@@ -1,26 +1,35 @@
 import type { ReactNode } from "react";
 import { createContext, Fragment, isValidElement, use } from "react";
 
-import { skipToken, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useNavigate, useRouterState } from "@tanstack/react-router";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useNavigate, useRouter } from "@tanstack/react-router";
 import { panic } from "better-result";
 
-import { LandmarkIcon, SkillIcon } from "@stll/ui/icons";
+import { RESOURCE_TYPE } from "@stll/api-contract";
+import { referenceFromHref } from "@stll/api-contract/chat-reference-href";
+import type { ChatReference } from "@stll/api-contract/chat-reference-href";
+import {
+  Building2Icon,
+  LandmarkIcon,
+  LibraryIcon,
+  PlugIcon,
+  SkillIcon,
+} from "@stll/ui/icons";
+import { resolveMatterColor } from "@stll/ui/matter-colors";
+import { MatterIcon } from "@stll/ui/matter-icon";
 import { cn } from "@stll/ui/utils";
 
 import { openCaseLawDecision } from "@/components/chat/case-law-open";
 import { openEntityInInspector } from "@/components/chat/entity-open";
 import { skillRefDestination } from "@/components/chat/skill-ref-link";
+import { CHIP_ICON_CLASS } from "@/components/chip-scale";
 import { InlinePill } from "@/components/inline-pill";
-import { MatterIcon } from "@/components/matter-icon";
 import { referenceHintOptions } from "@/components/references/reference-hints";
 import {
-  referenceFromHref,
   referenceMatterId,
   resolveReferenceVisual,
 } from "@/components/references/reference.logic";
 import type {
-  ChatReference,
   LiveFact,
   ReferenceGlyph,
   ReferenceLiveFacts,
@@ -30,13 +39,17 @@ import type {
 import { UserIdentityAvatar } from "@/components/user-avatar";
 import { EntityIcon } from "@/components/workspaces/entity-kind-icon";
 import { useOpenDecisionTab } from "@/features/case-law/open-decision-tab";
+import { SIGNED_OUT_QUERY_OWNER } from "@/lib/account/queries";
 import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
-import { resolveMatterColor } from "@/lib/matter-colors";
 import { organizationOptions } from "@/lib/organization/queries";
+import { queryView } from "@/lib/query-view.logic";
+import { useQueryViewError } from "@/lib/use-query-view";
+import { resourceQueryOptions } from "@/lib/workspace-realtime";
 import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
 import { entityOptions } from "@/lib/workspaces/queries/entities";
 import { navigateToWorkspaceFolder } from "@/lib/workspaces/reveal-navigation";
+import { getCurrentWorkspaceDocument } from "@/lib/workspaces/use-workspace-view-params";
 
 /**
  * The matter a chat surface renders in. An entity href persisted without its
@@ -61,7 +74,7 @@ export const ReferenceRenderScope = ({
 export const useReferenceRenderWorkspaceId = (): string | undefined =>
   use(ReferenceRenderContext).workspaceId;
 
-const GLYPH_CLASS = "size-3 shrink-0";
+const GLYPH_CLASS = CHIP_ICON_CLASS;
 
 const toLiveFact = <TData, TValue>(
   query: { data: TData | undefined; isError: boolean; isPending: boolean },
@@ -85,35 +98,67 @@ const toLiveFact = <TData, TValue>(
  * a reload.
  */
 const useReferenceFacts = (reference: ChatReference): ReferenceLiveFacts => {
-  const organizationId = useMaybeAuthenticatedUser()?.activeOrganizationId;
+  const user = useMaybeAuthenticatedUser();
+  const organizationId = user?.activeOrganizationId;
   const entity =
     reference.type === "entity" && reference.matterId !== null
       ? { entityId: reference.entityId, matterId: reference.matterId }
       : null;
   const matterId = referenceMatterId(reference);
   const userId = reference.type === "user" ? reference.userId : null;
+  const owner = {
+    organizationId: organizationId ?? "",
+    userId: user?.id ?? SIGNED_OUT_QUERY_OWNER,
+  };
 
   // staleTime Infinity: one read per entity; later chips and the click
   // handler share it, so a thread full of mentions stays cheap.
-  const entityQuery = useQuery({
-    ...(entity === null
-      ? {
-          queryKey: ["chat-reference-entity-disabled"] as const,
-          queryFn: skipToken,
-        }
-      : entityOptions(entity.matterId, entity.entityId)),
-    enabled: entity !== null,
-    staleTime: Number.POSITIVE_INFINITY,
-  });
-  const hintQuery = useQuery(
-    referenceHintOptions(
-      reference.type === "entity" ? reference.entityId : null,
+  const entityQuery = useQuery(
+    resourceQueryOptions(
+      {
+        // Without a matter there is nothing to read: the read stays off.
+        ...entityOptions(entity?.matterId ?? "", entity?.entityId ?? ""),
+        enabled: entity !== null,
+        staleTime: Number.POSITIVE_INFINITY,
+      },
+      {
+        resources: [RESOURCE_TYPE.ENTITY],
+        // A disabled read names no matter and is never refreshed.
+        scope: { type: "workspace", workspaceId: entity?.matterId ?? "" },
+      },
     ),
   );
+  // The hint is what the transcript carried about the entity, seeded into
+  // the cache as messages arrive; an entity write marks it stale with the
+  // entity read beside it.
+  const hintQuery = useQuery(
+    resourceQueryOptions(
+      referenceHintOptions(
+        reference.type === "entity" ? reference.entityId : null,
+      ),
+      {
+        resources: [RESOURCE_TYPE.ENTITY],
+        scope: {
+          type: "organization",
+          organizationId: owner.organizationId,
+          userId: owner.userId,
+        },
+      },
+    ),
+  );
+  const hintQueryView = queryView(hintQuery);
+  useQueryViewError(hintQueryView, "useReferenceFacts:query");
   // The navigation list is already in flight on every chat surface, so the
   // matter colour is a cache read rather than a fetch.
   const mattersQuery = useQuery({
-    ...workspacesNavigationOptions(organizationId ?? ""),
+    ...resourceQueryOptions(workspacesNavigationOptions(owner), {
+      resources: [RESOURCE_TYPE.WORKSPACE],
+      scope: {
+        type: "organization",
+        organizationId: owner.organizationId,
+        userId: owner.userId,
+      },
+    }),
     enabled: matterId !== null && organizationId !== undefined,
   });
   const organizationQuery = useQuery({
@@ -138,8 +183,8 @@ const useReferenceFacts = (reference: ChatReference): ReferenceLiveFacts => {
       return { kind: data.kind, fileName: null, mimeType: null };
     }),
     hint:
-      reference.type === "entity" && hintQuery.data !== undefined
-        ? hintQuery.data
+      reference.type === "entity" && hintQueryView.type === "items"
+        ? hintQueryView.items
         : null,
     matter: toLiveFact(
       mattersQuery,
@@ -216,6 +261,16 @@ const ReferenceGlyphIcon = ({
       return <LandmarkIcon className={GLYPH_CLASS} />;
     case "skill":
       return <SkillIcon className={GLYPH_CLASS} />;
+    case "corpus":
+      return glyph.corpus === "case_law" ? (
+        <LandmarkIcon className={GLYPH_CLASS} />
+      ) : (
+        <LibraryIcon className={GLYPH_CLASS} />
+      );
+    case "registry":
+      return <Building2Icon className={GLYPH_CLASS} />;
+    case "connector":
+      return <PlugIcon className={GLYPH_CLASS} />;
     case "user":
       return (
         <UserIdentityAvatar
@@ -233,6 +288,7 @@ const ReferenceGlyphIcon = ({
 
 type ReferenceChipViewProps = {
   visual: ReferenceVisual;
+  interactive: boolean;
   /** Rendered label when the source's label is richer than plain text (a
    * restored anonymized name inside an answer's link). */
   labelContent?: ReactNode;
@@ -243,6 +299,7 @@ type ReferenceChipViewProps = {
 
 const ReferenceChipView = ({
   visual,
+  interactive,
   labelContent,
   onActivate,
   selected = false,
@@ -255,17 +312,45 @@ const ReferenceChipView = ({
   }
   return (
     <InlinePill
+      {...(labelContent === undefined ? { ariaLabel: visual.label } : {})}
       className={cn(selected && "ring-ring ring-1")}
       data-reference-type={referenceType}
       leadingIcon={
         <ReferenceGlyphIcon glyph={visual.glyph} matter={visual.matter} />
       }
       onActivate={onActivate}
+      // Static chips belong to an editor or containing control. Their
+      // truncated label keeps its own hint without adding a focus target.
+      title={
+        interactive && labelContent === undefined ? visual.label : undefined
+      }
       truncate
     >
       {label}
     </InlinePill>
   );
+};
+
+/**
+ * Whether the viewer may open a document or matter reference now, read from
+ * the same authorized reads a chip's facts come from: the entity read of its
+ * matter, and the viewer's own matter list. For a list that names items the
+ * viewer may since have lost (what a chat step found), which offers only
+ * what they can still open and names the rest by the text they already saw.
+ */
+export const useReferenceAvailability = (
+  reference: Extract<ChatReference, { type: "entity" | "matter" }>,
+): LiveFact<unknown>["status"] => {
+  const facts = useReferenceFacts(reference);
+  switch (reference.type) {
+    case "entity":
+      return facts.entity.status;
+    case "matter":
+      return facts.matter.status;
+    default:
+      reference satisfies never;
+      return panic(`Unhandled reference: ${String(reference)}`);
+  }
 };
 
 /**
@@ -275,9 +360,7 @@ const ReferenceChipView = ({
 export const useReferenceActivation = (reference: ChatReference) => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const pathname = useRouterState({
-    select: (state) => state.location.pathname,
-  });
+  const router = useRouter();
   const { open: openDecision } = useOpenDecisionTab();
 
   switch (reference.type) {
@@ -289,16 +372,19 @@ export const useReferenceActivation = (reference: ChatReference) => {
       return () =>
         detached(
           (async () => {
-            const result = await openEntityInInspector(
+            const result = await openEntityInInspector({
+              documentOnScreen: getCurrentWorkspaceDocument(
+                router.state.matches,
+              ),
               entityId,
               label,
-              matterId,
-            );
+              workspaceId: matterId,
+            });
             if (result.type === "folder") {
               await navigateToWorkspaceFolder({
                 folderId: result.entityId,
                 navigate,
-                pathname,
+                router,
                 queryClient,
                 targetWorkspaceId: result.workspaceId,
               });
@@ -322,7 +408,9 @@ export const useReferenceActivation = (reference: ChatReference) => {
           openCaseLawDecision(
             reference.locator,
             openDecision,
-            reference.anchorId === null ? {} : { anchorId: reference.anchorId },
+            reference.paragraph === null
+              ? {}
+              : { anchorId: reference.paragraph.anchorId },
           ),
           "reference-chip.open-decision",
         );
@@ -332,7 +420,11 @@ export const useReferenceActivation = (reference: ChatReference) => {
           navigate(skillRefDestination(reference.slug)),
           "reference-chip.open-skill",
         );
+    // A person has no page here; a source scope is not a document to open.
     case "user":
+    case "corpus":
+    case "registry":
+    case "connector":
       return undefined;
     default:
       reference satisfies never;
@@ -354,6 +446,7 @@ const StaticReferenceChip = ({
   const facts = useReferenceFacts(reference);
   return (
     <ReferenceChipView
+      interactive={false}
       labelContent={labelContent}
       referenceType={reference.type}
       selected={selected}
@@ -371,6 +464,7 @@ const InteractiveReferenceChip = ({
   const onActivate = useReferenceActivation(reference);
   return (
     <ReferenceChipView
+      interactive
       labelContent={labelContent}
       onActivate={onActivate}
       referenceType={reference.type}
@@ -403,6 +497,22 @@ export const ReferenceChip = ({
   );
 
 /**
+ * Every matter the reader can open, as one chip: a chat that drew on all of
+ * them says so instead of naming each. It is a scope, not a reference to
+ * open, so it never takes a click. The caller passes the translated label.
+ */
+export const AllMattersChip = ({ label }: { label: string }) => (
+  <InlinePill leadingIcon={<AllMattersIcon />} truncate>
+    <bdi>{label}</bdi>
+  </InlinePill>
+);
+
+/** The "All matters" glyph, for a list of references in its own shell. */
+export const AllMattersIcon = () => (
+  <MatterIcon className={GLYPH_CLASS} variant="all" />
+);
+
+/**
  * A reference's glyph alone, by the same rule as the chip, for a control that
  * lists references in its own shell (the sources tray under an answer).
  */
@@ -413,6 +523,22 @@ export const ReferenceIcon = ({ reference }: { reference: ChatReference }) => {
     <ReferenceGlyphIcon glyph={visual.glyph} matter={visual.matter} />
   ) : null;
 };
+
+/**
+ * The glyph of a document known only by its file type (an inline citation
+ * into a Word file or a PDF), drawn by the same rule as a document reference,
+ * so a cited file looks like that file in the source tray. Decorative: the
+ * chip's label names the source.
+ */
+export const ReferenceFileTypeIcon = ({ mimeType }: { mimeType: string }) => (
+  <ReferenceGlyphIcon
+    glyph={{
+      type: "entity",
+      source: { type: "resolved", kind: "document", mimeType },
+    }}
+    matter={{ type: "none" }}
+  />
+);
 
 const isReactNodeArray = (node: ReactNode): node is readonly ReactNode[] =>
   Array.isArray(node);

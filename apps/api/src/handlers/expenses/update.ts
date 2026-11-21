@@ -1,7 +1,9 @@
 import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
+import { apiDateSchema } from "@stll/api-contract/api-date";
+import { currencyCodeSchema } from "@stll/api-contract/currency-code";
 import { toMajorUnits, tryToMinorUnits } from "@stll/money";
 
 import { expenseCategorySchema } from "@/api/db/billing-validators";
@@ -12,34 +14,40 @@ import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import {
-  tCurrencyCode,
-  tMinorUnitAmount,
-  tSafeId,
+  minorUnitAmountSchema,
+  resourceIdSchema,
 } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { cents } from "@/api/lib/money";
 import { pickDefined } from "@/api/lib/pick-defined";
 
-const updateExpenseBodySchema = t.Object({
-  id: tSafeId("expense"),
-  dateIncurred: t.Optional(t.String({ format: "date" })),
-  amount: t.Optional(tMinorUnitAmount(1)),
-  currency: t.Optional(tCurrencyCode),
-  category: t.Optional(expenseCategorySchema),
-  description: t.Optional(t.String({ minLength: 1, maxLength: 10_000 })),
-  invoiceDescription: t.Optional(t.Nullable(t.String({ maxLength: 10_000 }))),
-  billable: t.Optional(t.Boolean()),
-  markup: t.Optional(t.Integer({ minimum: 0, maximum: 100 })),
-  matterId: t.Optional(tSafeId("entity")),
-  status: t.Optional(
-    t.Union([
-      t.Literal(BILLING_STATUS.DRAFT),
-      t.Literal(BILLING_STATUS.APPROVED),
+const updateExpenseBodySchema = v.object({
+  id: resourceIdSchema("expense"),
+  dateIncurred: v.optional(apiDateSchema),
+  amount: v.optional(minorUnitAmountSchema(1)),
+  currency: v.optional(currencyCodeSchema),
+  category: v.optional(expenseCategorySchema),
+  description: v.optional(
+    v.pipe(v.string(), v.minLength(1), v.maxLength(10_000)),
+  ),
+  invoiceDescription: v.optional(
+    v.nullable(v.pipe(v.string(), v.maxLength(10_000))),
+  ),
+  billable: v.optional(v.boolean()),
+  markup: v.optional(
+    v.pipe(v.number(), v.integer(), v.minValue(0), v.maxValue(100)),
+  ),
+  matterId: v.optional(resourceIdSchema("entity")),
+  status: v.optional(
+    v.union([
+      v.literal(BILLING_STATUS.DRAFT),
+      v.literal(BILLING_STATUS.APPROVED),
     ]),
   ),
 });
 
 const config = {
+  contract: "patch",
   description:
     "Change a draft or approved expense in a matter: its date, amount, " +
     "currency, category, description, invoice description, billable flag, " +
@@ -48,6 +56,7 @@ const config = {
     "unbilled one.",
   permissions: { expense: ["update"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
+  featureAccess: { featureId: "time-billing", type: "required" },
   realtime: expenseRealtimeUpdates,
   mcp: { type: "capability", reason: "billing_admin", consumesServices: false },
   body: updateExpenseBodySchema,
@@ -196,15 +205,14 @@ const updateExpense = createSafeHandler(
 const buildExpenseDiff = (
   before: Record<string, unknown>,
   updates: Record<string, unknown>,
-): Record<string, { old: unknown; new: unknown }> => {
-  const diff: Record<string, { old: unknown; new: unknown }> = {};
-  for (const [key, value] of Object.entries(updates)) {
-    if (key === "updatedAt") {
-      continue;
-    }
-    diff[key] = { old: before[key] ?? null, new: value };
-  }
-  return diff;
-};
+): Record<string, { old: unknown; new: unknown }> =>
+  Object.fromEntries(
+    Object.entries(updates)
+      .filter(([key]) => key !== "updatedAt")
+      .map(
+        ([key, value]) =>
+          [key, { old: before[key] ?? null, new: value }] as const,
+      ),
+  );
 
 export default updateExpense;

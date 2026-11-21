@@ -52,7 +52,7 @@ describe("secure document responses", () => {
     expect(parseContentLengthHeader(value)).toBe(expected);
   });
 
-  test.each([null, "", "-1", "1.5", "1, 1", "9007199254740992"])(
+  test.each([null, "", "-1", "1.5", "1, 1", "42\n", "9007199254740992"])(
     "rejects an unsafe upstream content length (%s)",
     (value) => {
       expect(parseContentLengthHeader(value)).toBeUndefined();

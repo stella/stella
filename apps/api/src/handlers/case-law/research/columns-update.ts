@@ -1,4 +1,3 @@
-import { Value } from "@sinclair/typebox/value";
 import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 
@@ -22,6 +21,7 @@ import type { CaseLawResearchColumnContent } from "@/api/lib/case-law/research-a
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const config = {
+  contract: "patch",
   description:
     "Reword or retype one of the organization's questions. A changed " +
     "question, answer type or option list invalidates every answer the " +
@@ -86,7 +86,7 @@ const updateResearchColumn = createSafeRootHandler(
         const content = nextContent ?? current.content;
         const changed =
           nextQuestion !== current.question ||
-          !Value.Equal(content, current.content);
+          !Bun.deepEquals(content, current.content);
         if (!changed) {
           return current;
         }

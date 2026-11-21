@@ -1,13 +1,14 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { LOOKUP_REGISTRIES } from "@/api/lib/docx/types";
 import { setLookupFormatUserDefault } from "@/api/lib/templates/lookup-formats/set-user-default";
 
 const config = {
+  contract: "patch",
   description:
     "Choose or clear your own default company specification format for a business registry, overriding the organization's default for you alone.",
   // permissions-exempt: the write reaches nothing but the caller's own
@@ -22,13 +23,10 @@ const config = {
     reason: "template_authoring_ui",
     consumesServices: false,
   },
-  body: t.Object(
-    {
-      registry: t.UnionEnum(LOOKUP_REGISTRIES),
-      formatId: t.Union([tSafeId("templateLookupFormat"), t.Null()]),
-    },
-    { additionalProperties: false },
-  ),
+  body: v.strictObject({
+    registry: v.picklist(LOOKUP_REGISTRIES),
+    formatId: v.union([resourceIdSchema("templateLookupFormat"), v.null()]),
+  }),
 } satisfies HandlerConfig;
 
 const setMyDefaultLookupFormat = createSafeRootHandler(

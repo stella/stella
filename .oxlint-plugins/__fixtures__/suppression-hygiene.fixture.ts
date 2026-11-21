@@ -4,15 +4,13 @@
 // oxlint-disable-next-line no-console
 console.log("suppressed");
 
-/* oxlint-disable suppression-hygiene/no-foreign-directive -- fixture: foreign formatter directives must be rejected */
+// oxlint-disable-next-line suppression-hygiene/no-foreign-directive -- fixture: foreign formatter directives must be rejected
 // biome-ignore format: fixture proves dead formatter directives are rejected
 const foreignDirective = "foreign";
-/* oxlint-enable suppression-hygiene/no-foreign-directive */
 
-/* oxlint-disable suppression-hygiene/no-foreign-directive -- fixture: the legacy eslint spelling must be rejected */
+// oxlint-disable-next-line suppression-hygiene/no-foreign-directive -- fixture: the legacy eslint spelling must be rejected
 // eslint-disable-next-line no-console -- fixture: legacy alias of the oxlint directive
 console.log("legacy spelling");
-/* oxlint-enable suppression-hygiene/no-foreign-directive */
 
 // Prose naming eslint-disable mid-sentence -- not a directive; only a leading one is flagged.
 
@@ -28,3 +26,11 @@ console.log("documented inline");
 console.log("documented same line"); // oxlint-disable-line no-console -- fixture: same-line reason is valid
 
 void foreignDirective;
+
+// Canonical IDs leave both the directive and its reason intact.
+// expect-clean: suppression-hygiene/canonical-rule-id
+console.log("canonical"); // oxlint-disable-line no-console -- fixture: configured spelling
+
+// oxlint-disable-next-line suppression-hygiene/canonical-rule-id -- fixture: alias spelling is reported on the directive
+// oxlint-disable-next-line eslint/no-console -- fixture: alias maps to configured spelling
+console.log("alias");

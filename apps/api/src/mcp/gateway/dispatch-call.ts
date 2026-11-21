@@ -2,10 +2,12 @@ import type { CallToolResult } from "@modelcontextprotocol/server";
 import { panic } from "better-result";
 import * as v from "valibot";
 
+import { modelMayStartUninvoked } from "@/api/lib/agent-skills/invocation";
 import {
   describeMissingSkillTools,
   SKILL_TOOL_AVAILABILITY_STATUS,
 } from "@/api/lib/agent-skills/required-tools";
+import { windowSkillResource } from "@/api/lib/agent-skills/resource-window";
 import {
   recordSkillReadAudit,
   SKILL_READ_OUTCOME,
@@ -17,10 +19,12 @@ import {
   isExternalMcpToolName,
   isSkillToolName,
 } from "@/api/lib/mcp-upstream/namespace";
+import { projectionPayload } from "@/api/lib/projection-totality";
 import type { McpMode } from "@/api/mcp/constants";
-import type { McpRequestContext } from "@/api/mcp/context";
+import type { McpRequestResources } from "@/api/mcp/context";
 import {
   SKILL_TOOL_INPUT,
+  SKILL_TOOL_OUTPUT,
   SKILL_TOOL_OUTPUT_TYPE,
 } from "@/api/mcp/gateway/dynamic-tool-policy";
 import type { SkillToolOutput } from "@/api/mcp/gateway/dynamic-tool-policy";
@@ -28,6 +32,10 @@ import {
   callGatewayExternalMcpTool,
   gatewayLoadErrorResult,
 } from "@/api/mcp/gateway/external-tools";
+import {
+  modeAllowsGatewayTools,
+  modeAllowsSkillTools,
+} from "@/api/mcp/gateway/mode-policy";
 import {
   readSkillTool,
   resolveSkillTool,
@@ -38,7 +46,10 @@ import type {
   SkillToolRead,
 } from "@/api/mcp/gateway/skills";
 import { getStaticMcpToolDefinition } from "@/api/mcp/static-tool-definitions";
-import type { InternalToolResult } from "@/api/mcp/tool-types";
+import type {
+  InternalToolErrorResult,
+  InternalToolResult,
+} from "@/api/mcp/tool-types";
 import {
   oauthScopeRecoveryHint,
   structuredErrorResult,
@@ -83,7 +94,7 @@ const unavailableSkillResult = ({
   grantedScopes: readonly string[];
   missingTools: readonly string[];
   skillName: string;
-}): InternalToolResult => {
+}): InternalToolErrorResult => {
   const message = `The skill "${skillName}" cannot run in this session. ${describeMissingSkillTools(missingTools)}`;
   const missingScopes = [
     ...new Set(
@@ -120,7 +131,7 @@ const unavailableSkillResult = ({
 
 export type GatewayDispatchResult =
   | { type: "external_mcp"; result: CallToolResult }
-  | { type: "internal"; result: InternalToolResult };
+  | { type: "internal"; result: InternalToolResult<SkillToolOutput> };
 
 export const dispatchGatewayToolCall = async ({
   args,
@@ -130,16 +141,15 @@ export const dispatchGatewayToolCall = async ({
   dependencies = defaultDependencies,
 }: {
   args: Record<string, unknown>;
-  context: McpRequestContext;
+  context: McpRequestResources;
   mode: McpMode;
   toolName: string;
   dependencies?: GatewayDispatchDependencies;
 }): Promise<GatewayDispatchResult | null> => {
-  if (mode !== "default") {
-    return null;
-  }
-
   if (isExternalMcpToolName(toolName)) {
+    if (!modeAllowsGatewayTools(mode)) {
+      return null;
+    }
     return {
       type: "external_mcp",
       result: await dependencies.callGatewayExternalMcpTool({
@@ -150,7 +160,7 @@ export const dispatchGatewayToolCall = async ({
     };
   }
 
-  if (!isSkillToolName(toolName)) {
+  if (!isSkillToolName(toolName) || !modeAllowsSkillTools(mode, context)) {
     return null;
   }
 
@@ -161,7 +171,7 @@ export const dispatchGatewayToolCall = async ({
 
   let resolved: ResolvedSkillTool | null;
   try {
-    resolved = await dependencies.resolveSkillTool({ context, toolName });
+    resolved = await dependencies.resolveSkillTool({ context, mode, toolName });
   } catch (error) {
     return loadFaultResult({ dependencies, error });
   }
@@ -177,6 +187,39 @@ export const dispatchGatewayToolCall = async ({
         grantedScopes: context.grantedScopes,
         missingTools: resolved.availability.missingTools,
         skillName: resolved.name,
+      }),
+    };
+  }
+
+  // A `manual` skill is not a tool on this surface (`tools/list` leaves it
+  // out); it is a prompt the user starts.
+  if (!modelMayStartUninvoked(resolved)) {
+    return {
+      type: "internal",
+      result: structuredErrorResult({
+        code: "unknown_tool",
+        message: `The skill ${resolved.name} runs only when the user invokes it, so it is not a tool.`,
+        hint: `Ask the user to start the prompt ${toolName} from their client's prompt list.`,
+      }),
+    };
+  }
+
+  if (
+    input.output.cursor !== undefined &&
+    input.output.resource === undefined
+  ) {
+    return {
+      type: "internal",
+      result: structuredErrorResult({
+        code: "validation_error",
+        message: "cursor needs resource",
+        issues: [
+          {
+            path: "cursor",
+            message: "A cursor continues one resource file's text.",
+          },
+        ],
+        hint: `Pass the same \`resource\` the cursor came from, or call ${toolName} without \`cursor\`.`,
       }),
     };
   }
@@ -232,32 +275,65 @@ export const dispatchGatewayToolCall = async ({
       // validates the served value against the same Valibot source at runtime.
       return {
         type: "internal",
-        result: toolDataResult({
-          type: SKILL_TOOL_OUTPUT_TYPE.skill,
-          body: read.skill.body,
-          compatibility: read.skill.compatibility,
-          id: chatSkillId(read.skill),
-          license: read.skill.license,
-          metadata: read.skill.metadata,
-          name: read.skill.name,
-          origin: chatSkillOrigin(read.skill),
-          resources: read.skill.resources,
-          version: read.skill.version,
-        } satisfies SkillToolOutput),
+        result: toolDataResult(
+          projectionPayload(SKILL_TOOL_OUTPUT.outputSchemaSource, {
+            type: SKILL_TOOL_OUTPUT_TYPE.skill,
+            body: read.skill.body,
+            compatibility: read.skill.compatibility,
+            id: chatSkillId(read.skill),
+            license: read.skill.license,
+            metadata: read.skill.metadata,
+            name: read.skill.name,
+            origin: chatSkillOrigin(read.skill),
+            resources: read.skill.resources,
+            version: read.skill.version,
+          }),
+        ),
       };
-    case SKILL_TOOL_READ_TYPE.resource:
+    case SKILL_TOOL_READ_TYPE.resource: {
+      const skillId = chatSkillId(read.skill);
+      const window = windowSkillResource({
+        content: read.content,
+        cursor: input.output.cursor,
+        path: read.path,
+        skillId,
+        skillName: read.skill.name,
+      });
+      if (window.type === "invalid-cursor") {
+        await auditRead(SKILL_READ_OUTCOME.error);
+        return {
+          type: "internal",
+          result: structuredErrorResult({
+            code: "validation_error",
+            message: "Invalid cursor",
+            issues: [
+              {
+                path: "cursor",
+                message:
+                  "This cursor does not continue this resource as it is " +
+                  "now: it came from another file or the file has changed.",
+              },
+            ],
+            hint: `Call ${toolName} with this \`resource\` and without \`cursor\` to read the file from the start.`,
+          }),
+        };
+      }
       await auditRead(SKILL_READ_OUTCOME.success);
       return {
         type: "internal",
-        result: toolDataResult({
-          type: SKILL_TOOL_OUTPUT_TYPE.resource,
-          content: read.content,
-          id: chatSkillId(read.skill),
-          kind: read.kind,
-          name: read.skill.name,
-          path: read.path,
-        } satisfies SkillToolOutput),
+        result: toolDataResult(
+          projectionPayload(SKILL_TOOL_OUTPUT.outputSchemaSource, {
+            type: SKILL_TOOL_OUTPUT_TYPE.resource,
+            charCount: window.charCount,
+            content: window.content,
+            id: skillId,
+            name: read.skill.name,
+            nextCursor: window.nextCursor,
+            path: read.path,
+          }),
+        ),
       };
+    }
     default: {
       read satisfies never;
       return panic("skill tool read returned an unknown type");

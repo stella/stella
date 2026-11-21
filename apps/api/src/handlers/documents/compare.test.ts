@@ -2,10 +2,10 @@ import { Result } from "better-result";
 import { describe, expect, mock, test } from "bun:test";
 
 import {
-  createDocx,
-  createEmptyDocument,
   type CompareDocxError,
   type CompareResult,
+  createDocx,
+  createEmptyDocument,
 } from "@stll/folio-core";
 import { FolioDocxReviewer, parseDocx } from "@stll/folio-core/server";
 
@@ -13,6 +13,7 @@ import {
   createDocumentCompareHandler,
   mapCompareDocxError,
 } from "@/api/handlers/documents/compare";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -21,6 +22,7 @@ import { TimeoutError } from "@/api/lib/errors/tagged-errors";
 import { compareScannedDocx } from "@/api/lib/file-scan/document-parsers";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
+import type { SyntheticSessionAuthorityReader } from "@/api/lib/synthetic-principal/session-authority";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 import { testScannedFile } from "@/api/tests/helpers/scanned-file";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -163,7 +165,13 @@ const createHarness = ({
       },
     },
   };
-  const { safeDb, scopedDb } = createScopedDbMock(tx);
+  const { safeDb, scopedDb } = createScopedDbMock(tx, {
+    visibleResources: {
+      entity: [documentId],
+      entityVersion: rows.map(({ id }) => id),
+      field: [fieldId, secondaryFieldId],
+    },
+  });
   const applyDispositionMock = mock(
     async (file: ScannedFile, _disposition: "keep" | "accept" | "reject") =>
       file,
@@ -220,7 +228,7 @@ const createHarness = ({
         throw new TimeoutError({
           message: "timed out",
           label: options.label,
-          timeoutMs: 1,
+          timeoutMs: 1, // timeout under test
         });
       }
       return await operation(new AbortController().signal);
@@ -232,7 +240,7 @@ const createHarness = ({
         throw new TimeoutError({
           message: "delivery failed",
           label: "download",
-          timeoutMs: 1,
+          timeoutMs: 1, // timeout under test
         });
       }
       return {
@@ -265,7 +273,12 @@ const createHarness = ({
     resolveDocxEditAuthorName: async () => "Ada Lovelace",
     withTimeout: withTimeoutMock,
   });
-  const definition = createDocumentCompareHandler(dependencies);
+  const readSessionAuthority: SyntheticSessionAuthorityReader = async () =>
+    null;
+  const definition = createDocumentCompareHandler(
+    dependencies,
+    readSessionAuthority,
+  );
   type Ctx = Parameters<typeof definition.handler>[0];
   const auditedEvents: unknown[] = [];
   const auditRecorder = mock(async (_tx: unknown, event: unknown) => {
@@ -274,6 +287,9 @@ const createHarness = ({
   const context = asTestRaw<Ctx>({
     body: {
       filePropertyId: propertyId,
+      // Parsed bodies carry the schema defaults.
+      mode: "strict",
+      granularity: "word",
       selection: {
         type: previous ? "previous" : "versions",
         ...(previous
@@ -289,10 +305,12 @@ const createHarness = ({
     },
     params: { workspaceId, documentId },
     request: new Request("http://localhost/documents/compare"),
-    route: "/documents/:workspaceId/document/:documentId/compare",
+    route:
+      "/v1/documents/:workspaceId/document/:documentId/compare" satisfies ApiRoutePath,
     safeDb,
     scopedDb,
-    session: { activeOrganizationId: organizationId },
+    // A credential without a browser session, such as an agent's.
+    session: { activeOrganizationId: organizationId, id: null },
     workspaceId,
     user: { id: userId },
     recordAuditEvent: asTestRaw<AuditRecorder>(auditRecorder),
@@ -317,6 +335,7 @@ const createHarness = ({
     deliverTemporaryRedlineMock,
     readEntityVersionFileMock,
     readFileHandlerMock,
+    readSessionAuthority,
     withTimeoutMock,
   };
 };
@@ -472,11 +491,11 @@ describe("documents.compare", () => {
 
       const redlineBuffer = copyToArrayBuffer(persisted.buffer);
       const accepting = await FolioDocxReviewer.fromBuffer(redlineBuffer);
-      expect(accepting.acceptAll()).toBeGreaterThan(0);
+      expect(accepting.acceptAll().resolved).toBeGreaterThan(0);
       expect(await bodyText(await accepting.toBuffer())).toBe(targetText);
 
       const rejecting = await FolioDocxReviewer.fromBuffer(redlineBuffer);
-      expect(rejecting.rejectAll()).toBeGreaterThan(0);
+      expect(rejecting.rejectAll().resolved).toBeGreaterThan(0);
       expect(await bodyText(await rejecting.toBuffer())).toBe(baseText);
     },
   );
@@ -586,13 +605,22 @@ describe("documents.compare", () => {
     });
     expect(harness.createEntityVersionFromBufferMock).toHaveBeenCalledTimes(1);
     expect(harness.readFileHandlerMock).toHaveBeenCalledWith({
+      readSessionAuthority: expect.any(Function),
       scopedDb: harness.context.scopedDb,
       fieldId,
       organizationId,
       workspaceId,
       purpose: "download",
       recordAuditEvent: harness.auditRecorder,
+      source: {
+        kind: "background",
+        reason: "requested with a credential that has no browser session",
+      },
+      userId: harness.context.user.id,
     });
+    expect(
+      harness.readFileHandlerMock.mock.calls.at(0)?.[0].readSessionAuthority,
+    ).toBe(harness.readSessionAuthority);
   });
 
   test("previews a comparison without writing a document version", async () => {
@@ -654,6 +682,7 @@ describe("documents.compare", () => {
     ).toMatchObject({
       fileName: "Agreement v2 redline.docx",
       organizationId,
+      readSessionAuthority: expect.any(Function),
       scopedDb: harness.context.scopedDb,
       userId,
     });
@@ -874,19 +903,16 @@ describe("documents.compare", () => {
     expect(harness.readFileHandlerMock).not.toHaveBeenCalled();
   });
 
-  test("rejects inaccessible versions as a closed per-target failure", async () => {
+  test("rejects inaccessible versions before comparison details", async () => {
     const harness = createHarness({ rows: [baseRow] });
 
     const result = await harness.definition.handler(harness.context);
 
     expect(result).toMatchObject({
-      results: [
-        {
-          status: "failed",
-          error: { code: "version_not_found" },
-        },
-      ],
+      code: 404,
+      response: { message: "Not found" },
     });
+    expect(harness.compareDocxMock).not.toHaveBeenCalled();
     expect(harness.readEntityVersionFileMock).not.toHaveBeenCalled();
     expect(harness.createEntityVersionFromBufferMock).not.toHaveBeenCalled();
     expect(harness.readFileHandlerMock).not.toHaveBeenCalled();

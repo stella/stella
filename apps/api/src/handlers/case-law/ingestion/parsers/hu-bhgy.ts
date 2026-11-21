@@ -1,3 +1,5 @@
+// parser-output-unchanged: The retention check moved to the pipeline, which runs it against the stored document; the parse itself is unchanged.
+import { panic } from "better-result";
 /**
  * Hungarian courts (Bírósági Határozatok Gyűjteménye) decision parser.
  *
@@ -21,8 +23,6 @@
  * order, and only a line it does recognise gains a heading or a role.
  */
 
-import { panic } from "better-result";
-
 import type {
   BlockContent,
   Document as FolioDocument,
@@ -30,45 +30,49 @@ import type {
   Paragraph as FolioParagraph,
   ParagraphContent as FolioParagraphContent,
   Run as FolioRun,
-  RunContent as FolioRunContent,
-  TrackedRunContent,
   Table as FolioTable,
   TextFormatting,
+  TrackedRunContent,
 } from "@stll/docx-core/model";
 import {
   DECISION_IDENTIFIER_TYPES,
   isDecisionIdentifier,
 } from "@stll/legal-ast/decision-identifier";
-import { collapseSpacedLetters } from "@stll/text-normalize";
-
+// parser-output-unchanged: imports the document AST from its package owner
+// parser-output-unchanged: The output is typed as a decision document AST; the emitted AST is unchanged.
 import type {
   Block,
-  DocumentAst,
+  DecisionDocumentAst,
   HeadingBlock,
   Inline,
   ParagraphBlock,
   ParagraphRole,
   TableBlock,
   TableCell,
-} from "@/api/handlers/case-law/document-ast";
+} from "@stll/legal-ast/document-ast";
+// parser-output-unchanged: the inline-line helpers moved unchanged to their package owner.
 import {
-  inlinesToPlainText,
-  stripInlinePrefix,
-} from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
+  normalizeInlineLine,
+  stripInlineLinePrefix,
+} from "@stll/legal-ast/inline-line";
+import { collapseSpacedLetters } from "@stll/text-normalize";
+import { restoreHungarianLetters } from "@stll/text-normalize/hungarian-letters";
+import { parsePlainDate } from "@stll/time";
+
 import { sectionsFromAst } from "@/api/handlers/case-law/ingestion/sections-from-ast";
 import { DECISION_JUDGE_ROLE } from "@/api/handlers/case-law/judges/consts";
 import { arrayOrEmpty } from "@/api/lib/array";
 import type { DecisionSection } from "@/api/lib/legal-search/document-types";
 import type { DecisionJudgeInput } from "@/api/lib/legal-search/ingestion-types";
 import {
-  buildValidationHtml,
-  validateAndLog,
-} from "@/api/lib/legal-search/parsers/validate-ast";
+  type BodyDocumentLine,
+  createParagraphLineReader,
+  type DocumentLine,
+} from "@/api/lib/legal-search/parsers/document-footnotes";
+import { runContentVisibleText } from "@/api/lib/legal-search/parsers/run-content-text";
 
 /** Publisher recorded on the AST, so a stored document names where it came from. */
 const HU_BHGY_SOURCE_SYSTEM = "eakta.birosag.hu";
-
-const HU_BHGY_PARSER = "hu-bhgy";
 
 // ── The document as lines ────────────────────────────────
 
@@ -81,53 +85,19 @@ type DocRun = {
   readonly colored: boolean;
 };
 
-type DocLine = {
+type DocLineData = {
   readonly runs: readonly DocRun[];
   readonly text: string;
   readonly centered: boolean;
-  /** The note this line belongs to, where it is a footnote's text. */
-  readonly note?: { readonly label: string; readonly noteId: string };
 };
 
-type DocTable = { readonly rows: readonly (readonly DocLine[])[] };
+type DocLine = DocumentLine<DocLineData>;
+type DocCell = BodyDocumentLine<DocLineData>;
+type DocTable = { readonly rows: readonly (readonly DocCell[])[] };
 
 type DocItem =
   | { readonly type: "line"; readonly line: DocLine }
   | { readonly type: "table"; readonly table: DocTable };
-
-/** The characters one run item contributes to the document's text. */
-const runContentText = (item: FolioRunContent): string => {
-  switch (item.type) {
-    case "text":
-      return item.text;
-    case "tab":
-      return "\t";
-    case "break":
-      return "\n";
-    // Verbatim-preserved markup folio does not model. Its `text` is what the
-    // markup puts on the line (a `w:ruby` base is a word of the decision), so
-    // the extraction takes it rather than dropping the characters.
-    case "preservedXml":
-      return item.text;
-    // Carry no characters of their own: a symbol, a note mark, a field's own
-    // instruction text, a hyphen the layout inserted, a drawing or a shape all
-    // reach the text through the runs around them.
-    case "symbol":
-    case "footnoteRef":
-    case "endnoteRef":
-    case "fieldChar":
-    case "instrText":
-    case "softHyphen":
-    case "noBreakHyphen":
-    case "renderedPageBreak":
-    case "drawing":
-    case "shape":
-      return "";
-    default:
-      item satisfies never;
-      return panic(`Unhandled run content: ${JSON.stringify(item)}`);
-  }
-};
 
 type FolioInlineContent =
   | FolioParagraphContent
@@ -141,7 +111,7 @@ const runsOf = (paragraph: FolioParagraph): DocRun[] => {
     fallbackFormatting?: TextFormatting,
   ): void => {
     const formatting = run.formatting ?? fallbackFormatting;
-    const text = run.content.map(runContentText).join("");
+    const text = run.content.map(runContentVisibleText).join("");
     if (text.length === 0) {
       return;
     }
@@ -217,10 +187,14 @@ const runsOf = (paragraph: FolioParagraph): DocRun[] => {
   };
 
   visit(paragraph.content);
-  return runs;
+  // Every line, note and cell is read from these runs, in either format.
+  return runs.map((run) => ({
+    ...run,
+    text: restoreHungarianLetters(run.text),
+  }));
 };
 
-const lineOf = (paragraph: FolioParagraph, note?: DocLine["note"]): DocLine => {
+const lineOf = (paragraph: FolioParagraph): DocLineData => {
   const runs = runsOf(paragraph);
   const alignment = paragraph.formatting?.alignment;
   return {
@@ -234,61 +208,143 @@ const lineOf = (paragraph: FolioParagraph, note?: DocLine["note"]): DocLine => {
       .join("")
       .trimEnd(),
     centered: alignment === "center",
-    ...(note === undefined ? {} : { note }),
   };
 };
 
 /**
  * A cell's own paragraphs, read through the content controls that wrap them;
- * a nested table is not part of the cell's text.
+ * nested tables retain their paragraphs in source order.
  */
 const cellParagraphsOf = (content: readonly BlockContent[]): FolioParagraph[] =>
   content.flatMap((item) => {
-    if (item.type === "paragraph") {
-      return [item];
-    }
-    return item.type === "blockSdt" || item.type === "blockCustomXml"
-      ? cellParagraphsOf(item.content)
-      : [];
-  });
-
-const tableOf = (table: FolioTable): DocTable => ({
-  rows: table.rows.map((row) =>
-    row.cells.map((cell) => {
-      const paragraphs = cellParagraphsOf(cell.content);
-      const lines = paragraphs.map((item) => lineOf(item));
-      const text = lines
-        .map(({ text: cellText }) => cellText)
-        .filter((cellText) => cellText.length > 0)
-        .join("\n");
-      return {
-        runs: lines.flatMap(({ runs }) => runs),
-        text,
-        centered: lines.every(({ centered }) => centered),
-      };
-    }),
-  ),
-});
-
-/** Walk folio's blocks into the flat line-and-table sequence this parser reads. */
-const itemsOf = (content: readonly BlockContent[]): DocItem[] =>
-  content.flatMap((block): DocItem[] => {
-    switch (block.type) {
+    switch (item.type) {
       case "paragraph":
-        return [{ type: "line", line: lineOf(block) }];
+        return [item];
       case "table":
-        return [{ type: "table", table: tableOf(block) }];
+        return item.rows.flatMap((row) =>
+          row.cells.flatMap((cell) => cellParagraphsOf(cell.content)),
+        );
       case "blockSdt":
       case "blockCustomXml":
-        // A content control is a wrapper; its children are the document's.
-        return itemsOf(block.content);
-      // No line of the decision: a preserved block is opaque markup folio does
-      // not model and holds no text, and a bookmark marker is a position. This
-      // parser reads text, so it skips all three rather than round-tripping
-      // them.
+        return cellParagraphsOf(item.content);
+      // parser-output-unchanged: comment range markers carry no text and
+      // were not block content before folio 0.68.
       case "preservedBlock":
       case "bookmarkStart":
       case "bookmarkEnd":
+      case "commentRangeStart":
+      case "commentRangeEnd":
+      case "moveFromRangeStart":
+      case "moveFromRangeEnd":
+      case "moveToRangeStart":
+      case "moveToRangeEnd":
+        return [];
+      default:
+        item satisfies never;
+        return panic("Unhandled table-cell block");
+    }
+  });
+
+type ParagraphLineReader = ReturnType<
+  typeof createParagraphLineReader<DocLineData>
+>;
+
+const linesWithNotesOf = (
+  paragraph: FolioParagraph,
+  readLines?: ParagraphLineReader,
+): DocLine[] =>
+  readLines === undefined
+    ? [{ kind: "body", value: lineOf(paragraph) }]
+    : readLines(paragraph);
+
+/** Only body-kind lines can enter a cell; notes are separate blocks after
+ * their containing row, before any subsequent row or following body paragraph. */
+const cellOf = (lines: readonly BodyDocumentLine<DocLineData>[]): DocCell => ({
+  kind: "body",
+  value: {
+    runs: lines.flatMap(({ value }) => value.runs),
+    text: lines
+      .map(({ value }) => value.text)
+      .filter((text) => text.length > 0)
+      .join("\n"),
+    centered: lines.every(({ value }) => value.centered),
+  },
+});
+
+const tableItemsOf = (
+  table: FolioTable,
+  readLines?: ParagraphLineReader,
+): DocItem[] => {
+  const items: DocItem[] = [];
+  let rows: DocCell[][] = [];
+  for (const row of table.rows) {
+    const notes: Extract<DocLine, { kind: "note" }>[] = [];
+    const cells = row.cells.map((cell) => {
+      const body: BodyDocumentLine<DocLineData>[] = [];
+      for (const paragraph of cellParagraphsOf(cell.content)) {
+        for (const line of linesWithNotesOf(paragraph, readLines)) {
+          switch (line.kind) {
+            case "body":
+              body.push(line);
+              break;
+            case "note":
+              notes.push(line);
+              break;
+            default:
+              line satisfies never;
+              panic("Unhandled table line membership");
+          }
+        }
+      }
+      return cellOf(body);
+    });
+    rows.push(cells);
+    if (notes.length === 0) {
+      continue;
+    }
+    items.push({ type: "table", table: { rows } });
+    rows = [];
+    for (const line of notes) {
+      items.push({ type: "line", line });
+    }
+  }
+  if (rows.length > 0) {
+    items.push({ type: "table", table: { rows } });
+  }
+  return items;
+};
+
+/** Walk folio's blocks into the flat line-and-table sequence this parser reads. */
+const itemsOf = (
+  content: readonly BlockContent[],
+  notesAfter?: ParagraphLineReader,
+): DocItem[] =>
+  content.flatMap((block): DocItem[] => {
+    switch (block.type) {
+      case "paragraph":
+        return linesWithNotesOf(block, notesAfter).map((line) => ({
+          type: "line",
+          line,
+        }));
+      case "table":
+        return tableItemsOf(block, notesAfter);
+      case "blockSdt":
+      case "blockCustomXml":
+        // A content control is a wrapper; its children are the document's.
+        return itemsOf(block.content, notesAfter);
+      // No line of the decision: a preserved block is opaque markup folio does
+      // not model and holds no text, and a bookmark or move range marker is a
+      // position. This parser reads text, so it skips them rather than
+      // round-tripping them.
+      case "preservedBlock":
+      case "bookmarkStart":
+      case "bookmarkEnd":
+      case "commentRangeStart":
+      case "commentRangeEnd":
+      case "moveFromRangeStart":
+      case "moveFromRangeEnd":
+      case "moveToRangeStart":
+      case "moveToRangeEnd":
         return [];
       default:
         block satisfies never;
@@ -325,7 +381,7 @@ const headingKey = (text: string): string =>
   ).toLocaleLowerCase("hu-HU");
 
 /** Where in the document the walk currently is, which decides a body role. */
-type Region = "front" | "operative" | "reasoning" | "apparatus" | "closing";
+type Region = "front" | "operative" | "reasoning" | "closing" | "certification";
 
 /**
  * The section headings the collection prints, and the depth each sits at.
@@ -346,11 +402,13 @@ type SectionHeading = {
 const SECTION_HEADINGS = [
   { key: "rendelkező rész", level: 1, region: "operative" },
   { key: "indokolás", level: 1, region: "reasoning" },
-  { key: "a döntés elvi tartalma", level: 1, region: "apparatus" },
+  { key: "a döntés elvi tartalma", level: 1, region: "reasoning" },
+  { key: "a határozat elvi tartalma", level: 1, region: "reasoning" },
+  { key: "alkalmazott jogszabályok", level: 1, region: "reasoning" },
   {
     key: "alkalmazott jogszabályok és joggyakorlat",
     level: 1,
-    region: "apparatus",
+    region: "reasoning",
   },
   { key: "záradék", level: 1, region: "closing" },
   { key: "a felülvizsgálat alapjául szolgáló tényállás", level: 2 },
@@ -378,6 +436,51 @@ const sectionHeadingIn = (key: string): SectionHeading | null =>
   ) ?? null;
 
 /**
+ * A title the court prints inside its reasons, whatever its wording.
+ *
+ * Courts title the parts of their reasons in their own words (`Kereset`,
+ * `Az alperes döntése`, `A törvényszék döntése és jogi indokai`, `Záró rész,
+ * perköltség, illeték`), and the DOCX states no style that marks them, so no
+ * list of wordings can be complete. What a title has and a reasons paragraph
+ * lacks is its shape: it is short, opens with a capital, cites no number or
+ * section, and ends without the punctuation every sentence and every
+ * introduction to a list ends with. Read only under the reasons heading,
+ * where every paragraph the court numbers is `[N]`; the summary and
+ * applied-legislation sections list acts by name and are left alone.
+ *
+ * Shape alone also fits the opening words of a sentence the next paragraph
+ * finishes (`A bíróság a keresetet` / `elutasította.`), so a title must also
+ * be followed by what a title heads and no broken sentence runs on into: the
+ * court's next numbered paragraph, or the decision's closing place and date.
+ */
+const PRINTED_SUBHEADING_FORBIDDEN = /[\p{N}§\n]/u;
+const PRINTED_SUBHEADING_START = /^\p{Lu}/u;
+const PRINTED_SUBHEADING_UNFINISHED_END = /[.:;,!?…"'”»)\]-]$/u;
+
+const isPrintedSubheading = (text: string): boolean => {
+  const line = text.trim();
+  return (
+    line.length > 0 &&
+    line.length <= HEADING_LINE_MAX &&
+    PRINTED_SUBHEADING_START.test(line) &&
+    !PRINTED_SUBHEADING_FORBIDDEN.test(line) &&
+    !PRINTED_SUBHEADING_UNFINISHED_END.test(line)
+  );
+};
+
+/**
+ * How a finished reasons paragraph ends. A paragraph that ends otherwise ("…
+ * jogszabálysértő, mert") runs on into the next one, so a short capitalised
+ * line after it (`Magyarország Alaptörvénye`) is the rest of that sentence,
+ * not a title, unless the court sets it apart in bold. A colon or semicolon introduces what follows, so it does not
+ * finish the paragraph either.
+ */
+const SENTENCE_FINISHED_END = /[.!?…"'”»)\]]$/u;
+
+/** The level-1 section under which the court titles its own parts. */
+const REASONS_HEADING_KEY = "indokolás";
+
+/**
  * The operative part's own introduction, which courts set as a centred, spaced
  * line rather than as a heading: `Í T É L E T E T :`, `v é g z é s t :`.
  *
@@ -387,7 +490,13 @@ const sectionHeadingIn = (key: string): SectionHeading | null =>
  * In the current era the operative part opens with `Rendelkező rész`, which is
  * a section heading.
  */
-const OPERATIVE_INTRODUCTIONS = new Set(["ítéletet", "végzést", "határozatot"]);
+const OPERATIVE_INTRODUCTIONS = new Set([
+  "ítéletet",
+  "részítéletet",
+  "közbenső ítéletet",
+  "végzést",
+  "határozatot",
+]);
 
 /** The republic's formula, printed above the operative part in the legacy era. */
 const REPUBLIC_FORMULAE = new Set([
@@ -504,13 +613,31 @@ type HeaderLabelMatch = {
 };
 
 /**
+ * Whether a line opens with a label: the form, perhaps a few more words of a
+ * longer label (`A másodfokú bíróság neve és a jogerős határozat száma:`), and
+ * its colon; or the form alone with its value on the next line. A sentence
+ * that opens with the same words (`A felperes másodfokú eljárásban…`) is the
+ * decision's own text.
+ */
+const LABEL_TAIL = /^[^:.;]{0,80}:/u;
+
+const isLabelOpening = (key: string, form: string): boolean =>
+  key.startsWith(form) &&
+  (key.length === form.length || LABEL_TAIL.test(key.slice(form.length)));
+
+/**
  * The header label a line opens with, or `null`.
  *
  * Longest form wins, so a plural line is read as the label it is rather than
  * as the shorter one it happens to contain.
  */
 const huBhgyHeaderLabelIn = (text: string): HeaderLabelMatch | null => {
-  const key = headingKey(text);
+  // The heading key without its trailing-mark trim: a label's colon is what
+  // tells it from a sentence that opens with the same words.
+  const key = collapseSpacedLetters(text)
+    .replaceAll(/[\s ]+/gu, " ")
+    .trim()
+    .toLocaleLowerCase("hu-HU");
   let best: {
     label: HuBhgyHeaderLabel;
     role: ParagraphRole;
@@ -519,7 +646,7 @@ const huBhgyHeaderLabelIn = (text: string): HeaderLabelMatch | null => {
   for (const { label, role, forms } of HEADER_LABELS) {
     for (const form of forms) {
       if (
-        key.startsWith(form) &&
+        isLabelOpening(key, form) &&
         (best === null || form.length > best.length)
       ) {
         best = { label, role, length: form.length };
@@ -551,11 +678,16 @@ const BENCH_ROLES = [
   { suffix: "bíró", role: DECISION_JUDGE_ROLE.PANEL_MEMBER },
 ] as const;
 
+const SIGNATURE_ROLE_SUFFIXES = BENCH_ROLES.map(({ suffix }) => suffix);
+
+/** `s.k.`, optionally followed by one of the publisher's bench roles. */
+const SIGNED_IN_ORIGINAL = new RegExp(
+  String.raw`\bs\.\s?k\.(?:\s+(?:${SIGNATURE_ROLE_SUFFIXES.join("|")}))?\s*$`,
+  "iu",
+);
+
 /** Members of one panel line, as the court separates them. */
 const PANEL_MEMBER_SEPARATOR = /[/,;]/u;
-
-/** `s.k.`, the signed-in-the-original mark, which is not part of a name. */
-const SIGNED_IN_ORIGINAL = /\bs\.\s?k\.\s*$/iu;
 
 type BenchRoleMatch = {
   readonly role: DecisionJudgeInput["role"];
@@ -646,60 +778,62 @@ const MONTH_NUMBERS = new Map<string, number>(
   HUNGARIAN_MONTHS.map((name, index) => [name, index + 1]),
 );
 
-const SPELLED_DATE = new RegExp(
-  String.raw`(?<year>\d{4})\.\s*(?<month>${MONTH_NAMES})\s*(?<day>\d{1,2})\.`,
+// The words év/évi (year) and hó (month) are optional parts of the
+// publisher's date formula, in both document eras.
+const DATE_SOURCE = String.raw`(?<year>\d{4})\.\s*(?:évi?\s+)?(?:(?<monthName>${MONTH_NAMES})\s*(?:hó\s+)?|(?<monthNumber>\d{1,2})\.\s*)(?<day>\d{1,2})(?:\.|-(?:án|én))`;
+const HU_DATE = new RegExp(String.raw`(?<!\d)${DATE_SOURCE}`, "iu");
+const DATE_ONLY = new RegExp(
+  String.raw`^${DATE_SOURCE}(?:\s*napján\.?)?$`,
   "iu",
 );
-
-const NUMERIC_DATE =
-  /(?<year>\d{4})\.\s*(?<month>\d{1,2})\.\s*(?<day>\d{1,2})\./u;
 
 const pad = (value: number): string => String(value).padStart(2, "0");
 
 /**
- * The decision's own date, read off a closing line.
- *
- * The listing states only `HatarozatEve`, the year, so a date derived from it
- * would be a guess wearing a day. Where the document prints none, the decision
- * carries no date rather than a wrong one.
+ * Read only a full calendar date. The listing's decisionYear remains a year;
+ * neither that nor a document's timestamp reference supplies a month or day.
  */
 export const huDecisionDateFrom = (line: string): string | undefined => {
-  const spelled = SPELLED_DATE.exec(line)?.groups;
-  const spelledYear = spelled?.["year"];
-  if (spelled !== undefined && spelledYear !== undefined) {
-    const month = MONTH_NUMBERS.get(
-      (spelled["month"] ?? "").toLocaleLowerCase("hu-HU"),
-    );
-    if (month !== undefined) {
-      return `${spelledYear}-${pad(month)}-${pad(Number(spelled["day"]))}`;
-    }
-  }
-  const numeric = NUMERIC_DATE.exec(line)?.groups;
-  const year = numeric?.["year"];
-  if (numeric === undefined || year === undefined) {
+  const groups = HU_DATE.exec(line)?.groups;
+  const year = groups?.["year"];
+  if (groups === undefined || year === undefined) {
     return undefined;
   }
-  const month = Number(numeric["month"]);
-  const day = Number(numeric["day"]);
-  return month >= 1 && month <= 12 && day >= 1 && day <= 31
-    ? `${year}-${pad(month)}-${pad(day)}`
-    : undefined;
+  const monthName = groups["monthName"];
+  const month =
+    monthName === undefined
+      ? Number(groups["monthNumber"])
+      : MONTH_NUMBERS.get(monthName.toLocaleLowerCase("hu-HU"));
+  if (month === undefined) {
+    return panic("Matched Hungarian month has no calendar number");
+  }
+  const date = `${year}-${pad(month)}-${pad(Number(groups["day"]))}`;
+  return parsePlainDate(date) === null ? undefined : date;
 };
 
 /**
- * A place-and-date line: `Budapest, 2025. október 1.` The place is the court's
- * seat, so the comma is what tells this line from a sentence ending in a date.
+ * A complete place-and-date formula. Anonymisation can replace, shorten or
+ * remove the place; a comma still separates it from the date. The publisher
+ * also prints the literal placeholder "helység neve" without that separator.
+ * Requiring the visual line to end here excludes dates inside running text.
  */
-const CLOSING_LINE = /^\p{Lu}[\p{L}\-\s]{2,30},\s*\d{4}\./u;
+const CLOSING_LINE = new RegExp(
+  String.raw`^(?:[\p{L}\d()\-\s]{0,40},|helység neve)\s*${DATE_SOURCE}(?:\s*napján\.?)?$`,
+  "iu",
+);
 
-/** The date is where the line ends: `2021. március 3.`, `30. napján`. */
-const DATE_ENDS_LINE = /\d{1,2}\.(?:\s*napján\.?)?$/u;
+const closingDateFrom = (text: string): string | undefined => {
+  const firstLine = text.split("\n").at(0)?.trim() ?? "";
+  return CLOSING_LINE.test(firstLine)
+    ? huDecisionDateFrom(firstLine)
+    : undefined;
+};
 
 /**
  * The date of a closing line a soft break put inside a longer paragraph.
  *
  * A break renders as a newline inside one line rather than ending it
- * (`runContentText` maps `break` to "\n"), so a body paragraph built with
+ * (`runContentVisibleText` maps `break` to "\n"), so a body paragraph built with
  * `\line` carries the place-and-date line after its own text, where a match
  * anchored to the paragraph's start never sees it. Each visual line after the
  * first is read on its own, as `huDocketFrom` reads the header; the first is
@@ -719,11 +853,22 @@ const closingDateAfterSoftBreak = (text: string): string | undefined => {
     }
     const trimmed = rawLine.trim();
     const date =
-      index > 0 && CLOSING_LINE.test(trimmed) && DATE_ENDS_LINE.test(trimmed)
+      index > 0 && CLOSING_LINE.test(trimmed)
         ? huDecisionDateFrom(trimmed)
         : undefined;
     if (date !== undefined) {
       return date;
+    }
+    const nextLine = lines.at(index + 1)?.trim();
+    if (
+      DATE_ONLY.test(trimmed) &&
+      nextLine !== undefined &&
+      SIGNED_IN_ORIGINAL.test(nextLine)
+    ) {
+      const signedDate = huDecisionDateFrom(trimmed);
+      if (signedDate !== undefined) {
+        return signedDate;
+      }
     }
   }
   return undefined;
@@ -738,6 +883,8 @@ const HU_DECISION_TYPES = [
   "kollégiumi állásfoglalás",
   "kollégiumi vélemény",
   "elvi határozat",
+  "részítélet",
+  "közbenső ítélet",
   "ítélet",
   "végzés",
   "határozat",
@@ -747,17 +894,24 @@ const HU_DECISION_TYPES = [
  * The decision's kind, from the title lines the document opens with.
  *
  * The publisher prints it in the accusative under the operative part
- * (`ítéletet`, `végzést`) and in the possessive in the title block
- * (`ítélete`), so the stem is what matches and the stored value is the
- * dictionary form.
+ * (`ítéletet`, `végzést`) and in the possessive in the title block, whose
+ * vowel follows the word's harmony: `ítélete`, `végzése`, but `határozata`
+ * (`A Kúria Önkormányzati Tanácsának határozata`) and `állásfoglalása`. So
+ * the stem is what matches and the stored value is the dictionary form.
  */
+const HU_POSSESSIVE_ENDINGS = ["e", "a"] as const;
+
 export const huDecisionTypeFrom = (
   lines: readonly string[],
 ): string | undefined => {
   for (const line of lines) {
     const key = headingKey(line);
     const matched = HU_DECISION_TYPES.find(
-      (type) => key === type || key.startsWith(`${type}e`),
+      (type) =>
+        key === type ||
+        HU_POSSESSIVE_ENDINGS.some((ending) =>
+          key.startsWith(`${type}${ending}`),
+        ),
     );
     if (matched !== undefined) {
       return matched;
@@ -773,6 +927,20 @@ export const huDecisionTypeFrom = (
   }
   return undefined;
 };
+
+/**
+ * Whether a short line introduces the operative part: its accusative
+ * introduction (`Í T É L E T E T :`), or, below a header, the kind printed
+ * alone (`V é g z é s`). Above a header the same word is the title block's.
+ */
+const opensOperativePart = (
+  key: string,
+  text: string,
+  belowHeader: boolean,
+): boolean =>
+  text.length <= 40 &&
+  (OPERATIVE_INTRODUCTIONS.has(key) ||
+    (belowHeader && HU_DECISION_TYPES.some((type) => type === key)));
 
 /** `Az ügy száma:      Gfv.VI.30.091/2025/4.` */
 const DOCKET_LABEL = "az ügy száma:";
@@ -823,7 +991,7 @@ const persistableDocket = (docket: string): string | undefined =>
 export const huDocketFrom = (lines: readonly string[]): string | undefined => {
   for (const block of lines) {
     // A soft break renders as a newline inside one line rather than ending
-    // it (`runContentText` maps `break` to "\n"), so a header paragraph built
+    // it (`runContentVisibleText` maps `break` to "\n"), so a header paragraph built
     // with `\line` instead of `\par` carries the rest of the document with
     // it. The docket is stated on its own visual line, so read those: an
     // unbounded slice of the block took the whole body into the docket.
@@ -877,19 +1045,25 @@ const PLACEHOLDER_STEMS = [
   "telefonszám",
 ] as const;
 
-/** `név1`, `Terhelt1`, `Gyanúsított 1.`, `cég12` */
+/**
+ * `név1`, `Terhelt1`, `Gyanúsított 1.`, `cég12`. The token's number ends the
+ * token: a number that runs on into a larger one ("a felperes 2007. évi",
+ * "Felperes 5.300.000.-forint", "felperes 925.-Ft/db") is the court's own text
+ * about that party, and so is a stem inside a longer word.
+ */
 const NUMBERED_PLACEHOLDER = new RegExp(
-  String.raw`\b(?:${PLACEHOLDER_STEMS.join("|")})\s?\d{1,3}\.?`,
+  String.raw`(?<![\p{L}\p{N}])(?:${PLACEHOLDER_STEMS.join("|")})\s?\d{1,3}(?![\p{L}\p{N}]|[.,]\p{N}|\.-)\.?`,
   "giu",
 );
 
 /**
  * `alperes neve (címe)`, `I.rendű felperes neve`, `város neve`,
  * `terhelt születési helye`: the legacy era spells the field out in the
- * possessive instead of numbering it.
+ * possessive instead of numbering it. The field word ends the token, so
+ * "a felperes nevezett Rt." stays text.
  */
 const SPELLED_PLACEHOLDER =
-  /\b(?:[IVX]+\.\s?rendű\s+)?(?:felperes|alperes|terhelt|vádlott|gyanúsított|kérelmező|kérelmezett|tanú|sértett|város|község|utca|munkáltató|védő)\s+(?:születési\s+)?(?:neve|címe|helye|ideje|lakcíme|székhelye|anyja\s+neve)/giu;
+  /(?<![\p{L}\p{N}])(?:[IVX]+\.\s?rendű\s+)?(?:felperes|alperes|terhelt|vádlott|gyanúsított|kérelmező|kérelmezett|tanú|sértett|város|község|utca|munkáltató|védő)\s+(?:születési\s+)?(?:neve|címe|helye|ideje|lakcíme|székhelye|anyja\s+neve)(?![\p{L}\p{N}])/giu;
 
 type AnonSpan = { readonly start: number; readonly end: number };
 
@@ -951,6 +1125,107 @@ const inlinesOf = (runs: readonly DocRun[]): Inline[] =>
 /** `[1]`, `[42]`: the number the court itself cites its paragraphs by. */
 const COURT_PARAGRAPH_NUMBER = /^\[(?<number>\d{1,4})\]\s*/u;
 
+/**
+ * What the next line of the body is, as evidence for the line before it: a
+ * title heads the court's next numbered paragraph, or the closing part when
+ * the court titles that too (`Záró rész` before the place and date).
+ */
+type NextBodyLine = "numbered-paragraph" | "closing" | "other";
+
+/**
+ * The next body line after `index`, past the notes and blank lines between.
+ * A table is not a numbered paragraph, nor is the end of the document.
+ */
+const nextBodyLineAfter = (
+  items: readonly DocItem[],
+  index: number,
+): NextBodyLine => {
+  for (let next = index + 1; next < items.length; next += 1) {
+    const item = items[next];
+    if (item === undefined || item.type === "table") {
+      return "other";
+    }
+    if (item.line.kind === "note") {
+      continue;
+    }
+    const text = item.line.value.text.trim();
+    if (text.length === 0) {
+      continue;
+    }
+    if (COURT_PARAGRAPH_NUMBER.test(text)) {
+      return "numbered-paragraph";
+    }
+    return closingDateFrom(text) === undefined ? "other" : "closing";
+  }
+  return "other";
+};
+
+type RunWeight = "bold" | "regular";
+
+/** Bold when every visible character of the line is set in bold. */
+const weightOf = (runs: readonly DocRun[]): RunWeight => {
+  const visible = runs.filter(({ text }) => text.trim().length > 0);
+  return visible.length > 0 && visible.every(({ bold }) => bold)
+    ? "bold"
+    : "regular";
+};
+
+/**
+ * How the last body paragraph ended. One that runs on may continue in the
+ * next line, so only a line its weight sets apart can be a title after it.
+ */
+type PreviousParagraph =
+  | { readonly type: "finished" }
+  | { readonly type: "runs-on"; readonly weight: RunWeight };
+
+const FINISHED_PARAGRAPH: PreviousParagraph = { type: "finished" };
+
+type TitleBeforeSoftBreak = {
+  readonly title: readonly DocRun[];
+  readonly rest: readonly DocRun[];
+};
+
+/**
+ * A title the court sets on the first line of a paragraph and then, after a
+ * soft break, the numbered paragraph it heads (`Kereset` + `w:br` + `[2] …`).
+ * Splits the runs there, so each part keeps its own formatting; null when the
+ * line after the first break does not open a numbered paragraph.
+ */
+const titleBeforeSoftBreak = (
+  runs: readonly DocRun[],
+): TitleBeforeSoftBreak | null => {
+  const text = runs.map((run) => run.text).join("");
+  const breakAt = text.indexOf("\n");
+  if (
+    breakAt <= 0 ||
+    !COURT_PARAGRAPH_NUMBER.test(text.slice(breakAt + 1).trimStart())
+  ) {
+    return null;
+  }
+  const title: DocRun[] = [];
+  const rest: DocRun[] = [];
+  let start = 0;
+  for (const run of runs) {
+    const end = start + run.text.length;
+    if (end <= breakAt) {
+      title.push(run);
+    } else if (start > breakAt) {
+      rest.push(run);
+    } else {
+      const head = run.text.slice(0, breakAt - start);
+      const tail = run.text.slice(breakAt - start + 1);
+      if (head.length > 0) {
+        title.push({ ...run, text: head });
+      }
+      if (tail.length > 0) {
+        rest.push({ ...run, text: tail });
+      }
+    }
+    start = end;
+  }
+  return { title, rest };
+};
+
 // ── Parse ────────────────────────────────────────────────
 
 export type ParseHuBhgyInput = {
@@ -967,7 +1242,7 @@ export type ParseHuBhgyInput = {
 };
 
 export type ParseHuBhgyOutput = {
-  documentAst: DocumentAst;
+  documentAst: DecisionDocumentAst;
   fulltext: string;
   sections: DecisionSection[];
   /** Read off the document; the listing states only the year. */
@@ -997,15 +1272,15 @@ export const huBhgyHeaderLabelsOf = (
 ): readonly HuBhgyHeaderLabel[] => {
   const labels = new Set<HuBhgyHeaderLabel>();
   for (const item of itemsOf(document.package.document.content)) {
-    if (item.type !== "line") {
+    if (item.type !== "line" || item.line.kind !== "body") {
       continue;
     }
     // The header ends where the first section does. Past it a sentence can
     // open with a party's name, and a label is only a label in the header.
-    if (sectionHeadingIn(headingKey(item.line.text)) !== null) {
+    if (sectionHeadingIn(headingKey(item.line.value.text)) !== null) {
       break;
     }
-    const labelled = huBhgyHeaderLabelIn(item.line.text);
+    const labelled = huBhgyHeaderLabelIn(item.line.value.text);
     if (labelled !== null) {
       labels.add(labelled.label);
     }
@@ -1054,8 +1329,8 @@ const BODY_ROLE = {
   front: "intro",
   operative: "holding",
   reasoning: "argumentation",
-  apparatus: "apparatus",
   closing: "closing",
+  certification: "closing",
 } as const satisfies Record<Region, ParagraphRole>;
 
 const HEADING_ROLE_BY_LEVEL = {
@@ -1066,20 +1341,10 @@ const HEADING_ROLE_BY_LEVEL = {
 export const parseHuBhgyDecision = (
   input: ParseHuBhgyInput,
 ): ParseHuBhgyOutput => {
-  const items = itemsOf(input.document.package.document.content);
-  const noteLines: DocLine[] = [];
-  for (const note of arrayOrEmpty(input.document.package.footnotes)) {
-    if (note.noteType !== undefined && note.noteType !== "normal") {
-      continue;
-    }
-    const label = String(note.id);
-    const noteId = `fn-${note.id}`;
-    for (const block of note.content) {
-      if (block.type === "paragraph") {
-        noteLines.push(lineOf(block, { label, noteId }));
-      }
-    }
-  }
+  const items = itemsOf(
+    input.document.package.document.content,
+    createParagraphLineReader(input.document, lineOf),
+  );
 
   const builder = createBlockBuilder();
   const lineTexts: string[] = [];
@@ -1089,8 +1354,16 @@ export const parseHuBhgyDecision = (
   /** The header label the lines below a labelled one still belong to. */
   let continuedRole: ParagraphRole | null = null;
   let region: Region = "front";
-  let titleEmitted = false;
+  /** Whether the last level-1 heading was the reasons' own (`Indokolás`). */
+  let underReasonsHeading = false;
+  let previousParagraph: PreviousParagraph = FINISHED_PARAGRAPH;
+  /**
+   * Read through a call: the line handlers move `region`, and a direct
+   * comparison after them would still see the value narrowed before them.
+   */
+  const inFrontMatter = (): boolean => region === "front";
   let decisionDate: string | undefined;
+  let dateBeforeSignature: string | undefined;
   /**
    * A closing line found after a soft break inside a body paragraph. Only a
    * fallback: a closing line that opens its own paragraph is the formula
@@ -1101,39 +1374,145 @@ export const parseHuBhgyDecision = (
   /** Lines before the first section heading, where the kind is printed. */
   const titleLines: string[] = [];
 
-  const emitLine = (line: DocLine): void => {
-    if (line.text.trim().length === 0) {
+  /**
+   * Whether a line of the reasons is a title the court prints there. Besides
+   * its shape, a title heads the court's next numbered paragraph or the
+   * closing part; after a paragraph that runs on, it must also be set apart
+   * in bold, since a plain line there may finish that paragraph's sentence.
+   */
+  const opensTitle = (runs: readonly DocRun[], next: NextBodyLine): boolean => {
+    if (
+      region !== "reasoning" ||
+      !underReasonsHeading ||
+      next === "other" ||
+      !isPrintedSubheading(normalizeInlineLine(inlinesOf(runs)).plainText)
+    ) {
+      return false;
+    }
+    switch (previousParagraph.type) {
+      case "finished":
+        return true;
+      case "runs-on":
+        return (
+          previousParagraph.weight === "regular" && weightOf(runs) === "bold"
+        );
+      default:
+        previousParagraph satisfies never;
+        return panic("Unhandled paragraph ending");
+    }
+  };
+
+  const emitTitle = (runs: readonly DocRun[]): void => {
+    const normalized = normalizeInlineLine(inlinesOf(runs));
+    previousParagraph = FINISHED_PARAGRAPH;
+    builder.heading({
+      type: "heading",
+      level: 2,
+      role: HEADING_ROLE_BY_LEVEL[2],
+      inlines: normalized.inlines,
+      plainText: normalized.plainText,
+    });
+  };
+
+  /**
+   * A body line of the decision's own text: a court-numbered paragraph, an
+   * unnumbered one, or a title the court prints inside its reasons, on a line
+   * of its own or before a soft break.
+   */
+  const emitBodyText = (runs: readonly DocRun[], next: NextBodyLine): void => {
+    const split = titleBeforeSoftBreak(runs);
+    if (split !== null && opensTitle(split.title, "numbered-paragraph")) {
+      emitTitle(split.title);
+      emitBodyText(split.rest, next);
       return;
     }
-    lineTexts.push(line.text);
-
-    // ── A footnote's own text ──
-    //
-    // The notes are walked after the body, so every rule below reads a region
-    // and a wording this line has nothing to do with: it is the publisher's
-    // apparatus wherever the body left off, and it carries the mark it hangs
-    // from.
-    if (line.note !== undefined) {
+    const normalized = normalizeInlineLine(inlinesOf(runs));
+    const { match: numbered, line: unnumbered } = stripInlineLinePrefix(
+      normalized,
+      COURT_PARAGRAPH_NUMBER,
+    );
+    const number = numbered?.groups?.["number"];
+    const role: ParagraphRole = BODY_ROLE[region];
+    if (number === undefined && opensTitle(runs, next)) {
+      emitTitle(runs);
+      return;
+    }
+    previousParagraph = SENTENCE_FINISHED_END.test(normalized.plainText.trim())
+      ? FINISHED_PARAGRAPH
+      : { type: "runs-on", weight: weightOf(runs) };
+    if (number === undefined) {
       builder.paragraph({
         type: "paragraph",
-        role: "apparatus",
-        note: { type: "footnote", ...line.note },
+        role,
+        inlines: normalized.inlines,
+        plainText: normalized.plainText,
+      });
+      return;
+    }
+    // The bracketed number is the citable paragraph number, so it is kept as
+    // structure: a citation names `[31]`, and a prefix inside the text would
+    // make every search for the paragraph's words find the number too.
+    builder.paragraph({
+      type: "paragraph",
+      role,
+      number: Number(number),
+      inlines: unnumbered.inlines,
+      plainText: unnumbered.plainText,
+    });
+  };
+
+  const classifyBodyLine = (
+    body: BodyDocumentLine<DocLineData>,
+    next: NextBodyLine,
+  ): void => {
+    const line = body.value;
+    const key = headingKey(line.text);
+    const precedingDate = dateBeforeSignature;
+    dateBeforeSignature = undefined;
+
+    if (region === "certification") {
+      builder.paragraph({
+        type: "paragraph",
+        role: "signature",
         inlines: inlinesOf(line.runs),
         plainText: line.text,
       });
       return;
     }
-
-    const key = headingKey(line.text);
+    if (key.startsWith(KIADMANY)) {
+      region = "certification";
+      builder.paragraph({
+        type: "paragraph",
+        role: "closing",
+        inlines: inlinesOf(line.runs),
+        plainText: line.text,
+      });
+      return;
+    }
+    if (
+      precedingDate !== undefined &&
+      SIGNED_IN_ORIGINAL.test(line.text.trim())
+    ) {
+      decisionDate ??= precedingDate;
+      region = "closing";
+    }
 
     if (region === "front") {
       titleLines.push(line.text);
+      // Court numbering ends the caption even when its heading is absent.
+      if (COURT_PARAGRAPH_NUMBER.test(line.text.trim())) {
+        region = "reasoning";
+      }
     }
 
     // ── A section heading the publisher prints ──
     const heading = sectionHeadingIn(key);
     if (heading !== null) {
       region = heading.region ?? region;
+      if (heading.level === 1) {
+        underReasonsHeading = heading.key === REASONS_HEADING_KEY;
+      }
+      previousParagraph = FINISHED_PARAGRAPH;
       builder.heading({
         type: "heading",
         level: heading.level,
@@ -1145,8 +1524,15 @@ export const parseHuBhgyDecision = (
     }
 
     // ── The operative part's own introduction ──
-    if (OPERATIVE_INTRODUCTIONS.has(key) && line.text.length <= 40) {
+    if (
+      opensOperativePart(
+        key,
+        line.text,
+        region === "front" && statedLabels.size > 0,
+      )
+    ) {
       region = "operative";
+      underReasonsHeading = false;
       builder.heading({
         type: "heading",
         level: 1,
@@ -1168,8 +1554,9 @@ export const parseHuBhgyDecision = (
     }
 
     // ── The document's own title block ──
-    if (!titleEmitted && region === "front" && builder.blocks.length === 0) {
-      titleEmitted = true;
+    // Every earlier region transition emits a block, so an empty builder
+    // means this is the document's first unclassified line.
+    if (builder.blocks.length === 0) {
       builder.heading({
         type: "heading",
         level: 1,
@@ -1178,6 +1565,23 @@ export const parseHuBhgyDecision = (
         plainText: line.text,
       });
       return;
+    }
+
+    // A closing formula ends even an unlabelled continuation of the header.
+    const closingDate = closingDateFrom(line.text);
+    if (closingDate !== undefined) {
+      decisionDate ??= closingDate;
+      region = "closing";
+      builder.paragraph({
+        type: "paragraph",
+        role: "closing",
+        inlines: inlinesOf(line.runs),
+        plainText: line.text,
+      });
+      return;
+    }
+    if (DATE_ONLY.test(line.text.trim())) {
+      dateBeforeSignature = huDecisionDateFrom(line.text);
     }
 
     // ── Header labels ──
@@ -1210,28 +1614,6 @@ export const parseHuBhgyDecision = (
       }
     }
 
-    // ── The closing formula and what follows it ──
-    if (CLOSING_LINE.test(line.text)) {
-      decisionDate ??= huDecisionDateFrom(line.text);
-      region = "closing";
-      builder.paragraph({
-        type: "paragraph",
-        role: "closing",
-        inlines: inlinesOf(line.runs),
-        plainText: line.text,
-      });
-      return;
-    }
-    if (key.startsWith(KIADMANY)) {
-      region = "closing";
-      builder.paragraph({
-        type: "paragraph",
-        role: "apparatus",
-        inlines: inlinesOf(line.runs),
-        plainText: line.text,
-      });
-      return;
-    }
     if (region === "closing") {
       builder.paragraph({
         type: "paragraph",
@@ -1247,55 +1629,70 @@ export const parseHuBhgyDecision = (
     // A footnote returned above, so a note's date-shaped line never dates the
     // decision; nor does the kiadmány's, which opens the closing region first.
     softBreakDate ??= closingDateAfterSoftBreak(line.text);
-    const numbered = COURT_PARAGRAPH_NUMBER.exec(line.text);
-    const inlines = inlinesOf(line.runs);
-    const number = numbered?.groups?.["number"];
-    const role: ParagraphRole = BODY_ROLE[region];
-    if (numbered === null || number === undefined) {
-      builder.paragraph({
-        type: "paragraph",
-        role,
-        inlines,
-        plainText: line.text,
-      });
+    emitBodyText(line.runs, next);
+  };
+
+  const emitLine = (line: DocLine, next: NextBodyLine): void => {
+    const value = line.kind === "body" ? line.value : line.note.value;
+    if (value.text.trim().length === 0) {
       return;
     }
-    // The bracketed number is the citable paragraph number, so it is kept as
-    // structure: a citation names `[31]`, and a prefix inside the text would
-    // make every search for the paragraph's words find the number too.
-    const rest = stripInlinePrefix(inlines, numbered[0].length);
+    lineTexts.push(value.text);
+    if (line.kind === "body") {
+      classifyBodyLine(line, next);
+      // Certification can begin after a soft break and continue in later
+      // paragraphs; keep the date found before it, but read no date past it.
+      if (
+        value.text
+          .split("\n")
+          .some((text) => headingKey(text).startsWith(KIADMANY))
+      ) {
+        region = "certification";
+      }
+      return;
+    }
+    const { label, noteId } = line.note;
     builder.paragraph({
       type: "paragraph",
-      role,
-      number: Number(number),
-      inlines: rest,
-      plainText: inlinesToPlainText(rest),
+      role: "apparatus",
+      note: { type: "footnote", label, noteId },
+      inlines: inlinesOf(value.runs),
+      plainText: value.text,
     });
   };
 
-  for (const item of items) {
+  for (const [index, item] of items.entries()) {
     if (item.type === "line") {
-      emitLine(item.line);
+      emitLine(item.line, nextBodyLineAfter(items, index));
       continue;
     }
+    dateBeforeSignature = undefined;
     const rows: TableCell[][] = item.table.rows.map((row) =>
       row.map((cell) => ({
-        inlines: inlinesOf(cell.runs),
-        plainText: cell.text,
+        inlines: inlinesOf(cell.value.runs),
+        plainText: cell.value.text,
       })),
     );
     const plainText = item.table.rows
-      .map((row) => row.map(({ text }) => text).join("\t"))
+      .map((row) => row.map(({ value }) => value.text).join("\t"))
       .join("\n");
     if (plainText.trim().length === 0) {
       continue;
     }
     lineTexts.push(plainText);
+    // A sentence does not run on through a table into a line after it.
+    previousParagraph = FINISHED_PARAGRAPH;
+    if (inFrontMatter()) {
+      for (const row of item.table.rows) {
+        const labelled = huBhgyHeaderLabelIn(
+          row.map(({ value }) => value.text).join("\t"),
+        );
+        if (labelled !== null) {
+          statedLabels.add(labelled.label);
+        }
+      }
+    }
     builder.table({ type: "table", rows, plainText });
-  }
-
-  for (const line of noteLines) {
-    emitLine(line);
   }
 
   const { blocks } = builder;
@@ -1304,20 +1701,9 @@ export const parseHuBhgyDecision = (
     .filter((text) => text.length > 0)
     .join("\n\n");
 
-  validateAndLog(
-    {
-      parser: HU_BHGY_PARSER,
-      caseNumber: input.listedCaseNumber,
-      language: "hu",
-      url: input.sourceUrl,
-    },
-    buildValidationHtml(lineTexts),
-    blocks,
-  );
-
   decisionDate ??= softBreakDate;
   const documentDocket = huDocketFrom(lineTexts);
-  const ast: DocumentAst = {
+  const ast: DecisionDocumentAst = {
     version: 1,
     source: {
       system: HU_BHGY_SOURCE_SYSTEM,
@@ -1341,7 +1727,7 @@ export const parseHuBhgyDecision = (
   return {
     documentAst: ast,
     fulltext,
-    sections: sectionsFromAst(blocks),
+    sections: sectionsFromAst(blocks, "paragraph-anchor"),
     decisionDate,
     decisionType: huDecisionTypeFrom(titleLines),
     documentDocket,

@@ -1,21 +1,24 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
+import { readTimePolicy } from "@/api/lib/billing-time";
 
+import { resolveSuggestionBillingDefault } from "./billing-default";
 import { loadTimeSuggestions, serializeSuggestion } from "./load";
 import {
   timeSuggestionDateSchema,
   timeSuggestionTimezoneSchema,
 } from "./schemas";
 
-const listTimeSuggestionsQuerySchema = t.Object({
+const listTimeSuggestionsQuerySchema = v.object({
   date: timeSuggestionDateSchema,
   timezoneId: timeSuggestionTimezoneSchema,
 });
 
 const listTimeSuggestions = createSafeHandler(
   {
+    contract: "patch",
     description:
       "List suggested time entries for one day in the current matter, drawn " +
       "from the signed-in user's own activity here: chat messages they sent " +
@@ -26,6 +29,7 @@ const listTimeSuggestions = createSafeHandler(
       "time-entries.suggestions.dismiss.",
     permissions: { timeEntry: ["read"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
+    featureAccess: { featureId: "time-billing", type: "required" },
     mcp: {
       type: "capability",
       readClass: "tenant",
@@ -35,23 +39,51 @@ const listTimeSuggestions = createSafeHandler(
     access: "read",
     query: listTimeSuggestionsQuerySchema,
   },
-  async function* ({ query, safeDb, session, user, workspaceId }) {
+  async function* ({
+    query,
+    safeDb,
+    session,
+    user,
+    workspaceId,
+    featureAccessSnapshot,
+  }) {
     const loaded = yield* loadTimeSuggestions({
       safeDb,
+      featureAccessSnapshot,
       organizationId: session.activeOrganizationId,
       workspaceId,
       userId: user.id,
       date: query.date,
       timezoneId: query.timezoneId,
     });
+    const policy = yield* Result.await(
+      readTimePolicy({
+        safeDb,
+        organizationId: session.activeOrganizationId,
+      }),
+    );
+    const billingDefault = yield* resolveSuggestionBillingDefault({
+      safeDb,
+      workspaceId,
+      userId: user.id,
+      dateWorked: query.date,
+    });
+    const items = loaded.pending.map((cluster) =>
+      serializeSuggestion(
+        cluster,
+        policy.timeMinimumUnitMinutes,
+        billingDefault.billable,
+      ),
+    );
 
     return Result.ok({
       date: loaded.date,
-      activeMinutes: loaded.pending.reduce(
-        (sum, cluster) => sum + cluster.durationMinutes,
+      activeMinutes: items.reduce(
+        (sum, suggestion) => sum + suggestion.durationMinutes,
         0,
       ),
-      items: loaded.pending.map(serializeSuggestion),
+      loggedMinutes: loaded.loggedMinutes,
+      items,
     });
   },
 );

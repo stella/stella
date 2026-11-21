@@ -1,22 +1,21 @@
 import { and, asc, eq, inArray, lte, sql } from "drizzle-orm";
 
-import { PUBLIC_CASE_LAW_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
+import { PUBLIC_CASE_LAW_PAGE_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
 
-import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
-import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
+import { caseLawSources, publishedCaseLawDecisions } from "@/api/db/schema";
 import type {
   CaseLawPublicReadDb,
   CaseLawPublicReadTransaction,
 } from "@/api/lib/case-law-public-read-db";
 import { normalizePublicDecisionLanguage } from "@/api/lib/case-law/decision-language";
-import { publishedCaseLawDecision } from "@/api/lib/case-law/published-decisions";
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
-import { publicRowHoldsDocument } from "@/api/lib/case-law/stored-payload";
+import { publicRowHoldsDocumentFor } from "@/api/lib/case-law/stored-payload";
 import { LIMITS } from "@/api/lib/limits";
 import {
   definePublicLawSharedQuery,
   PUBLIC_LAW_SHARED_QUERY,
 } from "@/api/lib/public-law-shared-query";
+import { brandPersistedCaseLawDecisionId } from "@/api/lib/safe-id-boundaries";
 
 /**
  * One language version of a decision, with everything its own public route
@@ -51,7 +50,7 @@ export type PublicDecisionLanguageAlternatesByGroup = {
 const NO_ALTERNATES: readonly PublicDecisionLanguageAlternate[] = [];
 
 /** The same lower-case, hyphenated form the public routes use for a language. */
-const normalizedLanguageSql = sql<string>`replace(lower(${caseLawDecisions.language}), '_', '-')`;
+const normalizedLanguageSql = sql<string>`replace(lower(${publishedCaseLawDecisions.language}), '_', '-')`;
 const ROUTE_LANGUAGE_PATTERN = "^[a-z]{2,3}(-[a-z0-9]{2,8})*$";
 
 /**
@@ -65,35 +64,37 @@ export const readPublicDecisionLanguageAlternatesQuery =
   definePublicLawSharedQuery(
     PUBLIC_LAW_SHARED_QUERY.caseLawLanguageAlternates,
     async (
-      tx: CaseLawPublicReadTransaction,
+      tx: Pick<CaseLawPublicReadTransaction, "select">,
       languageGroupKeys: readonly string[],
+      countries: readonly string[] = PUBLIC_CASE_LAW_PAGE_COUNTRIES,
     ): Promise<PublicDecisionLanguageAlternateRow[]> => {
       const versions = tx
         .select({
-          id: caseLawDecisions.id,
-          caseNumber: caseLawDecisions.caseNumber,
-          slug: caseLawDecisions.slug,
-          country: caseLawDecisions.country,
-          court: caseLawDecisions.court,
-          decisionDate: caseLawDecisions.decisionDate,
-          language: caseLawDecisions.language,
-          languageGroupKey: caseLawDecisions.languageGroupKey,
+          id: publishedCaseLawDecisions.id,
+          caseNumber: publishedCaseLawDecisions.caseNumber,
+          slug: publishedCaseLawDecisions.slug,
+          country: publishedCaseLawDecisions.country,
+          court: publishedCaseLawDecisions.court,
+          decisionDate: publishedCaseLawDecisions.decisionDate,
+          language: publishedCaseLawDecisions.language,
+          languageGroupKey: publishedCaseLawDecisions.languageGroupKey,
           languageRank: sql<number>`row_number() over (
-            partition by ${caseLawDecisions.languageGroupKey}, ${normalizedLanguageSql}
-            order by ${caseLawDecisions.id}
+            partition by ${publishedCaseLawDecisions.languageGroupKey}, ${normalizedLanguageSql}
+            order by ${publishedCaseLawDecisions.id}
           )`.as("language_rank"),
         })
-        .from(caseLawDecisions)
+        .from(publishedCaseLawDecisions)
         .innerJoin(
           caseLawSources,
-          eq(caseLawSources.id, caseLawDecisions.sourceId),
+          eq(caseLawSources.id, publishedCaseLawDecisions.sourceId),
         )
         .where(
           and(
-            inArray(caseLawDecisions.languageGroupKey, [...languageGroupKeys]),
-            inArray(caseLawDecisions.country, [...PUBLIC_CASE_LAW_COUNTRIES]),
+            inArray(publishedCaseLawDecisions.languageGroupKey, [
+              ...languageGroupKeys,
+            ]),
+            inArray(publishedCaseLawDecisions.country, [...countries]),
             redistributableCaseLawSource,
-            publishedCaseLawDecision,
             sql`${normalizedLanguageSql} ~ ${ROUTE_LANGUAGE_PATTERN}`,
           ),
         )
@@ -150,7 +151,7 @@ export const readPublicDecisionLanguageAlternatesQuery =
  * version per route-safe language; a group with a single version is not a
  * multilingual decision and offers no alternates.
  */
-export const groupPublicDecisionLanguageAlternates = (
+const groupPublicDecisionLanguageAlternates = (
   rows: readonly PublicDecisionLanguageAlternateRow[],
 ): PublicDecisionLanguageAlternatesByGroup => {
   const groups = new Map<string, PublicDecisionLanguageAlternate[]>();
@@ -186,6 +187,85 @@ type ReadPublicDecisionLanguageAlternatesOptions = {
   languageGroupKeys: readonly string[];
 };
 
+/**
+ * The version of a decision to read instead of it, if any. A decision already
+ * in the language stays itself, and one missing from its own group's public
+ * list is left for the read gate to answer: it names no alternate.
+ */
+export const preferredLanguageVersionId = ({
+  id,
+  language,
+  alternates,
+  preferred,
+}: {
+  id: string;
+  language: string;
+  alternates: readonly PublicDecisionLanguageAlternate[];
+  preferred: string;
+}): string | undefined =>
+  normalizePublicDecisionLanguage(language) === preferred ||
+  !alternates.some((alternate) => alternate.id === id)
+    ? undefined
+    : alternates.find(
+        (alternate) =>
+          normalizePublicDecisionLanguage(alternate.language) === preferred,
+      )?.id;
+
+/**
+ * For each decision that has a version in `language` other than itself, the
+ * id of that version. A decision with none is absent from the answer.
+ */
+export const readPreferredLanguageVersionIds = async ({
+  caseLawDb,
+  decisionIds,
+  language: preferred,
+}: {
+  caseLawDb: CaseLawPublicReadDb;
+  decisionIds: readonly string[];
+  language: string;
+}): Promise<ReadonlyMap<string, string>> => {
+  const decisions = await caseLawDb(
+    async (tx) =>
+      await tx
+        .select({
+          id: publishedCaseLawDecisions.id,
+          language: publishedCaseLawDecisions.language,
+          languageGroupKey: publishedCaseLawDecisions.languageGroupKey,
+        })
+        .from(publishedCaseLawDecisions)
+        .where(
+          inArray(
+            publishedCaseLawDecisions.id,
+            decisionIds.map((id) => brandPersistedCaseLawDecisionId(id)),
+          ),
+        )
+        .limit(decisionIds.length),
+  );
+  const alternates = await readPublicDecisionLanguageAlternatesByGroup({
+    caseLawDb,
+    languageGroupKeys: [
+      ...new Set(
+        decisions.flatMap(({ languageGroupKey }) =>
+          languageGroupKey === null ? [] : [languageGroupKey],
+        ),
+      ),
+    ],
+  });
+  const versions = new Map<string, string>();
+  for (const { id, language, languageGroupKey } of decisions) {
+    const version = preferredLanguageVersionId({
+      id,
+      language,
+      alternates: alternates.alternatesFor(languageGroupKey),
+      preferred,
+    });
+    if (version !== undefined) {
+      versions.set(id, version);
+    }
+  }
+  return versions;
+};
+
 /** Alternates for a page of hits, keyed by language group. */
 export const readPublicDecisionLanguageAlternatesByGroup = async ({
   caseLawDb,
@@ -202,24 +282,13 @@ export const readPublicDecisionLanguageAlternatesByGroup = async ({
 };
 
 /**
- * The same batch, bound to the public reader, for a caller whose own query
- * also names private tables and so cannot hold the reader itself.
- */
-export const readPublicDecisionLanguageAlternatesForGroupKeys = async (
-  languageGroupKeys: readonly string[],
-): Promise<PublicDecisionLanguageAlternatesByGroup> =>
-  await readPublicDecisionLanguageAlternatesByGroup({
-    caseLawDb: caseLawPublicReadDb,
-    languageGroupKeys,
-  });
-
-/**
  * Alternates for rows read inside an open transaction: the group keys of a
  * page as selected (nulls and repeats included), one read for all of them.
  */
 export const readPublicDecisionLanguageAlternatesInTx = async (
-  tx: CaseLawPublicReadTransaction,
+  tx: Pick<CaseLawPublicReadTransaction, "select">,
   languageGroupKeys: readonly (string | null)[],
+  countries: readonly string[] = PUBLIC_CASE_LAW_PAGE_COUNTRIES,
 ): Promise<PublicDecisionLanguageAlternatesByGroup> => {
   const keys = [
     ...new Set(languageGroupKeys.filter((key): key is string => key !== null)),
@@ -227,7 +296,7 @@ export const readPublicDecisionLanguageAlternatesInTx = async (
   return groupPublicDecisionLanguageAlternates(
     keys.length === 0
       ? []
-      : await readPublicDecisionLanguageAlternatesQuery(tx, keys),
+      : await readPublicDecisionLanguageAlternatesQuery(tx, keys, countries),
   );
 };
 
@@ -235,9 +304,11 @@ export const readPublicDecisionLanguageAlternatesInTx = async (
 export const listPublicDecisionLanguageAlternates = async ({
   tx,
   languageGroupKey,
+  countries,
 }: {
   tx: CaseLawPublicReadTransaction;
   languageGroupKey: string | null;
+  countries: readonly string[];
 }): Promise<
   readonly (PublicDecisionLanguageAlternate & { hasDocument: boolean })[]
 > => {
@@ -248,27 +319,31 @@ export const listPublicDecisionLanguageAlternates = async ({
   // before language deduplication so a textless duplicate cannot hide text.
   const versions = tx
     .select({
-      id: caseLawDecisions.id,
-      caseNumber: caseLawDecisions.caseNumber,
-      slug: caseLawDecisions.slug,
-      country: caseLawDecisions.country,
-      court: caseLawDecisions.court,
-      decisionDate: caseLawDecisions.decisionDate,
-      language: caseLawDecisions.language,
-      hasDocument: publicRowHoldsDocument.as("has_document"),
+      id: publishedCaseLawDecisions.id,
+      caseNumber: publishedCaseLawDecisions.caseNumber,
+      slug: publishedCaseLawDecisions.slug,
+      country: publishedCaseLawDecisions.country,
+      court: publishedCaseLawDecisions.court,
+      decisionDate: publishedCaseLawDecisions.decisionDate,
+      language: publishedCaseLawDecisions.language,
+      hasDocument: publicRowHoldsDocumentFor(publishedCaseLawDecisions).as(
+        "has_document",
+      ),
       languageRank: sql<number>`row_number() over (
         partition by ${normalizedLanguageSql}
-        order by ${publicRowHoldsDocument} desc, ${caseLawDecisions.id}
+        order by ${publicRowHoldsDocumentFor(publishedCaseLawDecisions)} desc, ${publishedCaseLawDecisions.id}
       )`.as("language_rank"),
     })
-    .from(caseLawDecisions)
-    .innerJoin(caseLawSources, eq(caseLawSources.id, caseLawDecisions.sourceId))
+    .from(publishedCaseLawDecisions)
+    .innerJoin(
+      caseLawSources,
+      eq(caseLawSources.id, publishedCaseLawDecisions.sourceId),
+    )
     .where(
       and(
-        eq(caseLawDecisions.languageGroupKey, languageGroupKey),
-        inArray(caseLawDecisions.country, [...PUBLIC_CASE_LAW_COUNTRIES]),
+        eq(publishedCaseLawDecisions.languageGroupKey, languageGroupKey),
+        inArray(publishedCaseLawDecisions.country, [...countries]),
         redistributableCaseLawSource,
-        publishedCaseLawDecision,
         sql`${normalizedLanguageSql} ~ ${ROUTE_LANGUAGE_PATTERN}`,
       ),
     )

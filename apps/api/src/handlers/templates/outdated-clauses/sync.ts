@@ -1,17 +1,18 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { syncAllClausesHandler } from "@/api/lib/template-clause-links";
 
-const syncAllTemplateClausesParamsSchema = t.Object({
-  templateId: tSafeId("template"),
+const syncAllTemplateClausesParamsSchema = v.object({
+  templateId: resourceIdSchema("template"),
 });
 
 const config = {
+  contract: "patch",
   description:
     "Re-pin every outdated clause link of one template to its clause's " +
     "current version in a single transaction, auditing each link as if it " +

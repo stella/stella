@@ -1,5 +1,9 @@
 name: Railway Template Source
 
+defaults:
+  run:
+    shell: bash
+
 on:
   schedule:
     - cron: "17 6 * * *"
@@ -24,7 +28,9 @@ concurrency:
 jobs:
   drift:
     name: Check template-source runtime credentials
-    runs-on: ubuntu-latest
+    # A manual run uses main's script, like the scheduled one.
+    if: github.event_name != 'workflow_dispatch' || github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
 
     steps:
@@ -34,8 +40,9 @@ jobs:
           persist-credentials: false
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: stella/.github/actions/setup-bun-cached@2664e46f02aea7164ba71bcdd485a686166993a4
         with:
+          save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: "package.json"
 
       - name: Check Railway template-source runtime credentials

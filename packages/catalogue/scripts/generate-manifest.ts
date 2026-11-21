@@ -11,6 +11,8 @@ import { panic } from "better-result";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
+import { repoRelativePath } from "@stll/portable-path";
+
 import { CATALOGUE_KINDS } from "../src/schema";
 import {
   getInspectedDirectoryEntries,
@@ -21,6 +23,7 @@ import {
 
 const packageRoot = path.join(import.meta.dirname, "..");
 const defaultEntriesRoot = path.join(packageRoot, "entries");
+export const CI_MARKDOWN_READER_INPUTS = [defaultEntriesRoot];
 const outputPath = path.join(packageRoot, "src", "catalogue.gen.ts");
 const installPayloadsOutputPath = path.join(
   packageRoot,
@@ -33,6 +36,8 @@ export type GeneratedEntry = {
   manifestPath: string;
   /** JSON-encoded string literal — already wrapped in quotes — or "null". */
   iconLiteral: string;
+  /** JSON-encoded slug of a native tool; null for every other kind. */
+  nativeToolSlugLiteral: string | null;
   skillPayload: GeneratedSkillPayload | null;
 };
 
@@ -100,6 +105,8 @@ export const collectEntries = (entriesRoot: string): GeneratedEntry[] => {
           importName,
           manifestPath: toImportPath(manifest),
           iconLiteral: iconLiteralFor(filesystem, folder),
+          nativeToolSlugLiteral:
+            kind === "native-tool" ? JSON.stringify(slug) : null,
           skillPayload,
         };
       })
@@ -132,6 +139,12 @@ const renderOutputs = (entries: readonly GeneratedEntry[]): RenderedOutputs => {
       `  { manifest: ${entry.importName}, icon: ${entry.iconLiteral} }`,
   );
 
+  const nativeToolSlugRows = entries.flatMap((entry) =>
+    entry.nativeToolSlugLiteral === null
+      ? []
+      : [`  ${entry.nativeToolSlugLiteral}`],
+  );
+
   const skillPayloadRows = entries
     .map((entry) => entry.skillPayload)
     .filter((payload): payload is GeneratedSkillPayload => payload !== null)
@@ -152,6 +165,10 @@ type GeneratedCatalogueInput = {
 export const GENERATED_ENTRIES: readonly GeneratedCatalogueInput[] = [
 ${formatRows(entryRows)}
 ];
+
+export const GENERATED_NATIVE_TOOL_SLUGS = [
+${formatRows(nativeToolSlugRows)}
+] as const;
 
 export const GENERATED_RECOMMENDED = recommended;
 `;
@@ -243,7 +260,7 @@ function iconLiteralFor(
   const iconSvg = path.join(folder, "icon.svg");
   const inspectedIconPng = getInspectedFilePath(filesystem, iconPng);
   if (inspectedIconPng !== null) {
-    const base64 = readFileSync(inspectedIconPng).toString("base64");
+    const base64 = readFileSync(inspectedIconPng).toBase64();
     return JSON.stringify(`data:image/png;base64,${base64}`);
   }
   const inspectedIconSvg = getInspectedFilePath(filesystem, iconSvg);
@@ -251,7 +268,7 @@ function iconLiteralFor(
     const base64 = Buffer.from(
       readFileSync(inspectedIconSvg, "utf-8"),
       "utf-8",
-    ).toString("base64");
+    ).toBase64();
     return JSON.stringify(`data:image/svg+xml;base64,${base64}`);
   }
   return "null";
@@ -301,7 +318,7 @@ function toImportName(kind: string, slug: string): string {
 
 function toImportPath(absolutePath: string): string {
   const srcDir = path.join(packageRoot, "src");
-  const relative = path.relative(srcDir, absolutePath);
+  const relative = repoRelativePath(srcDir, absolutePath);
   return relative.startsWith(".") ? relative : `./${relative}`;
 }
 

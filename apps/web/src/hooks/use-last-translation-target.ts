@@ -6,21 +6,15 @@ import {
   LAST_TRANSLATION_TARGET_STORAGE_KEY,
   parseLastTranslationTarget,
 } from "@/components/translate-document-dialog.logic";
+import { deviceStorage } from "@/lib/account/browser-storage";
 
 const noopSubscribe = () => () => undefined;
 const noStoredTarget = () => null;
 
-const readStoredTarget = (): DocumentTranslationTargetLanguageCode | null => {
-  try {
-    return parseLastTranslationTarget(
-      localStorage.getItem(LAST_TRANSLATION_TARGET_STORAGE_KEY),
-    );
-  } catch {
-    // Storage can be blocked entirely (private browsing, a locked-down
-    // profile); no remembered choice is the same as never having made one.
-    return null;
-  }
-};
+const readStoredTarget = (): DocumentTranslationTargetLanguageCode | null =>
+  parseLastTranslationTarget(
+    deviceStorage("local").getItem(LAST_TRANSLATION_TARGET_STORAGE_KEY),
+  );
 
 type LastTranslationTarget = {
   lastTarget: DocumentTranslationTargetLanguageCode | null;
@@ -44,12 +38,10 @@ export const useLastTranslationTarget = (): LastTranslationTarget => {
   return {
     lastTarget,
     rememberTarget: (target) => {
-      try {
-        localStorage.setItem(LAST_TRANSLATION_TARGET_STORAGE_KEY, target);
-      } catch {
-        // Best-effort: a blocked or full store costs the memory of the choice,
-        // never the choice itself.
-      }
+      deviceStorage("local").setItem(
+        LAST_TRANSLATION_TARGET_STORAGE_KEY,
+        target,
+      );
     },
   };
 };

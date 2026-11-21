@@ -1,23 +1,42 @@
 import type { SQLWrapper } from "drizzle-orm";
 
-import { CONTACT_TYPES, WORKSPACE_CONTACT_ROLES } from "@stll/api-contract";
+import {
+  CONTACT_TYPES,
+  INVOICE_LANGUAGES,
+  WORKSPACE_CONTACT_ROLES,
+} from "@stll/api-contract";
+import {
+  WORKSPACE_STATUS,
+  WORKSPACE_STATUSES,
+} from "@stll/api-contract/workspace-status";
 
 import { workspaceInsertCheck } from "@/api/db/rls";
 import {
+  ACCOUNT_AUDIT_EVENT_TYPES,
   AUDIT_ACTION,
   AUDIT_RESOURCE_TYPE,
 } from "@/api/lib/audit-log.constants";
 import type { AuditAction } from "@/api/lib/audit-log.constants";
+import { NARRATIVE_LANGUAGE_MAX_LENGTH } from "@/api/lib/billing/narrative-language";
 import type { SafeId } from "@/api/lib/branded-types";
 import { SANCTIONS_CONTACT_MODES } from "@/api/lib/lists/sanctions/monitoring-vocabulary";
 
 import {
+  EU_VAT_ID_SQL_COMPACT,
+  EU_VAT_ID_SQL_PATTERN,
+} from "../eu-vat-id-format";
+import { fieldsSetTogetherCheck } from "../field-groups";
+import {
+  importProvenanceColumns,
+  importProvenanceConstraints,
+} from "../import-provenance-columns";
+import {
   centsColumn,
   isNotNull,
   jsonb,
-  orgPolicies,
   organization,
   organizationCheck,
+  orgPolicies,
   p,
   pUuid,
   safeOrganizationId,
@@ -25,11 +44,11 @@ import {
   safeWorkspaceId,
   sql,
   stella,
+  timestamptz,
   user,
   workspaceIdCheck,
   wsOrganizationPolicies,
   wsPolicies,
-  timestamptz,
 } from "./common";
 import type {
   BankAccount,
@@ -41,6 +60,10 @@ import type {
   SchedulerPayload,
   SchedulerSchedule,
 } from "./common";
+
+const contactsOwner = sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.contacts'::regclass)`;
+
+export const TIME_BILLING_FORMATS = ["categories", "ledes"] as const;
 
 export const contacts = p.pgTable(
   "contacts",
@@ -82,16 +105,25 @@ export const contacts = p.pgTable(
     metadata: jsonb().$type<ContactPersistedMetadata | null>(),
     color: p.varchar({ length: 32 }),
 
+    timeBillingFormat: p
+      .text("time_billing_format", { enum: TIME_BILLING_FORMATS })
+      .notNull()
+      .default("categories"),
     // Billing fields
     registrationNumber: p.varchar("registration_number", {
       length: 64,
     }),
     taxId: p.varchar("tax_id", { length: 64 }),
+    vatId: p.varchar("vat_id", { length: 64 }),
+    // Null means the payer status has not been established.
+    vatPayer: p.boolean("vat_payer"),
     bankAccounts: jsonb("bank_accounts").$type<BankAccount[]>(),
     billingAddress: jsonb("billing_address").$type<BillingAddress>(),
     defaultHourlyRate: centsColumn("default_hourly_rate"),
     currency: p.varchar({ length: 3 }),
     paymentTermDays: p.integer("payment_term_days"),
+    /** Language preferred for invoices sent to this contact; null uses the issuer default. */
+    invoiceLanguage: p.text("invoice_language", { enum: INVOICE_LANGUAGES }),
 
     // Attorney responsibility
     originatingAttorneyId: p
@@ -100,6 +132,9 @@ export const contacts = p.pgTable(
     responsibleAttorneyId: p
       .text("responsible_attorney_id")
       .references(() => user.id, { onDelete: "set null" }),
+
+    /** Import provenance: external_source, external_id, external_change_key, imported_at. */
+    ...importProvenanceColumns(),
 
     createdBy: p
       .text("created_by")
@@ -111,7 +146,30 @@ export const contacts = p.pgTable(
       .$onUpdate(() => new Date()),
   },
   (table) => [
+    p.check(
+      "contacts_time_billing_format_check",
+      sql`${table.timeBillingFormat} IN (${sql.join(
+        TIME_BILLING_FORMATS.map((format) => sql`${format}`),
+        sql`, `,
+      )})`,
+    ),
+    p.check(
+      "contacts_invoice_language_check",
+      sql`${table.invoiceLanguage} IS NULL OR ${table.invoiceLanguage} IN (${sql.join(
+        INVOICE_LANGUAGES.map((value) => sql`${value}`),
+        sql`, `,
+      )})`,
+    ),
+    // An EU VAT number lives in vat_id: tax_id holds one only beside a vat_id
+    // (migration 20261103061500_contact_vat_id_check, validated online).
+    p.check(
+      "contacts_vat_id_check",
+      sql`${table.vatId} IS NOT NULL OR ${table.taxId} IS NULL OR ${sql.raw(
+        EU_VAT_ID_SQL_COMPACT('"tax_id"'),
+      )} !~ ${sql.raw(`'${EU_VAT_ID_SQL_PATTERN}'`)}`,
+    ),
     p.unique("contacts_org_id_unique").on(table.organizationId, table.id),
+    ...importProvenanceConstraints("contacts", table),
     p.index("contacts_organization_id_idx").on(table.organizationId),
     p.index("contacts_org_type_idx").on(table.organizationId, table.type),
     p
@@ -141,6 +199,10 @@ export const contacts = p.pgTable(
         "gin",
         sql`arabic_normalize(${table.organizationName}) gin_trgm_ops`,
       ),
+    // Matches a data-box message's box IDs to contacts.
+    p
+      .index("contacts_data_box_ids_idx")
+      .using("gin", sql`(${table.metadata} -> 'dataBoxes') jsonb_path_ops`),
     p.check(
       "contacts_person_details_check",
       sql`(${table.type} = 'person' OR (${table.dateOfBirthYear} IS NULL AND ${table.dateOfBirthMonth} IS NULL AND ${table.dateOfBirthDay} IS NULL AND cardinality(${table.nationalityCodes}) = 0))`,
@@ -161,6 +223,12 @@ export const contacts = p.pgTable(
       )})`,
     ),
     ...orgPolicies(),
+    p.pgPolicy("contacts_owner_organization_access", {
+      for: "all",
+      to: "public",
+      using: sql`${contactsOwner} AND ${organizationCheck}`,
+      withCheck: sql`${contactsOwner} AND ${organizationCheck}`,
+    }),
   ],
 );
 
@@ -169,13 +237,21 @@ export type ContactType = (typeof contacts.type)["enumValues"][number];
 export type ContactImportReceiptResult = {
   results: (
     | { index: number; status: "created"; contactId: SafeId<"contact"> }
+    /** The row's external ref matched a contact an earlier import created. */
+    | {
+        index: number;
+        status: "updated" | "unchanged";
+        contactId: SafeId<"contact">;
+      }
     | {
         index: number;
         status: "skipped";
         reason:
           | "contacts_limit_reached"
           | "duplicate_contact_id"
+          | "duplicate_external_ref"
           | "duplicate_tax_id"
+          | "in_file_duplicate"
           | "invalid_row"
           | "invalid_tax_id";
       }
@@ -308,12 +384,14 @@ export const workspaces = p.pgTable(
     organizationId: safeOrganizationId("organization_id")
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
+    /** Import provenance: external_source, external_id, external_change_key, imported_at. */
+    ...importProvenanceColumns(),
     name: p.varchar({ length: 256 }).notNull(),
     reference: p.varchar({ length: 64 }).notNull(),
     // Nullable: a null client_id encodes a personal matter (visible
     // only to the creator via workspace_members). A non-null client_id
-    // is a normal client matter. Personal -> client is a one-way
-    // promotion handled by the update endpoint.
+    // is a normal client matter. Setting clientId on update turns a
+    // personal matter into a client matter; members are added apart.
     clientId: safeUuid<"contact">("client_id").references(() => contacts.id, {
       onDelete: "restrict",
     }),
@@ -324,19 +402,32 @@ export const workspaces = p.pgTable(
     leadUserId: p
       .text("lead_user_id")
       .references(() => user.id, { onDelete: "set null" }),
+    billingNarrativeLanguage: p.varchar("billing_narrative_language", {
+      length: NARRATIVE_LANGUAGE_MAX_LENGTH,
+    }),
     billingReference: p.varchar("billing_reference", {
       length: 128,
     }),
     color: p.varchar({ length: 32 }),
     status: p
-      .text({ enum: ["active", "deleting", "archived"] })
+      .text({ enum: WORKSPACE_STATUSES })
       .notNull()
-      .default("active"),
+      .default(WORKSPACE_STATUS.active),
     lastActivityAt: timestamptz("last_activity_at").notNull().defaultNow(),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [
     p.index("workspaces_organization_id_idx").on(table.organizationId),
+    // Readable-workspace queries test `<> 'deleting'`, so a value outside the
+    // domain must be unwritable rather than silently readable.
+    p.check(
+      "workspaces_status_values_check",
+      sql`${table.status} IN (${sql.join(
+        WORKSPACE_STATUSES.map((status) => sql.raw(`'${status}'`)),
+        sql`, `,
+      )})`,
+    ),
+    ...importProvenanceConstraints("workspaces", table),
     p
       .unique("workspaces_org_reference_uidx")
       .on(table.organizationId, table.reference),
@@ -393,7 +484,7 @@ export const workspaceMembers = p.pgTable(
       .uniqueIndex("workspace_members_workspace_user_uidx")
       .on(table.workspaceId, table.userId),
     p.index("workspace_members_user_id_idx").on(table.userId),
-    ...wsPolicies(),
+    ...wsPolicies({ columns: table }),
   ],
 );
 
@@ -435,7 +526,7 @@ export const workspaceContacts = p.pgTable(
     p
       .uniqueIndex("workspace_contacts_ws_contact_role_uidx")
       .on(table.workspaceId, table.contactId, table.role),
-    ...wsOrganizationPolicies("workspace_contacts"),
+    ...wsOrganizationPolicies("workspace_contacts", { columns: table }),
   ],
 );
 
@@ -535,6 +626,16 @@ export const auditActivityActionSql = (columns: AuditActivityColumns) =>
     ${columns.action}
   )`;
 
+const SERVICE_PERFORMER_SQL = sql.raw(`'service'`);
+
+/**
+ * Rows a person (or an agent acting for one) performed. A literal, never a
+ * bound parameter, so the planner can match the partial index that serves the
+ * default activity-log view.
+ */
+export const auditPeoplePerformerSql = (performerType: SQLWrapper) =>
+  sql`${performerType} <> ${SERVICE_PERFORMER_SQL}`;
+
 export const auditLogs = p.pgTable(
   "audit_logs",
   {
@@ -594,6 +695,7 @@ export const auditLogs = p.pgTable(
     p
       .index("audit_logs_org_created_id_idx")
       .on(table.organizationId, table.createdAt, table.id),
+    p.index("audit_logs_created_at_brin_idx").using("brin", table.createdAt),
     p
       .index("audit_logs_org_workspace_created_id_idx")
       .on(table.organizationId, table.workspaceId, table.createdAt, table.id),
@@ -646,6 +748,12 @@ export const auditLogs = p.pgTable(
     p
       .index("audit_logs_org_user_created_id_idx")
       .on(table.organizationId, table.userId, table.createdAt, table.id),
+    // The activity log hides background services by default; without this
+    // the newest-first page walks every service row to find people's.
+    p
+      .index("audit_logs_org_people_created_id_idx")
+      .on(table.organizationId, table.createdAt, table.id)
+      .where(auditPeoplePerformerSql(table.performerType)),
     p.pgPolicy("audit_logs_select", {
       for: "select",
       to: stella,
@@ -678,6 +786,73 @@ export const auditLogs = p.pgTable(
   ],
 );
 
+/** Account audit history belongs to its user, independently of organization membership. */
+export const accountAuditLogs = p.pgTable.withRLS(
+  "account_audit_logs",
+  {
+    id: p.uuid().primaryKey(),
+    userId: p
+      .text("user_id")
+      .$type<SafeId<"user">>()
+      .notNull()
+      .references(() => user.id, { onDelete: "restrict" }),
+    eventType: p
+      .text("event_type", { enum: ACCOUNT_AUDIT_EVENT_TYPES })
+      .notNull(),
+    resourceId: p.text("resource_id").notNull(),
+    requestMetadata: jsonb("request_metadata").$type<{
+      ipAddress: string | null;
+      forwardedFor: string | null;
+      userAgent: string | null;
+    }>(),
+    groupId: p.uuid("group_id").notNull(),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+  },
+  (table) => [
+    p.check(
+      "account_audit_logs_event_type_check",
+      sql`${table.eventType} IN (${sql.join(
+        ACCOUNT_AUDIT_EVENT_TYPES.map((type) => sql`${type}`),
+        sql`, `,
+      )})`,
+    ),
+    p
+      .index("account_audit_logs_user_event_idx")
+      .on(table.userId, table.eventType),
+    p
+      .index("account_audit_logs_user_created_id_idx")
+      .on(table.userId, table.createdAt, table.id),
+    p.pgPolicy("account_audit_logs_select", {
+      for: "select",
+      to: "public",
+      using: sql`${table.userId} = (SELECT current_setting('app.user_id', true))`,
+    }),
+    p.pgPolicy("account_audit_logs_insert", {
+      for: "insert",
+      to: stella,
+      withCheck: sql`${table.userId} = (SELECT current_setting('app.user_id', true))`,
+    }),
+    // Background jobs receive the owning connection; its insert cannot grant a read.
+    p.pgPolicy("account_audit_logs_owner_insert", {
+      for: "insert",
+      to: "public",
+      withCheck: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.account_audit_logs'::regclass)`,
+    }),
+    p.pgPolicy("account_audit_logs_no_update", {
+      as: "restrictive",
+      for: "update",
+      to: "public",
+      using: sql`false`,
+    }),
+    p.pgPolicy("account_audit_logs_no_delete", {
+      as: "restrictive",
+      for: "delete",
+      to: "public",
+      using: sql`false`,
+    }),
+  ],
+);
+
 // -- Scheduler --
 
 export const schedulerJobs = p.pgTable(
@@ -690,6 +865,7 @@ export const schedulerJobs = p.pgTable(
     payload: jsonb().$type<SchedulerPayload | null>(),
     enabled: p.boolean().notNull().default(true),
     pausedBy: p.text("paused_by"),
+    pausedSince: timestamptz("paused_since"),
     pausedUntil: timestamptz("paused_until"),
     pauseReason: p.text("pause_reason"),
     nextRunAt: timestamptz("next_run_at").notNull(),
@@ -712,9 +888,27 @@ export const schedulerJobs = p.pgTable(
       .on(table.enabled, table.nextRunAt),
     p.index("scheduler_jobs_task_idx").on(table.task),
     p.index("scheduler_jobs_locked_until_idx").on(table.lockedUntil),
+    // A lease is its token, claim time and expiry; a row never holds part of one.
+    fieldsSetTogetherCheck({
+      name: "scheduler_jobs_lease_fields_check",
+      columns: [table.lockedBy, table.lockedAt, table.lockedUntil],
+    }),
+    p
+      .index("scheduler_jobs_paused_until_idx")
+      .on(table.pausedUntil)
+      .where(sql`${table.pausedUntil} IS NOT NULL`),
     p.check(
       "scheduler_jobs_pause_attribution_check",
       sql`${table.pausedUntil} IS NULL OR (${table.pausedBy} IS NOT NULL AND length(btrim(${table.pausedBy})) > 0 AND ${table.pauseReason} IS NOT NULL AND length(btrim(${table.pauseReason})) >= 8)`,
+    ),
+    p.check(
+      "scheduler_jobs_pause_finite_check",
+      sql`${table.pausedUntil} IS NULL OR isfinite(${table.pausedUntil})`,
+    ),
+    // The pause audit watches every pause, so it can never be paused itself.
+    p.check(
+      "scheduler_jobs_pause_audit_unpausable_check",
+      sql`${table.id} <> 'scheduler.pauseAudit.hourly' OR ${table.pausedUntil} IS NULL`,
     ),
     p.pgPolicy("scheduler_jobs_no_stella_access", {
       for: "all",
@@ -792,7 +986,7 @@ export const infoSoudTrackedCases = p.pgTable(
     p
       .uniqueIndex("infosoud_tracked_cases_workspace_case_uidx")
       .on(table.workspaceId, table.courtCode, table.spisZn),
-    ...wsPolicies(),
+    ...wsPolicies({ columns: table }),
   ],
 );
 

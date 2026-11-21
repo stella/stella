@@ -1,13 +1,15 @@
 import { describe, expect, test } from "bun:test";
 
+import { STATUTE_COLUMN_IDS } from "@stll/api-contract/public-law-table";
+
 import { findTableRows } from "@/components/workspaces/table/table-find.logic";
 import type { StatuteListItem } from "@/features/statutes/queries/statutes";
-import { STATUTE_COLUMN_IDS } from "@/features/statutes/statute-columns.logic";
 import {
   isFindableStatuteColumn,
   statuteFindRowText,
 } from "@/features/statutes/statute-find.logic";
 import { toSafeId } from "@/lib/safe-id";
+import { createUuid } from "@/lib/uuid";
 
 const statute = (
   overrides: Pick<StatuteListItem, "documentType" | "eli" | "title">,
@@ -18,7 +20,7 @@ const statute = (
   documentUrl: null,
   effectiveDate: "2026-01-01",
   firstVersionValidFrom: "2012-03-22",
-  id: toSafeId<"legislationDocument">(crypto.randomUUID()),
+  id: toSafeId<"legislationDocument">(createUuid()),
   language: "cs",
   lastAmendedOn: "2026-01-01",
   slug: null,
@@ -44,7 +46,7 @@ const DECREE = statute({
 describe("what a statute row shows a find", () => {
   test("the act column reads both the number and the name the cell draws", () => {
     expect(statuteFindRowText(CIVIL_CODE).get("act")).toBe(
-      "89/2012 Sb.\nobčanský zákoník",
+      "Zákon č. 89/2012 Sb.\nobčanský zákoník",
     );
   });
 

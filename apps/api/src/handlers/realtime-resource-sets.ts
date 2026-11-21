@@ -55,7 +55,7 @@ export const flowRunRealtimeUpdates = workspaceResourceSetUpdates(
   RESOURCE_TYPE.FLOW_RUN,
 );
 
-export const invoiceRealtimeUpdates = workspaceResourceSetUpdates(
+export const invoiceRealtimeUpdates = organizationResourceSetUpdates(
   RESOURCE_TYPE.INVOICE,
 );
 
@@ -66,6 +66,11 @@ export const kanbanPlacementRealtimeUpdates = workspaceResourceSetUpdates([
 
 export const legalListRealtimeUpdates = workspaceResourceSetUpdates(
   RESOURCE_TYPE.LEGAL_LIST,
+);
+
+/** A verification as its reviewers see it: a review decision changes it. */
+export const legalListVerificationRealtimeUpdates = workspaceResourceSetUpdates(
+  RESOURCE_TYPE.LEGAL_LIST_VERIFICATION,
 );
 
 export const mcpConnectorRealtimeUpdates = organizationResourceSetUpdates(

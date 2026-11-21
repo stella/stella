@@ -28,14 +28,14 @@ import { CheckCheckIcon } from "@stll/ui/icons";
 
 import type { ReviewChange } from "@/components/ai-suggestions/review-bar.logic";
 import {
-  SEVERITY_ORDER,
   type ReviewSeverityKey,
+  SEVERITY_ORDER,
 } from "@/components/ai-suggestions/review-store";
 import type { TranslationKey } from "@/i18n/types";
 import { detached } from "@/lib/detached";
 
 /** Above this many pending changes, "accept all" asks to confirm first. */
-export const ACCEPT_ALL_CONFIRM_THRESHOLD = 10;
+const ACCEPT_ALL_CONFIRM_THRESHOLD = 10;
 
 const SEVERITY_COUNT_KEYS = {
   high: "docxReview.countHigh",
@@ -116,6 +116,11 @@ export const AcceptAllButton = ({
         aria-label={t("docxReview.acceptAll")}
         className={className}
         disabled={pendingChanges.length === 0 || isAccepting}
+        disabledReason={
+          isAccepting
+            ? t("docxReview.acceptingChanges")
+            : t("docxReview.noChangesToAccept")
+        }
         onClick={handleClick}
         size={buttonSize}
         tooltip={t("docxReview.acceptAll")}
@@ -155,6 +160,7 @@ export const AcceptAllButton = ({
             </Button>
             <Button
               disabled={isAccepting}
+              disabledReason={t("docxReview.acceptingChanges")}
               onClick={() => {
                 setConfirmOpen(false);
                 runAccept();

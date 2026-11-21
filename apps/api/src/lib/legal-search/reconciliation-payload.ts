@@ -1,5 +1,6 @@
 import { panic, Result, TaggedError } from "better-result";
 
+import { createSha256 } from "@stll/sha256/bun";
 import { stableStringify } from "@stll/stable-stringify";
 
 import { toJsonValue } from "@/api/lib/json-value";
@@ -27,7 +28,7 @@ export const fingerprintReconciliationPayload = (payload: unknown): string => {
         cause,
       }),
   }).unwrap("Reconciliation payload must be JSON serializable.");
-  const hasher = new Bun.CryptoHasher("sha256");
+  const hasher = createSha256();
   hasher.update(stableStringify(normalized));
   return hasher.digest("hex");
 };

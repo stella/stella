@@ -1,6 +1,9 @@
 import { useFormStatus } from "react-dom";
 
+import { useTranslations } from "use-intl";
+
 import { Button } from "@stll/ui/button";
+import { Form } from "@stll/ui/form";
 import { PlusIcon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 
@@ -25,12 +28,12 @@ export const AddContactMethodForm = ({
   type?: "text";
   value: string;
 }) => (
-  <form
+  <Form
     action={() => {
       onSubmit();
     }}
-    className="flex gap-2"
-    noValidate
+    density="compact"
+    layout="inline"
   >
     <Input
       className="h-8 min-w-0 flex-1 text-sm"
@@ -44,21 +47,34 @@ export const AddContactMethodForm = ({
     />
     <AddContactMethodSubmitButton
       buttonLabel={buttonLabel}
-      disabled={disabled || value.trim().length === 0}
+      disabled={disabled}
+      empty={value.trim().length === 0}
     />
-  </form>
+  </Form>
 );
 
 const AddContactMethodSubmitButton = ({
   buttonLabel,
   disabled,
+  empty,
 }: {
   buttonLabel: string;
   disabled: boolean;
+  empty: boolean;
 }) => {
+  const t = useTranslations();
   const { pending } = useFormStatus();
   return (
-    <Button disabled={disabled || pending} size="sm" type="submit">
+    <Button
+      disabled={disabled || pending || empty}
+      disabledReason={
+        pending || disabled
+          ? t("common.saving")
+          : t("common.enterContactMethod")
+      }
+      size="sm"
+      type="submit"
+    >
       <PlusIcon className="size-4" />
       {buttonLabel}
     </Button>

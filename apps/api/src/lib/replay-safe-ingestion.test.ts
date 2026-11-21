@@ -80,7 +80,7 @@ describe("commitReplaySafeIngestionBatch", () => {
       (error: unknown) => error,
     );
     if (!(rejection instanceof Error)) {
-      throw new Error("expected item persistence to reject");
+      throw new TypeError("expected item persistence to reject");
     }
 
     expect(rejection.message).toBe("item persistence failed");
@@ -107,7 +107,7 @@ describe("commitReplaySafeIngestionBatch", () => {
       (error: unknown) => error,
     );
     if (!(rejection instanceof Error)) {
-      throw new Error("expected checkpoint persistence to reject");
+      throw new TypeError("expected checkpoint persistence to reject");
     }
 
     expect(rejection.message).toBe("checkpoint persistence failed");

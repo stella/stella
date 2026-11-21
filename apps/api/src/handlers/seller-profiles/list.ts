@@ -1,11 +1,13 @@
 import { Result } from "better-result";
 import { and, desc, eq, isNull } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
+
+import { numberFromString } from "@stll/api-contract/http-input";
 
 import { sellerProfiles } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { tPaginationCursor } from "@/api/lib/custom-schema";
+import { paginationCursorSchema } from "@/api/lib/custom-schema";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
@@ -29,12 +31,17 @@ const SELLER_PROFILE_LIST_COLUMNS = {
   id: sellerProfiles.id,
   legalName: sellerProfiles.legalName,
   registrationId: sellerProfiles.registrationId,
+  taxId: sellerProfiles.taxId,
   vatId: sellerProfiles.vatId,
+  registerEntry: sellerProfiles.registerEntry,
+  barRegistration: sellerProfiles.barRegistration,
+  vatPayer: sellerProfiles.vatPayer,
   addressLine1: sellerProfiles.addressLine1,
   addressLine2: sellerProfiles.addressLine2,
   city: sellerProfiles.city,
   postalCode: sellerProfiles.postalCode,
   country: sellerProfiles.country,
+  email: sellerProfiles.email,
   iban: sellerProfiles.iban,
   bic: sellerProfiles.bic,
   accountNumber: sellerProfiles.accountNumber,
@@ -60,11 +67,13 @@ true satisfies MissingSellerProfileListColumn extends never ? true : never;
 true satisfies UnexpectedSellerProfileListColumn extends never ? true : never;
 
 const config = {
+  contract: "patch",
   description:
     "List active issuer profiles for the active organization, newest first, " +
     "with cursor pagination. Bank details are included for billing setup.",
   permissions: { organizationSettings: ["update"] },
   accountAccess: ACCOUNT_ACCESS.standard,
+  featureAccess: { featureId: "time-billing", type: "required" },
   mcp: {
     type: "capability",
     readClass: "tenant",
@@ -72,11 +81,18 @@ const config = {
     consumesServices: false,
   },
   access: "read",
-  query: t.Object({
-    limit: t.Optional(
-      t.Integer({ minimum: 1, maximum: LIMITS.sellerProfilesPageSizeMax }),
+  query: v.object({
+    limit: v.optional(
+      numberFromString(
+        v.pipe(
+          v.number(),
+          v.integer(),
+          v.minValue(1),
+          v.maxValue(LIMITS.sellerProfilesPageSizeMax),
+        ),
+      ),
     ),
-    cursor: t.Optional(tPaginationCursor()),
+    cursor: v.optional(paginationCursorSchema()),
   }),
 } satisfies HandlerConfig;
 

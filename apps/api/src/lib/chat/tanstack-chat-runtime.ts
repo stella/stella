@@ -10,7 +10,7 @@
 // through a reader here. A consumer that spells `chunk.finishReason` no longer
 // compiles.
 
-import { chat } from "@tanstack/ai";
+import { chat, EventType } from "@tanstack/ai";
 import type {
   ChatMiddleware,
   RunFinishedEvent,
@@ -20,7 +20,18 @@ import type {
 } from "@tanstack/ai";
 import { panic } from "better-result";
 
+import {
+  CHAT_TOOL_EXECUTOR_METADATA_KEY,
+  type ChatToolExecutor,
+  chatToolExecutor,
+} from "@stll/api-contract/chat";
+
+import { arrayOrEmpty } from "@/api/lib/array";
+import { stepLedgerProviderMiddleware } from "@/api/lib/chat/step-ledger-provider-copy";
 import { isRecord } from "@/api/lib/type-guards";
+
+/** Internal snapshot evidence, consumed before persistence and client delivery. */
+export const SNAPSHOT_OWNERS_METADATA_KEY = "__stellaSnapshotOwners";
 
 /**
  * Top-level keys `normalizeStreamChunk` takes off an engine-emitted chunk, per
@@ -114,7 +125,7 @@ export type TanStackTextFinishReason = Exclude<
 // fixture, an event this service synthesises) carries the value at the top
 // level, and so does one this service transformed and re-emitted.
 const readEngineField = (chunk: object, key: string): unknown => {
-  if (key in chunk) {
+  if (Object.hasOwn(chunk, key)) {
     const topLevel: unknown = Reflect.get(chunk, key);
     if (topLevel !== undefined) {
       return topLevel;
@@ -169,9 +180,9 @@ export const toolCallEndOutputOf = (chunk: PublicToolCallEndChunk): unknown =>
   readEngineField(chunk, "output");
 
 /**
- * `TOOL_CALL_START` carries the tool name as the spec key `toolCallName`, with
- * `toolName` as the alias the engine folds into it. `TOOL_CALL_END` carries
- * neither, so `metadata.tanstack.toolName` is the only place a name appears.
+ * `TOOL_CALL_START` carries the spec key `toolCallName`. Older synthetic
+ * events and `TOOL_CALL_END` may carry `toolName` at the top level or in
+ * `metadata.tanstack`; keep that read at this compatibility boundary.
  */
 export const toolCallNameOf = (
   chunk: PublicToolCallStartChunk | PublicToolCallEndChunk,
@@ -197,19 +208,216 @@ export const toolCallNameOf = (
 // No middleware in this repository declares one, and the pair that has to
 // travel together (the sandbox adapter and its capability) is returned as a
 // pair by its owner rather than assembled at the call site.
-type ChatOptions = Omit<Parameters<typeof chat>[0], "middleware"> & {
+// Stella's cache policy owns native markers and scoped keys. TanStack v1's
+// automatic cache defaults would otherwise re-enable caching for disabled
+// requests and move markers across conversation prefixes.
+type ChatOptions = Omit<
+  Parameters<typeof chat>[0],
+  "middleware" | "promptCache"
+> & {
   middleware?: ChatMiddleware[];
 };
 
-/** The streaming text form. `stream` and `outputSchema` belong to the owner. */
+/** The streaming text form. Output shape and tool ordering belong to the owner. */
 export type StreamChatChunksOptions = Omit<
   ChatOptions,
-  "outputSchema" | "stream"
+  "outputSchema" | "stream" | "toolExecution"
 >;
 
-export const streamChatChunks = (
+const providerToolMetadata = (metadata: unknown) => {
+  if (!isRecord(metadata)) {
+    return metadata;
+  }
+  const { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: _executor, ...provider } =
+    metadata;
+  return Object.keys(provider).length === 0 ? undefined : provider;
+};
+
+type ToolCallExecutorOptions = { id: string; name: string };
+
+type SubagentMessagePart = Extract<
+  NonNullable<StreamChatChunksOptions["messages"]>[number],
+  { parts: unknown }
+>["parts"][number];
+
+/** Every call a sub-agent part's child holds, at every depth, with the
+ *  executor the child's run stamped on it. */
+const recordChildExecutors = (
+  part: Extract<SubagentMessagePart, { type: "subagent" }>,
+  executors: Map<string, ChatToolExecutor>,
+): void => {
+  for (const message of part.subagent.messages) {
+    for (const child of message.parts) {
+      if (child.type === "subagent") {
+        recordChildExecutors(child, executors);
+        continue;
+      }
+      const executor = chatToolExecutor(child);
+      if (child.type === "tool-call" && executor !== null) {
+        executors.set(child.id, executor);
+      }
+    }
+  }
+};
+
+export const streamChatChunks = async function* (
   options: StreamChatChunksOptions,
-): AsyncIterable<PublicStreamChunk> => chat(options);
+): AsyncIterable<PublicStreamChunk> {
+  const executors = new Map<string, "server" | "client">();
+  // A stored call keeps its owner, a harness's included: a cloud turn that
+  // replays one never runs it, and persisting the turn refuses one it would.
+  const storedExecutors = new Map<string, ChatToolExecutor>();
+  // The SDK owns error results for unknown model-emitted tool names too.
+  const executorForCall = ({
+    id,
+    name,
+  }: ToolCallExecutorOptions): ChatToolExecutor =>
+    storedExecutors.get(id) ?? executors.get(name) ?? "server";
+  // Input-complete server calls can wait behind an approval. Their executor
+  // must survive snapshots so the browser does not offer a client resolution.
+  const messages = arrayOrEmpty(options.messages).map((message) => {
+    if ("parts" in message) {
+      return {
+        ...message,
+        parts: message.parts.map((part) => {
+          if (part.type === "subagent") {
+            // A sub-agent's child runs its own engine, which strips its calls
+            // when it resumes them; their owners are recorded here so a
+            // snapshot of this run names them too.
+            recordChildExecutors(part, storedExecutors);
+            return part;
+          }
+          if (part.type !== "tool-call") {
+            return part;
+          }
+          const { metadata, ...call } = part;
+          const executor = chatToolExecutor(part);
+          if (executor !== null) {
+            storedExecutors.set(part.id, executor);
+          }
+          const provider = providerToolMetadata(metadata);
+          return {
+            ...call,
+            ...(provider === undefined ? {} : { metadata: provider }),
+          };
+        }),
+      };
+    }
+    if (message.toolCalls === undefined) {
+      return message;
+    }
+    return {
+      ...message,
+      toolCalls: message.toolCalls.map(({ metadata, ...call }) => {
+        const executor = chatToolExecutor({ type: "tool-call", metadata });
+        if (executor !== null) {
+          storedExecutors.set(call.id, executor);
+        }
+        const provider = providerToolMetadata(metadata);
+        return {
+          ...call,
+          ...(provider === undefined ? {} : { metadata: provider }),
+        };
+      }),
+    };
+  });
+  const middleware = [...arrayOrEmpty(options.middleware)];
+  middleware.push({
+    name: "stella-tool-executors",
+    onConfig: (_context, config) => {
+      // The final SDK configuration includes MCP and discovered lazy tools.
+      for (const tool of config.tools) {
+        executors.set(tool.name, tool.execute ? "server" : "client");
+      }
+    },
+  });
+  // Last, so it reads the provider copy every middleware before it settled.
+  middleware.push(stepLedgerProviderMiddleware);
+  for await (const chunk of chat({
+    ...options,
+    promptCache: "none",
+    messages,
+    toolExecution: "sequential",
+    middleware,
+  })) {
+    if (chunk.type === "TOOL_CALL_START") {
+      // A sub-agent child's call was stamped by the child's own run, from the
+      // child's tool list; this run's tools do not name it.
+      if (
+        chunk.subagentRunId !== undefined &&
+        chatToolExecutor({ type: "tool-call", metadata: chunk.metadata }) !==
+          null
+      ) {
+        yield chunk;
+        continue;
+      }
+      const executor = executorForCall({
+        id: chunk.toolCallId,
+        name: chunk.toolCallName,
+      });
+      yield {
+        ...chunk,
+        metadata: {
+          ...chunk.metadata,
+          [CHAT_TOOL_EXECUTOR_METADATA_KEY]: executor,
+        },
+      };
+      continue;
+    }
+    if (chunk.type === EventType.MESSAGES_SNAPSHOT) {
+      yield {
+        ...chunk,
+        messages: chunk.messages.map((message) => {
+          if (message.role !== "assistant" || message.toolCalls === undefined) {
+            return message;
+          }
+          // A sub-agent child's row (`subagentRunId`): its calls belong to the
+          // child's tools, not this run's, and keep what the child stamped.
+          const childRun: unknown = Reflect.get(message, "subagentRunId");
+          if (typeof childRun === "string") {
+            return message;
+          }
+          const tanstack = isRecord(message.metadata?.["tanstack"])
+            ? message.metadata["tanstack"]
+            : {};
+          const previousMetadata = isRecord(tanstack["toolCallMetadata"])
+            ? tanstack["toolCallMetadata"]
+            : {};
+          return {
+            ...message,
+            metadata: {
+              ...message.metadata,
+              tanstack: {
+                ...tanstack,
+                toolCallMetadata: Object.fromEntries(
+                  message.toolCalls.map((call) => {
+                    const executor = executorForCall({
+                      id: call.id,
+                      name: call.function.name,
+                    });
+                    const previous = previousMetadata[call.id];
+                    const metadata = isRecord(previous)
+                      ? previous
+                      : call.metadata;
+                    return [
+                      call.id,
+                      {
+                        ...metadata,
+                        [CHAT_TOOL_EXECUTOR_METADATA_KEY]: executor,
+                      },
+                    ];
+                  }),
+                ),
+              },
+            },
+          };
+        }),
+      };
+      continue;
+    }
+    yield chunk;
+  }
+};
 
 export type ChatObjectOptions = StreamChatChunksOptions & {
   outputSchema: SchemaInput;
@@ -222,7 +430,7 @@ export type ChatObjectOptions = StreamChatChunksOptions & {
  */
 export const generateChatObject = async (
   options: ChatObjectOptions,
-): Promise<unknown> => await chat(options);
+): Promise<unknown> => await chat({ ...options, promptCache: "none" });
 
 type StructuredOutputStreamChunk =
   StructuredOutputStream extends AsyncIterable<infer TChunk> ? TChunk : never;
@@ -237,4 +445,4 @@ export type PublicStructuredOutputChunk =
 export const streamChatObject = (
   options: ChatObjectOptions,
 ): AsyncIterable<PublicStructuredOutputChunk> =>
-  chat({ ...options, stream: true });
+  chat({ ...options, promptCache: "none", stream: true });

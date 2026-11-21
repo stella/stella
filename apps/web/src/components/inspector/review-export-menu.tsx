@@ -141,7 +141,10 @@ export const ReviewExportMenu = ({
     setPending(null);
 
     if (Result.isError(result)) {
-      analytics.captureError(result.error);
+      analytics.captureError(result.error, {
+        fingerprintKey: "ReviewExportMenu.handleInternalExport:failure",
+        scope: { type: "handler", handlerId: `review-export.${format}` },
+      });
       notifyUserError(result.error, t("workspaces.views.exportFailed"));
       return;
     }
@@ -181,6 +184,7 @@ export const ReviewExportMenu = ({
               aria-busy={pending !== null}
               aria-label={t("clauses.export")}
               disabled={pending !== null}
+              disabledReason={t("inspector.review.export.exporting")}
               size="icon-xs"
               title={t("clauses.export")}
               variant="ghost"
@@ -189,6 +193,7 @@ export const ReviewExportMenu = ({
             <Button
               aria-busy={pending !== null}
               disabled={pending !== null}
+              disabledReason={t("inspector.review.export.exporting")}
               size="xs"
               variant="outline"
             />

@@ -16,7 +16,8 @@ import {
 import type { WorkObligationStatus } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import myWork from "@/api/handlers/work-obligations/queues/list";
-import { createSafeId } from "@/api/lib/branded-types";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
+import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -152,6 +153,23 @@ const entityIdOf = (label: string) =>
   seeded.get(label) ?? expect.unreachable(`missing fixture row: ${label}`);
 
 const queueEntityIds = async (queue?: MyWorkQueue) => {
+  const page = await queuePage({ ...(queue && { queue }), limit: 100 });
+  return new Set(
+    page.items
+      .filter(({ entityId }) => seededEntityIds.includes(entityId))
+      .map(({ entityId }) => entityId),
+  );
+};
+
+const queuePage = async ({
+  queue,
+  limit,
+  cursor,
+}: {
+  queue?: MyWorkQueue;
+  limit: number;
+  cursor?: string;
+}) => {
   const scopedDb = createScopedDb(testDb, [ids.wsA1], ids.orgA, ids.userA1);
   const safeDb = createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userA1);
   const page = await myWork.handler(
@@ -160,9 +178,14 @@ const queueEntityIds = async (queue?: MyWorkQueue) => {
       getAccessibleWorkspaces: async () => [{ id: ids.wsA1, status: "active" }],
       getWorkspaceAccess: async () => ({ id: ids.wsA1, status: "active" }),
       memberRole: sessionMemberRole("owner"),
-      query: { ...(queue && { queue }), asOf: AS_OF, limit: 100 },
+      query: {
+        ...(queue && { queue }),
+        ...(cursor && { cursor }),
+        asOf: AS_OF,
+        limit,
+      },
       request: new Request("https://example.test/my-work"),
-      route: "/test/my-work",
+      route: "/v1/my-work" satisfies ApiRoutePath,
       safeDb,
       scopedDb,
       session: { activeOrganizationId: ids.orgA },
@@ -174,11 +197,7 @@ const queueEntityIds = async (queue?: MyWorkQueue) => {
       `my work ${queue ?? "default"} failed: ${JSON.stringify(page)}`,
     );
   }
-  return new Set(
-    page.items
-      .filter(({ entityId }) => seededEntityIds.includes(entityId))
-      .map(({ entityId }) => entityId),
-  );
+  return page;
 };
 
 beforeAll(async () => {
@@ -259,5 +278,68 @@ describe("my work queues", () => {
     for (const queue of queues) {
       expect(queue.has(factEntityId)).toBe(false);
     }
+  });
+
+  test("cursor pages preserve deadline order and entity-id ties without gaps", async () => {
+    const tiedIds = [
+      toSafeId<"entity">("f0000000-0000-4000-8000-000000000001"),
+      toSafeId<"entity">("f0000000-0000-4000-8000-000000000002"),
+      toSafeId<"entity">("f0000000-0000-4000-8000-000000000003"),
+    ];
+    // The later deadline deliberately has the lexically smallest id. Ordering
+    // by id before date would therefore move it ahead of every tied row.
+    const laterId = toSafeId<"entity">("e0000000-0000-4000-8000-000000000001");
+    seededEntityIds.push(...tiedIds, laterId);
+    await testDb.insert(entities).values(
+      [...tiedIds, laterId].map((entityId) => ({
+        id: entityId,
+        workspaceId: ids.wsA1,
+        kind: "task" as const,
+        name: `Pagination ${entityId}`,
+        status: "open",
+        createdBy: ids.userA1,
+      })),
+    );
+    await testDb.insert(workObligations).values([
+      ...tiedIds.map((entityId) => ({
+        entityId,
+        workspaceId: ids.wsA1,
+        ownerUserId: ids.userA1,
+        status: WORK_OBLIGATION_STATUS.ACTIVE,
+        acknowledgedAt: new Date("2026-02-01T00:00:00.000Z"),
+        acknowledgedByUserId: ids.userA1,
+        hardDeadlineDate: "2026-05-01",
+        createdByUserId: ids.userA1,
+      })),
+      {
+        entityId: laterId,
+        workspaceId: ids.wsA1,
+        ownerUserId: ids.userA1,
+        status: WORK_OBLIGATION_STATUS.ACTIVE,
+        acknowledgedAt: new Date("2026-02-01T00:00:00.000Z"),
+        acknowledgedByUserId: ids.userA1,
+        hardDeadlineDate: "2026-06-01",
+        createdByUserId: ids.userA1,
+      },
+    ]);
+
+    const expected = tiedIds.toSorted().concat(laterId);
+    const walked: string[] = [];
+    let cursor: string | null = null;
+    do {
+      const page = await queuePage({
+        queue: "upcoming",
+        limit: 2,
+        ...(cursor === null ? {} : { cursor }),
+      });
+      walked.push(
+        ...page.items
+          .map(({ entityId }) => entityId)
+          .filter((entityId) => expected.includes(entityId)),
+      );
+      cursor = page.nextCursor;
+    } while (cursor !== null);
+
+    expect(walked).toEqual(expected);
   });
 });

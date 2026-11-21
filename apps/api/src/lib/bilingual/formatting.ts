@@ -1,6 +1,8 @@
 import { TaggedError } from "better-result";
 import * as slimdom from "slimdom";
 
+import { declareFingerprintFields } from "@stll/errors";
+
 import type { StoredRow } from "@/api/lib/bilingual/operations";
 import type { BilingualUnit } from "@/api/lib/bilingual/rows";
 import { hasSeparateTableTarget } from "@/api/lib/bilingual/rows";
@@ -12,12 +14,12 @@ const W14_NS = "http://schemas.microsoft.com/office/word/2010/wordml";
 const XML_NS = "http://www.w3.org/XML/1998/namespace";
 const INLINE_SEPARATOR = " / ";
 
-export type BilingualTextSpan = Readonly<{
+type BilingualTextSpan = Readonly<{
   id: string;
   text: string;
 }>;
 
-export type BilingualInlineControl = Readonly<{
+type BilingualInlineControl = Readonly<{
   type: "control";
   kind:
     | "break"
@@ -30,9 +32,8 @@ export type BilingualInlineControl = Readonly<{
     | "tab";
 }>;
 
-export type BilingualInlineToken =
-  | (BilingualTextSpan & Readonly<{ type: "text" }>)
-  | BilingualInlineControl;
+type BilingualInlineToken =
+  (BilingualTextSpan & Readonly<{ type: "text" }>) | BilingualInlineControl;
 
 export type FormattedBilingualUnit = BilingualUnit & {
   inline: readonly BilingualInlineToken[];
@@ -45,17 +46,18 @@ export type BilingualFormattedTranslation = Readonly<{
 }>;
 
 type BilingualFormattingErrorReason =
-  | "invalid-spans"
-  | "malformed-xml"
-  | "missing-document"
-  | "missing-paragraph";
+  "invalid-spans" | "malformed-xml" | "missing-document" | "missing-paragraph";
 
 export class BilingualFormattingError extends TaggedError(
   "BilingualFormattingError",
 )<{
   message: string;
   reason: BilingualFormattingErrorReason;
-}> {}
+}> {
+  static {
+    declareFingerprintFields(this, ["reason"]);
+  }
+}
 
 const fail = (
   reason: BilingualFormattingErrorReason,
@@ -354,6 +356,6 @@ export const applyFormattedBilingualTranslations = async (
       applyRow(doc, paragraphs, row, translation);
     }
   }
-  archive.zip.file(DOCUMENT_PART, slimdom.serializeToWellFormedString(doc));
-  return await archive.zip.generateAsync({ type: "arraybuffer" });
+  archive.zip.set(DOCUMENT_PART, slimdom.serializeToWellFormedString(doc));
+  return (await archive.zip.generate({ compression: "store" })).buffer;
 };

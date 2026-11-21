@@ -1,0 +1,5 @@
+{
+  "metric": "cross-handler-imports",
+  "delta": 1,
+  "reason": "The task that adopts a handed-over turn builds the turn's resource origin from the stored answer, as the send that started the turn builds it (send-message.ts imports the same createVisualResourceOrigin), so apps the released read showed are accepted again and the rest are minted the same way when the turn is stored."
+}

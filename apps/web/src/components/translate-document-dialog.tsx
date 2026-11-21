@@ -1,4 +1,6 @@
 import { useRef, useState } from "react";
+
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 /**
  * Unified document translation trigger and background run dialog.
  *
@@ -6,8 +8,6 @@ import { useRef, useState } from "react";
  * while the run is in progress; the mounted toolbar keeps polling and posts a
  * toast with an Open action when the output is ready.
  */
-
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useRouteContext } from "@tanstack/react-router";
 import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
@@ -18,6 +18,7 @@ import {
   DialogClose,
   DialogDescription,
   DialogFooter,
+  DialogFormState,
   DialogHeader,
   DialogPanel,
   DialogPopup,
@@ -25,42 +26,49 @@ import {
   DialogTrigger,
 } from "@stll/ui/dialog";
 import { LanguagesIcon } from "@stll/ui/icons";
+import { Label } from "@stll/ui/label";
+import { Loader } from "@stll/ui/loader";
 import { stellaToast } from "@stll/ui/toast";
 
 import { DocumentLanguagePicker } from "@/components/document-language-picker";
 import { DOCUMENT_TRANSLATION_TARGET_CODES } from "@/components/document-language-picker.logic";
 import {
   documentTranslationPreparationOptions,
-  invalidateDocumentTranslationOutputQueries,
-  documentTranslationRunOptions,
-  isDocumentTranslationRunActive,
   type DocumentTranslationRun,
+  documentTranslationRunOptions,
+  invalidateDocumentTranslationOutputQueries,
+  isDocumentTranslationRunActive,
 } from "@/components/document-translation-queries";
 import {
   activeTranslationChoice,
-  canTranslateDocument,
   canStartDocumentTranslation,
+  canTranslateDocument,
   commentPolicyStateForSource,
   DEFAULT_TRANSLATION_CHOICE,
   defaultDocumentTranslationTarget,
-  documentTranslationRunFailureKey,
-  openDocumentTranslationOutput,
   type DocumentTranslationCommentPolicy,
   type DocumentTranslationCommentPolicyState,
+  documentTranslationRunFailureKey,
+  openDocumentTranslationOutput,
   type TranslationChoice,
 } from "@/components/translate-document-dialog.logic";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLastTranslationTarget } from "@/hooks/use-last-translation-target";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
-import { useLocale } from "@/i18n/formatting-context";
+import { useMessageLocale } from "@/i18n/message-locale";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import type { DeepLTargetLanguageCode } from "@/lib/deepl/languages";
 import { deepLAvailabilityOptions } from "@/lib/deepl/queries";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
-import { notifyUserError } from "@/lib/errors/user-toast";
+import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
+import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
+import {
+  CapabilityAction,
+  useActionCapabilities,
+} from "@/lib/organization/feature-access/capability-actions";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
 import { entityOptions } from "@/lib/workspaces/queries/entities";
@@ -90,9 +98,74 @@ type TranslateDocumentDialogProps = TranslateDocumentDialogCommonProps &
       }
   );
 
+type TranslationStartDisabledReasonOptions = {
+  isStarting: boolean;
+  isRunning: boolean;
+  isLoadingRun: boolean;
+  isDeepL: boolean;
+  availabilityKnown: boolean;
+  canUseDeepL: boolean;
+  isDocx: boolean;
+  canUseAI: boolean;
+  hasPreparedVersion: boolean;
+  preparationFailed: boolean;
+  t: (
+    key:
+      | "bilingualTranslate.review.starting"
+      | "translate.dialog.translating"
+      | "common.loading"
+      | "translate.dialog.notConfigured"
+      | "translate.dialog.docxOnly"
+      | "translate.dialog.providerUnavailable"
+      | "translate.error.title"
+      | "translate.dialog.waitForDocument"
+      | "translate.dialog.commentsDescription",
+  ) => string;
+};
+
+const translationStartDisabledReason = ({
+  isStarting,
+  isRunning,
+  isLoadingRun,
+  isDeepL,
+  availabilityKnown,
+  canUseDeepL,
+  isDocx,
+  canUseAI,
+  hasPreparedVersion,
+  preparationFailed,
+  t,
+}: TranslationStartDisabledReasonOptions) => {
+  if (isStarting) {
+    return t("bilingualTranslate.review.starting");
+  }
+  if (isRunning) {
+    return t("translate.dialog.translating");
+  }
+  if (isLoadingRun || (isDeepL && !availabilityKnown)) {
+    return t("common.loading");
+  }
+  if (isDeepL && !canUseDeepL) {
+    return t("translate.dialog.notConfigured");
+  }
+  if (!isDeepL && !isDocx) {
+    return t("translate.dialog.docxOnly");
+  }
+  if (!isDeepL && !canUseAI) {
+    return t("translate.dialog.providerUnavailable");
+  }
+  if (!isDeepL && !hasPreparedVersion) {
+    return preparationFailed
+      ? t("translate.error.title")
+      : t("translate.dialog.waitForDocument");
+  }
+  return t("translate.dialog.commentsDescription");
+};
+
 export const TranslateDocumentDialog = (
   props: TranslateDocumentDialogProps,
 ) => {
+  const idempotentSubmit = useIdempotentSubmit();
   const {
     workspaceId,
     viewId,
@@ -103,7 +176,7 @@ export const TranslateDocumentDialog = (
     disabled = false,
   } = props;
   const t = useTranslations();
-  const locale = useLocale();
+  const locale = useMessageLocale();
   const analytics = useAnalytics();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -183,11 +256,20 @@ export const TranslateDocumentDialog = (
     );
   }
   const canUseDeepL = availability?.configured === true;
-  const choice = activeTranslationChoice({
-    selected: selectedChoice,
-    canUseDeepL,
-    isDocx,
-  });
+  const actionCapabilities = useActionCapabilities(
+    isDocx ? "translation" : "deepl",
+  );
+  const translationCapability =
+    actionCapabilities.capabilities[isDocx ? "translation" : "deepl"];
+  const canUseAI = actionCapabilities.capabilities.ai.type === "available";
+  const choice =
+    !canUseAI && canUseDeepL
+      ? "translated:deepl"
+      : activeTranslationChoice({
+          selected: selectedChoice,
+          canUseDeepL,
+          isDocx,
+        });
   const isDeepL = choice === "translated:deepl";
   const targetLang =
     targetSelection?.documentKey === documentKey
@@ -232,7 +314,10 @@ export const TranslateDocumentDialog = (
       return;
     }
 
-    analytics.captureError(result.error);
+    analytics.captureError(result.error, {
+      fingerprintKey: "TranslateDocumentDialog:failure",
+      scope: { type: "handler", handlerId: "TranslateDocumentDialog:failure" },
+    });
     notifyUserError(result.error, t("translate.error.title"), {
       description: userErrorFromThrown(result.error, t("errors.actionFailed")),
     });
@@ -245,7 +330,13 @@ export const TranslateDocumentDialog = (
       availabilityErrorRef.current !== availabilityError
     ) {
       availabilityErrorRef.current = availabilityError;
-      analytics.captureError(availabilityError);
+      analytics.captureError(availabilityError, {
+        fingerprintKey: "TranslateDocumentDialog:availabilityError",
+        scope: {
+          type: "handler",
+          handlerId: "TranslateDocumentDialog:availabilityError",
+        },
+      });
       notifyUserError(availabilityError, t("translate.error.title"), {
         description: userErrorFromThrown(
           availabilityError,
@@ -258,7 +349,13 @@ export const TranslateDocumentDialog = (
       preparationErrorRef.current !== preparationQuery.error
     ) {
       preparationErrorRef.current = preparationQuery.error;
-      analytics.captureError(preparationQuery.error);
+      analytics.captureError(preparationQuery.error, {
+        fingerprintKey: "TranslateDocumentDialog:failure-2",
+        scope: {
+          type: "handler",
+          handlerId: "TranslateDocumentDialog:failure-2",
+        },
+      });
     }
     const run = runQuery.data?.run;
     if (
@@ -267,7 +364,13 @@ export const TranslateDocumentDialog = (
       pollingErrorRunRef.current !== runId
     ) {
       pollingErrorRunRef.current = runId;
-      analytics.captureError(runQuery.error);
+      analytics.captureError(runQuery.error, {
+        fingerprintKey: "TranslateDocumentDialog:failure-3",
+        scope: {
+          type: "handler",
+          handlerId: "TranslateDocumentDialog:failure-3",
+        },
+      });
       notifyUserError(runQuery.error, t("translate.error.title"), {
         description: userErrorFromThrown(
           runQuery.error,
@@ -312,7 +415,7 @@ export const TranslateDocumentDialog = (
     }
     if (run.status === "failed" || run.status === "cancelled") {
       terminalNotifiedRunRef.current = runId;
-      notifyUserError(undefined, t("translate.error.title"), {
+      notifyUserProblem(t("translate.error.title"), {
         description: t(documentTranslationRunFailureKey(run.errorCode)),
       });
     }
@@ -344,11 +447,19 @@ export const TranslateDocumentDialog = (
       const data = await (async () => {
         switch (choice) {
           case "translated:deepl":
-            return unwrapEden(
-              await client.post({
-                ...common,
-                output: "translated",
-                engine: "deepl",
+            return unwrapApiResponse(
+              await idempotentSubmit.run({
+                operation: `translations.${workspaceId}.create`,
+                body: {
+                  ...common,
+                  output: "translated" as const,
+                  engine: "deepl" as const,
+                },
+                send: async (body) => {
+                  const reply = await client.post(body);
+                  unwrapApiResponse(reply);
+                  return reply;
+                },
               }),
             );
           case "translated:ai":
@@ -356,12 +467,23 @@ export const TranslateDocumentDialog = (
             const entityVersionId =
               preparationQuery.data?.entityVersionId ??
               panic("AI translation started without a prepared version");
-            return unwrapEden(
-              await client.post({
-                ...common,
-                output: choice === "translated:ai" ? "translated" : "bilingual",
-                engine: "ai",
-                entityVersionId,
+            return unwrapApiResponse(
+              await idempotentSubmit.run({
+                operation: `translations.${workspaceId}.create`,
+                body: {
+                  ...common,
+                  output:
+                    choice === "translated:ai"
+                      ? ("translated" as const)
+                      : ("bilingual" as const),
+                  engine: "ai" as const,
+                  entityVersionId,
+                },
+                send: async (body) => {
+                  const reply = await client.post(body);
+                  unwrapApiResponse(reply);
+                  return reply;
+                },
               }),
             );
           }
@@ -394,7 +516,13 @@ export const TranslateDocumentDialog = (
       setDialogOpen(true);
     },
     onError: (error: unknown) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "TranslateDocumentDialog:failure-4",
+        scope: {
+          type: "handler",
+          handlerId: "TranslateDocumentDialog:failure-4",
+        },
+      });
       notifyUserError(error, t("translate.error.title"), {
         description: userErrorFromThrown(error, t("errors.actionFailed")),
       });
@@ -405,9 +533,21 @@ export const TranslateDocumentDialog = (
   const isStarting = translateMutation.isPending;
   const isLoadingRun = runId !== null && runQuery.isPending;
   const isRunning = run ? isDocumentTranslationRunActive(run.status) : false;
-  const progress =
-    run && run.total > 0 ? Math.min(1, run.completed / run.total) : 0;
+  const startDisabledReason = translationStartDisabledReason({
+    isStarting,
+    isRunning,
+    isLoadingRun,
+    isDeepL,
+    availabilityKnown: availability !== undefined,
+    canUseDeepL,
+    isDocx,
+    canUseAI,
+    hasPreparedVersion: preparationQuery.data !== undefined,
+    preparationFailed: preparationQuery.isError,
+    t,
+  });
   const canStart =
+    (isDeepL ? canUseDeepL : canUseAI) &&
     canTranslateDocument({ canUseDeepL, isDocx }) &&
     canStartDocumentTranslation({
       canUseDeepL,
@@ -423,6 +563,9 @@ export const TranslateDocumentDialog = (
   return (
     <Dialog
       onOpenChange={(nextOpen) => {
+        if (nextOpen && translationCapability.type !== "available") {
+          return;
+        }
         if (nextOpen && run && !isRunning) {
           setRunId(null);
           setCommentPolicyState({ type: "unchecked" });
@@ -432,22 +575,44 @@ export const TranslateDocumentDialog = (
       open={open}
     >
       {props.mode !== "controlled" && (
-        <DialogTrigger
-          disabled={disabled}
-          render={
-            <Button
-              aria-label={t("common.translate")}
+        <CapabilityAction
+          action={{ capability: isDocx ? "translation" : "deepl" }}
+          surface="control"
+        >
+          {(capabilityProps) => (
+            <DialogTrigger
               disabled={disabled}
-              size="icon-xs"
-              tooltip={t("common.translate")}
-              variant="ghost"
-            >
-              <LanguagesIcon className="size-3.5" />
-            </Button>
-          }
-        />
+              render={
+                <Button
+                  aria-label={t("common.translate")}
+                  disabled={disabled}
+                  disabledReason={t("translate.dialog.waitForDocument")}
+                  size="icon-xs"
+                  tooltip={t("common.translate")}
+                  variant="ghost"
+                >
+                  <LanguagesIcon className="size-3.5" />
+                </Button>
+              }
+              {...capabilityProps}
+            />
+          )}
+        </CapabilityAction>
       )}
       <DialogPopup>
+        <DialogFormState
+          dirty={
+            runId === null &&
+            (selectedChoice !== DEFAULT_TRANSLATION_CHOICE ||
+              targetSelection !== null ||
+              commentPolicyState.type !== "unchecked")
+          }
+          onDiscard={() => {
+            setChoice(DEFAULT_TRANSLATION_CHOICE);
+            setTargetSelection(null);
+            setCommentPolicyState({ type: "unchecked" });
+          }}
+        />
         <DialogHeader>
           <DialogTitle>{t("translate.dialog.title")}</DialogTitle>
           <DialogDescription>
@@ -457,25 +622,19 @@ export const TranslateDocumentDialog = (
 
         <DialogPanel>
           {run && (isRunning || run.status === "completed") ? (
-            <div className="flex flex-col gap-3">
+            <div
+              aria-busy={isRunning || undefined}
+              className="flex flex-col gap-3"
+              role="status"
+            >
               <p className="text-sm font-medium">
                 {run.status === "completed"
                   ? t("translate.dialog.completed")
                   : t("translate.dialog.translating")}
               </p>
-              <div
-                aria-label={t("translate.dialog.progress")}
-                aria-valuemax={run.total}
-                aria-valuemin={0}
-                aria-valuenow={run.completed}
-                className="bg-muted h-1.5 w-full overflow-hidden rounded-full"
-                role="progressbar"
-              >
-                <div
-                  className="bg-primary h-full w-full origin-left rounded-full transition-transform duration-500 ease-out"
-                  style={{ transform: `scaleX(${String(progress)})` }}
-                />
-              </div>
+              {isRunning && (
+                <Loader className="size-4" size="sm" variant="decorative" />
+              )}
               <p className="text-muted-foreground text-xs tabular-nums">
                 {t("translate.dialog.progressCount", {
                   completed: String(run.completed),
@@ -507,7 +666,7 @@ export const TranslateDocumentDialog = (
                 </legend>
                 <RadioCard
                   checked={choice === "translated:ai"}
-                  disabled={!isDocx}
+                  disabled={!isDocx || !canUseAI}
                   label={t("translate.dialog.translatedDocumentAi")}
                   onChange={() => setChoice("translated:ai")}
                   description={t("translate.dialog.aiDescription")}
@@ -515,7 +674,7 @@ export const TranslateDocumentDialog = (
                 />
                 <RadioCard
                   checked={choice === "bilingual:ai"}
-                  disabled={!isDocx}
+                  disabled={!isDocx || !canUseAI}
                   label={t("translate.dialog.bilingualDocument")}
                   onChange={() => setChoice("bilingual:ai")}
                   description={t("translate.dialog.bilingualDescription")}
@@ -597,13 +756,20 @@ export const TranslateDocumentDialog = (
 
         <DialogFooter>
           <DialogClose
-            render={<Button disabled={isStarting} variant="ghost" />}
+            render={
+              <Button
+                disabled={isStarting}
+                disabledReason={t("bilingualTranslate.review.starting")}
+                variant="ghost"
+              />
+            }
           >
             {t("common.close")}
           </DialogClose>
           {!run || (!isRunning && run.status !== "completed") ? (
             <Button
               disabled={!canStart}
+              disabledReason={startDisabledReason}
               onClick={() => translateMutation.mutate()}
             >
               {isStarting
@@ -636,10 +802,7 @@ const RadioCard = ({
   value,
   onChange,
 }: RadioCardProps) => (
-  <label
-    aria-label={label}
-    className="has-[:checked]:border-primary has-[:checked]:bg-muted/50 flex min-h-11 cursor-pointer items-start gap-3 rounded-md border p-3 has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-50"
-  >
+  <Label aria-label={label} variant="choice-card">
     <input
       checked={checked}
       className="accent-primary mt-0.5 size-4 shrink-0"
@@ -653,5 +816,5 @@ const RadioCard = ({
       <span className="text-sm font-medium">{label}</span>
       <span className="text-muted-foreground text-xs">{description}</span>
     </span>
-  </label>
+  </Label>
 );

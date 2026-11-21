@@ -9,6 +9,14 @@ import type {
 import type { ClipboardSnapshot } from "../../src/clipboard/clipboard-types";
 import arMessages from "../../src/i18n/langs/ar.json" with { type: "json" };
 import enMessages from "../../src/i18n/langs/en.json" with { type: "json" };
+import type { AppSnapshot, DesktopAccountSnapshot } from "../../src/shared/rpc";
+import { BRIDGE_VERSION } from "../bridge-version";
+import {
+  emitTauriEvent,
+  installTauriIpc,
+  tauriInvocations,
+  unexpectedTauriCalls,
+} from "./tauri-ipc";
 
 const REGISTRIES = [
   {
@@ -83,6 +91,7 @@ const SNAPSHOT = {
     },
   ],
   persistence: { imageCleanup: "idle", status: "encrypted" },
+  revision: 0,
   retention: "month",
   screenCapture: "hidden",
   sourceAppExclusionLimit: 128,
@@ -93,17 +102,60 @@ const SNAPSHOT = {
 
 type Connection =
   | { status: "disconnected" }
+  | { status: "expired" }
+  | { status: "reconnectRequired" }
   | ({
       status: "connected";
       accountLabel: string;
       expiresAt: string;
     } & DesktopRegistryConfig);
-type Invocation = { args: Record<string, unknown>; command: string };
 type BoundaryMode =
   | "normal"
   | "reject-first-search"
+  | "reject-first-two-searches"
   | "defer-first-search"
-  | "reject-first-state";
+  | "reject-first-state"
+  | "defer-first-state"
+  | "reject-first-connect"
+  | "reject-first-activity"
+  | "reject-disconnect";
+type BoundaryOptions = {
+  mode?: BoundaryMode;
+  welcome?: boolean;
+  settings?: boolean;
+};
+const SETTINGS_SNAPSHOT = {
+  bridgePort: 45_901,
+  bridgeVersion: BRIDGE_VERSION,
+  capabilities: ["office-edit.v1", "self-host.connect", "account-link.v7"],
+  notificationPreferences: {
+    documentReady: true,
+    revisionCreated: true,
+    syncIssues: true,
+  },
+  documentRecovery: {
+    edits: [],
+    unassigned: false,
+    pending: false,
+    access: "available",
+  },
+  runningSince: "2026-09-08T05:00:00.000Z",
+  sessions: [],
+  trustedSelfHostConnections: [],
+  update: {
+    baseUrl: null,
+    channel: null,
+    currentHash: null,
+    currentVersion: null,
+    lastCheckedAt: null,
+    latestHash: null,
+    latestVersion: null,
+    status: "idle",
+    statusMessage: "",
+    updateAvailable: false,
+    updateReady: false,
+  },
+} satisfies AppSnapshot;
 type Audit = {
   consoleErrors: string[];
   external: string[];
@@ -155,176 +207,206 @@ test.afterEach(async ({ page }) => {
   expect(audit.pageErrors).toEqual([]);
   expect(audit.consoleErrors).toEqual([]);
   if (!page.isClosed()) {
-    expect(
-      await page.evaluate(() =>
-        Reflect.get(window, "__STELLA_REGISTRY_UNEXPECTED__"),
-      ),
-    ).toEqual([]);
+    expect(await unexpectedTauriCalls(page)).toEqual([]);
   }
 });
 
 const installNativeBoundary = async (
   page: Page,
   connection: Connection,
-  mode: BoundaryMode = "normal",
+  options: BoundaryMode | BoundaryOptions = "normal",
 ) => {
-  await page.addInitScript(
-    ({
-      initialConnection,
-      initialMode,
-      formatResponse,
-      searchResponse,
-      secondResponse,
-      clipboardSnapshot,
-      signedInConnection,
-    }) => {
-      const invocations: Invocation[] = [];
-      const unexpected: string[] = [];
-      const callbacks = new Map<number, (data: unknown) => unknown>();
-      let callbackId = 0;
+  const configuration =
+    typeof options === "string" ? { mode: options } : options;
+  const account = (
+    connection.status === "connected"
+      ? {
+          status: "connected",
+          account: {
+            name: "Synthetic Member",
+            email: "member@example.test",
+            verifiedAt: "2026-09-08T05:00:00.000Z",
+          },
+          identity: {
+            userId: "synthetic-user",
+            organizationId: "synthetic-organization",
+          },
+          expiresAt: CONNECTED_EXPIRES_AT,
+          server: ACCOUNT_SERVER,
+        }
+      : { status: connection.status, server: ACCOUNT_SERVER }
+  ) satisfies DesktopAccountSnapshot;
+  await installTauriIpc(page, {
+    windowLabel: configuration.settings ? "main" : "clipboard",
+    unhandled: "rejectAsUnexpected",
+    arg: {
+      initialConnection: connection,
+      initialMode: configuration.mode ?? "normal",
+      formatResponse: FORMAT_RESPONSE,
+      searchResponse: SEARCH_RESPONSE,
+      secondResponse: SECOND_RESPONSE,
+      clipboardSnapshot: {
+        ...SNAPSHOT,
+        welcomeStatus: configuration.welcome ? "pending" : "completed",
+      },
+      settingsSnapshot: SETTINGS_SNAPSHOT,
+      accountSnapshot: account,
+      signedInConnection: connected(),
+    },
+    handlers: (
+      {
+        initialConnection,
+        initialMode,
+        formatResponse,
+        searchResponse,
+        secondResponse,
+        clipboardSnapshot,
+        signedInConnection,
+        settingsSnapshot,
+        accountSnapshot,
+      },
+      { unexpected },
+    ) => {
       let searchCount = 0;
       let stateCount = 0;
+      let connectCount = 0;
+      let activityCount = 0;
+      let telemetryEnabled = true;
+      let resolveFirstState: ((value: Connection) => void) | null = null;
       let currentConnection = initialConnection;
       let resolveFirstSearch:
-        | ((value: DesktopRegistrySearchResponse) => void)
-        | null = null;
-      Reflect.set(window, "__STELLA_REGISTRY_INVOCATIONS__", invocations);
-      Reflect.set(window, "__STELLA_REGISTRY_UNEXPECTED__", unexpected);
+        ((value: DesktopRegistrySearchResponse) => void) | null = null;
+      Reflect.set(window, "__STELLA_RESOLVE_FIRST_STATE__", () =>
+        resolveFirstState?.(currentConnection),
+      );
       Reflect.set(window, "__STELLA_COMPLETE_SIGN_IN__", () => {
         currentConnection = signedInConnection;
       });
       Reflect.set(window, "__STELLA_RESOLVE_FIRST_SEARCH__", () =>
         resolveFirstSearch?.(searchResponse),
       );
-      Reflect.set(window, "__TAURI_EVENT_PLUGIN_INTERNALS__", {
-        unregisterListener: () => undefined,
-      });
-      Reflect.set(window, "__TAURI_INTERNALS__", {
-        callbacks,
-        convertFileSrc: (path: string) => path,
-        invoke: async (command: string, args: Record<string, unknown> = {}) => {
-          invocations.push({ args, command });
-          switch (command) {
-            case "get_desktop_language":
-              return navigator.language === "ar" ? "ar" : "en";
-            case "clipboard_get_snapshot":
-              return clipboardSnapshot;
-            case "is_autostart_enabled":
-              return false;
-            case "plugin:event|listen":
-              return args["handler"];
-            case "plugin:event|unlisten":
-            case "desktop_report_timing":
-            case "desktop_report_error":
-            case "clipboard_hide":
-            case "open_stella_account":
-            case "account_disconnect":
-            case "registry_copy":
-            case "registry_open_company_format":
-              return undefined;
-            case "registry_get_state": {
-              stateCount += 1;
-              if (initialMode === "reject-first-state" && stateCount === 1) {
-                throw new TypeError("Deliberate connection failure");
-              }
-              return currentConnection;
-            }
-            case "registry_search": {
-              searchCount += 1;
-              if (initialMode === "reject-first-search" && searchCount === 1) {
-                throw new TypeError("Deliberate registry search failure");
-              }
-              if (initialMode === "defer-first-search" && searchCount === 1) {
-                return await new Promise<DesktopRegistrySearchResponse>(
-                  (resolve) => {
-                    resolveFirstSearch = resolve;
-                  },
-                );
-              }
-              return initialMode === "normal" ||
-                initialMode === "reject-first-state"
-                ? searchResponse
-                : secondResponse;
-            }
-            case "registry_format":
-              return formatResponse;
-            case "registry_set_default_format": {
-              // The API answers with the default the member now resolves to.
-              // Clearing falls back to the firm's default, which this fixture
-              // has: the same format the first search arrived with.
-              const formatId = args["formatId"];
-              return formatId === null
-                ? {
-                    defaultFormatId: searchResponse.defaultFormatId,
-                    defaultFormatSource: searchResponse.defaultFormatSource,
-                  }
-                : { defaultFormatId: formatId, defaultFormatSource: "user" };
-            }
-            default:
-              unexpected.push(command);
-              throw new TypeError(`Unexpected native command: ${command}`);
+      return {
+        account_disconnect: () => {
+          if (initialMode === "reject-disconnect") {
+            throw new TypeError("Deliberate disconnect failure");
           }
+          return undefined;
         },
-        metadata: {
-          currentWebview: { label: "clipboard", windowLabel: "clipboard" },
-          currentWindow: { label: "clipboard" },
+        account_record_use: (args) => {
+          activityCount += 1;
+          if (Object.keys(args).length !== 0) {
+            unexpected.push("account_record_use arguments");
+            throw new TypeError("Account activity must not contain data");
+          }
+          if (initialMode === "reject-first-activity" && activityCount === 1) {
+            throw new TypeError("Deliberate account activity failure");
+          }
+          return null;
         },
-        runCallback: (id: number, data: unknown) => callbacks.get(id)?.(data),
-        transformCallback: (
-          callback: ((data: unknown) => unknown) | undefined,
-          once = false,
-        ) => {
-          callbackId += 1;
-          const id = callbackId;
-          callbacks.set(id, (data) => {
-            if (once) {
-              callbacks.delete(id);
-            }
-            return callback?.(data);
-          });
-          return id;
+        // The Settings window asks whether to show its Activity tab; these
+        // accounts have no activity timeline.
+        is_activity_enabled: () => false,
+        get_desktop_telemetry_enabled: () => telemetryEnabled,
+        set_desktop_telemetry_enabled: (args) => {
+          if (typeof args["enabled"] !== "boolean") {
+            unexpected.push("set_desktop_telemetry_enabled arguments");
+            throw new TypeError("Reporting preference must be a boolean");
+          }
+          telemetryEnabled = args["enabled"];
+          return telemetryEnabled;
         },
-        unregisterCallback: (id: number) => callbacks.delete(id),
-      });
+        get_desktop_language: () => (navigator.language === "ar" ? "ar" : "en"),
+        clipboard_get_snapshot: () => clipboardSnapshot,
+        clipboard_complete_welcome: () => ({
+          ...clipboardSnapshot,
+          welcomeStatus: "completed",
+        }),
+        get_state: () => settingsSnapshot,
+        dictation_get_snapshot: () => ({ available: false }),
+        shortcut_get_snapshot: () => ({
+          defaultKeys: { code: "KeyV", modifiers: ["shift", "super"] },
+          keys: { code: "KeyV", modifiers: ["shift", "super"] },
+          registration: "active",
+        }),
+        permissions_get_snapshot: () => ({ rows: [] }),
+        // No connection status: the section stays hidden, as with local agents off.
+        chatgpt_auth_get_status: () => null,
+        claude_code_auth_get_status: () => null,
+        // No install status either, read the same as the refusal with local agents off.
+        harness_get_status: () => null,
+        local_skill_folders_get: () => null,
+        signing_driver_get: () => null,
+        local_linked_folders_get: () => null,
+        account_get_state: () => accountSnapshot,
+        open_stella_account: () => {
+          connectCount += 1;
+          if (initialMode === "reject-first-connect" && connectCount === 1) {
+            throw new TypeError("Deliberate connect failure");
+          }
+          return undefined;
+        },
+        is_autostart_enabled: () => false,
+        desktop_report_timing: () => undefined,
+        desktop_report_error: () => undefined,
+        clipboard_hide: () => undefined,
+        registry_copy: () => undefined,
+        registry_open_company_format: () => undefined,
+        registry_get_state: async () => {
+          stateCount += 1;
+          if (initialMode === "reject-first-state" && stateCount === 1) {
+            throw new TypeError("Deliberate connection failure");
+          }
+          if (initialMode === "defer-first-state" && stateCount === 1) {
+            return await new Promise<Connection>((resolve) => {
+              resolveFirstState = resolve;
+            });
+          }
+          return currentConnection;
+        },
+        registry_search: async () => {
+          searchCount += 1;
+          if (
+            (initialMode === "reject-first-search" && searchCount === 1) ||
+            (initialMode === "reject-first-two-searches" && searchCount <= 2)
+          ) {
+            throw new TypeError("Deliberate registry search failure");
+          }
+          if (initialMode === "defer-first-search" && searchCount === 1) {
+            return await new Promise<DesktopRegistrySearchResponse>(
+              (resolve) => {
+                resolveFirstSearch = resolve;
+              },
+            );
+          }
+          return initialMode === "normal" ||
+            initialMode === "reject-first-state"
+            ? searchResponse
+            : secondResponse;
+        },
+        registry_format: () => formatResponse,
+        registry_set_default_format: (args) => {
+          // The API answers with the default the member now resolves to.
+          // Clearing falls back to the firm's default, which this fixture
+          // has: the same format the first search arrived with.
+          const formatId = args["formatId"];
+          return formatId === null
+            ? {
+                defaultFormatId: searchResponse.defaultFormatId,
+                defaultFormatSource: searchResponse.defaultFormatSource,
+              }
+            : { defaultFormatId: formatId, defaultFormatSource: "user" };
+        },
+      };
     },
-    {
-      initialConnection: connection,
-      initialMode: mode,
-      formatResponse: FORMAT_RESPONSE,
-      searchResponse: SEARCH_RESPONSE,
-      secondResponse: SECOND_RESPONSE,
-      clipboardSnapshot: SNAPSHOT,
-      signedInConnection: connected(),
-    },
-  );
+  });
 };
 
-const readInvocations = async (page: Page) =>
-  page.evaluate(() => {
-    const value: unknown = Reflect.get(
-      window,
-      "__STELLA_REGISTRY_INVOCATIONS__",
-    );
-    if (!Array.isArray(value)) {
-      throw new TypeError("Registry invocation log is not installed");
-    }
-    return value.map((invocation): Invocation => {
-      if (
-        typeof invocation !== "object" ||
-        invocation === null ||
-        !("args" in invocation) ||
-        typeof invocation.args !== "object" ||
-        invocation.args === null ||
-        !("command" in invocation) ||
-        typeof invocation.command !== "string"
-      ) {
-        throw new TypeError("Registry invocation log contains an invalid call");
-      }
-      return { args: invocation.args, command: invocation.command };
-    });
-  });
+const ACCOUNT_SERVER = "https://web.example.test";
+const ACCOUNT_HOST = "web.example.test";
+const withHost = (template: string) =>
+  template.replace("{host}", () => ACCOUNT_HOST);
 const searches = async (page: Page) =>
-  (await readInvocations(page)).filter(
+  (await tauriInvocations(page)).filter(
     ({ command }) => command === "registry_search",
   );
 const connected = (
@@ -409,9 +491,28 @@ test("sign-in stays available without disabling local clipboard search", async (
     })
     .click();
   await expect
-    .poll(async () => await readInvocations(page))
+    .poll(async () => await tauriInvocations(page))
     .toContainEqual({ command: "open_stella_account", args: {} });
   expect(await searches(page)).toEqual([]);
+});
+
+test("Enter while a registry search is still pending never copies a hidden clipboard result", async ({
+  page,
+}) => {
+  await openClipboard(page, connected(), "defer-first-search");
+  await searchBox(page).fill("Privileged");
+  await switchScope(page, "ArrowDown");
+  // The search is asked for but never answered, so Enter lands while the
+  // registry has nothing to act on and the clips' matches are only hidden.
+  await expect.poll(async () => (await searches(page)).length).toBe(1);
+  await searchBox(page).press("Enter");
+  await searchBox(page).press("Shift+Enter");
+  expect(
+    (await tauriInvocations(page)).filter(
+      ({ command }) => command === "clipboard_copy_item",
+    ),
+  ).toEqual([]);
+  await expect(searchBox(page)).toBeFocused();
 });
 
 test("keyboard activation retains the input and Enter never copies a hidden clipboard result", async ({
@@ -423,14 +524,14 @@ test("keyboard activation retains the input and Enter never copies a hidden clip
   await expect.poll(async () => (await searches(page)).length).toBe(1);
   await searchBox(page).press("Enter");
   expect(
-    (await readInvocations(page)).filter(
+    (await tauriInvocations(page)).filter(
       ({ command }) => command === "clipboard_copy_item",
     ),
   ).toEqual([]);
   await expect(searchBox(page)).toBeFocused();
 });
 
-test("highlights the first registry result and copies it with Enter from the search field", async ({
+test("highlights the first registry result and copies it with Enter on the focused card, not from the search field", async ({
   page,
 }) => {
   await openClipboard(page);
@@ -439,25 +540,63 @@ test("highlights the first registry result and copies it with Enter from the sea
   await expect(result).toHaveAttribute("aria-current", "true");
   await expect(result.locator("strong")).toHaveText("ACME PLC");
   await expect(searchBox(page)).toBeFocused();
+  const copies = async () =>
+    (await tauriInvocations(page)).filter(
+      ({ command }) => command === "registry_copy",
+    );
   await searchBox(page).press("Enter");
-  await expect
-    .poll(async () =>
-      (await readInvocations(page)).filter(
-        ({ command }) => command === "registry_copy",
-      ),
-    )
-    .toEqual([
-      {
-        command: "registry_copy",
-        args: { html: RESULT_HTML, text: RESULT_TEXT },
-      },
-    ]);
+  expect(await copies()).toEqual([]);
   await expect(searchBox(page)).toBeFocused();
   // ArrowUp lands on the highlighted card; ArrowDown returns to the field.
   await searchBox(page).press("ArrowUp");
   await expect(result.locator("[data-registry-card]")).toBeFocused();
   await page.keyboard.press("ArrowDown");
   await expect(searchBox(page)).toBeFocused();
+  await searchBox(page).press("ArrowUp");
+  await expect(result.locator("[data-registry-card]")).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect.poll(copies).toEqual([
+    {
+      command: "registry_copy",
+      args: { html: RESULT_HTML, text: RESULT_TEXT },
+    },
+  ]);
+});
+
+test("Enter repeats a search that failed after Enter confirmed it", async ({
+  page,
+}) => {
+  await openClipboard(page, connected(), "reject-first-two-searches");
+  await activateRegistry(page, "Privileged");
+  const alert = page.getByRole("alert");
+  await expect(alert).toHaveText(enMessages.clipboard.registryErrorSearch);
+  // The debounced search failed, so this Enter confirms the query and fails.
+  await searchBox(page).press("Enter");
+  await expect.poll(async () => (await searches(page)).length).toBe(2);
+  // Retried until the second failure has rendered: Enter is inert mid-search.
+  await expect(async () => {
+    await searchBox(page).press("Enter");
+    expect((await searches(page)).length).toBe(3);
+  }).toPass();
+  await expect(alert).toBeHidden();
+  await expect(searchBox(page)).toBeFocused();
+});
+
+test("starts every registry result at the top of its card", async ({
+  page,
+}) => {
+  await openClipboard(page);
+  await activateRegistry(page, "Privileged");
+  const card = page.locator(
+    '[data-registry-result="company-1"] [data-registry-card]',
+  );
+  const name = card.getByRole("heading", { name: "Stella Example s.r.o." });
+  await expect(name).toBeVisible();
+  const cardBox = await card.boundingBox();
+  const nameBox = await name.boundingBox();
+  // A short result must not sink to the middle of a tall card, or names in
+  // neighbouring cards stop lining up. The card's own top padding is 12px.
+  expect((nameBox?.y ?? 0) - (cardBox?.y ?? 0)).toBeCloseTo(12, 0);
 });
 
 test("retains the explicitly requested query across browser sign-in and native focus return", async ({
@@ -473,7 +612,7 @@ test("retains the explicitly requested query across browser sign-in and native f
     .click();
   await page.evaluate(() => {
     window.dispatchEvent(new Event("blur"));
-    const complete: unknown = Reflect.get(
+    const complete: (() => void) | undefined = Reflect.get(
       window,
       "__STELLA_COMPLETE_SIGN_IN__",
     );
@@ -507,7 +646,7 @@ test("refreshes the connection when the bridge stores a browser handoff", async 
     })
     .click();
   await page.evaluate(() => {
-    const complete: unknown = Reflect.get(
+    const complete: (() => void) | undefined = Reflect.get(
       window,
       "__STELLA_COMPLETE_SIGN_IN__",
     );
@@ -515,36 +654,8 @@ test("refreshes the connection when the bridge stores a browser handoff", async 
       throw new TypeError("Sign-in completion fixture is missing");
     }
     complete();
-    const invocations: unknown = Reflect.get(
-      window,
-      "__STELLA_REGISTRY_INVOCATIONS__",
-    );
-    if (!Array.isArray(invocations)) {
-      throw new TypeError("Registry invocation fixture is missing");
-    }
-    const subscription = invocations.findLast(
-      (entry: { args: Record<string, unknown>; command: string }) =>
-        entry.command === "plugin:event|listen" &&
-        entry.args["event"] === "desktop-account-changed",
-    );
-    const id = subscription?.args["handler"];
-    if (typeof id !== "number") {
-      throw new TypeError("Registry connection listener is not installed");
-    }
-    const internals: unknown = Reflect.get(window, "__TAURI_INTERNALS__");
-    const callbacks =
-      typeof internals === "object" && internals !== null
-        ? Reflect.get(internals, "callbacks")
-        : undefined;
-    if (!(callbacks instanceof Map)) {
-      throw new TypeError("Tauri callback registry is missing");
-    }
-    callbacks.get(id)?.({
-      event: "desktop-account-changed",
-      id,
-      payload: null,
-    });
   });
+  await emitTauriEvent(page, "desktop-account-changed");
   await expect
     .poll(async () => await searches(page))
     .toContainEqual({
@@ -597,7 +708,7 @@ test("registry chooser owns its arrow keys and Escape without closing the clipbo
   await page.keyboard.press("Escape");
   await expect(page.getByRole("menu")).toBeHidden();
   expect(
-    (await readInvocations(page)).filter(
+    (await tauriInvocations(page)).filter(
       ({ command }) => command === "clipboard_hide",
     ),
   ).toEqual([]);
@@ -778,7 +889,7 @@ test("ignores an older response after a newer search completes", async ({
     page.getByRole("heading", { name: "Latest Company" }),
   ).toBeVisible();
   await page.evaluate(() => {
-    const resolve: unknown = Reflect.get(
+    const resolve: (() => void) | undefined = Reflect.get(
       window,
       "__STELLA_RESOLVE_FIRST_SEARCH__",
     );
@@ -806,7 +917,7 @@ test("applies saved formatting and copies only the selected registry output", as
   await expect(card).toContainText("Saved detailed registry output");
   await expect(card.locator("strong")).toHaveText("ACME PLC");
   await card.click();
-  const calls = await readInvocations(page);
+  const calls = await tauriInvocations(page);
   expect(calls).toContainEqual({
     command: "registry_format",
     args: {
@@ -841,7 +952,7 @@ test("opens the selected company's specification formats from the format menu", 
     .click();
 
   await expect
-    .poll(async () => await readInvocations(page))
+    .poll(async () => await tauriInvocations(page))
     .toContainEqual({
       command: "registry_open_company_format",
       args: { id: "company-1", registry: "ares" },
@@ -874,7 +985,7 @@ test("labels non-company directory templates as registry results", async ({
     .click();
 
   await expect
-    .poll(async () => await readInvocations(page))
+    .poll(async () => await tauriInvocations(page))
     .toContainEqual({
       command: "registry_open_company_format",
       args: { id: "company-1", registry: "denue" },
@@ -905,7 +1016,7 @@ for (const language of ["en", "ar"] as const) {
         })
         .click();
       await expect
-        .poll(async () => await readInvocations(page))
+        .poll(async () => await tauriInvocations(page))
         .toContainEqual({
           command: "registry_set_default_format",
           args: {
@@ -930,7 +1041,7 @@ for (const language of ["en", "ar"] as const) {
         })
         .click();
       await expect
-        .poll(async () => await readInvocations(page))
+        .poll(async () => await tauriInvocations(page))
         .toContainEqual({
           command: "registry_set_default_format",
           args: {
@@ -953,7 +1064,7 @@ for (const language of ["en", "ar"] as const) {
         })
         .click();
       await expect
-        .poll(async () => await readInvocations(page))
+        .poll(async () => await tauriInvocations(page))
         .toContainEqual({
           command: "registry_set_default_format",
           args: { formatId: null, registry: "ares" },
@@ -978,11 +1089,16 @@ for (const language of ["en", "ar"] as const) {
       browserName,
       page,
     }) => {
+      const messages = language === "ar" ? arMessages : enMessages;
       await openClipboard(page);
       await searchBox(page).fill("Privileged");
       // WebKit follows macOS keyboard access: Option+Tab includes buttons.
       await searchBox(page).press(browserName === "webkit" ? "Alt+Tab" : "Tab");
-      // The scope icon stays out of the tab order; the groups rail follows.
+      const searchOptions = page.getByRole("button", {
+        name: messages.clipboard.searchOptions,
+      });
+      await expect(searchOptions).toBeFocused();
+      await searchOptions.press(browserName === "webkit" ? "Alt+Tab" : "Tab");
       await expect(
         page.locator('[data-clipboard-group-id="__no_group__"]'),
       ).toBeFocused();
@@ -1099,3 +1215,644 @@ for (const language of ["en", "ar"] as const) {
     }
   });
 }
+
+for (const language of ["en", "ar"] as const) {
+  test.describe(`${language} first launch account connection`, () => {
+    test.use({ locale: language });
+    const messages = language === "ar" ? arMessages : enMessages;
+
+    test("welcome connects through the existing account action without clipboard data", async ({
+      page,
+    }) => {
+      await installNativeBoundary(
+        page,
+        { status: "disconnected" },
+        { welcome: true },
+      );
+      await page.goto("/");
+      const welcome = page.getByRole("dialog");
+      await expect(welcome).toBeVisible();
+      await expect(welcome).toHaveCSS(
+        "direction",
+        language === "ar" ? "rtl" : "ltr",
+      );
+      const connect = welcome.getByRole("button", {
+        name: messages.settings.connectToStella,
+        exact: true,
+      });
+      await expect(connect).toBeVisible();
+      await connect.click();
+      await expect
+        .poll(async () =>
+          (await tauriInvocations(page)).filter(
+            ({ command }) => command === "open_stella_account",
+          ),
+        )
+        .toEqual([{ command: "open_stella_account", args: {} }]);
+      await expect(welcome).toBeVisible();
+    });
+
+    for (const status of [
+      "connected",
+      "disconnected",
+      "expired",
+      "reconnectRequired",
+    ] as const) {
+      test(`${status} welcome can finish without linking or opening an account`, async ({
+        page,
+      }) => {
+        const connection = (
+          status === "connected" ? connected() : { status }
+        ) satisfies Connection;
+        await installNativeBoundary(page, connection, { welcome: true });
+        await page.goto("/");
+        const welcome = page.getByRole("dialog");
+        await expect(welcome).toBeVisible();
+        await welcome
+          .getByRole("button", {
+            name: messages.clipboard.welcomeStart,
+            exact: true,
+          })
+          .click();
+        await expect(welcome).toHaveCount(0);
+        await expect
+          .poll(async () =>
+            (await tauriInvocations(page)).filter(
+              ({ command }) => command === "clipboard_complete_welcome",
+            ),
+          )
+          .toEqual([{ command: "clipboard_complete_welcome", args: {} }]);
+        expect(
+          (await tauriInvocations(page)).filter(
+            ({ command }) => command === "open_stella_account",
+          ),
+        ).toEqual([]);
+        await expect(
+          page.locator('[data-clipboard-id="private-clip"]'),
+        ).toBeVisible();
+      });
+    }
+
+    test("expired welcome explains expiry and reconnects through the existing account action", async ({
+      page,
+    }) => {
+      await installNativeBoundary(
+        page,
+        { status: "expired" },
+        { welcome: true },
+      );
+      await page.goto("/");
+      const welcome = page.getByRole("dialog");
+      await expect(
+        welcome.getByText(messages.settings.connectionExpiredDescription, {
+          exact: true,
+        }),
+      ).toBeVisible();
+      await expect(
+        welcome.getByRole("button", {
+          name: messages.settings.connectToStella,
+          exact: true,
+        }),
+      ).toHaveCount(0);
+      await welcome
+        .getByRole("button", {
+          name: messages.settings.reconnectToStella,
+          exact: true,
+        })
+        .click();
+      await expect
+        .poll(async () =>
+          (await tauriInvocations(page)).filter(
+            ({ command }) => command === "open_stella_account",
+          ),
+        )
+        .toEqual([{ command: "open_stella_account", args: {} }]);
+      await expect(welcome).toBeVisible();
+    });
+
+    test("Settings can disable and re-enable crash and error reporting", async ({
+      page,
+    }) => {
+      await installNativeBoundary(page, connected(), { settings: true });
+      await page.goto("/#general");
+      const reporting = page.getByRole("switch", {
+        name: messages.settings.sendCrashReports,
+        exact: true,
+      });
+      await expect(reporting).toBeEnabled();
+      await expect(reporting).toBeChecked();
+      await expect(
+        page.getByText(messages.settings.sendCrashReportsDescription, {
+          exact: true,
+        }),
+      ).toBeVisible();
+      await reporting.click();
+      await expect(reporting).not.toBeChecked();
+      await expect(reporting).toBeEnabled();
+      await reporting.click();
+      await expect(reporting).toBeChecked();
+      await expect
+        .poll(async () =>
+          (await tauriInvocations(page)).filter(
+            ({ command }) => command === "set_desktop_telemetry_enabled",
+          ),
+        )
+        .toEqual([
+          {
+            command: "set_desktop_telemetry_enabled",
+            args: { enabled: false },
+          },
+          { command: "set_desktop_telemetry_enabled", args: { enabled: true } },
+        ]);
+    });
+
+    test("expired Settings shows an expiry badge and offers reconnect", async ({
+      page,
+    }) => {
+      await installNativeBoundary(
+        page,
+        { status: "expired" },
+        { settings: true },
+      );
+      await page.goto("/#general");
+      // The sidebar names the state too; the badge is the General page's.
+      await expect(
+        page
+          .locator("[data-slot=settings-page]")
+          .getByText(messages.settings.connectionExpired, { exact: true }),
+      ).toBeVisible();
+      await expect(
+        page.getByText(withHost(messages.settings.reconnectHostDescription), {
+          exact: true,
+        }),
+      ).toHaveCount(1);
+      await expect(
+        page.getByRole("button", {
+          name: withHost(messages.settings.connectToHost),
+          exact: true,
+        }),
+      ).toHaveCount(0);
+      await page
+        .getByRole("button", {
+          name: messages.settings.reconnect,
+          exact: true,
+        })
+        .click();
+      await expect
+        .poll(async () =>
+          (await tauriInvocations(page)).filter(
+            ({ command }) => command === "open_stella_account",
+          ),
+        )
+        .toEqual([{ command: "open_stella_account", args: {} }]);
+    });
+
+    test("expired registry requests reconnection instead of searching", async ({
+      page,
+    }) => {
+      await openClipboard(page, { status: "expired" });
+      await activateRegistry(page, "Synthetic company");
+      await expect(
+        page
+          .getByRole("status")
+          .filter({ hasText: messages.settings.connectionExpiredDescription }),
+      ).toBeVisible();
+      expect(await searches(page)).toEqual([]);
+      await page
+        .getByRole("button", {
+          name: messages.settings.reconnectToStella,
+          exact: true,
+        })
+        .click();
+      await expect
+        .poll(async () =>
+          (await tauriInvocations(page)).filter(
+            ({ command }) => command === "open_stella_account",
+          ),
+        )
+        .toEqual([{ command: "open_stella_account", args: {} }]);
+    });
+
+    for (const surface of ["welcome", "settings", "registry"] as const) {
+      for (const mode of ["normal", "reject-disconnect"] as const) {
+        test(`${surface} missing device key reconnect ${mode} clears credentials before opening the account`, async ({
+          page,
+        }) => {
+          await installNativeBoundary(
+            page,
+            { status: "reconnectRequired" },
+            {
+              mode,
+              welcome: surface === "welcome",
+              settings: surface === "settings",
+            },
+          );
+          await page.goto(surface === "settings" ? "/#general" : "/");
+          if (surface === "registry") {
+            await activateRegistry(page, "Synthetic company");
+            expect(await searches(page)).toEqual([]);
+          }
+          const area = surface === "welcome" ? page.getByRole("dialog") : page;
+          if (surface === "settings") {
+            // The sidebar names the state too; the badge is the General
+            // page's.
+            await expect(
+              page
+                .locator("[data-slot=settings-page]")
+                .getByText(messages.settings.reconnectNeeded, {
+                  exact: true,
+                }),
+            ).toBeVisible();
+          }
+          await area
+            .getByRole("button", {
+              name:
+                surface === "settings"
+                  ? messages.settings.reconnect
+                  : messages.settings.reconnectToStella,
+              exact: true,
+            })
+            .click();
+          const accountActions = async () =>
+            (await tauriInvocations(page)).filter(
+              ({ command }) =>
+                command === "account_disconnect" ||
+                command === "open_stella_account",
+            );
+          if (mode === "normal") {
+            await expect.poll(accountActions).toEqual([
+              { command: "account_disconnect", args: {} },
+              { command: "open_stella_account", args: {} },
+            ]);
+          } else {
+            const error =
+              surface === "settings"
+                ? "Deliberate disconnect failure"
+                : messages.clipboard.registryErrorConnect;
+            if (surface === "settings") {
+              await expect(
+                page.getByText(error, { exact: true }),
+              ).toBeVisible();
+            } else {
+              await expect(area.getByRole("alert")).toHaveText(error);
+            }
+            expect(await accountActions()).toEqual([
+              { command: "account_disconnect", args: {} },
+            ]);
+            await expect(
+              area.getByRole("button", {
+                name:
+                  surface === "settings"
+                    ? messages.settings.reconnect
+                    : messages.settings.reconnectToStella,
+                exact: true,
+              }),
+            ).toBeVisible();
+          }
+          expect(await searches(page)).toEqual([]);
+          if (surface === "welcome") {
+            await expect(page.getByRole("dialog")).toBeVisible();
+          }
+        });
+      }
+    }
+
+    test("connected welcome omits the connect prompt", async ({ page }) => {
+      await installNativeBoundary(page, connected(), { welcome: true });
+      await page.goto("/");
+      const welcome = page.getByRole("dialog");
+      await expect(welcome).toBeVisible();
+      await expect
+        .poll(
+          async () =>
+            (await tauriInvocations(page)).filter(
+              ({ command }) => command === "registry_get_state",
+            ).length,
+        )
+        .toBeGreaterThan(0);
+      await page.evaluate(async () => {
+        await new Promise<void>((resolve) => {
+          requestAnimationFrame(() => {
+            requestAnimationFrame(() => resolve());
+          });
+        });
+      });
+      await expect(
+        welcome.getByRole("button", {
+          name: messages.settings.connectToStella,
+          exact: true,
+        }),
+      ).toHaveCount(0);
+      await expect(
+        welcome.getByText(messages.settings.connectToStellaDescription, {
+          exact: true,
+        }),
+      ).toHaveCount(0);
+      await expect(
+        welcome.getByRole("button", {
+          name: messages.clipboard.welcomeStart,
+          exact: true,
+        }),
+      ).toBeEnabled();
+    });
+
+    test("loading welcome never pretends the account is disconnected", async ({
+      page,
+    }) => {
+      await installNativeBoundary(
+        page,
+        { status: "disconnected" },
+        { welcome: true, mode: "defer-first-state" },
+      );
+      await page.goto("/");
+      const welcome = page.getByRole("dialog");
+      await expect(welcome).toBeVisible();
+      // Wait for the requested messages before asserting the loading state.
+      await expect(
+        welcome.getByRole("button", {
+          name: messages.clipboard.welcomeStart,
+          exact: true,
+        }),
+      ).toBeEnabled();
+      await expect(
+        welcome.getByRole("button", {
+          name: messages.settings.connectToStella,
+          exact: true,
+        }),
+      ).toHaveCount(0);
+      await expect(
+        welcome.getByRole("button", {
+          name: messages.settings.tryAgain,
+          exact: true,
+        }),
+      ).toHaveCount(0);
+      await expect
+        .poll(
+          async () =>
+            (await tauriInvocations(page)).filter(
+              ({ command }) => command === "registry_get_state",
+            ).length,
+        )
+        .toBe(1);
+      await page.evaluate(() => {
+        const resolve: (() => void) | undefined = Reflect.get(
+          window,
+          "__STELLA_RESOLVE_FIRST_STATE__",
+        );
+        if (typeof resolve !== "function") {
+          throw new TypeError("Missing state resolver");
+        }
+        resolve();
+      });
+      await expect(
+        welcome.getByRole("button", {
+          name: messages.clipboard.welcomeStart,
+          exact: true,
+        }),
+      ).toBeEnabled();
+      await expect(
+        welcome.getByRole("button", {
+          name: messages.settings.connectToStella,
+          exact: true,
+        }),
+      ).toBeVisible();
+    });
+
+    test("failed connection lookup exposes retry and recovers", async ({
+      page,
+    }) => {
+      await installNativeBoundary(page, connected(), {
+        welcome: true,
+        mode: "reject-first-state",
+      });
+      await page.goto("/");
+      const welcome = page.getByRole("dialog");
+      await expect(welcome.getByRole("alert")).toHaveText(
+        messages.clipboard.registryErrorState,
+      );
+      expect(
+        (await tauriInvocations(page)).filter(
+          ({ command }) => command === "registry_get_state",
+        ),
+      ).toHaveLength(1);
+      await expect(
+        welcome.getByRole("button", {
+          name: messages.settings.connectToStella,
+          exact: true,
+        }),
+      ).toHaveCount(0);
+      await welcome
+        .getByRole("button", { name: messages.settings.tryAgain, exact: true })
+        .click();
+      await expect(welcome.getByRole("alert")).toHaveCount(0);
+      expect(
+        (await tauriInvocations(page)).filter(
+          ({ command }) => command === "registry_get_state",
+        ),
+      ).toHaveLength(2);
+      await expect(
+        welcome.getByRole("button", {
+          name: messages.settings.tryAgain,
+          exact: true,
+        }),
+      ).toHaveCount(0);
+    });
+
+    test("failed connect remains recoverable through the same account action", async ({
+      page,
+    }) => {
+      await installNativeBoundary(
+        page,
+        { status: "disconnected" },
+        { welcome: true, mode: "reject-first-connect" },
+      );
+      await page.goto("/");
+      const welcome = page.getByRole("dialog");
+      const connect = welcome.getByRole("button", {
+        name: messages.settings.connectToStella,
+        exact: true,
+      });
+      await connect.click();
+      await expect(welcome.getByRole("alert")).toHaveText(
+        messages.clipboard.registryErrorConnect,
+      );
+      await connect.click();
+      await expect(welcome.getByRole("alert")).toHaveCount(0);
+      await expect
+        .poll(async () =>
+          (await tauriInvocations(page)).filter(
+            ({ command }) => command === "open_stella_account",
+          ),
+        )
+        .toEqual([
+          { command: "open_stella_account", args: {} },
+          { command: "open_stella_account", args: {} },
+        ]);
+    });
+
+    for (const status of ["connected", "disconnected"] as const) {
+      test(`${status} Settings header keeps its complete subtitle at the native window size`, async ({
+        page,
+      }) => {
+        // The smallest the settings window can be made.
+        await page.setViewportSize({ width: 640, height: 460 });
+        await installNativeBoundary(
+          page,
+          status === "connected" ? connected() : { status: "disconnected" },
+          { settings: true },
+        );
+        await page.goto("/#general");
+        const settingsPage = page.locator("[data-slot=settings-page]");
+        const subtitle =
+          status === "connected"
+            ? settingsPage.locator("#desktop-account-description")
+            : settingsPage.getByText(
+                withHost(messages.settings.connectToHostDescription),
+                { exact: true },
+              );
+        await expect(subtitle).toHaveCount(1);
+        await expect(subtitle).toBeVisible();
+        if (status === "connected") {
+          await expect(
+            settingsPage.getByText("Synthetic Member", { exact: true }),
+          ).toBeVisible();
+        } else {
+          await expect(
+            page.getByRole("button", {
+              name: withHost(messages.settings.connectToHost),
+              exact: true,
+            }),
+          ).toHaveCount(1);
+        }
+        if (status === "connected") {
+          await expect(subtitle).toContainText("member@example.test");
+        }
+        // The email and server read left to right in any interface language.
+        await expect(subtitle).toHaveCSS(
+          "direction",
+          language === "ar" && status === "disconnected" ? "rtl" : "ltr",
+        );
+        const geometry = await subtitle.evaluate((element) => {
+          const style = getComputedStyle(element);
+          return {
+            textOverflow: style.textOverflow,
+            whiteSpace: style.whiteSpace,
+            width: element.clientWidth,
+            scrollWidth: element.scrollWidth,
+            height: element.clientHeight,
+            scrollHeight: element.scrollHeight,
+          };
+        });
+        expect(geometry.textOverflow).not.toBe("ellipsis");
+        expect(geometry.whiteSpace).not.toBe("nowrap");
+        expect(geometry.scrollWidth).toBeLessThanOrEqual(geometry.width);
+        expect(geometry.scrollHeight).toBeLessThanOrEqual(geometry.height);
+      });
+    }
+  });
+}
+
+test("clipboard activity is paced and never sends clipboard or keyboard contents", async ({
+  page,
+}) => {
+  await page.clock.install();
+  await openClipboard(page);
+  expect(
+    (await tauriInvocations(page)).filter(
+      ({ command }) => command === "account_record_use",
+    ),
+  ).toEqual([]);
+  await searchBox(page).click();
+  await page.keyboard.type(PRIVATE_CLIPBOARD_TEXT);
+  await expect
+    .poll(async () =>
+      (await tauriInvocations(page)).filter(
+        ({ command }) => command === "account_record_use",
+      ),
+    )
+    .toEqual([{ command: "account_record_use", args: {} }]);
+  await page.clock.fastForward(30_000);
+  await page.keyboard.press("ArrowLeft");
+  await expect
+    .poll(async () =>
+      (await tauriInvocations(page)).filter(
+        ({ command }) => command === "account_record_use",
+      ),
+    )
+    .toEqual([
+      { command: "account_record_use", args: {} },
+      { command: "account_record_use", args: {} },
+    ]);
+});
+
+test("native refresh and synthetic input do not count as account activity", async ({
+  page,
+}) => {
+  await openClipboard(page);
+  await page.evaluate(() => {
+    document.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "a", bubbles: true }),
+    );
+    document.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
+    window.dispatchEvent(new Event("focus"));
+  });
+  await expect
+    .poll(
+      async () =>
+        (await tauriInvocations(page)).filter(
+          ({ command }) => command === "registry_get_state",
+        ).length,
+    )
+    .toBeGreaterThan(1);
+  expect(
+    (await tauriInvocations(page)).filter(
+      ({ command }) => command === "account_record_use",
+    ),
+  ).toEqual([]);
+});
+
+test("foreground Settings interactions record use without passing event data", async ({
+  page,
+}) => {
+  await installNativeBoundary(page, connected(), { settings: true });
+  await page.goto("/#general");
+  await page
+    .getByRole("navigation")
+    .getByRole("button", {
+      name: enMessages.settings.pages.general,
+      exact: true,
+    })
+    .click();
+  await expect
+    .poll(async () =>
+      (await tauriInvocations(page)).filter(
+        ({ command }) => command === "account_record_use",
+      ),
+    )
+    .toEqual([{ command: "account_record_use", args: {} }]);
+});
+
+test("activity failure reports only the existing telemetry classification", async ({
+  page,
+}) => {
+  await openClipboard(page, connected(), "reject-first-activity");
+  await searchBox(page).click();
+  await expect
+    .poll(async () =>
+      (await tauriInvocations(page)).filter(
+        ({ command }) => command === "desktop_report_error",
+      ),
+    )
+    .toEqual([
+      {
+        command: "desktop_report_error",
+        args: {
+          report: {
+            code: "invokeFailed",
+            operation: "runtime",
+            window: "clipboard",
+          },
+        },
+      },
+    ]);
+});

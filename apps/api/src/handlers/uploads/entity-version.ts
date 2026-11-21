@@ -1,8 +1,8 @@
 /** Presigned-upload transport for creating a new entity file version. */
-import { Result, panic } from "better-result";
+import { panic, Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 
-import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
+import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import type {
@@ -10,7 +10,11 @@ import type {
   PendingUploadPurposeData,
 } from "@/api/db/schema";
 import { pendingUploads } from "@/api/db/schema";
-import { captureError } from "@/api/lib/analytics/capture";
+import {
+  captureError,
+  createErrorCapture,
+  detached,
+} from "@/api/lib/analytics/capture";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -18,7 +22,9 @@ import {
   lockObjectCleanupIntentsForWriter,
   retirePublishedObjectCleanupIntentsInTransaction,
 } from "@/api/lib/buffer-intent-reconciliation";
+import { withAggregateParentBatch } from "@/api/lib/db/aggregate-lock";
 import { UPLOAD_DOCUMENT_SOURCE } from "@/api/lib/document-source";
+import { CALLER_AUTHORIZED } from "@/api/lib/entities/buffer-write-authority";
 import { computeVersionDiffStats } from "@/api/lib/entity-versions/compute-version-diff";
 import { writeFileVersion } from "@/api/lib/entity-versions/write-file-version";
 import type { WriteFileVersionResult } from "@/api/lib/entity-versions/write-file-version";
@@ -34,6 +40,7 @@ import {
 } from "@/api/lib/files/detect-file-encryption";
 import { allocateFileObject } from "@/api/lib/files/file-object-ids";
 import { createFileKey } from "@/api/lib/files/utils";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
 import { createRootScopedDb } from "@/api/lib/root-scoped-db";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
@@ -41,6 +48,8 @@ import {
   processExtraction,
   requestNativeExtractionRun,
 } from "@/api/lib/search/process-extraction";
+import { flushEntitySearchRepairs } from "@/api/lib/search/projection-repair-flush";
+import { enqueueEntitySearchRepairs } from "@/api/lib/search/projection-repair-queue";
 import type { PromotedUploadObject } from "@/api/lib/uploads/promote-tmp-object";
 import { finalizeErr, finalizeOk } from "@/api/lib/uploads/runtime";
 import type { UploadFinalizeError } from "@/api/lib/uploads/runtime";
@@ -134,6 +143,83 @@ const versionWriteRejection = (
   });
 };
 
+const EXTRACTION_KEY = "entityVersion.processExtraction";
+const THUMBNAIL_KEY = "entityVersion.enqueueThumbnail";
+const PDF_KEY = "entityVersion.enqueuePdfDerivative";
+const DIFF_KEY = "entityVersion.computeVersionDiff";
+
+type VersionFollowUpWork = Parameters<
+  typeof enqueuePdfDerivativeOrMarkFailed
+>[0] & { versionId: SafeId<"entityVersion"> };
+
+/** Work a promoted version starts after commit; none of it blocks the upload. */
+const startVersionFollowUpWork = ({
+  versionId,
+  ...file
+}: VersionFollowUpWork) => {
+  const { entityId, fieldId, mimeType, organizationId, userId, workspaceId } =
+    file;
+  detached(
+    async () =>
+      processExtraction(entityId).catch((error: unknown) => {
+        captureError(error, handlerErrorContext(EXTRACTION_KEY, { entityId }));
+      }),
+    "entity-version.process-extraction",
+  );
+  detached(
+    async () =>
+      enqueuePdfDerivativeOrMarkFailed(file).catch((error: unknown) => {
+        const context = { entityId, fieldId, mimeType };
+        captureError(error, handlerErrorContext(PDF_KEY, context));
+      }),
+    "entity-version.enqueue-pdf-derivative-or-mark-failed",
+  );
+  detached(
+    async () =>
+      enqueueImageThumbnailOrMarkFailed(file).catch((error: unknown) => {
+        const context = { entityId, fieldId, mimeType };
+        captureError(error, handlerErrorContext(THUMBNAIL_KEY, context));
+      }),
+    "entity-version.enqueue-image-thumbnail-or-mark-failed",
+  );
+  detached(
+    async () =>
+      computeVersionDiffStats({
+        versionId,
+        entityId,
+        scopedDb: createRootScopedDb({
+          organizationId,
+          userId,
+          workspaceIds: [workspaceId],
+        }),
+        workspaceId,
+        organizationId,
+      }).catch((error: unknown) => {
+        const context = { versionId };
+        captureError(error, handlerErrorContext(DIFF_KEY, context));
+      }),
+    "entity-version.compute-version-diff-stats",
+  );
+};
+
+type DetectVersionEncryptionOptions = Pick<
+  FinalizeEntityVersionProps,
+  "declaredMime" | "declaredSize" | "scanned"
+>;
+
+const detectVersionEncryption = async ({
+  declaredMime,
+  declaredSize,
+  scanned,
+}: DetectVersionEncryptionOptions) =>
+  uploadFileEncryption(
+    await detectFileEncryption({ mimeType: declaredMime, scanned }),
+    handlerErrorContext("entityVersion.detectEncryption", {
+      mimeType: declaredMime,
+      sizeBytes: String(declaredSize),
+    }),
+  );
+
 /**
  * Promote the staged object, then join the canonical version transaction. The
  * pending-upload FSM transition is supplied as writeFileVersion's afterWrite
@@ -147,12 +233,11 @@ export const finalizeEntityVersion = async function* ({
   organizationId,
   workspaceId,
   userId,
-  fileBuffer: _fileBuffer,
   declaredName,
   declaredMime,
   declaredSize,
   declaredSha256Hex,
-  purposeData,
+  purposeData: { entityId },
   scanned,
   scanWarnings,
   uploadId,
@@ -160,13 +245,13 @@ export const finalizeEntityVersion = async function* ({
   promoteTmpObject,
 }: FinalizeEntityVersionProps) {
   const fileName = sanitizeFilename(declaredName);
-  const { entityId } = purposeData;
   // The new bytes decide the attribute: a version is a different file from
   // the one it replaces, and may be encrypted when that one was not.
-  const encryption = uploadFileEncryption(
-    await detectFileEncryption({ mimeType: declaredMime, scanned }),
-    { mimeType: declaredMime, sizeBytes: String(declaredSize) },
-  );
+  const encryption = await detectVersionEncryption({
+    declaredMime,
+    declaredSize,
+    scanned,
+  });
   if (encryption === null) {
     return finalizeErr({
       status: 422,
@@ -194,6 +279,12 @@ export const finalizeEntityVersion = async function* ({
       | Extract<PendingUploadFinalizedResult, { type: "entity_version" }>
       | undefined;
     const writeResultResult = await safeDb(async (tx) => {
+      await withAggregateParentBatch({
+        tx,
+        organizationIds: [],
+        workspaceIds: [workspaceId],
+        mode: "key share",
+      });
       const claimRows = await tx
         .select({ id: pendingUploads.id })
         .from(pendingUploads)
@@ -213,6 +304,7 @@ export const finalizeEntityVersion = async function* ({
       }
 
       const versionResult = await writeFileVersion({
+        authority: CALLER_AUTHORIZED,
         tx,
         organizationId,
         workspaceId,
@@ -271,6 +363,7 @@ export const finalizeEntityVersion = async function* ({
         // file. The post-promote call below only accelerates the queue handoff,
         // so it resolves the same source file: no property pin, same as there.
         await requestNativeExtractionRun({ entityId, tx });
+        await enqueueEntitySearchRepairs(tx, [entityId]);
       }
       return versionResult;
     });
@@ -291,11 +384,15 @@ export const finalizeEntityVersion = async function* ({
     const finalizedResult =
       finalized ??
       panic("Entity version write completed without finalize result");
+    detached(
+      async () =>
+        flushEntitySearchRepairs([entityId]).catch(
+          createErrorCapture(handlerErrorContext("entityVersion.flushSearch")),
+        ),
+      "entity-version.flush-entity-search-repairs",
+    );
     const afterPromote = () => {
-      processExtraction(entityId).catch((error: unknown) => {
-        captureError(error, { entityId });
-      });
-      enqueuePdfDerivativeOrMarkFailed({
+      startVersionFollowUpWork({
         encrypted: encryption.encrypted,
         entityId,
         fieldId,
@@ -303,32 +400,7 @@ export const finalizeEntityVersion = async function* ({
         organizationId,
         userId,
         workspaceId,
-      }).catch((error: unknown) => {
-        captureError(error, { entityId, fieldId, mimeType: declaredMime });
-      });
-      enqueueImageThumbnailOrMarkFailed({
-        encrypted: encryption.encrypted,
-        entityId,
-        fieldId,
-        mimeType: declaredMime,
-        organizationId,
-        userId,
-        workspaceId,
-      }).catch((error: unknown) => {
-        captureError(error, { entityId, fieldId, mimeType: declaredMime });
-      });
-      computeVersionDiffStats({
         versionId: entityVersionId,
-        entityId,
-        scopedDb: createRootScopedDb({
-          organizationId,
-          userId,
-          workspaceIds: [workspaceId],
-        }),
-        workspaceId,
-        organizationId,
-      }).catch((error: unknown) => {
-        captureError(error, { versionId: entityVersionId });
       });
       broadcastWorkspaceResourceUpdated(
         workspaceId,

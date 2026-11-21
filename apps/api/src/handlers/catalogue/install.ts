@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { findCatalogueEntry, isGithubSkillEntry } from "@stll/catalogue";
 
@@ -8,6 +8,7 @@ import { env } from "@/api/env";
 import { catalogueRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { installSkill, preflightSkillInstall } from "@/api/lib/skills/install";
@@ -19,20 +20,18 @@ const installSkillScopeValues = [
   "private",
 ] as const satisfies typeof AGENT_SKILL_SCOPES;
 
-const installSkillBody = t.Object({
-  slug: t.String({ minLength: 1, maxLength: 64 }),
-  // Literals are inlined rather than `AGENT_SKILL_SCOPES.map(...)`: mapping the
-  // const yields a non-tuple union that Elysia infers as `never`, collapsing
-  // `scope` to `undefined`; the tuple above keeps schema drift type-checked.
-  scope: t.Optional(
-    t.Union([
-      t.Literal(installSkillScopeValues[0]),
-      t.Literal(installSkillScopeValues[1]),
+const installSkillBody = v.object({
+  slug: v.pipe(v.string(), v.minLength(1), v.maxLength(64)),
+  scope: v.optional(
+    v.union([
+      v.literal(installSkillScopeValues[0]),
+      v.literal(installSkillScopeValues[1]),
     ]),
   ),
 });
 
 const config = {
+  contract: "patch",
   contentDelivery: {
     type: "none",
     reason: "Installs a bundled skill without returning stored-file bytes.",
@@ -89,6 +88,7 @@ const installBundledSkill = createSafeRootHandler(
     }
 
     const resolvedResult = await resolveCatalogueSkillPackage(body.slug, {
+      permit: grantThirdPartyOutboundPermit(),
       ...(env.GITHUB_TOKEN ? { githubToken: env.GITHUB_TOKEN } : {}),
     });
     if (Result.isError(resolvedResult)) {

@@ -11,11 +11,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@stll/ui/select";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import type { FieldOption } from "@/components/conditions/condition-builder-logic";
 import { SelectColorIcon } from "@/components/workspaces/properties/shared";
 import { normalizeOptionalArray } from "@/lib/arrays";
+import { queryView } from "@/lib/query-view.logic";
+import { useQueryViewError } from "@/lib/use-query-view";
 import type { PropertyFacetCounts } from "@/lib/workspaces/queries/property-facets";
 import { propertyFacetsOptions } from "@/lib/workspaces/queries/property-facets";
 
@@ -163,7 +166,7 @@ type OptionRowProps = {
 const OptionRow = ({ label, color, count, showCounts }: OptionRowProps) => (
   <span className="flex w-full items-center gap-1.5">
     {color !== undefined && <SelectColorIcon color={color} />}
-    <span className="flex-1 truncate">{label}</span>
+    <TruncatedText className="flex-1">{label}</TruncatedText>
     {showCounts && (
       <span className="text-muted-foreground tabular-nums">{count ?? 0}</span>
     )}
@@ -198,7 +201,7 @@ const usePropertyFacetCounts = ({
     field.operand.type === "property" ? field.operand.propertyId : null;
   const enabled = open && facetContext !== undefined && propertyId !== null;
 
-  const { data } = useQuery({
+  const dataQuery = useQuery({
     ...propertyFacetsOptions({
       workspaceId: facetContext?.workspaceId ?? "",
       propertyId: propertyId ?? "",
@@ -206,6 +209,9 @@ const usePropertyFacetCounts = ({
     }),
     enabled,
   });
+  const dataView = queryView(dataQuery);
+  useQueryViewError(dataView, "usePropertyFacetCounts:query");
+  const data = dataView.type === "items" ? dataView.items : undefined;
 
   return data;
 };

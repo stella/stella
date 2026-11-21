@@ -7,8 +7,11 @@ import type { DocxEditorRef } from "@stll/folio-react";
 
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
+import { startKeyActionTimer } from "@/lib/analytics/key-action-timing";
 import { getAnalytics } from "@/lib/analytics/provider";
+import type { DocumentTimingSurface } from "@/lib/analytics/types";
 import { detached } from "@/lib/detached";
+import { scheduleIdle } from "@/lib/platform/schedule-idle";
 
 import {
   createTrailingSingleFlight,
@@ -20,13 +23,14 @@ import type { EditSession } from "./use-edit-session";
 const CHANGE_CHECKPOINT_DELAY = 2000;
 
 type UseDocxCheckpointAutosaveOptions = {
-  editorRef: RefObject<DocxEditorRef | null>;
+  editorRef: RefObject<Pick<DocxEditorRef, "save"> | null>;
   hasSessionChangesRef: RefObject<boolean>;
   isCollaborativeEditing: boolean;
   isUnlocked: boolean;
   markDirty: () => void;
   saveCheckpoint: EditSession["saveCheckpoint"];
   setAutosaveStatus: (status: AutosaveStatus) => void;
+  timingSurface: DocumentTimingSurface;
 };
 
 /**
@@ -42,8 +46,9 @@ export const useDocxCheckpointAutosave = ({
   markDirty,
   saveCheckpoint,
   setAutosaveStatus,
+  timingSurface,
 }: UseDocxCheckpointAutosaveOptions) => {
-  const changeCheckpointIdleCallbackRef = useRef<number | null>(null);
+  const cancelChangeCheckpointRef = useRef<(() => void) | null>(null);
 
   // The debounced autosave, the awaitable flush, and the Cmd/Ctrl+S
   // handler all serialize the live editor and persist the buffer.
@@ -67,18 +72,36 @@ export const useDocxCheckpointAutosave = ({
       return;
     }
     setAutosaveStatus("syncing");
+    const timer = startKeyActionTimer(getAnalytics(), {
+      action: "document-save",
+      surface: timingSurface,
+    });
     const buffer = await ref.save({ selective: true });
-    const outcome = buffer ? await saveCheckpoint(buffer) : "failed";
+    const outcome = buffer ? await saveCheckpoint(buffer) : null;
+    const saved = outcome?.type === "saved";
+    // Only a confirmed checkpoint is a round trip; a failed or released save
+    // ends early and would read as fast.
+    if (saved) {
+      timer.finish();
+    } else {
+      timer.cancel();
+    }
     setAutosaveStatus(
       resolveCheckpointAutosaveStatus({
         buffer: buffer ?? null,
-        checkpointSaved: outcome === "saved",
+        checkpointSaved: saved,
       }),
     );
   });
 
   const reportCheckpointSaveError = useLatestCallback((error: unknown) => {
-    getAnalytics().captureError(error);
+    getAnalytics().captureError(error, {
+      fingerprintKey: "useDocxCheckpointAutosave:failure",
+      scope: {
+        type: "handler",
+        handlerId: "useDocxCheckpointAutosave:failure",
+      },
+    });
     setAutosaveStatus("pending");
   });
 
@@ -108,9 +131,9 @@ export const useDocxCheckpointAutosave = ({
   // be idle. `useDebouncedCallback` owns the first wait; the idle handle is
   // not a debounce and stays a ref, because the cancel path has to reach it.
   const queueChangeCheckpointSave = useDebouncedCallback(() => {
-    changeCheckpointIdleCallbackRef.current = window.requestIdleCallback(
+    cancelChangeCheckpointRef.current = scheduleIdle(
       () => {
-        changeCheckpointIdleCallbackRef.current = null;
+        cancelChangeCheckpointRef.current = null;
         saveChangeCheckpoint();
       },
       { timeout: 2000 },
@@ -119,10 +142,8 @@ export const useDocxCheckpointAutosave = ({
 
   const clearQueuedChangeCheckpoint = useCallback(() => {
     queueChangeCheckpointSave.cancel();
-    if (changeCheckpointIdleCallbackRef.current !== null) {
-      window.cancelIdleCallback(changeCheckpointIdleCallbackRef.current);
-      changeCheckpointIdleCallbackRef.current = null;
-    }
+    cancelChangeCheckpointRef.current?.();
+    cancelChangeCheckpointRef.current = null;
   }, [queueChangeCheckpointSave]);
 
   // Awaitable variant of `saveChangeCheckpoint` for callers that

@@ -61,7 +61,7 @@ describe("memory extraction claim", () => {
       "await readThreadStoredContentSendModeOnTx(",
     );
     const modelCall = extractorSource.indexOf(
-      "await generateTanStackObjectForRole(",
+      "await generateTanStackObjectForTask(",
     );
 
     expect(transcriptRead).toBeGreaterThan(-1);

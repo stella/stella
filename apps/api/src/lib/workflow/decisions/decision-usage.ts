@@ -1,7 +1,9 @@
 import { Result } from "better-result";
 
+import type { DecisionModelProvider } from "@/api/lib/ai-config";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { AIUsageMetering } from "@/api/lib/analytics/tanstack-ai";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { incrementLaneCounter } from "@/api/lib/usage/lane-budget";
 import { decisionUsageUnitsFromTokens } from "@/api/lib/usage/unit-model";
 import { recordUsageEvent } from "@/api/lib/usage/usage-ledger";
@@ -16,16 +18,22 @@ type RecordDecisionUsageOptions = {
   metering: DecisionUsageMetering;
   keySource: DecisionModel["keySource"];
   inputTokens: number;
+  provider: DecisionModelProvider;
+  region?: "eu" | "global" | undefined;
 };
 
 export const recordDecisionUsage = async ({
   metering,
   keySource,
   inputTokens,
+  provider,
+  region,
 }: RecordDecisionUsageOptions): Promise<void> => {
   const isByok = keySource === "byok";
   const { rawUsageMicroUnits, unitsConsumed } = decisionUsageUnitsFromTokens({
     inputTokens,
+    provider,
+    region,
     actionType: metering.actionType,
     isByok,
   });
@@ -37,7 +45,7 @@ export const recordDecisionUsage = async ({
       workspaceId: metering.workspaceId,
       userId: metering.userId,
       actionType: metering.actionType,
-      modelRole: "decision",
+      modelTask: "decision",
       unitsConsumed: lane === "pool" ? unitsConsumed : 0,
       serviceTier: "standard",
       isByok,
@@ -58,10 +66,13 @@ export const recordDecisionUsage = async ({
     return recorded;
   });
   if (Result.isError(result)) {
-    captureError(result.error, {
-      source: "usage.decision",
-      organization_id: metering.organizationId,
-      trace_id: metering.callId,
-    });
+    captureError(
+      result.error,
+      handlerErrorContext("decisions.recordDecisionUsage.result_error", {
+        source: "usage.decision",
+        organization_id: metering.organizationId,
+        trace_id: metering.callId,
+      }),
+    );
   }
 };

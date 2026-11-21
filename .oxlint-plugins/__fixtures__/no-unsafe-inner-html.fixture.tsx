@@ -98,7 +98,7 @@ export const UnsafeInsertAdjacentHtml = () => {
   const element = document.createElement("div");
   // oxlint-disable-next-line no-unsafe-inner-html/no-unsafe-inner-html
   element.insertAdjacentHTML("beforeend", rawHtml);
-  // oxlint-disable-next-line no-unsafe-inner-html/no-unsafe-inner-html, eslint/no-useless-call -- call form
+  // oxlint-disable-next-line no-unsafe-inner-html/no-unsafe-inner-html, no-useless-call -- call form
   element.insertAdjacentHTML.call(element, "beforeend", rawHtml);
 };
 

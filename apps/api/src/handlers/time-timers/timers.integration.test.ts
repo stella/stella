@@ -1,5 +1,4 @@
-import type { TSchema } from "@sinclair/typebox";
-import { Value } from "@sinclair/typebox/value";
+import { panic, Result } from "better-result";
 import {
   afterAll,
   afterEach,
@@ -11,22 +10,27 @@ import {
   setSystemTime,
   test,
 } from "bun:test";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
+import * as v from "valibot";
 
 import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
 
+import { user as authUser } from "@/api/db/auth-schema";
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import {
   BILLING_STATUS,
-  TIME_ENTRY_SOURCE,
+  featureEnrolments,
   organizationSettings,
   rateTables,
+  TIME_ENTRY_SOURCE,
   timeEntries,
   timeTimers,
   workspaceMembers,
   workspaces,
 } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
+import { archiveWorkspaceHandler } from "@/api/handlers/workspaces/archive";
+import { unarchiveWorkspaceHandler } from "@/api/handlers/workspaces/unarchive";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import { cents } from "@/api/lib/money";
@@ -58,6 +62,26 @@ const START = "2026-09-01T23:59:00.000Z";
 beforeAll(async () => {
   db = await getTestDb();
   await setupRlsTestData(db, ids);
+
+  await db
+    .update(authUser)
+    .set({ emailVerified: true })
+    .where(inArray(authUser.id, [ids.userA1, ids.userAdmin]));
+  await db
+    .insert(featureEnrolments)
+    .values([
+      {
+        organizationId: ids.orgA,
+        userId: ids.userA1,
+        featureId: "time-billing",
+      },
+      {
+        organizationId: ids.orgA,
+        userId: ids.userAdmin,
+        featureId: "time-billing",
+      },
+    ])
+    .onConflictDoNothing();
 });
 afterAll(async () => {
   await releaseTestDb();
@@ -95,16 +119,13 @@ const context = (workspaceIds = [ids.wsA1]) => ({
   memberRole: sessionMemberRole("member"),
   getWorkspaceAccess: async () => ({ id: ids.wsA1, status: "active" as const }),
   pinServerValidatedWorkspaceId: () => true,
-  recordAuditEvent: async (_tx: unknown, event: unknown) => {
-    auditEvents.push(event);
-  },
-  createAuditRecorder: () => async (_tx: unknown, event: unknown) => {
+  audit: async (_tx: unknown, event: unknown) => {
     auditEvents.push(event);
   },
 });
 
-const checkedBody = <T>(schema: TSchema, body: T) => {
-  expect(Value.Check(schema, body)).toBe(true);
+const checkedBody = <T>(schema: v.GenericSchema, body: T) => {
+  expect(v.is(schema, body)).toBe(true);
   return body;
 };
 
@@ -975,6 +996,88 @@ describe("global timer lifecycle", () => {
     expect(auditEvents.at(-1)).toMatchObject({
       action: AUDIT_ACTION.DELETE,
       resourceId: timer.id,
+    });
+  });
+  test("a paused timer cannot resume after its matter is archived", async () => {
+    const timer = await start();
+    await pauseTimer.handler(
+      createTestHandlerContext<Parameters<typeof pauseTimer.handler>[0]>({
+        ...context(),
+        params: { id: timer.id },
+      }),
+    );
+    const archived = await Result.gen(() =>
+      archiveWorkspaceHandler({
+        safeDb: context().safeDb,
+        workspaceId: ids.wsA1,
+        recordAuditEvent: context().audit,
+      }),
+    );
+    try {
+      expect(Result.isOk(archived)).toBe(true);
+      expect(
+        await db.query.workspaces.findFirst({
+          where: { id: { eq: ids.wsA1 } },
+        }),
+      ).toMatchObject({ status: "archived" });
+      const before = await readTimer(timer.id);
+      expect(before).toMatchObject({ state: "paused", lastResumedAt: null });
+      const beforeAudits = [...auditEvents];
+      const result = await resumeTimer.handler(
+        createTestHandlerContext<Parameters<typeof resumeTimer.handler>[0]>({
+          ...context(),
+          params: { id: timer.id },
+        }),
+      );
+      expect(result).toMatchObject({ code: 404 });
+      expect(await readTimer(timer.id)).toEqual(before);
+      expect(auditEvents).toEqual(beforeAudits);
+    } finally {
+      const restored = await Result.gen(() =>
+        unarchiveWorkspaceHandler({
+          safeDb: context().safeDb,
+          workspaceId: ids.wsA1,
+          recordAuditEvent: context().audit,
+        }),
+      );
+      expect(Result.isOk(restored)).toBe(true);
+    }
+  });
+
+  test("an unassigned paused timer can resume", async () => {
+    const timer = await startTimer.handler(
+      createTestHandlerContext<Parameters<typeof startTimer.handler>[0]>({
+        ...context(),
+        body: checkedBody(startTimer.config.body, { matterId: null }),
+      }),
+    );
+    if ("code" in timer) {
+      panic("Unassigned fixture timer must start");
+    }
+    await pauseTimer.handler(
+      createTestHandlerContext<Parameters<typeof pauseTimer.handler>[0]>({
+        ...context(),
+        params: { id: timer.id },
+      }),
+    );
+    expect(await readTimer(timer.id)).toMatchObject({
+      state: "paused",
+      workspaceId: null,
+    });
+    const resumed = await resumeTimer.handler(
+      createTestHandlerContext<Parameters<typeof resumeTimer.handler>[0]>({
+        ...context(),
+        params: { id: timer.id },
+      }),
+    );
+    expect(resumed).toMatchObject({
+      id: timer.id,
+      state: "running",
+      matterId: null,
+    });
+    expect(await readTimer(timer.id)).toMatchObject({
+      state: "running",
+      workspaceId: null,
     });
   });
 });

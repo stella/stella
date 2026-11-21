@@ -1,9 +1,15 @@
 import * as v from "valibot";
 
+import {
+  PROVISION_CITING_DECISION_SORTS,
+  PROVISION_CITING_FILTER_LIMITS,
+} from "@stll/api-contract/provision-citing-decisions";
 import { normalizeStatuteVersionSegment } from "@stll/api-contract/statute-route";
 import { parsePlainDate } from "@stll/time";
 
 import { isStatuteCompareShow } from "@/features/statutes/statute-compare-search";
+import { optionalIntegerSearchSchema } from "@/lib/schema";
+import { routeSearchSchema } from "@/route-search-params";
 
 /**
  * A calendar day, not merely a date-shaped string: `2026-02-30` matches the
@@ -26,7 +32,56 @@ const MAX_PROVISION_ANCHOR_LENGTH = 256;
  * address. Anything unparseable is dropped rather than rejected — a mistyped
  * link should still open the act.
  */
-export const publicStatuteSearchSchema = v.object({
+const provisionCitingSearchSchema = v.object({
+  citingCourt: v.optional(
+    v.pipe(
+      v.string(),
+      v.trim(),
+      v.maxLength(PROVISION_CITING_FILTER_LIMITS.courtChars),
+    ),
+  ),
+  citingYear: optionalIntegerSearchSchema({
+    min: PROVISION_CITING_FILTER_LIMITS.yearMin,
+    max: PROVISION_CITING_FILTER_LIMITS.yearMax,
+  }),
+  citingSort: v.optional(v.picklist(PROVISION_CITING_DECISION_SORTS), "newest"),
+});
+
+export const readProvisionCitingSearch = (search: unknown) => {
+  const result = v.safeParse(provisionCitingSearchSchema, search);
+  return result.success
+    ? result.output
+    : v.parse(provisionCitingSearchSchema, {});
+};
+
+export type ProvisionCitingSearch = v.InferOutput<
+  typeof provisionCitingSearchSchema
+>;
+
+export const updateProvisionCitingSearch = <T extends Record<string, unknown>>(
+  previous: T,
+  filters: ProvisionCitingSearch,
+) => {
+  const {
+    citingCourt: _court,
+    citingYear: _year,
+    citingSort: _sort,
+    ...rest
+  } = previous;
+  return {
+    ...rest,
+    citingSort: filters.citingSort,
+    ...(filters.citingCourt ? { citingCourt: filters.citingCourt } : {}),
+    ...(filters.citingYear === undefined
+      ? {}
+      : { citingYear: filters.citingYear }),
+  };
+};
+
+export const publicStatuteSearchSchema = routeSearchSchema({
+  ...provisionCitingSearchSchema.entries,
+  citingSort: v.optional(v.picklist(PROVISION_CITING_DECISION_SORTS)),
+  q: v.optional(v.pipe(v.string(), v.trim())),
   asOf: v.optional(
     v.pipe(
       v.string(),

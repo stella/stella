@@ -1,0 +1,7 @@
+# Reading extracted document content
+
+Generated from `scripts/ownership/extracted-content-read.ts`. See [Module ownership](../module-ownership.md).
+
+| Capability                                                    | Owner                                             | Enforcement                                                                                                                                                                 | Summary                                                                                                                                                                            |
+| ------------------------------------------------------------- | ------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `extracted-content-read` — Reading extracted document content | `apps/api/src/lib/document-content-provenance.ts` | read `extractedContent.ciphertext`, `extractedContent.iv`, `extractedContent.ocrPayloadCiphertext`, `extractedContent.ocrPayloadIv`, including implicit full-row selections | The document content owner supplies extracted text and OCR payloads with their current source identity. Other modules may select extraction metadata and write extraction results. |

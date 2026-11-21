@@ -3,9 +3,12 @@ import { describe, expect, test } from "bun:test";
 import { and, eq, sql } from "drizzle-orm";
 import type { PgAsyncDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
 
+import { waitForExternalState } from "@stll/property-testing/external-state";
+
 import { member, organization, user } from "@/api/db/auth-schema";
 import {
   auditLogs,
+  featureEnrolments,
   rateTables,
   workspaceMembers,
   workspaces,
@@ -22,9 +25,14 @@ import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
-import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
+import {
+  createTestHandlerContext,
+  NO_DB,
+} from "@/api/tests/helpers/handler-context";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 
 import createRateTable from "./create";
+import deleteRateTable from "./delete";
 import updateRateTable from "./update";
 
 const databaseUrl = process.env["DATABASE_URL"];
@@ -34,18 +42,18 @@ const observeBlocking = async (
   tx: Pick<PgAsyncDatabase<PgQueryResultHKT>, "select">,
   pid: number,
 ) => {
-  for (let attempt = 0; attempt < 200; attempt += 1) {
-    const rows = await tx
-      .select({
-        blocked: sql<boolean>`pg_backend_pid() = ANY(pg_blocking_pids(${pid}))`,
-      })
-      .from(sql`(SELECT 1) AS lock_observation`);
-    if (rows.at(0)?.blocked) {
-      return;
-    }
-    await Bun.sleep(10);
-  }
-  panic("Concurrent rate default mutation did not reach the workspace lock");
+  await waitForExternalState({
+    description:
+      "the concurrent rate default mutation waits on the workspace lock",
+    read: async () =>
+      (
+        await tx
+          .select({
+            blocked: sql<boolean>`pg_backend_pid() = ANY(pg_blocking_pids(${pid}))`,
+          })
+          .from(sql`(SELECT 1) AS lock_observation`)
+      ).at(0)?.blocked === true,
+  });
 };
 
 if (!databaseUrl || !runPostgres) {
@@ -89,6 +97,11 @@ if (!databaseUrl || !runPostgres) {
           userId,
           role: "owner",
           createdAt: new Date(),
+        });
+        await firstDb.insert(featureEnrolments).values({
+          organizationId,
+          userId,
+          featureId: "time-billing",
         });
         await firstDb.insert(workspaces).values({
           id: workspaceId,
@@ -177,12 +190,12 @@ if (!databaseUrl || !runPostgres) {
         ) =>
           await createRateTable.handler(
             createTestHandlerContext<CreateContext>({
+              scopedDb: NO_DB,
               workspaceId,
               session: { activeOrganizationId: organizationId },
               user: { id: userId },
               safeDb,
-              recordAuditEvent,
-              createAuditRecorder: () => recordAuditEvent,
+              audit: recordAuditEvent,
               body: { name, currency: "USD", isDefault: true },
             }),
           );
@@ -230,12 +243,12 @@ if (!databaseUrl || !runPostgres) {
         ) =>
           await updateRateTable.handler(
             createTestHandlerContext<UpdateContext>({
+              scopedDb: NO_DB,
               workspaceId,
               session: { activeOrganizationId: organizationId },
               user: { id: userId },
               safeDb,
-              recordAuditEvent,
-              createAuditRecorder: () => recordAuditEvent,
+              audit: recordAuditEvent,
               body: { id, isDefault },
             }),
           );
@@ -293,6 +306,23 @@ if (!databaseUrl || !runPostgres) {
             auditLogs,
             eq(auditLogs.workspaceId, workspaceId),
           );
+        type DeleteContext = Parameters<typeof deleteRateTable.handler>[0];
+        const remove = async (
+          safeDb: typeof firstSafe,
+          id: typeof firstTable.id,
+          recordAuditEvent: AuditRecorder,
+        ) =>
+          await deleteRateTable.handler(
+            createTestHandlerContext<DeleteContext>({
+              scopedDb: NO_DB,
+              workspaceId,
+              session: { activeOrganizationId: organizationId },
+              user: { id: userId },
+              safeDb,
+              audit: recordAuditEvent,
+              body: { id },
+            }),
+          );
         const refusal = {
           code: 400,
           response: {
@@ -335,10 +365,89 @@ if (!databaseUrl || !runPostgres) {
         expect(pairedRemoval.second).toMatchObject(refusal);
         expect(await defaultIds()).toEqual([secondTable.id]);
         expect(await auditCount()).toBe(beforePairedRemoval + 1);
+
+        const beforePromoteDelete = await auditCount();
+        const promoteDelete = await compete(
+          async (gatedRecord) =>
+            await setDefault(firstSafe, firstTable.id, true, gatedRecord),
+          async () => await remove(secondSafe, firstTable.id, record),
+        );
+        expect(promoteDelete.first).toEqual({ id: firstTable.id });
+        expect(promoteDelete.second).toEqual({
+          code: 400,
+          response: {
+            message:
+              "Cannot delete the default rate table while the matter has " +
+              "other tables. Set another table as default first.",
+          },
+        });
+        expect(await defaultIds()).toEqual([firstTable.id]);
+        expect(
+          await firstDb.$count(
+            rateTables,
+            eq(rateTables.workspaceId, workspaceId),
+          ),
+        ).toBe(2);
+        expect(await auditCount()).toBe(beforePromoteDelete + 2);
+
+        // A table created without isDefault stays non-default while the
+        // matter has a default, and becomes the default when it has none.
+        const createPlain = async (name: string) =>
+          await createRateTable.handler(
+            createTestHandlerContext<CreateContext>({
+              scopedDb: NO_DB,
+              workspaceId,
+              session: { activeOrganizationId: organizationId },
+              user: { id: userId },
+              safeDb: firstSafe,
+              audit: record,
+              body: { name, currency: "USD" },
+            }),
+          );
+        type PlainDeleteContext = Parameters<typeof deleteRateTable.handler>[0];
+        const removeTable = async (id: typeof firstTable.id) =>
+          await deleteRateTable.handler(
+            createTestHandlerContext<PlainDeleteContext>({
+              scopedDb: NO_DB,
+              workspaceId,
+              session: { activeOrganizationId: organizationId },
+              user: { id: userId },
+              safeDb: firstSafe,
+              audit: record,
+              body: { id },
+            }),
+          );
+        await createPlain("Third");
+        expect(await defaultIds()).toEqual([firstTable.id]);
+
+        // The default goes only as the matter's last table.
+        expect(await removeTable(firstTable.id)).toMatchObject({ code: 400 });
+        expect(await defaultIds()).toEqual([firstTable.id]);
+        const others = await firstDb
+          .select({ id: rateTables.id })
+          .from(rateTables)
+          .where(
+            and(
+              eq(rateTables.workspaceId, workspaceId),
+              eq(rateTables.isDefault, false),
+            ),
+          );
+        for (const other of others) {
+          expect(await removeTable(other.id)).toEqual({ deleted: true });
+        }
+        expect(await removeTable(firstTable.id)).toEqual({ deleted: true });
+        expect(
+          await firstDb.$count(
+            rateTables,
+            eq(rateTables.workspaceId, workspaceId),
+          ),
+        ).toBe(0);
+
+        const fresh = await createPlain("Fresh");
+        expect(fresh).toHaveProperty("id");
+        expect(await defaultIds()).toHaveLength(1);
       } finally {
-        await firstDb
-          .delete(organization)
-          .where(eq(organization.id, organizationId));
+        await deleteOrganizationsForTest(firstDb, [organizationId]);
         await firstDb.delete(user).where(eq(user.id, userId));
       }
     });

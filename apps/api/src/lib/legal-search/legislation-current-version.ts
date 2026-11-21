@@ -3,6 +3,8 @@ import { sql } from "drizzle-orm";
 import { legislationDocuments } from "@/api/db/schema";
 import {
   isVersionOfWorkAt,
+  legislationStatusToday,
+  legislationVersionRef,
   legislationVersionRow,
 } from "@/api/lib/legal-search/legislation-validity-window";
 
@@ -15,4 +17,13 @@ import {
 export const isCurrentVersionOfWork = isVersionOfWorkAt(
   legislationVersionRow(legislationDocuments),
   sql`CURRENT_DATE`,
+);
+
+/**
+ * `legislationStatusToday` over `legislation_documents` itself: the status
+ * every read shows and filters on, never the stored column.
+ */
+export const legislationDocumentStatusToday = legislationStatusToday(
+  legislationVersionRef(legislationDocuments),
+  legislationDocuments.status,
 );

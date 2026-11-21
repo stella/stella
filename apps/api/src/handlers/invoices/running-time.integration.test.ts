@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import {
   afterAll,
   afterEach,
@@ -9,28 +10,33 @@ import {
   setSystemTime,
   test,
 } from "bun:test";
-import { eq, sql } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 
+import { user as authUser } from "@/api/db/auth-schema";
 import type { SafeDb } from "@/api/db/safe-db";
 import {
   BILLING_STATUS,
   expenses,
+  featureEnrolments,
   INVOICE_STATUS,
   invoiceLines,
   invoices,
   TIME_ENTRY_SOURCE,
   timeEntries,
   timeTimers,
-  workspaces,
   workspaceMembers,
+  workspaces,
 } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
+import type { SafeHandlerLogContext } from "@/api/lib/api-handlers";
 import type { AuditEvent } from "@/api/lib/audit-log";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
 import { cents } from "@/api/lib/money";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import { enrolledTimeBillingSnapshot } from "@/api/tests/helpers/time-billing-enrolment";
 import {
   createTestIds,
   setupRlsTestData,
@@ -56,6 +62,26 @@ const auditEvents: AuditEvent[] = [];
 beforeAll(async () => {
   db = await getTestDb();
   await setupRlsTestData(db, ids);
+
+  await db
+    .update(authUser)
+    .set({ emailVerified: true })
+    .where(inArray(authUser.id, [ids.userA2, ids.userAdmin]));
+  await db
+    .insert(featureEnrolments)
+    .values([
+      {
+        organizationId: ids.orgA,
+        userId: ids.userA2,
+        featureId: "time-billing",
+      },
+      {
+        organizationId: ids.orgA,
+        userId: ids.userAdmin,
+        featureId: "time-billing",
+      },
+    ])
+    .onConflictDoNothing();
   await db.insert(workspaceMembers).values({
     id: createSafeId<"workspaceMember">(),
     workspaceId: ids.wsA1,
@@ -78,7 +104,32 @@ afterEach(async () => {
   setSystemTime();
 });
 
-const context = <TContext>(
+const invoiceRouteForHandler = (handler: unknown): ApiRoutePath => {
+  if (handler === createInvoice.handler) {
+    return "/v1/invoices/:workspaceId";
+  }
+  if (handler === deleteInvoice.handler) {
+    return "/v1/invoices/:workspaceId/:invoiceId";
+  }
+  if (handler === addEntries.handler) {
+    return "/v1/invoices/:workspaceId/:invoiceId/entries";
+  }
+  if (handler === removeEntries.handler) {
+    return "/v1/invoices/:workspaceId/:invoiceId/entries";
+  }
+  if (handler === createLine.handler) {
+    return "/v1/invoices/:workspaceId/:invoiceId/lines";
+  }
+  if (handler === deleteLine.handler) {
+    return "/v1/invoices/:workspaceId/:invoiceId/lines/:lineId";
+  }
+  if (handler === transitionInvoice.handler) {
+    return "/v1/invoices/:workspaceId/:invoiceId/transition";
+  }
+  return panic("Invoice test context received an unregistered handler");
+};
+
+const context = <TContext extends SafeHandlerLogContext>(
   _handler: (input: TContext) => unknown,
   request: {
     body?: unknown;
@@ -99,7 +150,7 @@ const context = <TContext>(
   return asTestRaw<TContext>({
     ...request,
     workspaceId,
-    memberRole: sessionMemberRole(actor),
+    memberRole: sessionMemberRole(actor, true),
     session: { activeOrganizationId: ids.orgA },
     user: { id: actorId },
     safeDb: createSafeDb(db, [workspaceId], ids.orgA, actorId),
@@ -107,7 +158,7 @@ const context = <TContext>(
     recordAuditEvent,
     createAuditRecorder: () => recordAuditEvent,
     request: new Request("https://example.test/invoices/running-time"),
-    route: "/test/invoices/running-time",
+    route: invoiceRouteForHandler(_handler),
   });
 };
 
@@ -618,6 +669,11 @@ test("concurrent invoice creation respects the final available matter slot", asy
               currency: "USD",
               timeEntryIds: [entryId],
             },
+          }),
+          // Admission is resolved up front so only the guarded creation reaches safeDb.
+          featureAccessSnapshot: enrolledTimeBillingSnapshot({
+            userId: ids.userAdmin,
+            organizationId: ids.orgA,
           }),
           safeDb,
         }),

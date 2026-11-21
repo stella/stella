@@ -1,15 +1,13 @@
-import { lazy, useCallback, useState } from "react";
+import { lazy, useState } from "react";
 
-import { useTranslations } from "use-intl";
-
-import { Button } from "@stll/ui/button";
 import { cn } from "@stll/ui/utils";
 
 import { activeLegalDocumentRef } from "@/components/ai-suggestions/active-legal-document";
 import { DockedChatStackProvider } from "@/components/chat/docked-chat-stack";
-import { QuerySuspenseBoundary } from "@/components/query-suspense-boundary";
+import { DockedComposerPending } from "@/components/chat/docked-composer";
 import type { ChatThreadId } from "@/lib/chat-thread-ref";
 
+import { FileChatOverlayBoundary } from "./file-chat-overlay-boundary";
 import { FILE_CHAT_OVERLAY_ACTIVATION } from "./file-viewer-with-ai-config";
 import type { FileChatOverlayActivation } from "./file-viewer-with-ai-config";
 import type { FileViewerWithAIProps } from "./file-viewer-with-ai.impl";
@@ -66,8 +64,8 @@ export const FileViewerWithAI = ({
   docxEditorRef,
   docxComments,
   onDocxCommentsChange,
+  presets,
   requestDocxEditMode,
-  threadPresentation,
   children,
 }: FileViewerWithAIProps) => {
   const overlayIsActive =
@@ -95,7 +93,6 @@ export const FileViewerWithAI = ({
     overlayThread.overlayKey === overlayKey
       ? overlayThread.threadId
       : chatThreadId;
-
   return (
     <DockedChatStackProvider>
       <div
@@ -114,21 +111,16 @@ export const FileViewerWithAI = ({
           // would otherwise climb to whichever ancestor catches first and take
           // the document down with it, and the reader is the whole page for an
           // anonymous visitor.
-          <QuerySuspenseBoundary
+          <FileChatOverlayBoundary
             area="gated-chat-composer"
-            errorFallback={({ reset }) => (
-              <FileChatOverlayErrorFallback
-                onRetry={() => {
-                  // React.lazy caches a rejected thenable. Recreate the lazy type
-                  // before resetting the boundary so a transient chunk failure
-                  // gets a genuinely fresh import attempt.
-                  setLazyGatedChatComposer(() => createLazyGatedChatComposer());
-                  reset();
-                }}
-              />
-            )}
-            resetKeys={[overlayKey]}
-            suspenseFallback={null}
+            onRetry={() => {
+              // React.lazy caches a rejected thenable. Recreate the lazy type
+              // before the boundary resets so a transient chunk failure gets a
+              // genuinely fresh import attempt.
+              setLazyGatedChatComposer(() => createLazyGatedChatComposer());
+            }}
+            overlayKey={overlayKey}
+            pending={<DockedComposerPending surface="sign-in" />}
           >
             <LazyGatedChatComposer
               activeDraft={activeDraft}
@@ -137,26 +129,19 @@ export const FileViewerWithAI = ({
               activeLegal={activeLegal}
               docxEditSafety={docxEditSafety}
             />
-          </QuerySuspenseBoundary>
+          </FileChatOverlayBoundary>
         )}
         {overlayIsActive && (
-          <QuerySuspenseBoundary
+          <FileChatOverlayBoundary
             area="file-chat-overlay"
-            errorFallback={({ reset }) => (
-              <FileChatOverlayErrorFallback
-                onRetry={() => {
-                  // React.lazy caches a rejected thenable. Recreate the lazy type
-                  // before resetting the boundary so a transient chunk failure
-                  // gets a genuinely fresh import attempt.
-                  setLazyFileChatOverlayHost(() =>
-                    createLazyFileChatOverlayHost(),
-                  );
-                  reset();
-                }}
-              />
-            )}
-            resetKeys={[overlayKey]}
-            suspenseFallback={null}
+            onRetry={() => {
+              // React.lazy caches a rejected thenable. Recreate the lazy type
+              // before the boundary resets so a transient chunk failure gets a
+              // genuinely fresh import attempt.
+              setLazyFileChatOverlayHost(() => createLazyFileChatOverlayHost());
+            }}
+            overlayKey={overlayKey}
+            pending={<DockedComposerPending surface="chat" />}
           >
             <LazyFileChatOverlayHost
               activeExternal={activeExternal}
@@ -175,11 +160,11 @@ export const FileViewerWithAI = ({
               }}
               onActiveDraftChatBound={onActiveDraftChatBound}
               onDocxCommentsChange={onDocxCommentsChange}
+              presets={presets}
               requestDocxEditMode={requestDocxEditMode}
-              threadPresentation={threadPresentation}
               workspaceId={workspaceId}
             />
-          </QuerySuspenseBoundary>
+          </FileChatOverlayBoundary>
         )}
         {docxEditorRef !== undefined && <DocxHorizontalScrollbar />}
       </div>
@@ -187,25 +172,8 @@ export const FileViewerWithAI = ({
   );
 };
 
-const FileChatOverlayErrorFallback = ({ onRetry }: { onRetry: () => void }) => {
-  const t = useTranslations();
-
-  return (
-    <div className="pointer-events-none absolute inset-x-0 bottom-4 z-10 flex justify-center px-4">
-      <div className="bg-background/95 pointer-events-auto flex items-center gap-3 rounded-md border px-3 py-2 shadow-sm">
-        <span className="text-muted-foreground text-sm">
-          {t("common.somethingWentWrong")}
-        </span>
-        <Button onClick={onRetry} size="sm" variant="outline">
-          {t("common.tryAgain")}
-        </Button>
-      </div>
-    </div>
-  );
-};
-
 const DocxHorizontalScrollbar = () => {
-  const trackRef = useCallback((track: HTMLDivElement | null) => {
+  const trackRef = (track: HTMLDivElement | null) => {
     if (!track?.parentElement) {
       return () => undefined;
     }
@@ -370,13 +338,13 @@ const DocxHorizontalScrollbar = () => {
       pointerCleanup();
       track.removeEventListener("pointerdown", handlePointerDown);
     };
-  }, []);
+  };
 
   return (
     <div
       ref={trackRef}
       aria-hidden="true"
-      className="absolute inset-x-1 bottom-1 z-[100] h-1.5 cursor-pointer"
+      className="absolute inset-x-1 bottom-[calc(var(--document-panel-bottom-inset,0px)+0.25rem)] z-[100] h-1.5 cursor-pointer"
       dir="ltr"
       hidden
     >

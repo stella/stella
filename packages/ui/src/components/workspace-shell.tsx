@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useId, useRef } from "react";
 import type { ReactElement, ReactNode } from "react";
 
 import { useIsMobile } from "../hooks/use-mobile";
@@ -13,6 +13,10 @@ import {
   InspectorRailIconButton,
 } from "../inspector/chrome";
 import { SHELL_CHROME_LAYER_CLASS_NAME } from "../lib/overlay-layer";
+import {
+  SAFE_AREA_BOTTOM_EDGE_CLASS_NAME,
+  SAFE_AREA_TOP_EDGE_CLASS_NAME,
+} from "../lib/safe-area";
 import { cn } from "../lib/utils";
 import { Sheet, SheetPopup, SheetTitle, SheetTrigger } from "./sheet";
 
@@ -58,6 +62,12 @@ type WorkspaceShellProps = {
    * content column extends to the frame's inline-end edge.
    */
   endDock?: ReactElement | undefined;
+  /**
+   * Name of the "skip to content" link, the frame's first tab stop. It moves
+   * keyboard focus past the navigation into the main region. Omit it and the
+   * frame renders no skip link.
+   */
+  skipToContentLabel?: string | undefined;
   /** Active route content. */
   children: ReactNode;
 };
@@ -74,9 +84,12 @@ export const WorkspaceShell = ({
   children,
   endDock,
   navigation,
+  skipToContentLabel,
   topBar,
 }: WorkspaceShellProps) => {
   const isCompact = useIsMobile();
+  const mainId = useId();
+  const mainRef = useRef<HTMLElement>(null);
   const compactNavigation =
     navigation.mode === "shell-managed" ? navigation.compact : null;
   const compactNavigationOpen = compactNavigation?.open ?? false;
@@ -100,18 +113,51 @@ export const WorkspaceShell = ({
 
   const frame = (
     <div
-      className="flex h-dvh min-h-0 w-full overflow-hidden"
+      className={cn(
+        "flex h-dvh min-h-0 w-full overflow-hidden",
+        // The frame owns the viewport, so it keeps the top bar below the
+        // status bar and the last row above the home indicator.
+        SAFE_AREA_TOP_EDGE_CLASS_NAME,
+        SAFE_AREA_BOTTOM_EDGE_CLASS_NAME,
+      )}
       data-slot="workspace-shell"
     >
+      {skipToContentLabel === undefined ? null : (
+        // The wrapper pins where the link appears; the link itself stays
+        // visually hidden until it takes focus.
+        <div className="fixed start-2 top-2 z-50">
+          <a
+            className="bg-background text-foreground ring-ring sr-only focus:not-sr-only focus:block focus:rounded-md focus:px-3 focus:py-2 focus:text-sm focus:font-medium focus:shadow-md focus:ring-2"
+            data-slot="workspace-shell-skip-link"
+            href={`#${mainId}`}
+            onClick={(event) => {
+              // Focus moves without a hash in the URL, which the router would
+              // otherwise treat as a navigation.
+              event.preventDefault();
+              mainRef.current?.focus();
+            }}
+          >
+            {skipToContentLabel}
+          </a>
+        </div>
+      )}
       {navigation.mode === "responsive"
         ? navigation.content
         : navigation.desktop}
       <main
         className={cn(
-          "bg-background relative flex w-full min-w-0 flex-1 flex-col overflow-hidden",
+          "bg-background relative flex w-full min-w-0 flex-1 flex-col overflow-hidden outline-none",
+          // Below md the rails are hidden, so the content meets both edges of
+          // a landscape phone; at md and up the rails own those edges.
+          "max-md:ps-(--safe-area-inline-start) max-md:pe-(--safe-area-inline-end)",
+          endDock === undefined && "md:pe-(--safe-area-inline-end)",
           "md:peer-data-[variant=inset]:m-2 md:peer-data-[variant=inset]:ms-0 md:peer-data-[variant=inset]:rounded-xl md:peer-data-[variant=inset]:shadow-sm md:peer-data-[variant=inset]:peer-data-[state=collapsed]:ms-2",
         )}
         data-slot="workspace-shell-main"
+        id={mainId}
+        ref={mainRef}
+        // Reached by the skip link only; it is not a tab stop of its own.
+        tabIndex={-1}
       >
         <div
           className={cn(
@@ -154,7 +200,7 @@ export const WorkspaceShell = ({
         >
           <SheetTitle className="sr-only">{compactNavigation.label}</SheetTitle>
           <div
-            className="bg-background flex h-full min-h-0 flex-col overflow-y-auto [padding-inline:max(0.75rem,env(safe-area-inset-left))_max(0.75rem,env(safe-area-inset-right))] [padding-block:max(0.75rem,env(safe-area-inset-top))_max(0.75rem,env(safe-area-inset-bottom))]"
+            className="bg-background flex h-full min-h-0 flex-col overflow-y-auto overscroll-contain p-3"
             data-slot="workspace-compact-navigation"
           >
             {compactNavigation.content}
@@ -207,7 +253,7 @@ export const WorkspaceEndRail = ({
   overlay,
   topAction,
 }: WorkspaceEndRailProps) => (
-  <InspectorRail aria-label={label} className={cn("h-dvh", className)}>
+  <InspectorRail aria-label={label} className={cn("h-full", className)}>
     <InspectorRailCell>{topAction}</InspectorRailCell>
     <InspectorRailContent>{children}</InspectorRailContent>
     {overlay}

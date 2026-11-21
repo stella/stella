@@ -3,10 +3,17 @@ import type { ReactNode } from "react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
-import { Loader } from "@stll/ui/loader";
+import { DocumentIdentityBadge } from "@stll/ui/document-identity-badge";
 import { SEARCH_HIT_MARK, TextMark } from "@stll/ui/text-mark";
 
+import {
+  STATUTE_SEARCH_RESULT_ROW_CLASS,
+  StatuteSearchResultHeading,
+  StatuteSearchResultsPending,
+  StatuteSearchResultsSection,
+} from "@/features/statutes/components/statute-search-results.pending";
 import type { StatuteSearchHit } from "@/features/statutes/queries/statutes";
+import { statuteDocumentIdentity } from "@/lib/legal/statute-act-number";
 
 const decodeSearchText = (text: string): string =>
   text.replace(/&(amp|lt|gt|quot|#x27);/gu, (entity) => {
@@ -87,11 +94,7 @@ export const StatuteSearchResults = ({
 }: StatuteSearchResultsProps) => {
   const t = useTranslations();
   if (isLoading) {
-    return (
-      <div role="status">
-        <Loader label={t("common.loading")} />
-      </div>
-    );
+    return <StatuteSearchResultsPending label={t("common.loading")} />;
   }
   if (hits.length === 0) {
     return (
@@ -101,26 +104,34 @@ export const StatuteSearchResults = ({
     );
   }
   return (
-    <section aria-busy={isFetchingNextPage} className="flex flex-col gap-4">
-      <ul className="flex flex-col gap-5">
-        {hits.map((hit) => (
-          <li className="flex flex-col gap-2" key={hit.documentId}>
-            <h2 className="text-sm font-medium">{titleLink(hit)}</h2>
-            {hit.headline !== null && (
-              <StatuteSearchSnippet headline={hit.headline} />
-            )}
-          </li>
-        ))}
-      </ul>
-      {hasNextPage && (
-        <Button
-          disabled={isFetchingNextPage}
-          onClick={onLoadMore}
-          variant="ghost"
-        >
-          {isFetchingNextPage ? t("common.loading") : t("common.loadMore")}
-        </Button>
-      )}
-    </section>
+    <StatuteSearchResultsSection
+      busy={isFetchingNextPage}
+      rows={hits.map((hit) => (
+        <li className={STATUTE_SEARCH_RESULT_ROW_CLASS} key={hit.documentId}>
+          <StatuteSearchResultHeading>
+            <DocumentIdentityBadge
+              identity={statuteDocumentIdentity(hit.eli)}
+              title={hit.title}
+            />
+            {titleLink(hit)}
+          </StatuteSearchResultHeading>
+          {hit.headline !== null && (
+            <StatuteSearchSnippet headline={hit.headline} />
+          )}
+        </li>
+      ))}
+      trailing={
+        hasNextPage && (
+          <Button
+            disabled={isFetchingNextPage}
+            disabledReason={t("common.loading")}
+            onClick={onLoadMore}
+            variant="ghost"
+          >
+            {isFetchingNextPage ? t("common.loading") : t("common.loadMore")}
+          </Button>
+        )
+      }
+    />
   );
 };

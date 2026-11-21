@@ -17,6 +17,8 @@ import {
 import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 
+const IDENTITY = { errorClass: "Error", errorCode: "ECONNRESET" };
+
 const grading = gradeFailure(
   readEvidence(Object.assign(new Error("x"), { code: "ECONNRESET" })),
   failureSink({ event: "bounds", expected: [] }),
@@ -43,12 +45,16 @@ describe("the shadow aggregate", () => {
         grading,
         channel: "capture",
         degradation: undefined,
+        route: undefined,
+        identity: IDENTITY,
       });
       countFailureObservation({
         sink,
         grading,
         channel: "capture",
         degradation: undefined,
+        route: undefined,
+        identity: IDENTITY,
       });
     }
 
@@ -79,6 +85,8 @@ describe("the shadow aggregate", () => {
         grading,
         channel,
         degradation: undefined,
+        route: undefined,
+        identity: IDENTITY,
       });
     }
     countFailureObservation({
@@ -86,6 +94,8 @@ describe("the shadow aggregate", () => {
       grading,
       channel: "capture",
       degradation: "frame_absent",
+      route: undefined,
+      identity: IDENTITY,
     });
 
     flushFailureObservations();
@@ -113,6 +123,8 @@ describe("the shadow aggregate", () => {
         grading,
         channel: "capture",
         degradation: undefined,
+        route: undefined,
+        identity: IDENTITY,
       });
       setLogSinkForTesting((record) => {
         if (record.message === "failure.observed") {
@@ -137,6 +149,8 @@ describe("the shadow aggregate", () => {
       grading,
       channel: "capture",
       degradation: undefined,
+      route: undefined,
+      identity: IDENTITY,
     });
     flushFailureObservations();
     flushFailureObservations();

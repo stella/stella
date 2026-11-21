@@ -2,6 +2,7 @@ import { panic, Result } from "better-result";
 import { and, eq, ne, sql } from "drizzle-orm";
 
 import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
+import { TIME_ENTRY_RATE_REQUIRED_CODE } from "@stll/api-contract/time-entries";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
@@ -16,7 +17,7 @@ import {
   roundToBillingIncrement,
 } from "@/api/lib/billing-time";
 import type { TimePolicy } from "@/api/lib/billing-time";
-import { resolveRate } from "@/api/lib/billing/rates";
+import { type ResolvedRate, resolveRate } from "@/api/lib/billing/rates";
 import { canApproveTimeEntries } from "@/api/lib/billing/time-entry-authorization";
 import { lockTimerOwner } from "@/api/lib/billing/time-timers";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -48,6 +49,7 @@ type PrepareTimeEntryInsertProps = {
   userId: SafeId<"user">;
   body: TimeEntryInsertInput;
   dateWindow?: "entry" | "timer_completion";
+  resolvedRate?: ResolvedRate | null | undefined;
   billingSnapshot?: { hourlyRate: number; currency: string } | undefined;
 };
 
@@ -107,6 +109,7 @@ export const prepareTimeEntryInsert = async function* ({
   body,
   dateWindow = "entry",
   billingSnapshot,
+  resolvedRate: preResolvedRate,
 }: PrepareTimeEntryInsertProps) {
   yield* checkInsertTimePolicy({ policy, canApprove, body, dateWindow });
 
@@ -136,13 +139,16 @@ export const prepareTimeEntryInsert = async function* ({
   }
 
   const resolvedRate =
-    billingSnapshot ??
-    (yield* resolveRate({
-      safeDb,
-      workspaceId,
-      userId,
-      dateWorked: body.dateWorked,
-    }));
+    preResolvedRate !== undefined
+      ? preResolvedRate
+      : (billingSnapshot ??
+        (yield* resolveRate({
+          safeDb,
+          workspaceId,
+          userId,
+          dateWorked: body.dateWorked,
+          activityCode: body.activityCode,
+        })));
   const billable =
     body.billable ??
     (dateWindow === "timer_completion" ? resolvedRate !== null : true);
@@ -150,6 +156,8 @@ export const prepareTimeEntryInsert = async function* ({
     return yield* Result.err(
       new HandlerError({
         status: 400,
+        code: TIME_ENTRY_RATE_REQUIRED_CODE,
+        hint: "Add an effective matter rate for this person and date, or set billable to false.",
         message: "Billable time entries need an effective rate",
       }),
     );
@@ -188,11 +196,13 @@ type LockTimeEntryCapacityOptions = {
   tx: Transaction;
   workspaceId: SafeId<"workspace">;
   replacedEntryId?: SafeId<"timeEntry"> | undefined;
+  requestedEntries?: number;
 };
 export const lockTimeEntryCapacity = async ({
   tx,
   workspaceId,
   replacedEntryId,
+  requestedEntries = 1,
 }: LockTimeEntryCapacityOptions): Promise<TimeEntryCapacityCheck> => {
   await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${workspaceId}))`);
   const count = await tx.$count(
@@ -202,7 +212,7 @@ export const lockTimeEntryCapacity = async ({
       replacedEntryId ? ne(timeEntries.id, replacedEntryId) : undefined,
     ),
   );
-  if (count >= LIMITS.timeEntriesPerWorkspace) {
+  if (count + requestedEntries > LIMITS.timeEntriesPerWorkspace) {
     return Result.err(
       new HandlerError({
         status: 400,
@@ -432,6 +442,7 @@ export const insertPreparedInternalTimeEntry = async ({
 };
 
 type CreateTimeEntryHandlerProps = {
+  source?: TimeEntrySource;
   safeDb: SafeDb;
   organizationId: SafeId<"organization">;
   workspaceId: SafeId<"workspace">;
@@ -445,6 +456,7 @@ type CreateTimeEntryHandlerProps = {
 // `save_time_entry` MCP tool, so both run the same validation, advisory-lock
 // limit check, and audit event.
 export const createTimeEntryHandler = async function* ({
+  source = TIME_ENTRY_SOURCE.MANUAL,
   safeDb,
   organizationId,
   workspaceId,
@@ -477,7 +489,7 @@ export const createTimeEntryHandler = async function* ({
           organizationId,
           workspaceId,
           userId,
-          source: TIME_ENTRY_SOURCE.MANUAL,
+          source,
           prepared,
           recordAuditEvent,
         }),

@@ -3,10 +3,12 @@ import type { SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 
 import { BILLING_STATUS } from "@/api/db/schema";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import type { AuditEvent } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import { withTimeBillingEnrolment } from "@/api/tests/helpers/time-billing-enrolment";
 import {
   createScopedDbMock,
   createSelectQueryMock,
@@ -31,18 +33,22 @@ const createContext = ({
   body: UpdateTimeEntryCtx["body"];
   recordAuditEvent: UpdateTimeEntryCtx["recordAuditEvent"];
 }): UpdateTimeEntryCtx =>
-  asTestRaw<UpdateTimeEntryCtx>({
-    body,
-    safeDb,
-    scopedDb,
-    workspaceId: toSafeId<"workspace">("workspace_test"),
-    memberRole: sessionMemberRole("owner"),
-    session: {
-      activeOrganizationId: toSafeId<"organization">("org_test"),
-    },
-    user: { id: toSafeId<"user">("user_test") },
-    recordAuditEvent,
-  });
+  withTimeBillingEnrolment(
+    asTestRaw<UpdateTimeEntryCtx>({
+      request: new Request("https://api.example.test/handler"),
+      route: "/v1/time-entries/:workspaceId" satisfies ApiRoutePath,
+      body,
+      safeDb,
+      scopedDb,
+      workspaceId: toSafeId<"workspace">("workspace_test"),
+      memberRole: sessionMemberRole("owner"),
+      session: {
+        activeOrganizationId: toSafeId<"organization">("org_test"),
+      },
+      user: { id: toSafeId<"user">("user_test") },
+      recordAuditEvent,
+    }),
+  );
 
 describe("updateTimeEntryById", () => {
   test("excludes narrative and invoiceNarrative from the recorded audit diff", async () => {

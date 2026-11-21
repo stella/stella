@@ -1,4 +1,6 @@
 import * as v from "valibot";
+
+import { backoffDelay } from "@stll/concurrency/backoff-delay";
 /**
  * DeepL document-translation REST client.
  *
@@ -14,8 +16,12 @@ import * as v from "valibot";
  * upstream / timeout) so the calling handler can map them to
  * actionable HTTP responses.
  */
-
 import { fetchWithTimeout, type FetchWithTimeoutInit } from "@stll/fetch";
+import {
+  readBodyJsonWithIdleDeadline,
+  readBodyTextWithIdleDeadline,
+  readBodyWithIdleDeadline,
+} from "@stll/fetch/body-reader";
 import { Temporal } from "@stll/time";
 
 import {
@@ -26,6 +32,7 @@ import {
   DeepLTimeoutError,
   DeepLUpstreamError,
 } from "@/api/lib/deepl/errors";
+import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
 
 const PRO_BASE_URL = "https://api.deepl.com";
 const FREE_BASE_URL = "https://api-free.deepl.com";
@@ -36,6 +43,8 @@ const UPLOAD_TIMEOUT_MS = 60_000;
 const STATUS_TIMEOUT_MS = 15_000;
 const RESULT_TIMEOUT_MS = 120_000;
 const TEXT_TRANSLATION_TIMEOUT_MS = 60_000;
+/** Local transport ceiling for metadata, translated text and error bodies. */
+const DEEPL_RESPONSE_MAX_BYTES = 8 * 1024 * 1024;
 export const DEEPL_TEXT_REQUEST_MAX_ITEMS = 50;
 export const DEEPL_TEXT_REQUEST_MAX_BYTES = 128 * 1024;
 
@@ -59,14 +68,10 @@ export const maskDeepLKey = (key: string): string => {
 };
 
 /** Mirrors DeepL's `Formality` API parameter. */
-export type DeepLFormality =
-  | "default"
-  | "more"
-  | "less"
-  | "prefer_more"
-  | "prefer_less";
+type DeepLFormality =
+  "default" | "more" | "less" | "prefer_more" | "prefer_less";
 
-export type TranslateDocumentInput = {
+type TranslateDocumentInput = {
   apiKey: string;
   /** Source bytes — must be DOCX, PDF, PPTX, XLSX, TXT, HTML, or XLIFF. */
   file: Uint8Array | ArrayBuffer;
@@ -82,12 +87,12 @@ export type TranslateDocumentInput = {
   pollBudgetMs?: number | undefined;
 };
 
-export type TranslateDocumentResult = {
+type TranslateDocumentResult = {
   bytes: Uint8Array;
   billedCharacters: number | null;
 };
 
-export type TranslateTextBatchInput = {
+type TranslateTextBatchInput = {
   apiKey: string;
   texts: readonly string[];
   targetLang: string;
@@ -174,9 +179,15 @@ const deeplFetch = async (
  * drop) rejects on the `.json()` / `.text()` / `.arrayBuffer()`
  * promise instead, escaping the wrapper unless we catch it here.
  */
-const readDeepLText = async (response: Response): Promise<string> => {
+const readDeepLText = async (
+  response: Response,
+  idleMs: number,
+): Promise<string> => {
   try {
-    return await response.text();
+    return await readBodyTextWithIdleDeadline(response, {
+      maxBytes: DEEPL_RESPONSE_MAX_BYTES,
+      idleMs,
+    });
   } catch (error) {
     throw new DeepLUpstreamError({
       message: "DeepL response body could not be read",
@@ -185,9 +196,15 @@ const readDeepLText = async (response: Response): Promise<string> => {
   }
 };
 
-const readDeepLJson = async (response: Response): Promise<unknown> => {
+const readDeepLJson = async (
+  response: Response,
+  idleMs: number,
+): Promise<unknown> => {
   try {
-    return await response.json();
+    return await readBodyJsonWithIdleDeadline(response, {
+      maxBytes: DEEPL_RESPONSE_MAX_BYTES,
+      idleMs,
+    });
   } catch (error) {
     throw new DeepLUpstreamError({
       message: "DeepL response body could not be read",
@@ -220,7 +237,10 @@ const parseDeepLJson = <TSchema extends v.GenericSchema>({
 
 const readDeepLBytes = async (response: Response): Promise<Uint8Array> => {
   try {
-    return new Uint8Array(await response.arrayBuffer());
+    return await readBodyWithIdleDeadline(response, {
+      maxBytes: FILE_SIZE_LIMIT_BYTES.document,
+      idleMs: RESULT_TIMEOUT_MS,
+    });
   } catch (error) {
     throw new DeepLUpstreamError({
       message: "DeepL response body could not be read",
@@ -318,11 +338,14 @@ const uploadDocument = async (
   });
 
   if (!response.ok) {
-    mapHttpError(response.status, await readDeepLText(response));
+    mapHttpError(
+      response.status,
+      await readDeepLText(response, UPLOAD_TIMEOUT_MS),
+    );
   }
 
   const json = parseDeepLJson({
-    body: await readDeepLJson(response),
+    body: await readDeepLJson(response, UPLOAD_TIMEOUT_MS),
     responseName: "document upload",
     schema: uploadResponseSchema,
   });
@@ -345,11 +368,14 @@ const fetchStatus = async (
   });
 
   if (!response.ok) {
-    mapHttpError(response.status, await readDeepLText(response));
+    mapHttpError(
+      response.status,
+      await readDeepLText(response, STATUS_TIMEOUT_MS),
+    );
   }
 
   const json = parseDeepLJson({
-    body: await readDeepLJson(response),
+    body: await readDeepLJson(response, STATUS_TIMEOUT_MS),
     responseName: "document status",
     schema: statusResponseSchema,
   });
@@ -383,13 +409,14 @@ const downloadResult = async (
   );
 
   if (!response.ok) {
-    mapHttpError(response.status, await readDeepLText(response));
+    mapHttpError(
+      response.status,
+      await readDeepLText(response, RESULT_TIMEOUT_MS),
+    );
   }
 
   return await readDeepLBytes(response);
 };
-
-const delay = async (ms: number) => await Bun.sleep(ms);
 
 /**
  * Translate a document via DeepL. Uploads, polls until the job
@@ -416,9 +443,11 @@ export const translateDocument = async (
       });
     }
 
-    await delay(pollDelay);
+    await Bun.sleep(pollDelay);
     pollDelay = Math.min(
-      Math.round(pollDelay * POLL_BACKOFF_FACTOR),
+      Math.round(
+        backoffDelay(1, { baseMs: pollDelay, factor: POLL_BACKOFF_FACTOR }),
+      ),
       POLL_MAX_DELAY_MS,
     );
 
@@ -539,10 +568,13 @@ export const translateTextBatch = async ({
     timeoutMs: TEXT_TRANSLATION_TIMEOUT_MS,
   });
   if (!response.ok) {
-    mapHttpError(response.status, await readDeepLText(response));
+    mapHttpError(
+      response.status,
+      await readDeepLText(response, TEXT_TRANSLATION_TIMEOUT_MS),
+    );
   }
   const json = parseDeepLJson({
-    body: await readDeepLJson(response),
+    body: await readDeepLJson(response, TEXT_TRANSLATION_TIMEOUT_MS),
     responseName: "text translation",
     schema: textTranslationResponseSchema,
   });
@@ -582,11 +614,14 @@ export const fetchTargetLanguages = async (
   });
 
   if (!response.ok) {
-    mapHttpError(response.status, await readDeepLText(response));
+    mapHttpError(
+      response.status,
+      await readDeepLText(response, STATUS_TIMEOUT_MS),
+    );
   }
 
   const json = parseDeepLJson({
-    body: await readDeepLJson(response),
+    body: await readDeepLJson(response, STATUS_TIMEOUT_MS),
     responseName: "target languages",
     schema: languagesResponseSchema,
   });

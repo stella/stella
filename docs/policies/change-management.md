@@ -58,7 +58,7 @@ includes:
 | i18n sync          | `bun run i18n:check` | Ensure translation keys are consistent |
 | Code quality       | oxlint + tsgolint    | Lint rules and TypeScript diagnostics  |
 | Custom lint rules  | oxlint JS plugins    | Semantic tokens, RTL, ownership IDs    |
-| Format             | oxfmt                | Consistent code formatting             |
+| Format             | bun fmt              | Consistent code formatting             |
 | Tests              | Bun test runner      | Functional correctness                 |
 | Policy evidence    | Repository guard     | Policy-to-implementation drift         |
 
@@ -68,8 +68,8 @@ skipped.
 
 ### Dependency changes
 
-6. **Dependency review.** The `dependency-review.yml` workflow
-   runs on every PR and blocks introduction of dependencies
+6. **Dependency review.** The `ci.yml` workflow
+   runs on PRs that change dependency inputs and blocks introduction of dependencies
    with high-severity CVEs or copyleft licenses incompatible
    with Apache-2.0 distribution (GPL, AGPL, LGPL, SSPL, BUSL,
    Elastic, CPAL).

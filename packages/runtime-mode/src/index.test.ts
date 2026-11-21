@@ -6,8 +6,8 @@ import {
   currentBuildKind,
   LOCAL_DEV_OPT_IN,
   NODE_ENV,
-  RUNTIME_MODE,
   resolveRuntimeMode,
+  RUNTIME_MODE,
 } from "./index";
 
 const NODE_ENV_INPUTS = [undefined, "", ...Object.values(NODE_ENV)] as const;

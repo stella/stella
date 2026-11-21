@@ -1,8 +1,12 @@
 import { useTranslations } from "use-intl";
 
-import { PublicLawSearch } from "@/components/public-law-search";
+import {
+  publicLawAskScope,
+  PublicLawSearch,
+} from "@/components/public-law-search";
+import { STATUTE_SEARCH_PLACEHOLDER } from "@/features/statutes/components/statute-search.pending";
 import { useFormatter } from "@/i18n/formatting-context";
-import { statuteCountryName } from "@/lib/statute-route";
+import { statuteCountryName } from "@/lib/statutes/statute-route";
 
 type StatuteSearchProps = {
   /** The jurisdiction the page is scoped to, as its route segment. */
@@ -32,16 +36,17 @@ export const StatuteSearch = ({
 
   return (
     <PublicLawSearch
-      askPrompt={(entry) =>
-        t("statutes.searchAskPrompt", {
+      askScope={publicLawAskScope(
+        "legislation",
+        country,
+        t("chat.mention.corpus.legislation", {
           country: statuteCountryName(format, country),
-          query: entry,
-        })
-      }
+        }),
+      )}
       maxLength={maxLength}
       onQueryChange={onQueryChange}
       onSubmit={onSubmit}
-      placeholder={t("statutes.searchPlaceholder")}
+      placeholder={t(STATUTE_SEARCH_PLACEHOLDER)}
       query={query}
       searchLabel={t("statutes.searchLabel")}
     />

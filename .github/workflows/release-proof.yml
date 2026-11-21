@@ -1,0 +1,57 @@
+name: Prove release PR tree
+
+# Release pull requests come from this repository, where a pull_request run
+# gets the workflow's token scopes; fork pull requests never qualify.
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, ready_for_review]
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  dispatch:
+    if: >-
+      github.event.pull_request.draft == false &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      startsWith(github.event.pull_request.title, 'chore: release v')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+      actions: write
+    steps:
+      # Only main's verifier and dispatch logic execute with this token.
+      - name: Checkout trusted main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: false
+
+      # The release candidate verifier runs on Bun, at the version main pins.
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: package.json
+          no-cache: true
+
+      - name: Dispatch release candidate tag
+        timeout-minutes: 3
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PROOF_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          bash scripts/check-release-environment.sh "$GITHUB_REPOSITORY"
+          bash scripts/verify-release-tree-proof.sh --allow-pr-head "$GITHUB_REPOSITORY" "$PROOF_SHA" "$PROOF_SHA" >/dev/null
+          bash scripts/gh-retry.sh workflow run release-tag.yml --repo "$GITHUB_REPOSITORY" --ref main -f mode=rc -f sha="$PROOF_SHA"

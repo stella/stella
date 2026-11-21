@@ -29,6 +29,7 @@ export {
   hasUsableAst,
   isApparatusRole,
   isDocumentAst,
+  isUnreadBlock,
   parseDocumentAst,
   persistedAstDegradations,
 } from "./document-ast.js";
@@ -49,7 +50,13 @@ export type {
   PersistedAstDegradation,
   TableBlock,
   TableCell,
+  UnreadBlock,
 } from "./document-ast.js";
+export { resolveDecisionParagraphRange } from "./paragraph-range.js";
+export type {
+  DecisionParagraphRangeResolution,
+  ParagraphRange,
+} from "./paragraph-range.js";
 export {
   flattenInlineText,
   hasInlineChildren,
@@ -96,3 +103,5 @@ export type {
   StatuteStatus,
   StatuteTable,
 } from "./statute-ast.js";
+export { headingPathsByAnchor } from "./heading-path.js";
+export type { HeadingPathEntry } from "./heading-path.js";

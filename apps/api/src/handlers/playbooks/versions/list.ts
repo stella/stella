@@ -1,6 +1,8 @@
 import { Result } from "better-result";
 import { and, desc, eq } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
+
+import { numberFromString } from "@stll/api-contract/http-input";
 
 import { playbookDefinitionVersions } from "@/api/db/schema";
 import { playbookDefinitionParamsSchema } from "@/api/handlers/playbooks/schema";
@@ -11,6 +13,7 @@ import { LIMITS } from "@/api/lib/limits";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 
 const config = {
+  contract: "patch",
   description:
     "List one playbook's approval history, newest version first: the version " +
     "number, the name it carried at that version, when it was created, and " +
@@ -26,12 +29,16 @@ const config = {
   },
   access: "read",
   params: playbookDefinitionParamsSchema,
-  query: t.Object({
-    limit: t.Optional(
-      t.Integer({
-        minimum: 1,
-        maximum: LIMITS.playbookDefinitionVersionsPerPlaybook,
-      }),
+  query: v.object({
+    limit: v.optional(
+      numberFromString(
+        v.pipe(
+          v.number(),
+          v.integer(),
+          v.minValue(1),
+          v.maxValue(LIMITS.playbookDefinitionVersionsPerPlaybook),
+        ),
+      ),
     ),
   }),
 } satisfies HandlerConfig;

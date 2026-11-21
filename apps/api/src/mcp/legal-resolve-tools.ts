@@ -1,0 +1,198 @@
+import { panic, Result } from "better-result";
+import * as v from "valibot";
+
+import { AGENT_INPUT_NORMALIZATION_KIND } from "@stll/agent-input";
+import { legalResolveResponseSchema } from "@stll/api-contract/legal-resolve";
+import {
+  PUBLIC_COUNTRIES,
+  PUBLIC_COUNTRY_CAPABILITIES,
+} from "@stll/api-contract/public-country-capability";
+import { CASE_LAW_RESULTS_RESOURCE_URI } from "@stll/mcp-apps/resource-uri";
+
+import { admitLawRead } from "@/api/handlers/legal-resolve/admission";
+import type { resolveDecision } from "@/api/handlers/legal-resolve/decision";
+import type { resolveLawCitation } from "@/api/handlers/legal-resolve/law";
+import { LAW_READ_SCOPE } from "@/api/handlers/legal-resolve/scope";
+
+import {
+  LEGAL_RESOLVE_INPUT_NORMALIZATION,
+  resolveDecisionArgsSchema,
+  resolveLawArgsSchema,
+} from "./legal-resolve-input";
+import { defineMcpToolSet } from "./tool-types";
+import type { TypedMcpToolHandler } from "./tool-types";
+import {
+  featureDisabledHint,
+  structuredErrorResult,
+  toolDataResult,
+  validationErrorResult,
+} from "./tool-utils";
+import {
+  defineMcpToolOutput,
+  defineValibotMcpTool,
+} from "./valibot-tool-definition";
+import { openMcpRead } from "./write-tool-authority";
+
+type AdmissionFailure = Extract<
+  ReturnType<typeof admitLawRead>,
+  { error: unknown }
+>["error"];
+
+const ADMISSION_ERRORS = {
+  missing_scope: {
+    code: "feature_disabled",
+    message: "Public law is not enabled on this deployment.",
+    hint: featureDisabledHint("FEATURE_PUBLIC_LAW"),
+    retryable: false,
+  },
+} as const satisfies Record<
+  AdmissionFailure["type"],
+  Parameters<typeof structuredErrorResult>[0]
+>;
+
+const defaultResolveDecision: typeof resolveDecision = async (...input) =>
+  await (
+    await import("@/api/handlers/legal-resolve/decision")
+  ).resolveDecision(...input);
+const defaultResolveLawCitation: typeof resolveLawCitation = async (...input) =>
+  await (
+    await import("@/api/handlers/legal-resolve/law")
+  ).resolveLawCitation(...input);
+
+const supportedLawCountries = PUBLIC_COUNTRIES.filter(
+  (country) => PUBLIC_COUNTRY_CAPABILITIES[country].legislation === "admitted",
+).join(", ");
+
+const common = {
+  consumesServices: false,
+  access: "read",
+  permissions: openMcpRead("public law corpus"),
+  readClass: "public",
+  anonymized: { exposure: "passthrough" },
+  feature: "FEATURE_PUBLIC_LAW",
+  scope: LAW_READ_SCOPE,
+  inputNormalization: LEGAL_RESOLVE_INPUT_NORMALIZATION,
+} as const;
+
+const LEGAL_RESOLVE_TOOL_DEFINITIONS = [
+  defineValibotMcpTool({
+    ...common,
+    name: "resolve_case_law_decision",
+    annotations: {
+      title: "Resolve a case-law citation",
+      destructiveHint: false,
+      readOnlyHint: true,
+      openWorldHint: false,
+    },
+    description:
+      "Resolve docket/ECLI; descriptions: search_case_law. CZ/SK court in identifier constrains it. otherCourtCandidates are DIFFERENT decisions at other courts; ask user to choose. Only elsewhere: not_found/not_at_this_court; unknown court: not_found/court_unrecognized. resolved: identity, not text; read_case_law_decision reads it; ambiguous: candidates; incomplete_identifier: missing parts; country_unavailable: no identity surface. Missing stella:read needs OAuth consent.",
+    inputSchema: resolveDecisionArgsSchema,
+    _meta: {
+      ui: {
+        resourceUri: CASE_LAW_RESULTS_RESOURCE_URI,
+        visibility: ["model", "app"],
+      },
+    },
+  }),
+  defineValibotMcpTool({
+    ...common,
+    name: "resolve_law_citation",
+    annotations: {
+      title: "Resolve a statute provision",
+      destructiveHint: false,
+      readOnlyHint: true,
+      openWorldHint: false,
+    },
+    description: `Resolve one statute provision from a citation or structured gazette identity and section. Supported countries: ${supportedLawCountries}; unrecognized or unsupported countries return country_unavailable. Omit as_of for the current expression. Returns the legal resolve API envelope: resolved carries a provision, readerUrl, force dates, versionStatus and blocks; not_found names unknown_document or unknown_section; incomplete_identifier lists missing parts; ambiguous lists candidates without choosing. Open through readerUrl; supply missing parts and retry. For unknown_document use search_legislation; for unknown_section search then read_statute_provisions. Add missing stella:search (search) or stella:read (read) through OAuth consent before recovery calls.`,
+    inputSchema: resolveLawArgsSchema,
+    inputNormalization: {
+      ...common.inputNormalization,
+      as_of: { kind: AGENT_INPUT_NORMALIZATION_KIND.date, bound: "start" },
+    },
+  }),
+] as const;
+
+type ResolveData = v.InferOutput<typeof legalResolveResponseSchema>;
+const handleResolveDecision: TypedMcpToolHandler<ResolveData> = async ({
+  args,
+  context,
+}) => {
+  const parsed = v.safeParse(resolveDecisionArgsSchema, args);
+  if (!parsed.success) {
+    return validationErrorResult(parsed.issues);
+  }
+  const admission = (context.testDependencies?.admitLawRead ?? admitLawRead)({
+    organizationId: context.organizationId,
+  });
+  if (Result.isError(admission)) {
+    return structuredErrorResult(ADMISSION_ERRORS[admission.error.type]);
+  }
+  const { country, identifier } = parsed.output;
+  return toolDataResult(
+    await (context.testDependencies?.resolveDecision ?? defaultResolveDecision)(
+      { admission: admission.value, country, identifier },
+    ),
+  );
+};
+const handleResolveLaw: TypedMcpToolHandler<ResolveData> = async ({
+  args,
+  context,
+}) => {
+  const parsed = v.safeParse(resolveLawArgsSchema, args);
+  if (!parsed.success) {
+    return validationErrorResult(parsed.issues);
+  }
+  const admission = (context.testDependencies?.admitLawRead ?? admitLawRead)({
+    organizationId: context.organizationId,
+  });
+  if (Result.isError(admission)) {
+    return structuredErrorResult(ADMISSION_ERRORS[admission.error.type]);
+  }
+  const { country, source, section, as_of: asOf } = parsed.output;
+  switch (source.type) {
+    case "citation":
+      return toolDataResult(
+        await (
+          context.testDependencies?.resolveLawCitation ??
+          defaultResolveLawCitation
+        )({
+          admission: admission.value,
+          country,
+          input: { citation: source.citation, section, asOf },
+        }),
+      );
+    case "structured":
+      return toolDataResult(
+        await (
+          context.testDependencies?.resolveLawCitation ??
+          defaultResolveLawCitation
+        )({
+          admission: admission.value,
+          country,
+          input: {
+            collection: source.collection,
+            year: source.year,
+            number: source.number,
+            section,
+            asOf,
+          },
+        }),
+      );
+    default:
+      source satisfies never;
+      return panic("Unknown statute citation source");
+  }
+};
+
+export const LEGAL_RESOLVE_TOOL_HANDLERS = {
+  resolve_case_law_decision: handleResolveDecision,
+  resolve_law_citation: handleResolveLaw,
+};
+export const LEGAL_RESOLVE_TOOL_SET = defineMcpToolSet(
+  LEGAL_RESOLVE_TOOL_DEFINITIONS,
+  LEGAL_RESOLVE_TOOL_HANDLERS,
+  {
+    resolve_case_law_decision: defineMcpToolOutput(legalResolveResponseSchema),
+    resolve_law_citation: defineMcpToolOutput(legalResolveResponseSchema),
+  },
+);

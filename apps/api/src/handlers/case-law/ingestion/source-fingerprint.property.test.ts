@@ -1,9 +1,8 @@
 import { expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { propertyConfig } from "@stll/property-testing";
-
-import { hashContent } from "@/api/handlers/case-law/ingestion/adapters/utils";
+import { assertProperty } from "@stll/property-testing";
+import { createSha256, sha256Hex as hashContent } from "@stll/sha256/node";
 
 import { sourceFingerprint } from "./source-fingerprint";
 
@@ -24,7 +23,8 @@ const flipped = (bytes: Uint8Array, at: number, delta: number): Uint8Array => {
 };
 
 test("changing one byte of the envelope or of any stored object changes the fingerprint", () => {
-  fc.assert(
+  assertProperty(
+    "changing one byte of the envelope or of any stored object changes the fingerprint",
     fc.property(
       fc.string({ minLength: 1 }),
       fc.array(fc.uint8Array({ minLength: 1, maxLength: 64 }), {
@@ -68,12 +68,13 @@ test("changing one byte of the envelope or of any stored object changes the fing
         expect(after).not.toBe(before);
       },
     ),
-    propertyConfig({ numRuns: 300 }),
+    { numRuns: 300 },
   );
 });
 
 test("an envelope with no objects keeps the digest adapters already store", () => {
-  fc.assert(
+  assertProperty(
+    "an envelope with no objects keeps the digest adapters already store",
     fc.property(fc.string(), (sourceRaw) => {
       expect<string>(sourceFingerprint({ sourceRaw })).toBe(
         hashContent(sourceRaw),
@@ -82,13 +83,13 @@ test("an envelope with no objects keeps the digest adapters already store", () =
         sourceFingerprint({ sourceRaw, sourceRawObjects: {} }),
       ).toBe(hashContent(sourceRaw));
     }),
-    propertyConfig({ numRuns: 200 }),
+    { numRuns: 200 },
   );
 });
 
 test("objects contribute the digest of their bytes in the order they are listed", () => {
   const pdf = new Uint8Array([0x25, 0x50, 0x44, 0x46]);
-  const pdfDigest = new Bun.CryptoHasher("sha256").update(pdf).digest("hex");
+  const pdfDigest = createSha256().update(pdf).digest("hex");
   expect<string>(
     sourceFingerprint({
       sourceRaw: "envelope",

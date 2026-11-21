@@ -1,6 +1,21 @@
 import { describe, expect, test } from "bun:test";
 
-import { collisionSuffix, slugify, uniqueSlug } from "./slug";
+import {
+  MCP_TOOL_NAME_MAX_LENGTH,
+  MCP_TOOL_NAME_PATTERN,
+} from "@stll/api-contract/mcp-tool-name";
+
+import {
+  dynamicToolNamespacePrefix,
+  namespaceSkillToolName,
+} from "@/api/lib/mcp-upstream/namespace";
+
+import {
+  collisionSuffix,
+  SKILL_SLUG_MAX_LENGTH,
+  slugify,
+  uniqueSlug,
+} from "./slug";
 
 const SLUG_MAX = 56;
 const UNIQUE_MAX = 64;
@@ -25,13 +40,12 @@ describe("slugify", () => {
     expect(slugify("!!!skill!!!")).toBe("skill");
   });
 
-  test("drops non-ASCII characters (no transliteration)", () => {
-    // Unicode letters are not in a-z0-9, so they are treated as separators.
-    expect(slugify("café")).toBe("caf");
-    expect(slugify("naïve résumé")).toBe("na-ve-r-sum");
-    expect(slugify("Žluťoučký kůň")).toBe("lu-ou-k-k");
+  test("transliterates Latin letters and drops other scripts", () => {
+    expect(slugify("café")).toBe("cafe");
+    expect(slugify("naïve résumé")).toBe("naive-resume");
+    expect(slugify("Žluťoučký kůň")).toBe("zlutoucky-kun");
     expect(slugify("日本語")).toBe("skill");
-    expect(slugify("smörgåsbord")).toBe("sm-rg-sbord");
+    expect(slugify("smörgåsbord")).toBe("smorgasbord");
   });
 
   test("returns the 'skill' fallback for empty or separator-only input", () => {
@@ -118,4 +132,17 @@ describe("uniqueSlug", () => {
     const out = uniqueSlug(long);
     expect(out.length).toBeLessThanOrEqual(UNIQUE_MAX);
   });
+});
+
+test("authored slug budget reserves its tool namespace", () => {
+  expect(SKILL_SLUG_MAX_LENGTH).toBe(64);
+  expect(
+    SKILL_SLUG_MAX_LENGTH + dynamicToolNamespacePrefix("skill").length,
+  ).toBe(MCP_TOOL_NAME_MAX_LENGTH);
+  const slug = uniqueSlug("a".repeat(MCP_TOOL_NAME_MAX_LENGTH));
+  expect(slug).toHaveLength(SKILL_SLUG_MAX_LENGTH);
+  expect(namespaceSkillToolName(slug)).toMatch(MCP_TOOL_NAME_PATTERN);
+  expect(namespaceSkillToolName(slug).length).toBeLessThanOrEqual(
+    MCP_TOOL_NAME_MAX_LENGTH,
+  );
 });

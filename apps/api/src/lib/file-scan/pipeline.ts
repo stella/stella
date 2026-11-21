@@ -12,7 +12,7 @@ const MAX_ZIP_ENTRIES = 1000;
 const MAX_INFLATED_BYTES = 500 * 1024 * 1024;
 const MAX_INSPECTION_BUFFER_BYTES = 8 * 1024 * 1024;
 
-const zipBombGuard = createZipBombGuard({
+export const zipBombGuard = createZipBombGuard({
   maxEntries: MAX_ZIP_ENTRIES,
   maxTotalUncompressedBytes: MAX_INFLATED_BYTES,
   maxCompressionRatio: 1000,

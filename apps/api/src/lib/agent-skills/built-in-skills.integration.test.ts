@@ -7,6 +7,8 @@ import { listSkillMetadata, loadSkill } from "@stll/skills";
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import { agentSkills } from "@/api/db/schema";
+import { NO_SKILL_BINDING_SCOPE } from "@/api/lib/agent-skills/binding";
+import { offerSkillsToModel } from "@/api/lib/agent-skills/invocation";
 import { resolveRequestedSkills } from "@/api/lib/agent-skills/requested-skills";
 import {
   listAvailableChatSkillMetadata,
@@ -66,6 +68,7 @@ const unwrap = <T, E extends Error>(result: Result<T, E>): T => {
 // userB1 belongs to the second organization, which no other suite gives
 // skill rows, so every built-in is unshadowed there.
 const callerWithoutRows = () => ({
+  bindingScope: NO_SKILL_BINDING_SCOPE,
   organizationId: ids.orgB,
   safeDb,
   userId: ids.userB1,
@@ -102,7 +105,10 @@ describe("shipped built-in skills in chat", () => {
       const requested = unwrap(
         await resolveRequestedSkills({
           ...context,
-          catalog: unwrap(await listAvailableChatSkillMetadata(context)),
+          catalog: offerSkillsToModel({
+            invokedSkillNames: new Set([name]),
+            skills: unwrap(await listAvailableChatSkillMetadata(context)),
+          }),
           messageText: `Use [${name}](#stella-skill-ref=${name}).`,
           recordAuditEvent,
         }),
@@ -156,7 +162,7 @@ describe("shipped built-in skills in chat", () => {
       const read = unwrap(
         await readAvailableChatSkillResource({
           ...callerWithoutRows(),
-          path: "knowledge/not-shipped.md",
+          path: "references/not-shipped.md",
           skillName: name,
         }),
       );
@@ -207,6 +213,7 @@ describe("an installed row and a built-in with the same slug", () => {
   };
 
   const callerA = () => ({
+    bindingScope: NO_SKILL_BINDING_SCOPE,
     organizationId: ids.orgA,
     safeDb,
     userId: ids.userA1,

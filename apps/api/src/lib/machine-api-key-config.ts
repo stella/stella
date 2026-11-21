@@ -1,9 +1,10 @@
 import * as v from "valibot";
 
+import { MCP_ADVANCED_RESOURCE_SCOPES } from "@stll/api-contract";
 import { statements } from "@stll/permissions";
 import type { PermissionInput } from "@stll/permissions";
 
-import { MCP_DEFAULT_RESOURCE_SCOPES } from "@/api/mcp/constants";
+import { API_KEY_RATE_LIMITS } from "@/api/lib/rate-limit/budget-config";
 import type { McpMode } from "@/api/mcp/constants";
 
 /**
@@ -13,6 +14,21 @@ import type { McpMode } from "@/api/mcp/constants";
  * cannot already check.
  */
 const STATEMENT_ACTIONS: Record<string, readonly string[]> = statements;
+
+/** Shape ceilings for new requests; stored grants retain their existing parser. */
+export const MACHINE_API_KEY_PERMISSION_REQUEST_LIMITS = {
+  resources: Object.keys(STATEMENT_ACTIONS).length,
+  actionsPerResource: Math.max(
+    0,
+    ...Object.values(STATEMENT_ACTIONS).map((actions) => actions.length),
+  ),
+  actionNameChars: Math.max(
+    0,
+    ...Object.values(STATEMENT_ACTIONS).flatMap((actions) =>
+      actions.map((action) => action.length),
+    ),
+  ),
+};
 
 /**
  * Shared, dependency-light configuration for machine (CI/agent/CLI) API keys.
@@ -63,11 +79,7 @@ export const MACHINE_API_KEY_START_LENGTH = MACHINE_API_KEY_PREFIX.length + 6;
  * The window is milliseconds — the plugin's unit, not the seconds used by
  * better-auth's own rate limiter.
  */
-export const MACHINE_API_KEY_RATE_LIMIT = {
-  enabled: true,
-  timeWindow: 60_000,
-  maxRequests: 600,
-} as const;
+export const MACHINE_API_KEY_RATE_LIMIT = API_KEY_RATE_LIMITS.machine;
 
 /**
  * Lifetime bounds. A machine credential with no expiry is a credential nobody
@@ -94,10 +106,49 @@ export const MACHINE_API_KEY_EXPIRY = {
  * excluded: they exist for a different consent surface and are not something an
  * org admin grants to a headless caller here.
  */
-export const MACHINE_API_KEY_GRANTABLE_SCOPES = MCP_DEFAULT_RESOURCE_SCOPES;
+export const MACHINE_API_KEY_GRANTABLE_SCOPES = MCP_ADVANCED_RESOURCE_SCOPES;
 
 export type MachineApiKeyScope =
   (typeof MACHINE_API_KEY_GRANTABLE_SCOPES)[number];
+
+export const API_KEY_KIND = {
+  machine: "machine",
+  personal: "personal",
+} as const;
+export type ApiKeyKind = (typeof API_KEY_KIND)[keyof typeof API_KEY_KIND];
+
+export const PERSONAL_API_KEY_SCOPES = [
+  "stella:search",
+  "stella:read",
+  "stella:documents_write",
+  "stella:matters_write",
+  "stella:contacts_write",
+  "stella:knowledge_write",
+] as const satisfies readonly MachineApiKeyScope[];
+export type PersonalApiKeyScope = (typeof PERSONAL_API_KEY_SCOPES)[number];
+export const PERSONAL_API_KEY_AUDIENCES = [
+  "default",
+  "law",
+] as const satisfies readonly McpMode[];
+export const PERSONAL_API_KEY_DEFAULT_SCOPES = [
+  "stella:search",
+  "stella:read",
+] as const;
+export const PERSONAL_API_KEY_ACTIVE_LIMIT = 5;
+export const PERSONAL_API_KEY_POLICIES = ["enabled", "disabled"] as const;
+
+// Every kind decides its limits at the owning mint boundary.
+export const API_KEY_POLICY = {
+  machine: {
+    defaultDays: MACHINE_API_KEY_EXPIRY.defaultSeconds / 86_400,
+    minDays: MACHINE_API_KEY_EXPIRY.minDays,
+    maxDays: MACHINE_API_KEY_EXPIRY.maxDays,
+  },
+  personal: { defaultDays: 30, minDays: 1, maxDays: 90 },
+} as const satisfies Record<
+  ApiKeyKind,
+  { defaultDays: number; minDays: number; maxDays: number }
+>;
 
 const machineApiKeyScopeSchema = v.picklist(MACHINE_API_KEY_GRANTABLE_SCOPES);
 
@@ -107,12 +158,12 @@ const machineApiKeyScopeSchema = v.picklist(MACHINE_API_KEY_GRANTABLE_SCOPES);
  * because its `stella:*_anonymized` scopes are not grantable here, so a key
  * bound to it could never carry a scope that surface accepts.
  *
- * A literal tuple rather than a filter over `MCP_MODES`, because both the
- * TypeBox boundary schema and the valibot metadata picklist need the exact
- * member union. `machine-api-keys.test.ts` recomputes the rule and asserts this
+ * A literal tuple rather than a filter over `MCP_MODES`, because the
+ * boundary picklist needs the exact member union. `machine-api-keys.test.ts` recomputes the rule and asserts this
  * list equals it, so a new audience cannot quietly fail to be offered here.
  */
 export const MACHINE_API_KEY_GRANTABLE_AUDIENCES = [
+  "advanced",
   "default",
   "documents",
   "law",
@@ -132,22 +183,28 @@ export const MACHINE_API_KEY_GRANTABLE_AUDIENCES = [
  * mean the row was written by something other than the current code path, and
  * silently stripping them would hide that.
  */
-export const machineApiKeyMetadataSchema = v.strictObject({
-  /**
-   * The MCP audience this key may be presented on, when it was minted for one.
-   *
-   * A JWT is bound to its audience by the token's own `aud` claim, which the
-   * bearer path verifies per mode. A key has no such claim, so without this it
-   * is accepted on every audience path: a key minted for the public legal
-   * corpus would replay against the default surface and reach matter data with
-   * the same scopes. Optional because keys minted before this existed carry no
-   * audience and keep working on every surface; a key that names one is held to
-   * it.
-   */
-  audience: v.optional(v.picklist(MACHINE_API_KEY_GRANTABLE_AUDIENCES)),
+const metadataFields = {
   organizationId: v.pipe(v.string(), v.nonEmpty()),
   scopes: v.array(machineApiKeyScopeSchema),
-});
+};
+
+export const machineApiKeyMetadataSchema = v.union([
+  // Existing persisted machine keys have no kind discriminator.
+  v.strictObject({
+    ...metadataFields,
+    kind: v.optional(v.literal(API_KEY_KIND.machine), API_KEY_KIND.machine),
+    audience: v.optional(v.picklist(MACHINE_API_KEY_GRANTABLE_AUDIENCES)),
+  }),
+  v.strictObject({
+    organizationId: metadataFields.organizationId,
+    kind: v.literal(API_KEY_KIND.personal),
+    scopes: v.pipe(
+      v.array(v.picklist(PERSONAL_API_KEY_SCOPES)),
+      v.minLength(1),
+    ),
+    audience: v.picklist(PERSONAL_API_KEY_AUDIENCES),
+  }),
+]);
 
 /**
  * Whether a key may be presented on this audience. An unbound key keeps the

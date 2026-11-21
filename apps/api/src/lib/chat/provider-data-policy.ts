@@ -2,10 +2,11 @@ import type {
   OpenRouterConfig,
   OpenRouterTextModelOptions,
 } from "@tanstack/ai-openrouter";
-import { Result, panic } from "better-result";
+import { panic, Result } from "better-result";
 
 import { BYOK_MODEL_OPTIONS, getModelRate } from "@stll/ai-catalog";
 import type { AIProvider } from "@stll/ai-catalog";
+import { AI_FAILURE_CODES } from "@stll/api-contract";
 import { classifyFailure } from "@stll/errors";
 import { fetchWithTimeout, type FetchWithTimeoutInit } from "@stll/fetch";
 
@@ -75,6 +76,7 @@ export const PROVIDER_DATA_POLICY = {
   customer: {
     google: { status: "unsupported" },
     openrouter: MANAGED_OPENROUTER_POLICY,
+    // Generative and decision requests use the org credential under BYOK.
     openai: { status: "unsupported" },
     azure_foundry: { status: "unsupported" },
     anthropic: { status: "unsupported" },
@@ -93,7 +95,8 @@ export const PROVIDER_DATA_POLICY = {
   customer: Record<ManagedProvider, ProviderDataPolicy>;
 };
 
-export const MANAGED_PROVIDER_UNAVAILABLE_CODE = "managed-provider-unavailable";
+export const MANAGED_PROVIDER_UNAVAILABLE_CODE =
+  AI_FAILURE_CODES.managed_provider_unavailable;
 
 export const managedProviderUnavailable = (
   provider: string,
@@ -109,24 +112,25 @@ export const managedProviderUnavailable = (
     "model_unavailable",
   );
 
-export const fetchManagedOpenRouterCompletion = async (request: Request) => {
+export const fetchManagedOpenRouterCompletion = async (completion: Request) => {
   const euEndpoint = `${MANAGED_EU_ORIGIN}/api/v1/chat/completions`;
   const usEndpoint = `${MANAGED_US_ORIGIN}/api/v1/chat/completions`;
   const publicEndpoint = `${MANAGED_PUBLIC_ORIGIN}/api/v1/chat/completions`;
-  const regionalEndpoint = request.url === euEndpoint ? euEndpoint : usEndpoint;
+  const regionalEndpoint =
+    completion.url === euEndpoint ? euEndpoint : usEndpoint;
   const endpoint =
-    request.url === publicEndpoint ? publicEndpoint : regionalEndpoint;
-  if (endpoint !== request.url) {
+    completion.url === publicEndpoint ? publicEndpoint : regionalEndpoint;
+  if (endpoint !== completion.url) {
     return Result.err(managedProviderUnavailable("openrouter"));
   }
   // Manual mode exposes redirects without forwarding the request body.
   const fetched = await Result.tryPromise({
     try: async () =>
       await fetchWithTimeout(endpoint, {
-        method: request.method,
-        headers: request.headers,
-        body: request.body,
-        signal: request.signal,
+        method: completion.method,
+        headers: completion.headers,
+        body: completion.body,
+        signal: completion.signal,
         timeoutMs: MANAGED_PROVIDER_REQUEST_TIMEOUT_MS,
         redirect: "manual",
       }),
@@ -151,6 +155,147 @@ export const fetchManagedOpenRouterCompletion = async (request: Request) => {
     );
   }
   return Result.ok(response);
+};
+
+/**
+ * Where audio goes: the organization's region, or the global endpoint for a
+ * model its region does not serve, which a member chose knowing it leaves
+ * the region. Every endpoint gets the same zero-retention provider policy.
+ */
+export const MANAGED_TRANSCRIPTION_URLS = {
+  eu: `${MANAGED_EU_ORIGIN}/api/v1/audio/transcriptions`,
+  us: `${MANAGED_US_ORIGIN}/api/v1/audio/transcriptions`,
+  global: `${MANAGED_PUBLIC_ORIGIN}/api/v1/audio/transcriptions`,
+} as const satisfies Record<ManagedAIResidency | "global", string>;
+
+const TRANSCRIPTION_ORIGINS = [
+  ...MANAGED_PROVIDER_ORIGINS,
+  MANAGED_PUBLIC_ORIGIN,
+] as const;
+
+/** Audio requests go only to a known transcription endpoint and refuse
+ *  redirects. */
+export const fetchManagedOpenRouterTranscription = async (
+  input: string | URL,
+  init: FetchWithTimeoutInit,
+) => {
+  const target = restrictOutboundUrl({
+    rawUrl: String(input),
+    hostPolicy: { type: "exact-origin", origins: TRANSCRIPTION_ORIGINS },
+    pathPrefixes: ["/api/v1/audio/transcriptions"],
+  });
+  if (
+    target === null ||
+    !Object.values(MANAGED_TRANSCRIPTION_URLS).some(
+      (url) => url === target.href,
+    )
+  ) {
+    return panic("Transcription target is outside the provider policy.");
+  }
+  return await fetchWithTimeout(target, { ...init, redirect: "error" });
+};
+
+const ELEVENLABS_DEFAULT_ORIGIN = "https://api.elevenlabs.io";
+const ELEVENLABS_US_ORIGIN = "https://api.us.elevenlabs.io";
+const ELEVENLABS_EU_ORIGIN = "https://api.eu.residency.elevenlabs.io";
+const ELEVENLABS_TRANSCRIPTION_ORIGINS = [
+  ELEVENLABS_DEFAULT_ORIGIN,
+  ELEVENLABS_US_ORIGIN,
+  ELEVENLABS_EU_ORIGIN,
+] as const;
+
+/** The ElevenLabs environments a deployment key can belong to. */
+export type ElevenLabsEnvironment = "default" | "us" | "eu";
+
+// A key works only on its own environment's origin.
+const ELEVENLABS_ORIGINS = {
+  default: ELEVENLABS_DEFAULT_ORIGIN,
+  us: ELEVENLABS_US_ORIGIN,
+  eu: ELEVENLABS_EU_ORIGIN,
+} as const satisfies Record<
+  ElevenLabsEnvironment,
+  (typeof ELEVENLABS_TRANSCRIPTION_ORIGINS)[number]
+>;
+
+/**
+ * Where ElevenLabs transcription goes. With zero retention ElevenLabs keeps
+ * neither the audio nor the transcript beyond the request; an account
+ * without it cannot ask for it.
+ */
+export const elevenLabsTranscriptionUrl = (
+  environment: ElevenLabsEnvironment,
+  zeroRetention: boolean,
+) =>
+  `${ELEVENLABS_ORIGINS[environment]}/v1/speech-to-text${zeroRetention ? "?enable_logging=false" : ""}`;
+
+const ELEVENLABS_TRANSCRIPTION_URLS: ReadonlySet<string> = new Set(
+  (["default", "us", "eu"] as const).flatMap((environment) => [
+    elevenLabsTranscriptionUrl(environment, true),
+    elevenLabsTranscriptionUrl(environment, false),
+  ]),
+);
+
+/** Audio goes only to the transcription URL of a known ElevenLabs
+ *  environment, and redirects are refused. */
+export const fetchElevenLabsTranscription = async (
+  input: string | URL,
+  init: FetchWithTimeoutInit,
+) => {
+  const target = restrictOutboundUrl({
+    rawUrl: String(input),
+    hostPolicy: {
+      type: "exact-origin",
+      origins: ELEVENLABS_TRANSCRIPTION_ORIGINS,
+    },
+    pathPrefixes: ["/v1/speech-to-text"],
+  });
+  if (target === null || !ELEVENLABS_TRANSCRIPTION_URLS.has(target.href)) {
+    return panic("Transcription target is outside the provider policy.");
+  }
+  return await fetchWithTimeout(target, { ...init, redirect: "error" });
+};
+
+const ELEVENLABS_TRANSCRIPTS_PATH = "/v1/speech-to-text/transcripts/";
+// The ids ElevenLabs issues; anything else could escape the path.
+const ELEVENLABS_TRANSCRIPT_ID = /^[A-Za-z0-9_-]{1,128}$/u;
+
+/** Where ElevenLabs deletes a transcript it kept, or `null` for an id it
+ *  would not issue. */
+export const elevenLabsTranscriptUrl = (
+  environment: ElevenLabsEnvironment,
+  transcriptionId: string,
+) =>
+  ELEVENLABS_TRANSCRIPT_ID.test(transcriptionId)
+    ? `${ELEVENLABS_ORIGINS[environment]}${ELEVENLABS_TRANSCRIPTS_PATH}${transcriptionId}`
+    : null;
+
+/** A kept transcript is deleted only at the transcript URL of a known
+ *  ElevenLabs environment, and redirects are refused. */
+export const deleteElevenLabsTranscript = async (
+  input: string | URL,
+  init: FetchWithTimeoutInit,
+) => {
+  const target = restrictOutboundUrl({
+    rawUrl: String(input),
+    hostPolicy: {
+      type: "exact-origin",
+      origins: ELEVENLABS_TRANSCRIPTION_ORIGINS,
+    },
+    pathPrefixes: [ELEVENLABS_TRANSCRIPTS_PATH],
+  });
+  if (
+    target?.search !== "" ||
+    !ELEVENLABS_TRANSCRIPT_ID.test(
+      target.pathname.slice(ELEVENLABS_TRANSCRIPTS_PATH.length),
+    )
+  ) {
+    return panic("Transcript deletion target is outside the provider policy.");
+  }
+  return await fetchWithTimeout(target, {
+    ...init,
+    method: "DELETE",
+    redirect: "error",
+  });
 };
 
 export const isManagedProviderAvailable = (

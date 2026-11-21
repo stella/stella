@@ -1,3 +1,4 @@
+import { panic, Result } from "better-result";
 /**
  * Report spec discovery.
  *
@@ -16,10 +17,10 @@
  * Every spec is validated with `parseReportSpec` and every `prompt.ref` must
  * resolve; an invalid spec is a boot error, never a per-export failure.
  */
-
-import { panic, Result } from "better-result";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
+
+import { chunk as chunkItems } from "@stll/concurrency/chunk";
 
 import type {
   ReportSection,
@@ -151,7 +152,7 @@ const readPrompts = (dir: string): Map<string, string> => {
 };
 
 /** Every `<dir>/spec.json` directly under `specsDir`. */
-export const readReportSpecSourcesFromDir = (
+const readReportSpecSourcesFromDir = (
   specsDir: string,
 ): Result<Map<string, ReportSpecSource>, ConfigurationError> => {
   if (!(existsSync(specsDir) && statSync(specsDir).isDirectory())) {
@@ -196,14 +197,14 @@ export const parseS3SpecPrefix = (
   value: string,
 ): Result<S3SpecPrefix, ConfigurationError> => {
   const groups = S3_PREFIX_PATTERN.exec(value)?.groups;
-  if (groups?.["bucket"] === undefined || groups["prefix"] === undefined) {
-    return Result.err(
-      new ConfigurationError({
-        message: `REPORT_SPECS_S3_PREFIX must look like s3://bucket/prefix/ (got ${value}).`,
-      }),
-    );
+  if (groups?.["bucket"] !== undefined && groups["prefix"] !== undefined) {
+    return Result.ok({ bucket: groups["bucket"], prefix: groups["prefix"] });
   }
-  return Result.ok({ bucket: groups["bucket"], prefix: groups["prefix"] });
+  return Result.err(
+    new ConfigurationError({
+      message: `REPORT_SPECS_S3_PREFIX must look like s3://bucket/prefix/ (got ${value}).`,
+    }),
+  );
 };
 
 /** The two object-store operations the loader needs; production binds them to
@@ -234,15 +235,17 @@ const mapInChunks = async <T, R>(
   fn: (item: T) => Promise<R>,
 ): Promise<R[]> => {
   const results: R[] = [];
-  const mapFrom = async (index: number): Promise<R[]> => {
-    if (index >= items.length) {
+  const itemBatches = chunkItems(items, size)[Symbol.iterator]();
+  const mapFrom = async (): Promise<R[]> => {
+    const nextBatch = itemBatches.next();
+    if (nextBatch.done) {
       return results;
     }
-    const chunk = items.slice(index, index + size);
+    const chunk = nextBatch.value;
     results.push(...(await Promise.all(chunk.map(fn))));
-    return await mapFrom(index + size);
+    return await mapFrom();
   };
-  return await mapFrom(0);
+  return await mapFrom();
 };
 
 type S3SpecFile =

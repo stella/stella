@@ -11,6 +11,7 @@ import {
   Dialog,
   DialogDescription,
   DialogFooter,
+  DialogFormState,
   DialogHeader,
   DialogPanel,
   DialogPopup,
@@ -38,6 +39,7 @@ import {
   currentDocumentReferenceUploadPrompt,
   useDocumentReferenceUploadStore,
 } from "@/lib/files/document-reference-upload-store";
+import { createUuid } from "@/lib/uuid";
 import { useUploadVersion } from "@/lib/workspaces/mutations/use-upload-version";
 
 import type { ReferencedFileRowState } from "./document-reference-upload-dialog.logic";
@@ -88,7 +90,7 @@ const DocumentReferenceUploadDialogBody = ({
   const uploadVersion = useUploadVersion();
   const [rows, setRows] = useState<readonly ReferencedFileRowState[]>(() =>
     referenced.map((entry) => ({
-      id: crypto.randomUUID(),
+      id: createUuid(),
       entry,
       choice: defaultReferenceUploadAction(entry.evidence),
     })),
@@ -153,6 +155,20 @@ const DocumentReferenceUploadDialogBody = ({
       open
     >
       <DialogPopup className="max-w-lg">
+        <DialogFormState
+          dirty={rows.some(
+            (row) =>
+              row.choice !== defaultReferenceUploadAction(row.entry.evidence),
+          )}
+          onDiscard={() => {
+            setRows(
+              rows.map((row) => ({
+                ...row,
+                choice: defaultReferenceUploadAction(row.entry.evidence),
+              })),
+            );
+          }}
+        />
         <DialogHeader>
           <DialogTitle>
             {t("workspaces.files.referencedUpload.title")}
@@ -183,11 +199,17 @@ const DocumentReferenceUploadDialogBody = ({
         </DialogPanel>
 
         <DialogFooter>
-          <Button disabled={isSending} onClick={cancel} variant="ghost">
+          <Button
+            disabled={isSending}
+            disabledReason={t("workspaces.files.uploading")}
+            onClick={cancel}
+            variant="ghost"
+          >
             {t("common.cancel")}
           </Button>
           <Button
             disabled={isSending}
+            disabledReason={t("workspaces.files.uploading")}
             loading={isSending}
             onClick={() =>
               detached(confirm(), "document-reference-upload.confirm")

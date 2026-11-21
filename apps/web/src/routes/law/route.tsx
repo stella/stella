@@ -1,40 +1,34 @@
-import { createFileRoute, notFound } from "@tanstack/react-router";
+import { createFileRoute, notFound, Outlet } from "@tanstack/react-router";
 
-import { Skeleton } from "@stll/ui/skeleton";
-
+import { isPublicLawEnabled } from "@/lib/public-law-launch";
 import "@/features/case-law/case-decision-details-inspector-registration";
 import "@/features/case-law/case-decision-inspector-registration";
 import "@/features/statutes/provision-inspector-registration";
 import "@/features/statutes/statute-inspector-registration";
-import { isPublicLawRouteEnabled } from "@/lib/public-law-launch";
+import {
+  APP_FRAME_SCOPE,
+  MEMBER_PROVIDER_SCOPES,
+} from "@/routes/-app-frame-scope";
+import { LeafPendingView } from "@/routes/-route-pending-view";
 import { PublicLawShell } from "@/routes/law/-components/public-law-shell";
 
 export const Route = createFileRoute("/law")({
+  staticData: {
+    appFrame: APP_FRAME_SCOPE.none,
+    providerScopes: MEMBER_PROVIDER_SCOPES,
+  },
   beforeLoad: () => {
-    if (!isPublicLawRouteEnabled()) {
+    if (!isPublicLawEnabled()) {
       throw notFound();
     }
   },
   component: LawRouteComponent,
-  // The shell is also this match's suspense fallback. Without one of its own,
-  // a suspension no narrower boundary catches would replace the breadcrumbs,
-  // the country and language controls and the inspector rail with the
-  // router's spinner — none of which is what is loading.
-  pendingComponent: LawShellPending,
+  // A page's loading view is its own (the readers, the lists), drawn inside
+  // the shell while the shell stays; only a load of the shell itself shows
+  // the page's view alone.
+  pendingComponent: LeafPendingView,
 });
 
 function LawRouteComponent() {
-  return <PublicLawShell />;
+  return <PublicLawShell content={<Outlet />} />;
 }
-
-function LawShellPending() {
-  return <PublicLawShell content={<PublicLawContentPending />} />;
-}
-
-/** The frame every page under `/law` fills, with nothing claimed inside it. */
-const PublicLawContentPending = () => (
-  <main className="flex min-h-0 flex-1 flex-col gap-4 p-4">
-    <Skeleton className="h-9 w-full max-w-md rounded-md" />
-    <Skeleton className="min-h-0 flex-1 rounded-md" />
-  </main>
-);

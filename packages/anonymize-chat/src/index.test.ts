@@ -11,14 +11,13 @@ import { rejectionOf } from "@stll/property-testing/rejection";
 
 import {
   buildChatAnonPipelineConfig,
-  ChatAnonInputLimitError,
   CHAT_SEND_MODE,
-  CHAT_TRANSPORT_ERROR_CODE,
+  CHAT_TRANSPORT_ERROR_CODES,
+  ChatAnonInputLimitError,
   DEFAULT_CHAT_ANON_ENTITY_LABELS,
-  createThirdPartyBoundaryRefusalPayload,
   findChatAnonPlaceholders,
-  FORCED_SENSITIVE_VALUES_MAX,
   FORCED_SENSITIVE_VALUE_MAX_LENGTH,
+  FORCED_SENSITIVE_VALUES_MAX,
   getPreferredChatSendMode,
   isThirdPartyBoundaryRefusalError,
   isThirdPartyBoundaryRefusalPayload,
@@ -73,21 +72,19 @@ describe("chat anonymization pipeline contract", () => {
   });
 
   test("parses only the shared chat transport error payload shape", () => {
-    const payload = createThirdPartyBoundaryRefusalPayload("blocked");
+    for (const code of CHAT_TRANSPORT_ERROR_CODES) {
+      const payload = { code, message: "blocked" };
 
-    expect(parseChatTransportErrorPayload(payload)).toEqual({
-      code: CHAT_TRANSPORT_ERROR_CODE.thirdPartyBoundaryRefusal,
-      message: "blocked",
-    });
-    expect(parseChatTransportErrorMessage(JSON.stringify(payload))).toEqual(
-      payload,
-    );
-    expect(isThirdPartyBoundaryRefusalPayload(payload)).toBe(true);
-    expect(
-      isThirdPartyBoundaryRefusalError(
-        new Error(JSON.stringify(createThirdPartyBoundaryRefusalPayload("x"))),
-      ),
-    ).toBe(true);
+      expect(parseChatTransportErrorPayload(payload)).toEqual(payload);
+      expect(parseChatTransportErrorMessage(JSON.stringify(payload))).toEqual(
+        payload,
+      );
+      // Every refusal the transport names offers to send without anonymization.
+      expect(isThirdPartyBoundaryRefusalPayload(payload)).toBe(true);
+      expect(
+        isThirdPartyBoundaryRefusalError(new Error(JSON.stringify(payload))),
+      ).toBe(true);
+    }
     expect(
       parseChatTransportErrorPayload({ code: "other", message: "x" }),
     ).toBe(null);
@@ -142,7 +139,7 @@ describe("runChatAnonPipeline excludedCanonicals", () => {
     // SAFETY: the mock binding value is opaque plumbing - the fake
     // `createNativePipelineFromConfig` below never inspects it, it
     // only forwards it to `redactText`'s closure over `entities`.
-    // oxlint-disable-next-line typescript-eslint/no-unsafe-type-assertion -- test double stands in for the real wasm binding
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test double stands in for the real wasm binding
     getBinding: async () => ({}) as NativeAnonymizeBinding,
     createPipelineContext: () => ({
       nativePipelinePackage: null,
@@ -204,7 +201,7 @@ describe("runChatAnonPipeline excludedCanonicals", () => {
       // SAFETY: only `redactText` is exercised by these tests; the
       // rest of `PreparedNativePipeline`'s surface is intentionally
       // left unimplemented on this test double.
-      // oxlint-disable-next-line typescript-eslint/no-unsafe-type-assertion -- test double only implements `redactText`
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test double only implements `redactText`
       return pipeline as unknown as Awaited<
         ReturnType<ChatAnonRuntime["createNativePipelineFromConfig"]>
       >;

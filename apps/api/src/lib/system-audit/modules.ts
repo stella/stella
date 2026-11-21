@@ -14,27 +14,48 @@
 import type { SystemRunActor } from "./actors";
 
 export const SYSTEM_AUDIT_MODULES = {
+  "apps/api/src/lib/scheduler/tasks/case-law-coverage-refresh.ts":
+    "system:case-law-coverage-refresh",
+  "apps/api/src/lib/db/operator-activity/read.ts": "system:operator-activity",
+  "apps/api/src/lib/lists/sanctions/monitoring-fanout.ts":
+    "system:sanctions-monitoring-fanout",
+  "apps/api/src/lib/db/operator-registrations/read.ts":
+    "system:operator-registrations",
   "apps/api/src/lib/lists/sanctions/refresh.ts": "system:sanctions-refresh",
   "apps/api/src/lib/case-law/sitemap-shard-refresh.ts":
     "system:case-law-sitemap-refresh",
   "apps/api/src/lib/legal-search/statute-sitemap-shard-refresh.ts":
     "system:statute-sitemap-refresh",
-  "apps/api/src/lib/legal-search/pg-fts-browse-facet-refresh.ts":
-    "system:case-law-browse-facet-refresh",
+  "apps/api/src/lib/scheduler/tasks/case-law-population-fold.ts":
+    "system:case-law-population-fold",
+  "apps/api/src/lib/scheduler/tasks/case-law-population-seed.ts":
+    "system:case-law-population-seed",
+  "apps/api/src/lib/legal-search/legislation-facet-refresh.ts":
+    "system:legislation-facet-refresh",
+  "apps/api/src/lib/case-law/source-arrivals-refresh.ts":
+    "system:case-law-source-arrivals-refresh",
   "apps/api/src/lib/scheduler/tasks/case-law-raw-storage.ts":
     "system:case-law-raw-storage",
   "apps/api/src/lib/scheduler/tasks/registration-retention.ts":
     "system:registration-retention",
   "apps/api/src/lib/hosted-usage-provider/webhook-retention.ts":
     "system:usage-webhook-retention",
+  "apps/api/src/lib/scheduler/tasks/hosted-customer-erasure.ts":
+    "system:hosted-customer-erasure",
   "apps/api/src/lib/uploads/file-comparison/sweep.ts":
     "system:file-comparison-sweep",
   "apps/api/src/lib/scheduler/tasks/corpus-index-job-detail-backfill.ts":
     "system:corpus-index-job-detail-backfill",
+  "apps/api/src/lib/scheduler/tasks/case-law-parsed-input-state-backfill.ts":
+    "system:case-law-parsed-input-state-backfill",
   "apps/api/src/lib/scheduler/tasks/legislation-expression-id-backfill.ts":
     "system:legislation-expression-id-backfill",
+  "apps/api/src/db/search-history-country-repair.ts":
+    "system:search-history-country-repair",
   "apps/api/src/lib/scheduler/tasks/system-audit-retention.ts":
     "system:audit-retention",
+  "apps/api/src/handlers/case-law/polarity/form-repair.ts":
+    "system:case-law-citation-form-repair",
   "apps/api/src/handlers/case-law/ingestion/background-replay-store.ts":
     "system:case-law-background-replay",
   "apps/api/src/lib/legal-search/case-law-replay-audit.ts":

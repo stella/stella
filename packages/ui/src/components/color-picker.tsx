@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, lazy, useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import type * as React from "react";
 
 import { Popover as PopoverPrimitive } from "@base-ui/react/popover";
@@ -42,8 +42,17 @@ type ColorPickerProps = {
   defaultExpanded?: boolean;
   /** Localized label for expanding the custom color controls. */
   moreLabel: string;
-  /** Popover trigger element */
-  children: React.ReactNode;
+  /**
+   * The popover trigger: one focusable element (normally a named button)
+   * that becomes the trigger itself, so the picker never wraps it in a
+   * second, unnamed button.
+   */
+  trigger: React.ReactElement;
+  /**
+   * Whether `trigger` renders a native `<button>` (default). Pass `false`
+   * only for a non-button element; Base UI then gives it button semantics.
+   */
+  nativeButton?: boolean;
   /** Popover placement side */
   side?: "top" | "bottom" | "left" | "right";
   /** Popover placement alignment */
@@ -226,7 +235,7 @@ const CustomColorControls = ({
       <span className="text-muted-foreground text-2xs">#</span>
       <input
         aria-label="Custom hex color"
-        className="border-input bg-background text-foreground text-2xs h-6 flex-1 rounded border px-1.5 font-mono outline-none"
+        className="border-input bg-background text-foreground text-2xs h-6 flex-1 rounded-sm border px-1.5 font-mono outline-none"
         dir="ltr"
         maxLength={6}
         onChange={(event) => handleInputChange(event.target.value)}
@@ -242,7 +251,7 @@ const CustomColorControls = ({
       />
       {isValidHex(inputHex) && (
         <span
-          className="border-border size-6 shrink-0 rounded border"
+          className="border-border size-6 shrink-0 rounded-sm border"
           style={{ backgroundColor: `#${inputHex}` }}
         />
       )}
@@ -409,7 +418,7 @@ const ColorPickerContent = ({
           render={
             <button
               aria-label="No color"
-              className="text-muted-foreground hover:bg-accent hover:text-accent-foreground text-2xs flex h-6 w-full items-center gap-1.5 rounded px-1"
+              className="text-muted-foreground hover:bg-accent hover:text-accent-foreground text-2xs flex h-6 w-full items-center gap-1.5 rounded-sm px-1"
               onClick={onClear}
               type="button"
             />
@@ -479,7 +488,8 @@ const ColorPicker = ({
   columns = 9,
   defaultExpanded = false,
   moreLabel,
-  children,
+  nativeButton = true,
+  trigger,
   side = "bottom",
   align = "start",
   className,
@@ -487,11 +497,9 @@ const ColorPicker = ({
   <PopoverPrimitive.Root>
     <PopoverPrimitive.Trigger
       data-slot="color-picker-trigger"
-      nativeButton={false}
-      render={<div className="inline-flex" />}
-    >
-      {children}
-    </PopoverPrimitive.Trigger>
+      nativeButton={nativeButton}
+      render={trigger}
+    />
     <PopoverPrimitive.Portal>
       <PopoverPrimitive.Positioner
         align={align}

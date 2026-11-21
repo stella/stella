@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, getColumns, inArray, sql } from "drizzle-orm";
 
 import { SEARCH_PAGINATION_COMPLETE } from "@stll/api-contract/search";
 import type { RegistryRequestObservation } from "@stll/business-registries/shared/request-observer";
@@ -7,27 +7,39 @@ import { isUuid } from "@stll/uuid-codec";
 
 import {
   caseLawDecisionIdentifiers,
-  caseLawDecisions,
   caseLawSources,
+  publishedCaseLawDecisions,
 } from "@/api/db/schema";
 import { envBase } from "@/api/env-base";
 // oxlint-disable-next-line no-restricted-imports -- search boundary: brands document ids returned by the corpus index before re-hydrating from Postgres
-import { toSafeId, type SafeId } from "@/api/lib/branded-types";
+import { type SafeId, toSafeId } from "@/api/lib/branded-types";
 import {
+  type CaseLawPublicReadDb,
   caseLawPublicReadDb,
   type CaseLawPublicReadTransaction,
 } from "@/api/lib/case-law-public-read-db";
 import { decisionIdentifierProjection } from "@/api/lib/case-law/decision-identifiers";
-import { publishedCaseLawDecision } from "@/api/lib/case-law/published-decisions";
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
 import {
+  caseLawAppliedProjections,
+  caseLawCorpusAppliedRevision,
   caseLawCorpusDocumentCanRecur,
-  currentCaseLawCorpusProjection,
+  caseLawCorpusServingGeneration,
+  servedCaseLawCorpusProjection,
 } from "@/api/lib/legal-search/case-law-corpus-projection";
+import {
+  type CorpusHitDispositionCounter,
+  createCorpusHitDispositionCounter,
+  reportCorpusHitDispositions,
+} from "@/api/lib/legal-search/corpus-hit-telemetry";
 import { corpusIndexBrowseFacets } from "@/api/lib/legal-search/corpus-index-facets";
 import { courtPartitionsForCourtFilter } from "@/api/lib/legal-search/corpus-index-group-contract";
 import { readServingCorpusIndexTargetTx } from "@/api/lib/legal-search/corpus-index-group-enrollment-store";
-import { readCorpusIndexSearchPage } from "@/api/lib/legal-search/corpus-index-pagination";
+import { requireCorpusIndexManifest } from "@/api/lib/legal-search/corpus-index-manifest";
+import {
+  type CorpusCandidateRankingInput,
+  readCorpusIndexSearchPage,
+} from "@/api/lib/legal-search/corpus-index-pagination";
 import { caseLawCorpusQueryFields } from "@/api/lib/legal-search/corpus-index-read-contract";
 import { markCorpusFragment } from "@/api/lib/legal-search/corpus-passage-highlight";
 import {
@@ -43,6 +55,10 @@ import {
   corpusRankingCursorTarget,
 } from "@/api/lib/legal-search/corpus-ranking-policy";
 import {
+  partitionReturnedCorpusRecords,
+  recordCorpusRehydrationDispositions,
+} from "@/api/lib/legal-search/corpus-rehydration-disposition";
+import {
   corpusSearchGroupToken,
   decodeCorpusSearchCursor,
   encodeCorpusSearchCursor,
@@ -56,7 +72,6 @@ import { loadDocumentContext } from "@/api/lib/legal-search/document-context";
 import { resolveExpandedCorpusQuery } from "@/api/lib/legal-search/expansion";
 import {
   blendStableCitationAuthority,
-  type ScoredCandidate,
   stableBlendUpperBound,
 } from "@/api/lib/legal-search/rerank";
 import {
@@ -116,21 +131,41 @@ const engineSnippetText = (
   );
 };
 
+type MarkEngineSnippetOptions = Omit<
+  Parameters<typeof markCorpusFragment>[0],
+  "text"
+> & {
+  snippet: Record<string, unknown> | undefined;
+};
+
+const markEngineSnippet = ({
+  snippet,
+  tokens,
+  language,
+}: MarkEngineSnippetOptions): string | null => {
+  const text = engineSnippetText(snippet);
+  return text === null ? null : markCorpusFragment({ text, tokens, language });
+};
+
 type RehydrateCorpusIndexCandidatesOptions = {
   generation: string;
   ids: SafeId<"caseLawDecision">[];
 };
 
-export const rehydrateCorpusIndexProviderCandidatesQuery = (
+export const rehydrateCorpusIndexProviderCandidatesStatement = (
   tx: CaseLawPublicReadTransaction,
   { generation, ids }: RehydrateCorpusIndexCandidatesOptions,
-) =>
-  tx
+) => {
+  const requestedIds = sql`(SELECT unnest(ARRAY[${sql.join(
+    ids.map((id) => sql`${id}::uuid`),
+    sql`, `,
+  )}]::uuid[]) AS id) AS requested`;
+  const eligibleRows = tx
     .select({
-      id: caseLawDecisions.id,
-      caseNumber: caseLawDecisions.caseNumber,
-      caseNumberType: caseLawDecisions.caseNumberType,
-      ecli: caseLawDecisions.ecli,
+      id: publishedCaseLawDecisions.id,
+      caseNumber: publishedCaseLawDecisions.caseNumber,
+      caseNumberType: publishedCaseLawDecisions.caseNumberType,
+      ecli: publishedCaseLawDecisions.ecli,
       identifiers: sql<unknown>`coalesce((
         SELECT jsonb_agg(
           jsonb_build_object(
@@ -140,29 +175,52 @@ export const rehydrateCorpusIndexProviderCandidatesQuery = (
           ORDER BY identifier.type, identifier.value
         )
         FROM ${caseLawDecisionIdentifiers} identifier
-        WHERE identifier.decision_id = ${caseLawDecisions.id}
-      ), '[]'::jsonb)`,
-      court: caseLawDecisions.court,
-      country: caseLawDecisions.country,
-      language: caseLawDecisions.language,
-      decisionDate: caseLawDecisions.decisionDate,
-      decisionType: caseLawDecisions.decisionType,
-      sourceUrl: caseLawDecisions.sourceUrl,
-      citationCount: caseLawDecisions.citationCount,
-      citationAuthority: caseLawDecisions.citationAuthority,
-      createdAt: caseLawDecisions.createdAt,
-      canRecur: caseLawCorpusDocumentCanRecur(generation),
+        WHERE identifier.decision_id = ${publishedCaseLawDecisions.id}
+      ), '[]'::jsonb)`.as("identifiers"),
+      court: publishedCaseLawDecisions.court,
+      country: publishedCaseLawDecisions.country,
+      language: publishedCaseLawDecisions.language,
+      decisionDate: publishedCaseLawDecisions.decisionDate,
+      decisionType: publishedCaseLawDecisions.decisionType,
+      sourceUrl: publishedCaseLawDecisions.sourceUrl,
+      citationCount: publishedCaseLawDecisions.citationCount,
+      citationAuthority: publishedCaseLawDecisions.citationAuthority,
+      createdAt: publishedCaseLawDecisions.createdAt,
+      canRecur: caseLawCorpusDocumentCanRecur(generation).as("can_recur"),
+      appliedRevision:
+        caseLawCorpusAppliedRevision(generation).as("applied_revision"),
+      appliedGeneration:
+        caseLawCorpusServingGeneration(generation).as("applied_generation"),
     })
-    .from(caseLawDecisions)
-    .innerJoin(caseLawSources, eq(caseLawSources.id, caseLawDecisions.sourceId))
+    .from(publishedCaseLawDecisions)
+    .innerJoin(
+      caseLawSources,
+      eq(caseLawSources.id, publishedCaseLawDecisions.sourceId),
+    )
     .where(
       and(
-        inArray(caseLawDecisions.id, ids),
+        inArray(publishedCaseLawDecisions.id, ids),
         redistributableCaseLawSource,
-        publishedCaseLawDecision,
-        currentCaseLawCorpusProjection(generation),
+        servedCaseLawCorpusProjection(generation),
       ),
-    );
+    )
+    // Bounds the content branch and keeps its subplans behind eligibility.
+    .limit(ids.length)
+    .as("eligible_provider");
+  return tx
+    .select({ id: sql<string>`requested.id`, row: getColumns(eligibleRows) })
+    .from(requestedIds)
+    .leftJoin(eligibleRows, sql`requested.id = ${eligibleRows.id}`)
+    .limit(ids.length);
+};
+
+export const rehydrateCorpusIndexProviderCandidatesQuery = async (
+  tx: CaseLawPublicReadTransaction,
+  options: RehydrateCorpusIndexCandidatesOptions,
+) =>
+  partitionReturnedCorpusRecords(
+    await rehydrateCorpusIndexProviderCandidatesStatement(tx, options),
+  );
 
 export const rehydrateCorpusIndexProviderCandidates =
   definePublicLawSharedQuery(
@@ -173,25 +231,29 @@ export const rehydrateCorpusIndexProviderCandidates =
     ) => await rehydrateCorpusIndexProviderCandidatesQuery(tx, options),
   );
 
-type RankCorpusIndexProviderCandidatesOptions = {
+type RankCorpusIndexProviderCandidatesOptions = CorpusCandidateRankingInput & {
+  caseLawDb?: CaseLawPublicReadDb | undefined;
+  hitDispositions?: CorpusHitDispositionCounter | undefined;
   generation: string;
-  candidates: readonly ScoredCandidate[];
   /** Groups earlier pages emitted (`SearchCursor.excludedGroups`). */
   excludedGroups: readonly string[] | undefined;
 };
 
-const rankCorpusIndexProviderCandidates = async ({
+export const rankCorpusIndexProviderCandidates = async ({
+  caseLawDb = caseLawPublicReadDb,
+  hitDispositions = createCorpusHitDispositionCounter(),
   generation,
   candidates,
+  selectAppliedCandidates,
   excludedGroups,
 }: RankCorpusIndexProviderCandidatesOptions) => {
   const ids = candidates.map((candidate) =>
     toSafeId<"caseLawDecision">(candidate.id),
   );
-  const rows =
+  const read =
     ids.length === 0
-      ? []
-      : await caseLawPublicReadDb(
+      ? { rows: [], dispositions: [] }
+      : await caseLawDb(
           async (tx) =>
             await rehydrateCorpusIndexProviderCandidates(tx, {
               generation,
@@ -199,21 +261,34 @@ const rankCorpusIndexProviderCandidates = async ({
             }),
         );
 
+  recordCorpusRehydrationDispositions(read.dispositions, hitDispositions);
+  const rows = read.rows;
+
   // Keyed by plain string id (candidate ids from corpus index are strings).
   const displayById = new Map(rows.map((row) => [String(row.id), row]));
   const authorityById = new Map(
     rows.map((row) => [String(row.id), row.citationAuthority]),
+  );
+  const appliedById = caseLawAppliedProjections(rows);
+  const revisionById = new Map(
+    [...appliedById].map(([id, { revision }]) => [id, revision]),
   );
 
   // Drop candidates missing from Postgres (index/DB drift) so we never
   // surface a hit we cannot render. Only documents with later physical
   // passages need exclusions when the position window advances.
   const excluded = new Set(excludedGroups);
-  const rendered = candidates.filter((candidate) =>
-    displayById.has(candidate.id),
+  const rendered = (
+    selectAppliedCandidates === undefined
+      ? candidates
+      : selectAppliedCandidates(appliedById)
+  ).filter(
+    (candidate) =>
+      displayById.has(candidate.id) && revisionById.has(candidate.id),
   );
   return {
     context: { displayById },
+    revisionById,
     groups: rendered.flatMap((candidate) =>
       displayById.get(candidate.id)?.canRecur
         ? [corpusSearchGroupToken(candidate.id)]
@@ -228,11 +303,18 @@ const rankCorpusIndexProviderCandidates = async ({
   };
 };
 
+type CorpusIndexSearchResultOptions = {
+  query: LegalSearchQuery;
+  observer: RegistryRequestObservation;
+  hitDispositions: CorpusHitDispositionCounter;
+};
+
+type CorpusIndexSearchResult = Result<LegalSearchResult, LegalSearchError>;
+
 const searchResult = async (
-  query: LegalSearchQuery,
-  observer: RegistryRequestObservation,
-): Promise<Result<LegalSearchResult, LegalSearchError>> => {
-  const limit = query.limit;
+  options: CorpusIndexSearchResultOptions,
+): Promise<CorpusIndexSearchResult> => {
+  const { query, observer, hitDispositions } = options;
   const family = query.documentFamily ?? "case_law";
 
   // Before the generation read, and before any engine work: a cursor that does
@@ -260,7 +342,7 @@ const searchResult = async (
   if (Result.isError(target)) {
     return Result.err(
       new LegalSearchUnavailableError({
-        message: "Corpus index legal search reached an unready index group.",
+        message: "Corpus index legal search reached no readable index.",
         cause: target.error,
       }),
     );
@@ -325,7 +407,7 @@ const searchResult = async (
       facets: null,
       nextCursor: null,
       paginationOutcome: SEARCH_PAGINATION_COMPLETE,
-      limit,
+      limit: query.limit,
     });
   }
   // This boundary has no HTTP status to answer with, so a cursor from another
@@ -358,11 +440,12 @@ const searchResult = async (
   const snippetTokens = tokenizeCorpusFreeText(query.query);
 
   const searchPage = await readCorpusIndexSearchPage({
+    hitDispositions,
     observer,
     cluster: serving.cluster,
     indexId,
     query: resolved.query,
-    limit,
+    limit: query.limit,
     // The shared provider ranks best-first only; the public search handler
     // owns the reader-chosen orders.
     order: RELEVANCE_ORDER,
@@ -370,10 +453,10 @@ const searchResult = async (
     rankingMode,
     fallbackScanTransport: { type: "native" },
     scanTransport:
-      rankingMode === "bm25-ratio"
-        ? { type: "scored", fields: ["document_id"] }
-        : { type: "native" },
+      rankingMode === "bm25-ratio" ? { type: "scored" } : { type: "native" },
     snippetFields: ["text"],
+    projectionRevisionField: requireCorpusIndexManifest(family, generation)
+      .projection.projectionRevisionField,
     extractId: (hit) => {
       const id = hit["document_id"];
       return typeof id === "string" && isUuid(id) ? id : null;
@@ -383,24 +466,22 @@ const searchResult = async (
     // a window that was returned for it, and a quoted phrase is marked word by
     // word. Marking the window the engine already sent back keeps that off the
     // read path: no passage is fetched per hit.
-    extractSnippet: (snippet) => {
-      const text = engineSnippetText(snippet);
-      return text === null
-        ? null
-        : markCorpusFragment({
-            text,
-            tokens: snippetTokens,
-            language: fields.stemming?.language ?? null,
-          });
-    },
+    extractSnippet: (snippet) =>
+      markEngineSnippet({
+        snippet,
+        tokens: snippetTokens,
+        language: fields.stemming?.language ?? null,
+      }),
     // Upper bound for the pagination early-stop: scanning may end only once
     // no unseen candidate could out-blend the page cursor. Saturated
     // authority is bounded by 1, so the bound reads nothing from the corpus.
     unseenScoreUpperBound: stableBlendUpperBound,
-    rankCandidates: async (candidates) =>
+    rankCandidates: async (candidates, { selectAppliedCandidates }) =>
       await rankCorpusIndexProviderCandidates({
+        hitDispositions,
         generation,
         candidates,
+        selectAppliedCandidates,
         excludedGroups: parsedCursor?.excludedGroups,
       }),
   });
@@ -462,7 +543,7 @@ const searchResult = async (
     facets: null,
     nextCursor,
     paginationOutcome: searchPage.paginationOutcome,
-    limit,
+    limit: query.limit,
   });
 };
 
@@ -470,13 +551,18 @@ const search = async (
   query: LegalSearchQuery,
   observer: RegistryRequestObservation,
 ): Promise<Result<LegalSearchResult, LegalSearchError>> => {
+  const hitDispositions = createCorpusHitDispositionCounter();
   const attempted = await Result.tryPromise({
-    try: async () => await searchResult(query, observer),
+    try: async () => await searchResult({ query, observer, hitDispositions }),
     catch: (cause) =>
       new LegalSearchUnavailableError({
         message: "Corpus index legal search failed.",
         cause,
       }),
+  });
+  reportCorpusHitDispositions({
+    family: query.documentFamily ?? "case_law",
+    counts: hitDispositions.snapshot(),
   });
   if (Result.isError(attempted)) {
     return attempted;

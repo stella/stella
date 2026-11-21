@@ -31,7 +31,12 @@ import type { PlaybookPositions } from "@/api/lib/workflow/playbook-positions";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
-import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
+import {
+  createTestHandlerContext,
+  NO_DB,
+} from "@/api/tests/helpers/handler-context";
+import { testModelActionAdmitter } from "@/api/tests/helpers/model-dispatch-admission";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 
 import { DOCUMENT_TYPE_NOT_FOUND_MESSAGE } from "./assert-document-type";
 import { createPlaybookDefinitionHandler } from "./create-shared";
@@ -70,17 +75,21 @@ const holdDocumentTypeCheck = (
   new Proxy(tx, {
     get(target, key, receiver) {
       if (key !== "query") {
-        return Reflect.get(target, key, receiver);
+        return Reflect.get(target, key, receiver) as unknown;
       }
       return new Proxy(target.query, {
         get(queryTarget, tableKey, queryReceiver) {
           if (tableKey !== "documentTypes") {
-            return Reflect.get(queryTarget, tableKey, queryReceiver);
+            return Reflect.get(queryTarget, tableKey, queryReceiver) as unknown;
           }
           return new Proxy(queryTarget.documentTypes, {
             get(tableTarget, method, tableReceiver) {
               if (method !== "findFirst") {
-                return Reflect.get(tableTarget, method, tableReceiver);
+                return Reflect.get(
+                  tableTarget,
+                  method,
+                  tableReceiver,
+                ) as unknown;
               }
               return (config: Parameters<typeof tableTarget.findFirst>[0]) => {
                 const query = tableTarget.findFirst(config);
@@ -109,14 +118,18 @@ const holdDeleteReferenceCheck = (
   new Proxy(tx, {
     get(target, key, receiver) {
       if (key !== "select") {
-        return Reflect.get(target, key, receiver);
+        return Reflect.get(target, key, receiver) as unknown;
       }
       return (fields: Parameters<typeof target.select>[0]) => {
         const builder = target.select(fields);
         return new Proxy(builder, {
           get(builderTarget, method, builderReceiver) {
             if (method !== "from") {
-              return Reflect.get(builderTarget, method, builderReceiver);
+              return Reflect.get(
+                builderTarget,
+                method,
+                builderReceiver,
+              ) as unknown;
             }
             return (table: Parameters<typeof builderTarget.from>[0]) => {
               const query = builderTarget.from(table);
@@ -344,6 +357,9 @@ if (!databaseUrl || !runPostgresTests) {
                 server: null,
               });
               const writeContext = {
+                admitModelAction: testModelActionAdmitter(
+                  fixture.organizationId,
+                ),
                 organizationId: fixture.organizationId,
                 accessibleWorkspaceIds: [],
                 orgAIConfig: null,
@@ -408,13 +424,14 @@ if (!databaseUrl || !runPostgresTests) {
               >[0];
               const deletion = deleteDocumentType.handler(
                 createTestHandlerContext<DeleteContext>({
+                  scopedDb: NO_DB,
                   session: { activeOrganizationId: fixture.organizationId },
                   user: { id: fixture.userId },
                   params: { documentTypeId: fixture.documentTypeId },
                   safeDb: createSafeTestDb(deleteDb, (tx) =>
                     holdDeleteReferenceCheck(tx, deleteBarrier),
                   ),
-                  recordAuditEvent,
+                  audit: recordAuditEvent,
                 }),
               );
               tasks.push(deletion);
@@ -533,9 +550,9 @@ if (!databaseUrl || !runPostgresTests) {
                   .where(
                     eq(propertyDependencies.workspaceId, fixture.workspaceId),
                   );
-                await saveDb
-                  .delete(organization)
-                  .where(eq(organization.id, fixture.organizationId));
+                await deleteOrganizationsForTest(saveDb, [
+                  fixture.organizationId,
+                ]);
               }
             }
           });

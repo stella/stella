@@ -5,10 +5,10 @@ import {
   formatSummaryTable,
   hasBlockingFindings,
   isMeasureSummary,
+  type MeasureSample,
   pageTotals,
   parseDriveArgs,
   summarizeSamples,
-  type MeasureSample,
 } from "../agent/drive-report";
 
 const sample = (overrides: Partial<MeasureSample> = {}): MeasureSample => ({
@@ -25,10 +25,14 @@ const sample = (overrides: Partial<MeasureSample> = {}): MeasureSample => ({
 const request = (dbQueries: number | null, responseBytes: number | null) => ({
   dbQueries,
   dbQueryHeaderMissing: dbQueries === null,
+  transactions: 0,
+  transactionHeaderMissing: false,
   method: "GET",
   pathname: "/v1/contacts",
-  responseBytes,
-  responseBytesUnavailable: false,
+  responseSize:
+    responseBytes === null
+      ? { status: "streamed" as const }
+      : { status: "measured" as const, bytes: responseBytes },
 });
 
 describe("parseDriveArgs", () => {
@@ -41,6 +45,7 @@ describe("parseDriveArgs", () => {
           colorScheme: "light",
           compare: undefined,
           fullPage: false,
+          flows: "all",
           samples: 3,
           save: undefined,
           viewport: DEFAULT_VIEWPORT,
@@ -48,6 +53,23 @@ describe("parseDriveArgs", () => {
         },
         targets: ["/workspaces", "/chat/new"],
       },
+    });
+  });
+
+  test("census takes no target and accepts a sample count", () => {
+    expect(
+      parseDriveArgs(["census", "--samples", "5", "--flows", "matter,chat"]),
+    ).toMatchObject({
+      type: "ok",
+      args: {
+        command: "census",
+        targets: [],
+        options: { samples: 5, flows: "matter,chat" },
+      },
+    });
+    expect(parseDriveArgs(["census"])).toMatchObject({
+      type: "ok",
+      args: { options: { samples: 3 } },
     });
   });
 
@@ -80,6 +102,11 @@ describe("parseDriveArgs", () => {
 
   test.each([
     [[], "Unknown command"],
+    [["census", "/workspaces"], "does not take targets"],
+    [["census", "--flows", "../chat"], "comma-separated flow names"],
+    [["run", "flow.ts", "--flows", "chat"], "only applies to census"],
+    [["census", "--save", "before"], "only apply to measure"],
+    [["census", "--compare", "before"], "only apply to measure"],
     [["snap"], "needs at least one target"],
     [["snap", "workspaces"], "must start with /"],
     [["measure", "/a", "/b"], "exactly one target"],
@@ -137,7 +164,7 @@ describe("pageTotals", () => {
   test("counts a repeated endpoint every time it is called", () => {
     expect(
       pageTotals({
-        intervals: [],
+        depthChain: [],
         requests: [request(3, 1000), request(3, 1000), request(null, null)],
       }),
     ).toEqual({ apiRequests: 3, dbQueries: 6, responseBytes: 2000 });

@@ -1,9 +1,11 @@
 import { panic } from "better-result";
 import { expect } from "bun:test";
-import * as cheerio from "cheerio";
-import { isCDATA, isTag, isText } from "domhandler";
-import type { AnyNode } from "domhandler";
 import fc from "fast-check";
+
+import { load } from "@stll/html";
+import { isCDATA, isTag, isText } from "@stll/html/nodes";
+import type { AnyNode } from "@stll/html/nodes";
+import { normalizeUnicode } from "@stll/text-normalize";
 
 export const markerPlan = fc.record({
   nonce: fc.integer({ min: 0, max: 2_000_000_000 }),
@@ -19,7 +21,7 @@ export const markerPlan = fc.record({
 type MarkerPlan = ReturnType<typeof markerPlan.generate>["value"];
 type MarkerSlot = { read: () => string; write: (value: string) => void };
 const normalize = (text: string): string =>
-  text.normalize("NFC").replace(/\s+/gu, " ");
+  normalizeUnicode(text, "NFC").replace(/\s+/gu, " ");
 
 const injectMarkers = (
   slots: readonly MarkerSlot[],
@@ -91,7 +93,7 @@ export const injectMarkupMarkers = ({
   plan,
   xml = false,
 }: InjectMarkupOptions) => {
-  const $ = cheerio.load(source, xml ? { xml: true } : {});
+  const $ = load(source, xml ? { xml: true } : {});
   const roots = $(selector).toArray();
   const visited = new Set<AnyNode>();
   const slots: MarkerSlot[] = [];

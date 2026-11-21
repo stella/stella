@@ -17,14 +17,20 @@ export const POLARITY_GUIDANCE = {
   cited decision, and says so. Phrases like "v souladu s", "odkazuje na",
   "jak konstatoval", "following", "in line with", "as held in".`,
   supportive: `The court relies on the cited decision without stating
-  agreement outright: a comparison or see-also pointer offered in support
-  of what it is saying. Phrases like "srov.", "viz", "obdobně",
-  "přiměřeně", "porov.", "pozri", "cf.", "see also".`,
+  agreement outright and expresses that reliance in its own words. Phrases
+  like "má oporu v", "odpovídá závěr", "judikoval", "relies on".
+  A bare comparison or see-also marker is citation form, not support.`,
   neutral: `The court names the cited decision without endorsing or
   rejecting it, most often as part of the procedural record. Phrases like
   "proti rozsudku", "vedené u", "veden pod". This is also the answer when
   the excerpt does not settle the question.`,
-  negative: `The court distinguishes, overrules, departs from, or
-  criticizes the cited decision. Phrases like "na rozdíl od",
-  "překonán", "zrušen", "odlišuje se", "overruled", "distinguished".`,
+  // A court that declines to apply a precedent takes a stance against relying
+  // on it, which is what the seed rules' "na rozdíl od", "nelze aplikovat" and
+  // "odlišuje se" cues read. Whether that refusal is a distinguishing or a
+  // limiting is the reviewed doctrine axis, set apart from this reading.
+  negative: `The court overrules, departs from, declines to apply, or
+  criticizes the cited decision, or says it dealt with a different question
+  or does not carry over to the case at hand. Phrases like "na rozdíl od",
+  "nelze aplikovat", "odlišuje se", "překonán", "zrušen", "řešil jinou
+  otázku", "overruled", "distinguished".`,
 } as const satisfies Record<ClassifiablePolarity, string>;

@@ -1,22 +1,28 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
+import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
+import { storedAIConfigUnreadableError } from "@/api/lib/ai-config-response";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
-import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
+import {
+  ACCOUNT_ACCESS,
+  configuredModelAdmission,
+  createSafeRootHandler,
+} from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import {
   suggestTemplateFields,
   toSuggestFieldsError,
 } from "@/api/lib/templates/suggest-template-fields";
 
-const suggestFieldsBodySchema = t.Object({
-  // The text the editor chose to send: the whole document or just the current
-  // selection. Bounded so a pathological document can't blow up the prompt.
-  text: t.String({ maxLength: 200_000 }),
-  instructions: t.Optional(t.String({ maxLength: 2000 })),
+const suggestFieldsBodySchema = v.object({
+  text: v.pipe(v.string(), v.maxLength(200_000)),
+  instructions: v.optional(v.pipe(v.string(), v.maxLength(2000))),
 });
 
 const config = {
+  contract: "patch",
+  actionAdmission: { type: "handler", actionKind: "templates.suggest-fields" },
   description:
     "Ask the model which literal values in a slice of template text (a whole " +
     "document or just a selection) should become fillable fields, with " +
@@ -35,7 +41,7 @@ const config = {
     consumesServices: true,
   },
   body: suggestFieldsBodySchema,
-  requiresUsage: { actionType: "chat", modelRole: "fast" },
+  requiresUsage: { actionType: "chat", modelTask: "short-text" },
 } satisfies HandlerConfig;
 
 /**
@@ -49,6 +55,8 @@ const config = {
 const suggestFields = createSafeRootHandler(
   config,
   async function* ({
+    orgAIConfigStatus,
+    modelAdmission,
     session,
     body,
     safeDb,
@@ -56,6 +64,10 @@ const suggestFields = createSafeRootHandler(
     managedAIResidency,
     user,
   }) {
+    if (orgAIConfigStatus === ORG_AI_CONFIG_STATUS.unreadable) {
+      return Result.err(storedAIConfigUnreadableError());
+    }
+
     const organizationId = session.activeOrganizationId;
     const { text, instructions } = body;
     const trimmed = text.trim();
@@ -74,8 +86,9 @@ const suggestFields = createSafeRootHandler(
         workspaceId: null,
       },
       feature: "templates.suggestFields",
-      modelRole: "fast",
+      modelTask: "short-text",
       orgAIConfig,
+      modelTier: configuredModelAdmission({ modelAdmission }).modelTier,
       properties: { organization_id: organizationId },
       traceId: Bun.randomUUIDv7(),
     });
@@ -84,6 +97,7 @@ const suggestFields = createSafeRootHandler(
       Result.tryPromise({
         try: async () =>
           await suggestTemplateFields({
+            admission: configuredModelAdmission({ modelAdmission }),
             documentText: trimmed,
             instructions,
             orgAIConfig,

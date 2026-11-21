@@ -41,9 +41,17 @@
 
 import { eslintCompatPlugin } from "@oxlint/plugins";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
+import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { repoRelativePath } from "@stll/portable-path";
+
 import { PUBLIC_LAW_RELATION_BY_SCHEMA_IMPORT } from "../apps/api/src/lib/public-law-relations.ts";
+import {
+  parseSource,
+  type StaticExport,
+  type StaticImport,
+} from "../packages/scripts/src/syntax-tree.ts";
 import {
   type AstNode,
   canonicalModuleId,
@@ -62,6 +70,35 @@ import {
 } from "./utils.ts";
 
 const PUBLIC_READ_DB_MODULE = "apps/api/src/lib/case-law-public-read-db";
+const PUBLIC_LAW_SHARED_QUERY_MODULE =
+  "apps/api/src/lib/public-law-shared-query";
+export const UNREDACTED_VIEW_ALLOWED_MODULES: readonly string[] = [
+  "apps/api/src/lib/case-law/public-subject.ts",
+];
+const canUseUnredactedView = (filename: string): boolean =>
+  UNREDACTED_VIEW_ALLOWED_MODULES.some((modulePath) =>
+    filename.endsWith(modulePath),
+  );
+
+const WITHDRAWAL_VIEW_OWNER = "apps/api/src/lib/case-law/withdrawn-copies.ts";
+const canUseWithdrawalView = (filename: string): boolean =>
+  filename.endsWith(WITHDRAWAL_VIEW_OWNER);
+
+const CASE_LAW_READ_MODULE_OWNERS: readonly string[] = [
+  PUBLIC_READ_DB_MODULE,
+  PUBLIC_LAW_SHARED_QUERY_MODULE,
+];
+
+export const isCaseLawPublicReadModule = (
+  filename: string,
+  importedModules: ReadonlySet<string>,
+): boolean =>
+  CASE_LAW_READ_MODULE_OWNERS.some((owner) => importedModules.has(owner)) ||
+  [
+    `${PUBLIC_READ_DB_MODULE}.ts`,
+    `${PUBLIC_LAW_SHARED_QUERY_MODULE}.ts`,
+    ...UNREDACTED_VIEW_ALLOWED_MODULES,
+  ].some((modulePath) => filename.endsWith(modulePath));
 
 // The modules that own a public-law read: the connection, the two branded
 // corpus handles, and the registry of queries the reader-role suite runs.
@@ -73,6 +110,282 @@ const PUBLIC_LAW_BOUNDARY_OWNERS: readonly string[] = [
 ];
 
 const SCHEMA_MODULE = "apps/api/src/db/schema";
+// Module ids arrive repo-relative or absolute; compare them as portable
+// repo-relative identifiers so native separators never decide the match.
+export const isSchemaModule = (moduleId: string | null): boolean => {
+  if (moduleId === null) {
+    return false;
+  }
+  const normalized = path.isAbsolute(moduleId)
+    ? repoRelativePath(REPOSITORY_ROOT, moduleId)
+    : moduleId;
+  return (
+    normalized === SCHEMA_MODULE || normalized.startsWith(`${SCHEMA_MODULE}/`)
+  );
+};
+
+const REPOSITORY_ROOT = fileURLToPath(new URL("../", import.meta.url));
+const RESTRICTED_SCHEMA_IMPORTS = {
+  caseLawDecisions: {
+    allowed: (_filename: string) => false,
+    messageId: "baseCaseLawRead",
+  },
+  caseLawWithdrawalStatus: {
+    allowed: canUseWithdrawalView,
+    messageId: "withdrawalView",
+  },
+  unredactedCaseLawDecisions: {
+    allowed: canUseUnredactedView,
+    messageId: "unredactedView",
+  },
+} as const;
+type RestrictedSchemaImport = keyof typeof RESTRICTED_SCHEMA_IMPORTS;
+const isRestrictedSchemaImport = (
+  name: string,
+): name is RestrictedSchemaImport =>
+  Object.hasOwn(RESTRICTED_SCHEMA_IMPORTS, name);
+const restrictedSchemaCache = new Map<
+  string,
+  ReadonlySet<RestrictedSchemaImport>
+>();
+
+const moduleSourcePath = (moduleId: string): string | null => {
+  for (const extension of [".ts", ".tsx"] as const) {
+    const candidate = path.isAbsolute(moduleId)
+      ? `${moduleId}${extension}`
+      : path.join(REPOSITORY_ROOT, `${moduleId}${extension}`);
+    if (existsSync(candidate)) {
+      return candidate;
+    }
+  }
+  return null;
+};
+
+type LocalModuleSource = { readonly filename: string; readonly source: string };
+type LocalModuleSourceReader = (moduleId: string) => LocalModuleSource | null;
+
+const readLocalModuleSource: LocalModuleSourceReader = (moduleId) => {
+  const filename = moduleSourcePath(moduleId);
+  return filename === null
+    ? null
+    : { filename, source: readFileSync(filename, "utf-8") };
+};
+
+const schemaReexportCache = new Map<string, boolean>();
+
+const moduleReexportsSchema = (
+  moduleId: string,
+  {
+    readSource = readLocalModuleSource,
+    seen = new Set<string>(),
+  }: {
+    readonly readSource?: LocalModuleSourceReader;
+    readonly seen?: Set<string>;
+  } = {},
+): boolean => {
+  if (isSchemaModule(moduleId)) {
+    return true;
+  }
+  if (seen.has(moduleId)) {
+    return false;
+  }
+  seen.add(moduleId);
+  const source = readSource(moduleId);
+  if (source === null) {
+    return false;
+  }
+  const { module } = parseSource(source.filename, source.source);
+  return module.staticExports.some((statement) => {
+    // One declaration re-exports from one module; type-only entries carry no
+    // runtime value.
+    const request = statement.entries.find(
+      (entry) => entry.moduleRequest !== null && !entry.isType,
+    )?.moduleRequest;
+    return request
+      ? moduleReexportsSchema(canonicalModuleId(request.value, moduleId), {
+          readSource,
+          seen,
+        })
+      : false;
+  });
+};
+
+const isSchemaOrReexportModule = (moduleId: string | null): boolean => {
+  if (moduleId === null) {
+    return false;
+  }
+  const cached = schemaReexportCache.get(moduleId);
+  if (cached !== undefined) {
+    return cached;
+  }
+  const result = moduleReexportsSchema(moduleId);
+  schemaReexportCache.set(moduleId, result);
+  return result;
+};
+
+type SchemaReadCollectionOptions = {
+  readonly identities: Set<RestrictedSchemaImport>;
+  readonly readSource: LocalModuleSourceReader;
+  readonly seen: Set<string>;
+  readonly exportName?: string;
+};
+
+const includeSchemaDependency = (
+  dependency: string,
+  { identities, readSource, seen }: SchemaReadCollectionOptions,
+  importedName?: string,
+): void => {
+  for (const identity of moduleRestrictedSchemaReadsFromSources(dependency, {
+    readSource,
+    seen,
+    ...(importedName === undefined ? {} : { exportName: importedName }),
+  })) {
+    identities.add(identity);
+  }
+};
+
+type ModuleStatement =
+  | { readonly kind: "import"; readonly statement: StaticImport }
+  | { readonly kind: "export"; readonly statement: StaticExport };
+
+const addImportedSchemaReads = (
+  statement: StaticImport,
+  moduleId: string,
+  options: SchemaReadCollectionOptions,
+): void => {
+  const entries = statement.entries.filter((entry) => !entry.isType);
+  if (entries.length === 0) {
+    return;
+  }
+  const dependency = canonicalModuleId(statement.moduleRequest.value, moduleId);
+  if (!moduleReexportsSchema(dependency, { readSource: options.readSource })) {
+    return;
+  }
+  for (const { importName } of entries) {
+    // oxc-parser declares the kind as an ambient const enum of strings.
+    const kind: string = importName.kind;
+    if (kind === "Default") {
+      includeSchemaDependency(
+        dependency,
+        options,
+        isSchemaModule(dependency) ? undefined : "default",
+      );
+    } else if (kind === "NamespaceObject") {
+      includeSchemaDependency(dependency, options);
+    } else if (importName.name !== null) {
+      includeSchemaDependency(dependency, options, importName.name);
+    }
+  }
+};
+
+const addReexportedSchemaReads = (
+  statement: StaticExport,
+  moduleId: string,
+  options: SchemaReadCollectionOptions,
+): void => {
+  for (const entry of statement.entries) {
+    if (entry.moduleRequest === null || entry.isType) {
+      continue;
+    }
+    const dependency = canonicalModuleId(entry.moduleRequest.value, moduleId);
+    // oxc-parser declares the kind as an ambient const enum of strings.
+    const kind: string = entry.importName.kind;
+    if (kind === "AllButDefault") {
+      includeSchemaDependency(dependency, options, options.exportName);
+    } else if (
+      options.exportName !== undefined &&
+      entry.exportName.name !== options.exportName
+    ) {
+      continue;
+    } else if (kind === "All") {
+      includeSchemaDependency(dependency, options);
+    } else if (entry.importName.name !== null) {
+      includeSchemaDependency(dependency, options, entry.importName.name);
+    }
+  }
+};
+
+export const moduleRestrictedSchemaReadsFromSources = (
+  moduleId: string,
+  {
+    readSource,
+    seen = new Set<string>(),
+    exportName,
+  }: {
+    readonly readSource: LocalModuleSourceReader;
+    readonly seen?: Set<string>;
+    readonly exportName?: string;
+  },
+): ReadonlySet<RestrictedSchemaImport> => {
+  const identities = new Set<RestrictedSchemaImport>();
+  if (isSchemaModule(moduleId)) {
+    if (exportName === undefined) {
+      for (const name of Object.keys(RESTRICTED_SCHEMA_IMPORTS)) {
+        if (isRestrictedSchemaImport(name)) {
+          identities.add(name);
+        }
+      }
+    } else if (isRestrictedSchemaImport(exportName)) {
+      identities.add(exportName);
+    }
+    return identities;
+  }
+  const key = `${moduleId}:${exportName ?? "*"}`;
+  if (seen.has(key)) {
+    return identities;
+  }
+  seen.add(key);
+  const sourceFile = readSource(moduleId);
+  if (sourceFile === null) {
+    return identities;
+  }
+  const { module } = parseSource(sourceFile.filename, sourceFile.source);
+  // Imports and re-exports in source order.
+  const statements = [
+    ...module.staticImports.map((statement): ModuleStatement => ({
+      kind: "import",
+      statement,
+    })),
+    ...module.staticExports.map((statement): ModuleStatement => ({
+      kind: "export",
+      statement,
+    })),
+  ].toSorted((left, right) => left.statement.start - right.statement.start);
+  for (const entry of statements) {
+    if (entry.kind === "import") {
+      addImportedSchemaReads(entry.statement, moduleId, {
+        identities,
+        readSource,
+        seen,
+      });
+    } else {
+      addReexportedSchemaReads(entry.statement, moduleId, {
+        identities,
+        readSource,
+        seen,
+        ...(exportName === undefined ? {} : { exportName }),
+      });
+    }
+  }
+  return identities;
+};
+
+export const moduleRestrictedSchemaReads = (
+  moduleId: string,
+  { exportName }: { readonly exportName?: string } = {},
+): ReadonlySet<RestrictedSchemaImport> => {
+  const key = `${moduleId}:${exportName ?? "*"}`;
+  const cached = restrictedSchemaCache.get(key);
+  if (cached !== undefined) {
+    return cached;
+  }
+  const identities = moduleRestrictedSchemaReadsFromSources(moduleId, {
+    readSource: readLocalModuleSource,
+    ...(exportName === undefined ? {} : { exportName }),
+  });
+  restrictedSchemaCache.set(key, identities);
+  return identities;
+};
 
 /**
  * Where a producer takes SQL text: an argument position, or named properties
@@ -105,10 +418,17 @@ export const REVIEWED_SQL_PRODUCERS: readonly {
       "A CASE over the court registry's patterns and the court directory's ids; reads no relation.",
   },
   {
-    modules: ["apps/api/src/lib/case-law/published-decisions"],
+    modules: ["apps/api/src/lib/case-law/published-decisions-sql"],
     name: "publishedCaseLawDecisionSqlFor",
     sqlArguments: [0],
-    reason: "A predicate over the aliased decision's metadata column.",
+    reason: "The publication predicate over a code-owned decision alias.",
+  },
+  {
+    modules: ["apps/api/src/lib/legal-search/partial-observation-sql"],
+    name: "storedObservationHasDetailSqlFor",
+    sqlArguments: [0],
+    reason:
+      "The canonical published-detail predicate over a literal metadata column.",
   },
   {
     modules: [
@@ -177,7 +497,7 @@ const readSchemaTableNames = (): ReadonlySet<string> => {
   for (const file of files.filter((name) => name.endsWith(".ts"))) {
     const source = readFileSync(`${directory}${file}`, "utf-8");
     for (const match of source.matchAll(SCHEMA_TABLE_NAME_RE)) {
-      const name = match.groups?.name;
+      const { name } = match.groups ?? {};
       if (name !== undefined) {
         names.add(name);
       }
@@ -189,6 +509,14 @@ const readSchemaTableNames = (): ReadonlySet<string> => {
 const PUBLIC_LAW_RELATION_SET_SOURCE: readonly string[] = Object.values(
   PUBLIC_LAW_RELATION_BY_SCHEMA_IMPORT,
 );
+
+const isDecisionSurfaceOptions = (
+  options: unknown,
+): options is { scope: "decision-surface" } =>
+  typeof options === "object" &&
+  options !== null &&
+  "scope" in options &&
+  options.scope === "decision-surface";
 
 const SCHEMA_TABLE_NAMES = readSchemaTableNames();
 
@@ -206,7 +534,7 @@ const PUBLIC_LAW_RELATION_SET: ReadonlySet<string> = new Set(
 );
 
 const PUBLIC_CASE_LAW_QUERY_RELATIONS: ReadonlySet<string> = new Set([
-  "caseLawDecisions",
+  "publishedCaseLawDecisions",
 ]);
 
 // Schema exports that are not tables: enum-like constants such as
@@ -247,18 +575,23 @@ const declaredModule = (
     ? canonicalModuleId(statement.source.value, importerRepoPath)
     : null;
 
-// Whether the program imports one of `owners`.
-const importsPublicReadDb = (
+// Canonical module ids imported or re-exported by a program.
+const programImports = (
   program: unknown,
   importerRepoPath: string,
-  owners: readonly string[],
-) =>
-  isAstNode(program) &&
-  Array.isArray(program.body) &&
-  program.body.some((statement) => {
+): ReadonlySet<string> => {
+  if (!isAstNode(program) || !Array.isArray(program.body)) {
+    return new Set();
+  }
+  const modules = new Set<string>();
+  for (const statement of program.body) {
     const moduleId = declaredModule(statement, importerRepoPath);
-    return moduleId !== null && owners.includes(moduleId);
-  });
+    if (moduleId !== null) {
+      modules.add(moduleId);
+    }
+  }
+  return modules;
+};
 
 const getTxQueryObject = (node: unknown): AstNode | null => {
   const object = isAstNode(node) ? node.object : null;
@@ -1128,13 +1461,22 @@ export default eslintCompatPlugin({
     "public-case-law-db-boundary": {
       meta: {
         type: "problem",
+        schema: [
+          {
+            type: "object",
+            properties: {
+              scope: { enum: ["public-law", "decision-surface"] },
+            },
+            additionalProperties: false,
+          },
+        ],
         messages: {
           privateCaseLawImport:
-            "Public case-law data files may only import the explicit public-law table allowlist from '@/api/db/schema'.",
+            "Public case-law data files may only import the explicit public-law table allowlist from '@/api/db/schema'. Put the corpus read in apps/api/src/lib/case-law/ (or the legislation owner) and call it from the tenant handler.",
           privateTxQuery:
-            "Public case-law data files may only use the explicit public tx.query relation allowlist.",
+            "Public case-law data files may only use the explicit public tx.query relation allowlist. Put the corpus read in apps/api/src/lib/case-law/ (or the legislation owner) and call it from the tenant handler.",
           privateSqlText:
-            "Public case-law SQL must not mention private workspace, user, organization, matter, file, chat, task, or contact tables.",
+            "Public case-law SQL must not mention private workspace, user, organization, matter, file, chat, task, or contact tables. Put the corpus read in apps/api/src/lib/case-law/ (or the legislation owner) and call it from the tenant handler.",
           unlistedRelation:
             "Public-law SQL may only read relations in the public-law relation map (`public-law-relations.ts`), a CTE the same statement defines, or a system catalog; '{{relation}}' is none of them.",
           uninspectableRelation:
@@ -1145,14 +1487,23 @@ export default eslintCompatPlugin({
             "A CTE in public-law SQL may not take the name of a schema table ('{{relation}}'); rename it.",
           opaqueSql:
             "Raw SQL in a public-law read must be text the rule can read: a literal, a constant this file defines, a literal-union parameter, a constant in REVIEWED_SQL_CONSTANTS, or a producer in REVIEWED_SQL_PRODUCERS.",
+          baseCaseLawRead:
+            "Public case-law reads must use the published decisions view, not the base decision table.",
+          withdrawalView:
+            "Withdrawal status reads belong to the withdrawn-copy projection owner.",
+          unredactedView:
+            "The unredacted decisions view is reserved for the public subject owner.",
+          namedSchemaImport: "Import schema tables by name.",
         },
       },
       createOnce(context) {
+        let decisionSurfaceOnly = false;
         // The case-law data boundary: schema imports, `tx.query` and private
         // SQL text are checked here.
         let inBoundary = false;
         // Every public-law read: the SQL it runs is checked here.
         let readsPublicLaw = false;
+        let inCaseLawReadBoundary = false;
         let importerRepoPath = "";
         let candidates: AstNode[] = [];
         let executedStrings: AstNode[] = [];
@@ -1167,7 +1518,10 @@ export default eslintCompatPlugin({
             | "uninspectableRelation"
             | "opaqueSql"
             | "producerArgument"
-            | "shadowingCte",
+            | "shadowingCte"
+            | "baseCaseLawRead"
+            | "unredactedView"
+            | "withdrawalView",
           relation = "",
         ) => {
           const key = `${String(node.range[0])}:${messageId}:${relation}`;
@@ -1188,6 +1542,32 @@ export default eslintCompatPlugin({
         ) => {
           if (reference.kind === "name") {
             if (
+              inCaseLawReadBoundary &&
+              reference.relation === "case_law_decisions"
+            ) {
+              report(reportNode(reference.token.owner), "baseCaseLawRead");
+              return;
+            }
+            if (
+              inCaseLawReadBoundary &&
+              reference.relation === "case_law_unredacted_decisions" &&
+              !canUseUnredactedView(importerRepoPath)
+            ) {
+              report(reportNode(reference.token.owner), "unredactedView");
+              return;
+            }
+            if (
+              inCaseLawReadBoundary &&
+              reference.relation === "case_law_withdrawal_status" &&
+              !canUseWithdrawalView(importerRepoPath)
+            ) {
+              report(reportNode(reference.token.owner), "withdrawalView");
+              return;
+            }
+            if (decisionSurfaceOnly) {
+              return;
+            }
+            if (
               !isGrantedRelation(reference.schema, reference.relation, ctes)
             ) {
               report(
@@ -1198,6 +1578,9 @@ export default eslintCompatPlugin({
                   : `${reference.schema}.${reference.relation}`,
               );
             }
+            return;
+          }
+          if (decisionSurfaceOnly) {
             return;
           }
           const part = reference.part;
@@ -1212,47 +1595,112 @@ export default eslintCompatPlugin({
 
         return {
           before() {
+            const configuredOptions = context.options.at(0);
+            decisionSurfaceOnly = isDecisionSurfaceOptions(configuredOptions);
             importerRepoPath = repoRelativeFilename(context);
             inBoundary = false;
             readsPublicLaw = false;
+            inCaseLawReadBoundary = false;
             candidates = [];
             executedStrings = [];
             reported = new Set();
           },
           Program(node) {
+            const importedModules = programImports(node, importerRepoPath);
             inBoundary =
-              isFileIn(context, [`${PUBLIC_READ_DB_MODULE}.ts`]) ||
-              importsPublicReadDb(node, importerRepoPath, [
-                PUBLIC_READ_DB_MODULE,
-              ]);
+              !decisionSurfaceOnly &&
+              (isFileIn(context, [`${PUBLIC_READ_DB_MODULE}.ts`]) ||
+                importedModules.has(PUBLIC_READ_DB_MODULE));
             readsPublicLaw =
               isFileIn(
                 context,
                 PUBLIC_LAW_BOUNDARY_OWNERS.map((owner) => `${owner}.ts`),
               ) ||
-              importsPublicReadDb(
-                node,
-                importerRepoPath,
-                PUBLIC_LAW_BOUNDARY_OWNERS,
+              PUBLIC_LAW_BOUNDARY_OWNERS.some((owner) =>
+                importedModules.has(owner),
               );
+            inCaseLawReadBoundary =
+              decisionSurfaceOnly ||
+              isCaseLawPublicReadModule(importerRepoPath, importedModules);
+            if (decisionSurfaceOnly) {
+              readsPublicLaw = true;
+            }
           },
           ImportDeclaration(node) {
-            if (
-              !inBoundary ||
-              declaredModule(node, importerRepoPath) !== SCHEMA_MODULE
-            ) {
+            if (!inCaseLawReadBoundary || node.importKind === "type") {
               return;
             }
-            if (node.importKind === "type") {
-              return;
+            const importedModule = declaredModule(node, importerRepoPath);
+            if (isSchemaOrReexportModule(importedModule)) {
+              const indirectBinding = node.specifiers.find(
+                (specifier) =>
+                  specifier.type === "ImportNamespaceSpecifier" ||
+                  specifier.type === "ImportDefaultSpecifier",
+              );
+              if (indirectBinding !== undefined) {
+                context.report({
+                  node: indirectBinding,
+                  messageId: "namedSchemaImport",
+                });
+                return;
+              }
+            }
+            const reportRestrictedIdentities = (
+              binding: typeof node | (typeof node.specifiers)[number],
+              exportName?: string,
+            ) => {
+              if (importedModule === null) {
+                return;
+              }
+              for (const identity of moduleRestrictedSchemaReads(
+                importedModule,
+                {
+                  ...(exportName === undefined ? {} : { exportName }),
+                },
+              )) {
+                if (
+                  identity === "unredactedCaseLawDecisions" &&
+                  canUseUnredactedView(`${importedModule}.ts`)
+                ) {
+                  continue;
+                }
+                if (
+                  identity === "caseLawWithdrawalStatus" &&
+                  canUseWithdrawalView(`${importedModule}.ts`)
+                ) {
+                  continue;
+                }
+                const policy = RESTRICTED_SCHEMA_IMPORTS[identity];
+                if (!policy.allowed(importerRepoPath)) {
+                  context.report({
+                    node: binding,
+                    messageId: policy.messageId,
+                  });
+                }
+              }
+            };
+            if (node.specifiers.length === 0) {
+              reportRestrictedIdentities(node);
             }
             for (const specifier of node.specifiers) {
+              if (isAstNode(specifier) && specifier.importKind === "type") {
+                continue;
+              }
               const imported = getImportedName(specifier);
+              reportRestrictedIdentities(specifier, imported ?? undefined);
               if (
-                (isAstNode(specifier) && specifier.importKind === "type") ||
-                (imported !== null &&
-                  (PUBLIC_LAW_SCHEMA_IMPORT_SET.has(imported) ||
-                    CONSTANT_EXPORT_RE.test(imported)))
+                !isSchemaModule(importedModule) ||
+                (imported !== null && isRestrictedSchemaImport(imported))
+              ) {
+                continue;
+              }
+              if (decisionSurfaceOnly) {
+                continue;
+              }
+              if (
+                imported !== null &&
+                (PUBLIC_LAW_SCHEMA_IMPORT_SET.has(imported) ||
+                  CONSTANT_EXPORT_RE.test(imported))
               ) {
                 continue;
               }
@@ -1333,8 +1781,10 @@ export default eslintCompatPlugin({
               }
             }
             for (const [root, composition] of compositions) {
-              for (const issue of composition.issues) {
-                report(issue.node, issue.messageId);
+              if (!decisionSurfaceOnly) {
+                for (const issue of composition.issues) {
+                  report(issue.node, issue.messageId);
+                }
               }
               if (inlined.has(root)) {
                 continue;
@@ -1351,7 +1801,9 @@ export default eslintCompatPlugin({
                 for (const [name, token] of ctes) {
                   if (SCHEMA_TABLE_NAMES.has(name)) {
                     visible.delete(name);
-                    report(reportNode(token.owner), "shadowingCte", name);
+                    if (!decisionSurfaceOnly) {
+                      report(reportNode(token.owner), "shadowingCte", name);
+                    }
                   }
                 }
                 for (const reference of references) {

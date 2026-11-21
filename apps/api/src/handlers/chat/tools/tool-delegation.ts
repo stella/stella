@@ -14,8 +14,7 @@ type DelegationPolicyToolName = {
   [
     TName in NativeChatToolName
   ]: (typeof BUILT_IN_CHAT_TOOL_POLICY_KINDS)[TName] extends
-    | "internal"
-    | "mutation"
+    "internal" | "mutation"
     ? TName
     : never;
 }[NativeChatToolName];
@@ -41,6 +40,31 @@ export type ChatToolDelegation =
 
 /** Every native internal or mutation registration makes an authority decision. */
 export const NATIVE_CHAT_TOOL_DELEGATIONS = {
+  request_secret: {
+    type: "waiver",
+    reason:
+      "The client submits private input through a dedicated authenticated endpoint.",
+  },
+  list_connectable_connectors: {
+    type: "waiver",
+    reason:
+      "Reads the same user-scoped connector catalog as the optional chat prompt hint.",
+  },
+  connect_connector: {
+    type: "waiver",
+    reason:
+      "The client runs the ordinary connect flow; the receipt is confirmed through a dedicated authenticated endpoint.",
+  },
+  show_visual: {
+    type: "waiver",
+    reason:
+      "Publishes a private view for the owning chat turn; no standalone MCP or CLI execution context exists.",
+  },
+  show_app: {
+    type: "waiver",
+    reason:
+      "Shows an app for a read the owning chat turn ran; an MCP host shows the app from the tool's own resource.",
+  },
   "ask-user": {
     type: "waiver",
     reason:
@@ -165,6 +189,7 @@ export const NATIVE_CHAT_TOOL_DELEGATIONS = {
     reason:
       "The memories create handler is internal to assistant chat, absent from the capability catalog; persistExplicitMemory owns persistence.",
   },
+  save_skill_package: { type: "capability", delegatesTo: "skills.create" },
   "search-chat-history": {
     type: "waiver",
     reason: "Searches authorized chat messages without modifying them.",
@@ -187,6 +212,11 @@ export const NATIVE_CHAT_TOOL_DELEGATIONS = {
     delegatesTo: "skills.resources.update",
   },
   "update-entity-fields": { type: "capability", delegatesTo: "fields.upsert" },
+  validate_skill_package: {
+    type: "waiver",
+    reason:
+      "Checks a package in memory, or a skill the caller may edit, without modifying it.",
+  },
   spawn_subagents: {
     type: "waiver",
     reason:

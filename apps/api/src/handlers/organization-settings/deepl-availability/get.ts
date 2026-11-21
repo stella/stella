@@ -4,6 +4,7 @@ import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 
 const config = {
+  contract: "patch",
   description:
     "Report whether the organization has a translation provider key " +
     "configured, as a single boolean. Nothing about the key itself, not even " +

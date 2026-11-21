@@ -1,6 +1,9 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
+import { sleep } from "@stll/concurrency/sleep";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
+
 GlobalRegistrator.register({ url: "http://localhost:3000/law" });
 Object.assign(import.meta.env, {
   VITE_API_URL: "http://localhost:3001",
@@ -34,11 +37,9 @@ afterEach(() => {
 
 afterAll(async () => {
   await act(async () => {
-    await new Promise((resolve) => {
-      setTimeout(resolve, 50);
-    });
+    await sleep(50);
   });
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 const paymentRetry = (endsAt: string) => ({
@@ -80,14 +81,11 @@ const renderBanner = (queryClient: InstanceType<typeof QueryClient>) => {
     React.createElement(
       QueryClientProvider,
       { client: queryClient },
-      React.createElement(IntlProvider, {
-        locale: "en",
-        messages,
-        timeZone: "UTC",
-        children: React.createElement(BannerForOrganization, {
+      <IntlProvider locale="en" messages={messages} timeZone="UTC">
+        {React.createElement(BannerForOrganization, {
           organizationId: "org-a",
-        }),
-      }),
+        })}
+      </IntlProvider>,
     ),
   );
   return {
@@ -97,14 +95,11 @@ const renderBanner = (queryClient: InstanceType<typeof QueryClient>) => {
         React.createElement(
           QueryClientProvider,
           { client: queryClient },
-          React.createElement(IntlProvider, {
-            locale: "en",
-            messages,
-            timeZone: "UTC",
-            children: React.createElement(BannerForOrganization, {
+          <IntlProvider locale="en" messages={messages} timeZone="UTC">
+            {React.createElement(BannerForOrganization, {
               organizationId,
-            }),
-          }),
+            })}
+          </IntlProvider>,
         ),
       ),
   };
@@ -193,9 +188,7 @@ test("a delayed access response stays in its organization cache and retry copy e
     await waitFor(() => {
       expect(view.getByRole("status").textContent).toContain("Payment issue");
     });
-    await waitFor(() => expect(view.queryByRole("status")).toBeNull(), {
-      timeout: 3000,
-    });
+    await waitFor(() => expect(view.queryByRole("status") === null).toBe(true));
   } finally {
     oldResponse.resolve(Response.json(none));
     newResponse.resolve(Response.json(none));
@@ -218,9 +211,7 @@ test("external members never request organization access", async () => {
   const view = renderBanner(queryClient);
   try {
     await act(async () => {
-      await new Promise((resolve) => {
-        setTimeout(resolve, 30);
-      });
+      await sleep(30);
     });
     expect(requests).toBe(0);
     expect(view.queryByRole("status")).toBeNull();

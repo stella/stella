@@ -60,6 +60,10 @@ export const RESOURCE_IDENTITY_DISPOSITION = {
   },
   caseLawCitation: { type: "non_resource", reason: "association" },
   caseLawCitationReview: { type: "non_resource", reason: "association" },
+  caseLawCitationDoctrineReview: {
+    type: "non_resource",
+    reason: "association",
+  },
   caseLawCitationResolutionCensusRun: {
     type: "non_resource",
     reason: "projection",
@@ -77,9 +81,14 @@ export const RESOURCE_IDENTITY_DISPOSITION = {
   // A roster row of a court, addressed only as the subject of a portrait.
   caseLawJudge: { type: "non_resource", reason: "subresource" },
   caseLawMatterLink: { type: "non_resource", reason: "association" },
+  legislationMatterLink: { type: "non_resource", reason: "association" },
   caseLawPolarityRule: { type: "non_resource", reason: "policy" },
   caseLawProvisionCitation: { type: "non_resource", reason: "association" },
   caseLawReconciliationItem: { type: "non_resource", reason: "workflow" },
+  caseLawRemovalReconciliationItem: {
+    type: "non_resource",
+    reason: "workflow",
+  },
   // Which run owns a pending answer cell; a lease, never addressed by a client.
   caseLawResearchAnswerClaim: { type: "non_resource", reason: "workflow" },
   // A question the organization asks of every decision it looks at;
@@ -95,15 +104,21 @@ export const RESOURCE_IDENTITY_DISPOSITION = {
     type: "resource",
     resourceType: RESOURCE_TYPE.CHAT_MESSAGE,
   },
+  chatMessageRevision: { type: "non_resource", reason: "subresource" },
   chatTurn: { type: "non_resource", reason: "workflow" },
   chatThreadCompaction: { type: "non_resource", reason: "projection" },
   chatThread: {
     type: "resource",
     resourceType: RESOURCE_TYPE.CHAT_THREAD,
   },
+  // A stored approval grant: the caller's own standing tool-approval policy.
+  chatToolGrant: { type: "non_resource", reason: "policy" },
+  // A stored browser site approval: the caller's own standing policy.
+  chatBrowserSiteGrant: { type: "non_resource", reason: "policy" },
   fileChatThread: { type: "non_resource", reason: "association" },
   templateChatThread: { type: "non_resource", reason: "association" },
   templateDeletionCleanupRequest: { type: "non_resource", reason: "job" },
+  agentSkillOriginalCleanupRequest: { type: "non_resource", reason: "job" },
   templateLookupFormat: { type: "non_resource", reason: "subresource" },
   clause: { type: "resource", resourceType: RESOURCE_TYPE.CLAUSE },
   clauseCategory: {
@@ -118,6 +133,9 @@ export const RESOURCE_IDENTITY_DISPOSITION = {
     type: "resource",
     resourceType: RESOURCE_TYPE.CLAUSE_VERSION,
   },
+  // A firm's compliance record of one check, and its link to a matter.
+  conflictCheck: { type: "non_resource", reason: "workflow" },
+  conflictCheckMatter: { type: "non_resource", reason: "association" },
   contact: { type: "resource", resourceType: RESOURCE_TYPE.CONTACT },
   // Correspondence is matter-scoped; it has no portable ResourceRef kind.
   correspondence: { type: "non_resource", reason: "subresource" },
@@ -134,6 +152,9 @@ export const RESOURCE_IDENTITY_DISPOSITION = {
   contactImportRequest: { type: "non_resource", reason: "workflow" },
   contactRelationship: { type: "non_resource", reason: "association" },
   corpusIndexProjectionIntent: { type: "non_resource", reason: "workflow" },
+  // The receipt of one serving flip of a public corpus family.
+  corpusIndexGenerationFlip: { type: "non_resource", reason: "event" },
+  hostedCheckoutClaim: { type: "non_resource", reason: "workflow" },
   usageAllocation: { type: "non_resource", reason: "policy" },
   usageLaneCounter: { type: "non_resource", reason: "event" },
   usageSeatAssignment: { type: "non_resource", reason: "policy" },
@@ -159,6 +180,10 @@ export const RESOURCE_IDENTITY_DISPOSITION = {
   documentTranslationRun: { type: "non_resource", reason: "job" },
   documentTranslationUnit: { type: "non_resource", reason: "subresource" },
   documentReviewFinding: { type: "non_resource", reason: "subresource" },
+  documentReviewFindingDecision: {
+    type: "non_resource",
+    reason: "subresource",
+  },
   // Detected parties are recomputed from the entity version and its prompt
   // version, like `entityVersionAiSummary`: nothing addresses one directly.
   documentReviewParty: { type: "non_resource", reason: "projection" },
@@ -194,6 +219,8 @@ export const RESOURCE_IDENTITY_DISPOSITION = {
   infoSoudTrackedCase: { type: "non_resource", reason: "workflow" },
   invoice: { type: "resource", resourceType: RESOURCE_TYPE.INVOICE },
   invoiceLine: { type: "non_resource", reason: "subresource" },
+  invoiceSend: { type: "non_resource", reason: "subresource" },
+  invoicePayment: { type: "non_resource", reason: "subresource" },
   justification: { type: "non_resource", reason: "subresource" },
   legislationDocument: {
     type: "resource",
@@ -213,9 +240,13 @@ export const RESOURCE_IDENTITY_DISPOSITION = {
     reason: "association",
   },
   legalListGenerationRun: { type: "non_resource", reason: "job" },
-  legalListVerificationRun: { type: "non_resource", reason: "job" },
+  legalListVerificationRun: {
+    type: "resource",
+    resourceType: RESOURCE_TYPE.LEGAL_LIST_VERIFICATION,
+  },
   legalListClaim: { type: "non_resource", reason: "subresource" },
   legalListClaimReviewEvent: { type: "non_resource", reason: "subresource" },
+  legalGraphEdge: { type: "non_resource", reason: "subresource" },
   legalListGenerationSource: {
     type: "non_resource",
     reason: "association",
@@ -223,8 +254,15 @@ export const RESOURCE_IDENTITY_DISPOSITION = {
   legalListItemComment: { type: "non_resource", reason: "subresource" },
   legalListItemReview: { type: "non_resource", reason: "subresource" },
   legalListItemSource: { type: "non_resource", reason: "subresource" },
+  legalListItemSourceDecision: {
+    type: "non_resource",
+    reason: "subresource",
+  },
   legalListSection: { type: "non_resource", reason: "subresource" },
   legalReaderAnnotation: { type: "non_resource", reason: "subresource" },
+  // Passage-bound conversations and their messages have no portable ResourceRef.
+  legalReaderAnswer: { type: "non_resource", reason: "subresource" },
+  legalReaderAnswerMessage: { type: "non_resource", reason: "subresource" },
   matter: { type: "alias", resourceType: RESOURCE_TYPE.WORKSPACE },
   matterCounter: { type: "non_resource", reason: "projection" },
   mcpConnector: {
@@ -239,6 +277,7 @@ export const RESOURCE_IDENTITY_DISPOSITION = {
     resourceType: RESOURCE_TYPE.ORGANIZATION,
   },
   organizationSettings: { type: "non_resource", reason: "singleton" },
+  outboundAction: { type: "non_resource", reason: "workflow" },
   fileComparisonUpload: { type: "non_resource", reason: "workflow" },
   pdfSigningSession: { type: "non_resource", reason: "session" },
   pendingUpload: { type: "non_resource", reason: "workflow" },
@@ -259,11 +298,14 @@ export const RESOURCE_IDENTITY_DISPOSITION = {
     type: "resource",
     resourceType: RESOURCE_TYPE.REPORT_EXPORT,
   },
+  requestIdempotencyReceipt: { type: "non_resource", reason: "workflow" },
   savedSearch: { type: "resource", resourceType: RESOURCE_TYPE.SAVED_SEARCH },
   savedTimeNarrative: {
     type: "resource",
     resourceType: RESOURCE_TYPE.SAVED_TIME_NARRATIVE,
   },
+  // One use of a search or an opened decision or statute, private to its user.
+  searchHistoryEntry: { type: "non_resource", reason: "event" },
   sellerProfile: {
     type: "resource",
     resourceType: RESOURCE_TYPE.SELLER_PROFILE,
@@ -274,6 +316,7 @@ export const RESOURCE_IDENTITY_DISPOSITION = {
     resourceType: RESOURCE_TYPE.NUMBER_SERIES,
   },
   schedulerJobRun: { type: "non_resource", reason: "job" },
+  dataExport: { type: "non_resource", reason: "job" },
   systemScriptRun: { type: "non_resource", reason: "job" },
   sanctionsScreeningEvent: { type: "non_resource", reason: "event" },
   sanctionsEdition: { type: "non_resource", reason: "projection" },
@@ -323,6 +366,7 @@ export const RESOURCE_IDENTITY_DISPOSITION = {
   folioCollabContribution: { type: "non_resource", reason: "association" },
   folioCollabPublication: { type: "non_resource", reason: "workflow" },
   signal: { type: "non_resource", reason: "workflow" },
+  legalHold: { type: "non_resource", reason: "policy" },
   signalEvent: { type: "non_resource", reason: "event" },
   scoutRun: { type: "non_resource", reason: "workflow" },
   // A filed report is maintainer-facing, not a tenant resource: it has no read

@@ -28,30 +28,37 @@
  * Usage:
  *   bun apps/api/scripts/record-eu-ecj-fixtures.ts
  *   bun apps/api/scripts/record-eu-ecj-fixtures.ts --parser-only
+ *   bun apps/api/scripts/record-eu-ecj-fixtures.ts --parser-only --celex 61990CJ0006
  *   bun apps/api/scripts/record-eu-ecj-fixtures.ts --notice-only
  *   bun apps/api/scripts/record-eu-ecj-fixtures.ts --seed-only
  */
 
 import { panic } from "better-result";
-import JSZip from "jszip";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
-import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
-import { fetchDecisionsByCelex } from "@/api/handlers/case-law/ingestion/adapters/eu-ecj";
+import { ZipArchive } from "@stll/docx-core/zip";
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
+
+import {
+  ecjEnvelopeDocument,
+  fetchDecisionsByCelex,
+} from "@/api/handlers/case-law/ingestion/adapters/eu-ecj";
 import { INGESTION_USER_AGENT } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import {
+  manifestationStem,
   PORTAL_CORPUS,
   PORTAL_DOCUMENT_CONTAINER,
   type PortalPair,
-  manifestationStem,
   portalStem,
 } from "@/api/handlers/case-law/ingestion/parsers/__fixtures__/eu-ecj/corpus";
+import { parseFormex } from "@/api/handlers/case-law/ingestion/parsers/eu-ecj-formex";
 import { encodeGzipJson } from "@/api/lib/gzip-json";
+import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 
 import {
   formatProvenance,
   provenancePathOf,
-  sha256Of,
 } from "../src/tests/fixture-provenance";
 import { seedId } from "./seed-utils";
 
@@ -96,6 +103,31 @@ const PARSER_CORPUS = [
     languages: ["EN"],
     why: "General Court judgment: a different signature block (per-judge cells rather than one [Signatures] line).",
   },
+  {
+    celex: "61990CJ0006",
+    languages: ["EN"],
+    why: "Oldest layout from the 1990s: paragraph numbers printed as text (`37 It follows`), sub-headings as plain paragraphs between them, a contents line of in-document links before the parties, and the sections (parties, grounds, costs, operative part) named only by the publisher's anchors.",
+  },
+  {
+    celex: "61978CJ0120",
+    languages: ["EN"],
+    why: "Oldest layout as typeset in the 1970s: the number is glued to the paragraph (`1BY ORDER OF`), and a quoted question inside a paragraph opens with `1 .`, which is not the Court's numbering.",
+  },
+  {
+    celex: "61955CJ0008",
+    languages: ["DA", "EN"],
+    why: "A 1956 judgment. DA is converter output whose operative part and summary each restart `pointN` at 1, so the publisher's anchors repeat. EN is the oldest layout with printed report page markers (`P . 255`) as paragraphs and no paragraph numbers at all.",
+  },
+  {
+    celex: "62004CJ0144",
+    languages: ["HU"],
+    why: "Oldest layout in a language where headings carry no marker (`Jogi háttér`), among quoted lists whose items end in punctuation.",
+  },
+  {
+    celex: "62019CO0791",
+    languages: ["EN"],
+    why: "Interim-measures order: its operative part follows the last reasoning heading with no heading of its own, and its reasoning quotes numbered lists (`1) disciplinary proceedings:`).",
+  },
 ] as const;
 
 /**
@@ -112,6 +144,9 @@ const SEED_CORPUS = [
   { celex: "62018CJ0311", languages: ["EN"] },
   { celex: "62023CO0786", languages: ["EN", "FR"] },
 ] as const;
+
+export const hashRecordedFixtureBytes = (bytes: Uint8Array) =>
+  hashSha256Hex(bytes);
 
 const PARSER_FIXTURES_DIR = new URL(
   "../src/handlers/case-law/ingestion/parsers/__fixtures__/eu-ecj/",
@@ -130,6 +165,9 @@ const log = (message: string): void => {
 };
 
 // ── Formex, for the oracle ─────────────────────────────────
+
+/** Formex roots that encode the decision itself. */
+const ORACLE_KINDS = new Set(["JUDGMENT", "ORDER", "CONCLUSION"]);
 
 /**
  * Resolve a decision's Formex manifestation and download it. Cellar
@@ -237,9 +275,9 @@ const firstManifestationUri = (payload: unknown): string | undefined => {
 const unzipSingleEntry = async (
   archive: Uint8Array,
 ): Promise<Uint8Array | undefined> => {
-  const zip = await JSZip.loadAsync(archive);
-  const entry = Object.values(zip.files).find((file) => !file.dir);
-  return await entry?.async("uint8array");
+  const zip = await ZipArchive.read(archive);
+  const entry = zip.entries().at(0);
+  return await entry?.bytes();
 };
 
 // ── Recording ──────────────────────────────────────────────
@@ -330,8 +368,13 @@ const portalPairFor = (stem: string): PortalPair | undefined =>
  * before either is written, and a portal fetch that returns no document
  * leaves the pair exactly as it was.
  */
-const recordParserFixtures = async (): Promise<void> => {
+const recordParserFixtures = async (
+  only: readonly string[] | undefined,
+): Promise<void> => {
   for (const { celex, languages } of PARSER_CORPUS) {
+    if (only !== undefined && !only.includes(celex)) {
+      continue;
+    }
     const decisions = await fetchDecisionsByCelex({
       celexNumbers: [celex],
       languages,
@@ -340,7 +383,13 @@ const recordParserFixtures = async (): Promise<void> => {
 
     for (const decision of decisions) {
       const stem = `${celex}.${decision.language}`;
-      if (decision.sourceRaw === undefined) {
+      // The result stores an envelope of every response fetched for the
+      // variant; the parser fixture is the manifestation alone.
+      const xhtml =
+        decision.sourceRaw === undefined
+          ? undefined
+          : ecjEnvelopeDocument(decision.sourceRaw);
+      if (xhtml === undefined) {
         log(`  ${stem}: no XHTML, skipped`);
         continue;
       }
@@ -357,14 +406,23 @@ const recordParserFixtures = async (): Promise<void> => {
       const staged: StagedFixture[] = [
         {
           name: `${stem}.html.gz`,
-          bytes: Bun.gzipSync(Buffer.from(decision.sourceRaw)),
+          bytes: Bun.gzipSync(Buffer.from(xhtml)),
           sourceUrl: decision.documentUrl,
         },
       ];
 
       const formex = await fetchFormex(celex, languageUriOf(decision));
+      const formexKind =
+        formex === undefined
+          ? undefined
+          : parseFormex(new TextDecoder().decode(formex.bytes)).kind;
       if (formex === undefined) {
         log(`  ${stem}: no Formex published`);
+      } else if (!ORACLE_KINDS.has(formexKind ?? "")) {
+        // The oldest works' Formex can be another document of the case
+        // (the report for the hearing, the summary), which states nothing
+        // about this one's structure and would mislead the oracle.
+        log(`  ${stem}: Formex is a ${formexKind ?? "?"}, not the decision`);
       } else {
         staged.push({
           name: `${stem}.fmx.xml.gz`,
@@ -406,7 +464,7 @@ const recordParserFixtures = async (): Promise<void> => {
             new URL(provenancePathOf(name), PARSER_FIXTURES_DIR),
             formatProvenance({
               capture: "recorded",
-              sha256: sha256Of(bytes),
+              sha256: hashRecordedFixtureBytes(bytes),
               sourceUrl,
               capturedAt,
             }),
@@ -467,7 +525,7 @@ const recordNotice = async ({
       new URL(provenancePathOf(name), ADAPTER_FIXTURES_DIR),
       formatProvenance({
         capture: "recorded",
-        sha256: sha256Of(bytes),
+        sha256: hashRecordedFixtureBytes(bytes),
         sourceUrl,
         capturedAt: new Date().toISOString(),
         note: `branch notice, Accept-Language: ${cellarLanguage}`,
@@ -558,17 +616,24 @@ if (import.meta.main) {
   const seedOnly = process.argv.includes("--seed-only");
   const noticeOnly = process.argv.includes("--notice-only");
   const only = parserOnly || seedOnly || noticeOnly;
+  // `--celex 61990CJ0006,61978CJ0120` records only those parser-corpus
+  // entries, so adding a decision does not re-record the rest.
+  const celexIndex = process.argv.indexOf("--celex");
+  const celexOnly =
+    celexIndex === -1
+      ? undefined
+      : (process.argv[celexIndex + 1] ?? "").split(",").filter(Boolean);
 
   if (parserOnly || !only) {
     log(
-      `Recording parser fixtures → ${path.basename(PARSER_FIXTURES_DIR.pathname)}/`,
+      `Recording parser fixtures → ${path.basename(fileURLToPath(PARSER_FIXTURES_DIR))}/`,
     );
-    await recordParserFixtures();
+    await recordParserFixtures(celexOnly);
   }
 
   if (noticeOnly || !only) {
     log(
-      `Recording notice fixtures → ${path.basename(ADAPTER_FIXTURES_DIR.pathname)}/`,
+      `Recording notice fixtures → ${path.basename(fileURLToPath(ADAPTER_FIXTURES_DIR))}/`,
     );
     await recordNoticeFixtures();
   }

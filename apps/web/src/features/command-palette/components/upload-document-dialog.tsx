@@ -1,6 +1,7 @@
 import { useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
+import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { BidiText } from "@stll/ui/bidi-text";
@@ -15,15 +16,22 @@ import {
 } from "@stll/ui/dialog";
 import { openFilePicker } from "@stll/ui/file-picker";
 import { UploadIcon } from "@stll/ui/icons";
+import { Label } from "@stll/ui/label";
 
 import { QuerySuspenseBoundary } from "@/components/query-suspense-boundary";
+import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { useEntitiesCountLimit } from "@/components/workspaces/hooks/use-limits";
-import { MatterCombobox } from "@/components/workspaces/matter-combobox";
+import {
+  MatterCombobox,
+  toMatterOption,
+} from "@/components/workspaces/matter-combobox";
 import type { MatterOption } from "@/components/workspaces/matter-combobox";
 import { WorkflowQueryFeedback } from "@/components/workspaces/workflow-query-feedback";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
+import { queryView } from "@/lib/query-view.logic";
+import { useQueryViewError } from "@/lib/use-query-view";
 import { useCreateFileEntities } from "@/lib/workspaces/mutations/use-create-file-entities";
 import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
 import { useIsWorkflowRunning } from "@/lib/workspaces/queries/workspace";
@@ -39,24 +47,22 @@ export const UploadDocumentDialog = ({
   workspaceId,
 }: UploadDocumentDialogProps) => {
   const t = useTranslations();
-  const { activeOrganizationId } = useAuthenticatedUser();
+  const { activeOrganizationId, id: userId } = useAuthenticatedUser();
   // The picked matter, or the one the caller opened the dialog for, resolved
   // from the same list the picker offers so both paths show the same name.
   const [picked, setPicked] = useState<MatterOption | null>(null);
-  const {
-    data: matters,
-    isPending,
-    refetch,
-  } = useQuery({
-    ...workspacesNavigationOptions(activeOrganizationId),
-    select: (data) =>
-      data.workspaces.map((matter) => ({
-        clientName: matter.client?.displayName ?? null,
-        id: matter.id,
-        name: matter.name,
-      })),
+  const mattersQuery = useQuery({
+    ...workspacesNavigationOptions({
+      organizationId: activeOrganizationId,
+      userId,
+    }),
+    select: (data) => data.workspaces.map(toMatterOption),
     enabled: workspaceId !== undefined,
   });
+  const mattersView = queryView(mattersQuery);
+  useQueryViewError(mattersView, "UploadDocumentDialog:query");
+  const { refetch } = mattersQuery;
+  const matters = mattersView.type === "items" ? mattersView.items : undefined;
   const selectedMatter =
     workspaceId === undefined
       ? picked
@@ -84,27 +90,24 @@ export const UploadDocumentDialog = ({
             )
           ) : (
             <div className="flex flex-col gap-2">
-              <label className="text-sm font-medium" htmlFor="upload-matter">
-                {t("common.selectAMatter")}
-              </label>
+              <Label htmlFor="upload-matter">{t("common.selectAMatter")}</Label>
               <MatterCombobox
                 activeOrganizationId={activeOrganizationId}
+                userId={userId}
                 id="upload-matter"
                 onChange={setPicked}
                 value={picked}
               />
             </div>
           )}
-          {workspaceId !== undefined && isPending && (
-            <p className="text-muted-foreground text-sm">
-              {t("common.loading")}
-            </p>
+          {workspaceId !== undefined && (
+            <QueryViewFeedback view={mattersView} />
           )}
           {workspaceId !== undefined &&
-            !isPending &&
+            mattersQuery.status === "success" &&
             selectedMatter === null && (
               // The caller named a matter the navigation list does not carry —
-              // a failed read, or a list that arrived without it. Reading it
+              // a list that arrived without it. Reading it
               // again is the whole recovery, so offer that rather than leaving
               // the reader an upload they cannot start.
               <div className="flex items-center justify-between gap-2 text-sm">
@@ -124,7 +127,7 @@ export const UploadDocumentDialog = ({
             )}
           {selectedMatter && (
             <QuerySuspenseBoundary
-              area="command-palette.upload-document"
+              area="command-palette-upload-document"
               errorFallback={({ reset }) => (
                 <div className="flex items-center justify-between gap-2 text-sm">
                   <span className="text-destructive">
@@ -165,6 +168,42 @@ type UploadDocumentForMatterProps = {
   workspaceId: string;
 };
 
+type UploadBlockedReasonOptions = {
+  isUploadPending: boolean;
+  workflowView: ReturnType<typeof useIsWorkflowRunning>;
+  t: (
+    key:
+      | "workspaces.files.uploading"
+      | "common.loading"
+      | "common.loadFailed"
+      | "workspaces.files.uploadBlockedByWorkflow",
+  ) => string;
+};
+
+const uploadBlockedReason = ({
+  isUploadPending,
+  workflowView,
+  t,
+}: UploadBlockedReasonOptions) => {
+  if (isUploadPending) {
+    return t("workspaces.files.uploading");
+  }
+  switch (workflowView.type) {
+    case "pending":
+    case "empty":
+      return t("common.loading");
+    case "error":
+      return t("common.loadFailed");
+    case "items":
+      return workflowView.refetchError === undefined
+        ? t("workspaces.files.uploadBlockedByWorkflow")
+        : t("common.loadFailed");
+    default:
+      workflowView satisfies never;
+      return panic("Unhandled upload workflow view");
+  }
+};
+
 const UploadDocumentForMatter = ({
   onClose,
   workspaceId,
@@ -181,6 +220,12 @@ const UploadDocumentForMatter = ({
     isEntitiesLimitReached ||
     workflowDisabled ||
     isUploadPending;
+
+  const uploadDisabledReason = uploadBlockedReason({
+    isUploadPending,
+    workflowView,
+    t,
+  });
 
   if (!canCreateEntity) {
     return (
@@ -201,6 +246,7 @@ const UploadDocumentForMatter = ({
       <Button
         className="min-h-11 border border-dashed"
         disabled={disabled}
+        disabledReason={uploadDisabledReason}
         onClick={() =>
           openFilePicker({
             multiple: true,

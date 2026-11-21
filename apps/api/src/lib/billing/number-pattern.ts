@@ -2,8 +2,8 @@ import { Result, TaggedError } from "better-result";
 
 import {
   MATTER_REFERENCE_TOKENS,
-  renderMatterReferencePattern,
   type MatterReferenceToken,
+  renderMatterReferencePattern,
 } from "@stll/api-contract";
 
 class PatternError extends TaggedError("PatternError")<{

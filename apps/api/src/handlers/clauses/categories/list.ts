@@ -4,6 +4,7 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { listCategoriesHandler } from "../categories";
 
 const config = {
+  contract: "patch",
   description:
     "List the organization's clause categories in sort order, each with its " +
     "id, parent, name, description, and sort order. The taxonomy is capped " +

@@ -1,7 +1,7 @@
 import { useState } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useFormatter, useTranslations } from "use-intl";
+import { useTranslations } from "use-intl";
 
 import { FLOW_RUN_INPUT_ENTITIES_MAX } from "@stll/api-contract";
 import { Button } from "@stll/ui/button";
@@ -18,20 +18,27 @@ import {
 } from "@stll/ui/select";
 import { Skeleton } from "@stll/ui/skeleton";
 import { stellaToast } from "@stll/ui/toast";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
+import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { RunSizeConfirmDialog } from "@/components/usage/run-size-confirm-dialog";
 import { runSizeConfirmationDetail } from "@/components/usage/run-size-confirmation";
 import type { RunSizeConfirmationDetail } from "@/components/usage/run-size-confirmation";
 import { usePermissions } from "@/hooks/use-permissions";
+import { useFormatter } from "@/i18n/formatting-context";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
 import { userErrorMessage } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { FLOW_PICKER_LIMIT, flowsOptions } from "@/lib/knowledge/queries";
+import { queryView } from "@/lib/query-view.logic";
 import { toSafeId } from "@/lib/safe-id";
 import { entitySummariesOptions } from "@/lib/workspaces/queries/entities";
 import { flowRunsKeys } from "@/lib/workspaces/queries/flow-runs";
+
+import { filterEntitiesByName } from "./run-launcher.logic";
+import { RunLauncherFrame, RunLauncherSkeleton } from "./run-launcher.pending";
 
 type RunLauncherProps = {
   workspaceId: string;
@@ -58,9 +65,14 @@ export const RunLauncher = ({
   const [entityFilter, setEntityFilter] = useState("");
   const [starting, setStarting] = useState(false);
 
-  const { data: flowsData } = useQuery(
+  const flowsDataQuery = useQuery(
     flowsOptions(organizationId, FLOW_PICKER_LIMIT),
   );
+  const flowsDataView = queryView(flowsDataQuery, {
+    isEmpty: (data) => "items" in data && data.items.length === 0,
+  });
+  const flowsData =
+    flowsDataView.type === "items" ? flowsDataView.items : undefined;
   const {
     data: entities,
     isError: entitiesFailed,
@@ -72,9 +84,10 @@ export const RunLauncher = ({
       ? flowsData.items.filter((flow) => flow.enabled)
       : [];
 
-  const filteredEntities = entities?.filter((entity) =>
-    (entity.name ?? "").toLowerCase().includes(entityFilter.toLowerCase()),
-  );
+  const filteredEntities =
+    entities === undefined
+      ? undefined
+      : filterEntitiesByName(entities, entityFilter);
 
   const exceedsInputEntitiesLimit =
     selectedEntityIds.length > FLOW_RUN_INPUT_ENTITIES_MAX;
@@ -127,9 +140,18 @@ export const RunLauncher = ({
     onStarted(response.data.runId);
   };
 
+  if (flowsDataView.type === "pending") {
+    return <RunLauncherSkeleton />;
+  }
+
+  if (flowsDataView.type === "error") {
+    return <QueryViewFeedback view={flowsDataView} />;
+  }
+
   if (enabledFlows.length === 0) {
     return (
       <div className="rounded-lg border p-4">
+        <QueryViewFeedback view={flowsDataView} />
         <p className="text-muted-foreground text-sm">
           {t("flows.runs.noEnabledFlows", {
             sectionName: t("navigation.knowledge"),
@@ -139,8 +161,24 @@ export const RunLauncher = ({
     );
   }
 
+  const resolveWorkflowLaunchDisabledReason = () => {
+    if (starting) {
+      return t("flows.runs.starting");
+    }
+    if (!canRun) {
+      return t("errors.api.forbidden");
+    }
+    if (!definitionId) {
+      return t("flows.runs.selectFlow");
+    }
+    return t("flows.runs.tooManyInputDocuments", {
+      max: format.number(FLOW_RUN_INPUT_ENTITIES_MAX),
+    });
+  };
+
   return (
-    <div className="grid gap-4 rounded-lg border p-4">
+    <RunLauncherFrame>
+      <QueryViewFeedback view={flowsDataView} />
       <div className="grid gap-1.5">
         <Label htmlFor="flow-run-definition">
           {t("flows.runs.selectFlow")}
@@ -175,7 +213,9 @@ export const RunLauncher = ({
           )}
           {filteredEntities === undefined && entitiesFailed && (
             <div className="flex items-center gap-2 p-2 text-xs">
-              <span className="text-muted-foreground">{t("common.error")}</span>
+              <span className="text-muted-foreground">
+                {t("common.loadFailed")}
+              </span>
               <Button
                 onClick={() =>
                   detached(refetchEntities(), "flows.retry-run-entities")
@@ -193,15 +233,15 @@ export const RunLauncher = ({
             </p>
           )}
           {filteredEntities?.map((entity) => (
-            <label className="flex items-center gap-2 text-sm" key={entity.id}>
+            <Label className="flex" key={entity.id}>
               <Checkbox
                 checked={selectedEntityIds.includes(entity.id)}
                 onCheckedChange={(checked) => toggleEntity(entity.id, checked)}
               />
-              <span className="truncate" dir="auto">
+              <TruncatedText className="text-sm font-normal" dir="auto">
                 {entity.name}
-              </span>
-            </label>
+              </TruncatedText>
+            </Label>
           ))}
         </div>
         {exceedsInputEntitiesLimit && (
@@ -214,7 +254,7 @@ export const RunLauncher = ({
       </div>
 
       <RunSizeConfirmDialog
-        confirmLabel={t("flows.runs.start")}
+        confirmLabel={t("common.start")}
         detail={sizeConfirmation}
         title={t("flows.runs.sizeConfirmTitle")}
         onConfirm={() => {
@@ -231,6 +271,7 @@ export const RunLauncher = ({
           disabled={
             !canRun || !definitionId || starting || exceedsInputEntitiesLimit
           }
+          disabledReason={resolveWorkflowLaunchDisabledReason()}
           loading={starting}
           onClick={() => {
             detached(handleStart(), "run-launcher.start");
@@ -238,9 +279,9 @@ export const RunLauncher = ({
           type="button"
         >
           <PlayIcon />
-          {t("flows.runs.start")}
+          {t("common.start")}
         </Button>
       </div>
-    </div>
+    </RunLauncherFrame>
   );
 };

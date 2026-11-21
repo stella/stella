@@ -17,6 +17,7 @@ import { workspaceParams } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
 
 const config = {
+  contract: "patch",
   description:
     "List built-in and organization report templates available for exporting a matter view.",
   permissions: { workspace: ["read"] },

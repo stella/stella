@@ -1,14 +1,15 @@
 import { Result } from "better-result";
-import { status, t } from "elysia";
+import * as v from "valibot";
 
 import type {
   DesktopEditSessionClientEvent,
   DesktopEditSessionRealtimeEvent,
 } from "@stll/api-contract";
 
-import { captureError } from "@/api/lib/analytics/capture";
+import { status } from "@/api/http/status";
+import { captureError, detached } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { isDesktopEditSessionCloseSignal } from "@/api/lib/desktop-edit-session-notifications";
 import {
   authorizeDesktopEditSession,
@@ -18,18 +19,24 @@ import {
   readDesktopEditSessionEventState,
   refreshDesktopEditSessionLiveness,
 } from "@/api/lib/desktop-edit-sessions";
-import { registerSessionDelivery, sseResponse } from "@/api/lib/sse";
+import { LIMITS } from "@/api/lib/limits";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
+import {
+  addStreamWithinLimit,
+  registerSessionDelivery,
+  sseResponse,
+} from "@/api/lib/sse";
 
 const SESSION_TOKEN_LENGTH = 64;
 const BEARER_PREFIX = "Bearer ";
 const SESSION_TOKEN_PATTERN = /^[a-f0-9]{64}$/u;
 
-export const desktopEditSessionEventsParamsSchema = t.Object({
-  sessionId: tSafeId("desktopEditSession"),
+export const desktopEditSessionEventsParamsSchema = v.object({
+  sessionId: resourceIdSchema("desktopEditSession"),
 });
 
-export const desktopEditSessionEventsHeadersSchema = t.Object({
-  authorization: t.Optional(t.String()),
+export const desktopEditSessionEventsHeadersSchema = v.object({
+  authorization: v.optional(v.string()),
 });
 
 type SessionEventConnection = {
@@ -100,7 +107,7 @@ const deliverSessionEventLocal = (
 registerSessionDelivery(deliverSessionEventLocal);
 
 type DesktopEditSessionEventsHandlerProps = {
-  headers: { authorization?: string };
+  headers: { authorization?: string | undefined };
   sessionId: SafeId<"desktopEditSession">;
 };
 
@@ -182,7 +189,7 @@ export const desktopEditSessionEventsHandler = async (
   const userId = authorized.value.userId;
 
   // Declare conn in outer scope so cancel() can reference the exact instance.
-  let conn: SessionEventConnection;
+  let conn: SessionEventConnection | null = null;
   let livenessRefreshTimer: ReturnType<typeof setInterval> | null = null;
 
   const cleanupLivenessRefresh = () => {
@@ -191,6 +198,26 @@ export const desktopEditSessionEventsHandler = async (
     }
     clearInterval(livenessRefreshTimer);
     livenessRefreshTimer = null;
+  };
+
+  const closeConnection = () => {
+    cleanupLivenessRefresh();
+    if (conn === null) {
+      return;
+    }
+    const connection = conn;
+    conn = null;
+    const sessionConns = connections.get(sessionId);
+    sessionConns?.delete(connection);
+    if (
+      sessionConns?.size === 0 &&
+      connections.get(sessionId) === sessionConns
+    ) {
+      connections.delete(sessionId);
+    }
+    Result.try(() => {
+      connection.controller.close();
+    }).unwrapOr(undefined);
   };
 
   const refreshLiveness = async (): Promise<boolean> =>
@@ -210,16 +237,37 @@ export const desktopEditSessionEventsHandler = async (
     });
   }
 
-  const refreshLivenessInBackground = () => {
-    refreshLiveness().catch((error: unknown) => {
-      captureError(error, { sessionId });
+  const refreshLivenessInBackground = async () => {
+    const current = await Result.tryPromise({
+      try: refreshLiveness,
+      catch: (error) => error,
     });
+    if (Result.isError(current)) {
+      captureError(
+        current.error,
+        handlerErrorContext("entities.refreshLivenessInBackground", {
+          sessionId,
+        }),
+      );
+      closeConnection();
+      return;
+    }
+    if (!current.value) {
+      closeConnection();
+    }
+  };
+
+  const scheduleLivenessRefresh = (): void => {
+    detached(
+      refreshLivenessInBackground,
+      "desktop-edit-session.liveness-refresh",
+    );
   };
 
   const stream = new ReadableStream<Uint8Array>({
     start(controller) {
       livenessRefreshTimer = setInterval(
-        refreshLivenessInBackground,
+        scheduleLivenessRefresh,
         dependencies.livenessRefreshIntervalMs,
       );
 
@@ -230,7 +278,18 @@ export const desktopEditSessionEventsHandler = async (
         sessionConns = new Set();
         connections.set(sessionId, sessionConns);
       }
-      sessionConns.add(conn);
+      addStreamWithinLimit({
+        close: (stale) => {
+          stale.cleanup();
+          Result.try(() => {
+            stale.controller.close();
+          }).unwrapOr(undefined);
+        },
+        connection: conn,
+        limit: LIMITS.desktopEditSessionStreams,
+        sameHolder: () => true,
+        set: sessionConns,
+      });
 
       // Send an SSE comment to flush response headers immediately.
       // Without this, Bun may buffer the response until the first
@@ -252,18 +311,22 @@ export const desktopEditSessionEventsHandler = async (
       }
     },
     cancel() {
-      cleanupLivenessRefresh();
-      const sessionConns = connections.get(sessionId);
-      if (sessionConns) {
-        sessionConns.delete(conn);
-        if (sessionConns.size === 0) {
-          connections.delete(sessionId);
-        }
-      }
+      closeConnection();
     },
   });
 
-  return sseResponse(stream);
+  // The stream holds while its edit session does: taken over, expired,
+  // closed or no longer permitted all end it.
+  return sseResponse(stream, {
+    kind: "credential",
+    revalidate: async () =>
+      (
+        await dependencies.authorizeDesktopEditSession({
+          sessionId,
+          sessionToken,
+        })
+      ).status === "authorized",
+  });
 };
 
 /**

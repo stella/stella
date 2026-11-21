@@ -1,12 +1,42 @@
+// parser-output-unchanged: registers typed error fingerprint dimensions without changing error payloads or parser results.
+// parser-output-unchanged: [pl-courts] ParseXmlError moved to its parser module; successful parser output is identical.
+// parser-output-unchanged: [pl-sn] ParseXmlError moved to its parser module; successful parser output is identical.
+// parser-output-unchanged: [pl-kio] ParseXmlError moved to its parser module; successful parser output is identical.
+// parser-output-unchanged: [pl-ncourt] ParseXmlError moved to its parser module; successful parser output is identical.
+// parser-output-unchanged: [at-courts] ParseXmlError moved to its parser module; successful parser output is identical.
+// parser-output-unchanged: [at-vfgh] ParseXmlError moved to its parser module; successful parser output is identical.
+// parser-output-unchanged: [at-vwgh] ParseXmlError moved to its parser module; successful parser output is identical.
+// parser-output-unchanged: [at-bvwg] ParseXmlError moved to its parser module; successful parser output is identical.
+// parser-output-unchanged: [at-lvwg] ParseXmlError moved to its parser module; successful parser output is identical.
+// parser-output-unchanged: [at-asylgh] ParseXmlError moved to its parser module; successful parser output is identical.
+// parser-output-unchanged: [at-ubas] ParseXmlError moved to its parser module; successful parser output is identical.
+// parser-output-unchanged: [at-uvs] ParseXmlError moved to its parser module; successful parser output is identical.
+// parser-output-unchanged: [at-verg] ParseXmlError moved to its parser module; successful parser output is identical.
+// parser-output-unchanged: [at-umse] ParseXmlError moved to its parser module; successful parser output is identical.
+// parser-output-unchanged: [at-bks] ParseXmlError moved to its parser module; successful parser output is identical.
+// parser-output-unchanged: [at-findok] ParseXmlError moved to its parser module; successful parser output is identical.
+// parser-output-unchanged: [eu-ecj] ParseXmlError moved to its parser module; successful parser output is identical.
+// parser-output-unchanged: [pl-kis] ParseXmlError moved to its parser module; successful parser output is identical.
+// parser-output-unchanged: [pl-uodo] ParseXmlError moved to its parser module; successful parser output is identical.
+// parser-output-unchanged: [pl-uokik] ParseXmlError moved to its parser module; successful parser output is identical.
+// parser-output-unchanged: [us-courtlistener] ParseXmlError moved to its parser module; successful parser output is identical.
+// parser-output-unchanged: FlowStepError moved here from the flow executor; parsers neither throw nor read it.
+// parser-output-unchanged: HTTP 426 extends handoff response typing only; adapter stop kinds and parsed records are unchanged.
 // parser-output-unchanged: optional clause provenance affects template refusals only; adapter stop kinds and parsed records are unchanged.
 // parser-output-unchanged: adapter stop kinds and TimeoutError reexport preserve successful parsed records.
+// parser-output-unchanged: AdapterFetchError is declared before its first use; the class and its stop kinds are identical.
+// parser-output-unchanged: declared failure grades and refusal stop kinds affect failed operations only, preserving parsed records.
 import { panic, TaggedError } from "better-result";
 
 import type { ActionAdmissionRefusal } from "@stll/api-contract/action-admission";
 import { TimeoutError } from "@stll/concurrency/with-timeout";
-import { declareFailureClass, FetchBoundaryError } from "@stll/errors";
+import {
+  declareFailureClass,
+  declareFingerprintFields,
+  type FailureReason,
+  FetchBoundaryError,
+} from "@stll/errors";
 import { isConnectionFailure } from "@stll/fetch";
-import type { PersistedAstDegradation } from "@stll/legal-ast/document-ast";
 import {
   INGESTION_STOP_KIND,
   type IngestionStopKind,
@@ -24,6 +54,7 @@ export type HandlerErrorStatusCode =
   | 409
   | 413
   | 422
+  | 426
   | 428
   | 429
   | 500
@@ -113,10 +144,16 @@ export type HandlerErrorMissingRequiredField = {
  */
 export type HandlerErrorValidationIssue = {
   path: string;
+  code?: string | undefined;
   message: string;
 };
 
-export type HandlerErrorProps<
+// parser-output-unchanged: retry advice only shapes HTTP and capability error responses.
+type HandlerErrorRetryAdvice =
+  | { retryable: true; retryAfterMs: number }
+  | { retryable?: boolean | undefined; retryAfterMs?: undefined };
+
+type HandlerErrorBaseProps<
   TStatus extends HandlerErrorStatusCode = HandlerErrorStatusCode,
 > = {
   code?: HandlerErrorCode | undefined;
@@ -128,7 +165,6 @@ export type HandlerErrorProps<
     | { slotKey: string; id?: string | undefined; name?: string | undefined }
     | undefined;
   contactUrl?: ActionAdmissionRefusal["contactUrl"];
-  retryable?: boolean | undefined;
   /**
    * OAuth-style machine-readable error identifier (e.g. `login_required`,
    * `interaction_required`, `issuer_not_enabled`). Distinct from `code`
@@ -151,20 +187,35 @@ export type HandlerErrorProps<
    *  path, so a caller can fix the exact entries it sent rather than parsing
    *  the summary message. */
   issues?: HandlerErrorValidationIssue[] | undefined;
+  workspaceId?: string | undefined;
+  retryable?: boolean | undefined;
+  retryAfterMs?: number | undefined;
 };
+
+export type HandlerErrorProps<
+  TStatus extends HandlerErrorStatusCode = HandlerErrorStatusCode,
+> = HandlerErrorBaseProps<TStatus> &
+  HandlerErrorRetryAdvice &
+  // Gateway/availability statuses must state their semantics; the status alone
+  // cannot distinguish an upstream outage from configuration or output defects.
+  (
+    | { status: Exclude<HandlerErrorStatusCode, 502 | 503> }
+    | { code: HandlerErrorCode }
+  );
 
 // TaggedError(...) cannot reference the class type parameter in the base
 // expression, so the base uses the wide props type and the subclass narrows
 // `status` back down for callers.
 export class HandlerError<
   TStatus extends HandlerErrorStatusCode = HandlerErrorStatusCode,
-> extends TaggedError("HandlerError")<HandlerErrorProps> {
+> extends TaggedError("HandlerError")<HandlerErrorBaseProps> {
   declare code?: HandlerErrorCode | undefined;
   declare status: TStatus;
   declare hint?: string | undefined;
   declare clause?: HandlerErrorProps["clause"];
   declare contactUrl?: string | undefined;
   declare retryable?: boolean | undefined;
+  declare retryAfterMs?: number | undefined;
   declare usage?: HandlerErrorUsageDetail | undefined;
   declare confirmation?: HandlerErrorConfirmationDetail | undefined;
   declare error?: string | undefined;
@@ -172,6 +223,7 @@ export class HandlerError<
   declare stepUp?: HandlerErrorStepUp | undefined;
   declare requiredFields?: HandlerErrorMissingRequiredField[] | undefined;
   declare issues?: HandlerErrorValidationIssue[] | undefined;
+  declare workspaceId?: string | undefined;
 
   constructor(props: HandlerErrorProps<TStatus>) {
     super(props);
@@ -181,6 +233,7 @@ export class HandlerError<
     this.clause = props.clause;
     this.contactUrl = props.contactUrl;
     this.retryable = props.retryable;
+    this.retryAfterMs = props.retryAfterMs;
     this.usage = props.usage;
     this.confirmation = props.confirmation;
     this.error = props.error;
@@ -188,8 +241,15 @@ export class HandlerError<
     this.stepUp = props.stepUp;
     this.requiredFields = props.requiredFields;
     this.issues = props.issues;
+    this.workspaceId = props.workspaceId;
   }
 }
+
+/** Expected step-execution failure (bad AI output, doc-compile error, etc). */
+export class FlowStepError extends TaggedError("FlowStepError")<{
+  message: string;
+  cause?: unknown;
+}> {}
 
 export class DatabaseError extends TaggedError("DatabaseError")<{
   code?: string | undefined;
@@ -218,22 +278,19 @@ export class Unreachable extends TaggedError("Unreachable")<{
 
 export const unreachable = (message: string): never => panic(message);
 
-export class ParseXmlError extends TaggedError("ParseXmlError")<{
-  message: string;
-  cause: unknown;
-}> {}
-
 export class ConfigurationError extends TaggedError("ConfigurationError")<{
   message: string;
   cause?: unknown;
 }> {}
 
 export class TelemetryError extends TaggedError("TelemetryError")<{
+  /** Stable outcome code; it becomes `error.code`, so it splits the issue. */
+  code?: string | undefined;
   message: string;
   cause?: unknown;
 }> {}
 
-export const USAGE_LIMIT_EXCEEDED_REASONS = [
+const USAGE_LIMIT_EXCEEDED_REASONS = [
   "no_entitlement",
   "usage_limit_exceeded",
   "entitlement_inactive",
@@ -249,7 +306,11 @@ export class UsageLimitExceededError extends TaggedError(
   required: number;
   available: number;
   reason: UsageLimitExceededReason;
-}> {}
+}> {
+  static {
+    declareFingerprintFields(this, ["reason"]);
+  }
+}
 
 export class HealthCheckError extends TaggedError("HealthCheckError")<{
   message: string;
@@ -294,6 +355,9 @@ export class CorpusPayloadUnavailableError extends TaggedError(
 export const UNPERSISTABLE_DECISION_FIELDS = {
   IDENTIFIER: "identifier",
   IDENTIFIER_COUNT: "identifier-count",
+  CASE_NUMBER_LENGTH: "case-number-length",
+  COURT_LENGTH: "court-length",
+  SEARCH_CANDIDATE_BYTES: "search-candidate-bytes",
   SOURCE_DOCUMENT_ID: "source-document-id",
   SOURCE_DOCUMENT_ID_LENGTH: "source-document-id-length",
   VALUE_LIST: "value-list",
@@ -302,6 +366,8 @@ export const UNPERSISTABLE_DECISION_FIELDS = {
   PUBLISHER_CITATIONS: "publisher-citations",
   PRIMARY_REFERENCE_TYPE: "primary-reference-type",
   SUPPLEMENT: "supplement",
+  FALLBACK_IDENTITY: "fallback-identity",
+  HELD_DECISION_ATTACHMENT: "held-decision-attachment",
 } as const;
 
 export type UnpersistableDecisionField =
@@ -357,18 +423,29 @@ export class CorpusMemberDigestMismatchError extends TaggedError(
 }> {}
 
 /**
- * A stored document AST carried vocabulary this reader does not declare:
- * a block role, a block kind, or an inline kind. The read served the
- * document with those degraded (see `persistedAstDegradations` in
- * `@stll/legal-ast/document-ast`); this is telemetry only, so the row is
- * visible: either a writer newer than this reader, or a row written past
- * the ingestion boundary that needs repair.
+ * A stored document AST was served other than as written: degraded without
+ * loss (vocabulary this reader does not declare, repeated identities, head
+ * matter after the body; see `persistedAstDegradations`) or stored without
+ * structure. Telemetry only, so the row stays visible until a reparse
+ * repairs it; `reportStoredAstOutcome` in `stored-ast-outcome.ts` is its one
+ * reporter, and the record it writes carries the counts, never the content.
  */
 export class StoredAstDegradedError extends TaggedError(
   "StoredAstDegradedError",
 )<{
   message: string;
-  degradations: readonly PersistedAstDegradation[];
+  outcome: "degraded" | "structureless";
+}> {}
+
+export const STORED_CORPUS_VALIDATION_CODE = "stored_corpus_invalid";
+
+/** Stored JSON failed its reader contract; contains diagnostics only, never payloads. */
+export class StoredCorpusValidationError extends TaggedError(
+  "StoredCorpusValidationError",
+)<{
+  message: string;
+  code: typeof STORED_CORPUS_VALIDATION_CODE;
+  paths: readonly string[];
 }> {}
 
 /** Validation/domain-layer errors: no valid inputs, invalid config. */
@@ -456,8 +533,7 @@ export class ChatLoopDetectedError extends TaggedError(
  * `isAnticipatedAIFailure`.
  */
 export type ChatTerminalError =
-  | ChatEmptyCompletionError
-  | ChatLoopDetectedError;
+  ChatEmptyCompletionError | ChatLoopDetectedError;
 
 /**
  * A text generation ended because the abort signal its caller passed fired:
@@ -502,7 +578,11 @@ export class SandboxError extends TaggedError("SandboxError")<{
    */
   logs?: readonly string[];
   cause?: unknown;
-}> {}
+}> {
+  static {
+    declareFingerprintFields(this, ["reason"]);
+  }
+}
 
 /** Integration-layer errors: AI failures, parse failures, external I/O. */
 export class WorkflowIntegrationError extends TaggedError(
@@ -512,14 +592,12 @@ export class WorkflowIntegrationError extends TaggedError(
   cause?: unknown;
 }> {}
 
-/** Post-generation OOXML structural violations. */
-export class OoxmlValidationError extends TaggedError("OoxmlValidationError")<{
+/** The documents of one request cannot fit its model, even trimmed. */
+export class DocumentTooLargeError extends TaggedError(
+  "DocumentTooLargeError",
+)<{
   message: string;
-  violations: {
-    rule: string;
-    message: string;
-    element?: string;
-  }[];
+  budgetBytes: number;
 }> {}
 
 /** Optimistic-lock failure inside a transaction. */
@@ -527,18 +605,6 @@ export class ConcurrentModificationError extends TaggedError(
   "ConcurrentModificationError",
 )<{
   message: string;
-}> {}
-
-/** DOCX template block-directive structural errors. */
-export class TemplateDirectiveError extends TaggedError(
-  "TemplateDirectiveError",
-)<{
-  message: string;
-  errors: {
-    message: string;
-    paragraphIndex: number;
-    directive: string;
-  }[];
 }> {}
 
 type AdapterFetchErrorOptions = {
@@ -567,7 +633,8 @@ const ingestionFailureStopKind = (
       return failure.stopKind;
     case "publisher-response": {
       const { httpStatus } = failure;
-      if (httpStatus >= 500 || httpStatus === 408) {
+      // A successful HTTP response rejected at the fetch boundary supplied no data.
+      if (httpStatus >= 500 || httpStatus === 408 || httpStatus < 300) {
         return INGESTION_STOP_KIND.SOURCE_UNREACHABLE;
       }
       if (httpStatus === 401 || httpStatus === 403 || httpStatus === 429) {
@@ -589,11 +656,39 @@ const ingestionFailureStopKind = (
   }
 };
 
+const INGESTION_FAILURE_REASON = {
+  source_unreachable: "upstream_unavailable",
+  publisher_refusal: "publisher_refused",
+  adapter_error: "tagged_failure",
+  deadline: "timeout_unbounded",
+  internal_error: "tagged_failure",
+} as const satisfies Record<IngestionStopKind, FailureReason>;
+
+/** Case-law adapter page-fetch failure; wrappers retain its operational kind. */
+export class AdapterFetchError extends TaggedError(
+  "AdapterFetchError",
+)<AdapterFetchErrorOptions> {
+  static {
+    declareFailureClass(
+      this,
+      ({ stopKind }) => INGESTION_FAILURE_REASON[stopKind],
+    );
+  }
+
+  override readonly stopKind: IngestionStopKind;
+
+  constructor(options: AdapterFetchErrorOptions) {
+    super(options);
+    this.stopKind = options.stopKind ?? adapterFetchStopKind(options);
+  }
+}
+
 const ingestionFailureOf = (
   cause: unknown,
   fallback: "adapter" | "internal",
 ): IngestionFailure => {
   const visited = new Set<unknown>();
+  let fetchBoundary = false;
   let current = cause;
   while (current instanceof Error && !visited.has(current)) {
     visited.add(current);
@@ -610,11 +705,11 @@ const ingestionFailureOf = (
       return { type: "deadline" };
     }
     if (fallback === "adapter") {
-      if (
-        current instanceof FetchBoundaryError &&
-        current.status !== undefined
-      ) {
-        return { type: "publisher-response", httpStatus: current.status };
+      if (current instanceof FetchBoundaryError) {
+        if (current.status !== undefined) {
+          return { type: "publisher-response", httpStatus: current.status };
+        }
+        fetchBoundary = true;
       }
       if (isConnectionFailure(current)) {
         return { type: "connection" };
@@ -622,7 +717,7 @@ const ingestionFailureOf = (
     }
     current = current.cause;
   }
-  return { type: fallback };
+  return { type: fetchBoundary ? "connection" : fallback };
 };
 
 /** Ingestion entry points classify operational exceptions without changing their identity. */
@@ -641,18 +736,6 @@ const adapterFetchStopKind = ({
       ? ingestionFailureOf(cause, "adapter")
       : { type: "publisher-response", httpStatus },
   );
-
-/** Case-law adapter page-fetch failure; wrappers retain its operational kind. */
-export class AdapterFetchError extends TaggedError(
-  "AdapterFetchError",
-)<AdapterFetchErrorOptions> {
-  override readonly stopKind: IngestionStopKind;
-
-  constructor(options: AdapterFetchErrorOptions) {
-    super(options);
-    this.stopKind = options.stopKind ?? adapterFetchStopKind(options);
-  }
-}
 
 /**
  * One source made no progress for a sustained run of ingestion cycles.
@@ -693,7 +776,11 @@ export class SubprocessError extends TaggedError("SubprocessError")<{
   exitCode: number | null;
   termination: SubprocessTermination | null;
   cause?: unknown;
-}> {}
+}> {
+  static {
+    declareFingerprintFields(this, ["termination.reason"]);
+  }
+}
 
 export type ExtractionWorkerTermination = {
   reason: SubprocessTerminationReason;
@@ -740,7 +827,13 @@ export class ExtractionWorkerError extends TaggedError(
   mimeType: string;
   sizeBytes: number;
   termination: ExtractionWorkerTermination | null;
-}> {}
+  /** Parser error class recovered from worker stderr; null for termination. */
+  workerErrorClass: string | null;
+}> {
+  static {
+    declareFingerprintFields(this, ["termination.reason"]);
+  }
+}
 
 /**
  * A scheduler job exceeded its per-job execution ceiling. The task promise

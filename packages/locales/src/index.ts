@@ -8,6 +8,7 @@ export type {
   Language,
   LanguageCode,
   LanguageEntry,
+  UiLanguageCode,
   UiLocale,
 } from "./languages.js";
 export {
@@ -20,5 +21,7 @@ export {
   displayLanguageName,
   isUiLocale,
   resolveUiLocale,
+  resolveAcceptLanguage,
+  negotiateAcceptLanguage,
   toLanguageCode,
 } from "./helpers.js";

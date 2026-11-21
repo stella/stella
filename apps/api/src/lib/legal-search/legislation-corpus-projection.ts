@@ -1,12 +1,14 @@
-import { type SQL, sql } from "drizzle-orm";
+import { inArray, type SQL, sql } from "drizzle-orm";
 
 import {
   corpusIndexProjectionIntents,
   corpusIndexProjectionStates,
   legislationDocuments,
 } from "@/api/db/schema";
+import type { SafeId } from "@/api/lib/branded-types";
 import type { CorpusFamily } from "@/api/lib/legal-search/corpus-generation-contract";
 import { requireCorpusIndexManifest } from "@/api/lib/legal-search/corpus-index-manifest";
+import type { CorpusProjectionRevision } from "@/api/lib/legal-search/corpus-index-revision-clause";
 import { corpusIndexIdSqlFromManifest } from "@/api/lib/legal-search/corpus-index-route-sql";
 
 const LEGISLATION_FAMILY = "legislation" satisfies CorpusFamily;
@@ -32,6 +34,20 @@ export const legislationCorpusWorkCanRecur = (generation: string) =>
   ) END`;
 
 /**
+ * The revision this generation recorded as applied for the document, by the
+ * states table's primary key. Read beside `currentLegislationCorpusProjection`,
+ * it names the copy of the document a passage read may return.
+ */
+export const legislationCorpusAppliedRevision = (generation: string) =>
+  sql<CorpusProjectionRevision | null>`(
+    SELECT projection_state.applied_revision
+    FROM ${corpusIndexProjectionStates} projection_state
+    WHERE projection_state.family = ${LEGISLATION_FAMILY}
+      AND projection_state.generation = ${generation}
+      AND projection_state.entity_id = ${legislationDocuments}.${sql.identifier(legislationDocuments.id.name)}
+  )`;
+
+/**
  * Accept a physical hit only when this generation holds the current document
  * and has no queued mutation.
  *
@@ -47,9 +63,18 @@ export const legislationCorpusWorkCanRecur = (generation: string) =>
  * `desired_index_id` from.
  *
  * The lookup is the states table's primary key, `(family, generation,
- * entity_id)`, once per candidate row.
+ * entity_id)`, once per candidate row. The candidate ids are stated on the
+ * states side as well: the generation is a constant, so the planner may run
+ * the lookup as a semi-join driven from the states table, and without the
+ * ids that walks every state of the generation and probes the document for
+ * each. With them either join order reads only the candidates' keys. The
+ * caller's rows must be limited to the same ids, which keeps the predicate
+ * equal to the per-row probe.
  */
-export const currentLegislationCorpusProjection = (generation: string): SQL => {
+export const currentLegislationCorpusProjection = (
+  generation: string,
+  candidateIds: readonly SafeId<"legislationDocument">[],
+): SQL => {
   const routedIndexId = corpusIndexIdSqlFromManifest(
     requireCorpusIndexManifest(LEGISLATION_FAMILY, generation),
     legislationDocuments.country,
@@ -59,6 +84,7 @@ export const currentLegislationCorpusProjection = (generation: string): SQL => {
       FROM ${corpusIndexProjectionStates}
       WHERE ${corpusIndexProjectionStates.family} = ${LEGISLATION_FAMILY}
         AND ${corpusIndexProjectionStates.generation} = ${generation}
+        AND ${inArray(corpusIndexProjectionStates.entityId, [...candidateIds])}
         AND ${corpusIndexProjectionStates.entityId} = ${legislationDocuments.id}
         AND ${corpusIndexProjectionStates.desiredAction} = 'upsert'
         AND ${corpusIndexProjectionStates.appliedAction} = 'upsert'

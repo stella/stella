@@ -1,25 +1,52 @@
 import { CancelledError } from "@tanstack/react-query";
-import { isTaggedError, panic } from "better-result";
+import { panic } from "better-result";
 import { posthog } from "posthog-js";
-import type { CaptureResult, SupportedWebVitalsMetrics } from "posthog-js";
+import type {
+  CaptureResult,
+  ResetOptions,
+  SupportedWebVitalsMetrics,
+} from "posthog-js";
 
 import { POSTHOG_ORGANIZATION_GROUP_TYPE } from "@stll/analytics-config";
+import {
+  API_FILE_SECURITY_REJECTED_ERROR_CODE,
+  CHAT_CONTINUATION_REJECTED_ERROR_CODE,
+} from "@stll/api-contract";
+import { PROVIDER_SETUP_ERROR_CODE } from "@stll/api-contract/provider-setup";
+import { MAX_EXCEPTION_CAUSE_DEPTH } from "@stll/errors/exception-cause-chain";
 
 import { env } from "@/env";
+import { sanitizeHandoffUrl } from "@/lib/account/handoff-url";
 import { normalizeTelemetryErrorTypeName } from "@/lib/analytics/error-diagnostics";
 import { isErrorReference } from "@/lib/analytics/error-reference";
-import { fingerprintExceptionEvent } from "@/lib/analytics/exception-fingerprint";
-import type { ApiErrorIdentity } from "@/lib/analytics/exception-fingerprint";
+import {
+  automaticExceptionKey,
+  capturedApiErrorIdentity,
+  capturedExceptionIdentity,
+  fingerprintExceptionEvent,
+  fingerprintExceptionScope,
+  isApiErrorCode,
+  isExceptionFingerprintKey,
+  isExceptionScopeFingerprint,
+  readApiErrorIdentity,
+  sanitizeFingerprintFields,
+} from "@/lib/analytics/exception-fingerprint";
+import { sanitizeHangDiagnosticEvent } from "@/lib/analytics/posthog-hang-diagnostics";
 import { pickIngestionRequired } from "@/lib/analytics/posthog-ingestion";
 import type { sanitizeRouteErrorLifecycleEvent } from "@/lib/analytics/posthog-route-error";
 import { captureRedactedException } from "@/lib/analytics/stack-redaction";
 import { WEB_ANALYTICS_EVENTS } from "@/lib/analytics/types";
 import type {
   Analytics,
+  AnalyticsResetOptions,
   ErrorCaptureContext,
   WebAnalyticsEvent,
 } from "@/lib/analytics/types";
-import { API_ERROR_TAG } from "@/lib/errors/api-tag";
+import { APIError, isCancellation, isTypedCodeRefusal } from "@/lib/errors/api";
+import {
+  isNativeFetchFailure,
+  isNativeFetchTimeout,
+} from "@/lib/errors/native-fetch-failure";
 import { logDevError } from "@/lib/errors/telemetry";
 
 const isWebAnalyticsEvent = (event: string): event is WebAnalyticsEvent =>
@@ -124,10 +151,15 @@ const domExceptionClass = (type: string, value: string): string => {
 const CANCELLED_REQUEST_CLASS = "AbortError";
 
 // Errors whose type names an expected outcome, handled where it happens: no
-// desktop app running, a public-law source down, a signed-out session.
+// desktop app running, a public-law source down, a signed-out session, a
+// model provider's failure the chat shows with its setup guidance (the API
+// reports the provider failures it does not classify itself), a coding agent
+// on the member's computer at its usage limit.
 const EXPECTED_OUTCOME_TYPES: ReadonlySet<string> = new Set([
   "AuthClientError",
   "DesktopBridgeUnavailableError",
+  "LocalRunLimitError",
+  "ProviderDiagnosticError",
   "PublicLawUnavailableError",
 ]);
 
@@ -143,8 +175,9 @@ const ENVIRONMENT_NOISE_PATTERNS: readonly RegExp[] = [
 const EXTENSION_FRAME = /^(?:chrome|moz|safari(?:-web)?)-extension:\/\//u;
 
 // API answers the UI already turns into a state (sign in, no access, not
-// found, a rejected provider key or continuation). Other 4xx and every 5xx
-// stay reported.
+// found, a rejected provider key or continuation, a provider key that needs
+// more setup, a file the upload scan refused). Other 4xx and every 5xx stay
+// reported.
 const API_ERROR_TYPES: ReadonlySet<string> = new Set([
   "ApiError",
   "StreamReadError",
@@ -152,7 +185,9 @@ const API_ERROR_TYPES: ReadonlySet<string> = new Set([
 const EXPECTED_API_STATUSES: ReadonlySet<number> = new Set([401, 403, 404]);
 const EXPECTED_API_CODES: ReadonlySet<string> = new Set([
   "ai_config_provider_validation_failed",
-  "chat_continuation_rejected",
+  ...Object.values(PROVIDER_SETUP_ERROR_CODE),
+  CHAT_CONTINUATION_REJECTED_ERROR_CODE,
+  API_FILE_SECURITY_REJECTED_ERROR_CODE,
 ]);
 
 const hasExtensionFrame = (entry: unknown): boolean => {
@@ -190,6 +225,9 @@ const NOISE_PATTERNS = [
 export const isNoiseException = (event: {
   properties?: Record<string, unknown>;
 }): boolean => {
+  if (event.properties?.["user_visible"] === true) {
+    return false;
+  }
   const list = event.properties?.["$exception_list"];
   if (!Array.isArray(list) || list.length === 0) {
     return false;
@@ -214,6 +252,46 @@ export const isNoiseException = (event: {
 // (`ClientTelemetryError.area`). The pattern rejects anything free-form so
 // no dynamic string can ride along.
 const TELEMETRY_AREA = /^[a-z][a-z0-9-]{0,39}$/u;
+const USER_VISIBLE_FEATURE = /^[a-z][a-z0-9-]{0,39}$/u;
+const ROUTE_TEMPLATE = /^(?:unknown|\/[A-Za-z0-9_.$/-]*)$/u;
+
+declare const exceptionCodeBrand: unique symbol;
+type ExceptionCode = string & { readonly [exceptionCodeBrand]: true };
+declare const telemetryAreaBrand: unique symbol;
+type TelemetryArea = string & { readonly [telemetryAreaBrand]: true };
+
+type ExceptionValueFields = {
+  /** Already a class token: `normalizeTelemetryErrorTypeName` output. */
+  type: string;
+  code?: ExceptionCode;
+  status?: number;
+  area?: TelemetryArea;
+};
+
+/** Renders only structural fields that have already crossed their allowlist. */
+const exceptionValue = ({
+  type,
+  code,
+  status,
+  area,
+}: ExceptionValueFields): string =>
+  `${type}${code === undefined ? "" : `[${code}]`}${
+    status === undefined ? "" : ` ${status}`
+  }${area === undefined ? "" : ` area=${area}`}`;
+
+// The allowlists narrow by predicate, so a branded value only ever comes from
+// a string that passed its pattern.
+const isExceptionCode = (value: string): value is ExceptionCode =>
+  isApiErrorCode(value);
+
+const isTelemetryArea = (value: string): value is TelemetryArea =>
+  TELEMETRY_AREA.test(value);
+
+const exceptionCode = (value: string | undefined): ExceptionCode | undefined =>
+  value !== undefined && isExceptionCode(value) ? value : undefined;
+
+const telemetryArea = (value: unknown): TelemetryArea | undefined =>
+  typeof value === "string" && isTelemetryArea(value) ? value : undefined;
 
 const telemetryAreaProperty = (
   error: unknown,
@@ -227,76 +305,16 @@ const telemetryAreaProperty = (
     : undefined;
 };
 
-// API error codes are stable server-declared slugs (`usage_limit_exceeded`).
-// Anything else is treated as free text and dropped, so a server that echoed
-// input into `code` could not smuggle it into telemetry.
-const API_ERROR_CODE = /^[a-z][a-z0-9_]{0,63}$/u;
-const HTTP_STATUS_MIN = 100;
-const HTTP_STATUS_MAX = 599;
-
-const isHttpStatus = (value: unknown): value is number =>
-  typeof value === "number" &&
-  Number.isInteger(value) &&
-  value >= HTTP_STATUS_MIN &&
-  value <= HTTP_STATUS_MAX;
-
-const isApiError = (error: unknown): error is Record<string, unknown> =>
-  isTaggedError(error) && error._tag === API_ERROR_TAG && isRecord(error);
-
-// Error boundaries wrap the failure they caught (`ClientTelemetryError` with
-// the `ApiError` as its cause), so the API error is found anywhere in the
-// cause chain. `cause` is writable, so the walk is bounded against cycles.
-const apiErrorInChain = (
-  error: unknown,
-): Record<string, unknown> | undefined => {
-  const seen = new Set<unknown>();
-  let current = error;
-  while (isRecord(current) && !seen.has(current)) {
-    if (isApiError(current)) {
-      return current;
-    }
-    seen.add(current);
-    current = current["cause"];
-  }
-  return undefined;
-};
-
-// The status and code of an `ApiError` are the only parts of a failed API
-// response that identify the outcome without carrying its payload, so they
-// ride along as flat properties and feed the grouping identity below. The
-// class is recognized by its tag: importing it would close an import cycle
-// through the localized error module.
 const apiErrorTelemetryProperties = (
   error: unknown,
 ): Record<string, number | string> | undefined => {
-  const apiError = apiErrorInChain(error);
-  if (apiError === undefined) {
-    return undefined;
-  }
-  const status = apiError["status"];
-  const code = apiError["code"];
-  if (!isHttpStatus(status)) {
+  const identity = capturedApiErrorIdentity(error);
+  if (identity === undefined) {
     return undefined;
   }
   return {
-    error_status: status,
-    ...(typeof code === "string" && API_ERROR_CODE.test(code)
-      ? { error_code: code }
-      : {}),
-  };
-};
-
-const apiErrorIdentity = (
-  properties: Record<string, unknown>,
-): ApiErrorIdentity | undefined => {
-  const status = properties["error_status"];
-  if (!isHttpStatus(status)) {
-    return undefined;
-  }
-  const code = properties["error_code"];
-  return {
-    status,
-    ...(typeof code === "string" && API_ERROR_CODE.test(code) ? { code } : {}),
+    error_status: identity.status,
+    ...(identity.code === undefined ? {} : { error_code: identity.code }),
   };
 };
 
@@ -309,6 +327,10 @@ const apiErrorIdentity = (
 // `function`; a frame without them fails the whole exception. These carry
 // posthog-js's own defaults for a browser frame, with the function always
 // reported as unknown.
+//
+// `chunk_id` is the id the release build injected into the chunk and uploaded
+// its source map under. It is the only way the tracker finds that map: without
+// it, the tracker fetches the public bundle, which serves no maps.
 export const UNKNOWN_FRAME_FUNCTION = "?";
 const WEB_FRAME_PLATFORM = "web:javascript";
 
@@ -319,7 +341,11 @@ type SanitizedFrame = {
   filename?: string;
   lineno?: number;
   colno?: number;
+  chunk_id?: string;
 };
+
+// The CLI injects UUIDs; anything else is not a chunk id.
+const CHUNK_ID = /^[0-9a-f-]{1,64}$/iu;
 
 const stripUrlMetadata = (url: string): string => {
   const terminator = url.search(/[?#]/u);
@@ -333,6 +359,7 @@ export const sanitizeFrame = (frame: unknown): SanitizedFrame => {
   const inApp = fields["in_app"];
   const lineno = fields["lineno"];
   const colno = fields["colno"];
+  const chunkId = fields["chunk_id"];
   return {
     platform: typeof platform === "string" ? platform : WEB_FRAME_PLATFORM,
     function: UNKNOWN_FRAME_FUNCTION,
@@ -343,10 +370,16 @@ export const sanitizeFrame = (frame: unknown): SanitizedFrame => {
       : {}),
     ...(typeof lineno === "number" ? { lineno } : {}),
     ...(typeof colno === "number" ? { colno } : {}),
+    ...(typeof chunkId === "string" && CHUNK_ID.test(chunkId)
+      ? { chunk_id: chunkId }
+      : {}),
   };
 };
 
-const sanitizeExceptionEntry = (entry: unknown) => {
+const sanitizeExceptionEntry = (
+  entry: unknown,
+  fields: Omit<ExceptionValueFields, "type">,
+) => {
   const type = domExceptionClass(
     normalizeTelemetryErrorTypeName(readStringField(entry, "type")),
     readStringField(entry, "value"),
@@ -355,43 +388,130 @@ const sanitizeExceptionEntry = (entry: unknown) => {
   const frames = isRecord(stacktrace) ? stacktrace["frames"] : undefined;
   return {
     type,
-    value: "",
+    value: exceptionValue({ type, ...fields }),
     ...(Array.isArray(frames)
       ? { stacktrace: { type: "raw", frames: frames.map(sanitizeFrame) } }
       : {}),
   };
 };
 
-const sanitizeExceptionEvent = (event: CaptureResult): CaptureResult => {
+// The same finite dimensions the fingerprint carries, kept readable so an
+// issue's events can be filtered by them.
+const exceptionFieldsProperty = (fields: Record<string, string>) =>
+  Object.keys(fields).length === 0 ? undefined : { exception_fields: fields };
+
+type RouteTemplateHistory = Map<string, string>;
+
+type TemplateUrl = { url: string; pathname: string };
+
+const templateUrl = (
+  history: RouteTemplateHistory,
+  value: unknown,
+): TemplateUrl | undefined => {
+  if (typeof value !== "string") {
+    return undefined;
+  }
+  let parsed: URL;
+  try {
+    parsed = new URL(value);
+  } catch {
+    return undefined;
+  }
+  const template = history.get(parsed.pathname);
+  if (template === undefined) {
+    return undefined;
+  }
+  return { url: `${parsed.origin}${template}`, pathname: template };
+};
+
+export const sanitizeExceptionEvent = (
+  event: CaptureResult,
+  history: RouteTemplateHistory,
+): CaptureResult => {
   const properties: Record<string, unknown> = event.properties;
   const appCommit = properties["app_commit"];
   const appVersion = properties["app_version"];
   const area = properties["area"];
   const errorReference = properties["error_reference"];
+  const feature = properties["feature"];
+  const routeTemplate = properties["route_template"];
+  const userVisible = properties["user_visible"] === true;
   const exceptionList = properties["$exception_list"];
   const entries: unknown[] = Array.isArray(exceptionList) ? exceptionList : [];
+  const safeArea = telemetryArea(area);
+  const http = readApiErrorIdentity({
+    status: properties["error_status"],
+    code: properties["error_code"],
+  });
+  const safeCode = exceptionCode(http?.code);
+  const valueFields = {
+    ...(safeArea === undefined ? {} : { area: safeArea }),
+    ...(http === undefined
+      ? {}
+      : {
+          status: http.status,
+          ...(safeCode === undefined ? {} : { code: safeCode }),
+        }),
+  };
   const sanitizedList =
     entries.length > 0
-      ? entries.map(sanitizeExceptionEntry)
-      : [sanitizeExceptionEntry(undefined)];
+      ? entries.map((entry) => sanitizeExceptionEntry(entry, valueFields))
+      : [sanitizeExceptionEntry(undefined, valueFields)];
   const type = sanitizedList.at(0)?.type ?? normalizeTelemetryErrorTypeName("");
-  const safeArea =
-    typeof area === "string" && TELEMETRY_AREA.test(area) ? area : undefined;
-  const http = apiErrorIdentity(properties);
+  const fields = sanitizeFingerprintFields(properties["exception_fields"]);
+  const causalTypes = properties["exception_error_types"];
+  const declaredKey = properties["exception_key"];
+  const key = isExceptionFingerprintKey(declaredKey)
+    ? declaredKey
+    : automaticExceptionKey({
+        entries: sanitizedList,
+        message: readStringField(entries.at(-1), "value"),
+        firstPartyOrigin: env.VITE_PUBLIC_APP_URL,
+      });
+  const declaredScope = properties["exception_scope"];
+  const scopeIdentity = isExceptionScopeFingerprint(declaredScope)
+    ? declaredScope
+    : fingerprintExceptionScope({ type: "handler", handlerId: key });
+  // Session and window ids join an exception to the page views and actions
+  // around it; they are random SDK ids that carry no user content.
+  const sessionId = properties["$session_id"];
+  const windowId = properties["$window_id"];
+  // The route template the exception happened on; a resolved URL with no
+  // recorded template is dropped rather than sent.
+  const route = templateUrl(history, properties["$current_url"]);
   return {
     ...event,
     properties: {
       ...pickIngestionRequired(properties),
-      // Grouping identity derived from the sanitized list, so nothing the
-      // redaction removed can reach it.
+      ...(typeof sessionId === "string" ? { $session_id: sessionId } : {}),
+      ...(typeof windowId === "string" ? { $window_id: windowId } : {}),
+      ...(route === undefined
+        ? {}
+        : { $current_url: route.url, $pathname: route.pathname }),
+      // Explicit owners are preferred; SDK captures use asset ownership and an
+      // opaque normalized message shape. Source positions remain diagnostic.
       $exception_fingerprint: fingerprintExceptionEvent({
-        area: safeArea,
-        entries: sanitizedList,
-        firstPartyOrigin: env.VITE_PUBLIC_APP_URL,
+        key,
+        scopeIdentity,
+        entries:
+          Array.isArray(causalTypes) && causalTypes.length > 0
+            ? causalTypes
+                .slice(0, MAX_EXCEPTION_CAUSE_DEPTH)
+                .map((causalType) => ({
+                  type: normalizeTelemetryErrorTypeName(
+                    typeof causalType === "string" ? causalType : "",
+                  ),
+                }))
+            : sanitizedList,
+        fields,
         http,
       }),
       $exception_list: sanitizedList,
       $exception_type: type,
+      ...exceptionFieldsProperty(fields),
+      ...(properties["exception_identity_status"] === "read_failed"
+        ? { exception_identity_status: "read_failed" }
+        : {}),
       ...(typeof appCommit === "string" ? { app_commit: appCommit } : {}),
       ...(typeof appVersion === "string" ? { app_version: appVersion } : {}),
       ...(safeArea === undefined ? {} : { area: safeArea }),
@@ -403,6 +523,17 @@ const sanitizeExceptionEvent = (event: CaptureResult): CaptureResult => {
           }),
       ...(isErrorReference(errorReference)
         ? { error_reference: errorReference }
+        : {}),
+      ...(userVisible ? { user_visible: true } : {}),
+      ...(userVisible &&
+      typeof feature === "string" &&
+      USER_VISIBLE_FEATURE.test(feature)
+        ? { feature }
+        : {}),
+      ...(userVisible &&
+      typeof routeTemplate === "string" &&
+      ROUTE_TEMPLATE.test(routeTemplate)
+        ? { route_template: routeTemplate }
         : {}),
     },
   };
@@ -419,7 +550,6 @@ let routeErrorLifecycleSanitizer: RouteErrorLifecycleSanitizer | undefined;
 // next navigation resolves. An unknown origin drops the URL fields
 // rather than mislabeling them.
 const ROUTE_TEMPLATE_HISTORY_LIMIT = 50;
-type RouteTemplateHistory = Map<string, string>;
 
 const recordRouteTemplate = (
   history: RouteTemplateHistory,
@@ -548,28 +678,6 @@ const sanitizeWebVitalsEvent = (
 // those fields mapped through the history like every other resolved path.
 type SdkUrlSource = "route-template" | "resolved";
 
-type TemplateUrl = { url: string; pathname: string };
-
-const templateUrl = (
-  history: RouteTemplateHistory,
-  value: unknown,
-): TemplateUrl | undefined => {
-  if (typeof value !== "string") {
-    return undefined;
-  }
-  let parsed: URL;
-  try {
-    parsed = new URL(value);
-  } catch {
-    return undefined;
-  }
-  const template = history.get(parsed.pathname);
-  if (template === undefined) {
-    return undefined;
-  }
-  return { url: `${parsed.origin}${template}`, pathname: template };
-};
-
 // Referrers on another host are marketing signal and carry no resource ids;
 // same-host referrers are resolved in-app paths, and `$referring_domain`
 // already covers them.
@@ -627,17 +735,42 @@ const sanitizeSdkUrlContext = (
   ) {
     delete properties["$session_entry_referrer"];
   }
-  return { ...event, properties };
+  return {
+    ...event,
+    properties: {
+      ...properties,
+      ...Object.fromEntries(
+        ["$referrer", "$session_entry_referrer"].flatMap((key) => {
+          const value = properties[key];
+          return typeof value === "string"
+            ? [[key, sanitizeHandoffUrl(value)]]
+            : [];
+        }),
+      ),
+    },
+  };
 };
 
 const errorContextProperties = (
   context: ErrorCaptureContext | undefined,
-): Record<string, string> | undefined => {
-  if (context?.type !== "recovery") {
-    return undefined;
+): Record<string, string | boolean> | undefined => {
+  switch (context?.type) {
+    case "recovery":
+      return { error_reference: context.reference };
+    case "user-visible":
+      return {
+        feature: context.feature,
+        route_template: context.routeTemplate,
+        user_visible: true,
+      };
+    case "detached":
+    case undefined:
+      return undefined;
+    default: {
+      context satisfies never;
+      return panic(`Unhandled context: ${String(context)}`);
+    }
   }
-
-  return { error_reference: context.reference };
 };
 
 const devErrorContext = (
@@ -652,11 +785,96 @@ const devErrorContext = (
       return { detached: context.operation };
     case "recovery":
       return { error_reference: context.reference };
+    case "user-visible":
+      return {
+        feature: context.feature,
+        route_template: context.routeTemplate,
+        user_visible: "true",
+      };
     default: {
       context satisfies never;
       return panic(`Unhandled context: ${String(context)}`);
     }
   }
+};
+
+// The anonymous side of a page load's `$identify` when the load holds no
+// anonymous activity worth linking: the same value on every load of the same
+// user, so it joins that person once and never adds another distinct id.
+export const signedInAnonymousId = (userId: string): string =>
+  `signed-in:${userId}`;
+
+const registerBuildProperties = () => {
+  posthog.register({
+    app_commit: __APP_COMMIT_SHA__,
+    app_version: __APP_VERSION__,
+  });
+};
+
+// Clients outside the API client (the auth client) reject with the native
+// fetch error or deadline reason. It must be classified here, before redaction
+// blanks the message that tells it apart from a TypeError of ours.
+const transportFailureKind = (error: unknown): APIError["transportKind"] => {
+  if (APIError.is(error)) {
+    return error.transportKind;
+  }
+  if (isNativeFetchFailure(error)) {
+    return "network";
+  }
+  return isNativeFetchTimeout(error) ? "timeout" : undefined;
+};
+
+const captureError: Analytics["captureError"] = (
+  error,
+  { fingerprintKey, scope, context },
+) => {
+  // Transport failures have no HTTP response and describe client connectivity,
+  // not an application exception. Keep the fixed query owner and kind only:
+  // neither a resolved URL nor request/user content belongs in this signal.
+  const transportKind = transportFailureKind(error);
+  if (transportKind !== undefined) {
+    posthog.capture(WEB_ANALYTICS_EVENTS.clientTransient, {
+      query_owner: fingerprintKey,
+      transport_kind: transportKind,
+    });
+    return;
+  }
+  // A cancelled request is expected control flow, not an operational failure.
+  if (isCancellation(error)) {
+    return;
+  }
+  // A mistyped or expired code is the form's to answer, wherever it is captured:
+  // the status and code the tracker keeps cannot tell this 400 from a defect.
+  if (isTypedCodeRefusal(error)) {
+    return;
+  }
+  // Cheap guards before the SDK call: a stray `captureError(null)`
+  // or `captureError(undefined)` would otherwise reach PostHog as
+  // `Error: "undefined"` noise that the `before_send` filter then
+  // has to clean up.
+  if (
+    error === null ||
+    error === undefined ||
+    error instanceof CancelledError
+  ) {
+    return;
+  }
+  logDevError(error, devErrorContext(context));
+  const identity = capturedExceptionIdentity(error);
+  captureRedactedException(error, (redacted) => {
+    posthog.captureException(redacted, {
+      exception_key: fingerprintKey,
+      exception_scope: fingerprintExceptionScope(scope),
+      exception_error_types: identity.types,
+      exception_fields: identity.fields,
+      ...(identity.status === "read_failed"
+        ? { exception_identity_status: identity.status }
+        : {}),
+      ...errorContextProperties(context),
+      ...telemetryAreaProperty(error),
+      ...apiErrorTelemetryProperties(error),
+    });
+  });
 };
 
 /**
@@ -668,6 +886,7 @@ const devErrorContext = (
  * rather than relying on deployment-specific environment settings.
  */
 type CreatePostHogAnalyticsOptions = {
+  routeTemplates?: readonly string[];
   key: string;
   host: string;
   /**
@@ -678,130 +897,201 @@ type CreatePostHogAnalyticsOptions = {
   uiHost?: string | undefined;
 };
 
+// Events whose properties are already typed for PostHog go straight to the
+// SDK; keeping them out of the factory keeps its body to the stateful parts.
+const forwardedCaptures: Pick<
+  Analytics,
+  | "capturePageHangSuspected"
+  | "captureLongAnimationFrame"
+  | "captureGuideStepSkipped"
+  | "captureFeedbackDialogOpened"
+  | "captureFeedbackReportSubmitted"
+  | "captureProvisionPlacementGaps"
+  | "captureCaseLawAnalysisTiming"
+  | "captureInspectorRestoreRecovered"
+  | "captureFollowupShown"
+  | "captureFollowupSelected"
+  | "captureKeyActionTiming"
+> = {
+  capturePageHangSuspected: (properties) => {
+    posthog.capture(WEB_ANALYTICS_EVENTS.pageHangSuspected, properties);
+  },
+  captureLongAnimationFrame: (properties) => {
+    posthog.capture(WEB_ANALYTICS_EVENTS.longAnimationFrame, properties);
+  },
+  captureGuideStepSkipped: (properties) => {
+    posthog.capture(WEB_ANALYTICS_EVENTS.guideStepSkipped, properties);
+  },
+  captureFeedbackDialogOpened: (properties) => {
+    posthog.capture(WEB_ANALYTICS_EVENTS.feedbackDialogOpened, properties);
+  },
+  captureFeedbackReportSubmitted: (properties) => {
+    posthog.capture(WEB_ANALYTICS_EVENTS.feedbackReportSubmitted, properties);
+  },
+  captureProvisionPlacementGaps: (properties) => {
+    posthog.capture(WEB_ANALYTICS_EVENTS.provisionPlacementGaps, properties);
+  },
+  captureCaseLawAnalysisTiming: (properties) => {
+    posthog.capture(WEB_ANALYTICS_EVENTS.caseLawAnalysisTiming, properties);
+  },
+  captureInspectorRestoreRecovered: (properties) => {
+    posthog.capture(WEB_ANALYTICS_EVENTS.inspectorRestoreRecovered, properties);
+  },
+  captureFollowupShown: (properties) => {
+    posthog.capture(WEB_ANALYTICS_EVENTS.followupShown, properties);
+  },
+  captureFollowupSelected: (properties) => {
+    posthog.capture(WEB_ANALYTICS_EVENTS.followupSelected, properties);
+  },
+  captureKeyActionTiming: (properties) => {
+    posthog.capture(WEB_ANALYTICS_EVENTS.keyActionTimed, properties);
+  },
+};
+
 export const createPostHogAnalytics = ({
   host,
   key,
   uiHost,
+  routeTemplates = [],
 }: CreatePostHogAnalyticsOptions): {
   analytics: Analytics;
   client: typeof posthog | undefined;
 } => {
   const localDebugEnabled = import.meta.env.DEV && env.VITE_POSTHOG_LOCAL_DEBUG;
   const routeTemplateHistory: RouteTemplateHistory = new Map();
-  const client = posthog.init(key, {
-    opt_out_capturing_by_default: import.meta.env.DEV && !localDebugEnabled,
-    api_host: host,
-    ...(uiHost === undefined ? {} : { ui_host: uiHost }),
-    defaults: "2025-05-24",
-    advanced_disable_feature_flags: true,
-    advanced_disable_flags: true,
-    autocapture: false,
-    capture_exceptions: {
-      capture_console_errors: false,
-      capture_unhandled_errors: true,
-      capture_unhandled_rejections: true,
-    },
-    rageclick: false,
-    capture_dead_clicks: false,
-    disable_persistence: true,
-    disable_product_tours: true,
-    disable_session_recording: true,
-    disable_surveys: true,
-    disable_surveys_automatic_display: true,
-    disable_web_experiments: true,
-    mask_all_text: true,
-    mask_personal_data_properties: true,
-    person_profiles: "identified_only",
-    capture_heatmaps: false,
-    capture_performance: { network_timing: false, web_vitals: true },
-    capture_pageview: false,
-    // The SDK's pageleave is what web analytics derives bounce rate and page
-    // duration from; the default ties it to `capture_pageview`, which stays
-    // off because page views are captured manually with route templates.
-    capture_pageleave: true,
-    before_send: (event) => {
-      if (import.meta.env.DEV && !localDebugEnabled) {
-        return null;
-      }
-      if (!event || !isWebAnalyticsEvent(event.event)) {
-        return null;
-      }
-      switch (event.event) {
-        case WEB_ANALYTICS_EVENTS.exception:
-          return isNoiseException(event) ? null : sanitizeExceptionEvent(event);
-        case WEB_ANALYTICS_EVENTS.routeErrorRecovery:
-          return routeErrorLifecycleSanitizer?.(event) ?? null;
-        case WEB_ANALYTICS_EVENTS.webVitals:
-          return sanitizeWebVitalsEvent(event, routeTemplateHistory);
-        case WEB_ANALYTICS_EVENTS.pageViewed:
-          return sanitizeSdkUrlContext(
-            event,
-            routeTemplateHistory,
-            "route-template",
-          );
-        case WEB_ANALYTICS_EVENTS.pageLeft:
-        case WEB_ANALYTICS_EVENTS.identify:
-        case WEB_ANALYTICS_EVENTS.guideStepSkipped:
-        case WEB_ANALYTICS_EVENTS.feedbackDialogOpened:
-        case WEB_ANALYTICS_EVENTS.feedbackReportSubmitted:
-          return sanitizeSdkUrlContext(event, routeTemplateHistory, "resolved");
-        default: {
-          event.event satisfies never;
-          return panic(`Unhandled event: ${String(event.event)}`);
-        }
-      }
-    },
-  });
+  // The SDK is one module-level instance. The server builds a router, and so
+  // this analytics value, for every document it renders; a second `init` is a
+  // no-op that only warns, once per render, so it is skipped.
+  const client = posthog.__loaded
+    ? posthog
+    : posthog.init(key, {
+        opt_out_capturing_by_default: import.meta.env.DEV && !localDebugEnabled,
+        api_host: host,
+        ...(uiHost === undefined ? {} : { ui_host: uiHost }),
+        defaults: "2025-05-24",
+        advanced_disable_feature_flags: true,
+        advanced_disable_flags: true,
+        autocapture: false,
+        capture_exceptions: {
+          capture_console_errors: false,
+          capture_unhandled_errors: true,
+          capture_unhandled_rejections: true,
+        },
+        rageclick: false,
+        capture_dead_clicks: false,
+        disable_persistence: true,
+        disable_product_tours: true,
+        disable_session_recording: true,
+        disable_surveys: true,
+        disable_surveys_automatic_display: true,
+        disable_web_experiments: true,
+        mask_all_text: true,
+        mask_personal_data_properties: true,
+        person_profiles: "identified_only",
+        capture_heatmaps: false,
+        capture_performance: { network_timing: false, web_vitals: true },
+        capture_pageview: false,
+        // The SDK's pageleave is what web analytics derives bounce rate and page
+        // duration from; the default ties it to `capture_pageview`, which stays
+        // off because page views are captured manually with route templates.
+        capture_pageleave: true,
+        before_send: (event) => {
+          if (import.meta.env.DEV && !localDebugEnabled) {
+            return null;
+          }
+          if (!isWebAnalyticsEvent(event.event)) {
+            return null;
+          }
+          switch (event.event) {
+            case WEB_ANALYTICS_EVENTS.exception:
+              return isNoiseException(event)
+                ? null
+                : sanitizeExceptionEvent(event, routeTemplateHistory);
+            case WEB_ANALYTICS_EVENTS.routeErrorRecovery:
+              return routeErrorLifecycleSanitizer?.(event) ?? null;
+            case WEB_ANALYTICS_EVENTS.pageHangSuspected:
+            case WEB_ANALYTICS_EVENTS.longAnimationFrame:
+              return sanitizeHangDiagnosticEvent({
+                event,
+                appUrl: env.VITE_PUBLIC_APP_URL,
+                routeTemplates,
+              });
+            case WEB_ANALYTICS_EVENTS.webVitals:
+              return sanitizeWebVitalsEvent(event, routeTemplateHistory);
+            case WEB_ANALYTICS_EVENTS.pageViewed:
+              return sanitizeSdkUrlContext(
+                event,
+                routeTemplateHistory,
+                "route-template",
+              );
+            case WEB_ANALYTICS_EVENTS.pageLeft:
+            case WEB_ANALYTICS_EVENTS.identify:
+            case WEB_ANALYTICS_EVENTS.guideStepSkipped:
+            case WEB_ANALYTICS_EVENTS.feedbackDialogOpened:
+            case WEB_ANALYTICS_EVENTS.feedbackReportSubmitted:
+            case WEB_ANALYTICS_EVENTS.provisionPlacementGaps:
+            case WEB_ANALYTICS_EVENTS.caseLawAnalysisTiming:
+            case WEB_ANALYTICS_EVENTS.inspectorRestoreRecovered:
+            case WEB_ANALYTICS_EVENTS.followupShown:
+            case WEB_ANALYTICS_EVENTS.followupSelected:
+            case WEB_ANALYTICS_EVENTS.keyActionTimed:
+            case WEB_ANALYTICS_EVENTS.clientTransient:
+              return sanitizeSdkUrlContext(
+                event,
+                routeTemplateHistory,
+                "resolved",
+              );
+            default: {
+              event.event satisfies never;
+              return panic(`Unhandled event: ${String(event.event)}`);
+            }
+          }
+        },
+      });
 
   // Attach build metadata as super-properties so every captured
   // event carries the exact deployed build. `reset` clears super-properties,
   // so every identity change goes through `resetIdentity`, which registers
   // them again.
-  const registerBuildProperties = () => {
-    posthog.register({
-      app_commit: __APP_COMMIT_SHA__,
-      app_version: __APP_VERSION__,
-    });
-  };
   registerBuildProperties();
 
   // Persistence is off, so every page load starts with a fresh anonymous
-  // distinct id. `identify()` would merge that id into the person on every
-  // load until the person hits PostHog's distinct-id limit; bootstrapping the
-  // known user id switches identity without a merge. Anonymous activity before
-  // sign-in stays unlinked, which `person_profiles: "identified_only"` already
-  // implies.
-  const resetIdentity = (userId: string | null) => {
-    posthog.reset(
-      userId === null
-        ? undefined
-        : { bootstrap: { distinctID: userId, isIdentifiedID: true } },
-    );
+  // distinct id. Identity binds through one `$identify` per load, which is what
+  // marks the person identified and lets analytics count signed-in users. The
+  // anonymous side of that `$identify` is chosen so the person's distinct ids
+  // stay bounded:
+  // - after the app saw a signed-out visitor in this load (an in-app sign-in),
+  //   the load's own anonymous id, so the pages visited before signing in join
+  //   the person; this happens once per sign-in, not per page load;
+  // - otherwise (a page load that already holds a session, another user's
+  //   identity), an anonymous id derived from the user id, which joins the
+  //   person once and is a no-op on every later load.
+  let signedOutVisitorSeen = false;
+
+  const resetIdentity = (options?: ResetOptions) => {
+    posthog.reset(options);
     registerBuildProperties();
   };
 
-  const analytics: Analytics = {
-    captureError: (error, context) => {
-      // Cheap guards before the SDK call: a stray `captureError(null)`
-      // or `captureError(undefined)` would otherwise reach PostHog as
-      // `Error: "undefined"` noise that the `before_send` filter then
-      // has to clean up.
-      if (
-        error === null ||
-        error === undefined ||
-        error instanceof CancelledError
-      ) {
-        return;
-      }
-      logDevError(error, devErrorContext(context));
-      captureRedactedException(error, (redacted) => {
-        posthog.captureException(redacted, {
-          ...errorContextProperties(context),
-          ...telemetryAreaProperty(error),
-          ...apiErrorTelemetryProperties(error),
-        });
+  const bindIdentity = (userId: string) => {
+    if (posthog._isIdentified() || !signedOutVisitorSeen) {
+      resetIdentity({
+        bootstrap: {
+          distinctID: signedInAnonymousId(userId),
+          isIdentifiedID: false,
+        },
       });
-    },
+    }
+    signedOutVisitorSeen = false;
+    // The stable user id is the whole identity. Profile attributes such as
+    // name and email already live server-side keyed by this id, so
+    // duplicating them into PostHog person properties adds no analytical
+    // value and only widens the person-property surface.
+    posthog.identify(userId);
+  };
+
+  const analytics: Analytics = {
+    captureError,
     capturePageViewed: ({ path }) => {
       // `path` is the matched route template (`/workspaces/$workspaceId`),
       // never a resolved URL. Overriding the SDK's own `$current_url` and
@@ -825,15 +1115,7 @@ export const createPostHogAnalytics = ({
         path,
       });
     },
-    captureGuideStepSkipped: (properties) => {
-      posthog.capture(WEB_ANALYTICS_EVENTS.guideStepSkipped, properties);
-    },
-    captureFeedbackDialogOpened: (properties) => {
-      posthog.capture(WEB_ANALYTICS_EVENTS.feedbackDialogOpened, properties);
-    },
-    captureFeedbackReportSubmitted: (properties) => {
-      posthog.capture(WEB_ANALYTICS_EVENTS.feedbackReportSubmitted, properties);
-    },
+    ...forwardedCaptures,
     captureRouteErrorLifecycle: async (properties) =>
       import("@/lib/analytics/posthog-route-error")
         .then((module) => {
@@ -843,8 +1125,17 @@ export const createPostHogAnalytics = ({
         })
         .catch((error: unknown) => {
           analytics.captureError(error, {
-            operation: "posthog.route-error-lifecycle",
-            type: "detached",
+            fingerprintKey:
+              "createPostHogAnalytics.captureRouteErrorLifecycle:failure",
+            scope: {
+              type: "handler",
+              handlerId:
+                "createPostHogAnalytics.captureRouteErrorLifecycle:failure",
+            },
+            context: {
+              operation: "posthog.route-error-lifecycle",
+              type: "detached",
+            },
           });
         }),
     identifyUser: (user) => {
@@ -861,21 +1152,18 @@ export const createPostHogAnalytics = ({
         return;
       }
 
-      // The stable user id is the whole identity. Profile attributes such as
-      // name and email already live server-side keyed by this id, so
-      // duplicating them into PostHog person properties adds no analytical
-      // value and only widens the person-property surface.
-      resetIdentity(user.id);
+      bindIdentity(user.id);
       // Group properties (name, practice jurisdictions) are set server-side
       // via groupIdentify; the browser only attaches the opaque key.
       posthog.group(POSTHOG_ORGANIZATION_GROUP_TYPE, user.activeOrganizationId);
     },
-    reset: ({ onlyIfIdentified } = {}) => {
+    reset: ({ onlyIfIdentified }: AnalyticsResetOptions = {}) => {
+      signedOutVisitorSeen = true;
       if (onlyIfIdentified && !posthog._isIdentified()) {
         return;
       }
 
-      resetIdentity(null);
+      resetIdentity();
     },
   };
 

@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import {
   afterAll,
   beforeAll,
@@ -8,16 +8,38 @@ import {
   test,
 } from "bun:test";
 import { eq, inArray, sql } from "drizzle-orm";
+import type { SQL } from "drizzle-orm";
 
+import { DESKTOP_HANDOFF_FAILURE } from "@stll/api-contract/desktop-handoff";
+
+import { member } from "@/api/db/auth-schema";
 import type { rootDb, Transaction } from "@/api/db/root";
-import type { ScopedDb } from "@/api/db/safe-db";
-import { entityVersions, pdfSigningSessions } from "@/api/db/schema";
-import { createScopedDb, createTenantlessDb } from "@/api/db/scoped";
+import {
+  auditLogs,
+  entities,
+  entityVersions,
+  pdfSigningSessions,
+  properties,
+  workspaces,
+} from "@/api/db/schema";
+import {
+  createSafeDb,
+  createScopedDb,
+  createTenantlessDb,
+} from "@/api/db/scoped";
+import { cancelPdfSigningSession } from "@/api/handlers/entities/pdf-signing-sessions";
+import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
+import {
+  AUDIT_ACTION,
+  AUDIT_RESOURCE_TYPE,
+  createAuditRecorder,
+} from "@/api/lib/audit-log";
 import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { closePdfSigningSession } from "@/api/lib/files/pdf-signing/close-session";
+import { holdCurrentPdfSigningWriteAuthority } from "@/api/lib/files/pdf-signing/finalize";
 import {
   claimFinalizeAttempt,
   MAX_FINALIZE_ATTEMPTS,
@@ -31,8 +53,10 @@ import {
   hashPdfSigningToken,
   lockedCreatorAccess,
   openPdfSigningSession,
+  recordPdfSigningHandoffFailure,
   redeemPdfSigningHandoff,
 } from "@/api/lib/files/pdf-signing/sessions";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import type { TokenScopedDatabase } from "@/api/lib/root-scoped-db";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
@@ -51,6 +75,14 @@ const createdSessionIds: SafeId<"pdfSigningSession">[] = [];
 
 const MINUTE_MS = 60_000;
 
+/** A matter without a client in tenant A, reached through membership only. */
+const personalMatter = {
+  baseVersionId: createSafeId<"entityVersion">(),
+  entityId: createSafeId<"entity">(),
+  propertyId: createSafeId<"property">(),
+  workspaceId: createSafeId<"workspace">(),
+};
+
 const recordedAuditEvents: AuditEvent[] = [];
 const recordAuditEvent: AuditRecorder = async (_tx, event) => {
   recordedAuditEvents.push(...(Array.isArray(event) ? event : [event]));
@@ -60,7 +92,7 @@ type SeedOptions = {
   /** A creator other than the tenant's own member. */
   createdBy?: string;
   handoffExpiresAt?: Date;
-  tenant?: "a" | "b";
+  tenant?: "a" | "b" | "personal";
 };
 
 const seedHandoff = async ({
@@ -69,23 +101,24 @@ const seedHandoff = async ({
   tenant = "a",
 }: SeedOptions = {}) => {
   const sessionId = createSafeId<"pdfSigningSession">();
-  const handoffToken = createPdfSigningToken();
-  const tenantIds =
-    tenant === "a"
-      ? {
-          baseVersionId: ids.entityVersionA1,
-          createdBy: ids.userA1,
-          entityId: ids.entityA1,
-          propertyId: ids.filePropertyA1,
-          workspaceId: ids.wsA1,
-        }
-      : {
-          baseVersionId: ids.entityVersionB1,
-          createdBy: ids.userB1,
-          entityId: ids.entityB1,
-          propertyId: ids.filePropertyB1,
-          workspaceId: ids.wsB1,
-        };
+  const handoffToken = createPdfSigningToken({ userId: null });
+  const tenantIds = {
+    a: {
+      baseVersionId: ids.entityVersionA1,
+      createdBy: ids.userA1,
+      entityId: ids.entityA1,
+      propertyId: ids.filePropertyA1,
+      workspaceId: ids.wsA1,
+    },
+    b: {
+      baseVersionId: ids.entityVersionB1,
+      createdBy: ids.userB1,
+      entityId: ids.entityB1,
+      propertyId: ids.filePropertyB1,
+      workspaceId: ids.wsB1,
+    },
+    personal: { ...personalMatter, createdBy: ids.userA1 },
+  }[tenant];
 
   // `pdf_signing_sessions_open_uidx` allows one open exchange per person per
   // file field, so each seeded row replaces the tenant's previous one.
@@ -108,10 +141,26 @@ const seedHandoff = async ({
 
 /** The application role on the test database, as the token paths use it. */
 const testTokenDb = (): TokenScopedDatabase => ({
-  scoped: ({ organizationId, userId, workspaceIds }) =>
-    asTestRaw<ScopedDb>(
-      createScopedDb(testDb, workspaceIds, organizationId, userId),
-    ),
+  scoped:
+    ({ organizationId, userId, workspaceIds }) =>
+    async <T>(callback: (tx: Transaction) => Promise<T>) =>
+      createScopedDb(
+        testDb,
+        workspaceIds,
+        organizationId,
+        userId,
+      )(async (tx) => {
+        // Transition statements use Bun SQL's array result; PGlite wraps those rows.
+        const bunRowsTx = new Proxy(tx, {
+          get(target, key, receiver) {
+            if (key === "execute") {
+              return async (query: SQL) => (await tx.execute(query)).rows;
+            }
+            return Reflect.get(target, key, receiver) as unknown;
+          },
+        });
+        return callback(asTestRaw<Transaction>(bunRowsTx));
+      }),
   tenantless: asTestRaw<TokenScopedDatabase["tenantless"]>(
     createTenantlessDb(testDb),
   ),
@@ -124,6 +173,34 @@ beforeAll(async () => {
   ids = fixture.ids;
   db = asTestRaw<typeof rootDb>(testDb);
   tokenDb = testTokenDb();
+
+  await testDb.insert(workspaces).values({
+    id: personalMatter.workspaceId,
+    organizationId: ids.orgA,
+    clientId: null,
+    name: "Personal matter",
+    reference: `REF-${personalMatter.workspaceId}`,
+    status: "active",
+  });
+  await testDb.insert(entities).values({
+    id: personalMatter.entityId,
+    workspaceId: personalMatter.workspaceId,
+    kind: "document",
+    name: "personal-matter-document",
+  });
+  await testDb.insert(entityVersions).values({
+    id: personalMatter.baseVersionId,
+    workspaceId: personalMatter.workspaceId,
+    entityId: personalMatter.entityId,
+  });
+  await testDb.insert(properties).values({
+    id: personalMatter.propertyId,
+    workspaceId: personalMatter.workspaceId,
+    name: "Signed file",
+    content: { version: 1, type: "file" },
+    tool: { version: 1, type: "manual-input" },
+    status: "fresh",
+  });
 });
 
 afterAll(async () => {
@@ -133,6 +210,9 @@ afterAll(async () => {
         .delete(pdfSigningSessions)
         .where(inArray(pdfSigningSessions.id, createdSessionIds));
     }
+    await testDb
+      .delete(workspaces)
+      .where(eq(workspaces.id, personalMatter.workspaceId));
   } finally {
     await releaseRlsFixture();
   }
@@ -207,6 +287,27 @@ describe("pdf signing handoff redemption", () => {
     expect(rows.at(0)?.sessionTokenHash).toBeNull();
   });
 
+  test("follows the creator's matter access for an owner without a matter membership", async () => {
+    // userAdmin owns tenant A and holds no matter membership row.
+    const identity = { userId: ids.userAdmin, organizationId: ids.orgA };
+    const onClientMatter = await seedHandoff({ createdBy: ids.userAdmin });
+    const onPersonalMatter = await seedHandoff({
+      createdBy: ids.userAdmin,
+      tenant: "personal",
+    });
+
+    expect(
+      await redeemPdfSigningHandoff(onClientMatter.handoffToken, tokenDb, {
+        identity,
+      }),
+    ).not.toBeNull();
+    expect(
+      await redeemPdfSigningHandoff(onPersonalMatter.handoffToken, tokenDb, {
+        identity,
+      }),
+    ).toBeNull();
+  });
+
   test("spends nothing unless the whole redemption commits", async () => {
     const { handoffToken, sessionId } = await seedHandoff();
 
@@ -275,9 +376,13 @@ describe("pdf signing handoff redemption", () => {
     const { sessionId } = await seedHandoff();
 
     expect(
-      await redeemPdfSigningHandoff(createPdfSigningToken(), tokenDb, {
-        identity: { userId: ids.userA1, organizationId: ids.orgA },
-      }),
+      await redeemPdfSigningHandoff(
+        createPdfSigningToken({ userId: null }),
+        tokenDb,
+        {
+          identity: { userId: ids.userA1, organizationId: ids.orgA },
+        },
+      ),
     ).toBeNull();
 
     const rows = await testDb
@@ -309,6 +414,61 @@ describe("pdf signing session authorization", () => {
     }
     expect(authorized.value.workspaceId).toBe(workspaceId);
     expect(authorized.value.userId).toBe(ids.userA1);
+  });
+
+  test("refuses a session on a matter without a client to an owner without a matter membership", async () => {
+    const { sessionId } = await seedHandoff({
+      createdBy: ids.userAdmin,
+      tenant: "personal",
+    });
+    const sessionToken = createPdfSigningToken({ userId: null });
+    await testDb
+      .update(pdfSigningSessions)
+      .set({
+        handoffConsumedAt: new Date(),
+        sessionTokenHash: hashPdfSigningToken(sessionToken),
+        tokenExpiresAt: new Date(Date.now() + 10 * MINUTE_MS),
+      })
+      .where(eq(pdfSigningSessions.id, sessionId));
+
+    const authorized = await authorizePdfSigningSession(
+      { sessionId, sessionToken },
+      tokenDb,
+    );
+    expect(authorized.status).toBe("permission-revoked");
+  });
+
+  test("holds current write authority again at signed-version commit", async () => {
+    const { handoffToken, sessionId } = await seedHandoff();
+    const redeemed = await redeemPdfSigningHandoff(handoffToken, tokenDb, {
+      identity: { userId: ids.userA1, organizationId: ids.orgA },
+    });
+    const authorized = await authorizePdfSigningSession(
+      { sessionId, sessionToken: redeemed?.sessionToken ?? "" },
+      tokenDb,
+    );
+    expect(authorized.status).toBe("authorized");
+    if (authorized.status !== "authorized") {
+      return;
+    }
+
+    await testDb
+      .update(member)
+      .set({ role: "external" })
+      .where(eq(member.id, ids.memberA1org));
+    try {
+      expect(
+        await holdCurrentPdfSigningWriteAuthority(
+          asTestRaw<Transaction>(testDb),
+          authorized.value,
+        ),
+      ).toBe(false);
+    } finally {
+      await testDb
+        .update(member)
+        .set({ role: "member" })
+        .where(eq(member.id, ids.memberA1org));
+    }
   });
 
   test("refuses another tenant's session token for this session", async () => {
@@ -443,6 +603,124 @@ describe("pdf signing session authorization", () => {
 describe("pdf signing finalization attempts", () => {
   const store = () => asTestRaw<Transaction>(testDb);
 
+  test.each(["close", "browser-cancel"] as const)(
+    "%s records one current cancellation and leaves repeats unchanged",
+    async (owner) => {
+      const { sessionId } = await seedHandoff();
+      const safeDb = createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userA1);
+      const request = new Request("https://example.test/pdf-signing-session");
+      const audit = createAuditRecorder({
+        organizationId: ids.orgA,
+        workspaceId: ids.wsA1,
+        userId: ids.userA1,
+        request,
+        server: null,
+      });
+      const close = async (targetId = sessionId) =>
+        owner === "close"
+          ? await closePdfSigningSession({
+              closeReason: "user_cancelled",
+              recordAuditEvent: audit,
+              safeDb: async (run, retry) =>
+                await safeDb(
+                  async (tx) => await run(asTestRaw<Transaction>(tx)),
+                  retry,
+                ),
+              sessionId: targetId,
+            })
+          : await cancelPdfSigningSession.handler(
+              asTestRaw<Parameters<typeof cancelPdfSigningSession.handler>[0]>({
+                params: { sessionId: targetId },
+                recordAuditEvent: audit,
+                safeDb,
+                user: { id: ids.userA1 },
+                session: { activeOrganizationId: ids.orgA },
+                memberRole: sessionMemberRole("owner"),
+                getWorkspaceAccess: async () => ({
+                  id: ids.wsA1,
+                  status: "active",
+                }),
+                getActiveWorkspaceIds: async () => [ids.wsA1],
+                scopedDb: createScopedDb(
+                  testDb,
+                  [ids.wsA1],
+                  ids.orgA,
+                  ids.userA1,
+                ),
+                orgAIConfig: null,
+                orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
+                managedAIResidency: "eu",
+                promptCachingEnabled: false,
+                workspaceId: ids.wsA1,
+                request,
+                route:
+                  "/v1/entities/:workspaceId/pdf-signing-sessions/:sessionId/cancel",
+              }),
+            );
+      try {
+        const firstClose = await close();
+        if (owner === "browser-cancel") {
+          expect(firstClose).toMatchObject({
+            status: "cancelled",
+            closeReason: "user_cancelled",
+          });
+        }
+        const beforeRepeat =
+          (
+            await testDb
+              .select()
+              .from(pdfSigningSessions)
+              .where(eq(pdfSigningSessions.id, sessionId))
+          ).at(0) ?? panic("The cancelled signing fixture disappeared");
+        expect(beforeRepeat).toMatchObject({
+          status: "cancelled",
+          closeReason: "user_cancelled",
+        });
+        expect(beforeRepeat.closedAt).toBeInstanceOf(Date);
+        await close();
+        expect(
+          (
+            await testDb
+              .select()
+              .from(pdfSigningSessions)
+              .where(eq(pdfSigningSessions.id, sessionId))
+          ).at(0),
+        ).toEqual(beforeRepeat);
+        const audits = await testDb
+          .select({
+            action: auditLogs.action,
+            resourceType: auditLogs.resourceType,
+            changes: auditLogs.changes,
+            metadata: auditLogs.metadata,
+          })
+          .from(auditLogs)
+          .where(eq(auditLogs.resourceId, sessionId));
+        expect(audits).toEqual([
+          {
+            action: AUDIT_ACTION.UPDATE,
+            resourceType: AUDIT_RESOURCE_TYPE.PDF_SIGNING_SESSION,
+            changes: { status: { old: "open", new: "cancelled" } },
+            metadata: expect.objectContaining({
+              closeReason: "user_cancelled",
+            }),
+          },
+        ]);
+        if (owner === "browser-cancel") {
+          expect(
+            await close(createSafeId<"pdfSigningSession">()),
+          ).toMatchObject({
+            code: 404,
+            response: { code: "pdf_signing_session_not_found" },
+          });
+        }
+      } finally {
+        await testDb
+          .delete(auditLogs)
+          .where(eq(auditLogs.resourceId, sessionId));
+      }
+    },
+  );
+
   test("keeps the first signature and refuses a different one", async () => {
     const { sessionId } = await seedHandoff();
     const signature = new Uint8Array([1, 2, 3]);
@@ -542,16 +820,16 @@ describe("pdf signing finalization attempts", () => {
       sessionId,
       tx: store(),
     });
+    const auditsBeforeClose = recordedAuditEvents.length;
     const closed = await closePdfSigningSession({
       attempt: 1,
       closeReason: "signing_failed",
-      recordAuditEvent: async () => {
-        await Promise.resolve();
-      },
+      recordAuditEvent,
       safeDb: async (callback) => Result.ok(await callback(store())),
       sessionId,
     });
     expect(Result.isOk(closed)).toBe(true);
+    expect(recordedAuditEvents).toHaveLength(auditsBeforeClose);
     expect(await claim(new Date(lapsed.getTime() + 1000))).toEqual({
       status: "in-progress",
     });
@@ -641,7 +919,7 @@ describe("pdf signing finalization attempts", () => {
         await authorizePdfSigningSession(
           {
             sessionId,
-            sessionToken: createPdfSigningToken(),
+            sessionToken: createPdfSigningToken({ userId: null }),
           },
           tokenDb,
         )
@@ -664,7 +942,9 @@ describe("opening a pdf signing exchange", () => {
         createdBy: ids.userA1,
         entityId: ids.entityA1,
         handoffExpiresAt: expiresAt,
-        handoffTokenHash: hashPdfSigningToken(createPdfSigningToken()),
+        handoffTokenHash: hashPdfSigningToken(
+          createPdfSigningToken({ userId: null }),
+        ),
         id,
         propertyId: ids.filePropertyA1,
         tokenExpiresAt: expiresAt,
@@ -699,7 +979,9 @@ describe("opening a pdf signing exchange", () => {
           createdBy: ids.userA1,
           entityId: ids.entityA1,
           handoffExpiresAt: expiresAt,
-          handoffTokenHash: hashPdfSigningToken(createPdfSigningToken()),
+          handoffTokenHash: hashPdfSigningToken(
+            createPdfSigningToken({ userId: null }),
+          ),
           id,
           propertyId: ids.filePropertyA1,
           tokenExpiresAt: expiresAt,
@@ -895,7 +1177,9 @@ describe("pdf signing session row security", () => {
           createdBy: ids.userA1,
           entityId: ids.entityA1,
           handoffExpiresAt,
-          handoffTokenHash: hashPdfSigningToken(createPdfSigningToken()),
+          handoffTokenHash: hashPdfSigningToken(
+            createPdfSigningToken({ userId: null }),
+          ),
           id: createSafeId<"pdfSigningSession">(),
           propertyId: ids.filePropertyA1,
           tokenExpiresAt: handoffExpiresAt,
@@ -969,7 +1253,7 @@ describe("pdf signing token scopes", () => {
     ]);
     // Another token, an empty one, or no token at all names nothing.
     for (const hash of [
-      hashPdfSigningToken(createPdfSigningToken()),
+      hashPdfSigningToken(createPdfSigningToken({ userId: null })),
       "",
       null,
     ]) {
@@ -1039,3 +1323,93 @@ describe("pdf signing token scopes", () => {
     expect(rows).toEqual([]);
   });
 });
+
+test("PDF handoff failure acknowledges only its live unconsumed token", async () => {
+  const now = new Date();
+  const mine = await seedHandoff({
+    handoffExpiresAt: new Date(now.getTime() + MINUTE_MS),
+  });
+  const theirs = await seedHandoff({
+    tenant: "b",
+    handoffExpiresAt: new Date(now.getTime() + MINUTE_MS),
+  });
+  const acknowledge = async (token: string) =>
+    recordPdfSigningHandoffFailure({
+      handoffToken: token,
+      reason: DESKTOP_HANDOFF_FAILURE.accountRequired,
+      db: tokenDb,
+      now,
+    });
+  expect(await acknowledge(mine.handoffToken)).toBe(true);
+  expect(await acknowledge(mine.handoffToken)).toBe(false);
+  expect(await acknowledge(createPdfSigningToken({ userId: null }))).toBe(
+    false,
+  );
+  const rows = await testDb
+    .select({
+      id: pdfSigningSessions.id,
+      status: pdfSigningSessions.status,
+      closeReason: pdfSigningSessions.closeReason,
+      closedAt: pdfSigningSessions.closedAt,
+    })
+    .from(pdfSigningSessions)
+    .where(inArray(pdfSigningSessions.id, [mine.sessionId, theirs.sessionId]));
+  expect(rows.find((row) => row.id === mine.sessionId)).toEqual({
+    id: mine.sessionId,
+    status: "cancelled",
+    closeReason: DESKTOP_HANDOFF_FAILURE.accountRequired,
+    closedAt: now,
+  });
+  expect(rows.find((row) => row.id === theirs.sessionId)?.status).toBe("open");
+  expect(
+    await redeemPdfSigningHandoff(mine.handoffToken, tokenDb, {
+      identity: { userId: ids.userA1, organizationId: ids.orgA },
+    }),
+  ).toBeNull();
+  const expired = await seedHandoff({ handoffExpiresAt: now });
+  expect(await acknowledge(expired.handoffToken)).toBe(false);
+  const consumed = await seedHandoff();
+  expect(
+    await redeemPdfSigningHandoff(consumed.handoffToken, tokenDb, {
+      identity: { userId: ids.userA1, organizationId: ids.orgA },
+    }),
+  ).not.toBeNull();
+  expect(await acknowledge(consumed.handoffToken)).toBe(false);
+});
+
+test.each(["failure", "redemption"] as const)(
+  "PDF handoff keeps the first terminal outcome: %s",
+  async (first) => {
+    const { handoffToken, sessionId } = await seedHandoff();
+    const now = new Date();
+    const fail = async () =>
+      await recordPdfSigningHandoffFailure({
+        handoffToken,
+        reason: DESKTOP_HANDOFF_FAILURE.updateRequired,
+        db: tokenDb,
+        now,
+      });
+    const redeem = async () =>
+      await redeemPdfSigningHandoff(handoffToken, tokenDb, {
+        identity: { userId: ids.userA1, organizationId: ids.orgA },
+      });
+    if (first === "failure") {
+      expect(await fail()).toBe(true);
+      expect(await redeem()).toBeNull();
+    } else {
+      expect(await redeem()).not.toBeNull();
+      expect(await fail()).toBe(false);
+    }
+    const rows = await testDb
+      .select({
+        consumedAt: pdfSigningSessions.handoffConsumedAt,
+        status: pdfSigningSessions.status,
+        closedAt: pdfSigningSessions.closedAt,
+      })
+      .from(pdfSigningSessions)
+      .where(eq(pdfSigningSessions.id, sessionId));
+    expect(rows.at(0)?.status).toBe(first === "failure" ? "cancelled" : "open");
+    expect(rows.at(0)?.consumedAt === null).toBe(first === "failure");
+    expect(rows.at(0)?.closedAt).toEqual(first === "failure" ? now : null);
+  },
+);

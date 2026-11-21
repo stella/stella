@@ -1,10 +1,12 @@
 import { Result } from "better-result";
 import { and } from "drizzle-orm";
 
+import { moneyExportSchema } from "@stll/api-contract/billing-money";
 import { timeEntryAmount } from "@stll/money";
+import { withBillingRead } from "@stll/permissions";
 
+import { entityContextId } from "@/api/db/entity-feature-policies";
 import { timeEntries } from "@/api/db/schema";
-import { exportAmountText } from "@/api/handlers/time-entries/export-amount";
 import {
   loadTimekeeperNames,
   timeEntryExportConditions,
@@ -13,6 +15,7 @@ import {
 import type { TimeEntryExportHandlerProps } from "@/api/handlers/time-entries/export-query";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
+import { exportAmountText } from "@/api/lib/billing/export-amount";
 import { escapeCSV } from "@/api/lib/csv";
 import { LIMITS } from "@/api/lib/limits";
 
@@ -30,7 +33,7 @@ export const exportCsvHandler = async ({
         id: timeEntries.id,
         activityGroup: timeEntries.activityGroup,
         userId: timeEntries.userId,
-        workItemId: timeEntries.workItemId,
+        workItemId: entityContextId(timeEntries.workItemId),
         dateWorked: timeEntries.dateWorked,
         durationMinutes: timeEntries.durationMinutes,
         billedMinutes: timeEntries.billedMinutes,
@@ -105,14 +108,17 @@ export const exportCsvHandler = async ({
 };
 
 const config = {
+  moneyResponse: moneyExportSchema,
+  contract: "patch",
   accountAccess: ACCOUNT_ACCESS.standard,
+  featureAccess: { featureId: "time-billing", type: "required" },
   description:
     "Export a matter's client time entries as CSV text, one row per entry with " +
     "date, timekeeper name, activity group, work item, minutes, rate, amount, billable flag, " +
     "status, task and activity codes, and narratives. Filter by date-worked " +
     "range, status, and work item. Unlike the LEDES export this includes " +
     "non-billable and written-off entries; the row count is capped.",
-  permissions: { timeEntry: ["approve"] },
+  permissions: withBillingRead({ timeEntry: ["approve"] }),
   mcp: {
     type: "capability",
     readClass: "tenant",

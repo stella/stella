@@ -1,0 +1,23 @@
+{
+  "model": "gpt-6-luna",
+  "answers": [
+    { "type": "predicate", "name": "damaged", "probability": 0.95 },
+    {
+      "type": "choice",
+      "name": "category",
+      "choice": "screen",
+      "confidence": 0.85,
+      "probabilities": [
+        { "value": "screen", "probability": 0.9 },
+        { "value": "other", "probability": 0.1 }
+      ]
+    }
+  ],
+  "usage": {
+    "input_tokens": 42,
+    "input_tokens_details": { "cached_tokens": 0, "cache_write_tokens": 0 },
+    "output_tokens": 0,
+    "output_tokens_details": { "reasoning_tokens": 0 },
+    "total_tokens": 42
+  }
+}

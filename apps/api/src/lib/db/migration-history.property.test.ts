@@ -1,10 +1,11 @@
 import { describe, expect, spyOn, test } from "bun:test";
 import fc from "fast-check";
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import nodePath from "node:path";
 
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/node";
 
 import {
   assertMigrationHistory,
@@ -54,7 +55,8 @@ const migrationHistory = localMigrations.chain((local) =>
 
 describe("migration history invariant", () => {
   test("requires a named receipt or an unnamed legacy hash for each bundled migration", () => {
-    fc.assert(
+    assertProperty(
+      "requires a named receipt or an unnamed legacy hash for each bundled migration",
       fc.property(
         migrationHistory,
         ({ appliedRows, expectedUnapplied, local }) => {
@@ -66,7 +68,7 @@ describe("migration history invariant", () => {
           ).toEqual(expectedUnapplied);
         },
       ),
-      propertyConfig(),
+      {},
     );
   });
 
@@ -80,13 +82,11 @@ describe("migration history invariant", () => {
 
     await Promise.all(
       supportedHistories.map(async ([name, currentHash, priorHash]) => {
-        const actualHash = new Bun.CryptoHasher("sha256")
-          .update(
-            await Bun.file(
-              nodePath.join(MIGRATIONS_DIR, name, "migration.sql"),
-            ).bytes(),
-          )
-          .digest("hex");
+        const actualHash = hashSha256Hex(
+          await Bun.file(
+            nodePath.join(MIGRATIONS_DIR, name, "migration.sql"),
+          ).bytes(),
+        );
         expect(actualHash).toBe(currentHash);
         expect(
           findUnappliedMigrations({
@@ -152,10 +152,8 @@ describe("migration history invariant", () => {
     try {
       const name = "20260929000000_bundled";
       const sqlText = "SELECT 1;";
-      const hash = new Bun.CryptoHasher("sha256").update(sqlText).digest("hex");
-      const rewrittenHash = new Bun.CryptoHasher("sha256")
-        .update(`-- rewritten\n${sqlText}`)
-        .digest("hex");
+      const hash = hashSha256Hex(sqlText);
+      const rewrittenHash = hashSha256Hex(`-- rewritten\n${sqlText}`);
       const newerName = "20260930000000_newer";
       const folder = nodePath.join(migrationsDir, name);
       mkdirSync(folder);

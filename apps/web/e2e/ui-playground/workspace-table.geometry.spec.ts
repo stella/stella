@@ -14,13 +14,24 @@
  * holds whichever edge the inline start is.
  */
 
-import { expect, test } from "@playwright/test";
 import type { Page } from "@playwright/test";
+
+import {
+  expect,
+  test,
+  waitForStableGeometry,
+} from "../helpers/stable-geometry";
 
 const SECTION = '[data-playground-section="workspace-table"]';
 const SCROLL_BOX = `${SECTION} [data-slot="workspace-table-scroll"]`;
 const HEADER_CELL = `${SECTION} [data-slot="workspace-grid-head"]`;
 const BODY_ROW = `${SECTION} [data-slot="workspace-grid-row"][data-index]`;
+const TABLE_MEASUREMENTS = [
+  SCROLL_BOX,
+  HEADER_CELL,
+  BODY_ROW,
+  `${BODY_ROW} [data-slot="workspace-grid-cell"]`,
+].join(", ");
 
 /** The column pinned past the checkbox, so its offset is not zero. */
 const PINNED_COLUMN_INDEX = 2;
@@ -49,8 +60,9 @@ type TableGeometry = {
   firstRowCells: CellBox[];
 };
 
-const readGeometry = async (page: Page) =>
-  page.evaluate(
+const readGeometry = async (page: Page) => {
+  await waitForStableGeometry(page, page.locator(TABLE_MEASUREMENTS));
+  return await page.evaluate(
     ([sectionSelector, scrollSelector]): TableGeometry => {
       const section = document.querySelector(sectionSelector);
       const scroll = section?.querySelector(scrollSelector);
@@ -58,7 +70,7 @@ const readGeometry = async (page: Page) =>
         !(section instanceof HTMLElement) ||
         !(scroll instanceof HTMLElement)
       ) {
-        throw new Error("workspace table bench is not mounted");
+        throw new TypeError("workspace table bench is not mounted");
       }
       const origin = scroll.getBoundingClientRect();
       const box = (element: Element): CellBox => {
@@ -75,7 +87,13 @@ const readGeometry = async (page: Page) =>
           '[data-slot="workspace-grid-row"][data-index]',
         ),
       ];
-      const firstRow = rows.find((row) => row.dataset["index"] === "0");
+      // The first row the body draws: which one that is after a scroll
+      // depends on how far below the window the table has mounted rows.
+      const firstRow = rows
+        .toSorted(
+          (a, b) => Number(a.dataset["index"]) - Number(b.dataset["index"]),
+        )
+        .at(0);
       return {
         scroll: {
           scrollLeft: Math.round(scroll.scrollLeft),
@@ -100,6 +118,7 @@ const readGeometry = async (page: Page) =>
     },
     [SECTION, '[data-slot="workspace-table-scroll"]'] as const,
   );
+};
 
 /**
  * Scroll the table's own box to the middle of an axis, or of both.
@@ -112,7 +131,7 @@ const scrollToMiddle = async (
     ([scrollSelector, inline, block]) => {
       const scroll = document.querySelector(scrollSelector);
       if (!(scroll instanceof HTMLElement)) {
-        throw new Error("workspace table scroll box is not mounted");
+        throw new TypeError("workspace table scroll box is not mounted");
       }
       if (inline) {
         // `scrollLeft` is physical, and under `dir="rtl"` its scrollable range
@@ -128,12 +147,7 @@ const scrollToMiddle = async (
     },
     [SCROLL_BOX, axes.inline, axes.block] as const,
   );
-  // One frame for the sticky offsets to settle before anything is measured.
-  await page.evaluate(async () => {
-    await new Promise((resolve) => {
-      requestAnimationFrame(() => resolve(null));
-    });
-  });
+  await waitForStableGeometry(page, page.locator(TABLE_MEASUREMENTS));
 };
 
 test.beforeEach(async ({ page }) => {
@@ -142,6 +156,55 @@ test.beforeEach(async ({ page }) => {
   });
   await page.locator(HEADER_CELL).first().waitFor();
   await page.locator(BODY_ROW).first().waitFor();
+});
+
+test("table measurements wait for a moving cell inside a fixed scroll box", async ({
+  page,
+}) => {
+  const before = await readGeometry(page);
+  const beforeCell = before.headerCells.at(0);
+  if (beforeCell === undefined) {
+    throw new Error("Table fixture has no measured header cell");
+  }
+  const cell = page.locator(`${HEADER_CELL}[aria-colindex]`).first();
+  const displacement = 80;
+  const animationId = "geometry-cell-motion";
+  await cell.evaluate(
+    (element, { distance, id }) => {
+      const motion = element.animate(
+        [
+          { transform: "translateX(0px)" },
+          { transform: `translateX(${distance}px)` },
+        ],
+        { duration: 1000, easing: "linear", fill: "forwards" },
+      );
+      motion.id = id;
+    },
+    { distance: displacement, id: animationId },
+  );
+  try {
+    const after = await readGeometry(page);
+    expect(
+      await cell.evaluate(
+        (element, id) =>
+          element.getAnimations().find((motion) => motion.id === id)?.playState,
+        animationId,
+      ),
+    ).toBe("finished");
+    expect(after.scroll.clientWidth).toBe(before.scroll.clientWidth);
+    expect(after.scroll.clientHeight).toBe(before.scroll.clientHeight);
+    expect(after.headerCells.at(0)?.inlineOffset).toBe(
+      beforeCell.inlineOffset + displacement,
+    );
+  } finally {
+    await cell.evaluate((element, id) => {
+      for (const motion of element.getAnimations()) {
+        if (motion.id === id) {
+          motion.cancel();
+        }
+      }
+    }, animationId);
+  }
 });
 
 test("the table scrolls inside the height its host gives it", async ({
@@ -160,57 +223,66 @@ test("the table scrolls inside the height its host gives it", async ({
   expect(geometry.renderedRowCount).toBeLessThan(40);
 });
 
-test("a viewport too short for the table keeps what is below it reachable", async ({
-  page,
-}) => {
-  // Short enough that the table's own minimum no longer fits beside the rest of
-  // the stack. The bench's chrome is lighter than the results page's, so the
-  // height at which that bites is lower here; the assertion below checks the
-  // page really did overflow rather than trusting the number.
-  await page.setViewportSize({ width: 1440, height: 300 });
-  const belowTable = page.locator(`${SECTION} > div:last-child`);
-  await expect(belowTable).toBeVisible();
+test.describe("a short viewport", () => {
+  test.use({ viewport: { width: 1440, height: 300 } });
 
-  const readReach = async () =>
-    page.evaluate(
-      ([sectionSelector]) => {
-        const section = document.querySelector(sectionSelector);
-        const pageScroller = section?.closest("main");
-        const below = section?.lastElementChild;
-        if (
-          !(pageScroller instanceof HTMLElement) ||
-          !(below instanceof HTMLElement)
-        ) {
-          throw new Error("workspace table bench is not mounted");
-        }
-        const scrollerBox = pageScroller.getBoundingClientRect();
-        const belowBox = below.getBoundingClientRect();
-        return {
-          overflows: pageScroller.scrollHeight > pageScroller.clientHeight + 1,
-          bottomWithinScroller: Math.round(
-            scrollerBox.bottom - belowBox.bottom,
-          ),
-          height: Math.round(belowBox.height),
-        };
-      },
-      [SECTION] as const,
-    );
+  test("a viewport too short for the table keeps what is below it reachable", async ({
+    page,
+  }) => {
+    // Short enough that the table's own minimum no longer fits beside the rest of
+    // the stack. The bench's chrome is lighter than the results page's, so the
+    // height at which that bites is lower here; the assertion below checks the
+    // page really did overflow rather than trusting the number.
+    const belowTable = page.locator(`${SECTION} > div:last-child`);
+    const pageScrollerLocator = page
+      .locator("main")
+      .filter({ has: page.locator(SECTION) });
+    await expect(belowTable).toBeVisible();
 
-  const before = await readReach();
-  // The premise: the stack genuinely does not fit, so a fallback scroller is
-  // the only thing that can bring what is under the table back into view.
-  expect(before.overflows).toBe(true);
-  expect(before.height).toBeGreaterThan(0);
-  expect(before.bottomWithinScroller).toBeLessThan(0);
+    const readReach = async () => {
+      await waitForStableGeometry(page, [pageScrollerLocator, belowTable]);
+      return await page.evaluate(
+        ([sectionSelector]) => {
+          const section = document.querySelector(sectionSelector);
+          const pageScroller = section?.closest("main");
+          const below = section?.lastElementChild;
+          if (
+            !(pageScroller instanceof HTMLElement) ||
+            !(below instanceof HTMLElement)
+          ) {
+            throw new TypeError("workspace table bench is not mounted");
+          }
+          const scrollerBox = pageScroller.getBoundingClientRect();
+          const belowBox = below.getBoundingClientRect();
+          return {
+            overflows:
+              pageScroller.scrollHeight > pageScroller.clientHeight + 1,
+            bottomWithinScroller: Math.round(
+              scrollerBox.bottom - belowBox.bottom,
+            ),
+            height: Math.round(belowBox.height),
+          };
+        },
+        [SECTION] as const,
+      );
+    };
 
-  // A wheel over the chrome above the table, not over the table's own scroll
-  // box. `overflow: hidden` is still scriptable, so only a real gesture tells a
-  // page that scrolls apart from one that merely clips.
-  await page.mouse.move(720, 24);
-  await page.mouse.wheel(0, 2000);
-  await expect
-    .poll(async () => (await readReach()).bottomWithinScroller)
-    .toBeGreaterThanOrEqual(0);
+    const before = await readReach();
+    // The premise: the stack genuinely does not fit, so a fallback scroller is
+    // the only thing that can bring what is under the table back into view.
+    expect(before.overflows).toBe(true);
+    expect(before.height).toBeGreaterThan(0);
+    expect(before.bottomWithinScroller).toBeLessThan(0);
+
+    // A wheel over the chrome above the table, not over the table's own scroll
+    // box. `overflow: hidden` is still scriptable, so only a real gesture tells a
+    // page that scrolls apart from one that merely clips.
+    await page.mouse.move(720, 24);
+    await page.mouse.wheel(0, 2000);
+    await expect
+      .poll(async () => (await readReach()).bottomWithinScroller)
+      .toBeGreaterThanOrEqual(0);
+  });
 });
 
 test("the header stays frozen while the body scrolls under it", async ({
@@ -282,6 +354,7 @@ test("a column is one width in the header and in the body", async ({
 
 test("a row shown whole is as tall as what it holds", async ({ page }) => {
   await page.locator('[data-playground-content-mode="fit-content"]').click();
+  await waitForStableGeometry(page, page.locator(BODY_ROW).first());
 
   // Rows regrow and the virtualizer re-measures them, so the whole verdict is
   // polled rather than read once after a separate wait: reading the row's box
@@ -323,4 +396,120 @@ test("a row shown whole is as tall as what it holds", async ({ page }) => {
       ),
     )
     .toBe("row is as tall as what it holds");
+});
+
+/**
+ * How far each value cell's first text line sits below the row number, per
+ * rendered row. Text centres, not boxes: what must line up is what the reader
+ * sees, whatever padding each cell's content carries above its text.
+ */
+const readFirstLineOffsets = async (page: Page) => {
+  await waitForStableGeometry(page, page.locator(BODY_ROW));
+  return await page.evaluate(
+    ([bodyRowSelector]) => {
+      const lineCentre = (node: Node) => {
+        const range = document.createRange();
+        range.selectNodeContents(node);
+        const rect = range.getClientRects()[0];
+        if (!rect) {
+          throw new Error("text node has no line box");
+        }
+        return rect.top + rect.height / 2;
+      };
+      const firstText = (root: Element) => {
+        const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+          acceptNode: (node) =>
+            node.textContent?.trim() &&
+            !node.parentElement?.closest('[aria-hidden="true"], .sr-only')
+              ? NodeFilter.FILTER_ACCEPT
+              : NodeFilter.FILTER_REJECT,
+        });
+        return walker.nextNode();
+      };
+      return [...document.querySelectorAll(bodyRowSelector)].map((row) => {
+        const number = row.querySelector(
+          '[data-slot="checkbox-cell-label"], [data-slot="table-row-number"]',
+        );
+        const numberText = number?.firstChild;
+        if (!numberText) {
+          throw new Error("row has no number");
+        }
+        const numberCentre = lineCentre(numberText);
+        return [
+          ...row.querySelectorAll(
+            '[data-slot="workspace-grid-cell"][aria-colindex]',
+          ),
+        ]
+          .filter((cell) => !cell.contains(number))
+          .flatMap((cell) => {
+            const text = firstText(cell);
+            return text ? [lineCentre(text) - numberCentre] : [];
+          });
+      });
+    },
+    [BODY_ROW] as const,
+  );
+};
+
+for (const contentMode of ["tight", "fit-content"] as const) {
+  test(`the row number sits on its row's first text line (${contentMode})`, async ({
+    page,
+  }) => {
+    await page
+      .locator(`[data-playground-content-mode="${contentMode}"]`)
+      .click();
+    await expect
+      .poll(async () => {
+        const rows = await readFirstLineOffsets(page);
+        const cellCount = rows.reduce((sum, row) => sum + row.length, 0);
+        const worst = Math.max(...rows.flat().map(Math.abs));
+        // The premise: rows and cells with text were measured at all.
+        if (rows.length === 0 || cellCount < rows.length) {
+          return `measured ${rows.length} rows, ${cellCount} cells`;
+        }
+        return worst <= BOX_TOLERANCE_PX
+          ? "every first line within tolerance"
+          : `a first line ${worst.toFixed(1)}px off the number`;
+      })
+      .toBe("every first line within tolerance");
+  });
+}
+
+test("the whole selection cell toggles without opening a result and supports Shift and Space", async ({
+  page,
+}) => {
+  const rows = page.locator(BODY_ROW);
+  // The checkbox is named "Select <case number>" in the reader's language, so
+  // a row is found by its case number alone, which every project, `ar`
+  // included, puts in the name.
+  const first = rows.filter({
+    has: page.getByRole("checkbox", { name: "21 Cdo 1400/2024" }),
+  });
+  const firstSelection = first.locator('[data-slot="table-selection-cell"]');
+  await expect(firstSelection).toHaveAttribute("aria-checked", "false");
+
+  // The corner is outside the centred checkbox indicator.
+  await firstSelection.click({ position: { x: 3, y: 3 } });
+  await expect(first).toHaveAttribute("aria-selected", "true");
+  await expect(first).not.toHaveAttribute("data-active", "true");
+
+  const third = rows.filter({
+    has: page.getByRole("checkbox", { name: "23 Cdo 1414/2024" }),
+  });
+  await third.locator('[data-slot="table-selection-cell"]').click({
+    position: { x: 3, y: 3 },
+    modifiers: ["Shift"],
+  });
+  await expect(page.locator(`${BODY_ROW}[aria-selected="true"]`)).toHaveCount(
+    3,
+  );
+  await expect(page.locator(`${BODY_ROW}[data-active="true"]`)).toHaveCount(0);
+
+  await firstSelection.focus();
+  await firstSelection.press("Space");
+  await expect(firstSelection).toHaveAttribute("aria-checked", "false");
+  await expect(page.locator(`${BODY_ROW}[data-active="true"]`)).toHaveCount(0);
+  await firstSelection.press("Space");
+  await expect(firstSelection).toHaveAttribute("aria-checked", "true");
+  await expect(firstSelection).toHaveCSS("cursor", "pointer");
 });

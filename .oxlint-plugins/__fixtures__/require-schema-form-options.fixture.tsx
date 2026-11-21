@@ -77,7 +77,7 @@ export const useBadForms = () => {
 };
 
 export const useShadowedHelper = (
-  // oxlint-disable-next-line eslint/no-shadow -- fixture: a parameter must shadow the imported helper to exercise scope resolution
+  // oxlint-disable-next-line no-shadow -- fixture: a parameter must shadow the imported helper to exercise scope resolution
   schemaFormOptions: (value: unknown) => unknown,
 ) =>
   // oxlint-disable-next-line require-schema-form-options/require-schema-form-options -- fixture: a parameter shadows the real helper
@@ -85,6 +85,6 @@ export const useShadowedHelper = (
 
 // Unrelated functions and shadowed imports are outside the rule's scope.
 export const useUnrelatedForm = (
-  // oxlint-disable-next-line eslint/no-shadow -- fixture: a shadowed factory must not be mistaken for TanStack Form
+  // oxlint-disable-next-line no-shadow -- fixture: a shadowed factory must not be mistaken for TanStack Form
   useForm: (value: unknown) => unknown,
 ) => useForm(config);

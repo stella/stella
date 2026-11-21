@@ -1,10 +1,20 @@
 import { Panic, UnhandledException } from "better-result";
 import { SQL } from "bun";
-import { describe, expect, test } from "bun:test";
+import { describe, expect, spyOn, test } from "bun:test";
 
-import { classifyFailure } from "@stll/errors";
+import {
+  classifyFailure,
+  declareFailureClass,
+  declareFingerprintFields,
+} from "@stll/errors";
 
-import { DatabaseRlsError, HandlerError } from "@/api/lib/errors/tagged-errors";
+import {
+  DatabaseRlsError,
+  ExtractionWorkerError,
+  HandlerError,
+  SandboxError,
+  TimeoutError,
+} from "@/api/lib/errors/tagged-errors";
 import {
   MAX_EVIDENCE_DEPTH,
   readEvidence,
@@ -33,6 +43,7 @@ describe("failure evidence walks the chain once", () => {
     const evidence = readEvidence(
       new UnhandledException({
         cause: new HandlerError({
+          code: "internal_error",
           status: 502,
           message: "wrapped",
           cause: body,
@@ -112,6 +123,41 @@ describe("failure evidence walks the chain once", () => {
 });
 
 describe("failure evidence survives hostile values", () => {
+  test("constructor descriptor failures preserve the readable cause prefix", () => {
+    const hostile = Object.create(
+      new Proxy(Error.prototype, {
+        getOwnPropertyDescriptor: () => {
+          throw new TypeError("unreadable descriptor");
+        },
+      }),
+    );
+    const evidence = readEvidence(new Error("outer", { cause: hostile }));
+    expect(evidence.truncation).toBe("read_failed");
+    expect(evidence.nodes).toHaveLength(2);
+    expect(evidence.nodes[0]).toMatchObject({ kind: "error", tag: "Error" });
+  });
+
+  test("unreadable metadata indices preserve readable finite dimensions", () => {
+    class MetadataError extends Error {
+      override readonly name = "MetadataError";
+      readonly reason = "decode";
+      static readonly stellaExceptionFingerprintFields = new Proxy(
+        ["reason", "stage"],
+        {
+          get: (target, key, receiver): unknown => {
+            if (key === "1") {
+              throw new TypeError("unreadable metadata");
+            }
+            return Reflect.get(target, key, receiver);
+          },
+        },
+      );
+    }
+    const evidence = readEvidence(new MetadataError("private message"));
+    expect(evidence.truncation).toBe("read_failed");
+    expect(evidence.nodes[0]?.discriminators).toEqual({ reason: "decode" });
+  });
+
   test("a revoked Proxy reads as a failed read, not a throw", () => {
     const { proxy, revoke } = Proxy.revocable(new Error("x"), {});
     revoke();
@@ -186,6 +232,24 @@ describe("failure evidence survives hostile values", () => {
 });
 
 describe("failure evidence reads identity", () => {
+  test("reads deadline evidence only from a TimeoutError", () => {
+    const timeout = new TimeoutError({
+      message: "expired",
+      label: "workflow-reconcile-tick",
+      timeoutMs: 30_000,
+    });
+    const lookalike = Object.assign(new Error("expired"), {
+      label: "user-controlled",
+      timeoutMs: 1, // timeout: a lookalike field, never a deadline
+    });
+
+    expect(readEvidence(timeout).nodes[0]?.timeout).toMatchObject({
+      label: "workflow-reconcile-tick",
+      timeoutMs: 30_000,
+    });
+    expect(readEvidence(lookalike).nodes[0]?.timeout).toBeUndefined();
+  });
+
   test("a declared class name is kept only when the constructor vouches for it", () => {
     // Classes whose identifiers a build rewrote: named through
     // `defineProperty`, exactly as a bundler's output reports them.
@@ -286,6 +350,31 @@ describe("failure evidence reads frames", () => {
     });
   });
 
+  test("a panic names its caller, not the helper that built it", () => {
+    const error = new Error("boom");
+    error.stack = [
+      "Error: boom",
+      "    at i (/app/node_modules/better-result/dist/index.mjs:1:322)",
+      "    at i (/root/.bun/install/cache/better-result@3.0.1/index.mjs:1:322)",
+      "    at load (/app/apps/api/src/lib/caller.ts:12:7)",
+    ].join("\n");
+
+    expect(readEvidence(error).nodes[0]?.frame).toEqual({
+      kind: "recognized",
+      location: "/app/apps/api/src/lib/caller.ts:12:7",
+    });
+  });
+
+  test("a stack of only helper frames has no frame to report", () => {
+    const error = new Error("boom");
+    error.stack = [
+      "Error: boom",
+      "    at i (/app/node_modules/better-result/dist/index.mjs:1:322)",
+    ].join("\n");
+
+    expect(readEvidence(error).nodes[0]?.frame).toEqual({ kind: "absent" });
+  });
+
   test("a frame outside this build's paths is present but not shipped", () => {
     const error = errorWithStack(
       "x",
@@ -320,15 +409,33 @@ describe("failure evidence reads frames", () => {
       message,
       [`Error: ${message}`, at("/app/apps/api/src/big.ts:5:6")].join("\n"),
     );
-    const started = performance.now();
-
-    const frame = readEvidence(error).nodes[0]?.frame;
+    const originalSplit = String.prototype.split;
+    const splitBytes: number[] = [];
+    const splitting = spyOn(String.prototype, "split").mockImplementation(
+      function (this: string, separator, limit) {
+        splitBytes.push(new TextEncoder().encode(this).byteLength);
+        const split = originalSplit.bind(this);
+        if (typeof separator === "string" || separator instanceof RegExp) {
+          return split(separator, limit);
+        }
+        return split(separator, limit);
+      },
+    );
+    let evidence: ReturnType<typeof readEvidence>;
+    try {
+      evidence = readEvidence(error);
+    } finally {
+      splitting.mockRestore();
+    }
+    const frame = evidence.nodes[0]?.frame;
 
     expect(frame).toEqual({
       kind: "recognized",
       location: "/app/apps/api/src/big.ts:5:6",
     });
-    expect(performance.now() - started).toBeLessThan(250);
+    expect(splitBytes).toHaveLength(1);
+    expect(Math.max(...splitBytes)).toBeLessThanOrEqual(8 * 1024);
+    expect(new TextEncoder().encode(message).byteLength).toBe(1024 * 1024);
   });
 
   test("frames past the line bound are not searched", () => {
@@ -395,7 +502,9 @@ describe("provider status provenance", () => {
       source: "code",
     });
     expect(
-      readProviderStatus(new HandlerError({ status: 502, message: "x" })),
+      readProviderStatus(
+        new HandlerError({ code: "internal_error", status: 502, message: "x" }),
+      ),
     ).toBeUndefined();
   });
 
@@ -405,4 +514,79 @@ describe("provider status provenance", () => {
     expect(readProviderStatus({ code: "insufficient_quota" })).toBeUndefined();
     expect(readProviderStatus(new Panic({ message: "x" }))).toBeUndefined();
   });
+});
+
+describe("failure evidence snapshots typed fingerprint dimensions", () => {
+  test("keeps sandbox causes separate and reads a changing reason once", () => {
+    const error = new SandboxError({ message: "private", reason: "runtime" });
+    let reads = 0;
+    Object.defineProperty(error, "reason", {
+      get: () => {
+        reads += 1;
+        return reads === 1 ? "runtime" : "timeout";
+      },
+    });
+    expect(readEvidence(error).nodes.at(0)?.discriminators).toEqual({
+      reason: "runtime",
+    });
+    expect(readEvidence(error).nodes.at(0)?.discriminators).toEqual({
+      reason: "runtime",
+    });
+    expect(reads).toBe(1);
+  });
+
+  test("shares nested termination reads with extraction diagnostics", () => {
+    const error = new ExtractionWorkerError({
+      message: "private",
+      code: "worker_timeout",
+      workerErrorClass: null,
+      exitCode: null,
+      mimeType: "text/plain",
+      sizeBytes: 10,
+      termination: { reason: "timeout", signalCode: "SIGTERM" },
+    });
+    let reads = 0;
+    Object.defineProperty(error.termination, "reason", {
+      get: () => {
+        reads += 1;
+        return reads === 1 ? "timeout" : "crashed";
+      },
+    });
+    const node = readEvidence(error).nodes.at(0);
+    expect(node?.discriminators).toEqual({ "termination.reason": "timeout" });
+    expect(node?.extraction?.["terminationReason"]).toBe("timeout");
+    expect(reads).toBe(1);
+  });
+});
+
+test("failure evidence shares discriminator reads with class brands and accessors", () => {
+  class ReasonFailureError extends Error {
+    override readonly name = "ReasonFailureError";
+    readonly reason: "runtime" | "timeout" = "runtime";
+    static {
+      declareFailureClass(this, ({ reason }) =>
+        reason === "runtime" ? "unclassified" : "invalid_declaration",
+      );
+      declareFingerprintFields(this, ["reason"]);
+    }
+    get code() {
+      return this.reason;
+    }
+  }
+  const error = new ReasonFailureError("private");
+  let reads = 0;
+  Object.defineProperty(error, "reason", {
+    get: () => {
+      reads += 1;
+      return reads === 1 ? "runtime" : "timeout";
+    },
+  });
+  const node = readEvidence(error).nodes.at(0);
+  expect(node?.code).toBe("runtime");
+  expect(node?.brand?.reason).toBe("unclassified");
+  expect(node?.discriminators).toEqual({
+    reason: "runtime",
+    failureReason: "unclassified",
+  });
+  expect(reads).toBe(1);
 });

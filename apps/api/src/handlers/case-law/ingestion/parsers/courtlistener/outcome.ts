@@ -1,3 +1,5 @@
+// parser-output-unchanged: HTML parser bindings come from their package owner; DOM and serialization behavior are unchanged.
+// parser-output-unchanged: a parsed text carries its validation source as paragraphs instead of markup holding the same text.
 /**
  * What a CourtListener text parser returns, and the bounds every parser of
  * one cluster shares.
@@ -8,11 +10,12 @@
  * shared budget ran out).
  */
 
-import type { AnyNode } from "domhandler";
-
-import type { Block } from "@/api/handlers/case-law/document-ast";
+import type { AnyNode } from "@stll/html/nodes";
+// parser-output-unchanged: imports the document AST from its package owner
+import type { Block } from "@stll/legal-ast/document-ast";
 
 import type { UnitPosition } from "./opinion-class";
+import type { CourtListenerTextUsability } from "./usability";
 
 /**
  * Named bounds on one cluster's text. Past any, the cluster is held whole;
@@ -47,10 +50,13 @@ export const TEXT_CANDIDATE_UNUSABLE = {
   MARKUP_RESIDUE: "markup-residue",
   /** Some source text did not reach the blocks, in order and in full. */
   TEXT_NOT_CONSERVED: "text-not-conserved",
+  /** Candidate page chrome contains text outside the reviewed publisher signatures. */
+  UNCLASSIFIED_PAGE_CHROME: "unclassified-page-chrome",
 } as const;
 
 export type TextCandidateUnusable =
-  (typeof TEXT_CANDIDATE_UNUSABLE)[keyof typeof TEXT_CANDIDATE_UNUSABLE];
+  | (typeof TEXT_CANDIDATE_UNUSABLE)[keyof typeof TEXT_CANDIDATE_UNUSABLE]
+  | Exclude<CourtListenerTextUsability, "usable">;
 
 /**
  * A contiguous run of blocks under one structural opinion element, or
@@ -68,8 +74,6 @@ export type TextUnit = {
    */
   readonly boundaries: "markup" | "layout";
   readonly blocks: readonly Block[];
-  /** The block that is the unit's root `ORDER` title, when it opens with one. */
-  readonly orderTitleBlockId: string | null;
 };
 
 /** Counts a reader of the parse can check against the source. */
@@ -92,10 +96,10 @@ export type ParsedOpinionText = {
   readonly units: readonly TextUnit[];
   readonly counts: TextCounts;
   /**
-   * The source as the content-retention check reads it: the same markup
-   * with only the declared removals taken out.
+   * The source text as the content-retention check reads it, by paragraph:
+   * the same text with only the declared removals taken out.
    */
-  readonly validationHtml: string;
+  readonly validationParagraphs: readonly string[];
 };
 
 export type FormatParse =

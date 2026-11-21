@@ -27,12 +27,20 @@ import type {
 } from "@stll/api-contract";
 import {
   isOfficeCollaborationPart,
-  officeIdentityFields,
   officeIdentityAttributePolicy,
+  officeIdentityFields,
 } from "@stll/docx-utils/office-metadata";
 
 import { DocxArchiveError, loadDocxArchive } from "@/api/lib/docx-archive";
 import { savePdfRewrite } from "@/api/lib/files/pdf-signatures";
+import {
+  clearXmlElements,
+  firstXmlElement,
+  removeXmlElements,
+  replaceXmlElementContent,
+  xmlElementText,
+  XmlScanError,
+} from "@/api/lib/files/xml-scan";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 
@@ -81,47 +89,37 @@ const unreadableDocument = (
 };
 
 /** Property XML is a few kilobytes; a hostile archive declaring more is not read. */
-const PROPERTY_ENTRY_MAX_BYTES = 2 * 1024 * 1024;
+export const DOCUMENT_METADATA_ENTRY_MAX_BYTES = 2 * 1024 * 1024;
 
 const readPropertyEntry = async (
   archive: Awaited<ReturnType<typeof loadDocxArchive>>,
   path: string,
 ): Promise<string | null> => {
-  const entry = archive.zip.file(path);
-  if (entry === null) {
+  const entry = archive.zip.entry(path);
+  if (entry === undefined) {
     return null;
   }
-  const bytes = await new Promise<Buffer>((resolve, reject) => {
-    const stream = entry.nodeStream("nodebuffer");
-    const chunks: Buffer[] = [];
-    let size = 0;
-    stream.on("data", (chunk: Buffer) => {
-      size += chunk.length;
-      if (size > PROPERTY_ENTRY_MAX_BYTES) {
-        const destroy: unknown = Reflect.get(stream, "destroy");
-        if (typeof destroy === "function") {
-          Reflect.apply(destroy, stream, []);
-        }
-        reject(
+  // Inflation stops at the declared size, so refusing that size bounds the
+  // read.
+  const read =
+    entry.size > DOCUMENT_METADATA_ENTRY_MAX_BYTES
+      ? Result.err(
           new DocumentPropertiesParseError({
             message: `Property entry ${path} is too large`,
           }),
-        );
-        return;
-      }
-      chunks.push(chunk);
-    });
-    stream.on("end", () => resolve(Buffer.concat(chunks)));
-    stream.on("error", (cause) => {
-      reject(
-        new DocumentPropertiesParseError({
-          message: `Property entry ${path} could not be decompressed`,
-          cause,
-        }),
-      );
-    });
-  });
-  return bytes.toString("utf-8");
+        )
+      : await Result.tryPromise({
+          try: async () => await entry.text(),
+          catch: (cause) =>
+            new DocumentPropertiesParseError({
+              message: `Property entry ${path} could not be decompressed`,
+              cause,
+            }),
+        });
+  if (Result.isError(read)) {
+    throw read.error;
+  }
+  return read.value;
 };
 
 // ── Value builders ──────────────────────────────────────
@@ -221,25 +219,10 @@ const decodeXmlText = (value: string): string =>
     },
   );
 
-const elementRegexCache = new Map<string, RegExp>();
-
-/**
- * Text content of the first `<name>` element, or null when absent or empty.
- * A regex rather than a DOM parse: these documents are untrusted input and the
- * values wanted are flat leaf text, so there is nothing to gain from building
- * a tree (and no external-entity surface to defend).
- */
+/** Text content of the first `<name>` element, or null when absent or empty. */
 const elementText = (xml: string, name: string): string | null => {
-  let regex = elementRegexCache.get(name);
-  if (!regex) {
-    regex = new RegExp(
-      `<${name}(?:\\s[^>]*)?(?:/>|>(?<body>[\\s\\S]*?)</${name}>)`,
-      "u",
-    );
-    elementRegexCache.set(name, regex);
-  }
-  const body = regex.exec(xml)?.groups?.["body"];
-  return body === undefined ? null : decodeXmlText(body);
+  const text = xmlElementText(xml, name);
+  return text === null ? null : decodeXmlText(text);
 };
 
 const attributeRegexCache = new Map<string, RegExp>();
@@ -533,29 +516,11 @@ const ODF_META_CLEARED = [
   { namespace: ODF_META_NS, localName: "editing-duration" },
 ] as const satisfies readonly XmlElement[];
 
-const clearRegexCache = new Map<string, RegExp>();
-
-/**
- * Empty every occurrence of `<name>…</name>`, leaving the element in place.
- * Deleting the elements outright is the other option, but Word and LibreOffice
- * both treat a missing part as "never had properties" and helpfully write fresh
- * ones from the current user on the next save; an empty element stays empty.
- */
-const clearElements = (xml: string, names: readonly string[]): string => {
-  let cleared = xml;
-  for (const name of names) {
-    let regex = clearRegexCache.get(name);
-    if (!regex) {
-      regex = new RegExp(
-        `(<${name}(?:\\s[^>]*)?>)[\\s\\S]*?(</${name}>)`,
-        "gu",
-      );
-      clearRegexCache.set(name, regex);
-    }
-    cleared = cleared.replace(regex, "$1$2");
-  }
-  return cleared;
-};
+/** Empty every occurrence while leaving each element in place. */
+const clearElements = (
+  xml: string,
+  names: readonly string[],
+): Result<string, XmlScanError> => clearXmlElements(xml, names);
 
 const XML_NAMESPACE_DECLARATION_RE =
   /\bxmlns(?::(?<prefix>[A-Za-z_][\w.-]*))?\s*=\s*(?<quote>["'])(?<namespace>[^"']*)\k<quote>/gu;
@@ -573,7 +538,7 @@ const qualifiedNames = (xml: string, element: XmlElement): string[] =>
 const clearNamespacedElements = (
   xml: string,
   elements: readonly XmlElement[],
-): string =>
+): Result<string, XmlScanError> =>
   clearElements(
     xml,
     elements.flatMap((element) => qualifiedNames(xml, element)),
@@ -584,41 +549,45 @@ const hasNamespacedElement = (xml: string, element: XmlElement): boolean =>
     new RegExp(`<${name}(?:\\s|>)`, "u").test(xml),
   );
 
+const transformQualifiedElements = (
+  xml: string,
+  element: XmlElement,
+  transform: (current: string, name: string) => Result<string, XmlScanError>,
+): Result<string, XmlScanError> => {
+  let result = xml;
+  for (const name of qualifiedNames(xml, element)) {
+    const transformed = transform(result, name);
+    if (transformed.isErr()) {
+      return transformed;
+    }
+    result = transformed.value;
+  }
+  return Result.ok(result);
+};
+
 const removeNamespacedElements = (
   xml: string,
   element: XmlElement,
   keep?: (openTag: string) => boolean,
-): string => {
-  let result = xml;
-  for (const name of qualifiedNames(xml, element)) {
-    const regex = new RegExp(
-      `<${name}(?<attributes>\\s[^>]*)?(?:/>|>[\\s\\S]*?</${name}>)`,
-      "gu",
-    );
-    result = result.replace(regex, (match) =>
-      keep?.(match) === true ? match : "",
-    );
-  }
-  return result;
-};
+): Result<string, XmlScanError> =>
+  transformQualifiedElements(xml, element, (result, name) =>
+    removeXmlElements(result, name, keep),
+  );
+
+const zeroNamespacedElement = (
+  xml: string,
+  element: XmlElement,
+): Result<string, XmlScanError> =>
+  transformQualifiedElements(xml, element, (result, name) =>
+    replaceXmlElementContent(result, name, "0"),
+  );
 
 /** `<TotalTime>` is numeric: blanking it yields invalid OOXML, so zero it. */
-const zeroNamespacedElement = (xml: string, element: XmlElement): string => {
-  let result = xml;
-  for (const name of qualifiedNames(xml, element)) {
-    const regex = new RegExp(
-      `(<${name}(?:\\s[^>]*)?>)[\\s\\S]*?(</${name}>)`,
-      "gu",
-    );
-    result = result.replace(regex, "$10$2");
-  }
-  return result;
-};
 
 const isSignedZipArchive = (
   archive: Awaited<ReturnType<typeof loadDocxArchive>>,
 ): boolean =>
-  Object.keys(archive.zip.files).some((path) => {
+  archive.zip.paths().some((path) => {
     const normalized = path.toLowerCase();
     return (
       normalized.startsWith("_xmlsignatures/") ||
@@ -630,7 +599,9 @@ const isSignedZipArchive = (
 
 type ZipPart = {
   path: string;
-  clear: (xml: string) => string | Result<string, DocumentPropertiesParseError>;
+  clear: (
+    xml: string,
+  ) => string | Result<string, DocumentPropertiesParseError | XmlScanError>;
   propertyEntry?: boolean;
   required?: boolean;
 };
@@ -665,28 +636,25 @@ const scrubZipArchive = async (
     }
     const cleared = part.clear(xml);
     if (typeof cleared === "string") {
-      archive.zip.file(part.path, cleared);
+      archive.zip.set(part.path, cleared);
       continue;
     }
     if (cleared.isErr()) {
       return { status: "unreadable" };
     }
-    archive.zip.file(part.path, cleared.value);
+    archive.zip.set(part.path, cleared.value);
   }
   await prepare?.(archive);
   return {
     status: "scrubbed",
-    bytes: await archive.zip.generateAsync({
-      type: "uint8array",
-      compression: "DEFLATE",
-    }),
+    bytes: await archive.zip.generate(),
   };
 };
 
 const STELLA_CUSTOM_PROPERTY_NAMES = new Set(["stella-ref", "stella-code"]);
 const CUSTOM_PROPERTY_NAME_RE = /\bname\s*=\s*["'](?<name>[^"']*)["']/u;
 
-const scrubCustomProperties = (xml: string): string =>
+const scrubCustomProperties = (xml: string): Result<string, XmlScanError> =>
   removeNamespacedElements(
     xml,
     { namespace: OOXML_CUSTOM_NS, localName: "property" },
@@ -762,7 +730,8 @@ const scrubOoxml = async (
   bytes: ArrayBuffer,
 ): Promise<ScrubDocumentPropertiesResult> => {
   const archive = await loadDocxArchive(bytes);
-  const collaborationParts = Object.keys(archive.zip.files)
+  const collaborationParts = archive.zip
+    .paths()
     .filter(isOfficeCollaborationPart)
     .map((path) => ({
       path,
@@ -782,11 +751,19 @@ const scrubOoxml = async (
             message: "Invalid OOXML core properties root",
           });
         }
-        let scrubbed = clearNamespacedElements(xml, OOXML_CORE_TEXT_CLEARED);
-        for (const element of OOXML_CORE_REMOVED) {
-          scrubbed = removeNamespacedElements(scrubbed, element);
+        const cleared = clearNamespacedElements(xml, OOXML_CORE_TEXT_CLEARED);
+        if (cleared.isErr()) {
+          return cleared;
         }
-        return scrubbed;
+        let scrubbed = cleared.value;
+        for (const element of OOXML_CORE_REMOVED) {
+          const removed = removeNamespacedElements(scrubbed, element);
+          if (removed.isErr()) {
+            return removed;
+          }
+          scrubbed = removed.value;
+        }
+        return Result.ok(scrubbed);
       },
       propertyEntry: true,
       required: true,
@@ -804,9 +781,12 @@ const scrubOoxml = async (
             message: "Invalid OOXML extended properties root",
           });
         }
-        return zeroNamespacedElement(
-          clearNamespacedElements(xml, OOXML_APP_CLEARED),
-          { namespace: OOXML_APP_NS, localName: "TotalTime" },
+        const cleared = clearNamespacedElements(xml, OOXML_APP_CLEARED);
+        return cleared.andThen((value) =>
+          zeroNamespacedElement(value, {
+            namespace: OOXML_APP_NS,
+            localName: "TotalTime",
+          }),
         );
       },
       propertyEntry: true,
@@ -821,22 +801,27 @@ const scrubOoxml = async (
   ]);
 };
 
-const removeOdfStatisticsAndUserProperties = (xml: string): string => {
+const removeOdfStatisticsAndUserProperties = (
+  xml: string,
+): Result<string, XmlScanError> => {
   const withoutStatistics = removeNamespacedElements(xml, {
     namespace: ODF_META_NS,
     localName: "document-statistic",
   });
-  return removeNamespacedElements(withoutStatistics, {
-    namespace: ODF_META_NS,
-    localName: "user-defined",
-  });
+  return withoutStatistics.andThen((value) =>
+    removeNamespacedElements(value, {
+      namespace: ODF_META_NS,
+      localName: "user-defined",
+    }),
+  );
 };
 
 const scrubOdf = async (
   bytes: ArrayBuffer,
 ): Promise<ScrubDocumentPropertiesResult> => {
   const sourceArchive = await loadDocxArchive(bytes);
-  const collaborationParts = Object.keys(sourceArchive.zip.files)
+  const collaborationParts = sourceArchive.zip
+    .paths()
     .filter(isOfficeCollaborationPart)
     .map((path) => ({
       path,
@@ -848,8 +833,8 @@ const scrubOdf = async (
       {
         path: "meta.xml",
         clear: (xml) =>
-          removeOdfStatisticsAndUserProperties(
-            clearNamespacedElements(xml, ODF_META_CLEARED),
+          clearNamespacedElements(xml, ODF_META_CLEARED).andThen(
+            removeOdfStatisticsAndUserProperties,
           ),
         propertyEntry: true,
         required: true,
@@ -857,14 +842,14 @@ const scrubOdf = async (
       ...collaborationParts,
     ],
     async (archive) => {
-      const firstPath = Object.keys(archive.zip.files).at(0);
+      const firstPath = archive.zip.paths().at(0);
       const mimetype = await readPropertyEntry(archive, "mimetype");
       if (firstPath !== "mimetype" || mimetype === null) {
         throw new DocumentPropertiesParseError({
           message: "ODF mimetype must be the first ZIP entry",
         });
       }
-      archive.zip.file("mimetype", mimetype, { compression: "STORE" });
+      archive.zip.set("mimetype", mimetype, { compression: "store" });
     },
   );
 };
@@ -1062,11 +1047,11 @@ const declareOoxmlParts = async (
     })
     .join("");
 
-  archive.zip.file(
+  archive.zip.set(
     CONTENT_TYPES_PATH,
     contentTypes.replace(/<\/Types>/u, () => `${overrides}</Types>`),
   );
-  archive.zip.file(
+  archive.zip.set(
     PACKAGE_RELS_PATH,
     rels.replace(
       /<\/Relationships>/u,
@@ -1092,31 +1077,28 @@ const XML_1_FORBIDDEN_CONTROL_RE = /[\u0000-\u0008\u000B\u000C\u000E-\u001F]/u;
  * closing root tag rather than dropping the edit silently.
  */
 const setElement = (xml: string, name: string, value: string, root: string) => {
-  // Every replacement below is a function, not a string: the value is written
-  // by a person, and `$&` or `$'` in a replacement string is interpreted by JS
-  // even when the search is a plain string, which would splice surrounding
-  // markup into the property.
   const text = escapeXmlText(value);
-  const existing = new RegExp(
-    `(<${name}(?:\\s[^>]*)?>)[\\s\\S]*?(</${name}>)`,
-    "u",
-  );
-  if (existing.test(xml)) {
-    return xml.replace(
-      existing,
-      (_match, open: string, close: string) => `${open}${text}${close}`,
+  const element = firstXmlElement(xml, name);
+  if (element.kind === "incomplete") {
+    return Result.err(
+      new XmlScanError({ message: "Incomplete matching XML element" }),
     );
   }
-  // Self-closing form, which is how an empty property is often written.
-  const selfClosing = new RegExp(`<${name}(?:\\s[^>]*)?/>`, "u");
-  if (selfClosing.test(xml)) {
-    return xml.replace(selfClosing, () => `<${name}>${text}</${name}>`);
+  if (element.kind === "found") {
+    return replaceXmlElementContent(xml, name, text);
   }
-  const closingRoot = new RegExp(`</${root}>`, "u");
-  if (!closingRoot.test(xml)) {
-    return xml;
+  const rootElement = firstXmlElement(xml, root);
+  if (rootElement.kind === "incomplete") {
+    return Result.err(
+      new XmlScanError({ message: "Incomplete matching XML element" }),
+    );
   }
-  return xml.replace(closingRoot, () => `<${name}>${text}</${name}></${root}>`);
+  if (rootElement.kind === "absent" || rootElement.match.selfClosing) {
+    return Result.ok(xml);
+  }
+  return Result.ok(
+    `${xml.slice(0, rootElement.match.contentEnd)}<${name}>${text}</${name}>${xml.slice(rootElement.match.contentEnd)}`,
+  );
 };
 
 export type WriteDocumentPropertiesOptions = {
@@ -1181,7 +1163,7 @@ export const writeDocumentProperties = async ({
     const read = await Promise.all(
       parts.map(async (part) => ({
         part,
-        xml: await archive.readEntryString(OOXML_PART_PATH[part]),
+        xml: await readPropertyEntry(archive, OOXML_PART_PATH[part]),
       })),
     );
     // Declared before anything is written: skipping a missing part instead
@@ -1201,19 +1183,23 @@ export const writeDocumentProperties = async ({
       }
       for (const edit of edits) {
         if (edit.part === part) {
-          updated = setElement(
+          const set = setElement(
             updated,
             edit.element,
             edit.value,
             OOXML_PART_ROOT[part],
           );
+          if (set.isErr()) {
+            return { status: "unreadable" };
+          }
+          updated = set.value;
         }
       }
-      archive.zip.file(OOXML_PART_PATH[part], updated);
+      archive.zip.set(OOXML_PART_PATH[part], updated);
     }
     return {
       status: "written",
-      bytes: await archive.zip.generateAsync({ type: "uint8array" }),
+      bytes: await archive.zip.generate({ compression: "store" }),
     };
   } catch (error) {
     return unreadableDocument(error, "write");

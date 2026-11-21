@@ -1,6 +1,8 @@
 import path from "node:path";
 import * as v from "valibot";
 
+import { apiDateTimeSchema } from "@stll/api-contract/api-date";
+import { normalizeOutlookTaskPaneOrigin } from "@stll/api-contract/outlook-client";
 import {
   NODE_ENV,
   type NodeEnvLabel,
@@ -8,28 +10,44 @@ import {
   type RuntimeMode,
 } from "@stll/runtime-mode";
 
-import { featureFlagSchema } from "@/api/env-base-schema";
+import {
+  type AppleSignInInput,
+  resolveAppleSignIn,
+} from "@/api/env-apple-sign-in";
+import { envBaseServerSchema, featureFlagSchema } from "@/api/env-base-schema";
+import { softLawFullTextPermittedSourcesSchema } from "@/api/env-soft-law";
 import {
   AUTH_CLIENT_ADDRESS_HEADER,
   ORIGIN_VERIFY_HEADER,
   SIGNUP_RATE_LIMIT_IP_SOURCE,
 } from "@/api/lib/client-ip-config";
 import {
-  resolveInboundMailReceiving,
+  type EmailEventsInput,
+  resolveEmailEvents,
+} from "@/api/lib/email/deliverability-config";
+import {
   type InboundMailReceivingInput,
+  resolveInboundMailReceiving,
 } from "@/api/lib/email/inbound/receiving-config";
-import { featureAccessGrantsEnvSchema } from "@/api/lib/feature-access/grants-schema";
+import { emailAddressSchema } from "@/api/lib/email/normalized-email";
+import { converterSettingsSchema } from "@/api/lib/files/converter-settings";
 import { isTimestampAuthorityUrlList } from "@/api/lib/files/pdf-signing/timestamp-authority-urls";
 import {
   DEFAULT_POLAR_API_VERSION,
   polarApiVersionSchema,
 } from "@/api/lib/hosted-usage-provider/polar/contract";
+import {
+  caseLawCanariesEnvSchema,
+  caseLawDailyBandsEnvSchema,
+} from "@/api/lib/observability/data-invariants/config-schema";
+import { rateLimitBudgetEnvSchema } from "@/api/lib/rate-limit/budget-config-schema";
 import { MCP_READ_MAX_ENTRIES } from "@/api/lib/rate-limit/mcp-read-fence-policy";
 import { AUTH_PROVIDER_ID_PATTERN } from "@/api/lib/safe-id-boundaries";
 import {
   isSecureGotenbergUrl,
   isTlsOrLoopbackUrl,
 } from "@/api/lib/secure-service-url";
+import { modelRunCapEnvSchema } from "@/api/lib/usage/model-run-caps/config";
 
 type EmailProviderInput = {
   EMAIL_PROVIDER?: "ses" | "smtp" | undefined;
@@ -69,7 +87,42 @@ export const resolveEmailProvider = ({
  * etc.). Scripts and CLI tools that only need DB + S3 import
  * envBase from env-base.ts instead.
  */
+// A header an edge sets to the viewer's address; never one the API sets or verifies.
+const edgeAddressHeaderName = v.pipe(
+  v.string(),
+  v.trim(),
+  v.toLowerCase(),
+  v.regex(/^[a-z0-9-]+$/u, "must be a header name"),
+  v.check(
+    (name) =>
+      name !== AUTH_CLIENT_ADDRESS_HEADER && name !== ORIGIN_VERIFY_HEADER,
+    "must not be a header the API sets or verifies",
+  ),
+);
+
+const originVerifyValue = v.pipe(
+  v.string(),
+  v.trim(),
+  v.minLength(32, "must be at least 32 characters"),
+  v.check((value) => !value.includes(","), "must be a single value"),
+);
+
 export const envApiServerSchema = {
+  DEPLOY_ENVIRONMENT: envBaseServerSchema.DEPLOY_ENVIRONMENT,
+  ...rateLimitBudgetEnvSchema,
+  ...modelRunCapEnvSchema,
+  // Data invariants: each adapter's expected published decisions per day, and
+  // case-law queries the corpus must answer. Unset skips that invariant.
+  DATA_INVARIANT_CASE_LAW_DAILY_BANDS: caseLawDailyBandsEnvSchema,
+  DATA_INVARIANT_CASE_LAW_CANARIES: caseLawCanariesEnvSchema,
+  VISUAL_PREVIEW_FUNCTION_NAME: v.optional(
+    v.pipe(
+      v.string(),
+      v.regex(
+        /^(?:[A-Za-z0-9_-]{1,64}(?::[A-Za-z0-9_-]+)?|arn:aws(?:-us-gov|-cn)?:lambda:[a-z0-9-]+:\d{12}:function:[A-Za-z0-9_-]+(?::[A-Za-z0-9_-]+)?)$/u,
+      ),
+    ),
+  ),
   PORT: v.optional(v.pipe(v.string(), v.digits())),
   STELLA_API_PORT: v.optional(v.pipe(v.string(), v.digits())),
   AI_PROVIDER: v.optional(
@@ -95,7 +148,17 @@ export const envApiServerSchema = {
   GOOGLE_GENERATIVE_AI_API_KEY: v.optional(v.string()),
   /** Optional GitHub API token used only for curated catalogue traversal. */
   GITHUB_TOKEN: v.optional(v.string()),
+  /**
+   * Optional GitHub token limited to public repositories, for skill sources a
+   * person links. Never the catalogue token: it is sent for any URL a person
+   * enters.
+   */
+  SKILL_IMPORT_GITHUB_TOKEN: v.optional(v.pipe(v.string(), v.minLength(1))),
   OPENROUTER_API_KEY: v.optional(v.string()),
+  OPENROUTER_FAST_TIER_API_KEY: v.optional(v.string()),
+  OPENROUTER_FAST_TIER_WIF_POLICY_ID: v.optional(
+    v.pipe(v.string(), v.trim(), v.minLength(1)),
+  ),
   OPENROUTER_WIF_POLICY_ID: v.optional(
     v.pipe(v.string(), v.trim(), v.minLength(1)),
   ),
@@ -145,6 +208,29 @@ export const envApiServerSchema = {
   MISTRAL_API_KEY: v.optional(v.string()),
   GOOGLE_AI_API_KEY_EU: v.optional(v.string()),
   GOOGLE_AI_API_KEY_CH: v.optional(v.string()),
+  /**
+   * ElevenLabs key for stella AI transcription straight to ElevenLabs
+   * (Scribe). Requests ask for zero retention unless
+   * ELEVENLABS_ZERO_RETENTION is "0".
+   */
+  ELEVENLABS_API_KEY: v.optional(v.string()),
+  /**
+   * The ElevenLabs environment the key belongs to: "default" and "us" serve
+   * organizations in the US region, "eu" (the EU data residency
+   * environment) those in the EU region. Organizations elsewhere see the
+   * model as outside their region.
+   */
+  ELEVENLABS_ENVIRONMENT: v.optional(
+    v.picklist(["default", "us", "eu"]),
+    "default",
+  ),
+  /**
+   * "1" when the key's account has ElevenLabs zero retention, so every
+   * request asks for it. "0" offers Scribe v3 only to desktops that warn
+   * the member that ElevenLabs keeps the audio and transcript, never as a
+   * default and never on the web.
+   */
+  ELEVENLABS_ZERO_RETENTION: v.optional(v.picklist(["0", "1"]), "1"),
   /**
    * Force orgs to supply their own AI key (BYOK) even if the
    * instance has provisioned provider keys. Useful for shared
@@ -198,13 +284,56 @@ export const envApiServerSchema = {
    * deployments only (see handlers/smoke/routes.ts).
    */
   SMOKE_SESSION_SECRET: v.optional(v.pipe(v.string(), v.minLength(32))),
-  SESSION_TOKEN_ROTATION_ENABLED: featureFlagSchema,
-  SESSION_LIFETIME_CAP_ENABLED: featureFlagSchema,
+  SYNTHETIC_SESSION_KEYS: v.optional(
+    v.pipe(
+      v.string(),
+      v.parseJson(),
+      v.array(
+        v.strictObject({
+          label: v.pipe(
+            v.string(),
+            v.minLength(1),
+            v.maxLength(64),
+            v.regex(/^[A-Za-z0-9_-]+$/u),
+          ),
+          sha256: v.pipe(v.string(), v.regex(/^[a-fA-F0-9]{64}$/u)),
+          notAfter: apiDateTimeSchema,
+        }),
+      ),
+      v.minLength(1),
+      v.maxLength(2),
+    ),
+  ),
+  MCP_WEB_HANDOFF_MINT_ENABLED: featureFlagSchema,
+  MCP_WEB_HANDOFF_TEXT_ENABLED: v.optional(v.picklist(["0", "1"]), "0"),
+  MCP_WEB_HANDOFF_TEXT_SESSION_MAX_SECONDS: v.optional(
+    v.pipe(
+      v.string(),
+      v.digits(),
+      v.toNumber(),
+      v.integer(),
+      v.minValue(1),
+      v.maxValue(43_200),
+    ),
+    "43200",
+  ),
   /**
    * Deployment-owned bearer credential for collaboration snapshot transport.
    * Unset disables the service-only load/store routes.
    */
   STELLA_COLLAB_SERVICE_TOKEN: v.optional(v.pipe(v.string(), v.minLength(32))),
+  /** Deployment-owned operator credential. Unset disables operator HTTP access. */
+  OPERATOR_API_TOKEN: v.optional(v.pipe(v.string(), v.minLength(32))),
+  /**
+   * Apple Push Notification service provider-token credentials: the key id
+   * and team id Apple shows beside the `.p8` signing key, and that key as PEM.
+   * All three or none; unset turns mobile push off.
+   */
+  APNS_KEY_ID: v.optional(v.pipe(v.string(), v.regex(/^[A-Z0-9]{10}$/u))),
+  APNS_TEAM_ID: v.optional(v.pipe(v.string(), v.regex(/^[A-Z0-9]{10}$/u))),
+  APNS_PRIVATE_KEY: v.optional(
+    v.pipe(v.string(), v.includes("-----BEGIN PRIVATE KEY-----")),
+  ),
   /**
    * SHA-256 digest of a deployment-owned decoy machine API key. The
    * plaintext decoy belongs only in a honey resource; presenting it to any
@@ -237,6 +366,18 @@ export const envApiServerSchema = {
     v.pipe(v.string(), v.regex(/^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$/u)),
   ),
   INBOUND_MAIL_KEY_PREFIX: v.optional(v.pipe(v.string(), v.maxLength(512))),
+  EMAIL_EVENTS_QUEUE_URL: v.optional(
+    v.pipe(v.string(), v.url(), v.startsWith("https://")),
+  ),
+  EMAIL_EVENTS_TOPIC_ARN: v.optional(
+    v.pipe(
+      v.string(),
+      v.regex(/^arn:aws[a-z-]*:sns:[a-z0-9-]+:\d{12}:[A-Za-z0-9_-]{1,256}$/u),
+    ),
+  ),
+  EMAIL_EVENTS_DEAD_LETTER_QUEUE_URL: v.optional(
+    v.pipe(v.string(), v.url(), v.startsWith("https://")),
+  ),
   SES_REGION: v.optional(v.string()),
   SES_ACCESS_KEY_ID: v.optional(v.string()),
   SES_SECRET_ACCESS_KEY: v.optional(v.string()),
@@ -274,10 +415,23 @@ export const envApiServerSchema = {
   ),
   FRONTEND_URL: v.pipe(v.string(), v.url()),
   PUBLIC_URL: v.optional(v.pipe(v.string(), v.url())),
-  GOTENBERG_URL: v.pipe(v.string(), v.url()),
-  GOTENBERG_USERNAME: v.string(),
-  GOTENBERG_PASSWORD: v.string(),
+  ...converterSettingsSchema,
   EXTENSION_ORIGIN: v.optional(v.pipe(v.string(), v.url())),
+  /**
+   * The https origin serving the Outlook add-in's task pane, e.g.
+   * `https://outlook.example.com`. Set, the API publishes the add-in's OAuth
+   * client document, accepts its one redirect on this origin and answers its
+   * browser requests. Unset, the add-in cannot sign in to this deployment.
+   */
+  OUTLOOK_ADDIN_ORIGIN: v.optional(
+    v.pipe(
+      v.string(),
+      v.check(
+        (value) => normalizeOutlookTaskPaneOrigin(value) === value,
+        "OUTLOOK_ADDIN_ORIGIN must be an https origin without a path, e.g. https://outlook.example.com",
+      ),
+    ),
+  ),
   /**
    * RFC 3161 timestamp authorities for PDF signing, in preference order,
    * separated by commas or whitespace. Signing falls back to the next one
@@ -296,9 +450,10 @@ export const envApiServerSchema = {
   /** Single-authority form of `PDF_SIGNING_TSA_URLS`, appended to it. */
   PDF_SIGNING_TSA_URL: v.optional(v.pipe(v.string(), v.url())),
   /**
-   * Trust anchors for timestamp authorities: PEM text, or a path to a PEM
-   * file. CA certificates, or an authority's own certificate to pin it.
-   * Unset: timestamps are embedded but not counted as trusted time.
+   * Extra trust anchors for timestamp authorities, added to the shipped
+   * ones (EU qualified services, DigiCert and Sectigo public timestamping
+   * roots): PEM text, or a path to a PEM file. CA certificates, or an
+   * authority's own certificate to pin it.
    */
   PDF_SIGNING_TSA_TRUST_PEM: v.optional(v.string()),
 
@@ -320,11 +475,19 @@ export const envApiServerSchema = {
    * email delivery is skipped for this account (the code is shared
    * out-of-band).
    */
-  DEMO_ACCOUNT_EMAIL: v.optional(
-    v.pipe(v.string(), v.trim(), v.toLowerCase(), v.email()),
-  ),
+  DEMO_ACCOUNT_EMAIL: v.optional(emailAddressSchema),
   DEMO_ACCOUNT_OTP: v.optional(v.pipe(v.string(), v.digits(), v.length(6))),
   DEMO_ACCOUNT_ORGANIZATION_ID: v.optional(
+    v.pipe(v.string(), v.regex(AUTH_PROVIDER_ID_PATTERN)),
+  ),
+
+  /**
+   * One restricted review account that signs in with a password and stays
+   * inside its own organization. Set both or neither. Every other address is
+   * refused password sign-in with the ordinary invalid-credentials answer.
+   */
+  APP_REVIEW_ACCOUNT_EMAIL: v.optional(emailAddressSchema),
+  APP_REVIEW_ORGANIZATION_ID: v.optional(
     v.pipe(v.string(), v.regex(AUTH_PROVIDER_ID_PATTERN)),
   ),
 
@@ -351,19 +514,7 @@ export const envApiServerSchema = {
    * `STELLA_TRUSTED_PROXY_CIDRS`, ahead of the `x-forwarded-for` chain. Set it
    * only when every route to the API adds this header.
    */
-  STELLA_CLIENT_ADDRESS_HEADER: v.optional(
-    v.pipe(
-      v.string(),
-      v.trim(),
-      v.toLowerCase(),
-      v.regex(/^[a-z0-9-]+$/u, "must be a header name"),
-      v.check(
-        (name) =>
-          name !== AUTH_CLIENT_ADDRESS_HEADER && name !== ORIGIN_VERIFY_HEADER,
-        "must not be a header the API sets or verifies itself",
-      ),
-    ),
-  ),
+  STELLA_CLIENT_ADDRESS_HEADER: v.optional(edgeAddressHeaderName),
 
   /**
    * How `STELLA_CLIENT_ADDRESS_HEADER` spells the address: `with-port` (as
@@ -375,23 +526,16 @@ export const envApiServerSchema = {
   ),
 
   /**
-   * Comma-separated values the edge sends in `x-stella-origin-verify` (current
-   * first, then the next one during a rotation). When set, the client address
-   * header is read only from requests carrying one of them.
+   * Current value the edge sends in `x-stella-origin-verify`. One value of at
+   * least 32 characters; the address header accepts this or the previous value.
    */
-  STELLA_ORIGIN_VERIFY_SECRET: v.optional(
-    v.pipe(
-      v.string(),
-      v.check(
-        (value) =>
-          value
-            .split(",")
-            .map((part) => part.trim())
-            .every((part) => part.length >= 32),
-        "each value must be at least 32 characters",
-      ),
-    ),
-  ),
+  STELLA_ORIGIN_VERIFY_SECRET: v.optional(originVerifyValue),
+
+  /**
+   * Optional previous origin value accepted during a rotation. One value of at
+   * least 32 characters, stored separately from STELLA_ORIGIN_VERIFY_SECRET.
+   */
+  STELLA_ORIGIN_VERIFY_SECRET_PREVIOUS: v.optional(originVerifyValue),
 
   /**
    * Comma-separated user IDs allowed to publish an in-app announcement to
@@ -423,12 +567,23 @@ export const envApiServerSchema = {
   MICROSOFT_AUTH_TENANT_ID: v.optional(v.string()),
   MICROSOFT_REQUIRE_VERIFIED_EMAIL_CLAIM: featureFlagSchema,
 
+  // Social login — Apple. The client secret is minted from the key in process.
+  APPLE_AUTH_CLIENT_ID: v.optional(v.string()),
+  APPLE_AUTH_TEAM_ID: v.optional(v.string()),
+  APPLE_AUTH_KEY_ID: v.optional(v.string()),
+  APPLE_AUTH_PRIVATE_KEY: v.optional(v.string()),
+
   // Launch feature flags. Keep default-off; deployment must opt in.
-  CHAT_RUN_LOG_SHADOW: v.optional(v.pipe(v.string(), v.parseBoolean())),
   FEATURE_USAGE: featureFlagSchema,
   FEATURE_PUBLIC_LAW: featureFlagSchema,
   FEATURE_ACTION_ADMISSION: featureFlagSchema,
   FEATURE_MCP_READ_FENCE: featureFlagSchema,
+  /**
+   * A stopping API task releases each local chat turn it reads to another
+   * task instead of ending it. Turn on only once every task adopts released
+   * turns.
+   */
+  FEATURE_CHAT_TURN_HANDOVER: featureFlagSchema,
   MCP_READ_WINDOW_MS: v.optional(
     v.pipe(
       v.string(),
@@ -608,6 +763,17 @@ export const envApiServerSchema = {
   ACTION_ADMISSION_BACKGROUND_USER_CONCURRENCY: v.optional(
     v.pipe(v.string(), v.toNumber(), v.integer(), v.minValue(1)),
   ),
+  // Concurrent public-law MCP reads admitted per authenticated caller.
+  MCP_PUBLIC_READ_CALLER_CONCURRENCY: v.optional(
+    v.pipe(
+      v.string(),
+      v.toNumber(),
+      v.integer(),
+      v.minValue(1),
+      v.maxValue(Number.MAX_SAFE_INTEGER),
+    ),
+    "4",
+  ),
   // Operators must set the lease above the admission store's failover window.
   // Renewal errors retry inside that window; losing admission is not a user stop.
   ACTION_ADMISSION_LEASE_MS: v.optional(
@@ -633,12 +799,12 @@ export const envApiServerSchema = {
     ),
   ),
   FEATURE_TIME_BILLING: featureFlagSchema,
+  FEATURE_INVOICE_LINKS: featureFlagSchema,
+  FEATURE_GENERATED_VIEWS: featureFlagSchema,
   /** Dark-launch tenant-scoped AI memory until product and performance review. */
   FEATURE_AI_MEMORY: featureFlagSchema,
   /** Dark-launch first-class legal lists until the end-to-end workflow is complete. */
   FEATURE_LEGAL_LISTS: featureFlagSchema,
-  /** Operator-owned grants keyed by registered feature id; empty hides all. */
-  API_FEATURE_ACCESS_GRANTS: featureAccessGrantsEnvSchema,
   /** Dark-launch governed work obligations and compatibility task behavior. */
   FEATURE_GOVERNED_WORKFLOW: featureFlagSchema,
   /** Enables reviewed GitHub-sourced skills in the authenticated catalogue. */
@@ -650,8 +816,10 @@ export const envApiServerSchema = {
   // Delegated Microsoft Graph connection: per-user, read-only SharePoint /
   // OneDrive access for future workspace import. Default-off; a deployment
   // opts in only after its Microsoft app registration is granted the
-  // read-only delegated scopes (see handlers/sharepoint/graph-oauth.ts).
+  // read-only delegated scopes (see lib/auth/microsoft365/graph-oauth.ts).
   FEATURE_SHAREPOINT: featureFlagSchema,
+  /** Dark-launch internal conflict-of-interest checks until intake review. */
+  FEATURE_CONFLICT_CHECK: featureFlagSchema,
 
   /**
    * Dark-launch gate for the auth.md `identity_assertion` (ID-JAG)
@@ -661,6 +829,13 @@ export const envApiServerSchema = {
    * no issuer is accepted until an operator explicitly trusts one.
    */
   FEATURE_AGENT_ID_JAG: featureFlagSchema,
+
+  /**
+   * Dark-launch gate for organization single sign-on (OIDC). Off: the SSO
+   * sign-in endpoints are not mounted and no organization's SSO
+   * requirement is evaluated, so access is decided exactly as without SSO.
+   */
+  FEATURE_ENTERPRISE_SSO: featureFlagSchema,
 
   /**
    * Web search backend. Only Tavily is wired today; add a new
@@ -779,6 +954,14 @@ export const envApiServerSchema = {
    */
   FEATURE_ORG_ACCESS_STATE: featureFlagSchema,
 
+  /**
+   * Falls every organization whose evaluation or paid access has lapsed back
+   * to the seeded `free` usage policy instead of ending its access. The free
+   * budget is the policy's service actions per `ACTION_ADMISSION_PERIOD_MS`
+   * (one month in production; staging may run a daily period for tests).
+   */
+  FEATURE_FREE_TIER: featureFlagSchema,
+
   /** Enforces organization file byte reservations at storage writes. */
 
   /** Length of an organization's evaluation period, in days. */
@@ -787,6 +970,7 @@ export const envApiServerSchema = {
   ),
 
   AGENT_CLIENT_STORAGE_V1_ENABLED: featureFlagSchema,
+  SOFT_LAW_SYNC_ENABLED: featureFlagSchema,
 
   /** Enables agent-sandbox chat runs when true. */
   AGENT_SANDBOX_RUNS_ENABLED: featureFlagSchema,
@@ -797,6 +981,9 @@ export const envApiServerSchema = {
    * and the package falls back to its own `content/` mount.
    */
   TEMPLATE_PACKS_CONTENT_DIR: v.optional(v.string()),
+
+  /** See `env-soft-law.ts`; read there so ingestion scripts need no API environment. */
+  SOFT_LAW_FULL_TEXT_PERMITTED_SOURCES: softLawFullTextPermittedSourcesSchema,
 
   /**
    * Agent-sandbox engine config. The schema keeps these optional
@@ -867,50 +1054,68 @@ export const envApiServerSchema = {
   ),
 };
 
-type EnvApiInvariantInput = InboundMailReceivingInput & {
-  AI_PROVIDER?: v.InferOutput<typeof envApiServerSchema.AI_PROVIDER>;
-  FEATURE_MANAGED_PROVIDER_CHECKS?: boolean | undefined;
-  MANAGED_PROVIDER_CHECK_INTERVAL_MS?: number | undefined;
-  MANAGED_PROVIDER_CHECK_TIMEOUT_MS?: number | undefined;
-  OPENROUTER_API_KEY?: string | undefined;
-  OPENROUTER_WIF_POLICY_ID?: string | undefined;
-  OPENROUTER_WIF_AUDIENCE?: string | undefined;
-  OPENROUTER_WIF_STS_REGION?: string | undefined;
-  BETTER_AUTH_URL: string;
-  DEV_PUBLIC_LAW_CONNECT_COMMAND?: string | undefined;
-  E2E_DISABLE_AUTH_RATE_LIMIT: boolean;
-  EMAIL_PROVIDER?: "ses" | "smtp" | undefined;
-  FEATURE_ACTION_ADMISSION?: boolean | undefined;
-  FEATURE_ORG_ACCESS_STATE?: boolean | undefined;
-  FEATURE_ORG_SERVICE_BUDGETS?: boolean | undefined;
-  FEATURE_CONFIGURED_ACCESS?: boolean | undefined;
-  FEATURE_USAGE?: boolean | undefined;
-  PAYMENT_RETRY_WINDOW_MS?: number | undefined;
-  FRONTEND_URL: string;
-  GOTENBERG_URL: string;
-  MICROSOFT_AUTH_CLIENT_ID?: string | undefined;
-  MICROSOFT_AUTH_CLIENT_SECRET?: string | undefined;
-  MICROSOFT_AUTH_TENANT_ID?: string | undefined;
-  ORG_EVALUATION_PERIOD_DAYS?: number | undefined;
-  PUBLIC_URL?: string | undefined;
-  REPORT_SPECS_DIR?: string | undefined;
-  REPORT_SPECS_S3_PREFIX?: string | undefined;
-  SES_REGION?: string | undefined;
-  SMTP_HOST?: string | undefined;
-  SMTP_PORT?: number | undefined;
-  TRANSACTIONAL_EMAIL_FROM?: string | undefined;
-  USE_MOCK_AI: boolean | "force";
-  nodeEnv: NodeEnvLabel;
-  runtimeMode: RuntimeMode;
-};
+type EnvApiInvariantInput = InboundMailReceivingInput &
+  EmailEventsInput &
+  AppleSignInInput & {
+    APP_REVIEW_ACCOUNT_EMAIL?: string | undefined;
+    APP_REVIEW_ORGANIZATION_ID?: string | undefined;
+    APNS_KEY_ID?: string | undefined;
+    APNS_TEAM_ID?: string | undefined;
+    APNS_PRIVATE_KEY?: string | undefined;
+    DEPLOY_ENVIRONMENT?: v.InferOutput<
+      typeof envApiServerSchema.DEPLOY_ENVIRONMENT
+    >;
+    SMOKE_SESSION_SECRET?: string | undefined;
+    AI_PROVIDER?: v.InferOutput<typeof envApiServerSchema.AI_PROVIDER>;
+    FEATURE_MANAGED_PROVIDER_CHECKS?: boolean | undefined;
+    MANAGED_PROVIDER_CHECK_INTERVAL_MS?: number | undefined;
+    MANAGED_PROVIDER_CHECK_TIMEOUT_MS?: number | undefined;
+    OPENROUTER_API_KEY?: string | undefined;
+    OPENROUTER_FAST_TIER_API_KEY?: string | undefined;
+    OPENROUTER_FAST_TIER_WIF_POLICY_ID?: string | undefined;
+    OPENROUTER_WIF_POLICY_ID?: string | undefined;
+    OPENROUTER_WIF_AUDIENCE?: string | undefined;
+    OPENROUTER_WIF_STS_REGION?: string | undefined;
+    BETTER_AUTH_URL: string;
+    DEV_PUBLIC_LAW_CONNECT_COMMAND?: string | undefined;
+    E2E_DISABLE_AUTH_RATE_LIMIT: boolean;
+    EMAIL_PROVIDER?: "ses" | "smtp" | undefined;
+    FEATURE_ACTION_ADMISSION?: boolean | undefined;
+    FEATURE_ORG_ACCESS_STATE?: boolean | undefined;
+    FEATURE_ORG_SERVICE_BUDGETS?: boolean | undefined;
+    FEATURE_CONFIGURED_ACCESS?: boolean | undefined;
+    FEATURE_FREE_TIER?: boolean | undefined;
+    FEATURE_USAGE?: boolean | undefined;
+    USAGE_ENFORCEMENT_ENABLED?: boolean | undefined;
+    PAYMENT_RETRY_WINDOW_MS?: number | undefined;
+    FRONTEND_URL: string;
+    GOTENBERG_URL: string;
+    MICROSOFT_AUTH_CLIENT_ID?: string | undefined;
+    MICROSOFT_AUTH_CLIENT_SECRET?: string | undefined;
+    MICROSOFT_AUTH_TENANT_ID?: string | undefined;
+    ORG_EVALUATION_PERIOD_DAYS?: number | undefined;
+    PUBLIC_URL?: string | undefined;
+    REPORT_SPECS_DIR?: string | undefined;
+    REPORT_SPECS_S3_PREFIX?: string | undefined;
+    SES_REGION?: string | undefined;
+    SMTP_HOST?: string | undefined;
+    SMTP_PORT?: number | undefined;
+    TRANSACTIONAL_EMAIL_FROM?: string | undefined;
+    USE_MOCK_AI: boolean | "force";
+    nodeEnv: NodeEnvLabel;
+    runtimeMode: RuntimeMode;
+  };
 
 type ManagedProviderCheckInvariantInput = Pick<
   EnvApiInvariantInput,
   | "AI_PROVIDER"
   | "FEATURE_MANAGED_PROVIDER_CHECKS"
+  | "FEATURE_FREE_TIER"
   | "MANAGED_PROVIDER_CHECK_INTERVAL_MS"
   | "MANAGED_PROVIDER_CHECK_TIMEOUT_MS"
   | "OPENROUTER_API_KEY"
+  | "OPENROUTER_FAST_TIER_API_KEY"
+  | "OPENROUTER_FAST_TIER_WIF_POLICY_ID"
   | "OPENROUTER_WIF_POLICY_ID"
   | "OPENROUTER_WIF_AUDIENCE"
   | "OPENROUTER_WIF_STS_REGION"
@@ -919,26 +1124,69 @@ type ManagedProviderCheckInvariantInput = Pick<
 const managedProviderCheckInvariantViolation = ({
   AI_PROVIDER,
   FEATURE_MANAGED_PROVIDER_CHECKS,
+  FEATURE_FREE_TIER,
   MANAGED_PROVIDER_CHECK_INTERVAL_MS,
   MANAGED_PROVIDER_CHECK_TIMEOUT_MS,
   OPENROUTER_API_KEY,
+  OPENROUTER_FAST_TIER_API_KEY,
+  OPENROUTER_FAST_TIER_WIF_POLICY_ID,
   OPENROUTER_WIF_POLICY_ID,
   OPENROUTER_WIF_AUDIENCE,
   OPENROUTER_WIF_STS_REGION,
 }: ManagedProviderCheckInvariantInput): string | null => {
-  const configuredWifFields = [
-    OPENROUTER_WIF_POLICY_ID,
+  const configuredSharedWifFields = [
     OPENROUTER_WIF_AUDIENCE,
     OPENROUTER_WIF_STS_REGION,
   ].filter((value) => value !== undefined).length;
-  if (configuredWifFields !== 0 && configuredWifFields !== 3) {
-    return "OPENROUTER_WIF_POLICY_ID, OPENROUTER_WIF_AUDIENCE, and OPENROUTER_WIF_STS_REGION must be configured together.";
+  if (configuredSharedWifFields === 1) {
+    return "OPENROUTER_WIF_AUDIENCE and OPENROUTER_WIF_STS_REGION must be configured together.";
+  }
+  if (
+    configuredSharedWifFields === 2 &&
+    OPENROUTER_WIF_POLICY_ID === undefined &&
+    OPENROUTER_FAST_TIER_WIF_POLICY_ID === undefined
+  ) {
+    return "An OpenRouter WIF policy ID, OPENROUTER_WIF_AUDIENCE, and OPENROUTER_WIF_STS_REGION must be configured together.";
+  }
+  if (
+    (OPENROUTER_WIF_POLICY_ID !== undefined ||
+      OPENROUTER_FAST_TIER_WIF_POLICY_ID !== undefined) &&
+    configuredSharedWifFields !== 2
+  ) {
+    return "OpenRouter WIF policy IDs, OPENROUTER_WIF_AUDIENCE, and OPENROUTER_WIF_STS_REGION must be configured together.";
+  }
+  const standardCredential =
+    !!OPENROUTER_API_KEY?.trim() ||
+    (OPENROUTER_WIF_POLICY_ID !== undefined && configuredSharedWifFields === 2);
+  const fastCredential =
+    !!OPENROUTER_FAST_TIER_API_KEY?.trim() ||
+    (OPENROUTER_FAST_TIER_WIF_POLICY_ID !== undefined &&
+      configuredSharedWifFields === 2);
+  // Instance availability is answered once for the deployment, while each
+  // request dispatches on its own tier's credential. Requiring the standard
+  // credential beside the fast one (and the fast one under the free floor
+  // below) keeps the two answers equal for every organization's tier.
+  if (fastCredential && !standardCredential) {
+    return "OPENROUTER_FAST_TIER_API_KEY or OPENROUTER_FAST_TIER_WIF_POLICY_ID requires OPENROUTER_API_KEY or complete OpenRouter WIF configuration for the standard tier.";
+  }
+  // The free floor runs on the fast tier's own credential and never on the
+  // standard one, so a managed free tier without it would refuse every
+  // request; refuse the configuration at boot instead. A standard credential
+  // serves OpenRouter whatever AI_PROVIDER says: without AI_PROVIDER the
+  // deployment resolves to it, and transcription offers its models under any
+  // provider.
+  const openRouterMayServe = AI_PROVIDER === "openrouter" || standardCredential;
+  if (FEATURE_FREE_TIER && openRouterMayServe && !fastCredential) {
+    return "FEATURE_FREE_TIER with a managed OpenRouter credential requires OPENROUTER_FAST_TIER_API_KEY or complete fast-tier OpenRouter WIF configuration.";
   }
   if (FEATURE_MANAGED_PROVIDER_CHECKS) {
     if (AI_PROVIDER !== "openrouter") {
       return "FEATURE_MANAGED_PROVIDER_CHECKS requires AI_PROVIDER=openrouter.";
     }
-    if (!OPENROUTER_API_KEY?.trim() && configuredWifFields !== 3) {
+    if (
+      !OPENROUTER_API_KEY?.trim() &&
+      !(OPENROUTER_WIF_POLICY_ID && configuredSharedWifFields === 2)
+    ) {
       return "FEATURE_MANAGED_PROVIDER_CHECKS requires OPENROUTER_API_KEY or complete OpenRouter WIF configuration.";
     }
     if (
@@ -952,24 +1200,143 @@ const managedProviderCheckInvariantViolation = ({
   return null;
 };
 
+type FreeTierInvariantInput = Pick<
+  EnvApiInvariantInput,
+  | "FEATURE_FREE_TIER"
+  | "FEATURE_ORG_ACCESS_STATE"
+  | "FEATURE_ORG_SERVICE_BUDGETS"
+  | "USAGE_ENFORCEMENT_ENABLED"
+>;
+
+/**
+ * The free floor resolves from the access state and draws on the service
+ * budget. Usage enforcement refuses any organization without a usage
+ * entitlement, which a free organization never has, so the two cannot run
+ * together.
+ */
+export const freeTierInvariantViolation = ({
+  FEATURE_FREE_TIER,
+  FEATURE_ORG_ACCESS_STATE,
+  FEATURE_ORG_SERVICE_BUDGETS,
+  USAGE_ENFORCEMENT_ENABLED,
+}: FreeTierInvariantInput): string | null => {
+  if (!FEATURE_FREE_TIER) {
+    return null;
+  }
+  if (USAGE_ENFORCEMENT_ENABLED) {
+    return "FEATURE_FREE_TIER requires USAGE_ENFORCEMENT_ENABLED to be off.";
+  }
+  if (!FEATURE_ORG_ACCESS_STATE || !FEATURE_ORG_SERVICE_BUDGETS) {
+    return "FEATURE_FREE_TIER requires FEATURE_ORG_ACCESS_STATE and FEATURE_ORG_SERVICE_BUDGETS.";
+  }
+  return null;
+};
+
+type ApnsInvariantInput = Pick<
+  EnvApiInvariantInput,
+  "APNS_KEY_ID" | "APNS_TEAM_ID" | "APNS_PRIVATE_KEY"
+>;
+
+const apnsInvariantViolation = ({
+  APNS_KEY_ID,
+  APNS_TEAM_ID,
+  APNS_PRIVATE_KEY,
+}: ApnsInvariantInput): string | null => {
+  const set = [APNS_KEY_ID, APNS_TEAM_ID, APNS_PRIVATE_KEY].filter(
+    (value) => value !== undefined,
+  ).length;
+  return set === 0 || set === 3
+    ? null
+    : "APNS_KEY_ID, APNS_TEAM_ID and APNS_PRIVATE_KEY must be set together.";
+};
+
+type ReviewAccountInvariantInput = Pick<
+  EnvApiInvariantInput,
+  "APP_REVIEW_ACCOUNT_EMAIL" | "APP_REVIEW_ORGANIZATION_ID"
+>;
+
+const reviewAccountInvariantViolation = ({
+  APP_REVIEW_ACCOUNT_EMAIL,
+  APP_REVIEW_ORGANIZATION_ID,
+}: ReviewAccountInvariantInput): string | null =>
+  (APP_REVIEW_ACCOUNT_EMAIL === undefined) ===
+  (APP_REVIEW_ORGANIZATION_ID === undefined)
+    ? null
+    : "APP_REVIEW_ACCOUNT_EMAIL and APP_REVIEW_ORGANIZATION_ID must be set together.";
+
+type SmokeSessionInvariantInput = Pick<
+  EnvApiInvariantInput,
+  "DEPLOY_ENVIRONMENT" | "SMOKE_SESSION_SECRET"
+>;
+
+/** The synthetic-monitoring session route serves non-production deployments only. */
+const smokeSessionInvariantViolation = ({
+  DEPLOY_ENVIRONMENT,
+  SMOKE_SESSION_SECRET,
+}: SmokeSessionInvariantInput): string | null =>
+  DEPLOY_ENVIRONMENT === "production" && SMOKE_SESSION_SECRET !== undefined
+    ? "SMOKE_SESSION_SECRET is for non-production deployments; unset it when DEPLOY_ENVIRONMENT=production."
+    : null;
+
 // Feature-owned invariants, kept out of the top-level check's branch budget.
 const delegatedInvariantViolation = (
-  input: ManagedProviderCheckInvariantInput & InboundMailReceivingInput,
+  input: ManagedProviderCheckInvariantInput &
+    InboundMailReceivingInput &
+    EmailEventsInput &
+    FreeTierInvariantInput &
+    ReviewAccountInvariantInput &
+    AppleSignInInput &
+    ApnsInvariantInput &
+    SmokeSessionInvariantInput &
+    Pick<EnvApiInvariantInput, "runtimeMode">,
 ): string | null => {
+  const smokeSessionViolation = smokeSessionInvariantViolation(input);
+  if (smokeSessionViolation !== null) {
+    return smokeSessionViolation;
+  }
+  const reviewAccountViolation = reviewAccountInvariantViolation(input);
+  if (reviewAccountViolation !== null) {
+    return reviewAccountViolation;
+  }
+  const apnsViolation = apnsInvariantViolation(input);
+  if (apnsViolation !== null) {
+    return apnsViolation;
+  }
   const managedViolation = managedProviderCheckInvariantViolation(input);
   if (managedViolation !== null) {
     return managedViolation;
   }
+  const freeTierViolation = freeTierInvariantViolation(input);
+  if (freeTierViolation !== null) {
+    return freeTierViolation;
+  }
   const inboundMail = resolveInboundMailReceiving(input);
-  return inboundMail.isErr() ? inboundMail.error.message : null;
+  if (inboundMail.isErr()) {
+    return inboundMail.error.message;
+  }
+  const emailEvents = resolveEmailEvents(input);
+  if (emailEvents.isErr()) {
+    return emailEvents.error.message;
+  }
+  const appleSignIn = resolveAppleSignIn(input);
+  return appleSignIn.isErr() ? appleSignIn.error.message : null;
 };
 
 export const envApiInvariantViolation = ({
+  DEPLOY_ENVIRONMENT,
+  SMOKE_SESSION_SECRET,
+  APP_REVIEW_ACCOUNT_EMAIL,
+  APP_REVIEW_ORGANIZATION_ID,
+  APNS_KEY_ID,
+  APNS_TEAM_ID,
+  APNS_PRIVATE_KEY,
   AI_PROVIDER,
   FEATURE_MANAGED_PROVIDER_CHECKS,
   MANAGED_PROVIDER_CHECK_INTERVAL_MS,
   MANAGED_PROVIDER_CHECK_TIMEOUT_MS,
   OPENROUTER_API_KEY,
+  OPENROUTER_FAST_TIER_API_KEY,
+  OPENROUTER_FAST_TIER_WIF_POLICY_ID,
   OPENROUTER_WIF_POLICY_ID,
   OPENROUTER_WIF_AUDIENCE,
   OPENROUTER_WIF_STS_REGION,
@@ -981,7 +1348,9 @@ export const envApiInvariantViolation = ({
   FEATURE_ORG_ACCESS_STATE,
   FEATURE_ORG_SERVICE_BUDGETS,
   FEATURE_CONFIGURED_ACCESS,
+  FEATURE_FREE_TIER,
   FEATURE_USAGE,
+  USAGE_ENFORCEMENT_ENABLED,
   PAYMENT_RETRY_WINDOW_MS,
   FRONTEND_URL,
   GOTENBERG_URL,
@@ -1004,6 +1373,13 @@ export const envApiInvariantViolation = ({
   INBOUND_MAIL_TOPIC_ARN,
   INBOUND_MAIL_BUCKET,
   INBOUND_MAIL_KEY_PREFIX,
+  EMAIL_EVENTS_QUEUE_URL,
+  EMAIL_EVENTS_TOPIC_ARN,
+  EMAIL_EVENTS_DEAD_LETTER_QUEUE_URL,
+  APPLE_AUTH_CLIENT_ID,
+  APPLE_AUTH_TEAM_ID,
+  APPLE_AUTH_KEY_ID,
+  APPLE_AUTH_PRIVATE_KEY,
 }: EnvApiInvariantInput): string | null => {
   if (
     FEATURE_CONFIGURED_ACCESS &&
@@ -1017,11 +1393,21 @@ export const envApiInvariantViolation = ({
     return "FEATURE_CONFIGURED_ACCESS requires FEATURE_ORG_ACCESS_STATE, FEATURE_ORG_SERVICE_BUDGETS, FEATURE_USAGE and PAYMENT_RETRY_WINDOW_MS.";
   }
   const delegatedViolation = delegatedInvariantViolation({
+    DEPLOY_ENVIRONMENT,
+    SMOKE_SESSION_SECRET,
+    APP_REVIEW_ACCOUNT_EMAIL,
+    APP_REVIEW_ORGANIZATION_ID,
+    APNS_KEY_ID,
+    APNS_TEAM_ID,
+    APNS_PRIVATE_KEY,
     AI_PROVIDER,
     FEATURE_MANAGED_PROVIDER_CHECKS,
+    FEATURE_FREE_TIER,
     MANAGED_PROVIDER_CHECK_INTERVAL_MS,
     MANAGED_PROVIDER_CHECK_TIMEOUT_MS,
     OPENROUTER_API_KEY,
+    OPENROUTER_FAST_TIER_API_KEY,
+    OPENROUTER_FAST_TIER_WIF_POLICY_ID,
     OPENROUTER_WIF_POLICY_ID,
     OPENROUTER_WIF_AUDIENCE,
     OPENROUTER_WIF_STS_REGION,
@@ -1030,6 +1416,17 @@ export const envApiInvariantViolation = ({
     INBOUND_MAIL_TOPIC_ARN,
     INBOUND_MAIL_BUCKET,
     INBOUND_MAIL_KEY_PREFIX,
+    EMAIL_EVENTS_QUEUE_URL,
+    EMAIL_EVENTS_TOPIC_ARN,
+    EMAIL_EVENTS_DEAD_LETTER_QUEUE_URL,
+    FEATURE_ORG_ACCESS_STATE,
+    FEATURE_ORG_SERVICE_BUDGETS,
+    USAGE_ENFORCEMENT_ENABLED,
+    APPLE_AUTH_CLIENT_ID,
+    APPLE_AUTH_TEAM_ID,
+    APPLE_AUTH_KEY_ID,
+    APPLE_AUTH_PRIVATE_KEY,
+    runtimeMode,
   });
   if (delegatedViolation !== null) {
     return delegatedViolation;

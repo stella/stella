@@ -3,8 +3,8 @@ import { getAresCourtName } from "./court-names.js";
 import type {
   AresAddress,
   AresBodyMember,
-  AresCourtFile,
   AresCompany,
+  AresCourtFile,
   AresRawAddress,
   AresResRecord,
   AresSearchEntry,
@@ -50,9 +50,6 @@ export const parseAddress = (raw: AresRawAddress): AresAddress => ({
   country: raw.nazevStatu ?? null,
   textAddress: raw.textovaAdresa ?? null,
 });
-
-export const formatTextAddress = (raw: AresRawAddress): string | null =>
-  raw.textovaAdresa || null;
 
 // ---------------------------------------------------------------------------
 // RES record → AresCompany (partial, without VR fields)

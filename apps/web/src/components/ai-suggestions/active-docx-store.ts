@@ -30,7 +30,7 @@ import type { DocxEditModeResult } from "@/components/docx/docx-browser-editor.l
 export const activeDocxKey = (entityId: string, fileFieldId: string): string =>
   `${entityId}:${fileFieldId}`;
 
-export type ActiveDocxRegistration = {
+type ActiveDocxRegistration = {
   editorRef: RefObject<DocxEditorRef | null>;
   requestEditMode: () => Promise<DocxEditModeResult>;
   editable: boolean;

@@ -1,5 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
+import {
+  getModelBenchmarkMeasurements,
+  getModelUnratedReason,
+} from "./benchmarks";
 import type { ReasoningEffort } from "./index";
 import {
   ANTHROPIC_ADAPTIVE_THINKING_MODELS,
@@ -7,31 +11,34 @@ import {
   BYOK_DOCUMENT_INPUT_MODEL_OPTIONS,
   BYOK_MODEL_OPTIONS,
   CHAT_PDF_ATTACHMENT_MODEL_OPTIONS,
-  isChatPdfAttachmentModelSupported,
   CONTEXT_WINDOW_TOKENS,
   DEFAULT_CONTEXT_WINDOW_TOKENS,
   getContextWindowTokens,
-  getOutputTokenLimit,
   getModelDisplayMetadata,
+  getModelImageInputCapability,
   getModelRate,
   getModelReasoningEfforts,
+  getOutputTokenLimit,
   isBYOKModelRoleSupported,
-  normalizeModelCatalogId,
   isBYOKProviderRoleSupported,
-  DEFAULT_MODELS,
+  isChatPdfAttachmentModelSupported,
   MODEL_DEFAULT_REASONING_EFFORTS,
   MODEL_OUTPUT_TOKEN_LIMITS,
+  MODEL_OVERRIDE_GROUP_TASK,
+  MODEL_OVERRIDE_GROUPS,
   MODEL_RATES,
   MODEL_REASONING_EFFORTS,
   MODEL_TEMPERATURE_POLICIES,
-  MODEL_ROLES,
+  normalizeModelCatalogId,
   REASONING_EFFORTS,
+  resolveDefaultModel,
   resolveReasoningEffort,
-  resolveWorkingBYOKModelForRole,
+  resolveWorkingBYOKModelForTask,
   shouldEmitTemperature,
   supportsStreamingToolUse,
   TANSTACK_AI_PROVIDERS,
 } from "./index";
+import { resolveModelRate } from "./model-rate";
 
 const FLOATING_GOOGLE_MODEL_POINTERS = [
   "gemini-flash-latest",
@@ -54,6 +61,81 @@ const OPENROUTER_GPT_56_MODEL_IDS = [
   "openai/gpt-5.6-terra",
   "openai/gpt-5.6-luna",
 ] as const;
+
+describe("Claude Haiku 5.5 routes", () => {
+  const routes = [
+    { provider: "anthropic", modelId: "claude-haiku-5-5" },
+    { provider: "bedrock", modelId: "us.anthropic.claude-haiku-5-5" },
+    { provider: "openrouter", modelId: "anthropic/claude-haiku-5.5" },
+  ] as const;
+
+  test.each(routes)(
+    "$provider offers the model with complete request and display metadata",
+    ({ provider, modelId }) => {
+      expect(BYOK_MODEL_OPTIONS[provider]).toContain(modelId);
+      expect(getModelDisplayMetadata(modelId)).toEqual({
+        displayName: "Claude Haiku 5.5",
+        iconProvider: "anthropic",
+      });
+      for (const role of MODEL_OVERRIDE_GROUPS) {
+        expect(isBYOKModelRoleSupported({ provider, modelId, role })).toBe(
+          true,
+        );
+      }
+      expect(getModelImageInputCapability({ provider, modelId })).toBe(
+        "supported",
+      );
+      expect(supportsStreamingToolUse(modelId)).toBe(true);
+      expect(shouldEmitTemperature(modelId)).toBe(false);
+      expect(getContextWindowTokens(modelId)).toBe(1_000_000);
+      expect(getOutputTokenLimit(modelId)).toBe(128_000);
+      expect(getModelReasoningEfforts(modelId)).toEqual([
+        "none",
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max",
+      ]);
+      expect(getModelBenchmarkMeasurements(modelId)).toEqual([]);
+      expect(getModelUnratedReason(modelId)).toBe("too_new");
+    },
+  );
+
+  test("uses adaptive thinking and normalizes the aggregator rate identity", () => {
+    expect(ANTHROPIC_ADAPTIVE_THINKING_MODELS).toContain("claude-haiku-5-5");
+    expect(normalizeModelCatalogId("claude-haiku-5.5")).toBe(
+      "claude-haiku-5-5",
+    );
+    expect(getModelRate("anthropic/claude-haiku-5.5")).toBe(
+      getModelRate("claude-haiku-5-5"),
+    );
+    expect(MODEL_DEFAULT_REASONING_EFFORTS["anthropic/claude-haiku-5.5"]).toBe(
+      "medium",
+    );
+  });
+
+  test.each(routes)(
+    "$provider charges the upstream long-context rate only above its boundary",
+    ({ provider, modelId }) => {
+      const rate = getModelRate(modelId);
+      expect(rate?.kind).toBe("input-token-tiered");
+      if (rate === undefined) {
+        throw new Error(`Missing rate for ${modelId}`);
+      }
+      const input = provider === "bedrock" ? 11_000 : 10_000;
+      const output = provider === "bedrock" ? 55_000 : 50_000;
+      expect(resolveModelRate(rate, 100_000)).toMatchObject({
+        inputPerMTok: input,
+        outputPerMTok: output,
+      });
+      expect(resolveModelRate(rate, 100_001)).toMatchObject({
+        inputPerMTok: input * 5,
+        outputPerMTok: output * 5,
+      });
+    },
+  );
+});
 
 describe("output token limits", () => {
   test("covers every offered model with a positive limit", () => {
@@ -89,7 +171,7 @@ describe("direct OpenAI GPT-5.6 family", () => {
 
     for (const modelId of DIRECT_GPT_56_MODEL_IDS) {
       const displayName = DIRECT_GPT_56_DISPLAY_NAMES[modelId];
-      expect(getModelDisplayMetadata(modelId)).toEqual({
+      expect(getModelDisplayMetadata(modelId)).toMatchObject({
         displayName,
         iconProvider: "openai",
       });
@@ -113,6 +195,7 @@ describe("direct OpenAI GPT-5.6 family", () => {
     expect(getModelDisplayMetadata("gpt-5.6-sol")).toEqual({
       displayName: "GPT-5.6 Sol",
       iconProvider: "openai",
+      supersededBy: "gpt-6.2-sol",
     });
     expect(getModelRate("gpt-5.6-sol")).toBe(getModelRate("gpt-5.6"));
     expect(getContextWindowTokens("gpt-5.6-sol")).toBe(
@@ -132,9 +215,11 @@ describe("direct OpenAI GPT-5.6 family", () => {
       if (directModelId === undefined) {
         throw new Error("GPT-5.6 provider family is not aligned");
       }
-      expect(getModelDisplayMetadata(modelId)).toEqual(
-        getModelDisplayMetadata(directModelId),
-      );
+      // Successors differ by route; the product the picker shows does not.
+      expect(getModelDisplayMetadata(modelId)).toMatchObject({
+        displayName: getModelDisplayMetadata(directModelId)?.displayName,
+        iconProvider: getModelDisplayMetadata(directModelId)?.iconProvider,
+      });
       expect(getModelRate(modelId)).toBe(getModelRate(directModelId));
       expect(getContextWindowTokens(modelId)).toBe(
         getContextWindowTokens(directModelId),
@@ -222,7 +307,9 @@ describe("anthropic adaptive thinking", () => {
     ANTHROPIC_ADAPTIVE_THINKING_MODELS.some((m) => modelId.includes(m));
 
   test("the anthropic reasoning default supports adaptive thinking", () => {
-    expect(isAdaptive(DEFAULT_MODELS.anthropic.reasoning)).toBe(true);
+    expect(isAdaptive(BYOK_DEFAULT_MODELS.anthropic.reasoning.modelId)).toBe(
+      true,
+    );
   });
 
   test("every adaptive model is actually offered to users", () => {
@@ -234,14 +321,14 @@ describe("anthropic adaptive thinking", () => {
   });
 });
 
-describe("resolveWorkingBYOKModelForRole", () => {
+describe("resolveWorkingBYOKModelForTask", () => {
   test("keeps a still-offered model unchanged", () => {
     const modelId = BYOK_MODEL_OPTIONS.google[0];
     expect(
-      resolveWorkingBYOKModelForRole({
+      resolveWorkingBYOKModelForTask({
         provider: "google",
         modelId,
-        role: "chat",
+        task: "chat",
       }),
     ).toBe(modelId);
   });
@@ -249,60 +336,78 @@ describe("resolveWorkingBYOKModelForRole", () => {
   test("heals a dropped model to the provider's per-role default", () => {
     // `gemini-3-flash-preview` was a prior-catalog id, no longer offered.
     expect(
-      resolveWorkingBYOKModelForRole({
+      resolveWorkingBYOKModelForTask({
         provider: "google",
         modelId: "gemini-3-flash-preview",
-        role: "reasoning",
+        task: "reasoning",
       }),
-    ).toBe(BYOK_DEFAULT_MODELS.google.reasoning);
+    ).toBe(BYOK_DEFAULT_MODELS.google.reasoning.modelId);
   });
 
   test("heals a Bedrock model that cannot take tools on every role", () => {
     // DeepSeek R1 on Bedrock accepts no tool definitions, and every role
     // sends tools or structured output, so a stored selection moves to
     // the provider default instead of failing each request.
-    for (const role of MODEL_ROLES) {
+    for (const role of MODEL_OVERRIDE_GROUPS) {
       expect(
-        resolveWorkingBYOKModelForRole({
+        resolveWorkingBYOKModelForTask({
           provider: "bedrock",
           modelId: "us.deepseek.r1-v1:0",
-          role,
+          task: MODEL_OVERRIDE_GROUP_TASK[role],
         }),
-      ).toBe(BYOK_DEFAULT_MODELS.bedrock[role]);
+      ).toBe(BYOK_DEFAULT_MODELS.bedrock[role].modelId);
     }
   });
 
   test("heals a dropped model on the pdf role to a document-capable default", () => {
-    const healed = resolveWorkingBYOKModelForRole({
+    const healed = resolveWorkingBYOKModelForTask({
       provider: "google",
       modelId: "gemini-3-flash-preview",
-      role: "pdf",
+      task: "pdf",
     });
-    expect(healed).toBe(BYOK_DEFAULT_MODELS.google.pdf);
+    expect(healed).toBe(BYOK_DEFAULT_MODELS.google.pdf.modelId);
     expect(BYOK_DOCUMENT_INPUT_MODEL_OPTIONS.google).toContain(
-      BYOK_DEFAULT_MODELS.google.pdf,
+      BYOK_DEFAULT_MODELS.google.pdf.modelId,
     );
   });
 
-  test("every BYOK default is offered for its role (except mistral+pdf)", () => {
-    // resolveWorkingBYOKModelForRole only returns null when even the
-    // per-role default is not offered. That must stay a one-off
-    // (mistral+pdf, which has no document-capable model): if a future
-    // catalog edit drops a default from BYOK_MODEL_OPTIONS, healing would
-    // silently stop and leave a stale model pinned. Catch that here.
+  test("every BYOK provider-role entry matches capability and supported defaults are allowed", () => {
     for (const provider of TANSTACK_AI_PROVIDERS) {
-      for (const role of MODEL_ROLES) {
-        const modelId = BYOK_DEFAULT_MODELS[provider][role];
-        const resolved = resolveWorkingBYOKModelForRole({
-          provider,
-          modelId,
-          role,
-        });
-        if (provider === "mistral" && role === "pdf") {
-          expect(resolved).toBeNull();
-        } else {
-          expect(resolved).toBe(modelId);
+      for (const role of MODEL_OVERRIDE_GROUPS) {
+        const entry = BYOK_DEFAULT_MODELS[provider][role];
+        const supported = isBYOKProviderRoleSupported({ provider, role });
+        expect(entry.kind === "default").toBe(supported);
+        if (entry.kind === "unsupported") {
+          expect(
+            resolveWorkingBYOKModelForTask({
+              provider,
+              modelId: "fixture-unsupported-model",
+              task: MODEL_OVERRIDE_GROUP_TASK[role],
+            }),
+          ).toBeNull();
+          expect(
+            resolveDefaultModel({
+              task: MODEL_OVERRIDE_GROUP_TASK[role],
+              orgProviders: [provider],
+            }),
+          ).toBeNull();
+          continue;
         }
+        expect(entry.rationaleKey).toBe(
+          `organization.aiConfig.defaultRationale.${role}`,
+        );
+        const offered: readonly string[] = BYOK_MODEL_OPTIONS[provider];
+        expect(offered).toContain(entry.modelId);
+        expect(
+          isBYOKModelRoleSupported({ provider, modelId: entry.modelId, role }),
+        ).toBe(true);
+        expect(
+          resolveWorkingBYOKModelForTask({
+            provider,
+            modelId: entry.modelId,
+            task: MODEL_OVERRIDE_GROUP_TASK[role],
+          }),
+        ).toBe(entry.modelId);
       }
     }
   });
@@ -313,22 +418,22 @@ describe("resolveWorkingBYOKModelForRole", () => {
     // healing is impossible; the caller must leave the selection as-is.
     expect(BYOK_DOCUMENT_INPUT_MODEL_OPTIONS.mistral).toHaveLength(0);
     expect(
-      resolveWorkingBYOKModelForRole({
+      resolveWorkingBYOKModelForTask({
         provider: "mistral",
         modelId: "mistral-large-latest",
-        role: "pdf",
+        task: "pdf",
       }),
     ).toBeNull();
   });
 
   test("mistral non-pdf roles still heal on the same provider", () => {
     expect(
-      resolveWorkingBYOKModelForRole({
+      resolveWorkingBYOKModelForTask({
         provider: "mistral",
         modelId: "some-retired-mistral-id",
-        role: "chat",
+        task: "chat",
       }),
-    ).toBe(BYOK_DEFAULT_MODELS.mistral.chat);
+    ).toBe(BYOK_DEFAULT_MODELS.mistral.chat.modelId);
   });
 });
 
@@ -528,10 +633,12 @@ describe("supportsStreamingToolUse", () => {
     // The chat agent loop always carries tools, so a default that cannot
     // stream them would break that provider's chat outright.
     for (const provider of TANSTACK_AI_PROVIDERS) {
-      for (const role of MODEL_ROLES) {
-        expect(
-          supportsStreamingToolUse(BYOK_DEFAULT_MODELS[provider][role]),
-        ).toBe(true);
+      for (const role of MODEL_OVERRIDE_GROUPS) {
+        const entry = BYOK_DEFAULT_MODELS[provider][role];
+        if (entry.kind === "unsupported") {
+          continue;
+        }
+        expect(supportsStreamingToolUse(entry.modelId)).toBe(true);
       }
     }
   });

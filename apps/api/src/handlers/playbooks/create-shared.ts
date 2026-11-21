@@ -1,6 +1,10 @@
 import { panic, Result } from "better-result";
 import { eq, isNotNull } from "drizzle-orm";
 
+import {
+  onlineUniqueIndexTarget,
+  PLAYBOOK_DEFINITIONS_ORG_STARTER_ID_UIDX,
+} from "@/api/db/online-unique-indexes";
 import { resultTx } from "@/api/db/safe-db";
 import type { SafeDb } from "@/api/db/safe-db";
 import { playbookDefinitions } from "@/api/db/schema";
@@ -19,6 +23,7 @@ import { createSafeId } from "@/api/lib/branded-types";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+import type { ModelActionAdmitter } from "@/api/lib/rate-limit/model-action-admission";
 import type {
   PlaybookPositions,
   PlaybookScope,
@@ -32,7 +37,7 @@ import type { StarterPlaybookId } from "@/api/lib/workflow/starter-playbooks";
 // per-org cap, and the audit row in one place means a starter playbook is
 // exercised through exactly the same invariants as a hand-authored one.
 
-export type CreatePlaybookDefinitionBody = {
+type CreatePlaybookDefinitionBody = {
   name: string;
   description?: string;
   scope?: PlaybookScope;
@@ -44,25 +49,27 @@ export type CreatePlaybookDefinitionResult = {
   outcome: "created" | "existing";
 };
 
-export type CreatePlaybookDefinitionOrigin =
-  | { type: "authored" }
-  | { type: "starter"; starterId: StarterPlaybookId };
+type CreatePlaybookDefinitionOrigin =
+  { type: "authored" } | { type: "starter"; starterId: StarterPlaybookId };
 
 type CreatePlaybookDefinitionArgs = {
+  /** Admits the save's ask derivations; see `deriveAutoAsks`. */
+  admitModelAction: ModelActionAdmitter;
   safeDb: SafeDb;
   organizationId: SafeId<"organization">;
   /** Matters the caller can access; a newly added source must be in one. */
   accessibleWorkspaceIds: readonly SafeId<"workspace">[];
   orgAIConfig: OrgAIConfig | null;
-  managedAIResidency: ManagedAIResidency;
+  managedAIResidency: ManagedAIResidency | null;
   orgAIConfigStatus: OrgAIConfigStatus;
-  promptCachingEnabled: boolean;
+  promptCachingEnabled: boolean | null;
   recordAuditEvent: AuditRecorder;
   body: CreatePlaybookDefinitionBody;
   origin: CreatePlaybookDefinitionOrigin;
 };
 
 export const createPlaybookDefinitionHandler = async function* ({
+  admitModelAction,
   safeDb,
   organizationId,
   accessibleWorkspaceIds,
@@ -105,6 +112,7 @@ export const createPlaybookDefinitionHandler = async function* ({
   // consume `derived` like a manual ask. A failed derivation never blocks the
   // save (it persists with `derived` absent).
   const positions = await deriveAutoAsks(body.positions, {
+    admitModelAction,
     organizationId,
     orgAIConfig,
     managedAIResidency,
@@ -158,10 +166,10 @@ export const createPlaybookDefinitionHandler = async function* ({
                 .insert(playbookDefinitions)
                 .values(values)
                 .onConflictDoNothing({
-                  target: [
-                    playbookDefinitions.organizationId,
-                    playbookDefinitions.starterId,
-                  ],
+                  target: onlineUniqueIndexTarget(
+                    PLAYBOOK_DEFINITIONS_ORG_STARTER_ID_UIDX,
+                    playbookDefinitions,
+                  ),
                   where: isNotNull(playbookDefinitions.starterId),
                 })
                 .returning({ id: playbookDefinitions.id })

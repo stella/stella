@@ -18,6 +18,8 @@ import { createSafeId } from "@/api/lib/branded-types";
 import { FILE_READ_URL_EXPIRY_SECONDS } from "@/api/lib/files/read-file";
 import { putTemporaryS3ObjectWithSignal } from "@/api/lib/s3";
 import { presignDownloadUrl } from "@/api/lib/s3-presign";
+import type { SignedDownloadSource } from "@/api/lib/s3-presign";
+import type { SyntheticSessionAuthorityReader } from "@/api/lib/synthetic-principal/session-authority";
 import {
   FILE_COMPARISON_REDLINE_TTL_SECONDS,
   fileComparisonExpiry,
@@ -58,9 +60,11 @@ export type DeliverTemporaryRedlineOptions = {
   bytes: Uint8Array;
   fileName: string;
   organizationId: SafeId<"organization">;
+  readSessionAuthority: SyntheticSessionAuthorityReader;
   /** Sets `app.user_id` and `app.organization_id`, which the row's RLS policy pins. */
   scopedDb: ScopedDb;
   signal: AbortSignal;
+  source: SignedDownloadSource;
   userId: SafeId<"user">;
 };
 
@@ -75,17 +79,29 @@ export const DEFAULT_DELIVER_TEMPORARY_REDLINE_DEPENDENCIES: DeliverTemporaryRed
     putObject: putTemporaryS3ObjectWithSignal,
   };
 
-export const deliverTemporaryRedline = async (
+type StagedTemporaryRedline = {
+  delivery: TemporaryRedlineDelivery;
+  /** The redline's own row, for a caller that must withdraw it unpublished. */
+  uploadId: SafeId<"fileComparisonUpload">;
+};
+
+/**
+ * Store the redline and sign its link without handing it out. A caller whose
+ * publication is fenced withdraws the staged row and object when it loses.
+ */
+export const stageTemporaryRedline = async (
   {
     bytes,
     fileName,
     organizationId,
+    readSessionAuthority,
     scopedDb,
     signal,
+    source,
     userId,
   }: DeliverTemporaryRedlineOptions,
   dependencies: DeliverTemporaryRedlineDependencies = DEFAULT_DELIVER_TEMPORARY_REDLINE_DEPENDENCIES,
-): Promise<Result<TemporaryRedlineDelivery, TemporaryRedlineFailure>> => {
+): Promise<Result<StagedTemporaryRedline, TemporaryRedlineFailure>> => {
   const id = createSafeId<"fileComparisonUpload">();
   const key = fileComparisonObjectKey({ organizationId, uploadId: id });
   const expiresAt = fileComparisonExpiry(FILE_COMPARISON_REDLINE_TTL_SECONDS);
@@ -134,7 +150,10 @@ export const deliverTemporaryRedline = async (
   const downloadUrl = await Result.tryPromise(
     async () =>
       await dependencies.presignDownloadUrl(key, {
+        userId,
         expiresIn: FILE_READ_URL_EXPIRY_SECONDS,
+        source,
+        readSessionAuthority,
         fileName,
         // The key is organization-level `tmp/`, never workspace storage.
         scope: { organizationId, workspaceId: null },
@@ -145,7 +164,18 @@ export const deliverTemporaryRedline = async (
   }
 
   return Result.ok({
-    downloadUrl: downloadUrl.value,
-    expiresAt: expiresAt.toISOString(),
+    delivery: {
+      downloadUrl: downloadUrl.value,
+      expiresAt: expiresAt.toISOString(),
+    },
+    uploadId: id,
   });
 };
+
+export const deliverTemporaryRedline = async (
+  options: DeliverTemporaryRedlineOptions,
+  dependencies: DeliverTemporaryRedlineDependencies = DEFAULT_DELIVER_TEMPORARY_REDLINE_DEPENDENCIES,
+): Promise<Result<TemporaryRedlineDelivery, TemporaryRedlineFailure>> =>
+  (await stageTemporaryRedline(options, dependencies)).map(
+    ({ delivery }) => delivery,
+  );

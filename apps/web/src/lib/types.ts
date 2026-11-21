@@ -1,5 +1,6 @@
 import type {
   AgendaItemWireFields,
+  AiCellSettlement,
   EntityPriority,
   OcrExportStatus,
   ReviewFlag,
@@ -11,22 +12,16 @@ import type {
   WorkspaceFieldContent,
 } from "@stll/workspace-ui/types";
 
-import { PDF_MIME_TYPE } from "@/consts";
 import type {
   BoundingBox,
   ConditionNode,
   EntityKind,
+  SafeId,
   ViewLayout,
   ViewLayoutType,
-  SafeId,
   WorkspacePropertyWire,
 } from "@/lib/api-contract";
-import {
-  DOCX_MIME,
-  getNativeOfficeViewerFormat,
-  isEmailFile,
-  isMarkdownFile,
-} from "@/lib/consts";
+import { nativeFilePreviewKind } from "@/lib/files/preview-kind";
 import type { FileRouteTypes } from "@/routeTree.gen";
 
 export type { WorkspaceFieldContent };
@@ -40,7 +35,6 @@ export type {
 } from "@/lib/api-contract";
 
 export type RouterToPath = FileRouteTypes["to"];
-export type RouterFullPath = FileRouteTypes["fullPaths"];
 
 export type WorkspaceId = SafeId<"workspace">;
 export type EntityId = SafeId<"entity">;
@@ -53,33 +47,7 @@ export const isFileDisplayable = (file: {
   fileName?: string | null | undefined;
   pdfFileId: string | null;
   encrypted: boolean;
-}) => {
-  if (file.mimeType === PDF_MIME_TYPE) {
-    return true;
-  }
-
-  if (file.pdfFileId !== null) {
-    return true;
-  }
-
-  // OOXML files are rendered natively in-browser.
-  if (
-    file.mimeType === DOCX_MIME ||
-    getNativeOfficeViewerFormat(file.mimeType) !== null
-  ) {
-    return true;
-  }
-
-  if (!file.encrypted && isEmailFile(file)) {
-    return true;
-  }
-
-  if (!file.encrypted && isMarkdownFile(file)) {
-    return true;
-  }
-
-  return false;
-};
+}) => file.pdfFileId !== null || nativeFilePreviewKind(file) !== null;
 
 export type PropertyDependency = {
   dependsOnPropertyId: PropertyId;
@@ -165,7 +133,8 @@ export type WorkspaceProperty = Omit<
     | {
         version: 1;
         type: "person";
-      };
+      }
+    | Extract<WorkspacePropertyWire["content"], { type: "record" }>;
   tool: ManualInputTool | AIModelTool | PlaybookVerdictTool;
   // Structural role: identifies the document-type classifier by identity
   // rather than by the literal name "Document Type" (mirrors the server
@@ -186,6 +155,7 @@ export type WorkspaceField = {
   id: FieldId;
   propertyId: PropertyId;
   content: WorkspaceFieldContent;
+  aiSettlement?: AiCellSettlement | null;
   ocrExportStatus?: OcrExportStatus;
 };
 
@@ -210,6 +180,16 @@ export type WorkspaceCellMetadata = {
     lockedByName: string | null;
     lockedByImage: string | null;
     reason: "manual-edit" | "explicit";
+  };
+  /** A person's value over the one a run produced; absent once a run settles
+   *  the cell again. */
+  override?: {
+    machine: { content: WorkspaceFieldContent; settledAt: string };
+    editedBy: string;
+    editedByName: string | null;
+    editedByImage: string | null;
+    editedAt: string;
+    reason: string | null;
   };
 };
 
@@ -335,6 +315,8 @@ type VerdictRationaleJustificationBlock = {
 type DecisionPassageJustificationBlock = {
   kind: "decision-passage";
   anchorId: string;
+  /** The number the court printed on the cited block; null when none. */
+  courtParagraphNumber: number | null;
   excerpt: string;
 };
 

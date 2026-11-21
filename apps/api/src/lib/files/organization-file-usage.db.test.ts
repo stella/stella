@@ -1,24 +1,44 @@
-import { Result } from "better-result";
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { eq } from "drizzle-orm";
+import { panic, Result } from "better-result";
+import { afterAll, describe, expect, test } from "bun:test";
+import { eq, inArray } from "drizzle-orm";
 
+import { createTestState } from "@stll/test-state";
+
+import type { Transaction } from "@/api/db/root";
 import {
+  BUFFER_OBJECT_CLEANUP_INTENT_STATUS,
+  bufferObjectCleanupIntents,
+  ORGANIZATION_ACCESS_STATE,
+  organizationAccessStates,
   organizationFileObjects,
   organizationFileUsage,
   usageEntitlements,
   usagePolicies,
   usageSeatAssignments,
+  workspaces,
 } from "@/api/db/schema";
 import { env } from "@/api/env";
 import { envBase } from "@/api/env-base";
 import { envDocumentProcessingWorker } from "@/api/env-document-processing-worker";
 import { createSafeId } from "@/api/lib/branded-types";
-import { copyOrganizationFiles } from "@/api/lib/files/copy-organization-files";
 import {
+  BUFFER_INTENT_RECOVERY_RETIRE_AFTER_ATTEMPTS,
+  reconcileBufferObjectCleanupIntents,
+  releaseObjectCleanupIntentsForLifecycle,
+} from "@/api/lib/buffer-intent-reconciliation";
+import {
+  copyOrganizationFiles,
+  copyOrganizationFilesForPublication,
+  lockCopyPublicationIntentsInTransaction,
+  retirePublishedCopyIntentsInTransaction,
+} from "@/api/lib/files/copy-organization-files";
+import {
+  DeleteOrganizationFileError,
   deleteOrganizationFilesWithSignal,
   deleteOrganizationFileWithSignal,
 } from "@/api/lib/files/delete-organization-file";
 import {
+  authorizeOrganizationFileWrite,
   commitOrganizationFileBytes,
   commitOrganizationFilesBytes,
   copyOrganizationFile,
@@ -30,9 +50,11 @@ import {
   removeOrganizationFilesBytes,
   reserveOrganizationFileBytes,
   reserveOrganizationFilesBytes,
+  runCheckedOrganizationFileWrite,
   writeOrganizationFile,
   writeOrganizationFiles,
 } from "@/api/lib/files/organization-file-usage";
+import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
@@ -43,10 +65,12 @@ import type { TestIds } from "@/api/tests/security/rls-helpers";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
+const testState = createTestState({ file: import.meta.path, config: env });
+const workerState = testState.forConfig(envDocumentProcessingWorker);
+
 let testDb: TestDatabase;
 let ids: TestIds;
-const priorFlag = env.FEATURE_FILE_USAGE_LIMITS;
-const priorWorkerFlag = envDocumentProcessingWorker.FEATURE_FILE_USAGE_LIMITS;
+
 const policyId = createSafeId<"usagePolicy">();
 const entitlementId = createSafeId<"usageEntitlement">();
 const assignmentId = createSafeId<"usageSeatAssignment">();
@@ -86,7 +110,7 @@ const releaseConfirmedAbsentReservation = async (key: string) => {
   );
 };
 
-beforeAll(async () => {
+testState.beforeAll(async () => {
   testDb = await getTestDb();
   ids = createTestIds();
   await setupRlsTestData(testDb, ids);
@@ -106,20 +130,19 @@ beforeAll(async () => {
     seats: 1,
     currentPeriodStart: new Date(now - 60_000),
     currentPeriodEnd: new Date(now + 60_000),
-    source: "manual",
+    // The suite walks provider statuses on this row: hosted semantics.
+    source: "hosted",
   });
   await testDb.insert(usageSeatAssignments).values({
     id: assignmentId,
     organizationId: ids.orgA,
     userId: ids.userA1,
   });
-  env.FEATURE_FILE_USAGE_LIMITS = true;
-  envDocumentProcessingWorker.FEATURE_FILE_USAGE_LIMITS = true;
+  testState.setConfig("FEATURE_FILE_USAGE_LIMITS", true);
+  workerState.setConfig("FEATURE_FILE_USAGE_LIMITS", true);
 });
 
 afterAll(async () => {
-  env.FEATURE_FILE_USAGE_LIMITS = priorFlag;
-  envDocumentProcessingWorker.FEATURE_FILE_USAGE_LIMITS = priorWorkerFlag;
   await testDb
     .delete(organizationFileObjects)
     .where(eq(organizationFileObjects.organizationId, ids.orgA));
@@ -143,6 +166,106 @@ afterAll(async () => {
 });
 
 describe("organization file usage", () => {
+  test("each stored object execution family admits checked input and refuses unavailable input", async () => {
+    const attempted: string[] = [];
+    const key = (family: string, allowed: boolean) =>
+      `fixture/evidence-${family}-${allowed}`;
+    const runWrite = (family: string, allowed: boolean) => ({
+      ...input(key(family, allowed), allowed ? 1 : 1000),
+      content: key(family, allowed),
+      write: async () => {
+        attempted.push(key(family, allowed));
+        return await Promise.resolve("stored");
+      },
+      db: db(),
+    });
+    const runCopy = (family: string, allowed: boolean) => ({
+      ...input(key(family, allowed), allowed ? 1 : 1000),
+      source: key(family, allowed),
+      copy: async () => {
+        attempted.push(key(family, allowed));
+        return await Promise.resolve(Result.ok("stored"));
+      },
+      db: db(),
+    });
+    const families = {
+      write: async (allowed: boolean) =>
+        await writeOrganizationFile(runWrite("write", allowed)),
+      copy: async (allowed: boolean) =>
+        await copyOrganizationFile(runCopy("copy", allowed)),
+      batchWrite: async (allowed: boolean) =>
+        await writeOrganizationFiles([runWrite("batchWrite", allowed)], db()),
+      batchCopy: async (allowed: boolean) =>
+        await copyOrganizationFiles({
+          inputs: [runCopy("batchCopy", allowed)],
+          concurrency: 1,
+          db: db(),
+        }),
+    };
+    for (const [family, run] of Object.entries(families)) {
+      try {
+        expect((await run(true)).status).toBe("ok");
+        const denied = await run(false);
+        expect(denied.status).toBe("error");
+        if (denied.status === "error") {
+          expect(denied.error.reason).toBe("capacity_exceeded");
+        }
+        expect(attempted).toContain(key(family, true));
+        expect(attempted).not.toContain(key(family, false));
+      } finally {
+        await removeOrganizationFileBytes(key(family, true), db());
+      }
+    }
+  });
+
+  test("reserved execution retains the checked object and nested input", async () => {
+    const objectKey = "fixture/evidence-snapshot";
+    const operation = {
+      ...input(objectKey, 3),
+      metadata: { label: "authorized" },
+      content: "stored",
+      write: async () => await Promise.resolve("stored"),
+      db: db(),
+    };
+    try {
+      const authorization = await authorizeOrganizationFileWrite(
+        operation,
+        operation.db,
+      );
+      if (Result.isError(authorization)) {
+        panic("Successful evidence fixture was refused", authorization.error);
+      }
+      operation.objectKey = "fixture/evidence-changed";
+      operation.sizeBytes = 7;
+      operation.metadata.label = "changed";
+      const written = await authorization.value.execute(async (checked) => {
+        expect(checked.input.value.operation.objectKey).toBe(objectKey);
+        expect(checked.input.value.operation.sizeBytes).toBe(3);
+        expect(checked.input.value.operation.metadata.label).toBe("authorized");
+        expect(Object.isFrozen(checked.input.value.operation.metadata)).toBe(
+          true,
+        );
+        checked.scratch.operation.objectKey = "fixture/execution-changed";
+        checked.scratch.operation.sizeBytes = 99;
+        checked.scratch.operation.metadata.label = "scratch-only";
+        checked.scratch.operation.write = async () =>
+          await Promise.resolve("wrong write");
+        return await runCheckedOrganizationFileWrite({
+          ...checked,
+          input: { ...checked.input, value: checked.scratch },
+        });
+      });
+      expect(written).toEqual(Result.ok("stored"));
+      const rows = await testDb
+        .select()
+        .from(organizationFileObjects)
+        .where(eq(organizationFileObjects.objectKey, objectKey));
+      expect(rows.at(0)?.sizeBytes).toBe(3n);
+    } finally {
+      await removeOrganizationFileBytes(objectKey, db());
+    }
+  });
+
   test("reservation and failure release restore available bytes", async () => {
     const first = await reserveOrganizationFileBytes(
       input("fixture/release-a", 13),
@@ -181,6 +304,7 @@ describe("organization file usage", () => {
     const failed = await writeOrganizationFile({
       ...input("fixture/write", 11),
       db: db(),
+      content: "fixture/write",
       write: async () => {
         throw new Error("provider failed");
       },
@@ -195,6 +319,7 @@ describe("organization file usage", () => {
     const written = await writeOrganizationFile({
       ...input("fixture/write", 11),
       db: db(),
+      content: "fixture/write",
       write: async () => "stored",
     });
     expect(Result.isOk(written)).toBe(true);
@@ -246,13 +371,18 @@ describe("organization file usage", () => {
         Result.isOk(await reconcileOrganizationFileObject(input(key, 6), db())),
       ).toBe(true);
 
-      const unavailableDb = asTestRaw<
-        NonNullable<Parameters<typeof reserveOrganizationFileBytes>[1]>
-      >({
-        transaction: async () => {
+      let transactionCount = 0;
+      const unavailableDb: NonNullable<
+        Parameters<typeof reserveOrganizationFileBytes>[1]
+      > = {
+        transaction: async (run) => {
+          transactionCount += 1;
+          if (transactionCount === 1) {
+            return await db().transaction(run);
+          }
           throw new Error("ledger unavailable");
         },
-      });
+      };
       const deleted = await deleteOrganizationFileWithSignal(
         key,
         AbortSignal.timeout(10_000),
@@ -260,6 +390,12 @@ describe("organization file usage", () => {
       );
 
       expect(Result.isError(deleted)).toBe(true);
+      if (Result.isError(deleted)) {
+        expect(DeleteOrganizationFileError.is(deleted.error)).toBe(true);
+        if (DeleteOrganizationFileError.is(deleted.error)) {
+          expect(deleted.error.stage).toBe("usage_removal");
+        }
+      }
       expect(fake.objects.has(`${envBase.S3_BUCKET}/${key}`)).toBe(false);
       expect((await counter())?.committedBytes).toBe(6n);
       expect(Result.isOk(await removeOrganizationFileBytes(key, db()))).toBe(
@@ -267,6 +403,25 @@ describe("organization file usage", () => {
       );
     } finally {
       fake.stop();
+    }
+  });
+
+  test("distinguishes a storage failure from usage removal", async () => {
+    const fake = startFakeS3();
+    fake.stop();
+
+    const deleted = await deleteOrganizationFileWithSignal(
+      "fixture/unavailable-storage",
+      AbortSignal.timeout(10_000),
+      { fileUsageDb: db() },
+    );
+
+    expect(Result.isError(deleted)).toBe(true);
+    if (Result.isError(deleted)) {
+      expect(DeleteOrganizationFileError.is(deleted.error)).toBe(true);
+      if (DeleteOrganizationFileError.is(deleted.error)) {
+        expect(deleted.error.stage).toBe("storage");
+      }
     }
   });
 
@@ -365,6 +520,75 @@ describe("organization file usage", () => {
     }
   });
 
+  test("the free floor bounds the whole organization, with no seat assignment", async () => {
+    const freePolicyId = createSafeId<"usagePolicy">();
+    const now = Date.now();
+    await testDb.insert(usagePolicies).values({
+      id: freePolicyId,
+      policyKey: `file-usage-free-${freePolicyId}`.slice(0, 64),
+      displayName: "Free fixture",
+      kind: "free",
+      monthlyUsageUnits: 0,
+      maxMembers: 1,
+      storageBytesPerAssignment: 40n,
+      serviceActionsPerPeriod: 3,
+    });
+    const evaluationEnded = {
+      state: ORGANIZATION_ACCESS_STATE.evaluationEnded,
+      evaluationStartedAt: new Date(now - 120_000),
+      evaluationEndsAt: new Date(now - 60_000),
+      evaluationEndedAt: new Date(now - 60_000),
+    };
+    await testDb
+      .insert(organizationAccessStates)
+      .values({ organizationId: ids.orgB, ...evaluationEnded })
+      .onConflictDoUpdate({
+        target: organizationAccessStates.organizationId,
+        set: evaluationEnded,
+      });
+    try {
+      const freeInput = (objectKey: string, sizeBytes: number) => ({
+        organizationId: ids.orgB,
+        objectKey,
+        sizeBytes,
+      });
+      const over = await reserveOrganizationFileBytes(
+        freeInput("fixture/free-over", 41),
+        db(),
+      );
+      expect(over).toMatchObject({ error: { reason: "capacity_exceeded" } });
+      const overBatch = await reserveOrganizationFilesBytes(
+        [freeInput("fixture/free-a", 20), freeInput("fixture/free-b", 21)],
+        db(),
+      );
+      expect(overBatch).toMatchObject({
+        error: { reason: "capacity_exceeded" },
+      });
+      const fits = await reserveOrganizationFileBytes(
+        freeInput("fixture/free-fits", 40),
+        db(),
+      );
+      expect(Result.isOk(fits)).toBe(true);
+      if (Result.isOk(fits)) {
+        await releaseOrganizationFileBytes(fits.value, db());
+      }
+    } finally {
+      await testDb
+        .delete(organizationFileObjects)
+        .where(eq(organizationFileObjects.organizationId, ids.orgB));
+      await testDb
+        .delete(organizationAccessStates)
+        .where(eq(organizationAccessStates.organizationId, ids.orgB));
+      await recordNewOrganizationAccessState(testDb, {
+        organizationId: ids.orgB,
+        now: new Date(),
+      });
+      await testDb
+        .delete(usagePolicies)
+        .where(eq(usagePolicies.id, freePolicyId));
+    }
+  });
+
   test("zero-byte objects are recorded without consuming capacity", async () => {
     const zero = await reserveOrganizationFileBytes(
       input("fixture/empty", 0),
@@ -391,6 +615,7 @@ describe("organization file usage", () => {
   test("uncertain copy failure retains its reservation", async () => {
     const copied = await copyOrganizationFile({
       ...input("fixture/copy", 23),
+      source: "fixture/source",
       db: db(),
       copy: async () => Result.err(new Error("copy failed")),
     });
@@ -528,8 +753,9 @@ describe("organization file usage", () => {
     const written = await writeOrganizationFile({
       ...input(key, 9),
       db: { transaction: failingTransaction },
-      write: async () => {
-        fake.put(envBase.S3_BUCKET, key, "confirmed", undefined, new Date());
+      content: "confirmed",
+      write: async ({ content, objectKey }) => {
+        fake.put(envBase.S3_BUCKET, objectKey, content, undefined, new Date());
         return "confirmed";
       },
     });
@@ -755,9 +981,14 @@ describe("organization file usage", () => {
   test("batch writes commit confirmed successes while uncertain siblings stay reserved", async () => {
     const written = await writeOrganizationFiles(
       [
-        { ...input("fixture/batch-success", 4), write: async () => "stored" },
+        {
+          ...input("fixture/batch-success", 4),
+          content: "success",
+          write: async () => "stored",
+        },
         {
           ...input("fixture/batch-uncertain", 6),
+          content: "uncertain",
           write: async () => {
             throw new Error("provider timeout");
           },
@@ -793,6 +1024,7 @@ describe("organization file usage", () => {
       organizationId: ids.orgB,
       objectKey: `fixture/copy-round-${index}`,
       sizeBytes: 1,
+      source: `fixture/source-${index}`,
       copy: async () => {
         attempted.push(index);
         if (index === 150) {
@@ -845,6 +1077,199 @@ describe("organization file usage", () => {
           organizationId: ids.orgB,
           objectKey: pending.objectKey,
           writeId: pending.writeId,
+        },
+        db(),
+      );
+    }
+  });
+
+  test("publishes copied ownership and retires its exact-key cleanup intent atomically", async () => {
+    const key = `${ids.orgA}/${ids.wsA1}/prepublication-success.pdf`;
+    const copied = await copyOrganizationFilesForPublication({
+      inputs: [
+        {
+          cleanupScope: {
+            type: "workspaces",
+            workspaces: [{ id: ids.wsA1, state: "active" }],
+          },
+          copy: async () => Result.ok("copied"),
+          objectKey: key,
+          organizationId: ids.orgA,
+          sizeBytes: 3,
+          source: "source",
+        },
+      ],
+      concurrency: 1,
+      db: db(),
+    });
+    expect(Result.isOk(copied)).toBe(true);
+    if (Result.isError(copied)) {
+      return;
+    }
+    const intentIds = copied.value.publicationIntents.flatMap(
+      ({ cleanupIntentIds }) => cleanupIntentIds,
+    );
+    expect(intentIds).toHaveLength(1);
+    await testDb.transaction(async (tx) => {
+      const transaction = asTestRaw<Transaction>(tx);
+      expect(
+        Result.isOk(
+          await lockCopyPublicationIntentsInTransaction({
+            intentIds,
+            organizationId: ids.orgA,
+            tx: transaction,
+            workspaceIds: [ids.wsA1],
+            workspaceMode: "share",
+          }),
+        ),
+      ).toBe(true);
+      expect(
+        Result.isOk(
+          await retirePublishedCopyIntentsInTransaction({
+            intentIds,
+            organizationId: ids.orgA,
+            tx: transaction,
+            workspaceIds: [ids.wsA1],
+          }),
+        ),
+      ).toBe(true);
+    });
+    expect(
+      await testDb
+        .select({ id: bufferObjectCleanupIntents.id })
+        .from(bufferObjectCleanupIntents)
+        .where(inArray(bufferObjectCleanupIntents.id, intentIds)),
+    ).toEqual([]);
+    expect(
+      await testDb
+        .select({ status: organizationFileObjects.status })
+        .from(organizationFileObjects)
+        .where(eq(organizationFileObjects.objectKey, key)),
+    ).toEqual([{ status: "committed" }]);
+    await removeOrganizationFileBytes(key, db());
+  });
+
+  test("a lifecycle deletion preempts a paused copy and late completion converges through cleanup", async () => {
+    const workspaceId = createSafeId<"workspace">();
+    const key = `${ids.orgB}/${workspaceId}/late-copy.pdf`;
+    await testDb.insert(workspaces).values({
+      id: workspaceId,
+      name: "Late copy target",
+      organizationId: ids.orgB,
+      reference: `late-${workspaceId}`,
+      status: "active",
+    });
+    const started = Promise.withResolvers<undefined>();
+    const completeCopy = Promise.withResolvers<Result<string, Error>>();
+    const running = copyOrganizationFilesForPublication({
+      inputs: [
+        {
+          cleanupScope: {
+            type: "workspaces",
+            workspaces: [{ id: workspaceId, state: "active" }],
+          },
+          copy: async () => {
+            started.resolve(undefined);
+            return await completeCopy.promise;
+          },
+          objectKey: key,
+          organizationId: ids.orgB,
+          sizeBytes: 4,
+          source: "source",
+        },
+      ],
+      concurrency: 1,
+      db: db(),
+    });
+    await started.promise;
+    const safeDb = async <T>(run: (tx: Transaction) => Promise<T>) =>
+      await Result.tryPromise(
+        async () =>
+          await testDb.transaction(
+            async (tx) => await run(asTestRaw<Transaction>(tx)),
+          ),
+      );
+    const inFlightDeletes: string[] = [];
+    expect(
+      await reconcileBufferObjectCleanupIntents({
+        deleteObject: async (objectKey) => {
+          inFlightDeletes.push(objectKey);
+          return Result.ok(undefined);
+        },
+        limit: 1,
+        safeDb,
+      }),
+    ).toBe(0);
+    expect(inFlightDeletes).toEqual([]);
+    await testDb.transaction(async (tx) => {
+      const transaction = asTestRaw<Transaction>(tx);
+      await tx
+        .update(workspaces)
+        .set({ status: "deleting" })
+        .where(eq(workspaces.id, workspaceId));
+      await releaseObjectCleanupIntentsForLifecycle(transaction, {
+        organizationId: ids.orgB,
+        type: "workspace",
+        workspaceId,
+      });
+      await tx.delete(workspaces).where(eq(workspaces.id, workspaceId));
+    });
+    completeCopy.resolve(Result.ok("copied late"));
+    const late = await running;
+    expect(late).toMatchObject({
+      error: { reason: "destination_unavailable" },
+    });
+    const intent = await testDb
+      .select({
+        id: bufferObjectCleanupIntents.id,
+        status: bufferObjectCleanupIntents.status,
+      })
+      .from(bufferObjectCleanupIntents)
+      .where(eq(bufferObjectCleanupIntents.objectKey, key))
+      .then((rows) => rows.at(0));
+    expect(intent?.status).toBe(BUFFER_OBJECT_CLEANUP_INTENT_STATUS.RECOVERING);
+    expect(intent).toBeDefined();
+    if (!intent) {
+      return;
+    }
+    await testDb
+      .update(bufferObjectCleanupIntents)
+      .set({
+        attemptCount: BUFFER_INTENT_RECOVERY_RETIRE_AFTER_ATTEMPTS,
+        nextAttemptAt: new Date(0),
+      })
+      .where(eq(bufferObjectCleanupIntents.id, intent.id));
+    const deletedKeys: string[] = [];
+    expect(
+      await reconcileBufferObjectCleanupIntents({
+        deleteObject: async (objectKey) => {
+          deletedKeys.push(objectKey);
+          return Result.ok(undefined);
+        },
+        limit: 1,
+        safeDb,
+      }),
+    ).toBe(1);
+    expect(deletedKeys).toEqual([key]);
+    expect(
+      await testDb
+        .select({ id: bufferObjectCleanupIntents.id })
+        .from(bufferObjectCleanupIntents)
+        .where(eq(bufferObjectCleanupIntents.id, intent.id)),
+    ).toEqual([]);
+    const reservation = await testDb
+      .select({ writeId: organizationFileObjects.writeId })
+      .from(organizationFileObjects)
+      .where(eq(organizationFileObjects.objectKey, key))
+      .then((rows) => rows.at(0));
+    expect(reservation?.writeId).toBeTruthy();
+    if (reservation?.writeId) {
+      await releaseOrganizationFileBytes(
+        {
+          objectKey: key,
+          organizationId: ids.orgB,
+          status: "reserved",
+          writeId: reservation.writeId,
         },
         db(),
       );
@@ -958,8 +1383,8 @@ describe("organization file usage", () => {
   });
 
   test("flag off does not call the database", async () => {
-    env.FEATURE_FILE_USAGE_LIMITS = false;
-    envDocumentProcessingWorker.FEATURE_FILE_USAGE_LIMITS = false;
+    testState.setConfig("FEATURE_FILE_USAGE_LIMITS", false);
+    workerState.setConfig("FEATURE_FILE_USAGE_LIMITS", false);
     const noDb = {
       transaction: async () => {
         throw new Error("unexpected transaction");
@@ -972,7 +1397,7 @@ describe("organization file usage", () => {
       >(noDb),
     );
     expect(reservation).toMatchObject({ value: { status: "disabled" } });
-    env.FEATURE_FILE_USAGE_LIMITS = true;
-    envDocumentProcessingWorker.FEATURE_FILE_USAGE_LIMITS = true;
+    testState.setConfig("FEATURE_FILE_USAGE_LIMITS", true);
+    workerState.setConfig("FEATURE_FILE_USAGE_LIMITS", true);
   });
 });

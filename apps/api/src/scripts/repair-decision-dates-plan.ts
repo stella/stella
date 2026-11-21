@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 /**
  * What `repair-decision-dates.ts` selects and how it decides each row,
  * separated from the script that runs it.
@@ -9,21 +10,20 @@
  * selects the wrong rows is a data loss the first invocation commits, and a
  * syntax error is one no test would otherwise see.
  */
-
-import { panic } from "better-result";
 import type { SQL } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 
 import { isCaseLawJurisdiction } from "@stll/api-contract/case-law-jurisdictions";
 
+import type { CitationGraphTransaction } from "@/api/handlers/case-law/citation-graph-transaction";
 import {
-  lockCitationGraph,
   reopenCitationsForDecisionKey,
   reopenCitationsForKeys,
   reopenCitationsFrom,
   reopenCitationsResolvedTo,
 } from "@/api/handlers/case-law/citation-resolution";
 import type { SafeId } from "@/api/lib/branded-types";
+import { runDecisionWriteExtension } from "@/api/lib/case-law/decision-write-extension";
 import { canonicalDecisionDate } from "@/api/lib/dates";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { decisionDateOutOfBoundsSql } from "@/api/lib/decision-date-bounds-sql";
@@ -91,13 +91,8 @@ export const decisionDateYearSurveyStatement = (limit: number): SQL => sql`
  * buys a copy of what metadata already showed.
  *
  * `lock` decides whether the read claims its rows. A repairing batch takes
- * `FOR UPDATE` on the decisions alone, before the citation-graph lock, because
- * that is the order the ingestion pipeline takes them in: it locks the row it
- * is about to overwrite, then reopens the edges its identity change
- * invalidates. Taking them the other way round here would let one transaction
- * hold the row while waiting for the graph and the other hold the graph while
- * waiting for the row, which PostgreSQL resolves by aborting one of them. A
- * report-only read claims nothing.
+ * `FOR UPDATE` on decisions under a graph-owned transaction, matching ingestion
+ * and absorption. A report-only read claims nothing.
  */
 export const DECISION_DATE_ROW_LOCKS = {
   /** Claim the decision rows, in the pipeline's lock order. */
@@ -316,7 +311,7 @@ export const applyDecisionDateRepairsStatement = (
   `;
 };
 
-type CitationGraphTx = Parameters<typeof lockCitationGraph>[0];
+type CitationGraphTx = CitationGraphTransaction;
 
 /**
  * Reconcile one repaired decision's projection desired state, in the batch's
@@ -325,8 +320,7 @@ type CitationGraphTx = Parameters<typeof lockCitationGraph>[0];
  * and reports how many rows it left for a later reconcile sweep.
  */
 export type DecisionDateProjectionReconcile =
-  | ((entityId: SafeId<"caseLawDecision">) => Promise<void>)
-  | null;
+  ((entityId: SafeId<"caseLawDecision">) => Promise<void>) | null;
 
 export type DecisionDateRepairCollaborators = {
   reconcileProjection: DecisionDateProjectionReconcile;
@@ -440,6 +434,7 @@ const reopenWrittenAt = async (
       batch.cleared += 1;
     }
     const announced = await reopenAffectedCitations(tx, row, repaired);
+    await runDecisionWriteExtension(tx, row.id);
     if (!announced) {
       batch.unannounced.push(row);
     }
@@ -450,9 +445,8 @@ const reopenWrittenAt = async (
 /**
  * One bounded batch of the repair, inside the caller's transaction.
  *
- * Decision rows first, citation graph second: the order the ingestion pipeline
- * takes them in, which is the only thing that keeps a concurrent refresh of one
- * of these decisions from deadlocking against this batch. Holding the rows is
+ * The caller owns the graph before this batch locks decision rows, matching
+ * ingestion, absorption and the resolver. Holding the decision rows is
  * also what makes the graph work sound: nothing can move a claimed row's date
  * between the reopen and the commit.
  *
@@ -482,7 +476,6 @@ export const repairDecisionDateBatch = async (
   if (rows.length === 0) {
     return batch;
   }
-  await lockCitationGraph(tx);
 
   const repairs = rows.map(decideDecisionDateRepair);
   const written = new Set(

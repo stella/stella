@@ -10,6 +10,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { syncFlowScheduleTrigger } from "@/api/lib/flows/sync-flow-schedule-trigger";
 
 const config = {
+  contract: "patch",
   description:
     "Permanently delete one automation flow definition from the organization " +
     "and remove its schedule trigger. Past runs survive on their own " +
@@ -76,8 +77,7 @@ const deleteFlowDefinition = createSafeRootHandler(
     // throws).
     await syncFlowScheduleTrigger({
       id: deleted.id,
-      trigger: deleted.trigger,
-      enabled: false,
+      organizationId,
     });
 
     return Result.ok({});

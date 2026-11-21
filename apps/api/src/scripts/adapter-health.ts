@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 /**
  * Case law adapter health report.
  *
@@ -15,9 +16,9 @@
  *   bun apps/api/src/scripts/adapter-health.ts --adapter cz-ns --json
  *   bun apps/api/src/scripts/adapter-health.ts --adapter cz-ns --since 24h
  */
-
-import { panic } from "better-result";
 import { eq } from "drizzle-orm";
+
+import { printError } from "@stll/errors";
 
 import { caseLawSources } from "@/api/db/schema";
 import { loadAdapterByKey } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry-lazy";
@@ -30,12 +31,18 @@ import {
 import type { SourceTotalCount } from "@/api/lib/legal-search/ingestion-types";
 import {
   createUnrecognizedSourceReporter,
+  SOURCE_REPORT_FEATURE,
   sourceRegistryMembership,
 } from "@/api/lib/legal-search/source-registry-membership";
 import {
   CHECKED_FIELDS,
   readAdapterHealthMetrics,
 } from "@/api/scripts/adapter-health-query";
+import {
+  sourceSyncProgress,
+  STUCK_PREFIX,
+  stuckSyncIssue,
+} from "@/api/scripts/adapter-stuck";
 
 // This tool only reads; the read-only session makes that a property of every
 // transaction rather than a promise, and takes no maintenance lane.
@@ -133,14 +140,8 @@ type HealthReport = {
 
 // ── Config ──────────────────────────────────────────────
 
-/** Adapter is "stuck" if no growth in this many hours. */
-const STUCK_THRESHOLD_HOURS = 12;
-
 /** Flag an issue when coverage drops below this percentage. */
 const COVERAGE_THRESHOLD_PCT = 80;
-
-/** Issue prefix for stuck detection (used in summary counts). */
-const STUCK_PREFIX = "Stuck:" as const;
 
 /** Timeout for each remote total fetch (ms). */
 // The slowest total is the NSS full-range count, which the source itself
@@ -297,7 +298,7 @@ const buildReport = async (
 
   const adapters: AdapterReport[] = [];
   const reportUnrecognizedSource = createUnrecognizedSourceReporter(
-    "case_law.adapter_health",
+    SOURCE_REPORT_FEATURE.adapterHealth,
   );
 
   // Finish a source's local metrics and remote probe before the next source.
@@ -337,7 +338,7 @@ const buildReport = async (
     // A missing registry adapter and a failed total probe both report null;
     // membership remains explicit so the operator can tell them apart.
     const membership = sourceRegistryMembership(source.adapterKey);
-    const adapterRegistered = membership.type === "registered";
+    const adapterRegistered = membership.type !== "unrecognized";
     if (!adapterRegistered) {
       reportUnrecognizedSource(source.adapterKey);
     }
@@ -351,15 +352,18 @@ const buildReport = async (
     // Detect issues
     const issues: string[] = [];
 
-    // Stuck detection uses lastSyncAt exclusively: if the
-    // adapter hasn't synced in STUCK_THRESHOLD_HOURS, it's
-    // stuck regardless of what the growth window shows.
-    if (
-      source.enabled &&
-      hoursSinceSync !== null &&
-      hoursSinceSync > STUCK_THRESHOLD_HOURS
-    ) {
-      issues.push(`${STUCK_PREFIX} no sync in ${Math.round(hoursSinceSync)}h`);
+    // A completed fixed snapshot is parked; every other source is judged
+    // from the last publisher answer, regardless of the growth window.
+    const stuck = stuckSyncIssue({
+      progress: sourceSyncProgress({
+        adapterKey: source.adapterKey,
+        syncCursor: source.syncCursor,
+      }),
+      enabled: source.enabled,
+      hoursSinceSync,
+    });
+    if (stuck !== null) {
+      issues.push(stuck);
     }
 
     if (source.enabled && source.syncCursor === null && total > 0) {
@@ -570,7 +574,7 @@ if (import.meta.main) {
     );
     process.exit(hasIssues ? 1 : 0);
   } catch (error) {
-    console.error("Health check failed:", error);
+    printError("Health check failed:", error);
     process.exit(2);
   }
 }

@@ -1,3 +1,4 @@
+import { FinishReason as GeminiFinishReason } from "@google/genai";
 import { EventType } from "@tanstack/ai";
 import type { AnyTextAdapter, StreamChunk } from "@tanstack/ai";
 import {
@@ -5,8 +6,16 @@ import {
   webFetchTool,
   webSearchTool,
 } from "@tanstack/ai-anthropic/tools";
+import type { CompletionResponseStreamChoiceFinishReason as MistralFinishReasons } from "@tanstack/ai-mistral";
 import { resolveDebugOption } from "@tanstack/ai/adapter-internals";
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  expectTypeOf,
+  test,
+} from "bun:test";
 
 import { TANSTACK_AI_PROVIDERS } from "@stll/ai-catalog";
 import type { TanStackAIProvider } from "@stll/ai-catalog";
@@ -51,7 +60,6 @@ const toolCall: StreamChunk = {
   type: EventType.TOOL_CALL_START,
   toolCallId: "call",
   toolCallName: "mcp__external__delete",
-  toolName: "mcp__external__delete",
   timestamp: 1,
 };
 const usage = { completionTokens: 3, promptTokens: 31, totalTokens: 34 };
@@ -157,6 +165,18 @@ const UNLISTED_STEPS = {
 >;
 
 describe("a provider stop reason", () => {
+  test("maps every Mistral SDK finish reason and requires a decision for new values", () => {
+    type AdapterFinishReason =
+      (typeof MistralFinishReasons)[keyof typeof MistralFinishReasons];
+
+    expectTypeOf(PROVIDER_STOP_REASONS.mistral).toExtend<
+      Record<AdapterFinishReason, StopOutcome>
+    >();
+    expectTypeOf(PROVIDER_STOP_REASONS.mistral).not.toExtend<
+      Record<AdapterFinishReason | "unmapped_upstream_reason", StopOutcome>
+    >();
+  });
+
   test("reads as a finished answer only when the model ended its turn", async () => {
     const endings: Record<string, string> = {};
     const expected: Record<string, string> = {};
@@ -172,6 +192,69 @@ describe("a provider stop reason", () => {
       }
     }
     expect(endings).toEqual(expected);
+  });
+
+  test("malformed Google output fails even after streaming visible text", async () => {
+    for (const reason of [
+      GeminiFinishReason.MALFORMED_FUNCTION_CALL,
+      GeminiFinishReason.MALFORMED_RESPONSE,
+    ]) {
+      const chunks = await decide("google", [
+        started,
+        delta,
+        finishedWith(reason),
+      ]);
+      expect(chunks.at(-1)).toMatchObject({
+        type: EventType.RUN_ERROR,
+        code: PROVIDER_STOPPED_CODE,
+        metadata: { stopReason: reason },
+      });
+    }
+  });
+
+  test("a Google policy block filters the answer and a request or account defect fails it", async () => {
+    const endings: Record<string, string> = {};
+    for (const reason of [
+      GeminiFinishReason.MODEL_ARMOR,
+      GeminiFinishReason.ESCALATION,
+      GeminiFinishReason.MISSING_THOUGHT_SIGNATURE,
+      GeminiFinishReason.PUP_LIMITED_DISABLED,
+    ]) {
+      endings[reason] = endingOf(
+        await decide("google", [started, delta, finishedWith(reason)]),
+      );
+    }
+    expect(endings).toEqual({
+      MODEL_ARMOR: "finished:content_filter",
+      ESCALATION: "finished:content_filter",
+      MISSING_THOUGHT_SIGNATURE: "error:unknown",
+      PUP_LIMITED_DISABLED: "error:unknown",
+    });
+  });
+
+  test.each(["max_messages", "steered"])(
+    "an OpenAI %s response remains unfinished after visible text",
+    async (reason) => {
+      expect(
+        endingOf(
+          await decide("openai", [started, delta, finishedWith(reason)]),
+        ),
+      ).toBe("error:provider_stream_incomplete");
+    },
+  );
+
+  test("a Google continuation leaves a partial answer unfinished", async () => {
+    for (const chunks of [
+      [started],
+      [started, delta],
+      [started, delta, toolCall],
+    ]) {
+      expect(
+        endingOf(
+          await decide("google", [...chunks, finishedWith("CONTINUATION")]),
+        ),
+      ).toBe("error:provider_stream_incomplete");
+    }
   });
 
   test("that never arrived leaves the answer unfinished", async () => {
@@ -216,6 +299,7 @@ describe("a provider stop reason", () => {
         code: "server_error",
         timestamp: 1,
         error: { message: "The model failed.", code: "server_error" },
+        metadata: { stopReason: "failed" },
       },
     ]);
   });
@@ -239,11 +323,12 @@ describe("a provider stop reason", () => {
         finishReason: "length",
         timestamp: 1,
         usage,
+        metadata: { stopReason: "max_tokens" },
       },
     ]);
   });
 
-  test("is read and removed, and the rest of the event passes on", async () => {
+  test("is read and recorded as the run's stop reason, and the rest of the event passes on", async () => {
     const chunks = await decide("anthropic", [
       started,
       delta,
@@ -256,7 +341,7 @@ describe("a provider stop reason", () => {
       finishReason: "content_filter",
       timestamp: 1,
       usage,
-      metadata: { trace: "kept" },
+      metadata: { trace: "kept", stopReason: "refusal" },
     });
   });
 
@@ -406,6 +491,7 @@ describe("a stop reason no table lists", () => {
 describe("an Anthropic request whose turn could pause", () => {
   type Request = Parameters<AnyTextAdapter["chatStream"]>[0];
   const request = (overrides: Partial<Request>): Request => ({
+    threadId: "provider-stop-reasons-thread",
     logger: resolveDebugOption(false),
     messages: [],
     model: "model",

@@ -5,6 +5,7 @@ import type { Command } from "@tiptap/pm/state";
 import type { JSONContent } from "@tiptap/react";
 import { describe, expect, test } from "bun:test";
 
+import { CLAUSE_NUMBERING_LEVEL_LIMITS } from "@stll/api-contract";
 import {
   acceptAIEditRevision,
   acceptAllChanges,
@@ -173,8 +174,16 @@ describe("clause body ⇄ TipTap round-trip", () => {
 
   test("a flat bullet list round-trips as bulletList > listItem > paragraph", () => {
     const body: ClauseParagraph[] = [
-      { text: "First", listKind: "bullet", listLevel: 0 },
-      { text: "Second", listKind: "bullet", listLevel: 0 },
+      {
+        text: "First",
+        listKind: "bullet",
+        numbering: { kind: "levelOnly", ilvl: 0 },
+      },
+      {
+        text: "Second",
+        listKind: "bullet",
+        numbering: { kind: "levelOnly", ilvl: 0 },
+      },
     ];
 
     const doc = clauseBodyToTipTap(body);
@@ -200,8 +209,16 @@ describe("clause body ⇄ TipTap round-trip", () => {
 
   test("an ordered list round-trips and keeps its kind", () => {
     const body: ClauseParagraph[] = [
-      { text: "One", listKind: "ordered", listLevel: 0 },
-      { text: "Two", listKind: "ordered", listLevel: 0 },
+      {
+        text: "One",
+        listKind: "ordered",
+        numbering: { kind: "levelOnly", ilvl: 0 },
+      },
+      {
+        text: "Two",
+        listKind: "ordered",
+        numbering: { kind: "levelOnly", ilvl: 0 },
+      },
     ];
 
     const doc = clauseBodyToTipTap(body);
@@ -211,20 +228,82 @@ describe("clause body ⇄ TipTap round-trip", () => {
 
   test("nested list levels round-trip losslessly", () => {
     const body: ClauseParagraph[] = [
-      { text: "Top", listKind: "bullet", listLevel: 0 },
-      { text: "Child", listKind: "bullet", listLevel: 1 },
-      { text: "Grandchild", listKind: "bullet", listLevel: 2 },
-      { text: "Back to top", listKind: "bullet", listLevel: 0 },
+      {
+        text: "Top",
+        listKind: "bullet",
+        numbering: { kind: "levelOnly", ilvl: 0 },
+      },
+      {
+        text: "Child",
+        listKind: "bullet",
+        numbering: { kind: "levelOnly", ilvl: 1 },
+      },
+      {
+        text: "Grandchild",
+        listKind: "bullet",
+        numbering: { kind: "levelOnly", ilvl: 2 },
+      },
+      {
+        text: "Back to top",
+        listKind: "bullet",
+        numbering: { kind: "levelOnly", ilvl: 0 },
+      },
     ];
 
     expect(tipTapToClauseBody(clauseBodyToTipTap(body))).toEqual(body);
   });
 
+  test("list nesting past the deepest supported level stays at that level", () => {
+    const depth = 10;
+    const paragraph = (text: string): JSONContent => ({
+      type: "paragraph",
+      content: [{ type: "text", text }],
+    });
+    let list: JSONContent | null = null;
+    for (let index = depth - 1; index >= 0; index -= 1) {
+      const item: JSONContent = {
+        type: "listItem",
+        content: [paragraph(`Level ${index}`), ...(list ? [list] : [])],
+      };
+      list = { type: "orderedList", content: [item] };
+    }
+    if (!list) {
+      throw new Error("expected a nested list");
+    }
+
+    const body = tipTapToClauseBody({ type: "doc", content: [list] });
+
+    const levels = body.map((p) =>
+      p.numbering?.kind === "levelOnly" ? p.numbering.ilvl : null,
+    );
+    expect(CLAUSE_NUMBERING_LEVEL_LIMITS.max).toBe(8);
+    expect(levels).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 8]);
+    expect(body.map((p) => p.text)).toEqual(
+      Array.from({ length: depth }, (_, index) => `Level ${index}`),
+    );
+    for (const level of levels) {
+      expect(level).toBeGreaterThanOrEqual(CLAUSE_NUMBERING_LEVEL_LIMITS.min);
+      expect(level).toBeLessThanOrEqual(CLAUSE_NUMBERING_LEVEL_LIMITS.max);
+    }
+  });
+
   test("a nested ordered list inside a bullet list round-trips", () => {
     const body: ClauseParagraph[] = [
-      { text: "Bullet", listKind: "bullet", listLevel: 0 },
-      { text: "Numbered child", listKind: "ordered", listLevel: 1 },
-      { text: "Another bullet", listKind: "bullet", listLevel: 0 },
+      {
+        text: "Bullet",
+        listKind: "bullet",
+        numbering: { kind: "levelOnly", ilvl: 0 },
+      },
+      {
+        text: "Numbered child",
+        listKind: "ordered",
+        numbering: { kind: "levelOnly", ilvl: 1 },
+      },
+      {
+        text: "Another bullet",
+        listKind: "bullet",
+        numbering: { kind: "levelOnly", ilvl: 0 },
+      },
     ];
 
     expect(tipTapToClauseBody(clauseBodyToTipTap(body))).toEqual(body);
@@ -236,7 +315,7 @@ describe("clause body ⇄ TipTap round-trip", () => {
         text: "bold item",
         runs: [{ text: "bold", bold: true }, { text: " item" }],
         listKind: "bullet",
-        listLevel: 0,
+        numbering: { kind: "levelOnly", ilvl: 0 },
       },
     ];
 
@@ -247,8 +326,16 @@ describe("clause body ⇄ TipTap round-trip", () => {
     const body: ClauseParagraph[] = [
       { text: "Intro" },
       directive("if", "x"),
-      { text: "Item A", listKind: "bullet", listLevel: 0 },
-      { text: "Item B", listKind: "bullet", listLevel: 0 },
+      {
+        text: "Item A",
+        listKind: "bullet",
+        numbering: { kind: "levelOnly", ilvl: 0 },
+      },
+      {
+        text: "Item B",
+        listKind: "bullet",
+        numbering: { kind: "levelOnly", ilvl: 0 },
+      },
       directive("endif", ""),
       { text: "Outro" },
     ];
@@ -351,8 +438,20 @@ describe("buildTrackedChangeDoc", () => {
   test("structural alignment includes list and directive metadata", () => {
     expect(
       hasAlignedClauseStructure(
-        [{ text: "Item", listKind: "bullet", listLevel: 0 }],
-        [{ text: "Rewritten", listKind: "ordered", listLevel: 0 }],
+        [
+          {
+            text: "Item",
+            listKind: "bullet",
+            numbering: { kind: "levelOnly", ilvl: 0 },
+          },
+        ],
+        [
+          {
+            text: "Rewritten",
+            listKind: "ordered",
+            numbering: { kind: "levelOnly", ilvl: 0 },
+          },
+        ],
       ),
     ).toBe(false);
     expect(
@@ -422,13 +521,29 @@ describe("buildTrackedChangeDoc", () => {
   test("a changed list paragraph receives the tracked-change marks", () => {
     const baseline: ClauseParagraph[] = [
       { text: "Lead in." },
-      { text: "first item", listKind: "bullet", listLevel: 0 },
-      { text: "second item", listKind: "bullet", listLevel: 0 },
+      {
+        text: "first item",
+        listKind: "bullet",
+        numbering: { kind: "levelOnly", ilvl: 0 },
+      },
+      {
+        text: "second item",
+        listKind: "bullet",
+        numbering: { kind: "levelOnly", ilvl: 0 },
+      },
     ];
     const revised: ClauseParagraph[] = [
       { text: "Lead in." },
-      { text: "first item", listKind: "bullet", listLevel: 0 },
-      { text: "second item revised", listKind: "bullet", listLevel: 0 },
+      {
+        text: "first item",
+        listKind: "bullet",
+        numbering: { kind: "levelOnly", ilvl: 0 },
+      },
+      {
+        text: "second item revised",
+        listKind: "bullet",
+        numbering: { kind: "levelOnly", ilvl: 0 },
+      },
     ];
 
     const { doc, revisionIds } = buildTrackedChangeDoc(baseline, revised);

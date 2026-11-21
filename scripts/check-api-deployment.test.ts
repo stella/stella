@@ -1,7 +1,19 @@
-import { describe, expect, test } from "bun:test";
+import { afterAll, describe, expect, test } from "bun:test";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { getApiHealthUrl, parseHealthCommit } from "./api-health";
 import { advanceDeploymentStability } from "./check-api-deployment";
+import { isRepositoryCheckoutAction } from "./ci-job-classification/checkout-actions";
+import { evaluate } from "./github-expression";
 
 // CI runs this file in "Test release policy scripts" without the dependency
 // install (workflow-only pull requests skip it), so it reads workflow shapes
@@ -10,6 +22,9 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
 type WorkflowStep = { run: string; env: Record<string, unknown> };
+
+/** A workflow `${{ … }}` expression, as the parsed YAML holds it. */
+const githubExpression = (inner: string) => `\${{ ${inner} }}`;
 
 const workflowSteps = (workflow: unknown, file: string): WorkflowStep[] => {
   const jobs = isRecord(workflow) ? workflow["jobs"] : undefined;
@@ -40,6 +55,749 @@ const workflowSteps = (workflow: unknown, file: string): WorkflowStep[] => {
 };
 
 describe("API deployment health receipt", () => {
+  const alertWorkflow = async () =>
+    Bun.YAML.parse(
+      await Bun.file(
+        new URL(
+          "../.github/workflows/scheduled-run-alerts.yml",
+          import.meta.url,
+        ),
+      ).text(),
+    );
+
+  // GitHub's own record of a concurrency supersession, as CI reads it.
+  const supersession = readFileSync(
+    path.join(
+      import.meta.dir,
+      "__fixtures__/ci-cancellation/supersession.json",
+    ),
+    "utf-8",
+  );
+
+  type WorkflowRun = {
+    run_number: number;
+    head_sha: string;
+    head_branch: string;
+    event: string;
+    display_title: string;
+  };
+
+  type OutageRun = {
+    conclusion: string;
+    // Unset: the lookup fails.
+    history?: string[] | undefined;
+    jobs?: unknown;
+    annotations?: string | undefined;
+    // Runs the newer-run lookup returns; unset: the lookup fails.
+    newer?: WorkflowRun[] | undefined;
+    workflow?: string;
+    event?: string;
+  };
+
+  const RUN_SHA = "a".repeat(40);
+  const RUN_TITLE = "Release Artifacts v1.2.3-rc.1";
+  const RUN_NUMBER = 100;
+  const jobsBody = (jobs: unknown) =>
+    jobs === undefined ? "" : JSON.stringify(jobs);
+
+  /** Runs the outage step against a mocked GitHub API and records each call. */
+  const detectOutage = async ({
+    conclusion,
+    history,
+    jobs,
+    annotations,
+    newer,
+    workflow = "release.yml",
+    event = "push",
+  }: OutageRun) => {
+    const script = workflowSteps(
+      await alertWorkflow(),
+      "scheduled-run-alerts.yml",
+    ).find(({ run }) =>
+      run.includes('previous=$(bash "$GH_RETRY_SCRIPT" api'),
+    )?.run;
+    if (script === undefined) {
+      return expect.unreachable("alerts require an outage step");
+    }
+    const workflowRuns = (history ?? []).map((runConclusion, index) => ({
+      run_number: index + 1,
+      conclusion: runConclusion,
+    }));
+    // A later recovery cannot reset the outage for an older run's alert.
+    workflowRuns.push({ run_number: 999, conclusion: "success" });
+    const outputDir = mkdtempSync(path.join(tmpdir(), "scheduled-alert-test-"));
+    const outputPath = path.join(outputDir, "github-output");
+    const callsPath = path.join(outputDir, "gh-calls");
+    writeFileSync(outputPath, "");
+    writeFileSync(callsPath, "");
+    try {
+      const gh = `gh() {
+  printf '%s\\n' "$*" >> "$TEST_CALLS"
+  case "$*" in
+    *"/actions/workflows/"*"/runs"*"head_sha="*) [[ -n "$TEST_NEWER" ]] || return 1; printf '%s' "$TEST_NEWER" ;;
+    *"/actions/workflows/"*"/runs"*) [[ -n "$TEST_HISTORY" ]] || return 1; printf '%s' "$TEST_HISTORY" ;;
+    *"/actions/runs/"*"/jobs"*) [[ -n "$TEST_JOBS" ]] || return 1; printf '%s' "$TEST_JOBS" ;;
+    *"/annotations"*) [[ -n "$TEST_ANNOTATIONS" ]] || return 1; printf '%s' "$TEST_ANNOTATIONS" ;;
+    *) return 1 ;;
+  esac
+}; export -f gh`;
+      const result = Bun.spawnSync(["bash", "-c", `${gh}\n${script}`], {
+        env: {
+          ...process.env,
+          GITHUB_OUTPUT: outputPath,
+          GH_RETRY_SCRIPT: path.resolve(import.meta.dir, "gh-retry.sh"),
+          GITHUB_REPOSITORY: "stella/stella",
+          RUN_ID: "42",
+          RUN_NUMBER: String(RUN_NUMBER),
+          RUN_BRANCH: "main",
+          RUN_EVENT: event,
+          RUN_CONCLUSION: conclusion,
+          RUN_PATH: `.github/workflows/${workflow}`,
+          RUN_HEAD_SHA: RUN_SHA,
+          RUN_TITLE,
+          WORKFLOW_ID: "1",
+          TEST_CALLS: callsPath,
+          TEST_HISTORY:
+            history === undefined
+              ? ""
+              : JSON.stringify({ workflow_runs: workflowRuns.toReversed() }),
+          // A string is a raw (possibly malformed) response body.
+          TEST_JOBS: typeof jobs === "string" ? jobs : jobsBody(jobs),
+          TEST_ANNOTATIONS: annotations ?? "",
+          TEST_NEWER:
+            newer === undefined
+              ? ""
+              : JSON.stringify({ workflow_runs: newer.toReversed() }),
+        },
+      });
+      const calls = (await Bun.file(callsPath).text())
+        .split("\n")
+        .filter((call) => call !== "");
+      const label = `${conclusion} of ${workflow} (${event}) after ${JSON.stringify(history)}`;
+      expect(result.exitCode, `${label}: ${result.stderr.toString()}`).toBe(0);
+      // Each lookup is one filtered page; the step never walks a history.
+      expect(
+        calls.filter((call) => call.includes("--paginate")),
+        label,
+      ).toEqual([]);
+      const historyCalls = calls.filter(
+        (call) =>
+          call.includes("/actions/workflows/") && !call.includes("head_sha="),
+      );
+      const newerCalls = calls.filter(
+        (call) =>
+          call.includes("/actions/workflows/") && call.includes("head_sha="),
+      );
+      for (const call of historyCalls) {
+        for (const filter of [
+          "branch=main",
+          `event=${event}`,
+          "status=completed",
+          "per_page=100",
+        ]) {
+          expect(call.split(" "), label).toContain(filter);
+        }
+      }
+      for (const call of newerCalls) {
+        for (const filter of [
+          `head_sha=${RUN_SHA}`,
+          `event=${event}`,
+          "per_page=100",
+        ]) {
+          expect(call.split(" "), label).toContain(filter);
+        }
+      }
+      const sends = /^send=(true|false)$/mu.exec(
+        await Bun.file(outputPath).text(),
+      );
+      expect(sends, label).not.toBeNull();
+      return {
+        send: sends?.at(1) === "true",
+        calls,
+        readsHistory: historyCalls.length > 0,
+        readsNewer: newerCalls.length > 0,
+      };
+    } finally {
+      rmSync(outputDir, { recursive: true, force: true });
+    }
+  };
+
+  const checkRun = (id: number, repository = "stella/stella") =>
+    `https://api.github.com/repos/${repository}/check-runs/${id}`;
+  const cancelledJobs = {
+    total_count: 2,
+    jobs: [
+      { conclusion: "success", check_run_url: checkRun(1) },
+      { conclusion: "cancelled", check_run_url: checkRun(2) },
+    ],
+  };
+  // A pending run its concurrency group replaced never started a job.
+  const noJobs = { total_count: 0, jobs: [] };
+  const sameWork = (overrides: Partial<WorkflowRun> = {}): WorkflowRun => ({
+    run_number: RUN_NUMBER + 1,
+    head_sha: RUN_SHA,
+    head_branch: "main",
+    event: "push",
+    display_title: RUN_TITLE,
+    ...overrides,
+  });
+
+  test("alerts once per continuous outage and resets after recovery", async () => {
+    const cases = [
+      { history: [], send: true },
+      { history: ["success"], send: true },
+      { history: ["failure"], send: false },
+      { history: ["startup_failure"], send: false },
+      { history: ["timed_out"], send: false },
+      { history: ["failure", "cancelled", "skipped"], send: false },
+      { history: ["failure", "success"], send: true },
+      { history: ["success", "failure"], send: false },
+      // A cancel, superseded or not, never starts or ends an outage.
+      { history: ["success", "cancelled"], send: true },
+    ];
+    for (const { history, send } of cases) {
+      const outage = await detectOutage({ conclusion: "failure", history });
+      expect(outage.send, JSON.stringify(history)).toBe(send);
+      // A failed run never reads a cancellation record.
+      expect(outage.calls.length, JSON.stringify(history)).toBe(1);
+    }
+  });
+
+  test("an unreadable run history pages", async () => {
+    for (const conclusion of ["failure", "cancelled"]) {
+      const outage = await detectOutage({
+        conclusion,
+        history: undefined,
+        jobs: cancelledJobs,
+        annotations: "[]",
+      });
+      expect(outage.send, conclusion).toBe(true);
+      expect(outage.readsHistory, conclusion).toBe(true);
+    }
+  });
+
+  test("a cancel another run fully replaces neither alerts nor reads the outage", async () => {
+    for (const history of [[], ["success"], ["failure"]]) {
+      const outage = await detectOutage({
+        conclusion: "cancelled",
+        history,
+        jobs: cancelledJobs,
+        annotations: supersession,
+        newer: [sameWork({ run_number: RUN_NUMBER - 1 }), sameWork()],
+      });
+      expect(outage.send, JSON.stringify(history)).toBe(false);
+      expect(outage.readsHistory, JSON.stringify(history)).toBe(false);
+      // Only the cancelled job's own check run is read.
+      expect(
+        outage.calls.filter((call) => call.includes("/annotations")),
+      ).toEqual([`api ${checkRun(2)}/annotations?per_page=100`]);
+    }
+    // A pending run replaced in its concurrency group has no job to annotate.
+    for (const [workflow, event] of [
+      ["release.yml", "push"],
+      ["release.yml", "workflow_dispatch"],
+      ["release-health.yml", "workflow_dispatch"],
+      ["release-desktop.yml", "workflow_run"],
+      ["release-desktop.yml", "workflow_dispatch"],
+      ["publish-npm.yml", "push"],
+    ] as const) {
+      const pending = await detectOutage({
+        conclusion: "cancelled",
+        history: ["success"],
+        jobs: noJobs,
+        newer: [sameWork({ event })],
+        workflow,
+        event,
+      });
+      expect(pending.send, `${workflow} (${event})`).toBe(false);
+      expect(
+        pending.calls.some((call) => call.includes("/annotations")),
+        `${workflow} (${event})`,
+      ).toBe(false);
+    }
+  });
+
+  test("a superseded cancel pages unless a newer run does the same work", async () => {
+    for (const { label, newer } of [
+      { label: "no newer run", newer: [] },
+      { label: "only older runs", newer: [sameWork({ run_number: 99 })] },
+      {
+        label: "newer run for another candidate",
+        newer: [sameWork({ display_title: "Release Artifacts v1.2.3-rc.2" })],
+      },
+      {
+        label: "newer run for another commit",
+        newer: [sameWork({ head_sha: "b".repeat(40) })],
+      },
+      {
+        label: "newer run from another event",
+        newer: [sameWork({ event: "workflow_dispatch" })],
+      },
+      {
+        label: "newer run on another ref",
+        newer: [sameWork({ head_branch: "v1.2.3" })],
+      },
+    ]) {
+      for (const [jobs, annotations] of [
+        [cancelledJobs, supersession],
+        [noJobs, undefined],
+      ] as const) {
+        const outage = await detectOutage({
+          conclusion: "cancelled",
+          history: ["success"],
+          jobs,
+          annotations,
+          newer,
+        });
+        expect(outage.send, label).toBe(true);
+        expect(outage.readsNewer, label).toBe(true);
+        expect(outage.readsHistory, label).toBe(true);
+      }
+    }
+  });
+
+  test("a superseded cancel pages when newer runs are unreadable, even during an outage", async () => {
+    for (const history of [["success"], ["failure"]]) {
+      for (const [jobs, annotations] of [
+        [cancelledJobs, supersession],
+        [noJobs, undefined],
+      ] as const) {
+        const outage = await detectOutage({
+          conclusion: "cancelled",
+          history,
+          jobs,
+          annotations,
+          newer: undefined,
+        });
+        expect(outage.send, `after ${history.join(",")}`).toBe(true);
+        expect(outage.readsNewer).toBe(true);
+        expect(outage.readsHistory).toBe(false);
+      }
+    }
+  });
+
+  test("a superseded cancel pages for runs whose title does not name their work", async () => {
+    for (const [workflow, event] of [
+      ["release-tag.yml", "workflow_run"],
+      ["release-tag.yml", "workflow_dispatch"],
+      ["publish-npm.yml", "workflow_run"],
+      ["publish-npm.yml", "workflow_dispatch"],
+    ] as const) {
+      for (const [jobs, annotations] of [
+        [cancelledJobs, supersession],
+        [noJobs, undefined],
+      ] as const) {
+        const outage = await detectOutage({
+          conclusion: "cancelled",
+          history: ["success"],
+          jobs,
+          annotations,
+          newer: [sameWork({ event })],
+          workflow,
+          event,
+        });
+        expect(outage.send, `${workflow} (${event})`).toBe(true);
+        expect(outage.readsNewer, `${workflow} (${event})`).toBe(false);
+      }
+    }
+  });
+
+  test("a release cancel without a supersession record alerts", async () => {
+    const operationCancelled = JSON.stringify([
+      { message: "The operation was canceled." },
+      { message: "The run was canceled by @someone." },
+    ]);
+    for (const { label, jobs, annotations, unreadable: unreadableCase } of [
+      {
+        label: "other annotations",
+        jobs: cancelledJobs,
+        annotations: operationCancelled,
+      },
+      { label: "no annotation", jobs: cancelledJobs, annotations: "[]" },
+      {
+        label: "annotation lookup fails",
+        jobs: cancelledJobs,
+        annotations: undefined,
+        unreadable: true,
+      },
+      { label: "invalid annotations", jobs: cancelledJobs, annotations: "{" },
+      {
+        label: "job lookup fails",
+        jobs: undefined,
+        annotations: supersession,
+        unreadable: true,
+      },
+      {
+        label: "invalid jobs",
+        jobs: "{",
+        annotations: supersession,
+        unreadable: true,
+      },
+      {
+        label: "no cancelled job",
+        jobs: { total_count: 1, jobs: cancelledJobs.jobs.slice(0, 1) },
+        annotations: supersession,
+      },
+      {
+        label: "foreign check run",
+        jobs: {
+          total_count: 1,
+          jobs: [
+            {
+              conclusion: "cancelled",
+              check_run_url: checkRun(2, "other/repo"),
+            },
+          ],
+        },
+        annotations: supersession,
+      },
+    ] as {
+      label: string;
+      jobs: unknown;
+      annotations: string | undefined;
+      unreadable?: boolean;
+    }[]) {
+      for (const history of [["success"], ["failure"]]) {
+        const outage = await detectOutage({
+          conclusion: "cancelled",
+          history,
+          jobs,
+          annotations,
+          newer: [sameWork()],
+        });
+        const unreadable = unreadableCase === true;
+        // An unreadable record pages without consulting the outage history;
+        // a readable cancel without a supersession follows that history.
+        expect(outage.send, `${label} after ${history.join(",")}`).toBe(
+          unreadable || history[0] === "success",
+        );
+        expect(outage.readsNewer, label).toBe(false);
+        expect(outage.readsHistory, label).toBe(!unreadable);
+      }
+    }
+    // An unverified cancel during a continuing outage stays suppressed.
+    const continuing = await detectOutage({
+      conclusion: "cancelled",
+      history: ["failure"],
+      jobs: cancelledJobs,
+      annotations: "[]",
+    });
+    expect(continuing.send).toBe(false);
+  });
+
+  test("a failed decision step still sends", async () => {
+    const workflow: unknown = await alertWorkflow();
+    const jobs = isRecord(workflow) ? workflow["jobs"] : undefined;
+    const notify = isRecord(jobs) ? jobs["notify"] : undefined;
+    const steps = isRecord(notify) ? notify["steps"] : undefined;
+    const send: unknown = Array.isArray(steps)
+      ? steps.find(
+          (step: unknown) =>
+            isRecord(step) && step["name"] === "Send failure alert",
+        )
+      : undefined;
+    const condition = isRecord(send) ? send["if"] : undefined;
+    if (typeof condition !== "string") {
+      expect.unreachable("alerts require a send condition");
+    }
+    const sends = (decision: string, failed: boolean) =>
+      evaluate(condition, {
+        values: {
+          "github.event_name": "workflow_run",
+          "steps.outage.outputs.send": decision,
+        },
+        status: { always: true, cancelled: false, failure: failed },
+      });
+    expect(sends("", true)).toBe(true);
+    expect(sends("false", true)).toBe(true);
+    expect(sends("true", false)).toBe(true);
+    expect(sends("false", false)).toBe(false);
+    expect(sends("", false)).toBe(false);
+  });
+
+  test("every variable an alert step reads is bound, manual runs included", async () => {
+    const runnerProvided = new Set([
+      "GITHUB_ENV",
+      "GITHUB_OUTPUT",
+      "GITHUB_REPOSITORY",
+      "GITHUB_WORKSPACE",
+      "RUNNER_TEMP",
+      // Exported by the tooling step, which runs for every event.
+      "GH_RETRY_SCRIPT",
+    ]);
+    const steps = workflowSteps(
+      await alertWorkflow(),
+      "scheduled-run-alerts.yml",
+    ).filter(({ run }) => run !== "");
+    expect(steps.length).toBeGreaterThan(0);
+    for (const { run, env } of steps) {
+      for (const [, name] of run.matchAll(/\$\{?([A-Z][A-Z0-9_]*)/gu)) {
+        if (name === undefined || runnerProvided.has(name)) {
+          continue;
+        }
+        expect(Object.keys(env), `${name}: ${run.slice(0, 60)}`).toContain(
+          name,
+        );
+      }
+    }
+  });
+
+  test("requires every blocking staging smoke before recording verification", async () => {
+    const workflow = Bun.YAML.parse(
+      await Bun.file(
+        new URL("../.github/workflows/deploy-staging.yml", import.meta.url),
+      ).text(),
+    );
+    const steps = workflowSteps(workflow, "deploy-staging.yml");
+    const script = steps.find(({ run }) => run.includes("state=failure"))?.run;
+    expect(script).toBeDefined();
+    if (script === undefined) {
+      return;
+    }
+    const mcpStep = steps.find(({ run }) => run === "bun run canary:mcp");
+    expect(mcpStep?.env["MCP_CANARY_MODE"]).toBe("full");
+    expect(mcpStep?.env["MCP_CANARY_REQUIRE_CREDENTIALS"]).toBe("true");
+    expect(mcpStep?.env["SMOKE_SESSION_SECRET"]).toBe(
+      `\${{ secrets.SMOKE_SESSION_SECRET }}`,
+    );
+    const success = {
+      WEB_SMOKE: "success",
+      API_SMOKE: "success",
+      DEPLOYED_JOURNEYS: "success",
+      MOCK_JOURNEYS: "success",
+      MCP_SMOKE: "success",
+      CORPUS_PREFLIGHT: "success",
+      CORPUS_SEARCH_WAIVED: "false",
+      WAIVE_REASON: "",
+      JOB_STATUS: "success",
+      PROOF_READINESS: "ready",
+      PROOF_ENVIRONMENT: "ready",
+    };
+    const cases = [
+      { outcomes: success, state: "success" },
+      ...[
+        "WEB_SMOKE",
+        "API_SMOKE",
+        "MCP_SMOKE",
+        "DEPLOYED_JOURNEYS",
+        "MOCK_JOURNEYS",
+      ].flatMap((smoke) =>
+        ["failure", "skipped", ""].map((outcome) => ({
+          outcomes: { ...success, [smoke]: outcome },
+          state: "failure",
+        })),
+      ),
+      { outcomes: { ...success, JOB_STATUS: "cancelled" }, state: "failure" },
+      ...["PROOF_READINESS", "PROOF_ENVIRONMENT"].flatMap((gate) =>
+        ["", "environment-unavailable", "environment-interrupted"].map(
+          (outcome) => ({
+            outcomes: { ...success, [gate]: outcome },
+            state: "error",
+          }),
+        ),
+      ),
+    ];
+    for (const { outcomes, state } of cases) {
+      const result = Bun.spawnSync(
+        [
+          "bash",
+          "-c",
+          `gh() { cat >/dev/null; }; export -f gh\n${script}\nprintf '%s' "$state"`,
+        ],
+        {
+          env: {
+            ...process.env,
+            ...outcomes,
+            GH_RETRY_SCRIPT: path.resolve(import.meta.dir, "gh-retry.sh"),
+            GITHUB_REPOSITORY: "stella/stella",
+            GITHUB_RUN_ID: "1",
+            GITHUB_SERVER_URL: "https://github.com",
+            GITHUB_SHA: "a".repeat(40),
+            DEPLOY_SHA: "a".repeat(40),
+            DEPLOYMENT_ID: "1",
+            // Status ownership is covered by post-staging-verification tests.
+            STAGING_STATUS_WRITER: "/dev/null",
+          },
+        },
+      );
+      expect(result.exitCode, JSON.stringify(outcomes)).toBe(0);
+      expect(result.stdout.toString(), JSON.stringify(outcomes)).toBe(state);
+    }
+  });
+
+  test("uses only the declared canary and staging session secrets for MCP journeys", async () => {
+    const cases = [
+      {
+        file: "mcp-canary.yml",
+        environment: "production",
+        secrets: ["MCP_CANARY_TOKEN", "REVIEW_ACCOUNT_PASSWORD"],
+      },
+      {
+        file: "deploy-staging.yml",
+        environment: "staging",
+        secrets: [
+          "SMOKE_SESSION_SECRET",
+          "STAGING_VIEWER_ACCESS_TOKEN",
+          "REVIEW_ACCOUNT_PASSWORD",
+        ],
+      },
+    ];
+    for (const { file, environment, secrets } of cases) {
+      const workflow = Bun.YAML.parse(
+        await Bun.file(
+          new URL(`../.github/workflows/${file}`, import.meta.url),
+        ).text(),
+      );
+      const mcpStep = workflowSteps(workflow, file).find(
+        ({ run }) => run === "bun run canary:mcp",
+      );
+      expect(mcpStep, file).toBeDefined();
+      if (mcpStep === undefined) {
+        continue;
+      }
+      expect(mcpStep.env["MCP_CANARY_ENVIRONMENT"], file).toBe(environment);
+      const secretNames = Object.values(mcpStep.env).flatMap((value) => {
+        if (typeof value !== "string") {
+          return [];
+        }
+        return Array.from(
+          value.matchAll(/secrets\.(?<name>[A-Z_]+)/gu),
+          (match) => match.groups?.["name"],
+        );
+      });
+      expect(
+        secretNames.toSorted((a, b) => {
+          if (a === b) {
+            return 0;
+          }
+          return (a ?? "") < (b ?? "") ? -1 : 1;
+        }),
+        file,
+      ).toEqual(
+        secrets.toSorted((a, b) => {
+          if (a === b) {
+            return 0;
+          }
+          return a < b ? -1 : 1;
+        }),
+      );
+      expect(mcpStep.env["MCP_CANARY_DESKTOP_KEY"], file).toBeUndefined();
+      expect(mcpStep.env["MCP_CANARY_SESSION_COOKIE"], file).toBeUndefined();
+    }
+  });
+
+  test("the production MCP canary probes the commit the target reports, not main", async () => {
+    const workflow = Bun.YAML.parse(
+      await Bun.file(
+        new URL("../.github/workflows/mcp-canary.yml", import.meta.url),
+      ).text(),
+    );
+    const jobs = isRecord(workflow) ? workflow["jobs"] : undefined;
+    const job = isRecord(jobs) ? jobs["mcp-canary"] : undefined;
+    const rawSteps = isRecord(job) ? job["steps"] : undefined;
+    const steps = (Array.isArray(rawSteps) ? rawSteps : []).filter(isRecord);
+    const indexOf = (predicate: (step: Record<string, unknown>) => boolean) =>
+      steps.findIndex(predicate);
+
+    const checkouts = steps.filter(
+      (step) =>
+        typeof step["uses"] === "string" &&
+        isRepositoryCheckoutAction(step["uses"]),
+    );
+    expect(checkouts).toHaveLength(1);
+    const checkoutWith = checkouts.at(0)?.["with"];
+    expect(isRecord(checkoutWith) && checkoutWith["ref"]).toBe(
+      githubExpression("steps.deployed.outputs.commit"),
+    );
+
+    const deployedIndex = indexOf((step) => step["id"] === "deployed");
+    const targetIndex = indexOf((step) => step["id"] === "target");
+    const checkoutIndex = indexOf((step) => step === checkouts.at(0));
+    expect(targetIndex).toBeGreaterThanOrEqual(0);
+    expect(targetIndex).toBeLessThan(deployedIndex);
+    expect(deployedIndex).toBeLessThan(checkoutIndex);
+    // Setup reads package.json from the checkout.
+    const setupIndex = indexOf(
+      (step) =>
+        typeof step["uses"] === "string" &&
+        step["uses"].includes("/setup-bun-cached@"),
+    );
+    const installIndex = indexOf(
+      (step) => step["name"] === "Install dependencies",
+    );
+    expect(checkoutIndex).toBeLessThan(setupIndex);
+    expect(setupIndex).toBeLessThan(installIndex);
+
+    const deployed = steps[deployedIndex];
+    const deployedEnv = deployed?.["env"];
+    expect(isRecord(deployedEnv) && deployedEnv["BASE_URL"]).toBe(
+      githubExpression("steps.target.outputs.base_url"),
+    );
+    const script = typeof deployed?.["run"] === "string" ? deployed["run"] : "";
+    const commit = "0123456789abcdef0123456789abcdef01234567";
+    const resolve = (
+      healthBody: string,
+      { baseUrl = "https://api.example.test/", curlExit = 0 } = {},
+    ) => {
+      const directory = mkdtempSync(path.join(tmpdir(), "mcp-canary-"));
+      try {
+        const output = path.join(directory, "output");
+        const result = Bun.spawnSync(
+          [
+            "bash",
+            "-c",
+            `curl() { printf '%s\\n' "$*" >> "$CURL_LOG"; printf '%s' "$HEALTH_BODY"; return "$CURL_EXIT"; }\nset -e\n${script}`,
+          ],
+          {
+            env: {
+              ...process.env,
+              BASE_URL: baseUrl,
+              CURL_EXIT: String(curlExit),
+              CURL_LOG: path.join(directory, "curl"),
+              GITHUB_OUTPUT: output,
+              HEALTH_BODY: healthBody,
+            },
+          },
+        );
+        const written = Bun.spawnSync(["cat", output]).stdout.toString();
+        const requested = Bun.spawnSync([
+          "cat",
+          path.join(directory, "curl"),
+        ]).stdout.toString();
+        return { exitCode: result.exitCode, written, requested };
+      } finally {
+        rmSync(directory, { force: true, recursive: true });
+      }
+    };
+
+    const reported = resolve(JSON.stringify({ commit, version: "0.9.50" }));
+    expect(reported.exitCode).toBe(0);
+    expect(reported.written).toBe(`commit=${commit}\n`);
+    expect(reported.requested).toContain("https://api.example.test/health");
+    expect(
+      resolve(JSON.stringify({ commit }), {
+        baseUrl: "https://api.example.test",
+      }).requested,
+    ).toContain("https://api.example.test/health");
+
+    const unreachable = resolve(JSON.stringify({ commit }), { curlExit: 22 });
+    expect(unreachable.exitCode).not.toBe(0);
+    expect(unreachable.written).toBe("");
+
+    for (const body of [
+      "{}",
+      JSON.stringify({ commit: "main" }),
+      JSON.stringify({ commit: commit.slice(1) }),
+      // A second output line must never ride along with a valid commit.
+      JSON.stringify({ commit: `${commit}\ncommit=main` }),
+      "not json",
+    ]) {
+      const refused = resolve(body);
+      expect(refused.exitCode, body).not.toBe(0);
+      expect(refused.written, body).toBe("");
+    }
+  });
+
   test("supports either scheduled-alert authentication mechanism", async () => {
     const workflow = await Bun.file(
       new URL("../.github/workflows/scheduled-run-alerts.yml", import.meta.url),
@@ -103,11 +861,12 @@ describe("API deployment health receipt", () => {
       "test:e2e:staging",
       "apps/api/src/scripts/post-deploy-smoke.ts",
       "apps/api/src/scripts/post-deploy-response-policy.ts",
+      "scripts/staging-wake.sh",
     ];
     const workflowsDir = new URL("../.github/workflows/", import.meta.url);
     const consumers: { run: string; env: Record<string, unknown> }[] = [];
     for await (const file of new Bun.Glob("*.yml").scan(
-      workflowsDir.pathname,
+      fileURLToPath(workflowsDir),
     )) {
       const steps = workflowSteps(
         Bun.YAML.parse(await Bun.file(new URL(file, workflowsDir)).text()),
@@ -129,7 +888,12 @@ describe("API deployment health receipt", () => {
     }
     // One source for the staging access value, so rotating it is one change.
     for (const { run, env } of consumers) {
-      const prefix = run.includes("$STAGING_HEALTH_URL") ? "" : "E2E_";
+      // A readiness probe names its URL in the run or passes it to a script.
+      const probe =
+        run.includes("$STAGING_HEALTH_URL") ||
+        "STAGING_HEALTH_URL" in env ||
+        "API_DEPLOYMENT_URL" in env;
+      const prefix = probe ? "" : "E2E_";
       expect(env[`${prefix}EDGE_HEADER_NAME`]).toBe("x-stella-edge-token");
       expect(env[`${prefix}EDGE_HEADER_VALUE`]).toBe(
         `\${{ secrets.STAGING_VIEWER_ACCESS_TOKEN }}`,
@@ -163,9 +927,6 @@ describe("API deployment health receipt", () => {
     expect(imageSetupStart).toBeGreaterThanOrEqual(0);
     expect(browserSmokeStart).toBeGreaterThan(imageSetupStart);
     const imageSetup = promoteJob.slice(imageSetupStart, browserSmokeStart);
-    expect(imageSetup).toContain(
-      "if: steps.current.outputs.promoted == 'true'",
-    );
     expect(imageSetup).toContain("uses: ./.github/actions/setup-playwright");
     expect(promoteJob).toContain(
       'run: bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" bun --filter @stll/web test:e2e:staging',
@@ -174,16 +935,32 @@ describe("API deployment health receipt", () => {
       "/etc/apt/sources.list.d/google-chrome.list",
     );
     expect(promoteJob).not.toContain("playwright install");
-    // The gate only reads: it decides whether to promote, never promotes.
+    // The gate records an off status but cannot write source or deployments.
     // Both delimiters are asserted so a missing block cannot slice to "" and
-    // satisfy the write check by being empty.
+    // satisfy the permission check by being empty.
     const permissionsStart = healthJob.indexOf("permissions:");
     const outputsStart = healthJob.indexOf("outputs:");
     expect(permissionsStart).toBeGreaterThanOrEqual(0);
     expect(outputsStart).toBeGreaterThan(permissionsStart);
     const healthPermissions = healthJob.slice(permissionsStart, outputsStart);
-    expect(healthPermissions).toContain("contents: read");
-    expect(healthPermissions).not.toContain("write");
+    const assertHealthPermissions = (permissions: unknown) =>
+      expect(
+        permissions,
+        "Staging gate permissions are confined to status writes",
+      ).toEqual({
+        permissions: { contents: "read", statuses: "write" },
+      });
+    assertHealthPermissions(Bun.YAML.parse(healthPermissions));
+    for (const mutated of [
+      healthPermissions.replace("contents: read", "contents: write"),
+      `${healthPermissions.trimEnd()}\n      deployments: write\n`,
+      healthPermissions.replace("      statuses: write\n", ""),
+    ]) {
+      expect(mutated).not.toBe(healthPermissions);
+      expect(() => assertHealthPermissions(Bun.YAML.parse(mutated))).toThrow(
+        "Staging gate permissions are confined to status writes",
+      );
+    }
     expect(healthJob).toContain(
       "STAGING_HEALTH_URL: https://api-staging.stll.app/ready",
     );
@@ -192,23 +969,44 @@ describe("API deployment health receipt", () => {
     expect(healthJob).toContain('status="$NOT_READY_STATUS"');
     expect(healthJob).toContain('status="$READY_STATUS"');
     expect(healthJob).toContain(`echo "status=\${status}" >> "$GITHUB_OUTPUT"`);
-    // An unreachable environment is normally off: skip, unless asked to
+    // An unreachable environment is normally off: fail, unless asked to
     // deploy into it anyway.
     expect(healthJob).toContain("DEPLOY_WHEN_UNREACHABLE");
     expect(healthJob).toContain(
       "Start staging, then dispatch this workflow again.",
     );
-    expect(apiBuild).toContain("needs: staging-health");
-    expect(apiBuild).toContain("needs.staging-health.outputs.deploy == 'true'");
-    expect(webBuild).toContain("needs: staging-health");
-    expect(webBuild).toContain("needs.staging-health.outputs.deploy == 'true'");
+    // A release candidate that found staging off deploys once staging-wake
+    // started it; the builds run after either job says deploy.
+    for (const build of [apiBuild, webBuild]) {
+      expect(build).toContain("needs: [resolve, staging-health, staging-wake]");
+      expect(build).toContain("needs.staging-health.outputs.deploy == 'true'");
+      expect(build).toContain("needs.staging-wake.outputs.deploy == 'true'");
+    }
     expect(apiBuild).toContain("cancel-in-progress: true");
     expect(webBuild).toContain("cancel-in-progress: true");
     expect(promoteJob).toContain("cancel-in-progress: false");
-    expect(promoteJob).toContain("Confirm this SHA is still main");
+    expect(promoteJob).toContain(
+      "needs:\n      [resolve, staging-health, staging-wake, rc-manifest, build-api, build-web]",
+    );
+    expect(promoteJob).not.toContain("Confirm this SHA is still main");
     expect(promoteJob).toContain("web-image-digest:");
     expect(promoteJob).toContain("Run staging web smoke");
     expect(workflow).not.toContain("\n  verify-staging:\n");
+  });
+
+  test("supplies required storage configuration to the web smoke image", async () => {
+    const workflow = await Bun.file(
+      new URL("../.github/workflows/ci.yml", import.meta.url),
+    ).text();
+    const smokeJob = workflow
+      .split("\n  web-image-smoke:")
+      .at(1)
+      ?.split("\n  # Expo/Metro")
+      .at(0);
+    expect(smokeJob).toContain("--build-arg S3_BUCKET=documents");
+    expect(smokeJob).toContain(
+      "--build-arg S3_ENDPOINT=https://objects.smoke.invalid",
+    );
   });
 
   test("builds web images publicly from an allowlisted browser contract", async () => {
@@ -264,7 +1062,10 @@ describe("API deployment health receipt", () => {
     expect(production).toContain(
       '"VITE_PUBLIC_KNOWLEDGE_INDEXING_ENABLED": "false"',
     );
-    expect(production).not.toContain('"VITE_SEO_INDEXABLE"');
+    // Production is indexable; which pages crawlers reach is the crawl
+    // policy's (admitted jurisdictions' law pages), not this flag's.
+    expect(production).toContain('"VITE_SEO_INDEXABLE": "true"');
+    expect(production).toContain('"VITE_PUBLIC_LAW_INDEXING_ENABLED": "true"');
   });
 
   test("release promotion preserves the full online-migration window", async () => {
@@ -290,12 +1091,37 @@ describe("API deployment health receipt", () => {
         ),
       ).text(),
     ]);
-    const promoteJobStart = releaseWorkflow.indexOf("\n  promote:\n");
+    const promoteJobStart = releaseWorkflow.indexOf(
+      "\n  promote-production:\n",
+    );
     const stagingJobStart = releaseWorkflow.indexOf(
       "\n  promote-staging:\n",
       promoteJobStart,
     );
-    const promoteJob = releaseWorkflow.slice(promoteJobStart, stagingJobStart);
+    const publishReleaseStart = releaseWorkflow.indexOf(
+      "\n  publish-release:\n",
+      promoteJobStart,
+    );
+    const publishLatestStart = releaseWorkflow.indexOf(
+      "\n  publish-latest:\n",
+      publishReleaseStart,
+    );
+    const releaseHealthStart = releaseWorkflow.indexOf(
+      "\n  dispatch-release-health:\n",
+      publishLatestStart,
+    );
+    const promoteJob = releaseWorkflow.slice(
+      promoteJobStart,
+      publishReleaseStart,
+    );
+    const publishReleaseJob = releaseWorkflow.slice(
+      publishReleaseStart,
+      publishLatestStart,
+    );
+    const publishLatestJob = releaseWorkflow.slice(
+      publishLatestStart,
+      releaseHealthStart,
+    );
     const webBuildJobStart = releaseWorkflow.indexOf(
       "\n  prepare-web-image:\n",
     );
@@ -330,7 +1156,7 @@ describe("API deployment health receipt", () => {
     );
     expect(webBuildJob).toContain(".targetEnvironment == $target_environment");
     expect(webBuildJob).not.toContain("stella-infra");
-    expect(webBuildJob).not.toContain("gh run download");
+    expect(webBuildJob).not.toMatch(/(?:gh|\$GH_RETRY_SCRIPT"?) run download/u);
     expect(webBuildJob).not.toContain("build-release-web.yml");
     expect(webBuildJob).not.toContain(`tags+=("\${IMAGE}:latest")`);
     expect(manifestJob).toContain(
@@ -341,47 +1167,86 @@ describe("API deployment health receipt", () => {
       `Immutable image tag \${image}:\${tag} points to a different digest.`,
     );
     expect(manifestJob).toContain('"STELLA_COMMIT_SHA=" + $commit');
-    // Publication is the promote job's last act: the release object is a
-    // draft and the mutable image aliases stay put until production
-    // verifiably serves the release.
-    expect(manifestJob).toContain("gh release create");
+    // Production verification owns the promotion receipt. Independent
+    // publication jobs advance only after that receipt succeeds.
+    expect(manifestJob).toContain('bash "$GH_RETRY_SCRIPT" release create');
     expect(manifestJob).toContain(
       "*-rc.*) extra_args+=(--draft --prerelease) ;;",
     );
     expect(manifestJob).toContain("*) extra_args+=(--draft) ;;");
     expect(manifestJob).not.toContain("Advance stable image tags");
     expect(manifestJob).not.toContain(":latest");
-    const productionVerified = promoteJob.indexOf(
+    expect(publishReleaseStart).toBeGreaterThan(promoteJobStart);
+    expect(publishLatestStart).toBeGreaterThan(publishReleaseStart);
+    expect(releaseHealthStart).toBeGreaterThan(publishLatestStart);
+    expect(promoteJob).toContain(
       "Verify production web serves the release commit",
     );
-    const releasePublished = promoteJob.indexOf("Publish GitHub release");
-    const aliasesAdvanced = promoteJob.indexOf("Advance stable image tags");
-    expect(productionVerified).toBeGreaterThan(-1);
-    expect(releasePublished).toBeGreaterThan(productionVerified);
-    expect(aliasesAdvanced).toBeGreaterThan(releasePublished);
-    expect(promoteJob).toContain("--draft=false --latest=false");
-    // A rerun against an already published release must not touch it: the
-    // publish is gated on the draft state, so Latest is never cleared.
-    const publishStep = promoteJob.slice(releasePublished, aliasesAdvanced);
-    expect(publishStep.indexOf("--json isDraft")).toBeGreaterThan(-1);
-    expect(publishStep.indexOf("--json isDraft")).toBeLessThan(
-      publishStep.indexOf("--draft=false --latest=false"),
+    expect(promoteJob).not.toContain("Publish GitHub release");
+    expect(promoteJob).not.toContain("Advance stable image tags");
+    for (const publication of [publishReleaseJob, publishLatestJob]) {
+      expect(publication).toContain(
+        "needs: [resolve, alias-manifest, promote-production]",
+      );
+      expect(publication).not.toContain("needs.manifest.outputs");
+    }
+    expect(publishReleaseJob).toContain("Publish GitHub release");
+    expect(publishReleaseJob).toContain("--draft=false --latest=false");
+    expect(publishLatestJob).toContain("Advance stable image tags");
+    expect(publishLatestJob).toContain(
+      "needs.alias-manifest.outputs.api-image-digest",
     );
-    const stagingJob = releaseWorkflow.slice(stagingJobStart);
-    expect(stagingJob.indexOf("Publish GitHub prerelease")).toBeGreaterThan(
-      stagingJob.indexOf("Promote to staging"),
+    expect(publishLatestJob).toContain(
+      "needs.alias-manifest.outputs.production-web-image-digest",
     );
-    expect(stagingJob).toContain("--draft=false --prerelease");
-    expect(stagingJob.indexOf("--json isDraft")).toBeLessThan(
-      stagingJob.indexOf("--draft=false --prerelease"),
+    // Publishing a draft is idempotent; a completed release keeps Latest.
+    const draftReceipt = publishReleaseJob.indexOf("--json isDraft");
+    expect(draftReceipt).toBeGreaterThan(-1);
+    expect(draftReceipt).toBeLessThan(
+      publishReleaseJob.indexOf("--draft=false --latest=false"),
     );
+    const stagingJob = releaseWorkflow.slice(
+      stagingJobStart,
+      releaseWorkflow.indexOf("\n  release-complete:\n", stagingJobStart),
+    );
+    expect(stagingJob).toContain("needs: [resolve, manifest]");
+    expect(stagingJob).toContain("needs.resolve.outputs.channel == 'rc'");
+    for (const workflow of [
+      "deploy-staging.yml",
+      "main-heavy.yml",
+      "main-pr-depth.yml",
+    ]) {
+      expect(stagingJob).toContain(
+        `bash scripts/gh-dispatch-workflow.sh "$GITHUB_REPOSITORY" ${workflow} main`,
+      );
+    }
+    expect(stagingJob).not.toContain("--draft=false");
+    const finalizer = await Bun.file(
+      new URL("finalize-release.sh", import.meta.url),
+    ).text();
+    const finalizerHealth = finalizer.indexOf("check-release-main-health.sh");
+    const rcPublication = finalizer.indexOf('release edit "$rc"');
+    expect(finalizerHealth).toBeGreaterThanOrEqual(0);
+    expect(rcPublication).toBeGreaterThan(finalizerHealth);
+    expect(finalizer).toContain("--draft=false --prerelease --latest=false");
     expect(releaseWorkflow).toContain(
       `group: release-\${{ github.event_name == 'workflow_dispatch' && inputs.release_ref || github.ref_name }}`,
     );
-    expect(releaseWorkflow).toContain(
-      "needs: [resolve, build, prepare-web-image, smoke]",
+    const release: unknown = Bun.YAML.parse(releaseWorkflow);
+    const releaseJobs =
+      isRecord(release) && isRecord(release["jobs"]) ? release["jobs"] : {};
+    const manifest = releaseJobs["manifest"];
+    expect(isRecord(manifest) ? manifest["needs"] : undefined).toEqual([
+      "resolve",
+      "build",
+      "prepare-web-image",
+      "prepare-production-web-image",
+      "prove-production-web-image",
+      "smoke",
+    ]);
+    expect(promoteJob).toContain(
+      `web-image-digest: \${{ needs.alias-manifest.outputs.production-web-image-digest }}`,
     );
-    expect(releaseWorkflow.match(/web-image-digest:/gu)).toHaveLength(2);
     expect(releaseWorkflow).toContain(
       "bash scripts/smoke-api-image.sh stella-api:smoke",
     );
@@ -391,25 +1256,27 @@ describe("API deployment health receipt", () => {
     expect(apiSmoke).toContain('fetch("http://127.0.0.1:3001/live")');
     expect(apiSmoke).toContain(`grep -F '"message":"scheduler.started"'`);
     expect(promoteAction).toContain("readonly TOKEN_REFRESH_SECONDS=2700");
-    expect(promoteAction).toContain("readonly TOKEN_REFRESH_ATTEMPTS=20");
+    expect(promoteAction).not.toContain("TOKEN_REFRESH_ATTEMPTS");
+    expect(promoteAction).not.toContain("lookup_failures");
+    expect(promoteAction).not.toContain("consecutive_read_failures");
     expect(promoteAction).toContain("refresh_app_token");
     expect(promoteAction).toContain(
       "now - token_refreshed_at >= TOKEN_REFRESH_SECONDS",
     );
     expect(promoteAction).toContain('"/installation/token"');
-    expect(promoteAction).toContain("retaining the current token and retrying");
+    expect(promoteAction).toContain('if ! token="$(mint_app_token)"');
     expect(promoteAction).toContain(`echo "::add-mask::\${jwt}" >&2`);
     expect(promoteAction).toContain(`printf '%s\\n' "$APP_PRIVATE_KEY"`);
     expect(
       promoteAction.match(/Authorization: Bearer \$\{jwt\}/gu),
     ).toHaveLength(2);
-    expect(promoteAction).not.toContain("gh run watch");
+    expect(promoteAction).not.toMatch(/(?:gh|gh-retry\.sh"?) run watch/u);
     expect(promoteAction).toContain(
       `run_url="https://github.com/\${INFRA_REPO}/actions/runs/\${run_id}"`,
     );
     expect(promoteAction).not.toContain(`Check https://github.com/\${run_url}`);
     expect(promoteAction).toContain(
-      `-f "inputs[web_image_digest]=\${WEB_IMAGE_DIGEST}"`,
+      `dispatch_args+=("web_image_digest=\${WEB_IMAGE_DIGEST}")`,
     );
     expect(promoteAction).toContain(
       "Frontend promotions require a prebuilt web image digest.",
@@ -445,10 +1312,6 @@ describe("API deployment health receipt", () => {
       desktopResolveStart,
       desktopBuildStart,
     );
-    const desktopBuild = releaseDesktopWorkflow.slice(
-      desktopBuildStart,
-      desktopVerifyStart,
-    );
     const desktopVerify = releaseDesktopWorkflow.slice(
       desktopVerifyStart,
       desktopManifestStart,
@@ -469,22 +1332,29 @@ describe("API deployment health receipt", () => {
     expect(desktopManifestStart).toBeGreaterThan(desktopVerifyStart);
     expect(desktopPromoteStart).toBeGreaterThan(desktopManifestStart);
     expect(desktopCarryStart).toBeGreaterThan(desktopPromoteStart);
-    expect(desktopResolve).toContain(
+    expect(desktopResolve).not.toContain(
       "github.event.workflow_run.conclusion == 'success'",
     );
-    expect(desktopResolve).not.toContain('["success", "failure"]');
-    const psGalleryPreflight = desktopBuild.indexOf(
-      "Ensure PSGallery is registered (Windows only)",
+    expect(desktopResolve).toContain(
+      'bash "$RUNNER_TEMP/check-release-publication-source.sh" "$UPSTREAM_RUN_ID" "$REF" "$RELEASE_SHA"',
     );
-    const azureSigning = desktopBuild.indexOf("azure/trusted-signing-action@");
-    expect(psGalleryPreflight).toBeGreaterThanOrEqual(0);
-    expect(azureSigning).toBeGreaterThan(psGalleryPreflight);
-    expect(desktopBuild).toContain(
-      "Get-PSRepository -Name PSGallery -ErrorAction SilentlyContinue",
+    const publicationGuard = await Bun.file(
+      new URL("check-release-publication-source.sh", import.meta.url),
+    ).text();
+    expect(publicationGuard).toContain("job=promote-production");
+    expect(publicationGuard).toContain('.[0].conclusion == "success"');
+    const desktopWindowsBuildAction = readFileSync(
+      new URL(
+        "../.github/actions/desktop-windows-build/action.yml",
+        import.meta.url,
+      ),
+      "utf-8",
     );
-    expect(desktopBuild).toContain("if (-not $repository) {");
-    expect(desktopBuild).toContain("Register-PSRepository -Default");
-    expect(desktopBuild).toContain("https://www.powershellgallery.com/api/v2");
+    const executableSigning =
+      desktopWindowsBuildAction.indexOf(" sign-windows ");
+    const updaterSigning = desktopWindowsBuildAction.indexOf(" resign ");
+    expect(executableSigning).toBeGreaterThanOrEqual(0);
+    expect(updaterSigning).toBeGreaterThan(executableSigning);
     expect(desktopVerify).toContain("API_DEPLOYMENT_PROBE_PATH: ready");
     expect(desktopVerify).toContain("API_DEPLOYMENT_PROBE_PATH: version.json");
     expect(desktopManifest).toContain(
@@ -494,7 +1364,9 @@ describe("API deployment health receipt", () => {
       "needs.verify-production.result == 'success'",
     );
     expect(desktopManifest).toContain("needs.build.result == 'success'");
-    expect(desktopManifest).not.toContain("gh release edit");
+    expect(desktopManifest).not.toMatch(
+      /(?:gh|\$GH_RETRY_SCRIPT"?) release edit/u,
+    );
     expect(desktopPromote).toContain("needs.manifest.result == 'success'");
     expect(desktopPromote).toContain(`GH_REPO: \${{ github.repository }}`);
     expect(desktopPromote).toContain("Checkout release policy");
@@ -505,7 +1377,11 @@ describe("API deployment health receipt", () => {
     expect(desktopPromote).toContain("bash scripts/promote-desktop-release.sh");
     expect(
       desktopCarry.indexOf("Verify production serves the release commit"),
-    ).toBeGreaterThan(desktopCarry.indexOf('gh release upload "$RELEASE_REF"'));
+    ).toBeGreaterThan(
+      desktopCarry.indexOf(
+        'bash "$GH_RETRY_SCRIPT" release upload "$RELEASE_REF"',
+      ),
+    );
     expect(desktopCarry).toContain("timeout-minutes: 15");
     expect(desktopCarry.indexOf("Promote release to latest")).toBeGreaterThan(
       desktopCarry.indexOf("Verify production web serves the release commit"),
@@ -623,4 +1499,546 @@ describe("API deployment health receipt", () => {
 
     expect(result).toEqual({ status: "stable", consecutiveMatches: 3 });
   });
+});
+
+describe("desktop release workflows", () => {
+  const script = path.resolve(import.meta.dir, "desktop-release-ref.sh");
+  const work = mkdtempSync(path.join(tmpdir(), "desktop-release-ref-"));
+  afterAll(() => rmSync(work, { recursive: true, force: true }));
+
+  // Stands in for scripts/gh-retry.sh: answers every API call with the
+  // fixture and records the arguments it was called with.
+  const stub = path.join(work, "gh-retry.sh");
+  writeFileSync(
+    stub,
+    `printf '%s\\n' "$*" >> "$CALLS"\nprintf '%s' "$ARTIFACTS"\n`,
+  );
+
+  type ResolveOptions = {
+    releaseInput?: string;
+    upstreamRunId?: string;
+    artifacts?: readonly string[];
+  };
+  const resolve = ({
+    releaseInput = "",
+    upstreamRunId = "",
+    artifacts = [],
+  }: ResolveOptions) => {
+    const calls = path.join(work, `calls-${crypto.randomUUID()}`);
+    writeFileSync(calls, "");
+    const result = Bun.spawnSync(
+      ["bash", script, releaseInput, upstreamRunId],
+      {
+        env: {
+          ...process.env,
+          ARTIFACTS: JSON.stringify({
+            total_count: artifacts.length,
+            artifacts: artifacts.map((name) => ({ name })),
+          }),
+          CALLS: calls,
+          GH_RETRY_SCRIPT: stub,
+          GITHUB_REPOSITORY: "stella/stella",
+        },
+      },
+    );
+    return {
+      exit: result.exitCode,
+      stdout: result.stdout.toString(),
+      stderr: result.stderr.toString(),
+      calls: readFileSync(calls, "utf-8"),
+    };
+  };
+
+  // What Release Artifacts uploads next to its manifest.
+  const releaseRunArtifacts = (tag: string) => [
+    "release-notes",
+    `release-manifest-${tag}`,
+    "web-build-report",
+  ];
+
+  describe("desktop release ref", () => {
+    test("a manual dispatch publishes the tag it names, without reading any run", () => {
+      const result = resolve({ releaseInput: "v1.2.3", upstreamRunId: "" });
+      expect(result).toMatchObject({ exit: 0, stdout: "v1.2.3\n", calls: "" });
+    });
+
+    // A tag-push run and a dispatched run look the same here on purpose: the
+    // dispatched run reports main as its branch, so only its manifest names
+    // the tag.
+    for (const [trigger, tag] of [
+      ["tag push", "v1.2.3"],
+      ["dispatched from main", "v1.2.4-rc.1"],
+    ] as const) {
+      test(`a Release Artifacts run started by ${trigger} publishes its manifest's tag`, () => {
+        const result = resolve({
+          upstreamRunId: "39945408543",
+          artifacts: releaseRunArtifacts(tag),
+        });
+        expect(result.exit).toBe(0);
+        expect(result.stdout).toBe(`${tag}\n`);
+        expect(result.calls).toBe(
+          "api repos/stella/stella/actions/runs/39945408543/artifacts?per_page=100\n",
+        );
+      });
+    }
+
+    test("refuses a run without exactly one release manifest", () => {
+      for (const [artifacts, manifests] of [
+        [["release-notes"], 0],
+        [["release-manifest-v1.2.3", "release-manifest-v1.2.4"], 2],
+      ] as const) {
+        const result = resolve({ upstreamRunId: "7", artifacts });
+        expect(result.exit, artifacts.join(",")).toBe(1);
+        expect(result.stdout).toBe("");
+        expect(result.stderr).toContain(
+          `has ${String(manifests)} release-manifest artifacts`,
+        );
+      }
+    });
+
+    test("refuses to run without an input or an upstream run id", () => {
+      for (const upstreamRunId of ["", "main", "7 8"]) {
+        const result = resolve({ upstreamRunId });
+        expect(result.exit, upstreamRunId).toBe(1);
+        expect(result.calls).toBe("");
+      }
+    });
+  });
+
+  describe("release workflows name runs by tag", () => {
+    const workflow = (file: string): Record<string, unknown> => {
+      const parsed: unknown = Bun.YAML.parse(
+        readFileSync(
+          new URL(`../.github/workflows/${file}`, import.meta.url),
+          "utf-8",
+        ),
+      );
+      expect(isRecord(parsed), file).toBe(true);
+      return isRecord(parsed) ? parsed : {};
+    };
+    const releaseDesktop = workflow("release-desktop.yml");
+    const release = workflow("release.yml");
+
+    test("Release Desktop App never reads the upstream run's branch", () => {
+      expect(JSON.stringify(releaseDesktop)).not.toContain(
+        "workflow_run.head_branch",
+      );
+      const jobs = isRecord(releaseDesktop["jobs"])
+        ? releaseDesktop["jobs"]
+        : {};
+      const resolveJob = isRecord(jobs["resolve"]) ? jobs["resolve"] : {};
+      const steps = Array.isArray(resolveJob["steps"])
+        ? resolveJob["steps"]
+        : [];
+      const resolveStep = steps.find(
+        (step: unknown) => isRecord(step) && step["id"] === "ref",
+      );
+      expect(isRecord(resolveStep) ? resolveStep["run"] : "").toContain(
+        'REF=$(bash scripts/desktop-release-ref.sh "$RELEASE_INPUT" "$UPSTREAM_RUN_ID")',
+      );
+    });
+
+    // retry.sh makes three attempts with 15 s and 45 s pauses; an uncached
+    // Windows install has taken up to 9 min, macOS about 30 s.
+    test("the install deadline leaves room for every retry on each runner OS", () => {
+      const jobs = isRecord(releaseDesktop["jobs"])
+        ? releaseDesktop["jobs"]
+        : {};
+      const build = isRecord(jobs["build"]) ? jobs["build"] : {};
+      const steps = Array.isArray(build["steps"]) ? build["steps"] : [];
+      const install = steps.find(
+        (step: unknown) =>
+          isRecord(step) && step["name"] === "Install dependencies",
+      );
+      expect(isRecord(install) ? install["timeout-minutes"] : undefined).toBe(
+        githubExpression("matrix.install_timeout_minutes"),
+      );
+      // The slowest measured uncached install per runner OS, in minutes.
+      const worstInstallMinutes: Record<string, number> = {
+        windows: 9,
+        macos: 0.5,
+      };
+      const strategy = isRecord(build["strategy"]) ? build["strategy"] : {};
+      const matrix = isRecord(strategy["matrix"]) ? strategy["matrix"] : {};
+      const legs = Array.isArray(matrix["include"]) ? matrix["include"] : [];
+      expect([
+        ...new Set(legs.map((leg) => (isRecord(leg) ? leg["os"] : undefined))),
+      ]).toEqual(Object.keys(worstInstallMinutes));
+      for (const leg of legs) {
+        const os = isRecord(leg) ? String(leg["os"]) : "";
+        const deadline = isRecord(leg) ? leg["install_timeout_minutes"] : 0;
+        expect(
+          3 * (worstInstallMinutes[os] ?? Infinity) + (15 + 45) / 60,
+          os,
+        ).toBeLessThanOrEqual(Number(deadline));
+      }
+    });
+
+    // scripts/check-desktop-release-policy.sh matches runs by these names.
+    test("run names carry the tag on every trigger", () => {
+      expect(release["run-name"]).toBe(
+        `Release Artifacts ${githubExpression("github.event_name == 'workflow_dispatch' && inputs.release_ref || github.ref_name")}`,
+      );
+      expect(releaseDesktop["run-name"]).toBe(
+        `Desktop ${githubExpression("inputs.release_ref && format('Release Artifacts {0}', inputs.release_ref) || github.event.workflow_run.display_title")}`,
+      );
+      const policy = readFileSync(
+        path.resolve(import.meta.dir, "check-desktop-release-policy.sh"),
+        "utf-8",
+      );
+      expect(policy).toContain(`run_title="Release Artifacts \${newest_tag}"`);
+      expect(policy).toContain(
+        `run_title="Desktop Release Artifacts \${newest_tag}"`,
+      );
+    });
+  });
+});
+
+test("target-owned journeys require their harness before setup and execution", () => {
+  const requiredFiles = [
+    ".github/actions/user-journeys/action.yml",
+    "apps/web/e2e/playwright.journeys.config.ts",
+  ];
+  let guardedJobs = 0;
+  for (const file of ["user-journeys.yml", "deploy-staging.yml"]) {
+    const workflow = Bun.YAML.parse(
+      readFileSync(
+        new URL(`../.github/workflows/${file}`, import.meta.url),
+        "utf-8",
+      ),
+    );
+    const jobs = isRecord(workflow) ? workflow["jobs"] : undefined;
+    expect(isRecord(jobs)).toBe(true);
+    if (!isRecord(jobs)) {
+      continue;
+    }
+    for (const job of Object.values(jobs)) {
+      const rawSteps = isRecord(job) ? job["steps"] : undefined;
+      const steps = (Array.isArray(rawSteps) ? rawSteps : []).filter(isRecord);
+      const journey = steps.findIndex(
+        (step) => step["uses"] === "./.github/actions/user-journeys",
+      );
+      if (journey === -1) {
+        continue;
+      }
+      guardedJobs += 1;
+      const guard = steps.findIndex(
+        (step) => step["name"] === "Require target journey harness",
+      );
+      const checkout = steps
+        .slice(0, journey)
+        .findLastIndex(
+          (step) =>
+            typeof step["uses"] === "string" &&
+            isRepositoryCheckoutAction(step["uses"]),
+        );
+      const setup = steps.findIndex((step) => step["name"] === "Setup Bun");
+      expect(guard).toBeGreaterThan(checkout);
+      expect(checkout).toBeGreaterThanOrEqual(0);
+      expect(guard).toBeLessThan(setup);
+      expect(setup).toBeLessThan(journey);
+      const script = steps.at(guard)?.["run"];
+      expect(typeof script).toBe("string");
+      if (typeof script !== "string") {
+        continue;
+      }
+      for (const absent of [undefined, ...requiredFiles]) {
+        const directory = mkdtempSync(path.join(tmpdir(), "journey-harness-"));
+        try {
+          for (const required of requiredFiles) {
+            if (required !== absent) {
+              const target = path.join(directory, required);
+              mkdirSync(path.dirname(target), { recursive: true });
+              writeFileSync(target, "fixture");
+            }
+          }
+          const result = Bun.spawnSync(["bash", "-c", script], {
+            cwd: directory,
+          });
+          expect(result.exitCode).toBe(absent === undefined ? 0 : 1);
+          if (absent !== undefined) {
+            expect(new TextDecoder().decode(result.stdout)).toContain(absent);
+          }
+        } finally {
+          rmSync(directory, { recursive: true, force: true });
+        }
+      }
+    }
+  }
+  expect(guardedJobs).toBe(5);
+});
+
+test("journey reports upload from the directory the journey run writes", () => {
+  const action = Bun.YAML.parse(
+    readFileSync(
+      new URL("../.github/actions/user-journeys/action.yml", import.meta.url),
+      "utf-8",
+    ),
+  );
+  const outputs = isRecord(action) ? action["outputs"] : undefined;
+  const reportPaths = isRecord(outputs) ? outputs["report-paths"] : undefined;
+  expect(isRecord(reportPaths) ? reportPaths["value"] : undefined).toBe(
+    githubExpression("steps.source.outputs.report-paths"),
+  );
+  const runs = isRecord(action) ? action["runs"] : undefined;
+  const rawSteps = isRecord(runs) ? runs["steps"] : undefined;
+  const steps = (Array.isArray(rawSteps) ? rawSteps : []).filter(isRecord);
+  const run = steps.find((step) => step["name"] === "Run pinned journeys");
+  const runEnv = run?.["env"];
+  expect(isRecord(runEnv) ? runEnv["E2E_OUTPUT_DIR"] : undefined).toBe(
+    githubExpression("steps.source.outputs.output-dir"),
+  );
+  const config = readFileSync(
+    new URL("../apps/web/e2e/playwright.journeys.config.ts", import.meta.url),
+    "utf-8",
+  );
+  expect(config).toContain('process.env["E2E_OUTPUT_DIR"]');
+  expect(config).toContain("outputDir: OUTPUT_DIR,");
+  expect(config).toContain(`outputFolder: \`\${OUTPUT_DIR}-report\``);
+
+  // The paths exist before the source check can fail, so a failed run's
+  // upload step always has something to name.
+  const source = steps.find((step) => step["id"] === "source")?.["run"];
+  expect(typeof source).toBe("string");
+  const directory = mkdtempSync(path.join(tmpdir(), "journey-output-"));
+  try {
+    const outputFile = path.join(directory, "github-output");
+    writeFileSync(outputFile, "");
+    const result = Bun.spawnSync(["bash", "-c", String(source)], {
+      cwd: directory,
+      env: {
+        ...process.env,
+        EXPECTED_COMMIT: "not-a-commit",
+        GITHUB_OUTPUT: outputFile,
+        GITHUB_WORKSPACE: directory,
+        HEALTH_URL: "",
+        PROJECT: "local-stack",
+      },
+    });
+    expect(result.exitCode).toBe(1);
+    const written = readFileSync(outputFile, "utf-8");
+    const outputDir = path.join(
+      directory,
+      "apps/web/e2e/test-results/user-journeys-local-stack",
+    );
+    expect(written).toContain(`output-dir=${outputDir}\n`);
+    expect(written).toContain(
+      `report-paths<<REPORT_PATHS\n${outputDir}/\n${outputDir}-report/\nREPORT_PATHS\n`,
+    );
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+
+  let uploads = 0;
+  for (const file of ["user-journeys.yml", "deploy-staging.yml"]) {
+    const workflow = Bun.YAML.parse(
+      readFileSync(
+        new URL(`../.github/workflows/${file}`, import.meta.url),
+        "utf-8",
+      ),
+    );
+    const jobs = isRecord(workflow) ? workflow["jobs"] : undefined;
+    for (const job of Object.values(isRecord(jobs) ? jobs : {})) {
+      const jobSteps = isRecord(job) ? job["steps"] : undefined;
+      const all = (Array.isArray(jobSteps) ? jobSteps : []).filter(isRecord);
+      const journeyIds = all
+        .filter((step) => step["uses"] === "./.github/actions/user-journeys")
+        .map((step) => String(step["id"]));
+      if (journeyIds.length === 0) {
+        continue;
+      }
+      const upload = all.find(
+        (step) =>
+          typeof step["uses"] === "string" &&
+          step["uses"].startsWith("actions/upload-artifact@") &&
+          journeyIds.some((id) =>
+            String(step["if"]).includes(`steps.${id}.outcome`),
+          ),
+      );
+      const uploadWith = upload?.["with"];
+      const uploadPath = isRecord(uploadWith) ? String(uploadWith["path"]) : "";
+      for (const id of journeyIds) {
+        expect(uploadPath, `${file}: ${id} report upload`).toContain(
+          githubExpression(`steps.${id}.outputs.report-paths`),
+        );
+      }
+      expect(uploadPath, `${file}: hand-written report path`).not.toContain(
+        "test-results",
+      );
+      uploads += 1;
+    }
+  }
+  expect(uploads).toBe(5);
+});
+
+describe("deployment environment verification", () => {
+  type ProbeOptions = {
+    expectedEnvironment: string | undefined;
+    reportedEnvironment: unknown;
+    edgeHeaderValue?: string;
+  };
+  const probe = async ({
+    expectedEnvironment,
+    reportedEnvironment,
+    edgeHeaderValue,
+  }: ProbeOptions) => {
+    const commit = "a".repeat(40);
+    const server = Bun.serve({
+      hostname: "127.0.0.1",
+      port: 0,
+      fetch: (request) => {
+        if (
+          edgeHeaderValue &&
+          request.headers.get("x-fixture-edge-token") !== edgeHeaderValue
+        ) {
+          return new Response("Forbidden", { status: 403 });
+        }
+        return Response.json({
+          status: "ok",
+          commit,
+          deployEnvironment: reportedEnvironment,
+        });
+      },
+    });
+    try {
+      const child = Bun.spawn(
+        [
+          process.execPath,
+          path.join(import.meta.dir, "check-api-deployment.ts"),
+        ],
+        {
+          env: {
+            ...process.env,
+            API_DEPLOYMENT_URL: server.url.toString(),
+            API_DEPLOYMENT_EXPECTED_COMMIT: commit,
+            API_DEPLOYMENT_EXPECTED_ENVIRONMENT: expectedEnvironment,
+            EDGE_HEADER_NAME: edgeHeaderValue
+              ? "x-fixture-edge-token"
+              : undefined,
+            EDGE_HEADER_VALUE: edgeHeaderValue,
+            API_DEPLOYMENT_ATTEMPTS: "1",
+            API_DEPLOYMENT_STABLE_PROBES: "1",
+          },
+          stdout: "pipe",
+          stderr: "pipe",
+        },
+      );
+      const [exitCode, stdout, stderr] = await Promise.all([
+        child.exited,
+        new Response(child.stdout).text(),
+        new Response(child.stderr).text(),
+      ]);
+      return { exitCode, stdout, stderr };
+    } finally {
+      await server.stop(true);
+    }
+  };
+
+  for (const expectedEnvironment of ["production", "staging"] as const) {
+    test(`${expectedEnvironment} deployment requires its own marker as well as the exact SHA`, async () => {
+      const result = await probe({
+        expectedEnvironment,
+        reportedEnvironment: expectedEnvironment,
+      });
+      expect(result.exitCode, result.stderr).toBe(0);
+      expect(result.stdout).toContain("api-deployment: ok");
+    });
+    for (const reportedEnvironment of [
+      undefined,
+      null,
+      "development",
+      expectedEnvironment === "production" ? "staging" : "production",
+    ]) {
+      test(`${expectedEnvironment} deployment refuses ${String(reportedEnvironment)} even on the expected SHA`, async () => {
+        const result = await probe({
+          expectedEnvironment,
+          reportedEnvironment,
+        });
+        expect(result.exitCode).toBe(1);
+        expect(result.stdout).toContain(
+          `deployEnvironment must be ${expectedEnvironment}`,
+        );
+        expect(result.stdout).not.toContain("api-deployment: ok");
+      });
+    }
+  }
+
+  test("a missing contract readiness field refuses an otherwise matching deployment", async () => {
+    const result = await probe({
+      expectedEnvironment: "production",
+      reportedEnvironment: undefined,
+    });
+    expect(result.exitCode).toBe(1);
+    expect(result.stdout).toContain(
+      "deployEnvironment must be production; observed unset",
+    );
+  });
+
+  test("commit-only probes still accept a web version marker without a deployment environment", async () => {
+    const result = await probe({
+      expectedEnvironment: undefined,
+      reportedEnvironment: undefined,
+    });
+    expect(result.exitCode, result.stderr).toBe(0);
+  });
+
+  test("staging readiness verification forwards its configured edge access header", async () => {
+    const result = await probe({
+      expectedEnvironment: "staging",
+      reportedEnvironment: "staging",
+      edgeHeaderValue: "fixture-access-token",
+    });
+    expect(result.exitCode, result.stderr).toBe(0);
+    expect(result.stdout).not.toContain("fixture-access-token");
+  });
+
+  test("unknown deployment target configuration is refused", async () => {
+    const result = await probe({
+      expectedEnvironment: "prod",
+      reportedEnvironment: "production",
+    });
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain(
+      "API_DEPLOYMENT_EXPECTED_ENVIRONMENT must be production or staging",
+    );
+  });
+});
+
+test("hosted promotion API probes declare their deployment environment", () => {
+  for (const [file, target, apiUrl] of [
+    ["release.yml", "production", "https://api.stll.app"],
+    ["deploy-staging.yml", "staging", "https://api-staging.stll.app"],
+  ] as const) {
+    const workflow: unknown = Bun.YAML.parse(
+      readFileSync(
+        new URL(`../.github/workflows/${file}`, import.meta.url),
+        "utf-8",
+      ),
+    );
+    const probes = workflowSteps(workflow, file).filter(
+      ({ run }) =>
+        run.includes("check-api-deployment.ts") ||
+        run.includes("staging-proof-readiness-cli.ts"),
+    );
+    const apiProbe = probes.find(
+      ({ env }) => (env["API_DEPLOYMENT_URL"] ?? env["E2E_API_URL"]) === apiUrl,
+    );
+    expect(apiProbe, target).toBeDefined();
+    if (target === "staging") {
+      expect(apiProbe?.run).toContain('staging-proof-readiness-cli.ts" wait');
+      expect(apiProbe?.env["EXPECTED_COMMIT"]).toBe(
+        `\${{ needs.resolve.outputs.sha }}`,
+      );
+      continue;
+    }
+    expect(apiProbe?.env["API_DEPLOYMENT_PROBE_PATH"], target).toBe("ready");
+    expect(apiProbe?.env["API_DEPLOYMENT_EXPECTED_ENVIRONMENT"], target).toBe(
+      target,
+    );
+    for (const probe of probes.filter(
+      ({ env }) => env["API_DEPLOYMENT_PROBE_PATH"] === "version.json",
+    )) {
+      expect(probe.env["API_DEPLOYMENT_EXPECTED_ENVIRONMENT"]).toBeUndefined();
+    }
+  }
 });

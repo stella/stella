@@ -31,29 +31,38 @@ import { panic } from "better-result";
 import { and, eq, gt, lte, sql } from "drizzle-orm";
 import * as v from "valibot";
 
+import type { ModelOverrideGroup, ModelTask } from "@stll/ai-catalog";
 import { Temporal } from "@stll/time";
 
+import {
+  onlineUniqueIndexTarget,
+  USAGE_EVENTS_ORG_IDEMPOTENCY_KEY_UIDX,
+} from "@/api/db/online-unique-indexes";
 import type { Transaction } from "@/api/db/root";
 import {
   USAGE_ENTITLEMENT_STATUSES,
-  usageEvents,
   usageAllocations,
   usageEntitlements,
+  usageEvents,
   workspaces,
 } from "@/api/db/schema";
 import type {
   UsageActionType,
   UsageAllocationReason,
   UsageAllocationSource,
+  UsageEntitlementStatus,
   UsageEventLane,
   UsageServiceTier,
-  UsageEntitlementStatus,
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { UsageLimitExceededError } from "@/api/lib/errors/tagged-errors";
 import { currentActionCostIdentity } from "@/api/lib/usage/action-costs/context";
 import { CONFIGURED_ACCESS_STATE } from "@/api/lib/usage/configured-access";
+import {
+  FREE_TIER_OFF,
+  resolveOrganizationAccess,
+} from "@/api/lib/usage/organization-access";
 import { readOrganizationAccessSnapshot } from "@/api/lib/usage/organization-access-snapshot";
 import { allowsInstanceModels } from "@/api/lib/usage/organization-access-state";
 
@@ -61,8 +70,7 @@ import { allowsInstanceModels } from "@/api/lib/usage/organization-access-state"
 const UNRECOGNIZED_STATUS = "unrecognized" as const;
 
 type ReadEntitlementStatus =
-  | UsageEntitlementStatus
-  | typeof UNRECOGNIZED_STATUS;
+  UsageEntitlementStatus | typeof UNRECOGNIZED_STATUS;
 
 const storedEntitlementStatusSchema = v.picklist(USAGE_ENTITLEMENT_STATUSES);
 
@@ -140,8 +148,16 @@ export const resolveUsageConsumption = async ({
     return originalAccess;
   }
   const snapshot = await readOrganizationAccessSnapshot(tx, organizationId);
+  // Consumption counts paid access only, so the free floor stays out of it.
   return snapshot?.state === CONFIGURED_ACCESS_STATE
-    ? currentPeriodStart <= asOf && allowsInstanceModels(snapshot, asOf)
+    ? currentPeriodStart <= asOf &&
+        allowsInstanceModels(
+          resolveOrganizationAccess({
+            snapshot,
+            now: asOf,
+            freeTier: FREE_TIER_OFF,
+          }),
+        )
     : originalAccess;
 };
 
@@ -325,7 +341,8 @@ type RecordUsageEventInput = {
   workspaceId: SafeId<"workspace"> | null;
   userId: string;
   actionType: UsageActionType;
-  modelRole: string;
+  /** The task, or the admin-chosen role (`browse`), the model ran for. */
+  modelTask: ModelTask | ModelOverrideGroup | "decision" | "transcription";
   unitsConsumed: number;
   serviceTier: UsageServiceTier;
   isByok: boolean;
@@ -358,7 +375,7 @@ export const recordUsageEvent = async ({
   workspaceId,
   userId,
   actionType,
-  modelRole,
+  modelTask,
   unitsConsumed,
   serviceTier,
   isByok,
@@ -400,7 +417,7 @@ export const recordUsageEvent = async ({
     periodStart: periodResolved.start,
     periodEnd: periodResolved.end,
     actionType,
-    modelRole,
+    modelRole: modelTask,
     unitsConsumed,
     serviceTier,
     isByok,
@@ -419,7 +436,10 @@ export const recordUsageEvent = async ({
     .insert(usageEvents)
     .values(values)
     .onConflictDoNothing({
-      target: [usageEvents.organizationId, usageEvents.idempotencyKey],
+      target: onlineUniqueIndexTarget(
+        USAGE_EVENTS_ORG_IDEMPOTENCY_KEY_UIDX,
+        usageEvents,
+      ),
       where: sql`idempotency_key IS NOT NULL`,
     })
     .returning({ id: usageEvents.id });

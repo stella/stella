@@ -11,6 +11,7 @@ import {
 import fc from "fast-check";
 
 import { assertProperty } from "@stll/property-testing";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import type { ClauseParagraph } from "@/components/templates/clause-editor-types";
 import { APIError } from "@/lib/errors/api";
@@ -31,11 +32,8 @@ const HISTORY = [{ text: "Historical clause" }];
 const WRITE_FAILED = new Error("clause write failed");
 const CONFLICT = new APIError({ status: 409, message: "head changed" });
 beforeEach(() => jest.useFakeTimers());
-afterEach(() => {
-  cleanup();
-  jest.useRealTimers();
-});
-afterAll(async () => GlobalRegistrator.unregister());
+afterEach(cleanup);
+afterAll(async () => unregisterDomEnvironment());
 
 type MountOptions = {
   readHead?: (() => Promise<ClauseParagraph[]>) | undefined;
@@ -284,7 +282,7 @@ describe("clause body publication", () => {
             expect(save.result.current.dirty).toBe(true);
           } finally {
             save.unmount();
-            jest.clearAllTimers();
+            jest.runOnlyPendingTimers();
           }
         },
       ),

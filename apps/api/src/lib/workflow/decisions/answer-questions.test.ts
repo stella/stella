@@ -49,6 +49,16 @@ const decisionsFor = async (
     orgAIConfig: null,
     state: plan.state,
     questions: plan.questions,
+    generator: async ({ questions }) => ({
+      model: "test-generative",
+      output: {
+        answers: Object.keys(questions).map((id) => ({
+          id,
+          answer: { type: "refusal" },
+          evidence: null,
+        })),
+      },
+    }),
     client: {
       ...createSystemOneClient({ apiKey: "key-test", fetcher }),
       keySource: "byok",
@@ -119,8 +129,67 @@ const requestBytes = (plan: SystemOneAnswerPlan): number =>
   ).byteLength;
 
 describe("planSystemOneAnswers", () => {
-  test("text columns are not System One questions", () => {
+  test.each(["__proto__", "constructor", "toString", "ordinary"])(
+    "source criteria serialize their own %s identifier",
+    (id) => {
+      const plan = planSystemOneAnswers({
+        document,
+        sources: [{ id, text: "The contract is a purchase agreement." }],
+        language: "en",
+        questions: [contractType],
+      });
+      const where = plan.questions["col-type:where"];
+      expect(where?.type).toBe("choice");
+      if (where?.type !== "choice") {
+        throw new Error("Expected a source choice question");
+      }
+      expect(Object.getPrototypeOf(where.criteria)).toBe(Object.prototype);
+      expect(Object.keys(where.criteria)).toEqual([id, "__none"]);
+      expect(Object.getOwnPropertyDescriptor(where.criteria, id)).toEqual({
+        value: "The contract is a purchase agreement.",
+        enumerable: true,
+        configurable: true,
+        writable: true,
+      });
+      const serialized = serializeSystemOneRequest({
+        state: plan.state,
+        model: DEFAULT_SYSTEM_ONE_MODEL,
+        questions: plan.questions,
+      });
+      expect(serialized).toContain(JSON.stringify(where.criteria));
+      expect(plan.unplanned).toEqual([]);
+    },
+  );
+
+  test("a repeated question leaves the first accepted plan intact", () => {
+    const first = selectQuestion("same", "single-select", 1, () => "First");
+    const second = selectQuestion("same", "single-select", 1, () => "Second");
+    const plan = planSystemOneAnswers({
+      document,
+      sources,
+      language: "en",
+      questions: [first, second],
+    });
+    expect(plan.unplanned).toEqual(["same"]);
+    expect([...plan.plans.keys()]).toEqual(["same"]);
+    expect(Object.keys(plan.questions)).toEqual(["same:where", "same:value"]);
+    const value = plan.questions["same:value"];
+    expect(value?.type).toBe("choice");
+    if (value?.type !== "choice") {
+      throw new Error("Expected the first accepted choice question");
+    }
+    expect(value.criteria).toEqual({
+      o1: "First",
+      __not_stated:
+        "The sources do not state this, or none of the listed options applies.",
+    });
+  });
+
+  test("text and money columns are not System One questions", () => {
     expect(isSystemOneAnswerable({ version: 1, type: "text" })).toBe(false);
+    expect(
+      isSystemOneAnswerable({ version: 1, type: "money", currency: "EUR" }),
+    ).toBe(false);
     expect(isSystemOneAnswerable({ version: 1, type: "date" })).toBe(true);
   });
 
@@ -347,6 +416,90 @@ describe("planSystemOneAnswers", () => {
 });
 
 describe("decodeSystemOneAnswers", () => {
+  test("generative decisions preserve their model and evidence in decoded answers", async () => {
+    const plan = planSystemOneAnswers({
+      document,
+      sources,
+      language: "cs",
+      questions: [contractType],
+    });
+    const { decisions } = await decideMany({
+      id: "test.answer-questions.generative",
+      dataClass: "customer",
+      orgAIConfig: null,
+      state: plan.state,
+      questions: plan.questions,
+      client: null,
+      generator: async () => ({
+        model: "test-generative",
+        output: {
+          answers: [
+            {
+              id: "col-type:value",
+              answer: choiceAnswer("o1", {
+                o1: 0.93,
+                o2: 0.04,
+                __not_stated: 0.03,
+              }),
+              evidence: "The source identifies a purchase agreement.",
+            },
+            {
+              id: "col-type:where",
+              answer: choiceAnswer("p1", { p1: 0.8, p2: 0.15, __none: 0.05 }),
+              evidence: null,
+            },
+          ],
+        },
+      }),
+    });
+    expect(
+      decodeSystemOneAnswers({
+        plan,
+        questions: [contractType],
+        decisions,
+      }).get("col-type"),
+    ).toMatchObject({
+      state: "answered",
+      answer: "Purchase agreement",
+      source: "generative",
+      model: "test-generative",
+      rationale: "The source identifies a purchase agreement.",
+      sourceId: "p1",
+    });
+  });
+
+  test.each(["toString", "ordinary"])(
+    "a selected %s source survives the wire and answer decoding",
+    async (id) => {
+      const plan = planSystemOneAnswers({
+        document,
+        sources: [{ id, text: "The contract is a purchase agreement." }],
+        language: "en",
+        questions: [contractType],
+      });
+      const decisions = await decisionsFor(plan, {
+        "col-type:value": choiceAnswer("o1", {
+          o1: 0.93,
+          o2: 0.04,
+          __not_stated: 0.03,
+        }),
+        "col-type:where": choiceAnswer(id, { [id]: 0.95, __none: 0.05 }),
+      });
+      expect(
+        decodeSystemOneAnswers({
+          plan,
+          questions: [contractType],
+          decisions,
+        }).get("col-type"),
+      ).toMatchObject({
+        state: "answered",
+        answer: "Purchase agreement",
+        sourceId: id,
+        source: "decision-model",
+      });
+    },
+  );
+
   test("a single-select answer maps back to the option value and the chosen source", async () => {
     const plan = planSystemOneAnswers({
       document,
@@ -463,6 +616,76 @@ describe("decodeSystemOneAnswers", () => {
     });
   });
 
+  test("a mixed multi-select keeps the selected values and evidence for every generated option", async () => {
+    const question = {
+      id: "col-parties",
+      question: "Which parties are named?",
+      content: {
+        version: 1,
+        type: "multi-select",
+        fallback: null,
+        options: [
+          { value: "Seller", color: "gray" },
+          { value: "Buyer", color: "gray" },
+          { value: "Guarantor", color: "gray" },
+        ],
+      },
+    } satisfies AnswerQuestion;
+    const plan = planSystemOneAnswers({
+      document,
+      sources,
+      language: "cs",
+      questions: [question],
+    });
+    const primary = await decisionsFor(plan, {
+      "col-parties:where": choiceAnswer("p1", {
+        p1: 0.9,
+        p2: 0.05,
+        __none: 0.05,
+      }),
+      "col-parties:o1": { type: "noul", noul: 0.95 },
+      "col-parties:o2": { type: "noul", noul: 0.05 },
+      "col-parties:o3": { type: "noul", noul: 0.05 },
+    });
+    const optionDecision = primary["col-parties:o2"];
+    if (optionDecision?.state !== "decided") {
+      throw new Error("Expected the fixture to settle the second option");
+    }
+    const outcomes = decodeSystemOneAnswers({
+      plan,
+      questions: [question],
+      decisions: {
+        ...primary,
+        "col-parties:o2": {
+          ...optionDecision,
+          source: "generative",
+          model: "test-generative",
+          evidence: "This second option does not appear.",
+        },
+        "col-parties:o3": {
+          ...optionDecision,
+          source: "generative",
+          model: "test-generative",
+          evidence: "This third option does not appear.",
+        },
+      },
+    });
+    const outcome = outcomes.get("col-parties");
+    expect(outcome).toMatchObject({
+      state: "answered",
+      answer: ["Seller"],
+      source: "generative",
+      model: "test-generative",
+    });
+    if (outcome?.state !== "answered") {
+      throw new Error("Expected a settled multi-select answer");
+    }
+    expect(outcome.rationale).toContain("Seller");
+    expect(outcome.rationale).toContain("This second option does not appear.");
+    expect(outcome.rationale).toContain("This third option does not appear.");
+    expect(outcome.rationale).not.toContain("Generative model marked");
+  });
+
   test("one option under the floor leaves the whole multi-select undecided", async () => {
     const question: AnswerQuestion = {
       id: "col-parties",
@@ -499,7 +722,9 @@ describe("decodeSystemOneAnswers", () => {
     });
     expect(outcomes.get("col-parties")).toEqual({
       state: "undecided",
-      reason: "below-floor",
+      reason: "refusal",
+      source: "generative",
+      model: "test-generative",
     });
   });
 
@@ -528,7 +753,9 @@ describe("decodeSystemOneAnswers", () => {
     });
     expect(unsureValue.get("col-type")).toEqual({
       state: "undecided",
-      reason: "below-floor",
+      reason: "refusal",
+      source: "generative",
+      model: "test-generative",
     });
 
     const unsureWhere = decodeSystemOneAnswers({
@@ -567,6 +794,16 @@ describe("decodeSystemOneAnswers", () => {
       orgAIConfig: null,
       state: plan.state,
       questions: plan.questions,
+      generator: async ({ questions }) => ({
+        model: "test-generative",
+        output: {
+          answers: Object.keys(questions).map((id) => ({
+            id,
+            answer: { type: "refusal" },
+            evidence: null,
+          })),
+        },
+      }),
       client: null,
     });
     const outcomes = decodeSystemOneAnswers({
@@ -576,7 +813,9 @@ describe("decodeSystemOneAnswers", () => {
     });
     expect(outcomes.get("col-type")).toEqual({
       state: "undecided",
-      reason: "no-backend",
+      reason: "refusal",
+      source: "generative",
+      model: "test-generative",
     });
   });
 

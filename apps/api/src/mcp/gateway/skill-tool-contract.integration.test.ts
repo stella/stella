@@ -10,7 +10,7 @@ import {
 } from "bun:test";
 import * as v from "valibot";
 
-import { listSkillMetadata, loadSkill } from "@stll/skills";
+import { listSkillMetadata } from "@stll/skills";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
@@ -20,13 +20,13 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeIdType } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { namespaceSkillToolName } from "@/api/lib/mcp-upstream/namespace";
-import type { McpRequestContext } from "@/api/mcp/context";
 import { SKILL_TOOL_OUTPUT } from "@/api/mcp/gateway/dynamic-tool-policy";
 import {
   externalToolDefinition,
   toMcpTools,
 } from "@/api/mcp/gateway/list-tools";
 import { handleMcpToolCall, listMcpTools } from "@/api/mcp/tools";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -36,6 +36,8 @@ import {
 } from "@/api/tests/security/rls-fixture";
 import type { TestIds } from "@/api/tests/security/rls-helpers";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
+
+import { validateFetchedToolsList } from "../../../../../packages/cli/src/registry-trust";
 
 /**
  * End-to-end contract of the `skill__*` family through the served surface:
@@ -103,9 +105,8 @@ const createContext = ({
 }: {
   organizationId?: TestIds["orgA"];
   userId?: TestIds["userA1"];
-} = {}): McpRequestContext =>
-  asTestRaw<McpRequestContext>({
-    enabledRegistrySlugs: undefined,
+} = {}): AuthorizedMcpRequestContext =>
+  asTestRaw<AuthorizedMcpRequestContext>({
     grantedScopes: [],
     memberRole: "owner",
     organizationId,
@@ -132,10 +133,10 @@ const SUMMARIZE_SLUG = `summarize-${RUN}`;
 const DOTTED_SLUG = `data.report-${RUN}`;
 const UNDERSCORED_SLUG = `data_report-${RUN}`;
 const MALFORMED_SLUG = `malformed-${RUN}`;
-const COLLIDING_NAME = `skill__data_report-${RUN}`;
+const COLLIDING_NAME = `skill__data_report_${RUN}`;
 
 const listSkillTools = async () =>
-  (await listMcpTools(createContext(), "default", ["stella:skills"])).filter(
+  (await listMcpTools(createContext(), "advanced", ["stella:skills"])).filter(
     (tool) => tool.name.startsWith("skill__") && tool.name.includes(RUN),
   );
 
@@ -175,6 +176,17 @@ describe("skill tool output contract", () => {
     }
   });
 
+  test("the served listing, colliding skills included, passes the CLI's listing check", async () => {
+    // One name outside the contract makes the CLI drop the whole listing.
+    const tools = await listMcpTools(createContext(), "advanced", undefined);
+    const names = tools.map((tool) => tool.name);
+    expect(names).toContain(COLLIDING_NAME);
+    expect(new Set(names).size).toBe(names.length);
+    expect(validateFetchedToolsList(JSON.stringify({ tools }))).toMatchObject({
+      ok: true,
+    });
+  });
+
   test("every skill tool is read-only, non-destructive and closed-world", async () => {
     const tools = await listSkillTools();
 
@@ -197,6 +209,7 @@ describe("skill tool output contract", () => {
     }
 
     const result = await handleMcpToolCall({
+      mode: "advanced",
       args: {},
       context: createContext(),
       toolName: suffixed.name,
@@ -223,9 +236,10 @@ describe("skill tool output contract", () => {
 
   test("a stored skill whose projection violates the contract fails through the internal_error envelope", async () => {
     const result = await handleMcpToolCall({
+      mode: "advanced",
       args: {},
       context: createContext(),
-      toolName: `skill__${MALFORMED_SLUG}`,
+      toolName: `skill__malformed_${RUN}`,
     });
 
     expect(result.isError).toBe(true);
@@ -240,52 +254,28 @@ describe("skill tool output contract", () => {
   });
 });
 
-describe("built-in skill tools", () => {
-  // The second organization has no skill rows, so every built-in is served
-  // unshadowed there.
-  // A skill is offered only beside the tools it requires, so the caller holds
-  // the scope of each built-in's required tools too.
+describe("built-in skill guidance", () => {
   const builtInScopes = ["stella:skills", "stella:knowledge_write"];
-  const builtInContext = (): McpRequestContext => ({
+  const builtInContext = (): AuthorizedMcpRequestContext => ({
     ...createContext({ organizationId: ids.orgB, userId: ids.userB1 }),
     grantedScopes: builtInScopes,
   });
 
   test.each(listSkillMetadata().map(({ name }) => name))(
-    "%s is listed and served with no stored row, within the contract",
+    "%s is not exposed as a tool",
     async (name) => {
       const listed = (
-        await listMcpTools(builtInContext(), "default", builtInScopes)
+        await listMcpTools(builtInContext(), "advanced", builtInScopes)
       ).find((tool) => tool.name === namespaceSkillToolName(name));
-      if (listed === undefined) {
-        throw new Error(`expected built-in skill ${name} to be listed`);
-      }
 
+      expect(listed).toBeUndefined();
       const result = await handleMcpToolCall({
+        mode: "advanced",
         args: {},
         context: builtInContext(),
-        toolName: listed.name,
+        toolName: namespaceSkillToolName(name),
       });
-      const missingResource = await handleMcpToolCall({
-        args: { resource: "knowledge/not-shipped.md" },
-        context: builtInContext(),
-        toolName: listed.name,
-      });
-
-      expect(result.isError).toBeUndefined();
-      expect(result.structuredContent).toMatchObject({
-        body: loadSkill(name).body,
-        id: null,
-        name,
-        origin: "built-in",
-      });
-      expect(
-        v.safeParse(
-          SKILL_TOOL_OUTPUT.outputSchemaSource,
-          result.structuredContent,
-        ).success,
-      ).toBe(true);
-      expect(missingResource.isError).toBe(true);
+      expect(result.isError).toBe(true);
     },
   );
 });

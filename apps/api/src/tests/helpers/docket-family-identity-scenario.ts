@@ -1,6 +1,5 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { sql } from "drizzle-orm";
 
 import {
   DECISION_DOCKET_GRAMMARS,
@@ -50,16 +49,6 @@ export type DocketFamilyScenario = ReturnType<typeof docketFamilyScenario>;
 
 /** A file with more decisions than one identity read keeps. */
 const LARGE_FILE_SIZE = LIMITS.caseLawSearchPageSizeMax + 20;
-
-/**
- * The public reader's grant on the case-file key. It ships a release after
- * the column, so the suites set it as that release will, and take it away to
- * read as a reader that does not hold it yet.
- */
-export const docketFamilyKeyGrantSql = (mode: "grant" | "revoke") =>
-  mode === "grant"
-    ? sql`GRANT SELECT (docket_family_key) ON TABLE case_law_decisions TO stella_public_law_reader`
-    : sql`REVOKE SELECT (docket_family_key) ON TABLE case_law_decisions FROM stella_public_law_reader`;
 
 export const docketFamilyScenario = (number: number) => {
   const n = String(number);
@@ -159,6 +148,7 @@ export const docketFamilyScenario = (number: number) => {
     // split off the court's reference, alone or with the reference itself.
     decision(ids.sheet120, dockets.sheets, administrative, "2010-05-03", null, {
       sheetNumber: "120",
+      senate: "rozšířený senát",
     }),
     decision(ids.sheet131, dockets.sheets, administrative, "2010-06-14", null, {
       publishedCaseNumber: `${dockets.sheets} - 131`,
@@ -338,8 +328,6 @@ export const describeDocketFamilyIdentity = (
   context: () => {
     caseLawDb: CaseLawPublicReadDb;
     scenario: DocketFamilyScenario;
-    /** Sets the reader's grant on the case-file key, as its owner. */
-    setFamilyKeyGrant: (mode: "grant" | "revoke") => Promise<void>;
   },
 ): void => {
   const { lookedUp, read, searched } = identityReaders(
@@ -393,31 +381,14 @@ export const describeDocketFamilyIdentity = (
       }
     });
 
-    test("a reader without the case-file key's grant reads the file by its spellings", async () => {
-      // The release before the grant: no error, and no claim the file is whole.
-      const { dockets, ids } = context().scenario;
-      await context().setFamilyKeyGrant("revoke");
-      try {
-        expect(await searched(dockets.legacy)).toEqual(
-          sorted(ids.legacySibling),
-        );
-        expect(await lookedUp(dockets.legacy)).toMatchObject({
-          status: "ambiguous",
-          reason: "file_incomplete",
-        });
-      } finally {
-        await context().setFamilyKeyGrant("grant");
-      }
-    });
-
     test("a row not keyed yet is still found by its docket spelling", async () => {
       // The sibling stored with its sheet is reachable only by its key, which
       // its row does not hold yet: the read cannot prove the file whole.
       const { dockets, ids } = context().scenario;
       expect(await searched(dockets.unkeyed)).toEqual(sorted(ids.unkeyedBare));
       expect(await lookedUp(dockets.unkeyed)).toMatchObject({
-        status: "ambiguous",
-        reason: "file_incomplete",
+        status: "incomplete_identifier",
+        missing: ["sheet"],
       });
       expect(await searched(`${dockets.unkeyed} - 12`)).toEqual(
         sorted(ids.unkeyedSheet),
@@ -437,8 +408,8 @@ export const describeDocketFamilyIdentity = (
       ]) {
         expect(await searched(entry), entry).toEqual(sorted(ids.lone));
         expect(await lookedUp(entry), entry).toMatchObject({
-          status: "ambiguous",
-          reason: "file_incomplete",
+          status: "incomplete_identifier",
+          missing: ["sheet"],
         });
       }
     });
@@ -500,6 +471,10 @@ export const describeDocketFamilyIdentity = (
           basis: "selector",
         });
       }
+      expect(await lookedUp(`${dockets.sheets}-120`)).toMatchObject({
+        status: "unique",
+        decision: { senate: "rozšířený senát" },
+      });
     });
 
     test("a sheet names its decision in a file larger than a read keeps", async () => {
@@ -568,8 +543,10 @@ export const describeDocketFamilyIdentity = (
  */
 const GRAMMAR_SCENARIO_COURTS = {
   AUT: { court: "Bundesverwaltungsgericht", courtId: null, language: "de" },
+  BRA: { court: "Supremo Tribunal Federal", courtId: null, language: "pt" },
   CZE: { court: "Nejvyšší správní soud", courtId: null, language: "cs" },
   EU: { court: "Court of Justice", courtId: null, language: "en" },
+  GBR: { court: "UKSC", courtId: null, language: "en" },
   HUN: { court: "Kúria", courtId: null, language: "hu" },
   POL: { court: "Sąd Najwyższy", courtId: null, language: "pl" },
   SVK: {
@@ -765,7 +742,7 @@ export const describeDocketGrammarFamilyIdentity = (
       expect(await searched(entry)).toEqual(sorted(ids.lone));
       expect(await lookedUp(entry)).toMatchObject(
         DECISION_DOCKETS_STORED_WITH_SHEETS[jurisdiction]
-          ? { status: "ambiguous", reason: "file_incomplete" }
+          ? { status: "incomplete_identifier", missing: ["sheet"] }
           : { status: "unique", basis: "docket" },
       );
     });

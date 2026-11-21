@@ -11,9 +11,14 @@ import type {
   SessionHandlerConfig,
 } from "@/api/lib/api-handlers";
 import { checkDemoAccountAccess } from "@/api/lib/auth/demo-account-policy";
-import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
+import {
+  createTestHandlerContext,
+  NO_AUDIT,
+  NO_DB,
+} from "@/api/tests/helpers/handler-context";
 
 const config = {
+  contract: "patch",
   permissions: { integration: ["create"] },
   accountAccess: ACCOUNT_ACCESS.standard,
   mcp: { type: "internal", reason: "mcp_transport" },
@@ -48,7 +53,12 @@ describe("handler account policy", () => {
       );
       const context = createTestHandlerContext<
         Parameters<typeof definition.handler>[0]
-      >({ user: { email } });
+      >({
+        audit: NO_AUDIT,
+        safeDb: NO_DB,
+        scopedDb: NO_DB,
+        user: { email },
+      });
       const result = await definition.handler(context);
       expect(policyChecks).toBe(1);
       expect(calls).toBe(email === "standard@example.test" ? 1 : 0);
@@ -64,10 +74,57 @@ describe("handler account policy", () => {
   );
 });
 
+test.each(["when-used", "always"] as const)(
+  "refuses account access before conditional feature resource admission: %s",
+  async (decision) => {
+    const usesFeature = mock(async () => true);
+    const definition = createSafeRootHandler(
+      {
+        ...config,
+        featureAccess: {
+          featureId: "list-verification",
+          type: "conditional",
+          decision,
+          usesFeature,
+          projectInputSchema: (schemas) => schemas,
+        },
+      } satisfies HandlerConfig,
+      async function* () {
+        return Result.ok({ success: true });
+      },
+      {
+        checkAccountOperation: (email) =>
+          checkDemoAccountAccess({
+            email,
+            config: {
+              email: "account@example.test",
+              organizationId: "org_account",
+            },
+            operation: "growth",
+          }),
+      },
+    );
+    const response = await definition.handler(
+      createTestHandlerContext<Parameters<typeof definition.handler>[0]>({
+        audit: NO_AUDIT,
+        safeDb: NO_DB,
+        scopedDb: NO_DB,
+        user: { email: "account@example.test" },
+      }),
+    );
+    expect(response).toMatchObject({
+      code: 403,
+      response: { code: "account_access_unavailable" },
+    });
+    expect(usesFeature).not.toHaveBeenCalled();
+  },
+);
+
 test("allows sandbox matter mutations without an account growth check", async () => {
   for (const operation of ["create", "update", "delete"] as const) {
     const checkAccountOperation = mock(() => Result.ok());
     const matterConfig = {
+      contract: "patch",
       permissions: { workspace: [operation] },
       accountAccess: ACCOUNT_ACCESS.sandbox,
       mcp: { type: "internal", reason: "mcp_transport" },
@@ -81,7 +138,12 @@ test("allows sandbox matter mutations without an account growth check", async ()
     );
     const context = createTestHandlerContext<
       Parameters<typeof definition.handler>[0]
-    >({ user: { email: "account@example.test" } });
+    >({
+      audit: NO_AUDIT,
+      safeDb: NO_DB,
+      scopedDb: NO_DB,
+      user: { email: "account@example.test" },
+    });
     expect(await definition.handler(context)).toEqual({ success: true });
     expect(checkAccountOperation).not.toHaveBeenCalled();
   }
@@ -90,6 +152,7 @@ test("allows sandbox matter mutations without an account growth check", async ()
 test("applies declared account access alongside resource permissions", async () => {
   const definition = createSafeRootHandler(
     {
+      contract: "patch",
       permissions: { workspace: ["read"] },
       accountAccess: ACCOUNT_ACCESS.standard,
       mcp: { type: "internal", reason: "mcp_transport" },
@@ -112,6 +175,9 @@ test("applies declared account access alongside resource permissions", async () 
   for (const email of ["account@example.test", "standard@example.test"]) {
     const response = await definition.handler(
       createTestHandlerContext<Parameters<typeof definition.handler>[0]>({
+        audit: NO_AUDIT,
+        safeDb: NO_DB,
+        scopedDb: NO_DB,
         user: { email },
       }),
     );
@@ -148,6 +214,7 @@ describe("session handler account policy", () => {
         }),
       );
       const sessionConfig = {
+        contract: "patch",
         accountAccess,
         mcp: { type: "internal", reason: "mcp_transport" },
       } as const satisfies SessionHandlerConfig;
@@ -161,6 +228,9 @@ describe("session handler account policy", () => {
       );
       const result = await definition.handler(
         createTestHandlerContext<Parameters<typeof definition.handler>[0]>({
+          audit: NO_AUDIT,
+          safeDb: NO_DB,
+          scopedDb: NO_DB,
           user: { email },
         }),
       );
@@ -172,6 +242,58 @@ describe("session handler account policy", () => {
         expect(result).toMatchObject({
           code: 403,
           response: { code: "account_access_unavailable" },
+        });
+      } else {
+        expect(result).toEqual({ success: true });
+      }
+    },
+  );
+});
+
+describe("session capability account consent", () => {
+  test.each([
+    { scopes: ["stella:read", "stella:write"], calls: 0 },
+    { scopes: ["stella:organization_create"], calls: 1 },
+  ])(
+    "requires the declared account scope: $scopes",
+    async ({ scopes, calls: expectedCalls }) => {
+      const run = mock(() => ({ success: true }));
+      const definition = createSafeSessionHandler(
+        {
+          contract: "patch",
+          accountAccess: ACCOUNT_ACCESS.accountControl,
+          accountScope: "stella:organization_create",
+          access: "write",
+          mcp: {
+            type: "capability",
+            reason: "organization_management",
+            consumesServices: false,
+          },
+        },
+        async function* () {
+          return Result.ok(run());
+        },
+        { checkAccountOperation: () => Result.ok() },
+      );
+      const result = await definition.handler(
+        createTestHandlerContext<Parameters<typeof definition.handler>[0]>({
+          audit: NO_AUDIT,
+          safeDb: NO_DB,
+          scopedDb: NO_DB,
+          accountAuthority: {
+            credential: {
+              type: "oauth_client",
+              clientId: "account-consent-fixture",
+            },
+            grantedScopes: scopes,
+          },
+        }),
+      );
+      expect(run).toHaveBeenCalledTimes(expectedCalls);
+      if (expectedCalls === 0) {
+        expect(result).toMatchObject({
+          code: 403,
+          response: { code: "missing_scope" },
         });
       } else {
         expect(result).toEqual({ success: true });

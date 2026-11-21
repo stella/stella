@@ -4,12 +4,17 @@ import path from "node:path";
 
 import webManifest from "../apps/web/package.json" with { type: "json" };
 import rootManifest from "../package.json" with { type: "json" };
+import cliManifest from "../packages/cli/package.json" with { type: "json" };
 import uiManifest from "../packages/ui/package.json" with { type: "json" };
 import {
+  assertShippedAssetPatternsMatch,
   distEntryFiles,
+  matchShippedAssetPattern,
   sourceExportTargets,
+  sourceNativeExportTargets,
   toPublishedManifest,
 } from "./publish-manifest";
+import { ALL_PACKAGE_ORDER } from "./publish-packages";
 
 const ATLASKIT_DRAG_PACKAGE = "@atlaskit/pragmatic-drag-and-drop";
 const ATLASKIT_AUTO_SCROLL_PACKAGE =
@@ -19,7 +24,7 @@ const ATLASKIT_RUNTIME_PACKAGES = [
   ATLASKIT_AUTO_SCROLL_PACKAGE,
 ] as const;
 const ATLASKIT_ELEMENT_ADAPTER =
-  "@atlaskit/pragmatic-drag-and-drop/element/adapter";
+  "@atlaskit/pragmatic-drag-and-drop/adapter/element-adapter";
 const ATLASKIT_AUTO_SCROLL_ELEMENT =
   "@atlaskit/pragmatic-drag-and-drop-auto-scroll/element";
 const REPO_ROOT = path.resolve(import.meta.dir, "..");
@@ -69,6 +74,45 @@ describe("sourceExportTargets", () => {
     ).toThrow(/expected source export/u);
   });
 
+  // A component with a React Native renderer resolves to it in a React
+  // Native bundler and to the web module everywhere else; nothing else may
+  // use a condition.
+  const NATIVE_BUTTON = {
+    "react-native": "./src/components/button.native.tsx",
+    default: "./src/components/button.tsx",
+  };
+
+  test("reads a react-native pair as its web module and its native module", () => {
+    const withNative = manifest({
+      ".": "./src/index.ts",
+      "./button": NATIVE_BUTTON,
+    });
+    expect(sourceExportTargets(withNative)).toEqual({
+      ".": "./src/index.ts",
+      "./button": "./src/components/button.tsx",
+    });
+    expect(sourceNativeExportTargets(withNative)).toEqual({
+      "./button": "./src/components/button.native.tsx",
+    });
+  });
+
+  test("rejects a react-native pair in any other shape", () => {
+    for (const target of [
+      {
+        default: NATIVE_BUTTON.default,
+        "react-native": NATIVE_BUTTON["react-native"],
+      },
+      { ...NATIVE_BUTTON, "react-native": "./src/components/input.native.tsx" },
+      { ...NATIVE_BUTTON, import: NATIVE_BUTTON.default },
+    ]) {
+      expect(() =>
+        sourceExportTargets(
+          manifest({ ".": "./src/index.ts", "./button": target }),
+        ),
+      ).toThrow(/expected source export/u);
+    }
+  });
+
   test("accepts an exported root JSON asset when files ships it", () => {
     const withCatalog = {
       ...manifest({
@@ -86,6 +130,82 @@ describe("sourceExportTargets", () => {
       ".": { types: "./dist/index.d.ts", import: "./dist/index.js" },
       "./contract.json": "./contract.json",
     });
+  });
+
+  test("accepts a JSON asset directory pattern the files allowlist ships", () => {
+    const withShards = {
+      ...manifest({
+        ".": "./src/index.ts",
+        "./capabilities/*.json": "./capabilities/*.json",
+      }),
+      files: ["capabilities", "dist", "src", "README.md"],
+    };
+
+    expect(sourceExportTargets(withShards)["./capabilities/*.json"]).toBe(
+      "./capabilities/*.json",
+    );
+    const published = toPublishedManifest(withShards);
+    expect(published.exports["./capabilities/*.json"]).toBe(
+      "./capabilities/*.json",
+    );
+    expect(published["files"]).toEqual(["dist", "README.md", "capabilities"]);
+  });
+
+  // The release workflow is the only other place these manifests are
+  // transformed, so a shape it would refuse has to fail here, on the PR.
+  test("transforms every package the release publishes", async () => {
+    for (const directory of ALL_PACKAGE_ORDER) {
+      const source: unknown = await Bun.file(
+        path.join(REPO_ROOT, "packages", directory, "package.json"),
+      ).json();
+      expect(() => toPublishedManifest(source), directory).not.toThrow();
+    }
+  });
+
+  test("ships the CLI's capability shards as an asset pattern", () => {
+    const published = toPublishedManifest(cliManifest);
+    expect(published.exports["./capabilities/*.json"]).toBe(
+      "./capabilities/*.json",
+    );
+    expect(published["files"]).toContain("capabilities");
+  });
+
+  test("rejects a JSON asset pattern whose directory files does not ship", () => {
+    expect(() =>
+      sourceExportTargets(
+        manifest({
+          ".": "./src/index.ts",
+          "./capabilities/*.json": "./capabilities/*.json",
+        }),
+      ),
+    ).toThrow(/expected source export "\.\/capabilities\/\*\.json"/u);
+  });
+
+  test("rejects asset patterns in any other shape", () => {
+    const shipping = (exports: Record<string, unknown>) => ({
+      ...manifest(exports),
+      files: ["capabilities", "dist", "src", "README.md", "..", ".hidden"],
+    });
+    for (const [subpath, target] of [
+      // Remapped: the subpath has to name the file it resolves to.
+      ["./caps/*.json", "./capabilities/*.json"],
+      // Not JSON, or not one level of files.
+      ["./capabilities/*", "./capabilities/*"],
+      ["./capabilities/*.js", "./capabilities/*.js"],
+      ["./capabilities/**/*.json", "./capabilities/**/*.json"],
+      // Built directories go through the module and stylesheet rules.
+      ["./src/*.json", "./src/*.json"],
+      ["./dist/*.json", "./dist/*.json"],
+      // Nothing may climb out of the package or hide in a dot directory.
+      ["./../*.json", "./../*.json"],
+      ["./.hidden/*.json", "./.hidden/*.json"],
+    ] as const) {
+      expect(() =>
+        sourceExportTargets(
+          shipping({ ".": "./src/index.ts", [subpath]: target }),
+        ),
+      ).toThrow(/expected source export/u);
+    }
   });
 
   test("rejects a root JSON asset omitted from files", () => {
@@ -118,6 +238,76 @@ describe("toPublishedManifest", () => {
       types: "./dist/components/button.d.ts",
       import: "./dist/components/button.js",
     });
+  });
+
+  test.each(Object.getOwnPropertyNames(Object.prototype))(
+    "publishes own %s exports without inventing a native target",
+    (subpath) => {
+      const source = manifest(
+        Object.fromEntries([
+          [".", "./src/index.ts"],
+          [subpath, "./src/components/button.tsx"],
+        ]),
+      );
+      expect(Object.hasOwn(sourceExportTargets(source), subpath)).toBe(true);
+      expect(Object.hasOwn(sourceNativeExportTargets(source), subpath)).toBe(
+        false,
+      );
+      const result = toPublishedManifest(source);
+      expect(Object.hasOwn(result.exports, subpath)).toBe(true);
+      expect(result.exports[subpath]).toEqual({
+        types: "./dist/components/button.d.ts",
+        import: "./dist/components/button.js",
+      });
+    },
+  );
+
+  test.each(Object.getOwnPropertyNames(Object.prototype))(
+    "preserves an explicitly configured native target for %s",
+    (subpath) => {
+      const source = manifest({
+        ".": "./src/index.ts",
+        [subpath]: {
+          "react-native": "./src/components/button.native.tsx",
+          default: "./src/components/button.tsx",
+        },
+      });
+      expect(Object.hasOwn(sourceNativeExportTargets(source), subpath)).toBe(
+        true,
+      );
+      const result = toPublishedManifest(source);
+      expect(Object.hasOwn(result.exports, subpath)).toBe(true);
+      expect(result.exports[subpath]).toEqual({
+        "react-native": {
+          types: "./dist/components/button.native.d.ts",
+          import: "./dist/components/button.native.js",
+        },
+        types: "./dist/components/button.d.ts",
+        import: "./dist/components/button.js",
+      });
+    },
+  );
+
+  test("publishes a native renderer under the react-native condition, first", () => {
+    const publishedNative = toPublishedManifest(
+      manifest({
+        ".": "./src/index.ts",
+        "./button": {
+          "react-native": "./src/components/button.native.tsx",
+          default: "./src/components/button.tsx",
+        },
+      }),
+    );
+    const entry = publishedNative.exports["./button"];
+    expect(entry).toEqual({
+      "react-native": {
+        types: "./dist/components/button.native.d.ts",
+        import: "./dist/components/button.native.js",
+      },
+      types: "./dist/components/button.d.ts",
+      import: "./dist/components/button.js",
+    });
+    expect(Object.keys(entry ?? {})[0]).toBe("react-native");
   });
 
   // A stylesheet is copied, not compiled: the consumer owns the Tailwind
@@ -186,11 +376,64 @@ describe("toPublishedManifest", () => {
   });
 });
 
+describe("shipped asset patterns after the build", () => {
+  const published = toPublishedManifest({
+    ...manifest({
+      ".": "./src/index.ts",
+      "./capabilities/*.json": "./capabilities/*.json",
+    }),
+    files: ["capabilities", "dist"],
+  });
+
+  test("matches only JSON files directly inside the directory, sorted", () => {
+    expect(
+      matchShippedAssetPattern("./capabilities/*.json", [
+        "b.get.json",
+        "README.md",
+        "a.list.json",
+        "nested/c.json",
+      ]),
+    ).toEqual(["capabilities/a.list.json", "capabilities/b.get.json"]);
+  });
+
+  test("passes when the built directory holds a matching file", () => {
+    expect(() =>
+      assertShippedAssetPatternsMatch(published, (directory) =>
+        directory === "capabilities" ? ["a.list.json"] : undefined,
+      ),
+    ).not.toThrow();
+  });
+
+  test("refuses a pattern whose directory is missing or holds no match", () => {
+    expect(() =>
+      assertShippedAssetPatternsMatch(published, () => undefined),
+    ).toThrow(/matches no file in capabilities\/ after the build/u);
+    expect(() =>
+      assertShippedAssetPatternsMatch(published, () => ["README.md"]),
+    ).toThrow(/matches no file in capabilities\/ after the build/u);
+  });
+});
+
 describe("distEntryFiles", () => {
   test("names every file an entry points at", () => {
     expect(
       distEntryFiles({ types: "./dist/a.d.ts", import: "./dist/a.js" }),
     ).toEqual(["./dist/a.d.ts", "./dist/a.js"]);
+    expect(
+      distEntryFiles({
+        "react-native": {
+          types: "./dist/a.native.d.ts",
+          import: "./dist/a.native.js",
+        },
+        types: "./dist/a.d.ts",
+        import: "./dist/a.js",
+      }),
+    ).toEqual([
+      "./dist/a.native.d.ts",
+      "./dist/a.native.js",
+      "./dist/a.d.ts",
+      "./dist/a.js",
+    ]);
     expect(distEntryFiles("./dist/styles/theme.css")).toEqual([
       "./dist/styles/theme.css",
     ]);

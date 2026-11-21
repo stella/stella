@@ -1,0 +1,254 @@
+import type { APIRequestContext, Page } from "@playwright/test";
+import { randomUUID } from "node:crypto";
+import { readFile } from "node:fs/promises";
+import path from "node:path";
+import * as v from "valibot";
+
+import {
+  INSPECTOR_STORAGE,
+  inspectorStorageBaseKey,
+  ownerStorageKey,
+} from "@stll/api-contract/browser-storage";
+
+import type { FileTab } from "../../src/components/inspector/file-tab";
+import {
+  apiDelete,
+  apiPost,
+  apiPut,
+  apiUploadTemplate,
+  E2E_API_ORIGIN,
+} from "./api";
+import {
+  dockedChatFileThreadPage,
+  dockedChatMessagePage,
+  dockedChatSuggestedPrompts,
+  dockedChatTemplateThread,
+  dockedChatTitle,
+} from "./docked-chat-history";
+import { createUploadedDocumentRoute } from "./document";
+import { apiJson, respond } from "./route-mock";
+import { expect } from "./test";
+import { createTestWorkspace, deleteTestWorkspace } from "./workspace";
+
+const createdContactSchema = v.object({ id: v.string() });
+const createdSkillSchema = v.object({ id: v.string() });
+
+const sessionSchema = v.object({
+  user: v.object({ id: v.string() }),
+  session: v.object({ activeOrganizationId: v.string() }),
+});
+
+export const createDockedChatWorld = async (request: APIRequestContext) => {
+  const workspace = await createTestWorkspace(request, "dock-geometry");
+  let contactId: string | undefined;
+  let templateId: string | undefined;
+  let skillId: string | undefined;
+  try {
+    const contact = v.parse(
+      createdContactSchema,
+      await apiPut(request, "/contacts", {
+        type: "person",
+        displayName: "Dock geometry fixture",
+      }),
+    );
+    contactId = contact.id;
+    const document = await createUploadedDocumentRoute({
+      request,
+      workspace,
+      fileName: "dock-geometry.docx",
+    });
+    const fieldId = new URL(
+      document.path,
+      "https://fixture.test",
+    ).searchParams.get("field");
+    if (fieldId === null) {
+      throw new Error("Uploaded document has no file field");
+    }
+    const template = await apiUploadTemplate(request, {
+      file: {
+        name: "dock-geometry.docx",
+        mimeType:
+          "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        buffer: await readFile(
+          path.resolve(import.meta.dirname, "../fixtures/simple.docx"),
+        ),
+      },
+      name: "Dock geometry fixture",
+    });
+    templateId = template.id;
+    // An organization skill, so its editor's page hosts the dock.
+    const skill = v.parse(
+      createdSkillSchema,
+      await apiPost(request, "/skills", {
+        scope: "private",
+        name: `Dock geometry ${randomUUID().slice(0, 8)}`,
+        description: "Dock geometry fixture",
+        body: "Fixture instructions.",
+      }),
+    );
+    skillId = skill.id;
+    const response = await request.get(
+      `${E2E_API_ORIGIN}/api/auth/get-session`,
+    );
+    expect(response.ok()).toBe(true);
+    const session = v.parse(sessionSchema, await response.json());
+    const fileTab = {
+      type: "pdf",
+      id: fieldId,
+      entityId: document.entityId,
+      label: "dock-geometry.docx",
+      fileName: "dock-geometry.docx",
+      mimeType:
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      pdfFileId: fieldId,
+      workspaceId: workspace.id,
+      propertyId: workspace.filePropertyId,
+    } satisfies FileTab;
+    return {
+      workspace,
+      document,
+      contactId: contact.id,
+      templateId: template.id,
+      skillId: skill.id,
+      session,
+      fileTab,
+    };
+  } catch (error) {
+    if (skillId !== undefined) {
+      await apiDelete(request, `/skills/${skillId}`);
+    }
+    if (templateId !== undefined) {
+      await apiDelete(request, `/templates/${templateId}`);
+    }
+    if (contactId !== undefined) {
+      await apiDelete(request, `/contacts/${contactId}`);
+    }
+    await deleteTestWorkspace(request, workspace.id);
+    throw error;
+  }
+};
+export type DockedChatWorld = Awaited<ReturnType<typeof createDockedChatWorld>>;
+
+export const deleteDockedChatWorld = async (
+  request: APIRequestContext,
+  world: DockedChatWorld,
+) => {
+  await apiDelete(request, `/skills/${world.skillId}`);
+  await apiDelete(request, `/templates/${world.templateId}`);
+  await apiDelete(request, `/contacts/${world.contactId}`);
+  await deleteTestWorkspace(request, world.workspace.id);
+};
+
+/** HTTP fixtures isolate geometry from model availability; the real readers,
+ * runtime, hydration and portals still mount against the seeded signed-in stack. */
+export const installDockedChatHistory = async (page: Page) => {
+  await page.route(
+    /\/v1\/chat\/workspaces\/[^/]+\/file-thread(?:\?|$)/u,
+    async (route) => {
+      await respond(
+        route,
+        apiJson(
+          "v1/chat/workspaces/:workspaceId/file-thread",
+          "get",
+          dockedChatFileThreadPage,
+        ),
+      );
+    },
+  );
+  await page.route("**/v1/chat/template-thread", async (route) => {
+    await respond(
+      route,
+      apiJson("v1/chat/template-thread", "post", dockedChatTemplateThread),
+    );
+  });
+  await page.route("**/v1/chat/threads/*/messages*", async (route) => {
+    await respond(
+      route,
+      apiJson(
+        "v1/chat/threads/:threadId/messages",
+        "get",
+        dockedChatMessagePage,
+      ),
+    );
+  });
+  await page.route("**/v1/chat/threads/*/suggested-prompts*", async (route) => {
+    await respond(
+      route,
+      apiJson(
+        "v1/chat/threads/:threadId/suggested-prompts",
+        "post",
+        dockedChatSuggestedPrompts,
+      ),
+    );
+  });
+  await page.route("**/v1/chat/threads/*/title*", async (route) => {
+    await respond(
+      route,
+      apiJson("v1/chat/threads/:threadId/title", "get", dockedChatTitle),
+    );
+  });
+};
+
+type RestoreGeometryInspectorOptions = {
+  world: DockedChatWorld;
+  presentation: "inspector" | "reader";
+};
+export const restoreGeometryInspector = async (
+  page: Page,
+  { world, presentation }: RestoreGeometryInspectorOptions,
+) => {
+  // The keys come from the app's own owner, so a change to how the
+  // inspector keys its entries reaches this seed too.
+  const scope = {
+    userId: world.session.user.id,
+    organizationId: world.session.session.activeOrganizationId,
+  };
+  await page.addInitScript(
+    ({
+      stateKey,
+      minimizedKey,
+      fileTab,
+      mode,
+      stateVersion,
+      minimizedVersion,
+    }) => {
+      localStorage.setItem(
+        stateKey,
+        JSON.stringify({
+          version: stateVersion,
+          value: {
+            tabs: mode === "inspector" ? [fileTab] : [],
+            groups: [],
+            groupAssignments: {},
+            activeId: mode === "inspector" ? fileTab.id : null,
+            collapsedGroupIds: [],
+          },
+        }),
+      );
+      localStorage.setItem(
+        minimizedKey,
+        JSON.stringify({
+          version: minimizedVersion,
+          value: mode !== "inspector",
+        }),
+      );
+    },
+    {
+      stateKey: ownerStorageKey(
+        inspectorStorageBaseKey(INSPECTOR_STORAGE.state, scope.organizationId),
+        { kind: "user", userId: scope.userId },
+      ),
+      minimizedKey: ownerStorageKey(
+        inspectorStorageBaseKey(
+          INSPECTOR_STORAGE.minimized,
+          scope.organizationId,
+        ),
+        { kind: "user", userId: scope.userId },
+      ),
+      fileTab: world.fileTab,
+      mode: presentation,
+      stateVersion: INSPECTOR_STORAGE.state.version,
+      minimizedVersion: INSPECTOR_STORAGE.minimized.version,
+    },
+  );
+};

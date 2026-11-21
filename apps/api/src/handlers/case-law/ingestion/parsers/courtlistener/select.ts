@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+// parser-output-unchanged: candidates are validated against their source paragraphs, the text their validation markup held.
 /**
  * Which text column of an opinion row becomes its document.
  *
@@ -10,11 +12,11 @@
  * not hold.
  */
 
-import { panic } from "better-result";
-
-import type { OpinionRow } from "@/api/handlers/case-law/ingestion/adapters/courtlistener/snapshot-columns";
 import type { OpinionType } from "@/api/handlers/case-law/ingestion/adapters/courtlistener/vocabulary";
-import { validateAndLog } from "@/api/lib/legal-search/parsers/validate-ast";
+// parser-output-unchanged: the candidate check reads the same validateAst verdict; only the logging moved to the pipeline.
+// parser-output-unchanged: imports the same snapshot row shape from its pure parser module.
+import type { OpinionRow } from "@/api/handlers/case-law/ingestion/parsers/courtlistener/opinion-row";
+import { validateAst } from "@/api/lib/legal-search/parsers/validate-ast";
 
 import {
   type FormatInput,
@@ -31,6 +33,16 @@ import {
   type TextCandidateUnusable,
 } from "./outcome";
 import { parsePlainText, parsePreformatted } from "./plain-text";
+import { plainTextStructureOf } from "./plain-text-structure";
+import {
+  type PublishedTextDefect,
+  publishedTextDefects,
+} from "./source-defects";
+import {
+  classifyCourtListenerText,
+  COURTLISTENER_TEXT_USABILITY,
+} from "./usability";
+import { courtListenerValidationPolicy } from "./validation-policy";
 
 /** Text columns in precedence order. `xml_scan` is never text: see below. */
 export const COURTLISTENER_TEXT_FORMATS = [
@@ -56,7 +68,7 @@ export const textStructureOf = (
   text: string,
 ): TextStructure => {
   if (format === "plain_text") {
-    return "plain";
+    return plainTextStructureOf(text);
   }
   const head = withoutXmlDeclaration(text).trimStart();
   if (format === "xml_harvard" || OPINION_ROOT.test(head)) {
@@ -88,9 +100,15 @@ const parseCandidate = (
       return parseCandidate(format, "html", input);
     }
     case "html":
-      return format === "xml_harvard" || format === "plain_text"
+      return format === "xml_harvard"
         ? panic(`${format} is never read as HTML`)
-        : { structure, parsed: COURTLISTENER_HTML_PARSERS[format](input) };
+        : {
+            structure,
+            parsed:
+              COURTLISTENER_HTML_PARSERS[
+                format === "plain_text" ? "html" : format
+              ](input),
+          };
     default: {
       structure satisfies never;
       return panic(`Unhandled text structure: ${String(structure)}`);
@@ -110,6 +128,7 @@ export type OpinionTextSelection =
       readonly format: CourtListenerTextFormat;
       readonly structure: TextStructure;
       readonly text: ParsedOpinionText;
+      readonly sourceDefects: readonly PublishedTextDefect[];
       readonly attempts: readonly CandidateAttempt[];
     }
   | {
@@ -132,26 +151,29 @@ export type OpinionTextSelection =
 
 const RESIDUE = "MARKUP_RESIDUE";
 
-/** Why the retention check refused a parse, or `null` when it passed. */
-const retentionFailure = (
-  row: OpinionRow,
-  text: ParsedOpinionText,
-): TextCandidateUnusable | null => {
-  const result = validateAndLog(
-    {
-      parser: "courtlistener",
-      caseNumber: `cl-opinion:${row.id}`,
-      language: "en",
-    },
-    text.validationHtml,
+type CandidateValidation =
+  | { status: "accepted"; sourceDefects: PublishedTextDefect[] }
+  | { status: "refused"; reason: TextCandidateUnusable };
+
+const validateCandidate = (text: ParsedOpinionText): CandidateValidation => {
+  // Measured, not logged: the verdict decides whether this column is used or
+  // the next one tried, a refusal is recorded in the attempts, and the
+  // pipeline reports retention for the document it stores.
+  const result = validateAst(
+    { type: "paragraphs", paragraphs: text.validationParagraphs },
     text.units.flatMap(({ blocks }) => [...blocks]),
+    { sourcePolicy: courtListenerValidationPolicy },
   );
-  if (result.ok) {
-    return null;
+  const sourceDefects = publishedTextDefects(text, result);
+  if (sourceDefects !== null) {
+    return { status: "accepted", sourceDefects };
   }
-  return result.issues.some(({ code }) => code === RESIDUE)
-    ? TEXT_CANDIDATE_UNUSABLE.MARKUP_RESIDUE
-    : TEXT_CANDIDATE_UNUSABLE.CONTENT_LOSS;
+  return {
+    status: "refused",
+    reason: result.issues.some(({ code }) => code === RESIDUE)
+      ? TEXT_CANDIDATE_UNUSABLE.MARKUP_RESIDUE
+      : TEXT_CANDIDATE_UNUSABLE.CONTENT_LOSS,
+  };
 };
 
 /**
@@ -186,25 +208,46 @@ export const selectOpinionText = ({
     );
     switch (parsed.status) {
       case "parsed": {
-        const refused = retentionFailure(row, parsed.text);
-        if (refused === null) {
-          budget.blocks += parsed.text.units.reduce(
-            (sum, { blocks }) => sum + blocks.length,
-            0,
-          );
-          return {
-            status: "parsed",
-            format,
-            structure,
-            text: parsed.text,
-            attempts,
-          };
+        const usability = classifyCourtListenerText(
+          parsed.text.units
+            .flatMap(({ blocks }) => blocks.map(({ plainText }) => plainText))
+            .join("\n\n"),
+        );
+        if (usability !== COURTLISTENER_TEXT_USABILITY.USABLE) {
+          attempts.push({ format, structure, reason: usability });
+          break;
         }
-        attempts.push({ format, structure, reason: refused });
+        const validation = validateCandidate(parsed.text);
+        switch (validation.status) {
+          case "accepted":
+            budget.blocks += parsed.text.units.reduce(
+              (sum, { blocks }) => sum + blocks.length,
+              0,
+            );
+            return {
+              status: "parsed",
+              format,
+              structure,
+              text: parsed.text,
+              sourceDefects: validation.sourceDefects,
+              attempts,
+            };
+          case "refused":
+            attempts.push({ format, structure, reason: validation.reason });
+            break;
+          default:
+            validation satisfies never;
+            return panic("Unhandled candidate validation");
+        }
         break;
       }
       case "unusable":
         attempts.push({ format, structure, reason: parsed.reason });
+        if (
+          parsed.reason === TEXT_CANDIDATE_UNUSABLE.UNCLASSIFIED_PAGE_CHROME
+        ) {
+          return { status: "no-usable-text", attempts };
+        }
         break;
       case "requires-assets":
         return {

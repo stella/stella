@@ -2,7 +2,7 @@ import type { PGlite } from "@electric-sql/pglite";
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
-import Elysia, { t } from "elysia";
+import * as v from "valibot";
 
 import { DECISION_READ_RESOLUTION } from "@stll/api-contract/case-law-decision-resolution";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
@@ -18,6 +18,8 @@ import {
 } from "@/api/db/schema";
 import { readDecisionHandler } from "@/api/handlers/case-law/decisions/get";
 import { createSafePublicSubjectHandler } from "@/api/handlers/case-law/decisions/public-subject";
+import { createHttpApp } from "@/api/http/app";
+import { routes } from "@/api/http/route";
 import { ACCOUNT_ACCESS } from "@/api/lib/api-handlers";
 import type { PublicHandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -32,10 +34,14 @@ import {
 } from "@/api/lib/case-law/decision-absorption";
 import { withRedistributableSubject } from "@/api/lib/case-law/public-subject";
 import type { RedistributableDecisionSubject } from "@/api/lib/case-law/public-subject";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { DECISION_SUPPLEMENT_KIND } from "@/api/lib/legal-search/decision-supplement-kind";
+import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import { metadataMarkedListingOnly } from "@/api/lib/legal-search/partial-observation-sql";
+import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
+import { serveForTest } from "@/api/tests/helpers/test-server";
+import type { TestServer } from "@/api/tests/helpers/test-server";
 import {
   createTestPglite,
   withPublicLawReaderRole,
@@ -98,9 +104,13 @@ beforeAll(
     caseLawDb = readDb as unknown as CaseLawPublicReadDb;
 
     await db.insert(caseLawSources).values([
-      caseLawSourceRow({ adapterKey: "open", id: openSourceId, name: "open" }),
       caseLawSourceRow({
-        adapterKey: "closed",
+        adapterKey: ADAPTER_KEYS.CZ_NS,
+        id: openSourceId,
+        name: "open",
+      }),
+      caseLawSourceRow({
+        adapterKey: ADAPTER_KEYS.CZ_NSS,
         descriptor: {
           allowsDerivedAi: false,
           allowsRedistribution: false,
@@ -155,7 +165,11 @@ beforeAll(
   { timeout: 120_000 },
 );
 
+/** One server for the file, started on the first request once the database is up. */
+let server: TestServer | undefined;
+
 afterAll(async () => {
+  await server?.stop();
   await client.close();
 });
 
@@ -163,10 +177,11 @@ afterAll(async () => {
 const app = () => {
   const byId = createSafePublicSubjectHandler({
     config: {
+      contract: "patch",
       cache: { kind: "none" },
       accountAccess: ACCOUNT_ACCESS.sandbox,
       mcp: { type: "internal", reason: "public_indexing" },
-      params: t.Object({ decisionId: tSafeId("caseLawDecision") }),
+      params: v.object({ decisionId: resourceIdSchema("caseLawDecision") }),
     } satisfies PublicHandlerConfig,
     caseLawDb,
     locate: ({ params: { decisionId } }) => ({ kind: "id", id: decisionId }),
@@ -174,13 +189,14 @@ const app = () => {
   });
   const bySlug = createSafePublicSubjectHandler({
     config: {
+      contract: "patch",
       cache: { kind: "none" },
       accountAccess: ACCOUNT_ACCESS.sandbox,
       mcp: { type: "internal", reason: "public_indexing" },
-      params: t.Object({ slug: t.String() }),
-      query: t.Object({
-        country: t.String(),
-        language: t.Optional(t.String()),
+      params: v.object({ slug: v.string() }),
+      query: v.object({
+        country: v.string(),
+        language: v.optional(v.string()),
       }),
     } satisfies PublicHandlerConfig,
     caseLawDb,
@@ -192,18 +208,20 @@ const app = () => {
     }),
     read: async (subject) => await echoSubject(subject),
   });
-  return new Elysia()
-    .get("/d/:decisionId", byId.handler, { params: byId.config.params })
-    .get("/s/:slug", bySlug.handler, {
-      params: bySlug.config.params,
-      query: bySlug.config.query,
-    });
+  return createHttpApp({
+    routes: routes({
+      "/d/:decisionId": { GET: byId },
+      "/s/:slug": { GET: bySlug },
+    }),
+    middleware: [errorBoundary],
+  });
 };
 
 const get = async (path: string) => {
   opened = [];
   handles = [];
-  return await app().handle(new Request(`http://localhost${path}`));
+  server ??= serveForTest(app());
+  return await server.fetch(new Request(`http://localhost${path}`));
 };
 
 test(
@@ -245,7 +263,7 @@ test(
 );
 
 test(
-  "decision reads describe the AST actually served and null missing or redacted bodies",
+  "public decision reads describe available document content",
   async () => {
     const storedAst = {
       version: 1,
@@ -312,6 +330,7 @@ test(
     const read = async (id: SafeId<"caseLawDecision">) => {
       const result = await withRedistributableSubject(
         caseLawDb,
+        "pages",
         { kind: "id", id },
         async (subject) =>
           await readDecisionHandler({
@@ -330,11 +349,10 @@ test(
     expect(served.projectionDigest).toBe(await projectionDigest(storedAst));
     expect(served.documentAst).not.toEqual(storedAst);
 
-    for (const id of [bodylessId, redactedId]) {
-      const withoutAst = await read(id);
-      expect(withoutAst.documentAstSource).toBeNull();
-      expect(withoutAst.projectionDigest).toBeNull();
-    }
+    const withoutAst = await read(bodylessId);
+    expect(withoutAst.documentAstSource).toBeNull();
+    expect(withoutAst.projectionDigest).toBeNull();
+    expect((await get(`/d/${redactedId}`)).status).toBe(404);
   },
   DB_TEST_TIMEOUT_MS,
 );
@@ -365,6 +383,7 @@ test(
     expect(
       await withRedistributableSubject(
         caseLawDb,
+        "pages",
         { kind: "id", id: closedId },
         async (subject) => subject.id,
       ),
@@ -372,6 +391,7 @@ test(
     expect(
       await withRedistributableSubject(
         caseLawDb,
+        "pages",
         { kind: "id", id: openId },
         async (subject) => subject.id,
       ),
@@ -411,7 +431,7 @@ test(
     const decision = createSafeId<"caseLawDecision">();
     await db.insert(caseLawSources).values([
       caseLawSourceRow({
-        adapterKey: "revoked",
+        adapterKey: ADAPTER_KEYS.CZ_US,
         id: revoked,
         name: "revoked",
       }),
@@ -525,6 +545,7 @@ test(
     // The decision read answers with the judgment itself, and says why.
     const read = await withRedistributableSubject(
       caseLawDb,
+      "pages",
       { kind: "id", id: absorbedId },
       async (subject) =>
         await readDecisionHandler({
@@ -577,6 +598,36 @@ test(
         });
       }
     }
+  },
+  DB_TEST_TIMEOUT_MS,
+);
+
+test(
+  "an erased absorbed supplement is not found",
+  async () => {
+    const db = drizzle({ client });
+    const absorbedId = await insertAbsorbedRow({
+      slug: "absorbed-erased-reasons",
+      sourceDocumentId: "syn-erased-reasons",
+      judgmentId: openId,
+    });
+    const resolve = async (id: SafeId<"caseLawDecision">) =>
+      await withRedistributableSubject(
+        caseLawDb,
+        "pages",
+        { kind: "id", id },
+        async (subject) => subject.id,
+      );
+
+    expect(await resolve(absorbedId)).toBe(openId);
+
+    await db
+      .update(caseLawDecisions)
+      .set({ redactedAt: new Date("2026-10-11T12:00:00.000Z") })
+      .where(eq(caseLawDecisions.id, absorbedId));
+
+    expect(await resolve(absorbedId)).toBe(await resolve(missingId));
+    expect(await resolve(absorbedId)).toBeNull();
   },
   DB_TEST_TIMEOUT_MS,
 );

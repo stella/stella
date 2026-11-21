@@ -13,13 +13,14 @@ import {
   CHAT_SEND_MODE,
   CHAT_TRANSPORT_ERROR_CODE,
 } from "@stll/anonymize-chat";
+import { memberWaitsOf } from "@stll/api-contract/chat-member-wait";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { chatMessages, chatThreads, chatTurns } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
 import {
-  getAwaitingUserInteractions,
   toPersistableChatMessage,
+  toPersistedChatMessageContentV3,
 } from "@/api/handlers/chat/chat-message-parts";
 import {
   claimChatTurnForExecution,
@@ -32,6 +33,7 @@ import { ChatSendLifecycle } from "@/api/handlers/chat/send-message";
 import { createLazyExternalMcpToolsLoader } from "@/api/handlers/chat/tools/external-mcp-tools";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { withChatRunPings } from "@/api/lib/chat/chat-run-pings";
 import { DatabaseError } from "@/api/lib/errors/tagged-errors";
 import {
   resetMetricLineSinkForTesting,
@@ -40,11 +42,12 @@ import {
 import { ActionAdmissionError } from "@/api/lib/rate-limit/action-admission";
 import { isRecord } from "@/api/lib/type-guards";
 import {
-  createApprovalHarness,
   APPROVAL_TOOL_NAME,
   approvalToolArguments,
+  createApprovalHarness,
   HARNESS_CHAT_MODEL_ID,
 } from "@/api/tests/helpers/chat-approval-harness";
+import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 import {
@@ -336,7 +339,7 @@ describe("a turn's settlement count", () => {
         type: "approval",
         toolCallId: "approval-race",
       } as const;
-      expect(getAwaitingUserInteractions(checkpoint)).toEqual([interaction]);
+      expect(memberWaitsOf(checkpoint)).toEqual([interaction]);
       expect(await turnStatusesOf(threadId)).toEqual([
         { failureCode: null, status: "awaiting-user" },
       ]);
@@ -373,10 +376,12 @@ describe("a turn's settlement count", () => {
         return await safeDb(work, retry);
       };
       lifecycle = new ChatSendLifecycle({
+        organizationId: ids.orgA,
         scopedDb,
         startAdmission: async () =>
           Result.ok({
             signal: admission.signal,
+            modelAdmission: testModelAdmission(ids.orgA),
             reservePeriod: async () => Result.ok(undefined),
             release: async () => undefined,
           }),
@@ -406,7 +411,7 @@ describe("a turn's settlement count", () => {
       admission.abort(
         new ActionAdmissionError({
           message: "Admission lease lost",
-          reason: "unavailable",
+          reason: "lease_lost",
         }),
       );
       firstWriteMayFail.resolve(undefined);
@@ -445,9 +450,9 @@ describe("a turn's settlement count", () => {
         interactionType: interaction.type,
         interactionToolCallId: interaction.toolCallId,
       });
-      expect(
-        getAwaitingUserInteractions(await harness.lastAssistant(threadId)),
-      ).toEqual([interaction]);
+      expect(memberWaitsOf(await harness.lastAssistant(threadId))).toEqual([
+        interaction,
+      ]);
       expect(harness.executions).toEqual([]);
       expect(settlementsOf(lines)).toEqual([]);
     } finally {
@@ -467,8 +472,12 @@ describe("a turn's settlement count", () => {
         proposed.push(outcome.type);
         const turnId = await runningTurnOf(threadId);
         unwrap(
-          await safeDb(
-            async (tx) => await stopChatTurnOnTx({ threadId, tx, turnId }),
+          await withChatRunPings(
+            async (pings) =>
+              await safeDb(
+                async (tx) =>
+                  await stopChatTurnOnTx({ pings, threadId, tx, turnId }),
+              ),
           ),
         );
       },
@@ -524,8 +533,12 @@ describe("a turn's settlement count", () => {
           })
           .where(eq(chatTurns.threadId, threadId));
         unwrap(
-          await safeDb(
-            async (tx) => await reapOwnerlessChatTurnOnTx({ threadId, tx }),
+          await withChatRunPings(
+            async (pings) =>
+              await safeDb(
+                async (tx) =>
+                  await reapOwnerlessChatTurnOnTx({ pings, threadId, tx }),
+              ),
           ),
         );
       },
@@ -577,6 +590,7 @@ describe("a turn's settlement count", () => {
         workspaceId: ids.wsA1,
       });
       const acceptance = createChatTurnAcceptance({
+        source: { type: "member" },
         organizationId: ids.orgA,
         threadId,
         userId: ids.userA1,
@@ -584,17 +598,22 @@ describe("a turn's settlement count", () => {
         workspaceId: ids.wsA1,
       });
       unwrap(
-        await safeDb(async (tx) => {
-          await tx.insert(chatMessages).values({
-            content: { data: [{ text: "Draft it", type: "text" }], version: 1 },
-            id: userMessageId,
-            role: "user",
-            threadId,
-            userId: ids.userA1,
-            workspaceId: ids.wsA1,
-          });
-          await insertChatTurnAcceptanceOnTx({ acceptance, tx });
-        }),
+        await withChatRunPings(
+          async (pings) =>
+            await safeDb(async (tx) => {
+              await tx.insert(chatMessages).values({
+                content: toPersistedChatMessageContentV3({
+                  data: [{ content: "Draft it", type: "text" }],
+                }),
+                id: userMessageId,
+                role: "user",
+                threadId,
+                userId: ids.userA1,
+                workspaceId: ids.wsA1,
+              });
+              await insertChatTurnAcceptanceOnTx({ pings, acceptance, tx });
+            }),
+        ),
       );
       const execution =
         unwrap(
@@ -620,6 +639,7 @@ describe("a turn's settlement count", () => {
           return await work(tx);
         }, retry);
       const lifecycle = new ChatSendLifecycle({
+        organizationId: ids.orgA,
         scopedDb,
         externalMcpToolsLoader: createLazyExternalMcpToolsLoader(
           async () => await Promise.reject(new Error("No connectors expected")),

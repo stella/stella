@@ -4,14 +4,16 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import type { SafeDb } from "@/api/db/safe-db";
 import { mcpUserConnections } from "@/api/db/schema";
 import type { CachedMcpToolDefinition } from "@/api/db/schema";
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { toSafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { LoadedMcpConnection } from "@/api/lib/mcp-upstream/connections";
+import type { discoverOAuthMetadataForApproval } from "@/api/lib/mcp-upstream/oauth";
 import {
   bindDiscoveredMetadata,
   discoverOAuthMetadata,
-  MCP_OAUTH_INVALID_GRANT_CODE,
   MCP_OAUTH_DISCOVERY_TIMEOUT_CODE,
+  MCP_OAUTH_INVALID_GRANT_CODE,
 } from "@/api/lib/mcp-upstream/oauth";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
@@ -35,10 +37,12 @@ type CapturedTransport = {
   url: string;
 };
 
+const fixtureNow = 1_700_000_000_000;
+
 // Mutable controls the mocked collaborators close over. Reset per test.
 const state = {
   closes: 0,
-  now: new Date(),
+  now: new Date(fixtureNow),
   dbSets: [] as Record<string, unknown>[],
   reviews: [] as Record<string, unknown>[],
   decryptCalls: 0,
@@ -58,7 +62,9 @@ const state = {
 
 const connectionDependenciesTestDouble = {
   now: () => state.now,
-  discoverOAuthMetadataForApproval: async (connectorUrl: string) =>
+  discoverOAuthMetadataForApproval: async ({
+    rawMcpUrl: connectorUrl,
+  }: Parameters<typeof discoverOAuthMetadataForApproval>[0]) =>
     Result.ok({
       protectedResource: {
         resource: connectorUrl,
@@ -71,7 +77,9 @@ const connectionDependenciesTestDouble = {
       },
     }),
   wait: async () => {},
-  discoverOAuthMetadata: async (connectorUrl: string) =>
+  discoverOAuthMetadata: async ({
+    rawMcpUrl: connectorUrl,
+  }: Parameters<typeof discoverOAuthMetadata>[0]) =>
     bindDiscoveredMetadata({
       connectorUrl,
       protectedResource: {
@@ -100,7 +108,7 @@ const connectionDependenciesTestDouble = {
     state.refreshCalls += 1;
     return state.refresh();
   },
-  tokenExpiresAt: () => new Date(Date.now() + 3_600_000),
+  tokenExpiresAt: () => new Date(state.now.getTime() + 3_600_000),
   decryptMcpSecret: async ({ purpose }: { purpose: string }) => {
     state.decryptCalls += 1;
     return `decrypted-${purpose}`;
@@ -135,25 +143,31 @@ const outboundFetch = asTestRaw<
 });
 
 const createMcpClientForConnection = async (
-  options: Parameters<typeof createMcpClientForConnectionImpl>[0],
+  options: Omit<
+    Parameters<typeof createMcpClientForConnectionImpl>[0],
+    "permit"
+  >,
 ) =>
   await createMcpClientForConnectionImpl({
     ...options,
+    permit: outboundPermit,
     dependencies: connectionDependencies,
     outboundFetch,
   });
 
 const proxyMcpToolCall = async (
-  options: Parameters<typeof proxyMcpToolCallImpl>[0],
+  options: Omit<Parameters<typeof proxyMcpToolCallImpl>[0], "permit">,
 ) =>
   await proxyMcpToolCallImpl({
     ...options,
+    permit: outboundPermit,
     dependencies: connectionDependencies,
     outboundFetch,
   });
 
 const organizationId = toSafeId<"organization">("org_1");
 const userId = toSafeId<"user">("user_1");
+const outboundPermit = grantThirdPartyOutboundPermit();
 
 const cachedTool = {
   exposedName: "mcp__registry__lookup",
@@ -228,6 +242,7 @@ const makeSafeDb = () => {
         {
           ...row,
           authType: row.type,
+          responseDisposition: "normal",
           oauthConnectorIssuer: "https://auth.example.com",
           oauthConnectorConfirmedEndpointOrigins: null,
           oauthReviewApprovedIssuer: null,
@@ -265,6 +280,7 @@ const makeSafeDb = () => {
 const oauthRow = (
   overrides: Partial<Extract<LoadedMcpConnection, { type: "oauth2" }>> = {},
 ): LoadedMcpConnection => ({
+  responseDisposition: "normal",
   accessTokenEncrypted: Buffer.from("access"),
   accessTokenIv: Buffer.from("iv"),
   allowedTools: null,
@@ -272,7 +288,7 @@ const oauthRow = (
   description: "Registry connector",
   displayName: "Registry",
   // Expired by default so the refresh path is exercised.
-  expiresAt: new Date(Date.now() - 60_000),
+  expiresAt: new Date(state.now.getTime() - 60_000),
   oauthAuthorizationServerUrl: "https://auth.example.com",
   oauthIssuerBinding: {
     type: "approved",
@@ -302,7 +318,7 @@ let analytics: RecordingAnalytics;
 
 beforeEach(() => {
   analytics = installRecordingAnalytics();
-  state.now = new Date();
+  state.now = new Date(fixtureNow);
   state.closes = 0;
   state.dbSets = [];
   state.reviews = [];
@@ -370,6 +386,7 @@ test("uses credentials for configured resource paths", async () => {
 test("uses a consistent connection snapshot while preparing credentials", async () => {
   const row = oauthRow({ expiresAt: null });
   const client = await createMcpClientForConnectionImpl({
+    permit: outboundPermit,
     organizationId,
     userId,
     safeDb: makeSafeDb(),
@@ -396,7 +413,7 @@ describe("MCP upstream connection lifecycle", () => {
   test("valid, unexpired OAuth token is used directly without a refresh", async () => {
     const client = await createMcpClientForConnection({
       organizationId,
-      row: oauthRow({ expiresAt: new Date(Date.now() + 3_600_000) }),
+      row: oauthRow({ expiresAt: new Date(state.now.getTime() + 3_600_000) }),
       safeDb: makeSafeDb(),
       userId,
     });
@@ -547,8 +564,9 @@ describe("MCP upstream connection lifecycle", () => {
       cachedTool,
       dependencies: connectionDependencies,
       organizationId,
+      permit: outboundPermit,
       outboundFetch: recordingOutboundFetch,
-      row: oauthRow({ expiresAt: new Date(Date.now() + 3_600_000) }),
+      row: oauthRow({ expiresAt: new Date(state.now.getTime() + 3_600_000) }),
       safeDb: makeSafeDb(),
       userId,
     });
@@ -608,10 +626,11 @@ describe("MCP upstream connection lifecycle", () => {
     });
 
     const client = await createMcpClientForConnectionImpl({
+      permit: outboundPermit,
       dependencies: initializingDependencies,
       organizationId,
       outboundFetch: recordingOutboundFetch,
-      row: oauthRow({ expiresAt: new Date(Date.now() + 3_600_000) }),
+      row: oauthRow({ expiresAt: new Date(state.now.getTime() + 3_600_000) }),
       safeDb: makeSafeDb(),
       userId,
     });
@@ -743,6 +762,7 @@ describe("MCP upstream connection lifecycle", () => {
   test("records no review when discovery for an unconfigured issuer fails", async () => {
     const client = await createMcpClientForConnectionImpl({
       organizationId,
+      permit: outboundPermit,
       row: oauthRow({ oauthIssuerBinding: { type: "unconfigured" } }),
       safeDb: makeSafeDb(),
       userId,
@@ -753,6 +773,7 @@ describe("MCP upstream connection lifecycle", () => {
           Result.err(
             new HandlerError({
               status: 502,
+              code: "internal_error",
               message: "MCP OAuth metadata discovery did not complete",
             }),
           ),
@@ -767,6 +788,7 @@ describe("MCP upstream connection lifecycle", () => {
   test("records authorization discovery that requires confirmation", async () => {
     const client = await createMcpClientForConnectionImpl({
       organizationId,
+      permit: outboundPermit,
       row: oauthRow(),
       safeDb: makeSafeDb(),
       userId,
@@ -801,6 +823,7 @@ describe("MCP upstream connection lifecycle", () => {
     expect(
       await createMcpClientForConnectionImpl({
         organizationId,
+        permit: outboundPermit,
         row: oauthRow({
           oauthIssuerBinding: {
             type: "approved",
@@ -813,10 +836,16 @@ describe("MCP upstream connection lifecycle", () => {
         outboundFetch,
         dependencies: {
           ...connectionDependencies,
-          discoverOAuthMetadata: async (url, _dependencies, origins) => {
+          discoverOAuthMetadata: async ({
+            rawMcpUrl: url,
+            confirmedEndpointOrigins: origins,
+          }) => {
             observedOrigins = origins;
             return await connectionDependenciesTestDouble.discoverOAuthMetadata(
-              url,
+              {
+                rawMcpUrl: url,
+                permit: outboundPermit,
+              },
             );
           },
         },
@@ -869,6 +898,7 @@ describe("MCP upstream connection lifecycle", () => {
     let waitedMilliseconds = 0;
     const client = await createMcpClientForConnectionImpl({
       organizationId,
+      permit: outboundPermit,
       row,
       safeDb,
       userId,
@@ -885,11 +915,65 @@ describe("MCP upstream connection lifecycle", () => {
     expect(state.refreshCalls).toBe(0);
   });
 
+  test("uses the token another attempt refreshed while this one waited", async () => {
+    const safeDb = makeSafeDb();
+    const row = oauthRow();
+    const { claimMcpRefreshLease } =
+      await import("@/api/lib/mcp-upstream/connections");
+    Result.unwrap(
+      await claimMcpRefreshLease({
+        safeDb,
+        organizationId,
+        userId,
+        connectionId: row.userConnectionId,
+        now: state.now,
+      }),
+    );
+    const client = await createMcpClientForConnectionImpl({
+      organizationId,
+      permit: outboundPermit,
+      row,
+      safeDb,
+      userId,
+      outboundFetch,
+      dependencies: {
+        ...connectionDependencies,
+        // Returns the stored ciphertext so the assertion sees which token was read.
+        decryptMcpSecret: asTestRaw<
+          (typeof connectionDependencies)["decryptMcpSecret"]
+        >(async ({ ciphertext }: { ciphertext: Buffer }) =>
+          ciphertext.toString(),
+        ),
+        // The lease holder stores a fresh token during the first wait.
+        wait: async () => {
+          Result.unwrap(
+            await safeDb(async (tx) => {
+              await tx
+                .update(mcpUserConnections)
+                .set({
+                  accessTokenEncrypted: Buffer.from("rotated-token"),
+                  expiresAt: new Date(state.now.getTime() + 3_600_000),
+                  refreshLeaseExpiresAt: null,
+                })
+                .where(undefined);
+            }),
+          );
+        },
+      },
+    });
+    expect(client).not.toBeNull();
+    expect(state.refreshCalls).toBe(0);
+    expect(
+      state.transports.map((transport) => transport.headers?.["Authorization"]),
+    ).toEqual(["Bearer rotated-token"]);
+  });
+
   test("defers retryable refresh outcomes", async () => {
     state.refresh = () =>
       Result.err(
         new HandlerError({
           status: 502,
+          code: "internal_error",
           message: "Token endpoint unavailable",
         }),
       );
@@ -918,19 +1002,26 @@ describe("MCP upstream connection lifecycle", () => {
     const row = oauthRow();
     const dependencies = {
       ...connectionDependencies,
-      discoverOAuthMetadata: async (connectorUrl: string) => {
+      discoverOAuthMetadata: async ({
+        rawMcpUrl: connectorUrl,
+      }: Parameters<typeof discoverOAuthMetadata>[0]) => {
         if (!stalled) {
-          return await connectionDependenciesTestDouble.discoverOAuthMetadata(
-            connectorUrl,
-          );
+          return await connectionDependenciesTestDouble.discoverOAuthMetadata({
+            rawMcpUrl: connectorUrl,
+            permit: outboundPermit,
+          });
         }
-        const result = await discoverOAuthMetadata(connectorUrl, {
-          timeoutMs: 5,
-          validateOutboundFetchTarget: async (rawUrl: string | URL) =>
-            Result.ok({ url: new URL(rawUrl), addresses: [] }),
-          safeOutboundFetchBytes: async () => {
-            metadataFetches += 1;
-            return await new Promise<never>(() => {});
+        const result = await discoverOAuthMetadata({
+          rawMcpUrl: connectorUrl,
+          permit: outboundPermit,
+          dependencies: {
+            timeoutMs: 5, // timeout under test
+            validateOutboundFetchTarget: async (rawUrl: string | URL) =>
+              Result.ok({ url: new URL(rawUrl), addresses: [] }),
+            safeOutboundFetchBytes: async () => {
+              metadataFetches += 1;
+              return await new Promise<never>(() => {});
+            },
           },
         });
         if (Result.isError(result)) {
@@ -942,6 +1033,7 @@ describe("MCP upstream connection lifecycle", () => {
     const create = async () =>
       await createMcpClientForConnectionImpl({
         organizationId,
+        permit: outboundPermit,
         row,
         safeDb,
         userId,
@@ -964,6 +1056,7 @@ describe("MCP upstream connection lifecycle", () => {
 
   test("bearer connections send the decrypted static token, no OAuth path", async () => {
     const bearerRow: LoadedMcpConnection = {
+      responseDisposition: "normal",
       allowedTools: null,
       connectorId: toSafeId<"mcpConnector">("connector_1"),
       description: "Static-token connector",
@@ -991,6 +1084,7 @@ describe("MCP upstream connection lifecycle", () => {
 
 describe("loading a user's active MCP connections", () => {
   const storedRow = (overrides: Record<string, unknown>) => ({
+    responseDisposition: "normal",
     accessTokenEncrypted: Buffer.from("access"),
     accessTokenIv: Buffer.from("iv"),
     allowedTools: null,
@@ -1076,6 +1170,30 @@ describe("loading a user's active MCP connections", () => {
     ]);
     expect(listing.updates()).toBe(1);
     expect(hasStatusSet("needs_reauth")).toBe(true);
+  });
+
+  test("omits receipt-only connections from ordinary discovery", async () => {
+    const listing = makeListingSafeDb([
+      storedRow({ userConnectionId: "conn_1" }),
+      storedRow({
+        responseDisposition: "receipt-only",
+        userConnectionId: "conn_2",
+        description: "Private connector",
+        slug: "private",
+      }),
+    ]);
+    const loaded = await loadActiveMcpConnectionsForUser({
+      organizationId,
+      safeDb: listing.safeDb,
+      userId,
+    });
+    expect(loaded.map(({ userConnectionId }) => userConnectionId)).toEqual([
+      toSafeId<"mcpUserConnection">("conn_1"),
+    ]);
+    expect(loaded.map(({ description }) => description)).toEqual([
+      "Registry connector",
+    ]);
+    expect(listing.updates()).toBe(0);
   });
 
   test("writes nothing when every row is usable", async () => {

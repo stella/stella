@@ -20,6 +20,10 @@ type ReviewOutOfDateNoticeProps = {
   reasons: readonly ReviewOutOfDateReason[];
   actionLabel?: ReactNode;
   onAction?: (() => void) | undefined;
+  /** The action is running: its button shows it and takes no second press. */
+  actionPending?: boolean;
+  /** Why the action is not available now, shown on hover over it. */
+  actionDisabledReason?: string | undefined;
   tone?: ReviewOutOfDateTone;
   className?: string;
 };
@@ -33,6 +37,8 @@ export const ReviewOutOfDateNotice = ({
   reasons,
   actionLabel,
   onAction,
+  actionPending = false,
+  actionDisabledReason,
   tone = "warning",
   className,
 }: ReviewOutOfDateNoticeProps) => {
@@ -55,7 +61,15 @@ export const ReviewOutOfDateNotice = ({
         ))}
       </ul>
       {onAction === undefined ? null : (
-        <Button className="mt-2" onClick={onAction} size="xs" variant="outline">
+        <Button
+          className="mt-2"
+          disabled={actionDisabledReason !== undefined}
+          disabledReason={actionDisabledReason}
+          loading={actionPending}
+          onClick={onAction}
+          size="xs"
+          variant="outline"
+        >
           {actionLabel}
         </Button>
       )}

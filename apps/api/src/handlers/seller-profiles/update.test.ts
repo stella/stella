@@ -3,10 +3,12 @@ import { describe, expect, test } from "bun:test";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import { withTimeBillingEnrolment } from "@/api/tests/helpers/time-billing-enrolment";
 
 import updateSellerProfile from "./update";
 
@@ -31,24 +33,26 @@ describe("seller profile updates", () => {
     const recordAuditEvent: AuditRecorder = async () => {
       auditCalled = true;
     };
-    const context = asTestRaw<UpdateContext>({
-      params: { sellerProfileId: toSafeId<"sellerProfile">("profile_other") },
-      body: { legalName: "Updated Name" },
-      request: new Request(
-        "https://example.test/v1/seller-profiles/profile_other",
-        {
-          method: "PATCH",
+    const context = withTimeBillingEnrolment(
+      asTestRaw<UpdateContext>({
+        params: { sellerProfileId: toSafeId<"sellerProfile">("profile_other") },
+        body: { legalName: "Updated Name" },
+        request: new Request(
+          "https://example.test/v1/seller-profiles/profile_other",
+          {
+            method: "PATCH",
+          },
+        ),
+        route: "/v1/seller-profiles/:sellerProfileId" satisfies ApiRoutePath,
+        safeDb,
+        session: {
+          activeOrganizationId: toSafeId<"organization">("org_test"),
         },
-      ),
-      route: "/v1/seller-profiles/:sellerProfileId",
-      safeDb,
-      session: {
-        activeOrganizationId: toSafeId<"organization">("org_test"),
-      },
-      memberRole: sessionMemberRole("owner"),
-      user: { id: toSafeId<"user">("user_test") },
-      recordAuditEvent,
-    });
+        memberRole: sessionMemberRole("owner"),
+        user: { id: toSafeId<"user">("user_test") },
+        recordAuditEvent,
+      }),
+    );
 
     const result = await updateSellerProfile.handler(context);
 
@@ -88,26 +92,28 @@ describe("seller profile updates", () => {
       expect(auditTx).toBe(tx);
       auditEvent = event;
     };
-    const context = asTestRaw<UpdateContext>({
-      params: { sellerProfileId: profileId },
-      body: {
-        iban: "GB82 WEST 1234 5698 7654 32",
-        accountNumber: "sensitive-account-number",
-        footerNotes: null,
-      },
-      request: new Request(
-        `https://example.test/v1/seller-profiles/${profileId}`,
-        { method: "PATCH" },
-      ),
-      route: "/v1/seller-profiles/:sellerProfileId",
-      safeDb,
-      session: {
-        activeOrganizationId: toSafeId<"organization">("org_test"),
-      },
-      memberRole: sessionMemberRole("owner"),
-      user: { id: toSafeId<"user">("user_test") },
-      recordAuditEvent,
-    });
+    const context = withTimeBillingEnrolment(
+      asTestRaw<UpdateContext>({
+        params: { sellerProfileId: profileId },
+        body: {
+          iban: "GB82 WEST 1234 5698 7654 32",
+          accountNumber: "sensitive-account-number",
+          footerNotes: null,
+        },
+        request: new Request(
+          `https://example.test/v1/seller-profiles/${profileId}`,
+          { method: "PATCH" },
+        ),
+        route: "/v1/seller-profiles/:sellerProfileId" satisfies ApiRoutePath,
+        safeDb,
+        session: {
+          activeOrganizationId: toSafeId<"organization">("org_test"),
+        },
+        memberRole: sessionMemberRole("owner"),
+        user: { id: toSafeId<"user">("user_test") },
+        recordAuditEvent,
+      }),
+    );
 
     const result = await updateSellerProfile.handler(context);
 

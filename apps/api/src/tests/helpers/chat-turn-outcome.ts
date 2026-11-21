@@ -2,11 +2,9 @@ import { EventType } from "@tanstack/ai";
 import type { StreamChunk } from "@tanstack/ai";
 import { panic } from "better-result";
 
-import type {
-  ChatTurnFailureCode,
-  ChatTurnStatus,
-} from "@/api/handlers/chat/chat-turn-state";
+import type { ChatTurnFailureCode } from "@/api/handlers/chat/chat-turn-state";
 import type { ChatPart, ChatTurnOutcome } from "@/api/handlers/chat/types";
+import type { ChatTurnStatus } from "@/api/lib/chat/turn-status";
 import { CHAT_ORACLE, violationsOf } from "@/api/tests/helpers/chat-oracles";
 import type { OracleViolation } from "@/api/tests/helpers/chat-oracles";
 
@@ -24,6 +22,7 @@ import type { OracleViolation } from "@/api/tests/helpers/chat-oracles";
  * disclosure and is not an answer, and a tool result belongs to its call.
  */
 const PART_VISIBILITY = {
+  activity: "none",
   audio: "content",
   document: "content",
   image: "content",
@@ -105,6 +104,7 @@ export const TURN_STATUS_CLAIM = {
   accepted: "unsettled",
   running: "unsettled",
   "awaiting-user": "none",
+  "handed-over": "unsettled",
   completed: "answered",
   failed: "failed",
   cancelled: "none",
@@ -125,10 +125,7 @@ export type SettledTurnRow = {
 
 /** How the page's read of the response ended (`RecordedExchange["ended"]`). */
 type ResponseEnding =
-  | "complete"
-  | "connection-lost"
-  | "disconnected"
-  | "stopped";
+  "complete" | "connection-lost" | "disconnected" | "stopped";
 
 /**
  * Whether a chunk ends its run for good: a run error, or a finish that is

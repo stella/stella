@@ -1,4 +1,9 @@
 import { isPublicKnowledgeEnabled } from "@/lib/knowledge/public-knowledge-launch";
+import { toolsCataloguePathOf } from "@/lib/knowledge/public-tools-catalogue-path";
+import type {
+  PublicToolsBasePath,
+  PublicToolsCataloguePath,
+} from "@/lib/knowledge/public-tools-catalogue-path";
 import { isPublicToolsRouteEnabled } from "@/lib/public-tools-launch";
 
 // Every address of the published tools comes from here. They live under
@@ -8,12 +13,19 @@ import { isPublicToolsRouteEnabled } from "@/lib/public-tools-launch";
 
 type ToolsPathOptions = { publicKnowledge?: boolean };
 
-export type PublicToolsBasePath = "/knowledge/tools" | "/tools";
+export type { PublicToolsBasePath, PublicToolsCataloguePath };
 
 export const publicToolsBasePath = ({
   publicKnowledge = isPublicKnowledgeEnabled(),
 }: ToolsPathOptions = {}): PublicToolsBasePath =>
   publicKnowledge ? "/knowledge/tools" : "/tools";
+
+/** The published tools' list: `/knowledge/tools` itself is an
+ *  organization's own page. */
+export const publicToolsCataloguePath = (
+  options?: ToolsPathOptions,
+): PublicToolsCataloguePath =>
+  toolsCataloguePathOf(publicToolsBasePath(options));
 
 export const publicToolPath = (
   slug: string,
@@ -30,6 +42,18 @@ export const publicToolDownloadPath = (
   slug: string,
   options?: ToolsPathOptions,
 ): `/${string}` => `${publicToolPath(slug, options)}/download`;
+
+export const isPublicToolDownloadPath = (pathname: string): boolean => {
+  const normalized = pathname.replace(/\/$/u, "");
+  const slug = normalized.split("/").at(-2);
+  if (!slug) {
+    return false;
+  }
+  return (
+    normalized === publicToolDownloadPath(slug, { publicKnowledge: false }) ||
+    normalized === publicToolDownloadPath(slug, { publicKnowledge: true })
+  );
+};
 
 export const publicToolsContributePath = (
   options?: ToolsPathOptions,

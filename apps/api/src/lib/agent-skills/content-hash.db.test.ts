@@ -3,13 +3,14 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { and, eq, inArray } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
-import type { SafeDb } from "@/api/db/safe-db";
+import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import {
   agentSkillProposals,
   agentSkillResources,
   agentSkills,
 } from "@/api/db/schema";
-import { createSafeDb } from "@/api/db/scoped";
+import { createSafeDb, createScopedDb } from "@/api/db/scoped";
+import { createSkillPackageTools } from "@/api/handlers/chat/tools/skill-package-tools";
 import createSkill from "@/api/handlers/skills/create";
 import createSkillFromBlueprint from "@/api/handlers/skills/from-blueprint/create";
 import reviewSkillProposal from "@/api/handlers/skills/proposals/review";
@@ -19,12 +20,18 @@ import renameSkillResource from "@/api/handlers/skills/resources/rename";
 import updateSkillResource from "@/api/handlers/skills/resources/update";
 import uploadSkillResource from "@/api/handlers/skills/resources/upload";
 import updateSkill from "@/api/handlers/skills/update";
+import {
+  NO_SKILL_BINDING_SCOPE,
+  UNBOUND,
+} from "@/api/lib/agent-skills/binding";
 import { seedDefaultSkills } from "@/api/lib/agent-skills/default-skills";
+import { noModelOfferedSkills } from "@/api/lib/agent-skills/invocation";
 import { createSkillTools } from "@/api/lib/agent-skills/skill-tools";
+import type { safeOutboundFetchBytes } from "@/api/lib/auth/authorized-outbound-fetch";
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
-import type { safeOutboundFetchBytes } from "@/api/lib/safe-outbound-fetch";
 import { installSkill } from "@/api/lib/skills/install";
 import {
   createSkillPackageFetchContext,
@@ -153,7 +160,9 @@ const seedSkillWithResource = async () => {
 
 const skillEditTools = (skillId: SafeId<"agentSkill">) =>
   createSkillTools({
+    bindingScope: NO_SKILL_BINDING_SCOPE,
     activeSkillContext: {
+      binding: UNBOUND,
       body: "Follow the fixture instructions.",
       description: "Agent skill test fixture",
       displayName: "Fixture",
@@ -163,7 +172,7 @@ const skillEditTools = (skillId: SafeId<"agentSkill">) =>
       id: skillId,
       origin: "authored",
       requiredTools: [],
-      resources: [{ kind: "reference", path: "references/checklist.md" }],
+      resources: [{ path: "references/checklist.md" }],
       source: "installed",
       toolName: "fixture",
       version: null,
@@ -171,7 +180,7 @@ const skillEditTools = (skillId: SafeId<"agentSkill">) =>
     organizationId: ids.orgA,
     recordAuditEvent: async () => undefined,
     safeDb: asTestRaw<SafeDb>(createSafeDb(testDb, [], ids.orgA, ids.userA1)),
-    skills: [],
+    skills: noModelOfferedSkills(),
     userId: ids.userA1,
   });
 
@@ -192,6 +201,27 @@ const runSkillEditTool = async ({
     panic(`Expected an executable ${toolName} tool`);
   }
   await tool.execute(input);
+};
+
+const savePackage = async (input: Record<string, unknown>) => {
+  const tools = createSkillPackageTools({
+    offer: { type: "every" },
+    memberRole: sessionMemberRole("member"),
+    organizationId: ids.orgA,
+    recordAuditEvent: async () => undefined,
+    safeDb: asTestRaw<SafeDb>(createSafeDb(testDb, [], ids.orgA, ids.userA1)),
+    scopedDb: asTestRaw<ScopedDb>(
+      createScopedDb(testDb, [], ids.orgA, ids.userA1),
+    ),
+    userId: ids.userA1,
+  });
+  const tool = asTestExecutable<Record<string, unknown>, { skillId?: unknown }>(
+    tools.save_skill_package,
+  );
+  const output = await tool?.execute?.(input);
+  return typeof output?.skillId === "string"
+    ? toSafeId<"agentSkill">(output.skillId)
+    : panic(`Expected a saved skill in ${JSON.stringify(output)}`);
 };
 
 // Every path that writes a skill's hashed content. Each case returns the skill
@@ -333,7 +363,7 @@ const MUTATION_PATHS = {
       await uploadSkillResource.handler(
         context(uploadSkillResource.handler, {
           body: {
-            path: "knowledge/uploaded.md",
+            path: "references/uploaded.md",
             file: new File(["Uploaded knowledge."], "uploaded.md", {
               type: "text/markdown",
             }),
@@ -370,9 +400,26 @@ const MUTATION_PATHS = {
     await runSkillEditTool({
       skillId,
       toolName: "create-current-skill-resource",
-      input: { path: "knowledge/from-chat.md", content: "Created from chat." },
+      input: { path: "references/from-chat.md", content: "Created from chat." },
     });
     return skillId;
+  },
+  "chat save_skill_package create": async () =>
+    await savePackage({
+      skillMd: `---\nname: hashed-package-${Bun.randomUUIDv7()}\ndescription: Hashed.\n---\nBody.`,
+      resources: [{ path: "references/a.md", content: "A." }],
+    }),
+  "chat save_skill_package update": async () => {
+    const skillId = await seedSkillWithResource();
+    return await savePackage({
+      skillId,
+      skillMd:
+        "---\nname: hashed-update\ndescription: Updated.\n---\nNew body.",
+      resources: [
+        { path: "references/checklist.md", content: "Replaced." },
+        { path: "references/added.md", content: "Added." },
+      ],
+    });
   },
 } as const satisfies Record<string, () => Promise<SafeId<"agentSkill">>>;
 
@@ -396,10 +443,11 @@ describe("skill content hash", () => {
       });
     const fetched = await fetchSkillPackageFromUrl(
       `https://skills.example/${name}/SKILL.md`,
-      createSkillPackageFetchContext(
-        { deadlineAt: Date.now() + 30_000, maxRequests: 4 },
-        serve,
-      ),
+      createSkillPackageFetchContext({
+        fetchBytes: serve,
+        limits: { deadlineAt: Date.now() + 30_000, maxRequests: 4 },
+        permit: grantThirdPartyOutboundPermit(),
+      }),
     );
     if (Result.isError(fetched)) {
       throw fetched.error;

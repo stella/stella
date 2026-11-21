@@ -2,8 +2,8 @@ import { describe, expect, test } from "bun:test";
 
 import {
   rebaseSkillMetadataDraft,
-  skillMetadataDraft,
   type SkillMetadataDraft,
+  skillMetadataDraft,
 } from "@/routes/knowledge/-components/skill-metadata-draft.logic";
 
 const SKILL_ID = "0199a1b2-0000-7000-8000-000000000001";
@@ -13,6 +13,7 @@ const previous = {
   description: "Reviews an agreement against the checklist.",
   enabled: false,
   id: SKILL_ID,
+  invocation: "auto" as const,
   name: "check-against-rules",
 };
 
@@ -23,19 +24,23 @@ const next = {
   description: "Checks clauses against the house rules.",
   enabled: true,
   id: SKILL_ID,
+  invocation: "manual" as const,
   name: "Clause review",
 };
 
-// Unsaved edits. Each text differs from both snapshots; a boolean edit can
+// Unsaved edits. Each text differs from both snapshots; a two-valued edit can
 // only match one of them.
 const edits: SkillMetadataDraft = {
   command: "my-review",
   description: "Typed but not yet saved.",
   enabled: true,
+  invocation: "manual",
   name: "Typed name",
 };
 
-const FIELDS = ["command", "description", "enabled", "name"] as const;
+const FIELDS = Object.keys(edits).filter(
+  (field): field is keyof SkillMetadataDraft => Object.hasOwn(edits, field),
+);
 
 // Every combination of edited fields.
 const editedFieldSets: (typeof FIELDS)[number][][] = [[]];
@@ -91,5 +96,29 @@ describe("rebasing the skill editor draft onto a new snapshot", () => {
       previous,
     });
     expect(rebased).toEqual(skillMetadataDraft(other));
+  });
+});
+
+describe("suggesting a command from the skill name", () => {
+  const suggested = (name: string) =>
+    skillMetadataDraft({ ...previous, command: null, name }).command;
+
+  test.each([
+    ["Clause review", "clause-review"],
+    ["Česká dovednost", "ceska-dovednost"],
+    ["Prüfung der Verträge", "prufung-der-vertrage"],
+    ["Révision des clauses", "revision-des-clauses"],
+    ["İstanbul Sözleşme İncelemesi", "istanbul-sozlesme-incelemesi"],
+    ["Analiza umów w Łodzi", "analiza-umow-w-lodzi"],
+    ["  --Rules!!  ", "rules"],
+    ["契約書", ""],
+  ])("%s becomes %s", (name, command) => {
+    expect(suggested(name)).toBe(command);
+  });
+
+  test("stays within the API's 49-character command limit", () => {
+    const command = suggested(`${"word ".repeat(30)}end`);
+    expect(command.length).toBeLessThanOrEqual(49);
+    expect(command).toMatch(/^[a-z0-9]+(?:-[a-z0-9]+)*$/u);
   });
 });

@@ -1,6 +1,8 @@
 import { panic } from "better-result";
-import { describe, expect, test, setSystemTime } from "bun:test";
+import { describe, expect, setSystemTime, test } from "bun:test";
 import { eq, sql, TransactionRollbackError } from "drizzle-orm";
+
+import { createTestState } from "@stll/test-state";
 
 import { member, organization, user } from "@/api/db/auth-schema";
 import { SETTING_ORGANIZATION_ID, stella } from "@/api/db/rls";
@@ -9,8 +11,8 @@ import {
   ORGANIZATION_ACCESS_STATE,
   organizationAccessStates,
   organizationConfiguredAccess,
-  usagePolicies,
   usageEntitlements,
+  usagePolicies,
   usageSeatAssignments,
 } from "@/api/db/schema";
 import { createSafeDb, markRlsDatabase } from "@/api/db/scoped";
@@ -23,8 +25,8 @@ import getAccess from "@/api/handlers/usage/get-access";
 import getLane from "@/api/handlers/usage/get-lane";
 import { toSafeId } from "@/api/lib/branded-types";
 import {
-  POLAR_ENTITLEMENT_STATUSES,
   DEFAULT_POLAR_API_VERSION,
+  POLAR_ENTITLEMENT_STATUSES,
 } from "@/api/lib/hosted-usage-provider/polar/contract";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { getPgErrorCode, PG_ERROR } from "@/api/lib/pg-error";
@@ -33,6 +35,10 @@ import {
   configuredPaymentRetry,
 } from "@/api/lib/usage/configured-access";
 import { decideChatUsageLane } from "@/api/lib/usage/lane-routing";
+import {
+  FREE_TIER_OFF,
+  resolveOrganizationAccess,
+} from "@/api/lib/usage/organization-access";
 import { readOrganizationAccessSnapshot } from "@/api/lib/usage/organization-access-snapshot";
 import {
   allowsInstanceModels,
@@ -44,11 +50,17 @@ import {
   assertUsageAvailable,
 } from "@/api/lib/usage/usage-ledger";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
-import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
+import {
+  createTestHandlerContext,
+  NO_AUDIT,
+  NO_DB,
+} from "@/api/tests/helpers/handler-context";
 import {
   installRecordingAnalytics,
   installRecordingLogger,
 } from "@/api/tests/helpers/recording-telemetry";
+
+const testState = createTestState({ file: import.meta.path, config: env });
 
 const databaseUrl = process.env["DATABASE_URL"];
 const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -90,13 +102,16 @@ const withFixture = async (
   };
   const analytics = installRecordingAnalytics();
   const logs = installRecordingLogger();
-  env.FEATURE_USAGE = true;
-  env.FEATURE_CONFIGURED_ACCESS = true;
-  env.PAYMENT_RETRY_WINDOW_MS = RETRY_MS;
-  env.HOSTED_USAGE_WEBHOOK_SECRET = SECRET;
-  env.HOSTED_USAGE_WEBHOOK_SECRET_PREVIOUS = undefined;
-  env.HOSTED_USAGE_PROVIDER = "polar";
-  env.HOSTED_USAGE_PROVIDER_API_VERSION = DEFAULT_POLAR_API_VERSION;
+  testState.setConfig("FEATURE_USAGE", true);
+  testState.setConfig("FEATURE_CONFIGURED_ACCESS", true);
+  testState.setConfig("PAYMENT_RETRY_WINDOW_MS", RETRY_MS);
+  testState.setConfig("HOSTED_USAGE_WEBHOOK_SECRET", SECRET);
+  testState.setConfig("HOSTED_USAGE_WEBHOOK_SECRET_PREVIOUS", undefined);
+  testState.setConfig("HOSTED_USAGE_PROVIDER", "polar");
+  testState.setConfig(
+    "HOSTED_USAGE_PROVIDER_API_VERSION",
+    DEFAULT_POLAR_API_VERSION,
+  );
   setSystemTime(START);
   try {
     await withGatedTestClients(databaseUrl, async ({ openClient }) => {
@@ -112,7 +127,7 @@ const withFixture = async (
       }
     });
   } finally {
-    Object.assign(env, previous);
+    testState.patchConfig(previous);
     setSystemTime();
     analytics.restore();
     logs.restore();
@@ -314,6 +329,8 @@ const readLaneBudgets = async ({
       const context = createTestHandlerContext<
         Parameters<typeof getLane.handler>[0]
       >({
+        audit: NO_AUDIT,
+        scopedDb: NO_DB,
         session: { activeOrganizationId: organizationId },
         user: { id: userId },
         safeDb: createSafeDb(
@@ -341,15 +358,19 @@ const readLaneBudgets = async ({
   return enabled;
 };
 
+const accessOf = (
+  snapshot: Awaited<ReturnType<typeof readOrganizationAccessSnapshot>>,
+  now: Date,
+) => resolveOrganizationAccess({ snapshot, now, freeTier: FREE_TIER_OFF });
+
 const expectEnabled = (
   snapshot: Awaited<ReturnType<typeof readAccess>>["snapshot"],
   now: Date,
   enabled: boolean,
 ) => {
-  expect(allowsInstanceModels(snapshot, now)).toBe(enabled);
+  expect(allowsInstanceModels(accessOf(snapshot, now))).toBe(enabled);
   const resolved = resolveOrganizationActionBudget({
-    state: snapshot,
-    now,
+    access: accessOf(snapshot, now),
     periodMs: 23_000,
     evaluationActions: 7,
     selfManagedActions: 19,
@@ -632,6 +653,8 @@ describe.skipIf(!runPostgresTests)(
               const context = createTestHandlerContext<
                 Parameters<typeof getAccess.handler>[0]
               >({
+                audit: NO_AUDIT,
+                scopedDb: NO_DB,
                 memberRole: sessionMemberRole("member"),
                 session: { activeOrganizationId: organizationId },
                 safeDb: createSafeDb(
@@ -688,11 +711,15 @@ describe.skipIf(!runPostgresTests)(
         await expectNotice(other.organizationId, {
           paymentRetry: { status: "none" },
         });
-        env.FEATURE_CONFIGURED_ACCESS = false;
+        testState.setConfig("FEATURE_CONFIGURED_ACCESS", false);
         // The unconfigured SafeDb from the helper panics if queried: off must not read.
         expect(
           await getAccess.handler(
-            createTestHandlerContext<Parameters<typeof getAccess.handler>[0]>(),
+            createTestHandlerContext<Parameters<typeof getAccess.handler>[0]>({
+              audit: NO_AUDIT,
+              safeDb: NO_DB,
+              scopedDb: NO_DB,
+            }),
           ),
         ).toEqual({ paymentRetry: { status: "none" } });
       });
@@ -716,11 +743,9 @@ describe.skipIf(!runPostgresTests)(
             fixture.organizationId,
           );
           expect(snapshot?.state).toBe(CONFIGURED_ACCESS_STATE);
-          expect(snapshot && allowsInstanceModels(snapshot, at(999))).toBe(
-            true,
-          );
+          expect(allowsInstanceModels(accessOf(snapshot, at(999)))).toBe(true);
           for (const configuredAccess of [false, true]) {
-            env.FEATURE_CONFIGURED_ACCESS = configuredAccess;
+            testState.setConfig("FEATURE_CONFIGURED_ACCESS", configuredAccess);
             for (const asOf of [at(999), currentPeriodStart]) {
               const options = {
                 tx,
@@ -789,7 +814,7 @@ describe.skipIf(!runPostgresTests)(
               before,
             );
           }
-          env.FEATURE_CONFIGURED_ACCESS = false;
+          testState.setConfig("FEATURE_CONFIGURED_ACCESS", false);
           const asOf = at(101);
           expect(
             (await assertUsageAvailable({ ...options, required: 1, asOf })).ok,
@@ -797,7 +822,7 @@ describe.skipIf(!runPostgresTests)(
           expect(await decideChatUsageLane({ ...options, userId, asOf })).toBe(
             prior === "ending" ? "allowance" : "pool",
           );
-          env.FEATURE_CONFIGURED_ACCESS = true;
+          testState.setConfig("FEATURE_CONFIGURED_ACCESS", true);
           setSystemTime(at(1000));
           await deliver({
             tx,
@@ -868,7 +893,7 @@ describe.skipIf(!runPostgresTests)(
         const asOf = new Date(END.getTime() + 1);
         const options = { tx, organizationId: fixture.organizationId, asOf };
         for (const enabled of [false, true]) {
-          env.FEATURE_CONFIGURED_ACCESS = enabled;
+          testState.setConfig("FEATURE_CONFIGURED_ACCESS", enabled);
           const result = await assertUsageAvailable({
             ...options,
             required: 1,
@@ -907,7 +932,7 @@ describe.skipIf(!runPostgresTests)(
           };
           const before = await readAccess(tx, fixture.organizationId);
           for (const enabled of [false, true]) {
-            env.FEATURE_CONFIGURED_ACCESS = enabled;
+            testState.setConfig("FEATURE_CONFIGURED_ACCESS", enabled);
             const result = await assertUsageAvailable({
               ...options,
               required: 1,
@@ -981,7 +1006,7 @@ describe.skipIf(!runPostgresTests)(
 
     test("disabled feature preserves access rows and the existing equal-version ordering", async () => {
       await withFixture(async (tx, fixture) => {
-        env.FEATURE_CONFIGURED_ACCESS = false;
+        testState.setConfig("FEATURE_CONFIGURED_ACCESS", false);
         await seedPrior(tx, fixture, "evaluation_period");
         const before = await readAccess(tx, fixture.organizationId);
         for (const status of POLAR_ENTITLEMENT_STATUSES) {
@@ -1019,15 +1044,14 @@ describe.skipIf(!runPostgresTests)(
         ]) {
           await withFixture(async (tx, fixture) => {
             await seedPrior(tx, fixture, prior);
-            env.FEATURE_ORG_ACCESS_STATE = true;
+            testState.setConfig("FEATURE_ORG_ACCESS_STATE", true);
             const before = await readAccess(tx, fixture.organizationId);
             const modelBefore = await mayUseInstanceModels(
               tx,
               fixture.organizationId,
             );
             const budgetBefore = resolveOrganizationActionBudget({
-              state: before.snapshot,
-              now: START,
+              access: accessOf(before.snapshot, START),
               periodMs: 23_000,
               evaluationActions: 7,
               selfManagedActions: 19,
@@ -1049,7 +1073,7 @@ describe.skipIf(!runPostgresTests)(
             const configured = await readAccess(tx, fixture.organizationId);
             expect(configured.original).toEqual(before.original);
             expect(configured.row).toBeDefined();
-            env.FEATURE_CONFIGURED_ACCESS = false;
+            testState.setConfig("FEATURE_CONFIGURED_ACCESS", false);
             const off = await readAccess(tx, fixture.organizationId);
             expect(off.snapshot).toEqual(before.snapshot);
             expect(off.original).toEqual(before.original);
@@ -1059,15 +1083,14 @@ describe.skipIf(!runPostgresTests)(
             );
             expect(
               resolveOrganizationActionBudget({
-                state: off.snapshot,
-                now: START,
+                access: accessOf(off.snapshot, START),
                 periodMs: 23_000,
                 evaluationActions: 7,
                 selfManagedActions: 19,
               }),
             ).toEqual(budgetBefore);
             setSystemTime(at(99_000));
-            env.FEATURE_CONFIGURED_ACCESS = true;
+            testState.setConfig("FEATURE_CONFIGURED_ACCESS", true);
             const on = await readAccess(tx, fixture.organizationId);
             expectEnabled(on.snapshot, at(99_000), false);
             expect(on.row).toEqual(configured.row);
@@ -1102,7 +1125,7 @@ describe.skipIf(!runPostgresTests)(
               },
             });
             const overlay = (await readAccess(tx, fixture.organizationId)).row;
-            env.FEATURE_CONFIGURED_ACCESS = false;
+            testState.setConfig("FEATURE_CONFIGURED_ACCESS", false);
             await deliver({
               tx,
               type,
@@ -1115,7 +1138,7 @@ describe.skipIf(!runPostgresTests)(
             expect((await readAccess(tx, fixture.organizationId)).row).toEqual(
               overlay,
             );
-            env.FEATURE_CONFIGURED_ACCESS = true;
+            testState.setConfig("FEATURE_CONFIGURED_ACCESS", true);
             const on = await readAccess(tx, fixture.organizationId);
             expect(on.row).toEqual(overlay);
             if (type === "subscription.revoked") {
@@ -1146,7 +1169,7 @@ describe.skipIf(!runPostgresTests)(
               .snapshot;
             await seedPrior(tx, fixture, prior);
             const before = await readAccess(tx, fixture.organizationId);
-            env.FEATURE_CONFIGURED_ACCESS = false;
+            testState.setConfig("FEATURE_CONFIGURED_ACCESS", false);
             await deliver({
               tx,
               type,
@@ -1157,7 +1180,7 @@ describe.skipIf(!runPostgresTests)(
                 status: type === "subscription.updated" ? "past_due" : "active",
               },
             });
-            env.FEATURE_CONFIGURED_ACCESS = true;
+            testState.setConfig("FEATURE_CONFIGURED_ACCESS", true);
             const after = await readAccess(tx, fixture.organizationId);
             expect(after.row).toEqual(before.row);
             if (type === "subscription.revoked") {
@@ -1237,13 +1260,13 @@ describe.skipIf(!runPostgresTests)(
               ? "configured_access"
               : "payment_retry",
           );
-          env.FEATURE_CONFIGURED_ACCESS = false;
+          testState.setConfig("FEATURE_CONFIGURED_ACCESS", false);
           await deliver({
             tx,
             type: offType,
             data: { ...fixture.data, modified_at: at(5000).toISOString() },
           });
-          env.FEATURE_CONFIGURED_ACCESS = true;
+          testState.setConfig("FEATURE_CONFIGURED_ACCESS", true);
           await deliver({
             tx,
             data: {
@@ -1287,7 +1310,7 @@ describe.skipIf(!runPostgresTests)(
           data: { ...fixture.data, modified_at: at(5000).toISOString() },
         });
         const overlay = (await readAccess(tx, fixture.organizationId)).row;
-        env.FEATURE_CONFIGURED_ACCESS = false;
+        testState.setConfig("FEATURE_CONFIGURED_ACCESS", false);
         await deliver({
           tx,
           type: "subscription.active",
@@ -1298,7 +1321,7 @@ describe.skipIf(!runPostgresTests)(
             modified_at: at(2000).toISOString(),
           },
         });
-        env.FEATURE_CONFIGURED_ACCESS = true;
+        testState.setConfig("FEATURE_CONFIGURED_ACCESS", true);
         const after = await readAccess(tx, fixture.organizationId);
         expect(after.row).toEqual(overlay);
         expect(after.snapshot).toEqual(original);
@@ -1366,7 +1389,7 @@ describe.skipIf(!runPostgresTests)(
         const before = await readAccess(tx, fixture.organizationId);
         expectEnabled(before.snapshot, at(6000), true);
         const replacementId = `replacement_${Bun.randomUUIDv7()}`;
-        env.FEATURE_CONFIGURED_ACCESS = false;
+        testState.setConfig("FEATURE_CONFIGURED_ACCESS", false);
         await deliver({
           tx,
           type: "subscription.active",
@@ -1391,7 +1414,7 @@ describe.skipIf(!runPostgresTests)(
         expect(source?.cancelAtPeriodEnd).toBe(
           before.row?.sourceCancelAtPeriodEnd,
         );
-        env.FEATURE_CONFIGURED_ACCESS = true;
+        testState.setConfig("FEATURE_CONFIGURED_ACCESS", true);
         const after = await readAccess(tx, fixture.organizationId);
         expect(after.row).toEqual(before.row);
         expect(after.snapshot).toEqual(original);

@@ -4,6 +4,7 @@
 import { Result } from "better-result";
 import * as v from "valibot";
 
+import { apiFetch } from "../api-fetch.js";
 import { AUTH_FETCH_TIMEOUT_MS } from "./constants.js";
 import { TokenExchangeError, TokenRefreshError } from "./errors.js";
 import type { AuthorizationServerMetadata } from "./oauth-metadata.js";
@@ -96,7 +97,7 @@ export const redeemAuthorizationCode = async ({
             message: "Failed to exchange the authorization code for a token",
           }),
     try: async () => {
-      const response = await fetch(metadata.token_endpoint, {
+      const response = await apiFetch(metadata.token_endpoint, {
         body,
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
         method: "POST",
@@ -147,7 +148,7 @@ export const refreshAccessToken = async ({
             message: "Failed to refresh the access token",
           }),
     try: async () => {
-      const response = await fetch(metadata.token_endpoint, {
+      const response = await apiFetch(metadata.token_endpoint, {
         body,
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
         method: "POST",

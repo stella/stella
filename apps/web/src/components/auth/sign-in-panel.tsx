@@ -1,12 +1,19 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 import type { ReactNode } from "react";
 
 import { useForm, useSelector } from "@tanstack/react-form";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
+import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
+import {
+  PROFESSIONAL_USE_DISPLAYED_VERSION_FIELD,
+  PROFESSIONAL_USE_STATEMENT_VERSION,
+} from "@stll/api-contract/professional-use";
+import { AUTH_SIGN_IN_CODE_UNAVAILABLE_ERROR_CODE } from "@stll/auth-model";
+import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 import { fetchWithTimeout } from "@stll/fetch";
 import { Button } from "@stll/ui/button";
 import { Field, FieldError } from "@stll/ui/field";
@@ -16,49 +23,87 @@ import { TextSeparator } from "@stll/ui/separator";
 import { cn } from "@stll/ui/utils";
 
 import { QueryViewFeedback } from "@/components/query-view-feedback";
-import { SecretInput } from "@/components/secret-input";
 import { env } from "@/env";
 import { useInvalidateSession } from "@/hooks/use-invalidate-session";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { browserAuthBaseUrl } from "@/lib/api-url";
 import { authCapabilitiesOptions } from "@/lib/auth-capabilities";
-import {
-  authClient,
-  HTTP_TOO_MANY_REQUESTS,
-  isTwoFactorRedirect,
-} from "@/lib/auth-client";
+import { authClient, HTTP_TOO_MANY_REQUESTS } from "@/lib/auth-client";
 import { detached } from "@/lib/detached";
 import { toAuthClientError } from "@/lib/errors/auth";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { queryView } from "@/lib/query-view.logic";
 import { isAcceptInvitationRedirect } from "@/lib/redirect";
-import { sanitizeHref } from "@/lib/sanitize-href";
-import { schemaFormOptions, emailSchema, toFormErrors } from "@/lib/schema";
-import { useQueryView } from "@/lib/use-query-view";
+import { emailSchema, schemaFormOptions, toFormErrors } from "@/lib/schema";
 
-import { resolveSignInOptions } from "./sign-in-panel.logic";
-import type { AuthCapabilities } from "./sign-in-panel.logic";
+import type { SocialProvider } from "./access-reset.logic";
+import { newSignInAttempt, signInAttemptHeaders } from "./email-delivery.logic";
+import {
+  LAST_USED_BADGE_PILL_CLASS_NAME,
+  LAST_USED_BADGE_POSITION_CLASS_NAME,
+  LastUsedFieldBadge,
+  readLastUsedLoginMethod,
+} from "./last-used-sign-in";
+import {
+  EmailCredentialField,
+  getOrganizationCallbackUrl,
+  PasswordSignInForm,
+  SecretCredentialField,
+} from "./password-sign-in-form";
+import { PasswordSignInOption } from "./password-sign-in-option";
+import { GoogleIcon, MicrosoftIcon } from "./sign-in-brand-marks";
+import { socialProviderFlags } from "./sign-in-deployment.logic";
+import { SIGN_IN_MODE } from "./sign-in-mode";
+import type { SignInMode } from "./sign-in-mode";
+import {
+  SIGN_IN_CREDENTIAL_INPUT_SIZE,
+  SignInEmailDivider,
+  SignInHeading,
+  SignInMethodSwitch,
+  SignInPanelPending,
+  SignInPanelShell,
+} from "./sign-in-panel-face.pending";
+import {
+  initialPasswordEntry,
+  resolveLastUsedSignInMethod,
+  resolveSignInOptions,
+  SIGN_IN_METHOD,
+  signInMethodVariant,
+} from "./sign-in-panel.logic";
+import type {
+  AuthCapabilities,
+  SignInEntryMethod,
+  SignInMethod,
+} from "./sign-in-panel.logic";
 
 type SignInPanelProps = {
+  mode?: SignInMode;
   className?: string;
+  /** The method a link asked this page to open with. */
+  entryMethod?: SignInEntryMethod | undefined;
   redirectTo: string;
+  reserveInvitationHint?: boolean;
   showHeading?: boolean;
-  onOtpSent?: (payload: { email: string; redirectTo: string }) => void;
+  onOtpSent?: (payload: {
+    email: string;
+    redirectTo: string;
+    mode: SignInMode;
+    /** The attempt id the code request carried, to follow its mail. */
+    signInAttempt: string;
+  }) => void;
 };
 
-const formSchema = v.strictObject({
-  email: emailSchema(),
-});
+const formSchema = (invalidEmail: string) =>
+  v.strictObject({
+    email: emailSchema(invalidEmail),
+  });
 
-const passwordFormSchema = v.strictObject({
-  email: emailSchema(),
-  password: v.string(),
-});
-
-const bootstrapFormSchema = v.strictObject({
-  email: emailSchema(),
-  password: v.string(),
-  bootstrapToken: v.pipe(v.string(), v.trim()),
-});
+const bootstrapFormSchema = (invalidEmail: string) =>
+  v.strictObject({
+    email: emailSchema(invalidEmail),
+    password: v.string(),
+    bootstrapToken: v.pipe(v.string(), v.trim()),
+  });
 
 const authErrorResponseSchema = v.object({
   message: v.optional(v.string()),
@@ -79,47 +124,67 @@ const renderTermsLink = (chunks: ReactNode) => (
 
 const SignInOptionsPanel = ({
   className,
+  entryMethod,
   redirectTo,
-  showHeading = true,
+  heading,
+  feedback,
+  mode = SIGN_IN_MODE.signIn,
   onOtpSent,
   authCapabilities,
-}: SignInPanelProps & { authCapabilities: AuthCapabilities }) => {
+}: SignInPanelProps & {
+  authCapabilities: AuthCapabilities;
+  heading: ReactNode;
+  feedback: ReactNode;
+}) => {
   const t = useTranslations();
   const analytics = useAnalytics();
   const navigate = useNavigate();
-  const [socialLoading, setSocialLoading] = useState<
-    "google" | "microsoft" | null
-  >(null);
-  const lastMethod = authClient.getLastUsedLoginMethod();
+  const [socialLoading, setSocialLoading] = useState<SocialProvider | null>(
+    null,
+  );
+  const signInOptions = resolveSignInOptions({
+    authCapabilities,
+    socialProviderFlags,
+  });
   const {
+    accountCreation,
     showEmailOtp,
     showLocalPassword,
     showBootstrap,
+    showReviewPasswordSignIn,
     showGoogle,
     showMicrosoft,
+    showApple,
     showSocialProviders,
-    hasAboveEmailOptions,
-  } = resolveSignInOptions({
-    authCapabilities,
-    socialProviderFlags: {
-      google: env.VITE_AUTH_GOOGLE,
-      microsoft: env.VITE_AUTH_MICROSOFT,
-    },
+  } = signInOptions;
+  const lastUsed = resolveLastUsedSignInMethod({
+    stored: readLastUsedLoginMethod(),
+    options: signInOptions,
   });
+  const [passwordEntry, setPasswordEntry] = useState(() =>
+    initialPasswordEntry({ entryMethod, options: signInOptions }),
+  );
+  const hasCredentialOption =
+    showBootstrap ||
+    showLocalPassword ||
+    showEmailOtp ||
+    passwordEntry.type === "open";
+  const openPasswordEntry = (email: string) =>
+    setPasswordEntry({ type: "open", email });
 
-  const handleOtpSent = async (email: string) => {
+  const handleOtpSent = async (email: string, signInAttempt: string) => {
     if (onOtpSent) {
-      onOtpSent({ email, redirectTo });
+      onOtpSent({ email, redirectTo, mode, signInAttempt });
       return;
     }
 
     await navigate({
       to: "/auth/otp",
-      search: { email, redirectTo },
+      search: { email, redirectTo, mode, signInAttempt },
     });
   };
 
-  const handleSocialSignIn = async (provider: "google" | "microsoft") => {
+  const handleSocialSignIn = async (provider: SocialProvider) => {
     setSocialLoading(provider);
     const callbackURL = new URL("/auth/organization", window.location.origin);
     const errorCallbackURL = new URL("/auth/error", window.location.origin);
@@ -131,325 +196,315 @@ const SignInOptionsPanel = ({
       provider,
       callbackURL: callbackURL.toString(),
       errorCallbackURL: errorCallbackURL.toString(),
+      // The OAuth state carries the statement version this page showed to
+      // the callback that creates a new account.
+      additionalData: {
+        [PROFESSIONAL_USE_DISPLAYED_VERSION_FIELD]:
+          PROFESSIONAL_USE_STATEMENT_VERSION,
+      },
     });
 
     if (!error) {
       return;
     }
 
-    analytics.captureError(toAuthClientError(error));
+    analytics.captureError(toAuthClientError(error), {
+      fingerprintKey: "SignInOptionsPanel.handleSocialSignIn:failure",
+      scope: {
+        type: "handler",
+        handlerId: "SignInOptionsPanel.handleSocialSignIn:failure",
+      },
+    });
     if (error.status !== HTTP_TOO_MANY_REQUESTS) {
       notifyUserError(toAuthClientError(error), t("errors.actionFailed"));
     }
     setSocialLoading(null);
   };
 
-  const form = useForm(
-    schemaFormOptions({
-      schema: formSchema,
-      defaultValues: { email: "" },
-      submitValues: "schema-output",
-      onSubmit: async ({ value }) => {
-        const { error } = await authClient.emailOtp.sendVerificationOtp({
-          email: value.email,
-          type: "sign-in",
-        });
-
-        if (error) {
-          analytics.captureError(toAuthClientError(error));
-          if (error.status !== HTTP_TOO_MANY_REQUESTS) {
-            notifyUserError(toAuthClientError(error), t("errors.actionFailed"));
-          }
-          return;
-        }
-
-        await handleOtpSent(value.email);
-      },
-    }),
-  );
-
-  const formErrors = useSelector(form.store, (s) => toFormErrors(s.fieldMeta));
-
   return (
-    <div className={cn("flex w-full max-w-md flex-col gap-8", className)}>
-      {showHeading && (
-        <div className="flex flex-col gap-2">
-          <h2 className="text-foreground text-[2rem] leading-[1.15] font-light tracking-tight">
-            {t("auth.signIn")}
-          </h2>
-          {isAcceptInvitationRedirect(redirectTo) && (
-            <p className="text-muted-foreground text-sm">
-              {t("auth.signInBeforeInvitation")}
-            </p>
-          )}
-        </div>
-      )}
-
-      {showSocialProviders && (
-        <div className="flex flex-col gap-3">
-          {showGoogle && (
-            <SocialButton
-              disabled={socialLoading !== null}
-              icon={<GoogleIcon />}
-              label={t("auth.continueWithGoogle")}
-              lastUsed={lastMethod === "google"}
-              lastUsedLabel={t("auth.lastUsed")}
-              loading={socialLoading === "google"}
-              onClick={() => {
-                handleSocialSignIn("google").catch((error: unknown) => {
-                  setSocialLoading(null);
-                  analytics.captureError(
-                    error instanceof Error ? error : new Error(String(error)),
-                  );
-                });
-              }}
+    <SignInPanelShell
+      className={className}
+      heading={heading}
+      feedback={feedback}
+      social={{
+        google: showGoogle && (
+          <SocialButton
+            disabled={socialLoading !== null}
+            icon={<GoogleIcon />}
+            label={t("auth.continueWithGoogle")}
+            lastUsed={lastUsed}
+            method={SIGN_IN_METHOD.google}
+            loading={socialLoading === "google"}
+            onClick={() => {
+              handleSocialSignIn("google").catch((error: unknown) => {
+                setSocialLoading(null);
+                analytics.captureError(
+                  error instanceof Error ? error : new Error(String(error)),
+                  {
+                    fingerprintKey: "SignInOptionsPanel:failure",
+                    scope: {
+                      type: "handler",
+                      handlerId: "SignInOptionsPanel:failure",
+                    },
+                  },
+                );
+              });
+            }}
+          />
+        ),
+        microsoft: showMicrosoft && (
+          <SocialButton
+            disabled={socialLoading !== null}
+            icon={<MicrosoftIcon />}
+            label={t("auth.continueWithMicrosoft")}
+            lastUsed={lastUsed}
+            method={SIGN_IN_METHOD.microsoft}
+            loading={socialLoading === "microsoft"}
+            onClick={() => {
+              handleSocialSignIn("microsoft").catch((error: unknown) => {
+                setSocialLoading(null);
+                analytics.captureError(
+                  error instanceof Error ? error : new Error(String(error)),
+                  {
+                    fingerprintKey: "SignInOptionsPanel:failure-2",
+                    scope: {
+                      type: "handler",
+                      handlerId: "SignInOptionsPanel:failure-2",
+                    },
+                  },
+                );
+              });
+            }}
+          />
+        ),
+        apple: showApple && (
+          <SocialButton
+            disabled={socialLoading !== null}
+            icon={<AppleIcon />}
+            label={t("auth.continueWithApple")}
+            lastUsed={lastUsed}
+            method={SIGN_IN_METHOD.apple}
+            loading={socialLoading === "apple"}
+            onClick={() => {
+              handleSocialSignIn("apple").catch((error: unknown) => {
+                setSocialLoading(null);
+                analytics.captureError(
+                  error instanceof Error ? error : new Error(String(error)),
+                  {
+                    fingerprintKey: "SignInOptionsPanel:failure-3",
+                    scope: {
+                      type: "handler",
+                      handlerId: "SignInOptionsPanel:failure-3",
+                    },
+                  },
+                );
+              });
+            }}
+          />
+        ),
+      }}
+      beforeCredentials={
+        hasCredentialOption && (
+          <SignInEmailDivider>
+            {showBootstrap
+              ? t("auth.createFirstAccount")
+              : !showLocalPassword &&
+                showEmailOtp &&
+                showSocialProviders &&
+                t("auth.orSignInWithEmail")}
+          </SignInEmailDivider>
+        )
+      }
+      bootstrap={
+        showBootstrap && (
+          <BootstrapSignUpForm
+            hasSocialProviders={showSocialProviders}
+            redirectTo={redirectTo}
+          />
+        )
+      }
+      credentials={
+        showLocalPassword &&
+        !showBootstrap && (
+          <PasswordSignInForm
+            autoFocus={!showSocialProviders}
+            defaultEmail=""
+            lastUsed={lastUsed}
+            redirectTo={redirectTo}
+          />
+        )
+      }
+      separator={
+        showLocalPassword &&
+        showEmailOtp && (
+          <TextSeparator>{t("auth.orSignInWithEmail")}</TextSeparator>
+        )
+      }
+      alternate={
+        passwordEntry.type === "open" ? (
+          <PasswordSignInOption
+            email={passwordEntry.email}
+            onUseEmailCode={
+              showEmailOtp
+                ? () => setPasswordEntry({ type: "closed" })
+                : undefined
+            }
+            redirectTo={redirectTo}
+          />
+        ) : (
+          showEmailOtp && (
+            <EmailCodeSignInForm
+              autoFocus={!showSocialProviders && !showLocalPassword}
+              lastUsed={lastUsed}
+              onCodeSent={handleOtpSent}
+              onPasswordRequired={openPasswordEntry}
+              onUsePassword={
+                showReviewPasswordSignIn ? openPasswordEntry : undefined
+              }
             />
-          )}
-          {showMicrosoft && (
-            <SocialButton
-              disabled={socialLoading !== null}
-              icon={<MicrosoftIcon />}
-              label={t("auth.continueWithMicrosoft")}
-              lastUsed={lastMethod === "microsoft"}
-              lastUsedLabel={t("auth.lastUsed")}
-              loading={socialLoading === "microsoft"}
-              onClick={() => {
-                handleSocialSignIn("microsoft").catch((error: unknown) => {
-                  setSocialLoading(null);
-                  analytics.captureError(
-                    error instanceof Error ? error : new Error(String(error)),
-                  );
-                });
-              }}
-            />
-          )}
-        </div>
-      )}
-
-      {showBootstrap && (
-        <BootstrapSignUpForm
-          hasSocialProviders={showSocialProviders}
-          redirectTo={redirectTo}
-        />
-      )}
-
-      {showLocalPassword && !showBootstrap && (
-        <PasswordSignInForm
-          hasSocialProviders={showSocialProviders}
-          redirectTo={redirectTo}
-        />
-      )}
-
-      {showEmailOtp && hasAboveEmailOptions && (
-        <TextSeparator>{t("auth.orSignInWithEmail")}</TextSeparator>
-      )}
-
-      {showEmailOtp && (
-        <Form
-          errors={formErrors}
-          onSubmit={(e) => {
-            e.preventDefault();
-            detached(form.handleSubmit(), "sign-in-panel.submit");
-          }}
-        >
-          <form.Field name="email">
-            {(field) => (
-              <Field name={field.name}>
-                <Input
-                  autoFocus={!showSocialProviders && !showLocalPassword}
-                  onBlur={field.handleBlur}
-                  onChange={(e) => field.handleChange(e.target.value)}
-                  placeholder={t("auth.emailPlaceholder")}
-                  size="lg"
-                  type="email"
-                  value={field.state.value}
-                />
-                <FieldError />
-              </Field>
-            )}
-          </form.Field>
-          <form.Subscribe
-            selector={(s) => ({
-              isSubmitting: s.isSubmitting,
-              canSubmit: s.canSubmit,
-              email: s.values.email,
-            })}
-          >
-            {({ isSubmitting, canSubmit, email }) => (
-              <Button
-                className="w-full"
-                disabled={!canSubmit || email.trim().length === 0}
-                loading={isSubmitting}
-                type="submit"
-              >
-                {t("auth.continueWithEmail")}
-              </Button>
-            )}
-          </form.Subscribe>
-        </Form>
-      )}
-      <p className="text-foreground-muted text-xs">
-        {t.rich("onboarding.termsNotice", {
-          terms: renderTermsLink,
-        })}
-      </p>
-    </div>
+          )
+        )
+      }
+      terms={t.rich("onboarding.termsNotice", { terms: renderTermsLink })}
+      professionalUse={
+        accountCreation === "offered"
+          ? t("auth.professionalUseStatement")
+          : undefined
+      }
+    />
   );
 };
 
-/** The slice of a form field a single text input binds to. */
-type TextFieldBinding = {
-  handleBlur: () => void;
-  handleChange: (value: string) => void;
-  name: string;
-  state: { value: string };
-};
-
-const EmailCredentialField = ({
+/** The email step of code sign-in: asks the server to send the code. */
+const EmailCodeSignInForm = ({
   autoFocus,
-  field,
+  lastUsed,
+  onCodeSent,
+  onPasswordRequired,
+  onUsePassword,
 }: {
   autoFocus: boolean;
-  field: TextFieldBinding;
-}) => {
-  const t = useTranslations();
-  return (
-    <Field name={field.name}>
-      <Input
-        autoComplete="email"
-        autoFocus={autoFocus}
-        onBlur={field.handleBlur}
-        onChange={(e) => field.handleChange(e.target.value)}
-        placeholder={t("auth.emailPlaceholder")}
-        size="lg"
-        type="email"
-        value={field.state.value}
-      />
-      <FieldError />
-    </Field>
-  );
-};
-
-const SecretCredentialField = ({
-  autoComplete,
-  field,
-  placeholder,
-}: {
-  autoComplete: "current-password" | "new-password" | "one-time-code";
-  field: TextFieldBinding;
-  placeholder: string;
-}) => (
-  <Field name={field.name}>
-    <SecretInput
-      autoComplete={autoComplete}
-      onBlur={field.handleBlur}
-      onChange={(e) => field.handleChange(e.target.value)}
-      placeholder={placeholder}
-      size="lg"
-      value={field.state.value}
-    />
-    <FieldError />
-  </Field>
-);
-
-const PasswordSignInForm = ({
-  hasSocialProviders,
-  redirectTo,
-}: {
-  hasSocialProviders: boolean;
-  redirectTo: string;
+  lastUsed: SignInMethod | null;
+  /** The code was requested under `signInAttempt`. */
+  onCodeSent: (email: string, signInAttempt: string) => Promise<void>;
+  /** The server sends this address no code: it signs in with a password. */
+  onPasswordRequired: (email: string) => void;
+  /** Opens the password form with the address typed so far, where offered. */
+  onUsePassword: ((email: string) => void) | undefined;
 }) => {
   const t = useTranslations();
   const analytics = useAnalytics();
-  const navigate = useNavigate();
-  const invalidateSession = useInvalidateSession();
   const form = useForm(
     schemaFormOptions({
-      schema: passwordFormSchema,
-      defaultValues: { email: "", password: "" },
+      schema: formSchema(t("validation.invalidEmail")),
+      defaultValues: { email: "" },
       submitValues: "schema-output",
       onSubmit: async ({ value }) => {
-        const { data, error } = await authClient.signIn.email({
+        const signInAttempt = newSignInAttempt();
+        const { error } = await authClient.emailOtp.sendVerificationOtp({
           email: value.email,
-          password: value.password,
-          callbackURL: getOrganizationCallbackUrl(redirectTo),
+          type: "sign-in",
+          fetchOptions: { headers: signInAttemptHeaders(signInAttempt) },
         });
 
+        if (error?.code === AUTH_SIGN_IN_CODE_UNAVAILABLE_ERROR_CODE) {
+          onPasswordRequired(value.email);
+          return;
+        }
         if (error) {
-          analytics.captureError(toAuthClientError(error));
+          analytics.captureError(toAuthClientError(error), {
+            fingerprintKey: "EmailCodeSignInForm.onSubmit:failure",
+            scope: {
+              type: "handler",
+              handlerId: "EmailCodeSignInForm.onSubmit:failure",
+            },
+          });
           if (error.status !== HTTP_TOO_MANY_REQUESTS) {
             notifyUserError(toAuthClientError(error), t("errors.actionFailed"));
           }
           return;
         }
 
-        // An enrolled user's password is correct but the session is still
-        // pending a second factor; send them to the same challenge page the
-        // email-OTP flow uses instead of treating this as a completed sign-in.
-        if (isTwoFactorRedirect(data)) {
-          await navigate({
-            to: "/auth/two-factor",
-            search: { redirectTo },
-          });
-          return;
-        }
-
-        await invalidateSession.mutateAsync();
-        await navigate({
-          to: "/auth/organization",
-          search: { redirectTo },
-        });
+        await onCodeSent(value.email, signInAttempt);
       },
     }),
   );
-  const formErrors = useSelector(form.store, (s) => toFormErrors(s.fieldMeta));
+
+  const { formErrors, dirty } = useSelector(form.store, (s) => ({
+    formErrors: toFormErrors(s.fieldMeta),
+    dirty: !s.isDefaultValue,
+  }));
 
   return (
-    <Form
-      errors={formErrors}
-      onSubmit={(e) => {
-        e.preventDefault();
-        detached(form.handleSubmit(), "sign-in-panel.submit");
-      }}
-    >
-      <form.Field name="email">
-        {(field) => (
-          <EmailCredentialField autoFocus={!hasSocialProviders} field={field} />
-        )}
-      </form.Field>
-      <form.Field name="password">
-        {(field) => (
-          <SecretCredentialField
-            autoComplete="current-password"
-            field={field}
-            placeholder={t("auth.password")}
-          />
-        )}
-      </form.Field>
-      <form.Subscribe
-        selector={(s) => ({
-          isSubmitting: s.isSubmitting,
-          canSubmit: s.canSubmit,
-          email: s.values.email,
-          password: s.values.password,
-        })}
+    <>
+      <Form
+        dirty={dirty}
+        onDiscard={() => form.reset()}
+        errors={formErrors}
+        onSubmit={(e) => {
+          e.preventDefault();
+          detached(form.handleSubmit(), "sign-in-panel.submit");
+        }}
       >
-        {({ isSubmitting, canSubmit, email, password }) => (
+        <form.Field name="email">
+          {(field) => (
+            <Field className="relative" name={field.name}>
+              <Input
+                autoFocus={autoFocus}
+                onBlur={field.handleBlur}
+                onChange={(e) => field.handleChange(e.target.value)}
+                placeholder={t("auth.emailPlaceholder")}
+                size={SIGN_IN_CREDENTIAL_INPUT_SIZE}
+                type="email"
+                value={field.state.value}
+              />
+              {lastUsed === SIGN_IN_METHOD.emailOtp && <LastUsedFieldBadge />}
+              <FieldError />
+            </Field>
+          )}
+        </form.Field>
+        <form.Subscribe
+          selector={(s) => ({
+            isSubmitting: s.isSubmitting,
+            canSubmit: s.canSubmit,
+            email: s.values.email,
+          })}
+        >
+          {({ isSubmitting, canSubmit, email }) => (
+            <Button
+              className="w-full"
+              disabled={!canSubmit || email.trim().length === 0}
+              disabledReason={
+                isSubmitting
+                  ? t("auth.sendingCode")
+                  : t("validation.invalidEmail")
+              }
+              loading={isSubmitting}
+              type="submit"
+              variant={signInMethodVariant({
+                method: SIGN_IN_METHOD.emailOtp,
+                lastUsed,
+                fallback: "default",
+              })}
+            >
+              {t("auth.continueWithEmail")}
+            </Button>
+          )}
+        </form.Subscribe>
+      </Form>
+      {onUsePassword && (
+        <SignInMethodSwitch>
           <Button
-            className="w-full"
-            disabled={
-              !canSubmit ||
-              email.trim().length === 0 ||
-              password.trim().length === 0
-            }
-            loading={isSubmitting}
-            type="submit"
+            onClick={() => onUsePassword(form.state.values.email)}
+            size="sm"
+            type="button"
+            variant="link"
           >
-            {t("auth.signInWithPassword")}
+            {t("auth.usePassword")}
           </Button>
-        )}
-      </form.Subscribe>
-    </Form>
+        </SignInMethodSwitch>
+      )}
+    </>
   );
 };
 
@@ -466,7 +521,7 @@ const BootstrapSignUpForm = ({
   const invalidateSession = useInvalidateSession();
   const form = useForm(
     schemaFormOptions({
-      schema: bootstrapFormSchema,
+      schema: bootstrapFormSchema(t("validation.invalidEmail")),
       defaultValues: { email: "", password: "", bootstrapToken: "" },
       submitValues: "schema-output",
       onSubmit: async ({ value }) => {
@@ -477,17 +532,31 @@ const BootstrapSignUpForm = ({
           name: getFallbackName(email),
           bootstrapToken,
           callbackURL: getOrganizationCallbackUrl(redirectTo),
+          [PROFESSIONAL_USE_DISPLAYED_VERSION_FIELD]:
+            PROFESSIONAL_USE_STATEMENT_VERSION,
         });
 
         if (error) {
-          analytics.captureError(toAuthClientError(error));
+          analytics.captureError(toAuthClientError(error), {
+            fingerprintKey: "BootstrapSignUpForm.onSubmit:failure",
+            scope: {
+              type: "handler",
+              handlerId: "BootstrapSignUpForm.onSubmit:failure",
+            },
+          });
           if (error.status !== HTTP_TOO_MANY_REQUESTS) {
             notifyUserError(toAuthClientError(error), t("errors.actionFailed"));
           }
           return;
         }
 
-        await invalidateSession.mutateAsync();
+        const refreshed = await Result.tryPromise(
+          async () => await invalidateSession.mutateAsync(),
+        );
+        if (refreshed.isErr()) {
+          notifyUserError(refreshed.error, t("errors.actionFailed"));
+          return;
+        }
         await navigate({
           to: "/auth/organization",
           search: { redirectTo },
@@ -495,80 +564,82 @@ const BootstrapSignUpForm = ({
       },
     }),
   );
-  const formErrors = useSelector(form.store, (s) => toFormErrors(s.fieldMeta));
+  const { formErrors, dirty } = useSelector(form.store, (s) => ({
+    formErrors: toFormErrors(s.fieldMeta),
+    dirty: !s.isDefaultValue,
+  }));
 
   return (
-    <div className="flex flex-col gap-3">
-      <TextSeparator>{t("auth.createFirstAccount")}</TextSeparator>
-      <Form
-        errors={formErrors}
-        onSubmit={(e) => {
-          e.preventDefault();
-          detached(form.handleSubmit(), "sign-in-panel.submit");
-        }}
+    <Form
+      dirty={dirty}
+      onDiscard={() => form.reset()}
+      errors={formErrors}
+      onSubmit={(e) => {
+        e.preventDefault();
+        detached(form.handleSubmit(), "sign-in-panel.submit");
+      }}
+    >
+      <form.Field name="email">
+        {(field) => (
+          <EmailCredentialField
+            autoFocus={!hasSocialProviders}
+            field={field}
+            lastUsed={false}
+          />
+        )}
+      </form.Field>
+      <form.Field name="password">
+        {(field) => (
+          <SecretCredentialField
+            autoComplete="new-password"
+            autoFocus={false}
+            field={field}
+            placeholder={t("auth.password")}
+          />
+        )}
+      </form.Field>
+      <form.Field name="bootstrapToken">
+        {(field) => (
+          <SecretCredentialField
+            autoComplete="one-time-code"
+            autoFocus={false}
+            field={field}
+            placeholder={t("auth.bootstrapToken")}
+          />
+        )}
+      </form.Field>
+      <form.Subscribe
+        selector={(s) => ({
+          isSubmitting: s.isSubmitting,
+          canSubmit: s.canSubmit,
+          email: s.values.email,
+          password: s.values.password,
+          bootstrapToken: s.values.bootstrapToken,
+        })}
       >
-        <form.Field name="email">
-          {(field) => (
-            <EmailCredentialField
-              autoFocus={!hasSocialProviders}
-              field={field}
-            />
-          )}
-        </form.Field>
-        <form.Field name="password">
-          {(field) => (
-            <SecretCredentialField
-              autoComplete="new-password"
-              field={field}
-              placeholder={t("auth.password")}
-            />
-          )}
-        </form.Field>
-        <form.Field name="bootstrapToken">
-          {(field) => (
-            <SecretCredentialField
-              autoComplete="one-time-code"
-              field={field}
-              placeholder={t("auth.bootstrapToken")}
-            />
-          )}
-        </form.Field>
-        <form.Subscribe
-          selector={(s) => ({
-            isSubmitting: s.isSubmitting,
-            canSubmit: s.canSubmit,
-            email: s.values.email,
-            password: s.values.password,
-            bootstrapToken: s.values.bootstrapToken,
-          })}
-        >
-          {({ isSubmitting, canSubmit, email, password, bootstrapToken }) => (
-            <Button
-              className="w-full"
-              disabled={
-                !canSubmit ||
-                email.trim().length === 0 ||
-                password.trim().length === 0 ||
-                bootstrapToken.trim().length === 0
-              }
-              loading={isSubmitting}
-              type="submit"
-            >
-              {t("auth.createFirstAccount")}
-            </Button>
-          )}
-        </form.Subscribe>
-      </Form>
-    </div>
+        {({ isSubmitting, canSubmit, email, password, bootstrapToken }) => (
+          <Button
+            className="w-full"
+            disabled={
+              !canSubmit ||
+              email.trim().length === 0 ||
+              password.trim().length === 0 ||
+              bootstrapToken.trim().length === 0
+            }
+            disabledReason={
+              isSubmitting
+                ? t("auth.confirmingHandoff")
+                : t("auth.enterBootstrapCredentials")
+            }
+            loading={isSubmitting}
+            type="submit"
+          >
+            {t("auth.createFirstAccount")}
+          </Button>
+        )}
+      </form.Subscribe>
+    </Form>
   );
-};
-
-const getOrganizationCallbackUrl = (redirectTo: string) => {
-  const callbackURL = new URL("/auth/organization", window.location.origin);
-  if (redirectTo) {
-    callbackURL.searchParams.set("redirectTo", redirectTo);
-  }
-  return callbackURL.toString();
 };
 
 const getFallbackName = (email: string) => {
@@ -582,6 +653,7 @@ type SelfhostBootstrapSignUpInput = {
   name: string;
   bootstrapToken: string;
   callbackURL: string;
+  [PROFESSIONAL_USE_DISPLAYED_VERSION_FIELD]: string;
 };
 
 const signUpWithSelfhostBootstrap = async (
@@ -626,99 +698,142 @@ const signUpWithSelfhostBootstrap = async (
   };
 };
 
+/**
+ * Wraps a one-click sign-in action (a social provider button) and, when it
+ * is the last-used method, pins a "Last used" badge to its corner and links
+ * it as the action's description. Methods typed into a form mark their email
+ * field with `LastUsedFieldBadge` instead; a submit button never carries it.
+ */
+const LastUsedSignInFrame = ({
+  lastUsed,
+  children,
+}: {
+  lastUsed: boolean;
+  children: (describedBy: string | undefined) => ReactNode;
+}) => {
+  const t = useTranslations();
+  const badgeId = useId();
+  return (
+    <div className="relative">
+      {children(lastUsed ? badgeId : undefined)}
+      {lastUsed && (
+        <span
+          className={cn(
+            LAST_USED_BADGE_POSITION_CLASS_NAME,
+            LAST_USED_BADGE_PILL_CLASS_NAME,
+          )}
+          id={badgeId}
+        >
+          {t("auth.lastUsed")}
+        </span>
+      )}
+    </div>
+  );
+};
+
 const SocialButton = ({
   icon,
   label,
-  lastUsedLabel,
   lastUsed,
+  method,
   loading,
   disabled,
   onClick,
 }: {
   icon: ReactNode;
   label: string;
-  lastUsedLabel: string;
-  lastUsed: boolean;
+  lastUsed: SignInMethod | null;
+  method: SignInMethod;
   loading: boolean;
   disabled: boolean;
   onClick: () => void;
-}) => (
-  <div className="relative">
-    <Button
-      className={cn(
-        "w-full min-w-0 shrink max-sm:h-auto max-sm:min-h-10 max-sm:px-2 max-sm:py-2 max-sm:text-[0.95rem] max-sm:leading-tight max-sm:whitespace-normal sm:whitespace-nowrap",
-        lastUsed && "border-primary/40 shadow-primary/8 shadow-sm",
+}) => {
+  const t = useTranslations();
+  return (
+    <LastUsedSignInFrame lastUsed={lastUsed === method}>
+      {(describedBy) => (
+        <Button
+          aria-describedby={describedBy}
+          layout="wrap"
+          className="w-full min-w-0 shrink items-center justify-center text-center max-sm:px-2 max-sm:text-[0.95rem] max-sm:leading-tight"
+          disabled={disabled}
+          disabledReason={t("auth.confirmingHandoff")}
+          loading={loading}
+          onClick={onClick}
+          size="lg"
+          variant={signInMethodVariant({
+            method,
+            lastUsed,
+            fallback: "outline",
+          })}
+        >
+          {icon}
+          <span className="min-w-0 text-center">{label}</span>
+        </Button>
       )}
-      disabled={disabled}
-      loading={loading}
-      onClick={onClick}
-      size="lg"
-      variant="outline"
-    >
-      {icon}
-      <span className="min-w-0 text-center">{label}</span>
-    </Button>
-    {lastUsed && (
-      <span className="bg-primary text-primary-foreground text-3xs absolute end-3 -top-2 rounded-full px-2 py-0.5 font-medium">
-        {lastUsedLabel}
-      </span>
-    )}
-  </div>
-);
+    </LastUsedSignInFrame>
+  );
+};
 
-const GoogleIcon = () => (
+// Apple's logo in the button's own text colour, as Apple's sign-in button
+// guidelines require for a custom button.
+const AppleIcon = () => (
   <svg
     aria-hidden="true"
     className="size-4"
+    fill="currentColor"
     viewBox="0 0 24 24"
     xmlns="http://www.w3.org/2000/svg"
   >
-    <path
-      d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z"
-      fill="#4285F4"
-    />
-    <path
-      d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-      fill="#34A853"
-    />
-    <path
-      d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
-      fill="#FBBC05"
-    />
-    <path
-      d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
-      fill="#EA4335"
-    />
-  </svg>
-);
-
-const MicrosoftIcon = () => (
-  <svg
-    aria-hidden="true"
-    className="size-4"
-    viewBox="0 0 21 21"
-    xmlns="http://www.w3.org/2000/svg"
-  >
-    <rect fill="#F25022" height="9" width="9" x="1" y="1" />
-    <rect fill="#7FBA00" height="9" width="9" x="11" y="1" />
-    <rect fill="#00A4EF" height="9" width="9" x="1" y="11" />
-    <rect fill="#FFB900" height="9" width="9" x="11" y="11" />
+    <path d="M12.152 6.896c-.948 0-2.415-1.078-3.96-1.04-2.04.027-3.91 1.183-4.961 3.014-2.117 3.675-.546 9.103 1.519 12.09 1.013 1.454 2.208 3.09 3.792 3.039 1.52-.065 2.09-.987 3.935-.987 1.831 0 2.35.987 3.96.948 1.637-.026 2.676-1.48 3.676-2.948 1.156-1.688 1.636-3.325 1.662-3.415-.039-.013-3.182-1.221-3.22-4.857-.026-3.04 2.48-4.494 2.597-4.559-1.429-2.09-3.623-2.324-4.39-2.376-2-.156-3.675 1.09-4.61 1.09zM15.53 3.83c.843-1.012 1.4-2.427 1.245-3.83-1.207.052-2.662.805-3.532 1.818-.78.896-1.454 2.338-1.273 3.714 1.338.104 2.715-.688 3.559-1.701" />
   </svg>
 );
 
 export const SignInPanel = (props: SignInPanelProps) => {
+  const t = useTranslations();
   const capabilitiesQuery = useQuery(authCapabilitiesOptions);
-  const capabilitiesView = useQueryView(capabilitiesQuery);
+  const capabilitiesView = queryView(capabilitiesQuery);
+  if (capabilitiesView.type === "pending") {
+    return (
+      <>
+        <span className="sr-only" role="status">
+          {t("common.loading")}
+        </span>
+        <SignInPanelPending
+          className={props.className}
+          entryMethod={props.entryMethod}
+          redirectTo={props.redirectTo}
+          reserveInvitationHint={props.reserveInvitationHint}
+          showHeading={props.showHeading ?? true}
+        />
+      </>
+    );
+  }
   if (capabilitiesView.type !== "items") {
     return <QueryViewFeedback view={capabilitiesView} />;
   }
+  const showInvitationHint = isAcceptInvitationRedirect(props.redirectTo);
+  const invitationState = showInvitationHint
+    ? "visible-reserved"
+    : "hidden-reserved";
+  const reserveInvitationHint = props.reserveInvitationHint ?? false;
+  const heading = (props.showHeading ?? true) && (
+    <SignInHeading
+      title={t("auth.signIn")}
+      invitationState={reserveInvitationHint ? invitationState : "visible"}
+      invitation={
+        showInvitationHint || reserveInvitationHint
+          ? t("auth.signInBeforeInvitation")
+          : undefined
+      }
+    />
+  );
   return (
-    <>
-      <QueryViewFeedback view={capabilitiesView} />
-      <SignInOptionsPanel
-        {...props}
-        authCapabilities={capabilitiesView.items}
-      />
-    </>
+    <SignInOptionsPanel
+      {...props}
+      authCapabilities={capabilitiesView.items}
+      heading={heading}
+      feedback={<QueryViewFeedback view={capabilitiesView} />}
+    />
   );
 };

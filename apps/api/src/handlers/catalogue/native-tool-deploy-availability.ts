@@ -10,6 +10,7 @@ import type { SessionHandlerConfig } from "@/api/lib/api-handlers";
 import { isBusinessRegistryNativeToolDeployAvailable } from "@/api/lib/business-registries/dispatch";
 
 const config = {
+  contract: "patch",
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "deploy_mechanics" },
 } satisfies SessionHandlerConfig;

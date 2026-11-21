@@ -1,7 +1,7 @@
 import type {
   ChatProjectableToolName,
-  RegistryReadToolName,
   READ_TOOL_REF_FIELD_MAP,
+  RegistryReadToolName,
 } from "@/api/handlers/chat/tools/registry-adapter/ref-field-map";
 import type { ThirdPartyOutboundReadToolName } from "@/api/handlers/chat/tools/registry-adapter/run-registry-tool";
 
@@ -11,7 +11,7 @@ type ChatProjectableReadToolName = ChatProjectableToolName<
 
 const CHAT_READ_SCRIPT_POLICIES = ["script", "direct-only"] as const;
 
-export type ChatReadScriptPolicy = (typeof CHAT_READ_SCRIPT_POLICIES)[number];
+type ChatReadScriptPolicy = (typeof CHAT_READ_SCRIPT_POLICIES)[number];
 
 /**
  * A script runs without outbound approval and holds no third-party outbound
@@ -51,13 +51,18 @@ export const CHAT_READ_SCRIPT_POLICY = {
   list_templates: "script",
   get_usage: "script",
   search_case_law: "script",
-  lookup_case_law: "script",
+  resolve_case_law_decision: "script",
+  verify_quote: "script",
+  case_law_coverage: "script",
   read_case_law_decision: "script",
   read_case_law_citations: "script",
   search_legislation: "script",
+  resolve_law_citation: "script",
   read_statute: "script",
   read_statute_provisions: "script",
   read_provision_history: "script",
+  search_guidance: "script",
+  read_guidance: "script",
   search_boe_legislation: "direct-only",
   lookup_business_registry: "direct-only",
 } as const satisfies ChatReadScriptPolicyMap;

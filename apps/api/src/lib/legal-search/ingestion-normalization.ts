@@ -1,50 +1,59 @@
-// parser-output-unchanged: threads an optional static metadata URL schema; ordinary text normalization is unchanged
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 
 import { storedDecisionDocketOf } from "@stll/api-contract/decision-docket-grammar";
 import { DECISION_DOCUMENT_ROLE_METADATA_KEY } from "@stll/api-contract/decision-document-role";
 import {
   DECISION_IDENTIFIER_MAX_COUNT,
-  isDecisionIdentifier,
   type DecisionIdentifier,
   type DecisionIdentifiers,
+  isDecisionIdentifier,
 } from "@stll/legal-ast/decision-identifier";
+import {
+  type DocumentAst,
+  withProjectedPlainText,
+} from "@stll/legal-ast/document-ast";
+import { withStableBlockAnchors } from "@stll/legal-ast/stable-block-anchors";
 import { collapseSpacedLetters } from "@stll/text-normalize";
 
+import { fitsCitationStorageField } from "@/api/lib/case-law/citation-storage-bounds";
 import {
-  DECISION_TEXT_FIELD,
-  TEXT_ABSENCE_REASON,
-  TEXT_FIELD_TYPE,
   absentTextField,
+  DECISION_TEXT_FIELD,
+  type DecisionTextFields,
   presentTextField,
   storeDecisionTextFields,
-  type DecisionTextFields,
+  TEXT_ABSENCE_REASON,
+  TEXT_FIELD_TYPE,
   type TextField,
 } from "@/api/lib/case-law/decision-text";
-import {
-  isDocumentAst,
-  withProjectedPlainText,
-} from "@/api/lib/case-law/document-ast";
+import { isDocketShapedDecisionType } from "@/api/lib/case-law/decision-type-key";
+import { fitsSearchCandidateRow } from "@/api/lib/case-law/search-candidate-row-bound-sql";
 import { canonicalDecisionDate } from "@/api/lib/dates";
 import {
   UNPERSISTABLE_DECISION_FIELDS,
   UnpersistableDecisionFieldError,
 } from "@/api/lib/errors/tagged-errors";
+import type { StoredCorpusValidationError } from "@/api/lib/errors/tagged-errors";
+import { prepareCorpusAst } from "@/api/lib/legal-search/corpus-ast";
+import type { PreparedCorpusAst } from "@/api/lib/legal-search/corpus-ast";
 import {
   DANGEROUS_CHARS,
   sanitizeMetadata,
   stripDangerousChars,
 } from "@/api/lib/legal-search/corpus-sanitize";
 import { storeDecisionIdentifiersInMetadata } from "@/api/lib/legal-search/decision-identifier-metadata";
-import { assertDecisionLanguageIdentity } from "@/api/lib/legal-search/decision-language-identity";
+import {
+  assertDecisionLanguageIdentity,
+  decisionLanguageGroupKey,
+} from "@/api/lib/legal-search/decision-language-identity";
 import {
   DEFAULT_PRIMARY_REFERENCE_TYPE,
   parsePrimaryReferenceType,
 } from "@/api/lib/legal-search/decision-primary-reference";
 import {
   EMPTY_AST,
-  isPersistableSourceDocumentId,
   type IngestionResult,
+  isPersistableSourceDocumentId,
   type RawIngestionResult,
 } from "@/api/lib/legal-search/ingestion-types";
 import {
@@ -56,6 +65,81 @@ import {
 } from "@/api/lib/legal-search/partial-observation-sql";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { isRecord } from "@/api/lib/type-guards";
+
+// Source IDs are UUIDs: every real source contributes the same 36 ASCII
+// bytes. Adapters can validate the generated index key before they know it.
+const BYTE_BUDGET_SOURCE_UUID = "00000000-0000-0000-0000-000000000000";
+
+type DecisionSearchCandidate = Pick<
+  RawIngestionResult,
+  | "caseNumber"
+  | "country"
+  | "court"
+  | "decisionType"
+  | "ecli"
+  | "sourceDocumentId"
+>;
+
+export const fitsDecisionSearchCandidateRow = (
+  result: DecisionSearchCandidate,
+): boolean =>
+  fitsSearchCandidateRow({
+    court: result.court,
+    decisionType: result.decisionType,
+    languageGroupKey: decisionLanguageGroupKey({
+      caseNumber: result.caseNumber,
+      country: result.country,
+      ecli: result.ecli,
+      sourceDocumentId: result.sourceDocumentId,
+      sourceId: BYTE_BUDGET_SOURCE_UUID,
+    }),
+  });
+
+/** Refuse the court only when omitting it repairs the shared storage budget. */
+export const decisionCourtExceedsStorage = (
+  candidate: DecisionSearchCandidate,
+): boolean =>
+  !fitsCitationStorageField("court", candidate.court) ||
+  (!fitsDecisionSearchCandidateRow(candidate) &&
+    fitsDecisionSearchCandidateRow({ ...candidate, court: "" }));
+
+const DECISION_TYPE_NOISE =
+  /česk[áa]\s+republik[ay]|jm[ée]nem\s+republik[ay]/giu;
+
+// An address is a column read out of place (a code-list IRI), never a type.
+const URL_SHAPED = /^[a-z][a-z\d+.-]*:\/\//iu;
+
+/**
+ * A decision type as one value every adapter stores the same way: lowercase,
+ * without the republic formula, and a publisher list folded into one field
+ * ("uznesenie,uznesenie") naming each type once. A value shaped like an
+ * address or a docket is no type at all, so none is stored; the adapter keeps
+ * what the publisher stated in metadata.
+ */
+export const normalizeDecisionType = (
+  raw: string | undefined,
+): string | undefined => {
+  if (!raw) {
+    return undefined;
+  }
+  const stated = raw.replace(DECISION_TYPE_NOISE, "").trim().toLowerCase();
+  const value = [
+    ...new Set(
+      stated
+        .split(",")
+        .map((part) => part.trim())
+        .filter((part) => part.length > 0),
+    ),
+  ].join(", ");
+  if (
+    value.length === 0 ||
+    URL_SHAPED.test(value) ||
+    isDocketShapedDecisionType(value)
+  ) {
+    return undefined;
+  }
+  return value;
+};
 
 const sanitizeDecisionIdentifier = (
   identifier: DecisionIdentifier,
@@ -214,6 +298,10 @@ export const storedCaseNumberOf = (
     : result.caseNumber.replace(DANGEROUS_CHARS, "");
 };
 
+const isPreparedDocumentAst = (
+  ast: PreparedCorpusAst["ast"],
+): ast is DocumentAst => ast !== null && Array.isArray(ast.blocks);
+
 /**
  * Sanitize text fields before DB insertion. Postgres rejects null bytes in
  * text columns. Keeping this at the ingestion boundary means adapters and
@@ -231,23 +319,9 @@ export const storedCaseNumberOf = (
 export const sanitizeResult = (
   result: RawIngestionResult,
   metadataUrlSchema?: unknown,
-): IngestionResult => {
+): Result<IngestionResult, StoredCorpusValidationError> => {
   const strip = (value: string | undefined): string | undefined =>
     value ? stripDangerousChars(value) : undefined;
-
-  const DECISION_TYPE_NOISE =
-    /česk[áa]\s+republik[ay]|jm[ée]nem\s+republik[ay]/giu;
-
-  const normalizeDecisionType = (
-    raw: string | undefined,
-  ): string | undefined => {
-    if (!raw) {
-      return undefined;
-    }
-    return (
-      raw.replace(DECISION_TYPE_NOISE, "").trim().toLowerCase() || undefined
-    );
-  };
 
   // A listed document must survive a bad date, so an unusable value is
   // dropped to null instead of failing the row. The bounds are the
@@ -284,8 +358,21 @@ export const sanitizeResult = (
   // rewrites inline text (no-break spaces become spaces), which can turn a
   // run into a collapsible one.
   const sanitizedDocumentAst = deepSanitize(result.documentAst);
-  const documentAst = isDocumentAst(sanitizedDocumentAst)
-    ? withProjectedPlainText(sanitizedDocumentAst)
+  const preparedAstResult = prepareCorpusAst({
+    ast: sanitizedDocumentAst,
+    fallbackText: result.fulltext,
+    parserVersion: result.parserVersion,
+  });
+  if (preparedAstResult.isErr()) {
+    return preparedAstResult;
+  }
+  const preparedAst = preparedAstResult.value;
+  const readableAst = preparedAst.ast;
+  // Anchors are made stable here, at the one boundary every write and every
+  // replay comparison reads through, so a stored row and a reparse of it are
+  // compared in the same anchors and a replay reaches a fixed point.
+  const documentAst = isPreparedDocumentAst(readableAst)
+    ? withStableBlockAnchors(withProjectedPlainText(readableAst))
     : EMPTY_AST;
 
   const identifiers = sanitizeDecisionIdentifiers(result.identifiers);
@@ -371,54 +458,79 @@ export const sanitizeResult = (
     });
   }
 
+  const caseNumber = storedCaseNumberOf(result);
+  const court = stripDangerousChars(result.court);
+  if (!fitsCitationStorageField("caseNumber", caseNumber)) {
+    throw new UnpersistableDecisionFieldError({
+      message: "Decision number exceeds storage limits",
+      field: UNPERSISTABLE_DECISION_FIELDS.CASE_NUMBER_LENGTH,
+    });
+  }
+  if (!fitsCitationStorageField("court", court)) {
+    throw new UnpersistableDecisionFieldError({
+      message: "Decision court exceeds storage limits",
+      field: UNPERSISTABLE_DECISION_FIELDS.COURT_LENGTH,
+    });
+  }
+
   assertDecisionLanguageIdentity({ country: result.country, sourceDocumentId });
 
-  return plainTextIngestionResult(
-    {
-      ...result,
-      observationDetail,
-      caseNumber: storedCaseNumberOf(result),
-      caseNumberType: parsePrimaryReferenceType(result.caseNumberType),
-      identifiers,
-      sourceDocumentId,
-      sourceDocumentIdAliases: result.sourceDocumentIdAliases?.filter(
-        (identity): identity is string =>
-          strip(identity) === identity &&
-          isPersistableSourceDocumentId(identity),
-      ),
-      sourceDocumentIdRepairAliases:
-        result.sourceDocumentIdRepairAliases?.filter(
+  const decisionType = normalizeDecisionType(strip(result.decisionType));
+  const ecli = strip(result.ecli);
+  // The write planner checks aggregate index bytes against its actual language group key.
+
+  return Result.ok(
+    plainTextIngestionResult(
+      {
+        ...result,
+        observationDetail,
+        caseNumber,
+        court,
+        caseNumberType: parsePrimaryReferenceType(result.caseNumberType),
+        identifiers,
+        sourceDocumentId,
+        sourceDocumentIdAliases: result.sourceDocumentIdAliases?.filter(
           (identity): identity is string =>
             strip(identity) === identity &&
             isPersistableSourceDocumentId(identity),
         ),
-      legacySourceUrls: result.legacySourceUrls
-        ?.map((url) => strip(url))
-        .filter((url): url is string => url !== undefined),
-      legacyEcli: strip(result.legacyEcli),
-      sheetNumber: strip(result.sheetNumber),
-      fulltext: result.fulltext
-        ? collapseSpacedLetters(strip(result.fulltext) ?? "")
-        : undefined,
-      ecli: strip(result.ecli),
-      decisionDate: boundDecisionDate(result.decisionDate),
-      decisionType: normalizeDecisionType(strip(result.decisionType)),
-      sourceUrl: strip(result.sourceUrl),
-      documentUrl: strip(result.documentUrl),
-      metadata,
-      textFields,
-      publisherCitedCases: result.publisherCitedCases?.map((cited) =>
-        stripDangerousChars(cited),
-      ),
-      sections: result.sections?.map((section) => ({
-        ...section,
-        title:
-          section.title === null ? null : stripDangerousChars(section.title),
-        text: collapseSpacedLetters(strip(section.text) ?? ""),
-      })),
-      documentAst,
-      sourceRaw: strip(result.sourceRaw),
-    },
-    metadataUrlSchema,
+        sourceDocumentIdRepairAliases:
+          result.sourceDocumentIdRepairAliases?.filter(
+            (identity): identity is string =>
+              strip(identity) === identity &&
+              isPersistableSourceDocumentId(identity),
+          ),
+        legacySourceUrls: result.legacySourceUrls
+          ?.map((url) => strip(url))
+          .filter((url): url is string => url !== undefined),
+        legacyEcli: strip(result.legacyEcli),
+        legacyCaseNumber: strip(result.legacyCaseNumber),
+        sheetNumber: strip(result.sheetNumber),
+        fulltext: result.fulltext
+          ? collapseSpacedLetters(strip(result.fulltext) ?? "")
+          : undefined,
+        ecli,
+        decisionDate: boundDecisionDate(result.decisionDate),
+        decisionType,
+        sourceUrl: strip(result.sourceUrl),
+        documentUrl: strip(result.documentUrl),
+        metadata,
+        textFields,
+        publisherCitedCases: result.publisherCitedCases?.map((cited) =>
+          stripDangerousChars(cited),
+        ),
+        sections: result.sections?.map((section) => ({
+          ...section,
+          title:
+            section.title === null ? null : stripDangerousChars(section.title),
+          text: collapseSpacedLetters(strip(section.text) ?? ""),
+        })),
+        documentAst,
+        citationScopes:
+          preparedAst.type === "text-only" ? undefined : result.citationScopes,
+        sourceRaw: strip(result.sourceRaw),
+      },
+      metadataUrlSchema,
+    ),
   );
 };

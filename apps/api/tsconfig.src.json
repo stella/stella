@@ -1,0 +1,10 @@
+{
+  "extends": [
+    "./tsconfig.json",
+    "./typecheck-required/src.json",
+    "./.cache/typecheck-declarations/src.json"
+  ],
+  "compilerOptions": {
+    "tsBuildInfoFile": "${configDir}/.cache/tsbuildinfo.src.json"
+  }
+}

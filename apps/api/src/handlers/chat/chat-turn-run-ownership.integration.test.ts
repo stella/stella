@@ -1,34 +1,43 @@
+import { EventType, memoryStream } from "@tanstack/ai";
 import type { StreamChunk } from "@tanstack/ai";
 import { panic, Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq, inArray, sql } from "drizzle-orm";
 
+import { waitForExternalState } from "@stll/property-testing/external-state";
+import { rejectionOf } from "@stll/property-testing/rejection";
+import { deferred } from "@stll/test-kit";
+
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { chatMessages, chatThreads, chatTurns } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
+import { toPersistedChatMessageContentV3 } from "@/api/handlers/chat/chat-message-parts";
 import {
   bindChatTurnRunId,
+  CHAT_TURN_RUN_LEASE_MS,
   claimChatTurnForExecution,
   createChatTurnAcceptance,
   insertChatTurnAcceptanceOnTx,
   isChatTurnRunIdTaken,
   OWNER_LOST_OUTCOME,
   reapOwnerlessChatTurnOnTx,
-  CHAT_TURN_RUN_LEASE_MS,
   settleChatTurnOnTx,
   startChatTurnRun,
 } from "@/api/handlers/chat/chat-turn-persistence";
 import type { ChatTurnExecution } from "@/api/handlers/chat/chat-turn-persistence";
 import {
-  CHAT_TURN_OWNER_LOST_REASON,
   ChatTurnOwnership,
   ChatTurnRun,
 } from "@/api/handlers/chat/chat-turn-run";
 import type { ChatTurnStoredSettlement } from "@/api/handlers/chat/chat-turn-run";
+import { CHAT_TURN_OWNER_LOST_REASON } from "@/api/handlers/chat/chat-turn-run-cut";
 import type { ChatTurnOutcome } from "@/api/handlers/chat/types";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { withChatRunPings } from "@/api/lib/chat/chat-run-pings";
+import { buildWireSnapshot } from "@/api/tests/helpers/chat-fixtures";
+import { HELD_TEST_STREAM_BINDING } from "@/api/tests/helpers/sse-stream-binding";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 import {
@@ -106,6 +115,7 @@ const seedRunningTurn = async (member?: Member) => {
     workspaceId: as.workspaceId,
   });
   const acceptance = createChatTurnAcceptance({
+    source: { type: "member" },
     organizationId: ids.orgA,
     threadId,
     userId: as.userId,
@@ -113,17 +123,22 @@ const seedRunningTurn = async (member?: Member) => {
     workspaceId: as.workspaceId,
   });
   unwrap(
-    await as.safeDb(async (tx) => {
-      await tx.insert(chatMessages).values({
-        content: { data: [{ text: "Draft it", type: "text" }], version: 1 },
-        id: userMessageId,
-        role: "user",
-        threadId,
-        userId: as.userId,
-        workspaceId: as.workspaceId,
-      });
-      await insertChatTurnAcceptanceOnTx({ acceptance, tx });
-    }),
+    await withChatRunPings(
+      async (pings) =>
+        await as.safeDb(async (tx) => {
+          await tx.insert(chatMessages).values({
+            content: toPersistedChatMessageContentV3({
+              data: [{ content: "Draft it", type: "text" }],
+            }),
+            id: userMessageId,
+            role: "user",
+            threadId,
+            userId: as.userId,
+            workspaceId: as.workspaceId,
+          });
+          await insertChatTurnAcceptanceOnTx({ pings, acceptance, tx });
+        }),
+    ),
   );
   const execution = unwrap(
     await claimChatTurnForExecution({
@@ -154,17 +169,22 @@ const cutShortOutcome = (reason: unknown): ChatTurnOutcome =>
     : { reason: "client-disconnected", type: "interrupted" };
 
 /**
- * A run that produces nothing until it is cut short, then settles its turn
- * with the outcome its abort names. `stored` says how that settlement went.
+ * A run that settles after an abort or after its finite chunk source ends.
+ * `stored` says how that settlement went.
  */
 const produceUntilCut = ({
+  chunks,
+  end = "on-abort",
   execution,
   heartbeat,
   ownerDb = safeDb,
   ownership = new ChatTurnOwnership(),
   persist,
+  onDeliveryStalled,
   threadId,
 }: {
+  chunks?: AsyncIterable<StreamChunk>;
+  end?: "on-abort" | "after-chunks";
   execution: ChatTurnExecution;
   heartbeat: { intervalMs: number; renewEvery: number };
   /** The database the run's heartbeat reads its turn through. */
@@ -172,14 +192,16 @@ const produceUntilCut = ({
   ownership?: ChatTurnOwnership;
   /** Stores the cut; the turn's own settlement by default. */
   persist?: () => Promise<ChatTurnStoredSettlement>;
+  onDeliveryStalled?: () => void;
   threadId: SafeId<"chatThread">;
 }) => {
   const run = new ChatTurnRun({
     connectors: undefined,
-    deadlineMs: 60_000,
+    bound: { type: "provider-deadline", deadlineMs: 60_000 },
     mode: "raw",
     heartbeat,
     ownership,
+    onDeliveryStalled,
     owner: {
       indexThread: async () => await Promise.resolve(),
       execution,
@@ -194,23 +216,57 @@ const produceUntilCut = ({
   const stored: { settlement?: string } = {};
   const { signal } = run.control.abortController;
   const output = async function* (): AsyncGenerator<StreamChunk> {
-    if (!signal.aborted) {
-      await new Promise((resolve) => {
-        signal.addEventListener("abort", resolve, { once: true });
-      });
+    if (chunks !== undefined) {
+      yield* chunks;
+    }
+    let outcome: ChatTurnOutcome;
+    switch (end) {
+      case "on-abort":
+        if (!signal.aborted) {
+          await new Promise((resolve) => {
+            signal.addEventListener("abort", resolve, { once: true });
+          });
+        }
+        outcome = cutShortOutcome(signal.reason);
+        break;
+      case "after-chunks":
+        outcome = { type: "completed" };
+        break;
+      default:
+        end satisfies never;
+        panic(`Unknown run end: ${String(end)}`);
     }
     await run.settle(
       persist ??
         (async () => {
-          const outcome = cutShortOutcome(signal.reason);
           const settlement = unwrap(
-            await safeDb(
-              async (tx) =>
-                await settleChatTurnOnTx({
-                  assistantMessageId: null,
-                  execution,
-                  outcome,
-                  tx,
+            await withChatRunPings(
+              async (pings) =>
+                await safeDb(async (tx) => {
+                  const assistantMessageId =
+                    outcome.type === "completed"
+                      ? toSafeId<"chatMessage">(Bun.randomUUIDv7())
+                      : null;
+                  if (assistantMessageId !== null) {
+                    await tx.insert(chatMessages).values({
+                      content: toPersistedChatMessageContentV3({
+                        data: [{ content: "Done", type: "text" }],
+                        metadata: { turnOutcome: outcome },
+                      }),
+                      id: assistantMessageId,
+                      role: "assistant",
+                      threadId,
+                      userId: ids.userA1,
+                      workspaceId: ids.wsA1,
+                    });
+                  }
+                  return await settleChatTurnOnTx({
+                    pings,
+                    assistantMessageId,
+                    execution,
+                    outcome,
+                    tx,
+                  });
                 }),
             ),
           );
@@ -221,7 +277,11 @@ const produceUntilCut = ({
         }),
     );
   };
-  const response = run.produce(output());
+  const response = run.produce(
+    output(),
+    memoryStream({ runId: Bun.randomUUIDv7() }),
+    HELD_TEST_STREAM_BINDING,
+  );
   return { response, run, stored };
 };
 
@@ -235,6 +295,298 @@ const expireLease = async (turnId: SafeId<"chatTurn">) => {
 };
 
 describe("a producing run", () => {
+  test("ends a stalled provider when durable production fails", async () => {
+    const { execution, threadId } = await seedRunningTurn();
+    const stalled = Promise.withResolvers<undefined>();
+    const closed = Promise.withResolvers<undefined>();
+    const run = new ChatTurnRun({
+      connectors: undefined,
+      bound: { type: "provider-deadline", deadlineMs: 60_000 },
+      mode: "raw",
+      owner: {
+        indexThread: async () => await Promise.resolve(),
+        execution,
+        owningAssistantMessage: undefined,
+        recordAuditEvent: noAudit,
+        safeDb,
+        threadId,
+        userId: ids.userA1,
+        workspaceId: ids.wsA1,
+      },
+    });
+    const { signal } = run.control.abortController;
+    const output = async function* (): AsyncGenerator<StreamChunk> {
+      try {
+        stalled.resolve(undefined);
+        await new Promise((resolve) => {
+          signal.addEventListener("abort", resolve, { once: true });
+        });
+        yield* [];
+      } finally {
+        closed.resolve(undefined);
+      }
+    };
+    const response = run.produce(
+      output(),
+      memoryStream({ runId: Bun.randomUUIDv7() }),
+      HELD_TEST_STREAM_BINDING,
+    );
+    try {
+      await stalled.promise;
+      await run.failProduction("started");
+      expect(signal.aborted).toBe(true);
+      await closed.promise;
+      expect(await run.settled).toBe("stored");
+      expect((await readTurn(execution.id)).status).toBe("failed");
+    } finally {
+      run.control.abortController.abort();
+      await response.text();
+    }
+  });
+
+  test("delivers a large snapshot over HTTP to a continuously reading client", async () => {
+    const { execution, threadId } = await seedRunningTurn();
+    const snapshot = buildWireSnapshot([
+      {
+        id: "large-history",
+        role: "assistant",
+        content: "x".repeat(8 * 1024 * 1024),
+      },
+    ]);
+    const encodedSnapshot = JSON.stringify(snapshot);
+    expect(
+      new TextEncoder().encode(encodedSnapshot).byteLength,
+    ).toBeGreaterThan(1024 * 1024);
+    const clientConnected = Promise.withResolvers<undefined>();
+    const chunks = async function* (): AsyncGenerator<StreamChunk> {
+      yield {
+        type: EventType.TEXT_MESSAGE_CONTENT,
+        messageId: "http-connected",
+        delta: "connected",
+      };
+      // The initial event flushes HTTP headers before the large event starts.
+      await clientConnected.promise;
+      yield snapshot;
+    };
+    const { response, run } = produceUntilCut({
+      chunks: chunks(),
+      end: "after-chunks",
+      execution,
+      threadId,
+      heartbeat: { intervalMs: 5000, renewEvery: 4 },
+    });
+    const server = Bun.serve({
+      hostname: "127.0.0.1",
+      port: 0,
+      fetch: () => response,
+    });
+    try {
+      const client = await fetch(server.url, {
+        signal: AbortSignal.timeout(10_000),
+      });
+      const body = client.body ?? panic("Expected HTTP turn delivery");
+      const decoder = new TextDecoder();
+      const delivered: string[] = [];
+      clientConnected.resolve(undefined);
+      for await (const chunk of body) {
+        delivered.push(decoder.decode(chunk, { stream: true }));
+        // Real socket progress must continue between reads, even for a slower viewer.
+        await Bun.sleep(1);
+      }
+      delivered.push(decoder.decode());
+      expect(delivered.join("")).toContain(encodedSnapshot);
+      expect(await run.settled).toBe("stored");
+      expect(run.control.abortController.signal.aborted).toBe(false);
+      expect((await readTurn(execution.id)).status).toBe("completed");
+    } finally {
+      clientConnected.resolve(undefined);
+      await server.stop(true);
+      await run.stop();
+    }
+  }, 15_000);
+
+  test("fails a stalled HTTP reader while preserving the completed turn", async () => {
+    const { execution, threadId } = await seedRunningTurn();
+    const clientConnected = Promise.withResolvers<undefined>();
+    const deliveryStalled = deferred();
+    const snapshot = buildWireSnapshot([
+      {
+        id: "stalled-http-history",
+        role: "assistant",
+        content: "x".repeat(32 * 1024 * 1024),
+      },
+    ]);
+    const chunks = async function* (): AsyncGenerator<StreamChunk> {
+      yield {
+        type: EventType.TEXT_MESSAGE_CONTENT,
+        messageId: "stalled-http-connected",
+        delta: "connected",
+      };
+      await clientConnected.promise;
+      yield snapshot;
+    };
+    const { response, run } = produceUntilCut({
+      chunks: chunks(),
+      end: "after-chunks",
+      execution,
+      threadId,
+      heartbeat: { intervalMs: 5000, renewEvery: 4 },
+      onDeliveryStalled: deliveryStalled.resolve,
+    });
+    const server = Bun.serve({
+      hostname: "127.0.0.1",
+      port: 0,
+      fetch: () => response,
+    });
+    const firstBytes = Promise.withResolvers<undefined>();
+    const closed = Promise.withResolvers<undefined>();
+    const wire: string[] = [];
+    const networkErrors: string[] = [];
+    const socket = await Bun.connect({
+      hostname: "127.0.0.1",
+      port: server.port ?? panic("Expected a TCP server port"),
+      socket: {
+        data: (connection, data) => {
+          wire.push(data.toString());
+          if (wire.length === 1) {
+            // Pause native socket reads, rather than a buffered fetch body.
+            connection.pause();
+            firstBytes.resolve(undefined);
+          }
+        },
+        error: (_connection, error) => {
+          networkErrors.push(error.message);
+        },
+        close: () => closed.resolve(undefined),
+        open: (connection) => {
+          connection.write(
+            "GET / HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n",
+          );
+        },
+      },
+    });
+    try {
+      await firstBytes.promise;
+      clientConnected.resolve(undefined);
+      await deliveryStalled.promise;
+      expect(await run.settled).toBe("stored");
+      socket.resume();
+      // Bun can leave a failed chunked socket open until client cancellation.
+      // Collect its buffered prefix without waiting for that close handshake.
+      await Promise.race([closed.promise, Bun.sleep(200)]);
+      const delivered = wire.join("");
+      expect(delivered).toContain("HTTP/1.1 200");
+      expect(delivered).toContain("connected");
+      expect(delivered.length).toBeLessThan(JSON.stringify(snapshot).length);
+      // A failed chunked response must not claim a complete HTTP body.
+      expect(delivered.endsWith("\r\n0\r\n\r\n")).toBe(false);
+      expect(networkErrors.every((message) => /reset/iu.test(message))).toBe(
+        true,
+      );
+      expect(run.control.abortController.signal.aborted).toBe(false);
+      expect((await readTurn(execution.id)).status).toBe("completed");
+    } finally {
+      clientConnected.resolve(undefined);
+      socket.terminate();
+      await server.stop(true);
+      await run.stop();
+    }
+  }, 15_000);
+
+  test("bounds an unread delivery without indefinitely pausing its owned producer", async () => {
+    const { execution, threadId } = await seedRunningTurn();
+    const drained = Promise.withResolvers<undefined>();
+    const chunks = async function* (): AsyncGenerator<StreamChunk> {
+      // Cross the SDK durability batch boundary before the producer settles.
+      for (let index = 0; index < 40; index += 1) {
+        yield {
+          type: EventType.TEXT_MESSAGE_CONTENT,
+          messageId: "buffer-test",
+          delta: "x".repeat(60_000),
+        };
+      }
+      drained.resolve(undefined);
+    };
+    const { response, run } = produceUntilCut({
+      chunks: chunks(),
+      execution,
+      threadId,
+      heartbeat: { intervalMs: 5000, renewEvery: 4 },
+    });
+    try {
+      await drained.promise;
+      expect(run.control.abortController.signal.aborted).toBe(false);
+      expect(await rejectionOf(response.text())).toMatchObject({
+        message: expect.stringContaining("Chat delivery exceeded its buffer"),
+      });
+    } finally {
+      await run.stop();
+    }
+    expect((await readTurn(execution.id)).status).toBe("interrupted");
+  }, 15_000);
+
+  test("an overflowing delivery preserves a naturally completed turn", async () => {
+    const { execution, threadId } = await seedRunningTurn();
+    const chunks = async function* (): AsyncGenerator<StreamChunk> {
+      // Cross the SDK durability batch boundary before the producer settles.
+      for (let index = 0; index < 40; index += 1) {
+        yield {
+          type: EventType.TEXT_MESSAGE_CONTENT,
+          messageId: "completed-buffer-test",
+          delta: "x".repeat(60_000),
+        };
+      }
+    };
+    const { response, run } = produceUntilCut({
+      chunks: chunks(),
+      end: "after-chunks",
+      execution,
+      threadId,
+      heartbeat: { intervalMs: 5000, renewEvery: 4 },
+    });
+    try {
+      expect(await run.settled).toBe("stored");
+      expect(run.control.abortController.signal.aborted).toBe(false);
+      expect(await rejectionOf(response.text())).toMatchObject({
+        message: expect.stringContaining("Chat delivery exceeded its buffer"),
+      });
+      expect((await readTurn(execution.id)).status).toBe("completed");
+    } finally {
+      await run.stop();
+    }
+  }, 15_000);
+
+  test("cancelling queued delivery after EOF preserves the completed turn", async () => {
+    const { execution, threadId } = await seedRunningTurn();
+    const chunks = async function* (): AsyncGenerator<StreamChunk> {
+      for (let index = 0; index < 3; index += 1) {
+        yield {
+          type: EventType.TEXT_MESSAGE_CONTENT,
+          messageId: "queued-eof-test",
+          delta: "queued",
+        };
+      }
+    };
+    const { response, run } = produceUntilCut({
+      chunks: chunks(),
+      end: "after-chunks",
+      execution,
+      threadId,
+      heartbeat: { intervalMs: 5000, renewEvery: 4 },
+    });
+    try {
+      expect(await run.settled).toBe("stored");
+      // Let the transport's pending iterator read observe EOF after settlement.
+      await Bun.sleep(0);
+      const body = response.body ?? panic("Expected queued turn delivery");
+      await body.cancel();
+      expect(run.control.abortController.signal.aborted).toBe(false);
+      expect((await readTurn(execution.id)).status).toBe("completed");
+    } finally {
+      await run.stop();
+    }
+  });
+
   test("keeps its turn by renewing the lease on its heartbeat", async () => {
     const { execution, threadId } = await seedRunningTurn();
     await expireLease(execution.id);
@@ -243,17 +595,24 @@ describe("a producing run", () => {
       heartbeat: { intervalMs: 5, renewEvery: 2 },
       threadId,
     });
-    for (let poll = 0; poll < 400; poll += 1) {
-      const { leaseExpiresAt } = await readTurn(execution.id);
-      if (leaseExpiresAt !== null && leaseExpiresAt > new Date()) {
-        break;
-      }
-      await Bun.sleep(5);
-    }
+    await waitForExternalState({
+      description: "the heartbeat renews the lease past now",
+      intervalMs: 5,
+      read: async () => {
+        const { leaseExpiresAt } = await readTurn(execution.id);
+        return leaseExpiresAt !== null && leaseExpiresAt > new Date();
+      },
+      // The reaper below decides the outcome either way.
+      onTimeout: () => undefined,
+    });
     // Renewed past now: the reaper leaves a live owner's turn alone.
     unwrap(
-      await safeDb(
-        async (tx) => await reapOwnerlessChatTurnOnTx({ threadId, tx }),
+      await withChatRunPings(
+        async (pings) =>
+          await safeDb(
+            async (tx) =>
+              await reapOwnerlessChatTurnOnTx({ pings, threadId, tx }),
+          ),
       ),
     );
     expect((await readTurn(execution.id)).status).toBe("running");
@@ -271,8 +630,12 @@ describe("a producing run", () => {
     });
     await expireLease(execution.id);
     unwrap(
-      await safeDb(
-        async (tx) => await reapOwnerlessChatTurnOnTx({ threadId, tx }),
+      await withChatRunPings(
+        async (pings) =>
+          await safeDb(
+            async (tx) =>
+              await reapOwnerlessChatTurnOnTx({ pings, threadId, tx }),
+          ),
       ),
     );
 
@@ -294,7 +657,7 @@ describe("a producing run", () => {
     const { execution, threadId } = await seedRunningTurn();
     const run = new ChatTurnRun({
       connectors: undefined,
-      deadlineMs: 60_000,
+      bound: { type: "provider-deadline", deadlineMs: 60_000 },
       mode: "raw",
       heartbeat: { intervalMs: 1, renewEvery: 1 },
       owner: {
@@ -311,17 +674,21 @@ describe("a producing run", () => {
     const output = async function* (): AsyncGenerator<StreamChunk> {
       await run.settle(async () => {
         unwrap(
-          await safeDb(
-            async (tx) =>
-              await settleChatTurnOnTx({
-                assistantMessageId: null,
-                execution,
-                outcome: {
-                  reason: "client-disconnected",
-                  type: "interrupted",
-                },
-                tx,
-              }),
+          await withChatRunPings(
+            async (pings) =>
+              await safeDb(
+                async (tx) =>
+                  await settleChatTurnOnTx({
+                    pings,
+                    assistantMessageId: null,
+                    execution,
+                    outcome: {
+                      reason: "client-disconnected",
+                      type: "interrupted",
+                    },
+                    tx,
+                  }),
+              ),
           ),
         );
         // The turn is no longer running while the settlement finishes: a
@@ -334,7 +701,11 @@ describe("a producing run", () => {
       });
       yield* [];
     };
-    const response = run.produce(output());
+    const response = run.produce(
+      output(),
+      memoryStream({ runId: Bun.randomUUIDv7() }),
+      HELD_TEST_STREAM_BINDING,
+    );
     await response.text();
 
     expect(run.control.abortController.signal.aborted).toBe(false);
@@ -350,7 +721,7 @@ describe("a producing run", () => {
       threadId,
     });
 
-    expect(await ownership.relinquish()).toBe("stored");
+    expect(await ownership.relinquish({ type: "end" })).toBe("stored");
 
     expect(stored.settlement).toBe("settled");
     expect(await readTurn(execution.id)).toMatchObject({
@@ -370,14 +741,19 @@ describe("a producing run", () => {
       Date.now() + CHAT_TURN_RUN_LEASE_MS * 2,
     );
 
-    const relinquished = ownership.relinquish();
-    for (let poll = 0; poll < 400; poll += 1) {
-      const { leaseExpiresAt } = await readTurn(execution.id);
-      if ((leaseExpiresAt?.getTime() ?? 0) < (claimedLease?.getTime() ?? 0)) {
-        break;
-      }
-      await Bun.sleep(5);
-    }
+    const relinquished = ownership.relinquish({ type: "end" });
+    await waitForExternalState({
+      description: "the relinquished claim shortens the lease",
+      intervalMs: 5,
+      read: async () => {
+        const { leaseExpiresAt } = await readTurn(execution.id);
+        return (
+          (leaseExpiresAt?.getTime() ?? 0) < (claimedLease?.getTime() ?? 0)
+        );
+      },
+      // The assertion below reports a lease that stayed long.
+      onTimeout: () => undefined,
+    });
     expect(
       (await readTurn(execution.id)).leaseExpiresAt?.getTime() ?? 0,
     ).toBeLessThanOrEqual(Date.now() + CHAT_TURN_RUN_LEASE_MS);
@@ -422,7 +798,7 @@ describe("a producing run", () => {
     });
     await beatStarted.promise;
 
-    const relinquished = ownership.relinquish();
+    const relinquished = ownership.relinquish({ type: "end" });
     let over = false;
     const settled = run.settled.then((end) => {
       over = true;
@@ -453,7 +829,7 @@ describe("a producing run", () => {
     };
     const run = new ChatTurnRun({
       connectors: undefined,
-      deadlineMs: 60_000,
+      bound: { type: "provider-deadline", deadlineMs: 60_000 },
       mode: "raw",
       heartbeat: { intervalMs: 1, renewEvery: 1000 },
       ownership,
@@ -473,17 +849,21 @@ describe("a producing run", () => {
       await beatStarted.promise;
       await run.settle(async () => {
         unwrap(
-          await safeDb(
-            async (tx) =>
-              await settleChatTurnOnTx({
-                assistantMessageId: null,
-                execution,
-                outcome: {
-                  reason: "client-disconnected",
-                  type: "interrupted",
-                },
-                tx,
-              }),
+          await withChatRunPings(
+            async (pings) =>
+              await safeDb(
+                async (tx) =>
+                  await settleChatTurnOnTx({
+                    pings,
+                    assistantMessageId: null,
+                    execution,
+                    outcome: {
+                      reason: "client-disconnected",
+                      type: "interrupted",
+                    },
+                    tx,
+                  }),
+              ),
           ),
         );
         return {
@@ -493,12 +873,18 @@ describe("a producing run", () => {
       });
       yield* [];
     };
-    await run.produce(output()).text();
+    await run
+      .produce(
+        output(),
+        memoryStream({ runId: Bun.randomUUIDv7() }),
+        HELD_TEST_STREAM_BINDING,
+      )
+      .text();
     expect(ownership.run(execution.executionId)).toBeUndefined();
 
     // Giving up the process's turns from here still waits for that beat.
     let relinquishedWith: string | undefined;
-    const relinquished = ownership.relinquish().then((end) => {
+    const relinquished = ownership.relinquish({ type: "end" }).then((end) => {
       relinquishedWith = end;
       return end;
     });
@@ -530,7 +916,7 @@ describe("a producing run", () => {
     );
 
     let relinquishedWith: string | undefined;
-    const relinquished = ownership.relinquish().then((end) => {
+    const relinquished = ownership.relinquish({ type: "end" }).then((end) => {
       relinquishedWith = end;
       return end;
     });
@@ -560,7 +946,7 @@ describe("a producing run", () => {
       threadId,
     });
 
-    expect(await ownership.relinquish()).toBe("unstored");
+    expect(await ownership.relinquish({ type: "end" })).toBe("unstored");
     await response.body?.cancel();
   });
 });
@@ -591,14 +977,18 @@ describe("a run id", () => {
       ),
     ).toBe("run-taken");
     unwrap(
-      await safeDb(
-        async (tx) =>
-          await settleChatTurnOnTx({
-            assistantMessageId: null,
-            execution: first.execution,
-            outcome: { type: "interrupted", reason: "client-disconnected" },
-            tx,
-          }),
+      await withChatRunPings(
+        async (pings) =>
+          await safeDb(
+            async (tx) =>
+              await settleChatTurnOnTx({
+                pings,
+                assistantMessageId: null,
+                execution: first.execution,
+                outcome: { type: "interrupted", reason: "client-disconnected" },
+                tx,
+              }),
+          ),
       ),
     );
     expect((await readTurn(first.execution.id)).runId).toBe(runId);
@@ -701,14 +1091,18 @@ describe("a run id", () => {
     ).toBe("run-taken");
 
     unwrap(
-      await safeDb(
-        async (tx) =>
-          await settleChatTurnOnTx({
-            assistantMessageId: null,
-            execution: first.execution,
-            outcome: OWNER_LOST_OUTCOME,
-            tx,
-          }),
+      await withChatRunPings(
+        async (pings) =>
+          await safeDb(
+            async (tx) =>
+              await settleChatTurnOnTx({
+                pings,
+                assistantMessageId: null,
+                execution: first.execution,
+                outcome: OWNER_LOST_OUTCOME,
+                tx,
+              }),
+          ),
       ),
     );
     expect(await readTurn(first.execution.id)).toMatchObject({

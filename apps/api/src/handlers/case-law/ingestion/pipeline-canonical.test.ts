@@ -7,11 +7,12 @@ import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
   caseLawCorpusUploadIntents,
-  caseLawDecisions,
+  caseLawDecisionFallbackIdentities,
   caseLawDecisionIdentifiers,
+  caseLawDecisions,
   caseLawSources,
+  corpusIndexGenerations,
 } from "@/api/db/schema";
-import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import { czNsAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-ns";
 import { PL_COURTS_METADATA_URL_SCHEMA } from "@/api/handlers/case-law/ingestion/adapters/pl-courts.metadata-urls";
 import { runIngestionPipeline as runIngestionPipelineWithDependencies } from "@/api/handlers/case-law/ingestion/pipeline";
@@ -20,8 +21,9 @@ import { processDecision as processDecisionWithDependencies } from "@/api/handle
 import type { CaseLawCorpusDependencies } from "@/api/handlers/case-law/ingestion/pipeline/dependencies";
 import { createSafeId } from "@/api/lib/branded-types";
 import {
-  TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
+  splitStoredDecisionTextMetadata,
+  TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
 import { DatabaseError, TimeoutError } from "@/api/lib/errors/tagged-errors";
 import type { CaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
@@ -35,9 +37,11 @@ import type { putCorpusPacks } from "@/api/lib/legal-search/corpus-pack-writer";
 import * as realCorpusStorage from "@/api/lib/legal-search/corpus-storage";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import {
-  sanitizeResult,
   partialObservationFromMetadata,
+  sanitizeResult,
 } from "@/api/lib/legal-search/ingestion-normalization";
+import { PUBLISHER_REQUEST } from "@/api/lib/legal-search/ingestion-types";
+import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import {
   approveMetadataUrls,
   rehydrateMetadataUrls,
@@ -47,6 +51,11 @@ import { toMetadataUrl } from "@/api/lib/sanitize-url";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
+
+beforeEach(() => {
+  putPacksMock.mockReset();
+  putPacksMock.mockImplementation(putPacksDefault);
+});
 
 /**
  * `canonical` storage mode moves the payload out of Postgres, so what a
@@ -73,6 +82,8 @@ const unwrapPackFooter = (
 
 const events: string[] = [];
 const insertedRows: Record<string, unknown>[] = [];
+/** Fallback identity aliases the row writes reserved, read back as owners. */
+const reservedFallbackAliases: Record<string, unknown>[] = [];
 const updatedDecisionRows: Record<string, unknown>[] = [];
 
 /** Every pack the batches under test handed to the transfer. */
@@ -87,19 +98,18 @@ const packedDocumentIds = (pack: EncodedPack): string[] => [
 // redundancy decision and encodes a real pack, so a payload the planner
 // refuses contributes no member here for the same reason it would in
 // production, not because a fixture said so.
-const putPacksMock = mock(
-  async ({
-    packs,
-  }: Parameters<typeof putCorpusPacks>[0]): Promise<
-    Result<void, CorpusPackError>
-  > => {
-    for (const pack of packs) {
-      transferredPacks.push(pack);
-      events.push(`corpus-pack:${packedDocumentIds(pack).join(",")}`);
-    }
-    return await Promise.resolve(Result.ok(undefined));
-  },
-);
+const putPacksDefault = async ({
+  packs,
+}: Parameters<typeof putCorpusPacks>[0]): Promise<
+  Result<void, CorpusPackError>
+> => {
+  for (const pack of packs) {
+    transferredPacks.push(pack);
+    events.push(`corpus-pack:${packedDocumentIds(pack).join(",")}`);
+  }
+  return await Promise.resolve(Result.ok(undefined));
+};
+const putPacksMock = mock(putPacksDefault);
 
 /** A transfer that fails the way an unreachable bucket does. */
 const failTheTransfer = () => {
@@ -146,6 +156,7 @@ const testSourceLease = (
   beforeDatabaseMark: async () => undefined,
   beforeRemoteEffect: async (effect) => await effect(),
   leaseToken: createSafeId<"caseLawSourceIngestionLease">(),
+  purpose: "ingestion",
   release: async () => undefined,
   source,
 });
@@ -160,8 +171,7 @@ let persistedCursor: string | null | undefined;
 let rowWrite: "ok" | "fault" | "timeout" = "ok";
 /** The row the dedup lookup finds; undefined makes this a new decision. */
 let existingDecision:
-  | (Record<string, unknown> & { hasStoredDocument: boolean })
-  | undefined;
+  (Record<string, unknown> & { hasStoredDocument: boolean }) | undefined;
 /** Whether the observation still owns the mirror when it settles. */
 let mirrorSettlementApplied = true;
 let intentStatus: "active" | "cleanup" = "active";
@@ -170,6 +180,7 @@ afterEach(() => {
   czNsAdapter.fetchPage = originalCzNsFetchPage;
   events.length = 0;
   insertedRows.length = 0;
+  reservedFallbackAliases.length = 0;
   updatedDecisionRows.length = 0;
   transferredPacks.length = 0;
   persistedAdapterKey = "canonical-unregistered-fixture";
@@ -183,7 +194,9 @@ afterEach(() => {
 
 const decision: IngestionResult = plainTextIngestionResult({
   caseNumber: "X/1/2026",
-  court: "Test Court",
+  // A directory court under its official name, so the write boundary stores
+  // the name as given.
+  court: "Najvyšší súd Slovenskej republiky",
   country: "SVK",
   language: "sk",
   fulltext: "Rozhodnutie o veci samej.",
@@ -201,7 +214,7 @@ const decision: IngestionResult = plainTextIngestionResult({
  */
 const recordedCorpusWrite = (documentId: string) => {
   const contentHash = realCorpusStorage.corpusContentHash(
-    caseLawCanonicalPayload(sanitizeResult(decision)),
+    caseLawCanonicalPayload(sanitizeResult(decision).unwrap()).unwrap(),
   );
   return {
     ...realCorpusStorage.corpusKeys({
@@ -233,6 +246,10 @@ const scopedDb: ScopedDb = async (callback) => {
       // drizzle's relational API returns undefined for a miss.
       caseLawDecisions: {
         findFirst: async () => await Promise.resolve(existingDecision),
+        findMany: async () =>
+          await Promise.resolve(
+            existingDecision === undefined ? [] : [existingDecision],
+          ),
       },
     },
     select: (selection: Record<string, unknown>) => ({
@@ -256,6 +273,11 @@ const scopedDb: ScopedDb = async (callback) => {
           }
           if (table === caseLawDecisionIdentifiers) {
             return [];
+          }
+          if (table === caseLawDecisionFallbackIdentities) {
+            return reservedFallbackAliases.map((alias) => ({
+              id: alias["decisionId"],
+            }));
           }
           if (table === caseLawDecisions && "citationKey" in selection) {
             return existingDecision
@@ -283,6 +305,13 @@ const scopedDb: ScopedDb = async (callback) => {
         if (table === caseLawDecisionIdentifiers) {
           return { where: rows };
         }
+        if (table === corpusIndexGenerations) {
+          // The generation registry, read whole and in generation order: no
+          // generation is registered, so nothing is projected.
+          return {
+            where: () => ({ orderBy: () => ({ limit: async () => [] }) }),
+          };
+        }
         return {
           innerJoin: () => ({
             where: () => ({ limit: () => ({ for: rows }) }),
@@ -308,6 +337,8 @@ const scopedDb: ScopedDb = async (callback) => {
             insertedRows.push(...inserted);
           } else if (table === caseLawCorpusUploadIntents) {
             events.push("intent-reserve");
+          } else if (table === caseLawDecisionFallbackIdentities) {
+            reservedFallbackAliases.push(...inserted);
           }
         }
         const returning = async () => {
@@ -316,7 +347,7 @@ const scopedDb: ScopedDb = async (callback) => {
               new TimeoutError({
                 message: "decision write exceeded deadline",
                 label: "ingestion-db-transaction",
-                timeoutMs: 10,
+                timeoutMs: 10, // timeout under test
               }),
             );
           }
@@ -381,13 +412,15 @@ const scopedDb: ScopedDb = async (callback) => {
 
 describe("processDecision — canonical storage mode", () => {
   test("reserves before upload and publishes pointers only after it succeeds", async () => {
-    const outcome = await processDecision({
-      input: decision,
-      observationOrder: 1n,
-      sourceId: createSafeId<"caseLawSource">(),
-      scopedDb,
-      observedAt: new Date("2026-07-31T12:00:00.000Z"),
-    });
+    const outcome = (
+      await processDecision({
+        input: decision,
+        observationOrder: 1n,
+        sourceId: createSafeId<"caseLawSource">(),
+        scopedDb,
+        observedAt: new Date("2026-07-31T12:00:00.000Z"),
+      })
+    ).unwrap();
 
     expect(outcome).toEqual({
       status: "complete",
@@ -454,13 +487,15 @@ describe("processDecision — canonical storage mode", () => {
   test("keeps a readable pending row when the corpus write fails", async () => {
     failTheTransfer();
 
-    const outcome = await processDecision({
-      input: decision,
-      observationOrder: 1n,
-      sourceId: createSafeId<"caseLawSource">(),
-      scopedDb,
-      observedAt: new Date("2026-07-31T12:00:00.000Z"),
-    });
+    const outcome = (
+      await processDecision({
+        input: decision,
+        observationOrder: 1n,
+        sourceId: createSafeId<"caseLawSource">(),
+        scopedDb,
+        observedAt: new Date("2026-07-31T12:00:00.000Z"),
+      })
+    ).unwrap();
 
     expect(outcome).toEqual({
       status: "retryable",
@@ -480,75 +515,88 @@ describe("processDecision — canonical storage mode", () => {
   });
 
   test("repairs a pending mirror from a listing-only replay without degrading detail", async () => {
-    const decisionId = createSafeId<"caseLawDecision">();
-    existingDecision = {
-      id: decisionId,
-      caseNumber: decision.caseNumber,
-      caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
-      ecli: "ECLI:CZ:TEST:2026:1",
-      metadata: { recoveredDetail: true },
-      sourceHash: "recovered-detail-hash",
-      sourceObservedAt: new Date("2026-07-31T11:00:00.000Z"),
-      sourceObservationHash: "first-listing-hash",
-      sourceObservationOrder: 1n,
-      corpusMirrorStatus: "pending",
-      contentHash: null,
-      textS3Key: null,
-      normalizedS3Key: null,
-      astS3Key: null,
-      redactedAt: null,
-      sourceRawS3Key: "raw/recovered-detail.html",
-      sourceRawContentType: "text/html",
-      sourceUrl: "https://publisher.example/detail/1",
-      fulltext: "Recovered decision text.",
-      sections: null,
-      documentAst: {},
-      hasStoredDocument: true,
-    };
-
-    const outcome = await processDecision({
-      input: plainTextIngestionResult({
-        ...decision,
-        fulltext: undefined,
-        isListingOnly: true,
-        metadata: { listedOnly: true },
-        rawHash: "listing-only-replay-hash",
-        sourceRaw: "<tr>listing only</tr>",
+    const fake = startFakeS3();
+    try {
+      const decisionId = createSafeId<"caseLawDecision">();
+      existingDecision = {
+        id: decisionId,
+        caseNumber: decision.caseNumber,
+        caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+        ecli: "ECLI:CZ:TEST:2026:1",
+        metadata: { recoveredDetail: true },
+        sourceHash: "recovered-detail-hash",
+        sourceObservedAt: new Date("2026-07-31T11:00:00.000Z"),
+        sourceObservationHash: "first-listing-hash",
+        sourceObservationOrder: 1n,
+        corpusMirrorStatus: "pending",
+        contentHash: null,
+        textS3Key: null,
+        normalizedS3Key: null,
+        astS3Key: null,
+        redactedAt: null,
+        sourceRawS3Key: "raw/recovered-detail.html",
         sourceRawContentType: "text/html",
-      }),
-      observationOrder: 2n,
-      sourceId: createSafeId<"caseLawSource">(),
-      scopedDb,
-      observedAt: new Date("2026-07-31T12:00:00.000Z"),
-    });
+        sourceUrl: "https://publisher.example/detail/1",
+        fulltext: "Recovered decision text.",
+        sections: null,
+        documentAst: {},
+        hasStoredDocument: true,
+      };
 
-    expect(outcome).toEqual({
-      status: "complete",
-      inserted: true,
-      searchVectorFailed: false,
-    });
-    // One pack, carrying the repaired decision's members and nothing else.
-    expect(transferredPacks).toHaveLength(1);
-    expect(
-      packedDocumentIds(transferredPacks.at(0) ?? expect.unreachable()),
-    ).toEqual([decisionId]);
-    expect(updatedDecisionRows[0]).toMatchObject({
-      sourceHash: "recovered-detail-hash",
-      sourceObservationHash: "listing-only-replay-hash",
-      sourceObservationOrder: 2n,
-    });
-    // The row already holds the payload it is replaying, so the claim does
-    // not copy it back in; the pack above carries it from the row.
-    for (const column of ["fulltext", "sections", "documentAst"]) {
-      expect(updatedDecisionRows[0]).not.toHaveProperty(column);
+      const outcome = (
+        await processDecision({
+          input: plainTextIngestionResult({
+            ...decision,
+            fulltext: undefined,
+            isListingOnly: true,
+            metadata: { listedOnly: true },
+            rawHash: "listing-only-replay-hash",
+            sourceRaw: "<tr>listing only</tr>",
+            sourceRawContentType: "text/html",
+          }),
+          observationOrder: 2n,
+          sourceId: createSafeId<"caseLawSource">(),
+          scopedDb,
+          observedAt: new Date("2026-07-31T12:00:00.000Z"),
+        })
+      ).unwrap();
+
+      expect(outcome).toEqual({
+        status: "complete",
+        inserted: true,
+        searchVectorFailed: false,
+      });
+      expect([...fake.objects.values()]).toEqual([
+        {
+          bytes: new TextEncoder().encode("<tr>listing only</tr>"),
+          contentType: "text/html",
+        },
+      ]);
+      // One pack, carrying the repaired decision's members and nothing else.
+      expect(transferredPacks).toHaveLength(1);
+      expect(
+        packedDocumentIds(transferredPacks.at(0) ?? expect.unreachable()),
+      ).toEqual([decisionId]);
+      expect(updatedDecisionRows[0]).toMatchObject({
+        sourceHash: "recovered-detail-hash",
+        sourceObservationHash: "listing-only-replay-hash",
+        sourceObservationOrder: 2n,
+      });
+      // The row already holds the payload it is replaying, so the claim does
+      // not copy it back in; the pack above carries it from the row.
+      for (const column of ["fulltext", "sections", "documentAst"]) {
+        expect(updatedDecisionRows[0]).not.toHaveProperty(column);
+      }
+      expect(updatedDecisionRows[0]).not.toHaveProperty("caseNumber");
+      expect(updatedDecisionRows[0]).not.toHaveProperty("metadata");
+      expect(updatedDecisionRows[0]).not.toHaveProperty("sourceRawS3Key");
+      expect(updatedDecisionRows.at(-1)).toMatchObject({
+        corpusMirrorStatus: "settled",
+        fulltext: null,
+      });
+    } finally {
+      fake.stop();
     }
-    expect(updatedDecisionRows[0]).not.toHaveProperty("caseNumber");
-    expect(updatedDecisionRows[0]).not.toHaveProperty("metadata");
-    expect(updatedDecisionRows[0]).not.toHaveProperty("sourceRawS3Key");
-    expect(updatedDecisionRows.at(-1)).toMatchObject({
-      corpusMirrorStatus: "settled",
-      fulltext: null,
-    });
   });
 
   test("keeps the served payload when the failed write was a refresh", async () => {
@@ -571,13 +619,15 @@ describe("processDecision — canonical storage mode", () => {
     };
     failTheTransfer();
 
-    const outcome = await processDecision({
-      input: decision,
-      observationOrder: 1n,
-      sourceId: createSafeId<"caseLawSource">(),
-      scopedDb,
-      observedAt: new Date("2026-07-31T12:00:00.000Z"),
-    });
+    const outcome = (
+      await processDecision({
+        input: decision,
+        observationOrder: 1n,
+        sourceId: createSafeId<"caseLawSource">(),
+        scopedDb,
+        observedAt: new Date("2026-07-31T12:00:00.000Z"),
+      })
+    ).unwrap();
 
     expect(outcome).toMatchObject({
       status: "retryable",
@@ -606,13 +656,15 @@ describe("processDecision — canonical storage mode", () => {
     };
     intentStatus = "cleanup";
 
-    const outcome = await processDecision({
-      input: decision,
-      observationOrder: 1n,
-      sourceId: createSafeId<"caseLawSource">(),
-      scopedDb,
-      observedAt: new Date("2026-07-31T12:00:00.000Z"),
-    });
+    const outcome = (
+      await processDecision({
+        input: decision,
+        observationOrder: 1n,
+        sourceId: createSafeId<"caseLawSource">(),
+        scopedDb,
+        observedAt: new Date("2026-07-31T12:00:00.000Z"),
+      })
+    ).unwrap();
 
     expect(outcome).toEqual({
       status: "retryable",
@@ -660,17 +712,25 @@ describe("processDecision — canonical storage mode", () => {
           },
           schema,
         );
-        const normalized = sanitizeResult(input, schema);
-        expect(sanitizeResult(normalized, schema).metadata).toEqual(
-          normalized.metadata,
-        );
-        const outcome = await processDecision({
-          input,
-          observationOrder: 1n,
-          sourceId: createSafeId<"caseLawSource">(),
-          scopedDb,
-          observedAt: new Date("2026-07-31T12:00:00.000Z"),
-        });
+        const normalized = sanitizeResult(input, schema).unwrap();
+        expect(
+          sanitizeResult(
+            {
+              ...normalized,
+              ...splitStoredDecisionTextMetadata(normalized.metadata),
+            },
+            schema,
+          ).unwrap().metadata,
+        ).toEqual(normalized.metadata);
+        const outcome = (
+          await processDecision({
+            input,
+            observationOrder: 1n,
+            sourceId: createSafeId<"caseLawSource">(),
+            scopedDb,
+            observedAt: new Date("2026-07-31T12:00:00.000Z"),
+          })
+        ).unwrap();
         expect(outcome.status).toBe("complete");
         const metadata = insertedRows.at(0)?.["metadata"];
         expect(metadata).toMatchObject({
@@ -691,9 +751,15 @@ describe("processDecision — canonical storage mode", () => {
         // The row write owns the partial-observation marker; projection omits it.
         expect({
           value: sanitizeResult(
-            plainTextIngestionResult({ ...input, metadata: reloaded }, schema),
+            plainTextIngestionResult(
+              {
+                ...input,
+                metadata: splitStoredDecisionTextMetadata(reloaded).metadata,
+              },
+              schema,
+            ),
             schema,
-          ).metadata,
+          ).unwrap().metadata,
         }).toHaveProperty("value", normalized.metadata);
       } finally {
         fake.stop();
@@ -702,16 +768,18 @@ describe("processDecision — canonical storage mode", () => {
   );
 
   test("stores nothing and settles null pointers for a metadata-only decision", async () => {
-    const outcome = await processDecision({
-      // A metadata-first observation: identity fields only, the empty-AST
-      // placeholder, no fulltext — the shape a deferred-document adapter
-      // returns for every listing row.
-      input: plainTextIngestionResult({ ...decision, fulltext: undefined }),
-      observationOrder: 1n,
-      sourceId: createSafeId<"caseLawSource">(),
-      scopedDb,
-      observedAt: new Date("2026-07-31T12:00:00.000Z"),
-    });
+    const outcome = (
+      await processDecision({
+        // A metadata-first observation: identity fields only, the empty-AST
+        // placeholder, no fulltext — the shape a deferred-document adapter
+        // returns for every listing row.
+        input: plainTextIngestionResult({ ...decision, fulltext: undefined }),
+        observationOrder: 1n,
+        sourceId: createSafeId<"caseLawSource">(),
+        scopedDb,
+        observedAt: new Date("2026-07-31T12:00:00.000Z"),
+      })
+    ).unwrap();
 
     expect(outcome).toEqual({
       status: "complete",
@@ -739,7 +807,9 @@ describe("processDecision — canonical storage mode", () => {
     // holds no document, never by where a payload would have lived.
     expect(
       partialObservationFromMetadata(inserted?.["metadata"]),
-    ).toMatchObject({ detail: "listing-only" });
+    ).toMatchObject({
+      detail: "listing-only",
+    });
   });
 
   test("leaves a settled row's payload alone when only the publisher page moved", async () => {
@@ -767,13 +837,15 @@ describe("processDecision — canonical storage mode", () => {
       sourceRawContentType: null,
     };
 
-    const outcome = await processDecision({
-      input: decision,
-      observationOrder: 1n,
-      sourceId: createSafeId<"caseLawSource">(),
-      scopedDb,
-      observedAt: new Date("2026-07-31T12:00:00.000Z"),
-    });
+    const outcome = (
+      await processDecision({
+        input: decision,
+        observationOrder: 1n,
+        sourceId: createSafeId<"caseLawSource">(),
+        scopedDb,
+        observedAt: new Date("2026-07-31T12:00:00.000Z"),
+      })
+    ).unwrap();
 
     expect(outcome).toEqual({
       status: "complete",
@@ -830,21 +902,25 @@ describe("processDecision — canonical storage mode", () => {
       sourceRawS3Key: null,
       sourceRawContentType: null,
     };
-    const moved = plainTextIngestionResult({ ...decision, country: "CZE" });
+    // Into a jurisdiction that stores the court as printed, so only the
+    // jurisdiction moves.
+    const moved = plainTextIngestionResult({ ...decision, country: "POL" });
     // Not vacuous: the payload is the one the row records.
     expect(
       realCorpusStorage.corpusContentHash(
-        caseLawCanonicalPayload(sanitizeResult(moved)),
+        caseLawCanonicalPayload(sanitizeResult(moved).unwrap()).unwrap(),
       ),
     ).toBe(recorded.contentHash);
 
-    await processDecision({
-      input: moved,
-      observationOrder: 1n,
-      sourceId: createSafeId<"caseLawSource">(),
-      scopedDb,
-      observedAt: new Date("2026-07-31T12:00:00.000Z"),
-    });
+    (
+      await processDecision({
+        input: moved,
+        observationOrder: 1n,
+        sourceId: createSafeId<"caseLawSource">(),
+        scopedDb,
+        observedAt: new Date("2026-07-31T12:00:00.000Z"),
+      })
+    ).unwrap();
 
     expect(transferredPacks).toHaveLength(1);
     expect(updatedDecisionRows.at(0)).toMatchObject({
@@ -876,13 +952,15 @@ describe("processDecision — canonical storage mode", () => {
       sourceRawContentType: null,
     };
 
-    const first = await processDecision({
-      input: decision,
-      observationOrder: 1n,
-      sourceId: createSafeId<"caseLawSource">(),
-      scopedDb,
-      observedAt: new Date("2026-07-31T12:00:00.000Z"),
-    });
+    const first = (
+      await processDecision({
+        input: decision,
+        observationOrder: 1n,
+        sourceId: createSafeId<"caseLawSource">(),
+        scopedDb,
+        observedAt: new Date("2026-07-31T12:00:00.000Z"),
+      })
+    ).unwrap();
 
     expect(first).toEqual({
       status: "complete",
@@ -897,25 +975,22 @@ describe("processDecision — canonical storage mode", () => {
     // The next crawl pass sees the row the settle produced — the addresses
     // it wrote, not a recomputation of them; with the source unchanged it
     // advances the watermark and touches no corpus state.
-    existingDecision = {
-      ...existingDecision,
-      corpusMirrorStatus: "settled",
-      contentHash: settled["contentHash"],
-      textS3Key: settled["textS3Key"],
-      normalizedS3Key: settled["normalizedS3Key"],
-      astS3Key: settled["astS3Key"],
-      hasStoredDocument: true,
-    };
+    for (const updated of updatedDecisionRows) {
+      Object.assign(existingDecision, updated);
+    }
+    existingDecision.hasStoredDocument = true;
     events.length = 0;
     transferredPacks.length = 0;
 
-    const second = await processDecision({
-      input: decision,
-      observationOrder: 2n,
-      sourceId: createSafeId<"caseLawSource">(),
-      scopedDb,
-      observedAt: new Date("2026-07-31T13:00:00.000Z"),
-    });
+    const second = (
+      await processDecision({
+        input: decision,
+        observationOrder: 2n,
+        sourceId: createSafeId<"caseLawSource">(),
+        scopedDb,
+        observedAt: new Date("2026-07-31T13:00:00.000Z"),
+      })
+    ).unwrap();
 
     expect(second).toEqual({
       status: "complete",
@@ -937,7 +1012,7 @@ describe("processDecision — canonical storage mode", () => {
       scopedDb,
       observedAt: new Date("2026-07-31T12:00:00.000Z"),
     }).then(
-      () => null,
+      (outcome) => (outcome.isErr() ? outcome.error : null),
       (error: unknown) => error,
     );
 
@@ -974,11 +1049,9 @@ describe("processDecision — a refresh whose raw-source write failed", () => {
     fake.stop();
   });
 
-  test("reports the raw-source retry although the pack settled", async () => {
-    // The update kept its old `sourceHash` so the next pass re-observes the
-    // decision. A single decision is its own batch, and its corpus outcome
-    // is the whole answer only if nothing else is owed: reporting complete
-    // here would advance the cursor past a raw source that never landed.
+  test("preserves the stored parse until its new raw input is durable", async () => {
+    // A failed raw write cannot pair new derived output with the old input.
+    // The retry holds the cursor while the existing row and corpus stand.
     fake.failNext({ method: "PUT", code: "AccessDenied", status: 403 });
     existingDecision = {
       id: createSafeId<"caseLawDecision">(),
@@ -1000,26 +1073,28 @@ describe("processDecision — a refresh whose raw-source write failed", () => {
       sourceRawContentType: "text/html",
     };
 
-    const outcome = await processDecision({
-      input: plainTextIngestionResult({
-        ...decision,
-        sourceRaw: "<html></html>",
-      }),
-      observationOrder: 1n,
-      sourceId: createSafeId<"caseLawSource">(),
-      scopedDb,
-      observedAt: new Date("2026-07-31T12:00:00.000Z"),
-    });
+    const outcome = (
+      await processDecision({
+        input: plainTextIngestionResult({
+          ...decision,
+          sourceRaw: "<html></html>",
+        }),
+        observationOrder: 1n,
+        sourceId: createSafeId<"caseLawSource">(),
+        scopedDb,
+        observedAt: new Date("2026-07-31T12:00:00.000Z"),
+      })
+    ).unwrap();
 
-    // The corpus write itself succeeded, so the reason names the retry the
-    // page-batch path reports for the same failure.
-    expect(transferredPacks).toHaveLength(1);
-    expect(settledDecisionRows()).toHaveLength(1);
     expect(outcome).toEqual({
       status: "retryable",
-      inserted: true,
-      reason: "corpus-write",
+      inserted: false,
+      reason: "source-raw-write",
     });
+    expect(transferredPacks).toEqual([]);
+    expect(insertedRows).toEqual([]);
+    expect(updatedDecisionRows).toEqual([]);
+    expect(events).not.toContain("intent-reserve");
   });
 });
 
@@ -1031,7 +1106,11 @@ describe("runIngestionPipeline — canonical corpus write failure", () => {
 
     czNsAdapter.fetchPage = async () =>
       await Promise.resolve(
-        Result.ok({ decisions: [decision], nextCursor: "cursor-2" }),
+        Result.ok({
+          decisions: [decision],
+          publisherRequest: PUBLISHER_REQUEST.ANSWERED,
+          nextCursor: "cursor-2",
+        }),
       );
 
     const result = await runIngestionPipeline({
@@ -1078,7 +1157,11 @@ describe("runIngestionPipeline — canonical corpus write failure", () => {
 
     czNsAdapter.fetchPage = async () =>
       await Promise.resolve(
-        Result.ok({ decisions: [decision], nextCursor: "cursor-2" }),
+        Result.ok({
+          decisions: [decision],
+          publisherRequest: PUBLISHER_REQUEST.ANSWERED,
+          nextCursor: "cursor-2",
+        }),
       );
 
     const result = await runIngestionPipeline({
@@ -1108,7 +1191,7 @@ describe("sanitizeResult — decision-date floor", () => {
         country,
         decisionDate,
         sourceDocumentId: "document-1",
-      }).decisionDate;
+      }).unwrap().decisionDate;
     expect(dated("USA", "1791-08-03")).toBe("1791-08-03");
     expect(dated("USA", "1599-12-31")).toBeUndefined();
     expect(dated("SVK", "1791-08-03")).toBeUndefined();

@@ -3,13 +3,14 @@ import type { MouseEvent } from "react";
 import { Link } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
+import { isPlainPrimaryClick } from "@stll/decision-reader/citation-click";
 import { Button } from "@stll/ui/button";
 import { Maximize2Icon } from "@stll/ui/icons";
 
 import type { CaseDecisionViewPayload } from "@/components/inspector/case-decision-view";
 import {
+  CASE_DECISION_PLACEMENT,
   createCaseDecisionViewTab,
-  isPlainPrimaryClick,
 } from "@/components/inspector/case-decision-view";
 import { useInspectorView } from "@/components/inspector/use-inspector-view";
 import Tooltip from "@/components/tooltip";
@@ -59,8 +60,9 @@ export const DecisionMainViewAction = ({
     onMoveToMain?.();
     if (action.type === "swap-with-main") {
       const displaced = action.mainDecision;
-      inspector.open(
-        createCaseDecisionViewTab({
+      inspector.open({
+        decisionPlacement: CASE_DECISION_PLACEMENT.side,
+        ...createCaseDecisionViewTab({
           caseNumber: displaced.caseNumber,
           country: displaced.country,
           court: displaced.court,
@@ -69,7 +71,7 @@ export const DecisionMainViewAction = ({
           languageAlternates: displaced.languageAlternates,
           slug: displaced.slug,
         }),
-      );
+      });
     }
   };
 

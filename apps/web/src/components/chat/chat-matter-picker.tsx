@@ -6,8 +6,10 @@ import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { compareByLocale } from "@stll/collation";
-import { COMPOSER_PICKER_TRIGGER_CLASS } from "@stll/ui/composer";
-import { ChevronDownIcon, ExternalLinkIcon, SearchIcon } from "@stll/ui/icons";
+import { Button } from "@stll/ui/button";
+import { ExternalLinkIcon } from "@stll/ui/icons";
+import { resolveMatterColor } from "@stll/ui/matter-colors";
+import { MatterIcon } from "@stll/ui/matter-icon";
 import {
   Menu,
   MenuCheckboxItem,
@@ -15,16 +17,22 @@ import {
   MenuPopup,
   MenuTrigger,
 } from "@stll/ui/menu";
-import { Skeleton } from "@stll/ui/skeleton";
+import { SearchField } from "@stll/ui/search-field";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { contentDir } from "@stll/ui/use-content-dir";
 import { cn } from "@stll/ui/utils";
 
-import { MatterIcon } from "@/components/matter-icon";
+import {
+  MatterPickerChevron,
+  MatterPickerTriggerPendingContent,
+} from "@/components/chat/chat-matter-picker.pending";
+import { COMPOSER_LIST_VIEWPORT_CLASS_NAME } from "@/components/chat/composer-submenu-search";
+import { filterMatterPickerItems } from "@/components/matter-picker-search.logic";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
-import { useFormatter, useLocale } from "@/i18n/formatting-context";
+import { useFormatter, useFormattingLocale } from "@/i18n/formatting-context";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
-import { resolveMatterColor } from "@/lib/matter-colors";
-import { useQueryView } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
+import { coversAllMatters } from "@/lib/workspaces/all-matters.logic";
 import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
 
 /**
@@ -97,10 +105,7 @@ const MatterPickerTriggerContent = (props: MatterPickerTriggerContentProps) => {
 
   switch (props.status) {
     case "pending":
-      icon = <MatterIcon className="size-3 shrink-0" variant="none" />;
-      label = <Skeleton className="h-3 w-16" />;
-      extra = null;
-      break;
+      return <MatterPickerTriggerPendingContent />;
     case "ready":
       if (props.allSelected) {
         icon = <MatterIcon className="size-3 shrink-0" variant="all" />;
@@ -117,11 +122,7 @@ const MatterPickerTriggerContent = (props: MatterPickerTriggerContentProps) => {
       } else {
         icon = <MatterIcon className="size-3 shrink-0" variant="none" />;
       }
-      label = (
-        <span className="min-w-0 truncate" dir="auto">
-          {props.triggerLabel}
-        </span>
-      );
+      label = <TruncatedText dir="auto">{props.triggerLabel}</TruncatedText>;
       extra = props.extra;
       break;
     default: {
@@ -135,33 +136,24 @@ const MatterPickerTriggerContent = (props: MatterPickerTriggerContentProps) => {
       {icon}
       {label}
       {extra}
-      <ChevronDownIcon
-        aria-hidden="true"
-        className="size-3 shrink-0 opacity-70"
-      />
+      <MatterPickerChevron />
     </>
   );
 };
-
-export const ChatMatterPickerPending = () => (
-  <div
-    aria-hidden="true"
-    className={cn(COMPOSER_PICKER_TRIGGER_CLASS, "max-w-[220px] gap-0.5")}
-  >
-    <MatterPickerTriggerContent status="pending" />
-  </div>
-);
 
 type MatterPickerSearchProps = {
   search: string;
   onChange: (search: string) => void;
   searchRef: RefObject<HTMLInputElement | null>;
+  /** Closes the picker: Escape in the field dismisses it, as it always has. */
+  onDismiss: () => void;
 };
 
 const MatterPickerSearch = ({
   search,
   onChange,
   searchRef,
+  onDismiss,
 }: MatterPickerSearchProps) => {
   const t = useTranslations();
   return (
@@ -172,33 +164,88 @@ const MatterPickerSearch = ({
       <p className="text-muted-foreground text-xs leading-snug text-pretty">
         {t("inspector.matterPicker.description")}
       </p>
-      <div className="border-input focus-within:border-ring focus-within:ring-ring/16 bg-background relative flex items-center gap-1.5 rounded-md border px-1.5 focus-within:ring-2">
-        <SearchIcon
-          aria-hidden="true"
-          className="text-muted-foreground size-3.5 shrink-0"
-        />
-        <input
-          className="placeholder:text-foreground-placeholder h-7 w-full min-w-0 bg-transparent text-sm outline-none"
-          dir={contentDir(search)}
-          onChange={(e) => onChange(e.target.value)}
-          onKeyDown={(e) => {
-            // base-ui's Menu listens for keystrokes (typeahead
-            // jumps to items, arrows move focus, etc.) which
-            // hijacks the user's typing in this search input.
-            // Stop every non-closing key so typed characters
-            // actually land here, but keep Escape so the menu
-            // can still be dismissed from inside the field.
-            if (e.key !== "Escape") {
-              e.stopPropagation();
-            }
-          }}
-          placeholder={t("inspector.matterPicker.searchPlaceholder")}
-          ref={searchRef}
-          type="text"
-          value={search}
-        />
-      </div>
+      <SearchField
+        clearLabel={t("common.clearSearch")}
+        dir={contentDir(search)}
+        onKeyDown={(e) => {
+          // base-ui's Menu listens for keystrokes (typeahead
+          // jumps to items, arrows move focus, etc.) which
+          // hijacks the user's typing in this search input.
+          // Stop every non-closing key so typed characters
+          // actually land here. Escape closes the picker from
+          // inside the field: SearchField would otherwise spend
+          // it on clearing a typed query and keep it from the
+          // menu.
+          if (e.key === "Escape") {
+            onDismiss();
+            return;
+          }
+          e.stopPropagation();
+        }}
+        onValueChange={onChange}
+        placeholder={t("inspector.matterPicker.searchPlaceholder")}
+        ref={searchRef}
+        size="sm"
+        value={search}
+      />
     </div>
+  );
+};
+
+/** One matter in the picker: its toggle, and a link that opens it in a new
+ *  tab without toggling it. */
+const MatterCheckboxItem = ({
+  checked,
+  matter,
+  onToggle,
+}: {
+  checked: boolean;
+  matter: Matter;
+  onToggle: () => void;
+}) => {
+  const t = useTranslations();
+  return (
+    <MenuCheckboxItem
+      checked={checked}
+      className={cn(TRUNCATING_ITEM_CLASS, "group/matter-row")}
+      closeOnClick={false}
+      onClick={onToggle}
+    >
+      <span className="flex min-w-0 items-center gap-2">
+        <MatterIcon
+          className="size-3.5 shrink-0"
+          matter={{ id: matter.id, color: matter.color }}
+        />
+        <TruncatedText className="flex-1 text-sm" dir="auto">
+          {matter.name}
+        </TruncatedText>
+        {/* No tooltip: a tooltip's popup would portal its pointer events
+            through this menu item and toggle the matter. The label names
+            the link. Shown only on the row under the pointer or keyboard
+            highlight (and its own focus), so a long list reads as names
+            rather than a column of buttons; it keeps its space so names
+            never reflow, and stays visible where there is no hover. */}
+        <Button
+          aria-label={t("common.openInNewTab")}
+          className="ms-auto opacity-0 transition-opacity group-hover/matter-row:opacity-100 group-data-highlighted/matter-row:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100"
+          onClick={(e) => {
+            e.stopPropagation();
+          }}
+          render={
+            <a
+              href={`/workspaces/${matter.id}`}
+              rel="noreferrer"
+              target="_blank"
+            />
+          }
+          size="icon-xs"
+          tooltip={false}
+          variant="outline"
+        >
+          <ExternalLinkIcon className="size-3.5" />
+        </Button>
+      </span>
+    </MenuCheckboxItem>
   );
 };
 
@@ -208,17 +255,23 @@ export const ChatMatterPicker = ({
 }: ChatMatterPickerProps) => {
   const t = useTranslations();
   const format = useFormatter();
-  const locale = useLocale();
+  const locale = useFormattingLocale();
   const [search, setSearch] = useState("");
+  const [menuOpen, setMenuOpen] = useState(false);
   const deferredSearch = useDeferredValue(search);
   const searchRef = useRef<HTMLInputElement>(null);
 
   // Cache hit thanks to chat-mention-providers and the app sidebar
   // — the navigation list is already in flight on any workspace
   // page.
-  const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
-  const workspacesView = useQueryView(
-    useQuery(workspacesNavigationOptions(activeOrganizationId)),
+  const { activeOrganizationId, id: userId } = useAuthenticatedUser();
+  const workspacesView = queryView(
+    useQuery(
+      workspacesNavigationOptions({
+        organizationId: activeOrganizationId,
+        userId,
+      }),
+    ),
   );
   const workspaces =
     workspacesView.type === "items"
@@ -251,17 +304,11 @@ export const ChatMatterPicker = ({
     .map((id) => matterById.get(id))
     .filter((m): m is Matter => m !== undefined);
 
-  const filtered = (() => {
-    const q = deferredSearch.trim().toLowerCase();
-    if (q.length === 0) {
-      return matters;
-    }
-    return matters.filter(
-      (m) =>
-        m.name.toLowerCase().includes(q) ||
-        m.clientLabel.toLowerCase().includes(q),
-    );
-  })();
+  const filtered = filterMatterPickerItems({
+    getClientLabel: (matter) => matter.clientLabel,
+    items: matters,
+    query: deferredSearch,
+  });
 
   const mattersByClient = (() => {
     const map = new Map<string, Matter[]>();
@@ -309,7 +356,10 @@ export const ChatMatterPicker = ({
     });
   })();
 
-  const allSelected = matters.length > 0 && selected.length === matters.length;
+  const allSelected = coversAllMatters({
+    count: selected.length,
+    total: matters.length,
+  });
   const selectedIdSet = new Set(matterIds);
   const triggerLabel = (() => {
     if (workspacesView.type === "error") {
@@ -368,6 +418,7 @@ export const ChatMatterPicker = ({
   return (
     <Menu
       onOpenChange={(open) => {
+        setMenuOpen(open);
         if (open) {
           // Defer focus past base-ui's own focus-trap logic so the
           // search input wins over auto-focusing the first item.
@@ -376,9 +427,11 @@ export const ChatMatterPicker = ({
           setSearch("");
         }
       }}
+      open={menuOpen}
     >
       <MenuTrigger
-        className={cn(COMPOSER_PICKER_TRIGGER_CLASS, "max-w-[220px] gap-0.5")}
+        appearance="caption"
+        className="max-w-[220px] gap-0.5"
         title={
           selected.length > 1
             ? selected.map((m) => m.name).join(", ")
@@ -406,12 +459,23 @@ export const ChatMatterPicker = ({
           />
         )}
       </MenuTrigger>
-      <MenuPopup align="start" className="w-72" sideOffset={6}>
-        <MatterPickerSearch
-          search={search}
-          onChange={setSearch}
-          searchRef={searchRef}
-        />
+      <MenuPopup
+        align="start"
+        className="w-72"
+        header={
+          <MatterPickerSearch
+            onDismiss={() => {
+              setMenuOpen(false);
+              setSearch("");
+            }}
+            search={search}
+            onChange={setSearch}
+            searchRef={searchRef}
+          />
+        }
+        sideOffset={6}
+        viewportClassName={COMPOSER_LIST_VIEWPORT_CLASS_NAME}
+      >
         <div className="flex flex-col py-1">
           <QueryViewFeedback view={workspacesView} />
           {/* "All matters" sits above the per-matter rows so users
@@ -436,9 +500,9 @@ export const ChatMatterPicker = ({
             >
               <span className="flex min-w-0 items-center gap-2">
                 <MatterIcon className="size-3.5 shrink-0" variant="all" />
-                <span className="truncate text-sm font-medium">
+                <TruncatedText className="text-sm font-medium">
                   {t("inspector.matterPicker.allMatters")}
-                </span>
+                </TruncatedText>
               </span>
             </MenuCheckboxItem>
           )}
@@ -473,43 +537,14 @@ export const ChatMatterPicker = ({
                   isSelected={(matterId) => selectedIdSet.has(matterId)}
                   onToggle={() => toggleGroup(group)}
                 />
-                {group.matters.map((m) => {
-                  const isOn = selectedIdSet.has(m.id);
-                  return (
-                    <MenuCheckboxItem
-                      checked={isOn}
-                      className={TRUNCATING_ITEM_CLASS}
-                      closeOnClick={false}
-                      key={m.id}
-                      onClick={() => toggle(m.id)}
-                    >
-                      <span className="flex min-w-0 items-center gap-2">
-                        <MatterIcon
-                          className="size-3.5 shrink-0"
-                          matter={{ id: m.id, color: m.color }}
-                        />
-                        <span
-                          className="min-w-0 flex-1 truncate text-sm"
-                          dir="auto"
-                        >
-                          {m.name}
-                        </span>
-                        <a
-                          href={`/workspaces/${m.id}`}
-                          target="_blank"
-                          rel="noreferrer"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                          }}
-                          className="text-muted-foreground bg-muted hover:bg-background hover:text-foreground focus-visible:ring-ring relative ms-auto inline-flex size-7 shrink-0 items-center justify-center rounded-md shadow-sm/5 outline-none before:absolute before:-inset-2 before:content-[''] focus-visible:ring-2"
-                          title={t("common.openInNewTab")}
-                        >
-                          <ExternalLinkIcon className="size-3.5" />
-                        </a>
-                      </span>
-                    </MenuCheckboxItem>
-                  );
-                })}
+                {group.matters.map((m) => (
+                  <MatterCheckboxItem
+                    checked={selectedIdSet.has(m.id)}
+                    key={m.id}
+                    matter={m}
+                    onToggle={() => toggle(m.id)}
+                  />
+                ))}
               </MenuGroup>
             ));
           })()}
@@ -547,7 +582,7 @@ const ClientMatterToggle = ({
       onClick={onToggle}
     >
       <span className="flex min-w-0 items-center gap-2">
-        <span className="min-w-0 truncate">{group.label}</span>
+        <TruncatedText>{group.label}</TruncatedText>
         {groupSelectedCount > 0 && !groupAllSelected && (
           <span className="text-muted-foreground text-3xs ms-auto shrink-0 tabular-nums">
             {format.number(groupSelectedCount)}/

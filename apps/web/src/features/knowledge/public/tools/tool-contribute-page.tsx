@@ -8,10 +8,11 @@ import {
   CATALOGUE_COST,
   CATALOGUE_LICENSES,
   CATALOGUE_SETUP,
-  PRACTICE_AREAS,
   type CatalogueCost,
   type CatalogueSetup,
+  PRACTICE_AREAS,
 } from "@stll/catalogue/schema";
+import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 import { fetchWithTimeout } from "@stll/fetch";
 import { Button } from "@stll/ui/button";
 import { XIcon } from "@stll/ui/icons";
@@ -27,6 +28,7 @@ import {
 import { Textarea } from "@stll/ui/textarea";
 
 import {
+  type ContributeFormState,
   createLatestCommitLookupGuard,
   deriveSlug,
   evaluateManifest,
@@ -34,10 +36,13 @@ import {
   githubCommitsApiUrl,
   githubNewFileUrl,
   normalizeGithubRepo,
-  type ContributeFormState,
 } from "@/features/knowledge/public/tools/contribute.logic";
 import { CopyButton } from "@/features/knowledge/public/tools/copy-button";
 import { ToggleChip } from "@/features/knowledge/public/tools/toggle-chip";
+import {
+  ContributeFormShell,
+  DEFAULT_SKILL_LICENSE,
+} from "@/features/knowledge/public/tools/tool-contribute-shell.pending";
 import {
   CATALOGUE_CONTRIBUTING_URL,
   CATALOGUE_ENTRIES_URL,
@@ -45,7 +50,6 @@ import {
 import { useMountEffect } from "@/hooks/use-effect";
 import type { TranslationKey } from "@/i18n/types";
 import { getAnalytics } from "@/lib/analytics/provider";
-import { sanitizeHref } from "@/lib/sanitize-href";
 import { PRACTICE_AREA_LABEL_KEY } from "@/lib/tools-catalogue";
 
 const COMMIT_FETCH_TIMEOUT_MS = 10_000;
@@ -68,7 +72,7 @@ const INITIAL_FORM: ContributeFormState = {
   description: "",
   author: "",
   authorUrl: "",
-  license: "MIT",
+  license: DEFAULT_SKILL_LICENSE,
   cost: "free",
   setup: "none",
   jurisdictions: [],
@@ -81,83 +85,72 @@ const INITIAL_FORM: ContributeFormState = {
 
 type CommitStatus = "idle" | "loading" | "error";
 
-/** How to add a tool to the published catalogue. */
-export const ContributePage = () => {
+/** How to add a tool to the published catalogue, inside the route's shell. */
+export const ToolContributeContent = () => {
   const t = useTranslations();
 
   return (
-    <main className="min-h-0 flex-1 overflow-y-auto">
-      <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 p-6">
-        <div className="flex flex-col gap-2">
-          <h1 className="text-lg font-semibold">
-            {t("publicTools.contribute.title")}
-          </h1>
-          <p className="text-muted-foreground text-sm">
-            {t("publicTools.contribute.intro")}
+    <>
+      <AddSkillForm />
+
+      <div className="border-border border-t pt-6">
+        <Section title={t("knowledge.sections.skills.title")}>
+          <p>
+            <strong className="text-foreground font-medium">
+              {t("publicTools.contribute.inTreeTitle")}
+            </strong>{" "}
+            {t("publicTools.contribute.inTreeBody")}
           </p>
-        </div>
-
-        <AddSkillForm />
-
-        <div className="border-border border-t pt-6">
-          <Section title={t("knowledge.sections.skills.title")}>
-            <p>
-              <strong className="text-foreground font-medium">
-                {t("publicTools.contribute.inTreeTitle")}
-              </strong>{" "}
-              {t("publicTools.contribute.inTreeBody")}
-            </p>
-            <p>
-              <strong className="text-foreground font-medium">
-                {t("publicTools.contribute.githubTitle")}
-              </strong>{" "}
-              {t("publicTools.contribute.githubBody")}
-            </p>
-          </Section>
-        </div>
-
-        <Section title={t("publicTools.contribute.mcpTitle")}>
-          <p>{t("publicTools.contribute.mcpBody")}</p>
+          <p>
+            <strong className="text-foreground font-medium">
+              {t("publicTools.contribute.githubTitle")}
+            </strong>{" "}
+            {t("publicTools.contribute.githubBody")}
+          </p>
         </Section>
-
-        <Section title={t("publicTools.contribute.licenseTitle")}>
-          <p>{t("publicTools.contribute.licenseBody")}</p>
-        </Section>
-
-        <Section title={t("publicTools.contribute.recommendedTitle")}>
-          <p>{t("publicTools.contribute.recommendedBody")}</p>
-        </Section>
-
-        <div className="flex flex-wrap gap-3 pt-2">
-          <Button
-            render={
-              <a
-                aria-label={t("publicTools.contribute.contributingLink")}
-                href={sanitizeHref(CATALOGUE_CONTRIBUTING_URL)}
-                rel="noreferrer"
-                target="_blank"
-              />
-            }
-            variant="outline"
-          >
-            {t("publicTools.contribute.contributingLink")}
-          </Button>
-          <Button
-            render={
-              <a
-                aria-label={t("publicTools.contribute.repoLink")}
-                href={sanitizeHref(CATALOGUE_ENTRIES_URL)}
-                rel="noreferrer"
-                target="_blank"
-              />
-            }
-            variant="outline"
-          >
-            {t("publicTools.contribute.repoLink")}
-          </Button>
-        </div>
       </div>
-    </main>
+
+      <Section title={t("publicTools.contribute.mcpTitle")}>
+        <p>{t("publicTools.contribute.mcpBody")}</p>
+      </Section>
+
+      <Section title={t("publicTools.contribute.licenseTitle")}>
+        <p>{t("publicTools.contribute.licenseBody")}</p>
+      </Section>
+
+      <Section title={t("publicTools.contribute.recommendedTitle")}>
+        <p>{t("publicTools.contribute.recommendedBody")}</p>
+      </Section>
+
+      <div className="flex flex-wrap gap-3 pt-2">
+        <Button
+          render={
+            <a
+              aria-label={t("publicTools.contribute.contributingLink")}
+              href={sanitizeHref(CATALOGUE_CONTRIBUTING_URL)}
+              rel="noreferrer"
+              target="_blank"
+            />
+          }
+          variant="outline"
+        >
+          {t("publicTools.contribute.contributingLink")}
+        </Button>
+        <Button
+          render={
+            <a
+              aria-label={t("publicTools.contribute.repoLink")}
+              href={sanitizeHref(CATALOGUE_ENTRIES_URL)}
+              rel="noreferrer"
+              target="_blank"
+            />
+          }
+          variant="outline"
+        >
+          {t("publicTools.contribute.repoLink")}
+        </Button>
+      </div>
+    </>
   );
 };
 
@@ -256,14 +249,7 @@ const AddSkillForm = () => {
   };
 
   return (
-    <section className="border-border flex flex-col gap-4 rounded-lg border p-4">
-      <h2 className="text-base font-semibold">
-        {t("publicTools.contribute.form.title")}
-      </h2>
-      <p className="text-muted-foreground text-sm">
-        {t("publicTools.contribute.form.intro")}
-      </p>
-
+    <ContributeFormShell>
       <FormRow
         htmlFor="skill-name"
         label={t("publicTools.contribute.form.name")}
@@ -511,7 +497,10 @@ const AddSkillForm = () => {
           onRepoChange={setRepo}
           onResolveLatestCommit={() => {
             resolveLatestCommit().catch((error: unknown) => {
-              getAnalytics().captureError(error);
+              getAnalytics().captureError(error, {
+                fingerprintKey: "AddSkillForm:failure",
+                scope: { type: "handler", handlerId: "AddSkillForm:failure" },
+              });
             });
           }}
           setForm={setForm}
@@ -559,7 +548,11 @@ const AddSkillForm = () => {
             {t("publicTools.contribute.form.openPr")}
           </Button>
         ) : (
-          <Button disabled type="button">
+          <Button
+            disabled
+            disabledReason={t("publicTools.contribute.form.invalidHint")}
+            type="button"
+          >
             {t("publicTools.contribute.form.openPr")}
           </Button>
         )}
@@ -569,7 +562,7 @@ const AddSkillForm = () => {
           </p>
         )}
       </div>
-    </section>
+    </ContributeFormShell>
   );
 };
 
@@ -639,6 +632,7 @@ const GithubSourceFields = ({
           />
           <Button
             disabled={commitStatus === "loading"}
+            disabledReason={t("publicTools.contribute.form.resolvingCommit")}
             onClick={onResolveLatestCommit}
             size="sm"
             type="button"

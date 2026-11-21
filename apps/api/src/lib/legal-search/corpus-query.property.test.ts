@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import fc from "fast-check";
 
 import {
-  propertyConfig,
+  assertProperty,
   propertySeed,
   propertyTestTimeout,
 } from "@stll/property-testing";
@@ -73,7 +73,8 @@ const options = fc.record({
 test(
   "quoted values occupy one lexical term and retain their content",
   () => {
-    fc.assert(
+    assertProperty(
+      "quoted values occupy one lexical term and retain their content",
       fc.property(hostileText, (value) => {
         const quoted = quoteCorpusValue(value);
         expect(quoted).toMatch(quotedTerm);
@@ -87,7 +88,7 @@ test(
           value ? `("needle") AND source:${quoted}` : '("needle")',
         );
       }),
-      propertyConfig({ seed: propertySeed() }),
+      { seed: propertySeed() },
     );
   },
   propertyTestTimeout(5000),
@@ -96,7 +97,8 @@ test(
 test(
   "free-text tokenization retains the searchable word sequence",
   () => {
-    fc.assert(
+    assertProperty(
+      "free-text tokenization retains the searchable word sequence",
       fc.property(hostileText, (text) => {
         expect(
           tokenizeCorpusFreeText(text).flatMap(({ value }) =>
@@ -104,7 +106,7 @@ test(
           ),
         ).toEqual(corpusTokens(text));
       }),
-      propertyConfig({ seed: propertySeed() }),
+      { seed: propertySeed() },
     );
   },
   propertyTestTimeout(5000),
@@ -113,7 +115,8 @@ test(
 test(
   "expansion obeys its budget and preserves complete leaf groups",
   () => {
-    fc.assert(
+    assertProperty(
+      "expansion obeys its budget and preserves complete leaf groups",
       fc.property(
         words,
         options,
@@ -143,7 +146,11 @@ test(
             expand: () => alternatives,
             surfaceFields,
             keywordFields,
-            stemming: { language: "cs", fields: stemFields },
+            stemming: {
+              language: "cs",
+              fields: stemFields,
+              positionlessFields: [],
+            },
             legalAlternatives: () => legal,
           });
           expect(query).not.toBeNull();
@@ -189,7 +196,7 @@ test(
           expect(offset).toBe(leaves.length);
         },
       ),
-      propertyConfig({ seed: propertySeed() }),
+      { seed: propertySeed() },
     );
   },
   propertyTestTimeout(5000),
@@ -198,7 +205,8 @@ test(
 test(
   "keyword leaves preserve alternatives already granted to every token",
   () => {
-    fc.assert(
+    assertProperty(
+      "keyword leaves preserve alternatives already granted to every token",
       fc.property(
         words,
         fc.array(word, { maxLength: 8 }),
@@ -206,7 +214,11 @@ test(
           const base = {
             expand: () => alternatives,
             surfaceFields: ["headnote"],
-            stemming: { language: "cs", fields: ["text_stem"] },
+            stemming: {
+              language: "cs",
+              fields: ["text_stem"],
+              positionlessFields: [],
+            },
           } as const;
           const before = leavesOf(
             corpusFreeTextClause(terms.join(" "), base) ?? "",
@@ -222,7 +234,7 @@ test(
           );
         },
       ),
-      propertyConfig({ seed: propertySeed() }),
+      { seed: propertySeed() },
     );
   },
   propertyTestTimeout(5000),

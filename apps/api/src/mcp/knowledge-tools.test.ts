@@ -9,8 +9,9 @@ import { toSafeId } from "@/api/lib/branded-types";
 import { type ClauseBody, isClauseBody } from "@/api/lib/clauses/types";
 import { isRecord } from "@/api/lib/type-guards";
 import type { MaterializePlaybookRunResult } from "@/api/lib/workflow/materialize-playbook-run";
-import type { McpRequestContext } from "@/api/mcp/context";
 import { isMcpEgressPlan } from "@/api/mcp/tool-types";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
+import { authorizedMcpContextForTest } from "@/api/tests/helpers/authorized-mcp-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 
@@ -49,7 +50,7 @@ const APPROVED_VERSION_ID = toSafeId<"playbookDefinitionVersion">(
 
 /** A scopedDb whose select chain resolves to the seeded clause rows. */
 const createClauseScopedDb = (rows: unknown[]) =>
-  asTestRaw<McpRequestContext["scopedDb"] & ReturnType<typeof mock>>(
+  asTestRaw<AuthorizedMcpRequestContext["scopedDb"] & ReturnType<typeof mock>>(
     mock(async (run: (tx: unknown) => unknown) => {
       const builder = {
         select: () => builder,
@@ -88,7 +89,7 @@ const positionsSaying = (issue: string) => ({
 
 /** A scopedDb whose playbookDefinitions.findFirst resolves to `playbook`. */
 const createPlaybookScopedDb = (playbook: unknown) =>
-  asTestRaw<McpRequestContext["scopedDb"] & ReturnType<typeof mock>>(
+  asTestRaw<AuthorizedMcpRequestContext["scopedDb"] & ReturnType<typeof mock>>(
     mock(
       async (run: (tx: unknown) => unknown) =>
         await run({
@@ -108,7 +109,7 @@ const createPlaybookScopedDb = (playbook: unknown) =>
 const createClauseWriteScopedDb = () => {
   const insertedBodies: unknown[] = [];
   const scopedDb = asTestRaw<
-    McpRequestContext["scopedDb"] & ReturnType<typeof mock>
+    AuthorizedMcpRequestContext["scopedDb"] & ReturnType<typeof mock>
   >(
     mock(async (run: (tx: unknown) => unknown) => {
       const tx = {
@@ -165,10 +166,12 @@ const STORED_PLAYBOOK = {
  */
 const createPlaybookWriteScopedDb = ({
   lockedUpdatedAt = STORED_UPDATED_AT,
+  rereadFailure,
   readableSources = [],
   storedPositions = STORED_PLAYBOOK.positions.items,
 }: {
   lockedUpdatedAt?: Date;
+  rereadFailure?: "not-found" | "rejected";
   /** Rows the scoped source lookup answers: the documents the caller can read. */
   readableSources?: readonly {
     entityId: string;
@@ -179,9 +182,10 @@ const createPlaybookWriteScopedDb = ({
   storedPositions?: readonly Record<string, unknown>[];
 } = {}) => {
   const writes: Record<string, unknown>[] = [];
+  let lockedReadCompleted = false;
   const savedAt = new Date("2026-09-20T10:05:00.000Z");
   const scopedDb = asTestRaw<
-    McpRequestContext["scopedDb"] & ReturnType<typeof mock>
+    AuthorizedMcpRequestContext["scopedDb"] & ReturnType<typeof mock>
   >(
     mock(async (run: (tx: unknown) => unknown) => {
       const tx = {
@@ -189,17 +193,28 @@ const createPlaybookWriteScopedDb = ({
         query: {
           documentTypes: { findFirst: async () => undefined },
           playbookDefinitions: {
-            findFirst: async () => ({
-              ...STORED_PLAYBOOK,
-              positions: { version: 3, items: storedPositions },
-              ...(writes.length === 0 ? {} : { updatedAt: savedAt }),
-            }),
+            findFirst: async () => {
+              if (lockedReadCompleted && rereadFailure === "not-found") {
+                return undefined;
+              }
+              if (lockedReadCompleted && rereadFailure === "rejected") {
+                throw new Error("Conflict reread unavailable");
+              }
+              return {
+                ...STORED_PLAYBOOK,
+                positions: { version: 3, items: storedPositions },
+                updatedAt: writes.length === 0 ? lockedUpdatedAt : savedAt,
+              };
+            },
           },
         },
         select: () => ({
           from: () => ({
             where: () => ({
-              for: async () => [{ updatedAt: lockedUpdatedAt }],
+              for: async () => {
+                lockedReadCompleted = true;
+                return [{ updatedAt: lockedUpdatedAt }];
+              },
             }),
             innerJoin: () => ({
               where: () => ({ limit: async () => readableSources }),
@@ -226,12 +241,12 @@ const createPlaybookWriteScopedDb = ({
       return await run(tx);
     }),
   );
-  return { savedAt, scopedDb, writes };
+  return { savedAt, scopedDb, writes, wasLocked: () => lockedReadCompleted };
 };
 
 const createPlaybookWriteContext = (
-  scopedDb: McpRequestContext["scopedDb"],
-): McpRequestContext => {
+  scopedDb: AuthorizedMcpRequestContext["scopedDb"],
+): AuthorizedMcpRequestContext => {
   const context = createContext({ scopedDb });
   return {
     ...context,
@@ -249,7 +264,7 @@ const createPlaybookWriteContext = (
 
 /** A scopedDb whose clauses.findFirst resolves to `clause` (detail mode). */
 const createClauseDetailScopedDb = (clause: unknown) =>
-  asTestRaw<McpRequestContext["scopedDb"] & ReturnType<typeof mock>>(
+  asTestRaw<AuthorizedMcpRequestContext["scopedDb"] & ReturnType<typeof mock>>(
     mock(
       async (run: (tx: unknown) => unknown) =>
         await run({
@@ -265,30 +280,31 @@ const createContext = ({
   memberRole = "owner",
   scopedDb = createClauseScopedDb([]),
 }: {
-  memberRole?: McpRequestContext["memberRole"];
-  scopedDb?: McpRequestContext["scopedDb"];
-} = {}): McpRequestContext => ({
-  accessibleWorkspaceIds: [toSafeId<"workspace">(MATTER_ID)],
-  accessibleWorkspaceIdSet: new Set([MATTER_ID]),
-  accessibleWorkspaceStatusById: new Map([[MATTER_ID, "active"]]),
-  accessibleWorkspaces: [],
-  grantedScopes: [],
-  memberRole,
-  organizationId: toSafeId<"organization">("org_1"),
-  recordAuditEvent: asTestRaw<AuditRecorder & ReturnType<typeof mock>>(
-    mock(async () => undefined),
-  ),
-  testDependencies: {
-    materializePlaybookRun: materializePlaybookRunMock,
-    startWorkflow: startWorkflowMock,
-    loadLatestApprovedVersion: loadLatestApprovedVersionMock,
-    createPlaybookTableRuns: createPlaybookTableRunsMock,
-  },
-  safeDb: toSafeDbMock(scopedDb),
-  scopedDb,
-  userId: toSafeId<"user">("user_1"),
-  userEmail: "standard@example.test",
-});
+  memberRole?: AuthorizedMcpRequestContext["memberRole"];
+  scopedDb?: AuthorizedMcpRequestContext["scopedDb"];
+} = {}): AuthorizedMcpRequestContext =>
+  authorizedMcpContextForTest({
+    accessibleWorkspaceIds: [toSafeId<"workspace">(MATTER_ID)],
+    accessibleWorkspaceIdSet: new Set([MATTER_ID]),
+    accessibleWorkspaceStatusById: new Map([[MATTER_ID, "active"]]),
+    accessibleWorkspaces: [],
+    grantedScopes: [],
+    memberRole,
+    organizationId: toSafeId<"organization">("org_1"),
+    recordAuditEvent: asTestRaw<AuditRecorder & ReturnType<typeof mock>>(
+      mock(async () => undefined),
+    ),
+    testDependencies: {
+      materializePlaybookRun: materializePlaybookRunMock,
+      startWorkflow: startWorkflowMock,
+      loadLatestApprovedVersion: loadLatestApprovedVersionMock,
+      createPlaybookTableRuns: createPlaybookTableRunsMock,
+    },
+    safeDb: toSafeDbMock(scopedDb),
+    scopedDb,
+    userId: toSafeId<"user">("user_1"),
+    userEmail: "standard@example.test",
+  });
 
 describe("MCP knowledge tools", () => {
   beforeEach(() => {
@@ -419,6 +435,26 @@ describe("MCP knowledge tools", () => {
     });
   });
 
+  test.each(["listLevel", "list_level"])(
+    "save_clause rejects removed %s list depth field",
+    async (field) => {
+      const result = await handleMcpToolCall({
+        args: { title: "Terms", body: [{ text: "Item", [field]: 1 }] },
+        context: createContext(),
+        toolName: "save_clause",
+      });
+      expect(result.isError).toBe(true);
+      expect(parseToolPayload(result)).toMatchObject({
+        error: {
+          code: "validation_error",
+          issues: expect.arrayContaining([
+            expect.objectContaining({ path: `body.0.${field}` }),
+          ]),
+        },
+      });
+    },
+  );
+
   test.each(["create", "update"])(
     "save_clause refuses publishing unbalanced markers in %s mode",
     async (mode) => {
@@ -475,7 +511,7 @@ describe("MCP knowledge tools", () => {
             text: "The Supplier shall indemnify.",
             runs: [{ text: "The Supplier shall indemnify.", bold: true }],
             list_kind: "bullet",
-            list_level: 1,
+            numbering: { kind: "levelOnly", ilvl: 1 },
           },
           { text: "{% endif %}", is_directive: true, directive_kind: "endif" },
         ],
@@ -498,7 +534,7 @@ describe("MCP knowledge tools", () => {
           text: "The Supplier shall indemnify.",
           runs: [{ text: "The Supplier shall indemnify.", bold: true }],
           listKind: "bullet",
-          listLevel: 1,
+          numbering: { kind: "levelOnly", ilvl: 1 },
         },
         { text: "{% endif %}", isDirective: true, directiveKind: "endif" },
       ]);
@@ -547,7 +583,7 @@ describe("MCP knowledge tools", () => {
         {
           text: "List",
           listKind: "ordered",
-          listLevel: 1,
+          numbering: { kind: "levelOnly", ilvl: 1 },
           runs: [{ text: "List", bold: true }],
         },
         {
@@ -566,7 +602,7 @@ describe("MCP knowledge tools", () => {
       versions: [],
     };
     let writes = 0;
-    const scopedDb = asTestRaw<McpRequestContext["scopedDb"]>(
+    const scopedDb = asTestRaw<AuthorizedMcpRequestContext["scopedDb"]>(
       async (run: (tx: unknown) => unknown) =>
         await run({
           $count: async () => stored.variants.length,
@@ -621,9 +657,15 @@ describe("MCP knowledge tools", () => {
         id: CLAUSE_ID,
         title: "Clause",
         currentVersion: 1,
-        body: [{ text: "Read", listKind: "bullet", listLevel: 1 }],
+        body: [
+          {
+            text: "Read",
+            listKind: "bullet",
+            numbering: { kind: "levelOnly", ilvl: 1 },
+          },
+        ],
       };
-      const scopedDb = asTestRaw<McpRequestContext["scopedDb"]>(
+      const scopedDb = asTestRaw<AuthorizedMcpRequestContext["scopedDb"]>(
         async (run: (tx: unknown) => unknown) =>
           await run({
             query: { clauses: { findFirst: async () => stored } },
@@ -650,7 +692,7 @@ describe("MCP knowledge tools", () => {
             {
               text: expectation === "matching" ? "Read" : "Older",
               list_kind: "bullet",
-              list_level: 1,
+              numbering: { kind: "levelOnly", ilvl: 1 },
             },
           ],
         },
@@ -962,9 +1004,10 @@ describe("MCP knowledge tools", () => {
     },
   );
 
-  test("save_playbook answers a stale token with the calls that recover from it", async () => {
+  test("save_playbook answers a stale token with the current one and the calls that recover from it", async () => {
+    const currentUpdatedAt = new Date("2026-09-20T10:03:00.000Z");
     const { scopedDb, writes } = createPlaybookWriteScopedDb({
-      lockedUpdatedAt: new Date("2026-09-20T10:03:00.000Z"),
+      lockedUpdatedAt: currentUpdatedAt,
     });
 
     const result = await handleMcpToolCall({
@@ -982,10 +1025,45 @@ describe("MCP knowledge tools", () => {
     expect(parseToolPayload(result)).toMatchObject({
       error: {
         code: "conflict",
-        hint: expect.stringContaining("list_playbooks with playbook_id"),
+        message: expect.stringContaining(currentUpdatedAt.toISOString()),
+        hint: expect.stringMatching(
+          new RegExp(
+            `expected_updated_at ${currentUpdatedAt.toISOString()}.*list_playbooks with playbook_id`,
+            "u",
+          ),
+        ),
       },
     });
   });
+
+  test.each([
+    ["not-found", "not_found"],
+    ["rejected", "internal_error"],
+  ] as const)(
+    "save_playbook reports a %s conflict reread without inventing a current token",
+    async (rereadFailure, code) => {
+      const { scopedDb, writes, wasLocked } = createPlaybookWriteScopedDb({
+        lockedUpdatedAt: new Date("2026-09-20T10:03:00.000Z"),
+        rereadFailure,
+      });
+      const result = await handleMcpToolCall({
+        args: {
+          playbook_id: PLAYBOOK_ID,
+          expected_updated_at: STORED_UPDATED_AT.toISOString(),
+          name: "Renamed",
+        },
+        context: createPlaybookWriteContext(scopedDb),
+        toolName: "save_playbook",
+      });
+      expect(result.isError).toBe(true);
+      expect(wasLocked()).toBe(true);
+      expect(writes).toEqual([]);
+      expect(parseToolPayload(result)).toMatchObject({ error: { code } });
+      expect(JSON.stringify(parseToolPayload(result))).not.toContain(
+        "expected_updated_at",
+      );
+    },
+  );
 
   test("save_playbook writes nothing when every entry is refused, and says how to fix each", async () => {
     const { scopedDb, writes } = createPlaybookWriteScopedDb();
@@ -1119,6 +1197,7 @@ describe("MCP knowledge tools", () => {
       id: APPROVED_VERSION_ID,
       name: "Approved name",
       positions: positionsSaying("As approved"),
+      scope: null,
     });
     materializePlaybookRunMock.mockResolvedValue({
       ok: true,
@@ -1175,6 +1254,7 @@ describe("MCP knowledge tools", () => {
         definitionSnapshot: {
           name: "Approved name",
           positions: positionsSaying("As approved"),
+          scope: null,
         },
       },
     });
@@ -1266,7 +1346,7 @@ describe("MCP knowledge tools", () => {
         code: "validation_error",
         message:
           "This playbook is scoped to a document type, but the workspace has no matching Document Type classifier to gate on.",
-        hint: "Configure a matching Document Type classifier or change the playbook document-type scope before running it.",
+        hint: "Configure a matching Document Type classifier, or change the playbook document-type scope before running it. An approved playbook runs on its approved scope until it is approved again.",
         retryable: false,
         issues: [
           {

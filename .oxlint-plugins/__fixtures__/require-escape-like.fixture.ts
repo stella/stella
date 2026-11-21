@@ -13,7 +13,7 @@ import {
 } from "drizzle-orm";
 import * as ops from "drizzle-orm";
 
-import { escapeLike } from "@/api/lib/escape-like";
+import { escapeLike, escapeLikeSql } from "@/api/lib/escape-like";
 
 declare const column: SQL;
 declare const q: string;
@@ -111,6 +111,11 @@ export const escapedSqlOperand = () =>
 
 export const escapedSqlConcat = () =>
   // expect-clean: require-escape-like/require-escape-like
+  sql`${column} LIKE '%' || ${escapeLikeSql(fold(q))} || '%'`;
+
+// Escaped, then folded: the fold can still produce a wildcard.
+export const foldedAfterEscape = () =>
+  // oxlint-disable-next-line require-escape-like/require-escape-like
   sql`${column} LIKE '%' || ${fold(escapeLike(q))} || '%'`;
 
 // Non-LIKE comparison in a `sql` template.

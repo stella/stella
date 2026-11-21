@@ -1,34 +1,34 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  CYCLE_OUTCOME,
+  INGESTION_PAUSE_REASON,
   INGESTION_STOP_KIND,
   type IngestionStopKind,
 } from "@stll/legal-atlas/ingestion-cycle";
 
 import {
-  CYCLE_CADENCE,
-  CYCLE_OUTCOME,
-  CYCLE_PRODUCTIVITY,
   type CadenceStep,
   type CadenceStreaks,
-  type CycleOutcome,
+  classifyCycleProductivity,
+  CYCLE_CADENCE,
+  CYCLE_PRODUCTIVITY,
+  cycleMadeProgress,
   type CycleResult,
+  cycleStopKind,
   INITIAL_CADENCE_STREAKS,
   INITIAL_STALL_ALERT,
   QUIET_THRESHOLD,
   type StallAlertState,
   type StallAlertStep,
-  UNPRODUCTIVE_THRESHOLD,
-  classifyCycleProductivity,
-  cycleMadeProgress,
-  cycleStopKind,
+  stepAdapterCycleHealth,
   stepCadence,
   stepStallAlert,
-  updateStalledAdapter,
+  UNPRODUCTIVE_THRESHOLD,
 } from "./cycle-progress";
 import { ingestionHealthRecord } from "./ingestion-health";
 
-const OUTCOMES = Object.values(CYCLE_OUTCOME) satisfies readonly CycleOutcome[];
+const OUTCOMES = Object.values(CYCLE_OUTCOME);
 
 /** Rows written in a cycle, spanning none through many. */
 const INSERTED = [0, 1, 250] as const;
@@ -51,6 +51,16 @@ const CYCLES = OUTCOMES.flatMap((outcome) =>
                 pagesProcessed,
                 cursorAdvanced,
                 outcome,
+              };
+            case CYCLE_OUTCOME.PAUSED:
+              return {
+                inserted,
+                skipped,
+                pagesProcessed,
+                cursorAdvanced,
+                outcome,
+                pauseReason:
+                  INGESTION_PAUSE_REASON.DECISION_ALLOWANCE_EXHAUSTED,
               };
             case CYCLE_OUTCOME.FAILED:
               return {
@@ -547,17 +557,14 @@ describe("stalled-source causes", () => {
     let stallAlert: StallAlertState = INITIAL_STALL_ALERT;
     const stalledAdapters = new Map<string, IngestionStopKind>();
     return cycles.map((cycle) => {
-      const stall = stepStallAlert(
-        stallAlert,
-        cycleMadeProgress(cycle),
-        THRESHOLD,
-      );
-      stallAlert = stall.state;
-      updateStalledAdapter(stalledAdapters, {
+      const { stall } = stepAdapterCycleHealth({
         adapterKey: "test-source",
+        cycle,
         stallAlert,
-        stopKind: cycleStopKind(cycle),
+        stalledAdapters,
+        threshold: THRESHOLD,
       });
+      stallAlert = stall.state;
       return {
         stall,
         health: ingestionHealthRecord({

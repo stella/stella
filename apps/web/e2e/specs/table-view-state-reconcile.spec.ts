@@ -4,22 +4,40 @@ import { randomUUID } from "node:crypto";
 import { apiDelete, apiPut, apiStatus } from "../helpers/api";
 import { expect, test } from "../helpers/test";
 import {
-  type TestWorkspace,
+  PLAYWRIGHT_EXPECT_TIMEOUT_10_SECONDS_MS,
+  PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
+} from "../helpers/wait-budgets";
+import {
   createTestWorkspace,
   deleteTestWorkspace,
+  type TestWorkspace,
 } from "../helpers/workspace";
 
-const readContentModes = async (page: Page) =>
-  await page.evaluate(() => {
-    const raw = localStorage.getItem("stella:table");
-    return raw === null
-      ? null
-      : (
-          JSON.parse(raw) as {
-            state: { contentMode: Record<string, Record<string, string>> };
-          }
-        ).state.contentMode;
+// The table store keeps one entry per signed-in user, keyed
+// `stella:table:u:<userId>`; nothing is written under the bare name.
+const readContentModes = async (page: Page) => {
+  const { owned, unowned } = await page.evaluate(() => {
+    const keys = Array.from({ length: localStorage.length }, (_, index) =>
+      localStorage.key(index),
+    ).filter((key): key is string => key !== null);
+    return {
+      owned: keys
+        .filter((key) => key.startsWith("stella:table:u:"))
+        .map((key) => localStorage.getItem(key)),
+      unowned: localStorage.getItem("stella:table"),
+    };
   });
+  expect(unowned).toBeNull();
+  expect(owned.length).toBeLessThanOrEqual(1);
+  const raw = owned.at(0) ?? null;
+  return raw === null
+    ? null
+    : (
+        JSON.parse(raw) as {
+          state: { contentMode: Record<string, Record<string, string>> };
+        }
+      ).state.contentMode;
+};
 
 const namedView = (label: string) => {
   const id = randomUUID();
@@ -33,12 +51,14 @@ test.describe("per-view table state", () => {
     workspace = await createTestWorkspace(request, "table-view-state");
   });
 
-  test.afterEach(async ({ request }) => {
+  test.afterEach(async ({ page, request }, testInfo) => {
     if (workspace === null) {
       return;
     }
 
-    await deleteTestWorkspace(request, workspace.id);
+    await deleteTestWorkspace(request, workspace.id, {
+      leave: { page, testInfo },
+    });
     workspace = null;
   });
 
@@ -81,7 +101,7 @@ test.describe("per-view table state", () => {
           await apiStatus(page.request, `/workspaces/${testWorkspace.id}`),
         {
           message: "browser context can read the created workspace",
-          timeout: 10_000,
+          timeout: PLAYWRIGHT_EXPECT_TIMEOUT_10_SECONDS_MS,
         },
       )
       .toBe(200);
@@ -97,7 +117,9 @@ test.describe("per-view table state", () => {
       exact: true,
       name: secondView.name,
     });
-    await expect(firstTab).toBeVisible({ timeout: 30_000 });
+    await expect(firstTab).toBeVisible({
+      timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
+    });
     await expect(secondTab).toBeVisible();
 
     // Content mode is persisted alongside column widths and is one click to
@@ -127,7 +149,9 @@ test.describe("per-view table state", () => {
     );
 
     await page.goto(viewUrl, { waitUntil: "domcontentloaded" });
-    await expect(firstTab).toBeVisible({ timeout: 30_000 });
+    await expect(firstTab).toBeVisible({
+      timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
+    });
     await expect(secondTab).toBeHidden();
     await expect
       .poll(async () => (await readContentModes(page))?.[testWorkspace.id], {

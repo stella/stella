@@ -1,8 +1,8 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
-import JSZip from "jszip";
 
 import { API_FILE_SECURITY_REJECTED_ERROR_CODE } from "@stll/api-contract";
+import { ZipArchive } from "@stll/docx-core/zip";
 
 import createTemplate from "@/api/handlers/templates/create";
 import { discoverHandler } from "@/api/handlers/templates/discover";
@@ -11,7 +11,11 @@ import { fillHandler } from "@/api/handlers/templates/fill";
 import prepareTemplate from "@/api/handlers/templates/prepare";
 import { toSafeId } from "@/api/lib/branded-types";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
-import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
+import {
+  createTestHandlerContext,
+  NO_AUDIT,
+  NO_DB,
+} from "@/api/tests/helpers/handler-context";
 import { asTestRaw, readTestJson } from "@/api/tests/helpers/test-tool-set";
 
 // Every route that takes a template DOCX from the caller scans it before
@@ -21,14 +25,14 @@ import { asTestRaw, readTestJson } from "@/api/tests/helpers/test-tool-set";
 const W_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
 
 const makeAttachedTemplateDocx = async (): Promise<File> => {
-  const zip = new JSZip();
-  zip.file(
+  const zip = new ZipArchive();
+  zip.set(
     "word/document.xml",
     `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
       `<w:document xmlns:w="${W_NS}"><w:body>` +
       `<w:p><w:r><w:t>{{name}}</w:t></w:r></w:p></w:body></w:document>`,
   );
-  zip.file(
+  zip.set(
     "word/_rels/document.xml.rels",
     '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
       '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
@@ -37,7 +41,7 @@ const makeAttachedTemplateDocx = async (): Promise<File> => {
       'Target="https://templates.example/remote.dotm" TargetMode="External"/>' +
       "</Relationships>",
   );
-  const bytes = await zip.generateAsync({ type: "uint8array" });
+  const bytes = await zip.generate({ compression: "store" });
   return new File([bytes], "linked.docx", { type: DOCX_MIME_TYPE });
 };
 
@@ -74,6 +78,9 @@ describe("template uploads are scanned", () => {
   test("create refuses a DOCX the scan rejects", async () => {
     const result = await createTemplate.handler(
       createTestHandlerContext<Parameters<typeof createTemplate.handler>[0]>({
+        audit: NO_AUDIT,
+        safeDb: NO_DB,
+        scopedDb: NO_DB,
         body: { file: await makeAttachedTemplateDocx(), name: "Linked" },
       }),
     );
@@ -86,6 +93,9 @@ describe("template uploads are scanned", () => {
       createTestHandlerContext<
         Parameters<typeof saveTemplateDocument.handler>[0]
       >({
+        audit: NO_AUDIT,
+        safeDb: NO_DB,
+        scopedDb: NO_DB,
         body: { file: await makeAttachedTemplateDocx() },
         params: {
           templateId: toSafeId<"template">(
@@ -101,6 +111,9 @@ describe("template uploads are scanned", () => {
   test("prepare refuses a DOCX the scan rejects", async () => {
     const result = await prepareTemplate.handler(
       createTestHandlerContext<Parameters<typeof prepareTemplate.handler>[0]>({
+        audit: NO_AUDIT,
+        safeDb: NO_DB,
+        scopedDb: NO_DB,
         body: { file: await makeAttachedTemplateDocx() },
       }),
     );
@@ -122,7 +135,11 @@ describe("template uploads are scanned", () => {
   });
 
   test("fill refuses a DOCX the scan rejects", async () => {
-    const context = createTestHandlerContext();
+    const context = createTestHandlerContext({
+      audit: NO_AUDIT,
+      safeDb: NO_DB,
+      scopedDb: NO_DB,
+    });
     const response = await fillHandler({
       safeDb: context.safeDb,
       scopedDb: context.scopedDb,

@@ -10,15 +10,20 @@ import type { BilingualAIDocumentContext } from "@/api/lib/bilingual/ai";
 import {
   buildBilingualDocumentRequest,
   SOURCE_DOCUMENT_CACHE_CHARS_MAX,
-  translationLanguageInstruction,
   translateFormattedBatch,
+  translationLanguageInstruction,
 } from "@/api/lib/bilingual/ai";
 import type { FormattedBilingualUnit } from "@/api/lib/bilingual/formatting";
 import { toSafeId } from "@/api/lib/branded-types";
-import type { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
+import type { generateTanStackObjectForTask } from "@/api/lib/tanstack-ai-generate";
+import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+
+beforeEach(() => {
+  generateObjectMock.mockClear();
+});
 
 type GenerateOptions = {
   analytics: TanStackAIAnalyticsCallbacks;
@@ -43,7 +48,7 @@ const generateObjectMock = mock(
   },
 );
 const generateObjectForTest =
-  asTestRaw<typeof generateTanStackObjectForRole>(generateObjectMock);
+  asTestRaw<typeof generateTanStackObjectForTask>(generateObjectMock);
 
 describe("translation language instruction", () => {
   test("lets the model infer the source when only a target is known", () => {
@@ -82,6 +87,7 @@ const usageMetering = {
   workspaceId,
 } satisfies AIUsageMetering;
 const context = {
+  admission: testModelAdmission(organizationId),
   organizationId,
   workspaceId,
   orgAIConfig: null,
@@ -101,7 +107,7 @@ const context = {
       sourceText: "Stable source",
     },
   ],
-  generateObjectForRole: generateObjectForTest,
+  generateObjectForTask: generateObjectForTest,
 } satisfies BilingualAIDocumentContext;
 
 const formattedUnit = (

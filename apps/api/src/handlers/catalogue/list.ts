@@ -2,12 +2,12 @@ import { Result } from "better-result";
 import { and, eq, inArray, isNull, or } from "drizzle-orm";
 
 import {
-  filterCatalogueByKind,
-  loadCatalogue,
-  recommendedSlugsForJurisdictions,
   type CatalogueCost,
   type CatalogueSetup,
+  filterCatalogueByKind,
+  loadCatalogue,
   type LoadedCatalogueEntry,
+  recommendedSlugsForJurisdictions,
 } from "@stll/catalogue";
 
 import {
@@ -15,11 +15,18 @@ import {
   mcpConnectors,
   mcpUserConnections,
 } from "@/api/db/schema";
-import type { McpConnectorAuthType } from "@/api/db/schema";
+import type {
+  AgentSkillInvocation,
+  McpConnectorAuthType,
+} from "@/api/db/schema";
 import {
-  computeCatalogueInstallState,
   type CatalogueInstallState,
+  computeCatalogueInstallState,
 } from "@/api/handlers/catalogue/install-state";
+import {
+  canManageSkill,
+  canReadActiveSkillBody,
+} from "@/api/lib/agent-skills/access";
 import { EDITABLE_AGENT_SKILL_ORIGINS } from "@/api/lib/agent-skills/origin";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
@@ -30,6 +37,7 @@ import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { LIMITS } from "@/api/lib/limits";
 import { NATIVE_TOOL_SLUGS } from "@/api/lib/mcp-connectors/catalog-metadata";
 import { hasManagementPermission } from "@/api/lib/permission-authorization";
+import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 import { resolveWebSearchProvidersFromOrgSettingsRow } from "@/api/lib/web-search/load-org-keys";
 
 import { resolveCatalogueSkillHandleMaps } from "./skill-handles";
@@ -44,6 +52,7 @@ const MCP_CONNECTOR_SETUP = {
 } as const satisfies Record<McpConnectorAuthType, CatalogueSetup>;
 
 const config = {
+  contract: "patch",
   description:
     "List the tool catalogue for the signed-in user's organization: curated " +
     "skills, MCP connectors, and native tools, plus the organization's own " +
@@ -116,6 +125,17 @@ type CatalogueEntryResponse = LoadedCatalogueEntry extends infer Entry
          * surfaced via the dedicated MCP detail flow.
          */
         enabled: boolean | null;
+        /**
+         * Whether the assistant may use an installed skill on its own
+         * (`auto`) or only when the user invokes it (`manual`); `null` for
+         * any entry that is not an installed skill.
+         */
+        invocation: AgentSkillInvocation | null;
+        /**
+         * What an installed skill is bound to: one matter, one client, or
+         * nothing (`null`, also for entries that are not installed skills).
+         */
+        binding: CatalogueSkillBinding | null;
       }
     : never
   : never;
@@ -173,8 +193,11 @@ const listCatalogue = createSafeRootHandler(
                   slug: agentSkills.slug,
                   scope: agentSkills.scope,
                   enabled: agentSkills.enabled,
+                  invocation: agentSkills.invocation,
                   origin: agentSkills.origin,
                   userId: agentSkills.userId,
+                  boundWorkspaceId: agentSkills.boundWorkspaceId,
+                  boundClientId: agentSkills.boundClientId,
                 })
                 .from(agentSkills)
                 .where(
@@ -200,6 +223,11 @@ const listCatalogue = createSafeRootHandler(
             slug: agentSkills.slug,
             scope: agentSkills.scope,
             enabled: agentSkills.enabled,
+            invocation: agentSkills.invocation,
+            boundWorkspaceId: agentSkills.boundWorkspaceId,
+            boundClientId: agentSkills.boundClientId,
+            userId: agentSkills.userId,
+            origin: agentSkills.origin,
             name: agentSkills.name,
             description: agentSkills.description,
             license: agentSkills.license,
@@ -319,18 +347,13 @@ const listCatalogue = createSafeRootHandler(
     // Per-installation uninstall handles. We only surface a handle the
     // caller is actually allowed to delete:
     //
-    // - Skills: team-scope rows require admin/owner role
-    //   (`apps/api/src/handlers/skills/delete.ts`). Members get the
-    //   user-scope row's ID, if any, or null. Prefer the team row when
-    //   the caller is admin/owner.
+    // - Skills: each row spends its canonical delete permission. When both
+    //   scopes are visible, managers prefer the team row.
     // - MCP connectors: `DELETE /mcp/connectors/:slug` only deletes
     //   org-owned rows, so globally-curated connectors (organizationId
     //   = null) never produce a usable slug.
-    const canDeleteTeamSkills = hasManagementPermission(memberRole, {
-      agentSkill: ["delete"],
-    });
     const skillHandles = resolveCatalogueSkillHandleMaps({
-      canManageTeamSkills: canDeleteTeamSkills,
+      memberRole,
       rows: visibleSkillRows,
       userId: user.id,
     });
@@ -388,9 +411,11 @@ const listCatalogue = createSafeRootHandler(
           ? (connectorSlugByUrl.get(entry.url) ?? null)
           : null;
       let enabled: boolean | null = null;
+      let invocation: AgentSkillInvocation | null = null;
       if (installState === "installed") {
         if (entry.kind === "skill") {
           enabled = skillHandles.enabledBySlug.get(entry.slug) ?? null;
+          invocation = skillHandles.invocationBySlug.get(entry.slug) ?? null;
         } else if (entry.kind === "native-tool") {
           // Native-tools encode the enabled decision into install-state
           // already (jurisdiction default + overrides). Installed ⇒ on.
@@ -407,6 +432,9 @@ const listCatalogue = createSafeRootHandler(
         chatSkillId,
         installedConnectorSlug,
         enabled,
+        invocation,
+        // Catalogue installs are never bound; only authored skills are.
+        binding: null,
       });
     }
 
@@ -425,8 +453,9 @@ const listCatalogue = createSafeRootHandler(
       response,
       skills: customSkillRows,
       curatedSlugs: new Set(skillSlugs),
-      canDeleteTeamSkills,
+      memberRole,
       organizationId: session.activeOrganizationId,
+      userId: user.id,
     });
 
     return Result.ok({
@@ -534,43 +563,77 @@ const buildCustomMcpCatalogueEntry = (
     chatSkillId: null,
     installedConnectorSlug: connector.slug,
     enabled: null,
+    invocation: null,
+    binding: null,
   };
 };
 
-type CustomSkillRow = {
-  id: string;
-  slug: string;
-  scope: "team" | "private";
-  enabled: boolean;
-  name: string;
-  description: string;
-  license: string | null;
+type CustomSkillRow = Pick<
+  typeof agentSkills.$inferSelect,
+  | "id"
+  | "slug"
+  | "scope"
+  | "enabled"
+  | "invocation"
+  | "boundWorkspaceId"
+  | "boundClientId"
+  | "userId"
+  | "origin"
+  | "name"
+  | "description"
+  | "license"
+>;
+
+type CatalogueSkillBinding = "matter" | "client";
+
+const catalogueSkillBinding = ({
+  boundClientId,
+  boundWorkspaceId,
+}: Pick<
+  CustomSkillRow,
+  "boundClientId" | "boundWorkspaceId"
+>): CatalogueSkillBinding | null => {
+  if (boundWorkspaceId !== null) {
+    return "matter";
+  }
+  return boundClientId === null ? null : "client";
 };
 
 type AppendCustomSkillsArgs = {
   response: CatalogueEntryResponse[];
   skills: readonly CustomSkillRow[];
   curatedSlugs: ReadonlySet<string>;
-  canDeleteTeamSkills: boolean;
+  memberRole: AuthorizedMemberRole;
   organizationId: SafeId<"organization">;
+  userId: SafeId<"user">;
 };
 
 export const appendCustomSkillEntries = ({
   response,
   skills,
   curatedSlugs,
-  canDeleteTeamSkills,
+  memberRole,
   organizationId,
+  userId,
 }: AppendCustomSkillsArgs): void => {
   // De-dupe by slug. A team-scope row and a private-scope row can
   // coexist (different uniqueness gates), but the catalogue surface
-  // is keyed by slug, so we prefer the team row when both are visible
-  // and the caller can delete it.
+  // is keyed by slug. Management role ranks visible team rows first;
+  // row permissions independently decide visibility and handles.
+  const preferTeam = hasManagementPermission(memberRole, {
+    agentSkill: ["delete"],
+  });
   const bySlug = new Map<string, CustomSkillRow>();
   for (const row of skills) {
     if (
       curatedSlugs.has(row.slug) ||
-      (row.scope === "team" && !row.enabled && !canDeleteTeamSkills)
+      (!canReadActiveSkillBody({
+        ...row,
+        memberRole,
+        skillUserId: row.userId,
+        userId,
+      }) &&
+        !canManageSkill({ memberRole, skill: row, spends: "delete", userId }))
     ) {
       continue;
     }
@@ -578,7 +641,7 @@ export const appendCustomSkillEntries = ({
     if (
       !existing ||
       (existing.scope !== row.scope &&
-        (canDeleteTeamSkills ? row.scope === "team" : row.scope === "private"))
+        (preferTeam ? row.scope === "team" : row.scope === "private"))
     ) {
       bySlug.set(row.slug, row);
     }
@@ -586,22 +649,25 @@ export const appendCustomSkillEntries = ({
   for (const row of bySlug.values()) {
     response.push(
       buildCustomSkillCatalogueEntry({
-        canDeleteTeamSkills,
+        memberRole,
         organizationId,
         skill: row,
+        userId,
       }),
     );
   }
 };
 
 const buildCustomSkillCatalogueEntry = ({
-  canDeleteTeamSkills,
+  memberRole,
   organizationId,
   skill,
+  userId,
 }: {
-  canDeleteTeamSkills: boolean;
+  memberRole: AuthorizedMemberRole;
   organizationId: SafeId<"organization">;
   skill: CustomSkillRow;
+  userId: SafeId<"user">;
 }): CatalogueEntryResponse => ({
   kind: "skill",
   source: "in-tree",
@@ -620,14 +686,26 @@ const buildCustomSkillCatalogueEntry = ({
   isLocked: false,
   isRecommendedForOrg: false,
   installState: "installed",
-  installedSkillId:
-    skill.scope === "private" || canDeleteTeamSkills ? skill.id : null,
-  chatSkillId:
-    skill.scope === "private" || canDeleteTeamSkills || skill.enabled
-      ? skill.id
-      : null,
+  installedSkillId: canManageSkill({
+    memberRole,
+    skill,
+    spends: "delete",
+    userId,
+  })
+    ? skill.id
+    : null,
+  chatSkillId: canReadActiveSkillBody({
+    ...skill,
+    memberRole,
+    skillUserId: skill.userId,
+    userId,
+  })
+    ? skill.id
+    : null,
   installedConnectorSlug: null,
   enabled: skill.enabled,
+  invocation: skill.invocation,
+  binding: catalogueSkillBinding(skill),
 });
 
 export default listCatalogue;

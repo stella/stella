@@ -6,29 +6,50 @@ import {
   createStellaOriginTrust,
   parseTrustedOriginList,
   STELLA_CONTENT_SCRIPT_MATCHES,
+  STELLA_HOSTNAMES,
   trustedStellaOriginFromUrl,
 } from "./trusted-origin";
 
 describe("build-time origin list", () => {
-  test("defaults to the hosted origins and accepts exact HTTPS origins", () => {
-    expect(parseTrustedOriginList(undefined)).toEqual([
-      "https://app.stll.app",
-      "https://my.stll.app",
+  test("release and local builds default to production only", () => {
+    for (const mode of ["production", "development", "e2e", undefined]) {
+      expect(parseTrustedOriginList(undefined, mode)).toEqual([
+        "https://app.stll.app",
+        "https://my.stll.app",
+      ]);
+      expect(parseTrustedOriginList(" ", mode)).toEqual([
+        "https://app.stll.app",
+        "https://my.stll.app",
+      ]);
+    }
+  });
+
+  test("the staging build defaults to the staging origin only", () => {
+    expect(parseTrustedOriginList(" ", "staging")).toEqual([
       "https://staging.stll.app",
     ]);
-    expect(
-      parseTrustedOriginList(
-        " https://stella.example.org, https://law.example.net ",
-      ),
-    ).toEqual(["https://stella.example.org", "https://law.example.net"]);
+    expect(parseTrustedOriginList(undefined, "staging")).toEqual([
+      "https://staging.stll.app",
+    ]);
+  });
+
+  test("an explicit list replaces the default in every build mode", () => {
+    for (const mode of ["production", "staging"]) {
+      expect(
+        parseTrustedOriginList(
+          " https://stella.example.org, https://law.example.net ",
+          mode,
+        ),
+      ).toEqual(["https://stella.example.org", "https://law.example.net"]);
+    }
   });
 
   test("fails the build on non-origin or non-HTTPS entries", () => {
-    expect(() => parseTrustedOriginList("http://stella.example.org")).toThrow(
-      Panic,
-    );
     expect(() =>
-      parseTrustedOriginList("https://stella.example.org/app"),
+      parseTrustedOriginList("http://stella.example.org", "production"),
+    ).toThrow(Panic);
+    expect(() =>
+      parseTrustedOriginList("https://stella.example.org/app", "production"),
     ).toThrow(Panic);
   });
 });
@@ -38,9 +59,9 @@ describe("stella extension origin trust", () => {
     expect(trustedStellaOriginFromUrl("https://my.stll.app/chat")).toBe(
       "https://my.stll.app",
     );
-    expect(trustedStellaOriginFromUrl("https://staging.stll.app/chat")).toBe(
-      "https://staging.stll.app",
-    );
+    expect(
+      trustedStellaOriginFromUrl("https://staging.stll.app/chat"),
+    ).toBeNull();
     expect(trustedStellaOriginFromUrl("https://evil.stll.app/chat")).toBeNull();
     expect(trustedStellaOriginFromUrl("https://stll.app/chat")).toBeNull();
   });
@@ -49,10 +70,52 @@ describe("stella extension origin trust", () => {
     expect(STELLA_CONTENT_SCRIPT_MATCHES).toEqual([
       "https://app.stll.app/*",
       "https://my.stll.app/*",
-      "https://staging.stll.app/*",
     ]);
     expect(trustedStellaOriginFromUrl("http://localhost:3210/chat")).toBeNull();
     expect(trustedStellaOriginFromUrl("http://127.0.0.1:3210/chat")).toBeNull();
+  });
+});
+
+describe("stella hosts the controlled tab never loads", () => {
+  test("cover staging even where the bridge does not trust it", () => {
+    expect(STELLA_HOSTNAMES).toEqual([
+      "app.stll.app",
+      "my.stll.app",
+      "staging.stll.app",
+    ]);
+  });
+
+  test("a staging build trusts staging but never production", () => {
+    const trust = createStellaOriginTrust({
+      hostedOrigins: parseTrustedOriginList(undefined, "staging"),
+      trustLoopback: buildTrustsLoopback("staging"),
+    });
+    expect(trust.contentScriptMatches).toEqual(["https://staging.stll.app/*"]);
+    expect(trust.originFromUrl("https://staging.stll.app/chat")).toBe(
+      "https://staging.stll.app",
+    );
+    expect(trust.originFromUrl("https://app.stll.app/chat")).toBeNull();
+    expect(trust.originFromUrl("https://my.stll.app/chat")).toBeNull();
+    expect(trust.originFromUrl("http://localhost:3210/chat")).toBeNull();
+    expect(trust.hostnames).toEqual([
+      "staging.stll.app",
+      "app.stll.app",
+      "my.stll.app",
+    ]);
+  });
+
+  test("add a self-hosted origin to the hosted ones", () => {
+    const trust = createStellaOriginTrust({
+      hostedOrigins: ["https://stella.example.org"],
+      trustLoopback: false,
+    });
+    expect(trust.hostnames).toEqual([
+      "stella.example.org",
+      "app.stll.app",
+      "my.stll.app",
+      "staging.stll.app",
+    ]);
+    expect(trust.originFromUrl("https://my.stll.app/chat")).toBeNull();
   });
 });
 

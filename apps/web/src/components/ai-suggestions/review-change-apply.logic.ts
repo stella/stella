@@ -185,6 +185,7 @@ export const applyReviewChange = ({
   const operations = [...operationByBlock.values()];
 
   const result = editor.applyDocumentOperations({
+    undefinedReferences: "refuse",
     snapshot,
     batch: {
       version: DOCUMENT_OPERATION_CONTRACT_VERSION,

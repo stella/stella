@@ -1,0 +1,48 @@
+import { createFileRoute, redirect } from "@tanstack/react-router";
+import { panic } from "better-result";
+
+import { PROFESSIONAL_USE_STATUS } from "@stll/api-contract/professional-use";
+
+import { professionalUseOptions } from "@/lib/auth-queries";
+import { ensureRouteQueryData } from "@/lib/react-query";
+import { destinationNavigation, redirectToSchema } from "@/lib/redirect";
+import { routeSearchSchema } from "@/route-search-params";
+
+import { ProfessionalUsePage } from "./-professional-use.page";
+import { ProfessionalUsePending } from "./-professional-use.pending";
+
+const searchSchema = routeSearchSchema({
+  redirectTo: redirectToSchema,
+});
+
+export const Route = createFileRoute("/auth/professional-use")({
+  validateSearch: searchSchema,
+  beforeLoad: async ({ context, location, search }) => {
+    if (!context.session) {
+      redirect({
+        to: "/auth",
+        search: { redirectTo: location.pathname + location.searchStr },
+        replace: true,
+        throw: true,
+      });
+      return panic("TanStack Router did not throw the sign-in redirect.");
+    }
+    const userId = context.session.userId;
+    const professionalUse = await ensureRouteQueryData(
+      context.queryClient,
+      professionalUseOptions(userId),
+    );
+    switch (professionalUse.status) {
+      case PROFESSIONAL_USE_STATUS.required:
+        return { userId };
+      case PROFESSIONAL_USE_STATUS.accepted:
+        redirect({ ...destinationNavigation(search.redirectTo), throw: true });
+        return panic("TanStack Router did not throw the continue redirect.");
+      default:
+        professionalUse satisfies never;
+        return panic("Unhandled professional-use state");
+    }
+  },
+  component: ProfessionalUsePage,
+  pendingComponent: ProfessionalUsePending,
+});

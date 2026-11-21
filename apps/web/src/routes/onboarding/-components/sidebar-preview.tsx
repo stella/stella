@@ -1,14 +1,10 @@
-import type { ReactNode } from "react";
 import { useState } from "react";
 
 import { useTranslations } from "use-intl";
 
-import {
-  LibraryBigIcon,
-  MessageSquareIcon,
-  SearchIcon,
-  UsersIcon,
-} from "@stll/ui/icons";
+import { UsersIcon } from "@stll/ui/icons";
+import { MatterIcon } from "@stll/ui/matter-icon";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { PROVIDER_LABELS } from "@/components/ai-config-role-models.logic";
@@ -17,11 +13,12 @@ import type {
   ProviderValidationStatus,
 } from "@/components/ai-config-role-models.logic";
 import { getProviderIcon } from "@/components/ai-provider-icons";
-import { MatterIcon, MattersNavIcon } from "@/components/matter-icon";
 import { StellaWordmark } from "@/components/stella-wordmark";
 import { useMountEffect } from "@/hooks/use-effect";
 import { useHydrationSafeHotkeyPlatform } from "@/hooks/use-hydration-safe-hotkey-platform";
 import { formatHotkeyForPlatform, HOTKEYS } from "@/lib/hotkeys";
+
+import { OnboardingSidebarFrame } from "./sidebar-preview.pending";
 
 type SidebarPreviewProps = {
   organizationName: string;
@@ -55,31 +52,6 @@ const ANIMATION_STYLE = `
 }
 `;
 
-const NavItem = ({
-  icon: Icon,
-  label,
-  active,
-  trailing,
-}: {
-  icon: React.ComponentType<{ className?: string }>;
-  label: string;
-  active?: boolean;
-  trailing?: ReactNode;
-}) => (
-  <div
-    className={cn(
-      "flex items-center gap-2 rounded-md px-2 py-1.5 text-sm",
-      active
-        ? "bg-accent text-foreground font-medium"
-        : "text-muted-foreground",
-    )}
-  >
-    <Icon className="size-4" />
-    <span className="flex-1 truncate">{label}</span>
-    {trailing}
-  </div>
-);
-
 /**
  * Animated mock of the Stella sidebar for the onboarding
  * wizard. Shows contextual micro-animations based on the
@@ -108,74 +80,43 @@ export const SidebarPreview = ({
   });
 
   return (
-    <div className="bg-background w-[340px] overflow-hidden rounded-xl shadow-lg">
-      <style>{ANIMATION_STYLE}</style>
-
-      {/* Header */}
-      <div className="border-b px-4 py-3">
-        <StellaWordmark className="text-foreground h-4 w-auto" />
-      </div>
-
-      {/* Org name */}
-      <div className="border-b px-4 py-2.5">
-        {organizationName ? (
-          <div className="animate-slide-in text-foreground truncate text-sm font-medium">
-            {organizationName}
-          </div>
-        ) : (
-          <div className="text-foreground-subtle text-sm font-medium">
-            {t("onboarding.orgNameLabel")}
-          </div>
-        )}
-      </div>
-
-      {/* Nav items */}
-      <div className="flex flex-col gap-0.5 px-3 py-3">
-        <NavItem
-          icon={SearchIcon}
-          label={t("navigation.search")}
-          trailing={
-            <kbd className="text-foreground-strong-muted text-3xs">
-              {formatHotkeyForPlatform(HOTKEYS.SEARCH, hotkeyPlatform)}
-            </kbd>
-          }
-        />
-        <NavItem
-          active={showChatActive}
-          icon={MessageSquareIcon}
-          label={t("navigation.chat")}
-        />
-        <NavItem
-          active={!showChatActive}
-          icon={MattersNavIcon}
-          label={t("common.matters")}
-        />
-        <NavItem icon={LibraryBigIcon} label={t("navigation.knowledge")} />
-      </div>
-
-      {/* Documents section — placeholder skeleton when no matter exists */}
-      <div className="px-3 py-2">
-        <div className="text-muted-foreground text-2xs px-2 pb-1.5 font-medium tracking-wide uppercase">
-          {t("common.matters")}
-        </div>
-
-        {matterName ? (
+    <OnboardingSidebarFrame
+      chatActive={showChatActive}
+      label={(id) => t(id)}
+      navLabel={(id) => (
+        <TruncatedText className="flex-1">{t(id)}</TruncatedText>
+      )}
+      matter={
+        matterName ? (
           <div className="animate-slide-in flex items-center gap-2 rounded-md px-2 py-1.5">
             <MatterIcon
               className="size-3.5 shrink-0"
               matter={{ id: matterName, color: null }}
             />
-            <span className="text-foreground truncate text-sm">
+            <TruncatedText className="text-foreground text-sm">
               {matterName}
-            </span>
+            </TruncatedText>
           </div>
-        ) : (
-          <div className="flex items-center gap-2 rounded-md px-2 py-1.5">
-            <div className="bg-muted size-3.5 rounded" />
-            <div className="bg-muted h-3 w-24 rounded" />
-          </div>
-        )}
-      </div>
+        ) : undefined
+      }
+      organization={
+        organizationName ? (
+          <TruncatedText
+            className="animate-slide-in text-foreground text-sm font-medium"
+            render={<div />}
+          >
+            {organizationName}
+          </TruncatedText>
+        ) : undefined
+      }
+      searchHint={
+        <kbd className="text-foreground-strong-muted text-3xs">
+          {formatHotkeyForPlatform(HOTKEYS.SEARCH, hotkeyPlatform)}
+        </kbd>
+      }
+      wordmark={<StellaWordmark className="text-foreground h-4 w-auto" />}
+    >
+      <style>{ANIMATION_STYLE}</style>
 
       {/* AI status — one row per configured provider */}
       {aiProviders.length > 0 && (
@@ -240,6 +181,6 @@ export const SidebarPreview = ({
           </div>
         </div>
       )}
-    </div>
+    </OnboardingSidebarFrame>
   );
 };

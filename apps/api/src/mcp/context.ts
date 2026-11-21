@@ -1,33 +1,44 @@
 import { panic, Result } from "better-result";
-import { eq } from "drizzle-orm";
 
 import type { getLawTextBlock, searchConsolidatedLegislation } from "@stll/boe";
 import type { runEntityCheck } from "@stll/business-registries/entity-checks";
 import type { PermissionInput } from "@stll/permissions";
+import type { listSkillMetadata } from "@stll/skills";
 
 import { rlsDb } from "@/api/db/root";
-import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
-import { workspaces } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/root";
+import type { SafeDb, SafeDbError, ScopedDb } from "@/api/db/safe-db";
 import {
+  createExplicitSafeDb,
+  createExplicitScopedDb,
   createMembershipSafeDb,
   createMembershipScopedDb,
-  createSafeDb,
-  createScopedDb,
+  TRANSACTION_DEADLINE,
 } from "@/api/db/scoped";
+import type { RlsDatabase, TransactionDeadline } from "@/api/db/scoped";
+import type { readGatedDecisionCitationDigest } from "@/api/handlers/case-law/decisions/citation-digest";
 import type { readGatedDecisionCitations } from "@/api/handlers/case-law/decisions/citation-passages";
+import type { readCaseLawCoverageHandler } from "@/api/handlers/case-law/decisions/coverage";
 import type {
   readGatedDecisionWithDocument,
   readsSharedPublicLawCorpus,
 } from "@/api/handlers/case-law/decisions/get-deferred-document";
-import type { lookupDecisionsByIdentity } from "@/api/handlers/case-law/decisions/lookup-by-identity";
-import type { searchDecisionsHandler } from "@/api/handlers/case-law/decisions/search";
+import type { readDecisionReaderSource } from "@/api/handlers/case-law/decisions/reader";
+import type {
+  listCaseLawProvisionDecisions,
+  searchDecisionsHandler,
+} from "@/api/handlers/case-law/decisions/search";
 import type { resolveAnnotationTarget } from "@/api/handlers/legal-reader/annotations/document-blocks";
+import type { admitLawRead } from "@/api/handlers/legal-resolve/admission";
+import type { resolveDecision } from "@/api/handlers/legal-resolve/decision";
+import type { resolveLawCitation } from "@/api/handlers/legal-resolve/law";
 import type {
   resolveStatuteExpression,
   resolveStatuteWorkVersion,
 } from "@/api/handlers/legislation/by-eli";
 import type { readPublicLegislationHandler } from "@/api/handlers/legislation/get";
 import type { readProvisionHistoryHandler } from "@/api/handlers/legislation/provision-history";
+import type { readProvisionPreviewHandler } from "@/api/handlers/legislation/provision-preview";
 import type { readLegislationProvisionVersions } from "@/api/handlers/legislation/provision-versions";
 import type { searchLegislationHandler } from "@/api/handlers/legislation/search";
 import type { listStatuteVersionsHandler } from "@/api/handlers/legislation/versions";
@@ -47,12 +58,16 @@ import type { loadAnonymizationAllowlistCanonicalsByWorkspace } from "@/api/lib/
 import type { loadAnonymizationGazetteerEntriesByWorkspace } from "@/api/lib/anonymization-blacklist";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import type { AuditExecutionContext, AuditRecorder } from "@/api/lib/audit-log";
-import { resolveCredentialMemberAuthorization } from "@/api/lib/auth";
-import type { AccessibleWorkspace } from "@/api/lib/auth";
+import {
+  featureAccessSnapshotFromAuthorization,
+  resolveCredentialMemberAuthorization,
+} from "@/api/lib/auth";
+import type { AccessibleWorkspace } from "@/api/lib/auth/accessible-workspace";
+import type { safeOutboundFetchBytes } from "@/api/lib/auth/authorized-outbound-fetch";
 import { checkDemoAccountOperation } from "@/api/lib/auth/demo-account";
-import { resolveFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context";
-import { createFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/policy";
-import type { FeatureAccessSnapshot } from "@/api/lib/auth/feature-access/policy";
+import type { ResolveCredentialMemberAuthorization } from "@/api/lib/auth/member-authorization";
+import type { AdmittedMcpSession } from "@/api/lib/auth/oauth-grant-admission";
+import { checkReviewAccountOrganization } from "@/api/lib/auth/review-account";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type { createTimeEntryHandler } from "@/api/lib/billing/time-entry-insert";
@@ -66,20 +81,39 @@ import type {
   executeRegistryLookup,
 } from "@/api/lib/business-registries/dispatch";
 import type { runSanctionsCheck } from "@/api/lib/business-registries/sanctions-check";
-import type { CaseLawSearchGuidanceMode } from "@/api/lib/case-law/search-guidance-mode";
+import type { readDecisionReviews } from "@/api/lib/case-law/decision-reviews";
+import type { readPreferredLanguageVersionIds } from "@/api/lib/case-law/language-alternates";
+import type {
+  readCaseLawProvisionScope,
+  readProvisionWorkLinked,
+} from "@/api/lib/case-law/provision-filter";
+import type { readWithdrawnCopyProjection } from "@/api/lib/case-law/withdrawn-copy-read";
 import type { loadLatestApprovedVersion } from "@/api/lib/document-review/approved-playbook-versions";
 import type { createPlaybookTableRuns } from "@/api/lib/document-review/table-run-create";
-import { FEATURE_REGISTRY } from "@/api/lib/feature-access/registry";
+import {
+  type ReadOutcome,
+  readPresent,
+  readUnavailable,
+} from "@/api/lib/errors/read-outcome";
+import type { FeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
+import type { LEGAL_FILE_READERS } from "@/api/lib/files/read-legal-file";
 import type { CorpusIndexQueryVariant } from "@/api/lib/legal-search/corpus-query-variant-policy";
 import type { readVersionBlocks } from "@/api/lib/legal-search/legislation-version-blocks";
+import type {
+  readServedSoftLaw,
+  searchServedSoftLaw,
+} from "@/api/lib/legal-search/soft-law-read";
+import type { SoftLawReadSurface } from "@/api/lib/legal-search/soft-law-serving";
 import { getDisabledNativeToolSlugsFromSettingsRow } from "@/api/lib/mcp-connectors/catalog-metadata";
 import { isMemberRole } from "@/api/lib/member-roles";
 import type { MemberRole } from "@/api/lib/member-roles";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
+import type { withMcpPublicReadAdmission } from "@/api/lib/rate-limit/mcp-public-read-admission";
 import {
   brandActorSessionIdentity,
   brandPersistedWorkspaceId,
 } from "@/api/lib/safe-id-boundaries";
-import type { safeOutboundFetchBytes } from "@/api/lib/safe-outbound-fetch";
 import type { getSearchReader } from "@/api/lib/search/provider";
 import type { createStoredTemplate } from "@/api/lib/templates/create-template";
 import type {
@@ -87,7 +121,10 @@ import type {
   recordTemplateUse,
 } from "@/api/lib/templates/record-use";
 import type { renameStoredTemplate } from "@/api/lib/templates/rename-template";
-import type { templateDecideConditionsLogic } from "@/api/lib/templates/template-decide-conditions";
+import type {
+  decideTemplateConditions,
+  templateDecideConditionsLogic,
+} from "@/api/lib/templates/template-decide-conditions";
 import type {
   describeStoredTemplate,
   fillStoredTemplateDocx,
@@ -95,14 +132,24 @@ import type {
   fillStoredTemplateWithTextStrict,
 } from "@/api/lib/templates/template-fill-service";
 import type { writeStoredTemplate } from "@/api/lib/templates/write-template";
+import {
+  type OrgWebSearchKeyRow,
+  resolveWebSearchProvidersResultFromOrgSettingsRow,
+} from "@/api/lib/web-search/load-org-keys";
+import type { WebSearchProvider } from "@/api/lib/web-search/types";
 import type { withTimeout } from "@/api/lib/with-timeout";
 import type { startWorkflow } from "@/api/lib/workflow-queue";
 import type { materializePlaybookRun } from "@/api/lib/workflow/materialize-playbook-run";
+import { readAuthorizedWorkspaces } from "@/api/lib/workspaces/authorized-workspace-ids";
 import type { anonymizeTextFields } from "@/api/mcp/anonymization";
-import type { McpSession } from "@/api/mcp/auth";
+import type { McpCredentialType, McpSession } from "@/api/mcp/auth";
 import type { consumeInvokeCapabilityRateLimit } from "@/api/mcp/capability-rate-limit";
+import type { loadCapabilityEndpoint } from "@/api/mcp/capability-tools";
+import type { CompatCorpusContinuation } from "@/api/mcp/compat-corpus";
 import { McpOrganizationAccessError } from "@/api/mcp/errors";
 import type { McpFeatureAccessBindings } from "@/api/mcp/feature-access";
+import type { LegislationContinuation } from "@/api/mcp/legislation-tools";
+import type { CaseLawContinuation } from "@/api/mcp/stella-tools";
 import type {
   claimTemplatePersistenceRequest,
   fingerprintTemplatePersistenceRequest,
@@ -116,7 +163,7 @@ import type { ToolConfirmation } from "@/api/mcp/tool-confirmation";
 import { createWorkspaceAccessBoundary } from "@/api/mcp/workspace-access-boundary";
 import { filterUsableMcpWorkspaces } from "@/api/mcp/workspace-session-scope";
 
-export type McpOperationDatabaseScope = {
+type McpOperationDatabaseScope = {
   /**
    * Add one workspace only when it belongs to the access map captured by this
    * MCP request. Returns false instead of minting scope for an unknown ID.
@@ -126,10 +173,20 @@ export type McpOperationDatabaseScope = {
   scopedDb: ScopedDb;
 };
 
+export type McpRequestDataAccess = Pick<
+  McpOperationDatabaseScope,
+  "safeDb" | "scopedDb"
+>;
+
 export type McpRequestContext = {
+  /** Set by the in-app chat projection; absent on MCP client requests. */
+  softLawReadSurface?: SoftLawReadSurface | undefined;
   /** Explicit seams used by focused MCP tests; production contexts leave these unset. */
   featureAccessSnapshot?: FeatureAccessSnapshot | undefined;
   testDependencies?: {
+    loadCapabilityEndpoint?: typeof loadCapabilityEndpoint;
+    readWithdrawnCopies?: typeof readWithdrawnCopyProjection | undefined;
+    admitPublicRead?: typeof withMcpPublicReadAdmission;
     featureAccessSnapshot?: FeatureAccessSnapshot | undefined;
     featureAccessBindings?: McpFeatureAccessBindings | undefined;
     /** Replaces the scoped `organization_settings` read, transaction included. */
@@ -147,21 +204,53 @@ export type McpRequestContext = {
     consumeInvokeCapabilityRateLimit?: typeof consumeInvokeCapabilityRateLimit;
     isCapabilityFeatureEnabled?: (feature: string | undefined) => boolean;
     contextFidelityWaivers?: ReadonlyMap<string, string>;
+    /** Replaces the shipped skill catalog, for a skill shape no shipped skill has yet. */
+    listShippedSkillMetadata?: typeof listSkillMetadata;
     materializePlaybookRun?: typeof materializePlaybookRun;
     startWorkflow?: typeof startWorkflow;
     loadLatestApprovedVersion?: typeof loadLatestApprovedVersion;
     createPlaybookTableRuns?: typeof createPlaybookTableRuns;
     createTimeEntryHandler?: typeof createTimeEntryHandler;
+    readCaseLawCoverageHandler?: typeof readCaseLawCoverageHandler;
     searchDecisionsHandler?: typeof searchDecisionsHandler;
+    caseLawSearchContinuation?: CaseLawContinuation;
+    publicReadResponseDeadlineMs?: number;
+    legislationSearchContinuation?: LegislationContinuation;
+    compatCorpusContinuation?: CompatCorpusContinuation;
+    listCaseLawProvisionDecisions?: typeof listCaseLawProvisionDecisions;
+    /** Reads a provision's citing set once per agent search. */
+    readCaseLawProvisionScope?: (
+      scope: Omit<
+        Parameters<typeof readCaseLawProvisionScope>[1],
+        "idSetMax" | "linkScanMax"
+      >,
+    ) => ReturnType<typeof readCaseLawProvisionScope>;
+    /** Whether any recorded link names the provision's act. */
+    readProvisionWorkLinked?: (
+      scope: Parameters<typeof readProvisionWorkLinked>[1],
+    ) => ReturnType<typeof readProvisionWorkLinked>;
     corpusIndexQueryVariant?: CorpusIndexQueryVariant;
-    caseLawSearchGuidance?: CaseLawSearchGuidanceMode;
     /** Every court spelling one corpus country holds, for reading a court filter. */
     readCaseLawCourtNames?: (country: string) => Promise<readonly string[]>;
+    readAdmittedCaseLawCourtPage?: (request: {
+      country: string;
+      after: string | null;
+      limit: number;
+    }) => Promise<{ courts: string[]; more: boolean }>;
     readGatedDecisionCitations?: typeof readGatedDecisionCitations;
-    lookupDecisionsByIdentity?: typeof lookupDecisionsByIdentity;
+    readGatedDecisionCitationDigest?: typeof readGatedDecisionCitationDigest;
+    admitLawRead?: typeof admitLawRead;
+    resolveDecision?: typeof resolveDecision;
+    readDecisionReviews?: typeof readDecisionReviews;
+    resolveLawCitation?: typeof resolveLawCitation;
     readGatedDecisionWithDocument?: typeof readGatedDecisionWithDocument;
+    readPreferredLanguageVersionIds?: typeof readPreferredLanguageVersionIds;
+    readDecisionReaderSource?: typeof readDecisionReaderSource;
+    readProvisionPreviewHandler?: typeof readProvisionPreviewHandler;
     readsSharedPublicLawCorpus?: typeof readsSharedPublicLawCorpus;
     searchLegislationHandler?: typeof searchLegislationHandler;
+    searchServedSoftLaw?: typeof searchServedSoftLaw;
+    readServedSoftLaw?: typeof readServedSoftLaw;
     resolveStatuteExpression?: typeof resolveStatuteExpression;
     resolveStatuteWorkVersion?: typeof resolveStatuteWorkVersion;
     readPublicLegislationHandler?: typeof readPublicLegislationHandler;
@@ -170,6 +259,8 @@ export type McpRequestContext = {
     readLegislationProvisionVersions?: typeof readLegislationProvisionVersions;
     readVersionBlocks?: typeof readVersionBlocks;
     resolveAnnotationTarget?: typeof resolveAnnotationTarget;
+    /** Replaces the registered legal file readers, which open stored bytes in a worker. */
+    legalFileReaders?: typeof LEGAL_FILE_READERS;
     readWorkspaceHandler?: typeof readWorkspaceHandler;
     readOverviewHandler?: typeof readOverviewHandler;
     readWorkspaceContactsHandler?: typeof readWorkspaceContactsHandler;
@@ -186,6 +277,7 @@ export type McpRequestContext = {
     loadAnonymizationAllowlistCanonicalsByWorkspace?: typeof loadAnonymizationAllowlistCanonicalsByWorkspace;
     loadAnonymizationGazetteerEntriesByWorkspace?: typeof loadAnonymizationGazetteerEntriesByWorkspace;
     templateDecideConditionsLogic?: typeof templateDecideConditionsLogic;
+    decideTemplateConditions?: typeof decideTemplateConditions;
     fillStoredTemplateDocx?: typeof fillStoredTemplateDocx;
     fillStoredTemplateWithText?: typeof fillStoredTemplateWithText;
     fillStoredTemplateWithTextStrict?: typeof fillStoredTemplateWithTextStrict;
@@ -208,13 +300,13 @@ export type McpRequestContext = {
   /**
    * Status of every accessible (non-deleting) workspace, keyed by id. Write
    * tools gate on this to keep archived matters read-only, mirroring the HTTP
-   * `validateWorkspaceAccess` macro which 404s a workspace whose status is not
-   * "active".
+   * core's `authorizeWorkspace`, which 404s a workspace whose status the route
+   * does not admit ("active" unless it admits archived matters).
    */
   accessibleWorkspaceStatusById: Map<string, AccessibleWorkspace["status"]>;
   /**
    * Every accessible (non-deleting) workspace with its status. The generic
-   * capability path (`invoke_capability`) needs this to build the
+   * capability path (capability executors) needs this to build the
    * `getAccessibleWorkspaces` resolver the safe-handler context carries; existing
    * tools resolve access through `accessibleWorkspaceIdSet` /
    * `accessibleWorkspaceStatusById` and do not read it.
@@ -222,6 +314,10 @@ export type McpRequestContext = {
   accessibleWorkspaces: AccessibleWorkspace[];
   /** Resolved transport client IP used by shared gateway/REST abuse budgets. */
   clientIp?: string | null;
+  credentialType?: "oauth" | "api-key" | "anonymous";
+  clientId?: string | null;
+  /** Credential classification copied from the authenticated MCP session. */
+  sessionCredentialType?: McpCredentialType | undefined;
   /**
    * The credential's own permission set, when it carries one (machine API
    * keys). Authorization ANDs it with `memberRole` through
@@ -236,26 +332,39 @@ export type McpRequestContext = {
   toolConfirmation?: ToolConfirmation | undefined;
   /**
    * OAuth scopes granted to this session (the access token's `scope` claim).
-   * `invoke_capability` gates each capability on its catalog scope against this
+   * capability executors gate each capability on its catalog scope against this
    * list; the session-authed chat projection has no OAuth scopes and passes an
    * empty list (it never dispatches the generic path).
    */
   grantedScopes: readonly string[];
+  credential?: McpSession["credential"];
   /**
    * Registry slugs this org may actually call (credential/deployment available
    * AND enabled for the org). The `lookup_business_registry` list projection narrows its
    * `registry` enum to these and drops the tool when empty, mirroring the
    * in-app chat tool so the MCP surface never advertises a registry the
-   * call cannot execute. Computed once from organization settings and registry
-   * credential availability.
+   * call cannot execute. Read from organization settings and registry
+   * credential availability on first use, at most once per request: only
+   * discovery narrows by it, so a `tools/call` never pays the settings read and
+   * credential decryption behind it.
    *
-   * `undefined` means "not resolved" (a synthetic/test context, or a settings
-   * read fault): the projection then leaves the full enum advertised and the
-   * call-time gate stays the backstop. It is NOT the same as an empty array,
-   * which means the org can reach no registry and the tool is dropped.
+   * Absent (a synthetic/test context) or an unavailable read leaves the full
+   * enum advertised, and the call-time gate stays the backstop. Neither is
+   * the same as a present empty list, which means the org can reach no
+   * registry and the tool is dropped.
    */
-  enabledRegistrySlugs?: readonly BusinessRegistrySlug[] | undefined;
+  loadEnabledRegistrySlugs?:
+    (() => Promise<ReadOutcome<readonly BusinessRegistrySlug[]>>) | undefined;
+  /**
+   * The web search provider, loaded on first use within this request only, so
+   * a call that does no web search never reads or decrypts the stored key.
+   * An error means the settings read failed; an unavailable result names why
+   * web search is off (not configured, turned off, or an unreadable key).
+   */
+  loadWebSearchProvider?:
+    (() => Promise<Result<McpWebSearchAvailability, SafeDbError>>) | undefined;
   memberRole: MemberRole;
+  billingAccess?: boolean;
   organizationId: SafeId<"organization">;
   /**
    * Build an operation-local database scope whose private pinned-ID list can
@@ -269,13 +378,12 @@ export type McpRequestContext = {
   createOperationDatabaseScope?: (() => McpOperationDatabaseScope) | undefined;
   /** Pin one workspace only after an MCP access/status gate proves it. */
   pinServerValidatedWorkspaceId?:
-    | ((workspaceId: SafeId<"workspace">) => boolean)
-    | undefined;
+    ((workspaceId: SafeId<"workspace">) => boolean) | undefined;
   /**
    * The originating gateway HTTP request. Present on the MCP transport path
    * (set by `resolveMcpSessionContext`); absent on the session-authed chat
    * projection, which never dispatches the generic capability path. Only
-   * `invoke_capability` reads it (to synthesize a safe-handler context).
+   * capability executors read it (to synthesize a safe-handler context).
    */
   request?: Request;
   recordAuditEvent: AuditRecorder;
@@ -287,10 +395,14 @@ export type McpRequestContext = {
    * declared with `withThirdPartyOutbound`.
    */
   thirdPartyOutboundPermit?: ThirdPartyOutboundPermit | undefined;
-  safeDb: SafeDb;
-  scopedDb: ScopedDb;
   userId: SafeId<"user">;
   userEmail: string;
+};
+
+/** Resources built with the caller context but kept outside its authority. */
+export type McpRequestResources = McpRequestContext & {
+  safeDb: SafeDb;
+  scopedDb: ScopedDb;
 };
 
 /**
@@ -298,9 +410,9 @@ export type McpRequestContext = {
  * contexts carry the request needed to rebuild the recorder; chat contexts
  * already receive a recorder whose approval was resolved by the chat gate.
  */
-export const bindApprovedMcpAuditContext = (
-  context: McpRequestContext,
-): McpRequestContext => {
+export const bindApprovedMcpAuditContext = <TContext extends McpRequestContext>(
+  context: TContext,
+): TContext => {
   if (context.request === undefined) {
     return context;
   }
@@ -312,9 +424,9 @@ export const bindApprovedMcpAuditContext = (
       type: "user",
     },
     trigger: currentExecution?.trigger ?? { type: "direct" },
-    ...(currentExecution?.runId === undefined
-      ? {}
-      : { runId: currentExecution.runId }),
+    ...(currentExecution?.runId !== undefined
+      ? { runId: currentExecution.runId }
+      : {}),
     approval: {
       status: "approved",
       userId: context.userId,
@@ -341,58 +453,213 @@ type LoadAccessibleMcpWorkspacesOptions = {
 };
 
 /**
- * Enumerate the workspace metadata MCP's current access maps require. Keep the
- * organization predicate explicit even though RLS independently enforces it,
- * so the tenant index bounds the query before policy evaluation.
+ * Enumerate the workspace metadata MCP's current access maps require, from
+ * the authorized-workspace owner in the credential's scoped transaction.
  */
 export const loadAccessibleMcpWorkspaces = async ({
   organizationId,
   scopedDb,
-}: LoadAccessibleMcpWorkspacesOptions): Promise<AccessibleWorkspace[]> =>
-  await scopedDb(
-    async (tx) =>
-      await tx
-        .select({ id: workspaces.id, status: workspaces.status })
-        .from(workspaces)
-        .where(eq(workspaces.organizationId, organizationId)),
+}: LoadAccessibleMcpWorkspacesOptions): Promise<AccessibleWorkspace[]> => {
+  const outcome = await scopedDb(
+    async (tx) => await readAuthorizedWorkspaces(tx, { organizationId }),
   );
+  if (outcome.isErr()) {
+    const { error } = outcome;
+    throw error;
+  }
+  return outcome.value.workspaces;
+};
 
-export const resolveMcpSessionContext = async (
+export type McpWebSearchAvailability =
+  | { status: "available"; provider: WebSearchProvider }
+  | {
+      status: "unavailable";
+      reason: "not-configured" | "key-unreadable";
+    };
+
+const MCP_WEB_SEARCH_KEY_RESOLUTION_SINK = failureSink({
+  event: "mcp.web_search.key_resolution_failed",
+  expected: [],
+});
+
+export const resolveEnabledMcpWebSearchProvider = async ({
+  disabledNativeToolSlugs,
+  organizationId,
+  row,
+}: {
+  disabledNativeToolSlugs: readonly string[] | undefined;
+  organizationId: SafeId<"organization">;
+  row: OrgWebSearchKeyRow | null | undefined;
+}): Promise<McpWebSearchAvailability> => {
+  if (disabledNativeToolSlugs?.includes("web-search")) {
+    return { status: "unavailable", reason: "not-configured" };
+  }
+  const resolved = await resolveWebSearchProvidersResultFromOrgSettingsRow(
+    organizationId,
+    row,
+  );
+  if (resolved.isErr()) {
+    observeFailure(resolved.error, {
+      sink: MCP_WEB_SEARCH_KEY_RESOLUTION_SINK,
+    });
+    return { status: "unavailable", reason: "key-unreadable" };
+  }
+  if (resolved.value.webSearchProvider === null) {
+    return { status: "unavailable", reason: "not-configured" };
+  }
+  return { status: "available", provider: resolved.value.webSearchProvider };
+};
+
+const credentialPermissionContext = (
   session: McpSession,
-  {
-    clientIp = null,
-    request,
-    resolveAuthorization = resolveCredentialMemberAuthorization,
-    checkAccountOperation = checkDemoAccountOperation,
-  }: {
-    clientIp?: string | null;
-    request: Request;
-    resolveAuthorization?: typeof resolveCredentialMemberAuthorization;
-    checkAccountOperation?: typeof checkDemoAccountOperation;
-  },
-): Promise<McpRequestContext> => {
-  const { organizationId, userId } = brandActorSessionIdentity({
-    organizationId: session.organizationId,
-    userId: session.userId,
+): Pick<McpRequestContext, "credentialPermissions"> =>
+  session.credential?.type === "machine_api_key" ||
+  session.credential?.type === "personal_api_key"
+    ? { credentialPermissions: session.credential.permissions }
+    : {};
+
+export const providerFromMcpWebSearchAvailability = (
+  availability: McpWebSearchAvailability,
+): WebSearchProvider | null =>
+  availability.status === "available" ? availability.provider : null;
+
+/**
+ * The web search provider one organization can use, from its settings row
+ * (native tool overrides and the stored key) in one scoped read.
+ */
+const readMcpWebSearchProvider = async ({
+  organizationId,
+  safeDb,
+}: {
+  organizationId: SafeId<"organization">;
+  safeDb: SafeDb;
+}): Promise<Result<McpWebSearchAvailability, SafeDbError>> => {
+  const settings = await safeDb((tx) =>
+    tx.query.organizationSettings.findFirst({
+      where: { organizationId: { eq: organizationId } },
+      columns: {
+        practiceJurisdictions: true,
+        nativeToolOverrides: true,
+        webSearchApiKeyEncrypted: true,
+        webSearchApiKeyIv: true,
+        urlFetchApiKeyEncrypted: true,
+        urlFetchApiKeyIv: true,
+      },
+    }),
+  );
+  if (Result.isError(settings)) {
+    return settings;
+  }
+  return Result.ok(
+    await resolveEnabledMcpWebSearchProvider({
+      disabledNativeToolSlugs: getDisabledNativeToolSlugsFromSettingsRow(
+        settings.value ?? undefined,
+      ),
+      organizationId,
+      row: settings.value,
+    }),
+  );
+};
+
+const resolveMcpWebHandoffIdentity = (session: McpSession) => {
+  const credential = session.credential;
+  if (credential?.type === "oauth_client") {
+    return { credentialType: "oauth", clientId: credential.clientId } as const;
+  }
+  const credentialType =
+    credential?.type === "machine_api_key" ||
+    credential?.type === "personal_api_key"
+      ? "api-key"
+      : "anonymous";
+  return { credentialType, clientId: null } as const;
+};
+
+const REGISTRY_NARROWING_SINK = failureSink({
+  event: "mcp.registry_narrowing.read_failed",
+  expected: [],
+});
+
+/**
+ * The registries one organization can reach, from its settings and its stored
+ * credentials, read in one scoped transaction.
+ */
+const readEnabledRegistrySlugs = async ({
+  organizationId,
+  safeDb,
+}: {
+  organizationId: SafeId<"organization">;
+  safeDb: SafeDb;
+}): Promise<ReadOutcome<readonly BusinessRegistrySlug[]>> => {
+  const read = await safeDb(async (tx) => {
+    const settings = await tx.query.organizationSettings.findFirst({
+      where: { organizationId: { eq: organizationId } },
+      columns: { practiceJurisdictions: true, nativeToolOverrides: true },
+    });
+    const dispatch = await getOrganizationRegistryDispatch({
+      organizationId,
+      // Same transaction: the credential read joins the settings read.
+      scopedDb: async (run) => await run(tx),
+    });
+    return { dispatch, settings };
   });
+  if (Result.isError(read)) {
+    observeFailure(read.error, { sink: REGISTRY_NARROWING_SINK });
+    return readUnavailable({ kind: "thrown", error: read.error });
+  }
+  const { dispatch, settings } = read.value;
+  return readPresent(
+    availableRegistryHandlersForOrg({
+      disabledNativeToolSlugs: getDisabledNativeToolSlugsFromSettingsRow(
+        settings ?? undefined,
+      ),
+      dispatch,
+    }).map((handler) => handler.slug),
+  );
+};
+
+type AdmitMcpMemberOptions = {
+  session: McpSession;
+  organizationId: SafeId<"organization">;
+  userId: SafeId<"user">;
+  resolveAuthorization: ResolveCredentialMemberAuthorization;
+  checkAccountOperation: typeof checkDemoAccountOperation;
+  checkAccountOrganization: typeof checkReviewAccountOrganization;
+};
+
+/** The live membership a credential acts as, or why it may not act. */
+const admitMcpMember = async ({
+  session,
+  organizationId,
+  userId,
+  resolveAuthorization,
+  checkAccountOperation,
+  checkAccountOrganization,
+}: AdmitMcpMemberOptions) => {
   const authorization = await resolveAuthorization({
     organizationId,
     userId,
   });
-
-  if (!authorization) {
-    throw new McpOrganizationAccessError({
-      message: "User is not a member of this organization",
-    });
+  if (!authorization || authorization.userDeleted) {
+    return Result.err(
+      new McpOrganizationAccessError({
+        message: "User is not a member of this organization",
+      }),
+    );
   }
-
   const accountOperation = checkAccountOperation(authorization.email);
-  if (Result.isError(accountOperation)) {
-    throw new McpOrganizationAccessError({
-      message: accountOperation.error.message,
-    });
+  const accountAccess = Result.isError(accountOperation)
+    ? accountOperation
+    : checkAccountOrganization({
+        email: authorization.email,
+        organizationId,
+      });
+  if (Result.isError(accountAccess)) {
+    return Result.err(
+      new McpOrganizationAccessError({
+        message: accountAccess.error.message,
+      }),
+    );
   }
-
   // OAuth access tokens issued before the member_id claim existed carry none
   // and open on live membership alone. Remove this allowance (require the
   // claim on OAuth client tokens) once every such token has expired, i.e.
@@ -401,34 +668,114 @@ export const resolveMcpSessionContext = async (
     session.memberId !== undefined &&
     session.memberId !== authorization.memberId
   ) {
-    throw new McpOrganizationAccessError({
-      message: "Token was issued for a previous membership",
-    });
+    return Result.err(
+      new McpOrganizationAccessError({
+        message: "Token was issued for a previous membership",
+      }),
+    );
   }
+  return Result.ok(authorization);
+};
 
+/**
+ * One MCP operation's databases. A workspace_ids claim is a signed attenuation
+ * boundary, not just a tool-discovery hint: once intersected with live
+ * authorization it is carried into RLS explicit mode, so root and list queries
+ * cannot see another workspace through ordinary membership. Either scope runs
+ * under the request's deadline.
+ */
+export const createMcpOperationDatabases = (
+  database: RlsDatabase<Transaction>,
+  {
+    deadline,
+    organizationId,
+    serverValidatedWorkspaceIds,
+    tokenWorkspaceIds,
+    userId,
+  }: {
+    deadline: TransactionDeadline;
+    organizationId: SafeId<"organization">;
+    /** Membership pins, filled as the operation proves access to a workspace. */
+    serverValidatedWorkspaceIds: readonly SafeId<"workspace">[];
+    /** The token's attenuated workspaces; undefined when it carries no claim. */
+    tokenWorkspaceIds: SafeId<"workspace">[] | undefined;
+    userId: SafeId<"user">;
+  },
+): McpRequestDataAccess => {
+  if (tokenWorkspaceIds !== undefined) {
+    const explicitIdentity = {
+      workspaceIds: tokenWorkspaceIds,
+      organizationId,
+      userId,
+      deadline,
+    };
+    return {
+      safeDb: createExplicitSafeDb(database, explicitIdentity),
+      scopedDb: createExplicitScopedDb(database, explicitIdentity),
+    };
+  }
+  const databaseIdentity = {
+    organizationId,
+    serverValidatedWorkspaceIds,
+    userId,
+    deadline,
+  };
+  return {
+    safeDb: createMembershipSafeDb(database, databaseIdentity),
+    scopedDb: createMembershipScopedDb(database, databaseIdentity),
+  };
+};
+
+export const resolveMcpSessionContext = async (
+  session: AdmittedMcpSession,
+  {
+    clientIp = null,
+    request,
+    resolveAuthorization = resolveCredentialMemberAuthorization,
+    checkAccountOperation = checkDemoAccountOperation,
+    checkAccountOrganization = checkReviewAccountOrganization,
+  }: {
+    clientIp?: string | null;
+    request: Request;
+    resolveAuthorization?: ResolveCredentialMemberAuthorization;
+    checkAccountOperation?: typeof checkDemoAccountOperation;
+    checkAccountOrganization?: typeof checkReviewAccountOrganization;
+  },
+): Promise<McpRequestResources> => {
+  const { organizationId, userId } = brandActorSessionIdentity({
+    organizationId: session.organizationId,
+    userId: session.userId,
+  });
+  const admitted = await admitMcpMember({
+    session,
+    organizationId,
+    userId,
+    resolveAuthorization,
+    checkAccountOperation,
+    checkAccountOrganization,
+  });
+  if (Result.isError(admitted)) {
+    throw admitted.error;
+  }
+  const authorization = admitted.value;
   if (!isMemberRole(authorization.role)) {
     panic("User has an invalid member role");
   }
-
-  const auditExecution = await resolveAgentAuditExecution({
+  const auditExecution = resolveAgentAuditExecution({
     credential: session.credential,
-    organizationId,
     userId,
   });
-
   const memberRole = authorization.role;
   const bootstrapScopedDb = createMembershipScopedDb(rlsDb, {
     organizationId,
     serverValidatedWorkspaceIds: [],
     userId,
+    deadline: TRANSACTION_DEADLINE.request,
   });
   const accessibleWorkspaces = await loadAccessibleMcpWorkspaces({
     organizationId,
     scopedDb: bootstrapScopedDb,
   });
-  // Business-logic fields exclude deleting workspaces so MCP tools don't
-  // surface content from sealed workspaces. RLS derives membership from the
-  // organization/user transaction settings independently.
   const usableWorkspaces = filterUsableMcpWorkspaces({
     accessibleWorkspaces,
     tokenWorkspaceIds: session.workspaceIds,
@@ -451,75 +798,57 @@ export const resolveMcpSessionContext = async (
         }
         return true;
       });
-
-    // A workspace_ids claim is a signed attenuation boundary, not just a
-    // tool-discovery hint. After intersecting it with live authorization
-    // above, carry that exact subset into RLS explicit mode so root/list
-    // queries cannot see another workspace through ordinary membership.
-    if (hasTokenWorkspaceAttenuation) {
-      return {
-        pinServerValidatedWorkspaceId,
-        safeDb: createSafeDb(rlsDb, usableWorkspaceIds, organizationId, userId),
-        scopedDb: createScopedDb(
-          rlsDb,
-          usableWorkspaceIds,
-          organizationId,
-          userId,
-        ),
-      };
-    }
-
-    const databaseIdentity = {
-      organizationId,
-      serverValidatedWorkspaceIds,
-      userId,
-    };
     return {
       pinServerValidatedWorkspaceId,
-      safeDb: createMembershipSafeDb(rlsDb, databaseIdentity),
-      scopedDb: createMembershipScopedDb(rlsDb, databaseIdentity),
+      ...createMcpOperationDatabases(rlsDb, {
+        deadline: TRANSACTION_DEADLINE.request,
+        organizationId,
+        serverValidatedWorkspaceIds,
+        tokenWorkspaceIds: hasTokenWorkspaceAttenuation
+          ? usableWorkspaceIds
+          : undefined,
+        userId,
+      }),
     };
   };
   const requestDatabaseScope = createOperationDatabaseScope();
-  const featureAccessSnapshot =
-    Object.keys(FEATURE_REGISTRY).length === 0
-      ? createFeatureAccessSnapshot({
-          organizationId,
-          userId,
-          decisions: new Map(),
-        })
-      : await requestDatabaseScope.scopedDb(
-          async (tx) =>
-            await resolveFeatureAccessSnapshot({ tx, organizationId, userId }),
-        );
+  // The membership read above already carries every feature-access fact, so
+  // the snapshot is derived from it rather than read again.
+  const featureAccessSnapshot = featureAccessSnapshotFromAuthorization({
+    organizationId,
+    userId,
+    authorization,
+  });
 
-  // Resolve the org's reachable registries once, so the tools/list projection
-  // can narrow the `lookup_business_registry` enum synchronously. On a read
-  // fault, leave it unresolved (undefined) rather than dropping the tool.
-  const [settingsResult, registryDispatch] = await Promise.all([
-    requestDatabaseScope.safeDb((tx) =>
-      tx.query.organizationSettings.findFirst({
-        where: { organizationId: { eq: organizationId } },
-        columns: { practiceJurisdictions: true, nativeToolOverrides: true },
-      }),
-    ),
-    getOrganizationRegistryDispatch({
+  // Read once, on first use within this request: settings and decrypted
+  // registry credentials in one scoped transaction.
+  let enabledRegistrySlugs:
+    Promise<ReadOutcome<readonly BusinessRegistrySlug[]>> | undefined;
+  const loadEnabledRegistrySlugs = async () => {
+    enabledRegistrySlugs ??= readEnabledRegistrySlugs({
       organizationId,
-      scopedDb: requestDatabaseScope.scopedDb,
-    }),
-  ]);
-  const enabledRegistrySlugs: readonly BusinessRegistrySlug[] | undefined =
-    Result.isError(settingsResult)
-      ? undefined
-      : availableRegistryHandlersForOrg({
-          disabledNativeToolSlugs: getDisabledNativeToolSlugsFromSettingsRow(
-            settingsResult.value ?? undefined,
-          ),
-          dispatch: registryDispatch,
-        }).map((handler) => handler.slug);
+      safeDb: requestDatabaseScope.safeDb,
+    });
+    return await enabledRegistrySlugs;
+  };
+  let webSearchAvailability:
+    Promise<Result<McpWebSearchAvailability, SafeDbError>> | undefined;
+  const loadWebSearchProvider = async () => {
+    webSearchAvailability ??= readMcpWebSearchProvider({
+      organizationId,
+      safeDb: requestDatabaseScope.safeDb,
+    });
+    return await webSearchAvailability;
+  };
+
+  const webHandoffIdentity = resolveMcpWebHandoffIdentity(session);
 
   return {
+    ...webHandoffIdentity,
     ...(auditExecution ? { auditExecution } : {}),
+    ...(session.credential === undefined
+      ? {}
+      : { credential: session.credential }),
     accessibleWorkspaceIds: usableWorkspaceIds,
     accessibleWorkspaceIdSet: workspaceAccessBoundary.accessibleWorkspaceIdSet,
     accessibleWorkspaceStatusById: new Map(
@@ -527,18 +856,20 @@ export const resolveMcpSessionContext = async (
     ),
     accessibleWorkspaces: usableWorkspaces,
     clientIp,
+    ...(session.credential === undefined
+      ? {}
+      : { sessionCredentialType: session.credential.type }),
     createOperationDatabaseScope,
     featureAccessSnapshot,
-    ...(session.credential?.type === "machine_api_key"
-      ? { credentialPermissions: session.credential.permissions }
-      : {}),
-    // An agent run has no person at the tool boundary to confirm a call.
+    ...credentialPermissionContext(session),
     ...(session.credential?.type === "agent_run"
       ? { toolConfirmation: TOOL_CONFIRMATION.unavailable }
       : {}),
-    enabledRegistrySlugs,
+    loadEnabledRegistrySlugs,
+    loadWebSearchProvider,
     grantedScopes: session.scopes,
     memberRole,
+    billingAccess: authorization.billingAccess,
     organizationId,
     request,
     recordAuditEvent: createAuditRecorder({
@@ -551,8 +882,6 @@ export const resolveMcpSessionContext = async (
     }),
     pinServerValidatedWorkspaceId:
       requestDatabaseScope.pinServerValidatedWorkspaceId,
-    // The MCP caller invokes each tool directly, so the request may reach the
-    // third-party services its tools front.
     thirdPartyOutboundPermit: grantThirdPartyOutboundPermit(),
     safeDb: requestDatabaseScope.safeDb,
     scopedDb: requestDatabaseScope.scopedDb,

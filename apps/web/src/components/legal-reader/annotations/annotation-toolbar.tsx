@@ -1,59 +1,58 @@
 import { useRef, useState } from "react";
 import type { ReactNode, RefObject } from "react";
 
-import { panic, Result } from "better-result";
+import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
-import { copyToClipboard } from "@stll/clipboard";
 import { Button } from "@stll/ui/button";
-import {
-  Building2Icon,
-  ChevronDownIcon,
-  CopyIcon,
-  HighlighterIcon,
-  LockIcon,
-  AddCommentIcon,
-  SparklesIcon,
-  StrikethroughIcon,
-  Trash2Icon,
-  UnderlineIcon,
-  WavesIcon,
-} from "@stll/ui/icons";
-import { MenuPreviewLayout, PreviewPane } from "@stll/ui/preview-pane";
-import { stellaToast } from "@stll/ui/toast";
-import { cn } from "@stll/ui/utils";
+import { AddCommentIcon, SparklesIcon, Trash2Icon } from "@stll/ui/icons";
 
-import {
-  ANNOTATION_COLORS,
-  ANNOTATION_STYLES,
-} from "@/components/legal-reader/annotations/annotation-types";
+import { useSelectionCopyControl } from "@/components/copy-control";
 import type {
   AnnotationColor,
   AnnotationStyle,
   AnnotationVisibility,
 } from "@/components/legal-reader/annotations/annotation-types";
 import {
-  askAboutReaderPassage,
   readerSelectionLocator,
   readerSpansLocator,
-  readerTargetCitation,
+  useAskAboutReaderPassage,
   writeReaderPassage,
 } from "@/components/legal-reader/annotations/reader-annotation-target";
 import type { ReaderAnnotationTarget } from "@/components/legal-reader/annotations/reader-annotation-target";
 import type { ReaderAnnotation } from "@/components/legal-reader/annotations/reader-annotations-query";
+import {
+  cleanSelectionText,
+  copyTextFor,
+  readerTargetCitation,
+} from "@/components/legal-reader/annotations/reader-copy-text.logic";
 import {
   readerAnnotationActivationAction,
   readerSelectionContainmentAction,
   selectionAnchorsFrom,
 } from "@/components/legal-reader/annotations/selection-anchor";
 import type { SelectionAnchor } from "@/components/legal-reader/annotations/selection-anchor";
-import type { ReaderAnnotationController } from "@/components/legal-reader/annotations/use-reader-annotations";
+import type { ReaderAnnotationController } from "@/components/legal-reader/annotations/use-reader-annotation-history";
+import { useReaderAnnotationShortcuts } from "@/components/legal-reader/annotations/use-reader-annotation-shortcuts";
 import { SelectionToolbar } from "@/components/selection-toolbar";
+import {
+  SelectionAIActions,
+  SelectionCopyMenu,
+} from "@/components/selection-toolbar-actions";
+import {
+  MarkColorSwatches,
+  MarkStyleButtons,
+  MarkVisibilityToggle,
+} from "@/components/selection-toolbar-marks";
+import {
+  scrollMovesSelection,
+  selectionToolbarAnchor,
+} from "@/components/selection-toolbar.logic";
 import Tooltip from "@/components/tooltip";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { detached } from "@/lib/detached";
-import { notifyUserError } from "@/lib/errors/user-toast";
+import { CapabilityAction } from "@/lib/organization/feature-access/capability-actions";
 
 type AnnotationToolbarProps = {
   /** A mark the reader clicked; the bar edits it instead of the selection. */
@@ -69,6 +68,16 @@ type AnnotationToolbarProps = {
    * no notes margin, where the bar offers no comment at all rather than an
    * affordance that leads nowhere. */
   onCompose?: ((spans: SelectionAnchor[]) => void) | undefined;
+  explainLanguagePicker?: ReactNode;
+  onExplain?: ((spans: SelectionAnchor[]) => void) | undefined;
+  /** Why Explain cannot take these spans, or `undefined` when it can. */
+  explainRefusal?:
+    ((spans: SelectionAnchor[]) => string | undefined) | undefined;
+  /** The paragraphs the settled selection covers, on the same frame the bar
+   * reads them; empty once nothing is selected. Called again on scroll and
+   * resize with the same spans, so a consumer compares before it stores. */
+  onSelectedSpansChange?:
+    ((spans: readonly SelectionAnchor[]) => void) | undefined;
   scrollContainerRef: RefObject<HTMLElement | null>;
   /** The document being marked: the only thing that differs by corpus. */
   target: ReaderAnnotationTarget;
@@ -76,6 +85,7 @@ type AnnotationToolbarProps = {
 
 type Selected = {
   rect: DOMRect;
+  bounds: DOMRect;
   /** One per paragraph the selection touches; empty outside the words. */
   spans: SelectionAnchor[];
   text: string;
@@ -95,78 +105,7 @@ type ReaderSelectionSnapshot = {
   focusOffset: number;
 };
 
-/** Chrome that must never leak into a quotation. */
-const QUOTE_CHROME_SELECTOR = "[data-reader-chrome], .reader-note-ref";
-
-const BLOCK_BOUNDARY_SELECTOR = "p, h1, h2, h3, h4, h5, h6, li, blockquote";
-
-const cleanSelectionText = (range: Range): string => {
-  const holder =
-    range.startContainer.ownerDocument?.createElement("div") ?? null;
-  if (holder === null) {
-    return "";
-  }
-  holder.append(range.cloneContents());
-  for (const el of holder.querySelectorAll(QUOTE_CHROME_SELECTOR)) {
-    el.remove();
-  }
-  // textContent concatenates block elements without any separator, gluing
-  // the last word of one paragraph to the first of the next; give each
-  // block an explicit boundary before flattening.
-  for (const block of holder.querySelectorAll(BLOCK_BOUNDARY_SELECTOR)) {
-    block.append("\n");
-  }
-  return holder.textContent.replaceAll(/\s+/gu, " ").trim();
-};
-
-const COPY_MODES = [
-  "quoteWithCitation",
-  "citationWithQuote",
-  "blockQuoteWithCitation",
-  "textOnly",
-  "citationOnly",
-] as const;
-type CopyMode = (typeof COPY_MODES)[number];
-
-const copyTextFor = (
-  mode: CopyMode,
-  selected: Pick<Selected, "cleanText" | "locator">,
-  target: ReaderAnnotationTarget,
-): string => {
-  const quote = selected.cleanText;
-  const citation = readerTargetCitation({
-    locator: selected.locator,
-    target,
-  });
-  switch (mode) {
-    case "quoteWithCitation": {
-      return `“${quote}” ${citation}.`;
-    }
-    case "citationWithQuote": {
-      return `${citation} (“${quote}”).`;
-    }
-    case "blockQuoteWithCitation": {
-      return `${quote}\n\n${citation}.`;
-    }
-    case "textOnly": {
-      return quote;
-    }
-    case "citationOnly": {
-      return `${citation}.`;
-    }
-    default: {
-      mode satisfies never;
-      return panic(`Unhandled mode: ${String(mode)}`);
-    }
-  }
-};
-
-const STYLE_ICONS = {
-  highlight: HighlighterIcon,
-  underline: UnderlineIcon,
-  squiggly: WavesIcon,
-  strikethrough: StrikethroughIcon,
-} as const satisfies Record<AnnotationStyle, unknown>;
+const NO_SELECTED_SPANS: readonly SelectionAnchor[] = [];
 
 /**
  * What a reader can do with selected words in a decision or a statute: send
@@ -186,26 +125,36 @@ export const AnnotationToolbar = ({
   onActivateAnnotation,
   onClearActive,
   onCompose,
+  onExplain,
+  explainLanguagePicker,
+  explainRefusal,
+  onSelectedSpansChange,
   scrollContainerRef,
   target,
 }: AnnotationToolbarProps) => {
   const t = useTranslations();
+  const askAboutReaderPassage = useAskAboutReaderPassage();
   const barRef = useRef<HTMLDivElement | null>(null);
+  const copyMenuRef = useRef<HTMLDivElement | null>(null);
   const attachBar = (node: HTMLDivElement | null) => {
     barRef.current = node;
   };
   const [selected, setSelected] = useState<Selected | null>(null);
-  const [activeRect, setActiveRect] = useState<DOMRect | null>(null);
+  const [activeGeometry, setActiveGeometry] =
+    useState<ReturnType<typeof selectionToolbarAnchor>>(null);
   // The reader's document, learned once mounted: the only browser handle the
   // bar holds, so nothing here reads a ref while rendering.
   const [doc, setDoc] = useState<Document | null>(null);
   const [style, setStyle] = useState<AnnotationStyle>("highlight");
   const [copyOpen, setCopyOpen] = useState(false);
-  const [copyPreviewMode, setCopyPreviewMode] = useState<CopyMode | null>(null);
-  // The dropdown is hand-rolled (a portal menu would collapse the text
-  // selection), so it does its own collision handling: open upward when
-  // the space below the trigger cannot fit the menu.
-  const [copyOpensUp, setCopyOpensUp] = useState(false);
+  // The bar copies the words selected in the reader while it is showing.
+  const selectionCopy = useSelectionCopyControl({
+    ownsSelection: (selection, root) =>
+      barRef.current !== null &&
+      root.contains(selection.anchorNode) &&
+      root.contains(selection.focusNode),
+    rootRef: scrollContainerRef,
+  });
   // A new highlight is private; sharing is a deliberate second step on the mark.
   const visibility: AnnotationVisibility = "private";
 
@@ -224,6 +173,16 @@ export const AnnotationToolbar = ({
   );
   const activateAnnotation = useLatestCallback(onActivateAnnotation);
   const clearActive = useLatestCallback(onClearActive);
+  const reportSelectedSpans = useLatestCallback(
+    (spans: readonly SelectionAnchor[]) => onSelectedSpansChange?.(spans),
+  );
+
+  useReaderAnnotationShortcuts({
+    onRedo: controller.redo,
+    onUndo: controller.undo,
+    scrollContainerRef,
+    surfaceRefs: [barRef, copyMenuRef],
+  });
 
   useMountEffect(() => {
     const root = scrollContainerRef.current;
@@ -299,15 +258,25 @@ export const AnnotationToolbar = ({
         }
       }
     };
+    // The bar appears once a pointer drag ends. Painting it mid-drag puts a
+    // fixed element, portalled after the reader, under the pointer: crossing
+    // it extends the selection to the end of the page for a frame. It also
+    // anchors to the selection's end in every phase, so it does not move
+    // between the drag, the release and a later scroll.
     const readSelection = () => {
       const currentSelection = ownerDoc.getSelection();
       if (currentSelection !== null) {
         containReaderSelection(currentSelection);
       }
       cancelAnimationFrame(frame);
+      if (readerDragActive) {
+        setSelected(null);
+        return;
+      }
       frame = requestAnimationFrame(() => {
         const selection = ownerDoc.getSelection();
         if (
+          readerDragActive ||
           selection === null ||
           selection.isCollapsed ||
           selection.rangeCount === 0 ||
@@ -315,22 +284,45 @@ export const AnnotationToolbar = ({
           barRef.current?.contains(selection.anchorNode) === true
         ) {
           setSelected(null);
+          reportSelectedSpans(NO_SELECTED_SPANS);
           return;
         }
         const text = selection.toString().replace(/\s+/gu, " ").trim();
         if (text === "") {
           setSelected(null);
+          reportSelectedSpans(NO_SELECTED_SPANS);
+          return;
+        }
+        const range = selection.getRangeAt(0);
+        const spans = selectionAnchorsFrom(selection, root);
+        // The bar acts on a passage of the document: words selected in the
+        // reader's own chrome (a notice, a note, a label) touch none of its
+        // anchored blocks, and quoting them with the document's citation
+        // would be wrong. A text with no anchored blocks at all keeps the bar.
+        if (
+          spans.length === 0 &&
+          root.querySelector("[data-anchor]") !== null
+        ) {
+          setSelected(null);
+          reportSelectedSpans(NO_SELECTED_SPANS);
           return;
         }
         // A fresh selection must not inherit the previous one's open menu.
         setCopyOpen(false);
-        const range = selection.getRangeAt(0);
+        // Reported before the bar's geometry: words scrolled out of view are
+        // still selected, though the bar has nowhere to float.
+        reportSelectedSpans(spans);
+        const geometry = selectionToolbarAnchor({ range, root });
+        if (geometry === null) {
+          setSelected(null);
+          return;
+        }
         const cleanText = cleanSelectionText(range);
-        const spans = selectionAnchorsFrom(selection, root);
         setSelected({
           cleanText: cleanText === "" ? text : cleanText,
           locator: locatorOf(range, root, spans),
-          rect: range.getBoundingClientRect(),
+          rect: geometry.rect,
+          bounds: geometry.bounds,
           spans,
           text,
         });
@@ -361,7 +353,11 @@ export const AnnotationToolbar = ({
       readerDragActive =
         event.button === 0 && pressed instanceof Node && root.contains(pressed);
       readerSelectionSnapshot = null;
-      if (!(pressed instanceof Node) || barRef.current?.contains(pressed)) {
+      if (
+        !(pressed instanceof Node) ||
+        barRef.current?.contains(pressed) ||
+        copyMenuRef.current?.contains(pressed)
+      ) {
         return;
       }
       clearActive();
@@ -393,9 +389,27 @@ export const AnnotationToolbar = ({
         activateAnnotation(id);
       }
     };
-    const onPointerEnd = () => {
+    const onPointerCancel = () => {
       readerDragActive = false;
       readerSelectionSnapshot = null;
+    };
+    const onPointerEnd = (event: PointerEvent) => {
+      onPointerCancel();
+      if (
+        event.target instanceof Node &&
+        (barRef.current?.contains(event.target) ||
+          copyMenuRef.current?.contains(event.target))
+      ) {
+        return;
+      }
+      readSelection();
+    };
+    const onSelectionChange = () => readSelection();
+    const onViewportChange = () => readSelection();
+    const onScroll = (event: Event) => {
+      if (scrollMovesSelection(event, [barRef.current, copyMenuRef.current])) {
+        readSelection();
+      }
     };
     // Dragging selected words carries the passage with the document it came
     // from, so a drop on the chat composer lands as chips where the corpus
@@ -413,37 +427,63 @@ export const AnnotationToolbar = ({
       }
       writePassage(event.dataTransfer, quote);
     };
-    ownerDoc.addEventListener("selectionchange", readSelection);
+    ownerDoc.addEventListener("selectionchange", onSelectionChange);
     ownerDoc.addEventListener("keydown", onKeyDown);
     ownerDoc.addEventListener("pointerdown", onPointerDown);
-    ownerDoc.addEventListener("pointercancel", onPointerEnd);
+    ownerDoc.addEventListener("pointercancel", onPointerCancel);
     ownerDoc.addEventListener("pointerup", onPointerEnd);
+    ownerDoc.addEventListener("scroll", onScroll, true);
+    ownerDoc.defaultView?.addEventListener("resize", onViewportChange);
+    const observer = new ResizeObserver(onViewportChange);
+    observer.observe(root);
     root.addEventListener("click", onClick);
     root.addEventListener("dragstart", onDragStart);
     return () => {
+      observer.disconnect();
       cancelAnimationFrame(frame);
-      ownerDoc.removeEventListener("selectionchange", readSelection);
+      ownerDoc.removeEventListener("selectionchange", onSelectionChange);
       ownerDoc.removeEventListener("keydown", onKeyDown);
       ownerDoc.removeEventListener("pointerdown", onPointerDown);
-      ownerDoc.removeEventListener("pointercancel", onPointerEnd);
+      ownerDoc.removeEventListener("pointercancel", onPointerCancel);
       ownerDoc.removeEventListener("pointerup", onPointerEnd);
+      ownerDoc.removeEventListener("scroll", onScroll, true);
+      ownerDoc.defaultView?.removeEventListener("resize", onViewportChange);
       root.removeEventListener("click", onClick);
       root.removeEventListener("dragstart", onDragStart);
     };
   });
 
-  // The clicked mark's place on screen, read once per activation: a ref is
-  // not for rendering, and the mark does not move while the bar is open.
+  // A mark follows its visible words when this reader or an ancestor scrolls.
   const activeAnnotationId = activeAnnotation?.id ?? null;
   useExternalSyncEffect(() => {
-    if (activeAnnotationId === null) {
-      setActiveRect(null);
-      return;
+    const root = scrollContainerRef.current;
+    if (activeAnnotationId === null || root === null) {
+      setActiveGeometry(null);
+      return undefined;
     }
-    const element = scrollContainerRef.current?.querySelector(
-      `[data-annotation-id="${CSS.escape(activeAnnotationId)}"]`,
-    );
-    setActiveRect(element?.getBoundingClientRect() ?? null);
+    const updateGeometry = () => {
+      const element = root.querySelector(
+        `[data-annotation-id="${CSS.escape(activeAnnotationId)}"]`,
+      );
+      if (element === null) {
+        setActiveGeometry(null);
+        return;
+      }
+      const range = root.ownerDocument.createRange();
+      range.selectNodeContents(element);
+      setActiveGeometry(selectionToolbarAnchor({ range, root }));
+    };
+    const ownerDoc = root.ownerDocument;
+    updateGeometry();
+    ownerDoc.addEventListener("scroll", updateGeometry, true);
+    ownerDoc.defaultView?.addEventListener("resize", updateGeometry);
+    const observer = new ResizeObserver(updateGeometry);
+    observer.observe(root);
+    return () => {
+      observer.disconnect();
+      ownerDoc.removeEventListener("scroll", updateGeometry, true);
+      ownerDoc.defaultView?.removeEventListener("resize", updateGeometry);
+    };
   }, [activeAnnotationId, scrollContainerRef]);
 
   const clearSelection = () => {
@@ -458,8 +498,9 @@ export const AnnotationToolbar = ({
   // the same question, and the tools look the provision up by it.
   const askAboutPassage = (quote: string, locator: string | null) => {
     askAboutReaderPassage({
+      locator,
       prompt: t("legalReader.annotations.askPassagePrompt", {
-        citation: readerTargetCitation({ locator, target }),
+        citation: readerTargetCitation({ locator, target }).inline,
         quote,
       }),
       quote,
@@ -484,73 +525,35 @@ export const AnnotationToolbar = ({
     clearSelection();
   };
 
-  const rect = activeRect ?? selected?.rect ?? null;
-  if (rect === null) {
+  const geometry = activeAnnotation !== null ? activeGeometry : selected;
+  if (geometry === null) {
     return null;
   }
-
-  const colorSwatches = (onPick: (color: AnnotationColor) => void) =>
-    ANNOTATION_COLORS.map((color) => (
-      <Tooltip
-        content={t(colorLabelKey(color))}
-        key={color}
-        render={
-          <button
-            aria-label={t(colorLabelKey(color))}
-            className="focus-visible:ring-ring size-4 rounded-full ring-offset-1 transition-transform hover:scale-110 focus-visible:ring-2 focus-visible:outline-none"
-            onClick={() => onPick(color)}
-            style={{ backgroundColor: `var(--option-${color})` }}
-            type="button"
-          />
-        }
-      />
-    ));
-
-  const styleButtons = (
-    current: AnnotationStyle,
-    onPick: (style: AnnotationStyle) => void,
-  ) =>
-    ANNOTATION_STYLES.map((option) => {
-      const Icon = STYLE_ICONS[option];
-      return (
-        <Tooltip
-          content={t(styleLabelKey(option))}
-          key={option}
-          render={
-            <Button
-              aria-label={t(styleLabelKey(option))}
-              aria-pressed={current === option}
-              className={cn(current === option && "bg-accent text-foreground")}
-              onClick={() => onPick(option)}
-              size="icon-xs"
-              variant="ghost"
-            />
-          }
-        >
-          <Icon className="size-3.5" />
-        </Tooltip>
-      );
-    });
 
   let content: ReactNode;
   if (activeAnnotation !== null) {
     if (!activeAnnotation.mine) {
       content = (
-        <div className="flex items-center gap-1">
-          <Button
-            onClick={() => {
-              askAboutPassage(
-                activeSpans.map((span) => span.quote).join(" "),
-                readerSpansLocator({ spans: activeSpans, target }),
-              );
-              onClearActive();
-            }}
-            size="sm"
-            variant="ghost"
-          >
-            <SparklesIcon className="size-3.5" />
-            {t("common.askAI")}
-          </Button>
+        <div className="flex flex-wrap items-center gap-1">
+          <CapabilityAction action={{ capability: "ai" }} surface="control">
+            {(capabilityProps) => (
+              <Button
+                onClick={() => {
+                  askAboutPassage(
+                    activeSpans.map((span) => span.quote).join(" "),
+                    readerSpansLocator({ spans: activeSpans, target }),
+                  );
+                  onClearActive();
+                }}
+                size="sm"
+                variant="ghost"
+                {...capabilityProps}
+              >
+                <SparklesIcon className="size-3.5" />
+                {t("common.askAI")}
+              </Button>
+            )}
+          </CapabilityAction>
         </div>
       );
     } else {
@@ -559,31 +562,36 @@ export const AnnotationToolbar = ({
           ? t("legalReader.annotations.removeHighlight")
           : t("common.delete");
       content = (
-        <div className="flex items-center gap-1">
+        <div className="flex flex-wrap items-center gap-1">
           {activeAnnotation.kind === "highlight" && (
             <>
-              {styleButtons(activeAnnotation.style ?? "highlight", (next) => {
-                detached(
-                  controller.update({
-                    change: "style",
-                    id: activeAnnotation.id,
-                    style: next,
-                  }),
-                  "legal-reader.annotation-restyle",
-                );
-              })}
-              <span className="bg-border mx-1 h-4 w-px" />
-              <div className="flex items-center gap-1.5 px-1">
-                {colorSwatches((color) => {
+              <MarkStyleButtons
+                current={activeAnnotation.style ?? "highlight"}
+                onPick={(next) => {
                   detached(
                     controller.update({
-                      change: "color",
-                      color,
+                      change: "style",
                       id: activeAnnotation.id,
+                      style: next,
                     }),
-                    "legal-reader.annotation-recolor",
+                    "legal-reader.annotation-restyle",
                   );
-                })}
+                }}
+              />
+              <span className="bg-border mx-1 h-4 w-px" />
+              <div className="flex items-center gap-1.5 px-1">
+                <MarkColorSwatches
+                  onPick={(color) => {
+                    detached(
+                      controller.update({
+                        change: "color",
+                        color,
+                        id: activeAnnotation.id,
+                      }),
+                      "legal-reader.annotation-recolor",
+                    );
+                  }}
+                />
               </div>
               <span className="bg-border mx-1 h-4 w-px" />
             </>
@@ -597,6 +605,8 @@ export const AnnotationToolbar = ({
                       blockAnchorId: span.blockAnchorId,
                       endOffset: span.endOffset,
                       quote: span.quote,
+                      quotePrefix: span.quotePrefix,
+                      quoteSuffix: span.quoteSuffix,
                       startOffset: span.startOffset,
                     })),
                   );
@@ -612,7 +622,7 @@ export const AnnotationToolbar = ({
             </>
           )}
           {mode === "authenticated" && (
-            <VisibilityToggle
+            <MarkVisibilityToggle
               onChange={(next) => {
                 detached(
                   controller.update({
@@ -623,6 +633,7 @@ export const AnnotationToolbar = ({
                   "legal-reader.annotation-visibility",
                 );
               }}
+              sharedLabel={t("legalReader.annotations.visibilityShared")}
               value={activeAnnotation.visibility}
             />
           )}
@@ -652,118 +663,56 @@ export const AnnotationToolbar = ({
   } else if (selected !== null) {
     const spans = selected.spans;
     content = (
-      <div className="flex items-center gap-1">
-        <div className="relative">
-          <Button
-            onClick={(event) => {
-              const MENU_ESTIMATED_HEIGHT_PX = 200;
-              const triggerRect = event.currentTarget.getBoundingClientRect();
-              const viewportHeight =
-                event.currentTarget.ownerDocument.defaultView?.innerHeight ?? 0;
-              setCopyOpensUp(
-                triggerRect.bottom + MENU_ESTIMATED_HEIGHT_PX > viewportHeight,
+      <div className="flex flex-wrap items-center gap-1">
+        <SelectionCopyMenu
+          barRef={barRef}
+          copy={selectionCopy}
+          doc={doc}
+          menuRef={copyMenuRef}
+          onOpenChange={setCopyOpen}
+          open={copyOpen}
+          quote={selected.cleanText}
+          textFor={(copyMode, quote) =>
+            copyTextFor({
+              mode: copyMode,
+              selected: { cleanText: quote, locator: selected.locator },
+              target,
+            })
+          }
+        />
+        {/* AI actions take the document's own words only: a selection with no
+            anchored text (AI notes, reader chrome) is not offered to them,
+            and the passage sent is the anchored words, never the chrome or
+            generated text a drag also crossed. */}
+        {mode === "authenticated" && spans.length > 0 && (
+          <SelectionAIActions
+            explainRefusal={explainRefusal?.(spans)}
+            explainLanguagePicker={explainLanguagePicker}
+            onAsk={() => {
+              askAboutPassage(
+                spans.map(({ quote }) => quote).join(" "),
+                selected.locator,
               );
-              setCopyPreviewMode(null);
-              setCopyOpen((open) => !open);
+              clearSelection();
             }}
-            onMouseDown={(event) => event.preventDefault()}
-            size="sm"
-            variant="ghost"
-          >
-            <CopyIcon className="size-3.5" />
-            {t("common.copy")}
-            <ChevronDownIcon className="size-3" />
-          </Button>
-          {copyOpen && (
-            <div
-              className={cn(
-                "bg-popover text-popover-foreground absolute start-0 z-10 rounded-md border p-1 shadow-md",
-                copyOpensUp ? "bottom-full mb-1" : "top-full mt-1",
-              )}
-            >
-              <MenuPreviewLayout
-                preview={
-                  // The submenu paints over the pane rather than in it, so its
-                  // floor is the viewport's, not the pane's.
-                  <PreviewPane className="w-[min(18rem,calc(100vw-9rem))]">
-                    {copyPreviewMode !== null && (
-                      <p className="text-foreground text-2xs leading-snug whitespace-pre-wrap">
-                        {copyTextFor(
-                          copyPreviewMode,
-                          {
-                            cleanText:
-                              selected.cleanText.length > 220
-                                ? `${selected.cleanText.slice(0, 220)}…`
-                                : selected.cleanText,
-                            locator: selected.locator,
-                          },
-                          target,
-                        )}
-                      </p>
-                    )}
-                  </PreviewPane>
-                }
-              >
-                {COPY_MODES.map((copyMode) => (
-                  <button
-                    className="hover:bg-accent block w-full rounded-sm px-2 py-1.5 text-start text-xs whitespace-nowrap"
-                    key={copyMode}
-                    onClick={() => {
-                      const text = copyTextFor(copyMode, selected, target);
-                      detached(
-                        (async () => {
-                          const copied = await copyToClipboard(text);
-                          if (Result.isError(copied)) {
-                            notifyUserError(
-                              copied.error,
-                              t("errors.actionFailed"),
-                            );
-                            return;
-                          }
-                          stellaToast.add({
-                            title: t("common.copied"),
-                            type: "success",
-                          });
-                        })(),
-                        "legal-reader.selection-copy",
-                      );
-                      setCopyOpen(false);
-                      clearSelection();
-                    }}
-                    onFocus={() => setCopyPreviewMode(copyMode)}
-                    onMouseDown={(event) => event.preventDefault()}
-                    onMouseEnter={() => setCopyPreviewMode(copyMode)}
-                    type="button"
-                  >
-                    {t(`legalReader.copyMenu.${copyMode}`)}
-                  </button>
-                ))}
-              </MenuPreviewLayout>
-            </div>
-          )}
-        </div>
-        {mode === "authenticated" && (
-          <>
-            <span className="bg-border mx-1 h-4 w-px" />
-            <Button
-              onClick={() => {
-                askAboutPassage(selected.text, selected.locator);
-                clearSelection();
-              }}
-              size="sm"
-              variant="ghost"
-            >
-              <SparklesIcon className="size-3.5" />
-              {t("common.askAI")}
-            </Button>
-          </>
+            onExplain={
+              onExplain === undefined
+                ? undefined
+                : () => {
+                    onExplain(spans);
+                    clearSelection();
+                  }
+            }
+          />
         )}
         {spans.length > 0 && (
           <>
             <span className="bg-border mx-1 h-4 w-px" />
-            {styleButtons(style, setStyle)}
+            <MarkStyleButtons current={style} onPick={setStyle} />
             <div className="flex items-center gap-1.5 px-1">
-              {colorSwatches((color) => createHighlight(spans, color))}
+              <MarkColorSwatches
+                onPick={(color) => createHighlight(spans, color)}
+              />
             </div>
             {onCompose !== undefined && (
               <>
@@ -791,94 +740,15 @@ export const AnnotationToolbar = ({
 
   return (
     <SelectionToolbar
-      anchorRect={rect}
+      anchorRect={geometry.rect}
+      boundaryRect={geometry.bounds}
       className="reader-chrome"
       doc={doc}
       onAttach={attachBar}
     >
-      {content}
+      <div onMouseDown={(event) => event.preventDefault()} role="presentation">
+        {content}
+      </div>
     </SelectionToolbar>
   );
-};
-
-const VisibilityToggle = ({
-  onChange,
-  value,
-}: {
-  onChange: (next: AnnotationVisibility) => void;
-  value: AnnotationVisibility;
-}) => {
-  const t = useTranslations();
-  const shared = value === "shared";
-  const label = shared
-    ? t("legalReader.annotations.visibilityShared")
-    : t("knowledge.agentSkills.scopePrivate");
-
-  return (
-    <Tooltip
-      content={label}
-      render={
-        <Button
-          aria-label={label}
-          aria-pressed={shared}
-          className="text-2xs gap-1 px-1.5"
-          onClick={() => onChange(shared ? "private" : "shared")}
-          size="sm"
-          variant="ghost"
-        />
-      }
-    >
-      {shared ? (
-        <Building2Icon className="size-3.5" />
-      ) : (
-        <LockIcon className="size-3.5" />
-      )}
-      {label}
-    </Tooltip>
-  );
-};
-
-const colorLabelKey = (color: AnnotationColor) => {
-  switch (color) {
-    case "yellow": {
-      return "legalReader.annotations.colorYellow" as const;
-    }
-    case "green": {
-      return "legalReader.annotations.colorGreen" as const;
-    }
-    case "sky": {
-      return "legalReader.annotations.colorSky" as const;
-    }
-    case "violet": {
-      return "legalReader.annotations.colorViolet" as const;
-    }
-    case "red": {
-      return "legalReader.annotations.colorRed" as const;
-    }
-    default: {
-      color satisfies never;
-      return panic(`Unhandled color: ${String(color)}`);
-    }
-  }
-};
-
-const styleLabelKey = (style: AnnotationStyle) => {
-  switch (style) {
-    case "highlight": {
-      return "legalReader.annotations.styleHighlight" as const;
-    }
-    case "underline": {
-      return "folio.underline" as const;
-    }
-    case "squiggly": {
-      return "legalReader.annotations.styleSquiggly" as const;
-    }
-    case "strikethrough": {
-      return "legalReader.annotations.styleStrikethrough" as const;
-    }
-    default: {
-      style satisfies never;
-      return panic(`Unhandled style: ${String(style)}`);
-    }
-  }
 };

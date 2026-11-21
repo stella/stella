@@ -1,5 +1,9 @@
 import { panic } from "better-result";
 
+import { isUserInputChatToolName } from "@stll/api-contract/chat-tool-activity";
+import type { UserInputChatToolName } from "@stll/api-contract/chat-tool-activity";
+
+import { withSubagentRunParts } from "@/components/chat/chat-subagent-parts.logic";
 import type { ChatMessage, ChatPart } from "@/components/chat/chat-ui-tools";
 import { resolveChatAssistantTurnOutcome } from "@/components/chat/chat-ui-tools";
 
@@ -29,7 +33,8 @@ type ResolveSuggestedPromptsAvailabilityOptions = {
   turnOwner: SuggestedPromptsTurnOwner;
 };
 
-export type SuggestedPromptsTurnOwner = "approval" | "ask-user" | "composer";
+export type SuggestedPromptsTurnOwner =
+  "approval" | "ask-user" | "secret" | "connector" | "composer";
 
 type ToolCallState = Extract<ChatPart, { type: "tool-call" }>["state"];
 const ASK_USER_STATE_OWNS_TURN = {
@@ -41,6 +46,17 @@ const ASK_USER_STATE_OWNS_TURN = {
   "input-complete": true,
   "input-streaming": true,
 } as const satisfies Record<ToolCallState, boolean>;
+
+type UserInputTurnOwner = Extract<
+  SuggestedPromptsTurnOwner,
+  "ask-user" | "secret" | "connector"
+>;
+const USER_INPUT_TURN_OWNERS = {
+  "ask-user": "ask-user",
+  connect_connector: "connector",
+  request_secret: "secret",
+  request_user_input: "ask-user",
+} as const satisfies Record<UserInputChatToolName, UserInputTurnOwner>;
 
 type ResolveSuggestedPromptsTurnOwnerOptions = {
   approvalPendingMessageId: string | null;
@@ -59,18 +75,30 @@ export const resolveSuggestedPromptsTurnOwner = ({
   if (hasReopenedAskUser) {
     return "ask-user";
   }
-  if (
-    lastMessage?.role === "assistant" &&
-    lastMessage.parts.some(
-      (part) =>
-        part.type === "tool-call" &&
-        part.name === "ask-user" &&
-        ASK_USER_STATE_OWNS_TURN[part.state],
-    )
-  ) {
-    return "ask-user";
+  if (lastMessage?.role !== "assistant") {
+    return "composer";
   }
-  return "composer";
+  // A question a sub-agent run asks owns the turn like a top-level one.
+  const owners = new Set(
+    withSubagentRunParts(lastMessage.parts).flatMap((part) => {
+      if (
+        part.type !== "tool-call" ||
+        !ASK_USER_STATE_OWNS_TURN[part.state] ||
+        !isUserInputChatToolName(part.name)
+      ) {
+        return [];
+      }
+      return [USER_INPUT_TURN_OWNERS[part.name]];
+    }),
+  );
+  // A private input card outranks a connector card, which outranks a question.
+  if (owners.has("secret")) {
+    return "secret";
+  }
+  if (owners.has("connector")) {
+    return "connector";
+  }
+  return owners.has("ask-user") ? "ask-user" : "composer";
 };
 
 export const resolveSuggestedPromptsAvailability = ({
@@ -100,6 +128,7 @@ export const resolveSuggestedPromptsAvailability = ({
     return { status: "blocked", reason: "no-assistant-turn" };
   }
   const turnOutcome = resolveChatAssistantTurnOutcome(lastMessage);
+  // A paused turn offers Continue; a chip would answer for the user.
   switch (turnOutcome.type) {
     case "completed":
     case "legacy-completed":
@@ -109,6 +138,7 @@ export const resolveSuggestedPromptsAvailability = ({
     case "failed":
     case "incomplete":
     case "interrupted":
+    case "paused":
       return { status: "blocked", reason: "terminal-outcome" };
     default:
       turnOutcome satisfies never;

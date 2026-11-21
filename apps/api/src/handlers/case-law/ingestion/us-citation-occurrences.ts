@@ -16,6 +16,7 @@ import type {
   DecisionIdentifiers,
   ReporterCitationIdentifier,
 } from "@stll/legal-ast/decision-identifier";
+import type { DocumentAst, Inline } from "@stll/legal-ast/document-ast";
 import type {
   CitationUnresolvedReason,
   InlineCitationPin,
@@ -58,7 +59,6 @@ import type {
   Token,
   UsCitationWorkBudgetError,
 } from "@/api/handlers/case-law/ingestion/us-citation-scanner";
-import type { DocumentAst, Inline } from "@/api/lib/case-law/document-ast";
 
 /** Occurrences one decision may carry before extraction rejects it. */
 export const US_CITATION_OCCURRENCE_LIMIT = 50_000;

@@ -2,17 +2,19 @@ import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
 import { assertProperty } from "@stll/property-testing";
+import { normalizeUnicode } from "@stll/text-normalize";
 
 import { STATUTE_ALIASES } from "./statute-aliases";
-import type { StatuteQueryCountry } from "./statute-query-capability";
+import type { StatuteGazetteCountry } from "./statute-query-capability";
 import {
   foldStatuteQuery,
   parseStatuteQuery,
   readStatuteQueryReferences,
+  type StatuteQueryIntent,
 } from "./statute-query-intent";
 
 const countries = Object.keys(STATUTE_ALIASES).filter(
-  (country): country is StatuteQueryCountry =>
+  (country): country is StatuteGazetteCountry =>
     Object.hasOwn(STATUTE_ALIASES, country),
 );
 
@@ -76,9 +78,9 @@ describe("reading an act number", () => {
     );
   });
 
-  test("every lenient spelling of a Slovak number names the same act", () => {
+  test("Slovak number spellings preserve the collection era", () => {
     assertProperty(
-      "every lenient spelling of a Slovak number names the same act",
+      "Slovak number spellings preserve the collection era",
       fc.property(
         number,
         year,
@@ -86,6 +88,18 @@ describe("reading an act number", () => {
         fc.array(space, { minLength: 3, maxLength: 3 }),
         (n, y, [suffix, collection], spaces) => {
           const raw = spelled([String(n), "/", String(y), suffix], spaces);
+
+          if (
+            suffix !== "" &&
+            (foldStatuteQuery(suffix).replaceAll(".", "") === "zb") !== y < 1993
+          ) {
+            expect(parseStatuteQuery("svk", raw)).toEqual({
+              type: "text",
+              text: raw.trim(),
+            });
+            expect(readStatuteQueryReferences("svk", raw)).toEqual([]);
+            return;
+          }
 
           expect(parseStatuteQuery("svk", raw)).toEqual({
             type: "act",
@@ -107,6 +121,38 @@ describe("reading an act number", () => {
       year: "2012",
     });
   });
+
+  test.each([
+    ["1992", "Zb.", "Z. z."],
+    ["1993", "Z. z.", "Zb."],
+  ])(
+    "the Slovak collection boundary in %s is preserved",
+    (publicationYear, valid, invalid) => {
+      const expected = {
+        type: "act",
+        collection: "zz",
+        label: null,
+        number: "1",
+        provision: null,
+        year: publicationYear,
+      } as const satisfies StatuteQueryIntent;
+      expect(parseStatuteQuery("svk", `1/${publicationYear}`)).toEqual(
+        expected,
+      );
+      expect(parseStatuteQuery("svk", `1/${publicationYear} ${valid}`)).toEqual(
+        expected,
+      );
+      expect(
+        parseStatuteQuery("svk", `1/${publicationYear} ${invalid}`).type,
+      ).toBe("text");
+      expect(
+        readStatuteQueryReferences(
+          "svk",
+          `zákona č. 1/${publicationYear} ${invalid}`,
+        ),
+      ).toEqual([]);
+    },
+  );
 
   test("a provision ahead of the number is kept as a jump target", () => {
     expect(parseStatuteQuery("cze", "§ 2079 zákona č. 89/2012 Sb.")).toEqual({
@@ -431,7 +477,7 @@ describe("reading act references inside a full-text query", () => {
         readStatuteQueryReferences("cze", `výklad ${typed} pro smlouvu`),
       ).toEqual([{ country: "cze", ...target }]);
     }
-    const decomposed = "OSŘ".normalize("NFD");
+    const decomposed = normalizeUnicode("OSŘ", "NFD");
     expect(decomposed).not.toBe("OSŘ");
     expect(
       readStatuteQueryReferences("cze", `výklad ${decomposed} pro řízení`),
@@ -537,5 +583,99 @@ describe("reading act references inside a full-text query", () => {
         label: null,
       },
     ]);
+  });
+});
+
+describe("reading a Hungarian entry", () => {
+  test.each([
+    [
+      "2013. évi V. törvény",
+      { collection: "torveny", number: "5", year: "2013", provision: null },
+    ],
+    [
+      "Ptk. 6:519. §",
+      {
+        collection: "torveny",
+        number: "5",
+        year: "2013",
+        provision: "6:519. §",
+      },
+    ],
+    [
+      "123/2020. (IV. 30.) Korm. rendelet 25/G. §",
+      {
+        collection: "korm-rendelet",
+        number: "123",
+        year: "2020",
+        provision: "25/G. §",
+      },
+    ],
+    [
+      "123/2020 Korm. rendelet",
+      {
+        collection: "korm-rendelet",
+        number: "123",
+        year: "2020",
+        provision: null,
+      },
+    ],
+    [
+      "5/2019. (III. 13.) IM rendelet",
+      { collection: "im-rendelet", number: "5", year: "2019", provision: null },
+    ],
+  ])("%s names one act in its series", (entry, act) => {
+    expect(parseStatuteQuery("hun", entry)).toEqual({
+      type: "act",
+      label: null,
+      ...act,
+    });
+  });
+
+  test("a non-breaking space does not hide the section", () => {
+    expect(parseStatuteQuery("hun", "Ptk.\u00a06:519.\u00a0§")).toMatchObject({
+      type: "act",
+      provision: "6:519. §",
+    });
+  });
+
+  test.each([
+    "a polgári törvénykönyv",
+    "89/2012 Sb.",
+    "2013. évi V. törvény és 2012. évi I. törvény",
+  ])("%s searches titles", (entry) => {
+    expect(parseStatuteQuery("hun", entry)).toEqual({
+      type: "text",
+      text: entry,
+    });
+  });
+
+  test("references inside prose name each act once, in mention order", () => {
+    expect(
+      readStatuteQueryReferences(
+        "hun",
+        "a Btk. 370. §-a és a Ptk., valamint a 2013. évi V. törvény",
+      ),
+    ).toEqual([
+      {
+        country: "hun",
+        collection: "torveny",
+        number: "100",
+        year: "2012",
+        label: null,
+      },
+      {
+        country: "hun",
+        collection: "torveny",
+        number: "5",
+        year: "2013",
+        label: null,
+      },
+    ]);
+  });
+
+  test("a Czech number read in Hungarian names no act", () => {
+    expect(readStatuteQueryReferences("hun", "zákon č. 89/2012 Sb.")).toEqual(
+      [],
+    );
   });
 });

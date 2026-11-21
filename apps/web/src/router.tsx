@@ -1,4 +1,3 @@
-import { QueryClient } from "@tanstack/react-query";
 import { createRouter } from "@tanstack/react-router";
 import { setupRouterSsrQueryIntegration } from "@tanstack/react-router-ssr-query";
 import { enableMapSet } from "immer";
@@ -10,40 +9,51 @@ import {
   DefaultNotFoundComponent,
   DefaultPendingComponent,
 } from "@/components/route-components";
-import { installChatRuntimeCleanup } from "@/features/chat/queries";
+import {
+  documentPresentationSnapshot,
+  restoreHydratedDocumentPresentation,
+} from "@/i18n/document-presentation";
+import { installUserScopedStorage } from "@/lib/account/install-user-scoped-storage";
+import { defaultPresentationPrefs } from "@/lib/account/presentation-prefs/preferences";
+import { readRequestPresentationPrefs } from "@/lib/account/presentation-prefs/server";
 import { installSessionChangeListener } from "@/lib/account/session-change-listener";
 import { listenForSessionDocumentRestore } from "@/lib/account/session-document";
 import { listenForSessionChange } from "@/lib/account/session-signal";
-import { installUserScopedStorage } from "@/lib/account/user-scoped-storage";
 import { createAnalyticsValue } from "@/lib/analytics/provider";
 import {
+  createRouteCatchHandler,
   createRouteErrorLifecycleController,
   resolveCaughtRouteTemplate,
 } from "@/lib/analytics/route-error-lifecycle";
-import { STALE_TIME } from "@/lib/consts";
+import { getWebHangDetector } from "@/lib/analytics/web-hang/web-hang-detector";
+import { installSessionExpiredNotice } from "@/lib/errors/session-expired-install";
+import { setUserErrorRouteTemplate } from "@/lib/errors/user-toast";
 import { installPDFDocumentCleanup } from "@/lib/pdf/hooks/use-pdf-document";
+import {
+  createAppQueryClient,
+  shouldDehydrateServerQuery,
+} from "@/lib/react-query";
 import { isAuthFlowPathname } from "@/lib/redirect";
 import { installSessionCacheGuard } from "@/lib/session-cache-guard";
 import { installTableStoreReconcile } from "@/lib/workspaces/table-store";
+import { parseRouteSearch, stringifyRouteSearch } from "@/route-search-params";
+import { WEB_ROUTE_TEMPLATES } from "@/route-templates.gen";
 import { routeTree } from "@/routeTree.gen";
+import { getRequestSsrOptions } from "@/security/ssr-options";
 
 enableMapSet();
 
+// The one owner of the generated route tree; tests read it through here.
+export { routeTree };
+
 export function getRouter() {
-  const analyticsValue = createAnalyticsValue();
+  const analyticsValue = createAnalyticsValue(WEB_ROUTE_TEMPLATES);
   const routeErrorLifecycle = createRouteErrorLifecycleController(
     analyticsValue.analytics,
   );
-  const queryClient = new QueryClient({
-    defaultOptions: {
-      queries: {
-        staleTime: STALE_TIME.FIVE.MINUTES,
-      },
-    },
-  });
+  const queryClient = createAppQueryClient();
   installPDFDocumentCleanup(queryClient);
   installDocxDocumentCacheInvalidation(queryClient);
-  installChatRuntimeCleanup(queryClient);
   installTableStoreReconcile(queryClient);
   installSessionCacheGuard(queryClient, {
     isAuthFlowPage: () => isAuthFlowPathname(window.location.pathname),
@@ -56,6 +66,7 @@ export function getRouter() {
     },
   });
   if (typeof window !== "undefined") {
+    installSessionExpiredNotice(queryClient);
     installUserScopedStorage(queryClient);
     installSessionChangeListener(queryClient, {
       listen: listenForSessionChange,
@@ -81,11 +92,35 @@ export function getRouter() {
 
   const router = createRouter({
     routeTree,
-    defaultPreload: "intent",
-    context: { analyticsValue, queryClient, routeErrorLifecycle },
-    defaultOnCatch: () => {
-      routeErrorLifecycle.caught(readCaughtRouteTemplate());
+    dehydrate: () =>
+      documentPresentationSnapshot(readRequestPresentationPrefs()),
+    hydrate: async (snapshot) => {
+      await restoreHydratedDocumentPresentation(snapshot);
+      // A member page's root does not load on the server, so its document is
+      // painted from the router's context; the hydrating matches take the
+      // same snapshot, before any match is built.
+      router.options.context.presentationPrefs = snapshot.prefs;
     },
+    defaultPreload: "intent",
+    // A scalar param reaches its schema as the URL's text, never as a number
+    // or a boolean the default guessed from it.
+    parseSearch: parseRouteSearch,
+    stringifySearch: stringifyRouteSearch,
+    context: {
+      analyticsValue,
+      queryClient,
+      routeErrorLifecycle,
+      // The request's presentation on the server: a page whose root does not
+      // load there (every member page) still paints the member's theme,
+      // direction and frame. The browser takes the dehydrated snapshot of the
+      // same cookie in `hydrate`.
+      presentationPrefs: import.meta.env.SSR
+        ? readRequestPresentationPrefs()
+        : defaultPresentationPrefs,
+    },
+    defaultOnCatch: createRouteCatchHandler(routeErrorLifecycle, () =>
+      readCaughtRouteTemplate(),
+    ),
     // Keep browser scroll restoration after hydration, but avoid rendering
     // TanStack's restoration sibling during server streaming for client-only
     // top-level routes.
@@ -100,6 +135,11 @@ export function getRouter() {
     // threshold.
     defaultPendingMs: 500,
     defaultPendingMinMs: 300,
+    ssr: getRequestSsrOptions(),
+  });
+  getWebHangDetector()?.attach({
+    analytics: analyticsValue.analytics,
+    routeTemplates: new Set(WEB_ROUTE_TEMPLATES),
   });
   readCaughtRouteTemplate = () =>
     resolveCaughtRouteTemplate(router.state.matches);
@@ -116,7 +156,9 @@ export function getRouter() {
     if (path === undefined) {
       return;
     }
+    getWebHangDetector()?.routeReady(path);
     routeErrorLifecycle.routeResolved(path);
+    setUserErrorRouteTemplate(path);
     analyticsValue.analytics.capturePageViewed({ path });
   });
 
@@ -124,13 +166,14 @@ export function getRouter() {
     router,
     queryClient,
     wrapQueryClient: false,
+    dehydrateOptions: { shouldDehydrateQuery: shouldDehydrateServerQuery },
   });
 
   return router;
 }
 
 declare module "@tanstack/react-router" {
-  // oxlint-disable-next-line consistent-type-definitions -- module augmentation requires interface for declaration merging
+  // oxlint-disable-next-line typescript/consistent-type-definitions -- module augmentation requires interface for declaration merging
   interface Register {
     router: ReturnType<typeof getRouter>;
   }

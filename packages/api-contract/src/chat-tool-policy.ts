@@ -17,7 +17,7 @@ export const CHAT_TOOL_POLICY_REQUIRES_APPROVAL = {
   external: true,
   internal: false,
   mutation: true,
-  public_official: false,
+  public_official: true,
   public_unofficial: true,
   scope_expansion: true,
 } as const satisfies Record<ChatToolPolicyKind, boolean>;
@@ -32,7 +32,19 @@ export type NeedsApprovalPolicyKind = {
 }[ChatToolPolicyKind];
 
 export const BUILT_IN_CHAT_TOOL_POLICY_KINDS = {
+  calendar_list_events: CHAT_TOOL_POLICY_KIND.scopeExpansion,
+  calendar_free_busy: CHAT_TOOL_POLICY_KIND.scopeExpansion,
   "ask-user": CHAT_TOOL_POLICY_KIND.internal,
+  request_secret: CHAT_TOOL_POLICY_KIND.internal,
+  // Asks the user to connect a connector; the card runs the ordinary connect
+  // flow and the server confirms the connection before answering.
+  connect_connector: CHAT_TOOL_POLICY_KIND.internal,
+  list_connectable_connectors: CHAT_TOOL_POLICY_KIND.internal,
+  use_connector_secret: CHAT_TOOL_POLICY_KIND.external,
+  // Chat-only presentation: its private attachment belongs to this chat turn.
+  show_visual: CHAT_TOOL_POLICY_KIND.internal,
+  // Chat-only presentation of a read this turn already ran; it reads nothing.
+  show_app: CHAT_TOOL_POLICY_KIND.internal,
   boe_find_related_laws: CHAT_TOOL_POLICY_KIND.publicOfficial,
   boe_get_law: CHAT_TOOL_POLICY_KIND.publicOfficial,
   boe_get_law_block: CHAT_TOOL_POLICY_KIND.publicOfficial,
@@ -88,6 +100,9 @@ export const BUILT_IN_CHAT_TOOL_POLICY_KINDS = {
   "load-skill": CHAT_TOOL_POLICY_KIND.internal,
   "read-skill-resource": CHAT_TOOL_POLICY_KIND.internal,
   remember: CHAT_TOOL_POLICY_KIND.mutation,
+  // Writes a skill package into the user's library: one approved call per
+  // batch of files.
+  save_skill_package: CHAT_TOOL_POLICY_KIND.mutation,
   "search-chat-history": CHAT_TOOL_POLICY_KIND.internal,
   "search-past-chats": CHAT_TOOL_POLICY_KIND.internal,
   // Crosses from this chat's matters into every chat the user has, so the
@@ -97,16 +112,19 @@ export const BUILT_IN_CHAT_TOOL_POLICY_KINDS = {
   "update-current-skill-body": CHAT_TOOL_POLICY_KIND.mutation,
   "update-current-skill-resource": CHAT_TOOL_POLICY_KIND.mutation,
   "update-entity-fields": CHAT_TOOL_POLICY_KIND.mutation,
+  // Checks a package in memory, or a skill the caller may edit; writes nothing.
+  validate_skill_package: CHAT_TOOL_POLICY_KIND.internal,
   // Client-executed Chrome control. Each command reaches a signed-in website
   // with model-authored input, so it uses the external-service policy and
   // stays on per-call approval in the UI grant policy; only page reads may
   // run unasked, after the user opts in for the tab session.
   "use-browser": CHAT_TOOL_POLICY_KIND.external,
   web_search: CHAT_TOOL_POLICY_KIND.external,
-  // The top-level delegation is approval-gated. Subagent writes remain
-  // non-executing proposals and return to the top-level loop for per-write
-  // approval; this grant never authorizes the proposed writes themselves.
-  spawn_subagents: CHAT_TOOL_POLICY_KIND.mutation,
+  // Delegation runs without asking: a subagent executes only tools that need
+  // no approval, and every approval-gated call it makes becomes a
+  // non-executing proposal that returns to the top-level loop for per-write
+  // approval.
+  spawn_subagents: CHAT_TOOL_POLICY_KIND.internal,
   ...MCP_CHAT_TOOL_POLICY_KINDS,
 } as const satisfies Record<string, ChatToolPolicyKind>;
 

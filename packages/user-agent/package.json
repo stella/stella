@@ -2,7 +2,7 @@
   "name": "@stll/user-agent",
   "version": "0.0.0",
   "private": true,
-  "description": "browser and OS names parsed from a user-agent string for session and device lists",
+  "description": "browser, OS and device kind parsed from a user-agent string for session and device lists",
   "license": "Apache-2.0",
   "type": "module",
   "sideEffects": false,
@@ -12,10 +12,9 @@
   "scripts": {
     "clean": "git clean -xdf .cache .turbo node_modules",
     "test": "bun test src",
-    "typecheck": "bun ../../packages/scripts/src/tsc-native.ts --noEmit",
-    "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware --type-check packages/user-agent",
-    "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/user-agent",
-    "format": "bun ../../scripts/run-oxfmt.ts ."
+    "typecheck": "bun check --no-pretty --all --project=tsconfig.json",
+    "lint": "cd ../.. && bun scripts/lint.ts packages/user-agent",
+    "lint:fix": "cd ../.. && bun scripts/lint.ts --fix packages/user-agent"
   },
   "devDependencies": {
     "@stll/typescript-config": "workspace:*",

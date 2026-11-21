@@ -6,10 +6,11 @@ import {
   type CorpusIndexManifest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
 import {
+  type CaseLawProjectionInput,
   caseLawProjectionTitle,
   deriveCorpusIndexProjectionDescriptor,
-  type CaseLawProjectionInput,
   type LegislationV2ProjectionInput,
+  undeclaredLanguageFingerprintFields,
 } from "@/api/lib/legal-search/corpus-index-projection-descriptor";
 import { caseLawProjectionInputFromCanonical } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import { EMPTY_CORPUS_CONTENT_HASHES } from "@/api/lib/legal-search/corpus-storage";
@@ -33,6 +34,13 @@ const CASE_LAW_INPUT = {
   redistributionEligible: true,
   redacted: false,
   listingOnly: false,
+  provisionKeys: [],
+  rankingSignals: {
+    citationAuthorityBucket: 0,
+    languageGroupKey: null,
+    languageGroupShared: false,
+  },
+  vacatedFrom: null,
   caseNumber: "4 As 3/2008",
   identifiers: [
     { type: "source", value: "NSS-4-AS-3-2008" },
@@ -577,5 +585,211 @@ test("a group under its manifest's contract never reads a court id into its fing
     expect(
       fingerprintOf(manifest, { ...CASE_LAW_INPUT, courtId: "scotus" }),
     ).toBe(EXPECTED_FINGERPRINTS[manifest.generation]);
+  }
+});
+
+const PROVISION_KEYS = [
+  "262/2006 Sb.|par_316",
+  "262/2006 Sb.|par_316-odst_2",
+  "262/2006 Sb.|par_316-odst_2-pism_a",
+] as const;
+
+test("a Czech decision is owed both indexes while v9 builds: v8 unchanged, v9 with its keys", () => {
+  const v8 = CORPUS_INDEX_MANIFESTS.case_law_v8;
+  const v9 = CORPUS_INDEX_MANIFESTS.case_law_v9;
+  const withKeys = { ...CASE_LAW_INPUT, provisionKeys: PROVISION_KEYS };
+  // The serving generation's descriptor is the one it always had: the keys
+  // and the build beside it change neither its index nor its fingerprint.
+  expect(deriveCorpusIndexProjectionDescriptor(v8, withKeys)).toEqual(
+    deriveCorpusIndexProjectionDescriptor(v8, CASE_LAW_INPUT),
+  );
+  expect(deriveCorpusIndexProjectionDescriptor(v8, withKeys)).toMatchObject({
+    action: "upsert",
+    indexId: "case_law_v8_cs_sk",
+  });
+  expect(fingerprintOf(CORPUS_INDEX_MANIFESTS.case_law_v7, withKeys)).toBe(
+    EXPECTED_FINGERPRINTS.case_law_v7,
+  );
+  // The building generation is owed the same decision in its own group.
+  expect(deriveCorpusIndexProjectionDescriptor(v9, withKeys)).toMatchObject({
+    action: "upsert",
+    indexId: "case_law_v9_cze",
+  });
+  expect(fingerprintOf(v9, withKeys)).not.toBe(fingerprintOf(v8, withKeys));
+});
+
+test("a Czech decision's v9 fingerprint covers its sorted provision keys", () => {
+  const v9 = CORPUS_INDEX_MANIFESTS.case_law_v9;
+  const none = fingerprintOf(v9, CASE_LAW_INPUT);
+  const some = fingerprintOf(v9, {
+    ...CASE_LAW_INPUT,
+    provisionKeys: PROVISION_KEYS,
+  });
+  // A link recorded, corrected or removed re-projects the decision.
+  expect(some).not.toBe(none);
+  expect(
+    fingerprintOf(v9, {
+      ...CASE_LAW_INPUT,
+      provisionKeys: PROVISION_KEYS.slice(0, 2),
+    }),
+  ).not.toBe(some);
+  // Order is not a change.
+  expect(
+    fingerprintOf(v9, {
+      ...CASE_LAW_INPUT,
+      provisionKeys: PROVISION_KEYS.toReversed(),
+    }),
+  ).toBe(some);
+});
+
+test("a group without the provision keys field never reads keys into its fingerprint", () => {
+  for (const manifest of [
+    CORPUS_INDEX_MANIFESTS.case_law_v5,
+    CORPUS_INDEX_MANIFESTS.case_law_v6,
+    CORPUS_INDEX_MANIFESTS.case_law_v7,
+    CORPUS_INDEX_MANIFESTS.case_law_v8,
+    CORPUS_INDEX_MANIFESTS.case_law_v9,
+  ]) {
+    for (const input of [
+      { ...CASE_LAW_INPUT, jurisdiction: "SVK" },
+      { ...CASE_LAW_INPUT, jurisdiction: "POL", language: "pl" },
+      { ...CASE_LAW_INPUT, jurisdiction: "AUT", language: "de" },
+      USA_INPUT,
+    ]) {
+      expect(
+        fingerprintOf(manifest, { ...input, provisionKeys: PROVISION_KEYS }),
+      ).toBe(fingerprintOf(manifest, input));
+    }
+  }
+});
+
+test("a generation the jurisdiction-serving pointer moved away from owes its copy an erasure", () => {
+  const v8 = CORPUS_INDEX_MANIFESTS.case_law_v8;
+  const v9 = CORPUS_INDEX_MANIFESTS.case_law_v9;
+  // No pointer row: the serving generation keeps the decision.
+  expect(deriveCorpusIndexProjectionDescriptor(v8, CASE_LAW_INPUT).action).toBe(
+    "upsert",
+  );
+  // After the flip the pointer names v9: v8 erases, v9 keeps.
+  const flipped = { ...CASE_LAW_INPUT, vacatedFrom: "case_law_v8" };
+  expect(deriveCorpusIndexProjectionDescriptor(v8, flipped)).toEqual({
+    action: "erase",
+  });
+  expect(deriveCorpusIndexProjectionDescriptor(v9, flipped).action).toBe(
+    "upsert",
+  );
+  // Only the vacated generation erases: a whole generation being built for
+  // promotion while the pointer is set still projects the decision, or its
+  // Czech search would be incomplete once the promotion clears the pointer.
+  for (const whole of [
+    CORPUS_INDEX_MANIFESTS.case_law_v5,
+    CORPUS_INDEX_MANIFESTS.case_law_v6,
+    CORPUS_INDEX_MANIFESTS.case_law_v7,
+  ]) {
+    expect(deriveCorpusIndexProjectionDescriptor(whole, flipped).action).toBe(
+      "upsert",
+    );
+  }
+  // The fingerprint of what v9 keeps does not depend on where readers are
+  // pointed, so the flip re-projects nothing there.
+  expect(fingerprintOf(v9, flipped)).toBe(fingerprintOf(v9, CASE_LAW_INPUT));
+});
+
+const RANKED_INPUT = {
+  ...CASE_LAW_INPUT,
+  jurisdiction: "SVK",
+  rankingSignals: {
+    citationAuthorityBucket: 9,
+    languageGroupKey: "ECLI:SK:NSSR:2008:1",
+    languageGroupShared: false,
+  },
+} as const satisfies CaseLawProjectionInput;
+
+/** Each way a decision's written signals move without the decision changing. */
+const MOVED_SIGNALS = [
+  {
+    ...RANKED_INPUT,
+    rankingSignals: {
+      ...RANKED_INPUT.rankingSignals,
+      citationAuthorityBucket: 10,
+    },
+  },
+  {
+    ...RANKED_INPUT,
+    rankingSignals: {
+      ...RANKED_INPUT.rankingSignals,
+      languageGroupShared: true,
+    },
+  },
+  {
+    ...RANKED_INPUT,
+    rankingSignals: {
+      ...RANKED_INPUT.rankingSignals,
+      languageGroupKey: "ECLI:SK:NSSR:2008:2",
+    },
+  },
+  { ...RANKED_INPUT, courtId: "sk-court-7" },
+] as const satisfies readonly CaseLawProjectionInput[];
+
+test("a moved ranking signal re-projects the decision in the generation that writes it", () => {
+  const v10 = CORPUS_INDEX_MANIFESTS.case_law_v10;
+  const base = fingerprintOf(v10, RANKED_INPUT);
+  expect(base).not.toBeNull();
+  const moved = MOVED_SIGNALS.map((input) => fingerprintOf(v10, input));
+  for (const fingerprint of moved) {
+    expect(fingerprint).not.toBeNull();
+    expect(fingerprint).not.toBe(base);
+  }
+  // Each signal moves the fingerprint on its own.
+  expect(new Set(moved).size).toBe(MOVED_SIGNALS.length);
+  // The same signals derive the same fingerprint.
+  expect(
+    fingerprintOf(v10, {
+      ...RANKED_INPUT,
+      rankingSignals: { ...RANKED_INPUT.rankingSignals },
+    }),
+  ).toBe(base);
+});
+
+test("a generation without ranking signals never reads them into its fingerprint", () => {
+  for (const manifest of [
+    CORPUS_INDEX_MANIFESTS.case_law_v5,
+    CORPUS_INDEX_MANIFESTS.case_law_v6,
+    CORPUS_INDEX_MANIFESTS.case_law_v7,
+    CORPUS_INDEX_MANIFESTS.case_law_v8,
+    CORPUS_INDEX_MANIFESTS.case_law_v9,
+  ]) {
+    // The court id alone is a base input of no generation before v10, so the
+    // other moves are compared against the same court id.
+    for (const input of MOVED_SIGNALS.filter(
+      ({ courtId }) => courtId === RANKED_INPUT.courtId,
+    )) {
+      expect([manifest.generation, fingerprintOf(manifest, input)]).toEqual([
+        manifest.generation,
+        fingerprintOf(manifest, RANKED_INPUT),
+      ]);
+    }
+    expect([
+      manifest.generation,
+      fingerprintOf(manifest, { ...RANKED_INPUT, courtId: "sk-court-7" }),
+    ]).toEqual([manifest.generation, fingerprintOf(manifest, RANKED_INPUT)]);
+  }
+});
+
+test("only a decision in an undeclared language carries the mark that a declaration later removes", () => {
+  expect(
+    undeclaredLanguageFingerprintFields({
+      jurisdiction: "CZE",
+      language: "de",
+    }),
+  ).toEqual({ documentLanguage: "undeclared" });
+  // Declared, with or without a stemmer: no field, so the fingerprints the
+  // census above pins do not move.
+  for (const declared of [
+    { jurisdiction: "CZE", language: "cs" },
+    { jurisdiction: "SVK", language: "cs" },
+    { jurisdiction: "EU", language: "bg" },
+  ]) {
+    expect(undeclaredLanguageFingerprintFields(declared)).toEqual({});
   }
 });

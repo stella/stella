@@ -9,6 +9,7 @@ import {
   corpusIndexGenerations,
   corpusIndexProjectionIntents,
   corpusIndexProjectionStates,
+  publishedCaseLawDecisions,
 } from "@/api/db/schema";
 import { courtWeightMapFromSeed } from "@/api/handlers/case-law/court-weight-seed";
 import { rehydrateCaseLawCandidates } from "@/api/handlers/case-law/decisions/search";
@@ -23,23 +24,27 @@ import {
   corpusIndexManifestDigest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
 import {
+  NATIVE_SCAN_TRANSPORT,
   readCorpusIndexSearchPage,
   type SearchCursor,
 } from "@/api/lib/legal-search/corpus-index-pagination";
 import {
+  corpusSearchGroupToken,
   decodeCorpusSearchCursor,
   encodeCorpusSearchCursor,
-  corpusSearchGroupToken,
 } from "@/api/lib/legal-search/corpus-search-cursor";
 import { RELEVANCE_ORDER } from "@/api/lib/legal-search/corpus-search-order";
 import { corpusIndexId } from "@/api/lib/legal-search/index-naming";
 import { NO_EXPANSION_DICTIONARY_IDENTITY } from "@/api/lib/legal-search/morphology/dictionary";
 import { LIMITS } from "@/api/lib/limits";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import {
   createTestPglite,
   withPublicLawReaderRole,
 } from "@/api/tests/pglite-test-db";
+
+const testFetchState = createTestFetch();
 
 const GENERATION = "case_law_v5";
 const FINGERPRINT = "a".repeat(64);
@@ -53,6 +58,7 @@ const groupCsId = createSafeId<"caseLawDecision">();
 const groupEnId = createSafeId<"caseLawDecision">();
 const singletonId = createSafeId<"caseLawDecision">();
 const originalFetch = globalThis.fetch;
+const revisionById = new Map<string, string>();
 
 let client: PGlite;
 let caseLawDb: CaseLawPublicReadDb;
@@ -169,6 +175,9 @@ beforeAll(
       indexId: corpusIndexId(GENERATION, country),
       intentId: createSafeId<"corpusIndexProjectionIntent">(),
     }));
+    for (const { entityId, intentId } of held) {
+      revisionById.set(entityId, intentId);
+    }
     await db.insert(corpusIndexProjectionIntents).values(
       held.map(({ entityId, indexId, intentId }) => ({
         id: intentId,
@@ -211,7 +220,7 @@ afterAll(async () => {
 });
 
 afterEach(() => {
-  globalThis.fetch = originalFetch;
+  testFetchState.restore();
 });
 
 test("only recurrent decisions consume the carried group budget", async () => {
@@ -237,8 +246,8 @@ test("a missing applied passage count cannot prove a singleton", async () => {
         .select({
           canRecur: caseLawCorpusDocumentCanRecur("missing-generation"),
         })
-        .from(caseLawDecisions)
-        .where(eq(caseLawDecisions.id, singletonId)),
+        .from(publishedCaseLawDecisions)
+        .where(eq(publishedCaseLawDecisions.id, singletonId)),
   );
   expect(rows).toEqual([{ canRecur: true }]);
 });
@@ -318,6 +327,7 @@ test.each(
         : [groupCsId, singletonId, groupEnId, supremeId, districtId];
     const engineHits = ids.map((id, index) => ({
       document_id: id,
+      projection_revision: revisionById.get(id),
       chunk_id: `passage-${index}`,
     }));
     // The applied census must describe the physical passages this engine emits.
@@ -354,9 +364,11 @@ test.each(
         { status: 200 },
       );
     };
-    globalThis.fetch = Object.assign(stub, {
-      preconnect: originalFetch.preconnect,
-    });
+    testFetchState.set(
+      Object.assign(stub, {
+        preconnect: originalFetch.preconnect,
+      }),
+    );
 
     const seen: string[] = [];
     let cursor: SearchCursor | null = null;
@@ -364,6 +376,7 @@ test.each(
     let windowMoved = false;
     const readPage = async (parsedCursor: SearchCursor | null) =>
       await readCorpusIndexSearchPage({
+        scanTransport: NATIVE_SCAN_TRANSPORT,
         observer: "unobserved",
         cluster: "q09",
         indexId: corpusIndexId(GENERATION, "CZE"),
@@ -372,15 +385,17 @@ test.each(
         parsedCursor,
         order: RELEVANCE_ORDER,
         snippetFields: [],
+        projectionRevisionField: "projection_revision",
         extractId: (hit) =>
           typeof hit["document_id"] === "string" ? hit["document_id"] : null,
         extractSnippet: () => null,
         // Force the scan to reach either exhaustion or its round cap.
         unseenScoreUpperBound: (score) => score + 1,
-        rankCandidates: async (candidates) =>
+        rankCandidates: async (candidates, { selectAppliedCandidates }) =>
           await rehydrateCaseLawCandidates({
             body: { country: "CZE", query: "search rank" },
             candidates,
+            selectAppliedCandidates,
             caseLawDb,
             courtWeights: courtWeightMapFromSeed(),
             generation: GENERATION,

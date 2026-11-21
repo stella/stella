@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import {
   readJudgePortraitObject,
@@ -11,10 +11,11 @@ import {
   createSafeBoundedPublicHandler,
 } from "@/api/lib/api-handlers";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const config = {
+  contract: "patch",
   contentDelivery: {
     type: "public",
     reason: "Returns public judicial portraits.",
@@ -22,7 +23,7 @@ const config = {
   cache: { kind: "public", maxAge: 86_400 },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "public_indexing" },
-  params: t.Object({ judgeId: tSafeId("caseLawJudge") }),
+  params: v.object({ judgeId: resourceIdSchema("caseLawJudge") }),
 } satisfies PublicHandlerConfig;
 
 /**

@@ -9,31 +9,32 @@
  */
 
 import type React from "react";
-import { useCallback, useRef } from "react";
+import { useRef } from "react";
 
 import { flexRender } from "@tanstack/react-table";
-import {
-  row_getCanSelect,
-  row_getIsSelected,
-} from "@tanstack/react-table/static-functions";
+import { row_getCanSelect } from "@tanstack/react-table/static-functions";
 
 import { containedEventHandler } from "@stll/ui/use-contained-handler";
 import { cn } from "@stll/ui/utils";
 
 import type { PublicLawRowData } from "@/components/public-law-table/public-law-table";
 import type { TableRowRenderInput } from "@/components/workspaces/table/row-host";
-import { SelectRowContent } from "@/components/workspaces/table/select-row-content";
+import {
+  ROW_FIRST_LINE,
+  RowNumberLabel,
+  SelectRowContent,
+} from "@/components/workspaces/table/select-row-content";
 import type { TableCell } from "@/components/workspaces/table/types";
 import {
   WorkspaceGridCell,
   WorkspaceGridRow,
 } from "@/components/workspaces/table/workspace-grid";
 import { getOrderedCells } from "@/components/workspaces/table/workspace-grid-order";
+import { AddPropertyCell } from "@/components/workspaces/table/workspace-table/end-fillers";
 import {
-  AddPropertyCell,
+  PinnedBoundary,
   RowEndFillerCell,
-} from "@/components/workspaces/table/workspace-table/end-fillers";
-import { PinnedBoundary } from "@/components/workspaces/table/workspace-table/internals";
+} from "@/components/workspaces/table/workspace-table/internals";
 import {
   addPropertyColId,
   getGridPinningStyles,
@@ -42,6 +43,10 @@ import {
 } from "@/components/workspaces/table/workspace-table/internals-helpers";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { TOOLBAR_ROW_MIN_HEIGHT } from "@/lib/consts";
+
+// Result cells are plain text lines; the number cell and every other cell
+// read this one key.
+const FIRST_LINE = "text";
 
 /**
  * A gesture that already means something else: a link in a cell, a menu, a
@@ -84,18 +89,17 @@ export const PublicLawRow = <TRow extends PublicLawRowData>({
   renderColumns,
   row,
   rowLabel,
+  selectionLabel,
   table,
 }: PublicLawRowProps<TRow>) => {
+  const selected = table.state.rowSelection[row.id] === true;
   const rowRef = useRef<HTMLDivElement>(null);
   // Stable ref callback so React doesn't re-run TanStack Virtual's
   // measureElement on every render.
-  const setRowRef = useCallback(
-    (element: HTMLDivElement | null) => {
-      rowRef.current = element;
-      measureElement(element);
-    },
-    [measureElement],
-  );
+  const setRowRef = (element: HTMLDivElement | null) => {
+    rowRef.current = element;
+    measureElement(element);
+  };
   const visibleCells = getOrderedCells(row.getVisibleCells(), renderColumns);
   const addPropertyCell = addPropertyColumn
     ? row
@@ -126,7 +130,7 @@ export const PublicLawRow = <TRow extends PublicLawRowData>({
   return (
     <WorkspaceGridRow
       aria-rowindex={index + 2}
-      aria-selected={row_getIsSelected(row)}
+      aria-selected={selected}
       className={cn(
         "cursor-pointer transition-opacity duration-150",
         // The compact height is a floor, not a ceiling. The density clamps
@@ -137,7 +141,7 @@ export const PublicLawRow = <TRow extends PublicLawRowData>({
       )}
       data-active={isActive || undefined}
       data-index={index}
-      data-state={row_getIsSelected(row) ? "selected" : undefined}
+      data-state={selected ? "selected" : undefined}
       onClick={containedEventHandler(handleClick)}
       onKeyDown={handleKeyDown}
       ref={setRowRef}
@@ -145,9 +149,12 @@ export const PublicLawRow = <TRow extends PublicLawRowData>({
     >
       <PublicLawRowCells
         contentMode={contentMode}
+        selected={selected}
         selectCell={
           row_getCanSelect(row) ? (
             <SelectRowContent
+              ariaLabel={selectionLabel}
+              firstLine={FIRST_LINE}
               index={index}
               label={rowLabel}
               lastSelectedIndex={lastSelectedIndex}
@@ -155,9 +162,7 @@ export const PublicLawRow = <TRow extends PublicLawRowData>({
               table={table}
             />
           ) : (
-            <span className="absolute inset-0 flex min-w-12 shrink-0 items-center justify-center text-xs tabular-nums">
-              {rowLabel}
-            </span>
+            <RowNumberLabel firstLine={FIRST_LINE} label={rowLabel} />
           )
         }
         visibleCells={visibleCells}
@@ -165,12 +170,12 @@ export const PublicLawRow = <TRow extends PublicLawRowData>({
       <RowEndFillerCell
         addPropertyColumn={addPropertyColumn}
         renderColumns={renderColumns}
-        selected={row_getIsSelected(row)}
+        selected={selected}
       />
       <AddPropertyCell
         cell={addPropertyCell}
-        columnIndex={renderColumns.length + 1}
-        selected={row_getIsSelected(row)}
+        renderColumns={renderColumns}
+        selected={selected}
       />
     </WorkspaceGridRow>
   );
@@ -178,10 +183,12 @@ export const PublicLawRow = <TRow extends PublicLawRowData>({
 
 const PublicLawRowCells = <TRow extends PublicLawRowData>({
   contentMode,
+  selected,
   selectCell,
   visibleCells,
 }: {
   contentMode: TableRowRenderInput<TRow>["contentMode"];
+  selected: boolean;
   selectCell: React.ReactElement;
   visibleCells: TableCell<TRow>[];
 }) =>
@@ -204,7 +211,7 @@ const PublicLawRowCells = <TRow extends PublicLawRowData>({
           cell.column.getIsResizing() &&
             "after:bg-info after:pointer-events-none after:absolute after:end-0 after:top-0 after:bottom-0 after:z-50 after:w-px",
         )}
-        data-state={row_getIsSelected(cell.row) ? "selected" : undefined}
+        data-state={selected ? "selected" : undefined}
         key={cell.id}
         style={{
           gridColumn: cellIndex + 1,
@@ -235,7 +242,12 @@ const PublicLawRowCellContent = <TRow extends PublicLawRowData>({
     return null;
   }
   return (
-    <span className="flex w-full min-w-0 items-center gap-1.5">
+    <span
+      className={cn(
+        "flex w-full min-w-0 items-center gap-1.5",
+        ROW_FIRST_LINE[FIRST_LINE].content,
+      )}
+    >
       {flexRender(cell.column.columnDef.cell, cell.getContext())}
     </span>
   );

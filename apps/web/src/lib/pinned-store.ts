@@ -1,9 +1,14 @@
 import * as v from "valibot";
 import { create } from "zustand";
 
+import { browserStateStorage } from "@/lib/account/browser-storage";
+import {
+  onStorageOwnerChange,
+  userStorageKey,
+} from "@/lib/account/user-scoped-storage";
 import { readStoredJson, writeStoredJson } from "@/lib/stored-json";
 
-const PINNED_LS_PREFIX = "sidebar_pinned_";
+const PINNED_LS_PREFIX = "sidebar_pinned";
 
 const PinnedIdsSchema = v.array(v.string());
 
@@ -11,29 +16,29 @@ type PinAttention =
   | { type: "idle"; sequence: number }
   | { type: "pending"; matterId: string; sequence: number };
 
-const readFromStorage = (userId: string): string[] => {
-  try {
-    const raw = localStorage.getItem(PINNED_LS_PREFIX + userId);
-    const stored = readStoredJson(raw, PinnedIdsSchema);
-    if (stored === null) {
-      return [];
-    }
-    return stored;
-  } catch {
+const readFromStorage = (): string[] => {
+  const stored = readStoredJson(
+    browserStateStorage("local").getItem(userStorageKey(PINNED_LS_PREFIX)),
+    PinnedIdsSchema,
+  );
+  if (stored === null) {
     return [];
   }
+  return stored;
 };
 
-const writeToStorage = (userId: string, ids: readonly string[]) => {
-  writeStoredJson(localStorage, PINNED_LS_PREFIX + userId, ids);
+const writeToStorage = (ids: readonly string[]) => {
+  writeStoredJson(
+    browserStateStorage("local"),
+    userStorageKey(PINNED_LS_PREFIX),
+    ids,
+  );
 };
 
 type PinnedStore = {
-  userId: string;
   pinnedIds: Set<string>;
   pinnedOrder: string[];
   pinAttention: PinAttention;
-  init: (userId: string) => void;
   togglePin: (id: string) => void;
   acknowledgePinAttention: (sequence: number) => void;
   isPinned: (id: string) => boolean;
@@ -41,27 +46,14 @@ type PinnedStore = {
 };
 
 export const usePinnedStore = create<PinnedStore>((set, get) => ({
-  userId: "",
   pinnedIds: new Set(),
   pinnedOrder: [],
   pinAttention: { type: "idle", sequence: 0 },
-  init: (userId) => {
-    if (get().userId === userId) {
-      return;
-    }
-    const order = readFromStorage(userId);
-    set({
-      userId,
-      pinnedOrder: order,
-      pinnedIds: new Set(order),
-      pinAttention: { type: "idle", sequence: 0 },
-    });
-  },
   togglePin: (id) => {
-    const { userId, pinnedOrder, pinAttention } = get();
+    const { pinnedOrder, pinAttention } = get();
     if (pinnedOrder.includes(id)) {
       const next = pinnedOrder.filter((pinnedId) => pinnedId !== id);
-      writeToStorage(userId, next);
+      writeToStorage(next);
       set({
         pinnedOrder: next,
         pinnedIds: new Set(next),
@@ -74,7 +66,7 @@ export const usePinnedStore = create<PinnedStore>((set, get) => ({
     }
 
     const next = [...pinnedOrder, id];
-    writeToStorage(userId, next);
+    writeToStorage(next);
     set({
       pinnedOrder: next,
       pinnedIds: new Set(next),
@@ -94,7 +86,7 @@ export const usePinnedStore = create<PinnedStore>((set, get) => ({
   },
   isPinned: (id) => get().pinnedIds.has(id),
   reorder: (draggedId, targetId) => {
-    const { userId, pinnedOrder } = get();
+    const { pinnedOrder } = get();
     const fromIdx = pinnedOrder.indexOf(draggedId);
     const toIdx = pinnedOrder.indexOf(targetId);
     if (fromIdx === -1 || toIdx === -1 || fromIdx === toIdx) {
@@ -103,7 +95,18 @@ export const usePinnedStore = create<PinnedStore>((set, get) => ({
     const next = pinnedOrder.toSpliced(fromIdx, 1);
     const adjustedIdx = fromIdx < toIdx ? toIdx - 1 : toIdx;
     next.splice(adjustedIdx, 0, draggedId);
-    writeToStorage(userId, next);
+    writeToStorage(next);
     set({ pinnedOrder: next, pinnedIds: new Set(next) });
   },
 }));
+
+const hydratePins = () => {
+  const order = readFromStorage();
+  usePinnedStore.setState({
+    pinnedOrder: order,
+    pinnedIds: new Set(order),
+    pinAttention: { type: "idle", sequence: 0 },
+  });
+};
+onStorageOwnerChange(hydratePins);
+hydratePins();

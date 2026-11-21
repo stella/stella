@@ -1,20 +1,20 @@
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
 import {
+  type AstNode,
+  type FilenameContext,
   getPropertyName,
   isAstNode,
   isFileIn,
   isIdentifierReference,
   resolveImport,
-  resolveImportedExpression,
+  resolveImportedExpressionForEnforcement,
   resolveVariable,
   returnArguments,
+  type ScopeContext,
   stableInitializer,
   staticStringValue,
   unwrapExpression,
-  type AstNode,
-  type FilenameContext,
-  type ScopeContext,
 } from "./utils.ts";
 
 const OWNER = "packages/scripts/src/child-exit-status";
@@ -70,7 +70,7 @@ const isProcess = ({
     return false;
   }
   seen.add(node);
-  const imported = resolveImportedExpression(context, node);
+  const imported = resolveImportedExpressionForEnforcement(context, node);
   if (
     imported !== null &&
     (imported.source === "node:process" || imported.source === "process")
@@ -103,7 +103,7 @@ const isExit = ({
     return false;
   }
   seen.add(node);
-  const imported = resolveImportedExpression(context, node);
+  const imported = resolveImportedExpressionForEnforcement(context, node);
   if (
     imported !== null &&
     (imported.source === "node:process" || imported.source === "process") &&
@@ -168,7 +168,7 @@ const isSpawn = ({
     return false;
   }
   seen.add(node);
-  const imported = resolveImportedExpression(context, node);
+  const imported = resolveImportedExpressionForEnforcement(context, node);
   if (imported !== null) {
     if (
       (imported.source === "node:child_process" ||
@@ -231,7 +231,7 @@ const isChildResult = ({
     return isChildResult({ context, value: callee.object, seen });
   }
   if (node.type === "TaggedTemplateExpression") {
-    const imported = resolveImportedExpression(context, node.tag);
+    const imported = resolveImportedExpressionForEnforcement(context, node.tag);
     return imported?.source === "bun" && imported.imported === "$";
   }
   return false;

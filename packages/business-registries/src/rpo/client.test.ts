@@ -1,6 +1,8 @@
 import type { Result } from "better-result";
 import { afterEach, describe, expect, test } from "bun:test";
 
+import { stripUnicodeMarks } from "@stll/text-normalize";
+
 import { lookupByIco, searchByName } from "./client.js";
 import type { RpoClientError } from "./client.js";
 import { RpoAPIError, RpoRequestError, RpoValidationError } from "./errors.js";
@@ -11,7 +13,7 @@ const FIXTURE_DIR = new URL("__fixtures__/", import.meta.url);
 // SAFETY: fixtures are captured from the live RPO API and committed beside
 // the tests; the assertions below check the parsed shape.
 const readFixture = async <T>(name: string): Promise<T> =>
-  // oxlint-disable-next-line typescript-eslint/no-unsafe-type-assertion -- committed test fixture JSON; shape asserted by the tests below
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- committed test fixture JSON; shape asserted by the tests below
   (await Bun.file(new URL(name, FIXTURE_DIR)).json()) as T;
 
 type FetchHandler = (url: URL) => Promise<Response>;
@@ -362,9 +364,7 @@ describe("searchByName", () => {
     // A row whose name lacks the query never outranks one that has it,
     // matched regardless of case and diacritics ("Slovnafť").
     const hasQuery = results.map(({ name }) =>
-      name
-        .normalize("NFD")
-        .replaceAll(/\p{M}/gu, "")
+      stripUnicodeMarks(name, { form: "NFD", markClass: "combining" })
         .toLowerCase()
         .includes("slovnaft"),
     );

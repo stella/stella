@@ -3,6 +3,8 @@ import { useQuery } from "@tanstack/react-query";
 import { roleOptions } from "@/lib/auth-queries";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { skillDetailOptions } from "@/lib/knowledge/queries";
+import { queryView } from "@/lib/query-view.logic";
+import { useQueryViewError } from "@/lib/use-query-view";
 
 import type { SkillEditAccess } from "./skill-history.logic";
 import { skillEditAccess } from "./skill-history.logic";
@@ -17,16 +19,25 @@ export const useSkillEditAccess = (skillId: string): SkillEditAccess => {
   const detail = useQuery(
     skillDetailOptions(user.activeOrganizationId, user.id, skillId),
   );
+  const detailView = queryView(detail);
+  useQueryViewError(detailView, "useSkillEditAccess:query");
   const role = useQuery(roleOptions);
+  const roleView = queryView(role);
+  useQueryViewError(roleView, "useSkillEditAccess:query-2");
 
-  if (detail.data === undefined) {
+  if (
+    detailView.type !== "items" ||
+    detailView.refetchError !== undefined ||
+    roleView.type !== "items" ||
+    roleView.refetchError !== undefined
+  ) {
     return "none";
   }
   return skillEditAccess({
-    scope: detail.data.scope,
-    ownerUserId: detail.data.userId,
-    origin: detail.data.origin,
-    memberRole: role.data,
+    scope: detailView.items.scope,
+    ownerUserId: detailView.items.userId,
+    origin: detailView.items.origin,
+    memberRole: roleView.items,
     userId: user.id,
   });
 };

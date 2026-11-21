@@ -9,8 +9,37 @@
  * own `LIMITS` so server call sites keep one lookup table.
  */
 
+import { UPLOAD_DOCUMENT_MAX_BYTES } from "./document-version-upload";
+import { READER_ANNOTATION_QUOTE_MAX_LENGTH } from "./legal-reader-annotations";
+
+/** Bun's 128 MiB default ingress ceiling, shared with request schemas. */
+export const HTTP_REQUEST_BODY_MAX_BYTES = 128 * 1024 * 1024;
+
+/**
+ * Max length of a short required text field such as a matter or contact
+ * name. The API schema rejects longer input, and inputs bound to those
+ * fields cap typing at the same length.
+ */
+export const DEFAULT_VARCHAR_MAX_LENGTH = 256;
+
+export const AGENT_CLAIM_CODE_MAX_LENGTH = 32;
+
+/**
+ * Max time entries one approval request may name. The approver's selection is
+ * sent in batches of at most this many entries.
+ */
+export const TIME_ENTRIES_APPROVAL_BATCH_MAX = 200;
+
 /** Max input documents a single flow run may be launched against. */
 export const FLOW_RUN_INPUT_ENTITIES_MAX = 50;
+
+/**
+ * Zero-based list nesting levels a clause paragraph's numbering may carry.
+ * OOXML numbering defines nine levels (`w:ilvl` 0..8). The API rejects a level
+ * outside this range, so the clause editor keeps deeper nesting at the deepest
+ * supported level.
+ */
+export const CLAUSE_NUMBERING_LEVEL_LIMITS = { min: 0, max: 8 } as const;
 
 /**
  * Enabled skills an agent surface exposes: chat `load-skill`, template field
@@ -84,6 +113,9 @@ export const ENTITIES_PER_WORKSPACE_MAX = 10_000;
  */
 export const CASE_LAW_CITATION_TIMELINE_MAX_YEARS = 60;
 
+/** Raw incoming edges considered by bounded citation summaries and rankings. */
+export const CASE_LAW_CITATION_SUMMARY_SCAN_LIMIT = 2048;
+
 /**
  * Decisions one research-answer run request may queue. The server rejects a
  * longer list, so a client with more rows on screen than this has to send them
@@ -107,5 +139,94 @@ export const CASE_LAW_RESEARCH_COLUMNS_PER_ORGANIZATION_MAX = 20;
  */
 export const CASE_LAW_RESEARCH_SUGGEST_SAMPLES_MAX = 5;
 
+/**
+ * Deepest result a page of case-law decisions may reach (`offset + limit`),
+ * on the search and on the browse listing alike. A page addressed by offset
+ * costs one request whatever its depth, but the search still ranks every
+ * result in front of it: past this depth the reader is better served by a
+ * narrower search than by a slower page. The web pager derives its last page
+ * button from it, and the API refuses a request past it before any read.
+ */
+export const CASE_LAW_RESULT_DEPTH_MAX = 500;
+
+/**
+ * Page sizes the public law tables offer. Shared so a server-side check (the
+ * seeded case-law corpus spanning several pages) reads the sizes the pager
+ * actually offers.
+ */
+export const PUBLIC_LAW_PAGE_SIZES = [25, 50, 100] as const;
+
 /** Shared search bounds enforced by the API and its clients. */
 export const SEARCH_QUERY_MAX_LENGTH = 500;
+
+/** Display title of a saved law-history document, shared with its writer. */
+export const SEARCH_HISTORY_TITLE_MAX_LENGTH = 512;
+
+/** Entries one best-effort history import request accepts. */
+export const SEARCH_HISTORY_IMPORT_MAX = 300;
+
+/**
+ * Max quoted characters of a list item's document source, attached by hand or
+ * proposed by a generation candidate. A source is a spot in the document, so
+ * it takes the spot quote bound; verification pins quotes no longer than this
+ * either.
+ */
+export const LEGAL_LIST_SOURCE_QUOTE_MAX_LENGTH =
+  READER_ANNOTATION_QUOTE_MAX_LENGTH;
+
+/** Character budget for app-only decision pages and provision previews. */
+export const READER_PAGE_MAX_CHARS = 60_000;
+export const READER_PROVISION_ANCHOR_MIN_CHARS = 1;
+export const READER_PROVISION_ANCHOR_MAX_CHARS = 256;
+
+/**
+ * Smallest file a presigned upload may declare, single or in a dropped folder.
+ * An empty document is never a legitimate upload, so the API refuses it before
+ * minting a URL, and a folder drop sends empty files down the single-file path
+ * where the user sees that refusal for the file alone.
+ */
+export const UPLOAD_FILE_MIN_BYTES = 1;
+
+/**
+ * Largest document a presigned upload may declare. The browser refuses a
+ * larger file before reading it, and a folder drop sends it down the
+ * single-file path where the user sees that refusal for the file alone.
+ * Defined beside the upload transport, which the published CLI copies.
+ */
+export { UPLOAD_DOCUMENT_MAX_BYTES };
+
+/**
+ * What a multipart request may carry besides its file: the boundaries, the
+ * part headers and the scalar fields beside it.
+ */
+export const MULTIPART_ENVELOPE_MAX_BYTES = 1024 * 1024;
+
+/**
+ * Largest document one multipart request through the API may carry. The
+ * server refuses a body above `HTTP_REQUEST_BODY_MAX_BYTES` before any route
+ * runs, and the form is read into memory whole, so this is that ceiling less
+ * the envelope. A larger document goes through a presigned upload.
+ */
+export const MULTIPART_DOCUMENT_MAX_BYTES = Math.min(
+  UPLOAD_DOCUMENT_MAX_BYTES,
+  HTTP_REQUEST_BODY_MAX_BYTES - MULTIPART_ENVELOPE_MAX_BYTES,
+);
+
+/**
+ * Largest file uploaded into an existing skill as one resource. Its text must
+ * also fit the stored resource cap (`SKILL_PACKAGE_LIMITS.resourceMaxChars`);
+ * the browser refuses a larger file before reading it.
+ */
+export const SKILL_RESOURCE_UPLOAD_MAX_BYTES = 5 * 1024 * 1024;
+
+/**
+ * Size bounds, in PDF points, of a visible signature stamp: legible, and never
+ * a page-covering box. The browser keeps a drawn stamp inside them and the
+ * API refuses a stamp outside them.
+ */
+export const PDF_SIGNING_STAMP_SIZE_LIMITS_PT = {
+  maxHeight: 200,
+  maxWidth: 400,
+  minHeight: 24,
+  minWidth: 72,
+} as const;

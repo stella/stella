@@ -1,0 +1,225 @@
+import { TaggedError } from "better-result";
+
+import { declareFailureClass, declareFingerprintFields } from "@stll/errors";
+import type { FailureReason } from "@stll/errors";
+import type { SanctionsSource } from "@stll/sanctions";
+
+import {
+  failureSink,
+  gradeFailure,
+  pgIdentityFields,
+} from "@/api/lib/observability/failure";
+import { readEvidence } from "@/api/lib/observability/failure-evidence";
+import { logger } from "@/api/lib/observability/logger";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
+import {
+  emitFailureMetric,
+  emitSanctionsScreeningWorkMetric,
+} from "@/api/lib/observability/request-metrics";
+import { observedStatus } from "@/api/lib/observability/server-error-answer";
+
+const SANCTIONS_MATCHER_FAILURE_CAUSES = [
+  "closed",
+  "admission",
+  "deadline",
+  "worker-create",
+  "worker-error",
+  "worker-exit",
+  "worker-send",
+  "worker-reply",
+  "worker-retire",
+  "operation",
+] as const;
+
+export type SanctionsMatcherFailureCause =
+  (typeof SANCTIONS_MATCHER_FAILURE_CAUSES)[number];
+
+export type SanctionsScreeningFailureCause =
+  | SanctionsMatcherFailureCause
+  | "freshness-read"
+  | "entries-read"
+  | "read-stalled"
+  | "short-read"
+  | "work-limit"
+  | "matcher-unavailable";
+
+type SanctionsScreeningFailureStage =
+  | "matcher-pool"
+  | "public-matcher"
+  | "public-warmup"
+  | "list-screening"
+  | "whole-screening";
+
+const SCREENING_FAILURE_REASON = {
+  closed: "sanctions_matcher_closed",
+  admission: "sanctions_matcher_saturated",
+  deadline: "sanctions_matcher_deadline",
+  "work-limit": "sanctions_screening_work_limit",
+  "worker-create": "sanctions_screening_failed",
+  "worker-error": "sanctions_screening_failed",
+  "worker-exit": "sanctions_screening_failed",
+  "worker-send": "sanctions_screening_failed",
+  "worker-reply": "sanctions_screening_failed",
+  "worker-retire": "sanctions_screening_failed",
+  "short-read": "sanctions_screening_failed",
+  "read-stalled": "sanctions_screening_failed",
+  "matcher-unavailable": "sanctions_screening_failed",
+  // Read/operation boundaries retain the shared infrastructure classification.
+  "freshness-read": "unclassified",
+  "entries-read": "unclassified",
+  operation: "unclassified",
+} as const satisfies Record<SanctionsScreeningFailureCause, FailureReason>;
+
+export class SanctionsScreeningFailure extends TaggedError(
+  "SanctionsScreeningFailure",
+)<{
+  message: string;
+  stage: SanctionsScreeningFailureStage;
+  reason: SanctionsScreeningFailureCause;
+  cause?: unknown;
+}> {
+  static {
+    declareFingerprintFields(this, ["stage", "reason"]);
+  }
+
+  static {
+    declareFailureClass(this, ({ reason, cause }) => {
+      const declared = SCREENING_FAILURE_REASON[reason];
+      return declared === "unclassified" && cause !== undefined
+        ? gradeFailure(readEvidence(cause), SCREENING_FAILURE_SINK).reason
+        : declared;
+    });
+  }
+}
+
+type SanctionsDriverEvidenceOptions = {
+  code: string;
+  errno: string | undefined;
+};
+
+// Driver provenance requires an untagged Error; this projection contains no raw payload.
+class SanctionsDriverEvidenceError extends Error {
+  readonly code: string;
+  readonly errno: string | undefined;
+
+  constructor({ code, errno }: SanctionsDriverEvidenceOptions) {
+    super("Sanctions database read failed");
+    this.name = "SanctionsDriverEvidenceError";
+    this.code = code;
+    this.errno = errno;
+  }
+}
+
+const SCREENING_FAILURE_SINK = failureSink({
+  event: "sanctions.screening_failed",
+  expected: [],
+});
+
+type ReportScreeningFailureOptions = {
+  stage: SanctionsScreeningFailureStage;
+  reason: SanctionsScreeningFailureCause;
+  source?: SanctionsSource;
+  error?: unknown;
+};
+
+/** Preserve bounded driver evidence, never query text, messages or identity fields. */
+export const reportSanctionsScreeningFailure = ({
+  stage,
+  reason,
+  source,
+  error,
+}: ReportScreeningFailureOptions): void => {
+  const fields = pgIdentityFields(readEvidence(error));
+  const sqlState = fields["error.cause.pg_code"];
+  const driverCode = fields["error.cause.pg_driver_code"];
+  const code = driverCode ?? sqlState;
+  const cause =
+    code === undefined
+      ? error
+      : new SanctionsDriverEvidenceError({ code, errno: sqlState });
+  observeFailure(
+    new SanctionsScreeningFailure({
+      message: "Sanctions screening unavailable",
+      stage,
+      reason,
+      cause,
+    }),
+    {
+      sink: SCREENING_FAILURE_SINK,
+      ctx: {
+        feature: "sanctions.screening",
+        stage,
+        phase: reason,
+        ...(source === undefined ? {} : { source }),
+      },
+    },
+  );
+  emitFailureMetric({
+    sink: SCREENING_FAILURE_SINK.event,
+    reason: "unavailable",
+  });
+};
+
+const PUBLIC_SCREENING_BUSY_SINK = failureSink({
+  event: "sanctions.search.busy",
+  expected: [],
+});
+
+/**
+ * The 503 a public screening answers at its concurrency ceiling. The cause
+ * names saturation, which grades anticipated: recorded with the request,
+ * never reported as a fault, and it holds no identity.
+ */
+export const publicScreeningBusyAnswer = () =>
+  observedStatus(
+    {
+      sink: PUBLIC_SCREENING_BUSY_SINK,
+      cause: new SanctionsScreeningFailure({
+        message: "Public sanctions screening is at its concurrency limit",
+        stage: "public-matcher",
+        reason: "admission",
+      }),
+    },
+    503,
+    {
+      code: "service_unavailable",
+      message: "Sanctions screening is busy; try again shortly",
+    },
+  );
+
+/** The lease owns diagnostics; its screening caller owns failure capture. */
+export const reportSanctionsMatcherFailure = ({
+  stage,
+  reason,
+}: ReportScreeningFailureOptions): void => {
+  logger.warn("sanctions.matcher_failed", {
+    feature: "sanctions.screening",
+    stage,
+    phase: reason,
+  });
+};
+
+// Above this share a list is close to refusing common names with work-limit.
+export const SANCTIONS_WORK_PRESSURE = 0.7;
+
+/** Every completed screening reports its budget share; high shares warn. */
+export const reportSanctionsScreeningWork = ({
+  source,
+  spent,
+  limit,
+}: {
+  source: SanctionsSource;
+  spent: number;
+  limit: number;
+}): void => {
+  const share = spent / limit;
+  emitSanctionsScreeningWorkMetric({ source, percent: share * 100 });
+  if (share > SANCTIONS_WORK_PRESSURE) {
+    logger.warn("sanctions.screening_work_pressure", {
+      feature: "sanctions.screening",
+      source,
+      spent,
+      limit,
+    });
+  }
+};

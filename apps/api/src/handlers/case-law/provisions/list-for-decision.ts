@@ -1,24 +1,30 @@
 import { panic } from "better-result";
-import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
-import { status, t } from "elysia";
-import type { Static } from "elysia";
+import type { SelectResultFields } from "drizzle-orm/query-builders/select.types";
 import * as v from "valibot";
 
+import { numberFromString } from "@stll/api-contract/http-input";
+import { provisionLinkCapability } from "@stll/api-contract/provision-link-capability";
+import type { ProvisionLinkCapability } from "@stll/api-contract/provision-link-capability";
 import { PROVISION_LINK_STATUS_TYPES } from "@stll/api-contract/provision-link-status";
 import type { ProvisionLinkStatus } from "@stll/api-contract/provision-link-status";
-import { DECISION_DATE_VERSION_BASIS } from "@stll/api-contract/provision-version-basis";
 
 import {
-  caseLawDecisions,
   caseLawProvisionCitations,
-  caseLawProvisionExtractions,
   caseLawProvisionExtractionRevisions,
   caseLawProvisionExtractionRevisionsRegistry,
+  caseLawProvisionExtractions,
+  publishedCaseLawDecisions,
 } from "@/api/db/schema";
+import { status } from "@/api/http/status";
 import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
 import type { RedistributableDecisionSubject } from "@/api/lib/case-law/public-subject";
-import { tPaginationCursor, tPaginationLimit } from "@/api/lib/custom-schema";
+import {
+  paginationCursorSchema,
+  paginationLimitSchema,
+} from "@/api/lib/custom-schema";
+import { POSTGRES_INTEGER_MAX } from "@/api/lib/db/postgres-integer";
 import { EMPTY_CORPUS_CONTENT_HASHES } from "@/api/lib/legal-search/corpus-storage";
 import { LIMITS } from "@/api/lib/limits";
 import {
@@ -33,12 +39,28 @@ import {
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { sqlCaseFragment } from "@/api/lib/sql-case-expression";
 
-export const listDecisionProvisionsQuerySchema = t.Object({
-  limit: t.Optional(tPaginationLimit(LIMITS.caseLawSearchPageSizeMax)),
-  cursor: t.Optional(tPaginationCursor()),
+import { provisionStatusForCapability } from "./status-for-capability";
+import {
+  projectProvisionVersion,
+  PROVISION_VERSION_COLUMNS,
+} from "./version-response";
+
+export const listDecisionProvisionsQuerySchema = v.object({
+  limit: v.optional(
+    numberFromString(paginationLimitSchema(LIMITS.caseLawSearchPageSizeMax)),
+  ),
+  cursor: v.optional(
+    v.pipe(
+      paginationCursorSchema(),
+      v.check(
+        (cursor) => decodeProvisionCursor(cursor) !== null,
+        "Invalid cursor",
+      ),
+    ),
+  ),
 });
 
-type ListDecisionProvisionsQuery = Static<
+type ListDecisionProvisionsQuery = v.InferOutput<
   typeof listDecisionProvisionsQuerySchema
 >;
 
@@ -51,15 +73,15 @@ type ListDecisionProvisionsOptions = {
   query: ListDecisionProvisionsQuery;
 };
 
-const POSTGRES_INTEGER_MAX = 2_147_483_647;
-
 type ProvisionCursor = {
   generation: string;
   spanStart: number;
   anchor: string;
 };
 
-const decodeProvisionCursor = (cursor: string): ProvisionCursor | null => {
+export const decodeProvisionCursor = (
+  cursor: string,
+): ProvisionCursor | null => {
   const parts = decodePaginationCursor(cursor);
   if (parts?.length !== 3) {
     return null;
@@ -81,11 +103,21 @@ const decodeProvisionCursor = (cursor: string): ProvisionCursor | null => {
   return { generation, spanStart, anchor };
 };
 
+export const encodeProvisionCursor = (cursor: ProvisionCursor): string =>
+  encodePaginationCursor([cursor.generation, cursor.spanStart, cursor.anchor]);
+
 const LEGACY_CITATION_FIELDS = {
+  // Drizzle detects absent left-join rows from the first column; keep it non-null.
   jurisdiction: caseLawProvisionCitations.jurisdiction,
   workIdentifier: caseLawProvisionCitations.workIdentifier,
-  workNumber: caseLawProvisionCitations.workNumber,
-  workYear: caseLawProvisionCitations.workYear,
+  workNumber: sql<
+    number | null
+  >`CASE WHEN ${caseLawProvisionCitations.jurisdiction} = 'EU'
+    THEN ${caseLawProvisionCitations.euWorkNumber} ELSE ${caseLawProvisionCitations.workNumber} END`,
+  workYear: sql<
+    number | null
+  >`CASE WHEN ${caseLawProvisionCitations.jurisdiction} = 'EU'
+    THEN ${caseLawProvisionCitations.euWorkYear} ELSE ${caseLawProvisionCitations.workYear} END`,
   workCollection: caseLawProvisionCitations.workCollection,
   workEli: caseLawProvisionCitations.workEli,
   workSource: caseLawProvisionCitations.workSource,
@@ -103,6 +135,7 @@ const LEGACY_CITATION_FIELDS = {
   spanStart: caseLawProvisionCitations.spanStart,
   spanEnd: caseLawProvisionCitations.spanEnd,
   confidence: caseLawProvisionCitations.confidence,
+  ...PROVISION_VERSION_COLUMNS,
 };
 
 const SPAN_CITATION_FIELDS = {
@@ -137,9 +170,8 @@ const UNAVAILABLE_SPAN_FIELDS = {
   targetStatus: null,
 } satisfies Record<keyof typeof SPAN_CITATION_FIELDS, null>;
 
-type ProvisionRow = Pick<
-  typeof caseLawProvisionCitations.$inferSelect,
-  keyof typeof LEGACY_CITATION_FIELDS | keyof typeof SPAN_CITATION_FIELDS
+type ProvisionRow = SelectResultFields<
+  typeof LEGACY_CITATION_FIELDS & typeof SPAN_CITATION_FIELDS
 >;
 
 type ProvisionPageOptions = {
@@ -148,6 +180,8 @@ type ProvisionPageOptions = {
   generation: string;
   status: ProvisionLinkStatus;
   publishedProjectionDigest: string | null;
+  capability: ProvisionLinkCapability;
+  pendingSince: string | null;
 };
 
 const provisionPage = ({
@@ -156,19 +190,20 @@ const provisionPage = ({
   generation,
   status: linkStatus,
   publishedProjectionDigest,
+  capability,
+  pendingSince,
 }: ProvisionPageOptions) => ({
   ...createCursorPage({
-    rows: rows.map((row) => ({
-      ...row,
-      versionBasis: DECISION_DATE_VERSION_BASIS,
-    })),
+    rows: rows.map(projectProvisionVersion),
     limit,
     cursorForItem: (item) =>
       encodePaginationCursor([generation, item.spanStart, item.anchor]),
   }),
-  status: linkStatus,
+  status: provisionStatusForCapability(capability, linkStatus),
   generation,
   publishedProjectionDigest,
+  capability,
+  pendingSince: capability.type === "notSupportedYet" ? null : pendingSince,
 });
 
 /** Check on this transaction, so a grant rollout takes effect without a restart. */
@@ -211,17 +246,26 @@ const readLegacyProvisionPage = async ({
   if (cursor !== null && cursor.generation !== "0") {
     return paginationConflict();
   }
+  const [decisionMetadata] = await tx
+    .select({
+      country: publishedCaseLawDecisions.country,
+      language: publishedCaseLawDecisions.language,
+    })
+    .from(publishedCaseLawDecisions)
+    .where(eq(publishedCaseLawDecisions.id, decisionId));
+  if (decisionMetadata === undefined) {
+    panic("Authorized decision disappeared");
+  }
   const rows = await tx
     .select(LEGACY_CITATION_FIELDS)
     .from(caseLawProvisionCitations)
     .innerJoin(
-      caseLawDecisions,
-      eq(caseLawDecisions.id, caseLawProvisionCitations.decisionId),
+      publishedCaseLawDecisions,
+      eq(publishedCaseLawDecisions.id, caseLawProvisionCitations.decisionId),
     )
     .where(
       and(
         eq(caseLawProvisionCitations.decisionId, decisionId),
-        isNull(caseLawDecisions.redactedAt),
         cursor === null
           ? undefined
           : sql`(${caseLawProvisionCitations.spanStart}, ${caseLawProvisionCitations.anchor}) > (${cursor.spanStart}::integer, ${cursor.anchor}::text)`,
@@ -238,6 +282,11 @@ const readLegacyProvisionPage = async ({
     generation: "0",
     status: { type: "pending" },
     publishedProjectionDigest: null,
+    capability: provisionLinkCapability(
+      decisionMetadata.country,
+      decisionMetadata.language,
+    ),
+    pendingSince: null,
   });
 };
 
@@ -264,7 +313,7 @@ export const listDecisionProvisionsHandler = async ({
     return await readLegacyProvisionPage({ subject, cursor, limit });
   }
 
-  const decision = caseLawDecisions;
+  const decision = publishedCaseLawDecisions;
   const extraction = caseLawProvisionExtractions;
   const revisions = caseLawProvisionExtractionRevisions;
   const registry = caseLawProvisionExtractionRevisionsRegistry;
@@ -303,8 +352,6 @@ export const listDecisionProvisionsHandler = async ({
   }));
   const pageConditions = [
     eq(caseLawProvisionCitations.decisionId, decisionId),
-    // A redacted decision's old citation excerpts must not escape its tombstone.
-    isNull(decision.redactedAt),
     ...(cursor === null
       ? []
       : [
@@ -315,6 +362,9 @@ export const listDecisionProvisionsHandler = async ({
   const rows = await tx
     .select({
       status: statusCase,
+      country: decision.country,
+      language: decision.language,
+      pendingSince: extraction.pendingSince,
       generation: sql<string>`coalesce(${extraction.generation}, 0)::text`,
       publishedProjectionDigest: sql<
         string | null
@@ -354,5 +404,7 @@ export const listDecisionProvisionsHandler = async ({
     status: metadata.status,
     generation: metadata.generation,
     publishedProjectionDigest: metadata.publishedProjectionDigest,
+    capability: provisionLinkCapability(metadata.country, metadata.language),
+    pendingSince: metadata.pendingSince?.toISOString() ?? null,
   });
 };

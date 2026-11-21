@@ -2,11 +2,51 @@ import { FieldApi, FormApi } from "@tanstack/react-form";
 import { describe, expect, expectTypeOf, test } from "bun:test";
 import * as v from "valibot";
 
+import { PROVISION_CITING_FILTER_LIMITS } from "@stll/api-contract/provision-citing-decisions";
+
 import {
   emailSchema,
+  optionalFlagSearchSchema,
+  optionalIntegerSearchSchema,
   optionalUuidSearchSchema,
   schemaFormOptions,
 } from "@/lib/schema";
+
+describe("optional integer search params", () => {
+  const page = optionalIntegerSearchSchema({
+    min: PROVISION_CITING_FILTER_LIMITS.yearMin,
+    max: PROVISION_CITING_FILTER_LIMITS.yearMax,
+  });
+
+  test("reads the URL's text and a navigation's number alike", () => {
+    for (const value of ["7", " 7 ", 7]) {
+      expect(v.parse(page, value)).toBe(7);
+    }
+    expect(v.parse(page, undefined)).toBeUndefined();
+  });
+
+  test("drops what is not a whole number in range", () => {
+    for (const value of ["", "x", "1.5", 1.5, "0", 0, "9999", true, null]) {
+      expect(v.parse(page, value)).toBeUndefined();
+    }
+  });
+});
+
+describe("optional flag search params", () => {
+  test("reads the URL's text and a navigation's boolean alike", () => {
+    expect(v.parse(optionalFlagSearchSchema, "true")).toBe(true);
+    expect(v.parse(optionalFlagSearchSchema, true)).toBe(true);
+    expect(v.parse(optionalFlagSearchSchema, "false")).toBe(false);
+    expect(v.parse(optionalFlagSearchSchema, false)).toBe(false);
+    expect(v.parse(optionalFlagSearchSchema, undefined)).toBeUndefined();
+  });
+
+  test("drops any other value", () => {
+    for (const value of ["", "1", "yes", 1, null]) {
+      expect(v.parse(optionalFlagSearchSchema, value)).toBeUndefined();
+    }
+  });
+});
 
 describe("optional UUID search filters", () => {
   const uuid = "0194d94a-1122-7000-8000-123456789abc";
@@ -41,7 +81,7 @@ const PASSWORD = "  keep password whitespace  ";
 const QUANTITY = " 42 ";
 
 const credentialsSchema = v.object({
-  email: emailSchema(),
+  email: emailSchema("Email must be valid"),
   password: v.string(),
   quantity: v.pipe(
     v.string(),

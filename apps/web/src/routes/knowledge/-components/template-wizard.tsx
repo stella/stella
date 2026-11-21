@@ -18,6 +18,7 @@ import {
 import { Field, FieldControl, FieldLabel } from "@stll/ui/field";
 import { XIcon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
+import { Label } from "@stll/ui/label";
 import {
   Select,
   SelectItem,
@@ -26,9 +27,12 @@ import {
   SelectValue,
 } from "@stll/ui/select";
 import { Textarea } from "@stll/ui/textarea";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { contentDir } from "@stll/ui/use-content-dir";
 import { cn } from "@stll/ui/utils";
 
+import { matchesComboboxItem } from "@/components/combobox-filter.logic";
+import { QueryViewFeedback } from "@/components/query-view-feedback";
 import {
   REGISTRY_DEFAULT_FORMAT,
   REGISTRY_FIELD_EXAMPLES,
@@ -44,16 +48,17 @@ import {
   type TemplateDateFormat,
 } from "@/components/templates/template-date-format";
 import {
-  isInputType,
   type InputType,
+  isInputType,
   type LookupRegistry,
 } from "@/components/templates/template-field-manifest";
 import Tooltip from "@/components/tooltip";
-import { useLocale } from "@/i18n/formatting-context";
+import { useFormatter, useFormattingLocale } from "@/i18n/formatting-context";
 import { LANG_ENDONYMS } from "@/i18n/i18n-store";
 import type { api } from "@/lib/api";
 import { optionalArray } from "@/lib/arrays";
 import { bindingCatalogOptions } from "@/lib/knowledge/queries/binding-catalog";
+import { queryView } from "@/lib/query-view.logic";
 import { inputTypeValueKind, VALUE_TYPE_META } from "@/lib/value-types";
 import type {
   EditableField,
@@ -107,7 +112,7 @@ const LOOKUP_FORMAT_TEMPLATE_MAX_LENGTH = 2000;
 
 /** Canonical icon + name for a field's value type (shared with the matter
  *  table's property chips via the value-type registry). */
-export const ValueTypeLabel = ({
+const ValueTypeLabel = ({
   inputType,
 }: {
   inputType: InputType | "company";
@@ -118,7 +123,7 @@ export const ValueTypeLabel = ({
   return (
     <span className="flex min-w-0 items-center gap-1.5">
       <Icon aria-hidden="true" className="size-3.5 shrink-0 opacity-70" />
-      <span className="truncate">{t(meta.labelKey)}</span>
+      <TruncatedText>{t(meta.labelKey)}</TruncatedText>
     </span>
   );
 };
@@ -160,7 +165,7 @@ const OptionsTagInput = ({
   };
 
   return (
-    // oxlint-disable-next-line jsx_a11y/no-static-element-interactions, jsx_a11y/click-events-have-key-events -- wrapper extends click target to focus the nested input; the input is natively keyboard-focusable
+    // oxlint-disable-next-line jsx-a11y/no-static-element-interactions, jsx-a11y/click-events-have-key-events -- wrapper extends click target to focus the nested input; the input is natively keyboard-focusable
     <div
       className="border-input bg-background ring-ring/24 focus-within:border-ring flex min-h-9 w-full flex-wrap gap-1 rounded-lg border p-[calc(--spacing(1)-1px)] text-base shadow-xs/5 outline-none focus-within:ring-[3px] sm:min-h-8 sm:text-sm"
       onClick={() => inputRef.current?.focus()}
@@ -174,23 +179,25 @@ const OptionsTagInput = ({
           <Tooltip
             content={t("common.remove")}
             render={
-              <button
+              <Button
                 aria-label={t("common.remove")}
-                className="h-full shrink-0 cursor-pointer px-1.5 opacity-80 hover:opacity-100"
+                className="h-full"
                 onClick={(e) => {
                   e.stopPropagation();
                   removeOption(i);
                 }}
-                type="button"
+                variant="plain"
               >
-                <XIcon className="size-3.5" />
-              </button>
+                <span className="flex h-full items-center px-1.5 opacity-80 hover:opacity-100">
+                  <XIcon className="size-3.5" />
+                </span>
+              </Button>
             }
           />
         </span>
       ))}
-      <input
-        className="placeholder:text-muted-foreground min-w-24 flex-1 bg-transparent px-1 outline-none"
+      <Input
+        className="min-w-24 flex-1"
         dir={contentDir(draft)}
         onChange={(e) => setDraft(e.target.value)}
         onKeyDown={handleKeyDown}
@@ -198,7 +205,9 @@ const OptionsTagInput = ({
           options.length === 0 ? t("templates.fieldOptionsPlaceholder") : ""
         }
         ref={inputRef}
+        size="sm"
         type="text"
+        unstyled
         value={draft}
       />
     </div>
@@ -369,7 +378,8 @@ const CompanyLookupConfig = ({
   onUpdate: (patch: Partial<TemplateEditableField>) => void;
 }) => {
   const t = useTranslations();
-  const locale = useLocale();
+  const formatter = useFormatter();
+  const locale = useFormattingLocale();
   const registry = field.lookup?.registry ?? preferredRegistry(locale);
   const formats = optionalArray(field.lookup?.formats);
   const options = orderedRegistryOptions(locale);
@@ -419,6 +429,7 @@ const CompanyLookupConfig = ({
         <FieldLabel>{t("templates.fieldLookupRegistry")}</FieldLabel>
         <Combobox<LookupRegistryOption>
           autoHighlight
+          filter={matchesComboboxItem}
           items={options}
           itemToStringLabel={(option) => option.label}
           onValueChange={(option) => {
@@ -469,6 +480,9 @@ const CompanyLookupConfig = ({
         <Button
           className="self-start"
           disabled={formats.length >= LOOKUP_FORMATS_MAX}
+          disabledReason={t("templates.lookupFormatLimit", {
+            max: formatter.number(LOOKUP_FORMATS_MAX),
+          })}
           onClick={addFormat}
           size="sm"
           type="button"
@@ -521,13 +535,9 @@ const LookupTokenChip = ({
   onInsert: (name: string) => void;
 }) => {
   const button = (
-    <button
-      className="bg-accent text-accent-foreground hover:bg-accent/80 cursor-pointer rounded-md px-1.5 py-0.5 text-xs font-medium"
-      onClick={() => onInsert(name)}
-      type="button"
-    >
+    <Button onClick={() => onInsert(name)} size="xs" variant="secondary">
       [{name}]
-    </button>
+    </Button>
   );
   if (example === undefined) {
     return button;
@@ -636,7 +646,7 @@ const FormatMarkerHint = ({
     return (
       <p className="text-muted-foreground text-xs">
         {t("templates.fieldLookupFormatDefaultMarker")}
-        <code className="bg-muted ms-1 rounded px-1 py-0.5">
+        <code className="bg-muted ms-1 rounded-sm px-1 py-0.5">
           {`{{${fieldPath}}}`}
         </code>
       </p>
@@ -648,7 +658,7 @@ const FormatMarkerHint = ({
   return (
     <p className="text-muted-foreground text-xs">
       {t("templates.fieldLookupFormatMarker")}
-      <code className="bg-muted ms-1 rounded px-1 py-0.5">
+      <code className="bg-muted ms-1 rounded-sm px-1 py-0.5">
         {`{{${fieldPath}.${trimmedKey}}}`}
       </code>
     </p>
@@ -808,7 +818,7 @@ type BindingCatalogData = Exclude<
 
 /** One pickable source in the binding catalog (the matter's client, a party, the
  *  matter, an attorney, or the firm), with its bindable fields and any extra
- *  selector (party `roles`, attorney `refs`). Derived from the Eden response so
+ *  selector (party `roles`, attorney `refs`). Derived from the API response so
  *  it tracks the backend catalog. */
 type CatalogSource = BindingCatalogData["sources"][number];
 
@@ -865,7 +875,9 @@ const BindingSourceConfigControl = ({
   onUpdate: (patch: Partial<EditableField>) => void;
 }) => {
   const t = useTranslations();
-  const { data } = useQuery(bindingCatalogOptions());
+  const dataQuery = useQuery(bindingCatalogOptions());
+  const dataView = queryView(dataQuery);
+  const data = dataView.type === "items" ? dataView.items : undefined;
   const sources = optionalArray(data?.sources);
   const firstSource = sources.at(0);
 
@@ -892,6 +904,7 @@ const BindingSourceConfigControl = ({
   if (firstSource === undefined) {
     return (
       <Field>
+        <QueryViewFeedback view={dataView} />
         <div className="flex items-center gap-2">
           <Checkbox checked={field.source !== undefined} disabled />
           <FieldLabel>{t("templates.studio.sourceEnable")}</FieldLabel>
@@ -905,6 +918,7 @@ const BindingSourceConfigControl = ({
 
   return (
     <>
+      <QueryViewFeedback view={dataView} />
       <Field>
         <div className="flex items-center gap-2">
           <Checkbox
@@ -1096,7 +1110,7 @@ export const FieldConfigEditor = ({
   defaultDateLocale?: string | undefined;
 }) => {
   const t = useTranslations();
-  const appLocale = useLocale();
+  const appLocale = useFormattingLocale();
   const isFormula = field.formula !== undefined;
   const typeChoice = fieldTypeChoice(field);
 
@@ -1108,7 +1122,7 @@ export const FieldConfigEditor = ({
       )}
     >
       {!embedded && (
-        <p className="bg-muted/60 text-muted-foreground rounded px-3 py-2 text-xs leading-relaxed">
+        <p className="bg-muted/60 text-muted-foreground rounded-sm px-3 py-2 text-xs leading-relaxed">
           <code>{field.path}</code>
         </p>
       )}
@@ -1117,7 +1131,7 @@ export const FieldConfigEditor = ({
         <div className="flex items-center justify-between gap-2">
           <FieldLabel>{t("templates.fieldLabel")}</FieldLabel>
           {isFormula || hideRequired ? null : (
-            <label className="text-muted-foreground flex cursor-pointer items-center gap-1.5 text-xs">
+            <Label variant="muted">
               <Checkbox
                 checked={field.required}
                 onCheckedChange={(checked) => onUpdate({ required: checked })}
@@ -1126,7 +1140,7 @@ export const FieldConfigEditor = ({
               <span aria-hidden className="text-destructive">
                 *
               </span>
-            </label>
+            </Label>
           )}
         </div>
         <FieldControl

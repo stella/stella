@@ -32,11 +32,26 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { analyse } from "scslre";
-import ts from "typescript";
 
 import { compareCodeUnit } from "@stll/collation";
 
-import { MCP_WRITE_ONLY_RESOURCE_SCOPES } from "../packages/api-contract/src/mcp";
+import { GRADED_HANDLER_CODE_REASON } from "../apps/api/src/lib/errors/graded-handler-codes";
+import {
+  type CallExpression,
+  type EcmaScriptModule,
+  type Expression,
+  isObjectLiteralProperty,
+  type JSXAttributeName,
+  type Node,
+  type ObjectExpression,
+  type ObjectProperty,
+  type Program,
+  type StaticImportEntry,
+  type StaticMemberExpression,
+  type TSAsExpression,
+  walk,
+} from "../packages/scripts/src/syntax-tree";
+import { treeBaseRevision } from "../packages/scripts/src/tree-base-revision";
 import { countDbAwaitInLoopDirectives } from "./db-await-in-loop";
 import {
   collectLintDirectives,
@@ -47,10 +62,21 @@ import {
   type TrackedRule,
 } from "./lint-suppressions";
 import {
+  isApiProductionModule,
+  isOutboundProductionModule,
+  LOCAL_MODULE_CAPABILITIES,
+  outboundTransportReferences,
+} from "./outbound-transport-ownership";
+import {
   ROOT_CONNECTION_DOORS,
   STATUS_TRANSITION_OWNERSHIP,
 } from "./ownership";
-import { memoizeRecent, parseSource, sourceDialect } from "./parse-memo";
+import {
+  memoizeRecent,
+  parseSyntax,
+  type SyntaxDialect,
+  syntaxDialect,
+} from "./parse-memo";
 import {
   isResultConventionExcludedFile,
   RESULT_CONVENTION_SOURCE_GLOBS,
@@ -67,14 +93,32 @@ import {
   isExcludedTestInclusiveSource,
 } from "./source-globs";
 import {
-  unmanagedTransitionTables,
   statusWriteCalls,
+  unmanagedTransitionTables,
 } from "./status-write-shapes";
+import { countTestDatabaseHandleCasts } from "./test-database-handle-casts";
+import { countUndeclaredApiClientWrites } from "./undeclared-api-client-writes";
+import {
+  countUnsignalledSkips,
+  isExcludedSkipSource,
+  UNSIGNALLED_SKIP_SOURCE_GLOBS,
+} from "./unsignalled-skip";
 
 const SCRIPTS_DIR = import.meta.dir;
 const REPO_ROOT = path.resolve(SCRIPTS_DIR, "..");
-const INTERNAL_MODULE_MOCK_LEDGER_REL =
-  "scripts/internal-module-mock-ledger.json";
+const INSTRUCTION_ENFORCEMENT_LEDGER_REL =
+  "scripts/instruction-enforcement-ledger.json";
+
+// The single owners of a transport: callers reach fetch, Bun SQL, SQS and
+// APNs HTTP/2 clients through them, so their own acquisition is the
+// capability, not a legacy site.
+const TRANSPORT_OWNER_MODULES: ReadonlySet<string> = new Set([
+  "apps/api/src/lib/safe-outbound-fetch.ts",
+  "apps/api/src/lib/observability/operator-endpoint-fetch.ts",
+  "apps/api/src/db/sql-client.ts",
+  "apps/api/src/lib/email/sns-queue-drain.ts",
+  "apps/api/src/lib/push/apns-client.ts",
+]);
 
 // Shared source globs + exclusions for the app-source metrics.
 const APP_SOURCE_GLOBS = [
@@ -139,15 +183,14 @@ const readSource = (tree: SourceTree, rel: string): string => {
 
 // Lines that are pure comments (JSDoc `*`, `//`, `/* ... */` openers).
 const COMMENT_LINE = /^\s*(?:\/\/|\*|\/\*)/u;
-const LINE_COMMENT_TAIL = /\/\/.*/u;
-// --- String/template literal stripping --------------------------------------
+// --- String/template literal and comment stripping --------------------------
 // A regex counter scanning raw line text cannot tell "as" the type-assertion
-// keyword from "as" the English word sitting inside a string, and a stray `//`
-// inside a string (e.g. a URL) must not be mistaken for a comment tail. Every
-// lexical counter below first blanks string/template literal contents so it
-// only ever scans code. This is still a single char-by-char pass per line,
-// carrying only the minimal state needed to survive a template literal that
-// spans multiple lines.
+// keyword from "as" the English word sitting inside a string, a stray `//`
+// inside a string (e.g. a URL) must not be mistaken for a comment tail, and a
+// quote inside a comment must not be mistaken for a string. Every lexical
+// counter below scans lines from one char-by-char pass that tracks literal and
+// comment state together, carrying only the minimal state needed to survive a
+// template literal or block comment that spans multiple lines.
 //
 // Trade-off: `${...}` interpolation inside a template literal is NOT parsed
 // specially — the whole template span up to the next unescaped backtick is
@@ -159,12 +202,6 @@ const LINE_COMMENT_TAIL = /\/\/.*/u;
 // "line-based". Accepted, documented fidelity limit — same spirit as the
 // other known limitations called out in the self-test fixtures below.
 const BLANKED_LITERAL = " ";
-
-const QUOTE_CHARACTER = /['"`]/u;
-
-type LiteralScanState = { readonly inTemplate: boolean };
-
-const NO_OPEN_TEMPLATE: LiteralScanState = { inTemplate: false };
 
 // Index of the next unescaped `quote` at or after `from`, or -1.
 const findUnescapedQuote = (
@@ -185,165 +222,278 @@ const findUnescapedQuote = (
   return -1;
 };
 
-// Blank string/template literal contents in `raw`, carrying open-template
-// state across lines. Returns the remaining code (literal contents replaced
-// by a single space, so word boundaries around the literal still hold) plus
-// the state to pass into the next line.
-const stripStringLiterals = (
+type LexState = {
+  readonly inTemplate: boolean;
+  readonly inBlockComment: boolean;
+};
+
+const LEX_START: LexState = { inTemplate: false, inBlockComment: false };
+
+// Characters that can open a literal or a comment.
+const LEXICAL_CHARACTER = /['"`/]/u;
+
+type LexedLine = {
+  /** Literal contents blanked; comments kept verbatim. */
+  readonly blanked: string;
+  /** Also without the trailing `//` comment. */
+  readonly stripped: string;
+  /** Also without block comments. */
+  readonly code: string;
+};
+
+// One pass over a line that tracks literal and comment state together, so a
+// quote inside a comment (`the model's`, a doc-comment code span) never opens
+// a literal that would blank the real code after it, and a `//` inside a
+// string never truncates the line. Literal contents become a single space, so
+// word boundaries around a literal still hold; an open template literal or
+// block comment carries into the next line.
+const lexLine = (
   raw: string,
-  state: LiteralScanState,
-): { code: string; state: LiteralScanState } => {
-  // Most lines in the tree hold no literal at all, and the scan below appends
-  // one character at a time. Returning those lines untouched is what keeps the
-  // whole-tree counters (duplicate-token-blocks above all) affordable.
-  if (!state.inTemplate && !QUOTE_CHARACTER.test(raw)) {
-    return { code: raw, state: NO_OPEN_TEMPLATE };
+  state: LexState,
+): { line: LexedLine; state: LexState } => {
+  // Most lines in the tree hold no literal or comment at all. Returning those
+  // untouched is what keeps the whole-tree counters (duplicate-token-blocks
+  // above all) affordable.
+  if (
+    !state.inTemplate &&
+    !state.inBlockComment &&
+    !LEXICAL_CHARACTER.test(raw)
+  ) {
+    return { line: { blanked: raw, stripped: raw, code: raw }, state };
   }
 
-  let out = "";
+  let blanked = "";
+  let stripped = "";
+  let code = "";
+  let { inTemplate, inBlockComment } = state;
   let i = 0;
-
-  if (state.inTemplate) {
-    const close = findUnescapedQuote(raw, 0, "`");
-    if (close === -1) {
-      return { code: out, state };
-    }
-    out += BLANKED_LITERAL;
-    i = close + 1;
-  }
-
-  let inTemplate = false;
   while (i < raw.length) {
-    const ch = raw[i];
+    if (inTemplate) {
+      const close = findUnescapedQuote(raw, i, "`");
+      if (close === -1) {
+        break;
+      }
+      blanked += BLANKED_LITERAL;
+      stripped += BLANKED_LITERAL;
+      code += BLANKED_LITERAL;
+      i = close + 1;
+      inTemplate = false;
+      continue;
+    }
+    if (inBlockComment) {
+      const close = raw.indexOf("*/", i);
+      const end = close === -1 ? raw.length : close + 2;
+      blanked += raw.slice(i, end);
+      stripped += raw.slice(i, end);
+      i = end;
+      inBlockComment = close === -1;
+      continue;
+    }
+    const ch = raw[i] ?? "";
     if (ch === "'" || ch === '"' || ch === "`") {
       const close = findUnescapedQuote(raw, i + 1, ch);
       if (close === -1) {
         // Unterminated: a template literal legitimately continues on the
         // next line; an unterminated '/" is invalid JS, blank defensively.
-        if (ch === "`") {
-          inTemplate = true;
-        }
+        inTemplate = ch === "`";
         break;
       }
-      out += BLANKED_LITERAL;
+      blanked += BLANKED_LITERAL;
+      stripped += BLANKED_LITERAL;
+      code += BLANKED_LITERAL;
       i = close + 1;
       continue;
     }
-    out += ch;
-    i += 1;
-  }
-
-  return { code: out, state: { inTemplate } };
-};
-
-const stripBlockComments = (
-  code: string,
-  inBlockComment: boolean,
-): { code: string; inBlockComment: boolean } => {
-  if (!inBlockComment && !code.includes("/*")) {
-    return { code, inBlockComment: false };
-  }
-
-  let output = "";
-  let cursor = 0;
-  let inside = inBlockComment;
-  while (cursor < code.length) {
-    if (inside) {
-      const close = code.indexOf("*/", cursor);
-      if (close === -1) {
-        return { code: output, inBlockComment: true };
-      }
-      cursor = close + 2;
-      inside = false;
-      continue;
-    }
-    const open = code.indexOf("/*", cursor);
-    if (open === -1) {
-      output += code.slice(cursor);
+    if (ch === "/" && raw[i + 1] === "/") {
+      blanked += raw.slice(i);
       break;
     }
-    output += code.slice(cursor, open);
-    cursor = open + 2;
-    inside = true;
+    if (ch === "/" && raw[i + 1] === "*") {
+      blanked += "/*";
+      stripped += "/*";
+      i += 2;
+      inBlockComment = true;
+      continue;
+    }
+    blanked += ch;
+    stripped += ch;
+    code += ch;
+    i += 1;
   }
-  return { code: output, inBlockComment: inside };
+  return {
+    line: { blanked, stripped, code },
+    state: { inTemplate, inBlockComment },
+  };
 };
 
-// The lexical counters below all scan the same stripped lines of a file, so
-// each stripping pass runs once per file rather than once per counter.
-const recentLiteralBlankedLines = memoizeRecent<readonly string[]>(2);
-const recentLiteralStrippedLines = memoizeRecent<readonly string[]>(2);
-const recentCodeLines = memoizeRecent<readonly string[]>(2);
+// The lexical counters below all scan the same lexed lines of a file, so the
+// lexer runs once per file rather than once per counter.
+type LexedFile = {
+  readonly blanked: readonly string[];
+  readonly stripped: readonly string[];
+  readonly code: readonly string[];
+};
+
+const recentLexedFiles = memoizeRecent<LexedFile>(2);
+
+const lexFile = (content: string): LexedFile =>
+  recentLexedFiles(content, () => {
+    const blanked: string[] = [];
+    const stripped: string[] = [];
+    const code: string[] = [];
+    let state = LEX_START;
+    for (const raw of content.split("\n")) {
+      const lexed = lexLine(raw, state);
+      state = lexed.state;
+      blanked.push(lexed.line.blanked);
+      stripped.push(lexed.line.stripped);
+      code.push(lexed.line.code);
+    }
+    return { blanked, stripped, code };
+  });
 
 // Every line with string and template literal contents blanked.
 const literalBlankedLines = (content: string): readonly string[] =>
-  recentLiteralBlankedLines(content, () => {
-    const lines: string[] = [];
-    let literalState = NO_OPEN_TEMPLATE;
-    for (const raw of content.split("\n")) {
-      const { code, state } = stripStringLiterals(raw, literalState);
-      literalState = state;
-      lines.push(code);
-    }
-    return lines;
-  });
+  lexFile(content).blanked;
 
-// The same lines with their trailing `//` comment dropped. Order matters:
-// doing this on the ORIGINAL line (as the counters used to) means a `//`
-// inside a string (e.g. `const s = "http://x" as string;`) truncates the line
-// before the string is ever recognized as a string, silently dropping real
-// code (including real casts) after it. Blanking literals first fixes that.
+// The same lines with their trailing `//` comment dropped.
 const literalStrippedLines = (content: string): readonly string[] =>
-  recentLiteralStrippedLines(content, () =>
-    literalBlankedLines(content).map((code) =>
-      code.replace(LINE_COMMENT_TAIL, ""),
-    ),
-  );
+  lexFile(content).stripped;
 
 // The same lines with block comments removed as well.
-const codeLines = (content: string): readonly string[] =>
-  recentCodeLines(content, () => {
-    const lines: string[] = [];
-    let inBlockComment = false;
-    for (const line of literalStrippedLines(content)) {
-      const stripped = stripBlockComments(line, inBlockComment);
-      inBlockComment = stripped.inBlockComment;
-      lines.push(stripped.code);
-    }
-    return lines;
-  });
+const codeLines = (content: string): readonly string[] => lexFile(content).code;
+
+// The nodes under `node`, not `node` itself.
+const walkChildren = (node: Node, visit: (node: Node) => unknown): void => {
+  walk(node, (child) => (child === node ? undefined : visit(child)));
+};
+
+const isConstAssertion = (node: TSAsExpression): boolean =>
+  node.typeAnnotation.type === "TSTypeReference" &&
+  node.typeAnnotation.typeName.type === "Identifier" &&
+  node.typeAnnotation.typeName.name === "const";
 
 const countAsCasts: FileCounter = (content, { file }) => {
-  const source = parseSource({ fileName: file, text: content });
+  const { program } = parseSyntax({ fileName: file, text: content });
   let total = 0;
 
-  const visit = (node: ts.Node): void => {
-    if (!ts.isAsExpression(node)) {
-      ts.forEachChild(node, visit);
-      return;
+  const visit = (node: Node): "skip-children" | undefined => {
+    if (node.type !== "TSAsExpression") {
+      return undefined;
     }
-    const isConstAssertion =
-      ts.isTypeReferenceNode(node.type) &&
-      ts.isIdentifier(node.type.typeName) &&
-      node.type.typeName.text === "const";
-    if (isConstAssertion) {
-      ts.forEachChild(node.expression, visit);
-      return;
+    if (isConstAssertion(node)) {
+      walkChildren(node.expression, visit);
+      return "skip-children";
     }
     total += 1;
-    if (
-      ts.isAsExpression(node.expression) &&
-      node.expression.type.kind === ts.SyntaxKind.UnknownKeyword
-    ) {
-      ts.forEachChild(node.expression.expression, visit);
-      return;
-    }
-    ts.forEachChild(node.expression, visit);
+    const operand = node.expression;
+    walkChildren(
+      operand.type === "TSAsExpression" &&
+        operand.typeAnnotation.type === "TSUnknownKeyword"
+        ? operand.expression
+        : operand,
+      visit,
+    );
+    return "skip-children";
   };
 
-  visit(source);
+  walk(program, visit);
   return total;
 };
+
+const isNumberLiteral = (node: Node): boolean =>
+  node.type === "Literal" &&
+  (typeof node.value === "number" || typeof node.value === "bigint");
+
+// A string, number, bigint, boolean or null literal, or a signed number.
+const isObviousNumericCoercionLiteral = (node: Node): boolean => {
+  let expression = node;
+  while (expression.type === "ParenthesizedExpression") {
+    expression = expression.expression;
+  }
+  if (expression.type === "Literal") {
+    return !("regex" in expression);
+  }
+  if (expression.type === "TemplateLiteral") {
+    return expression.expressions.length === 0;
+  }
+  return (
+    expression.type === "UnaryExpression" &&
+    (expression.operator === "+" || expression.operator === "-") &&
+    isNumberLiteral(expression.argument)
+  );
+};
+
+const NUMBER_PARSERS: ReadonlySet<string> = new Set(["parseInt", "parseFloat"]);
+
+// `object.name`: a member read by a plain name, not `object[key]` or
+// `object.#name`.
+const isPropertyAccess = (node: Node): node is StaticMemberExpression =>
+  node.type === "MemberExpression" &&
+  !node.computed &&
+  node.property.type === "Identifier";
+
+const isIdentifierNamed = (node: Node, name: string): boolean =>
+  node.type === "Identifier" && node.name === name;
+
+// `key: value` in an object literal: not a shorthand, method or accessor.
+const isPropertyAssignment = (
+  node: Node,
+  parent: Node | undefined,
+): node is ObjectProperty =>
+  isObjectLiteralProperty(node, parent) &&
+  node.kind === "init" &&
+  !node.method &&
+  !node.shorthand;
+
+// A string literal's value; a template literal is not one.
+const stringLiteralValue = (node: Node): string | null =>
+  node.type === "Literal" && typeof node.value === "string" ? node.value : null;
+
+// A key written as a name or a string: `name` or `"name"`.
+const keyText = (key: Node): string | null =>
+  key.type === "Identifier" ? key.name : stringLiteralValue(key);
+
+const propertyNameText = (property: ObjectProperty): string | null =>
+  property.computed ? null : keyText(property.key);
+
+const countRawNumericCoercions: FileCounter = (content, { file }) => {
+  const { program } = parseSyntax({ fileName: file, text: content });
+  let total = 0;
+  walk(program, (node) => {
+    if (node.type !== "CallExpression") {
+      return;
+    }
+    const callee = node.callee;
+    const isGlobalCoercion =
+      callee.type === "Identifier" &&
+      (callee.name === "Number" || NUMBER_PARSERS.has(callee.name));
+    const isNumberParser =
+      isPropertyAccess(callee) &&
+      isIdentifierNamed(callee.object, "Number") &&
+      NUMBER_PARSERS.has(callee.property.name);
+    const argument = node.arguments.at(0);
+    if (
+      (isGlobalCoercion || isNumberParser) &&
+      argument !== undefined &&
+      !isObviousNumericCoercionLiteral(argument)
+    ) {
+      total += 1;
+    }
+  });
+  return total;
+};
+
+const RAW_NUMERIC_COERCION_SOURCE_GLOBS = [
+  "apps/*/src/**/*.{ts,tsx}",
+  "packages/*/src/**/*.{ts,tsx}",
+] as const;
+
+const isExcludedRawNumericCoercionSource = (file: string): boolean =>
+  isExcludedSource(file) ||
+  file.includes("/scripts/") ||
+  file.includes("/evals/") ||
+  file === "packages/agent-input/src/numeric-token.ts";
 
 // `transition` is also an ordinary word and a discriminator value
 // (`kind: "transition"`), so it counts only in a class-list position.
@@ -367,102 +517,136 @@ const CLASS_LIST_NAME = /class(?:_?names?|es)?$/iu;
 
 type StringPosition = "class-list" | "other";
 
-const isClassListBinding = (name: ts.Node): boolean =>
-  (ts.isIdentifier(name) || ts.isStringLiteral(name)) &&
-  CLASS_LIST_NAME.test(name.text);
+// A binding or key named like a class list. Computed keys never are.
+const isClassListBinding = (name: Node): boolean => {
+  const text = keyText(name);
+  return text !== null && CLASS_LIST_NAME.test(text);
+};
 
 const isClassListHelperCall = (
-  node: ts.Node,
+  node: Node | undefined,
   helper?: string,
-): node is ts.CallExpression =>
-  ts.isCallExpression(node) &&
-  ts.isIdentifier(node.expression) &&
+): node is CallExpression =>
+  node?.type === "CallExpression" &&
+  node.callee.type === "Identifier" &&
   (helper === undefined
-    ? CLASS_LIST_HELPERS.has(node.expression.text)
-    : node.expression.text === helper);
-
-// Operators whose right operand is the expression's value
-// (`open && "transition"`); a comparison's operands are not.
-const VALUE_OPERATORS: ReadonlySet<ts.SyntaxKind> = new Set([
-  ts.SyntaxKind.AmpersandAmpersandToken,
-  ts.SyntaxKind.BarBarToken,
-  ts.SyntaxKind.QuestionQuestionToken,
-]);
+    ? CLASS_LIST_HELPERS.has(node.callee.name)
+    : node.callee.name === helper);
 
 const CVA_VARIANTS_KEY = "variants";
 
-// `cva(base, { variants: { size: { sm: "…" } } })`: the option's value.
-const isCvaVariantValue = (option: ts.PropertyAssignment): boolean => {
-  const options = option.parent;
-  const variant = options.parent;
-  if (!ts.isPropertyAssignment(variant)) {
+// `cva(base, { variants: { size: { sm: "…" } } })`: whether the option at
+// `lineage[at]` holds a variant value.
+const isCvaVariantValue = (lineage: readonly Node[], at: number): boolean => {
+  if (at < 6) {
     return false;
   }
-  const variants = variant.parent.parent;
+  const [config, variants, sizes, variant, options] = lineage.slice(at - 5, at);
   if (
-    !ts.isPropertyAssignment(variants) ||
-    !ts.isIdentifier(variants.name) ||
-    variants.name.text !== CVA_VARIANTS_KEY
+    config === undefined ||
+    variants === undefined ||
+    sizes === undefined ||
+    variant === undefined ||
+    options === undefined ||
+    !isPropertyAssignment(variant, sizes) ||
+    variant.value !== options ||
+    !isPropertyAssignment(variants, config) ||
+    variants.value !== sizes ||
+    variants.computed ||
+    !isIdentifierNamed(variants.key, CVA_VARIANTS_KEY)
   ) {
     return false;
   }
-  const config = variants.parent;
+  const call = lineage[at - 6];
   return (
-    isClassListHelperCall(config.parent, "cva") &&
-    config.parent.arguments.some((argument) => argument === config)
+    isClassListHelperCall(call, "cva") &&
+    call.arguments.some((argument) => argument === config)
   );
 };
 
-// Whether `node` is a class-list value: a class-helper argument, a class
-// attribute or binding value, or a branch that flows into one unchanged
-// (`&&`/`||`/`??` right operand, ternary branch, array element, clsx object
-// key, cva variant value). A comparison operand, a switch case or an argument
-// to any other call is not.
-const classValuePosition = (node: ts.Node): StringPosition => {
-  const parent = node.parent;
-  if (ts.isSourceFile(parent)) {
+const jsxAttributeName = (name: JSXAttributeName): string =>
+  name.type === "JSXNamespacedName"
+    ? `${name.namespace.name}:${name.name.name}`
+    : name.name;
+
+// Parents that pass a value through unchanged.
+const CLASS_VALUE_WRAPPERS: ReadonlySet<string> = new Set([
+  "ArrayExpression",
+  "JSXExpressionContainer",
+  "JSXSpreadChild",
+  "ParenthesizedExpression",
+  "TSAsExpression",
+  "TSSatisfiesExpression",
+  "TemplateLiteral",
+]);
+
+// Whether the node at `lineage[at]` (its ancestors before it) is a class-list
+// value: a class-helper argument, a class attribute or binding value, or a
+// branch that flows into one unchanged (`&&`/`||`/`??` right operand, ternary
+// branch, array element, clsx object key, cva variant value). A comparison
+// operand, a switch case or an argument to any other call is not.
+const classValuePosition = (
+  lineage: readonly Node[],
+  at = lineage.length - 1,
+): StringPosition => {
+  const node = lineage[at];
+  const parent = lineage[at - 1];
+  if (node === undefined || parent === undefined) {
     return "other";
   }
-  if (ts.isCallExpression(parent)) {
+  const parentPosition = () => classValuePosition(lineage, at - 1);
+  if (parent.type === "CallExpression") {
     return isClassListHelperCall(parent) &&
       parent.arguments.some((argument) => argument === node)
       ? "class-list"
       : "other";
   }
-  if (ts.isJsxAttribute(parent)) {
-    return CLASS_LIST_NAME.test(parent.name.getText()) ? "class-list" : "other";
-  }
-  if (
-    ts.isJsxExpression(parent) ||
-    ts.isParenthesizedExpression(parent) ||
-    ts.isAsExpression(parent) ||
-    ts.isSatisfiesExpression(parent) ||
-    ts.isArrayLiteralExpression(parent) ||
-    ts.isSpreadElement(parent) ||
-    ts.isTemplateSpan(parent) ||
-    ts.isTemplateExpression(parent)
-  ) {
-    return classValuePosition(parent);
-  }
-  if (ts.isBinaryExpression(parent)) {
-    return parent.right === node &&
-      VALUE_OPERATORS.has(parent.operatorToken.kind)
-      ? classValuePosition(parent)
-      : "other";
-  }
-  if (ts.isConditionalExpression(parent)) {
-    return parent.condition === node ? "other" : classValuePosition(parent);
-  }
-  if (ts.isPropertyAssignment(parent)) {
-    if (parent.name === node) {
-      return classValuePosition(parent.parent);
-    }
-    return isClassListBinding(parent.name) || isCvaVariantValue(parent)
+  if (parent.type === "JSXAttribute") {
+    return CLASS_LIST_NAME.test(jsxAttributeName(parent.name))
       ? "class-list"
       : "other";
   }
-  if (ts.isVariableDeclaration(parent) || ts.isPropertyDeclaration(parent)) {
-    return parent.initializer === node && isClassListBinding(parent.name)
+  if (CLASS_VALUE_WRAPPERS.has(parent.type)) {
+    return parentPosition();
+  }
+  if (parent.type === "SpreadElement") {
+    // An object spread copies keys; it is not a class-list branch.
+    return lineage[at - 2]?.type === "ObjectExpression"
+      ? "other"
+      : parentPosition();
+  }
+  if (parent.type === "LogicalExpression") {
+    return parent.right === node ? parentPosition() : "other";
+  }
+  if (parent.type === "ConditionalExpression") {
+    return parent.test === node ? "other" : parentPosition();
+  }
+  if (isPropertyAssignment(parent, lineage[at - 2])) {
+    if (parent.key === node) {
+      return parent.computed ? "other" : classValuePosition(lineage, at - 2);
+    }
+    return (!parent.computed && isClassListBinding(parent.key)) ||
+      isCvaVariantValue(lineage, at - 1)
+      ? "class-list"
+      : "other";
+  }
+  return bindingValuePosition(node, parent);
+};
+
+// A value bound to a class-list name: `const className = …` or a class field.
+const bindingValuePosition = (node: Node, parent: Node): StringPosition => {
+  if (parent.type === "VariableDeclarator") {
+    return parent.init === node && isClassListBinding(parent.id)
+      ? "class-list"
+      : "other";
+  }
+  if (
+    parent.type === "PropertyDefinition" ||
+    parent.type === "AccessorProperty"
+  ) {
+    return parent.value === node &&
+      !parent.computed &&
+      isClassListBinding(parent.key)
       ? "class-list"
       : "other";
   }
@@ -574,39 +758,42 @@ const countLegacyPaintCssTransitions = (content: string): number => {
   return count;
 };
 
+// The text of a string literal or of one literal piece of a template.
+const stringText = (node: Node): string | undefined => {
+  if (node.type === "TemplateElement") {
+    return node.value.cooked ?? node.value.raw;
+  }
+  return stringLiteralValue(node) ?? undefined;
+};
+
 const countLegacyPaintScriptTransitions = (
   content: string,
   file: string,
 ): number => {
-  const source = parseSource({ fileName: file, text: content });
+  const { program } = parseSyntax({ fileName: file, text: content });
   let total = 0;
-  const visit = (node: ts.Node): void => {
-    if (
-      ts.isStringLiteral(node) ||
-      ts.isNoSubstitutionTemplateLiteral(node) ||
-      ts.isTemplateHead(node) ||
-      ts.isTemplateMiddle(node) ||
-      ts.isTemplateTail(node)
-    ) {
+  walk(program, (node, ancestors) => {
+    const text = stringText(node);
+    if (text !== undefined) {
       // Walking ancestors is only needed when the bare utility can occur.
-      const position = node.text.includes(BARE_TRANSITION_UTILITY)
-        ? classValuePosition(node)
+      const position = text.includes(BARE_TRANSITION_UTILITY)
+        ? classValuePosition([...ancestors, node])
         : "other";
-      total += countLegacyPaintTransitionTokens(node.text, position);
+      total += countLegacyPaintTransitionTokens(text, position);
     }
     // clsx object syntax: `{ transition: open }` names the class by its key.
+    const parent = ancestors.at(-1);
     if (
-      ts.isIdentifier(node) &&
-      node.text === BARE_TRANSITION_UTILITY &&
-      ts.isPropertyAssignment(node.parent) &&
-      node.parent.name === node &&
-      classValuePosition(node) === "class-list"
+      isIdentifierNamed(node, BARE_TRANSITION_UTILITY) &&
+      parent !== undefined &&
+      isPropertyAssignment(parent, ancestors.at(-2)) &&
+      parent.key === node &&
+      !parent.computed &&
+      classValuePosition([...ancestors, node]) === "class-list"
     ) {
       total += 1;
     }
-    ts.forEachChild(node, visit);
-  };
-  visit(source);
+  });
   return total;
 };
 
@@ -615,9 +802,10 @@ const countLegacyPaintScriptTransitions = (
 // Tailwind class lists (`class`, `class:list`, `contentClass`, ...).
 const ASTRO_FRONTMATTER = /^---\r?\n([\s\S]*?)\r?\n---/u;
 // A <script> or <style> element; an end tag may carry whitespace or
-// attributes, as browsers accept.
+// attributes, as browsers accept. A self-closing `<script … />` holds no
+// text, so it opens nothing.
 const ASTRO_RAW_TEXT_ELEMENT =
-  /<(script|style)\b[^>]*>([\s\S]*?)<\/\1\b[^>]*>/giu;
+  /<(script|style)\b[^>]*(?<!\/)>([\s\S]*?)<\/\1\b[^>]*>/giu;
 const ASTRO_STYLE_ELEMENT = "style";
 const ASTRO_CLASS_LIST_DIRECTIVE = "class:list";
 const ASTRO_STYLE_ATTRIBUTE = "style";
@@ -932,54 +1120,46 @@ const countLegacyRealtimeInvalidationProducers: FileCounter = (
 // metrics inspect import sources and SQL literals. Only parser-recognized
 // comment trivia is blanked, with line breaks retained so tokens cannot join.
 const stripCommentTrivia = ({ content, file }: SourceText): string => {
-  const sourceFile = parseSource({ fileName: file, text: content });
-  const ranges = new Map<number, ts.CommentRange>();
-  const collect = (comments: readonly ts.CommentRange[] | undefined): void => {
-    for (const comment of comments ?? []) {
-      ranges.set(comment.pos, comment);
-    }
-  };
-  const visit = (node: ts.Node): void => {
-    collect(ts.getLeadingCommentRanges(content, node.getFullStart()));
-    collect(ts.getTrailingCommentRanges(content, node.getEnd()));
-    for (const child of node.getChildren(sourceFile)) {
-      visit(child);
-    }
-  };
-  visit(sourceFile);
-
+  const { comments } = parseSyntax({ fileName: file, text: content });
   let output = "";
   let previousEnd = 0;
-  for (const range of [...ranges.values()].toSorted(
-    (left, right) => left.pos - right.pos,
-  )) {
-    if (range.pos < previousEnd) {
-      continue;
-    }
-    output += content.slice(previousEnd, range.pos);
-    output += content.slice(range.pos, range.end).replace(/[^\r\n]/gu, " ");
-    previousEnd = range.end;
+  for (const comment of comments) {
+    output += content.slice(previousEnd, comment.start);
+    output += content
+      .slice(comment.start, comment.end)
+      .replace(/[^\r\n]/gu, " ");
+    previousEnd = comment.end;
   }
   return output + content.slice(previousEnd);
 };
 
 // Most counters over one file strip its comments; they share the result.
 const recentStrippedComments = {
-  [ts.ScriptKind.TS]: memoizeRecent<string>(2),
-  [ts.ScriptKind.TSX]: memoizeRecent<string>(2),
+  js: memoizeRecent<string>(2),
+  jsx: memoizeRecent<string>(2),
+  ts: memoizeRecent<string>(2),
+  tsx: memoizeRecent<string>(2),
 } as const satisfies Record<
-  ReturnType<typeof sourceDialect>,
+  SyntaxDialect,
   (text: string, compute: () => string) => string
 >;
 
 const stripComments = ({ content, file }: SourceText): string =>
-  recentStrippedComments[sourceDialect(file)](content, () =>
+  recentStrippedComments[syntaxDialect(file)](content, () =>
     stripCommentTrivia({ content, file }),
   );
 
 // An identifier spells its name, or writes it with a `\u` escape.
 const mayNameIdentifier = (content: string, name: string): boolean =>
   content.includes(name) || content.includes("\\u");
+
+// The export a `{ name }` or `{ name as local }` import entry reads; null for
+// default and namespace imports.
+const namedImport = ({ importName }: StaticImportEntry): string | null => {
+  // oxc-parser declares the import kinds as an ambient const enum of strings.
+  const kind: string = importName.kind;
+  return kind === "Name" ? importName.name : null;
+};
 
 // Without a spelling of `importedName`, no import can bind it under another
 // name, so only the name itself is a binding.
@@ -998,22 +1178,14 @@ const importedLocalBindings = ({
   if (!mayNameIdentifier(content, importedName)) {
     return bindings;
   }
-  const sourceFile = parseSource({ fileName: file, text: content });
-  for (const statement of sourceFile.statements) {
-    if (
-      !ts.isImportDeclaration(statement) ||
-      !ts.isStringLiteral(statement.moduleSpecifier) ||
-      statement.moduleSpecifier.text !== moduleName
-    ) {
+  const { module } = parseSyntax({ fileName: file, text: content });
+  for (const declaration of module.staticImports) {
+    if (declaration.moduleRequest.value !== moduleName) {
       continue;
     }
-    const bindingsNode = statement.importClause?.namedBindings;
-    if (!bindingsNode || !ts.isNamedImports(bindingsNode)) {
-      continue;
-    }
-    for (const specifier of bindingsNode.elements) {
-      if ((specifier.propertyName ?? specifier.name).text === importedName) {
-        bindings.add(specifier.name.text);
+    for (const entry of declaration.entries) {
+      if (namedImport(entry) === importedName) {
+        bindings.add(entry.localName.value);
       }
     }
   }
@@ -1034,6 +1206,17 @@ const countRawUserAvatarPrimitive: FileCounter = (content, { file }) =>
     file,
     pattern: /["']@stll\/ui\/(?:components\/)?avatar["']/gu,
     required: /@stll\/ui\/(?:components\/)?avatar/u,
+  });
+
+// A tolerated browser error hides a console error a spec may or may not
+// emit. Each call carries its reason and what removes it; this keeps the
+// number of them from growing unseen.
+const countToleratedBrowserErrors: FileCounter = (content, { file }) =>
+  countCodeMatches({
+    content,
+    file,
+    pattern: /\bbrowserErrors\s*\.\s*tolerate\s*\(/gu,
+    required: /tolerate/u,
   });
 
 const countShadowedUserNameHelpers: FileCounter = (content, { file }) =>
@@ -1063,7 +1246,7 @@ const countAdHocRelativeTimeFormatting: FileCounter = (content, { file }) => {
       total +
       countMatches(
         code,
-        new RegExp("title=\\{" + escapeRegExp(binding) + "\\s*\\(", "gu"),
+        new RegExp(`title=\\{${escapeRegExp(binding)}\\s*\\(`, "gu"),
       ),
     0,
   );
@@ -1076,30 +1259,15 @@ const countAdHocRelativeTimeFormatting: FileCounter = (content, { file }) => {
   );
 };
 
-const countDirectAuditLogInserts: FileCounter = (content, { file }) => {
-  if (!content.includes(".insert")) {
-    return 0;
-  }
-  const code = stripComments({ content, file });
-  const auditLogBindings = importedLocalBindings({
-    content: code,
-    file,
-    moduleName: "@/api/db/schema",
-    importedName: "auditLogs",
-  });
-  return [...auditLogBindings].reduce(
-    (total, binding) =>
-      total +
-      countMatches(
-        code,
-        new RegExp(
-          "\\.insert\\s*\\(\\s*" + escapeRegExp(binding) + "\\s*\\)",
-          "gu",
-        ),
-      ),
-    0,
-  );
-};
+// Database tests of document review and workflows, the code that runs queued
+// work through the handles a run's actor holds.
+const TEST_DATABASE_HANDLE_CAST_GLOBS = [
+  "apps/api/src/handlers/document-reviews/**/*.test.ts",
+  "apps/api/src/handlers/workspaces/workflow/**/*.test.ts",
+  "apps/api/src/lib/document-review/**/*.test.ts",
+  "apps/api/src/lib/workflow/**/*.test.ts",
+  "apps/api/src/lib/workflow-*.test.ts",
+] as const;
 
 // Every hand-written API module, not only `src`: a script or eval that reaches
 // an owner-level handle is as much a use of it as a lib module.
@@ -1130,6 +1298,32 @@ const ROOT_CONNECTION_DOOR_FILES: ReadonlySet<string> = new Set(
 // occurrences that stripping comments removes.
 const AUDIT_SKIP_DIRECTIVE = /\baudit:\s*skip\b/giu;
 
+export const countPublicCorpusMembership: FileCounter = (content, { file }) => {
+  const { program } = parseSyntax({ fileName: file, text: content });
+  for (const topLevel of program.body) {
+    const statement =
+      topLevel.type === "ExportNamedDeclaration"
+        ? topLevel.declaration
+        : topLevel;
+    if (statement?.type !== "VariableDeclaration") {
+      continue;
+    }
+    for (const declaration of statement.declarations) {
+      if (
+        !isIdentifierNamed(declaration.id, "PUBLIC_CORPUS_BOOKKEEPING_TABLES")
+      ) {
+        continue;
+      }
+      const initializer = declaration.init;
+      if (initializer?.type !== "ArrayExpression") {
+        panic("Corpus membership must be an explicit array literal");
+      }
+      return initializer.elements.length;
+    }
+  }
+  return 0;
+};
+
 const countAuditSkipDirectives: FileCounter = (content, { file }) =>
   countMatches(content, AUDIT_SKIP_DIRECTIVE) -
   countCodeMatches({
@@ -1157,80 +1351,58 @@ const countInlineClipboardWrites = (content: string): number =>
   countMatches(content, CLIPBOARD_WRITE_CALL);
 
 /**
- * Direct `isRedistributable(x)` calls, counted from the syntax tree.
+ * Calls whose callee is the bare identifier `name`, counted from the syntax
+ * tree.
  *
  * A text scan cannot tell a call from a mention: it counts the word inside a
- * comment explaining the gate, inside a string, and `source.isRedistributable(...)`
- * on some unrelated object. This counts a call whose callee is the bare
- * identifier — the shape the gate replaced — and nothing else.
+ * comment or a string, and `object.name(...)` on some unrelated object.
  */
-const countDirectRedistributableCalls: FileCounter = (content, { file }) => {
-  const sourceFile = parseSource({ fileName: file, text: content });
+const countCallsTo =
+  (name: string): FileCounter =>
+  (content, { file }) => {
+    const { program } = parseSyntax({ fileName: file, text: content });
+    let total = 0;
+    walk(program, (node) => {
+      if (
+        node.type === "CallExpression" &&
+        isIdentifierNamed(node.callee, name)
+      ) {
+        total += 1;
+      }
+    });
+    return total;
+  };
 
+// Direct `isRedistributable(x)` calls: the shape the gate replaced.
+const countDirectRedistributableCalls = countCallsTo("isRedistributable");
+
+// A known scope gap is one `gap(...)` decision in the diff-scoped step census.
+const countDiffScopeGaps = countCallsTo("gap");
+
+// A satisfies tie only checks fresh literal keys. Forwarded domain objects
+// need projectionPayload's recursive exactness gate before return annotations.
+const countWeakMcpProjectionTies: FileCounter = (content, { file }) => {
+  const { program } = parseSyntax({ fileName: file, text: content });
   let total = 0;
-  const visit = (node: ts.Node) => {
+  walk(program, (node) => {
+    if (node.type !== "TSSatisfiesExpression") {
+      return;
+    }
+    const type = node.typeAnnotation;
     if (
-      ts.isCallExpression(node) &&
-      ts.isIdentifier(node.expression) &&
-      node.expression.text === "isRedistributable"
+      type.type === "TSTypeReference" &&
+      type.typeName.type === "TSQualifiedName" &&
+      type.typeName.right.name === "InferInput" &&
+      type.typeArguments?.params.some(
+        (argument) =>
+          argument.type === "TSTypeQuery" &&
+          argument.exprName.type === "Identifier" &&
+          argument.exprName.name.endsWith("_PROJECTION"),
+      ) === true
     ) {
       total += 1;
     }
-    node.forEachChild(visit);
-  };
-  visit(sourceFile);
-  return total;
-};
-
-const BOUNDARY_HELPER = "pgTimestampCursorBoundary";
-
-const countRepeatedTimestampCursorBoundaries: FileCounter = (
-  content,
-  { file },
-) => {
-  if (!mayNameIdentifier(content, BOUNDARY_HELPER)) {
-    return 0;
-  }
-  const code = stripComments({ content, file });
-  const sourceFile = parseSource({ fileName: file, text: code });
-  const boundaryBindings = importedLocalBindings({
-    content: code,
-    file,
-    moduleName: "@/api/lib/db-pagination",
-    importedName: BOUNDARY_HELPER,
   });
-  const orBindings = importedLocalBindings({
-    content: code,
-    file,
-    moduleName: "drizzle-orm",
-    importedName: "or",
-  });
-
-  const countBoundaries = (node: ts.Node): number => {
-    let count =
-      ts.isCallExpression(node) &&
-      ts.isIdentifier(node.expression) &&
-      boundaryBindings.has(node.expression.text)
-        ? 1
-        : 0;
-    node.forEachChild((child) => {
-      count += countBoundaries(child);
-    });
-    return count;
-  };
-
-  let total = 0;
-  const visit = (node: ts.Node) => {
-    if (
-      ts.isCallExpression(node) &&
-      ts.isIdentifier(node.expression) &&
-      orBindings.has(node.expression.text)
-    ) {
-      total += Math.max(0, countBoundaries(node) - 1);
-    }
-    node.forEachChild(visit);
-  };
-  visit(sourceFile);
   return total;
 };
 
@@ -1258,36 +1430,29 @@ const countSuperLinearRegexes: FileCounter = (content, { file }) => {
   // and the parser's recovery can swallow the rest of the file — which
   // would silently hide regexes from a guard whose whole value is that
   // it cannot be evaded.
-  const source = parseSource({ fileName: file, text: content });
+  const { program } = parseSyntax({ fileName: file, text: content });
 
   let total = 0;
-  const visit = (node: ts.Node): void => {
-    if (node.kind === ts.SyntaxKind.RegularExpressionLiteral) {
-      const literal = node.getText(source);
-      const lastSlash = literal.lastIndexOf("/");
-      let expression: RegExp;
-      try {
-        expression = new RegExp(
-          literal.slice(1, lastSlash),
-          literal.slice(lastSlash + 1),
-        );
-      } catch {
-        // A pattern this runtime cannot compile cannot run either.
-        return;
-      }
-      try {
-        if (analyse(expression).reports.length > 0) {
-          total += 1;
-        }
-      } catch {
-        // The analyser bails on constructs it does not model; an
-        // unanalysable pattern is not evidence of a finding.
-      }
+  walk(program, (node) => {
+    if (node.type !== "Literal" || !("regex" in node)) {
       return;
     }
-    ts.forEachChild(node, visit);
-  };
-  visit(source);
+    let expression: RegExp;
+    try {
+      expression = new RegExp(node.regex.pattern, node.regex.flags);
+    } catch {
+      // A pattern this runtime cannot compile cannot run either.
+      return;
+    }
+    try {
+      if (analyse(expression).reports.length > 0) {
+        total += 1;
+      }
+    } catch {
+      // The analyser bails on constructs it does not model; an
+      // unanalysable pattern is not evidence of a finding.
+    }
+  });
   return total;
 };
 
@@ -1416,7 +1581,7 @@ const countUnhandledDetachedPromises = (content: string): number => {
 // counters extract module specifiers per line and resolve them against the
 // importing file's path. Deliberately NOT literal-stripped: import specifiers
 // ARE string literals. Fidelity limits: the specifier must sit on the same
-// line as its `from`/`import(`/`import` keyword (oxfmt formats imports that
+// line as its `from`/`import(`/`import` keyword (bun fmt formats imports that
 // way), and an import-shaped string inside a template literal would count
 // (stable noise; none today).
 const MODULE_SPECIFIER =
@@ -1603,6 +1768,31 @@ const webImporterSlice = (file: string): string => {
   return SHARED_IMPORTER;
 };
 
+// A dynamic import's argument when it is a literal path.
+const LITERAL_MODULE_REQUEST = /^(?:"([^"\\]*)"|'([^'\\]*)'|`([^`\\$]*)`)$/u;
+
+// The modules `content` imports, re-exports from, or loads by a literal
+// dynamic import, one entry per site.
+const importedSpecifiers = ({ content, file }: SourceText): string[] => {
+  const { module } = parseSyntax({ fileName: file, text: content });
+  const dynamic = module.dynamicImports.flatMap(({ moduleRequest }) => {
+    const literal = LITERAL_MODULE_REQUEST.exec(
+      content.slice(moduleRequest.start, moduleRequest.end),
+    );
+    const spec = literal?.at(1) ?? literal?.at(2) ?? literal?.at(3);
+    return spec === undefined ? [] : [spec];
+  });
+  return [
+    ...module.staticImports.map(({ moduleRequest }) => moduleRequest.value),
+    ...module.staticExports.flatMap(({ entries }) =>
+      entries.flatMap(({ moduleRequest }) =>
+        moduleRequest === null ? [] : [moduleRequest.value],
+      ),
+    ),
+    ...dynamic,
+  ];
+};
+
 const countSliceOwnedWebComponents: RepoCounter = (context) => {
   const sources = scanRepoFiles(context, [WEB_SOURCE_GLOB]);
   const known = new Set(sources);
@@ -1610,10 +1800,9 @@ const countSliceOwnedWebComponents: RepoCounter = (context) => {
   for (const file of sources) {
     const slice = webImporterSlice(file);
     const content = readSource(context, file);
-    // The compiler's import pre-scan, not the per-line MODULE_SPECIFIER scan:
-    // a lazily loaded component is formatted as a multi-line `import(...)`.
-    const { importedFiles } = ts.preProcessFile(content, true, true);
-    for (const { fileName: spec } of importedFiles) {
+    // The parser's module record, not the per-line MODULE_SPECIFIER scan: a
+    // lazily loaded component is formatted as a multi-line `import(...)`.
+    for (const spec of importedSpecifiers({ content, file })) {
       const resolved = resolveSpecifier(file, spec);
       if (resolved === null || !resolved.startsWith(WEB_COMPONENTS_PREFIX)) {
         continue;
@@ -1630,116 +1819,24 @@ const countSliceOwnedWebComponents: RepoCounter = (context) => {
     }
   }
 
-  const files: Record<string, number> = {};
+  const files = new Map<string, number>();
   let count = 0;
   for (const [component, slices] of importerSlices) {
     if (slices.size === 1 && !slices.has(SHARED_IMPORTER)) {
-      files[component] = 1;
+      files.set(component, 1);
       count += 1;
     }
   }
-  return { count, files };
+  return { count, files: Object.fromEntries(files) };
 };
 
 // --- Metric table -----------------------------------------------------------
 
-// A capability whose input schema exceeded the exporter's byte cap
-// (`MAX_CAPABILITY_SCHEMA_BYTES` in apps/api/scripts/lib/capability-catalog.ts).
-// A capability whose schema was dropped for size degraded to an opaque
-// `--input` JSON blob: no typed CLI flags, no discoverable shape, and nothing
-// failed to say so. The exporter no longer has that escape hatch — it hoists
-// repeated subschemas into `$defs` and errors on anything still over the byte
-// cap — so this counter now guards the absence of the pathway rather than
-// burning it down. Counting the committed artifact (rather than re-running the
-// exporter) keeps the scan cheap and deterministic.
-const countTruncatedCapabilitySchemas = (content: string): number => {
-  const entry: unknown = JSON.parse(content);
-  return Number(
-    typeof entry === "object" &&
-      entry !== null &&
-      "inputSchemaTruncated" in entry &&
-      entry.inputSchemaTruncated === true,
-  );
-};
-
-// Capabilities carrying no authored `description` are tracked by exact id in
-// apps/api/capability-description-ledger.json, not by an aggregate count here:
-// see apps/api/scripts/capability-description-guard.ts. Any set of the same
-// size satisfies a count, so it could not name the gap an author had just
-// closed, nor force that entry to be deleted in the same change as the prose.
-
-// A capability suppressed from the generic transport by its `transport`
-// disposition: it returns bytes (`file-response`/`file-both`), or it REQUIRES a
-// file input. Suppressed entries are dropped from the CLI tree
-// (`insertCapabilities`) and refused pre-execution by `invoke_capability`, so
-// each one is a capability an agent surface simply cannot reach. This metric
-// freezes that count: a newly file-shaped capability cannot silently disappear
-// from both clients, and the burn-down is a reviewed baseline bump rather than a
-// side effect. A capability with an OPTIONAL file input is NOT counted — its
-// JSON modes stay invokable (the file field is withheld), which is the shape of
-// a real burn-down rather than a relabelling. The unit is a suppressed
-// capability, so an entry blocked on both legs counts once. Counting the
-// committed artifact keeps the scan cheap and deterministic.
-const countFileTransportSuppressed = (content: string): number => {
-  const entry: unknown = JSON.parse(content);
-  if (typeof entry !== "object" || entry === null) {
-    return 0;
-  }
-  const transport: unknown = Object.hasOwn(entry, "transport")
-    ? Object.getOwnPropertyDescriptor(entry, "transport")?.value
-    : undefined;
-  if (typeof transport !== "object" || transport === null) {
-    return 0;
-  }
-  const type: unknown = Object.getOwnPropertyDescriptor(
-    transport,
-    "type",
-  )?.value;
-  if (type === "file-response" || type === "file-both") {
-    return 1;
-  }
-  if (type !== "file-input") {
-    return 0;
-  }
-  const input: unknown = Object.getOwnPropertyDescriptor(
-    transport,
-    "input",
-  )?.value;
-  if (typeof input !== "object" || input === null) {
-    return 0;
-  }
-  return Number(
-    Object.getOwnPropertyDescriptor(input, "required")?.value === true,
-  );
-};
-
-// A READ capability that requires a write-only OAuth grant is unreachable by a
-// read-only credential
-// (`stella:read` / `stella:admin_read`): the exporter's read-scope guard
-// prevents it, and this ratchet freezes the count at 0 over the committed
-// catalog so a regression fails CI even if the exporter guard were bypassed
-// (e.g. a hand-edited JSON). The scope classification is shared with the
-// exporter, so the guard cannot omit a newly classified write-only scope.
-const WRITE_ONLY_SCOPES: ReadonlySet<string> = new Set(
-  MCP_WRITE_ONLY_RESOURCE_SCOPES,
-);
-
-const countReadCapabilitiesWithWriteScope = (content: string): number => {
-  const entry: unknown = JSON.parse(content);
-  if (typeof entry !== "object" || entry === null) {
-    return 0;
-  }
-  const read = (key: string): unknown =>
-    Object.hasOwn(entry, key)
-      ? Object.getOwnPropertyDescriptor(entry, key)?.value
-      : undefined;
-  const scope = read("scope");
-  return Number(
-    read("access") === "read" &&
-      typeof scope === "string" &&
-      WRITE_ONLY_SCOPES.has(scope),
-  );
-};
+// Capabilities carrying no authored `description` are rejected by
+// apps/api/scripts/capability-description-guard.ts, not counted here.
+// Capabilities suppressed from the generic transport are ledgered by exact id
+// (apps/api/scripts/capability-file-transport-guard.ts) over the catalog the
+// exporter derives in memory, since no catalog file is committed to count.
 
 /**
  * Compound (hyphenated) entries in the closed `DOMAIN_ACTION_VERBS` list. A
@@ -1769,7 +1866,7 @@ const countDomainActionVerbs: RoleSensitiveFileCounter = (
 /**
  * Namespaces where a curated, hand-written command still shares a top-level name
  * with generated capability commands, so `stella <namespace> …` mixes the named
- * MCP tool path and the generic `invoke_capability` path. Must reach zero.
+ * MCP tool path and the generic capability executors path. Must reach zero.
  */
 const countShadowedNamespaces = (content: string): number => {
   const block =
@@ -1946,31 +2043,23 @@ type FailureSinkBindings = {
 };
 
 const importedFailureBindings = (
-  sourceFile: ts.SourceFile,
+  module: EcmaScriptModule,
   file: string,
 ): { captures: Set<string>; helpers: Set<string>; loggers: Set<string> } => {
   const captures = new Set<string>();
   const helpers = new Set<string>();
   const loggers = new Set<string>();
-  for (const statement of sourceFile.statements) {
-    if (
-      !ts.isImportDeclaration(statement) ||
-      !ts.isStringLiteral(statement.moduleSpecifier) ||
-      statement.importClause?.phaseModifier === ts.SyntaxKind.TypeKeyword
-    ) {
-      continue;
-    }
-    const bindings = statement.importClause?.namedBindings;
-    if (bindings === undefined || !ts.isNamedImports(bindings)) {
-      continue;
-    }
-    const modulePath = resolvedModulePath(file, statement.moduleSpecifier.text);
-    for (const specifier of bindings.elements) {
-      if (specifier.isTypeOnly) {
+  for (const declaration of module.staticImports) {
+    const modulePath = resolvedModulePath(
+      file,
+      declaration.moduleRequest.value,
+    );
+    for (const entry of declaration.entries) {
+      const imported = namedImport(entry);
+      if (entry.isType || imported === null) {
         continue;
       }
-      const imported = (specifier.propertyName ?? specifier.name).text;
-      const local = specifier.name.text;
+      const local = entry.localName.value;
       if (
         modulePath === FAILURE_SINK_MODULES.capture &&
         TERMINAL_CAPTURE_EXPORTS.has(imported)
@@ -1988,216 +2077,232 @@ const importedFailureBindings = (
   return { captures, helpers, loggers };
 };
 
-const propertyNameText = (name: ts.PropertyName): string | null =>
-  ts.isIdentifier(name) || ts.isStringLiteral(name) ? name.text : null;
-
 // Initializers of `const x = …` in the file, for following a name to the
 // value it was bound to.
-const constInitializers = (
-  sourceFile: ts.SourceFile,
-): Map<string, ts.Expression> => {
-  const initializers = new Map<string, ts.Expression>();
-  const visit = (node: ts.Node): void => {
+const constInitializers = (program: Program): Map<string, Expression> => {
+  const initializers = new Map<string, Expression>();
+  walk(program, (node) => {
     if (
-      ts.isVariableDeclaration(node) &&
-      ts.isIdentifier(node.name) &&
-      node.initializer !== undefined
+      node.type === "VariableDeclarator" &&
+      node.id.type === "Identifier" &&
+      node.init !== null
     ) {
-      initializers.set(node.name.text, node.initializer);
+      initializers.set(node.id.name, node.init);
     }
-    ts.forEachChild(node, visit);
-  };
-  visit(sourceFile);
+  });
   return initializers;
 };
 
+// The local name a destructured entry binds, defaulted or not.
+const boundName = (pattern: Node): string | null => {
+  if (pattern.type === "Identifier") {
+    return pattern.name;
+  }
+  return pattern.type === "AssignmentPattern" &&
+    pattern.left.type === "Identifier"
+    ? pattern.left.name
+    : null;
+};
+
 const loggerMethodAliases = (
-  sourceFile: ts.SourceFile,
+  program: Program,
   loggers: ReadonlySet<string>,
 ): Set<string> => {
   const aliases = new Set<string>();
-  const visit = (node: ts.Node): void => {
+  walk(program, (node) => {
     if (
-      ts.isVariableDeclaration(node) &&
-      ts.isObjectBindingPattern(node.name) &&
-      node.initializer !== undefined &&
-      ts.isIdentifier(node.initializer) &&
-      loggers.has(node.initializer.text)
+      node.type !== "VariableDeclarator" ||
+      node.id.type !== "ObjectPattern" ||
+      node.init?.type !== "Identifier" ||
+      !loggers.has(node.init.name)
     ) {
-      for (const element of node.name.elements) {
-        const method = element.propertyName ?? element.name;
-        if (
-          ts.isIdentifier(method) &&
-          FAILURE_LOGGER_METHODS.has(method.text) &&
-          ts.isIdentifier(element.name)
-        ) {
-          aliases.add(element.name.text);
-        }
+      return;
+    }
+    for (const element of node.id.properties) {
+      // `{ warn }`, `{ warn: log }` or `{ ...warn }`: the method read and the
+      // name it is bound to.
+      const local = boundName(
+        element.type === "RestElement" ? element.argument : element.value,
+      );
+      let method = local;
+      if (element.type !== "RestElement") {
+        method =
+          !element.computed && element.key.type === "Identifier"
+            ? element.key.name
+            : null;
+      }
+      if (
+        method !== null &&
+        local !== null &&
+        FAILURE_LOGGER_METHODS.has(method)
+      ) {
+        aliases.add(local);
       }
     }
-    ts.forEachChild(node, visit);
-  };
-  visit(sourceFile);
+  });
   return aliases;
 };
 
 const MAX_ATTRIBUTE_FOLLOW_DEPTH = 3;
 
 // A key or member name, not a value reference that could be followed.
-const isNameOfParent = (node: ts.Identifier): boolean => {
-  const parent = node.parent;
-  return (
-    (ts.isPropertyAccessExpression(parent) && parent.name === node) ||
-    (ts.isPropertyAssignment(parent) && parent.name === node)
-  );
-};
+const isNameOfParent = (
+  node: Node,
+  parent: Node | undefined,
+  grandparent: Node | undefined,
+): boolean =>
+  parent !== undefined &&
+  ((isPropertyAccess(parent) && parent.property === node) ||
+    (isPropertyAssignment(parent, grandparent) &&
+      !parent.computed &&
+      parent.key === node));
 
 // Whether an attribute expression carries error fields: an `error.*` key, or
 // a folded helper called or spread anywhere inside it. A name is followed to
 // its initializer, so a record assembled in a local still counts.
 const carriesErrorFields = (
-  expression: ts.Node,
+  expression: Node,
   bindings: FailureSinkBindings,
-  initializers: ReadonlyMap<string, ts.Expression>,
+  initializers: ReadonlyMap<string, Expression>,
   depth = 0,
 ): boolean => {
   let found = false;
-  const visit = (node: ts.Node): void => {
+  walk(expression, (node, ancestors) => {
     if (found) {
-      return;
+      return "skip-children";
     }
+    const parent = ancestors.at(-1);
     if (
-      (ts.isPropertyAssignment(node) ||
-        ts.isShorthandPropertyAssignment(node)) &&
-      propertyNameText(node.name)?.startsWith(ERROR_ATTRIBUTE_PREFIX) === true
+      isObjectLiteralProperty(node, parent) &&
+      node.kind === "init" &&
+      !node.method &&
+      propertyNameText(node)?.startsWith(ERROR_ATTRIBUTE_PREFIX) === true
     ) {
       found = true;
-      return;
+      return "skip-children";
     }
     if (
-      ts.isCallExpression(node) &&
-      ts.isIdentifier(node.expression) &&
-      bindings.helpers.has(node.expression.text)
+      node.type === "CallExpression" &&
+      node.callee.type === "Identifier" &&
+      bindings.helpers.has(node.callee.name)
     ) {
       found = true;
-      return;
+      return "skip-children";
     }
     if (
-      ts.isIdentifier(node) &&
+      node.type === "Identifier" &&
       depth < MAX_ATTRIBUTE_FOLLOW_DEPTH &&
-      !isNameOfParent(node)
+      !isNameOfParent(node, parent, ancestors.at(-2))
     ) {
-      const initializer = initializers.get(node.text);
+      const initializer = initializers.get(node.name);
       if (
         initializer !== undefined &&
         initializer !== expression &&
         carriesErrorFields(initializer, bindings, initializers, depth + 1)
       ) {
         found = true;
-        return;
+        return "skip-children";
       }
     }
-    ts.forEachChild(node, visit);
-  };
-  visit(expression);
+    return undefined;
+  });
   return found;
 };
 
 // `logger.warn(…)`, `logger["warn"](…)`, or a destructured `warn(…)`: the
 // method called, or null for any other call.
 const failureLoggerMethod = (
-  call: ts.CallExpression,
+  call: CallExpression,
   bindings: FailureSinkBindings,
 ): string | null => {
-  const callee = call.expression;
-  if (ts.isIdentifier(callee)) {
-    return bindings.loggerMethods.has(callee.text) ? callee.text : null;
+  const callee = call.callee;
+  if (callee.type === "Identifier") {
+    return bindings.loggerMethods.has(callee.name) ? callee.name : null;
   }
   if (
-    ts.isPropertyAccessExpression(callee) &&
-    ts.isIdentifier(callee.expression) &&
-    bindings.loggers.has(callee.expression.text)
+    callee.type !== "MemberExpression" ||
+    callee.object.type !== "Identifier" ||
+    !bindings.loggers.has(callee.object.name)
   ) {
-    return FAILURE_LOGGER_METHODS.has(callee.name.text)
-      ? callee.name.text
+    return null;
+  }
+  if (isPropertyAccess(callee)) {
+    return FAILURE_LOGGER_METHODS.has(callee.property.name)
+      ? callee.property.name
       : null;
   }
-  if (
-    ts.isElementAccessExpression(callee) &&
-    ts.isIdentifier(callee.expression) &&
-    bindings.loggers.has(callee.expression.text) &&
-    ts.isStringLiteral(callee.argumentExpression) &&
-    FAILURE_LOGGER_METHODS.has(callee.argumentExpression.text)
-  ) {
-    return callee.argumentExpression.text;
-  }
-  return null;
+  const method = callee.computed ? stringLiteralValue(callee.property) : null;
+  return method !== null && FAILURE_LOGGER_METHODS.has(method) ? method : null;
 };
 
-const isProcessStreamWrite = (call: ts.CallExpression): boolean => {
-  const callee = call.expression;
+// A string or substitution-free template literal's value.
+const stringLiteralLikeValue = (node: Node): string | null => {
+  if (node.type === "TemplateLiteral") {
+    return node.expressions.length === 0
+      ? (node.quasis.at(0)?.value.cooked ?? null)
+      : null;
+  }
+  return stringLiteralValue(node);
+};
+
+const isProcessStreamWrite = (call: CallExpression): boolean => {
+  const callee = call.callee;
   const target = call.arguments.at(0);
   return (
-    ts.isPropertyAccessExpression(callee) &&
-    ts.isIdentifier(callee.expression) &&
-    callee.expression.text === "Bun" &&
-    callee.name.text === "write" &&
+    isPropertyAccess(callee) &&
+    isIdentifierNamed(callee.object, "Bun") &&
+    callee.property.name === "write" &&
     target !== undefined &&
-    ts.isPropertyAccessExpression(target) &&
-    ts.isIdentifier(target.expression) &&
-    target.expression.text === "Bun" &&
-    PROCESS_STREAMS.has(target.name.text)
+    isPropertyAccess(target) &&
+    isIdentifierNamed(target.object, "Bun") &&
+    PROCESS_STREAMS.has(target.property.name)
   );
 };
 
 const isTerminalCapture = (
-  call: ts.CallExpression,
+  call: CallExpression,
   bindings: FailureSinkBindings,
 ): boolean => {
-  const callee = call.expression;
-  if (ts.isIdentifier(callee)) {
-    return bindings.captures.has(callee.text);
+  const callee = call.callee;
+  if (callee.type === "Identifier") {
+    return bindings.captures.has(callee.name);
   }
   // A capture reached as a member (`telemetry.captureRequestError(…)`) is the
   // same terminal call; the adapter seams' `captureError` members are counted
   // by their own inventory metric instead.
   return (
-    ts.isPropertyAccessExpression(callee) &&
-    callee.name.text === "captureRequestError"
+    isPropertyAccess(callee) && callee.property.name === "captureRequestError"
   );
 };
 
 const countDirectFailureSinksAs = (content: string, file: string): number => {
-  const sourceFile = parseSource({ fileName: file, text: content });
-  const imported = importedFailureBindings(sourceFile, file);
+  const { module, program } = parseSyntax({ fileName: file, text: content });
+  const imported = importedFailureBindings(module, file);
   const bindings: FailureSinkBindings = {
     ...imported,
-    loggerMethods: loggerMethodAliases(sourceFile, imported.loggers),
+    loggerMethods: loggerMethodAliases(program, imported.loggers),
   };
-  const initializers = constInitializers(sourceFile);
+  const initializers = constInitializers(program);
   const isRunner = file.startsWith(RUNNER_SOURCE_PREFIX);
   let count = 0;
-  const visit = (node: ts.Node): void => {
-    if (ts.isCallExpression(node)) {
-      const method = failureLoggerMethod(node, bindings);
-      const attributes =
-        method === "request" ? node.arguments.at(0) : node.arguments.at(1);
-      if (
-        isTerminalCapture(node, bindings) ||
-        isProcessStreamWrite(node) ||
-        (isRunner &&
-          ts.isIdentifier(node.expression) &&
-          node.expression.text === RUNNER_ERROR_WRITER) ||
-        (method !== null &&
-          attributes !== undefined &&
-          carriesErrorFields(attributes, bindings, initializers))
-      ) {
-        count += 1;
-      }
+  walk(program, (node) => {
+    if (node.type !== "CallExpression") {
+      return;
     }
-    ts.forEachChild(node, visit);
-  };
-  visit(sourceFile);
+    const method = failureLoggerMethod(node, bindings);
+    const attributes =
+      method === "request" ? node.arguments.at(0) : node.arguments.at(1);
+    if (
+      isTerminalCapture(node, bindings) ||
+      isProcessStreamWrite(node) ||
+      (isRunner && isIdentifierNamed(node.callee, RUNNER_ERROR_WRITER)) ||
+      (method !== null &&
+        attributes !== undefined &&
+        carriesErrorFields(attributes, bindings, initializers))
+    ) {
+      count += 1;
+    }
+  });
   return count;
 };
 
@@ -2207,19 +2312,17 @@ const countDirectFailureSinks: FileCounter = (content, { file }) =>
 // `callbacks.captureError(…)`-shaped seams: adapters that also do generation
 // bookkeeping, inventoried apart from the terminal sinks above.
 const countAnalyticsCallbackSeams: FileCounter = (content, { file }) => {
-  const sourceFile = parseSource({ fileName: file, text: content });
+  const { program } = parseSyntax({ fileName: file, text: content });
   let count = 0;
-  const visit = (node: ts.Node): void => {
+  walk(program, (node) => {
     if (
-      ts.isCallExpression(node) &&
-      ts.isPropertyAccessExpression(node.expression) &&
-      node.expression.name.text === "captureError"
+      node.type === "CallExpression" &&
+      isPropertyAccess(node.callee) &&
+      node.callee.property.name === "captureError"
     ) {
       count += 1;
     }
-    ts.forEachChild(node, visit);
-  };
-  visit(sourceFile);
+  });
   return count;
 };
 
@@ -2229,42 +2332,39 @@ const FAILURE_SINK_FACTORY = "failureSink";
 const failureSinkSpecs = ({
   content,
   file,
-}: SourceText): ts.ObjectLiteralExpression[] => {
-  const sourceFile = parseSource({ fileName: file, text: content });
-  const specs: ts.ObjectLiteralExpression[] = [];
-  const visit = (node: ts.Node): void => {
-    const spec = ts.isCallExpression(node) ? node.arguments.at(0) : undefined;
+}: SourceText): ObjectExpression[] => {
+  const { program } = parseSyntax({ fileName: file, text: content });
+  const specs: ObjectExpression[] = [];
+  walk(program, (node) => {
+    const spec =
+      node.type === "CallExpression" ? node.arguments.at(0) : undefined;
     if (
-      ts.isCallExpression(node) &&
-      ts.isIdentifier(node.expression) &&
-      node.expression.text === FAILURE_SINK_FACTORY &&
-      spec !== undefined &&
-      ts.isObjectLiteralExpression(spec)
+      node.type === "CallExpression" &&
+      isIdentifierNamed(node.callee, FAILURE_SINK_FACTORY) &&
+      spec?.type === "ObjectExpression"
     ) {
       specs.push(spec);
     }
-    ts.forEachChild(node, visit);
-  };
-  visit(sourceFile);
+  });
   return specs;
 };
 
 const specProperty = (
-  spec: ts.ObjectLiteralExpression,
+  spec: ObjectExpression,
   name: string,
-): ts.PropertyAssignment | undefined =>
+): ObjectProperty | undefined =>
   spec.properties.find(
-    (property): property is ts.PropertyAssignment =>
-      ts.isPropertyAssignment(property) &&
-      propertyNameText(property.name) === name,
+    (property): property is ObjectProperty =>
+      isPropertyAssignment(property, spec) &&
+      propertyNameText(property) === name,
   );
 
 // One per local expectation a sink handle declares.
 const countFailureSinkExpectations: FileCounter = (content, { file }) => {
   let total = 0;
   for (const spec of failureSinkSpecs({ content, file })) {
-    const expected = specProperty(spec, "expected")?.initializer;
-    if (expected !== undefined && ts.isArrayLiteralExpression(expected)) {
+    const expected = specProperty(spec, "expected")?.value;
+    if (expected?.type === "ArrayExpression") {
       total += expected.elements.length;
     }
   }
@@ -2276,6 +2376,84 @@ const countFailureLegacyOutputPins: FileCounter = (content, { file }) =>
   failureSinkSpecs({ content, file }).filter(
     (spec) => specProperty(spec, "legacy") !== undefined,
   ).length;
+
+const HANDLER_ERROR_CLASS = "HandlerError";
+const CLASSIFY_FAILURE = "classifyFailure";
+const SERVER_ERROR_STATUSES: ReadonlySet<string> = new Set([
+  "500",
+  "502",
+  "503",
+]);
+const GRADED_HANDLER_CODES: ReadonlySet<string> = new Set(
+  Object.keys(GRADED_HANDLER_CODE_REASON),
+);
+
+const mayAnswerServerError = (expression: Node): boolean => {
+  let found = false;
+  walk(expression, (node) => {
+    if (found) {
+      return "skip-children";
+    }
+    if (
+      node.type === "Literal" &&
+      typeof node.value === "number" &&
+      SERVER_ERROR_STATUSES.has(String(node.value))
+    ) {
+      found = true;
+    }
+    return undefined;
+  });
+  return found;
+};
+
+const unwrapParentheses = (expression: Node): Node =>
+  expression.type === "ParenthesizedExpression"
+    ? unwrapParentheses(expression.expression)
+    : expression;
+
+/**
+ * One per `new HandlerError({ status: 5xx, … })` the failure grader can only
+ * call `unclassified`: no graded `code` literal, and not branded by a
+ * `classifyFailure(…)` wrapped around the construction. A status written as
+ * any expression holding a 5xx literal (a ternary, a lookup default) counts;
+ * an opaque status variable is out of reach of a syntax census.
+ */
+const countUnclassifiedHandlerFailures: FileCounter = (content, { file }) => {
+  if (!content.includes(HANDLER_ERROR_CLASS)) {
+    return 0;
+  }
+  const { program } = parseSyntax({ fileName: file, text: content });
+  const classified = new Set<Node>();
+  let count = 0;
+  walk(program, (node) => {
+    if (
+      node.type === "CallExpression" &&
+      isIdentifierNamed(node.callee, CLASSIFY_FAILURE)
+    ) {
+      const branded = node.arguments.at(0);
+      if (branded !== undefined) {
+        classified.add(unwrapParentheses(branded));
+      }
+    }
+    const spec =
+      node.type === "NewExpression" ? node.arguments.at(0) : undefined;
+    if (
+      node.type === "NewExpression" &&
+      isIdentifierNamed(node.callee, HANDLER_ERROR_CLASS) &&
+      spec?.type === "ObjectExpression" &&
+      !classified.has(node)
+    ) {
+      const status = specProperty(spec, "status")?.value;
+      const code = specProperty(spec, "code")?.value;
+      const codeText = code === undefined ? null : stringLiteralLikeValue(code);
+      const graded = codeText !== null && GRADED_HANDLER_CODES.has(codeText);
+      if (status !== undefined && mayAnswerServerError(status) && !graded) {
+        count += 1;
+      }
+    }
+  });
+  return count;
+};
 
 const FAILURE_SINK_SOURCE_GLOBS = [
   "apps/api/src/**/*.{ts,tsx}",
@@ -2369,25 +2547,40 @@ const PER_RULE_SUPPRESSION_METRICS: readonly RatchetMetric[] =
     count: countTrackedRuleSuppressions(rule),
   }));
 
-// Grandfathered `mock.module` targets: one ledger line per
-// "<test file>::<workspace module>" pair. The rule
-// (.oxlint-plugins/no-internal-module-mock.ts) reports an unlisted pair and a
-// listed pair whose mock is gone; this budget is what stops a new pair from
-// being listed instead of fixed.
-const countInternalModuleMockLedgerEntries: FileCounter = (content) => {
+// The count scripts/check-instruction-enforcement.ts holds equal to the
+// `[review]` tags in the instruction sources; this metric keeps it falling.
+const countReviewOnlyInstructionRules: FileCounter = (content) => {
   const parsed: unknown = JSON.parse(content);
-  if (!Array.isArray(parsed)) {
-    panic("internal-module-mock ledger must be a JSON array");
+  if (
+    typeof parsed !== "object" ||
+    parsed === null ||
+    !("reviewOnlyRules" in parsed) ||
+    typeof parsed.reviewOnlyRules !== "number"
+  ) {
+    return panic("instruction-enforcement ledger must hold reviewOnlyRules");
   }
-  return parsed.length;
+  return parsed.reviewOnlyRules;
 };
 
-const countParserValidatorLedgerEntries: FileCounter = (content) => {
-  const parsed: unknown = JSON.parse(content);
-  if (!Array.isArray(parsed)) {
-    panic("parser-validator-call ledger must be a JSON array");
-  }
-  return parsed.length;
+const countOutboundIndirectAccessExceptions = (
+  context: ScanContext,
+): RepoMetricResult => {
+  const flagged = scanRepoFiles(context, [
+    "apps/api/**/*.{ts,tsx,js,jsx,mjs,cjs,mts,cts}",
+    "apps/{web,collab}/src/**/*.{ts,tsx,js,jsx,mjs,cjs,mts,cts}",
+    "packages/*/src/**/*.{ts,tsx,js,jsx,mjs,cjs,mts,cts}",
+  ]).filter(
+    (file) =>
+      isOutboundProductionModule(file) &&
+      outboundTransportReferences({
+        file,
+        text: readSource(context, file),
+      }).includes("indirect:transport"),
+  );
+  const files: Record<string, number> = Object.fromEntries(
+    flagged.map((file) => [file, 1]),
+  );
+  return { count: flagged.length, files };
 };
 
 // --- Repo-scope counters ----------------------------------------------------
@@ -2445,7 +2638,7 @@ const countCrossAppLibPathCopies: RepoCounter = (context) => {
     byLibPath.set(libPath, byApp);
   }
 
-  const files: Record<string, number> = {};
+  const files = new Map<string, number>();
   let count = 0;
   for (const byApp of byLibPath.values()) {
     if (byApp.size < 2) {
@@ -2453,12 +2646,12 @@ const countCrossAppLibPathCopies: RepoCounter = (context) => {
     }
     for (const copies of byApp.values()) {
       for (const rel of copies) {
-        files[rel] = 1;
+        files.set(rel, 1);
         count += 1;
       }
     }
   }
-  return { count, files };
+  return { count, files: Object.fromEntries(files) };
 };
 
 // A top-level exported binding. Line-anchored, so a nested or re-exported
@@ -2495,7 +2688,7 @@ const countCrossWorkspaceDuplicateExportNames: RepoCounter = (context) => {
     }
   }
 
-  const files: Record<string, number> = {};
+  const files = new Map<string, number>();
   let count = 0;
   for (const byWorkspace of definitions.values()) {
     const workspaces = [...byWorkspace.keys()].toSorted();
@@ -2503,11 +2696,11 @@ const countCrossWorkspaceDuplicateExportNames: RepoCounter = (context) => {
       const rel =
         byWorkspace.get(workspace) ??
         panic(`ratchet lost the defining file for ${workspace}`);
-      files[rel] = (files[rel] ?? 0) + 1;
+      files.set(rel, (files.get(rel) ?? 0) + 1);
       count += 1;
     }
   }
-  return { count, files };
+  return { count, files: Object.fromEntries(files) };
 };
 
 // Direct children of a flat lib bucket, one per entry: the bucket's size is the
@@ -2532,7 +2725,7 @@ const countLibTopLevelEntries =
                   .at(0),
               ),
           );
-    const files: Record<string, number> = {};
+    const files = new Map<string, number>();
     let count = 0;
     for (const entry of readdirSync(dir, { withFileTypes: true })) {
       const rel = `${libDir}/${entry.name}`;
@@ -2543,10 +2736,10 @@ const countLibTopLevelEntries =
       ) {
         continue;
       }
-      files[rel] = 1;
+      files.set(rel, 1);
       count += 1;
     }
-    return { count, files };
+    return { count, files: Object.fromEntries(files) };
   };
 
 const THIRD_PARTY_DEPENDENCY_SECTIONS = [
@@ -2592,7 +2785,7 @@ const countDirectThirdPartyDeclarations: RepoCounter = (context) => {
     }
   }
 
-  const files: Record<string, number> = {};
+  const files = new Map<string, number>();
   let count = 0;
   for (const rel of manifests.toSorted()) {
     const manifest = parseJson5Record(context, rel);
@@ -2615,11 +2808,11 @@ const countDirectThirdPartyDeclarations: RepoCounter = (context) => {
       }
     }
     if (declarations > 0) {
-      files[rel] = declarations;
+      files.set(rel, declarations);
       count += declarations;
     }
   }
-  return { count, files };
+  return { count, files: Object.fromEntries(files) };
 };
 
 const countLockfilePackageEntries: RepoCounter = (context) => {
@@ -2895,16 +3088,16 @@ const countDuplicateTokenBlocks: RepoCounter = (context) => {
     }
   }
 
-  const files: Record<string, number> = {};
+  const files = new Map<string, number>();
   let count = 0;
   for (const [fileIndex, positions] of hitPositions) {
     const rel =
       scanned[fileIndex] ?? panic("ratchet lost a duplicate-block file index");
     const blocks = cloneBlockCount(positions);
-    files[rel] = blocks;
+    files.set(rel, blocks);
     count += blocks;
   }
-  return { count, files };
+  return { count, files: Object.fromEntries(files) };
 };
 
 const RESULT_BOUNDARY_METRICS = [
@@ -2928,7 +3121,63 @@ const RESULT_BOUNDARY_METRICS = [
   },
 ] as const satisfies readonly RatchetMetric[];
 
+const countUnsignalledSkipMetric: FileCounter = (content, { file }) =>
+  countUnsignalledSkips(content, { file });
+
 export const RATCHET_METRICS: readonly RatchetMetric[] = [
+  {
+    scope: "file",
+    id: "unsignalled-skip",
+    description:
+      "data-boundary catch outcomes and failed parse/lookup item skips without observation or typed disposition; empty literal ??/|| fallbacks on valueAtPath/asString/fieldOf/extractId, parse/find/lookup helpers or Map lookups; per-file shrink-only",
+    include: UNSIGNALLED_SKIP_SOURCE_GLOBS,
+    exclude: isExcludedSkipSource,
+    perFile: true,
+    growth: "shrink-only",
+    count: countUnsignalledSkipMetric,
+  },
+  {
+    scope: "repo",
+    id: "outbound-indirect-access-exceptions",
+    description:
+      "Unclassified indirect transport acquisition outside the bounded local module owner; each owner only shrinks",
+    perFile: true,
+    growth: "shrink-only",
+    count: countOutboundIndirectAccessExceptions,
+  },
+  {
+    scope: "repo",
+    id: "api-legacy-outbound-transports",
+    description:
+      "Raw transport and client capabilities acquired by each classified API owner; each file's capability set only shrinks",
+    perFile: true,
+    growth: "shrink-only",
+    count: (context) => {
+      const keys: string[] = [];
+      for (const file of scanRepoFiles(context, [
+        "apps/api/**/*.{ts,tsx,js,jsx,mjs,cjs,mts,cts}",
+      ])) {
+        if (!isApiProductionModule(file) || TRANSPORT_OWNER_MODULES.has(file)) {
+          continue;
+        }
+        for (const capability of outboundTransportReferences({
+          file,
+          text: readSource(context, file),
+        })) {
+          if (
+            capability !== "permit:grant" &&
+            !LOCAL_MODULE_CAPABILITIES.has(capability)
+          ) {
+            keys.push(`${file}#${capability}`);
+          }
+        }
+      }
+      return {
+        count: keys.length,
+        files: Object.fromEntries(keys.map((key) => [key, 1])),
+      };
+    },
+  },
   {
     scope: "repo",
     id: "schema-introspection-files",
@@ -3005,6 +3254,17 @@ export const RATCHET_METRICS: readonly RatchetMetric[] = [
   },
   {
     scope: "file",
+    id: "raw-numeric-coercions",
+    description:
+      "Number/parseInt/parseFloat calls on non-literal arguments in app and package source; syntax-only, so variable number/bigint conversions are conservatively counted; tests, generated files, scripts/evals, and numeric-token's parser are excluded; each file only shrinks",
+    include: RAW_NUMERIC_COERCION_SOURCE_GLOBS,
+    exclude: isExcludedRawNumericCoercionSource,
+    perFile: true,
+    growth: "shrink-only",
+    count: countRawNumericCoercions,
+  },
+  {
+    scope: "file",
     id: "legacy-paint-transitions",
     description:
       "Tailwind utilities and CSS declarations (in TS, CSS and .astro sources) that transition paint properties instead of transform/opacity; at 0 — keep it there",
@@ -3029,6 +3289,15 @@ export const RATCHET_METRICS: readonly RatchetMetric[] = [
     include: ALL_SOURCE_GLOBS,
     exclude: isExcludedSource,
     count: countSuperLinearRegexes,
+  },
+  {
+    scope: "file",
+    id: "diff-scope-gaps",
+    description:
+      "CI steps that read a base revision with a known scope gap (scripts/diff-scoped-steps.ts); fixing one removes its decision",
+    include: ["scripts/diff-scoped-steps.ts"],
+    exclude: isExcludedSource,
+    count: countDiffScopeGaps,
   },
   {
     scope: "file",
@@ -3098,6 +3367,16 @@ export const RATCHET_METRICS: readonly RatchetMetric[] = [
   },
   {
     scope: "file",
+    id: "e2e-tolerated-browser-errors",
+    description:
+      "browserErrors.tolerate(...) calls in web browser specs: console errors a spec may emit without failing; gated per file, and a new one needs a justified allowance",
+    include: ["apps/web/e2e/**/*.{ts,tsx}"],
+    exclude: () => false,
+    perFile: true,
+    count: countToleratedBrowserErrors,
+  },
+  {
+    scope: "file",
     id: "raw-user-avatar-primitive",
     description:
       "imports of @stll/ui/avatar outside the shared owner and explicit non-user exceptions",
@@ -3106,10 +3385,11 @@ export const RATCHET_METRICS: readonly RatchetMetric[] = [
       isExcludedSource(file) ||
       [
         "apps/web/src/components/public-workspace-shell.tsx",
-        "apps/web/src/routes/auth/organization.tsx",
+        "apps/web/src/routes/auth/-organization.page.tsx",
         "apps/web/src/routes/dev/-components/ui-playground.tsx",
         "apps/web/src/components/ai-suggestions/review-panel.impl.tsx",
       ].includes(file),
+    perFile: true,
     count: countRawUserAvatarPrimitive,
   },
   {
@@ -3134,13 +3414,15 @@ export const RATCHET_METRICS: readonly RatchetMetric[] = [
   },
   {
     scope: "file",
-    id: "direct-audit-log-insert",
+    id: "undeclared-api-client-writes",
     description:
-      "direct .insert(auditLogs) calls outside the audit-log recorder module",
-    include: ["apps/api/src/**/*.{ts,tsx}"],
-    exclude: (file) =>
-      isExcludedSource(file) || file === "apps/api/src/lib/audit-log.ts",
-    count: countDirectAuditLogInserts,
+      "Eden post/put/patch/delete calls in apps/web outside an invokeCapability or useCapabilityMutation callback, so they run without declaring a catalog capability; each file's count can only shrink",
+    include: ["apps/web/src/**/*.{ts,tsx}"],
+    exclude: (file) => isExcludedSource(file),
+    perFile: true,
+    growth: "shrink-only",
+    count: ((content, { file }) =>
+      countUndeclaredApiClientWrites(content, file)) satisfies FileCounter,
   },
   {
     scope: "file",
@@ -3185,6 +3467,15 @@ export const RATCHET_METRICS: readonly RatchetMetric[] = [
   },
   {
     scope: "file",
+    id: "public-corpus-audit-membership",
+    description:
+      "Reviewed table admissions that exempt public corpus bookkeeping from mutation audit; membership growth requires an explicit budget decision",
+    include: ["apps/api/src/lib/db/public-corpus-audit/membership.ts"],
+    exclude: () => false,
+    count: countPublicCorpusMembership,
+  },
+  {
+    scope: "file",
     id: "audit-skip-directives",
     description:
       "`// audit: skip - <reason>` comments in API source, each marking a database write that records no audit event (in handlers, an exemption from require-audit-on-mutation); the fix is an audit recorder call in the same transaction. Counted across all API source, so moving a write out of the handler tree does not retire its exemption",
@@ -3203,6 +3494,18 @@ export const RATCHET_METRICS: readonly RatchetMetric[] = [
   },
   {
     scope: "file",
+    id: "test-database-handle-casts",
+    description:
+      "database handles that document-review and workflow database tests cast by hand (`asTestRaw<Transaction>(testDb)`, `asTestRaw<ScopedDb>(...)`, `value as SafeDb`) and give the code under test. The test database connects as the owner, which row security never refuses, so such a test passes where production, on the application role, would refuse the write. New tests take their handles from apps/api/src/tests/helpers/application-role-db.ts, which need no cast; a cast that mirrors an owner handle production itself passes needs a justified allowance. Each file's count can only shrink",
+    include: TEST_DATABASE_HANDLE_CAST_GLOBS,
+    exclude: isExcludedTestInclusiveSource,
+    perFile: true,
+    growth: "shrink-only",
+    count: ((content, { file }) =>
+      countTestDatabaseHandleCasts(content, file)) satisfies FileCounter,
+  },
+  {
+    scope: "file",
     id: "inline-timestamp-cursor-sql",
     description:
       "Z-less PostgreSQL microsecond cursor formats and inline UTC timestamp re-anchors outside db-pagination and non-cursor date arithmetic",
@@ -3212,19 +3515,6 @@ export const RATCHET_METRICS: readonly RatchetMetric[] = [
       file === "apps/api/src/lib/db-pagination.ts" ||
       file === "apps/api/src/handlers/case-law/citation-authority.ts",
     count: countInlineTimestampCursorSql,
-  },
-  {
-    scope: "file",
-    id: "repeated-timestamp-cursor-boundary",
-    description:
-      "pgTimestampCursorBoundary calls beyond the first per API source file (fuzzy proxy for hand-built timestamp/id disjunctions; explicit heterogeneous/range owners excluded)",
-    include: ["apps/api/src/**/*.{ts,tsx}"],
-    exclude: (file) =>
-      isExcludedSource(file) ||
-      file === "apps/api/src/lib/db-pagination.ts" ||
-      file === "apps/api/src/lib/entities/list-cursor.ts" ||
-      file === "apps/api/src/lib/workflow-target-queries.ts",
-    count: countRepeatedTimestampCursorBoundaries,
   },
   ...RESULT_BOUNDARY_METRICS,
   ...PER_RULE_SUPPRESSION_METRICS,
@@ -3288,6 +3578,15 @@ export const RATCHET_METRICS: readonly RatchetMetric[] = [
   },
   {
     scope: "file",
+    id: "weak-mcp-projection-ties",
+    description:
+      "satisfies-only MCP projection ties miss nested producer fields; use projectionPayload to bind forwarded domain results recursively. Stays at 0",
+    include: ["apps/api/src/mcp/**/*.ts"],
+    exclude: isExcludedSource,
+    count: countWeakMcpProjectionTies,
+  },
+  {
+    scope: "file",
     id: "lib-to-handler-imports",
     description:
       "imports from shared API lib code into handler slices; dependency direction must flow from handlers to lib",
@@ -3303,39 +3602,6 @@ export const RATCHET_METRICS: readonly RatchetMetric[] = [
     include: ["apps/web/src/**/*.{ts,tsx}"],
     exclude: isExcludedSource,
     count: countCrossSliceImports(crossesRoutePrivate),
-  },
-  {
-    scope: "file",
-    id: "capability-schemas-truncated",
-    description:
-      "capabilities carrying `inputSchemaTruncated`, the flag that used to mark a schema dropped for size. The exporter now $defs-compacts schemas and FAILS on one still over the byte cap, so this can only be reached by reintroducing the truncation pathway: it stays at 0",
-    include: ["packages/cli/capabilities/*.json"],
-    // Generated artifacts are the subject here, so the shared source
-    // exclusions (which skip `.gen.`/generated paths) must not apply.
-    exclude: () => false,
-    count: countTruncatedCapabilitySchemas,
-  },
-  {
-    scope: "file",
-    id: "capability-file-transport-suppressed",
-    description:
-      "capabilities whose transport disposition suppresses them from the generic transport (a file response, or a REQUIRED file input): dropped from the CLI tree and refused by invoke_capability, so no agent surface can reach them. An OPTIONAL file input is not counted — its JSON modes stay invokable",
-    include: ["packages/cli/capabilities/*.json"],
-    // Generated artifacts are the subject here, so the shared source
-    // exclusions (which skip `.gen.`/generated paths) must not apply.
-    exclude: () => false,
-    count: countFileTransportSuppressed,
-  },
-  {
-    scope: "file",
-    id: "read-capabilities-with-write-scope",
-    description:
-      "read capabilities whose required scope is a write-only grant (admin/billing/documents/knowledge/matters _write), unreachable by a read-only credential; the exporter's access-keyed scope resolver keeps this at 0",
-    include: ["packages/cli/capabilities/*.json"],
-    // Generated artifacts are the subject here, so the shared source
-    // exclusions (which skip `.gen.`/generated paths) must not apply.
-    exclude: () => false,
-    count: countReadCapabilitiesWithWriteScope,
   },
   {
     scope: "file",
@@ -3386,21 +3652,12 @@ export const RATCHET_METRICS: readonly RatchetMetric[] = [
   },
   {
     scope: "file",
-    id: "parser-validator-call-ledger-entries",
+    id: "review-only-instruction-rules",
     description:
-      "legacy parser validator imports and calls; validation moves to the pipeline and this ledger only shrinks",
-    include: ["scripts/parser-validator-call-ledger.json"],
+      "instruction rules whose only control is a reader (`[review]` in .ai/local and .ai/local-skills); a rule leaves the count when a lint, check or test enforces it",
+    include: [INSTRUCTION_ENFORCEMENT_LEDGER_REL],
     exclude: () => false,
-    count: countParserValidatorLedgerEntries,
-  },
-  {
-    scope: "file",
-    id: "internal-module-mock-ledger-entries",
-    description:
-      "grandfathered mock.module targets of workspace modules, one per <test file>::<module> pair in scripts/internal-module-mock-ledger.json (each replaces a real dependency with a fabrication the mocked module's contract changes cannot fail)",
-    include: [INTERNAL_MODULE_MOCK_LEDGER_REL],
-    exclude: () => false,
-    count: countInternalModuleMockLedgerEntries,
+    count: countReviewOnlyInstructionRules,
   },
   {
     scope: "file",
@@ -3438,6 +3695,16 @@ export const RATCHET_METRICS: readonly RatchetMetric[] = [
     include: FAILURE_SINK_SOURCE_GLOBS,
     exclude: isExcludedSource,
     count: countFailureLegacyOutputPins,
+  },
+  {
+    scope: "file",
+    id: "unclassified-handler-failures",
+    description:
+      "`new HandlerError({ status: 5xx })` constructions with no graded `code` literal and no `classifyFailure(…)` brand: each one grades `unclassified`, which the post-release check alerts on whenever it fires. Name the failure (a graded code, a brand, or a typed error class with a declared reason) instead of adding one; gated per file",
+    include: FAILURE_SINK_SOURCE_GLOBS,
+    exclude: isExcludedSource,
+    count: countUnclassifiedHandlerFailures,
+    perFile: true,
   },
   {
     scope: "repo",
@@ -3591,7 +3858,7 @@ export const inspectConfiguration = (
     }
   }
 
-  const baseline: Baseline = {};
+  const baseline = new Map<string, MetricSnapshot>();
   for (const id of metricIds) {
     const rawSnapshot = ownValue(rawBaseline, id);
     if (!isRecord(rawSnapshot)) {
@@ -3624,7 +3891,7 @@ export const inspectConfiguration = (
       continue;
     }
 
-    const files: Record<string, number> = {};
+    const files = new Map<string, number>();
     let fileTotal = 0;
     let filesValid = true;
     for (const [file, value] of Object.entries(rawFiles)) {
@@ -3640,7 +3907,7 @@ export const inspectConfiguration = (
         );
         continue;
       }
-      files[file] = value;
+      files.set(file, value);
       fileTotal += value;
     }
     if (!filesValid) {
@@ -3658,11 +3925,11 @@ export const inspectConfiguration = (
       );
       continue;
     }
-    baseline[id] = { count: fileTotal, files };
+    baseline.set(id, { count: fileTotal, files: Object.fromEntries(files) });
   }
 
   return errors.length === 0
-    ? { status: "valid", baseline }
+    ? { status: "valid", baseline: Object.fromEntries(baseline) }
     : { status: "invalid", errors };
 };
 
@@ -3673,16 +3940,26 @@ const assertMetricRegistry = (): void => {
   }
 };
 
+const ownSnapshot = (baseline: Baseline, id: string) =>
+  Object.hasOwn(baseline, id) ? baseline[id] : undefined;
+
 const requireSnapshot = (baseline: Baseline, id: string): MetricSnapshot =>
-  baseline[id] ?? panic(`ratchet metric ${id} is missing from the snapshot`);
+  ownSnapshot(baseline, id) ??
+  panic(`ratchet metric ${id} is missing from the snapshot`);
 
 const sortedSnapshot = (result: RepoMetricResult): MetricSnapshot => {
-  const files: Record<string, number> = {};
-  for (const rel of Object.keys(result.files).toSorted()) {
-    files[rel] =
-      result.files[rel] ??
-      panic(`ratchet count for ${rel} disappeared during scan`);
-  }
+  const files = Object.fromEntries(
+    Object.keys(result.files)
+      .toSorted()
+      .map(
+        (rel) =>
+          [
+            rel,
+            result.files[rel] ??
+              panic(`ratchet count for ${rel} disappeared during scan`),
+          ] as const,
+      ),
+  );
   const count = Object.values(files).reduce((total, value) => total + value, 0);
   if (count !== result.count) {
     panic(
@@ -3763,7 +4040,7 @@ export const scanTree = ({
 
   const totals = new Map<
     string,
-    { count: number; files: Record<string, number> }
+    { count: number; files: Map<string, number> }
   >();
   const files = new Map<string, FileCounts>();
   for (const [rel, selected] of metricsByFile) {
@@ -3781,8 +4058,11 @@ export const scanTree = ({
       if (!(n > 0)) {
         continue;
       }
-      const total = totals.get(metric.id) ?? { count: 0, files: {} };
-      total.files[rel] = n;
+      const total = totals.get(metric.id) ?? {
+        count: 0,
+        files: new Map<string, number>(),
+      };
+      total.files.set(rel, n);
       total.count += n;
       totals.set(metric.id, total);
     }
@@ -3794,7 +4074,7 @@ export const scanTree = ({
     }
   }
 
-  const snapshot: Baseline = {};
+  const snapshot = new Map<string, MetricSnapshot>();
   for (const metric of metrics) {
     switch (metric.scope) {
       case "repo":
@@ -3803,20 +4083,30 @@ export const scanTree = ({
           // before allocating another whole-repository duplication index.
           Bun.gc(true);
         }
-        snapshot[metric.id] = sortedSnapshot(metric.count(tree));
+        snapshot.set(metric.id, sortedSnapshot(metric.count(tree)));
         break;
-      case "file":
-        snapshot[metric.id] = sortedSnapshot(
-          totals.get(metric.id) ?? { count: 0, files: {} },
+      case "file": {
+        const total = totals.get(metric.id);
+        snapshot.set(
+          metric.id,
+          sortedSnapshot(
+            total === undefined
+              ? { count: 0, files: {} }
+              : { count: total.count, files: Object.fromEntries(total.files) },
+          ),
         );
         break;
+      }
       default: {
         metric satisfies never;
         return panic(`ratchet metric has an unknown scope: ${String(metric)}`);
       }
     }
   }
-  const inspection = inspectConfiguration(metrics, snapshot);
+  const inspection = inspectConfiguration(
+    metrics,
+    Object.fromEntries(snapshot),
+  );
   if (inspection.status === "invalid") {
     panic(inspection.errors.join("\n"));
   }
@@ -3944,17 +4234,21 @@ const metricStatus = (current: number, baseline: number): MetricStatus => {
 type DiffOptions = {
   perFile?: true | undefined;
   allowlist?: true | undefined;
+  renamedFrom?: ReadonlyMap<string, string> | undefined;
 };
 
 const diffMetric = (
   id: string,
   current: MetricSnapshot,
   baseline: MetricSnapshot,
-  { perFile, allowlist }: DiffOptions = {},
+  { perFile, allowlist, renamedFrom }: DiffOptions = {},
 ): MetricDiff => {
+  const currentFiles = new Map(Object.entries(current.files));
+  const baselineFiles = new Map(Object.entries(baseline.files));
   const regressedFiles: RegressedFile[] = [];
-  for (const [file, to] of Object.entries(current.files)) {
-    const from = baseline.files[file] ?? 0;
+  for (const [file, to] of currentFiles) {
+    const baselineFile = renamedFrom?.get(file) ?? file;
+    const from = baselineFiles.get(baselineFile) ?? 0;
     if (to > from) {
       regressedFiles.push({ file, from, to });
     }
@@ -3963,8 +4257,11 @@ const diffMetric = (
 
   const staleFiles: RegressedFile[] = [];
   if (allowlist === true) {
-    for (const [file, from] of Object.entries(baseline.files)) {
-      const to = current.files[file] ?? 0;
+    const renamedTo = new Map(
+      [...(renamedFrom ?? [])].map(([to, from]) => [from, to]),
+    );
+    for (const [file, from] of baselineFiles) {
+      const to = currentFiles.get(renamedTo.get(file) ?? file) ?? 0;
       if (to < from) {
         staleFiles.push({ file, from, to });
       }
@@ -4022,7 +4319,7 @@ const runReport = (): number => {
   console.log("ratchet: current metric counts (vs baseline)\n");
   for (const metric of RATCHET_METRICS) {
     const c = requireSnapshot(current, metric.id);
-    const b = baseline[metric.id]?.count ?? 0;
+    const b = ownSnapshot(baseline, metric.id)?.count ?? 0;
     const delta = c.count - b;
     const sign = formatDelta(delta);
     console.log(
@@ -4048,19 +4345,21 @@ type AssessMeasurementsOptions = {
   current: Baseline;
   baseline: Baseline;
   metrics?: readonly RatchetMetric[];
+  renamedFrom?: ReadonlyMap<string, string>;
 };
 
 export const assessMeasurements = ({
   current,
   baseline,
   metrics = RATCHET_METRICS,
+  renamedFrom,
 }: AssessMeasurementsOptions): MeasurementAssessment => {
   const diffs = metrics.map((metric) =>
     diffMetric(
       metric.id,
       requireSnapshot(current, metric.id),
-      baseline[metric.id] ?? { count: 0, files: {} },
-      { perFile: metricGate(metric).perFile },
+      ownSnapshot(baseline, metric.id) ?? { count: 0, files: {} },
+      { perFile: metricGate(metric).perFile, renamedFrom },
     ),
   );
   return {
@@ -4081,12 +4380,50 @@ const revisionOption = (flag: "--base" | "--head"): string | undefined => {
 const resolveCommit = (ref: string): string =>
   readGit(["rev-parse", "--verify", "--end-of-options", `${ref}^{commit}`]);
 
-const comparisonBase = (): string =>
-  resolveCommit(
-    revisionOption("--base") ??
-      process.env["RATCHET_BASE_REF"] ??
-      readGit(["merge-base", "origin/main", "HEAD"]),
-  );
+const renamedFiles = (
+  base: string,
+  head: string | undefined,
+): ReadonlyMap<string, string> => {
+  const output = readGit([
+    "diff",
+    "--find-renames",
+    "--name-status",
+    "-z",
+    base,
+    ...(head === undefined ? [] : [head]),
+    "--",
+  ]);
+  const fields = output.split("\0");
+  const renamedFrom = new Map<string, string>();
+  for (let index = 0; index < fields.length;) {
+    const status = fields[index++] ?? "";
+    const source = fields[index++] ?? "";
+    if (!status.startsWith("R")) {
+      continue;
+    }
+    const destination = fields[index++] ?? "";
+    renamedFrom.set(destination, source);
+  }
+  return renamedFrom;
+};
+
+const comparisonBase = (headRef?: string): string => {
+  const explicitBase =
+    revisionOption("--base") ?? process.env["RATCHET_BASE_REF"];
+  if (explicitBase === undefined && headRef !== undefined) {
+    readGit([
+      "fetch",
+      "--no-tags",
+      "origin",
+      "+refs/heads/main:refs/remotes/origin/main",
+    ]);
+  }
+  return treeBaseRevision({
+    repoRoot: REPO_ROOT,
+    baseRef: explicitBase,
+    headRef,
+  });
+};
 
 const ALLOWANCE_DIRECTORY = "scripts/ratchet-allowances";
 
@@ -4198,6 +4535,27 @@ const parseAllowance = (filename: string, head: string): AllowanceParse => {
   };
 };
 
+const shellArgument = (value: string): string =>
+  `'${value.replaceAll("'", "'\\''")}'`;
+
+export const allowanceRemovalCommand = (paths: readonly string[]): string =>
+  `rm -- ${paths.map(shellArgument).join(" ")}`;
+
+type AllowanceAdjustmentCommandOptions = {
+  target: string;
+  remove: readonly string[];
+  template: RatchetAllowance;
+};
+export const allowanceAdjustmentCommand = ({
+  target,
+  remove,
+  template,
+}: AllowanceAdjustmentCommandOptions): string => {
+  const consolidate =
+    remove.length === 0 ? "" : `${allowanceRemovalCommand(remove)} && `;
+  return `mkdir -p ${shellArgument(ALLOWANCE_DIRECTORY)} && ${consolidate}printf '%s\\n' ${shellArgument(JSON.stringify(template))} > ${shellArgument(target)}`;
+};
+
 // Presence in the measured base makes an allowance inert, even if the head
 // edits its contents. Read committed head files so funding has the same Git
 // boundary.
@@ -4265,7 +4623,7 @@ const checkAllowances = ({
     for (const { file, delta } of increases) {
       if (metric.growth === "shrink-only") {
         errors.push(
-          `${diff.id}${file === undefined ? "" : ` (${file})`}: actual increase ${delta}; shrink-only metric takes no allowances. Use the transition owner and declare a managed transition spec.`,
+          `${diff.id}${file === undefined ? "" : ` (${file})`}: actual increase ${delta}; shrink-only metric takes no allowances.`,
         );
         continue;
       }
@@ -4287,14 +4645,25 @@ const checkAllowances = ({
         delta,
         reason: "Explain why this increase is needed",
       };
+      const command = allowanceAdjustmentCommand({
+        target: filename,
+        remove: funded?.paths.slice(1) ?? [],
+        template,
+      });
+      const adjustment =
+        funded === undefined
+          ? `Add ${filename}`
+          : `Adjust ${funded.paths.join(", ")}, merging their funding into ${filename}`;
       errors.push(
-        `${diff.id}${file === undefined ? "" : ` (${file})`}: actual increase ${delta}, funded ${funded?.delta ?? 0} (${(funded?.delta ?? 0) > delta ? "over-funded" : "unfunded increase"}). ${funded === undefined ? "Add" : "Adjust"} ${filename} so added deltas total exactly ${delta}: ${JSON.stringify(template)}`,
+        `${diff.id}${file === undefined ? "" : ` (${file})`}: actual increase ${delta}, funded ${funded?.delta ?? 0} (${(funded?.delta ?? 0) > delta ? "over-funded" : "unfunded increase"}). ${adjustment} so added deltas total exactly ${delta}: ${JSON.stringify(template)}\n` +
+          `    After deciding the increase is required, run: ${command}\n` +
+          "    Replace the reason with the justification, review all added deltas, then run `bun scripts/ratchet.ts --check`.",
       );
     }
   }
   for (const [key, { paths, delta }] of funding) {
     errors.push(
-      `${paths.join(", ")}: ${key} actual increase 0, funded ${delta}; allowance with no increase, remove the added allowance`,
+      `${paths.join(", ")}: ${key} actual increase 0, funded ${delta}; allowance with no increase, remove it with: ${allowanceRemovalCommand(paths)}`,
     );
   }
   return errors;
@@ -4328,7 +4697,7 @@ const runCheck = (): number => {
   const head = scanCheckedHead(headRef);
   const current = head.snapshot;
   const headFinished = performance.now();
-  const base = comparisonBase();
+  const base = comparisonBase(headRef);
   const baseline = scanMergeBase({ ref: base, previous: head });
   console.log(
     `ratchet timing: head ${(headFinished - started).toFixed(0)}ms; base export + scan ${(performance.now() - headFinished).toFixed(0)}ms (${base})`,
@@ -4338,7 +4707,11 @@ const runCheck = (): number => {
   const drops: MetricDiff[] = [];
   const remedies = new Set<string>();
 
-  const assessment = assessMeasurements({ current, baseline });
+  const assessment = assessMeasurements({
+    current,
+    baseline,
+    renamedFrom: renamedFiles(base, headRef),
+  });
   for (const [index, diff] of assessment.diffs.entries()) {
     const metric =
       RATCHET_METRICS.at(index) ?? panic("ratchet diff has no metric");
@@ -4390,14 +4763,15 @@ const runCheck = (): number => {
   if (regressions.some(({ id }) => PER_FILE_METRIC_IDS.has(id))) {
     console.error(
       "\nA per-file metric fails on any file above its own baseline, even when\n" +
-        "the total did not rise: move the new occurrence behind the owner instead.",
+        "the total did not rise: move the new occurrence behind the owner instead.\n" +
+        "File moves follow Git rename detection; edits below Git's similarity threshold are treated as a deletion plus an addition.",
     );
   }
   for (const remedy of remedies) {
     console.error(`\n${remedy}`);
   }
   console.error(
-    "\nIncreases relative to the measured base tree require exact, justified allowances added in this PR.",
+    "\nIncreases relative to the measured base tree require exact, justified allowances added in this PR. Recheck with `bun scripts/ratchet.ts --check`.",
   );
   return 1;
 };
@@ -4463,6 +4837,26 @@ const SELF_TEST_PACKAGE_AS_CASTS = [
   "",
 ].join("\n");
 const EXPECTED_PACKAGE_AS_CASTS = 2;
+
+const SELF_TEST_RAW_NUMERIC_COERCIONS = [
+  "Number(amount)",
+  "parseInt(text, 10)",
+  "parseFloat(decimal)",
+  "Number.parseInt(text, 10)",
+  "Number.parseFloat(decimal)",
+  'Number("12")',
+  "Number(12)",
+  "Number(12n)",
+  "Number(true)",
+  "Number(null)",
+  "Number(-12)",
+  "Number(+12n)",
+  "schema.Number(amount)",
+  "other.parseInt(text)",
+  "// Number(amount) and parseInt(text)",
+  'const example = "Number(amount)";',
+].join("\n");
+const EXPECTED_RAW_NUMERIC_COERCIONS = 5;
 
 const LEGACY_PAINT_TRANSITION_FIXTURE_LINES = [
   `const directClass = "transition transition-colors";`,
@@ -4585,6 +4979,9 @@ const SELF_TEST_NULLISH = `${NULLISH_FIXTURE_LINES.join("\n")}\n`;
 // string/template false positives (e, f, g) are excluded.
 const EXPECTED_NULLISH = 5;
 
+// Two disabled Buttons that say nothing (the bare flag, and one with only a
+// tooltip); a reasoned one, a never-disabled one, another control, and the
+// same text in a comment and a string do not count.
 const LEGACY_REALTIME_INVALIDATION_FIXTURE_LINES = [
   'const direct = { type: "invalidate-query", data: ["entities"] };',
   "const named = { type: REALTIME_EVENT_TYPE.INVALIDATE_QUERY, data: key };",
@@ -4638,7 +5035,35 @@ const SHARED_WEB_HELPER_FIXTURE_LINES = [
   "// title={formatFullTimestamp(value)} must not count.",
 ];
 const SELF_TEST_SHARED_WEB_HELPERS = `${SHARED_WEB_HELPER_FIXTURE_LINES.join("\n")}\n`;
+const UNDECLARED_API_CLIENT_WRITE_FIXTURE_LINES = [
+  'import { api, apiClient as client } from "@/lib/api";',
+  'import { invokeCapability } from "@/lib/capabilities/capability-request";',
+  'import { useCapabilityMutation } from "@/lib/capabilities/use-capability-mutation";',
+  "await api.items.post(body);",
+  "await client.v1.memories({ id }).delete();",
+  "const route = api.items({ id });",
+  "await route.patch(body);",
+  'await invokeCapability("items.create", async (request) => await api.items.post(body, request));',
+  'useCapabilityMutation({ capability: "items.update", mutationFn: async (vars, request) => await route.patch(vars, request) });',
+  "await api.items.get();",
+  "map.delete(key);",
+];
+const SELF_TEST_UNDECLARED_API_CLIENT_WRITES = `${UNDECLARED_API_CLIENT_WRITE_FIXTURE_LINES.join("\n")}\n`;
+// The bare post, the aliased delete and the write through `route`; declared
+// writes, reads and unrelated `delete` calls are excluded.
+const EXPECTED_UNDECLARED_API_CLIENT_WRITES = 3;
 const EXPECTED_RAW_USER_AVATAR_PRIMITIVES = 1;
+const TOLERATED_BROWSER_ERROR_FIXTURE_LINES = [
+  'browserErrors.tolerate({ pattern: /a/u, reason: "r", removedBy: "x" });',
+  "browserErrors",
+  '  .tolerate({ pattern: /b/u, reason: "r", removedBy: "x" });',
+  "browserErrors.expectCaptured(/c/u);",
+  "// browserErrors.tolerate({ pattern: /d/u }) must not count.",
+];
+const SELF_TEST_TOLERATED_BROWSER_ERRORS = `${TOLERATED_BROWSER_ERROR_FIXTURE_LINES.join("\n")}\n`;
+// The plain call and the one split across lines; the required declaration
+// and the comment are excluded.
+const EXPECTED_TOLERATED_BROWSER_ERRORS = 2;
 const EXPECTED_SHADOWED_USER_NAME_HELPERS = 2;
 const EXPECTED_AD_HOC_RELATIVE_TIME_FORMATTING = 3;
 
@@ -4657,7 +5082,6 @@ const SHARED_API_HELPER_FIXTURE_LINES = [
   "// value::timestamp AT TIME ZONE 'UTC' must not count.",
 ];
 const SELF_TEST_SHARED_API_HELPERS = `${SHARED_API_HELPER_FIXTURE_LINES.join("\n")}\n`;
-const EXPECTED_DIRECT_AUDIT_LOG_INSERTS = 1;
 
 // One of each shape the implicit-root counter owns (the exhaustive cases live
 // in scripts/root-connection-shapes.test.ts); the same content written to a
@@ -4738,28 +5162,21 @@ const SELF_TEST_AUDIT_SKIP_DIRECTIVES = `${AUDIT_SKIP_FIXTURE_LINES.join("\n")}\
 const EXPECTED_AUDIT_SKIP_DIRECTIVES = 4;
 const EXPECTED_INLINE_TIMESTAMP_CURSOR_SQL = 2;
 
-const TIMESTAMP_BOUNDARY_FIXTURE_LINES = [
-  'import { or as anyOf } from "drizzle-orm";',
-  'import { pgTimestampCursorBoundary as cursorBoundary } from "@/api/lib/db-pagination";',
-  [
-    "const manual = or(",
-    "lt(column, pgTimestampCursorBoundary(first)), ",
-    "eq(column, pgTimestampCursorBoundary(first))",
-    ");",
-  ].join(""),
-  [
-    "const aliased = anyOf(",
-    "lt(column, cursorBoundary(second)), ",
-    "eq(column, cursorBoundary(second))",
-    ");",
-  ].join(""),
-  "const first = pgTimestampCursorBoundary(cursor.timestamp);",
-  "const second = pgTimestampCursorBoundary(other.timestamp);",
-  "const unrelated = buildTimestampBoundary(value);",
-  "// or(pgTimestampCursorBoundary(a), pgTimestampCursorBoundary(b))",
-];
-const SELF_TEST_TIMESTAMP_BOUNDARIES = `${TIMESTAMP_BOUNDARY_FIXTURE_LINES.join("\n")}\n`;
-const EXPECTED_REPEATED_TIMESTAMP_CURSOR_BOUNDARIES = 2;
+// Counted: the owner database and an owner transaction cast to production
+// handle types, by call and by `as`. Not counted: the row-security database
+// the production factories wrap, a stub object, and a test-only type.
+const SELF_TEST_TEST_DATABASE_HANDLE_CASTS = [
+  'import { getRlsFixture } from "@/api/tests/security/rls-fixture";',
+  "const { testDb } = await getRlsFixture();",
+  "await finalize({ tx: asTestRaw<Transaction>(testDb) });",
+  "await testDb.transaction(async (tx) => await upsert(asTestRaw<Transaction>(tx)));",
+  "const scopedDb = testDb as unknown as ScopedDb;",
+  "const database = asTestRaw<RlsDatabase<Transaction>>(testDb);",
+  "const stub = asTestRaw<Transaction>({ select: () => [] });",
+  "const raw = asTestRaw<TestDatabase>(testDb);",
+  "",
+].join("\n");
+const EXPECTED_TEST_DATABASE_HANDLE_CASTS = 3;
 
 const DIRECT_ERROR_FIXTURE_LINES = [
   "stellaToast.add({ title: error instanceof Error ? error.message : fallback });",
@@ -4767,6 +5184,7 @@ const DIRECT_ERROR_FIXTURE_LINES = [
   "stellaToast.add({ title: result.error.message ?? fallback });",
   "if (APIError.is(error) &&",
   "    error.message) {",
+  "}",
   "const internal = userErrorMessage(response.error, fallback);",
   'const literal = "error.message ?? fallback";',
   "// error instanceof Error ? error.message : fallback",
@@ -4866,6 +5284,7 @@ const EXPECTED_BARE_FIXTURE_DIRECTIVES = 3;
 // plus one in the operational-script fixture, which also proves the budgets
 // reach beyond `apps/*/src`.
 const EXPECTED_NAMED_FIXTURE_SUPPRESSIONS = {
+  "citation-evidence-text-fence/citation-evidence-text-fence": 0,
   "no-body-ownership-ids/no-body-ownership-ids": 0,
   "no-unbranded-ownership-id-param/no-unbranded-ownership-id-param": 0,
   "require-search-scope/require-search-scope": 0,
@@ -4882,7 +5301,6 @@ const EXPECTED_NAMED_FIXTURE_SUPPRESSIONS = {
   "no-unowned-file-version-write/no-unowned-file-version-write": 0,
   "no-direct-audit-log-insert/no-direct-audit-log-insert": 0,
   "scanned-file-boundary/scanned-file-boundary": 0,
-  "no-raw-zip-load/no-raw-zip-load": 0,
   "no-direct-buffer-cleanup-intent-delete/no-direct-buffer-cleanup-intent-delete": 0,
   "no-direct-ingestion-checkpoint-write/no-direct-ingestion-checkpoint-write": 0,
   "require-buffer-cleanup-intent-status/require-buffer-cleanup-intent-status": 0,
@@ -5215,24 +5633,12 @@ const RESULT_BOUNDARY_FILE_FIXTURE_LINES = [
 ];
 const SELF_TEST_RESULT_BOUNDARY_FILE = `${RESULT_BOUNDARY_FILE_FIXTURE_LINES.join("\n")}\n`;
 
-// Two pairs in one file and one in another: the count is the number of
-// ledger lines, not of files.
-const SELF_TEST_INTERNAL_MODULE_MOCK_LEDGER = `${JSON.stringify(
-  [
-    "apps/api/src/handlers/alpha.test.ts::@/api/lib/s3",
-    "apps/api/src/handlers/alpha.test.ts::@/api/lib/s3-presign",
-    "packages/cli/src/login.test.ts::./browser-open.js",
-  ],
+const SELF_TEST_INSTRUCTION_ENFORCEMENT_LEDGER = `${JSON.stringify(
+  { reviewOnlyRules: 4, excludedSources: [], excludedSections: [] },
   null,
   2,
 )}\n`;
-const EXPECTED_INTERNAL_MODULE_MOCK_LEDGER_ENTRIES = 3;
-const SELF_TEST_PARSER_VALIDATOR_LEDGER = `${JSON.stringify([
-  "apps/api/src/handlers/case-law/ingestion/parsers/alpha.ts::import::1",
-  "apps/api/src/handlers/case-law/ingestion/parsers/alpha.ts::call::1",
-  "apps/api/src/lib/legal-search/parsers/beta.ts::call::1",
-])}\n`;
-const EXPECTED_PARSER_VALIDATOR_LEDGER_ENTRIES = 3;
+const EXPECTED_REVIEW_ONLY_INSTRUCTION_RULES = 4;
 // Expected: the two tables that declare organizationId AND spread wsPolicies().
 // Excluded: the workspace-only table with no organizationId column, the table
 // already on wsOrganizationPolicies, the org-only table, the table whose only
@@ -5315,9 +5721,9 @@ const EXPECTED_CROSS_APP_LIB_PATH_COPIES = 2;
 const EXPECTED_CROSS_WORKSPACE_DUPLICATE_EXPORT_NAMES = 3;
 // apps/api/src/lib children: api-handlers.ts, result-catches.ts,
 // result-throws.ts, shared/ (from the earlier fixtures), plus alpha/, copied/,
-// api-only-helper.ts and shared-names.ts. The two `.test.ts` files, the
+// api-only-helper.ts, shared-names.ts and db/ (the corpus membership fixture). The two `.test.ts` files, the
 // `.type-test.ts` file, __fixtures__/, tests/ and __tests__/ are excluded.
-const EXPECTED_API_LIB_TOP_LEVEL_ENTRIES = 9;
+const EXPECTED_API_LIB_TOP_LEVEL_ENTRIES = 10;
 // apps/web/src/lib children: index.tsx (from the earlier fixtures), plus
 // beta/, copied/, mirrored-names.ts and second-definition.ts. The `.test.ts`
 // companion is excluded.
@@ -5667,68 +6073,6 @@ const writeFixture = (root: string, rel: string, content: string): void => {
   writeFileSync(full, content);
 };
 
-// Two truncated entries among four, plus shapes the counter must NOT count:
-// `inputSchemaTruncated: false`, and an entry that simply omits the field.
-const SELF_TEST_CAPABILITY_CATALOG = [
-  { id: "alpha.create", inputSchemaTruncated: true },
-  { id: "beta.read", inputSchemaTruncated: false },
-  { id: "gamma.update" },
-  { id: "delta.delete", inputSchemaTruncated: true },
-  // Transport shapes: required file input, file response, BOTH legs (must count
-  // once, not twice), a plain JSON transport, and an OPTIONAL file input (the
-  // fileless-exposed shape, which must NOT count — it stays invokable).
-  {
-    id: "eta.create",
-    transport: {
-      type: "file-input",
-      input: { field: "file", required: true, mediaTypes: [] },
-      alternative: { type: "none", reason: "fixture" },
-    },
-  },
-  {
-    id: "theta.get",
-    transport: {
-      type: "file-response",
-      response: { mediaTypes: ["application/pdf"] },
-      alternative: { type: "none", reason: "fixture" },
-    },
-  },
-  {
-    id: "iota.update",
-    transport: {
-      type: "file-both",
-      input: { field: "file", required: true, mediaTypes: [] },
-      response: { mediaTypes: ["application/pdf"] },
-      alternative: { type: "none", reason: "fixture" },
-    },
-  },
-  { id: "kappa.delete", transport: { type: "json" } },
-  {
-    id: "kappa.prefill",
-    transport: {
-      type: "file-input",
-      input: { field: "file", required: false, mediaTypes: [] },
-      alternative: { type: "none", reason: "fixture" },
-    },
-  },
-  // Read-scope shapes: two reads on a write-only scope MUST count, a read on a
-  // read scope and a write on a write scope must NOT.
-  { id: "lambda.list", access: "read", scope: "stella:matters_write" },
-  { id: "mu.get", access: "read", scope: "stella:admin_write" },
-  { id: "nu.get", access: "read", scope: "stella:read" },
-  { id: "xi.create", access: "write", scope: "stella:matters_write" },
-];
-// Two truncated entries in the catalog fixture.
-const EXPECTED_TRUNCATED_CAPABILITY_SCHEMAS = 2;
-// Three suppressed entries (required file input, file response, and the
-// both-legs entry counted ONCE) in the catalog fixture; the plain JSON entry
-// and the OPTIONAL-file-input entry are excluded.
-const EXPECTED_FILE_TRANSPORT_SUPPRESSED = 3;
-// Two read-on-write-scope entries (`lambda.list`, `mu.get`) in the catalog
-// fixture; the read-on-read-scope and write-on-write-scope entries, and every
-// earlier fixture entry lacking access/scope, are excluded.
-const EXPECTED_READ_CAPABILITIES_WITH_WRITE_SCOPE = 2;
-
 // The two better-result convention counters share one shape of check: the
 // fixture count matches, and the boundary fixture file stays out of the
 // per-file map.
@@ -5859,16 +6203,71 @@ const asCastSelfTestFailures = (snapshot: Baseline): string[] => {
   return failures;
 };
 
+const rawNumericCoercionSelfTestFailures = (snapshot: Baseline): string[] => {
+  const failures: string[] = [];
+  const id = "raw-numeric-coercions";
+  const metric = RATCHET_METRICS.find((entry) => entry.id === id);
+  const measured = requireSnapshot(snapshot, id);
+  if (metric?.scope !== "file") {
+    return [`${id} is not registered as a file metric`];
+  }
+  if (metric.growth !== "shrink-only" || metric.perFile !== true) {
+    failures.push(`${id} is not per-file shrink-only`);
+  }
+  if (measured.count !== EXPECTED_RAW_NUMERIC_COERCIONS) {
+    failures.push(
+      `${id} counted ${measured.count}, expected ${EXPECTED_RAW_NUMERIC_COERCIONS}`,
+    );
+  }
+  for (const file of [
+    "apps/web/src/raw-numeric-coercions.test.ts",
+    "apps/web/src/raw-numeric-coercions.gen.ts",
+    "apps/web/src/scripts/raw-numeric-coercions.ts",
+    "packages/example/src/evals/raw-numeric-coercions.ts",
+    "packages/agent-input/src/numeric-token.ts",
+  ]) {
+    if (file in measured.files) {
+      failures.push(`${id} counted excluded source ${file}`);
+    }
+  }
+  const newCall = "Number(variable)";
+  const after = metric.count(`${SELF_TEST_RAW_NUMERIC_COERCIONS}\n${newCall}`, {
+    file: "apps/web/src/raw-numeric-coercions.ts",
+    role: "head",
+  });
+  const change = diffMetric(
+    id,
+    {
+      count: after,
+      files: { "apps/web/src/raw-numeric-coercions.ts": after },
+    },
+    {
+      count: EXPECTED_RAW_NUMERIC_COERCIONS,
+      files: {
+        "apps/web/src/raw-numeric-coercions.ts": EXPECTED_RAW_NUMERIC_COERCIONS,
+      },
+    },
+    metricGate(metric),
+  );
+  if (
+    after !== EXPECTED_RAW_NUMERIC_COERCIONS + 1 ||
+    change.status !== "regressed"
+  ) {
+    failures.push(`${id} did not reject a newly added Number(variable) call`);
+  }
+  return failures;
+};
+
 const ledgerSelfTestFailures = (snapshot: Baseline): string[] => {
   const failures: string[] = [];
   for (const { id, expected } of [
     {
-      id: "parser-validator-call-ledger-entries",
-      expected: EXPECTED_PARSER_VALIDATOR_LEDGER_ENTRIES,
+      id: "review-only-instruction-rules",
+      expected: EXPECTED_REVIEW_ONLY_INSTRUCTION_RULES,
     },
     {
-      id: "internal-module-mock-ledger-entries",
-      expected: EXPECTED_INTERNAL_MODULE_MOCK_LEDGER_ENTRIES,
+      id: "outbound-indirect-access-exceptions",
+      expected: 1,
     },
   ]) {
     const metric = requireSnapshot(snapshot, id);
@@ -6110,8 +6509,123 @@ const schemaIntrospectionSelfTestFailures = (snapshot: Baseline): string[] => {
   return failures;
 };
 
+const unsignalledSkipSelfTestFailures = (): string[] => {
+  const failures: string[] = [];
+  const skipFixtures = [
+    {
+      name: "nullable computed value skipped",
+      code: "for (const item of items) { const head = sentenceHeadPattern(item.text); if (head === null) { continue; } }",
+      expected: 1,
+    },
+    {
+      name: "empty text extraction fallback",
+      code: 'function fixture() {\nreturn { kind: "windowed-text", text: asString(valueAtPath(payload, textPath)) ?? "", nextCursor: asString(fieldOf(payload, "nextCursor")) };\n}',
+      expected: 1,
+    },
+    {
+      name: "catch without signal",
+      code: "try { read(); } catch {}",
+      expected: 1,
+    },
+    {
+      name: "catch with telemetry",
+      code: "read().catch(cause => captureException(cause));",
+      expected: 0,
+    },
+    {
+      name: "catch with result",
+      code: "function fixture() {\ntry { read(); } catch { return Result.err(cause); }\n}",
+      expected: 0,
+    },
+  ];
+  const skipMetric = RATCHET_METRICS.find(
+    ({ id }) => id === "unsignalled-skip",
+  );
+  if (
+    skipMetric?.scope !== "file" ||
+    skipMetric.measurement === "role-sensitive"
+  ) {
+    failures.push("unsignalled-skip requires a file counter");
+  } else {
+    for (const fixture of skipFixtures) {
+      const actual = skipMetric.count(fixture.code, {
+        file: "apps/api/src/shapes.ts",
+      });
+      if (actual !== fixture.expected) {
+        failures.push(
+          `unsignalled-skip ${fixture.name}: counted ${actual}, expected ${fixture.expected}`,
+        );
+      }
+    }
+  }
+  return failures;
+};
+
+// Every call form counts; a mention in a comment or a string does not.
+const diffScopeGapSelfTestFailures = (): string[] =>
+  [
+    { code: 'const a = { x: gap("needs-base", "why") };', expected: 1 },
+    { code: "const a = { x: gap(KIND, REASON) };", expected: 1 },
+    {
+      code: '// gap("needs-base", "why")\nconst s = \'gap("x")\';',
+      expected: 0,
+    },
+  ].flatMap(({ code, expected }) => {
+    const counted = countDiffScopeGaps(code, {
+      file: "scripts/diff-scoped-steps.ts",
+    });
+    return counted === expected
+      ? []
+      : [
+          `diff-scope-gaps counted ${counted}, expected ${expected}, for: ${code.replaceAll("\n", " ")}`,
+        ];
+  });
+
+const projectionTieSelfTestFailures = (): string[] => {
+  const failures: string[] = [];
+  const projectionTieCases = [
+    {
+      code: "payload satisfies v.InferInput<typeof SEARCH_CASE_LAW_PROJECTION>;",
+      expected: 1,
+    },
+    {
+      code: "payload satisfies v.InferInput<\n typeof READ_STATUTE_PROJECTION\n>;",
+      expected: 1,
+    },
+    {
+      code: "payload satisfies v.InferInput<typeof INPUT_SCHEMA>;",
+      expected: 0,
+    },
+    {
+      code: "payload satisfies AssertNoExtraFields<typeof payload, v.InferInput<typeof READ_STATUTE_PROJECTION>>;",
+      expected: 0,
+    },
+    {
+      code: "projectionPayload(READ_STATUTE_PROJECTION, payload);",
+      expected: 0,
+    },
+    {
+      code: "// payload satisfies v.InferInput<typeof READ_STATUTE_PROJECTION>;",
+      expected: 0,
+    },
+  ];
+  for (const { code, expected } of projectionTieCases) {
+    const counted = countWeakMcpProjectionTies(code, {
+      file: "apps/api/src/mcp/tool.ts",
+    });
+    if (counted !== expected) {
+      failures.push(
+        `weak-mcp-projection-ties counted ${counted}, expected ${expected}, for: ${code}`,
+      );
+    }
+  }
+
+  return failures;
+};
+
 const runSelfTest = (): number => {
   const failures: string[] = [];
+  failures.push(...unsignalledSkipSelfTestFailures());
   const root = mkdtempSync(path.join(tmpdir(), "ratchet-selftest-"));
 
   failures.push(...dependencyMetricSelfTestFailures(root));
@@ -6200,6 +6714,36 @@ const runSelfTest = (): number => {
     writeFixture(root, "apps/api/src/casts.ts", SELF_TEST_AS_CASTS);
     writeFixture(
       root,
+      "apps/web/src/raw-numeric-coercions.ts",
+      SELF_TEST_RAW_NUMERIC_COERCIONS,
+    );
+    writeFixture(
+      root,
+      "apps/web/src/raw-numeric-coercions.test.ts",
+      "Number(testValue)",
+    );
+    writeFixture(
+      root,
+      "apps/web/src/raw-numeric-coercions.gen.ts",
+      "Number(generatedValue)",
+    );
+    writeFixture(
+      root,
+      "apps/web/src/scripts/raw-numeric-coercions.ts",
+      "Number(scriptValue)",
+    );
+    writeFixture(
+      root,
+      "packages/example/src/evals/raw-numeric-coercions.ts",
+      "Number(evalValue)",
+    );
+    writeFixture(
+      root,
+      "packages/agent-input/src/numeric-token.ts",
+      "Number(tokenValue)",
+    );
+    writeFixture(
+      root,
       "apps/web/src/legacy-paint-transitions.tsx",
       SELF_TEST_LEGACY_PAINT_TRANSITIONS,
     );
@@ -6241,6 +6785,11 @@ const runSelfTest = (): number => {
     );
     writeFixture(
       root,
+      "apps/api/src/handlers/document-reviews/handle-casts.integration.test.ts",
+      SELF_TEST_TEST_DATABASE_HANDLE_CASTS,
+    );
+    writeFixture(
+      root,
       "apps/api/scripts/implicit-root-connection.ts",
       SELF_TEST_IMPLICIT_ROOT_CONNECTION,
     );
@@ -6259,13 +6808,18 @@ const runSelfTest = (): number => {
     );
     writeFixture(
       root,
-      "apps/api/src/shared-helper-shapes.ts",
-      SELF_TEST_SHARED_API_HELPERS,
+      "apps/web/e2e/specs/tolerated-browser-errors.spec.ts",
+      SELF_TEST_TOLERATED_BROWSER_ERRORS,
     );
     writeFixture(
       root,
-      "apps/api/src/timestamp-boundaries.ts",
-      SELF_TEST_TIMESTAMP_BOUNDARIES,
+      "apps/web/src/undeclared-api-client-writes.ts",
+      SELF_TEST_UNDECLARED_API_CLIENT_WRITES,
+    );
+    writeFixture(
+      root,
+      "apps/api/src/shared-helper-shapes.ts",
+      SELF_TEST_SHARED_API_HELPERS,
     );
     writeFixture(
       root,
@@ -6374,13 +6928,6 @@ const runSelfTest = (): number => {
       "apps/api/src/lib/api-handlers.ts",
       SELF_TEST_RESULT_BOUNDARY_FILE,
     );
-    for (const capability of SELF_TEST_CAPABILITY_CATALOG) {
-      writeFixture(
-        root,
-        `packages/cli/capabilities/${capability.id}.json`,
-        `${JSON.stringify(capability)}\n`,
-      );
-    }
     // Both handler globs the subject-gate metric covers, plus the gate module
     // itself, so the exclusion is exercised rather than assumed.
     writeFixture(
@@ -6400,13 +6947,13 @@ const runSelfTest = (): number => {
     );
     writeFixture(
       root,
-      "scripts/parser-validator-call-ledger.json",
-      SELF_TEST_PARSER_VALIDATOR_LEDGER,
+      INSTRUCTION_ENFORCEMENT_LEDGER_REL,
+      SELF_TEST_INSTRUCTION_ENFORCEMENT_LEDGER,
     );
     writeFixture(
       root,
-      INTERNAL_MODULE_MOCK_LEDGER_REL,
-      SELF_TEST_INTERNAL_MODULE_MOCK_LEDGER,
+      "apps/web/src/runtime.ts",
+      "const module = await import(mod);",
     );
     writeFixture(
       root,
@@ -6525,6 +7072,11 @@ const runSelfTest = (): number => {
     // literal, and a test-file copy the scan excludes outright.
     writeFixture(root, "apps/api/src/clone-origin.ts", SELF_TEST_CLONE_BLOCK);
     writeFixture(root, "apps/web/src/clone-copy.ts", SELF_TEST_CLONE_BLOCK);
+    writeFixture(
+      root,
+      "apps/api/src/lib/db/public-corpus-audit/membership.ts",
+      "export const PUBLIC_CORPUS_BOOKKEEPING_TABLES = [{}, {}];\n",
+    );
     writeFixture(root, "apps/api/src/clone-unique.ts", SELF_TEST_UNIQUE_BLOCK);
     writeFixture(
       root,
@@ -6596,6 +7148,7 @@ const runSelfTest = (): number => {
     failures.push(...schemaIntrospectionSelfTestFailures(snapshot));
 
     failures.push(...asCastSelfTestFailures(snapshot));
+    failures.push(...rawNumericCoercionSelfTestFailures(snapshot));
     failures.push(...failureSinkSelfTestFailures(snapshot));
     failures.push(...ownerHandleAllowlistSelfTestFailures(snapshot));
 
@@ -6668,22 +7221,21 @@ const runSelfTest = (): number => {
           EXPECTED_LEGACY_PAINT_TRANSITIONS_ASTRO,
       ],
       ["raw-user-avatar-primitive", EXPECTED_RAW_USER_AVATAR_PRIMITIVES],
+      ["e2e-tolerated-browser-errors", EXPECTED_TOLERATED_BROWSER_ERRORS],
+      ["undeclared-api-client-writes", EXPECTED_UNDECLARED_API_CLIENT_WRITES],
       ["shadowed-user-name-helpers", EXPECTED_SHADOWED_USER_NAME_HELPERS],
       [
         "ad-hoc-relative-time-formatting",
         EXPECTED_AD_HOC_RELATIVE_TIME_FORMATTING,
       ],
-      ["direct-audit-log-insert", EXPECTED_DIRECT_AUDIT_LOG_INSERTS],
       ["audit-skip-directives", EXPECTED_AUDIT_SKIP_DIRECTIVES],
+      ["public-corpus-audit-membership", 2],
       [
         "implicit-root-connection-shapes",
         EXPECTED_IMPLICIT_ROOT_CONNECTION_SHAPES,
       ],
       ["inline-timestamp-cursor-sql", EXPECTED_INLINE_TIMESTAMP_CURSOR_SQL],
-      [
-        "repeated-timestamp-cursor-boundary",
-        EXPECTED_REPEATED_TIMESTAMP_CURSOR_BOUNDARIES,
-      ],
+      ["test-database-handle-casts", EXPECTED_TEST_DATABASE_HANDLE_CASTS],
     ] as const;
     for (const [id, expected] of sharedHelperMetricExpectations) {
       const metric = requireSnapshot(snapshot, id);
@@ -6817,40 +7369,6 @@ const runSelfTest = (): number => {
       );
     }
 
-    const truncatedCapabilityMetric = requireSnapshot(
-      snapshot,
-      "capability-schemas-truncated",
-    );
-    if (
-      truncatedCapabilityMetric.count !== EXPECTED_TRUNCATED_CAPABILITY_SCHEMAS
-    ) {
-      failures.push(
-        `capability-schemas-truncated counted ${truncatedCapabilityMetric.count}, expected ${EXPECTED_TRUNCATED_CAPABILITY_SCHEMAS}`,
-      );
-    }
-
-    const fileTransportMetric = requireSnapshot(
-      snapshot,
-      "capability-file-transport-suppressed",
-    );
-    if (fileTransportMetric.count !== EXPECTED_FILE_TRANSPORT_SUPPRESSED) {
-      failures.push(
-        `capability-file-transport-suppressed counted ${fileTransportMetric.count}, expected ${EXPECTED_FILE_TRANSPORT_SUPPRESSED}`,
-      );
-    }
-
-    const readWriteScopeMetric = requireSnapshot(
-      snapshot,
-      "read-capabilities-with-write-scope",
-    );
-    if (
-      readWriteScopeMetric.count !== EXPECTED_READ_CAPABILITIES_WITH_WRITE_SCOPE
-    ) {
-      failures.push(
-        `read-capabilities-with-write-scope counted ${readWriteScopeMetric.count}, expected ${EXPECTED_READ_CAPABILITIES_WITH_WRITE_SCOPE}`,
-      );
-    }
-
     const crossHandlerMetric = requireSnapshot(
       snapshot,
       "cross-handler-imports",
@@ -6924,7 +7442,7 @@ const runSelfTest = (): number => {
     // hand-rolled gate the metric is holding at zero.
     const redistributableCases = [
       {
-        code: "if (!isRedistributable(row.descriptor)) return null;",
+        code: "() => {\n  if (!isRedistributable(row.descriptor)) return null;\n};",
         expected: 1,
       },
       {
@@ -6935,7 +7453,10 @@ const runSelfTest = (): number => {
         code: 'const message = "call isRedistributable(x) instead";',
         expected: 0,
       },
-      { code: "if (source.isRedistributable(row)) return row;", expected: 0 },
+      {
+        code: "() => {\n  if (source.isRedistributable(row)) return row;\n};",
+        expected: 0,
+      },
       {
         code: "isRedistributable(a); isRedistributable(b);",
         expected: 2,
@@ -6951,6 +7472,10 @@ const runSelfTest = (): number => {
         );
       }
     }
+
+    failures.push(...diffScopeGapSelfTestFailures());
+
+    failures.push(...projectionTieSelfTestFailures());
 
     // Diff behavior: equal passes, a rise regresses, a fall is a drop.
     const equal = diffMetric(
@@ -6996,6 +7521,29 @@ const runSelfTest = (): number => {
 
 // --- Entry ------------------------------------------------------------------
 
+const USAGE = `Usage: bun scripts/ratchet.ts [mode] [options]
+
+Modes:
+  (no mode)       Report current metric counts against the comparison base.
+  --check         Exit nonzero when an increase lacks an exact allowance.
+  --self-test     Run the ratchet's counter and gate checks.
+
+Options:
+  --base <commit> Compare against this revision instead of the merge base.
+  --head <commit> Measure this revision instead of the working tree.
+  --details       Include per-file counts in report mode.
+  -h, --help      Print this usage and exit.
+
+Allowances:
+  Add scripts/ratchet-allowances/<slug>.json in the measured head with:
+  { "metric": "<metric-id>", "delta": <positive integer>, "reason": "<justification>" }
+  Per-file metrics also require "file": "<repository-relative path>".
+  The total allowance must exactly match the measured increase.`;
+
+const printUsage = (write: (message: string) => void = console.log): void => {
+  write(USAGE);
+};
+
 const main = (): number => {
   const supportedFlags = new Set([
     "--check",
@@ -7004,9 +7552,15 @@ const main = (): number => {
     "--head",
     "--details",
   ]);
+  if (process.argv.includes("--help") || process.argv.includes("-h")) {
+    printUsage();
+    return 0;
+  }
   for (const argument of process.argv.slice(2)) {
-    if (argument.startsWith("--") && !supportedFlags.has(argument)) {
-      return panic(`unsupported ratchet option: ${argument}`);
+    if (argument.startsWith("-") && !supportedFlags.has(argument)) {
+      console.error(`unsupported ratchet option: ${argument}\n`);
+      printUsage(console.error);
+      return 1;
     }
   }
   if (process.argv.includes("--self-test")) {

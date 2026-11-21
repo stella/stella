@@ -4,7 +4,11 @@ import { and, asc, eq } from "drizzle-orm";
 
 import { Temporal } from "@stll/time";
 
-import { mcpConnectors, mcpUserConnections } from "@/api/db/schema";
+import {
+  MCP_RESPONSE_DISPOSITION,
+  mcpConnectors,
+  mcpUserConnections,
+} from "@/api/db/schema";
 import type { CachedMcpToolDefinition } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -16,7 +20,8 @@ import {
   refreshCachedMcpToolsForConnection,
 } from "@/api/lib/mcp-upstream/connections";
 import type { LoadedMcpConnection } from "@/api/lib/mcp-upstream/connections";
-import type { McpRequestContext } from "@/api/mcp/context";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
+import type { McpRequestResources } from "@/api/mcp/context";
 import { McpGatewayLoadError } from "@/api/mcp/errors";
 import { consumeMcpGatewayRateLimit } from "@/api/mcp/gateway/rate-limit";
 import type { InternalToolErrorResult } from "@/api/mcp/tool-types";
@@ -31,12 +36,14 @@ const mcpStructuredErrorResult = (
 ): CallToolResult => serializeToolResult(structuredErrorResult(args));
 
 export type ExternalGatewayDependencies = {
+  consumeMcpGatewayRateLimit: typeof consumeMcpGatewayRateLimit;
   loadActiveMcpConnectionsForUser: typeof loadActiveMcpConnectionsForUser;
   proxyMcpToolCall: typeof proxyMcpToolCall;
   refreshCachedMcpToolsForConnection: typeof refreshCachedMcpToolsForConnection;
 };
 
 const defaultDependencies: ExternalGatewayDependencies = {
+  consumeMcpGatewayRateLimit,
   loadActiveMcpConnectionsForUser,
   proxyMcpToolCall,
   refreshCachedMcpToolsForConnection,
@@ -81,7 +88,7 @@ export const listGatewayExternalMcpTools = async ({
   context,
   dependencies = defaultDependencies,
 }: {
-  context: McpRequestContext;
+  context: McpRequestResources;
   dependencies?: ExternalGatewayDependencies;
 }): Promise<ResolvedExternalMcpTool[]> => {
   let cachedRows = await loadCachedGatewayToolRows({ context });
@@ -133,7 +140,7 @@ export const resolveGatewayExternalMcpTool = async ({
   toolName,
   dependencies = defaultDependencies,
 }: {
-  context: McpRequestContext;
+  context: McpRequestResources;
   toolName: string;
   dependencies?: ExternalGatewayDependencies;
 }): Promise<ResolvedExternalMcpTool | null> =>
@@ -148,7 +155,7 @@ export const callGatewayExternalMcpTool = async ({
   dependencies = defaultDependencies,
 }: {
   args: Record<string, unknown>;
-  context: McpRequestContext;
+  context: McpRequestResources;
   toolName: string;
   dependencies?: ExternalGatewayDependencies;
 }) => {
@@ -176,7 +183,17 @@ export const callGatewayExternalMcpTool = async ({
     });
   }
 
-  const allowed = await consumeMcpGatewayRateLimit({
+  const permit = context.thirdPartyOutboundPermit;
+  if (permit === undefined) {
+    return mcpStructuredErrorResult({
+      code: "permission_denied",
+      message:
+        "This tool reaches a third-party service and runs only as a direct tool call",
+      hint: "Call the tool directly instead of from a script.",
+    });
+  }
+
+  const allowed = await dependencies.consumeMcpGatewayRateLimit({
     connectorSlug: resolved.connectorSlug,
     userId: context.userId,
   });
@@ -202,6 +219,7 @@ export const callGatewayExternalMcpTool = async ({
       args,
       cachedTool: resolved.cachedTool,
       organizationId: context.organizationId,
+      permit,
       row: resolved.connection,
       safeDb: context.safeDb,
       userId: context.userId,
@@ -215,11 +233,14 @@ export const callGatewayExternalMcpTool = async ({
     });
     return result;
   } catch (error) {
-    captureError(error, {
-      source: "mcp-gateway-external-call",
-      connectorSlug: resolved.connectorSlug,
-      toolName: resolved.cachedTool.rawName,
-    });
+    captureError(
+      error,
+      handlerErrorContext("gateway.callGatewayExternalMcpTool", {
+        source: "mcp-gateway-external-call",
+        connectorSlug: resolved.connectorSlug,
+        toolName: resolved.cachedTool.rawName,
+      }),
+    );
     await recordGatewayToolAudit({
       context,
       durationMs: Temporal.Now.instant().epochMilliseconds - startedAt,
@@ -242,7 +263,7 @@ const recordGatewayToolAudit = async ({
   resolved,
   toolKind,
 }: {
-  context: McpRequestContext;
+  context: McpRequestResources;
   durationMs: number;
   outcome: "error" | "rate_limited" | "success";
   resolved: ResolvedExternalMcpTool;
@@ -268,7 +289,12 @@ const recordGatewayToolAudit = async ({
       }),
   );
   if (Result.isError(result)) {
-    captureError(result.error, { source: "mcp-gateway-external-audit" });
+    captureError(
+      result.error,
+      handlerErrorContext("gateway.recordGatewayToolAudit.result_error", {
+        source: "mcp-gateway-external-audit",
+      }),
+    );
   }
 };
 
@@ -277,10 +303,15 @@ const refreshMissingCachedTools = async ({
   rows,
   dependencies,
 }: {
-  context: McpRequestContext;
+  context: McpRequestResources;
   rows: readonly GatewayConnectionToolRow[];
   dependencies: ExternalGatewayDependencies;
 }): Promise<boolean> => {
+  const permit = context.thirdPartyOutboundPermit;
+  if (permit === undefined) {
+    return false;
+  }
+
   const missingRows = rows.filter((row) => row.cachedTools === null);
   if (missingRows.length === 0) {
     return false;
@@ -293,6 +324,7 @@ const refreshMissingCachedTools = async ({
         await dependencies.refreshCachedMcpToolsForConnection({
           connectionId: row.userConnectionId,
           organizationId: context.organizationId,
+          permit,
           safeDb: context.safeDb,
           userId: context.userId,
         }),
@@ -305,7 +337,7 @@ const refreshMissingCachedTools = async ({
 const loadCachedGatewayToolRows = async ({
   context,
 }: {
-  context: McpRequestContext;
+  context: McpRequestResources;
 }): Promise<GatewayConnectionToolRow[]> => {
   const rows = await context.safeDb((tx) =>
     tx
@@ -328,6 +360,10 @@ const loadCachedGatewayToolRows = async ({
           eq(mcpUserConnections.userId, context.userId),
           eq(mcpUserConnections.enabled, true),
           eq(mcpUserConnections.status, "connected"),
+          eq(
+            mcpUserConnections.responseDisposition,
+            MCP_RESPONSE_DISPOSITION.normal,
+          ),
         ),
       )
       .orderBy(asc(mcpUserConnections.createdAt), asc(mcpUserConnections.id))
@@ -335,7 +371,12 @@ const loadCachedGatewayToolRows = async ({
   );
 
   if (Result.isError(rows)) {
-    captureError(rows.error, { source: "mcp-gateway-external-list" });
+    captureError(
+      rows.error,
+      handlerErrorContext("gateway.loadCachedGatewayToolRows.rows_error", {
+        source: "mcp-gateway-external-list",
+      }),
+    );
     // Propagate the load fault as a distinct state: returning `[]` here would
     // make a transient DB outage indistinguishable from "no connectors", so a
     // `tools/call` would answer `unknown_tool` and `tools/list` would silently

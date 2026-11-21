@@ -2,11 +2,15 @@ import { toolDefinition } from "@tanstack/ai";
 import type { AnyTextAdapter } from "@tanstack/ai";
 import { Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { eq } from "drizzle-orm";
 import * as v from "valibot";
 
 import { createPipelineContext } from "@stll/anonymize";
+import { AI_ERROR_KINDS } from "@stll/api-contract";
+import { rejectionOf } from "@stll/property-testing/rejection";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
+import { usageEvents } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
 import { deanonymizeFromBoundary } from "@/api/handlers/chat/third-party-boundary";
 import type { ChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
@@ -17,8 +21,13 @@ import {
 } from "@/api/handlers/chat/tools/tool-policy";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import {
+  admitModelDispatch,
+  type ModelDispatchAdmission,
+} from "@/api/lib/rate-limit/model-dispatch-admission";
 import { resolveTanStackTextModel } from "@/api/lib/tanstack-ai-generate";
 import type { ResolvedTanStackTextModel } from "@/api/lib/tanstack-ai-models";
+import { usageUnitsFromTokens } from "@/api/lib/usage/unit-model";
 import { anonymizeTextFieldsWithDependencies } from "@/api/mcp/anonymization-core";
 import { AnonymizedFieldBoundaryError } from "@/api/mcp/field-markers";
 import {
@@ -27,6 +36,10 @@ import {
 } from "@/api/tests/helpers/anonymize-pipeline-fakes";
 import { createScriptedTextAdapter } from "@/api/tests/helpers/chat-round-trip";
 import type { ScriptedTurn } from "@/api/tests/helpers/chat-round-trip";
+import {
+  testModelAdmission,
+  testOrganizationStateDb,
+} from "@/api/tests/helpers/model-dispatch-admission";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 import {
@@ -34,8 +47,9 @@ import {
   releaseRlsFixture,
 } from "@/api/tests/security/rls-fixture";
 import type { TestIds } from "@/api/tests/security/rls-helpers";
+import type { TestDatabase } from "@/api/tests/security/test-utils";
 
-import { runSubagent } from "./subagent-runner";
+import { runSubagent, subagentRunErrorMessage } from "./subagent-runner";
 import type { RunSubagentOptions } from "./subagent-runner";
 
 // Drives `runSubagent` through the real `chat()` loop with a scripted provider,
@@ -67,10 +81,12 @@ const ANSWER_STEP_USAGE = {
 
 let ids: TestIds;
 let safeDb: SafeDb;
+let testDb: TestDatabase;
 
 beforeAll(async () => {
   const fixture = await getRlsFixture();
   ids = fixture.ids;
+  testDb = fixture.testDb;
   safeDb = toSafeDbMock(
     asTestRaw<ScopedDb>(
       createScopedDb(fixture.testDb, [ids.wsA1], ids.orgA, ids.userA1),
@@ -85,11 +101,13 @@ afterAll(async () => {
 type RunScriptedSubagentOverrides = Partial<
   Pick<
     RunSubagentOptions,
-    "systemSafe" | "systemUntrusted" | "thirdPartyBoundary"
+    "modelId" | "systemSafe" | "systemUntrusted" | "thirdPartyBoundary"
   >
 > & {
+  traceId?: string | undefined;
   /** Wraps the scripted transport, e.g. to record what the provider receives. */
   wrapAdapter?: ((adapter: AnyTextAdapter) => AnyTextAdapter) | undefined;
+  admission?: ModelDispatchAdmission | undefined;
 };
 
 const runScriptedSubagent = async (
@@ -129,14 +147,16 @@ const runScriptedSubagent = async (
         safeDb,
         serviceTier: "standard",
         sessionId: Bun.randomUUIDv7(),
-        traceId: Bun.randomUUIDv7(),
+        traceId: overrides.traceId ?? Bun.randomUUIDv7(),
         userId: ids.userA1,
         workspaceId: ids.wsA1,
       },
+      modelId: overrides.modelId,
       organizationId: ids.orgA,
+      admission: overrides.admission ?? testModelAdmission(ids.orgA),
       orgAIConfig,
       managedAIResidency: "eu" as const,
-      role: "fast",
+      task: "short-text",
       systemSafe: overrides.systemSafe ?? "Answer briefly.",
       systemUntrusted: overrides.systemUntrusted ?? "",
       tenantWorkspaceIds: [ids.wsA1],
@@ -363,6 +383,93 @@ describe("a subagent run across several model steps", () => {
   });
 });
 
+describe("a subagent run on a model its parent chose", () => {
+  test("meters usage at the chosen model's rate, not the task default's", async () => {
+    const traceId = Bun.randomUUIDv7();
+    const { result } = await runScriptedSubagent(
+      [
+        {
+          finishReason: "stop",
+          text: "Clause 12 allows termination for convenience.",
+          type: "text",
+          usage: ANSWER_STEP_USAGE,
+        },
+      ],
+      { modelId: "gpt-5.4", traceId },
+    );
+    expect(result).toMatchObject({ outcome: "completed" });
+
+    const ratedMicroUnits = (modelId: string) =>
+      usageUnitsFromTokens({
+        actionType: "subagent",
+        isByok: true,
+        modelId,
+        outputTokens: ANSWER_STEP_USAGE.completionTokens,
+        serviceTier: "standard",
+        uncachedInputTokens: ANSWER_STEP_USAGE.promptTokens,
+      }).rawUsageMicroUnits;
+    // short-text resolves to the org's fast override; the two rates must
+    // differ, or the row below cannot tell which model it was priced at.
+    expect(ratedMicroUnits("gpt-5.4")).not.toBe(
+      ratedMicroUnits(orgAIConfig.overrideModels.fast.modelId),
+    );
+
+    const rows = await testDb
+      .select({ rawUsageMicroUnits: usageEvents.rawUsageMicroUnits })
+      .from(usageEvents)
+      .where(eq(usageEvents.traceId, traceId));
+    expect(rows).toEqual([{ rawUsageMicroUnits: ratedMicroUnits("gpt-5.4") }]);
+  });
+});
+
+describe("a subagent run on its parent's admitted action", () => {
+  test("stops when the admitted action's lease is lost", async () => {
+    const lease = new AbortController();
+    const reached = Promise.withResolvers<AbortSignal>();
+    const run = admitModelDispatch({
+      organizationId: ids.orgA,
+      userId: ids.userA1,
+      actionKind: "chat.send",
+      organizationStateDb: testOrganizationStateDb,
+      signal: lease.signal,
+      run: async (admission) =>
+        await runScriptedSubagent(
+          [{ finishReason: "stop", text: "never sent", type: "text" }],
+          {
+            admission,
+            wrapAdapter: (adapter) => ({
+              ...adapter,
+              async *chatStream(options) {
+                const signal = options.request?.signal;
+                if (!signal) {
+                  throw new Error(
+                    "Expected the engine to pass an abort signal.",
+                  );
+                }
+                reached.resolve(signal);
+                const aborted = Promise.withResolvers<never>();
+                signal.addEventListener(
+                  "abort",
+                  () => aborted.reject(signal.reason),
+                  { once: true },
+                );
+                await aborted.promise;
+                yield* adapter.chatStream(options);
+              },
+            }),
+          },
+        ),
+    });
+
+    const providerSignal = await reached.promise;
+    expect(providerSignal.aborted).toBe(false);
+    lease.abort();
+
+    expect(await rejectionOf(run)).toMatchObject({ name: "AbortError" });
+    expect(providerSignal.aborted).toBe(true);
+  });
+});
+
 describe("a subagent run that ends without a complete answer", () => {
   test("reports a provider error as a failure, keeping the usage spent before it", async () => {
     const { result } = await runScriptedSubagent([
@@ -375,6 +482,24 @@ describe("a subagent run that ends without a complete answer", () => {
       reason: "run-error",
       usage: LOOKUP_STEP_USAGE,
     });
+  });
+
+  test("names a provider error by its kind, never by the provider's text", async () => {
+    const sentinel = "SENTINEL_SUBAGENT_PROVIDER_TEXT";
+    const { result } = await runScriptedSubagent([
+      lookupStep,
+      {
+        code: `${sentinel}_code`,
+        message: JSON.stringify({ error: { message: sentinel, code: 503 } }),
+        type: "error",
+      },
+    ]);
+
+    expect(result).toMatchObject({ outcome: "failed", reason: "run-error" });
+    expect(JSON.stringify(result)).not.toContain(sentinel);
+    expect(
+      AI_ERROR_KINDS.map((kind) => subagentRunErrorMessage(kind)),
+    ).toContain(result.outcome === "failed" ? result.message : "");
   });
 
   test("adds the usage a failed step reported to the steps before it", async () => {

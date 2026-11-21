@@ -1,10 +1,17 @@
 import { panic } from "better-result";
 import { eq, inArray } from "drizzle-orm";
 
+import { provisionVersionAsOf } from "@stll/api-contract/provision-version-basis";
+import type { ProvisionVersionBasis } from "@stll/api-contract/provision-version-basis";
+import type { PublicCountrySurface } from "@stll/api-contract/public-country-capability";
+import { statuteAnchorNestingFor } from "@stll/api-contract/statute-anchor-schemes";
 import type { Block } from "@stll/legal-ast/document-ast";
 import { provisionHeadingAnchor } from "@stll/legal-ast/provision-preview";
 
-import { caseLawDecisions, legislationDocuments } from "@/api/db/schema";
+import {
+  legislationDocuments,
+  publishedCaseLawDecisions,
+} from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { RedistributableDecisionSubject } from "@/api/lib/case-law/public-subject";
 import {
@@ -12,12 +19,14 @@ import {
   previewVersionColumns,
 } from "@/api/lib/legal-search/legislation-provision-preview";
 import type { ProvisionPreview } from "@/api/lib/legal-search/legislation-provision-preview";
+import { legislationCountriesFor } from "@/api/lib/legal-search/legislation-redistribution";
 import {
   readVersionBlocks,
   versionAstColumns,
 } from "@/api/lib/legal-search/legislation-version-blocks";
 import type { LegislationVersionAstRow } from "@/api/lib/legal-search/legislation-version-blocks";
 import { resolveWorksAtDate } from "@/api/lib/legal-search/legislation-works-at-date";
+import { buildLegislationDocumentAppUrl } from "@/api/lib/legal-search/public-law-app-urls";
 import type { LegislationReadDb } from "@/api/lib/legislation-public-read-db";
 import { LIMITS } from "@/api/lib/limits";
 import type { Page } from "@/api/lib/pagination";
@@ -29,6 +38,7 @@ type CitationRow = {
   anchor: string;
   jurisdiction: string;
   versionValidFrom: string | null;
+  versionBasis: ProvisionVersionBasis;
   workEli: string | null;
 };
 
@@ -52,15 +62,8 @@ const previewKeyOf = (
   anchor: string,
 ): string => `${documentId}#${anchor}`;
 
-/**
- * The date a citation's wording is read at: the version the reference itself
- * states, and the decision's own date otherwise. A court applies the text in
- * force when it decided, so that is the truthful fallback.
- */
-const citationAsOf = (
-  row: CitationRow,
-  decisionDate: string | null,
-): string | null => row.versionValidFrom ?? decisionDate;
+const citationAsOf = (row: CitationRow, decisionDate: string | null) =>
+  provisionVersionAsOf(row, decisionDate);
 
 const workRequestsFor = (
   rows: readonly CitationRow[],
@@ -94,7 +97,13 @@ const workRequestsFor = (
   return requests;
 };
 
-type ResolvedVersion = LegislationVersionAstRow & { language: string };
+type ResolvedVersion = LegislationVersionAstRow & {
+  language: string;
+  country: string;
+  eli: string;
+  slug: string | null;
+  versionValidFrom: string | null;
+};
 
 type ResolvedWorks = {
   versionByWork: Map<string, ResolvedVersion>;
@@ -109,6 +118,7 @@ type ResolvedWorks = {
 const resolveWorkVersions = async (
   requests: readonly WorkRequest[],
   legislationDb: LegislationReadDb,
+  surface: PublicCountrySurface,
 ): Promise<ResolvedWorks> => {
   const versionByWork = new Map<string, ResolvedVersion>();
   if (requests.length === 0) {
@@ -118,7 +128,11 @@ const resolveWorkVersions = async (
   const { works, versions } = await legislationDb(async (tx) => {
     // Linking follows applicable versions only: a Work a publisher
     // inconsistency leaves unanswered at that date gets no preview.
-    const { idByKey: idByWork } = await resolveWorksAtDate(tx, requests);
+    const { idByKey: idByWork } = await resolveWorksAtDate(
+      tx,
+      requests,
+      legislationCountriesFor(surface),
+    );
 
     const ids = [...new Set(idByWork.values())];
     if (ids.length === 0) {
@@ -149,10 +163,15 @@ type PreviewsForPageOptions<TRow extends CitationRow> = {
   page: Page<TRow>;
   decisionDate: string | null;
   legislationDb: LegislationReadDb;
+  /** The surface the previews are read for; its country list decides publication. */
+  surface: PublicCountrySurface;
 };
 
 /** A preview plus the key this page's items reference it by. */
-type KeyedProvisionPreview = ProvisionPreview & { key: string };
+type KeyedProvisionPreview = ProvisionPreview & {
+  key: string;
+  url: string | null;
+};
 
 type PreviewsForPage<TRow extends CitationRow> = Page<
   TRow & { previewKey: string | null }
@@ -175,9 +194,14 @@ export const attachDecisionProvisionPreviews = async <
   page,
   decisionDate,
   legislationDb,
+  surface,
 }: PreviewsForPageOptions<TRow>): Promise<PreviewsForPage<TRow>> => {
   const requests = workRequestsFor(page.items, decisionDate);
-  const { versionByWork } = await resolveWorkVersions(requests, legislationDb);
+  const { versionByWork } = await resolveWorkVersions(
+    requests,
+    legislationDb,
+    surface,
+  );
 
   // One read per consolidation, outside any transaction: corpus payloads are
   // whole objects in storage, so a block range is sliced from the version the
@@ -191,6 +215,7 @@ export const attachDecisionProvisionPreviews = async <
             version,
             // db-await-in-loop: one storage read per distinct consolidation version, deduplicated above; the page bounds the set
             await readVersionBlocks({
+              surface,
               row: version,
               legislationDb,
               step: PREVIEWS_READ_STEP,
@@ -222,10 +247,21 @@ export const attachDecisionProvisionPreviews = async <
 
       previewByKey.set(key, {
         key,
+        url: buildLegislationDocumentAppUrl({
+          country: version.country,
+          documentId: version.id,
+          eli: version.eli,
+          slug: version.slug,
+          version: version.versionValidFrom,
+          anchor: row.anchor,
+        }),
         ...buildProvisionPreview({
           version,
           blocks,
-          anchor: provisionHeadingAnchor(row.anchor),
+          anchor: provisionHeadingAnchor(
+            row.anchor,
+            statuteAnchorNestingFor(row.jurisdiction),
+          ),
           citedAnchor: row.anchor,
         }),
       });
@@ -246,9 +282,9 @@ export const readDecisionDate = async ({
   tx,
 }: RedistributableDecisionSubject): Promise<string | null> => {
   const [row] = await tx
-    .select({ decisionDate: caseLawDecisions.decisionDate })
-    .from(caseLawDecisions)
-    .where(eq(caseLawDecisions.id, id))
+    .select({ decisionDate: publishedCaseLawDecisions.decisionDate })
+    .from(publishedCaseLawDecisions)
+    .where(eq(publishedCaseLawDecisions.id, id))
     .limit(1);
 
   return row?.decisionDate ?? null;

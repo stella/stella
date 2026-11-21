@@ -5,8 +5,12 @@ import { FILE_PROPERTY_TYPE_IMMUTABLE_CODE } from "@stll/api-contract/property-p
 import { toSafeId } from "@/api/lib/branded-types";
 import type { OpenPlaybookRunResult } from "@/api/lib/document-review/open-playbook-run";
 import { PLAYBOOK_RUN_FAILURE_CODE } from "@/api/lib/document-review/playbook-run-refusal";
+import { filterPlaybooksByPresentLabels } from "@/api/lib/workflow/route-playbooks";
 import { mapHandlerResult } from "@/api/mcp/capability-tools";
-import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
+import {
+  createTestHandlerContext,
+  NO_AUDIT,
+} from "@/api/tests/helpers/handler-context";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 const loadLatestApprovedVersionsMock = mock();
@@ -36,6 +40,7 @@ const opened = {
     definitionSnapshot: {
       name: "Vendor agreement review",
       positions: { version: 3, items: [] },
+      scope: null,
     },
   },
   materializedPropertyIds: [propertyId],
@@ -57,7 +62,11 @@ const runAutoRun = async () => {
     query: { playbookDefinitions: { findMany: async () => [] } },
   });
   return await autoRunPlaybooks.handler(
-    createTestHandlerContext<AutoRunCtx>({ safeDb, scopedDb }),
+    createTestHandlerContext<AutoRunCtx>({
+      audit: NO_AUDIT,
+      safeDb,
+      scopedDb,
+    }),
   );
 };
 
@@ -145,7 +154,6 @@ describe("auto-run playbooks handler", () => {
       mapHandlerResult({
         id: "playbooks.applicable.run",
         result,
-        access: "write",
       }),
     ).toMatchObject({
       egress: "structured",
@@ -208,6 +216,77 @@ describe("auto-run playbooks handler", () => {
     expect(startWorkflowMock).not.toHaveBeenCalled();
   });
 
+  test("applicability is resolved on the approved scope, not the edited live one", async () => {
+    // The playbook was approved for NDAs and edited to leases afterwards;
+    // the matter's only classified document is an NDA. Applicability runs
+    // the real label filter over whatever the handler hands it, so the run
+    // only happens if the handler pins the scope first: handed the live
+    // scope, the filter drops the playbook and nothing runs.
+    const livePlaybook = {
+      id: playbookId,
+      name: "NDA review",
+      positions: { version: 3, items: [] },
+      scope: { documentTypeKey: "lease" },
+    };
+    loadLatestApprovedVersionsMock.mockResolvedValue(
+      new Map([
+        [
+          playbookId,
+          {
+            id: toSafeId<"playbookDefinitionVersion">("pv_approved_scope"),
+            name: "NDA review",
+            positions: { version: 3, items: [] },
+            scope: { documentTypeKey: "nda" },
+          },
+        ],
+      ]),
+    );
+    resolveApplicablePlaybooksMock.mockImplementation(
+      async ({ playbooks }: { playbooks: readonly (typeof livePlaybook)[] }) =>
+        filterPlaybooksByPresentLabels({
+          playbooks,
+          labelByKey: new Map([
+            ["nda", "NDA"],
+            ["lease", "Lease"],
+          ]),
+          presentLabels: new Set(["NDA"]),
+        }),
+    );
+    startWorkflowMock.mockResolvedValue({ status: "skipped" });
+
+    const { scopedDb, safeDb } = createScopedDbMock({
+      query: {
+        playbookDefinitions: { findMany: async () => [livePlaybook] },
+      },
+    });
+    const result = await autoRunPlaybooks.handler(
+      createTestHandlerContext<AutoRunCtx>({
+        audit: NO_AUDIT,
+        safeDb,
+        scopedDb,
+      }),
+    );
+
+    expect(result).toEqual({
+      playbooksRun: 1,
+      runPropertyCount: 1,
+      documentRunCount: 1,
+      refusals: [],
+    });
+    // What applicability and the opener received is the playbook carrying
+    // its approved scope; the edited live scope appears nowhere downstream.
+    const applicabilityInput: { playbooks: unknown } | undefined =
+      resolveApplicablePlaybooksMock.mock.calls.at(0)?.[0];
+    expect(applicabilityInput?.playbooks).toEqual([
+      { ...livePlaybook, scope: { documentTypeKey: "nda" } },
+    ]);
+    const openerInput: { definition: { scope: unknown } } | undefined =
+      openPlaybookRunMock.mock.calls.at(0)?.[0];
+    expect(openerInput?.definition.scope).toEqual({
+      documentTypeKey: "nda",
+    });
+  });
+
   test("configuration refusals survive alongside successfully started playbooks", async () => {
     const refusal = {
       ok: false,
@@ -247,7 +326,6 @@ describe("auto-run playbooks handler", () => {
       mapHandlerResult({
         id: "playbooks.applicable.run",
         result,
-        access: "write",
       }),
     ).toMatchObject({ egress: "structured", payload: expected });
     expect(startWorkflowMock).toHaveBeenCalledTimes(1);

@@ -46,6 +46,18 @@ type CommonFields = {
    * surfaced via the MCP detail flow).
    */
   enabled: boolean | null;
+  /**
+   * Whether the assistant may pick an installed skill by itself (`auto`) or
+   * only when the user invokes it (`manual`). `null` for entries that are not
+   * installed skills.
+   */
+  invocation: "auto" | "manual" | null;
+  /**
+   * What an installed skill is bound to: one matter, one client, or nothing
+   * (`null`, also for entries that are not installed skills). A bound skill is
+   * visible and usable only there.
+   */
+  binding: "matter" | "client" | null;
 };
 
 export type CatalogueSkill = CommonFields & {
@@ -73,9 +85,7 @@ export type CatalogueNativeTool = CommonFields & {
 };
 
 export type CatalogueDisplayEntry =
-  | CatalogueSkill
-  | CatalogueMcp
-  | CatalogueNativeTool;
+  CatalogueSkill | CatalogueMcp | CatalogueNativeTool;
 
 /**
  * Binary "is this tool in use" check.

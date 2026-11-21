@@ -3,6 +3,8 @@ import { existsSync, readFileSync } from "node:fs";
 const API_CONFIG_PATH = "railway/api.railway.json";
 const ROOT_RAILWAY_CONFIG_PATHS = ["railway.json", "railway.toml"];
 const WEB_CONFIG_PATH = "railway/web.railway.json";
+const FILE_DERIVATIVE_WORKER_CONFIG_PATH =
+  "railway/file-derivative-worker.railway.json";
 const RAILWAY_DOC_PATH = "docs/railway.md";
 const TEMPLATE_README_PATH = "railway/template-readme.md";
 const TEMPLATE_MANIFEST_PATH = "railway/template-manifest.json";
@@ -102,15 +104,15 @@ const getStringRecord = (
     return {};
   }
 
-  const result: Record<string, string> = {};
-  for (const [recordKey, recordValue] of Object.entries(next)) {
-    if (typeof recordValue !== "string") {
-      failures.push(`Expected ${key}.${recordKey} to be a string`);
-      continue;
-    }
-    result[recordKey] = recordValue;
-  }
-  return result;
+  return Object.fromEntries(
+    Object.entries(next).flatMap(([recordKey, recordValue]) => {
+      if (typeof recordValue !== "string") {
+        failures.push(`Expected ${key}.${recordKey} to be a string`);
+        return [];
+      }
+      return [[recordKey, recordValue] as const];
+    }),
+  );
 };
 
 const validateServiceConfig = ({
@@ -121,7 +123,8 @@ const validateServiceConfig = ({
 }: {
   path: string;
   dockerfilePath: string;
-  healthcheckPath: string;
+  // Queue workers serve no HTTP, so they have no health check to declare.
+  healthcheckPath: string | undefined;
   requiredWatchPatterns: string[];
 }) => {
   const config = readJson(path);
@@ -141,8 +144,12 @@ const validateServiceConfig = ({
     expect(watchPatterns.includes(pattern), `${path} must watch ${pattern}`);
   }
   expect(
-    getString(deploy, "healthcheckPath") === healthcheckPath,
-    `${path} must healthcheck ${healthcheckPath}`,
+    healthcheckPath === undefined
+      ? !("healthcheckPath" in deploy)
+      : getString(deploy, "healthcheckPath") === healthcheckPath,
+    healthcheckPath === undefined
+      ? `${path} must not declare an HTTP health check`
+      : `${path} must healthcheck ${healthcheckPath}`,
   );
   expect(
     deploy["restartPolicyType"] === "ON_FAILURE",
@@ -185,6 +192,33 @@ validateServiceConfig({
     "/VERSION",
   ],
 });
+
+validateServiceConfig({
+  path: FILE_DERIVATIVE_WORKER_CONFIG_PATH,
+  dockerfilePath: "apps/api/Dockerfile",
+  healthcheckPath: undefined,
+  requiredWatchPatterns: [
+    "/railway/file-derivative-worker.railway.json",
+    "/apps/api/**",
+    "/packages/**",
+    "/bun.lock",
+  ],
+});
+// The API no longer consumes the file-derivatives queue; without this
+// service a Railway install never renders previews or thumbnails.
+const fileDerivativeWorkerDeploy = getRecord(
+  readJson(FILE_DERIVATIVE_WORKER_CONFIG_PATH),
+  "deploy",
+);
+expect(
+  fileDerivativeWorkerDeploy["startCommand"] ===
+    "bun /app/file-derivative-worker.js",
+  "file-derivative worker config must start the bundled worker entrypoint",
+);
+expect(
+  !("preDeployCommand" in fileDerivativeWorkerDeploy),
+  "file-derivative worker must leave migrations to the API pre-deploy command",
+);
 
 const apiDeploy = getRecord(readJson(API_CONFIG_PATH), "deploy");
 expect(
@@ -400,11 +434,19 @@ expect(
 
 const apiTemplate = getRecord(templateManifest, "api");
 const webTemplate = getRecord(templateManifest, "web");
+const fileDerivativeWorkerTemplate = getRecord(
+  templateManifest,
+  "file-derivative-worker",
+);
 const gotenbergTemplate = getRecord(templateManifest, "gotenberg");
 const postgresTemplate = getRecord(templateManifest, "Postgres");
 const redisTemplate = getRecord(templateManifest, "Redis");
 const apiTemplateVariables = getStringRecord(apiTemplate, "variables");
 const webTemplateVariables = getStringRecord(webTemplate, "variables");
+const fileDerivativeWorkerTemplateVariables = getStringRecord(
+  fileDerivativeWorkerTemplate,
+  "variables",
+);
 const gotenbergTemplateVariables = getStringRecord(
   gotenbergTemplate,
   "variables",
@@ -426,6 +468,15 @@ expect(
 expect(
   getString(webTemplate, "configFile") === "/railway/web.railway.json",
   "web template service must point at /railway/web.railway.json",
+);
+expect(
+  getString(fileDerivativeWorkerTemplate, "configFile") ===
+    `/${FILE_DERIVATIVE_WORKER_CONFIG_PATH}`,
+  `file-derivative worker template service must point at /${FILE_DERIVATIVE_WORKER_CONFIG_PATH}`,
+);
+expect(
+  getBoolean(fileDerivativeWorkerTemplate, "publicNetworking") === false,
+  "file-derivative worker must stay private in the template",
 );
 expect(
   getBoolean(gotenbergTemplate, "publicNetworking") === false,
@@ -454,11 +505,57 @@ for (const [key, value] of Object.entries(expectedApiReferenceVariables)) {
     `API template variable ${key} must be ${value}`,
   );
 }
+// The worker reads the same database, queue, bucket and converter as the API,
+// and nothing else: no auth, encryption or bootstrap secrets.
+const expectedFileDerivativeWorkerVariables: Record<string, string> = {
+  ...expectedApiReferenceVariables,
+  DB_LOAD_GATE_EBS_SIGNAL: "disabled",
+  GOTENBERG_PASSWORD: railwayTemplateReference(
+    "gotenberg.GOTENBERG_API_BASIC_AUTH_PASSWORD",
+  ),
+  GOTENBERG_URL: `http://${railwayTemplateReference("gotenberg.RAILWAY_PRIVATE_DOMAIN")}:3000`,
+  GOTENBERG_USERNAME: railwayTemplateReference(
+    "gotenberg.GOTENBERG_API_BASIC_AUTH_USERNAME",
+  ),
+};
+const fileDerivativeWorkerVariableKeys = new Set([
+  ...Object.keys(fileDerivativeWorkerTemplateVariables),
+  ...Object.keys(expectedFileDerivativeWorkerVariables),
+]);
+expect(
+  [...fileDerivativeWorkerVariableKeys].every(
+    (key) =>
+      fileDerivativeWorkerTemplateVariables[key] ===
+      expectedFileDerivativeWorkerVariables[key],
+  ),
+  "file-derivative worker template variables must be exactly the API references it needs",
+);
+
+const postgresBuild = getRecord(postgresTemplate, "build");
+expect(
+  postgresTemplate["volumeMountPath"] === "/var/lib/postgresql",
+  "Postgres manifest must declare its persistent volume mount",
+);
+expect(
+  postgresBuild["builder"] === "DOCKERFILE" &&
+    postgresBuild["dockerfilePath"] === "docker/postgres/Dockerfile",
+  "Postgres template must build the initialized database image",
+);
+expect(
+  postgresTemplate["configFile"] === "/railway/postgres.railway.json",
+  "Postgres template must select its service config",
+);
+const postgresConfig = readJson("railway/postgres.railway.json");
+expect(
+  getRecord(postgresConfig, "deploy")["requiredMountPath"] ===
+    "/var/lib/postgresql",
+  "Postgres service must require its persistent volume mount",
+);
 
 const expectedPostgresVariables: Record<string, string> = {
   DATABASE_PUBLIC_URL: `postgresql://${railwayTemplateReference("PGUSER")}:${railwayTemplateReference("POSTGRES_PASSWORD")}@${railwayTemplateReference("RAILWAY_TCP_PROXY_DOMAIN")}:${railwayTemplateReference("RAILWAY_TCP_PROXY_PORT")}/${railwayTemplateReference("PGDATABASE")}`,
   DATABASE_URL: `postgresql://${railwayTemplateReference("PGUSER")}:${railwayTemplateReference("POSTGRES_PASSWORD")}@${railwayTemplateReference("RAILWAY_PRIVATE_DOMAIN")}:5432/${railwayTemplateReference("PGDATABASE")}`,
-  PGDATA: "/var/lib/postgresql/data/pgdata",
+  PGDATA: "/var/lib/postgresql/18/docker",
   PGDATABASE: railwayTemplateReference("POSTGRES_DB"),
   PGHOST: railwayTemplateReference("RAILWAY_PRIVATE_DOMAIN"),
   PGPASSWORD: railwayTemplateReference("POSTGRES_PASSWORD"),
@@ -471,7 +568,6 @@ const expectedPostgresVariables: Record<string, string> = {
   ),
   POSTGRES_USER: "postgres",
   RAILWAY_DEPLOYMENT_DRAINING_SECONDS: "60",
-  SSL_CERT_DAYS: "820",
 };
 for (const [key, value] of Object.entries(expectedPostgresVariables)) {
   expect(
@@ -570,6 +666,7 @@ const forbiddenTemplateVariablePattern =
 const templateVariableSets: [string, Record<string, string>][] = [
   ["api", apiTemplateVariables],
   ["web", webTemplateVariables],
+  ["file-derivative-worker", fileDerivativeWorkerTemplateVariables],
   ["gotenberg", gotenbergTemplateVariables],
   ["Postgres", postgresTemplateVariables],
   ["Redis", redisTemplateVariables],

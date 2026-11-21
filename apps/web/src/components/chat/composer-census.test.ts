@@ -1,0 +1,251 @@
+import { describe, expect, test } from "bun:test";
+import { fileURLToPath } from "node:url";
+
+import { sourceFileIndex } from "@stll/scripts/src/source-file-index";
+
+import type { ChatSend } from "@/components/chat-editor-provider";
+
+type ExpectFalse<T extends false> = T;
+
+const SOURCE_ROOT = fileURLToPath(new URL("../../", import.meta.url));
+const sourceIndex = sourceFileIndex(SOURCE_ROOT);
+const sourceModules = sourceIndex
+  .map(({ relativePath }) => relativePath)
+  .filter((file) => !/\.(?:test|spec|gen)\./u.test(file));
+const sourceOf = (file: string) => {
+  const entry = sourceIndex.find(({ relativePath }) => relativePath === file);
+  if (entry === undefined) {
+    throw new Error(`Missing source module ${file}`);
+  }
+  return entry.sourceText;
+};
+
+const chatEditorModules = `components/ai-prompt-input/ai-prompt-input.tsx
+components/ai-suggestions/file-chat-overlay.tsx
+components/ai-suggestions/host.tsx
+components/chat-input-surface.tsx
+components/inspector/chat-tab-panel.tsx
+routes/_protected.chat/-components/chat-index.page.tsx
+routes/_protected.chat/-components/chat-thread.page.tsx
+routes/dev/-components/chat-composer-reference-playground.tsx
+routes/dev/-components/chat-long-paste-playground.tsx
+routes/knowledge/-components/template-studio-chat.tsx`;
+
+const composerShells = [
+  {
+    component: "PromptBar",
+    module: "components/ai-suggestions/host.tsx",
+  },
+  {
+    component: "GatedChatComposer",
+    module: "components/ai-suggestions/gated-chat-composer.tsx",
+  },
+  {
+    component: "ChatInputSurface",
+    module: "components/chat-input-surface.tsx",
+  },
+] as const;
+
+// Every place that hands a composer draft to a send, by how it does so. Each
+// send is typed `ChatSend` (directly, or through `PromptBar`'s `onSubmit`), so
+// the compiler makes it say whether the composer keeps the draft. A new entry
+// point is added here, typed the same way, with a test for its declines.
+const sendEntryPatterns = {
+  chatInputSurface: /<ChatInputSurface(?=[\s/>])/gu,
+  composerWiring: /\buseChatComposerWiring\(/gu,
+  controllerSubmit: /\b\w*[Cc]ontroller(?:\(\))?\.submit\(/gu,
+  promptBar: /<PromptBar(?=[\s/>])/gu,
+};
+const sendEntryPoints = {
+  "components/ai-suggestions/file-chat-overlay.tsx": {
+    controllerSubmit: 3,
+    promptBar: 1,
+  },
+  "components/ai-suggestions/host.tsx": { composerWiring: 1 },
+  "components/chat-input-surface.tsx": { composerWiring: 1 },
+  "components/inspector/chat-tab-panel.tsx": {
+    controllerSubmit: 1,
+    promptBar: 1,
+  },
+  "routes/_protected.chat/-components/chat-thread.page.tsx": {
+    chatInputSurface: 1,
+    controllerSubmit: 1,
+  },
+  "routes/_protected.chat/-components/chat-index.page.tsx": {
+    chatInputSurface: 1,
+  },
+  "routes/dev/-components/chat-composer-reference-playground.tsx": {
+    chatInputSurface: 1,
+  },
+  "routes/dev/-components/chat-long-paste-playground.tsx": {
+    chatInputSurface: 1,
+  },
+  "routes/knowledge/-components/template-studio-chat.tsx": { promptBar: 1 },
+} satisfies Record<
+  string,
+  Partial<Record<keyof typeof sendEntryPatterns, number>>
+>;
+
+// Every composer states its model menu, Run on included (the props are
+// required). These are the places that decline the menu or Run on, each
+// saying why where it does: a new one is added here once its surface really
+// cannot run turns on the member's computer.
+const runOnPatterns = {
+  cloudOnly: /\brunOn: "cloud_only"/gu,
+  noModels: /\bmodels=\{null\}/gu,
+  // A `/new` handoff that starts its thread on stella.
+  newThreadOnStella: /\bgetRunTarget: undefined\b/gu,
+};
+const runOnDeclines = {
+  // The file chat edits the open document through the page's review queue.
+  "components/ai-suggestions/file-chat-overlay.tsx": {
+    cloudOnly: 1,
+    newThreadOnStella: 1,
+  },
+  // Ask AI from search has no composer to choose in.
+  "components/search-dialog.tsx": { newThreadOnStella: 1 },
+  // The placeholder shown until the live panel has read its thread.
+  "components/inspector/chat-tab-panel.tsx": { noModels: 1 },
+  "routes/dev/-components/chat-composer-reference-playground.tsx": {
+    noModels: 1,
+  },
+  "routes/dev/-components/chat-long-paste-playground.tsx": { noModels: 1 },
+  // The Studio places fields through its own editor bridge.
+  "routes/knowledge/-components/template-studio-chat.tsx": { noModels: 2 },
+} satisfies Record<string, Partial<Record<keyof typeof runOnPatterns, number>>>;
+
+const followupSurfaces = `components/ai-suggestions/file-chat-overlay.tsx
+components/inspector/chat-tab-panel.tsx
+routes/_protected.chat/-components/chat-thread.page.tsx`;
+
+describe("chat composer census", () => {
+  test("pins every chat editor module", () => {
+    const discovered = sourceModules.filter((file) => {
+      const source = sourceOf(file);
+      return (
+        /\buseChatEditor\s*\(/u.test(source) ||
+        /<PromptEditorContent\b/u.test(source)
+      );
+    });
+
+    expect(discovered.join("\n")).toBe(chatEditorModules);
+  });
+
+  test("pins every shared composer shell", () => {
+    for (const { component, module } of composerShells) {
+      expect(sourceOf(module)).toMatch(
+        new RegExp(`export const ${component}\\b`, "u"),
+      );
+    }
+  });
+
+  test("a composer send cannot finish without saying whether the draft is kept", () => {
+    type QuietSendIsAllowed = (() => Promise<void>) extends ChatSend
+      ? true
+      : false;
+    type EarlyReturnIsAllowed = ((
+      draft: Parameters<ChatSend>[0],
+    ) => Promise<undefined | { kind: "sent" }>) extends ChatSend
+      ? true
+      : false;
+    const quietIsAllowed: ExpectFalse<QuietSendIsAllowed> = false;
+    const earlyReturnIsAllowed: ExpectFalse<EarlyReturnIsAllowed> = false;
+    const declining: ChatSend = async (draft) =>
+      draft.html === "" ? { kind: "kept" } : { kind: "sent" };
+
+    expect({ quietIsAllowed, earlyReturnIsAllowed, declining }).toEqual({
+      quietIsAllowed: false,
+      earlyReturnIsAllowed: false,
+      declining,
+    });
+  });
+
+  test("pins every composer send entry point", () => {
+    const discovered: Record<string, Record<string, number>> = {};
+    for (const file of sourceModules) {
+      const source = sourceOf(file);
+      for (const [kind, pattern] of Object.entries(sendEntryPatterns)) {
+        const count = source.match(pattern)?.length ?? 0;
+        if (count > 0) {
+          discovered[file] = { ...discovered[file], [kind]: count };
+        }
+      }
+    }
+
+    expect(discovered).toEqual(sendEntryPoints);
+  });
+
+  test("pins every composer that offers no Run on choice", () => {
+    const discovered: Record<string, Record<string, number>> = {};
+    for (const file of sourceModules) {
+      const source = sourceOf(file);
+      for (const [kind, pattern] of Object.entries(runOnPatterns)) {
+        const count = source.match(pattern)?.length ?? 0;
+        if (count > 0) {
+          discovered[file] = { ...discovered[file], [kind]: count };
+        }
+      }
+    }
+
+    expect(discovered).toEqual(runOnDeclines);
+  });
+
+  test("every composer bar shows where its chat runs and its model as two chips from one owner", () => {
+    // The dock is the composer bar of every surface (the new chat, the
+    // thread page, the inspector tab, the file chat); its models come from
+    // `useChatComposerModels`, which owns both choices.
+    const chipRenderers = sourceModules.filter((file) =>
+      /<ChatComposerChips\b/u.test(sourceOf(file)),
+    );
+    expect(chipRenderers).toEqual(["components/chat/chat-composer-dock.tsx"]);
+    const chips = sourceOf("components/chat/chat-model-selector.tsx");
+    expect(chips).toMatch(/<ChatRunOnChip\b/u);
+    expect(chips).toMatch(/<ChatModelSelector\b/u);
+    // Neither chip, nor the where menu, renders anywhere else.
+    const strays = sourceModules.filter(
+      (file) =>
+        file !== "components/chat/chat-model-selector.tsx" &&
+        /<(?:ChatRunOnChip|ChatModelSelector|ChatRunTargetMenu)\b/u.test(
+          sourceOf(file),
+        ),
+    );
+    expect(strays).toEqual([]);
+    for (const surface of [
+      "routes/_protected.chat/-components/chat-index.page.tsx",
+      "routes/_protected.chat/-components/chat-thread.page.tsx",
+      "components/inspector/chat-tab-panel.tsx",
+    ]) {
+      const source = sourceOf(surface);
+      expect(source).toMatch(/\buseChatComposerModels\(/u);
+      expect(source).toMatch(
+        /<ChatComposerDock\b[\s\S]*?models=\{composerModels\.models\}/u,
+      );
+    }
+  });
+
+  test("follow-ups appear only under the answer they follow", () => {
+    // Every surface that fetches suggestions hands them to the transcript,
+    // which draws them after the answer's actions; none draws its own row
+    // over the answer or beside the composer.
+    const discovered = sourceModules.filter((file) =>
+      /\buseSuggestedFollowupPrompts\s*\(/u.test(sourceOf(file)),
+    );
+    expect(discovered.join("\n")).toBe(followupSurfaces);
+
+    const failures: string[] = [];
+    for (const file of discovered) {
+      if (!/<ChatThreadMessages\b[\s\S]*?followUps=\{/u.test(sourceOf(file))) {
+        failures.push(
+          `${file} fetches follow-ups but does not give them to ChatThreadMessages`,
+        );
+      }
+    }
+    expect(failures).toEqual([]);
+    const drawers = sourceModules.filter(
+      (file) =>
+        file !== "features/chat/components/suggested-followups.tsx" &&
+        /<SuggestedFollowups\b/u.test(sourceOf(file)),
+    );
+    expect(drawers).toEqual(["components/chat/chat-thread-messages.tsx"]);
+  });
+});

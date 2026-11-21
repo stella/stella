@@ -1,8 +1,11 @@
 import type { QueryClient } from "@tanstack/react-query";
+import { Result } from "better-result";
 
-import type { WorkspaceView } from "@/lib/types";
+import { toAPIError } from "@/lib/errors/api";
 import { workspacesKeys } from "@/lib/workspaces/queries.logic";
 import { viewsKeys, viewsOptions } from "@/lib/workspaces/queries/views";
+import { isWorkspaceViewAvailable } from "@/lib/workspaces/queries/views.logic";
+import type { CachedWorkspaceView } from "@/lib/workspaces/queries/views.logic";
 
 export const invalidateViewDerivedQueries = async ({
   queryClient,
@@ -27,9 +30,9 @@ export const invalidateViewDerivedQueries = async ({
  * losing a view.
  */
 export const reorderCachedViews = (
-  current: WorkspaceView[] | undefined,
+  current: CachedWorkspaceView[] | undefined,
   viewIds: readonly string[],
-): WorkspaceView[] | undefined => {
+): CachedWorkspaceView[] | undefined => {
   if (!current) {
     return current;
   }
@@ -48,17 +51,43 @@ export const reorderCachedViews = (
 
 /** What the optimistic write displaced, so a failed reorder can put it back. */
 export type ReorderViewsContext = {
-  previousViews: WorkspaceView[] | undefined;
+  previousViews: CachedWorkspaceView[] | undefined;
   /**
    * What the optimistic write left in the cache, so a rollback can tell whether
    * the strip is still showing this reorder.
    */
-  optimisticViews: WorkspaceView[] | undefined;
+  optimisticViews: CachedWorkspaceView[] | undefined;
 };
 
 type ViewOrderCacheOptions = {
   queryClient: QueryClient;
   workspaceId: string;
+};
+
+type EnsureViewMutationAvailableOptions = ViewOrderCacheOptions & {
+  viewIds: readonly string[];
+};
+
+/** A server-projected unavailable row cannot be an optimistic mutation target. */
+export const ensureViewMutationAvailable = ({
+  queryClient,
+  workspaceId,
+  viewIds,
+}: EnsureViewMutationAvailableOptions) => {
+  const targets = new Set(viewIds);
+  const cachedViews = queryClient.getQueryData(
+    viewsOptions(workspaceId).queryKey,
+  );
+  if (
+    cachedViews?.some(
+      (view) => targets.has(view.id) && !isWorkspaceViewAvailable(view),
+    )
+  ) {
+    return Result.err(
+      toAPIError({ status: 404, value: { message: "Not found" } }),
+    );
+  }
+  return Result.ok();
 };
 
 /**
@@ -75,8 +104,16 @@ export const viewOrderCache = ({
   const localizedKey = viewsOptions(workspaceId).queryKey;
 
   return {
-    apply: async (viewIds: readonly string[]): Promise<ReorderViewsContext> => {
+    apply: async (viewIds: readonly string[]) => {
       await queryClient.cancelQueries({ queryKey: localizedKey });
+      const available = ensureViewMutationAvailable({
+        queryClient,
+        workspaceId,
+        viewIds,
+      });
+      if (Result.isError(available)) {
+        return available;
+      }
       const previousViews = queryClient.getQueryData(localizedKey);
 
       const optimisticViews = queryClient.setQueryData(
@@ -84,7 +121,7 @@ export const viewOrderCache = ({
         (current) => reorderCachedViews(current, viewIds),
       );
 
-      return { previousViews, optimisticViews };
+      return Result.ok({ previousViews, optimisticViews });
     },
 
     restore: (context: ReorderViewsContext | undefined) => {

@@ -1,5 +1,6 @@
 // parser-output-unchanged: threads an optional static metadata URL schema; ordinary source assembly is unchanged
 import { stripDangerousChars } from "@stll/legal-ast/text-sanitize";
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
 import {
   absentDecisionTextFields,
@@ -8,9 +9,15 @@ import {
 import {
   EMPTY_AST,
   isPersistableSourceDocumentId,
-  toPlainTextIngestionResult,
   type RawIngestionResult,
+  toPlainTextIngestionResult,
 } from "@/api/lib/legal-search/ingestion-types";
+
+const PLAIN_TEXT_QUARANTINE_ID_PREFIX = "plaintext-quarantine:";
+
+export const isPlainTextQuarantineSourceDocumentId = (value: string): boolean =>
+  value.startsWith(PLAIN_TEXT_QUARANTINE_ID_PREFIX) &&
+  /^[0-9a-f]{64}$/u.test(value.slice(PLAIN_TEXT_QUARANTINE_ID_PREFIX.length));
 
 const persistableIdentity = (value: string) =>
   isPersistableSourceDocumentId(value) && stripDangerousChars(value) === value;
@@ -25,9 +32,7 @@ export const plainTextIngestionResult = <T extends RawIngestionResult>(
     return result.value;
   }
   const error = result.error;
-  const quarantineId = `plaintext-quarantine:${new Bun.CryptoHasher("sha256")
-    .update(JSON.stringify([raw.country, raw.rawHash, raw.sourceRaw]))
-    .digest("hex")}`;
+  const quarantineId = `${PLAIN_TEXT_QUARANTINE_ID_PREFIX}${hashSha256Hex(JSON.stringify([raw.country, raw.rawHash, raw.sourceRaw]))}`;
   const sourceDocumentId =
     raw.sourceDocumentId !== undefined &&
     persistableIdentity(raw.sourceDocumentId)
@@ -63,6 +68,7 @@ export const plainTextIngestionResult = <T extends RawIngestionResult>(
     sheetNumber: undefined,
     ecli: undefined,
     legacyEcli: undefined,
+    legacyCaseNumber: undefined,
     decisionType: undefined,
     identifiers: undefined,
     publisherCitedCases: undefined,

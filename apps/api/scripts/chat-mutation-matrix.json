@@ -2,6 +2,118 @@
   "$comment": "Each entry is one behaviour of the chat pipeline, stated as the mutation that removes it from the current tree, the scenario that exercises it, and the oracle (apps/api/src/tests/helpers/chat-oracles.ts) that must fail when it is gone. Run: bun apps/api/scripts/chat-mutation-matrix.ts. An entry whose mutation no longer applies fails until it is replaced or retired with a reason.",
   "entries": [
     {
+      "fix": "#5256",
+      "status": "active",
+      "id": "textual-snapshot-retains-provider-metadata",
+      "behaviour": "A signed snapshot enriches streamed thinking; later unsigned snapshots retain its final signature and provider fields.",
+      "file": "src/handlers/chat/snapshot-reconciliation.ts",
+      "search": "mergeTextualSnapshotMetadata({\n          canonical,\n          incoming,\n          content: snapshotContent.slice(start, end),\n          canonicalStart: canonicalRange?.start,\n          contentStart: fragmentStart,\n        })",
+      "replace": "{ ...canonical, content: snapshotContent.slice(start, end) }",
+      "scenario": {
+        "file": "src/handlers/chat/snapshot-reconciliation.property.test.ts",
+        "test": "signed thinking snapshots enrich streamed content and survive later unsigned snapshots"
+      },
+      "oracle": "chat.live.equals-reload"
+    },
+    {
+      "fix": "#5256",
+      "status": "active",
+      "id": "snapshot-only-textual-metadata-survives-unsigned-repeat",
+      "behaviour": "Snapshot-only textual blocks retain provider metadata and signed reasoning identities through repeated unsigned snapshots.",
+      "file": "src/handlers/chat/snapshot-reconciliation.ts",
+      "search": "mergeTextualSnapshotMetadata({\n          canonical,\n          incoming,\n          content: snapshotContent.slice(start, end),\n          canonicalStart: canonicalRange?.start,\n          contentStart: fragmentStart,\n        })",
+      "replace": "(hasDeltas ? mergeTextualSnapshotMetadata({\n          canonical,\n          incoming,\n          content: snapshotContent.slice(start, end),\n          canonicalStart: canonicalRange?.start,\n          contentStart: fragmentStart,\n        }) : { ...incoming, content: snapshotContent.slice(start, end) })",
+      "scenario": {
+        "file": "src/handlers/chat/snapshot-reconciliation.property.test.ts",
+        "test": "streamed textual completions preserve newly introduced lifecycle anchors"
+      },
+      "oracle": "chat.live.equals-reload"
+    },
+    {
+      "fix": "#5256",
+      "status": "active",
+      "id": "unknown-activities-are-observed",
+      "behaviour": "Unknown activity renderers report one structural client telemetry error without displaying internal data.",
+      "file": "../web/src/components/chat/chat-thread-messages.tsx",
+      "search": "    analytics.captureError(\n      new ClientTelemetryError({\n        area: \"chat-unknown-activity\",\n        message: \"A chat activity has no registered renderer\",\n      }),\n      {\n        fingerprintKey: \"UnknownChatActivity:ClientTelemetryError\",\n        scope: {\n          type: \"handler\",\n          handlerId: \"UnknownChatActivity:ClientTelemetryError\",\n        },\n      },\n    );",
+      "replace": "    return;",
+      "scenario": {
+        "file": "../web/src/components/chat/chat-activity-part.dom.test.tsx",
+        "test": "unknown chat activities report once per type across remounts without rendering or reporting private payloads"
+      },
+      "oracle": "chat.client.no-errors"
+    },
+    {
+      "fix": "#5256",
+      "status": "active",
+      "id": "denied-approval-has-no-failure-details",
+      "behaviour": "A snapshot denial shows one denial status and no tool failure details.",
+      "file": "../web/src/components/chat/tool-approval-card.tsx",
+      "search": "isFailed: part.state === \"error\" && !isDenied,",
+      "replace": "isFailed: part.state === \"error\",",
+      "scenario": {
+        "file": "../web/src/components/chat/tool-approval-card.dom.test.tsx",
+        "test": "a denied approval restored as an SDK error shows only its denial status"
+      },
+      "oracle": "chat.render.cards-match-stored"
+    },
+    {
+      "fix": "#5256",
+      "status": "active",
+      "id": "activity-payloads-stay-internal",
+      "behaviour": "Recognized activities show translated captions without internal payloads.",
+      "file": "../web/src/components/chat/chat-thread-messages.tsx",
+      "search": "        {t(labelKey)}\n      </figcaption>",
+      "replace": "        {t(labelKey)}\n      </figcaption>\n      <pre>{JSON.stringify(part.content)}</pre>",
+      "scenario": {
+        "file": "../web/src/components/chat/chat-thread-messages.test.tsx",
+        "test": "activity roles and embedded parts show translated labels without internal payloads"
+      },
+      "oracle": "chat.render.cards-match-stored"
+    },
+    {
+      "fix": "#5256",
+      "status": "active",
+      "id": "unknown-activities-are-omitted",
+      "behaviour": "Unknown activity types do not render a user-facing activity card.",
+      "file": "../web/src/components/chat/chat-thread-messages.tsx",
+      "search": "    default:\n      return (\n        <UnknownChatActivity\n          key={part.activityType}\n          activityType={part.activityType}\n        />\n      );\n  }\n\n  return (\n    <figure",
+      "replace": "    default:\n      labelKey = \"chat.thinking\";\n  }\n\n  return (\n    <figure",
+      "scenario": {
+        "file": "../web/src/components/chat/chat-thread-messages.test.tsx",
+        "test": "unknown activity types and malformed activity messages leave the thread readable"
+      },
+      "oracle": "chat.render.cards-match-stored"
+    },
+    {
+      "fix": "#5256",
+      "status": "active",
+      "id": "malformed-activities-preserve-thread",
+      "behaviour": "Malformed activity envelopes are omitted without failing transcript rendering.",
+      "file": "../web/src/components/chat/chat-thread-messages.tsx",
+      "search": "  if (parts.length !== 1 || part?.type !== \"activity\") {\n    return null;\n  }",
+      "replace": "  if (parts.length !== 1 || part?.type !== \"activity\") {\n    return panic(\"An activity message must contain exactly one activity part\");\n  }",
+      "scenario": {
+        "file": "../web/src/components/chat/chat-thread-messages.test.tsx",
+        "test": "unknown activity types and malformed activity messages leave the thread readable"
+      },
+      "oracle": "chat.client.no-errors"
+    },
+    {
+      "id": "subagent-snapshot-resumes-after-suspension",
+      "fix": "#5256",
+      "behaviour": "Resuming a suspended subagent updates its running status and child transcript; terminal snapshots reject active replays.",
+      "status": "active",
+      "file": "src/handlers/chat/snapshot-reconciliation.ts",
+      "search": "  suspended: 0,",
+      "replace": "  suspended: 1,",
+      "scenario": {
+        "file": "src/handlers/chat/snapshot-reconciliation.property.test.ts",
+        "test": "subagent snapshots preserve suspend resume cycles and terminal finality"
+      },
+      "oracle": "chat.live.subagent-lifecycle"
+    },
+    {
       "id": "snapshot-one-message-per-id",
       "fix": "#3858",
       "behaviour": "The interrupt snapshot carries one assistant message per id, merging the copies the engine splits at each tool result.",
@@ -28,7 +140,7 @@
         "file": "src/handlers/chat/approval-settlement.integration.test.ts",
         "test": "is stored on its owning message when the model answers in text"
       },
-      "oracle": "chat.persisted.turn-settles"
+      "oracle": "chat.client.no-errors"
     },
     {
       "id": "failed-continuation-keeps-owning-parts",
@@ -61,18 +173,18 @@
       "oracle": "chat.live.equals-reload"
     },
     {
-      "id": "persistence-ignores-snapshots",
+      "id": "snapshot-preserves-reconciled-denials",
       "fix": "#2186",
-      "behaviour": "The persistence processor never consumes a messages snapshot, which would reset what it accumulated.",
+      "behaviour": "Denial restoration preserves reconciled snapshot parts, including denied tool results; the SDK migration consumes snapshots to recover resumed results.",
       "status": "active",
-      "file": "src/handlers/chat/stream-chat.ts",
-      "search": "      if (chunk.type !== EventType.MESSAGES_SNAPSHOT) {\n        processor.processChunk(chunk);\n      }",
-      "replace": "      processor.processChunk(chunk);",
+      "file": "src/handlers/chat/stream-message-identity.ts",
+      "search": "      \"parts\" in message ||\n",
+      "replace": "",
       "scenario": {
         "file": "src/handlers/chat/live-reload-parity.integration.test.ts",
-        "test": "keeps a run's server call and the approval it then asks for"
+        "test": "keeps a denied call denied when the model then asks for another approval"
       },
-      "oracle": "chat.ledger.calls-present"
+      "oracle": "chat.live.equals-reload"
     },
     {
       "id": "same-run-iterations-stay-one-message",
@@ -95,7 +207,7 @@
       "behaviour": "The snapshot folds a run's per-iteration assistant messages into the turn's one message.",
       "status": "active",
       "file": "src/handlers/chat/stream-message-identity.ts",
-      "search": "      messages: mergeSnapshotAssistantMessages({\n        existingMessageIds,\n        mapMessageId,\n        messages: chunk.messages,\n        snapshotMessageIds,\n      }),",
+      "search": "      messages: mergeSnapshotAssistantMessages({\n        existingMessageIds,\n        mapMessageId,\n        messages: chunk.messages,\n        snapshotMessageIds,\n        snapshotOwners,\n      }),",
       "replace": "      messages: chunk.messages,",
       "scenario": {
         "file": "src/handlers/chat/live-reload-parity.integration.test.ts",
@@ -210,9 +322,9 @@
       "fix": "#1730",
       "behaviour": "A turn's steps stay in one folded list across the tool results between them.",
       "status": "active",
-      "file": "../web/src/components/chat/chat-thread-messages.tsx",
-      "search": "  if (part.type === \"tool-result\") {\n    return true;\n  }\n  return (\n    part.type === \"tool-call\" &&",
-      "replace": "  return (\n    part.type === \"tool-call\" &&",
+      "file": "../../packages/api-contract/src/chat-tool-activity.ts",
+      "search": "  if (part.type === \"thinking\" || part.type === \"tool-result\") {",
+      "replace": "  if (part.type === \"thinking\") {",
       "scenario": {
         "file": "../web/src/components/chat/recorded-conversations.dom.test.tsx",
         "test": "approval-after-tool-result shows what the server stored, live and in a second tab"
@@ -372,13 +484,13 @@
       "behaviour": "A tool call's stored arguments are the adapter's normalized input, not the raw wire string.",
       "status": "active",
       "file": "../../node_modules/@tanstack/ai/dist/esm/activities/chat/stream/processor.js",
-      "search": "if (serializedInput !== void 0) existingToolCall.arguments = serializedInput;",
-      "replace": "void serializedInput;",
+      "search": "existingToolCall.arguments = final.args;",
+      "replace": "void final.args;",
       "scenario": {
-        "file": "src/handlers/chat/provider-wire-replay.integration.test.ts",
-        "test": "openai: a tool call reaches its card, runs once approved, and the answer reloads"
+        "file": "src/handlers/chat/tool-call-end-arguments.test.ts",
+        "test": "an OpenAI strict-mode null on an optional field never reaches the persisted arguments"
       },
-      "oracle": "chat.live.equals-reload"
+      "oracle": "chat.provider-wire.tool-arguments"
     },
     {
       "id": "tool-input-null-optionals-omitted",
@@ -399,7 +511,7 @@
       "fix": "maintenance",
       "behaviour": "Tool input under a union of arrays reads its items against the members' item schemas as alternatives, so a null one member declares is kept.",
       "status": "active",
-      "file": "src/lib/json-schema/null-optionals.ts",
+      "file": "../../packages/agent-input/src/null-optionals.ts",
       "search": "      itemSchemas.length === 1 ? itemSchemas[0] : { anyOf: itemSchemas };",
       "replace": "      itemSchemas[0];",
       "scenario": {
@@ -413,7 +525,7 @@
       "fix": "maintenance",
       "behaviour": "Tool input under a union reads its placeholders against the branches whose shape takes the value, so a branch the value cannot fit does not keep a null.",
       "status": "active",
-      "file": "src/lib/json-schema/null-optionals.ts",
+      "file": "../../packages/agent-input/src/null-optionals.ts",
       "search": "  const matched = fitting.length > 0 ? fitting : matching;",
       "replace": "  const matched = matching;",
       "scenario": {
@@ -427,8 +539,8 @@
       "fix": "maintenance",
       "behaviour": "A union branch whose object constant the tool input does not equal is not one it fits, so it keeps no null.",
       "status": "active",
-      "file": "src/lib/json-schema/null-optionals.ts",
-      "search": "    return isDeepStrictEqual(schema[\"const\"], value);",
+      "file": "../../packages/agent-input/src/null-optionals.ts",
+      "search": "    return sameJsonValue(schema[\"const\"], value);",
       "replace": "    return typeof value === \"object\" || schema[\"const\"] === value;",
       "scenario": {
         "file": "src/lib/json-schema/null-optionals.test.ts",
@@ -441,7 +553,7 @@
       "fix": "maintenance",
       "behaviour": "A closed union branch with patternProperties refuses a field no pattern names, so it keeps no null.",
       "status": "active",
-      "file": "src/lib/json-schema/null-optionals.ts",
+      "file": "../../packages/agent-input/src/null-optionals.ts",
       "search": "  if (matched) {",
       "replace": "  if (matched || isRecord(patternProperties)) {",
       "scenario": {
@@ -455,7 +567,7 @@
       "fix": "maintenance",
       "behaviour": "Only union array members that take the whole array lend their item schemas to reading its placeholders.",
       "status": "active",
-      "file": "src/lib/json-schema/null-optionals.ts",
+      "file": "../../packages/agent-input/src/null-optionals.ts",
       "search": "  const fitting = members.filter((member) => shapeTakes(member, value));",
       "replace": "  const fitting = members;",
       "scenario": {
@@ -511,7 +623,7 @@
       "fix": "#4273",
       "behaviour": "The request options a chat attempt hands the engine put nothing on the provider wire that the provider refuses, such as a request metadata value that is not a string.",
       "status": "active",
-      "file": "src/handlers/chat/stream-chat.ts",
+      "file": "src/lib/chat/chat-request.ts",
       "search": "  adapter: withRunToolCallIds(model.adapter, toolCallIds),\n",
       "replace": "  adapter: withRunToolCallIds(model.adapter, toolCallIds),\n  metadata: { stellaToolCallIdLedger: toolCallIds },\n",
       "scenario": {
@@ -526,8 +638,8 @@
       "behaviour": "A message sent while cards wait resets the client's interrupt state first, so the send is posted.",
       "status": "active",
       "file": "../web/src/features/chat/chat-runtime.ts",
-      "search": "    client.stop();\n  };\n\n  const startClientSend",
-      "replace": "  };\n\n  const startClientSend",
+      "search": "    supersedePendingInterrupts();\n",
+      "replace": "",
       "scenario": {
         "file": "src/handlers/chat/live-reload-parity.integration.test.ts",
         "test": "lets a new message replace an approval that still waits"
@@ -537,16 +649,16 @@
     {
       "id": "engine-closes-unanswerable-calls",
       "fix": "#3885",
-      "behaviour": "The engine is handed an ended turn's open calls with a result, so it runs the model instead of asking the client about them again.",
+      "behaviour": "An ended turn's open calls receive closing results before context selection and provider-history validation, so a fork can continue with balanced tool history.",
       "status": "active",
       "file": "src/handlers/chat/chat-turn-settlement.ts",
-      "search": "      !ENGINE_ASKS_CLIENT_AGAIN[part.state]",
+      "search": "      !CALL_NEEDS_CLOSING_RESULT[part.state]",
       "replace": "      true",
       "scenario": {
-        "file": "src/handlers/chat/live-reload-parity.integration.test.ts",
-        "test": "continues a fork taken while a question waits"
+        "file": "src/handlers/chat/chat-turn-settlement.test.ts",
+        "test": "a batch with an unanswered call keeps its calls in one step"
       },
-      "oracle": "chat.client.no-errors"
+      "oracle": "chat.provider.transcript-settled"
     },
     {
       "id": "run-continues-stored-thread",
@@ -624,8 +736,8 @@
       "behaviour": "A stop that ends a turn waiting on the user stores the same outcome on the turn and on its message.",
       "status": "active",
       "file": "src/handlers/chat/chat-turn-persistence.ts",
-      "search": "      reason: planned.state.reason,",
-      "replace": "      reason: \"superseded\",",
+      "search": "      outcome: { reason: planned.state.reason, type: \"cancelled\" },",
+      "replace": "      outcome: { reason: \"superseded\", type: \"cancelled\" },",
       "scenario": {
         "file": "src/handlers/chat/live-reload-parity.integration.test.ts",
         "test": "stops a client call the page still runs"
@@ -652,8 +764,8 @@
       "behaviour": "A turn's run does not end when the request that started it ends: only its deadline, a stop, or its response closing cut it short.",
       "status": "active",
       "file": "src/handlers/chat/send-message.ts",
-      "search": "const run = lifecycle.startRun(externalMcpTools);",
-      "replace": "const run = lifecycle.startRun(externalMcpTools); request.signal.addEventListener(\"abort\", () => { run.control.abortController.abort(); });",
+      "search": "const run = lifecycle.startRun(\n                externalMcpTools,\n                body.runTarget.kind,\n              );",
+      "replace": "const run = lifecycle.startRun(\n                externalMcpTools,\n                body.runTarget.kind,\n              ); request.signal.addEventListener(\"abort\", () => { run.control.abortController.abort(); });",
       "scenario": {
         "file": "src/handlers/chat/chat-turn-run.integration.test.ts",
         "test": "runs an approved call to completion after its request is torn down, with nobody reading"
@@ -666,8 +778,8 @@
       "behaviour": "A run binds the run id its request posted to its turn when it starts.",
       "status": "active",
       "file": "src/handlers/chat/chat-turn-persistence.ts",
-      "search": "...(runId === undefined ? {} : { runId }),",
-      "replace": "...(runId === undefined ? {} : {}),",
+      "search": "        mode === \"bind\"\n          ? { runId }\n          : {\n              leaseExpiresAt: nextChatTurnRunLeaseExpiry(),\n              ...(runId === undefined ? {} : { runId }),\n            },",
+      "replace": "        mode === \"bind\"\n          ? { runId: sql`${chatTurns.runId}` }\n          : {\n              leaseExpiresAt: nextChatTurnRunLeaseExpiry(),\n            },",
       "scenario": {
         "file": "src/handlers/chat/chat-turn-run.integration.test.ts",
         "test": "runs an approved call to completion after its request is torn down, with nobody reading"
@@ -680,7 +792,7 @@
       "behaviour": "The reaper ends a turn whose owner stopped renewing its lease, without waiting for a next message.",
       "status": "active",
       "file": "src/lib/scheduler/tasks/chat-turn-reaper.ts",
-      "search": "async (tx) => await reapOwnerlessChatTurnOnTx({ threadId, tx }),",
+      "search": "async (tx) =>\n                await reapOwnerlessChatTurnOnTx({ pings, threadId, tx }),",
       "replace": "async () => await Promise.resolve(),",
       "scenario": {
         "file": "src/handlers/chat/live-reload-parity.integration.test.ts",
@@ -810,7 +922,7 @@
       "replace": "buffer += decoder.decode(value);",
       "scenario": {
         "file": "src/lib/tanstack-ai-provider-wire.test.ts",
-        "test": "reads a stream cut anywhere as it reads it whole mistral text"
+        "test": "reads a stream cut anywhere as it reads it whole mistral text matches the whole read at any cut"
       },
       "oracle": "chat.provider-wire.split"
     },
@@ -834,8 +946,8 @@
       "behaviour": "The history a chat attempt dispatches, the only one its surfaces accept, has each call answered in its own step.",
       "status": "active",
       "file": "src/handlers/chat/provider-history.ts",
-      "search": "      messages: answerHistoryCallsInTheirStep(withoutRepeatedCalls(messages)),",
-      "replace": "      messages: withoutRepeatedCalls(messages),",
+      "search": "      messages: answerHistoryCallsInTheirStep(\n        withoutRepeatedCalls(withoutContentlessUserTurns(messages)),\n      ),",
+      "replace": "      messages: withoutRepeatedCalls(withoutContentlessUserTurns(messages)),",
       "scenario": {
         "file": "src/handlers/chat/approval-answer-order.test.ts",
         "test": "keeps a denial ahead of the approved call it was answered with"
@@ -888,10 +1000,11 @@
       "id": "reader-decodes-v2-envelope",
       "fix": "saved-state",
       "behaviour": "The reader keeps decoding the v2 content envelope that releases before canonical tool calls stored, instead of reading it as v3.",
-      "status": "active",
+      "status": "retired",
+      "reason": "The v3 content backfill upgrades every stored v2 envelope before runtime readers start, and the reader now rejects any version but 3, so no v2 decode path is left to mutate.",
       "file": "src/handlers/chat/chat-message-parts.ts",
-      "search": "  if (content.version === 3) {\n    return normalizePersistedV3ChatMessageContent(content);\n  }",
-      "replace": "  if (content.version >= 2) {\n    return normalizePersistedV3ChatMessageContent(content);\n  }",
+      "search": "  if (content.version === 3) {\n    normalized = normalizePersistedV3ChatMessageContent(content);",
+      "replace": "  if (content.version >= 2) {\n    normalized = normalizePersistedV3ChatMessageContent(content);",
       "scenario": {
         "file": "src/handlers/chat/saved-state-compat.integration.test.ts",
         "test": "v0.7.22 (3952f790b2) reloads, takes a denial and a follow-up"
@@ -903,9 +1016,9 @@
       "fix": "#4007",
       "behaviour": "A request of a thread sends the system prompt the request before it sent, so an approval's continuation extends the cached prompt instead of rewriting it.",
       "status": "active",
-      "file": "src/handlers/chat/stream-chat.ts",
-      "search": "  ...systemPromptsPatch({ caching, model, system }),",
-      "replace": "  ...systemPromptsPatch({ caching, model, system: `${String(system)}\\nRequest time: ${String(performance.now())}` }),",
+      "file": "src/lib/chat/chat-request.ts",
+      "search": "  ...systemPromptsFor({ caching, model, system, systemLayers }),",
+      "replace": "  ...systemPromptsFor({ caching, model, system: `${String(system)}\\nRequest time: ${String(performance.now())}`, systemLayers }),",
       "scenario": {
         "file": "src/handlers/chat/live-reload-parity.integration.test.ts",
         "test": "keeps every card after an approval on a message that already holds a tool result"
@@ -917,7 +1030,7 @@
       "fix": "#4007",
       "behaviour": "A provider's SDK writes a thread's tools in the same order on every request of the thread.",
       "status": "active",
-      "file": "src/handlers/chat/stream-chat.ts",
+      "file": "src/lib/chat/chat-request.ts",
       "search": "  tools: projectChatToolSchemasForProvider({\n    modelTools,\n    provider: model.provider,\n  }),",
       "replace": "  tools: projectChatToolSchemasForProvider({\n    modelTools,\n    provider: model.provider,\n  }).toSorted(() => Math.random() - 0.5),",
       "scenario": {
@@ -1086,13 +1199,27 @@
       "behaviour": "A completed turn's follow-ups run after its settlement, so one that throws is reported and never marks the stored turn failed.",
       "status": "active",
       "file": "src/handlers/chat/send-message.ts",
-      "search": "                          await persistStreamedAssistantTurn(event),",
-      "replace": "                          await persistStreamedAssistantTurn(event).then(async (settled) => { if (Result.isOk(settled) && settled.value !== null) { await runCompletedTurnFollowUps(settled.value); } return settled; }),",
+      "search": "                        await persistStreamedTurn({\n                          context: settlementContext,\n                          event,\n                        }),",
+      "replace": "                        await persistStreamedTurn({\n                          context: settlementContext,\n                          event,\n                        }).then(async (settled) => { if (Result.isOk(settled) && settled.value.followUps !== null) { await runCompletedTurnFollowUps(run, settled.value.followUps); } return settled; }),",
       "scenario": {
         "file": "src/handlers/chat/send-message.test.ts",
         "test": "keeps a completed turn completed when a follow-up throws"
       },
       "oracle": "chat.persisted.turn-outcome"
+    },
+    {
+      "id": "cut-off-call-reaches-engine-with-object-arguments",
+      "fix": "maintenance",
+      "behaviour": "A call stopped while its input streamed is handed to the provider on later requests with a JSON object as its arguments, never the partial text that had arrived.",
+      "status": "active",
+      "file": "src/handlers/chat/chat-turn-settlement.ts",
+      "search": "    ).map(withEngineArguments);",
+      "replace": "    );",
+      "scenario": {
+        "file": "src/handlers/chat/provider-wire-transcripts.integration.test.ts",
+        "test": "openai: interrupt-mid-tool"
+      },
+      "oracle": "chat.provider-wire.outbound"
     }
   ]
 }

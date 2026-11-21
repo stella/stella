@@ -47,13 +47,13 @@ import {
 } from "@/api/lib/template-binding/binding-sources";
 
 import {
-  fieldMetaSchema,
-  LOOKUP_REGISTRIES,
-  SMALLEST_MAXIMUM,
   type FieldLookupFormat,
   type FieldMeta,
-  type FieldValidation,
+  fieldMetaSchema,
   type FieldSource,
+  type FieldValidation,
+  LOOKUP_REGISTRIES,
+  SMALLEST_MAXIMUM,
 } from "./types";
 
 // ── The catalogue ────────────────────────────────────────
@@ -469,7 +469,7 @@ const applyFilter = (draft: Draft, call: FilterCall): void => {
         );
         return;
       }
-      draft.meta[call.name] = text;
+      draft.meta = { ...draft.meta, [call.name]: text };
       return;
     }
     case "required":
@@ -558,7 +558,7 @@ const applyFilter = (draft: Draft, call: FilterCall): void => {
         );
         return;
       }
-      draft.meta[call.name] = expression;
+      draft.meta = { ...draft.meta, [call.name]: expression };
       return;
     }
     default:

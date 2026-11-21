@@ -1,8 +1,6 @@
-import { Value } from "@sinclair/typebox/value";
 import { panic, Result } from "better-result";
 import * as v from "valibot";
 
-import { CASE_LAW_RESEARCH_QUESTION_MAX_LENGTH } from "@stll/api-contract";
 import type {
   CaseLawResearchAnswerFailureReason,
   CaseLawResearchColumnTool,
@@ -11,12 +9,14 @@ import type {
 import type { JustificationContent } from "@/api/db/schema";
 import { fieldContentSchema } from "@/api/db/schema-validators";
 import type {
-  AiExtractablePropertyContent,
+  CaseLawQuestionContent,
   FieldContent,
 } from "@/api/db/schema-validators";
 import { captureError } from "@/api/lib/analytics/capture";
+import { reportCaseLawIncompleteAnswer } from "@/api/lib/case-law/incomplete-answer-telemetry";
 import { DatabaseError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import {
   answerSchemaForContent,
   answerShapeHint,
@@ -37,11 +37,11 @@ import type { ValidatedAnswer } from "@/api/lib/workflow/ai-validators";
  * same justification shape — so one cell renderer and one output registry serve
  * both surfaces.
  */
-export type CaseLawResearchColumnContent = AiExtractablePropertyContent;
+export type CaseLawResearchColumnContent = CaseLawQuestionContent;
 
 export const defaultResearchColumnTool = (): CaseLawResearchColumnTool => ({
   version: 1,
-  role: "fast",
+  task: "short-text",
 });
 
 export type ResearchQuestion = {
@@ -87,22 +87,56 @@ export const selectPassagesWithinBudget = (
   const selected: ResearchPassage[] = [];
   const seen = new Set<string>();
   let used = 0;
+  let duplicate = 0;
+  let invalid = 0;
+  let truncated = 0;
+  let budget = 0;
+  let budgetSpent = false;
   for (const passage of passages) {
-    const excerpt = passage.excerpt.trim().slice(0, passageChars);
-    if (
-      excerpt.length === 0 ||
-      passage.anchorId.length === 0 ||
-      seen.has(passage.anchorId)
-    ) {
+    const trimmed = passage.excerpt.trim();
+    if (trimmed.length === 0 || passage.anchorId.length === 0) {
+      invalid += 1;
       continue;
     }
-    if (used + excerpt.length > budgetChars) {
-      break;
+    if (seen.has(passage.anchorId)) {
+      duplicate += 1;
+      continue;
     }
+    const excerpt = trimmed.slice(0, passageChars);
+    if (budgetSpent || used + excerpt.length > budgetChars) {
+      // The order is the ranking: once a passage does not fit, nothing ranked
+      // below it takes its place. Later passages still count under their own
+      // reason, so a repeat of a dropped anchor is a duplicate.
+      budgetSpent = true;
+      seen.add(passage.anchorId);
+      budget += 1;
+      continue;
+    }
+    truncated += Number(excerpt.length < trimmed.length);
     seen.add(passage.anchorId);
     used += excerpt.length;
     selected.push({ anchorId: passage.anchorId, excerpt });
   }
+  reportCaseLawIncompleteAnswer({
+    surface: "research",
+    reason: "passage_invalid",
+    count: invalid,
+  });
+  reportCaseLawIncompleteAnswer({
+    surface: "research",
+    reason: "passage_duplicate",
+    count: duplicate,
+  });
+  reportCaseLawIncompleteAnswer({
+    surface: "research",
+    reason: "passage_truncated",
+    count: truncated,
+  });
+  reportCaseLawIncompleteAnswer({
+    surface: "research",
+    reason: "passage_budget",
+    count: budget,
+  });
   return selected;
 };
 
@@ -155,7 +189,7 @@ export const buildResearchUserMessage = ({
 };
 
 /** What the model returns for one question. */
-export type ResearchAnswerOutput = {
+type ResearchAnswerOutput = {
   answer: Answer;
   rationale: string;
   anchorIds: string[];
@@ -218,6 +252,7 @@ export const statedAnswerContent = (
     case "single-select":
     case "date":
     case "int":
+    case "money":
       return validated.value === null
         ? null
         : fieldContentFromValidated(validated);
@@ -303,6 +338,11 @@ export const parseResearchAnswers = ({
       .trim()
       .slice(0, LIMITS.caseLawResearchAnswerRationaleChars);
     const anchorIds = anchorOrder.filter((anchorId) => cited.has(anchorId));
+    reportCaseLawIncompleteAnswer({
+      surface: "research",
+      reason: "cited_passage_unknown",
+      count: cited.size - anchorIds.length,
+    });
     const answer = statedAnswerContent(validated.value);
     return {
       columnId,
@@ -320,16 +360,19 @@ const CITED_EXCERPT_CHARS = 300;
 /**
  * The cited passages as justification blocks. One block per anchor, in the
  * order the anchors were sent, so the card renders them the way the reader
- * scrolls them.
+ * scrolls them. Each names the court's number for its block from the
+ * decision's AST (`courtParagraphNumbersByAnchor`), never from the anchor.
  */
 export const buildAnswerJustification = (
   anchorIds: readonly string[],
   excerptByAnchor: ReadonlyMap<string, string>,
+  courtParagraphNumbers: ReadonlyMap<string, number>,
 ): JustificationContent => ({
   version: 1,
   blocks: anchorIds.map((anchorId) => ({
     kind: "decision-passage",
     anchorId,
+    courtParagraphNumber: courtParagraphNumbers.get(anchorId) ?? null,
     excerpt: (excerptByAnchor.get(anchorId) ?? "").slice(
       0,
       CITED_EXCERPT_CHARS,
@@ -345,22 +388,16 @@ export const buildAnswerJustification = (
  * as the union's own error arm, never handed to the client as an unknown shape.
  */
 export const parseStoredAnswerContent = (value: unknown): FieldContent => {
-  if (Value.Check(fieldContentSchema, value)) {
+  if (v.is(fieldContentSchema, value)) {
     return value;
   }
   captureError(
     new DatabaseError({
       message: "Stored research answer is not field content",
     }),
-    { source: "case-law-research-answers" },
+    handlerErrorContext("caselaw.parseStoredAnswerContent", {
+      source: "case-law-research-answers",
+    }),
   );
   return { version: 1, type: "error" };
 };
-
-/** A question as the route accepts it; the handler re-parses. */
-export const researchQuestionSchema = v.pipe(
-  v.string(),
-  v.trim(),
-  v.minLength(1),
-  v.maxLength(CASE_LAW_RESEARCH_QUESTION_MAX_LENGTH),
-);

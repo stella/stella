@@ -1,8 +1,10 @@
 import { renderToStaticMarkup } from "react-dom/server";
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { beforeAll, describe, expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import { IntlProvider } from "use-intl";
+
+import { createTestState } from "@stll/test-state";
 
 import { FormattingProvider } from "@/i18n/formatting-context";
 import en from "@/i18n/langs/en.json";
@@ -10,9 +12,11 @@ import { AuthenticatedUserProvider } from "@/lib/authenticated-user-context";
 import type { AuthenticatedUser } from "@/lib/authenticated-user-context";
 import { toChatThreadId } from "@/lib/chat-thread-ref";
 
-// The query module imports the Eden client, which reads the API URL eagerly.
-beforeAll(() => {
-  process.env["VITE_API_URL"] ??= "https://api.example.test";
+const testState = createTestState({ file: import.meta.path, config: {} });
+
+// The query module imports the API client, which reads the API URL eagerly.
+testState.beforeAll(() => {
+  testState.setEnvIfAbsent("VITE_API_URL", "https://api.example.test");
 });
 
 const ORGANIZATION_ID = "org-1";
@@ -50,6 +54,7 @@ const renderDock = async ({
   );
   const dock = (
     <ChatComposerDock
+      models={null}
       status="pending"
       threadRef={{ scope: "global", threadId: toChatThreadId("thread-1") }}
     />

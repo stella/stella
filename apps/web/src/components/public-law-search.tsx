@@ -1,13 +1,18 @@
 import { useTranslations } from "use-intl";
 
+import type { ChatCorpus, ChatCorpusScope } from "@stll/api-contract";
+import { isPublicCountry } from "@stll/api-contract/public-country-capability";
 import { Button } from "@stll/ui/button";
-import { MessageSquareTextIcon, AiActionIcon } from "@stll/ui/icons";
+import { Form } from "@stll/ui/form";
+import { AiActionIcon, MessageSquareTextIcon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import { Loader } from "@stll/ui/loader";
 
 import { ACCOUNT_GATE_OUTCOME } from "@/components/auth/require-account.logic";
 import { useRequireAccount } from "@/components/auth/use-require-account";
-import { openPublicLawChat } from "@/components/public-law-ask";
+import { askPublicLawInChat } from "@/components/public-law-ask";
+import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
+import { CapabilityAction } from "@/lib/organization/feature-access/capability-actions";
 
 type PublicLawSearchProps = {
   maxLength: number;
@@ -23,15 +28,36 @@ type PublicLawSearchProps = {
   refine?: PublicLawSearchRefine | undefined;
   searchLabel: string;
   /**
-   * The chat prompt for the current entry, scoped the way the page is. Null
-   * hides the chat button (nothing to ask about yet).
+   * The corpus the page searches, which "Ask in chat" puts in front of the
+   * question as a chip. Null hides the chat button (no corpus to ask in).
    */
-  askPrompt: (query: string) => string | null;
+  askScope: PublicLawAskScope | null;
+};
+
+/** The corpus a box searches, with the chip text naming it. */
+export type PublicLawAskScope = {
+  scope: ChatCorpusScope;
+  /** Already translated: "Case law · Czechia". */
+  label: string;
 };
 
 /**
- * The one box of a public-law browser: an identifier, an alias or words. A
- * form so Enter submits the way the browser already knows how to. The
+ * The ask scope for a corpus and a country code in any case (`cze`, `CZE`);
+ * null for a code that names no public country.
+ */
+export const publicLawAskScope = (
+  corpus: ChatCorpus,
+  countryCode: string,
+  label: string,
+): PublicLawAskScope | null => {
+  const country = countryCode.toUpperCase();
+  return isPublicCountry(country)
+    ? { scope: { corpus, country }, label }
+    : null;
+};
+
+/**
+ * The one box of a public-law browser: an identifier, an alias or words. The
  * statutes and case-law browsers share it so a reader learns one box, not
  * two; the home's entry box is built from the same parts.
  *
@@ -40,7 +66,7 @@ type PublicLawSearchProps = {
  * the two cannot drift into different pages again.
  */
 export const PublicLawSearch = ({
-  askPrompt,
+  askScope,
   maxLength,
   onQueryChange,
   onSubmit,
@@ -50,11 +76,12 @@ export const PublicLawSearch = ({
   searchLabel,
 }: PublicLawSearchProps) => {
   const trimmed = query.trim();
-  const prompt = trimmed.length > 0 ? askPrompt(trimmed) : null;
 
   return (
-    <form
-      className="mx-auto flex w-full max-w-2xl flex-wrap items-center justify-center gap-2"
+    <Form
+      className="mx-auto max-w-2xl flex-wrap justify-center"
+      density="compact"
+      layout="inline"
       onSubmit={(event) => {
         event.preventDefault();
         onSubmit();
@@ -63,7 +90,7 @@ export const PublicLawSearch = ({
     >
       <Input
         aria-label={searchLabel}
-        className="h-11 min-h-11 min-w-64 flex-1 text-base"
+        className="h-11 min-h-11 min-w-64 flex-1"
         maxLength={maxLength}
         onChange={(event) => onQueryChange(event.currentTarget.value)}
         placeholder={placeholder}
@@ -77,14 +104,14 @@ export const PublicLawSearch = ({
           onRefine={refine.onRefine}
         />
       )}
-      {prompt !== null && (
-        <PublicLawAskInChat label={trimmed} prompt={prompt} />
+      {askScope !== null && trimmed.length > 0 && (
+        <PublicLawAskInChat askScope={askScope} question={trimmed} />
       )}
-    </form>
+    </Form>
   );
 };
 
-type PublicLawSearchRefine = {
+export type PublicLawSearchRefine = {
   isPending: boolean;
   /** Rewrite the entry; called only once the reader may spend AI on it. */
   onRefine: () => void;
@@ -95,68 +122,102 @@ type PublicLawSearchRefine = {
  * visitor is asked for an account when they press it, because the rewrite
  * reaches an AI endpoint.
  */
-const PublicLawRefine = ({
+export const PublicLawRefine = ({
   disabled,
   isPending,
+  labelled = false,
   onRefine,
-}: PublicLawSearchRefine & { disabled: boolean }) => {
+}: PublicLawSearchRefine & {
+  disabled: boolean;
+  /** Spell the action out beside the wand, where it is not beside a box. */
+  labelled?: boolean;
+}) => {
   const t = useTranslations();
   const ensureAccount = useRequireAccount();
+  const user = useMaybeAuthenticatedUser();
 
   return (
-    <Button
-      aria-label={t("search.aiRefine")}
-      disabled={disabled || isPending}
-      onClick={() => {
-        if (ensureAccount() !== ACCOUNT_GATE_OUTCOME.allowed) {
-          return;
-        }
-        onRefine();
-      }}
-      size="icon-sm"
-      title={t("search.aiRefine")}
-      type="button"
-      variant="muted"
+    <CapabilityAction
+      action={{ capability: user === null ? null : "ai" }}
+      surface="control"
     >
-      {isPending ? (
-        <Loader label={t("search.aiRefine")} size="sm" />
-      ) : (
-        <AiActionIcon aria-hidden="true" className="size-4" />
+      {(capabilityProps) => (
+        <Button
+          aria-label={labelled ? undefined : t("search.aiRefine")}
+          disabled={disabled || isPending}
+          disabledReason={
+            isPending
+              ? t("search.refiningQuery")
+              : t("search.enterQueryToRefine")
+          }
+          onClick={() => {
+            if (ensureAccount() !== ACCOUNT_GATE_OUTCOME.allowed) {
+              return;
+            }
+            onRefine();
+          }}
+          size={labelled ? "sm" : "icon-sm"}
+          title={t("search.aiRefine")}
+          type="button"
+          variant={labelled ? "outline" : "muted"}
+          {...capabilityProps}
+        >
+          {isPending ? (
+            <Loader label={t("search.aiRefine")} size="sm" />
+          ) : (
+            <AiActionIcon aria-hidden="true" className="size-4" />
+          )}
+          {labelled && t("search.aiRefine")}
+        </Button>
       )}
-    </Button>
+    </CapabilityAction>
   );
 };
 
 /**
- * Hands the entry to a chat with the corpus tools. Drawn for every reader; a
- * visitor is asked for an account at the moment the question would be sent,
- * and comes back to the same list.
+ * Asks the entry in a chat scoped to the corpus, sent at once. Drawn for every
+ * reader; a visitor is asked for an account at the moment the question would
+ * be sent, and comes back to the same list.
  */
 export const PublicLawAskInChat = ({
-  label,
-  prompt,
+  askScope,
+  question,
 }: {
-  label: string;
-  prompt: string;
+  askScope: PublicLawAskScope;
+  question: string;
 }) => {
   const t = useTranslations();
   const ensureAccount = useRequireAccount();
+  const user = useMaybeAuthenticatedUser();
 
   return (
-    <Button
-      className="text-muted-foreground"
-      onClick={() => {
-        if (ensureAccount() !== ACCOUNT_GATE_OUTCOME.allowed) {
-          return;
-        }
-        openPublicLawChat({ label, prompt });
-      }}
-      size="sm"
-      type="button"
-      variant="ghost"
+    <CapabilityAction
+      action={{ capability: user === null ? null : "ai" }}
+      surface="control"
     >
-      <MessageSquareTextIcon aria-hidden="true" className="size-3.5" />
-      {t("common.askInChat")}
-    </Button>
+      {(capabilityProps) => (
+        <Button
+          className="text-muted-foreground"
+          onClick={() => {
+            if (ensureAccount() !== ACCOUNT_GATE_OUTCOME.allowed) {
+              return;
+            }
+            askPublicLawInChat({
+              label: question,
+              question,
+              scope: askScope.scope,
+              scopeLabel: askScope.label,
+            });
+          }}
+          size="sm"
+          type="button"
+          variant="ghost"
+          {...capabilityProps}
+        >
+          <MessageSquareTextIcon aria-hidden="true" className="size-3.5" />
+          {t("common.askInChat")}
+        </Button>
+      )}
+    </CapabilityAction>
   );
 };

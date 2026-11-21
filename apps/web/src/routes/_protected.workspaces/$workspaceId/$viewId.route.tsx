@@ -1,48 +1,35 @@
-import { useRef } from "react";
-import type { ReactNode } from "react";
-
-import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
-import {
-  createFileRoute,
-  Outlet,
-  redirect,
-  useMatches,
-} from "@tanstack/react-router";
-import * as v from "valibot";
-
-import { Skeleton } from "@stll/ui/skeleton";
-import { cn } from "@stll/ui/utils";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 
 import {
   getWeekStart,
-  isWorkspaceDocumentRoutePath,
   resolveKanbanGroupBy,
   toISODate,
 } from "@/components/workspaces/entity-utils";
 import { windowIncludesAssignees } from "@/components/workspaces/kanban/kanban-view.logic";
 import { resolveEntityFind } from "@/components/workspaces/table/entity-find.logic";
 import { UNRESTRICTED_FIND } from "@/components/workspaces/table/table-find.logic";
-import { guideAnchor } from "@/features/guides/guide-anchor";
-import { GUIDE_ANCHORS } from "@/features/guides/guide-anchors";
 import { isTimeBillingRouteEnabled } from "@/hooks/use-time-billing-preview";
 import { getFormattingLocale } from "@/i18n/i18n-store";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { authClient } from "@/lib/auth-client";
 import { roleOptions } from "@/lib/auth-queries";
-import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { detached } from "@/lib/detached";
+import { loadRouteResource } from "@/lib/errors/route-resource";
 import {
   ensureRouteInfiniteQueryData,
   ensureRouteQueryData,
   prefetchRouteQuery,
 } from "@/lib/react-query";
-import { optionalSearchStringSchema } from "@/lib/schema";
-import type { EntityKind, ViewLayout, WorkspaceView } from "@/lib/types";
+import {
+  optionalIntegerSearchSchema,
+  optionalSearchStringSchema,
+} from "@/lib/schema";
+import type { EntityKind } from "@/lib/types";
 import { overviewOptions } from "@/lib/workspaces/queries";
 import {
+  CORRESPONDENCE_PAGE_SIZE,
   correspondenceAddressOptions,
   correspondenceInfiniteOptions,
-  CORRESPONDENCE_PAGE_SIZE,
 } from "@/lib/workspaces/queries/correspondence";
 import {
   DEFAULT_ENTITY_WINDOW_SIZE,
@@ -56,32 +43,50 @@ import {
   timeEntryTeamSummaryOptions,
 } from "@/lib/workspaces/queries/time-entries";
 import { viewsOptions } from "@/lib/workspaces/queries/views";
+import { selectAvailableWorkspaceView } from "@/lib/workspaces/queries/views.logic";
 import { useTableStore } from "@/lib/workspaces/table-store";
-import { CorrespondenceViewSkeleton } from "@/routes/_protected.workspaces/$workspaceId/-components/correspondence-view";
+import {
+  type CurrentWorkspaceDocument,
+  getCurrentWorkspaceDocument,
+} from "@/lib/workspaces/use-workspace-view-params";
+import {
+  DEFAULT_WORKSPACE_VIEW_ID,
+  isWorkspaceViewId,
+  workspaceViewRouteIds,
+  workspaceViewsInclude,
+} from "@/lib/workspaces/view-params.logic";
+import { routeSearchSchema } from "@/route-search-params";
+import { VIEW_SWITCH_PENDING } from "@/routes/-pending-view.logic";
 import { includesListItems } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-kind-filters";
-import { ViewSwitcher } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-switcher";
-import { ViewToolbar } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar";
+
+import { ViewPage } from "./-$viewId.route.page";
+import { ViewPending } from "./-$viewId.route.pending";
 
 // v.object: validateSearch receives the full URL search params
 // including params from child routes; strictObject would reject them.
-const searchSchema = v.object({
+const searchSchema = routeSearchSchema({
   folder: optionalSearchStringSchema(),
   reveal: optionalSearchStringSchema(),
-  page: v.optional(v.pipe(v.number(), v.integer(), v.minValue(1))),
+  page: optionalIntegerSearchSchema({ min: 1 }),
 });
 
 export const Route = createFileRoute(
   "/_protected/workspaces/$workspaceId/$viewId",
 )({
-  component: RouteComponent,
-  pendingComponent: ViewPendingComponent,
+  component: ViewPage,
+  pendingComponent: ViewPending,
+  pendingMs: VIEW_SWITCH_PENDING.pendingMs,
+  pendingMinMs: VIEW_SWITCH_PENDING.pendingMinMs,
   validateSearch: searchSchema,
-  beforeLoad: ({ params }) => {
+  // Annotated: the context this returns is part of the `matches` type it
+  // reads, so an inferred return would be circular.
+  beforeLoad: ({
+    matches,
+    params,
+  }): { documentOnScreen: CurrentWorkspaceDocument } => {
     // Reject obviously invalid viewIds (e.g. "workspaces" from stale doubled
-    // URLs). Allow UUIDs and the special "all" slug used by the PDF viewer.
-    const VALID_VIEW_ID =
-      /^(?:all|[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12})$/iu;
-    if (!VALID_VIEW_ID.test(params.viewId)) {
+    // URLs).
+    if (!isWorkspaceViewId(params.viewId)) {
       if (import.meta.env.DEV) {
         // oxlint-disable-next-line no-console -- dev-only stack trace to debug stale doubled URLs
         console.trace(
@@ -95,17 +100,25 @@ export const Route = createFileRoute(
         replace: true,
       });
     }
+    // The loader sees no matches; the document page below this view is read
+    // from them here.
+    return { documentOnScreen: getCurrentWorkspaceDocument(matches) };
   },
-  loader: async ({ context, location, params }) => {
+  loader: async ({ context, params }) => {
     const { workspaceId, viewId } = params;
     const { queryClient } = context;
-    const isDocumentRoute = isWorkspaceDocumentRoutePath(location.pathname);
+    const isDocumentRoute = context.documentOnScreen !== undefined;
 
-    const views = await ensureRouteQueryData(
-      queryClient,
-      viewsOptions(workspaceId),
-    );
-    const activeView = views.find((view) => view.id === viewId) ?? views.at(0);
+    const views = await loadRouteResource({
+      ids: workspaceViewRouteIds(workspaceId, viewId),
+      load: async () =>
+        await ensureRouteQueryData(queryClient, viewsOptions(workspaceId)),
+      exists: (loadedViews) => workspaceViewsInclude(loadedViews, viewId),
+    });
+    const activeView =
+      viewId === DEFAULT_WORKSPACE_VIEW_ID
+        ? selectAvailableWorkspaceView(views, viewId)
+        : views.find((view) => view.id === viewId);
 
     if (!activeView) {
       return;
@@ -116,9 +129,20 @@ export const Route = createFileRoute(
         return;
       }
 
-      await ensureRouteQueryData(queryClient, overviewOptions(workspaceId));
+      await ensureRouteQueryData(
+        queryClient,
+        overviewOptions({
+          workspaceId,
+          organizationId: context.user.activeOrganizationId,
+        }),
+      );
 
-      if (!(await isTimeBillingRouteEnabled(queryClient))) {
+      if (
+        !(await isTimeBillingRouteEnabled(queryClient, {
+          userId: context.user.id,
+          organizationId: context.user.activeOrganizationId,
+        }))
+      ) {
         return;
       }
 
@@ -151,7 +175,15 @@ export const Route = createFileRoute(
               toISODate(weekEnd),
             ),
             (error: unknown) => {
-              getAnalytics().captureError(error);
+              getAnalytics().captureError(error, {
+                fingerprintKey:
+                  "workspaces.workspaceId.viewId.route.loader:failure",
+                scope: {
+                  type: "request",
+                  method: "GET",
+                  routeTemplate: "/_protected/workspaces/$workspaceId/$viewId",
+                },
+              });
             },
           ),
           "workspace-view.prefetch",
@@ -167,7 +199,15 @@ export const Route = createFileRoute(
               toISODate(weekEnd),
             ),
             (error: unknown) => {
-              getAnalytics().captureError(error);
+              getAnalytics().captureError(error, {
+                fingerprintKey:
+                  "workspaces.workspaceId.viewId.route.loader:failure-2",
+                scope: {
+                  type: "request",
+                  method: "GET",
+                  routeTemplate: "/_protected/workspaces/$workspaceId/$viewId",
+                },
+              });
             },
           ),
           "workspace-view.prefetch",
@@ -183,7 +223,15 @@ export const Route = createFileRoute(
             toISODate(prevWeekEnd),
           ),
           (error: unknown) => {
-            getAnalytics().captureError(error);
+            getAnalytics().captureError(error, {
+              fingerprintKey:
+                "workspaces.workspaceId.viewId.route.loader:failure-3",
+              scope: {
+                type: "request",
+                method: "GET",
+                routeTemplate: "/_protected/workspaces/$workspaceId/$viewId",
+              },
+            });
           },
         ),
         "workspace-view.prefetch",
@@ -206,7 +254,15 @@ export const Route = createFileRoute(
           queryClient,
           correspondenceAddressOptions(workspaceId),
           (error: unknown) => {
-            getAnalytics().captureError(error);
+            getAnalytics().captureError(error, {
+              fingerprintKey:
+                "workspaces.workspaceId.viewId.route.loader:failure-4",
+              scope: {
+                type: "request",
+                method: "GET",
+                routeTemplate: "/_protected/workspaces/$workspaceId/$viewId",
+              },
+            });
           },
         ),
       ]);
@@ -325,308 +381,3 @@ export const Route = createFileRoute(
     return;
   },
 });
-
-function RouteComponent() {
-  const { workspaceId, viewId } = Route.useParams({
-    select: (p) => ({ workspaceId: p.workspaceId, viewId: p.viewId }),
-  });
-  const viewsQueryOptions = viewsOptions(workspaceId);
-  const { data: activeView } = useSuspenseQuery({
-    ...viewsQueryOptions,
-    select: (data) => data.find((view) => view.id === viewId) ?? data.at(0),
-  });
-
-  if (!activeView) {
-    return null;
-  }
-
-  if (activeView.layout.type === "overview") {
-    return (
-      <OverviewViewContent activeView={activeView} workspaceId={workspaceId} />
-    );
-  }
-
-  return (
-    <EntityViewContent activeView={activeView} workspaceId={workspaceId} />
-  );
-}
-
-type ViewContentProps = {
-  activeView: WorkspaceView;
-  workspaceId: string;
-};
-
-type VisibleFieldsView = WorkspaceView & {
-  layout: Extract<WorkspaceView["layout"], { type: "filesystem" }>;
-};
-
-function OverviewViewContent({ activeView, workspaceId }: ViewContentProps) {
-  return <ViewShell activeView={activeView} workspaceId={workspaceId} />;
-}
-
-function EntityViewContent({ activeView, workspaceId }: ViewContentProps) {
-  if (hasVisibleFieldsLayout(activeView)) {
-    return (
-      <VisibleFieldEntityViewContent
-        activeView={activeView}
-        workspaceId={workspaceId}
-      />
-    );
-  }
-
-  if (activeView.layout.type === "table") {
-    return <ViewShell activeView={activeView} workspaceId={workspaceId} />;
-  }
-
-  if (activeView.layout.type === "calendar") {
-    return <ViewShell activeView={activeView} workspaceId={workspaceId} />;
-  }
-
-  if (activeView.layout.type === "kanban") {
-    return <ViewShell activeView={activeView} workspaceId={workspaceId} />;
-  }
-
-  return <ViewShell activeView={activeView} workspaceId={workspaceId} />;
-}
-
-const hasVisibleFieldsLayout = (
-  view: WorkspaceView,
-): view is VisibleFieldsView => view.layout.type === "filesystem";
-
-function VisibleFieldEntityViewContent({
-  activeView,
-  workspaceId,
-}: ViewContentProps & { activeView: VisibleFieldsView }) {
-  return <ViewShell activeView={activeView} workspaceId={workspaceId} />;
-}
-
-function ViewShell({ activeView, workspaceId }: ViewContentProps) {
-  const matches = useMatches();
-  const isOnPdfRoute = matches.some((m) => m.fullPath.endsWith("/document"));
-  const paneRef = useRef<HTMLDivElement>(null);
-
-  // File detail view: hide the view chrome; breadcrumbs provide navigation
-  // back to the matter.
-  if (isOnPdfRoute) {
-    return <Outlet />;
-  }
-
-  return (
-    <div className="flex min-h-0 flex-1 flex-col" ref={paneRef}>
-      <ViewChromeRow
-        activeViewId={activeView.id}
-        toolbar={
-          hasViewToolbar(activeView) ? (
-            <ViewToolbar
-              paneRef={paneRef}
-              view={activeView}
-              workspaceId={workspaceId}
-            />
-          ) : null
-        }
-        workspaceId={workspaceId}
-      />
-      <div
-        className="flex min-h-0 flex-1 flex-col"
-        {...guideAnchor(
-          GUIDE_ANCHORS.tabularReviewTable,
-          activeView.layout.type === "table",
-        )}
-      >
-        <div
-          className="flex-1 overflow-auto"
-          {...guideAnchor(
-            GUIDE_ANCHORS.documentsList,
-            activeView.layout.type === "table",
-          )}
-        >
-          <Outlet />
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// The view tabs row. Loaded views and the route-pending state render the same
-// row: the tabs are known before any view data is, so switching to a view the
-// user has not opened yet keeps the tabs still and shimmers only the toolbar
-// and body below them.
-function ViewChromeRow({
-  activeViewId,
-  toolbar,
-  workspaceId,
-}: {
-  activeViewId: string;
-  toolbar: ReactNode;
-  workspaceId: string;
-}) {
-  const navigate = Route.useNavigate();
-  return (
-    <div className="flex min-w-0 flex-col border-b md:flex-row md:items-center md:justify-between">
-      <div
-        className={cn(
-          "flex min-w-0 items-center",
-          TOOLBAR_ROW_HEIGHT,
-          toolbar !== null && "border-b md:border-b-0",
-        )}
-      >
-        <ViewSwitcher
-          activeViewId={activeViewId}
-          onViewChange={(viewId) => {
-            detached(
-              navigate({
-                to: "/workspaces/$workspaceId/$viewId",
-                params: { workspaceId, viewId },
-                search: { page: undefined },
-              }),
-              "workspace-view.navigate",
-            );
-          }}
-          workspaceId={workspaceId}
-        />
-      </div>
-      {toolbar}
-    </div>
-  );
-}
-
-// Overview, AVT and correspondence do not show the matter's entities through
-// filters, sorts and columns, so the toolbar that edits those has nothing to
-// act on.
-const hasViewToolbar = (view: WorkspaceView): boolean =>
-  view.layout.type !== "overview" &&
-  view.layout.type !== "avt" &&
-  view.layout.type !== "correspondence";
-
-const PENDING_TABLE_ROW_KEYS = [
-  "r1",
-  "r2",
-  "r3",
-  "r4",
-  "r5",
-  "r6",
-  "r7",
-  "r8",
-  "r9",
-  "r10",
-  "r11",
-  "r12",
-];
-const PENDING_TABLE_CELLS = [
-  { key: "name", width: "w-48" },
-  { key: "c2", width: "w-28" },
-  { key: "c3", width: "w-20" },
-  { key: "c4", width: "w-32" },
-  { key: "c5", width: "w-24" },
-] as const;
-const PENDING_KANBAN_COLUMN_KEYS = ["k1", "k2", "k3", "k4"];
-const PENDING_KANBAN_CARD_KEYS = ["card1", "card2", "card3"];
-const PENDING_OVERVIEW_CARD_KEYS = ["o1", "o2", "o3", "o4"];
-
-const PendingTableBody = () => (
-  <div className="flex flex-col">
-    <div className="flex items-center gap-4 border-b px-3 py-2">
-      <Skeleton className="size-4 rounded" />
-      {PENDING_TABLE_CELLS.map((cell) => (
-        <Skeleton className={cn("h-3", cell.width)} key={cell.key} />
-      ))}
-    </div>
-    {PENDING_TABLE_ROW_KEYS.map((rowKey) => (
-      <div
-        className="flex items-center gap-4 border-b px-3 py-2.5"
-        key={rowKey}
-      >
-        <Skeleton className="size-4 rounded" />
-        {PENDING_TABLE_CELLS.map((cell) => (
-          <Skeleton className={cn("h-4", cell.width)} key={cell.key} />
-        ))}
-      </div>
-    ))}
-  </div>
-);
-
-const PendingKanbanBody = () => (
-  <div className="flex gap-3 p-3">
-    {PENDING_KANBAN_COLUMN_KEYS.map((columnKey) => (
-      <div className="flex w-72 shrink-0 flex-col gap-2" key={columnKey}>
-        <Skeleton className="h-5 w-32" />
-        {PENDING_KANBAN_CARD_KEYS.map((cardKey) => (
-          <Skeleton className="h-20 w-full rounded-lg" key={cardKey} />
-        ))}
-      </div>
-    ))}
-  </div>
-);
-
-const PendingOverviewBody = () => (
-  <div className="grid gap-4 p-4 md:grid-cols-2 lg:grid-cols-4">
-    {PENDING_OVERVIEW_CARD_KEYS.map((cardKey) => (
-      <Skeleton className="h-28 rounded-xl" key={cardKey} />
-    ))}
-  </div>
-);
-
-const ViewBodySkeleton = ({
-  layoutType,
-}: {
-  layoutType: ViewLayout["type"] | undefined;
-}) => {
-  if (layoutType === "kanban") {
-    return <PendingKanbanBody />;
-  }
-  if (layoutType === "overview") {
-    return <PendingOverviewBody />;
-  }
-  if (layoutType === "correspondence") {
-    return <CorrespondenceViewSkeleton />;
-  }
-  // table / filesystem / calendar / unknown all fall back to the row list.
-  return <PendingTableBody />;
-};
-
-// Route-pending shell for the matter data-grid: the view chrome row plus a
-// layout-aware body skeleton (rows / kanban columns / overview cards), read
-// from the cached view so opening a matter shows its structure, not the logo.
-function ViewPendingComponent() {
-  const { workspaceId, viewId } = Route.useParams({
-    select: (p) => ({ workspaceId: p.workspaceId, viewId: p.viewId }),
-  });
-  const queryClient = useQueryClient();
-  const viewsQueryOptions = viewsOptions(workspaceId);
-  const cachedViews = queryClient.getQueryData(viewsQueryOptions.queryKey);
-  const pendingView =
-    cachedViews?.find((view) => view.id === viewId) ?? cachedViews?.at(0);
-  const layoutType = pendingView?.layout.type;
-  const toolbarSkeleton = (
-    <div className={cn("flex items-center gap-1.5 px-3", TOOLBAR_ROW_HEIGHT)}>
-      <Skeleton className="size-7 rounded-md" />
-      <Skeleton className="size-7 rounded-md" />
-      <Skeleton className="h-7 w-24 rounded-md" />
-    </div>
-  );
-
-  return (
-    <>
-      {pendingView ? (
-        <ViewChromeRow
-          activeViewId={pendingView.id}
-          toolbar={hasViewToolbar(pendingView) ? toolbarSkeleton : null}
-          workspaceId={workspaceId}
-        />
-      ) : (
-        <div className="flex min-w-0 flex-col border-b px-3 md:flex-row md:items-center md:justify-between">
-          <div className={cn("flex items-center gap-1.5", TOOLBAR_ROW_HEIGHT)}>
-            <Skeleton className="h-7 w-24 rounded-md" />
-            <Skeleton className="h-7 w-20 rounded-md" />
-          </div>
-          {toolbarSkeleton}
-        </div>
-      )}
-      <div className="flex min-h-0 flex-1 flex-col">
-        <div className="flex-1 overflow-auto">
-          <ViewBodySkeleton layoutType={layoutType} />
-        </div>
-      </div>
-    </>
-  );
-}

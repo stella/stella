@@ -1,16 +1,19 @@
 import { expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
+import { encodePlanFileList } from "../../../scripts/plan-output-codec";
 import {
   parseApiTestShard,
   partitionTestFiles,
+  restrictApiTestFiles,
   selectApiTestFiles,
 } from "./test-file-shards";
 
 test("partitions are complete, deterministic and bounded for every measured workload", () => {
-  fc.assert(
+  assertProperty(
+    "partitions are complete, deterministic and bounded for every measured workload",
     fc.property(
       fc.array(fc.nat({ max: 10_000 }), { maxLength: 100 }),
       fc.integer({ min: 1, max: 12 }),
@@ -38,11 +41,10 @@ test("partitions are complete, deterministic and bounded for every measured work
           ).toBeLessThanOrEqual(total / count + longest);
         }
         expect(partitionTestFiles({ files, durations, count: 1 })).toEqual([
-          files,
+          files.toSorted(),
         ]);
       },
     ),
-    propertyConfig(),
   );
 });
 
@@ -104,13 +106,68 @@ test("an API sub-shard must select files before the runner can start", () => {
     selectApiTestFiles({ files: [], durations: {}, shardValue: "1/4" }),
   ).toThrow("selected zero test files");
   expect(() =>
-    selectApiTestFiles({ files: ["one"], durations: {}, shardValue: "4/4" }),
+    selectApiTestFiles({
+      files: ["one"],
+      durations: { one: 1 },
+      shardValue: "4/4",
+    }),
   ).toThrow("selected zero test files");
   expect(
-    selectApiTestFiles({ files: ["one"], durations: {}, shardValue: "1/4" })
-      .testPaths,
+    selectApiTestFiles({
+      files: ["one"],
+      durations: { one: 1 },
+      shardValue: "1/4",
+    }).testPaths,
   ).toEqual(["one"]);
   expect(
     selectApiTestFiles({ files: [], durations: {}, shardValue: undefined }),
   ).toEqual({ testPaths: [], shard: null });
+});
+
+test("explicit encoded test selection validates paths before duration sharding", () => {
+  const files: [string, string, string] = [
+    "src/a.test.ts",
+    "src/b.test.ts",
+    "src/c.test.ts",
+  ];
+  expect(restrictApiTestFiles(files, undefined)).toEqual(files);
+  expect(restrictApiTestFiles(files, "")).toEqual(files);
+  expect(
+    restrictApiTestFiles(
+      files,
+      encodePlanFileList(["src/c.test.ts", "src/a.test.ts"]),
+    ),
+  ).toEqual([files[0], files[2]]);
+  expect(
+    restrictApiTestFiles(files, encodePlanFileList(["src/b.test.ts"])),
+  ).toEqual([files[1]]);
+  expect(() =>
+    restrictApiTestFiles(files, encodePlanFileList(["src/unknown.test.ts"])),
+  ).toThrow("Unknown API_TEST_FILES_ENCODED path");
+  expect(() =>
+    restrictApiTestFiles(
+      files,
+      encodePlanFileList(["src/a.test.ts", "src/a.test.ts"]),
+    ),
+  ).toThrow("paths must be unique");
+  const selected = restrictApiTestFiles(
+    files,
+    encodePlanFileList(["src/a.test.ts", "src/c.test.ts"]),
+  );
+  const bins = [1, 2].map(
+    (index) =>
+      selectApiTestFiles({
+        files: selected,
+        durations: {
+          "src/a.test.ts": 1,
+          "src/b.test.ts": 1000,
+          "src/c.test.ts": 2,
+        },
+        shardValue: `${index}/2`,
+      }).testPaths,
+  );
+  expect(bins.flat().toSorted()).toEqual([...selected]);
+  expect(() => restrictApiTestFiles(files, encodePlanFileList([]))).toThrow(
+    "selected zero test files",
+  );
 });

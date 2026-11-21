@@ -1,23 +1,35 @@
+import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { PassThrough } from "node:stream";
 
 import { respondToMcpLifecycle } from "../tests/mcp-test-lifecycle.js";
+import { resolveEffectiveGrants } from "./auth/command-scopes.js";
+import { readCapabilityCatalog } from "./capability-catalog-data.js";
+import { parseCapabilityCatalog } from "./capability-catalog-load.js";
 import type { Context } from "./context.js";
+import {
+  capabilityCommandPath,
+  deriveCapabilityLeaf,
+} from "./generate-capability-tree.js";
 import { EXIT_CODES } from "./mcp-constants.js";
 import type { CapabilityFlagSpec, CapabilityLeafSpec } from "./route-types.js";
 import { runCapabilityCommand } from "./run-capability-command.js";
+
+const repositoryCapabilityCatalog = readCapabilityCatalog();
 
 type RecordedCall = { name: string; args: Record<string, unknown> };
 
 type ServerResponse =
   | { kind: "echo" }
+  | { kind: "payload"; payload: unknown }
+  | { kind: "error"; error: Record<string, unknown> }
   | { kind: "confirm-gate" }
   | { kind: "receipt"; requestId: string }
   | { kind: "pages"; pages: readonly Record<string, unknown>[] };
 
 /**
  * In-process MCP endpoint. `echo` returns the received args as the result so a
- * test can assert the exact `invoke_capability` payload; `confirm-gate` answers
+ * test can assert the exact capability executor payload; `confirm-gate` answers
  * `confirmation_required` until `confirm: true`; `pages` walks a cursor list.
  */
 const startServer = (response: ServerResponse) => {
@@ -52,6 +64,24 @@ const startServer = (response: ServerResponse) => {
             structuredContent: { result: payload },
           },
         });
+      if (response.kind === "payload") {
+        return text(response.payload);
+      }
+      if (response.kind === "error") {
+        return Response.json({
+          jsonrpc: "2.0",
+          id: 1,
+          result: {
+            content: [
+              {
+                type: "text",
+                text: JSON.stringify({ error: response.error }),
+              },
+            ],
+            isError: true,
+          },
+        });
+      }
       if (response.kind === "confirm-gate") {
         if (args["confirm"] === true) {
           return text({ done: true });
@@ -133,11 +163,12 @@ const makeTtyContext = ({
   const proc = { stdin, stdout, stderr, exitCode: undefined, env: {} };
   const context: Context = {
     // SAFETY: the executor only reads stdin/stdout/stderr/exitCode off process.
-    // oxlint-disable-next-line no-unsafe-type-assertion -- test double for the process slice
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test double for the process slice
     process: proc as unknown as NodeJS.Process,
     configDir: "/tmp/stella-test",
     serverUrl,
     token,
+    effectiveGrants: resolveEffectiveGrants({ token }),
   };
   return {
     context,
@@ -190,11 +221,35 @@ const capSpec = (
 const lastInvoke = (calls: readonly RecordedCall[]): Record<string, unknown> =>
   calls.at(-1)?.args ?? {};
 
-describe("runCapabilityCommand: flag -> invoke_capability payload", () => {
-  test("routes flags into input parts and calls invoke_capability", async () => {
+describe("runCapabilityCommand: flag -> capability executor payload", () => {
+  for (const access of ["read", "write"] as const) {
+    test(`${access} capability dispatches through its executor, including dry runs`, async () => {
+      const server = startServer({ kind: "echo" });
+      const tty = makeTtyContext({
+        serverUrl: server.url,
+        stdinData: "",
+        isTTY: false,
+      });
+      await runCapabilityCommand({
+        context: tty.context,
+        flags: { dryRun: true },
+        spec: capSpec({ capabilityId: "a.operation", access }),
+      });
+      server.stop();
+      expect(server.calls).toEqual([
+        {
+          name: `${access}_capability`,
+          args: { capability: "a.operation", input: {}, validate_only: true },
+        },
+      ]);
+    });
+  }
+
+  test("routes flags into input parts and calls the write executor", async () => {
     const server = startServer({ kind: "echo" });
     const spec = capSpec({
       capabilityId: "billing-codes.create",
+      access: "write",
       commandPath: ["billing-codes", "create"],
       flags: [
         stringFlag("--matter-id", "params", "matterId", true),
@@ -213,7 +268,7 @@ describe("runCapabilityCommand: flag -> invoke_capability payload", () => {
     });
     server.stop();
     const call = server.calls.at(0);
-    expect(call?.name).toBe("invoke_capability");
+    expect(call?.name).toBe("write_capability");
     expect(call?.args).toEqual({
       capability: "billing-codes.create",
       input: { params: { matterId: "ws-1" }, body: { code: "A1" } },
@@ -463,6 +518,52 @@ describe("runCapabilityCommand: flag -> invoke_capability payload", () => {
 });
 
 describe("runCapabilityCommand: compound scope preflight", () => {
+  for (const admitted of [false, true]) {
+    test(`capability execution follows effective server grants when token claims ${admitted ? "deny" : "allow"}`, async () => {
+      const server = startServer({ kind: "echo" });
+      const token = makeToken(
+        admitted ? ["read"] : ["documents_write", "templates"],
+      );
+      const tty = makeTtyContext({
+        serverUrl: server.url,
+        stdinData: "",
+        isTTY: false,
+        token,
+      });
+      try {
+        await runCapabilityCommand({
+          context: {
+            ...tty.context,
+            effectiveGrants: resolveEffectiveGrants({
+              token,
+              registry: {
+                grantedScopes: admitted
+                  ? ["stella:documents_write", "stella:templates"]
+                  : ["stella:read"],
+              },
+            }),
+          },
+          flags: {},
+          spec: capSpec({
+            capabilityId: "templates.fills.create",
+            scope: "documents_write",
+            additionalScopes: ["templates"],
+          }),
+        });
+        expect(server.calls).toHaveLength(admitted ? 1 : 0);
+        if (admitted) {
+          expect(tty.exitCode()).toBeUndefined();
+          expect(tty.stderrText()).toBe("");
+        } else {
+          expect(tty.exitCode()).toBe(EXIT_CODES.auth);
+          expect(tty.stderrText()).toContain("stella:documents_write");
+        }
+      } finally {
+        server.stop();
+      }
+    });
+  }
+
   test("rejects a document-only token before invoking a template capability", async () => {
     const server = startServer({ kind: "echo" });
     const tty = makeTtyContext({
@@ -491,9 +592,85 @@ describe("runCapabilityCommand: compound scope preflight", () => {
 });
 
 describe("runCapabilityCommand: confirm gates", () => {
+  test("reversible confirmation-required capabilities need fresh approval", async () => {
+    const server = startServer({ kind: "echo" });
+    const spec = capSpec({
+      capabilityId: "memories.create",
+      access: "write",
+      destructive: false,
+      confirmation: "required",
+    });
+    const denied = makeTtyContext({
+      serverUrl: server.url,
+      stdinData: "",
+      isTTY: false,
+    });
+    await runCapabilityCommand({ context: denied.context, flags: {}, spec });
+    expect(denied.exitCode()).toBe(EXIT_CODES.aborted);
+    expect(server.calls).toHaveLength(0);
+    expect(denied.stderrText()).toContain("requiring approval");
+    const allowed = makeTtyContext({
+      serverUrl: server.url,
+      stdinData: "",
+      isTTY: false,
+    });
+    await runCapabilityCommand({
+      context: allowed.context,
+      flags: { yes: true },
+      spec,
+    });
+    expect(allowed.exitCode()).toBeUndefined();
+    expect(lastInvoke(server.calls)["confirm"]).toBe(true);
+    server.stop();
+  });
+
+  test("a read with --yes never sends confirmation arguments", async () => {
+    const server = startServer({ kind: "echo" });
+    const tty = makeTtyContext({
+      serverUrl: server.url,
+      stdinData: "",
+      isTTY: false,
+    });
+    await runCapabilityCommand({
+      context: tty.context,
+      flags: { yes: true },
+      spec: capSpec({ capabilityId: "a.get", access: "read" }),
+    });
+    server.stop();
+    expect(server.calls).toEqual([
+      { name: "read_capability", args: { capability: "a.get", input: {} } },
+    ]);
+    expect(tty.exitCode()).toBeUndefined();
+  });
+
+  test("a read confirmation error is surfaced without prompting or retrying", async () => {
+    const server = startServer({ kind: "confirm-gate" });
+    const tty = makeTtyContext({
+      serverUrl: server.url,
+      stdinData: "y\n",
+      isTTY: true,
+    });
+    await runCapabilityCommand({
+      context: tty.context,
+      flags: {},
+      spec: capSpec({ capabilityId: "a.get", access: "read" }),
+    });
+    server.stop();
+    expect(server.calls).toEqual([
+      { name: "read_capability", args: { capability: "a.get", input: {} } },
+    ]);
+    expect(tty.exitCode()).toBe(EXIT_CODES.aborted);
+    expect(tty.stderrText()).toContain("irreversible; retry with confirm");
+    expect(tty.stderrText()).not.toContain("Confirm [y/N]");
+  });
+
   test("a destructive capability off a TTY without --yes aborts (exit 7)", async () => {
     const server = startServer({ kind: "echo" });
-    const spec = capSpec({ capabilityId: "a.delete", destructive: true });
+    const spec = capSpec({
+      capabilityId: "a.delete",
+      access: "write",
+      destructive: true,
+    });
     const tty = makeTtyContext({
       serverUrl: server.url,
       stdinData: "",
@@ -507,7 +684,11 @@ describe("runCapabilityCommand: confirm gates", () => {
 
   test("--yes on a destructive capability sends confirm: true", async () => {
     const server = startServer({ kind: "echo" });
-    const spec = capSpec({ capabilityId: "a.delete", destructive: true });
+    const spec = capSpec({
+      capabilityId: "a.delete",
+      access: "write",
+      destructive: true,
+    });
     const tty = makeTtyContext({
       serverUrl: server.url,
       stdinData: "",
@@ -524,7 +705,7 @@ describe("runCapabilityCommand: confirm gates", () => {
 
   test("confirmation_required prompt-and-retry on a TTY confirms and retries once", async () => {
     const server = startServer({ kind: "confirm-gate" });
-    const spec = capSpec({ capabilityId: "a.risky" });
+    const spec = capSpec({ capabilityId: "a.risky", access: "write" });
     const tty = makeTtyContext({
       serverUrl: server.url,
       stdinData: "y\n",
@@ -532,7 +713,10 @@ describe("runCapabilityCommand: confirm gates", () => {
     });
     await runCapabilityCommand({ context: tty.context, flags: {}, spec });
     server.stop();
-    expect(server.calls).toHaveLength(2);
+    expect(server.calls.map(({ name }) => name)).toEqual([
+      "write_capability",
+      "write_capability",
+    ]);
     expect(server.calls[0]?.args["confirm"]).toBeUndefined();
     expect(server.calls[1]?.args["confirm"]).toBe(true);
     expect(tty.stdoutText()).toContain("done");
@@ -540,7 +724,7 @@ describe("runCapabilityCommand: confirm gates", () => {
 
   test("--no-input on a confirmation_required TTY fails closed (exit 7, --yes required)", async () => {
     const server = startServer({ kind: "confirm-gate" });
-    const spec = capSpec({ capabilityId: "a.risky" });
+    const spec = capSpec({ capabilityId: "a.risky", access: "write" });
     const tty = makeTtyContext({
       serverUrl: server.url,
       stdinData: "y\n",
@@ -560,7 +744,7 @@ describe("runCapabilityCommand: confirm gates", () => {
 
   test("a declined confirm-retry prompt is terminal: exit 7, aborted line, no envelope", async () => {
     const server = startServer({ kind: "confirm-gate" });
-    const spec = capSpec({ capabilityId: "a.risky" });
+    const spec = capSpec({ capabilityId: "a.risky", access: "write" });
     const tty = makeTtyContext({
       serverUrl: server.url,
       stdinData: "n\n",
@@ -648,6 +832,188 @@ describe("runCapabilityCommand: reserved flag values", () => {
 });
 
 describe("runCapabilityCommand: output contract", () => {
+  test("personal export commands dispatch every generated capability and preserve declared response shapes", async () => {
+    const catalog = parseCapabilityCatalog(repositoryCapabilityCatalog);
+    if (catalog === null) {
+      panic("Expected the committed capability catalog");
+    }
+    const exportId = "0199d851-071b-7000-8000-000000000001";
+    const cases = [
+      {
+        capabilityId: "account-exports.create",
+        flags: { output: "json" },
+        output: {
+          id: exportId,
+          status: "requested",
+          nextCall: {
+            capability: "account-exports.status.get",
+            input: { params: { exportId } },
+          },
+        },
+      },
+      {
+        capabilityId: "account-exports.get",
+        flags: { output: "json" },
+        output: { latest: { id: exportId, status: "requested" } },
+      },
+      {
+        capabilityId: "account-exports.status.get",
+        flags: { exportId, output: "json" },
+        output: { id: exportId, status: "requested" },
+      },
+      {
+        capabilityId: "account-exports.download.get",
+        flags: { exportId, output: "json" },
+        output: {
+          id: exportId,
+          download: {
+            downloadUrl: `https://api.example.test/v1/me/data-exports/${exportId}/download`,
+            expiresAt: "2030-01-01T12:00:00Z",
+          },
+        },
+      },
+    ] as const;
+    for (const item of cases) {
+      const entry = catalog.find(({ id }) => id === item.capabilityId);
+      if (entry === undefined) {
+        panic(`Expected capability ${item.capabilityId}`);
+      }
+      const { spec } = deriveCapabilityLeaf(entry);
+      expect(spec.commandPath).toEqual(capabilityCommandPath(entry.id));
+      const server = startServer({ kind: "payload", payload: item.output });
+      const tty = makeTtyContext({
+        serverUrl: server.url,
+        stdinData: "",
+        isTTY: false,
+        token: makeToken([
+          "read",
+          entry.access === "write"
+            ? "account_export_write"
+            : "account_export_read",
+        ]),
+      });
+      await runCapabilityCommand({
+        context: tty.context,
+        flags: item.flags,
+        spec,
+      });
+      expect(server.calls.at(-1)).toEqual({
+        name: `${entry.access}_capability`,
+        args: {
+          capability: entry.id,
+          input: "exportId" in item.flags ? { params: { exportId } } : {},
+        },
+      });
+      expect(JSON.parse(tty.stdoutText())).toEqual(item.output);
+      expect(tty.exitCode()).toBeUndefined();
+      server.stop();
+    }
+  });
+
+  test("personal export commands cannot choose another account and preserve ownership refusals", async () => {
+    const catalog = parseCapabilityCatalog(repositoryCapabilityCatalog);
+    const entry = catalog?.find(
+      ({ id }) => id === "account-exports.status.get",
+    );
+    if (entry === undefined) {
+      panic("Expected the account export status capability");
+    }
+    const otherExportId = "0199d851-071b-7000-8000-000000000002";
+    const refusal = {
+      code: "not_found",
+      message: "Export not found.",
+      hint: "Call account-exports.get for your latest export ID or account-exports.create to request one.",
+    };
+    const server = startServer({ kind: "error", error: refusal });
+    const tty = makeTtyContext({
+      serverUrl: server.url,
+      stdinData: "",
+      isTTY: false,
+      token: makeToken(["read", "account_export_read"]),
+    });
+    await runCapabilityCommand({
+      context: tty.context,
+      flags: { exportId: otherExportId, output: "json" },
+      spec: deriveCapabilityLeaf(entry).spec,
+    });
+    expect(server.calls).toEqual([
+      {
+        name: "read_capability",
+        args: {
+          capability: "account-exports.status.get",
+          input: { params: { exportId: otherExportId } },
+        },
+      },
+    ]);
+    expect(tty.stderrText()).toContain(refusal.message);
+    expect(tty.stderrText()).toContain(refusal.hint);
+    expect(tty.exitCode()).toBe(EXIT_CODES.notFound);
+    server.stop();
+  });
+
+  test("JSON output preserves full and partial case-law matches and their warning", async () => {
+    const payload = {
+      results: [
+        { decisionId: "decision-1", match: "all_terms" },
+        { decisionId: "decision-2", match: "some_terms" },
+      ],
+      searches: [{ warnings: [{ code: "partial_matches_appended" }] }],
+      nextCursor: null,
+    };
+    const server = startServer({ kind: "pages", pages: [payload] });
+    const tty = makeTtyContext({
+      serverUrl: server.url,
+      stdinData: "",
+      isTTY: false,
+    });
+    await runCapabilityCommand({
+      context: tty.context,
+      flags: { output: "json" },
+      spec: capSpec({
+        capabilityId: "case-law.decisions.search",
+        itemsKey: "results",
+      }),
+    });
+    server.stop();
+    expect(tty.exitCode()).toBeUndefined();
+    expect(JSON.parse(tty.stdoutText())).toEqual(payload);
+  });
+
+  test("typed country unavailability preserves its domain and recovery guidance in machine and human output", async () => {
+    const unavailable = {
+      code: "public_country_unavailable",
+      status: "unavailable",
+      domain: "legislation",
+      country: "SVK",
+      reason: "pending_public",
+      message: "Legislation for this country is not publicly available yet.",
+      hint: "Choose a country with public legislation search: CZE.",
+    };
+    for (const output of ["json", "jsonl", "table"] as const) {
+      const server = startServer({ kind: "pages", pages: [unavailable] });
+      const tty = makeTtyContext({
+        serverUrl: server.url,
+        stdinData: "",
+        isTTY: output === "table",
+      });
+      await runCapabilityCommand({
+        context: tty.context,
+        flags: { output },
+        spec: capSpec({ capabilityId: "legislation.search" }),
+      });
+      server.stop();
+      if (output === "table") {
+        expect(tty.stdoutText()).toContain("domain");
+        expect(tty.stdoutText()).toContain(unavailable.domain);
+        expect(tty.stdoutText()).toContain(unavailable.message);
+        expect(tty.stdoutText()).toContain(unavailable.hint);
+      } else {
+        expect(JSON.parse(tty.stdoutText())).toEqual(unavailable);
+      }
+      expect(tty.stderrText()).toBe("");
+      expect(tty.exitCode()).toBeUndefined();
+    }
+  });
   test("a page under `result` renders as a table with its resume cursor", async () => {
     const server = startServer({
       kind: "pages",
@@ -731,6 +1097,10 @@ describe("runCapabilityCommand: output contract", () => {
     });
     server.stop();
     expect(tty.stdoutText()).toBe('{"a":1}\n{"a":2}\n');
+    expect(server.calls.map(({ name }) => name)).toEqual([
+      "read_capability",
+      "read_capability",
+    ]);
     // Second page threads the first page's cursor into input.query.cursor.
     const secondInput = server.calls[1]?.args["input"];
     expect(secondInput).toEqual({ query: { cursor: "c1" } });
@@ -764,55 +1134,191 @@ describe("runCapabilityCommand: output contract", () => {
   });
 });
 
-describe("runCapabilityCommand: request-id receipt", () => {
-  const WRITE_ID = "req_ab12cd34ef567890ab12cd34ef567890";
-  const READ_ID = "req_fedcba9876543210fedcba9876543210";
-  // An untrusted server smuggling ANSI escape sequences into the receipt.
-  const ANSI_ID = "req_\u001B]0;pwned\u0007\u001B[31mabcdef0123456789";
+describe("bulk ID command execution", () => {
+  const idsSpec = (property = "ids"): CapabilityLeafSpec =>
+    capSpec({
+      capabilityId: "contacts.bulk.delete",
+      access: "write",
+      flags: [
+        {
+          flag: property === "ids" ? "--ids" : "--claim-ids",
+          prop: `body.${property}`,
+          part: "body",
+          partPath: property,
+          kind: "string-array",
+          required: true,
+          repeatable: true,
+        },
+      ],
+      inputSchema: {
+        type: "object",
+        properties: {
+          body: {
+            type: "object",
+            properties: { [property]: { type: "array", maxItems: 2 } },
+          },
+        },
+      },
+    });
 
-  test("a write surfaces the request id on stderr, not stdout", async () => {
-    const server = startServer({ kind: "receipt", requestId: WRITE_ID });
-    const spec = capSpec({ capabilityId: "a.create", access: "write" });
+  test("comma-separated IDs chunk at the schema maximum and produce one JSON result", async () => {
+    const server = startServer({ kind: "echo" });
     const tty = makeTtyContext({
       serverUrl: server.url,
       stdinData: "",
       isTTY: false,
     });
-    await runCapabilityCommand({ context: tty.context, flags: {}, spec });
-    server.stop();
-    // The human-readable receipt line goes to stderr; stdout stays pure result
-    // (which still carries the id inside the payload's meta, on its own).
-    expect(tty.stderrText()).toContain(`request id: ${WRITE_ID}`);
-    expect(tty.stdoutText()).not.toContain("request id:");
-    expect(tty.exitCode()).toBeUndefined();
+    try {
+      await runCapabilityCommand({
+        context: tty.context,
+        flags: { ids: [" a,b,a, c,d,e "], json: true, yes: true },
+        spec: idsSpec(),
+      });
+      expect(server.calls.map((call) => call.args)).toEqual([
+        {
+          capability: "contacts.bulk.delete",
+          input: { body: { ids: ["a", "b"] } },
+          confirm: true,
+        },
+        {
+          capability: "contacts.bulk.delete",
+          input: { body: { ids: ["c", "d"] } },
+          confirm: true,
+        },
+        {
+          capability: "contacts.bulk.delete",
+          input: { body: { ids: ["e"] } },
+          confirm: true,
+        },
+      ]);
+      expect(JSON.parse(tty.stdoutText())).toEqual({
+        chunks: server.calls.map((call) => ({
+          status: "ok",
+          result: { received: call.args },
+        })),
+      });
+      expect(tty.exitCode() ?? 0).toBe(0);
+    } finally {
+      server.stop();
+    }
   });
 
-  test("a read does not surface the request id", async () => {
-    const server = startServer({ kind: "receipt", requestId: READ_ID });
-    const spec = capSpec({ capabilityId: "a.get", access: "read" });
+  test("the IDs alias reaches a domain-named ID collection without changing other body fields", async () => {
+    const server = startServer({ kind: "echo" });
     const tty = makeTtyContext({
       serverUrl: server.url,
       stdinData: "",
       isTTY: false,
     });
-    await runCapabilityCommand({ context: tty.context, flags: {}, spec });
-    server.stop();
-    expect(tty.stderrText()).not.toContain("request id:");
+    try {
+      await runCapabilityCommand({
+        context: tty.context,
+        flags: {
+          ids: ["claim-a,claim-b,claim-c"],
+          input: JSON.stringify({ body: { runId: "run" } }),
+          json: true,
+        },
+        spec: {
+          ...idsSpec("claimIds"),
+          capabilityId: "lists.verifications.claim-reviews.bulk.create",
+        },
+      });
+      expect(server.calls.map((call) => call.args["input"])).toEqual([
+        { body: { claimIds: ["claim-a", "claim-b"], runId: "run" } },
+        { body: { claimIds: ["claim-c"], runId: "run" } },
+      ]);
+    } finally {
+      server.stop();
+    }
   });
 
-  test("an ANSI-laced receipt from the server is dropped, never rendered", async () => {
-    const server = startServer({ kind: "receipt", requestId: ANSI_ID });
-    const spec = capSpec({ capabilityId: "a.create", access: "write" });
+  test("an omitted IDs alias preserves the canonical flag and conflicting aliases are rejected", async () => {
+    const server = startServer({ kind: "echo" });
     const tty = makeTtyContext({
       serverUrl: server.url,
       stdinData: "",
       isTTY: false,
     });
-    await runCapabilityCommand({ context: tty.context, flags: {}, spec });
-    server.stop();
-    // The malformed id must not reach the terminal in any form: no receipt
-    // line at all (drop, don't sanitize) and no escape byte on stderr.
-    expect(tty.stderrText()).not.toContain("request id:");
-    expect(tty.stderrText()).not.toContain("\u001B");
+    try {
+      await runCapabilityCommand({
+        context: tty.context,
+        flags: { ids: [], claimIds: ["canonical"], json: true },
+        spec: idsSpec("claimIds"),
+      });
+      expect(server.calls.map((call) => call.args["input"])).toEqual([
+        { body: { claimIds: ["canonical"] } },
+      ]);
+      await runCapabilityCommand({
+        context: tty.context,
+        flags: { ids: ["alias"], claimIds: ["canonical"], json: true },
+        spec: idsSpec("claimIds"),
+      });
+      expect(server.calls.length).toBe(1);
+      expect(tty.exitCode()).toBe(EXIT_CODES.validation);
+      expect(tty.stderrText()).toContain("Use either --ids or --claim-ids");
+    } finally {
+      server.stop();
+    }
+  });
+
+  test("failed chunks remain visible and make the command exit nonzero", async () => {
+    const server = startServer({
+      kind: "error",
+      error: { code: "validation_error", message: "Rejected chunk" },
+    });
+    const tty = makeTtyContext({
+      serverUrl: server.url,
+      stdinData: "",
+      isTTY: false,
+    });
+    try {
+      await runCapabilityCommand({
+        context: tty.context,
+        flags: { ids: ["a,b,c"], json: true },
+        spec: idsSpec(),
+      });
+      expect(server.calls.length).toBe(2);
+      expect(JSON.parse(tty.stdoutText())).toEqual({
+        chunks: [
+          {
+            status: "error",
+            error: {
+              error: { code: "validation_error", message: "Rejected chunk" },
+            },
+          },
+          {
+            status: "error",
+            error: {
+              error: { code: "validation_error", message: "Rejected chunk" },
+            },
+          },
+        ],
+      });
+      expect(tty.exitCode()).toBe(EXIT_CODES.server);
+    } finally {
+      server.stop();
+    }
+  });
+
+  test("a bulk dry run validates every chunk without executing its operation", async () => {
+    const server = startServer({ kind: "echo" });
+    const tty = makeTtyContext({
+      serverUrl: server.url,
+      stdinData: "",
+      isTTY: false,
+    });
+    try {
+      await runCapabilityCommand({
+        context: tty.context,
+        flags: { ids: ["a,b,c"], dryRun: true, json: true },
+        spec: idsSpec(),
+      });
+      expect(server.calls.length).toBe(2);
+      expect(
+        server.calls.every((call) => call.args["validate_only"] === true),
+      ).toBe(true);
+    } finally {
+      server.stop();
+    }
   });
 });

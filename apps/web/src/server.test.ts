@@ -1,3 +1,6 @@
+import { createElement } from "react";
+
+import type * as StartServerExports from "@tanstack/react-start/server";
 import type { ServerEntry } from "@tanstack/react-start/server-entry";
 import { expect, mock, test } from "bun:test";
 
@@ -16,38 +19,61 @@ const HTML =
 const REDIRECT_LOCATION = "/auth";
 const STATUS_TEXT = "Fixture response";
 
+const fixtureHandler = {
+  fetch: async (request: Request) => {
+    const url = new URL(request.url);
+    const headers = new Headers({ "Cache-Control": PUBLIC_POLICY });
+    const cacheClass = url.searchParams.get("class");
+    if (cacheClass !== null) {
+      headers.set(SSR_CACHE_CLASS_HEADER, cacheClass);
+    }
+    const contentType = url.searchParams.get("type");
+    if (contentType !== null) {
+      headers.set("Content-Type", contentType);
+    }
+    const status = Number(url.searchParams.get("status") ?? 200);
+    if (status === 302) {
+      headers.set("Location", REDIRECT_LOCATION);
+    }
+    const requestedStatus = url.searchParams.get("documentStatus");
+    if (requestedStatus !== null) {
+      headers.set(SSR_STATUS_HEADER, requestedStatus);
+    }
+    if (url.searchParams.get("policy") === "absent") {
+      headers.delete("Cache-Control");
+    }
+    return await Promise.resolve(
+      new Response(HTML, { headers, status, statusText: STATUS_TEXT }),
+    );
+  },
+};
 await mock.module("@tanstack/react-start/server-entry", () => ({
   createServerEntry: (entry: ServerEntry) => entry,
-  default: {
-    fetch: async (request: Request) => {
-      const url = new URL(request.url);
-      const headers = new Headers({ "Cache-Control": PUBLIC_POLICY });
-      const cacheClass = url.searchParams.get("class");
-      if (cacheClass !== null) {
-        headers.set(SSR_CACHE_CLASS_HEADER, cacheClass);
-      }
-      const contentType = url.searchParams.get("type");
-      if (contentType !== null) {
-        headers.set("Content-Type", contentType);
-      }
-      const status = Number(url.searchParams.get("status") ?? 200);
-      if (status === 302) {
-        headers.set("Location", REDIRECT_LOCATION);
-      }
-      const requestedStatus = url.searchParams.get("documentStatus");
-      if (requestedStatus !== null) {
-        headers.set(SSR_STATUS_HEADER, requestedStatus);
-      }
-      if (url.searchParams.get("policy") === "absent") {
-        headers.delete("Cache-Control");
-      }
-      return await Promise.resolve(
-        new Response(HTML, { headers, status, statusText: STATUS_TEXT }),
-      );
-    },
-  },
+  default: fixtureHandler,
 }));
+const startServer = await import("@tanstack/react-start/server");
+await mock.module(
+  "@tanstack/react-start/server",
+  () =>
+    ({
+      ...startServer,
+      createStartHandler: () => fixtureHandler.fetch,
+      StartServer: () => createElement("div"),
+    }) satisfies Pick<
+      typeof StartServerExports,
+      "createStartHandler" | "StartServer"
+    >,
+);
 const { default: server } = await import("@/server");
+
+test("invoice link documents are not cached and never send a referrer", async () => {
+  const response = await server.fetch(
+    new Request("https://stella.test/invoice-link?type=text/html"),
+  );
+  expect(response.headers.get("Cache-Control")).toBe(DOCUMENT_POLICY);
+  expect(response.headers.get("Referrer-Policy")).toBe("no-referrer");
+  await response.text();
+});
 
 const cacheClasses = [...new Set(Object.values(ROUTE_CACHE_CLASSES))];
 const mediaTypes = [
@@ -125,6 +151,8 @@ test("document status determines the final response policy", async () => {
     expect(response.headers.get("Cache-Control")).toBe(DOCUMENT_POLICY);
     expect(response.headers.get("X-Robots-Tag")).toBe("noindex");
     expect(response.headers.get(SSR_STATUS_HEADER)).toBeNull();
+    // An unread SSR body keeps its lifetime timer; release it with the test.
+    await response.body?.cancel();
   }
 });
 
@@ -135,4 +163,46 @@ test("a public response requires an explicit freshness policy", async () => {
     ),
   );
   expect(response.headers.get("Cache-Control")).toBe(DOCUMENT_POLICY);
+});
+
+test("an unknown document path stays a direct 404 response", async () => {
+  const { renderToString } = await import("react-dom/server");
+  const {
+    createMemoryHistory,
+    createRootRoute,
+    createRoute,
+    createRouter,
+    RouterProvider,
+  } = await import("@tanstack/react-router");
+  const { getSsrStatus } = await import("@tanstack/react-router/ssr/server");
+  const { IntlProvider } = await import("use-intl");
+  const { DefaultNotFoundComponent } =
+    await import("@/components/route-components");
+  const { default: messages } = await import("@/i18n/langs/en.json");
+  const root = createRootRoute();
+  const router = createRouter({
+    isServer: true,
+    history: createMemoryHistory({ initialEntries: ["/time/invoices"] }),
+    routeTree: root.addChildren([
+      createRoute({ getParentRoute: () => root, path: "/workspaces" }),
+    ]),
+    defaultNotFoundComponent: () =>
+      IntlProvider({
+        children: createElement(DefaultNotFoundComponent),
+        locale: "en",
+        messages,
+        timeZone: "UTC",
+      }),
+  });
+  await router.load();
+  const response = new Response(
+    renderToString(createElement(RouterProvider, { router })),
+    { status: getSsrStatus(router) },
+  );
+
+  expect(response.status).toBe(404);
+  expect(response.headers.get("Location")).toBeNull();
+  expect(await response.text()).toContain(
+    "We could not find what you requested.",
+  );
 });

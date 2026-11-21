@@ -1,7 +1,13 @@
+// parser-output-unchanged: Named listedDocumentUrl options preserve its body, argument values and evaluation order.
+// parser-output-unchanged: a page states whether the publisher was asked; parsed decision output is unchanged.
+// parser-output-unchanged: Reconciliation exposes the existing listing total for unfiltered source scopes; decision parsing and listed identities are unchanged.
 // parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
 // parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
+// parser-output-unchanged: imports ingestion bindings directly from their existing owner.
 import { panic, Result } from "better-result";
 
+// parser-output-unchanged: SHA-256 ownership changes preserve input bytes, serialization and update order, so stored hashes and parser output remain identical.
+import { sha256Hex as hashContent } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
 import {
@@ -9,23 +15,6 @@ import {
   ADAPTER_TIMEOUT,
   PARSER_VERSIONS,
 } from "@/api/handlers/case-law/consts";
-import {
-  defineSourceAdapter,
-  EMPTY_AST,
-  encodeSourceRawEnvelope,
-  isPersistableSourceDocumentId,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  SOURCE_TOTAL_PROBE_FAILURE,
-  sourceTotalProbeFailed,
-  sourceTotalRead,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import type {
-  IngestionResult,
-  ReconciliationBuildOutcome,
-  ReconciliationSlicePage,
-  ReconciliationSlicePageOptions,
-  SourceAdapter,
-} from "@/api/handlers/case-law/ingestion/adapter";
 import {
   AT_RIS_APPLICATIONS,
   AT_RIS_PART,
@@ -41,32 +30,52 @@ import {
 import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
 import { publisherRequestIntervalMs } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
 import type { fetchWithRetry } from "@/api/handlers/case-law/ingestion/adapters/retry";
-import {
-  adapterCatch,
-  hashContent,
-} from "@/api/handlers/case-law/ingestion/adapters/utils";
+import { adapterCatch } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { parseRisDecisionXml } from "@/api/handlers/case-law/ingestion/parsers/at-ris";
 import type { RisDocumentSections } from "@/api/handlers/case-law/ingestion/parsers/at-ris";
 import { sectionsFromAst } from "@/api/handlers/case-law/ingestion/sections-from-ast";
 import {
-  TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
   checkedDecisionMetadata,
   sourceTextField,
+  TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
 import type { DecisionTextFields } from "@/api/lib/case-law/decision-text";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import type { AdapterKey } from "@/api/lib/legal-search/ingestion-constants";
+import {
+  defineSourceAdapter,
+  EMPTY_AST,
+  encodeSourceRawEnvelope,
+  isPersistableSourceDocumentId,
+  PUBLISHER_REQUEST,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+  SOURCE_TOTAL_PROBE_FAILURE,
+  sourceTotalProbeFailed,
+  sourceTotalRead,
+} from "@/api/lib/legal-search/ingestion-types";
+import type {
+  IngestionResult,
+  ReconciliationBuildOutcome,
+  ReconciliationSlicePage,
+  ReconciliationSlicePageOptions,
+  SourceAdapter,
+} from "@/api/lib/legal-search/ingestion-types";
+import { AST_CONTENT_LOST } from "@/api/lib/legal-search/parsers/validate-ast";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
+import { logger } from "@/api/lib/observability/logger";
 import { toMetadataUrl } from "@/api/lib/sanitize-url";
 import { isRecord } from "@/api/lib/type-guards";
 
 import {
-  AT_RIS_METADATA_URL_SCHEMA,
   AT_RIS_HEADNOTE_METADATA_URL_SCHEMA,
+  AT_RIS_METADATA_URL_SCHEMA,
 } from "./at-courts.metadata-urls";
+
+/** The document printed an element outside the RIS vocabulary; its text is kept. */
+const RIS_UNKNOWN_ELEMENT = "case_law.ingestion.ris_unknown_element";
 
 const API_URL = "https://data.bka.gv.at/ris/api/v2.6/Judikatur";
 const LANGUAGE = "de";
@@ -591,6 +600,14 @@ const parsedUrl = (value: string): URL | null =>
     catch: () => null,
   }).unwrapOr(null);
 
+type ListedDocumentUrlOptions = {
+  source: AtRisSourceDefinition;
+  item: RisListingItem;
+  sourceDocumentId: string;
+  dataType: "Html" | "Xml";
+  extension: "html" | "xml";
+};
+
 /**
  * The address the publisher lists for one format of this decision's document.
  *
@@ -601,13 +618,13 @@ const parsedUrl = (value: string): URL | null =>
  * document number implies, so a listed address can name a different host or a
  * different document and be refused rather than followed.
  */
-const listedDocumentUrl = (
-  source: AtRisSourceDefinition,
-  item: RisListingItem,
-  sourceDocumentId: string,
-  dataType: "Html" | "Xml",
-  extension: "html" | "xml",
-): string | undefined => {
+const listedDocumentUrl = ({
+  source,
+  item,
+  sourceDocumentId,
+  dataType,
+  extension,
+}: ListedDocumentUrlOptions): string | undefined => {
   const listed = mainDocumentFormats(item)[dataType];
   if (listed === undefined) {
     return undefined;
@@ -1050,13 +1067,13 @@ const buildListingOnly = ({
       decisionDate: data.decisionDate,
       decisionType: data.decisionType,
       sourceUrl: data.sourceUrl,
-      documentUrl: listedDocumentUrl(
+      documentUrl: listedDocumentUrl({
         source,
         item,
         sourceDocumentId,
-        "Html",
-        "html",
-      ),
+        dataType: "Html",
+        extension: "html",
+      }),
       // The listing states a text of its own for some applications, so a row
       // without its document is still not a row whose publisher wrote nothing.
       textFields: decisionTextFields(source, data, NO_SECTIONS),
@@ -1111,13 +1128,13 @@ const buildDecision = async ({
       source,
     });
   }
-  const xmlUrl = listedDocumentUrl(
+  const xmlUrl = listedDocumentUrl({
     source,
     item,
     sourceDocumentId,
-    "Xml",
-    "xml",
-  );
+    dataType: "Xml",
+    extension: "xml",
+  });
   if (xmlUrl === undefined) {
     return buildListingOnly({
       identity,
@@ -1241,6 +1258,27 @@ export const assembleAtRisDecision = (
     });
   }
   const parsed = parseResult.value;
+  if (parsed.unknownElements.length > 0) {
+    logger.warn(RIS_UNKNOWN_ELEMENT, {
+      adapterKey: source.key,
+      caseNumber: data.caseNumber,
+      elements: parsed.unknownElements.join(","),
+    });
+  }
+
+  if (parsed.textFidelity !== undefined) {
+    logger.error(AST_CONTENT_LOST, {
+      parser: source.key,
+      caseNumber: data.caseNumber,
+      language: LANGUAGE,
+      url: data.sourceUrl,
+      codes: "TEXT_FIDELITY_MISMATCH",
+      fidelity: parsed.textFidelity.status,
+      missingChars: parsed.textFidelity.missingChars,
+      extraChars: parsed.textFidelity.extraChars,
+      firstDifferenceAt: parsed.textFidelity.firstDifferenceAt,
+    });
+  }
 
   const raw = storedRaw({ item, documentXml, headnoteListing });
   return plainTextIngestionResult(
@@ -1256,18 +1294,21 @@ export const assembleAtRisDecision = (
       decisionType: data.decisionType,
       fulltext: parsed.fulltext,
       sourceUrl: data.sourceUrl,
-      documentUrl: listedDocumentUrl(
+      documentUrl: listedDocumentUrl({
         source,
         item,
         sourceDocumentId,
-        "Html",
-        "html",
-      ),
+        dataType: "Html",
+        extension: "html",
+      }),
       textFields: decisionTextFields(source, data, parsed.sections),
       metadata: checkedDecisionMetadata(
         {
           ...decisionMetadata(source, data, parsed.sections),
           headnotes: headnotesOf(source, headnoteListing, sourceDocumentId),
+          ...(parsed.textFidelity === undefined
+            ? {}
+            : { textFidelity: parsed.textFidelity }),
         },
         AT_RIS_HEADNOTE_METADATA_URL_SCHEMA,
       ),
@@ -1403,6 +1444,7 @@ const listReconciliationSlicePage = async (
         payload: item,
       })),
     totalPages,
+    publisherCount: source.excludeForeignCourts ? undefined : listing.total,
   };
 };
 
@@ -1560,6 +1602,7 @@ const createAdapter = <const TKey extends AtRisAdapterKey>(
           if (page.total !== expectedTotal) {
             return {
               decisions: [],
+              publisherRequest: PUBLISHER_REQUEST.ANSWERED,
               nextCursor: encodeCursor(restartSliceCursor(state.slice)),
             };
           }
@@ -1571,6 +1614,7 @@ const createAdapter = <const TKey extends AtRisAdapterKey>(
             );
             return {
               decisions: [],
+              publisherRequest: PUBLISHER_REQUEST.ANSWERED,
               nextCursor: encodeCursor(next),
             };
           }
@@ -1600,6 +1644,7 @@ const createAdapter = <const TKey extends AtRisAdapterKey>(
             if (state.page < totalPages) {
               return {
                 decisions: [],
+                publisherRequest: PUBLISHER_REQUEST.ANSWERED,
                 nextCursor: encodeCursor({
                   ...state,
                   page: state.page + 1,
@@ -1615,6 +1660,7 @@ const createAdapter = <const TKey extends AtRisAdapterKey>(
             ) {
               return {
                 decisions: [],
+                publisherRequest: PUBLISHER_REQUEST.ANSWERED,
                 nextCursor: encodeCursor(restartSliceCursor(state.slice)),
               };
             }
@@ -1625,6 +1671,7 @@ const createAdapter = <const TKey extends AtRisAdapterKey>(
             );
             return {
               decisions: [],
+              publisherRequest: PUBLISHER_REQUEST.ANSWERED,
               nextCursor: encodeCursor(next),
             };
           }
@@ -1671,6 +1718,7 @@ const createAdapter = <const TKey extends AtRisAdapterKey>(
             return {
               decisions,
               itemBuildFailures,
+              publisherRequest: PUBLISHER_REQUEST.ANSWERED,
               nextCursor: encodeCursor({
                 ...state,
                 page: state.page + 1,
@@ -1685,12 +1733,14 @@ const createAdapter = <const TKey extends AtRisAdapterKey>(
           if (collected !== expectedTotal - foreign) {
             return {
               decisions: [],
+              publisherRequest: PUBLISHER_REQUEST.ANSWERED,
               nextCursor: encodeCursor(restartSliceCursor(state.slice)),
             };
           }
           return {
             decisions,
             itemBuildFailures,
+            publisherRequest: PUBLISHER_REQUEST.ANSWERED,
             nextCursor: encodeCursor({
               slice: state.slice,
               phase: CURSOR_PHASE.VERIFY,

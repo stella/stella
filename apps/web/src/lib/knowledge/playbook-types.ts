@@ -1,6 +1,5 @@
-import type { api } from "@/lib/api";
-import { optionalArray } from "@/lib/arrays";
 import type {
+  api,
   AskManual,
   DeterministicCheck,
   FallbackEntry,
@@ -12,10 +11,11 @@ import type {
   Position,
   PositionSeverity,
   PositionStandard,
-  PositionStandardSource,
   ReferencePassage,
   TierRule,
-} from "@/lib/eden-client";
+} from "@/lib/api";
+import { optionalArray } from "@/lib/arrays";
+import { createUuid } from "@/lib/uuid";
 
 // Playbook position types are the backend `playbookPositionsSchema` (v3) types
 // themselves, re-exported by the API, so the editor's working state and save
@@ -31,7 +31,6 @@ export type {
   Position,
   PositionSeverity,
   PositionStandard,
-  PositionStandardSource,
   ReferencePassage,
   TierRule,
 };
@@ -69,10 +68,6 @@ export type ExtractPosition = Extract<Position, { mode: "extract" }>;
 // passages of a reference document someone already negotiated. Grading
 // dispatches on `source`, and so does every editor below.
 type TieredStandard = Extract<PositionStandard, { source: "tiers" }>;
-export type ReferenceStandard = Extract<
-  PositionStandard,
-  { source: "reference" }
->;
 
 export type PositionTiers = TieredStandard["tiers"];
 type GradedAskConfig = GradedPosition["ask"];
@@ -103,12 +98,12 @@ export type PlaybookVersionItem = PlaybookVersionsData["items"][number];
 // reorder/DnD and finding citations reference stable identity, not array index.
 
 export const newTierRule = (): TierRule => ({
-  id: crypto.randomUUID(),
+  id: createUuid(),
   text: "",
 });
 
 export const newFallbackEntry = (): FallbackEntry => ({
-  id: crypto.randomUUID(),
+  id: createUuid(),
   text: "",
 });
 
@@ -177,7 +172,7 @@ const textContent = (): PositionAskContent => ({ version: 1, type: "text" });
 
 export const newGradedPosition = (): GradedPosition => ({
   mode: "graded",
-  sourceId: crypto.randomUUID(),
+  sourceId: createUuid(),
   issue: "",
   severity: "medium",
   standard: emptyTieredStandard(),
@@ -187,7 +182,7 @@ export const newGradedPosition = (): GradedPosition => ({
 
 export const newExtractPosition = (): ExtractPosition => ({
   mode: "extract",
-  sourceId: crypto.randomUUID(),
+  sourceId: createUuid(),
   issue: "",
   ask: { question: "", content: textContent() },
   enabled: true,
@@ -263,14 +258,14 @@ export const withoutPositionSource = (
 // A duplicated position needs a fresh sourceId and fresh rule/entry ids so it is
 // a distinct materialized column/finding target, never an alias of the original.
 const withFreshRuleId = (rule: TierRule): TierRule => ({
-  id: crypto.randomUUID(),
+  id: createUuid(),
   text: rule.text,
 });
 
 const withFreshEntryId = (entry: FallbackEntry): FallbackEntry =>
   entry.label !== undefined
-    ? { id: crypto.randomUUID(), text: entry.text, label: entry.label }
-    : { id: crypto.randomUUID(), text: entry.text };
+    ? { id: createUuid(), text: entry.text, label: entry.label }
+    : { id: createUuid(), text: entry.text };
 
 // A reference standard's passages carry no client-generated ids (they are
 // pinned provenance, not editable rows), so a copy shares them verbatim.
@@ -296,11 +291,11 @@ const duplicateStandard = (standard: PositionStandard): PositionStandard => {
 
 export const duplicatePosition = (position: Position): Position => {
   if (position.mode === "extract") {
-    return { ...position, sourceId: crypto.randomUUID() };
+    return { ...position, sourceId: createUuid() };
   }
   return {
     ...position,
-    sourceId: crypto.randomUUID(),
+    sourceId: createUuid(),
     standard: duplicateStandard(position.standard),
   };
 };

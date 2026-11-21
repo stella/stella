@@ -1,0 +1,102 @@
+import { AUTH_SOCIAL_PROVIDER_IDS } from "@stll/auth-model";
+
+import { isRecord } from "@/api/lib/type-guards";
+
+/**
+ * Social callback outcomes, logged once per callback as `auth.social_sign_in`
+ * so refused links and failure spikes can be counted from the request logs.
+ */
+const SOCIAL_SIGN_IN_OUTCOMES = [
+  "completed",
+  "account_not_linked",
+  "identity_not_allowed",
+  "failed",
+] as const;
+
+export type SocialSignInOutcome = (typeof SOCIAL_SIGN_IN_OUTCOMES)[number];
+
+const KNOWN_PROVIDERS: ReadonlySet<string> = new Set(AUTH_SOCIAL_PROVIDER_IDS);
+
+/**
+ * Whether the endpoint call completes a social callback. Only the GET does: a
+ * provider's `form_post` (Apple's) is answered with a redirect to that GET,
+ * and counting it would log every such sign-in twice, once as completed.
+ */
+export const completesSocialCallback = ({
+  method,
+  path,
+}: {
+  method?: string | undefined;
+  path?: string | undefined;
+}): boolean => method === "GET" && (path?.startsWith("/callback/") ?? false);
+
+/**
+ * Where this callback reports failures, as an absolute URL: the sign-in's own
+ * error destination when it chose one (possibly relative to the auth base),
+ * otherwise the global error URL. The callback's parsed OAuth state carries
+ * the per-sign-in choice.
+ */
+export const socialCallbackErrorUrl = (
+  state: unknown,
+  globalErrorUrl: string,
+  baseUrl: string,
+): string => {
+  const errorUrl = isRecord(state) ? state["errorURL"] : undefined;
+  if (typeof errorUrl !== "string" || errorUrl.length === 0) {
+    return globalErrorUrl;
+  }
+  return URL.parse(errorUrl, baseUrl)?.href ?? globalErrorUrl;
+};
+
+/** The provider dimension: a known provider id, otherwise `other`. */
+export const socialSignInProvider = (provider: unknown): string =>
+  typeof provider === "string" && KNOWN_PROVIDERS.has(provider)
+    ? provider
+    : "other";
+
+/**
+ * Reads the outcome from the redirect the callback answers with. Better Auth
+ * reports every callback failure as a redirect to its error URL carrying an
+ * `error` code, and a completed sign-in or link as a redirect elsewhere. Only
+ * a redirect to the error URL counts as a failure, so a caller-chosen
+ * callback URL cannot pose as one.
+ */
+export const classifySocialCallback = (
+  returned: unknown,
+  errorUrl: string,
+): SocialSignInOutcome => {
+  // Better Auth's redirect is an APIError: a numeric `statusCode` and the
+  // response `headers` carrying `location`.
+  if (!isRecord(returned)) {
+    return "failed";
+  }
+  const headers = returned["headers"];
+  const location = headers instanceof Headers ? headers.get("location") : null;
+  if (returned["statusCode"] !== 302 || location === null) {
+    return "failed";
+  }
+  const target = URL.parse(location, errorUrl);
+  const expected = URL.parse(errorUrl);
+  if (
+    target === null ||
+    expected === null ||
+    target.origin !== expected.origin ||
+    target.pathname !== expected.pathname
+  ) {
+    return "completed";
+  }
+  // Failures always carry an `error` code; a sign-in whose success and error
+  // destinations are the same URL lands here without one when it completes.
+  const error = target.searchParams.get("error");
+  if (error === null) {
+    return "completed";
+  }
+  switch (error) {
+    case "account_not_linked":
+      return "account_not_linked";
+    case "identity_not_allowed":
+      return "identity_not_allowed";
+    default:
+      return "failed";
+  }
+};

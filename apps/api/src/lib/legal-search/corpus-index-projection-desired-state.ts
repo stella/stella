@@ -14,32 +14,48 @@ import {
   legislationSources,
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
-import { requireRegisteredCorpusIndexManifest } from "@/api/lib/legal-search/corpus-index-generation-store";
+import { replayWrite } from "@/api/lib/case-law/replay-write";
 import {
-  CORPUS_INDEX_MANIFESTS,
+  lockCaseLawProjectionRepairIdentifiers,
+  lockCaseLawProjectionRepairRows,
+  lockCaseLawProjectionRepairStates,
+  lockCorpusProjectionRevisionsAfterStates,
+} from "@/api/lib/db/aggregate-lock";
+import { transitionBatch } from "@/api/lib/db/transitions";
+import type { CaseLawRankingSignals } from "@/api/lib/legal-search/case-law-ranking-signals";
+import { CORPUS_INDEX_ACTIVE_GENERATION_STATUSES } from "@/api/lib/legal-search/corpus-generation-contract";
+import { requireRegisteredCorpusIndexManifest } from "@/api/lib/legal-search/corpus-index-generation-store";
+import { readCaseLawJurisdictionVacatedTx } from "@/api/lib/legal-search/corpus-index-jurisdiction-serving-store";
+import {
   type CorpusIndexManifest,
+  corpusIndexManifestCoversJurisdiction,
+  requireCorpusIndexManifest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
 import {
-  deriveCorpusIndexProjectionDescriptor,
+  type ProjectedCorpusIndexGeneration,
+  readProjectedCorpusIndexGenerationsTx,
+} from "@/api/lib/legal-search/corpus-index-projected-generations";
+import {
   type CaseLawProjectionInput,
   type CorpusIndexProjectionDescriptor,
   type CorpusIndexProjectionInput,
+  deriveCorpusIndexProjectionDescriptor,
   type LegislationV2ProjectionInput,
 } from "@/api/lib/legal-search/corpus-index-projection-descriptor";
+import { CORPUS_INDEX_PROJECTION_INTENT_LIFECYCLE } from "@/api/lib/legal-search/corpus-index-projection-intent-transition-spec";
+import { readCaseLawProvisionKeys } from "@/api/lib/legal-search/corpus-index-projection-provision-keys";
+import {
+  corpusProjectionAcceptedAppendCleanupFence,
+  corpusProjectionRetiredRevisionRunnableAt,
+} from "@/api/lib/legal-search/corpus-index-projection-publish-fence";
+import { readCaseLawRankingSignals } from "@/api/lib/legal-search/corpus-index-projection-ranking-signals";
 import { lockCorpusIndexProjectionWriterTx } from "@/api/lib/legal-search/corpus-index-projection-revision";
+import { corpusIndexProjectionNamedCopyTrailsTwoChanges } from "@/api/lib/legal-search/corpus-index-projection-sql";
 import { isRedistributable } from "@/api/lib/legal-search/corpus-source";
 import { partialObservationFromMetadata } from "@/api/lib/legal-search/ingestion-normalization";
 import type { LegislationExpressionClassification } from "@/api/lib/legal-search/legislation-expression-classification";
 import { OBSERVATION_DETAIL } from "@/api/lib/legal-search/partial-observation-sql";
-
-const CORPUS_INDEX_MANIFEST_COUNT = Object.keys(CORPUS_INDEX_MANIFESTS).length;
-
-const projectionGenerationsForFamily = (
-  family: CorpusIndexProjectionSubject["family"],
-): string[] =>
-  Object.values(CORPUS_INDEX_MANIFESTS).flatMap((manifest) =>
-    manifest.family === family ? [manifest.generation] : [],
-  );
+import { sqlCaseFragment } from "@/api/lib/sql-case-expression";
 
 export type CorpusIndexProjectionSubject =
   | {
@@ -106,6 +122,9 @@ export type CaseLawProjectionCanonicalInput = {
   decisionDate: string | null;
   ecli: string | null;
   metadata: Record<string, unknown> | null;
+  provisionKeys: readonly string[];
+  rankingSignals: CaseLawRankingSignals;
+  vacatedFrom: string | null;
   sourceDescriptor: Parameters<typeof isRedistributable>[0];
 };
 
@@ -124,6 +143,9 @@ export const caseLawProjectionInputFromCanonical = ({
   decisionDate,
   ecli,
   metadata,
+  provisionKeys,
+  rankingSignals,
+  vacatedFrom,
   sourceDescriptor,
 }: CaseLawProjectionCanonicalInput): CaseLawProjectionInput => ({
   family: "case_law",
@@ -145,6 +167,9 @@ export const caseLawProjectionInputFromCanonical = ({
   decisionDate,
   ecli,
   metadata,
+  provisionKeys,
+  rankingSignals,
+  vacatedFrom,
 });
 
 /**
@@ -278,7 +303,7 @@ const lockLegislationProjectionSource = async (
 };
 
 /** Take the source-policy half of the canonical projection lock order. */
-export const lockCorpusProjectionSourceTx = async (
+const lockCorpusProjectionSourceTx = async (
   tx: Transaction,
   subject: CorpusIndexProjectionSubject,
 ): Promise<void> => {
@@ -296,7 +321,7 @@ export const lockCorpusProjectionSourceTx = async (
 };
 
 /** Lock source policy before inserting a canonical subject that has no row yet. */
-export const lockCorpusProjectionSourceByIdTx = async (
+const lockCorpusProjectionSourceByIdTx = async (
   tx: Transaction,
   source: CorpusIndexProjectionSource,
 ): Promise<void> => {
@@ -339,29 +364,19 @@ export const lockCorpusProjectionSourceByIdTx = async (
   }
 };
 
+/**
+ * Whether the family has a generation that takes content. Read through the
+ * projected-generation owner, so a process that does not know one of the
+ * registry's generations is refused here, before its caller writes the
+ * canonical row, rather than told there is nothing to project.
+ */
 const hasActiveCorpusProjectionTx = async (
   tx: Transaction,
   family: CorpusIndexProjectionSubject["family"],
 ): Promise<boolean> =>
-  (
-    await tx
-      .select({ generation: corpusIndexGenerations.generation })
-      .from(corpusIndexGenerations)
-      .where(
-        and(
-          eq(corpusIndexGenerations.family, family),
-          inArray(
-            corpusIndexGenerations.generation,
-            projectionGenerationsForFamily(family),
-          ),
-          or(
-            eq(corpusIndexGenerations.status, "building"),
-            eq(corpusIndexGenerations.status, "serving"),
-          ),
-        ),
-      )
-      .limit(1)
-  ).length > 0;
+  (await readProjectedCorpusIndexGenerationsTx(tx, family)).some(
+    ({ accepts }) => accepts === "content",
+  );
 
 /**
  * Share-lock source policy before checking activation. Registration takes a
@@ -399,32 +414,11 @@ const lockCaseLawProjectionInput = async (
   // Take the compatible source lock first so per-document projection never
   // inverts that order or exclusively serializes every decision in a source.
   const source = await lockCaseLawProjectionSource(tx, subject);
-  const rows = await tx
-    .select({
-      documentId: caseLawDecisions.id,
-      sourceId: caseLawDecisions.sourceId,
-      jurisdiction: caseLawDecisions.country,
-      language: caseLawDecisions.language,
-      documentType: caseLawDecisions.decisionType,
-      contentHash: caseLawDecisions.contentHash,
-      redactedAt: caseLawDecisions.redactedAt,
-      caseNumber: caseLawDecisions.caseNumber,
-      court: caseLawDecisions.court,
-      courtId: caseLawDecisions.courtId,
-      decisionDate: caseLawDecisions.decisionDate,
-      ecli: caseLawDecisions.ecli,
-      metadata: caseLawDecisions.metadata,
-      projectionEpoch: caseLawDecisions.projectionEpoch,
-    })
-    .from(caseLawDecisions)
-    .where(
-      and(
-        eq(caseLawDecisions.id, subject.entityId),
-        eq(caseLawDecisions.sourceId, source.sourceId),
-      ),
-    )
-    .limit(1)
-    .for("update", { of: caseLawDecisions });
+  const rows = await lockCaseLawProjectionRepairRows(tx, {
+    decisions: caseLawDecisions,
+    sourceId: source.sourceId,
+    decisionIds: [subject.entityId],
+  });
   const row = rows.at(0);
   if (row === undefined) {
     throw new CorpusIndexProjectionSubjectMissingError({
@@ -450,11 +444,31 @@ const lockCaseLawProjectionInput = async (
       `Case-law projection subject exceeds ${DECISION_IDENTIFIER_MAX_COUNT} identifiers: ${subject.entityId}`,
     );
   }
+  const provisionKeys = (
+    await readCaseLawProvisionKeys(tx, [
+      { id: row.documentId, jurisdiction: row.jurisdiction },
+    ])
+  ).get(String(row.documentId));
+  const vacatedFrom =
+    (await readCaseLawJurisdictionVacatedTx(tx, [row.jurisdiction])).get(
+      row.jurisdiction,
+    ) ?? null;
+  const rankingSignals = (
+    await readCaseLawRankingSignals(tx, [row.documentId])
+  ).get(String(row.documentId));
   return {
     epoch: row.projectionEpoch,
     input: caseLawProjectionInputFromCanonical({
       ...row,
       identifiers,
+      provisionKeys:
+        provisionKeys ??
+        panic(`Provision keys were not loaded for ${row.documentId}`),
+      // The row is locked, so it cannot have disappeared since.
+      rankingSignals:
+        rankingSignals ??
+        panic(`Ranking signals were not loaded for ${row.documentId}`),
+      vacatedFrom,
       sourceDescriptor: source.sourceDescriptor,
     }),
   };
@@ -510,35 +524,93 @@ const lockProjectionInput = async (
   }
 };
 
-const setCanonicalProjectionEpoch = async (
-  tx: Transaction,
+type CanonicalProjectionEpochUpdate =
+  | {
+      family: "case_law";
+      epochs: readonly { id: SafeId<"caseLawDecision">; epoch: bigint }[];
+    }
+  | {
+      family: "legislation";
+      entityId: SafeId<"legislationDocument">;
+      epoch: bigint;
+    };
+
+const projectionEpochUpdate = (
   subject: CorpusIndexProjectionSubject,
   epoch: bigint,
-): Promise<void> => {
+): CanonicalProjectionEpochUpdate => {
   switch (subject.family) {
     case "case_law":
-      await tx
-        .update(caseLawDecisions)
-        .set({ projectionEpoch: epoch })
-        .where(eq(caseLawDecisions.id, subject.entityId));
-      return;
+      return { family: "case_law", epochs: [{ id: subject.entityId, epoch }] };
     case "legislation":
-      await tx
-        .update(legislationDocuments)
-        .set({ projectionEpoch: epoch })
-        .where(eq(legislationDocuments.id, subject.entityId));
-      return;
+      return { family: "legislation", entityId: subject.entityId, epoch };
     default:
       subject satisfies never;
-      return panic(`Unhandled subject: ${String(subject)}`);
+      return panic("Unhandled projection subject");
   }
 };
 
-type RegisteredManifest = {
-  generation: string;
-  manifest: CorpusIndexManifest;
-  /** Whether the generation may still be given content, or only relieved of it. */
-  accepts: "content" | "erase-only";
+/**
+ * The projection epoch is search-projection bookkeeping: no reader of the
+ * decision or document sees it. Every write of it keeps `updated_at`, the
+ * public freshness that sitemaps, change cursors and compare-and-set tokens
+ * read, as the other bookkeeping writers of these rows do.
+ */
+export const CANONICAL_PROJECTION_EPOCH_KEEPS_FRESHNESS = {
+  case_law: sql<Date>`${caseLawDecisions.updatedAt}`,
+  legislation: sql<Date>`${legislationDocuments.updatedAt}`,
+} as const satisfies Record<CorpusIndexProjectionSubject["family"], unknown>;
+
+const setCanonicalProjectionEpoch = async (
+  tx: Transaction,
+  update: CanonicalProjectionEpochUpdate,
+): Promise<void> => {
+  switch (update.family) {
+    case "case_law": {
+      if (update.epochs.length === 0) {
+        return;
+      }
+      const write = replayWrite(caseLawDecisions, {
+        projectionEpoch: sqlCaseFragment({
+          branches: update.epochs.map(
+            ({ id, epoch }) =>
+              sql`WHEN ${caseLawDecisions.id} = ${id} THEN ${epoch.toString()}::bigint`,
+          ),
+          fallback: sql`${caseLawDecisions.projectionEpoch}`,
+        }),
+        updatedAt: CANONICAL_PROJECTION_EPOCH_KEEPS_FRESHNESS.case_law,
+      });
+      await tx
+        .update(caseLawDecisions)
+        .set(write.set)
+        .where(
+          and(
+            write.setWhere,
+            inArray(
+              caseLawDecisions.id,
+              update.epochs.map(({ id }) => id),
+            ),
+          ),
+        );
+      return;
+    }
+    case "legislation": {
+      const write = replayWrite(legislationDocuments, {
+        projectionEpoch: update.epoch,
+        updatedAt: CANONICAL_PROJECTION_EPOCH_KEEPS_FRESHNESS.legislation,
+      });
+      await tx
+        .update(legislationDocuments)
+        .set(write.set)
+        .where(
+          and(write.setWhere, eq(legislationDocuments.id, update.entityId)),
+        );
+      return;
+    }
+    default:
+      update satisfies never;
+      return panic(`Unhandled projection epoch update: ${String(update)}`);
+  }
 };
 
 /**
@@ -547,40 +619,17 @@ type RegisteredManifest = {
  * A building or serving generation takes the whole descriptor. A retiring one
  * is past taking new content, but its index still holds whatever it was given
  * until that index is deleted, so an erasure has to reach it as well; sending
- * it an upsert instead would re-add the text this mutation is removing.
+ * it an upsert instead would re-add the text this mutation is removing. The
+ * set comes from the registry, and a generation this process has no manifest
+ * for refuses the mutation (`CorpusIndexGenerationUnknownError`) instead of
+ * being left out of it.
  */
 const projectionManifests = async (
   tx: Transaction,
   family: CorpusIndexProjectionSubject["family"],
-): Promise<RegisteredManifest[]> => {
+): Promise<ProjectedCorpusIndexGeneration[]> => {
   await lockCorpusIndexProjectionWriterTx(tx);
-  const rows = await tx
-    .select()
-    .from(corpusIndexGenerations)
-    .where(
-      and(
-        eq(corpusIndexGenerations.family, family),
-        inArray(
-          corpusIndexGenerations.generation,
-          projectionGenerationsForFamily(family),
-        ),
-        or(
-          eq(corpusIndexGenerations.status, "building"),
-          eq(corpusIndexGenerations.status, "serving"),
-          eq(corpusIndexGenerations.status, "retiring"),
-        ),
-      ),
-    )
-    .orderBy(asc(corpusIndexGenerations.generation))
-    .limit(CORPUS_INDEX_MANIFEST_COUNT + 1);
-  if (rows.length > CORPUS_INDEX_MANIFEST_COUNT) {
-    return panic(`Active corpus generation registry exceeds its manifest set`);
-  }
-  return rows.map((row) => ({
-    generation: row.generation,
-    manifest: requireRegisteredCorpusIndexManifest(row),
-    accepts: row.status === "retiring" ? "erase-only" : "content",
-  }));
+  return await readProjectedCorpusIndexGenerationsTx(tx, family);
 };
 
 type GenerationProjection = {
@@ -591,12 +640,61 @@ type GenerationProjection = {
 /**
  * The descriptor each generation is owed for one canonical input. A retiring
  * generation appears only where that descriptor is an erasure.
+ *
+ * A partial generation is owed nothing for a jurisdiction it does not hold:
+ * no state, so it never carries a row per decision of the corpus. But a
+ * generation whose scope no longer covers the decision owes an erasure when it
+ * holds a projection of it, so a decision corrected out of a jurisdiction
+ * (or a jurisdiction dropped from a scope) does not leave a copy behind that
+ * nothing would ever delete. The existing projections are read in one probe by
+ * the state primary key.
  */
-const projectionsFor = (
-  manifests: readonly RegisteredManifest[],
+const projectionsFor = async (
+  tx: Transaction,
+  subject: CorpusIndexProjectionSubject,
+  manifests: readonly ProjectedCorpusIndexGeneration[],
   input: Parameters<typeof deriveCorpusIndexProjectionDescriptor>[1],
+): Promise<GenerationProjection[]> => {
+  const uncovered = manifests.filter(
+    ({ manifest }) =>
+      !corpusIndexManifestCoversJurisdiction(manifest, input.jurisdiction),
+  );
+  const projected =
+    uncovered.length === 0
+      ? new Set<string>()
+      : new Set(
+          (
+            await tx
+              .select({ generation: corpusIndexProjectionStates.generation })
+              .from(corpusIndexProjectionStates)
+              .where(
+                and(
+                  eq(corpusIndexProjectionStates.family, subject.family),
+                  eq(corpusIndexProjectionStates.entityId, subject.entityId),
+                  inArray(
+                    corpusIndexProjectionStates.generation,
+                    uncovered.map(({ generation }) => generation),
+                  ),
+                  eq(corpusIndexProjectionStates.desiredAction, "upsert"),
+                ),
+              )
+              .limit(uncovered.length)
+          ).map(({ generation }) => generation),
+        );
+  return projectionsFromSnapshot(manifests, input, projected);
+};
+
+const projectionsFromSnapshot = (
+  manifests: readonly ProjectedCorpusIndexGeneration[],
+  input: CorpusIndexProjectionInput,
+  projected: ReadonlySet<string>,
 ): GenerationProjection[] =>
   manifests.flatMap(({ generation, manifest, accepts }) => {
+    if (!corpusIndexManifestCoversJurisdiction(manifest, input.jurisdiction)) {
+      return projected.has(generation)
+        ? [{ generation, descriptor: { action: "erase" } as const }]
+        : [];
+    }
     const descriptor = deriveCorpusIndexProjectionDescriptor(manifest, input);
     return accepts === "erase-only" && descriptor.action !== "erase"
       ? []
@@ -615,9 +713,9 @@ export const readActiveCorpusProjectionManifest = async (
       and(
         eq(corpusIndexGenerations.family, family),
         eq(corpusIndexGenerations.generation, generation),
-        or(
-          eq(corpusIndexGenerations.status, "building"),
-          eq(corpusIndexGenerations.status, "serving"),
+        inArray(
+          corpusIndexGenerations.status,
+          CORPUS_INDEX_ACTIVE_GENERATION_STATUSES,
         ),
       ),
     )
@@ -649,9 +747,9 @@ export const lockActiveCorpusProjectionManifestForMutation = async (
       and(
         eq(corpusIndexGenerations.family, family),
         eq(corpusIndexGenerations.generation, generation),
-        or(
-          eq(corpusIndexGenerations.status, "building"),
-          eq(corpusIndexGenerations.status, "serving"),
+        inArray(
+          corpusIndexGenerations.status,
+          CORPUS_INDEX_ACTIVE_GENERATION_STATUSES,
         ),
       ),
     )
@@ -741,13 +839,194 @@ export const buildCorpusIndexProjectionDesiredStateValues = ({
   desiredIndexId: descriptor.action === "upsert" ? descriptor.indexId : null,
 });
 
-const writeDesiredStates = async (
+export type DesiredStateKey = Pick<
+  typeof corpusIndexProjectionStates.$inferSelect,
+  "family" | "generation" | "entityId"
+>;
+
+const desiredStateKeys = (keys: readonly DesiredStateKey[]) =>
+  or(
+    ...keys.map(({ family, generation, entityId }) =>
+      and(
+        eq(corpusIndexProjectionStates.family, family),
+        eq(corpusIndexProjectionStates.generation, generation),
+        eq(corpusIndexProjectionStates.entityId, entityId),
+      ),
+    ),
+  );
+
+/**
+ * States this write takes from a desired erasure back to an upsert while they
+ * still name a copy. Read before the write, since the write replaces the
+ * erasure it is undoing; every desired writer holds the canonical row first,
+ * so no other desired write can move these states in between.
+ */
+const readUndoneErasuresTx = async (
+  tx: Transaction,
+  values: readonly (typeof corpusIndexProjectionStates.$inferInsert)[],
+): Promise<DesiredStateKey[]> => {
+  const keys = desiredStateKeys(
+    values.filter(({ desiredAction }) => desiredAction === "upsert"),
+  );
+  if (keys === undefined) {
+    return [];
+  }
+  return await tx
+    .select({
+      family: corpusIndexProjectionStates.family,
+      generation: corpusIndexProjectionStates.generation,
+      entityId: corpusIndexProjectionStates.entityId,
+    })
+    .from(corpusIndexProjectionStates)
+    .where(
+      and(
+        keys,
+        eq(corpusIndexProjectionStates.desiredAction, "erase"),
+        eq(corpusIndexProjectionStates.appliedAction, "upsert"),
+      ),
+    );
+};
+
+export const SERVED_COPY_RETIREMENT_REASONS = {
+  undoneErasure: "projection revision retired by an undone erasure",
+  legacyUnproven: "projection revision retired as not provably current",
+} as const;
+
+/**
+ * Retire the copy these states name and stop naming it, so the entity is
+ * appended anew and never served the retired copy again. The copy is queued
+ * for cleanup if it is still `applied`. The caller holds these state rows;
+ * the revisions are locked after them, in the projection lock order. Each
+ * state is then queued for the append walk at the instant its retired copy
+ * can have settled.
+ */
+export const retireServedCopiesTx = async (
+  tx: Transaction,
+  retired: readonly DesiredStateKey[],
+  reason: (typeof SERVED_COPY_RETIREMENT_REASONS)[keyof typeof SERVED_COPY_RETIREMENT_REASONS],
+): Promise<void> => {
+  const keys = desiredStateKeys(retired);
+  if (keys === undefined) {
+    return;
+  }
+  const named = await tx
+    .select({
+      family: corpusIndexProjectionStates.family,
+      generation: corpusIndexProjectionStates.generation,
+      entityId: corpusIndexProjectionStates.entityId,
+      revision: corpusIndexProjectionStates.appliedRevision,
+    })
+    .from(corpusIndexProjectionStates)
+    .where(
+      and(
+        keys,
+        eq(corpusIndexProjectionStates.desiredAction, "upsert"),
+        eq(corpusIndexProjectionStates.appliedAction, "upsert"),
+      ),
+    );
+  const revisions = named.flatMap(({ revision, ...key }) =>
+    revision === null ? [] : [{ ...key, revision }],
+  );
+  if (revisions.length === 0) {
+    return;
+  }
+  await lockCorpusProjectionRevisionsAfterStates(
+    tx,
+    revisions.map(({ revision }) => revision),
+  );
+  const transitionAt = sql<Date>`clock_timestamp()`;
+  const generations = Map.groupBy(
+    revisions,
+    ({ family, generation }) => `${family}/${generation}`,
+  );
+  for (const group of generations.values()) {
+    const first = group.at(0) ?? panic("Empty retired copy group");
+    const manifest = requireCorpusIndexManifest(first.family, first.generation);
+    // db-await-in-loop: one statement per generation, each with that generation's publish fence
+    await transitionBatch({
+      tx,
+      spec: CORPUS_INDEX_PROJECTION_INTENT_LIFECYCLE,
+      ids: group.map(({ revision }) => revision),
+      options: {
+        to: "cleanup_pending",
+        from: ["applied"],
+        set: {
+          leaseToken: null,
+          leaseExpiresAt: null,
+          ...corpusProjectionAcceptedAppendCleanupFence(manifest, transitionAt),
+          lastError: reason,
+          updatedAt: transitionAt,
+        },
+      },
+      // Bookkeeping on the derived public corpus projection: no tenant data
+      // and no actor; the canonical write that changed the desired state is
+      // audited.
+      recordTransitionAuditEvent: () => undefined,
+    });
+    const unname = replayWrite(
+      corpusIndexProjectionStates,
+      {
+        appliedAction: null,
+        appliedEpoch: null,
+        appliedRevision: null,
+        appliedFingerprint: null,
+        appliedIndexId: null,
+        appliedAt: null,
+      },
+      {
+        modifiedAt: {
+          column: corpusIndexProjectionStates.updatedAt,
+          value: corpusProjectionRetiredRevisionRunnableAt(
+            manifest,
+            corpusIndexProjectionStates.appliedRevision,
+          ),
+        },
+      },
+    );
+    // audit: skip - applied-state bookkeeping on the derived public corpus projection
+    // db-await-in-loop: one statement per generation, each with that generation's settlement bound
+    await tx
+      .update(corpusIndexProjectionStates)
+      .set(unname.set)
+      .where(
+        and(
+          desiredStateKeys(group),
+          eq(corpusIndexProjectionStates.desiredAction, "upsert"),
+          eq(corpusIndexProjectionStates.appliedAction, "upsert"),
+          unname.setWhere,
+        ),
+      );
+  }
+};
+
+export const writeDesiredStates = async (
   tx: Transaction,
   values: (typeof corpusIndexProjectionStates.$inferInsert)[],
 ): Promise<void> => {
   if (values.length === 0) {
     return;
   }
+  const undone = await readUndoneErasuresTx(tx, values);
+  const states = corpusIndexProjectionStates;
+  // Judged on the row before this write: once its named copy trails by two
+  // changes with other content, an upsert write keeps `desired_at` at the
+  // instant that happened, so the legacy pass can tell a copy that fell that
+  // far behind before its cutover from one that fell behind after it (see the
+  // predicate). A write that turns the state into an erasure stamps its own
+  // instant, so the erasure's pending time is its own; the undo that follows
+  // it retires the copy here (`readUndoneErasuresTx`).
+  const namedCopyTrailsTwoChanges =
+    corpusIndexProjectionNamedCopyTrailsTwoChanges({
+      desiredAction: states.desiredAction,
+      appliedAction: states.appliedAction,
+      appliedRevision: states.appliedRevision,
+      appliedEpoch: states.appliedEpoch,
+      desiredEpoch: states.desiredEpoch,
+      appliedFingerprint: states.appliedFingerprint,
+      desiredFingerprint: states.desiredFingerprint,
+      appliedIndexId: states.appliedIndexId,
+      desiredIndexId: states.desiredIndexId,
+    });
   const desiredStateUnchanged = sql`(
     ${corpusIndexProjectionStates.desiredAction},
     ${corpusIndexProjectionStates.desiredEpoch},
@@ -768,22 +1047,36 @@ const writeDesiredStates = async (
         corpusIndexProjectionStates.generation,
         corpusIndexProjectionStates.entityId,
       ],
-      set: {
-        desiredAction: sql`excluded.desired_action`,
-        desiredEpoch: sql`excluded.desired_epoch`,
-        desiredFingerprint: sql`excluded.desired_fingerprint`,
-        desiredIndexId: sql`excluded.desired_index_id`,
-        workStatus: sql`CASE WHEN ${desiredStateUnchanged} THEN ${corpusIndexProjectionStates.workStatus} ELSE 'eligible' END`,
-        retryNotBefore: sql`CASE WHEN ${desiredStateUnchanged} THEN ${corpusIndexProjectionStates.retryNotBefore} ELSE NULL END`,
-        failureAttempts: sql`CASE WHEN ${desiredStateUnchanged} THEN ${corpusIndexProjectionStates.failureAttempts} ELSE 0 END`,
-        appendMode: sql<
-          "batchable" | "single"
-        >`CASE WHEN ${desiredStateUnchanged} THEN ${corpusIndexProjectionStates.appendMode} ELSE 'batchable' END`,
-        lastFailureKind: sql`CASE WHEN ${desiredStateUnchanged} THEN ${corpusIndexProjectionStates.lastFailureKind} ELSE NULL END`,
-        lastFailureMessage: sql`CASE WHEN ${desiredStateUnchanged} THEN ${corpusIndexProjectionStates.lastFailureMessage} ELSE NULL END`,
-        updatedAt: sql<Date>`clock_timestamp()`,
-      },
+      ...replayWrite(
+        corpusIndexProjectionStates,
+        {
+          desiredAction: sql`excluded.desired_action`,
+          desiredEpoch: sql`excluded.desired_epoch`,
+          desiredAt: sql<Date>`CASE WHEN ${desiredStateUnchanged} OR (excluded.desired_action = 'upsert' AND ${namedCopyTrailsTwoChanges}) THEN ${corpusIndexProjectionStates.desiredAt} ELSE statement_timestamp() END`,
+          desiredFingerprint: sql`excluded.desired_fingerprint`,
+          desiredIndexId: sql`excluded.desired_index_id`,
+          workStatus: sql`CASE WHEN ${desiredStateUnchanged} THEN ${corpusIndexProjectionStates.workStatus} ELSE 'eligible' END`,
+          retryNotBefore: sql`CASE WHEN ${desiredStateUnchanged} THEN ${corpusIndexProjectionStates.retryNotBefore} ELSE NULL END`,
+          failureAttempts: sql`CASE WHEN ${desiredStateUnchanged} THEN ${corpusIndexProjectionStates.failureAttempts} ELSE 0 END`,
+          appendMode: sql<
+            "batchable" | "single"
+          >`CASE WHEN ${desiredStateUnchanged} THEN ${corpusIndexProjectionStates.appendMode} ELSE 'batchable' END`,
+          lastFailureKind: sql`CASE WHEN ${desiredStateUnchanged} THEN ${corpusIndexProjectionStates.lastFailureKind} ELSE NULL END`,
+          lastFailureMessage: sql`CASE WHEN ${desiredStateUnchanged} THEN ${corpusIndexProjectionStates.lastFailureMessage} ELSE NULL END`,
+        },
+        {
+          modifiedAt: {
+            column: corpusIndexProjectionStates.updatedAt,
+            value: sql`statement_timestamp()`,
+          },
+        },
+      ),
     });
+  await retireServedCopiesTx(
+    tx,
+    undone,
+    SERVED_COPY_RETIREMENT_REASONS.undoneErasure,
+  );
 };
 
 type DesiredStateSnapshot = {
@@ -794,12 +1087,26 @@ type DesiredStateSnapshot = {
   desiredIndexId: string | null;
 };
 
-const desiredStateMatches = (
-  state: DesiredStateSnapshot,
-  epoch: bigint,
+/**
+ * Whether a generation's desired state already holds what the canonical row
+ * derives for it. One rule for every reader that asks: reconciliation, the
+ * seeding of one generation, and any sweep comparing desired state with the
+ * canonical rows (import this; never restate it).
+ *
+ * Content decides: the action, and for an upsert the fingerprint and index.
+ * The desired epoch orders one generation's revisions of the entity; the
+ * canonical row's epoch is never behind any of them, and a generation whose
+ * content did not change is not drifted for trailing it.
+ */
+export const corpusProjectionDesiredStateHolds = (
+  state: Pick<
+    DesiredStateSnapshot,
+    "desiredAction" | "desiredEpoch" | "desiredFingerprint" | "desiredIndexId"
+  >,
+  canonicalEpoch: bigint,
   descriptor: CorpusIndexProjectionDescriptor,
 ): boolean =>
-  state.desiredEpoch === epoch &&
+  state.desiredEpoch <= canonicalEpoch &&
   state.desiredAction === descriptor.action &&
   state.desiredFingerprint ===
     (descriptor.action === "upsert" ? descriptor.fingerprint : null) &&
@@ -816,7 +1123,9 @@ export const advanceCorpusProjectionDesiredStateTx = async (
   subject: CorpusIndexProjectionSubject,
 ): Promise<{ epoch: bigint; generationCount: number }> => {
   const locked = await lockProjectionInput(tx, subject);
-  const projections = projectionsFor(
+  const projections = await projectionsFor(
+    tx,
+    subject,
     await projectionManifests(tx, subject.family),
     locked.input,
   );
@@ -825,7 +1134,7 @@ export const advanceCorpusProjectionDesiredStateTx = async (
   }
 
   const epoch = locked.epoch + 1n;
-  await setCanonicalProjectionEpoch(tx, subject, epoch);
+  await setCanonicalProjectionEpoch(tx, projectionEpochUpdate(subject, epoch));
   await writeDesiredStates(
     tx,
     projections.map(({ generation, descriptor }) =>
@@ -840,6 +1149,58 @@ export const advanceCorpusProjectionDesiredStateTx = async (
   return { epoch, generationCount: projections.length };
 };
 
+type ReconcileProjectionPlanOptions = {
+  subject: CorpusIndexProjectionSubject;
+  currentEpoch: bigint;
+  existing: readonly (DesiredStateSnapshot & { generation: string })[];
+  projections: readonly GenerationProjection[];
+};
+
+const reconcileProjectionPlan = ({
+  subject,
+  currentEpoch,
+  existing,
+  projections,
+}: ReconcileProjectionPlanOptions) => {
+  const byGeneration = new Map(
+    existing.map((state) => [state.generation, state]),
+  );
+  const existingDrifted = projections.some(({ generation, descriptor }) => {
+    const state = byGeneration.get(generation);
+    return (
+      state !== undefined &&
+      !corpusProjectionDesiredStateHolds(state, currentEpoch, descriptor)
+    );
+  });
+
+  let epoch = currentEpoch;
+  if (existingDrifted || epoch === 0n) {
+    epoch += 1n;
+  }
+
+  // A drift still moves every generation to the new epoch together, so a
+  // state that owes work always desires the canonical epoch: a builder of an
+  // earlier release fences its leases by that equality.
+  const values = projections
+    .filter(({ generation, descriptor }) => {
+      const state = byGeneration.get(generation);
+      return (
+        existingDrifted ||
+        state === undefined ||
+        !corpusProjectionDesiredStateHolds(state, epoch, descriptor)
+      );
+    })
+    .map(({ generation, descriptor }) =>
+      buildCorpusIndexProjectionDesiredStateValues({
+        subject,
+        generation,
+        epoch,
+        descriptor,
+      }),
+    );
+  return { epoch, values };
+};
+
 /**
  * Repair or seed desired state from authoritative corpus rows. Plane may call
  * this from bounded sweeps after a projector or source-policy change; exact
@@ -850,7 +1211,9 @@ export const reconcileCorpusProjectionDesiredStateTx = async (
   subject: CorpusIndexProjectionSubject,
 ): Promise<{ epoch: bigint; changed: boolean; generationCount: number }> => {
   const locked = await lockProjectionInput(tx, subject);
-  const projections = projectionsFor(
+  const projections = await projectionsFor(
+    tx,
+    subject,
     await projectionManifests(tx, subject.family),
     locked.input,
   );
@@ -878,40 +1241,18 @@ export const reconcileCorpusProjectionDesiredStateTx = async (
       ),
     )
     .for("update");
-  const byGeneration = new Map(
-    existing.map((state) => [state.generation, state]),
-  );
-  const existingDrifted = projections.some(({ generation, descriptor }) => {
-    const state = byGeneration.get(generation);
-    return (
-      state !== undefined &&
-      !desiredStateMatches(state, locked.epoch, descriptor)
-    );
+  const { epoch, values } = reconcileProjectionPlan({
+    subject,
+    currentEpoch: locked.epoch,
+    existing,
+    projections,
   });
-
-  let epoch = locked.epoch;
-  if (existingDrifted || epoch === 0n) {
-    epoch += 1n;
-    await setCanonicalProjectionEpoch(tx, subject, epoch);
-  }
-
-  const values = projections
-    .filter(({ generation, descriptor }) => {
-      const state = byGeneration.get(generation);
-      return (
-        existingDrifted ||
-        state === undefined ||
-        !desiredStateMatches(state, epoch, descriptor)
-      );
-    })
-    .map(({ generation, descriptor }) =>
-      buildCorpusIndexProjectionDesiredStateValues({
-        subject,
-        generation,
-        epoch,
-        descriptor,
-      }),
+  if (epoch !== locked.epoch) {
+    await setCanonicalProjectionEpoch(
+      tx,
+      projectionEpochUpdate(subject, epoch),
     );
+  }
   await writeDesiredStates(tx, values);
   return {
     epoch,
@@ -939,6 +1280,46 @@ export const synchronizeLockedCorpusProjectionDesiredStateTx = async (
   await reconcileCorpusProjectionDesiredStateTx(tx, subject);
 };
 
+/**
+ * Retire a canonical row from every active projection without deleting its
+ * database record. Decision aliases use this to keep old UUIDs resolvable
+ * while ensuring only the survivor remains searchable.
+ */
+export const synchronizeRetiredCaseLawProjectionDesiredStateTx = async (
+  tx: Transaction,
+  {
+    lock,
+    subject,
+  }: {
+    lock: ActiveCorpusProjectionSourceLock;
+    subject: Extract<CorpusIndexProjectionSubject, { family: "case_law" }>;
+  },
+): Promise<void> => {
+  if (lock.family !== subject.family) {
+    return panic(
+      `Corpus projection source lock family ${lock.family} cannot retire ${subject.family}`,
+    );
+  }
+  const locked = await lockProjectionInput(tx, subject);
+  const manifests = await projectionManifests(tx, subject.family);
+  if (manifests.length === 0) {
+    return;
+  }
+  const epoch = locked.epoch + 1n;
+  await setCanonicalProjectionEpoch(tx, projectionEpochUpdate(subject, epoch));
+  await writeDesiredStates(
+    tx,
+    manifests.map(({ generation }) =>
+      buildCorpusIndexProjectionDesiredStateValues({
+        subject,
+        generation,
+        epoch,
+        descriptor: { action: "erase" },
+      }),
+    ),
+  );
+};
+
 /** Seed one newly registered generation without invalidating existing ones. */
 export const ensureCorpusProjectionDesiredStateTx = async (
   tx: Transaction,
@@ -954,9 +1335,9 @@ export const ensureCorpusProjectionDesiredStateTx = async (
       and(
         eq(corpusIndexGenerations.family, subject.family),
         eq(corpusIndexGenerations.generation, generation),
-        or(
-          eq(corpusIndexGenerations.status, "building"),
-          eq(corpusIndexGenerations.status, "serving"),
+        inArray(
+          corpusIndexGenerations.status,
+          CORPUS_INDEX_ACTIVE_GENERATION_STATUSES,
         ),
       ),
     )
@@ -991,15 +1372,12 @@ export const ensureCorpusProjectionDesiredStateTx = async (
     .for("update");
   const existingState = existing.at(0);
   if (existingState !== undefined) {
-    const expectedFingerprint =
-      descriptor.action === "upsert" ? descriptor.fingerprint : null;
-    const expectedIndexId =
-      descriptor.action === "upsert" ? descriptor.indexId : null;
     if (
-      existingState.desiredEpoch !== locked.epoch ||
-      existingState.desiredAction !== descriptor.action ||
-      existingState.desiredFingerprint !== expectedFingerprint ||
-      existingState.desiredIndexId !== expectedIndexId
+      !corpusProjectionDesiredStateHolds(
+        existingState,
+        locked.epoch,
+        descriptor,
+      )
     ) {
       return panic(
         `Existing corpus desired state does not match canonical input: ${subject.family}/${generation}/${subject.entityId}`,
@@ -1010,7 +1388,10 @@ export const ensureCorpusProjectionDesiredStateTx = async (
 
   const epoch = locked.epoch === 0n ? 1n : locked.epoch;
   if (epoch !== locked.epoch) {
-    await setCanonicalProjectionEpoch(tx, subject, epoch);
+    await setCanonicalProjectionEpoch(
+      tx,
+      projectionEpochUpdate(subject, epoch),
+    );
   }
   await writeDesiredStates(tx, [
     buildCorpusIndexProjectionDesiredStateValues({
@@ -1021,4 +1402,185 @@ export const ensureCorpusProjectionDesiredStateTx = async (
     }),
   ]);
   return { epoch, created: true };
+};
+
+/**
+ * Owe an erasure to one decision a generation still holds although the
+ * jurisdiction-serving pointer moved readers to another generation. Run after
+ * the gated flip (`case-law-serving-flip.ts`).
+ *
+ * Only this generation's state changes, and the canonical epoch is left alone:
+ * the generation that now serves the decision keeps its applied copy exactly
+ * as it is, so no reader sees the decision leave and return. The existing
+ * erasure path then deletes the old copy from the old index.
+ */
+export const eraseServedElsewhereDesiredStateTx = async (
+  tx: Transaction,
+  subject: Extract<CorpusIndexProjectionSubject, { family: "case_law" }>,
+  generation: string,
+): Promise<{ changed: boolean }> => {
+  const locked = await lockProjectionInput(tx, subject);
+  const manifest = await lockActiveCorpusProjectionManifestForMutation(
+    tx,
+    subject.family,
+    generation,
+  );
+  const descriptor = deriveCorpusIndexProjectionDescriptor(
+    manifest,
+    locked.input,
+  );
+  if (descriptor.action !== "erase") {
+    return { changed: false };
+  }
+  const state = (
+    await tx
+      .select({
+        desiredAction: corpusIndexProjectionStates.desiredAction,
+        desiredEpoch: corpusIndexProjectionStates.desiredEpoch,
+      })
+      .from(corpusIndexProjectionStates)
+      .where(
+        and(
+          eq(corpusIndexProjectionStates.family, subject.family),
+          eq(corpusIndexProjectionStates.generation, generation),
+          eq(corpusIndexProjectionStates.entityId, subject.entityId),
+        ),
+      )
+      .limit(1)
+  ).at(0);
+  if (state === undefined || state.desiredAction === "erase") {
+    return { changed: false };
+  }
+  await writeDesiredStates(tx, [
+    buildCorpusIndexProjectionDesiredStateValues({
+      subject,
+      generation,
+      epoch: state.desiredEpoch,
+      descriptor,
+    }),
+  ]);
+  return { changed: true };
+};
+
+/** A transaction holds at most this many canonical projection locks. */
+export const CASE_LAW_PROJECTION_REPAIR_BATCH_SIZE = 32;
+
+type SynchronizeCaseLawProjectionBatchOptions = {
+  lock: ActiveCorpusProjectionSourceLock;
+  sourceId: SafeId<"caseLawSource">;
+  decisionIds: readonly SafeId<"caseLawDecision">[];
+};
+
+/** Reconcile a bounded source batch with set-based reads and writes. */
+export const synchronizeLockedCaseLawProjectionBatchTx = async (
+  tx: Transaction,
+  { lock, sourceId, decisionIds }: SynchronizeCaseLawProjectionBatchOptions,
+): Promise<void> => {
+  if (
+    lock.family !== "case_law" ||
+    decisionIds.length > CASE_LAW_PROJECTION_REPAIR_BATCH_SIZE
+  ) {
+    return panic("Invalid case-law projection repair batch");
+  }
+  if (decisionIds.length === 0) {
+    return;
+  }
+  const source = (
+    await tx
+      .select({ descriptor: caseLawSources.descriptor })
+      .from(caseLawSources)
+      .where(eq(caseLawSources.id, sourceId))
+      .limit(1)
+  ).at(0);
+  if (source === undefined) {
+    return panic("Projection repair source disappeared");
+  }
+  const rows = await lockCaseLawProjectionRepairRows(tx, {
+    decisions: caseLawDecisions,
+    sourceId,
+    decisionIds,
+  });
+  const ids = rows.map(({ documentId }) => documentId);
+  if (ids.length !== decisionIds.length) {
+    return panic("Projection repair subject disappeared");
+  }
+  const identifiers = await lockCaseLawProjectionRepairIdentifiers(tx, ids);
+  const byDecision = new Map<string, { type: string; value: string }[]>(
+    ids.map((id) => [id, []]),
+  );
+  for (const identifier of identifiers) {
+    const values =
+      byDecision.get(identifier.decisionId) ??
+      panic("Unrequested projection identifier");
+    values.push({ type: identifier.type, value: identifier.value });
+    if (values.length > DECISION_IDENTIFIER_MAX_COUNT) {
+      return panic("Projection repair identifier limit exceeded");
+    }
+  }
+  const provisionKeys = await readCaseLawProvisionKeys(
+    tx,
+    rows.map(({ documentId, jurisdiction }) => ({
+      id: documentId,
+      jurisdiction,
+    })),
+  );
+  const vacated = await readCaseLawJurisdictionVacatedTx(
+    tx,
+    rows.map(({ jurisdiction }) => jurisdiction),
+  );
+  const rankingSignals = await readCaseLawRankingSignals(tx, ids);
+  const manifests = await projectionManifests(tx, "case_law");
+  const states = await lockCaseLawProjectionRepairStates(tx, {
+    decisionIds: ids,
+    generations: manifests.map(({ generation }) => generation),
+  });
+  const values: (typeof corpusIndexProjectionStates.$inferInsert)[] = [];
+  const advanced: { id: SafeId<"caseLawDecision">; epoch: bigint }[] = [];
+  for (const row of rows) {
+    const existing = states.filter(
+      ({ entityId }) => entityId === row.documentId,
+    );
+    const input = caseLawProjectionInputFromCanonical({
+      ...row,
+      identifiers:
+        byDecision.get(row.documentId) ??
+        panic("Projection repair identifiers missing"),
+      provisionKeys:
+        provisionKeys.get(row.documentId) ??
+        panic("Projection repair provision keys missing"),
+      rankingSignals:
+        rankingSignals.get(row.documentId) ??
+        panic("Projection repair ranking signals missing"),
+      vacatedFrom: vacated.get(row.jurisdiction) ?? null,
+      sourceDescriptor: source.descriptor,
+    });
+    const projections = projectionsFromSnapshot(
+      manifests,
+      input,
+      new Set(
+        existing
+          .filter(({ desiredAction }) => desiredAction === "upsert")
+          .map(({ generation }) => generation),
+      ),
+    );
+    if (projections.length === 0) {
+      continue;
+    }
+    const plan = reconcileProjectionPlan({
+      subject: { family: "case_law", entityId: row.documentId },
+      currentEpoch: row.projectionEpoch,
+      existing,
+      projections,
+    });
+    if (plan.epoch !== row.projectionEpoch) {
+      advanced.push({ id: row.documentId, epoch: plan.epoch });
+    }
+    values.push(...plan.values);
+  }
+
+  await setCanonicalProjectionEpoch(tx, {
+    family: "case_law",
+    epochs: advanced,
+  });
+  await writeDesiredStates(tx, values);
 };

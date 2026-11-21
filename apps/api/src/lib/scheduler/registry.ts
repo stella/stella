@@ -1,4 +1,8 @@
+import { Temporal } from "@stll/time";
+
+import { runWithStatementCeiling } from "@/api/lib/db/statement-ceiling";
 import { createBullMqDispatchTask } from "@/api/lib/scheduler/bullmq";
+import { FLOW_RUN_TASK } from "@/api/lib/scheduler/flow-schedule-identity";
 import {
   SWEEP_ACTION_COSTS_TASK,
   sweepActionCostRecords,
@@ -7,6 +11,10 @@ import {
   BACKFILL_AGENT_CLIENT_STORAGE_TASK,
   backfillAgentClientStorage,
 } from "@/api/lib/scheduler/tasks/agent-client-storage-backfill";
+import {
+  CLEAN_AGENT_SKILL_ORIGINAL_OBJECTS_TASK,
+  cleanAgentSkillOriginalObjects,
+} from "@/api/lib/scheduler/tasks/agent-skill-original-cleanup";
 import {
   BACKFILL_HEARTBEAT_TASK,
   emitBackfillHeartbeats,
@@ -20,17 +28,40 @@ import {
   reconcileBufferIntents,
 } from "@/api/lib/scheduler/tasks/buffer-intent-reconciliation";
 import {
-  REFRESH_CASE_LAW_BROWSE_FACETS_TASK,
-  refreshCaseLawBrowseFacetsTask,
-} from "@/api/lib/scheduler/tasks/case-law-browse-facet-refresh";
-import {
   RECONCILE_CASE_LAW_CORPUS_UPLOAD_INTENTS_TASK,
   reconcileCaseLawCorpusUploadIntentsTask,
 } from "@/api/lib/scheduler/tasks/case-law-corpus-upload-cleanup";
+import { REFRESH_CASE_LAW_COVERAGE_TASK } from "@/api/lib/scheduler/tasks/case-law-coverage-refresh";
+import {
+  RECONCILE_CASE_LAW_DECISION_IDENTIFIERS_TASK,
+  reconcileCaseLawDecisionIdentifiersTask,
+} from "@/api/lib/scheduler/tasks/case-law-decision-identifier-reconciliation";
+import {
+  REPORT_CASE_LAW_FRESHNESS_TASK,
+  reportCaseLawFreshnessTask,
+} from "@/api/lib/scheduler/tasks/case-law-freshness-report";
+import {
+  BACKFILL_CASE_LAW_PARSED_INPUT_STATE_TASK,
+  createCaseLawParsedInputStateBackfill,
+} from "@/api/lib/scheduler/tasks/case-law-parsed-input-state-backfill";
+import {
+  FOLD_CASE_LAW_POPULATION_COUNTS_TASK,
+  foldCaseLawPopulationCountsTask,
+} from "@/api/lib/scheduler/tasks/case-law-population-fold";
+import {
+  SEED_CASE_LAW_POPULATION_COUNTS_TASK,
+  seedCaseLawPopulationCountsTask,
+} from "@/api/lib/scheduler/tasks/case-law-population-seed";
 import {
   BACKFILL_CASE_LAW_PROVISION_STATE_TASK,
   backfillCaseLawProvisionState,
 } from "@/api/lib/scheduler/tasks/case-law-provision-state-backfill";
+import {
+  RECONCILE_CLAIMED_ERASURES_TASK,
+  RECONCILE_PUBLISHER_REMOVALS_TASK,
+  reconcileClaimedErasuresTask,
+  reconcilePublisherRemovalsTask,
+} from "@/api/lib/scheduler/tasks/case-law-publisher-removals";
 import {
   CENSUS_CASE_LAW_RAW_OBJECTS_TASK,
   censusCaseLawRawObjectsTask,
@@ -48,9 +79,29 @@ import {
   refreshCaseLawSitemapShardsTask,
 } from "@/api/lib/scheduler/tasks/case-law-sitemap-shard-refresh";
 import {
+  FOLD_CASE_LAW_SITEMAP_TOUCHES_TASK,
+  foldCaseLawSitemapTouchesTask,
+} from "@/api/lib/scheduler/tasks/case-law-sitemap-touch-fold";
+import {
+  REFRESH_CASE_LAW_SOURCE_ARRIVALS_TASK,
+  refreshCaseLawSourceArrivalsTask,
+} from "@/api/lib/scheduler/tasks/case-law-source-arrivals-refresh";
+import {
+  SWEEP_CHAT_COMMAND_RECEIPTS_TASK,
+  sweepChatCommandReceipts,
+} from "@/api/lib/scheduler/tasks/chat-command-receipt-retention";
+import {
+  SEND_CHAT_LIMIT_REMINDERS_TASK,
+  sendChatLimitReminders,
+} from "@/api/lib/scheduler/tasks/chat-limit-reminders";
+import {
   SWEEP_CHAT_RUN_LOGS_TASK,
   sweepChatRunLogs,
 } from "@/api/lib/scheduler/tasks/chat-run-log-retention";
+import {
+  PURGE_CHAT_SECRETS_TASK,
+  purgeChatSecrets,
+} from "@/api/lib/scheduler/tasks/chat-secret-retention";
 import {
   CHAT_THREAD_COMPACTOR_TASK,
   compactChatThreads,
@@ -61,13 +112,27 @@ import {
   backfillCorpusIndexJobDetail,
 } from "@/api/lib/scheduler/tasks/corpus-index-job-detail-backfill";
 import {
+  createMaintainDataExportsTask,
+  type DataExportMaintenanceDependencies,
+  MAINTAIN_DATA_EXPORTS_TASK,
+  maintainDataExports,
+} from "@/api/lib/scheduler/tasks/data-export-maintenance";
+import {
+  CHECK_DATA_INVARIANTS_TASK,
+  checkDataInvariants,
+} from "@/api/lib/scheduler/tasks/data-invariants";
+import {
   EXPIRE_DESKTOP_EDIT_SESSIONS_TASK,
-  expireDesktopEditSessions,
+  expireDesktopEditSessionsTask,
 } from "@/api/lib/scheduler/tasks/desktop-edit-session-expiry";
 import {
   RECOVER_DOCUMENT_DEADLINE_SCOUTS_TASK,
   recoverDocumentDeadlineScouts,
 } from "@/api/lib/scheduler/tasks/document-deadline-scout-recovery";
+import {
+  DISPATCH_NATIVE_EXTRACTION_TASK,
+  dispatchNativeExtraction,
+} from "@/api/lib/scheduler/tasks/document-processing-native-extraction";
 import {
   DISPATCH_DOCUMENT_OCR_TASK,
   dispatchDocumentOcr,
@@ -77,6 +142,10 @@ import {
   reconcileDocumentReviewRuns,
 } from "@/api/lib/scheduler/tasks/document-review-run-reconcile";
 import {
+  RECEIVE_EMAIL_DELIVERABILITY_TASK,
+  receiveEmailDeliverability,
+} from "@/api/lib/scheduler/tasks/email-deliverability-receive";
+import {
   SWEEP_FILE_COMPARISON_UPLOADS_TASK,
   sweepFileComparisonUploads,
 } from "@/api/lib/scheduler/tasks/file-comparison-sweep";
@@ -84,14 +153,16 @@ import {
   REPAIR_FILE_DERIVATIVES_TASK,
   repairFileDerivatives,
 } from "@/api/lib/scheduler/tasks/file-derivative-repair";
-import {
-  FLOW_RUN_TASK,
-  runScheduledFlow,
-} from "@/api/lib/scheduler/tasks/flow-run";
+import { runScheduledFlow } from "@/api/lib/scheduler/tasks/flow-run";
 import {
   RECONCILE_FLOW_RUN_ORPHANS_TASK,
   reconcileFlowRunOrphans,
 } from "@/api/lib/scheduler/tasks/flow-run-orphan-reconcile";
+import {
+  ERASE_HOSTED_CUSTOMERS_TASK,
+  eraseHostedCustomers,
+  runHostedCustomerErasures,
+} from "@/api/lib/scheduler/tasks/hosted-customer-erasure";
 import {
   REDACT_HOSTED_USAGE_WEBHOOK_EVENTS_TASK,
   redactHostedUsageWebhookEvents,
@@ -105,20 +176,28 @@ import {
   syncInfoSoudTrackedCases,
 } from "@/api/lib/scheduler/tasks/infosoud";
 import {
+  DELETE_KEPT_TRANSCRIPTS_TASK,
+  deleteKeptTranscripts,
+} from "@/api/lib/scheduler/tasks/kept-transcript-deletion";
+import {
   BACKFILL_LEGISLATION_EXPRESSION_IDS_TASK,
   backfillLegislationExpressionIds,
 } from "@/api/lib/scheduler/tasks/legislation-expression-id-backfill";
+import {
+  REFRESH_LEGISLATION_FACETS_TASK,
+  refreshLegislationFacetsTask,
+} from "@/api/lib/scheduler/tasks/legislation-facet-refresh";
 import {
   RECONCILE_LIST_VERIFICATION_RUNS_TASK,
   reconcileListVerificationRuns,
 } from "@/api/lib/scheduler/tasks/list-verification-run-reconcile";
 import {
-  MEMORY_CURATOR_TASK,
   curateAiMemories,
+  MEMORY_CURATOR_TASK,
 } from "@/api/lib/scheduler/tasks/memory-curator";
 import {
-  MEMORY_EXTRACTOR_TASK,
   extractMemoriesFromCompactions,
+  MEMORY_EXTRACTOR_TASK,
 } from "@/api/lib/scheduler/tasks/memory-extractor";
 import {
   RECORD_MISSING_ORGANIZATION_ACCESS_STATES_TASK,
@@ -137,9 +216,29 @@ import {
   reconcileReportExports,
 } from "@/api/lib/scheduler/tasks/report-export-reconcile";
 import {
+  SWEEP_REQUEST_RECEIPTS_TASK,
+  sweepRequestReceipts,
+} from "@/api/lib/scheduler/tasks/request-receipt-retention";
+import {
+  RESET_REVIEW_ORGANIZATION_TASK,
+  resetReviewOrganizationTask,
+} from "@/api/lib/scheduler/tasks/review-organization-reset";
+import {
+  DRAIN_SANCTIONS_MONITORING_TASK,
+  drainSanctionsMonitoringTask,
+} from "@/api/lib/scheduler/tasks/sanctions-monitoring";
+import {
+  BACKFILL_SANCTIONS_MONITORING_TASK,
+  backfillSanctionsMonitoringTask,
+} from "@/api/lib/scheduler/tasks/sanctions-monitoring-backfill";
+import {
   REFRESH_SANCTIONS_SOURCES_TASK,
   refreshSanctionsSourcesTask,
 } from "@/api/lib/scheduler/tasks/sanctions-refresh";
+import {
+  AUDIT_SCHEDULER_PAUSES_TASK,
+  auditSchedulerPauses,
+} from "@/api/lib/scheduler/tasks/scheduler-pause-audit";
 import {
   REPAIR_CHAT_SEARCH_INDEX_TASK,
   repairChatSearchIndex,
@@ -152,6 +251,7 @@ import {
   REPAIR_SEARCH_SEMANTIC_TIMESTAMPS_TASK,
   repairSearchSemanticTimestampsTask,
 } from "@/api/lib/scheduler/tasks/search-semantic-timestamps";
+import { SYNC_SOFT_LAW_TASK } from "@/api/lib/scheduler/tasks/soft-law-sync";
 import {
   REFRESH_STATUTE_SITEMAP_SHARDS_TASK,
   refreshStatuteSitemapShardsTask,
@@ -169,8 +269,8 @@ import {
   cleanTemplateDeletionObjects,
 } from "@/api/lib/scheduler/tasks/template-deletion-cleanup";
 import {
-  WORK_ATTENTION_SCOUT_TASK,
   runWorkAttentionScoutTask,
+  WORK_ATTENTION_SCOUT_TASK,
 } from "@/api/lib/scheduler/tasks/work-attention-scout";
 import {
   BACKFILL_WORK_OBLIGATIONS_TASK,
@@ -178,6 +278,7 @@ import {
 } from "@/api/lib/scheduler/tasks/work-obligation-backfill";
 import type {
   SchedulerTask,
+  SchedulerTaskContext,
   SchedulerTaskRegistry,
 } from "@/api/lib/scheduler/types";
 
@@ -186,16 +287,28 @@ const noopTask: SchedulerTask = ({ logger }) => {
 };
 
 const SCHEDULER_TASKS = {
+  [ERASE_HOSTED_CUSTOMERS_TASK]: eraseHostedCustomers,
+  [DELETE_KEPT_TRANSCRIPTS_TASK]: deleteKeptTranscripts,
+  [SWEEP_REQUEST_RECEIPTS_TASK]: sweepRequestReceipts,
+  [RECONCILE_CLAIMED_ERASURES_TASK]: reconcileClaimedErasuresTask,
+  [RECONCILE_PUBLISHER_REMOVALS_TASK]: reconcilePublisherRemovalsTask,
+  [AUDIT_SCHEDULER_PAUSES_TASK]: auditSchedulerPauses,
   [REDACT_HOSTED_USAGE_WEBHOOK_EVENTS_TASK]: redactHostedUsageWebhookEvents,
   [BACKFILL_AGENT_CLIENT_STORAGE_TASK]: backfillAgentClientStorage,
   [BACKFILL_HEARTBEAT_TASK]: emitBackfillHeartbeats,
+  [CHECK_DATA_INVARIANTS_TASK]: checkDataInvariants,
   "scheduler.noop": noopTask,
   "scheduler.dispatchBullMq": createBullMqDispatchTask(),
   [INFO_SOUD_SYNC_TRACKED_CASES_TASK]: syncInfoSoudTrackedCases,
+  [BACKFILL_SANCTIONS_MONITORING_TASK]: backfillSanctionsMonitoringTask,
+  [DRAIN_SANCTIONS_MONITORING_TASK]: drainSanctionsMonitoringTask,
+  [RECEIVE_EMAIL_DELIVERABILITY_TASK]: receiveEmailDeliverability,
   [RECEIVE_INBOUND_MAIL_TASK]: receiveInboundMail,
   [REFRESH_SANCTIONS_SOURCES_TASK]: refreshSanctionsSourcesTask,
-  [EXPIRE_DESKTOP_EDIT_SESSIONS_TASK]: expireDesktopEditSessions,
+  [SEND_CHAT_LIMIT_REMINDERS_TASK]: sendChatLimitReminders,
+  [EXPIRE_DESKTOP_EDIT_SESSIONS_TASK]: expireDesktopEditSessionsTask,
   [DISPATCH_DOCUMENT_OCR_TASK]: dispatchDocumentOcr,
+  [DISPATCH_NATIVE_EXTRACTION_TASK]: dispatchNativeExtraction,
   [FLOW_RUN_TASK]: runScheduledFlow,
   [BACKFILL_CASE_LAW_REDACTION_TOMBSTONES_TASK]:
     backfillCaseLawRedactionTombstones,
@@ -207,18 +320,31 @@ const SCHEDULER_TASKS = {
   [RECONCILE_CASE_LAW_RAW_ROWS_TASK]: reconcileCaseLawRawRowsTask,
   [CENSUS_CASE_LAW_RAW_OBJECTS_TASK]: censusCaseLawRawObjectsTask,
   [REFRESH_CASE_LAW_SITEMAP_SHARDS_TASK]: refreshCaseLawSitemapShardsTask,
-  [REFRESH_CASE_LAW_BROWSE_FACETS_TASK]: refreshCaseLawBrowseFacetsTask,
+  [FOLD_CASE_LAW_SITEMAP_TOUCHES_TASK]: foldCaseLawSitemapTouchesTask,
+  [FOLD_CASE_LAW_POPULATION_COUNTS_TASK]: foldCaseLawPopulationCountsTask,
+  [SEED_CASE_LAW_POPULATION_COUNTS_TASK]: seedCaseLawPopulationCountsTask,
+  [REPORT_CASE_LAW_FRESHNESS_TASK]: reportCaseLawFreshnessTask,
+  [RECONCILE_CASE_LAW_DECISION_IDENTIFIERS_TASK]:
+    reconcileCaseLawDecisionIdentifiersTask,
+  [REFRESH_CASE_LAW_SOURCE_ARRIVALS_TASK]: refreshCaseLawSourceArrivalsTask,
+  [REFRESH_LEGISLATION_FACETS_TASK]: refreshLegislationFacetsTask,
   [REFRESH_STATUTE_SITEMAP_SHARDS_TASK]: refreshStatuteSitemapShardsTask,
   [RECONCILE_BUFFER_INTENTS_TASK]: reconcileBufferIntents,
   [SWEEP_FILE_COMPARISON_UPLOADS_TASK]: sweepFileComparisonUploads,
   [REPAIR_CHAT_SEARCH_INDEX_TASK]: repairChatSearchIndex,
   [REPAIR_SEARCH_PROJECTIONS_TASK]: repairSearchProjections,
   [CHAT_THREAD_COMPACTOR_TASK]: compactChatThreads,
+  [SWEEP_CHAT_COMMAND_RECEIPTS_TASK]: sweepChatCommandReceipts,
   [SWEEP_CHAT_RUN_LOGS_TASK]: sweepChatRunLogs,
+  [PURGE_CHAT_SECRETS_TASK]: purgeChatSecrets,
   [SWEEP_ACTION_COSTS_TASK]: sweepActionCostRecords,
   [SWEEP_REGISTRATIONS_TASK]: sweepRegistrationRecords,
   [PURGE_SYSTEM_AUDIT_RUNS_TASK]: purgeSystemAuditRunsTask,
   [BACKFILL_WORK_OBLIGATIONS_TASK]: backfillWorkObligations,
+  [BACKFILL_CASE_LAW_PARSED_INPUT_STATE_TASK]:
+    createCaseLawParsedInputStateBackfill({
+      clock: () => Temporal.Now.instant().epochMilliseconds,
+    }),
   [BACKFILL_LEGISLATION_EXPRESSION_IDS_TASK]: backfillLegislationExpressionIds,
   [WORK_ATTENTION_SCOUT_TASK]: runWorkAttentionScoutTask,
   [REPAIR_SEARCH_SEMANTIC_TIMESTAMPS_TASK]: repairSearchSemanticTimestampsTask,
@@ -228,20 +354,53 @@ const SCHEDULER_TASKS = {
     recordMissingOrganizationAccessStatesTask,
   [RECONCILE_ORGANIZATION_FILE_RESERVATIONS_TASK]:
     reconcileOrganizationFileReservations,
+  // Ungated: its time-billing sample data admits itself on the feature.
+  [RESET_REVIEW_ORGANIZATION_TASK]: resetReviewOrganizationTask,
   [CLEAN_TEMPLATE_DELETION_OBJECTS_TASK]: cleanTemplateDeletionObjects,
+  [CLEAN_AGENT_SKILL_ORIGINAL_OBJECTS_TASK]: cleanAgentSkillOriginalObjects,
   [REPAIR_FILE_DERIVATIVES_TASK]: repairFileDerivatives,
   [RECONCILE_FLOW_RUN_ORPHANS_TASK]: reconcileFlowRunOrphans,
   [RECONCILE_DOCUMENT_REVIEW_RUNS_TASK]: reconcileDocumentReviewRuns,
-  [RECONCILE_LIST_VERIFICATION_RUNS_TASK]: reconcileListVerificationRuns,
+  [RECONCILE_LIST_VERIFICATION_RUNS_TASK]: {
+    featureId: "list-verification",
+    task: reconcileListVerificationRuns,
+  },
   [RECONCILE_BILINGUAL_RUNS_TASK]: reconcileBilingualRuns,
   [RECONCILE_STYLE_SET_PACKAGE_CLEANUPS_TASK]: reconcileStyleSetPackageCleanups,
   [RECONCILE_REPORT_EXPORTS_TASK]: reconcileReportExports,
+  [MAINTAIN_DATA_EXPORTS_TASK]: maintainDataExports,
   [RECOVER_DOCUMENT_DEADLINE_SCOUTS_TASK]: recoverDocumentDeadlineScouts,
-} as const satisfies Record<string, SchedulerTask>;
+} as const satisfies Record<
+  string,
+  SchedulerTask | { featureId: string; task: SchedulerTask }
+>;
 
-const schedulerTasks = (reapOwnerlessChatTurns: SchedulerTask) => ({
+type SchedulerTaskRegistryOptions = {
+  hostedCustomerErasureDependencies?: Parameters<
+    typeof runHostedCustomerErasures
+  >[1];
+  resetReviewOrganization?: SchedulerTask;
+  dataExportMaintenance?: DataExportMaintenanceDependencies;
+};
+
+/*
+ * Tasks whose work lives in a handler slice arrive as parameters: the
+ * composition root builds them, so scheduler code keeps its dependencies
+ * pointing from handlers to lib.
+ */
+const schedulerTasks = (
+  reapOwnerlessChatTurns: SchedulerTask,
+  refreshCaseLawCoverage: SchedulerTask,
+  syncSoftLaw: SchedulerTask,
+  options: SchedulerTaskRegistryOptions = {},
+) => ({
   ...SCHEDULER_TASKS,
+  [MAINTAIN_DATA_EXPORTS_TASK]: createMaintainDataExportsTask(
+    options.dataExportMaintenance,
+  ),
   [REAP_OWNERLESS_CHAT_TURNS_TASK]: reapOwnerlessChatTurns,
+  [REFRESH_CASE_LAW_COVERAGE_TASK]: refreshCaseLawCoverage,
+  [SYNC_SOFT_LAW_TASK]: syncSoftLaw,
 });
 
 export type RegisteredSchedulerTaskName = keyof ReturnType<
@@ -253,10 +412,53 @@ export type RegisteredSchedulerTaskName = keyof ReturnType<
  * persisted rows whose task no build code answers for anymore.
  */
 export const REGISTERED_SCHEDULER_TASK_NAMES: ReadonlySet<string> = new Set(
-  Object.keys(schedulerTasks(noopTask)),
+  Object.keys(schedulerTasks(noopTask, noopTask, noopTask)),
 );
 
 export const createSchedulerTaskRegistry = (
   reapOwnerlessChatTurns: SchedulerTask,
+  refreshCaseLawCoverage: SchedulerTask,
+  syncSoftLaw: SchedulerTask,
+  options: SchedulerTaskRegistryOptions = {},
 ): SchedulerTaskRegistry =>
-  new Map(Object.entries(schedulerTasks(reapOwnerlessChatTurns)));
+  new Map(
+    Object.entries(
+      schedulerTasks(
+        reapOwnerlessChatTurns,
+        refreshCaseLawCoverage,
+        syncSoftLaw,
+        options,
+      ),
+    ).map(([name, registered]) => {
+      const entry =
+        name === RESET_REVIEW_ORGANIZATION_TASK
+          ? (options.resetReviewOrganization ?? registered)
+          : registered;
+      return [
+        name,
+        async (context: SchedulerTaskContext) =>
+          runWithStatementCeiling({
+            kind: "scheduler",
+            key: name,
+            run: async () => {
+              const task = typeof entry === "function" ? entry : entry.task;
+              if (
+                name === ERASE_HOSTED_CUSTOMERS_TASK &&
+                options.hostedCustomerErasureDependencies !== undefined
+              ) {
+                await runHostedCustomerErasures(
+                  context,
+                  options.hostedCustomerErasureDependencies,
+                );
+                return undefined;
+              }
+              const outcome = await task(context);
+              if (outcome === undefined) {
+                return undefined;
+              }
+              return outcome;
+            },
+          }),
+      ];
+    }),
+  );

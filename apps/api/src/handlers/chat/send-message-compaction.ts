@@ -1,13 +1,12 @@
 import { Result } from "better-result";
 
-import type { ReasoningEffort } from "@stll/ai-catalog";
-
 import type { SafeDb } from "@/api/db/safe-db";
 import type { UsageEventLane } from "@/api/db/schema";
 import {
-  compactChatMessagesForModel,
   chatThreadNeedsCompaction,
+  compactChatMessagesForModel,
 } from "@/api/handlers/chat/compaction";
+import type { CompactedHistory } from "@/api/handlers/chat/compaction";
 import {
   applyChatCompactionCheckpoint,
   readLatestChatCompaction,
@@ -21,7 +20,9 @@ import type { SafeId } from "@/api/lib/branded-types";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import { resolveChatCompactionBudget } from "@/api/lib/chat/compaction-budget";
 import { markChatThreadCompactionDue } from "@/api/lib/chat/thread-compaction";
-import type { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
+import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
+import type { ManagedModelTier } from "@/api/lib/usage/managed-model-tier";
 
 type ChatCompactionModelProps = {
   /** Effective chat model override for this turn; see `resolveEffectiveChatModelSelection`. */
@@ -29,12 +30,12 @@ type ChatCompactionModelProps = {
   organizationId: SafeId<"organization">;
   orgAIConfig: OrgAIConfig | null;
   managedAIResidency: ManagedAIResidency;
-  /** Effective reasoning override paired with the selected thread model. */
-  reasoningEffort: ReasoningEffort | undefined;
 };
 
 type CompactMessagesForContextProps = ChatCompactionModelProps & {
   abortSignal: AbortSignal;
+  /** The turn's admission: compaction is a step of the turn. */
+  admission: ModelDispatchAdmission;
   boundary: ChatThirdPartyBoundary;
   messages: ChatMessage[];
   safeDb: SafeDb;
@@ -47,6 +48,7 @@ type CompactMessagesForContextProps = ChatCompactionModelProps & {
 };
 
 type SelectMessagesForContextInputProps = {
+  caseLawDb?: Parameters<typeof readLatestChatCompaction>[0]["caseLawDb"];
   messages: ChatMessage[];
   safeDb: SafeDb;
   skipCheckpoint: boolean;
@@ -56,6 +58,7 @@ type SelectMessagesForContextInputProps = {
 export const selectMessagesForContextInput = async ({
   messages,
   safeDb,
+  caseLawDb,
   skipCheckpoint,
   threadId,
 }: SelectMessagesForContextInputProps): Promise<ChatMessage[]> => {
@@ -64,14 +67,21 @@ export const selectMessagesForContextInput = async ({
   }
 
   const checkpointResult = await readLatestChatCompaction({
+    caseLawDb,
     safeDb,
     threadId,
   });
   if (Result.isError(checkpointResult)) {
-    captureError(checkpointResult.error, {
-      threadId,
-      feature: "chat.compaction_checkpoint_read",
-    });
+    captureError(
+      checkpointResult.error,
+      handlerErrorContext(
+        "chat.selectMessagesForContextInput.checkpointResult_error",
+        {
+          threadId,
+          feature: "chat.compaction_checkpoint_read",
+        },
+      ),
+    );
     return messages;
   }
 
@@ -91,18 +101,16 @@ export const compactMessagesForContext = async ({
   chatModelOverride,
   messages,
   organizationId,
+  admission,
   orgAIConfig,
   managedAIResidency,
-  reasoningEffort,
   safeDb,
   tenantWorkspaceIds,
   threadId,
   usageLane,
   userId,
   workspaceId,
-}: CompactMessagesForContextProps): Promise<
-  Result<ChatMessage[], HandlerError>
-> => {
+}: CompactMessagesForContextProps): Promise<CompactedHistory<ChatMessage>> => {
   const aiAnalytics = createTanStackAIAnalyticsCallbacks({
     dataClass: "customer",
     usageMetering: {
@@ -117,8 +125,9 @@ export const compactMessagesForContext = async ({
       workspaceId,
     },
     feature: "chat.context_compaction",
-    modelRole: "chat",
+    modelTask: "chat",
     orgAIConfig,
+    modelTier: admission.modelTier,
     properties: {
       organization_id: organizationId,
       ...(workspaceId ? { workspace_id: workspaceId } : {}),
@@ -131,6 +140,7 @@ export const compactMessagesForContext = async ({
     chatModelOverride,
     orgAIConfig,
     organizationId,
+    modelTier: admission.modelTier,
   });
 
   return await compactChatMessagesForModel({
@@ -141,15 +151,18 @@ export const compactMessagesForContext = async ({
     modelId: chatModelOverride,
     tenantWorkspaceIds,
     onSummaryError: (error) => {
-      captureError(error, {
-        threadId,
-        feature: "chat.compaction",
-      });
+      captureError(
+        error,
+        handlerErrorContext("chat.compactMessagesForContext", {
+          threadId,
+          feature: "chat.compaction",
+        }),
+      );
     },
     organizationId,
+    admission,
     orgAIConfig,
     managedAIResidency,
-    reasoningEffort,
     preserveTokens,
     triggerTokens,
   });
@@ -160,6 +173,8 @@ type MarkChatCompactionDueProps = Omit<
   "managedAIResidency"
 > & {
   messages: ChatMessage[];
+  /** The turn's managed model tier, so the trigger matches its model. */
+  modelTier: ManagedModelTier;
   safeDb: SafeDb;
   threadId: SafeId<"chatThread">;
 };
@@ -180,6 +195,7 @@ type MarkChatCompactionDueProps = Omit<
 export const markChatCompactionDue = async ({
   chatModelOverride,
   messages,
+  modelTier,
   organizationId,
   orgAIConfig,
   safeDb,
@@ -189,6 +205,7 @@ export const markChatCompactionDue = async ({
     chatModelOverride,
     orgAIConfig,
     organizationId,
+    modelTier,
   });
 
   if (!chatThreadNeedsCompaction({ messages, triggerTokens })) {
@@ -199,9 +216,12 @@ export const markChatCompactionDue = async ({
     async (tx) => await markChatThreadCompactionDue({ threadId, tx }),
   );
   if (Result.isError(marked)) {
-    captureError(marked.error, {
-      threadId,
-      feature: "chat.compaction_enqueue",
-    });
+    captureError(
+      marked.error,
+      handlerErrorContext("chat.markChatCompactionDue.marked_error", {
+        threadId,
+        feature: "chat.compaction_enqueue",
+      }),
+    );
   }
 };

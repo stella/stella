@@ -5,13 +5,14 @@ import { useTranslations } from "use-intl";
 
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
-import { SlidersHorizontalIcon } from "@stll/ui/icons";
+import { Label } from "@stll/ui/label";
 import {
   Popover,
   PopoverPanel,
   PopoverTitle,
   PopoverTrigger,
 } from "@stll/ui/popover";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import {
@@ -23,6 +24,7 @@ import type {
   FacetItem,
   FacetSourceBucket,
 } from "@/components/public-law-table/public-law-facets.logic";
+import { PublicLawFiltersLabel } from "@/components/public-law-table/public-law-results-toolbar.pending";
 import { useFormatter } from "@/i18n/formatting-context";
 
 type PublicLawFilterPopoverProps = {
@@ -54,13 +56,13 @@ export const PublicLawFilterPopover = ({
       <PopoverTrigger
         render={<Button className="shrink-0" size="sm" variant="outline" />}
       >
-        <SlidersHorizontalIcon aria-hidden="true" className="size-3.5" />
-        {t("common.filters")}
-        {activeFilterCount > 0 && (
-          <span className="bg-primary text-primary-foreground text-3xs inline-flex min-w-4 items-center justify-center rounded-full px-1 leading-4 font-medium tabular-nums">
-            {format.number(activeFilterCount)}
-          </span>
-        )}
+        <PublicLawFiltersLabel
+          badge={
+            activeFilterCount > 0 ? format.number(activeFilterCount) : null
+          }
+        >
+          {t("common.filters")}
+        </PublicLawFiltersLabel>
       </PopoverTrigger>
       <PopoverPanel
         align="start"
@@ -144,13 +146,14 @@ export const ShowAllButton = ({
   children: ReactNode;
   onClick: () => void;
 }) => (
-  <button
-    className="text-muted-foreground hover:text-foreground -mx-1 min-h-11 px-1 py-1.5 text-xs"
+  <Button
+    className="-mx-2 min-h-11"
     onClick={onClick}
-    type="button"
+    size="xs"
+    variant="muted"
   >
     {children}
-  </button>
+  </Button>
 );
 
 /**
@@ -180,7 +183,7 @@ export const FacetOptions = ({
         const checked = item.value === selectedValue;
         return (
           <li key={item.value}>
-            <label className="hover:bg-muted/60 has-[:focus-visible]:ring-ring flex min-h-11 cursor-pointer items-center gap-2 rounded-sm py-1.5 ps-1 pe-1 text-xs has-[:focus-visible]:ring-2">
+            <Label className="text-xs" variant="choice">
               <input
                 checked={checked}
                 className="accent-primary size-3.5 shrink-0"
@@ -194,22 +197,21 @@ export const FacetOptions = ({
                 type="radio"
                 value={item.value}
               />
-              <BidiText
-                as="span"
+              <TruncatedText
                 className={cn(
-                  "min-w-0 flex-1 truncate",
+                  "flex-1",
                   checked ? "text-foreground font-medium" : "text-foreground",
                 )}
-                title={item.label}
+                render={<BidiText as="span" />}
               >
                 {item.label}
-              </BidiText>
+              </TruncatedText>
               {item.count !== null && (
                 <bdi className="text-muted-foreground text-2xs shrink-0 tabular-nums">
                   {formatFacetCount(item, format.number)}
                 </bdi>
               )}
-            </label>
+            </Label>
           </li>
         );
       })}

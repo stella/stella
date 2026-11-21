@@ -4,16 +4,23 @@ import {
   ACTION_ADMISSION_CODES,
   ACTION_ADMISSION_REFUSALS,
 } from "@stll/api-contract/action-admission";
+import {
+  CHAT_TOOL_EXECUTOR_METADATA_KEY,
+  createChatPastedTextPart,
+} from "@stll/api-contract/chat";
+import { FOLIO_AGENT_TOOL_NAMES } from "@stll/folio-agents";
 
 import {
   consumeDocumentDeletionToolCalls,
+  consumePlaybookSaveToolCalls,
+  getApprovalToolName,
+  getAwaitedAssistantMessageId,
   getChatAssistantTurnError,
   getChatToolTitleKey,
-  getAwaitedAssistantMessageId,
+  getChatWorkAwaitedAtOpen,
   getCurrentApprovalPendingMessageId,
-  getApprovalToolName,
   getToolApprovalGrant,
-  getUserMessageHtmlHistory,
+  getUserMessageHistory,
   hasApprovalResponseAwaitingModelStep,
   hasRunningToolCallInLatestAssistantMessage,
   isApprovalOnceChatToolName,
@@ -21,7 +28,6 @@ import {
   isChatTurnInFlight,
   isExternalInputChatToolName,
   isNonPersistentGrantChatToolName,
-  isPublicOfficialChatToolName,
   isRegistryWriteSummaryToolName,
   isRunningToolPart,
   isToolApprovedByGrant,
@@ -37,8 +43,58 @@ import type {
   ChatPart,
   DocumentDeletionMessage,
   PersistedChatMessage,
+  PlaybookSaveMessage,
 } from "@/components/chat/chat-ui-tools";
+import { MCP_CHAT_TOOL_GRANT_POLICIES } from "@/lib/api-contract";
 import { actionAdmissionOutcome } from "@/lib/errors/action-admission";
+
+describe("playbook save consumption", () => {
+  test("a reverse completion refreshes caches without following the older call", () => {
+    const handledToolCallIds = new Set<string>();
+    const saves = (olderState: "complete" | "input-complete") =>
+      [
+        {
+          id: "assistant-saves",
+          role: "assistant",
+          parts: [
+            {
+              type: "tool-call",
+              name: "save_playbook",
+              id: "save-a",
+              state: olderState,
+              output: { playbookId: "playbook-a" },
+            },
+            {
+              type: "tool-call",
+              name: "save_playbook",
+              id: "save-b",
+              state: "complete",
+              output: { playbookId: "playbook-b" },
+            },
+          ],
+        },
+      ] satisfies PlaybookSaveMessage[];
+    expect(
+      consumePlaybookSaveToolCalls({
+        handledToolCallIds,
+        messages: saves("input-complete"),
+      }),
+    ).toEqual({ target: { playbookId: "playbook-b", source: "live" } });
+    expect(
+      consumePlaybookSaveToolCalls({
+        handledToolCallIds,
+        messages: saves("complete"),
+      }),
+    ).toEqual({ target: null });
+    expect(handledToolCallIds).toEqual(new Set(["save-a", "save-b"]));
+    expect(
+      consumePlaybookSaveToolCalls({
+        handledToolCallIds,
+        messages: saves("complete"),
+      }),
+    ).toBeNull();
+  });
+});
 
 describe("assistant turn outcomes", () => {
   test("reloads every stored refusal with its canonical recovery actions", () => {
@@ -407,24 +463,15 @@ describe("consumeDocumentDeletionToolCalls", () => {
 });
 
 describe("isApprovalPart", () => {
-  test("distinguishes official public lookup tools from other public tools", () => {
-    expect(isPublicOfficialChatToolName("business_registry_lookup")).toBe(true);
-    expect(isPublicOfficialChatToolName("infosoud_lookup_case")).toBe(true);
-    expect(isPublicOfficialChatToolName("mcp__salvia__search_decisions")).toBe(
-      false,
-    );
-    // Legacy aliases that pre-date the unified business_registry_lookup
-    // tool should NOT count as currently-registered public-official
-    // tools — they only render in chat history.
-    expect(isPublicOfficialChatToolName("ares_lookup_company")).toBe(false);
-    expect(isPublicOfficialChatToolName("ares_search_companies")).toBe(false);
-  });
-
   test("identifies built-in tools whose external request needs a preview", () => {
     expect(isExternalInputChatToolName("web_search")).toBe(true);
     expect(isExternalInputChatToolName("fetch_url")).toBe(true);
     expect(isExternalInputChatToolName("boe_search_legislation")).toBe(true);
-    expect(isExternalInputChatToolName("boe_get_law")).toBe(false);
+    // Official public registries receive model-chosen arguments too.
+    expect(isExternalInputChatToolName("boe_get_law")).toBe(true);
+    expect(isExternalInputChatToolName("business_registry_lookup")).toBe(true);
+    expect(isExternalInputChatToolName("infosoud_lookup_case")).toBe(true);
+    expect(isExternalInputChatToolName("save_clause")).toBe(false);
   });
 
   test("treats DOCX comment mutation tools as approval parts", () => {
@@ -517,35 +564,32 @@ describe("isApprovalPart", () => {
 });
 
 describe("tool approval grants", () => {
-  test("keeps sensitive write approvals per call", () => {
+  test("keeps sensitive and update-capable write approvals per call", () => {
     expect(isApprovalOnceChatToolName("suggest_changes")).toBe(true);
-    expect(isApprovalOnceChatToolName("manage_organization")).toBe(true);
-    expect(isApprovalOnceChatToolName("save_clause")).toBe(false);
+    expect(isApprovalOnceChatToolName("update_organization_settings")).toBe(
+      true,
+    );
+    expect(
+      isNonPersistentGrantChatToolName("update_organization_settings"),
+    ).toBe(true);
+    expect(isApprovalOnceChatToolName("save_clause")).toBe(true);
   });
 
-  test("never auto-approves delegation, by either grant predicate", () => {
-    expect(isApprovalOnceChatToolName("spawn_subagents")).toBe(true);
-    expect(isNonPersistentGrantChatToolName("spawn_subagents")).toBe(true);
-  });
-
-  test("rejects persistent grants for destructive deletes and the approve-once writes, without the stronger never-auto bar", () => {
-    for (const name of [
-      "delete_clause",
-      "delete_contact",
-      "delete_document",
-      "delete_matter",
-      "delete_time_entry",
-      "manage_organization",
-      "suggest_changes",
-    ] as const) {
-      expect(isApprovalOnceChatToolName(name)).toBe(true);
-      expect(isNonPersistentGrantChatToolName(name)).toBe(false);
+  test("rejects persistent grants for every projected approve-once write", () => {
+    const approveOnceTools = Object.entries(
+      MCP_CHAT_TOOL_GRANT_POLICIES,
+    ).filter(([, policy]) => policy === "approve-once");
+    expect(approveOnceTools.length).toBeGreaterThan(0);
+    for (const [name] of approveOnceTools) {
+      expect(isNonPersistentGrantChatToolName(name)).toBe(true);
     }
   });
 
-  test("keeps an ordinary mutation grantable", () => {
-    expect(isApprovalOnceChatToolName("save_clause")).toBe(false);
-    expect(isNonPersistentGrantChatToolName("save_clause")).toBe(false);
+  test("keeps a create-only mutation grantable", () => {
+    expect(isApprovalOnceChatToolName("create_reader_annotation")).toBe(false);
+    expect(isNonPersistentGrantChatToolName("create_reader_annotation")).toBe(
+      false,
+    );
   });
 
   test("renders the registry-write summary only for tools opted into it", () => {
@@ -555,11 +599,6 @@ describe("tool approval grants", () => {
 
   test("keeps the retired save_template card's write summary", () => {
     expect(isRegistryWriteSummaryToolName("save_template")).toBe(true);
-  });
-
-  test("identifies one representative public-official and external-input tool", () => {
-    expect(isPublicOfficialChatToolName("business_registry_lookup")).toBe(true);
-    expect(isExternalInputChatToolName("web_search")).toBe(true);
   });
 
   test("treats external MCP approvals as connector-level grants", () => {
@@ -745,6 +784,33 @@ describe("hasRunningToolCallInLatestAssistantMessage", () => {
 });
 
 describe("isUnresolvedFolioAgentDocToolCallPart", () => {
+  test("idle watchers select client folio calls and never deferred server calls", () => {
+    for (const name of [
+      FOLIO_AGENT_TOOL_NAMES.readDocument,
+      FOLIO_AGENT_TOOL_NAMES.suggestChanges,
+    ]) {
+      const client = {
+        arguments: "{}",
+        id: `client-${name}`,
+        input: {},
+        state: "input-complete",
+        name,
+        type: "tool-call",
+      } as const;
+      const server = {
+        ...client,
+        id: `server-${name}`,
+        metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "server" },
+      } as const;
+      expect(isUnresolvedFolioAgentDocToolCallPart(server)).toBe(false);
+      if (!isUnresolvedFolioAgentDocToolCallPart(client)) {
+        expect.unreachable("The client fixture must be actionable");
+      }
+      expect(
+        selectUnresolvedFolioAgentDocToolCallParts([server, client], new Set()),
+      ).toEqual([client]);
+    }
+  });
   test("matches a completed read_document call awaiting a result", () => {
     const part = {
       arguments: "{}",
@@ -850,6 +916,11 @@ describe("isUnresolvedFolioAgentDocToolCallPart", () => {
   });
 });
 
+const NOTHING_AWAITED_AT_OPEN = {
+  approvalIds: new Set<string>(),
+  clientToolCallIds: new Set<string>(),
+};
+
 describe("selectUnresolvedFolioAgentDocToolCallParts", () => {
   // Core decision loop behind the file overlay's folio-agents doc-tool
   // auto-run watcher (`file-chat-overlay.tsx`): given the latest
@@ -908,6 +979,7 @@ describe("selectUnresolvedFolioAgentDocToolCallParts", () => {
     ).toBe(true);
 
     const result = selectIdleFolioAgentDocToolCallParts({
+      awaitedAtOpen: NOTHING_AWAITED_AT_OPEN,
       clientStatus: "ready",
       executedIds: new Set(),
       messageParts: [findTextPart],
@@ -916,8 +988,53 @@ describe("selectUnresolvedFolioAgentDocToolCallParts", () => {
     expect(result.map((part) => part.id)).toEqual(["tool-call-find"]);
   });
 
+  test("a thread opened with a document read waiting runs nothing until the user acts", () => {
+    // The page opens the thread as a turn left it: find_text waits on the
+    // browser's result.
+    const opened = [
+      {
+        id: "assistant-1",
+        parts: [findTextPart],
+        role: "assistant",
+      },
+    ] satisfies PersistedChatMessage[];
+    const awaitedAtOpen = getChatWorkAwaitedAtOpen(opened);
+    // The fixture must reach the fault: the read is one the overlay would run.
+    expect(
+      selectIdleFolioAgentDocToolCallParts({
+        awaitedAtOpen: NOTHING_AWAITED_AT_OPEN,
+        clientStatus: "ready",
+        executedIds: new Set(),
+        messageParts: [findTextPart],
+      }).map((part) => part.id),
+    ).toEqual(["tool-call-find"]);
+
+    expect(awaitedAtOpen.clientToolCallIds).toEqual(
+      new Set(["tool-call-find"]),
+    );
+    expect(
+      selectIdleFolioAgentDocToolCallParts({
+        awaitedAtOpen,
+        clientStatus: "ready",
+        executedIds: new Set(),
+        messageParts: [findTextPart],
+      }),
+    ).toEqual([]);
+
+    // A read the server asks for while the page is open still runs.
+    expect(
+      selectIdleFolioAgentDocToolCallParts({
+        awaitedAtOpen,
+        clientStatus: "ready",
+        executedIds: new Set(),
+        messageParts: [findTextPart, readDocumentPart],
+      }).map((part) => part.id),
+    ).toEqual(["tool-call-read"]);
+  });
+
   test("waits while the response stream can still claim the tool", () => {
     const result = selectIdleFolioAgentDocToolCallParts({
+      awaitedAtOpen: NOTHING_AWAITED_AT_OPEN,
       clientStatus: "streaming",
       executedIds: new Set(),
       messageParts: [findTextPart],
@@ -1083,6 +1200,39 @@ describe("sanitizeRunningToolCalls", () => {
     state: "input-complete",
     type: "tool-call",
   } satisfies ChatPart;
+
+  test("server calls waiting behind approval remain resumable only on an awaiting-user turn", () => {
+    const part = {
+      ...runningToolPart,
+      metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "server" },
+    };
+    const message = {
+      id: "deferred-message",
+      role: "assistant",
+      parts: [part],
+    } as const satisfies PersistedChatMessage;
+    const waiting = {
+      ...message,
+      metadata: {
+        turnOutcome: {
+          type: "awaiting-user",
+          interaction: { type: "approval", toolCallId: "approval-call" },
+        },
+      },
+    } as const satisfies PersistedChatMessage;
+    expect(sanitizeRunningToolCalls([waiting])).toEqual([waiting]);
+    expect(isChatTurnInFlight({ status: "ready", messages: [waiting] })).toBe(
+      false,
+    );
+    expect(
+      isChatTurnInFlight({ status: "streaming", messages: [waiting] }),
+    ).toBe(true);
+    expect(
+      sanitizeRunningToolCalls([message]).at(0)?.parts.at(0),
+    ).toMatchObject({
+      state: "error",
+    });
+  });
 
   test("rewrites a dead running tool call in the last assistant message to the terminal error state", () => {
     const messages: PersistedChatMessage[] = [
@@ -1270,10 +1420,25 @@ describe("sanitizeRunningToolCalls", () => {
   });
 });
 
-describe("getUserMessageHtmlHistory", () => {
-  test("returns user message HTML from newest to oldest", () => {
+describe("getUserMessageHistory", () => {
+  test("recalls a just-sent message's markup without its pasted texts", () => {
     expect(
-      getUserMessageHtmlHistory([
+      getUserMessageHistory([
+        {
+          id: "message-1",
+          parts: [
+            { content: "<p>Review <strong>this</strong></p>", type: "text" },
+            createChatPastedTextPart("Clause 4\nClause 5"),
+          ],
+          role: "user",
+        },
+      ]),
+    ).toEqual(["<p>Review <strong>this</strong></p>"]);
+  });
+
+  test("returns user message texts from newest to oldest", () => {
+    expect(
+      getUserMessageHistory([
         {
           id: "message-1",
           parts: [{ content: "Older prompt", type: "text" }],
@@ -1295,7 +1460,7 @@ describe("getUserMessageHtmlHistory", () => {
 
   test("skips user messages without text", () => {
     expect(
-      getUserMessageHtmlHistory([
+      getUserMessageHistory([
         {
           id: "message-1",
           parts: [{ content: "Reusable prompt", type: "text" }],
@@ -1322,7 +1487,7 @@ describe("getUserMessageHtmlHistory", () => {
 
   test("trims history entries and skips whitespace-only text", () => {
     expect(
-      getUserMessageHtmlHistory([
+      getUserMessageHistory([
         {
           id: "message-1",
           parts: [{ content: "   ", type: "text" }],
@@ -1461,5 +1626,31 @@ describe("getCurrentApprovalPendingMessageId", () => {
         },
       ]),
     ).toBeNull();
+  });
+});
+
+describe("tool names a model or a newer server sends", () => {
+  // A tool name is read off the wire; one that matches a name every object
+  // inherits must read as the unknown tool it is.
+  const INHERITED_NAMES = [
+    ...Object.getOwnPropertyNames(Object.prototype),
+    "__proto__",
+  ];
+
+  test("an inherited object name is no known tool", () => {
+    const unknown = getChatToolTitleKey("no_such_tool");
+    for (const name of INHERITED_NAMES) {
+      expect(getChatToolTitleKey(name)).toBe(unknown);
+      expect(isRegistryWriteSummaryToolName(name)).toBe(false);
+      expect(
+        isRunningToolPart({
+          arguments: "{}",
+          id: "call-inherited",
+          name,
+          state: "input-streaming",
+          type: "tool-call",
+        }),
+      ).toBe(true);
+    }
   });
 });

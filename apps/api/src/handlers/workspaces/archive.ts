@@ -1,5 +1,7 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { and, eq, isNotNull, sql } from "drizzle-orm";
+
+import { WORKSPACE_STATUS } from "@stll/api-contract/workspace-status";
 
 import { member } from "@/api/db/auth-schema";
 import type { SafeDb } from "@/api/db/safe-db";
@@ -14,9 +16,12 @@ import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
+import { withAggregateRowQuery } from "@/api/lib/db/aggregate-lock";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { brandPersistedOrganizationId } from "@/api/lib/safe-id-boundaries";
 
 const config = {
+  contract: "patch",
   description:
     "Archive a matter: it stops being writable and is cleared from members' " +
     "last-visited matter. Reversible with matters.unarchive, and nothing " +
@@ -43,6 +48,14 @@ export const archiveWorkspaceHandler = async function* ({
 }: ArchiveWorkspaceHandlerProps) {
   const outcome = yield* Result.await(
     safeDb(async (tx) => {
+      const scope = await tx.query.workspaces.findFirst({
+        where: { id: { eq: workspaceId } },
+        columns: { organizationId: true },
+      });
+      if (!scope) {
+        return "archived" as const;
+      }
+      const organizationId = brandPersistedOrganizationId(scope.organizationId);
       // Timer starts take this advisory lock before inserting. Acquire it
       // before the workspace row lock to keep lock ordering acyclic, then hold
       // it through the active-timer check so archive cannot strand a timer
@@ -53,14 +66,22 @@ export const archiveWorkspaceHandler = async function* ({
       // Lock the workspace before inspecting dispatches. OCR takes this same
       // lock immediately before it claims a run, so archive cannot race a
       // provider dispatch after the workspace becomes read-only.
-      const workspaceRows = await tx
-        .select({ id: workspaces.id, status: workspaces.status })
-        .from(workspaces)
-        .where(eq(workspaces.id, workspaceId))
-        .limit(1)
-        .for("update");
-      const workspace = workspaceRows.at(0);
-      if (workspace?.status === "active") {
+      const acquisition = await withAggregateRowQuery({
+        tx,
+        aggregate: "workspace",
+        id: { id: workspaceId, organizationId },
+        mode: "update",
+        select: (lockTx) =>
+          lockTx
+            .select({
+              id: workspaces.id,
+              organizationId: workspaces.organizationId,
+              status: workspaces.status,
+            })
+            .from(workspaces),
+      });
+      const workspace = acquisition.rows.at(0);
+      if (workspace?.status === WORKSPACE_STATUS.active) {
         const runningOcrRuns = await tx
           .select({ id: documentProcessingRuns.id })
           .from(documentProcessingRuns)
@@ -73,6 +94,18 @@ export const archiveWorkspaceHandler = async function* ({
           .limit(1);
         if (runningOcrRuns.at(0)) {
           return "document_processing_running" as const;
+        }
+
+        const [currentTimers] = await tx
+          .select({
+            running: sql<boolean>`public.stella_matter_has_running_timers(${workspaceId}::uuid)`,
+          })
+          .from(sql`(SELECT 1) timer_presence`);
+        if (
+          (currentTimers ?? panic("Timer presence aggregate returned no row"))
+            .running
+        ) {
+          return "timer_running" as const;
         }
 
         const runningTimers = await tx
@@ -92,9 +125,12 @@ export const archiveWorkspaceHandler = async function* ({
 
       const updated = await tx
         .update(workspaces)
-        .set({ status: "archived" })
+        .set({ status: WORKSPACE_STATUS.archived })
         .where(
-          and(eq(workspaces.id, workspaceId), eq(workspaces.status, "active")),
+          and(
+            eq(workspaces.id, workspaceId),
+            eq(workspaces.status, WORKSPACE_STATUS.active),
+          ),
         )
         .returning({ id: workspaces.id });
 
@@ -111,7 +147,10 @@ export const archiveWorkspaceHandler = async function* ({
           resourceType: AUDIT_RESOURCE_TYPE.WORKSPACE,
           resourceId: workspaceId,
           changes: {
-            status: { old: "active", new: "archived" },
+            status: {
+              old: WORKSPACE_STATUS.active,
+              new: WORKSPACE_STATUS.archived,
+            },
           },
         });
       }

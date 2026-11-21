@@ -5,20 +5,34 @@ import react from "@vitejs/plugin-react";
 import { panic } from "better-result";
 import { execFileSync } from "node:child_process";
 import { readdirSync, readFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import { homedir } from "node:os";
 import path from "node:path";
 import { visualizer } from "rollup-plugin-visualizer";
 import {
   defineConfig,
   type Logger,
+  parseSync,
   type Plugin,
   type PluginOption,
 } from "vite";
 
+import stllAhoCorasickWasm from "@stll/aho-corasick-wasm/vite";
 import stllAnonymizeWasm from "@stll/anonymize-wasm/vite";
+import { STELLA_LOGO_FILE_NAME } from "@stll/api-contract/stella-logo";
+import stllRegexSetWasm from "@stll/regex-set-wasm/vite";
+import {
+  REACT_COMPILER_EXCLUDE as REACT_PLUGIN_EXCLUDE,
+  REACT_COMPILER_OPTIONS,
+} from "@stll/scripts/src/react-compiler-options";
 
-import { REACT_COMPILER_OPTIONS } from "./react-compiler-options.ts";
-import { ROUTE_TREE_OPTIONS } from "./route-tree.config.ts";
+import { chatRuntimeBuildGuard } from "./chat-runtime-build-guard.ts";
+import { devRouteBuildGuard } from "./dev-route-build-guard.ts";
+import { routeTreeOptions } from "./route-tree.config.ts";
+import { routeTemplateManifestPlugin } from "./scripts/route-template-manifest.ts";
+import { workerEntryFileName } from "./scripts/runtime-asset-contracts.ts";
+
+export { REACT_COMPILER_EXCLUDE as REACT_PLUGIN_EXCLUDE } from "@stll/scripts/src/react-compiler-options";
 
 const APP_ROOT = import.meta.dirname;
 const BUN_GLOBAL_STORE_ROOT = path.resolve(
@@ -34,13 +48,6 @@ const FOLIO_LOCALE_MESSAGE_ENTRYPOINTS = readdirSync(
   .filter((file) => file.endsWith(".json"))
   .map((file) => `@stll/folio-react/messages/${path.basename(file, ".json")}`);
 const ANALYZE_MODE = "analyze";
-export const REACT_PLUGIN_EXCLUDE = [
-  /[/\\]node_modules[/\\]/u,
-  // These sanctioned wrappers accept opaque callbacks and dependency arrays.
-  // The compiler cannot validate their call-site dependencies, and their
-  // intentional exhaustive-deps suppressions otherwise emit on every load.
-  /[/\\]src[/\\]hooks[/\\]use-effect\.ts$/u,
-];
 const DEV_API_PROXY_PATHS = [
   "/api",
   "/v1",
@@ -75,6 +82,7 @@ const readCommitSha = () => {
 
   try {
     return execFileSync("git", ["rev-parse", "HEAD"], {
+      maxBuffer: 2 ** 30,
       cwd: path.resolve(APP_ROOT, "../.."),
       encoding: "utf-8",
     }).trim();
@@ -98,6 +106,127 @@ const versionManifestPlugin = (): Plugin => ({
         commit: APP_COMMIT_SHA,
         version: APP_VERSION,
       }),
+    });
+  },
+});
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+/**
+ * package.json `imports` entries whose server (`default`) target is another
+ * package, keyed by the `#` specifier.
+ */
+export const serverPackageImports = (
+  manifest: unknown,
+): ReadonlyMap<string, string> => {
+  const imports = isRecord(manifest) ? manifest["imports"] : undefined;
+  if (!isRecord(imports)) {
+    return new Map();
+  }
+  return new Map(
+    Object.entries(imports).flatMap(([specifier, target]) => {
+      const server = isRecord(target) ? target["default"] : target;
+      return typeof server === "string" && !server.startsWith(".")
+        ? [[specifier, server]]
+        : [];
+    }),
+  );
+};
+
+const QUOTED_SPECIFIER = /^(["'])(.*)\1$/su;
+const SCRIPT_MODULE = /\.[cm]?[jt]sx?$/u;
+
+type RewritePackageImportsOptions = {
+  code: string;
+  /** The module path; its extension selects the parser's language. */
+  file: string;
+  targets: ReadonlyMap<string, string>;
+};
+
+/**
+ * Rewrites the module specifiers of imports, re-exports and dynamic imports
+ * that name a `#` import to its package. Other strings are left alone.
+ */
+export const rewritePackageImports = ({
+  code,
+  file,
+  targets,
+}: RewritePackageImportsOptions): string => {
+  const { module } = parseSync(file, code);
+  const spans = [
+    ...module.staticImports.map(({ moduleRequest }) => moduleRequest),
+    ...module.staticExports.flatMap(({ entries }) =>
+      entries.flatMap(({ moduleRequest }) =>
+        moduleRequest === null ? [] : [moduleRequest],
+      ),
+    ),
+    ...module.dynamicImports.map(({ moduleRequest }) => moduleRequest),
+  ].toSorted((a, b) => b.start - a.start);
+  let rewritten = code;
+  for (const { start, end } of spans) {
+    const [, quote = "", specifier = ""] =
+      QUOTED_SPECIFIER.exec(code.slice(start, end)) ?? [];
+    const target = targets.get(specifier);
+    if (target !== undefined) {
+      rewritten = `${rewritten.slice(0, start)}${quote}${target}${quote}${rewritten.slice(end)}`;
+    }
+  }
+  return rewritten;
+};
+
+// The dev server's module runner externalizes a dependency only when the
+// import specifier itself is a package name, and it ignores `external` from
+// plugins. A `#` import that package.json maps to a package is therefore
+// inlined: the napi-rs packages behind `#aho-corasick` and `#regex-set` then
+// evaluate their CommonJS binding loader as ESM and fail on `require`.
+// Importing the package by name in the server environment lets the runtime
+// load it natively, as the production server bundle does.
+const serverPackageImportsPlugin = (): Plugin => {
+  const targets = serverPackageImports(
+    JSON.parse(readFileSync(path.resolve(APP_ROOT, "package.json"), "utf-8")),
+  );
+  return {
+    name: "stella-server-package-imports",
+    apply: "serve",
+    applyToEnvironment: (environment) =>
+      environment.config.consumer === "server",
+    transform(code, id) {
+      const file = id.split("?", 1)[0] ?? id;
+      return SCRIPT_MODULE.test(file) &&
+        [...targets.keys()].some((specifier) => code.includes(specifier))
+        ? rewritePackageImports({ code, file, targets })
+        : null;
+    },
+  };
+};
+
+// Publish the canonical stella logo from @stll/api-contract at
+// `/stella-logo-512.png`, the URL MCP metadata advertises. The package owns the
+// only copy; the API serves the same bytes as its favicon.
+const readStellaLogo = () =>
+  readFileSync(
+    createRequire(import.meta.url).resolve(
+      "@stll/api-contract/stella-logo-512.png",
+    ),
+  );
+
+const stellaLogoPlugin = (): Plugin => ({
+  name: "stella-logo",
+  configureServer(server) {
+    server.middlewares.use(
+      `/${STELLA_LOGO_FILE_NAME}`,
+      (_request, response) => {
+        response.setHeader("Content-Type", "image/png");
+        response.end(readStellaLogo());
+      },
+    );
+  },
+  generateBundle() {
+    this.emitFile({
+      type: "asset",
+      fileName: STELLA_LOGO_FILE_NAME,
+      source: readStellaLogo(),
     });
   },
 });
@@ -310,16 +439,23 @@ const isPromiseLikePluginOption = (
   return typeof value.then === "function";
 };
 
-export default defineConfig(({ mode }) => {
+export default defineConfig(({ mode, command }) => {
+  const routeOptions = routeTreeOptions(command);
   const shouldAnalyze = mode === ANALYZE_MODE || process.env["ANALYZE"] === "1";
   const devApiProxyTarget = process.env["DEV_API_PROXY_TARGET"];
   const plugins: PluginOption[] = [
+    stllAhoCorasickWasm(),
+    stllRegexSetWasm(),
+    serverPackageImportsPlugin(),
     logCapPlugin(),
     ensurePluginOption(
       devtools({ consolePiping: { enabled: false } }),
       "@tanstack/devtools-vite",
     ),
     versionManifestPlugin(),
+    stellaLogoPlugin(),
+    devRouteBuildGuard(),
+    chatRuntimeBuildGuard(),
     // Emits @stll/anonymize-wasm's binding + glue as build assets and
     // rewrites its runtime asset URLs so `vite build` can resolve them
     // (the package computes them at runtime, which Rollup can't follow
@@ -332,17 +468,26 @@ export default defineConfig(({ mode }) => {
     ensurePluginOption(tailwindcss(), "@tailwindcss/vite"),
     ensurePluginOption(
       tanstackStart({
-        srcDirectory: ROUTE_TREE_OPTIONS.srcDirectory,
+        srcDirectory: routeOptions.srcDirectory,
         router: {
-          routesDirectory: ROUTE_TREE_OPTIONS.routesDirectory,
-          generatedRouteTree: ROUTE_TREE_OPTIONS.generatedRouteTree,
+          routesDirectory: routeOptions.routesDirectory,
+          generatedRouteTree: routeOptions.generatedRouteTree,
+          routeFileIgnorePattern: routeOptions.routeFileIgnorePattern,
+          plugins: [
+            routeTemplateManifestPlugin(
+              path.join(
+                APP_ROOT,
+                routeOptions.srcDirectory,
+                routeOptions.generatedRouteTree,
+              ),
+            ),
+          ],
           codeSplittingOptions: {
-            defaultBehavior: [
-              ["component"],
-              ["errorComponent"],
-              ["notFoundComponent"],
-              ["pendingComponent"],
-            ],
+            // Recovery UI must stay in the entry graph. When a deployment
+            // removes an old route chunk, a split error or pending component
+            // would fail to load from that same old graph and leave the route
+            // blank instead of presenting recovery.
+            defaultBehavior: [["component"]],
           },
         },
       }),
@@ -416,6 +561,9 @@ export default defineConfig(({ mode }) => {
       // asset plugins so dependencies that rewrite and emit WASM sidecars keep
       // the same contract when they move off the main thread.
       plugins: workerRuntimeAssetPlugins,
+      rolldownOptions: {
+        output: { entryFileNames: workerEntryFileName },
+      },
     },
     build: {
       target: "es2025",
@@ -434,15 +582,25 @@ export default defineConfig(({ mode }) => {
               return "vendor-react";
             }
             if (
-              id.includes("node_modules/@tanstack/ai-react/") ||
               id.includes("node_modules/@mcp-ui/client/") ||
               id.includes("node_modules/@modelcontextprotocol/ext-apps/") ||
               id.includes("node_modules/@modelcontextprotocol/sdk/")
             ) {
               // This graph is reached only from ChatRichMessagePart's dynamic
-              // import. Keep it out of the eagerly preloaded TanStack vendor
-              // chunk so users without MCP App output never download it.
-              return "mcp-app";
+              // import, so that boundary already splits it off. A named group
+              // here would also capture its shared dependencies (React, zod),
+              // and every route importing those would then evaluate the MCP
+              // client eagerly, including the zod copy it bundles, whose eval
+              // probe the content security policy reports.
+              return undefined;
+            }
+            if (
+              id.includes("node_modules/@tanstack/ai/") ||
+              id.includes("node_modules/@tanstack/ai-client/")
+            ) {
+              // Let the chat boundary own its SDK graph; the eager router/query
+              // vendor must never pull the AI runtime into every route.
+              return undefined;
             }
             if (id.includes("node_modules/@tanstack/start-client-core/")) {
               return "vendor-tanstack-server-fn";
@@ -453,12 +611,23 @@ export default defineConfig(({ mode }) => {
             if (id.includes("node_modules/@stll/anonymize-data/")) {
               return "vendor-anonymize-data";
             }
-            if (id.includes("node_modules/@stll/") && id.includes("-wasm")) {
-              return "wasm-vendor";
+            if (
+              id.includes("node_modules/@stll/docx-core/dist/zip/archive.js") ||
+              id.includes("node_modules/@stll/docx-core/dist/archive-")
+            ) {
+              // The zip entry only re-exports its archive module. Split
+              // apart, with no eager importer holding the archive, the
+              // bundler emits the entry as an empty chunk that the lazy
+              // `import("@stll/docx-core/zip")` still loads, and the
+              // runtime build contract rejects it. One chunk for both keeps
+              // the reader whole; it loads with the shell (about 6 KiB
+              // gzip), where it was before the inbox views left startup.
+              return "docx-zip";
             }
-            if (id.includes("node_modules/@napi-rs/wasm-runtime")) {
-              return "wasm-vendor";
-            }
+            // The browser uses some WASM packages directly (for example the
+            // outline and key-term matchers). Let those stay with their lazy
+            // callers: `wasm-vendor` is reserved for the anonymization worker
+            // and must never become a main-thread shared chunk.
             if (id.includes("node_modules/cytoscape")) {
               return "vendor-graphs";
             }
@@ -526,7 +695,6 @@ export default defineConfig(({ mode }) => {
         "@tanstack/router-core/isServer",
         "@tanstack/router-core/ssr/client",
         "@tanstack/router-core/ssr/server",
-        "h3-v2",
         "seroval",
         // 4. The native-first Temporal adapter reaches this only when the
         //    browser lacks Temporal. Pre-bundling is dev-server preparation;
@@ -556,7 +724,6 @@ export default defineConfig(({ mode }) => {
         "prosemirror-tables",
         "prosemirror-transform",
         "prosemirror-view",
-        "jszip",
         "fast-xml-parser",
         "marked",
         // 4. Editor, chat, table, and drag-and-drop deps reached only through
@@ -568,16 +735,16 @@ export default defineConfig(({ mode }) => {
         //    cold pass.
         "@atlaskit/pragmatic-drag-and-drop-auto-scroll/element",
         "@atlaskit/pragmatic-drag-and-drop-auto-scroll/external",
-        "@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge",
+        "@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge/attach-closest-edge",
+        "@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge/extract-closest-edge",
+        "@atlaskit/pragmatic-drag-and-drop-live-region",
         "@atlaskit/pragmatic-drag-and-drop/adapter/drop-target-for-external",
         "@atlaskit/pragmatic-drag-and-drop/adapter/element-adapter",
-        "@atlaskit/pragmatic-drag-and-drop/combine",
-        "@atlaskit/pragmatic-drag-and-drop/element/adapter",
-        "@atlaskit/pragmatic-drag-and-drop/element/center-under-pointer",
-        "@atlaskit/pragmatic-drag-and-drop/element/set-custom-native-drag-preview",
         "@atlaskit/pragmatic-drag-and-drop/utils/center-under-pointer",
+        "@atlaskit/pragmatic-drag-and-drop/utils/combine",
         "@atlaskit/pragmatic-drag-and-drop/utils/contains-files",
         "@atlaskit/pragmatic-drag-and-drop/utils/get-files",
+        "@atlaskit/pragmatic-drag-and-drop/utils/preserve-offset-on-source",
         "@atlaskit/pragmatic-drag-and-drop/utils/set-custom-native-drag-preview",
         "@base-ui/react/context-menu",
         "@base-ui/react/preview-card",
@@ -595,13 +762,13 @@ export default defineConfig(({ mode }) => {
         "@stll/folio-core/utils/findReplace",
         "@streamdown/cjk",
         "@streamdown/math",
-        "@streamdown/mermaid",
         "@tanstack/react-table",
         "@tanstack/react-table/static-functions",
         "@tiptap/extension-heading",
         "@tiptap/extension-italic",
         "@tiptap/extension-list",
         "diff",
+        "pele/lazy",
         "y-prosemirror",
         "yjs",
       ],
@@ -624,10 +791,25 @@ export default defineConfig(({ mode }) => {
         "@stll/aho-corasick-wasm",
         "@stll/fuzzy-search-wasm",
         "@stll/regex-set-wasm",
+        // Pre-bundling would inline its `temporal-polyfill/full` import
+        // without running temporalRuntimePlugin, so the browser would load the
+        // polyfill implementation even when native Temporal exists.
+        "@stll/time",
       ],
     },
     resolve: {
       tsconfigPaths: true,
+      alias: [
+        {
+          // tldts' module build exports its public-suffix label table as a
+          // 67 KB string constant from a separate module. Rolldown inlines
+          // imported constants into conditions, so the table was copied into
+          // the chunk once per lookup site. The prebuilt single-module build
+          // keeps the table a local binding that is emitted once.
+          find: /^tldts$/u,
+          replacement: "tldts/dist/index.esm.min.js",
+        },
+      ],
       dedupe: [
         "react",
         "react-dom",

@@ -71,6 +71,7 @@ const statute = ({
   fulltext: null,
   id,
   language: "cs",
+  pendingChanges: null,
   sections: null,
   slug: SLUG,
   sourceUrl: null,
@@ -95,7 +96,7 @@ const version = (
     ...rest
   } = statute(seed);
 
-  return { ...rest, isDefault };
+  return { ...rest, amendedBy: null, changes: null, isDefault };
 };
 
 /**
@@ -286,7 +287,7 @@ describe("the address a statute consolidation is canonical at", () => {
       await canonicalRedirect(
         load(queryClient, {
           hash: "#sec-2079",
-          search: { asOf: "2021-01-01", jump: JUMP },
+          search: { asOf: "2021-01-01", jump: JUMP, q: "odpovědnost" },
           slug: SLUG,
         }),
       ),
@@ -298,7 +299,7 @@ describe("the address a statute consolidation is canonical at", () => {
           slug: SLUG,
           version: "2020-01-01",
         },
-        search: { jump: JUMP },
+        search: { jump: JUMP, q: "odpovědnost" },
         to: "/law/$country/statutes/$slug/v/$version",
       },
     });
@@ -464,6 +465,12 @@ describe("the search a statute address carries", () => {
       jump: undefined,
       provision: undefined,
     });
+  });
+
+  test("keeps reader search terms while trimming the URL input", () => {
+    expect(v.parse(publicStatuteSearchSchema, { q: " odpovědnost " }).q).toBe(
+      "odpovědnost",
+    );
   });
 
   test("keeps a provision anchor within the bound", () => {

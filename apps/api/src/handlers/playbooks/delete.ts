@@ -9,6 +9,7 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const config = {
+  contract: "patch",
   description:
     "Permanently delete a playbook definition and every approved version of " +
     "it from the organization. Columns the playbook materialized into matters " +

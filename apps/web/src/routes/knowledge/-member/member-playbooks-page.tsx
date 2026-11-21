@@ -1,31 +1,50 @@
-import { useCallback, useRef, useState } from "react";
+import { lazy, Suspense, useRef, useState } from "react";
 
 import { getRouteApi } from "@tanstack/react-router";
 import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
-import { guideAnchor } from "@/features/guides/guide-anchor";
+import {
+  guideAnchor,
+  guideReverseBlocked,
+} from "@/features/guides/guide-anchor";
 import { GUIDE_ANCHORS } from "@/features/guides/guide-anchors";
 import {
   memberKnowledgeActions,
   memberKnowledgeSource,
 } from "@/features/knowledge/member/member-knowledge";
 import { KnowledgeStatusMessage } from "@/features/knowledge/views/knowledge-status-message";
-import { PlaybooksPageSkeleton } from "@/features/knowledge/views/playbooks/playbooks-page-view";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
 import { userErrorFromThrown, userErrorMessage } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import type { PlaybookListItem } from "@/lib/knowledge/playbook-types";
-import { PlaybookEditor } from "@/routes/knowledge/-components/playbook-editor";
 import { PlaybookList } from "@/routes/knowledge/-components/playbook-list";
+import { PlaybooksPending } from "@/routes/knowledge/-member/playbooks.pending";
+
+const LazyPlaybookEditor = lazy(async () => {
+  const module =
+    await import("@/features/knowledge/playbook-editor/playbook-editor");
+  return { default: module.PlaybookEditor };
+});
 
 // ── View discriminated union ─────────────────────────
 
 type View = { kind: "list" } | { kind: "editor"; playbookId: string | null };
 
 const playbooksRouteApi = getRouteApi("/knowledge/playbooks");
+
+// The playbooks tour runs on this page, so the page hands the editor its
+// targets; the inspector pane hosts the same editor without them.
+const PLAYBOOK_EDITOR_TOUR_ANCHORS = {
+  back: (isDirty: boolean) => ({
+    ...guideAnchor(GUIDE_ANCHORS.playbooksBack),
+    ...guideReverseBlocked(isDirty),
+  }),
+  basics: guideAnchor(GUIDE_ANCHORS.playbooksBasics),
+  addPosition: guideAnchor(GUIDE_ANCHORS.playbooksAddPosition),
+};
 
 /** The organization's playbooks and their editor: the member side of the
  *  playbooks section. */
@@ -76,7 +95,7 @@ export function MemberPlaybooksPage({
   const currentNextCursor =
     nextCursor === undefined ? initialNextCursor : nextCursor;
 
-  const handleLoadMore = useCallback(async () => {
+  const handleLoadMore = async () => {
     const cursor = currentNextCursor;
     if (!cursor) {
       return;
@@ -107,7 +126,10 @@ export function MemberPlaybooksPage({
     // Reported, not swallowed: a load that failed outright is captured and
     // told the same way as one the server refused.
     if (Result.isError(result)) {
-      getAnalytics().captureError(result.error);
+      getAnalytics().captureError(result.error, {
+        fingerprintKey: "MemberPlaybooksPage:failure",
+        scope: { type: "handler", handlerId: "MemberPlaybooksPage:failure" },
+      });
       notifyUserError(result.error, t("knowledge.playbooks.loadFailed"), {
         description: userErrorFromThrown(
           result.error,
@@ -139,9 +161,9 @@ export function MemberPlaybooksPage({
 
     setExtraPlaybooks((prev) => [...prev, ...data.items]);
     setNextCursor(data.nextCursor);
-  }, [currentNextCursor, t, playbookActions]);
+  };
 
-  const handleRefresh = useCallback(() => {
+  const handleRefresh = () => {
     // Abort any in-flight page load so its result cannot append a stale page
     // back into the list we are about to reset. handleLoadMore's abort branch
     // intentionally leaves loadingMore set, so clear it here.
@@ -151,26 +173,32 @@ export function MemberPlaybooksPage({
     setExtraPlaybooks([]);
     setNextCursor(undefined);
     playbookActions.invalidatePlaybooks();
-  }, [playbookActions]);
+  };
 
-  const handleBackToList = useCallback(() => {
+  const handleBackToList = () => {
     setView({ kind: "list" });
     handleRefresh();
-  }, [handleRefresh]);
+  };
 
   if (view.kind === "editor") {
     return (
-      <PlaybookEditor
-        onBack={handleBackToList}
-        onSaved={handleBackToList}
-        organizationId={activeOrganizationId}
-        playbookId={view.playbookId}
-      />
+      <Suspense fallback={<div className="bg-background min-h-0 flex-1" />}>
+        <LazyPlaybookEditor
+          host={{
+            type: "page",
+            onBack: handleBackToList,
+            onSaved: handleBackToList,
+            tourAnchors: PLAYBOOK_EDITOR_TOUR_ANCHORS,
+          }}
+          organizationId={activeOrganizationId}
+          playbookId={view.playbookId}
+        />
+      </Suspense>
     );
   }
 
   if (isLoading) {
-    return <PlaybooksPageSkeleton />;
+    return <PlaybooksPending />;
   }
 
   if (isError) {

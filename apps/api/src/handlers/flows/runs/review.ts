@@ -10,6 +10,7 @@ import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { resolveFlowReviewGate } from "@/api/lib/flows/flow-executor";
 
 const config = {
+  contract: "patch",
   description:
     "Resolve a flow run waiting at a review gate: pass decision approved or " +
     "rejected, with an optional note. The run continues or stops " +

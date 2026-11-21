@@ -3,8 +3,8 @@ import { and, eq } from "drizzle-orm";
 
 import {
   documentTypes,
-  playbookDefinitions,
   PLAYBOOK_DOCUMENT_TYPE_CONSTRAINT,
+  playbookDefinitions,
 } from "@/api/db/schema";
 import { documentTypeParamsSchema } from "@/api/handlers/document-types/schema";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
@@ -16,6 +16,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { isPgConstraintError, PG_ERROR } from "@/api/lib/pg-error";
 
 const config = {
+  contract: "patch",
   description:
     "Remove one document type from the organization's classification list so " +
     "it can no longer be assigned. Documents already classified as that type " +

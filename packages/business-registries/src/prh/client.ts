@@ -1,7 +1,7 @@
 import {
   hasOptionalString,
-  isRecord,
   isOptionalArrayOf,
+  isRecord,
 } from "../shared/guards.js";
 import { performRegistryRequest, readRegistryJson } from "../shared/http.js";
 import type { RegistryClientOptions } from "../shared/http.js";

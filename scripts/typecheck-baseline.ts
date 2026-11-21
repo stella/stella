@@ -8,7 +8,7 @@
 // explosion in a widely-instantiated generic lands as "typecheck got slow"
 // weeks later, with no diff to point at. Lint and tests see none of it.
 //
-// This runs the native tsc (tsgo, via packages/scripts/src/tsc-native.ts)
+// This runs the native tsc (tsrs, via packages/scripts/src/tsc-native.ts)
 // with --extendedDiagnostics and --singleThreaded per project. CI compares the
 // deterministic size counters with the merge base; nightly checks the committed
 // cumulative budget. Native tsc uses independent checker-local caches in
@@ -26,9 +26,8 @@
 //   bun scripts/typecheck-baseline.ts --check-delta FILE  gate against that measurement
 //   bun scripts/typecheck-baseline.ts --self-test      prove parser + comparison logic
 //
-// CI-only by design: it re-runs full typechecks (tens of seconds), too slow
-// for the local lint/pre-commit loop. Wired into .github/workflows/ci.yml as
-// its own typecheck-baseline job, parallel to the turbo typecheck job.
+// Full measurements run in CI and the admitted workflow-derived verify command,
+// outside the lint/pre-commit loop. CI owns a separate baseline job.
 
 import { panic } from "better-result";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
@@ -149,8 +148,7 @@ const RATCHET_DOWN = 0.95;
 // reason scripts/verify.sh serializes typecheck tasks (--concurrency=1). The
 // measurement itself also uses one checker so its counters remain comparable.
 type RunResult =
-  | { ok: true; diagnostics: string }
-  | { ok: false; error: string };
+  { ok: true; diagnostics: string } | { ok: false; error: string };
 
 const runProject = (project: string, repoRoot: string): RunResult => {
   const proc = Bun.spawnSync(
@@ -184,8 +182,7 @@ const diagnosticField = (diagnostics: string, label: string): number | null => {
 };
 
 type ParseResult =
-  | { ok: true; counters: Counters }
-  | { ok: false; error: string };
+  { ok: true; counters: Counters } | { ok: false; error: string };
 
 const parseCounters = (diagnostics: string, project: string): ParseResult => {
   const types = diagnosticField(diagnostics, "Types");
@@ -195,7 +192,7 @@ const parseCounters = (diagnostics: string, project: string): ParseResult => {
       ok: false,
       error:
         `Could not find Types/Instantiations in --extendedDiagnostics output\n` +
-        `for ${project}. Did the tsgo output format change? Output was:\n\n${diagnostics}`,
+        `for ${project}. Did the compiler output format change? Output was:\n\n${diagnostics}`,
     };
   }
   return { ok: true, counters: { types, instantiations } };
@@ -215,8 +212,7 @@ const ungatedSummary = (diagnostics: string): string => {
 
 type Measured = { id: ProjectId; counters: Counters; context: string };
 type MeasureResult =
-  | { ok: true; measured: Measured[] }
-  | { ok: false; error: string };
+  { ok: true; measured: Measured[] } | { ok: false; error: string };
 
 // A project the change adds does not exist at its merge base; with
 // absentAsEmpty the base measurement records it as zero instead of failing.
@@ -253,12 +249,13 @@ const measureAll = (
 const emptyCounters = (): Counters => ({ types: 0, instantiations: 0 });
 
 const writeBaseline = (measured: Measured[], file = BASELINE_PATH): void => {
-  // Spelled out per project so the committed JSON has a stable key order.
-  const baseline: Record<string, Counters> = {};
-  for (const { id } of PROJECTS) {
-    const entry = measured.find((m) => m.id === id);
-    baseline[id] = entry?.counters ?? emptyCounters();
-  }
+  // Keep project order stable in the committed JSON.
+  const baseline = Object.fromEntries(
+    PROJECTS.map(({ id }) => {
+      const entry = measured.find((m) => m.id === id);
+      return [id, entry?.counters ?? emptyCounters()] as const;
+    }),
+  );
   writeFileSync(file, `${JSON.stringify(baseline, null, 2)}\n`);
 };
 
@@ -266,18 +263,15 @@ const readBaseline = (file = BASELINE_PATH): Baseline => {
   const parsed: Record<string, Partial<Counters>> = JSON.parse(
     readFileSync(file, "utf-8"),
   );
-  const baseline = {
-    api: emptyCounters(),
-    web: emptyCounters(),
-    "web-e2e": emptyCounters(),
+  const counters = (id: ProjectId) => ({
+    types: parsed[id]?.types ?? 0,
+    instantiations: parsed[id]?.instantiations ?? 0,
+  });
+  return {
+    api: counters("api"),
+    web: counters("web"),
+    "web-e2e": counters("web-e2e"),
   };
-  for (const { id } of PROJECTS) {
-    baseline[id] = {
-      types: parsed[id]?.types ?? 0,
-      instantiations: parsed[id]?.instantiations ?? 0,
-    };
-  }
-  return baseline;
 };
 
 const baselineExists = (): boolean => {
@@ -383,9 +377,12 @@ const formatCheckMeasurement = (m: Measured, baseline: Baseline): string =>
 
 type BaselineAge = { sha: string; date: string; commits: number };
 
-const gitOutput = (args: readonly string[]): string | null => {
+const gitOutput = (
+  args: readonly string[],
+  repoRoot = REPO_ROOT,
+): string | null => {
   const proc = Bun.spawnSync(["git", ...args], {
-    cwd: REPO_ROOT,
+    cwd: repoRoot,
     stdout: "pipe",
     stderr: "pipe",
   });
@@ -398,14 +395,16 @@ const gitOutput = (args: readonly string[]): string | null => {
 
 // Null whenever git cannot answer (no repository, shallow clone, export
 // tarball): the headroom line still prints, only without the age.
-const readBaselineAge = (): BaselineAge | null => {
-  const written = gitOutput([
-    "log",
-    "--format=%H %cs",
-    "-1",
-    "--",
-    BASELINE_REL,
-  ]);
+export const readBaselineAge = (repoRoot = REPO_ROOT): BaselineAge | null => {
+  if (
+    gitOutput(["rev-parse", "--is-shallow-repository"], repoRoot) !== "false"
+  ) {
+    return null;
+  }
+  const written = gitOutput(
+    ["log", "--format=%H %cs", "-1", "--", BASELINE_REL],
+    repoRoot,
+  );
   const fields = written?.split(" ");
   const sha = fields?.at(0);
   const date = fields?.at(1);
@@ -414,7 +413,7 @@ const readBaselineAge = (): BaselineAge | null => {
   }
   // Number(null) is 0, so a failed rev-list would read as a fresh baseline:
   // reject the absent output before converting it.
-  const counted = gitOutput(["rev-list", "--count", `${sha}..HEAD`]);
+  const counted = gitOutput(["rev-list", "--count", `${sha}..HEAD`], repoRoot);
   if (counted === null) {
     return null;
   }
@@ -495,7 +494,7 @@ const runReport = (): number => {
   const hasBaseline = baselineExists();
   const baseline = hasBaseline ? readBaseline() : null;
 
-  console.log("\ntypecheck cost (tsgo --extendedDiagnostics)\n");
+  console.log("\ntypecheck cost (tsrs --extendedDiagnostics)\n");
   for (const m of result.measured) {
     console.log(`  ${m.id}  (${m.context})`);
     for (const field of GATED_FIELDS) {
@@ -661,6 +660,72 @@ const runCheck = (): number => {
 
 // Verbatim tsgo 7.0.2 output from
 // `-p apps/api --noEmit --extendedDiagnostics --singleThreaded`.
+type FieldStatusCase = {
+  label: string;
+  field: GatedField;
+  current: number;
+  baseline: number;
+  expected: FieldStatus;
+};
+
+const SELF_TEST_FIELD_CASES = [
+  // An inference explosion (x2) MUST fail.
+  {
+    label: "explosion",
+    field: "instantiations",
+    current: 18_000_000,
+    baseline: 9_000_000,
+    expected: "regressed",
+  },
+  // Routine feature growth inside 5% must pass.
+  {
+    label: "routine-growth",
+    field: "instantiations",
+    current: 9_300_000,
+    baseline: 9_000_000,
+    expected: "ok",
+  },
+  // Small projects get an absolute floor: +15k types on a 100k project is
+  // > 5% but under the floor — new specs, not an explosion.
+  {
+    label: "small-within-floor",
+    field: "types",
+    current: 115_000,
+    baseline: 100_000,
+    expected: "ok",
+  },
+  {
+    label: "small-past-floor",
+    field: "types",
+    current: 130_000,
+    baseline: 100_000,
+    expected: "regressed",
+  },
+  // A real improvement is a ratchet-down prompt, not a failure.
+  {
+    label: "improvement",
+    field: "types",
+    current: 900_000,
+    baseline: 1_000_000,
+    expected: "dropped",
+  },
+  // A new PROJECTS entry with no baseline must be acknowledged.
+  {
+    label: "new-project",
+    field: "types",
+    current: 50_000,
+    baseline: 0,
+    expected: "regressed",
+  },
+  {
+    label: "still-empty",
+    field: "types",
+    current: 0,
+    baseline: 0,
+    expected: "ok",
+  },
+] as const satisfies readonly FieldStatusCase[];
+
 const SELF_TEST_DIAGNOSTICS = [
   "Files:              7107",
   "Lines:           1137044",
@@ -752,37 +817,18 @@ const runSelfTest = (): number => {
     failures.push("parser accepted output missing Types/Instantiations");
   }
 
-  const expectStatus = (
-    label: string,
-    field: GatedField,
-    current: number,
-    baseline: number,
-    expected: FieldStatus,
-  ) => {
+  for (const {
+    label,
+    field,
+    current,
+    baseline,
+    expected,
+  } of SELF_TEST_FIELD_CASES) {
     const actual = compareField(field, current, baseline);
     if (actual !== expected) {
       failures.push(`${label}: compareField = ${actual}, want ${expected}`);
     }
-  };
-  // An inference explosion (x2) MUST fail.
-  expectStatus(
-    "explosion",
-    "instantiations",
-    18_000_000,
-    9_000_000,
-    "regressed",
-  );
-  // Routine feature growth inside 5% must pass.
-  expectStatus("routine-growth", "instantiations", 9_300_000, 9_000_000, "ok");
-  // Small projects get an absolute floor: +15k types on a 100k project is
-  // > 5% but under the floor — new specs, not an explosion.
-  expectStatus("small-within-floor", "types", 115_000, 100_000, "ok");
-  expectStatus("small-past-floor", "types", 130_000, 100_000, "regressed");
-  // A real improvement is a ratchet-down prompt, not a failure.
-  expectStatus("improvement", "types", 900_000, 1_000_000, "dropped");
-  // A new PROJECTS entry with no baseline must be acknowledged.
-  expectStatus("new-project", "types", 50_000, 0, "regressed");
-  expectStatus("still-empty", "types", 0, 0, "ok");
+  }
 
   // The whole-run diff must isolate the exploding project+field.
   const baseline: Baseline = {

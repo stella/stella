@@ -21,6 +21,24 @@ export const CORPUS_INDEX_GENERATION_STATUSES = [
 export type CorpusIndexGenerationStatus =
   (typeof CORPUS_INDEX_GENERATION_STATUSES)[number];
 
+/**
+ * The statuses whose generation takes every canonical change: each desired
+ * writer projects a changed decision or document into every generation in
+ * one of them, in the writing transaction. A retiring generation takes
+ * erasures only, and a retired one nothing. The desired-state writer, the
+ * flip parity read and the seeding walk all read this one list, so "the
+ * generation is kept current" means the same thing to each of them.
+ */
+export const CORPUS_INDEX_ACTIVE_GENERATION_STATUSES = [
+  "building",
+  "serving",
+] as const satisfies readonly CorpusIndexGenerationStatus[];
+
+export const isActiveCorpusIndexGenerationStatus = (
+  status: CorpusIndexGenerationStatus,
+): boolean =>
+  CORPUS_INDEX_ACTIVE_GENERATION_STATUSES.some((active) => active === status);
+
 const memberOf = <T extends string>(
   values: readonly T[],
   value: unknown,
@@ -40,8 +58,17 @@ type ManifestGenerationByFamily = {
 };
 
 const CORPUS_GENERATIONS = {
-  case_law: ["case_law_v5", "case_law_v6", "case_law_v7"],
-  legislation: ["legislation_v2"],
+  case_law: [
+    "case_law_v5",
+    "case_law_v6",
+    "case_law_v7",
+    "case_law_v8",
+    "case_law_v9",
+    "case_law_v10",
+    "case_law_v11",
+    "case_law_v12",
+  ],
+  legislation: ["legislation_v2", "legislation_v3"],
 } as const satisfies {
   [Family in CorpusFamily]: readonly ManifestGenerationByFamily[Family][];
 };

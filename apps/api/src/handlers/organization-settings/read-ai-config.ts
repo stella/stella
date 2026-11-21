@@ -1,21 +1,22 @@
 import { Result } from "better-result";
 
-import type {
-  DataRegion,
-  DecisionModelProvider,
-  OrgAIConfig,
-} from "@/api/lib/ai-config";
+import type { DataRegion, OrgAIConfig } from "@/api/lib/ai-config";
 import { decryptAIConfig, maskApiKey } from "@/api/lib/ai-config-crypto";
 import {
+  decisionModelResponse,
   providerResponseExtras,
   providerResponseRegion,
   storedAIConfigUnreadableError,
 } from "@/api/lib/ai-config-response";
-import { captureError } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { hasTanStackInstanceProvider } from "@/api/lib/tanstack-ai-models";
-import { hasInstanceDecisionModel } from "@/api/lib/workflow/decisions/decision-model";
+import {
+  hasCustomerDecisionModel,
+  hasInstanceDecisionModel,
+} from "@/api/lib/workflow/decisions/decision-model";
+
+import { resolveAIConfigDefaults } from "./ai-config-defaults";
 
 type AIConfigResult = {
   /**
@@ -31,36 +32,41 @@ type AIConfigResult = {
    * caller takes its generative or rule-based path.
    */
   decisionInstanceProvisioned: boolean;
-} & (
-  | { configured: false }
-  | {
-      configured: true;
-      providers: {
-        provider: OrgAIConfig["providers"][number]["provider"];
-        apiKeyMasked: string;
-        endpoint?: string | undefined;
-        apiVersion?: string | undefined;
-        region: DataRegion;
-      }[];
-      overrideModels: OrgAIConfig["overrideModels"];
-      decision: {
-        provider: DecisionModelProvider;
-        apiKeyMasked: string;
-        modelId: string;
-      } | null;
-    }
-);
+  /**
+   * Whether Anchor Verification asks the decision model for verdicts
+   * (`enabled`), and whether it can: the org has a decision model of its
+   * own, or runs on the instance's models and the instance has one
+   * (`available`). Only an available model can be turned on.
+   */
+  verificationDecisionModel: { enabled: boolean; available: boolean };
+} & ReturnType<typeof resolveAIConfigDefaults> &
+  (
+    | { configured: false }
+    | {
+        configured: true;
+        providers: {
+          provider: OrgAIConfig["providers"][number]["provider"];
+          apiKeyMasked: string;
+          anthropicWorkspaceId?: string | undefined;
+          endpoint?: string | undefined;
+          apiVersion?: string | undefined;
+          region: DataRegion;
+        }[];
+        overrideModels: OrgAIConfig["overrideModels"];
+        decision: ReturnType<typeof decisionModelResponse>;
+      }
+  );
 
 const config = {
+  contract: "patch",
   permissions: { organizationSettings: ["update"] },
-  accountAccess: ACCOUNT_ACCESS.standard,
+  accountAccess: ACCOUNT_ACCESS.accountControl,
   mcp: { type: "internal", reason: "provider_secret" },
 } satisfies HandlerConfig;
 
 /**
  * Read the org's AI config. Returns provider, region, and
- * override roles. The API key is masked (first 8 chars only)
- * to prevent exposure.
+ * override roles. Credentials are returned only as masked identifiers.
  */
 const readAIConfig = createSafeRootHandler(
   config,
@@ -76,6 +82,7 @@ const readAIConfig = createSafeRootHandler(
           columns: {
             aiConfigEncrypted: true,
             aiConfigIv: true,
+            verificationDecisionModelEnabled: true,
           },
         }),
       ),
@@ -85,29 +92,37 @@ const readAIConfig = createSafeRootHandler(
     const iv = row?.aiConfigIv;
     const instanceProvisioned = hasTanStackInstanceProvider();
     const decisionInstanceProvisioned = hasInstanceDecisionModel("customer");
+    const verificationEnabled = row?.verificationDecisionModelEnabled ?? false;
 
     let result: AIConfigResult = {
+      ...resolveAIConfigDefaults([]),
       configured: false,
       instanceProvisioned,
       decisionInstanceProvisioned,
+      verificationDecisionModel: {
+        enabled: verificationEnabled,
+        available: hasCustomerDecisionModel(null),
+      },
     };
 
-    if (ciphertext && iv) {
-      const decryptResult = await Result.tryPromise({
-        try: async () =>
-          await decryptAIConfig(session.activeOrganizationId, ciphertext, iv),
-        catch: (error: unknown) => error,
-      });
+    if (ciphertext || iv) {
+      const decryptResult = await decryptAIConfig(
+        session.activeOrganizationId,
+        ciphertext,
+        iv,
+      );
 
       if (decryptResult.isErr()) {
-        captureError(decryptResult.error);
         // Reporting the default here would present a stored-but-unreadable
         // config as an unconfigured org and invite re-entry of the key.
-        return Result.err(storedAIConfigUnreadableError(decryptResult.error));
+        return Result.err(storedAIConfigUnreadableError());
       }
 
       const aiConfig = decryptResult.value;
       result = {
+        ...resolveAIConfigDefaults(
+          aiConfig.providers.map(({ provider }) => provider),
+        ),
         configured: true,
         providers: aiConfig.providers.map((providerConfig) => ({
           provider: providerConfig.provider,
@@ -116,16 +131,13 @@ const readAIConfig = createSafeRootHandler(
           ...providerResponseExtras(providerConfig),
         })),
         overrideModels: aiConfig.overrideModels,
-        decision:
-          aiConfig.decision === null
-            ? null
-            : {
-                provider: aiConfig.decision.provider,
-                apiKeyMasked: maskApiKey(aiConfig.decision.apiKey),
-                modelId: aiConfig.decision.modelId,
-              },
+        decision: decisionModelResponse(aiConfig.decision),
         instanceProvisioned,
         decisionInstanceProvisioned,
+        verificationDecisionModel: {
+          enabled: verificationEnabled,
+          available: hasCustomerDecisionModel(aiConfig),
+        },
       };
     }
 

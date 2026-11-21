@@ -1,10 +1,11 @@
-import { Panic } from "better-result";
+import { Panic, panic } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { asc, eq } from "drizzle-orm";
+import { and, asc, eq, gt } from "drizzle-orm";
 
 import { organization } from "@/api/db/auth-schema";
 import { anonymizationBlacklistEntries } from "@/api/db/schema";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import {
   getTestDb,
   releaseTestDb,
@@ -12,7 +13,7 @@ import {
 } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
-import { readBounded } from "./read-bounded";
+import { readBounded, readCursorPage } from "./read-bounded";
 
 let testDb: TestDatabase;
 
@@ -86,10 +87,55 @@ describe("complete bounded reads", () => {
           expect(result).toEqual({ type: "complete", rows: expectedRows });
         }
         expect(queryLimits).toEqual([cap + 1]);
+        if (cap > 0) {
+          const traversed: typeof expectedRows = [];
+          let cursor: string | undefined;
+          for (;;) {
+            const page = await readCursorPage(
+              testDb
+                .select({ canonical: anonymizationBlacklistEntries.canonical })
+                .from(anonymizationBlacklistEntries)
+                .where(
+                  and(
+                    eq(
+                      anonymizationBlacklistEntries.organizationId,
+                      organizationId,
+                    ),
+                    cursor === undefined
+                      ? undefined
+                      : gt(anonymizationBlacklistEntries.canonical, cursor),
+                  ),
+                )
+                .orderBy(asc(anonymizationBlacklistEntries.canonical)),
+              {
+                limit: cap,
+                cursorForItem: ({ canonical }) => canonical,
+              },
+            );
+            expect(page.items.length).toBeLessThanOrEqual(cap);
+            expect(page.nextCursor !== null).toBe(
+              count - traversed.length > cap,
+            );
+            expect(page.items).toEqual(
+              expectedRows.slice(traversed.length, traversed.length + cap),
+            );
+            traversed.push(...page.items);
+            if (page.nextCursor === null) {
+              expect(page.nextCursor).toBeNull();
+              break;
+            }
+            expect(page.items).toHaveLength(cap);
+            const lastItem = page.items.at(-1);
+            if (lastItem === undefined) {
+              panic("A continuing cursor page must contain an item");
+            }
+            expect(page.nextCursor).toBe(lastItem.canonical);
+            cursor = page.nextCursor;
+          }
+          expect(traversed).toEqual(expectedRows);
+        }
       } finally {
-        await testDb
-          .delete(organization)
-          .where(eq(organization.id, organizationId));
+        await deleteOrganizationsForTest(testDb, [organizationId]);
       }
     },
   );
@@ -118,5 +164,32 @@ describe("complete bounded reads", () => {
 
     expect(rejection).toBeInstanceOf(Panic);
     expect(queried).toBe(false);
+    const pageRejection: unknown = await readCursorPage(query, {
+      limit: cap,
+      cursorForItem: () => "unused",
+    }).then(
+      () => null,
+      (error: unknown) => error,
+    );
+    expect(pageRejection).toBeInstanceOf(Panic);
+    expect(queried).toBe(false);
   });
+});
+
+test("cursor pages reject a zero limit before querying", async () => {
+  let queried = false;
+  const rejection: unknown = await readCursorPage(
+    {
+      limit: async () => {
+        queried = true;
+        return [];
+      },
+    },
+    { limit: 0, cursorForItem: () => "unused" },
+  ).then(
+    () => null,
+    (error: unknown) => error,
+  );
+  expect(rejection).toBeInstanceOf(Panic);
+  expect(queried).toBe(false);
 });

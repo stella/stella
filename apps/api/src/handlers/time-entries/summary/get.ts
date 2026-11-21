@@ -1,8 +1,9 @@
 import { Result } from "better-result";
 import { and, eq, gte, lte, sql } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
+import { apiDateSchema } from "@stll/api-contract/api-date";
 import type { TimeEntrySummary } from "@stll/api-contract/time-entry-types";
 import { addDays, parseIsoDateLocal } from "@stll/time";
 
@@ -18,23 +19,27 @@ const MAX_TEAM_SUMMARY_ROWS = LIMITS.workspaceMembersCount * MAX_SUMMARY_DAYS;
 
 const okTimeEntrySummary = (summary: TimeEntrySummary) => Result.ok(summary);
 
-const timeEntrySummaryQuerySchema = t.Object({
-  dateFrom: t.String({ format: "date" }),
-  dateTo: t.String({ format: "date" }),
-  scope: t.Optional(
-    t.Literal("team", {
-      description:
+const timeEntrySummaryQuerySchema = v.object({
+  dateFrom: apiDateSchema,
+  dateTo: apiDateSchema,
+  scope: v.optional(
+    v.pipe(
+      v.literal("team"),
+      v.description(
         "Include a bounded per-member daily summary; requires time-entry approval access",
-    }),
+      ),
+    ),
   ),
 });
 
 const readTimeEntrySummary = createSafeHandler(
   {
+    contract: "patch",
     description:
       "Summarize client time in the current matter for a bounded date range; team scope requires time-entry approval access.",
     permissions: { timeEntry: ["read"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
+    featureAccess: { featureId: "time-billing", type: "required" },
     mcp: {
       type: "capability",
       readClass: "tenant",

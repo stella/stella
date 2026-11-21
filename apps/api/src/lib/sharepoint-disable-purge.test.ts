@@ -16,6 +16,7 @@ import {
 } from "@/api/db/schema";
 import { createSafeDb } from "@/api/db/scoped";
 import disconnectSharepoint from "@/api/handlers/sharepoint/disconnect";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
@@ -46,7 +47,10 @@ beforeAll(async () => {
   // orgB stays disabled (schema default) — the disconnect test runs against it.
   await testDb
     .update(organizationSettings)
-    .set({ sharepointConnectionEnabled: true })
+    .set({
+      sharepointConnectionEnabled: true,
+      microsoft365CalendarReadEnabled: true,
+    })
     .where(eq(organizationSettings.organizationId, ids.orgA));
 
   await testDb.insert(sharepointConnections).values([
@@ -59,6 +63,7 @@ beforeAll(async () => {
       refreshTokenEncrypted: enc(),
       refreshTokenIv: iv(),
       status: "connected",
+      scope: "Files.Read.All Sites.Read.All",
     },
     {
       id: createSafeId<"sharepointConnection">(),
@@ -67,6 +72,7 @@ beforeAll(async () => {
       accessTokenEncrypted: enc(),
       accessTokenIv: iv(),
       status: "connected",
+      scope: "Files.Read.All Sites.Read.All",
     },
     {
       id: createSafeId<"sharepointConnection">(),
@@ -75,6 +81,7 @@ beforeAll(async () => {
       accessTokenEncrypted: enc(),
       accessTokenIv: iv(),
       status: "connected",
+      scope: "Files.Read.All Sites.Read.All",
     },
   ]);
 
@@ -125,10 +132,14 @@ describe("disabling the org toggle revokes stored tokens", () => {
     expect(pending).toHaveLength(0);
 
     const settings = await testDb
-      .select({ enabled: organizationSettings.sharepointConnectionEnabled })
+      .select({
+        enabled: organizationSettings.sharepointConnectionEnabled,
+        calendarEnabled: organizationSettings.microsoft365CalendarReadEnabled,
+      })
       .from(organizationSettings)
       .where(eq(organizationSettings.organizationId, ids.orgA));
     expect(settings[0]?.enabled).toBe(false);
+    expect(settings[0]?.calendarEnabled).toBe(false);
 
     // Another org's connection is untouched.
     const orgBConnections = await testDb
@@ -140,6 +151,9 @@ describe("disabling the org toggle revokes stored tokens", () => {
     // A toggle-change audit plus a disconnect/purge audit.
     expect(events).toHaveLength(2);
     expect(events[0]?.action).toBe("update");
+    expect(events[0]?.changes).toMatchObject({
+      microsoft365CalendarReadEnabled: { old: true, new: false },
+    });
     expect(events[1]?.action).toBe("delete");
     expect(events[1]?.metadata?.["operation"]).toBe(
       "sharepoint_oauth_disconnect",
@@ -171,7 +185,7 @@ describe("disconnect is never gated on org enablement", () => {
         request: new Request(
           "https://api.example.test/v1/sharepoint/connection",
         ),
-        route: "/v1/sharepoint/connection",
+        route: "/v1/sharepoint/connection" satisfies ApiRoutePath,
       }),
     );
 

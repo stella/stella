@@ -1,5 +1,7 @@
-import { defineConfig, devices } from "@playwright/test";
+import { defineConfig } from "@playwright/test";
 import path from "node:path";
+
+import { devices } from "@stll/playwright-tools/devices";
 
 import { resolveE2eExecutionProfile } from "./execution-profile";
 
@@ -17,6 +19,7 @@ const executionProfile = resolveE2eExecutionProfile(
 );
 
 const ROUTE_SMOKE_SPEC = /route-smoke\.spec\.ts$/u;
+const DOCKED_CHAT_GEOMETRY_SPEC = /docked-chat-geometry\.spec\.ts$/u;
 const HEAP_GROWTH_CANARY_SPEC = /heap-growth-canary\.spec\.ts$/u;
 
 export default defineConfig({
@@ -32,7 +35,19 @@ export default defineConfig({
   // Retries hide flakes; fix them in code instead.
   retries: 0,
   reporter: IS_CI
-    ? [["blob", { outputDir: E2E_BLOB_OUTPUT_DIR }], ["github"], ["list"]]
+    ? [
+        ["blob", { outputDir: E2E_BLOB_OUTPUT_DIR }],
+        ["github"],
+        ["list"],
+        [
+          "json",
+          {
+            outputFile:
+              process.env["PLAYWRIGHT_JSON_OUTPUT_FILE"] ??
+              ".cache/playwright-timings.json",
+          },
+        ],
+      ]
     : [["list"], ["html", { open: "never" }]],
   // Cold Vite + folio editor compile on a fresh CI runner can use 25-30s
   // before the first locator runs, leaving no headroom for in-spec
@@ -53,7 +68,17 @@ export default defineConfig({
   projects: [
     {
       name: "chromium",
-      testIgnore: [ROUTE_SMOKE_SPEC, HEAP_GROWTH_CANARY_SPEC],
+      testIgnore: [
+        ROUTE_SMOKE_SPEC,
+        HEAP_GROWTH_CANARY_SPEC,
+        DOCKED_CHAT_GEOMETRY_SPEC,
+      ],
+      use: { ...devices["Desktop Chrome"] },
+    },
+    {
+      // CI shards this uniform-cost matrix independently from the general suite.
+      name: "docked-chat-geometry",
+      testMatch: DOCKED_CHAT_GEOMETRY_SPEC,
       use: { ...devices["Desktop Chrome"] },
     },
     {

@@ -1,6 +1,10 @@
 import { Result } from "better-result";
 import { beforeEach, describe, expect, test } from "bun:test";
 
+import { sleep } from "@stll/concurrency/sleep";
+
+import type { safeOutboundFetchBytes } from "@/api/lib/auth/authorized-outbound-fetch";
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { LIMITS } from "@/api/lib/limits";
 import {
   SafeOutboundFetchError,
@@ -13,6 +17,7 @@ import {
 } from "@/api/lib/skills/skill-package";
 
 const COMMIT_SHA = "a".repeat(40);
+const permit = grantThirdPartyOutboundPermit();
 const SMALL_TREE_SHA = "b".repeat(40);
 const SCRIPTS_TREE_SHA = "c".repeat(40);
 const MAX_DEPTH_SCRIPTS_TREE_SHA = "d".repeat(40);
@@ -56,9 +61,9 @@ const invalidSkillStatus = (): number => {
   return 404;
 };
 
-const safeOutboundFetchBytesMock: NonNullable<
-  Parameters<typeof createSkillPackageFetchContextWithDependencies>[1]
-> = async ({ url }) => {
+const safeOutboundFetchBytesMock: typeof safeOutboundFetchBytes = async ({
+  url,
+}) => {
   const requestUrl = typeof url === "string" ? new URL(url) : url;
   outboundRequestCount += 1;
   if (requestUrl.hostname === "raw.githubusercontent.com") {
@@ -70,9 +75,7 @@ const safeOutboundFetchBytesMock: NonNullable<
         );
       }
       activeRawRequests += 1;
-      await new Promise<void>((resolve) => {
-        setTimeout(resolve, 5);
-      });
+      await sleep(5);
       activeRawRequests -= 1;
     }
     if (requestUrl.pathname.endsWith("/invalid/SKILL.md")) {
@@ -128,6 +131,12 @@ Instructions.`);
   }
   if (requestUrl.pathname.endsWith("/commits/main")) {
     return response({ sha: COMMIT_SHA });
+  }
+  if (
+    requestUrl.pathname.includes("/git/ref/") &&
+    requestUrl.pathname.endsWith("/missing-branch")
+  ) {
+    return response("", 404);
   }
   if (requestUrl.pathname.includes("/git/trees/")) {
     requestedTreeUrls.push(requestUrl.toString());
@@ -218,18 +227,24 @@ Instructions.`);
 };
 
 const createSkillPackageFetchContext = (
-  limits: Parameters<typeof createSkillPackageFetchContextWithDependencies>[0],
+  limits: NonNullable<
+    Parameters<
+      typeof createSkillPackageFetchContextWithDependencies
+    >[0]["limits"]
+  >,
 ) =>
-  createSkillPackageFetchContextWithDependencies(
+  createSkillPackageFetchContextWithDependencies({
+    permit,
     limits,
-    safeOutboundFetchBytesMock,
-  );
+    fetchBytes: safeOutboundFetchBytesMock,
+  });
 
 const discoverSkillPackagesFromUrl = async (rawUrl: string) =>
-  await discoverSkillPackagesFromUrlWithDependencies(
+  await discoverSkillPackagesFromUrlWithDependencies({
+    fetchBytes: safeOutboundFetchBytesMock,
+    permit,
     rawUrl,
-    safeOutboundFetchBytesMock,
-  );
+  });
 
 const fetchSkillPackageFromUrl = async (
   rawUrl: string,
@@ -280,7 +295,22 @@ describe("GitHub skill package discovery", () => {
         throw new Error("Expected retryable source failure to propagate");
       }
       expect(result.error.message).toBe(message);
+      expect(result.error.status).toBe(400);
+      expect(result.error.code).toBe("skill_source_unreachable");
     }
+  });
+
+  test("codes a branch that exists neither as a branch nor as a tag", async () => {
+    const result = await discoverSkillPackagesFromUrl(
+      "https://github.com/example/skills/tree/missing-branch",
+    );
+
+    expect(Result.isError(result)).toBe(true);
+    if (Result.isOk(result)) {
+      throw new Error("Expected an unknown branch to reject discovery");
+    }
+    expect(result.error.status).toBe(400);
+    expect(result.error.code).toBe("skill_source_unreachable");
   });
 
   test("stops scheduling discovery work after a source failure", async () => {
@@ -445,6 +475,7 @@ describe("GitHub skill package discovery", () => {
       throw new Error("Expected the expired deadline to reject the import");
     }
     expect(result.error.message).toBe("Skill import timed out");
+    expect(result.error.code).toBe("skill_source_unreachable");
     expect(outboundRequestCount).toBe(0);
   });
 
@@ -463,6 +494,7 @@ describe("GitHub skill package discovery", () => {
       throw new Error("Expected the expired deadline to reject the import");
     }
     expect(result.error.message).toBe("Skill import timed out");
+    expect(result.error.code).toBe("skill_source_unreachable");
     expect(outboundRequestCount).toBe(0);
   });
 });

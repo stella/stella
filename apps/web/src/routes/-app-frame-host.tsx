@@ -5,20 +5,33 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useRouterState } from "@tanstack/react-router";
 import { panic } from "better-result";
 
+import { ProtectedPendingInspectorScopeContext } from "@/components/inspector/protected-pending-inspector-scope";
+import { useLeafRouteInspectorEntry } from "@/components/inspector/route-inspector-entry";
+import { StellaWordmark } from "@/components/stella-wordmark";
+import { mountBrowserExtensionBridge } from "@/features/chat/browser-control/browser-extension-bridge";
 import { useClientAuthStatus } from "@/hooks/use-client-auth-status";
 import type { ClientAuthStatus } from "@/hooks/use-client-auth-status";
+import { useMountEffect } from "@/hooks/use-effect";
 import type { AuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { isPublicKnowledgeEnabled } from "@/lib/knowledge/public-knowledge-launch";
-import { usePinnedStore } from "@/lib/pinned-store";
 import { resetAuthTransition } from "@/lib/session-cache-guard";
+import { matchedAppFrameScope } from "@/routes/-app-frame-scope";
 import {
   frameVisitor,
   selectAppFrame,
   visitorChanged,
 } from "@/routes/-app-frame.logic";
 import type { AppFrameAudience } from "@/routes/-app-frame.logic";
+import {
+  AuthFrameShell,
+  AuthPickersPending,
+} from "@/routes/-auth-frame.pending";
 import { ProtectedPendingSkeleton } from "@/routes/-protected-pending-skeleton";
+import {
+  useLeafPendingView,
+  useLeafRedirectFrameScope,
+} from "@/routes/-route-pending-view";
 
 // The signed-in frame (sidebar, inspector, chat and their registrations) loads
 // only once a member is known, so sign-in and pages for visitors never
@@ -33,6 +46,11 @@ const LazyProtectedAppFrame = lazy(async () => {
 const LazyKnowledgePublicFrame = lazy(async () => {
   const module = await import("@/routes/-knowledge-public-frame");
   return { default: module.KnowledgePublicFrame };
+});
+
+const AuthFramePickers = lazy(async () => {
+  const module = await import("@/routes/-auth-frame-pickers");
+  return { default: module.AuthFramePickers };
 });
 
 const ROUTE_ID_SEPARATOR = "\n";
@@ -81,12 +99,21 @@ type AppFrameHostProps = {
 };
 
 export const AppFrameHost = ({ children, frames }: AppFrameHostProps) => {
+  // The one owner of the browser extension bridge: it sits above every frame,
+  // including routes with no frame, so each chat send path sees the pairing.
+  useMountEffect(mountBrowserExtensionBridge);
   const MemberFrame = frames?.member ?? LazyProtectedAppFrame;
   const PublicFrame = frames?.public ?? LazyKnowledgePublicFrame;
   const routeIdKey = useRouterState({
     select: (state) =>
       state.matches.map((match) => match.routeId).join(ROUTE_ID_SEPARATOR),
   });
+  const scope = useRouterState({
+    select: (state) => matchedAppFrameScope(state.matches),
+  });
+  const leafPendingView = useLeafPendingView();
+  const inspectorOnEntry = useLeafRouteInspectorEntry();
+  const redirectScope = useLeafRedirectFrameScope();
   const routeUser = useRouterState({
     select: (state) => routeUserOf(state.matches),
   });
@@ -94,35 +121,29 @@ export const AppFrameHost = ({ children, frames }: AppFrameHostProps) => {
   const publicKnowledge = isPublicKnowledgeEnabled();
   const needsAudience =
     selectAppFrame({
+      scope,
       routeIds,
       hasRouteUser: routeUser !== undefined,
       publicKnowledge,
+      redirectScope,
     }) === "unresolved";
   // Asked for only where the frame depends on it: other pages keep exactly
   // the requests they make today.
   const authStatus = useClientAuthStatus({ enabled: needsAudience });
   const audience = needsAudience ? audienceOf(authStatus) : undefined;
   const frame = selectAppFrame({
+    scope,
     routeIds,
     hasRouteUser: routeUser !== undefined,
     publicKnowledge,
     audience,
+    redirectScope,
   });
   const memberUser =
     routeUser ??
     (audience === "member" && authStatus.status === "authenticated"
       ? authStatus.user
       : undefined);
-
-  // A signed-in page's guard seeds the pinned matters before the sidebar
-  // renders; a page without one does it here, before the first paint.
-  const sessionMemberId =
-    routeUser === undefined && frame === "member" ? memberUser?.id : undefined;
-  useLayoutEffect(() => {
-    if (sessionMemberId !== undefined) {
-      usePinnedStore.getState().init(sessionMemberId);
-    }
-  }, [sessionMemberId]);
 
   // When the page moves on to another visitor (sign-out, another
   // organization, an expired session), nothing read for the previous one may
@@ -163,27 +184,42 @@ export const AppFrameHost = ({ children, frames }: AppFrameHostProps) => {
     };
   }, [queryClient, publicKnowledge, visitor]);
 
+  // Until the frame mounts, the skeleton already has the page's shape.
+  const pending = (
+    <ProtectedPendingSkeleton
+      body={leafPendingView}
+      inspectorOnEntry={inspectorOnEntry}
+    />
+  );
+
   if (resetting) {
-    return <ProtectedPendingSkeleton />;
+    return pending;
   }
 
   switch (frame) {
     case "member":
       return memberUser === undefined ? (
-        <ProtectedPendingSkeleton />
+        pending
       ) : (
-        <Suspense fallback={<ProtectedPendingSkeleton />}>
-          <MemberFrame
-            key={`${memberUser.activeOrganizationId}:${memberUser.id}`}
-            user={memberUser}
-          >
-            {children}
-          </MemberFrame>
-        </Suspense>
+        <ProtectedPendingInspectorScopeContext.Provider
+          value={{
+            userId: memberUser.id,
+            organizationId: memberUser.activeOrganizationId,
+          }}
+        >
+          <Suspense fallback={pending}>
+            <MemberFrame
+              key={`${memberUser.activeOrganizationId}:${memberUser.id}`}
+              user={memberUser}
+            >
+              {children}
+            </MemberFrame>
+          </Suspense>
+        </ProtectedPendingInspectorScopeContext.Provider>
       );
     case "public":
       return (
-        <Suspense fallback={<ProtectedPendingSkeleton />}>
+        <Suspense fallback={pending}>
           <PublicFrame>{children}</PublicFrame>
         </Suspense>
       );
@@ -191,11 +227,24 @@ export const AppFrameHost = ({ children, frames }: AppFrameHostProps) => {
     case "unresolved":
       // Until the visitor is known, neither frame (nor anything it would
       // fetch) mounts.
-      return <ProtectedPendingSkeleton />;
+      return pending;
     case "neutral":
       // A page the same for every visitor shows inside the skeleton, so it
       // is there in the server render before either frame mounts.
       return <ProtectedPendingSkeleton content={children} />;
+    case "auth":
+      return (
+        <AuthFrameShell
+          pickers={
+            <Suspense fallback={<AuthPickersPending />}>
+              <AuthFramePickers />
+            </Suspense>
+          }
+          wordmark={StellaWordmark}
+        >
+          {children}
+        </AuthFrameShell>
+      );
     case "none":
       return children;
     default: {

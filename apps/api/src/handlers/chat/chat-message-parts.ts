@@ -1,56 +1,394 @@
+import { isToolResultOutcome } from "@tanstack/ai";
 import type { ContentPartSource } from "@tanstack/ai";
 import type { ToolCallPart as TanStackToolCallPart } from "@tanstack/ai-client";
 import { panic, Result } from "better-result";
 import { deepEquals } from "bun";
 import { Buffer } from "node:buffer";
+import * as v from "valibot";
 
 import {
   isBoundedBase64Content,
   MCP_APP_RESOURCE_MIME_TYPE,
 } from "@stll/api-contract";
+import {
+  CHAT_TOOL_DECLINED_ERROR,
+  chatToolExecutor,
+  isUnsupportedChatPart,
+  UNSUPPORTED_CHAT_PART_ACTIVITY_TYPE,
+} from "@stll/api-contract/chat";
+import { memberWaitsOf } from "@stll/api-contract/chat-member-wait";
+import type { SupersededToolResultsOptions } from "@stll/api-contract/chat-tool-result-retention";
+import {
+  GENERATED_VISUAL_MIME_TYPE,
+  generatedVisualPartSchema,
+} from "@stll/api-contract/generated-visual";
+import { isOwnKey, ownEntry } from "@stll/api-contract/own-key";
+import {
+  STELLA_MCP_APP_MIME_TYPE,
+  stellaMcpAppPartSchema,
+} from "@stll/api-contract/stella-mcp-app";
 
-import { normalizeLegacyRawToolInputs } from "@/api/handlers/chat/legacy-tool-compat";
+import { carriedChatPart } from "@/api/db/stored-chat-part-codec";
+import type { STORED_CHAT_PART_TYPES } from "@/api/db/stored-chat-part-codec";
+import { normalizeStoredChatToolExecutor } from "@/api/handlers/chat/legacy-tool-compat";
 import {
   TANSTACK_TOOL_CALL_STATE_LIFECYCLE,
   TANSTACK_TOOL_RESULT_STATE_LIFECYCLE,
 } from "@/api/handlers/chat/tanstack-chat-lifecycle";
-import { ASK_USER_TOOL_NAME } from "@/api/handlers/chat/tools/native-chat-tool-names";
+import {
+  retainToolResultsInMessages,
+  retainToolResultsInParts,
+} from "@/api/handlers/chat/tool-result-retention";
 import type {
   ChatAttachmentMetadata,
   ChatAttachmentPart,
   ChatMessage,
   ChatMessageContentCandidate,
-  ChatMessageContent,
   ChatMessageMetadata,
   ChatMessageRole,
   ChatPart,
+  ChatSubagentPart,
   ChatTanStackPart,
-  PersistableChatPartType,
-  PersistableChatMessageCandidate,
   PersistableChatMessage,
+  PersistableChatMessageCandidate,
+  PersistableChatPartType,
   PersistableTerminalAssistantMessage,
-  PersistedChatMessageContent,
   PersistedChatMessageContentV3,
+  PersistedSubagentHandle,
+  PersistedSubagentPart,
 } from "@/api/handlers/chat/types";
-import { arrayOrEmpty } from "@/api/lib/array";
+import type { VisualResourceOrigin } from "@/api/handlers/visual-sandbox/resource-origin";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
+  appPresentsTool,
+  chatMcpAppByUri,
+} from "@/api/lib/chat/mcp-app-catalog";
+import {
+  isPersistedJsonObject,
   isPersistedJsonValue,
+  isPersistedToolProviderMetadata,
   proveParsedToolInput,
   proveParsedToolOutput,
   provePersistedChatMessageContentV3,
   provePersistedJsonArray,
-  provePersistedJsonValue,
+  provePersistedToolCallMetadata,
 } from "@/api/lib/chat/persisted-message-content";
 import type {
+  PersistedJsonValue,
+  PersistedToolCallPart,
   PersistedToolInput,
   PersistedToolResultContent,
+  PersistedToolResultPart,
 } from "@/api/lib/chat/persisted-message-content";
+import { isReasoningProvenance } from "@/api/lib/chat/reasoning-provenance";
 import { LIMITS } from "@/api/lib/limits";
-import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { isUserFileUrl, parseUserFileId } from "@/api/lib/user-files/types";
 
 const IMAGE_MIME_PREFIX = "image/";
+
+// What this release knows of each stored part, at every depth. `true` marks a
+// field whose value is kept whole (free JSON, or a provider's own record). Any
+// other field is one a newer release added: this release never reads it,
+// never shows it to the model, and writes it back as stored.
+type KnownFields = { readonly [field: string]: true | KnownFields };
+
+const SOURCE_FIELDS = { mimeType: true, type: true, value: true } as const;
+const MEDIA_FIELDS = {
+  id: true,
+  metadata: true,
+  source: SOURCE_FIELDS,
+  type: true,
+} as const;
+
+const KNOWN_STORED_FIELDS = {
+  activity: {
+    activityType: true,
+    content: true,
+    subagentRunId: true,
+    type: true,
+  },
+  audio: MEDIA_FIELDS,
+  document: MEDIA_FIELDS,
+  image: MEDIA_FIELDS,
+  "structured-output": {
+    data: true,
+    errorMessage: true,
+    partial: true,
+    raw: true,
+    reasoning: true,
+    status: true,
+    type: true,
+  },
+  subagent: {
+    subagent: {
+      description: true,
+      error: { code: true, message: true },
+      id: true,
+      // What the parent model wrote when it started the child: the SDK's
+      // checked value, kept as written.
+      input: true,
+      interruptIds: true,
+      // Each child message is read through its own stored content.
+      messages: true,
+      metadata: true,
+      name: true,
+      parentRunId: true,
+      parentSubagentRunId: true,
+      parentToolCallId: true,
+      status: true,
+    } satisfies Record<
+      keyof PersistedSubagentPart["subagent"],
+      true | KnownFields
+    >,
+    type: true,
+  },
+  text: { content: true, metadata: true, providerMetadata: true, type: true },
+  thinking: {
+    content: true,
+    provenance: { format: true, model: true, provider: true },
+    providerMetadata: true,
+    redacted: true,
+    signature: true,
+    stepId: true,
+    type: true,
+  },
+  "tool-call": {
+    approval: { approved: true, id: true, needsApproval: true },
+    id: true,
+    input: { rawArguments: true, status: true, value: true },
+    metadata: true,
+    name: true,
+    output: { value: true },
+    providerMetadata: { call: true, result: true },
+    state: true,
+    type: true,
+  } satisfies Record<keyof PersistedToolCallPart, true | KnownFields>,
+  "tool-result": {
+    content: { type: true, value: true },
+    error: true,
+    outcome: true,
+    state: true,
+    toolCallId: true,
+    type: true,
+  } satisfies Record<keyof PersistedToolResultPart, true | KnownFields>,
+  "ui-resource": {
+    meta: true,
+    resource: { blob: true, mimeType: true, text: true, uri: true },
+    serverId: true,
+    toolCallId: true,
+    toolName: true,
+    type: true,
+  } satisfies Record<
+    keyof Extract<ChatPart, { type: "ui-resource" }>,
+    true | KnownFields
+  >,
+  video: MEDIA_FIELDS,
+} as const satisfies Record<keyof typeof STORED_CHAT_PART_TYPES, KnownFields>;
+
+const knownFieldsOfType = (type: string): KnownFields =>
+  ownEntry(KNOWN_STORED_FIELDS, type) ?? {};
+
+const isFieldRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+/** `value` with only the fields `known` names, at every depth. */
+const knownFieldsOf = (value: unknown, known: KnownFields): unknown => {
+  if (!isFieldRecord(value)) {
+    return value;
+  }
+  return Object.fromEntries(
+    Object.entries(value).flatMap(([field, inner]) => {
+      const rule = ownEntry(known, field);
+      if (rule === undefined) {
+        return [];
+      }
+      return [[field, rule === true ? inner : knownFieldsOf(inner, rule)]];
+    }),
+  );
+};
+
+/** `value`'s fields `known` names, at every depth, for a value that is a
+ *  field record. */
+const knownRecordOf = (
+  value: Record<string, unknown>,
+  known: KnownFields,
+): Record<string, unknown> => {
+  const fields = knownFieldsOf(value, known);
+  return isFieldRecord(fields)
+    ? fields
+    : panic("Known fields of a record are a record");
+};
+
+/** Expose only fields this release understands in a stored revision snapshot. */
+const clientVisibleStoredChatPart = (part: unknown): unknown => {
+  if (!isFieldRecord(part) || typeof part["type"] !== "string") {
+    return {};
+  }
+  return knownFieldsOf(part, knownFieldsOfType(part["type"]));
+};
+
+/**
+ * The client sees where an unknown stored part sits, never its raw payload,
+ * at every depth: a part a sub-agent's child stored is shown the same way.
+ */
+export const clientVisibleChatPart = (part: ChatPart): ChatPart => {
+  if (isUnsupportedChatPart(part)) {
+    return {
+      type: "activity",
+      activityType: UNSUPPORTED_CHAT_PART_ACTIVITY_TYPE,
+      content: {},
+    };
+  }
+  if (part.type !== "subagent") {
+    return part;
+  }
+  const messages = part.subagent.messages.map((message) => {
+    const parts = childPartsOf(message);
+    const visible = parts.map(clientVisibleChatPart);
+    return visible.every((child, index) => child === parts.at(index))
+      ? message
+      : { ...message, parts: visible };
+  });
+  return messages.every(
+    (message, index) => message === part.subagent.messages.at(index),
+  )
+    ? part
+    : { ...part, subagent: { ...part.subagent, messages } };
+};
+
+/**
+ * Stored content as a revision snapshot shows it: each part with only the
+ * fields this release understands, a part this release cannot read as a
+ * neutral row, and a sub-agent part's child messages each as content of its
+ * own, by the same rule.
+ */
+export const clientVisibleStoredContent = (
+  content: StoredChatMessageContentV3,
+): { data: unknown[]; metadata?: unknown; version: 3 } => {
+  const readParts = normalizePersistedChatMessageContent(content).parts;
+  return {
+    version: content.version,
+    data: content.data.map((part, index) => {
+      const read =
+        readParts.at(index) ??
+        panic("Revision snapshot projection lost a stored part");
+      if (isUnsupportedChatPart(read)) {
+        return clientVisibleChatPart(read);
+      }
+      if (part.type !== "subagent") {
+        return clientVisibleStoredChatPart(part);
+      }
+      return {
+        subagent: {
+          ...knownRecordOf(
+            part.subagent,
+            KNOWN_STORED_FIELDS.subagent.subagent,
+          ),
+          messages: part.subagent.messages.map(
+            ({ content: child, id, role }) => ({
+              content: clientVisibleStoredContent(child),
+              id,
+              role,
+            }),
+          ),
+        },
+        type: "subagent",
+      };
+    }),
+    ...(content.metadata === undefined ? {} : { metadata: content.metadata }),
+  };
+};
+
+/** `encoded` with every field `stored` holds that this release does not
+ *  know, at every depth, as stored. */
+const withLaterReleaseFields = <TPart extends object>(
+  encoded: TPart,
+  stored: unknown,
+  known: KnownFields,
+): TPart => {
+  if (!isFieldRecord(stored)) {
+    return encoded;
+  }
+  const later = Object.fromEntries(
+    Object.entries(stored).filter(
+      ([field]) => !isOwnKey(known, field) && !Object.hasOwn(encoded, field),
+    ),
+  );
+  const nested = Object.fromEntries(
+    Object.entries(encoded).flatMap(([field, inner]) => {
+      const rule = ownEntry(known, field);
+      return rule === undefined || rule === true || !isFieldRecord(inner)
+        ? []
+        : [[field, withLaterReleaseFields(inner, stored[field], rule)]];
+    }),
+  );
+  return { ...later, ...encoded, ...nested };
+};
+
+/** What a decoded part keeps of the stored message it came from. */
+type StoredOrigin = {
+  /** The authoritative row that supplied this part, when read as a message. */
+  messageId: SafeId<"chatMessage"> | undefined;
+  /** The part as stored: every field, a newer release's included. */
+  stored: unknown;
+  /** The stored part, written back as it is while the part is unedited.
+   *  Absent for a call stored before calls recorded their executor, which
+   *  every save upgrades. */
+  writable: PersistedV3Part | undefined;
+  /** The part as loaded: a part still equal to it is unedited. */
+  loaded: ChatPart;
+};
+
+// Keyed by the decoded part itself; a write also checks its source message.
+const STORED_ORIGINS = new WeakMap<ChatPart, StoredOrigin>();
+
+const writableStoredPart = (part: StoredPart): PersistedV3Part | undefined => {
+  // Written back only while it still proves as a stored part of this
+  // release's; otherwise every save re-encodes it.
+  if (part.type !== "tool-call") {
+    return isPersistedV3Part(part) ? part : undefined;
+  }
+  const metadata = Result.try(() =>
+    provePersistedToolCallMetadata(part.metadata),
+  );
+  if (!Result.isOk(metadata)) {
+    return undefined;
+  }
+  const writable = { ...part, metadata: metadata.value };
+  return isPersistedV3Part(writable) ? writable : undefined;
+};
+
+const rememberStoredOrigins = (
+  stored: readonly StoredPart[],
+  parts: readonly ChatPart[],
+  messageId?: SafeId<"chatMessage">,
+): void => {
+  for (const [index, part] of parts.entries()) {
+    const raw = stored.at(index);
+    if (raw === undefined) {
+      continue;
+    }
+    const origin: StoredOrigin = {
+      messageId,
+      stored: raw,
+      writable: writableStoredPart(raw),
+      loaded: structuredClone(part),
+    };
+    STORED_ORIGINS.set(part, origin);
+  }
+};
+
+/** Preserve provenance only when a server transformation names its exact source. */
+export const continueStoredChatPart = <T extends ChatPart>(
+  source: ChatPart,
+  changed: T,
+): T => {
+  const origin = STORED_ORIGINS.get(source);
+  if (origin !== undefined && source.type === changed.type) {
+    STORED_ORIGINS.set(changed, origin);
+  }
+  return changed;
+};
 
 export type ChatAttachmentInput = {
   filename?: string | undefined;
@@ -66,9 +404,16 @@ export const attachTerminalTurnOutcome = ({
   message: PersistableChatMessage;
   turnOutcome: NonNullable<ChatMessageMetadata["turnOutcome"]>;
 }): PersistableTerminalAssistantMessage => {
+  const { resumeSnapshot, ...metadata } = message.metadata ?? {};
   const terminalMessage = toPersistableChatMessage({
     ...message,
-    metadata: { ...message.metadata, turnOutcome },
+    metadata: {
+      ...metadata,
+      ...(turnOutcome.type === "awaiting-user" && resumeSnapshot !== undefined
+        ? { resumeSnapshot }
+        : {}),
+      turnOutcome,
+    },
   });
   if (!isPersistableTerminalAssistantMessage(terminalMessage)) {
     panic("Terminal chat turn must be an assistant message with an outcome");
@@ -81,26 +426,13 @@ const isPersistableTerminalAssistantMessage = (
 ): message is PersistableTerminalAssistantMessage =>
   message.role === "assistant" && message.metadata?.turnOutcome !== undefined;
 
-export type LegacyAiSdkFilePart = {
-  filename?: string | undefined;
-  mediaType: string;
-  placeholder?: string | undefined;
-  type: "file";
-  url: string;
-};
-
-type LegacyAiSdkTextPart = {
-  text: string;
-  type: "text";
-};
-
-export type NormalizedLegacyMessageParts = {
+export type NormalizedChatMessageParts = {
   metadata: ChatMessageMetadata;
   parts: ChatPart[];
 };
 
 type PersistedChatMessageRow = {
-  content: PersistedChatMessageContent;
+  content: StoredChatMessageContentV3;
   id: SafeId<"chatMessage">;
   role: ChatMessageRole;
 };
@@ -131,6 +463,19 @@ export const isChatAttachmentPart = (
   isRecord(part["source"]) &&
   "value" in part["source"] &&
   typeof part["source"]["value"] === "string";
+
+/**
+ * A file on an assistant message is one the answer handed the member. Nobody
+ * sent it to the model, so it never goes to one, and its bytes are never
+ * fetched to prepare a turn or copied to a computer as an attachment. Every
+ * reader that turns a message's files into model input or a run's attachments
+ * asks this first; the message itself keeps the part, so it still shows.
+ */
+export const isAnswerFilePart = (
+  role: ChatMessage["role"],
+  part: unknown,
+): part is ChatAttachmentPart =>
+  role === "assistant" && isChatAttachmentPart(part);
 
 export const isChatDocumentPart = (part: unknown): part is ChatAttachmentPart =>
   isChatAttachmentPart(part) && part.type === "document";
@@ -186,136 +531,30 @@ export const createChatAttachmentPart = ({
   };
 };
 
-const isLegacyAiSdkTextPart = (part: unknown): part is LegacyAiSdkTextPart =>
-  isRecord(part) && part["type"] === "text" && typeof part["text"] === "string";
-
-const isLegacyAiSdkFilePart = (part: unknown): part is LegacyAiSdkFilePart =>
-  isRecord(part) &&
-  part["type"] === "file" &&
-  typeof part["mediaType"] === "string" &&
-  typeof part["url"] === "string";
-
-const legacyAiSdkTextPartToTanStack = (
-  part: LegacyAiSdkTextPart,
-): Extract<ChatTanStackPart, { type: "text" }> => ({
-  type: "text",
-  content: part.text,
-});
-
-export const legacyAiSdkFilePartToTanStack = (
-  part: LegacyAiSdkFilePart,
-): ChatAttachmentPart =>
-  createChatAttachmentPart({
-    filename:
-      part.filename === undefined ? undefined : sanitizeFilename(part.filename),
-    mimeType: part.mediaType,
-    placeholder: part.placeholder,
-    url: part.url,
-  });
-
-const normalizeLegacyMessagePartsToTanStack = (
-  parts: readonly unknown[],
-): NormalizedLegacyMessageParts => {
-  const normalized: ChatPart[] = [];
-  const metadata: ChatMessageMetadata = {};
-  for (const part of parts) {
-    if (isLegacyAiSdkTextPart(part)) {
-      normalized.push(legacyAiSdkTextPartToTanStack(part));
-      continue;
-    }
-    if (isLegacyAiSdkFilePart(part)) {
-      normalized.push(legacyAiSdkFilePartToTanStack(part));
-      continue;
-    }
-    if (isLegacyAnonRestorationsPart(part)) {
-      // Legacy parts predate thread-wide placeholder numbering, so a repeated
-      // placeholder here is expected history, not a fault: not reported.
-      metadata.anonRestorations = mergeAnonRestorations(
-        metadata.anonRestorations,
-        part.data,
-      ).restorations;
-      continue;
-    }
-    if (isLegacyMentionsPart(part)) {
-      metadata.mentions = part.data;
-      continue;
-    }
-    if (isLegacySourceDocumentPart(part)) {
-      const sourceDocuments = metadata.sourceDocuments;
-      metadata.sourceDocuments = [...arrayOrEmpty(sourceDocuments), part.data];
-      continue;
-    }
-    if (isLegacyToolPart(part)) {
-      const converted = legacyToolPartToTanStack(part);
-      if (converted) {
-        normalized.push(converted);
-      }
-      continue;
-    }
-    if (isChatPart(part)) {
-      normalized.push(part);
-    }
-  }
-  return { metadata, parts: normalized };
+// Stored rows may predate executor metadata; the writer output remains strict.
+type StoredChatMessageContentV3 = Pick<
+  PersistedChatMessageContentV3,
+  "version" | "metadata"
+> & {
+  data: (
+    | Exclude<PersistedV3Part, { type: "tool-call" }>
+    | (Omit<Extract<PersistedV3Part, { type: "tool-call" }>, "metadata"> & {
+        metadata?: PersistedJsonValue | undefined;
+      })
+  )[];
 };
-
 export const normalizePersistedChatMessageContent = (
-  content: PersistedChatMessageContent,
-): NormalizedLegacyMessageParts => {
-  if (content.version === 3) {
-    return normalizePersistedV3ChatMessageContent(content);
-  }
-
-  if (content.version === 2) {
-    return {
-      metadata: content.metadata ?? {},
-      parts: normalizeLegacyPersistedToolInputs(content.data),
-    };
-  }
-
-  const normalized = normalizeLegacyMessagePartsToTanStack(
-    normalizeLegacyRawToolInputs(content.data),
-  );
-  return {
-    metadata: normalized.metadata,
-    parts: normalizeLegacyPersistedToolInputs(normalized.parts),
-  };
-};
-
-const normalizeLegacyPersistedToolInputs = (
-  parts: readonly ChatPart[],
-): ChatPart[] => parts.map(normalizeLegacyPersistedToolInput);
-
-const normalizeLegacyPersistedToolInput = (part: ChatPart): ChatPart => {
-  if (
-    part.type !== "tool-call" ||
-    part.input !== undefined ||
-    part.state === "awaiting-input" ||
-    part.state === "input-streaming"
-  ) {
-    return part;
-  }
-
-  const parsed = Result.try((): unknown => JSON.parse(part.arguments));
-  if (Result.isError(parsed)) {
-    return part;
-  }
-  const input =
-    parsed.value !== null && typeof parsed.value === "object"
-      ? parsed.value
-      : {};
-  const candidate: unknown = { ...part, input };
-  if (!isChatPart(candidate) || candidate.type !== "tool-call") {
-    panic(`Stored legacy tool call ${part.id} has invalid input`);
-  }
-  return candidate;
-};
-
+  content: StoredChatMessageContentV3,
+  messageId?: SafeId<"chatMessage">,
+): NormalizedChatMessageParts =>
+  normalizePersistedV3ChatMessageContent(content, messageId);
 type PersistedV3Part = PersistedChatMessageContentV3["data"][number];
+type StoredPart = StoredChatMessageContentV3["data"][number];
 
 const normalizePersistedV3ChatMessageContent = (
-  content: PersistedChatMessageContentV3,
-): NormalizedLegacyMessageParts => {
+  content: StoredChatMessageContentV3,
+  messageId?: SafeId<"chatMessage">,
+): NormalizedChatMessageParts => {
   if (!Array.isArray(content.data)) {
     panic("Stored v3 chat content has invalid data");
   }
@@ -325,21 +564,48 @@ const normalizePersistedV3ChatMessageContent = (
   ) {
     panic("Stored v3 chat content has invalid metadata");
   }
+  const data: readonly StoredPart[] = content.data;
   const outputByToolCallId = new Map<string, unknown>();
-  for (const part of content.data) {
-    if (!isRecord(part)) {
-      panic("Stored v3 chat content has an invalid part");
-    }
-    if (part.type === "tool-call" && part.output !== undefined) {
-      outputByToolCallId.set(part.id, decodePersistedToolOutput(part.output));
+  for (const part of data) {
+    if (
+      isRecord(part) &&
+      part.type === "tool-call" &&
+      part.output !== undefined
+    ) {
+      const output = Result.try(() => decodePersistedToolOutput(part.output));
+      if (Result.isOk(output)) {
+        outputByToolCallId.set(part.id, output.value);
+      }
     }
   }
 
-  const parts: ChatPart[] = [];
-  for (const part of content.data) {
-    parts.push(persistedV3PartToChatPart({ outputByToolCallId, part }));
-  }
+  const parts = data.map((part) =>
+    readStoredChatPart({ outputByToolCallId, part }),
+  );
+  rememberStoredOrigins(data, parts, messageId);
   return { metadata: content.metadata ?? {}, parts };
+};
+
+/**
+ * Decoding is total: a stored part this release cannot decode strictly, for
+ * any reason (a type, an enum value or a nested shape a newer release
+ * introduced), is carried whole and written back as stored.
+ */
+const readStoredChatPart = ({
+  outputByToolCallId,
+  part,
+}: {
+  outputByToolCallId: ReadonlyMap<string, unknown>;
+  part: StoredPart;
+}): ChatPart => {
+  const decoded = Result.try(() =>
+    isRecord(part)
+      ? normalizeStoredChatToolExecutor(
+          persistedV3PartToChatPart({ outputByToolCallId, part }),
+        )
+      : panic("Stored v3 chat content has an invalid part"),
+  );
+  return Result.isOk(decoded) ? decoded.value : carriedChatPart(part);
 };
 
 const persistedV3PartToChatPart = ({
@@ -347,7 +613,7 @@ const persistedV3PartToChatPart = ({
   part,
 }: {
   outputByToolCallId: ReadonlyMap<string, unknown>;
-  part: PersistedV3Part;
+  part: StoredChatMessageContentV3["data"][number];
 }): ChatPart => {
   if (part.type === "tool-call") {
     const persistedInput = decodePersistedToolInput(part.input);
@@ -356,17 +622,29 @@ const persistedV3PartToChatPart = ({
     if (part.metadata !== undefined && !isPersistedJsonValue(part.metadata)) {
       panic("Stored v3 tool call has invalid metadata");
     }
+    const known = KNOWN_STORED_FIELDS["tool-call"];
     const candidate: unknown = {
-      ...(part.approval === undefined ? {} : { approval: part.approval }),
+      ...(part.approval === undefined
+        ? {}
+        : { approval: knownFieldsOf(part.approval, known.approval) }),
       arguments:
         persistedInput.status === "raw"
           ? persistedInput.rawArguments
-          : stringifyPersistedJsonValue(persistedInput.value),
+          : (persistedInput.rawArguments ??
+            stringifyPersistedJsonValue(persistedInput.value)),
       id: part.id,
       ...(input === undefined ? {} : { input }),
       ...(part.metadata === undefined ? {} : { metadata: part.metadata }),
       name: part.name,
       ...(part.output === undefined ? {} : { output }),
+      ...(part.providerMetadata === undefined
+        ? {}
+        : {
+            providerMetadata: knownFieldsOf(
+              part.providerMetadata,
+              known.providerMetadata,
+            ),
+          }),
       state: part.state,
       type: "tool-call",
     };
@@ -384,6 +662,7 @@ const persistedV3PartToChatPart = ({
     const candidate: unknown = {
       content,
       ...(part.error === undefined ? {} : { error: part.error }),
+      ...(part.outcome === undefined ? {} : { outcome: part.outcome }),
       state: part.state,
       toolCallId: part.toolCallId,
       type: "tool-result",
@@ -394,10 +673,81 @@ const persistedV3PartToChatPart = ({
     return candidate;
   }
 
-  if (!isChatPart(part)) {
+  if (part.type === "subagent") {
+    return storedSubagentToChatPart(part);
+  }
+
+  const known: unknown = knownFieldsOf(part, knownFieldsOfType(part.type));
+  if (!isChatPart(known)) {
     panic("Stored v3 non-tool part is not a valid chat part");
   }
-  return part;
+  return known;
+};
+
+/** The fields of a stored child message, and of its content, this release
+ *  reads. A decoded child keeps no others, so a child a newer release
+ *  extended is not decoded: its whole part is carried and written back as
+ *  stored. */
+const STORED_CHILD_MESSAGE_FIELDS = {
+  content: true,
+  id: true,
+  role: true,
+} as const satisfies Record<
+  keyof PersistedSubagentPart["subagent"]["messages"][number],
+  true
+>;
+const STORED_CHILD_CONTENT_FIELDS = {
+  data: true,
+  metadata: true,
+  version: true,
+} as const satisfies Record<
+  Exclude<keyof PersistedChatMessageContentV3, symbol>,
+  true
+>;
+
+const hasOnlyFields = (
+  value: Readonly<Record<string, unknown>>,
+  fields: Readonly<Record<string, true>>,
+): boolean => Object.keys(value).every((field) => Object.hasOwn(fields, field));
+
+/**
+ * A stored sub-agent part read back: each child message's parts decoded from
+ * its own stored content, so a child part this release cannot read is
+ * carried exactly as a message's own part is.
+ */
+const storedSubagentToChatPart = (part: PersistedSubagentPart): ChatPart => {
+  const { subagent } = part;
+  if (!isRecord(subagent) || !Array.isArray(subagent.messages)) {
+    return panic("Stored subagent part has invalid messages");
+  }
+  const candidate: unknown = {
+    subagent: {
+      ...knownRecordOf(subagent, KNOWN_STORED_FIELDS.subagent.subagent),
+      messages: subagent.messages.map((message) => {
+        if (!isRecord(message) || !isRecord(message.content)) {
+          return panic("Stored subagent message is invalid");
+        }
+        const content: Readonly<Record<string, unknown>> = message.content;
+        if (
+          !hasOnlyFields(message, STORED_CHILD_MESSAGE_FIELDS) ||
+          content["version"] !== 3 ||
+          !hasOnlyFields(content, STORED_CHILD_CONTENT_FIELDS)
+        ) {
+          return panic("Stored subagent message is from a newer release");
+        }
+        return {
+          id: message.id,
+          parts: normalizePersistedChatMessageContent(message.content).parts,
+          role: message.role,
+        };
+      }),
+    },
+    type: "subagent",
+  };
+  if (!isChatPart(candidate) || candidate.type !== "subagent") {
+    return panic("Stored subagent part is not a valid chat part");
+  }
+  return candidate;
 };
 
 const persistedV3ToolResultContent = ({
@@ -436,7 +786,11 @@ const decodePersistedToolInput = (input: unknown): PersistedToolInput => {
       : panic("Stored v3 tool call has invalid raw arguments");
   }
   if (input["status"] === "parsed" && "value" in input) {
-    return proveParsedToolInput(input["value"]);
+    const rawArguments = input["rawArguments"];
+    if (rawArguments !== undefined && typeof rawArguments !== "string") {
+      return panic("Stored v3 tool call has invalid raw arguments");
+    }
+    return proveParsedToolInput(input["value"], rawArguments);
   }
   return panic("Stored v3 tool call has invalid input state");
 };
@@ -500,7 +854,7 @@ export const chatMessageFromPersisted = ({
   id,
   role,
 }: PersistedChatMessageRow): PersistableChatMessage => {
-  const normalized = normalizePersistedChatMessageContent(content);
+  const normalized = normalizePersistedChatMessageContent(content, id);
   return toPersistableChatMessage({
     id,
     role,
@@ -514,18 +868,29 @@ export const chatMessageFromPersisted = ({
 export const chatMessageContentFromMessage = (
   message: PersistableChatMessage,
 ): PersistedChatMessageContentV3 =>
-  toPersistedChatMessageContentV3({
-    data: message.parts,
-    ...(message.metadata === undefined ? {} : { metadata: message.metadata }),
-  });
+  toPersistedChatMessageContentV3(
+    {
+      data: message.parts,
+      ...(message.metadata === undefined ? {} : { metadata: message.metadata }),
+    },
+    message.id,
+  );
 
 type ChatPartClientAcceptance = "accept" | "server-only";
 type ChatPartProviderVisibility = "model" | "ui-only";
 type InvalidChatPartHandling = "drop" | "panic";
+/**
+ * `presentation` parts count against a message's rich-part budget, and one
+ * past it is dropped. `conversation` parts are the turn itself (what the user
+ * wrote, what a model produced, what a tool or a sub-agent did), so a budget
+ * never drops one.
+ */
+type ChatPartStorage = "conversation" | "presentation";
 type ChatPartPolicy = {
   clientAcceptance: ChatPartClientAcceptance;
   invalidHandling: InvalidChatPartHandling;
   providerVisibility: ChatPartProviderVisibility;
+  storage: ChatPartStorage;
 };
 
 // Rich output parts are issued by the trusted stream processor. Accepting
@@ -539,88 +904,87 @@ type ChatPartPolicy = {
 // explicit here also prevents audio/video replay into a model that may not
 // support those modalities on the next turn.
 const CHAT_PART_POLICY = {
+  activity: {
+    clientAcceptance: "server-only",
+    invalidHandling: "panic",
+    providerVisibility: "ui-only",
+    storage: "presentation",
+  },
   audio: {
     clientAcceptance: "server-only",
     invalidHandling: "drop",
     providerVisibility: "ui-only",
+    storage: "presentation",
   },
   document: {
     clientAcceptance: "accept",
     invalidHandling: "panic",
     providerVisibility: "model",
+    storage: "conversation",
   },
   image: {
     clientAcceptance: "accept",
     invalidHandling: "panic",
     providerVisibility: "model",
+    storage: "conversation",
   },
   "structured-output": {
     clientAcceptance: "accept",
     invalidHandling: "panic",
     providerVisibility: "model",
+    storage: "conversation",
   },
+  // A sub-agent part holds its child's run (its calls, approvals and client
+  // calls), which a resumed turn reads back, so it is conversation, and a
+  // malformed one fails loudly. Only a tool-mode part is accepted: its child
+  // reaches the parent model only as the result of the call that started it,
+  // so the part itself is never sent to a model.
   subagent: {
     clientAcceptance: "server-only",
-    invalidHandling: "drop",
+    invalidHandling: "panic",
     providerVisibility: "ui-only",
+    storage: "conversation",
   },
   text: {
     clientAcceptance: "accept",
     invalidHandling: "panic",
     providerVisibility: "model",
+    storage: "conversation",
   },
   thinking: {
-    clientAcceptance: "accept",
+    clientAcceptance: "server-only",
     invalidHandling: "panic",
     providerVisibility: "model",
+    storage: "conversation",
   },
   "tool-call": {
     clientAcceptance: "accept",
     invalidHandling: "panic",
     providerVisibility: "model",
+    storage: "conversation",
   },
   "tool-result": {
     clientAcceptance: "accept",
     invalidHandling: "panic",
     providerVisibility: "model",
+    storage: "conversation",
   },
   "ui-resource": {
     clientAcceptance: "server-only",
     invalidHandling: "drop",
     providerVisibility: "ui-only",
+    storage: "presentation",
   },
   video: {
     clientAcceptance: "server-only",
     invalidHandling: "drop",
     providerVisibility: "ui-only",
+    storage: "presentation",
   },
 } as const satisfies Record<PersistableChatPartType, ChatPartPolicy>;
 
 export const isProviderVisibleChatPart = (part: ChatPart): boolean =>
   CHAT_PART_POLICY[part.type].providerVisibility === "model";
-
-/**
- * Whether a client-executed tool call (ask-user, or any tool without a server
- * `execute`) still awaits its client resolution. A server-executed call never
- * ends a run in `input-complete`: the agent loop executes every tool of a
- * model turn before it decides whether to call the model again, so at run end
- * an `input-complete` call is by construction one the client must resolve.
- */
-const CLIENT_TOOL_STATE_AWAITS_RESOLUTION = {
-  "approval-requested": false,
-  "approval-responded": false,
-  // A terminal stream can end while the provider has only announced a call or
-  // is still emitting its JSON arguments. Neither state carries usable input,
-  // so neither may take durable turn ownership.
-  "awaiting-input": false,
-  complete: false,
-  error: false,
-  "input-complete": true,
-  "input-streaming": false,
-} as const satisfies Record<TanStackToolCallState, boolean>;
-
-const clientToolInteractionType = (name: string): "ask-user" | "client-tool" =>
-  name === ASK_USER_TOOL_NAME ? "ask-user" : "client-tool";
 
 export type AwaitingUserInteraction = Extract<
   NonNullable<ChatMessageMetadata["turnOutcome"]>,
@@ -675,20 +1039,58 @@ const terminalToolCallError = (part: ChatToolCallPart): ChatToolCallPart => {
   });
 };
 
+type ChatToolResultPart = Extract<ChatPart, { type: "tool-result" }>;
+
+/** A declined call as it is stored, and the result answering it. */
+type DeclinedToolCall = {
+  call: ChatToolCallPart;
+  result: ChatToolResultPart;
+};
+
+/**
+ * `part` declined, in the one shape a declined call is stored in: the shape
+ * the chat engine writes when the user denies an approval. The call settles
+ * as an error whose output is the engine's denial and keeps its approval with
+ * `approved: false`, and a `denied` result answers it, so the model is told
+ * the user declined and every reader (`isDeclinedChatToolCall`) sees the same
+ * decision whoever declined the call.
+ */
+export const declineToolCall = (
+  part: ChatToolCallPart,
+  approval: ChatApprovalMetadata,
+): DeclinedToolCall => {
+  const output = { error: CHAT_TOOL_DECLINED_ERROR };
+  return {
+    call: toChatToolCallPart({
+      ...part,
+      approval: { ...approval, approved: false },
+      output,
+      state: "error",
+    }),
+    result: {
+      content: JSON.stringify(output),
+      error: CHAT_TOOL_DECLINED_ERROR,
+      outcome: "denied",
+      state: "error",
+      toolCallId: part.id,
+      type: "tool-result",
+    },
+  };
+};
+
+/** What a terminated turn leaves of one of its calls: the call, and the
+ *  result that now answers it, if any. */
 const cancelPendingToolCallPart = (
   part: ChatToolCallPart,
-): ChatToolCallPart => {
+): { call: ChatToolCallPart; result?: ChatToolResultPart } => {
   switch (part.state) {
     case "approval-requested": {
       const approval = getChatToolCallExtension(part, "approval");
       if (!isChatApprovalMetadata(approval)) {
-        return terminalToolCallError(part);
+        return { call: terminalToolCallError(part) };
       }
-      return toChatToolCallPart({
-        ...part,
-        approval: { ...approval, approved: false },
-        state: "approval-responded",
-      });
+      // Nobody can answer the approval any more, so it is declined.
+      return declineToolCall(part, approval);
     }
     case "awaiting-input":
     case "input-streaming":
@@ -696,11 +1098,11 @@ const cancelPendingToolCallPart = (
       // Do not leave a partial or client-owned call in a state that a fresh
       // hydration can execute after its owning turn was superseded. Omitting
       // input/approval/output also removes now-invalid user controls.
-      return terminalToolCallError(part);
+      return { call: terminalToolCallError(part) };
     case "approval-responded":
     case "complete":
     case "error":
-      return part;
+      return { call: part };
     default:
       part.state satisfies never;
       return panic(`Unhandled state: ${String(part.state)}`);
@@ -710,55 +1112,117 @@ const cancelPendingToolCallPart = (
 /**
  * Keep a terminal assistant message internally consistent: metadata records
  * its turn's outcome, and its parts no longer expose an approval or input
- * control that belongs to that terminated turn.
+ * control that belongs to that terminated turn. The results answering the
+ * approvals it declines go at the end of the message, where the engine
+ * stores the results it writes (`answerCallsInTheirStep` puts each in its
+ * step for a provider request).
  */
 export const cancelPendingChatToolCalls = (
   message: PersistableChatMessage,
-): PersistableChatMessage => {
-  const parts = message.parts.map((part) =>
-    part.type === "tool-call" ? cancelPendingToolCallPart(part) : part,
-  );
-  return { ...message, parts };
+): PersistableChatMessage => ({
+  ...message,
+  parts: cancelPendingToolCallParts(message.parts),
+});
+
+/** `parts` with every pending call closed, at every depth; see
+ *  `cancelPendingChatToolCalls`. */
+const cancelPendingToolCallParts = (parts: readonly ChatPart[]): ChatPart[] => {
+  const results: ChatToolResultPart[] = [];
+  const closed = parts.map((part) => {
+    if (part.type === "subagent") {
+      return continueStoredChatPart(part, stopSubagentRun(part));
+    }
+    if (part.type !== "tool-call") {
+      return part;
+    }
+    const { call, result } = cancelPendingToolCallPart(part);
+    if (result !== undefined) {
+      results.push(result);
+    }
+    return continueStoredChatPart(part, call);
+  });
+  return [...closed, ...results];
+};
+
+/** The run's handle as the SDK leaves a child it stopped. */
+const SUBAGENT_STOPPED_ERROR = { message: "Stopped" } as const;
+
+/**
+ * A sub-agent run of a terminated turn: its child's pending calls closed as a
+ * message's own are, and a run that could still continue (running, or
+ * suspended on an answer) stopped, as the SDK stops a child, so no control
+ * inside it stays answerable.
+ */
+const stopSubagentRun = (part: ChatSubagentPart): ChatSubagentPart => {
+  const { interruptIds: _interruptIds, ...handle } = part.subagent;
+  const messages = part.subagent.messages.map((message) => ({
+    ...message,
+    parts: cancelPendingToolCallParts(childPartsOf(message)),
+  }));
+  switch (part.subagent.status) {
+    case "running":
+    case "suspended":
+      return {
+        subagent: {
+          ...handle,
+          error: SUBAGENT_STOPPED_ERROR,
+          messages,
+          status: "error",
+        },
+        type: "subagent",
+      };
+    case "error":
+    case "finished":
+      return { subagent: { ...part.subagent, messages }, type: "subagent" };
+    default:
+      part.subagent.status satisfies never;
+      return panic(`Unhandled status: ${String(part.subagent.status)}`);
+  }
 };
 
 /**
- * Every approval-requested call remains actionable. A chat turn is owned by
- * its assistant message, not by whichever pending approval happened to arrive
- * first in the stream.
+ * Every tool call of `parts` an answer can reach: their own, and those of
+ * each suspended sub-agent run inside them, at every depth. The SDK resumes
+ * only a suspended child, so a call inside a running, finished or failed one
+ * awaits nothing.
  */
-export const getAwaitingUserInteractions = (
-  message: Pick<ChatMessage, "metadata" | "parts" | "role"> | null,
-): AwaitingUserInteraction[] => {
-  const turnOutcome = message?.metadata?.turnOutcome;
-  if (
-    message?.role !== "assistant" ||
-    (turnOutcome !== undefined && turnOutcome.type !== "awaiting-user")
-  ) {
+export const answerableToolCalls = (
+  parts: readonly ChatPart[],
+): ChatToolCallPart[] =>
+  parts.flatMap((part) => {
+    if (part.type === "tool-call") {
+      return [part];
+    }
+    if (part.type === "subagent" && part.subagent.status === "suspended") {
+      return part.subagent.messages.flatMap((message) =>
+        answerableToolCalls(childPartsOf(message)),
+      );
+    }
     return [];
+  });
+
+/** The tools whose calls in `message` await an approval. */
+export const getAwaitedApprovalToolNames = (
+  message: Pick<ChatMessage, "metadata" | "parts" | "role"> | null,
+): ReadonlySet<string> => {
+  if (message === null) {
+    return new Set();
   }
-  const interactions: AwaitingUserInteraction[] = [];
-  for (const part of message.parts) {
-    if (part.type !== "tool-call") {
-      continue;
-    }
-    if (part.state === "approval-requested") {
-      interactions.push({ type: "approval", toolCallId: part.id });
-      continue;
-    }
-    if (CLIENT_TOOL_STATE_AWAITS_RESOLUTION[part.state]) {
-      interactions.push({
-        type: clientToolInteractionType(part.name),
-        toolCallId: part.id,
-      });
-    }
-  }
-  return interactions;
+  const awaitedCallIds = new Set(
+    memberWaitsOf(message).flatMap((interaction) =>
+      interaction.type === "approval" ? [interaction.toolCallId] : [],
+    ),
+  );
+  return new Set(
+    answerableToolCalls(message.parts).flatMap((part) =>
+      awaitedCallIds.has(part.id) ? [part.name] : [],
+    ),
+  );
 };
 
 export const getAwaitingUserInteraction = (
   message: Pick<ChatMessage, "parts" | "role"> | null,
-): AwaitingUserInteraction | null =>
-  getAwaitingUserInteractions(message).at(0) ?? null;
+): AwaitingUserInteraction | null => memberWaitsOf(message).at(0) ?? null;
 
 /**
  * Whether an incoming tool-call state answers an awaited interaction:
@@ -788,10 +1252,22 @@ const CLIENT_INTERACTION_RESOLUTION = {
   },
   "client-tool": {
     "approval-requested": null,
-    "approval-responded": null,
+    // An approved call the client has not run yet.
+    "approval-responded": "unchanged",
     "awaiting-input": null,
     complete: "resolved",
     error: "resolved",
+    "input-complete": "unchanged",
+    "input-streaming": null,
+  },
+  // The call never moves: the answer travels as the resume payload of the
+  // question's interrupt, and the harness reports the call's result itself.
+  "harness-question": {
+    "approval-requested": null,
+    "approval-responded": null,
+    "awaiting-input": null,
+    complete: null,
+    error: null,
     "input-complete": "unchanged",
     "input-streaming": null,
   },
@@ -801,7 +1277,7 @@ const CLIENT_INTERACTION_RESOLUTION = {
 >;
 
 type GetResumedUserInteractionOptions = {
-  /** Interactions the persisted turn awaits (`getAwaitingUserInteractions`). */
+  /** Interactions the persisted turn awaits (`memberWaitsOf`). */
   awaited: readonly AwaitingUserInteraction[];
   message: Pick<ChatMessage, "parts" | "role">;
 };
@@ -826,11 +1302,8 @@ export const getResumedUserInteraction = ({
     ),
   );
   let unchangedInteraction: AwaitingUserInteraction | null = null;
-  for (let index = message.parts.length - 1; index >= 0; index -= 1) {
-    const part = message.parts[index];
-    if (part?.type !== "tool-call") {
-      continue;
-    }
+  // Newest first, a suspended sub-agent's calls included where they sit.
+  for (const part of answerableToolCalls(message.parts).toReversed()) {
     const interaction = awaitedByToolCallId.get(part.id);
     if (interaction === undefined) {
       continue;
@@ -940,6 +1413,19 @@ const isUiResourcePart = (part: Record<string, unknown>): boolean => {
   }
 
   const resource = part["resource"];
+  if (resource["mimeType"] === GENERATED_VISUAL_MIME_TYPE) {
+    return v.is(generatedVisualPartSchema, part);
+  }
+  if (resource["mimeType"] === STELLA_MCP_APP_MIME_TYPE) {
+    const app = v.safeParse(stellaMcpAppPartSchema, part);
+    if (!app.success) {
+      return false;
+    }
+    const presented = chatMcpAppByUri(app.output.resource.uri);
+    return (
+      presented !== undefined && appPresentsTool(presented, app.output.toolName)
+    );
+  }
   if (
     typeof resource["uri"] !== "string" ||
     !resource["uri"].startsWith("ui://") ||
@@ -971,13 +1457,12 @@ type ChatPartPersistence = "drop" | "persist";
 // Every TanStack part must receive an explicit persistence policy. A future SDK
 // variant fails typecheck here until it is deliberately persisted or dropped.
 const CHAT_PART_PERSISTENCE = {
+  activity: "persist",
   audio: "persist",
   document: "persist",
   image: "persist",
   "structured-output": "persist",
-  // Stella runs subagents through its own tool, not TanStack's
-  // `chat({ subagents })`, so the engine never builds this part.
-  subagent: "drop",
+  subagent: "persist",
   text: "persist",
   thinking: "persist",
   "tool-call": "persist",
@@ -1028,26 +1513,218 @@ const isStructuredOutputPart = (part: Record<string, unknown>): boolean => {
   }
 };
 
+type SubagentStatus = ChatSubagentPart["subagent"]["status"];
+type SubagentMessageRole =
+  ChatSubagentPart["subagent"]["messages"][number]["role"];
+
+const SUBAGENT_MESSAGE_ROLES = {
+  activity: true,
+  assistant: true,
+  system: true,
+  user: true,
+} as const satisfies Record<SubagentMessageRole, true>;
+
+const isNonEmptyString = (value: unknown): value is string =>
+  typeof value === "string" && value.length > 0;
+
+const isOptionalString = (value: unknown): boolean =>
+  value === undefined || typeof value === "string";
+
+const isSubagentError = (value: unknown): boolean =>
+  isRecord(value) &&
+  typeof value["message"] === "string" &&
+  isOptionalString(value["code"]);
+
+/**
+ * What each status requires of the rest of a sub-agent run's handle, as the
+ * SDK's stream processor writes it: only a failed run carries an error, and a
+ * suspended run names the interrupts it waits on.
+ */
+const SUBAGENT_STATUS_FIELDS = {
+  error: (handle) => isSubagentError(handle["error"]),
+  finished: (handle) => handle["error"] === undefined,
+  running: (handle) => handle["error"] === undefined,
+  suspended: (handle) =>
+    handle["error"] === undefined && Array.isArray(handle["interruptIds"]),
+} as const satisfies Record<
+  SubagentStatus,
+  (handle: Record<string, unknown>) => boolean
+>;
+
+const isSubagentStatus = (value: unknown): value is SubagentStatus =>
+  typeof value === "string" && Object.hasOwn(SUBAGENT_STATUS_FIELDS, value);
+
+const isSubagentMessageRole = (value: unknown): boolean =>
+  typeof value === "string" && Object.hasOwn(SUBAGENT_MESSAGE_ROLES, value);
+
+/** The fields of a sub-agent run's handle, its messages aside. */
+const isSubagentHandle = (handle: Record<string, unknown>): boolean => {
+  const status = handle["status"];
+  const interruptIds = handle["interruptIds"];
+  return (
+    isNonEmptyString(handle["id"]) &&
+    typeof handle["name"] === "string" &&
+    // Tool mode only. A router-mode run (no parent call) has its child's text
+    // replayed into the parent model's history, which would carry it past
+    // the third-party boundary, so such a part is never accepted.
+    isNonEmptyString(handle["parentToolCallId"]) &&
+    isOptionalString(handle["description"]) &&
+    isOptionalString(handle["parentRunId"]) &&
+    isOptionalString(handle["parentSubagentRunId"]) &&
+    (interruptIds === undefined ||
+      (Array.isArray(interruptIds) &&
+        interruptIds.every((id) => typeof id === "string"))) &&
+    (handle["metadata"] === undefined ||
+      isPersistedJsonObject(handle["metadata"])) &&
+    isSubagentStatus(status) &&
+    SUBAGENT_STATUS_FIELDS[status](handle)
+  );
+};
+
+/** A sub-agent part, each of its child's parts validated as a part. */
+const isSubagentPart = (part: Record<string, unknown>): boolean => {
+  const subagent = part["subagent"];
+  if (!isRecord(subagent) || !isSubagentHandle(subagent)) {
+    return false;
+  }
+  const messages = subagent["messages"];
+  return (
+    Array.isArray(messages) &&
+    messages.every(
+      (message) =>
+        isRecord(message) &&
+        isNonEmptyString(message["id"]) &&
+        isSubagentMessageRole(message["role"]) &&
+        Array.isArray(message["parts"]) &&
+        message["parts"].every(isChatPart),
+    )
+  );
+};
+
+/** A sub-agent part as stored: each child message's content is checked when
+ *  it is read, as a message's own content is. */
+const isPersistedSubagentPart = (part: PersistedSubagentPart): boolean => {
+  const { subagent } = part;
+  return (
+    isRecord(subagent) &&
+    isSubagentHandle(subagent) &&
+    Array.isArray(subagent.messages) &&
+    subagent.messages.every(
+      (message) =>
+        isRecord(message) &&
+        isNonEmptyString(message.id) &&
+        isSubagentMessageRole(message.role) &&
+        // Child content is a proven v3 message content (see its type).
+        isRecord(message.content) &&
+        Array.isArray(message.content.data),
+    )
+  );
+};
+
+/** A child message's parts, each one the part validator accepted. */
+const childPartsOf = (
+  message: ChatSubagentPart["subagent"]["messages"][number],
+): ChatPart[] =>
+  message.parts.map((part) =>
+    isChatPart(part) ? part : panic("A sub-agent message has an invalid part"),
+  );
+
+/**
+ * Whether a child run's newest tool result stays whole. A run that can still
+ * continue keeps it, since its next step reads it (a suspended run resumes
+ * from the page its approval refers to). A finished or failed run never
+ * continues (the SDK resumes only a suspended child), so it keeps every
+ * result as its projection.
+ */
+export const SUBAGENT_RESULT_RETENTION = {
+  error: { keepNewest: false },
+  finished: { keepNewest: false },
+  running: { keepNewest: true },
+  suspended: { keepNewest: true },
+} as const satisfies Record<SubagentStatus, SupersededToolResultsOptions>;
+
+/**
+ * A sub-agent part with its child's tool results kept as its status allows,
+ * across all of the child's messages, and each nested run's as its own
+ * status allows. Returns `part` itself when nothing changes. A stored child
+ * part keeps its provenance.
+ */
+export const retainSubagentResults = (
+  part: ChatSubagentPart,
+): ChatSubagentPart => {
+  const { messages, status } = part.subagent;
+  const parts = messages.map(childPartsOf);
+  const retained = retainToolResultsInMessages(
+    parts,
+    SUBAGENT_RESULT_RETENTION[status],
+    continueStoredChatPart,
+  ).map((child) => {
+    // A nested run keeps its results as its own status allows.
+    const nested = child.map((inner) =>
+      inner.type === "subagent"
+        ? continueStoredChatPart(inner, retainSubagentResults(inner))
+        : inner,
+    );
+    return nested.every((inner, index) => inner === child.at(index))
+      ? child
+      : nested;
+  });
+  if (retained.every((child, index) => child === parts.at(index))) {
+    return part;
+  }
+  return {
+    ...part,
+    subagent: {
+      ...part.subagent,
+      messages: messages.map((message, index) => {
+        const child = retained.at(index);
+        return child === undefined || child === parts.at(index)
+          ? message
+          : { ...message, parts: [...child] };
+      }),
+    },
+  };
+};
+
 // Validators are independently exhaustive over the persistable subset, so a
 // part cannot enter the persistence boundary without structural validation.
 const CHAT_PART_VALIDATORS = {
+  activity: (part) =>
+    typeof part["activityType"] === "string" &&
+    isRecord(part["content"]) &&
+    isPersistedJsonValue(part["content"]) &&
+    (part["subagentRunId"] === undefined ||
+      typeof part["subagentRunId"] === "string"),
   audio: (part) => isMediaPart(part, "audio/"),
   document: isContentPartWithSource,
   image: isContentPartWithSource,
   "structured-output": isStructuredOutputPart,
-  subagent: () => false,
-  text: (part) => typeof part["content"] === "string",
-  thinking: (part) => typeof part["content"] === "string",
+  subagent: isSubagentPart,
+  text: (part) =>
+    typeof part["content"] === "string" &&
+    (part["providerMetadata"] === undefined ||
+      isPersistedJsonObject(part["providerMetadata"])),
+  thinking: (part) =>
+    typeof part["content"] === "string" &&
+    // An unknown provenance stays unread in its stored part. Replay checks
+    // whether a valid provenance matches the current model.
+    (part["provenance"] === undefined ||
+      isReasoningProvenance(part["provenance"])) &&
+    (part["providerMetadata"] === undefined ||
+      isPersistedJsonObject(part["providerMetadata"])),
   "tool-call": (part) =>
     typeof part["id"] === "string" &&
     typeof part["name"] === "string" &&
     typeof part["arguments"] === "string" &&
-    isTanStackToolCallState(part["state"]),
+    isTanStackToolCallState(part["state"]) &&
+    (part["providerMetadata"] === undefined ||
+      isPersistedToolProviderMetadata(part["providerMetadata"])),
   "tool-result": (part) =>
     typeof part["toolCallId"] === "string" &&
     isTanStackToolResultContent(part["content"]) &&
     isTanStackToolResultState(part["state"]) &&
-    (!("error" in part) || typeof part["error"] === "string"),
+    (!("error" in part) || typeof part["error"] === "string") &&
+    (part["outcome"] === undefined || isToolResultOutcome(part["outcome"])),
   "ui-resource": isUiResourcePart,
   video: (part) => isMediaPart(part, "video/"),
 } satisfies Record<PersistableChatPartType, ChatPartValidator>;
@@ -1114,7 +1791,13 @@ export const applyChatPartPersistenceBudget = (parts: readonly ChatPart[]) => {
   let richPartCount = 0;
 
   for (const part of parts) {
-    if (!isServerOwnedChatPart(part)) {
+    // A stored part passed the budget of the release that stored it;
+    // dropping it here would lose it the next time this release saves.
+    if (
+      CHAT_PART_POLICY[part.type].storage === "conversation" ||
+      isUnsupportedChatPart(part) ||
+      STORED_ORIGINS.has(part)
+    ) {
       acceptedParts.push(part);
       continue;
     }
@@ -1186,6 +1869,11 @@ const normalizeMediaSource = (source: ContentPartSource): ContentPartSource => {
 };
 
 const normalizeChatPartForPersistence = (part: ChatPart): ChatPart => {
+  // A stored part was made canonical when it was first written; rebuilding it
+  // would drop what a newer release stored with it.
+  if (STORED_ORIGINS.has(part)) {
+    return part;
+  }
   switch (part.type) {
     case "audio":
       return {
@@ -1199,6 +1887,12 @@ const normalizeChatPartForPersistence = (part: ChatPart): ChatPart => {
       };
     case "ui-resource": {
       const { resource } = part;
+      if (
+        resource.mimeType === GENERATED_VISUAL_MIME_TYPE ||
+        resource.mimeType === STELLA_MCP_APP_MIME_TYPE
+      ) {
+        return part;
+      }
       const normalizedResource =
         resource.text === undefined
           ? {
@@ -1230,8 +1924,10 @@ const normalizeChatPartForPersistence = (part: ChatPart): ChatPart => {
     case "tool-call":
     case "tool-result":
       return part;
+    case "activity":
+      return part;
     case "subagent":
-      return panic("A subagent part is never persisted");
+      return normalizeSubagentPartForPersistence(part);
     default: {
       part satisfies never;
       return panic(`Unhandled part: ${String(part)}`);
@@ -1239,19 +1935,147 @@ const normalizeChatPartForPersistence = (part: ChatPart): ChatPart => {
   }
 };
 
+/** The handle fields a stored sub-agent part keeps, rebuilt field by field,
+ *  so nothing the SDK or a client hangs on the handle (a stop hook) is
+ *  stored. */
+const storedSubagentHandle = (
+  subagent: ChatSubagentPart["subagent"],
+): PersistedSubagentHandle => ({
+  ...(subagent.description === undefined
+    ? {}
+    : { description: subagent.description }),
+  ...(subagent.error === undefined
+    ? {}
+    : {
+        error: {
+          message: subagent.error.message,
+          ...(subagent.error.code === undefined
+            ? {}
+            : { code: subagent.error.code }),
+        },
+      }),
+  id: subagent.id,
+  ...(subagent.interruptIds === undefined
+    ? {}
+    : { interruptIds: [...subagent.interruptIds] }),
+  ...(subagent.metadata === undefined ? {} : { metadata: subagent.metadata }),
+  name: subagent.name,
+  ...(subagent.parentRunId === undefined
+    ? {}
+    : { parentRunId: subagent.parentRunId }),
+  ...(subagent.parentSubagentRunId === undefined
+    ? {}
+    : { parentSubagentRunId: subagent.parentSubagentRunId }),
+  ...(subagent.parentToolCallId === undefined
+    ? {}
+    : { parentToolCallId: subagent.parentToolCallId }),
+  status: subagent.status,
+});
+
+/**
+ * A sub-agent part as a message stores it: its child's results kept as the
+ * run's status allows (`SUBAGENT_RESULT_RETENTION`), and each child message's
+ * parts normalized as a message's own parts are. A carried part only the
+ * stored reader made is kept only where it was read; one arriving on a stream
+ * would be written back as a stored part it never was.
+ */
+const normalizeSubagentPartForPersistence = (
+  part: ChatSubagentPart,
+): ChatSubagentPart => {
+  const retained = retainSubagentResults(part);
+  return {
+    subagent: {
+      ...storedSubagentHandle(retained.subagent),
+      messages: retained.subagent.messages.map((message) => ({
+        id: message.id,
+        parts: normalizeChatPartsForPersistence(
+          childPartsOf(message).filter(
+            (child) =>
+              !isUnsupportedChatPart(child) || STORED_ORIGINS.has(child),
+          ),
+        ),
+        role: message.role,
+      })),
+    },
+    type: "subagent",
+  };
+};
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null;
+
 type ChatPartPersistenceDecision =
-  | { type: "drop"; partType: string }
-  | { type: "persist"; part: ChatPart };
+  { type: "drop"; partType: string } | { type: "persist"; part: ChatPart };
+
+/**
+ * A streamed sub-agent part with each of its child's parts classified as a
+ * message's own part is: a child part this rule drops at the top level (a
+ * server resource the turn did not mint, an invalid presentation part) is
+ * dropped inside the child too, at every depth, so nesting never widens what
+ * a message stores.
+ */
+const withClassifiedSubagentChildren = (
+  part: Record<string, unknown>,
+  visualOrigin: Pick<VisualResourceOrigin, "accepts"> | undefined,
+): Record<string, unknown> => {
+  const subagent = part["subagent"];
+  if (!isRecord(subagent) || !Array.isArray(subagent["messages"])) {
+    return part;
+  }
+  const messages: readonly unknown[] = subagent["messages"];
+  return {
+    ...part,
+    subagent: {
+      ...subagent,
+      messages: messages.map((message) => {
+        if (!isRecord(message) || !Array.isArray(message["parts"])) {
+          return message;
+        }
+        const parts: readonly unknown[] = message["parts"];
+        return {
+          ...message,
+          parts: parts.flatMap((child) => {
+            const decision = classifyChatPartForPersistence(
+              child,
+              visualOrigin,
+            );
+            return decision.type === "persist" ? [decision.part] : [];
+          }),
+        };
+      }),
+    },
+  };
+};
 
 export const classifyChatPartForPersistence = (
-  part: unknown,
+  streamed: unknown,
+  visualOrigin?: Pick<VisualResourceOrigin, "accepts">,
 ): ChatPartPersistenceDecision => {
-  if (!isRecord(part) || typeof part["type"] !== "string") {
+  if (!isRecord(streamed) || typeof streamed["type"] !== "string") {
     panic("Cannot classify a malformed chat part for persistence");
   }
-  const type = part["type"];
+  const part =
+    streamed["type"] === "subagent"
+      ? withClassifiedSubagentChildren(streamed, visualOrigin)
+      : streamed;
+  const type = streamed["type"];
+  // A server resource is persisted only as the server minted it.
+  if (
+    type === "ui-resource" &&
+    isRecord(part["resource"]) &&
+    (part["resource"]["mimeType"] === GENERATED_VISUAL_MIME_TYPE ||
+      part["resource"]["mimeType"] === STELLA_MCP_APP_MIME_TYPE) &&
+    !visualOrigin?.accepts(part)
+  ) {
+    return { type: "drop", partType: type };
+  }
   if (!isChatPartPersistenceType(type)) {
     panic(`Cannot classify unknown chat part type: ${type}`);
+  }
+  // Only the stored reader carries a part; one arriving on a stream would be
+  // written back as a stored part it never was.
+  if (isUnsupportedChatPart(part)) {
+    return { type: "drop", partType: type };
   }
   if (chatPartPersistenceFor(type) === "drop") {
     return { type: "drop", partType: type };
@@ -1273,7 +2097,9 @@ const normalizeChatPartsForPersistence = (
   parts: readonly ChatPart[],
 ): ChatPart[] => {
   const normalized: ChatPart[] = [];
-  for (const part of parts) {
+  // A message stores each superseded tool result as its projection, as the
+  // model reads it, so a browsing turn stores one page however many it read.
+  for (const part of retainToolResultsInParts(parts, continueStoredChatPart)) {
     normalized.push(normalizeChatPartForPersistence(part));
   }
   return applyChatPartPersistenceBudget(normalized).parts;
@@ -1291,7 +2117,10 @@ export const toPersistableChatMessage = (
     parts: normalizeChatPartsForPersistence(
       message.role === "assistant"
         ? message.parts.filter(
-            (part) => part.type !== "text" || part.content.trim().length > 0,
+            (part) =>
+              part.type !== "text" ||
+              part.content.trim().length > 0 ||
+              STORED_ORIGINS.has(part),
           )
         : message.parts,
     ),
@@ -1306,39 +2135,14 @@ export const toPersistableChatMessage = (
   return normalized;
 };
 
-const isChatMessageContent = (
-  content: ChatMessageContentCandidate,
-): content is ChatMessageContent => content.data.every(isChatPart);
-
-export const toChatMessageContent = (
-  content: ChatMessageContentCandidate,
-): ChatMessageContent => {
-  if (!isChatMessageContent(content)) {
-    panic("Cannot persist chat message content with unsupported parts");
-  }
-  const normalized = {
-    version: content.version,
-    data: normalizeChatPartsForPersistence(content.data),
-    ...(content.metadata === undefined ? {} : { metadata: content.metadata }),
-  };
-  if (!isChatMessageContent(normalized)) {
-    panic("Normalized chat content violates the persistence policy");
-  }
-  return normalized;
-};
-
 /**
  * Encode one message for the v3 JSONB representation. Canonical tool input and
  * output are stored directly; TanStack wire strings are reconstructed only by
  * `normalizePersisted...` on read.
  */
-type PersistedChatMessageContentV3Source = Omit<
-  ChatMessageContentCandidate,
-  "version"
->;
-
 export const toPersistedChatMessageContentV3 = (
-  content: PersistedChatMessageContentV3Source,
+  content: ChatMessageContentCandidate,
+  expectedOriginMessageId?: SafeId<"chatMessage">,
 ): PersistedChatMessageContentV3 => {
   if (!content.data.every(isChatPart)) {
     panic("Cannot persist chat message content with unsupported parts");
@@ -1350,8 +2154,26 @@ export const toPersistedChatMessageContentV3 = (
       outputsByToolCallId.set(part.id, part.output);
     }
   }
-  const data = normalized.map((part) =>
-    chatPartToPersistedV3Part({ outputsByToolCallId, part }),
+  const origins = normalized.map((part) => {
+    const origin = STORED_ORIGINS.get(part);
+    if (
+      isUnsupportedChatPart(part) &&
+      expectedOriginMessageId !== undefined &&
+      origin?.messageId !== expectedOriginMessageId
+    ) {
+      panic("An unknown stored part has no origin in this message");
+    }
+    return expectedOriginMessageId === undefined ||
+      origin?.messageId === expectedOriginMessageId
+      ? origin
+      : undefined;
+  });
+  const data = normalized.map((part, index) =>
+    chatPartToPersistedV3Part({
+      origin: origins.at(index),
+      outputsByToolCallId,
+      part,
+    }),
   );
   if (
     content.metadata !== undefined &&
@@ -1369,7 +2191,38 @@ export const toPersistedChatMessageContentV3 = (
   );
 };
 
+/**
+ * A part as stored. A part loaded from a stored message and not edited since
+ * is written back exactly as it was stored; an edited one is encoded from what
+ * this release knows, with every field a newer release stored merged back.
+ */
 const chatPartToPersistedV3Part = ({
+  origin,
+  outputsByToolCallId,
+  part,
+}: {
+  origin: StoredOrigin | undefined;
+  outputsByToolCallId: ReadonlyMap<string, unknown>;
+  part: ChatPart;
+}): PersistedV3Part => {
+  if (
+    origin?.writable !== undefined &&
+    STORED_ORIGINS.get(part) === origin &&
+    deepEquals(part, origin.loaded)
+  ) {
+    return origin.writable;
+  }
+  const encoded = encodeChatPart({ outputsByToolCallId, part });
+  return origin === undefined
+    ? encoded
+    : withLaterReleaseFields(
+        encoded,
+        origin.stored,
+        knownFieldsOfType(encoded.type),
+      );
+};
+
+const encodeChatPart = ({
   outputsByToolCallId,
   part,
 }: {
@@ -1379,18 +2232,22 @@ const chatPartToPersistedV3Part = ({
   if (part.type === "tool-call") {
     const approval = "approval" in part ? part.approval : undefined;
     const metadata = "metadata" in part ? part.metadata : undefined;
+    if (chatToolExecutor(part) === null) {
+      panic("Cannot persist a tool call without executor ownership");
+    }
     const input = persistedToolInputFromChatPart(part);
     return {
       ...(approval === undefined ? {} : { approval }),
       id: part.id,
       input,
-      ...(metadata === undefined
-        ? {}
-        : { metadata: provePersistedJsonValue(metadata) }),
+      metadata: provePersistedToolCallMetadata(metadata),
       name: part.name,
       ...(part.output === undefined
         ? {}
         : { output: proveParsedToolOutput(part.output) }),
+      ...(part.providerMetadata === undefined
+        ? {}
+        : { providerMetadata: part.providerMetadata }),
       state: part.state,
       type: "tool-call",
     };
@@ -1402,19 +2259,34 @@ const chatPartToPersistedV3Part = ({
     if (!hasPairedOutput) {
       content = persistedToolResultContentFromChatContent(part.content);
     } else if (Array.isArray(part.content)) {
-      if (!deepEquals(part.content, output)) {
-        panic(`Tool result ${part.toolCallId} disagrees with canonical output`);
-      }
-      content = { type: "paired-output-parts" };
+      content = deepEquals(part.content, output)
+        ? { type: "paired-output-parts" }
+        : persistedToolResultContentFromChatContent(part.content);
     } else if (part.content !== stringifyPersistedJsonValue(output)) {
       content = { type: "text", value: part.content };
     }
     return {
       ...(content === undefined ? {} : { content }),
       ...(part.error === undefined ? {} : { error: part.error }),
+      ...(part.outcome === undefined ? {} : { outcome: part.outcome }),
       state: part.state,
       toolCallId: part.toolCallId,
       type: "tool-result",
+    };
+  }
+  if (part.type === "subagent") {
+    return {
+      subagent: {
+        ...storedSubagentHandle(part.subagent),
+        messages: part.subagent.messages.map((message) => ({
+          content: toPersistedChatMessageContentV3({
+            data: childPartsOf(message),
+          }),
+          id: message.id,
+          role: message.role,
+        })),
+      },
+      type: "subagent",
     };
   }
   return part;
@@ -1429,7 +2301,19 @@ const persistedToolInputFromChatPart = (
   if (part.input === undefined) {
     return { rawArguments: part.arguments, status: "raw" };
   }
-  return proveParsedToolInput(part.input);
+  // Successful inputs are canonicalized by their schema. Failed calls keep
+  // the model's exact rejected text, alongside the parsed preview shown live.
+  const preserveFailedArguments =
+    part.state === "error" && JSON.stringify(part.input) !== part.arguments;
+  const reproduced = Result.try((): unknown => JSON.parse(part.arguments));
+  return proveParsedToolInput(
+    part.input,
+    !preserveFailedArguments &&
+      reproduced.isOk() &&
+      deepEquals(reproduced.value, part.input)
+      ? undefined
+      : part.arguments,
+  );
 };
 
 const persistedToolResultContentFromChatContent = (
@@ -1443,140 +2327,22 @@ const persistedToolResultContentFromChatContent = (
 
 const isPersistedV3Part = (part: PersistedV3Part): boolean => {
   if (part.type === "tool-call") {
-    return part.id.length > 0 && part.name.length > 0;
+    return (
+      part.id.length > 0 &&
+      part.name.length > 0 &&
+      chatToolExecutor(part) !== null
+    );
   }
   if (part.type === "tool-result") {
-    return part.toolCallId.length > 0;
+    return (
+      part.toolCallId.length > 0 &&
+      (part.outcome === undefined || isToolResultOutcome(part.outcome))
+    );
+  }
+  if (part.type === "subagent") {
+    return isPersistedSubagentPart(part);
   }
   return isChatPart(part);
-};
-
-const isLegacyAnonRestorationsPart = (
-  part: unknown,
-): part is {
-  data: NonNullable<ChatMessageMetadata["anonRestorations"]>;
-  type: "data-stella-anon-restorations";
-} =>
-  isRecord(part) &&
-  part["type"] === "data-stella-anon-restorations" &&
-  isRecord(part["data"]) &&
-  Array.isArray(part["data"]["pairs"]);
-
-const isLegacyMentionsPart = (
-  part: unknown,
-): part is {
-  data: NonNullable<ChatMessageMetadata["mentions"]>;
-  type: "data-stella-mentions";
-} =>
-  isRecord(part) &&
-  part["type"] === "data-stella-mentions" &&
-  isRecord(part["data"]) &&
-  Array.isArray(part["data"]["mentions"]);
-
-const isLegacySourceDocumentPart = (
-  part: unknown,
-): part is {
-  data: NonNullable<ChatMessageMetadata["sourceDocuments"]>[number];
-  type: "data-stella-source-document";
-} =>
-  isRecord(part) &&
-  part["type"] === "data-stella-source-document" &&
-  isRecord(part["data"]);
-
-const isLegacyToolPart = (
-  part: unknown,
-): part is Record<string, unknown> & { type: string } => {
-  if (!isRecord(part) || typeof part["type"] !== "string") {
-    return false;
-  }
-  if (part["type"] === "dynamic-tool") {
-    return typeof part["toolName"] === "string";
-  }
-  return part["type"].startsWith("tool-") && part["type"] !== "tool-result";
-};
-
-const legacyToolPartToTanStack = (
-  part: Record<string, unknown> & { type: string },
-): ChatPart | null => {
-  const name = legacyToolName(part);
-  const id =
-    getStringProperty(part, "toolCallId") ?? getStringProperty(part, "id");
-  if (!name || !id) {
-    return null;
-  }
-
-  const input = Reflect.get(part, "input");
-  const next: unknown = {
-    type: "tool-call" as const,
-    id,
-    name,
-    arguments: safeStringifyToolArguments(input ?? {}),
-    state: legacyToolStateToTanStack(part["state"]),
-    ...("input" in part ? { input } : {}),
-    ...("output" in part ? { output: Reflect.get(part, "output") } : {}),
-    ...legacyToolApprovalToTanStack(part["approval"]),
-  };
-
-  return isChatPart(next) ? next : null;
-};
-
-const legacyToolName = (
-  part: Record<string, unknown> & { type: string },
-): string | null => {
-  if (part.type === "dynamic-tool") {
-    const toolName = getStringProperty(part, "toolName");
-    return toolName?.startsWith("mcp__") ? toolName : null;
-  }
-  return part.type.slice("tool-".length);
-};
-
-const legacyToolStateToTanStack = (state: unknown) => {
-  switch (state) {
-    case "input-streaming":
-      return "input-streaming" as const;
-    case "input-available":
-    case "input-complete":
-      return "input-complete" as const;
-    case "approval-requested":
-      return "approval-requested" as const;
-    case "approval-responded":
-      return "approval-responded" as const;
-    case "output-available":
-    case "output-error":
-    case "complete":
-      return "complete" as const;
-    default:
-      return "input-complete" as const;
-  }
-};
-
-const legacyToolApprovalToTanStack = (
-  approval: unknown,
-):
-  | {
-      approval: {
-        approved?: boolean | undefined;
-        id: string;
-        needsApproval: boolean;
-      };
-    }
-  | Record<string, never> => {
-  if (!isRecord(approval)) {
-    return {};
-  }
-  const id = getStringProperty(approval, "id");
-  const needsApproval = approval["needsApproval"];
-  if (!id || typeof needsApproval !== "boolean") {
-    return {};
-  }
-  const approved = approval["approved"];
-  return {
-    approval: {
-      id,
-      needsApproval,
-      ...(typeof approved === "boolean" ? { approved } : {}),
-    },
-  };
 };
 
 const isTanStackToolCallState = (
@@ -1650,30 +2416,73 @@ export const mergeAnonRestorations = (
 const isChatMessageMetadataEmpty = (metadata: ChatMessageMetadata): boolean =>
   metadata.activeDraftContext === undefined &&
   metadata.anonRestorations === undefined &&
+  metadata.answerQuotes === undefined &&
+  metadata.contextNotice === undefined &&
+  metadata.localFilesUndone === undefined &&
+  metadata.localRunContext === undefined &&
+  metadata.localRunModel === undefined &&
+  metadata.localRunFilesNotShared === undefined &&
   metadata.mentions === undefined &&
   metadata.refContext === undefined &&
   metadata.refEncoding === undefined &&
+  metadata.resumeSnapshot === undefined &&
   metadata.serverProvenance === undefined &&
   metadata.sourceDocuments === undefined &&
   metadata.turnOutcome === undefined &&
+  metadata.turnSpend === undefined &&
+  metadata.turnTiming === undefined &&
+  metadata.turnModel === undefined &&
   metadata.usage === undefined;
 
-const safeStringifyToolArguments = (value: unknown): string => {
-  try {
-    const serialized: unknown = JSON.stringify(value);
-    return typeof serialized === "string" ? serialized : "{}";
-  } catch {
-    return "{}";
+const stringifyToolPayload = (value: unknown): unknown => JSON.stringify(value);
+
+const toolResultPayload = ({
+  outputsByCallId,
+  part,
+}: {
+  outputsByCallId: ReadonlyMap<string, unknown>;
+  part: Extract<ChatPart, { type: "tool-result" }>;
+}): unknown => {
+  if (outputsByCallId.has(part.toolCallId)) {
+    return outputsByCallId.get(part.toolCallId);
   }
+  if (part.state === "error" && part.error !== undefined) {
+    return { error: part.error };
+  }
+  return undefined;
 };
 
-const getStringProperty = (
-  value: Record<string, unknown>,
-  key: string,
-): string | null => {
-  const property = value[key];
-  return typeof property === "string" ? property : null;
-};
+/**
+ * A message's tool results with their content restated from the outputs of
+ * their calls, so the stored and the streamed content cannot disagree.
+ */
+export const synchronizeToolResultContent = (
+  parts: readonly ChatPart[],
+): ChatPart[] => {
+  const outputsByCallId = new Map<string, unknown>();
+  for (const part of parts) {
+    if (part.type === "tool-call" && part.output !== undefined) {
+      outputsByCallId.set(part.id, part.output);
+    }
+  }
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null;
+  return parts.map((part) => {
+    if (part.type !== "tool-result" || part.state === "streaming") {
+      return part;
+    }
+    const payload = toolResultPayload({ outputsByCallId, part });
+    if (Array.isArray(part.content)) {
+      if (!deepEquals(part.content, payload)) {
+        panic(`Canonical tool result ${part.toolCallId} disagrees with output`);
+      }
+      return part;
+    }
+    const content = stringifyToolPayload(payload);
+    if (typeof content !== "string") {
+      panic(
+        `Canonical tool result ${part.toolCallId} has no serializable output`,
+      );
+    }
+    return { ...part, content };
+  });
+};

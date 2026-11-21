@@ -36,48 +36,4 @@ if [[ -z "$base_ref" ]]; then
   source "$script_dir/canonical-base.sh"
   base_ref="$(canonical_base_ref)"
 fi
-merge_base="$(git merge-base "$base_ref" HEAD)"
-
-# Committed, staged and unstaged changes plus untracked files. Deleted paths
-# stay in the list: a deleted generator input still selects its generator.
-changed_files() {
-  {
-    git diff --name-only "$merge_base"
-    git ls-files --others --exclude-standard
-  } | sort -u
-}
-
-plan="$(changed_files | bun scripts/autofix-plan.ts plan)"
-generator_ids="$(sed -n 's/^ids=//p' <<<"$plan")"
-if [[ -n "$generator_ids" ]]; then
-  bun scripts/autofix-plan.ts run "$generator_ids"
-fi
-
-format_paths=()
-lint_paths=()
-while IFS= read -r path; do
-  [[ -f "$path" && ! -L "$path" ]] || continue
-  format_paths+=("./$path")
-  if [[ "$path" =~ \.([cm]?[jt]s|[jt]sx)$ ]]; then
-    lint_paths+=("./$path")
-  fi
-done < <(changed_files)
-
-if ((${#lint_paths[@]} > 0)); then
-  # Safe fixes only; exit 1 means findings remain, which `bun run lint` reports.
-  lint_status=0
-  bun --bun oxlint -c oxlint.config.ts --no-error-on-unmatched-pattern --fix "${lint_paths[@]}" || lint_status=$?
-  if ((lint_status > 1)); then
-    exit "$lint_status"
-  fi
-fi
-if ((${#format_paths[@]} > 0)); then
-  bun run format:guard
-  bun --bun oxfmt -c .oxfmtrc.json --no-error-on-unmatched-pattern "${format_paths[@]}"
-fi
-# CI runs the ratchet improvement phase last, on the final tree, so a removed
-# violation tightens the committed baseline instead of leaving slack.
-if [[ "$(sed -n 's/^ratchet=//p' <<<"$plan")" == "true" ]]; then
-  bun --no-install --no-env-file scripts/ratchet.ts --write-improvements-only --base "$merge_base"
-fi
-echo "autofix: compared against $base_ref; review and commit the changes"
+exec bash scripts/verify.sh --fix-only --base "$base_ref"

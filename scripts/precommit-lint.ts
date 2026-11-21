@@ -4,7 +4,7 @@
  * Lint autofixes are code changes, and some change behaviour, so they never
  * reach a commit unseen. The hook runs the fix pass, and when it would change
  * a staged file it prints the change, restores the file and fails. Nothing is
- * left modified for another step's `stage_fixed` to sweep into the commit, so
+ * left modified for a later `git add` to sweep into the commit, so
  * a fix pass can neither rewrite code behind a passing hook nor turn a commit
  * empty. Apply the fixes deliberately with `--apply`, review `git diff`, stage
  * and commit again.
@@ -15,7 +15,8 @@
  * runtime error. CI's lint still reports them; fix those by hand.
  *
  * Run: `bun scripts/precommit-lint.ts [--apply] <files...>` (lefthook passes
- * the staged files).
+ * the staged paths scripts/precommit-paths.ts prints, which in a merge commit
+ * are only the paths that differ from every parent).
  */
 
 import {
@@ -29,6 +30,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { childExitStatus } from "../packages/scripts/src/child-exit-status";
+import { lintCommand as repositoryLintCommand } from "./lint-command";
 
 export const RECEIVER_TYPED_AUTOFIX_RULES = [
   // `x.match(y)` -> `y.test(x)`: assumes `x` is a string (wrong for `Bun.Glob#match`).
@@ -50,18 +52,13 @@ export const RECEIVER_TYPED_AUTOFIX_RULES = [
   "unicorn/no-typeof-undefined",
 ] as const;
 
-export const lintCommand = (files: readonly string[]): string[] => [
-  "bun",
-  "--bun",
-  "oxlint",
-  "-c",
-  "oxlint.config.ts",
-  "--threads=2",
-  "--no-error-on-unmatched-pattern",
-  "--fix",
-  ...RECEIVER_TYPED_AUTOFIX_RULES.flatMap((rule) => ["-A", rule]),
-  ...files,
-];
+export const lintCommand = (files: readonly string[]): string[] =>
+  repositoryLintCommand({ mode: "fix", typeAware: false }, [
+    "--threads=2",
+    "--no-error-on-unmatched-pattern",
+    ...RECEIVER_TYPED_AUTOFIX_RULES.flatMap((rule) => ["-A", rule]),
+    ...files,
+  ]);
 
 // A staged deletion or rename source has no working-tree file to compare.
 const readOrNull = (file: string): string | null =>

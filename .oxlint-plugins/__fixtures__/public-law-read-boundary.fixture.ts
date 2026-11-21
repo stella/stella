@@ -1,6 +1,8 @@
 // Passive regression fixture for public-law-read-boundary.
 
-declare const readPublicDecisionLanguageAlternatesByGroup: () => Promise<void>;
+import { withPublicReadIo } from "@/api/lib/legal-search/public-read-timeout-context";
+import { readPublicDecisionLanguageAlternatesByGroup } from "@/api/lib/case-law/language-alternates";
+
 declare const configureExternalReadTransaction: (
   tx: unknown,
   isolation: string,
@@ -28,6 +30,11 @@ export const searchCorpusIndexDecisions = () => {
   return deferredRead;
 };
 
+// expect-clean: public-law-read-boundary/require-language-alternate-counts
+export const listCaseLawProvisionDecisions = async () => {
+  await readPublicDecisionLanguageAlternatesByGroup();
+};
+
 // oxlint-disable-next-line public-law-read-boundary/require-configured-read-transaction -- fixture: the primary database branch reaches fn without read-only configuration
 export const publicLawReadDb = async <T>(
   fn: (tx: unknown) => Promise<T>,
@@ -43,3 +50,11 @@ export const publicLawReadDb = async <T>(
     }
     return await fn(tx);
   });
+
+// oxlint-disable-next-line public-law-read-boundary/require-owned-public-read-transport -- fixture: a raw request cannot own public-read settlement
+await fetch("https://example.test/document");
+
+// expect-clean: public-law-read-boundary/require-owned-public-read-transport
+await withPublicReadIo("corpus-index", async (io) =>
+  await io.fetch("https://example.test/document", { timeoutMs: 1000 }, async (response) => await response.text()),
+);

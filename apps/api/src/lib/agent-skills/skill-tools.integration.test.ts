@@ -5,11 +5,23 @@ import { eq } from "drizzle-orm";
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import { agentSkillResources, agentSkills, auditLogs } from "@/api/db/schema";
+import {
+  NO_SKILL_BINDING_SCOPE,
+  resolveSkillBindingScope,
+} from "@/api/lib/agent-skills/binding";
+import type { SkillBindingScope } from "@/api/lib/agent-skills/binding";
+import {
+  offerSkillsToModel,
+  SKILL_INVOCATION,
+} from "@/api/lib/agent-skills/invocation";
 import { createSkillTools } from "@/api/lib/agent-skills/skill-tools";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId, SafeIdType } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
+import { CHAT_TOOL_SET_PURPOSE } from "@/api/lib/chat/chat-tool-types";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
+import { LIMITS } from "@/api/lib/limits";
+import { isRecord } from "@/api/lib/type-guards";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -58,8 +70,7 @@ const insertSkill = async (slug: string) => {
     id: testId(),
     organizationId: ids.orgA,
     skillId,
-    path: "knowledge/checklist.md",
-    kind: "knowledge",
+    path: "references/checklist.md",
     content: "checklist",
     sizeBytes: 9,
   });
@@ -98,20 +109,152 @@ const expectNotFound = (result: Result<unknown, unknown>) => {
   }
 };
 
+/** A turn catalog holding one `auto` skill, as chat offers it. */
+const catalogOf = (slug: string) =>
+  offerSkillsToModel({
+    invokedSkillNames: new Set(),
+    skills: [
+      {
+        description: "Skill tools test skill",
+        invocation: SKILL_INVOCATION.auto,
+        name: slug,
+        version: null,
+      },
+    ],
+  });
+
+describe("bound skills in the skill tools", () => {
+  test("serve a matter-bound skill only in a conversation of that matter", async () => {
+    const slug = `matter-bound-${Bun.randomUUIDv7()}`;
+    const skillId = await insertSkill(slug);
+    await testDb
+      .update(agentSkills)
+      .set({ boundWorkspaceId: ids.wsA1 })
+      .where(eq(agentSkills.id, skillId));
+    const toolsIn = (bindingScope: SkillBindingScope) =>
+      createSkillTools({
+        bindingScope,
+        organizationId: ids.orgA,
+        safeDb,
+        skills: catalogOf(slug),
+        userId: ids.userA2,
+      });
+    const scopeOf = async (
+      homeWorkspaceId: SafeId<"workspace"> | null,
+      otherWorkspaceIds: SafeId<"workspace">[],
+    ) => {
+      const scope = await resolveSkillBindingScope({
+        homeWorkspaceId,
+        otherWorkspaceIds,
+        safeDb,
+      });
+      if (Result.isError(scope)) {
+        throw scope.error;
+      }
+      return scope.value;
+    };
+
+    // Even a catalog that names the skill cannot load it outside its matter.
+    const otherMatter = await scopeOf(ids.wsA2, []);
+    expectNotFound(
+      await executeTool({
+        input: { skillName: slug },
+        tool: toolsIn(otherMatter)["load-skill"],
+      }),
+    );
+    expectNotFound(
+      await executeTool({
+        input: { path: "references/checklist.md", skillName: slug },
+        tool: toolsIn(otherMatter)["read-skill-resource"],
+      }),
+    );
+
+    const loaded = await executeTool({
+      input: { skillName: slug },
+      tool: toolsIn(await scopeOf(ids.wsA1, [ids.wsA1]))["load-skill"],
+    });
+    expect(Result.isOk(loaded)).toBe(true);
+  });
+});
+
 describe("skill catalog tools", () => {
+  test("refuse a manual skill the turn did not invoke, even by its exact slug", async () => {
+    const slug = `manual-${Bun.randomUUIDv7()}`;
+    const skillId = await insertSkill(slug);
+    await testDb
+      .update(agentSkills)
+      .set({ invocation: SKILL_INVOCATION.manual })
+      .where(eq(agentSkills.id, skillId));
+    const manualSkill = {
+      description: "Skill tools test skill",
+      invocation: SKILL_INVOCATION.manual,
+      name: slug,
+      version: null,
+    };
+
+    const uninvoked = createSkillTools({
+      bindingScope: NO_SKILL_BINDING_SCOPE,
+      organizationId: ids.orgA,
+      safeDb,
+      skills: offerSkillsToModel({
+        invokedSkillNames: new Set(),
+        skills: [manualSkill],
+      }),
+      userId: ids.userA2,
+    });
+    expect(uninvoked["load-skill"]).toBeUndefined();
+
+    // A validation set registers the tools whatever the catalog holds; the
+    // name check still refuses the manual skill when the tool runs.
+    const validation = createSkillTools({
+      bindingScope: NO_SKILL_BINDING_SCOPE,
+      organizationId: ids.orgA,
+      purpose: CHAT_TOOL_SET_PURPOSE.validation,
+      safeDb,
+      skills: offerSkillsToModel({
+        invokedSkillNames: new Set(),
+        skills: [manualSkill],
+      }),
+      userId: ids.userA2,
+    });
+    expectNotFound(
+      await executeTool({
+        input: { skillName: slug },
+        tool: validation["load-skill"],
+      }),
+    );
+    expectNotFound(
+      await executeTool({
+        input: { path: "references/checklist.md", skillName: slug },
+        tool: validation["read-skill-resource"],
+      }),
+    );
+
+    const invoked = createSkillTools({
+      bindingScope: NO_SKILL_BINDING_SCOPE,
+      organizationId: ids.orgA,
+      safeDb,
+      skills: offerSkillsToModel({
+        invokedSkillNames: new Set([slug]),
+        skills: [manualSkill],
+      }),
+      userId: ids.userA2,
+    });
+    const loaded = await executeTool({
+      input: { skillName: slug },
+      tool: invoked["load-skill"],
+    });
+    expect(Result.isOk(loaded)).toBe(true);
+  });
+
   test("answer not-found for a skill deleted after the catalog was built", async () => {
     const slug = `vanishing-${Bun.randomUUIDv7()}`;
     const skillId = await insertSkill(slug);
     const tools = createSkillTools({
+      bindingScope: NO_SKILL_BINDING_SCOPE,
       organizationId: ids.orgA,
       safeDb,
-      skills: [
-        {
-          description: "Skill tools test skill",
-          name: slug,
-          version: null,
-        },
-      ],
+      skills: catalogOf(slug),
       userId: ids.userA2,
     });
 
@@ -125,7 +268,7 @@ describe("skill catalog tools", () => {
     );
     expectNotFound(
       await executeTool({
-        input: { path: "knowledge/checklist.md", skillName: slug },
+        input: { path: "references/checklist.md", skillName: slug },
         tool: tools["read-skill-resource"],
       }),
     );
@@ -135,15 +278,10 @@ describe("skill catalog tools", () => {
     const slug = `disabled-later-${Bun.randomUUIDv7()}`;
     const skillId: SafeId<"agentSkill"> = await insertSkill(slug);
     const tools = createSkillTools({
+      bindingScope: NO_SKILL_BINDING_SCOPE,
       organizationId: ids.orgA,
       safeDb,
-      skills: [
-        {
-          description: "Skill tools test skill",
-          name: slug,
-          version: null,
-        },
-      ],
+      skills: catalogOf(slug),
       userId: ids.userA2,
     });
 
@@ -164,6 +302,7 @@ describe("skill catalog tools", () => {
     const slug = `audited-${Bun.randomUUIDv7()}`;
     const skillId = await insertSkill(slug);
     const tools = createSkillTools({
+      bindingScope: NO_SKILL_BINDING_SCOPE,
       organizationId: ids.orgA,
       recordReadAuditEvent: createAuditRecorder({
         organizationId: ids.orgA,
@@ -173,9 +312,7 @@ describe("skill catalog tools", () => {
         workspaceId: null,
       }),
       safeDb,
-      skills: [
-        { description: "Skill tools test skill", name: slug, version: null },
-      ],
+      skills: catalogOf(slug),
       userId: ids.userA2,
     });
 
@@ -185,13 +322,13 @@ describe("skill catalog tools", () => {
     });
     expect(Result.isOk(loaded)).toBe(true);
     const read = await executeTool({
-      input: { path: "knowledge/checklist.md", skillName: slug },
+      input: { path: "references/checklist.md", skillName: slug },
       tool: tools["read-skill-resource"],
     });
     expect(Result.isOk(read)).toBe(true);
     expectNotFound(
       await executeTool({
-        input: { path: "knowledge/absent.md", skillName: slug },
+        input: { path: "references/absent.md", skillName: slug },
         tool: tools["read-skill-resource"],
       }),
     );
@@ -225,7 +362,7 @@ describe("skill catalog tools", () => {
         {
           action: "access",
           outcome: "success",
-          path: "knowledge/checklist.md",
+          path: "references/checklist.md",
           resourceType: "agent_skill",
           slug,
           surface: "chat",
@@ -233,7 +370,7 @@ describe("skill catalog tools", () => {
         {
           action: "access",
           outcome: "error",
-          path: "knowledge/absent.md",
+          path: "references/absent.md",
           resourceType: "agent_skill",
           slug,
           surface: "chat",
@@ -242,5 +379,142 @@ describe("skill catalog tools", () => {
     );
     expect(reads).toHaveLength(3);
     expect(JSON.stringify(rows)).not.toContain("Follow the test methodology.");
+  });
+});
+
+describe("read-skill-resource windows", () => {
+  const readTool = (slug: string) =>
+    createSkillTools({
+      bindingScope: NO_SKILL_BINDING_SCOPE,
+      organizationId: ids.orgA,
+      safeDb,
+      skills: catalogOf(slug),
+      userId: ids.userA1,
+    })["read-skill-resource"];
+
+  const insertResource = async (
+    skillId: SafeId<"agentSkill">,
+    path: string,
+    content: string,
+  ) =>
+    await testDb.insert(agentSkillResources).values({
+      id: testId(),
+      organizationId: ids.orgA,
+      skillId,
+      path,
+      content,
+      sizeBytes: new TextEncoder().encode(content).byteLength,
+    });
+
+  const windowOf = (result: Result<unknown, unknown>) => {
+    if (Result.isError(result)) {
+      throw result.error;
+    }
+    const output = result.value;
+    if (
+      !isRecord(output) ||
+      typeof output["content"] !== "string" ||
+      typeof output["charCount"] !== "number" ||
+      (output["nextCursor"] !== null &&
+        typeof output["nextCursor"] !== "string")
+    ) {
+      throw new TypeError("Expected a resource window");
+    }
+    return {
+      charCount: output["charCount"],
+      content: output["content"],
+      contentHash: output["contentHash"],
+      nextCursor: output["nextCursor"],
+    };
+  };
+
+  const expectInvalidCursor = (result: Result<unknown, unknown>) => {
+    expect(Result.isError(result)).toBe(true);
+    if (Result.isError(result)) {
+      expect(result.error).toBeInstanceOf(ChatToolError);
+      if (result.error instanceof ChatToolError) {
+        expect(result.error.kind).toBe("invalid-input");
+      }
+    }
+  };
+
+  test("a resource at the stored cap reads back whole through nextCursor", async () => {
+    const slug = `windowed-${Bun.randomUUIDv7()}`;
+    const skillId = await insertSkill(slug);
+    const path = "references/commentary.txt";
+    const unit = "Komentář 😀 ";
+    const content = unit
+      .repeat(Math.ceil(LIMITS.agentSkillResourceMaxChars / unit.length))
+      .slice(0, LIMITS.agentSkillResourceMaxChars)
+      .toWellFormed();
+    await insertResource(skillId, path, content);
+    const tool = readTool(slug);
+
+    const windows: string[] = [];
+    let cursor: string | null = null;
+    do {
+      const window = windowOf(
+        await executeTool({
+          input: {
+            path,
+            skillName: slug,
+            ...(cursor === null ? {} : { cursor }),
+          },
+          tool,
+        }),
+      );
+      expect(window.charCount).toBe(content.length);
+      expect(window.content.length).toBeLessThanOrEqual(
+        LIMITS.agentSkillResourceModelContextMaxChars,
+      );
+      expect(window.content.isWellFormed()).toBe(true);
+      // Every window reports the hash of the whole skill, not of the window.
+      expect(window.contentHash).toBe("0".repeat(64));
+      windows.push(window.content);
+      cursor = window.nextCursor;
+    } while (cursor !== null);
+
+    expect(windows.join("")).toBe(content);
+    expect(windows.length).toBeGreaterThan(1);
+  });
+
+  test("a cursor from another resource or an edited resource is refused", async () => {
+    const slug = `windowed-${Bun.randomUUIDv7()}`;
+    const skillId = await insertSkill(slug);
+    const path = "references/long.md";
+    const content = "x".repeat(
+      LIMITS.agentSkillResourceModelContextMaxChars + 10,
+    );
+    await insertResource(skillId, path, content);
+    await insertResource(skillId, "references/other.md", content);
+    const tool = readTool(slug);
+
+    const first = windowOf(
+      await executeTool({ input: { path, skillName: slug }, tool }),
+    );
+    const cursor = first.nextCursor;
+    if (cursor === null) {
+      throw new TypeError("Expected a continuation");
+    }
+
+    expectInvalidCursor(
+      await executeTool({
+        input: { cursor, path: "references/other.md", skillName: slug },
+        tool,
+      }),
+    );
+
+    await testDb
+      .update(agentSkillResources)
+      .set({ content: `${content}y` })
+      .where(eq(agentSkillResources.skillId, skillId));
+    expectInvalidCursor(
+      await executeTool({ input: { cursor, path, skillName: slug }, tool }),
+    );
+
+    const restarted = windowOf(
+      await executeTool({ input: { path, skillName: slug }, tool }),
+    );
+    expect(restarted.charCount).toBe(content.length + 1);
   });
 });

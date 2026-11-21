@@ -109,7 +109,9 @@ export const InspectorDock = ({
       />
       <div
         className={cn(
-          "fixed inset-y-0 end-0 hidden h-svh md:flex",
+          // Fixed to the viewport, so it clears the notch and the home
+          // indicator itself; its width includes that padding.
+          "fixed inset-y-0 end-0 hidden h-svh pe-(--safe-area-inline-end) pt-(--safe-area-top) pb-(--safe-area-bottom) md:flex",
           PANE_LAYER_CLASS_NAME[mount],
         )}
         data-slot="inspector-dock-pane"
@@ -134,7 +136,7 @@ export const InspectorDock = ({
             />
             <span
               aria-hidden="true"
-              className="bg-background/80 text-foreground-placeholder ring-border/60 group-hover:bg-accent group-hover:text-foreground group-focus-visible:bg-accent group-focus-visible:text-foreground relative flex h-5 w-3 items-center justify-center rounded-full opacity-0 shadow-xs ring-1 backdrop-blur-sm transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100 group-active:opacity-100"
+              className="bg-background/80 text-foreground-placeholder ring-border/60 group-hover:bg-accent group-hover:text-foreground group-focus-visible:bg-accent group-focus-visible:text-foreground relative flex h-5 w-3 items-center justify-center rounded-full opacity-0 shadow-xs ring-1 backdrop-blur-sm transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100 group-active:opacity-100 pointer-coarse:opacity-100"
               data-slot="inspector-resize-grip"
             >
               <EllipsisIcon className="size-3 rotate-90" />

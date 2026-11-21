@@ -15,11 +15,19 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/stella/stella/releases"><img src="https://img.shields.io/github/v/release/stella/stella?include_prereleases&label=release" alt="Latest release" /></a>
+  <a href="https://github.com/stella/stella/releases"><img src="https://img.shields.io/github/v/release/stella/stella?filter=v*&label=release" alt="Latest release" /></a>
   <a href="https://github.com/stella/stella/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue" alt="License" /></a>
   <a href="https://stll.app"><img src="https://img.shields.io/badge/cloud-stll.app-black" alt="stella cloud" /></a>
   <a href="https://github.com/stella/stella/issues"><img src="https://img.shields.io/github/issues/stella/stella" alt="Issues" /></a>
   <a href="https://discord.gg/8dZjmVFjTK"><img src="https://img.shields.io/badge/discord-join%20chat-5865F2?logo=discord&logoColor=white" alt="Discord" /></a>
+</p>
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="apps/landing/public/media/products/story-public-data-1-dark.png" />
+    <img src="apps/landing/public/media/products/story-public-data-1.png" alt="stella's case-law reader open on a Czech Supreme Court judgment, 27 Cdo 59/2022, on a company director's statutory guarantee to creditors. The decision's numbered paragraphs fill the centre with a reader's highlight and underline; the margin shows an AI note on the issue and a lawyer's comment; the two-turn chat on the right answers whether a creditor must first make the company demand compensation from its director, citing the decision." width="100%" />
+  </picture>
+  <br /><sub><b>Case law</b> from public sources: read the decision, mark it up, and ask questions answered from its own paragraphs.</sub>
 </p>
 
 ---
@@ -57,12 +65,63 @@ MCP-compatible tools that extend the agent.
 **Web app.** Matters, documents, Word .docx editing, review, research, chat and
 knowledge tools in one workspace.
 
-**Desktop app.** Local desktop bridge for editing Office documents from stella.
+**Desktop app.** Opens Office documents from stella in your local apps and saves edits back, and keeps a clipboard history that stays on your device.
 
 **[stella MCP server](apps/api/src/mcp/README.md).** A central gateway to
 access and control stella data, including matters, documents and case law.
 
 **Outlook add-in.** Coming soon.
+
+## A tour
+
+Every screenshot below is stella itself, captured by its own end-to-end suite
+from a seeded demo organization and kept current by CI
+([how](apps/landing/public/media/products/README.md)). The matters, parties and
+people in them are fictional.
+
+<table>
+<tr>
+<td colspan="2" valign="top">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="apps/landing/public/media/products/agent-dark.png" />
+  <img src="apps/landing/public/media/products/agent.png" alt="A chat thread where the user asks to turn a change-of-control review into a view for a partner meeting. The answer cites the two critical agreements as document chips, then renders a generated view: total contract value needing consent or termination review, consent to confirm, and notice only, a bar splitting the value between them, and a table of counterparties with agreement, document count, value, risk and change-of-control position" width="100%" />
+</picture>
+<p align="center"><sub><b>AI agent.</b> Cited answers across a whole matter, turned into a view you can take to the meeting.</sub></p>
+</td>
+</tr>
+<tr>
+<td width="50%" valign="top">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="apps/landing/public/media/products/workspace-dark.png" />
+  <img src="apps/landing/public/media/products/workspace.png" alt="The Files tab of the Meridian supply agreement matter: a list of PDF, Word and email files with author, last updated, version, status (Active, In Review, Closed, On Hold) and notes columns" width="100%" />
+</picture>
+<p align="center"><sub><b>Matters.</b> Documents, emails and versions per matter, with status, notes and owners.</sub></p>
+</td>
+<td width="50%" valign="top">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="apps/landing/public/media/products/tabular-review-dark.png" />
+  <img src="apps/landing/public/media/products/tabular-review.png" alt="The Table tab of the Export Review matter: one row per document with coloured status pills, notes, due dates and an extracted document type such as Shareholder Register, Supplier Agreement or Loan Agreement" width="100%" />
+</picture>
+<p align="center"><sub><b>Tabular Review.</b> Extract structured answers from a document set into a review table.</sub></p>
+</td>
+</tr>
+<tr>
+<td width="50%" valign="top">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="apps/landing/public/media/products/editor-dark.png" />
+  <img src="apps/landing/public/media/products/editor.png" alt="A supplier agreement open in the Word editor, with the inspector on the right showing metadata, version history, review and anonymization tabs, the current version v2 and the matter status In Review" width="100%" />
+</picture>
+<p align="center"><sub><b>Editor.</b> Edit .docx in the browser, with version history and matter context beside the page.</sub></p>
+</td>
+<td width="50%" valign="top">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="apps/landing/public/media/products/templates-dark.png" />
+  <img src="apps/landing/public/media/products/templates.png" alt="The Templates library listing nine agreements, such as Supply Agreement, Non-Disclosure Agreement and Share Purchase Agreement, grouped into Corporate, Employment, Commercial and Real Estate categories" width="100%" />
+</picture>
+<p align="center"><sub><b>Templates.</b> A shared library of firm templates, grouped by practice area.</sub></p>
+</td>
+</tr>
+</table>
 
 ## Quickstart
 
@@ -107,6 +166,18 @@ This installs dependencies, prepares local env files, starts Docker services,
 pushes the database schema, starts the API at <http://localhost:3001>, starts
 the web app at <http://localhost:3000>, and opens the browser.
 
+### Cloud environments
+
+Cloud environments run `bash .agents/cloud-setup.sh install` once, then
+`bash .agents/cloud-setup.sh start` each session. Startup restores local PostgreSQL
+and Valkey and writes `apps/api/.env.test`, which the API test runners load.
+Apply migrations next with
+`(cd apps/api && DB_LOAD_GATE_EBS_SIGNAL=disabled bun --env-file=.env.test run db:migrate)`; the explicit
+signal setting applies to this disposable local database. Startup does not run migrations.
+Setup installs dependencies without lifecycle scripts, so generated route and API
+types are absent until a task needs them; run `bun run generate` first in that
+case. Cloud tasks do not need the `.ai/shared` or template-pack submodules.
+
 ### Optional demo data
 
 ```bash
@@ -142,7 +213,10 @@ Local development uses mock AI by default. To use real AI, set provider keys in
 stella does not aim to replace human judgment or provide legal advice. stella
 relies on AI models, which can produce incorrect or misleading output. We aim
 to ground AI flows in citations and traceable source material, but we encourage
-users to always validate the answers.
+users to always validate the answers. AI summaries, notes and analyses of court
+decisions are generated by stella, not endorsed by the courts, and do not
+represent the courts' own reasoning; they are aids for legal professionals, and
+the decision text remains the authoritative source.
 
 ## Contributing
 

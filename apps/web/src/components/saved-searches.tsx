@@ -1,12 +1,14 @@
-import { useState } from "react";
+import { useState, useTransition } from "react";
 
 import {
   useInfiniteQuery,
   useMutation,
   useQueryClient,
 } from "@tanstack/react-query";
+import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
+import { API_VERSION_CONFLICT_ERROR_CODE } from "@stll/api-contract";
 import {
   AlertDialog,
   AlertDialogClose,
@@ -21,20 +23,24 @@ import { Button } from "@stll/ui/button";
 import {
   Dialog,
   DialogFooter,
+  DialogFormState,
   DialogHeader,
   DialogPopup,
   DialogTitle,
 } from "@stll/ui/dialog";
+import { Form } from "@stll/ui/form";
 import {
   BookmarkIcon,
   BookmarkPlusIcon,
-  LoaderIcon,
   PencilIcon,
   Trash2Icon,
 } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
+import { Label } from "@stll/ui/label";
+import { Loader } from "@stll/ui/loader";
 import { MenuSection } from "@stll/ui/menu-section";
 import type { OverlayLayer } from "@stll/ui/overlay-layer";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { contentDir } from "@stll/ui/use-content-dir";
 
 import {
@@ -49,8 +55,9 @@ import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
+import { APIError, unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
 import { stringCursorSeed } from "@/lib/infinite-query";
 import { toSafeId } from "@/lib/safe-id";
 
@@ -78,7 +85,159 @@ type SavedSearchesProps = {
   showTrigger?: boolean;
 };
 
-export const SavedSearches = ({
+type SavedSearchNameDialogProps = {
+  dialog: Extract<SavedSearchDialog, { type: "create" | "rename" }> | null;
+  isSaving: boolean;
+  isConflict: boolean;
+  layer: OverlayLayer;
+  onClose: () => void;
+  onSave: () => void;
+  onNameChange: (name: string) => void;
+  onReload: () => void;
+};
+
+type SavedSearchDisabledReasonOptions = {
+  isSaving: boolean;
+  name: string;
+  t: (
+    key:
+      | "common.saving"
+      | "search.savedSearchEnterName"
+      | "search.savedSearchNameConflict",
+  ) => string;
+};
+
+const savedSearchDisabledReason = ({
+  isSaving,
+  name,
+  t,
+}: SavedSearchDisabledReasonOptions) => {
+  if (isSaving) {
+    return t("common.saving");
+  }
+  if (!name.trim()) {
+    return t("search.savedSearchEnterName");
+  }
+  return t("search.savedSearchNameConflict");
+};
+
+const SavedSearchNameDialog = ({
+  dialog,
+  isSaving,
+  isConflict,
+  layer,
+  onClose,
+  onSave,
+  onNameChange,
+  onReload,
+}: SavedSearchNameDialogProps) => {
+  const t = useTranslations();
+  const name = dialog === null ? "" : dialog.name;
+  return (
+    <Dialog
+      onOpenChange={(open) => {
+        if (!open && !isSaving) {
+          onClose();
+        }
+      }}
+      open={dialog !== null}
+    >
+      <DialogPopup layer={layer}>
+        <DialogFormState
+          dirty={
+            dialog?.type === "create"
+              ? dialog.name !== ""
+              : dialog?.type === "rename" && dialog.name !== dialog.search.name
+          }
+        />
+        <DialogHeader>
+          <DialogTitle>
+            {dialog?.type === "rename"
+              ? t("search.renameSearchTitle")
+              : t("search.saveSearchTitle")}
+          </DialogTitle>
+        </DialogHeader>
+        <Form
+          className="gap-0"
+          onSubmit={(event) => {
+            event.preventDefault();
+            onSave();
+          }}
+        >
+          <div className="px-6 pb-6">
+            {dialog?.type === "rename" && isConflict && (
+              <p className="text-destructive mb-2 text-sm" role="alert">
+                {t("errors.apiCodes.versionConflict")}
+              </p>
+            )}
+            {dialog?.type === "rename" && (
+              <p className="text-muted-foreground mb-2 text-sm">
+                {t("common.name")}: <BidiText>{dialog.search.name}</BidiText>
+              </p>
+            )}
+            <Label className="sr-only" htmlFor="saved-search-name">
+              {t("common.name")}
+            </Label>
+            <Input
+              autoFocus
+              dir={contentDir(name)}
+              disabled={isSaving}
+              id="saved-search-name"
+              maxLength={SAVED_SEARCH_NAME_MAX_LENGTH}
+              onChange={(event) => onNameChange(event.target.value)}
+              placeholder={t("search.saveSearchNamePlaceholder")}
+              value={name}
+            />
+          </div>
+          <DialogFooter>
+            {dialog?.type === "rename" && isConflict && (
+              <Button
+                disabled={isSaving}
+                disabledReason={t("common.saving")}
+                onClick={onReload}
+                type="button"
+                variant="outline"
+              >
+                {t("common.reload")}
+              </Button>
+            )}
+            <Button
+              className="min-h-11"
+              disabled={isSaving}
+              disabledReason={t("common.saving")}
+              onClick={onClose}
+              type="button"
+              variant="ghost"
+            >
+              {t("common.cancel")}
+            </Button>
+            <Button
+              className="min-h-11"
+              disabled={
+                !name.trim() ||
+                isSaving ||
+                (dialog?.type === "rename" && isConflict)
+              }
+              disabledReason={savedSearchDisabledReason({ isSaving, name, t })}
+              type="submit"
+            >
+              {isSaving && (
+                <Loader
+                  className="size-4"
+                  label={t("common.loading")}
+                  size="sm"
+                />
+              )}
+              {t("common.save")}
+            </Button>
+          </DialogFooter>
+        </Form>
+      </DialogPopup>
+    </Dialog>
+  );
+};
+
+const SavedSearches = ({
   filters,
   isOpen,
   query,
@@ -110,7 +269,7 @@ export const SavedSearches = ({
         fetch: { signal },
       });
 
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     initialPageParam: stringCursorSeed(),
     getNextPageParam: (page) => page.nextCursor ?? undefined,
@@ -121,52 +280,98 @@ export const SavedSearches = ({
     setDialog({ type: "closed" });
     await queryClient.invalidateQueries({ queryKey: savedSearchQueryKey });
   };
-  const onMutationError = (error: Error) => {
-    analytics.captureError(error);
+  const onMutationError = (
+    error: unknown,
+    operation: "create" | "rename" | "delete",
+  ) => {
+    analytics.captureError(error, {
+      fingerprintKey: "SavedSearches.onMutationError:failure",
+      scope: { type: "handler", handlerId: `saved-search.${operation}` },
+    });
     notifyUserError(error, t("common.somethingWentWrong"));
   };
 
+  const submitIntent = useIdempotentSubmit();
   const createMutation = useMutation({
     mutationFn: async (name: string) => {
       const criteria = toSavedSearchCriteria({ filters, query });
       const { time, workspaceIds, ...requiredCriteria } = criteria;
-      return unwrapEden(
-        await api["saved-searches"].post({
-          name,
-          criteria: {
-            ...requiredCriteria,
-            workspaceIds: workspaceIds.map((workspaceId) =>
-              toSafeId<"workspace">(workspaceId),
-            ),
-            ...(time !== undefined && { time }),
+      return unwrapApiResponse(
+        await submitIntent.run({
+          operation: "saved-searches.create",
+          body: {
+            name,
+            criteria: {
+              ...requiredCriteria,
+              workspaceIds: workspaceIds.map((workspaceId) =>
+                toSafeId<"workspace">(workspaceId),
+              ),
+              ...(time !== undefined && { time }),
+            },
           },
+          send: async (creationPayload) =>
+            api["saved-searches"].post(creationPayload),
         }),
       );
     },
     onSuccess: onMutationSuccess,
-    onError: onMutationError,
+    onError: (error) => onMutationError(error, "create"),
   });
 
   const renameMutation = useMutation({
     mutationFn: async ({
       name,
       savedSearchId,
+      expectedUpdatedAt,
     }: {
       name: string;
       savedSearchId: SavedSearch["id"];
+      expectedUpdatedAt: SavedSearch["updatedAt"];
     }) =>
-      unwrapEden(
-        await api["saved-searches"]({ savedSearchId }).patch({ name }),
+      unwrapApiResponse(
+        await api["saved-searches"]({ savedSearchId }).patch({
+          name,
+          expectedUpdatedAt,
+        }),
       ),
     onSuccess: onMutationSuccess,
-    onError: onMutationError,
+    onError: (error) => onMutationError(error, "rename"),
   });
+
+  const [isReloading, startReloadTransition] = useTransition();
+  const reloadSavedSearch = () => {
+    if (dialog.type !== "rename") {
+      return;
+    }
+    const snapshot = dialog;
+    startReloadTransition(async () => {
+      const loaded = await Result.tryPromise(async () =>
+        unwrapApiResponse(
+          await api["saved-searches"]({
+            savedSearchId: snapshot.search.id,
+          }).get(),
+        ),
+      );
+      if (loaded.isErr()) {
+        onMutationError(loaded.error.cause, "rename");
+        return;
+      }
+      setDialog((current) =>
+        current === snapshot
+          ? { type: "rename", name: snapshot.name, search: loaded.value }
+          : current,
+      );
+      renameMutation.reset();
+    });
+  };
 
   const deleteMutation = useMutation({
     mutationFn: async (savedSearchId: SavedSearch["id"]) =>
-      unwrapEden(await api["saved-searches"]({ savedSearchId }).delete()),
+      unwrapApiResponse(
+        await api["saved-searches"]({ savedSearchId }).delete(),
+      ),
     onSuccess: onMutationSuccess,
-    onError: onMutationError,
+    onError: (error) => onMutationError(error, "delete"),
   });
 
   const savedSearches = savedSearchesQuery.data?.pages.flatMap(
@@ -183,9 +388,16 @@ export const SavedSearches = ({
     if (!showList || !savedSearchesError) {
       return;
     }
-    analytics.captureError(savedSearchesError);
+    analytics.captureError(savedSearchesError, {
+      fingerprintKey: "SavedSearches:savedSearchesError",
+      scope: { type: "handler", handlerId: "SavedSearches:savedSearchesError" },
+    });
   }, [analytics, savedSearchesError, showList]);
-  const isSaving = createMutation.isPending || renameMutation.isPending;
+  const isSaving =
+    createMutation.isPending || renameMutation.isPending || isReloading;
+  const isRenameConflict =
+    APIError.is(renameMutation.error) &&
+    renameMutation.error.code === API_VERSION_CONFLICT_ERROR_CODE;
   const isMutatingSavedSearch = isSaving || deleteMutation.isPending;
   const dialogName =
     dialog.type === "create" || dialog.type === "rename" ? dialog.name : "";
@@ -212,7 +424,14 @@ export const SavedSearches = ({
       return;
     }
     if (dialog.type === "rename") {
-      renameMutation.mutate({ name, savedSearchId: dialog.search.id });
+      if (isRenameConflict) {
+        return;
+      }
+      renameMutation.mutate({
+        name,
+        savedSearchId: dialog.search.id,
+        expectedUpdatedAt: dialog.search.updatedAt,
+      });
     }
   };
 
@@ -223,6 +442,11 @@ export const SavedSearches = ({
           aria-label={t("search.saveSearch")}
           className="size-11 shrink-0"
           disabled={!hasActiveCriteria || isMutatingSavedSearch}
+          disabledReason={
+            isMutatingSavedSearch
+              ? t("search.savedSearchUpdating")
+              : t("search.savedSearchAddCriteria")
+          }
           onClick={() => setDialog({ type: "create", name: "" })}
           size="icon"
           title={t("search.saveSearch")}
@@ -236,7 +460,11 @@ export const SavedSearches = ({
         <MenuSection title={t("search.savedSearches")}>
           {savedSearchesQuery.isPending && (
             <div className="flex h-11 items-center px-2">
-              <LoaderIcon className="text-muted-foreground size-4 animate-spin" />
+              <Loader
+                className="size-4"
+                label={t("common.loading")}
+                size="sm"
+              />
             </div>
           )}
           {savedSearchesQuery.isError && (
@@ -263,21 +491,23 @@ export const SavedSearches = ({
                 variant="ghost"
               >
                 <BookmarkIcon className="text-muted-foreground size-4 shrink-0" />
-                <BidiText as="span" className="truncate">
+                <TruncatedText render={<BidiText as="span" />}>
                   {savedSearch.name}
-                </BidiText>
+                </TruncatedText>
               </Button>
               <Button
                 aria-label={t("common.rename")}
                 className="size-11 shrink-0"
                 disabled={isMutatingSavedSearch}
-                onClick={() =>
+                disabledReason={t("search.savedSearchUpdating")}
+                onClick={() => {
+                  renameMutation.reset();
                   setDialog({
                     type: "rename",
                     name: savedSearch.name,
                     search: savedSearch,
-                  })
-                }
+                  });
+                }}
                 size="icon"
                 title={t("common.rename")}
                 variant="ghost"
@@ -288,6 +518,7 @@ export const SavedSearches = ({
                 aria-label={t("common.delete")}
                 className="size-11 shrink-0"
                 disabled={isMutatingSavedSearch}
+                disabledReason={t("search.savedSearchUpdating")}
                 onClick={() =>
                   setDialog({ type: "delete", search: savedSearch })
                 }
@@ -303,6 +534,7 @@ export const SavedSearches = ({
             <Button
               className="h-11 w-full"
               disabled={savedSearchesQuery.isFetchingNextPage}
+              disabledReason={t("caseLaw.loadingMore")}
               onClick={() => {
                 detached(
                   savedSearchesQuery.fetchNextPage(),
@@ -311,75 +543,29 @@ export const SavedSearches = ({
               }}
               variant="ghost"
             >
-              {savedSearchesQuery.isFetchingNextPage ? (
-                <LoaderIcon className="size-4 animate-spin" />
-              ) : (
-                t("common.loadMore")
+              {savedSearchesQuery.isFetchingNextPage && (
+                <Loader size="sm" variant="decorative" />
               )}
+              {savedSearchesQuery.isFetchingNextPage
+                ? t("common.loading")
+                : t("common.loadMore")}
             </Button>
           )}
         </MenuSection>
       )}
 
-      <Dialog
-        onOpenChange={(open) => {
-          if (!open && !isSaving) {
-            setDialog({ type: "closed" });
-          }
-        }}
-        open={dialog.type === "create" || dialog.type === "rename"}
-      >
-        <DialogPopup layer={overlayLayer}>
-          <DialogHeader>
-            <DialogTitle>
-              {dialog.type === "rename"
-                ? t("search.renameSearchTitle")
-                : t("search.saveSearchTitle")}
-            </DialogTitle>
-          </DialogHeader>
-          <form
-            onSubmit={(event) => {
-              event.preventDefault();
-              saveName();
-            }}
-          >
-            <div className="px-6 pb-6">
-              <label className="sr-only" htmlFor="saved-search-name">
-                {t("common.name")}
-              </label>
-              <Input
-                autoFocus
-                dir={contentDir(dialogName)}
-                disabled={isSaving}
-                id="saved-search-name"
-                maxLength={SAVED_SEARCH_NAME_MAX_LENGTH}
-                onChange={(event) => updateDialogName(event.target.value)}
-                placeholder={t("search.saveSearchNamePlaceholder")}
-                value={dialogName}
-              />
-            </div>
-            <DialogFooter>
-              <Button
-                className="min-h-11"
-                disabled={isSaving}
-                onClick={() => setDialog({ type: "closed" })}
-                type="button"
-                variant="ghost"
-              >
-                {t("common.cancel")}
-              </Button>
-              <Button
-                className="min-h-11"
-                disabled={!dialogName.trim() || isSaving}
-                type="submit"
-              >
-                {isSaving && <LoaderIcon className="size-4 animate-spin" />}
-                {t("common.save")}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogPopup>
-      </Dialog>
+      <SavedSearchNameDialog
+        dialog={
+          dialog.type === "create" || dialog.type === "rename" ? dialog : null
+        }
+        isSaving={isSaving}
+        isConflict={isRenameConflict}
+        layer={overlayLayer}
+        onClose={() => setDialog({ type: "closed" })}
+        onSave={saveName}
+        onNameChange={updateDialogName}
+        onReload={reloadSavedSearch}
+      />
 
       <AlertDialog
         onOpenChange={(open) => {
@@ -407,6 +593,7 @@ export const SavedSearches = ({
                 <Button
                   className="min-h-11"
                   disabled={deleteMutation.isPending}
+                  disabledReason={t("common.deleting")}
                   variant="ghost"
                 />
               }
@@ -416,6 +603,7 @@ export const SavedSearches = ({
             <Button
               className="min-h-11"
               disabled={deleteMutation.isPending}
+              disabledReason={t("common.deleting")}
               onClick={() => {
                 if (dialog.type === "delete") {
                   deleteMutation.mutate(dialog.search.id);
@@ -424,7 +612,11 @@ export const SavedSearches = ({
               variant="destructive"
             >
               {deleteMutation.isPending && (
-                <LoaderIcon className="size-4 animate-spin" />
+                <Loader
+                  className="size-4"
+                  label={t("common.loading")}
+                  size="sm"
+                />
               )}
               {t("common.delete")}
             </Button>
@@ -434,3 +626,16 @@ export const SavedSearches = ({
     </>
   );
 };
+
+/** Editing state and outstanding actions belong to one authenticated owner. */
+const SavedSearchesOwnerBoundary = (props: SavedSearchesProps) => {
+  const { activeOrganizationId, id: userId } = useAuthenticatedUser();
+  return (
+    <SavedSearches
+      key={JSON.stringify([activeOrganizationId, userId])}
+      {...props}
+    />
+  );
+};
+
+export { SavedSearchesOwnerBoundary as SavedSearches };

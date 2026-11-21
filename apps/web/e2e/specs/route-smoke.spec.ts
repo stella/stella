@@ -6,17 +6,28 @@ import type {
   Request,
 } from "@playwright/test";
 import { expect, request as apiRequestFactory, test } from "@playwright/test";
+import { spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
+import * as v from "valibot";
+
+import {
+  INSPECTOR_STORAGE,
+  inspectorStorageBaseKey,
+  ownerStorageKey,
+} from "@stll/api-contract/browser-storage";
+import { CAPABILITY_REQUEST_HEADER } from "@stll/api-contract/capability-request";
+import { ORGANIZATION_NAME_MAX_LENGTH } from "@stll/api-contract/organization-create";
 
 import {
   partitionRoundRobin,
   resolveE2eExecutionProfile,
 } from "../execution-profile";
-import { apiDelete, apiPut } from "../helpers/api";
+import { apiDelete, apiGet, apiPut, E2E_API_ORIGIN } from "../helpers/api";
 import { ROUTE_ERROR_HEADING } from "../helpers/app-shell";
 import { findChromeDividerProblems } from "../helpers/chrome-divider";
+import { installContentSecurityPolicyCollector } from "../helpers/content-security-policy";
 import {
   CORRESPONDENCE_SMOKE_SUBJECT,
   createTestCorrespondence,
@@ -26,34 +37,79 @@ import {
   registerDeferredE2eCleanup,
 } from "../helpers/deferred-cleanup";
 import { createUploadedDocumentRoute } from "../helpers/document";
+import { findEscapedText } from "../helpers/escaped-text";
 import {
-  type RouteNetworkMetrics,
-  WATERFALL_DEPTH_RESAMPLES,
+  assertRouteLayoutShift,
+  observeLayoutShift,
+} from "../helpers/layout-shift";
+import {
   assertNetworkBaseline,
   assertNetworkBaselineCoverage,
-  baselineWaterfallDepth,
   createNetworkCollector,
   mergeNetworkBaseline,
-  mergeResampledMetrics,
+  type RouteNetworkMetrics,
   summarizeCapture,
 } from "../helpers/network";
+import { deleteTestOrganization } from "../helpers/organization";
+import { declarePublicKnowledgeSmoke } from "../helpers/public-knowledge-smoke";
+import { measurePublicLawGeometry } from "../helpers/public-law-loading-geometry";
 import {
-  declarePublicKnowledgeSmoke,
-  PUBLIC_VISITOR_ROUTE_DEFS,
-} from "../helpers/public-knowledge-smoke";
+  createRenderRecorder,
+  readRenderCensus,
+  type RouteRenderMetrics,
+} from "../helpers/render-census";
+import {
+  installRenderCommitHook,
+  RENDER_CENSUS_GLOBAL,
+} from "../helpers/render-census-hook";
+import {
+  measureSmokeWorlds,
+  parseRouteScaleLedger,
+  routeScaleCensus,
+  type RouteScaleMeasurement,
+} from "../helpers/route-scale";
+import {
+  addedLedgerEntries,
+  routeScaleLedgerMembership,
+} from "../helpers/route-scale-ledger";
+import { signInWithEmailOtp } from "../helpers/sign-in";
+import {
+  assertSmokeRouteCoverage,
+  networkBaselineKey,
+} from "../helpers/smoke-route-coverage";
+import {
+  type RouteExpectation,
+  SMOKE_ROUTE_DEFS,
+  type SmokeRouteDef,
+  type SmokeWorld,
+} from "../helpers/smoke-route-defs";
+import { getSmokeWorlds } from "../helpers/smoke-world";
 import { createBrowserErrorCollector } from "../helpers/test";
+import { listTimeBillingRoutes } from "../helpers/time-billing-routes";
+import { measureLoadingGeometry } from "../helpers/time-loading-geometry";
+import { declareVisualSandboxSmoke } from "../helpers/visual-sandbox-smoke";
 import {
-  type TestWorkspace,
+  PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
+  PLAYWRIGHT_EXPECT_TIMEOUT_60_SECONDS_MS,
+} from "../helpers/wait-budgets";
+import {
   createTestWorkspace,
   deleteTestWorkspace,
+  type TestWorkspace,
 } from "../helpers/workspace";
+import scaleLedger from "../route-scale-ledger.json" with { type: "json" };
 
 // Every route retains the former one-second observation floor so delayed
 // warmups remain visible. After that floor, tracked API activity may finish
 // the longer document-route windows early once it stays quiet.
 const NETWORK_QUIET_MS = 500;
 const DEFAULT_SETTLE_MS = 1000;
-const NONEXISTENT_VERIFICATION_CODE = "abcdmnp239";
+const GIT_REF_OUTPUT_MAX_BYTES = 64 * 1024;
+const ROUTE_SCALE_LEDGER_OUTPUT_MAX_BYTES = 256 * 1024;
+const SCALE_LEDGER = parseRouteScaleLedger(JSON.stringify(scaleLedger));
+// The small/large matter comparison walks every route three times, so it runs
+// in the nightly route-scale workflow; pull requests walk the baseline only.
+const ROUTE_SCALE = process.env["E2E_ROUTE_SCALE"] === "1";
 
 // Repo-root .playwright/storage-state.json — mirrors apps/web/e2e/playwright.config.ts
 // (seed-test-user.ts writes it there). The route walk owns its API request
@@ -61,6 +117,44 @@ const NONEXISTENT_VERIFICATION_CODE = "abcdmnp239";
 // page it loads, so setup/teardown are no longer hostage to a per-test fixture
 // lifecycle; both need the authenticated storage state wired in explicitly.
 const REPO_ROOT = path.resolve(import.meta.dirname, "../../../..");
+
+const routeScaleLedgerAdditions = (): string[] => {
+  const baseRef = "origin/main";
+  const resolved = spawnSync(
+    "git",
+    [
+      "rev-parse",
+      "--verify",
+      "--quiet",
+      "--end-of-options",
+      `${baseRef}^{commit}`,
+    ],
+    { cwd: REPO_ROOT, encoding: "utf-8", maxBuffer: GIT_REF_OUTPUT_MAX_BYTES },
+  );
+  if (resolved.status !== 0) {
+    return [`base ${baseRef} could not be resolved`];
+  }
+  const commit = resolved.stdout.trim();
+  const ledgerPath = "apps/web/e2e/route-scale-ledger.json";
+  const base = spawnSync("git", ["show", `${commit}:${ledgerPath}`], {
+    cwd: REPO_ROOT,
+    encoding: "utf-8",
+    maxBuffer: ROUTE_SCALE_LEDGER_OUTPUT_MAX_BYTES,
+  });
+  if (base.status !== 0) {
+    if (/exists on disk, but not in|does not exist in/u.test(base.stderr)) {
+      return addedLedgerEntries(
+        routeScaleLedgerMembership(JSON.stringify(scaleLedger)),
+        null,
+      );
+    }
+    return [`git show ${commit}:${ledgerPath} failed: ${base.stderr}`];
+  }
+  return addedLedgerEntries(
+    routeScaleLedgerMembership(JSON.stringify(scaleLedger)),
+    routeScaleLedgerMembership(base.stdout),
+  );
+};
 const STORAGE_STATE = path.resolve(REPO_ROOT, ".playwright/storage-state.json");
 
 const ROUTE_TREE_PATH = path.resolve(
@@ -68,16 +162,12 @@ const ROUTE_TREE_PATH = path.resolve(
   "../../src/routeTree.gen.ts",
 );
 
-type RouteExpectation =
-  | { kind: "rendersInPlace" }
-  | { kind: "redirectsTo"; to: string }
-  | { kind: "settles" };
-
 // The concrete route smoked by a single test case: template (stable key),
 // resolved path, optional settle window, and where it is expected to land.
 type SmokeRoute = {
   template: string;
   path: string;
+  storageState?: Awaited<ReturnType<APIRequestContext["storageState"]>>;
   settleMs?: number;
   // Where the route settles. Defaults to rendering in place (the pathname stays
   // put). `redirectsTo` pins a deterministic beforeLoad/Navigate target and
@@ -88,153 +178,6 @@ type SmokeRoute = {
   // is assertable.
   expectation?: RouteExpectation;
 };
-
-// Runtime fixtures every dynamic route path is resolved against. Populated once
-// in beforeAll and shared across the per-route test cases.
-type SmokeWorld = {
-  workspace: TestWorkspace;
-  contactId: string;
-  documentRoute: { entityId: string; path: string };
-  correspondenceId: string;
-};
-
-// A route case declared at collection time. `path` is a function so dynamic
-// routes (workspace/contact/document ids) resolve against the beforeAll world
-// when the case actually runs, while templates stay static so the per-route
-// `test()` cases and the coverage assertion can be built before setup runs.
-type SmokeRouteDef = {
-  template: string;
-  path: (world: SmokeWorld) => string;
-  settleMs?: number;
-  expectation?: RouteExpectation;
-};
-
-const staticRoute = (
-  template: string,
-  extra: Omit<SmokeRouteDef, "template" | "path"> = {},
-): SmokeRouteDef => ({ template, path: () => template, ...extra });
-
-// Every authenticated route smoked, one case each. Order is the walk order; the
-// heavy document route stays last. Kept as declarations (not live SmokeRoutes)
-// so each route is its own `test()` with its own timeout instead of one 300s
-// mega-test whose budget any single slow or dev-server-stalled route can blow.
-const SMOKE_ROUTE_DEFS: readonly SmokeRouteDef[] = [
-  staticRoute("/chat"),
-  {
-    template: "/chat/$threadId",
-    path: () => `/chat/${randomUUID()}`,
-  },
-  staticRoute("/chat/new", { expectation: { kind: "settles" } }),
-  staticRoute("/contacts"),
-  staticRoute("/dev/autocomplete", { expectation: { kind: "settles" } }),
-  staticRoute("/knowledge"),
-  staticRoute("/knowledge/clauses"),
-  // Reachable in dev/staging (playbooks preview gate is open there); redirects
-  // to /knowledge only in production where the flag is off.
-  staticRoute("/knowledge/playbooks"),
-  staticRoute("/knowledge/styles"),
-  staticRoute("/knowledge/templates"),
-  staticRoute("/knowledge/tools"),
-  staticRoute("/knowledge/workflows"),
-  staticRoute("/settings", {
-    expectation: { kind: "redirectsTo", to: "/settings/account/profile" },
-  }),
-  staticRoute("/settings/account/beta", { expectation: { kind: "settles" } }),
-  staticRoute("/settings/account/connections"),
-  staticRoute("/settings/account/desktop"),
-  staticRoute("/settings/account/memory", {
-    expectation: { kind: "redirectsTo", to: "/settings/account/profile" },
-  }),
-  staticRoute("/settings/account/profile"),
-  staticRoute("/settings/organization", {
-    expectation: { kind: "redirectsTo", to: "/settings/organization/members" },
-  }),
-  staticRoute("/settings/organization/ai"),
-  staticRoute("/settings/organization/anonymization"),
-  staticRoute("/settings/organization/audit-logs"),
-  staticRoute("/settings/organization/catalogue", {
-    expectation: { kind: "redirectsTo", to: "/knowledge/tools" },
-  }),
-  staticRoute("/settings/organization/document-types"),
-  staticRoute("/settings/organization/matter-numbering"),
-  staticRoute("/settings/organization/billing", {
-    expectation: { kind: "settles" },
-  }),
-  staticRoute("/settings/organization/members"),
-  staticRoute("/settings/organization/usage"),
-  staticRoute("/inbox"),
-  staticRoute("/workspaces"),
-  {
-    template: "/chat/workspaces/$workspaceId/$threadId",
-    path: (world) => `/chat/workspaces/${world.workspace.id}/${randomUUID()}`,
-  },
-  {
-    template: "/chat/workspaces/$workspaceId/new",
-    path: (world) => `/chat/workspaces/${world.workspace.id}/new`,
-    expectation: { kind: "settles" },
-  },
-  {
-    template: "/workspaces/$workspaceId",
-    path: (world) => `/workspaces/${world.workspace.id}`,
-    expectation: { kind: "redirectsTo", to: "" },
-  },
-  {
-    template: "/workspaces/$workspaceId/expenses",
-    path: (world) => `/workspaces/${world.workspace.id}/expenses`,
-  },
-  {
-    template: "/workspaces/$workspaceId/invoices",
-    path: (world) => `/workspaces/${world.workspace.id}/invoices`,
-  },
-  {
-    template: "/workspaces/$workspaceId/lists",
-    path: (world) => `/workspaces/${world.workspace.id}/lists`,
-    expectation: { kind: "redirectsTo", to: "" },
-  },
-  {
-    template: "/workspaces/$workspaceId/timesheets",
-    path: (world) => `/workspaces/${world.workspace.id}/timesheets`,
-  },
-  {
-    template: "/workspaces/$workspaceId/workflows",
-    path: (world) => `/workspaces/${world.workspace.id}/workflows`,
-  },
-  {
-    template: "/workspaces/$workspaceId/$viewId",
-    path: (world) =>
-      `/workspaces/${world.workspace.id}/${world.workspace.viewId}`,
-  },
-  {
-    template: "/contacts/$contactId",
-    path: (world) => `/contacts/${world.contactId}`,
-  },
-  {
-    template: "/workspaces/$workspaceId/$viewId/document",
-    path: (world) => world.documentRoute.path,
-    settleMs: 2000,
-  },
-  // Routes are partitioned round-robin into serial groups whose shared state
-  // (threads, contacts created by earlier routes) shapes the recorded network
-  // baseline. Append new routes here so existing routes keep their group.
-  staticRoute("/contacts/import"),
-  {
-    template: "/verify/$code",
-    path: () => `/verify/${NONEXISTENT_VERIFICATION_CODE}`,
-  },
-  {
-    template: "/workspaces/$workspaceId/correspondence/$correspondenceId",
-    path: (world) =>
-      `/workspaces/${world.workspace.id}/correspondence/${world.correspondenceId}`,
-  },
-  staticRoute("/time"),
-  staticRoute("/settings/organization/time-policy"),
-  staticRoute("/settings/organization/vat-rates", {
-    expectation: { kind: "settles" },
-  }),
-  staticRoute("/settings/organization/number-series", {
-    expectation: { kind: "settles" },
-  }),
-];
 
 // Redirect targets for workspace-scoped aliases depend on the runtime view id,
 // so their `expectation.to` is resolved here rather than in the static table.
@@ -254,43 +197,72 @@ const resolveExpectation = (
   };
 };
 
-const resolveRoute = (def: SmokeRouteDef, world: SmokeWorld): SmokeRoute => {
+const resolveRoute = (
+  def: SmokeRouteDef,
+  world: SmokeWorld & {
+    storageState?: Awaited<ReturnType<APIRequestContext["storageState"]>>;
+  },
+): SmokeRoute => {
   const expectation = resolveExpectation(def, world);
   return {
     template: def.template,
     path: def.path(world),
+    ...(world.storageState === undefined
+      ? {}
+      : { storageState: world.storageState }),
     ...(def.settleMs === undefined ? {} : { settleMs: def.settleMs }),
     ...(expectation === undefined ? {} : { expectation }),
   };
 };
 
-// These routes need richer domain setup than cheap route smoke should own.
-// Keeping them explicit means a newly added authenticated route fails the
-// coverage assertion until it is either smoked or deliberately placed here.
-const INTENTIONALLY_NOT_SMOKED = new Set([
-  // Requires a connected desktop registry account and a real company record.
-  "/knowledge/company-formats/$registry/$companyId",
-  // A file download handler, not a page.
-  "/knowledge/tools/$entry/download",
-  "/workspaces/$workspaceId/invoices/$invoiceId",
-  "/workspaces/$workspaceId/reports/$exportId",
-]);
+type TimeBillingRedirectDestinationOptions = {
+  template: string;
+  workspace: TestWorkspace;
+};
+
+const timeBillingRedirectDestination = ({
+  template,
+  workspace,
+}: TimeBillingRedirectDestinationOptions): string => {
+  // The workspace index forwards to the workspace's default view.
+  if (template.startsWith("/workspaces/")) {
+    return `/workspaces/${workspace.id}/${workspace.viewId}`;
+  }
+  if (template.startsWith("/settings/organization/")) {
+    return "/settings/organization/members";
+  }
+  if (template.startsWith("/admin/")) {
+    return "/admin/members";
+  }
+  // My week, its approval queue and the team report leave for the matters list.
+  if (
+    template === "/time" ||
+    template === "/time_/approvals" ||
+    template === "/time_/report"
+  ) {
+    return "/workspaces";
+  }
+  throw new Error(`No unenrolled redirect expectation for ${template}`);
+};
 
 const declareRouteSmokeGroup = ({
   defs,
   name,
   requireAllRoutes,
+  checkUnenrolledRoutes,
 }: {
   defs: readonly SmokeRouteDef[];
   name: string;
   requireAllRoutes: boolean;
+  checkUnenrolledRoutes: boolean;
 }) => {
-  // Serial within one fixture-owning group; separate groups are independent
-  // Playwright scheduling units and can run on different workers or CI shards.
+  // Keep the existing scheduling groups; the single route-smoke worker shares
+  // one pair of worlds across them.
   test.describe.serial(name, () => {
     let apiRequest: APIRequestContext;
     let browserForPages: Browser;
     let world: SmokeWorld | null = null;
+    let worlds: Awaited<ReturnType<typeof getSmokeWorlds>> | null = null;
     // Recorded the moment each fixture is created (not only after the whole
     // setup succeeds), so a registry failure still tears down what exists.
     let createdWorkspace: SmokeWorld["workspace"] | null = null;
@@ -298,12 +270,26 @@ const declareRouteSmokeGroup = ({
     let workspaceCleanupRegistered = false;
     let contactCleanupRegistered = false;
     const networkResults = new Map<string, RouteNetworkMetrics>();
+    const smallScaleResults = new Map<string, RouteNetworkMetrics>();
+    const scaleResults = new Map<string, RouteNetworkMetrics>();
+    const smallRenderResults = new Map<string, RouteRenderMetrics>();
+    const largeRenderResults = new Map<string, RouteRenderMetrics>();
 
     test.beforeAll(async ({ browser }, testInfo) => {
+      // timeout: build the baseline world, plus two isolated 100/1000-row matters in scale runs, before measuring routes.
+      test.setTimeout(ROUTE_SCALE ? 180_000 : 60_000);
       apiRequest = await apiRequestFactory.newContext({
         storageState: STORAGE_STATE,
       });
       browserForPages = browser;
+      const navigation = await apiGet<{ features: { timeBilling: boolean } }>(
+        apiRequest,
+        "/workspaces/navigation",
+      );
+      expect(
+        navigation.features.timeBilling,
+        "the persisted smoke principal is enrolled and verified",
+      ).toBe(true);
 
       const workspace = await createTestWorkspace(apiRequest, "route-smoke");
       createdWorkspace = workspace;
@@ -324,8 +310,28 @@ const declareRouteSmokeGroup = ({
         request: apiRequest,
         workspace,
       });
-      const correspondenceId = await createTestCorrespondence(workspace.id);
+      const sessionResponse = await apiRequest.get(
+        `${E2E_API_ORIGIN}/api/auth/get-session`,
+      );
+      expect(sessionResponse.ok()).toBe(true);
+      const {
+        session: { activeOrganizationId },
+        user: { email },
+      } = v.parse(
+        v.object({
+          session: v.object({ activeOrganizationId: v.string() }),
+          user: v.object({ email: v.string() }),
+        }),
+        await sessionResponse.json(),
+      );
+      const correspondenceId = await createTestCorrespondence(workspace.id, {
+        organizationId: activeOrganizationId,
+        email,
+      });
       world = { workspace, contactId, documentRoute, correspondenceId };
+      if (ROUTE_SCALE) {
+        worlds = await getSmokeWorlds(testInfo.project.outputDir);
+      }
     });
 
     test.afterAll(async () => {
@@ -366,18 +372,284 @@ const declareRouteSmokeGroup = ({
     // beforeAll.
     const declareRouteTest = (def: SmokeRouteDef) => {
       test(def.template, async () => {
+        // timeout: each measured world retains the former 60s navigation allowance.
+        test.setTimeout(ROUTE_SCALE ? 180_000 : 60_000);
         if (world === null) {
-          throw new Error("route-smoke world was not initialized in beforeAll");
+          throw new Error("route-smoke baseline world was not initialized");
         }
-        await smokeRoute({
-          browser: browserForPages,
-          results: networkResults,
-          route: resolveRoute(def, world),
+        const baselineWorld = world;
+        const measureBaseline = async () =>
+          await smokeRoute({
+            browser: browserForPages,
+            results: networkResults,
+            route: resolveRoute(def, baselineWorld),
+          });
+        if (worlds === null) {
+          await measureBaseline();
+          return;
+        }
+        const scaleWorlds = worlds;
+        const measured = await measureSmokeWorlds({
+          baseline: measureBaseline,
+          small: async () =>
+            await smokeRoute({
+              browser: browserForPages,
+              results: smallScaleResults,
+              renderResults: smallRenderResults,
+              route: resolveRoute(def, scaleWorlds.small),
+            }),
+          large: async () =>
+            await smokeRoute({
+              browser: browserForPages,
+              results: scaleResults,
+              renderResults: largeRenderResults,
+              route: resolveRoute(def, scaleWorlds.large),
+            }),
+        });
+        if (measured.isErr()) {
+          throw measured.error;
+        }
+        const key = networkBaselineKey(def);
+        const small = smallScaleResults.get(key);
+        const large = scaleResults.get(key);
+        const smallRenders = smallRenderResults.get(key);
+        const largeRenders = largeRenderResults.get(key);
+        if (
+          small === undefined ||
+          large === undefined ||
+          smallRenders === undefined ||
+          largeRenders === undefined
+        ) {
+          throw new Error(`Missing paired route measurement: ${key}`);
+        }
+        await test.info().attach("matter-scale", {
+          body: JSON.stringify(
+            {
+              route: key,
+              cardinalities: {
+                small: scaleWorlds.small.cardinalities,
+                large: scaleWorlds.large.cardinalities,
+              },
+              small,
+              large,
+              renders: { small: smallRenders, large: largeRenders },
+            },
+            null,
+            2,
+          ),
+          contentType: "application/json",
         });
       });
     };
     for (const def of defs) {
       declareRouteTest(def);
+    }
+
+    if (defs.some((def) => def.template === "/knowledge")) {
+      test("/knowledge with a restored inspector", async () => {
+        const response = await apiRequest.get(
+          `${E2E_API_ORIGIN}/api/auth/get-session`,
+        );
+        expect(response.ok()).toBe(true);
+        const session = v.parse(
+          v.object({
+            user: v.object({ id: v.string() }),
+            session: v.object({ activeOrganizationId: v.string() }),
+          }),
+          await response.json(),
+        );
+        await measureRouteTarget({
+          browser: browserForPages,
+          route: {
+            template: "/knowledge (restored inspector)",
+            path: "/knowledge",
+          },
+          countRenders: false,
+          restoredInspector: {
+            userId: session.user.id,
+            organizationId: session.session.activeOrganizationId,
+          },
+        });
+      });
+      test("/tools layout", async () => {
+        const response = await apiRequest.get(
+          `${process.env["E2E_WEB_URL"] ?? "http://localhost:3000"}/tools`,
+        );
+        test.skip(response.status() === 404, "Legacy Tools route is disabled");
+        expect(response.ok()).toBe(true);
+        await measureRouteTarget({
+          browser: browserForPages,
+          route: { template: "/tools", path: "/tools" },
+          countRenders: false,
+        });
+      });
+    }
+
+    if (checkUnenrolledRoutes) {
+      test("unenrolled callers leave every time-billing route before its loader", async () => {
+        test.setTimeout(180_000);
+        const negativeRequest = await apiRequestFactory.newContext({
+          extraHTTPHeaders: {
+            origin: new URL(
+              process.env["E2E_WEB_URL"] ?? "http://localhost:3000",
+            ).origin,
+          },
+        });
+        let negativeWorkspace: TestWorkspace | null = null;
+        let negativeOrganizationId: string | null = null;
+        const gatedRoutes = listTimeBillingRoutes();
+        expect(gatedRoutes.length).toBeGreaterThan(0);
+        try {
+          const token = randomUUID();
+          await signInWithEmailOtp(
+            negativeRequest,
+            `unenrolled-route-smoke-${token}@stella.dev`,
+          );
+          const organizationResponse = await negativeRequest.post(
+            `${E2E_API_ORIGIN}/v1/organizations`,
+            {
+              data: {
+                name: `Unenrolled route smoke ${token}`.slice(
+                  0,
+                  ORGANIZATION_NAME_MAX_LENGTH,
+                ),
+                slug: `unenrolled-smoke-${token}`,
+              },
+              headers: {
+                "Idempotency-Key": `unenrolled-smoke-${token}`,
+                [CAPABILITY_REQUEST_HEADER]: "organizations.create",
+              },
+            },
+          );
+          expect(
+            organizationResponse.ok(),
+            await organizationResponse.text(),
+          ).toBe(true);
+          const organization: unknown = await organizationResponse.json();
+          if (
+            typeof organization !== "object" ||
+            organization === null ||
+            !("organizationId" in organization) ||
+            typeof organization.organizationId !== "string"
+          ) {
+            throw new Error("Organization creation returned no id");
+          }
+          negativeOrganizationId = organization.organizationId;
+          const activation = await negativeRequest.post(
+            `${E2E_API_ORIGIN}/api/auth/organization/set-active`,
+            { data: { organizationId: negativeOrganizationId } },
+          );
+          expect(activation.ok(), await activation.text()).toBe(true);
+          const sessionResponse = await negativeRequest.get(
+            `${E2E_API_ORIGIN}/api/auth/get-session`,
+            { params: { disableCookieCache: "true" } },
+          );
+          expect(sessionResponse.ok()).toBe(true);
+          expect(await sessionResponse.json()).toMatchObject({
+            user: { emailVerified: true },
+            session: { activeOrganizationId: negativeOrganizationId },
+          });
+          negativeWorkspace = await createTestWorkspace(
+            negativeRequest,
+            "unenrolled-route-smoke",
+          );
+          const workspace = negativeWorkspace;
+          const workspaceId = workspace.id;
+          const storageState = await negativeRequest.storageState();
+          const navigation = await apiGet<{
+            features: { timeBilling: boolean };
+          }>(negativeRequest, "/workspaces/navigation");
+          expect(
+            navigation.features.timeBilling,
+            "the isolated verified principal is not enrolled",
+          ).toBe(false);
+          const isolatedBrowser = browserForPages;
+          for (const gatedRoute of gatedRoutes) {
+            const template = gatedRoute.routePath.replace("/_protected", "");
+            // A trailing underscore un-nests a route file (`time_`); the URL
+            // segment has none.
+            const routePath = template
+              .replaceAll(/_(?=\/|$)/gu, "")
+              .replace("$workspaceId", () => workspaceId)
+              .replace("$invoiceId", () => randomUUID());
+            const destination = timeBillingRedirectDestination({
+              template,
+              workspace,
+            });
+            await test.step(template, async () => {
+              const { context, page } = await openCleanPage(
+                isolatedBrowser,
+                storageState,
+              );
+              const csp = await installContentSecurityPolicyCollector(page);
+              const browserErrors = createBrowserErrorCollector({
+                tolerateColdMountWarning: true,
+              });
+              const detachPage = browserErrors.trackPage(page);
+              try {
+                const route = {
+                  template,
+                  path: routePath,
+                  expectation: { kind: "redirectsTo", to: destination },
+                } as const satisfies SmokeRoute;
+                await renderSmokeRoute({ page, route });
+                await csp.assertClean();
+                assertFinalDestination(page, route);
+                await assertNoRouteBoundary(page, template);
+                browserErrors.assertEmpty(
+                  `unexpected browser errors on ${template}`,
+                );
+              } finally {
+                detachPage();
+                await context.close();
+              }
+            });
+          }
+        } finally {
+          try {
+            if (negativeWorkspace !== null) {
+              await deleteTestWorkspace(negativeRequest, negativeWorkspace.id);
+            }
+          } finally {
+            try {
+              if (negativeOrganizationId !== null) {
+                await deleteTestOrganization(
+                  negativeRequest,
+                  negativeOrganizationId,
+                );
+              }
+            } finally {
+              await negativeRequest.dispose();
+            }
+          }
+        }
+      });
+    }
+
+    if (ROUTE_SCALE) {
+      test("route cost stays bounded as the matter grows tenfold", () => {
+        // A route missing either measurement stays absent and fails the census.
+        const measurements = (
+          network: ReadonlyMap<string, RouteNetworkMetrics>,
+          renders: ReadonlyMap<string, RouteRenderMetrics>,
+        ) => {
+          const joined = new Map<string, RouteScaleMeasurement>();
+          for (const [route, metrics] of network) {
+            const routeRenders = renders.get(route);
+            if (routeRenders !== undefined) {
+              joined.set(route, { network: metrics, renders: routeRenders });
+            }
+          }
+          return joined;
+        };
+        const problems = routeScaleCensus({
+          routes: defs.map(networkBaselineKey),
+          small: measurements(smallScaleResults, smallRenderResults),
+          large: measurements(scaleResults, largeRenderResults),
+          ledger: SCALE_LEDGER,
+        });
+        expect(problems).toEqual([]);
+      });
     }
 
     test("network manifest matches the committed baseline", async () => {
@@ -395,20 +667,189 @@ const declareRouteSmokeGroup = ({
 };
 
 const baselineMode = process.env["E2E_NETWORK_BASELINE"];
+declareVisualSandboxSmoke();
 declarePublicKnowledgeSmoke({ mode: "disabled" });
+
+test("records loading landmarks in English and Czech", async ({
+  baseURL,
+  browser,
+}, testInfo) => {
+  // timeout: Each locale needs a cold and hydrated document for four routes and held updates on three.
+  testInfo.setTimeout(PLAYWRIGHT_EXPECT_TIMEOUT_60_SECONDS_MS);
+  const measurement = await measureLoadingGeometry({
+    browser,
+    baseURL: baseURL ?? "http://localhost:3000",
+    storageState: STORAGE_STATE,
+  });
+  const admin = measurement.evidence.filter(({ route }) =>
+    route.startsWith("/settings/organization/"),
+  );
+  const time = measurement.evidence.filter(({ route }) =>
+    route.startsWith("/time"),
+  );
+  for (const [file, evidence] of [
+    ["time-loading-geometry.json", time],
+    ["admin-loading-geometry.json", admin],
+  ] as const) {
+    await testInfo.attach(file, {
+      body: JSON.stringify(
+        { viewport: measurement.viewport, evidence },
+        null,
+        2,
+      ),
+      contentType: "application/json",
+    });
+  }
+  for (const sample of admin) {
+    for (const [landmark, loaded] of Object.entries(sample.loaded)) {
+      expect(
+        loaded,
+        `${sample.locale} ${sample.route} ${landmark}`,
+      ).not.toBeNull();
+      const origin = { top: loaded?.top, left: loaded?.left };
+      expect
+        .soft(
+          sample.server[landmark],
+          `${sample.locale} ${sample.route} cold ${landmark}`,
+        )
+        .toMatchObject(origin);
+      if ("pending" in sample) {
+        expect
+          .soft(
+            sample.pending[landmark],
+            `${sample.locale} ${sample.route} pending ${landmark}`,
+          )
+          .toMatchObject(origin);
+        expect
+          .soft(
+            sample.stepped?.[landmark],
+            `${sample.locale} ${sample.route} settled ${landmark}`,
+          )
+          .toMatchObject(origin);
+      }
+    }
+  }
+});
+
+for (const locale of ["en", "cs"] as const) {
+  test(`public law loading landmarks hold in ${locale}`, async ({
+    baseURL,
+    browser,
+  }, testInfo) => {
+    // timeout: Three no-JavaScript documents, browser entries, and held navigations.
+    testInfo.setTimeout(PLAYWRIGHT_EXPECT_TIMEOUT_60_SECONDS_MS);
+    await measurePublicLawGeometry({
+      baseURL: baseURL ?? "http://localhost:3000",
+      browser,
+      locale,
+      testInfo,
+    });
+  });
+}
+
+test("records inbox and contact loading landmarks in English and Czech", async ({
+  baseURL,
+  browser,
+}, testInfo) => {
+  // timeout: Each locale needs a cold and hydrated document for three routes.
+  testInfo.setTimeout(PLAYWRIGHT_EXPECT_TIMEOUT_60_SECONDS_MS);
+  const measurement = await measureLoadingGeometry({
+    browser,
+    baseURL: baseURL ?? "http://localhost:3000",
+    storageState: STORAGE_STATE,
+    set: "contacts",
+  });
+  await testInfo.attach("contacts-loading-geometry.json", {
+    body: JSON.stringify(measurement, null, 2),
+    contentType: "application/json",
+  });
+  for (const sample of measurement.evidence) {
+    for (const [landmark, loaded] of Object.entries(sample.loaded)) {
+      expect(
+        loaded,
+        `${sample.locale} ${sample.route} ${landmark}`,
+      ).not.toBeNull();
+      // The inbox's body is drawn from the layout this browser keeps, which
+      // the server's paint cannot read: it is absent there, never elsewhere.
+      if (sample.route === "/inbox" && landmark === "body") {
+        expect(sample.server[landmark]).toBeNull();
+        continue;
+      }
+      expect
+        .soft(
+          sample.server[landmark],
+          `${sample.locale} ${sample.route} cold ${landmark}`,
+        )
+        .toMatchObject({ top: loaded?.top, left: loaded?.left });
+    }
+  }
+});
+
+test("records Knowledge skill loading landmarks in English and Czech", async ({
+  baseURL,
+  browser,
+}, testInfo) => {
+  // timeout: Each locale needs a cold and hydrated document.
+  testInfo.setTimeout(PLAYWRIGHT_EXPECT_TIMEOUT_60_SECONDS_MS);
+  const measurement = await measureLoadingGeometry({
+    browser,
+    baseURL: baseURL ?? "http://localhost:3000",
+    storageState: STORAGE_STATE,
+    set: "knowledge-skill",
+  });
+  await testInfo.attach("knowledge-skill-loading-geometry.json", {
+    body: JSON.stringify(measurement, null, 2),
+    contentType: "application/json",
+  });
+  for (const sample of measurement.evidence) {
+    for (const [landmark, loaded] of Object.entries(sample.loaded)) {
+      expect(
+        loaded,
+        `${sample.locale} ${sample.route} ${landmark}`,
+      ).not.toBeNull();
+      expect
+        .soft(
+          sample.server[landmark],
+          `${sample.locale} ${sample.route} cold ${landmark}`,
+        )
+        .toMatchObject({ top: loaded?.top, left: loaded?.left });
+    }
+  }
+});
+
+test("records Knowledge loading landmarks in English and Czech", async ({
+  baseURL,
+  browser,
+}, testInfo) => {
+  // timeout: Each locale needs a cold and hydrated document for three routes.
+  testInfo.setTimeout(PLAYWRIGHT_EXPECT_TIMEOUT_60_SECONDS_MS);
+  const measurement = await measureLoadingGeometry({
+    browser,
+    baseURL: baseURL ?? "http://localhost:3000",
+    storageState: STORAGE_STATE,
+    set: "knowledge",
+  });
+  await testInfo.attach("knowledge-loading-geometry.json", {
+    body: JSON.stringify(measurement, null, 2),
+    contentType: "application/json",
+  });
+});
 
 test("route coverage matches the authenticated route tree", async () => {
   await expectAuthenticatedRouteCoverage(SMOKE_ROUTE_DEFS);
+  expect(
+    routeScaleLedgerAdditions(),
+    "route scale allowances only shrink",
+  ).toEqual([]);
+  const routeKeys = new Set(SMOKE_ROUTE_DEFS.map(networkBaselineKey));
+  expect(
+    SCALE_LEDGER.filter(({ route }) => !routeKeys.has(route)),
+    "scale allowances reference smoke routes",
+  ).toEqual([]);
   // A write run may be adding the missing route entry; check the committed
   // baseline only in comparison mode.
   if (baselineMode !== "write" && baselineMode !== "rewrite") {
-    assertNetworkBaselineCoverage(
-      SMOKE_ROUTE_DEFS.map((def) =>
-        def.expectation?.kind === "redirectsTo"
-          ? `${def.template} target`
-          : def.template,
-      ),
-    );
+    assertNetworkBaselineCoverage(SMOKE_ROUTE_DEFS.map(networkBaselineKey));
   }
 });
 
@@ -420,6 +861,7 @@ if (baselineMode === "write" || baselineMode === "rewrite") {
     defs: SMOKE_ROUTE_DEFS,
     name: "authenticated routes render without browser errors",
     requireAllRoutes: true,
+    checkUnenrolledRoutes: true,
   });
 } else {
   const { routeSmokeGroupCount } = resolveE2eExecutionProfile(
@@ -431,31 +873,35 @@ if (baselineMode === "write" || baselineMode === "rewrite") {
       defs,
       name: `authenticated routes render without browser errors ${groupIndex + 1}/${groups.length}`,
       requireAllRoutes: false,
+      checkUnenrolledRoutes: groupIndex === 0,
     });
   }
 }
 
 const createContact = async (request: APIRequestContext): Promise<string> => {
-  const contactId = randomUUID();
+  const contact = v.parse(
+    v.object({ id: v.string() }),
+    await apiPut(request, "/contacts", {
+      type: "person",
+      displayName: `Route Smoke ${randomUUID().slice(0, 8)}`,
+      firstName: "Route",
+      lastName: "Smoke",
+    }),
+  );
 
-  await apiPut(request, "/contacts", {
-    id: contactId,
-    type: "person",
-    displayName: `Route Smoke ${contactId.slice(0, 8)}`,
-    firstName: "Route",
-    lastName: "Smoke",
-  });
-
-  return contactId;
+  return contact.id;
 };
 
 const smokeRoute = async ({
   browser,
   results,
+  renderResults,
   route,
 }: {
   browser: Browser;
   results: Map<string, RouteNetworkMetrics>;
+  // Present on the scale walk: also count React commits per navigation.
+  renderResults?: Map<string, RouteRenderMetrics>;
   route: SmokeRoute;
 }) => {
   const expectation = route.expectation;
@@ -469,8 +915,12 @@ const smokeRoute = async ({
     await smokeRouteTarget({
       browser,
       results,
+      ...(renderResults === undefined ? {} : { renderResults }),
       route: {
-        template: `${route.template} target`,
+        template: networkBaselineKey(route),
+        ...(route.storageState === undefined
+          ? {}
+          : { storageState: route.storageState }),
         path: expectation.to,
         ...(route.settleMs === undefined ? {} : { settleMs: route.settleMs }),
         expectation: { kind: "redirectsTo", to: expectation.to },
@@ -479,68 +929,143 @@ const smokeRoute = async ({
     return;
   }
 
-  await smokeRouteTarget({ browser, results, route });
+  await smokeRouteTarget({
+    browser,
+    results,
+    ...(renderResults === undefined ? {} : { renderResults }),
+    route,
+  });
 };
 
 const smokeRouteTarget = async ({
   browser,
   results,
+  renderResults,
   route,
 }: {
   browser: Browser;
   results: Map<string, RouteNetworkMetrics>;
+  renderResults?: Map<string, RouteRenderMetrics>;
   route: SmokeRoute;
 }) => {
-  // A deeper reading than the budget is either a regression or a fast sample
-  // over-reading by one; only more samples tell them apart. A regression
-  // survives every re-measurement, jitter does not. Samples run one at a time
-  // on purpose: a second page in flight would distort the timing being read.
-  const budget = baselineWaterfallDepth(route.template);
-  const resampleDeeperReading = async (
-    metrics: RouteNetworkMetrics,
-    remaining: number,
-  ): Promise<RouteNetworkMetrics> => {
-    if (budget === null || metrics.depth <= budget || remaining === 0) {
-      return metrics;
-    }
-    const again = await measureRouteTarget({ browser, route });
-    return resampleDeeperReading(
-      mergeResampledMetrics(metrics, again),
-      remaining - 1,
-    );
-  };
-
-  const metrics = await resampleDeeperReading(
-    await measureRouteTarget({ browser, route }),
-    WATERFALL_DEPTH_RESAMPLES,
-  );
+  const { network, renders } = await measureRouteTarget({
+    browser,
+    route,
+    countRenders: renderResults !== undefined,
+  });
   // Stored under the template it received; redirect targets arrive as
   // "<template> target".
-  results.set(route.template, metrics);
+  results.set(route.template, network);
+  if (renders !== null) {
+    renderResults?.set(route.template, renders);
+  }
 };
 
 const measureRouteTarget = async ({
   browser,
   route,
+  countRenders,
+  restoredInspector,
 }: {
   browser: Browser;
   route: SmokeRoute;
-}): Promise<RouteNetworkMetrics> => {
-  const { context, page } = await openCleanPage(browser);
+  countRenders: boolean;
+  restoredInspector?: { userId: string; organizationId: string };
+}): Promise<{
+  network: RouteNetworkMetrics;
+  renders: RouteRenderMetrics | null;
+}> => {
+  const { context, page } = await openCleanPage(browser, route.storageState);
+  const csp = await installContentSecurityPolicyCollector(page);
   const browserErrors = createBrowserErrorCollector({
     tolerateColdMountWarning: true,
   });
   const detachPage = browserErrors.trackPage(page);
   const network = createNetworkCollector();
-  const detachNetwork = network.trackPage(page);
+  let detachNetwork: (() => Promise<void>) | undefined;
+
+  const renders = countRenders
+    ? createRenderRecorder(async () => await readRenderCensus(page))
+    : null;
 
   try {
+    await observeLayoutShift(page);
+    if (restoredInspector !== undefined) {
+      const { userId, organizationId } = restoredInspector;
+      await page.addInitScript(
+        ({
+          stateKey,
+          minimizedKey,
+          stateVersion,
+          minimizedVersion,
+          restoredTab,
+        }) => {
+          localStorage.setItem(
+            stateKey,
+            JSON.stringify({
+              version: stateVersion,
+              value: {
+                tabs: [restoredTab],
+                groups: [],
+                groupAssignments: {},
+                activeId: restoredTab.id,
+                collapsedGroupIds: [],
+              },
+            }),
+          );
+          localStorage.setItem(
+            minimizedKey,
+            JSON.stringify({ version: minimizedVersion, value: false }),
+          );
+        },
+        {
+          stateKey: ownerStorageKey(
+            inspectorStorageBaseKey(INSPECTOR_STORAGE.state, organizationId),
+            { kind: "user", userId },
+          ),
+          minimizedKey: ownerStorageKey(
+            inspectorStorageBaseKey(
+              INSPECTOR_STORAGE.minimized,
+              organizationId,
+            ),
+            { kind: "user", userId },
+          ),
+          stateVersion: INSPECTOR_STORAGE.state.version,
+          minimizedVersion: INSPECTOR_STORAGE.minimized.version,
+          restoredTab: {
+            type: "chat",
+            id: randomUUID(),
+            label: "Route smoke",
+            contextMatterIds: [],
+          },
+        },
+      );
+    }
+    detachNetwork = await network.trackPage(page);
+    if (renders !== null) {
+      // Installed before the first document script so React registers with it.
+      await page.addInitScript(installRenderCommitHook, RENDER_CENSUS_GLOBAL);
+    }
+    await network.measureRounds(
+      page,
+      renders === null ? {} : { beforeRelease: renders.beforeRelease },
+    );
     await renderSmokeRoute({ page, route });
     await network.waitForQuiet({
       idleMs: NETWORK_QUIET_MS,
       minimumObservationMs: DEFAULT_SETTLE_MS,
-      timeoutMs: route.settleMs ?? DEFAULT_SETTLE_MS,
+      // Allow injected request waves to finish; quiet activity still exits early.
+      timeoutMs: Math.max(route.settleMs ?? DEFAULT_SETTLE_MS, 10_000),
     });
+    network.finishRounds();
+    // Commits until the network went quiet; checks below do not render.
+    const renderMetrics = renders === null ? null : await renders.finish();
+    if (restoredInspector !== undefined) {
+      await expect(
+        page.locator('[data-slot="inspector-dock"][data-state="expanded"]'),
+      ).toBeVisible();
+    }
+    await assertRouteLayoutShift(page, route.template);
     await assertNoRouteBoundary(page, route.template);
     assertFinalDestination(page, route);
     await assertRouteContentVisible(page, route.template);
@@ -548,16 +1073,28 @@ const measureRouteTarget = async ({
     // with its own top border on that line doubles it into a 2px rule.
     expect(
       await findChromeDividerProblems(page),
-      `${route.template} must show exactly one divider under the app chrome`,
+      `${route.template} must show exactly one divider under the app chrome: the chrome owns it, so a page root or a nested layout's first pane draws no top border (border-t, border-y, border) on that line`,
+    ).toEqual([]);
+    expect(
+      await findEscapedText(page),
+      `${route.template} must keep every text inside its box`,
     ).toEqual([]);
     browserErrors.assertEmpty(`unexpected browser errors on ${route.template}`);
-    // Captured after the route shell and tracked API work are ready, so the
-    // manifest reflects the fully-rendered route.
-    return summarizeCapture(await network.capture());
+    // Capture at the settled route boundary; awaiting the document's CSP
+    // check must not extend the network measurement into background work.
+    const capture = await network.capture();
+    await csp.assertClean();
+    return {
+      network: summarizeCapture(capture),
+      renders: renderMetrics,
+    };
   } finally {
-    detachNetwork();
-    detachPage();
-    await context.close();
+    try {
+      await detachNetwork?.();
+    } finally {
+      detachPage();
+      await context.close();
+    }
   }
 };
 
@@ -570,14 +1107,16 @@ const assertRedirectRoute = async ({
   route: SmokeRoute;
   expectation: { kind: "redirectsTo"; to: string };
 }) => {
-  const { context, page } = await openCleanPage(browser);
+  const { context, page } = await openCleanPage(browser, route.storageState);
   const redirectRoute = { ...route, expectation };
+  const csp = await installContentSecurityPolicyCollector(page);
 
   try {
     await gotoSmokeRoute(page, redirectRoute);
     await expect(page, redirectRoute.template).not.toHaveURL(/\/auth(?:\/|$)/u);
     await waitForRedirectDestination(page, redirectRoute);
     assertFinalDestination(page, redirectRoute);
+    await csp.assertClean();
   } finally {
     await context.close();
   }
@@ -590,15 +1129,22 @@ const assertRedirectRoute = async ({
 // authenticated storage state; server-side fixtures stay shared.
 const openCleanPage = async (
   browser: Browser,
+  storageState:
+    | string
+    | Awaited<ReturnType<APIRequestContext["storageState"]>> = STORAGE_STATE,
 ): Promise<{ context: BrowserContext; page: Page }> => {
-  const context = await browser.newContext({ storageState: STORAGE_STATE });
+  const context = await browser.newContext({ storageState });
   try {
     // Guards the clean start: the page must not inherit browser storage that
     // an earlier route wrote into a shared context.
     expect(
       storedKeys(await context.storageState()),
       "route-smoke pages must start from the seeded storage state only",
-    ).toEqual(await seededStorageKeys(browser));
+    ).toEqual(
+      typeof storageState === "string"
+        ? await seededStorageKeys(browser)
+        : storedKeys(storageState),
+    );
     return { context, page: await context.newPage() };
   } catch (error) {
     await context.close();
@@ -644,7 +1190,7 @@ const renderSmokeRoute = async ({
   // Cold-compiled route chunks can take longer than the default 10s expect
   // timeout to paint <main> on a fresh CI runner.
   await expect(page.locator("main").first(), route.template).toBeVisible({
-    timeout: 30_000,
+    timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
   });
 };
 
@@ -709,7 +1255,7 @@ const waitForRedirectDestination = async (page: Page, route: SmokeRoute) => {
 
   await expect(page, `${route.template} reached redirect target`).toHaveURL(
     (actual) => comparableHref(actual, expected.assertSearch) === expected.href,
-    { timeout: 30_000 },
+    { timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS },
   );
 };
 
@@ -778,46 +1324,5 @@ const assertRouteContentVisible = async (page: Page, routeTemplate: string) => {
 const expectAuthenticatedRouteCoverage = async (
   routeDefs: readonly SmokeRouteDef[],
 ) => {
-  const actual = await readAuthenticatedRouteTemplates();
-  const expected = [
-    ...routeDefs.map((def) => def.template),
-    ...PUBLIC_VISITOR_ROUTE_DEFS.map((def) => def.template),
-    ...INTENTIONALLY_NOT_SMOKED,
-  ].toSorted();
-
-  expect(actual).toEqual(expected);
+  assertSmokeRouteCoverage(await readFile(ROUTE_TREE_PATH, "utf-8"), routeDefs);
 };
-
-const readAuthenticatedRouteTemplates = async (): Promise<string[]> => {
-  const source = await readFile(ROUTE_TREE_PATH, "utf-8");
-  const marker = "export interface FileRoutesByTo {";
-  const bodyStart = source.indexOf(marker);
-  if (bodyStart === -1) {
-    throw new Error("Could not find FileRoutesByTo in routeTree.gen.ts");
-  }
-  const routeBodyStart = bodyStart + marker.length;
-  const bodyEnd = source.indexOf("\n}", routeBodyStart);
-  if (bodyEnd === -1) {
-    throw new Error("Could not find end of FileRoutesByTo in routeTree.gen.ts");
-  }
-  const body = source.slice(routeBodyStart, bodyEnd);
-
-  return body
-    .split("\n")
-    .map(parseAuthenticatedRouteTemplate)
-    .filter((route): route is string => route !== null)
-    .toSorted();
-};
-
-// The generated route tree types every authenticated `to` path against a
-// `Protected*` route (the `_protected` layout) or a `Knowledge*` route (the
-// Knowledge tree, which keeps the same sign-in guard beside it). Deriving the
-// smoke set from those structural markers, rather than a hand-maintained
-// prefix allow-list, means a newly added authenticated top-level section
-// fails the coverage test until it is either smoked or placed in
-// INTENTIONALLY_NOT_SMOKED.
-const PROTECTED_ROUTE_LINE =
-  /^'(?<path>[^']+)':\s*typeof\s+(?:Protected|Knowledge)/u;
-
-const parseAuthenticatedRouteTemplate = (line: string): string | null =>
-  PROTECTED_ROUTE_LINE.exec(line.trimStart())?.groups?.["path"] ?? null;

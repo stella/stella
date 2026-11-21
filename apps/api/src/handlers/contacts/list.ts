@@ -1,5 +1,7 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
+
+import { numberFromString } from "@stll/api-contract/http-input";
 
 import {
   CONTACT_CURSOR_MAX_LENGTH,
@@ -7,20 +9,28 @@ import {
 } from "@/api/handlers/contacts/list-query";
 import { contactTypeSchema } from "@/api/handlers/contacts/schema";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
-import { tPaginationCursor, tPaginationLimit } from "@/api/lib/custom-schema";
+import {
+  paginationCursorSchema,
+  paginationLimitSchema,
+} from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
 
-const readContactsQuerySchema = t.Object({
-  limit: t.Optional(tPaginationLimit(LIMITS.contactsPageSizeMax)),
-  cursor: t.Optional(
-    tPaginationCursor({ maxChars: CONTACT_CURSOR_MAX_LENGTH }),
+const readContactsQuerySchema = v.object({
+  limit: v.exactOptional(
+    numberFromString(paginationLimitSchema(LIMITS.contactsPageSizeMax)),
   ),
-  type: t.Optional(contactTypeSchema),
-  q: t.Optional(t.String()),
+  cursor: v.exactOptional(
+    paginationCursorSchema({ maxChars: CONTACT_CURSOR_MAX_LENGTH }),
+  ),
+  type: v.exactOptional(contactTypeSchema),
+  q: v.exactOptional(
+    v.pipe(v.string(), v.maxLength(LIMITS.searchQueryMaxLength)),
+  ),
 });
 
 const readContacts = createSafeRootHandler(
   {
+    contract: "patch",
     description:
       "List the organization address book alphabetically by display name, " +
       "with cursor pagination. Filter by type (person or organization) and " +

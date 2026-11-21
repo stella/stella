@@ -19,13 +19,14 @@ import {
   safeWorkspaceId,
   sql,
   stella,
+  timestamptz,
   user,
   userPolicies,
-  timestamptz,
 } from "./common";
 import type {
   AccountDeletionRequestStatus,
   AccountDeletionStorageCleanup,
+  AccountErasureReport,
 } from "./common";
 import { workspaces } from "./contacts";
 import {
@@ -34,9 +35,9 @@ import {
   USAGE_ALLOCATION_SOURCES,
   USAGE_ENTITLEMENT_SOURCES,
   USAGE_ENTITLEMENT_STATUSES,
-  type UsageEntitlementStatus,
   USAGE_PROVIDER_WEBHOOK_RESULTS,
   USAGE_SERVICE_TIERS,
+  type UsageEntitlementStatus,
 } from "./skills";
 
 export const CLOSED_USAGE_ENTITLEMENT_STATUSES = [
@@ -46,7 +47,13 @@ export const CLOSED_USAGE_ENTITLEMENT_STATUSES = [
 const CLOSED_USAGE_ENTITLEMENT_STATUS_SQL_VALUES =
   CLOSED_USAGE_ENTITLEMENT_STATUSES.map((status) => sql.raw(`'${status}'`));
 
-export const USAGE_POLICY_KINDS = ["subscription", "addon"] as const;
+/**
+ * `free` is the no-cost floor an organization falls back to once its
+ * evaluation or paid access lapses. At most one active `free` policy exists
+ * (partial unique index); its limits are read through the
+ * `organization_effective_policy` database function.
+ */
+export const USAGE_POLICY_KINDS = ["subscription", "addon", "free"] as const;
 export type UsagePolicyKind = (typeof USAGE_POLICY_KINDS)[number];
 
 export const USAGE_POLICY_BILLING_INTERVALS = [
@@ -103,6 +110,10 @@ const USAGE_EVENT_LANE_SQL_VALUES = USAGE_EVENT_LANES.map((lane) =>
   sql.raw(`'${lane}'`),
 );
 
+const USAGE_ACTION_TYPE_SQL_VALUES = USAGE_ACTION_TYPES.map((actionType) =>
+  sql.raw(`'${actionType}'`),
+);
+
 const USAGE_LANE_COUNTER_KIND_SQL_VALUES = USAGE_LANE_COUNTER_KINDS.map(
   (kind) => sql.raw(`'${kind}'`),
 );
@@ -141,7 +152,8 @@ export const usagePolicies = p.pgTable(
     }),
     // Operator-seeded member bound, read through the
     // `organization_member_capacity` database function together with the
-    // seat count of a per-seat policy. Null = the policy sets no bound.
+    // seat count of a per-seat policy. Null = no bound beyond the seats of
+    // a per-seat policy; a flat policy is then unbounded.
     maxMembers: p.integer("max_members"),
     serviceActionsPerPeriod: p.integer("service_actions_per_period"),
     // Hidden by default: a seeded policy only appears in the catalog
@@ -207,6 +219,16 @@ export const usagePolicies = p.pgTable(
       .uniqueIndex("usage_policies_hosted_policy_ref_uidx")
       .on(table.hostedPolicyRef)
       .where(sql`hosted_policy_ref IS NOT NULL`),
+    p
+      .uniqueIndex("usage_policies_free_active_uidx")
+      .on(table.kind)
+      .where(sql`kind = 'free' AND active`),
+    // The free floor is never checkout-able, costs nothing, and bounds every
+    // limit it applies: members, organization storage and service actions.
+    p.check(
+      "usage_policies_free_shape",
+      sql`kind <> 'free' OR (hosted_policy_ref IS NULL AND COALESCE(price_amount_cents, 0) = 0 AND max_members IS NOT NULL AND storage_bytes_per_assignment IS NOT NULL AND service_actions_per_period IS NOT NULL)`,
+    ),
     p.check(
       "usage_policies_service_actions_positive",
       sql`service_actions_per_period IS NULL OR service_actions_per_period > 0`,
@@ -342,6 +364,73 @@ export const usageEntitlements = p.pgTable(
   ],
 );
 
+const currentUserOwnsHostedCheckoutClaims = sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.hosted_checkout_claims'::regclass)`;
+
+/**
+ * The organization's open hosted subscription checkout, at most one. A
+ * checkout start claims the row before it calls the provider; the claim
+ * holds until the provider session expires, the start fails, or the
+ * subscription event arrives. An expired claim is taken over in place.
+ */
+export const hostedCheckoutClaims = p.pgTable(
+  "hosted_checkout_claims",
+  {
+    organizationId: safeOrganizationId("organization_id")
+      .primaryKey()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    /** Identifies one start, so a stale request releases only its own claim. */
+    claimId: safeUuid<"hostedCheckoutClaim">("claim_id").notNull(),
+    hostedSessionId: p.text("hosted_session_id"),
+    /**
+     * The provider page for the created session. Anyone holding it can
+     * complete the checkout, so it is returned only to the organization and
+     * never logged or audited.
+     */
+    hostedCheckoutUrl: p.text("hosted_checkout_url"),
+    /** The requested policy and seat count; a matching start reuses the session. */
+    usagePolicyId: safeUuid<"usagePolicy">("usage_policy_id"),
+    seats: p.integer("seats"),
+    expiresAt: timestamptz("expires_at").notNull(),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+  },
+  (table) => [
+    p.check(
+      "hosted_checkout_claims_url_has_session_check",
+      sql`${table.hostedCheckoutUrl} IS NULL OR ${table.hostedSessionId} IS NOT NULL`,
+    ),
+    // Members with organization settings access start checkouts through the
+    // scoped connection; the webhook dispatcher clears claims on the owner
+    // connection.
+    p.pgPolicy("hosted_checkout_claims_owner", {
+      for: "all",
+      to: "public",
+      using: currentUserOwnsHostedCheckoutClaims,
+      withCheck: currentUserOwnsHostedCheckoutClaims,
+    }),
+    p.pgPolicy("hosted_checkout_claims_organization_select", {
+      for: "select",
+      to: stella,
+      using: organizationCheck,
+    }),
+    p.pgPolicy("hosted_checkout_claims_organization_insert", {
+      for: "insert",
+      to: stella,
+      withCheck: organizationCheck,
+    }),
+    p.pgPolicy("hosted_checkout_claims_organization_update", {
+      for: "update",
+      to: stella,
+      using: organizationCheck,
+      withCheck: organizationCheck,
+    }),
+    p.pgPolicy("hosted_checkout_claims_organization_delete", {
+      for: "delete",
+      to: stella,
+      using: organizationCheck,
+    }),
+  ],
+);
+
 /**
  * How an organization may reach the instance model provider.
  * `self_managed_keys` is recorded once for organizations that existed before
@@ -355,6 +444,18 @@ export const ORGANIZATION_ACCESS_STATE = {
   evaluationPeriod: "evaluation_period",
   evaluationEnded: "evaluation_ended",
 } as const;
+
+export const ORGANIZATION_ACCESS_STATE_ORIGIN = {
+  creation: "creation",
+  legacyReconcile: "legacy_reconcile",
+} as const;
+
+const ORGANIZATION_ACCESS_STATE_ORIGINS = [
+  ORGANIZATION_ACCESS_STATE_ORIGIN.creation,
+  ORGANIZATION_ACCESS_STATE_ORIGIN.legacyReconcile,
+] as const;
+const ORGANIZATION_ACCESS_STATE_ORIGIN_SQL_VALUES =
+  ORGANIZATION_ACCESS_STATE_ORIGINS.map((origin) => sql.raw(`'${origin}'`));
 
 const ORGANIZATION_ACCESS_STATES = [
   ORGANIZATION_ACCESS_STATE.selfManagedKeys,
@@ -371,6 +472,10 @@ export const organizationAccessStates = p.pgTable(
       .primaryKey()
       .references(() => organization.id, { onDelete: "cascade" }),
     state: p.text({ enum: ORGANIZATION_ACCESS_STATES }).notNull(),
+    origin: p
+      .text({ enum: ORGANIZATION_ACCESS_STATE_ORIGINS })
+      .notNull()
+      .default(ORGANIZATION_ACCESS_STATE_ORIGIN.legacyReconcile),
     evaluationStartedAt: timestamptz("evaluation_started_at"),
     evaluationEndsAt: timestamptz("evaluation_ends_at"),
     evaluationEndedAt: timestamptz("evaluation_ended_at"),
@@ -380,12 +485,16 @@ export const organizationAccessStates = p.pgTable(
       .defaultNow()
       .$onUpdate(() => new Date()),
   },
-  () => [
+  (table) => [
+    p.check(
+      "organization_access_states_origin_domain",
+      sql`${table.origin} IN (${sql.join(ORGANIZATION_ACCESS_STATE_ORIGIN_SQL_VALUES, sql`, `)})`,
+    ),
     // Each state admits exactly one shape of evaluation columns, so a row
     // cannot claim an evaluation it never started or end one twice.
     p.check(
       "organization_access_states_shape",
-      sql`((state = 'self_managed_keys' AND evaluation_started_at IS NULL AND evaluation_ends_at IS NULL AND evaluation_ended_at IS NULL) OR (state = 'evaluation_period' AND evaluation_ends_at > evaluation_started_at AND evaluation_ended_at IS NULL) OR (state = 'evaluation_ended' AND evaluation_ends_at > evaluation_started_at AND evaluation_ended_at IS NOT NULL)) IS TRUE`,
+      sql`((state = 'self_managed_keys' AND evaluation_started_at IS NULL AND evaluation_ends_at IS NULL AND evaluation_ended_at IS NULL) OR (state = 'evaluation_period' AND evaluation_ends_at > evaluation_started_at AND evaluation_ended_at IS NULL) OR (state = 'evaluation_ended' AND evaluation_ended_at IS NOT NULL AND ((evaluation_started_at IS NULL AND evaluation_ends_at IS NULL) OR evaluation_ends_at > evaluation_started_at))) IS TRUE`,
     ),
     // Written only by system paths on the owner connection (organization
     // creation, operator transitions); members read their own row.
@@ -587,6 +696,10 @@ export const accountDeletionRequests = p.pgTable(
       .$type<AccountDeletionRequestStatus>()
       .notNull()
       .default("pending"),
+    erasureReport: jsonb("erasure_report")
+      .$type<AccountErasureReport>()
+      .notNull()
+      .default({ retainedMatterContent: [] }),
     storageCleanup: jsonb("storage_cleanup")
       .$type<AccountDeletionStorageCleanup>()
       .notNull(),
@@ -695,6 +808,10 @@ export const usageEvents = p.pgTable(
       sql`(action_kind IS NULL) = (logical_phase_id IS NULL)`,
     ),
     p.check("usage_events_units_nonneg", sql`units_consumed >= 0`),
+    p.check(
+      "usage_events_action_type_domain",
+      sql`action_type IN (${sql.join(USAGE_ACTION_TYPE_SQL_VALUES, sql`, `)})`,
+    ),
     p.check("usage_events_period_order", sql`period_end > period_start`),
     p.check(
       "usage_events_lane_domain",
@@ -797,6 +914,16 @@ export const FILE_USAGE_OBJECT_STATUSES = ["reserved", "committed"] as const;
 const FILE_USAGE_OBJECT_STATUS_SQL_VALUES = FILE_USAGE_OBJECT_STATUSES.map(
   (status) => sql.raw(`'${status}'`),
 );
+export const FILE_USAGE_RECONCILIATION_STATE = {
+  ACTIVE: "active",
+  QUARANTINED: "quarantined",
+} as const;
+const FILE_USAGE_RECONCILIATION_STATES = [
+  FILE_USAGE_RECONCILIATION_STATE.ACTIVE,
+  FILE_USAGE_RECONCILIATION_STATE.QUARANTINED,
+] as const;
+const FILE_USAGE_RECONCILIATION_STATE_SQL_VALUES =
+  FILE_USAGE_RECONCILIATION_STATES.map((state) => sql.raw(`'${state}'`));
 const currentUserOwnsOrganizationFileUsage = sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.organization_file_usage'::regclass)`;
 const currentUserOwnsOrganizationFileObjects = sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.organization_file_objects'::regclass)`;
 
@@ -865,6 +992,19 @@ export const organizationFileObjects = p.pgTable(
     writeId: p.text("write_id"),
     expectedSha256Hex: p.text("expected_sha256_hex"),
     reservationStartedAt: timestamptz("reservation_started_at"),
+    /** Active rows are eligible for bounded recovery; quarantined mismatches require operator repair. */
+    reconciliationState: p
+      .text("reconciliation_state", {
+        enum: FILE_USAGE_RECONCILIATION_STATES,
+      })
+      .notNull()
+      .default(FILE_USAGE_RECONCILIATION_STATE.ACTIVE),
+    reconciliationAttemptCount: p
+      .integer("reconciliation_attempt_count")
+      .notNull()
+      .default(0),
+    /** Durable backoff cursor for unresolved writes; null after settlement or quarantine. */
+    reconcileAfter: timestamptz("reconcile_after"),
     status: p.text({ enum: FILE_USAGE_OBJECT_STATUSES }).notNull(),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
     updatedAt: timestamptz("updated_at").notNull().defaultNow(),
@@ -874,13 +1014,17 @@ export const organizationFileObjects = p.pgTable(
       .index("organization_file_objects_org_key_idx")
       .on(table.organizationId, table.objectKey),
     p
-      .index("organization_file_objects_pending_reconcile_idx")
-      .on(table.updatedAt, table.objectKey)
-      .where(sql`${table.writeId} IS NOT NULL`),
+      .index("organization_file_objects_active_reconcile_idx")
+      .on(table.reconcileAfter, table.objectKey)
+      .where(
+        sql`${table.writeId} IS NOT NULL AND ${table.reconciliationState} = 'active'`,
+      ),
     p
-      .index("organization_file_objects_org_pending_reconcile_idx")
-      .on(table.organizationId, table.updatedAt, table.objectKey)
-      .where(sql`${table.writeId} IS NOT NULL`),
+      .index("organization_file_objects_org_active_reconcile_idx")
+      .on(table.organizationId, table.reconcileAfter, table.objectKey)
+      .where(
+        sql`${table.writeId} IS NOT NULL AND ${table.reconciliationState} = 'active'`,
+      ),
     p.check("organization_file_objects_size_nonneg", sql`size_bytes >= 0`),
     p.check(
       "organization_file_objects_pending_size_nonneg",
@@ -897,6 +1041,29 @@ export const organizationFileObjects = p.pgTable(
     p.check(
       "organization_file_objects_status_domain",
       sql`status IN (${sql.join(FILE_USAGE_OBJECT_STATUS_SQL_VALUES, sql`, `)})`,
+    ),
+    p.check(
+      "organization_file_objects_reconciliation_attempt_nonnegative",
+      sql`${table.reconciliationAttemptCount} >= 0`,
+    ),
+    p.check(
+      "organization_file_objects_reconciliation_state_domain",
+      sql`${table.reconciliationState} IN (${sql.join(FILE_USAGE_RECONCILIATION_STATE_SQL_VALUES, sql`, `)})`,
+    ),
+    p.check(
+      "organization_file_objects_reconciliation_lifecycle",
+      sql`(
+        ${table.writeId} IS NULL
+        AND ${table.reconciliationState} = ${FILE_USAGE_RECONCILIATION_STATE.ACTIVE}
+        AND ${table.reconciliationAttemptCount} = 0
+        AND ${table.reconcileAfter} IS NULL
+      ) OR (
+        ${table.writeId} IS NOT NULL
+        AND (
+          (${table.reconciliationState} = ${FILE_USAGE_RECONCILIATION_STATE.ACTIVE} AND ${table.reconcileAfter} IS NOT NULL)
+          OR (${table.reconciliationState} = ${FILE_USAGE_RECONCILIATION_STATE.QUARANTINED} AND ${table.reconcileAfter} IS NULL)
+        )
+      )`,
     ),
     p.pgPolicy("organization_file_objects_owner_access", {
       for: "all",
@@ -1025,6 +1192,72 @@ export const hostedUsageWebhookEvents = p.pgTable(
     // System table: written and read only by the webhook handler via
     // the root connection. Stella sessions have no business touching it.
     p.pgPolicy("usage_provider_webhook_events_no_stella_access", {
+      for: "all",
+      to: stella,
+      using: sql`false`,
+      withCheck: sql`false`,
+    }),
+  ],
+);
+
+export const HOSTED_CUSTOMER_ERASURE_STATUS = {
+  pending: "pending",
+  erased: "erased",
+  failed: "failed",
+} as const;
+export const HOSTED_CUSTOMER_ERASURE_STATUSES = [
+  HOSTED_CUSTOMER_ERASURE_STATUS.pending,
+  HOSTED_CUSTOMER_ERASURE_STATUS.erased,
+  HOSTED_CUSTOMER_ERASURE_STATUS.failed,
+] as const;
+const HOSTED_CUSTOMER_ERASURE_STATUS_SQL_VALUES =
+  HOSTED_CUSTOMER_ERASURE_STATUSES.map((status) => sql.raw(`'${status}'`));
+
+export const HOSTED_CUSTOMER_ERASURE_MAX_ATTEMPTS = 5;
+const HOSTED_CUSTOMER_ERASURE_RETRYABLE_SQL_VALUES = [
+  HOSTED_CUSTOMER_ERASURE_STATUS.pending,
+  HOSTED_CUSTOMER_ERASURE_STATUS.failed,
+].map((status) => sql.raw(`'${status}'`));
+
+/** Shared by the due index and its claim so terminal history is never scanned. */
+export const hostedCustomerErasureRetryable = sql`status IN (${sql.join(HOSTED_CUSTOMER_ERASURE_RETRYABLE_SQL_VALUES, sql`, `)}) AND attempts < ${sql.raw(String(HOSTED_CUSTOMER_ERASURE_MAX_ATTEMPTS))}`;
+
+/** Reference-free provider deletion intents which survive the organization cascade. */
+export const hostedCustomerErasures = p.pgTable(
+  "hosted_customer_erasures",
+  {
+    id: p.uuid().primaryKey().defaultRandom(),
+    externalCustomerRef: p.text("external_customer_ref").notNull().unique(),
+    status: p
+      .text({ enum: HOSTED_CUSTOMER_ERASURE_STATUSES })
+      .notNull()
+      .default(HOSTED_CUSTOMER_ERASURE_STATUS.pending),
+    attempts: p.integer().notNull().default(0),
+    nextAttemptAt: timestamptz("next_attempt_at").notNull().defaultNow(),
+    lastErrorCode: p.varchar("last_error_code", { length: 64 }),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    p
+      .index("hosted_customer_erasures_due_idx")
+      .on(table.nextAttemptAt)
+      .where(hostedCustomerErasureRetryable),
+    p.check(
+      "hosted_customer_erasures_status_domain",
+      sql`status IN (${sql.join(HOSTED_CUSTOMER_ERASURE_STATUS_SQL_VALUES, sql`, `)})`,
+    ),
+    p.check(
+      "hosted_customer_erasures_attempts_nonnegative",
+      sql`attempts >= 0`,
+    ),
+    p.pgPolicy("hosted_customer_erasures_owner_access", {
+      for: "all",
+      to: "public",
+      using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.hosted_customer_erasures'::regclass)`,
+      withCheck: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.hosted_customer_erasures'::regclass)`,
+    }),
+    p.pgPolicy("hosted_customer_erasures_no_stella_access", {
       for: "all",
       to: stella,
       using: sql`false`,

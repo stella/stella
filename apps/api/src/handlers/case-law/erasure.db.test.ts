@@ -5,6 +5,7 @@ import { drizzle } from "drizzle-orm/pglite";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
+  caseLawCitationDoctrineReviews,
   caseLawCorpusPackRefs,
   caseLawCorpusTombstones,
   caseLawDecisions,
@@ -16,7 +17,7 @@ import {
 } from "@/api/db/schema";
 import { envBase } from "@/api/env-base";
 import { redactCaseLawDecision } from "@/api/handlers/case-law/erasure";
-import { toSafeId } from "@/api/lib/branded-types";
+import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import {
   CORPUS_INDEX_MANIFESTS,
   corpusIndexManifestDigest,
@@ -29,6 +30,7 @@ import {
   rawDocumentPrefix,
   writeSourceBinary,
 } from "@/api/lib/legal-search/raw-source-storage";
+import { CORPUS_PROJECTION_SEEDING_GUARD_OFF_SETTING } from "@/api/tests/helpers/corpus-projection-seeding-guard";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -247,13 +249,20 @@ test("redaction of packed payloads tombstones every address it cannot delete", a
 });
 
 test("redaction erases the decision's publisher files and no other decision's", async () => {
-  await db.insert(caseLawDecisions).values({
-    id: OTHER_DECISION_ID,
-    sourceId: SOURCE_ID,
-    caseNumber: "4 As 4/2008",
-    court: "Nejvyšší správní soud",
-    country: "CZE",
-    language: "cs",
+  // A neighbour decision as data no writer touched since the generation was
+  // registered; the seeding guard stands aside for the fixture only.
+  await db.transaction(async (tx) => {
+    await tx.execute(
+      sql`SELECT set_config(${CORPUS_PROJECTION_SEEDING_GUARD_OFF_SETTING}, 'off', true)`,
+    );
+    await tx.insert(caseLawDecisions).values({
+      id: OTHER_DECISION_ID,
+      sourceId: SOURCE_ID,
+      caseNumber: "4 As 4/2008",
+      court: "Nejvyšší správní soud",
+      country: "CZE",
+      language: "cs",
+    });
   });
   // One file served for both decisions, and one this decision's envelope
   // named before a later observation replaced it.
@@ -309,6 +318,40 @@ test("redaction erases the decision's publisher files and no other decision's", 
   expect(keysUnder(OTHER_DECISION_ID)).toEqual([
     `${envBase.S3_BUCKET}/${kept.location}`,
   ]);
+});
+
+test("redaction as the ingestion role erases doctrine evidence quoted from the decision", async () => {
+  await db.insert(caseLawCitationDoctrineReviews).values({
+    id: createSafeId<"caseLawCitationDoctrineReview">(),
+    citingDecisionId: DECISION_ID,
+    citationKey: "erasure-doctrine-fixture",
+    doctrinalTreatment: "distinguishes",
+    evidenceQuote: "Osobní údaj.",
+    reviewRef: "test:erasure",
+    origin: "human-review",
+  });
+  // The production fence runs on the ingestion connection; the owner would
+  // pass on a grant the deployment does not hold.
+  const ingestionDb = asTestRaw<ScopedDb>(
+    async (callback: (tx: typeof db) => Promise<unknown>) =>
+      await db.transaction(async (tx) => {
+        await tx.execute(sql`SET LOCAL ROLE stella_ingestion`);
+        return await callback(asTestRaw(tx));
+      }),
+  );
+
+  const outcome = await redactCaseLawDecision({
+    decisionId: DECISION_ID,
+    scopedDb: ingestionDb,
+  });
+
+  expect(Result.isOk(outcome)).toBe(true);
+  expect(
+    await db
+      .select({ id: caseLawCitationDoctrineReviews.id })
+      .from(caseLawCitationDoctrineReviews)
+      .where(eq(caseLawCitationDoctrineReviews.citingDecisionId, DECISION_ID)),
+  ).toEqual([]);
 });
 
 test("redaction clears the inline raw column a row may still hold", async () => {

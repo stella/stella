@@ -76,7 +76,7 @@ included and whether alone or in a sweep, follows these rules:
    native binding; the `anonymize-chat` property suite uses a stand-in runtime.
 
 3. **The WASM build is exercised for real.** When `@stll/anonymize-wasm` moves,
-   run `bun --filter @stll/web test:e2e:landing`: it drives the shipped WASM
+   run `bun --filter @stll/landing test:e2e`: it drives the shipped WASM
    bundle in a browser and fails when the engine does not boot or detect. No
    automated test yet runs the chat worker's deny-list matching on the real
    WASM build, so also check it by hand on a local stack (`bun run agent:up`):
@@ -183,15 +183,22 @@ instead of creating workspace drift. Use `bun update <package> --latest` only
 when intentionally changing the declared dependency range. Resolve and preserve
 an intended prerelease version or channel explicitly.
 
-For Rust, use targeted lockfile updates:
+For Rust, use targeted lockfile updates, run from inside the repository:
 
 ```bash
 cargo update --manifest-path <path/to/Cargo.toml> -p <crate>
 ```
 
-Edit the manifest only when the declared requirement must change. Do not run bare
-`cargo update` for an ordinary batch; a full-graph update must be an explicit,
-reviewed choice.
+The root `.cargo/config.toml` sets `global-min-publish-age` to the root
+`bunfig.toml` quarantine, so Cargo skips crates.io versions younger than it,
+transitive ones included; CI's lockfile release-age check fails such a pin in
+any `Cargo.lock`. An urgent fix inside the quarantine needs a reasoned temporary
+`"cargo:<crate>"` exclude with a `# quarantine-expires:` annotation in the root
+`bunfig.toml`, then
+`CARGO_RESOLVER_INCOMPATIBLE_PUBLISH_AGE=allow cargo update --manifest-path <path/to/Cargo.toml> -p <crate> --precise <version>`;
+any other young crate that pulls in needs its own exclude. Edit the manifest
+only when the declared requirement must change; a full-graph update must be an
+explicit, reviewed choice.
 
 For uv, update only the planned packages and review the resulting lockfile:
 

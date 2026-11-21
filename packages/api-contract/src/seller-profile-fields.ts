@@ -1,0 +1,20 @@
+/** A seller profile's text fields, in the order the profile form shows them. */
+export const SELLER_PROFILE_TEXT_FIELDS = [
+  "legalName",
+  "registrationId",
+  "taxId",
+  "vatId",
+  "registerEntry",
+  "barRegistration",
+  "addressLine1",
+  "addressLine2",
+  "city",
+  "postalCode",
+  "country",
+  "email",
+  "iban",
+  "bic",
+  "accountNumber",
+  "defaultCurrency",
+  "footerNotes",
+] as const;

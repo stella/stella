@@ -10,6 +10,8 @@ import { PlusIcon } from "@stll/ui/icons";
 import { ExpenseForm } from "@/components/billing/expense-form";
 import type { ExpenseFormValues } from "@/components/billing/expense-form";
 import { formatCurrencyAmount } from "@/components/billing/format-currency";
+import { useSingleFlight } from "@/hooks/use-single-flight";
+import { detached } from "@/lib/detached";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import {
   useCreateExpense,
@@ -19,6 +21,8 @@ import {
 import { expensesOptions } from "@/lib/workspaces/queries/expenses";
 import { ExpenseRow } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/expense-row";
 import { useMatterNameMap } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/matter-name-map";
+
+import { ExpenseListFrame } from "./expense-row.pending";
 
 type ExpenseListViewProps = {
   workspaceId: string;
@@ -48,6 +52,7 @@ export const ExpenseListView = ({
   const matterNameMap = useMatterNameMap(workspaceId);
 
   const createExpense = useCreateExpense();
+  const createOnce = useSingleFlight();
   const updateExpense = useUpdateExpense();
   const deleteExpense = useDeleteExpense();
 
@@ -69,7 +74,7 @@ export const ExpenseListView = ({
     ? expenses.find((e) => e.id === editingId)
     : null;
 
-  const handleCreate = (values: ExpenseFormValues) => {
+  const createFromValues = (values: ExpenseFormValues, settled: () => void) => {
     createExpense.mutate(
       {
         workspaceId,
@@ -84,11 +89,18 @@ export const ExpenseListView = ({
         markup: values.markup,
       },
       {
+        onSettled: settled,
         onSuccess: () => setFormOpen(false),
         onError: (error) => {
           notifyUserError(error, t("billing.failedToSave"));
         },
       },
+    );
+  };
+  const handleCreate = (values: ExpenseFormValues) => {
+    detached(
+      createOnce.runSettled((settled) => createFromValues(values, settled)),
+      "expense-list-view.create",
     );
   };
 
@@ -100,7 +112,10 @@ export const ExpenseListView = ({
       {
         workspaceId,
         id: editingId,
-        matterId: values.matterId,
+        ...(editingExpense?.matterReference?.type === "unavailable" &&
+        values.matterId === ""
+          ? {}
+          : { matterId: values.matterId }),
         dateIncurred: values.dateIncurred,
         amount: values.amount,
         currency: values.currency,
@@ -130,40 +145,41 @@ export const ExpenseListView = ({
   };
 
   return (
-    <div className="flex flex-col gap-3">
-      {/* Summary bar */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          {totalsByCurrency.map(({ currency, amount }) => (
-            <span className="text-sm font-medium tabular-nums" key={currency}>
-              {`${t("billing.total")}: ${formatCurrencyAmount(
-                amount,
-                currency,
-              )}`}
-            </span>
-          ))}
-        </div>
+    <ExpenseListFrame
+      totals={totalsByCurrency.map(({ currency, amount }) => (
+        <span className="text-sm font-medium tabular-nums" key={currency}>
+          {`${t("billing.total")}: ${formatCurrencyAmount(amount, currency)}`}
+        </span>
+      ))}
+      actions={
         <Button onClick={() => setFormOpen(true)} size="sm" variant="outline">
           <PlusIcon className="size-4" />
           {t("billing.addEntry")}
         </Button>
-      </div>
-
+      }
+    >
       {/* Expenses list */}
       {expenses.length > 0 ? (
         <div className="flex flex-col gap-1.5">
-          {expenses.map((expense) => (
-            <ExpenseRow
-              expense={expense}
-              key={expense.id}
-              matterName={
-                matterNameMap.get(expense.matterId) ??
-                t("workspaces.defaultName")
-              }
-              onDelete={handleDelete}
-              onEdit={setEditingId}
-            />
-          ))}
+          {expenses.map((expense) => {
+            let matterName = t("common.unavailable");
+            if (expense.matterReference?.type !== "unavailable") {
+              matterName =
+                expense.matterId === null
+                  ? t("common.matter")
+                  : (matterNameMap.get(expense.matterId) ??
+                    t("workspaces.defaultName"));
+            }
+            return (
+              <ExpenseRow
+                expense={expense}
+                key={expense.id}
+                matterName={matterName}
+                onDelete={handleDelete}
+                onEdit={setEditingId}
+              />
+            );
+          })}
         </div>
       ) : (
         <div className="text-muted-foreground py-8 text-center text-sm">
@@ -204,8 +220,13 @@ export const ExpenseListView = ({
             </h3>
             {editingExpense && (
               <ExpenseForm
+                contextState={
+                  editingExpense.matterReference?.type === "unavailable"
+                    ? "unavailable"
+                    : "available"
+                }
                 defaultValues={{
-                  matterId: editingExpense.matterId,
+                  matterId: editingExpense.matterId ?? "",
                   dateIncurred: editingExpense.dateIncurred,
                   amount: editingExpense.amount,
                   currency: editingExpense.currency,
@@ -222,6 +243,6 @@ export const ExpenseListView = ({
           </div>
         </DialogPopup>
       </Dialog>
-    </div>
+    </ExpenseListFrame>
   );
 };

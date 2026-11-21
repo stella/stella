@@ -1,3 +1,4 @@
+import { panic, Result } from "better-result";
 import {
   afterAll,
   afterEach,
@@ -8,26 +9,28 @@ import {
   setSystemTime,
   test,
 } from "bun:test";
+import { fileURLToPath } from "node:url";
 
-/* oxlint-disable typescript-eslint/promise-function-async -- fetch mock callbacks return Promise.resolve without being async */
+/* oxlint-disable typescript/promise-function-async -- fetch mock callbacks return Promise.resolve without being async */
 import { INGESTION_STOP_KIND } from "@stll/legal-atlas/ingestion-cycle";
+import { sha256Hex } from "@stll/sha256/bun";
+import { normalizeUnicode } from "@stll/text-normalize";
 
 import {
   buildSkUsDecision,
+  SK_US_FIRST_SLICE,
   skUsAdapter,
   skUsListingIdentity,
-  SK_US_FIRST_SLICE,
 } from "@/api/handlers/case-law/ingestion/adapters/sk-us";
-import { requireReconciliation } from "@/api/handlers/case-law/ingestion/adapters/test-utils";
 import { tipWindowSlices } from "@/api/handlers/case-law/ingestion/reconciliation-plan";
 import { sourceFingerprint } from "@/api/handlers/case-law/ingestion/source-fingerprint";
 import { errorTag } from "@/api/lib/errors/error-tag";
 import {
   isReadRefusal,
   READ_OUTCOME_METADATA_KEY,
-  type ReadRefusal,
   readAbsent,
   readPresent,
+  type ReadRefusal,
 } from "@/api/lib/errors/read-outcome";
 import {
   AdapterFetchError,
@@ -35,8 +38,10 @@ import {
   UnpersistableDecisionFieldError,
 } from "@/api/lib/errors/tagged-errors";
 import { readGzipJson } from "@/api/lib/gzip-json";
+import { sanitizeResult } from "@/api/lib/legal-search/ingestion-normalization";
 import {
   decodeSourceRawEnvelope,
+  decodeSourceRawEnvelopeObjects,
   encodeSourceRawEnvelope,
   type IngestionResult,
   listingIdentityKey,
@@ -44,10 +49,50 @@ import {
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
 } from "@/api/lib/legal-search/ingestion-types";
 import { isRecord } from "@/api/lib/type-guards";
+import { requireReconciliation } from "@/api/tests/helpers/case-law-adapter-test-utils";
 import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
+const testFetchState = createTestFetch();
+
 const reconciliation = requireReconciliation(skUsAdapter);
+
+const storedReplayInput = (decision: IngestionResult) => {
+  const objects = decision.sourceRawObjects ?? {};
+  const refs = Object.fromEntries(
+    Object.entries(objects).map(([part, object]) => [
+      part,
+      {
+        location: part,
+        sha256: sha256Hex(object.bytes),
+        byteLength: object.bytes.byteLength,
+        contentType: object.contentType,
+      },
+    ]),
+  );
+  return {
+    raw: new TextEncoder().encode(
+      encodeSourceRawEnvelope(
+        decodeSourceRawEnvelope(decision.sourceRaw ?? "") ??
+          panic("Missing source envelope"),
+        refs,
+      ),
+    ),
+    contentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+    caseNumber: decision.caseNumber,
+    sourceDocumentId: decision.sourceDocumentId ?? null,
+    court: decision.court,
+    language: decision.language,
+    ecli: decision.ecli ?? null,
+    decisionDate: decision.decisionDate ?? null,
+    decisionType: decision.decisionType ?? null,
+    sourceUrl: decision.sourceUrl ?? null,
+    documentUrl: decision.documentUrl ?? null,
+    metadata: decision.metadata,
+    readObject: async (key: string) => Result.ok(objects[key]?.bytes ?? null),
+  };
+};
 
 /**
  * The stored refusal marker, typed as the stored shape: metadata values are
@@ -154,6 +199,10 @@ const CHAMBER_RESOLUTION = {
   mkFormOfDecision: "Uznesenie",
 } as const;
 
+/** The identity the same record has when listed without its document id. */
+const quarantineIdentityOf = (doc: Parameters<typeof skUsListingIdentity>[0]) =>
+  skUsListingIdentity({ ...doc, documentId: null });
+
 /** The DMS lists metadata rows with no downloadable document behind them. */
 const WITHOUT_DOCUMENT_ID = {
   mkDocumentType: "Rozhodnutie - Uznesenie z predbežného prerokovania",
@@ -226,6 +275,7 @@ type MockOptions = {
   /** How each supplementary surface answers; unnamed ones serve their response. */
   supplementary?: Partial<Record<SupplementarySurface, SurfaceAnswer>>;
   collection?: SearchStub;
+  codelistBody?: string;
 };
 
 /** The responses served for one decision beside its listing row and its file. */
@@ -348,7 +398,9 @@ const searchResponse = (stub: SearchStub): Response => {
     case "page":
       return new Response(
         JSON.stringify({ documents: stub.documents, numFound: stub.numFound }),
-        { headers: JSON_HEADERS },
+        {
+          headers: JSON_HEADERS,
+        },
       );
     case "body":
       return new Response(stub.json, { headers: JSON_HEADERS });
@@ -378,12 +430,13 @@ const mockFetch = ({
   searchFor,
   supplementary = {},
   collection = { type: "page", documents: [], numFound: 0 },
+  codelistBody = CODELIST_BODY,
 }: MockOptions): MockHandle => {
   let searchCall = 0;
   let downloadCall = 0;
   let facetCall = 0;
-  globalThis.fetch = asFetchMock(
-    (input: string | URL | Request, init?: RequestInit) => {
+  testFetchState.set(
+    asFetchMock((input: string | URL | Request, init?: RequestInit) => {
       const url = new URL(input instanceof Request ? input.url : String(input));
       if (url.pathname === SEARCH_PATH) {
         const body = parseSearchBody(init);
@@ -417,7 +470,7 @@ const mockFetch = ({
           () =>
             new Response(
               JSON.stringify({
-                content: Buffer.from(DOCUMENT_XHTML).toString("base64"),
+                content: Buffer.from(DOCUMENT_XHTML).toBase64(),
               }),
               { headers: JSON_HEADERS },
             ),
@@ -426,7 +479,7 @@ const mockFetch = ({
       if (url.pathname === CODELIST_PATH) {
         return surfaceAnswer(
           supplementary.codelist,
-          () => new Response(CODELIST_BODY, { headers: JSON_HEADERS }),
+          () => new Response(codelistBody, { headers: JSON_HEADERS }),
         );
       }
       if (url.pathname.startsWith(COURT_FILE_PREFIX)) {
@@ -442,7 +495,7 @@ const mockFetch = ({
       return Promise.resolve(
         new Response(`unexpected request: ${url.toString()}`, { status: 500 }),
       );
-    },
+    }),
   );
   return {
     calls: () => searchCall,
@@ -548,33 +601,260 @@ describe("sk-us listing identity", () => {
     );
   });
 
-  test("an id the decision column cannot hold keys nothing", () => {
-    expect(
-      skUsListingIdentity({
-        ...PLENARY_OPINION,
-        documentId: "d".repeat(SOURCE_DOCUMENT_ID_MAX_LENGTH + 1),
-      }),
-    ).toEqual({ type: "unidentifiable" });
+  test("an id the decision column cannot hold keys the row's audit identity", () => {
+    // Keyed as the same record listed with no id at all, so the row is
+    // stored once rather than hunted under an id no column can hold.
+    const identity = skUsListingIdentity({
+      ...PLENARY_OPINION,
+      documentId: "d".repeat(SOURCE_DOCUMENT_ID_MAX_LENGTH + 1),
+    });
+    expect(identity).toMatchObject({ type: "document" });
+    expect(identity).toEqual(quarantineIdentityOf(PLENARY_OPINION));
   });
 
-  test("an item the crawl would drop is unidentifiable, not keyed on nothing", () => {
+  test("a row with no document id is keyed on its audit identity, not dropped", () => {
+    const identity = skUsListingIdentity(WITHOUT_DOCUMENT_ID);
+    expect(identity).toMatchObject({ type: "document" });
+    expect(listingIdentityKey(identity)).toMatch(
+      /^document:sk-us-quarantine:[0-9a-f]{64}$/u,
+    );
+    // The DMS states empty fields as null; null states no id either.
+    expect(
+      skUsListingIdentity({ ...WITHOUT_DOCUMENT_ID, documentId: null }),
+    ).toEqual(identity);
+  });
+
+  test("an item stating nothing that names it stays unidentifiable", () => {
+    // A usable id with no docket is not quarantined: the id is the record.
     expect(
       skUsListingIdentity({ ...CHAMBER_RESOLUTION, mkRSAPNumberOfFile: "" }),
-    ).toEqual({ type: "unidentifiable" });
-    expect(skUsListingIdentity(WITHOUT_DOCUMENT_ID)).toEqual({
+    ).toEqual({
       type: "unidentifiable",
     });
     expect(
-      listingIdentityKey(skUsListingIdentity(WITHOUT_DOCUMENT_ID)),
+      skUsListingIdentity({ ...WITHOUT_DOCUMENT_ID, mkRSAPNumberOfFile: "" }),
+    ).toEqual({ type: "unidentifiable" });
+    expect(
+      listingIdentityKey(
+        skUsListingIdentity({
+          ...WITHOUT_DOCUMENT_ID,
+          mkRSAPNumberOfFile: null,
+        }),
+      ),
     ).toBeNull();
   });
 });
 
-describe("sk-us listSlicePage", () => {
-  const originalFetch = globalThis.fetch;
-
+describe("sk-us row without a usable document id", () => {
   afterEach(() => {
-    globalThis.fetch = originalFetch;
+    testFetchState.restore();
+  });
+
+  test("the audit identity is read off fields that survive the id coming back", () => {
+    const identity = quarantineIdentityOf(PLENARY_OPINION);
+    // Listing position, the ECLI and later publication dates move between
+    // listings of one record; the identity does not.
+    expect(
+      quarantineIdentityOf({
+        ...PLENARY_OPINION,
+        index: 41,
+        mkECLI: null,
+        mkPublicationDate: "04/01/2020 00:00:00",
+      }),
+    ).toEqual(identity);
+    // A separate opinion under the same docket on the same day is its own row.
+    expect(
+      quarantineIdentityOf({ ...PLENARY_OPINION, mkDifferentView: "Áno" }),
+    ).not.toEqual(identity);
+    expect(
+      quarantineIdentityOf({ ...PLENARY_OPINION, mkRVPNumberOfFile: "1/2020" }),
+    ).not.toEqual(identity);
+  });
+
+  test("the crawl stores it listing-only without asking the court for more", async () => {
+    const stub = mockFetch({
+      search: [
+        {
+          type: "page",
+          documents: [WITHOUT_DOCUMENT_ID],
+          numFound: 1,
+        },
+      ],
+    });
+
+    const page = (await skUsAdapter.fetchPage("2021:0", {})).unwrap();
+
+    const identity = skUsListingIdentity(WITHOUT_DOCUMENT_ID);
+    expect(page.itemBuildFailures).toEqual({
+      type: "item_build_failed",
+      count: 0,
+    });
+    expect(page.decisions).toHaveLength(1);
+    expect(page.decisions.at(0)).toMatchObject({
+      sourceDocumentId:
+        identity.type === "document" ? identity.sourceDocumentId : null,
+      caseNumber: WITHOUT_DOCUMENT_ID.mkRSAPNumberOfFile,
+      court: "Ústavný súd SR",
+      decisionDate: "1993-12-15",
+      isListingOnly: true,
+      metadata: {
+        identityQuarantined: true,
+        listedOnly: true,
+        listedOnlyReason: "no_usable_document_id",
+        documentType: WITHOUT_DOCUMENT_ID.mkDocumentType,
+      },
+    });
+    expect(page.decisions.at(0)?.caseNumberIsPlaceholder).toBeUndefined();
+    expect(page.decisions.at(0)?.sourceUrl).toBeUndefined();
+    expect(
+      decodeSourceRawEnvelope(page.decisions.at(0)?.sourceRaw ?? ""),
+    ).toEqual({ listing: JSON.stringify(WITHOUT_DOCUMENT_ID) });
+    expect(stub.downloads()).toBe(0);
+    expect(stub.facetCalls()).toBe(0);
+  });
+
+  test("a row stating only its registry number is labelled a placeholder", async () => {
+    mockFetch({ search: [] });
+    const registryOnly = {
+      ...WITHOUT_DOCUMENT_ID,
+      mkRSAPNumberOfFile: null,
+      mkRVPNumberOfFile: "1448/2020",
+    };
+
+    const built = await buildSkUsDecision(registryOnly);
+
+    if (built.type !== "built") {
+      throw new Error(`expected a built row, got ${built.type}`);
+    }
+    const { caseNumber, caseNumberIsPlaceholder, sourceDocumentId } =
+      built.decision;
+    expect(caseNumberIsPlaceholder).toBe(true);
+    expect(String(caseNumber)).toBe(String(sourceDocumentId));
+    expect(listingIdentityKey(skUsListingIdentity(registryOnly))).toBe(
+      `document:${String(sourceDocumentId)}`,
+    );
+  });
+
+  test("the reconciliation builds a parked one and holds it without a document", async () => {
+    mockFetch({ search: [] });
+    // Parked as JSONB, where the DMS's null document id survives.
+    const parked: unknown = structuredClone({
+      ...WITHOUT_DOCUMENT_ID,
+      documentId: null,
+    });
+
+    const built = await reconciliation.buildDecision(parked);
+
+    expect(built).toMatchObject({
+      type: "built",
+      decision: { isListingOnly: true },
+    });
+    const identity = skUsListingIdentity(WITHOUT_DOCUMENT_ID);
+    // Read as held, or the walk would hunt a document nothing can address.
+    expect(reconciliation.heldWithoutDetail?.(identity)).toBe(true);
+    expect(
+      reconciliation.heldWithoutDetail?.(skUsListingIdentity(PLENARY_OPINION)),
+    ).toBe(false);
+  });
+
+  test("the keyed record takes over the row its id-less listing stored", async () => {
+    mockFetch({ search: [] });
+
+    const built = await buildSkUsDecision(PLENARY_OPINION);
+
+    const quarantined = quarantineIdentityOf(PLENARY_OPINION);
+    expect(built.type).toBe("built");
+    expect(
+      built.type === "built"
+        ? built.decision.sourceDocumentIdRepairAliases
+        : undefined,
+    ).toEqual([
+      quarantined.type === "document" ? quarantined.sourceDocumentId : "",
+    ]);
+  });
+
+  test("a stored quarantined row replays to itself", async () => {
+    mockFetch({ search: [] });
+    const built = await buildSkUsDecision(WITHOUT_DOCUMENT_ID);
+    if (built.type !== "built") {
+      throw new Error(`expected a built row, got ${built.type}`);
+    }
+
+    const replayed = await skUsAdapter.reparseStoredRaw?.(
+      storedReplayInput(built.decision),
+    );
+
+    expect(replayed).toEqual({ type: "parsed", result: built.decision });
+    expect(
+      await skUsAdapter.reparseStoredRaw?.({
+        ...storedReplayInput(built.decision),
+        sourceDocumentId: "another-row",
+      }),
+    ).toMatchObject({ type: "rejected" });
+  });
+
+  test("a stored quarantined row replays to itself when its docket carries a character ingestion strips", async () => {
+    mockFetch({ search: [] });
+    const docket = WITHOUT_DOCUMENT_ID.mkRSAPNumberOfFile;
+    const withStrippedCharacters = {
+      ...WITHOUT_DOCUMENT_ID,
+      mkRSAPNumberOfFile: `\u200B${docket}\uFEFF`,
+    };
+    const built = await buildSkUsDecision(withStrippedCharacters);
+    if (built.type !== "built") {
+      throw new Error(`expected a built row, got ${built.type}`);
+    }
+    // What the pipeline stores: the raw without the characters it strips.
+    const stored = sanitizeResult(built.decision).unwrap();
+
+    const replayed = await skUsAdapter.reparseStoredRaw?.(
+      storedReplayInput(stored),
+    );
+
+    expect(replayed).toMatchObject({
+      type: "parsed",
+      result: {
+        sourceDocumentId: stored.sourceDocumentId,
+        caseNumber: docket,
+      },
+    });
+    expect(skUsListingIdentity(withStrippedCharacters)).toEqual(
+      skUsListingIdentity(WITHOUT_DOCUMENT_ID),
+    );
+  });
+
+  test("a text field of another type reads as absent instead of failing the row", async () => {
+    mockFetch({ search: [] });
+    // Parked as JSONB, where a field whose type the DMS changed survives.
+    const parked: unknown = structuredClone({
+      ...WITHOUT_DOCUMENT_ID,
+      mkClauseTitle: 7,
+      mkClauseText: ["Právna veta"],
+    });
+
+    const built = await reconciliation.buildDecision(parked);
+
+    expect(built).toMatchObject({
+      type: "built",
+      decision: {
+        isListingOnly: true,
+        textFields: {
+          headnote: { type: "absent" },
+          legalSentence: { type: "absent" },
+        },
+      },
+    });
+    expect(
+      built.type === "built"
+        ? decodeSourceRawEnvelope(built.decision.sourceRaw ?? "")
+        : undefined,
+    ).toEqual({ listing: JSON.stringify(parked) });
+  });
+});
+
+describe("sk-us listSlicePage", () => {
+  afterEach(() => {
+    testFetchState.restore();
   });
 
   test("asks the publisher for exactly the slice's month", async () => {
@@ -656,7 +936,7 @@ describe("sk-us listSlicePage", () => {
 
     expect(
       await reconciliation.listSlicePage({ slice: "1993-01", page: 0 }),
-    ).toEqual({ items: [], totalPages: 0 });
+    ).toEqual({ items: [], totalPages: 0, publisherCount: 0 });
   });
 
   test("a server error throws instead of reading as an empty slice", async () => {
@@ -864,8 +1144,6 @@ describe("sk-us listSlicePage", () => {
 });
 
 describe("sk-us getTotalCount", () => {
-  const originalFetch = globalThis.fetch;
-
   beforeAll(() => {
     setSystemTime(new Date("2026-09-25T09:30:00.000Z"));
   });
@@ -875,7 +1153,7 @@ describe("sk-us getTotalCount", () => {
   });
 
   afterEach(() => {
-    globalThis.fetch = originalFetch;
+    testFetchState.restore();
   });
 
   test("reads the court's own count over the crawl's whole date span", async () => {
@@ -930,10 +1208,8 @@ describe("sk-us getTotalCount", () => {
 });
 
 describe("sk-us buildDecision", () => {
-  const originalFetch = globalThis.fetch;
-
   afterEach(() => {
-    globalThis.fetch = originalFetch;
+    testFetchState.restore();
   });
 
   test("builds the decision the crawl would have stored", async () => {
@@ -1013,30 +1289,31 @@ describe("sk-us buildDecision", () => {
     if (reparse === undefined) {
       throw new Error("sk-us must support stored replay");
     }
-    const replayed = await reparse({
-      raw: new TextEncoder().encode(decision.sourceRaw),
-      contentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-      caseNumber: decision.caseNumber,
-      sourceDocumentId: decision.sourceDocumentId ?? null,
-      court: decision.court,
-      language: decision.language,
-      ecli: decision.ecli ?? null,
-      decisionDate: decision.decisionDate ?? null,
-      decisionType: decision.decisionType ?? null,
-      sourceUrl: decision.sourceUrl ?? null,
-      documentUrl: decision.documentUrl ?? null,
-      metadata: decision.metadata,
-    });
+    testFetchState.set(
+      asFetchMock(async () => panic("Replay must not request the publisher")),
+    );
+    const replayed = await reparse(storedReplayInput(decision));
     expect(replayed.type).toBe("parsed");
     if (replayed.type !== "parsed") {
       throw new Error("the captured collection must be reparsable");
     }
     expect(replayed.result.textFields).toEqual(decision.textFields);
     expect(replayed.result.metadata).toEqual(decision.metadata);
+    expect(replayed.result).toEqual(decision);
+    const again = await reparse(storedReplayInput(replayed.result));
+    expect(again).toEqual(replayed);
   });
 
   test("every response the court served for the decision is in the envelope", async () => {
-    mockFetch({ search: [], dissenters: ["Peter Straka"] });
+    const codelistBody = JSON.stringify({
+      codelist: {
+        mkJudgeReporter: ["Ivan Fiačan", "Another published judge"],
+        mkDifferentViewJudges: ["Peter Straka"],
+        newlyPublishedRoster: [],
+      },
+      publisherRevision: "retained",
+    });
+    mockFetch({ search: [], dissenters: ["Peter Straka"], codelistBody });
 
     const outcome = await reconciliation.buildDecision(PLENARY_OPINION);
     if (outcome.type !== "built") {
@@ -1056,14 +1333,10 @@ describe("sk-us buildDecision", () => {
     ]);
     expect(JSON.parse(parts?.["listing"] ?? "null")).toEqual(PLENARY_OPINION);
     expect(parts?.["document"]).toContain("rozh od ol");
-    // The vocabularies are corpus-level, so the row keeps the digest of the
-    // response it read and the entries this decision resolved against it.
-    expect(JSON.parse(parts?.["codelists"] ?? "null")).toMatchObject({
-      used: {
-        mkJudgeReporter: ["Ivan Fiačan"],
-        mkDifferentViewJudges: ["Peter Straka"],
-      },
-    });
+    expect(parts?.["codelists"]).toBe(codelistBody);
+    expect(
+      await skUsAdapter.sourceFields.listSourceFields(parts ?? {}),
+    ).toContain("newlyPublishedRoster");
   });
 
   test("a collection listing the service states nothing for stays visible beside the publisher inclusion flag", async () => {
@@ -1328,11 +1601,13 @@ describe("sk-us buildDecision", () => {
         supplementary: { [surface]: { type: "status", status: 429 } },
       });
       const served = globalThis.fetch;
-      globalThis.fetch = asFetchMock(
-        async (input: string | URL | Request, init?: RequestInit) => {
-          requests += 1;
-          return await served(input, init);
-        },
+      testFetchState.set(
+        asFetchMock(
+          async (input: string | URL | Request, init?: RequestInit) => {
+            requests += 1;
+            return await served(input, init);
+          },
+        ),
       );
       const rejection = await rejectionOf(buildSkUsDecision(PLENARY_OPINION));
       expect(rejection).toBeInstanceOf(AdapterFetchError);
@@ -1482,10 +1757,19 @@ describe("sk-us buildDecision", () => {
         mkRSAPNumberOfFile: "",
       }),
     ).toEqual({ type: "unkeyable" });
-    // A field whose type the DMS changed under us keys nothing either.
+    // A document id whose type the DMS changed under us is no usable id: the
+    // row is kept under its audit identity, as the crawl keeps it.
     expect(
       await reconciliation.buildDecision({ ...PLENARY_OPINION, documentId: 7 }),
-    ).toEqual({ type: "unkeyable" });
+    ).toMatchObject({
+      type: "built",
+      decision: {
+        sourceDocumentId: listingIdentityKey(
+          quarantineIdentityOf(PLENARY_OPINION),
+        )?.replace(/^document:/u, ""),
+        isListingOnly: true,
+      },
+    });
   });
 
   test("replays a payload that round-tripped through storage", async () => {
@@ -1506,7 +1790,6 @@ describe("sk-us buildDecision", () => {
 });
 
 describe("sk-us crawl and reconciliation dispose of a missing document differently", () => {
-  const originalFetch = globalThis.fetch;
   const originalSleep = Bun.sleep;
 
   beforeEach(() => {
@@ -1514,7 +1797,7 @@ describe("sk-us crawl and reconciliation dispose of a missing document different
   });
 
   afterEach(() => {
-    globalThis.fetch = originalFetch;
+    testFetchState.restore();
     Bun.sleep = originalSleep;
   });
 
@@ -1558,8 +1841,8 @@ describe("sk-us crawl and reconciliation dispose of a missing document different
       ],
     });
     const served = globalThis.fetch;
-    globalThis.fetch = asFetchMock(
-      async (input: string | URL | Request, init?: RequestInit) => {
+    testFetchState.set(
+      asFetchMock(async (input: string | URL | Request, init?: RequestInit) => {
         const url = new URL(
           input instanceof Request ? input.url : String(input),
         );
@@ -1571,7 +1854,7 @@ describe("sk-us crawl and reconciliation dispose of a missing document different
           return new Response("", { status: 500 });
         }
         return await served(input, init);
-      },
+      }),
     );
 
     const page = (await skUsAdapter.fetchPage("2021:0", {})).unwrap();
@@ -1743,25 +2026,58 @@ describe("sk-us crawl and reconciliation dispose of a missing document different
     ]);
   });
 
-  test("stored-raw replay keeps the stated type and derives the same comparison key", async () => {
-    const outcome = await skUsAdapter.reparseStoredRaw?.({
-      raw: new TextEncoder().encode(
-        encodeSourceRawEnvelope({
-          listing: JSON.stringify(CHAMBER_RESOLUTION),
-        }),
-      ),
-      contentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-      caseNumber: CHAMBER_RESOLUTION.mkRSAPNumberOfFile,
-      sourceDocumentId: CHAMBER_RESOLUTION.documentId,
-      language: "sk",
-      court: "Ústavný súd SR",
-      ecli: null,
-      decisionDate: null,
-      decisionType: null,
-      sourceUrl: null,
-      documentUrl: null,
-      metadata: {},
+  test("stored replay without the PDF object or XHTML replays from the stored listing without a publisher request", async () => {
+    mockFetch({ search: [] });
+    const built = await buildSkUsDecision(CHAMBER_RESOLUTION);
+    if (built.type !== "built") {
+      throw new Error(`expected a built decision, got ${built.type}`);
+    }
+    const input = storedReplayInput(built.decision);
+    const parts =
+      decodeSourceRawEnvelope(built.decision.sourceRaw ?? "") ??
+      panic("Missing fixture envelope");
+    const { document: _document, ...withoutDocument } = parts;
+    const refs = decodeSourceRawEnvelopeObjects(
+      new TextDecoder().decode(input.raw),
+    );
+    testFetchState.set(
+      asFetchMock(async () => panic("Replay must not request the publisher")),
+    );
+    for (const raw of [
+      new TextEncoder().encode(built.decision.sourceRaw ?? ""),
+      new TextEncoder().encode(encodeSourceRawEnvelope(withoutDocument, refs)),
+    ]) {
+      const outcome = await skUsAdapter.reparseStoredRaw?.({ ...input, raw });
+      expect(outcome).toMatchObject({
+        type: "parsed",
+        result: { caseNumber: built.decision.caseNumber },
+      });
+    }
+    const missingBody = await skUsAdapter.reparseStoredRaw?.({
+      ...input,
+      readObject: async () => Result.ok(null),
     });
+    expect(missingBody).toMatchObject({
+      type: "parsed",
+      result: {
+        caseNumber: built.decision.caseNumber,
+        isListingOnly: true,
+      },
+    });
+  });
+
+  test("stored-raw replay keeps the stated type and derives the same comparison key", async () => {
+    mockFetch({ search: [] });
+    const built = await buildSkUsDecision(CHAMBER_RESOLUTION);
+    if (built.type !== "built") {
+      throw new Error(`expected a built decision, got ${built.type}`);
+    }
+    testFetchState.set(
+      asFetchMock(async () => panic("Replay must not request the publisher")),
+    );
+    const outcome = await skUsAdapter.reparseStoredRaw?.(
+      storedReplayInput(built.decision),
+    );
     expect(outcome).toMatchObject({
       type: "parsed",
       result: {
@@ -1814,14 +2130,14 @@ describe("sk-us crawl and reconciliation dispose of a missing document different
     const abortError = new DOMException("Aborted", "AbortError");
     mockFetch({ search: [], download: { type: "fails", error: abortError } });
     const fetchDocument = globalThis.fetch;
-    globalThis.fetch = asFetchMock(
-      async (input: string | URL | Request, init?: RequestInit) => {
+    testFetchState.set(
+      asFetchMock(async (input: string | URL | Request, init?: RequestInit) => {
         const url = input instanceof Request ? input.url : String(input);
         if (url.includes("/docDownload/")) {
           controller.abort(abortError);
         }
         return await fetchDocument(input, init);
-      },
+      }),
     );
 
     const outcome = await buildSkUsDecision(CHAMBER_RESOLUTION, {
@@ -1844,11 +2160,10 @@ describe("sk-us crawl and reconciliation dispose of a missing document different
  * so only a count of what it kept shows a build that fails on every row.
  */
 describe("sk-us rows as the court sends them", () => {
-  const originalFetch = globalThis.fetch;
   const FIXTURES = new URL("__fixtures__/", import.meta.url);
 
   afterEach(() => {
-    globalThis.fetch = originalFetch;
+    testFetchState.restore();
   });
 
   const recordedRows = async (): Promise<Record<string, unknown>[]> => {
@@ -1875,7 +2190,7 @@ describe("sk-us rows as the court sends them", () => {
     mockFetch({ search: [] });
     const values = [
       " Ústavná sťažnosť ",
-      "Ústavná sťažnosť".normalize("NFD"),
+      normalizeUnicode("Ústavná sťažnosť", "NFD"),
       "",
       "Iné",
     ];
@@ -2003,8 +2318,6 @@ describe("sk-us rows as the court sends them", () => {
  * collects documents leaves the cursor past them.
  */
 describe("the sk-us steady-state frontier", () => {
-  const originalFetch = globalThis.fetch;
-
   beforeAll(() => {
     setSystemTime(new Date("2026-08-11T09:30:00.000Z"));
   });
@@ -2014,7 +2327,7 @@ describe("the sk-us steady-state frontier", () => {
   });
 
   afterEach(() => {
-    globalThis.fetch = originalFetch;
+    testFetchState.restore();
   });
 
   /** Where the crawl parked after listing the current year to its end. */
@@ -2301,7 +2614,7 @@ describe("the responses this court served, as recorded", () => {
     const file = Bun.gunzipSync(
       new Uint8Array(
         await Bun.file(
-          new URL("sk-us-decision.pdf.gz", FIXTURES).pathname,
+          fileURLToPath(new URL("sk-us-decision.pdf.gz", FIXTURES)),
         ).arrayBuffer(),
       ),
     );

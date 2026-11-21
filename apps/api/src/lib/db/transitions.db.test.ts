@@ -1,10 +1,10 @@
 import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
 import { eq, inArray, sql } from "drizzle-orm";
-import type { SQL } from "drizzle-orm";
-import { pgTable, text } from "drizzle-orm/pg-core";
+import { integer, pgTable, primaryKey, text } from "drizzle-orm/pg-core";
 import { drizzle } from "drizzle-orm/pglite";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
+import { createTestClock } from "@stll/test-kit";
 
 import { organization } from "@/api/db/auth-schema";
 import { auditLogs, flowRuns, workspaces } from "@/api/db/schema";
@@ -22,7 +22,10 @@ import {
 } from "@/api/lib/db/transitions";
 import { isPgError } from "@/api/lib/pg-error";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { createTestRawExecute } from "@/api/tests/helpers/raw-execute";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
+
+const stateClock = createTestClock();
 
 const organizationId = mintAuthProviderId<"organization">();
 const workspaceId = createSafeId<"workspace">();
@@ -34,7 +37,9 @@ let db: ReturnType<typeof drizzle>;
 type PGliteTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
 // The production Bun driver returns rows directly; PGlite wraps them in `rows`.
 const withBunRows = (tx: PGliteTransaction) => ({
-  execute: async (query: SQL) => (await tx.execute(query)).rows,
+  execute: createTestRawExecute(
+    async (query) => (await tx.execute(query)).rows,
+  ),
   rollback: () => tx.rollback(),
   insert: tx.insert.bind(tx),
   select: tx.select.bind(tx),
@@ -95,7 +100,11 @@ test("a successful transition commits one system audit; a stale transition recor
         tx: transactional,
         spec: TRANSITIONS.flowRuns,
         id: runId,
-        options: { from: ["pending"], to: "running" },
+        options: {
+          from: ["pending"],
+          to: "running",
+          set: { startedAt: new Date(stateClock.now()) },
+        },
         recordTransitionAuditEvent: async (auditTx, row) => {
           expect(auditTx).toBe(transactional);
           await recordAuditEvent(auditTx, {
@@ -133,7 +142,11 @@ test("a real audit insert failure rolls back the already applied transition", as
         tx: transactional,
         spec: TRANSITIONS.flowRuns,
         id: runId,
-        options: { from: ["pending"], to: "running" },
+        options: {
+          from: ["pending"],
+          to: "running",
+          set: { startedAt: new Date(stateClock.now()) },
+        },
         recordTransitionAuditEvent: async (auditTx, row) => {
           expect(auditTx).toBe(transactional);
           expect((await auditTx.select().from(flowRuns)).at(0)?.status).toBe(
@@ -210,7 +223,11 @@ test("an audit failure rolls back every row in a batch", async () => {
         tx: transactional,
         spec: TRANSITIONS.flowRuns,
         ids: [runId, secondId],
-        options: { from: ["pending"], to: "cancelled" },
+        options: {
+          from: ["pending"],
+          to: "cancelled",
+          set: { finishedAt: new Date(stateClock.now()) },
+        },
         recordTransitionAuditEvent: async (auditTx, rows) => {
           expect(rows).toHaveLength(2);
           await recordAuditEvent(
@@ -282,6 +299,100 @@ test("a domain primary key changes ownership metadata and its status together", 
     });
     expect(changed).toEqual([{ id: "task", status: "unassigned" }]);
     await tx.execute(sql`DROP TABLE transition_keyed_fixture`);
+  });
+  expect(await db.$count(auditLogs)).toBe(1);
+});
+
+test("scoped composite transitions fence the generation and preserve another organization's same key", async () => {
+  const keyed = pgTable(
+    "transition_scoped_fixture",
+    {
+      organizationId: text("organization_id").notNull(),
+      sourceId: text("source_id").notNull(),
+      status: text({ enum: ["pending", "complete"] }).notNull(),
+      generation: integer().notNull(),
+    },
+    (table) => [
+      primaryKey({ columns: [table.organizationId, table.sourceId] }),
+    ],
+  );
+  const spec = defineKeyedTransitions({
+    table: keyed,
+    key: "sourceId",
+    scope: ["organizationId"],
+    edges: { pending: ["complete"], complete: [] },
+    options: { terminal: ["complete"], fence: "generation" },
+  });
+  await db.transaction(async (tx) => {
+    await tx.execute(
+      sql`CREATE TEMP TABLE transition_scoped_fixture (organization_id text, source_id text, status text NOT NULL, generation integer NOT NULL, PRIMARY KEY (organization_id, source_id))`,
+    );
+    await tx.insert(keyed).values([
+      {
+        organizationId: "first",
+        sourceId: "eu",
+        status: "pending",
+        generation: 2,
+      },
+      {
+        organizationId: "second",
+        sourceId: "eu",
+        status: "pending",
+        generation: 2,
+      },
+    ]);
+    const transactional = withBunRows(tx);
+    const recordTransitionAuditEvent = async (
+      auditTx: typeof transactional,
+      rows: readonly { id: string; status: string }[],
+    ) => {
+      await recorderFor(organizationId)(
+        auditTx,
+        rows.map((row) => ({
+          action: AUDIT_ACTION.UPDATE,
+          resourceType: AUDIT_RESOURCE_TYPE.WORK_OBLIGATION,
+          resourceId: row.id,
+        })),
+      );
+    };
+    expect(
+      await transitionBatch({
+        tx: transactional,
+        spec,
+        ids: ["eu"],
+        scope: { organizationId: "first" },
+        options: { from: ["pending"], to: "complete", fence: 1 },
+        recordTransitionAuditEvent,
+      }),
+    ).toEqual([]);
+    expect(await tx.select().from(auditLogs)).toHaveLength(0);
+    expect(
+      await transitionBatch({
+        tx: transactional,
+        spec,
+        ids: ["eu"],
+        scope: { organizationId: "first" },
+        options: { from: ["pending"], to: "complete", fence: 2, nextFence: 3 },
+        recordTransitionAuditEvent,
+      }),
+    ).toEqual([{ id: "eu", status: "complete" }]);
+    expect(await tx.select().from(keyed).orderBy(keyed.organizationId)).toEqual(
+      [
+        {
+          organizationId: "first",
+          sourceId: "eu",
+          status: "complete",
+          generation: 3,
+        },
+        {
+          organizationId: "second",
+          sourceId: "eu",
+          status: "pending",
+          generation: 2,
+        },
+      ],
+    );
+    await tx.execute(sql`DROP TABLE transition_scoped_fixture`);
   });
   expect(await db.$count(auditLogs)).toBe(1);
 });

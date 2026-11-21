@@ -2,17 +2,20 @@ import { useState } from "react";
 
 import { useTranslations } from "use-intl";
 
+import { DEFAULT_VARCHAR_MAX_LENGTH } from "@stll/api-contract/limits";
 import { Button } from "@stll/ui/button";
 import {
   Dialog,
   DialogClose,
   DialogFooter,
+  DialogFormState,
   DialogHeader,
   DialogPanel,
   DialogPopup,
   DialogTitle,
 } from "@stll/ui/dialog";
 import { Input } from "@stll/ui/input";
+import { Label } from "@stll/ui/label";
 import {
   Select,
   SelectItem,
@@ -24,11 +27,13 @@ import { Textarea } from "@stll/ui/textarea";
 import { stellaToast } from "@stll/ui/toast";
 
 import type { ClauseParagraph } from "@/components/templates/clause-editor-types";
+import { useSingleFlight } from "@/hooks/use-single-flight";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
 import { userErrorMessage } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
 import { toSafeId } from "@/lib/safe-id";
 
 import { ClauseEditor, type ClauseEditorReviewStatus } from "./clause-editor";
@@ -107,6 +112,7 @@ const ClauseFormDialogBody = ({
   categories,
   initial,
 }: ClauseFormDialogBodyProps) => {
+  const idempotentSubmit = useIdempotentSubmit();
   const t = useTranslations();
   const isEdit = !!initial?.id;
 
@@ -119,7 +125,11 @@ const ClauseFormDialogBody = ({
     categoryId: initial?.categoryId ?? "",
     bodyParagraphs: initial?.bodyParagraphs ?? DEFAULT_BODY,
   }));
+  const [initialForm] = useState(form);
   const [saving, setSaving] = useState(false);
+  // The create goes through the API directly, not a create hook, so the
+  // census cannot find it: guard it here the same way.
+  const once = useSingleFlight();
   const [reviewStatus, setReviewStatus] =
     useState<ClauseEditorReviewStatus>("resolved");
 
@@ -172,13 +182,17 @@ const ClauseFormDialogBody = ({
           ? undefined
           : toSafeId<"clauseCategory">(form.categoryId);
 
-      const response = await api.clauses.put({
-        title: form.title.trim(),
-        ...(description && { description }),
-        ...(usageNotes && { usageNotes }),
-        ...(language && { language }),
-        ...(categoryId && { categoryId }),
-        body,
+      const response = await idempotentSubmit.run({
+        operation: "clauses.create",
+        send: async (creationPayload) => api.clauses.put(creationPayload),
+        body: {
+          title: form.title.trim(),
+          ...(description && { description }),
+          ...(usageNotes && { usageNotes }),
+          ...(language && { language }),
+          ...(categoryId && { categoryId }),
+          body,
+        },
       });
 
       setSaving(false);
@@ -203,8 +217,22 @@ const ClauseFormDialogBody = ({
     onSaved();
   };
 
+  const resolveSaveClauseDisabledReason = () => {
+    if (saving) {
+      return t("common.saving");
+    }
+    if (!form.title.trim()) {
+      return t("common.enterTitle");
+    }
+    return t("common.finishReview");
+  };
+
   return (
     <DialogPopup className="sm:max-w-lg">
+      <DialogFormState
+        dirty={JSON.stringify(form) !== JSON.stringify(initialForm)}
+        onDiscard={() => setForm(initialForm)}
+      />
       <DialogHeader>
         <DialogTitle>
           {isEdit ? t("clauses.editClause") : t("clauses.createClause")}
@@ -212,11 +240,10 @@ const ClauseFormDialogBody = ({
       </DialogHeader>
       <DialogPanel className="grid gap-4">
         <div className="grid gap-1.5">
-          <label className="text-sm font-medium" htmlFor="clause-title">
-            {t("clauses.titleLabel")}
-          </label>
+          <Label htmlFor="clause-title">{t("clauses.titleLabel")}</Label>
           <Input
             id="clause-title"
+            maxLength={DEFAULT_VARCHAR_MAX_LENGTH}
             onChange={(e) =>
               setForm((f) => ({
                 ...f,
@@ -229,9 +256,7 @@ const ClauseFormDialogBody = ({
         </div>
 
         <div className="grid gap-1.5">
-          <label className="text-sm font-medium" htmlFor="clause-description">
-            {t("common.description")}
-          </label>
+          <Label htmlFor="clause-description">{t("common.description")}</Label>
           <Input
             id="clause-description"
             onChange={(e) =>
@@ -247,9 +272,7 @@ const ClauseFormDialogBody = ({
 
         <div className="grid grid-cols-2 gap-4">
           <div className="grid gap-1.5">
-            <label className="text-sm font-medium" htmlFor="clause-language">
-              {t("common.language")}
-            </label>
+            <Label htmlFor="clause-language">{t("common.language")}</Label>
             <Input
               id="clause-language"
               maxLength={10}
@@ -306,9 +329,7 @@ const ClauseFormDialogBody = ({
         </div>
 
         <div className="grid gap-1.5">
-          <label className="text-sm font-medium" htmlFor="clause-usage-notes">
-            {t("clauses.usageNotes")}
-          </label>
+          <Label htmlFor="clause-usage-notes">{t("clauses.usageNotes")}</Label>
           <Textarea
             className="min-h-[60px]"
             id="clause-usage-notes"
@@ -329,8 +350,9 @@ const ClauseFormDialogBody = ({
         </DialogClose>
         <Button
           disabled={saving || !form.title.trim() || reviewStatus !== "resolved"}
+          disabledReason={resolveSaveClauseDisabledReason()}
           onClick={() => {
-            detached(handleSave(), "clause-form-dialog.save");
+            detached(once.run(handleSave), "clause-form-dialog.save");
           }}
         >
           {t("common.save")}

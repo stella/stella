@@ -1,0 +1,594 @@
+import type React from "react";
+
+import { GlobalRegistrator } from "@happy-dom/global-registrator";
+import type { RowSelectionState } from "@tanstack/react-table";
+import { afterAll, afterEach, describe, expect, test } from "bun:test";
+import { fileURLToPath } from "node:url";
+
+import {
+  TEXT_ABSENCE_REASON,
+  TEXT_FIELD_TYPE,
+} from "@stll/api-contract/case-law-text-field";
+import { TABLE_CONTENT_MODES } from "@stll/api-contract/public-law-table";
+import type { TableContentMode } from "@stll/api-contract/public-law-table";
+import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
+
+import { ROW_FIRST_LINE } from "@/components/workspaces/table/select-row-content";
+import { workspaceTableFeatures } from "@/components/workspaces/table/table-features";
+import type {
+  DecisionRowData,
+  TableTreeNode,
+} from "@/components/workspaces/table/types";
+
+GlobalRegistrator.register({ url: "http://localhost:3000/law" });
+
+const originalFetch = globalThis.fetch;
+globalThis.fetch = Object.assign(async () => Response.json(null), {
+  preconnect: () => undefined,
+});
+
+const { cleanup, fireEvent, render } = await import("@testing-library/react");
+const { useState, useRef } = await import("react");
+const { useTable } = await import("@tanstack/react-table");
+const { QueryClient, QueryClientProvider, onlineManager } =
+  await import("@tanstack/react-query");
+const router = await import("@tanstack/react-router");
+const { IntlProvider } = await import("use-intl");
+const { default: messages } = await import("@/i18n/langs/en.json");
+const { PublicLawRow } =
+  await import("@/components/public-law-table/public-law-row");
+const { DraggableRow } =
+  await import("@/routes/_protected.workspaces/$workspaceId/-components/table/entity-row-cells");
+const { AuthenticatedUserProvider } =
+  await import("@/lib/authenticated-user-context");
+const { FormattingProvider } = await import("@/i18n/formatting-context");
+const { ChatEditorProvider } =
+  await import("@/components/chat-editor-provider");
+const { useInspectorTabsStore } =
+  await import("@/components/inspector/inspector-tabs-store");
+const { propertiesOptions } =
+  await import("@/lib/workspaces/queries/properties");
+const { toSafeId } = await import("@/lib/safe-id");
+const { selectColId, addPropertyColId, getWorkspaceGridColumnMetadata } =
+  await import("./workspace-table/internals-helpers");
+const { CellMetadataFlags } =
+  await import("@/components/workspaces/cell-metadata-flags");
+
+const wasOnline = onlineManager.isOnline();
+onlineManager.setOnline(false);
+
+const clients: InstanceType<typeof QueryClient>[] = [];
+afterEach(() => {
+  cleanup();
+  for (const client of clients) {
+    client.clear();
+  }
+  clients.length = 0;
+  useInspectorTabsStore.setState(useInspectorTabsStore.getInitialState());
+});
+afterAll(async () => {
+  globalThis.fetch = originalFetch;
+  onlineManager.setOnline(wasOnline);
+  await unregisterDomEnvironment();
+});
+
+// Derive the host census from imports, so a new host automatically exercises
+// the selection/row boundary rather than relying on a maintained fixture list.
+const selectionHosts: string[] = [];
+for await (const path of new Bun.Glob("**/*.tsx").scan({
+  cwd: fileURLToPath(new URL("../../../", import.meta.url)),
+})) {
+  if (path.endsWith(".test.tsx")) {
+    continue;
+  }
+  const source = await Bun.file(
+    new URL(`../../../${path}`, import.meta.url),
+  ).text();
+  if (
+    source.includes('from "@/components/workspaces/table/select-row-content"')
+  ) {
+    selectionHosts.push(path);
+  }
+}
+
+const decisions = Array.from(
+  { length: 4 },
+  (_, index) =>
+    ({
+      kind: "decision",
+      children: [],
+      decision: {
+        id: `decision-${index}`,
+        caseNumber: "1/2026",
+        caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+        ecli: null,
+        court: "Court",
+        courtAbbreviation: null,
+        country: "CZ",
+        language: "cs",
+        languageAlternates: [],
+        slug: null,
+        decisionDate: "2026-01-01",
+        decisionType: null,
+        decisionTypeKind: null,
+        headline: null,
+        headnote: {
+          type: TEXT_FIELD_TYPE.ABSENT,
+          reason: TEXT_ABSENCE_REASON.NOT_PUBLISHED,
+        },
+        citationCount: 0,
+      },
+    }) satisfies DecisionRowData,
+);
+
+const entities: TableTreeNode[] = Array.from(
+  { length: 4 },
+  (_, index) =>
+    ({
+      entityId: toSafeId<"entity">(`task-${index}`),
+      kind: "task",
+      name: `Task ${index}`,
+      parentId: null,
+      createdAt: "2026-01-01T00:00:00.000Z",
+      createdBy: null,
+      createdByUserId: null,
+      createdByImage: null,
+      createdByDeletedAt: null,
+      updatedAt: null,
+      version: 1,
+      currentVersionReference: null,
+      status: null,
+      priority: null,
+      listItemType: null,
+      dueDate: null,
+      agendaKind: "task",
+      startAt: null,
+      endAt: null,
+      occurredAt: null,
+      remindAt: null,
+      allDay: false,
+      timeZone: null,
+      location: null,
+      onlineMeetingUrl: null,
+      availability: null,
+      sensitivity: null,
+      organizer: null,
+      attendees: null,
+      recurrence: null,
+      agendaSource: "manual",
+      externalSource: null,
+      externalId: null,
+      externalChangeKey: null,
+      externalICalUid: null,
+      readOnly: false,
+      sortOrder: null,
+      activeEditBy: null,
+      fields: {},
+      cellMetadata: {},
+      assignees: [],
+      children: [],
+    }) satisfies TableTreeNode,
+);
+
+// A value column beside the number, so the first line a host reserves in its
+// cells can be compared with the one its number sits on.
+const fixtureCellText = { icon: "Icon", value: "Value" };
+const columns = [
+  { id: selectColId },
+  {
+    id: "_value",
+    cell: () => (
+      <>
+        <span data-slot="fixture-cell-icon">{fixtureCellText.icon}</span>
+        <span className="truncate" data-slot="fixture-cell-value">
+          {fixtureCellText.value}
+        </span>
+      </>
+    ),
+  },
+];
+
+type FixtureProps = {
+  contentMode: TableContentMode;
+  onOpen: () => void;
+  columnLayout:
+    | "with-value"
+    | "selection-only"
+    | "select-last"
+    | "selection-with-rail"
+    | "with-flags";
+};
+
+const PublicLawFixture = ({ contentMode, onOpen }: FixtureProps) => {
+  const [rowSelection, onRowSelectionChange] = useState<RowSelectionState>({});
+  const lastSelectedIndex = useRef<number | null>(null);
+  const table = useTable({
+    features: workspaceTableFeatures,
+    data: decisions,
+    columns,
+    getRowId: ({ decision }) => decision.id,
+    state: { rowSelection },
+    onRowSelectionChange,
+  });
+  return table
+    .getRowModel()
+    .rows.map((row, index) => (
+      <PublicLawRow
+        key={row.id}
+        row={row}
+        index={index}
+        rowLabel={String(index + 1)}
+        renderColumns={table.getVisibleLeafColumns()}
+        addPropertyColumn={null}
+        table={table}
+        contentMode={contentMode}
+        expandedCellId={null}
+        hasExpandedTableCell={false}
+        lastSelectedIndex={lastSelectedIndex}
+        measureElement={() => undefined}
+        onToggleExpandedCell={() => undefined}
+        isActive={false}
+        onOpen={onOpen}
+      />
+    ));
+};
+
+const EntityFixture = ({ contentMode, columnLayout }: FixtureProps) => {
+  const [rowSelection, onRowSelectionChange] = useState<RowSelectionState>({});
+  const lastSelectedIndex = useRef<number | null>(null);
+  const table = useTable({
+    features: workspaceTableFeatures,
+    data: entities,
+    columns: (() => {
+      switch (columnLayout) {
+        case "selection-only":
+          return columns.slice(0, 1);
+        case "selection-with-rail":
+          return [
+            ...columns.slice(0, 1),
+            { id: addPropertyColId, cell: () => "Add property" },
+          ];
+        case "select-last":
+          return columns.toReversed();
+        case "with-flags":
+          return [
+            ...columns,
+            {
+              id: "_flags",
+              cell: () => (
+                <CellMetadataFlags
+                  workspaceId="selection-test"
+                  entityId="task-0"
+                  propertyId="property-test"
+                  metadata={undefined}
+                />
+              ),
+            },
+          ];
+        case "with-value":
+          return columns;
+        default:
+          return columnLayout satisfies never;
+      }
+    })(),
+    getRowId: ({ entityId }) => entityId,
+    state: { rowSelection },
+    onRowSelectionChange,
+  });
+  const renderColumns = table
+    .getVisibleLeafColumns()
+    .filter(({ id }) => id !== addPropertyColId);
+  const addPropertyColumn =
+    table.getVisibleLeafColumns().find(({ id }) => id === addPropertyColId) ??
+    null;
+  const columnMetadata = getWorkspaceGridColumnMetadata({
+    renderColumns,
+    addPropertyColumn,
+  });
+  return (
+    <div role="grid" aria-colcount={columnMetadata.columnCount}>
+      {table.getRowModel().rows.map((row, index) => (
+        <DraggableRow
+          key={row.id}
+          row={row}
+          index={index}
+          rowLabel={String(index + 1)}
+          renderColumns={renderColumns}
+          addPropertyColumn={addPropertyColumn}
+          table={table}
+          contentMode={contentMode}
+          expandedCellId={null}
+          hasExpandedTableCell={false}
+          lastSelectedIndex={lastSelectedIndex}
+          measureElement={() => undefined}
+          onToggleExpandedCell={() => undefined}
+          workspaceId="selection-test"
+          activeEntityId={null}
+          activePropertyId={null}
+          activeTaskId={null}
+          editingEntityId={null}
+          onRename={() => undefined}
+          onStartEditing={() => undefined}
+          onStopEditing={() => undefined}
+        />
+      ))}
+    </div>
+  );
+};
+
+const fixtures = new Map<string, React.ComponentType<FixtureProps>>([
+  ["components/public-law-table/public-law-row.tsx", PublicLawFixture],
+  [
+    "routes/_protected.workspaces/$workspaceId/-components/table/entity-row-cells.tsx",
+    EntityFixture,
+  ],
+]);
+
+const renderHost = async ({
+  host,
+  contentMode = "tight",
+  columnLayout = "with-value",
+}: {
+  host: string;
+  contentMode?: TableContentMode;
+  columnLayout?: FixtureProps["columnLayout"];
+}) => {
+  const Fixture = fixtures.get(host);
+  if (!Fixture) {
+    throw new Error(`No selection-column fixture for ${host}`);
+  }
+  let openCount = 0;
+  const initialTabs = useInspectorTabsStore.getState().tabs;
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  client.setQueryData(propertiesOptions("selection-test").queryKey, []);
+  clients.push(client);
+  const root = router.createRootRoute({ component: router.Outlet });
+  const protectedRoute = router.createRoute({
+    getParentRoute: () => root,
+    id: "_protected",
+    beforeLoad: () => ({ user: { activeOrganizationId: "organization" } }),
+    component: () => (
+      <ChatEditorProvider>
+        <div role="grid">
+          <Fixture
+            contentMode={contentMode}
+            columnLayout={columnLayout}
+            onOpen={() => {
+              openCount++;
+            }}
+          />
+        </div>
+      </ChatEditorProvider>
+    ),
+  });
+  const appRouter = router.createRouter({
+    routeTree: root.addChildren([protectedRoute]),
+    history: router.createMemoryHistory({ initialEntries: ["/"] }),
+    isServer: false,
+  });
+  await appRouter.load();
+  const view = render(
+    <IntlProvider locale="en" messages={messages} timeZone="UTC">
+      <QueryClientProvider client={client}>
+        <FormattingProvider locale="en" timeZone="UTC">
+          <AuthenticatedUserProvider
+            user={{
+              activeOrganizationId: "organization",
+              id: "user",
+              email: "test@example.test",
+              name: "Selection tester",
+              image: null,
+              preferredName: null,
+              timezoneId: "UTC",
+              wordEditShortcut: null,
+            }}
+          >
+            <router.RouterProvider router={appRouter} />
+          </AuthenticatedUserProvider>
+        </FormattingProvider>
+      </QueryClientProvider>
+    </IntlProvider>,
+  );
+  await view.findByRole("checkbox", { name: "1" });
+  return {
+    view,
+    assertOpened: () => {
+      expect(
+        openCount +
+          useInspectorTabsStore.getState().tabs.length -
+          initialTabs.length,
+      ).toBe(1);
+    },
+    assertNotOpened: () => {
+      expect(openCount).toBe(0);
+      expect(useInspectorTabsStore.getState().tabs).toEqual(initialTabs);
+    },
+  };
+};
+
+describe("every shared selection-column host", () => {
+  test.each([
+    { columnLayout: "with-value" },
+    { columnLayout: "selection-only" },
+    { columnLayout: "select-last" },
+    { columnLayout: "selection-with-rail" },
+  ] satisfies { columnLayout: FixtureProps["columnLayout"] }[])(
+    "entity actions have their own space outside the selection cell (%s)",
+    async ({ columnLayout }) => {
+      const { view, assertNotOpened } = await renderHost({
+        host: "routes/_protected.workspaces/$workspaceId/-components/table/entity-row-cells.tsx",
+        columnLayout,
+      });
+      const checkbox = view.getByRole("checkbox", { name: "1" });
+      const row = checkbox.closest('[role="row"]');
+      const actions = row?.querySelector('button[aria-label="Actions"]');
+      expect(actions).not.toBeNull();
+      expect(
+        actions?.closest('[role="gridcell"]') ===
+          checkbox.closest('[role="gridcell"]'),
+      ).toBe(false);
+      expect(
+        row?.querySelectorAll('button[aria-label="Actions"]'),
+      ).toHaveLength(1);
+      const actionsCell = actions?.closest('[role="gridcell"]');
+      expect(actionsCell).not.toBeNull();
+      expect(actionsCell?.getAttribute("aria-hidden")).not.toBe("true");
+      expect(actions?.className.split(" ")).toContain(
+        "pointer-coarse:opacity-100!",
+      );
+      expect(actions?.closest("span.sr-only")?.className.split(" ")).toContain(
+        "pointer-coarse:not-sr-only",
+      );
+      const grid = row?.closest('[role="grid"]');
+      const cells = [...(row?.querySelectorAll('[role="gridcell"]') ?? [])];
+      expect(
+        cells.map((cell) => Number(cell.getAttribute("aria-colindex"))),
+      ).toEqual(
+        Array.from(
+          { length: Number(grid?.getAttribute("aria-colcount")) },
+          (_, index) => index + 1,
+        ),
+      );
+      fireEvent.click(checkbox);
+      expect(checkbox.getAttribute("aria-checked")).toBe("true");
+      assertNotOpened();
+    },
+  );
+
+  test.each(TABLE_CONTENT_MODES)(
+    "entity renderer siblings remain direct flex children (%s)",
+    async (contentMode) => {
+      const { view } = await renderHost({
+        host: "routes/_protected.workspaces/$workspaceId/-components/table/entity-row-cells.tsx",
+        contentMode,
+      });
+      const icon = view.container.querySelector(
+        '[data-slot="fixture-cell-icon"]',
+      );
+      const value = view.container.querySelector(
+        '[data-slot="fixture-cell-value"]',
+      );
+      expect(icon?.parentElement).toBe(value?.parentElement);
+      expect(value?.parentElement?.className.split(" ")).toContain("flex");
+      expect(value?.parentElement?.className.split(" ")).toContain("gap-1.5");
+      expect(value?.className.split(" ")).toContain("truncate");
+    },
+  );
+
+  test("cell lock and verification controls remain visible to coarse pointers", async () => {
+    const { view } = await renderHost({
+      host: "routes/_protected.workspaces/$workspaceId/-components/table/entity-row-cells.tsx",
+      columnLayout: "with-flags",
+    });
+    const lock = view
+      .getAllByRole("button", { name: messages.workspaces.table.lock.lock })
+      .at(0);
+    const verified = view
+      .getAllByRole("button", { name: messages.common.verified })
+      .at(0);
+    for (const button of [lock, verified]) {
+      expect(button).toBeDefined();
+      expect(button?.className.split(" ")).toContain(
+        "pointer-coarse:opacity-100",
+      );
+      expect(button?.className.split(" ")).not.toContain(
+        "pointer-coarse:hidden",
+      );
+    }
+  });
+
+  test("the exercised host set equals the imports in product source", () => {
+    expect(selectionHosts.toSorted()).toEqual([...fixtures.keys()].toSorted());
+  });
+  for (const host of selectionHosts) {
+    test(`${host}: number and empty cell clicks select without opening the row`, async () => {
+      const { view, assertNotOpened, assertOpened } = await renderHost({
+        host,
+      });
+      const first = view.getByRole("checkbox", { name: "1" });
+      fireEvent.click(view.getByText("1"));
+      expect(first.getAttribute("aria-checked")).toBe("true");
+      assertNotOpened();
+      fireEvent.click(first);
+      expect(first.getAttribute("aria-checked")).toBe("false");
+      assertNotOpened();
+      const row = first.closest('[role="row"]');
+      if (!row) {
+        throw new Error("selection host did not render a row");
+      }
+      fireEvent.click(row);
+      assertOpened();
+    });
+    for (const contentMode of TABLE_CONTENT_MODES) {
+      test(`${host} (${contentMode}): the number, the checkbox and the row's cells share one first line`, async () => {
+        const { view } = await renderHost({ host, contentMode });
+        const number = view.getByText("1");
+        expect(number.dataset["slot"]).toBe("checkbox-cell-label");
+        const numberClasses = number.className.split(" ");
+        const firstLine = Object.values(ROW_FIRST_LINE).find(({ slot }) =>
+          numberClasses.includes(slot),
+        );
+        if (!firstLine) {
+          throw new Error(
+            `row number has no first-line box: ${number.className}`,
+          );
+        }
+        const checkboxSlot = view
+          .getByRole("checkbox", { name: "1" })
+          .querySelector('[data-slot="checkbox"]')?.parentElement;
+        for (const slot of [number, checkboxSlot]) {
+          const classes = slot?.className.split(" ") ?? [];
+          expect(classes).toContain("top-2");
+          expect(classes).toContain(firstLine.slot);
+          expect(classes).not.toContain("inset-0");
+        }
+        const row = number.closest('[role="row"]');
+        const valueCell = [
+          ...(row?.querySelectorAll('[role="gridcell"]') ?? []),
+        ].find((cell) => cell.textContent.includes("Value"));
+        const content = valueCell?.querySelector(":scope > span");
+        expect(content?.className.split(" ")).toContain(firstLine.content);
+        for (const strut of valueCell?.querySelectorAll(
+          '[data-slot="table-first-line-strut"]',
+        ) ?? []) {
+          expect(strut.className.split(" ")).toContain(firstLine.slot);
+        }
+      });
+    }
+    test(`${host}: Enter toggles once without opening the row, including Shift ranges`, async () => {
+      const { view, assertNotOpened } = await renderHost({ host });
+      const first = view.getByRole("checkbox", { name: "1" });
+      expect(first.tagName).toBe("BUTTON");
+      expect(first.getAttribute("type")).toBe("button");
+      expect(fireEvent.keyDown(first, { key: "Enter" })).toBe(false);
+      expect(first.getAttribute("aria-checked")).toBe("true");
+      fireEvent.keyDown(view.getByRole("checkbox", { name: "4" }), {
+        key: "Enter",
+        shiftKey: true,
+      });
+      expect(view.getAllByRole("checkbox", { checked: true })).toHaveLength(4);
+      fireEvent.keyDown(first, { key: "Enter" });
+      expect(first.getAttribute("aria-checked")).toBe("false");
+      expect(view.getAllByRole("checkbox", { checked: true })).toHaveLength(3);
+      assertNotOpened();
+    });
+    test(`${host}: checkbox clicks toggle once and shift-click selects a range`, async () => {
+      const { view, assertNotOpened } = await renderHost({ host });
+      const first = view.getByRole("checkbox", { name: "1" });
+      const indicator = first.querySelector('[data-slot="checkbox"]');
+      if (!indicator) {
+        throw new Error("selection indicator is missing");
+      }
+      fireEvent.click(indicator);
+      expect(first.getAttribute("aria-checked")).toBe("true");
+      fireEvent.click(view.getByRole("checkbox", { name: "4" }), {
+        shiftKey: true,
+      });
+      expect(view.getAllByRole("checkbox", { checked: true })).toHaveLength(4);
+      assertNotOpened();
+    });
+  }
+});

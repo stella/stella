@@ -11,6 +11,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 
 import { useTable } from "@tanstack/react-table";
 import { describe, expect, test } from "bun:test";
+import { Window } from "happy-dom";
 
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 
@@ -39,6 +40,7 @@ const decisionRows = (count: number): DecisionRowData[] =>
       slug: null,
       decisionDate: null,
       decisionType: null,
+      decisionTypeKind: null,
       headnote: { type: "absent", reason: "not_published" } as const,
       citationCount: 0,
     },
@@ -121,5 +123,27 @@ describe("the table body before it is measured", () => {
     expect(markup).toContain('aria-rowcount="0"');
     expect(markup).not.toContain("data-index=");
     expect(markup).not.toContain('data-slot="skeleton"');
+  });
+});
+
+describe("the grid's structure", () => {
+  test("owns every row through a row group", () => {
+    const markup = renderToStaticMarkup(<Harness rowCount={3} />);
+    const container = new Window().document.createElement("div");
+    // safe-html: React-rendered test markup is parsed only in a detached document.
+    container.innerHTML = markup;
+
+    const grid = container.querySelector('[role="grid"]');
+    expect(grid).not.toBeNull();
+    const childRoles = [...(grid?.children ?? [])].map((child) =>
+      child.getAttribute("role"),
+    );
+    expect(childRoles).toEqual(["rowgroup", "rowgroup"]);
+
+    const rows = [...container.querySelectorAll('[role="row"]')];
+    expect(rows.length).toBeGreaterThan(0);
+    for (const row of rows) {
+      expect(row.parentElement?.getAttribute("role")).toBe("rowgroup");
+    }
   });
 });

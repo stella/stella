@@ -24,6 +24,9 @@ describe("action refusal presentation", () => {
         value: {
           code,
           message: "Internal details",
+          ...(code === ACTION_ADMISSION_CODES.concurrencyBusy
+            ? { retryAfterMs: 1250 }
+            : {}),
           contactUrl: "https://example.test/help",
         },
       };
@@ -37,6 +40,9 @@ describe("action refusal presentation", () => {
         hasContact ? "https://example.test/help" : undefined,
       );
       expect(outcome?.retryable).toBe(refusal.retryable);
+      expect(outcome?.retryAfterMs).toBe(
+        code === ACTION_ADMISSION_CODES.concurrencyBusy ? 1250 : undefined,
+      );
       expect(shouldRetryAPIRequest(0, error)).toBe(refusal.retryable);
       expect(shouldRetryAPIRequest(3, error)).toBe(false);
       expect(userErrorMessage(response, "Generic failure")).toBe(error.message);

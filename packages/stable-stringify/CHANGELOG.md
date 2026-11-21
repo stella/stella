@@ -1,5 +1,11 @@
 # @stll/stable-stringify
 
+## 0.2.2
+
+### Patch Changes
+
+- [#5529](https://github.com/stella/stella/pull/5529) [`281be96`](https://github.com/stella/stella/commit/281be96c485b45905f5b4647a7aa9d5fad5adab9) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Serialize repeated non-circular references in full; only true cycles use the cycle marker.
+
 ## 0.2.1
 
 ### Patch Changes

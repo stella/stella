@@ -1,4 +1,6 @@
-import { defineConfig, devices } from "@playwright/test";
+import { defineConfig } from "@playwright/test";
+
+import { devices } from "@stll/playwright-tools/devices";
 
 const BASE_URL = "http://127.0.0.1:4177";
 const IS_CI = process.env["CI"] !== undefined;
@@ -8,7 +10,20 @@ export default defineConfig({
   testMatch: "anonymized-export.spec.ts",
   workers: 1,
   retries: 0,
-  reporter: IS_CI ? [["github"], ["list"]] : [["list"]],
+  reporter: IS_CI
+    ? [
+        ["github"],
+        ["list"],
+        [
+          "json",
+          {
+            outputFile:
+              process.env["PLAYWRIGHT_JSON_OUTPUT_FILE"] ??
+              ".cache/playwright-timings.json",
+          },
+        ],
+      ]
+    : [["list"]],
   timeout: 30_000,
   use: {
     baseURL: BASE_URL,

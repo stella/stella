@@ -4,6 +4,7 @@ import {
   composeCourtListenerText,
   type CourtListenerTextOutcome,
 } from "@/api/handlers/case-law/ingestion/parsers/courtlistener/compose";
+import { COURTLISTENER_TEXT_USABILITY } from "@/api/handlers/case-law/ingestion/parsers/courtlistener/usability";
 import {
   absentTextField,
   checkedDecisionMetadata,
@@ -12,8 +13,8 @@ import {
 } from "@/api/lib/case-law/decision-text";
 import { IMPORT_SOURCE_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import {
-  toPlainTextIngestionResult,
   STORED_RAW_REPARSE_REJECTION,
+  toPlainTextIngestionResult,
 } from "@/api/lib/legal-search/ingestion-types";
 import type {
   IngestionResult,
@@ -21,7 +22,6 @@ import type {
   StoredRawReparseOutcome,
 } from "@/api/lib/legal-search/ingestion-types";
 
-import { classifyCourtListenerDecision } from "./order-classification";
 import { planCourtListenerRecord } from "./plan";
 import { decodeCourtListenerRaw } from "./raw";
 import { admitCourtListenerRecord } from "./record";
@@ -33,7 +33,7 @@ import {
 import { hasVisibleText } from "./snapshot-columns";
 
 export const COURTLISTENER_IMPORT_KEY = IMPORT_SOURCE_KEYS.COURTLISTENER;
-export const COURTLISTENER_PARSER_VERSION = 5;
+export const COURTLISTENER_PARSER_VERSION = 22;
 
 const textField = (value: string) =>
   hasVisibleText(value)
@@ -82,17 +82,43 @@ export const mapCourtListenerRecord = (
                 ? `scope defect: ${composed.defect}`
                 : composed.status,
           },
+          ...composed.opinions.flatMap(({ opinionId, attempts }) =>
+            attempts.flatMap(({ format, reason }) => {
+              switch (reason) {
+                case COURTLISTENER_TEXT_USABILITY.SOURCE_PLACEHOLDER:
+                case COURTLISTENER_TEXT_USABILITY.NO_RULING_TEXT:
+                case COURTLISTENER_TEXT_USABILITY.UNDECODABLE:
+                  return [
+                    { path: `opinions.${opinionId}.${format}`, detail: reason },
+                  ];
+                case "blank":
+                case "declared-dtd":
+                case "malformed-xml":
+                case "missing-opinion":
+                case "no-visible-text":
+                case "content-loss":
+                case "markup-residue":
+                case "text-not-conserved":
+                case "unclassified-page-chrome":
+                  return [];
+                default:
+                  reason satisfies never;
+                  return panic(
+                    "Unhandled CourtListener text candidate rejection",
+                  );
+              }
+            }),
+          ),
         ],
       }),
     );
   }
   const plan = planned.value;
-  const classification = classifyCourtListenerDecision({
-    opinionTypes: plan.opinions.map(({ type }) => type),
-    scdbPresent: plan.scdbPresent,
-    principal: composed.principal,
-  });
-  const { decisionType } = classification;
+  const decisionType = {
+    status: "not-stated",
+    asPublished: null,
+    reason: "source-does-not-state-decision-type",
+  } as const;
   return toPlainTextIngestionResult({
     sourceDocumentId: plan.sourceDocumentId,
     country: plan.country,
@@ -103,7 +129,6 @@ export const mapCourtListenerRecord = (
     caseNumberType: plan.caseNumberType,
     identifiers: plan.identifiers,
     decisionDate: plan.decisionDate,
-    decisionType,
     sourceUrl: plan.sourceUrl,
     documentUrl: plan.documentUrl,
     judges: plan.judges,
@@ -115,8 +140,16 @@ export const mapCourtListenerRecord = (
     },
     metadata: checkedDecisionMetadata({
       ...plan.metadata,
-      classification,
+      decisionType,
+      structure: {
+        principalLength: composed.principal.length,
+        bodyParagraphCount: composed.principal.bodyParagraphCount,
+        inBodyCitationCount: composed.principal.inBodyCitationCount,
+        opinionTypes: plan.opinions.map(({ type }) => type),
+        scdbPresent: plan.scdbPresent,
+      },
       textSelection: composed.opinions,
+      sourceDefects: composed.sourceDefects,
       diagnostics: plan.diagnostics,
     }),
     fulltext: composed.blocks.map(({ plainText }) => plainText).join("\n\n"),
@@ -133,7 +166,7 @@ export const mapCourtListenerRecord = (
         ecli: null,
         court: plan.court,
         decisionDate: plan.decisionDate ?? null,
-        decisionType,
+        decisionType: null,
         keywords: [],
         statutes: [],
       },

@@ -5,9 +5,9 @@ import type { RegistryRequestObservation } from "@stll/business-registries/share
 import { LegalBrowseFacetsError } from "@/api/lib/legal-search/browse-facets";
 import { getCorpusIndexClient } from "@/api/lib/legal-search/corpus-index-client";
 import {
-  type CorpusIndexGroupNotReadyError,
   readServingCorpusIndexTargetTx,
   type ServingCorpusIndexTarget,
+  type ServingCorpusIndexTargetError,
 } from "@/api/lib/legal-search/corpus-index-group-enrollment-store";
 import { corpusIndexReadContract } from "@/api/lib/legal-search/corpus-index-read-contract";
 import {
@@ -106,7 +106,10 @@ const browseFacetSpecs = (yearFacetField: string) =>
     country: { field: "jurisdiction", order: { _count: "desc" } },
     court: { field: "court", order: { _count: "desc" } },
     year: { field: yearFacetField, order: { _key: "desc" } },
-  }) as const satisfies Record<keyof LegalBrowseFacets, BrowseFacetSpec>;
+  }) as const satisfies Record<
+    Exclude<keyof LegalBrowseFacets, "countsFreshness">,
+    BrowseFacetSpec
+  >;
 
 export const browseFacetNames = Object.keys(browseFacetSpecs("year"));
 
@@ -183,14 +186,15 @@ const parseTermsBuckets = (
 type CorpusIndexBrowseFacetsDependencies = {
   /**
    * The serving generation and the indexes a read of it reaches, refusing a
-   * scoped read of an unready group (`readServingCorpusIndexTargetTx`).
+   * family with no serving generation or a scoped read of an unready group
+   * (`readServingCorpusIndexTargetTx`).
    */
   readServingTarget: (
     jurisdiction: string | undefined,
   ) => Promise<
     Result<
       Pick<ServingCorpusIndexTarget, "serving" | "route">,
-      CorpusIndexGroupNotReadyError
+      ServingCorpusIndexTargetError
     >
   >;
 };
@@ -235,6 +239,7 @@ export const corpusIndexBrowseFacets = async (
   const aggregated = await getCorpusIndexClient(serving.cluster).aggregate({
     observer,
     indexId,
+    filter: route.aggregationFilter,
     query: browseFacetsQuery({
       excludedSourceIds: query.excludedSourceIds,
       jurisdictionClause,

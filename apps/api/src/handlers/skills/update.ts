@@ -1,15 +1,17 @@
 import { panic, Result } from "better-result";
 import { and, eq } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { abortableTx } from "@/api/db/safe-db";
 import {
   AGENT_SKILL_COMMAND_PATTERN,
-  RESERVED_AGENT_SKILL_COMMANDS,
+  type AgentSkillInvocation,
   agentSkills,
+  RESERVED_AGENT_SKILL_COMMANDS,
 } from "@/api/db/schema";
 import { skillRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { requireSkillManager } from "@/api/handlers/skills/managed-skill";
+import { tSkillInvocation } from "@/api/handlers/skills/skill-invocation-schema";
 import { uniqueSlug } from "@/api/handlers/skills/slug";
 import type { SkillSlug } from "@/api/handlers/skills/slug";
 import { auditedSkillBody } from "@/api/lib/agent-skills/audited-body";
@@ -19,46 +21,59 @@ import { requireEditableSkillOrigin } from "@/api/lib/agent-skills/origin";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { displayNameSchema, resourceIdSchema } from "@/api/lib/custom-schema";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { PG_ERROR } from "@/api/lib/pg-error";
 import { includes } from "@/api/lib/type-guards";
 
-const updateSkillParamsSchema = t.Object({
-  skillId: tSafeId("agentSkill"),
+const updateSkillParamsSchema = v.object({
+  skillId: resourceIdSchema("agentSkill"),
 });
 
-const updateSkillBodySchema = t.Object({
-  enabled: t.Optional(t.Boolean()),
-  name: t.Optional(t.String({ minLength: 1, maxLength: 64 })),
-  description: t.Optional(
-    t.String({ minLength: 1, maxLength: LIMITS.agentSkillDescriptionMaxChars }),
+const updateSkillBodySchema = v.object({
+  enabled: v.optional(v.boolean()),
+  invocation: v.optional(tSkillInvocation()),
+  name: v.optional(displayNameSchema({ maxLength: 64 })),
+  description: v.optional(
+    v.pipe(
+      v.string(),
+      v.minLength(1),
+      v.maxLength(LIMITS.agentSkillDescriptionMaxChars),
+    ),
   ),
-  body: t.Optional(
-    t.String({ minLength: 1, maxLength: LIMITS.agentSkillBodyMaxChars }),
+  body: v.optional(
+    v.pipe(
+      v.string(),
+      v.minLength(1),
+      v.maxLength(LIMITS.agentSkillBodyMaxChars),
+    ),
   ),
-  version: t.Optional(
-    t.Union([
-      t.String({ maxLength: LIMITS.agentSkillVersionMaxChars }),
-      t.Null(),
+  version: v.optional(
+    v.union([
+      v.pipe(v.string(), v.maxLength(LIMITS.agentSkillVersionMaxChars)),
+      v.null(),
     ]),
   ),
-  // Optional slash-command handle. Pass `null` to clear an existing
-  // command; pass a string to set/replace it. Omitting the field
-  // leaves it untouched.
-  command: t.Optional(
-    t.Union([t.String({ minLength: 1, maxLength: 50 }), t.Null()]),
+  command: v.optional(
+    v.union([v.pipe(v.string(), v.minLength(1), v.maxLength(50)), v.null()]),
   ),
 });
 
 const config = {
+  contract: "replace",
+  precondition: {
+    type: "deferred",
+    baselineId: "apps/api/src/handlers/skills/update.ts",
+  },
   description:
-    "Change an agent skill: enable or disable it, or edit its name, " +
-    "description, instruction body, version, or slash command. Pass command " +
-    "as null to clear it; at least one field is required. Enabling and " +
-    "disabling works on any skill you may manage, but editing the content of " +
-    "a bundled skill is refused. A rename derives a new unique slug from the " +
+    "Change an agent skill: enable or disable it, set its invocation (`auto`: " +
+    "the assistant may use it on its own; `manual`: only when the user " +
+    "invokes it), or edit its name, description, instruction body, version, " +
+    "or slash command. Pass command as null to clear it; at least one field " +
+    "is required. Enabling, disabling and the invocation work on any skill " +
+    "you may manage, but editing the content of a bundled skill is refused. " +
+    "A rename derives a new unique slug from the " +
     "name; a command already taken in the organization is a 409.",
   permissions: { agentSkill: ["update"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
@@ -77,6 +92,7 @@ type SkillUpdateFields = {
   contentHash?: string;
   description?: string;
   enabled?: boolean;
+  invocation?: AgentSkillInvocation;
   name?: string;
   slug?: SkillSlug;
   version?: string | null;
@@ -89,6 +105,7 @@ type SkillUpdateChanges = {
   body?: SkillUpdateChange<AuditedSkillBody>;
   description?: SkillUpdateChange<string>;
   enabled?: SkillUpdateChange<boolean>;
+  invocation?: SkillUpdateChange<AgentSkillInvocation>;
   name?: SkillUpdateChange<string>;
   slug?: SkillUpdateChange<string>;
   version?: SkillUpdateChange<string | null>;
@@ -99,6 +116,7 @@ type SkillUpdateExisting = {
   body: string;
   description: string;
   enabled: boolean;
+  invocation: AgentSkillInvocation;
   name: string;
   slug: string;
   version: string | null;
@@ -107,6 +125,7 @@ type SkillUpdateExisting = {
 
 type SkillUpdateBody = {
   enabled?: boolean | undefined;
+  invocation?: AgentSkillInvocation | undefined;
   name?: string | undefined;
   description?: string | undefined;
   body?: string | undefined;
@@ -155,6 +174,13 @@ const buildSkillUpdateDiff = (
   if (body.enabled !== undefined && body.enabled !== existing.enabled) {
     updates.enabled = body.enabled;
     changes.enabled = { old: existing.enabled, new: body.enabled };
+  }
+  if (
+    body.invocation !== undefined &&
+    body.invocation !== existing.invocation
+  ) {
+    updates.invocation = body.invocation;
+    changes.invocation = { old: existing.invocation, new: body.invocation };
   }
   if (body.name !== undefined && body.name !== existing.name) {
     const slug = uniqueSlug(body.name);
@@ -209,7 +235,11 @@ const updateSkill = createSafeRootHandler(
       body.body !== undefined ||
       body.version !== undefined ||
       body.command !== undefined;
-    if (body.enabled === undefined && !hasMetadataEdit) {
+    if (
+      body.enabled === undefined &&
+      body.invocation === undefined &&
+      !hasMetadataEdit
+    ) {
       return Result.err(
         new HandlerError({
           status: 400,
@@ -232,7 +262,10 @@ const updateSkill = createSafeRootHandler(
             id: agentSkills.id,
             scope: agentSkills.scope,
             userId: agentSkills.userId,
+            boundClientId: agentSkills.boundClientId,
+            boundWorkspaceId: agentSkills.boundWorkspaceId,
             enabled: agentSkills.enabled,
+            invocation: agentSkills.invocation,
             slug: agentSkills.slug,
             name: agentSkills.name,
             description: agentSkills.description,
@@ -255,7 +288,12 @@ const updateSkill = createSafeRootHandler(
           // The row lock follows the write policy, so a skill the caller can
           // read but not manage is missing here; refuse it as the handler would.
           const visibleRows = await tx
-            .select({ scope: agentSkills.scope, userId: agentSkills.userId })
+            .select({
+              boundClientId: agentSkills.boundClientId,
+              boundWorkspaceId: agentSkills.boundWorkspaceId,
+              scope: agentSkills.scope,
+              userId: agentSkills.userId,
+            })
             .from(agentSkills)
             .where(
               and(

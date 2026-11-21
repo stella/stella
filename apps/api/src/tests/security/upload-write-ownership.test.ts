@@ -1,6 +1,15 @@
 import { describe, expect, test } from "bun:test";
 import path from "node:path";
-import ts from "typescript";
+
+import {
+  type ModuleExportName,
+  type Node,
+  parseSource,
+  walk,
+} from "@stll/scripts/src/syntax-tree";
+
+const exportName = (name: ModuleExportName) =>
+  name.type === "Identifier" ? name.name : name.value;
 
 const apiRoot = path.resolve(import.meta.dir, "../../..");
 const guardedSymbols = new Map([
@@ -11,7 +20,7 @@ const guardedSymbols = new Map([
 // Types require ownership at every direct and forwarded call. Keep one import
 // spelling so dynamic loading and relative aliases cannot conceal the owner.
 const importViolations = (file: string, source: string) => {
-  const ast = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true);
+  const { program } = parseSource(file, source);
   const violations: string[] = [];
   const moduleOwner = (specifier: string) => {
     const resolved = specifier.startsWith(".")
@@ -26,64 +35,62 @@ const importViolations = (file: string, source: string) => {
     }
     return undefined;
   };
-  const visit = (node: ts.Node) => {
-    if (
-      ts.isCallExpression(node) &&
-      (node.expression.kind === ts.SyntaxKind.ImportKeyword ||
-        (ts.isIdentifier(node.expression) &&
-          node.expression.text === "require"))
+  walk(program, (node) => {
+    let loaded: Node | undefined;
+    if (node.type === "ImportExpression") {
+      loaded = node.source;
+    } else if (
+      node.type === "CallExpression" &&
+      node.callee.type === "Identifier" &&
+      node.callee.name === "require"
     ) {
-      const specifier = node.arguments.at(0);
-      if (specifier && ts.isStringLiteral(specifier)) {
-        const owner = moduleOwner(specifier.text);
-        if (owner) {
-          for (const symbol of owner.symbols) {
-            if (!source.includes(symbol)) {
-              continue;
-            }
-            violations.push(`${file}:${symbol}: dynamic import`);
+      loaded = node.arguments.at(0);
+    }
+    if (loaded?.type === "Literal" && typeof loaded.value === "string") {
+      const owner = moduleOwner(loaded.value);
+      if (owner) {
+        for (const symbol of owner.symbols) {
+          if (!source.includes(symbol)) {
+            continue;
           }
+          violations.push(`${file}:${symbol}: dynamic import`);
         }
       }
     }
     if (
-      (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) &&
-      node.moduleSpecifier &&
-      ts.isStringLiteral(node.moduleSpecifier)
+      node.type === "ImportDeclaration" ||
+      node.type === "ExportAllDeclaration" ||
+      (node.type === "ExportNamedDeclaration" && node.source !== null)
     ) {
-      const owner = moduleOwner(node.moduleSpecifier.text);
+      const specifier = node.source?.value ?? "";
+      const owner = moduleOwner(specifier);
       if (owner) {
-        const bindings = ts.isImportDeclaration(node)
-          ? node.importClause?.namedBindings
-          : node.exportClause;
-        const importedSymbols = (() => {
-          if (bindings && ts.isNamedImports(bindings)) {
-            return bindings.elements.map(
-              (item) => item.propertyName?.text ?? item.name.text,
-            );
-          }
-          if (bindings && ts.isNamedExports(bindings)) {
-            return bindings.elements.map(
-              (item) => item.propertyName?.text ?? item.name.text,
-            );
-          }
-          return [...owner.symbols];
-        })();
+        // Named bindings list their symbols; a default, namespace or
+        // side-effect import and `export *` reach every one.
+        let importedSymbols = [...owner.symbols];
+        if (node.type === "ImportDeclaration") {
+          const named = node.specifiers.flatMap((item) =>
+            item.type === "ImportSpecifier" ? [exportName(item.imported)] : [],
+          );
+          importedSymbols = named.length > 0 ? named : importedSymbols;
+        } else if (node.type === "ExportNamedDeclaration") {
+          importedSymbols = node.specifiers.map((item) =>
+            exportName(item.local),
+          );
+        }
         for (const symbol of importedSymbols) {
           if (!owner.symbols.has(symbol)) {
             continue;
           }
-          if (ts.isExportDeclaration(node)) {
+          if (node.type !== "ImportDeclaration") {
             violations.push(`${file}:${symbol}: re-export`);
-          } else if (node.moduleSpecifier.text !== owner.canonical) {
+          } else if (specifier !== owner.canonical) {
             violations.push(`${file}:${symbol}: relative import`);
           }
         }
       }
     }
-    ts.forEachChild(node, visit);
-  };
-  visit(ast);
+  });
   return violations;
 };
 

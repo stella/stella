@@ -1,11 +1,17 @@
 import { Result } from "better-result";
 import { and, eq, isNull, or } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
-import { mcpConnectors, mcpUserConnections } from "@/api/db/schema";
+import {
+  MCP_RESPONSE_DISPOSITION,
+  mcpConnectors,
+  mcpUserConnections,
+} from "@/api/db/schema";
 import { mcpConnectorRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { refreshCachedMcpToolsForConnection } from "@/api/lib/mcp-upstream/connections";
 import { encryptMcpSecret } from "@/api/lib/mcp-upstream/crypto";
@@ -14,14 +20,15 @@ import {
   discoverOAuthMetadata,
 } from "@/api/lib/mcp-upstream/oauth";
 
-const requestBody = t.Object({
-  connectorSlug: t.String({ minLength: 1, maxLength: 80 }),
-  token: t.String({ minLength: 1, maxLength: 4096 }),
+const requestBody = v.object({
+  connectorSlug: v.pipe(v.string(), v.minLength(1), v.maxLength(80)),
+  token: v.pipe(v.string(), v.minLength(1), v.maxLength(4096)),
 });
 
 const config = {
+  contract: "patch",
   permissions: { integration: ["create"] },
-  accountAccess: ACCOUNT_ACCESS.standard,
+  accountAccess: ACCOUNT_ACCESS.accountControl,
   realtime: mcpConnectorRealtimeUpdates,
   mcp: { type: "internal", reason: "mcp_transport" },
   body: requestBody,
@@ -29,7 +36,7 @@ const config = {
 
 const createMcpConnection = createSafeRootHandler(
   config,
-  async function* ({ body: input, safeDb, session, user }) {
+  async function* ({ body: input, recordAuditEvent, safeDb, session, user }) {
     const rows = yield* Result.await(
       safeDb((tx) =>
         tx
@@ -75,10 +82,8 @@ const createMcpConnection = createSafeRootHandler(
     });
 
     const saved = yield* Result.await(
-      // oxlint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
       safeDb(async (tx) => {
-        // audit: skip — per-user MCP connection bearer-token registration; the connector itself is SOC 2-audited at create-connector / delete-connector.
-        return await tx
+        const upserted = await tx
           .insert(mcpUserConnections)
           .values({
             organizationId: session.activeOrganizationId,
@@ -87,6 +92,8 @@ const createMcpConnection = createSafeRootHandler(
             staticTokenEncrypted: encrypted.ciphertext,
             staticTokenIv: encrypted.iv,
             status: "connected",
+            responseDisposition: MCP_RESPONSE_DISPOSITION.normal,
+            responseTargetUrl: null,
             enabled: true,
             tokenType: "Bearer",
           })
@@ -110,6 +117,8 @@ const createMcpConnection = createSafeRootHandler(
               cachedTools: null,
               cachedToolsRefreshedAt: null,
               status: "connected",
+              responseDisposition: MCP_RESPONSE_DISPOSITION.normal,
+              responseTargetUrl: null,
               enabled: true,
               tokenType: "Bearer",
               updatedAt: new Date(),
@@ -119,6 +128,21 @@ const createMcpConnection = createSafeRootHandler(
             id: mcpUserConnections.id,
             status: mcpUserConnections.status,
           });
+        const row = upserted.at(0);
+        if (row) {
+          await recordAuditEvent(tx, {
+            action: AUDIT_ACTION.CREATE,
+            resourceType: AUDIT_RESOURCE_TYPE.MCP_CONNECTION,
+            resourceId: row.id,
+            workspaceId: null,
+            metadata: {
+              connectorId: connector.id,
+              connectorSlug: input.connectorSlug,
+              credential: "static_token",
+            },
+          });
+        }
+        return upserted;
       }),
     );
 
@@ -135,6 +159,7 @@ const createMcpConnection = createSafeRootHandler(
     await refreshCachedMcpToolsForConnection({
       connectionId: connection.id,
       organizationId: session.activeOrganizationId,
+      permit: grantThirdPartyOutboundPermit(),
       safeDb,
       userId: user.id,
     });
@@ -173,7 +198,10 @@ const assertStaticTokenAccepted = async ({
     return staticTokenRejected();
   }
 
-  const metadata = await discoverOAuthMetadata(url);
+  const metadata = await discoverOAuthMetadata({
+    rawMcpUrl: url,
+    permit: grantThirdPartyOutboundPermit(),
+  });
   if (Result.isError(metadata)) {
     return staticTokenRejected();
   }

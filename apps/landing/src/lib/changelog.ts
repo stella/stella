@@ -1,8 +1,10 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
+import { slugify } from "@stll/text-normalize";
+
 import releaseDates from "../data/changelog-release-dates.json";
-import { getReleaseKind, groupMaintenanceReleases } from "./changelog-release";
+import { groupMaintenanceReleases } from "./changelog-release";
 
 export type ChangelogRelease = {
   description: string;
@@ -18,20 +20,25 @@ export type ChangelogRelease = {
 // possibly absent (a new release lands before its date entry is committed).
 // A `null` entry records a stable tag whose release was built but never
 // promoted to production: its notes file exists, and nothing here lists it.
+// Computed filesystem reads retain these repository Markdown inputs.
+const CI_MARKDOWN_READER_INPUTS_CHANGELOG = ["docs/changelog/*.md"] as const;
+
 const RELEASE_DATES: Partial<Record<string, string | null>> = releaseDates;
 
 const isUnpromoted = (tagName: string) => RELEASE_DATES[tagName] === null;
 
-const CHANGELOG_DIR = resolveRepoPath("docs", "changelog");
+const CHANGELOG_DIR = resolveRepoPath(
+  path.dirname(CI_MARKDOWN_READER_INPUTS_CHANGELOG[0]),
+);
 const STABLE_CHANGELOG_FILE_PATTERN = /^v\d+\.\d+\.\d+\.md$/u;
 
-export const releaseAnchorId = (tagName: string) =>
-  tagName
-    .toLowerCase()
-    .replaceAll(".", "-")
-    .replace(/[^a-z0-9-]/gu, "-")
-    .replace(/-+/gu, "-")
-    .replace(/^-|-$/gu, "");
+const releaseAnchorId = (tagName: string) =>
+  slugify(tagName, {
+    charset: "ascii",
+    fallback: "",
+    maxLength: Number.MAX_SAFE_INTEGER,
+    separator: "-",
+  });
 
 const listReleaseTags = (): string[] => {
   if (!existsSync(CHANGELOG_DIR)) {
@@ -92,14 +99,6 @@ export const getChangelogReleaseEntries = () =>
     getChangelogReleases(),
     (release) => release.heading,
   );
-
-export const getLatestFeatureRelease = (): ChangelogRelease | undefined => {
-  const tagName = listReleaseTags().find(
-    (tag) => getReleaseKind(tag) !== "patch",
-  );
-
-  return tagName ? readRelease(tagName) : undefined;
-};
 
 const findHeading = (markdown: string, level: 1 | 2) => {
   const marker = "#".repeat(level);

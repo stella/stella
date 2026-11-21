@@ -2,8 +2,8 @@ import { panic } from "better-result";
 
 import { chatMessageFromPersisted } from "@/api/handlers/chat/chat-message-parts";
 import type {
-  ChatTurnOutcome,
   ChatMessageRole,
+  ChatTurnOutcome,
   PersistableChatMessage,
   PersistedChatMessageContent,
 } from "@/api/handlers/chat/types";
@@ -165,6 +165,7 @@ export const planAssistantFinishPersistence = ({
     case "completed":
     case "failed":
     case "interrupted":
+    case "paused":
       return existingIds.has(message.id)
         ? { type: "update", messageId: message.id, message }
         : { type: "insert", message };

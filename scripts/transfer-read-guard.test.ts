@@ -1,5 +1,7 @@
 import { expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
 
+import type { BoundedMetadataTransferPolicy } from "../apps/api/src/lib/safe-outbound-fetch";
 import { addedEntries } from "./ledger-membership.ts";
 import {
   compareTransferBaseline,
@@ -9,6 +11,48 @@ import {
 } from "./transfer-read-guard.ts";
 
 const file = "apps/api/src/handlers/export.ts";
+
+test("SQL predicate subqueries stay server-side while ordinary capped reads are checked", () => {
+  for (const predicate of ["inArray", "notInArray", "exists", "notExists"]) {
+    const argumentsSource =
+      predicate === "inArray" || predicate === "notInArray"
+        ? "table.id, db.select().from(table).orderBy(table.id).limit(CAP)"
+        : "db.select().from(table).orderBy(table.id).limit(CAP)";
+    for (const localName of [predicate, "predicate"]) {
+      const body = `${localName}(${argumentsSource})`;
+      const source = `import { ${predicate} as ${localName} } from "drizzle-orm";
+        const remove = () => db.delete(table).where(${body});`;
+      expect(findTransferReads(file, source)).toEqual([]);
+      for (const declaration of [localName, `{ ${localName} }`]) {
+        expect(
+          findTransferReads(
+            file,
+            source.replace(
+              "const remove = ()",
+              () => `const remove = (${declaration})`,
+            ),
+          ).map(({ kind }) => kind),
+        ).toEqual(["constant-limit"]);
+      }
+      expect(
+        findTransferReads(
+          file,
+          source.replace('"drizzle-orm"', '"./local"'),
+        ).map(({ kind }) => kind),
+      ).toEqual(["constant-limit"]);
+      expect(
+        findTransferReads(
+          file,
+          `import { ${predicate} as ${localName} } from "drizzle-orm";
+            const rows = async () => {
+              const items = await db.select().from(table).orderBy(table.id).limit(CAP);
+              return ${localName}(items);
+            };`,
+        ).map(({ kind }) => kind),
+      ).toEqual(["constant-limit"]);
+    }
+  }
+});
 
 test("numeric timeout streaming and unchecked export fixtures are rejected", () => {
   const streaming = findTransferReads(
@@ -39,15 +83,44 @@ test("numeric timeout streaming and unchecked export fixtures are rejected", () 
   ).toHaveLength(3);
 });
 
-test("explicit idle policy and bounded owner fixtures pass", () => {
+test("the owned bounded metadata contract replaces a legacy numeric body deadline", () => {
+  const transfer = {
+    type: "bounded-metadata",
+    totalTimeoutMs: 10_000,
+  } as const satisfies BoundedMetadataTransferPolicy;
+  const policy = `transfer: ${JSON.stringify(transfer)}`;
+  const source = `
+    import { safeOutboundFetchBytes } from "@/api/lib/auth/authorized-outbound-fetch";
+    export const fetchMetadata = async () => {
+      const result = await safeOutboundFetchBytes({ url, permit, ${policy} });
+      if (result.isErr()) return result;
+      return JSON.parse(new TextDecoder().decode(result.value.body));
+    };
+  `;
+  expect(findTransferReads(file, source)).toEqual([]);
+  expect(
+    findTransferReads(
+      file,
+      source.replace(policy, "maxBytes: 65_536, timeoutMs: 10_000"),
+    )
+      .map(({ kind }) => kind)
+      .toSorted(),
+  ).toEqual(["numeric-timeout", "total-timeout-body"]);
+});
+
+test("explicit transfer policies and bounded owner fixtures pass", () => {
   expect(
     findTransferReads(
       file,
       `
     export const download = async () => {
-      const response = await fetchWithTimeout(url, { timeout: { type: "idle", ms: 30_000 } });
-      return new Response(response.body);
+      const response = await fetchWithTimeout(url, { timeout: { type: "headers", ms: 30_000 } });
+      return readBodyWithIdleDeadline(response, { idleMs: 30_000 });
     };
+    export const request = () => fetchWithTimeout(url, {
+      timeout: { type: "total", ms: 30_000 },
+      timeoutMs: 30_000,
+    });
     export const exportRows = async () => {
       const result = await readBounded(query, LIMITS.exportRowLimit);
       return result.type === "complete" ? makeCsv(result.rows) : rejectOverflow();
@@ -61,6 +134,80 @@ test("explicit idle policy and bounded owner fixtures pass", () => {
       `
     export const readBounded = async (query, CAP) => query.limit(CAP + 1);
   `,
+    ),
+  ).toEqual([]);
+});
+
+test("headers-only fetches require an idle-bounded body reader", () => {
+  for (const consume of [
+    "response.text()",
+    "response.json()",
+    "response.arrayBuffer()",
+    "response.blob()",
+    "new Response(response.body)",
+    "response.body.getReader()",
+    "(async () => { for await (const chunk of response.body) sink(chunk); })()",
+  ]) {
+    expect(
+      findTransferReads(
+        file,
+        `import { fetchWithTimeout } from "@stll/fetch";
+        const download = async () => {
+          const response = await fetchWithTimeout(url, {
+            timeout: { type: "headers", ms: 100 },
+          });
+          return ${consume};
+        };`,
+      ).map(({ kind }) => kind),
+    ).toEqual(["headers-timeout-unbounded-body"]);
+  }
+});
+
+test("headers-only factories are checked in their consuming function", () => {
+  expect(
+    findTransferReads(
+      file,
+      `import { createFetchWithTimeout } from "@stll/fetch";
+      const download = async () => {
+        const request = createFetchWithTimeout({
+          timeout: { type: "headers", ms: 100 },
+        });
+        const response = await request(url);
+        return response.text();
+      };`,
+    ).map(({ kind }) => kind),
+  ).toEqual(["headers-timeout-unbounded-body"]);
+});
+
+test("idle-bounded readers and header-only uses without body reads pass", () => {
+  for (const reader of [
+    "readBodyWithIdleDeadline",
+    "readBodyTextWithIdleDeadline",
+    "readBodyJsonWithIdleDeadline",
+    "iterateBodyWithIdleDeadline",
+  ]) {
+    expect(
+      findTransferReads(
+        file,
+        `import { fetchWithTimeout, ${reader} } from "@stll/fetch";
+        const download = async () => {
+          const response = await fetchWithTimeout(url, {
+            timeout: { type: "headers", ms: 100 },
+          });
+          return ${reader}(response, { idleMs: 100 });
+        };`,
+      ),
+    ).toEqual([]);
+  }
+  expect(
+    findTransferReads(
+      file,
+      `const inspect = async () => {
+        const response = await fetchWithTimeout(url, {
+          timeout: { type: "headers", ms: 100 },
+        });
+        return response.status;
+      };`,
     ),
   ).toEqual([]);
 });
@@ -101,6 +248,31 @@ test("timeouts and reads in separate functions do not cooccur", () => {
   `,
     ),
   ).toEqual([]);
+});
+
+test("default parameter functions keep timeout ownership separate from the caller body", () => {
+  for (const parameter of [
+    "deadlineSignal = (durationMs) => AbortSignal.timeout(durationMs)",
+    "{ deadlineSignal = (durationMs) => AbortSignal.timeout(durationMs) }",
+    "[deadlineSignal = (durationMs) => AbortSignal.timeout(durationMs)]",
+    "{ deadlineSignal = function (durationMs) { return AbortSignal.timeout(durationMs); } }",
+  ]) {
+    const source = `const prove = async (${parameter}) => {
+      const response = await fetch(url);
+      return response.json();
+    };`;
+    expect(findTransferReads(file, source)).toEqual([]);
+    const outerRead = findTransferReads(
+      file,
+      source.replace(
+        "fetch(url)",
+        "fetch(url, { signal: AbortSignal.timeout(100) })",
+      ),
+    );
+    expect(
+      outerRead.map(({ kind, function: name }) => ({ kind, name })),
+    ).toEqual([{ kind: "total-timeout-body", name: "module/prove" }]);
+  }
 });
 
 test("nested function identities survive whitespace and source movement", () => {
@@ -199,13 +371,16 @@ test("lowercase constant bindings need budgets while shadowed page inputs do not
   ).toEqual(["constant-limit"]);
 });
 
-test("literal, named, arithmetic and computed constant limits need a contract", () => {
+test("literal, named, arithmetic, fallback and computed constant limits need a contract", () => {
   for (const limit of [
     "10_000",
     "EXPORT_CAP",
     "LIMITS.exportRowLimit",
     "LIMITS.exportRowLimit + 1",
     'LIMITS["exportRowLimit"]',
+    "PRIMARY_CAP ?? FALLBACK_CAP",
+    "PRIMARY_CAP || 10_000",
+    "HAS_CAP && LIMITS.exportRowLimit",
   ]) {
     expect(
       findTransferReads(
@@ -218,6 +393,12 @@ test("literal, named, arithmetic and computed constant limits need a contract", 
     findTransferReads(
       file,
       "const list = ({ limit }) => query.limit(limit + 1);",
+    ),
+  ).toEqual([]);
+  expect(
+    findTransferReads(
+      file,
+      "const list = ({ limit }) => query.limit(limit ?? EXPORT_CAP);",
     ),
   ).toEqual([]);
   expect(
@@ -268,6 +449,7 @@ test("sentinel reads pass only with a matching early overflow decision", () => {
   expect(findTransferReads(file, safe)).toEqual([]);
   for (const decision of [
     "if (rows.length > pageSize) console.log('overflow');",
+    "if (rows[length] > pageSize) return { type: 'overflow' };",
     "if (otherRows.length > pageSize) return { type: 'overflow' };",
     "if (rows.length > OTHER_CAP) return { type: 'overflow' };",
     "if (rows.length > pageSize) return makeCsv(rows);",
@@ -497,4 +679,90 @@ test("baseline rejects missing reasons and duplicate function budgets", () => {
   expect(() =>
     parseTransferBaseline(JSON.stringify([row, row]), "fixture"),
   ).toThrow("duplicate file/function");
+});
+
+test("a relocated contributor read retains its original budget without permitting growth", () => {
+  const original = {
+    file: "apps/api/src/handlers/entities/publish-folio-collab-version.ts",
+    function: "module/loadRoomContributors",
+    kind: "constant-limit",
+    count: 1,
+    reason: "Existing contributor cap",
+  };
+  const moved = {
+    ...original,
+    file: "apps/api/src/lib/entity-versions/publish-folio-collab-checkpoint.ts",
+  };
+  const base = transferMembership(JSON.stringify([original]), "base");
+  const current = transferMembership(JSON.stringify([moved]), "head");
+  expect(current).toEqual(base);
+  for (const rows of [[{ ...moved, count: 2 }], [original, moved]]) {
+    expect(
+      addedEntries(transferMembership(JSON.stringify(rows), "head"), base),
+    ).toHaveLength(1);
+  }
+  const otherFunction = { ...moved, function: "module/anotherRead" };
+  expect(
+    addedEntries(
+      transferMembership(JSON.stringify([otherFunction]), "head"),
+      base,
+    ),
+  ).toHaveLength(1);
+});
+
+test("production grouped lateral reads use the bounded owner without fixed-limit allowances", () => {
+  const productionFile =
+    "apps/api/src/lib/billing/invoice-prefill-operation.ts";
+  const source = readFileSync(
+    new URL(
+      "../apps/api/src/lib/billing/invoice-prefill-operation.ts",
+      import.meta.url,
+    ),
+    "utf-8",
+  );
+  expect(source.match(/readBoundedByGroup\(/gu)).toHaveLength(2);
+  expect(findTransferReads(productionFile, source)).toEqual([]);
+  const rawSentinels = source
+    .replace(
+      ".orderBy(asc(timeEntries.dateWorked), asc(timeEntries.id));",
+      ".orderBy(asc(timeEntries.dateWorked), asc(timeEntries.id)).limit(PREFILL_ENTRY_LIMIT + 1);",
+    )
+    .replace(
+      ".orderBy(asc(expenses.dateIncurred), asc(expenses.id));",
+      ".orderBy(asc(expenses.dateIncurred), asc(expenses.id)).limit(PREFILL_ENTRY_LIMIT + 1);",
+    );
+  expect(rawSentinels).not.toBe(source);
+  expect(
+    findTransferReads(productionFile, rawSentinels).map(({ kind }) => kind),
+  ).toEqual(["constant-limit", "constant-limit"]);
+});
+
+test("computed keys count only when they name a static timeout or response method", () => {
+  for (const [key, expected] of [
+    ["timeoutMs", ["numeric-timeout", "total-timeout-body"]],
+    ['["timeoutMs"]', ["numeric-timeout", "total-timeout-body"]],
+    ["[timeoutMs]", []],
+  ] as const) {
+    const source = `export const work = async () => {
+      const response = await fetch(url, { ${key}: 1000 });
+      return response?.json();
+    };`;
+    expect(findTransferReads(file, source).map(({ kind }) => kind)).toEqual([
+      ...expected,
+    ]);
+  }
+  for (const [member, expected] of [
+    ['["json"]', ["numeric-timeout", "total-timeout-body"]],
+    ["[json]", ["numeric-timeout"]],
+  ] as const) {
+    expect(
+      findTransferReads(
+        file,
+        `export const work = async () => {
+          const response = await fetch(url, { timeoutMs: 1000 });
+          return response${member}();
+        };`,
+      ).map(({ kind }) => kind),
+    ).toEqual([...expected]);
+  }
 });

@@ -81,6 +81,86 @@ export const findUnusedKeys = (
   return keys.filter((key) => !usages.some((usage) => isUsedIn(key, usage)));
 };
 
+const quoted = (literal: string): string[] => [
+  `"${literal}"`,
+  `'${literal}'`,
+  `\`${literal}\``,
+];
+
+/**
+ * The text on a line that names `key` in a file, by the rules of isUsedIn,
+ * except that a template prefix must end at a key segment: `` `a${x}` `` says
+ * nothing about which message a line shows, though it keeps a key from being
+ * reported unused.
+ */
+const usageNeedles = (key: string, usage: SourceUsage): string[] => {
+  const needles: string[] = [];
+  if (usage.literals.has(key)) {
+    needles.push(...quoted(key));
+  }
+  const segmentPrefixes = usage.templatePrefixes.filter((prefix) =>
+    prefix.endsWith("."),
+  );
+  for (const prefix of segmentPrefixes) {
+    if (key.startsWith(prefix)) {
+      needles.push(`\`${prefix}\${`);
+    }
+  }
+  const segments = key.split(".");
+  for (let split = 1; split < segments.length; split += 1) {
+    if (!usage.literals.has(segments.slice(0, split).join("."))) {
+      continue;
+    }
+    const rest = segments.slice(split).join(".");
+    if (usage.literals.has(rest)) {
+      needles.push(...quoted(rest));
+    }
+    for (const prefix of segmentPrefixes) {
+      if (rest.startsWith(prefix)) {
+        needles.push(`\`${prefix}\${`);
+      }
+    }
+  }
+  return needles;
+};
+
+export type SourceFile = { path: string; text: string };
+export type KeyUsage = { path: string; line: number; code: string };
+
+type FindKeyUsagesOptions = {
+  keys: readonly string[];
+  files: readonly SourceFile[];
+};
+
+/** For each key, the source lines that name it, as findUnusedKeys counts a use. */
+export const findKeyUsages = ({
+  keys,
+  files,
+}: FindKeyUsagesOptions): Map<string, KeyUsage[]> => {
+  const indexed = files.map((file) => ({
+    ...file,
+    usage: readSourceUsage(file.text),
+    lines: file.text.split("\n"),
+  }));
+  const usages = new Map<string, KeyUsage[]>();
+  for (const key of keys) {
+    const found: KeyUsage[] = [];
+    for (const file of indexed) {
+      const needles = usageNeedles(key, file.usage);
+      if (needles.length === 0) {
+        continue;
+      }
+      for (const [index, line] of file.lines.entries()) {
+        if (needles.some((needle) => line.includes(needle))) {
+          found.push({ path: file.path, line: index + 1, code: line.trim() });
+        }
+      }
+    }
+    usages.set(key, found);
+  }
+  return usages;
+};
+
 type UnusedKeysBaselineAfterOptions = {
   baseline: readonly string[];
   unused: readonly string[];

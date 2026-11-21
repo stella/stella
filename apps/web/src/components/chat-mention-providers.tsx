@@ -13,7 +13,7 @@ import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { useChromeQuery } from "@/hooks/use-chrome-query";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
-import { useQueryView } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
 import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
 import { viewsOptions } from "@/lib/workspaces/queries/views";
 
@@ -52,7 +52,13 @@ const loadFirstViewIdsByWorkspaceId = async ({
       );
 
       if (Result.isError(viewsResult)) {
-        getAnalytics().captureError(viewsResult.error);
+        getAnalytics().captureError(viewsResult.error, {
+          fingerprintKey: "loadFirstViewIdsByWorkspaceId:failure",
+          scope: {
+            type: "handler",
+            handlerId: "loadFirstViewIdsByWorkspaceId:failure",
+          },
+        });
         return [workspace.id, null] as const;
       }
 
@@ -70,11 +76,14 @@ export const ChatMentionProviders = ({
   children: React.ReactNode;
 }) => {
   const queryClient = useQueryClient();
-  const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
+  const { activeOrganizationId, id: userId } = useAuthenticatedUser();
   const workspacesQuery = useChromeQuery(
-    workspacesNavigationOptions(activeOrganizationId),
+    workspacesNavigationOptions({
+      organizationId: activeOrganizationId,
+      userId,
+    }),
   );
-  const workspacesView = useQueryView(workspacesQuery);
+  const workspacesView = queryView(workspacesQuery);
   const workspaces =
     workspacesView.type === "items"
       ? workspacesView.items.workspaces

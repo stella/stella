@@ -15,6 +15,7 @@ export type ToolScope = McpCliToolScope;
 
 /** Wire fields from `tools/list` (build-time: projected from `DEFAULT_MCP_TOOL_DEFINITIONS`). */
 export type RegistryToolListing = {
+  feature?: string;
   featureId?: string;
   name: string;
   description: string;
@@ -38,6 +39,7 @@ export type DiscriminatorSubcommand = {
 
 /** Baked-in per-tool annotation (spec S1), keyed by tool name and merged with the listing. */
 export type ToolAnnotation = {
+  feature?: string;
   featureId?: string;
   command: readonly string[];
   additionalScopes?: readonly ToolScope[];
@@ -63,7 +65,7 @@ export type ToolAnnotation = {
   localFileBase64Prop?: string;
   /**
    * The tool is not destructive itself but gates SOME calls behind its
-   * `confirm` arg (per-target destructiveness, e.g. `invoke_capability`). The
+   * `confirm` arg (per-target destructiveness, e.g. the capability executors). The
    * leaf accepts `--yes` (injects `confirm: true` upfront) and, on a
    * `confirmation_required` envelope at a TTY, prompts and retries once.
    */
@@ -111,8 +113,8 @@ export type FlagSpec = {
   repeatable: boolean;
   default?: unknown;
   /**
-   * Per-property prose from the source JSON Schema's `description` (an Elysia
-   * `t.String({ description })` on the handler config, or a curated tool's
+   * Per-property prose from the source JSON Schema's `description` (a
+   * `v.description(...)` on the handler config's schema, or a curated tool's
    * hand-written property description). Rendered ahead of the mechanical
    * type/required suffix in the flag's `--help` brief.
    */
@@ -121,11 +123,14 @@ export type FlagSpec = {
 
 /** The generator's per-leaf output before handing to stricli's `buildCommand`. */
 export type LeafCommandSpec = {
+  feature?: string;
   featureId?: string;
   commandPath: readonly string[];
   additionalScopes?: readonly ToolScope[];
   requestTimeoutMs?: number;
   toolName: string;
+  /** Registry read classification; absence must be treated as a possible write. */
+  readOnlyHint?: boolean;
   /** The tool's authored description, first sentence; the command's `--help` brief. */
   description?: string;
   discriminatorInject?: Record<string, string>;
@@ -170,7 +175,7 @@ export type CapabilityPart = (typeof CAPABILITY_PARTS)[number];
  * One generated flag on a capability leaf: a `FlagSpec` tagged with the input
  * part it routes into. `FlagSpec.flag` is the canonical user-facing name;
  * `part` + `partPath` drive where the coerced value lands inside the
- * `invoke_capability` input object. `FlagSpec.prop` remains the unique local
+ * capability executor's input object. `FlagSpec.prop` remains the unique local
  * destination identity used while resolving cross-part collisions.
  */
 export type CapabilityFlagSpec = FlagSpec & {
@@ -180,12 +185,13 @@ export type CapabilityFlagSpec = FlagSpec & {
 };
 
 /**
- * A generated capability leaf (spec 049): reached through the generic
- * `invoke_capability` tool rather than a curated tool. `capabilityId` is the
- * catalog id; the executor calls `invoke_capability` with
+ * A generated capability leaf (spec 049): reached through its read or write
+ * capability executor rather than a curated tool. `capabilityId` is the
+ * catalog id; the executor sends
  * `{ capability: capabilityId, input: { body?, params?, query? } }`.
  */
 export type CapabilityLeafSpec = {
+  feature?: string;
   featureId?: string;
   commandPath: readonly string[];
   capabilityId: string;
@@ -197,11 +203,7 @@ export type CapabilityLeafSpec = {
    * command's `--help` brief; absent entries fall back to an id-derived line.
    */
   description?: string;
-  /**
-   * Read vs. write, from the catalog entry. The executor surfaces the server's
-   * request-id receipt on stderr only for a `write` (a mutation an operator may
-   * need to reference), never for a read.
-   */
+  /** Read vs. write, from the catalog entry. */
   access: "read" | "write";
   flags: readonly CapabilityFlagSpec[];
   /** Part-qualified property paths reachable only through `--input` (spec S3). */
@@ -212,6 +214,8 @@ export type CapabilityLeafSpec = {
   /** Result envelope items key for a list-shaped capability (`Page<T>` -> `items`). */
   itemsKey?: string;
   destructive: boolean;
+  confirmation?: "required";
+  idempotency?: { type: "replay" };
   scope?: ToolScope;
   additionalScopes?: readonly ToolScope[];
   /**
@@ -229,24 +233,6 @@ export type CapabilityLeafSpec = {
    * command and the REST endpoint.
    */
   filelessField?: string;
-};
-
-/**
- * Commands the connected server attested are gated off in this deployment.
- * They stay in the tree (invoking one yields the server's `feature_disabled`);
- * every listing marks them from this one value.
- */
-export type DisabledCommands = {
-  /** Curated tool names (`x-stella-feature-omitted-tools`). */
-  tools: readonly string[];
-  /** Catalog capability ids (`x-stella-feature-omitted-capabilities`). */
-  capabilities: readonly string[];
-};
-
-/** No attestation: a server that sent no evidence, or no server at all. */
-export const NO_DISABLED_COMMANDS: DisabledCommands = {
-  tools: [],
-  capabilities: [],
 };
 
 /** stricli assembly: `LeafCommandSpec[]` folds into a nested route tree. */

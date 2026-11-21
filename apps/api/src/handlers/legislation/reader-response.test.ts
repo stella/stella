@@ -1,27 +1,43 @@
-import { Value } from "@sinclair/typebox/value";
 import { expect, test } from "bun:test";
-import Elysia, { t } from "elysia";
 import fc from "fast-check";
+import * as v from "valibot";
 
+import {
+  isEligibleLegislationExpression,
+  LEGISLATION_EXPRESSION_KINDS,
+  LEGISLATION_WINDOW_DISPOSITIONS,
+} from "@stll/api-contract/legislation-expression";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import { assertProperty } from "@stll/property-testing";
 
 import {
-  projectStatuteReader,
-  projectStatuteVersion,
+  PREVIEW_BLOCK_MAX,
+  PREVIEW_HEADING_MAX,
   projectProvisionHistoryItem,
   projectProvisionPreview,
-  statuteReaderSuccessResponseSchema,
-  statuteVersionsSuccessResponseSchema,
+  projectStatuteAmendments,
+  projectStatuteReader,
+  projectStatuteVersion,
   provisionHistorySuccessResponseSchema,
   provisionPreviewSuccessResponseSchema,
   readerTextBytes,
-  PREVIEW_BLOCK_MAX,
-  PREVIEW_HEADING_MAX,
+  statuteReaderSuccessResponseSchema,
+  statuteVersionsSuccessResponseSchema,
 } from "@/api/handlers/legislation/reader-response";
+import { createHttpApp } from "@/api/http/app";
+import { routes } from "@/api/http/route";
+import { createSafeId } from "@/api/lib/branded-types";
+import { toRouteJsonSchema } from "@/api/lib/json-schema/valibot-to-json-schema";
+import { effectOpensVersion } from "@/api/lib/legal-search/legislation-validity-window";
 import { LIMITS } from "@/api/lib/limits";
+import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
 import { brandPersistedLegislationDocumentId } from "@/api/lib/safe-id-boundaries";
 import { responseSchemaByteBound } from "@/api/tests/helpers/response-schema-byte-bound";
+import { serveForTest } from "@/api/tests/helpers/test-server";
+
+/** The serialized bound the response schema's JSON Schema rendering implies. */
+const byteBound = (schema: v.GenericSchema) =>
+  responseSchemaByteBound(toRouteJsonSchema(schema));
 
 const id = brandPersistedLegislationDocumentId(
   "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
@@ -79,9 +95,7 @@ test("reader metadata is byte bounded while complete official text survives", ()
         fulltext: text,
       };
       const result = projectStatuteReader(body);
-      expect(Value.Check(statuteReaderSuccessResponseSchema, result)).toBe(
-        true,
-      );
+      expect(v.is(statuteReaderSuccessResponseSchema, result)).toBe(true);
       expect(result.fulltext).toBe(text);
       expect(result.documentAst).toBe(body.documentAst);
       expect(result.sections?.at(0)?.text).toBe(text);
@@ -91,20 +105,18 @@ test("reader metadata is byte bounded while complete official text survives", ()
         documentAst: null,
         sections: result.sections?.map((section) => ({ ...section, text: "" })),
       };
-      const metadataSchema = t.Omit(statuteReaderSuccessResponseSchema, [
+      const metadataSchema = v.omit(statuteReaderSuccessResponseSchema, [
         "fulltext",
         "documentAst",
         "sections",
       ]);
       const sectionSchema =
-        statuteReaderSuccessResponseSchema.properties.sections.anyOf[0].items;
-      const projectedSectionSchema = t.Omit(sectionSchema, ["text"]);
+        statuteReaderSuccessResponseSchema.entries.sections.options[0].item;
+      const projectedSectionSchema = v.omit(sectionSchema, ["text"]);
       const metadataEnvelope = { ...envelope, sections: undefined };
       const metadataBytes = Buffer.byteLength(JSON.stringify(metadataEnvelope));
       const section = result.sections?.at(0);
-      expect(metadataBytes).toBeLessThanOrEqual(
-        responseSchemaByteBound(metadataSchema),
-      );
+      expect(metadataBytes).toBeLessThanOrEqual(byteBound(metadataSchema));
       expect(
         Buffer.byteLength(
           JSON.stringify({
@@ -113,7 +125,7 @@ test("reader metadata is byte bounded while complete official text survives", ()
             title: section?.title,
           }),
         ),
-      ).toBeLessThanOrEqual(responseSchemaByteBound(projectedSectionSchema));
+      ).toBeLessThanOrEqual(byteBound(projectedSectionSchema));
     }),
   );
 });
@@ -130,11 +142,9 @@ test("version pages serialize within the bound derived from every metadata field
         limit: count,
         nextCursor: "x".repeat(readerTextBytes.cursor),
       };
-      expect(Value.Check(statuteVersionsSuccessResponseSchema, result)).toBe(
-        true,
-      );
+      expect(v.is(statuteVersionsSuccessResponseSchema, result)).toBe(true);
       expect(Buffer.byteLength(JSON.stringify(result))).toBeLessThanOrEqual(
-        responseSchemaByteBound(statuteVersionsSuccessResponseSchema),
+        byteBound(statuteVersionsSuccessResponseSchema),
       );
     }),
   );
@@ -153,20 +163,26 @@ test("provision history pages keep each preview wording inside its byte budget",
         expressionKind: "consolidation",
         windowDisposition: "effective",
         windowDispositionBasis: null,
+        status: "found",
+        wordingChange: "changed",
         text,
       } as const;
       const count = LIMITS.legislationProvisionHistoryPageSizeMax;
-      const item = projectProvisionHistoryItem(row);
+      const item = projectProvisionHistoryItem({
+        ...row,
+        governingText: [{ anchor: text, position: "closing", text }],
+        country: "CZE",
+        slug: "89-2012-sb",
+        sourceUrl: "https://www.e-sbirka.cz/sb/2012/89",
+      });
       const result = {
         items: Array.from({ length: count }, () => item),
         limit: count,
         nextCursor: "x".repeat(readerTextBytes.cursor),
       };
-      expect(Value.Check(provisionHistorySuccessResponseSchema, result)).toBe(
-        true,
-      );
+      expect(v.is(provisionHistorySuccessResponseSchema, result)).toBe(true);
       expect(Buffer.byteLength(JSON.stringify(result))).toBeLessThanOrEqual(
-        responseSchemaByteBound(provisionHistorySuccessResponseSchema),
+        byteBound(provisionHistorySuccessResponseSchema),
       );
     }),
   );
@@ -179,6 +195,8 @@ test("citation previews cap block count and serialize within their derived byte 
       const text = fragment.repeat(8000);
       const heading = { id: text, anchorId: text, level: 1 as const, text };
       const result = projectProvisionPreview({
+        country: text,
+        url: text,
         documentId: id,
         language: text,
         anchorId: text,
@@ -194,14 +212,49 @@ test("citation previews cap block count and serialize within their derived byte 
           text,
         })),
       });
-      expect(Value.Check(provisionPreviewSuccessResponseSchema, result)).toBe(
-        true,
-      );
+      expect(v.is(provisionPreviewSuccessResponseSchema, result)).toBe(true);
       expect(Buffer.byteLength(JSON.stringify(result))).toBeLessThanOrEqual(
-        responseSchemaByteBound(provisionPreviewSuccessResponseSchema),
+        byteBound(provisionPreviewSuccessResponseSchema),
       );
     }),
   );
+});
+
+test("citation previews preserve their metadata through response encoding", async () => {
+  const preview = {
+    documentId: id,
+    country: "CZE",
+    url: "https://example.test/statutes/fixture#par_1",
+    language: "cs",
+    anchorId: "par_1",
+    citedAnchorId: null,
+    headings: [],
+    heading: null,
+    blocks: [
+      { id: "paragraph-1", anchorId: "par_1", text: "Text ustanovení." },
+    ],
+  };
+  const projected = projectProvisionPreview(preview);
+  const encoded = projectProvisionPreview(projected);
+  await using server = serveForTest(
+    createHttpApp({
+      routes: routes({
+        "/preview": {
+          GET: {
+            access: "public",
+            config: {
+              response: { 200: provisionPreviewSuccessResponseSchema },
+            },
+            run: async () => await Promise.resolve(encoded),
+          },
+        },
+      }),
+      middleware: [errorBoundary],
+    }),
+  );
+  const response = await server.fetch(new Request("http://localhost/preview"));
+  expect(response.status).toBe(200);
+  expect(await response.json()).toEqual(preview);
 });
 
 test("reader plain text keeps literal markup and entities as text", () => {
@@ -216,6 +269,8 @@ test("reader plain text keeps literal markup and entities as text", () => {
       (tokens, repeat) => {
         const text = tokens.join("").repeat(repeat);
         const preview = projectProvisionPreview({
+          country: "CZE",
+          url: null,
           documentId: id,
           language: "cs",
           anchorId: "par_1",
@@ -225,6 +280,9 @@ test("reader plain text keeps literal markup and entities as text", () => {
           blocks: [{ id: "1", anchorId: "par_1", text }],
         }).blocks.at(0)?.text;
         const history = projectProvisionHistoryItem({
+          country: "CZE",
+          slug: "89-2012-sb",
+          sourceUrl: "https://www.e-sbirka.cz/sb/2012/89",
           documentId: id,
           allowsDerivedAi: true,
           versionValidFrom: null,
@@ -232,11 +290,17 @@ test("reader plain text keeps literal markup and entities as text", () => {
           expressionKind: "consolidation",
           windowDisposition: "effective",
           windowDispositionBasis: null,
+          status: "found",
+          wordingChange: "unchanged",
           text,
-        }).text;
+          governingText: [],
+        });
+        if (history.status !== "found") {
+          throw new Error("Expected a found history item");
+        }
         for (const [projected, maxBytes] of [
           [preview, readerTextBytes.previewText],
-          [history, readerTextBytes.provisionText],
+          [history.text, readerTextBytes.provisionText],
         ] as const) {
           expect(text.startsWith(projected ?? "")).toBe(true);
           expect(Buffer.byteLength(projected ?? "")).toBeLessThanOrEqual(
@@ -302,10 +366,21 @@ test("reader response serialization preserves the complete official AST and text
   expect(
     Buffer.byteLength(projected.sections?.at(0)?.title ?? ""),
   ).toBeLessThanOrEqual(readerTextBytes.sectionTitle);
-  const app = new Elysia().get("/statute", () => projected, {
-    response: { 200: statuteReaderSuccessResponseSchema },
-  });
-  const response = await app.handle(new Request("http://localhost/statute"));
+  await using server = serveForTest(
+    createHttpApp({
+      routes: routes({
+        "/statute": {
+          GET: {
+            access: "public",
+            config: { response: { 200: statuteReaderSuccessResponseSchema } },
+            run: async () => await Promise.resolve(projected),
+          },
+        },
+      }),
+      middleware: [errorBoundary],
+    }),
+  );
+  const response = await server.fetch(new Request("http://localhost/statute"));
   expect(response.status).toBe(200);
   // Compare the actual wire object, including all inline text, to the complete
   // source fixture: schema encoding must not clean or narrow the AST payload.
@@ -322,4 +397,162 @@ test("reader response serialization preserves the complete official AST and text
       },
     ],
   });
+});
+
+test("amendment previews preserve same-day actors, staged starts, and source gaps", () => {
+  const sourceId = createSafeId<"legislationSource">();
+  const relation = {
+    sourceId,
+    targetEli: "/eli/cz/sb/2012/89",
+    language: "cs",
+    publisherId: "effect-a",
+    amendingEli: "/eli/cz/sb/2026/159",
+    amendingTitle: "Amending act",
+    amendingAnchor: null,
+    affectedAnchor: "par_1830a",
+    changeKind: "inserted",
+    effectiveType: "date",
+    effectiveDate: "2027-01-01",
+    effectiveText: null,
+    publisherInstruction: null,
+  } as const;
+  const page = {
+    items: [
+      relation,
+      {
+        ...relation,
+        publisherId: "effect-b",
+        amendingEli: "/eli/cz/sb/2026/160",
+      },
+      {
+        ...relation,
+        publisherId: "effect-c",
+        effectiveDate: "2027-07-01",
+        affectedAnchor: "par_1830b",
+      },
+    ],
+    limit: 500,
+    nextCursor: null,
+  };
+  const snapshot = {
+    observedAt: new Date("2026-10-16T10:00:00Z"),
+    coverage: {
+      type: "partial",
+      unlocatedRelations: 1,
+      reason: "Publisher relation has no provision",
+    },
+  } as const;
+  const result = projectStatuteAmendments({ page, snapshot });
+  expect(
+    result?.items.map(({ amendingEli, effectiveDate }) => [
+      amendingEli,
+      effectiveDate,
+    ]),
+  ).toEqual([
+    ["/eli/cz/sb/2026/159", "2027-01-01"],
+    ["/eli/cz/sb/2026/160", "2027-01-01"],
+    ["/eli/cz/sb/2026/159", "2027-07-01"],
+  ]);
+  expect(result?.coverage).toEqual(snapshot.coverage);
+  expect(projectStatuteAmendments({ page, snapshot: null })).toBeNull();
+  expect(
+    projectStatuteAmendments({ page: { ...page, items: [] }, snapshot })
+      ?.coverage.type,
+  ).toBe("partial");
+  // A stored coverage carrying a key the closed response schema refuses
+  // projects to its known fields only.
+  const widened = {
+    ...snapshot,
+    coverage: { ...snapshot.coverage, publisherNote: "extra" },
+  };
+  expect(
+    projectStatuteAmendments({ page, snapshot: widened })?.coverage,
+  ).toEqual(snapshot.coverage);
+});
+
+test("an instruction the publisher restates under several links reads once and keeps every link", () => {
+  const sourceId = createSafeId<"legislationSource">();
+  // 408/2023 Sb. amends § 5 písm. e) of 435/2004 Sb. on 2024-01-01; the
+  // publisher's link dataset states it again under another link id.
+  const relation = {
+    sourceId,
+    targetEli: "https://www.e-sbirka.cz/eli/cz/sb/2004/435",
+    language: "cs",
+    publisherId: "cz-esbirka:link/981085",
+    amendingEli: "https://www.e-sbirka.cz/eli/cz/sb/2023/408",
+    amendingTitle: "408/2023 Sb.",
+    amendingAnchor: null,
+    affectedAnchor: "par_5-pism_e",
+    changeKind: "changed",
+    effectiveType: "date",
+    effectiveDate: "2024-01-01",
+    effectiveText: null,
+    publisherInstruction: "UPRAVUJE",
+  } as const;
+  const page = {
+    items: [
+      relation,
+      { ...relation, publisherId: "cz-esbirka:link/1310442" },
+      {
+        ...relation,
+        publisherId: "cz-esbirka:link/981086",
+        changeKind: "inserted" as const,
+      },
+      {
+        ...relation,
+        publisherId: "cz-esbirka:link/981087",
+        affectedAnchor: "par_5-pism_f",
+      },
+    ],
+    limit: 500,
+    nextCursor: null,
+  };
+  const snapshot = {
+    observedAt: new Date("2026-11-18T06:00:00Z"),
+    coverage: { type: "complete" },
+  } as const;
+  const result = projectStatuteAmendments({ page, snapshot });
+  expect(
+    result?.items.map(
+      ({ publisherId, duplicatePublisherIds, affectedAnchor, changeKind }) => [
+        publisherId,
+        duplicatePublisherIds,
+        affectedAnchor,
+        changeKind,
+      ],
+    ),
+  ).toEqual([
+    [
+      "cz-esbirka:link/981085",
+      ["cz-esbirka:link/1310442"],
+      "par_5-pism_e",
+      "changed",
+    ],
+    ["cz-esbirka:link/981086", [], "par_5-pism_e", "inserted"],
+    ["cz-esbirka:link/981087", [], "par_5-pism_f", "changed"],
+  ]);
+  // Every stored link is still named.
+  expect(
+    result?.items.flatMap(({ publisherId, duplicatePublisherIds }) => [
+      publisherId,
+      ...duplicatePublisherIds,
+    ]),
+  ).toHaveLength(page.items.length);
+});
+
+test("effect dates label only eligible version openings across every expression state", () => {
+  for (const expressionKind of LEGISLATION_EXPRESSION_KINDS) {
+    for (const windowDisposition of LEGISLATION_WINDOW_DISPOSITIONS) {
+      const candidate = {
+        expressionKind,
+        windowDisposition,
+        versionValidFrom: "2027-01-01",
+      };
+      expect(effectOpensVersion("2027-01-01", candidate)).toBe(
+        isEligibleLegislationExpression(candidate),
+      );
+      expect(effectOpensVersion("2027-07-01", candidate)).toBe(false);
+      expect(effectOpensVersion(null, candidate)).toBe(false);
+    }
+  }
 });

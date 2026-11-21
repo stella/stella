@@ -36,9 +36,8 @@ import {
 } from "@stll/ui/inspector";
 import { ScrollArea } from "@stll/ui/scroll-area";
 
-import { ViewerOverlayBar } from "@/components/inspector/viewer-overlay-bar";
-import { ZoomControls } from "@/components/inspector/zoom-controls";
-import { DecisionText } from "@/features/case-law/components/case-viewer/decision-text";
+import { FloatingZoomControls } from "@/components/inspector/zoom-controls";
+import { WebDecisionReader as DecisionText } from "@/components/legal-reader/web-decision-reader";
 import { CitationYearStrip } from "@/features/case-law/components/citation-year-strip";
 import { toSafeId } from "@/lib/safe-id";
 
@@ -126,6 +125,13 @@ const BENCH_DOCUMENT_AST = {
     statutes: [],
   },
   blocks: [
+    {
+      ...paragraph(
+        "apparatus",
+        "Publisher information keeps its own paragraph permalink.",
+      ),
+      role: "apparatus",
+    },
     paragraph(
       "b1",
       "Ústavní soud rozhodl o návrhu na zrušení ustanovení zákona; odůvodnění se opírá o dosavadní judikaturu a o ustálený výklad dotčených ustanovení.",
@@ -167,6 +173,7 @@ const BENCH_TEXT_FIELDS = {
 const BENCH_DECISION = {
   caseNumber: "Pl. ÚS 20/21",
   caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+  country: "CZE",
   court: "Ústavní soud",
   courtAbbreviation: null,
   courtTier: "other",
@@ -231,18 +238,21 @@ const BenchPane = ({ width }: { width: number }) => (
             />
           </div>
           <DecisionText
-            activeMatchIndex={-1}
+            surface="development"
             decision={BENCH_DECISION}
             decisionId={BENCH_DECISION.id}
-            searchQuery=""
           />
         </main>
       </ScrollArea>
-      <ViewerOverlayBar>
-        {/* The bar's geometry is what the bench measures; its controls have
-            nothing to drive, so they stay at rest. */}
-        <ZoomControls atMax atMin level={1} onReset={noop} onZoom={noop} />
-      </ViewerOverlayBar>
+      {/* The bar's geometry is what the bench measures; its controls have
+          nothing to drive, so they stay at rest. */}
+      <FloatingZoomControls
+        atMax
+        atMin
+        level={1}
+        onReset={noop}
+        onZoom={noop}
+      />
     </div>
   </section>
 );

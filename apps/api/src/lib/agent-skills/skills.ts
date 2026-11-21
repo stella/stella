@@ -4,24 +4,34 @@ import { and, asc, eq, inArray, or } from "drizzle-orm";
 import {
   listSkillMetadata,
   loadSkill,
-  readDocumentedChatReads,
-  readExcludedChatTools,
-  readSkillDisplayName,
   readSkillRequiredTools,
   readSkillResource,
 } from "@stll/skills";
-import type { SkillMetadata, SkillResource } from "@stll/skills";
-import type { SkillResourceKind } from "@stll/skills/resource-kinds";
+import type { SkillResource } from "@stll/skills";
+import {
+  readDocumentedChatReads,
+  readExcludedChatTools,
+  readSkillDisplayName,
+} from "@stll/skills/frontmatter";
+import type { SkillInvocation, SkillMetadata } from "@stll/skills/frontmatter";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import {
+  type AgentSkillOrigin,
   agentSkillResources,
   agentSkills,
-  type AgentSkillOrigin,
 } from "@/api/db/schema";
-import { canManageSkill } from "@/api/lib/agent-skills/access";
-import { requireEditableSkillOrigin } from "@/api/lib/agent-skills/origin";
+import {
+  canEditActiveSkill,
+  canReadActiveSkillBody,
+} from "@/api/lib/agent-skills/access";
+import { skillBindingCondition, UNBOUND } from "@/api/lib/agent-skills/binding";
+import type {
+  SkillBinding,
+  SkillBindingScope,
+} from "@/api/lib/agent-skills/binding";
 import type { SafeId } from "@/api/lib/branded-types";
+import { readBounded } from "@/api/lib/db/read-bounded";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
@@ -81,6 +91,8 @@ export const chatSkillId = (
 
 export type AvailableChatSkill = SkillMetadata & {
   displayName: string;
+  /** Applied by `offerSkillsToModel` before any model sees the skill. */
+  invocation: SkillInvocation;
 } & (
     | { source: typeof CHAT_SKILL_SOURCE.installed; id: SafeId<"agentSkill"> }
     | { source: typeof CHAT_SKILL_SOURCE.builtIn }
@@ -106,10 +118,18 @@ export const resolvesToBuiltInSkill = (
 
 export const ACTIVE_SKILL_BODY_PROMPT_MAX_CHARS = 30_000;
 
-type ChatSkillContext = {
+type ChatSkillCaller = {
   organizationId: SafeId<"organization">;
   safeDb: SafeDb;
   userId: SafeId<"user">;
+};
+
+type ChatSkillContext = ChatSkillCaller & {
+  /**
+   * Where the conversation may use a bound skill. Required on every read
+   * that serves a skill to a model, so none can skip the binding.
+   */
+  bindingScope: SkillBindingScope;
 };
 
 /**
@@ -131,6 +151,12 @@ type ChatMemberRole = AuthorizedMemberRole;
  */
 export type ActiveSkillContext = {
   body: string;
+  /**
+   * The skill's binding, checked against the turn's binding scope once the
+   * turn's matters are known (`skillBindingAllows`); null on both for an
+   * unbound or built-in skill.
+   */
+  binding: SkillBinding;
   description: string;
   displayName: string;
   /** `stella-chat-documented-reads`, as declared. */
@@ -157,13 +183,18 @@ export type ActiveSkillContext = {
     }
 );
 
+/**
+ * Resolved before the turn's matters are known, so it reads any skill row
+ * security lets the caller see; the turn then checks `binding` against its
+ * binding scope and refuses a skill bound elsewhere.
+ */
 export const resolveActiveSkillContext = async ({
   activeSkill,
   memberRole,
   organizationId,
   safeDb,
   userId,
-}: ChatSkillContext & {
+}: ChatSkillCaller & {
   activeSkill: ActiveChatSkillRequest | undefined;
   memberRole: ChatMemberRole;
 }): Promise<
@@ -185,6 +216,7 @@ export const resolveActiveSkillContext = async ({
   }
 
   const installed = await findInstalledSkills({
+    bindingScope: ANY_READABLE_BINDING,
     organizationId,
     safeDb,
     skillNames: [skillName],
@@ -211,6 +243,7 @@ export const resolveActiveSkillContext = async ({
 
   const skill = loadSkill(skillName);
   return Result.ok({
+    binding: UNBOUND,
     body: skill.body,
     description: skill.description,
     displayName: readSkillDisplayName(skill),
@@ -233,7 +266,7 @@ const resolveInstalledActiveSkill = async ({
   organizationId,
   safeDb,
   userId,
-}: ChatSkillContext & {
+}: ChatSkillCaller & {
   activeSkill: { skillId: SafeId<"agentSkill">; skillName: string };
   memberRole: ChatMemberRole;
 }): Promise<
@@ -244,6 +277,8 @@ const resolveInstalledActiveSkill = async ({
       .select({
         id: agentSkills.id,
         body: agentSkills.body,
+        boundClientId: agentSkills.boundClientId,
+        boundWorkspaceId: agentSkills.boundWorkspaceId,
         description: agentSkills.description,
         enabled: agentSkills.enabled,
         metadata: agentSkills.metadata,
@@ -281,6 +316,8 @@ const resolveInstalledActiveSkill = async ({
   }
   if (
     !canReadActiveSkillBody({
+      boundClientId: skill.boundClientId,
+      boundWorkspaceId: skill.boundWorkspaceId,
       enabled: skill.enabled,
       memberRole,
       origin: skill.origin,
@@ -295,7 +332,6 @@ const resolveInstalledActiveSkill = async ({
   const resources = await safeDb((tx) =>
     tx
       .select({
-        kind: agentSkillResources.kind,
         path: agentSkillResources.path,
       })
       .from(agentSkillResources)
@@ -308,11 +344,17 @@ const resolveInstalledActiveSkill = async ({
   }
 
   return Result.ok({
+    binding: {
+      boundClientId: skill.boundClientId,
+      boundWorkspaceId: skill.boundWorkspaceId,
+    },
     body: skill.body,
     description: skill.description,
     displayName: skill.name,
     documentedChatReads: readDocumentedChatReads(skill.metadata),
     editable: canEditActiveSkill({
+      boundClientId: skill.boundClientId,
+      boundWorkspaceId: skill.boundWorkspaceId,
       memberRole,
       origin: skill.origin,
       scope: skill.scope,
@@ -330,66 +372,8 @@ const resolveInstalledActiveSkill = async ({
   });
 };
 
-export const canEditActiveSkill = ({
-  memberRole,
-  origin,
-  scope,
-  skillUserId,
-  userId,
-}: {
-  memberRole: ChatMemberRole;
-  origin: AgentSkillOrigin;
-  scope: "private" | "team";
-  skillUserId: string;
-  userId: SafeId<"user">;
-}): boolean => {
-  if (
-    !canManageSkill({
-      memberRole,
-      skill: { scope, userId: skillUserId },
-      userId,
-      spends: "update",
-    })
-  ) {
-    return false;
-  }
-
-  return !Result.isError(requireEditableSkillOrigin(origin));
-};
-
-const canReadActiveSkillBody = ({
-  enabled,
-  memberRole,
-  origin,
-  scope,
-  skillUserId,
-  userId,
-}: {
-  enabled: boolean;
-  memberRole: ChatMemberRole;
-  origin: AgentSkillOrigin;
-  scope: "private" | "team";
-  skillUserId: string;
-  userId: SafeId<"user">;
-}): boolean => {
-  if (scope === "private") {
-    return skillUserId === userId;
-  }
-
-  if (enabled) {
-    return true;
-  }
-
-  return canEditActiveSkill({
-    memberRole,
-    origin,
-    scope,
-    skillUserId,
-    userId,
-  });
-};
-
 export const listAvailableChatSkillMetadata = async ({
+  bindingScope,
   organizationId,
   safeDb,
   userId,
@@ -402,6 +386,7 @@ export const listAvailableChatSkillMetadata = async ({
         name: agentSkills.name,
         slug: agentSkills.slug,
         description: agentSkills.description,
+        invocation: agentSkills.invocation,
         version: agentSkills.version,
         license: agentSkills.license,
         compatibility: agentSkills.compatibility,
@@ -413,6 +398,7 @@ export const listAvailableChatSkillMetadata = async ({
           eq(agentSkills.organizationId, organizationId),
           eq(agentSkills.enabled, true),
           or(eq(agentSkills.scope, "team"), eq(agentSkills.userId, userId)),
+          skillBindingCondition(bindingScope),
         ),
       )
       .orderBy(agentSkills.scope, agentSkills.slug, agentSkills.id)
@@ -430,12 +416,13 @@ export const listAvailableChatSkillMetadata = async ({
 export type LoadedChatSkill = {
   body: string;
   compatibility: string | null;
+  contentHash: string | null;
   description: string;
   license: string | null;
   metadata: Record<string, string>;
   /** The skill slug: the name the catalog and the skill tools use. */
   name: string;
-  resources: { kind: SkillResourceKind; path: string }[];
+  resources: { path: string }[];
   version: string | null;
 } & ChatSkillRef;
 
@@ -462,6 +449,7 @@ export const loadAvailableChatSkill = async ({
  */
 export const loadAvailableChatSkills = async ({
   activeSkillId,
+  bindingScope,
   organizationId,
   safeDb,
   skillNames,
@@ -472,6 +460,7 @@ export const loadAvailableChatSkills = async ({
 }): Promise<Result<Map<string, LoadedChatSkill>, SafeDbError>> => {
   const rowsResult = await findInstalledSkills({
     activeSkillId,
+    bindingScope,
     organizationId,
     safeDb,
     skillNames,
@@ -491,7 +480,6 @@ export const loadAvailableChatSkills = async ({
   const resources = await safeDb((tx) =>
     tx
       .select({
-        kind: agentSkillResources.kind,
         path: agentSkillResources.path,
         skillId: agentSkillResources.skillId,
       })
@@ -515,6 +503,7 @@ export const loadAvailableChatSkills = async ({
         row.slug,
         {
           body: row.body,
+          contentHash: row.contentHash,
           compatibility: row.compatibility,
           description: row.description,
           id: row.id,
@@ -525,7 +514,7 @@ export const loadAvailableChatSkills = async ({
           resources: resources.value
             .filter(({ skillId }) => skillId === row.id)
             .slice(0, LIMITS.agentSkillResourcesPerSkill)
-            .map(({ kind, path }) => ({ kind, path })),
+            .map(({ path }) => ({ path })),
           source: CHAT_SKILL_SOURCE.installed,
           version: row.version,
         },
@@ -540,6 +529,7 @@ const loadBuiltInSkill = (skillName: string): LoadedChatSkill => {
   return {
     body: skill.body,
     compatibility: skill.compatibility ?? null,
+    contentHash: null,
     description: skill.description,
     license: skill.license ?? null,
     metadata: skill.metadata ?? {},
@@ -560,7 +550,7 @@ export type AvailableChatSkillResourceRead =
   | {
       status: typeof SKILL_RESOURCE_READ_STATUS.found;
       content: string;
-      kind: SkillResourceKind;
+      contentHash: string | null;
       skill: ChatSkillRef;
     }
   | {
@@ -571,6 +561,7 @@ export type AvailableChatSkillResourceRead =
 
 export const readAvailableChatSkillResource = async ({
   activeSkillId,
+  bindingScope,
   organizationId,
   path,
   safeDb,
@@ -583,6 +574,7 @@ export const readAvailableChatSkillResource = async ({
 }): Promise<Result<AvailableChatSkillResourceRead, SafeDbError>> => {
   const rowResult = await findInstalledSkills({
     activeSkillId,
+    bindingScope,
     organizationId,
     safeDb,
     skillNames: [skillName],
@@ -606,7 +598,6 @@ export const readAvailableChatSkillResource = async ({
     tx
       .select({
         content: agentSkillResources.content,
-        kind: agentSkillResources.kind,
       })
       .from(agentSkillResources)
       .where(
@@ -632,7 +623,7 @@ export const readAvailableChatSkillResource = async ({
   return Result.ok({
     status: SKILL_RESOURCE_READ_STATUS.found,
     content: resource.content,
-    kind: resource.kind,
+    contentHash: row.contentHash,
     skill,
   });
 };
@@ -658,33 +649,53 @@ const readBuiltInSkillResource = ({
   return {
     status: SKILL_RESOURCE_READ_STATUS.found,
     content: resource.content,
-    kind: resource.kind,
+    contentHash: null,
     skill,
   };
 };
 
-/** The row each name resolves to for the caller, keyed by slug. */
+/**
+ * Active-skill resolution only: any row the caller may read, whatever its
+ * binding, because the turn checks the binding once its matters are known.
+ */
+const ANY_READABLE_BINDING = Symbol("any readable binding");
+
+/**
+ * The row each name resolves to for the caller, keyed by slug. A row outside
+ * `bindingScope` is not a candidate, so a bound skill can neither be served
+ * nor shadow an unbound one with the same slug outside its binding.
+ */
 const findInstalledSkills = async ({
   activeSkillId,
+  bindingScope,
+  includeDisabled = false,
   organizationId,
   safeDb,
   skillNames,
   userId,
-}: ChatSkillContext & {
+}: ChatSkillCaller & {
   activeSkillId?: SafeId<"agentSkill"> | undefined;
+  bindingScope: SkillBindingScope | typeof ANY_READABLE_BINDING;
+  includeDisabled?: boolean | undefined;
   skillNames: readonly string[];
 }) => {
   if (skillNames.length === 0) {
     return Result.ok(new Map<string, InstalledSkillRow>());
   }
-  const enabledOrActive =
+  const activeSkillEnabledCondition =
     activeSkillId === undefined
       ? eq(agentSkills.enabled, true)
       : or(eq(agentSkills.enabled, true), eq(agentSkills.id, activeSkillId));
+  const enabledOrActive = includeDisabled
+    ? undefined
+    : activeSkillEnabledCondition;
 
   const rows = await safeDb((tx) =>
     tx
       .select({
+        boundClientId: agentSkills.boundClientId,
+        boundWorkspaceId: agentSkills.boundWorkspaceId,
+        contentHash: agentSkills.contentHash,
         id: agentSkills.id,
         scope: agentSkills.scope,
         slug: agentSkills.slug,
@@ -703,6 +714,9 @@ const findInstalledSkills = async ({
           enabledOrActive,
           inArray(agentSkills.slug, [...skillNames]),
           or(eq(agentSkills.scope, "team"), eq(agentSkills.userId, userId)),
+          bindingScope === ANY_READABLE_BINDING
+            ? undefined
+            : skillBindingCondition(bindingScope),
         ),
       )
       .limit(LIMITS.agentSkillsPerUser),
@@ -728,6 +742,9 @@ const findInstalledSkills = async ({
 };
 
 type InstalledSkillRow = {
+  boundClientId: SafeId<"contact"> | null;
+  boundWorkspaceId: SafeId<"workspace"> | null;
+  contentHash: string;
   body: string;
   compatibility: string | null;
   description: string;
@@ -740,10 +757,71 @@ type InstalledSkillRow = {
   version: string | null;
 };
 
+/**
+ * Resolves installed skills already loaded into chat history by immutable row
+ * id, never by their reusable slug. Current row visibility remains authoritative:
+ * an inaccessible or deleted identity is absent and therefore withheld.
+ */
+export type ReadableChatSkillBinding = SkillBinding & {
+  contentHash: string;
+};
+
+export const loadReadableChatSkillBindings = async ({
+  organizationId,
+  safeDb,
+  skillIds,
+  userId,
+}: ChatSkillCaller & {
+  skillIds: readonly SafeId<"agentSkill">[];
+}): Promise<Result<Map<string, ReadableChatSkillBinding>, SafeDbError>> => {
+  const uniqueSkillIds = [...new Set(skillIds)];
+  if (uniqueSkillIds.length === 0) {
+    return Result.ok(new Map());
+  }
+  const rows = await safeDb(async (tx) => {
+    const read = await readBounded(
+      tx
+        .select({
+          boundClientId: agentSkills.boundClientId,
+          boundWorkspaceId: agentSkills.boundWorkspaceId,
+          contentHash: agentSkills.contentHash,
+          id: agentSkills.id,
+        })
+        .from(agentSkills)
+        .where(
+          and(
+            eq(agentSkills.organizationId, organizationId),
+            inArray(agentSkills.id, uniqueSkillIds),
+            or(eq(agentSkills.scope, "team"), eq(agentSkills.userId, userId)),
+          ),
+        ),
+      uniqueSkillIds.length,
+    );
+    if (read.type === "overflow") {
+      return panic("Readable chat skill bindings exceeded their bounded read", {
+        cap: read.cap,
+      });
+    }
+    return read.rows;
+  });
+  if (Result.isError(rows)) {
+    return Result.err(rows.error);
+  }
+  return Result.ok(
+    new Map(
+      rows.value.map(({ boundClientId, boundWorkspaceId, contentHash, id }) => [
+        id,
+        { boundClientId, boundWorkspaceId, contentHash },
+      ]),
+    ),
+  );
+};
+
 type InstalledSkillMetadataRow = {
   compatibility: string | null;
   description: string;
   id: SafeId<"agentSkill">;
+  invocation: SkillInvocation;
   license: string | null;
   metadata: Record<string, string>;
   name: string;
@@ -775,6 +853,7 @@ const resolveSkillPrecedence = (
       description: row.description,
       displayName: row.name,
       id: row.id,
+      invocation: row.invocation,
       license: row.license,
       metadata: row.metadata,
       name: row.slug,

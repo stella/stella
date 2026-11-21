@@ -17,6 +17,8 @@ import {
   corpusIndexManifestDigest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
 import { bootstrapCorpusProjectionDesiredStateBatchTx } from "@/api/lib/legal-search/corpus-index-projection-bootstrap";
+import { installCorpusProjectionCanonicalEpochGuard } from "@/api/tests/helpers/corpus-projection-canonical-epoch-guard";
+import { CORPUS_PROJECTION_SEEDING_GUARD_OFF_SETTING } from "@/api/tests/helpers/corpus-projection-seeding-guard";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
@@ -44,6 +46,7 @@ let db: ReturnType<typeof drizzle>;
 
 beforeAll(async () => {
   client = await createTestPglite();
+  await installCorpusProjectionCanonicalEpochGuard(client);
   db = drizzle({ client });
 });
 
@@ -131,6 +134,22 @@ afterAll(async () => {
   await client.close();
 });
 
+/**
+ * Decisions that predate the generation, as data no writer touched since:
+ * the rows a bootstrap exists to find, so the seeding guard stands aside for
+ * the fixture.
+ */
+const insertUnseededDecisions = async (
+  values: (typeof caseLawDecisions.$inferInsert)[],
+): Promise<void> => {
+  await db.transaction(async (tx) => {
+    await tx.execute(
+      sql`SELECT set_config(${CORPUS_PROJECTION_SEEDING_GUARD_OFF_SETTING}, 'off', true)`,
+    );
+    await tx.insert(caseLawDecisions).values(values);
+  });
+};
+
 test("bulk bootstrap advances a keyset cursor and reaches a fixed point", async () => {
   const first = await db.transaction(
     async (tx) =>
@@ -208,6 +227,8 @@ test("bulk bootstrap advances a keyset cursor and reaches a fixed point", async 
     generation: "case_law_v5",
     claimedCount: 0,
     seededCount: 0,
+    walkedCount: 1,
+    deferredCount: 0,
     entityIds: [],
     nextAfterEntityId: CASE_LAW_DECISION_ID,
   });
@@ -244,7 +265,7 @@ test("bulk bootstrap uses the same contract for legislation", async () => {
   expect(result.entityIds).toHaveLength(2);
 });
 
-test("bootstrap locks source policy before canonical rows for every family", async () => {
+test("bootstrap key-share locks the source before canonical rows for every family", async () => {
   const statements: string[] = [];
   const loggedDb = drizzle({
     client,
@@ -274,7 +295,7 @@ test("bootstrap locks source policy before canonical rows for every family", asy
     documentTable: string,
   ): void => {
     const sourceLock = statements.findIndex((query) =>
-      query.includes(`for share of "${sourceTable}"`),
+      query.includes(`for key share of "${sourceTable}"`),
     );
     const documentLock = statements.findIndex((query) =>
       query.includes(`for update of "${documentTable}"`),
@@ -326,7 +347,7 @@ test("a cursor page is an id-range seek, never an anti-join over the corpus", as
     sourceTable: string,
   ): void => {
     const cursorPages = statements.filter((query) =>
-      query.includes(`for share of "${sourceTable}"`),
+      query.includes(`for key share of "${sourceTable}"`),
     );
     expect(cursorPages).toHaveLength(1);
     const cursorPage = cursorPages.at(0);
@@ -359,7 +380,7 @@ test("a page's work is bounded by its limit, not by how many rows are already se
   const FIFTH_DECISION_ID = toSafeId<"caseLawDecision">(
     "0198e331-e578-7000-8000-000000000109",
   );
-  await db.insert(caseLawDecisions).values(
+  await insertUnseededDecisions(
     [THIRD_DECISION_ID, FOURTH_DECISION_ID, FIFTH_DECISION_ID].map(
       (id, index) => ({
         id,
@@ -565,7 +586,7 @@ test("a seed limit bounds what a page writes, and the cursor stops with it", asy
   const FOURTH_DECISION_ID = toSafeId<"caseLawDecision">(
     "0198e331-e578-7000-8000-000000000108",
   );
-  await db.insert(caseLawDecisions).values(
+  await insertUnseededDecisions(
     [THIRD_DECISION_ID, FOURTH_DECISION_ID].map((id, index) => ({
       id,
       sourceId: CASE_LAW_SOURCE_ID,

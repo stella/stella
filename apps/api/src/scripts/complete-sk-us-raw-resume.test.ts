@@ -4,20 +4,20 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import * as v from "valibot";
 
+import { createSafeId } from "@/api/lib/branded-types";
 import {
   decodeSourceRawEnvelope,
   encodeSourceRawEnvelope,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import { createSafeId } from "@/api/lib/branded-types";
+} from "@/api/lib/legal-search/ingestion-types";
 import {
   journalSkUsRawOutcome,
-  readSkUsRawCheckpoint,
   persistSkUsRawCheckpoint,
+  readSkUsRawCheckpoint,
 } from "@/api/scripts/complete-sk-us-raw-checkpoint";
 import {
-  SK_US_RAW_OUTCOMES,
-  SK_US_RAW_OUTCOME_DISPOSITIONS,
   runSkUsRawBatch,
+  SK_US_RAW_OUTCOME_DISPOSITIONS,
+  SK_US_RAW_OUTCOMES,
 } from "@/api/scripts/complete-sk-us-raw-plan";
 
 const NOT_REJECTED = Symbol("not rejected");
@@ -71,7 +71,7 @@ const readJournal = async (checkpointPath: string) =>
     (await readFile(`${checkpointPath}.outcomes.jsonl`, "utf-8"))
       .trim()
       .split("\n")
-      .map((line) => JSON.parse(line)),
+      .map((line) => JSON.parse(line) as unknown),
   );
 
 test("killing a multi-page batch resumes its durable checkpoint without duplicate effects or skipped rows", async () => {
@@ -209,7 +209,7 @@ test("killing a multi-page batch resumes its durable checkpoint without duplicat
           (await readFile(path.join(directory, "fetches.jsonl"), "utf-8"))
             .trim()
             .split("\n")
-            .map((line) => JSON.parse(line)),
+            .map((line) => JSON.parse(line) as unknown),
         );
         expect(fetches).toEqual(
           pauseAt === "before_write"
@@ -237,7 +237,7 @@ test("killing a multi-page batch resumes its durable checkpoint without duplicat
             (await readFile(path.join(directory, "fetches.jsonl"), "utf-8"))
               .trim()
               .split("\n")
-              .map((line) => JSON.parse(line)),
+              .map((line) => JSON.parse(line) as unknown),
           ),
         ).toEqual(fetches);
         for (const row of rows) {

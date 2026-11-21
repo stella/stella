@@ -1,0 +1,275 @@
+import type { Page } from "@playwright/test";
+import { panic } from "better-result";
+
+import {
+  type CaseLawDecisionRouteInput,
+  createCaseLawDecisionPath,
+  createCaseLawDecisionRouteParams,
+} from "@stll/api-contract/case-law-decision-route";
+import {
+  createStatutePath,
+  createStatuteRouteParams,
+} from "@stll/api-contract/statute-route";
+
+import {
+  caseLawBrowseCourtSegment,
+  createCaseLawBrowsePath,
+} from "../../src/features/case-law/browse-path";
+import { E2E_API_ORIGIN } from "./api";
+import { dockedChatLegalPayloads } from "./docked-chat-legal-payloads";
+import { apiJson, respond } from "./route-mock";
+import type { ApiOk } from "./route-mock";
+
+const {
+  decision,
+  bilingualDecision,
+  bilingualCzechDecision,
+  statute,
+  olderStatute,
+  noProvisions,
+  noCitations,
+  noLeadingCitations,
+  citationSummary,
+  versions,
+} = dockedChatLegalPayloads;
+
+type DecisionFixtureIdentity = Omit<CaseLawDecisionRouteInput, "decisionId"> & {
+  id: string;
+};
+const decisionParams = (value: DecisionFixtureIdentity) =>
+  createCaseLawDecisionRouteParams({
+    caseNumber: value.caseNumber,
+    country: value.country,
+    court: value.court,
+    decisionId: value.id,
+    language: value.language,
+    languageAlternates: value.languageAlternates,
+    slug: value.slug,
+  });
+const statuteParams = createStatuteRouteParams({
+  country: statute.country,
+  documentId: statute.id,
+  eli: statute.eli,
+  slug: statute.slug,
+  version: null,
+});
+const statuteVersionParams = createStatuteRouteParams({
+  country: olderStatute.country,
+  documentId: olderStatute.id,
+  eli: olderStatute.eli,
+  slug: olderStatute.slug,
+  version: olderStatute.versionValidFrom,
+});
+
+export const DOCKED_CHAT_LEGAL_ROUTES = {
+  decision: {
+    params: decisionParams(decision),
+    path: createCaseLawDecisionPath(decisionParams(decision)),
+    id: decision.id,
+  },
+  bilingualDecision: {
+    params: decisionParams(bilingualDecision),
+    path: createCaseLawDecisionPath(decisionParams(bilingualDecision)),
+    id: bilingualDecision.id,
+  },
+  statute: {
+    params: statuteParams,
+    path: createStatutePath(statuteParams),
+    id: statute.id,
+  },
+  statuteVersion: {
+    params: statuteVersionParams,
+    path: createStatutePath(statuteVersionParams),
+    id: olderStatute.id,
+  },
+};
+
+/** Resolve each host template through the same canonical route owners as the readers. */
+export const dockedLegalPath = (template: string): string => {
+  if (template === "/law/$country/courts/$") {
+    // The court hub of the decision fixture's court; its years come from
+    // the browse reads installed below.
+    return createCaseLawBrowsePath(
+      DOCKED_CHAT_LEGAL_ROUTES.decision.params.country,
+      {
+        level: "court",
+        court: caseLawBrowseCourtSegment(decision.court),
+      },
+    );
+  }
+  if (template.includes("/cases/") && template.includes("$slug")) {
+    const params = template.includes("$language")
+      ? DOCKED_CHAT_LEGAL_ROUTES.bilingualDecision.params
+      : DOCKED_CHAT_LEGAL_ROUTES.decision.params;
+    return template.replaceAll(/\$([A-Za-z]+)/gu, (_, parameter: string) => {
+      switch (parameter) {
+        case "country":
+          return params.country;
+        case "court":
+          return params.court;
+        case "language":
+          return (
+            params.language ?? panic(`No fixture language for ${template}`)
+          );
+        case "slug":
+          return params.slug;
+        default:
+          return panic(
+            `Unknown docked legal route parameter ${parameter} (${template})`,
+          );
+      }
+    });
+  }
+  const params = template.includes("$version")
+    ? statuteVersionParams
+    : statuteParams;
+  return template.replaceAll(/\$([A-Za-z]+)/gu, (_, parameter: string) => {
+    switch (parameter) {
+      case "country":
+        return params.country;
+      case "slug":
+        return params.slug;
+      case "version":
+        return (
+          statuteVersionParams.version ??
+          panic("Missing statute fixture version")
+        );
+      case "tableId":
+        return "019a0000-0000-7000-8000-000000000106";
+      default:
+        return panic(
+          `Unknown docked legal route parameter ${parameter} (${template})`,
+        );
+    }
+  });
+};
+
+/** Exact HTTP reads only: the real route, reader, runtime and composer mount. */
+export const installDockedLegalFixtures = async (page: Page) => {
+  const statuteRead = (value: ApiOk<"v1/law/statutes/:documentId", "get">) =>
+    apiJson("v1/law/statutes/:documentId", "get", value);
+  const decisionRead = (value: ApiOk<"v1/case/decisions/:decisionId", "get">) =>
+    apiJson("v1/case/decisions/:decisionId", "get", value);
+  const decisionBySlug = (
+    value: ApiOk<"v1/case/decisions/by-slug/:slug", "get">,
+  ) => apiJson("v1/case/decisions/by-slug/:slug", "get", value);
+  const versionsRead = apiJson(
+    "v1/law/statutes/:documentId/versions",
+    "get",
+    versions,
+  );
+  const reads = [
+    { pathname: `/v1/law/statutes/${statute.id}`, reply: statuteRead(statute) },
+    {
+      pathname: `/v1/law/statutes/by-slug/${statute.slug}`,
+      reply: apiJson("v1/law/statutes/by-slug/:slug", "get", statute),
+    },
+    {
+      pathname: `/v1/law/statutes/${statute.id}/versions`,
+      reply: versionsRead,
+    },
+    {
+      pathname: `/v1/law/statutes/${olderStatute.id}`,
+      reply: statuteRead(olderStatute),
+    },
+    {
+      pathname: `/v1/law/statutes/${olderStatute.id}/versions`,
+      reply: versionsRead,
+    },
+    ...[decision, bilingualDecision, bilingualCzechDecision].flatMap(
+      (value) => [
+        {
+          pathname: `/v1/case/decisions/${value.id}`,
+          reply: decisionRead(value),
+        },
+        {
+          pathname: `/v1/case/decisions/${value.id}/provisions`,
+          reply: apiJson(
+            "v1/case/decisions/:decisionId/provisions",
+            "get",
+            noProvisions,
+          ),
+        },
+        {
+          pathname: `/v1/case/decisions/${value.id}/citations`,
+          reply: apiJson(
+            "v1/case/decisions/:decisionId/citations",
+            "get",
+            noCitations,
+          ),
+        },
+        {
+          pathname: `/v1/case/decisions/${value.id}/citations/leading`,
+          reply: apiJson(
+            "v1/case/decisions/:decisionId/citations/leading",
+            "get",
+            noLeadingCitations,
+          ),
+        },
+        {
+          pathname: `/v1/case/decisions/${value.id}/citations/summary`,
+          reply: apiJson(
+            "v1/case/decisions/:decisionId/citations/summary",
+            "get",
+            citationSummary,
+          ),
+        },
+      ],
+    ),
+    {
+      pathname: `/v1/case/decisions/by-slug/${decision.slug}`,
+      reply: decisionBySlug(decision),
+    },
+    {
+      pathname: "/v1/case/browse/courts",
+      reply: apiJson("v1/case/browse/courts", "get", {
+        courts: [decision.court],
+        truncated: false,
+      }),
+    },
+    {
+      pathname: "/v1/case/browse/calendar",
+      reply: apiJson("v1/case/browse/calendar", "get", {
+        level: "years",
+        periods: [{ value: 2024, count: 1 }],
+        undated: 0,
+      }),
+    },
+    {
+      pathname: `/v1/case/decisions/by-slug/${bilingualDecision.slug}`,
+      reply: decisionBySlug(bilingualDecision),
+    },
+  ];
+  await page.route(
+    (url) =>
+      url.origin === E2E_API_ORIGIN &&
+      reads.some(({ pathname }) => pathname === url.pathname),
+    async (route) => {
+      if (route.request().method() !== "GET") {
+        await route.fallback();
+        return;
+      }
+      const url = new URL(route.request().url());
+      const read =
+        reads.find(({ pathname }) => pathname === url.pathname) ??
+        panic(`Unregistered legal fixture read ${url.pathname}`);
+      const reply = (() => {
+        if (
+          url.pathname ===
+            `/v1/case/decisions/by-slug/${bilingualDecision.slug}` &&
+          url.searchParams.get("language") === "cs"
+        ) {
+          return decisionBySlug(bilingualCzechDecision);
+        }
+        if (
+          url.pathname === `/v1/law/statutes/by-slug/${statute.slug}` &&
+          url.searchParams.get("asOf") === olderStatute.versionValidFrom
+        ) {
+          return apiJson("v1/law/statutes/by-slug/:slug", "get", olderStatute);
+        }
+        return read.reply;
+      })();
+      await respond(route, reply);
+    },
+  );
+};

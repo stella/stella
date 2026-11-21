@@ -1,4 +1,9 @@
+import { Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
+import type { SQL } from "drizzle-orm";
+import { PgDialect } from "drizzle-orm/pg-core";
+
+import { createTestState } from "@stll/test-state";
 
 import { member } from "@/api/db/auth-schema";
 import {
@@ -10,21 +15,30 @@ import {
   fields,
   matterCounters,
   properties,
+  propertyDependencies,
   workspaceMembers,
   workspaces,
+  workspaceViews,
 } from "@/api/db/schema";
 import type { FieldContent, PropertyContent } from "@/api/db/schema-validators";
 import { env } from "@/api/env";
 import { envBase } from "@/api/env-base";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  createFeatureAccessSnapshot,
+  decideFeatureAccess,
+} from "@/api/lib/feature-access/policy";
 import { createFileKey } from "@/api/lib/file-key";
 import { THUMBNAIL_MIME_TYPE } from "@/api/lib/files/image-derivative";
 import { LIMITS } from "@/api/lib/limits";
 import { MAX_MATTER_REFERENCE_ALLOCATION_ATTEMPTS } from "@/api/lib/matter-reference";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
+import { deleteS3ObjectWithSignal } from "@/api/lib/s3";
+import { copyObject } from "@/api/lib/s3-presign";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 import { entityVersionInsertResult } from "@/api/tests/helpers/entity-version-insert-mock";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
@@ -36,6 +50,9 @@ import {
 } from "@/api/tests/scoped-db-mock";
 
 import { createDuplicateWorkspace } from "./duplicate";
+import type { DuplicateWorkspaceDependencies } from "./duplicate";
+
+const testState = createTestState({ file: import.meta.path, config: env });
 
 const requestNativeExtractionRunsMock = mock(
   async ({ requests }: { requests: readonly unknown[] }) =>
@@ -58,7 +75,51 @@ const flushWorkspaceSearchRepairsMock = mock(async () => ({
   failed: 0,
   repaired: 0,
 }));
+const copyWorkspaceFilesMock: NonNullable<
+  DuplicateWorkspaceDependencies["copyWorkspaceFiles"]
+> = async ({
+  copiedS3Keys,
+  copies,
+  organizationId,
+  sourceWorkspaceId,
+  targetWorkspaceId,
+}) => {
+  const copied = await Promise.all(
+    copies.map(async (copy) => {
+      const sourceKey = createFileKey({
+        organizationId,
+        workspaceId: sourceWorkspaceId,
+        fileId: copy.sourceFileId,
+        mimeType: copy.mimeType,
+      });
+      const targetKey = createFileKey({
+        organizationId,
+        workspaceId: targetWorkspaceId,
+        fileId: copy.targetFileId,
+        mimeType: copy.mimeType,
+      });
+      copiedS3Keys.push(targetKey);
+      return await copyObject(sourceKey, targetKey);
+    }),
+  );
+  const completed = Result.all(copied);
+  return Result.isError(completed)
+    ? Result.err(completed.error)
+    : Result.ok([]);
+};
+const cleanupCopiedS3KeysMock: NonNullable<
+  DuplicateWorkspaceDependencies["cleanupCopiedS3Keys"]
+> = async ({ copiedS3Keys }) => {
+  await Promise.all(
+    copiedS3Keys.map(
+      async (key) =>
+        await deleteS3ObjectWithSignal(key, AbortSignal.timeout(10_000)),
+    ),
+  );
+};
 const duplicateWorkspace = createDuplicateWorkspace({
+  cleanupCopiedS3Keys: cleanupCopiedS3KeysMock,
+  copyWorkspaceFiles: copyWorkspaceFilesMock,
   enqueueDocumentProcessingRun: enqueueDocumentProcessingRunMock,
   enqueueEntitySearchRepairs: enqueueEntitySearchRepairsMock,
   enqueueWorkspaceSearchRepairs: enqueueWorkspaceSearchRepairsMock,
@@ -140,6 +201,13 @@ const readDuplicatedWorkspaceId = (result: unknown): SafeId<"workspace"> => {
 };
 
 beforeEach(() => {
+  enqueueDocumentProcessingRunMock.mockClear();
+  enqueueEntitySearchRepairsMock.mockClear();
+  enqueueWorkspaceSearchRepairsMock.mockClear();
+  flushEntitySearchRepairsMock.mockClear();
+  flushWorkspaceSearchRepairsMock.mockClear();
+  requestNativeExtractionRunsMock.mockClear();
+  testState.setConfig("FEATURE_LEGAL_LISTS", true);
   fake = startFakeS3();
 });
 
@@ -151,7 +219,9 @@ const createContext = ({
   includeContent = false,
   safeDb,
   scopedDb,
+  featureStatus = "hidden",
 }: {
+  featureStatus?: "hidden" | "colleague" | "enabled";
   includeContent?: boolean;
   safeDb: DuplicateWorkspaceCtx["safeDb"];
   scopedDb: DuplicateWorkspaceCtx["scopedDb"];
@@ -167,6 +237,38 @@ const createContext = ({
   };
 
   return asTestRaw<DuplicateWorkspaceCtx>({
+    featureAccessSnapshot: createFeatureAccessSnapshot({
+      organizationId: recorderBindings.organizationId,
+      userId: recorderBindings.userId,
+      decisions: new Map([
+        [
+          "list-verification",
+          decideFeatureAccess({
+            registry: { "list-verification": { enrolment: "invitation" } },
+            featureId: "list-verification",
+            organizationId: recorderBindings.organizationId,
+            userId: recorderBindings.userId,
+            user: { email: "member@example.test", emailVerified: true },
+            membership: true,
+            grants:
+              featureStatus === "hidden"
+                ? {}
+                : {
+                    "list-verification": [
+                      {
+                        type: "member",
+                        organizationId: recorderBindings.organizationId,
+                        email:
+                          featureStatus === "enabled"
+                            ? "member@example.test"
+                            : "colleague@example.test",
+                      },
+                    ],
+                  },
+          }),
+        ],
+      ]),
+    }),
     body: { includeContent },
     safeDb,
     scopedDb,
@@ -175,7 +277,7 @@ const createContext = ({
     orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
     managedAIResidency: "eu" as const,
     request: recorderBindings.request,
-    route: "/v1/workspaces/:workspaceId/duplicate",
+    route: "/v1/workspaces/:workspaceId/duplicate" satisfies ApiRoutePath,
     session: {
       activeOrganizationId: recorderBindings.organizationId,
     },
@@ -187,152 +289,201 @@ const createContext = ({
 };
 
 describe("duplicateWorkspace", () => {
-  test("copies the workspace lead when duplicating a matter", async () => {
-    const insertedWorkspaces: unknown[] = [];
-    const insertedWorkspaceMembers: unknown[] = [];
-    const insertedAuditLogs: unknown[] = [];
+  for (const featureStatus of ["hidden", "colleague", "enabled"] as const) {
+    test(`${featureStatus} copies a matter with permitted views and its lead`, async () => {
+      const createdWorkspaces: unknown[][] = [];
+      const insertedViews: unknown[] = [];
+      const insertedWorkspaceMembers: unknown[] = [];
+      const insertedAuditLogs: unknown[] = [];
 
-    const { safeDb, scopedDb } = createScopedDbMock({
-      query: {
-        workspaces: {
-          findFirst: async () => ({
-            id: "ws_source123",
-            name: "Smith v Jones",
-            clientId: "contact_client123",
-            billingReference: "BILL-123",
-            color: "blue",
-            leadUserId: "user_lead123",
-          }),
-        },
-        properties: {
-          findMany: async () => [],
-        },
-        propertyDependencies: {
-          findMany: async () => [],
-        },
-        workspaceViews: {
-          findMany: async () => [],
-        },
-        workspaceMembers: {
-          findMany: async () => [{ userId: "user_lead123" }],
-        },
-        workspaceContacts: {
-          findMany: async () => [],
-        },
-        organizationSettings: {
-          findFirst: async () => null,
-        },
-      },
-      select: (selectedFields: Record<string, unknown>) => {
-        if (
-          selectedFields["reference"] === documentReferenceCounters.reference
-        ) {
-          return createSelectQueryMock([]);
-        }
-        if ("total" in selectedFields) {
-          return {
-            from: () => ({
-              where: async () => [{ total: 0 }],
+      const { safeDb, scopedDb } = createScopedDbMock({
+        query: {
+          workspaces: {
+            findFirst: async () => ({
+              id: "ws_source123",
+              name: "Smith v Jones",
+              clientId: "contact_client123",
+              billingReference: "BILL-123",
+              color: "blue",
+              leadUserId: "user_lead123",
             }),
-          };
-        }
-
-        if ("name" in selectedFields) {
-          return {
-            from: () => ({
-              where: async () => [],
-            }),
-          };
-        }
-
-        if ("userId" in selectedFields) {
-          return {
-            from: (table: unknown) => {
-              expect(table).toBe(member);
-              return {
-                where: () => ({
-                  orderBy: (column: unknown) => {
-                    // Copied memberships lock in the order removal uses.
-                    expect(column).toBe(member.userId);
-                    return {
-                      limit: () => ({
-                        for: async (strength: string) => {
-                          expect(strength).toBe("key share");
-                          return [{ userId: "user_lead123" }];
-                        },
-                      }),
-                    };
-                  },
-                }),
-              };
-            },
-          };
-        }
-
-        throw new Error("Unexpected select fields");
-      },
-      insert: (table: unknown) => ({
-        values: (value: unknown) => {
-          if (table === matterCounters) {
+          },
+          properties: {
+            findMany: async () => [],
+          },
+          propertyDependencies: {
+            findMany: async () => [],
+          },
+          workspaceViews: {
+            findMany: async () => [
+              {
+                id: "019c0c90-0000-7000-8000-000000000103",
+                name: "Ordinary",
+                position: 0,
+                layout: {
+                  type: "filesystem",
+                  version: 1,
+                  filters: [],
+                  sorts: [],
+                  hiddenProperties: [],
+                  calculations: [],
+                },
+              },
+              {
+                id: "019c0c90-0000-7000-8000-000000000104",
+                name: "Verification",
+                position: 1,
+                layout: {
+                  type: "avt",
+                  version: 1,
+                  listId: null,
+                  filters: [],
+                  sorts: [],
+                  hiddenProperties: [],
+                  calculations: [],
+                },
+              },
+            ],
+          },
+          workspaceMembers: {
+            findMany: async () => [{ userId: "user_lead123" }],
+          },
+          workspaceContacts: {
+            findMany: async () => [],
+          },
+          organizationSettings: {
+            findFirst: async () => null,
+          },
+        },
+        select: (selectedFields: Record<string, unknown>) => {
+          if (
+            selectedFields["reference"] === documentReferenceCounters.reference
+          ) {
+            return createSelectQueryMock([]);
+          }
+          if ("total" in selectedFields) {
             return {
-              onConflictDoUpdate: () => ({
-                returning: async () => [
-                  {
-                    lastValue: MAX_MATTER_REFERENCE_ALLOCATION_ATTEMPTS,
-                  },
-                ],
+              from: () => ({
+                where: async () => [{ total: 0 }],
               }),
             };
           }
 
-          if (table === workspaces) {
-            insertedWorkspaces.push(value);
-            return undefined;
+          if ("name" in selectedFields) {
+            return {
+              from: () => ({
+                where: async () => [],
+              }),
+            };
           }
 
-          if (table === workspaceMembers) {
-            insertedWorkspaceMembers.push(value);
-            return undefined;
+          if ("userId" in selectedFields) {
+            return {
+              from: (table: unknown) => {
+                expect(table).toBe(member);
+                return {
+                  where: () => ({
+                    orderBy: (column: unknown) => {
+                      // Copied memberships lock in the order removal uses.
+                      expect(column).toBe(member.userId);
+                      return {
+                        limit: () => ({
+                          for: async (strength: string) => {
+                            expect(strength).toBe("key share");
+                            return [{ userId: "user_lead123" }];
+                          },
+                        }),
+                      };
+                    },
+                  }),
+                };
+              },
+            };
           }
 
-          if (table === auditLogs) {
-            insertedAuditLogs.push(value);
-            return undefined;
-          }
-
-          throw new Error("Unexpected insert table");
+          throw new Error("Unexpected select fields");
         },
-      }),
-      update: (table: unknown) => {
-        expect(table).toBe(matterCounters);
-        return { set: () => ({ where: async () => undefined }) };
-      },
-      execute: async () => undefined,
-    });
+        insert: (table: unknown) => ({
+          values: (value: unknown) => {
+            if (table === matterCounters) {
+              return {
+                onConflictDoUpdate: () => ({
+                  returning: async () => [
+                    {
+                      lastValue: MAX_MATTER_REFERENCE_ALLOCATION_ATTEMPTS,
+                    },
+                  ],
+                }),
+              };
+            }
 
-    const result = await duplicateWorkspace.handler(
-      createContext({ safeDb, scopedDb }),
-    );
+            if (table === workspaceViews) {
+              insertedViews.push(value);
+              return undefined;
+            }
+            if (table === workspaceMembers) {
+              insertedWorkspaceMembers.push(value);
+              return { onConflictDoNothing: async () => undefined };
+            }
 
-    expect(result).toEqual({ workspaceId: expect.any(String) });
-    expect(insertedWorkspaces).toEqual([
-      expect.objectContaining({
-        billingReference: "BILL-123",
-        clientId: "contact_client123",
-        color: "blue",
-        leadUserId: "user_lead123",
-        name: "Smith v Jones",
-      }),
-    ]);
-    expect(insertedWorkspaceMembers).toEqual([
-      [
-        expect.objectContaining({
-          userId: "user_lead123",
+            if (table === auditLogs) {
+              insertedAuditLogs.push(value);
+              return undefined;
+            }
+
+            throw new Error("Unexpected insert table");
+          },
         }),
-      ],
-    ]);
-    expect(insertedAuditLogs).toHaveLength(1);
-  });
+        update: (table: unknown) => {
+          expect(table).toBe(matterCounters);
+          return { set: () => ({ where: async () => undefined }) };
+        },
+        execute: async (query: SQL) => {
+          const statement = new PgDialect().sqlToQuery(query);
+          if (statement.sql.includes("stella_create_workspace")) {
+            createdWorkspaces.push(statement.params);
+          }
+          return undefined;
+        },
+      });
+
+      const result = await duplicateWorkspace.handler(
+        createContext({ safeDb, scopedDb, featureStatus }),
+      );
+
+      expect(result).toEqual({ workspaceId: expect.any(String) });
+      // The database creates the matter: id, client, name, reference,
+      // billing reference, color and lead.
+      expect(createdWorkspaces).toEqual([
+        [
+          expect.any(String),
+          "contact_client123",
+          "Smith v Jones",
+          expect.any(String),
+          "BILL-123",
+          "blue",
+          "user_lead123",
+        ],
+      ]);
+      expect(insertedWorkspaceMembers).toEqual([
+        [
+          expect.objectContaining({
+            userId: "user_lead123",
+          }),
+        ],
+      ]);
+      expect(insertedAuditLogs).toHaveLength(1);
+      expect(insertedViews).toHaveLength(1);
+      expect(insertedViews.at(0)).toEqual(
+        featureStatus === "enabled"
+          ? [
+              expect.objectContaining({ name: "Ordinary" }),
+              expect.objectContaining({ name: "Verification" }),
+            ]
+          : [expect.objectContaining({ name: "Ordinary" })],
+      );
+    });
+  }
 
   test("preserves property roles when duplicating a matter", async () => {
     const insertedProperties: unknown[] = [];
@@ -357,6 +508,17 @@ describe("duplicateWorkspace", () => {
         },
         properties: {
           findMany: async () => [
+            {
+              id: "prop_file",
+              workspaceId: "ws_source123",
+              name: "Documents",
+              status: "active",
+              content: { type: "file", version: 1 },
+              tool: { type: "manual-input", version: 1 },
+              system: true,
+              kinds: ["document"],
+              role: null,
+            },
             {
               id: "prop_document_type",
               workspaceId: "ws_source123",
@@ -433,7 +595,11 @@ describe("duplicateWorkspace", () => {
             return undefined;
           }
 
-          if (table === auditLogs || table === workspaces) {
+          if (
+            table === auditLogs ||
+            table === workspaces ||
+            table === propertyDependencies
+          ) {
             return undefined;
           }
 
@@ -452,17 +618,17 @@ describe("duplicateWorkspace", () => {
     );
 
     expect(result).toEqual({ workspaceId: expect.any(String) });
-    expect(insertedProperties).toEqual([
-      [
+    expect(insertedProperties.at(0)).toEqual(
+      expect.arrayContaining([
         expect.objectContaining({
           name: "Type de document",
           role: "document-type-classifier",
         }),
-      ],
-    ]);
+      ]),
+    );
   });
 
-  test("copies and remaps image thumbnail refs when duplicating content", async () => {
+  test("copies and remaps image thumbnail refs with a tool-less property", async () => {
     requestNativeExtractionRunsMock.mockClear();
     enqueueDocumentProcessingRunMock.mockClear();
     enqueueWorkspaceSearchRepairsMock.mockClear();
@@ -699,7 +865,7 @@ describe("duplicateWorkspace", () => {
     expect(requestKeys("GET")).toEqual([]);
   });
 
-  test("marks the copies extraction will not index, inside the transaction", async () => {
+  test("marks every copy for name indexing inside the transaction", async () => {
     requestNativeExtractionRunsMock.mockClear();
     enqueueDocumentProcessingRunMock.mockClear();
     enqueueEntitySearchRepairsMock.mockClear();
@@ -898,12 +1064,12 @@ describe("duplicateWorkspace", () => {
       throw new Error("Expected both copies to be inserted");
     }
 
-    // The task has no extraction run to index it, so its mark is written
-    // with the copies themselves; the document's projection arrives with the
-    // extraction that owns it, and marking it too would index it twice.
+    // Both names are indexed immediately; native extraction independently
+    // adds the document content to the same source-fenced projection.
     expect(enqueueEntitySearchRepairsMock).toHaveBeenCalledTimes(1);
     expect(enqueueEntitySearchRepairsMock.mock.calls.at(0)?.at(1)).toEqual([
       copiedTaskId,
+      copiedDocumentId,
     ]);
     expect(requestNativeExtractionRunsMock).toHaveBeenCalledTimes(1);
     expect(enqueueDocumentProcessingRunMock.mock.calls).toEqual([

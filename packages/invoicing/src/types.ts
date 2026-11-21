@@ -6,6 +6,7 @@ export type VatTreatment =
   | "domestic_vat"
   | "not_vat_payer"
   | "reverse_charge"
+  | "outside_scope"
   | "exempt";
 
 export type InvoiceParty = {
@@ -27,6 +28,8 @@ export type BankPaymentDetails = {
   accountNumber?: string;
   bankCode?: string;
   variableSymbol?: string;
+  constantSymbol?: string;
+  specificSymbol?: string;
   dueDate?: string;
   message?: string;
 };

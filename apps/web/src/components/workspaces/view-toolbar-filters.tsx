@@ -2,6 +2,7 @@ import { useState } from "react";
 
 import { useTranslations } from "use-intl";
 
+import { parseDecimalToken } from "@stll/agent-input/numeric-token";
 import {
   ENTITY_PRIORITIES as PRIORITY_VALUES,
   TASK_STATUSES as STATUS_VALUES,
@@ -31,6 +32,7 @@ import {
   MenuSeparator,
   MenuTrigger,
 } from "@stll/ui/menu";
+import { NumberInput } from "@stll/ui/number-input";
 import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
 import {
   Select,
@@ -39,7 +41,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@stll/ui/select";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { ViewFilterButton, ViewFilterChip } from "@stll/ui/view-toolbar";
+import { PropertyIcon } from "@stll/workspace-ui/property-icon";
 
 import type {
   ConditionOperator,
@@ -64,15 +68,22 @@ import {
   SingleSelectValue,
 } from "@/components/workspaces/conditions/condition-select-values";
 import { SelectColorIcon } from "@/components/workspaces/properties/shared";
-import { PropertyIcon } from "@/components/workspaces/property-helpers";
 import { WORK_TYPES } from "@/components/workspaces/tasks/task-detail-constants";
+import { filterFieldsByLabel } from "@/components/workspaces/view-toolbar-filters.logic";
+import {
+  ADVANCED_FILTER_ICON_CLASS,
+  FILTER_CHIP_FIELD_CLASS,
+  FILTER_CHIP_SUMMARY_CLASS,
+} from "@/components/workspaces/view-toolbar-filters.pending";
 import type { TranslationKey } from "@/i18n/types";
 import type { WorkspaceProperty } from "@/lib/types";
 
-import {
-  ADVANCED_FILTER_POPUP_CLASS_NAME,
-  AdvancedFilterEditor,
-} from "./advanced-filter-editor";
+import { AdvancedFilterEditor } from "./advanced-filter-editor";
+
+/** A filter value's text as the number its field shows; empty or unreadable
+ *  text shows an empty field. */
+const leafNumberValue = (value: string): number | null =>
+  parseDecimalToken(value.trim()).unwrapOr(null);
 
 type FilterChipsProps = {
   filters: ConditionNode[];
@@ -228,11 +239,11 @@ const FilterChip = ({
     <Popover onOpenChange={onOpenChange} open={open}>
       <PopoverTrigger render={<ViewFilterChip />}>
         <FieldTypeIcon field={field} />
-        <span className="text-foreground">{field.label}</span>
+        <span className={FILTER_CHIP_FIELD_CLASS}>{field.label}</span>
         {valueColor !== undefined && (
           <SelectColorIcon className="size-3.5" color={valueColor} />
         )}
-        <span className="text-muted-foreground">
+        <span className={FILTER_CHIP_SUMMARY_CLASS}>
           {chipSummary({
             field,
             node,
@@ -283,9 +294,9 @@ const FilterEditBody = ({
     <div className="flex flex-col">
       <div className="flex items-center gap-1.5 border-b px-2.5 py-2">
         <FieldTypeIcon field={field} />
-        <span className="flex-1 truncate text-sm font-medium">
+        <TruncatedText className="flex-1 text-sm font-medium">
           {field.label}
-        </span>
+        </TruncatedText>
         <Menu>
           <MenuTrigger
             aria-label={t("common.actions")}
@@ -402,13 +413,15 @@ const ValueEditor = ({
 
   if (editorKind === "int") {
     return (
-      <Input
-        autoFocus
-        className="h-7! w-full text-xs"
-        onChange={(e) => emit(e.currentTarget.value)}
+      <NumberInput
+        className="w-full"
+        // A year or a registry number reads without grouping, and the
+        // filter compares the digits as typed.
+        format={{ maximumFractionDigits: 20, useGrouping: false }}
+        inputProps={{ autoFocus: true }}
+        onValueChange={(next) => emit(next === null ? "" : String(next))}
         size="sm"
-        type="number"
-        value={leafValueString(node)}
+        value={leafNumberValue(leafValueString(node))}
       />
     );
   }
@@ -462,11 +475,9 @@ const AdvancedFilterChip = ({
   return (
     <Popover onOpenChange={onOpenChange} open={open}>
       <PopoverTrigger render={<ViewFilterChip />}>
-        <SlidersHorizontalIcon className="size-3.5" />
-        <span className="text-foreground">
-          {t("workspaces.views.advancedFilter")}
-        </span>
-        <span className="text-muted-foreground">
+        <SlidersHorizontalIcon className={ADVANCED_FILTER_ICON_CLASS} />
+        <span className={FILTER_CHIP_FIELD_CLASS}>{t("common.advanced")}</span>
+        <span className={FILTER_CHIP_SUMMARY_CLASS}>
           {t("workspaces.views.advancedFilterCount", {
             count: node.children.length,
           })}
@@ -474,7 +485,7 @@ const AdvancedFilterChip = ({
       </PopoverTrigger>
       <PopoverPopup
         align="start"
-        className={ADVANCED_FILTER_POPUP_CLASS_NAME}
+        className="w-[44rem] max-w-[92vw]"
         padding="none"
       >
         <AdvancedFilterEditor
@@ -508,10 +519,7 @@ const AddFilterPicker = ({
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
 
-  const normalized = query.trim().toLowerCase();
-  const visible = normalized
-    ? fields.filter((field) => field.label.toLowerCase().includes(normalized))
-    : fields;
+  const visible = filterFieldsByLabel(fields, query);
 
   const close = () => {
     setOpen(false);
@@ -739,7 +747,7 @@ const useFilterFields = (properties: WorkspaceProperty[]): FieldOption[] => {
 
   for (const property of properties) {
     const content = property.content;
-    if (content.type === "file") {
+    if (content.type === "file" || content.type === "record") {
       continue;
     }
     if (content.type === "single-select" || content.type === "multi-select") {

@@ -1,14 +1,15 @@
+import type { RouteEntry } from "@/api/http/route";
 import { API_RATE_LIMITS } from "@/api/lib/limits";
 import { logger } from "@/api/lib/observability/logger";
 import { emitPublicCorpusAdmissionMetric } from "@/api/lib/observability/request-metrics";
 import {
   getPublicCorpusClassPolicy,
   type PublicCorpusClass,
-  resolvePublicCorpusPolicy,
+  publicCorpusClassOf,
 } from "@/api/public-corpus-policy";
 
+import type { RateLimitOptions } from "./contracts";
 import { scopedRateLimitKey } from "./rate-limit";
-import type { RateLimitOptions } from "./rate-limit";
 import { createRedisRateLimit } from "./redis-context";
 
 export const createPublicCorpusAddressRateLimitOptions = (
@@ -21,8 +22,8 @@ export const createPublicCorpusAddressRateLimitOptions = (
       failurePolicy: "fail_open_local",
       scope: `public-corpus-${routeClass}`,
     }),
-    skip: (request: Request) =>
-      resolvePublicCorpusPolicy(request)?.class !== routeClass,
+    skip: (request: Request, entry: RouteEntry | undefined) =>
+      publicCorpusClassOf(entry, new URL(request.url)) !== routeClass,
   }) as const satisfies RateLimitOptions;
 
 export const createPublicCorpusGlobalRateLimitOptions = (
@@ -35,6 +36,7 @@ export const createPublicCorpusGlobalRateLimitOptions = (
   return {
     duration,
     max,
+    refusalStatus: 503,
     ...createRedisBinding({
       failurePolicy: "fail_open_local",
       scope,
@@ -57,8 +59,8 @@ export const createPublicCorpusGlobalRateLimitOptions = (
         max,
       });
     },
-    skip: (request: Request) =>
-      resolvePublicCorpusPolicy(request)?.class !== routeClass,
+    skip: (request: Request, entry: RouteEntry | undefined) =>
+      publicCorpusClassOf(entry, new URL(request.url)) !== routeClass,
   } as const satisfies RateLimitOptions;
 };
 
@@ -68,6 +70,7 @@ export const createPublicSanctionsRateLimitOptions = () =>
   ({
     duration: API_RATE_LIMITS.publicSanctionsSearch.duration,
     max: API_RATE_LIMITS.publicSanctionsSearch.max,
+    budget: { name: "api.public_sanctions.address", keyKind: "address" },
     ...createRedisRateLimit({
       failurePolicy: "fail_closed",
       scope: PUBLIC_SANCTIONS_RATE_LIMIT_SCOPE,

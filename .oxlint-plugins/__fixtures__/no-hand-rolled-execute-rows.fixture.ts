@@ -76,7 +76,7 @@ const toolRows = (await oneArgumentTool.execute({})).rows;
 const tableRows = Array.isArray(table.rows) ? table.rows : [];
 
 // A shadowing parameter does not inherit the result's provenance.
-// oxlint-disable-next-line eslint/no-shadow -- the shadow is the regression shape
+// oxlint-disable-next-line no-shadow -- the shadow is the regression shape
 const shadowed = (result: unknown[]) => Array.isArray(result);
 
 export {

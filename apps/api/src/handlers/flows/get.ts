@@ -4,9 +4,11 @@ import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 
 const config = {
+  contract: "patch",
   description:
     "Read one flow definition: its name, description, steps, trigger, and " +
-    "enabled flag. Use flows.list to browse the organization's flows and " +
+    "enabled flag, plus updatedAt. Send that updatedAt value as expectedUpdatedAt " +
+    "when replacing the definition with flows.update. Use flows.list to browse the organization's flows and " +
     "flows.runs.get to read a run of one.",
   permissions: { workspace: ["read"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,

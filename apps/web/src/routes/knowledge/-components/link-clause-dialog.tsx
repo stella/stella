@@ -10,6 +10,7 @@ import {
   Dialog,
   DialogClose,
   DialogFooter,
+  DialogFormState,
   DialogHeader,
   DialogPanel,
   DialogPopup,
@@ -26,23 +27,28 @@ import {
   SelectValue,
 } from "@stll/ui/select";
 import { stellaToast } from "@stll/ui/toast";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
+import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
 import { userErrorMessage } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
 import {
   clauseCategoriesOptions,
   clausesOptions,
   templateClausesOptions,
   templatePreviewOptions,
 } from "@/lib/knowledge/queries";
+import { queryView } from "@/lib/query-view.logic";
 import type { SafeId } from "@/lib/safe-id";
 import { toSafeId } from "@/lib/safe-id";
 import { ClauseBody } from "@/routes/knowledge/-components/clause-body";
+import { filterClauseLinkCandidates } from "@/routes/knowledge/-components/link-clause-dialog.logic";
 
 // ── Types ────────────────────────────────────────────
 
@@ -77,6 +83,7 @@ export const LinkClauseDialog = ({
   defaultSlotName,
   reservedSlotNames,
 }: LinkClauseDialogProps) => {
+  const idempotentSubmit = useIdempotentSubmit();
   const t = useTranslations();
   const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
   const [selectedCategory, setSelectedCategory] = useState("");
@@ -94,10 +101,12 @@ export const LinkClauseDialog = ({
   const [customSlotName, setCustomSlotName] = useState("");
   const [linking, setLinking] = useState(false);
 
-  const { data: catData } = useQuery({
+  const catDataQuery = useQuery({
     ...clauseCategoriesOptions(activeOrganizationId),
     enabled: open,
   });
+  const catDataView = queryView(catDataQuery);
+  const catData = catDataView.type === "items" ? catDataView.items : undefined;
   const {
     data: clauseData,
     isLoading: clausesLoading,
@@ -109,14 +118,20 @@ export const LinkClauseDialog = ({
 
   // Slots discovered in the template document (clause markers
   // markers) and slots already taken by existing links.
-  const { data: previewData } = useQuery({
+  const previewDataQuery = useQuery({
     ...templatePreviewOptions(activeOrganizationId, templateId),
     enabled: open,
   });
-  const { data: linksData } = useQuery({
+  const previewDataView = queryView(previewDataQuery);
+  const previewData =
+    previewDataView.type === "items" ? previewDataView.items : undefined;
+  const linksDataQuery = useQuery({
     ...templateClausesOptions(activeOrganizationId, templateId),
     enabled: open,
   });
+  const linksDataView = queryView(linksDataQuery);
+  const linksData =
+    linksDataView.type === "items" ? linksDataView.items : undefined;
 
   const discoveredSlots =
     previewData && "clauseSlots" in previewData ? previewData.clauseSlots : [];
@@ -166,7 +181,7 @@ export const LinkClauseDialog = ({
   const clauses = clauseData && "items" in clauseData ? clauseData.items : [];
 
   // Variants of the currently selected clause, offered at link time.
-  const { data: variantsResult } = useQuery({
+  const variantsResultQuery = useQuery({
     queryKey: ["clause-variants", selectedClauseId],
     queryFn: async ({ signal }) => {
       if (!selectedClauseId) {
@@ -185,20 +200,19 @@ export const LinkClauseDialog = ({
     },
     enabled: open && selectedClauseId !== null,
   });
+  const variantsResultView = queryView(variantsResultQuery);
+  const variantsResult =
+    variantsResultView.type === "items" ? variantsResultView.items : undefined;
   const variants =
     variantsResult && "variants" in variantsResult
       ? variantsResult.variants
       : [];
   const previewVariant = variants.find((v) => v.id === previewVariantId);
 
-  const filtered = clauses.filter((c) => {
-    if (selectedCategory && c.categoryId !== selectedCategory) {
-      return false;
-    }
-    if (search && !c.title.toLowerCase().includes(search.toLowerCase())) {
-      return false;
-    }
-    return true;
+  const filtered = filterClauseLinkCandidates({
+    clauses,
+    selectedCategory,
+    search,
   });
 
   const resolveSlotName = (): string | undefined => {
@@ -222,7 +236,13 @@ export const LinkClauseDialog = ({
   // No useCallback: React Compiler handles memoization, and the
   // closure depends on half the dialog state anyway.
   const handleLink = async () => {
-    if (!selectedClauseId || slotUnavailable) {
+    if (
+      !selectedClauseId ||
+      slotUnavailable ||
+      previewDataView.type !== "items" ||
+      linksDataView.type !== "items" ||
+      variantsResultView.type !== "items"
+    ) {
       return;
     }
 
@@ -241,9 +261,14 @@ export const LinkClauseDialog = ({
       body.slotName = slotName;
     }
 
-    const response = await api
-      .templates({ templateId: toSafeId<"template">(templateId) })
-      .clauses.put(body);
+    const response = await idempotentSubmit.run({
+      operation: `templates.${templateId}.clauses.create`,
+      body,
+      send: async (payload) =>
+        api
+          .templates({ templateId: toSafeId<"template">(templateId) })
+          .clauses.put(payload),
+    });
 
     setLinking(false);
 
@@ -269,13 +294,53 @@ export const LinkClauseDialog = ({
     onLinked();
   };
 
+  const resolveLinkClauseDisabledReason = () => {
+    if (linking) {
+      return t("clauses.linking");
+    }
+    if (!selectedClauseId) {
+      return t("clauses.selectClauseToLink");
+    }
+    if (slotUnavailable) {
+      return t("clauses.chooseUnusedSlot");
+    }
+    if (
+      previewDataView.type === "error" ||
+      linksDataView.type === "error" ||
+      variantsResultView.type === "error"
+    ) {
+      return t("common.loadFailed");
+    }
+    return t("common.loading");
+  };
+
   return (
     <Dialog onOpenChange={onOpenChange} open={open}>
       <DialogPopup className="sm:max-w-lg">
+        <DialogFormState
+          dirty={
+            selectedClauseId !== null ||
+            selectedVariantId !== null ||
+            slotValue !== null ||
+            customSlotName !== ""
+          }
+          onDiscard={() => {
+            setSelectedClauseId(null);
+            setSelectedVariantId(null);
+            setSlotValue(null);
+            setCustomSlotName("");
+          }}
+        />
         <DialogHeader>
           <DialogTitle>{t("clauses.linkClause")}</DialogTitle>
         </DialogHeader>
         <DialogPanel className="grid gap-4">
+          <QueryViewFeedback view={catDataView} />
+          <QueryViewFeedback view={previewDataView} />
+          <QueryViewFeedback view={linksDataView} />
+          {selectedClauseId !== null && (
+            <QueryViewFeedback view={variantsResultView} />
+          )}
           <div className="flex gap-2">
             <div className="relative flex-1">
               <SearchIcon className="text-muted-foreground absolute start-2.5 top-2.5 size-4" />
@@ -287,18 +352,27 @@ export const LinkClauseDialog = ({
                 value={search}
               />
             </div>
-            <select
-              className="flex h-9 rounded-md border bg-transparent px-3 py-1 text-sm"
-              onChange={(e) => setSelectedCategory(e.target.value)}
+            <Select
+              onValueChange={(value: string | null) =>
+                setSelectedCategory(value ?? "")
+              }
               value={selectedCategory}
             >
-              <option value="">{t("clauses.allClauses")}</option>
-              {categories.map((cat) => (
-                <option dir="auto" key={cat.id} value={cat.id}>
-                  {cat.name}
-                </option>
-              ))}
-            </select>
+              <SelectTrigger
+                aria-label={t("common.category")}
+                className="w-auto"
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectPopup>
+                <SelectItem value="">{t("clauses.allClauses")}</SelectItem>
+                {categories.map((cat) => (
+                  <SelectItem dir="auto" key={cat.id} value={cat.id}>
+                    {cat.name}
+                  </SelectItem>
+                ))}
+              </SelectPopup>
+            </Select>
           </div>
 
           <div className="max-h-64 overflow-y-auto rounded-lg border">
@@ -320,32 +394,35 @@ export const LinkClauseDialog = ({
             <ul className="divide-y">
               {filtered.map((clause) => (
                 <li key={clause.id}>
-                  <button
-                    className={cn(
-                      "flex w-full items-center gap-3 px-4 py-2.5 text-start text-sm",
-                      selectedClauseId === clause.id
-                        ? "bg-muted"
-                        : "hover:bg-muted/50",
-                    )}
+                  <Button
+                    aria-pressed={selectedClauseId === clause.id}
                     onClick={() => {
                       setSelectedClauseId(clause.id);
                       setSelectedVariantId(null);
                     }}
-                    type="button"
+                    className="w-full"
+                    selected={selectedClauseId === clause.id}
+                    variant="plain"
                   >
-                    <TextQuoteIcon className="text-muted-foreground size-4 shrink-0" />
                     <span
-                      className="min-w-0 flex-1 truncate font-medium"
-                      dir="auto"
+                      className={cn(
+                        "flex w-full items-center gap-3 px-4 py-2.5 text-start text-sm",
+                        selectedClauseId === clause.id
+                          ? "bg-muted"
+                          : "hover:bg-muted/50",
+                      )}
                     >
-                      {clause.title}
+                      <TextQuoteIcon className="text-muted-foreground size-4 shrink-0" />
+                      <TruncatedText className="flex-1 font-medium" dir="auto">
+                        {clause.title}
+                      </TruncatedText>
+                      <span className="text-muted-foreground shrink-0 text-xs">
+                        {t("common.versionLabel", {
+                          version: String(clause.currentVersion),
+                        })}
+                      </span>
                     </span>
-                    <span className="text-muted-foreground shrink-0 text-xs">
-                      {t("common.versionLabel", {
-                        version: String(clause.currentVersion),
-                      })}
-                    </span>
-                  </button>
+                  </Button>
                 </li>
               ))}
             </ul>
@@ -461,7 +538,15 @@ export const LinkClauseDialog = ({
             {t("common.cancel")}
           </DialogClose>
           <Button
-            disabled={linking || !selectedClauseId || slotUnavailable}
+            disabled={
+              previewDataView.type !== "items" ||
+              linksDataView.type !== "items" ||
+              variantsResultView.type !== "items" ||
+              linking ||
+              !selectedClauseId ||
+              slotUnavailable
+            }
+            disabledReason={resolveLinkClauseDisabledReason()}
             onClick={() => {
               detached(handleLink(), "link-clause-dialog.link");
             }}

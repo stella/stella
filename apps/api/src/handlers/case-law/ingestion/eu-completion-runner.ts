@@ -1,24 +1,19 @@
-import { panic, Result, TaggedError, type InferOk } from "better-result";
+import { type InferOk, panic, Result, TaggedError } from "better-result";
 import { and, asc, eq } from "drizzle-orm";
 import { TransformStream } from "node:stream/web";
 
+// parser-output-unchanged: SHA-256 ownership changes preserve input bytes, serialization and update order, so stored hashes and parser output remain identical.
+import { createSha256 } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
-  caseLawDecisions,
   caseLawDecisionJudges,
+  caseLawDecisions,
   caseLawSources,
 } from "@/api/db/schema";
 import { createIngestionDb, markRlsDatabase } from "@/api/db/scoped";
-import {
-  decodeSourceRawEnvelope,
-  decodeSourceRawEnvelopeObjects,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  type IngestionResult,
-  type StoredRawReparseInput,
-} from "@/api/handlers/case-law/ingestion/adapter";
 import {
   ECJ_LANGUAGES,
   euEcjAdapter,
@@ -34,21 +29,30 @@ import type { CaseLawRootHandle } from "@/api/lib/case-law/maintenance-lane";
 import { readBounded } from "@/api/lib/db/read-bounded";
 import type { CaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import {
-  readCorpusText,
-  readCorpusAst,
   type CorpusByteSourceSeams,
+  parsePersistedCorpusAst,
+  readCorpusAst,
+  readCorpusForRecovery,
+  readCorpusText,
 } from "@/api/lib/legal-search/corpus-storage";
 import { corpusTombstoneReaderForTx } from "@/api/lib/legal-search/corpus-tombstones";
+import {
+  decodeSourceRawEnvelope,
+  decodeSourceRawEnvelopeObjects,
+  type IngestionResult,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+  type StoredRawReparseInput,
+} from "@/api/lib/legal-search/ingestion-types";
 import {
   readS3ObjectBoundedIfPresent,
   S3ObjectBudgetError,
 } from "@/api/lib/s3";
 
 import {
-  EuCompletionStop,
   EU_COMPLETION_LIMITS,
   type EuCompletionRowOptions,
   type EuCompletionRowOutcome,
+  EuCompletionStop,
 } from "./eu-completion";
 import {
   ecjCompletionFingerprint,
@@ -63,8 +67,8 @@ import {
 } from "./eu-completion-store";
 import type {
   createEuCompletionStore,
-  EuCompletionReceipt,
   EuCompletionFailure,
+  EuCompletionReceipt,
 } from "./eu-completion-store";
 
 class CompletionReviewRequired extends TaggedError("CompletionReviewRequired")<{
@@ -89,7 +93,7 @@ class CompletionStageFailure extends TaggedError("CompletionStageFailure")<{
 const MAX_COMPLETION_JUDGES = 1000;
 const COMPLETION_DEFER_MS = 60_000;
 const digest = (payload: string) =>
-  new Bun.CryptoHasher("sha256").update(payload).digest("hex");
+  createSha256().update(payload).digest("hex");
 
 /** The canonical writer and storage APIs still reject promises; this is their typed boundary. */
 const legacyOperation = async <T>(operation: () => Promise<T>) =>
@@ -401,7 +405,8 @@ const fetchCompletionCandidate = async (
       raw === null
         ? null
         : decodeSourceRawEnvelope(new TextDecoder().decode(raw));
-    if (raw === null || parts?.["notice"] === undefined) {
+    const hasNotice = parts?.["notice"] !== undefined;
+    if (raw === null || !hasNotice) {
       const candidate = yield* Result.await(
         fetchFullCompletionCandidate({ row, signal, ensure }, raw),
       );
@@ -798,6 +803,7 @@ const createGuardedLease = ({
 }: GuardedLeaseOptions): CaseLawSourceIngestionLease => ({
   source: lease.source,
   leaseToken: lease.leaseToken,
+  purpose: lease.purpose,
   release: lease.release,
   beforeDatabaseMark: async () => {
     const admitted = await ensure();
@@ -893,7 +899,7 @@ const applyCompletionCandidate = async (
       candidate,
     });
     const guardedLease = createGuardedLease({ lease, ensure, raiseFailure });
-    yield* Result.await(
+    const written = yield* Result.await(
       legacyOperation(
         async () =>
           await guardedLease.beforeRemoteEffect(
@@ -911,6 +917,16 @@ const applyCompletionCandidate = async (
           ),
       ),
     );
+    if (written.isErr()) {
+      return Result.err(
+        new CompletionStageFailure({
+          message: "Completion document could not be stored",
+          code: "storage",
+          scope: "systemic",
+          cause: written.error,
+        }),
+      );
+    }
     yield* Result.await(ensure());
     return await finalizeWrittenCompletion(context);
   });
@@ -959,10 +975,18 @@ const hydrateCompletionStatements = async ({
       );
     }
     yield* Result.await(ensure());
-    const ast = await legacyOperation(async () =>
-      row.astS3Key !== null
-        ? await readCorpusAst(row.astS3Key, readOptions)
-        : row.documentAst,
+    const ast = await legacyOperation(
+      async () =>
+        await readCorpusForRecovery({
+          documentId: row.id,
+          read: async () =>
+            row.astS3Key !== null
+              ? await readCorpusAst(row.astS3Key, {
+                  ...readOptions,
+                  report: { documentId: row.id },
+                })
+              : parsePersistedCorpusAst(row.documentAst, row.id),
+        }),
     );
     if (ast.isErr() && signal.aborted) {
       return Result.err(
@@ -982,15 +1006,37 @@ const hydrateCompletionStatements = async ({
         }),
       );
     }
+    if (ast.value.isErr() && signal.aborted) {
+      return Result.err(
+        new EuCompletionStop({
+          message: "Completion cancelled",
+          reason: "cancelled",
+        }),
+      );
+    }
+    if (
+      ast.value.isErr() &&
+      (text.value === null || text.value.trim().length === 0)
+    ) {
+      return Result.err(
+        new CompletionStageFailure({
+          message: "Stored statements could not be read",
+          code: "storage",
+          scope: "systemic",
+          cause: ast.value.error,
+        }),
+      );
+    }
     yield* Result.await(ensure());
-    if (row.astS3Key !== null && ast.value === null) {
+    const documentAst = ast.value.isOk() ? ast.value.value : null;
+    if (row.astS3Key !== null && documentAst === null) {
       return Result.err(
         new CompletionReviewRequired({
           message: "Stored AST reference has no verifiable statement",
         }),
       );
     }
-    return Result.ok({ ...row, fulltext: text.value, documentAst: ast.value });
+    return Result.ok({ ...row, fulltext: text.value, documentAst });
   });
 
 const executeCompletionRow = async (

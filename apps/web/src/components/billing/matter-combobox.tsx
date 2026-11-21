@@ -14,6 +14,7 @@ import { entitySummariesOptions } from "@/lib/workspaces/queries/entities";
 type MatterComboboxProps = {
   workspaceId: string;
   value: string;
+  placeholder?: string;
   onChange: (matterId: string) => void;
 };
 
@@ -21,9 +22,12 @@ export const MatterCombobox = ({
   workspaceId,
   value,
   onChange,
+  placeholder,
 }: MatterComboboxProps) => {
   const t = useTranslations();
-  const { data: matters } = useSuspenseQuery(
+  // The work items (documents, folders, tasks) inside one matter that billing
+  // calls its "matters"; not matters themselves, so no matter icon.
+  const { data: workItems } = useSuspenseQuery(
     entitySummariesOptions(workspaceId),
   );
 
@@ -36,12 +40,15 @@ export const MatterCombobox = ({
       }}
       value={value || null}
     >
-      <ComboboxInput placeholder={t("billing.selectMatter")} size="default" />
+      <ComboboxInput
+        placeholder={placeholder ?? t("billing.selectMatter")}
+        size="default"
+      />
       <ComboboxPopup>
         <ComboboxList>
-          {matters.map((matter) => (
-            <ComboboxItem key={matter.id} value={matter.id}>
-              {matter.name}
+          {workItems.map((workItem) => (
+            <ComboboxItem key={workItem.id} value={workItem.id}>
+              {workItem.name}
             </ComboboxItem>
           ))}
         </ComboboxList>

@@ -1,10 +1,9 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
-import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
-import { copyToClipboard } from "@stll/clipboard";
+import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 import { FetchBoundaryError } from "@stll/errors";
 import { fetchWithTimeout } from "@stll/fetch";
 import { Button } from "@stll/ui/button";
@@ -17,36 +16,42 @@ import {
   DialogPopup,
   DialogTitle,
 } from "@stll/ui/dialog";
-import { CopyIcon, ExternalLinkIcon, SearchIcon } from "@stll/ui/icons";
+import { ExternalLinkIcon, SearchIcon } from "@stll/ui/icons";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { Skeleton } from "@stll/ui/skeleton";
-import { stellaToast } from "@stll/ui/toast";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { MessageResponse } from "@/components/ai-elements/message";
 import { FileViewerWithAI } from "@/components/ai-suggestions/file-viewer-with-ai";
 import { useExternalSourceStore } from "@/components/chat/external-source-store";
 import { CompanyRegistryPreview } from "@/components/company-registry-preview";
+import { CopyControl } from "@/components/copy-control";
 import { findMcpConnectorIconHref } from "@/components/inspector/external-source-icon";
 import {
   InspectorFindBar,
   useInspectorFind,
 } from "@/components/inspector/inspector-find";
-import { InspectorTabHeader } from "@/components/inspector/inspector-tab-header";
+import {
+  type HeaderAction,
+  InspectorTabHeader,
+} from "@/components/inspector/inspector-tab-header";
 import type { InspectorTab } from "@/components/inspector/inspector-tabs-store";
 import { MeasuredPdfProvider } from "@/components/inspector/measured-pdf-provider";
-import { getAnalytics } from "@/lib/analytics/provider";
+import { useProxiedIconSrc } from "@/components/proxied-icon";
+import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { apiUrl } from "@/lib/api-url";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { createChatThreadId, toChatThreadId } from "@/lib/chat-thread-ref";
-import { detached } from "@/lib/detached";
-import { notifyUserError } from "@/lib/errors/user-toast";
 import { mcpConnectorsOptions } from "@/lib/knowledge/queries";
 import { openIsolatedWindow } from "@/lib/open-isolated-window";
 import { PDFPage } from "@/lib/pdf/pdf-page";
 import type { PDFPageFallback } from "@/lib/pdf/pdf-page";
 import { PDFViewport } from "@/lib/pdf/pdf-viewport";
-import { sanitizeHref } from "@/lib/sanitize-href";
+import { AVAILABLE_EVERYWHERE } from "@/lib/platform/requirements.logic";
+import { queryView } from "@/lib/query-view.logic";
+import { useQueryViewError } from "@/lib/use-query-view";
+import { createUuid } from "@/lib/uuid";
 
 import { externalReferencePreviewOptions } from "./external-reference-preview";
 
@@ -63,7 +68,8 @@ export const ExternalSourceLogo = ({
   className?: string | undefined;
   iconHref?: string | undefined;
 }) => {
-  if (iconHref) {
+  const proxiedIconSrc = useProxiedIconSrc(iconHref);
+  if (proxiedIconSrc) {
     return (
       <span
         className={cn(
@@ -75,7 +81,7 @@ export const ExternalSourceLogo = ({
           alt=""
           className="size-3 rounded-xs object-contain"
           height={12}
-          src={iconHref}
+          src={proxiedIconSrc}
           width={12}
         />
       </span>
@@ -139,7 +145,7 @@ const useExternalPdfBuffer = ({
       // new bytes would otherwise return the stale parsed document.
       // The token rotates per fresh fetch and is folded into the
       // `fileId` so each new buffer parses from scratch.
-      return { buffer, token: crypto.randomUUID() };
+      return { buffer, token: createUuid() };
     },
     enabled: enabled && url !== undefined,
     // Large binaries — keep them cached for the session so toggling
@@ -227,6 +233,7 @@ const ExternalPdfPreview = ({
       key={fileId}
     >
       <PDFViewport
+        pageSource="portfolio"
         buffer={buffer}
         className="document-preview-surface h-full"
         contentClassName="relative space-y-2 px-2 pt-2"
@@ -288,22 +295,29 @@ const GenericExternalReferencePanel = ({
   const storedSource = useExternalSourceStore((state) =>
     safeHref === undefined ? undefined : state.sourcesByUrl[safeHref],
   );
+  // No stored source counts as no stored text.
   const shouldFetchPreview =
-    canPreview &&
-    tab.text === undefined &&
-    storedSource?.text === undefined &&
-    (tab.connectorSlug !== undefined ||
-      tab.sourceToolName !== undefined ||
-      storedSource?.connectorSlug !== undefined ||
-      storedSource?.sourceToolName !== undefined);
+    storedSource?.text !== undefined
+      ? false
+      : canPreview &&
+        tab.text === undefined &&
+        (tab.connectorSlug !== undefined ||
+          tab.sourceToolName !== undefined ||
+          storedSource?.connectorSlug !== undefined ||
+          storedSource?.sourceToolName !== undefined);
   const previewErrorTitle = t("common.somethingWentWrong");
-  const { data: fetchedPreview, isLoading: previewLoading } = useQuery({
+  const fetchedPreviewQuery = useQuery({
     ...externalReferencePreviewOptions({
       url: tab.url,
       errorTitle: previewErrorTitle,
     }),
     enabled: shouldFetchPreview,
   });
+  const fetchedPreviewView = queryView(fetchedPreviewQuery);
+  useQueryViewError(fetchedPreviewView, "GenericExternalReferencePanel:query");
+  const { isLoading: previewLoading } = fetchedPreviewQuery;
+  const fetchedPreview =
+    fetchedPreviewView.type === "items" ? fetchedPreviewView.items : undefined;
 
   const previewTitle = fetchedPreview?.title ?? storedSource?.title;
   const previewText = tab.text ?? storedSource?.text ?? fetchedPreview?.text;
@@ -331,6 +345,7 @@ const GenericExternalReferencePanel = ({
     provider !== undefined ||
     connectorSlug !== undefined ||
     sourceToolName !== undefined;
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- inlining this conditional pushes the component past the complexity limit
   const activeExternal = useMemo(
     () =>
       canPreview
@@ -364,10 +379,19 @@ const GenericExternalReferencePanel = ({
     highlightKey: tab.id,
     panelRef,
   });
-  const { data: mcpConnectorsData } = useQuery({
+  const mcpConnectorsDataQuery = useQuery({
     ...mcpConnectorsOptions(activeOrganizationId),
     enabled: connectorSlug !== undefined,
   });
+  const mcpConnectorsDataView = queryView(mcpConnectorsDataQuery);
+  useQueryViewError(
+    mcpConnectorsDataView,
+    "GenericExternalReferencePanel:query-2",
+  );
+  const mcpConnectorsData =
+    mcpConnectorsDataView.type === "items"
+      ? mcpConnectorsDataView.items
+      : undefined;
   const availableConnectors = mcpConnectorsData
     ? mcpConnectorsData.connectors
     : [];
@@ -379,40 +403,63 @@ const GenericExternalReferencePanel = ({
           connectorSlug,
           connectors: availableConnectors,
         }));
-  const requestOpenExternal = useCallback(
-    (href: string) => {
-      setConfirmHref(href);
-    },
-    [setConfirmHref],
-  );
-  const requestSafeExternalOpen = useCallback(() => {
+  const requestOpenExternal = (href: string) => {
+    setConfirmHref(href);
+  };
+  const requestSafeExternalOpen = () => {
     if (safeHref === undefined) {
       return;
     }
 
     requestOpenExternal(safeHref);
-  }, [requestOpenExternal, safeHref]);
-  const openConfirmedExternal = useCallback(() => {
+  };
+  const openConfirmedExternal = () => {
     if (confirmHref === undefined) {
       return;
     }
 
     openIsolatedWindow(confirmHref);
     setConfirmHref(undefined);
-  }, [confirmHref, setConfirmHref]);
-  const copyConfirmHref = useCallback(async () => {
-    if (confirmHref === undefined) {
-      return;
-    }
+  };
 
-    const copied = await copyToClipboard(confirmHref);
-    if (Result.isError(copied)) {
-      getAnalytics().captureError(copied.error);
-      notifyUserError(copied.error, t("common.error"));
-      return;
-    }
-    stellaToast.success(t("common.copied"));
-  }, [confirmHref, t]);
+  const headerActions: HeaderAction[] = [];
+  if (previewText) {
+    headerActions.push({
+      id: "find",
+      requires: AVAILABLE_EVERYWHERE,
+      render: () => (
+        <Button
+          aria-label={t("common.find")}
+          onClick={find.openFind}
+          size="xs"
+          title="Cmd+F"
+          variant="ghost"
+        >
+          <SearchIcon className="size-3.5" />
+          {t("common.find")}
+        </Button>
+      ),
+    });
+  }
+  if (canPreview) {
+    headerActions.push({
+      id: "open-original",
+      requires: AVAILABLE_EVERYWHERE,
+      render: () => (
+        <Button
+          aria-label={t("inspector.external.openOriginal")}
+          onClick={() => {
+            requestOpenExternal(safeHref);
+          }}
+          size="xs"
+          variant="ghost"
+        >
+          <ExternalLinkIcon className="size-3.5" />
+          {t("inspector.external.openOriginal")}
+        </Button>
+      ),
+    });
+  }
 
   return (
     <div
@@ -420,35 +467,7 @@ const GenericExternalReferencePanel = ({
       ref={panelRef}
     >
       <InspectorTabHeader
-        actions={
-          <div className="flex items-center gap-1">
-            {previewText && (
-              <Button
-                aria-label={t("common.find")}
-                onClick={find.openFind}
-                size="xs"
-                title="Cmd+F"
-                variant="ghost"
-              >
-                <SearchIcon className="size-3.5" />
-                {t("common.find")}
-              </Button>
-            )}
-            {canPreview && (
-              <Button
-                aria-label={t("inspector.external.openOriginal")}
-                onClick={() => {
-                  requestOpenExternal(safeHref);
-                }}
-                size="xs"
-                variant="ghost"
-              >
-                <ExternalLinkIcon className="size-3.5" />
-                {t("inspector.external.openOriginal")}
-              </Button>
-            )}
-          </div>
-        }
+        actions={headerActions}
         label={tab.label}
         onClose={onClose}
       />
@@ -464,38 +483,43 @@ const GenericExternalReferencePanel = ({
               <div className="flex min-w-0 items-center gap-1.5">
                 <ExternalSourceLogo iconHref={iconHref} />
                 {provider && (
-                  <p className="text-muted-foreground truncate text-xs">
+                  <TruncatedText
+                    className="text-muted-foreground text-xs"
+                    render={<p />}
+                  >
                     {provider}
-                  </p>
+                  </TruncatedText>
                 )}
                 {connectorSlug && (
-                  <span className="bg-muted text-muted-foreground text-3xs max-w-24 truncate rounded px-1.5 py-0.5 font-mono">
+                  <TruncatedText className="bg-muted text-muted-foreground text-3xs max-w-24 rounded-sm px-1.5 py-0.5 font-mono">
                     {connectorSlug}
-                  </span>
+                  </TruncatedText>
                 )}
                 {sourceToolName && (
-                  <span className="bg-muted text-muted-foreground text-3xs min-w-0 truncate rounded px-1.5 py-0.5 font-mono">
+                  <TruncatedText className="bg-muted text-muted-foreground text-3xs rounded-sm px-1.5 py-0.5 font-mono">
                     {sourceToolName}
-                  </span>
+                  </TruncatedText>
                 )}
               </div>
             )}
             {canPreview && (
-              <button
-                className={cn(
-                  "text-muted-foreground hover:text-foreground truncate text-start text-xs underline-offset-2 hover:underline",
-                  hasMetadata && "mt-1",
-                )}
+              <Button
+                className={cn("max-w-full min-w-0", hasMetadata && "mt-1")}
                 onClick={() => {
                   requestOpenExternal(safeHref);
                 }}
-                type="button"
+                variant="plain"
               >
-                {safeHref}
-              </button>
+                <TruncatedText className="text-muted-foreground hover:text-foreground text-xs underline-offset-2 hover:underline">
+                  {safeHref}
+                </TruncatedText>
+              </Button>
             )}
           </div>
           <InspectorFindBar find={find} />
+          {shouldFetchPreview && (
+            <QueryViewFeedback view={fetchedPreviewView} />
+          )}
           {(() => {
             if (previewLoading) {
               return (
@@ -583,18 +607,12 @@ const GenericExternalReferencePanel = ({
             className="grid grid-cols-2 gap-2 sm:grid-cols-2"
             variant="bare"
           >
-            <Button
-              onClick={() => {
-                detached(
-                  copyConfirmHref(),
-                  "external-reference-panel.copy-confirm-href",
-                );
-              }}
+            <CopyControl
+              iconClassName="size-4"
+              label={t("common.copyLink")}
+              text={confirmHref ?? ""}
               variant="outline"
-            >
-              <CopyIcon className="size-4" />
-              {t("common.copyLink")}
-            </Button>
+            />
             <Button onClick={openConfirmedExternal}>
               <ExternalLinkIcon className="size-4" />
               {t("inspector.external.openLink")}

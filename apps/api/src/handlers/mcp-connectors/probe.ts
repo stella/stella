@@ -1,15 +1,14 @@
 import { Result, TaggedError } from "better-result";
 
 import { arrayOrEmpty } from "@/api/lib/array";
+import { safeOutboundFetchBytes } from "@/api/lib/auth/authorized-outbound-fetch";
+import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import {
   discoverOAuthMetadataForApproval,
-  getOAuthEndpointOrigins,
   endpointsRequiringConfirmation,
+  getOAuthEndpointOrigins,
 } from "@/api/lib/mcp-upstream/oauth";
-import {
-  safeOutboundFetchBytes,
-  validateOutboundFetchTarget,
-} from "@/api/lib/safe-outbound-fetch";
+import { validateOutboundFetchTarget } from "@/api/lib/safe-outbound-fetch";
 
 const MCP_PROTOCOL_VERSION = "2025-06-18";
 const PROBE_TIMEOUT_MS = 10_000;
@@ -34,6 +33,7 @@ export type McpProbeResult =
 
 export const probeMcpServer = async (
   rawUrl: string,
+  permit: ThirdPartyOutboundPermit,
 ): Promise<Result<McpProbeResult, McpProbeError>> => {
   const target = await validateOutboundFetchTarget(rawUrl);
   if (Result.isError(target)) {
@@ -46,7 +46,10 @@ export const probeMcpServer = async (
   }
   const url = target.value.url;
 
-  const oauth = await discoverOAuthMetadataForApproval(url.toString());
+  const oauth = await discoverOAuthMetadataForApproval({
+    rawMcpUrl: url.toString(),
+    permit,
+  });
   if (Result.isOk(oauth)) {
     return Result.ok({
       authType: "oauth2" as const,
@@ -63,6 +66,7 @@ export const probeMcpServer = async (
   const anonymous = await Result.tryPromise({
     try: async () =>
       await safeOutboundFetchBytes({
+        permit,
         body: JSON.stringify({
           jsonrpc: "2.0",
           id: 1,

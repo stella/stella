@@ -1,21 +1,43 @@
+import type { StandardSchemaV1 } from "@standard-schema/spec";
 import {
-  toolDefinition,
+  renderLazyCatalogEntry,
   type SchemaInput,
   type ServerTool,
+  toolDefinition,
+  type ToolExecutionContext,
 } from "@tanstack/ai";
 import {
-  createCodeMode,
-  createCodeModeSystemPrompt,
   type CodeModeTool,
+  createCodeMode,
   type CreateCodeModeResult,
+  generateTypeStubs,
+  toolsToBindings,
 } from "@tanstack/ai-code-mode";
 import { panic, Result } from "better-result";
+import * as v from "valibot";
 
 import { BUILT_IN_CHAT_TOOL_POLICY_KINDS } from "@stll/api-contract";
-import { listSkillMetadata, readDocumentedChatReads } from "@stll/skills";
+import type { ChatSourceScope } from "@stll/api-contract";
+import {
+  CHAT_STEP_LEDGER_KEY,
+  chatStepLedgerSchema,
+} from "@stll/api-contract/chat-step-ledger";
+import { listSkillMetadata } from "@stll/skills";
+import { readDocumentedChatReads } from "@stll/skills/frontmatter";
 
+import { corpusResourceCountries } from "@/api/handlers/chat/tools/corpus-resource-countries";
+import { scopeCorpusRead } from "@/api/handlers/chat/tools/corpus-scope";
 import { isChatScriptRead } from "@/api/handlers/chat/tools/execute/chat-read-script-policy";
 import { runChatScriptRead } from "@/api/handlers/chat/tools/execute/chat-script-read-boundary";
+import {
+  type ChatStepCallSink,
+  type ChatStepLedgerRecorder,
+  type ChatStepRefScope,
+  chatStepRefScope,
+  createChatStepLedgerRecorder,
+  runRecordedStepCall,
+  stepCallSink,
+} from "@/api/handlers/chat/tools/execute/chat-step-ledger";
 import {
   EAGER_CHAT_READ_TOOLS,
   toDocumentedChatReads,
@@ -30,12 +52,17 @@ import {
   type ScriptCallCatalog,
 } from "@/api/handlers/chat/tools/execute/script-call-guide";
 import {
+  type ResolveCurrentChatExecutionContext,
+  resolveCurrentChatRegistryContext,
+} from "@/api/handlers/chat/tools/registry-adapter/current-execution-context";
+import {
   buildMcpContextFromChat,
   type ChatRegistryContextDeps,
 } from "@/api/handlers/chat/tools/registry-adapter/mcp-chat-context";
 import type { RegistryReadToolName } from "@/api/handlers/chat/tools/registry-adapter/ref-field-map";
 import { READ_TOOL_REF_FIELD_MAP } from "@/api/handlers/chat/tools/registry-adapter/ref-field-map";
 import { runRegistryReadTool } from "@/api/handlers/chat/tools/registry-adapter/run-registry-tool";
+import type { RunRegistryReadToolProps } from "@/api/handlers/chat/tools/registry-adapter/run-registry-tool";
 import { toToolInputSchema } from "@/api/handlers/chat/tools/registry-adapter/tool-input-schema";
 import { raiseChatToolError } from "@/api/handlers/chat/tools/tool-failure";
 import { renderProjectionShape } from "@/api/lib/chat/projection-schema";
@@ -44,6 +71,7 @@ import type { ChatToolDefectMemo } from "@/api/lib/chat/tool-defect-memo";
 import type { ChatToolError } from "@/api/lib/errors/tagged-errors";
 import {
   hasToolSchemaInputs,
+  isStandardSchemaInput,
   type WithToolSchemaInputs,
 } from "@/api/lib/tanstack-ai-schema";
 import { isRecord } from "@/api/lib/type-guards";
@@ -57,6 +85,7 @@ import {
   DEFAULT_MCP_TOOL_DEFINITIONS,
   getStaticMcpToolDefinition,
 } from "@/api/mcp/static-tool-definitions";
+import { isMcpToolVisibleTo } from "@/api/mcp/tool-visibility";
 
 /**
  * Chat's code-mode surface, projected from the MCP registry.
@@ -81,7 +110,10 @@ import {
 const scriptEligibleReadToolNames = (): readonly RegistryReadToolName[] => {
   const names: RegistryReadToolName[] = [];
   for (const definition of DEFAULT_MCP_TOOL_DEFINITIONS) {
-    if (definition.access !== "read") {
+    if (
+      definition.access !== "read" ||
+      !isMcpToolVisibleTo(definition, "model")
+    ) {
       continue;
     }
     if (
@@ -201,11 +233,13 @@ const buildChatReadTools = ({
  * behind its defect memo; the playbook-authoring eval binds fixtures behind
  * the same runner so a model meets the chat surface (eager `list_matters`,
  * `discover_tools` for every other read, the sandbox, the error envelopes)
- * without a database.
+ * without a database. `step` takes the read's own answer for the step
+ * ledger; a runner with nothing to record leaves it unused.
  */
 export type ChatCodeModeReadRunner = (
   toolName: RegistryReadToolName,
   args: Record<string, unknown>,
+  step: ChatStepCallSink,
 ) => Promise<Result<unknown, ChatToolError>>;
 
 type CreateChatCodeModeSurfaceProps = {
@@ -215,6 +249,12 @@ type CreateChatCodeModeSurfaceProps = {
   /** Tells a script that called a name it cannot the call to make instead. */
   nameGuide?: CreateStellaIsolateDriverProps["nameGuide"];
   runReadTool: ChatCodeModeReadRunner;
+  /**
+   * The matters whose documents a step's ledger may name, and the turn's
+   * chat refs it names them by. Without it the ledger names no matter item
+   * at all.
+   */
+  stepLedgerScope?: ChatStepRefScope | undefined;
 };
 
 /**
@@ -227,24 +267,148 @@ export const createChatCodeModeSurface = ({
   documentedReads,
   nameGuide,
   runReadTool,
-}: CreateChatCodeModeSurfaceProps): CreateCodeModeResult =>
-  createCodeMode({
+  stepLedgerScope,
+}: CreateChatCodeModeSurfaceProps): CreateCodeModeResult => {
+  const tools = buildChatReadTools({
+    featureAccessContext,
+    documentedReads,
+    runReadTool: async (toolName, args) => {
+      const result = await runReadTool(
+        toolName,
+        isRecord(args) ? args : {},
+        stepCallSink(),
+      );
+      return Result.isError(result)
+        ? raiseChatToolError(result.error)
+        : result.value;
+    },
+  });
+  // Each `execute_typescript` run gets its own ledger, found by the context
+  // object the run was handed: code mode passes that same object to
+  // `aroundCalls` when the run starts.
+  const recorders = new WeakMap<object, ChatStepLedgerRecorder>();
+  const codeMode = createCodeMode({
     driver: createStellaIsolateDriver({
       concurrencyKey,
       ...(nameGuide === undefined ? {} : { nameGuide }),
     }),
-    tools: buildChatReadTools({
-      featureAccessContext,
-      documentedReads,
-      runReadTool: async (toolName, args) => {
-        const result = await runReadTool(toolName, isRecord(args) ? args : {});
-        return Result.isError(result)
-          ? raiseChatToolError(result.error)
-          : result.value;
-      },
-    }),
+    tools,
     ...CODE_MODE_RUNTIME_CONFIG,
+    aroundCalls: (toolContext) => {
+      const recorder =
+        toolContext === undefined ? undefined : recorders.get(toolContext);
+      return async (call, run) =>
+        recorder === undefined
+          ? await run()
+          : await runRecordedStepCall({
+              recorder,
+              tool: call.name,
+              callArgs: call.args,
+              run,
+            });
+    },
   });
+  const tool = withStepLedger({
+    tool: codeMode.tool,
+    startRun: (toolContext) => {
+      const recorder = createChatStepLedgerRecorder(stepLedgerScope);
+      recorders.set(toolContext, recorder);
+      return recorder;
+    },
+  });
+  return {
+    ...codeMode,
+    tool,
+    tools:
+      codeMode.discoveryTool === null ? [tool] : [tool, codeMode.discoveryTool],
+    systemPrompt: renderChatReadSystemPrompt(tools),
+  };
+};
+
+type CodeModeExecuteTool = CreateCodeModeResult["tool"];
+
+/**
+ * `execute_typescript` with each run's step ledger on its result
+ * (`CHAT_STEP_LEDGER_KEY`). The result schema is code mode's own, widened by
+ * the ledger alone: the SDK parses a tool's result against its schema and an
+ * object schema would drop the key. The ledger never reaches the model; the
+ * provider copy of every message drops it (`stepLedgerFreeProviderMessages`).
+ */
+const withStepLedger = ({
+  tool,
+  startRun,
+}: {
+  tool: CodeModeExecuteTool;
+  startRun: (toolContext: ToolExecutionContext) => ChatStepLedgerRecorder;
+}): CodeModeExecuteTool => {
+  const execute =
+    tool.execute ?? panic("code mode's execute_typescript has no execute");
+  const outputSchema = tool.outputSchema;
+  if (outputSchema === undefined || !isStandardSchemaInput(outputSchema)) {
+    return panic("code mode's execute_typescript has no result validator");
+  }
+  return {
+    ...tool,
+    outputSchema: withStepLedgerResult(outputSchema),
+    execute: async (args: unknown, context?: ToolExecutionContext) => {
+      // A fresh object per run, so two runs never share a ledger. A run the
+      // SDK starts without a context emits nothing, as code mode does then.
+      const runContext: ToolExecutionContext =
+        context === undefined
+          ? { emitCustomEvent: () => undefined }
+          : { ...context };
+      const recorder = startRun(runContext);
+      const result: unknown = await execute(args, runContext);
+      return isRecord(result)
+        ? { ...result, [CHAT_STEP_LEDGER_KEY]: recorder.ledger() }
+        : result;
+    },
+  };
+};
+
+/**
+ * `base`'s verdict on `value`. The SDK parses a tool result synchronously, so
+ * code mode's validator is synchronous; a promise would be a broken SDK.
+ */
+const validateNow = (
+  base: StandardSchemaV1,
+  value: unknown,
+): StandardSchemaV1.Result<unknown> => {
+  const parsed = base["~standard"].validate(value);
+  return parsed instanceof Promise
+    ? panic("code mode's result validator is synchronous")
+    : parsed;
+};
+
+/** `base`, accepting a valid step ledger beside the fields it reads. */
+const withStepLedgerResult = (base: StandardSchemaV1): StandardSchemaV1 => ({
+  "~standard": {
+    ...base["~standard"],
+    validate: (value): StandardSchemaV1.Result<unknown> => {
+      if (!isRecord(value) || !Object.hasOwn(value, CHAT_STEP_LEDGER_KEY)) {
+        return validateNow(base, value);
+      }
+      const { [CHAT_STEP_LEDGER_KEY]: ledger, ...result } = value;
+      const parsed = validateNow(base, result);
+      const parsedLedger = v.safeParse(chatStepLedgerSchema, ledger);
+      if (parsed.issues !== undefined || !parsedLedger.success) {
+        return (
+          parsed.issues === undefined
+            ? { issues: [{ message: "Invalid step ledger" }] }
+            : parsed
+        ) satisfies StandardSchemaV1.FailureResult;
+      }
+      return isRecord(parsed.value)
+        ? {
+            value: {
+              ...parsed.value,
+              [CHAT_STEP_LEDGER_KEY]: parsedLedger.output,
+            },
+          }
+        : parsed;
+    },
+  },
+});
 
 /** The prefix code mode gives every tool it exposes to a script. */
 const SCRIPT_FUNCTION_PREFIX = "external_";
@@ -315,36 +479,74 @@ type BuildChatCodeModeProps = Omit<
   toolDefectMemo: ChatToolDefectMemo;
   /** Read when a script runs, after the turn's tool set is complete. */
   scriptCallTools: () => ChatScriptCallTools;
+  /** The turn's source chips; every script read is held to them. */
+  sourceScopes?: readonly ChatSourceScope[] | undefined;
+  /** Rebuild live authority before each registry read in a delayed script. */
+  resolveCurrentExecutionContext?: ResolveCurrentChatExecutionContext;
+  /** Keeps the reads a chat app presents for the turn's `show_app`. */
+  recordAppRead?: RunRegistryReadToolProps["recordAppRead"];
 };
 
 export const buildChatCodeMode = (
   props: BuildChatCodeModeProps,
 ): CreateCodeModeResult => {
   const {
+    sourceScopes = [],
     documentedReads,
+    recordAppRead,
     refRegistry,
+    resolveCurrentExecutionContext,
     scriptCallTools,
     toolDefectMemo,
     ...contextDeps
   } = props;
   const context = buildMcpContextFromChat(contextDeps);
+  const resolveReadContext = async () => {
+    if (resolveCurrentExecutionContext === undefined) {
+      return Result.ok(context);
+    }
+    return (
+      await resolveCurrentChatRegistryContext({
+        contextDeps,
+        resolveCurrentExecutionContext,
+      })
+    ).map(buildMcpContextFromChat);
+  };
 
   return createChatCodeModeSurface({
     featureAccessContext: context,
     concurrencyKey: contextDeps.userId,
     documentedReads,
-    runReadTool: async (toolName, toolArgs) =>
+    stepLedgerScope: chatStepRefScope({
+      refRegistry,
+      workspaceIds: contextDeps.toolWorkspaceIds,
+    }),
+    runReadTool: async (toolName, toolArgs, step) =>
       await runChatScriptRead({
         toolName,
         args: toolArgs,
         toolDefectMemo,
-        read: async () =>
-          await runRegistryReadTool({
+        read: async () => {
+          const currentContext = await resolveReadContext();
+          if (Result.isError(currentContext)) {
+            return Result.err(currentContext.error);
+          }
+          return await runRegistryReadTool({
             toolName,
             args: toolArgs,
-            context,
+            context: currentContext.value,
             refRegistry,
-          }),
+            recordAppRead,
+            onAnswered: step.answered,
+            scopeArgs: async (args) =>
+              await scopeCorpusRead({
+                scopes: sourceScopes,
+                toolName,
+                args,
+                resolveCountries: corpusResourceCountries,
+              }),
+          });
+        },
       }),
     // A script that calls a direct tool, an unprefixed read or a tool this
     // chat does not offer is told the call to make instead.
@@ -402,17 +604,49 @@ const renderChatCodeModeSystemPrompt = (
   documentedReads: readonly RegistryReadToolName[],
   featureAccessContext?: McpFeatureAccessContext,
 ): string =>
-  createCodeModeSystemPrompt({
-    driver: createStellaIsolateDriver({
-      concurrencyKey: "chat-code-mode-prompt",
-    }),
-    tools: buildChatReadTools({
+  renderChatReadSystemPrompt(
+    buildChatReadTools({
       featureAccessContext,
       documentedReads: [...new Set(documentedReads)].toSorted(),
       runReadTool: () => ({}),
     }),
-    ...CODE_MODE_RUNTIME_CONFIG,
-  });
+  );
+
+/** Keep descriptions once, beside the SDK-derived signatures and field docs. */
+const renderChatReadSystemPrompt = (tools: CodeModeTool[]): string => {
+  const bindings = toolsToBindings(
+    tools.filter((tool) => !tool.lazy),
+    SCRIPT_FUNCTION_PREFIX,
+  );
+  const lazyCatalog = tools
+    .filter((tool) => tool.lazy)
+    .map(
+      (tool) =>
+        `- ${renderLazyCatalogEntry(`${SCRIPT_FUNCTION_PREFIX}${tool.name}`, tool.description, CODE_MODE_RUNTIME_CONFIG.lazyToolsConfig.includeDescription)}`,
+    )
+    .join("\n");
+
+  return `## Code Execution Tool
+
+Use \`execute_typescript\` for loops, calculations, transformations, or parallel reads with \`Promise.all\`. For simple operations, call tools directly.
+The sandbox has no network or filesystem access. Each execution is independent. All \`external_*\` functions are async: use \`await\`. Return a value to pass results back; \`console.log\` captures debugging logs.
+
+### Available External APIs
+
+\`\`\`typescript
+${generateTypeStubs(bindings)}
+\`\`\`
+${
+  lazyCatalog.length === 0
+    ? ""
+    : `
+### Discoverable APIs
+
+Before writing code that calls an undocumented \`external_<name>\`, call \`discover_tools\` with its names for full TypeScript signatures. \`discover_tools\` is a separate tool call, unavailable inside \`execute_typescript\`.
+
+${lazyCatalog}`
+}`;
+};
 
 let builtInVariants: ReadonlyMap<string, string> | undefined;
 

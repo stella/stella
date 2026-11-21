@@ -18,6 +18,7 @@ import {
 } from "@/api/handlers/chat/tools/template-tools";
 import { toSafeId } from "@/api/lib/branded-types";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
+import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 
@@ -34,6 +35,7 @@ const suggestTemplateFieldsMock = mock(async () => {
 let analytics: RecordingAnalytics;
 
 beforeEach(() => {
+  suggestTemplateFieldsMock.mockClear();
   analytics = installRecordingAnalytics();
 });
 
@@ -46,9 +48,9 @@ const userId = toSafeId<"user">("user-test");
 // SAFETY: test double — usage metering only touches `safeDb` on a real
 // model step, which never runs here (`suggestTemplateFields` is mocked to
 // reject before any metering call).
+// oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test double; see SAFETY above
 const stubSafeDb = (() => {
   throw new Error("safeDb stub must not be called");
-  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test double; see SAFETY above
 }) as unknown as SafeDb;
 
 type SuggestFieldsExecute = (
@@ -60,6 +62,7 @@ describe("suggest_template_fields tool error handling", () => {
   test("sanitizes the provider error before it reaches the model, while still capturing the original", async () => {
     const tools = createTemplateAuthoringTools({
       organizationId,
+      modelAdmission: testModelAdmission(organizationId),
       orgAIConfig: null,
       managedAIResidency: "eu" as const,
       safeDb: stubSafeDb,
@@ -69,9 +72,9 @@ describe("suggest_template_fields tool error handling", () => {
     });
 
     // SAFETY: invoke the tool's execute directly with a stub call context.
-    const execute = tools[SUGGEST_TEMPLATE_FIELDS_TOOL_NAME]
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test double; see SAFETY above
-      .execute as unknown as SuggestFieldsExecute;
+    const tool = tools[SUGGEST_TEMPLATE_FIELDS_TOOL_NAME];
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test double; see SAFETY above
+    const execute = tool.execute as unknown as SuggestFieldsExecute;
 
     const rejection: unknown = await execute(
       { instructions: null, text: "Granted by Example Corp." },

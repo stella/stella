@@ -32,7 +32,11 @@
   --vscode-editorWidget-foreground: var(--popover-foreground);
   --vscode-editorWidget-border: var(--border);
   --vscode-widget-border: var(--border);
-  --vscode-widget-shadow: rgb(0 0 0 / 0.16);
+  --vscode-widget-shadow: color-mix(
+    in srgb,
+    var(--color-black) 16%,
+    transparent
+  );
 
   --vscode-input-background: var(--background);
   --vscode-input-foreground: var(--foreground);
@@ -80,4 +84,72 @@
     var(--warning) 20%,
     transparent
   );
+}
+
+/*
+ * Diff mode (a `baseline` is set). The engine marks the baseline's removed and
+ * changed blocks with classes and paints word-level rects into an overlay, but
+ * ships no styles for either, so without these rules a deletion reads as the
+ * old paragraph in plain text beside the new one. The look is the product's
+ * one track-changes language (`@stll/ui/review/review-diff-text`): deleted
+ * text dimmed and struck through with a faint destructive tint, inserted text
+ * a soft success wash with an inset ring.
+ */
+.md-editor.md-theme-stella {
+  --md-gutter-added: var(--success);
+  --md-gutter-modified: var(--primary);
+  --md-gutter-deleted: var(--destructive);
+}
+
+.md-theme-stella .md-diff-highlight-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: visible;
+}
+
+.md-theme-stella .md-diff-ins-rect,
+.md-theme-stella .md-diff-del-rect {
+  position: absolute;
+  border-radius: 3px;
+}
+
+.md-theme-stella .md-diff-ins-rect {
+  background-color: color-mix(in oklch, var(--success) 14%, transparent);
+  box-shadow: inset 0 0 0 1px
+    color-mix(in oklch, var(--success) 28%, transparent);
+}
+
+/* The rect is an overlay, not a wrapper, so the strike is drawn as a 1px rule
+   through the middle of each line fragment. */
+.md-theme-stella .md-diff-del-rect {
+  background:
+    linear-gradient(
+        color-mix(in oklch, var(--destructive) 55%, var(--muted-foreground)),
+        color-mix(in oklch, var(--destructive) 55%, var(--muted-foreground))
+      )
+      center / 100% 1px no-repeat,
+    color-mix(in oklch, var(--destructive) 10%, transparent);
+}
+
+/* Baseline text shown beside the document: a whole removed block, or the old
+   side of a changed block (its deleted words carry a del rect). */
+.md-theme-stella :is(.md-diff-removed, .md-diff-original) {
+  color: color-mix(in oklch, var(--destructive) 35%, var(--muted-foreground));
+}
+
+.md-theme-stella .md-diff-removed {
+  text-decoration-line: line-through;
+  text-decoration-thickness: 1px;
+  text-decoration-color: color-mix(
+    in oklch,
+    var(--destructive) 30%,
+    var(--muted-foreground)
+  );
+}
+
+.md-theme-stella .md-diff-added {
+  border-radius: 4px;
+  background-color: color-mix(in oklch, var(--success) 10%, transparent);
+  box-shadow: 0 0 0 4px color-mix(in oklch, var(--success) 10%, transparent);
 }

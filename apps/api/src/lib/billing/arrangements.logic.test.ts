@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 
 import {
+  evaluateBillingArrangementCaps,
   evaluateBillingCap,
   newBillingCapCrossings,
 } from "./arrangements.logic";
@@ -74,3 +75,23 @@ test("billing cap emits each upward boundary once and rearms on a decrease", () 
     newBillingCapCrossings({ previous: below, current: threshold }),
   ).toEqual(["threshold"]);
 });
+
+test.each([
+  { amount: null, minutes: 100, amountState: "below", minuteState: "above" },
+  { amount: 1000, minutes: null, amountState: "above", minuteState: "below" },
+  { amount: 1000, minutes: 100, amountState: "above", minuteState: "above" },
+  { amount: null, minutes: null, amountState: "below", minuteState: "below" },
+])(
+  "amount $amount and minute $minutes caps evaluate independently",
+  ({ amount, minutes, amountState, minuteState }) => {
+    const result = evaluateBillingArrangementCaps({
+      totalAmount: 1000n,
+      totalMinutes: 100n,
+      capAmount: amount,
+      capMinutes: minutes,
+      alertThresholdBps: 8000,
+    });
+    expect(result.amount.capState).toBe(amountState);
+    expect(result.minutes.capState).toBe(minuteState);
+  },
+);

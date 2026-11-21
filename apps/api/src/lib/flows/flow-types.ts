@@ -11,7 +11,6 @@ export {
   FLOW_RUN_STATUSES,
   FLOW_RUN_STEP_STATUSES,
   FLOW_SCHEDULE_FREQUENCIES,
-  FLOW_STEP_KINDS,
 } from "@stll/api-contract";
 export type {
   FlowRunStatus,
@@ -54,8 +53,8 @@ export const FLOW_STEP_OUTPUT_CONTEXT_CHAR_CAP = 20_000;
 export const FLOW_DOCUMENT_CONTEXT_CHAR_CAP = 60_000;
 
 /**
- * Scalar bounds on a flow definition's own text fields. The TypeBox route
- * contract in `handlers/flows/schema.ts` and the valibot schema below are two
+ * Scalar bounds on a flow definition's own text fields. The route contract in
+ * `handlers/flows/schema.ts` and the shared valibot schema below are two
  * layers over the same body, so both read these rather than restating the
  * numbers: a bound raised in one layer and not the other silently becomes the
  * lower of the two, with an error message from the wrong layer.
@@ -112,7 +111,7 @@ export type FlowTrigger =
       schedule: {
         frequency: FlowScheduleFrequency;
         hourUtc: number;
-        // `| undefined` matches the valibot/TypeBox boundary output under
+        // `| undefined` matches the valibot boundary output under
         // exactOptionalPropertyTypes, so a parsed definition is assignable to
         // this column type without a cast.
         dayOfWeek?: number | undefined;
@@ -235,7 +234,7 @@ const createDocumentFlowStepSchema = v.strictObject({
   ),
 });
 
-export const flowStepSchema = v.variant("kind", [
+const flowStepSchema = v.variant("kind", [
   aiFlowStepSchema,
   reviewGateFlowStepSchema,
   createDocumentFlowStepSchema,
@@ -278,7 +277,7 @@ const flowScheduleSchema = v.strictObject({
 
 const fileExtensionSchema = v.pipe(v.string(), v.minLength(1), v.maxLength(32));
 
-export const flowTriggerSchema = v.variant("type", [
+const flowTriggerSchema = v.variant("type", [
   v.strictObject({ type: v.literal("manual") }),
   v.strictObject({
     type: v.literal("schedule"),

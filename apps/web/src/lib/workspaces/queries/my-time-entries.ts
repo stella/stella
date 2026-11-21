@@ -1,38 +1,75 @@
 import { infiniteQueryOptions } from "@tanstack/react-query";
 
-import { myTimeEntriesApi } from "@/lib/api";
-import { unwrapEden } from "@/lib/errors/api";
-import { stringCursorSeed } from "@/lib/infinite-query";
+import { RESOURCE_TYPE } from "@stll/api-contract";
 
-const MY_TIME_ENTRIES_PAGE_SIZE = 50;
+import { api } from "@/lib/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
+import { stringCursorSeed } from "@/lib/infinite-query";
+import { resourceQueryOptions } from "@/lib/workspace-realtime";
+
+/** The API's largest page: a week of one person's entries usually fits in one. */
+const MY_TIME_ENTRIES_PAGE_SIZE = 200;
+
+type MyTimeEntriesRange = { startDate: string; endDate: string };
 
 export const myTimeEntriesKeys = {
-  all: (organizationId: string) => ["myTimeEntries", organizationId],
-  day: (organizationId: string, userId: string, date: string) => [
+  root: () => ["myTimeEntries"],
+  all: (organizationId: string) => [
+    ...myTimeEntriesKeys.root(),
+    organizationId,
+  ],
+  range: (
+    organizationId: string,
+    userId: string,
+    { startDate, endDate }: MyTimeEntriesRange,
+  ) => [
     ...myTimeEntriesKeys.all(organizationId),
     userId,
-    { date },
+    { startDate, endDate },
   ],
 };
 
+const fetchMyTimeEntriesPage = async ({
+  range,
+  cursor,
+  signal,
+}: {
+  range: MyTimeEntriesRange;
+  cursor: string | undefined;
+  signal: AbortSignal;
+}) =>
+  unwrapApiResponse(
+    await api["time-entries"].me.get({
+      query: {
+        date: range.startDate,
+        endDate: range.endDate,
+        limit: MY_TIME_ENTRIES_PAGE_SIZE,
+        ...(cursor === undefined ? {} : { cursor }),
+      },
+      fetch: { signal },
+    }),
+  );
+
+export type MyTimeEntriesPage = Awaited<
+  ReturnType<typeof fetchMyTimeEntriesPage>
+>;
+
+/** The signed-in person's entries across matters for one to seven work dates. */
 export const myTimeEntriesInfiniteOptions = (
   organizationId: string,
   userId: string,
-  date: string,
+  range: MyTimeEntriesRange,
 ) =>
-  infiniteQueryOptions({
-    queryKey: myTimeEntriesKeys.day(organizationId, userId, date),
-    initialPageParam: stringCursorSeed(),
-    queryFn: async ({ pageParam, signal }) =>
-      unwrapEden(
-        await myTimeEntriesApi.get({
-          query: {
-            date,
-            limit: MY_TIME_ENTRIES_PAGE_SIZE,
-            ...(pageParam === undefined ? {} : { cursor: pageParam }),
-          },
-          fetch: { signal },
-        }),
-      ),
-    getNextPageParam: (page) => page.nextCursor ?? undefined,
-  });
+  resourceQueryOptions(
+    infiniteQueryOptions({
+      queryKey: myTimeEntriesKeys.range(organizationId, userId, range),
+      initialPageParam: stringCursorSeed(),
+      queryFn: async ({ pageParam, signal }) =>
+        await fetchMyTimeEntriesPage({ range, cursor: pageParam, signal }),
+      getNextPageParam: (page) => page.nextCursor ?? undefined,
+    }),
+    {
+      resources: [RESOURCE_TYPE.TIME_ENTRY],
+      scope: { type: "organization", organizationId, userId },
+    },
+  );

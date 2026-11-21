@@ -1,5 +1,7 @@
 import { panic } from "better-result";
+import { fileURLToPath } from "node:url";
 
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
 /**
@@ -94,8 +96,8 @@ type Lockfile = {
   files: Record<string, string>;
 };
 
-const sha256 = (text: string): string =>
-  new Bun.CryptoHasher("sha256").update(text).digest("hex");
+export const authSpecContentSha256 = (text: string): string =>
+  hashSha256Hex(text);
 
 const asMessage = (error: unknown): string =>
   error instanceof Error ? error.message : String(error);
@@ -170,7 +172,7 @@ const readLockfile = async (): Promise<Lockfile | null> => {
   const parsed: unknown = await file.json();
   return isLockfile(parsed)
     ? parsed
-    : panic(`${LOCKFILE_URL.pathname} is not an auth.md spec lockfile`);
+    : panic(`${fileURLToPath(LOCKFILE_URL)} is not an auth.md spec lockfile`);
 };
 
 const update = async (): Promise<void> => {
@@ -194,7 +196,7 @@ const update = async (): Promise<void> => {
       console.error(`  ✗ ${path}: ${result.reason}`);
       process.exit(1);
     }
-    files[path] = sha256(result.text);
+    files[path] = authSpecContentSha256(result.text);
     console.log(`  · ${path} → ${files[path].slice(0, 12)}…`);
   }
 
@@ -261,7 +263,7 @@ const check = async (): Promise<void> => {
       unreachable += 1;
       continue;
     }
-    const current = sha256(result.text);
+    const current = authSpecContentSha256(result.text);
     const pinned = lockfile.files[path];
     if (pinned !== undefined && current !== pinned) {
       drifts.push({
@@ -345,4 +347,6 @@ const main = async (): Promise<void> => {
   await check();
 };
 
-await main();
+if (import.meta.main) {
+  await main();
+}

@@ -19,6 +19,7 @@ import {
   ColorPickerContent,
   DEFAULT_PRESETS,
 } from "@stll/ui/color-picker";
+import { FaceLabelPending } from "@stll/ui/control-face";
 import { openFilePicker } from "@stll/ui/file-picker";
 import {
   EllipsisVerticalIcon,
@@ -31,8 +32,15 @@ import {
   Trash2Icon,
 } from "@stll/ui/icons";
 import { KanbanColumnHeader } from "@stll/ui/kanban";
-import { Menu, MenuItem, MenuPopup, MenuTrigger } from "@stll/ui/menu";
+import {
+  Menu,
+  MenuAnchor,
+  MenuItem,
+  MenuPopup,
+  MenuTrigger,
+} from "@stll/ui/menu";
 import { Popover, PopoverPopup } from "@stll/ui/popover";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { containedEventHandler } from "@stll/ui/use-contained-handler";
 import { cn } from "@stll/ui/utils";
 import type {
@@ -46,6 +54,9 @@ import {
 
 import { InlineEdit } from "@/components/inline-edit";
 import { KanbanCard } from "@/components/workspaces/kanban/kanban-card";
+import { KanbanCardsPending } from "@/components/workspaces/kanban/kanban-card.pending";
+import type { KanbanSelection } from "@/components/workspaces/kanban/kanban-selection";
+import type { KanbanDraggedCard } from "@/components/workspaces/kanban/kanban-selection.logic";
 import {
   useKanbanColumnDrag,
   useKanbanEntityDropTarget,
@@ -61,6 +72,13 @@ import type {
   WorkspaceProperty,
 } from "@/lib/types";
 import { toCalculationValue } from "@/lib/workspaces/calculations";
+import {
+  KANBAN_COLUMN_BODY_CLASS,
+  KANBAN_COLUMN_CLASS,
+  KANBAN_COLUMN_PLAIN_CLASS,
+  KANBAN_COLUMN_SWATCH_CLASS,
+  kanbanColumnRestingBackground,
+} from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-view.pending";
 import { useWorkspaceCalculationLabels } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-workspace-calculation-labels";
 
 const KANBAN_CARD_ESTIMATE_PX = 128;
@@ -70,13 +88,21 @@ type KanbanColumnProps = {
   title: string;
   columnValue: string | null;
   entities: WorkspaceEntity[];
+  /**
+   * Whether the column's first page is still on its way: the header shows a
+   * bar where the count goes (never a count of 0 it would take back) and the
+   * column shows card placeholders where its cards go.
+   */
+  entitiesPending?: boolean | undefined;
   workspaceId: string;
   color?: string | undefined;
   colorBg?: string | undefined;
   optionColor?: PropertyOptionColor | undefined;
   cardFields?: string[] | undefined;
   properties?: WorkspaceProperty[] | undefined;
-  onDrop: (entityId: string) => void;
+  onDrop: (cards: readonly KanbanDraggedCard[]) => void;
+  /** The board's card selection; omit on a board without one. */
+  selection?: KanbanSelection | undefined;
   onFileUpload?: ((files: File[]) => void) | undefined;
   onChangeColor?: ((color: PropertyOptionColor) => void) | undefined;
   onRenameColumn?: ((newName: string) => void) | undefined;
@@ -105,6 +131,7 @@ export const KanbanColumn = ({
   title,
   columnValue,
   entities,
+  entitiesPending = false,
   workspaceId,
   color,
   colorBg,
@@ -125,6 +152,7 @@ export const KanbanColumn = ({
   onReorderColumn,
   taskOnly,
   calculations,
+  selection,
 }: KanbanColumnProps) => {
   const t = useTranslations();
   const format = useFormatter();
@@ -136,6 +164,7 @@ export const KanbanColumn = ({
 
   // Context menu state
   const [ctxOpen, setCtxOpen] = useState(false);
+  const [ctxOpener, setCtxOpener] = useState<HTMLElement | null>(null);
   const [ctxAnchor, setCtxAnchor] = useState<{
     getBoundingClientRect: () => DOMRect;
   } | null>(null);
@@ -145,6 +174,9 @@ export const KanbanColumn = ({
       return;
     }
     e.preventDefault();
+    setCtxOpener(
+      e.currentTarget instanceof HTMLElement ? e.currentTarget : null,
+    );
     const x = e.clientX;
     const y = e.clientY;
     setCtxAnchor({
@@ -169,8 +201,8 @@ export const KanbanColumn = ({
       return undefined;
     }
     const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry?.isIntersecting) {
+      (entries) => {
+        if (entries.at(-1)?.isIntersecting) {
           onLoadMore();
         }
       },
@@ -202,6 +234,10 @@ export const KanbanColumn = ({
   });
 
   const { isDropTarget, isInnerActive } = useExternalFileDrop({
+    exceptionScope: {
+      type: "handler",
+      handlerId: "KanbanColumn.useExternalFileDrop",
+    },
     externalRef: columnRef,
     enabled: !!onFileUpload,
     onDrop: (files) => onFileUpload?.(files),
@@ -238,9 +274,7 @@ export const KanbanColumn = ({
   // instead of a generic highlight; a colourless column keeps that generic
   // highlight unchanged.
   const isColumnActive = isFileDragOver || isEntityDragOver;
-  const restingBackground = colorBg
-    ? `color-mix(in srgb, ${colorBg} 50%, transparent)`
-    : undefined;
+  const restingBackground = kanbanColumnRestingBackground(colorBg);
   const activeAccentBackground =
     isColumnActive && color
       ? `color-mix(in srgb, ${color} 22%, var(--background))`
@@ -254,8 +288,8 @@ export const KanbanColumn = ({
   return (
     <div
       className={cn(
-        "group/column relative flex w-[300px] max-w-[320px] min-w-[280px] shrink-0 flex-col rounded-lg transition-opacity",
-        !colorBg && "bg-muted/50",
+        KANBAN_COLUMN_CLASS,
+        !colorBg && KANBAN_COLUMN_PLAIN_CLASS,
         isColumnActive && !color && "bg-primary/5 ring-primary/50 ring-2",
         isDragging && "opacity-40",
       )}
@@ -300,7 +334,7 @@ export const KanbanColumn = ({
         dragHandle={
           isDraggable ? (
             <div
-              className="text-muted-foreground hover:text-foreground shrink-0 cursor-grab opacity-0 transition-opacity group-hover/column:opacity-100"
+              className="text-muted-foreground hover:text-foreground shrink-0 cursor-grab opacity-0 transition-opacity group-hover/column:opacity-100 pointer-coarse:opacity-100"
               ref={dragHandleRef}
             >
               <GripVerticalIcon className="size-3.5" />
@@ -319,7 +353,15 @@ export const KanbanColumn = ({
             />
           ) : null
         }
-        meta={editing ? undefined : format.number(entities.length)}
+        meta={(() => {
+          if (editing) {
+            return undefined;
+          }
+          if (entitiesPending) {
+            return <FaceLabelPending className="w-3" />;
+          }
+          return format.number(entities.length);
+        })()}
         swatch={
           <KanbanColumnSwatch
             color={color}
@@ -341,7 +383,7 @@ export const KanbanColumn = ({
         }
       />
       <div
-        className="flex-1 overflow-y-auto p-2"
+        className={KANBAN_COLUMN_BODY_CLASS}
         onContextMenu={containedEventHandler(handleContextMenu)}
         ref={scrollRef}
       >
@@ -351,6 +393,7 @@ export const KanbanColumn = ({
             {t("workspaces.dropToUploadFiles")}
           </div>
         )}
+        {entitiesPending && <KanbanCardsPending />}
         <div
           className="relative"
           style={{ height: cardVirtualizer.getTotalSize() }}
@@ -374,6 +417,11 @@ export const KanbanColumn = ({
                   entity={entity}
                   onRename={onRenameEntity}
                   properties={properties}
+                  selection={
+                    selection
+                      ? { owner: selection, scope: entities }
+                      : undefined
+                  }
                   workspaceId={workspaceId}
                 />
               </div>
@@ -395,11 +443,11 @@ export const KanbanColumn = ({
           }}
           open={ctxOpen}
         >
-          <MenuTrigger
-            nativeButton={false}
-            render={<span className="sr-only" />}
-          />
-          <MenuPopup anchor={ctxAnchor ?? undefined}>
+          <MenuAnchor />
+          <MenuPopup
+            anchor={ctxAnchor ?? undefined}
+            finalFocus={() => ctxOpener}
+          >
             <MenuItem onClick={() => onCreate("task")}>
               <SquareCheckIcon />
               {t("tasks.newTask")}
@@ -588,7 +636,6 @@ export const KanbanColumnTitle = ({
     return (
       <InlineEdit
         className="flex-1"
-        inputClassName="flex-1 font-medium"
         onCancel={onCancel}
         onChange={onChange}
         onCommit={onCommit}
@@ -598,17 +645,23 @@ export const KanbanColumnTitle = ({
   }
 
   if (!onStartEditing) {
-    return <span className="truncate text-sm font-medium">{title}</span>;
+    return (
+      <TruncatedText className="text-sm font-medium whitespace-pre">
+        {title}
+      </TruncatedText>
+    );
   }
 
   return (
-    <button
-      className="truncate text-start text-sm font-medium"
+    <Button
+      className="flex min-w-0 shrink overflow-hidden"
       onClick={onStartEditing}
-      type="button"
+      variant="plain"
     >
-      {title}
-    </button>
+      <TruncatedText className="text-sm font-medium whitespace-pre">
+        {title}
+      </TruncatedText>
+    </Button>
   );
 };
 
@@ -635,7 +688,7 @@ export const KanbanColumnSwatch = ({
   if (!showPicker) {
     return (
       <span
-        className="size-2.5 rounded-full"
+        className={KANBAN_COLUMN_SWATCH_CLASS}
         style={{ backgroundColor: color }}
       />
     );
@@ -646,19 +699,21 @@ export const KanbanColumnSwatch = ({
       moreLabel={t("common.showMore")}
       onSelect={onSelect}
       side="bottom"
+      trigger={
+        <Button
+          aria-label={t("common.changeColor")}
+          className="flex shrink-0"
+          shape="round"
+          variant="plain"
+        >
+          <span
+            className={cn("block", KANBAN_COLUMN_SWATCH_CLASS)}
+            style={{ backgroundColor: color }}
+          />
+        </Button>
+      }
       value={optionColor}
-    >
-      <button
-        aria-label={t("common.changeColor")}
-        className="shrink-0 cursor-pointer"
-        type="button"
-      >
-        <span
-          className="block size-2.5 rounded-full"
-          style={{ backgroundColor: color }}
-        />
-      </button>
-    </ColorPicker>
+    />
   );
 };
 
@@ -706,7 +761,7 @@ export const ColumnCalculations = ({
         />
       ))}
       {onChange && properties.length > 0 && (
-        <span className="opacity-0 transition-opacity group-hover/column:opacity-100 focus-within:opacity-100">
+        <span className="opacity-0 transition-opacity group-hover/column:opacity-100 focus-within:opacity-100 pointer-coarse:opacity-100">
           <CalculationPicker
             labels={labels}
             onChange={onChange}

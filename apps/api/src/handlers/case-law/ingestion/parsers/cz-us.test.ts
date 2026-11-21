@@ -1,29 +1,85 @@
 import { describe, expect, test } from "bun:test";
+import fc from "fast-check";
 
-import { hasBlockInlines } from "@/api/handlers/case-law/document-ast";
-import type { Block } from "@/api/handlers/case-law/document-ast";
-import { parseUsDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/cz-us";
+import type { Document as FolioDocument } from "@stll/docx-core/model";
+import { hasBlockInlines } from "@stll/legal-ast/document-ast";
+import type { Block } from "@stll/legal-ast/document-ast";
+import { normalizeInlineLine } from "@stll/legal-ast/inline-line";
+import { assertProperty } from "@stll/property-testing";
+
+import { parseUsDecisionHtml as uncheckedParseUsDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/cz-us";
 import type { ParseUsDecisionInput } from "@/api/handlers/case-law/ingestion/parsers/cz-us";
+import { courtParagraphNumbers } from "@/api/lib/legal-search/parsers/court-paragraph-numbers";
 import { markupResidueIn } from "@/api/lib/legal-search/parsers/markup-residue";
 import {
   embeddedTextFixtures,
   embeddedTextRtf,
 } from "@/api/lib/legal-search/parsers/rtf-destinations.fixtures";
+import { readRtfString } from "@/api/lib/legal-search/parsers/rtf-reader";
+import {
+  VISIBLE_FIELD_DOCUMENT,
+  VISIBLE_RUN_CASES,
+  visibleRunDocument,
+} from "@/api/lib/legal-search/parsers/run-content-text.fixtures";
+import { segmentDecisionBlocks } from "@/api/lib/legal-search/segment-decision";
+import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
+
+import { classifyUsDocumentLines, usDocumentLinesOf } from "./cz-us";
+import {
+  assertNotePath,
+  furnitureRtf,
+  LINE_BOUNDARIES,
+  NOTE_PATHS,
+  notePathDocument,
+  noteTableRtf,
+} from "./document-note-paths.fixtures";
+import { assertHtmlRtfLineParity } from "./rtf-line-parity.fixtures";
+import { inlinesToPlainText } from "./shared-inlines";
+
+const parseUsDecisionHtml = guardParser(uncheckedParseUsDecisionHtml);
+
+test("CZ field results keep visible hyphens and omit instructions", () => {
+  const line = usDocumentLinesOf(VISIBLE_FIELD_DOCUMENT).at(0);
+  expect(line?.kind).toBe("body");
+  if (line?.kind !== "body") {
+    return;
+  }
+  expect(line.value.plainText).toBe("word\u2011word");
+  expect(inlinesToPlainText(line.value.inlines)).toBe("word\u2011word");
+});
+
+test.each(Object.values(VISIBLE_RUN_CASES))(
+  "CZ run kind $item.type preserves its visible characters",
+  ({ item, text }) => {
+    const lines = usDocumentLinesOf(visibleRunDocument(item));
+    expect(lines).toHaveLength(1);
+    const line = lines.at(0);
+    expect(line?.kind).toBe("body");
+    if (line?.kind !== "body") {
+      return;
+    }
+    expect(line.value.plainText).toBe(`word${text}word`);
+    expect(inlinesToPlainText(line.value.inlines)).toBe(`word${text}word`);
+  },
+);
 
 // ── Helpers ─────────────────────────────────────────────────
 
 const baseInput = (
   html: string,
   overrides?: Partial<ParseUsDecisionInput>,
-): ParseUsDecisionInput => ({
-  html,
-  caseNumber: "I.ÚS 100/25",
-  ecli: "ECLI:CZ:US:2025:1.US.100.25.1",
-  court: "Ústavní soud",
-  decisionDate: "2025-02-10",
-  decisionType: undefined,
-  ...overrides,
-});
+): ParseUsDecisionInput => {
+  assertHtmlRtfLineParity(html);
+  return {
+    html,
+    caseNumber: "I.ÚS 100/25",
+    ecli: "ECLI:CZ:US:2025:1.US.100.25.1",
+    court: "Ústavní soud",
+    decisionDate: "2025-02-10",
+    decisionType: undefined,
+    ...overrides,
+  };
+};
 
 const findByRole = (blocks: Block[], role: string) =>
   blocks.find((b) => "role" in b && b.role === role);
@@ -35,6 +91,77 @@ const findAllByType = (blocks: Block[], type: string) =>
   blocks.filter((b) => b.type === type);
 
 // ── RTF-based decision (post-2007) ──────────────────────────
+
+/**
+ * The paragraph the court numbered `number`, in a reasoning numbered from 1
+ * (a lone "1." is as likely a list item, so a numbering needs a run).
+ */
+const numberedRtfBlocks = (leading: string, number: number, body: string) => {
+  const whitespace = leading
+    .replaceAll("\t", "\\tab ")
+    .replaceAll("\u00a0", "\\~");
+  const paragraphs = Array.from({ length: Math.max(number, 2) }, (_, index) =>
+    index + 1 === number
+      ? `{\\b ${whitespace}${number}}. {\\b ${body}}  \\par`
+      : `${String(index + 1)}. Soud v\u011bc posoudil. \\par`,
+  );
+  return courtParagraphNumbers(
+    classifyUsDocumentLines(
+      usDocumentLinesOf(
+        readRtfString(`{\\rtf1\\ansi \\pard ${paragraphs.join(" ")}}`),
+      ),
+    ),
+    { parser: "cz-us", caseNumber: "test" },
+  ).filter((block) => block.type === "paragraph" && block.number === number);
+};
+
+test.each(["  ", "\t", "\u00a0", " \t\u00a0"])(
+  "CZ numbered RTF paragraphs preserve text and formatting after leading %j",
+  (leading) => {
+    const block = numberedRtfBlocks(leading, 1, "Body").at(0);
+    expect(block?.type).toBe("paragraph");
+    expect(block?.plainText).toBe("Body");
+    expect(
+      block && hasBlockInlines(block)
+        ? inlinesToPlainText(block.inlines)
+        : undefined,
+    ).toBe("Body");
+    expect(block && hasBlockInlines(block) ? block.inlines : undefined).toEqual(
+      [{ type: "bold", children: [{ type: "text", text: "Body" }] }],
+    );
+  },
+);
+
+test("CZ numbered prefixes share normalized offsets with rendered inline text", () => {
+  assertProperty(
+    "CZ numbered prefixes share normalized offsets with rendered inline text",
+    fc.property(
+      fc.array(fc.constantFrom(" ", "\t", "\u00a0"), {
+        minLength: 1,
+        maxLength: 12,
+      }),
+      fc.integer({ min: 1, max: 60 }),
+      fc.array(fc.constantFrom("Body", "text", "žluťoučký", "😀"), {
+        minLength: 1,
+        maxLength: 5,
+      }),
+      (whitespace, number, words) => {
+        // A court paragraph opens a sentence: the first word is capitalised,
+        // and the rest is whatever the court wrote.
+        const body = ["Soud", ...words].join(" ");
+        const block = numberedRtfBlocks(whitespace.join(""), number, body).at(
+          0,
+        );
+        expect(block?.plainText).toBe(body);
+        expect(
+          block && hasBlockInlines(block)
+            ? inlinesToPlainText(block.inlines)
+            : undefined,
+        ).toBe(body);
+      },
+    ),
+  );
+});
 
 const rtfContent = [
   "\\pard\\b Ústavní soud rozhodl v senátu složeném z předsedy senátu",
@@ -199,9 +326,8 @@ describe("parseUsDecisionHtml", () => {
       const input = baseInput(rtfDecisionHtml);
       const { documentAst } = parseUsDecisionHtml(input);
 
-      const headings = findAllByType(documentAst.blocks, "heading");
-      const takto = headings.find((h) => h.plainText === "takto:");
-      expect(takto).toBeDefined();
+      const takto = documentAst.blocks.find((b) => b.plainText === "takto:");
+      expect(takto).toMatchObject({ type: "paragraph", role: "intro" });
     });
 
     test("detects Odůvodnění separator (spaced variant)", () => {
@@ -225,6 +351,58 @@ describe("parseUsDecisionHtml", () => {
       const holdingTexts = holdings.map((h) => h.plainText);
       expect(holdingTexts.some((t) => t.includes("porušeno právo"))).toBe(true);
       expect(holdingTexts.some((t) => t.includes("zrušuje"))).toBe(true);
+    });
+
+    // A synthetic page with no recorded legacy segmentation, built the way
+    // the other synthetic inputs are.
+    const sbnuRuling = (tail: string[]) =>
+      parseUsDecisionHtml({
+        ...baseInput(""),
+        html: `
+        <html><body>
+          <span id="lblDecisionForm">NÁLEZ</span>
+          <input id="docContentHidden" value="${[
+            "\\pard Nález Ústavního soudu ze dne 3. března 2005 ve věci ústavní stížnosti stěžovatele J. K. proti rozsudku Městského soudu v Praze",
+            "\\par",
+            "Ústavní stížnost se zamítá.",
+            ...tail,
+          ].join("\n")}" />
+          <input id="docIdHidden" value="99999" />
+        </body></html>
+      `,
+      }).documentAst.blocks;
+
+    test("opens the ruling at the SbNU nález caption, which prints no takto:", () => {
+      const blocks = sbnuRuling([
+        "\\par",
+        "Odůvodnění:",
+        "\\par",
+        "1. Stěžovatel se domáhal zrušení rozsudku.",
+      ]);
+
+      expect(findByRole(blocks, "intro")?.plainText).toStartWith(
+        "Nález Ústavního soudu",
+      );
+      expect(findAllByRole(blocks, "holding").map((b) => b.plainText)).toEqual([
+        "Ústavní stížnost se zamítá.",
+      ]);
+    });
+
+    test("closes the ruling at the signatures and the instruction", () => {
+      const blocks = sbnuRuling([
+        "\\par",
+        "V Brně dne 3. března 2005",
+        "\\par",
+        "JUDr. Tomáš Lichovník v. r.",
+        "\\par",
+        "předseda senátu",
+        "\\par",
+        "Poučení: Proti tomuto nálezu se nelze odvolat.",
+      ]);
+
+      expect(findAllByRole(blocks, "holding").map((b) => b.plainText)).toEqual([
+        "Ústavní stížnost se zamítá.",
+      ]);
     });
   });
 
@@ -397,6 +575,44 @@ describe("parseUsDecisionHtml", () => {
       });
     });
 
+    // A concurring judge agrees with the outcome: the opinion is that
+    // judge's argumentation, not a dissent.
+    test.each([
+      ["Odlišné stanovisko sudcu A. B.", "dissent"],
+      ["Odlišné stanovisko sudkyne A. B.", "dissent"],
+      ["Paralelní stanovisko soudkyně A. B.", "argumentation"],
+      ["Konkurujúce stanovisko sudcov A. B. a C. D.", "argumentation"],
+    ] as const)("shares CS/SK opinion roles at %s", (opinionLine, role) => {
+      const lines = [
+        "Odůvodnění:",
+        `1. ${MAJORITY_TEXT}`,
+        opinionLine,
+        `2. ${DISSENT_TEXT}`,
+      ].map((text) => ({
+        kind: "body" as const,
+        value: normalizeInlineLine([{ type: "text", text }]),
+      }));
+      const blocks = courtParagraphNumbers(classifyUsDocumentLines(lines), {
+        parser: "cz-us",
+        caseNumber: "test",
+      });
+      expect(blocks).toContainEqual(
+        expect.objectContaining({
+          type: "heading",
+          plainText: opinionLine,
+          role: "section-heading",
+        }),
+      );
+      expect(blocks).toContainEqual(
+        expect.objectContaining({
+          type: "paragraph",
+          plainText: DISSENT_TEXT,
+          number: 2,
+          role,
+        }),
+      );
+    });
+
     test("keeps the number the court printed on the opinion heading", () => {
       const heading = "3. Odlišné stanovisko soudce Jana Nováka";
       const parsed = parseUsDecisionHtml(baseInput(decisionWith(heading)));
@@ -455,6 +671,70 @@ describe("parseUsDecisionHtml", () => {
 
       const sigs = findAllByRole(documentAst.blocks, "signature");
       expect(sigs.some((s) => s.plainText.includes("JUDr."))).toBe(true);
+    });
+
+    const MAJORITY_TEXT = "Ústavní soud shledal ústavní stížnost důvodnou.";
+    const DISSENT_TEXT = "Se závěrem senátní většiny nesouhlasím.";
+
+    const classifiedRoles = (texts: readonly string[]) =>
+      classifyUsDocumentLines(
+        texts.map((text) => ({
+          kind: "body" as const,
+          value: normalizeInlineLine([{ type: "text", text }]),
+        })),
+      ).map((block) => ({
+        text: block.plainText,
+        role: block.type === "paragraph" ? block.role : block.type,
+      }));
+
+    // The Court's judges sign a separate opinion with their name alone: no
+    // academic title and no "v. r." under the opinion's own closing.
+    test("reads a bare name under a separate opinion's closing as its signature", () => {
+      const roles = classifiedRoles([
+        "Odůvodnění:",
+        `1. ${MAJORITY_TEXT}`,
+        "V Brně dne 24. září 2026",
+        "Jan Novák v. r.",
+        "předseda senátu",
+        "Odlišné stanovisko soudce Jana Nováka",
+        DISSENT_TEXT,
+        "V Brně dne 24. září 2026",
+        "Jan Novák",
+      ]);
+
+      expect(roles.at(-2)).toEqual({
+        text: "V Brně dne 24. září 2026",
+        role: "closing",
+      });
+      expect(roles.at(-1)).toEqual({ text: "Jan Novák", role: "signature" });
+      expect(roles).toContainEqual({ text: DISSENT_TEXT, role: "dissent" });
+    });
+
+    test("reads every bare name of a signature block under the closing", () => {
+      const roles = classifiedRoles([
+        "Odůvodnění:",
+        `1. ${MAJORITY_TEXT}`,
+        "V Brně dne 24. září 2026",
+        "Petra Svobodová-Dvořáková",
+        "Jan Novák",
+      ]);
+
+      expect(roles.slice(-2)).toEqual([
+        { text: "Petra Svobodová-Dvořáková", role: "signature" },
+        { text: "Jan Novák", role: "signature" },
+      ]);
+    });
+
+    test("leaves a name-shaped line that no closing precedes as opinion text", () => {
+      const roles = classifiedRoles([
+        "Odůvodnění:",
+        `1. ${MAJORITY_TEXT}`,
+        "Odlišné stanovisko soudce Jana Nováka",
+        DISSENT_TEXT,
+        "Jan Novák",
+      ]);
+
+      expect(roles.at(-1)).toEqual({ text: "Jan Novák", role: "dissent" });
     });
   });
 
@@ -975,3 +1255,300 @@ for (const tag of ["script", "style"]) {
     );
   });
 }
+
+test("RTF source decoding preserves bytes, Unicode transport, table text and notes", () => {
+  const rtf = String.raw`{\rtf1\ansi Literal ${"šťáva"} \'e1\uc2\u225??\par \trowd\cellx3000\pard\intbl cell text\cell\row \pard body{\footnote note text}\par}`;
+  const { fulltext } = parseUsDecisionHtml(
+    baseInput(`<input id="docContentHidden" value="${rtf}">`),
+  );
+  for (const text of ["Literal šťáva áá", "cell text", "body", "note text"]) {
+    expect(fulltext).toContain(text);
+  }
+  expect(markupResidueIn(fulltext)).toBeUndefined();
+});
+
+test("skipped RTF destinations cannot publish footnotes or table contents", () => {
+  const rtf = String.raw`{\rtf1 Before {\*\unknownprobe{\footnote Hidden note}}{\info\trowd Hidden table\cell\row} After\par}`;
+  const { fulltext } = parseUsDecisionHtml(
+    baseInput(`<input id="docContentHidden" value="${rtf}">`),
+  );
+  expect(fulltext).toContain("Before  After");
+  expect(fulltext).not.toContain("Hidden");
+});
+
+test("footnotes stay with their referenced paragraphs across majority and dissent sections", () => {
+  const heading = "Odlišné stanovisko";
+  const rtf = String.raw`{\rtf1 ${"Odůvodnění"}\par Majority text{\footnote Majority note one\par Majority note two}\par ${heading}\par Dissent text{\footnote Dissent note}\par}`;
+  const parsed = parseUsDecisionHtml(
+    baseInput(`<input id="docContentHidden" value="${rtf}">`),
+  );
+  expect(parsed.documentAst.blocks.map(({ plainText }) => plainText)).toEqual([
+    "Odůvodnění:",
+    "Majority text",
+    "Majority note one",
+    "Majority note two",
+    heading,
+    "Dissent text",
+    "Dissent note",
+  ]);
+  const sections = parsed.sections;
+  const majority = sections.find(({ text }) => text.includes("Majority text"));
+  const dissent = sections.find(({ text }) => text.includes("Dissent text"));
+  expect(majority?.text).toContain("Majority note one");
+  expect(majority?.text).toContain("Majority note two");
+  expect(dissent?.text).toContain("Dissent note");
+  expect(dissent?.text).not.toContain("Majority note");
+});
+
+test.each(["Odůvodnění", "Odlišné stanovisko"])(
+  "RTF line break separates %s from its body and section",
+  (heading) => {
+    const rtf = String.raw`{\rtf1 ${heading}\line Body text\par}`;
+    const parsed = parseUsDecisionHtml(
+      baseInput(`<input id="docContentHidden" value="${rtf}">`),
+    );
+    expect(parsed.documentAst.blocks.map(({ plainText }) => plainText)).toEqual(
+      [heading === "Odůvodnění" ? "Odůvodnění:" : heading, "Body text"],
+    );
+    const section = parsed.sections.find(({ text }) =>
+      text.includes("Body text"),
+    );
+    expect(section?.type).toBe(
+      heading === "Odůvodnění" ? "argumentation" : "dissent",
+    );
+    expect(parsed.documentAst.blocks.at(0)?.type).toBe("heading");
+  },
+);
+
+const noteHeadingRtf = (heading: string): string =>
+  String.raw`{\rtf1 ${"Odůvodnění"}\par Majority text{\footnote ${heading}}\par Later majority text\par}`;
+const parseNoteHeading = (heading: string) =>
+  parseUsDecisionHtml({
+    ...baseInput(""),
+    html: `<input id="docContentHidden" value="${noteHeadingRtf(heading)}">`,
+  });
+
+test("a note heading cannot turn later majority text into dissent", () => {
+  const rtf = noteHeadingRtf("Odlišné stanovisko");
+  const parsed = parseUsDecisionHtml(
+    baseInput(`<input id="docContentHidden" value="${rtf}">`),
+  );
+  const note = parsed.documentAst.blocks.find(
+    (block) => block.plainText === "Odlišné stanovisko",
+  );
+  expect(note?.type).toBe("paragraph");
+  expect(note?.type === "paragraph" ? note.note?.type : undefined).toBe(
+    "footnote",
+  );
+  const majority = parsed.sections.find(({ text }) =>
+    text.includes("Later majority text"),
+  );
+  expect(majority?.type).toBe("argumentation");
+  expect(majority?.text).toContain("Majority text");
+  expect(majority?.text).toContain("Odlišné stanovisko");
+  const last = parsed.documentAst.blocks.at(-1);
+  expect(last?.type === "paragraph" ? last.role : undefined).not.toBe(
+    "dissent",
+  );
+});
+
+test("heading text inserted into any CZ note never changes body structure or section attribution", () => {
+  const baseline = parseNoteHeading("Neutral note");
+  assertProperty(
+    "heading text inserted into any CZ note never changes body structure or section attribution",
+    fc.property(
+      fc.array(
+        fc.constantFrom(
+          "Odlišné stanovisko",
+          "Odůvodnění",
+          "takto:",
+          "Poučení:",
+          "NÁLEZ",
+          "I.",
+          "V Brně dne 1. 1. 2025",
+          "JUDr. Test",
+        ),
+        { minLength: 1, maxLength: 5 },
+      ),
+      (headings) => {
+        const parsed = parseNoteHeading(headings.join("\\par "));
+        const body = (blocks: readonly Block[]) =>
+          blocks
+            .filter(
+              (block) => block.type !== "paragraph" || block.note === undefined,
+            )
+            .map((block) => ({
+              type: block.type,
+              text: block.plainText,
+              role: block.type === "image" ? undefined : block.role,
+            }));
+        expect(body(parsed.documentAst.blocks)).toEqual(
+          body(baseline.documentAst.blocks),
+        );
+        for (const text of ["Majority text", "Later majority text"]) {
+          expect(
+            parsed.sections.find((section) => section.text.includes(text))
+              ?.type,
+          ).toBe(
+            baseline.sections.find((section) => section.text.includes(text))
+              ?.type,
+          );
+        }
+      },
+    ),
+    { numRuns: 100 },
+  );
+});
+
+for (const path of NOTE_PATHS) {
+  test.each(LINE_BOUNDARIES)(
+    `typed note path ${path} with \\%s boundaries`,
+    (boundary) => {
+      const fixture = notePathDocument({
+        parser: "cz",
+        path,
+        boundary,
+        withNotes: true,
+      });
+      const baselineFixture = notePathDocument({
+        parser: "cz",
+        path,
+        boundary,
+        withNotes: false,
+      });
+      const parsePath = (document: FolioDocument) => {
+        const blocks = classifyUsDocumentLines(usDocumentLinesOf(document));
+        return { blocks, sections: segmentDecisionBlocks(blocks) };
+      };
+      assertNotePath({
+        ...fixture,
+        parsed: parsePath(fixture.document),
+        baseline: parsePath(baselineFixture.document),
+      });
+    },
+  );
+}
+
+const parseMatrixRtf = (source: string) => {
+  const blocks = classifyUsDocumentLines(
+    usDocumentLinesOf(readRtfString(source)),
+  );
+  return { blocks, sections: segmentDecisionBlocks(blocks) };
+};
+test.each(LINE_BOUNDARIES)(
+  "RTF table-row note keeps membership across \\%s",
+  (boundary) => {
+    assertNotePath({
+      parsed: parseMatrixRtf(noteTableRtf("cz", boundary, true)),
+      baseline: parseMatrixRtf(noteTableRtf("cz", boundary, false)),
+      anchorText: "Anchor text",
+      noteHeading: "Odlišné stanovisko",
+      nested: false,
+      excluded: false,
+    });
+  },
+);
+for (const destination of ["header", "footer"] as const) {
+  test.each(LINE_BOUNDARIES)(
+    `RTF ${destination} notes and \\%s stay outside body extraction`,
+    (boundary) => {
+      const parsed = parseMatrixRtf(furnitureRtf("cz", destination, boundary));
+      expect(
+        parsed.blocks.map((block) => block.plainText).join(" "),
+      ).not.toContain("Hidden");
+      expect(
+        parsed.blocks.filter(
+          (block) => block.type === "paragraph" && block.note !== undefined,
+        ),
+      ).toEqual([]);
+      expect(parsed.blocks.map((block) => block.plainText)).toEqual([
+        "Odůvodnění:",
+        "Following body",
+      ]);
+    },
+  );
+}
+
+describe("CZ printed lines read as paragraphs", () => {
+  /** A printed line of I. ÚS 549/2000, ending at the margin mid-sentence. */
+  const WRAPPED_LINE =
+    "stížnosti stěžovatelů A. M., bytem SRN,  a O. M., bytem, SRN, obou";
+  const rtfOf = (lines: readonly string[]): string =>
+    `{\\rtf1\\ansi \\pard ${lines.join("\\par ")}\\par}`;
+
+  /** Characters the reader trims while reading `count` lines of one paragraph. */
+  const trimmedCharacters = (count: number) => {
+    let characters = 0;
+    const lines = usDocumentLinesOf(
+      readRtfString(
+        rtfOf([...Array.from({ length: count }, () => WRAPPED_LINE), "konec."]),
+      ),
+      {
+        normalize: (nodes) => {
+          const line = normalizeInlineLine(nodes);
+          characters += line.plainText.length;
+          return line;
+        },
+      },
+    );
+    return { characters, lines };
+  };
+
+  test("trims each line of a long paragraph once, not the paragraph per line", () => {
+    const small = trimmedCharacters(200);
+    const large = trimmedCharacters(400);
+
+    expect(small.lines).toHaveLength(1);
+    expect(large.lines).toHaveLength(1);
+    // Every line once as it joins and the paragraph once as it closes:
+    // twice the text, whatever the paragraph's length.
+    const text = (count: number) => count * (WRAPPED_LINE.length + 1);
+    expect(small.characters).toBeGreaterThanOrEqual(text(200));
+    expect(small.characters).toBeLessThanOrEqual(2 * text(200) + 100);
+    expect(large.characters).toBeLessThanOrEqual(2 * text(400) + 100);
+  });
+
+  test("keeps sentences of one width and the ruling after takto: apart", () => {
+    const sentences = Array.from({ length: 4 }, () => [
+      "Ústavní soud posoudil návrh a neshledal jej důvodným.",
+      "Napadené rozhodnutí obecného soudu bylo řádně odůvodněno.",
+    ]).flat();
+    const { documentAst } = parseUsDecisionHtml({
+      html: `
+        <html><body>
+          <span id="lblDecisionForm">NÁLEZ</span>
+          <input id="docContentHidden" value="${rtfOf([
+            "Ústavní soud rozhodl o ústavní stížnosti takto:",
+            "Ústavní stížnost se zamítá.",
+            "Odůvodnění",
+            ...sentences,
+          ])}" />
+        </body></html>
+      `,
+      caseNumber: "I.ÚS 100/25",
+      ecli: undefined,
+      court: "Ústavní soud",
+      decisionDate: undefined,
+      decisionType: undefined,
+    });
+
+    expect(
+      documentAst.blocks.find(
+        (block) => block.type === "paragraph" && block.role === "holding",
+      )?.plainText,
+    ).toBe("Ústavní stížnost se zamítá.");
+    // The sentence handing over to the ruling is part of the opening.
+    expect(
+      documentAst.blocks.find(
+        (block) => block.type === "paragraph" && block.role === "intro",
+      )?.plainText,
+    ).toBe("Ústavní soud rozhodl o ústavní stížnosti takto:");
+    expect(
+      documentAst.blocks
+        .filter(
+          (block) => block.type === "paragraph" && block.role === undefined,
+        )
+        .map((block) => block.plainText),
+    ).toEqual(sentences);
+  });
+});

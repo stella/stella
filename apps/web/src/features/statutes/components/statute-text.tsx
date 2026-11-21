@@ -3,28 +3,37 @@ import type { ReactNode } from "react";
 
 import { useTranslations } from "use-intl";
 
-import type { Block } from "@stll/legal-ast/document-ast";
-import { cn } from "@stll/ui/utils";
-
-import { useInspectorView } from "@/components/inspector/use-inspector-view";
-import { buildAnnotationAnchors } from "@/components/legal-reader/annotations/annotation-anchors";
-import type { AnnotationAnchorSource } from "@/components/legal-reader/annotations/annotation-anchors";
+import { buildAnnotationAnchors } from "@stll/decision-reader/annotation-anchors";
+import type { AnnotationAnchorSource } from "@stll/decision-reader/annotation-anchors";
 import {
   BlockRenderer,
   FulltextFallback,
   READER_BLOCK_CHROME_REVEAL_CLASS,
-} from "@/components/legal-reader/document-ast-text";
+} from "@stll/decision-reader/document-ast-text";
 import type {
   AnchorPresentation,
   TextAnchor,
-} from "@/components/legal-reader/document-ast-text";
+} from "@stll/decision-reader/document-ast-text";
 import {
   holdLanding,
   readerBlockByAnchor,
-} from "@/components/legal-reader/reader-landing";
-import { provisionHeadingLine } from "@/components/legal-reader/reader-outline";
-import type { ProvisionHeadingLine } from "@/components/legal-reader/reader-outline";
-import type { ReaderMarkRange } from "@/components/legal-reader/reader-search";
+} from "@stll/decision-reader/reader-landing";
+import { provisionHeadingLine } from "@stll/decision-reader/reader-outline";
+import type { ProvisionHeadingLine } from "@stll/decision-reader/reader-outline";
+import type { ReaderMarkRange } from "@stll/decision-reader/reader-search";
+import { buildFulltextParagraphBlocks } from "@stll/legal-ast/case-law-reader";
+import type { Block } from "@stll/legal-ast/document-ast";
+import type { StatuteAnchorScheme } from "@stll/legal-ast/statute-anchor-scheme";
+import { Button } from "@stll/ui/button";
+import { LEGAL_TEXT_CLASS_NAME } from "@stll/ui/prose";
+import { cn } from "@stll/ui/utils";
+
+import { useInspectorView } from "@/components/inspector/use-inspector-view";
+import { READER_BODY_STYLE } from "@/components/legal-reader/reader-text.pending";
+import {
+  STATUTE_MASTHEAD_CLASS_NAMES,
+  STATUTE_TEXT_CLASS_NAME,
+} from "@/features/statutes/components/statute-text.pending";
 import { createProvisionViewTab } from "@/features/statutes/provision-inspector.logic";
 import type { StatuteMasthead as StatuteMastheadData } from "@/features/statutes/statute-reader-blocks";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
@@ -35,7 +44,7 @@ import { useExternalSyncEffect } from "@/hooks/use-effect";
  * document states none, in which case the reader offers no provision tab at
  * all: the tab is keyed by it.
  */
-export type StatuteCitationWork = {
+type StatuteCitationWork = {
   eli: string;
   jurisdiction: string;
 };
@@ -51,27 +60,40 @@ type StatuteTextProps = {
   fulltext: string | null;
   language: string;
   /**
-   * The rendered block the reader was sent to. It keeps a marker, and the
-   * text lands on it once it is shown.
+   * The rendered blocks the reader was sent to: a citation can name several
+   * subdivisions (`odst. 1 a 2`). Each keeps a marker, and the text lands on
+   * the first once it is shown.
    */
-  landingAnchorId?: string | undefined;
+  landingAnchorIds?: readonly string[] | undefined;
   masthead: StatuteMastheadData | null;
   provisionCitationCounts: ReadonlyMap<string, number>;
+  /** The publisher's scheme its anchors nest provision lists in. */
+  statuteAnchors: StatuteAnchorScheme;
   statuteTitle: string;
   /** A Work with a single consolidation has no history to offer. */
   versionCount: number;
   versionValidFrom: string | null;
 };
 
-const READER_STYLE = {
-  fontFamily: "var(--reader-body-font)",
-  fontSize: "var(--reader-body-size)",
-  lineHeight: "var(--reader-body-line-height)",
-} as const;
+/**
+ * The blocks the statute reader draws marks in: the parsed provisions, or
+ * the plain text's paragraphs when the version has none. The marks are
+ * placed among these and drawn over these, so the two cannot disagree.
+ */
+export const statuteAnnotationBlocks = (
+  blocks: readonly Block[],
+  fulltext: string | null,
+): readonly Block[] => {
+  if (blocks.length > 0) {
+    return blocks;
+  }
+  return fulltext ? buildFulltextParagraphBlocks(fulltext) : [];
+};
 
 // The statutes reader carries no in-page find bar yet, so every block renders
 // with an empty highlight set.
 const NO_RANGES = {};
+const NO_LANDING: readonly string[] = [];
 const NO_ACTIVE_MATCH = -1;
 
 /**
@@ -85,27 +107,18 @@ export const StatuteMasthead = ({
 }: {
   masthead: StatuteMastheadData;
 }) => (
-  <header
-    className="group relative mb-12 scroll-mt-[var(--reader-anchor-offset)] text-center"
-    id={masthead.anchorId}
-  >
-    <p className="mb-4 text-[1.55rem] leading-tight font-bold">
-      {masthead.citation}
-    </p>
-    <p className="text-[1.35rem] leading-tight font-bold tracking-wide">
+  <header className={STATUTE_MASTHEAD_CLASS_NAMES.root} id={masthead.anchorId}>
+    <p className={STATUTE_MASTHEAD_CLASS_NAMES.citation}>{masthead.citation}</p>
+    <p className={STATUTE_MASTHEAD_CLASS_NAMES.instrument}>
       {masthead.instrument}
     </p>
     {masthead.issuer !== null && (
-      <p className="mt-2 text-[1.25rem] leading-snug font-semibold">
-        {masthead.issuer}
-      </p>
+      <p className={STATUTE_MASTHEAD_CLASS_NAMES.issuer}>{masthead.issuer}</p>
     )}
     {masthead.date !== null && (
-      <p className="mt-3 text-[1.05rem] leading-relaxed">{masthead.date}</p>
+      <p className={STATUTE_MASTHEAD_CLASS_NAMES.date}>{masthead.date}</p>
     )}
-    <h1 className="mt-2 text-[1.15rem] leading-relaxed font-semibold text-balance">
-      {masthead.title}
-    </h1>
+    <h1 className={STATUTE_MASTHEAD_CLASS_NAMES.title}>{masthead.title}</h1>
   </header>
 );
 
@@ -120,10 +133,11 @@ export const StatuteText = ({
   citationWork,
   documentId,
   fulltext,
-  landingAnchorId,
+  landingAnchorIds = NO_LANDING,
   language,
   masthead,
   provisionCitationCounts,
+  statuteAnchors,
   statuteTitle,
   versionCount,
   versionValidFrom,
@@ -134,23 +148,27 @@ export const StatuteText = ({
 
   // The same arrival the decision reader makes: straight onto the block, held
   // there while the page around it settles.
+  const [scrollAnchorId] = landingAnchorIds;
   useExternalSyncEffect(() => {
     const article = articleRef.current;
-    if (article === null || landingAnchorId === undefined) {
+    if (article === null || scrollAnchorId === undefined) {
       return undefined;
     }
-    const target = readerBlockByAnchor(article, landingAnchorId);
+    const target = readerBlockByAnchor(article, scrollAnchorId);
     return target === null ? undefined : holdLanding({ article, target });
-  }, [landingAnchorId]);
+  }, [scrollAnchorId]);
 
   if (blocks.length > 0) {
-    const anchorsByPieceId = buildAnnotationAnchors(annotationAnchors, blocks);
+    const anchorsByPieceId = buildAnnotationAnchors(
+      annotationAnchors,
+      statuteAnnotationBlocks(blocks, fulltext),
+    );
     return (
       <article
-        className="reader-statute text-card-foreground text-start"
+        className={cn(LEGAL_TEXT_CLASS_NAME, STATUTE_TEXT_CLASS_NAME)}
         lang={language}
         ref={articleRef}
-        style={READER_STYLE}
+        style={READER_BODY_STYLE}
       >
         {masthead !== null && <StatuteMasthead masthead={masthead} />}
         {blocks.map((block) => {
@@ -184,9 +202,10 @@ export const StatuteText = ({
               anchorsByPieceId={anchorsByPieceId}
               block={block}
               key={block.id}
-              landing={block.anchorId === landingAnchorId}
+              landing={landingAnchorIds.includes(block.anchorId)}
               provisionAccessory={detailsAction}
               rangesByPieceId={NO_RANGES}
+              statuteAnchors={statuteAnchors}
             />
           );
         })}
@@ -197,16 +216,19 @@ export const StatuteText = ({
   if (fulltext) {
     return (
       <article
-        className="reader-statute text-card-foreground text-start"
+        className={cn(LEGAL_TEXT_CLASS_NAME, STATUTE_TEXT_CLASS_NAME)}
         lang={language}
-        style={READER_STYLE}
+        style={READER_BODY_STYLE}
       >
         <h1 className="mb-10 text-center text-xl font-semibold text-balance">
           {statuteTitle}
         </h1>
         <FulltextFallback
           activeMatchIndex={NO_ACTIVE_MATCH}
-          anchorsByPieceId={buildAnnotationAnchors(annotationAnchors)}
+          anchorsByPieceId={buildAnnotationAnchors(
+            annotationAnchors,
+            statuteAnnotationBlocks(blocks, fulltext),
+          )}
           rangesByPieceId={NO_RANGES}
           text={fulltext}
         />
@@ -231,9 +253,9 @@ type StatuteBlockProps = {
   landing?: boolean | undefined;
   /** What a provision heading offers beside its designation. */
   provisionAccessory?:
-    | ((provision: ProvisionHeadingLine) => ReactNode)
-    | undefined;
+    ((provision: ProvisionHeadingLine) => ReactNode) | undefined;
   rangesByPieceId: Record<string, ReaderMarkRange[]>;
+  statuteAnchors: StatuteAnchorScheme;
 };
 
 /**
@@ -248,6 +270,7 @@ export const StatuteBlock = ({
   landing = false,
   provisionAccessory,
   rangesByPieceId,
+  statuteAnchors,
 }: StatuteBlockProps) => {
   // The unit case law cites and a drafting history is about: the
   // designation the heading states, wherever the publisher put it.
@@ -278,6 +301,7 @@ export const StatuteBlock = ({
           : undefined
       }
       rangesByPieceId={rangesByPieceId}
+      statuteAnchors={statuteAnchors}
       variant="statute"
     />
   );
@@ -302,24 +326,34 @@ const ProvisionDetailsAction = ({
   const t = useTranslations();
 
   return (
-    <button
-      aria-label={t("statutes.provisionDetailsFor", { provision })}
+    // The wrapper carries what the heading asks of its chrome: the reader's
+    // sans face at its own tracking, shown on wide panes and on screen only,
+    // and revealed with the heading's ¶ by the same rule.
+    <span
       className={cn(
-        "reader-chrome border-border text-foreground hover:bg-muted hover:border-foreground-disabled focus-visible:ring-ring hidden h-8 items-center rounded-sm border px-3 text-sm font-normal tracking-normal focus-visible:ring-2 focus-visible:outline-none md:inline-flex print:hidden",
-        // Revealed with the heading's ¶, by the same rule.
+        "reader-chrome hidden tracking-normal md:inline-flex print:hidden",
         READER_BLOCK_CHROME_REVEAL_CLASS,
       )}
-      onClick={onOpen}
-      type="button"
     >
-      <span>{t("common.details")}</span>
-      {/* The count needs a wide pane; beside the designation in a narrow
-          one there is room for the action's name only. */}
-      {citationCount !== undefined && citationCount > 0 && (
-        <span className="text-muted-foreground ms-2 hidden tabular-nums @lg/provision:inline">
-          {t("caseLaw.citation.decisionCount", { count: citationCount })}
+      {/* A quiet hairline action beside the heading, lighter than an
+          outline button. */}
+      <Button
+        aria-label={t("statutes.provisionDetailsFor", { provision })}
+        className="group/plain"
+        onClick={onOpen}
+        variant="plain"
+      >
+        <span className="border-border text-foreground group-hover/plain:bg-muted group-hover/plain:border-foreground-disabled inline-flex h-8 items-center rounded-sm border px-3 text-sm font-normal">
+          <span>{t("common.details")}</span>
+          {/* The count needs a wide pane; beside the designation in a narrow
+              one there is room for the action's name only. */}
+          {citationCount !== undefined && citationCount > 0 && (
+            <span className="text-muted-foreground ms-2 hidden tabular-nums @lg/provision:inline">
+              {t("caseLaw.citation.decisionCount", { count: citationCount })}
+            </span>
+          )}
         </span>
-      )}
-    </button>
+      </Button>
+    </span>
   );
 };

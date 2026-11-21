@@ -1,5 +1,7 @@
-import { afterAll, beforeAll, expect, test, setDefaultTimeout } from "bun:test";
+import { afterAll, beforeAll, expect, setDefaultTimeout, test } from "bun:test";
 import { and, eq } from "drizzle-orm";
+
+import { createTestClock } from "@stll/test-kit";
 
 import { apikey, member, session } from "@/api/db/auth-schema";
 import {
@@ -25,10 +27,13 @@ import {
   brandPersistedUserId,
 } from "@/api/lib/safe-id-boundaries";
 import { signInHuman } from "@/api/tests/helpers/human-session";
+import { CREDENTIAL_AUTHENTICATION } from "@/api/tests/helpers/member-authorization";
 import {
   initAgentAuthTestDb,
   releaseAgentAuthTestDb,
 } from "@/api/tests/helpers/mock-agent-auth-db";
+
+const stateClock = createTestClock();
 
 setDefaultTimeout(120_000);
 let db: Awaited<ReturnType<typeof initAgentAuthTestDb>>;
@@ -176,6 +181,7 @@ test.each([
       id: runId,
       workspaceId: coassigned.workspaceId,
       status: "awaiting_review",
+      startedAt: new Date(stateClock.now()),
       definitionSnapshot: {
         name: "Assignment review",
         steps: [{ kind: "review-gate", name: "Review", instructions: "" }],
@@ -190,6 +196,7 @@ test.each([
       index: 0,
       kind: "review-gate",
       status: "awaiting_review",
+      startedAt: new Date(stateClock.now()),
     });
     const headers = owner.headers();
     headers.set("content-type", "application/json");
@@ -497,7 +504,12 @@ test("a re-invited member returns without credentials, matters or approvals", as
 
   // The authorization layer grants the rejoined member no matter access.
   const authorization = await resolveMemberAuthorization(
-    { organizationId, userId: leaverId, workspaceId },
+    {
+      authentication: CREDENTIAL_AUTHENTICATION,
+      organizationId,
+      userId: leaverId,
+      workspaceId,
+    },
     db,
   );
   expect(authorization).toMatchObject({ role: "member", workspace: null });

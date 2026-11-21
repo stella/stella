@@ -5,25 +5,32 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
+import { statuteAnchorSchemeFor } from "@stll/api-contract/statute-anchor-schemes";
+import { statuteDisplayLabel } from "@stll/api-contract/statute-display-label";
+import { isPlainPrimaryClick } from "@stll/decision-reader/citation-click";
 import { parseDocumentAst } from "@stll/legal-ast/document-ast";
 import { Button } from "@stll/ui/button";
 import { Maximize2Icon } from "@stll/ui/icons";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { Skeleton } from "@stll/ui/skeleton";
+import { cn } from "@stll/ui/utils";
 
 import type { ActiveLegalDocument } from "@/components/ai-suggestions/active-legal-document";
-import { isPlainPrimaryClick } from "@/components/inspector/case-decision-view";
 import {
   InspectorFindBar,
   useInspectorFind,
 } from "@/components/inspector/inspector-find";
 import { InspectorTabHeader } from "@/components/inspector/inspector-tab-header";
 import type { InspectorViewRenderProps } from "@/components/inspector/view-registry";
-import { ViewerOverlayBar } from "@/components/inspector/viewer-overlay-bar";
-import { ZoomControls } from "@/components/inspector/zoom-controls";
 import { LegalReaderAIChat } from "@/components/legal-reader/legal-reader-ai-chat";
+import { LegalReaderControls } from "@/components/legal-reader/legal-reader-controls";
+import {
+  LEGAL_READER_CONTENT_CLEARANCE_CLASS_NAME,
+  LEGAL_READER_LAYOUT_CLASS_NAME,
+} from "@/components/legal-reader/legal-reader-controls.pending";
 import { OpenOriginalButton } from "@/components/legal-reader/open-original-button";
-import { useReaderTextScale } from "@/components/legal-reader/use-reader-text-scale";
+import { useReaderElement } from "@/components/legal-reader/use-reader-element";
+import { useWebReaderTextScale as useReaderTextScale } from "@/components/legal-reader/use-web-reader-text-scale";
 import Tooltip from "@/components/tooltip";
 import { StatuteReaderBody } from "@/features/statutes/components/statute-reader-body";
 import {
@@ -33,11 +40,17 @@ import {
 import type { StatuteViewPayload } from "@/features/statutes/statute-inspector.logic";
 import {
   prepareStatuteReader,
-  statuteLandingAnchorId,
+  statuteLandingAnchorIds,
 } from "@/features/statutes/statute-reader-blocks";
 import { optionalArray } from "@/lib/arrays";
 import { detached } from "@/lib/detached";
-import { createStatuteLinkTarget } from "@/lib/statute-route";
+import {
+  AVAILABLE_EVERYWHERE,
+  REQUIREMENT,
+} from "@/lib/platform/requirements.logic";
+import { queryView } from "@/lib/query-view.logic";
+import { createStatuteLinkTarget } from "@/lib/statutes/statute-route";
+import { useQueryViewError } from "@/lib/use-query-view";
 
 /**
  * The act a decision cites, beside the decision: the consolidation that
@@ -46,6 +59,7 @@ import { createStatuteLinkTarget } from "@/lib/statute-route";
  */
 export const StatuteInspectorView = ({
   onClose,
+  onMoveToMain,
   tab,
 }: InspectorViewRenderProps<StatuteViewPayload>) => {
   const t = useTranslations();
@@ -59,18 +73,27 @@ export const StatuteInspectorView = ({
   } = useQuery(statuteOptions(payload.documentId));
   // A provision opened from a heading offers its drafting history only where
   // the work has more than one consolidation, and the count is what says so.
-  const { data: versions } = useQuery(
-    statuteVersionsOptions(payload.documentId),
-  );
+  const versionsQuery = useQuery(statuteVersionsOptions(payload.documentId));
+  const versionsView = queryView(versionsQuery);
+  useQueryViewError(versionsView, "StatuteInspectorView:query");
+  const versions =
+    versionsView.type === "items" ? versionsView.items : undefined;
   const versionCount = Math.max(optionalArray(versions).length, 1);
   const panelRef = useRef<HTMLDivElement | null>(null);
-  const contentRef = useRef<HTMLDivElement | null>(null);
+  const {
+    readerRef: contentRef,
+    element: contentElement,
+    attach: attachContent,
+  } = useReaderElement<HTMLDivElement>();
+  const { element: viewportElement, attach: attachViewport } =
+    useReaderElement<HTMLDivElement>();
   // Cmd/Ctrl+F belongs to the act in front of the reader rather than to the
   // decision behind it, for as long as there is wording to search.
   const find = useInspectorFind({
     contentRef,
     enabled: statute !== undefined,
     highlightKey: tab.id,
+    initialQuery: payload.searchQuery,
     panelRef,
   });
   const ast = parseDocumentAst(statute?.documentAst);
@@ -78,9 +101,12 @@ export const StatuteInspectorView = ({
     blocks: ast === null ? [] : ast.blocks,
     statuteTitle: statute?.title ?? payload.statuteTitle,
   });
-  const landingAnchorId = statuteLandingAnchorId(
-    preparedReader.blocks,
-    payload.anchorId,
+  const landingAnchorIds = statuteLandingAnchorIds(
+    {
+      blocks: preparedReader.blocks,
+      scheme: statuteAnchorSchemeFor(payload.country),
+    },
+    payload,
   );
   // The chat is bound to the consolidation the tab holds, which is the
   // document the full reader binds: a question asked here and one asked there
@@ -88,7 +114,10 @@ export const StatuteInspectorView = ({
   const activeLegal = {
     type: "statute",
     documentId: payload.documentId,
-    title: payload.statuteTitle,
+    title:
+      statute === undefined
+        ? payload.statuteTitle
+        : statuteDisplayLabel(statute).text,
   } as const satisfies ActiveLegalDocument;
 
   return (
@@ -96,36 +125,68 @@ export const StatuteInspectorView = ({
       // The pane is resizable down to 320px and nothing inside it may widen
       // it: `min-w-0` lets this column shrink past its content's intrinsic
       // width, and the clip is the backstop for a child that still refuses.
-      className="bg-background flex min-h-0 min-w-0 flex-1 flex-col overflow-x-clip overflow-y-hidden"
+      className={cn(
+        LEGAL_READER_LAYOUT_CLASS_NAME,
+        "bg-background flex min-h-0 min-w-0 flex-1 flex-col overflow-x-clip overflow-y-hidden",
+      )}
       ref={panelRef}
     >
       <InspectorTabHeader
-        actions={
-          <>
-            {statute !== undefined && (
-              <OpenOriginalButton
-                href={statute.documentUrl ?? statute.sourceUrl}
-                size="icon-xs"
+        actions={[
+          ...(statute === undefined
+            ? []
+            : [
+                {
+                  id: "open-original",
+                  requires: AVAILABLE_EVERYWHERE,
+                  render: () => (
+                    <OpenOriginalButton
+                      href={statute.documentUrl ?? statute.sourceUrl}
+                      size="icon-xs"
+                    />
+                  ),
+                },
+              ]),
+          {
+            id: "move-to-main",
+            requires: [REQUIREMENT.sidePanel],
+            // The wording moves to the page, so the tab that held it goes.
+            render: () => (
+              <StatuteMainViewAction
+                onMoveToMain={onMoveToMain}
+                payload={payload}
+                searchQuery={find.findQuery}
               />
-            )}
-            {/* The wording moves to the page, so the tab that held it goes. */}
-            <StatuteMainViewAction onMoveToMain={onClose} payload={payload} />
-          </>
+            ),
+          },
+        ]}
+        label={
+          statute === undefined ? tab.label : statuteDisplayLabel(statute).text
         }
-        label={tab.label}
         onClose={onClose}
       />
       <InspectorFindBar find={find} />
-      <LegalReaderAIChat activeLegal={activeLegal} className="min-h-0 flex-1">
-        <ScrollArea axis="vertical" className="h-full">
+      <LegalReaderAIChat
+        activeLegal={activeLegal}
+        aiMode="enabled"
+        className="min-h-0 flex-1"
+      >
+        <ScrollArea
+          axis="vertical"
+          className="h-full"
+          viewportRef={attachViewport}
+        >
           {/* The gutter and the room the composer needs belong to the column;
               the text root inside it carries the reader's own scale. */}
           <div data-slot="reader-document-column">
             {/* The floating bar owns the top corner, so the act's masthead
                 starts below it rather than under the zoom controls. */}
             <div
-              className="flex flex-col gap-4 pt-12 pb-4"
-              ref={contentRef}
+              className={cn(
+                "flex flex-col gap-4 pb-4",
+                LEGAL_READER_CONTENT_CLEARANCE_CLASS_NAME,
+              )}
+              ref={attachContent}
               {...textScale.rootProps}
             >
               {isPending && <StatuteInspectorLoader />}
@@ -148,7 +209,7 @@ export const StatuteInspectorView = ({
               {statute !== undefined && (
                 <StatuteReaderBody
                   blocks={preparedReader.blocks}
-                  landingAnchorId={landingAnchorId}
+                  landingAnchorIds={landingAnchorIds}
                   masthead={preparedReader.masthead}
                   scrollContainerRef={contentRef}
                   statute={statute}
@@ -158,15 +219,13 @@ export const StatuteInspectorView = ({
             </div>
           </div>
         </ScrollArea>
-        <ViewerOverlayBar>
-          <ZoomControls
-            atMax={textScale.atMax}
-            atMin={textScale.atMin}
-            level={textScale.level}
-            onReset={textScale.reset}
-            onZoom={textScale.zoom}
-          />
-        </ViewerOverlayBar>
+        <LegalReaderControls
+          textScale={textScale}
+          blocks={preparedReader.blocks}
+          content={contentElement}
+          viewport={viewportElement}
+          key={payload.documentId}
+        />
       </LegalReaderAIChat>
     </div>
   );
@@ -181,7 +240,9 @@ export const StatuteInspectorView = ({
 const StatuteMainViewAction = ({
   onMoveToMain,
   payload,
+  searchQuery,
 }: {
+  searchQuery: string;
   onMoveToMain: () => void;
   payload: StatuteViewPayload;
 }) => {
@@ -203,6 +264,7 @@ const StatuteMainViewAction = ({
           render={
             <Link
               onClick={onNavigate}
+              search={{ q: searchQuery || undefined }}
               {...(payload.anchorId === undefined
                 ? {}
                 : { hash: payload.anchorId })}

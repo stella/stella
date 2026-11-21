@@ -1,4 +1,4 @@
-import { sanitizeHref } from "@/lib/sanitize-href";
+import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 
 const sanitizeMcpToolNamePart = (value: string): string =>
   value.replace(/[^a-zA-Z0-9_-]/gu, "_");

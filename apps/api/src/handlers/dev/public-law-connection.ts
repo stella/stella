@@ -3,6 +3,8 @@ import { sql } from "drizzle-orm";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { backoffDelay } from "@stll/concurrency/backoff-delay";
+
 import { env } from "@/api/env";
 import {
   probeCorpusIndexSearchLiveness,
@@ -45,8 +47,7 @@ type ConnectionConfig =
   | Extract<PublicLawConnection, { status: "unconfigured" }>;
 
 type ProbeOutcome =
-  | { status: "reachable" }
-  | { status: "unreachable"; reason: string };
+  { status: "reachable" } | { status: "unreachable"; reason: string };
 
 let connectRun: Promise<void> | null = null;
 let lastFailure: string | null = null;
@@ -130,7 +131,9 @@ const awaitCorpusReadiness = async (): Promise<ProbeOutcome> => {
     attempt < READINESS_ATTEMPTS && probe.status === "unreachable";
     attempt++
   ) {
-    await Bun.sleep(READINESS_FIRST_DELAY_MS * 2 ** (attempt - 1));
+    await Bun.sleep(
+      backoffDelay(attempt - 1, { baseMs: READINESS_FIRST_DELAY_MS }),
+    );
     probe = await probeCorpus();
   }
   return probe;

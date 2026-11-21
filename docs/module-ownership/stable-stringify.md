@@ -1,0 +1,7 @@
+# Deterministic string form of a JSON-shaped value for hashing and keys
+
+Generated from `scripts/ownership/stable-stringify.ts`. See [Module ownership](../module-ownership.md).
+
+| Capability                                                                                 | Owner                        | Enforcement | Summary                                                                                                                                                                                                                                                                                                                       |
+| ------------------------------------------------------------------------------------------ | ---------------------------- | ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `stable-stringify` — Deterministic string form of a JSON-shaped value for hashing and keys | `packages/stable-stringify/` | none        | Sorted keys, cycle detection, and one spelling for bigint, symbol, and function values, so a hash or cache key computed in the api and in the browser agree byte for byte. `StableStringifyInput` is the contract: a live Date, Map, or Set would read as `{}`, so it is a compile error rather than a colliding fingerprint. |

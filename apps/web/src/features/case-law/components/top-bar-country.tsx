@@ -13,20 +13,19 @@ import {
   MenuTrigger,
 } from "@stll/ui/menu";
 
-import { clearedCaseLawFilters } from "@/features/case-law/case-law-index-search.logic";
 import {
   PUBLIC_CASE_LAW_COUNTRIES,
   toCaseLawCountryParam,
 } from "@/features/case-law/case-law-jurisdiction";
-import { caseLawCountryName } from "@/features/case-law/components/case-law-search";
 import { countryScopedLawRoute } from "@/features/case-law/country-scope.logic";
 import { useFormatter } from "@/i18n/formatting-context";
+import { caseLawCountryName } from "@/lib/case-law-route";
 import { detached } from "@/lib/detached";
 import {
   isPublicStatuteCountry,
   STATUTE_COUNTRIES,
   statuteCountryName,
-} from "@/lib/statute-route";
+} from "@/lib/statutes/statute-route";
 
 /**
  * The jurisdiction the reader is in, in the title row.
@@ -61,10 +60,20 @@ export const TopBarCountry = () => {
 const TopBarCaseLawCountry = ({ route }: { route: "home" | "cases" }) => {
   const format = useFormatter();
   const navigate = useNavigate();
-  // Read from the location rather than a route-scoped hook: this renders in
-  // shared chrome, above the route whose search it is reading.
+  // Read from the rendered match rather than a route-scoped hook: this
+  // renders in shared chrome, above the route whose search it is reading.
+  // The match, not the location, so the label always names the page shown:
+  // a navigation moves the location first, even while this hydrates.
   const country = useRouterState({
-    select: (state) => state.location.search.country,
+    select: (state) => {
+      const search: unknown = state.matches.at(-1)?.search;
+      return typeof search === "object" &&
+        search !== null &&
+        "country" in search &&
+        typeof search.country === "string"
+        ? search.country
+        : undefined;
+    },
   });
 
   const switchTo = (next: string) => {
@@ -75,15 +84,19 @@ const TopBarCaseLawCountry = ({ route }: { route: "home" | "cases" }) => {
       );
       return;
     }
-    // A court, a year or a source belongs to one corpus; carrying it into
-    // another would filter by a value that corpus never uses.
+    // The destination route validates facets against its country and reports
+    // the removed selections; dates and values shared by both countries stay.
     detached(
       navigate({
         to: "/law/cases",
         search: (previous) => ({
           ...previous,
-          ...clearedCaseLawFilters(),
           country: next,
+          page: undefined,
+          filterNotice: undefined,
+          // A rewrite was judged against the previous corpus, not this one.
+          rewrite: undefined,
+          rewrittenFrom: undefined,
         }),
         replace: true,
       }),

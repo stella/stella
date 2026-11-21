@@ -1,12 +1,14 @@
 import { panic } from "better-result";
 
+import { PRODUCTION_STELLA_ORIGINS } from "@stll/api-contract/browser-control";
+import {
+  HOSTED_STELLA_ORIGINS,
+  STAGING_STELLA_ORIGINS,
+} from "@stll/browser-page/stella-origins";
+
 import { buildMode, rawStellaOrigins } from "./env";
 
-const DEFAULT_HOSTED_STELLA_ORIGINS = [
-  "https://app.stll.app",
-  "https://my.stll.app",
-  "https://staging.stll.app",
-] as const;
+const STAGING_BUILD_MODE = "staging";
 
 /** Local stella dev servers; only development and e2e builds trust them. */
 const LOOPBACK_STELLA_MATCHES = [
@@ -22,14 +24,18 @@ export const buildTrustsLoopback = (mode: string | undefined): boolean =>
 /**
  * Parses the build-time `WXT_STELLA_ORIGINS` list (comma-separated exact
  * HTTPS origins). Self-hosters set it to their own app origin; unset means the
- * hosted stella origins. A malformed entry fails the build rather than
- * silently widening or narrowing the bridge.
+ * hosted origins of the build mode: staging for the `staging` build,
+ * production for every other one. A malformed entry fails the build rather
+ * than silently widening or narrowing the bridge.
  */
 export const parseTrustedOriginList = (
   raw: string | undefined,
+  mode: string | undefined,
 ): readonly string[] => {
   if (raw === undefined || raw.trim() === "") {
-    return DEFAULT_HOSTED_STELLA_ORIGINS;
+    return mode === STAGING_BUILD_MODE
+      ? STAGING_STELLA_ORIGINS
+      : PRODUCTION_STELLA_ORIGINS;
   }
   return raw
     .split(",")
@@ -61,7 +67,14 @@ export const createStellaOriginTrust = ({
       ...[...hosted].map((origin) => `${origin}/*`),
       ...(trustLoopback ? LOOPBACK_STELLA_MATCHES : []),
     ],
-    hostnames: [...hosted].map((origin) => new URL(origin).hostname),
+    // Every hosted stella, trusted or not, stays out of the controlled tab.
+    hostnames: [
+      ...new Set(
+        [...hosted, ...HOSTED_STELLA_ORIGINS].map(
+          (origin) => new URL(origin).hostname,
+        ),
+      ),
+    ],
     originFromUrl: (rawUrl: string): string | null => {
       try {
         const url = new URL(rawUrl);
@@ -83,15 +96,20 @@ export const createStellaOriginTrust = ({
   };
 };
 
+const trustedOrigins = parseTrustedOriginList(rawStellaOrigins, buildMode);
+
 const stellaOriginTrust = createStellaOriginTrust({
-  hostedOrigins: parseTrustedOriginList(rawStellaOrigins),
+  hostedOrigins: trustedOrigins,
   trustLoopback: buildTrustsLoopback(buildMode),
 });
+
+/** The configured stella the popup opens when no stella tab is open. */
+export const STELLA_START_ORIGIN: string | undefined = trustedOrigins.at(0);
 
 export const STELLA_CONTENT_SCRIPT_MATCHES =
   stellaOriginTrust.contentScriptMatches;
 
-/** Hosts of the configured HTTPS stella origins; the controlled tab never loads them. */
+/** Hosts of the configured and hosted stella origins; never loaded under control. */
 export const STELLA_HOSTNAMES = stellaOriginTrust.hostnames;
 
 export const trustedStellaOriginFromUrl = stellaOriginTrust.originFromUrl;

@@ -35,10 +35,73 @@ export const forgetOpenedTab = (tabId: number): void => {
   awaitingFirstUrl.delete(tabId);
 };
 
+const isBlankUrl = (url: string | undefined): boolean =>
+  url === undefined || url === "" || url === "about:blank";
+
+/** Whether the tab shows that Chrome has begun loading a URL in it. */
+const hasStartedLoading = ({
+  pendingUrl,
+  status,
+  url,
+}: Pick<chrome.tabs.Tab, "pendingUrl" | "status" | "url">): boolean =>
+  status === "loading" || !isBlankUrl(pendingUrl) || !isBlankUrl(url);
+
+const FIRST_LOAD = { closed: "closed", started: "started" } as const;
+
+type FirstLoad = (typeof FIRST_LOAD)[keyof typeof FIRST_LOAD];
+
+/**
+ * Settles once Chrome has begun loading the first URL of a tab a page
+ * opened, or the tab is gone. Chrome reports the tab while the page that
+ * opened it can still be inside `window.open`: a debugger that holds new
+ * windows at start (DevTools, browser automation) keeps it there, and
+ * closing the tab meanwhile leaves that page frozen. The tab only starts
+ * loading once `window.open` has returned; its network rules confine it
+ * until then.
+ */
+const firstLoad = async (tabId: number): Promise<FirstLoad> => {
+  const settled = Promise.withResolvers<FirstLoad>();
+  const onUpdated = (
+    updatedTabId: number,
+    _change: chrome.tabs.OnUpdatedInfo,
+    tab: chrome.tabs.Tab,
+  ): void => {
+    if (updatedTabId === tabId && hasStartedLoading(tab)) {
+      settled.resolve(FIRST_LOAD.started);
+    }
+  };
+  const onRemoved = (removedTabId: number): void => {
+    if (removedTabId === tabId) {
+      settled.resolve(FIRST_LOAD.closed);
+    }
+  };
+  chrome.tabs.onUpdated.addListener(onUpdated);
+  chrome.tabs.onRemoved.addListener(onRemoved);
+  try {
+    // Read once listening, so a change in between is not missed. Chrome
+    // hides a plain-HTTP address from the tab, not from its top frame.
+    const [tab, top] = await Promise.all([
+      chrome.tabs.get(tabId).catch(() => null),
+      chrome.webNavigation.getFrame({ frameId: 0, tabId }).catch(() => null),
+    ]);
+    if (tab === null) {
+      return FIRST_LOAD.closed;
+    }
+    if (hasStartedLoading(tab) || !isBlankUrl(top?.url)) {
+      return FIRST_LOAD.started;
+    }
+    return await settled.promise;
+  } finally {
+    chrome.tabs.onUpdated.removeListener(onUpdated);
+    chrome.tabs.onRemoved.removeListener(onRemoved);
+  }
+};
+
 /**
  * Called for every tab update: closes a page-opened tab whose first URL
  * fails the origin policy. Later navigations stay under the tab's network
- * rules, as the controlled tab's do.
+ * rules, as the controlled tab's do. An update that shows the URL is one
+ * Chrome is loading, so the tab is past `window.open`.
  */
 export const judgeOpenedTab = async (tab: chrome.tabs.Tab): Promise<void> => {
   if (tab.id === undefined || !awaitingFirstUrl.has(tab.id)) {
@@ -59,9 +122,11 @@ export const judgeOpenedTab = async (tab: chrome.tabs.Tab): Promise<void> => {
  * `target=_blank`, a middle click), from any frame. A tab one of the user's
  * pages opened is the user's. Any other stays confined, even when it was
  * already given to the user: this report wins whenever it arrives. One a
- * page chat operates opened is closed when its first URL fails the policy or
- * the page has opened too many; chat never operates it. The tab's
- * `openerTabId` is not used: Chrome may set it to whichever tab was active.
+ * page in chat's tabs opened becomes chat's, which chat may switch to; one
+ * a merely confined tab opened is confined but never chat's, and either is
+ * closed when its first URL fails the policy or too many tabs are open. One
+ * an unknown tab opened is confined, never chat's. The tab's `openerTabId` is not used: Chrome may set it to
+ * whichever tab was active.
  */
 export const sortNavigationTarget = async ({
   sourceTabId,
@@ -79,14 +144,22 @@ export const sortNavigationTarget = async ({
     await releaseToUser(tabId);
     return;
   }
-  const fromControl = source === "controlled" || source === "opened";
-  const containment = await containOpenedTab(tabId, { limited: fromControl });
+  // Whether the source is chat's is decided again where the tab is recorded.
+  const containment = await containOpenedTab(tabId, { sourceTabId });
   if (containment === "over-limit") {
-    await chrome.tabs.remove(tabId);
+    if ((await firstLoad(tabId)) === FIRST_LOAD.started) {
+      await chrome.tabs.remove(tabId);
+    }
     return;
   }
-  if (containment === "contained" && fromControl) {
+  if (
+    (containment === "chat" || containment === "confined") &&
+    (source === "controlled" || source === "chat" || source === "confined")
+  ) {
     awaitingFirstUrl.add(tabId);
+    if ((await firstLoad(tabId)) === FIRST_LOAD.closed) {
+      return;
+    }
     await judgeOpenedTab({
       ...(await chrome.tabs.get(tabId)),
       pendingUrl: url,

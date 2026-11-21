@@ -3,14 +3,15 @@ import { panic, Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 import * as v from "valibot";
 
-import type { SkillMetadata } from "@stll/skills";
+import type { SkillMetadata } from "@stll/skills/frontmatter";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { agentSkillResources, agentSkills } from "@/api/db/schema";
-import {
-  RESOURCE_PATH_PATTERN,
-  inferResourceKind,
-} from "@/api/lib/agent-skills/resource-path";
+import type { SkillBindingScope } from "@/api/lib/agent-skills/binding";
+import type { ModelOfferedSkills } from "@/api/lib/agent-skills/invocation";
+import { RESOURCE_PATH_PATTERN } from "@/api/lib/agent-skills/resource-path";
+import { windowSkillResource } from "@/api/lib/agent-skills/resource-window";
+import { SKILL_CONTENT_TOOL_NAME } from "@/api/lib/agent-skills/skill-content-tools";
 import {
   recordSkillReadAudit,
   SKILL_READ_OUTCOME,
@@ -20,9 +21,9 @@ import type { SkillReadOutcome } from "@/api/lib/agent-skills/skill-read-audit";
 import {
   ACTIVE_SKILL_BODY_PROMPT_MAX_CHARS,
   type ActiveSkillContext,
-  type ChatSkillRef,
   chatSkillId,
   chatSkillOrigin,
+  type ChatSkillRef,
   loadAvailableChatSkill,
   readAvailableChatSkillResource,
   SKILL_RESOURCE_READ_STATUS,
@@ -32,9 +33,12 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { CHAT_TOOL_SET_PURPOSE } from "@/api/lib/chat/chat-tool-types";
 import type { ChatToolSetPurpose } from "@/api/lib/chat/chat-tool-types";
+import { paginationCursorSchema } from "@/api/lib/custom-schema";
+import { withAggregateSavepoint } from "@/api/lib/db/aggregate-lock";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { toTanStackValibotSchema as toTanStackToolSchema } from "@/api/lib/tanstack-ai-schema";
+import { BOUND_TEXT_CURSOR_MAX_CHARS } from "@/api/mcp/bound-text-window";
 
 import { auditedSkillBody } from "./audited-body";
 import {
@@ -45,6 +49,8 @@ import {
 
 type CreateSkillToolsProps = {
   activeSkillContext?: ActiveSkillContext | null | undefined;
+  /** Where the conversation may use a bound skill; reads resolve within it. */
+  bindingScope: SkillBindingScope;
   organizationId: SafeId<"organization">;
   /**
    * A `validation` set registers the catalog tools whatever `skills` holds:
@@ -61,13 +67,19 @@ type CreateSkillToolsProps = {
    */
   recordReadAuditEvent?: AuditRecorder | undefined;
   safeDb: SafeDb;
-  /** The turn's skill catalog; absent when the caller loaded none. */
-  skills?: readonly SkillMetadata[] | undefined;
+  /**
+   * The turn's skill catalog, invocation rule applied; absent when the
+   * caller loaded none. `load-skill` and `read-skill-resource` serve only
+   * these names, so a `manual` skill the user did not invoke stays out of
+   * reach even when the model guesses its slug.
+   */
+  skills?: ModelOfferedSkills<SkillMetadata> | undefined;
   userId: SafeId<"user">;
 };
 
 export const createSkillTools = ({
   activeSkillContext,
+  bindingScope,
   organizationId,
   purpose = CHAT_TOOL_SET_PURPOSE.run,
   recordAuditEvent,
@@ -110,14 +122,14 @@ export const createSkillTools = ({
   const forValidation = purpose === CHAT_TOOL_SET_PURPOSE.validation;
   if (availableSkillIds.size === 0 && !forValidation) {
     return {
-      "load-skill": undefined,
-      "read-skill-resource": undefined,
+      [SKILL_CONTENT_TOOL_NAME.load]: undefined,
+      [SKILL_CONTENT_TOOL_NAME.readResource]: undefined,
       ...currentSkillEditTools,
     };
   }
 
   return {
-    "load-skill": toolDefinition({
+    [SKILL_CONTENT_TOOL_NAME.load]: toolDefinition({
       name: "load-skill",
       description:
         "Load the full instructions for one stella skill. The system " +
@@ -138,6 +150,7 @@ export const createSkillTools = ({
       const skill = unwrapSkillRead(
         await loadAvailableChatSkill({
           activeSkillId,
+          bindingScope,
           organizationId,
           safeDb,
           skillName,
@@ -155,7 +168,9 @@ export const createSkillTools = ({
         slug: skill.name,
       });
       return {
+        contentHash: skill.contentHash,
         name: skill.name,
+        skillId: chatSkillId(skill),
         version: skill.version,
         description: skill.description,
         instructions: skill.body,
@@ -163,25 +178,11 @@ export const createSkillTools = ({
       };
     }),
 
-    "read-skill-resource": toolDefinition({
+    [SKILL_CONTENT_TOOL_NAME.readResource]: toolDefinition({
       name: "read-skill-resource",
-      description:
-        "Read one resource from a loaded stella skill. Use only paths " +
-        "returned by load-skill. Resources are read-only methodology, " +
-        "knowledge, or prompt templates; they do not grant access to " +
-        "matter data.",
-      inputSchema: toTanStackToolSchema(
-        v.strictObject({
-          skillName: skillNameSchema,
-          path: v.pipe(
-            v.string(),
-            v.description(
-              "Resource path from load-skill, such as knowledge/01-example.md.",
-            ),
-          ),
-        }),
-      ),
-    }).server(async ({ path, skillName }) => {
+      description: READ_SKILL_RESOURCE_DESCRIPTION,
+      inputSchema: toTanStackToolSchema(readSkillResourceInputSchema),
+    }).server(async ({ cursor, path, skillName }) => {
       assertAvailableSkill({
         availableSkillIds,
         skillName,
@@ -190,6 +191,7 @@ export const createSkillTools = ({
       const read = unwrapSkillRead(
         await readAvailableChatSkillResource({
           activeSkillId,
+          bindingScope,
           organizationId,
           path,
           safeDb,
@@ -212,21 +214,39 @@ export const createSkillTools = ({
             kind: "not-found",
             message: "Unknown or unavailable skill resource path.",
           });
-        case SKILL_RESOURCE_READ_STATUS.found:
+        case SKILL_RESOURCE_READ_STATUS.found: {
+          const skillId = chatSkillId(read.skill);
+          const window = windowSkillResource({
+            content: read.content,
+            cursor,
+            path,
+            skillId,
+            skillName,
+          });
+          const served = window.type === "window";
           await auditRead({
-            outcome: SKILL_READ_OUTCOME.success,
+            outcome: served
+              ? SKILL_READ_OUTCOME.success
+              : SKILL_READ_OUTCOME.error,
             path,
             skill: read.skill,
             slug: skillName,
           });
+          if (window.type === "invalid-cursor") {
+            throw staleResourceCursorError();
+          }
           return {
+            contentHash: read.contentHash,
             skillName,
             path,
             mimeType: inferSkillResourceMimeType(path),
-            content: read.content,
-            skillId: chatSkillId(read.skill),
+            content: window.content,
+            charCount: window.charCount,
+            nextCursor: window.nextCursor,
+            skillId,
             origin: chatSkillOrigin(read.skill),
           };
+        }
         default: {
           read satisfies never;
           return panic("skill resource read returned an unknown status");
@@ -245,6 +265,41 @@ const skillNameSchema = v.pipe(
   v.string(),
   v.description("Skill name exactly as listed in the chat skill catalog."),
 );
+
+const READ_SKILL_RESOURCE_DESCRIPTION =
+  "Read one resource from a loaded stella skill. Use only paths " +
+  "returned by load-skill. Resources are read-only methodology, " +
+  "knowledge, or prompt templates; they do not grant access to " +
+  "matter data. A long resource comes back one window at a time: " +
+  "when nextCursor is not null, call again with the same skillName " +
+  "and path and pass nextCursor as cursor to read the next window.";
+
+const readSkillResourceInputSchema = v.strictObject({
+  skillName: skillNameSchema,
+  path: v.pipe(
+    v.string(),
+    v.description(
+      "Resource path from load-skill, such as references/01-example.md.",
+    ),
+  ),
+  cursor: v.optional(
+    paginationCursorSchema({
+      maxChars: BOUND_TEXT_CURSOR_MAX_CHARS,
+      description:
+        "nextCursor from the previous read of this same resource. Omit to " +
+        "read from the start.",
+    }),
+  ),
+});
+
+const staleResourceCursorError = () =>
+  new ChatToolError({
+    kind: "invalid-input",
+    message:
+      "This cursor does not continue this resource as it is now: it came " +
+      "from another resource or the resource has changed since. Read the " +
+      "resource again without cursor.",
+  });
 
 type ActiveEditableSkillContext = ActiveSkillContext & {
   editable: true;
@@ -325,7 +380,7 @@ const createCurrentSkillEditTools = ({
           ),
           content: v.pipe(
             v.string(),
-            v.maxLength(LIMITS.agentSkillResourceMaxChars),
+            v.maxLength(LIMITS.agentSkillResourceModelContextMaxChars),
             v.description("Full replacement text content for the resource."),
           ),
         }),
@@ -353,12 +408,12 @@ const createCurrentSkillEditTools = ({
             v.minLength(1),
             v.maxLength(512),
             v.description(
-              "New resource path inside the current skill, such as knowledge/checklist.md.",
+              "New resource path inside the current skill, such as references/checklist.md.",
             ),
           ),
           content: v.pipe(
             v.string(),
-            v.maxLength(LIMITS.agentSkillResourceMaxChars),
+            v.maxLength(LIMITS.agentSkillResourceModelContextMaxChars),
             v.description("Text content for the new resource."),
           ),
         }),
@@ -396,7 +451,7 @@ const updateCurrentSkillBody = async ({
 }: UpdateCurrentSkillBodyProps) => {
   const result = await safeDb(
     async (tx) =>
-      await tx.transaction(async (innerTx) => {
+      await withAggregateSavepoint(tx, async (innerTx) => {
         // The content hash covers the body and goes out in the same write:
         // the revision trigger snapshots whatever hash the row carries.
         await innerTx
@@ -499,7 +554,7 @@ const updateCurrentSkillResource = async ({
   const nextSizeBytes = new TextEncoder().encode(content).byteLength;
   const result = await safeDb(
     async (tx) =>
-      await tx.transaction(async (innerTx) => {
+      await withAggregateSavepoint(tx, async (innerTx) => {
         const lockedSkill = await lockSkillForResourceWrite(
           innerTx,
           activeSkillContext.id,
@@ -608,11 +663,10 @@ const createCurrentSkillResource = async ({
     });
   }
 
-  const kind = inferResourceKind(trimmedPath);
   const sizeBytes = new TextEncoder().encode(content).byteLength;
   const result = await safeDb(
     async (tx) =>
-      await tx.transaction(async (innerTx) => {
+      await withAggregateSavepoint(tx, async (innerTx) => {
         const lockedSkill = await lockSkillForResourceWrite(
           innerTx,
           activeSkillContext.id,
@@ -623,7 +677,6 @@ const createCurrentSkillResource = async ({
             organizationId,
             skillId: activeSkillContext.id,
             path: trimmedPath,
-            kind,
             content,
             sizeBytes,
           })
@@ -638,7 +691,7 @@ const createCurrentSkillResource = async ({
             changes: {
               resource: {
                 old: null,
-                new: { path: trimmedPath, kind, sizeBytes },
+                new: { path: trimmedPath, sizeBytes },
               },
             },
             metadata: {

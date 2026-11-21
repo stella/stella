@@ -13,6 +13,8 @@
 
 import * as v from "valibot";
 
+import { apiDateTimeSchema } from "@stll/api-contract/api-date";
+
 const ENTITLEMENT_CREATED_EVENT_TYPE = "entitlement.created";
 const ENTITLEMENT_UPDATED_EVENT_TYPE = "entitlement.updated";
 const ENTITLEMENT_ACTIVE_EVENT_TYPE = "entitlement.active";
@@ -80,8 +82,8 @@ const providerEntitlementSchema = v.object({
    * semantics. When present, dispatch uses it to reject stale
    * out-of-order retries (see `usage_entitlements.hosted_last_event_at`).
    */
-  occurred_at: v.optional(v.pipe(v.string(), v.isoTimestamp())),
-  created_at: v.optional(v.pipe(v.string(), v.isoTimestamp())),
+  occurred_at: v.optional(apiDateTimeSchema),
+  created_at: v.optional(apiDateTimeSchema),
 });
 
 // Suspension and closure snapshots can have a null end bound; dispatch uses
@@ -102,7 +104,7 @@ const providerUpdatedEntitlementSchema = v.union([
 ]);
 
 const providerAllocationSchema = v.object({
-  occurred_at: v.optional(v.pipe(v.string(), v.isoTimestamp())),
+  occurred_at: v.optional(apiDateTimeSchema),
   id: v.string(),
   account_ref: v.string(),
   policy_ref: v.string(),
@@ -110,27 +112,27 @@ const providerAllocationSchema = v.object({
   metadata: v.optional(providerMetadataSchema),
 });
 
-export const entitlementCreatedEventSchema = v.looseObject({
+const entitlementCreatedEventSchema = v.looseObject({
   type: v.literal(ENTITLEMENT_CREATED_EVENT_TYPE),
   data: providerEntitlementSchema,
 });
 
-export const entitlementUpdatedEventSchema = v.looseObject({
+const entitlementUpdatedEventSchema = v.looseObject({
   type: v.literal(ENTITLEMENT_UPDATED_EVENT_TYPE),
   data: providerUpdatedEntitlementSchema,
 });
 
-export const entitlementActiveEventSchema = v.looseObject({
+const entitlementActiveEventSchema = v.looseObject({
   type: v.literal(ENTITLEMENT_ACTIVE_EVENT_TYPE),
   data: providerEntitlementSchema,
 });
 
-export const entitlementCanceledEventSchema = v.looseObject({
+const entitlementCanceledEventSchema = v.looseObject({
   type: v.literal(ENTITLEMENT_CANCELED_EVENT_TYPE),
   data: providerClosedEntitlementSchema,
 });
 
-export const entitlementRevokedEventSchema = v.looseObject({
+const entitlementRevokedEventSchema = v.looseObject({
   type: v.literal(ENTITLEMENT_REVOKED_EVENT_TYPE),
   data: providerClosedEntitlementSchema,
 });
@@ -147,7 +149,7 @@ const entitlementPausedEventSchema = v.looseObject({
   data: providerClosedEntitlementSchema,
 });
 
-export const allocationCreatedEventSchema = v.looseObject({
+const allocationCreatedEventSchema = v.looseObject({
   type: v.literal(ALLOCATION_CREATED_EVENT_TYPE),
   data: providerAllocationSchema,
 });
@@ -182,7 +184,3 @@ export type HostedUsageAllocationPayload = v.InferOutput<
 export const hostedUsageUnknownEventEnvelopeSchema = v.looseObject({
   type: v.string(),
 });
-
-export type HostedUsageEnvelope = v.InferOutput<
-  typeof hostedUsageUnknownEventEnvelopeSchema
->;

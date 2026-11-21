@@ -1,7 +1,7 @@
 import { queryOptions } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import type { QueryOptionsInput } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
 import type { ConditionNode } from "@/lib/types";
@@ -32,17 +32,19 @@ export const propertyFacetsOptions = (key: PropertyFacetsOptionsInput) =>
   queryOptions({
     queryKey: propertyFacetsKeys.facets(key),
     queryFn: async ({ signal }) => {
-      const response = await api
-        .entities({ workspaceId: toSafeId<"workspace">(key.workspaceId) })
-        ["property-facets"].post(
-          {
-            propertyId: toSafeId<"property">(key.propertyId),
-            filters: key.filters,
-          },
-          { fetch: { signal } },
-        );
+      const entitiesApi = api.entities({
+        workspaceId: toSafeId<"workspace">(key.workspaceId),
+      });
 
-      const data = unwrapEden(response);
+      const response = await entitiesApi["property-facets"].post(
+        {
+          propertyId: toSafeId<"property">(key.propertyId),
+          filters: key.filters,
+        },
+        { fetch: { signal } },
+      );
+
+      const data = unwrapApiResponse(response);
 
       const counts = new Map<string, number>();
       for (const entry of data.values) {

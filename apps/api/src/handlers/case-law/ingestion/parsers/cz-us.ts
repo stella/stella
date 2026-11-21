@@ -1,3 +1,15 @@
+import { panic } from "better-result";
+
+import type {
+  BlockContent as FolioBlockContent,
+  Paragraph as FolioParagraph,
+  ParagraphContent as FolioParagraphContent,
+} from "@stll/docx-core/model";
+// parser-output-unchanged: HTML loads through @stll/html, which reproduces cheerio.load output; parsed content is unchanged.
+// parser-output-unchanged: The retention check moved to the pipeline; dropping the parser's own validation call leaves its blocks and fulltext unchanged.
+import { load } from "@stll/html";
+import type * as cheerio from "@stll/html";
+import type { AnyNode } from "@stll/html/nodes";
 /**
  * Czech Constitutional Court (Ustavni soud) HTML parser.
  *
@@ -12,6 +24,11 @@
  *
  * Fallback: for pre-2007 decisions that lack the hidden field,
  * the old `extractLinesFromDocContent` approach is used.
+ *
+ * Decisions of the 1990s carry the court's typescript: one RTF
+ * paragraph per printed line. Their lines are joined back into
+ * paragraphs (`hard-wrapped-lines.ts`), and letter-spaced emphasis
+ * ("N á v r h   s e   z a m í t á") is read as words.
  *
  * Additional hidden fields extracted for metadata:
  *   - `registrySignHidden` — e.g., "I.ÚS 100/25 #1"
@@ -42,38 +59,70 @@
  *   V Brne dne ...
  *   Judge name + title
  */
-
-import { panic } from "better-result";
-import * as cheerio from "cheerio";
-
 import { caseLawSectionHeading } from "@stll/legal-ast/case-law-heading";
+import { opensWithCourtParagraphMarker } from "@stll/legal-ast/court-paragraph-numbers";
 import {
   CZ_CLOSING_RE as CLOSING_RE,
   CZ_JUDGE_NAME_RE as JUDGE_NAME_RE,
   CZ_JUDGE_TITLE_RE as SIGNATURE_RE,
+  CZ_TAKTO,
+  CZ_TAKTO_TAIL_RE,
+  czechBenchRecitalStart,
+  isCzechBareSignatoryName,
+  isCzechOpeningFormula,
+  isCzechTaktoLine,
 } from "@stll/legal-ast/czech-document-roles";
+// parser-output-unchanged: cached DocContent and direct paragraph validation preserve extracted content; the output retains its decision-specific AST type.
+import {
+  type Block,
+  type DecisionDocumentAst,
+  hasInlineChildren,
+  type Inline,
+  type ParagraphRole,
+  plainTextOf,
+} from "@stll/legal-ast/document-ast";
+// parser-output-unchanged: mapInlineText moved unchanged to the shared inline-line module.
+import {
+  mapInlineText,
+  normalizeInlineLine,
+  stripInlineLinePrefix,
+} from "@stll/legal-ast/inline-line";
+import {
+  DOT_PARAGRAPH_MARKER_RE,
+  ITEM_OPENING_RE,
+} from "@stll/legal-ast/printed-paragraph-labels";
 
-import type {
-  Block,
-  DocumentAst,
-  Inline,
-  ParagraphRole,
-} from "@/api/handlers/case-law/document-ast";
+import type { DecisionSection } from "@/api/lib/legal-search/document-types";
+import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
+import { courtParagraphNumbers } from "@/api/lib/legal-search/parsers/court-paragraph-numbers";
 import {
-  RTF_EMBEDDED_CONTAINERS,
-  RTF_VISIBLE_BLOCK_DESTINATIONS,
-} from "@/api/lib/legal-search/parsers/rtf-destinations";
+  type BodyDocumentLine,
+  createParagraphLineReader,
+  type DocumentLine,
+} from "@/api/lib/legal-search/parsers/document-footnotes";
 import {
-  buildValidationHtml,
-  validateAndLog,
-} from "@/api/lib/legal-search/parsers/validate-ast";
+  type ContinuingJoin,
+  LINE_JOINS,
+  printedLine,
+  readHardWrap,
+} from "@/api/lib/legal-search/parsers/hard-wrapped-lines";
+import {
+  readInlineLetterSpacing,
+  withAttestedLetterSpacing,
+} from "@/api/lib/legal-search/parsers/letter-spacing";
+import { readRtfString } from "@/api/lib/legal-search/parsers/rtf-reader";
+import { runContentVisibleText } from "@/api/lib/legal-search/parsers/run-content-text";
+import {
+  type OpinionHeadingKind,
+  separateOpinionAuthorLine,
+  type SeparateOpinionHeading,
+  separateOpinionHeading,
+  separateOpinionHeadingNamesAuthor,
+} from "@/api/lib/legal-search/parsers/separate-opinion-heading";
+import { RTF_SOURCE_OPTIONS } from "@/api/lib/legal-search/rtf-source-registry";
+import { segmentDecisionBlocks } from "@/api/lib/legal-search/segment-decision";
 
-import {
-  inlinesToPlainText,
-  visibleHtmlText,
-  stripFurniturePrefix,
-  stripInlinePrefix,
-} from "./shared-inlines";
+import { stripFurniturePrefix, visibleHtmlText } from "./shared-inlines";
 
 // ── Public API ─────────────────────────────────────────────
 
@@ -92,8 +141,9 @@ type CrossReference = {
 };
 
 type ParseUsDecisionOutput = {
-  documentAst: DocumentAst;
+  documentAst: DecisionDocumentAst;
   fulltext: string;
+  sections: DecisionSection[];
   /** Cross-references to other decisions found in the HTML. */
   crossReferences: CrossReference[];
 };
@@ -101,16 +151,23 @@ type ParseUsDecisionOutput = {
 export const parseUsDecisionHtml = (
   input: ParseUsDecisionInput,
 ): ParseUsDecisionOutput => {
-  const $ = cheerio.load(input.html);
+  const $ = load(input.html);
+  const docContent = $(".DocContent");
 
   // Extract metadata from hidden fields
   const hiddenMeta = extractHiddenMetadata($);
 
   // Extract cross-reference links from the visible HTML
-  const crossReferences = extractCrossReferences($);
+  const crossReferences = extractCrossReferences($, docContent);
 
-  const lines = extractLines($);
-  const blocks = classifyLines(lines);
+  const lines = extractLines($, docContent);
+  const blocks = courtParagraphNumbers(
+    withAttestedLetterSpacing(classifyUsDocumentLines(lines)),
+    {
+      parser: "cz-us",
+      caseNumber: input.caseNumber,
+    },
+  );
 
   // Synthesize decision title heading if none was parsed.
   // The RTF docContentHidden doesn't include decorative
@@ -130,23 +187,11 @@ export const parseUsDecisionHtml = (
     });
   }
 
-  // Build validation HTML from extracted lines instead of
-  // passing the raw page HTML. The page HTML concatenates
-  // all text without whitespace between sections, creating
-  // phantom words like "tarifu.ii.skutkové" that aren't in
-  // the AST. Using per-line <p> tags preserves word boundaries.
-  const validationHtml = buildValidationHtml(lines.map((l) => l.plainText));
-  validateAndLog(
-    { parser: "cz-us", caseNumber: input.caseNumber },
-    validationHtml,
-    blocks,
-  );
-
   const fulltext = blocks
     .flatMap((b) => (b.plainText ? [b.plainText] : []))
     .join("\n\n");
 
-  const ast: DocumentAst = {
+  const ast: DecisionDocumentAst = {
     version: 1,
     source: {
       system: "nalus.usoud.cz",
@@ -166,7 +211,12 @@ export const parseUsDecisionHtml = (
     blocks,
   };
 
-  return { documentAst: ast, fulltext, crossReferences };
+  return {
+    documentAst: ast,
+    fulltext,
+    sections: segmentDecisionBlocks(blocks),
+    crossReferences,
+  };
 };
 
 // ── Hidden-field metadata ─────────────────────────────────
@@ -195,11 +245,14 @@ const CROSS_REF_HREF_RE = /GetRegSignDecisions\.aspx\?sz=/iu;
  * Extract cross-reference links to other ÚS decisions from
  * the visible DocContent HTML.
  */
-const extractCrossReferences = ($: cheerio.CheerioAPI): CrossReference[] => {
+const extractCrossReferences = (
+  $: cheerio.CheerioAPI,
+  docContent: cheerio.Cheerio<AnyNode>,
+): CrossReference[] => {
   const refs: CrossReference[] = [];
   const seen = new Set<string>();
 
-  $(".DocContent a[href]").each((_, el) => {
+  docContent.find("a[href]").each((_, el) => {
     const href = $(el).attr("href") ?? "";
     if (!CROSS_REF_HREF_RE.test(href)) {
       return;
@@ -220,448 +273,299 @@ const extractCrossReferences = ($: cheerio.CheerioAPI): CrossReference[] => {
 /** Create a simple text inline helper. */
 const textInline = (text: string): Inline[] => [{ type: "text", text }];
 
-// ── RTF reader ────────────────────────────────────────────
+type ParsedLineData = ReturnType<typeof normalizeInlineLine>;
+type ParsedLine = DocumentLine<ParsedLineData>;
 
-/**
- * Destinations whose group carries no document text.
- *
- * RTF 1.9 ignores an unknown `{\*\...}` destination whole, and these named
- * ones hold a picture's payload, the font and colour tables, the
- * revision-save-id table or the document properties. Drawing and object
- * wrappers are walked for their visible text destinations. Read as text instead,
- * a picture group puts its own control words and hundreds of hex digits
- * into the decision: Pl.ÚS-st. 27/09 prints a horizontal rule between the
- * majority opinion and the dissent, and the `\shppict`/`\nonshppict` pair
- * behind it surfaced in the reader immediately before "1. Odlišné
- * stanovisko".
- *
- * A picture becomes nothing. An `image` block needs an https asset in a
- * store, which this export does not publish, and a `data:` URI is rejected
- * because the AST is read, indexed and prompted with whole.
- */
-const RTF_SKIPPED_DESTINATIONS = new Set([
-  "colortbl",
-  "datastore",
-  "fonttbl",
-  "header",
-  "headerf",
-  "headerl",
-  "headerr",
-  "footer",
-  "footerf",
-  "footerl",
-  "footerr",
-  "info",
-  "latentstyles",
-  "listoverridetable",
-  "listtable",
-  "nonshppict",
-  "objdata",
-  "objclass",
-  "objname",
-  "shprslt",
-  "sp",
-  "pgptbl",
-  "pict",
-  "rsidtbl",
-  "shppict",
-  "stylesheet",
-  "themedata",
-  "xmlnstbl",
-]);
+// ── RTF reading ───────────────────────────────────────────
 
-/** Control words that end the current paragraph. */
-const RTF_BREAK_WORDS = new Set(["line", "page", "par", "sect"]);
-
-/** Control words that stand for one character of text. */
-const RTF_SYMBOL_TEXT = new Map([
-  ["bullet", "•"],
-  ["emdash", "—"],
-  ["emspace", " "],
-  ["endash", "–"],
-  ["enspace", " "],
-  ["ldblquote", "“"],
-  ["lquote", "‘"],
-  ["qmspace", " "],
-  ["rdblquote", "”"],
-  ["rquote", "’"],
-  ["tab", "\t"],
-]);
-
-/** A run of text sharing one font weight. */
-type RtfRun = { text: string; bold: boolean };
-
-/** Formatting a group inherits from its parent and restores on close. */
-type RtfDestination =
-  | { type: "body" }
-  | { type: "container"; paragraphs: RtfRun[][] }
-  | { type: "text"; paragraphs: RtfRun[][] };
-type RtfGroupState = {
-  bold: boolean;
-  unicodeSkip: number;
-  destination: RtfDestination;
-};
-type RtfParagraph = { runs: RtfRun[]; following: RtfRun[][] };
-
-/**
- * A control word with its optional numeric argument and the single space
- * that delimits it, or a control symbol. Sticky: the reader matches at the
- * backslash it stands on rather than searching forward for one.
- */
-const RTF_CONTROL_RE =
-  /\\(?:(?<word>[a-zA-Z]+)(?<value>-?\d+)?[ ]?|(?<symbol>[^a-zA-Z]))/uy;
-
-/** The destination name at `index`, where one starts there. */
-const RTF_WORD_RE = /^[a-zA-Z]+/u;
-
-/**
- * The destination a group introduces: whether it is ignorable (`{\*`) and
- * the control word that names it.
- *
- * Scanned rather than matched: the literal for this — an optional `\*`
- * between two runs of whitespace — is super-linear under scslre, and the
- * ratchet is at 0. The cursor only advances.
- */
-const rtfGroupHead = (
-  rtf: string,
-  open: number,
-): { ignorable: boolean; word: string | undefined } | undefined => {
-  let index = open + 1;
-  while (index < rtf.length && WHITESPACE_RE.test(rtf.charAt(index))) {
-    index += 1;
-  }
-  if (rtf.charAt(index) !== "\\") {
-    return undefined;
-  }
-  index += 1;
-  const ignorable = rtf.charAt(index) === "*";
-  if (ignorable) {
-    index += 1;
-    while (index < rtf.length && WHITESPACE_RE.test(rtf.charAt(index))) {
-      index += 1;
-    }
-    if (rtf.charAt(index) !== "\\") {
-      return { ignorable, word: undefined };
-    }
-    index += 1;
-  }
-  return {
-    ignorable,
-    word: RTF_WORD_RE.exec(rtf.slice(index, index + 32))?.[0]?.toLowerCase(),
-  };
-};
-
-const WHITESPACE_RE = /\s/u;
-
-/** Index just past the group opening at `start`, or undefined when it never closes. */
-const rtfGroupEnd = (rtf: string, start: number): number | undefined => {
-  let depth = 0;
-  for (let i = start; i < rtf.length; i++) {
-    const char = rtf.charAt(i);
-    if (char === "\\") {
-      RTF_CONTROL_RE.lastIndex = i;
-      const control = RTF_CONTROL_RE.exec(rtf);
-      if (control === null) {
-        i += 1;
-        continue;
-      }
-      i = RTF_CONTROL_RE.lastIndex - 1;
-      if (control.groups?.["word"] === "bin") {
-        const size = Number.parseInt(control.groups["value"] ?? "0", 10);
-        if (size >= 0) {
-          i = Math.min(rtf.length, i + size);
-        }
-      }
-      continue;
-    }
-    if (char === "{") {
-      depth += 1;
-      continue;
-    }
-    if (char === "}") {
-      depth -= 1;
-      if (depth === 0) {
-        return i + 1;
-      }
-    }
-  }
-  return undefined;
-};
-
-/**
- * Index just past a group to skip whole, or undefined when the group's text
- * belongs in the document.
- *
- * An unbalanced group is not skipped: its closing brace is missing, so
- * where it ends is a guess and dropping to the end of the source would drop
- * the rest of the decision with it. What leaks instead is markup, which
- * `validateAndLog`'s MARKUP_RESIDUE reports.
- */
-const skippedGroupEnd = (rtf: string, open: number): number | undefined => {
-  const head = rtfGroupHead(rtf, open);
-  if (
-    !head ||
-    (head.word !== undefined &&
-      (RTF_EMBEDDED_CONTAINERS.has(head.word) ||
-        RTF_VISIBLE_BLOCK_DESTINATIONS.has(head.word)))
-  ) {
-    return undefined;
-  }
-  if (
-    !head.ignorable &&
-    !(head.word !== undefined && RTF_SKIPPED_DESTINATIONS.has(head.word))
-  ) {
-    return undefined;
-  }
-  return rtfGroupEnd(rtf, open);
-};
-
-/**
- * Skip the characters `\uN` prints for readers that cannot show it: `\ucN`
- * states how many, and each is a `\'hh` byte or one plain character.
- */
-const skipUnicodeFallback = (
-  rtf: string,
-  start: number,
-  count: number,
-): number => {
-  let index = start;
-  for (let skipped = 0; skipped < count && index < rtf.length; skipped++) {
-    index += rtf.startsWith("\\'", index) ? 4 : 1;
-  }
-  return index;
-};
-
-/**
- * Read RTF into paragraphs of formatted runs.
- *
- * Group-aware by construction: formatting is pushed and popped with the
- * braces, and a destination holding no text is skipped as one group rather
- * than filtered control word by control word. A filter only removes what it
- * was told to look for, so every unlisted control word — and every byte of
- * the payload one introduces — reached the text.
- */
-const readRtfRuns = (rtf: string): RtfRun[][] => {
-  const paragraphs: RtfRun[][] = [];
-  const stack: { state: RtfGroupState; heldParagraph: RtfParagraph | null }[] =
-    [];
-  const state: RtfGroupState = {
-    bold: false,
-    unicodeSkip: 1,
-    destination: { type: "body" },
-  };
-  let paragraph: RtfParagraph = { runs: [], following: [] };
-
-  const emit = (text: string): void => {
-    if (!text || state.destination.type === "container") {
-      return;
-    }
-    const last = paragraph.runs.at(-1);
-    if (last && last.bold === state.bold) {
-      last.text += text;
-      return;
-    }
-    paragraph.runs.push({ text, bold: state.bold });
-  };
-
-  const breakParagraph = (): void => {
-    switch (state.destination.type) {
-      case "body":
-        paragraphs.push(paragraph.runs, ...paragraph.following);
-        break;
-      case "text":
-        state.destination.paragraphs.push(
-          paragraph.runs,
-          ...paragraph.following,
-        );
-        break;
-      case "container":
-        state.destination.paragraphs.push(...paragraph.following);
-        break;
-      default:
-        state.destination satisfies never;
-        panic("Unhandled RTF destination");
-    }
-    paragraph = { runs: [], following: [] };
-  };
-
-  /** Apply the control at `index`; returns the index just past it. */
-  const applyControl = (index: number): number => {
-    RTF_CONTROL_RE.lastIndex = index;
-    const match = RTF_CONTROL_RE.exec(rtf);
-    if (!match) {
-      emit("\\");
-      return index + 1;
-    }
-    const next = RTF_CONTROL_RE.lastIndex;
-
-    const symbol = match.groups?.["symbol"];
-    if (symbol !== undefined) {
-      if (symbol === "\\" || symbol === "{" || symbol === "}") {
-        emit(symbol);
-        return next;
-      }
-      if (symbol === "~") {
-        emit(" ");
-        return next;
-      }
-      if (symbol === "_") {
-        emit("-");
-        return next;
-      }
-      if (symbol === "\n" || symbol === "\r") {
-        breakParagraph();
-        return next;
-      }
-      // `\'hh` is a code-page byte the hidden field already serves decoded;
-      // `\-` is an optional hyphen, which prints nothing.
-      return symbol === "'" ? next + 2 : next;
-    }
-
-    const word = match.groups?.["word"]?.toLowerCase();
-    if (word === undefined) {
-      return next;
-    }
-    const argument = match.groups?.["value"];
-    const value =
-      argument === undefined ? undefined : Number.parseInt(argument, 10);
-
-    if (word === "bin" && value !== undefined && value >= 0) {
-      return Math.min(rtf.length, next + value);
-    }
-    if (RTF_BREAK_WORDS.has(word)) {
-      breakParagraph();
-      return next;
-    }
-    const symbolText = RTF_SYMBOL_TEXT.get(word);
-    if (symbolText !== undefined) {
-      emit(symbolText);
-      return next;
-    }
-    if (word === "b") {
-      state.bold = value !== 0;
-      return next;
-    }
-    if (word === "uc") {
-      state.unicodeSkip = value === undefined || value < 0 ? 1 : value;
-      return next;
-    }
-    if (word === "u" && value !== undefined) {
-      emit(String.fromCodePoint(value < 0 ? value + 0x01_00_00 : value));
-      return skipUnicodeFallback(rtf, next, state.unicodeSkip);
-    }
-    return next;
-  };
-
-  let index = 0;
-  while (index < rtf.length) {
-    const char = rtf.charAt(index);
-    if (char === "{") {
-      const skipTo = skippedGroupEnd(rtf, index);
-      if (skipTo !== undefined) {
-        index = skipTo;
-        continue;
-      }
-      const frame: {
-        state: RtfGroupState;
-        heldParagraph: RtfParagraph | null;
-      } = { state: { ...state }, heldParagraph: null };
-      stack.push(frame);
-      const head = rtfGroupHead(rtf, index);
-      if (
-        head?.word !== undefined &&
-        (RTF_EMBEDDED_CONTAINERS.has(head.word) ||
-          RTF_VISIBLE_BLOCK_DESTINATIONS.has(head.word))
-      ) {
-        frame.heldParagraph = paragraph;
-        paragraph = { runs: [], following: [] };
-        state.destination = {
-          type: RTF_EMBEDDED_CONTAINERS.has(head.word) ? "container" : "text",
-          paragraphs: [],
-        };
-      }
-      index += 1;
-      continue;
-    }
-    if (char === "}") {
-      const popped = stack.pop();
-      if (popped) {
-        if (popped.heldParagraph !== null) {
-          if (paragraph.runs.length > 0 || paragraph.following.length > 0) {
-            breakParagraph();
-          }
-          const embedded =
-            state.destination.type === "body"
-              ? []
-              : state.destination.paragraphs;
-          paragraph = popped.heldParagraph;
-          paragraph.following.push(...embedded);
-        }
-        state.bold = popped.state.bold;
-        state.unicodeSkip = popped.state.unicodeSkip;
-        state.destination = popped.state.destination;
-      }
-      index += 1;
-      continue;
-    }
-    if (char === "\\") {
-      index = applyControl(index);
-      continue;
-    }
-    emit(char);
-    index += 1;
-  }
-
-  breakParagraph();
-  return paragraphs;
-};
-
-/** Formatted runs as inline nodes, with the paragraph's outer padding trimmed. */
-const runsToInlines = (runs: readonly RtfRun[]): Inline[] => {
-  const trimmed = runs.map((run) => ({ ...run }));
-  const first = trimmed.at(0);
-  if (first) {
-    first.text = first.text.trimStart();
-  }
-  const last = trimmed.at(-1);
-  if (last) {
-    last.text = last.text.trimEnd();
-  }
-
+const rtfInlinesOf = (paragraph: FolioParagraph): Inline[] => {
   const inlines: Inline[] = [];
-  for (const run of trimmed) {
-    if (!run.text) {
-      continue;
+
+  const visit = (items: readonly FolioParagraphContent[]): void => {
+    for (const item of items) {
+      switch (item.type) {
+        case "run": {
+          const text = item.content.map(runContentVisibleText).join("");
+          if (text.length === 0) {
+            break;
+          }
+          const inline: Inline = { type: "text", text };
+          inlines.push(
+            item.formatting?.bold === true
+              ? { type: "bold", children: [inline] }
+              : inline,
+          );
+          break;
+        }
+        case "hyperlink":
+        case "simpleField":
+        case "inlineSdt":
+        case "inlineWrapper":
+        case "insertion":
+        case "moveTo":
+          visit(item.type === "hyperlink" ? item.children : item.content);
+          break;
+        case "complexField":
+          for (const run of item.fieldResult) {
+            visit([run]);
+          }
+          break;
+        case "mathEquation":
+          if (item.plainText) {
+            inlines.push({ type: "text", text: item.plainText });
+          }
+          break;
+        case "preservedInline":
+          if (item.text) {
+            inlines.push({ type: "text", text: item.text });
+          }
+          break;
+        case "deletion":
+        case "moveFrom":
+        case "bookmarkStart":
+        case "bookmarkEnd":
+        case "moveFromRangeStart":
+        case "moveFromRangeEnd":
+        case "moveToRangeStart":
+        case "moveToRangeEnd":
+        case "commentRangeStart":
+        case "commentRangeEnd":
+        case "commentReference":
+          break;
+        default:
+          item satisfies never;
+          panic("Unhandled RTF paragraph content");
+      }
     }
-    const text: Inline = { type: "text", text: run.text };
-    inlines.push(run.bold ? { type: "bold", children: [text] } : text);
-  }
-  return inlines;
-};
+  };
 
-// ── Line extraction ────────────────────────────────────────
-
-type ParsedLine = {
-  inlines: Inline[];
-  plainText: string;
+  visit(paragraph.content);
+  return coalesceRuns(inlines);
 };
 
 /**
- * Primary extraction: read the `docContentHidden` RTF field.
- *
- * One line per RTF paragraph (`\par` and its siblings); an empty one
- * carries nothing and is dropped.
+ * Adjacent runs of the same formatting as one inline. RTF starts a run at
+ * every escaped character (`N \'e1 v r h`), and a word read run by run
+ * cannot be recognised as letter-spaced or as a heading.
  */
+const coalesceRuns = (inlines: readonly Inline[]): Inline[] => {
+  const result: Inline[] = [];
+  for (const node of inlines) {
+    const previous = result.at(-1);
+    if (previous?.type === "text" && node.type === "text") {
+      result[result.length - 1] = {
+        ...previous,
+        text: previous.text + node.text,
+      };
+      continue;
+    }
+    if (previous?.type === "bold" && node.type === "bold") {
+      result[result.length - 1] = {
+        ...previous,
+        children: coalesceRuns([...previous.children, ...node.children]),
+      };
+      continue;
+    }
+    result.push(node);
+  }
+  return result;
+};
+
+/** Primary extraction: read the `docContentHidden` RTF field. */
 const extractLinesFromRtf = (rtfContent: string): ParsedLine[] => {
+  const document = readRtfString(
+    rtfContent,
+    RTF_SOURCE_OPTIONS[ADAPTER_KEYS.CZ_US],
+  );
+  return usDocumentLinesOf(document);
+};
+
+/** A line as the RTF printed it, and which run of adjacent paragraphs it is in. */
+type PrintedUsLine = {
+  readonly line: DocumentLine<Inline[]>;
+  /**
+   * Paragraphs side by side in one container. A table cell is a run of its
+   * own, and so is the text after a table: a printed line never continues
+   * across either.
+   */
+  readonly run: number;
+};
+
+type UsDocumentLinesOptions = {
+  /**
+   * Trims a line's inlines. Each printed line is trimmed once and each
+   * paragraph once more; a test counts the work through it.
+   */
+  normalize?: typeof normalizeInlineLine;
+};
+
+/** Shared-model entry point, including nested tables and content controls. */
+export const usDocumentLinesOf = (
+  document: ReturnType<typeof readRtfString>,
+  { normalize = normalizeInlineLine }: UsDocumentLinesOptions = {},
+): ParsedLine[] => {
+  const printed: PrintedUsLine[] = [];
+  let run = 0;
+  const readLines = createParagraphLineReader(document, rtfInlinesOf);
+  const visit = (blocks: readonly FolioBlockContent[]): void => {
+    for (const block of blocks) {
+      switch (block.type) {
+        case "paragraph":
+          for (const line of readLines(block)) {
+            printed.push({ line, run });
+          }
+          break;
+        case "table":
+          for (const row of block.rows) {
+            for (const cell of row.cells) {
+              run += 1;
+              visit(cell.content);
+            }
+          }
+          run += 1;
+          break;
+        case "blockSdt":
+        case "blockCustomXml":
+          visit(block.content);
+          break;
+        // parser-output-unchanged: comment range markers carry no text and
+        // were not block content before folio 0.68.
+        case "preservedBlock":
+        case "bookmarkStart":
+        case "bookmarkEnd":
+        case "commentRangeStart":
+        case "commentRangeEnd":
+        case "moveFromRangeStart":
+        case "moveFromRangeEnd":
+        case "moveToRangeStart":
+        case "moveToRangeEnd":
+          break;
+        default:
+          block satisfies never;
+          panic("Unhandled CZ document block");
+      }
+    }
+  };
+  visit(document.package.document.content);
+  return reflowUsLines(printed, normalize);
+};
+
+/**
+ * Drop the last character of the inlines, wherever it is nested. Touches
+ * only the trailing node, so it costs the same however long the paragraph.
+ */
+const dropLastCharacter = (inlines: Inline[]): void => {
+  for (let index = inlines.length - 1; index >= 0; index -= 1) {
+    const node = inlines[index];
+    if (node === undefined || plainTextOf([node]).length === 0) {
+      continue;
+    }
+    if (node.type === "text") {
+      inlines[index] = { ...node, text: node.text.slice(0, -1) };
+      return;
+    }
+    if (hasInlineChildren(node)) {
+      const children = [...node.children];
+      dropLastCharacter(children);
+      inlines[index] = { ...node, children };
+      return;
+    }
+    // A line break: one character on the text axis, and the last one.
+    inlines.splice(index, 1);
+    return;
+  }
+};
+
+/**
+ * Append the next printed line, already trimmed, to a paragraph whose lines
+ * were trimmed as they came, as the margin joined them.
+ */
+const appendPrintedLine = (
+  paragraph: Inline[],
+  line: readonly Inline[],
+  join: ContinuingJoin,
+): void => {
+  switch (join) {
+    case LINE_JOINS.SPACE:
+      paragraph.push({ type: "text", text: " " }, ...line);
+      return;
+    case LINE_JOINS.WORD:
+      dropLastCharacter(paragraph);
+      paragraph.push(...line);
+      return;
+    case LINE_JOINS.COMPOUND:
+      paragraph.push(...line);
+      return;
+    default:
+      join satisfies never;
+      panic("Unhandled printed line join");
+  }
+};
+
+/**
+ * The printed lines as the court's paragraphs: letter-spaced words read as
+ * words, and a typescript's margin-wrapped lines joined back together. See
+ * `hard-wrapped-lines.ts` for when a document counts as one.
+ *
+ * Each line is trimmed once as it joins and each paragraph once when it
+ * closes, so the work grows with the text, not with a paragraph's length
+ * times its lines.
+ */
+const reflowUsLines = (
+  printed: readonly PrintedUsLine[],
+  normalize: typeof normalizeInlineLine,
+): ParsedLine[] => {
+  const reading = readHardWrap(
+    printed.map(({ line }) =>
+      line.kind === "body" ? printedLine(plainTextOf(line.value)) : null,
+    ),
+  );
+  // Not a typescript: every line is its own paragraph, and an absent join
+  // below reads as a break.
+  const joins =
+    reading === null
+      ? []
+      : reading.joins.map((join, index) =>
+          printed[index]?.run === printed[index + 1]?.run
+            ? join
+            : LINE_JOINS.BREAK,
+        );
+  const finish = (inlines: readonly Inline[]): ParsedLineData =>
+    normalize(
+      reading === null ? inlines : mapInlineText(inlines, reading.clean),
+    );
+  const spelled = (inlines: readonly Inline[]): Inline[] =>
+    readInlineLetterSpacing(inlines);
+
   const lines: ParsedLine[] = [];
-  for (const runs of readRtfRuns(rtfContent)) {
-    const inlines = runsToInlines(runs);
-    const plainText = inlinesToPlainText(inlines).trim();
-    if (plainText) {
-      lines.push({ inlines, plainText });
+  let paragraph: Inline[] | null = null;
+  for (const [index, { line }] of printed.entries()) {
+    if (line.kind === "note") {
+      lines.push({
+        kind: "note",
+        note: { ...line.note, value: finish(spelled(line.note.value)) },
+      });
+      continue;
+    }
+    const continues = (joins[index] ?? LINE_JOINS.BREAK) !== LINE_JOINS.BREAK;
+    const join = joins[index - 1] ?? LINE_JOINS.BREAK;
+    if (paragraph === null || join === LINE_JOINS.BREAK) {
+      // A paragraph of one line is trimmed when it closes.
+      paragraph = continues
+        ? [...normalize(spelled(line.value)).inlines]
+        : spelled(line.value);
+    } else {
+      appendPrintedLine(
+        paragraph,
+        normalize(spelled(line.value)).inlines,
+        join,
+      );
+    }
+    if (!continues) {
+      lines.push({ kind: "body", value: finish(paragraph) });
+      paragraph = null;
     }
   }
-
   return lines;
 };
 
@@ -672,8 +576,10 @@ const extractLinesFromRtf = (rtfContent: string): ParsedLine[] => {
  * `docContentHidden` field. Splits the crammed text at
  * paragraph boundaries using heuristics.
  */
-const extractLinesFromDocContent = ($: cheerio.CheerioAPI): ParsedLine[] => {
-  const docContent = $(".DocContent");
+const extractLinesFromDocContent = (
+  $: cheerio.CheerioAPI,
+  docContent: cheerio.Cheerio<AnyNode>,
+): ParsedLine[] => {
   const container = docContent.length > 0 ? docContent : $("body");
 
   const fullText = visibleHtmlText(container).trim();
@@ -690,8 +596,8 @@ const extractLinesFromDocContent = ($: cheerio.CheerioAPI): ParsedLine[] => {
       continue;
     }
     lines.push({
-      inlines: [{ type: "text", text: trimmed }],
-      plainText: trimmed,
+      kind: "body",
+      value: normalizeInlineLine(textInline(trimmed)),
     });
   }
 
@@ -729,7 +635,10 @@ const PARAGRAPH_BOUNDARY_PATTERNS = [
  * Prefers the `docContentHidden` RTF field; falls back to
  * parsing the visible DocContent HTML.
  */
-const extractLines = ($: cheerio.CheerioAPI): ParsedLine[] => {
+const extractLines = (
+  $: cheerio.CheerioAPI,
+  docContent: cheerio.Cheerio<AnyNode>,
+): ParsedLine[] => {
   const rtfContent = $("input#docContentHidden").attr("value") ?? "";
 
   if (rtfContent.trim()) {
@@ -737,7 +646,7 @@ const extractLines = ($: cheerio.CheerioAPI): ParsedLine[] => {
   }
 
   // Fallback: parse the visible DocContent HTML
-  return extractLinesFromDocContent($);
+  return extractLinesFromDocContent($, docContent);
 };
 
 // ── Patterns ───────────────────────────────────────────────
@@ -753,14 +662,30 @@ const DECORATIVE_LINE_RE = /^(?:Česká republika|ČESKÁ REPUBLIKA)$/u;
 
 /** Decision title (level 1). */
 const TITLE_RE =
-  /^(?:N\s*[ÁA]\s*L\s*[ÉE]\s*Z|U\s*S\s*N\s*E\s*S\s*E\s*N\s*[ÍI]|Ústavního soudu|Jménem republiky)$/iu;
+  /^(?:N\s*[ÁA]\s*L\s*[ÉE]\s*Z|U\s*S\s*N\s*E\s*S\s*E\s*N\s*[ÍI]|Ústavního soudu)$/iu;
 
 /** Normalize spaced text like "t a k t o" -> "takto". */
 const collapseSpaces = (text: string): string =>
   text.replace(/(?<keep>\S)\s+(?=\S)/gu, "$<keep>");
 
-/** "takto:" separator (with spaced variants). */
-const TAKTO_RE = /^t\s*a\s*k\s*t\s*o\s*(?::\s*)?$/iu;
+/**
+ * The plenary's bench sentence (`pléna Ústavního soudu složeného z …`). The
+ * plenary prints no "takto:" after it: the ruling follows, under a `Výrok`
+ * label or directly.
+ */
+const PLENARY_BENCH_RE = /^pléna Ústavního soudu(?=\s)/u;
+
+/** The label a plenary nález prints above its ruling. */
+const RULING_LABEL_RE = /^V\s*ý\s*r\s*o\s*k\s*:?$/iu;
+
+/**
+ * The caption an SbNU-format nález prints in place of "takto:": the ruling
+ * follows it directly.
+ */
+const NALEZ_CAPTION_RE = /^Nález Ústavního soudu(?=\s).*\sve věci(?=\s)/u;
+
+/** The instruction block that follows the signatures; the ruling is over. */
+const INSTRUCTION_RE = /^P\s*o\s*u\s*č\s*e\s*n\s*í(?=\s*:|\s|$)/iu;
 
 /** "Odůvodnění:" separator (with spaced variants). */
 const ODUVODNENI_RE =
@@ -773,18 +698,38 @@ const ODUVODNENI_RE =
  */
 const SECTION_ROMAN_RE = /^(?=[IVX])(?<roman>X{0,3}(?:IX|IV|V?I{0,3}))\.?\s*$/u;
 
-/** Numbered paragraph: "1. ...", "2. ..." */
-const NUMBERED_PARA_RE = /^(?:\d+)\.\s+/u;
+/** The court's first reasoning paragraph, which no ruling item opens with. */
+const FIRST_REASONING_PARAGRAPH_RE = /^(?:\[1\]|1\.)\s/u;
 
 /**
- * Heading opening a separate opinion. The court prints it either on its own
- * or as the next enumerated item, and names the dissenting judges after it,
- * so the pattern is anchored at the start and bounded by length rather than
- * closed at the end.
+ * A line a section title never is: one opening with a list item, or ending
+ * where a sentence or a printed line goes on. A title may end with a full
+ * stop ("… zákona č. 128/1946 Sb."); a long line that does is a sentence.
  */
-const DISSENT_HEADING_RE =
-  /^(?:Odli[šs]n[ée]\s+stanovisko|Odli[šs]n[áa]\s+stanoviska|Stanovisko\s+men[šs]iny)\b/iu;
+const UNFINISHED_TITLE_RE = /[,;:-]$/u;
+const TITLE_SENTENCE_MAX_WORDS = 10;
+
+const readsAsSentence = (text: string): boolean =>
+  UNFINISHED_TITLE_RE.test(text) ||
+  (text.endsWith(".") && text.split(/\s+/u).length > TITLE_SENTENCE_MAX_WORDS);
+
 const DISSENT_HEADING_MAX_CHARS = 120;
+/**
+ * A closing names the place and the date and nothing else. A paragraph that
+ * opens with a date ("Dne 26. 8. 1993 zaslaly stěžovatelky …") is reasoning.
+ */
+const CLOSING_MAX_CHARS = 80;
+/**
+ * A bare name under the closing, or under the signature lines that follow
+ * it, signs the decision or a separate opinion: the Court's judges often sign
+ * with no academic title and no "v. r.".
+ */
+const signsUnderClosing = (plainText: string, previous: Block | undefined) =>
+  isCzechBareSignatoryName(plainText) &&
+  previous?.type === "paragraph" &&
+  (previous.role === "closing" || previous.role === "signature");
+/** Longest heading an author continuation can make. */
+const DISSENT_TITLE_MAX_CHARS = 500;
 
 // ── Block classification ───────────────────────────────────
 
@@ -802,273 +747,508 @@ const makeAnchorId = (prefix: string, index: number): string =>
  *   2. Výrok / ruling zone (between "takto:" and "Odůvodnění:")
  *   3. Odůvodnění zone (after "Odůvodnění:")
  */
-const classifyLines = (lines: readonly ParsedLine[]): Block[] => {
-  let blockCounter = 0;
-  const makeBlockId = (): string => {
-    blockCounter += 1;
-    return `b${blockCounter}`;
-  };
-  const blocks: Block[] = [];
-  let blockIndex = 0;
+type UsClassificationState = {
+  blockCounter: number;
+  blockIndex: number;
+  inRuling: boolean;
+  inOduvodneni: boolean;
+  /** The separate opinion the lines belong to, if any. */
+  separateOpinion: OpinionHeadingKind | null;
+  /** Whether the ruling zone has produced a holding yet. */
+  sawHolding: boolean;
+  consumedLines: Set<ParsedLine>;
+};
 
-  let inRuling = false;
-  let inOduvodneni = false;
-  let inDissent = false;
-  const bodyRole = (): ParagraphRole | undefined =>
-    inDissent ? "dissent" : undefined;
-  const consumedLines = new Set<ParsedLine>();
+const makeUsBlockId = (state: UsClassificationState): string => {
+  state.blockCounter += 1;
+  return `b${state.blockCounter}`;
+};
 
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines.at(i);
-    if (!line) {
-      continue;
-    }
-    if (consumedLines.has(line)) {
-      continue;
-    }
-    // Skip empty sentinel lines (paragraph breaks)
-    if (!line.plainText) {
-      continue;
-    }
+type ClassifyUsBodyLineOptions = {
+  body: BodyDocumentLine<ParsedLineData>;
+  i: number;
+  lines: readonly ParsedLine[];
+  blocks: Block[];
+  state: UsClassificationState;
+};
 
-    // Peel the emblem rather than dropping the line it is glued to, then skip
-    // what turns out to have been decoration and nothing else.
-    const inlines = stripFurniturePrefix(line.inlines, EMBLEM_PREFIX_RE);
-    const plainText = inlinesToPlainText(inlines).trim();
-    if (!plainText || DECORATIVE_LINE_RE.test(plainText)) {
-      continue;
-    }
+const classifyUsBodyLine = ({
+  body,
+  i,
+  lines,
+  blocks,
+  state,
+}: ClassifyUsBodyLineOptions): void => {
+  const line = body.value;
+  // Skip empty sentinel lines (paragraph breaks)
+  if (!line.plainText) {
+    return;
+  }
 
-    // Decision title: NALEZ, USNESENI, etc.
-    const collapsed = collapseSpaces(plainText);
-    if (TITLE_RE.test(plainText) || TITLE_RE.test(collapsed)) {
-      blockIndex += 1;
-      blocks.push({
-        id: makeBlockId(),
-        anchorId: makeAnchorId("h", blockIndex),
-        type: "heading",
-        level: 1,
-        role: "decision-title",
-        inlines,
-        plainText,
-      });
-      continue;
-    }
+  // Peel the emblem rather than dropping the line it is glued to, then skip
+  // what turns out to have been decoration and nothing else.
+  const normalized = normalizeInlineLine(
+    stripFurniturePrefix(line.inlines, EMBLEM_PREFIX_RE),
+  );
+  const { inlines, plainText } = normalized;
+  if (!plainText || DECORATIVE_LINE_RE.test(plainText)) {
+    return;
+  }
 
-    // "takto:" separator
-    if (TAKTO_RE.test(plainText) || TAKTO_RE.test(collapsed)) {
-      inRuling = true;
-      blockIndex += 1;
-      blocks.push({
-        id: makeBlockId(),
-        anchorId: makeAnchorId("h", blockIndex),
-        type: "heading",
-        level: 2,
-        role: "section-heading",
-        inlines: textInline("takto:"),
-        plainText: "takto:",
-      });
-      continue;
-    }
+  // Decision title: NALEZ, USNESENI, etc.
+  const collapsed = collapseSpaces(plainText);
+  if (TITLE_RE.test(plainText) || TITLE_RE.test(collapsed)) {
+    state.blockIndex += 1;
+    blocks.push({
+      id: makeUsBlockId(state),
+      anchorId: makeAnchorId("h", state.blockIndex),
+      type: "heading",
+      level: 1,
+      role: "decision-title",
+      inlines,
+      plainText,
+    });
+    return;
+  }
 
-    // "Odůvodnění:" separator
-    if (ODUVODNENI_RE.test(plainText) || ODUVODNENI_RE.test(collapsed)) {
-      inRuling = false;
-      inOduvodneni = true;
-      blockIndex += 1;
-      blocks.push({
-        id: makeBlockId(),
-        anchorId: makeAnchorId("h", blockIndex),
-        type: "heading",
-        level: 2,
-        role: "section-heading",
-        inlines: textInline("Odůvodnění:"),
-        plainText: "Odůvodnění:",
-      });
-      continue;
-    }
+  // The formula is the court's wording under its title, not a second title.
+  if (isCzechOpeningFormula(plainText)) {
+    state.blockIndex += 1;
+    blocks.push({
+      id: makeUsBlockId(state),
+      anchorId: makeAnchorId("p", state.blockIndex),
+      type: "paragraph",
+      role: "opening-formula",
+      inlines,
+      plainText,
+    });
+    return;
+  }
 
-    // A separate opinion runs to the end of the document, so the heading
-    // opens a zone rather than a section.
-    // The court numbers some of these headings. The number is stripped for
-    // the match alone: the heading block below carries the line the court
-    // printed, because what the heading is does not change what it says.
-    const numberPrefix = NUMBERED_PARA_RE.exec(plainText)?.[0] ?? "";
-    const unnumberedText = plainText.slice(numberPrefix.length);
-    const unnumberedInlines = stripInlinePrefix(inlines, numberPrefix.length);
+  // "takto:" separator
+  if (isCzechTaktoLine(plainText) || isCzechTaktoLine(collapsed)) {
+    state.inRuling = true;
+    markBenchRecital(blocks);
+    state.blockIndex += 1;
+    blocks.push({
+      id: makeUsBlockId(state),
+      anchorId: makeAnchorId("p", state.blockIndex),
+      type: "paragraph",
+      role: "intro",
+      inlines: textInline(CZ_TAKTO),
+      plainText: CZ_TAKTO,
+    });
+    return;
+  }
+
+  // The plenary's own label above its ruling
+  if (
+    RULING_LABEL_RE.test(plainText) &&
+    !state.inOduvodneni &&
+    state.separateOpinion === null
+  ) {
+    state.inRuling = true;
+    state.blockIndex += 1;
+    blocks.push({
+      id: makeUsBlockId(state),
+      anchorId: makeAnchorId("h", state.blockIndex),
+      type: "heading",
+      level: 2,
+      role: "section-heading",
+      inlines,
+      plainText,
+    });
+    return;
+  }
+
+  // "Odůvodnění:" separator
+  if (ODUVODNENI_RE.test(plainText) || ODUVODNENI_RE.test(collapsed)) {
+    state.inRuling = false;
+    state.inOduvodneni = true;
+    state.blockIndex += 1;
+    blocks.push({
+      id: makeUsBlockId(state),
+      anchorId: makeAnchorId("h", state.blockIndex),
+      type: "heading",
+      level: 2,
+      role: "section-heading",
+      inlines: textInline("Odůvodnění:"),
+      plainText: "Odůvodnění:",
+    });
+    return;
+  }
+
+  // A separate opinion runs to the end of the document, so the heading
+  // opens a zone rather than a section.
+  const opinion = opinionHeading(normalized);
+  if (opinion !== undefined) {
+    state.separateOpinion = opinion.kind;
+    state.blockIndex += 1;
+    blocks.push({
+      id: makeUsBlockId(state),
+      anchorId: makeAnchorId("h", state.blockIndex),
+      type: "heading",
+      level: 2,
+      role: "section-heading",
+      ...(separateOpinionHeadingNamesAuthor(opinion.tail)
+        ? { inlines, plainText }
+        : withAuthorContinuation({ heading: normalized, i, lines, state })),
+    });
+    return;
+  }
+
+  // A line the court numbered ("3. Věc projednal senát …") is body text,
+  // never a closing or a signature, however it reads: classifying it away
+  // would leave a gap in the court's numbering.
+  const courtNumbered = opensWithCourtParagraphMarker(plainText);
+
+  // Closing: "V Brně dne ..."
+  if (
+    !courtNumbered &&
+    plainText.length <= CLOSING_MAX_CHARS &&
+    CLOSING_RE.test(plainText)
+  ) {
+    state.inRuling = false;
+    state.blockIndex += 1;
+    blocks.push({
+      id: makeUsBlockId(state),
+      anchorId: makeAnchorId("p", state.blockIndex),
+      type: "paragraph",
+      role: "closing",
+      inlines,
+      plainText,
+    });
+    return;
+  }
+
+  // Signature: judge title line
+  if (!courtNumbered && SIGNATURE_RE.test(plainText) && plainText.length < 80) {
+    state.inRuling = false;
+    state.blockIndex += 1;
+    blocks.push({
+      id: makeUsBlockId(state),
+      anchorId: makeAnchorId("p", state.blockIndex),
+      type: "paragraph",
+      role: "signature",
+      inlines,
+      plainText,
+    });
+    return;
+  }
+
+  if (!courtNumbered && signsUnderClosing(plainText, blocks.at(-1))) {
+    state.inRuling = false;
+    state.blockIndex += 1;
+    blocks.push({
+      id: makeUsBlockId(state),
+      anchorId: makeAnchorId("p", state.blockIndex),
+      type: "paragraph",
+      role: "signature",
+      inlines,
+      plainText,
+    });
+    return;
+  }
+
+  // Judge name line (short, academic title prefix;
+  // only at the tail of the document)
+  if (
+    JUDGE_NAME_RE.test(plainText) &&
+    plainText.length < 80 &&
+    !state.inRuling
+  ) {
+    // Look ahead: if the next non-empty line is a
+    // signature or another judge name, treat as signature.
+    const nextNonEmpty = findNextNonEmpty(lines, i + 1);
     if (
-      unnumberedText.length <= DISSENT_HEADING_MAX_CHARS &&
-      DISSENT_HEADING_RE.test(unnumberedText)
+      !nextNonEmpty ||
+      SIGNATURE_RE.test(nextNonEmpty.value.plainText) ||
+      JUDGE_NAME_RE.test(nextNonEmpty.value.plainText) ||
+      CLOSING_RE.test(nextNonEmpty.value.plainText)
     ) {
-      inDissent = true;
-      blockIndex += 1;
+      state.blockIndex += 1;
       blocks.push({
-        id: makeBlockId(),
-        anchorId: makeAnchorId("h", blockIndex),
-        type: "heading",
-        level: 2,
-        role: "section-heading",
-        inlines,
-        plainText,
-      });
-      continue;
-    }
-
-    // Closing: "V Brně dne ..."
-    if (CLOSING_RE.test(plainText)) {
-      blockIndex += 1;
-      blocks.push({
-        id: makeBlockId(),
-        anchorId: makeAnchorId("p", blockIndex),
-        type: "paragraph",
-        role: "closing",
-        inlines,
-        plainText,
-      });
-      continue;
-    }
-
-    // Signature: judge title line
-    if (SIGNATURE_RE.test(plainText) && plainText.length < 80) {
-      blockIndex += 1;
-      blocks.push({
-        id: makeBlockId(),
-        anchorId: makeAnchorId("p", blockIndex),
+        id: makeUsBlockId(state),
+        anchorId: makeAnchorId("p", state.blockIndex),
         type: "paragraph",
         role: "signature",
         inlines,
         plainText,
       });
-      continue;
+      return;
     }
+  }
 
-    // Judge name line (short, academic title prefix;
-    // only at the tail of the document)
-    if (JUDGE_NAME_RE.test(plainText) && plainText.length < 80 && !inRuling) {
-      // Look ahead: if the next non-empty line is a
-      // signature or another judge name, treat as signature.
-      const nextNonEmpty = findNextNonEmpty(lines, i + 1);
-      if (
-        !nextNonEmpty ||
-        SIGNATURE_RE.test(nextNonEmpty.plainText) ||
-        JUDGE_NAME_RE.test(nextNonEmpty.plainText) ||
-        CLOSING_RE.test(nextNonEmpty.plainText)
-      ) {
-        blockIndex += 1;
-        blocks.push({
-          id: makeBlockId(),
-          anchorId: makeAnchorId("p", blockIndex),
-          type: "paragraph",
-          role: "signature",
-          inlines,
-          plainText,
-        });
-        continue;
-      }
-    }
+  if (INSTRUCTION_RE.test(plainText)) {
+    state.inRuling = false;
+  }
 
-    // Ruling items (in the ruling zone): detected by Roman
-    // numeral prefix, emitted as holding paragraphs with
-    // the full original text preserved.
-    if (inRuling && !inOduvodneni) {
-      blockIndex += 1;
+  if (closesRuling(state, plainText)) {
+    state.inRuling = false;
+    state.inOduvodneni = true;
+  }
+
+  // Ruling items (in the ruling zone): detected by Roman
+  // numeral prefix, emitted as holding paragraphs with
+  // the full original text preserved.
+  if (state.inRuling && !state.inOduvodneni) {
+    state.sawHolding = true;
+    state.blockIndex += 1;
+    blocks.push({
+      id: makeUsBlockId(state),
+      anchorId: makeAnchorId("p", state.blockIndex),
+      type: "paragraph",
+      role: "holding",
+      inlines,
+      plainText,
+    });
+    return;
+  }
+
+  // Section headings in Odůvodnění: standalone Roman
+  // numeral possibly followed by a title on the next line
+  if (state.inOduvodneni) {
+    const titledRoman = caseLawSectionHeading(plainText);
+    if (titledRoman !== null && readsAsSectionTitle(plainText)) {
+      state.blockIndex += 1;
       blocks.push({
-        id: makeBlockId(),
-        anchorId: makeAnchorId("p", blockIndex),
-        type: "paragraph",
-        role: "holding",
+        id: makeUsBlockId(state),
+        anchorId: makeAnchorId("h", state.blockIndex),
+        type: "heading",
+        level: titledRoman.level,
         inlines,
         plainText,
       });
-      continue;
+      return;
     }
 
-    // Section headings in Odůvodnění: standalone Roman
-    // numeral possibly followed by a title on the next line
-    if (inOduvodneni) {
-      const titledRoman = caseLawSectionHeading(plainText);
-      if (titledRoman !== null) {
-        blockIndex += 1;
+    const romanMatch = SECTION_ROMAN_RE.exec(plainText);
+    if (romanMatch) {
+      // Check if next non-empty line is a short title
+      const nextNonEmpty = findNextNonEmpty(lines, i + 1);
+      if (
+        nextNonEmpty &&
+        nextNonEmpty.value.plainText.length < 120 &&
+        !ITEM_OPENING_RE.test(nextNonEmpty.value.plainText) &&
+        !readsAsSentence(nextNonEmpty.value.plainText) &&
+        !SECTION_ROMAN_RE.test(nextNonEmpty.value.plainText) &&
+        !CLOSING_RE.test(nextNonEmpty.value.plainText)
+      ) {
+        // Combine Roman numeral + title line
+        const combinedText = `${romanMatch.groups?.["roman"] ?? ""}. ${nextNonEmpty.value.plainText}`;
+        state.blockIndex += 1;
         blocks.push({
-          id: makeBlockId(),
-          anchorId: makeAnchorId("h", blockIndex),
-          type: "heading",
-          level: titledRoman.level,
-          inlines,
-          plainText,
-        });
-        continue;
-      }
-
-      const romanMatch = SECTION_ROMAN_RE.exec(plainText);
-      if (romanMatch) {
-        // Check if next non-empty line is a short title
-        const nextNonEmpty = findNextNonEmpty(lines, i + 1);
-        if (
-          nextNonEmpty &&
-          nextNonEmpty.plainText.length < 120 &&
-          !NUMBERED_PARA_RE.test(nextNonEmpty.plainText) &&
-          !SECTION_ROMAN_RE.test(nextNonEmpty.plainText) &&
-          !CLOSING_RE.test(nextNonEmpty.plainText)
-        ) {
-          // Combine Roman numeral + title line
-          const combinedText = `${romanMatch.groups?.["roman"] ?? ""}. ${nextNonEmpty.plainText}`;
-          blockIndex += 1;
-          blocks.push({
-            id: makeBlockId(),
-            anchorId: makeAnchorId("h", blockIndex),
-            type: "heading",
-            level: 3,
-            inlines: textInline(combinedText),
-            plainText: combinedText,
-          });
-          // Skip the consumed title line
-          consumedLines.add(nextNonEmpty);
-          continue;
-        }
-
-        // Standalone Roman numeral heading
-        const headingText = `${romanMatch[1] ?? ""}.`;
-        blockIndex += 1;
-        blocks.push({
-          id: makeBlockId(),
-          anchorId: makeAnchorId("h", blockIndex),
+          id: makeUsBlockId(state),
+          anchorId: makeAnchorId("h", state.blockIndex),
           type: "heading",
           level: 3,
-          inlines: textInline(headingText),
-          plainText: headingText,
+          inlines: textInline(combinedText),
+          plainText: combinedText,
         });
-        continue;
+        // Skip the consumed title line
+        state.consumedLines.add(nextNonEmpty);
+        return;
       }
-    }
 
-    // Numbered paragraphs: "1. ...", "2. ..."
-    if (numberPrefix.length > 0) {
-      const strippedText = unnumberedText.trim();
-      blockIndex += 1;
+      // Standalone Roman numeral heading
+      const headingText = `${romanMatch[1] ?? ""}.`;
+      state.blockIndex += 1;
       blocks.push({
-        id: makeBlockId(),
-        anchorId: makeAnchorId("p", blockIndex),
-        type: "paragraph",
-        role: bodyRole(),
-        inlines:
-          unnumberedInlines.length > 0
-            ? unnumberedInlines
-            : textInline(strippedText),
-        plainText: strippedText,
+        id: makeUsBlockId(state),
+        anchorId: makeAnchorId("h", state.blockIndex),
+        type: "heading",
+        level: 3,
+        inlines: textInline(headingText),
+        plainText: headingText,
       });
+      return;
+    }
+  }
+
+  // Default: paragraph. A numbered one ("1. …") stays whole here: whether
+  // its marker is the court's numbering is decided over the whole decision,
+  // by `courtParagraphNumbers` once every block is classified.
+  state.blockIndex += 1;
+  blocks.push({
+    id: makeUsBlockId(state),
+    anchorId: makeAnchorId("p", state.blockIndex),
+    type: "paragraph",
+    role: paragraphRole(state, plainText),
+    inlines,
+    plainText,
+  });
+  state.inRuling ||= opensRuling(state, plainText);
+};
+
+/**
+ * Reasoning the court did not head with "Odůvodnění": its first numbered
+ * paragraph, after the holdings, closes the ruling.
+ */
+const closesRuling = (
+  state: UsClassificationState,
+  plainText: string,
+): boolean =>
+  state.inRuling &&
+  state.sawHolding &&
+  FIRST_REASONING_PARAGRAPH_RE.test(plainText);
+
+/**
+ * The sentence naming the bench and the parties opens the ruling: it ends
+ * in "takto:", or it is the plenary's or the SbNU caption, which print the
+ * ruling after it.
+ */
+const opensRuling = (
+  state: UsClassificationState,
+  plainText: string,
+): boolean =>
+  !state.inOduvodneni &&
+  state.separateOpinion === null &&
+  (CZ_TAKTO_TAIL_RE.test(plainText) ||
+    PLENARY_BENCH_RE.test(plainText) ||
+    NALEZ_CAPTION_RE.test(plainText));
+
+/**
+ * The bench recital printed before a "takto:" of its own line (`Ústavní
+ * soud České republiky` / `v senátě rozhodl ve věci …`) introduces the
+ * ruling, as the shared Czech grammar reads it.
+ */
+const markBenchRecital = (blocks: Block[]): void => {
+  // The title is kept apart from the body's blocks, which open after it.
+  const start = czechBenchRecitalStart(blocks, blocks.length, {
+    opensAfterHeadMatter: true,
+  });
+  if (start === undefined) {
+    return;
+  }
+  for (const [index, block] of blocks.entries()) {
+    if (index >= start && block.type === "paragraph") {
+      blocks[index] = { ...block, role: "intro" };
+    }
+  }
+};
+
+/** A paragraph's role: its separate opinion's, or the ruling's opener. */
+const paragraphRole = (
+  state: UsClassificationState,
+  plainText: string,
+): ParagraphRole | undefined => {
+  if (state.separateOpinion !== null) {
+    return OPINION_PARAGRAPH_ROLE[state.separateOpinion];
+  }
+  return opensRuling(state, plainText) ? "intro" : undefined;
+};
+
+/**
+ * The role of a separate opinion's paragraphs. A concurring judge agrees with
+ * the outcome; the opinion is that judge's reasoning, not a dissent.
+ */
+const OPINION_PARAGRAPH_ROLE = {
+  dissent: "dissent",
+  concurring: "argumentation",
+} as const satisfies Record<OpinionHeadingKind, ParagraphRole>;
+
+/**
+ * A separate opinion's heading on this line, or `undefined` for a line that
+ * is no such heading. The court numbers some of these headings; the number is
+ * stripped for the match alone, because the heading block carries the line
+ * the court printed.
+ */
+const opinionHeading = (
+  line: ParsedLineData,
+): SeparateOpinionHeading | undefined =>
+  separateOpinionHeading(
+    stripInlineLinePrefix(line, DOT_PARAGRAPH_MARKER_RE).line.plainText,
+    DISSENT_HEADING_MAX_CHARS,
+  );
+
+/**
+ * A Roman-numbered line that reads as a section title: one that opens with
+ * a capital, a number or a subsection letter ("IV. 1. Obecná východiska",
+ * "V. a)"), not a sentence that starts with an ordinal ("II. senát Ústavního
+ * soudu nepovažoval …"), and one that does not break off mid-sentence.
+ */
+const readsAsSectionTitle = (text: string): boolean => {
+  const title = text.replace(/^[IVXLC]+\.\s*/u, "");
+  return (
+    /^(?:[\p{Lu}\d§]|\p{Ll}[.)](?:\s|$))/u.test(title) &&
+    !UNFINISHED_TITLE_RE.test(title)
+  );
+};
+
+type AuthorContinuationOptions = {
+  heading: ParsedLineData;
+  i: number;
+  lines: readonly ParsedLine[];
+  state: UsClassificationState;
+};
+
+/**
+ * A separate opinion's heading together with the lines naming its authors
+ * ("STANOVISKO" / "soudců Ústavního soudu … JUDr. P. H., …"), which the
+ * court set beneath the heading rather than on it. The lines join the
+ * heading as printed; only their role changes.
+ */
+const withAuthorContinuation = ({
+  heading,
+  i,
+  lines,
+  state,
+}: AuthorContinuationOptions): { inlines: Inline[]; plainText: string } => {
+  const inlines = [...heading.inlines];
+  let { plainText } = heading;
+  let next = findNextNonEmpty(lines, i + 1);
+  if (next === undefined || !separateOpinionAuthorLine(next.value.plainText)) {
+    return { inlines, plainText };
+  }
+  while (
+    next !== undefined &&
+    /^\p{Ll}/u.test(next.value.plainText) &&
+    plainText.length + 1 + next.value.plainText.length <=
+      DISSENT_TITLE_MAX_CHARS
+  ) {
+    inlines.push({ type: "text", text: " " }, ...next.value.inlines);
+    plainText = `${plainText} ${next.value.plainText}`;
+    state.consumedLines.add(next);
+    next = findNextNonEmpty(lines, lines.indexOf(next) + 1);
+  }
+  return { inlines, plainText };
+};
+
+export const classifyUsDocumentLines = (
+  lines: readonly ParsedLine[],
+): Block[] => {
+  const blocks: Block[] = [];
+  const state: UsClassificationState = {
+    blockCounter: 0,
+    blockIndex: 0,
+    inRuling: false,
+    inOduvodneni: false,
+    separateOpinion: null,
+    sawHolding: false,
+    consumedLines: new Set(),
+  };
+
+  for (const [i, line] of lines.entries()) {
+    if (state.consumedLines.has(line)) {
       continue;
     }
-
-    // Default: paragraph
-    blockIndex += 1;
+    if (line.kind === "body") {
+      classifyUsBodyLine({ body: line, i, lines, blocks, state });
+      continue;
+    }
+    const { value, label, noteId } = line.note;
+    if (value.plainText.length === 0) {
+      continue;
+    }
+    state.blockIndex += 1;
     blocks.push({
-      id: makeBlockId(),
-      anchorId: makeAnchorId("p", blockIndex),
+      id: makeUsBlockId(state),
+      anchorId: makeAnchorId("p", state.blockIndex),
       type: "paragraph",
-      role: bodyRole(),
-      inlines,
-      plainText,
+      role: "apparatus",
+      note: { type: "footnote", label, noteId },
+      inlines: value.inlines,
+      plainText: value.plainText,
     });
   }
 
@@ -1081,10 +1261,10 @@ const classifyLines = (lines: readonly ParsedLine[]): Block[] => {
 const findNextNonEmpty = (
   lines: readonly ParsedLine[],
   startIndex: number,
-): ParsedLine | undefined => {
+): BodyDocumentLine<ParsedLineData> | undefined => {
   for (let j = startIndex; j < lines.length; j++) {
     const line = lines[j];
-    if (line?.plainText) {
+    if (line?.kind === "body" && line.value.plainText) {
       return line;
     }
   }

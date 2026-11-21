@@ -12,6 +12,24 @@
 
 /** Each run actor with the counts one of its runs reports. */
 export const SYSTEM_RUN_ACTOR_COUNTS = {
+  "system:data-export-maintenance": ["checkpointedJobs"],
+  "system:monitoring-session-revoke": [
+    "revokedControls",
+    "deletedSessions",
+    "deletedRoomTokens",
+  ],
+  "system:operator-activity": ["reads"],
+  "system:sanctions-monitoring-fanout": [
+    "freshnessQueued",
+    "requestedOrganizations",
+    "fannedOrganizations",
+    "transitions",
+  ],
+  "system:operator-registrations": [
+    "sinceEpochMilliseconds",
+    "pageSize",
+    "returned",
+  ],
   "system:sanctions-refresh": [
     "activated",
     "activatedEntries",
@@ -19,9 +37,14 @@ export const SYSTEM_RUN_ACTOR_COUNTS = {
     "held",
     "failed",
   ],
-  "system:case-law-sitemap-refresh": ["shards", "pages"],
+  "system:case-law-sitemap-refresh": ["months", "shards"],
   "system:statute-sitemap-refresh": ["shards"],
-  "system:case-law-browse-facet-refresh": ["buckets"],
+  "system:case-law-coverage-refresh": ["summaries", "countries", "unreadParts"],
+  "system:case-law-population-fold": ["deltas"],
+  "system:case-law-population-seed": ["projectedDecisions"],
+  "system:legislation-facet-refresh": ["buckets"],
+  "system:legislation-version-changes": ["summaries"],
+  "system:case-law-source-arrivals-refresh": ["sources"],
   "system:case-law-raw-storage": [
     "sweptPrefixes",
     "failedSweeps",
@@ -29,6 +52,7 @@ export const SYSTEM_RUN_ACTOR_COUNTS = {
     "queuedSweeps",
   ],
   "system:registration-retention": [
+    "handoffs",
     "verifications",
     "assertions",
     "replays",
@@ -37,15 +61,50 @@ export const SYSTEM_RUN_ACTOR_COUNTS = {
     "budgets",
   ],
   "system:usage-webhook-retention": ["redactedEvents"],
+  "system:hosted-customer-erasure": [
+    "claimed",
+    "erased",
+    "failed",
+    "terminalFailures",
+  ],
   "system:file-comparison-sweep": ["sweptUploads"],
   "system:corpus-index-job-detail-backfill": ["movedJobs"],
+  "system:case-law-parsed-input-state-backfill": ["updatedDecisions"],
   "system:legislation-expression-id-backfill": ["claimedDocuments"],
+  "system:search-history-country-repair": ["classified", "unclassifiable"],
   "system:audit-retention": ["deletedRuns"],
+  "system:case-law-review-reconcile": [
+    "removedReviews",
+    "writtenReviews",
+    "resolvedReviews",
+    "extractionVersions",
+  ],
+  "system:case-law-citation-form-repair": ["attempted", "applied", "skipped"],
   "system:case-law-background-replay": [
     "attempted",
     "applied",
     "blocked",
     "failed",
+  ],
+  "system:review-organization-reset": [
+    "deletedMatters",
+    "deletedContacts",
+    "deletedClauses",
+    "deletedTemplates",
+    "deletedPlaybooks",
+    "sweptRows",
+    "failedDeletes",
+    "seededContacts",
+    "seededMatters",
+    "seededDocuments",
+    "seededTasks",
+    "seededTimeEntries",
+    "seededClauses",
+    "seededTemplates",
+    "seededPlaybooks",
+    "seededRateTables",
+    "enabledTimeBilling",
+    "seedFailed",
   ],
   "system:eu-corpus-completion": [
     "attempted",
@@ -54,6 +113,15 @@ export const SYSTEM_RUN_ACTOR_COUNTS = {
     "reviewRequired",
     "failed",
   ],
+  "system:eu-soft-law-ingestion": ["sourcesRegistered"],
+  "system:corpus-generation-operator": ["registered", "promoted", "demoted"],
+  "system:corpus-generation-retire": [
+    "retired",
+    "deletedIndexes",
+    "deletedStates",
+    "deletedIntents",
+  ],
+  "system:partner-client-operator": ["created", "rotated", "disabled"],
 } as const satisfies Record<`system:${string}`, readonly string[]>;
 
 export type SystemRunActor = keyof typeof SYSTEM_RUN_ACTOR_COUNTS;
@@ -68,9 +136,15 @@ export type SystemAuditCounts<A extends SystemRunActor> = Readonly<
 
 /** Actors stamped on organization audit rows no member performed. */
 export const TENANT_SYSTEM_ACTOR = {
+  serviceClientOperator: "system:service-client-operator",
+  serviceClient: "system:service-client",
+  folioCollaborationRecovery: "system:folio-collaboration-recovery",
+  sanctionsMonitoringDrain: "system:sanctions-monitoring-drain",
+  sanctionsMonitoringBackfill: "system:sanctions-monitoring-backfill",
   memoryCurator: "system:memory-curator",
   memoryExtractor: "system:memory-extractor",
   usageProvider: "system:usage-provider",
+  uploadedMail: "system:uploaded-mail",
 } as const;
 
 /** The shape the database CHECK enforces on `system_audit_runs.actor`. */

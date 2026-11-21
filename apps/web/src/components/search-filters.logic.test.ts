@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, spyOn, test } from "bun:test";
+import { afterEach, describe, expect, mock, spyOn, test } from "bun:test";
 
 import * as search from "@/lib/search";
 
@@ -15,6 +15,14 @@ import {
   toggleArrayMember,
 } from "./search-filters.logic";
 import type { SearchFilters } from "./search-filters.logic";
+
+// Spies created in a test stay attached if it fails before restoring them.
+afterEach(() => {
+  mock.restore();
+  // Restore any spy installed on the shared search module so a preset
+  // test cannot leak a stubbed clock into the next test.
+  spyOn(search, "presetUpdatedFrom").mockRestore();
+});
 
 const baseFilters = (
   overrides: Partial<SearchFilters> = {},
@@ -141,12 +149,6 @@ describe("search summary visibility", () => {
       }),
     ).toBe(false);
   });
-});
-
-afterEach(() => {
-  // Restore any spy installed on the shared search module so a preset
-  // test cannot leak a stubbed clock into the next test.
-  spyOn(search, "presetUpdatedFrom").mockRestore();
 });
 
 describe("resolveUpdatedFrom", () => {

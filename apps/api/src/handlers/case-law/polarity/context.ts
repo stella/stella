@@ -1,3 +1,7 @@
+import { normalizeUnicode } from "@stll/text-normalize";
+
+import type { CitationEvidenceWindows } from "@/api/lib/case-law/citation-evidence";
+
 /**
  * Extract citation context from decision sections.
  *
@@ -8,6 +12,22 @@
 const WINDOW_CHARS = 200;
 
 /**
+ * How far past `WINDOW_CHARS` a mention may read to finish its sentence. A
+ * Czech court often answers a citation at the end of the sentence that names
+ * it ("Namítá-li žalobce s poukazem na rozsudek ..., potom pomíjí, že soud ve
+ * zmiňované věci řešil ..."), well past a cut at a fixed width. Bounded, so a
+ * text without sentence punctuation cannot read an unbounded run.
+ */
+const SENTENCE_TAIL_CHARS = 400;
+
+/**
+ * A sentence break after the window: a terminator before a capitalised word
+ * or the end of the text, or a line break. The lookbehind keeps abbreviations
+ * of one or two letters from ending the sentence ("sp. zn.", "č. j.", "II.").
+ */
+const SENTENCE_BREAK = /(?<![\s(]\p{L}{1,2})[.!?](?=\s+\p{Lu}|\s*$)|\n/u;
+
+/**
  * Windows of a citing decision's text, ordered as the section reads.
  *
  * Windows come back composed. Their readers (the kind cues and the polarity
@@ -15,7 +35,8 @@ const WINDOW_CHARS = 200;
  * letters, so a publisher that serves "á" decomposed (U+0061 U+0301) would
  * silently match none of them: a combining mark is neither the letter nor
  * `\p{L}`. Nothing indexes into a window, so composing it costs no offset; the
- * citation is located in the section's own characters first.
+ * citation is located in the section's own characters first. Evidence offsets
+ * remain in the original text, before normalization.
  */
 export type CitationContexts = readonly [string, ...string[]];
 
@@ -41,17 +62,41 @@ export type CitationWindows = {
    * Two mentions closer than one window still share their cues, which is the
    * same reading a single mention gets: at that distance the cues are one
    * stretch of reasoning, not two stances.
+   *
+   * Each window reads on to the end of its sentence (`SENTENCE_TAIL_CHARS`),
+   * so a cue stating the court's answer at the end of a long sentence is read.
    */
   mentions: CitationContexts;
   /**
-   * The same windows with overlaps merged: what the model tiers are shown.
-   * Merged because an excerpt that printed the same sentence once per
-   * mention would spend its budget repeating itself.
+   * The fixed-width windows with overlaps merged: what the model tiers are
+   * shown and what citation kind is read from. Merged because an excerpt that
+   * printed the same sentence once per mention would spend its budget
+   * repeating itself; not read on to the sentence end, so widening what the
+   * rule tier reads cannot shift a stored kind.
    */
   contexts: CitationContexts;
+  /** Exact offsets for each mention in the original joined section text. */
+  evidenceWindows: CitationEvidenceWindows;
+  /** Exact offsets for each merged model context in the original text. */
+  contextEvidenceWindows: CitationEvidenceWindows;
 };
-
 type Span = { start: number; end: number };
+
+/**
+ * A window cut mid-sentence, read on to the sentence end when one is within
+ * reach; a window already ending on a sentence end stays as it is.
+ */
+const toSentenceEnd = (text: string, { start, end }: Span): Span => {
+  if (/[.!?]\s*$/u.test(text.slice(Math.max(start, end - 2), end))) {
+    return { start, end };
+  }
+  const tail = text.slice(end, end + SENTENCE_TAIL_CHARS);
+  const breakAt = tail.search(SENTENCE_BREAK);
+  if (breakAt === -1) {
+    return { start, end };
+  }
+  return { start, end: end + breakAt + (tail[breakAt] === "\n" ? 0 : 1) };
+};
 
 export const extractContexts = (
   sections: { text: string }[],
@@ -60,6 +105,12 @@ export const extractContexts = (
 ): CitationWindows | null => {
   const section = sectionIndex !== null ? sections[sectionIndex] : undefined;
   const text = section?.text ?? sections.map((s) => s.text).join("\n");
+  const sectionOffset =
+    section && sectionIndex !== null
+      ? sections
+          .slice(0, sectionIndex)
+          .reduce((offset, s) => offset + s.text.length + 1, 0)
+      : 0;
 
   const spans: Span[] = [];
   for (
@@ -92,9 +143,33 @@ export const extractContexts = (
   }
 
   const window = ({ start, end }: Span) =>
-    text.slice(start, end).normalize("NFC");
+    normalizeUnicode(text.slice(start, end), "NFC");
+  // Each mention's evidence window covers the same sentence-extended span
+  // its mention text reads.
+  const firstMention = toSentenceEnd(text, first);
+  const restMentions = rest.map((span) => toSentenceEnd(text, span));
   return {
-    mentions: [window(first), ...rest.map(window)],
+    mentions: [window(firstMention), ...restMentions.map(window)],
     contexts: [window(mergedFirst), ...mergedRest.map(window)],
+    evidenceWindows: [
+      {
+        start: sectionOffset + firstMention.start,
+        end: sectionOffset + firstMention.end,
+      },
+      ...restMentions.map(({ start, end }) => ({
+        start: sectionOffset + start,
+        end: sectionOffset + end,
+      })),
+    ],
+    contextEvidenceWindows: [
+      {
+        start: sectionOffset + mergedFirst.start,
+        end: sectionOffset + mergedFirst.end,
+      },
+      ...mergedRest.map(({ start, end }) => ({
+        start: sectionOffset + start,
+        end: sectionOffset + end,
+      })),
+    ],
   };
 };

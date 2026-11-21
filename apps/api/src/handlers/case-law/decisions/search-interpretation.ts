@@ -1,11 +1,16 @@
-import type { Static } from "elysia";
+import type * as v from "valibot";
 
 import {
   type DecisionQueryIntent,
   isWholeEntryIdentifier,
 } from "@stll/api-contract/decision-query-intent";
-import type { CaseLawSearchWarning } from "@stll/api-contract/search";
+import type {
+  CaseLawHitOrder,
+  CaseLawSearchWarning,
+  SearchPhaseState,
+} from "@stll/api-contract/search";
 
+import type { TermDecisionCounts } from "@/api/handlers/case-law/decisions/search-relaxed";
 import type { searchDecisionsBodySchema } from "@/api/handlers/case-law/decisions/search-schema";
 import { caseLawSearchWarnings } from "@/api/lib/case-law/search-warnings";
 import { caseLawQueryLanguage } from "@/api/lib/legal-search/corpus-index-read-contract";
@@ -34,7 +39,7 @@ import { functionWordsFor } from "@/api/lib/legal-search/morphology/function-wor
  * or the same query means two things depending on a deployment flag.
  */
 
-type SearchDecisionsBody = Static<typeof searchDecisionsBodySchema>;
+type SearchDecisionsBody = v.InferOutput<typeof searchDecisionsBodySchema>;
 
 /** Every request key that is not the query itself or the index it selects. */
 type SearchOptionKey = Exclude<keyof SearchDecisionsBody, "country" | "query">;
@@ -43,7 +48,7 @@ type SearchOptionKey = Exclude<keyof SearchDecisionsBody, "country" | "query">;
  * Whether an option cuts the result set or only shapes it.
  *
  * `narrows` is what an empty page can be blamed on and what a reader can drop
- * to widen one; `shapes` orders, trims or paginates a set it does not cut.
+ * to widen one; `shapes` orders, trims, paginates or summarizes a set it does not cut.
  * `country` is neither and is absent above: it is required and selects the
  * index rather than filtering within it, so no reader can drop it.
  *
@@ -59,13 +64,18 @@ const SEARCH_OPTION_EFFECT = {
   courts: "narrows",
   category: "narrows",
   hasLegalSentence: "narrows",
+  docketRegisters: "narrows",
+  senate: "narrows",
+  provision: "narrows",
   cursor: "shapes",
   dateFrom: "narrows",
   dateTo: "narrows",
   decisionType: "narrows",
   excerpt: "shapes",
+  facets: "shapes",
   language: "narrows",
   limit: "shapes",
+  offset: "shapes",
   sort: "shapes",
   sourceId: "narrows",
   strict: "shapes",
@@ -89,6 +99,9 @@ const NARROWING_FILTERS = {
   courts: ({ courts }) => courts !== undefined,
   category: ({ category }) => category !== undefined,
   hasLegalSentence: ({ hasLegalSentence }) => hasLegalSentence !== undefined,
+  docketRegisters: ({ docketRegisters }) => docketRegisters !== undefined,
+  senate: ({ senate }) => senate !== undefined,
+  provision: ({ provision }) => provision !== undefined,
   dateFrom: ({ dateFrom }) => dateFrom !== undefined,
   dateTo: ({ dateTo }) => dateTo !== undefined,
   decisionType: ({ decisionType }) => decisionType !== undefined,
@@ -192,16 +205,26 @@ type SearchAnswerOptions = {
   interpretation: DecisionQueryInterpretation;
   /** Hits this page carries. */
   hitCount: number;
+  partialHitCount?: number;
   /**
    * Whether this page can speak for the whole result set. A continuation
    * page cannot: it comes back empty at the end of every result set that had
    * hits, so "nothing matched" would be false there.
    */
   countsResultSet: boolean;
+  /** How the partial-match phase ended; `not_due` when it had no place here. */
+  partialMatches?: SearchPhaseState;
+  /** Per-word decision counts, when few decisions hold every word. */
+  termDecisionCounts?: TermDecisionCounts | null;
+  /** The order the page's hits are in; passage pages tier by construction. */
+  hitOrder?: CaseLawHitOrder;
 };
 
 export type SearchAnswer = {
+  hitOrder: CaseLawHitOrder;
   queryUsed: string;
+  relaxedHitCount: number;
+  termDecisionCounts: TermDecisionCounts | null;
   warnings: CaseLawSearchWarning[];
 };
 
@@ -213,12 +236,24 @@ export const searchAnswer = ({
   body,
   interpretation,
   hitCount,
+  partialHitCount = 0,
   countsResultSet,
+  partialMatches = "not_due",
+  termDecisionCounts = null,
+  hitOrder = "all_words_first",
 }: SearchAnswerOptions): SearchAnswer => ({
+  hitOrder,
   queryUsed: interpretation.queryUsed,
+  relaxedHitCount: partialHitCount,
+  termDecisionCounts,
   warnings: caseLawSearchWarnings({
     droppedFunctionWords: interpretation.droppedFunctionWords,
+    partialHitCount,
+    hitOrder,
     filters: narrowingFilters(body),
-    emptyResultSet: countsResultSet && hitCount === 0,
+    // With the partial matches unread, an empty page has not shown that
+    // nothing matched.
+    emptyResultSet:
+      countsResultSet && hitCount === 0 && partialMatches !== "skipped",
   }),
 });

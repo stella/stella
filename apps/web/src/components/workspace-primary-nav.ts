@@ -2,16 +2,16 @@ import type { ComponentType } from "react";
 
 import {
   BlocksIcon,
+  CaseLawIcon,
+  Clock3Icon,
   InboxIcon,
   LibraryBigIcon,
   MessageSquareIcon,
-  CaseLawIcon,
-  Clock3Icon,
   SearchIcon,
   UsersIcon,
 } from "@stll/ui/icons";
+import { MattersNavIcon } from "@stll/ui/matter-icon";
 
-import { MattersNavIcon } from "@/components/matter-icon";
 import type { TranslationKey } from "@/i18n/types";
 
 type WorkspacePrimaryRoute =
@@ -40,7 +40,7 @@ type WorkspacePrimaryNavItem = {
     }
 );
 
-export const WORKSPACE_PRIMARY_NAV_ITEMS = [
+const WORKSPACE_PRIMARY_NAV_ITEMS = [
   {
     icon: SearchIcon,
     id: "search",
@@ -85,7 +85,7 @@ export const WORKSPACE_PRIMARY_NAV_ITEMS = [
     id: "caseLaw",
     audience: "public",
     kind: "route",
-    labelKey: "common.caseLaw",
+    labelKey: "common.legalDatabase",
     to: "/law",
   },
   {

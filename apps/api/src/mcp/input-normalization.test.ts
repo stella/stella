@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import {
   normalizeInputAtBoundary,
   normalizeObjectInputAtBoundary,
+  withInputNotes,
 } from "@/api/mcp/input-normalization";
 
 describe("agent input dispatch normalization", () => {
@@ -143,5 +144,22 @@ describe("agent input dispatch normalization", () => {
       ],
       hint: 'due: That reads as 2026-02-01 with the day first, or 2026-01-02 with the month first. Send "2026-02-01" or "2026-01-02".',
     });
+  });
+});
+
+describe("input repair note audience", () => {
+  test("deduplicates input notes and directs their text only to the agent", () => {
+    const result = withInputNotes(
+      { content: [{ type: "text", text: "search results" }] },
+      ['Read "Czechia" as "CZ".', 'Read "Czechia" as "CZ".'],
+    );
+    expect(result.content).toEqual([
+      { type: "text", text: "search results" },
+      {
+        type: "text",
+        text: 'Input read: Read "Czechia" as "CZ".',
+        annotations: { audience: ["assistant"] },
+      },
+    ]);
   });
 });

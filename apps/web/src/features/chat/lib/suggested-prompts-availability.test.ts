@@ -78,6 +78,24 @@ describe("resolveSuggestedPromptsAvailability", () => {
     }
   });
 
+  test("offers no follow-up on a turn paused on its budget", () => {
+    expect(
+      resolveSuggestedPromptsAvailability({
+        ...ELIGIBLE_INPUT,
+        lastMessage: {
+          ...ELIGIBLE_INPUT.lastMessage,
+          metadata: {
+            turnOutcome: {
+              type: "paused",
+              reason: "tool-calls",
+              toolCalls: 50,
+            },
+          },
+        },
+      }),
+    ).toEqual({ status: "blocked", reason: "terminal-outcome" });
+  });
+
   test("keeps persisted human interactions user-owned", () => {
     for (const interaction of [
       { type: "ask-user", toolCallId: "ask-1" },
@@ -186,5 +204,68 @@ describe("resolveSuggestedPromptsTurnOwner", () => {
         lastMessage: assistantMessage,
       }),
     ).toBe("ask-user");
+  });
+
+  test("keeps a private credential request user-owned", () => {
+    const pendingSecret = {
+      ...assistantMessage,
+      parts: [
+        {
+          type: "tool-call" as const,
+          id: "secret-1",
+          name: "request_secret" as const,
+          arguments: "{}",
+          input: {
+            purpose: "Authenticate a connector request",
+            kind: "token" as const,
+            target: { type: "mcp-connector" as const, connectorSlug: "sample" },
+          },
+          state: "input-complete" as const,
+        },
+      ],
+    };
+    expect(
+      resolveSuggestedPromptsTurnOwner({
+        approvalPendingMessageId: null,
+        hasReopenedAskUser: false,
+        lastMessage: pendingSecret,
+      }),
+    ).toBe("secret");
+  });
+
+  test("keeps a pending connector request user-owned until it is answered", () => {
+    const connectorCall = {
+      type: "tool-call" as const,
+      id: "connector-1",
+      name: "connect_connector" as const,
+      arguments: "{}",
+      input: { connectorSlug: "sample", purpose: "Search the sample source" },
+    };
+    expect(
+      resolveSuggestedPromptsTurnOwner({
+        approvalPendingMessageId: null,
+        hasReopenedAskUser: false,
+        lastMessage: {
+          ...assistantMessage,
+          parts: [{ ...connectorCall, state: "input-complete" as const }],
+        },
+      }),
+    ).toBe("connector");
+    expect(
+      resolveSuggestedPromptsTurnOwner({
+        approvalPendingMessageId: null,
+        hasReopenedAskUser: false,
+        lastMessage: {
+          ...assistantMessage,
+          parts: [
+            {
+              ...connectorCall,
+              state: "complete" as const,
+              output: { status: "declined" as const, connectorSlug: "sample" },
+            },
+          ],
+        },
+      }),
+    ).toBe("composer");
   });
 });

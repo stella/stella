@@ -1,3 +1,4 @@
+import { panic, Result } from "better-result";
 /**
  * Document-review sessions: a client cache over durable server runs.
  *
@@ -11,8 +12,6 @@
  * what lets a freshly opened facet restore the document's latest run instead of
  * starting from the launcher.
  */
-
-import { panic, Result } from "better-result";
 import { create } from "zustand";
 
 import { REVIEW_START_MODE } from "@/components/ai-suggestions/document-review-basis.logic";
@@ -25,6 +24,7 @@ import type {
 } from "@/components/ai-suggestions/document-review-basis.logic";
 import {
   mergeStreamedPosition,
+  proposalRefusalMessage,
   REVIEW_PROPOSAL_EVENT,
   streamReviewProposal,
 } from "@/components/ai-suggestions/document-review-proposal-stream";
@@ -38,6 +38,7 @@ import { toAPIError } from "@/lib/errors/api";
 import { userErrorMessage } from "@/lib/errors/user-safe";
 import type { Position } from "@/lib/knowledge/playbook-types";
 import { toSafeId } from "@/lib/safe-id";
+import { createUuid } from "@/lib/uuid";
 
 const RUN_CREATE_TIMEOUT_MS = 30_000;
 
@@ -56,12 +57,8 @@ export const reviewSessionKey = (
  * lifecycle: once a run exists, `runId` points at it and the server row is the
  * only source of progress, findings and failure.
  */
-export type ReviewStatus =
-  | "idle"
-  | "proposing-positions"
-  | "editing-positions"
-  | "starting"
-  | "error";
+type ReviewStatus =
+  "idle" | "proposing-positions" | "editing-positions" | "starting" | "error";
 
 /**
  * Whether the facet may still adopt the document's latest server run. A
@@ -69,7 +66,7 @@ export type ReviewStatus =
  * decision has to outlive the run itself — without it, the restore would
  * immediately put the finished review back on screen.
  */
-export type ReviewRestoreMode = "allowed" | "dismissed";
+type ReviewRestoreMode = "allowed" | "dismissed";
 
 /**
  * Which of the document's runs the facet is showing: the one this session
@@ -78,8 +75,7 @@ export type ReviewRestoreMode = "allowed" | "dismissed";
  * facet renders it read-only and offers the way back.
  */
 export type ReviewRunSelection =
-  | { type: "tracked" }
-  | { type: "history"; runId: string };
+  { type: "tracked" } | { type: "history"; runId: string };
 
 export const TRACKED_RUN_SELECTION: ReviewRunSelection = { type: "tracked" };
 
@@ -137,7 +133,7 @@ type ReviewRequestError = Parameters<typeof toAPIError>[0];
 const isRunAlreadyActive = (error: ReviewRequestError): boolean =>
   toAPIError(error).status === RUN_ALREADY_ACTIVE_STATUS;
 
-export type RunSizeConfirmation = RunSizeConfirmationDetail & {
+type RunSizeConfirmation = RunSizeConfirmationDetail & {
   /** The refused request, replayed verbatim once the reviewer confirms. */
   args: StartRunArgs;
 };
@@ -152,6 +148,7 @@ type StartReviewArgs = {
   entityId: string;
   fileFieldId: string;
   unexpectedErrorMessage: string;
+  documentsTooLargeMessage: string;
   /** What the proposal is followed by: the run, or the confirm step. */
   startMode: ReviewStartMode;
   /** The picked playbook's enabled positions, when there is one. */
@@ -276,32 +273,32 @@ const requestRun = async ({
   skipped,
   confirmedUnits,
 }: Omit<StartRunArgs, "unexpectedErrorMessage">) => {
+  const workspaceApi = api.workspaces({
+    workspaceId: toSafeId<"workspace">(workspaceId),
+  });
+
   // Both channels are read here rather than handed on as one response: the
   // caller decides between attaching to an already active run and surfacing
   // the failure, and neither decision may depend on an unexamined `.data`.
-  const { data, error } = await api
-    .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
-    ["document-reviews"].runs.post(
-      {
-        target: {
-          entityId: toSafeId<"entity">(entityId),
-          fileFieldId: toSafeId<"field">(fileFieldId),
-        },
-        playbookId:
-          playbookId === null
-            ? null
-            : toSafeId<"playbookDefinition">(playbookId),
-        // The whole confirmed list, disabled entries included: the run pins it
-        // as its snapshot, and "Save as playbook" keeps exactly what was
-        // confirmed. Grading skips the disabled ones server-side.
-        positions: [...positions],
-        references: referenceRefs(references),
-        perspective,
-        skipped: [...skipped],
-        ...(confirmedUnits === undefined ? {} : { confirmedUnits }),
+  const { data, error } = await workspaceApi["document-reviews"].runs.post(
+    {
+      target: {
+        entityId: toSafeId<"entity">(entityId),
+        fileFieldId: toSafeId<"field">(fileFieldId),
       },
-      { fetch: { signal: AbortSignal.timeout(RUN_CREATE_TIMEOUT_MS) } },
-    );
+      playbookId:
+        playbookId === null ? null : toSafeId<"playbookDefinition">(playbookId),
+      // The whole confirmed list, disabled entries included: the run pins it
+      // as its snapshot, and "Save as playbook" keeps exactly what was
+      // confirmed. Grading skips the disabled ones server-side.
+      positions: [...positions],
+      references: referenceRefs(references),
+      perspective,
+      skipped: [...skipped],
+      ...(confirmedUnits === undefined ? {} : { confirmedUnits }),
+    },
+    { fetch: { signal: AbortSignal.timeout(RUN_CREATE_TIMEOUT_MS) } },
+  );
   return { data, error };
 };
 
@@ -333,6 +330,7 @@ export const usePlaybookReviewStore = create<State & Actions>()((set, get) => {
       entityId,
       fileFieldId,
       unexpectedErrorMessage,
+      documentsTooLargeMessage,
       startMode,
       seededPositions,
     }) => {
@@ -375,7 +373,7 @@ export const usePlaybookReviewStore = create<State & Actions>()((set, get) => {
         });
       }
 
-      const requestId = crypto.randomUUID();
+      const requestId = createUuid();
       set((state) => ({
         sessions: {
           ...state.sessions,
@@ -507,10 +505,11 @@ export const usePlaybookReviewStore = create<State & Actions>()((set, get) => {
         refusal !== null ||
         proposalStatus === "failed"
       ) {
-        const message =
-          refusal === null
-            ? unexpectedErrorMessage
-            : userErrorMessage(refusal, unexpectedErrorMessage);
+        const message = proposalRefusalMessage({
+          refusal,
+          unexpectedErrorMessage,
+          documentsTooLargeMessage,
+        });
         set((state) => {
           const current = state.sessions[key];
           if (current?.requestId !== requestId) {
@@ -631,7 +630,7 @@ export const usePlaybookReviewStore = create<State & Actions>()((set, get) => {
       confirmedUnits,
     }) => {
       const key = reviewSessionKey(entityId, fileFieldId);
-      const requestId = crypto.randomUUID();
+      const requestId = createUuid();
       set((state) => {
         const current = state.sessions[key];
         return {

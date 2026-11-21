@@ -1,0 +1,6 @@
+{
+  "handlers/chat/chat-prompt.ts": "Assembles a complete turn prompt; its excerpts are prompt context rather than a document continuation.",
+  "handlers/chat/send-message.ts": "Reads complete attachments for a turn; phases describe durable execution rather than document windows.",
+  "handlers/files/get.ts": "Streams a complete binary download; phase identifies a stamp failure rather than a document continuation.",
+  "lib/document-processing-queue.ts": "Processes whole input files; its cursor pages repair jobs rather than the contents of a document."
+}

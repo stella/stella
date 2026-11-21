@@ -1,7 +1,6 @@
-import { v7 as uuidv7 } from "uuid";
-
 import type { SafeId } from "@/lib/safe-id";
 import { toSafeId } from "@/lib/safe-id";
+import { createUuid } from "@/lib/uuid";
 
 export type ChatThreadId = SafeId<"chatThread">;
 
@@ -37,7 +36,8 @@ export const resolveChatContextMatterIds = (
 export const toChatThreadId = (value: string): ChatThreadId =>
   toSafeId<"chatThread">(value);
 
-export const createChatThreadId = (): ChatThreadId => toChatThreadId(uuidv7());
+export const createChatThreadId = (): ChatThreadId =>
+  toChatThreadId(createUuid());
 
 /**
  * Route target for opening a chat thread: matter-scoped threads live under

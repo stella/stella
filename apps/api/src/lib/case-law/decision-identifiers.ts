@@ -17,7 +17,7 @@ type LegacyDecisionIdentifierFields = {
   ecli: string | null;
 };
 
-export const legacyDecisionIdentifiers = ({
+const legacyDecisionIdentifiers = ({
   caseNumber,
   caseNumberType,
   ecli,

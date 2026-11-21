@@ -1,5 +1,7 @@
 import { panic, Result, TaggedError } from "better-result";
 
+import { DEFAULT_CASE_LAW_SEARCH_FACETS } from "@stll/api-contract/search";
+import { compareCodeUnit } from "@stll/collation";
 import { Temporal } from "@stll/time";
 
 import type {
@@ -11,11 +13,16 @@ import {
   compareYearBuckets,
 } from "@/api/lib/case-law/decision-search-facets";
 import type {
-  CorpusIndexAggregations,
   CorpusIndexAggregateInput,
+  CorpusIndexAggregations,
   CorpusIndexError,
 } from "@/api/lib/legal-search/corpus-index-client";
 import { DECISION_TIMESTAMP_FIELD } from "@/api/lib/legal-search/corpus-index-config";
+import {
+  type CorpusCourtYear,
+  courtYearAggregation,
+  parseCourtYearAggregation,
+} from "@/api/lib/legal-search/corpus-index-court-year";
 import { corpusExcludedSourcesClause } from "@/api/lib/legal-search/corpus-query";
 import { LIMITS } from "@/api/lib/limits";
 import { isRecord } from "@/api/lib/type-guards";
@@ -43,13 +50,7 @@ class CorpusSearchFacetsError extends TaggedError("CorpusSearchFacetsError")<{
   cause?: unknown;
 }> {}
 
-export const CORPUS_SEARCH_FACET_NAMES = [
-  "court",
-  "decisionType",
-  "source",
-  "language",
-  "year",
-] as const;
+export const CORPUS_SEARCH_FACET_NAMES = DEFAULT_CASE_LAW_SEARCH_FACETS;
 
 export type CorpusSearchFacetName = (typeof CORPUS_SEARCH_FACET_NAMES)[number];
 
@@ -91,11 +92,14 @@ export const CORPUS_SEARCH_FACET_SPEC = {
     candidates: LIMITS.caseLawFacetCandidateBuckets,
     display: LIMITS.caseLawFacetCandidateBuckets,
   },
+  // Kept whole like court: the buckets are stated spellings, and the caller
+  // folds them into canonical kinds before cutting the list, so a kind spread
+  // over several small spellings is not lost behind one large one.
   decisionType: {
     kind: "terms",
     field: "document_type",
     candidates: LIMITS.caseLawFacetCandidateBuckets,
-    display: LIMITS.caseLawFacetLimit,
+    display: LIMITS.caseLawFacetCandidateBuckets,
   },
   source: {
     kind: "terms",
@@ -110,8 +114,10 @@ export const CORPUS_SEARCH_FACET_SPEC = {
     display: LIMITS.caseLawFacetLimit,
   },
   year: { kind: "year_range", field: DECISION_TIMESTAMP_FIELD },
-} as const satisfies Record<CorpusSearchFacetName, CorpusFacetSpec> &
-  Record<keyof DecisionSearchFacets, CorpusFacetSpec>;
+} as const satisfies Record<
+  Exclude<keyof DecisionSearchFacets, "courtYear">,
+  CorpusFacetSpec
+>;
 
 /**
  * Oldest year a bucket is offered for. Everything below it falls into the one
@@ -177,6 +183,7 @@ type FacetAggregationsOptions = {
   names: readonly CorpusSearchFacetName[];
   /** Whether this request also carries the whole query's decision count. */
   withTotal: boolean;
+  withCourtYear: boolean;
   yearRanges: readonly CorpusYearRange[];
 };
 
@@ -184,6 +191,7 @@ const facetAggregations = ({
   decisionCountField,
   names,
   withTotal,
+  withCourtYear,
   yearRanges,
 }: FacetAggregationsOptions): Record<string, unknown> => {
   // KNOWN LIMITATION: this counts language versions, not judgments. The page
@@ -224,14 +232,23 @@ const facetAggregations = ({
         return panic(`Unhandled corpus facet spec: ${String(spec)}`);
     }
   };
-  const aggs: Record<string, unknown> = {};
+  const aggs = new Map<string, unknown>();
   for (const name of names) {
-    aggs[name] = aggregationFor(CORPUS_SEARCH_FACET_SPEC[name]);
+    aggs.set(name, aggregationFor(CORPUS_SEARCH_FACET_SPEC[name]));
   }
   if (withTotal) {
-    aggs[TOTAL_AGGREGATION] = { cardinality: { field: decisionCountField } };
+    aggs.set(TOTAL_AGGREGATION, { cardinality: { field: decisionCountField } });
   }
-  return aggs;
+  if (withCourtYear) {
+    aggs.set(
+      "courtYear",
+      courtYearAggregation({
+        decisionCountField,
+        yearRanges,
+      }),
+    );
+  }
+  return Object.fromEntries(aggs);
 };
 
 /**
@@ -239,7 +256,7 @@ const facetAggregations = ({
  * with a JSON float from a sketch, and a fractional "3.0000000001 decisions"
  * is not a number to put in front of a reader. Null when the shape is not one.
  */
-const readCardinality = (aggregation: unknown): number | null => {
+export const readCardinality = (aggregation: unknown): number | null => {
   if (!isRecord(aggregation)) {
     return null;
   }
@@ -346,6 +363,14 @@ type FacetRequest = {
   names: CorpusSearchFacetName[];
   query: string;
   withTotal: boolean;
+  withCourtYear: boolean;
+};
+
+type FacetRequestsOptions = {
+  queryFor: CorpusFacetQuery;
+  totalQuery: string;
+  excludedSourceIds: readonly string[];
+  requestedFacets: readonly (CorpusSearchFacetName | "courtYear")[];
 };
 
 /**
@@ -353,16 +378,21 @@ type FacetRequest = {
  * — every cross-filtered query identical to the full one — costs one round
  * trip instead of five.
  */
-const facetRequests = (
-  queryFor: CorpusFacetQuery,
-  totalQuery: string,
-  excludedSourceIds: readonly string[],
-): FacetRequest[] => {
+const facetRequests = ({
+  queryFor,
+  totalQuery,
+  excludedSourceIds,
+  requestedFacets,
+}: FacetRequestsOptions): FacetRequest[] => {
   // Applied here rather than by the caller, so no query this module sends can
   // be the one that forgot it: hydration re-applies the policy to the hits, so
   // without it a revoked source keeps a bucket and a count while contributing
   // none of the decisions behind them.
-  const excluded = corpusExcludedSourcesClause(excludedSourceIds);
+  // Sorted, because the set arrives in whatever order the registry read it
+  // in, and the query text is what a cached aggregation is keyed by.
+  const excluded = corpusExcludedSourcesClause(
+    excludedSourceIds.toSorted(compareCodeUnit),
+  );
   const byQuery = new Map<string, FacetRequest>();
   const requestFor = (rawQuery: string): FacetRequest => {
     const query =
@@ -371,12 +401,21 @@ const facetRequests = (
     if (existing !== undefined) {
       return existing;
     }
-    const created: FacetRequest = { names: [], query, withTotal: false };
+    const created: FacetRequest = {
+      names: [],
+      query,
+      withTotal: false,
+      withCourtYear: false,
+    };
     byQuery.set(query, created);
     return created;
   };
   requestFor(totalQuery).withTotal = true;
-  for (const name of CORPUS_SEARCH_FACET_NAMES) {
+  for (const name of new Set(requestedFacets)) {
+    if (name === "courtYear") {
+      requestFor(totalQuery).withCourtYear = true;
+      continue;
+    }
     requestFor(queryFor(name)).names.push(name);
   }
   return [...byQuery.values()];
@@ -401,6 +440,7 @@ export type CorpusAggregate = (
 
 type ReadCorpusSearchFacetsOptions = {
   aggregate: CorpusAggregate;
+  requestedFacets?: readonly (CorpusSearchFacetName | "courtYear")[];
   /**
    * Sources whose redistribution permission is revoked. Their documents leave
    * the index asynchronously, so every aggregation excludes them by name.
@@ -418,10 +458,12 @@ type CorpusSearchFacetsRead = {
   facets: Record<CorpusSearchFacetName, SearchFacetBucket[]>;
   /** Distinct decisions the whole query matches. */
   total: number;
+  courtYear: CorpusCourtYear | null;
 };
 
 export const readCorpusSearchFacets = async ({
   aggregate,
+  requestedFacets = CORPUS_SEARCH_FACET_NAMES,
   currentYear,
   excludedSourceIds,
   decisionCountField,
@@ -430,26 +472,42 @@ export const readCorpusSearchFacets = async ({
 }: ReadCorpusSearchFacetsOptions): Promise<
   Result<CorpusSearchFacetsRead, CorpusSearchFacetsError>
 > => {
-  const yearRanges = corpusYearRanges(currentYear);
-  const requests = facetRequests(queryFor, totalQuery, excludedSourceIds);
+  const yearRanges = requestedFacets.some(
+    (name) => name === "year" || name === "courtYear",
+  )
+    ? corpusYearRanges(currentYear)
+    : [];
+  const requests = facetRequests({
+    queryFor,
+    totalQuery,
+    excludedSourceIds,
+    requestedFacets,
+  });
   const answers = await Promise.all(
     requests.map(
-      async ({ names, query, withTotal }) =>
+      async ({ names, query, withTotal, withCourtYear }) =>
         await aggregate({
           query,
           aggs: facetAggregations({
             decisionCountField,
             names,
             withTotal,
+            withCourtYear,
             yearRanges,
           }),
         }),
     ),
   );
 
-  const facets: Partial<Record<CorpusSearchFacetName, SearchFacetBucket[]>> =
-    {};
+  const facets = new Map<CorpusSearchFacetName, SearchFacetBucket[]>([
+    ["court", []],
+    ["decisionType", []],
+    ["source", []],
+    ["language", []],
+    ["year", []],
+  ]);
   let total: number | null = null;
+  let courtYear: CorpusCourtYear | null = null;
   for (const [index, answer] of answers.entries()) {
     const request = requests[index];
     if (request === undefined) {
@@ -470,6 +528,12 @@ export const readCorpusSearchFacets = async ({
     if (request.withTotal) {
       total = readCardinality(answer.value[TOTAL_AGGREGATION]);
     }
+    if (request.withCourtYear) {
+      courtYear = parseCourtYearAggregation({
+        aggregation: answer.value["courtYear"],
+        yearRanges,
+      });
+    }
     for (const name of request.names) {
       const buckets = parseFacetAggregation(
         name,
@@ -483,23 +547,22 @@ export const readCorpusSearchFacets = async ({
           }),
         );
       }
-      facets[name] = buckets;
+      facets.set(name, buckets);
     }
   }
 
-  const court = facets.court;
-  const decisionType = facets.decisionType;
-  const source = facets.source;
-  const language = facets.language;
-  const year = facets.year;
-  if (
-    court === undefined ||
-    decisionType === undefined ||
-    source === undefined ||
-    language === undefined ||
-    year === undefined ||
-    total === null
-  ) {
+  const court =
+    facets.get("court") ?? panic("Missing declared corpus facet: court");
+  const decisionType =
+    facets.get("decisionType") ??
+    panic("Missing declared corpus facet: decisionType");
+  const source =
+    facets.get("source") ?? panic("Missing declared corpus facet: source");
+  const language =
+    facets.get("language") ?? panic("Missing declared corpus facet: language");
+  const year =
+    facets.get("year") ?? panic("Missing declared corpus facet: year");
+  if (total === null) {
     return Result.err(
       new CorpusSearchFacetsError({
         message: "corpus index did not answer every requested facet",
@@ -509,5 +572,6 @@ export const readCorpusSearchFacets = async ({
   return Result.ok({
     facets: { court, decisionType, source, language, year },
     total,
+    courtYear,
   });
 };

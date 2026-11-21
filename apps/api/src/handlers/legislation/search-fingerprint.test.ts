@@ -20,6 +20,9 @@ const filterArbitraries = {
   dateFrom: fc
     .integer({ min: 2000, max: 2025 })
     .map((year) => `${String(year)}-01-01`),
+  asOf: fc
+    .integer({ min: 2000, max: 2035 })
+    .map((year) => `${String(year)}-06-01`),
   dateTo: fc
     .integer({ min: 2000, max: 2025 })
     .map((year) => `${String(year)}-12-31`),

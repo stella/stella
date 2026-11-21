@@ -8,11 +8,15 @@
  * statute tables cannot drift from each other.
  */
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import type { ReactNode } from "react";
 
-import { queryHighlightTokens } from "@/components/legal-reader/query-marks";
+import { useTranslations } from "use-intl";
+
+import { queryHighlightTokens } from "@stll/decision-reader/query-marks";
+
 import { PublicLawTable } from "@/components/public-law-table/public-law-table";
+import type { PublicLawTableLayoutUpdate } from "@/components/public-law-table/public-law-table-layout.logic";
 import type { TableFindHighlight } from "@/components/workspaces/table/find-highlight";
 import type { DecisionRowData } from "@/components/workspaces/table/types";
 import type { Decision } from "@/features/case-law/components/decision-cells";
@@ -21,15 +25,19 @@ import type {
   DecisionExtraColumn,
   DecisionReferenceColumnKind,
 } from "@/features/case-law/decision-columns.logic";
+import type { DecisionDateOrder } from "@/features/case-law/decision-order.logic";
 import { useDecisionRowHost } from "@/features/case-law/decision-row-host";
 import {
+  DecisionDateDirectionsScope,
   DecisionRenderScope,
+  decisionTableSorting,
   useDecisionTableColumns,
 } from "@/features/case-law/decision-table-columns";
 import {
   AddQuestionColumn,
   questionColumnAddAction,
 } from "@/features/case-law/research/add-question-column";
+import { QuestionColumnSelectionBar } from "@/features/case-law/research/question-columns-controller";
 import type { QuestionColumnSurface } from "@/features/case-law/research/question-columns.logic";
 
 export type { Decision } from "@/features/case-law/components/decision-cells";
@@ -51,6 +59,11 @@ const withHeadnoteToggled = (
 const decisionRowId = (row: DecisionRowData): string => row.decision.id;
 
 type DecisionTableProps = {
+  /**
+   * The order the rows were read in and how the date header changes it; null
+   * where no order can be chosen and the headers offer none.
+   */
+  dateOrder: DecisionDateOrder | null;
   decisions: readonly Decision[];
   /** The ordinal of the first row: a page's first position in the whole list. */
   firstRowNumber: number;
@@ -66,7 +79,9 @@ type DecisionTableProps = {
   /** See `PublicLawTable`. */
   isRefreshing?: boolean | undefined;
   layout: DecisionTableLayout;
-  onLayoutChange: (layout: DecisionTableLayout) => void;
+  onLayoutChange: (
+    update: PublicLawTableLayoutUpdate<DecisionTableLayout>,
+  ) => void;
   onSelectedIdsChange: (decisionIds: string[]) => void;
   /**
    * The query the rows answer, which is not always the one the URL asks
@@ -81,6 +96,7 @@ type DecisionTableProps = {
 };
 
 export const DecisionTable = ({
+  dateOrder,
   decisions,
   emptyState,
   expectedRowCount,
@@ -97,24 +113,29 @@ export const DecisionTable = ({
   referenceKind,
   selectedIds,
 }: DecisionTableProps) => {
+  const t = useTranslations();
   const columns = useDecisionTableColumns({
     extraColumns,
+    ordering: dateOrder === null ? "answer" : "header",
     questions,
     referenceKind,
   });
-  const rows = useMemo(
-    () =>
-      decisions.map((decision): DecisionRowData => ({
-        kind: "decision",
-        decision,
-        children: [],
-      })),
-    [decisions],
-  );
-  const selection = useMemo(
-    () => ({ onSelectedIdsChange, selectedIds }),
-    [onSelectedIdsChange, selectedIds],
-  );
+  const sorting = decisionTableSorting(dateOrder);
+  const rows = decisions.map((decision): DecisionRowData => ({
+    kind: "decision",
+    decision,
+    children: [],
+  }));
+  const selection = {
+    actions: <QuestionColumnSelectionBar surface={questions} />,
+    clearLabel: t("common.clearSelection"),
+    getRowLabel: (row: DecisionRowData) =>
+      t("common.selectRow", { label: row.decision.caseNumber }),
+    label: t("common.selectedCount", { count: selectedIds.length }),
+    onSelectedIdsChange,
+    selectedIds,
+    selectAllLabel: t("common.selectAllRows"),
+  };
 
   // The rail is a transparent strip pinned over the table's end columns, so it
   // is reserved only where it actually carries a control; otherwise it would
@@ -137,38 +158,38 @@ export const DecisionTable = ({
     ReadonlySet<string>
   >(NO_EXPANDED_HEADNOTES);
 
-  const renderScope = useMemo(
-    () => ({
-      contentMode: layout.contentMode,
-      expandedHeadnoteIds,
-      onToggleHeadnote: (decisionId: string) => {
-        setExpandedHeadnoteIds((current) =>
-          withHeadnoteToggled(current, decisionId),
-        );
-      },
-      queryTokens: queryHighlightTokens(query),
-      searchQuery: query,
-    }),
-    [expandedHeadnoteIds, layout.contentMode, query],
-  );
+  const renderScope = {
+    contentMode: layout.contentMode,
+    expandedHeadnoteIds,
+    onToggleHeadnote: (decisionId: string) => {
+      setExpandedHeadnoteIds((current) =>
+        withHeadnoteToggled(current, decisionId),
+      );
+    },
+    queryTokens: queryHighlightTokens(query),
+    searchQuery: query,
+  };
 
   return (
     <DecisionRenderScope value={renderScope}>
-      <PublicLawTable
-        columns={columns}
-        emptyState={emptyState}
-        expectedRowCount={expectedRowCount}
-        findHighlight={findHighlight}
-        firstRowNumber={firstRowNumber}
-        getRowId={decisionRowId}
-        isLoading={isLoading}
-        isRefreshing={isRefreshing}
-        layout={layout}
-        onLayoutChange={onLayoutChange}
-        rowHost={rowHost}
-        rows={rows}
-        selection={selection}
-      />
+      <DecisionDateDirectionsScope value={dateOrder?.directions ?? null}>
+        <PublicLawTable
+          columns={columns}
+          emptyState={emptyState}
+          expectedRowCount={expectedRowCount}
+          findHighlight={findHighlight}
+          firstRowNumber={firstRowNumber}
+          getRowId={decisionRowId}
+          isLoading={isLoading}
+          isRefreshing={isRefreshing}
+          layout={layout}
+          onLayoutChange={onLayoutChange}
+          rowHost={rowHost}
+          rows={rows}
+          selection={selection}
+          sorting={sorting}
+        />
+      </DecisionDateDirectionsScope>
     </DecisionRenderScope>
   );
 };

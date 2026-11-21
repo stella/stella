@@ -1,5 +1,9 @@
 name: Cancel stale merge groups
 
+defaults:
+  run:
+    shell: bash
+
 # When the merge queue rebuilds a group, it deletes the group's
 # gh-readonly-queue/* branch, but runs already started for that branch keep
 # their runner slots: the CI concurrency group is per ref, so nothing newer
@@ -26,31 +30,69 @@ permissions: {}
 jobs:
   cancel:
     if: >-
-      github.event_name != 'delete'
+      (github.event_name != 'workflow_dispatch'
+      || github.ref == 'refs/heads/main')
+      && (github.event_name != 'delete'
       || (github.event.ref_type == 'branch'
           && startsWith(github.event.ref, 'gh-readonly-queue/'))
-    runs-on: ubuntu-latest
+      )
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
       actions: write
       contents: read
     steps:
+      - name: Checkout GitHub API tooling
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.workflow_sha }}
+          path: .gh-retry
+          persist-credentials: false
+          sparse-checkout: scripts/gh-retry.sh
+          sparse-checkout-cone-mode: false
+
+      - name: Checkout network retry helper
+        timeout-minutes: 2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.workflow_sha }}
+          path: .network-retry
+          persist-credentials: false
+          sparse-checkout: scripts/retry.sh
+          sparse-checkout-cone-mode: false
+
+      - name: Preserve GitHub API tooling across source checkouts
+        run: |
+          cp "$GITHUB_WORKSPACE/.gh-retry/scripts/gh-retry.sh" "$RUNNER_TEMP/gh-retry.sh"
+          echo "GH_RETRY_SCRIPT=$RUNNER_TEMP/gh-retry.sh" >> "$GITHUB_ENV"
+
+      - name: Stage network retry helper
+        run: |
+          mkdir -p "$RUNNER_TEMP/network-retry"
+          cp "$GITHUB_WORKSPACE/.network-retry/scripts/retry.sh" "$RUNNER_TEMP/network-retry/retry.sh"
+          echo "NETWORK_RETRY_SCRIPT=$RUNNER_TEMP/network-retry/retry.sh" >> "$GITHUB_ENV"
+
       - name: Cancel merge_group runs whose branch no longer exists
+        timeout-minutes: 5
         env:
           DRY_RUN: ${{ inputs.dry-run == true }}
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
-          for status in queued in_progress; do
-            gh api --paginate \
+          # Every status of a run that has not finished: a merge group held
+          # by concurrency is pending, one awaiting an environment waiting.
+          for status in requested queued pending waiting in_progress; do
+            bash "$GH_RETRY_SCRIPT" api --paginate \
               "repos/$REPO/actions/runs?event=merge_group&status=$status&per_page=100" \
               --jq '.workflow_runs[] | "\(.id) \(.head_branch)"'
           done | sort -u | while read -r run_id branch; do
             # ls-remote exits 2 only when the ref is absent; any other
             # failure leaves the run alone.
             set +e
-            git ls-remote --exit-code "https://github.com/$REPO" "refs/heads/$branch" > /dev/null
+            RETRY_PASSTHROUGH_EXIT_CODES=2 bash "$NETWORK_RETRY_SCRIPT" git ls-remote --exit-code "https://github.com/$REPO" "refs/heads/$branch" > /dev/null
             code=$?
             set -e
             if (( code != 2 )); then
@@ -63,6 +105,6 @@ jobs:
             echo "Cancelling run $run_id: $branch no longer exists."
             # Force-cancel also stops `if: always()` jobs, which have nothing
             # to report for a group the queue has already discarded.
-            gh api --method POST "repos/$REPO/actions/runs/$run_id/force-cancel" > /dev/null \
+            bash "$GH_RETRY_SCRIPT" api --method POST "repos/$REPO/actions/runs/$run_id/force-cancel" > /dev/null \
               || echo "::warning::Could not cancel run $run_id ($branch)."
           done

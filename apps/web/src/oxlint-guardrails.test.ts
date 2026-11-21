@@ -96,16 +96,24 @@ describe("custom oxlint guardrails", () => {
       "apps/web/src/lib/workspaces/queries.ts",
     );
 
-    expect(protectedGuardSource).not.toContain("ensureRouteQueryData");
+    const shellPrefetchStart = protectedGuardSource.indexOf(
+      "// Start optional shell data immediately.",
+    );
+    expect(shellPrefetchStart).toBeGreaterThan(-1);
+    expect(protectedGuardSource.slice(shellPrefetchStart)).not.toContain(
+      "ensureRouteQueryData",
+    );
     expect(protectedGuardSource).toContain("prefetchRouteQuery");
     expect(protectedGuardSource).toContain("aiAvailabilityOptions");
     expect(protectedGuardSource).toContain("roleOptions");
     expect(protectedGuardSource).not.toContain("organizationOptions");
 
-    // The route definition (beforeLoad, loader) must never seed the matter
-    // list: route commit cannot wait on it. The rendered shell may subscribe
-    // to it, but only as deferred chrome, which dedupes with the sidebar's
-    // identical subscription instead of adding a request.
+    // Route commit must never wait on the matter list. The signed-in guard
+    // only starts it, detached, in the shell's first request wave (otherwise
+    // it opens its own round after chrome mounts and delays every
+    // enrolment-gated request). The rendered shell subscribes to it only as
+    // deferred chrome, which dedupes with that warm cache instead of adding a
+    // request.
     expect(protectedRouteFileSource).toContain(
       "beforeLoad: loadProtectedContext,",
     );
@@ -115,7 +123,14 @@ describe("custom oxlint guardrails", () => {
     expect(protectedGuardSource).toContain(
       "export const loadProtectedContext = async",
     );
-    expect(protectedGuardSource).not.toContain("workspacesNavigationOptions");
+    const guardNavigationReads =
+      protectedGuardSource.match(/workspacesNavigationOptions\(/gu) ?? [];
+    const detachedGuardNavigationReads =
+      protectedGuardSource.match(
+        /detached\(\s*prefetchRouteQuery\(\s*queryClient,\s*workspacesNavigationOptions\(/gu,
+      ) ?? [];
+    expect(guardNavigationReads).toHaveLength(1);
+    expect(detachedGuardNavigationReads).toHaveLength(1);
     const navigationListReads =
       protectedFrameSource.match(/workspacesNavigationOptions\(/gu) ?? [];
     const chromeNavigationListReads =
@@ -158,7 +173,7 @@ describe("custom oxlint guardrails", () => {
     );
     const filesystemEntitiesOptionsSource = entityQuerySource.slice(
       entityQuerySource.indexOf("export const filesystemEntitiesOptions"),
-      entityQuerySource.indexOf("export const kanbanGroupOptions"),
+      entityQuerySource.indexOf("const kanbanGroupOptions"),
     );
 
     expect(routeSource).toContain("ensureRouteInfiniteQueryData");
@@ -220,12 +235,22 @@ describe("custom oxlint guardrails", () => {
     const memberToolsSource = readRootFixture(
       "apps/web/src/routes/knowledge/-member/member-tools-page.tsx",
     );
+    const registrationSource = readRootFixture(
+      "apps/web/src/routes/knowledge/-components/catalogue/tool-detail-inspector-registration.tsx",
+    );
     const pluginSource = readRootFixture(
       ".oxlint-plugins/no-static-catalogue-route-import.ts",
     );
     const configSource = readRootFixture("oxlint.config.ts");
 
-    expect(toolsRouteSource).toContain("const LazyMemberToolsPage = lazy");
+    // The route renders its page statically (so the manifest preloads it) and
+    // keeps the inspector registration eager; neither holds the catalogue UI.
+    expect(toolsRouteSource).toContain(
+      'import { ToolsPage } from "@/routes/knowledge/-member/tools.page";',
+    );
+    expect(toolsRouteSource).toContain(
+      'import "@/routes/knowledge/-components/catalogue/tool-detail-inspector-registration";',
+    );
     expect(memberToolsSource).toContain("const LazyCatalogueBrowser = lazy");
     expect(memberToolsSource).toContain("catalogue/catalogue-browser");
     expect(memberToolsSource).toContain(
@@ -235,11 +260,12 @@ describe("custom oxlint guardrails", () => {
     expect(memberToolsSource).toContain("canManageCustomTools");
     expect(memberToolsSource).toContain("practiceJurisdictions");
     expect(memberToolsSource).not.toContain("import { CatalogueBrowser");
-    expect(toolsRouteSource).toContain("const LazyToolDetailView = lazy");
-    expect(toolsRouteSource).toContain("const LazyToolDetailRailIcon = lazy");
+    expect(registrationSource).toContain("const LazyToolDetailView = lazy");
+    expect(registrationSource).toContain("const LazyToolDetailRailIcon = lazy");
     expect(toolsRouteSource).not.toContain("import { CatalogueBrowser");
-    expect(toolsRouteSource).not.toContain("ToolDetailView,");
-    expect(toolsRouteSource).not.toContain("ToolDetailRailIcon,");
+    expect(registrationSource).not.toContain("import { CatalogueBrowser");
+    expect(registrationSource).not.toContain("ToolDetailView,");
+    expect(registrationSource).not.toContain("ToolDetailRailIcon,");
 
     expect(pluginSource).toContain("CATALOGUE_BROWSER_MODULE");
     expect(pluginSource).toContain('node.importKind === "type"');
@@ -253,6 +279,9 @@ describe("custom oxlint guardrails", () => {
     expect(configSource).toContain("apps/web/src/routes/knowledge/tools.tsx");
     expect(configSource).toContain(
       "apps/web/src/routes/knowledge/-member/member-tools-page.tsx",
+    );
+    expect(configSource).toContain(
+      "apps/web/src/routes/knowledge/-components/catalogue/tool-detail-inspector-registration.tsx",
     );
   });
 

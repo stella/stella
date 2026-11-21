@@ -1,6 +1,5 @@
 import { Result } from "better-result";
-import { t } from "elysia";
-import type { Static } from "elysia";
+import * as v from "valibot";
 
 import { renderMatterReference } from "@stll/api-contract";
 
@@ -11,12 +10,17 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { toScopeKey, validatePattern } from "@/api/lib/matter-reference";
 
-const previewOrganizationSettingsBodySchema = t.Object({
-  matterNumberPattern: t.String({ minLength: 1, maxLength: 128 }),
-  matterNumberPadding: t.Integer({ minimum: 1, maximum: 6 }),
+const previewOrganizationSettingsBodySchema = v.object({
+  matterNumberPattern: v.pipe(v.string(), v.minLength(1), v.maxLength(128)),
+  matterNumberPadding: v.pipe(
+    v.number(),
+    v.integer(),
+    v.minValue(1),
+    v.maxValue(6),
+  ),
 });
 
-type PreviewOrganizationSettingsBodySchema = Static<
+type PreviewOrganizationSettingsBodySchema = v.InferOutput<
   typeof previewOrganizationSettingsBodySchema
 >;
 
@@ -66,6 +70,7 @@ const previewOrganizationSettingsHandler = async function* ({
 };
 
 const config = {
+  contract: "patch",
   description:
     "Preview the matter number a pattern would produce next: the pattern and " +
     "padding are validated, the counter for the scope that pattern falls in " +

@@ -9,10 +9,10 @@ import type { Transaction } from "@/api/db/root";
 import { caseLawDecisions } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
 import {
+  pendingDocumentPredicate,
   remainingDocumentCandidateQuery,
   remainingDocumentOrder,
   remainingDocumentPredicate,
-  pendingDocumentPredicate,
 } from "@/api/lib/legal-search/sk-document-backfill";
 import type { RemainingDocumentCursor } from "@/api/lib/legal-search/sk-document-backfill";
 import {
@@ -27,6 +27,7 @@ import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   explainRoot,
+  indexedAccessPaths,
   scanOccurrences,
 } from "@/api/tests/query-plans/plan-walker";
 
@@ -118,9 +119,22 @@ test("outstanding candidate pages bound cooldown-heavy first, middle and NULL-ta
           ),
         );
         const scans = scanOccurrences(plan);
+        const accessPaths = indexedAccessPaths(plan, "case_law_decisions");
         expect(scans.length).toBeGreaterThan(0);
+        expect(accessPaths).toHaveLength(scans.length);
+        for (const path of accessPaths) {
+          expect(path.accessKind).toBe("index");
+          expect(path.branches.map(({ indexName }) => indexName)).toEqual([
+            DOCUMENT_OUTSTANDING_DATE_INDEX.name,
+          ]);
+          expect(
+            path.branches.every(({ indexCondition }) =>
+              indexCondition?.includes("source_id"),
+            ),
+          ).toBe(true);
+          expect(path.node["Filter"]).toBeUndefined();
+        }
         for (const scan of scans) {
-          expect(scan.nodeType).toBe("Index Scan");
           expect(scan.index).toBe(DOCUMENT_OUTSTANDING_DATE_INDEX.name);
           expect(scan.indexCond).toContain("source_id");
           expect(scan.filter).toBeNull();

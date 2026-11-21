@@ -4,7 +4,7 @@ import apiPackage from "../apps/api/package.json" with { type: "json" };
 import {
   STELLA_API_CONTRACT,
   STELLA_MCP_API_CONTRACT_VERSION,
-} from "../apps/api/src/mcp/constants";
+} from "../apps/api/src/mcp/stella-api-contract";
 import cliPackage from "../packages/cli/package.json" with { type: "json" };
 import {
   CLI_DEFAULT_SCOPES,
@@ -17,30 +17,11 @@ import {
   CLI_SUPPORTED_API_PROTOCOLS,
 } from "../packages/cli/src/generated/api-contract";
 import { loadChangesetPolicy } from "./changeset-guard";
+import { LIBRARY_PACKAGE_ORDER } from "./publish-packages";
 
-const SHARED_NPM_PACKAGES = [
-  "agent-input",
-  "mcp-kit",
-  "auth-model",
-  "ai-catalog",
-  "anonymize-chat",
-  "business-registries",
-  "chat",
-  "calculations",
-  "country-codes",
-  "conditions",
-  "docx-utils",
-  "money",
-  "ssr-kit",
-  "ssr-testkit",
-  "stable-stringify",
-  "start-runtime",
-  "template-conditions",
-  "text-normalize",
-  "time",
-  "workspace-model",
-  "workspace-ui",
-] as const;
+// Every library publish-npm.yml releases; one list, so a package added to or
+// removed from the release cannot drift out of these assertions.
+const SHARED_NPM_PACKAGES = LIBRARY_PACKAGE_ORDER;
 
 /**
  * The release gate's pathspecs live in scripts/changeset-policy.json, and the
@@ -58,9 +39,10 @@ const readReleaseSmokeSource = async () => {
   const releaseWorkflow = await Bun.file(
     new URL("../.github/workflows/release.yml", import.meta.url),
   ).text();
-  const scriptPath = /run: bash (scripts\/smoke-api-image\.sh)\s/u
-    .exec(releaseWorkflow)
-    ?.at(1);
+  const scriptPath =
+    /(?:^|\n)\s*(?:run: )?bash (scripts\/smoke-api-image\.sh)\s/u
+      .exec(releaseWorkflow)
+      ?.at(1);
   if (!scriptPath) {
     throw new TypeError("Release must invoke the shared API image smoke");
   }
@@ -148,7 +130,10 @@ describe("API and CLI release contract", () => {
     expect(cliPackage.scripts["codegen:version"]).toBe(
       "bun run src/codegen-version.ts",
     );
-    expect(cliPackage.scripts.codegen).toContain(
+    // Full codegen derives the catalog, then regenerates the registry
+    // projections and the baked version.
+    expect(cliPackage.scripts.codegen).toContain("bun run codegen:registry");
+    expect(cliPackage.scripts["codegen:registry"]).toContain(
       "bun run src/codegen-version.ts",
     );
 
@@ -175,7 +160,9 @@ describe("API and CLI release contract", () => {
     ]);
 
     expect(releaseWorkflow).toContain("name: release-source-receipt");
-    expect(publishWorkflow).toContain('gh run download "$UPSTREAM_RUN_ID"');
+    expect(publishWorkflow).toContain(
+      'bash "$GH_RETRY_SCRIPT" run download "$UPSTREAM_RUN_ID"',
+    );
     expect(publishWorkflow).toContain(
       `UPSTREAM_RELEASE_REF: \${{ needs.release-trigger.outputs.release_ref }}`,
     );
@@ -197,7 +184,7 @@ describe("API and CLI release contract", () => {
       "source_sha must be a full lowercase commit SHA.",
     );
     expect(publishWorkflow).toContain(
-      "source_sha is not reachable from protected main.",
+      'bash "$GITHUB_WORKSPACE/.pack-tooling/scripts/check-release-source-on-main.sh" "$source_sha"',
     );
     expect(publishWorkflow).toContain(
       `git rev-parse "refs/tags/\${tag}^{commit}"`,
@@ -210,9 +197,15 @@ describe("API and CLI release contract", () => {
   test("release and pull-request smoke tests refuse corrupt history with pending SQL", async () => {
     const [releaseSmoke, migrationSmoke] = await Promise.all([
       readReleaseSmokeSource(),
-      Bun.file(
-        new URL("../.github/workflows/db-migrations.yml", import.meta.url),
-      ).text(),
+      // The migration smoke job runs its history rehearsal from a script.
+      Promise.all([
+        Bun.file(
+          new URL("../.github/workflows/ci.yml", import.meta.url),
+        ).text(),
+        Bun.file(
+          new URL("check-migration-history-refusal.sh", import.meta.url),
+        ).text(),
+      ]).then((sources) => sources.join("\n")),
     ]);
 
     for (const source of [releaseSmoke, migrationSmoke]) {
@@ -245,9 +238,15 @@ describe("API and CLI release contract", () => {
   test("release and migration smoke tests wait for scheduler initialization", async () => {
     const [releaseSmoke, migrationSmoke] = await Promise.all([
       readReleaseSmokeSource(),
-      Bun.file(
-        new URL("../.github/workflows/db-migrations.yml", import.meta.url),
-      ).text(),
+      // The migration smoke job runs its history rehearsal from a script.
+      Promise.all([
+        Bun.file(
+          new URL("../.github/workflows/ci.yml", import.meta.url),
+        ).text(),
+        Bun.file(
+          new URL("check-migration-history-refusal.sh", import.meta.url),
+        ).text(),
+      ]).then((sources) => sources.join("\n")),
     ]);
 
     expect(releaseSmoke).toContain('fetch("http://127.0.0.1:3001/live")');
@@ -255,6 +254,17 @@ describe("API and CLI release contract", () => {
     expect(releaseSmoke).toContain(`grep -F '"message":"scheduler.started"'`);
     expect(migrationSmoke).toContain("curl -fsS http://127.0.0.1:3001/live");
     expect(migrationSmoke).toContain(`grep -q '"message":"scheduler.started"'`);
+    // Catalog discovery imports handlers that embed MCP App bundles, so the
+    // bundles are prepared before the runtime generator reads them.
+    expect(apiPackage.scripts["generate:capability-runtime"]).toBe(
+      "bun ../../scripts/prepare-mcp-apps.ts && bun scripts/generate-capability-runtime.ts",
+    );
+    const prepareRuntime = migrationSmoke.indexOf(
+      "bun --filter @stll/api generate:capability-runtime",
+    );
+    const startServer = migrationSmoke.indexOf("bun src/server.ts");
+    expect(prepareRuntime).toBeGreaterThan(-1);
+    expect(startServer).toBeGreaterThan(prepareRuntime);
   });
 
   test("shared package publishing uses Changesets release signals", async () => {
@@ -306,12 +316,28 @@ describe("API and CLI release contract", () => {
       if (!isRecord(packageExports)) {
         throw new TypeError(`${packageName} exports is not an object`);
       }
-      for (const target of Object.values(packageExports)) {
+      for (const [subpath, entry] of Object.entries(packageExports)) {
+        // A component with a React Native renderer pairs it with the web
+        // module under the `react-native` condition (scripts/publish-manifest.ts).
+        const target =
+          isRecord(entry) &&
+          Object.keys(entry).join(",") === "react-native,default" &&
+          typeof entry["default"] === "string" &&
+          entry["react-native"] ===
+            entry["default"].replace(/\.(tsx?)$/u, ".native.$1")
+            ? entry["default"]
+            : entry;
         expect(typeof target).toBe("string");
         if (typeof target !== "string") {
           throw new TypeError(`${packageName} has a non-string export target`);
         }
-        expect(target).toMatch(/^\.\/src\/.*\.tsx?$/u);
+        // The manifest may export itself so a consumer can read the published
+        // version; every other entry point resolves to source.
+        if (subpath === "./package.json") {
+          expect(target).toBe("./package.json");
+          continue;
+        }
+        expect(target).toMatch(/^\.\/src\/.*\.(?:css|tsx?)$/u);
       }
     }
   });

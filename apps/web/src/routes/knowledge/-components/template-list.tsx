@@ -28,12 +28,14 @@ import {
   Dialog,
   DialogClose,
   DialogFooter,
+  DialogFormState,
   DialogHeader,
   DialogPanel,
   DialogPopup,
   DialogTitle,
 } from "@stll/ui/dialog";
 import {
+  AiActionIcon,
   CheckIcon,
   DownloadIcon,
   PencilLineIcon,
@@ -41,13 +43,14 @@ import {
   SquarePenIcon,
   TagIcon,
   Trash2Icon,
-  AiActionIcon,
   XIcon,
 } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
+import { Label } from "@stll/ui/label";
 import { Textarea } from "@stll/ui/textarea";
 import { stellaToast } from "@stll/ui/toast";
 
+import { matchesComboboxItem } from "@/components/combobox-filter.logic";
 import Tooltip from "@/components/tooltip";
 import { EntityKindIcon } from "@/components/workspaces/entity-kind-icon";
 import { memberKnowledgeActions } from "@/features/knowledge/member/member-knowledge";
@@ -56,9 +59,9 @@ import {
   languageDisplayName,
   TemplateRowView,
 } from "@/features/knowledge/views/templates/template-row-view";
-import type { TemplateDensity } from "@/features/knowledge/views/templates/template-row-view";
 import type {
   KnowledgeTemplate,
+  TemplateDensity,
   TemplatesSource,
 } from "@/features/knowledge/views/templates/templates-seam";
 import { usePermissions } from "@/hooks/use-permissions";
@@ -70,7 +73,7 @@ import { isDocxFile } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
 import { userErrorMessage } from "@/lib/errors/user-safe";
-import { notifyUserError } from "@/lib/errors/user-toast";
+import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
 import { openIsolatedWindow } from "@/lib/open-isolated-window";
 import { toSafeId } from "@/lib/safe-id";
 import { CategoryMobileFilterBar } from "@/routes/knowledge/-components/category-sidebar";
@@ -81,6 +84,7 @@ import {
 } from "@/routes/knowledge/-components/template-category-sidebar";
 import type { TemplateCategoryItem } from "@/routes/knowledge/-components/template-category-sidebar";
 import { TEMPLATE_DRAG_MIME } from "@/routes/knowledge/-components/template-drag";
+import { filterTemplateTagSuggestions } from "@/routes/knowledge/-components/template-studio-search.logic";
 import { TemplateUpload } from "@/routes/knowledge/-components/template-upload";
 import { UseTemplateDialog } from "@/routes/knowledge/-components/use-template-dialog";
 
@@ -133,7 +137,7 @@ export const TemplateList = ({
 
   const discover = async (file: File) => {
     if (!isDocxFile(file)) {
-      notifyUserError(undefined, t("templates.invalidFileType"));
+      notifyUserProblem(t("templates.invalidFileType"));
       return;
     }
 
@@ -161,7 +165,7 @@ export const TemplateList = ({
 
     const { data } = response;
     if (data instanceof Response) {
-      notifyUserError(undefined, t("templates.discoveryFailed"));
+      notifyUserProblem(t("templates.discoveryFailed"));
       return;
     }
 
@@ -170,7 +174,7 @@ export const TemplateList = ({
 
   const dropFile = (file: File) => {
     if (!isDocxFile(file)) {
-      notifyUserError(undefined, t("templates.invalidFileType"));
+      notifyUserProblem(t("templates.invalidFileType"));
       return;
     }
     // Errors are surfaced as toasts inside discover
@@ -240,7 +244,12 @@ export const TemplateList = ({
       source={source}
       toolbar={
         canCreateTemplate && (
-          <Button disabled={discovering} onClick={onCreateBlank} size="sm">
+          <Button
+            disabled={discovering}
+            disabledReason={t("common.loading")}
+            onClick={onCreateBlank}
+            size="sm"
+          >
             <PlusIcon />
             {discovering ? t("common.loading") : t("templates.newTemplate")}
           </Button>
@@ -340,7 +349,7 @@ const MemberTemplateRow = ({
   const downloadSource = async () => {
     const sourceUrl = await templateActions.readSourceUrl(template.id);
     if (sourceUrl === null) {
-      notifyUserError(undefined, t("common.unexpectedError"));
+      notifyUserProblem(t("common.unexpectedError"));
       return;
     }
     openIsolatedWindow(sourceUrl);
@@ -455,6 +464,7 @@ const MemberTemplateRow = ({
             </AlertDialogClose>
             <Button
               disabled={deleting}
+              disabledReason={t("common.deleting")}
               onClick={() => {
                 detached(handleDelete(), "template-list.delete");
               }}
@@ -501,8 +511,6 @@ const MemberTemplateRow = ({
 };
 
 // ── Tags dialog ──────────────────────────────────────
-
-const MAX_TAG_SUGGESTIONS = 6;
 
 type TemplateTagsDialogProps = {
   open: boolean;
@@ -552,13 +560,11 @@ const TemplateTagsDialogBody = ({
     setInput("");
   };
 
-  const matchingSuggestions = suggestions
-    .filter(
-      (tag) =>
-        !tags.includes(tag) &&
-        tag.toLowerCase().includes(input.trim().toLowerCase()),
-    )
-    .slice(0, MAX_TAG_SUGGESTIONS);
+  const matchingSuggestions = filterTemplateTagSuggestions(
+    suggestions,
+    tags,
+    input,
+  );
 
   const handleSave = async () => {
     setSaving(true);
@@ -583,6 +589,16 @@ const TemplateTagsDialogBody = ({
 
   return (
     <DialogPopup className="sm:max-w-sm">
+      <DialogFormState
+        dirty={
+          JSON.stringify(tags) !==
+            JSON.stringify(optionalArray(template.tags)) || input !== ""
+        }
+        onDiscard={() => {
+          setTags(optionalArray(template.tags));
+          setInput("");
+        }}
+      />
       <DialogHeader>
         <DialogTitle>{t("templates.addTag")}</DialogTitle>
       </DialogHeader>
@@ -598,13 +614,13 @@ const TemplateTagsDialogBody = ({
                 <Tooltip
                   content={t("common.remove")}
                   render={
-                    <button
+                    <Button
                       aria-label={t("common.remove")}
-                      className="text-muted-foreground hover:text-foreground rounded-full p-0.5"
                       onClick={() =>
                         setTags((current) => current.filter((x) => x !== tag))
                       }
-                      type="button"
+                      size="inline"
+                      variant="muted"
                     />
                   }
                 >
@@ -631,14 +647,14 @@ const TemplateTagsDialogBody = ({
         {matchingSuggestions.length > 0 && (
           <div className="flex flex-wrap gap-1">
             {matchingSuggestions.map((tag) => (
-              <button
-                className="bg-muted text-muted-foreground hover:text-foreground rounded-full px-2 py-0.5 text-xs font-medium"
+              <Button
                 key={tag}
                 onClick={() => addTag(tag)}
-                type="button"
+                size="chip"
+                variant="secondary"
               >
                 {tag}
-              </button>
+              </Button>
             ))}
           </div>
         )}
@@ -649,6 +665,7 @@ const TemplateTagsDialogBody = ({
         </DialogClose>
         <Button
           disabled={saving}
+          disabledReason={t("common.saving")}
           onClick={() => {
             detached(handleSave(), "template-list.save");
           }}
@@ -722,14 +739,24 @@ const TemplateGuidanceDialogBody = ({
 
   return (
     <DialogPopup className="sm:max-w-lg">
+      <DialogFormState
+        dirty={
+          whenToUse !== (template.whenToUse ?? "") ||
+          whenNotToUse !== (template.whenNotToUse ?? "") ||
+          JSON.stringify(languages) !== JSON.stringify(template.languages)
+        }
+        onDiscard={() => {
+          setWhenToUse(template.whenToUse ?? "");
+          setWhenNotToUse(template.whenNotToUse ?? "");
+          setLanguages(template.languages);
+        }}
+      />
       <DialogHeader>
         <DialogTitle>{t("templates.usageGuidance")}</DialogTitle>
       </DialogHeader>
       <DialogPanel className="grid gap-4">
         <div className="grid gap-1.5">
-          <label className="text-sm font-medium" htmlFor="template-when-to-use">
-            {t("templates.whenToUse")}
-          </label>
+          <Label htmlFor="template-when-to-use">{t("common.whenToUse")}</Label>
           <Textarea
             className="min-h-[60px]"
             id="template-when-to-use"
@@ -740,12 +767,9 @@ const TemplateGuidanceDialogBody = ({
           />
         </div>
         <div className="grid gap-1.5">
-          <label
-            className="text-sm font-medium"
-            htmlFor="template-when-not-to-use"
-          >
+          <Label htmlFor="template-when-not-to-use">
             {t("templates.whenNotToUse")}
-          </label>
+          </Label>
           <Textarea
             className="min-h-[60px]"
             id="template-when-not-to-use"
@@ -763,6 +787,7 @@ const TemplateGuidanceDialogBody = ({
         </DialogClose>
         <Button
           disabled={saving}
+          disabledReason={t("common.saving")}
           onClick={() => {
             detached(handleSave(), "template-list.save");
           }}
@@ -823,9 +848,7 @@ const TemplateLanguagesField = ({
 
   return (
     <div className="grid gap-1.5">
-      <label className="text-sm font-medium" htmlFor="template-languages">
-        {t("templates.languages")}
-      </label>
+      <Label htmlFor="template-languages">{t("templates.languages")}</Label>
 
       {languages.length > 0 && (
         <div className="flex flex-wrap gap-1">
@@ -839,11 +862,11 @@ const TemplateLanguagesField = ({
               <Tooltip
                 content={t("common.remove")}
                 render={
-                  <button
+                  <Button
                     aria-label={t("common.remove")}
-                    className="text-muted-foreground hover:text-foreground rounded-full p-0.5"
                     onClick={() => onChange(languages.filter((x) => x !== tag))}
-                    type="button"
+                    size="inline"
+                    variant="muted"
                   />
                 }
               >
@@ -857,6 +880,7 @@ const TemplateLanguagesField = ({
       {!atLimit && (
         <Combobox<LanguagePick>
           autoHighlight
+          filter={matchesComboboxItem}
           isItemEqualToValue={(a, b) => a.code === b.code}
           items={options}
           itemToStringLabel={(item) => item.label}

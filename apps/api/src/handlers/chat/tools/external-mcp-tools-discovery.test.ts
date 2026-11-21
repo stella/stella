@@ -1,8 +1,12 @@
+import type { AnyServerTool } from "@tanstack/ai";
 import type { MCPClient } from "@tanstack/ai-mcp";
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 
+import { sleep } from "@stll/concurrency/sleep";
+
 import type { SafeDb } from "@/api/db/safe-db";
 import { loadExternalMcpToolsForUser } from "@/api/handlers/chat/tools/external-mcp-tools";
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { toSafeId } from "@/api/lib/branded-types";
 import { TimeoutError } from "@/api/lib/errors/tagged-errors";
 import type { LoadedMcpConnection } from "@/api/lib/mcp-upstream/connections";
@@ -31,25 +35,31 @@ const dependencies = asTestRaw<
 const loadExternalMcpToolsForUserForTest = async (
   input: Omit<
     Parameters<typeof loadExternalMcpToolsForUser>[0],
-    "dependencies"
+    "dependencies" | "permit"
   >,
-) => await loadExternalMcpToolsForUser({ ...input, dependencies });
+) =>
+  await loadExternalMcpToolsForUser({
+    ...input,
+    permit: grantThirdPartyOutboundPermit(),
+    dependencies,
+  });
 
 const orgId = toSafeId<"organization">("org-test");
 const userId = toSafeId<"user">("user-test");
 // SAFETY: test double — every call this suite exercises is mocked at the
 // `mcp-upstream/connections` module boundary, so `safeDb` is never touched.
+// oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test double; see SAFETY above
 const stubSafeDb = (() => {
   throw new Error("safeDb stub must not be called");
-  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test double; see SAFETY above
 }) as unknown as SafeDb;
 
 type FakeMcpClient = {
   close: ReturnType<typeof mock<() => Promise<void>>>;
-  tools: ReturnType<typeof mock<() => Promise<never[]>>>;
+  tools: ReturnType<typeof mock<() => Promise<AnyServerTool[]>>>;
 };
 
 const buildRow = (): LoadedMcpConnection => ({
+  responseDisposition: "normal",
   allowedTools: null,
   connectorId: toSafeId<"mcpConnector">("connector-test"),
   description: "Test connector",
@@ -184,7 +194,7 @@ describe("loadExternalMcpToolsForUser client lifecycle", () => {
       throw new TimeoutError({
         message: `${opts.label} exceeded ${opts.timeoutMs}ms`,
         label: opts.label,
-        timeoutMs: opts.timeoutMs,
+        timeoutMs: opts.timeoutMs, // timeout: error payload copied from the caller, not a deadline
       });
     });
 
@@ -227,13 +237,11 @@ describe("loadExternalMcpToolsForUser client lifecycle", () => {
       // otherwise this test could not distinguish "client known" from
       // "client not yet created" at the moment the timeout fires.
       void operation();
-      await new Promise((resolve) => {
-        setTimeout(resolve, 0);
-      });
+      await sleep(0);
       throw new TimeoutError({
         message: `${opts.label} exceeded ${opts.timeoutMs}ms`,
         label: opts.label,
-        timeoutMs: opts.timeoutMs,
+        timeoutMs: opts.timeoutMs, // timeout: error payload copied from the caller, not a deadline
       });
     });
 
@@ -277,7 +285,18 @@ describe("loadExternalMcpToolsForUser across connectors", () => {
         } else {
           secondStarted.resolve(undefined);
         }
-        return asMcpClient(buildFakeClient());
+        return asMcpClient(
+          buildFakeClient({
+            tools: mock(async (): Promise<AnyServerTool[]> => [
+              {
+                name: "lookup",
+                description: "Look up one record",
+                __toolSide: "server",
+                inputSchema: { type: "object", properties: {} },
+              },
+            ]),
+          }),
+        );
       },
     );
 
@@ -292,6 +311,13 @@ describe("loadExternalMcpToolsForUser across connectors", () => {
       "first",
       "second",
     ]);
+    const names = ["mcp__first__lookup", "mcp__second__lookup"];
+    expect(Object.keys(loaded.tools)).toEqual(names);
+    const sourceTools = await loaded.source.tools();
+    expect(sourceTools.map((tool) => tool.name)).toEqual(names);
+    for (const tool of sourceTools) {
+      expect(loaded.tools[tool.name]).toBe(tool);
+    }
     await loaded.close();
   });
 });

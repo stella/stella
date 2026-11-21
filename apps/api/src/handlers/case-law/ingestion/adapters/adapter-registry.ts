@@ -1,9 +1,7 @@
+// parser-output-unchanged: the cz-ns-sbirka adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
+// parser-output-unchanged: the br-tjdft adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
 import type { Result } from "better-result";
 
-import type {
-  IngestionResult,
-  SourceAdapter,
-} from "@/api/handlers/case-law/ingestion/adapter";
 import { atAsylghAdapter } from "@/api/handlers/case-law/ingestion/adapters/at-asylgh";
 import { atBksAdapter } from "@/api/handlers/case-law/ingestion/adapters/at-bks";
 import { atBvwgAdapter } from "@/api/handlers/case-law/ingestion/adapters/at-bvwg";
@@ -16,9 +14,14 @@ import { atUvsAdapter } from "@/api/handlers/case-law/ingestion/adapters/at-uvs"
 import { atVergAdapter } from "@/api/handlers/case-law/ingestion/adapters/at-verg";
 import { atVfghAdapter } from "@/api/handlers/case-law/ingestion/adapters/at-vfgh";
 import { atVwghAdapter } from "@/api/handlers/case-law/ingestion/adapters/at-vwgh";
+import { brTjdftAdapter } from "@/api/handlers/case-law/ingestion/adapters/br-tjdft";
+import { brTstAdapter } from "@/api/handlers/case-law/ingestion/adapters/br-tst";
+import { czIsirAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-isir";
 import { czNsAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-ns";
+import { czNsSbirkaAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-ns-sbirka";
 import { czNssAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-nss";
 import { czRegionalAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-regional";
+import { czUohsAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-uohs";
 import { czUsAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-us";
 import { euEcjAdapter } from "@/api/handlers/case-law/ingestion/adapters/eu-ecj";
 import { huBhgyAdapter } from "@/api/handlers/case-law/ingestion/adapters/hu-bhgy";
@@ -33,21 +36,33 @@ import { plUodoAdapter } from "@/api/handlers/case-law/ingestion/adapters/pl-uod
 import { plUokikAdapter } from "@/api/handlers/case-law/ingestion/adapters/pl-uokik";
 import { skCourtsAdapter } from "@/api/handlers/case-law/ingestion/adapters/sk-courts";
 import { skUsAdapter } from "@/api/handlers/case-law/ingestion/adapters/sk-us";
+import { ukFclAdapter } from "@/api/handlers/case-law/ingestion/adapters/uk-fcl";
 import {
   ADAPTER_KEYS,
-  IMPORT_SOURCE_KEYS,
   type AdapterKey,
+  IMPORT_SOURCE_KEYS,
   type ImportSourceKey,
 } from "@/api/lib/legal-search/ingestion-constants";
+import type {
+  IngestionResult,
+  SourceAdapter,
+} from "@/api/lib/legal-search/ingestion-types";
 
 import { courtListenerImport } from "./courtlistener/import";
 import { checkedSourceRegistrations } from "./source-registrations";
 
 /**
- * The Slovak document walk's gated fetch, carried here because the registry is
- * how anything outside this slice reaches an adapter.
+ * The deferred-document drains, carried here because the registry is how
+ * anything outside this slice reaches an adapter.
  */
-export { skCourtsDocumentFetch } from "@/api/handlers/case-law/ingestion/adapters/sk-courts";
+export { listDeferredDocumentDrains } from "@/api/handlers/case-law/ingestion/adapters/deferred-document-processors";
+
+/**
+ * The graded budget each deferred-document fetch starts, carried with the
+ * drains so a drain outside this slice grades a slow publisher the same way
+ * the read-through path does.
+ */
+export { startDocumentFetchBudget } from "@/api/lib/legal-search/document-fetch-budget";
 
 type AdapterRegistry = {
   readonly [TKey in AdapterKey]: SourceAdapter & { readonly key: TKey };
@@ -58,6 +73,8 @@ const ADAPTER_REGISTRY = {
   [ADAPTER_KEYS.CZ_NSS]: czNssAdapter,
   [ADAPTER_KEYS.CZ_US]: czUsAdapter,
   [ADAPTER_KEYS.CZ_REGIONAL]: czRegionalAdapter,
+  [ADAPTER_KEYS.CZ_UOHS]: czUohsAdapter,
+  [ADAPTER_KEYS.BR_TST]: brTstAdapter,
   [ADAPTER_KEYS.SK_COURTS]: skCourtsAdapter,
   [ADAPTER_KEYS.SK_US]: skUsAdapter,
   [ADAPTER_KEYS.PL_COURTS]: plCourtsAdapter,
@@ -80,9 +97,13 @@ const ADAPTER_REGISTRY = {
   [ADAPTER_KEYS.AT_FINDOK]: atFindokAdapter,
   [ADAPTER_KEYS.EU_ECJ]: euEcjAdapter,
   [ADAPTER_KEYS.HU_BHGY]: huBhgyAdapter,
+  [ADAPTER_KEYS.UK_FCL]: ukFclAdapter,
   [ADAPTER_KEYS.PL_KIS]: plKisAdapter,
   [ADAPTER_KEYS.PL_UODO]: plUodoAdapter,
   [ADAPTER_KEYS.PL_UOKIK]: plUokikAdapter,
+  [ADAPTER_KEYS.BR_TJDFT]: brTjdftAdapter,
+  [ADAPTER_KEYS.CZ_NS_SBIRKA]: czNsSbirkaAdapter,
+  [ADAPTER_KEYS.CZ_ISIR]: czIsirAdapter,
 } as const satisfies AdapterRegistry;
 
 type SourceImport = Pick<

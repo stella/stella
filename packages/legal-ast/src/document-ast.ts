@@ -1,3 +1,33 @@
+// parser-output-unchanged: an annex is also resolved by its number in statute anchor resolution; no decision parser resolves anchors, so parser output is unchanged.
+// parser-output-unchanged: adds the opening-formula paragraph role to the vocabulary; only the Czech and Slovak readers that emit it change their output, and each carries its own parser version bump.
+// parser-output-unchanged: persisted readers and ingestion writers accept head matter after the body and report late blocks; parsers emit the same output, and writers now store such an AST instead of refusing it.
+// parser-output-unchanged: adds withUniqueBlockIdentities and re-keys repeated identities in the persisted reader. sk-us carries its parser version bump; main already gives sk-courts unique identities; every other enrolled fixture output repeats none (replay conformance asserts it).
+// parser-output-unchanged: [cz-uohs] the reader supplies fulltext and every block plainText directly; its stored footnote inlines and replay fixture fields are unchanged.
+// parser-output-unchanged: [at-courts] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [at-vfgh] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [at-vwgh] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [at-bvwg] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [at-lvwg] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [at-asylgh] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [at-ubas] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [at-uvs] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [at-verg] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [at-umse] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [at-bks] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [cz-ns] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [cz-nss] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [cz-us] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [cz-regional] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [sk-courts] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [sk-us] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [at-findok] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [hu-bhgy] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [uk-fcl] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [pl-kis] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [pl-uokik] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [us-courtlistener] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: Guidance metadata is a new union branch; decision metadata keeps its fields and no parser writes the optional type.
+// parser-output-unchanged: Statute anchor resolution (`resolveDocumentAnchor`, `resolveDocumentHeadingAnchor`) now reads the publisher's scheme; no decision parser or adapter calls either.
 import { panic } from "better-result";
 /**
  * Canonical legal-document AST shared by legal corpus readers and parsers.
@@ -17,12 +47,25 @@ import * as v from "valibot";
 import { collapseSpacedLetters } from "@stll/text-normalize";
 
 import {
+  DECISION_DOCUMENT_KIND,
+  DOCUMENT_ISSUER_TYPES,
+  GUIDANCE_KINDS,
+} from "./document-kind.js";
+import type { DocumentIssuer, GuidanceKind } from "./document-kind.js";
+import {
+  flattenInlineText,
   inlineSchema,
   isKnownInlineType,
   persistedInlineArraySchema,
   rawInlineTypes,
 } from "./inline.js";
 import type { Inline } from "./inline.js";
+import {
+  anchorEndsWithPath,
+  annexDesignator,
+  requestedAnnexDesignator,
+} from "./statute-anchor-scheme.js";
+import type { StatuteBlocks } from "./statute-anchor-scheme.js";
 
 export type {
   Inline,
@@ -31,7 +74,10 @@ export type {
   InlineCitationPin,
   InlineCitationPinPart,
   InlineCitationTarget,
+  InlineDecisionCitation,
   InlineItalic,
+  InlineLegislationCitation,
+  InlineLegislationTarget,
   InlineLineBreak,
   InlineLink,
   InlinePageAnchor,
@@ -57,7 +103,11 @@ export type HeadingLevel = 1 | 2 | 3 | 4 | 5 | 6;
  * persisted reader. A role added here reaches all three; a role added
  * anywhere else is a type error.
  */
-export const HEADING_ROLES = ["decision-title", "section-heading"] as const;
+export const HEADING_ROLES = [
+  "decision-title",
+  "section-heading",
+  "publisher-heading",
+] as const;
 
 export type HeadingRole = (typeof HEADING_ROLES)[number];
 
@@ -73,6 +123,13 @@ export type HeadingBlock = {
 
 export const PARAGRAPH_ROLES = [
   "case-number",
+  /**
+   * The formula a court decides under and the state it decides for, printed
+   * beside the decision's title (`ČESKÁ REPUBLIKA`, `JMÉNEM REPUBLIKY`,
+   * `V MENE SLOVENSKEJ REPUBLIKY`). The court's words as printed, neither
+   * a heading nor the preamble's prose.
+   */
+  "opening-formula",
   "intro",
   "history",
   "argumentation",
@@ -95,6 +152,8 @@ export const PARAGRAPH_ROLES = [
    * finer roles below do not name. Not the court's own words —
    * readers may fold it away. */
   "apparatus",
+  /** Publisher annotations printed after the decision, never head matter. */
+  "publisher-note",
   /** The publisher's official summary of the decision, printed with it
    * but not part of it. */
   "syllabus",
@@ -119,24 +178,22 @@ export type ParagraphRole = (typeof PARAGRAPH_ROLES)[number];
  * The publisher-authored roles a reader may fold away: everything around
  * the decision that the court did not write.
  *
- * `panel` is not one of them. The bench is a fact about the decision that
- * a reader looks for, not apparatus wrapped around it.
+ * `panel` and `counsel` are not among them. Participants are facts about
+ * the decision, not publisher apparatus wrapped around it.
  */
 export const APPARATUS_ROLES = [
   "apparatus",
   "syllabus",
   "headnotes",
   "summary",
-  "counsel",
 ] as const satisfies readonly ParagraphRole[];
 
 export type ApparatusRole = (typeof APPARATUS_ROLES)[number];
 
 /**
  * The apparatus roles that carry the publisher's own summary of the decision:
- * the text a reader recognises the case by. `apparatus` and `counsel` are
- * apparatus too and summarise nothing — the first is unnamed publisher
- * matter, the second is who appeared.
+ * the text a reader recognises the case by. `apparatus` is unnamed publisher
+ * matter and summarises nothing.
  *
  * One list, because two surfaces resolve over it and must not drift: the API
  * reads a decision's headnote from these paragraphs before it reads any
@@ -188,9 +245,29 @@ export type ParagraphBlock = {
    * rather than as a prefix inside `plainText`.
    */
   number?: number | undefined;
+  /**
+   * The block type a stored row wrote that this reader does not declare.
+   * The persisted reader keeps such a block as a paragraph of role
+   * `unknown`, with its text and its identity, rather than dropping it (see
+   * `persistedBlockSchema`); this names what it was written as, so a reparse
+   * can be asked for by what it repairs. No parser writes it.
+   */
+  storedType?: string | undefined;
   inlines: Inline[];
   plainText: string;
 };
+
+/**
+ * A stored block of a type this reader does not declare, as the persisted
+ * reader keeps it: a body paragraph with no role, its text and its identity.
+ */
+export type UnreadBlock = ParagraphBlock & {
+  role: "unknown";
+  storedType: string;
+};
+
+export const isUnreadBlock = (block: Block): block is UnreadBlock =>
+  block.type === "paragraph" && block.storedType !== undefined;
 
 export type TableCell = {
   inlines: Inline[];
@@ -276,12 +353,14 @@ export const hasBlockInlines = (block: Block): block is InlineBlock =>
 
 /**
  * Resolve an AST anchor stated without its structural parent path. Exact
- * anchors win; a suffix alias is usable only when it identifies one block.
+ * anchors win; a tail alias is usable only when it identifies one block, and
+ * an annex is also found by the number a citation gives it.
  * This lets a legal reference such as `cl_7` reach `prilohy-cl_7` without
- * guessing when several annexes repeat the same local designation.
+ * guessing when several annexes repeat the same local designation. The tail
+ * is whole segments of the publisher's scheme, never a substring.
  */
 const resolveAnchorCandidate = <TBlock extends Block>(
-  blocks: readonly TBlock[],
+  { blocks, scheme }: StatuteBlocks<TBlock>,
   requestedAnchorId: string,
 ): TBlock | null => {
   const exact = blocks.find(({ anchorId }) => anchorId === requestedAnchorId);
@@ -289,31 +368,57 @@ const resolveAnchorCandidate = <TBlock extends Block>(
     return exact;
   }
 
-  const suffix = `-${requestedAnchorId}`;
-  let resolved: TBlock | null = null;
-  for (const block of blocks) {
-    if (!block.anchorId.endsWith(suffix)) {
-      continue;
-    }
-    if (resolved !== null) {
-      return null;
-    }
-    resolved = block;
+  const tails = blocks.filter((block) =>
+    anchorEndsWithPath(scheme, {
+      anchor: block.anchorId,
+      tail: requestedAnchorId,
+    }),
+  );
+  if (tails.length > 0) {
+    return tails.length === 1 ? (tails[0] ?? null) : null;
   }
-  return resolved;
+  return annexNamed({ blocks, scheme }, requestedAnchorId);
+};
+
+/**
+ * The annex heading a caller's spelling names (`priloha_3`, `příloha č. 3`,
+ * `annex 3` for e-Sbírka's `pril_3` or Slov-Lex's
+ * `prilohy.priloha-priloha_c_3_k_…`), when exactly one heading carries that
+ * designator. An annex is a provision a reader cites by its number, and no
+ * publisher's anchor for it is one a caller can guess.
+ */
+const annexNamed = <TBlock extends Block>(
+  { blocks, scheme }: StatuteBlocks<TBlock>,
+  requestedAnchorId: string,
+): TBlock | null => {
+  const designator = requestedAnnexDesignator(requestedAnchorId);
+  if (designator === null) {
+    return null;
+  }
+  const annexes = blocks.filter(
+    (block) =>
+      block.type === "heading" &&
+      annexDesignator(scheme, block.anchorId) === designator,
+  );
+  return annexes.length === 1 ? (annexes[0] ?? null) : null;
 };
 
 export const resolveDocumentAnchor = (
-  blocks: readonly Block[],
+  statute: StatuteBlocks<Block>,
   requestedAnchorId: string,
-): Block | null => resolveAnchorCandidate(blocks, requestedAnchorId);
+): Block | null => resolveAnchorCandidate(statute, requestedAnchorId);
 
 export const resolveDocumentHeadingAnchor = (
-  blocks: readonly Block[],
+  { blocks, scheme }: StatuteBlocks<Block>,
   requestedAnchorId: string,
 ): HeadingBlock | null =>
   resolveAnchorCandidate(
-    blocks.filter((block): block is HeadingBlock => block.type === "heading"),
+    {
+      blocks: blocks.filter(
+        (block): block is HeadingBlock => block.type === "heading",
+      ),
+      scheme,
+    },
     requestedAnchorId,
   );
 
@@ -338,7 +443,16 @@ export type DocumentAstSource = {
   printUrl: string;
 };
 
-export type DocumentAstMetadata = {
+/**
+ * A decision's metadata.
+ *
+ * `type` is optional because every decision AST stored before guidance
+ * metadata existed omits it, and no decision parser writes it: absence means
+ * a decision. Writing it would change every stored decision's bytes and
+ * replay the corpus for a field that only names the default.
+ */
+export type DecisionMetadata = {
+  type?: typeof DECISION_DOCUMENT_KIND | undefined;
   caseNumber: string | null;
   ecli: string | null;
   court: string | null;
@@ -348,12 +462,35 @@ export type DocumentAstMetadata = {
   statutes: string[];
 };
 
-export type DocumentAst = {
+/** The metadata of guidance: a text an issuer publishes that decides no case. */
+export type GuidanceMetadata = {
+  type: "guidance";
+  kind: GuidanceKind;
+  title: string;
+  /** The issuer's own designation ("Guidelines 3/2025"), when it states one. */
+  reference: string | null;
+  /** ISO date the issuer adopted or published the text, when it states one. */
+  issuedOn: string | null;
+  issuer: DocumentIssuer;
+};
+
+export type DocumentAstMetadata = DecisionMetadata | GuidanceMetadata;
+
+/**
+ * A document read by any legal reader. A producer that only ever writes one
+ * kind of metadata (every decision parser) narrows `TMetadata`, so its own
+ * callers read decision fields without re-checking a union they cannot hold.
+ */
+export type DocumentAst<
+  TMetadata extends DocumentAstMetadata = DocumentAstMetadata,
+> = {
   version: 1;
   source: DocumentAstSource;
-  metadata: DocumentAstMetadata;
+  metadata: TMetadata;
   blocks: Block[];
 };
+
+export type DecisionDocumentAst = DocumentAst<DecisionMetadata>;
 
 /**
  * Flatten `inlines` into the character sequence a renderer walks: text
@@ -365,25 +502,8 @@ export type DocumentAst = {
  * character for character. Nothing here may normalize, trim or collapse:
  * one character of drift moves every anchor after it.
  */
-export const plainTextOf = (inlines: readonly Inline[]): string => {
-  let out = "";
-  for (const node of inlines) {
-    if (node.type === "text") {
-      out += node.text;
-    } else if (node.type === "line-break") {
-      out += "\n";
-    } else if (node.type === "page-anchor") {
-      // Zero characters: a page break is typography, and it may fall
-      // mid-word — the word must stay whole on this axis.
-    } else {
-      // A citation's `cite` is zero characters here for the same reason:
-      // the printed reference is the children, `cite` is metadata beside
-      // them.
-      out += plainTextOf(node.children);
-    }
-  }
-  return out;
-};
+export const plainTextOf = (inlines: readonly Inline[]): string =>
+  flattenInlineText(inlines, "rendered");
 
 /**
  * Trailing spaces and tabs before a line break, which carry no meaning
@@ -395,7 +515,8 @@ const NO_BREAK_SPACE = /\u00a0/gu;
 
 /**
  * `inlines` reduced to the text that feeds search and AI reads: the raw
- * flattening with no-break spaces normalized, spaces before a line break
+ * projection with numeric superscript indices delimited, no-break spaces
+ * normalized, spaces before a line break
  * dropped, the ends trimmed, and letter-spaced runs collapsed so a
  * court's "R O Z S U D E K" is findable as "ROZSUDEK".
  *
@@ -409,7 +530,7 @@ const NO_BREAK_SPACE = /\u00a0/gu;
  */
 export const projectPlainText = (inlines: readonly Inline[]): string =>
   collapseSpacedLetters(
-    plainTextOf(inlines)
+    flattenInlineText(inlines)
       .replace(NO_BREAK_SPACE, " ")
       .replace(SPACE_BEFORE_NEWLINE, "\n")
       .trim(),
@@ -601,11 +722,12 @@ const HTTPS_PROTOCOL = "https:";
 const isHttpsUrl = (src: string): boolean =>
   URL.canParse(src) && new URL(src).protocol === HTTPS_PROTOCOL;
 
-const imageSrcSchema = v.pipe(
-  v.string(),
-  v.url(),
-  v.check(isHttpsUrl, "Image src must be an https URL"),
+const imageSrcHttpsCheck = v.check(
+  isHttpsUrl,
+  "Image src must be an https URL",
 );
+
+const imageSrcSchema = v.pipe(v.string(), v.url(), imageSrcHttpsCheck);
 
 /** A span of more than one cell. A span of one is the default, so it is
  * absent rather than written as 1. */
@@ -644,6 +766,18 @@ const paragraphNoteSchema = v.variant("type", [
   }),
 ]);
 
+const paragraphNumberFinite = v.finite();
+
+/**
+ * Actions JSON Schema cannot express. A JSON number is always finite, and the
+ * https rule reads the parsed URL; a converter publishes the remaining number
+ * and URL string while both actions still run at runtime.
+ */
+export const DOCUMENT_AST_RUNTIME_ONLY_ACTIONS = [
+  paragraphNumberFinite,
+  imageSrcHttpsCheck,
+] as const;
+
 const paragraphEntries = {
   id: v.string(),
   anchorId: v.string(),
@@ -651,7 +785,8 @@ const paragraphEntries = {
   role: v.optional(v.picklist(PARAGRAPH_ROLES)),
   note: v.optional(paragraphNoteSchema),
   listDepth: v.optional(v.picklist([1, 2, 3, 4])),
-  number: v.optional(v.pipe(v.number(), v.finite())),
+  number: v.optional(v.pipe(v.number(), paragraphNumberFinite)),
+  storedType: v.optional(v.pipe(v.string(), v.nonEmpty())),
   inlines: inlineArraySchema,
 };
 
@@ -687,7 +822,7 @@ const tableCellSchema: v.GenericSchema<TableCell> = v.object({
   plainText: v.string(),
 });
 
-const blockSchema: v.GenericSchema<Block> = v.variant("type", [
+export const blockSchema: v.GenericSchema<Block> = v.variant("type", [
   v.object({ ...headingEntries, plainText: v.string() }),
   v.object({ ...paragraphEntries, plainText: v.string() }),
   v.object({ ...imageEntries, plainText: v.string() }),
@@ -762,27 +897,140 @@ const wireBlockSchema: v.GenericSchema<unknown, WireBlock> = v.variant("type", [
   }),
 ]);
 
+// parser-output-unchanged: the persisted reader keeps an undeclared block it used to drop, and the optional `storedType` is written by no parser.
+/** Field separators of an unread block's text, as a table's own text uses. */
+const UNREAD_CELL_SEPARATOR = "\t";
+const UNREAD_LINE_SEPARATOR = "\n";
+
+/** Nested parts an unread block may hold its text in, read in this order. */
+const UNREAD_NESTED_FIELDS = ["items", "children", "blocks"] as const;
+
+/** String fields an unread block may hold its text in, read in this order. */
+const UNREAD_STRING_FIELDS = ["plainText", "text", "body", "content"] as const;
+
+/** How deep an unread block's nested parts are walked for their text. */
+const UNREAD_MAX_DEPTH = 4;
+
+const unreadPartShape = v.record(v.string(), v.unknown());
+
+const unreadRowsShape = v.array(v.array(unreadPartShape));
+
 /**
- * A block read from storage, or `null` for a block kind this reader does
- * not declare.
- *
- * Unlike a role or an inline kind, an unknown block has no neutral shape
- * to degrade to: nothing here knows where its text lives or how it should
- * read. It is dropped, and reported, rather than guessed at.
+ * The text of a stored block this reader has no shape for, from the fields
+ * every declared block keeps it in: an inline run, a grid of cells, nested
+ * parts, then a plain string. What carries no text yields none; nothing is
+ * guessed from other fields.
  */
-const persistedBlockSchema: v.GenericSchema<unknown, WireBlock | null> =
-  v.union([
-    wireBlockSchema,
-    v.pipe(
-      v.object({
-        type: v.pipe(
-          v.string(),
-          v.check((type) => !Object.hasOwn(BLOCK_ROLES, type)),
-        ),
-      }),
-      v.transform((): null => null),
-    ),
-  ]);
+const unreadText = (part: Record<string, unknown>, depth: number): string => {
+  const inlines = v.safeParse(persistedInlineArraySchema, part["inlines"]);
+  if (inlines.success && inlines.output.length > 0) {
+    return projectPlainText(inlines.output);
+  }
+  const rows = v.safeParse(unreadRowsShape, part["rows"]);
+  if (rows.success && rows.output.length > 0) {
+    return rows.output
+      .map((row) =>
+        row
+          .map((cell) => unreadText(cell, depth + 1))
+          .join(UNREAD_CELL_SEPARATOR),
+      )
+      .join(UNREAD_LINE_SEPARATOR);
+  }
+  if (depth < UNREAD_MAX_DEPTH) {
+    for (const field of UNREAD_NESTED_FIELDS) {
+      const nested = v.safeParse(v.array(unreadPartShape), part[field]);
+      if (nested.success && nested.output.length > 0) {
+        return nested.output
+          .map((child) => unreadText(child, depth + 1))
+          .filter((text) => text !== "")
+          .join(UNREAD_LINE_SEPARATOR);
+      }
+    }
+  }
+  for (const field of UNREAD_STRING_FIELDS) {
+    const text = part[field];
+    if (typeof text === "string" && text !== "") {
+      return text;
+    }
+  }
+  return "";
+};
+
+/**
+ * A stored block of a type this reader does not declare, before its
+ * identity is settled: a stored id or anchor may be absent, and only the
+ * document knows the position that stands in for one.
+ */
+type UnreadBlockDraft = {
+  kind: "unread";
+  storedType: string;
+  id: string | undefined;
+  anchorId: string | undefined;
+  text: string;
+};
+
+/**
+ * A block read from storage. A block kind this reader does not declare is
+ * kept as an `UnreadBlockDraft`, never dropped.
+ *
+ * Same doctrine as a role or an inline kind: a stored kind this reader does
+ * not know is a newer writer's or a row written past the ingestion boundary,
+ * and dropping it loses the decision's words. It is kept as a body paragraph
+ * of role `unknown` with the text its declared fields carry, its identity and
+ * its stored type name, and reported (`persistedAstDegradations`), so a
+ * reparse repairs the row and no reader loses the text meanwhile.
+ */
+const persistedBlockSchema: v.GenericSchema<
+  unknown,
+  WireBlock | UnreadBlockDraft
+> = v.union([
+  wireBlockSchema,
+  v.pipe(
+    v.looseObject({
+      type: v.pipe(
+        v.string(),
+        v.nonEmpty(),
+        v.check((type) => !Object.hasOwn(BLOCK_ROLES, type)),
+      ),
+      id: v.optional(v.unknown()),
+      anchorId: v.optional(v.unknown()),
+    }),
+    v.transform((block): UnreadBlockDraft => ({
+      kind: "unread",
+      storedType: block.type,
+      id:
+        typeof block.id === "string" && block.id !== "" ? block.id : undefined,
+      anchorId:
+        typeof block.anchorId === "string" && block.anchorId !== ""
+          ? block.anchorId
+          : undefined,
+      text: unreadText(block, 0),
+    })),
+  ),
+]);
+
+/** The identity an unread block takes when its stored row names none. */
+const unreadBlockIdentity = (index: number): string =>
+  `unread-${String(index + 1)}`;
+
+const unreadBlock = (draft: UnreadBlockDraft, index: number): UnreadBlock => {
+  const id = draft.id ?? draft.anchorId ?? unreadBlockIdentity(index);
+  const inlines: Inline[] =
+    draft.text === "" ? [] : [{ type: "text", text: draft.text }];
+  return {
+    id,
+    anchorId: draft.anchorId ?? id,
+    type: "paragraph",
+    role: "unknown",
+    storedType: draft.storedType,
+    inlines,
+    plainText: projectPlainText(inlines),
+  };
+};
+
+const isUnreadBlockDraft = (
+  block: WireBlock | UnreadBlockDraft,
+): block is UnreadBlockDraft => "kind" in block;
 
 /** What the persisted reader could not read as written, per occurrence. */
 export type PersistedAstDegradation =
@@ -793,10 +1041,20 @@ export type PersistedAstDegradation =
       role: string;
     }
   | { kind: "block-type"; blockId: string | null; type: string }
-  | { kind: "inline-type"; blockId: string | null; type: string };
+  | { kind: "inline-type"; blockId: string | null; type: string }
+  /** A block repeating an identity an earlier block holds; re-keyed. */
+  | {
+      kind: "block-identity";
+      blockId: string | null;
+      field: BlockIdentityField;
+      value: string;
+    }
+  /** Head matter stored after the body started; served where it was written. */
+  | { kind: "head-matter-order"; blockId: string };
 
 const storedBlockShape = v.object({
   id: v.optional(v.string()),
+  anchorId: v.optional(v.string()),
   type: v.string(),
   role: v.optional(v.string()),
   inlines: v.optional(v.unknown()),
@@ -833,8 +1091,9 @@ const blockInlineTypes = (block: {
 
 /**
  * What a stored AST carries that the persisted reader degrades: a block
- * role it does not declare, a block kind it drops, an inline kind it
- * collapses to text.
+ * role it does not declare, a block kind it keeps as an unread paragraph
+ * (`UnreadBlock`), an inline kind it collapses to text, a block identity it
+ * re-keys because an earlier block holds it. None of them loses text.
  *
  * Reads the raw value, not the parsed AST, because parsing is where the
  * information is lost. A value that is not an AST at all reports nothing:
@@ -852,18 +1111,35 @@ export const persistedAstDegradations = (
     return [];
   }
   const degradations: PersistedAstDegradation[] = [];
+  const held = { id: new Set<string>(), anchorId: new Set<string>() };
   for (const candidate of stored.output.blocks) {
     const parsed = v.safeParse(storedBlockShape, candidate);
     if (!parsed.success) {
       continue;
     }
-    const { id, role, type } = parsed.output;
+    const { anchorId, id, role, type } = parsed.output;
     const blockId = id ?? null;
-    if (!isBlockType(type)) {
+    const declared = isBlockType(type);
+    if (!declared) {
       degradations.push({ kind: "block-type", blockId, type });
-      continue;
     }
-    if (role !== undefined && !isMemberOf(BLOCK_ROLES[type], role)) {
+    for (const [field, value] of [
+      ["id", id],
+      ["anchorId", anchorId],
+    ] as const) {
+      if (value === undefined) {
+        continue;
+      }
+      if (held[field].has(value)) {
+        degradations.push({ kind: "block-identity", blockId, field, value });
+      }
+      held[field].add(value);
+    }
+    if (
+      declared &&
+      role !== undefined &&
+      !isMemberOf(BLOCK_ROLES[type], role)
+    ) {
       degradations.push({ kind: "block-role", blockId, type, role });
     }
     const seen = new Set<string>();
@@ -885,16 +1161,39 @@ const documentAstSourceSchema: v.GenericSchema<DocumentAstSource> = v.object({
   printUrl: v.string(),
 });
 
-const documentAstMetadataSchema: v.GenericSchema<DocumentAstMetadata> =
-  v.object({
-    caseNumber: v.nullable(v.string()),
-    ecli: v.nullable(v.string()),
-    court: v.nullable(v.string()),
-    decisionDate: v.nullable(v.string()),
-    decisionType: v.nullable(v.string()),
-    keywords: v.array(v.string()),
-    statutes: v.array(v.string()),
-  });
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/u;
+
+const decisionMetadataSchema: v.GenericSchema<DecisionMetadata> = v.object({
+  type: v.optional(v.literal(DECISION_DOCUMENT_KIND)),
+  caseNumber: v.nullable(v.string()),
+  ecli: v.nullable(v.string()),
+  court: v.nullable(v.string()),
+  decisionDate: v.nullable(v.string()),
+  decisionType: v.nullable(v.string()),
+  keywords: v.array(v.string()),
+  statutes: v.array(v.string()),
+});
+
+const guidanceMetadataSchema: v.GenericSchema<GuidanceMetadata> = v.object({
+  type: v.literal("guidance"),
+  kind: v.picklist(GUIDANCE_KINDS),
+  title: v.pipe(v.string(), v.nonEmpty()),
+  reference: v.nullable(v.pipe(v.string(), v.nonEmpty())),
+  issuedOn: v.nullable(v.pipe(v.string(), v.regex(ISO_DATE))),
+  issuer: v.object({
+    type: v.picklist(DOCUMENT_ISSUER_TYPES),
+    name: v.pipe(v.string(), v.nonEmpty()),
+    jurisdiction: v.pipe(v.string(), v.nonEmpty()),
+  }),
+});
+
+/**
+ * Guidance first: its `type` is required, so a guidance object can never be
+ * read as a decision whose `type` is merely absent.
+ */
+const documentAstMetadataSchema: v.GenericSchema<DocumentAstMetadata> = v.union(
+  [guidanceMetadataSchema, decisionMetadataSchema],
+);
 
 const footnoteOf = (block: Block): ParagraphNote | null =>
   (block.type === "paragraph" || block.type === "table") &&
@@ -929,7 +1228,184 @@ export const footnoteGroupsShareLabels = (
   return true;
 };
 
-export const documentAstSchema: v.GenericSchema<DocumentAst> = v.pipe(
+/** The two identities a block carries, each unique within its document. */
+type BlockIdentityField = "id" | "anchorId";
+
+type BlockIdentities = { id: string; anchorId: string };
+
+/**
+ * The blocks with every repeated `id` and `anchorId` given one of its own.
+ *
+ * The first block to carry a value keeps it, so a link to that value still
+ * lands where it always did. Each later carrier gets the value with the
+ * lowest `-<n>` suffix (from 2) that no block of the document holds, so a
+ * re-keyed identity can never take one another block already has. Blocks
+ * whose identities are already unique come back as the same objects.
+ *
+ * This is the one rule for both boundaries: a writer re-keys before the
+ * canonical guard checks uniqueness, and the persisted reader re-keys a row
+ * stored before that check existed, so a stored row reads exactly as a
+ * re-parse would now write it.
+ */
+export const withUniqueBlockIdentities = <TBlock extends BlockIdentities>(
+  blocks: readonly TBlock[],
+): TBlock[] => {
+  const held = {
+    id: new Set(blocks.map(({ id }) => id)),
+    anchorId: new Set(blocks.map(({ anchorId }) => anchorId)),
+  } satisfies Record<BlockIdentityField, Set<string>>;
+  const claimed = {
+    id: new Set<string>(),
+    anchorId: new Set<string>(),
+  } satisfies Record<BlockIdentityField, Set<string>>;
+  const nextSuffix = {
+    id: new Map<string, number>(),
+    anchorId: new Map<string, number>(),
+  };
+  const claim = (field: BlockIdentityField, value: string): string => {
+    if (!claimed[field].has(value)) {
+      claimed[field].add(value);
+      return value;
+    }
+    let suffix = nextSuffix[field].get(value) ?? 2;
+    while (held[field].has(`${value}-${String(suffix)}`)) {
+      suffix += 1;
+    }
+    nextSuffix[field].set(value, suffix + 1);
+    const fresh = `${value}-${String(suffix)}`;
+    held[field].add(fresh);
+    claimed[field].add(fresh);
+    return fresh;
+  };
+  return blocks.map((block) => {
+    const id = claim("id", block.id);
+    const anchorId = claim("anchorId", block.anchorId);
+    return id === block.id && anchorId === block.anchorId
+      ? block
+      : { ...block, id, anchorId };
+  });
+};
+
+/** Block and anchor identities address one location each within a document. */
+const hasUniqueBlockIdentities = (blocks: readonly Block[]): boolean => {
+  const ids = new Set<string>();
+  const anchors = new Set<string>();
+  for (const { anchorId, id } of blocks) {
+    if (ids.has(id) || anchors.has(anchorId)) {
+      return false;
+    }
+    ids.add(id);
+    anchors.add(anchorId);
+  }
+  return true;
+};
+
+/** Every paragraph role explicitly declares whether it starts the decision body. */
+const PARAGRAPH_STARTS_BODY = {
+  "case-number": false,
+  "opening-formula": false,
+  intro: false,
+  history: false,
+  argumentation: true,
+  holding: true,
+  dissent: true,
+  closing: true,
+  signature: true,
+  quote: true,
+  parties: false,
+  "front-matter": false,
+  apparatus: false,
+  "publisher-note": true,
+  syllabus: false,
+  headnotes: false,
+  summary: false,
+  counsel: false,
+  panel: false,
+  unknown: true,
+} as const satisfies Record<ParagraphRole, boolean>;
+
+const HEADING_STARTS_BODY = {
+  "decision-title": false,
+  "section-heading": true,
+  "publisher-heading": false,
+} as const satisfies Record<HeadingRole, boolean>;
+
+const TABLE_STARTS_BODY = {
+  "related-proceedings": false,
+  "metadata-table": false,
+} as const satisfies Record<TableRole, boolean>;
+
+/** Shared positional boundary for parsers and persisted-reader validation. */
+export const startsDecisionBody = (block: Block): boolean => {
+  if (footnoteOf(block) !== null) {
+    return false;
+  }
+  switch (block.type) {
+    case "paragraph":
+      return block.role === undefined || PARAGRAPH_STARTS_BODY[block.role];
+    case "heading":
+      return block.role === undefined || HEADING_STARTS_BODY[block.role];
+    case "table":
+      return block.role === undefined || TABLE_STARTS_BODY[block.role];
+    case "image":
+      return false;
+    default:
+      block satisfies never;
+      return panic(`Unhandled block type: ${String(block)}`);
+  }
+};
+
+/** The publisher blocks validated and folded as one head-matter region. */
+export const isHeadMatterBlock = (block: Block): boolean =>
+  (block.type === "paragraph" &&
+    block.note === undefined &&
+    isApparatusRole(block.role)) ||
+  (block.type === "heading" && block.role === "publisher-heading");
+
+/** Head-matter blocks placed after the body started, in document order. */
+const lateHeadMatter = (blocks: readonly Block[]): Block[] => {
+  const late: Block[] = [];
+  let bodyStarted = false;
+  for (const block of blocks) {
+    if (footnoteOf(block) !== null) {
+      continue;
+    }
+    if (bodyStarted && isHeadMatterBlock(block)) {
+      late.push(block);
+    }
+    bodyStarted ||= startsDecisionBody(block);
+  }
+  return late;
+};
+
+/** Publisher head matter may precede, but never interrupt or follow, the body.
+ * Notes retain their own placement and are never a head-matter region. */
+export const headMatterPrecedesBody = (blocks: readonly Block[]): boolean =>
+  lateHeadMatter(blocks).length === 0;
+
+/**
+ * Rows stored before writers enforced the head-matter order keep their
+ * blocks where they were written: the reader serves them and reports each
+ * late block, and a reparse with the current parser repairs the row.
+ */
+export const headMatterOrderDegradations = (
+  blocks: readonly Block[],
+): PersistedAstDegradation[] =>
+  lateHeadMatter(blocks).map((block) => ({
+    kind: "head-matter-order",
+    blockId: block.id,
+  }));
+
+const HEAD_MATTER_ORDER_MESSAGE = "Head matter must precede the decision body";
+
+const headMatterOrderCheck = v.check(
+  ({ blocks }: DocumentAst) => headMatterPrecedesBody(blocks),
+  HEAD_MATTER_ORDER_MESSAGE,
+);
+
+/** The writer contract without the head-matter order rule, which rows written
+ * before that rule existed may break while every other rule still holds. */
+const documentAstAnyOrderSchema: v.GenericSchema<DocumentAst> = v.pipe(
   v.object({
     version: v.literal(1),
     source: documentAstSourceSchema,
@@ -940,6 +1416,15 @@ export const documentAstSchema: v.GenericSchema<DocumentAst> = v.pipe(
     ({ blocks }) => footnoteGroupsShareLabels(blocks),
     "Adjacent footnote blocks sharing a noteId must repeat one label",
   ),
+  v.check(
+    ({ blocks }) => hasUniqueBlockIdentities(blocks),
+    "Block ids and anchorIds must be unique",
+  ),
+);
+
+export const documentAstSchema: v.GenericSchema<DocumentAst> = v.pipe(
+  documentAstAnyOrderSchema,
+  headMatterOrderCheck,
 );
 
 const emptyDocumentAstSource = () =>
@@ -977,6 +1462,16 @@ const persistedDocumentAstWireSchema = v.object({
  * here from the fields beside it, so the parsed `DocumentAst` keeps
  * `plainText` required and no consumer of a parsed AST can observe the
  * omission.
+ *
+ * Rows written before block identities were checked can repeat one (a
+ * title set over two lines, each read as the title heading). Failing the
+ * document over that would take its text down with a duplicated link
+ * target, so the reader re-keys the repeats by the rule writers apply
+ * (`withUniqueBlockIdentities`) and reports each one.
+ *
+ * Block order is never a reason to refuse a stored row: rows written before
+ * an ordering rule existed would lose their text on read. The reader reports
+ * misplaced head matter (`headMatterOrderDegradations`).
  */
 export const persistedDocumentAstSchema: v.GenericSchema<unknown, DocumentAst> =
   v.pipe(
@@ -985,14 +1480,27 @@ export const persistedDocumentAstSchema: v.GenericSchema<unknown, DocumentAst> =
       version: 1,
       source: source ?? emptyDocumentAstSource(),
       metadata: metadata ?? emptyDocumentAstMetadata(),
-      blocks: blocks.flatMap((block) =>
-        block === null ? [] : [fillBlockPlainText(block)],
+      blocks: withUniqueBlockIdentities(
+        blocks.map((block, index) =>
+          isUnreadBlockDraft(block)
+            ? unreadBlock(block, index)
+            : fillBlockPlainText(block),
+        ),
       ),
     })),
+    v.check(
+      ({ blocks }) => hasUniqueBlockIdentities(blocks),
+      "Block ids and anchorIds must be unique",
+    ),
   );
 
 export const isDocumentAst = (val: unknown): val is DocumentAst =>
   v.is(documentAstSchema, val);
+
+/** A writer-valid AST whose head matter may follow the body. */
+export const isDocumentAstInAnyBlockOrder = (
+  val: unknown,
+): val is DocumentAst => v.is(documentAstAnyOrderSchema, val);
 
 export const parseDocumentAst = (raw: unknown): DocumentAst | null => {
   if (raw === null || raw === undefined) {

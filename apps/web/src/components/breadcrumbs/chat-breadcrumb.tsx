@@ -1,8 +1,9 @@
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 
-import { BreadcrumbItem } from "@stll/ui/breadcrumb";
+import { BreadcrumbItem, BreadcrumbPage } from "@stll/ui/breadcrumb";
 
 import { shouldFetchChatThreadTitle } from "@/components/breadcrumbs/chat-breadcrumb.logic";
+import { ChatSwitcher } from "@/components/breadcrumbs/chat-switcher";
 import { BreadcrumbQueryContent } from "@/components/breadcrumbs/query-content";
 import { ChatTitleRename } from "@/features/chat/components/chat-title-rename";
 import {
@@ -14,10 +15,10 @@ import {
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { toChatThreadId } from "@/lib/chat-thread-ref";
 import { isPlaceholderThreadTitle } from "@/lib/chat-thread-title";
-import { useQueryView } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
 
 // Thread-title crumb for chat routes. Reuses the grouped-threads list already
-// primed by the sidebar / threads sheet (a lightweight query that never
+// primed by the sidebar / chat history (a lightweight query that never
 // instantiates the chat runtime), narrowed with `select` to this thread's
 // title. When the thread is not in the loaded pages (an older thread scrolled
 // out of the window), a bounded by-id title read fills the gap instead of
@@ -43,7 +44,7 @@ export const ChatBreadcrumb = ({
     ...groupedChatThreadsOptions({ activeOrganizationId, userId }),
     select: (data) => selectThreadTitleSummary(data.pages, threadId),
   });
-  const groupedView = useQueryView(groupedQuery);
+  const groupedView = queryView(groupedQuery);
   const groupedThread =
     groupedView.type === "items" ? groupedView.items : undefined;
 
@@ -69,7 +70,7 @@ export const ChatBreadcrumb = ({
     ...threadOptions,
     enabled: groupedThread === null,
   });
-  const threadView = useQueryView(threadQuery);
+  const threadView = queryView(threadQuery);
   const threadData = threadView.type === "items" ? threadView.items : undefined;
 
   // The grouped list only holds its first loaded pages, so an older thread that
@@ -82,11 +83,12 @@ export const ChatBreadcrumb = ({
   });
   const titleOptions = chatThreadTitleOptions({
     activeOrganizationId,
-    enabled: titleEnabled,
     key: { threadId, workspaceId },
+    needed: titleEnabled,
+    persistedThread: threadData,
   });
   const titleQuery = useQuery(titleOptions);
-  const titleView = useQueryView(titleQuery);
+  const titleView = queryView(titleQuery);
   const byIdTitle = titleView.type === "items" ? titleView.items : undefined;
 
   const title = groupedThread?.title ?? byIdTitle ?? null;
@@ -113,16 +115,23 @@ export const ChatBreadcrumb = ({
       <BreadcrumbQueryContent view={groupedView} />
       {groupedThread === null && <BreadcrumbQueryContent view={threadView} />}
       {titleEnabled && <BreadcrumbQueryContent view={titleView} />}
-      <BreadcrumbItem className="min-w-0 shrink has-[input]:flex-1">
-        <ChatTitleRename
-          hasMessages={hasMessages}
-          editClassName="w-full"
-          inputClassName="flex-1 text-sm"
-          ownsRenameCommand
-          threadRef={threadRef}
-          title={currentTitle}
-          usedAnonymization={usedAnonymization}
-        />
+      {/* The rename button's hover chrome reaches past its text; the end
+          margin keeps it inside the trail, which clips its overflow. The
+          title is the current page, which the trail's `BreadcrumbPage` marks
+          and colours as every other page's last crumb; the caret beside it
+          switches to another chat, as the matter crumb's does. */}
+      <BreadcrumbItem className="me-1 min-w-0 flex-1">
+        <BreadcrumbPage className="flex min-w-0 items-center">
+          <ChatTitleRename
+            hasMessages={hasMessages}
+            editClassName="w-full"
+            ownsRenameCommand
+            threadRef={threadRef}
+            title={currentTitle}
+            usedAnonymization={usedAnonymization}
+          />
+          <ChatSwitcher threadId={threadId} />
+        </BreadcrumbPage>
       </BreadcrumbItem>
     </>
   );

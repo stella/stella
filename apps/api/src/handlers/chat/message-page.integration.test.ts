@@ -1,10 +1,16 @@
 import { Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { inArray } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
-import { chatMessages, chatThreads, userFiles } from "@/api/db/schema";
+import {
+  chatMessages,
+  chatThreads,
+  chatTurns,
+  userFiles,
+} from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
+import { toPersistedChatMessageContentV3 } from "@/api/handlers/chat/chat-message-parts";
 import {
   decodeMessagePageCursor,
   loadChatMessagePage,
@@ -12,8 +18,8 @@ import {
 } from "@/api/handlers/chat/message-page";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { createUserFileKey } from "@/api/lib/file-key";
 import { toUserFileUrl } from "@/api/lib/user-files/types";
-import { testFileKey } from "@/api/tests/helpers/file-key";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 import {
@@ -84,10 +90,9 @@ const seedThread = async (
     userId: ids.userA1,
     workspaceId: ids.wsA1,
     role: "user" as const,
-    content: {
-      version: 1 as const,
-      data: [{ type: "text" as const, text: `message ${index}` }],
-    },
+    content: toPersistedChatMessageContentV3({
+      data: [{ type: "text" as const, content: `message ${index}` }],
+    }),
     createdAt,
   }));
   if (rows.length > 0) {
@@ -217,7 +222,79 @@ describe("loadChatMessagePage keyset pagination", () => {
   });
 });
 
+describe("loadChatMessagePage active turn", () => {
+  const acceptTurn = async (
+    threadId: SafeId<"chatThread">,
+    userMessageId: SafeId<"chatMessage">,
+    acceptedAt: Date,
+  ) => {
+    const turnId = toSafeId<"chatTurn">(Bun.randomUUIDv7());
+    await testDb.insert(chatTurns).values({
+      activeDurationMs: 0,
+      activeStartedAt: acceptedAt,
+      createdAt: acceptedAt,
+      id: turnId,
+      leaseExpiresAt: new Date(acceptedAt.getTime() + 60_000),
+      organizationId: ids.orgA,
+      status: "accepted",
+      threadId,
+      userId: ids.userA1,
+      userMessageId,
+      workspaceId: ids.wsA1,
+    });
+    return turnId;
+  };
+
+  test("names the thread's unsettled turn on every page of it", async () => {
+    const base = Date.parse("2026-05-01T00:00:00.000Z");
+    const { threadId, messages } = await seedThread(
+      Array.from({ length: 60 }, (_, i) => new Date(base + i)),
+    );
+    const newest = expectedAscendingIds(messages).at(-1);
+    if (newest === undefined) {
+      throw new Error("seeded thread has no messages");
+    }
+    const turnId = await acceptTurn(threadId, newest, new Date(base + 60));
+    const { threadId: idleThreadId } = await seedThread([new Date(base)]);
+
+    const page = await loadPage(threadId);
+    const cursor =
+      page.olderCursor === null
+        ? undefined
+        : (decodeMessagePageCursor(page.olderCursor) ?? undefined);
+    expect(cursor).toBeDefined();
+    const older = await loadPage(threadId, cursor);
+
+    expect(page.activeTurnId).toBe(turnId);
+    expect(older.activeTurnId).toBe(turnId);
+    expect((await loadPage(idleThreadId)).activeTurnId).toBeNull();
+  });
+});
+
 describe("loadClientMessages", () => {
+  test("current pages and acceptance snapshots expose the stored revision", async () => {
+    const { threadId, messages } = await seedThread([new Date()]);
+    const first = messages.at(0);
+    if (!first) {
+      throw new TypeError("Expected the seeded message");
+    }
+    await testDb
+      .update(chatMessages)
+      .set({ revision: 3 })
+      .where(eq(chatMessages.id, first.id));
+
+    const page = await loadPage(threadId);
+    const served = await loadClientMessages({
+      messageIds: [first.id],
+      safeDb,
+      threadId,
+      userId: ids.userA1,
+    });
+
+    expect(page.messages.at(0)).toMatchObject({ revision: 3, edited: true });
+    expect(served).toEqual(Result.ok(page.messages));
+  });
+
   test("serves each message exactly as the thread's page does", async () => {
     const base = Date.parse("2026-05-01T00:00:00.000Z");
     const { threadId, messages } = await seedThread([
@@ -230,7 +307,11 @@ describe("loadClientMessages", () => {
       id: fileId,
       mimeType: "image/png",
       placeholder: "data:image/png;base64,AAAA",
-      s3Key: testFileKey(`chat/${ids.userA1}/${fileId}`),
+      s3Key: createUserFileKey({
+        fileId,
+        mimeType: "image/png",
+        organizationId: ids.orgA,
+      }),
       sha256Hex: "b".repeat(64),
       sizeBytes: 4,
       threadId,
@@ -239,7 +320,7 @@ describe("loadClientMessages", () => {
     seededFileIds.push(fileId);
     const withAttachment = toSafeId<"chatMessage">(Bun.randomUUIDv7());
     await testDb.insert(chatMessages).values({
-      content: {
+      content: toPersistedChatMessageContentV3({
         data: [
           {
             source: {
@@ -250,8 +331,7 @@ describe("loadClientMessages", () => {
             type: "image",
           },
         ],
-        version: 1,
-      },
+      }),
       createdAt: new Date(base + 2),
       id: withAttachment,
       role: "user",

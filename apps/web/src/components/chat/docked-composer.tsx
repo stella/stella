@@ -6,6 +6,8 @@
 
 import type { ComponentProps, ReactNode } from "react";
 
+import { useTranslations } from "use-intl";
+
 import {
   COMPOSER_BOX_CLASS,
   COMPOSER_COMPACT_ROW_CLASS,
@@ -13,6 +15,8 @@ import {
   COMPOSER_TEXT_CLASS,
 } from "@stll/ui/composer";
 import { OVERLAY_LAYER_CLASS_NAMES } from "@stll/ui/overlay-layer";
+import { publishDocumentPanelInset } from "@stll/ui/panel-inset";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import {
@@ -20,11 +24,16 @@ import {
   DOCKED_COMPOSER_VEIL_WIDTH_CLASS,
   DOCKED_COMPOSER_WIDTH_CLASS,
 } from "@/components/ai-suggestions/composer-geometry";
-import { ChatComposerActionButton } from "@/components/chat/chat-composer-action-button";
-import { ComposerControlSlot } from "@/components/chat/composer-control-slot";
-import { ComposerPlusMenu } from "@/components/chat/composer-plus-menu";
-import { ComposerVeil } from "@/components/chat/composer-veil";
-import { useDockedChatSlotRef } from "@/components/chat/docked-chat-stack";
+import {
+  ComposerControlSlot,
+  ComposerPlusFace,
+  ComposerSendFace,
+} from "@/components/chat/composer-row.pending";
+import { ComposerVeil } from "@/components/chat/composer-veil.pending";
+import {
+  DOCKED_CHAT_COLUMN_SLOT,
+  useDockedChatSlotRef,
+} from "@/components/chat/docked-chat-stack";
 
 /**
  * Styled placeholder label rendered in the prompt bar when the editor
@@ -37,14 +46,15 @@ export const PromptBarPlaceholderContent = ({
 }: {
   children: ReactNode;
 }) => (
-  <span
-    className={cn(
-      "text-foreground-placeholder block min-w-0 truncate",
-      COMPOSER_TEXT_CLASS,
-    )}
+  <TruncatedText
+    render={
+      <span
+        className={cn("text-foreground-placeholder", COMPOSER_TEXT_CLASS)}
+      />
+    }
   >
     {children}
-  </span>
+  </TruncatedText>
 );
 
 type PromptBarShellProps = {
@@ -97,39 +107,15 @@ export const PromptBarShell = ({
 );
 
 /**
- * What a bar that is drawn but cannot be typed into does when it is pressed.
- * Absent while the live editor hydrates (nothing to say yet); present where
- * the bar is the entry point to something the reader does not have an account
- * for, so the press is what asks for one.
- */
-type PromptBarActivation = {
-  /** Names the act for a screen reader; the bar itself only shows a hint. */
-  label: string;
-  onActivate: () => void;
-};
-
-/**
  * Complete prompt row rendered while the live editor hydrates. Known controls
- * stay real and fixed in place; only data-owned content belongs in a skeleton.
- * Keeping this beside `PromptBar` makes the attachment and send affordances a
- * single owned pair instead of asking each loading shell to mirror them.
- *
- * With an `activation` the same row becomes pressable: the controls stay inert
- * and one transparent button covers the box, so the reader presses the bar
- * they can see rather than a control that only looks enabled.
+ * keep their place in their unavailable faces, drawn from the chat bar's own
+ * pieces (`composer-row.pending`), the ones the chat thread's loading view
+ * uses too; only data-owned content belongs in a skeleton.
  */
-export const PromptBarPending = ({
-  activation,
-  children,
-}: {
-  activation?: PromptBarActivation | undefined;
-  children: ReactNode;
-}) => (
-  <PromptBarShell
-    {...(activation === undefined ? { "aria-hidden": true } : {})}
-  >
+export const PromptBarPending = ({ children }: { children: ReactNode }) => (
+  <PromptBarShell aria-hidden>
     <ComposerControlSlot>
-      <ComposerPlusMenu disabled onOpenFilePicker={() => undefined} />
+      <ComposerPlusFace />
     </ComposerControlSlot>
     <div
       className={cn(
@@ -140,22 +126,43 @@ export const PromptBarPending = ({
       <PromptBarPlaceholderContent>{children}</PromptBarPlaceholderContent>
     </div>
     <ComposerControlSlot>
-      <ChatComposerActionButton
-        canSend={false}
-        isGenerating={false}
-        onSend={() => undefined}
-      />
+      <ComposerSendFace />
     </ComposerControlSlot>
-    {activation !== undefined && (
-      <button
-        aria-label={activation.label}
-        className="absolute inset-0 cursor-text rounded-[inherit]"
-        onClick={activation.onActivate}
-        type="button"
-      />
-    )}
   </PromptBarShell>
 );
+
+/**
+ * The docked composer while its code or thread loads, at the height of what is
+ * coming: the chat's bar and status row, or the sign-in bar. The composer
+ * publishes the height everything else on the page lays out around, so it holds
+ * that height from the first paint instead of leaving and coming back.
+ */
+export const DockedComposerPending = ({
+  surface,
+}: {
+  surface: "chat" | "sign-in";
+}) => {
+  const t = useTranslations("common");
+  return (
+    <>
+      {/* The placeholder is hidden from assistive technology; this says why. */}
+      <span className="sr-only" role="status">
+        {t("loading")}
+      </span>
+      {surface === "chat" ? (
+        <DockedComposer
+          bar={<PromptBarPending>{null}</PromptBarPending>}
+          // The status row's height: its controls, and the gap above them.
+          dock={<div aria-hidden className="mt-1.5 h-6" />}
+        />
+      ) : (
+        <DockedComposer
+          bar={<PromptBarShell aria-hidden>{null}</PromptBarShell>}
+        />
+      )}
+    </>
+  );
+};
 
 type DockedComposerProps = {
   /**
@@ -200,6 +207,8 @@ export const DockedComposer = ({ chips, bar, dock }: DockedComposerProps) => {
         DOCKED_COMPOSER_INSET_START_CLASS,
         OVERLAY_LAYER_CLASS_NAMES.chrome,
       )}
+      data-slot={DOCKED_CHAT_COLUMN_SLOT}
+      ref={publishDocumentPanelInset}
     >
       {/* The docked surfaces of this host (thread card, review pill) render
           into these slots: same column, same width, stacked on the bar with
@@ -241,6 +250,7 @@ export const DockedComposer = ({ chips, bar, dock }: DockedComposerProps) => {
             "pointer-events-auto relative z-50 flex flex-col",
             DOCKED_COMPOSER_WIDTH_CLASS,
           )}
+          data-slot="docked-chat-composer"
         >
           {bar}
           {/* No extra top margin: `ComposerStatusRow` owns the single

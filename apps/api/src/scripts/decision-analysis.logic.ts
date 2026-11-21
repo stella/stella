@@ -6,7 +6,7 @@
  * `decision-analysis.logic.test.ts` rather than through a live corpus.
  *
  * Nothing here reaches for a connection, an environment or an object store:
- * the caller resolves the decision's parse and hands it in, which is what
+ * the caller hands in the reader for the decision's parse, which is what
  * lets every refusal be exercised without a corpus.
  */
 
@@ -48,6 +48,12 @@ export const ANALYSIS_REJECTION = {
    * run that met it.
    */
   astUnavailable: "ast-unavailable",
+  /**
+   * No analysis prompt is written for the decision's language. Analysing it
+   * under another language's prompt would produce output that does not
+   * match the text.
+   */
+  unsupportedLanguage: "unsupported-language",
   /** The submitted output does not match the schema the input published. */
   invalidOutput: "invalid-output",
   /** The graph-fenced layer is written in-app; it is never submitted. */
@@ -88,18 +94,21 @@ export type ResolvedDecisionInput =
  * it: the same language-selected system prompt, the same anchored user
  * message, and therefore the same fingerprint.
  *
- * `ast` is resolved by the caller through the corpus reader, because under
- * canonical corpus storage the parse is an object and the row's column is
- * trimmed. A null `ast` therefore means no parse anywhere, not "not in this
- * column": the run reports that as `ast-unavailable`, which should be rare.
+ * Every refusal the row alone decides runs before `readAst`, so a redacted,
+ * withheld or unsupported-language decision never costs an object-store
+ * read. `readAst` resolves the parse through the corpus reader, because
+ * under canonical corpus storage the parse is an object and the row's
+ * column is trimmed. A null parse therefore means no parse anywhere, not
+ * "not in this column": the run reports that as `ast-unavailable`, which
+ * should be rare.
  */
-export const resolveRowAnalysisInput = ({
-  ast,
+export const resolveRowAnalysisInput = async ({
+  readAst,
   row,
 }: {
   row: DecisionAnalysisRow;
-  ast: DocumentAst | null;
-}): ResolvedDecisionInput => {
+  readAst: () => Promise<DocumentAst | null>;
+}): Promise<ResolvedDecisionInput> => {
   if (row.redactedAt !== null) {
     return { status: "rejected", reason: ANALYSIS_REJECTION.redacted };
   }
@@ -109,6 +118,14 @@ export const resolveRowAnalysisInput = ({
       reason: ANALYSIS_REJECTION.derivedAiNotAllowed,
     };
   }
+  const systemPrompt = getSystemPrompt(row.language);
+  if (Result.isError(systemPrompt)) {
+    return {
+      status: "rejected",
+      reason: ANALYSIS_REJECTION.unsupportedLanguage,
+    };
+  }
+  const ast = await readAst();
   if (ast === null) {
     return { status: "rejected", reason: ANALYSIS_REJECTION.astUnavailable };
   }
@@ -118,7 +135,7 @@ export const resolveRowAnalysisInput = ({
     input: analysisInputOf({
       blocks: ast.blocks,
       decision: row,
-      systemPrompt: getSystemPrompt(row.language),
+      systemPrompt: systemPrompt.value,
     }),
   };
 };
@@ -305,4 +322,44 @@ export const nonNegativeInteger = (
   }
   const parsed = Number.parseInt(raw, 10);
   return Number.isInteger(parsed) && parsed >= 0 ? parsed : fallback;
+};
+
+/** The longest court name `case_law_decisions.court` can hold. */
+const COURT_NAME_MAX_LENGTH = 512;
+
+/** Courts to restrict a run to; absent means every court. */
+export type CourtFilter = readonly [string, ...string[]] | undefined;
+
+/**
+ * Every `--court <name>` in the argument list, matched exactly against the
+ * stored court name. A flag without a usable value is an error rather than
+ * a silently dropped filter, which would widen the run to every court.
+ */
+export const courtFilter = (
+  argv: readonly string[],
+): Result<CourtFilter, ScriptArgumentError> => {
+  const courts: string[] = [];
+  for (const [index, argument] of argv.entries()) {
+    if (argument !== "--court") {
+      continue;
+    }
+    const value = argv.at(index + 1);
+    if (
+      value === undefined ||
+      value.startsWith("--") ||
+      value.trim().length === 0 ||
+      value.length > COURT_NAME_MAX_LENGTH
+    ) {
+      return Result.err(
+        new ScriptArgumentError({
+          message: `--court needs a court name of 1 to ${String(COURT_NAME_MAX_LENGTH)} characters, as stored on the decision.`,
+        }),
+      );
+    }
+    if (!courts.includes(value)) {
+      courts.push(value);
+    }
+  }
+  const [first, ...rest] = courts;
+  return Result.ok(first === undefined ? undefined : [first, ...rest]);
 };

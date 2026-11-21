@@ -1,0 +1,140 @@
+import { useState } from "react";
+import type { ReactNode } from "react";
+
+import { panic } from "better-result";
+
+import type { CourtTierLabel as CourtTier } from "@stll/api-contract/case-law-court-tiers";
+import { Button } from "@stll/ui/button";
+import {
+  Collapsible,
+  CollapsiblePanel,
+  CollapsibleTrigger,
+} from "@stll/ui/collapsible";
+
+import { CourtTierBadge } from "./court-tier-badge";
+import { useReaderMessages } from "./reader-adapters";
+import { ReaderAiLabel } from "./reader-ai-label";
+
+/** The court's own chip, where the registry abbreviates it. */
+type CourtChip = { abbreviation: string; tier: CourtTier };
+
+/**
+ * Who wrote a block of top matter.
+ *
+ * The court's headnote and the model's are drawn the same way — same
+ * typography, same label, same fold — so the mark is the only thing that
+ * separates them, and every block carries one. A discriminator rather than an
+ * `isAi` flag: the next origin a decision gains is a branch here, not a second
+ * boolean that can be set with the first.
+ */
+export type HeadnoteOrigin =
+  { type: "ai" } | { type: "court"; chip: CourtChip | null };
+
+/**
+ * The mark itself. The court's chip stands beside the court's name, which the
+ * reference line above the top matter already prints; where nothing
+ * abbreviates the court, the mark says "court" in words rather than inventing
+ * a chip for it. The model's mark is the shared AI label, which opens what
+ * the reader should know about text the court did not write.
+ */
+const OriginMark = ({ origin }: { origin: HeadnoteOrigin }) => {
+  const messages = useReaderMessages();
+
+  switch (origin.type) {
+    case "ai":
+      return (
+        <ReaderAiLabel
+          context="caseLaw"
+          label={messages["caseLaw.notesFilter.ai"]}
+        />
+      );
+    case "court":
+      return origin.chip === null ? (
+        <span className="align-middle">{messages["common.court"]}</span>
+      ) : (
+        <CourtTierBadge
+          abbreviation={origin.chip.abbreviation}
+          className="align-middle"
+          tier={origin.chip.tier}
+        />
+      );
+    default:
+      origin satisfies never;
+      return panic(`Unhandled headnote origin: ${String(origin)}`);
+  }
+};
+
+type HeadnoteBlockProps = {
+  children: ReactNode;
+  /** Whether the section opens with the page, before the reader touches it. */
+  defaultOpen: boolean;
+  /** Held open while what the reader is looking for sits inside it. */
+  forceOpen?: boolean | undefined;
+  /** The section's name — the same words whoever wrote the text under it. */
+  label: string;
+  origin: HeadnoteOrigin;
+};
+
+/**
+ * One named section of a decision's top matter: a headnote or an abstract,
+ * under its own label and its own origin mark.
+ *
+ * The body inherits the article's serif, size and line-height, so the text
+ * reads as part of the decision whoever wrote it; only the label is chrome.
+ * Text the court did not write is marked `data-reader-chrome` and carries no
+ * `data-anchor`, so it can be neither highlighted, cited, nor pulled into a
+ * quotation of the passage beside it.
+ */
+export const HeadnoteBlock = ({
+  children,
+  defaultOpen,
+  forceOpen = false,
+  label,
+  origin,
+}: HeadnoteBlockProps) => {
+  // The default is the same on the server and on the client, so the first
+  // paint is the final one.
+  const [openedByReader, setOpenedByReader] = useState(defaultOpen);
+
+  return (
+    // The mark shares the label's row without being inside it: the
+    // disclosure trigger is itself a control, and a control nested in it
+    // would be interactive content inside interactive content.
+    // It comes first in the DOM so assistive technology announces the origin
+    // before the headnote it describes, not after the whole section.
+    <div className="relative mt-4 first:mt-0" data-slot="headnote-block">
+      {/* The origin and label share the same document-label scale. */}
+      <span
+        className="reader-chrome text-foreground-disabled absolute end-0 top-0 text-[calc(0.75rem*var(--reader-text-scale))] font-semibold tracking-wide uppercase"
+        data-reader-chrome=""
+        data-slot="headnote-origin"
+      >
+        <OriginMark origin={origin} />
+      </span>
+      <Collapsible
+        data-reader-chrome={origin.type === "court" ? undefined : ""}
+        onOpenChange={(nextOpen) => {
+          // Held open by a find match, not by the reader: recording it as
+          // their choice would leave the section open once the match moves on.
+          if (forceOpen) {
+            return;
+          }
+          setOpenedByReader(nextOpen);
+        }}
+        open={openedByReader || forceOpen}
+      >
+        <div
+          className="reader-chrome pe-20 text-[calc(0.75rem*var(--reader-text-scale))]"
+          data-reader-chrome=""
+        >
+          <CollapsibleTrigger render={<Button size="inline" variant="muted" />}>
+            {label}
+          </CollapsibleTrigger>
+        </div>
+        <CollapsiblePanel>
+          <div className="mt-2">{children}</div>
+        </CollapsiblePanel>
+      </Collapsible>
+    </div>
+  );
+};

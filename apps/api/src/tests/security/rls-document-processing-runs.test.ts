@@ -25,9 +25,9 @@ import {
 } from "@/api/tests/security/rls-fixture";
 import type { TestIds } from "@/api/tests/security/rls-helpers";
 import type {
-  TestDatabase,
   createDryScopedQuery,
   createScopedQuery,
+  TestDatabase,
 } from "@/api/tests/security/test-utils";
 
 // `document_processing_runs` is root-worker owned except for one hole: the
@@ -96,14 +96,15 @@ const tryCatch = async (fn: () => Promise<unknown>) => {
 const insertAsScopedRole = async (
   values: typeof documentProcessingRuns.$inferInsert,
 ) =>
-  await scopedQuery(
-    [ids.wsA1],
-    ids.orgA,
-    async (tx) =>
-      await tryCatch(async () => {
+  await tryCatch(async () =>
+    scopedQuery(
+      [ids.wsA1],
+      ids.orgA,
+      async (tx) => {
         await tx.insert(documentProcessingRuns).values(values);
-      }),
-    ids.userA1,
+      },
+      ids.userA1,
+    ),
   );
 
 const expectRejected = (error: unknown) => {

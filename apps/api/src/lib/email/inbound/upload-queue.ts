@@ -1,7 +1,12 @@
-import { Worker } from "bullmq";
+import { isDataBoxMessageMimeType } from "@stll/api-contract/data-box";
+import { isEmailMimeType } from "@stll/api-contract/email-mime-types";
 
+import { BullMqWorker } from "@/api/lib/bullmq-queue";
 import type { BullMqWorkerContext } from "@/api/lib/bullmq-queue";
-import { fileUploadedMail } from "@/api/lib/email/inbound/upload";
+import {
+  fileUploadedMail,
+  retireUploadedMailSource,
+} from "@/api/lib/email/inbound/upload";
 import {
   UPLOADED_MAIL_QUEUE_NAME,
   type UploadedMailJobData,
@@ -31,10 +36,12 @@ type ProcessUploadedMailJobOptions = {
   database: FileDatabase;
   readFile?: typeof readStoredFile;
   fileMail?: typeof fileUploadedMail;
+  retireMail?: typeof retireUploadedMailSource;
 };
 
 /**
- * One filing attempt. An unavailable database or object read rejects, so
+ * One correspondence reconciliation attempt. Other channels retire stale
+ * source metadata without reading file bytes. Database or object failures reject, so
  * BullMQ retries with backoff; the file's unique record makes a retry after an
  * uncertain commit converge as a duplicate. A permanent refusal is a terminal
  * skip.
@@ -44,12 +51,27 @@ export const processUploadedMailJob = async ({
   database,
   readFile = readStoredFile,
   fileMail = fileUploadedMail,
+  retireMail = retireUploadedMailSource,
 }: ProcessUploadedMailJobOptions) => {
   const scope = {
     organizationId: brandPersistedOrganizationId(data.organizationId),
     workspaceId: brandPersistedWorkspaceId(data.workspaceId),
     entityId: brandPersistedEntityId(data.entityId),
   };
+  if (
+    !isEmailMimeType(data.mimeType) &&
+    !isDataBoxMessageMimeType(data.mimeType)
+  ) {
+    const retired = await retireMail({
+      database,
+      scope,
+      sourceFileId: data.sourceFileId,
+    });
+    if (retired.isErr()) {
+      throw retired.error;
+    }
+    return retired.value;
+  }
   const stored = await readFile({
     key: createFileKey({
       organizationId: scope.organizationId,
@@ -66,6 +88,7 @@ export const processUploadedMailJob = async ({
   });
   const filed = await fileMail({
     bytes: stored.bytes,
+    sourceFileId: data.sourceFileId,
     mimeType: data.mimeType,
     scope,
     database,
@@ -113,7 +136,7 @@ export const initUploadedMailCorrespondenceWorker = ({
   const workerConnection = createBullMqConnection({
     storeClass: "durable-coordination",
   });
-  const worker = new Worker<UploadedMailJobData>(
+  const worker = new BullMqWorker<UploadedMailJobData>(
     UPLOADED_MAIL_QUEUE_NAME,
     async (job) => {
       await processUploadedMailJob({ data: job.data, database: db });

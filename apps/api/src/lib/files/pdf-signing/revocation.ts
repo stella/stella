@@ -1,3 +1,4 @@
+import * as asn1js from "asn1js";
 /**
  * Revocation data for the signer's chain, fetched through the guarded PKI
  * fetcher.
@@ -14,13 +15,13 @@
  * No nonce is sent (most responders serve pre-signed responses), so
  * freshness rests on the validity window.
  */
-
-import * as asn1js from "asn1js";
 import { Result } from "better-result";
 import * as pkijs from "pkijs";
 
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 import { DAY_IN_MS } from "@stll/time";
 
+import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import {
   accessLocations,
   carriedCertificates,
@@ -70,9 +71,6 @@ export type TrackedRevocationProvider = {
   /** Whether revocation data says this certificate is revoked. */
   isRevoked: (certificate: Uint8Array) => boolean;
 };
-
-const fingerprint = (der: Uint8Array) =>
-  new Bun.CryptoHasher("sha256").update(der).digest("hex");
 
 /** Whether data dated `thisUpdate`..`nextUpdate` is current at `now`. */
 const isCurrent = (thisUpdate: Date, nextUpdate: Date | undefined, now: Date) =>
@@ -231,23 +229,25 @@ const ocspRequestFor = async (
   return new Uint8Array(request.toSchema(true).toBER(false));
 };
 
-export const createTrackedRevocationProvider = (
-  fetcher: PkiFetcher = withFetchBudget(
-    safePkiFetch,
-    REVOCATION_FETCH_BUDGET_MS,
-  ),
-  now: () => Date = () => new Date(),
-): TrackedRevocationProvider => {
+export const createTrackedRevocationProvider = ({
+  permit,
+  fetcher = withFetchBudget(safePkiFetch, REVOCATION_FETCH_BUDGET_MS),
+  now = () => new Date(),
+}: {
+  permit: ThirdPartyOutboundPermit;
+  fetcher?: PkiFetcher;
+  now?: () => Date;
+}): TrackedRevocationProvider => {
   const covered = new Set<string>();
   const revoked = new Set<string>();
   const record = (certificateDer: Uint8Array, verdict: "good" | "revoked") =>
     (verdict === "revoked" ? revoked : covered).add(
-      fingerprint(certificateDer),
+      hashSha256Hex(certificateDer),
     );
 
   return {
-    covers: (certificate) => covered.has(fingerprint(certificate)),
-    isRevoked: (certificate) => revoked.has(fingerprint(certificate)),
+    covers: (certificate) => covered.has(hashSha256Hex(certificate)),
+    isRevoked: (certificate) => revoked.has(hashSha256Hex(certificate)),
 
     getOCSP: async (certificateDer, issuerDer) => {
       const certificate = parseCertificate(certificateDer);
@@ -266,6 +266,7 @@ export const createTrackedRevocationProvider = (
           contentType: "application/ocsp-request",
           maxBytes: OCSP_RESPONSE_MAX_BYTES,
           method: "POST",
+          permit,
           url,
         });
         const status =
@@ -299,6 +300,7 @@ export const createTrackedRevocationProvider = (
         const crl = await fetcher({
           maxBytes: CRL_MAX_BYTES,
           method: "GET",
+          permit,
           url,
         });
         const verdict =

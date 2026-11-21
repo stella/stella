@@ -1,22 +1,33 @@
 import { Result } from "better-result";
 import { eq } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { justifications } from "@/api/db/schema";
 import type { BoundingBox } from "@/api/db/schema-validators";
 import { workspaceRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
-import { memberAIAccessError } from "@/api/lib/ai-config-response";
+import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
+import {
+  memberAIAccessError,
+  storedAIConfigUnreadableError,
+} from "@/api/lib/ai-config-response";
 import { aiHandlerError } from "@/api/lib/ai-error";
 import { captureError } from "@/api/lib/analytics/capture";
-import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
+import {
+  ACCOUNT_ACCESS,
+  configuredModelAdmission,
+  createSafeHandler,
+} from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { generateBBoxes } from "@/api/lib/bbox/generate-b-boxes";
 import { generateBBoxesMock } from "@/api/lib/bbox/generate-b-boxes-mock";
 import { prepareJustificationData } from "@/api/lib/bbox/generate-b-boxes-shared";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { mockAnswersForOrganization } from "@/api/lib/tanstack-ai-models";
 
 const config = {
+  contract: "patch",
+  actionAdmission: { type: "handler", actionKind: "documents.bounding-boxes" },
   contentDelivery: {
     type: "none",
     reason: "Generates document geometry without delivering stored-file bytes.",
@@ -25,14 +36,13 @@ const config = {
   accountAccess: ACCOUNT_ACCESS.sandbox,
   realtime: workspaceRealtimeUpdates,
   mcp: { type: "internal", reason: "document_processing" },
-  body: t.Object({
-    justificationId: tSafeId("justification"),
-  }),
+  body: v.object({ justificationId: resourceIdSchema("justification") }),
 } satisfies WorkspaceHandlerConfig;
 
 const generateBoundingBoxes = createSafeHandler(
   config,
   async function* ({
+    modelAdmission,
     scopedDb,
     safeDb,
     session,
@@ -42,7 +52,12 @@ const generateBoundingBoxes = createSafeHandler(
     managedAIResidency,
     orgAIConfigStatus,
     promptCachingEnabled,
+    request,
   }) {
+    if (orgAIConfigStatus === ORG_AI_CONFIG_STATUS.unreadable) {
+      return Result.err(storedAIConfigUnreadableError());
+    }
+
     const accessError = memberAIAccessError(orgAIConfigStatus);
     if (accessError) {
       return Result.err(accessError);
@@ -58,10 +73,16 @@ const generateBoundingBoxes = createSafeHandler(
     );
 
     if (Result.isError(preparedDataResult)) {
-      captureError(preparedDataResult.error, {
-        method: "POST",
-        path: `/workspaces/${workspaceId}/bounding-boxes`,
-      });
+      captureError(
+        preparedDataResult.error,
+        handlerErrorContext(
+          "workspaces.generateBoundingBoxes.preparedDataResult_error",
+          {
+            method: "POST",
+            path: `/workspaces/${workspaceId}/bounding-boxes`,
+          },
+        ),
+      );
 
       return Result.ok({ boxes: [] });
     }
@@ -79,7 +100,9 @@ const generateBoundingBoxes = createSafeHandler(
 
     for (const pageNumber of preparedData.pageNumbers) {
       const pageBoxesResult = await generateFn({
-        abortSignal: AbortSignal.timeout(60_000),
+        abortSignal: request.signal,
+        deadlineMs: 60_000,
+        admission: configuredModelAdmission({ modelAdmission }),
         justificationId,
         organizationId,
         orgAIConfig: orgAIConfig ?? null,
@@ -96,11 +119,17 @@ const generateBoundingBoxes = createSafeHandler(
       });
 
       if (Result.isError(pageBoxesResult)) {
-        captureError(pageBoxesResult.error, {
-          feature: "bbox.generate",
-          workspaceId,
-          organizationId,
-        });
+        captureError(
+          pageBoxesResult.error,
+          handlerErrorContext(
+            "workspaces.generateBoundingBoxes.pageBoxesResult_error",
+            {
+              feature: "bbox.generate",
+              workspaceId,
+              organizationId,
+            },
+          ),
+        );
         // `WorkflowIntegrationError.cause` carries the underlying
         // provider failure — classify
         // against that so quota/usage-limit errors map to 429/402 instead of

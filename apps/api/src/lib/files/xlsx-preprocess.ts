@@ -1,13 +1,15 @@
 import { Result } from "better-result";
 
 import { loadDocxArchive } from "@/api/lib/docx-archive";
+import {
+  firstXmlElement,
+  replaceXmlElements,
+  XmlScanError,
+} from "@/api/lib/files/xml-scan";
 
 const REGEX_HAS_PAGE_SET_UP_PR = /<pageSetUpPr[\s/>]/u;
 const REGEX_EXTRACT_PAGE_SET_UP_PR = /<pageSetUpPr(?<attrs>[^/]*?)\/>/gu;
 const REGEX_REMOVE_FIT_TO_PAGE = /(?<!\s)\s*fitToPage="[^"]*"/u;
-const REGEX_HAS_OPEN_SHEET_PR = /<sheetPr[^>]*>[\s\S]*?<\/sheetPr>/u;
-const REGEX_EXTRACT_OPEN_SHEET_PR =
-  /(?<open><sheetPr[^>]*>)(?<inner>[\s\S]*?)(?<close><\/sheetPr>)/u;
 const REGEX_HAS_SELF_CLOSING_SHEET_PR = /<sheetPr[^>]*\/>/u;
 const REGEX_EXTRACT_SELF_CLOSING_SHEET_PR = /<sheetPr(?<attrs>[^>]*?)\/>/u;
 const REGEX_SHEET_LANDMARK =
@@ -32,8 +34,10 @@ const REGEX_SHEET_FILENAME = /^xl\/worksheets\/sheet\d+\.xml$/u;
  *   any `scale` attribute removed. If absent it is appended
  *   before `</worksheet>`.
  */
-export const patchSheetXml = (xml: string): string => {
-  let out = xml;
+export const patchSheetXml = (xml: string): Result<string, XmlScanError> => {
+  const sheetData = xml.indexOf("<sheetData");
+  const suffix = sheetData === -1 ? "" : xml.slice(sheetData);
+  let out = sheetData === -1 ? xml : xml.slice(0, sheetData);
 
   // ── sheetPr / pageSetUpPr ───────────────────────────────
 
@@ -46,15 +50,24 @@ export const patchSheetXml = (xml: string): string => {
       return `<pageSetUpPr${cleaned ? ` ${cleaned}` : ""} fitToPage="1"/>`;
     });
   } else {
-    const hasOpenSheetPr = REGEX_HAS_OPEN_SHEET_PR.test(out);
+    const sheetPr = firstXmlElement(out, "sheetPr");
 
-    if (hasOpenSheetPr) {
-      // Insert pageSetUpPr inside existing open sheetPr
-      out = out.replace(
-        REGEX_EXTRACT_OPEN_SHEET_PR,
-        (_, open: string, inner: string, close: string) =>
-          `${open}${inner}<pageSetUpPr fitToPage="1"/>${close}`,
+    if (sheetPr.kind === "incomplete") {
+      return Result.err(
+        new XmlScanError({ message: "Incomplete matching XML element" }),
       );
+    }
+    if (sheetPr.kind === "found" && !sheetPr.match.selfClosing) {
+      const replaced = replaceXmlElements(
+        out,
+        "sheetPr",
+        (match, inner) =>
+          `${match.openTag}${inner}<pageSetUpPr fitToPage="1"/>${match.closeTag}`,
+      );
+      if (replaced.isErr()) {
+        return replaced;
+      }
+      out = replaced.value;
     } else if (REGEX_HAS_SELF_CLOSING_SHEET_PR.test(out)) {
       // Handle self-closing <sheetPr ... />
       out = out.replace(
@@ -78,6 +91,9 @@ export const patchSheetXml = (xml: string): string => {
     }
   }
 
+  // The paired element scan above is confined to the bounded worksheet header.
+  out += suffix;
+
   // ── pageSetup ───────────────────────────────────────────
 
   const hasPageSetup = REGEX_HAS_PAGE_SETUP.test(out);
@@ -100,7 +116,7 @@ export const patchSheetXml = (xml: string): string => {
     );
   }
 
-  return out;
+  return Result.ok(out);
 };
 
 /**
@@ -130,13 +146,11 @@ export const applyFitToPage = async (
   const { zip } = archive;
 
   // Guard: must be an OOXML spreadsheet
-  if (!zip.file("xl/workbook.xml")) {
+  if (!zip.entry("xl/workbook.xml")) {
     return buffer;
   }
 
-  const sheetPaths = Object.keys(zip.files).filter((p) =>
-    REGEX_SHEET_FILENAME.test(p),
-  );
+  const sheetPaths = zip.paths().filter((p) => REGEX_SHEET_FILENAME.test(p));
 
   const sheets = await Result.tryPromise(
     async () =>
@@ -155,8 +169,12 @@ export const applyFitToPage = async (
     if (xml === null) {
       continue;
     }
-    zip.file(path, patchSheetXml(xml));
+    const patched = patchSheetXml(xml);
+    if (patched.isErr()) {
+      return buffer;
+    }
+    zip.set(path, patched.value);
   }
 
-  return await zip.generateAsync({ type: "arraybuffer" });
+  return (await zip.generate({ compression: "store" })).buffer;
 };

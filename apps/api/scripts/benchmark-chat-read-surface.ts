@@ -1,3 +1,4 @@
+import { EventType, maxIterations, toolDefinition } from "@tanstack/ai";
 /**
  * Benchmark the chat readonly data surface with a cheap model.
  *
@@ -8,16 +9,17 @@
  *   bun apps/api/scripts/benchmark-chat-read-surface.ts --surface new-inline
  *   bun apps/api/scripts/benchmark-chat-read-surface.ts --json
  */
-
-import { EventType, maxIterations, toolDefinition } from "@tanstack/ai";
 import type { AnyServerTool, TokenUsage } from "@tanstack/ai";
 import { panic, Result } from "better-result";
 import * as v from "valibot";
+
+import { printError } from "@stll/errors";
 
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 import { resolveCaching } from "@/api/lib/ai-config";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { streamChatChunks } from "@/api/lib/chat/tanstack-chat-runtime";
+import { NO_ORGANIZATION_MODEL_DISPATCH } from "@/api/lib/rate-limit/model-dispatch-admission";
 import {
   mergeGenerationOptions,
   systemPromptsPatch,
@@ -295,16 +297,16 @@ type BenchModel = {
 };
 
 const getBenchModel = async (): Promise<BenchModel | null> => {
-  const { getTanStackTextModelInfoForRole, requireTanStackAIAvailableForRole } =
+  const { getTanStackTextModelInfoForTask, requireTanStackAIAvailableForTask } =
     await import("@/api/lib/tanstack-ai-models");
 
   const { resolveTanStackTextModel } =
     await import("@/api/lib/tanstack-ai-generate");
 
-  const available = requireTanStackAIAvailableForRole({
+  const available = requireTanStackAIAvailableForTask({
     configStatus: ORG_AI_CONFIG_STATUS.ok,
     orgConfig: null,
-    role: "fast",
+    task: "short-text",
     dataClass: "public_corpus",
   });
   if (Result.isError(available)) {
@@ -313,16 +315,19 @@ const getBenchModel = async (): Promise<BenchModel | null> => {
 
   const overrideModel = process.env["AI_BENCH_MODEL"];
   if (overrideModel) {
-    const info = getTanStackTextModelInfoForRole("fast", null, {
+    const info = getTanStackTextModelInfoForTask("short-text", null, {
       dataClass: "public_corpus",
       organizationId: null,
+      modelTier: NO_ORGANIZATION_MODEL_DISPATCH.modelTier,
     });
     const model = await resolveTanStackTextModel({
+      userId: null,
       modelId: overrideModel,
       orgAIConfig: null,
       dataClass: "public_corpus",
-      role: "fast",
+      task: "short-text",
       organizationId: null,
+      admission: NO_ORGANIZATION_MODEL_DISPATCH,
     });
     return {
       id: overrideModel,
@@ -331,15 +336,18 @@ const getBenchModel = async (): Promise<BenchModel | null> => {
     };
   }
 
-  const info = getTanStackTextModelInfoForRole("fast", null, {
+  const info = getTanStackTextModelInfoForTask("short-text", null, {
     dataClass: "public_corpus",
     organizationId: null,
+    modelTier: NO_ORGANIZATION_MODEL_DISPATCH.modelTier,
   });
   const model = await resolveTanStackTextModel({
-    role: "fast",
+    userId: null,
+    task: "short-text",
     orgAIConfig: null,
     dataClass: "public_corpus",
     organizationId: null,
+    admission: NO_ORGANIZATION_MODEL_DISPATCH,
   });
   return {
     id: info.modelId,
@@ -886,10 +894,11 @@ const runBenchTask = async ({
   const start = performance.now();
   const caching = resolveCaching({
     promptCachingEnabled: true,
-    role: "fast",
+    task: "short-text",
     scopeKey: null,
   });
   const stream = streamChatChunks({
+    threadId: Bun.randomUUIDv7(),
     adapter: model.adapter,
     messages: [
       {
@@ -1104,7 +1113,6 @@ const main = async () => {
 };
 
 main().catch((error: unknown) => {
-  const message = error instanceof Error ? error.message : String(error);
-  console.error(`Benchmark failed: ${message}`);
+  printError("Benchmark failed:", error);
   process.exitCode = 1;
 });

@@ -3,7 +3,10 @@ import type { ReactNode } from "react";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import type { RouteComponent } from "@tanstack/react-router";
 import { plugin } from "bun";
-import { afterAll, beforeAll, describe, expect, mock, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+
+import { sleep } from "@stll/concurrency/sleep";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 // A DOM for this file only: the frames and sections mount, fetch and react to
 // session changes, which a static render cannot show. Everything that touches
@@ -27,6 +30,23 @@ plugin({
   },
 });
 
+// The member frame holds the signed-in user's event stream open. These pages
+// assert on requests and timing, so the stream stays open and silent instead
+// of dialing a server that is not there.
+class SilentEventSource extends EventTarget {
+  static readonly CLOSED = 2;
+  readyState = 1;
+  readonly url: string;
+  constructor(url: string | URL) {
+    super();
+    this.url = String(url);
+  }
+  close() {
+    this.readyState = SilentEventSource.CLOSED;
+  }
+}
+Object.assign(globalThis, { EventSource: SilentEventSource });
+
 // Build-time constants the member frame shows.
 for (const name of ["__APP_VERSION__", "__APP_COMMIT_SHA__"]) {
   Object.defineProperty(globalThis, name, {
@@ -34,28 +54,6 @@ for (const name of ["__APP_VERSION__", "__APP_COMMIT_SHA__"]) {
     value: "test",
   });
 }
-
-// The browser build keeps only the client half of an isomorphic function;
-// without the build step both halves exist and the server one would run.
-const start = await import("@tanstack/react-start");
-type ClientHalf = (...args: never[]) => unknown;
-await mock.module("@tanstack/react-start", () => ({
-  ...start,
-  createIsomorphicFn: () => {
-    let clientHalf: ClientHalf = () => undefined;
-    const isomorphic = Object.assign(
-      (...args: never[]) => clientHalf(...args),
-      {
-        server: () => isomorphic,
-        client: (half: ClientHalf) => {
-          clientHalf = half;
-          return isomorphic;
-        },
-      },
-    );
-    return isomorphic;
-  },
-}));
 
 // ── The network ─────────────────────────────────────
 
@@ -105,6 +103,13 @@ const CATALOGUE_TEMPLATE = {
   sha256: "0".repeat(64),
 };
 
+const CATALOGUE_STARTER = {
+  id: "nda-review",
+  name: "Catalogue NDA review",
+  description: "Review a nondisclosure agreement.",
+  positionCount: 3,
+};
+
 const libraryTemplate = (name: string) => ({
   id: name.toLowerCase().replaceAll(" ", "-"),
   name,
@@ -123,6 +128,9 @@ const libraryTemplate = (name: string) => ({
   authorName: "Member",
   authorImage: null,
 });
+
+/** A member of organization A. */
+const SIGNED_IN_SESSION = "org-a" satisfies Session;
 
 const LIBRARY_NAME: Record<"org-a" | "org-b", string> = {
   "org-a": "Alpha lease",
@@ -171,6 +179,23 @@ globalThis.fetch = Object.assign(
       }
       return Response.json(sessionBody());
     }
+    if (
+      path.endsWith("/api/auth/organization/get-active-member-role") &&
+      (askedAs === "org-a" || askedAs === "org-b")
+    ) {
+      return Response.json({ role: "admin" });
+    }
+    if (
+      path === "/v1/me/professional-use" &&
+      (askedAs === "org-a" || askedAs === "org-b")
+    ) {
+      return Response.json({
+        status: "accepted",
+        statementVersion: "2026-10",
+        termsVersion: "2026-10",
+        acceptedAt: "2026-10-01T00:00:00.000Z",
+      });
+    }
     if (path === "/v1/public/knowledge/template-packs") {
       return Response.json({
         items: templateCatalogue === "missing" ? [] : [CATALOGUE_PACK],
@@ -216,6 +241,9 @@ globalThis.fetch = Object.assign(
       }
       return Response.json(body);
     }
+    if (path === "/v1/public/knowledge/playbook-starters") {
+      return Response.json({ items: [CATALOGUE_STARTER] });
+    }
     if (path === "/v1/template-categories") {
       return Response.json({ categories: [] });
     }
@@ -231,6 +259,7 @@ const { QueryClient, QueryClientProvider } =
 const router = await import("@tanstack/react-router");
 const testing = await import("@testing-library/react");
 const { IntlProvider } = await import("use-intl");
+const { PendingTextIntlScope } = await import("@/components/pending-text");
 const { TooltipProvider } = await import("@stll/ui/tooltip");
 const { ToastProvider } = await import("@stll/ui/toast");
 const { ThemeProvider } = await import("@/components/theme-provider");
@@ -243,9 +272,11 @@ const { createRouteErrorLifecycleController } =
 const { HotkeysProvider } = await import("@tanstack/react-hotkeys");
 const { FormattingProvider } = await import("@/i18n/formatting-context");
 const messages = (await import("@/i18n/langs/en.json")).default;
-const { refreshAuthQueries } = await import("@/lib/auth-queries");
-const { discardBootPrefetch } = await import("@/boot-prefetch");
+const { professionalUseOptions, refreshAuthQueries } =
+  await import("@/lib/auth-queries");
 const { AppFrameHost } = await import("@/routes/-app-frame-host");
+const { RouteProviderScopeBoundary } =
+  await import("@/components/route-provider-scope/route-provider-scope");
 const { Route: KnowledgeLayoutRoute } =
   await import("@/routes/knowledge/route");
 const { Route: TemplatesRoute } = await import("@/routes/knowledge/templates");
@@ -254,6 +285,16 @@ const { publicKnowledgeKeys } =
   await import("@/features/knowledge/public/public-knowledge-queries");
 const { PublicKnowledgeLanding } =
   await import("@/routes/knowledge/-public/public-knowledge-landing");
+const { Route: PlaybooksRoute } = await import("@/routes/knowledge/playbooks");
+const { Route: PlaybooksCatalogueRoute } =
+  await import("@/routes/knowledge/playbooks_.catalogue");
+const { Route: ToolsRoute } = await import("@/routes/knowledge/tools");
+const { Route: ToolsCatalogueRoute } =
+  await import("@/routes/knowledge/tools_.catalogue");
+const { Route: ToolEntryRoute } =
+  await import("@/routes/knowledge/tools_.$entry");
+const { Route: ToolSkillRoute } =
+  await import("@/routes/knowledge/tools_.skills.$skillId");
 const { Route: CatalogueRoute } =
   await import("@/routes/knowledge/templates_.catalogue");
 const { Route: CatalogueIndexRoute } =
@@ -285,15 +326,17 @@ const createApp = (initialEntry = "/knowledge/templates") => {
     <RouteErrorLifecycleProvider controller={routeErrorLifecycle}>
       <QueryClientProvider client={queryClient}>
         <IntlProvider locale="en" messages={messages} timeZone="UTC">
-          <FormattingProvider locale="en" timeZone="UTC">
-            <HotkeysProvider>
-              <ThemeProvider>
-                <TooltipProvider>
-                  <ToastProvider>{children}</ToastProvider>
-                </TooltipProvider>
-              </ThemeProvider>
-            </HotkeysProvider>
-          </FormattingProvider>
+          <PendingTextIntlScope formattingLocale="en">
+            <FormattingProvider locale="en" timeZone="UTC">
+              <HotkeysProvider>
+                <ThemeProvider>
+                  <TooltipProvider>
+                    <ToastProvider>{children}</ToastProvider>
+                  </TooltipProvider>
+                </ThemeProvider>
+              </HotkeysProvider>
+            </FormattingProvider>
+          </PendingTextIntlScope>
         </IntlProvider>
       </QueryClientProvider>
     </RouteErrorLifecycleProvider>
@@ -302,12 +345,15 @@ const createApp = (initialEntry = "/knowledge/templates") => {
   const rootRoute = router.createRootRouteWithContext<{
     queryClient: InstanceType<typeof QueryClient>;
   }>()({
+    // The root shell bounds every page by its declared provider scopes.
     component: () => (
-      <ApiVersionMismatchProvider>
-        <AppFrameHost>
-          <router.Outlet />
-        </AppFrameHost>
-      </ApiVersionMismatchProvider>
+      <RouteProviderScopeBoundary>
+        <ApiVersionMismatchProvider>
+          <AppFrameHost>
+            <router.Outlet />
+          </AppFrameHost>
+        </ApiVersionMismatchProvider>
+      </RouteProviderScopeBoundary>
     ),
   });
   // The member frame navigates from the signed-in pages' layout, which the
@@ -319,20 +365,38 @@ const createApp = (initialEntry = "/knowledge/templates") => {
   const knowledgeRoute = router.createRoute({
     getParentRoute: () => rootRoute,
     path: "/knowledge",
+    // The frame and provider scopes the real layout declares pick the frame.
+    staticData: { ...KnowledgeLayoutRoute.options.staticData },
     component: componentOf(KnowledgeLayoutRoute.options.component),
   });
-  const templatesRoute = router.createRoute({
-    getParentRoute: () => knowledgeRoute,
-    path: "templates",
-    validateSearch: TemplatesRoute.options.validateSearch,
-    component: componentOf(TemplatesRoute.options.component),
-  });
+  // Attach the real file routes to this test root, as the generated tree does.
+  // The id keeps the file route's own (`tools_`), the path the URL's.
+  const attach = <TRoute extends { options: object }>(
+    route: TRoute,
+    id: string,
+  ): TRoute => {
+    Object.assign(route.options, {
+      getParentRoute: () => knowledgeRoute,
+      id,
+      path: id.replaceAll("_/", "/"),
+    });
+    return route;
+  };
+  const templatesRoute = attach(TemplatesRoute, "/templates");
+  const playbooksRoute = attach(PlaybooksRoute, "/playbooks");
+  const playbooksCatalogueRoute = attach(
+    PlaybooksCatalogueRoute,
+    "/playbooks_/catalogue",
+  );
+  const toolsRoute = attach(ToolsRoute, "/tools");
+  const toolsCatalogueRoute = attach(ToolsCatalogueRoute, "/tools_/catalogue");
+  const toolEntryRoute = attach(ToolEntryRoute, "/tools_/$entry");
+  const toolSkillRoute = attach(ToolSkillRoute, "/tools_/skills/$skillId");
   const landingRoute = router.createRoute({
     getParentRoute: () => knowledgeRoute,
     path: "/",
     component: () => <PublicKnowledgeLanding from={undefined} />,
   });
-  // Attach the real file routes to this test root, as the generated tree does.
   const catalogueRoute = CatalogueRoute;
   Object.assign(catalogueRoute.options, {
     getParentRoute: () => knowledgeRoute,
@@ -361,6 +425,12 @@ const createApp = (initialEntry = "/knowledge/templates") => {
       protectedRoute,
       knowledgeRoute.addChildren([
         templatesRoute,
+        playbooksRoute,
+        playbooksCatalogueRoute,
+        toolsRoute,
+        toolsCatalogueRoute,
+        toolEntryRoute,
+        toolSkillRoute,
         landingRoute,
         catalogueRoute.addChildren([catalogueIndexRoute, catalogueDetailRoute]),
       ]),
@@ -382,6 +452,15 @@ const cachedKeys = (queryClient: InstanceType<typeof QueryClient>) =>
     .getAll()
     .map((query) => JSON.stringify(query.queryKey));
 
+/** An organization's own Knowledge reads. */
+const MEMBER_KNOWLEDGE_PATHS = [
+  "/v1/templates",
+  "/v1/template-categories",
+  "/v1/playbooks",
+  "/v1/catalogue",
+  "/v1/skills",
+];
+
 const isPublicRequest = (path: string) =>
   path.endsWith("/api/auth/get-session") ||
   path.startsWith("/v1/public/knowledge/");
@@ -391,15 +470,11 @@ const MEMBER_WAIT = { timeout: 10_000 };
 
 const settle = async () => {
   await testing.act(async () => {
-    await new Promise((resolve) => {
-      setTimeout(resolve, 50);
-    });
+    await sleep(50);
   });
 };
 
 beforeAll(() => {
-  // The page did not boot here, so there is no early session read to reuse.
-  discardBootPrefetch();
   requests.length = 0;
 });
 
@@ -407,7 +482,7 @@ afterAll(async () => {
   // Let React's scheduled work drain before the DOM goes away.
   await settle();
   globalThis.fetch = originalFetch;
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 describe("Knowledge for every visitor, on one live client", () => {
@@ -465,6 +540,11 @@ describe("Knowledge for every visitor, on one live client", () => {
       requests.map(() => "/api/auth/get-session"),
     );
     expect(cachedKeys(queryClient)).toEqual([JSON.stringify(["session"])]);
+    expect(
+      queryClient
+        .getQueryCache()
+        .find({ queryKey: professionalUseOptions(undefined).queryKey }),
+    ).toBeUndefined();
     view.unmount();
   });
 
@@ -477,6 +557,11 @@ describe("Knowledge for every visitor, on one live client", () => {
     );
 
     expect(requests.filter(({ path }) => !isPublicRequest(path))).toEqual([]);
+    expect(
+      queryClient
+        .getQueryCache()
+        .find({ queryKey: professionalUseOptions(undefined).queryKey }),
+    ).toBeUndefined();
     for (const key of cachedKeys(queryClient)) {
       expect(
         key === JSON.stringify(["session"]) ||
@@ -559,9 +644,7 @@ describe("Knowledge for every visitor, on one live client", () => {
         respond();
       }
       await refetchForA;
-      await new Promise((resolve) => {
-        setTimeout(resolve, 20);
-      });
+      await sleep(20);
     });
     expect(
       cachedKeys(queryClient).filter((key) => key.includes("org-a")),
@@ -583,10 +666,17 @@ describe("Knowledge for every visitor, on one live client", () => {
     ).toEqual([]);
     expect(view.queryByText("Alpha lease")).toBeNull();
 
-    // Organization B signs in on the same client.
+    // Organization B signs in on the same client, on the catalogue the
+    // sign-out left it on; the library is its own page.
     session = "org-b";
     await testing.act(async () => {
       await refreshAuthQueries(queryClient);
+    });
+    expect(appRouter.state.location.pathname).toBe(
+      "/knowledge/templates/catalogue",
+    );
+    await testing.act(async () => {
+      await appRouter.navigate({ to: "/knowledge/templates" });
     });
     await testing.waitFor(() => view.getByText("Bravo lease"), MEMBER_WAIT);
     expect(view.queryByText("Alpha lease")).toBeNull();
@@ -594,7 +684,7 @@ describe("Knowledge for every visitor, on one live client", () => {
       cachedKeys(queryClient).filter((key) => key.includes("org-a")),
     ).toEqual([]);
     view.unmount();
-  }, 30_000);
+  });
 
   test("switching from organization A to B keeps nothing of A, frame included", async () => {
     session = "org-a";
@@ -616,5 +706,157 @@ describe("Knowledge for every visitor, on one live client", () => {
       cachedKeys(queryClient).filter((key) => key.includes("org-a")),
     ).toEqual([]);
     view.unmount();
-  }, 30_000);
+  });
+
+  test.each([
+    [
+      "/knowledge/templates",
+      "/knowledge/templates/catalogue",
+      "/knowledge/templates_/catalogue/",
+    ],
+    [
+      "/knowledge/playbooks",
+      "/knowledge/playbooks/catalogue",
+      "/knowledge/playbooks_/catalogue",
+    ],
+    [
+      "/knowledge/tools",
+      "/knowledge/tools/catalogue",
+      "/knowledge/tools_/catalogue",
+    ],
+  ] as const)(
+    "a visitor without an account on %s reads %s, before and after the session is known",
+    async (memberPath, cataloguePath, catalogueRouteId) => {
+      session = "anonymous";
+      requests.length = 0;
+      // Entered cold: the session is read on the page, which turns away.
+      const { appRouter, view } = createApp(memberPath);
+      try {
+        await testing.waitFor(() => {
+          expect(appRouter.state.location.pathname).toBe(cataloguePath);
+        });
+        // With the session known, the route turns away before its page
+        // loads: a preload (a hover over a link) follows the redirect and
+        // never matches the organization's page, so its code is not fetched.
+        let preloaded: { routeId: string }[] | undefined;
+        await testing.act(async () => {
+          preloaded = await appRouter.preloadRoute({ to: memberPath });
+        });
+        expect(preloaded?.map(({ routeId }) => routeId)).not.toContain(
+          memberPath,
+        );
+        expect(preloaded?.map(({ routeId }) => routeId)).toContain(
+          catalogueRouteId,
+        );
+        await testing.act(async () => {
+          await appRouter.navigate({ to: memberPath });
+        });
+        await testing.waitFor(() => {
+          expect(appRouter.state.location.pathname).toBe(cataloguePath);
+        });
+        expect(requests.filter(({ path }) => !isPublicRequest(path))).toEqual(
+          [],
+        );
+      } finally {
+        view.unmount();
+      }
+    },
+  );
+
+  test("the route turns a known visitor away with a permanent redirect, and only a visitor", async () => {
+    const { turnAwaySignedOutVisitor } =
+      await import("@/routes/knowledge/-knowledge-member-route");
+    const { sessionOptions } = await import("@/lib/auth-query-options");
+    const queryClient = new QueryClient();
+    const visitor = {
+      kind: "catalogue",
+      to: "/knowledge/tools/catalogue",
+    } as const;
+
+    /** What the route throws, or `"passed"` when it lets the visitor in. */
+    const outcome = async (
+      target: Parameters<typeof turnAwaySignedOutVisitor>[0]["visitor"],
+    ): Promise<unknown> => {
+      try {
+        await turnAwaySignedOutVisitor({ queryClient, visitor: target });
+        return "passed";
+      } catch (error: unknown) {
+        return error;
+      }
+    };
+
+    // Unknown: the page decides.
+    expect(await outcome(visitor)).toBe("passed");
+    // A member, as the session read answers: nothing to turn away.
+    session = SIGNED_IN_SESSION;
+    await queryClient.query(sessionOptions);
+    expect(queryClient.getQueryData(sessionOptions.queryKey)).not.toBeNull();
+    expect(await outcome(visitor)).toBe("passed");
+    // Known to have no session: a 301 to the catalogue, or not found.
+    session = "anonymous";
+    await queryClient.query({ ...sessionOptions, staleTime: 0 });
+    expect(queryClient.getQueryData(sessionOptions.queryKey)).toBeNull();
+    const redirected = await outcome(visitor);
+    expect(router.isRedirect(redirected)).toBe(true);
+    if (router.isRedirect(redirected)) {
+      expect(redirected.status).toBe(301);
+      expect(redirected.options.to).toBe("/knowledge/tools/catalogue");
+    }
+    const missing = await outcome({ kind: "not-found" });
+    expect(router.isNotFound(missing)).toBe(true);
+  });
+
+  test.each([SIGNED_IN_SESSION, "anonymous"] as const)(
+    "the published catalogues read the same for %s, on their own address",
+    async (asked) => {
+      session = asked;
+      requests.length = 0;
+      const { appRouter, view } = createApp("/knowledge/playbooks/catalogue");
+      try {
+        await testing.waitFor(
+          () => view.getByText(CATALOGUE_STARTER.name),
+          MEMBER_WAIT,
+        );
+        await testing.act(async () => {
+          await appRouter.navigate({ to: "/knowledge/tools/catalogue" });
+        });
+        await testing.waitFor(() =>
+          view.getByRole("heading", { level: 1, name: "Tools" }),
+        );
+        expect(appRouter.state.location.pathname).toBe(
+          "/knowledge/tools/catalogue",
+        );
+        // The catalogues read only the catalogue, whoever is visiting: no
+        // organization's Knowledge is asked for.
+        expect(
+          requests.filter(({ path }) =>
+            MEMBER_KNOWLEDGE_PATHS.some((prefix) => path.startsWith(prefix)),
+          ),
+        ).toEqual([]);
+      } finally {
+        view.unmount();
+      }
+    },
+  );
+
+  test("a skill id at a published tool's address moves to the skill's own", async () => {
+    session = "anonymous";
+    requests.length = 0;
+    const skillId = "11111111-1111-4111-8111-111111111111";
+    const { appRouter, view } = createApp(`/knowledge/tools/${skillId}`);
+    try {
+      await testing.waitFor(() => {
+        expect(appRouter.state.location.pathname).toBe(
+          `/knowledge/tools/skills/${skillId}`,
+        );
+      });
+      // A skill belongs to an organization: a visitor finds nothing there.
+      await testing.waitFor(() =>
+        view.getByText(messages.publicTools.notFound),
+      );
+      expect(requests.filter(({ path }) => !isPublicRequest(path))).toEqual([]);
+    } finally {
+      view.unmount();
+    }
+  });
 });

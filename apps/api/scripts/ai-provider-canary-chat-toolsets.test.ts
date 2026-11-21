@@ -7,14 +7,18 @@ import * as nodeHttp from "node:http";
 import * as nodeHttp2 from "node:http2";
 import * as nodeHttps from "node:https";
 
-import {
-  BYOK_MODEL_OPTIONS,
-  DEFAULT_MODELS,
-  isBYOKModelRoleSupported,
-} from "@stll/ai-catalog";
+import { BYOK_MODEL_OPTIONS, isBYOKModelRoleSupported } from "@stll/ai-catalog";
+import { BUILT_IN_CHAT_TOOL_POLICY_KINDS } from "@stll/api-contract";
+import { VISUAL_PREVIEW_TOOL_NAME } from "@stll/api-contract/visual-preview";
 
 import type { OrgAIConfig } from "@/api/lib/ai-config";
+import {
+  CHAT_ONLY_FEATURE_TOOL_DEFINITIONS,
+  FEATURE_REGISTRY,
+} from "@/api/lib/feature-access/registry";
 import { createTanStackTextAdapterFactory } from "@/api/lib/tanstack-ai-models";
+import { DEFAULT_MCP_TOOL_DEFINITIONS } from "@/api/mcp/static-tool-definitions";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 
 import {
   buildCanaryChatToolsets,
@@ -25,6 +29,8 @@ import {
   CANARY_PROVIDERS,
   type CanaryProvider,
 } from "./ai-provider-canary-config";
+
+const testFetchState = createTestFetch();
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
@@ -71,7 +77,6 @@ type CapturedHttpRequest = {
 };
 
 const installRequestCaptureTransport = () => {
-  const originalFetch = globalThis.fetch;
   const requests: CapturedHttpRequest[] = [];
   let blockedAttempts = 0;
   const blockNativeNetwork = (): never => {
@@ -107,17 +112,19 @@ const installRequestCaptureTransport = () => {
       { status: 400, headers: { "content-type": "application/json" } },
     );
   };
-  globalThis.fetch = Object.assign(captureFetch, {
-    preconnect: () => {
-      blockedAttempts += 1;
-      throw new TypeError("Provider matrix network access is forbidden.");
-    },
-  });
+  testFetchState.set(
+    Object.assign(captureFetch, {
+      preconnect: () => {
+        blockedAttempts += 1;
+        throw new TypeError("Provider matrix network access is forbidden.");
+      },
+    }),
+  );
   return {
     blockedAttemptCount: () => blockedAttempts,
     requests,
     restore: () => {
-      globalThis.fetch = originalFetch;
+      testFetchState.restore();
       for (const spy of nativeSpies) {
         spy.mockRestore();
       }
@@ -164,12 +171,7 @@ const chatModelSelections = (
 
 const canaryConfig = (provider: CanaryProvider): OrgAIConfig => ({
   providers: [{ apiKey: "test-key", provider }],
-  overrideModels: {
-    fast: { modelId: DEFAULT_MODELS[provider].fast, provider },
-    chat: { modelId: DEFAULT_MODELS[provider].chat, provider },
-    reasoning: { modelId: DEFAULT_MODELS[provider].reasoning, provider },
-    pdf: { modelId: DEFAULT_MODELS[provider].pdf, provider },
-  },
+  overrideModels: null,
   decision: null,
 });
 
@@ -185,6 +187,7 @@ const serializeTools = (
   }));
 
 const commonProviderOptions = (model: string, tools: Tool[]) => ({
+  threadId: "provider-toolset-probe",
   logger: resolveDebugOption(false),
   messages: [{ role: "user" as const, content: "Contract probe." }],
   model,
@@ -356,6 +359,37 @@ const emptyStringEnumPaths = (value: unknown, path = "request"): string[] => {
 };
 
 describe("AI provider production chat tool matrix", () => {
+  test("an unenrolled canary accounts for gated tools without requiring their admission", () => {
+    const featureDefinitions = [
+      ...DEFAULT_MCP_TOOL_DEFINITIONS,
+      ...CHAT_ONLY_FEATURE_TOOL_DEFINITIONS,
+    ].filter((definition) => "featureId" in definition);
+    for (const { featureId } of featureDefinitions) {
+      expect(Object.hasOwn(FEATURE_REGISTRY, featureId)).toBe(true);
+    }
+    const catalogNames = Object.keys(BUILT_IN_CHAT_TOOL_POLICY_KINDS);
+    const gated = new Set(
+      catalogNames.filter((name) =>
+        featureDefinitions.some((definition) => definition.name === name),
+      ),
+    );
+    expect(
+      catalogNames.filter((name) => gated.has(name)).length,
+    ).toBeGreaterThan(0);
+    const registered = new Set(
+      buildCanaryChatToolsets(canaryConfig("openai")).flatMap(({ tools }) =>
+        tools.map(({ name }) => name),
+      ),
+    );
+    expect(registered.has(VISUAL_PREVIEW_TOOL_NAME)).toBe(false);
+    expect(DEFAULT_MCP_TOOL_DEFINITIONS).not.toContainEqual(
+      expect.objectContaining({ name: VISUAL_PREVIEW_TOOL_NAME }),
+    );
+    expect([...registered].toSorted()).toEqual(
+      catalogNames.filter((name) => !gated.has(name)).toSorted(),
+    );
+  });
+
   test("maps every advertised chat model and DOCX registry through its real SDK adapter with accepted enums", async () => {
     const transport = installRequestCaptureTransport();
     try {

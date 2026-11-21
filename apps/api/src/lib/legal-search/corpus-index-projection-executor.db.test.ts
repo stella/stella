@@ -11,7 +11,7 @@ import {
   legislationDocuments,
   legislationSources,
 } from "@/api/db/schema";
-import { toSafeId, type SafeId } from "@/api/lib/branded-types";
+import { type SafeId, toSafeId } from "@/api/lib/branded-types";
 import { CorpusIndexError } from "@/api/lib/legal-search/corpus-index-client";
 import {
   CORPUS_INDEX_MANIFESTS,
@@ -25,6 +25,7 @@ import { CORPUS_PROJECTION_GENERATION_SCOPE } from "@/api/lib/legal-search/corpu
 import { CORPUS_PROJECTION_APPEND_UNKNOWN_ATTEMPT_LIMIT } from "@/api/lib/legal-search/corpus-index-projection-store";
 import { EFFECTIVE_CONSOLIDATION } from "@/api/lib/legal-search/legislation-expression-classification";
 import { logger } from "@/api/lib/observability/logger";
+import { optOutOfCorpusProjectionSeedingGuard } from "@/api/tests/helpers/corpus-projection-seeding-guard";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
@@ -138,7 +139,7 @@ const runLegislationCycle = async ({
   return await executeCorpusProjectionAppendCycle({
     runInTransaction,
     client: {
-      ingestCommittedBatch: async (indexId, ndjson) => {
+      ingestCommittedBatch: async ({ indexId, ndjson }) => {
         const result = await ingest(indexId, ndjson);
         if (result.isErr() || presence === "missing") {
           return result;
@@ -185,11 +186,13 @@ const runLegislationCycle = async ({
     ...LEGISLATION_TARGET,
     scope: { type: "subjects", entityIds },
     limit: entityIds.length,
-    leaseMs: 600_000,
+    fillWindowMs: 600_000,
     payloadReadConcurrency: 2,
     retryDelayMs: 5000,
     payloadRetryLimit: 3,
-    payloadReader: async () => ({ text, ast: null }),
+    proofAfterIndexId: null,
+    payloadReader: async () =>
+      Result.ok({ text, ast: null, storedAst: { type: "absent" } as const }),
   });
 };
 
@@ -246,14 +249,19 @@ const runCycle = async (
     generation: TARGET.generation,
     scope: CORPUS_PROJECTION_GENERATION_SCOPE,
     limit: 8,
-    leaseMs: 60_000,
+    fillWindowMs: 60_000,
     payloadReadConcurrency: 4,
     retryDelayMs: 5000,
     payloadRetryLimit: 3,
+    proofAfterIndexId: null,
   });
 
 beforeAll(async () => {
   client = await createTestPglite();
+  await optOutOfCorpusProjectionSeedingGuard(client, {
+    reason:
+      "Exercises the projection store, executor and serving pipeline on canonical rows and desired states this suite stands up as fixtures; no desired writer runs here, and the writer suites keep the guard.",
+  });
   db = drizzle({ client });
   await db.insert(corpusIndexGenerations).values({
     ...TARGET,

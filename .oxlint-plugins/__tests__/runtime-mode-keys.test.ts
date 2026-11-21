@@ -1,8 +1,6 @@
-import { describe, expect, setDefaultTimeout, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 
 import { lintSingleRule } from "./lint-single-rule.ts";
-
-setDefaultTimeout(20_000);
 
 // The owner exemption and the env-boundary files are path-scoped, which the
 // passive fixture under `.oxlint-plugins/__fixtures__` cannot exercise.

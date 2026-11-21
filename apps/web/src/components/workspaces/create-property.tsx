@@ -1,16 +1,19 @@
 import { Suspense, useState } from "react";
 
-import { useSuspenseQuery } from "@tanstack/react-query";
+import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
 import type { Editor } from "@tiptap/react";
-import { useFormatter, useTranslations } from "use-intl";
+import { useTranslations } from "use-intl";
 
 import { PROPERTY_DEPENDENCIES_PER_PROPERTY_MAX } from "@stll/api-contract";
+import { DEFAULT_VARCHAR_MAX_LENGTH } from "@stll/api-contract/limits";
+import { stableStringify } from "@stll/stable-stringify";
 import { Temporal } from "@stll/time";
 import { Button } from "@stll/ui/button";
 import {
   Dialog,
   DialogClose,
   DialogFooter,
+  DialogFormState,
   DialogPopup,
   DialogTitle,
   DialogTrigger,
@@ -25,6 +28,7 @@ import {
   SelectValue,
 } from "@stll/ui/select";
 import { Skeleton } from "@stll/ui/skeleton";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import Tooltip from "@/components/tooltip";
@@ -34,16 +38,19 @@ import {
   COMPOSER_CARD_CLASS,
   ReadingFromRow,
   TypeChipsRow,
-  useChipDefinitions,
+  usePropertyComposerChipDefinitions,
 } from "@/components/workspaces/properties/composer-primitives";
 import type {
-  CreatableContentType,
   FileChip,
+  PropertyComposerContentType,
 } from "@/components/workspaces/properties/composer-primitives";
 import { InlineOptionEditor } from "@/components/workspaces/properties/inline-option-editor";
 import { PropertyPromptInput } from "@/components/workspaces/properties/property-input/input";
 import type { PropertyPromptFieldHandle } from "@/components/workspaces/properties/property-input/input";
-import { isCreatableContentType } from "@/components/workspaces/property-utils";
+import {
+  isPropertyComposerContentType,
+  propertyToolAction,
+} from "@/components/workspaces/property-utils";
 import { ADD_COLUMN_RAIL_PLUS_CLASS_NAME } from "@/components/workspaces/table/add-column-rail";
 import {
   buildDocTypeGate,
@@ -51,19 +58,30 @@ import {
   resolveDocumentTypeClassifier,
 } from "@/components/workspaces/table/group-columns";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { useSingleFlight } from "@/hooks/use-single-flight";
+import { useFormatter } from "@/i18n/formatting-context";
 import { detached } from "@/lib/detached";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { useCallerFeatureEnabled } from "@/lib/organization/feature-access/access";
+import {
+  CapabilityAction,
+  useActionCapabilities,
+} from "@/lib/organization/feature-access/capability-actions";
+import { CALLER_FEATURE } from "@/lib/organization/feature-access/surfaces";
+import { queryView } from "@/lib/query-view.logic";
 import { toSafeId } from "@/lib/safe-id";
 import type {
   PropertyDependency,
-  WorkspaceProperty,
   SelectPropertyOption,
+  WorkspaceProperty,
 } from "@/lib/types";
+import { useQueryViewError } from "@/lib/use-query-view";
 import {
   useCreateProperty,
   useSuggestPrompt,
   useUpdateProperty,
 } from "@/lib/workspaces/mutations/properties";
+import { usePropertyDisplayName } from "@/lib/workspaces/property-display-name";
 import { propertiesOptions } from "@/lib/workspaces/queries/properties";
 
 type CreatePropertyProps = {
@@ -86,12 +104,7 @@ type CreatePropertyProps = {
    *    column popover's "Edit column…" item).
    */
   triggerVariant?:
-    | "icon"
-    | "labelled"
-    | "panel"
-    | "blank-cell"
-    | "rail"
-    | "none";
+    "icon" | "labelled" | "panel" | "blank-cell" | "rail" | "none";
   extractionContext?: {
     entityId: string;
     filePropertyId: string | null;
@@ -113,11 +126,23 @@ type CreatePropertyResult = {
   entityId?: string;
 };
 
-const buildContent = (
-  contentType: CreatableContentType,
-  options: SelectPropertyOption[],
-  fallback: string | null,
-): WorkspaceProperty["content"] => {
+type BuildContentArgs = {
+  contentType: PropertyComposerContentType;
+  options: SelectPropertyOption[];
+  fallback: string | null;
+  /** The edited column's currency, kept when it stays a money column. */
+  currency: string | null;
+};
+
+const buildContent = ({
+  contentType,
+  options,
+  fallback,
+  currency,
+}: BuildContentArgs): Exclude<
+  WorkspaceProperty["content"],
+  { type: "record" }
+> => {
   if (contentType === "single-select" || contentType === "multi-select") {
     return {
       version: 1,
@@ -126,7 +151,31 @@ const buildContent = (
       fallback,
     };
   }
+  if (contentType === "money") {
+    return { version: 1, type: "money", currency };
+  }
   return { version: 1, type: contentType };
+};
+
+type ComposerContent = {
+  initialContentType: PropertyComposerContentType;
+  /** The edited column's currency, kept when it stays a money column. */
+  editingCurrency: string | null;
+};
+
+const composerContentOf = (
+  editingProperty: WorkspaceProperty | null,
+): ComposerContent => {
+  if (editingProperty === null) {
+    return { initialContentType: "text", editingCurrency: null };
+  }
+  const { content } = editingProperty;
+  return {
+    initialContentType: isPropertyComposerContentType(content.type)
+      ? content.type
+      : "text",
+    editingCurrency: content.type === "money" ? content.currency : null,
+  };
 };
 
 const promptFromHtml = (html: string): string =>
@@ -147,6 +196,21 @@ export const CreateProperty = ({
   const t = useTranslations();
   const isLimitReached = usePropertiesCountLimit(workspaceId);
   const isEditMode = propertyId !== undefined;
+  const editingPropertyQuery = useQuery({
+    ...propertiesOptions(workspaceId),
+    enabled: isEditMode,
+    select: (properties) =>
+      properties.find((property) => property.id === propertyId),
+  });
+  const editingProperty = queryView(editingPropertyQuery);
+  useQueryViewError(editingProperty, "CreateProperty:query");
+  const action = propertyToolAction(
+    editingProperty.type === "items" &&
+      editingProperty.refetchError === undefined
+      ? editingProperty.items?.tool.type
+      : undefined,
+  );
+  const { capabilities } = useActionCapabilities(action.capability);
   // Both mutations are lifted out of the dialog body so an in-flight
   // request survives a close/reopen cycle. Whichever one applies is
   // chosen inside the body based on edit mode.
@@ -155,6 +219,13 @@ export const CreateProperty = ({
   const [uncontrolledDialogOpen, setUncontrolledDialogOpen] = useState(false);
   const dialogOpen = open ?? uncontrolledDialogOpen;
   const setDialogOpen = (nextOpen: boolean) => {
+    if (
+      nextOpen &&
+      action.capability === "ai" &&
+      capabilities.ai.type !== "available"
+    ) {
+      return;
+    }
     onOpenChange?.(nextOpen);
     if (open === undefined) {
       setUncontrolledDialogOpen(nextOpen);
@@ -185,104 +256,133 @@ export const CreateProperty = ({
       {(() => {
         if (triggerVariant === "labelled") {
           return (
-            <DialogTrigger
-              render={
-                <Button
-                  className="gap-1"
-                  size="xs"
-                  type="button"
-                  variant="muted"
-                />
-              }
-            >
-              <PlusIcon className="size-3" />
-              {t("workspaces.properties.newColumn")}
-            </DialogTrigger>
+            <CapabilityAction action={action} surface="control">
+              {(capabilityProps) => (
+                <DialogTrigger
+                  render={
+                    <Button
+                      className="gap-1"
+                      size="xs"
+                      type="button"
+                      variant="muted"
+                    />
+                  }
+                  {...capabilityProps}
+                >
+                  <PlusIcon className="size-3" />
+                  {t("workspaces.properties.newColumn")}
+                </DialogTrigger>
+              )}
+            </CapabilityAction>
           );
         }
         if (triggerVariant === "panel") {
           return (
-            <DialogTrigger
-              render={
-                <Button
-                  className="text-muted-foreground hover:text-foreground hover:bg-accent flex h-full w-full flex-1 justify-start gap-2 rounded-none border-0 px-3 font-normal before:rounded-none"
-                  type="button"
-                  variant="ghost"
-                />
-              }
-            >
-              <PlusIcon className="size-4" />
-              <span className="truncate">
-                {t("workspaces.properties.extractEntityType")}
-              </span>
-            </DialogTrigger>
+            <CapabilityAction action={action} surface="control">
+              {(capabilityProps) => (
+                <DialogTrigger
+                  render={
+                    <Button
+                      className="text-muted-foreground hover:text-foreground hover:bg-accent flex h-full w-full flex-1 justify-start gap-2 rounded-none border-0 px-3 font-normal before:rounded-none"
+                      type="button"
+                      variant="ghost"
+                    />
+                  }
+                  {...capabilityProps}
+                >
+                  <PlusIcon className="size-4" />
+                  <TruncatedText>
+                    {t("workspaces.properties.extractEntityType")}
+                  </TruncatedText>
+                </DialogTrigger>
+              )}
+            </CapabilityAction>
           );
         }
         if (triggerVariant === "icon") {
           return (
             <Tooltip
               content={t("workspaces.properties.newColumn")}
-              render={
-                <DialogTrigger
-                  render={
-                    <button
-                      aria-label={t("workspaces.properties.newColumn")}
-                      className="ring-ring focus-visible:ring-offset-background text-muted-foreground flex h-full w-full cursor-pointer items-center justify-center border-0 bg-transparent p-0 outline-none focus-visible:ring-2 focus-visible:ring-offset-1"
-                      data-add-property-trigger
-                      data-row-expansion-ignore
-                      onClick={(event) => {
-                        event.currentTarget.blur();
-                      }}
-                      type="button"
-                    />
-                  }
-                >
-                  <PlusIcon className="size-4" />
-                </DialogTrigger>
-              }
+              render={(triggerProps) => (
+                <CapabilityAction action={action} surface="control">
+                  {(capabilityProps) => (
+                    <DialogTrigger
+                      {...triggerProps}
+                      render={
+                        <Button
+                          aria-label={t("workspaces.properties.newColumn")}
+                          className="flex h-full w-full items-center justify-center"
+                          data-add-property-trigger
+                          data-row-expansion-ignore
+                          onClick={(event) => {
+                            event.currentTarget.blur();
+                          }}
+                          variant="plain"
+                        />
+                      }
+                      {...capabilityProps}
+                    >
+                      <PlusIcon className="text-muted-foreground size-4" />
+                    </DialogTrigger>
+                  )}
+                </CapabilityAction>
+              )}
             />
           );
         }
         if (triggerVariant === "blank-cell") {
           return (
-            <DialogTrigger
-              render={
-                <button
-                  aria-label={t("workspaces.properties.newColumn")}
-                  className="ring-ring focus-visible:ring-offset-background absolute inset-0 z-10 cursor-pointer border-0 bg-transparent p-0 outline-none focus-visible:ring-2 focus-visible:ring-offset-1"
-                  data-add-property-trigger
-                  data-row-expansion-ignore
-                  onClick={(event) => {
-                    event.currentTarget.blur();
-                  }}
-                  type="button"
+            <CapabilityAction action={action} surface="control">
+              {(capabilityProps) => (
+                <DialogTrigger
+                  render={
+                    <Button
+                      aria-label={t("workspaces.properties.newColumn")}
+                      className="absolute inset-0 z-10"
+                      data-add-property-trigger
+                      data-row-expansion-ignore
+                      onClick={(event) => {
+                        event.currentTarget.blur();
+                      }}
+                      variant="plain"
+                    />
+                  }
+                  {...capabilityProps}
                 />
-              }
-            />
+              )}
+            </CapabilityAction>
           );
         }
         if (triggerVariant === "rail") {
           return (
             <Tooltip
               content={t("workspaces.properties.newColumn")}
-              render={
-                <DialogTrigger
-                  render={
-                    <button
-                      aria-label={t("workspaces.properties.newColumn")}
-                      className="group/add-column-rail ring-ring focus-visible:ring-offset-background absolute inset-0 z-10 cursor-pointer border-0 bg-transparent p-0 outline-none focus-visible:ring-2 focus-visible:ring-offset-1"
-                      data-add-property-trigger
-                      data-row-expansion-ignore
-                      onClick={(event) => {
-                        event.currentTarget.blur();
-                      }}
-                      type="button"
-                    >
-                      <PlusIcon className={ADD_COLUMN_RAIL_PLUS_CLASS_NAME} />
-                    </button>
-                  }
-                />
-              }
+              render={(triggerProps) => (
+                <CapabilityAction action={action} surface="control">
+                  {(capabilityProps) => (
+                    <DialogTrigger
+                      {...triggerProps}
+                      render={
+                        <Button
+                          aria-label={t("workspaces.properties.newColumn")}
+                          className="group/add-column-rail absolute inset-0 z-10"
+                          data-add-property-trigger
+                          data-row-expansion-ignore
+                          onClick={(event) => {
+                            event.currentTarget.blur();
+                          }}
+                          variant="plain"
+                        >
+                          <PlusIcon
+                            className={ADD_COLUMN_RAIL_PLUS_CLASS_NAME}
+                          />
+                        </Button>
+                      }
+                      {...capabilityProps}
+                    />
+                  )}
+                </CapabilityAction>
+              )}
             />
           );
         }
@@ -325,6 +425,49 @@ type DialogBodyProps = {
   onCreated?: (result: CreatePropertyResult) => void;
 };
 
+type ColumnSubmitDisabledReasonOptions = {
+  isMutationPending: boolean;
+  hasName: boolean;
+  showAiSections: boolean;
+  overDependencyCap: boolean;
+  hasPrompt: boolean;
+  hasDependencies: boolean;
+  t: (
+    key:
+      | "common.saving"
+      | "workspaces.properties.enterColumnName"
+      | "workspaces.properties.reduceDependencies"
+      | "workspaces.properties.addPromptAndDependencies"
+      | "workspaces.properties.completeColumnOptions",
+  ) => string;
+};
+
+const columnSubmitDisabledReason = ({
+  isMutationPending,
+  hasName,
+  showAiSections,
+  overDependencyCap,
+  hasPrompt,
+  hasDependencies,
+  t,
+}: ColumnSubmitDisabledReasonOptions) => {
+  if (isMutationPending) {
+    return t("common.saving");
+  }
+  if (!hasName) {
+    return t("workspaces.properties.enterColumnName");
+  }
+  if (showAiSections) {
+    if (overDependencyCap) {
+      return t("workspaces.properties.reduceDependencies");
+    }
+    if (!hasPrompt || !hasDependencies) {
+      return t("workspaces.properties.addPromptAndDependencies");
+    }
+  }
+  return t("workspaces.properties.completeColumnOptions");
+};
+
 const PropertyComposerBody = ({
   workspaceId,
   onClose,
@@ -336,8 +479,10 @@ const PropertyComposerBody = ({
 }: DialogBodyProps) => {
   const t = useTranslations();
   const format = useFormatter();
+  const displayName = usePropertyDisplayName();
   const suggestPrompt = useSuggestPrompt();
   const startWorkflow = useStartWorkflow(workspaceId);
+  const submitOnce = useSingleFlight();
   const { data: properties } = useSuspenseQuery(propertiesOptions(workspaceId));
 
   const editingProperty =
@@ -359,10 +504,16 @@ const PropertyComposerBody = ({
   const editingTool = editingProperty?.tool;
   const isManualEdit = editingTool?.type === "manual-input";
   const showAiSections = !isManualEdit;
-  const initialContentType: CreatableContentType =
-    editingProperty && isCreatableContentType(editingProperty.content.type)
-      ? editingProperty.content.type
-      : "text";
+  const { capabilities } = useActionCapabilities("ai");
+  const { initialContentType, editingCurrency } =
+    composerContentOf(editingProperty);
+  // An existing money column keeps its chip for everyone; offering money for
+  // an AI column is the table-analysis beta, so only the AI composer asks.
+  const tableAnalysisEnabled = useCallerFeatureEnabled(
+    CALLER_FEATURE.tableAnalysis,
+    { enabled: showAiSections },
+  );
+  const offerMoney = tableAnalysisEnabled || initialContentType === "money";
   const initialPromptHtml =
     editingTool?.type === "ai-model" ? editingTool.prompt : "";
   const initialOptions: SelectPropertyOption[] =
@@ -381,12 +532,12 @@ const PropertyComposerBody = ({
   const fileProperties = properties.filter((p) => p.content.type === "file");
   const fileProperty = fileProperties.at(0);
   const extractionFileProperty =
-    extractionContext?.filePropertyId === null ||
-    extractionContext?.filePropertyId === undefined
-      ? null
-      : (fileProperties.find(
+    extractionContext?.filePropertyId !== undefined &&
+    extractionContext.filePropertyId !== null
+      ? (fileProperties.find(
           (property) => property.id === extractionContext.filePropertyId,
-        ) ?? null);
+        ) ?? null)
+      : null;
 
   // Split the existing dependencies (if editing) into file-typed (which
   // become chips) and other (which live as @-mentions in the textarea).
@@ -457,7 +608,7 @@ const PropertyComposerBody = ({
   })();
 
   const [contentType, setContentType] =
-    useState<CreatableContentType>(initialContentType);
+    useState<PropertyComposerContentType>(initialContentType);
   const [name, setName] = useState(editingProperty?.name ?? "");
   const [prompt, setPrompt] = useState(initialPromptHtml);
   const [textareaMentions, setTextareaMentions] = useState<string[]>(
@@ -472,6 +623,16 @@ const PropertyComposerBody = ({
     initialScopeDocType,
   );
   const [editor, setEditor] = useState<Editor | null>(null);
+  const [initialDraft] = useState(() => ({
+    contentType,
+    name,
+    prompt,
+    textareaMentions,
+    selectedFileIds,
+    options,
+    fallback,
+    scopeDocType,
+  }));
 
   const trimmedName = name.trim();
   const promptText = promptFromHtml(prompt);
@@ -524,6 +685,15 @@ const PropertyComposerBody = ({
   const aiRequirementsMet =
     !showAiSections ||
     (promptText.length > 0 && dependencyIds.length > 0 && !overDependencyCap);
+  const submitDisabledReason = columnSubmitDisabledReason({
+    isMutationPending,
+    hasName: trimmedName.length > 0,
+    showAiSections,
+    overDependencyCap,
+    hasPrompt: promptText.length > 0,
+    hasDependencies: dependencyIds.length > 0,
+    t,
+  });
   const canSubmit =
     trimmedName.length > 0 &&
     aiRequirementsMet &&
@@ -537,13 +707,22 @@ const PropertyComposerBody = ({
     handleBlur: () => undefined,
   };
 
-  const handleSubmit = () => {
-    if (!canSubmit) {
+  const submitProperty = (settled: () => void) => {
+    if (
+      (showAiSections && capabilities.ai.type !== "available") ||
+      !canSubmit
+    ) {
+      settled();
       return;
     }
 
     if (isEditMode && editingProperty) {
-      const nextContent = buildContent(contentType, options, effectiveFallback);
+      const nextContent = buildContent({
+        contentType,
+        options,
+        fallback: effectiveFallback,
+        currency: editingCurrency,
+      });
       const nextTool: Exclude<
         WorkspaceProperty["tool"],
         { type: "playbook-verdict" }
@@ -561,6 +740,7 @@ const PropertyComposerBody = ({
           tool: nextTool,
         },
         {
+          onSettled: settled,
           onSuccess: () => {
             // AI properties need a re-extraction after any edit since
             // the prompt, type, options, or dependencies may have
@@ -593,6 +773,7 @@ const PropertyComposerBody = ({
           : {}),
       },
       {
+        onSettled: settled,
         onSuccess: (data) => {
           const result: CreatePropertyResult = {
             property: {
@@ -602,7 +783,12 @@ const PropertyComposerBody = ({
               createdAt: Temporal.Now.instant().toString(),
               status: "stale",
               kinds: null,
-              content: buildContent(contentType, options, effectiveFallback),
+              content: buildContent({
+                contentType,
+                options,
+                fallback: effectiveFallback,
+                currency: null,
+              }),
               tool: {
                 version: 1,
                 type: "ai-model",
@@ -634,6 +820,10 @@ const PropertyComposerBody = ({
         },
       },
     );
+  };
+
+  const handleSubmit = () => {
+    detached(submitOnce.runSettled(submitProperty), "create-property.submit");
   };
 
   const handleAutoPrompt = (instruction: string) => {
@@ -689,6 +879,30 @@ const PropertyComposerBody = ({
 
   return (
     <>
+      <DialogFormState
+        dirty={
+          stableStringify({
+            contentType,
+            name,
+            prompt,
+            textareaMentions,
+            selectedFileIds,
+            options,
+            fallback,
+            scopeDocType,
+          }) !== stableStringify(initialDraft)
+        }
+        onDiscard={() => {
+          setContentType(initialDraft.contentType);
+          setName(initialDraft.name);
+          setPrompt(initialDraft.prompt);
+          setTextareaMentions(initialDraft.textareaMentions);
+          setSelectedFileIds(initialDraft.selectedFileIds);
+          setOptions(initialDraft.options);
+          setFallback(initialDraft.fallback);
+          setScopeDocType(initialDraft.scopeDocType);
+        }}
+      />
       <DialogTitle className="sr-only">
         {isEditMode
           ? t("workspaces.properties.editColumn")
@@ -699,7 +913,8 @@ const PropertyComposerBody = ({
         <Input
           autoComplete="off"
           autoFocus
-          className="text-foreground placeholder:text-foreground-placeholder w-full px-0 text-base font-semibold tracking-tight"
+          className="text-foreground placeholder:text-foreground-placeholder w-full text-base font-semibold tracking-tight"
+          maxLength={DEFAULT_VARCHAR_MAX_LENGTH}
           onChange={(e) => setName(e.target.value)}
           onKeyDown={(e) => {
             if ((e.metaKey || e.ctrlKey) && e.key === "Enter" && canSubmit) {
@@ -720,13 +935,11 @@ const PropertyComposerBody = ({
             autoPromptPending={suggestPrompt.isPending}
             contentType={contentType}
             editorReady={setEditor}
-            fileChips={effectiveSelectedFileIds.map(
-              (id) =>
-                fileProperties.find((p) => p.id === id) ?? {
-                  id,
-                  name: id,
-                },
-            )}
+            fileChips={effectiveSelectedFileIds.map((id) => {
+              const file = fileProperties.find((p) => p.id === id);
+              return { id, name: file === undefined ? id : displayName(file) };
+            })}
+            offerMoney={offerMoney}
             onAutoPrompt={handleAutoPrompt}
             onContentTypeChange={setContentType}
             onMentionsChange={setTextareaMentions}
@@ -741,7 +954,10 @@ const PropertyComposerBody = ({
               ? {
                   addFile: (id: string) =>
                     setSelectedFileIds((prev) => [...prev, id]),
-                  availableFiles: availableFileToAdd,
+                  availableFiles: availableFileToAdd.map((file) => ({
+                    id: file.id,
+                    name: displayName(file),
+                  })),
                 }
               : {})}
             {...(propertyId !== undefined ? { propertyId } : {})}
@@ -750,6 +966,7 @@ const PropertyComposerBody = ({
         ) : (
           <ManualTypeRow
             contentType={contentType}
+            offerMoney={offerMoney}
             onContentTypeChange={setContentType}
             typeChanged={typeChanged}
           />
@@ -788,16 +1005,25 @@ const PropertyComposerBody = ({
         <DialogClose render={<Button size="sm" variant="ghost" />}>
           {t("common.cancel")}
         </DialogClose>
-        <Button
-          disabled={!canSubmit}
-          loading={isMutationPending}
-          onClick={handleSubmit}
-          size="sm"
+        <CapabilityAction
+          action={{ capability: showAiSections ? "ai" : null }}
+          surface="control"
         >
-          {isEditMode
-            ? t("common.saveChanges")
-            : t("workspaces.properties.createColumn")}
-        </Button>
+          {(capabilityProps) => (
+            <Button
+              disabled={!canSubmit}
+              disabledReason={submitDisabledReason}
+              loading={isMutationPending}
+              onClick={handleSubmit}
+              size="sm"
+              {...capabilityProps}
+            >
+              {isEditMode
+                ? t("common.saveChanges")
+                : t("workspaces.properties.createColumn")}
+            </Button>
+          )}
+        </CapabilityAction>
       </DialogFooter>
     </>
   );
@@ -880,8 +1106,9 @@ type ComposerCardProps = {
   onMentionsChange: (mentions: string[]) => void;
   editorReady: (editor: Editor) => void;
   onSubmit: () => void;
-  contentType: CreatableContentType;
-  onContentTypeChange: (next: CreatableContentType) => void;
+  contentType: PropertyComposerContentType;
+  onContentTypeChange: (next: PropertyComposerContentType) => void;
+  offerMoney: boolean;
   fileChips: FileChip[];
   onRemoveFile: (id: string) => void;
   availableFiles?: FileChip[];
@@ -902,6 +1129,7 @@ const ComposerCard = ({
   onSubmit,
   contentType,
   onContentTypeChange,
+  offerMoney,
   fileChips,
   onRemoveFile,
   availableFiles,
@@ -912,7 +1140,7 @@ const ComposerCard = ({
   typeChanged,
 }: ComposerCardProps) => {
   const t = useTranslations();
-  const chipDefs = useChipDefinitions();
+  const chipDefs = usePropertyComposerChipDefinitions(offerMoney);
 
   return (
     <div className={COMPOSER_CARD_CLASS}>
@@ -936,6 +1164,7 @@ const ComposerCard = ({
         onSubmit={onSubmit}
         aiEditAction={{
           disabled: autoPromptDisabled,
+          disabledReason: t("workspaces.properties.enterColumnName"),
           isPending: autoPromptPending,
           label: t("ai.editWithAI"),
           onClick: onAutoPrompt,
@@ -948,6 +1177,7 @@ const ComposerCard = ({
       />
 
       <TypeChipsRow
+        capability="ai"
         chipDefs={chipDefs}
         contentType={contentType}
         onContentTypeChange={onContentTypeChange}
@@ -1010,20 +1240,23 @@ const DocumentTypeScopeRow = ({
 };
 
 type ManualTypeRowProps = {
-  contentType: CreatableContentType;
-  onContentTypeChange: (next: CreatableContentType) => void;
+  contentType: PropertyComposerContentType;
+  offerMoney: boolean;
+  onContentTypeChange: (next: PropertyComposerContentType) => void;
   typeChanged: boolean;
 };
 
 const ManualTypeRow = ({
   contentType,
+  offerMoney,
   onContentTypeChange,
   typeChanged,
 }: ManualTypeRowProps) => {
-  const chipDefs = useChipDefinitions();
+  const chipDefs = usePropertyComposerChipDefinitions(offerMoney);
   return (
     <div className={cn(COMPOSER_CARD_CLASS, "gap-2")}>
       <TypeChipsRow
+        capability={null}
         chipDefs={chipDefs}
         contentType={contentType}
         onContentTypeChange={onContentTypeChange}

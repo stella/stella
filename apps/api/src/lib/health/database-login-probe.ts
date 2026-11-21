@@ -9,10 +9,11 @@
  */
 
 import { Result, TaggedError } from "better-result";
-import { SQL } from "bun";
 
 import { declareFailureClass } from "@stll/errors";
 
+import { createSqlClient } from "@/api/db/sql-client";
+import { forceClosePool } from "@/api/db/sql-close";
 import { startNonOverlappingInterval } from "@/api/lib/non-overlapping-interval";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
@@ -21,10 +22,6 @@ export const DATABASE_LOGIN_PROBE_INTERVAL_MS = 5 * 60_000;
 /** Budget for one attempt: connect, authenticate, query. */
 export const DATABASE_LOGIN_ATTEMPT_DEADLINE_MS = 10_000;
 const CONNECTION_TIMEOUT_S = 5;
-// Seconds. On the pinned Bun, `close({ timeout: 0 })` waits for queries in
-// flight like a close without a timeout, so a stalled query needs a positive
-// bound to be ended.
-const CLOSE_TIMEOUT_S = 0.001;
 
 const FRESH_LOGIN_SINK = failureSink({ event: "db.fresh_login", expected: [] });
 
@@ -45,7 +42,7 @@ export type FreshLoginClient = {
 
 /** A dedicated one-connection client; nothing else shares its connection. */
 export const openFreshLoginClient = (url: string): FreshLoginClient => {
-  const client = new SQL({
+  const client = createSqlClient({
     url,
     max: 1,
     connectionTimeout: CONNECTION_TIMEOUT_S,
@@ -55,7 +52,7 @@ export const openFreshLoginClient = (url: string): FreshLoginClient => {
       await client`SELECT 1`;
     },
     close: async () => {
-      await client.close({ timeout: CLOSE_TIMEOUT_S });
+      await forceClosePool(client);
     },
   };
 };

@@ -1,17 +1,18 @@
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 
 import { getClauseVersionHandler } from "../read";
 
-const getClauseVersionParamsSchema = t.Object({
-  clauseId: tSafeId("clause"),
-  versionId: tSafeId("clauseVersion"),
+const getClauseVersionParamsSchema = v.object({
+  clauseId: resourceIdSchema("clause"),
+  versionId: resourceIdSchema("clauseVersion"),
 });
 
 const config = {
+  contract: "patch",
   description:
     "Read the stored body of one specific clause version, with its version " +
     "number and creation time. Use clauses.get for the clause's current body " +

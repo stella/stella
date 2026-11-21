@@ -1,5 +1,5 @@
-// parser-output-unchanged: listing-stage labels preserve the fetched response and parsed page.
-// parser-output-unchanged: unread items pass through for adapters that report them; parsed pages and decisions are unchanged.
+import { panic, Result } from "better-result";
+// parser-output-unchanged: Retry exhaustion holds the cursor; successful pages produce unchanged parsed decisions.
 /**
  * Shared pagination helpers for case-law adapters.
  *
@@ -8,25 +8,27 @@
  * pagination (CZ-constitutional enumeration, EU-ECJ
  * multi-language) should implement fetchPage directly.
  */
-
-import { panic, Result } from "better-result";
 import * as v from "valibot";
 
+import { chunk as chunkItems } from "@stll/concurrency/chunk";
+import { INGESTION_STOP_KIND } from "@stll/legal-atlas/ingestion-cycle";
+
 import { ADAPTER_TIMEOUT } from "@/api/handlers/case-law/consts";
+import { fetchWithRetry } from "@/api/handlers/case-law/ingestion/adapters/retry";
+import { adapterCatch } from "@/api/handlers/case-law/ingestion/adapters/utils";
+import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
+import type { AdapterKey } from "@/api/lib/legal-search/ingestion-constants";
+// parser-output-unchanged: a page states whether the publisher was asked; parsed decision output is unchanged.
+// parser-output-unchanged: This change only classifies failed listing fetches as source unreachable and does not change parser output.
+// parser-output-unchanged: completion batches use the shared owner with identical items and cursor boundaries; parsed content is unchanged.
+import { PUBLISHER_REQUEST } from "@/api/lib/legal-search/ingestion-types";
 import type {
   DecisionSupplement,
   IngestionItem,
   IngestionResult,
   SyncPage,
   UnreadListedItem,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import { fetchWithRetry } from "@/api/handlers/case-law/ingestion/adapters/retry";
-import {
-  adapterCatch,
-  isTimeoutError,
-} from "@/api/handlers/case-law/ingestion/adapters/utils";
-import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
-import type { AdapterKey } from "@/api/lib/legal-search/ingestion-constants";
+} from "@/api/lib/legal-search/ingestion-types";
 import { logger } from "@/api/lib/observability/logger";
 import { isRecord } from "@/api/lib/type-guards";
 
@@ -645,11 +647,12 @@ const parsePageItems = async ({
   // Complete chunks sequentially so an abort can rewind to the last durable
   // chunk boundary. Replaying that chunk is safe because inserts are
   // idempotent; advancing past an in-flight chunk would lose decisions.
-  for (let i = 0; i < items.length; i += chunkSize) {
+  for (const [batchIndex, chunk] of chunkItems(items, chunkSize).entries()) {
+    const i = batchIndex * chunkSize;
     if (signal?.aborted) {
       break;
     }
-    const chunk = items.slice(i, i + chunkSize);
+
     const results = await Promise.allSettled(
       chunk.map(async (item) => await parseItem(item, signal)),
     );
@@ -826,25 +829,6 @@ export const createPagePaginatedFetch = <TResponse>(
           if (signal?.aborted) {
             throw error;
           }
-          // Timeout after all retries: skip this page so the
-          // adapter doesn't stall on a single slow page.
-          // Network errors (DNS, connection refused) propagate
-          // so a transient outage doesn't permanently skip pages.
-          // A slow publisher is an expected operational failure, so no
-          // per-page exception capture (see the pipeline's halt path):
-          // the skip is logged, and the coverage ledger records the
-          // shortfall the skipped page leaves behind.
-          if (isTimeoutError(error)) {
-            logger.warn("case_law.ingestion.page_skipped_timeout", {
-              adapterKey: opts.adapterKey,
-              page: String(page),
-              retries: String(SERVER_ERROR_RETRIES),
-            });
-            return Result.ok({
-              decisions: [],
-              nextCursor: encode(pageStartOffset + opts.pageSize),
-            });
-          }
           throw error;
         }
 
@@ -870,6 +854,7 @@ export const createPagePaginatedFetch = <TResponse>(
             });
             return Result.ok({
               decisions: [],
+              publisherRequest: PUBLISHER_REQUEST.FAILED,
               nextCursor: encode(pageStartOffset + opts.pageSize),
             });
           }
@@ -938,12 +923,20 @@ export const createPagePaginatedFetch = <TResponse>(
             } catch (retryParseError) {
               const retryContentType =
                 retryResponse.headers.get("content-type") ?? "unknown";
+              // Two answers in a row that are not data at all are the
+              // publisher's error or maintenance page, not a page this
+              // adapter misread.
               return Result.err(
-                retryFailed(
-                  retryParseError instanceof SyntaxError
-                    ? `unparseable (content-type: ${retryContentType})`
-                    : `validation failed: ${retryParseError instanceof Error ? retryParseError.message : String(retryParseError)}`,
-                ),
+                retryParseError instanceof SyntaxError
+                  ? new AdapterFetchError({
+                      message: `${opts.adapterKey}: page ${page} retry unparseable (content-type: ${retryContentType})`,
+                      adapterKey: opts.adapterKey,
+                      cursor,
+                      stopKind: INGESTION_STOP_KIND.SOURCE_UNREACHABLE,
+                    })
+                  : retryFailed(
+                      `validation failed: ${retryParseError instanceof Error ? retryParseError.message : String(retryParseError)}`,
+                    ),
               );
             }
           }
@@ -1060,6 +1053,7 @@ export const createPagePaginatedFetch = <TResponse>(
               }),
           ...(supplements.length === 0 ? {} : { supplements }),
           ...(unreadItems.length === 0 ? {} : { unreadItems }),
+          publisherRequest: PUBLISHER_REQUEST.ANSWERED,
           nextCursor,
           sourceUrl: url,
         });

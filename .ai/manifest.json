@@ -13,8 +13,14 @@
       {
         "path": "apps/api",
         "title": "Stella API Development Guidelines",
-        "modules": ["backend-elysia", "database"],
+        "modules": ["database"],
         "local": ".ai/local/api-agents.md"
+      },
+      {
+        "path": "apps/api/src/handlers/case-law",
+        "title": "Case Law Ingestion — Engineering Guide",
+        "modules": [],
+        "local": ".ai/local/case-law-agents.md"
       },
       {
         "path": "apps/web",

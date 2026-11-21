@@ -1,16 +1,20 @@
-import { panic, Result } from "better-result";
-import { describe, expect, test } from "bun:test";
+import { panic, Result, UnhandledException } from "better-result";
+import { afterEach, describe, expect, test } from "bun:test";
 import { PgDialect } from "drizzle-orm/pg-core";
-import { ElysiaCustomStatusResponse } from "elysia/error";
 
 import { envBase } from "@/api/env-base";
+import { courtWeightMapFromSeed } from "@/api/handlers/case-law/court-weight-seed";
 import {
   searchCorpusIndexDecisions,
   searchDecisionsHandler,
 } from "@/api/handlers/case-law/decisions/search";
+import { HttpStatusResponse } from "@/api/http/status";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { bodyPreviewJoin } from "@/api/lib/case-law/search-sql";
+import { resolveHandlerError } from "@/api/lib/errors/handler-error-resolution";
+import { CorpusServingGenerationAbsentError } from "@/api/lib/legal-search/corpus-index-generation-store";
 import { corpusIndexReadTarget } from "@/api/lib/legal-search/corpus-index-group-contract";
+import { CorpusIndexGroupNotReadyError } from "@/api/lib/legal-search/corpus-index-group-enrollment-store";
 import type { ServingCorpusIndexTarget } from "@/api/lib/legal-search/corpus-index-group-enrollment-store";
 import { CORPUS_INDEX_MANIFESTS } from "@/api/lib/legal-search/corpus-index-manifest";
 import {
@@ -20,6 +24,13 @@ import {
 import { corpusRankingCursorTarget } from "@/api/lib/legal-search/corpus-ranking-policy";
 import { encodeCorpusSearchCursor } from "@/api/lib/legal-search/corpus-search-cursor";
 import { NO_EXPANSION_DICTIONARY_IDENTITY } from "@/api/lib/legal-search/morphology/dictionary";
+import {
+  SEARCH_INDEX_UNAVAILABLE_CODE,
+  searchIndexUnavailableError,
+} from "@/api/lib/legal-search/search-index-unavailable";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
+
+const testFetchState = createTestFetch();
 
 describe("case-law search body preview SQL", () => {
   test("does not expand non-array sections JSONB values", () => {
@@ -49,8 +60,8 @@ describe("PostgreSQL metadata filter admission", () => {
       caseLawDb: unreadableDb,
       observer: "unobserved",
     });
-    expect(result).toBeInstanceOf(ElysiaCustomStatusResponse);
-    if (!(result instanceof ElysiaCustomStatusResponse)) {
+    expect(result).toBeInstanceOf(HttpStatusResponse);
+    if (!(result instanceof HttpStatusResponse)) {
       panic("Expected metadata-filter rejection");
     }
     expect(result.code).toBe(400);
@@ -110,11 +121,279 @@ test("the corpus handler rejects a cursor after a query variant changes", async 
         readServingTarget: async () => Result.ok(target),
       },
     });
-    expect(result).toBeInstanceOf(ElysiaCustomStatusResponse);
-    if (!(result instanceof ElysiaCustomStatusResponse)) {
+    expect(result).toBeInstanceOf(HttpStatusResponse);
+    if (!(result instanceof HttpStatusResponse)) {
       panic("Expected cross-variant cursor rejection");
     }
     expect(result.code).toBe(400);
     expect(result.response).toEqual({ message: "Invalid cursor" });
   }
+});
+
+describe("a search against a serving cluster that holds no index", () => {
+  const originalFetch = globalThis.fetch;
+
+  afterEach(() => {
+    testFetchState.restore();
+  });
+
+  test.each(["relevance", "newest"] as const)(
+    "answers the typed retryable 503 under the %s order",
+    async (sort) => {
+      const requested: string[] = [];
+      testFetchState.set(
+        Object.assign(
+          async (input: string | URL | Request) => {
+            requested.push(
+              input instanceof Request ? input.url : String(input),
+            );
+            return await Promise.resolve(
+              Response.json(
+                { message: "could not find indexes matching the IDs" },
+                { status: 404 },
+              ),
+            );
+          },
+          { preconnect: originalFetch.preconnect },
+        ),
+      );
+      const manifest = CORPUS_INDEX_MANIFESTS.case_law_v7;
+      const resolution = corpusIndexReadTarget({
+        manifest,
+        jurisdiction: "CZE",
+        attestedGroups: new Set(),
+        enrolledGroups: new Set(),
+      });
+      if (resolution.type !== "ready") {
+        panic("Expected the base Czech corpus group to be ready");
+      }
+      const target = {
+        ...resolution.target,
+        manifest,
+        serving: {
+          family: "case_law",
+          generation: manifest.generation,
+          cluster: manifest.cluster,
+        },
+      } as const satisfies ServingCorpusIndexTarget;
+      // The engine fails the first round, so no candidate is ever hydrated.
+      const unreadableDb = Object.assign(
+        async () => panic("A failed scan must not read decision rows"),
+        caseLawPublicReadDb,
+      );
+
+      const outcome = await searchCorpusIndexDecisions({
+        body: {
+          query: "smlouva",
+          country: "CZE",
+          limit: 1,
+          sort,
+          strict: true,
+        },
+        caseLawDb: unreadableDb,
+        observer: "unobserved",
+        dependencies: {
+          loadCourtWeights: async () =>
+            await Promise.resolve(courtWeightMapFromSeed()),
+          readServingTarget: async () =>
+            await Promise.resolve(Result.ok(target)),
+          readSourceRegistry: async () =>
+            await Promise.resolve(
+              Result.ok({ excludedSourceIds: [], nameById: new Map() }),
+            ),
+        },
+      }).then(
+        () => panic("Expected the search to fail against a missing index"),
+        (error: unknown) => error,
+      );
+
+      expect(requested.length).toBeGreaterThan(0);
+      // The route hands the rejection on inside `Result.tryPromise`, which
+      // wraps it; the boundary answers with the HandlerError it resolves.
+      expect(
+        resolveHandlerError(new UnhandledException({ cause: outcome })),
+      ).toMatchObject({
+        status: 503,
+        code: SEARCH_INDEX_UNAVAILABLE_CODE,
+        retryable: true,
+      });
+    },
+  );
+});
+
+const SERVING_TARGET_REFUSALS = [
+  {
+    name: "before any case-law generation serves",
+    failure: new CorpusServingGenerationAbsentError({
+      message: "No serving corpus generation: case_law",
+      family: "case_law",
+    }),
+  },
+  {
+    name: "while its index group is not ready",
+    failure: new CorpusIndexGroupNotReadyError({
+      message: "Corpus index group is not ready",
+      indexId: "case_law_v7_cs_sk",
+      reason: "pending",
+    }),
+  },
+];
+
+test.each(SERVING_TARGET_REFUSALS)(
+  "a search $name answers the typed retryable 503",
+  async ({ failure }) => {
+    const requested: string[] = [];
+    const originalFetch = globalThis.fetch;
+    testFetchState.set(
+      Object.assign(
+        async (input: string | URL | Request) => {
+          requested.push(input instanceof Request ? input.url : String(input));
+          return await Promise.resolve(Response.json({}, { status: 500 }));
+        },
+        { preconnect: originalFetch.preconnect },
+      ),
+    );
+    const unreadableDb = Object.assign(
+      async () => panic("No serving generation must not read decision rows"),
+      caseLawPublicReadDb,
+    );
+    const outcome = await searchCorpusIndexDecisions({
+      body: { query: "smlouva", country: "CZE", limit: 1 },
+      caseLawDb: unreadableDb,
+      observer: "unobserved",
+      dependencies: {
+        readServingTarget: async () =>
+          await Promise.resolve(Result.err(failure)),
+      },
+    }).finally(() => {
+      testFetchState.restore();
+    });
+
+    expect(requested).toEqual([]);
+    expect(outcome).toBeInstanceOf(HttpStatusResponse);
+    if (!(outcome instanceof HttpStatusResponse)) {
+      return;
+    }
+    // The returned envelope is the body the route error mapping renders for
+    // the thrown refusal, so a client cannot tell the two paths apart.
+    const thrown = searchIndexUnavailableError(failure);
+    expect(outcome.code).toBe(thrown.status);
+    // Compared as a value: the envelope's declared type is the union of every
+    // body the route may return.
+    const body: unknown = outcome.response;
+    expect(body).toEqual({
+      code: thrown.code,
+      message: thrown.message,
+      hint: thrown.hint,
+      retryable: thrown.retryable,
+    });
+    expect(outcome.response).toMatchObject({
+      code: SEARCH_INDEX_UNAVAILABLE_CODE,
+    });
+  },
+);
+
+describe("a caller that keeps only the page", () => {
+  afterEach(() => {
+    testFetchState.restore();
+  });
+
+  test.each([
+    { describeResultSet: undefined, aggregations: 1 },
+    { describeResultSet: false, aggregations: 0 },
+  ] as const)(
+    "asks the engine for $aggregations result-set aggregations (describeResultSet: $describeResultSet)",
+    async ({ describeResultSet, aggregations }) => {
+      const originalFetch = globalThis.fetch;
+      const bodies: Record<string, unknown>[] = [];
+      // The scan answers once the facet arm has sent its aggregation (or at
+      // once when none is expected), then fails so no row is read.
+      const aggregationSent = Promise.withResolvers<undefined>();
+      if (aggregations === 0) {
+        aggregationSent.resolve(undefined);
+      }
+      testFetchState.set(
+        Object.assign(
+          async (
+            _input: string | URL | Request,
+            init?: Parameters<typeof fetch>[1],
+          ) => {
+            const body: Record<string, unknown> =
+              typeof init?.body === "string" ? JSON.parse(init.body) : {};
+            bodies.push(body);
+            if (body["aggs"] === undefined) {
+              await aggregationSent.promise;
+            } else {
+              aggregationSent.resolve(undefined);
+            }
+            return Response.json(
+              { message: "could not find indexes matching the IDs" },
+              { status: 404 },
+            );
+          },
+          { preconnect: originalFetch.preconnect },
+        ),
+      );
+      const manifest = CORPUS_INDEX_MANIFESTS.case_law_v7;
+      const resolution = corpusIndexReadTarget({
+        manifest,
+        jurisdiction: "CZE",
+        attestedGroups: new Set(),
+        enrolledGroups: new Set(),
+      });
+      if (resolution.type !== "ready") {
+        panic("Expected the base Czech corpus group to be ready");
+      }
+      const target = {
+        ...resolution.target,
+        manifest,
+        serving: {
+          family: "case_law",
+          generation: manifest.generation,
+          cluster: manifest.cluster,
+        },
+      } as const satisfies ServingCorpusIndexTarget;
+      let registryReads = 0;
+      const unreadableDb = Object.assign(
+        async () => panic("A failed scan must not read decision rows"),
+        caseLawPublicReadDb,
+      );
+
+      await searchCorpusIndexDecisions({
+        body: {
+          // A query no other test caches an aggregation for.
+          query: `describe result set ${String(describeResultSet)}`,
+          country: "CZE",
+          limit: 1,
+          strict: true,
+          ...(describeResultSet === undefined ? {} : { describeResultSet }),
+        },
+        caseLawDb: unreadableDb,
+        observer: "unobserved",
+        dependencies: {
+          loadCourtWeights: async () =>
+            await Promise.resolve(courtWeightMapFromSeed()),
+          readServingTarget: async () =>
+            await Promise.resolve(Result.ok(target)),
+          readSourceRegistry: async () => {
+            registryReads += 1;
+            return await Promise.resolve(
+              Result.ok({ excludedSourceIds: [], nameById: new Map() }),
+            );
+          },
+        },
+      }).then(
+        () => panic("Expected the search to fail against a missing index"),
+        (error: unknown) => error,
+      );
+
+      expect(bodies.filter((body) => body["aggs"] !== undefined)).toHaveLength(
+        aggregations,
+      );
+      // The facet arm's source-policy read goes with its aggregations, so
+      // none under the opt-out also proves no aggregation can follow.
+      expect(registryReads).toBe(aggregations);
+      expect(bodies.some((body) => body["aggs"] === undefined)).toBe(true);
+    },
+  );
 });

@@ -1,69 +1,132 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import {
   afterAll,
-  beforeAll,
+  beforeEach,
   describe,
   expect,
   mock,
   setDefaultTimeout,
   test,
 } from "bun:test";
-import { eq } from "drizzle-orm";
+import { and, asc, eq, inArray } from "drizzle-orm";
+import * as v from "valibot";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import { CHAT_SKILL_DOCUMENT } from "@stll/api-contract";
+import { desktopBillingDraftSettingsResponseSchema } from "@stll/api-contract/desktop-billing-drafts";
 import { NOTIFICATION_KIND } from "@stll/api-contract/notifications";
+import {
+  OUTBOUND_ACTION_TTL_MS,
+  type OutboundActionPreview,
+} from "@stll/api-contract/outbound-action";
 import {
   SIGNAL_KIND,
   SIGNAL_KIND_ORIGIN,
   SIGNAL_SEVERITY,
 } from "@stll/api-contract/signals";
+import { VAT_RATE_PRESETS } from "@stll/invoicing";
+import { sha256Hex } from "@stll/sha256/bun";
+import { createTestClock } from "@stll/test-kit";
+import { dbClock } from "@stll/test-kit/db";
+import { createTestState } from "@stll/test-state";
 
-import { member } from "@/api/db/auth-schema";
+import { member, user as authUser } from "@/api/db/auth-schema";
+import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
   billingArrangements,
+  caseLawDecisions,
   caseLawResearchAnswers,
   caseLawResearchColumns,
+  caseLawSources,
+  chatBrowserSiteGrants,
+  chatLimitReminders,
+  chatMessageRevisions,
   chatMessages,
+  chatQueuedMessages,
+  chatQueueHolds,
   chatThreads,
+  chatToolGrants,
   chatTurns,
+  conflictChecks,
+  desktopPresence,
+  desktopRunnerFolderRestores,
+  desktopTimeEntryBatches,
   documentTranslationRuns,
   entities,
-  entityViews,
   entityVersions,
+  entityViews,
+  featureEnrolments,
   fields,
   invoiceLines,
   invoices,
   legalLists,
   legalReaderAnnotations,
-  numberSeries,
+  legalReaderAnswers,
   notifications,
-  savedTimeNarratives,
+  numberSeries,
+  organizationDataExports,
+  organizationSettings,
+  outboundActions,
   savedSearches,
+  savedTimeNarratives,
+  searchHistoryEntries,
+  searchHistoryOwners,
   sellerProfiles,
   signals,
+  templateLookupFormats,
+  timeEntries,
   timeTimers,
   vatRates,
   WORK_OBLIGATION_STATUS,
   workObligations,
 } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
+import { env } from "@/api/env";
 import readBilingualRun from "@/api/handlers/bilingual-translations/read-run";
 import readBillingCodes from "@/api/handlers/billing-codes/list";
-import lookupResearchAnswers from "@/api/handlers/case-law/research/answers-lookup";
+import { createLookupResearchAnswers } from "@/api/handlers/case-law/research/answers-lookup";
+import createBrowserSiteGrant from "@/api/handlers/chat/browser-site-grants/create";
+import deleteBrowserSiteGrant from "@/api/handlers/chat/browser-site-grants/delete";
+import listBrowserSiteGrants from "@/api/handlers/chat/browser-site-grants/list";
+import { toPersistedChatMessageContentV3 } from "@/api/handlers/chat/chat-message-parts";
+import getDecisionChatThread from "@/api/handlers/chat/decision-threads/get";
 import exportChatMessage from "@/api/handlers/chat/export/create";
 import forkChatThread from "@/api/handlers/chat/fork/create";
 import readSuggestedChatPrompts from "@/api/handlers/chat/get-suggested-prompts";
 import readChatThreadRecap from "@/api/handlers/chat/get-thread-recap";
 import readChatThreadTitle from "@/api/handlers/chat/get-thread-title";
+import cancelChatLimitReminder from "@/api/handlers/chat/limit-reminder/cancel";
+import getChatLimitReminder from "@/api/handlers/chat/limit-reminder/get";
+import setChatLimitReminder from "@/api/handlers/chat/limit-reminder/set";
+import { createLocalRunStepContent } from "@/api/handlers/chat/local-run-step-content";
 import { encodeMessagePageCursor } from "@/api/handlers/chat/message-page";
+import getChatMessage from "@/api/handlers/chat/messages/get";
 import listChatMessages from "@/api/handlers/chat/messages/list";
+import {
+  createReadLocalFilesUndo,
+  createUndoLocalFiles,
+} from "@/api/handlers/chat/messages/local-files-undo";
+import acceptChatMessageRevision from "@/api/handlers/chat/messages/revisions/accept";
+import listChatMessageRevisions from "@/api/handlers/chat/messages/revisions/list";
+import revertChatMessageRevision from "@/api/handlers/chat/messages/revisions/revert";
+import { createProposeMessageSpanEdit } from "@/api/handlers/chat/messages/revisions/span-edit";
 import listOlderChatMessages from "@/api/handlers/chat/older-messages/list";
+import cancelQueuedChatMessage from "@/api/handlers/chat/queue/cancel";
+import enqueueChatMessage from "@/api/handlers/chat/queue/enqueue";
+import moveQueuedChatMessage from "@/api/handlers/chat/queue/move";
+import pauseChatQueue from "@/api/handlers/chat/queue/pause";
+import readChatQueue from "@/api/handlers/chat/queue/read";
+import readQueuedChatMessage from "@/api/handlers/chat/queue/read-message";
+import replaceQueuedChatMessage from "@/api/handlers/chat/queue/replace";
+import resumeChatQueue from "@/api/handlers/chat/queue/resume";
+import sendQueuedChatMessageNow from "@/api/handlers/chat/queue/send-now";
 import readFileChatThread from "@/api/handlers/chat/read-file-thread";
 import resolveFileChatThread from "@/api/handlers/chat/resolve-file-thread";
 import resolveTemplateChatThread from "@/api/handlers/chat/resolve-template-thread";
 import rotateTemplateChatThread from "@/api/handlers/chat/rotate-template-thread";
+import listActiveChatRuns from "@/api/handlers/chat/runs/list";
+import readSavedChatSecret from "@/api/handlers/chat/saved-secret";
 import { createSendMessage } from "@/api/handlers/chat/send-message";
 import { compactMessagesForContext } from "@/api/handlers/chat/send-message-compaction";
 import {
@@ -71,20 +134,57 @@ import {
   uploadMessageFilesWithRollback,
 } from "@/api/handlers/chat/send-message-side-effects";
 import listUnavailableChatSkills from "@/api/handlers/chat/skill-availability/list";
+import submitChatConnector from "@/api/handlers/chat/submit-connector";
+import submitChatSecret from "@/api/handlers/chat/submit-secret";
 import { createSuggestThreadTitle } from "@/api/handlers/chat/suggest-thread-title";
 import { RECAP_PROMPT_VERSION } from "@/api/handlers/chat/thread-recap";
+import { createReadBackgroundTasks } from "@/api/handlers/chat/threads/background-tasks";
 import deleteChatThread from "@/api/handlers/chat/threads/delete";
 import listChatThreads from "@/api/handlers/chat/threads/list";
+import updateChatThreadPinState from "@/api/handlers/chat/threads/pin-state/update";
+import updateChatThreadReadState from "@/api/handlers/chat/threads/read-state/update";
 import renameChatThread from "@/api/handlers/chat/threads/rename";
 import updateChatThread from "@/api/handlers/chat/threads/update";
+import readChatToolGrantCoverage from "@/api/handlers/chat/tool-grants/coverage";
+import createChatToolGrant from "@/api/handlers/chat/tool-grants/create";
+import deleteChatToolGrant from "@/api/handlers/chat/tool-grants/delete";
+import listChatToolGrants from "@/api/handlers/chat/tool-grants/list";
 import * as externalMcpToolsModule from "@/api/handlers/chat/tools/external-mcp-tools";
 import cancelChatTurn from "@/api/handlers/chat/turns/cancel";
+import { joinChatTurn, probeChatTurn } from "@/api/handlers/chat/turns/resume";
+import steerChatTurn from "@/api/handlers/chat/turns/steer";
 import updateChatThreadModel from "@/api/handlers/chat/update-thread-model";
+import createClientInvoice from "@/api/handlers/client-invoices/create";
+import prefillClientInvoice from "@/api/handlers/client-invoices/prefill";
+import listConflictChecks from "@/api/handlers/conflict-checks/list";
 import readContactById from "@/api/handlers/contacts/get";
+import readDataExport from "@/api/handlers/data-exports/get";
+import listDataExports from "@/api/handlers/data-exports/list";
+import { createDesktopFeatureAccessReadEndpoint } from "@/api/handlers/desktop-feature-access/read";
+import readDesktopPresence from "@/api/handlers/desktop-presence/read";
+import { createDesktopRegistryRequestEndpoint } from "@/api/handlers/desktop-registry/request";
+import {
+  createDesktopTimeEntryBatchEndpoint,
+  desktopBatchFingerprint,
+} from "@/api/handlers/desktop-time-entries/batch";
+import { createDesktopTimeEntryBatchStatusEndpoint } from "@/api/handlers/desktop-time-entries/batch-status";
+import {
+  createDesktopBillingDraftSettingsReadEndpoint,
+  createDesktopBillingDraftSettingsUpdateEndpoint,
+} from "@/api/handlers/desktop-time-entries/billing-draft-settings";
+import {
+  type BillingDraftPrompt,
+  createDesktopBillingDraftEndpoint,
+} from "@/api/handlers/desktop-time-entries/billing-drafts";
+import { createDesktopMatterCandidatesEndpoint } from "@/api/handlers/desktop-time-entries/candidates";
+import { createDesktopTimeEntryEndpoint } from "@/api/handlers/desktop-time-entries/create";
+import { createDesktopMattersEndpoint } from "@/api/handlers/desktop-time-entries/matters";
 import listDocumentReviewSources from "@/api/handlers/document-reviews/list-sources";
 import readDocumentTranslationRun from "@/api/handlers/document-translations/runs/get";
 import { createDocumentCompareHandler } from "@/api/handlers/documents/compare";
-import listDocxSuggestions from "@/api/handlers/docx-suggestions/read";
+import listDocxSuggestions from "@/api/handlers/docx-suggestions/list";
+import resolveDocxSuggestion from "@/api/handlers/docx-suggestions/resolve";
+import revertDocxSuggestion from "@/api/handlers/docx-suggestions/revert";
 import readEntityById from "@/api/handlers/entities/get";
 import readVersionById from "@/api/handlers/entities/versions/get";
 import readVersions from "@/api/handlers/entities/versions/list";
@@ -95,16 +195,28 @@ import createInvoice from "@/api/handlers/invoices/create";
 import readInvoiceById from "@/api/handlers/invoices/get";
 import createInvoiceLine from "@/api/handlers/invoices/lines/create";
 import updateInvoiceLine from "@/api/handlers/invoices/lines/update";
-import listReaderAnnotations from "@/api/handlers/legal-reader/annotations/list";
+import { createListReaderAnnotations } from "@/api/handlers/legal-reader/annotations/list";
+import { createListReaderAnswers } from "@/api/handlers/legal-reader/answers/list";
+import updateReaderAnswer from "@/api/handlers/legal-reader/answers/update";
 import listLegalLists from "@/api/handlers/lists/list";
+import deleteMemory from "@/api/handlers/memories/delete";
 import listMemories from "@/api/handlers/memories/list";
+import updateMemory from "@/api/handlers/memories/update";
 import listNotifications from "@/api/handlers/notifications/list";
+import markNotificationRead from "@/api/handlers/notifications/read-state/update";
 import getNumberSeries from "@/api/handlers/number-series/get";
 import listNumberSeries from "@/api/handlers/number-series/list";
+import { createConfirmOutboundActionHandler } from "@/api/handlers/outbound-actions/confirm";
+import discardOutboundAction from "@/api/handlers/outbound-actions/discard";
+import { outboundPreviewHash } from "@/api/handlers/outbound-actions/preview";
+import readOutboundAction from "@/api/handlers/outbound-actions/read";
+import { prepareOutboundAction } from "@/api/handlers/outbound-actions/store";
 import getBillingArrangement from "@/api/handlers/rates/arrangement/get";
 import readRateEntries from "@/api/handlers/rates/entries/list";
 import listSavedSearches from "@/api/handlers/saved-searches/list";
 import listSavedTimeNarratives from "@/api/handlers/saved-time-narratives/list";
+import { prepareSearchHistoryRows } from "@/api/handlers/search-history/entries";
+import listSearchHistory from "@/api/handlers/search-history/list";
 import getSellerProfile from "@/api/handlers/seller-profiles/get";
 import listSellerProfiles from "@/api/handlers/seller-profiles/list";
 import listSignals from "@/api/handlers/signals/list";
@@ -117,24 +229,55 @@ import listMyTimeTimers from "@/api/handlers/time-timers/list";
 import readUserFileContent from "@/api/handlers/user-files/read-content";
 import readUserFileThumbnail from "@/api/handlers/user-files/read-thumbnail";
 import listVatRates from "@/api/handlers/vat-rates/list";
+import applyVatRatePreset from "@/api/handlers/vat-rates/presets/create";
 import updateVatRate from "@/api/handlers/vat-rates/update";
 import listMyWork from "@/api/handlers/work-obligations/queues/list";
+import { createHttpApp } from "@/api/http/app";
+import { createResponseSet } from "@/api/http/context";
+import type { ResponseSet } from "@/api/http/context";
+import { routes } from "@/api/http/route";
+import { status } from "@/api/http/status";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
+import type { SafeHandlerLogContext } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
-import { toSafeId } from "@/api/lib/branded-types";
+import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { DESKTOP_REGISTRY_REQUEST_USER_AGENT } from "@/api/lib/business-registries/desktop/request-contract";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
+import { createDesktopRunnerControl } from "@/api/lib/desktop-runner/control";
+import { createLocalDoorbell } from "@/api/lib/desktop-runner/doorbell";
+import type { DesktopRunnerDb } from "@/api/lib/desktop-runner/store";
+import {
+  createFeatureAccessSnapshot,
+  decideFeatureAccess,
+} from "@/api/lib/feature-access/policy";
+import {
+  AI_MEMORY_FEATURE_ID,
+  FEATURE_REGISTRY,
+  LEGAL_LISTS_FEATURE_ID,
+} from "@/api/lib/feature-access/registry";
 import { readFileHandler } from "@/api/lib/files/read-file";
 import { cents } from "@/api/lib/money";
+import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
+import type { withActionAdmission } from "@/api/lib/rate-limit/action-admission";
 import type { SavedSearchCriteria } from "@/api/lib/saved-searches";
-import type { generateTanStackTextForRole } from "@/api/lib/tanstack-ai-generate";
+import type {
+  generateTanStackObjectForTask,
+  generateTanStackTextForTask,
+} from "@/api/lib/tanstack-ai-generate";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
+import { grantedConflictCheckSnapshot } from "@/api/tests/helpers/conflict-check-access";
+import { createDesktopBillingDraftRequest } from "@/api/tests/helpers/desktop-billing-draft";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import { testScannedFile } from "@/api/tests/helpers/scanned-file";
+import { serveForTest } from "@/api/tests/helpers/test-server";
+import type { TestServer } from "@/api/tests/helpers/test-server";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import { createTestWithdrawalCopyReader } from "@/api/tests/helpers/withdrawn-copy-reader";
+import { createRlsDesktopCredentials } from "@/api/tests/security/rls-desktop-credentials";
 import {
   createTestIds,
   setupRlsTestData,
@@ -147,6 +290,17 @@ import type {
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 
 setDefaultTimeout(120_000);
+
+const testState = createTestState({ file: import.meta.path, config: env });
+
+const readCopies = createTestWithdrawalCopyReader(() => testDb);
+const listReaderAnnotations = createListReaderAnnotations({ readCopies });
+const listReaderAnswers = createListReaderAnswers({ readCopies });
+const lookupResearchAnswers = createLookupResearchAnswers({ readCopies });
+
+beforeEach(() => {
+  streamChatStub.mockClear();
+});
 
 type TestHandlerContext = {
   createAuditRecorder: () => AuditRecorder;
@@ -167,6 +321,11 @@ type TestHandlerContext = {
   route: string;
   safeDb: ReturnType<typeof createSafeDb<TestDatabaseTransaction>>;
   scopedDb: ReturnType<typeof createScopedDb<TestDatabaseTransaction>>;
+  set: ResponseSet;
+  server: null;
+  path: string;
+  headers: Record<string, string>;
+  status: typeof status;
   session: { activeOrganizationId: SafeId<"organization"> };
   user: { id: SafeId<"user"> };
   workspaceId: SafeId<"workspace">;
@@ -174,6 +333,8 @@ type TestHandlerContext = {
 
 type IsolationContext = {
   ids: TestIds;
+  desktopA: (request: Request) => Promise<Response>;
+  desktopB: (request: Request) => Promise<Response>;
   sameUserWorkspaceB: TestHandlerContext;
   workspaceA: TestHandlerContext;
   workspaceB: TestHandlerContext;
@@ -187,10 +348,80 @@ type IsolationCase = {
   expectPositive: (result: unknown, context: IsolationContext) => void;
 };
 
+const legalListAccess = ({ session, user }: TestHandlerContext) =>
+  createFeatureAccessSnapshot({
+    organizationId: session.activeOrganizationId,
+    userId: user.id,
+    decisions: new Map([
+      [
+        LEGAL_LISTS_FEATURE_ID,
+        decideFeatureAccess({
+          registry: FEATURE_REGISTRY,
+          featureId: LEGAL_LISTS_FEATURE_ID,
+          grants: {
+            [LEGAL_LISTS_FEATURE_ID]: [
+              {
+                type: "organization",
+                organizationId: session.activeOrganizationId,
+              },
+            ],
+          },
+          organizationId: session.activeOrganizationId,
+          userId: user.id,
+          user: { email: "member@example.test", emailVerified: true },
+          membership: true,
+        }),
+      ],
+    ]),
+  });
+
+const memoryAccess = ({ session, user }: TestHandlerContext) =>
+  createFeatureAccessSnapshot({
+    organizationId: session.activeOrganizationId,
+    userId: user.id,
+    decisions: new Map([
+      [
+        AI_MEMORY_FEATURE_ID,
+        decideFeatureAccess({
+          registry: FEATURE_REGISTRY,
+          featureId: AI_MEMORY_FEATURE_ID,
+          grants: {
+            [AI_MEMORY_FEATURE_ID]: [
+              {
+                type: "organization",
+                organizationId: session.activeOrganizationId,
+              },
+            ],
+          },
+          organizationId: session.activeOrganizationId,
+          userId: user.id,
+          user: { email: "member@example.test", emailVerified: true },
+          membership: true,
+        }),
+      ],
+    ]),
+  });
+
 let testDb: TestDatabase;
 let ids: TestIds;
+let desktopCredentials: Awaited<ReturnType<typeof createRlsDesktopCredentials>>;
+const desktopFormatB = createSafeId<"templateLookupFormat">();
+const DESKTOP_BATCH_KEY = "matrix-desktop-batch";
+// Its own key, so the positive call writes a batch instead of replaying the
+// seeded receipt that the status case reads, whatever the case order.
+const DESKTOP_CREATE_BATCH_KEY = "matrix-desktop-create-batch";
+const DESKTOP_ENTRY = {
+  dateWorked: "2026-10-09",
+  timezoneId: "UTC",
+  durationMinutes: 6,
+  narrative: "Reviewed agreement",
+  billable: false,
+};
 
 const noopAuditRecorder: AuditRecorder = async () => undefined;
+const conflictCheckB = toSafeId<"conflictCheck">(
+  "22222222-2222-4222-8222-2222222222c7",
+);
 const savedSearchA = toSafeId<"savedSearch">(
   "11111111-1111-4111-8111-111111111145",
 );
@@ -206,6 +437,9 @@ const sellerProfileB = toSafeId<"sellerProfile">(
 const invoiceLineB = toSafeId<"invoiceLine">(
   "22222222-2222-4222-8222-222222222259",
 );
+const clientInvoiceEntryB = toSafeId<"timeEntry">(
+  "22222222-2222-4222-8222-222222222296",
+);
 const manualInvoiceLineBody = {
   source: {
     type: "manual",
@@ -219,10 +453,16 @@ const manualInvoiceLineBody = {
 const savedTimeNarrativeB = toSafeId<"savedTimeNarrative">(
   "22222222-2222-4222-8222-222222222258",
 );
+const searchHistoryEntryB = toSafeId<"searchHistoryEntry">(
+  "22222222-2222-4222-8222-222222222290",
+);
 const numberSeriesB = toSafeId<"numberSeries">(
   "22222222-2222-4222-8222-222222222259",
 );
 const vatRateB = toSafeId<"vatRate">("22222222-2222-4222-8222-222222222260");
+const dataExportB = toSafeId<"dataExport">(
+  "22222222-2222-4222-8222-2222222229d1",
+);
 const entityViewB = toSafeId<"workspaceView">(
   "22222222-2222-4222-8222-222222222255",
 );
@@ -264,6 +504,12 @@ const notificationB = toSafeId<"notification">(
 );
 const readerAnnotationB = toSafeId<"legalReaderAnnotation">(
   "22222222-2222-4222-8222-222222222254",
+);
+const privateReaderAnswerB = toSafeId<"legalReaderAnswer">(
+  "22222222-2222-4222-8222-222222222301",
+);
+const sharedReaderAnswerB = toSafeId<"legalReaderAnswer">(
+  "22222222-2222-4222-8222-222222222302",
 );
 const compareTargetVersionB = toSafeId<"entityVersion">(
   "22222222-2222-4222-8222-222222222253",
@@ -357,11 +603,78 @@ const chatDeleteThreadB = toSafeId<"chatThread">(
 const chatSendThreadB = toSafeId<"chatThread">(
   "22222222-2222-4222-8222-222222222267",
 );
+// The same user's conversation about a public decision, under organization
+// B: a reader in organization A asking about that decision must not find it.
+const chatDecisionThreadB = toSafeId<"chatThread">(
+  "22222222-2222-4222-8222-222222222293",
+);
+const chatDecisionB = toSafeId<"caseLawDecision">(
+  "22222222-2222-4222-8222-222222222294",
+);
+// Chats whose latest turn stopped on the usage limit of the member's
+// computer, each with the reminder its member asked for. Cancelling gets a
+// chat of its own, so its positive case leaves the others' reminders.
+const chatLimitThreadB = toSafeId<"chatThread">(
+  "22222222-2222-4222-8222-222222222320",
+);
+const chatLimitCancelThreadB = toSafeId<"chatThread">(
+  "22222222-2222-4222-8222-222222222324",
+);
+// A chat of B's with two queued messages; the queue's cases run in order and
+// each positive one leaves the queue as the next expects it.
+const chatQueueThreadB = toSafeId<"chatThread">(
+  "22222222-2222-4222-8222-222222222330",
+);
+const chatQueuedFirstB = toSafeId<"chatMessage">(
+  "22222222-2222-4222-8222-222222222331",
+);
+const chatQueuedSecondB = toSafeId<"chatMessage">(
+  "22222222-2222-4222-8222-222222222332",
+);
+const chatQueuedThirdB = toSafeId<"chatMessage">(
+  "22222222-2222-4222-8222-222222222333",
+);
+// Far enough ahead to stay a future reset whenever the suite runs.
+const chatLimitResetsAt = new Date("2100-01-01T00:00:00.000Z");
 const chatForkFromA = toSafeId<"chatThread">(
   "11111111-1111-4111-8111-111111111268",
 );
 const chatForkFromB = toSafeId<"chatThread">(
   "22222222-2222-4222-8222-222222222268",
+);
+const chatRevisionThreadB = toSafeId<"chatThread">(
+  "22222222-2222-4222-8222-222222222290",
+);
+const chatMatterThreadB = toSafeId<"chatThread">(
+  "22222222-2222-4222-8222-222222222295",
+);
+const chatMatterMessageB = toSafeId<"chatMessage">(
+  "22222222-2222-4222-8222-222222222296",
+);
+const chatRevisionAcceptMessageB = toSafeId<"chatMessage">(
+  "22222222-2222-4222-8222-222222222291",
+);
+const chatRevisionRevertMessageB = toSafeId<"chatMessage">(
+  "22222222-2222-4222-8222-222222222292",
+);
+// Stored tool approvals of user A1 in organization B: one for every
+// conversation, one given in thread B, and one the delete case removes.
+const chatToolGrantAlwaysB = toSafeId<"chatToolGrant">(
+  "22222222-2222-4222-8222-222222222297",
+);
+const chatToolGrantConversationB = toSafeId<"chatToolGrant">(
+  "22222222-2222-4222-8222-222222222298",
+);
+const chatToolGrantDeleteB = toSafeId<"chatToolGrant">(
+  "22222222-2222-4222-8222-222222222299",
+);
+// Website approvals of user A1 in organization B: one listed, one the delete
+// case removes.
+const browserSiteGrantB = toSafeId<"chatBrowserSiteGrant">(
+  "22222222-2222-4222-8222-222222222311",
+);
+const browserSiteGrantDeleteB = toSafeId<"chatBrowserSiteGrant">(
+  "22222222-2222-4222-8222-222222222312",
 );
 const chatThreadTitleB = "Chat thread B";
 const chatRenameFromA = "Renamed from organization A";
@@ -421,7 +734,7 @@ const chatRecapB = "Recap of thread B";
 
 // The model sees only the transcript the handler loaded. Answering with a
 // title only when thread B's answer is in it shows the read reached B's rows.
-const generateTitleFromTranscript: typeof generateTanStackTextForRole = async (
+const generateTitleFromTranscript: typeof generateTanStackTextForTask = async (
   options,
 ) =>
   "prompt" in options && options.prompt.includes("Here is the summary.")
@@ -429,7 +742,10 @@ const generateTitleFromTranscript: typeof generateTanStackTextForRole = async (
     : "";
 
 const suggestChatThreadTitle = createSuggestThreadTitle({
-  generateTextForRole: generateTitleFromTranscript,
+  generateTextForTask: generateTitleFromTranscript,
+});
+const proposeChatMessageSpanEdit = createProposeMessageSpanEdit({
+  generateObject: async () => ({ replacement: "Updated" }),
 });
 
 type SendChatMessageBody = Parameters<
@@ -471,12 +787,68 @@ const readChatThreadRow = async (threadId: SafeId<"chatThread">) =>
     await testDb
       .select({
         chatModel: chatThreads.chatModel,
+        lastReadAt: chatThreads.lastReadAt,
+        pinnedAt: chatThreads.pinnedAt,
         title: chatThreads.title,
         webSearchEnabled: chatThreads.webSearchEnabled,
       })
       .from(chatThreads)
       .where(eq(chatThreads.id, threadId))
   ).at(0) ?? null;
+
+const chatLimitRemindersOf = async (threadId: SafeId<"chatThread">) =>
+  await testDb
+    .select({
+      organizationId: chatLimitReminders.organizationId,
+      remindAt: chatLimitReminders.remindAt,
+    })
+    .from(chatLimitReminders)
+    .where(eq(chatLimitReminders.threadId, threadId));
+
+const queuedSendOf = (id: SafeId<"chatMessage">, text: string) => ({
+  sendMode: "anonymized" as const,
+  message: {
+    id,
+    role: "user" as const,
+    parts: [{ type: "text" as const, content: text }],
+  },
+});
+
+/** B's queue as stored: ids in order with their revisions, and its hold. */
+const chatQueueOfB = async () => ({
+  items: await testDb
+    .select({
+      id: chatQueuedMessages.id,
+      revision: chatQueuedMessages.revision,
+    })
+    .from(chatQueuedMessages)
+    .where(eq(chatQueuedMessages.threadId, chatQueueThreadB))
+    .orderBy(asc(chatQueuedMessages.position)),
+  holds: (
+    await testDb
+      .select({ reason: chatQueueHolds.reason })
+      .from(chatQueueHolds)
+      .where(eq(chatQueueHolds.threadId, chatQueueThreadB))
+  ).map(({ reason }) => reason),
+});
+
+const chatToolGrantExists = async (grantId: SafeId<"chatToolGrant">) =>
+  (
+    await testDb
+      .select({ id: chatToolGrants.id })
+      .from(chatToolGrants)
+      .where(eq(chatToolGrants.id, grantId))
+  ).length > 0;
+
+const browserSiteGrantExists = async (
+  grantId: SafeId<"chatBrowserSiteGrant">,
+) =>
+  (
+    await testDb
+      .select({ id: chatBrowserSiteGrants.id })
+      .from(chatBrowserSiteGrants)
+      .where(eq(chatBrowserSiteGrants.id, grantId))
+  ).length > 0;
 
 const countChatMessages = async (threadId: SafeId<"chatThread">) =>
   (
@@ -485,6 +857,45 @@ const countChatMessages = async (threadId: SafeId<"chatThread">) =>
       .from(chatMessages)
       .where(eq(chatMessages.threadId, threadId))
   ).length;
+
+const CZECH_PRESET_CODES = [
+  ...new Set(VAT_RATE_PRESETS.CZ.map(({ code }) => code)),
+];
+
+/** An organization's Czech preset rows, read past RLS after a handler ran. */
+const countCzechPresetRates = async (organizationId: SafeId<"organization">) =>
+  (
+    await testDb
+      .select({ id: vatRates.id })
+      .from(vatRates)
+      .where(
+        and(
+          eq(vatRates.organizationId, organizationId),
+          inArray(vatRates.code, CZECH_PRESET_CODES),
+        ),
+      )
+  ).length;
+
+/** The undo handlers on the test database, as the runner control reads it. */
+const undoControl = () =>
+  createDesktopRunnerControl({
+    db: asTestRaw<DesktopRunnerDb>(testDb),
+    doorbell: createLocalDoorbell(),
+  });
+const readLocalFilesUndo = createReadLocalFilesUndo({ control: undoControl });
+const undoLocalFiles = createUndoLocalFiles({ control: undoControl });
+const readBackgroundTasks = createReadBackgroundTasks({ control: undoControl });
+const readLocalRunStepContent = createLocalRunStepContent({
+  control: undoControl,
+});
+/** A step's chat call id, naming a run that never existed. */
+const UNSENT_STEP_CALL_ID = `${"0".repeat(32)}_call-1`;
+
+const folderRestoresOfTurn = async (turnId: SafeId<"chatTurn">) =>
+  await testDb
+    .select({ id: desktopRunnerFolderRestores.id })
+    .from(desktopRunnerFolderRestores)
+    .where(eq(desktopRunnerFolderRestores.chatTurnId, turnId));
 
 const readChatTurnRow = async (turnId: SafeId<"chatTurn">) =>
   (
@@ -510,7 +921,409 @@ const savedSearchCriteria = (
   sort: "relevance",
 });
 
+const outboundPreview = {
+  kind: "email.send",
+  from: { address: "sender@example.test" },
+  to: [{ address: "recipient@example.test" }],
+  cc: [],
+  bcc: [],
+  subject: "Agreement",
+  bodyText: "Please review the agreement.",
+  attachments: [],
+  inReplyTo: null,
+} satisfies OutboundActionPreview;
+const outboundHash = outboundPreviewHash(outboundPreview);
+let outboundReadB: SafeId<"outboundAction">;
+let outboundConfirmB: SafeId<"outboundAction">;
+let outboundDiscardB: SafeId<"outboundAction">;
+// A second member of organization B targets these; each positive case then
+// proves the denied attempt left the owner's action pending.
+let outboundPeerReadB: SafeId<"outboundAction">;
+let outboundPeerConfirmB: SafeId<"outboundAction">;
+let outboundPeerDiscardB: SafeId<"outboundAction">;
+const confirmOutboundAction = createConfirmOutboundActionHandler({
+  "email.send": async () => Result.ok({ providerMessageId: "message-1" }),
+});
+
+// Desktop credential B is user A1 bound to organization B: a successful
+// write lands in matter B1 under organization B and that user, nowhere else.
+const expectDesktopEntryOwnedByB = async (entryId: string) => {
+  const safeEntryId = toSafeId<"timeEntry">(entryId);
+  const rows = await testDb
+    .select({
+      id: timeEntries.id,
+      workspaceId: timeEntries.workspaceId,
+      organizationId: timeEntries.organizationId,
+      userId: timeEntries.userId,
+    })
+    .from(timeEntries)
+    .where(eq(timeEntries.id, safeEntryId));
+  expect(rows).toEqual([
+    {
+      id: safeEntryId,
+      workspaceId: ids.wsB1,
+      organizationId: ids.orgB,
+      userId: ids.userA1,
+    },
+  ]);
+};
+
+const DESKTOP_DRAFT_PREFERENCE_B = "Organization B drafting preference";
+
+// Grants and preference changes apply to the revision the caller last read.
+const putDraftSettings = async (
+  caller: (request: Request) => Promise<Response>,
+  change:
+    { type: "grant_consent" } | { type: "set_preference"; preference: string },
+) => {
+  const current = await caller(desktopRequest("/draft-settings"));
+  expect(current.status).toBe(200);
+  const { revision } = v.parse(
+    desktopBillingDraftSettingsResponseSchema,
+    await current.json(),
+  );
+  const response = await caller(
+    desktopRequest("/draft-settings", { ...change, revision }),
+  );
+  expect(response.status).toBe(200);
+};
+
+const grantDraftConsent = async (
+  caller: (request: Request) => Promise<Response>,
+) => await putDraftSettings(caller, { type: "grant_consent" });
+
+const saveOrganizationBDraftSettings = async (
+  desktopB: (request: Request) => Promise<Response>,
+) => {
+  await grantDraftConsent(desktopB);
+  await putDraftSettings(desktopB, {
+    type: "set_preference",
+    preference: DESKTOP_DRAFT_PREFERENCE_B,
+  });
+};
+
+const desktopCredentialIsolationCases = (): IsolationCase[] => [
+  {
+    name: "desktop registry saved format",
+    runAAgainstB: async ({ desktopA }) =>
+      await desktopA(
+        desktopRequest("/registry", {
+          type: "setDefaultFormat",
+          registry: "ares",
+          formatId: desktopFormatB,
+        }),
+      ),
+    runBPositive: async ({ desktopB }) =>
+      await desktopB(
+        desktopRequest("/registry", {
+          type: "setDefaultFormat",
+          registry: "ares",
+          formatId: desktopFormatB,
+        }),
+      ),
+    expectDenied: (result) => expect(result).toMatchObject({ status: 404 }),
+    expectPositive: (result) => expect(result).toMatchObject({ status: 200 }),
+  },
+  {
+    name: "desktop feature access",
+    runAAgainstB: async ({ desktopA }) => {
+      testState.setConfig("API_FEATURE_ACCESS_GRANTS", {
+        "activity-timeline": [
+          { type: "organization", organizationId: ids.orgB },
+        ],
+      });
+      const response = await desktopA(desktopRequest("/features"));
+      expect(response.status).toBe(200);
+      return await response.json();
+    },
+    runBPositive: async ({ desktopB }) => {
+      const response = await desktopB(desktopRequest("/features"));
+      expect(response.status).toBe(200);
+      return await response.json();
+    },
+    expectDenied: (result) =>
+      expect(result).toMatchObject({
+        features: { "activity-timeline": { status: "hidden" } },
+      }),
+    expectPositive: (result) =>
+      expect(result).toMatchObject({
+        features: { "activity-timeline": { status: "enabled" } },
+      }),
+  },
+  ...["candidates", "matters"].map((path): IsolationCase => ({
+    name: `desktop ${path}`,
+    runAAgainstB: async ({ desktopA }) => {
+      const response = await desktopA(desktopRequest(`/${path}`));
+      expect(response.status).toBe(200);
+      return await response.json();
+    },
+    runBPositive: async ({ desktopB }) => {
+      const response = await desktopB(desktopRequest(`/${path}`));
+      expect(response.status).toBe(200);
+      return await response.json();
+    },
+    expectDenied: (result, { ids: testIds }) => {
+      // A sees its own matter, so an empty list cannot pass as isolation.
+      const matters = recordField(result, "matters");
+      expect(matters).toEqual(
+        expect.arrayContaining([expect.objectContaining({ id: testIds.wsA1 })]),
+      );
+      expect(matters).not.toEqual(
+        expect.arrayContaining([expect.objectContaining({ id: testIds.wsB1 })]),
+      );
+    },
+    expectPositive: (result, { ids: testIds }) =>
+      expect(result).toMatchObject({
+        matters: expect.arrayContaining([
+          expect.objectContaining({ id: testIds.wsB1 }),
+        ]),
+      }),
+  })),
+  {
+    name: "desktop batch",
+    runAAgainstB: async ({ desktopA, ids: testIds }) =>
+      await desktopA(
+        desktopRequest("/batch", {
+          idempotencyKey: DESKTOP_CREATE_BATCH_KEY,
+          entries: [{ matterId: testIds.wsB1, ...DESKTOP_ENTRY }],
+        }),
+      ),
+    runBPositive: async ({ desktopB, ids: testIds }) => {
+      const response = await desktopB(
+        desktopRequest("/batch", {
+          idempotencyKey: DESKTOP_CREATE_BATCH_KEY,
+          entries: [{ matterId: testIds.wsB1, ...DESKTOP_ENTRY }],
+        }),
+      );
+      expect(response.status).toBe(200);
+      const body: unknown = await response.json();
+      const entries = recordField(body, "entries");
+      expect(Array.isArray(entries) ? entries : []).toHaveLength(1);
+      for (const entry of Array.isArray(entries) ? entries : []) {
+        await expectDesktopEntryOwnedByB(String(recordField(entry, "id")));
+      }
+      return body;
+    },
+    expectDenied: (result) => expect(result).toMatchObject({ status: 404 }),
+    expectPositive: (result, { ids: testIds }) =>
+      expect(recordField(result, "entries")).toEqual([
+        expect.objectContaining({
+          id: expect.any(String),
+          matterId: testIds.wsB1,
+        }),
+      ]),
+  },
+  {
+    name: "desktop batch status",
+    runAAgainstB: async ({ desktopA }) => {
+      const response = await desktopA(
+        desktopRequest("/status", { idempotencyKey: DESKTOP_BATCH_KEY }),
+      );
+      expect(response.status).toBe(200);
+      return await response.json();
+    },
+    runBPositive: async ({ desktopB }) => {
+      const response = await desktopB(
+        desktopRequest("/status", { idempotencyKey: DESKTOP_BATCH_KEY }),
+      );
+      expect(response.status).toBe(200);
+      return await response.json();
+    },
+    expectDenied: (result) => expect(result).toEqual({ type: "cancelled" }),
+    expectPositive: (result, { ids: testIds }) =>
+      expect(result).toEqual({
+        type: "committed",
+        entries: [{ id: testIds.timeEntryB1, matterId: testIds.wsB1 }],
+      }),
+  },
+  {
+    // Consent and preference are kept per organization: the same user's
+    // settings in B never answer a request bound to A.
+    name: "desktop billing draft settings",
+    runAAgainstB: async ({ desktopA, desktopB }) => {
+      await saveOrganizationBDraftSettings(desktopB);
+      const response = await desktopA(desktopRequest("/draft-settings"));
+      expect(response.status).toBe(200);
+      return await response.json();
+    },
+    runBPositive: async ({ desktopB }) => {
+      await saveOrganizationBDraftSettings(desktopB);
+      const response = await desktopB(desktopRequest("/draft-settings"));
+      expect(response.status).toBe(200);
+      return await response.json();
+    },
+    expectDenied: (result) =>
+      expect(result).toEqual({
+        revision: null,
+        effectiveMode: "plain",
+        consent: "revoked",
+        preference: null,
+      }),
+    expectPositive: (result) =>
+      expect(result).toEqual({
+        revision: expect.any(String),
+        effectiveMode: "plain",
+        consent: "granted",
+        preference: DESKTOP_DRAFT_PREFERENCE_B,
+      }),
+  },
+  {
+    // Drafting reads the selected matter before guidelines or the model, so
+    // B's matter is refused to A, while B, with consent and no firm
+    // guideline file bound, gets a plain description.
+    name: "desktop billing drafts",
+    runAAgainstB: async ({ desktopA, ids: testIds }) => {
+      await grantDraftConsent(desktopA);
+      const response = await desktopA(desktopDraftRequest(testIds.wsB1));
+      expect(response.status).not.toBe(422);
+      return { status: response.status, body: await response.json() };
+    },
+    runBPositive: async ({ desktopB, ids: testIds }) => {
+      await grantDraftConsent(desktopB);
+      const response = await desktopB(desktopDraftRequest(testIds.wsB1));
+      expect(response.status).not.toBe(422);
+      return { status: response.status, body: await response.json() };
+    },
+    expectDenied: (result) => {
+      expect(result).toMatchObject({ status: 403 });
+      expect(JSON.stringify(result)).toContain(
+        "Selected matter is unavailable",
+      );
+    },
+    expectPositive: (result) =>
+      expect(result).toEqual({
+        status: 200,
+        body: {
+          result: {
+            mode: "plain",
+            drafts: [
+              {
+                entryId: "entry_1",
+                narrative: "Reviewed the agreement",
+                matchedEarlierEntryIds: [],
+              },
+            ],
+          },
+          earlierEntries: [],
+        },
+      }),
+  },
+  {
+    name: "desktop single create",
+    runAAgainstB: async ({ desktopA, ids: testIds }) =>
+      await desktopA(desktopRequest(`/single/${testIds.wsB1}`, DESKTOP_ENTRY)),
+    runBPositive: async ({ desktopB, ids: testIds }) => {
+      const response = await desktopB(
+        desktopRequest(`/single/${testIds.wsB1}`, DESKTOP_ENTRY),
+      );
+      expect(response.status).toBe(200);
+      const body: unknown = await response.json();
+      await expectDesktopEntryOwnedByB(String(recordField(body, "id")));
+      return body;
+    },
+    expectDenied: (result) => expect(result).toMatchObject({ status: 404 }),
+    expectPositive: (result) =>
+      expect(result).toEqual({ id: expect.any(String) }),
+  },
+];
+
 const isolationCases: IsolationCase[] = [
+  {
+    name: "outbound action read",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(readOutboundAction, workspaceA, {
+        params: { actionId: outboundReadB },
+      }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(readOutboundAction, sameUserWorkspaceB, {
+        params: { actionId: outboundReadB },
+      }),
+    expectDenied: expectStatus(404),
+    expectPositive: (result) => {
+      expectRecordFieldEquals(result, "id", outboundReadB);
+      expect(recordField(result, "preview")).toEqual(outboundPreview);
+      expectRecordFieldEquals(result, "previewHash", outboundHash);
+    },
+  },
+  {
+    name: "outbound action confirm",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(confirmOutboundAction, workspaceA, {
+        params: { actionId: outboundConfirmB },
+        body: { previewHash: outboundHash },
+      }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(confirmOutboundAction, sameUserWorkspaceB, {
+        params: { actionId: outboundConfirmB },
+        body: { previewHash: outboundHash },
+      }),
+    expectDenied: expectStatus(404),
+    expectPositive: (result) =>
+      expectRecordFieldEquals(result, "status", "sent"),
+  },
+  {
+    name: "outbound action discard",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(discardOutboundAction, workspaceA, {
+        params: { actionId: outboundDiscardB },
+      }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(discardOutboundAction, sameUserWorkspaceB, {
+        params: { actionId: outboundDiscardB },
+      }),
+    expectDenied: (result) =>
+      expect(recordField(result, "discarded")).toBe(false),
+    expectPositive: (result) =>
+      expect(recordField(result, "discarded")).toBe(true),
+  },
+  {
+    name: "outbound action read by another member of the same organization",
+    runAAgainstB: async ({ workspaceB }) =>
+      await runHandler(readOutboundAction, workspaceB, {
+        params: { actionId: outboundPeerReadB },
+      }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(readOutboundAction, sameUserWorkspaceB, {
+        params: { actionId: outboundPeerReadB },
+      }),
+    expectDenied: expectStatus(404),
+    expectPositive: (result) =>
+      expectRecordFieldEquals(result, "id", outboundPeerReadB),
+  },
+  {
+    name: "outbound action confirm by another member of the same organization",
+    runAAgainstB: async ({ workspaceB }) =>
+      await runHandler(confirmOutboundAction, workspaceB, {
+        params: { actionId: outboundPeerConfirmB },
+        body: { previewHash: outboundHash },
+      }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(confirmOutboundAction, sameUserWorkspaceB, {
+        params: { actionId: outboundPeerConfirmB },
+        body: { previewHash: outboundHash },
+      }),
+    expectDenied: expectStatus(404),
+    expectPositive: (result) =>
+      expectRecordFieldEquals(result, "status", "sent"),
+  },
+  {
+    name: "outbound action discard by another member of the same organization",
+    runAAgainstB: async ({ workspaceB }) =>
+      await runHandler(discardOutboundAction, workspaceB, {
+        params: { actionId: outboundPeerDiscardB },
+      }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(discardOutboundAction, sameUserWorkspaceB, {
+        params: { actionId: outboundPeerDiscardB },
+      }),
+    expectDenied: (result) =>
+      expect(recordField(result, "discarded")).toBe(false),
+    expectPositive: (result) =>
+      expect(recordField(result, "discarded")).toBe(true),
+  },
+  ...desktopPresenceIsolationCases(),
+  ...desktopCredentialIsolationCases(),
+  ...readerAnswerIsolationCases(),
   {
     name: "user file content",
     runAAgainstB: async ({ ids: testIds, workspaceA }) =>
@@ -618,6 +1431,8 @@ const isolationCases: IsolationCase[] = [
             baseVersionId: testIds.entityVersionB1,
             targetVersionIds: [compareTargetVersionB],
           },
+          mode: "strict",
+          granularity: "word",
           baseTrackedChanges: "keep",
           targetTrackedChanges: "keep",
           output: { type: "version" },
@@ -636,6 +1451,8 @@ const isolationCases: IsolationCase[] = [
             baseVersionId: testIds.entityVersionB1,
             targetVersionIds: [compareTargetVersionB],
           },
+          mode: "strict",
+          granularity: "word",
           baseTrackedChanges: "keep",
           targetTrackedChanges: "keep",
           output: { type: "version" },
@@ -712,9 +1529,55 @@ const isolationCases: IsolationCase[] = [
         params: { workspaceId: testIds.wsB1, entityId: testIds.entityB1 },
         query: { limit: 100 },
       }),
-    expectDenied: expectEmptyPage,
+    expectDenied: expectStatus(404),
     expectPositive: (result, { ids: testIds }) =>
       expectPageContainsId(result, testIds.docxSuggestionB1),
+  },
+  {
+    // The positive run rejects B's suggestion; the revert case below returns
+    // it to pending, so the fixture leaves the matrix as it entered.
+    name: "docx suggestion resolve",
+    runAAgainstB: async ({ ids: testIds, workspaceA }) =>
+      await runHandler(resolveDocxSuggestion, workspaceA, {
+        params: {
+          workspaceId: testIds.wsA1,
+          entityId: testIds.entityB1,
+          suggestionId: testIds.docxSuggestionB1,
+        },
+        body: { status: "rejected" },
+      }),
+    runBPositive: async ({ ids: testIds, workspaceB }) =>
+      await runHandler(resolveDocxSuggestion, workspaceB, {
+        params: {
+          workspaceId: testIds.wsB1,
+          entityId: testIds.entityB1,
+          suggestionId: testIds.docxSuggestionB1,
+        },
+        body: { status: "rejected" },
+      }),
+    expectDenied: expectStatus(404),
+    expectPositive: (result) => expect(result).toEqual({ updated: true }),
+  },
+  {
+    name: "docx suggestion revert",
+    runAAgainstB: async ({ ids: testIds, workspaceA }) =>
+      await runHandler(revertDocxSuggestion, workspaceA, {
+        params: {
+          workspaceId: testIds.wsA1,
+          entityId: testIds.entityB1,
+          suggestionId: testIds.docxSuggestionB1,
+        },
+      }),
+    runBPositive: async ({ ids: testIds, workspaceB }) =>
+      await runHandler(revertDocxSuggestion, workspaceB, {
+        params: {
+          workspaceId: testIds.wsB1,
+          entityId: testIds.entityB1,
+          suggestionId: testIds.docxSuggestionB1,
+        },
+      }),
+    expectDenied: expectStatus(404),
+    expectPositive: (result) => expect(result).toEqual({ updated: true }),
   },
   {
     name: "document review source list",
@@ -800,6 +1663,66 @@ const isolationCases: IsolationCase[] = [
       expect(getStatusCode(result)).toBeNull();
       expect(result).toMatchObject({ id: expect.any(String) });
     },
+  },
+  {
+    name: "client invoice prefill",
+    runAAgainstB: async ({ ids: testIds, workspaceA }) =>
+      await runHandler(prefillClientInvoice, workspaceA, {
+        params: { clientId: testIds.contactB },
+        query: {},
+      }),
+    runBPositive: async ({ ids: testIds, workspaceB }) =>
+      await runHandler(prefillClientInvoice, workspaceB, {
+        params: { clientId: testIds.contactB },
+        query: {},
+      }),
+    expectDenied: expectStatus(404),
+    expectPositive: (result, { ids: testIds }) =>
+      expect(result).toMatchObject({
+        clientId: testIds.contactB,
+        matters: [expect.objectContaining({ workspaceId: testIds.wsB1 })],
+      }),
+  },
+  {
+    name: "client invoice create",
+    runAAgainstB: async ({ ids: testIds, workspaceA }) =>
+      await runHandler(createClientInvoice, workspaceA, {
+        params: { clientId: testIds.contactB },
+        body: {
+          invoiceDate: "2026-10-15",
+          currency: "USD",
+          matters: [
+            {
+              workspaceId: testIds.wsB1,
+              timeEntryIds: [clientInvoiceEntryB],
+              expenseIds: [],
+            },
+          ],
+        },
+      }),
+    runBPositive: async ({ ids: testIds, workspaceB }) =>
+      await runHandler(createClientInvoice, workspaceB, {
+        params: { clientId: testIds.contactB },
+        body: {
+          invoiceDate: "2026-10-15",
+          currency: "USD",
+          matters: [
+            {
+              workspaceId: testIds.wsB1,
+              timeEntryIds: [clientInvoiceEntryB],
+              expenseIds: [],
+            },
+          ],
+        },
+      }),
+    expectDenied: expectStatus(404),
+    expectPositive: (result, { ids: testIds }) =>
+      expect(result).toMatchObject({
+        id: expect.any(String),
+        workspaceId: testIds.wsB1,
+        entryCount: 1,
+        totalAmount: 200,
+      }),
   },
   {
     name: "invoice read by id",
@@ -935,6 +1858,61 @@ const isolationCases: IsolationCase[] = [
       }),
     expectDenied: expectStatus(404),
     expectPositive: (result) => expectRecordFieldEquals(result, "id", vatRateB),
+  },
+  {
+    name: "organization data export list",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(listDataExports, workspaceA, { query: {} }),
+    runBPositive: async ({ workspaceB }) =>
+      await runHandler(listDataExports, workspaceB, { query: {} }),
+    expectDenied: (result) => expectPageExcludesId(result, dataExportB),
+    expectPositive: (result) => expectPageContainsId(result, dataExportB),
+  },
+  {
+    name: "organization data export read by id",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(readDataExport, workspaceA, {
+        params: { exportId: dataExportB },
+      }),
+    runBPositive: async ({ workspaceB }) =>
+      await runHandler(readDataExport, workspaceB, {
+        params: { exportId: dataExportB },
+      }),
+    expectDenied: expectStatus(404),
+    expectPositive: (result) =>
+      expectRecordFieldEquals(result, "id", dataExportB),
+  },
+  {
+    name: "VAT rate preset applies only to the active organization",
+    runAAgainstB: async ({ ids: testIds, workspaceA }) => {
+      const otherBefore = await countCzechPresetRates(testIds.orgB);
+      const result = await runHandler(applyVatRatePreset, workspaceA, {
+        body: { country: "CZ" },
+      });
+      return {
+        added: recordField(result, "added"),
+        activeRows: await countCzechPresetRates(testIds.orgA),
+        otherUnchanged:
+          (await countCzechPresetRates(testIds.orgB)) === otherBefore,
+      };
+    },
+    runBPositive: async ({ ids: testIds, workspaceB }) => {
+      const result = await runHandler(applyVatRatePreset, workspaceB, {
+        body: { country: "CZ" },
+      });
+      return {
+        added: recordField(result, "added"),
+        activeRows: await countCzechPresetRates(testIds.orgB),
+      };
+    },
+    expectDenied: (outcome) =>
+      expect(outcome).toEqual({
+        added: 5,
+        activeRows: 5,
+        otherUnchanged: true,
+      }),
+    expectPositive: (outcome) =>
+      expect(outcome).toEqual({ added: 5, activeRows: 5 }),
   },
   {
     name: "time entry read by id",
@@ -1081,7 +2059,7 @@ const isolationCases: IsolationCase[] = [
       await runHandler(readExpenses, workspaceB, {
         query: { limit: 25, matterId: testIds.entityB1 },
       }),
-    expectDenied: expectEmptyPage,
+    expectDenied: expectStatus(404),
     expectPositive: (result, { ids: testIds }) =>
       expectPageContainsId(result, testIds.expenseB1),
   },
@@ -1104,14 +2082,37 @@ const isolationCases: IsolationCase[] = [
     name: "legal list list",
     runAAgainstB: async ({ workspaceA }) =>
       await runHandler(listLegalLists, workspaceA, {
+        featureAccessSnapshot: legalListAccess(workspaceA),
         query: { limit: 100 },
       }),
     runBPositive: async ({ workspaceB }) =>
       await runHandler(listLegalLists, workspaceB, {
+        featureAccessSnapshot: legalListAccess(workspaceB),
         query: { limit: 100 },
       }),
     expectDenied: (result) => expectPageExcludesId(result, legalListB),
     expectPositive: (result) => expectPageContainsId(result, legalListB),
+  },
+  {
+    name: "conflict check list",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(listConflictChecks, workspaceA, {
+        featureAccessSnapshot: grantedConflictCheckSnapshot({
+          organizationId: workspaceA.session.activeOrganizationId,
+          userId: workspaceA.user.id,
+        }),
+        query: { limit: 100 },
+      }),
+    runBPositive: async ({ workspaceB }) =>
+      await runHandler(listConflictChecks, workspaceB, {
+        featureAccessSnapshot: grantedConflictCheckSnapshot({
+          organizationId: workspaceB.session.activeOrganizationId,
+          userId: workspaceB.user.id,
+        }),
+        query: { limit: 100 },
+      }),
+    expectDenied: (result) => expectPageExcludesId(result, conflictCheckB),
+    expectPositive: (result) => expectPageContainsId(result, conflictCheckB),
   },
   {
     name: "saved search list",
@@ -1139,6 +2140,21 @@ const isolationCases: IsolationCase[] = [
     expectDenied: (result) => expectPageExcludesId(result, savedTimeNarrativeB),
     expectPositive: (result) =>
       expectPageContainsId(result, savedTimeNarrativeB),
+  },
+  {
+    // The same person in another firm: their history there never shows here.
+    name: "search history list",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(listSearchHistory, workspaceA, {
+        query: { limit: 100 },
+      }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(listSearchHistory, sameUserWorkspaceB, {
+        query: { limit: 100 },
+      }),
+    expectDenied: (result) => expectPageExcludesId(result, searchHistoryEntryB),
+    expectPositive: (result) =>
+      expectPageContainsId(result, searchHistoryEntryB),
   },
   {
     name: "personal cross-matter view list",
@@ -1201,16 +2217,70 @@ const isolationCases: IsolationCase[] = [
     name: "memory list",
     runAAgainstB: async ({ workspaceA }) =>
       await runHandler(listMemories, workspaceA, {
+        featureAccessSnapshot: memoryAccess(workspaceA),
         query: { scope: "organization", status: "active", limit: 100 },
       }),
     runBPositive: async ({ workspaceB }) =>
       await runHandler(listMemories, workspaceB, {
+        featureAccessSnapshot: memoryAccess(workspaceB),
         query: { scope: "organization", status: "active", limit: 100 },
       }),
     expectDenied: (result, { ids: testIds }) =>
       expectPageExcludesId(result, testIds.aiMemoryFirmB),
     expectPositive: (result, { ids: testIds }) =>
       expectPageContainsId(result, testIds.aiMemoryFirmB),
+  },
+  {
+    // Both probes need a live firm administrator for the in-transaction
+    // authority check. `pinned: false` reaches the locked row without writing.
+    name: "memory update",
+    runAAgainstB: async ({ ids: testIds }) => {
+      const context = createWorkspaceContext({
+        activeWorkspaceIds: [testIds.wsA1],
+        organizationId: testIds.orgA,
+        userId: testIds.userAdmin,
+        workspaceId: testIds.wsA1,
+      });
+      return await runHandler(updateMemory, context, {
+        featureAccessSnapshot: memoryAccess(context),
+        memberRole: sessionMemberRole("owner"),
+        params: { memoryId: testIds.aiMemoryFirmB },
+        body: { pinned: false },
+      });
+    },
+    runBPositive: async ({ ids: testIds }) => {
+      const context = createWorkspaceContext({
+        activeWorkspaceIds: [testIds.wsB1],
+        organizationId: testIds.orgB,
+        userId: testIds.userAdmin,
+        workspaceId: testIds.wsB1,
+      });
+      return await runHandler(updateMemory, context, {
+        featureAccessSnapshot: memoryAccess(context),
+        memberRole: sessionMemberRole("admin"),
+        params: { memoryId: testIds.aiMemoryFirmB },
+        body: { pinned: false },
+      });
+    },
+    expectDenied: expectStatus(404),
+    expectPositive: (result, { ids: testIds }) =>
+      expectRecordFieldEquals(result, "id", testIds.aiMemoryFirmB),
+  },
+  {
+    name: "memory delete",
+    runAAgainstB: async ({ ids: testIds, workspaceA }) =>
+      await runHandler(deleteMemory, workspaceA, {
+        featureAccessSnapshot: memoryAccess(workspaceA),
+        params: { memoryId: testIds.aiMemoryDeleteB },
+      }),
+    runBPositive: async ({ ids: testIds, workspaceB }) =>
+      await runHandler(deleteMemory, workspaceB, {
+        featureAccessSnapshot: memoryAccess(workspaceB),
+        params: { memoryId: testIds.aiMemoryDeleteB },
+      }),
+    expectDenied: expectStatus(404),
+    expectPositive: (result, { ids: testIds }) =>
+      expect(result).toEqual({ id: testIds.aiMemoryDeleteB }),
   },
   {
     name: "organization contact read by id",
@@ -1317,6 +2387,32 @@ const isolationCases: IsolationCase[] = [
       expectPageContainsField(result, "id", notificationB),
   },
   {
+    // Same organization, other recipient: only the recipient predicate stands
+    // between user A1 and user B1's notification.
+    name: "notification mark read",
+    runAAgainstB: async ({ sameUserWorkspaceB }) =>
+      await runHandler(markNotificationRead, sameUserWorkspaceB, {
+        params: { notificationId: notificationB },
+      }),
+    runBPositive: async ({ workspaceB }) =>
+      await runHandler(markNotificationRead, workspaceB, {
+        params: { notificationId: notificationB },
+      }),
+    expectDenied: expectStatus(404),
+    expectPositive: (result) => expect(result).toEqual({ unreadCount: 0 }),
+  },
+  {
+    name: "active chat run list",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(listActiveChatRuns, workspaceA, { query: {} }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(listActiveChatRuns, sameUserWorkspaceB, { query: {} }),
+    expectDenied: (result) =>
+      expect(activeChatRunThreadIds(result)).not.toContain(chatTurnThreadB),
+    expectPositive: (result) =>
+      expect(activeChatRunThreadIds(result)).toContain(chatTurnThreadB),
+  },
+  {
     name: "chat thread list",
     runAAgainstB: async ({ workspaceA }) =>
       await runHandler(listChatThreads, workspaceA, { query: {} }),
@@ -1326,6 +2422,39 @@ const isolationCases: IsolationCase[] = [
       expect(globalChatThreadIds(result)).not.toContain(chatThreadB),
     expectPositive: (result) =>
       expect(globalChatThreadIds(result)).toContain(chatThreadB),
+  },
+  {
+    name: "chat thread list filtered by matter",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(listChatThreads, workspaceA, {
+        query: { workspaceId: ids.wsB1 },
+      }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(listChatThreads, sameUserWorkspaceB, {
+        query: { workspaceId: ids.wsB1 },
+      }),
+    expectDenied: (result) => {
+      expectStatus(404)(result);
+      expect(JSON.stringify(result)).not.toContain(chatMatterThreadB);
+    },
+    expectPositive: (result) =>
+      expect(matterChatThreadIds(result)).toEqual([chatMatterThreadB]),
+  },
+  {
+    name: "chat decision conversation lookup",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(getDecisionChatThread, workspaceA, {
+        params: { decisionId: chatDecisionB },
+        query: {},
+      }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(getDecisionChatThread, sameUserWorkspaceB, {
+        params: { decisionId: chatDecisionB },
+        query: {},
+      }),
+    expectDenied: (result) => expect(result).toEqual({ threadId: null }),
+    expectPositive: (result) =>
+      expect(result).toEqual({ threadId: chatDecisionThreadB }),
   },
   {
     name: "chat messages list",
@@ -1345,6 +2474,138 @@ const isolationCases: IsolationCase[] = [
         chatUserMessageB,
         chatAssistantMessageB,
       ]),
+  },
+  {
+    name: "chat message revision list",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(listChatMessageRevisions, workspaceA, {
+        params: { threadId: chatThreadB, messageId: chatAssistantMessageB },
+        query: {},
+      }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(listChatMessageRevisions, sameUserWorkspaceB, {
+        params: { threadId: chatThreadB, messageId: chatAssistantMessageB },
+        query: {},
+      }),
+    expectDenied: expectStatus(404),
+    expectPositive: (result) => expect(result).toMatchObject({ items: [] }),
+  },
+  {
+    name: "chat message current read",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(getChatMessage, workspaceA, {
+        params: { threadId: chatThreadB, messageId: chatAssistantMessageB },
+      }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(getChatMessage, sameUserWorkspaceB, {
+        params: { threadId: chatThreadB, messageId: chatAssistantMessageB },
+      }),
+    expectDenied: expectStatus(404),
+    expectPositive: (result) =>
+      expect(result).toMatchObject({
+        id: chatAssistantMessageB,
+        revision: 0,
+        edited: false,
+      }),
+  },
+  {
+    name: "chat message span edit",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(proposeChatMessageSpanEdit, workspaceA, {
+        params: { threadId: chatThreadB, messageId: chatAssistantMessageB },
+        orgAIConfig: chatOrgAIConfig,
+        body: {
+          baseRevision: 0,
+          start: 0,
+          end: 4,
+          selectedTextHash: sha256Hex("Here"),
+          instruction: "Make it clearer",
+        },
+      }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(proposeChatMessageSpanEdit, sameUserWorkspaceB, {
+        params: { threadId: chatThreadB, messageId: chatAssistantMessageB },
+        orgAIConfig: chatOrgAIConfig,
+        body: {
+          baseRevision: 0,
+          start: 0,
+          end: 4,
+          selectedTextHash: sha256Hex("Here"),
+          instruction: "Make it clearer",
+        },
+      }),
+    expectDenied: expectStatus(404),
+    expectPositive: (result) =>
+      expect(result).toMatchObject({
+        replacement: "Updated",
+        content: {
+          version: 3,
+          data: [{ type: "text", content: "Updated is the summary." }],
+        },
+        edit: { type: "ai_span", keySource: "byok" },
+      }),
+  },
+  {
+    name: "chat message revision accept",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(acceptChatMessageRevision, workspaceA, {
+        params: {
+          threadId: chatRevisionThreadB,
+          messageId: chatRevisionAcceptMessageB,
+        },
+        body: {
+          baseRevision: 0,
+          selectedTextHash: sha256Hex("Here"),
+          content: {
+            version: 3,
+            data: [{ type: "text", content: "**Here** is the summary." }],
+          },
+          edit: { type: "format", format: "bold", start: 0, end: 4 },
+        },
+      }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(acceptChatMessageRevision, sameUserWorkspaceB, {
+        params: {
+          threadId: chatRevisionThreadB,
+          messageId: chatRevisionAcceptMessageB,
+        },
+        body: {
+          baseRevision: 0,
+          selectedTextHash: sha256Hex("Here"),
+          content: {
+            version: 3,
+            data: [{ type: "text", content: "**Here** is the summary." }],
+          },
+          edit: { type: "format", format: "bold", start: 0, end: 4 },
+        },
+      }),
+    expectDenied: expectStatus(404),
+    expectPositive: (result) =>
+      expect(result).toMatchObject({ revision: 1, edited: true }),
+  },
+  {
+    name: "chat message revision revert",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(revertChatMessageRevision, workspaceA, {
+        params: {
+          threadId: chatRevisionThreadB,
+          messageId: chatRevisionRevertMessageB,
+          revision: 0,
+        },
+        body: { baseRevision: 1 },
+      }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(revertChatMessageRevision, sameUserWorkspaceB, {
+        params: {
+          threadId: chatRevisionThreadB,
+          messageId: chatRevisionRevertMessageB,
+          revision: 0,
+        },
+        body: { baseRevision: 1 },
+      }),
+    expectDenied: expectStatus(404),
+    expectPositive: (result) =>
+      expect(result).toMatchObject({ revision: 2, edited: true }),
   },
   {
     // A missing thread may be served as an empty draft; another firm's
@@ -1425,6 +2686,200 @@ const isolationCases: IsolationCase[] = [
       expect(result).toEqual({ title: expect.any(String) }),
   },
   {
+    name: "chat saved private input availability",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(readSavedChatSecret, workspaceA, {
+        params: { threadId: chatThreadB },
+        query: { connectorSlug: "missing-connector" },
+      }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(readSavedChatSecret, sameUserWorkspaceB, {
+        params: { threadId: chatThreadB },
+        query: { connectorSlug: "missing-connector" },
+      }),
+    expectDenied: (result) => {
+      expect(getStatusCode(result)).toBe(404);
+      expect(recordField(result, "response")).toMatchObject({
+        message: "Chat thread not found",
+      });
+    },
+    expectPositive: (result) => {
+      expect(getStatusCode(result)).toBe(404);
+      expect(recordField(result, "response")).toMatchObject({
+        message:
+          "Enable this connector in settings before providing a credential",
+      });
+    },
+  },
+  {
+    name: "chat private input submission",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(submitChatSecret, workspaceA, {
+        body: { decision: "decline" },
+        params: { threadId: chatThreadB, toolCallId: "missing-request" },
+        query: {},
+      }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(submitChatSecret, sameUserWorkspaceB, {
+        body: { decision: "decline" },
+        params: { threadId: chatThreadB, toolCallId: "missing-request" },
+        query: {},
+      }),
+    expectDenied: expectStatus(404),
+    expectPositive: expectStatus(409),
+  },
+  {
+    name: "chat connector request answer",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(submitChatConnector, workspaceA, {
+        body: { decision: "declined" },
+        params: { threadId: chatThreadB, toolCallId: "missing-request" },
+        query: {},
+      }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(submitChatConnector, sameUserWorkspaceB, {
+        body: { decision: "declined" },
+        params: { threadId: chatThreadB, toolCallId: "missing-request" },
+        query: {},
+      }),
+    expectDenied: expectStatus(404),
+    expectPositive: expectStatus(409),
+  },
+  {
+    // The same person's approvals in another firm stay with that firm: the
+    // list in organization A neither returns them nor sees thread B's grant.
+    name: "chat tool grant list",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(listChatToolGrants, workspaceA, {
+        query: { threadId: chatThreadB },
+      }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(listChatToolGrants, sameUserWorkspaceB, {
+        query: { threadId: chatThreadB },
+      }),
+    expectDenied: (result) => {
+      expect(chatToolGrantIds(result)).not.toContain(chatToolGrantAlwaysB);
+      expect(chatToolGrantIds(result)).not.toContain(
+        chatToolGrantConversationB,
+      );
+    },
+    expectPositive: (result) => {
+      expect(chatToolGrantIds(result)).toContain(chatToolGrantAlwaysB);
+      expect(chatToolGrantIds(result)).toContain(chatToolGrantConversationB);
+    },
+  },
+  {
+    name: "chat tool grant coverage",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(readChatToolGrantCoverage, workspaceA, {
+        query: { threadId: chatThreadB, toolName: "web_search" },
+      }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(readChatToolGrantCoverage, sameUserWorkspaceB, {
+        query: { threadId: chatThreadB, toolName: "web_search" },
+      }),
+    expectDenied: (result) => expect(result).toEqual({ covered: false }),
+    expectPositive: (result) => expect(result).toEqual({ covered: true }),
+  },
+  {
+    // A grant names the conversation it was given in; organization A cannot
+    // attach one to thread B.
+    name: "chat tool grant create",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(createChatToolGrant, workspaceA, {
+        body: {
+          scope: "conversation",
+          threadId: chatThreadB,
+          toolName: "add_comment",
+        },
+      }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(createChatToolGrant, sameUserWorkspaceB, {
+        body: {
+          scope: "conversation",
+          threadId: chatThreadB,
+          toolName: "add_comment",
+        },
+      }),
+    expectDenied: expectStatus(404),
+    expectPositive: (result) =>
+      expect(result).toMatchObject({
+        scope: "conversation",
+        toolName: "add_comment",
+      }),
+  },
+  {
+    name: "chat tool grant delete",
+    runAAgainstB: async ({ workspaceA }) => ({
+      response: await runHandler(deleteChatToolGrant, workspaceA, {
+        params: { grantId: chatToolGrantDeleteB },
+      }),
+      exists: await chatToolGrantExists(chatToolGrantDeleteB),
+    }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(deleteChatToolGrant, sameUserWorkspaceB, {
+        params: { grantId: chatToolGrantDeleteB },
+      }),
+    expectDenied: (result) => {
+      expect(recordField(result, "response")).toEqual({ deleted: false });
+      expect(recordField(result, "exists")).toBe(true);
+    },
+    expectPositive: (result) => expect(result).toEqual({ deleted: true }),
+  },
+  {
+    // The same person's website approvals in another firm stay with that firm.
+    name: "browser site grant list",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(listBrowserSiteGrants, workspaceA, {}),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(listBrowserSiteGrants, sameUserWorkspaceB, {}),
+    expectDenied: (result) =>
+      expect(chatToolGrantIds(result)).not.toContain(browserSiteGrantB),
+    expectPositive: (result) =>
+      expect(chatToolGrantIds(result)).toContain(browserSiteGrantB),
+  },
+  {
+    // A website allowed in one firm never answers the same person's browser
+    // cards in another: the grant is stored for the session's organization.
+    name: "browser site grant create",
+    runAAgainstB: async ({ sameUserWorkspaceB, workspaceA }) => {
+      await runHandler(createBrowserSiteGrant, workspaceA, {
+        body: { url: "https://allowed-in-a.example/page" },
+      });
+      return await runHandler(listBrowserSiteGrants, sameUserWorkspaceB, {});
+    },
+    runBPositive: async ({ sameUserWorkspaceB }) => {
+      await runHandler(createBrowserSiteGrant, sameUserWorkspaceB, {
+        body: { url: "https://allowed-in-b.example/page" },
+      });
+      return await runHandler(listBrowserSiteGrants, sameUserWorkspaceB, {});
+    },
+    expectDenied: (result) =>
+      expect(JSON.stringify(result)).not.toContain(
+        "https://allowed-in-a.example",
+      ),
+    expectPositive: (result) =>
+      expect(JSON.stringify(result)).toContain("https://allowed-in-b.example"),
+  },
+  {
+    name: "browser site grant delete",
+    runAAgainstB: async ({ workspaceA }) => ({
+      response: await runHandler(deleteBrowserSiteGrant, workspaceA, {
+        params: { grantId: browserSiteGrantDeleteB },
+      }),
+      exists: await browserSiteGrantExists(browserSiteGrantDeleteB),
+    }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(deleteBrowserSiteGrant, sameUserWorkspaceB, {
+        params: { grantId: browserSiteGrantDeleteB },
+      }),
+    expectDenied: (result) => {
+      expect(recordField(result, "response")).toEqual({ deleted: false });
+      expect(recordField(result, "exists")).toBe(true);
+    },
+    expectPositive: (result) => expect(result).toEqual({ deleted: true }),
+  },
+  {
     name: "chat thread rename",
     runAAgainstB: async ({ workspaceA }) => ({
       response: await runHandler(renameChatThread, workspaceA, {
@@ -1448,6 +2903,54 @@ const isolationCases: IsolationCase[] = [
     },
     expectPositive: (result) =>
       expect(result).toEqual({ title: chatThreadTitleB }),
+  },
+  {
+    name: "chat thread read state",
+    runAAgainstB: async ({ workspaceA }) => ({
+      response: await runHandler(updateChatThreadReadState, workspaceA, {
+        body: { readState: "unread" },
+        params: { threadId: chatThreadB },
+        query: {},
+      }),
+      thread: await readChatThreadRow(chatThreadB),
+    }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(updateChatThreadReadState, sameUserWorkspaceB, {
+        body: { readState: "read" },
+        params: { threadId: chatThreadB },
+        query: {},
+      }),
+    expectDenied: (result) => {
+      expect(getStatusCode(recordField(result, "response"))).toBe(404);
+      // Marking unread clears the instant; the other firm's attempt left it.
+      expect(recordField(result, "thread")).toMatchObject({
+        lastReadAt: expect.any(Date),
+      });
+    },
+    expectPositive: (result) => expect(result).toEqual({ readState: "read" }),
+  },
+  {
+    name: "chat thread pin state",
+    runAAgainstB: async ({ workspaceA }) => ({
+      response: await runHandler(updateChatThreadPinState, workspaceA, {
+        body: { pinState: "pinned" },
+        params: { threadId: chatThreadB },
+        query: {},
+      }),
+      thread: await readChatThreadRow(chatThreadB),
+    }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(updateChatThreadPinState, sameUserWorkspaceB, {
+        body: { pinState: "unpinned" },
+        params: { threadId: chatThreadB },
+        query: {},
+      }),
+    expectDenied: (result) => {
+      expect(getStatusCode(recordField(result, "response"))).toBe(404);
+      expect(recordField(result, "thread")).toMatchObject({ pinnedAt: null });
+    },
+    expectPositive: (result) =>
+      expect(result).toEqual({ pinState: "unpinned" }),
   },
   {
     // An upsert: a thread id the caller cannot see must neither be updated
@@ -1558,6 +3061,79 @@ const isolationCases: IsolationCase[] = [
     },
   },
   {
+    // Runs before the cancel case, which settles the shared accepted turn.
+    name: "chat turn resume probe",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(probeChatTurn, workspaceA, {
+        params: { threadId: chatTurnThreadB, turnId: chatTurnB },
+        query: {},
+        request: new Request("http://localhost/"),
+      }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(probeChatTurn, sameUserWorkspaceB, {
+        params: { threadId: chatTurnThreadB, turnId: chatTurnB },
+        query: {},
+        request: new Request("http://localhost/"),
+      }),
+    expectDenied: (result) => {
+      expect(getStatusCode(result)).toBe(404);
+    },
+    expectPositive: (result) =>
+      expect(result).toEqual({ type: "preparing", turnId: chatTurnB }),
+  },
+  {
+    // Runs before the cancel case, which settles the shared accepted turn.
+    name: "chat turn resume join",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(joinChatTurn, workspaceA, {
+        params: { threadId: chatTurnThreadB, turnId: chatTurnB },
+        query: {},
+        request: new Request("http://localhost/"),
+      }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(joinChatTurn, sameUserWorkspaceB, {
+        params: { threadId: chatTurnThreadB, turnId: chatTurnB },
+        query: {},
+        request: new Request("http://localhost/"),
+      }),
+    expectDenied: (result) => {
+      expect(getStatusCode(result)).toBe(404);
+    },
+    expectPositive: (result) =>
+      expect(result).toEqual({ type: "preparing", turnId: chatTurnB }),
+  },
+  {
+    // B's turn is not running, so its own steer is declined; A's never finds
+    // the turn at all.
+    name: "chat turn steer",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(steerChatTurn, workspaceA, {
+        params: { threadId: chatTurnThreadB, turnId: chatTurnB },
+        body: {
+          inputId: Bun.randomUUIDv7(),
+          text: "Also check the annex.",
+          source: { type: "composer" },
+        },
+      }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(steerChatTurn, sameUserWorkspaceB, {
+        params: { threadId: chatTurnThreadB, turnId: chatTurnB },
+        body: {
+          inputId: Bun.randomUUIDv7(),
+          text: "Also check the annex.",
+          source: { type: "composer" },
+        },
+      }),
+    expectDenied: (result) => {
+      expect(getStatusCode(result)).toBe(404);
+    },
+    expectPositive: (result) => {
+      expect(result).toEqual({
+        steer: { type: "refused", reason: "turn_not_running" },
+      });
+    },
+  },
+  {
     name: "chat turn cancel",
     runAAgainstB: async ({ workspaceA }) => ({
       response: await runHandler(cancelChatTurn, workspaceA, {
@@ -1579,6 +3155,433 @@ const isolationCases: IsolationCase[] = [
     expectPositive: (result) =>
       expect(result).toMatchObject({
         turn: { id: chatTurnB, status: "cancelled" },
+      }),
+  },
+  {
+    // Runs after the cancel case: the message's turn ended without a run,
+    // so there are no files to undo, which its own member is told.
+    name: "chat message local files undo",
+    runAAgainstB: async ({ workspaceA }) => {
+      const params = {
+        threadId: chatTurnThreadB,
+        messageId: chatTurnUserMessageB,
+      };
+      return {
+        read: await runHandler(readLocalFilesUndo, workspaceA, { params }),
+        undo: await runHandler(undoLocalFiles, workspaceA, { params }),
+        queued: await folderRestoresOfTurn(chatTurnB),
+      };
+    },
+    runBPositive: async ({ sameUserWorkspaceB }) => {
+      const params = {
+        threadId: chatTurnThreadB,
+        messageId: chatTurnUserMessageB,
+      };
+      return {
+        read: await runHandler(readLocalFilesUndo, sameUserWorkspaceB, {
+          params,
+        }),
+        undo: await runHandler(undoLocalFiles, sameUserWorkspaceB, {
+          params,
+        }),
+      };
+    },
+    expectDenied: (result) => {
+      expect(getStatusCode(recordField(result, "read"))).toBe(404);
+      expect(getStatusCode(recordField(result, "undo"))).toBe(404);
+      expect(recordField(result, "queued")).toEqual([]);
+    },
+    expectPositive: (result) =>
+      expect(result).toEqual({
+        read: {
+          files: { type: "none" },
+          conversation: { type: "continues" },
+          undo: null,
+        },
+        undo: { status: "refused", undo: null, reason: "no_checkpoint" },
+      }),
+  },
+  {
+    // A chat of another member reads as missing; its own member reads that
+    // nothing of it runs in the background on a computer.
+    name: "chat thread background tasks",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(readBackgroundTasks, workspaceA, {
+        params: { threadId: chatTurnThreadB },
+      }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(readBackgroundTasks, sameUserWorkspaceB, {
+        params: { threadId: chatTurnThreadB },
+      }),
+    expectDenied: (result) => {
+      expect(getStatusCode(result)).toBe(404);
+    },
+    expectPositive: (result) => expect(result).toEqual({ count: 0 }),
+  },
+  {
+    // A step of another member's chat reads as missing with its chat; its
+    // own member reads that nothing was stored for a step no run sent.
+    name: "chat local run step content",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(readLocalRunStepContent, workspaceA, {
+        params: { threadId: chatTurnThreadB, callId: UNSENT_STEP_CALL_ID },
+        query: {},
+      }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(readLocalRunStepContent, sameUserWorkspaceB, {
+        params: { threadId: chatTurnThreadB, callId: UNSENT_STEP_CALL_ID },
+        query: {},
+      }),
+    expectDenied: (result) => {
+      expect(getStatusCode(result)).toBe(404);
+    },
+    expectPositive: (result) => expect(result).toEqual({ state: "not_stored" }),
+  },
+  {
+    // Another firm's caller reads the chat as missing; its own member reads
+    // the reminder they asked for.
+    name: "chat limit reminder read",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(getChatLimitReminder, workspaceA, {
+        params: { threadId: chatLimitThreadB },
+        query: {},
+      }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(getChatLimitReminder, sameUserWorkspaceB, {
+        params: { threadId: chatLimitThreadB },
+        query: {},
+      }),
+    expectDenied: (result) => {
+      expect(getStatusCode(result)).toBe(404);
+    },
+    expectPositive: (result) =>
+      expect(result).toEqual({
+        remindAt: chatLimitResetsAt.toISOString(),
+        onReset: "notify",
+      }),
+  },
+  {
+    // Asking again for the same stopped turn keeps the stored reminder, so
+    // the positive case changes nothing either.
+    name: "chat limit reminder set",
+    runAAgainstB: async ({ workspaceA }) => ({
+      response: await runHandler(setChatLimitReminder, workspaceA, {
+        params: { threadId: chatLimitThreadB },
+        query: {},
+        body: { onReset: "continue" },
+      }),
+      reminders: await chatLimitRemindersOf(chatLimitThreadB),
+    }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(setChatLimitReminder, sameUserWorkspaceB, {
+        params: { threadId: chatLimitThreadB },
+        query: {},
+        body: { onReset: "notify" },
+      }),
+    expectDenied: (result) => {
+      expect(getStatusCode(recordField(result, "response"))).toBe(404);
+      expect(recordField(result, "reminders")).toEqual([
+        { organizationId: ids.orgB, remindAt: chatLimitResetsAt },
+      ]);
+    },
+    expectPositive: (result) =>
+      expect(result).toEqual({
+        remindAt: chatLimitResetsAt.toISOString(),
+        onReset: "notify",
+      }),
+  },
+  {
+    name: "chat limit reminder cancel",
+    runAAgainstB: async ({ workspaceA }) => ({
+      response: await runHandler(cancelChatLimitReminder, workspaceA, {
+        params: { threadId: chatLimitCancelThreadB },
+        query: {},
+      }),
+      reminders: await chatLimitRemindersOf(chatLimitCancelThreadB),
+    }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(cancelChatLimitReminder, sameUserWorkspaceB, {
+        params: { threadId: chatLimitCancelThreadB },
+        query: {},
+      }),
+    expectDenied: (result) => {
+      expect(getStatusCode(recordField(result, "response"))).toBe(404);
+      expect(recordField(result, "reminders")).toEqual([
+        { organizationId: ids.orgB, remindAt: chatLimitResetsAt },
+      ]);
+    },
+    expectPositive: (result) => expect(result).toEqual({ remindAt: null }),
+  },
+  {
+    // Another firm's caller reads the chat as missing; its own member reads
+    // its queue in order.
+    name: "chat queue read",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(readChatQueue, workspaceA, {
+        params: { threadId: chatQueueThreadB },
+      }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(readChatQueue, sameUserWorkspaceB, {
+        params: { threadId: chatQueueThreadB },
+      }),
+    expectDenied: (result) => {
+      expect(getStatusCode(result)).toBe(404);
+    },
+    expectPositive: (result) =>
+      expect(result).toMatchObject({
+        hold: null,
+        items: [
+          { id: chatQueuedFirstB, position: 1, preview: "First" },
+          { id: chatQueuedSecondB, position: 2, preview: "Second" },
+        ],
+      }),
+  },
+  {
+    name: "chat queued message read",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(readQueuedChatMessage, workspaceA, {
+        params: { messageId: chatQueuedFirstB, threadId: chatQueueThreadB },
+      }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(readQueuedChatMessage, sameUserWorkspaceB, {
+        params: { messageId: chatQueuedFirstB, threadId: chatQueueThreadB },
+      }),
+    expectDenied: (result) => {
+      expect(getStatusCode(result)).toBe(404);
+    },
+    expectPositive: (result) =>
+      expect(result).toMatchObject({
+        message: {
+          id: chatQueuedFirstB,
+          parts: [{ type: "text", content: "First" }],
+        },
+        revision: 0,
+      }),
+  },
+  {
+    name: "chat queue enqueue",
+    runAAgainstB: async ({ workspaceA }) => ({
+      response: await runHandler(enqueueChatMessage, workspaceA, {
+        params: { threadId: chatQueueThreadB },
+        body: { send: queuedSendOf(chatQueuedThirdB, "Third") },
+      }),
+      queue: await chatQueueOfB(),
+    }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(enqueueChatMessage, sameUserWorkspaceB, {
+        params: { threadId: chatQueueThreadB },
+        body: { send: queuedSendOf(chatQueuedThirdB, "Third") },
+      }),
+    expectDenied: (result) => {
+      expect(getStatusCode(recordField(result, "response"))).toBe(404);
+      expect(recordField(result, "queue")).toEqual({
+        items: [
+          { id: chatQueuedFirstB, revision: 0 },
+          { id: chatQueuedSecondB, revision: 0 },
+        ],
+        holds: [],
+      });
+    },
+    expectPositive: (result) =>
+      expect(result).toMatchObject({
+        item: { id: chatQueuedThirdB, position: 3, preview: "Third" },
+      }),
+  },
+  {
+    name: "chat queued message replace",
+    runAAgainstB: async ({ workspaceA }) => ({
+      response: await runHandler(replaceQueuedChatMessage, workspaceA, {
+        params: { threadId: chatQueueThreadB, messageId: chatQueuedFirstB },
+        body: { revision: 0, send: queuedSendOf(chatQueuedFirstB, "Edited") },
+      }),
+      queue: await chatQueueOfB(),
+    }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(replaceQueuedChatMessage, sameUserWorkspaceB, {
+        params: { threadId: chatQueueThreadB, messageId: chatQueuedFirstB },
+        body: { revision: 0, send: queuedSendOf(chatQueuedFirstB, "Edited") },
+      }),
+    expectDenied: (result) => {
+      expect(getStatusCode(recordField(result, "response"))).toBe(404);
+      expect(recordField(result, "queue")).toEqual({
+        items: [
+          { id: chatQueuedFirstB, revision: 0 },
+          { id: chatQueuedSecondB, revision: 0 },
+          { id: chatQueuedThirdB, revision: 0 },
+        ],
+        holds: [],
+      });
+    },
+    expectPositive: (result) =>
+      expect(result).toMatchObject({
+        item: { id: chatQueuedFirstB, revision: 1, preview: "Edited" },
+      }),
+  },
+  {
+    name: "chat queued message move",
+    runAAgainstB: async ({ workspaceA }) => ({
+      response: await runHandler(moveQueuedChatMessage, workspaceA, {
+        params: { threadId: chatQueueThreadB, messageId: chatQueuedThirdB },
+        body: { beforeId: chatQueuedFirstB },
+      }),
+      queue: await chatQueueOfB(),
+    }),
+    runBPositive: async ({ sameUserWorkspaceB }) => {
+      const response = await runHandler(
+        moveQueuedChatMessage,
+        sameUserWorkspaceB,
+        {
+          params: { threadId: chatQueueThreadB, messageId: chatQueuedThirdB },
+          body: { beforeId: chatQueuedFirstB },
+        },
+      );
+      return { response, queue: await chatQueueOfB() };
+    },
+    expectDenied: (result) => {
+      expect(getStatusCode(recordField(result, "response"))).toBe(404);
+      expect(recordField(result, "queue")).toEqual({
+        items: [
+          { id: chatQueuedFirstB, revision: 1 },
+          { id: chatQueuedSecondB, revision: 0 },
+          { id: chatQueuedThirdB, revision: 0 },
+        ],
+        holds: [],
+      });
+    },
+    expectPositive: (result) =>
+      expect(result).toEqual({
+        response: {},
+        queue: {
+          items: [
+            { id: chatQueuedThirdB, revision: 0 },
+            { id: chatQueuedFirstB, revision: 1 },
+            { id: chatQueuedSecondB, revision: 0 },
+          ],
+          holds: [],
+        },
+      }),
+  },
+  {
+    name: "chat queue pause",
+    runAAgainstB: async ({ workspaceA }) => ({
+      response: await runHandler(pauseChatQueue, workspaceA, {
+        params: { threadId: chatQueueThreadB },
+      }),
+      queue: await chatQueueOfB(),
+    }),
+    runBPositive: async ({ sameUserWorkspaceB }) => {
+      const response = await runHandler(pauseChatQueue, sameUserWorkspaceB, {
+        params: { threadId: chatQueueThreadB },
+      });
+      return { response, holds: (await chatQueueOfB()).holds };
+    },
+    expectDenied: (result) => {
+      expect(getStatusCode(recordField(result, "response"))).toBe(404);
+      expect(recordField(result, "queue")).toMatchObject({ holds: [] });
+    },
+    expectPositive: (result) =>
+      expect(result).toEqual({ response: {}, holds: ["member"] }),
+  },
+  {
+    name: "chat queue resume",
+    runAAgainstB: async ({ workspaceA }) => ({
+      response: await runHandler(resumeChatQueue, workspaceA, {
+        params: { threadId: chatQueueThreadB },
+      }),
+      queue: await chatQueueOfB(),
+    }),
+    runBPositive: async ({ sameUserWorkspaceB }) => {
+      const response = await runHandler(resumeChatQueue, sameUserWorkspaceB, {
+        params: { threadId: chatQueueThreadB },
+      });
+      return { response, holds: (await chatQueueOfB()).holds };
+    },
+    expectDenied: (result) => {
+      expect(getStatusCode(recordField(result, "response"))).toBe(404);
+      expect(recordField(result, "queue")).toMatchObject({
+        holds: ["member"],
+      });
+    },
+    expectPositive: (result) =>
+      expect(result).toEqual({ response: {}, holds: [] }),
+  },
+  {
+    // Nothing runs in B's chat, so its own Send now only moves the message
+    // first; the server's queue sender sends it.
+    name: "chat queued message send now",
+    runAAgainstB: async ({ workspaceA }) => ({
+      response: await runHandler(sendQueuedChatMessageNow, workspaceA, {
+        params: { threadId: chatQueueThreadB, messageId: chatQueuedSecondB },
+      }),
+      queue: await chatQueueOfB(),
+    }),
+    runBPositive: async ({ sameUserWorkspaceB }) => {
+      const response = await runHandler(
+        sendQueuedChatMessageNow,
+        sameUserWorkspaceB,
+        {
+          params: { threadId: chatQueueThreadB, messageId: chatQueuedSecondB },
+        },
+      );
+      return {
+        response,
+        first: (await chatQueueOfB()).items.at(0)?.id,
+      };
+    },
+    expectDenied: (result) => {
+      expect(getStatusCode(recordField(result, "response"))).toBe(404);
+      expect(recordField(result, "queue")).toEqual({
+        items: [
+          { id: chatQueuedThirdB, revision: 0 },
+          { id: chatQueuedFirstB, revision: 1 },
+          { id: chatQueuedSecondB, revision: 0 },
+        ],
+        holds: [],
+      });
+    },
+    expectPositive: (result) =>
+      expect(result).toEqual({ response: {}, first: chatQueuedSecondB }),
+  },
+  {
+    name: "chat queued message cancel",
+    runAAgainstB: async ({ workspaceA }) => ({
+      response: await runHandler(cancelQueuedChatMessage, workspaceA, {
+        params: { threadId: chatQueueThreadB, messageId: chatQueuedSecondB },
+        query: { files: "delete", revision: 0 },
+      }),
+      queue: await chatQueueOfB(),
+    }),
+    runBPositive: async ({ sameUserWorkspaceB }) => {
+      const response = await runHandler(
+        cancelQueuedChatMessage,
+        sameUserWorkspaceB,
+        {
+          params: { threadId: chatQueueThreadB, messageId: chatQueuedSecondB },
+          query: { files: "delete", revision: 0 },
+        },
+      );
+      return {
+        response,
+        ids: (await chatQueueOfB()).items.map(({ id }) => id),
+      };
+    },
+    expectDenied: (result) => {
+      expect(getStatusCode(recordField(result, "response"))).toBe(404);
+      expect(recordField(result, "queue")).toEqual({
+        items: [
+          { id: chatQueuedSecondB, revision: 0 },
+          { id: chatQueuedThirdB, revision: 0 },
+          { id: chatQueuedFirstB, revision: 1 },
+        ],
+        holds: [],
+      });
+    },
+    expectPositive: (result) =>
+      expect(result).toEqual({
+        response: {
+          message: queuedSendOf(chatQueuedSecondB, "Second").message,
+        },
+        ids: [chatQueuedThirdB, chatQueuedFirstB],
       }),
   },
   {
@@ -1770,8 +3773,7 @@ const isolationCases: IsolationCase[] = [
       await runHandler(readFileChatThread, workspaceA, {
         query: { entityId: testIds.entityA1, fieldId: testIds.fieldA1 },
       }),
-    expectDenied: (result) =>
-      expect(result).toMatchObject({ messages: [], threadId: null }),
+    expectDenied: expectStatus(404),
     expectPositive: (result, { ids: testIds }) =>
       expectRecordFieldEquals(
         result,
@@ -1814,15 +3816,120 @@ const chatSkillFileQuery = (testIds: TestIds) => ({
   webSearch: false,
 });
 
-beforeAll(async () => {
+testState.beforeAll(async () => {
   testDb = await getTestDb();
   ids = createTestIds();
   await setupRlsTestData(testDb, ids);
+  await testDb
+    .update(authUser)
+    .set({ email: "desktop-review-a@example.test" })
+    .where(eq(authUser.id, ids.userA1));
+  await testDb
+    .update(authUser)
+    .set({ email: "desktop-review@example.test" })
+    .where(eq(authUser.id, ids.userB1));
+  testState.setConfig("FEATURE_TIME_BILLING", true);
+  testState.setConfig("API_FEATURE_ACCESS_GRANTS", {
+    ...env.API_FEATURE_ACCESS_GRANTS,
+    "activity-timeline": [
+      {
+        type: "member",
+        organizationId: ids.orgB,
+        email: "desktop-review@example.test",
+      },
+    ],
+  });
+  await testDb
+    .update(authUser)
+    .set({ emailVerified: true })
+    .where(
+      inArray(authUser.id, [ids.userA1, ids.userA2, ids.userB1, ids.userAdmin]),
+    );
+  await testDb
+    .insert(featureEnrolments)
+    .values([
+      {
+        organizationId: ids.orgA,
+        userId: ids.userA1,
+        featureId: "time-billing",
+      },
+      {
+        organizationId: ids.orgA,
+        userId: ids.userA2,
+        featureId: "time-billing",
+      },
+      {
+        organizationId: ids.orgA,
+        userId: ids.userAdmin,
+        featureId: "time-billing",
+      },
+      {
+        organizationId: ids.orgB,
+        userId: ids.userA1,
+        featureId: "time-billing",
+      },
+      {
+        organizationId: ids.orgB,
+        userId: ids.userB1,
+        featureId: "time-billing",
+      },
+      {
+        organizationId: ids.orgB,
+        userId: ids.userAdmin,
+        featureId: "time-billing",
+      },
+    ])
+    .onConflictDoNothing();
+  await testDb.insert(templateLookupFormats).values({
+    id: desktopFormatB,
+    organizationId: ids.orgB,
+    registry: "ares",
+    name: "Matrix format B",
+    format: "[company name]",
+  });
+  await testDb
+    .update(organizationSettings)
+    .set({ aiBillingDraftsMode: "enabled" })
+    .where(inArray(organizationSettings.organizationId, [ids.orgA, ids.orgB]));
+  desktopCredentials = await createRlsDesktopCredentials(testDb, ids);
+  await testDb.insert(desktopTimeEntryBatches).values({
+    organizationId: ids.orgB,
+    userId: ids.userA1,
+    idempotencyKey: DESKTOP_BATCH_KEY,
+    status: "committed",
+    requestFingerprint: desktopBatchFingerprint({
+      idempotencyKey: DESKTOP_BATCH_KEY,
+      entries: [{ matterId: ids.wsB1, ...DESKTOP_ENTRY }],
+    }),
+    result: { entries: [{ id: ids.timeEntryB1, matterId: ids.wsB1 }] },
+  });
+  await testDb.insert(desktopPresence).values({
+    userId: ids.userA1,
+    organizationId: ids.orgB,
+    desktopId: "22222222-2222-4222-8222-222222222270",
+    version: "0.9.48",
+    protocol: 1,
+  });
   await testDb.insert(billingArrangements).values({
     workspaceId: ids.wsB1,
     organizationId: ids.orgB,
     mode: "hourly",
     currency: "USD",
+  });
+  await testDb.insert(timeEntries).values({
+    id: clientInvoiceEntryB,
+    organizationId: ids.orgB,
+    workspaceId: ids.wsB1,
+    userId: ids.userB1,
+    dateWorked: "2026-10-14",
+    timezoneId: "UTC",
+    durationMinutes: 60,
+    billedMinutes: 60,
+    rateAtEntry: cents(200),
+    currency: "USD",
+    narrative: "Client invoice isolation work",
+    billable: true,
+    status: "approved",
   });
   await testDb.insert(invoices).values({
     id: creditOriginalB,
@@ -1864,6 +3971,14 @@ beforeAll(async () => {
     pattern: "INV-{YYYY}-{SEQ}",
     padding: 5,
     isDefault: true,
+  });
+  await testDb.insert(organizationDataExports).values({
+    id: dataExportB,
+    organizationId: ids.orgB,
+    requestedBy: ids.userB1,
+    status: "failed",
+    versionScope: "all",
+    completedAt: new Date("2026-01-01T00:00:00.000Z"),
   });
   await testDb.insert(vatRates).values({
     id: vatRateB,
@@ -1910,6 +4025,22 @@ beforeAll(async () => {
       createdBy: ids.userB1,
     },
   ]);
+  await testDb.insert(conflictChecks).values({
+    id: conflictCheckB,
+    organizationId: ids.orgB,
+    runBy: ids.userB1,
+    title: "Workspace B intake",
+    parties: [
+      {
+        type: "organization",
+        role: "client",
+        name: "Firm B prospect",
+        aliases: [],
+      },
+    ],
+    results: { version: 1, contactsScreened: 0, gaps: [], parties: [] },
+    outcome: "no_matches",
+  });
   await testDb.insert(savedSearches).values([
     {
       id: savedSearchA,
@@ -1926,6 +4057,29 @@ beforeAll(async () => {
       criteria: savedSearchCriteria(ids.wsB1),
     },
   ]);
+  const [searchHistoryRowB] = await prepareSearchHistoryRows(
+    { organizationId: ids.orgB, userId: ids.userA1 },
+    [
+      {
+        entry: {
+          kind: "search",
+          query: "Firm B research",
+          country: "CZE",
+        },
+        usedAt: new Date(),
+      },
+    ],
+  );
+  if (searchHistoryRowB === undefined) {
+    throw new Error("Search history fixture was not prepared");
+  }
+  await testDb
+    .insert(searchHistoryOwners)
+    .values({ organizationId: ids.orgB, userId: ids.userA1 })
+    .onConflictDoNothing();
+  await testDb
+    .insert(searchHistoryEntries)
+    .values({ ...searchHistoryRowB, id: searchHistoryEntryB });
   await testDb.insert(savedTimeNarratives).values({
     id: savedTimeNarrativeB,
     organizationId: ids.orgB,
@@ -1966,7 +4120,7 @@ beforeAll(async () => {
       ],
       fallback: null,
     },
-    tool: { version: 1, role: "fast" },
+    tool: { version: 1, task: "short-text" },
   });
   await testDb.insert(caseLawResearchAnswers).values({
     columnId: researchColumnB,
@@ -1990,6 +4144,32 @@ beforeAll(async () => {
     endOffset: 9,
     quote: "important",
   });
+  await testDb.insert(legalReaderAnswers).values([
+    {
+      id: privateReaderAnswerB,
+      organizationId: ids.orgB,
+      userId: ids.userB1,
+      decisionId: ids.caseLawDecisionB,
+      kind: "explain",
+      visibility: "private",
+      paragraphId: "p-1",
+      startOffset: 0,
+      endOffset: 9,
+      quote: "important",
+    },
+    {
+      id: sharedReaderAnswerB,
+      organizationId: ids.orgB,
+      userId: ids.userB1,
+      decisionId: ids.caseLawDecisionB,
+      kind: "ask",
+      visibility: "shared",
+      paragraphId: "p-1",
+      startOffset: 0,
+      endOffset: 9,
+      quote: "important",
+    },
+  ]);
   await testDb.insert(signals).values([
     {
       id: visibleSignalB,
@@ -2129,12 +4309,79 @@ beforeAll(async () => {
     chatThreadOfB(chatTurnThreadB),
     chatThreadOfB(chatDeleteThreadB),
     chatThreadOfB(chatSendThreadB),
+    { ...chatThreadOfB(chatDecisionThreadB), subjectDecisionId: chatDecisionB },
   ]);
-  const chatText = (text: string) => ({
-    version: 1 as const,
-    data: [{ type: "text" as const, text }],
+  const outboundClock = createTestClock();
+  const prepareAction = async () => {
+    const prepared = await testDb.transaction(async (tx) => {
+      const action = await prepareOutboundAction({
+        tx: asTestRaw<Transaction>(tx),
+        organizationId: ids.orgB,
+        userId: ids.userA1,
+        chatThreadId: chatThreadB,
+        preview: outboundPreview,
+        now: new Date(outboundClock.now()),
+        recordAuditEvent: noopAuditRecorder,
+      });
+      if (Result.isOk(action)) {
+        // Expiry is judged by the database clock, so it is set from it.
+        await tx
+          .update(outboundActions)
+          .set({ expiresAt: dbClock.fromNow(OUTBOUND_ACTION_TTL_MS) })
+          .where(eq(outboundActions.id, action.value.id));
+      }
+      return action;
+    });
+    if (Result.isError(prepared)) {
+      throw prepared.error;
+    }
+    return prepared.value.id;
+  };
+  outboundReadB = await prepareAction();
+  outboundConfirmB = await prepareAction();
+  outboundDiscardB = await prepareAction();
+  outboundPeerReadB = await prepareAction();
+  outboundPeerConfirmB = await prepareAction();
+  outboundPeerDiscardB = await prepareAction();
+  const chatText = (text: string) =>
+    toPersistedChatMessageContentV3({
+      data: [{ type: "text" as const, content: text }],
+    });
+  await testDb.insert(chatThreads).values(chatThreadOfB(chatRevisionThreadB));
+  await testDb.insert(chatThreads).values({
+    ...chatThreadOfB(chatMatterThreadB),
+    workspaceId: ids.wsB1,
+  });
+  await testDb.insert(chatMessages).values(
+    [chatRevisionAcceptMessageB, chatRevisionRevertMessageB].map((id) => ({
+      id,
+      threadId: chatRevisionThreadB,
+      userId: ids.userA1,
+      workspaceId: null,
+      role: "assistant" as const,
+      content: chatText("Here is the summary."),
+      revision: id === chatRevisionRevertMessageB ? 1 : 0,
+    })),
+  );
+  await testDb.insert(chatMessageRevisions).values({
+    messageId: chatRevisionRevertMessageB,
+    threadId: chatRevisionThreadB,
+    workspaceId: null,
+    revision: 0,
+    content: chatText("Here is the summary."),
+    edit: { type: "format", format: "bold", start: 0, end: 4 },
+    createdBy: ids.userA1,
   });
   const chatAskedAt = new Date("2026-09-01T09:00:00.000Z");
+  await testDb.insert(chatMessages).values({
+    id: chatMatterMessageB,
+    threadId: chatMatterThreadB,
+    userId: ids.userA1,
+    workspaceId: ids.wsB1,
+    role: "user",
+    content: chatText("Summarise the matter."),
+    createdAt: chatAskedAt,
+  });
   await testDb.insert(chatMessages).values([
     {
       id: chatUserMessageB,
@@ -2174,13 +4421,208 @@ beforeAll(async () => {
     userMessageId: chatTurnUserMessageB,
     workspaceId: null,
   });
-});
-
-afterAll(async () => {
-  await releaseTestDb();
+  for (const [threadId, questionId, answerId, turnId] of [
+    [
+      chatLimitThreadB,
+      toSafeId<"chatMessage">("22222222-2222-4222-8222-222222222321"),
+      toSafeId<"chatMessage">("22222222-2222-4222-8222-222222222322"),
+      toSafeId<"chatTurn">("22222222-2222-4222-8222-222222222323"),
+    ],
+    [
+      chatLimitCancelThreadB,
+      toSafeId<"chatMessage">("22222222-2222-4222-8222-222222222325"),
+      toSafeId<"chatMessage">("22222222-2222-4222-8222-222222222326"),
+      toSafeId<"chatTurn">("22222222-2222-4222-8222-222222222327"),
+    ],
+  ] as const) {
+    await testDb.insert(chatThreads).values(chatThreadOfB(threadId));
+    await testDb.insert(chatMessages).values([
+      {
+        id: questionId,
+        threadId,
+        userId: ids.userA1,
+        workspaceId: null,
+        role: "user",
+        content: chatText("Draft the reply."),
+        createdAt: chatAskedAt,
+      },
+      {
+        id: answerId,
+        threadId,
+        userId: ids.userA1,
+        workspaceId: null,
+        role: "assistant",
+        content: toPersistedChatMessageContentV3({
+          data: [],
+          metadata: {
+            turnOutcome: {
+              type: "failed",
+              error: "local_runner_limit_reached",
+              limitResetsAt: chatLimitResetsAt.toISOString(),
+            },
+          },
+        }),
+        createdAt: new Date(chatAskedAt.getTime() + 1000),
+      },
+    ]);
+    await testDb.insert(chatTurns).values({
+      assistantMessageId: answerId,
+      createdAt: chatAskedAt,
+      failureCode: "provider-error",
+      failureRetryable: false,
+      id: turnId,
+      organizationId: ids.orgB,
+      settledAt: new Date(chatAskedAt.getTime() + 1000),
+      status: "failed",
+      threadId,
+      userId: ids.userA1,
+      userMessageId: questionId,
+      workspaceId: null,
+    });
+    await testDb.insert(chatLimitReminders).values({
+      organizationId: ids.orgB,
+      remindAt: chatLimitResetsAt,
+      threadId,
+      turnId,
+      userId: ids.userA1,
+    });
+  }
+  await testDb.insert(chatThreads).values(chatThreadOfB(chatQueueThreadB));
+  await testDb.insert(chatQueuedMessages).values(
+    [
+      { id: chatQueuedFirstB, text: "First" },
+      { id: chatQueuedSecondB, text: "Second" },
+    ].map(({ id, text }, index) => ({
+      id,
+      organizationId: ids.orgB,
+      userId: ids.userA1,
+      workspaceId: null,
+      threadId: chatQueueThreadB,
+      position: index + 1,
+      request: queuedSendOf(id, text),
+    })),
+  );
+  await testDb.insert(chatToolGrants).values([
+    {
+      id: chatToolGrantAlwaysB,
+      organizationId: ids.orgB,
+      userId: ids.userA1,
+      scope: "always",
+      toolName: "web_search",
+    },
+    {
+      id: chatToolGrantConversationB,
+      organizationId: ids.orgB,
+      userId: ids.userA1,
+      scope: "conversation",
+      chatThreadId: chatThreadB,
+      toolName: "remember",
+    },
+    {
+      id: chatToolGrantDeleteB,
+      organizationId: ids.orgB,
+      userId: ids.userA1,
+      scope: "always",
+      toolName: "fetch_url",
+    },
+  ]);
+  await testDb.insert(chatBrowserSiteGrants).values([
+    {
+      id: browserSiteGrantB,
+      organizationId: ids.orgB,
+      userId: ids.userA1,
+      origin: "https://example.com",
+    },
+    {
+      id: browserSiteGrantDeleteB,
+      organizationId: ids.orgB,
+      userId: ids.userA1,
+      origin: "https://example.org",
+    },
+  ]);
 });
 
 describe("cross-tenant handler isolation", () => {
+  test.each([
+    "reader answers across organizations",
+    "legal reader annotation list",
+    "case-law research answers lookup",
+  ])(
+    "%s: withdrawal changes content but preserves visible resource identities",
+    async (name) => {
+      const testCase =
+        isolationCases.find((candidate) => candidate.name === name) ??
+        panic("Missing withdrawal isolation case");
+      const context = createIsolationContext();
+      const beforeA = await testCase.runAAgainstB(context);
+      const beforeB = await testCase.runBPositive(context);
+      testCase.expectDenied(beforeA, context);
+      testCase.expectPositive(beforeB, context);
+      const identities = (result: unknown) =>
+        getPageItems(result).map((item) => ({
+          id: item["id"],
+          columnId: item["columnId"],
+          decisionId: item["decisionId"],
+        }));
+      const sourceId = createSafeId<"caseLawSource">();
+      await testDb.insert(caseLawSources).values({
+        id: sourceId,
+        adapterKey: sourceId,
+        name: "Withdrawal isolation fixture",
+        enabled: false,
+      });
+      const [originalDecision] = await testDb
+        .select()
+        .from(caseLawDecisions)
+        .where(eq(caseLawDecisions.id, ids.caseLawDecisionB))
+        .limit(1);
+      try {
+        await testDb
+          .insert(caseLawDecisions)
+          .values({
+            id: ids.caseLawDecisionB,
+            sourceId,
+            sourceDocumentId: ids.caseLawDecisionB,
+            caseNumber: "Fixture",
+            court: "Fixture court",
+            country: "POL",
+            language: "pl",
+            redactedAt: new Date(),
+          })
+          .onConflictDoUpdate({
+            target: caseLawDecisions.id,
+            set: {
+              redactedAt: new Date(),
+              fulltext: null,
+              contentHash: null,
+              sections: null,
+              documentAst: null,
+            },
+          });
+        const afterA = await testCase.runAAgainstB(createIsolationContext());
+        const afterB = await testCase.runBPositive(createIsolationContext());
+        expect(getStatusCode(afterA)).toBeNull();
+        expect(getStatusCode(afterB)).toBeNull();
+        expect(identities(afterA)).toEqual(identities(beforeA));
+        expect(identities(afterB)).toEqual(identities(beforeB));
+        expect(JSON.stringify(afterB)).toContain("Withdrawn by publisher");
+      } finally {
+        if (originalDecision !== undefined) {
+          await testDb
+            .update(caseLawDecisions)
+            .set(originalDecision)
+            .where(eq(caseLawDecisions.id, ids.caseLawDecisionB));
+        } else {
+          await testDb
+            .delete(caseLawDecisions)
+            .where(eq(caseLawDecisions.id, ids.caseLawDecisionB));
+        }
+        await testDb
+          .delete(caseLawSources)
+          .where(eq(caseLawSources.id, sourceId));
+      }
+    },
+  );
   for (const testCase of isolationCases) {
     test(`${testCase.name}: workspace A cannot read workspace/org B resource IDs`, async () => {
       const context = createIsolationContext();
@@ -2202,6 +4644,8 @@ describe("cross-tenant handler isolation", () => {
 
 const createIsolationContext = (): IsolationContext => ({
   ids,
+  desktopA: desktopCaller("a"),
+  desktopB: desktopCaller("b"),
   sameUserWorkspaceB: createWorkspaceContext({
     activeWorkspaceIds: [ids.wsB1],
     organizationId: ids.orgB,
@@ -2265,6 +4709,11 @@ const createWorkspaceContext = ({
     route: "/security/cross-tenant-handler",
     safeDb,
     scopedDb,
+    set: createResponseSet(),
+    server: null,
+    path: `/workspaces/${workspaceId}`,
+    headers: {},
+    status,
     session: { activeOrganizationId: organizationId },
     user: { id: userId },
     workspaceId,
@@ -2284,7 +4733,7 @@ const runHandler = async <TContext>(
 
   try {
     return await handler(
-      asTestRaw<TContext>({
+      asTestRaw<TContext & SafeHandlerLogContext>({
         ...context,
         ...requestShape,
       }),
@@ -2293,6 +4742,78 @@ const runHandler = async <TContext>(
     return error;
   }
 };
+
+function desktopPresenceIsolationCases(): IsolationCase[] {
+  return [
+    {
+      name: "desktop presence across organizations",
+      runAAgainstB: async ({ workspaceA }) =>
+        await runHandler(readDesktopPresence, workspaceA, {}),
+      runBPositive: async ({ sameUserWorkspaceB }) =>
+        await runHandler(readDesktopPresence, sameUserWorkspaceB, {}),
+      expectDenied: (result) => expect(result).toEqual({ type: "none" }),
+      expectPositive: (result) =>
+        expect(result).toMatchObject({
+          desktop: { version: "0.9.48", protocol: 1 },
+        }),
+    },
+    {
+      name: "desktop presence in the same organization with another owner",
+      runAAgainstB: async ({ workspaceB }) =>
+        await runHandler(readDesktopPresence, workspaceB, {}),
+      runBPositive: async ({ sameUserWorkspaceB }) =>
+        await runHandler(readDesktopPresence, sameUserWorkspaceB, {}),
+      expectDenied: (result) => expect(result).toEqual({ type: "none" }),
+      expectPositive: (result) =>
+        expect(result).toMatchObject({
+          desktop: { version: "0.9.48", protocol: 1 },
+        }),
+    },
+  ];
+}
+
+function readerAnswerIsolationCases(): IsolationCase[] {
+  const list = async (
+    context: TestHandlerContext,
+    decisionId: SafeId<"caseLawDecision">,
+  ) =>
+    await runHandler(listReaderAnswers, context, {
+      query: { decisionId, limit: 50 },
+    });
+  const update = async (context: TestHandlerContext) =>
+    await runHandler(updateReaderAnswer, context, {
+      params: { answerId: sharedReaderAnswerB },
+      body: { visibility: "shared" },
+    });
+  return [
+    {
+      name: "reader answers across organizations",
+      runAAgainstB: async ({ ids: testIds, workspaceA }) =>
+        await list(workspaceA, testIds.caseLawDecisionB),
+      runBPositive: async ({ ids: testIds, workspaceB }) =>
+        await list(workspaceB, testIds.caseLawDecisionB),
+      expectDenied: (result) => {
+        expectPageExcludesId(result, privateReaderAnswerB);
+        expectPageExcludesId(result, sharedReaderAnswerB);
+      },
+      expectPositive: (result) => {
+        expectPageContainsId(result, privateReaderAnswerB);
+        expectPageContainsId(result, sharedReaderAnswerB);
+      },
+    },
+    {
+      name: "reader answer mutation across organizations",
+      runAAgainstB: async ({ workspaceA }) => await update(workspaceA),
+      runBPositive: async ({ workspaceB }) => await update(workspaceB),
+      expectDenied: expectStatus(404),
+      expectPositive: (result) =>
+        expect(result).toMatchObject({
+          id: sharedReaderAnswerB,
+          visibility: "shared",
+        }),
+    },
+  ];
+}
 
 function expectStatus(expectedStatus: number): (result: unknown) => void {
   return (result: unknown): void => {
@@ -2403,6 +4924,24 @@ function recordField(result: unknown, field: string): unknown {
   return result[field];
 }
 
+function chatToolGrantIds(result: unknown): unknown[] {
+  expect(getStatusCode(result)).toBeNull();
+  const grants = recordField(result, "grants");
+  if (!Array.isArray(grants)) {
+    throw new TypeError("Expected a chat tool grant list response");
+  }
+  return grants.map((grant) => recordField(grant, "id"));
+}
+
+function activeChatRunThreadIds(result: unknown): unknown[] {
+  expect(getStatusCode(result)).toBeNull();
+  const runs = recordField(result, "items");
+  if (!Array.isArray(runs)) {
+    throw new TypeError("Expected an active chat run list response");
+  }
+  return runs.map((run) => recordField(run, "threadId"));
+}
+
 function globalChatThreadIds(result: unknown): unknown[] {
   expect(getStatusCode(result)).toBeNull();
   const threads = recordField(result, "global");
@@ -2410,6 +4949,21 @@ function globalChatThreadIds(result: unknown): unknown[] {
     throw new TypeError("Expected a chat thread list response");
   }
   return threads.map((thread) => recordField(thread, "id"));
+}
+
+function matterChatThreadIds(result: unknown): unknown[] {
+  expect(getStatusCode(result)).toBeNull();
+  const groups = recordField(result, "workspaces");
+  if (!Array.isArray(groups)) {
+    throw new TypeError("Expected a chat thread list response");
+  }
+  return groups.flatMap((group) => {
+    const threads = recordField(group, "threads");
+    if (!Array.isArray(threads)) {
+      throw new TypeError("Expected a chat thread group");
+    }
+    return threads.map((thread) => recordField(thread, "id"));
+  });
 }
 
 function chatMessageIds(result: unknown): unknown[] {
@@ -2456,3 +5010,126 @@ const getPageItems = (result: unknown): Record<string, unknown>[] => {
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
+
+testState.beforeAll(() => {
+  testState.setConfig("FEATURE_TIME_BILLING", true);
+  testState.setConfig("API_FEATURE_ACCESS_GRANTS", {
+    "activity-timeline": [ids.orgA, ids.orgB].map((organizationId) => ({
+      type: "organization" as const,
+      organizationId,
+    })),
+  });
+});
+
+const desktopServer = (): TestServer => {
+  const authorize = desktopCredentials.authorizeDesktopAccount;
+  const registry = createDesktopRegistryRequestEndpoint({
+    config: authorize,
+    revoke: authorize,
+    search: desktopCredentials.authorizeDesktopRegistry,
+    format: desktopCredentials.authorizeDesktopRegistry,
+    setDefaultFormat: desktopCredentials.authorizeDesktopRegistry,
+  });
+  const feature = createDesktopFeatureAccessReadEndpoint({
+    authorizeAccount: authorize,
+  });
+  const candidates = createDesktopMatterCandidatesEndpoint(authorize);
+  const matters = createDesktopMattersEndpoint(authorize);
+  const batch = createDesktopTimeEntryBatchEndpoint(authorize);
+  const batchStatus = createDesktopTimeEntryBatchStatusEndpoint(authorize);
+  const single = createDesktopTimeEntryEndpoint(authorize);
+  const readDraftSettings =
+    createDesktopBillingDraftSettingsReadEndpoint(authorize);
+  const updateDraftSettings =
+    createDesktopBillingDraftSettingsUpdateEndpoint(authorize);
+  const drafts = createDesktopBillingDraftEndpoint({
+    authorizeAccount: authorize,
+    // The model is the one external boundary: it describes each selected
+    // entry under the reference the prompt gave it.
+    generateObjectForTask: asTestRaw<typeof generateTanStackObjectForTask>(
+      async ({ prompt }: { prompt?: string }) => ({
+        drafts: asTestRaw<BillingDraftPrompt>(
+          JSON.parse(prompt ?? "{}"),
+        ).entries.map(({ entryId }) => ({
+          entryId,
+          narrative: "Reviewed the agreement",
+          matchedEarlierEntryIds: [],
+        })),
+      }),
+    ),
+    admit: asTestRaw<typeof withActionAdmission>(
+      async ({ run }: Parameters<typeof withActionAdmission>[0]) =>
+        Result.ok(
+          await run(new AbortController().signal, {
+            reservePeriod: async () => Result.ok(undefined),
+          }),
+        ),
+    ),
+  });
+  // The real routes on the real HTTP core: each definition decodes its own
+  // input and answers through its own response schemas.
+  return serveForTest(
+    createHttpApp({
+      middleware: [errorBoundary],
+      routes: routes({
+        "/registry": { PUT: registry },
+        "/features": { GET: feature },
+        "/candidates": { GET: candidates },
+        "/matters": { GET: matters },
+        "/batch": { PUT: batch },
+        "/status": { PUT: batchStatus },
+        "/single/:workspaceId": { PUT: single },
+        "/draft-settings": { GET: readDraftSettings, PUT: updateDraftSettings },
+        "/drafts": { POST: drafts },
+      }),
+    }),
+  );
+};
+
+// One server answers both tenants; the credential decides who is calling.
+let desktopRoutes: TestServer | undefined;
+
+afterAll(async () => {
+  await releaseTestDb();
+  await desktopRoutes?.stop();
+});
+
+const desktopCaller = (tenant: "a" | "b") => async (request: Request) => {
+  desktopRoutes ??= desktopServer();
+  const credential =
+    tenant === "a" ? desktopCredentials.a : desktopCredentials.b;
+  return await desktopRoutes.fetch(await credential.signRequest(request));
+};
+
+const desktopDraftRequest = (matterId: string) =>
+  new Request("http://localhost/drafts", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(
+      createDesktopBillingDraftRequest({
+        matterId,
+        entry: {
+          date: DESKTOP_ENTRY.dateWorked,
+          timezone: DESKTOP_ENTRY.timezoneId,
+          durationMinutes: DESKTOP_ENTRY.durationMinutes,
+        },
+      }),
+    ),
+  });
+
+/** A request as the desktop app sends it: its HTTP client names itself on
+ *  every call, and the registry route admits no other agent. */
+const desktopRequest = (path: string, body?: unknown) =>
+  new Request(
+    `http://localhost${path}`,
+    body === undefined
+      ? { headers: { "user-agent": DESKTOP_REGISTRY_REQUEST_USER_AGENT } }
+      : {
+          method: "PUT",
+          headers: {
+            "content-type": "application/json",
+            "user-agent": DESKTOP_REGISTRY_REQUEST_USER_AGENT,
+          },
+          body: JSON.stringify(body),
+        },
+  );

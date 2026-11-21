@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import type { AccessibleWorkspace } from "@/api/lib/auth";
+import type { AccessibleWorkspace } from "@/api/lib/auth/accessible-workspace";
 import { toSafeId } from "@/api/lib/branded-types";
 import { filterUsableMcpWorkspaces } from "@/api/mcp/workspace-session-scope";
 

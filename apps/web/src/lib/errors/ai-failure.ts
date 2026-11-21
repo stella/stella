@@ -1,0 +1,67 @@
+import { AI_ERROR_KINDS, AI_FAILURE_CODES } from "@stll/api-contract";
+import type { AIErrorKind, AIFailureCode } from "@stll/api-contract";
+
+import type { TranslationKey } from "@/i18n/types";
+
+/**
+ * What each AI failure tells the user, wherever it surfaces: a REST error, a
+ * toast, a failed chat turn. Total over the codes, so a new code cannot ship
+ * without a message of its own.
+ */
+export const AI_FAILURE_ERROR_KEYS = {
+  [AI_FAILURE_CODES.quota_exhausted]: "chat.sendErrorQuotaExhausted",
+  [AI_FAILURE_CODES.provider_billing]: "chat.sendErrorProviderBilling",
+  [AI_FAILURE_CODES.provider_credentials_rejected]:
+    "chat.sendErrorProviderCredentialsRejected",
+  [AI_FAILURE_CODES.model_unavailable]: "chat.sendErrorModelUnavailable",
+  [AI_FAILURE_CODES.provider_unavailable]: "chat.sendErrorProviderUnavailable",
+  [AI_FAILURE_CODES.provider_stream_incomplete]:
+    "chat.sendErrorStreamIncomplete",
+  [AI_FAILURE_CODES.output_incomplete]: "chat.sendErrorStreamIncomplete",
+  [AI_FAILURE_CODES.output_moderated]: "errors.apiCodes.aiOutputModerated",
+  [AI_FAILURE_CODES.output_invalid]: "errors.apiCodes.aiOutputInvalid",
+  [AI_FAILURE_CODES.deadline_exceeded]: "errors.apiCodes.aiDeadlineExceeded",
+  [AI_FAILURE_CODES.loop_detected]: "chat.sendErrorLoopDetected",
+  [AI_FAILURE_CODES.empty_completion]: "chat.sendErrorEmptyCompletion",
+  [AI_FAILURE_CODES.turn_too_large]: "chat.sendErrorTurnTooLarge",
+  [AI_FAILURE_CODES.local_runner_needs_login]: "chat.localRun.errorNeedsLogin",
+  [AI_FAILURE_CODES.local_runner_limit_reached]:
+    "chat.localRun.errorLimitReached",
+  [AI_FAILURE_CODES.local_runner_unavailable]: "chat.localRun.errorUnavailable",
+  [AI_FAILURE_CODES.local_runner_turn_too_large]:
+    "chat.localRun.refusalTooLarge",
+  [AI_FAILURE_CODES.local_runner_not_reached]: "chat.localRun.errorNotReached",
+  [AI_FAILURE_CODES.local_runner_relinked]: "chat.localRun.errorRelinked",
+  [AI_FAILURE_CODES.local_runner_restoring]: "chat.localRun.errorRestoring",
+  [AI_FAILURE_CODES.local_runner_folder_unavailable]:
+    "chat.localRun.errorFolderUnavailable",
+  // A turn whose run could not start: the member's message is stored and the
+  // turn failed for what the computer reported then.
+  [AI_FAILURE_CODES.local_runner_no_computer]:
+    "chat.localRun.refusalNoComputer",
+  [AI_FAILURE_CODES.local_runner_harness_unavailable]:
+    "chat.localRun.refusalHarnessUnavailable",
+  [AI_FAILURE_CODES.local_runner_model_unavailable]:
+    "chat.localRun.refusalModelUnavailable",
+  [AI_FAILURE_CODES.local_runner_reasoning_effort_unavailable]:
+    "chat.localRun.refusalReasoningEffortUnavailable",
+  [AI_FAILURE_CODES.local_runner_approvals_unavailable]:
+    "chat.localRun.refusalPermissionUnavailable",
+  [AI_FAILURE_CODES.local_runner_folder_not_approved]:
+    "chat.localRun.refusalFolderNotApproved",
+  [AI_FAILURE_CODES.unknown]: "errors.apiCodes.aiUnknown",
+  [AI_FAILURE_CODES.role_not_configured]: "capabilityActions.aiMissing",
+  [AI_FAILURE_CODES.own_key_required]: "capabilityActions.aiMissing",
+  [AI_FAILURE_CODES.provider_task_unsupported]:
+    "errors.apiCodes.aiProviderTaskUnsupported",
+  [AI_FAILURE_CODES.managed_provider_unavailable]:
+    "capabilityActions.aiMissing",
+} as const satisfies Record<AIFailureCode, TranslationKey>;
+
+export type AIFailureTranslationKey =
+  (typeof AI_FAILURE_ERROR_KEYS)[AIFailureCode];
+
+/** The chat stream ends a failed turn with the AI error kind as its message. */
+export const aiErrorKindFromMessage = (
+  message: string,
+): AIErrorKind | undefined => AI_ERROR_KINDS.find((kind) => kind === message);

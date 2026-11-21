@@ -1,7 +1,9 @@
+import { envBase } from "@/api/env-base";
 import type { FileKey } from "@/api/lib/file-key";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { mintScannedFile } from "@/api/lib/file-scan/scanned-file";
-import { getS3ObjectWithSignal, readS3ArrayBuffer } from "@/api/lib/s3";
+import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
+import { readS3BytesBounded, readS3ObjectBounded } from "@/api/lib/s3";
 import type { S3SigningScope } from "@/api/lib/s3-presign";
 import { readTenantS3ArrayBuffer } from "@/api/lib/s3-presign";
 
@@ -10,9 +12,9 @@ type ReadStoredFileInput = {
   mimeType: string;
   fileName?: string;
 } & (
-  | { scope?: undefined; signal?: AbortSignal }
+  | { scope?: undefined; signal?: AbortSignal; maxBytes?: number }
   /** Read through the tenant client, refusing keys outside this scope. */
-  | { scope: S3SigningScope; signal: AbortSignal }
+  | { scope: S3SigningScope; signal: AbortSignal; maxBytes?: undefined }
 );
 
 const readBytes = async (input: ReadStoredFileInput): Promise<ArrayBuffer> => {
@@ -23,9 +25,27 @@ const readBytes = async (input: ReadStoredFileInput): Promise<ArrayBuffer> => {
       signal: input.signal,
     });
   }
-  return input.signal === undefined
-    ? await readS3ArrayBuffer(input.key)
-    : await getS3ObjectWithSignal(input.key, input.signal);
+  let bytes: Uint8Array;
+  if (input.signal === undefined) {
+    bytes = await readS3BytesBounded({
+      key: input.key,
+      maxBytes: input.maxBytes ?? FILE_SIZE_LIMIT_BYTES.document,
+    });
+  } else {
+    bytes = await readS3ObjectBounded({
+      bucket: envBase.S3_BUCKET,
+      key: input.key,
+      maxBytes: input.maxBytes ?? FILE_SIZE_LIMIT_BYTES.document,
+      signal: input.signal,
+    });
+  }
+  // The read is the only holder of `bytes`, so an exact-fit buffer is
+  // handed on as-is rather than copied a second time.
+  return bytes.buffer instanceof ArrayBuffer &&
+    bytes.byteOffset === 0 &&
+    bytes.byteLength === bytes.buffer.byteLength
+    ? bytes.buffer
+    : bytes.slice().buffer;
 };
 
 /**

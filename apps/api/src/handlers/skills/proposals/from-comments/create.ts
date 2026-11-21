@@ -1,6 +1,5 @@
 import { panic, Result } from "better-result";
 import { and, asc, eq, inArray, isNull } from "drizzle-orm";
-import { t } from "elysia";
 import * as v from "valibot";
 
 import { abortableTx } from "@/api/db/safe-db";
@@ -14,16 +13,22 @@ import {
   lockSkillForAnchor,
 } from "@/api/lib/agent-skills/revisions";
 import { resolveCaching } from "@/api/lib/ai-config";
+import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
+import { storedAIConfigUnreadableError } from "@/api/lib/ai-config-response";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
-import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
+import {
+  ACCOUNT_ACCESS,
+  configuredModelAdmission,
+  createSafeRootHandler,
+} from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
-import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
-import { requireTanStackAIAvailableForRole } from "@/api/lib/tanstack-ai-models";
+import { generateTanStackObjectForTask } from "@/api/lib/tanstack-ai-generate";
+import { requireTanStackAIAvailableForTask } from "@/api/lib/tanstack-ai-models";
 
 import { preservesFrontmatter } from "../frontmatter-guard";
 
@@ -33,29 +38,38 @@ const SUMMARY_MAX_CHARS = 600;
 const GENERATION_TIMEOUT_MS = 90_000;
 const GENERATION_MAX_OUTPUT_TOKENS = 8192;
 
-const fromCommentsParamsSchema = t.Object({
-  skillId: tSafeId("agentSkill"),
+const fromCommentsParamsSchema = v.object({
+  skillId: resourceIdSchema("agentSkill"),
 });
 
-const fromCommentsBodySchema = t.Object({
-  commentIds: t.Optional(
-    t.Array(tSafeId("agentSkillComment"), {
-      minItems: 1,
-      maxItems: COMMENTS_MAX,
-      description:
+const fromCommentsBodySchema = v.object({
+  commentIds: v.optional(
+    v.pipe(
+      v.array(resourceIdSchema("agentSkillComment")),
+      v.minLength(1),
+      v.maxLength(COMMENTS_MAX),
+      v.description(
         "Comments to apply. Omit to apply every unresolved comment written against the skill's newest revision.",
-    }),
+      ),
+    ),
   ),
-  instructions: t.Optional(
-    t.String({
-      maxLength: INSTRUCTIONS_MAX_CHARS,
-      description:
+  instructions: v.optional(
+    v.pipe(
+      v.string(),
+      v.maxLength(INSTRUCTIONS_MAX_CHARS),
+      v.description(
         "Extra guidance for the revision, applied on top of the comments.",
-    }),
+      ),
+    ),
   ),
 });
 
 const config = {
+  contract: "patch",
+  actionAdmission: {
+    type: "handler",
+    actionKind: "skills.propose-from-comments",
+  },
   description:
     "Turn reviewer comments on an agent skill into a draft change proposal: " +
     "the model rewrites SKILL.md so each comment is addressed, and the result " +
@@ -81,11 +95,12 @@ const config = {
   requiresUsage: {
     actionType: "chat",
     serviceTier: "flex",
-    modelRole: "fast",
+    modelTask: "short-text",
   },
 } satisfies HandlerConfig;
 
-const aiRevisionSchema = v.strictObject({
+/** Read by the structured-output role contract test. @public */
+export const aiRevisionSchema = v.strictObject({
   markdown: v.pipe(
     v.string(),
     v.description(
@@ -111,6 +126,7 @@ type AppliedComment = {
 const createProposalFromComments = createSafeRootHandler(
   config,
   async function* ({
+    modelAdmission,
     body,
     orgAIConfig,
     managedAIResidency,
@@ -122,11 +138,15 @@ const createProposalFromComments = createSafeRootHandler(
     session,
     user,
   }) {
-    yield* requireTanStackAIAvailableForRole({
+    if (orgAIConfigStatus === ORG_AI_CONFIG_STATUS.unreadable) {
+      return Result.err(storedAIConfigUnreadableError());
+    }
+
+    yield* requireTanStackAIAvailableForTask({
       dataClass: "customer",
       configStatus: orgAIConfigStatus,
       orgConfig: orgAIConfig,
-      role: "fast",
+      task: "short-text",
     });
 
     const source = yield* Result.await(
@@ -214,19 +234,22 @@ const createProposalFromComments = createSafeRootHandler(
         workspaceId: null,
       },
       feature: "skills.apply_comments",
-      modelRole: "fast",
+      modelTask: "short-text",
       orgAIConfig,
+      modelTier: configuredModelAdmission({ modelAdmission }).modelTier,
       properties: { organization_id: session.activeOrganizationId },
       traceId: Bun.randomUUIDv7(),
     });
 
     const generation = await Result.tryPromise({
       try: async () =>
-        await generateTanStackObjectForRole({
+        await generateTanStackObjectForTask({
+          userId: user.id,
           dataClass: "customer",
-          abortSignal: AbortSignal.timeout(GENERATION_TIMEOUT_MS),
+          admission: configuredModelAdmission({ modelAdmission }),
+          deadlineMs: GENERATION_TIMEOUT_MS,
           maxOutputTokens: GENERATION_MAX_OUTPUT_TOKENS,
-          role: "fast",
+          task: "short-text",
           serviceTier: "flex",
           orgAIConfig,
           managedAIResidency,
@@ -236,7 +259,7 @@ const createProposalFromComments = createSafeRootHandler(
           analytics: aiAnalytics,
           caching: resolveCaching({
             promptCachingEnabled,
-            role: "fast",
+            task: "short-text",
             scopeKey: `${session.activeOrganizationId}:skills:${params.skillId}:comments`,
           }),
           outputSchema: aiRevisionSchema,
@@ -250,6 +273,7 @@ const createProposalFromComments = createSafeRootHandler(
         aiAnalytics.captureError(cause);
         return new HandlerError({
           status: 502,
+          code: "internal_error",
           message: "Could not apply the comments. Please try again.",
           cause,
         });
@@ -264,6 +288,7 @@ const createProposalFromComments = createSafeRootHandler(
       return Result.err(
         new HandlerError({
           status: 502,
+          code: "internal_error",
           message: "The revised skill was empty. Please try again.",
         }),
       );
@@ -272,6 +297,7 @@ const createProposalFromComments = createSafeRootHandler(
       return Result.err(
         new HandlerError({
           status: 502,
+          code: "internal_error",
           message: "The revised skill exceeds the maximum size.",
         }),
       );
@@ -285,6 +311,7 @@ const createProposalFromComments = createSafeRootHandler(
       return Result.err(
         new HandlerError({
           status: 502,
+          code: "internal_error",
           message:
             "The revised skill dropped or altered its frontmatter. Please try again.",
         }),

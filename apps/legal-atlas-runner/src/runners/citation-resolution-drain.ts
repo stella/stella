@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 /**
  * The standing walk that settles every citation the corpus holds.
  *
@@ -24,14 +25,97 @@
  * cursor wrap and the contradiction escalation can be exercised on their own.
  */
 
-import { panic } from "better-result";
+import { backoffDelay } from "@stll/concurrency/backoff-delay";
 
-import type { CitationResolutionCounts } from "@/api/handlers/case-law/citation-resolution";
+import type {
+  CitationResolutionBatch,
+  CitationResolutionCounts,
+} from "@/api/handlers/case-law/citation-resolution";
 import {
   CITATION_RESOLUTION_RULES,
   countsByRule,
 } from "@/api/handlers/case-law/citation-resolution-status";
 import { pgErrorFields } from "@/api/lib/pg-error";
+
+export type CitationBatchOutcome =
+  | { type: "settled"; counts: CitationResolutionCounts }
+  | { type: "busy" }
+  | { type: "aborted"; counts: CitationResolutionCounts };
+
+type TryResolveCitationBatchOptions = {
+  limit: number;
+  signal?: AbortSignal | undefined;
+  resolveBatch: (limit: number) => Promise<CitationResolutionBatch | null>;
+};
+
+const emptyCitationCounts = (): CitationResolutionCounts => ({
+  scanned: 0,
+  resolved: 0,
+  resolvedByRule: countsByRule(() => 0),
+  unmatched: 0,
+  ambiguous: 0,
+  jurisdictionBlocked: 0,
+  undeclaredJurisdiction: 0,
+});
+
+const addCitationCounts = (
+  target: CitationResolutionCounts,
+  counts: CitationResolutionCounts,
+): void => {
+  target.scanned += counts.scanned;
+  target.resolved += counts.resolved;
+  target.unmatched += counts.unmatched;
+  target.ambiguous += counts.ambiguous;
+  target.jurisdictionBlocked += counts.jurisdictionBlocked;
+  target.undeclaredJurisdiction += counts.undeclaredJurisdiction;
+  for (const rule of CITATION_RESOLUTION_RULES) {
+    target.resolvedByRule[rule] += counts.resolvedByRule[rule];
+  }
+};
+
+/** Bounds work committed after cancellation to at most one chunk. */
+const CITATION_ABORT_CHUNK = 25;
+
+/** Resolve independently committed chunks so cancellation preserves progress. */
+export const tryResolveCitationBatch = async ({
+  limit,
+  resolveBatch,
+  signal,
+}: TryResolveCitationBatchOptions): Promise<CitationBatchOutcome> => {
+  if (signal === undefined) {
+    const batch = await resolveBatch(limit);
+    if (batch === null) {
+      return { type: "busy" };
+    }
+    const counts = emptyCitationCounts();
+    addCitationCounts(counts, batch);
+    return { type: "settled", counts };
+  }
+
+  const counts = emptyCitationCounts();
+
+  for (
+    let remaining = limit;
+    remaining > 0;
+    remaining -= CITATION_ABORT_CHUNK
+  ) {
+    if (signal.aborted) {
+      return { type: "aborted", counts };
+    }
+    const chunkSize = Math.min(remaining, CITATION_ABORT_CHUNK);
+    const batch = await resolveBatch(chunkSize);
+    if (batch === null) {
+      return counts.scanned === 0
+        ? { type: "busy" }
+        : { type: "settled", counts };
+    }
+    addCitationCounts(counts, batch);
+    if (batch.scanned < chunkSize) {
+      break;
+    }
+  }
+  return { type: "settled", counts };
+};
 
 /** How one turn ended. */
 export const CITATION_RESOLUTION_STEP = {
@@ -42,9 +126,6 @@ export const CITATION_RESOLUTION_STEP = {
   /** Another writer holds the walk. Not an error; asked again next turn. */
   BUSY: "busy",
 } as const;
-
-export type CitationResolutionStepKind =
-  (typeof CITATION_RESOLUTION_STEP)[keyof typeof CITATION_RESOLUTION_STEP];
 
 export type CitationResolutionStep =
   | {
@@ -138,7 +219,7 @@ export const CITATION_RESOLUTION_DRAIN_TIMING = {
  * The longest slice a pacing wait sleeps before re-checking the drain flag.
  * The idle ceiling is minutes; a SIGTERM must not wait it out.
  */
-export const CITATION_RESOLUTION_CHECK_SLICE_MS = 1000;
+const CITATION_RESOLUTION_CHECK_SLICE_MS = 1000;
 
 export type CitationResolutionDrainOptions = {
   /**
@@ -276,13 +357,19 @@ export const runCitationResolutionDrain = async ({
         case CITATION_RESOLUTION_STEP.DRAINED: {
           summary.drained += 1;
           delayMs = idleMs;
-          idleMs = Math.min(idleMs * 2, timing.idleSleepMaxMs);
+          idleMs = backoffDelay(1, {
+            baseMs: idleMs,
+            maxMs: timing.idleSleepMaxMs,
+          });
           break;
         }
         case CITATION_RESOLUTION_STEP.BUSY: {
           summary.busy += 1;
           delayMs = idleMs;
-          idleMs = Math.min(idleMs * 2, timing.idleSleepMaxMs);
+          idleMs = backoffDelay(1, {
+            baseMs: idleMs,
+            maxMs: timing.idleSleepMaxMs,
+          });
           break;
         }
         default: {
@@ -300,11 +387,10 @@ export const runCitationResolutionDrain = async ({
       // From its own floor, not from the duty cycle: a backfill may set the
       // batch gap to zero, and a database refusing statements must not then be
       // asked again as fast as it can refuse.
-      delayMs = Math.min(
-        Math.max(timing.batchDelayMs, timing.failureBackoffMinMs) *
-          2 ** (failureStreak - 1),
-        timing.failureBackoffMaxMs,
-      );
+      delayMs = backoffDelay(failureStreak - 1, {
+        baseMs: Math.max(timing.batchDelayMs, timing.failureBackoffMinMs),
+        maxMs: timing.failureBackoffMaxMs,
+      });
     }
 
     if (now() >= summaryDueAt) {

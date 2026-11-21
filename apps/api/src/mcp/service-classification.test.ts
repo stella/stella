@@ -13,10 +13,10 @@ const body = {
 };
 
 describe("capability classification uses validated export input", () => {
-  test("raw exports bypass services across output formats", () => {
+  test("raw exports bypass services across output formats", async () => {
     for (const format of ["docx", "pdf"] as const) {
       for (const aiNarrative of [true, false, undefined]) {
-        const result = classifyValidatedCapabilityServiceInput({
+        const result = await classifyValidatedCapabilityServiceInput({
           config: {
             body: reportExportBodySchema,
             mcp: {
@@ -43,9 +43,9 @@ describe("capability classification uses validated export input", () => {
     }
   });
 
-  test("invalid export input is refused before its classifier runs", () => {
+  test("invalid export input is refused before its classifier runs", async () => {
     let classifications = 0;
-    const result = classifyValidatedCapabilityServiceInput({
+    const result = await classifyValidatedCapabilityServiceInput({
       config: {
         body: reportExportBodySchema,
         mcp: {

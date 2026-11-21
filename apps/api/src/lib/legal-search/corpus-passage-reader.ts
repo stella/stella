@@ -10,18 +10,20 @@
  * `unanchored` rather than located by position.
  */
 
+import { panic } from "better-result";
 import { inArray } from "drizzle-orm";
 
 import { mapWithConcurrency } from "@stll/concurrency";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
+import { hasUsableAst } from "@stll/legal-ast/document-ast";
 
 import type { Transaction } from "@/api/db/root";
 import { caseLawDecisions } from "@/api/db/schema";
-import { hasUsableAst } from "@/api/lib/case-law/document-ast";
 import { chunkDocument } from "@/api/lib/corpus-index/chunking";
 import { readCorpusTombstones } from "@/api/lib/legal-search/corpus-reads";
 import {
   readCorpusAst,
+  readCorpusForRecovery,
   readCorpusText,
 } from "@/api/lib/legal-search/corpus-storage";
 import { prefetchCorpusTombstones } from "@/api/lib/legal-search/corpus-tombstones";
@@ -123,11 +125,29 @@ const hydratingPayloadSource = async (
     ),
     read,
   );
+  const documentByAstKey = new Map(
+    pointers.flatMap(({ astS3Key, documentId }) =>
+      astS3Key === null ? [] : [[astS3Key, documentId] as const],
+    ),
+  );
   return {
     readText: async (storedKey) =>
       await readCorpusText(storedKey, { readTombstones }),
-    readAst: async (storedKey) =>
-      await readCorpusAst(storedKey, { readTombstones }),
+    readAst: async (storedKey) => {
+      const documentId =
+        documentByAstKey.get(storedKey) ??
+        panic("Passage AST pointer has no document");
+      return (
+        await readCorpusForRecovery({
+          documentId,
+          read: async () =>
+            await readCorpusAst(storedKey, {
+              readTombstones,
+              report: { documentId },
+            }),
+        })
+      ).unwrapOr(null);
+    },
   };
 };
 

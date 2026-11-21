@@ -13,9 +13,12 @@ import { useExternalSyncEffect } from "@/hooks/use-effect";
 // installing their own blocker or unload listener.
 
 type UnsavedWorkSurface =
+  | "ai-provider-settings"
   | "chat-draft"
+  | "chat-message-edit"
   | "docx-edit-session"
   | "document-docx-editor"
+  | "file-upload"
   | "pdf-page-organizer"
   | "playbook-editor"
   | "template-studio";
@@ -25,9 +28,12 @@ type UnsavedWorkSurface =
 const useUnsavedWorkStore = create<
   Readonly<Record<UnsavedWorkSurface, number>>
 >(() => ({
+  "ai-provider-settings": 0,
   "chat-draft": 0,
+  "chat-message-edit": 0,
   "docx-edit-session": 0,
   "document-docx-editor": 0,
+  "file-upload": 0,
   "pdf-page-organizer": 0,
   "playbook-editor": 0,
   "template-studio": 0,

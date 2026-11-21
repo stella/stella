@@ -1,4 +1,5 @@
 import type { ModelMessage } from "@tanstack/ai";
+import { Result } from "better-result";
 
 import { CHAT_ORACLE, violationsOf } from "@/api/tests/helpers/chat-oracles";
 import type { OracleViolation } from "@/api/tests/helpers/chat-oracles";
@@ -19,7 +20,9 @@ import type { OracleViolation } from "@/api/tests/helpers/chat-oracles";
 //   message making it with nothing in between;
 // - every result answers a call of the message right before it;
 // - a message's thinking comes before its text and calls, and every thinking
-//   block that must be signed carries its signature.
+//   block that must be signed carries its signature;
+// - a call's arguments, where a format sends them as text, are a JSON
+//   object: a provider takes nothing else as a call's input.
 
 /** The wire formats the supported provider adapters send. */
 export const PROVIDER_WIRE_FORMATS = [
@@ -52,10 +55,20 @@ export type ProviderRequest =
       body: unknown;
       format: ProviderWireFormat;
       /** Per tool call id: the signature an earlier response of the
-       *  conversation sent with the call, which a request replaying the call
-       *  must send back with it (Gemini's `thoughtSignature`). */
-      signedCalls?: ReadonlyMap<string, string>;
+       *  conversation sent with the call and the model that sent it. A
+       *  request to that model replaying the call must send the signature
+       *  back with it (Gemini's `thoughtSignature`). */
+      signedCalls?: ReadonlyMap<string, SignedGeminiCall>;
+      /** The model the request asks, when the request names one. */
+      model?: string | null;
     };
+
+/** A Gemini call's `thoughtSignature` and the model that produced it. */
+export type SignedGeminiCall = {
+  signature: string;
+  /** `null` when the producing request named no model. */
+  model: string | null;
+};
 
 /** A request message as pairing reads it. */
 type Entry =
@@ -105,6 +118,27 @@ const unreadable = (at: number, what: string): Finding => ({
   problem: `the check cannot read ${what}`,
 });
 
+/** A finding when a call's argument text is not a JSON object. */
+const argumentsFinding = (
+  at: number,
+  toolCallId: string | null,
+  text: unknown,
+): Finding[] => {
+  const parsed =
+    typeof text === "string"
+      ? Result.try((): unknown => JSON.parse(text))
+      : null;
+  return parsed !== null && Result.isOk(parsed) && isRecord(parsed.value)
+    ? []
+    : [
+        {
+          message: at,
+          problem: "a tool call's arguments are not a JSON object",
+          ...(toolCallId === null ? {} : { toolCallId }),
+        },
+      ];
+};
+
 /** Builds an assistant entry from its blocks, in order. */
 const assistantEntry = (
   at: number,
@@ -153,6 +187,11 @@ const projectModelMessages = (
         entries.push({ at, results: [message.toolCallId], role: "results" });
         continue;
       case "assistant": {
+        for (const call of message.toolCalls ?? []) {
+          findings.push(
+            ...argumentsFinding(at, call.id, call.function.arguments),
+          );
+        }
         const hasContent =
           message.content !== null &&
           message.content !== "" &&
@@ -216,6 +255,17 @@ const projectOpenAIChat = (body: unknown): Projection => {
         if (ids.includes(null)) {
           findings.push(unreadable(at, "a tool call with no id"));
         }
+        for (const call of calls) {
+          findings.push(
+            ...argumentsFinding(
+              at,
+              stringField(call, "id"),
+              isRecord(call) && isRecord(call["function"])
+                ? call["function"]["arguments"]
+                : undefined,
+            ),
+          );
+        }
         entries.push(
           assistantEntry(at, [
             ...((typeof content === "string" && content !== "") ||
@@ -277,6 +327,15 @@ const projectOpenAIResponses = (body: unknown): Projection => {
         continue;
       }
       if (pairing === "") {
+        if (type === "function_call") {
+          findings.push(
+            ...argumentsFinding(
+              at,
+              id,
+              isRecord(item) ? item["arguments"] : undefined,
+            ),
+          );
+        }
         addBlock(at, { id, type: "call" });
         continue;
       }
@@ -758,12 +817,15 @@ const findThinkingAttachmentProblems = (
 
 /**
  * Each call an earlier response sent with a signature carries it again
- * wherever the request replays the call: Gemini rejects a replayed call that
- * lost the signature it was produced with.
+ * wherever a request to the same model replays the call: Gemini rejects a
+ * replayed call that lost the signature it was produced with. A request to
+ * another Gemini model may drop it, since a signature is valid only for the
+ * model that produced it.
  */
 const findDroppedGeminiSignatures = (
   body: unknown,
-  signedCalls: ReadonlyMap<string, string>,
+  signedCalls: ReadonlyMap<string, SignedGeminiCall>,
+  model: string | null,
 ): Finding[] =>
   (arrayField(body, "contents") ?? []).flatMap((content, at) =>
     (arrayField(content, "parts") ?? []).flatMap((part): Finding[] => {
@@ -773,7 +835,8 @@ const findDroppedGeminiSignatures = (
       if (
         id === null ||
         produced === undefined ||
-        stringField(part, "thoughtSignature") === produced
+        stringField(part, "thoughtSignature") === produced.signature ||
+        isOtherGeminiModel(produced.model, model)
       ) {
         return [];
       }
@@ -786,6 +849,13 @@ const findDroppedGeminiSignatures = (
       ];
     }),
   );
+
+/** Whether `requested` is a different model than `producer`; unknown when
+ *  either is unnamed, which keeps the signature owed. */
+const isOtherGeminiModel = (
+  producer: string | null,
+  requested: string | null,
+) => producer !== null && requested !== null && producer !== requested;
 
 /** The problems one request has, unlabeled. */
 export const findTranscriptProblems = (request: ProviderRequest): Finding[] => {
@@ -801,7 +871,11 @@ export const findTranscriptProblems = (request: ProviderRequest): Finding[] => {
       ? findThinkingAttachmentProblems(entries, request.earlierSteps)
       : []),
     ...(request.format === "gemini" && request.signedCalls !== undefined
-      ? findDroppedGeminiSignatures(request.body, request.signedCalls)
+      ? findDroppedGeminiSignatures(
+          request.body,
+          request.signedCalls,
+          request.model ?? null,
+        )
       : []),
   ];
 };

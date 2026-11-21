@@ -1,4 +1,8 @@
-import type { ApiFileSecurityRejectionDetails } from "@stll/api-contract";
+import type {
+  AiCellSettlement,
+  ApiFileSecurityRejectionDetails,
+} from "@stll/api-contract";
+import { DESKTOP_HANDOFF_FAILURE_REASONS } from "@stll/api-contract/desktop-handoff";
 import type { DocumentTranslationSourceLanguageCode } from "@stll/api-contract/document-translation";
 
 import { DESKTOP_EDIT_FILE_TYPES } from "@/api/lib/desktop-edit-file-types";
@@ -6,11 +10,20 @@ import {
   FOLIO_COLLAB_CHECKPOINT_MAX_BYTES,
   FOLIO_COLLAB_CONTRIBUTOR_MAX_COUNT,
   FOLIO_COLLAB_ROOM_SEED_STATES,
+  FOLIO_COLLAB_ROOM_SNAPSHOT_STATES,
   FOLIO_COLLAB_ROOM_UNSEEDED_STATES,
   FOLIO_COLLAB_SNAPSHOT_MAX_BYTES,
 } from "@/api/lib/folio-collab-room-contract";
+import type { FolioCollabSavedSnapshotCut } from "@/api/lib/folio-collab-room-contract";
 import type { SkippedSkillFile } from "@/api/lib/skills/skill-package";
 
+import { session as authSession } from "../auth-schema";
+import {
+  entityFeatureGateChecks,
+  entityFeatureGateColumns,
+  entityFeatureWorkspaceGateColumns,
+} from "../entity-feature-gate-columns";
+import { fieldsSetTogetherCheck } from "../field-groups";
 import {
   deletionCleanupConstraints,
   deletionCleanupRetryColumns,
@@ -24,10 +37,9 @@ import {
   AGENDA_SENSITIVITIES,
   ENTITY_DELETION_CLEANUP_STATUSES,
   ENTITY_KINDS,
-  LIST_ITEM_TYPES,
-  TASK_ASSIGNEE_ROLES,
   isNotNull,
   jsonb,
+  LIST_ITEM_TYPES,
   organization,
   organizationCheck,
   p,
@@ -37,6 +49,7 @@ import {
   safeWorkspaceId,
   sql,
   stella,
+  TASK_ASSIGNEE_ROLES,
   timestamptz,
   user,
   workspaceCheck,
@@ -54,6 +67,7 @@ import type {
   DocumentSource,
   EntityDeletionCleanupStatus,
   FieldContent,
+  ImportDocumentSource,
   JustificationContent,
   LinkMetadata,
   SafeId,
@@ -71,6 +85,7 @@ const ENTITY_DELETION_CLEANUP_STATUS_SQL_VALUES =
 export const entities = p.pgTable(
   "entities",
   {
+    ...entityFeatureGateColumns(),
     id: pUuid<"entity">().primaryKey(),
     workspaceId: safeWorkspaceId("workspace_id")
       .notNull()
@@ -159,6 +174,10 @@ export const entities = p.pgTable(
       .index("entities_parent_id_idx")
       .on(table.parentId)
       .where(isNotNull(table.parentId)),
+    p
+      .index("entities_ws_editor_updated_idx")
+      .on(table.workspaceId, table.lastEditedBy, table.updatedAt)
+      .where(sql`${table.kind} = 'document'`),
     p.index("entities_workspace_name_idx").on(table.workspaceId, table.name),
     p
       .uniqueIndex("entities_ws_doc_seq_uidx")
@@ -177,6 +196,7 @@ export const entities = p.pgTable(
       .index("entities_due_date_idx")
       .on(table.workspaceId, table.dueDate)
       .where(isNotNull(table.dueDate)),
+    ...entityFeatureGateChecks(table),
     p.check(
       "entities_list_item_type_task_only",
       sql`${table.listItemType} IS NULL OR (${table.kind} = 'task' AND ${table.listItemType} IN (${sql.join(LIST_ITEM_TYPE_SQL_VALUES, sql`, `)}))`,
@@ -201,7 +221,16 @@ export const entities = p.pgTable(
       .index("entities_agenda_ical_uid_idx")
       .on(table.workspaceId, table.externalICalUid)
       .where(isNotNull(table.externalICalUid)),
-    ...wsPolicies(),
+    ...wsPolicies({
+      columns: table,
+      references: new Map([
+        [table.parentId, { target: "entities", kind: "context" }],
+        [
+          table.currentVersionId,
+          { target: "entity_versions", kind: "owned-content" },
+        ],
+      ]),
+    }),
   ],
 );
 
@@ -282,6 +311,8 @@ export const entityDeletionEffectChunks = p.pgTable.withRLS(
 export const taskAssignees = p.pgTable(
   "task_assignees",
   {
+    ...entityFeatureGateColumns(),
+    ...entityFeatureWorkspaceGateColumns(),
     id: pUuid<"taskAssignee">().primaryKey(),
     workspaceId: safeWorkspaceId("workspace_id")
       .notNull()
@@ -297,19 +328,27 @@ export const taskAssignees = p.pgTable(
     createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [
+    ...entityFeatureGateChecks(table),
     p.index("task_assignees_workspace_id_idx").on(table.workspaceId),
     p.index("task_assignees_entity_id_idx").on(table.entityId),
     p.index("task_assignees_user_id_idx").on(table.userId),
     p
       .uniqueIndex("task_assignees_entity_user_uidx")
       .on(table.entityId, table.userId),
-    ...wsPolicies(),
+    ...wsPolicies({
+      columns: table,
+      references: new Map([
+        [table.entityId, { target: "entities", kind: "owned-content" }],
+      ]),
+    }),
   ],
 );
 
 export const entityLinks = p.pgTable(
   "entity_links",
   {
+    ...entityFeatureGateColumns(),
+    ...entityFeatureWorkspaceGateColumns(),
     id: pUuid<"entityLink">().primaryKey(),
     workspaceId: safeWorkspaceId("workspace_id")
       .notNull()
@@ -327,6 +366,7 @@ export const entityLinks = p.pgTable(
     createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [
+    ...entityFeatureGateChecks(table),
     p.index("entity_links_workspace_id_idx").on(table.workspaceId),
     p.index("entity_links_source_idx").on(table.sourceEntityId),
     p.index("entity_links_target_idx").on(table.targetEntityId),
@@ -344,13 +384,20 @@ export const entityLinks = p.pgTable(
       "entity_links_no_self_ref_check",
       sql`${table.sourceEntityId} != ${table.targetEntityId}`,
     ),
-    ...wsPolicies(),
+    ...wsPolicies({
+      columns: table,
+      references: new Map([
+        [table.sourceEntityId, { target: "entities", kind: "owned-content" }],
+        [table.targetEntityId, { target: "entities", kind: "owned-content" }],
+      ]),
+    }),
   ],
 );
 
 export const entityVersions = p.pgTable(
   "entity_versions",
   {
+    ...entityFeatureGateColumns(),
     id: pUuid<"entityVersion">().primaryKey(),
     workspaceId: safeWorkspaceId("workspace_id").notNull(),
     entityId: safeUuid<"entity">("entity_id").notNull(),
@@ -391,16 +438,20 @@ export const entityVersions = p.pgTable(
       .$type<DocumentTranslationSourceLanguageCode>(),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
     /**
-     * Chain-of-custody tombstone. A non-null `deletedAt` hides the version
-     * from every read / list / restore / download path while its row and S3
-     * objects are retained under legal hold: version history must never be
-     * hard-deleted. `deletedBy` mirrors `createdBy` (plain user id, no FK) so
-     * the actor survives a user deletion.
+     * Version tombstone. Deleting a version sets `deletedAt` and keeps the
+     * row, its fields and their storage objects; a non-null `deletedAt` hides
+     * the version from every read / list / restore / download path. Moving
+     * the document to another matter carries its tombstones with it,
+     * `deletedAt`/`deletedBy` unchanged. Deleting the whole document removes
+     * all of its versions, tombstones included, with their objects.
+     * `deletedBy` mirrors `createdBy` (plain user id, no FK) so the actor
+     * survives a user deletion.
      */
     deletedAt: timestamptz("deleted_at"),
     deletedBy: p.text("deleted_by"),
   },
   (table) => [
+    ...entityFeatureGateChecks(table),
     p
       .uniqueIndex("entity_versions_id_entity_ws_uidx")
       .on(table.id, table.entityId, table.workspaceId),
@@ -412,6 +463,9 @@ export const entityVersions = p.pgTable(
       sql`${table.collaborationContributorUserIds} IS NULL OR (jsonb_typeof(${table.collaborationContributorUserIds}) = 'array' AND jsonb_array_length(${table.collaborationContributorUserIds}) <= ${FOLIO_COLLAB_CONTRIBUTOR_MAX_COUNT})`,
     ),
     p.index("entity_versions_entity_id_idx").on(table.entityId),
+    // Equality reads need the heap's row-local gate; hash lookup avoids repeated
+    // B-tree levels when search checks the current version for each match.
+    p.index("entity_versions_id_hash_idx").using("hash", table.id),
     p
       .index("entity_versions_stamp_idx")
       .on(table.stamp)
@@ -427,13 +481,20 @@ export const entityVersions = p.pgTable(
       })
       .onDelete("cascade"),
     p.index("entity_versions_workspace_id_idx").on(table.workspaceId),
-    ...wsPolicies(),
+    ...wsPolicies({
+      columns: table,
+      references: new Map([
+        [table.entityId, { target: "entities", kind: "owned-content" }],
+      ]),
+    }),
   ],
 );
 
 export const entityVersionAiSummaries = p.pgTable(
   "entity_version_ai_summaries",
   {
+    ...entityFeatureGateColumns(),
+    ...entityFeatureWorkspaceGateColumns(),
     id: pUuid<"entityVersionAiSummary">().primaryKey(),
     organizationId: safeOrganizationId("organization_id")
       .notNull()
@@ -452,6 +513,7 @@ export const entityVersionAiSummaries = p.pgTable(
     generatedAt: timestamptz("generated_at").notNull().defaultNow(),
   },
   (table) => [
+    ...entityFeatureGateChecks(table),
     p.index("entity_version_ai_summaries_workspace_idx").on(table.workspaceId),
     p.index("entity_version_ai_summaries_entity_idx").on(table.entityId),
     p
@@ -470,7 +532,16 @@ export const entityVersionAiSummaries = p.pgTable(
         name: "entity_version_ai_summaries_workspace_organization_fk",
       })
       .onDelete("cascade"),
-    ...wsOrganizationPolicies("entity_version_ai_summaries"),
+    ...wsOrganizationPolicies("entity_version_ai_summaries", {
+      columns: table,
+      references: new Map([
+        [
+          table.entityVersionId,
+          { target: "entity_versions", kind: "owned-content" },
+        ],
+        [table.entityId, { target: "entities", kind: "owned-content" }],
+      ]),
+    }),
   ],
 );
 
@@ -494,6 +565,8 @@ export type FolioCollabTokenPermissions = {
 export const desktopEditSessions = p.pgTable(
   "desktop_edit_sessions",
   {
+    ...entityFeatureGateColumns(),
+    ...entityFeatureWorkspaceGateColumns(),
     id: pUuid<"desktopEditSession">().primaryKey(),
     workspaceId: safeWorkspaceId("workspace_id")
       .notNull()
@@ -540,6 +613,7 @@ export const desktopEditSessions = p.pgTable(
     ),
   },
   (table) => [
+    ...entityFeatureGateChecks(table),
     p.index("desktop_edit_sessions_workspace_id_idx").on(table.workspaceId),
     p.index("desktop_edit_sessions_entity_id_idx").on(table.entityId),
     p.index("desktop_edit_sessions_property_id_idx").on(table.propertyId),
@@ -585,7 +659,23 @@ export const desktopEditSessions = p.pgTable(
         foreignColumns: [properties.id, properties.workspaceId],
       })
       .onDelete("cascade"),
-    ...wsPolicies(),
+    ...wsPolicies({
+      columns: table,
+      references: new Map([
+        [
+          table.baseVersionId,
+          { target: "entity_versions", kind: "owned-content" },
+        ],
+        [
+          table.finalizedVersionId,
+          { target: "entity_versions", kind: "owned-content" },
+        ],
+        [table.entityId, { target: "entities", kind: "owned-content" }],
+      ]),
+    }),
+    p
+      .index("desktop_edit_sessions_ef_finalized_version_id_idx")
+      .on(table.finalizedVersionId),
   ],
 );
 
@@ -598,6 +688,8 @@ export type DesktopEditLinkedAccountSnapshot = {
 export const desktopEditHandoffs = p.pgTable(
   "desktop_edit_handoffs",
   {
+    ...entityFeatureGateColumns(),
+    ...entityFeatureWorkspaceGateColumns(),
     id: pUuid<"desktopEditHandoff">().primaryKey(),
     workspaceId: safeWorkspaceId("workspace_id")
       .notNull()
@@ -616,6 +708,10 @@ export const desktopEditHandoffs = p.pgTable(
     forceTakeover: p.boolean("force_takeover").notNull().default(false),
     expiresAt: timestamptz("expires_at").notNull(),
     consumedAt: timestamptz("consumed_at"),
+    failedAt: timestamptz("failed_at"),
+    failureReason: p.text("failure_reason", {
+      enum: DESKTOP_HANDOFF_FAILURE_REASONS,
+    }),
     desktopSessionId: safeUuid<"desktopEditSession">("desktop_session_id"),
     openedAt: timestamptz("opened_at"),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
@@ -625,6 +721,11 @@ export const desktopEditHandoffs = p.pgTable(
       .$onUpdate(() => new Date()),
   },
   (table) => [
+    ...entityFeatureGateChecks(table),
+    p.check(
+      "desktop_edit_handoffs_failure_check",
+      sql`(${table.failedAt} is null and ${table.failureReason} is null) or (${table.failedAt} is not null and ${table.consumedAt} is null and ${table.openedAt} is null and ${table.failureReason} is not null and ${table.failureReason} in (${sql.raw(DESKTOP_HANDOFF_FAILURE_REASONS.map((reason) => `'${reason}'`).join(", "))}))`,
+    ),
     p.index("desktop_edit_handoffs_workspace_id_idx").on(table.workspaceId),
     p.index("desktop_edit_handoffs_expires_at_idx").on(table.expiresAt),
     p
@@ -650,7 +751,22 @@ export const desktopEditHandoffs = p.pgTable(
         foreignColumns: [properties.id, properties.workspaceId],
       })
       .onDelete("cascade"),
-    ...wsPolicies(),
+    ...wsPolicies({
+      columns: table,
+      references: new Map([
+        [table.entityId, { target: "entities", kind: "owned-content" }],
+        [
+          table.desktopSessionId,
+          { kind: "owned-by-parent", parent: desktopEditSessions },
+        ],
+      ]),
+    }),
+    p
+      .index("desktop_edit_handoffs_ef_desktop_session_id_idx")
+      .on(table.desktopSessionId),
+    p
+      .index("desktop_edit_handoffs_ef_entity_id_idx")
+      .on(table.workspaceId, table.entityId),
   ],
 );
 
@@ -661,9 +777,14 @@ const FOLIO_COLLAB_ROOM_UNSEEDED_STATE_SQL_VALUES = sql.raw(
   FOLIO_COLLAB_ROOM_UNSEEDED_STATES.map((state) => `'${state}'`).join(", "),
 );
 
+const FOLIO_COLLAB_ROOM_SNAPSHOT_STATE_SQL_VALUES = sql.raw(
+  FOLIO_COLLAB_ROOM_SNAPSHOT_STATES.map((state) => `'${state}'`).join(", "),
+);
+
 export const folioCollabRooms = p.pgTable(
   "folio_collab_rooms",
   {
+    ...entityFeatureGateColumns(),
     id: pUuid<"folioCollabRoom">().primaryKey(),
     workspaceId: safeWorkspaceId("workspace_id")
       .notNull()
@@ -679,6 +800,9 @@ export const folioCollabRooms = p.pgTable(
       .bigint("yjs_snapshot_revision", { mode: "number" })
       .notNull()
       .default(0),
+    /** Immutable snapshot hash bound to its saved DOCX version; null for unknown historical cuts. */
+    savedSnapshotCut:
+      jsonb("saved_snapshot_cut").$type<FolioCollabSavedSnapshotCut>(),
     yjsSnapshotSizeBytes: p.integer("yjs_snapshot_size_bytes"),
     yjsSnapshotUpdatedAt: timestamptz("yjs_snapshot_updated_at"),
     docxCheckpointFileId: safeUuid<"userFile">(
@@ -687,6 +811,11 @@ export const folioCollabRooms = p.pgTable(
     docxCheckpointSha256Hex: p.varchar("docx_checkpoint_sha256_hex", {
       length: 64,
     }),
+    /** Persisted snapshot hash captured with this checkpoint, before any normalization. */
+    docxCheckpointSnapshotSha256Hex: p.varchar(
+      "docx_checkpoint_snapshot_sha256_hex",
+      { length: 64 },
+    ),
     docxCheckpointSizeBytes: p.integer("docx_checkpoint_size_bytes"),
     docxCheckpointScanWarnings: jsonb("docx_checkpoint_scan_warnings").$type<
       string[] | null
@@ -701,6 +830,9 @@ export const folioCollabRooms = p.pgTable(
     }),
     seedClaimedAt: timestamptz("seed_claimed_at"),
     seededAt: timestamptz("seeded_at"),
+    // Set when recovery discarded known or possible unsaved changes; cleared
+    // after reseeding, so the seeding client can report the recovery.
+    snapshotRecoveredAt: timestamptz("snapshot_recovered_at"),
     lastActivityAt: timestamptz("last_activity_at"),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
     updatedAt: timestamptz("updated_at")
@@ -709,6 +841,7 @@ export const folioCollabRooms = p.pgTable(
       .$onUpdate(() => new Date()),
   },
   (table) => [
+    ...entityFeatureGateChecks(table),
     p
       .uniqueIndex("folio_collab_rooms_target_uidx")
       .on(table.workspaceId, table.entityId, table.propertyId),
@@ -739,7 +872,7 @@ export const folioCollabRooms = p.pgTable(
       "folio_collab_rooms_snapshot_revision_seed_check",
       sql`(
         (${table.seedState} IN (${FOLIO_COLLAB_ROOM_UNSEEDED_STATE_SQL_VALUES}) AND ${table.yjsSnapshotRevision} = 0)
-        OR (${table.seedState} = 'seeded' AND ${table.yjsSnapshotRevision} > 0)
+        OR (${table.seedState} IN (${FOLIO_COLLAB_ROOM_SNAPSHOT_STATE_SQL_VALUES}) AND ${table.yjsSnapshotRevision} > 0)
       )`,
     ),
     p.check(
@@ -750,7 +883,7 @@ export const folioCollabRooms = p.pgTable(
       "folio_collab_rooms_seed_fields_check",
       sql`(
         (${table.seedState} = 'empty' AND ${table.seedClaimedBy} IS NULL AND ${table.seedClaimedAt} IS NULL AND ${table.seededAt} IS NULL AND ${table.yjsSnapshotSizeBytes} IS NULL AND ${table.yjsSnapshotUpdatedAt} IS NULL)
-        OR (${table.seedState} = 'claimed' AND ${table.seedClaimedBy} IS NOT NULL AND ${table.seedClaimedAt} IS NOT NULL AND ${table.seededAt} IS NULL AND ${table.yjsSnapshotSizeBytes} IS NULL AND ${table.yjsSnapshotUpdatedAt} IS NULL)
+        OR (${table.seedState} = 'claimed' AND ${table.seedClaimedBy} IS NOT NULL AND ${table.seedClaimedAt} IS NOT NULL AND ${table.seededAt} IS NULL AND ((${table.yjsSnapshotRevision} = 0 AND ${table.yjsSnapshotSizeBytes} IS NULL AND ${table.yjsSnapshotUpdatedAt} IS NULL) OR (${table.yjsSnapshotRevision} > 0 AND ${table.yjsSnapshotSizeBytes} IS NOT NULL AND ${table.yjsSnapshotUpdatedAt} IS NOT NULL)))
         OR (${table.seedState} = 'seeded' AND ${table.seedClaimedAt} IS NOT NULL AND ${table.seededAt} IS NOT NULL AND ${table.yjsSnapshotSizeBytes} IS NOT NULL AND ${table.yjsSnapshotUpdatedAt} IS NOT NULL)
       )`,
     ),
@@ -794,13 +927,30 @@ export const folioCollabRooms = p.pgTable(
       ],
       name: "folio_collab_rooms_source_version_entity_workspace_fk",
     }),
-    ...wsPolicies(),
+    ...wsPolicies({
+      columns: table,
+      references: new Map([
+        [table.entityId, { target: "entities", kind: "owned-content" }],
+        [
+          table.baseVersionId,
+          { target: "entity_versions", kind: "owned-content" },
+        ],
+        [
+          table.sourceVersionId,
+          { target: "entity_versions", kind: "owned-content" },
+        ],
+      ]),
+    }),
+    p
+      .index("folio_collab_rooms_ef_base_version_id_idx")
+      .on(table.workspaceId, table.baseVersionId),
   ],
 );
 
 export const folioCollabRoomTokens = p.pgTable(
   "folio_collab_room_tokens",
   {
+    ...entityFeatureGateColumns(),
     id: pUuid<"folioCollabRoomToken">().primaryKey(),
     roomId: safeUuid<"folioCollabRoom">("room_id").notNull(),
     workspaceId: safeWorkspaceId("workspace_id")
@@ -810,6 +960,9 @@ export const folioCollabRoomTokens = p.pgTable(
       .text("user_id")
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
+    sourceSessionId: p
+      .text("source_session_id")
+      .references(() => authSession.id, { onDelete: "cascade" }),
     tokenHash: p.varchar("token_hash", { length: 64 }).notNull(),
     generation: p.bigint("generation", { mode: "number" }).notNull(),
     permissions: jsonb("permissions")
@@ -819,11 +972,16 @@ export const folioCollabRoomTokens = p.pgTable(
     createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [
+    ...entityFeatureGateChecks(table),
     p
       .index("folio_collab_room_tokens_workspace_expiry_idx")
       .on(table.workspaceId, table.expiresAt),
     p.index("folio_collab_room_tokens_room_id_idx").on(table.roomId),
     p.index("folio_collab_room_tokens_user_id_idx").on(table.userId),
+    p
+      .index("folio_collab_room_tokens_source_session_idx")
+      .on(table.sourceSessionId)
+      .where(sql`${table.sourceSessionId} IS NOT NULL`),
     p
       .uniqueIndex("folio_collab_room_tokens_token_hash_uidx")
       .on(table.tokenHash),
@@ -838,7 +996,12 @@ export const folioCollabRoomTokens = p.pgTable(
       "folio_collab_room_tokens_generation_check",
       sql`${table.generation} >= 0`,
     ),
-    ...wsPolicies(),
+    ...wsPolicies({
+      columns: table,
+      references: new Map([
+        [table.roomId, { kind: "owned-by-parent", parent: folioCollabRooms }],
+      ]),
+    }),
   ],
 );
 
@@ -847,6 +1010,7 @@ export const folioCollabRoomTokens = p.pgTable(
 export const folioCollabContributions = p.pgTable(
   "folio_collab_contributions",
   {
+    ...entityFeatureGateColumns(),
     id: pUuid<"folioCollabContribution">().primaryKey(),
     roomId: safeUuid<"folioCollabRoom">("room_id").notNull(),
     workspaceId: safeWorkspaceId("workspace_id").notNull(),
@@ -863,6 +1027,7 @@ export const folioCollabContributions = p.pgTable(
       .$onUpdate(() => new Date()),
   },
   (table) => [
+    ...entityFeatureGateChecks(table),
     p
       .uniqueIndex("folio_collab_contributions_room_user_uidx")
       .on(table.roomId, table.userId),
@@ -887,7 +1052,23 @@ export const folioCollabContributions = p.pgTable(
         name: "folio_collab_contributions_version_entity_workspace_fk",
       })
       .onDelete("cascade"),
-    ...wsPolicies(),
+    ...wsPolicies({
+      columns: table,
+      references: new Map([
+        [table.entityId, { target: "entities", kind: "owned-content" }],
+        [
+          table.sinceVersionId,
+          { target: "entity_versions", kind: "owned-content" },
+        ],
+        [table.roomId, { kind: "owned-by-parent", parent: folioCollabRooms }],
+      ]),
+    }),
+    p
+      .index("folio_collab_contributions_ef_entity_id_idx")
+      .on(table.workspaceId, table.entityId),
+    p
+      .index("folio_collab_contributions_ef_since_version_id_idx")
+      .on(table.workspaceId, table.sinceVersionId),
   ],
 );
 
@@ -896,6 +1077,7 @@ export const folioCollabContributions = p.pgTable(
 export const folioCollabPublications = p.pgTable(
   "folio_collab_publications",
   {
+    ...entityFeatureGateColumns(),
     id: pUuid<"folioCollabPublication">().primaryKey(),
     roomId: safeUuid<"folioCollabRoom">("room_id").notNull(),
     workspaceId: safeWorkspaceId("workspace_id").notNull(),
@@ -906,9 +1088,12 @@ export const folioCollabPublications = p.pgTable(
     checkpointSha256Hex: p
       .varchar("checkpoint_sha256_hex", { length: 64 })
       .notNull(),
+    /** Immutable persisted snapshot bytes represented by this publication's DOCX. */
+    snapshotSha256Hex: p.varchar("snapshot_sha256_hex", { length: 64 }),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [
+    ...entityFeatureGateChecks(table),
     p
       .uniqueIndex("folio_collab_publications_idempotency_uidx")
       .on(table.idempotencyKey),
@@ -937,7 +1122,23 @@ export const folioCollabPublications = p.pgTable(
         name: "folio_collab_publications_version_entity_workspace_fk",
       })
       .onDelete("cascade"),
-    ...wsPolicies(),
+    ...wsPolicies({
+      columns: table,
+      references: new Map([
+        [table.entityId, { target: "entities", kind: "owned-content" }],
+        [
+          table.entityVersionId,
+          { target: "entity_versions", kind: "owned-content" },
+        ],
+        [table.roomId, { kind: "owned-by-parent", parent: folioCollabRooms }],
+      ]),
+    }),
+    p
+      .index("folio_collab_publications_ef_entity_id_idx")
+      .on(table.workspaceId, table.entityId),
+    p
+      .index("folio_collab_publications_ef_entity_version_id_idx")
+      .on(table.workspaceId, table.entityVersionId),
   ],
 );
 
@@ -1007,6 +1208,8 @@ export type PendingUploadPurposeData =
   | {
       type: "entity_create";
       propertyId: SafeId<"property">;
+      /** Set when the upload imports a file from another system. */
+      importSource?: ImportDocumentSource;
       /**
        * Final object id reserved by trusted server-side writers. Persisting it
        * before S3 publication lets the bounded reconciler derive and remove a
@@ -1093,7 +1296,7 @@ export const pendingUploads = p.pgTable(
     /** Set inside the claim transaction. Used to detect stuck `scanning` rows. */
     claimedAt: timestamptz("claimed_at"),
     claimedByRequestId: p.varchar("claimed_by_request_id", { length: 64 }),
-    /** `createdAt + 5min`. A finalize after this rejects without touching S3. */
+    /** Finalize deadline (`uploadTimeline`); later requests only replay terminal results. */
     expiresAt: timestamptz("expires_at").notNull(),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
     finalizedAt: timestamptz("finalized_at"),
@@ -1127,7 +1330,7 @@ export const pendingUploads = p.pgTable(
         name: "pending_uploads_workspace_organization_fk",
       })
       .onDelete("cascade"),
-    ...wsOrganizationPolicies("pending_uploads"),
+    ...wsOrganizationPolicies("pending_uploads", { columns: table }),
   ],
 );
 
@@ -1148,7 +1351,7 @@ export const BUFFER_OBJECT_CLEANUP_INTENT_STATUS = {
  * writer confirms it can no longer publish or the bounded late-write
  * quarantine completes. Matter writers reserve a finalized
  * `{org}/{workspace}/{file}` key; organization-scoped chat writers reserve
- * their `{user}/{file}` key with a null workspace. No bucket lifecycle rule
+ * their `{org}/{file}` key with a null workspace. No bucket lifecycle rule
  * expires either class and no prefix sweep can rediscover one.
  *
  * Adding an ancestor reference is therefore only safe once that ancestor's
@@ -1190,7 +1393,10 @@ export const bufferObjectCleanupIntents = p.pgTable(
   (table) => {
     const ownerScopeAccess = sql`((
       ${table.chatThreadId} IS NOT NULL
-      AND pg_catalog.split_part(${table.objectKey}, '/', 1) = (SELECT pg_catalog.current_setting('app.user_id', true))
+      AND pg_catalog.split_part(${table.objectKey}, '/', 1) IN (
+        ${table.organizationId},
+        (SELECT pg_catalog.current_setting('app.user_id', true))
+      )
       AND EXISTS (
         SELECT 1 FROM chat_threads ct
         WHERE ct.id = ${table.chatThreadId}
@@ -1241,6 +1447,32 @@ export const bufferObjectCleanupIntents = p.pgTable(
           AND (t.s3_key = ${table.objectKey} OR t.id::text || '.docx' = pg_catalog.split_part(${table.objectKey}, '/', 3))
       )
     )`;
+    const reportExportWriteAccess = sql`(
+      ${table.chatThreadId} IS NULL
+      AND ${table.workspaceId} IS NOT NULL
+      AND ${workspaceCheck}
+      AND pg_catalog.split_part(${table.objectKey}, '/', 1) = 'exports'
+      AND pg_catalog.split_part(${table.objectKey}, '/', 2) = ${table.organizationId}
+      AND pg_catalog.split_part(${table.objectKey}, '/', 3) = ${table.workspaceId}::text
+      AND pg_catalog.split_part(${table.objectKey}, '/', 4) ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}[.](docx|pdf)$'
+      AND pg_catalog.array_length(pg_catalog.string_to_array(${table.objectKey}, '/'), 1) = 4
+    )`;
+    // Skill file writers reserve only fresh original keys that no stored
+    // file names yet, so an intent can never claim (and later erase) another
+    // file's bytes.
+    const skillOriginalWriteAccess = sql`(
+      ${table.chatThreadId} IS NULL
+      AND ${table.workspaceId} IS NULL
+      AND pg_catalog.split_part(${table.objectKey}, '/', 1) = ${table.organizationId}
+      AND pg_catalog.split_part(${table.objectKey}, '/', 2) = 'agent-skills'
+      AND pg_catalog.split_part(${table.objectKey}, '/', 3) = 'originals'
+      AND pg_catalog.split_part(${table.objectKey}, '/', 4) ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+      AND pg_catalog.array_length(pg_catalog.string_to_array(${table.objectKey}, '/'), 1) = 4
+      AND NOT EXISTS (
+        SELECT 1 FROM agent_skill_resources r
+        WHERE r.original_s3_key = ${table.objectKey}
+      )
+    )`;
 
     return [
       p
@@ -1267,7 +1499,7 @@ export const bufferObjectCleanupIntents = p.pgTable(
       p.pgPolicy("buffer_object_cleanup_insert", {
         for: "insert",
         to: stella,
-        withCheck: sql`${organizationCheck} AND ${writerSettlementAccess} AND (${ownerScopeAccess} OR ${templateWriteAccess} OR ${templateCreationAccess})`,
+        withCheck: sql`${organizationCheck} AND ${writerSettlementAccess} AND (${ownerScopeAccess} OR ${templateWriteAccess} OR ${templateCreationAccess} OR ${reportExportWriteAccess} OR ${skillOriginalWriteAccess})`,
       }),
       p.pgPolicy("buffer_object_cleanup_select", {
         for: "select",
@@ -1291,6 +1523,8 @@ export const bufferObjectCleanupIntents = p.pgTable(
 export const fields = p.pgTable(
   "fields",
   {
+    ...entityFeatureGateColumns(),
+    ...entityFeatureWorkspaceGateColumns(),
     id: pUuid<"field">().primaryKey(),
     workspaceId: safeWorkspaceId("workspace_id").notNull(),
     propertyId: safeUuid<"property">("property_id").notNull(),
@@ -1299,8 +1533,35 @@ export const fields = p.pgTable(
       .references(() => entityVersions.id, { onDelete: "cascade" }),
     fileId: safeUuid<"userFile">("file_id"),
     content: jsonb().$type<FieldContent>().notNull(),
+    /** Durable terminal outcome of the latest AI run for this cell. */
+    aiSettlement: jsonb("ai_settlement").$type<AiCellSettlement>(),
+    /** Workflow run that currently owns this non-terminal cell. */
+    ownerRunId: p.text("owner_run_id"),
+    /** Batch within the workflow run that currently owns this cell. */
+    ownerBatchId: p.text("owner_batch_id"),
+    /** Time after which the cell owner may be reconciled. */
+    deadlineAt: timestamptz("deadline_at"),
+    /** Bounded automatic-retry attempt for an owned cell. */
+    attempt: p.smallint("attempt"),
   },
   (table) => [
+    ...entityFeatureGateChecks(table),
+    // A claim is its run, batch, deadline and attempt; a cell never holds part of one.
+    fieldsSetTogetherCheck({
+      name: "fields_owner_fields_check",
+      columns: [
+        table.ownerRunId,
+        table.ownerBatchId,
+        table.deadlineAt,
+        table.attempt,
+      ],
+    }),
+    // Only a pending cell is owned. A pending cell may be unowned: version
+    // clones copy it without its claim, and orphan recovery retries it.
+    p.check(
+      "fields_owner_pending_check",
+      sql`${table.ownerRunId} IS NULL OR ${table.content}->>'type' = 'pending'`,
+    ),
     p
       .uniqueIndex("fields_property_id_entity_version_id_key")
       .on(table.propertyId, table.entityVersionId),
@@ -1318,6 +1579,14 @@ export const fields = p.pgTable(
         sql`(${table.content}->>'mimeType')`,
         table.entityVersionId,
         table.id,
+      )
+      .where(sql`${table.content}->>'type' = 'file'`),
+    p
+      .index("fields_workspace_file_sha256_idx")
+      .on(
+        table.workspaceId,
+        sql`(${table.content}->>'sha256Hex')`,
+        table.entityVersionId,
       )
       .where(sql`${table.content}->>'type' = 'file'`),
     // Bounded document-processing recovery has a global ID cursor, so its
@@ -1348,7 +1617,8 @@ export const fields = p.pgTable(
     // immutable projection of the text a cell displays. Partial on the
     // findable types so pending and error placeholders stay out of the GIN
     // pending list; `fields-find-text-index.test.ts` binds that list to
-    // `FIELD_FIND_SUPPORT` and to the migration.
+    // `FIELD_FIND_SUPPORT` and to the migration. No query reads it once the
+    // find folds through `search_fold`.
     p
       .index("fields_find_text_trgm_idx")
       .using("gin", sql`field_find_text(${table.content}) gin_trgm_ops`)
@@ -1363,13 +1633,24 @@ export const fields = p.pgTable(
       .onDelete("cascade"),
     p.index("fields_workspace_id_idx").on(table.workspaceId),
     p.unique("fields_id_ws_unq").on(table.id, table.workspaceId),
-    ...wsPolicies(),
+    ...wsPolicies({
+      columns: table,
+      references: new Map([
+        [
+          table.entityVersionId,
+          { target: "entity_versions", kind: "owned-content" },
+        ],
+      ]),
+    }),
+    p.index("fields_ef_entity_version_id_idx").on(table.entityVersionId),
   ],
 );
 
 export const cellMetadata = p.pgTable(
   "cell_metadata",
   {
+    ...entityFeatureGateColumns(),
+    ...entityFeatureWorkspaceGateColumns(),
     workspaceId: safeWorkspaceId("workspace_id").notNull(),
     entityVersionId: safeUuid<"entityVersion">("entity_version_id")
       .notNull()
@@ -1386,6 +1667,7 @@ export const cellMetadata = p.pgTable(
     updatedAt: timestamptz("updated_at").notNull().defaultNow(),
   },
   (table) => [
+    ...entityFeatureGateChecks(table),
     p.primaryKey({
       columns: [table.entityVersionId, table.propertyId],
       name: "cell_metadata_entity_version_id_property_id_pk",
@@ -1399,13 +1681,23 @@ export const cellMetadata = p.pgTable(
       .onDelete("cascade"),
     p.index("cell_metadata_workspace_id_idx").on(table.workspaceId),
     p.index("cell_metadata_entity_version_id_idx").on(table.entityVersionId),
-    ...wsPolicies(),
+    ...wsPolicies({
+      columns: table,
+      references: new Map([
+        [
+          table.entityVersionId,
+          { target: "entity_versions", kind: "owned-content" },
+        ],
+      ]),
+    }),
   ],
 );
 
 export const justifications = p.pgTable(
   "justifications",
   {
+    ...entityFeatureGateColumns(),
+    ...entityFeatureWorkspaceGateColumns(),
     id: pUuid<"justification">().primaryKey(),
     workspaceId: safeWorkspaceId("workspace_id").notNull(),
     fieldId: safeUuid<"field">("field_id").notNull(),
@@ -1417,6 +1709,7 @@ export const justifications = p.pgTable(
       .default([]),
   },
   (table) => [
+    ...entityFeatureGateChecks(table),
     p.uniqueIndex("justifications_field_id_key").on(table.fieldId),
     p
       .foreignKey({
@@ -1425,7 +1718,12 @@ export const justifications = p.pgTable(
       })
       .onDelete("cascade"),
     p.index("justifications_workspace_id_idx").on(table.workspaceId),
-    ...wsPolicies(),
+    ...wsPolicies({
+      columns: table,
+      references: new Map([
+        [table.fieldId, { target: "fields", kind: "owned-content" }],
+      ]),
+    }),
   ],
 );
 

@@ -1,7 +1,8 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
-import JSZip from "jszip";
+import { SaxesParser } from "saxes";
 
+import { ZipArchive } from "@stll/docx-core/zip";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { DESKTOP_EDIT_FILE_TYPE_CONFIG } from "@/api/lib/desktop-edit-file-types";
@@ -12,7 +13,7 @@ import {
   stripStamp,
 } from "@/api/lib/docx-stamp";
 import { scrubDocumentProperties } from "@/api/lib/files/document-properties";
-import { LIMITS } from "@/api/lib/limits";
+import { FILE_SIZE_LIMIT_BYTES, LIMITS } from "@/api/lib/limits";
 
 // ── Helpers ─────────────────────────────────────────────
 
@@ -44,9 +45,9 @@ const makeDocx = async (opts?: {
   contentTypes?: string;
   docRels?: string;
 }): Promise<ArrayBuffer> => {
-  const zip = new JSZip();
+  const zip = new ZipArchive();
 
-  zip.file(
+  zip.set(
     "word/document.xml",
     opts?.documentXml ??
       [
@@ -60,58 +61,68 @@ const makeDocx = async (opts?: {
       ].join("\n"),
   );
 
-  zip.file("[Content_Types].xml", opts?.contentTypes ?? CONTENT_TYPES_XML);
+  zip.set("[Content_Types].xml", opts?.contentTypes ?? CONTENT_TYPES_XML);
 
   if (opts?.docRels) {
-    zip.file("word/_rels/document.xml.rels", opts.docRels);
+    zip.set("word/_rels/document.xml.rels", opts.docRels);
   }
   if (opts?.footerXml) {
-    zip.file("word/footer1.xml", opts.footerXml);
+    zip.set("word/footer1.xml", opts.footerXml);
   }
   if (opts?.footerRels) {
-    zip.file("word/_rels/footer1.xml.rels", opts.footerRels);
+    zip.set("word/_rels/footer1.xml.rels", opts.footerRels);
   }
   if (opts?.customXml) {
-    zip.file("docProps/custom.xml", opts.customXml);
+    zip.set("docProps/custom.xml", opts.customXml);
   }
   if (opts?.coreXml) {
-    zip.file("docProps/core.xml", opts.coreXml);
+    zip.set("docProps/core.xml", opts.coreXml);
   }
   if (opts?.appXml) {
-    zip.file("docProps/app.xml", opts.appXml);
+    zip.set("docProps/app.xml", opts.appXml);
   }
   for (const [path, contents] of Object.entries(opts?.additionalFiles ?? {})) {
-    zip.file(path, contents);
+    zip.set(path, contents);
   }
 
-  return zip.generateAsync({ type: "arraybuffer" });
+  return zip
+    .generate({ compression: "store" })
+    .then((archive) => archive.buffer);
 };
 
 const readZipFile = async (
   buffer: ArrayBuffer | Uint8Array,
   path: string,
 ): Promise<string | null> => {
-  const zip = await JSZip.loadAsync(buffer);
-  const file = zip.file(path);
+  const zip = await ZipArchive.read(buffer);
+  const file = zip.entry(path);
   if (!file) {
     return null;
   }
-  return file.async("string");
+  return file.text();
 };
+
+const isWellFormedXml = (xml: string): boolean =>
+  Result.try(() => new SaxesParser().write(xml).close()).isOk();
 
 // ── Tests ───────────────────────────────────────────────
 
 describe("isStampableDocx", () => {
-  test("returns true for DOCX under 50 MB", () => {
+  test("returns true for DOCX up to the document limit", () => {
     expect(isStampableDocx(DOCX_MIME, 1024)).toBe(true);
+    expect(isStampableDocx(DOCX_MIME, FILE_SIZE_LIMIT_BYTES.document)).toBe(
+      true,
+    );
   });
 
   test("returns false for non-DOCX mime type", () => {
     expect(isStampableDocx("application/pdf", 1024)).toBe(false);
   });
 
-  test("returns false for files over 50 MB", () => {
-    expect(isStampableDocx(DOCX_MIME, 51 * 1024 * 1024)).toBe(false);
+  test("returns false for files over the document limit", () => {
+    expect(isStampableDocx(DOCX_MIME, FILE_SIZE_LIMIT_BYTES.document + 1)).toBe(
+      false,
+    );
   });
 });
 
@@ -228,6 +239,68 @@ describe("injectStamp", () => {
     expect(footer).toContain("Existing footer");
     expect(footer).toContain("stella_dms_ref");
     expect(footer).toContain(stamp);
+  });
+
+  test("updates a footer paragraph containing commented markup", async () => {
+    const relNs =
+      "http://schemas.openxmlformats.org/package/2006/relationships";
+    const footerRelType =
+      "http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer";
+    const docx = await makeDocx({
+      footerXml: [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        `<w:ftr xmlns:w="${W_NS}" xmlns:r="${R_NS}">`,
+        '<w:p><!-- <w:p> --><w:bookmarkStart w:id="0" w:name="stella_dms_ref"/><w:r><w:t>old stamp</w:t></w:r></w:p>',
+        "</w:ftr>",
+      ].join(""),
+      docRels: [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        `<Relationships xmlns="${relNs}">`,
+        `<Relationship Id="rId1" Type="${footerRelType}" Target="footer1.xml"/>`,
+        "</Relationships>",
+      ].join(""),
+    });
+
+    const stamped = await injectStamp(docx, stamp, code, baseUrl);
+    const footer = await readZipFile(stamped, "word/footer1.xml");
+
+    expect(isWellFormedXml(footer ?? "")).toBe(true);
+    expect(isWellFormedXml(`${footer ?? ""}</w:p>`)).toBe(false);
+    expect(footer).not.toContain("old stamp");
+    expect(footer).toContain(stamp);
+  });
+
+  test("replaces an outer footer paragraph containing the stamp bookmark", async () => {
+    const relNs =
+      "http://schemas.openxmlformats.org/package/2006/relationships";
+    const footerRelType =
+      "http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer";
+    const docx = await makeDocx({
+      footerXml: [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        `<w:ftr xmlns:w="${W_NS}" xmlns:r="${R_NS}">`,
+        '<w:p w:rsidR="outer"><w:pPr/><w:r><w:txbxContent>',
+        '<w:p><w:bookmarkStart w:id="0" w:name="stella_dms_ref"/><w:r><w:t>old stamp</w:t></w:r></w:p>',
+        "</w:txbxContent></w:r></w:p>",
+        "</w:ftr>",
+      ].join(""),
+      docRels: [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        `<Relationships xmlns="${relNs}">`,
+        `<Relationship Id="rId1" Type="${footerRelType}" Target="footer1.xml"/>`,
+        "</Relationships>",
+      ].join(""),
+    });
+
+    const stamped = await injectStamp(docx, stamp, code, baseUrl);
+    const footer = await readZipFile(stamped, "word/footer1.xml");
+
+    expect(isWellFormedXml(footer ?? "")).toBe(true);
+    expect(isWellFormedXml(`${footer ?? ""}</w:p>`)).toBe(false);
+    expect(footer).not.toContain('w:rsidR="outer"');
+    expect(footer).not.toContain("old stamp");
+    expect(footer).toContain(stamp);
+    expect(footer?.match(/<w:p(?:\s|>)/gu)).toHaveLength(1);
   });
 
   test("stamps every footer variant referenced across document sections once", async () => {
@@ -783,8 +856,8 @@ describe("stripStamp", () => {
   test("does not rewrite a non-DOCX OOXML archive", async () => {
     const { mainPartContentType, mainPartPath } =
       DESKTOP_EDIT_FILE_TYPE_CONFIG.xlsx;
-    const zip = new JSZip();
-    zip.file(
+    const zip = new ZipArchive();
+    zip.set(
       "[Content_Types].xml",
       [
         '<?xml version="1.0" encoding="UTF-8"?>',
@@ -793,8 +866,8 @@ describe("stripStamp", () => {
         "</Types>",
       ].join("\n"),
     );
-    zip.file(mainPartPath, "<workbook/>");
-    zip.file(
+    zip.set(mainPartPath, "<workbook/>");
+    zip.set(
       "docProps/custom.xml",
       [
         '<?xml version="1.0" encoding="UTF-8"?>',
@@ -807,7 +880,7 @@ describe("stripStamp", () => {
     );
 
     expect(
-      await stripStamp(await zip.generateAsync({ type: "arraybuffer" })),
+      await stripStamp((await zip.generate({ compression: "store" })).buffer),
     ).toBeNull();
   });
 

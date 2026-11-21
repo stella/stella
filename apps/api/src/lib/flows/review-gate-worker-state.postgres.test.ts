@@ -1,23 +1,39 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/bun-sql";
 
+import {
+  parseWorkspaceRealtimeEvent,
+  REALTIME_EVENT_TYPE,
+  RESOURCE_TYPE,
+} from "@stll/api-contract";
+import { createTestClock, settledWithin } from "@stll/test-kit";
+
+import { session } from "@/api/db/auth-schema";
 import { databaseRelations } from "@/api/db/database-relations";
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
-import { flowRuns, flowRunSteps } from "@/api/db/schema";
+import { entities, flowRuns, flowRunSteps } from "@/api/db/schema";
 import { createScopedDb, markRlsDatabase } from "@/api/db/scoped";
+import { createDatabase } from "@/api/db/sql-client";
+import { realtimeAuthorizers } from "@/api/lib/auth";
+import { revokeOrganizationMemberAuthArtifacts } from "@/api/lib/auth-artifacts";
 import {
   executeFlowStep,
   failFlowRunFromWorker,
 } from "@/api/lib/flows/flow-executor";
+import { broadcastFlowRunUpdate } from "@/api/lib/flows/flow-run-events";
+import { startSse, stopSse, subscribe } from "@/api/lib/sse";
+import { createSseBroadcastPublisher } from "@/api/lib/sse-broadcast";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
-import {
-  flowReviewGateFixture,
-  waitForBlockedPid,
-} from "@/api/tests/helpers/flow-review-gate";
+import { mintAuthProviderIdValue } from "@/api/tests/helpers/auth-provider-id";
+import { flowReviewGateFixture } from "@/api/tests/helpers/flow-review-gate";
+import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
+import { waitForBlockedPid } from "@/api/tests/helpers/wait-for-blocked-pid";
+import { HAPPY_PATH_TIMEOUT_MS } from "@/api/tests/test-timeouts";
+
+const stateClock = createTestClock();
 
 const databaseUrl = process.env["DATABASE_URL"];
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -86,6 +102,7 @@ const pausedWorker = async ({ db, f, phase }: PausedWorkerOptions) => {
   );
   let transactions = 0;
   const dependencies = {
+    admission: testModelAdmission(f.organizationId),
     database: db,
     makeScopedDb:
       () =>
@@ -103,7 +120,7 @@ const pausedWorker = async ({ db, f, phase }: PausedWorkerOptions) => {
     makeSafeDb: () => f.safeDb(db),
     broadcastUpdate: () => undefined,
     enqueueStep: async () => undefined,
-    generateTextForRole: async () => {
+    generateTextForTask: async () => {
       reached.resolve(undefined);
       await release.promise;
       return "A generated result";
@@ -123,6 +140,154 @@ const pausedWorker = async ({ db, f, phase }: PausedWorkerOptions) => {
     }),
   ]);
   return { running, release: () => release.resolve(undefined) };
+};
+
+type GateFixture = Awaited<ReturnType<typeof flowReviewGateFixture>>;
+
+/** Real SSE delivery/database authorization; only Redis is a fixture. */
+const observeGateResources = async (db: GatedTestDb, f: GateFixture) => {
+  const sessionId = mintAuthProviderIdValue();
+  await db.insert(session).values({
+    id: sessionId,
+    token: `review-stream-${sessionId}`,
+    userId: f.userId,
+    activeOrganizationId: f.organizationId,
+    // A long-lived fixture for delivery authorization, not an expiry test.
+    expiresAt: new Date("2099-01-01T00:00:00.000Z"),
+  });
+  const abort = new AbortController();
+  try {
+    startSse(realtimeAuthorizers, {
+      createClient: () => ({
+        connected: false,
+        close: () => undefined,
+        onReconnect: () => () => undefined,
+        subscribe: async () => 0,
+      }),
+      publisher: createSseBroadcastPublisher({
+        createClient: () => ({
+          connect: async () => undefined,
+          close: () => undefined,
+          onClose: () => () => undefined,
+          publish: async () => 0,
+        }),
+      }),
+    });
+    const reader = subscribe({
+      organizationId: f.organizationId,
+      userId: f.userId,
+      sessionId,
+      workspaceId: f.workspaceId,
+      signal: abort.signal,
+    }).getReader();
+    const entityIds: string[] = [];
+    const progressStatuses: string[] = [];
+    let barrier = Promise.withResolvers<undefined>();
+    const watching = Result.tryPromise({
+      try: async () => {
+        while (true) {
+          const chunk = await reader.read();
+          if (chunk.done) {
+            return;
+          }
+          const data = new TextDecoder()
+            .decode(chunk.value)
+            .split("\n")
+            .find((line) => line.startsWith("data: "));
+          if (!data) {
+            continue;
+          }
+          const event = parseWorkspaceRealtimeEvent(JSON.parse(data.slice(6)));
+          expect(event).not.toBeNull();
+          if (
+            event?.type === REALTIME_EVENT_TYPE.RESOURCE_UPDATED &&
+            event.resource.type === RESOURCE_TYPE.ENTITY
+          ) {
+            entityIds.push(event.resource.id);
+          }
+          if (event?.type === REALTIME_EVENT_TYPE.FLOW_RUN_UPDATE) {
+            if (event.data.steps.length === 0) {
+              barrier.resolve(undefined);
+            } else {
+              progressStatuses.push(event.data.status);
+            }
+          }
+        }
+      },
+      catch: (cause) => cause,
+    });
+    return {
+      entityIds,
+      progressStatuses,
+      // The valid empty-progress marker drains ordered workspace delivery.
+      flush: async () => {
+        barrier = Promise.withResolvers<undefined>();
+        broadcastFlowRunUpdate(f.workspaceId, {
+          runId: f.runId,
+          status: "running",
+          currentStepIndex: 0,
+          steps: [],
+        });
+        await settledWithin(
+          Promise.race([
+            barrier.promise,
+            watching.then((outcome) => {
+              if (outcome.isErr()) {
+                throw outcome.error;
+              }
+              throw new Error("Review stream closed before its marker");
+            }),
+          ]),
+          {
+            description: "review stream delivery barrier",
+            timeoutMs: HAPPY_PATH_TIMEOUT_MS,
+          },
+        );
+      },
+      close: async () => {
+        try {
+          abort.abort();
+          const outcome = await watching;
+          if (outcome.isErr()) {
+            throw outcome.error;
+          }
+        } finally {
+          try {
+            reader.releaseLock();
+          } finally {
+            try {
+              stopSse();
+            } finally {
+              await db.transaction(
+                async (tx) =>
+                  await revokeOrganizationMemberAuthArtifacts(tx, {
+                    organizationId: f.organizationId,
+                    userId: f.userId,
+                  }),
+              );
+            }
+          }
+        }
+      },
+    };
+  } catch (error) {
+    try {
+      abort.abort();
+    } finally {
+      try {
+        stopSse();
+      } finally {
+        await db.transaction(
+          async (tx) =>
+            await revokeOrganizationMemberAuthArtifacts(tx, {
+              organizationId: f.organizationId,
+              userId: f.userId,
+            }),
+        );
+      }
+    }
+    throw error;
+  }
 };
 
 if (!databaseUrl || !enabled) {
@@ -157,7 +322,7 @@ if (!databaseUrl || !enabled) {
             const target = phase === "start" || phase === "fail" ? 1 : 2;
             let stepReads = 0;
             const phaseReadRequested = Promise.withResolvers<undefined>();
-            const workerDb = drizzle({
+            const workerDb = createDatabase({
               client: workerClient.sql,
               relations: databaseRelations,
               logger: {
@@ -199,12 +364,13 @@ if (!databaseUrl || !enabled) {
                 return await scoped(work);
               };
             const dependencies = {
+              admission: testModelAdmission(f.organizationId),
               database: workerDb,
               makeScopedDb,
               makeSafeDb: () => f.safeDb(workerDb),
               broadcastUpdate: () => undefined,
               enqueueStep: async () => undefined,
-              generateTextForRole: async () => {
+              generateTextForTask: async () => {
                 targetReached.resolve(undefined);
                 await permitTarget.promise;
                 return "A generated result";
@@ -395,11 +561,17 @@ if (!databaseUrl || !enabled) {
             try {
               await db
                 .update(flowRuns)
-                .set({ status: "running" })
+                .set({
+                  status: "running",
+                  startedAt: new Date(stateClock.now()),
+                })
                 .where(eq(flowRuns.id, f.runId));
               await db
                 .update(flowRunSteps)
-                .set({ status: "running" })
+                .set({
+                  status: "running",
+                  startedAt: new Date(stateClock.now()),
+                })
                 .where(eq(flowRunSteps.reviewTaskEntityId, f.taskEntityId));
               // Another delivery reached a gate while this worker held its
               // earlier snapshot. AI completion is now behind the next gate;
@@ -407,7 +579,11 @@ if (!databaseUrl || !enabled) {
               if (phase === "complete") {
                 await db
                   .update(flowRunSteps)
-                  .set({ status: "completed", reviewTaskEntityId: null })
+                  .set({
+                    status: "completed",
+                    finishedAt: new Date(stateClock.now()),
+                    reviewTaskEntityId: null,
+                  })
                   .where(eq(flowRunSteps.reviewTaskEntityId, f.taskEntityId));
                 const next = (await f.read()).steps.at(1);
                 if (!next) {
@@ -415,7 +591,10 @@ if (!databaseUrl || !enabled) {
                 }
                 await db
                   .update(flowRunSteps)
-                  .set({ status: "running" })
+                  .set({
+                    status: "running",
+                    startedAt: new Date(stateClock.now()),
+                  })
                   .where(eq(flowRunSteps.id, next.id));
                 await db
                   .update(flowRunSteps)
@@ -435,7 +614,10 @@ if (!databaseUrl || !enabled) {
                   .where(eq(flowRuns.id, f.runId));
                 await db
                   .update(flowRunSteps)
-                  .set({ status: "awaiting_review" })
+                  .set({
+                    status: "awaiting_review",
+                    startedAt: new Date(stateClock.now()),
+                  })
                   .where(eq(flowRunSteps.runId, f.runId));
               }
               if (first === "approve") {
@@ -537,4 +719,129 @@ if (!databaseUrl || !enabled) {
       });
     }
   });
+}
+
+if (enabled && databaseUrl) {
+  for (const scenario of ["commit", "rollback", "reuse"] as const) {
+    test(`review task ENTITY delivery follows ${scenario} transaction outcome`, async () => {
+      await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+        const { db } = openClient();
+        const workerDb = openClient().db;
+        const f = await flowReviewGateFixture(db, {
+          intermediate: false,
+          initialRunStatus: "pending",
+        });
+        let stream:
+          Awaited<ReturnType<typeof observeGateResources>> | undefined;
+        const reached = Promise.withResolvers<typeof f.taskEntityId>();
+        const release = Promise.withResolvers<undefined>();
+        const scoped = createScopedDb(
+          markRlsDatabase(workerDb),
+          [f.workspaceId],
+          f.organizationId,
+          f.userId,
+        );
+        let transactions = 0;
+        let worker:
+          | Promise<{ type: "ok" } | { type: "error"; cause: unknown }>
+          | undefined;
+        try {
+          stream = await observeGateResources(db, f);
+          if (scenario !== "reuse") {
+            await db
+              .update(flowRunSteps)
+              .set({ reviewTaskEntityId: null })
+              .where(eq(flowRunSteps.runId, f.runId));
+          }
+          worker = executeFlowStep(
+            { runId: f.runId, stepIndex: 0 },
+            new AbortController().signal,
+            {
+              admission: testModelAdmission(f.organizationId),
+              database: workerDb,
+              makeSafeDb: () => f.safeDb(workerDb),
+              makeScopedDb:
+                () =>
+                async <T>(work: (tx: Transaction) => Promise<T>) => {
+                  transactions += 1;
+                  const hold = transactions === 2;
+                  return await scoped(async (tx) => {
+                    const value = await work(tx);
+                    if (hold) {
+                      const [step] = await tx
+                        .select({ entityId: flowRunSteps.reviewTaskEntityId })
+                        .from(flowRunSteps)
+                        .where(eq(flowRunSteps.runId, f.runId));
+                      if (!step?.entityId) {
+                        throw new Error(
+                          "Review task missing at commit barrier",
+                        );
+                      }
+                      reached.resolve(step.entityId);
+                      await release.promise;
+                      if (scenario === "rollback") {
+                        tx.rollback();
+                      }
+                    }
+                    return value;
+                  });
+                },
+              enqueueStep: async () => undefined,
+              flushSearchRepairs: async () => ({ failed: 0, repaired: 0 }),
+              taskFeatures: { governedWorkflow: false, legalLists: false },
+            },
+          ).then(
+            () => ({ type: "ok" as const }),
+            (error: unknown) => ({ type: "error" as const, cause: error }),
+          );
+          const entityId = await settledWithin(
+            Promise.race([
+              reached.promise,
+              worker.then(() => {
+                throw new Error("Worker finished before task commit barrier");
+              }),
+            ]),
+            {
+              description: "review task transaction barrier",
+              timeoutMs: HAPPY_PATH_TIMEOUT_MS,
+            },
+          );
+          await stream.flush();
+          expect(stream.entityIds).toEqual([]);
+          const before = await db
+            .select({ id: entities.id })
+            .from(entities)
+            .where(eq(entities.id, entityId));
+          expect(before.length).toBe(scenario === "reuse" ? 1 : 0);
+          release.resolve(undefined);
+          const outcome = await worker;
+          expect(outcome.type).toBe(scenario === "rollback" ? "error" : "ok");
+          await stream.flush();
+          expect(stream.entityIds).toEqual(
+            scenario === "commit" ? [entityId] : [],
+          );
+          expect(stream.progressStatuses.includes("awaiting_review")).toBe(
+            scenario !== "rollback",
+          );
+          const after = await db
+            .select({ id: entities.id })
+            .from(entities)
+            .where(eq(entities.id, entityId));
+          expect(after.length).toBe(scenario === "rollback" ? 0 : 1);
+        } finally {
+          release.resolve(undefined);
+          if (worker) {
+            await worker;
+          }
+          try {
+            if (stream) {
+              await stream.close();
+            }
+          } finally {
+            await f.cleanup();
+          }
+        }
+      });
+    });
+  }
 }

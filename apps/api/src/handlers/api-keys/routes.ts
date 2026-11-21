@@ -1,10 +1,16 @@
-import Elysia from "elysia";
-
 import createMachineApiKey from "@/api/handlers/api-keys/create";
+import currentMachineApiKey from "@/api/handlers/api-keys/current";
 import listMachineApiKeys from "@/api/handlers/api-keys/list";
+import createPersonalKey from "@/api/handlers/api-keys/personal/create";
+import listPersonalKeys from "@/api/handlers/api-keys/personal/list";
+import listOrganizationPersonalKeys from "@/api/handlers/api-keys/personal/list-organization";
+import updatePersonalKeyPolicy from "@/api/handlers/api-keys/personal/policy";
+import revokePersonalKey from "@/api/handlers/api-keys/personal/revoke";
+import revokeOrganizationPersonalKey from "@/api/handlers/api-keys/personal/revoke-organization";
+import rotatePersonalKey from "@/api/handlers/api-keys/personal/rotate";
 import revokeMachineApiKey from "@/api/handlers/api-keys/revoke";
 import rotateMachineApiKey from "@/api/handlers/api-keys/rotate";
-import { authMacro, permissionMacro } from "@/api/lib/auth";
+import { routes } from "@/api/http/route";
 
 /**
  * Machine (CI / agent / CLI) API key lifecycle.
@@ -14,27 +20,18 @@ import { authMacro, permissionMacro } from "@/api/lib/auth";
  * check, no subset validation against the caller's role, and no audit record.
  * This is the only route surface that mints or revokes a machine credential.
  */
-export const apiKeysRoute = new Elysia({ prefix: "/api-keys" })
-  .use(authMacro)
-  .use(permissionMacro)
-  // See the identical guard in `organization-settings/routes.ts` for why this
-  // stays even though `permissions` already applies `validateAuth` at runtime.
-  .guard({
-    validateAuth: true,
-  })
-  .get("/", listMachineApiKeys.handler, {
-    query: listMachineApiKeys.config.query,
-    permissions: listMachineApiKeys.config.permissions,
-  })
-  .post("/", createMachineApiKey.handler, {
-    body: createMachineApiKey.config.body,
-    permissions: createMachineApiKey.config.permissions,
-  })
-  .post("/rotate", rotateMachineApiKey.handler, {
-    body: rotateMachineApiKey.config.body,
-    permissions: rotateMachineApiKey.config.permissions,
-  })
-  .post("/revoke", revokeMachineApiKey.handler, {
-    body: revokeMachineApiKey.config.body,
-    permissions: revokeMachineApiKey.config.permissions,
-  });
+export const apiKeysRoute = routes(
+  {
+    "/current": { GET: currentMachineApiKey },
+    "/personal": { GET: listPersonalKeys, POST: createPersonalKey },
+    "/personal/rotate": { POST: rotatePersonalKey },
+    "/personal/revoke": { POST: revokePersonalKey },
+    "/personal/organization": { GET: listOrganizationPersonalKeys },
+    "/personal/organization/revoke": { POST: revokeOrganizationPersonalKey },
+    "/personal/policy": { POST: updatePersonalKeyPolicy },
+    "/": { GET: listMachineApiKeys, POST: createMachineApiKey },
+    "/rotate": { POST: rotateMachineApiKey },
+    "/revoke": { POST: revokeMachineApiKey },
+  },
+  { prefix: "/api-keys" },
+);

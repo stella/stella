@@ -10,7 +10,7 @@ const baseSkill = {
   metadata: { author: "Stella", category: "review" },
   name: "Summarise a document",
   resources: [
-    { path: "knowledge/a.md", content: "First." },
+    { path: "references/a.md", content: "First." },
     { path: "references/b.md", content: "Second." },
   ],
   version: null,
@@ -35,20 +35,20 @@ describe("skill content hashing", () => {
       "resource content": {
         ...baseSkill,
         resources: [
-          { path: "knowledge/a.md", content: "Changed." },
+          { path: "references/a.md", content: "Changed." },
           { path: "references/b.md", content: "Second." },
         ],
       },
       "resource path": {
         ...baseSkill,
         resources: [
-          { path: "knowledge/renamed.md", content: "First." },
+          { path: "references/renamed.md", content: "First." },
           { path: "references/b.md", content: "Second." },
         ],
       },
       "resource removed": {
         ...baseSkill,
-        resources: [{ path: "knowledge/a.md", content: "First." }],
+        resources: [{ path: "references/a.md", content: "First." }],
       },
     };
     const baseHash = hashSkillPackageContent(baseSkill);

@@ -2,10 +2,14 @@ import { lazy, StrictMode, Suspense, useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import type { Root as ReactRoot } from "react-dom/client";
 
+import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { panic } from "better-result";
 
+import { TooltipProvider } from "@stll/ui/tooltip";
+
 import ClipboardApp from "../clipboard/ClipboardApp";
+import { installClipsCopyRouting } from "../clipboard/clips-copy-routing";
 import {
   applyDocumentLanguage,
   defaultMessages,
@@ -17,12 +21,14 @@ import {
   synchronizeDesktopLanguage,
 } from "../i18n";
 import type { DesktopMessages } from "../i18n";
+import { installAccountActivity } from "../shared/account-activity";
 import { subscribeDesktopEvent } from "../shared/desktop-events";
+import { installNativeContextMenuPolicy } from "../shared/native-context-menu";
 import { useSystemTheme } from "../shared/use-system-theme";
 import {
+  describeError,
   DESKTOP_TELEMETRY_ERROR_CODES,
   DESKTOP_TELEMETRY_OPERATIONS,
-  describeError,
   desktopTelemetryWindowFromLabel,
   installDesktopErrorTelemetry,
   reportDesktopError,
@@ -31,8 +37,19 @@ import App from "./App";
 import "./index.css";
 
 const REACT_ROOT_KEY = Symbol.for("legal.stella.desktop.react-root");
-const ClipboardEditor = lazy(
+const ClipboardEditorWindow = lazy(
   async () => import("../clipboard/ClipboardEditor"),
+);
+const ActivityApp = lazy(async () => import("../activity/ActivityApp"));
+const OnboardingApp = lazy(async () => import("../onboarding/OnboardingApp"));
+const TranscribeApp = lazy(async () => import("../transcribe/TranscribeApp"));
+
+const AccessibilityGuideApp = lazy(
+  async () => import("../onboarding/AccessibilityGuideApp"),
+);
+const DictationNoticeApp = lazy(async () => import("./DictationNoticeApp"));
+const DictationPreviewApp = lazy(
+  async () => import("../dictation/DictationPreviewApp"),
 );
 
 const isReactRoot = (value: unknown): value is ReactRoot =>
@@ -119,6 +136,42 @@ const Root = () => {
   let content = <App />;
   if (windowLabel === "clipboard") {
     content = <ClipboardApp />;
+  } else if (windowLabel === "activity") {
+    content = (
+      <Suspense fallback={<main className="bg-background min-h-dvh" />}>
+        <ActivityApp />
+      </Suspense>
+    );
+  } else if (windowLabel === "accessibility-guide") {
+    content = (
+      <Suspense fallback={null}>
+        <AccessibilityGuideApp />
+      </Suspense>
+    );
+  } else if (windowLabel === "dictation-notice") {
+    content = (
+      <Suspense fallback={null}>
+        <DictationNoticeApp />
+      </Suspense>
+    );
+  } else if (windowLabel === "dictation-preview") {
+    content = (
+      <Suspense fallback={null}>
+        <DictationPreviewApp />
+      </Suspense>
+    );
+  } else if (windowLabel === "onboarding") {
+    content = (
+      <Suspense fallback={<main className="bg-background min-h-dvh" />}>
+        <OnboardingApp />
+      </Suspense>
+    );
+  } else if (windowLabel === "transcribe") {
+    content = (
+      <Suspense fallback={<main className="bg-background min-h-dvh" />}>
+        <TranscribeApp />
+      </Suspense>
+    );
   } else if (windowLabel === "clipboard-editor") {
     content = (
       <Suspense
@@ -126,16 +179,18 @@ const Root = () => {
           <main className="clipboard-editor-window bg-background min-h-dvh" />
         }
       >
-        <ClipboardEditor />
+        <ClipboardEditorWindow />
       </Suspense>
     );
   }
 
   return (
     <StrictMode>
-      <DesktopIntlProvider language={language} messages={messages}>
-        {content}
-      </DesktopIntlProvider>
+      <TooltipProvider>
+        <DesktopIntlProvider language={language} messages={messages}>
+          {content}
+        </DesktopIntlProvider>
+      </TooltipProvider>
     </StrictMode>
   );
 };
@@ -151,6 +206,34 @@ const telemetryWindow = desktopTelemetryWindowFromLabel(
 );
 const removeDesktopErrorTelemetry =
   installDesktopErrorTelemetry(telemetryWindow);
+
+const removeAccountActivity = installAccountActivity({
+  document,
+  windowLabel: getCurrentWindow().label,
+  recordUse: async () => await invoke("account_record_use"),
+  onFailure: () => {
+    reportDesktopError({
+      code: DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed,
+      operation: DESKTOP_TELEMETRY_OPERATIONS.runtime,
+      window: telemetryWindow,
+    });
+  },
+});
+
+// Every window renders from this entry: none shows the webview's browser menu.
+const removeNativeContextMenuPolicy = installNativeContextMenuPolicy(document);
+const removeClipsCopyRouting = installClipsCopyRouting({
+  document,
+  windowLabel: getCurrentWindow().label,
+  onFailure: (error) => {
+    reportDesktopError({
+      code: DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed,
+      detail: describeError(error),
+      operation: DESKTOP_TELEMETRY_OPERATIONS.clipboardCopy,
+      window: telemetryWindow,
+    });
+  },
+});
 
 const existingRoot: unknown = Reflect.get(rootElement, REACT_ROOT_KEY);
 const reactRoot = isReactRoot(existingRoot)
@@ -185,5 +268,10 @@ Reflect.set(rootElement, REACT_ROOT_KEY, reactRoot);
 reactRoot.render(<Root />);
 
 if (import.meta.hot) {
-  import.meta.hot.dispose(removeDesktopErrorTelemetry);
+  import.meta.hot.dispose(() => {
+    removeAccountActivity();
+    removeClipsCopyRouting();
+    removeDesktopErrorTelemetry();
+    removeNativeContextMenuPolicy();
+  });
 }

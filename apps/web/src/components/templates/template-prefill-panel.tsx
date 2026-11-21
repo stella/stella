@@ -1,34 +1,31 @@
 import { useState } from "react";
 
-import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
-import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
-import { Checkbox } from "@stll/ui/checkbox";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { openFilePicker } from "@stll/ui/file-picker";
 import {
+  AiActionIcon,
   ChevronDownIcon,
   ChevronRightIcon,
   FileTextIcon,
   UploadIcon,
-  AiActionIcon,
   XIcon,
 } from "@stll/ui/icons";
 import { Textarea } from "@stll/ui/textarea";
 import { stellaToast } from "@stll/ui/toast";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
+import { MatterDocumentPicker } from "@/components/workspaces/matter-document-picker";
 import { resolveAppTimeZone } from "@/i18n/time-zone";
 import { api } from "@/lib/api";
-import { optionalArray } from "@/lib/arrays";
 import { DOCX_MIME, PDF_MIME } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
-import { notifyUserError } from "@/lib/errors/user-toast";
+import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
 import { toSafeId } from "@/lib/safe-id";
-import { workspaceFilesOptions } from "@/lib/workspaces/queries/entities";
 
 /**
  * "Prefill from documents" affordance on the template fill form: a drop
@@ -54,8 +51,6 @@ const ACCEPTED_MIME_TYPES: readonly string[] = Object.freeze([
   DOCX_MIME,
   PDF_MIME,
 ]);
-const MAX_MATTER_DOCUMENTS = 30;
-const MAX_PICKED_DOCUMENTS = 5;
 
 type TemplatePrefillPanelProps = {
   templateId: string;
@@ -84,7 +79,7 @@ export const TemplatePrefillPanel = ({
       return;
     }
     if (!ACCEPTED_MIME_TYPES.includes(candidate.type)) {
-      notifyUserError(undefined, t("templates.invalidFileType"));
+      notifyUserProblem(t("templates.invalidFileType"));
       return;
     }
     setFile(candidate);
@@ -140,25 +135,27 @@ export const TemplatePrefillPanel = ({
 
   return (
     <section className="rounded-lg border">
-      <button
+      <Button
         aria-expanded={expanded}
-        className="hover:bg-muted/50 flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-start"
+        className="block w-full"
         onClick={() => setExpanded((prev) => !prev)}
-        type="button"
+        variant="plain"
       >
-        {expanded ? (
-          <ChevronDownIcon className="text-muted-foreground size-4 shrink-0" />
-        ) : (
-          <DirectionalIcon
-            className="text-muted-foreground size-4 shrink-0"
-            icon={ChevronRightIcon}
-          />
-        )}
-        <AiActionIcon className="text-muted-foreground size-4 shrink-0" />
-        <span className="text-sm font-medium">
-          {t("templates.prefillTitle")}
+        <span className="hover:bg-muted/50 flex w-full items-center gap-2 rounded-lg px-3 py-2.5">
+          {expanded ? (
+            <ChevronDownIcon className="text-muted-foreground size-4 shrink-0" />
+          ) : (
+            <DirectionalIcon
+              className="text-muted-foreground size-4 shrink-0"
+              icon={ChevronRightIcon}
+            />
+          )}
+          <AiActionIcon className="text-muted-foreground size-4 shrink-0" />
+          <span className="text-sm font-medium">
+            {t("templates.prefillTitle")}
+          </span>
         </span>
-      </button>
+      </Button>
 
       {expanded && (
         <div className="flex flex-col gap-3 border-t p-3">
@@ -168,11 +165,8 @@ export const TemplatePrefillPanel = ({
 
           {/* Drop zone / picked file */}
           {file === null ? (
-            <button
-              className={cn(
-                "text-muted-foreground hover:text-foreground hover:border-ring flex w-full items-center justify-center gap-2 rounded-lg border border-dashed px-3 py-4 text-sm",
-                dragOver && "border-ring text-foreground",
-              )}
+            <Button
+              className="block w-full"
               onClick={() => {
                 openFilePicker({
                   accept: ".docx,.pdf",
@@ -189,15 +183,22 @@ export const TemplatePrefillPanel = ({
                 setDragOver(false);
                 acceptFile(e.dataTransfer.files[0]);
               }}
-              type="button"
+              variant="plain"
             >
-              <UploadIcon className="size-4 shrink-0" />
-              {t("templates.prefillDropHint")}
-            </button>
+              <span
+                className={cn(
+                  "text-muted-foreground hover:text-foreground hover:border-ring flex w-full items-center justify-center gap-2 rounded-lg border border-dashed px-3 py-4 text-sm",
+                  dragOver && "border-ring text-foreground",
+                )}
+              >
+                <UploadIcon className="size-4 shrink-0" />
+                {t("templates.prefillDropHint")}
+              </span>
+            </Button>
           ) : (
             <div className="flex items-center gap-2 rounded-lg border px-3 py-2 text-sm">
               <FileTextIcon className="text-muted-foreground size-4 shrink-0" />
-              <span className="min-w-0 flex-1 truncate">{file.name}</span>
+              <TruncatedText className="flex-1">{file.name}</TruncatedText>
               <Button
                 aria-label={t("common.remove")}
                 onClick={() => setFile(null)}
@@ -240,6 +241,9 @@ export const TemplatePrefillPanel = ({
           <Button
             className="self-end"
             disabled={!hasSource || loading}
+            disabledReason={
+              loading ? t("common.loading") : t("templates.choosePrefillSource")
+            }
             onClick={() =>
               detached(runPrefill(), "template-prefill-panel.run-prefill")
             }
@@ -252,71 +256,5 @@ export const TemplatePrefillPanel = ({
         </div>
       )}
     </section>
-  );
-};
-
-type MatterDocumentPickerProps = {
-  workspaceId: string;
-  pickedEntityIds: string[];
-  onChange: (entityIds: string[]) => void;
-};
-
-/** Bounded checkbox list over the matter's stored DOCX/PDF documents. */
-const MatterDocumentPicker = ({
-  workspaceId,
-  pickedEntityIds,
-  onChange,
-}: MatterDocumentPickerProps) => {
-  const t = useTranslations();
-  const { data: files } = useQuery(workspaceFilesOptions(workspaceId));
-
-  const availableFiles = optionalArray(files);
-  const documents = availableFiles
-    .filter((f) => f.mimeType === DOCX_MIME || f.mimeType === PDF_MIME)
-    .slice(0, MAX_MATTER_DOCUMENTS);
-
-  if (documents.length === 0) {
-    return null;
-  }
-
-  const toggle = (entityId: string) => {
-    if (pickedEntityIds.includes(entityId)) {
-      onChange(pickedEntityIds.filter((id) => id !== entityId));
-      return;
-    }
-    if (pickedEntityIds.length >= MAX_PICKED_DOCUMENTS) {
-      return;
-    }
-    onChange([...pickedEntityIds, entityId]);
-  };
-
-  return (
-    <div className="flex flex-col gap-1.5">
-      <span className="text-muted-foreground text-xs font-medium">
-        {t("templates.prefillMatterDocuments")}
-      </span>
-      <div className="flex max-h-36 flex-col gap-1 overflow-y-auto rounded-lg border p-2">
-        {documents.map((doc) => {
-          const checked = pickedEntityIds.includes(doc.entityId);
-          return (
-            <label
-              className="flex cursor-pointer items-center gap-2 text-sm"
-              key={doc.entityId}
-            >
-              <Checkbox
-                checked={checked}
-                disabled={
-                  !checked && pickedEntityIds.length >= MAX_PICKED_DOCUMENTS
-                }
-                onCheckedChange={() => toggle(doc.entityId)}
-              />
-              <BidiText as="span" className="min-w-0 truncate">
-                {doc.name ?? doc.fileName}
-              </BidiText>
-            </label>
-          );
-        })}
-      </div>
-    </div>
   );
 };

@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { agentSkillResources } from "@/api/db/schema";
 import { skillRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
@@ -13,24 +13,29 @@ import { requireEditableSkillOrigin } from "@/api/lib/agent-skills/origin";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 
-const updateSkillResourceParamsSchema = t.Object({
-  skillId: tSafeId("agentSkill"),
+const updateSkillResourceParamsSchema = v.object({
+  skillId: resourceIdSchema("agentSkill"),
 });
 
-const updateSkillResourceBodySchema = t.Object({
-  path: t.String({ minLength: 1, maxLength: 512 }),
-  content: t.String({ maxLength: LIMITS.agentSkillResourceMaxChars }),
+const updateSkillResourceBodySchema = v.object({
+  path: v.pipe(v.string(), v.minLength(1), v.maxLength(512)),
+  content: v.pipe(v.string(), v.maxLength(LIMITS.agentSkillResourceMaxChars)),
 });
 
 const config = {
+  contract: "replace",
+  precondition: {
+    type: "deferred",
+    baselineId: "apps/api/src/handlers/skills/resources/update.ts",
+  },
   description:
     "Replace the content of one file of an agent skill, addressed by its " +
-    "path. The path and kind stay as they are; use skills.resources.rename " +
-    "to change them. Bundled skills are read-only, team skills require admin " +
+    "path. The path stays as it is; use skills.resources.rename " +
+    "to change it. Bundled skills are read-only, team skills require admin " +
     "or owner, and private ones their author.",
   permissions: { agentSkill: ["update"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
@@ -74,7 +79,6 @@ const updateSkillResource = createSafeRootHandler(
             id: agentSkillResources.id,
             content: agentSkillResources.content,
             sizeBytes: agentSkillResources.sizeBytes,
-            kind: agentSkillResources.kind,
             path: agentSkillResources.path,
           })
           .from(agentSkillResources)
@@ -137,7 +141,6 @@ const updateSkillResource = createSafeRootHandler(
       id: existingResource.id,
       skillId: params.skillId,
       path: existingResource.path,
-      kind: existingResource.kind,
       content: nextContent,
       sizeBytes: nextSizeBytes,
     });

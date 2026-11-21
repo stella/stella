@@ -1,5 +1,7 @@
 import { panic, Result } from "better-result";
+import * as v from "valibot";
 
+import { contactBirthDateSchema } from "@stll/api-contract/contact-date";
 import {
   ENTITY_CHECK_KINDS,
   runEntityCheck,
@@ -11,10 +13,10 @@ import type {
 } from "@stll/business-registries/entity-checks";
 import type { RegistryRequestObservation } from "@stll/business-registries/shared/request-observer";
 import type { CountryCode } from "@stll/country-codes";
-import { Temporal } from "@stll/time";
 
 import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type { DateOfBirth } from "@/api/lib/business-registries/date-of-birth";
+import { reserveIsirLookup } from "@/api/lib/business-registries/isir-lookup-budget";
 import { runSanctionsCheck } from "@/api/lib/business-registries/sanctions-check";
 import type {
   SanctionsCheckDependencies,
@@ -72,6 +74,8 @@ export type RunEntityCheckSharedProps = {
   subject: CounterpartyCheckSubject;
   signal?: AbortSignal | undefined;
   runCheck?: typeof runEntityCheck | undefined;
+  /** Pays for an insolvency register lookup before it is sent. */
+  reserveLookup?: typeof reserveIsirLookup | undefined;
   /** What the sanctions check reads: the lists, the register, the firm's jurisdictions. */
   sanctions: Omit<SanctionsCheckDependencies, "observer" | "permit"> & {
     runSanctionsCheck?: typeof runSanctionsCheck | undefined;
@@ -91,12 +95,6 @@ const invalidSubject = (message: string, hint: string) =>
 const ISO_BIRTH_DATE = /^(\d{4})-(\d{2})-(\d{2})$/u;
 
 type DayDateOfBirth = Extract<DateOfBirth, { precision: "day" }>;
-
-/** Whether a day-precision date exists in the calendar: 1990-02-31 does not. */
-const isCalendarDate = ({ year, month, day }: DayDateOfBirth): boolean =>
-  Result.try(() =>
-    Temporal.PlainDate.from({ year, month, day }, { overflow: "reject" }),
-  ).isOk();
 
 /** Whether a date at any precision says nothing the full date denies. */
 const agreesWith = (full: DayDateOfBirth, partial: DateOfBirth): boolean => {
@@ -149,24 +147,27 @@ export const personDateOfBirth = ({
           month: Number(parts[2]),
           day: Number(parts[3]),
         };
-  for (const date of [fromBirthDate, dateOfBirth]) {
-    if (date?.precision === "day" && !isCalendarDate(date)) {
-      return invalidSubject(
-        "The birth date is not a valid calendar date",
-        "Send a date that exists in the calendar, or the date of birth at the precision known.",
-      );
-    }
-  }
-  if (fromBirthDate === null) {
-    return Result.ok(dateOfBirth ?? null);
-  }
-  if (dateOfBirth !== undefined && !agreesWith(fromBirthDate, dateOfBirth)) {
+  if (
+    fromBirthDate !== null &&
+    dateOfBirth !== undefined &&
+    !agreesWith(fromBirthDate, dateOfBirth)
+  ) {
     return invalidSubject(
       "The full birth date and the date of birth name different dates",
       "Send one of them: the full birth date, or the date of birth when only the year or month is known.",
     );
   }
-  return Result.ok(fromBirthDate);
+  const reconciledDate = fromBirthDate ?? dateOfBirth ?? null;
+  if (
+    reconciledDate !== null &&
+    !v.safeParse(contactBirthDateSchema, reconciledDate).success
+  ) {
+    return invalidSubject(
+      "The birth date must be from 1900 through today",
+      "Send a date from 1900 through today at the precision known.",
+    );
+  }
+  return Result.ok(reconciledDate);
 };
 
 const pad = (value: number) => String(value).padStart(2, "0");
@@ -241,16 +242,33 @@ const runRegisterCheck = async ({
   subject,
   signal,
   runCheck,
+  reserveLookup = reserveIsirLookup,
 }: {
   check: EntityCheckKind;
   observer: RegistryRequestObservation;
   subject: CounterpartyCheckSubject;
   signal: AbortSignal | undefined;
   runCheck: typeof runEntityCheck;
+  /** Pays for an insolvency register lookup before it is sent. */
+  reserveLookup?: typeof reserveIsirLookup;
 }): Promise<Result<EntityCheckResult, HandlerError>> => {
   const entitySubject = toEntityCheckSubject(check, subject);
   if (entitySubject.isErr()) {
     return Result.err(entitySubject.error);
+  }
+  if (check === "cz-insolvency") {
+    // The register's request limits are shared with the corpus walk.
+    const paid = await reserveLookup(signal);
+    if (paid.isErr()) {
+      return Result.err(
+        new HandlerError({
+          status: 503,
+          code: "upstream_unavailable",
+          message: paid.error.message,
+          retryable: true,
+        }),
+      );
+    }
   }
   const result = await runCheck({
     observer,
@@ -288,6 +306,23 @@ const runRegisterCheck = async ({
   }
 };
 
+type RunRegisterEntityCheckProps = {
+  observer: RegistryRequestObservation;
+  /** A register check asks a third-party source. */
+  permit: ThirdPartyOutboundPermit;
+  check: EntityCheckKind;
+  subject: CounterpartyCheckSubject;
+  signal: AbortSignal | undefined;
+};
+
+/** One register check, for callers that never screen sanctions lists. */
+export const runRegisterEntityCheck = async ({
+  permit: _permit,
+  ...props
+}: RunRegisterEntityCheckProps): Promise<
+  Result<EntityCheckResult, HandlerError>
+> => await runRegisterCheck({ ...props, runCheck: runEntityCheck });
+
 /**
  * Screen a subject against one official source, or against every sanctions
  * list. A source that could not answer is an `unavailable` outcome, not an
@@ -301,6 +336,7 @@ export const runEntityCheckShared = async ({
   subject,
   signal,
   runCheck = runEntityCheck,
+  reserveLookup,
   sanctions,
 }: RunEntityCheckSharedProps): Promise<
   Result<CounterpartyCheckResult, HandlerError>
@@ -312,6 +348,7 @@ export const runEntityCheckShared = async ({
       subject,
       signal,
       runCheck,
+      ...(reserveLookup === undefined ? {} : { reserveLookup }),
     });
   }
   if (subject.type === "tax-id") {

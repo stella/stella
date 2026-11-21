@@ -1,13 +1,15 @@
-import { Result, panic } from "better-result";
+import { panic, Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { entities, fields } from "@/api/db/schema";
-import { captureError } from "@/api/lib/analytics/capture";
+import { createErrorCapture, detached } from "@/api/lib/analytics/capture";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
+import { normalizeEntityName } from "@/api/lib/entities/entity-name";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { flushEntitySearchRepairs } from "@/api/lib/search/projection-repair-flush";
 import { enqueueEntitySearchRepairs } from "@/api/lib/search/projection-repair-queue";
@@ -34,6 +36,8 @@ export const createRenameEntityHandler = ({
     recordAuditEvent,
     body,
   }: RenameEntityHandlerProps) {
+    // Plain string: the brand proves the write, and stays out of the response.
+    const name: string = normalizeEntityName(body.name);
     const txResult = yield* Result.await(
       safeDb(async (tx) => {
         const entityRows = await tx
@@ -70,7 +74,7 @@ export const createRenameEntityHandler = ({
 
         await tx
           .update(entities)
-          .set({ name: body.name, updatedAt: new Date() })
+          .set({ name, updatedAt: new Date() })
           .where(eq(entities.id, body.entityId));
 
         // Also update the file field's fileName so the table
@@ -96,7 +100,7 @@ export const createRenameEntityHandler = ({
             return cv.fields.find((f) => f.content.type === "file");
           });
 
-        const renamedFileName = sanitizeFilename(body.name);
+        const renamedFileName = sanitizeFilename(name);
         const file =
           fileField?.content.type === "file"
             ? { fieldId: fileField.id, fileName: renamedFileName }
@@ -122,14 +126,14 @@ export const createRenameEntityHandler = ({
           changes: {
             name: {
               old: entity.name,
-              new: body.name,
+              new: name,
             },
           },
         });
 
         await enqueueRepairs(tx, [body.entityId]);
 
-        return { ok: true as const, name: body.name, file };
+        return { ok: true as const, name, file };
       }),
     );
 
@@ -142,7 +146,15 @@ export const createRenameEntityHandler = ({
       );
     }
 
-    flushRepairs([body.entityId]).catch(captureError);
+    detached(
+      async () =>
+        flushRepairs([body.entityId]).catch(
+          createErrorCapture(
+            handlerErrorContext("createRenameEntityHandler.flushRepairs"),
+          ),
+        ),
+      "rename-operation.flush-repairs",
+    );
 
     return Result.ok({
       entityId: body.entityId,

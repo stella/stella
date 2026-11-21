@@ -21,9 +21,7 @@ export const DESKTOP_EDIT_FILE_TYPE_DETAILS = {
 
 export type { DesktopEditFileType } from "@stll/api-contract";
 export type DesktopEditLockState =
-  | "locked-by-me"
-  | "locked-by-other"
-  | "unlocked";
+  "locked-by-me" | "locked-by-other" | "unlocked";
 export type DesktopEditActionContext = "bulk" | "cell" | "row";
 
 export const canOpenDesktopEdit = ({
@@ -41,6 +39,22 @@ export const canOpenDesktopEdit = ({
   !readOnly &&
   fileType !== null &&
   lockState !== "locked-by-other";
+
+export const canReleaseDesktopEditLock = ({
+  context,
+  fileType,
+  lockState,
+  readOnly,
+}: {
+  context: DesktopEditActionContext;
+  fileType: DesktopEditFileType | null;
+  lockState: DesktopEditLockState;
+  readOnly: boolean;
+}): boolean =>
+  context === "row" &&
+  !readOnly &&
+  fileType !== null &&
+  lockState !== "unlocked";
 
 type DesktopEditFile = {
   fileName: string | null | undefined;

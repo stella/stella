@@ -3,13 +3,17 @@ import { useNow, useTranslations } from "use-intl";
 
 import { CASE_LAW_CITATION_TIMELINE_MAX_YEARS } from "@stll/api-contract";
 import { Temporal } from "@stll/time";
+import { Button } from "@stll/ui/button";
 import { Popover, PopoverPanel, PopoverTrigger } from "@stll/ui/popover";
 import { cn } from "@stll/ui/utils";
 
 import type { createCaseDecisionDetailsTab } from "@/components/inspector/case-decision-details-view";
-import { VIEWER_OVERLAY_BAR_CLEARANCE } from "@/components/inspector/viewer-overlay-bar";
 import { decisionYear, formatYear } from "@/features/case-law/citation-format";
-import { totalCitations } from "@/features/case-law/citation-treatment";
+import {
+  citationSummaryIsCapped,
+  hasIncomingCitations,
+  totalCitations,
+} from "@/features/case-law/citation-treatment";
 import { CitationTimelinePanel } from "@/features/case-law/components/citation-timeline-panel";
 import { lastNegativeYear } from "@/features/case-law/components/citation-timeline.logic";
 import {
@@ -19,9 +23,13 @@ import {
 import { decisionCitationSummaryOptions } from "@/features/case-law/queries/citations";
 import { useHydrated } from "@/hooks/use-hydrated";
 import { useFormatter } from "@/i18n/formatting-context";
+import { queryView } from "@/lib/query-view.logic";
 import type { SafeId } from "@/lib/safe-id";
+import { useQueryViewError } from "@/lib/use-query-view";
 
 type CitationHeaderProps = {
+  /** The compact inspector shows counts beside the chart in its own row. */
+  compact?: boolean;
   decisionDate: string | null;
   decisionId: SafeId<"caseLawDecision">;
   /** The decision, as the citing-decisions tab the panel opens needs it. */
@@ -60,6 +68,7 @@ export const citationStripFromYear = ({
  * flat strip would only say "nothing", which the missing panel already says.
  */
 export const CitationHeader = ({
+  compact = false,
   decisionDate,
   decisionId,
   target,
@@ -67,9 +76,10 @@ export const CitationHeader = ({
   const t = useTranslations();
   const format = useFormatter();
   const now = useNow();
-  const { data: summary } = useQuery(
-    decisionCitationSummaryOptions(decisionId),
-  );
+  const summaryQuery = useQuery(decisionCitationSummaryOptions(decisionId));
+  const summaryView = queryView(summaryQuery);
+  useQueryViewError(summaryView, "CitationHeader:query");
+  const summary = summaryView.type === "items" ? summaryView.items : undefined;
   // Prefetched without blocking the route: known on one side of hydration
   // and not the other, so the strip waits for hydration to stay identical.
   const hydrated = useHydrated();
@@ -77,10 +87,10 @@ export const CitationHeader = ({
   if (!hydrated || summary === undefined) {
     return null;
   }
-  const total = totalCitations(summary.incoming);
-  if (total === 0 && !summary.capped.incoming) {
+  if (!hasIncomingCitations(summary)) {
     return null;
   }
+  const total = totalCitations(summary.incoming);
 
   const currentYear = Temporal.Instant.fromEpochMilliseconds(
     now.getTime(),
@@ -94,13 +104,13 @@ export const CitationHeader = ({
   const lastNegative = lastNegativeYear(summary.incomingByYear);
 
   const summaryText = [
-    summary.capped.incoming
+    citationSummaryIsCapped(summary, "incoming")
       ? t("caseLaw.citation.citedAtLeast", { count: format.number(total) })
       : t("caseLaw.citation.citedSummary", { count: total }),
-    !summary.capped.incoming && negative > 0
+    !citationSummaryIsCapped(summary, "incoming") && negative > 0
       ? t("caseLaw.citation.negativeCount", { count: negative })
       : null,
-    summary.capped.incoming || lastNegative === null
+    citationSummaryIsCapped(summary, "incoming") || lastNegative === null
       ? null
       : t("caseLaw.citation.lastNegative", {
           year: formatYear(format, lastNegative),
@@ -112,35 +122,37 @@ export const CitationHeader = ({
   return (
     <div
       className={cn(
-        "reader-chrome mb-3 flex text-xs print:hidden",
-        // The zoom bar floats over this first row at the opposite corner; the
-        // row keeps that corner free at every reader width and on every scroll
-        // position, since the bar does not move with the text.
-        VIEWER_OVERLAY_BAR_CLEARANCE,
+        "reader-chrome flex text-xs print:hidden",
+        compact ? "justify-center" : "mb-3",
       )}
     >
       <Popover>
         <PopoverTrigger
           render={
-            <button
+            // The strip draws the trigger, so the button paints nothing of
+            // its own. A 16px strip is a 20px band to tap; the touch target
+            // gives a finger the project's 44px without moving a pixel of
+            // what the eye sees.
+            <Button
               aria-label={summaryText}
-              // A 16px strip is a 20px band to tap; the pseudo-element gives
-              // a finger the project's 44px target without moving a pixel of
-              // what the eye sees.
-              className={cn(
-                "text-muted-foreground hover:text-foreground flex flex-wrap items-center gap-x-3 gap-y-1 rounded-sm px-1 py-0.5 text-start",
-                CITATION_TRIGGER_TOUCH_TARGET,
-              )}
-              type="button"
+              className="group/plain"
+              variant="plain"
             />
           }
         >
-          <CitationYearStrip
-            byYear={summary.incomingByYear}
-            fromYear={fromYear}
-            toYear={currentYear}
-          />
-          <span aria-hidden="true">{summaryText}</span>
+          <span
+            className={cn(
+              "text-muted-foreground group-hover/plain:text-foreground group-data-popup-open/plain:text-foreground flex flex-wrap items-center gap-x-3 gap-y-1 rounded-sm px-1 py-0.5",
+              CITATION_TRIGGER_TOUCH_TARGET,
+            )}
+          >
+            <CitationYearStrip
+              byYear={summary.incomingByYear}
+              fromYear={fromYear}
+              toYear={currentYear}
+            />
+            {!compact && <span aria-hidden="true">{summaryText}</span>}
+          </span>
         </PopoverTrigger>
         <PopoverPanel
           align="start"

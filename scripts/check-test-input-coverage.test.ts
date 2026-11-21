@@ -12,7 +12,16 @@ import {
   readStringLiterals,
   readTestInputs,
 } from "./check-test-input-coverage.ts";
+import { readCallArguments } from "./test-input-readers";
 import { scopeFilters } from "./test-scope.ts";
+
+test("call arguments stop at the first complete call before chained source", () => {
+  expect(
+    readCallArguments(
+      '(join("docs", directory), { mode: "read" }).scanSync({ cwd: root }); next("elsewhere.md")',
+    ),
+  ).toEqual(['join("docs", directory)', '{ mode: "read" }']);
+});
 
 const roots: string[] = [];
 
@@ -73,6 +82,26 @@ const createRoot = ({ files, tasks }: Fixture): string => {
   return root;
 };
 
+test("classification keys extending a file path are absent targets", () => {
+  const root = createRoot({
+    tasks: {},
+    files: { ".github/workflows/ci.yml": "jobs: {}" },
+  });
+  for (const suffix of ["job", "job/step"]) {
+    expect(
+      classifyTarget({
+        candidate: {
+          path: `.github/workflows/ci.yml/${suffix}`,
+          fromGlob: false,
+        },
+        packageDir: "apps/alpha",
+        root,
+        testDir: "apps/alpha/src",
+      }),
+    ).toEqual({ type: "absent" });
+  }
+});
+
 describe("string literals", () => {
   test("tags each literal with the innermost enclosing call", () => {
     const literals = readStringLiterals(
@@ -118,11 +147,26 @@ describe("literal targets", () => {
     ]);
   });
 
+  test("stops expanding at the cap", () => {
+    const expanded = expandBraces("{a,b,c}".repeat(40));
+    expect(expanded).toHaveLength(64);
+    expect(expanded.at(0)).toBe("a".repeat(40));
+    expect(expanded.at(1)).toBe(`${"a".repeat(39)}b`);
+  });
+
   test("reduces a glob to the tree it scans", () => {
     expect(literalTargets("{apps,packages}/**/*.test.ts")).toEqual([
       { fromGlob: true, path: "apps" },
       { fromGlob: true, path: "packages" },
     ]);
+  });
+
+  test("bounds a product of many brace alternatives before materializing it", () => {
+    const expansions = expandBraces("{a,b}".repeat(80));
+    expect(expansions).toHaveLength(64);
+    expect(new Set(expansions).size).toBe(64);
+    expect(expansions.at(0)).toBe("a".repeat(80));
+    expect(expansions.at(-1)).toBe("a".repeat(74) + "b".repeat(6));
   });
 
   test("a wildcard with no directory before it names no path", () => {
@@ -149,6 +193,30 @@ describe("target classification", () => {
 
   test("resolves against the package before the repository", () => {
     expect(classify("package.json").type).toBe("package-local");
+  });
+
+  test("dotenv fixture names do not become source reads when local env exists", () => {
+    const names = [".env", ".env.local", ".env.test", ".env.production"];
+    // Directory listings are cached per path, so the env files exist in a
+    // root of their own before the first lookup, whatever order tests run in.
+    const envRoot = createRoot({
+      files: Object.fromEntries(names.map((name) => [name, "LOCAL_FIXTURE=1"])),
+      tasks: {},
+    });
+    const classifyInEnvRoot = (candidate: string) =>
+      classifyTarget({
+        candidate: { fromGlob: false, path: candidate },
+        packageDir: "apps/alpha",
+        root: envRoot,
+        testDir: "apps/alpha/src",
+      });
+    for (const name of names) {
+      expect(classifyInEnvRoot(name).type).toBe("absent");
+      expect(classifyInEnvRoot(`../../../${name}`)).toEqual({
+        target: name,
+        type: "repository",
+      });
+    }
   });
 
   test("reports a path owned by another package", () => {
@@ -253,6 +321,58 @@ describe("test input coverage", () => {
     );
   });
 
+  test("counts local static, re-exported, and dynamic module imports", () => {
+    const root = createRoot({
+      files: {
+        "scripts/static-helper.ts": "export const value = 1;\n",
+        "scripts/reexported-helper.ts": "export const value = 2;\n",
+        "scripts/dynamic-helper.ts": "export const value = 3;\n",
+        "apps/alpha/src/guard.test.ts": [
+          'import { value as staticValue } from "../../../scripts/static-helper";',
+          'export { value } from "../../../scripts/reexported-helper.ts";',
+          'const dynamicValue = await import("../../../scripts/dynamic-helper");',
+          "expect([staticValue, dynamicValue]).toBeDefined();",
+        ].join("\n"),
+      },
+      tasks: {},
+    });
+
+    const errors = checkTestInputCoverage(root);
+    expect(errors).toHaveLength(3);
+    expect(errors.join("\n")).toContain("scripts/static-helper.ts");
+    expect(errors.join("\n")).toContain("scripts/reexported-helper.ts");
+    expect(errors.join("\n")).toContain("scripts/dynamic-helper.ts");
+  });
+
+  test("matches extensionless module imports to their declared source inputs", () => {
+    const root = createRoot({
+      files: {
+        "scripts/helper.ts": "export const value = 1;\n",
+        "apps/alpha/src/guard.test.ts":
+          'import { value } from "../../../scripts/helper";\n' +
+          "expect(value).toBeDefined();\n",
+      },
+      tasks: {
+        "@stll/alpha#test": {
+          inputs: ["$TURBO_DEFAULT$", "$TURBO_ROOT$/scripts/helper.ts"],
+        },
+      },
+    });
+
+    expect(checkTestInputCoverage(root)).toEqual([]);
+  });
+
+  test("leaves an unresolved local import to the test runner", () => {
+    const root = createRoot({
+      files: {
+        "apps/alpha/src/guard.test.ts": 'import "../../../scripts/missing";\n',
+      },
+      tasks: {},
+    });
+
+    expect(checkTestInputCoverage(root)).toEqual([]);
+  });
+
   test("ignores a read of a workspace dependency, which Turbo already selects", () => {
     const root = createRoot({
       files: {
@@ -265,11 +385,30 @@ describe("test input coverage", () => {
     expect(checkTestInputCoverage(root)).toEqual([]);
   });
 
-  test("ignores a path compared by a matcher rather than read", () => {
+  test("counts an explicitly declared read of a workspace dependency", () => {
     const root = createRoot({
       files: {
         "apps/alpha/src/guard.test.ts":
-          'expect(config).toContain("apps/beta/src/route.ts");\n',
+          'readFileSync(path.join(root, "packages/shared/src/index.ts"));\n',
+      },
+      tasks: {
+        "@stll/alpha#test": {
+          inputs: ["$TURBO_ROOT$/packages/shared/src/**"],
+        },
+      },
+    });
+
+    expect(checkTestInputCoverage(root)).toEqual([]);
+  });
+
+  test("ignores a path compared by a matcher rather than read", () => {
+    const root = createRoot({
+      files: {
+        "apps/alpha/src/guard.test.ts": [
+          'expect(config).toContain("apps/beta/src/route.ts");',
+          'expect(config).toMatchInlineSnapshot("apps/beta/src/route.ts");',
+          'expect(config).toMatchSnapshot("apps/beta/src/route.ts");',
+        ].join("\n"),
       },
       tasks: {},
     });

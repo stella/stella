@@ -102,9 +102,7 @@ export const extractThreadDataWorkspaceIds = (
 //      Without these, an assistant reply that links a workspace in
 //      plain text would not widen `chat_threads.data_workspace_ids`.
 //
-// Accepts `readonly unknown[]` and narrows per-part so this also
-// handles legacy/migrated message shapes without forcing callers to
-// pre-validate against the live `ChatMessage` union.
+// Narrows unknown nested tool output values while walking the message parts.
 export const extractAssistantWorkspaceIds = (
   parts: readonly unknown[],
 ): SafeId<"workspace">[] => collectPartsWorkspaceIds(parts);

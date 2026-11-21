@@ -2,12 +2,17 @@ import { describe, expect, test } from "bun:test";
 
 import { CASE_LAW_JURISDICTIONS } from "@stll/api-contract/case-law-jurisdictions";
 import type { CaseLawJurisdiction } from "@stll/api-contract/case-law-jurisdictions";
+import { isPublicCaseLawCountry } from "@stll/api-contract/case-law-launch-readiness";
 import { isPublicLegislationCountry } from "@stll/api-contract/legislation-publication";
+import { statuteAnchorNestingFor } from "@stll/api-contract/statute-anchor-schemes";
+import { provisionHeadingAnchor } from "@stll/legal-ast/provision-preview";
+import { E_SBIRKA_ANCHORS } from "@stll/legal-ast/statute-anchor-scheme";
+import type { StatuteAnchorScheme } from "@stll/legal-ast/statute-anchor-scheme";
 
 import {
   createProvisionCitationGrammar,
-  PROVISION_CITATION_GRAMMARS,
   locateGazetteCitations,
+  PROVISION_CITATION_GRAMMARS,
 } from "./provision-citation-grammars";
 
 type GrammarFixture = {
@@ -22,16 +27,35 @@ type GrammarFixture = {
 /** One real sentence per grammar; a jurisdiction without a grammar has none. */
 const FIXTURES = {
   AUT: null,
+  BRA: null,
   CZE: {
     anchors: ["par_46-odst_1-pism_a", "par_60-odst_3", "par_120"],
     gazette: ["https://www.e-sbirka.cz/eli/cz/sb/2005/485"],
     text: "Soud návrh odmítl podle § 46 odst. 1 písm. a) s. ř. s. a o nákladech rozhodl podle § 60 odst. 3 ve spojení s § 120 s. ř. s.; vyhláška č. 485/2005 Sb. byla zrušena.",
   },
-  EU: null,
+  EU: {
+    anchors: ["art_6-par_1-pt_a"],
+    gazette: [],
+    text: "Article 6(1)(a) GDPR",
+  },
+  GBR: null,
   HUN: null,
   POL: null,
-  SVK: null,
-  USA: null,
+  SVK: {
+    anchors: [
+      "paragraf-97",
+      "paragraf-13.odsek-3",
+      "paragraf-17.pismeno-a",
+      "paragraf-439.odsek-2.pismeno-d",
+    ],
+    gazette: ["https://www.slov-lex.sk/eli/sk/zz/2015/162"],
+    text: "§97 SSP; §13 ods.3 SSP v spojení s §17 písm.a) SSP; §439 ods.2 písm.d) SSP; zákon č. 162/2015 Z. z.",
+  },
+  USA: {
+    anchors: ["s1983", "s1026.18/c/1/i", "s1.401(k)-1/a/4"],
+    gazette: [],
+    text: "The claim arises under 42 U.S.C. § 1983; the disclosure rule is 12 C.F.R. § 1026.18(c)(1)(i), and the plan relied on Treas. Reg. § 1.401(k)-1(a)(4).",
+  },
 } as const satisfies Record<CaseLawJurisdiction, GrammarFixture | null>;
 
 const czech = PROVISION_CITATION_GRAMMARS.CZE;
@@ -44,7 +68,7 @@ const testGrammar = (
       canonicalAbbreviation: "test.",
       ...entry,
     })),
-    anchorSeparator: "-",
+    anchors: E_SBIRKA_ANCHORS,
     connectors: [","],
     gazette: {
       eli: ({ number, year }) => `https://example.test/${year}/${number}`,
@@ -57,13 +81,30 @@ const testGrammar = (
         key: "section",
         marker: "§",
         value: String.raw`\d+`,
-        anchorMarker: "par_",
       },
     ],
     unit: "section",
   });
 
 /** An article-based style, to show the chain shape is not the Czech one. */
+const ARTICLE_ANCHORS = {
+  type: "listed",
+  kinds: {
+    section: "par",
+    article: "art",
+    subsection: "ust",
+    letter: "lit",
+    point: "pkt",
+  },
+  kindSeparator: "_",
+  listKinds: {},
+  restatementSuffix: null,
+  segmentSeparator: "-",
+  unnumberedAnchor: null,
+  unnumberedSegment: /^frag_\d+$/u,
+  annexAnchors: [],
+} as const satisfies StatuteAnchorScheme;
+
 const articleGrammar = createProvisionCitationGrammar({
   abbreviations: [
     {
@@ -72,7 +113,7 @@ const articleGrammar = createProvisionCitationGrammar({
       patternSource: String.raw`k\.p\.c\.`,
     },
   ],
-  anchorSeparator: "-",
+  anchors: ARTICLE_ANCHORS,
   connectors: [",", String.raw`i(?=\s)`, String.raw`oraz(?=\s)`],
   gazette: {
     eli: ({ number, year }) => `https://example.test/${year}/${number}`,
@@ -85,19 +126,16 @@ const articleGrammar = createProvisionCitationGrammar({
       key: "section",
       marker: String.raw`art\.`,
       value: String.raw`\d+[a-z]?`,
-      anchorMarker: "art_",
     },
     {
       key: "subsection",
       marker: String.raw`ust\.`,
       value: String.raw`\d+`,
-      anchorMarker: "ust_",
     },
     {
       key: "point",
       marker: "pkt",
       value: String.raw`\d+`,
-      anchorMarker: "pkt_",
     },
   ],
   unit: "article",
@@ -136,12 +174,62 @@ describe("provision citation grammars", () => {
     },
   );
 
-  test("a grammar exists only where the legislation corpus can open the act", () => {
-    for (const grammar of Object.values(PROVISION_CITATION_GRAMMARS)) {
-      if (grammar.status === "supported") {
-        expect(isPublicLegislationCountry(grammar.jurisdiction)).toBe(true);
+  test("a minted anchor nests on its country's scheme, under its section's anchor", () => {
+    const cut: string[] = [];
+    for (const jurisdiction of CASE_LAW_JURISDICTIONS) {
+      const grammar = PROVISION_CITATION_GRAMMARS[jurisdiction];
+      const fixture = FIXTURES[jurisdiction];
+      if (grammar.status === "unsupported" || fixture === null) {
+        continue;
+      }
+      const nesting = statuteAnchorNestingFor(jurisdiction);
+      for (const { anchor, reference } of grammar.locateAbbreviatedProvisions(
+        fixture.text,
+      )) {
+        const heading = provisionHeadingAnchor(anchor, nesting);
+        expect({ anchor, heading }).toEqual({
+          anchor,
+          heading: grammar.anchor({
+            ...reference,
+            letter: null,
+            point: null,
+            subsection: null,
+          }),
+        });
+        if (heading !== anchor) {
+          cut.push(jurisdiction);
+        }
       }
     }
+    // Every grammar's fixture cites a subdivision, so each scheme is exercised.
+    expect(new Set(cut)).toEqual(
+      new Set(
+        CASE_LAW_JURISDICTIONS.filter(
+          (jurisdiction) => FIXTURES[jurisdiction] !== null,
+        ),
+      ),
+    );
+  });
+
+  test("a decision readers can open links only to legislation they can open", () => {
+    for (const grammar of Object.values(PROVISION_CITATION_GRAMMARS)) {
+      if (grammar.status !== "supported" || grammar.target === "publisher") {
+        continue;
+      }
+      // Hosted links point into the corpus: wherever the citing decisions
+      // are admitted, the statutes they link to have to be as well.
+      expect({
+        jurisdiction: grammar.jurisdiction,
+        linksReadable:
+          !isPublicCaseLawCountry(grammar.jurisdiction) ||
+          isPublicLegislationCountry(grammar.jurisdiction),
+      }).toEqual({ jurisdiction: grammar.jurisdiction, linksReadable: true });
+    }
+  });
+
+  test("EU references open at the publisher while national fallback stays hosted", () => {
+    expect(PROVISION_CITATION_GRAMMARS.EU.target).toBe("publisher");
+    expect(PROVISION_CITATION_GRAMMARS.CZE.target).toBe("hosted");
   });
 
   test("gazette citations are read with every grammar, whoever cites them", () => {
@@ -157,6 +245,21 @@ describe("provision citation grammars", () => {
         eli: "https://www.e-sbirka.cz/eli/cz/sb/2005/485",
         jurisdiction: "CZE",
       },
+      {
+        eli: "https://www.slov-lex.sk/eli/sk/zz/2005/300",
+        jurisdiction: "SVK",
+      },
+    ]);
+  });
+
+  test.each([
+    "300/2005 Z. z.",
+    "300/2005 Z.z.",
+    "300/2005 Z. z.",
+    "300/2005 Z.  z.",
+  ])("Slovak gazette collections read any spacing: %p", (text) => {
+    expect(locateGazetteCitations(text).map(({ eli }) => eli)).toEqual([
+      "https://www.slov-lex.sk/eli/sk/zz/2005/300",
     ]);
   });
 
@@ -343,5 +446,176 @@ test("work normalization uses the selected grammar's gazette", () => {
   expect(articleGrammar.gazette.parse("Dz. U. 2026 poz. 42")).toEqual({
     identifier: "2026 poz. 42",
     eli: "https://example.test/2026/42",
+  });
+});
+
+test("Czech citations keep a sentence and a slash-closed letter", () => {
+  const citations = czech.locateAbbreviatedProvisions(
+    "§ 103 odst. 1 věta druhá s. ř. s. a § 5 písm. b/ s. ř. s.",
+  );
+  expect(
+    citations.map(({ anchor, reference }) => [anchor, reference.sentence]),
+  ).toEqual([
+    ["par_103-odst_1", "2"],
+    ["par_5-pism_b", null],
+  ]);
+});
+
+describe("Slovak reader citations", () => {
+  const slovak = PROVISION_CITATION_GRAMMARS.SVK;
+  const sspEli = "https://www.slov-lex.sk/eli/sk/zz/2015/162";
+
+  test.each([
+    ["§ 6 ods. 2 písm. d) SSP", "paragraf-6.odsek-2.pismeno-d"],
+    ["§ 206 ods. 1 SSP", "paragraf-206.odsek-1"],
+    ["§ 9 ods. 1 SSP", "paragraf-9.odsek-1"],
+    ["§ 10 SSP", "paragraf-10"],
+    ["§ 13 ods. 3 SSP", "paragraf-13.odsek-3"],
+    ["§ 17 SSP", "paragraf-17"],
+    ["§ 18 ods. 2 SSP", "paragraf-18.odsek-2"],
+    ["§ 31 ods. 1 SSP", "paragraf-31.odsek-1"],
+    ["§ 97 SSP", "paragraf-97"],
+    ["§ 17 písm. a) SSP", "paragraf-17.pismeno-a"],
+    ["§ 439 ods.2 písm.d) SSP", "paragraf-439.odsek-2.pismeno-d"],
+  ])(
+    "reads the citation %s published in 10Saz/2/2026",
+    (text, expectedAnchor) => {
+      const citations = slovak.locateAbbreviatedProvisions(text);
+      expect(
+        citations.map(({ anchor, abbreviation }) => ({
+          anchor,
+          eli: abbreviation.eli,
+        })),
+      ).toEqual([{ anchor: expectedAnchor, eli: sspEli }]);
+      expect(printed(text, citations)).toEqual([
+        text.slice(0, text.lastIndexOf(" SSP")),
+      ]);
+    },
+  );
+
+  test("the numbered SSP citation identifies the same work as its abbreviation", () => {
+    const text = "§ 6 ods. 1 zákona č. 162/2015 Z. z. Správny súdny poriadok";
+    expect(slovak.locateGazetteCitations(text).map(({ eli }) => eli)).toEqual([
+      sspEli,
+    ]);
+  });
+
+  test("reads both coordinated references and keeps repeated occurrences", () => {
+    const text =
+      "§ 13 ods. 3 SSP v spojení s § 17 písm. a) SSP; § 13 ods. 3 SSP";
+    const citations = slovak.locateAbbreviatedProvisions(text);
+    expect(citations.map(({ anchor }) => anchor)).toEqual([
+      "paragraf-13.odsek-3",
+      "paragraf-17.pismeno-a",
+      "paragraf-13.odsek-3",
+    ]);
+    expect(printed(text, citations)).toEqual([
+      "§ 13 ods. 3",
+      "§ 17 písm. a)",
+      "§ 13 ods. 3",
+    ]);
+  });
+
+  test("missing spaces after designators preserve the entire path", () => {
+    expect(
+      slovak
+        .locateAbbreviatedProvisions("§439 ods.2 písm.d) bod1 SSP")
+        .map(({ anchor }) => anchor),
+    ).toEqual(["paragraf-439.odsek-2.pismeno-d.bod-1"]);
+  });
+
+  test("a letter closed by a slash keeps the act", () => {
+    const text = "(§ 439 ods. 2 písm. d/ SSP)";
+    const citations = slovak.locateAbbreviatedProvisions(text);
+    expect(citations.map(({ anchor }) => anchor)).toEqual([
+      "paragraf-439.odsek-2.pismeno-d",
+    ]);
+    expect(printed(text, citations)).toEqual(["§ 439 ods. 2 písm. d/"]);
+  });
+
+  test.each([
+    ["§ 18 ods. 2 prvá veta SSP", "1"],
+    ["§ 18 ods. 2 veta prvá SSP", "1"],
+    ["§ 18 ods. 2 veta 2 SSP", "2"],
+  ])(
+    "%s records the sentence on the provision it refines",
+    (text, sentence) => {
+      const citations = slovak.locateAbbreviatedProvisions(text);
+      expect(
+        citations.map(({ anchor, reference }) => ({
+          anchor,
+          sentence: reference.sentence,
+        })),
+      ).toEqual([{ anchor: "paragraf-18.odsek-2", sentence }]);
+      expect(printed(text, citations)).toEqual(["§ 18 ods. 2"]);
+    },
+  );
+
+  test("a sentence refines only the last coordinated provision", () => {
+    const citations = slovak.locateAbbreviatedProvisions(
+      "§ 9 ods. 1 a § 18 ods. 2 prvá veta SSP",
+    );
+    expect(
+      citations.map(({ anchor, reference }) => [anchor, reference.sentence]),
+    ).toEqual([
+      ["paragraf-9.odsek-1", null],
+      ["paragraf-18.odsek-2", "1"],
+    ]);
+  });
+
+  test.each([
+    ["CSP", "https://www.slov-lex.sk/eli/sk/zz/2015/160"],
+    ["OZ", "https://www.slov-lex.sk/eli/sk/zz/1964/40"],
+    ["OSP", "https://www.slov-lex.sk/eli/sk/zz/1963/99"],
+    ["ObZ", "https://www.slov-lex.sk/eli/sk/zz/1991/513"],
+    ["S. s. p.", sspEli],
+    ["S.s.p.", sspEli],
+  ])("reads %s from the jurisdiction alias registry", (alias, eli) => {
+    expect(
+      slovak
+        .locateAbbreviatedProvisions(`§1 ${alias}`)
+        .map(({ abbreviation }) => abbreviation.eli),
+    ).toEqual([eli]);
+  });
+
+  test.each(["TZ", "TP", "ZP", "ssp", "SSPrefix"])(
+    "a date-free fallback does not guess %s",
+    (alias) => {
+      expect(slovak.locateAbbreviatedProvisions(`§1 ${alias}`)).toEqual([]);
+    },
+  );
+
+  test.each([
+    ["162/2015 Z. z.", "162/2015 Z. z.", sspEli],
+    ["162/2015 Z.z.", "162/2015 Z. z.", sspEli],
+    ["40/1964 Zb.", "40/1964 Zb.", "https://www.slov-lex.sk/eli/sk/zz/1964/40"],
+  ])("preserves the printed collection in %s", (text, identifier, eli) => {
+    expect(slovak.gazette.parse(text)).toEqual({ identifier, eli });
+  });
+});
+
+describe("a citation label's provisions", () => {
+  const anchorsOf = (jurisdiction: "CZE" | "SVK", label: string) => {
+    const grammar = PROVISION_CITATION_GRAMMARS[jurisdiction];
+    return grammar.readLabelProvisions(label).map(grammar.anchor);
+  };
+
+  test("reads the path and its coordination whatever names the act", () => {
+    // An abbreviation the grammar does not list still ends the label.
+    expect(anchorsOf("CZE", "§ 240 odst. 3 OSŘ")).toEqual(["par_240-odst_3"]);
+    expect(anchorsOf("CZE", "§ 240 odst. 1 a 2 OSŘ")).toEqual([
+      "par_240-odst_1",
+      "par_240-odst_2",
+    ]);
+    expect(anchorsOf("CZE", "§ 240 odst. 1 věta druhá OSŘ")).toEqual([
+      "par_240-odst_1",
+    ]);
+    expect(anchorsOf("SVK", "§ 18 ods. 2 písm. a) SSP")).toEqual([
+      "paragraf-18.odsek-2.pismeno-a",
+    ]);
+  });
+
+  test("a label with no designator names nothing", () => {
+    expect(anchorsOf("CZE", "občanský soudní řád")).toEqual([]);
   });
 });

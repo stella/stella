@@ -14,8 +14,8 @@
 
 import { activeLegalDocumentRef } from "@/components/ai-suggestions/active-legal-document";
 import type { ActiveLegalDocument } from "@/components/ai-suggestions/active-legal-document";
-import { skillLabel } from "@/components/inspector/inspector-store-types";
 import type { ChatTab } from "@/components/inspector/inspector-store-types";
+import { newChatMatterScope } from "@/components/inspector/new-chat-scope";
 import type { LegalDocumentChatKey } from "@/features/chat/legal-document-chat-key";
 
 type RailChatOpenArgsOptions = {
@@ -34,6 +34,19 @@ type RailChatOpenArgs = {
   workspaceId?: string;
 };
 
+/**
+ * The skill a chat started from the rail is about. The rail stands beside the
+ * main view, so a skill that view's editor shows wins; otherwise the active
+ * Inspector tab's skill (a skill file, a skill chat, a tool detail) applies.
+ */
+export const railChatSkill = ({
+  activeTabSkill,
+  mainViewSkill,
+}: {
+  activeTabSkill: ChatTab["activeSkill"];
+  mainViewSkill: ChatTab["activeSkill"];
+}): ChatTab["activeSkill"] => mainViewSkill ?? activeTabSkill;
+
 export const railChatOpenArgs = ({
   activeSkill,
   legalDocument,
@@ -43,16 +56,12 @@ export const railChatOpenArgs = ({
     legalDocument === undefined
       ? {}
       : { activeLegalKey: activeLegalDocumentRef(legalDocument).key };
-  // A skill open from the rail keeps naming its skill: the reader picked the
-  // skill, and the document is only where they happen to be standing.
-  const skillContext =
-    activeSkill === undefined
-      ? {}
-      : { activeSkill, label: skillLabel(activeSkill) };
-  const matterContext =
-    workspaceId === undefined
-      ? {}
-      : { workspaceId, contextMatterIds: [workspaceId] };
-
-  return { ...legalContext, ...skillContext, ...matterContext };
+  // No label travels with the skill either: an untitled tab names its skill
+  // where it is drawn, so a built-in title follows the reader's language.
+  const skillContext = activeSkill === undefined ? {} : { activeSkill };
+  return {
+    ...legalContext,
+    ...skillContext,
+    ...newChatMatterScope(workspaceId),
+  };
 };

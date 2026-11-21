@@ -6,8 +6,7 @@
 // The ban is deliberately scoped to `or(...)` expressions containing the
 // boundary helper more than once. A single boundary call is ordinary range
 // logic, and heterogeneous three-part cursors cannot use the two-column
-// codec. The `repeated-timestamp-cursor-boundary` ratchet metric covers
-// equivalent predicate spellings outside the exact imported-binding shape.
+// codec.
 
 import { eslintCompatPlugin } from "@oxlint/plugins";
 

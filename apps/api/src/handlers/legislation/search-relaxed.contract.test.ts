@@ -25,10 +25,8 @@ import { getCorpusIndexClient } from "@/api/lib/legal-search/corpus-index-client
 import { readServingCorpusIndexGenerationTx } from "@/api/lib/legal-search/corpus-index-generation-store";
 import {
   CORPUS_INDEX_MANIFESTS,
-  corpusIndexConfigFromManifest,
   corpusIndexManifestDigest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
-import { HIGHLIGHT_COPIES_PER_PASSAGE } from "@/api/lib/legal-search/corpus-index-pagination";
 import { buildLegislationV2ProjectionDocuments } from "@/api/lib/legal-search/corpus-index-projection-builder";
 import type { LegislationV2ProjectionInput } from "@/api/lib/legal-search/corpus-index-projection-descriptor";
 import { corpusFreeTextClause } from "@/api/lib/legal-search/corpus-query";
@@ -46,6 +44,7 @@ import type {
 } from "@/api/lib/legislation-public-read-db";
 import { LIMITS } from "@/api/lib/limits";
 import { encodeCursor } from "@/api/lib/search/cursor";
+import { corpusFixtureIndexConfig } from "@/api/tests/helpers/corpus-fixture-index";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   createTestPglite,
@@ -75,6 +74,7 @@ const PRESENT_FILTERS = {
   language: "cs",
   dateFrom: "1999-01-01",
   dateTo: "2030-01-01",
+  asOf: "2026-01-01",
 } as const satisfies Required<RequestFilters>;
 
 const DIFFERENT_FILTERS = {
@@ -85,6 +85,7 @@ const DIFFERENT_FILTERS = {
   language: { language: "sk" },
   dateFrom: { dateFrom: "1998-01-01" },
   dateTo: { dateTo: "2031-01-01" },
+  asOf: { asOf: "2027-01-01" },
 } as const satisfies {
   [Field in keyof RequestFilters]-?: Required<Pick<RequestFilters, Field>>;
 };
@@ -95,7 +96,10 @@ const admittedFixtureCountries = {
   unavailable: (country: string) =>
     country === "CZE" || country === "SVK"
       ? null
-      : publicLawCountryUnavailable(country),
+      : publicLawCountryUnavailable(country, {
+          domain: "legislation",
+          surface: "search",
+        }),
   isAdmitted: (country: string) => country === "CZE" || country === "SVK",
 };
 
@@ -172,7 +176,20 @@ const cappedStrictVersions = Array.from(
         .slice(0, 10),
     }),
 );
+/**
+ * A refreshed act: the index still holds the copy its previous revision wrote,
+ * whose text carries a word the current one does not.
+ */
+const refreshed = fixtureVersion({
+  tail: "2003/801",
+  title: "Pravidla nájmu",
+  text: "Nájemné se platí měsíčně předem.",
+});
+const SUPERSEDED_REVISION = createSafeId<"corpusIndexProjectionIntent">();
+const SUPERSEDED_MARKER = "dřívější";
+const SUPERSEDED_TEXT = `Nájemné se platí ročně podle ${SUPERSEDED_MARKER} úpravy.`;
 const VERSIONS = [
+  refreshed,
   strictOld,
   strictCurrent,
   amendment,
@@ -189,6 +206,9 @@ describe.skipIf(!runEngineTests)(
     let restoreSearch: (() => void) | undefined;
     let fixtureIndexCreated = false;
     const searchCalls: Parameters<typeof corpusClient.search>[0][] = [];
+    const highlightedIdsByCall: string[][] = [];
+    /** Native reads without snippet fields: a scan round fetching whole statutes. */
+    const nativeScanQueries: string[] = [];
 
     beforeAll(async () => {
       expect(
@@ -280,14 +300,22 @@ describe.skipIf(!runEngineTests)(
       );
 
       const created = await corpusClient.createIndex(
-        corpusIndexConfigFromManifest(MANIFEST, INDEX_ID),
+        corpusFixtureIndexConfig(MANIFEST, INDEX_ID),
         "unobserved",
       );
       if (created.isErr()) {
         throw created.error;
       }
       fixtureIndexCreated = true;
-      const documents = VERSIONS.flatMap((version) => {
+      const buildFixtureDocuments = ({
+        version,
+        text,
+        revision,
+      }: {
+        version: (typeof VERSIONS)[number];
+        text: string;
+        revision: (typeof VERSIONS)[number]["revision"];
+      }) => {
         const input = {
           family: "legislation",
           documentId: String(version.id),
@@ -307,19 +335,37 @@ describe.skipIf(!runEngineTests)(
         } satisfies LegislationV2ProjectionInput;
         const built = buildLegislationV2ProjectionDocuments({
           input,
-          payload: { text: version.text, ast: null },
-          revision: version.revision,
+          payload: { text, ast: null },
+          revision,
         });
         if (built.isErr()) {
           throw built.error;
         }
         return built.value;
+      };
+      const documents = [
+        ...VERSIONS.flatMap((version) =>
+          buildFixtureDocuments({
+            version,
+            text: version.text,
+            revision: version.revision,
+          }),
+        ),
+        // Postgres records only the current revision as applied; the
+        // superseded copy is what an unapplied delete leaves behind.
+        ...buildFixtureDocuments({
+          version: refreshed,
+          text: SUPERSEDED_TEXT,
+          revision: SUPERSEDED_REVISION,
+        }),
+      ];
+      const ingested = await corpusClient.ingestCommittedBatch({
+        indexId: INDEX_ID,
+        ndjson: `${documents.map((document) => JSON.stringify(document)).join("\n")}\n`,
+        observer: "unobserved",
+        commitTimeoutSecs:
+          MANIFEST.engine.indexConfig.indexing_settings.commit_timeout_secs,
       });
-      const ingested = await corpusClient.ingestCommittedBatch(
-        INDEX_ID,
-        `${documents.map((document) => JSON.stringify(document)).join("\n")}\n`,
-        "unobserved",
-      );
       if (ingested.isErr()) {
         throw ingested.error;
       }
@@ -328,10 +374,50 @@ describe.skipIf(!runEngineTests)(
       const searchSpy = spyOn(corpusClient, "search").mockImplementation(
         async (options) => {
           searchCalls.push(options);
-          return await originalSearch({ ...options, indexId: INDEX_ID });
+          if (options.snippetFields === undefined) {
+            nativeScanQueries.push(options.query);
+          }
+          const result = await originalSearch({
+            ...options,
+            indexId: INDEX_ID,
+          });
+          if (options.snippetFields?.includes("text") && result.isOk()) {
+            highlightedIdsByCall.push(
+              result.value.hits.map((hit) => {
+                const id = hit["document_id"];
+                if (typeof id !== "string") {
+                  panic(
+                    "Highlighted legislation passage has no document identity",
+                  );
+                }
+                return id;
+              }),
+            );
+          }
+          return result;
         },
       );
-      restoreSearch = () => searchSpy.mockRestore();
+      const originalScoredSearch = corpusClient.scoredSearch.bind(corpusClient);
+      const scoredSearchSpy = spyOn(
+        corpusClient,
+        "scoredSearch",
+      ).mockImplementation(async (options) => {
+        searchCalls.push({
+          observer: options.observer,
+          indexId: options.indexId,
+          query:
+            typeof options.query === "string"
+              ? options.query
+              : JSON.stringify(options.query.query),
+          maxHits: options.size,
+          startOffset: options.from,
+        });
+        return await originalScoredSearch({ ...options, indexId: INDEX_ID });
+      });
+      restoreSearch = () => {
+        searchSpy.mockRestore();
+        scoredSearchSpy.mockRestore();
+      };
     }, ENGINE_TIMEOUT_MS);
 
     afterAll(async () => {
@@ -381,8 +467,24 @@ describe.skipIf(!runEngineTests)(
       },
     );
 
+    test("a superseded revision's text never reaches a headline", async () => {
+      const result = await search({
+        query: "nájemné",
+        jurisdiction: "CZE",
+        limit: 10,
+      });
+      const item =
+        result.items.find((hit) => hit.documentId === String(refreshed.id)) ??
+        panic("the refreshed act did not match");
+      expect(item.headline).toContain("měsíčně");
+      for (const hit of result.items) {
+        expect(hit.headline ?? "").not.toContain(SUPERSEDED_MARKER);
+      }
+    });
+
     test("a short exhausted strict page appends relaxed hits and highlights only emitted passages", async () => {
       const callStart = searchCalls.length;
+      const highlightStart = highlightedIdsByCall.length;
       const result = await search({
         query: QUERY,
         jurisdiction: "CZE",
@@ -402,16 +504,33 @@ describe.skipIf(!runEngineTests)(
       );
       expect(relaxedCalls).toHaveLength(1);
       expect(relaxedCalls.at(0)?.snippetFields).toBeUndefined();
+      const strictQuery =
+        calls.at(0)?.query ?? panic("Strict scan did not run");
+      const relaxedQuery =
+        relaxedCalls.at(0)?.query ?? panic("Relaxed scan did not run");
       const highlights = calls.filter((call) =>
         call.snippetFields?.includes("text"),
       );
-      expect(highlights).toHaveLength(2);
+      // Each phase highlights its emitted passages under its own query.
+      expect(highlights.map(({ maxHits }) => maxHits)).toEqual([2, 1]);
+      expect(highlights.at(0)?.query).toStartWith(`(${strictQuery}) AND (`);
+      expect(highlights.at(1)?.query).toStartWith(`(${relaxedQuery}) AND (`);
       for (const highlight of highlights) {
         expect(/\b(?:document_id|chunk_id):/u.test(highlight.query)).toBe(true);
-        expect(highlight.maxHits).toBeLessThanOrEqual(
-          result.items.length * HIGHLIGHT_COPIES_PER_PASSAGE,
-        );
       }
+      expect(
+        highlightedIdsByCall.slice(highlightStart).map((ids) => ids.toSorted()),
+      ).toEqual(
+        ["strict", "relaxed"].map((phase) =>
+          result.items
+            .filter(({ match }) => match.type === phase)
+            .map(({ documentId }) => documentId)
+            .toSorted(),
+        ),
+      );
+      expect(result.items.every(({ headline }) => headline !== null)).toBe(
+        true,
+      );
       expect(calls).toHaveLength(4);
       expect(result.nextCursor).not.toBeNull();
       const cursor = decodeCorpusSearchCursor(
@@ -458,6 +577,21 @@ describe.skipIf(!runEngineTests)(
           call.query.startsWith('("závazek" AND "pohledávka")'),
         ),
       ).toBe(true);
+    });
+
+    test("strict and relaxed scan rounds never fetch whole statutes through the native endpoint", async () => {
+      const nativeStart = nativeScanQueries.length;
+      const callStart = searchCalls.length;
+      // A limit no other test here asks for: a repeated search is answered
+      // from the coalescer and reaches no engine.
+      await search({
+        query: "závazek pohledávka",
+        jurisdiction: "CZE",
+        limit: 7,
+      });
+      await search({ query: QUERY, jurisdiction: "CZE", limit: 7 });
+      expect(searchCalls.length).toBeGreaterThan(callStart);
+      expect(nativeScanQueries.slice(nativeStart)).toEqual([]);
     });
 
     test("a full strict page never invokes the relaxed pass", async () => {
@@ -636,7 +770,7 @@ describe.skipIf(!runEngineTests)(
         "malformed-cursor",
         encodeCursor(
           0.5,
-          `0:none:relevance:p${Buffer.from('{"type":"strict').toString("base64url")}:${String(code.id)}`,
+          `0:none:relevance:p${Buffer.from('{"type":"strict').toBase64({ alphabet: "base64url", omitPadding: true })}:${String(code.id)}`,
         ),
         encodeCorpusSearchCursor({
           ...cursor,
@@ -768,10 +902,13 @@ describe.skipIf(!runEngineTests)(
         {
           provider: "corpus-index",
           loadSearchConfigs: async () => [],
-          readServingGeneration: async (tx, family) => ({
-            ...(await readServingCorpusIndexGenerationTx(tx, family)),
-            generation: CORPUS_INDEX_MANIFESTS.case_law_v7.generation,
-          }),
+          readServingGeneration: async (tx, family) =>
+            (await readServingCorpusIndexGenerationTx(tx, family)).map(
+              (serving) => ({
+                ...serving,
+                generation: CORPUS_INDEX_MANIFESTS.case_law_v7.generation,
+              }),
+            ),
         },
       );
       expect(response).toMatchObject({
@@ -791,7 +928,7 @@ describe.skipIf(!runEngineTests)(
         page.nextCursor ?? panic("fixture issued no strict cursor");
       const callStart = searchCalls.length;
       const response = await searchLegislationHandler(
-        { query: QUERY, jurisdiction: "SVK", limit: 1, cursor },
+        { query: QUERY, jurisdiction: "AUT", limit: 1, cursor },
         legislationDb,
         "unobserved",
         { provider: "corpus-index", loadSearchConfigs: async () => [] },
@@ -800,7 +937,8 @@ describe.skipIf(!runEngineTests)(
         code: PUBLIC_COUNTRY_UNAVAILABLE_STATUS,
         response: {
           code: PUBLIC_COUNTRY_UNAVAILABLE_CODE,
-          country: "SVK",
+          domain: "legislation",
+          country: "AUT",
           reason: "pending_public",
         },
       });

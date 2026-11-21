@@ -61,15 +61,15 @@ import type * as slimdom from "slimdom";
 import {
   assertNever,
   blockDirectiveLinePattern,
+  clauseSlotKey,
   evaluateCondition,
+  type FilterCall,
   hasBlockDirectivePattern,
   LOOP_PROPERTIES,
-  type FilterCall,
   type LoopProperty,
   type NamedCondition,
   resolvePath,
   scanMarkers,
-  clauseSlotKey,
 } from "@stll/template-conditions";
 import { escapeRegExp } from "@stll/text-normalize";
 
@@ -80,8 +80,8 @@ import {
   createDirectiveProcessingContext,
   type DirectiveProcessingContext,
   eachKey,
-  registerLoopItemPatchValues,
   loopContext,
+  registerLoopItemPatchValues,
   rewriteEachPlaceholdersInText,
   scopeIterationNumberingInText,
 } from "./block-directives";
@@ -701,7 +701,12 @@ const registerIterationContext = (
   index: number,
 ): void => {
   const visit = (value: unknown, field: string): void => {
-    context[eachKey(arrayPath, index, field)] = value;
+    Object.defineProperty(context, eachKey(arrayPath, index, field), {
+      value,
+      enumerable: true,
+      configurable: true,
+      writable: true,
+    });
     if (Array.isArray(value) || value === null || typeof value !== "object") {
       return;
     }
@@ -710,7 +715,12 @@ const registerIterationContext = (
     }
   };
   if (item === null || typeof item !== "object" || Array.isArray(item)) {
-    context[eachKey(arrayPath, index, "value")] = item;
+    Object.defineProperty(context, eachKey(arrayPath, index, "value"), {
+      value: item,
+      enumerable: true,
+      configurable: true,
+      writable: true,
+    });
     return;
   }
   for (const [key, value] of Object.entries(item)) {

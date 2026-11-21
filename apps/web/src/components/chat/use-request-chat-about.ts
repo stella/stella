@@ -8,6 +8,7 @@ import {
   SIDE_PANEL_CHAT_READY_MS,
   SIDE_PANEL_CHAT_STATUS,
 } from "@/components/chat/side-panel-chat-status.logic";
+import { INSPECTOR_FOCUS_INTENT } from "@/components/inspector/inspector-store-types";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { useMountEffect } from "@/hooks/use-effect";
 import type { ChatThreadId, ChatThreadRef } from "@/lib/chat-thread-ref";
@@ -39,7 +40,7 @@ export type InspectorChatRequest = {
  * after the pre-filled content. The chat's rail tab flashes, so the eye finds
  * where it opened even when the pane was already showing.
  */
-export const useOpenChatInInspector = () => {
+const useOpenChatInInspector = () => {
   const { focusThread, insertMentionIntoThread, insertPastedTextIntoThread } =
     useChatEditorManager();
   const openChat = useInspectorTabsStore((s) => s.openChat);
@@ -57,6 +58,7 @@ export const useOpenChatInInspector = () => {
       id: threadId,
       workspaceId,
       contextMatterIds: [...contextMatterIds],
+      focus: INSPECTOR_FOCUS_INTENT.claim,
     });
     flashTab(threadId);
 

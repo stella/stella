@@ -1,16 +1,164 @@
+use crate::logging::best_effort;
 use tauri::{
-  AppHandle, Wry,
-  menu::{Menu, MenuBuilder, MenuItemBuilder, SubmenuBuilder},
+  AppHandle, Manager, Wry,
+  menu::{Menu, MenuBuilder, MenuItemBuilder, Submenu, SubmenuBuilder},
 };
 
-use crate::i18n::{t, t_plural};
+use crate::PreferencesTab;
+use crate::activity::{ActivityRecordingStatus, TrayActivitySnapshot};
+use crate::dictation::TrayDictation;
+use crate::dictation_hold_key::KeyNames;
+use crate::i18n::{active_locale, t, t_fmt, t_plural};
 use crate::types::{AppSnapshot, SessionSnapshot};
+
+#[cfg(target_os = "macos")]
+use objc2::MainThreadMarker as TrayMainThread;
+
+#[cfg(not(target_os = "macos"))]
+struct TrayMainThread;
 
 const QUIT_ACTION: &str = "quit";
 const OPEN_PREFERENCES_ACTION: &str = "open-preferences";
+const RECONNECT_ACCOUNT_ACTION: &str = "reconnect-account";
 const OPEN_CLIPBOARD_ACTION: &str = "open-clipboard";
+const OPEN_ACTIVITY_ACTION: &str = "open-activity";
+const OPEN_TRANSCRIBE_ACTION: &str = "open-transcribe";
+const OPEN_DICTATION_SETTINGS_ACTION: &str = "open-dictation-settings";
+const DICTATION_HINT_ITEM: &str = "dictation-hint";
+const PAUSE_ACTIVITY_ACTION: &str = "activity-pause";
+const RESUME_ACTIVITY_ACTION: &str = "activity-resume";
+const ACTIVITY_STATUS_ITEM: &str = "activity-status";
+const ACTIVITY_NOW_ITEM: &str = "activity-now";
+const MILLIS_PER_TENTH_HOUR: u64 = 360_000;
+const TRAY_ICON_BYTES: &[u8] = include_bytes!("../icons/tray-icon-32-template.png");
+
+fn format_activity_hours(total_ms: u64, locale: &str) -> String {
+  let tenths =
+    total_ms.saturating_add(MILLIS_PER_TENTH_HOUR / 2) / MILLIS_PER_TENTH_HOUR;
+  let separator = match locale {
+    "en" => '.',
+    "ar" => '٫',
+    "cs" | "de" | "es" | "et" | "fr" | "hu" | "lt" | "lv" | "pl" | "pt-BR" | "sk" => {
+      ','
+    }
+    _ => panic!("activity tray requires a shipped locale"),
+  };
+  let number = format!("{}{separator}{}", tenths / 10, tenths % 10);
+  if locale != "ar" {
+    return number;
+  }
+  number
+    .chars()
+    .map(|character| match character {
+      '0' => '٠',
+      '1' => '١',
+      '2' => '٢',
+      '3' => '٣',
+      '4' => '٤',
+      '5' => '٥',
+      '6' => '٦',
+      '7' => '٧',
+      '8' => '٨',
+      '9' => '٩',
+      other => other,
+    })
+    .collect()
+}
+
+fn activity_status_label(snapshot: &TrayActivitySnapshot) -> String {
+  let key = match snapshot.status {
+    ActivityRecordingStatus::Recording => "tray.activityRecording",
+    ActivityRecordingStatus::Paused => "tray.activityPaused",
+    ActivityRecordingStatus::Off => return t("tray.activityOff").to_string(),
+  };
+  let hours = format_activity_hours(snapshot.total_ms, active_locale());
+  t_fmt(key, &[("hours", &hours)])
+}
+
+fn activity_action(
+  status: ActivityRecordingStatus,
+) -> Option<(&'static str, &'static str)> {
+  match status {
+    ActivityRecordingStatus::Recording => {
+      Some((PAUSE_ACTIVITY_ACTION, "tray.activityPause"))
+    }
+    ActivityRecordingStatus::Paused => {
+      Some((RESUME_ACTIVITY_ACTION, "tray.activityResume"))
+    }
+    ActivityRecordingStatus::Off => None,
+  }
+}
+
+/// The tray's Dictation submenu, decided apart from the native menu.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum DictationMenu {
+  /// Switched off: one item, opening the page where it is turned on.
+  Off,
+  /// On: a line naming the key to hold, then its settings.
+  On { hint: String },
+}
+
+/// `None` wherever the Settings window shows no Dictation page.
+fn dictation_menu(
+  state: Option<TrayDictation>,
+  names: KeyNames,
+  locale: &str,
+) -> Option<DictationMenu> {
+  let state = state?;
+  if !state.enabled {
+    return Some(DictationMenu::Off);
+  }
+  let language = locale.split('-').next().unwrap_or(locale);
+  let key = state.hold_key.label(names, language, |key| {
+    t_fmt("dictation.holdKey.right", &[("key", key)])
+  });
+  Some(DictationMenu::On {
+    hint: t_fmt("tray.dictationHint", &[("key", &key)]),
+  })
+}
+
+fn recording_icon(recording: bool) -> image::ImageResult<tauri::image::Image<'static>> {
+  let mut image = image::load_from_memory(TRAY_ICON_BYTES)?.to_rgba8();
+  if recording {
+    // A monochrome dot remains visible when macOS tints the template icon.
+    let radius = image.width().min(image.height()) / 10;
+    let center_x = image.width().saturating_sub(radius + 2);
+    let center_y = image.height().saturating_sub(radius + 2);
+    for (x, y, pixel) in image.enumerate_pixels_mut() {
+      let distance =
+        u64::from(x.abs_diff(center_x)).pow(2) + u64::from(y.abs_diff(center_y)).pow(2);
+      if distance <= u64::from(radius).pow(2) {
+        *pixel = image::Rgba([0, 0, 0, 255]);
+      } else if distance <= u64::from(radius + 1).pow(2) {
+        *pixel = image::Rgba([0, 0, 0, 0]);
+      }
+    }
+  }
+  let (width, height) = image.dimensions();
+  Ok(tauri::image::Image::new_owned(
+    image.into_raw(),
+    width,
+    height,
+  ))
+}
+
+#[allow(
+  clippy::disallowed_methods,
+  clippy::disallowed_types,
+  reason = "the tray owner updates native handles only from its main-thread refresh"
+)]
+fn set_tray_icon(
+  tray: &tauri::tray::TrayIcon,
+  icon: tauri::image::Image<'_>,
+) -> tauri::Result<()> {
+  // Replacing the image clears macOS template tinting.
+  tray.set_icon(Some(icon))?;
+  tray.set_icon_as_template(true)
+}
+
 const OPEN_ABOUT_ACTION: &str = "open-about";
 const CHECK_FOR_UPDATES_ACTION: &str = "check-for-updates";
+const UPDATES_MANAGED_ITEM: &str = "updates-managed";
 const OPEN_EDIT_ROOT_ACTION: &str = "open-edit-root";
 const COPY_DIAGNOSTICS_ACTION: &str = "copy-diagnostics";
 const EMAIL_SUPPORT_ACTION: &str = "email-support";
@@ -89,17 +237,167 @@ fn get_tray_status_label(snapshot: &AppSnapshot) -> String {
 /// Rebuilds the tray menu from `snapshot`. The menu is the one native string
 /// the app caches, so both state changes and a language change come through
 /// here. A failed rebuild leaves the previous menu in place.
+///
+/// Callers run on async workers, but AppKit status items may only be touched
+/// on the main thread: dropping the last tray handle elsewhere removes the
+/// status item off the main thread and aborts the process. The work hops to
+/// the main thread instead.
 pub fn refresh(app: &AppHandle, snapshot: &AppSnapshot) {
-  if let Ok(menu) = build_tray_menu(app, snapshot)
-    && let Some(tray) = app.tray_by_id("main")
+  let handle = app.clone();
+  let snapshot = snapshot.clone();
+  if app
+    .run_on_main_thread(move || {
+      #[cfg(target_os = "macos")]
+      let main_thread =
+        TrayMainThread::new().expect("tray work must run on the main thread");
+      #[cfg(not(target_os = "macos"))]
+      let main_thread = TrayMainThread;
+      refresh_on_main_thread(&handle, &snapshot, &main_thread);
+    })
+    .is_err()
   {
-    let _ = tray.set_menu(Some(menu));
+    tracing::warn!("tray refresh skipped: the event loop is gone");
   }
 }
 
-pub fn build_tray_menu(
+/// Shows a short mark beside the status icon, or removes it.
+#[cfg_attr(
+  not(dictation),
+  allow(dead_code, reason = "only builds with the speech engine drive these")
+)]
+pub fn set_status_mark(app: &AppHandle, mark: Option<&'static str>) {
+  let handle = app.clone();
+  if app
+    .run_on_main_thread(move || {
+      #[cfg(target_os = "macos")]
+      let main_thread =
+        TrayMainThread::new().expect("tray work must run on the main thread");
+      #[cfg(not(target_os = "macos"))]
+      let main_thread = TrayMainThread;
+      set_status_mark_on_main_thread(&handle, mark, &main_thread);
+    })
+    .is_err()
+  {
+    tracing::warn!("tray mark skipped: the event loop is gone");
+  }
+}
+
+#[cfg_attr(
+  not(dictation),
+  allow(dead_code, reason = "only builds with the speech engine drive these")
+)]
+#[allow(
+  clippy::disallowed_methods,
+  reason = "the tray owner: the main-thread proof keeps every native handle local"
+)]
+fn set_status_mark_on_main_thread(
+  app: &AppHandle,
+  mark: Option<&'static str>,
+  _main_thread: &TrayMainThread,
+) {
+  if let Some(tray) = app.tray_by_id("main")
+    && tray.set_title(mark).is_err()
+  {
+    tracing::warn!("tray mark failed");
+  }
+}
+
+/// The status icon and its owning screen in one logical coordinate space;
+/// `None` when there is no icon or the OS cannot place it (an icon in
+/// Windows' hidden overflow area). The handle is read and dropped on the
+/// main thread, like every other tray handle.
+#[cfg(target_os = "macos")]
+pub fn status_icon_placement(
+  app: &AppHandle,
+) -> Option<crate::window_placement::ScreenPlacement> {
+  let handle = app.clone();
+  crate::window_placement::on_main_thread(app, None, move || {
+    let main_thread = TrayMainThread::new()?;
+    status_icon_placement_on_main_thread(&handle, &main_thread)
+  })
+}
+
+/// The status icon and its owning screen; see the macOS twin.
+#[cfg(not(target_os = "macos"))]
+pub fn status_icon_placement(
+  app: &AppHandle,
+) -> Option<crate::window_placement::ScreenPlacement> {
+  status_icon_placement_on_main_thread(app, &TrayMainThread)
+}
+
+#[allow(
+  clippy::disallowed_methods,
+  reason = "the tray owner: the main-thread proof keeps every native handle local"
+)]
+fn status_icon_placement_on_main_thread(
+  app: &AppHandle,
+  _main_thread: &TrayMainThread,
+) -> Option<crate::window_placement::ScreenPlacement> {
+  let tray = app.tray_by_id("main")?;
+  #[cfg(target_os = "macos")]
+  {
+    tray
+      .with_inner_tray_icon(|inner| {
+        let main_thread = TrayMainThread::new()?;
+        let window = inner.ns_status_item()?.button(main_thread)?.window()?;
+        crate::window_placement::native_window_placement(&window, main_thread)
+      })
+      .ok()
+      .flatten()
+  }
+  #[cfg(not(target_os = "macos"))]
+  {
+    crate::window_placement::physical_rect_placement(app, tray.rect().ok().flatten()?)
+  }
+}
+
+#[allow(
+  clippy::disallowed_methods,
+  reason = "the tray owner: the main-thread proof keeps every native handle local"
+)]
+fn refresh_on_main_thread(
   app: &AppHandle,
   snapshot: &AppSnapshot,
+  main_thread: &TrayMainThread,
+) {
+  let binding = activity_binding(app);
+  let activity = crate::activity::tray_snapshot(app);
+  let menu =
+    build_tray_menu_with_activity(app, snapshot, activity.as_ref(), main_thread);
+  let Some(tray) = app.tray_by_id("main") else {
+    return;
+  };
+  // Building native menu items can hop threads. Never install a projection
+  // copied from the account that was unlinked while those items were built.
+  let current = binding == activity_binding(app);
+  let menu = if current {
+    menu
+  } else {
+    build_tray_menu_with_activity(app, snapshot, None, main_thread)
+  };
+  if let Ok(menu) = menu {
+    best_effort(tray.set_menu(Some(menu)), "tray menu was not updated");
+  }
+  let recording = current
+    && activity
+      .as_ref()
+      .is_some_and(|activity| activity.status == ActivityRecordingStatus::Recording);
+  if let Ok(icon) = recording_icon(recording) {
+    best_effort(set_tray_icon(&tray, icon), "tray icon was not updated");
+  }
+}
+
+fn activity_binding(app: &AppHandle) -> Option<(u64, String)> {
+  app
+    .try_state::<crate::feature_gate::FeatureGates>()?
+    .account_binding(crate::feature_gate::DesktopFeature::ActivityTimeline)
+}
+
+fn build_tray_menu_with_activity(
+  app: &AppHandle,
+  snapshot: &AppSnapshot,
+  activity: Option<&TrayActivitySnapshot>,
+  _main_thread: &TrayMainThread,
 ) -> tauri::Result<Menu<Wry>> {
   let mut builder = MenuBuilder::new(app);
 
@@ -111,9 +409,40 @@ pub fn build_tray_menu(
   );
   builder = builder.separator();
 
-  builder = builder.item(
-    &MenuItemBuilder::with_id(OPEN_CLIPBOARD_ACTION, t("tray.clipboard")).build(app)?,
+  if crate::account::reconnect_needed() {
+    builder = builder.item(
+      &MenuItemBuilder::with_id(RECONNECT_ACCOUNT_ACTION, t("tray.reconnectAccount"))
+        .build(app)?,
+    );
+    builder = builder.separator();
+  }
+
+  let clipboard_enabled = !crate::managed_policy::current().clipboard_disabled;
+  if clipboard_enabled {
+    builder = builder.item(
+      &MenuItemBuilder::with_id(OPEN_CLIPBOARD_ACTION, t("clipboard.title"))
+        .build(app)?,
+    );
+  }
+  let dictation = dictation_menu(
+    crate::dictation::tray_state(app),
+    KeyNames::CURRENT,
+    active_locale(),
   );
+  if let Some(dictation) = &dictation {
+    builder = builder.item(&build_dictation_menu(app, dictation)?);
+  }
+  let first_group = clipboard_enabled || dictation.is_some();
+  let activity_enabled = crate::activity::is_enabled(app);
+  if activity_enabled {
+    if first_group {
+      builder = builder.separator();
+    }
+    builder = builder.item(&build_activity_menu(app, activity)?);
+  }
+  if first_group || activity_enabled {
+    builder = builder.separator();
+  }
 
   // Settings
   builder = builder.item(
@@ -121,17 +450,25 @@ pub fn build_tray_menu(
       .build(app)?,
   );
 
-  // Check for updates
-  builder = builder.item(
-    &MenuItemBuilder::with_id(CHECK_FOR_UPDATES_ACTION, t("tray.checkForUpdates"))
-      .enabled(!matches!(
-        snapshot.update.status,
-        crate::types::DesktopUpdateStatus::Checking
-          | crate::types::DesktopUpdateStatus::Downloading
-          | crate::types::DesktopUpdateStatus::Applying
-      ))
-      .build(app)?,
-  );
+  // Check for updates, unless the organization deploys them itself
+  if crate::managed_policy::current().updates_disabled {
+    builder = builder.item(
+      &MenuItemBuilder::with_id(UPDATES_MANAGED_ITEM, t("tray.updatesManaged"))
+        .enabled(false)
+        .build(app)?,
+    );
+  } else {
+    builder = builder.item(
+      &MenuItemBuilder::with_id(CHECK_FOR_UPDATES_ACTION, t("tray.checkForUpdates"))
+        .enabled(!matches!(
+          snapshot.update.status,
+          crate::types::DesktopUpdateStatus::Checking
+            | crate::types::DesktopUpdateStatus::Downloading
+            | crate::types::DesktopUpdateStatus::Applying
+        ))
+        .build(app)?,
+    );
+  }
 
   // Support submenu
   let support_menu = SubmenuBuilder::new(app, t("tray.support"))
@@ -226,6 +563,82 @@ pub fn build_tray_menu(
   builder.build()
 }
 
+fn build_dictation_menu(
+  app: &AppHandle,
+  dictation: &DictationMenu,
+) -> tauri::Result<Submenu<Wry>> {
+  let menu = SubmenuBuilder::new(app, t("tray.dictation"));
+  // The Transcribe window has the same gate as dictation itself.
+  let transcribe =
+    MenuItemBuilder::with_id(OPEN_TRANSCRIBE_ACTION, t("tray.transcribeRecording"))
+      .build(app)?;
+  match dictation {
+    // Transcribing a recording does not need dictation switched on.
+    DictationMenu::Off => menu
+      .item(
+        &MenuItemBuilder::with_id(
+          OPEN_DICTATION_SETTINGS_ACTION,
+          t("tray.dictationTurnOn"),
+        )
+        .build(app)?,
+      )
+      .separator()
+      .item(&transcribe),
+    DictationMenu::On { hint } => menu
+      .item(
+        &MenuItemBuilder::with_id(DICTATION_HINT_ITEM, hint)
+          .enabled(false)
+          .build(app)?,
+      )
+      .separator()
+      .item(&transcribe)
+      .item(
+        &MenuItemBuilder::with_id(
+          OPEN_DICTATION_SETTINGS_ACTION,
+          t("tray.dictationSettings"),
+        )
+        .build(app)?,
+      ),
+  }
+  .build()
+}
+
+fn build_activity_menu(
+  app: &AppHandle,
+  activity: Option<&TrayActivitySnapshot>,
+) -> tauri::Result<Submenu<Wry>> {
+  let mut menu = SubmenuBuilder::new(app, t("tray.activity"));
+  if let Some(activity) = activity {
+    menu = menu.item(
+      &MenuItemBuilder::with_id(ACTIVITY_STATUS_ITEM, activity_status_label(activity))
+        .enabled(false)
+        .build(app)?,
+    );
+    if activity.status == ActivityRecordingStatus::Recording
+      && let Some(name) = &activity.now
+    {
+      menu = menu.item(
+        &MenuItemBuilder::with_id(
+          ACTIVITY_NOW_ITEM,
+          t_fmt("tray.activityNow", &[("name", name)]),
+        )
+        .enabled(false)
+        .build(app)?,
+      );
+    }
+    menu = menu.separator();
+    if let Some((action, label)) = activity_action(activity.status) {
+      menu = menu.item(&MenuItemBuilder::with_id(action, t(label)).build(app)?);
+    }
+  }
+  menu
+    .item(
+      &MenuItemBuilder::with_id(OPEN_ACTIVITY_ACTION, t("tray.openActivity"))
+        .build(app)?,
+    )
+    .build()
+}
+
 pub fn get_session_id_from_action<'a>(
   action: &'a str,
   prefix: &str,
@@ -237,14 +650,29 @@ pub fn handle_menu_action(action: &str) -> MenuAction {
   if action == QUIT_ACTION {
     return MenuAction::Quit;
   }
-  if action == OPEN_PREFERENCES_ACTION {
-    return MenuAction::OpenPreferences("general");
+  if action == OPEN_PREFERENCES_ACTION || action == RECONNECT_ACCOUNT_ACTION {
+    return MenuAction::OpenPreferences(PreferencesTab::General);
   }
   if action == OPEN_CLIPBOARD_ACTION {
     return MenuAction::OpenClipboard;
   }
+  if action == OPEN_ACTIVITY_ACTION {
+    return MenuAction::OpenActivity;
+  }
+  if action == OPEN_TRANSCRIBE_ACTION {
+    return MenuAction::OpenTranscribe;
+  }
+  if action == OPEN_DICTATION_SETTINGS_ACTION {
+    return MenuAction::OpenPreferences(PreferencesTab::Dictation);
+  }
+  if action == PAUSE_ACTIVITY_ACTION {
+    return MenuAction::SetActivityRecording(ActivityRecordingStatus::Paused);
+  }
+  if action == RESUME_ACTIVITY_ACTION {
+    return MenuAction::SetActivityRecording(ActivityRecordingStatus::Recording);
+  }
   if action == OPEN_ABOUT_ACTION {
-    return MenuAction::OpenPreferences("about");
+    return MenuAction::OpenPreferences(PreferencesTab::About);
   }
   if action == CHECK_FOR_UPDATES_ACTION {
     return MenuAction::CheckForUpdates;
@@ -275,13 +703,16 @@ pub fn handle_menu_action(action: &str) -> MenuAction {
     return MenuAction::RetrySession(id.to_string());
   }
 
-  MenuAction::OpenPreferences("general")
+  MenuAction::OpenPreferences(PreferencesTab::General)
 }
 
 pub enum MenuAction {
   Quit,
-  OpenPreferences(&'static str),
+  OpenPreferences(PreferencesTab),
   OpenClipboard,
+  OpenActivity,
+  OpenTranscribe,
+  SetActivityRecording(ActivityRecordingStatus),
   CheckForUpdates,
   OpenEditRoot,
   CopyDiagnostics,
@@ -296,6 +727,7 @@ pub enum MenuAction {
 #[cfg(test)]
 mod tests {
   use super::*;
+  use crate::dictation_hold_key::HoldChoice;
   use crate::types::{
     DesktopEditFileType, DesktopNotificationPreferences, DesktopUpdateSnapshot,
     SessionStatus,
@@ -303,6 +735,172 @@ mod tests {
 
   fn init_i18n() {
     crate::i18n::init_en();
+  }
+
+  #[test]
+  fn activity_hours_round_and_follow_the_shipped_locale() {
+    assert_eq!(format_activity_hours(0, "en"), "0.0");
+    assert_eq!(format_activity_hours(18_720_000, "en"), "5.2");
+    assert_eq!(format_activity_hours(179_999, "en"), "0.0");
+    assert_eq!(format_activity_hours(180_000, "en"), "0.1");
+    for locale in [
+      "cs", "de", "es", "et", "fr", "hu", "lt", "lv", "pl", "pt-BR", "sk",
+    ] {
+      assert_eq!(format_activity_hours(18_720_000, locale), "5,2");
+    }
+    assert_eq!(format_activity_hours(18_720_000, "ar"), "٥٫٢");
+    for locale in crate::i18n::shipped_locales() {
+      assert!(!format_activity_hours(18_720_000, locale).is_empty());
+    }
+  }
+
+  #[test]
+  fn reconnect_opens_the_account_settings() {
+    assert!(matches!(
+      handle_menu_action(RECONNECT_ACCOUNT_ACTION),
+      MenuAction::OpenPreferences(PreferencesTab::General)
+    ));
+  }
+
+  #[test]
+  fn activity_menu_actions_pause_and_resume_without_starting_an_off_recorder() {
+    assert!(matches!(
+      handle_menu_action(PAUSE_ACTIVITY_ACTION),
+      MenuAction::SetActivityRecording(ActivityRecordingStatus::Paused)
+    ));
+    assert!(matches!(
+      handle_menu_action(RESUME_ACTIVITY_ACTION),
+      MenuAction::SetActivityRecording(ActivityRecordingStatus::Recording)
+    ));
+    assert_eq!(activity_action(ActivityRecordingStatus::Off), None);
+    assert_eq!(
+      activity_action(ActivityRecordingStatus::Recording),
+      Some((PAUSE_ACTIVITY_ACTION, "tray.activityPause"))
+    );
+    assert_eq!(
+      activity_action(ActivityRecordingStatus::Paused),
+      Some((RESUME_ACTIVITY_ACTION, "tray.activityResume"))
+    );
+  }
+
+  #[test]
+  fn recording_icon_adds_a_dot_without_changing_dimensions_and_restores_the_base() {
+    let base = recording_icon(false).unwrap();
+    let recording = recording_icon(true).unwrap();
+    assert_eq!(
+      (recording.width(), recording.height()),
+      (base.width(), base.height())
+    );
+    assert_ne!(recording.rgba(), base.rgba());
+    assert_eq!(recording_icon(false).unwrap().rgba(), base.rgba());
+  }
+
+  #[test]
+  fn recording_icons_are_monochrome_with_alpha() {
+    for recording in [false, true] {
+      let icon = recording_icon(recording).unwrap();
+      let (pixels, _) = icon.rgba().as_chunks::<4>();
+      assert!(pixels.iter().any(|pixel| pixel[3] == 0));
+      assert!(pixels.iter().any(|pixel| pixel[3] == 255));
+      assert!(
+        pixels
+          .iter()
+          .all(|pixel| pixel[3] == 0 || pixel[..3] == [0, 0, 0]),
+        "visible template pixels must be monochrome black"
+      );
+    }
+  }
+
+  #[test]
+  fn dictation_is_in_the_tray_only_where_settings_has_its_page() {
+    init_i18n();
+    assert_eq!(dictation_menu(None, KeyNames::Mac, "en"), None);
+  }
+
+  #[test]
+  fn dictation_switched_off_offers_only_turning_it_on() {
+    init_i18n();
+    let off = TrayDictation {
+      enabled: false,
+      hold_key: HoldChoice::Fn,
+    };
+    assert_eq!(
+      dictation_menu(Some(off), KeyNames::Mac, "en"),
+      Some(DictationMenu::Off)
+    );
+  }
+
+  #[test]
+  fn the_dictation_hint_names_the_configured_key() {
+    init_i18n();
+    let on = |hold_key| TrayDictation {
+      enabled: true,
+      hold_key,
+    };
+    let hint = |state, names| match dictation_menu(Some(state), names, "en") {
+      Some(DictationMenu::On { hint }) => hint,
+      other => panic!("expected the on menu, got {other:?}"),
+    };
+    assert_eq!(
+      hint(on(HoldChoice::Fn), KeyNames::Mac),
+      "Hold fn to dictate"
+    );
+    assert_eq!(
+      hint(on(HoldChoice::RightOption), KeyNames::Mac),
+      "Hold Right ⌥ to dictate"
+    );
+    assert_eq!(
+      hint(on(HoldChoice::Combination), KeyNames::Windows),
+      "Hold Ctrl+Alt+Space to dictate"
+    );
+  }
+
+  #[test]
+  fn the_dictation_submenu_opens_the_transcribe_window() {
+    assert!(matches!(
+      handle_menu_action(OPEN_TRANSCRIBE_ACTION),
+      MenuAction::OpenTranscribe
+    ));
+  }
+
+  #[test]
+  fn both_dictation_items_open_its_settings_page() {
+    assert!(matches!(
+      handle_menu_action(OPEN_DICTATION_SETTINGS_ACTION),
+      MenuAction::OpenPreferences(PreferencesTab::Dictation)
+    ));
+  }
+
+  #[test]
+  fn dictation_entries_have_translations_in_every_locale() {
+    for key in [
+      "tray.dictation",
+      "tray.dictationHint",
+      "tray.dictationSettings",
+      "tray.dictationTurnOn",
+    ] {
+      assert!(
+        crate::i18n::locales_missing(key).is_empty(),
+        "missing {key}"
+      );
+    }
+  }
+
+  #[test]
+  fn activity_statuses_and_actions_have_translations_in_every_locale() {
+    for key in [
+      "tray.activityRecording",
+      "tray.activityPaused",
+      "tray.activityOff",
+      "tray.activityNow",
+      "tray.activityPause",
+      "tray.activityResume",
+    ] {
+      assert!(
+        crate::i18n::locales_missing(key).is_empty(),
+        "missing {key}"
+      );
+    }
   }
 
   fn make_session(status: SessionStatus) -> SessionSnapshot {
@@ -325,6 +923,7 @@ mod tests {
 
   fn make_snapshot(sessions: Vec<SessionSnapshot>) -> AppSnapshot {
     AppSnapshot {
+      document_recovery: crate::types::DocumentRecoverySnapshot::default(),
       bridge_port: 45_901,
       bridge_version: crate::types::BRIDGE_VERSION,
       capabilities: crate::types::BRIDGE_CAPABILITIES
@@ -503,7 +1102,7 @@ mod tests {
   fn test_handle_menu_action_preferences() {
     assert!(matches!(
       handle_menu_action("open-preferences"),
-      MenuAction::OpenPreferences("general")
+      MenuAction::OpenPreferences(PreferencesTab::General)
     ));
   }
 
@@ -519,7 +1118,7 @@ mod tests {
   fn test_handle_menu_action_about() {
     assert!(matches!(
       handle_menu_action("open-about"),
-      MenuAction::OpenPreferences("about")
+      MenuAction::OpenPreferences(PreferencesTab::About)
     ));
   }
 
@@ -583,7 +1182,7 @@ mod tests {
   fn test_handle_menu_action_unknown_defaults_to_preferences() {
     assert!(matches!(
       handle_menu_action("some-unknown-action"),
-      MenuAction::OpenPreferences("general")
+      MenuAction::OpenPreferences(PreferencesTab::General)
     ));
   }
 }

@@ -30,13 +30,16 @@ import { FOLIO_COLLAB_REDIS_SCOPE } from "@stll/api-contract/folio-collab";
  * key outlives its writes on purpose and must say why.
  */
 export const COORDINATION_KEY_EXPIRY = {
+  "link-icons": "ttl",
   "api-ratelimit": "ttl",
   "case-law-publisher-gate": "ttl",
   "auth-ratelimit": "ttl",
   "mcp-gateway-ratelimit": "ttl",
   "action-admission": "ttl",
   "mcp-read-fence": "ttl",
+  "public-read-continuation": "ttl",
   "feedback-intake": "ttl",
+  "sign-in-code-delivery": "ttl",
   // Pub/sub channels do not materialize values. The only stored key under this
   // scope is Hocuspocus's Redlock key, whose lockTimeout supplies its TTL.
   [FOLIO_COLLAB_REDIS_SCOPE]: "ttl",
@@ -123,13 +126,23 @@ export const unboundedCoordinationKey = (
   return buildKey(options);
 };
 
+/**
+ * A relative lifetime, or `epoch-milliseconds`: an absolute expiry on the
+ * server clock, so a key can end exactly when another one does.
+ */
 type CoordinationTtl = {
-  unit: "seconds" | "milliseconds";
+  unit: "seconds" | "milliseconds" | "epoch-milliseconds";
   value: number;
 };
 
+const TTL_TOKEN = {
+  seconds: "EX",
+  milliseconds: "PX",
+  "epoch-milliseconds": "PXAT",
+} as const satisfies Record<CoordinationTtl["unit"], string>;
+
 const ttlArguments = ({ unit, value }: CoordinationTtl): [string, string] => [
-  unit === "seconds" ? "EX" : "PX",
+  TTL_TOKEN[unit],
   String(value),
 ];
 

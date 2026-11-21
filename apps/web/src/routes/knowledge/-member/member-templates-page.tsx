@@ -1,8 +1,9 @@
-import { useCallback, useState } from "react";
+import { useState } from "react";
 
 import { getRouteApi, Link } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
+import { LeaveConfirmDialog } from "@/features/knowledge/leave-confirm-dialog";
 import {
   memberKnowledgeActions,
   memberKnowledgeSource,
@@ -13,11 +14,10 @@ import type { StyleSelection } from "@/features/style-sets/style-set-picker-dial
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useFormatter } from "@/i18n/formatting-context";
 import { detached } from "@/lib/detached";
-import { toAPIError, APIError } from "@/lib/errors/api";
+import { APIError, toAPIError } from "@/lib/errors/api";
 import { userErrorMessage } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { isPublicKnowledgeEnabled } from "@/lib/knowledge/public-knowledge-launch";
-import { LeaveConfirmDialog } from "@/routes/knowledge/-components/leave-confirm-dialog";
 import { TemplateList } from "@/routes/knowledge/-components/template-list";
 import { TemplateStudioPage } from "@/routes/knowledge/-components/template-studio";
 import { useTemplateStudioStore } from "@/routes/knowledge/-components/template-studio-store";
@@ -62,71 +62,62 @@ export function MemberTemplatesPage({
 
   // Studio state belongs to this route entry. Replacing it avoids leaving a
   // duplicate list entry behind when the Studio closes.
-  const openStudio = useCallback(
-    async (templateId: string) => {
-      await navigate({ replace: true, search: { template: templateId } });
-    },
-    [navigate],
-  );
+  const openStudio = async (templateId: string) => {
+    await navigate({ replace: true, search: { template: templateId } });
+  };
 
-  const closeStudio = useCallback(() => {
+  const closeStudio = () => {
     detached(
       navigate({ replace: true, search: {} }),
       "knowledge-templates.close-studio",
     );
-  }, [navigate]);
+  };
 
   // Uploading a template drops you straight into the Studio: create it (the
   // server discovers fields from the DOCX), then open the editor. Field/clause
   // config now happens in the Studio, so there's no separate configure step.
   const [uploading, setUploading] = useState(false);
-  const openUploadedTemplate = useCallback(
-    async (file: File) => {
-      setUploading(true);
-      const response = await templateActions.upload(
-        file,
-        file.name.replace(DOCX_EXTENSION_RE, ""),
-      );
-      if (response.error) {
-        setUploading(false);
-        notifyUserError(toAPIError(response.error), t("templates.saveFailed"), {
-          description: userErrorMessage(
-            response.error,
-            t("common.unexpectedError"),
-          ),
-        });
-        return;
-      }
-      invalidateTemplates();
-      // Hold the upload placeholder until the Studio's URL has landed, so the
-      // list cannot flash between the two.
-      await openStudio(response.data.id);
+  const openUploadedTemplate = async (file: File) => {
+    setUploading(true);
+    const response = await templateActions.upload(
+      file,
+      file.name.replace(DOCX_EXTENSION_RE, ""),
+    );
+    if (response.error) {
       setUploading(false);
-    },
-    [t, templateActions, invalidateTemplates, openStudio],
-  );
+      notifyUserError(toAPIError(response.error), t("templates.saveFailed"), {
+        description: userErrorMessage(
+          response.error,
+          t("common.unexpectedError"),
+        ),
+      });
+      return;
+    }
+    invalidateTemplates();
+    // Hold the upload placeholder until the Studio's URL has landed, so the
+    // list cannot flash between the two.
+    await openStudio(response.data.id);
+    setUploading(false);
+  };
 
-  const openBlankTemplate = useCallback(
-    async (name: string, style: StyleSelection) => {
-      const response =
-        style.type === "stella"
-          ? await templateActions.createBlank(name)
-          : await templateActions.createFromStyleSet(name, style.styleSetId);
-      if (response.error) {
-        notifyUserError(toAPIError(response.error), t("templates.saveFailed"), {
-          description: userErrorMessage(
-            response.error,
-            t("common.unexpectedError"),
-          ),
-        });
-        return false;
-      }
-      invalidateTemplates();
-      await openStudio(response.data.id);
-      return true;
-    },
-    [t, templateActions, invalidateTemplates, openStudio],
-  );
+  const openBlankTemplate = async (name: string, style: StyleSelection) => {
+    const response =
+      style.type === "stella"
+        ? await templateActions.createBlank(name)
+        : await templateActions.createFromStyleSet(name, style.styleSetId);
+    if (response.error) {
+      notifyUserError(toAPIError(response.error), t("templates.saveFailed"), {
+        description: userErrorMessage(
+          response.error,
+          t("common.unexpectedError"),
+        ),
+      });
+      return false;
+    }
+    invalidateTemplates();
+    await openStudio(response.data.id);
+    return true;
+  };
 
   if (openTemplateId !== undefined) {
     const exitDetail = () => {

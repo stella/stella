@@ -22,13 +22,23 @@
  */
 
 import { Result } from "better-result";
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  setSystemTime,
+  test,
+} from "bun:test";
 
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import type { AdapterKey } from "@/api/handlers/case-law/consts";
-import type { SourceAdapter } from "@/api/handlers/case-law/ingestion/adapter";
 import { getAdapter } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
+import type { SourceAdapter } from "@/api/lib/legal-search/ingestion-types";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
+
+const testFetchState = createTestFetch();
 
 // ── Bounds ───────────────────────────────────────────────
 
@@ -55,6 +65,8 @@ const MAX_WALK_STEPS = 192;
  */
 /** Walks are stubbed and sleepless, but CZ ÚS still drives ~2000 requests. */
 const WALK_TIMEOUT_MS = 120_000;
+
+const FIXTURE_CLOCK_MS = new Date("2026-10-06T12:00:00.000Z").getTime();
 
 /**
  * What the pl-courts stub gives the dump: a full page and a short one. The
@@ -404,6 +416,13 @@ const ADAPTER_CONFORMANCE = {
     maxSteadyStateCursors: 4,
     maxSteadyStatePositions: 1,
   },
+  [ADAPTER_KEYS.UK_FCL]: {
+    disposition: "exercised",
+    exhaustedSource: () =>
+      xmlResponse('<feed xmlns="http://www.w3.org/2005/Atom"/>'),
+    maxSteadyStateCursors: 4,
+    maxSteadyStatePositions: 1,
+  },
   [ADAPTER_KEYS.HU_BHGY]: {
     disposition: "exercised",
     // The search answers a window it holds nothing for with an empty list and
@@ -476,6 +495,40 @@ const ADAPTER_CONFORMANCE = {
     maxSteadyStateCursors: 1,
     maxSteadyStatePositions: 0,
   },
+  [ADAPTER_KEYS.CZ_UOHS]: {
+    disposition: "excluded",
+    reason: "the complete JSON-LD export is covered by adapter fixture tests",
+  },
+  [ADAPTER_KEYS.BR_TJDFT]: {
+    disposition: "exercised",
+    // Every closed publication day answers an empty window, so the frontier
+    // crosses the last closed day's two bases and waits on a day that has
+    // not closed: a cycle there sends nothing and returns its cursor.
+    exhaustedSource: () =>
+      jsonResponse({
+        hits: { value: 0 },
+        agregacoes: {},
+        paginacao: { pagina: 0, tamanho: 40 },
+        registros: [],
+      }),
+    maxSteadyStateCursors: 1,
+    maxSteadyStatePositions: 0,
+  },
+  [ADAPTER_KEYS.CZ_ISIR]: {
+    disposition: "excluded",
+    reason:
+      "the feed walk by action id, the cursor standing still at the feed's end and the stop on an unread document are covered by cz-isir.test.ts against a composed feed page",
+  },
+  [ADAPTER_KEYS.CZ_NS_SBIRKA]: {
+    disposition: "excluded",
+    reason:
+      "the sitemap walk, the parked cycle at the newest entry, an edited entry met again and the stop on an unread page are covered by cz-ns-sbirka.test.ts against recorded sitemaps",
+  },
+  [ADAPTER_KEYS.BR_TST]: {
+    disposition: "excluded",
+    reason:
+      "the walk, the window restart, the quiet parked cycle and the rate-limit halt are covered by br-tst.test.ts against a scripted search",
+  },
 } as const satisfies Record<AdapterKey, AdapterCoverage>;
 
 /**
@@ -522,22 +575,21 @@ type ExhaustedProbe = {
 };
 
 const installExhaustedSource = (respond: ExhaustedSource): ExhaustedProbe => {
-  const originalFetch = globalThis.fetch;
   const positions = new Set<string>();
 
-  globalThis.fetch = asFetchMock(
-    async (input: string | URL | Request, init?: RequestInit) => {
+  testFetchState.set(
+    asFetchMock(async (input: string | URL | Request, init?: RequestInit) => {
       const url = resolveUrl(input);
       const method = init?.method ?? "GET";
       positions.add(positionKey(method, url, init?.body));
       return await Promise.resolve(respond({ method, url }));
-    },
+    }),
   );
 
   return {
     positions,
     restore: () => {
-      globalThis.fetch = originalFetch;
+      testFetchState.restore();
     },
   };
 };
@@ -635,21 +687,29 @@ const describeFootprint = (positions: readonly string[]): string =>
 // ── Invariants ───────────────────────────────────────────
 
 describe("an exhausted source leaves every adapter parked", () => {
-  const originalFetch = globalThis.fetch;
   const originalSleep = Bun.sleep;
+  let fixtureClock = FIXTURE_CLOCK_MS;
 
   beforeEach(() => {
-    // Adapters pace themselves against live courts. Nothing here is live.
-    Bun.sleep = async () => {
-      // no-op
+    fixtureClock = FIXTURE_CLOCK_MS;
+    setSystemTime(fixtureClock);
+    // Keep calendar windows deterministic and spend pacing delays on the
+    // fixture clock, so the walk never waits for a live publisher interval.
+    Bun.sleep = async (duration) => {
+      fixtureClock =
+        typeof duration === "number"
+          ? fixtureClock + Math.max(0, duration)
+          : Math.max(fixtureClock, duration.getTime());
+      setSystemTime(fixtureClock);
     };
   });
 
   afterEach(() => {
     // The walk restores fetch after every step; this covers the step that
     // never returned, so one adapter's stub can never answer the next one's.
-    globalThis.fetch = originalFetch;
+    testFetchState.restore();
     Bun.sleep = originalSleep;
+    setSystemTime();
   });
 
   for (const key of DECLARED_ADAPTER_KEYS) {
@@ -665,6 +725,7 @@ describe("an exhausted source leaves every adapter parked", () => {
     test(
       `${key}: parks within a bounded window`,
       async () => {
+        expect(Date.now()).toBe(FIXTURE_CLOCK_MS);
         const adapter = getAdapter(key);
         expect(adapter, `${key} is declared but not registered`).toBeDefined();
         if (adapter === undefined) {

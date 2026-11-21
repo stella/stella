@@ -14,7 +14,7 @@ export const CREATE_DOCUMENT_DRAFT_STREAM_PREVIEW_INTERVAL_MS = 200;
 const PREVIEW_TITLE_FALLBACK = "Draft";
 
 /** A compiled document the preview can show, with the source it came from. */
-export type CreateDocumentDraftPreview = {
+type CreateDocumentDraftPreview = {
   document: Document;
   /** The source that compiled into `document`. */
   source: string;

@@ -1,0 +1,11 @@
+{
+  "type": "parser",
+  "name": "PL_KIS",
+  "key": "pl-kis",
+  "parserVersion": 37,
+  "sourceFingerprintVersion": 0,
+  "scope": {
+    "type": "all",
+    "reason": "Retain the publisher's excluded fields in the stored record instead of naming them as exclusions. Read a parliamentary answer's question (TRESC_INTERP_ZAPYT) before its text, and a newsletter's own text (TRESC_NEWS), into the document. Drop lines that only link back within the document, and join a footnote's line its sentence runs across. Re-derive stored citations with rule kinds, polarity evidence windows and cited parts; the canonical AST and publisher metadata do not change. A running footer or header that counts its pages after its words (`… 2/13`, `… 2 z 13`) is compared without the count, so it is read as one repeated line and leaves the body, and a paragraph the page break crossed joins again; the AST has no separate feature storage."
+  }
+}

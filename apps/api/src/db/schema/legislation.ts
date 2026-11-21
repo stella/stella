@@ -2,13 +2,21 @@ import type { SQLWrapper } from "drizzle-orm";
 
 import {
   LEGISLATION_EXPRESSION_KINDS,
+  LEGISLATION_IDENTITY_MODES,
   LEGISLATION_WINDOW_DISPOSITION_BASES,
   LEGISLATION_WINDOW_DISPOSITIONS,
 } from "@stll/api-contract/legislation-expression";
 import type { LegislationWindowDispositionBasis } from "@stll/api-contract/legislation-expression";
 import { LEGISLATION_DOCUMENT_STATUSES } from "@stll/api-contract/legislation-status";
 import { STATUTE_SLUG_PATTERN } from "@stll/api-contract/statute-route";
+import type { StoredStatuteVersionChanges } from "@stll/api-contract/statute-version-changes";
 
+import {
+  LEGISLATION_AMENDMENT_CHANGE_KINDS,
+  LEGISLATION_AMENDMENT_EFFECTIVE_TYPES,
+} from "@/api/lib/legal-search/legislation-ingestion-types";
+import type { LegislationAmendmentCoverage } from "@/api/lib/legal-search/legislation-ingestion-types";
+import { redistributableLegislationSourceFor } from "@/api/lib/legal-search/legislation-redistribution-sql";
 import {
   legislationVersionRef,
   notWithdrawn,
@@ -19,15 +27,18 @@ import {
   corpusSampleReaderPolicies,
   globalCaseLawPolicies,
   isNotNull,
-  isNull,
   jsonb,
   p,
-  pUuid,
   publicLawReaderPolicies,
+  pUuid,
   safeUuid,
+  safeWorkspaceId,
   sql,
-  tsvector,
+  stellaPublicLawReader,
   timestamptz,
+  tsvector,
+  user,
+  wsPolicies,
 } from "./common";
 import type {
   CorpusSourceDescriptor,
@@ -35,6 +46,7 @@ import type {
   DocumentAst,
   EmptyAst,
 } from "./common";
+import { workspaces } from "./contacts";
 import {
   CORPUS_INDEX_JOB_OPERATION_SQL_VALUES,
   CORPUS_INDEX_JOB_STATUS_SQL_VALUES,
@@ -147,6 +159,18 @@ export const legislationSources = p.pgTable(
      * and an id whose prefix does not match.
      */
     expressionNamespace: p.varchar("expression_namespace", { length: 32 }),
+    /** Selected before the first document; existing sources retain window identity. */
+    identityMode: p
+      .varchar("identity_mode", {
+        length: 32,
+        enum: [
+          LEGISLATION_IDENTITY_MODES.legacy,
+          LEGISLATION_IDENTITY_MODES.publisher,
+        ],
+      })
+      .notNull()
+      .default(LEGISLATION_IDENTITY_MODES.legacy),
+
     createdAt: timestamptz("created_at").defaultNow().notNull(),
     updatedAt: timestamptz("updated_at")
       .defaultNow()
@@ -158,6 +182,14 @@ export const legislationSources = p.pgTable(
     p.check(
       "legislation_sources_expression_namespace_shape",
       sql`${t.expressionNamespace} IS NULL OR ${t.expressionNamespace} ~ ${sql.raw(`'${LEGISLATION_EXPRESSION_NAMESPACE_PATTERN}'`)}`,
+    ),
+    p.check(
+      "legislation_sources_identity_mode_values",
+      sql`${t.identityMode} IN (${sqlValues(Object.values(LEGISLATION_IDENTITY_MODES))})`,
+    ),
+    p.check(
+      "legislation_sources_publisher_namespace",
+      sql`${t.identityMode} <> 'publisher-expression' OR ${t.expressionNamespace} IS NOT NULL`,
     ),
     ...globalCaseLawPolicies(),
     ...publicLawReaderPolicies(),
@@ -193,6 +225,17 @@ export const legislationDocuments = p.pgTable(
     effectiveDate: p.date("effective_date"),
     versionValidFrom: p.date("version_valid_from"),
     versionValidTo: p.date("version_valid_to"),
+    /** Derived by the database from the source, so partial identity indexes cannot drift. */
+    identityMode: p
+      .varchar("identity_mode", {
+        length: 32,
+        enum: [
+          LEGISLATION_IDENTITY_MODES.legacy,
+          LEGISLATION_IDENTITY_MODES.publisher,
+        ],
+      })
+      .notNull()
+      .default(LEGISLATION_IDENTITY_MODES.legacy),
     /**
      * The publisher's own identity for this version, prefixed with the
      * source's namespace. Set once, from null, and never changed afterwards
@@ -243,6 +286,7 @@ export const legislationDocuments = p.pgTable(
       .default(0)
       .notNull(),
     citationCount: p.integer("citation_count").default(0).notNull(),
+    // Retained until the next schema release; remove with its case-law counterpart.
     citationAuthorityComputedAt: timestamptz("citation_authority_computed_at"),
     textS3Key: p.varchar("text_s3_key", { length: 512 }),
     normalizedS3Key: p.varchar("normalized_s3_key", { length: 512 }),
@@ -252,7 +296,7 @@ export const legislationDocuments = p.pgTable(
     indexedHash: p.varchar("indexed_hash", { length: 64 }),
     indexedGeneration: p.varchar("indexed_generation", { length: 64 }),
     indexedAt: timestamptz("indexed_at"),
-    /** Monotonic fence advanced by each desired-state transaction. */
+    /** Monotonic order of the document's projection desired-state changes. */
     projectionEpoch: p
       .bigint("projection_epoch", { mode: "bigint" })
       .default(0n)
@@ -266,6 +310,14 @@ export const legislationDocuments = p.pgTable(
       .bigint("payload_revision", { mode: "bigint" })
       .default(1n)
       .notNull(),
+    /**
+     * What this consolidation changed against the eligible one before it, and
+     * the payload revisions of both it was computed from; null until computed.
+     * Derived state, owned by `legislation-version-changes.ts`: written after
+     * ingestion stores a version and by its backfill, never by the payload
+     * write itself, so it advances no payload revision.
+     */
+    changeSummary: jsonb("change_summary").$type<StoredStatuteVersionChanges>(),
     createdAt: timestamptz("created_at").defaultNow().notNull(),
     updatedAt: timestamptz("updated_at")
       .defaultNow()
@@ -289,15 +341,35 @@ export const legislationDocuments = p.pgTable(
       "legislation_documents_window_disposition_basis_pairing",
       WINDOW_DISPOSITION_BASIS_PAIRING,
     ),
+    p.check(
+      "legislation_documents_identity_mode_values",
+      sql`${t.identityMode} IN (${sqlValues(Object.values(LEGISLATION_IDENTITY_MODES))})`,
+    ),
+    p.check(
+      "legislation_documents_publisher_identity_required",
+      sql`${t.identityMode} <> 'publisher-expression' OR ${t.publisherExpressionId} IS NOT NULL`,
+    ),
     p
-      .uniqueIndex("legislation_documents_eli_version_lang_idx")
+      .uniqueIndex("legislation_documents_publisher_identity_idx")
+      .on(t.sourceId, t.eli, t.language, t.publisherExpressionId)
+      .where(sql`${t.identityMode} = 'publisher-expression'`),
+    p
+      .uniqueIndex("legislation_documents_legacy_version_lang_idx")
+      .on(t.sourceId, t.eli, t.versionValidFrom, t.language)
+      .where(
+        sql`${t.identityMode} = 'legacy-window' AND ${t.versionValidFrom} IS NOT NULL`,
+      ),
+    p
+      .uniqueIndex("legislation_documents_legacy_current_lang_idx")
+      .on(t.sourceId, t.eli, t.language)
+      .where(
+        sql`${t.identityMode} = 'legacy-window' AND ${t.versionValidFrom} IS NULL`,
+      ),
+    p
+      .index("legislation_documents_work_version_lang_idx")
       .on(t.sourceId, t.eli, t.versionValidFrom, t.language)
       .where(isNotNull(t.versionValidFrom)),
-    p
-      .uniqueIndex("legislation_documents_eli_current_lang_idx")
-      .on(t.sourceId, t.eli, t.language)
-      .where(isNull(t.versionValidFrom)),
-    // `legislation_documents_eli_version_lang_idx` plus the two fields that
+    // The work/version access path plus the two fields that
     // decide whether a version may apply, so the listing's per-Work probes of
     // its eligible dated versions (first opening, wording count, last change)
     // stay index-only. Trailing keys rather than INCLUDE because the Drizzle
@@ -446,6 +518,76 @@ export const legislationDocuments = p.pgTable(
   ],
 );
 
+/** A reproducible provision version pinned to a tenant matter. */
+export const legislationMatterLinks = p.pgTable(
+  "legislation_matter_links",
+  {
+    id: pUuid<"legislationMatterLink">().primaryKey(),
+    documentId: safeUuid<"legislationDocument">("document_id").notNull(),
+    statuteId: p.varchar("statute_id", { length: 512 }).notNull(),
+    provisionId: p.text("provision_id").notNull(),
+    appliedVersion: p.date("applied_version").notNull(),
+    jurisdiction: p.varchar({ length: 3 }).notNull(),
+    workspaceId: safeWorkspaceId("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    linkedBy: p
+      .text("linked_by")
+      .notNull()
+      .references(() => user.id, { onDelete: "restrict" }),
+    createdAt: timestamptz("created_at").defaultNow().notNull(),
+  },
+  (t) => [
+    p
+      .foreignKey({
+        name: "legislation_matter_links_document_fk",
+        columns: [t.documentId],
+        foreignColumns: [legislationDocuments.id],
+      })
+      .onDelete("restrict"),
+    p
+      .uniqueIndex("legislation_matter_links_provision_ws_idx")
+      .on(t.documentId, t.provisionId, t.workspaceId),
+    p.index("legislation_matter_links_workspace_idx").on(t.workspaceId),
+    ...wsPolicies({ columns: t }),
+  ],
+);
+
+/** Publisher-stated aliases bound immutably to a source's language-neutral Work. */
+export const legislationWorkIdentifiers = p.pgTable(
+  "legislation_work_identifiers",
+  {
+    sourceId: safeUuid<"legislationSource">("source_id").notNull(),
+    identifier: p.varchar({ length: 512 }).notNull(),
+    eli: p.varchar({ length: 512 }).notNull(),
+  },
+  (t) => [
+    p.primaryKey({ columns: [t.sourceId, t.identifier] }),
+    p
+      .foreignKey({
+        name: "legislation_work_identifiers_source_fk",
+        columns: [t.sourceId],
+        foreignColumns: [legislationSources.id],
+      })
+      .onDelete("cascade"),
+    p
+      .index("legislation_work_identifiers_identifier_idx")
+      .on(t.identifier, t.sourceId, t.eli),
+    p.check(
+      "legislation_work_identifiers_nonempty",
+      sql`length(${t.identifier}) > 0 AND length(${t.eli}) > 0`,
+    ),
+    p.pgPolicy("legislation_work_identifier_owner_access", {
+      for: "all",
+      to: "public",
+      using: sql`true`,
+      withCheck: sql`true`,
+    }),
+    ...caseLawIngestionOnlyPolicies(),
+    ...publicLawReaderPolicies(),
+  ],
+);
+
 /**
  * How a name in `legislation_work_names` was derived from stored titles. The
  * publisher's own title is not one of them: it is stored in its own column,
@@ -579,6 +721,70 @@ export const statuteSitemapShards = p.pgTable(
 );
 
 /**
+ * Works per kind of act, per jurisdiction and source, replaced as one snapshot
+ * by the scheduler. Counted per source so a public read applies the live
+ * redistribution policy instead of a policy frozen into the count.
+ */
+export const legislationFacetCounts = p.pgTable(
+  "legislation_facet_counts",
+  {
+    country: p.varchar({ length: 3 }).notNull(),
+    sourceId: safeUuid<"legislationSource">("source_id")
+      .notNull()
+      .references(() => legislationSources.id, { onDelete: "cascade" }),
+    documentType: p.varchar("document_type", { length: 128 }).notNull(),
+    works: p.integer().notNull(),
+  },
+  (t) => [
+    p.primaryKey({
+      name: "legislation_facet_counts_pkey",
+      columns: [t.country, t.sourceId, t.documentType],
+    }),
+    p.check("legislation_facet_counts_works_positive", sql`${t.works} > 0`),
+    p.pgPolicy("legislation_facet_count_owner_access", {
+      for: "all",
+      to: "public",
+      using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.legislation_facet_counts'::regclass)`,
+      withCheck: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.legislation_facet_counts'::regclass)`,
+    }),
+    p.pgPolicy("public_law_reader_access", {
+      for: "select",
+      to: stellaPublicLawReader,
+      using: sql`EXISTS (
+        SELECT 1
+        FROM ${legislationSources} AS facet_source
+        WHERE facet_source.id = ${t.sourceId}
+          AND ${redistributableLegislationSourceFor(sql`facet_source.descriptor`)}
+      )`,
+    }),
+  ],
+);
+
+/**
+ * When the statute facet snapshot last completed: one row, no source data.
+ * Its presence, not the visibility of any bucket, is what tells a reader the
+ * snapshot exists, so a source the reader may not see never sends it back to
+ * the live aggregation.
+ */
+export const legislationFacetRefreshes = p.pgTable(
+  "legislation_facet_refreshes",
+  {
+    singleton: p.boolean().primaryKey().default(true),
+    refreshedAt: timestamptz("refreshed_at").notNull(),
+  },
+  (t) => [
+    p.check("legislation_facet_refreshes_singleton", sql`${t.singleton}`),
+    p.pgPolicy("legislation_facet_refresh_owner_access", {
+      for: "all",
+      to: "public",
+      using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.legislation_facet_refreshes'::regclass)`,
+      withCheck: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.legislation_facet_refreshes'::regclass)`,
+    }),
+    ...publicLawReaderPolicies(),
+  ],
+);
+
+/**
  * Works whose versions changed, one row per affected `(country, eli)`. Filled
  * only by triggers on `legislation_documents`: every insert and delete, and
  * every update that advances `payload_revision`. A queue, not a watermark;
@@ -675,3 +881,82 @@ export const legislationIndexJobs = p.pgTable(
 );
 
 // -- Chat --
+
+/** Latest publisher observation of incoming amendments for one target Work. */
+export const legislationAmendmentSnapshots = p.pgTable(
+  "legislation_amendment_snapshots",
+  {
+    sourceId: safeUuid<"legislationSource">("source_id").notNull(),
+    targetEli: p.varchar("target_eli", { length: 512 }).notNull(),
+    language: p.varchar({ length: 16 }).notNull(),
+    observedAt: timestamptz("observed_at").notNull(),
+    coverage: jsonb().$type<LegislationAmendmentCoverage>().notNull(),
+  },
+  (t) => [
+    p.primaryKey({
+      name: "legislation_amendment_snapshots_pk",
+      columns: [t.sourceId, t.targetEli, t.language],
+    }),
+    p
+      .foreignKey({
+        name: "legislation_amendment_snapshots_source_fk",
+        columns: [t.sourceId],
+        foreignColumns: [legislationSources.id],
+      })
+      .onDelete("cascade"),
+    ...globalCaseLawPolicies(),
+    ...publicLawReaderPolicies(),
+  ],
+);
+
+/** Publisher-stated provision effects, independent of consolidation windows. */
+export const legislationAmendments = p.pgTable(
+  "legislation_amendments",
+  {
+    sourceId: safeUuid<"legislationSource">("source_id")
+      .notNull()
+      .references(() => legislationSources.id, { onDelete: "cascade" }),
+    targetEli: p.varchar("target_eli", { length: 512 }).notNull(),
+    language: p.varchar({ length: 16 }).notNull(),
+    publisherId: p.varchar("publisher_id", { length: 512 }).notNull(),
+    amendingEli: p.varchar("amending_eli", { length: 512 }).notNull(),
+    amendingTitle: p.text("amending_title"),
+    amendingAnchor: p.text("amending_anchor"),
+    affectedAnchor: p.text("affected_anchor").notNull(),
+    changeKind: p
+      .text("change_kind", { enum: LEGISLATION_AMENDMENT_CHANGE_KINDS })
+      .notNull(),
+    effectiveType: p
+      .text("effective_type", { enum: LEGISLATION_AMENDMENT_EFFECTIVE_TYPES })
+      .notNull(),
+    effectiveDate: p.date("effective_date"),
+    effectiveText: p.text("effective_text"),
+    publisherInstruction: p.text("publisher_instruction"),
+  },
+  (t) => [
+    p.primaryKey({
+      name: "legislation_amendments_pk",
+      columns: [t.sourceId, t.targetEli, t.language, t.publisherId],
+    }),
+    p
+      .index("legislation_amendments_amending_idx")
+      .on(t.sourceId, t.amendingEli, t.language, t.targetEli, t.publisherId),
+    p
+      .index("legislation_amendments_target_date_idx")
+      .on(t.sourceId, t.targetEli, t.language, t.effectiveDate, t.publisherId),
+    p.check(
+      "legislation_amendments_kind",
+      sql`${t.changeKind} IN (${sqlValues(LEGISLATION_AMENDMENT_CHANGE_KINDS)})`,
+    ),
+    p.check(
+      "legislation_amendments_effective",
+      sql`(${t.effectiveType} = 'date' AND ${t.effectiveDate} IS NOT NULL AND ${t.effectiveText} IS NULL) OR (${t.effectiveType} = 'not-stated' AND ${t.effectiveDate} IS NULL)`,
+    ),
+    p.check(
+      "legislation_amendments_identity",
+      sql`${t.publisherId} <> '' AND ${t.amendingEli} <> '' AND ${t.affectedAnchor} <> ''`,
+    ),
+    ...globalCaseLawPolicies(),
+    ...publicLawReaderPolicies(),
+  ],
+);

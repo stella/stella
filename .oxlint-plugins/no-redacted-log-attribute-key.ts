@@ -1,5 +1,6 @@
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
+import { isQueryErrorOutputKey } from "../packages/errors/src/query-field-policy.ts";
 import { getPropertyName, isAstNode, isIdentifier } from "./utils.ts";
 import type { AstNode } from "./utils.ts";
 
@@ -37,20 +38,24 @@ const LOGGER_IDENTIFIER = "logger";
 const LOGGER_METHODS = new Set(["debug", "error", "info", "warn"]);
 
 export const SENSITIVE_LOG_ATTRIBUTE_KEY_PATTERN =
-  /(?:body|content|email|fileName|message|name|title|password|secret|credential|authorization|cookie|bearer|api[_-]?key|prompt(?!_?token)|snippet|subject|phone)/iu;
+  /(?:body|content|email|fileName|message|name|title|password|secret|credential|authorization|cookie|bearer|api[_-]?key|synthetic[_-]?key|prompt(?!_?token)|snippet|subject|phone)/iu;
 
 export const FAILURE_CONTEXT_KEYS = [
   "adapterKey",
   "decisionId",
   "documentId",
   "entityId",
+  "eventId",
   "feature",
   "jobId",
+  "jurisdiction",
   "method",
   "mode",
   "modelId",
   "operation",
   "organizationId",
+  "outcome",
+  "parameterStoreReason",
   "phase",
   "queue",
   "requestId",
@@ -63,6 +68,7 @@ export const FAILURE_CONTEXT_KEYS = [
   "tool",
   "userFileId",
   "versionId",
+  "vocabulary",
   "workspaceId",
 ];
 
@@ -179,7 +185,8 @@ export default eslintCompatPlugin({
               const key = getPropertyName(property.key);
               if (
                 key === null ||
-                !SENSITIVE_LOG_ATTRIBUTE_KEY_PATTERN.test(key)
+                (!SENSITIVE_LOG_ATTRIBUTE_KEY_PATTERN.test(key) &&
+                  !isQueryErrorOutputKey(key))
               ) {
                 continue;
               }

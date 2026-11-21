@@ -1,0 +1,135 @@
+import { Result, TaggedError, type TaggedErrorClass } from "better-result";
+import { readFileSync } from "node:fs";
+
+// Every watched file and directory costs a descriptor, and the table is
+// shared by the whole machine: a runner that starts near the ceiling takes
+// down unrelated processes with it, so it refuses instead.
+const MAX_HOST_FILE_USAGE_RATIO = 0.7;
+
+export type HostFileUsage = {
+  max: number;
+  open: number;
+};
+
+export type HostAdmission =
+  | { type: "admit" }
+  | { type: "admit-unverified"; reason: string }
+  | { type: "refuse"; message: string };
+
+type DecideHostAdmissionOptions = {
+  maxRatio?: number;
+  usage: HostFileUsage | null;
+};
+
+export const decideHostAdmission = ({
+  maxRatio = MAX_HOST_FILE_USAGE_RATIO,
+  usage,
+}: DecideHostAdmissionOptions): HostAdmission => {
+  if (usage === null || !(usage.max > 0) || !(usage.open >= 0)) {
+    return {
+      type: "admit-unverified",
+      reason: "Could not read the host open-file usage; starting unchecked.",
+    };
+  }
+  const ratio = usage.open / usage.max;
+  if (ratio <= maxRatio) {
+    return { type: "admit" };
+  }
+  return {
+    type: "refuse",
+    message: `Refusing to start: the host has ${String(usage.open)} of ${String(usage.max)} system open files in use (${String(Math.round(ratio * 100))}%, limit ${String(Math.round(maxRatio * 100))}%). Stop idle dev stacks (bun run agent:down) and retry.`,
+  };
+};
+
+const toCount = (value: string | undefined) => {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed >= 0 ? parsed : null;
+};
+
+// macOS: `sysctl -n kern.num_files kern.maxfiles` prints one value per line.
+export const parseDarwinFileUsage = (output: string): HostFileUsage | null => {
+  const [open, max] = output.trim().split(/\s+/u).map(toCount);
+  return open === undefined ||
+    max === undefined ||
+    open === null ||
+    max === null
+    ? null
+    : { max, open };
+};
+
+// Linux: /proc/sys/fs/file-nr is "allocated unused maximum".
+export const parseLinuxFileNr = (content: string): HostFileUsage | null => {
+  const [allocated, , max] = content.trim().split(/\s+/u).map(toCount);
+  return allocated === undefined ||
+    max === undefined ||
+    allocated === null ||
+    max === null
+    ? null
+    : { max, open: allocated };
+};
+
+const DevHostProbeErrorBase: TaggedErrorClass<"DevHostProbeError"> =
+  TaggedError("DevHostProbeError");
+
+export class DevHostProbeError extends DevHostProbeErrorBase<{
+  message: string;
+}> {}
+
+type ProbeSpawn = (command: string[]) => {
+  stdout: { toString: () => string };
+  success: boolean;
+};
+
+const spawnSysctl: ProbeSpawn = (command) =>
+  Bun.spawnSync(command, { stderr: "ignore", stdout: "pipe" });
+
+// Spawning throws when sysctl cannot be resolved or launched.
+export const probeDarwinFileUsage = (
+  spawn: ProbeSpawn = spawnSysctl,
+): Result<HostFileUsage | null, DevHostProbeError> =>
+  Result.try({
+    try: () => {
+      const result = spawn(["sysctl", "-n", "kern.num_files", "kern.maxfiles"]);
+      return result.success
+        ? parseDarwinFileUsage(result.stdout.toString())
+        : null;
+    },
+    catch: (cause) =>
+      new DevHostProbeError({
+        message: `Cannot run sysctl: ${String(cause)}`,
+      }),
+  });
+
+const readProbeOutput = (): Result<HostFileUsage | null, DevHostProbeError> => {
+  if (process.platform === "darwin") {
+    return probeDarwinFileUsage();
+  }
+  if (process.platform === "linux") {
+    return Result.try({
+      try: () =>
+        parseLinuxFileNr(readFileSync("/proc/sys/fs/file-nr", "utf-8")),
+      catch: (cause) =>
+        new DevHostProbeError({
+          message: `Cannot read /proc/sys/fs/file-nr: ${String(cause)}`,
+        }),
+    });
+  }
+  return Result.ok(null);
+};
+
+export const probeHostFileUsage = (): Result<
+  HostFileUsage,
+  DevHostProbeError
+> => {
+  const read = readProbeOutput();
+  if (read.isErr()) {
+    return Result.err(read.error);
+  }
+  return read.value === null
+    ? Result.err(
+        new DevHostProbeError({
+          message: "Host open-file usage is unavailable on this platform",
+        }),
+      )
+    : Result.ok(read.value);
+};

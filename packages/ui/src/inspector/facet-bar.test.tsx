@@ -24,6 +24,23 @@ const classesOf = (buttonMarkup: string) =>
   /class="([^"]*)"/u.exec(buttonMarkup)?.[1]?.split(/\s+/u) ?? [];
 
 describe("InspectorFacetBar", () => {
+  test("exposes the chips as tabs with the active facet selected", () => {
+    const markup = renderToStaticMarkup(
+      <InspectorFacetBar
+        facet="beta"
+        facets={["alpha", "beta", "gamma"]}
+        labels={LABELS}
+        onChange={() => undefined}
+        overflowMenuLabel="Show more"
+      />,
+    );
+
+    expect(markup).toContain('role="tablist"');
+    expect(buttonFor(markup, "Alpha")).toContain('role="tab"');
+    expect(buttonFor(markup, "Alpha")).toContain('aria-selected="false"');
+    expect(buttonFor(markup, "Beta")).toContain('aria-selected="true"');
+  });
+
   test("renders every facet's label", () => {
     const markup = renderToStaticMarkup(
       <InspectorFacetBar

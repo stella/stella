@@ -17,6 +17,18 @@ import {
   isStatuteViewPayload,
   STATUTE_VIEW,
 } from "@/features/statutes/statute-inspector.logic";
+import {
+  isPlaybookDraftViewPayload,
+  PLAYBOOK_DRAFT_VIEW,
+  projectPlaybookDraftViewPayload,
+} from "@/lib/knowledge/playbook-draft-view";
+
+// The pane names its playbook only; the editor reads the rest from the server.
+registerInspectorPersistenceReference({
+  type: PLAYBOOK_DRAFT_VIEW,
+  validate: isPlaybookDraftViewPayload,
+  project: projectPlaybookDraftViewPayload,
+});
 
 registerInspectorPersistenceReference({
   type: INBOX_SIGNAL_VIEW,

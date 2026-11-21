@@ -12,6 +12,34 @@
 import type { ModelRate } from "./model-rate";
 
 export const MODEL_RATES = {
+  // models.dev: google:gemini-4-neon
+  "gemini-4-neon": {
+    kind: "flat",
+    inputPerMTok: 300_000,
+    outputPerMTok: 1_500_000,
+    cachedInputPerMTok: 15_000,
+  },
+  // models.dev: google:gemini-4-hydrogen
+  "gemini-4-hydrogen": {
+    kind: "flat",
+    inputPerMTok: 150_000,
+    outputPerMTok: 750_000,
+    cachedInputPerMTok: 7500,
+  },
+  // models.dev: google:gemini-4-carbon
+  "gemini-4-carbon": {
+    kind: "flat",
+    inputPerMTok: 200_000,
+    outputPerMTok: 1_000_000,
+    cachedInputPerMTok: 10_000,
+  },
+  // models.dev: google:gemini-4-argon
+  "gemini-4-argon": {
+    kind: "flat",
+    inputPerMTok: 200_000,
+    outputPerMTok: 1_000_000,
+    cachedInputPerMTok: 10_000,
+  },
   // models.dev: google:gemini-3.8-flash
   "gemini-3.8-flash": {
     kind: "flat",
@@ -69,6 +97,40 @@ export const MODEL_RATES = {
     outputPerMTok: 150_000,
     cachedInputPerMTok: 2500,
   },
+  // models.dev: openai:gpt-6.2-astra
+  "gpt-6.2-astra": {
+    kind: "input-token-tiered",
+    inputTokenThreshold: 272_000,
+    standard: {
+      inputPerMTok: 800_000,
+      outputPerMTok: 4_000_000,
+      cachedInputPerMTok: 40_000,
+      cachedWriteInputPerMTok: 1_000_000,
+    },
+    aboveThreshold: {
+      inputPerMTok: 1_600_000,
+      outputPerMTok: 6_000_000,
+      cachedInputPerMTok: 80_000,
+      cachedWriteInputPerMTok: 2_000_000,
+    },
+  },
+  // models.dev: openai:gpt-6.2-sol
+  "gpt-6.2-sol": {
+    kind: "input-token-tiered",
+    inputTokenThreshold: 272_000,
+    standard: {
+      inputPerMTok: 200_000,
+      outputPerMTok: 1_000_000,
+      cachedInputPerMTok: 10_000,
+      cachedWriteInputPerMTok: 250_000,
+    },
+    aboveThreshold: {
+      inputPerMTok: 400_000,
+      outputPerMTok: 1_500_000,
+      cachedInputPerMTok: 20_000,
+      cachedWriteInputPerMTok: 500_000,
+    },
+  },
   // models.dev: openai:gpt-6.1-sol
   "gpt-6.1-sol": {
     kind: "input-token-tiered",
@@ -84,6 +146,23 @@ export const MODEL_RATES = {
       outputPerMTok: 1_500_000,
       cachedInputPerMTok: 20_000,
       cachedWriteInputPerMTok: 500_000,
+    },
+  },
+  // models.dev: openai:gpt-6.1-terra
+  "gpt-6.1-terra": {
+    kind: "input-token-tiered",
+    inputTokenThreshold: 272_000,
+    standard: {
+      inputPerMTok: 100_000,
+      outputPerMTok: 500_000,
+      cachedInputPerMTok: 5000,
+      cachedWriteInputPerMTok: 125_000,
+    },
+    aboveThreshold: {
+      inputPerMTok: 200_000,
+      outputPerMTok: 750_000,
+      cachedInputPerMTok: 10_000,
+      cachedWriteInputPerMTok: 250_000,
     },
   },
   // models.dev: openai:gpt-6-astra
@@ -240,6 +319,7 @@ export const MODEL_RATES = {
     cachedInputPerMTok: 17_500,
   },
   // models.dev: anthropic:claude-sonnet-5-5
+  // reviewed rate correction: cost.cache_read 0.1 -> 0.2 (2026-10-07: models.dev lists half the provider cache-read price; https://platform.claude.com/docs/en/models/sonnet-5-5/overview)
   "claude-sonnet-5-5": {
     kind: "flat",
     inputPerMTok: 200_000,
@@ -254,6 +334,14 @@ export const MODEL_RATES = {
     outputPerMTok: 1_000_000,
     cachedInputPerMTok: 20_000,
     cachedWriteInputPerMTok: 250_000,
+  },
+  // models.dev: anthropic:claude-fable-5-2
+  "claude-fable-5-2": {
+    kind: "flat",
+    inputPerMTok: 800_000,
+    outputPerMTok: 4_000_000,
+    cachedInputPerMTok: 20_000,
+    cachedWriteInputPerMTok: 1_000_000,
   },
   // models.dev: anthropic:claude-fable-5-1
   "claude-fable-5-1": {
@@ -319,6 +407,23 @@ export const MODEL_RATES = {
     cachedInputPerMTok: 50_000,
     cachedWriteInputPerMTok: 625_000,
   },
+  // models.dev: anthropic:claude-haiku-5-5
+  "claude-haiku-5-5": {
+    kind: "input-token-tiered",
+    inputTokenThreshold: 100_000,
+    standard: {
+      inputPerMTok: 10_000,
+      outputPerMTok: 50_000,
+      cachedInputPerMTok: 1000,
+      cachedWriteInputPerMTok: 12_500,
+    },
+    aboveThreshold: {
+      inputPerMTok: 50_000,
+      outputPerMTok: 250_000,
+      cachedInputPerMTok: 5000,
+      cachedWriteInputPerMTok: 62_500,
+    },
+  },
   // models.dev: anthropic:claude-haiku-4-5-20251001
   "claude-haiku-4-5-20251001": {
     kind: "flat",
@@ -334,6 +439,23 @@ export const MODEL_RATES = {
     outputPerMTok: 1_650_000,
     cachedInputPerMTok: 33_000,
     cachedWriteInputPerMTok: 412_500,
+  },
+  // models.dev: amazon-bedrock:us.anthropic.claude-haiku-5-5
+  "us.anthropic.claude-haiku-5-5": {
+    kind: "input-token-tiered",
+    inputTokenThreshold: 100_000,
+    standard: {
+      inputPerMTok: 11_000,
+      outputPerMTok: 55_000,
+      cachedInputPerMTok: 1100,
+      cachedWriteInputPerMTok: 13_750,
+    },
+    aboveThreshold: {
+      inputPerMTok: 55_000,
+      outputPerMTok: 275_000,
+      cachedInputPerMTok: 5500,
+      cachedWriteInputPerMTok: 68_750,
+    },
   },
   // models.dev: amazon-bedrock:us.anthropic.claude-haiku-4-5-20251001-v1:0
   "us.anthropic.claude-haiku-4-5-20251001-v1:0": {
@@ -379,12 +501,19 @@ export const MODEL_RATES = {
     inputPerMTok: 7000,
     outputPerMTok: 30_000,
   },
+  // models.dev: mistral:mistral-large-4
+  "mistral-large-4": {
+    kind: "flat",
+    inputPerMTok: 70_000,
+    outputPerMTok: 210_000,
+    cachedInputPerMTok: 7000,
+  },
   // models.dev: mistral:mistral-large-latest
   "mistral-large-latest": {
     kind: "flat",
-    inputPerMTok: 50_000,
-    outputPerMTok: 150_000,
-    cachedInputPerMTok: 5000,
+    inputPerMTok: 70_000,
+    outputPerMTok: 210_000,
+    cachedInputPerMTok: 7000,
   },
   // models.dev: mistral:mistral-medium-latest
   "mistral-medium-latest": {

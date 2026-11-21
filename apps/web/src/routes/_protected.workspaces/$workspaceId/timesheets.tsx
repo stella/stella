@@ -1,52 +1,54 @@
-import { lazy, Suspense, useState } from "react";
-
 import { createFileRoute, redirect } from "@tanstack/react-router";
-import { useFormatter, useTranslations } from "use-intl";
+import * as v from "valibot";
 
 import { Temporal } from "@stll/time";
-import { Button } from "@stll/ui/button";
-import { DirectionalIcon } from "@stll/ui/directional-icon";
-import { ChevronLeftIcon, ChevronRightIcon } from "@stll/ui/icons";
-import { Skeleton } from "@stll/ui/skeleton";
 
-import {
-  getTimeEntryDateBounds,
-  isTimeEntryDateAllowed,
-} from "@/components/billing/time-entry-date.logic";
-import { toISODate } from "@/components/workspaces/entity-utils";
-import { usePermissions } from "@/hooks/use-permissions";
 import { isTimeBillingRouteEnabled } from "@/hooks/use-time-billing-preview";
 import { authClient } from "@/lib/auth-client";
 import { roleOptions } from "@/lib/auth-queries";
+import { detached } from "@/lib/detached";
+import { routeLoadMode } from "@/lib/query-view.logic";
 import {
   ensureRouteInfiniteQueryData,
   ensureRouteQueryData,
 } from "@/lib/react-query";
-import { MEDIUM_DATE_FORMAT } from "@/lib/relative-time";
 import {
   timeEntriesInfiniteOptions,
   timeEntrySuggestionsOptions,
   timeEntrySummaryOptions,
 } from "@/lib/workspaces/queries/time-entries";
-import { PersonalTimesheetDay } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/personal-timesheet-day";
+import { routeSearchSchema } from "@/route-search-params";
 
-const RateManagementDialog = lazy(async () => {
-  const module =
-    await import("@/routes/_protected.workspaces/$workspaceId/-components/billing/rate-management-dialog");
-  return { default: module.RateManagementDialog };
-});
+import {
+  approvedMatterExpensesOptions,
+  approvedMatterTimeOptions,
+  draftMatterExpensesOptions,
+  submittedMatterTimeOptions,
+} from "./-components/billing/matter-approval-queries";
+import { TimesheetsPage } from "./-timesheets.page";
+import { MatterTimesheetsPending } from "./-timesheets.pending";
 
-const BillingCodesDialog = lazy(async () => {
-  const module =
-    await import("@/routes/_protected.workspaces/$workspaceId/-components/billing/billing-codes-dialog");
-  return { default: module.BillingCodesDialog };
+/**
+ * `view=approvals` opens the matter's approval queue, so the invoice composer
+ * can link straight to the work that is waiting.
+ */
+const timesheetsSearchSchema = routeSearchSchema({
+  view: v.optional(v.picklist(["approvals"])),
+  rates: v.optional(v.literal("manage")),
 });
 
 export const Route = createFileRoute(
   "/_protected/workspaces/$workspaceId/timesheets",
 )({
+  validateSearch: timesheetsSearchSchema,
+  loaderDeps: ({ search }) => ({ view: search.view }),
   beforeLoad: async ({ context, params }) => {
-    if (!(await isTimeBillingRouteEnabled(context.queryClient))) {
+    if (
+      !(await isTimeBillingRouteEnabled(context.queryClient, {
+        userId: context.user.id,
+        organizationId: context.user.activeOrganizationId,
+      }))
+    ) {
       throw redirect({
         to: "/workspaces/$workspaceId",
         params: { workspaceId: params.workspaceId },
@@ -64,180 +66,72 @@ export const Route = createFileRoute(
         params: { workspaceId: params.workspaceId },
       });
     }
+
+    return {
+      canApproveMatterTime: authClient.organization.checkRolePermission({
+        role,
+        permissions: { timeEntry: ["approve"] },
+      }),
+    };
   },
-  loader: async ({ context, params }) => {
+  loader: async ({ cause, context, deps, params }) => {
+    const { queryClient, user } = context;
+    const { workspaceId } = params;
+    const opensApprovals =
+      deps.view === "approvals" && context.canApproveMatterTime;
     const today = Temporal.Now.instant()
       .toZonedDateTimeISO(Temporal.Now.timeZoneId())
       .toPlainDate()
       .toString();
-    await Promise.all([
-      ensureRouteInfiniteQueryData(
-        context.queryClient,
-        timeEntriesInfiniteOptions(params.workspaceId, context.user.id, {
-          dateFrom: today,
-          dateTo: today,
-          scope: "me",
-        }),
-      ),
-      ensureRouteQueryData(
-        context.queryClient,
-        timeEntrySummaryOptions(
-          params.workspaceId,
-          context.user.id,
-          today,
-          today,
-        ),
-      ),
-      ensureRouteQueryData(
-        context.queryClient,
-        timeEntrySuggestionsOptions(
-          params.workspaceId,
-          context.user.id,
-          today,
-          Temporal.Now.timeZoneId(),
-        ),
-      ),
-    ]);
+    const entries = timeEntriesInfiniteOptions(workspaceId, user.id, {
+      dateFrom: today,
+      dateTo: today,
+      scope: "me",
+    });
+    const submitted = submittedMatterTimeOptions(workspaceId, user.id);
+    const approved = approvedMatterTimeOptions(workspaceId, user.id);
+    const draftExpenses = draftMatterExpensesOptions(workspaceId);
+    const approvedExpenses = approvedMatterExpensesOptions(workspaceId);
+    const summary = timeEntrySummaryOptions(workspaceId, user.id, today, today);
+    const suggestions = timeEntrySuggestionsOptions(
+      workspaceId,
+      user.id,
+      today,
+      Temporal.Now.timeZoneId(),
+    );
+    const queries = opensApprovals
+      ? [submitted, approved, draftExpenses, approvedExpenses]
+      : [entries, summary, suggestions];
+    let hasCachedPages = true;
+    for (const options of queries) {
+      if (queryClient.getQueryData(options.queryKey) === undefined) {
+        hasCachedPages = false;
+        break;
+      }
+    }
+    const mode = routeLoadMode({ cause, hasCachedPages });
+    if (hasCachedPages && mode === "background") {
+      return;
+    }
+    const loading = opensApprovals
+      ? Promise.all([
+          ensureRouteQueryData(queryClient, submitted),
+          ensureRouteQueryData(queryClient, approved),
+          ensureRouteQueryData(queryClient, draftExpenses),
+          ensureRouteQueryData(queryClient, approvedExpenses),
+        ])
+      : Promise.all([
+          ensureRouteInfiniteQueryData(queryClient, entries),
+          ensureRouteQueryData(queryClient, summary),
+          ensureRouteQueryData(queryClient, suggestions),
+        ]);
+    if (mode === "await") {
+      await loading;
+    } else {
+      detached(loading, "timesheets.view-prefetch");
+    }
   },
   remountDeps: ({ params }) => params.workspaceId,
+  pendingComponent: MatterTimesheetsPending,
   component: TimesheetsPage,
 });
-
-const TimesheetSkeleton = () => (
-  <div className="flex flex-col gap-3">
-    <div className="flex min-h-11 items-center justify-between">
-      <Skeleton className="h-5 w-20" />
-      <Skeleton className="h-9 w-28" />
-    </div>
-    {Array.from({ length: 3 }, (_, index) => (
-      <Skeleton className="h-14 w-full rounded-lg" key={index} />
-    ))}
-  </div>
-);
-
-function TimesheetsPage() {
-  const tBilling = useTranslations("billing");
-  const tCommon = useTranslations("common");
-  const canManageRates = usePermissions({ rate: ["create"] });
-  const canManageBillingCodes = usePermissions({ billingCode: ["create"] });
-  const [rateDialogOpen, setRateDialogOpen] = useState(false);
-  const [codesDialogOpen, setCodesDialogOpen] = useState(false);
-  const format = useFormatter();
-  const workspaceId = Route.useParams({
-    select: (params) => params.workspaceId,
-  });
-  const [date, setDate] = useState(() =>
-    Temporal.Now.instant()
-      .toZonedDateTimeISO(Temporal.Now.timeZoneId())
-      .toPlainDate(),
-  );
-  const dateValue = toISODate(date);
-  const dateBounds = getTimeEntryDateBounds();
-  const canLogTime = isTimeEntryDateAllowed(dateValue, dateBounds);
-
-  const moveDay = (days: number) => {
-    setDate((current) => current.add({ days }));
-  };
-
-  return (
-    <div className="flex h-full flex-col">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3">
-        <h1 className="text-sm font-medium">{tBilling("timesheets")}</h1>
-        <div className="flex flex-wrap items-center gap-2">
-          {canManageRates && (
-            <Button
-              onClick={() => setRateDialogOpen(true)}
-              size="sm"
-              variant="outline"
-            >
-              {tBilling("rates.rates")}
-            </Button>
-          )}
-          {canManageBillingCodes && (
-            <Button
-              onClick={() => setCodesDialogOpen(true)}
-              size="sm"
-              variant="outline"
-            >
-              {tBilling("codes.manageCodes")}
-            </Button>
-          )}
-          <Button
-            onClick={() =>
-              setDate(
-                Temporal.Now.instant()
-                  .toZonedDateTimeISO(Temporal.Now.timeZoneId())
-                  .toPlainDate(),
-              )
-            }
-            size="sm"
-            variant="outline"
-          >
-            {tCommon("today")}
-          </Button>
-          <Button
-            aria-label={tCommon("previous")}
-            className="size-11"
-            onClick={() => moveDay(-1)}
-            size="icon"
-            variant="ghost"
-          >
-            <DirectionalIcon className="size-4" icon={ChevronLeftIcon} />
-          </Button>
-          <span className="min-w-36 text-center text-sm">
-            {format.dateTime(
-              date.toZonedDateTime({
-                plainTime: Temporal.PlainTime.from("00:00"),
-                timeZone: "UTC",
-              }).epochMilliseconds,
-              { ...MEDIUM_DATE_FORMAT, timeZone: "UTC" },
-            )}
-          </span>
-          <Button
-            aria-label={tCommon("next")}
-            className="size-11"
-            disabled={
-              dateValue >=
-              toISODate(
-                Temporal.Now.instant()
-                  .toZonedDateTimeISO(Temporal.Now.timeZoneId())
-                  .toPlainDate(),
-              )
-            }
-            onClick={() => moveDay(1)}
-            size="icon"
-            variant="ghost"
-          >
-            <DirectionalIcon className="size-4" icon={ChevronRightIcon} />
-          </Button>
-        </div>
-      </div>
-      <div className="flex-1 overflow-auto p-4">
-        <Suspense fallback={<TimesheetSkeleton />}>
-          <PersonalTimesheetDay
-            canCreateTimeEntry={canLogTime}
-            date={dateValue}
-            key={dateValue}
-            workspaceId={workspaceId}
-          />
-        </Suspense>
-      </div>
-      <Suspense fallback={null}>
-        {rateDialogOpen && (
-          <RateManagementDialog
-            onOpenChange={setRateDialogOpen}
-            open
-            workspaceId={workspaceId}
-          />
-        )}
-        {codesDialogOpen && (
-          <BillingCodesDialog
-            onOpenChange={setCodesDialogOpen}
-            open
-            workspaceId={workspaceId}
-          />
-        )}
-      </Suspense>
-    </div>
-  );
-}

@@ -8,6 +8,7 @@ import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 
 const config = {
+  contract: "patch",
   description:
     "The organization's case-law question columns, in the order they are " +
     "shown. Every member sees the same set, and the whole set fits one " +

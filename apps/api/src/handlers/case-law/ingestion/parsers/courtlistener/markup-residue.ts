@@ -1,0 +1,225 @@
+import { entityResidueMatchesIn } from "@/api/lib/legal-search/parsers/entity-residue";
+import type { MarkupResidueRuleId } from "@/api/lib/legal-search/parsers/markup-residue";
+import { rtfControlResidueMatchesIn } from "@/api/lib/legal-search/parsers/rtf-reader";
+
+/** CourtListener's publisher grammar, used only by its explicit validation policy. */
+
+type MarkupResidueRule =
+  | { id: "entity"; reason: string }
+  | {
+      id: Exclude<MarkupResidueRuleId, "entity">;
+      /** Why a court's text never looks like this. */
+      reason: string;
+      /** Global: a rule with an accept gate walks every match. */
+      pattern: RegExp;
+      accept?: (match: string) => boolean;
+    };
+
+/**
+ * A run of digits long enough that no number a court writes reaches it.
+ *
+ * Measured on contiguous digits, never across separators: an IČO is 8, a
+ * Czech account number with its separators is at most 26, a docket, an
+ * ECLI, an ISBN and a phone number all break long before this. A hex
+ * payload written by a picture or an embedded object does not.
+ */
+const DIGIT_RUN_MIN = 40;
+
+/** Hex is only text when it is short; a long run is a payload. */
+const HEX_RUN_MIN = 32;
+
+/** …and a run with no letters in it has to be longer to count as hex. */
+const HEX_RUN_DIGITS_ONLY_MIN = 48;
+
+/** How much of the offending text a report carries. */
+const MARKUP_RESIDUE_EXCERPT_CHARS = 120;
+
+/**
+ * Ordered: the first rule that matches names the finding, so a run of 48
+ * digits reports as a number rather than as hex.
+ */
+const MARKUP_RESIDUE_RULES: readonly MarkupResidueRule[] = [
+  {
+    id: "html-tag",
+    reason: "HTML tags",
+    // A tag closed right after its name, or opened with an attribute.
+    // Deliberately not a bare `<name`: "a<b " is arithmetic, not markup.
+    pattern: /<\/?[a-zA-Z][a-zA-Z0-9-]{0,30}(?:\s+[a-zA-Z-]+\s*=|\s*\/?>)/gu,
+  },
+  {
+    id: "xml-marker",
+    reason: "XML prologue or CDATA",
+    pattern: /<\?xml[\s?]|<!\[CDATA\[|<!DOCTYPE\s/giu,
+  },
+  {
+    id: "pdf-object",
+    reason: "PDF object syntax",
+    pattern: /<<\s*\/[a-zA-Z]|\bendobj\b|\bendstream\b/gu,
+  },
+  {
+    id: "entity",
+    reason: "undecoded character entities",
+  },
+  {
+    id: "digit-run",
+    reason: "a digit run longer than any number a court writes",
+    pattern: new RegExp(String.raw`\d{${DIGIT_RUN_MIN},}`, "gu"),
+  },
+  {
+    id: "hex-run",
+    reason: "an embedded binary payload",
+    pattern: new RegExp(String.raw`[0-9a-fA-F]{${HEX_RUN_MIN},}`, "gu"),
+    accept: (match) =>
+      match.length >= HEX_RUN_DIGITS_ONLY_MIN || /[a-f]/iu.test(match),
+  },
+];
+
+type MarkupResidue = {
+  rule: MarkupResidueRuleId;
+  reason: string;
+  /** The offending text, bounded so a log line stays a log line. */
+  excerpt: string;
+};
+
+// Citation URLs may wrap after a path separator or hyphen. Index their spans
+// once, so rejecting multiple hashes in one long URL stays linear in the text.
+const citationUrlRanges = (text: string): { start: number; end: number }[] => {
+  const urls = /https?:\/\/[^\s<>]+/giu;
+  const continuation = /[^\s<>]+/uy;
+  const ranges = [];
+  let url = urls.exec(text);
+  while (url) {
+    let end = urls.lastIndex;
+    while (text.at(end - 1) === "-" || text.at(end - 1) === "/") {
+      let newline = 0;
+      if (text.startsWith("\r\n", end)) {
+        newline = 2;
+      } else if (text.at(end) === "\n") {
+        newline = 1;
+      }
+      if (newline === 0) {
+        break;
+      }
+      continuation.lastIndex = end + newline;
+      if (!continuation.test(text)) {
+        break;
+      }
+      end = continuation.lastIndex;
+    }
+    ranges.push({ start: url.index, end });
+    urls.lastIndex = end;
+    url = urls.exec(text);
+  }
+  return ranges;
+};
+
+const isWalletAddress = (match: RegExpExecArray): boolean => {
+  if (match[0].length !== 40) {
+    return false;
+  }
+  const prefix = match.input.slice(Math.max(0, match.index - 3), match.index);
+  if (!/(?:^|\W)0x$/iu.test(prefix)) {
+    return false;
+  }
+  const following = match.input.at(match.index + match[0].length);
+  return following === undefined || /\W/u.test(following);
+};
+
+type MarkupResidueMatch = MarkupResidue & { index: number; matched: string };
+
+/**
+ * Context-qualified matches shared by diagnostics and published-text classification.
+ * @yields Context-qualified residue spans on the stored text axis.
+ */
+export function* markupResidueMatchesIn(
+  text: string,
+): Generator<MarkupResidueMatch> {
+  for (const { index, matched } of rtfControlResidueMatchesIn(text)) {
+    yield {
+      index,
+      matched,
+      rule: "rtf-control",
+      reason: "RTF control words",
+      excerpt: text.slice(index, index + MARKUP_RESIDUE_EXCERPT_CHARS).trim(),
+    };
+  }
+  const entities = [...entityResidueMatchesIn(text)];
+  for (const rule of MARKUP_RESIDUE_RULES) {
+    if (rule.id === "entity") {
+      for (const { entity, index } of entities) {
+        yield {
+          index,
+          matched: entity,
+          rule: rule.id,
+          reason: rule.reason,
+          excerpt: text
+            .slice(index, index + MARKUP_RESIDUE_EXCERPT_CHARS)
+            .trim(),
+        };
+      }
+      continue;
+    }
+    const detectsPayload = rule.id === "digit-run" || rule.id === "hex-run";
+    // Iterators may be interleaved; each owns its scan cursor.
+    const pattern = rule.pattern.ignoreCase
+      ? new RegExp(rule.pattern.source, "giu")
+      : new RegExp(rule.pattern.source, "gu");
+    let match = pattern.exec(text);
+    const urlRanges = detectsPayload && match ? citationUrlRanges(text) : [];
+    let urlIndex = 0;
+    let entityIndex = 0;
+    while (match) {
+      if (detectsPayload) {
+        let entity = entities.at(entityIndex);
+        while (entity && entity.index + entity.entity.length <= match.index) {
+          entityIndex += 1;
+          entity = entities.at(entityIndex);
+        }
+        if (
+          entity &&
+          entity.index <= match.index &&
+          match.index + match[0].length <= entity.index + entity.entity.length
+        ) {
+          match = pattern.exec(text);
+          continue;
+        }
+        let url = urlRanges.at(urlIndex);
+        while (url && url.end <= match.index) {
+          urlIndex += 1;
+          url = urlRanges.at(urlIndex);
+        }
+        if (
+          (url &&
+            url.start <= match.index &&
+            match.index + match[0].length <= url.end) ||
+          isWalletAddress(match)
+        ) {
+          match = pattern.exec(text);
+          continue;
+        }
+      }
+      if (!rule.accept || rule.accept(match[0])) {
+        yield {
+          index: match.index,
+          matched: match[0],
+          rule: rule.id,
+          reason: rule.reason,
+          excerpt: text
+            .slice(match.index, match.index + MARKUP_RESIDUE_EXCERPT_CHARS)
+            .trim(),
+        };
+      }
+      match = pattern.exec(text);
+    }
+  }
+}
+
+/** The first diagnostic only; full scanning is reserved for source attribution. */
+export const markupResidueIn = (text: string): MarkupResidue | undefined => {
+  const first = markupResidueMatchesIn(text).next();
+  if (first.done) {
+    return undefined;
+  }
+  const { rule, reason, excerpt } = first.value;
+  return { rule, reason, excerpt };
+};

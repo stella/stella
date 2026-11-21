@@ -30,7 +30,7 @@ const BOUNDARY = "stella-boundary";
 const BASE64_LINE_LENGTH = 76;
 
 const base64Lines = (bytes: Uint8Array) => {
-  const encoded = Buffer.from(bytes).toString("base64");
+  const encoded = Buffer.from(bytes).toBase64();
   const lines: string[] = [];
   for (let start = 0; start < encoded.length; start += BASE64_LINE_LENGTH) {
     lines.push(encoded.slice(start, start + BASE64_LINE_LENGTH));

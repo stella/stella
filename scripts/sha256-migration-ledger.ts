@@ -1,0 +1,162 @@
+import { panic } from "better-result";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import * as v from "valibot";
+
+import { repoRelativePath } from "@stll/portable-path";
+
+import { parseSource } from "../packages/scripts/src/syntax-tree";
+import { runLedgerMembershipGuard } from "./ledger-membership.ts";
+
+const ROOT = path.resolve(import.meta.dir, "..");
+const RULE = "no-raw-sha256";
+const outputSchema = v.object({
+  diagnostics: v.array(v.object({ code: v.string(), filename: v.string() })),
+});
+
+/** Tracked files where the rule reports raw SHA-256 outside its owners. */
+export const rawSha256Files = (root: string): string[] => {
+  const temporary = mkdtempSync(path.join(tmpdir(), "sha256-migration-"));
+  const config = path.join(temporary, "oxlint.config.ts");
+  writeFileSync(
+    config,
+    `export default ${JSON.stringify({
+      categories: { correctness: "off" },
+      jsPlugins: [path.join(root, ".oxlint-plugins/no-raw-sha256.ts")],
+      rules: { [`${RULE}/${RULE}`]: "error" },
+    })};\n`,
+  );
+  const result = Bun.spawnSync(
+    [
+      process.execPath,
+      "--bun",
+      "oxlint",
+      "-c",
+      config,
+      "-f",
+      "json",
+      "apps",
+      "packages",
+      "scripts",
+      ".oxlint-plugins",
+    ],
+    { cwd: root, stdout: "pipe", stderr: "pipe" },
+  );
+  rmSync(temporary, { recursive: true, force: true });
+  if (result.exitCode !== 0 && result.exitCode !== 1) {
+    panic(
+      `SHA-256 census failed (${result.exitCode}): ${result.stderr.toString()}`,
+    );
+  }
+  const output = v.parse(outputSchema, JSON.parse(result.stdout.toString()));
+  // Only files this repository tracks count: a checked-out submodule holds
+  // another repository's files and exists in some checkouts but not others.
+  const listed = Bun.spawnSync(["git", "ls-files", "-z"], {
+    cwd: root,
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  if (listed.exitCode !== 0) {
+    panic(
+      `SHA-256 census could not list tracked files: ${listed.stderr.toString()}`,
+    );
+  }
+  const tracked = new Set(
+    listed.stdout
+      .toString()
+      .split("\0")
+      .filter((file) => file !== ""),
+  );
+  return [
+    ...new Set(
+      output.diagnostics
+        .filter(({ code }) => code.startsWith(RULE))
+        .map(({ filename }) =>
+          repoRelativePath(root, path.resolve(root, filename)).replaceAll(
+            "\\",
+            "/",
+          ),
+        )
+        .filter((file) => tracked.has(file)),
+    ),
+  ].toSorted();
+};
+
+export const parseOwnerLedger = (text: string, label: string): string[] => {
+  // The owners ledger is TypeScript whatever its label is.
+  const { program } = parseSource(
+    /\.[cm]?ts$/u.test(label) ? label : `${label}.ts`,
+    text,
+  );
+  for (const topLevel of program.body) {
+    // `export const` wraps the declaration it exports.
+    const statement =
+      topLevel.type === "ExportNamedDeclaration"
+        ? topLevel.declaration
+        : topLevel;
+    if (statement?.type !== "VariableDeclaration") {
+      continue;
+    }
+    for (const declaration of statement.declarations) {
+      if (
+        declaration.id.type !== "Identifier" ||
+        declaration.id.name !== "SHA256_OWNERS"
+      ) {
+        continue;
+      }
+      let value = declaration.init;
+      while (
+        value &&
+        (value.type === "TSAsExpression" ||
+          value.type === "TSSatisfiesExpression")
+      ) {
+        value = value.expression;
+      }
+      if (value?.type !== "ObjectExpression") {
+        panic(`${label}: owners must be a literal reasoned map`);
+      }
+      return value.properties.map((property) => {
+        if (
+          property.type !== "Property" ||
+          property.kind !== "init" ||
+          property.method ||
+          property.shorthand ||
+          property.computed ||
+          property.key.type !== "Literal" ||
+          typeof property.key.value !== "string" ||
+          property.value.type !== "Literal" ||
+          typeof property.value.value !== "string" ||
+          property.value.value.trim().length === 0
+        ) {
+          panic(`${label}: every owner needs a literal path and reason`);
+        }
+        return property.key.value;
+      });
+    }
+  }
+  return panic(`${label}: SHA256_OWNERS must be declared`);
+};
+
+if (import.meta.main) {
+  const args = process.argv.slice(2);
+  if (!args.includes("--self-test")) {
+    const files = rawSha256Files(ROOT);
+    if (files.length > 0) {
+      panic(
+        [
+          "Raw SHA-256 outside the registered owners; route hashing through its runtime owner:",
+          ...files,
+        ].join("\n"),
+      );
+    }
+  }
+  process.exitCode = runLedgerMembershipGuard({
+    ledgerRel: "scripts/sha256-owners.ts",
+    repoRoot: ROOT,
+    parseLedger: parseOwnerLedger,
+    label: "SHA-256 owners",
+    remediation: "reuse a registered owner",
+    args,
+  });
+}

@@ -1,6 +1,11 @@
+import { organizationClient } from "better-auth/client/plugins";
 import { describe, expect, test } from "bun:test";
 
-import { CLAUSE_DIRECTIVES_INVALID_CODE } from "@stll/api-contract";
+import {
+  API_FILE_SECURITY_REJECTED_ERROR_CODE,
+  CLAUSE_DIRECTIVES_INVALID_CODE,
+} from "@stll/api-contract";
+import { HOSTED_CHECKOUT_REFUSAL_CODE } from "@stll/api-contract/hosted-checkout";
 import { FILE_PROPERTY_TYPE_IMMUTABLE_CODE } from "@stll/api-contract/property-policy";
 
 import messages from "@/i18n/langs/en.json";
@@ -10,7 +15,7 @@ import {
   internalToolErrorMessage,
   shouldRetryAPIRequest,
   toAPIError,
-  unwrapEden,
+  unwrapApiResponse,
 } from "./api";
 import {
   AuthClientError,
@@ -18,6 +23,7 @@ import {
   isUnauthorizedError,
   toAuthClientError,
 } from "./auth";
+import { ClientOperationError } from "./client";
 import { userErrorFromThrown, userErrorMessage } from "./user-safe";
 
 describe("API request retries", () => {
@@ -47,6 +53,65 @@ describe("API request retries", () => {
 
     expect(shouldRetryAPIRequest(2, transportError)).toBe(true);
     expect(shouldRetryAPIRequest(3, transportError)).toBe(false);
+  });
+
+  test.each([
+    ["network", true],
+    ["timeout", true],
+    ["aborted", false],
+  ] as const)(
+    "handles %s transport retryability",
+    (transportKind, expected) => {
+      const error = new APIError({
+        message: "Transport failure",
+        status: 0,
+        transportKind,
+      });
+
+      expect(shouldRetryAPIRequest(0, error)).toBe(expected);
+    },
+  );
+});
+
+describe("user-visible transport and client failures", () => {
+  test.each([
+    ["network", messages.common.networkError],
+    ["timeout", messages.transportErrors.timeout],
+  ] as const)("localizes a %s transport failure", (kind, expected) => {
+    try {
+      unwrapApiResponse({
+        data: null,
+        error: {
+          kind,
+          cause: new TypeError("private browser detail"),
+          status: 0,
+          value: null,
+        },
+      });
+      throw new TypeError("Expected transport failure");
+    } catch (error) {
+      expect(APIError.is(error)).toBe(true);
+      expect(userErrorFromThrown(error, "Fallback")).toBe(expected);
+    }
+  });
+
+  test("keeps an expected client refusal safe for display", () => {
+    const error = new ClientOperationError({
+      action: "upload-version",
+      message: "Choose a file with the same file type.",
+    });
+    expect(userErrorFromThrown(error, "Version upload failed")).toBe(
+      error.message,
+    );
+  });
+
+  test("hides an internal client operation message", () => {
+    const error = new ClientOperationError({
+      action: "prepare-file-upload",
+      message: "Prepared upload referenced an unknown file",
+    });
+
+    expect(userErrorFromThrown(error, "Upload failed")).toBe("Upload failed");
   });
 });
 
@@ -81,6 +146,22 @@ describe("toAPIError", () => {
     expect(shouldRetryAPIRequest(0, error)).toBe(false);
   });
 
+  test("explains a file the upload scan refused", () => {
+    const error = toAPIError({
+      status: 422,
+      value: {
+        code: API_FILE_SECURITY_REJECTED_ERROR_CODE,
+        hint: "Raw hint",
+        issues: [],
+        message: "Raw scan refusal",
+      },
+    });
+
+    expect(error.message).toBe(messages.errors.apiCodes.fileSecurityRejected);
+    expect(userErrorFromThrown(error, "Fallback")).toBe(error.message);
+    expect(shouldRetryAPIRequest(0, error)).toBe(false);
+  });
+
   test.each([
     [
       "matter_contact_capacity_reached",
@@ -100,6 +181,19 @@ describe("toAPIError", () => {
     expect(error.rawMessage).toBe("Raw capacity refusal");
     expect(shouldRetryAPIRequest(0, error)).toBe(false);
   });
+  test.each(Object.values(HOSTED_CHECKOUT_REFUSAL_CODE))(
+    "shows the localized hosted checkout refusal %s",
+    (code) => {
+      const error = toAPIError({
+        status: 409,
+        value: { code, message: "Raw checkout refusal" },
+      });
+      const message = userErrorFromThrown(error, "fallback");
+      expect(message).not.toBe("fallback");
+      expect(message).not.toBe("Raw checkout refusal");
+      expect(Object.values(messages.errors.apiCodes)).toContain(message);
+    },
+  );
   test("localizes string payloads by status and preserves the raw message", () => {
     const error = toAPIError({
       status: 400,
@@ -175,6 +269,21 @@ describe("toAPIError", () => {
 
     expect(error.message).toBe(expected);
     expect(error.rawMessage).toBe("Raw provider error");
+  });
+
+  test("localizes an unreachable skill source instead of the generic 400", () => {
+    const error = toAPIError({
+      status: 400,
+      value: {
+        code: "skill_source_unreachable",
+        message: "Skill source returned HTTP 403",
+      },
+    });
+
+    expect(error.message).toBe(
+      "The skill source could not be loaded. Check that the link points to a public GitHub repository, or try again later.",
+    );
+    expect(error.rawMessage).toBe("Skill source returned HTTP 403");
   });
 
   test.each([
@@ -299,27 +408,27 @@ describe("toAPIError", () => {
   });
 });
 
-describe("unwrapEden", () => {
+describe("unwrapApiResponse", () => {
   test("returns the payload when there is no error", () => {
     const payload = { id: "abc", value: 1 };
 
-    expect(unwrapEden({ data: payload, error: null })).toBe(payload);
+    expect(unwrapApiResponse({ data: payload, error: null })).toBe(payload);
   });
 
   test("preserves a nullable success payload", () => {
-    expect(unwrapEden({ data: null, error: null })).toBeNull();
+    expect(unwrapApiResponse({ data: null, error: null })).toBeNull();
   });
 
   test("throws a localized APIError when the response carries an error", () => {
     expect(() =>
-      unwrapEden({
+      unwrapApiResponse({
         data: null,
         error: { status: 403, value: { code: "forbidden", message: "no" } },
       }),
     ).toThrow(APIError);
 
     try {
-      unwrapEden({
+      unwrapApiResponse({
         data: null,
         error: { status: 403, value: { code: "forbidden", message: "no" } },
       });
@@ -333,7 +442,7 @@ describe("unwrapEden", () => {
 
   test("normalizes an untyped transport error at the client boundary", () => {
     expect(() =>
-      unwrapEden({
+      unwrapApiResponse({
         data: null,
         error: { status: 401, value: { private: "discard me" } },
       }),
@@ -539,6 +648,22 @@ describe("toAuthClientError", () => {
       "YOU_ARE_NOT_A_MEMBER_OF_THIS_ORGANIZATION",
       "You are not a member of this organization.",
     ],
+    [
+      "USER_IS_ALREADY_A_MEMBER_OF_THIS_ORGANIZATION",
+      messages.errors.apiCodes.alreadyOrganizationMember,
+    ],
+    [
+      "USER_IS_ALREADY_INVITED_TO_THIS_ORGANIZATION",
+      messages.errors.apiCodes.invitationAlreadyPending,
+    ],
+    [
+      "INVITATION_LIMIT_REACHED",
+      messages.errors.apiCodes.invitationLimitReached,
+    ],
+    [
+      "YOU_ARE_NOT_ALLOWED_TO_INVITE_USER_WITH_THIS_ROLE",
+      messages.errors.apiCodes.invitationRoleNotAllowed,
+    ],
   ])("localizes the known auth client code %s", (code, expected) => {
     const error = toAuthClientError({
       code,
@@ -549,6 +674,25 @@ describe("toAuthClientError", () => {
 
     expect(AuthClientError.is(error)).toBe(true);
     expect(error.message).toBe(expected);
+  });
+
+  test("every organization code has a message of its own", () => {
+    const codes = Object.keys(organizationClient().$ERROR_CODES);
+
+    expect(codes.length).toBeGreaterThan(0);
+    for (const code of codes) {
+      const error = toAuthClientError({
+        code,
+        message: "Raw auth error",
+        status: 400,
+        statusText: "Bad Request",
+      });
+
+      expect({ code, known: AuthClientError.is(error) }).toEqual({
+        code,
+        known: true,
+      });
+    }
   });
 });
 

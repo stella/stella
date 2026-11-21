@@ -8,15 +8,20 @@
 import { Result } from "better-result";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+import { printError } from "@stll/errors";
 
 import { fillTemplate } from "../lib/docx/patch-template";
 import { scanUpload } from "../lib/file-scan/scan-upload";
 import { DOCX_MIME_TYPE } from "../mime-types";
 
-const TEMPLATE = new URL(
-  "../lib/docx/fixtures/spa-template-with-placeholders.docx",
-  import.meta.url,
-).pathname;
+const TEMPLATE = fileURLToPath(
+  new URL(
+    "../lib/docx/fixtures/spa-template-with-placeholders.docx",
+    import.meta.url,
+  ),
+);
 
 const MOCK_VALUES = {
   price_share_1: "1 250 000",
@@ -45,6 +50,6 @@ const run = async () => {
 };
 
 run().catch((error: unknown) => {
-  console.error(error);
+  printError(error);
   process.exit(1);
 });

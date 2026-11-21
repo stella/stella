@@ -59,7 +59,7 @@ const client = createAnonymizeChatWorkerClient({
   maxPendingRequests: MAX_PENDING_ANONYMIZE_REQUESTS,
 });
 
-// oxlint-disable-next-line @typescript-eslint/promise-function-async -- the body is the Promise; an inner async wrapper would just add a microtask
+// oxlint-disable-next-line typescript/promise-function-async -- the body is the Promise; an inner async wrapper would just add a microtask
 export const anonymizeChatTextInWorker = ({
   text,
   workspaceId,
@@ -114,7 +114,13 @@ export const warmupChatAnonymizeWorker = (): void => {
     (error: unknown) => {
       // Warmup is non-blocking; record the failure and allow the next mount
       // to retry a transient worker crash.
-      getAnalytics().captureError(error);
+      getAnalytics().captureError(error, {
+        fingerprintKey: "warmupChatAnonymizeWorker:failure",
+        scope: {
+          type: "handler",
+          handlerId: "warmupChatAnonymizeWorker:failure",
+        },
+      });
       warmedUp = false;
     },
   );

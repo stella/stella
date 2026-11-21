@@ -1,7 +1,9 @@
+import { coversAllMatters } from "@/lib/workspaces/all-matters.logic";
+
 /** Matters a history row shows by name before folding the rest into "+N". */
-export const THREAD_CONTEXT_INLINE_MATTERS = 2;
+const THREAD_CONTEXT_INLINE_MATTERS = 2;
 /** Files a history row shows by name before folding the rest into "+N". */
-export const THREAD_CONTEXT_INLINE_FILES = 2;
+const THREAD_CONTEXT_INLINE_FILES = 2;
 
 /**
  * A thread's context as the list endpoint returns it: a bounded, ordered
@@ -31,6 +33,11 @@ export type ThreadContextLayout<TMatter, TFile> = {
   overflowCount: number;
   /** Whether the row has any context line at all. */
   hasContext: boolean;
+  /**
+   * The chat drew on every matter the reader can open: the row shows one
+   * "All matters" chip and names none of them.
+   */
+  allMatters: boolean;
 };
 
 /**
@@ -46,26 +53,40 @@ export type ThreadContextLayout<TMatter, TFile> = {
 export const layoutThreadContext = <TMatter, TFile>(
   context: ThreadContextPreview<TMatter, TFile>,
   {
+    accessibleMatterCount,
     maxInlineFiles = THREAD_CONTEXT_INLINE_FILES,
     maxInlineMatters = THREAD_CONTEXT_INLINE_MATTERS,
-  }: { maxInlineFiles?: number; maxInlineMatters?: number } = {},
+  }: {
+    /** How many matters the reader can open; unknown while their list loads. */
+    accessibleMatterCount?: number | undefined;
+    maxInlineFiles?: number;
+    maxInlineMatters?: number;
+  } = {},
 ): ThreadContextLayout<TMatter, TFile> => {
   const matterTotal = Math.max(context.matterCount, context.matters.length);
   const fileTotal = Math.max(context.fileCount, context.files.length);
-  const inlineMatters = context.matters.slice(0, Math.max(0, maxInlineMatters));
+  const allMatters =
+    accessibleMatterCount !== undefined &&
+    coversAllMatters({ count: matterTotal, total: accessibleMatterCount });
+  // A chat that drew on every matter says so once instead of naming them:
+  // its matters leave the chips and the "+N" alike.
+  const matters = allMatters ? [] : context.matters;
+  const namedMatterTotal = allMatters ? 0 : matterTotal;
+  const inlineMatters = matters.slice(0, Math.max(0, maxInlineMatters));
   const inlineFiles = context.files.slice(0, Math.max(0, maxInlineFiles));
   const unnamedCount =
-    matterTotal - context.matters.length + (fileTotal - context.files.length);
+    namedMatterTotal - matters.length + (fileTotal - context.files.length);
 
   return {
+    allMatters,
     hasContext: matterTotal + fileTotal > 0,
     hidden: {
       files: context.files.slice(inlineFiles.length),
-      matters: context.matters.slice(inlineMatters.length),
+      matters: matters.slice(inlineMatters.length),
     },
     inline: { files: inlineFiles, matters: inlineMatters },
     overflowCount:
-      matterTotal + fileTotal - inlineMatters.length - inlineFiles.length,
+      namedMatterTotal + fileTotal - inlineMatters.length - inlineFiles.length,
     unnamedCount,
   };
 };

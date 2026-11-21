@@ -12,11 +12,13 @@ import {
   caseLawDecisions,
   caseLawSources,
 } from "@/api/db/schema";
+import { runCitationGraphTransaction } from "@/api/handlers/case-law/citation-graph-transaction";
 import {
   type CitationResolutionCursor,
   classifyCitationsBeforeWrite,
   reopenCitationsForDecisionKey,
   reopenCitationsForKeys,
+  reopenCitationsFrom,
   reopenCitationsResolvedTo,
   resolveCitationBatch,
   resolveCitationsForDecision,
@@ -365,7 +367,9 @@ test("resolves a structured citation through its normalized identifier", async (
     normalizedIdentifierValue: "347us483",
   });
 
-  await resolveCitationsForDecision(asTx(), citingId);
+  await runCitationGraphTransaction(db.transaction.bind(db), async (tx) =>
+    resolveCitationsForDecision(tx, citingId),
+  );
 
   const [citation] = await db
     .select()
@@ -440,7 +444,9 @@ test("a Hungarian docket printed the way the courts print it reaches the listed 
     ),
   });
 
-  await resolveCitationsForDecision(asTx(), citingId);
+  await runCitationGraphTransaction(db.transaction.bind(db), async (tx) =>
+    resolveCitationsForDecision(tx, citingId),
+  );
 
   const [citation] = await db
     .select()
@@ -514,7 +520,9 @@ test.each([
       ),
     });
 
-    await resolveCitationsForDecision(asTx(), citingId);
+    await runCitationGraphTransaction(db.transaction.bind(db), async (tx) =>
+      resolveCitationsForDecision(tx, citingId),
+    );
 
     const [citation] = await db
       .select()
@@ -589,7 +597,9 @@ test("a Constitutional Court ruling is reached by its gazette number and by its 
     })),
   );
 
-  await resolveCitationsForDecision(asTx(), citingId);
+  await runCitationGraphTransaction(db.transaction.bind(db), async (tx) =>
+    resolveCitationsForDecision(tx, citingId),
+  );
 
   const rows = await db
     .select({
@@ -673,7 +683,9 @@ test("a Constitutional Court docket beside its reporter entry still resolves by 
     })),
   );
 
-  await resolveCitationsForDecision(asTx(), citingId);
+  await runCitationGraphTransaction(db.transaction.bind(db), async (tx) =>
+    resolveCitationsForDecision(tx, citingId),
+  );
 
   const rows = await db
     .select({
@@ -750,7 +762,10 @@ const resolveCitationBatchFor = async (id: SafeId<"caseLawCitation">) => {
     .update(caseLawCitations)
     .set({ resolutionStatus: CITATION_RESOLUTION_STATUS.PENDING })
     .where(eq(caseLawCitations.id, id));
-  return await resolveCitationsForDecision(asTx(), citingId);
+  return await runCitationGraphTransaction(
+    db.transaction.bind(db),
+    async (tx) => resolveCitationsForDecision(tx, citingId),
+  );
 };
 
 test("counts a structured identifier blocked only by jurisdiction", async () => {
@@ -790,7 +805,10 @@ test("counts a structured identifier blocked only by jurisdiction", async () => 
     normalizedIdentifierValue: "zbierka123/2019",
   });
 
-  const result = await resolveCitationsForDecision(asTx(), citingId);
+  const result = await runCitationGraphTransaction(
+    db.transaction.bind(db),
+    async (tx) => resolveCitationsForDecision(tx, citingId),
+  );
 
   expect(result.jurisdictionBlocked).toBe(1);
   expect(result.resolved).toBe(0);
@@ -864,10 +882,14 @@ test("a citation settled before it is written gets the walk's answer", async () 
     ]),
   );
   for (const row of settled) {
-    const resolutions = await classifyCitationsBeforeWrite(asTx(), {
-      citingDecisionId: row.citingDecisionId,
-      citations: [{ ...row, id: createSafeId<"caseLawCitation">() }],
-    });
+    const resolutions = await runCitationGraphTransaction(
+      db.transaction.bind(db),
+      async (tx) =>
+        classifyCitationsBeforeWrite(tx, {
+          citingDecisionId: row.citingDecisionId,
+          citations: [{ ...row, id: createSafeId<"caseLawCitation">() }],
+        }),
+    );
     const [resolution] = [...resolutions.values()];
     if (row.resolutionStatus === CITATION_RESOLUTION_STATUS.PENDING) {
       // Unkeyed, or a jurisdiction with no declared policy: left pending.
@@ -1003,7 +1025,10 @@ test("ingest-time resolution settles only the decision it is given", async () =>
     citationKey: "21cdo/5/2019",
   });
 
-  const counts = await resolveCitationsForDecision(asTx(), isolatedCiting);
+  const counts = await runCitationGraphTransaction(
+    db.transaction.bind(db),
+    async (tx) => resolveCitationsForDecision(tx, isolatedCiting),
+  );
   expect(counts).toMatchObject({ scanned: 1, resolved: 1 });
   expect(await rowOf(isolatedCitation)).toMatchObject({
     cited: czTarget,
@@ -1038,7 +1063,9 @@ test("a decision arriving under an unmatched key reopens it", async () => {
     citationText: "sp. zn. 18 Tdo 700/2021",
     citationKey: arrivingKey,
   });
-  await resolveCitationsForDecision(asTx(), arrivingCiting);
+  await runCitationGraphTransaction(db.transaction.bind(db), async (tx) =>
+    resolveCitationsForDecision(tx, arrivingCiting),
+  );
   expect(await rowOf(arrivingCitation)).toMatchObject({
     status: CITATION_RESOLUTION_STATUS.UNMATCHED,
   });
@@ -1054,12 +1081,16 @@ test("a decision arriving under an unmatched key reopens it", async () => {
     slug: "arrived",
     languageGroupKey: "arrived",
   });
-  const reopened = await reopenCitationsForDecisionKey(asTx(), {
-    citationKey: arrivingKey,
-    decisionId: arrived,
-    jurisdiction: "CZE",
-    decisionDate: "2021-09-01",
-  });
+  const reopened = await runCitationGraphTransaction(
+    db.transaction.bind(db),
+    async (tx) =>
+      reopenCitationsForDecisionKey(tx, {
+        citationKey: arrivingKey,
+        decisionId: arrived,
+        jurisdiction: "CZE",
+        decisionDate: "2021-09-01",
+      }),
+  );
   expect(reopened).toBe(1);
   expect(await rowOf(arrivingCitation)).toMatchObject({
     status: CITATION_RESOLUTION_STATUS.PENDING,
@@ -1109,7 +1140,9 @@ test("a second decision under a resolved key retracts the edge", async () => {
     citationText: "č. j. 9 As 12/2015",
     citationKey: contestedKey,
   });
-  await resolveCitationsForDecision(asTx(), contestedCiting);
+  await runCitationGraphTransaction(db.transaction.bind(db), async (tx) =>
+    resolveCitationsForDecision(tx, contestedCiting),
+  );
   expect(await rowOf(contestedCitation)).toMatchObject({
     cited: firstHolder,
     status: CITATION_RESOLUTION_STATUS.RESOLVED,
@@ -1127,12 +1160,16 @@ test("a second decision under a resolved key retracts the edge", async () => {
     slug: "second-holder",
     languageGroupKey: "second-holder",
   });
-  const reopened = await reopenCitationsForDecisionKey(asTx(), {
-    citationKey: contestedKey,
-    decisionId: secondHolder,
-    jurisdiction: "CZE",
-    decisionDate: "2015-09-01",
-  });
+  const reopened = await runCitationGraphTransaction(
+    db.transaction.bind(db),
+    async (tx) =>
+      reopenCitationsForDecisionKey(tx, {
+        citationKey: contestedKey,
+        decisionId: secondHolder,
+        jurisdiction: "CZE",
+        decisionDate: "2015-09-01",
+      }),
+  );
   expect(reopened).toBe(1);
   expect(await rowOf(contestedCitation)).toMatchObject({
     cited: null,
@@ -1183,7 +1220,9 @@ test("a resolved link with no target is unsettled, not settled", async () => {
     citationText: "sp. zn. 77 Cdo 7/2017",
     citationKey: "77cdo/7/2017",
   });
-  await resolveCitationsForDecision(asTx(), orphanCiting);
+  await runCitationGraphTransaction(db.transaction.bind(db), async (tx) =>
+    resolveCitationsForDecision(tx, orphanCiting),
+  );
   expect(await rowOf(orphanCitation)).toMatchObject({
     cited: orphanTarget,
     status: CITATION_RESOLUTION_STATUS.RESOLVED,
@@ -1206,7 +1245,7 @@ test("a resolved link with no target is unsettled, not settled", async () => {
   });
 });
 
-test("a decision whose identity changes retracts the edges drawn to it", async () => {
+test("a decision whose identity changes re-queues the edges drawn to it and keeps them until answered", async () => {
   // The complement of the arriving-decision path, which deliberately excludes
   // the decision's own links. Case number, jurisdiction and date are all
   // filters in the candidate join, so an edge decided against the old values
@@ -1242,15 +1281,42 @@ test("a decision whose identity changes retracts the edges drawn to it", async (
     citationText: "sp. zn. 80 Cdo 1/2016",
     citationKey: "80cdo/1/2016",
   });
-  await resolveCitationsForDecision(asTx(), movedCiting);
+  await runCitationGraphTransaction(db.transaction.bind(db), async (tx) =>
+    resolveCitationsForDecision(tx, movedCiting),
+  );
   expect(await rowOf(movedCitation)).toMatchObject({
     cited: movedTarget,
     status: CITATION_RESOLUTION_STATUS.RESOLVED,
   });
 
-  expect(await reopenCitationsResolvedTo(asTx(), movedTarget)).toBe(1);
+  expect(
+    await runCitationGraphTransaction(db.transaction.bind(db), async (tx) =>
+      reopenCitationsResolvedTo(tx, movedTarget),
+    ),
+  ).toMatchObject({ reopened: 1 });
+  // Queued for another answer, and still linked until it comes: the decision
+  // must not lose its incoming citations for as long as the queue takes.
   expect(await rowOf(movedCitation)).toMatchObject({
-    cited: null,
+    cited: movedTarget,
+    status: CITATION_RESOLUTION_STATUS.PENDING,
+  });
+
+  // The resolver's answer replaces the kept link. This target still holds the
+  // key, so it answers with the same decision.
+  await drain();
+  expect(await rowOf(movedCitation)).toMatchObject({
+    cited: movedTarget,
+    status: CITATION_RESOLUTION_STATUS.RESOLVED,
+  });
+
+  // The citing side is put back the same way.
+  expect(
+    await runCitationGraphTransaction(db.transaction.bind(db), async (tx) =>
+      reopenCitationsFrom(tx, movedCiting),
+    ),
+  ).toBe(1);
+  expect(await rowOf(movedCitation)).toMatchObject({
+    cited: movedTarget,
     status: CITATION_RESOLUTION_STATUS.PENDING,
   });
 });
@@ -1292,7 +1358,9 @@ test("a key gaining a second holder retracts the edge, in bulk too", async () =>
     citationText: "sp. zn. 33 Cdo 2178/2018",
     citationKey: bulkKey,
   });
-  await resolveCitationsForDecision(asTx(), bulkCiting);
+  await runCitationGraphTransaction(db.transaction.bind(db), async (tx) =>
+    resolveCitationsForDecision(tx, bulkCiting),
+  );
   expect(await rowOf(bulkCitation)).toMatchObject({
     cited: firstHolder,
     status: CITATION_RESOLUTION_STATUS.RESOLVED,
@@ -1311,7 +1379,11 @@ test("a key gaining a second holder retracts the edge, in bulk too", async () =>
     slug: "bulk-second",
     languageGroupKey: "bulk-second",
   });
-  expect(await reopenCitationsForKeys(asTx(), [bulkKey])).toBe(1);
+  expect(
+    await runCitationGraphTransaction(db.transaction.bind(db), async (tx) =>
+      reopenCitationsForKeys(tx, [bulkKey]),
+    ),
+  ).toMatchObject({ reopened: 1 });
   expect(await rowOf(bulkCitation)).toMatchObject({
     cited: null,
     status: CITATION_RESOLUTION_STATUS.PENDING,
@@ -1325,7 +1397,11 @@ test("a key gaining a second holder retracts the edge, in bulk too", async () =>
   // And an ambiguous row is reachable by key, which is the only handle it has:
   // it carries no target, so nothing searching by target could find it. This
   // is what lets a candidate leaving the key make the remaining one unique.
-  expect(await reopenCitationsForKeys(asTx(), [bulkKey])).toBe(1);
+  expect(
+    await runCitationGraphTransaction(db.transaction.bind(db), async (tx) =>
+      reopenCitationsForKeys(tx, [bulkKey]),
+    ),
+  ).toMatchObject({ reopened: 1 });
   expect(await rowOf(bulkCitation)).toMatchObject({
     status: CITATION_RESOLUTION_STATUS.PENDING,
   });

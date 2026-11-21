@@ -3,20 +3,23 @@ import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
-import { Input } from "@stll/ui/input";
+import { Button } from "@stll/ui/button";
+import { InlineRenameInput } from "@stll/ui/inline-rename";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { useInlineRename } from "@/hooks/use-inline-rename";
-import { useLocale } from "@/i18n/formatting-context";
+import { useFormattingLocale } from "@/i18n/formatting-context";
 import { useUpdateContact } from "@/lib/contacts/mutations";
 import type { ContactUpdate } from "@/lib/contacts/mutations";
 import { contactOptions } from "@/lib/contacts/queries";
 import { detached } from "@/lib/detached";
-import { notifyUserError } from "@/lib/errors/user-toast";
+import { notifyUserProblem } from "@/lib/errors/user-toast";
+import { DETAIL_ROW_LABEL_CLASS } from "@/routes/_protected.contacts/-components/detail-section.pending";
 import {
   buildContactRatePayload,
   buildNumericContactPayload,
-  contactRateInput,
   buildTextContactPayload,
+  contactRateInput,
   EDITABLE_FIELD_POLICY,
   getEditableFieldInputAttributes,
   isNumericEditableField,
@@ -44,7 +47,7 @@ export const EditableRow = ({
   contact,
 }: EditableRowProps) => {
   const t = useTranslations();
-  const locale = useLocale();
+  const locale = useFormattingLocale();
   const updateContact = useUpdateContact();
   const queryClient = useQueryClient();
   const [scope] = useState(() => ({
@@ -58,7 +61,7 @@ export const EditableRow = ({
   const rateNeedsCurrency = field === "defaultHourlyRate" && !contact.currency;
   const displayValue =
     field === "defaultHourlyRate"
-      ? contactRateInput(contact.defaultHourlyRate, contact.currency)
+      ? contactRateInput(contact.defaultHourlyRate, contact.currency, locale)
       : value;
   const rename = useInlineRename({
     initial: displayValue ?? "",
@@ -78,7 +81,7 @@ export const EditableRow = ({
         policy.maxLength !== null &&
         trimmed.length > policy.maxLength
       ) {
-        notifyUserError(undefined, t("errors.actionFailed"));
+        notifyUserProblem(t("errors.actionFailed"));
         return;
       }
 
@@ -99,7 +102,7 @@ export const EditableRow = ({
         });
         if (result.status === "invalid") {
           const message = t("errors.actionFailed");
-          notifyUserError(undefined, message);
+          notifyUserProblem(message);
           setError(message);
           return;
         }
@@ -108,14 +111,14 @@ export const EditableRow = ({
         const result = buildNumericContactPayload(field, trimmed);
         if (result.status === "invalid") {
           const message = t("errors.actionFailed");
-          notifyUserError(undefined, message);
+          notifyUserProblem(message);
           setError(message);
           return;
         }
         payload = result.payload;
       } else {
         if (field === "displayName" && !trimmed) {
-          notifyUserError(undefined, t("errors.actionFailed"));
+          notifyUserProblem(t("errors.actionFailed"));
           return;
         }
         payload = buildTextContactPayload(field, trimmed);
@@ -131,32 +134,21 @@ export const EditableRow = ({
   if (rename.state.mode === "edit") {
     return (
       <div className="flex items-baseline gap-2">
-        {label && (
-          <span className="text-muted-foreground w-32 shrink-0">{label}</span>
-        )}
-        <Input
+        {label && <span className={DETAIL_ROW_LABEL_CLASS}>{label}</span>}
+        <InlineRenameInput
           {...inputAttributes}
-          autoFocus
-          className="h-auto min-w-0 flex-1 border-0 bg-transparent p-0 text-sm shadow-none outline-none focus-visible:ring-0"
+          className="text-sm"
           dir={policy.valueKind === "text" ? "auto" : undefined}
           maxLength={
             policy.valueKind === "text"
               ? (policy.maxLength ?? undefined)
               : undefined
           }
-          onBlur={() => {
+          onCommit={() => {
             detached(rename.commit(), "editable-row.commit");
           }}
-          onChange={(e) => rename.setDraft(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              e.currentTarget.blur();
-            }
-            if (e.key === "Escape") {
-              rename.cancel();
-              e.currentTarget.blur();
-            }
-          }}
+          onValueChange={rename.setDraft}
+          onCancel={rename.cancel}
           value={rename.state.draft}
         />
       </div>
@@ -165,23 +157,24 @@ export const EditableRow = ({
 
   return (
     <div className="flex items-baseline gap-2">
-      {label && (
-        <span className="text-muted-foreground w-32 shrink-0">{label}</span>
+      {label && <span className={DETAIL_ROW_LABEL_CLASS}>{label}</span>}
+      {/* Without a currency there is nothing to edit yet: the hint stands as
+          plain text (a disabled Button would dim the already subtle hint). */}
+      {rateNeedsCurrency ? (
+        <TruncatedText className="text-foreground-subtle text-sm">
+          {t("contacts.billing.selectCurrencyForRate")}
+        </TruncatedText>
+      ) : (
+        <Button
+          className="min-w-0 overflow-hidden"
+          onClick={() => rename.startEditing()}
+          variant="plain"
+        >
+          <TruncatedText className="hover:text-foreground cursor-text text-sm whitespace-pre">
+            {displayValue || <span className="text-foreground-subtle">—</span>}
+          </TruncatedText>
+        </Button>
       )}
-      <button
-        className="hover:text-foreground cursor-text text-start text-sm"
-        disabled={rateNeedsCurrency}
-        onClick={() => rename.startEditing()}
-        type="button"
-      >
-        {rateNeedsCurrency ? (
-          <span className="text-foreground-subtle">
-            {t("contacts.billing.selectCurrencyForRate")}
-          </span>
-        ) : (
-          displayValue || <span className="text-foreground-subtle">—</span>
-        )}
-      </button>
     </div>
   );
 };

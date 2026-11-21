@@ -22,7 +22,12 @@ import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
-import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
+import {
+  createTestHandlerContext,
+  NO_AUDIT,
+  NO_DB,
+} from "@/api/tests/helpers/handler-context";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
@@ -125,9 +130,7 @@ const defineCalendarRangeSuite = ({ label, connect }: CalendarSuiteDatabase) =>
         .update(entities)
         .set({ currentVersionId: null })
         .where(eq(entities.workspaceId, workspaceId));
-      await testDb
-        .delete(organization)
-        .where(eq(organization.id, organizationId));
+      await deleteOrganizationsForTest(testDb, [organizationId]);
       await testDb.delete(user).where(eq(user.id, userId));
     };
 
@@ -289,6 +292,8 @@ const defineCalendarRangeSuite = ({ label, connect }: CalendarSuiteDatabase) =>
     const list = async (body: CalendarBody) =>
       await calendarTasks.handler(
         createTestHandlerContext<Parameters<typeof calendarTasks.handler>[0]>({
+          audit: NO_AUDIT,
+          scopedDb: NO_DB,
           workspaceId,
           session: { activeOrganizationId: organizationId },
           user: { id: userId },

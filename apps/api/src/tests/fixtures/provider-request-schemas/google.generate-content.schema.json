@@ -367,6 +367,9 @@
           },
           "type": "array"
         },
+        "continuationToken": {
+          "type": "string"
+        },
         "generationConfig": {
           "$ref": "#/$defs/GenerationConfig"
         },

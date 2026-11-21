@@ -3,10 +3,15 @@ import type { UIMessage } from "@tanstack/ai-client";
 import { panic } from "better-result";
 
 import type { ChatSendMode } from "@stll/anonymize-chat";
+import { sleep } from "@stll/concurrency/sleep";
+import { withTimeout } from "@stll/concurrency/with-timeout";
+import { runInRequest } from "@stll/start-runtime/test-request";
 
 import { ASK_USER_TOOL_NAME } from "@/api/handlers/chat/tools/native-chat-tool-names";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { ChatHarnessProfile } from "@/api/tests/helpers/chat-harness-profile";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import { API_TEST_TIMEOUT_MS } from "@/api/tests/test-timeouts";
 
 // The browser side of a chat thread is the web app's own code, loaded from
 // `apps/web`: `createChatRuntime` (TanStack's `ChatClient` over its SSE
@@ -41,6 +46,9 @@ const WEB_CHAT_USER_ACTIONS_URL = new URL(
 
 /** The web app's API origin in tests (`apps/web/src/test-setup.ts`). */
 const WEB_TEST_API_URL = "http://localhost:3001";
+/** The web app's required document storage settings, as its test preload sets them. */
+const WEB_TEST_DOCUMENTS_BUCKET = "stella";
+const WEB_TEST_DOCUMENTS_ENDPOINT = "http://localhost:9000";
 
 type WebChatSnapshot = {
   error: Error | undefined;
@@ -51,6 +59,7 @@ type WebChatSnapshot = {
 };
 
 type WebChatRuntime = {
+  subscribe: (listener: () => void) => () => void;
   addToolResult: (result: {
     output: unknown;
     tool: string;
@@ -68,6 +77,7 @@ type WebChatRuntime = {
 
 /** An assistant message's action, as `chat-user-actions.ts` offers it. */
 type AssistantMessageActionGate = (state: {
+  error: Error | undefined;
   isGenerating: boolean;
   messageId: string;
   messages: readonly UIMessage[];
@@ -130,6 +140,8 @@ export const loadWebChat = async (): Promise<WebChatModules> => {
     return loadedWebChat;
   }
   process.env["VITE_API_URL"] ??= WEB_TEST_API_URL;
+  process.env["VITE_DOCUMENTS_BUCKET"] ??= WEB_TEST_DOCUMENTS_BUCKET;
+  process.env["VITE_DOCUMENTS_ENDPOINT"] ??= WEB_TEST_DOCUMENTS_ENDPOINT;
   const runtime: unknown = await import(WEB_CHAT_RUNTIME_URL);
   const uiTools: unknown = await import(WEB_CHAT_UI_TOOLS_URL);
   const userActions: unknown = await import(WEB_CHAT_USER_ACTIONS_URL);
@@ -248,13 +260,14 @@ export const cardsOf = (
   );
 };
 
-const MAX_SETTLE_TICKS = 20_000;
 const QUIET_TICKS = 3;
 
-const nextTick = async () =>
-  await new Promise<void>((resolve) => {
-    setTimeout(resolve, 0);
-  });
+const nextTick = async () => await sleep(0);
+
+// Bun runs the web modules' server branches; give their API header hooks the
+// same request scope a page has when those hooks run during server rendering.
+const inWebRequest = async (action: () => Promise<void>) =>
+  await runInRequest(action, new Request(WEB_TEST_API_URL));
 
 export type WebChatClient = {
   /** The approval card's Allow or Deny. */
@@ -269,6 +282,7 @@ export type WebChatClient = {
   /** Whether the runtime reports an error, has a request open, and where
    *  its Stop stands. */
   runtimeState: () => {
+    error: Error | undefined;
     hasError: boolean;
     requestActive: boolean;
     stopStatus: WebChatSnapshot["stop"]["status"];
@@ -284,6 +298,10 @@ export type WebChatClient = {
     id: string,
     content: ContentPart[],
     options?: { sendMode?: ChatSendMode | undefined },
+  ) => Promise<void>;
+  /** Waits for a partial live view without waiting for turn settlement. */
+  waitForMessages: (
+    until: (messages: readonly UIMessage[]) => boolean,
   ) => Promise<void>;
   /** Sends a message and returns once the live view satisfies `until`,
    *  without waiting for the turn to end. */
@@ -332,19 +350,31 @@ export const createWebChatClient = async ({
   context,
   inFlight,
   page,
+  profile,
   reload,
+  subscribeInFlight,
   threadId,
 }: {
   /** What the composer adds to every request; none by default. */
   context?: WebChatContext | undefined;
   inFlight: () => number;
   page: WebChatPage;
+  profile?: ChatHarnessProfile | undefined;
   reload: () => Promise<WebChatPage>;
+  subscribeInFlight: (listener: () => void) => () => void;
   threadId: string;
 }): Promise<WebChatClient> => {
   const web = await loadWebChat();
   const errors: Error[] = [];
   let disposed = false;
+  const listeners = new Set<() => void>();
+  const notify = () => {
+    profile?.recordCounter("webIdleNotifications");
+    for (const listener of listeners) {
+      listener();
+    }
+  };
+  const releaseInFlightSubscription = subscribeInFlight(notify);
   /** The page's reload after a stop or a leave, until its runtime is
    *  rebuilt. */
   let reloading: Promise<void> | undefined;
@@ -356,39 +386,108 @@ export const createWebChatClient = async ({
       key: { scope: "global", threadId },
       onError: (error) => {
         errors.push(error);
+        notify();
       },
       onFinish: () => undefined,
       reloadThread: () => {
         reloading = (async () => {
-          runtime = createRuntime(await reload());
+          const reloadedPage = await reload();
+          releaseSubscription();
+          runtime = createRuntime(reloadedPage);
+          releaseSubscription = disposed
+            ? () => undefined
+            : runtime.subscribe(notify);
           reloading = undefined;
+          notify();
         })();
       },
     });
   let runtime = createRuntime(page);
+  let releaseSubscription = runtime.subscribe(notify);
+  const waitForChange = async (signal: AbortSignal) => {
+    if (signal.aborted) {
+      return;
+    }
+    await new Promise<void>((resolve) => {
+      const changed = () => {
+        listeners.delete(changed);
+        signal.removeEventListener("abort", changed);
+        resolve();
+      };
+      listeners.add(changed);
+      signal.addEventListener("abort", changed, { once: true });
+    });
+  };
+  const waitForMessages = async (
+    until: (messages: readonly UIMessage[]) => boolean,
+  ) =>
+    await withTimeout(
+      async (signal) => {
+        while (!signal.aborted) {
+          if (until(messages())) {
+            return;
+          }
+          await waitForChange(signal);
+        }
+      },
+      {
+        label: "The live view reaching the awaited state",
+        timeoutMs: API_TEST_TIMEOUT_MS,
+      },
+    );
 
   /** Waits until no request is open and the runtime is idle. */
-  const settle = async () => {
-    let quiet = 0;
-    for (let tick = 0; tick < MAX_SETTLE_TICKS; tick += 1) {
-      await nextTick();
-      if (reloading !== undefined) {
-        await reloading;
-      }
-      const { isLoading, status } = runtime.getSnapshot();
-      const busy =
-        inFlight() > 0 ||
-        reloading !== undefined ||
-        isLoading ||
-        status === "submitted" ||
-        status === "streaming";
-      quiet = busy ? 0 : quiet + 1;
-      if (quiet >= QUIET_TICKS) {
-        return;
-      }
-    }
-    panic("The web chat runtime never settled");
-  };
+  const waitForIdle = async () =>
+    await withTimeout(
+      async (signal) => {
+        let quiet = 0;
+        while (!signal.aborted) {
+          if (reloading !== undefined) {
+            await reloading;
+          }
+          const { isLoading, status } = runtime.getSnapshot();
+          const busy =
+            inFlight() > 0 ||
+            reloading !== undefined ||
+            isLoading ||
+            status === "submitted" ||
+            status === "streaming";
+          if (busy) {
+            quiet = 0;
+            profile?.recordCounter("webIdleBusyWaits");
+            await waitForChange(signal);
+            continue;
+          }
+          // Keep the same quiet-stability barrier after the last notification.
+          await nextTick();
+          profile?.recordCounter("webIdleQuietTicks");
+          const snapshot = runtime.getSnapshot();
+          if (
+            inFlight() > 0 ||
+            reloading !== undefined ||
+            snapshot.isLoading ||
+            snapshot.status === "submitted" ||
+            snapshot.status === "streaming"
+          ) {
+            quiet = 0;
+            continue;
+          }
+          quiet += 1;
+          if (quiet >= QUIET_TICKS) {
+            profile?.recordCounter("webIdleTransitions");
+            return;
+          }
+        }
+      },
+      {
+        label: "The web chat runtime settling",
+        timeoutMs: API_TEST_TIMEOUT_MS,
+      },
+    );
+  const settle = async () =>
+    profile === undefined
+      ? await waitForIdle()
+      : await profile.measure("webSettlement", waitForIdle);
 
   /**
    * Runs a user action the way a click does: without waiting on it. An
@@ -396,15 +495,16 @@ export const createWebChatClient = async ({
    * the step ends when the runtime and the server are idle, and a rejection
    * lands in `errors` whenever it arrives.
    */
-  const act = async (action: () => Promise<void>) => {
-    if (disposed) {
-      panic("The page was closed");
-    }
-    void action().catch((error: unknown) => {
-      errors.push(error instanceof Error ? error : new Error(String(error)));
+  const act = async (action: () => Promise<void>) =>
+    await inWebRequest(async () => {
+      if (disposed) {
+        panic("The page was closed");
+      }
+      void action().catch((error: unknown) => {
+        errors.push(error instanceof Error ? error : new Error(String(error)));
+      });
+      await settle();
     });
-    await settle();
-  };
 
   const messages = () => runtime.getSnapshot().messages;
   const cards = () => cardsOf(web, messages());
@@ -442,14 +542,24 @@ export const createWebChatClient = async ({
     // Closing a tab drops its page; it asks the server for nothing.
     dispose: () => {
       disposed = true;
+      releaseSubscription();
+      releaseInFlightSubscription();
     },
     messages,
     resend: async () => {
+      // A failed turn refetches the stored page before the user retries.
+      if (runtime.getSnapshot().error !== undefined) {
+        releaseSubscription();
+        runtime = createRuntime(await reload());
+        releaseSubscription = runtime.subscribe(notify);
+        notify();
+      }
       await act(async () => await runtime.reload());
     },
     runtimeState: () => {
       const { error, isLoading, status, stop } = runtime.getSnapshot();
       return {
+        error,
         hasError: error !== undefined,
         requestActive:
           isLoading || status === "submitted" || status === "streaming",
@@ -486,30 +596,28 @@ export const createWebChatClient = async ({
       );
     },
     settle,
-    startUserMessage: async (id, text, until) => {
-      void web
-        .sendThreadChatMessage(runtime, { content: text, id })
-        .catch((error: unknown) => {
-          errors.push(
-            error instanceof Error ? error : new Error(String(error)),
-          );
-        });
-      for (let tick = 0; tick < MAX_SETTLE_TICKS; tick += 1) {
-        await nextTick();
-        if (until(messages())) {
-          return;
-        }
-      }
-      panic("The live view never reached the awaited state");
-    },
-    stop: async () => {
-      runtime.stop();
-      await settle();
-    },
-    leave: async () => {
-      runtime.leave();
-      await settle();
-    },
+    waitForMessages,
+    startUserMessage: async (id, text, until) =>
+      await inWebRequest(async () => {
+        void web
+          .sendThreadChatMessage(runtime, { content: text, id })
+          .catch((error: unknown) => {
+            errors.push(
+              error instanceof Error ? error : new Error(String(error)),
+            );
+          });
+        await waitForMessages(until);
+      }),
+    stop: async () =>
+      await inWebRequest(async () => {
+        runtime.stop();
+        await settle();
+      }),
+    leave: async () =>
+      await inWebRequest(async () => {
+        runtime.leave();
+        await settle();
+      }),
     takeErrors: () => errors.splice(0),
   };
 };

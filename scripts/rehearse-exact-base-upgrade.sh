@@ -146,7 +146,7 @@ log "Checking out exact base $base_commit"
 git -C "$repo_root" worktree add --detach "$base_dir" "$base_commit"
 
 log "Installing the base's pinned dependencies"
-(cd "$base_dir" && NPM_TOKEN='' bun ci --ignore-scripts)
+(cd "$base_dir" && NPM_TOKEN='' bash "$repo_root/scripts/retry.sh" bun ci --ignore-scripts)
 
 # Keep the database credentials in URLs, never in output. A fresh database
 # name makes a stale local run fail rather than reusing its migrated state.

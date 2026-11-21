@@ -34,7 +34,7 @@ export const readAiFieldErrorPaths = (headers: Headers) =>
 
 /** How a warning names an undecided condition: its label, or its path when
  *  the template authored an empty label. */
-export const undecidedConditionName = ({
+const undecidedConditionName = ({
   label,
   path,
 }: {
@@ -292,3 +292,66 @@ export const visibleItemFields = ({
         conditions,
       ),
   );
+
+export type FormValues = Record<string, unknown>;
+
+/** Form-state key holding an array field's item index list (`number[]`),
+ *  bookkeeping rather than a field value. Single source of the array key
+ *  naming scheme; hosts tapping `onValuesChange` parse keys through
+ *  {@link parseArrayItemKey} in `template-array-item-key.ts`. */
+export const ARRAY_INDEX_KEY_PREFIX = "__array_";
+
+export const arrayIndexKey = (fieldPath: string): string =>
+  `${ARRAY_INDEX_KEY_PREFIX}${fieldPath}`;
+
+/**
+ * Read an `__array_*` key from form state into a `number[]` index list.
+ * Returns `[]` when the key is missing or holds a non-number-array value;
+ * runtime validation absorbs the previous unchecked cast.
+ */
+export const readArrayIndices = (
+  values: FormValues,
+  arrayKey: string,
+): number[] => {
+  const raw = values[arrayKey];
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+  return raw.filter((item): item is number => typeof item === "number");
+};
+
+export const getDefaultValue = (field: ResolvedField): unknown => {
+  if (field.kind === "boolean") {
+    return false;
+  }
+  if (field.kind === "array") {
+    return [];
+  }
+  return "";
+};
+
+export const buildInitialValues = (
+  fields: readonly ResolvedField[],
+): FormValues =>
+  Object.fromEntries(
+    fields
+      .filter((field) => field.kind !== "array")
+      .map((field) => [field.path, getDefaultValue(field)]),
+  );
+
+/**
+ * Check if a field is visible given current form values
+ * and named conditions. Returns true if the field has no
+ * `visibleWhen` condition, or if the condition evaluates
+ * to true.
+ */
+export const isFieldVisible = (
+  field: ResolvedField,
+  values: FormValues,
+  conditions: readonly NamedCondition[],
+): boolean => {
+  if (!field.visibleWhen) {
+    return true;
+  }
+  return evaluateCondition(field.visibleWhen, values, conditions);
+};

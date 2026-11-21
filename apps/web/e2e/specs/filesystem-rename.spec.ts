@@ -4,9 +4,13 @@ import path from "node:path";
 import { apiStatus, apiUploadDocx } from "../helpers/api";
 import { expect, test } from "../helpers/test";
 import {
-  type TestWorkspace,
+  PLAYWRIGHT_EXPECT_TIMEOUT_1_SECOND_MS,
+  PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
+} from "../helpers/wait-budgets";
+import {
   createTestWorkspace,
   deleteTestWorkspace,
+  type TestWorkspace,
 } from "../helpers/workspace";
 
 const DOCX_MIME =
@@ -22,12 +26,14 @@ test.describe("filesystem rename", () => {
     workspace = await createTestWorkspace(request, "filesystem-rename");
   });
 
-  test.afterEach(async ({ request }) => {
+  test.afterEach(async ({ page, request }, testInfo) => {
     if (workspace === null) {
       return;
     }
 
-    await deleteTestWorkspace(request, workspace.id);
+    await deleteTestWorkspace(request, workspace.id, {
+      leave: { page, testInfo },
+    });
     workspace = null;
   });
 
@@ -69,7 +75,9 @@ test.describe("filesystem rename", () => {
     const originalName = page.getByTitle(`${LONG_BASE_NAME}.docx`, {
       exact: true,
     });
-    await expect(originalName).toBeVisible({ timeout: 30_000 });
+    await expect(originalName).toBeVisible({
+      timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
+    });
     await originalName.locator("xpath=ancestor::button[1]").click({
       button: "right",
     });
@@ -123,7 +131,9 @@ test.describe("filesystem rename", () => {
     const renamedName = page.getByTitle(`${renamedBase}.docx`, {
       exact: true,
     });
-    await expect(renamedName).toBeVisible({ timeout: 1000 });
+    await expect(renamedName).toBeVisible({
+      timeout: PLAYWRIGHT_EXPECT_TIMEOUT_1_SECOND_MS,
+    });
 
     renameRequest.resolve(undefined);
     expect((await renameResponse).status()).toBe(200);

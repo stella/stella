@@ -54,6 +54,19 @@ const fakeEngine = (options?: {
           answered[name] = { value: options?.total ?? 7 };
           continue;
         }
+        if (name === "courtYear") {
+          answered[name] = {
+            sum_other_doc_count: 0,
+            doc_count_error_upper_bound: 0,
+            buckets: [
+              {
+                key: "court-value",
+                years: { buckets: [engineBucket("2024", 40, 3)] },
+              },
+            ],
+          };
+          continue;
+        }
         answered[name] = {
           buckets: [
             engineBucket(
@@ -580,4 +593,65 @@ test("the read counts under exactly the query each facet was given", async () =>
     );
     expect(request?.query).toBe(`(${QUERY} AND facet:${name}) AND ${dated}`);
   }
+});
+
+test("only explicitly selected facets are aggregated, while every selection retains the total", async () => {
+  for (
+    let selection = 0;
+    selection < 2 ** CORPUS_SEARCH_FACET_NAMES.length;
+    selection += 1
+  ) {
+    const requestedFacets = CORPUS_SEARCH_FACET_NAMES.filter(
+      (_name, index) => Math.floor(selection / 2 ** index) % 2 === 1,
+    );
+    const engine = fakeEngine({ total: 412 });
+    const result = await readCorpusSearchFacets({
+      aggregate: engine.aggregate,
+      requestedFacets,
+      currentYear: CURRENT_YEAR,
+      decisionCountField: DOCUMENT_ID,
+      excludedSourceIds: [],
+      queryFor: (name) => `cross-filter:${name}`,
+      totalQuery: QUERY,
+    });
+
+    expect(Result.isError(result)).toBe(false);
+    if (Result.isError(result)) {
+      return;
+    }
+    expect(result.value.total).toBe(412);
+    expect(result.value.courtYear).toBeNull();
+    expect(engine.requests).toHaveLength(requestedFacets.length + 1);
+    expect(
+      engine.requests.flatMap(({ aggs }) => Object.keys(aggs)).toSorted(),
+    ).toEqual([...requestedFacets, "total"].toSorted());
+    for (const name of CORPUS_SEARCH_FACET_NAMES) {
+      expect(result.value.facets[name].length).toBe(
+        requestedFacets.includes(name) ? 1 : 0,
+      );
+    }
+  }
+});
+
+test("the matrix is aggregated only on explicit request under the whole filtered result query", async () => {
+  const engine = fakeEngine();
+  const result = await readCorpusSearchFacets({
+    aggregate: engine.aggregate,
+    requestedFacets: ["courtYear"],
+    currentYear: CURRENT_YEAR,
+    decisionCountField: DOCUMENT_ID,
+    excludedSourceIds: [],
+    queryFor: (name) => `cross-filter:${name}`,
+    totalQuery: QUERY,
+  });
+  expect(engine.requests).toHaveLength(1);
+  expect(engine.requests.at(0)?.query).toBe(QUERY);
+  expect(Object.keys(engine.requests.at(0)?.aggs ?? {}).toSorted()).toEqual([
+    "courtYear",
+    "total",
+  ]);
+  expect(Result.isError(result) ? undefined : result.value.courtYear).toEqual({
+    buckets: [{ court: "court-value", year: 2024, count: 3 }],
+    truncated: false,
+  });
 });

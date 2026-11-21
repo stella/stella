@@ -1,10 +1,18 @@
 {
+  "nativeEvents": [
+    "$exception",
+    "desktop_timing",
+    "desktopCrashed"
+  ],
   "windows": [
     "clipboard",
     "clipboardEditor",
     "main",
     "selfHostConnectDialog",
-    "takeoverDialog"
+    "takeoverDialog",
+    "activity",
+    "onboarding",
+    "transcribe"
   ],
   "operations": [
     "autostartRead",
@@ -20,7 +28,12 @@
     "clipboardWindowHide",
     "registryConnectionSubscribe",
     "render",
-    "runtime"
+    "runtime",
+    "activityRead",
+    "activitySubscribe",
+    "activityUpdate",
+    "permissionsUpdate",
+    "shortcutUpdate"
   ],
   "errorCodes": [
     "eventSubscriptionFailed",
@@ -32,6 +45,17 @@
     "unhandledError",
     "unhandledRejection",
     "windowLabelMismatch"
+  ],
+  "reasons": [
+    "accountUnavailable",
+    "windowRefused",
+    "billingRequestFailed",
+    "typeError",
+    "referenceError",
+    "rangeError",
+    "syntaxError",
+    "otherError",
+    "unclassified"
   ],
   "spans": [
     "clipboardFirstPaint",

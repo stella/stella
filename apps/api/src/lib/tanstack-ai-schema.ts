@@ -26,8 +26,7 @@ export type TanStackValibotSchema<TSchema extends GenericSchema> =
  * member must be the latter.
  */
 export type ToolSchemaInput =
-  | StandardSchemaV1
-  | (JSONSchema & { "~standard"?: never });
+  StandardSchemaV1 | (JSONSchema & { "~standard"?: never });
 
 type ToolSchemaFields = {
   inputSchema?: SchemaInput | undefined;
@@ -100,14 +99,14 @@ const strictifyObjectSchemas = (schema: unknown): unknown => {
     return schema;
   }
 
-  const next: JsonObject = {};
-  for (const [key, value] of Object.entries(schema)) {
-    if (Array.isArray(value)) {
-      next[key] = value.map(strictifyObjectSchemas);
-      continue;
-    }
-    next[key] = strictifyObjectSchemas(value);
-  }
+  const next = Object.fromEntries(
+    Object.entries(schema).map(([key, value]): [string, unknown] => [
+      key,
+      Array.isArray(value)
+        ? value.map(strictifyObjectSchemas)
+        : strictifyObjectSchemas(value),
+    ]),
+  );
 
   // Nullable object schemas can arrive as a type union (e.g.
   // ["object", "null"]) before the provider-safe projection lowers them,
@@ -167,13 +166,22 @@ const toProviderSafeJsonSchema = (
     .schema;
 };
 
+type ToolSchemaProjectionOptions = ProviderSafeJsonSchemaProjectionOptions & {
+  // JSON Schema cannot express predicates or type-only brands. Their canonical
+  // Standard Schema validator still runs at the tool execution boundary.
+  omitValidationActions?: readonly ("check" | "brand")[];
+};
+
 export const toTanStackValibotSchema = <TSchema extends GenericSchema>(
   schema: TSchema,
-  projectionOptions?: ProviderSafeJsonSchemaProjectionOptions,
+  projectionOptions?: ToolSchemaProjectionOptions,
 ): TanStackValibotSchema<TSchema> => {
-  const providerProjectionOptions = projectionOptions ?? {
-    nullUnionStrategy: "json-schema",
-  };
+  const { omitValidationActions = [], ...providerProjectionOptions } =
+    projectionOptions ?? { nullUnionStrategy: "json-schema" };
+  const ignoredActions = [
+    ...PROVIDER_SCHEMA_IGNORED_ACTIONS,
+    ...omitValidationActions,
+  ];
   return {
     "~standard": {
       ...schema["~standard"],
@@ -183,7 +191,7 @@ export const toTanStackValibotSchema = <TSchema extends GenericSchema>(
             toJsonSchema(schema, {
               target: valibotJsonSchemaTarget(options.target),
               typeMode: "input",
-              ignoreActions: PROVIDER_SCHEMA_IGNORED_ACTIONS,
+              ignoreActions: ignoredActions,
             }),
             providerProjectionOptions,
           ),
@@ -192,7 +200,7 @@ export const toTanStackValibotSchema = <TSchema extends GenericSchema>(
             toJsonSchema(schema, {
               target: valibotJsonSchemaTarget(options.target),
               typeMode: "output",
-              ignoreActions: PROVIDER_SCHEMA_IGNORED_ACTIONS,
+              ignoreActions: ignoredActions,
             }),
             providerProjectionOptions,
           ),

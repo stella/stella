@@ -1,25 +1,65 @@
-import { panic } from "better-result";
-import { Elysia } from "elysia";
-
 import { env } from "@/api/env";
+import { toResponse } from "@/api/http/respond";
+import type { Middleware } from "@/api/http/route";
+import { SITEMAP_ADMISSION_WAIT_MS } from "@/api/lib/case-law/sitemap-shard-budget";
+import {
+  type RateLimitClientAddressOptions,
+  resolveRateLimitClientAddress,
+} from "@/api/lib/client-ip";
 import { logger } from "@/api/lib/observability/logger";
 import { emitPublicCorpusAdmissionMetric } from "@/api/lib/observability/request-metrics";
-import { DEFAULT_RATE_LIMIT_ERROR_RESPONSE } from "@/api/lib/rate-limit/rate-limit";
+import { observedStatus } from "@/api/lib/observability/server-error-answer";
+import {
+  type AdmissionClass,
+  createPublicCorpusAdmission,
+} from "@/api/lib/rate-limit/public-corpus-admission";
+import {
+  asRouteBudget,
+  capacityRefusalCause,
+  DEFAULT_RATE_LIMIT_ERROR_RESPONSE,
+} from "@/api/lib/rate-limit/rate-limit";
 import {
   getPublicCorpusClassPolicy,
-  type PublicCorpusClass,
-  resolvePublicCorpusPolicy,
+  publicCorpusClassOf,
 } from "@/api/public-corpus-policy";
 
 type PublicCorpusConcurrencyOptions = {
   observe?: (event: {
-    class: Exclude<PublicCorpusClass, "browse">;
+    class: AdmissionClass;
     outcome: "acquired" | "refused";
   }) => void;
+  waitMsOf?: (routeClass: AdmissionClass) => number;
+  clientOf?: (
+    request: Request,
+    server: RateLimitClientAddressOptions["server"],
+  ) => string;
 };
 
+// A page fires its search and facets at once; a short wait lets the second
+// follow the first instead of failing. A sitemap file waits as long as the
+// web server's wait for it leaves room (`sitemap-shard-budget.ts`).
+const ADMISSION_WAIT_MS = {
+  search: 2000,
+  aggregate: 2000,
+  sitemap: SITEMAP_ADMISSION_WAIT_MS,
+} as const satisfies Record<AdmissionClass, number>;
+
+const MAX_ADMISSION_WAITERS = 64;
+
+// Sitemap files wait seconds for their slot, so they may hold a quarter of
+// the queue at most; the rest stays free for pages' searches and facets.
+const MAX_ADMISSION_WAITERS_PER_CLASS = {
+  search: MAX_ADMISSION_WAITERS,
+  aggregate: MAX_ADMISSION_WAITERS,
+  sitemap: MAX_ADMISSION_WAITERS / 4,
+} as const satisfies Record<AdmissionClass, number>;
+
+// Requests without a resolvable address share one client key, so together
+// they hold at most one slot per class.
+const UNRESOLVED_CLIENT = "unresolved";
+
 // One instance belongs to the process-wide HTTP composition, not to a route
-// or address. Admission is synchronous and never queues behind busy work.
+// or address. Waiting requests hold no slot and no database connection.
 export const publicCorpusConcurrencyLimit = ({
   observe = (event) => {
     if (event.outcome === "refused") {
@@ -29,81 +69,64 @@ export const publicCorpusConcurrencyLimit = ({
       });
     }
   },
-}: PublicCorpusConcurrencyOptions = {}) => {
+  waitMsOf = (routeClass) => ADMISSION_WAIT_MS[routeClass],
+  clientOf = (request, server) =>
+    resolveRateLimitClientAddress({ request, server }) ?? UNRESOLVED_CLIENT,
+}: PublicCorpusConcurrencyOptions = {}): Middleware => {
   const policyLimits = getPublicCorpusClassPolicy();
-  const active = new Map(
-    Object.entries({
-      search: { count: 0 },
-      aggregate: { count: 0 },
-      sitemap: { count: 0 },
-    } satisfies Record<
-      Exclude<PublicCorpusClass, "browse">,
-      { count: number }
-    >),
-  );
-  let totalActive = 0;
-  const leases = new WeakMap<Request, () => void>();
-  const release = (request: Request): void => {
-    const lease = leases.get(request);
-    if (lease === undefined) {
-      return;
+  const capacityOf = (routeClass: AdmissionClass) =>
+    routeClass === "sitemap"
+      ? policyLimits.totalConcurrency
+      : policyLimits.classes[routeClass].concurrency;
+  const admission = createPublicCorpusAdmission({
+    capacityOf,
+    totalCapacity: policyLimits.totalConcurrency,
+    maxWaiters: MAX_ADMISSION_WAITERS,
+    classMaxWaitersOf: (routeClass) =>
+      MAX_ADMISSION_WAITERS_PER_CLASS[routeClass],
+  });
+  // It waits for or refuses a concurrency slot and decides nothing else.
+  return asRouteBudget(async (ctx, inner) => {
+    if (env.E2E_DISABLE_AUTH_RATE_LIMIT) {
+      return await inner();
     }
-    leases.delete(request);
-    lease();
-  };
-
-  return (
-    new Elysia()
-      .onBeforeHandle({ as: "scoped" }, ({ request, set, status }) => {
-        if (env.E2E_DISABLE_AUTH_RATE_LIMIT) {
-          return undefined;
-        }
-        const policy = resolvePublicCorpusPolicy(request);
-        if (policy === undefined || policy.class === "browse") {
-          return undefined;
-        }
-        const routeClass = policy.class;
-        const classActive = active.get(routeClass);
-        if (classActive === undefined) {
-          panic("Missing public corpus concurrency class");
-        }
-        const capacity =
-          routeClass === "sitemap"
-            ? policyLimits.totalConcurrency
-            : policyLimits.classes[routeClass].concurrency;
-        if (
-          request.signal.aborted ||
-          classActive.count >= capacity ||
-          totalActive >= policyLimits.totalConcurrency
-        ) {
-          observe({ class: routeClass, outcome: "refused" });
-          logger.warn("api.public_corpus.admission_refused", {
-            class: routeClass,
-            capacity,
-            totalCapacity: policyLimits.totalConcurrency,
-          });
-          set.headers["Retry-After"] = "1";
-          return status(429, DEFAULT_RATE_LIMIT_ERROR_RESPONSE);
-        }
-        classActive.count += 1;
-        totalActive += 1;
-        leases.set(request, () => {
-          classActive.count -= 1;
-          totalActive -= 1;
-        });
-        observe({ class: routeClass, outcome: "acquired" });
-        return undefined;
-      })
-      // Disconnect does not cancel these handlers' database/index work. Keep
-      // its lease until that work settles, including after abort or timeout.
-      .onError({ as: "scoped" }, ({ request }) => {
-        release(request);
-      })
-      .mapResponse({ as: "scoped" }, ({ request }) => {
-        release(request);
-      })
-      .onAfterResponse({ as: "scoped" }, ({ request }) => {
-        release(request);
-      })
-  );
+    const routeClass = publicCorpusClassOf(
+      ctx.routeEntry,
+      new URL(ctx.request.url),
+    );
+    if (routeClass === undefined || routeClass === "browse") {
+      return await inner();
+    }
+    const release = await admission.acquire({
+      routeClass,
+      client: clientOf(ctx.request, ctx.server),
+      waitMs: waitMsOf(routeClass),
+      signal: ctx.request.signal,
+    });
+    if (release === null) {
+      observe({ class: routeClass, outcome: "refused" });
+      logger.warn("api.public_corpus.admission_refused", {
+        class: routeClass,
+        capacity: capacityOf(routeClass),
+        totalCapacity: policyLimits.totalConcurrency,
+      });
+      ctx.set.headers["Retry-After"] = "1";
+      return toResponse(
+        observedStatus(
+          capacityRefusalCause("public corpus admission refused"),
+          503,
+          DEFAULT_RATE_LIMIT_ERROR_RESPONSE,
+        ),
+        ctx.set,
+      );
+    }
+    observe({ class: routeClass, outcome: "acquired" });
+    // Disconnect does not cancel the handler's database or index work, so the
+    // slot is held until that work settles, abort and timeout included.
+    try {
+      return await inner();
+    } finally {
+      release();
+    }
+  });
 };

@@ -3,21 +3,22 @@ import type { ReservedSQL } from "bun";
 import { eq } from "drizzle-orm";
 
 import type { HealthConfig, Verdict } from "@stll/db-load-gate/health";
+import { runScriptWithErrorOutput } from "@stll/errors/script-error";
 import { Temporal } from "@stll/time";
 
 import { readEuCompletionTickEnvironment } from "@/api/env-eu-completion";
 import {
   EU_COMPLETION_LIMITS,
-  EuCompletionStop,
   type EuCompletionReport,
+  EuCompletionStop,
 } from "@/api/handlers/case-law/ingestion/eu-completion";
-import { REPLAY_HEALTH_CONFIG } from "@/api/handlers/case-law/ingestion/replay-enrolment";
+import { replayHealthConfig } from "@/api/handlers/case-law/ingestion/replay-enrolment";
 import { classifyReplayFailure } from "@/api/handlers/case-law/ingestion/replay-failure";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
+  type CaseLawScriptHandles,
   createCaseLawMaintenanceCleanupHandles,
   enterCaseLawMaintenanceLane,
-  type CaseLawScriptHandles,
 } from "@/api/lib/case-law/maintenance-lane";
 import type { CaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import {
@@ -29,7 +30,7 @@ import {
   assertReplaySlot,
   createReplayPreflightGate,
   readReplayGate,
-} from "@/api/scripts/replay-tick";
+} from "@/api/scripts/replay-tick-command";
 
 const QUERY_TIMEOUT_MS = 5000;
 const CLEANUP_TIMEOUT_MS = 30_000;
@@ -188,7 +189,7 @@ const loadRuntime = async () => {
     { createEuCompletionStore },
     { runEuCompletionTick },
     { createEuCompletionRunner },
-    { acquireCaseLawSourceIngestionLease },
+    { holdCaseLawSourceIngestionLease },
   ] = await Promise.all([
     import("@/api/db/long-running-connection"),
     import("@/api/db/backfill-runtime"),
@@ -207,7 +208,7 @@ const loadRuntime = async () => {
     createEuCompletionStore,
     runEuCompletionTick,
     createEuCompletionRunner,
-    acquireCaseLawSourceIngestionLease,
+    holdCaseLawSourceIngestionLease,
     caseLawSources,
   };
 };
@@ -254,6 +255,8 @@ const createCompletionFence = async ({
   });
   let slotHeld = false;
   let lease: CaseLawSourceIngestionLease | null = null;
+  let finishLease: (() => void) | null = null;
+  let leaseRun: Promise<unknown> | null = null;
   return {
     getLease: () => lease,
     fence: async () => {
@@ -292,26 +295,42 @@ const createCompletionFence = async ({
     },
     acquireDocument: async () => {
       signal.throwIfAborted();
-      lease ??= await runtime.acquireCaseLawSourceIngestionLease({
+      if (lease !== null) {
+        return;
+      }
+      const held = await runtime.holdCaseLawSourceIngestionLease({
         scopedDb: handles.ingestionDb,
         sourceId,
         releaseDb: cleanup.ingestionDb,
       });
-      if (lease === null) {
+      if (held === null) {
         throw new EuCompletionStop({
           message: "Completion source lease is held",
           reason: "held",
         });
       }
+      lease = held.lease;
+      finishLease = () => {
+        leaseRun = held.release();
+      };
     },
     releaseDocument: async () => {
-      const acquired = lease;
-      lease = null;
-      await acquired?.release();
+      // A failed release still ends this document's lease; the next document
+      // acquires a fresh one instead of reusing a released handle.
+      try {
+        finishLease?.();
+        await leaseRun;
+      } finally {
+        lease = null;
+        finishLease = null;
+        leaseRun = null;
+      }
     },
     close: async () => {
       try {
-        await lease?.release();
+        finishLease?.();
+        await leaseRun;
+        lease = null;
       } finally {
         await slot.close();
       }
@@ -341,7 +360,7 @@ const runCompletionSession = async (
     db: handles.rootDb,
     tableName: "case_law_decisions",
     clock: now,
-    config: { ...REPLAY_HEALTH_CONFIG, ...fixture.healthConfig },
+    config: { ...replayHealthConfig(), ...fixture.healthConfig },
   });
   const preflight = createReplayPreflightGate({
     readVerdict: async () =>
@@ -615,7 +634,9 @@ export const runEuCompletionTickScript = async ({
 };
 
 if (import.meta.main) {
-  process.exit(
-    await runEuCompletionTickScript({ args: process.argv.slice(2) }),
-  );
+  await runScriptWithErrorOutput(async () => {
+    process.exit(
+      await runEuCompletionTickScript({ args: process.argv.slice(2) }),
+    );
+  });
 }

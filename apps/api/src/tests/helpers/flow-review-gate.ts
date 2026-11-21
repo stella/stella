@@ -1,17 +1,17 @@
-import { panic } from "better-result";
-import type { SQL } from "bun";
 import { eq } from "drizzle-orm";
+
+import { createTestClock } from "@stll/test-kit";
 
 import { member, organization, user } from "@/api/db/auth-schema";
 import type { SafeDb } from "@/api/db/safe-db";
 import {
-  WORK_OBLIGATION_SOURCE,
   entities,
   flowRuns,
   flowRunSteps,
-  workspaces,
-  workspaceMembers,
+  WORK_OBLIGATION_SOURCE,
   workObligations,
+  workspaceMembers,
+  workspaces,
 } from "@/api/db/schema";
 import { createSafeDb, markRlsDatabase } from "@/api/db/scoped";
 import { createBackgroundAuditRecorder } from "@/api/lib/audit-log";
@@ -21,11 +21,15 @@ import {
   resolveFlowReviewGate,
 } from "@/api/lib/flows/flow-executor";
 import type { FlowStep } from "@/api/lib/flows/flow-types";
+import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
+
+const stateClock = createTestClock();
 
 type Action = "approved" | "rejected" | "cancel";
 
@@ -59,7 +63,7 @@ export const flowReviewGateFixture = async (
     });
   }
   const cleanup = async () => {
-    await db.delete(organization).where(eq(organization.id, organizationId));
+    await deleteOrganizationsForTest(db, [organizationId]);
     await db.delete(user).where(eq(user.id, userId));
   };
   try {
@@ -68,6 +72,10 @@ export const flowReviewGateFixture = async (
       name: "Review fixture",
       slug: organizationId,
       createdAt: new Date(),
+    });
+    await recordNewOrganizationAccessState(db, {
+      organizationId,
+      now: new Date(),
     });
     await db.insert(user).values({
       id: userId,
@@ -107,10 +115,13 @@ export const flowReviewGateFixture = async (
         createdByUserId: userId,
       });
     }
+    const startedAt =
+      initialRunStatus === "pending" ? null : new Date(stateClock.now());
     await db.insert(flowRuns).values({
       id: runId,
       workspaceId,
       status: initialRunStatus,
+      startedAt,
       definitionSnapshot: { name: "Review flow", steps },
       triggerSource: { type: "manual", userId },
     });
@@ -122,7 +133,9 @@ export const flowReviewGateFixture = async (
         index,
         kind: step.kind,
         reviewTaskEntityId: index === 0 ? taskEntityId : null,
-        status: index === 0 ? initialRunStatus : ("pending" as const),
+        ...(index === 0
+          ? { status: initialRunStatus, startedAt }
+          : { status: "pending" as const }),
       })),
     );
   } catch (error) {
@@ -205,22 +218,4 @@ export const flowReviewGateFixture = async (
     read,
     cleanup,
   };
-};
-
-// A query logger marks arrival; this observation proves the session waited.
-// This bounded DB observation is used only in concurrency regressions.
-export const waitForBlockedPid = async (
-  observer: SQL,
-  { waitingPid, holdingPid }: { waitingPid: number; holdingPid: number },
-) => {
-  const deadline = performance.now() + 3000;
-  while (performance.now() < deadline) {
-    const rows = await observer<
-      { waiting: boolean }[]
-    >`select ${holdingPid} = any(pg_blocking_pids(${waitingPid})) as waiting`;
-    if (rows.at(0)?.waiting === true) {
-      return;
-    }
-  }
-  panic(`Session ${waitingPid} did not wait for ${holdingPid}`);
 };

@@ -18,15 +18,18 @@ import type { SearchProjectionKind } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
-  SEARCH_PROJECTION_REPAIR_BATCH_SIZE,
   createSearchProjectionRepairDeps,
   drainSearchProjectionRepairQueue,
   enqueueContactSearchRepairs,
   enqueueEntitySearchRepairs,
   enqueueWorkspaceSearchRepairs,
   flushSearchRepairs,
+  SEARCH_PROJECTION_REPAIR_BATCH_SIZE,
 } from "@/api/lib/search/projection-repair-queue";
-import type { SearchProjectionRepairDeps } from "@/api/lib/search/projection-repair-queue";
+import type {
+  SearchProjectionRepairClaim,
+  SearchProjectionRepairDeps,
+} from "@/api/lib/search/projection-repair-queue";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
@@ -63,7 +66,9 @@ type RepairLog = {
 };
 
 const repairDeps = (log: RepairLog): SearchProjectionRepairDeps => {
-  const record = async (sourceId: string): Promise<void> => {
+  const record = async ({
+    sourceId,
+  }: SearchProjectionRepairClaim): Promise<void> => {
     if (log.failing.has(sourceId)) {
       throw new Error(`repair refused for ${sourceId}`);
     }
@@ -312,9 +317,9 @@ test("an edit that lands mid-repair survives the repair it raced", async () => {
     db: deps.db,
     repair: {
       ...deps.repair,
-      entity: async (sourceId) => {
+      entity: async (claim) => {
         await enqueueEntitySearchRepairs(asTx(), [document]);
-        await deps.repair.entity(sourceId);
+        await deps.repair.entity(claim);
       },
     },
   };
@@ -454,8 +459,22 @@ test("a drain rebuilds every projection kind on the connection it is handed", as
   // The rebuilds read through the relational API, so the handle carries the
   // production relations over the same client. `execute` yields a result
   // object on PGlite and a row array on the production driver; that is the
-  // one difference the transaction shim adapts.
+  // one difference the transaction shim adapts, at every savepoint level.
+  // Contact and matter rebuilds read their sources inside the organization
+  // transaction the owner scope opens, so the shim carries reads too.
   const relational = drizzle({ client, relations: databaseRelations });
+  type RelationalTransaction = Parameters<
+    Parameters<typeof relational.transaction>[0]
+  >[0];
+  const shim = (tx: RelationalTransaction): unknown => ({
+    execute: async (query: SQL) => (await tx.execute(query)).rows,
+    insert: tx.insert.bind(tx),
+    query: tx.query,
+    select: tx.select.bind(tx),
+    rollback: tx.rollback.bind(tx),
+    transaction: async (run: (savepoint: unknown) => Promise<unknown>) =>
+      await tx.transaction(async (savepoint) => await run(shim(savepoint))),
+  });
   const handed = asTestRaw<
     Parameters<typeof createSearchProjectionRepairDeps>[0]
   >({
@@ -464,12 +483,7 @@ test("a drain rebuilds every projection kind on the connection it is handed", as
     select: relational.select.bind(relational),
     update: relational.update.bind(relational),
     transaction: async (run: (tx: unknown) => Promise<unknown>) =>
-      await relational.transaction(
-        async (tx) =>
-          await run({
-            execute: async (query: SQL) => (await tx.execute(query)).rows,
-          }),
-      ),
+      await relational.transaction(async (tx) => await run(shim(tx))),
   });
   expect(
     await drainSearchProjectionRepairQueue({

@@ -1,7 +1,7 @@
 import { panic, Result } from "better-result";
 import { and, count, desc, eq, gte, inArray, lte, max, sql } from "drizzle-orm";
 
-import { Temporal, DAY_IN_MS } from "@stll/time";
+import { DAY_IN_MS, Temporal } from "@stll/time";
 
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -15,6 +15,10 @@ import {
 } from "@/api/db/schema";
 import type { SourceTotalOrigin } from "@/api/db/schema";
 import { setSharedStatementTimeout } from "@/api/db/shared-pool-timeouts";
+import {
+  adapterParkOf,
+  readAdapterFailureRunsIn,
+} from "@/api/handlers/case-law/ingestion/adapter-park";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -23,13 +27,15 @@ import {
   CASE_LAW_SOURCE_ROWS_BOUND,
   CASE_LAW_SOURCE_ROWS_INVARIANT,
 } from "@/api/lib/legal-search/ingestion-constants";
+import { removalReconciliationCountsQuery } from "@/api/lib/legal-search/removal-reconciliation-store";
 import {
   createUnrecognizedSourceReporter,
+  SOURCE_REPORT_FEATURE,
   sourceRegistryMembership,
 } from "@/api/lib/legal-search/source-registry-membership";
 
 /**
- * Where the standing listing reconciliation stands for one source.
+ * Durable listing and removal reconciliation for one source.
  *
  * Null for a source it has never touched. The handler cannot see adapters, so
  * it cannot ask whether a source has the capability; the absence of both a
@@ -47,13 +53,16 @@ type SourceReconciliationStatus = {
   parked: number;
   /** Listed decisions the retry schedule gave up on; accounted for, not held. */
   terminal: number;
+  pendingRemovals: number;
+  unprobeable: number;
   lastCheckedAt: string | null;
 };
 
 type SourceStatus = {
   adapterKey: string;
   /**
-   * False when no adapter is registered for `adapterKey`: a retired source, or
+   * False when neither an adapter nor a bulk import is registered for
+   * `adapterKey`: a retired source, or
    * a seeded/test row. The corpus figures below are still that row's own, but
    * nothing will ingest into it, which is not visible from the numbers alone.
    */
@@ -85,16 +94,36 @@ type SourceStatus = {
    * failure message is verbatim publisher or driver output, so the failure is
    * reported as `status` here and as the classified `topErrors` below.
    */
-  lastEvent: {
-    status: string;
-    inserted: number;
-    skipped: number;
-    durationMs: number;
-    finishedAt: string;
-    failed: boolean;
-  } | null;
+  lastEvent:
+    | (Pick<
+        typeof caseLawIngestionEvents.$inferSelect,
+        "status" | "pauseReason"
+      > & {
+        inserted: number;
+        skipped: number;
+        durationMs: number;
+        finishedAt: string;
+        failed: boolean;
+      })
+    | null;
   topErrors: { errorType: string; count: number }[];
   reconciliation: SourceReconciliationStatus | null;
+  /**
+   * Set while the source is parked: its last cycles failed the same way with
+   * nothing stored for long enough that it asks its publisher only once a day,
+   * so it ingests nothing in between. Null when it runs on its own cadence.
+   * No error text, for the reason `lastEvent` carries none.
+   */
+  park: SourcePark | null;
+};
+
+type SourcePark = {
+  /** When the run of identical failed cycles began. */
+  failingSince: string;
+  /** Cycles in that run, the daily attempts included. */
+  sameFailureCycles: number;
+  /** When the source next asks its publisher. */
+  nextAttemptAt: string;
 };
 
 type IngestionStatus = {
@@ -121,15 +150,18 @@ type SourceAggregate = {
   failures24h: number;
   topErrors: SourceStatus["topErrors"];
   lastEvent: SourceStatus["lastEvent"];
+  park: SourcePark | null;
   slices: number;
   shortSlices: number;
   failedSlices: number;
   lastCheckedAt: string | null;
   parked: number;
   terminal: number;
+  pendingRemovals: number;
+  unprobeable: number;
 };
 
-type SourceAggregates = Map<string, SourceAggregate>;
+type SourceAggregates = Map<SafeId<"caseLawSource">, SourceAggregate>;
 
 const emptyAggregate = (): SourceAggregate => ({
   insertedLastHour: 0,
@@ -137,12 +169,15 @@ const emptyAggregate = (): SourceAggregate => ({
   failures24h: 0,
   topErrors: [],
   lastEvent: null,
+  park: null,
   slices: 0,
   shortSlices: 0,
   failedSlices: 0,
   lastCheckedAt: null,
   parked: 0,
   terminal: 0,
+  pendingRemovals: 0,
+  unprobeable: 0,
 });
 
 /**
@@ -180,6 +215,7 @@ export const latestIngestionEventsQuery = (
     .select({
       sourceId: caseLawSources.id,
       status: caseLawIngestionEvents.status,
+      pauseReason: caseLawIngestionEvents.pauseReason,
       inserted: caseLawIngestionEvents.inserted,
       skipped: caseLawIngestionEvents.skipped,
       durationMs: caseLawIngestionEvents.durationMs,
@@ -192,7 +228,7 @@ export const latestIngestionEventsQuery = (
     .where(inArray(caseLawSources.id, sourceIds));
 };
 
-/** The `(source_id, slice, status)` index covers both exact counts. */
+/** Each durable lane supplies its own source-scoped health counts. */
 export const reconciliationCountsQuery = (
   db: Transaction,
   sourceIds: SafeId<"caseLawSource">[],
@@ -212,14 +248,20 @@ export const reconciliationCountsQuery = (
     .where(eq(caseLawReconciliationItems.sourceId, caseLawSources.id))
     .as("reconciliation_counts");
 
+  const removalCounts = removalReconciliationCountsQuery(db, sourceIds).as(
+    "removal_reconciliation_counts",
+  );
   return db
     .select({
       sourceId: caseLawSources.id,
       parked: counts.parked,
       terminal: counts.terminal,
+      pendingRemovals: removalCounts.pendingRemovals,
+      unprobeable: removalCounts.unprobeable,
     })
     .from(caseLawSources)
     .innerJoinLateral(counts, sql`true`)
+    .innerJoin(removalCounts, eq(removalCounts.sourceId, caseLawSources.id))
     .where(inArray(caseLawSources.id, sourceIds));
 };
 
@@ -231,6 +273,32 @@ export const reconciliationCountsQuery = (
  * callback holds a single transaction connection, which carries one in-flight
  * statement at a time.
  */
+/**
+ * The park of each source whose last event failed; any other source cannot be
+ * parked, so only those read their failure run, all in one statement.
+ */
+const readSourceParks = async (
+  db: Transaction,
+  aggregates: SourceAggregates,
+  now: Date,
+): Promise<void> => {
+  const failing = [...aggregates]
+    .filter(([, aggregate]) => aggregate.lastEvent?.failed === true)
+    .map(([sourceId]) => sourceId);
+  const runs = await readAdapterFailureRunsIn(db, failing);
+  for (const [sourceId, run] of runs) {
+    const park = adapterParkOf(run, now.getTime());
+    requireAggregate(aggregates, sourceId).park =
+      park === null
+        ? null
+        : {
+            failingSince: new Date(park.failingSinceMs).toISOString(),
+            sameFailureCycles: park.cycles,
+            nextAttemptAt: new Date(park.untilMs).toISOString(),
+          };
+  }
+};
+
 const readSourceAggregates = async ({
   db,
   oneDayAgo,
@@ -356,6 +424,7 @@ const readSourceAggregates = async ({
   for (const row of lastEventRows) {
     requireAggregate(aggregates, row.sourceId).lastEvent = {
       status: row.status,
+      pauseReason: row.pauseReason,
       inserted: row.inserted,
       skipped: row.skipped,
       durationMs: row.durationMs,
@@ -374,6 +443,8 @@ const readSourceAggregates = async ({
     const aggregate = requireAggregate(aggregates, row.sourceId);
     aggregate.parked = row.parked;
     aggregate.terminal = row.terminal;
+    aggregate.pendingRemovals = row.pendingRemovals;
+    aggregate.unprobeable = row.unprobeable;
   }
 
   return aggregates;
@@ -419,10 +490,11 @@ export const getIngestionStatus = async (
       oneHourAgo,
       sourceIds: sources.map((source) => source.id),
     });
+    await readSourceParks(db, aggregates, now);
 
     const sourceStatuses: SourceStatus[] = [];
     const reportUnrecognizedSource = createUnrecognizedSourceReporter(
-      "case_law.ingestion_status",
+      SOURCE_REPORT_FEATURE.ingestionStatus,
     );
 
     for (const source of sources) {
@@ -430,7 +502,8 @@ export const getIngestionStatus = async (
       const reconciliation: SourceReconciliationStatus | null =
         aggregate.slices === 0 &&
         aggregate.parked === 0 &&
-        aggregate.terminal === 0
+        aggregate.terminal === 0 &&
+        aggregate.pendingRemovals === 0
           ? null
           : {
               slices: aggregate.slices,
@@ -438,6 +511,8 @@ export const getIngestionStatus = async (
               failedSlices: aggregate.failedSlices,
               parked: aggregate.parked,
               terminal: aggregate.terminal,
+              pendingRemovals: aggregate.pendingRemovals,
+              unprobeable: aggregate.unprobeable,
               lastCheckedAt: aggregate.lastCheckedAt,
             };
 
@@ -448,7 +523,7 @@ export const getIngestionStatus = async (
 
       sourceStatuses.push({
         adapterKey: source.adapterKey,
-        adapterRegistered: membership.type === "registered",
+        adapterRegistered: membership.type !== "unrecognized",
         name: source.name,
         enabled: source.enabled,
         syncCursor: source.syncCursor,
@@ -463,6 +538,7 @@ export const getIngestionStatus = async (
         lastEvent: aggregate.lastEvent,
         topErrors: aggregate.topErrors,
         reconciliation,
+        park: aggregate.park,
       });
     }
 
@@ -501,6 +577,7 @@ export const getIngestionStatus = async (
 };
 
 const config = {
+  contract: "patch",
   description:
     "Report case-law corpus ingestion health for operators. Per source: " +
     "adapter key and whether an adapter is still registered for it, enabled " +
@@ -508,13 +585,15 @@ const config = {
     "reports, decisions inserted in the last hour and last day, failures and " +
     "the top error types in the last day, the last ingestion event, and " +
     "standing reconciliation counts (slices surveyed, short slices, parked " +
-    "and terminal items). The fleet event total is an estimate from database " +
+    "and terminal items, pending removals and unprobeable identities), and " +
+    "whether the source is parked: failing the same way for so long that it " +
+    "asks its publisher once a day, since when, and its next attempt. The fleet event total is an estimate from database " +
     "statistics and may lag recent writes. Requires organization audit-log access.",
   // Operator-only ingestion observability: `auditLog: ["read"]` is held solely
   // by owner/admin (see `packages/permissions`), matching the admin/owner gate
   // this route used to carry as a route-level `onBeforeHandle`. Declaring it in
   // the handler config means the safe-handler wrapper enforces it for BOTH the
-  // REST route and the generic `invoke_capability` path, so neither bypasses the
+  // REST route and the generic capability executors path, so neither bypasses the
   // gate. Keep this as the single source of the role check for this endpoint.
   permissions: { auditLog: ["read"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,

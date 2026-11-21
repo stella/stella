@@ -206,7 +206,7 @@ export const annotatedAliasedLocalReturn =
 export const annotatedAssignedLocalReturn =
   // oxlint-disable-next-line no-unvalidated-json-domain-cast/no-unvalidated-json-domain-cast
   (): RegistryCompany => {
-    // oxlint-disable-next-line eslint/prefer-const
+    // oxlint-disable-next-line prefer-const
     let parsed;
     parsed = JSON.parse(raw);
     return parsed;

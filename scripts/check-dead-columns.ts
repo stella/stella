@@ -15,6 +15,8 @@ import { PgTable } from "drizzle-orm/pg-core";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 
+import { repoRelativePath } from "@stll/portable-path";
+
 import * as schema from "../apps/api/src/db/schema";
 
 const REPO_ROOT = path.resolve(import.meta.dir, "..");
@@ -50,6 +52,11 @@ const TEST_FILE_SUFFIXES = [
 ] as const;
 
 const EXCLUDED_PATH_PREFIXES = ["apps/api/src/db/schema"] as const;
+// Schema inventories list every column of a kind; naming one there is not a use.
+const EXCLUDED_FILES = new Set([
+  "apps/api/src/lib/db/enum-column-roles.ts",
+  "apps/api/src/lib/db/status-tables.gen.ts",
+]);
 // Migrations replay column names verbatim and would make every column look
 // referenced; generated/vendor output belongs out for the same reason.
 const EXCLUDED_PATH_SEGMENTS = new Set(["node_modules", "drizzle"]);
@@ -109,6 +116,7 @@ export const shouldScanFile = (relativePath: string): boolean => {
     return false;
   }
   if (
+    EXCLUDED_FILES.has(relativePath) ||
     EXCLUDED_PATH_PREFIXES.some((prefix) => relativePath.startsWith(prefix))
   ) {
     return false;
@@ -146,9 +154,7 @@ const collectSourceFiles = (): string[] => {
     }
   }
   return files.filter((absolute) =>
-    shouldScanFile(
-      path.relative(REPO_ROOT, absolute).split(path.sep).join("/"),
-    ),
+    shouldScanFile(repoRelativePath(REPO_ROOT, absolute)),
   );
 };
 
@@ -206,7 +212,7 @@ const loadAllowlist = (): AllowlistEntry[] => {
   const parsed: unknown = JSON.parse(raw);
   if (!Array.isArray(parsed) || !parsed.every(isAllowlistEntry)) {
     return panic(
-      `${path.relative(REPO_ROOT, ALLOWLIST_PATH)} must be a JSON array of { table, column, reason } entries`,
+      `${repoRelativePath(REPO_ROOT, ALLOWLIST_PATH)} must be a JSON array of { table, column, reason } entries`,
     );
   }
   return parsed;
@@ -240,12 +246,12 @@ const main = (): void => {
     if (!validColumnKeys.has(key)) {
       failed = true;
       console.error(
-        `stale allowlist entry: ${entry.table}.${entry.column} does not match any current schema column -- remove it from ${path.relative(REPO_ROOT, ALLOWLIST_PATH)}`,
+        `stale allowlist entry: ${entry.table}.${entry.column} does not match any current schema column -- remove it from ${repoRelativePath(REPO_ROOT, ALLOWLIST_PATH)}`,
       );
     } else if (!deadColumnKeys.has(key)) {
       failed = true;
       console.error(
-        `stale allowlist entry: ${entry.table}.${entry.column} is no longer dead -- remove it from ${path.relative(REPO_ROOT, ALLOWLIST_PATH)}`,
+        `stale allowlist entry: ${entry.table}.${entry.column} is no longer dead -- remove it from ${repoRelativePath(REPO_ROOT, ALLOWLIST_PATH)}`,
       );
     }
   }

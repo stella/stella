@@ -1,8 +1,14 @@
 import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
-import { status, t } from "elysia";
+import * as v from "valibot";
 
+import {
+  isPublicCountry,
+  type PublicCountrySurface,
+} from "@stll/api-contract/public-country-capability";
+import { legalDayTimeZone } from "@stll/api-contract/public-country-legal-day";
 import { hasUsableAst } from "@stll/legal-ast/document-ast";
+import { todayFor } from "@stll/time";
 
 import {
   caseLawStatuteCitationCountState,
@@ -13,15 +19,25 @@ import {
   statuteCitationCaseCount,
   statuteCitationCountStateJoin,
 } from "@/api/handlers/legislation/citation-count";
-import { projectStatuteReader } from "@/api/handlers/legislation/reader-response";
+import {
+  projectStatuteAmendments,
+  projectStatuteReader,
+} from "@/api/handlers/legislation/reader-response";
+import { status } from "@/api/http/status";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
+import {
+  LEGISLATION_AMENDMENT_PAGE_MAX,
+  readLegislationAmendments,
+  readLegislationAmendmentSnapshot,
+} from "@/api/lib/legal-search/legislation-amendments";
+import { legislationDocumentStatusToday } from "@/api/lib/legal-search/legislation-current-version";
 import { legislationExpressionLabelColumns } from "@/api/lib/legal-search/legislation-expression-label";
 import {
   derivedAiLegislationSource,
-  publishedLegislationDocument,
+  publishedLegislationDocumentFor,
 } from "@/api/lib/legal-search/legislation-redistribution";
 import {
   readVersionAst,
@@ -46,6 +62,7 @@ import {
 export const readPublicLegislationHandler = async (
   documentId: SafeId<"legislationDocument">,
   legislationDb: LegislationReadDb,
+  surface: PublicCountrySurface,
 ) => {
   const [document] = await legislationDb(
     async (tx) =>
@@ -57,13 +74,14 @@ export const readPublicLegislationHandler = async (
           // megabytes the reader would discard.
           ...versionAstColumns,
           ...versionTextColumns,
+          sourceId: legislationDocuments.sourceId,
           eli: legislationDocuments.eli,
           slug: legislationDocuments.slug,
           title: legislationDocuments.title,
           country: legislationDocuments.country,
           language: legislationDocuments.language,
           documentType: legislationDocuments.documentType,
-          status: legislationDocuments.status,
+          status: legislationDocumentStatusToday,
           effectiveDate: legislationDocuments.effectiveDate,
           versionValidFrom: legislationDocuments.versionValidFrom,
           versionValidTo: legislationDocuments.versionValidTo,
@@ -93,17 +111,40 @@ export const readPublicLegislationHandler = async (
         .where(
           and(
             eq(legislationDocuments.id, documentId),
-            publishedLegislationDocument,
+            publishedLegislationDocumentFor(surface),
           ),
         )
         .limit(1),
   );
 
-  if (!document) {
+  // The published-read filter admits public countries only, so a row outside
+  // the list is as unpublished as a missing one.
+  if (!document || !isPublicCountry(document.country)) {
     return status(404, { message: "Legislation document not found" });
   }
+  const { country } = document;
+
+  const pendingChanges = await legislationDb(async (tx) => {
+    const work = {
+      sourceId: document.sourceId,
+      eli: document.eli,
+      language: document.language,
+    };
+    const snapshot = await readLegislationAmendmentSnapshot(tx, work);
+    if (snapshot === null) {
+      return null;
+    }
+    const page = await readLegislationAmendments(tx, {
+      work,
+      direction: "incoming",
+      limit: LEGISLATION_AMENDMENT_PAGE_MAX,
+      effectiveAfter: todayFor(legalDayTimeZone(country)).toString(),
+    });
+    return projectStatuteAmendments({ page, snapshot });
+  });
 
   const {
+    sourceId: _sourceId,
     astS3Key,
     textS3Key,
     documentAst: pgAst,
@@ -112,6 +153,7 @@ export const readPublicLegislationHandler = async (
   } = document;
 
   const documentAst = await readVersionAst({
+    surface,
     row: { id: documentId, astS3Key, documentAst: pgAst },
     legislationDb,
     step: "readLegislation.corpusAst",
@@ -120,15 +162,22 @@ export const readPublicLegislationHandler = async (
   const fulltext = hasUsableAst(documentAst)
     ? null
     : await readVersionText({
+        surface,
         row: { id: documentId, textS3Key, fulltext: pgText },
         legislationDb,
         step: "readLegislation.corpusText",
       });
 
-  return projectStatuteReader({ ...rest, documentAst, fulltext });
+  return projectStatuteReader({
+    ...rest,
+    pendingChanges,
+    documentAst,
+    fulltext,
+  });
 };
 
 const config = {
+  contract: "patch",
   description:
     "Read one legislation document from the stella corpus by id: its ELI, " +
     "title, country, language, document type, status, effective and " +
@@ -140,7 +189,7 @@ const config = {
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "covered", by: "read_statute" },
   access: "read",
-  params: t.Object({ documentId: tSafeId("legislationDocument") }),
+  params: v.object({ documentId: resourceIdSchema("legislationDocument") }),
 } satisfies HandlerConfig;
 
 const readLegislation = createSafeRootHandler(
@@ -152,6 +201,7 @@ const readLegislation = createSafeRootHandler(
           await readPublicLegislationHandler(
             documentId,
             legislationPublicReadDb,
+            "pages",
           ),
       ),
     );

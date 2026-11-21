@@ -1,35 +1,23 @@
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
-import type { StateStorage } from "zustand/middleware";
 
 import { getStorageKey } from "@/consts";
+import { deviceStorage } from "@/lib/account/browser-storage";
 
 type State = {
   tanstackDevtools: boolean;
   sourceInspector: boolean;
-  publicLawPreview: boolean;
   workflowsPreview: boolean;
   inboxPreview: boolean;
-  timeBillingPreview: boolean;
-  avtPreview: boolean;
   simulateSlowLoad: boolean;
 };
 
 type Actions = {
   setTanstackDevtools: (value: boolean) => void;
   setSourceInspector: (value: boolean) => void;
-  setPublicLawPreview: (value: boolean) => void;
   setWorkflowsPreview: (value: boolean) => void;
   setInboxPreview: (value: boolean) => void;
-  setTimeBillingPreview: (value: boolean) => void;
-  setAvtPreview: (value: boolean) => void;
   setSimulateSlowLoad: (value: boolean) => void;
-};
-
-const serverStorage: StateStorage = {
-  getItem: () => null,
-  removeItem: () => undefined,
-  setItem: () => undefined,
 };
 
 export const useDevStore = create<State & Actions>()(
@@ -37,11 +25,8 @@ export const useDevStore = create<State & Actions>()(
     (set) => ({
       tanstackDevtools: false,
       sourceInspector: false,
-      publicLawPreview: false,
       workflowsPreview: false,
       inboxPreview: false,
-      timeBillingPreview: false,
-      avtPreview: false,
       simulateSlowLoad: false,
 
       setTanstackDevtools: (tanstackDevtools) => {
@@ -50,29 +35,18 @@ export const useDevStore = create<State & Actions>()(
       setSourceInspector: (sourceInspector) => {
         set({ sourceInspector });
       },
-      setPublicLawPreview: (publicLawPreview) => {
-        set({ publicLawPreview });
-      },
       setWorkflowsPreview: (workflowsPreview) => {
         set({ workflowsPreview });
       },
       setInboxPreview: (inboxPreview) => {
         set({ inboxPreview });
       },
-      setTimeBillingPreview: (timeBillingPreview) => {
-        set({ timeBillingPreview });
-      },
-      setAvtPreview: (avtPreview) => {
-        set({ avtPreview });
-      },
       setSimulateSlowLoad: (simulateSlowLoad) => {
         set({ simulateSlowLoad });
       },
     }),
     {
-      storage: createJSONStorage(() =>
-        typeof window === "undefined" ? serverStorage : window.localStorage,
-      ),
+      storage: createJSONStorage(() => deviceStorage("local")),
       name: getStorageKey("dev"),
     },
   ),

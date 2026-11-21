@@ -14,6 +14,8 @@ import { readdirSync, readFileSync } from "node:fs";
 import nodePath from "node:path";
 import { IntlProvider } from "use-intl";
 
+import { repoRelativePath } from "@stll/portable-path";
+
 import { SidebarProvider } from "@/components/sidebar";
 import en from "@/i18n/langs/en.json";
 import { AuthenticatedUserProvider } from "@/lib/authenticated-user-context";
@@ -122,12 +124,34 @@ describe("inspector dock ownership", () => {
   test("only the shells mount the inspector dock", () => {
     const owners = listSourceFiles(WEB_SOURCE)
       .filter((path) => DOCK_IMPORT_PATTERN.test(readFileSync(path, "utf-8")))
-      .map((path) => nodePath.relative(WEB_SOURCE, path))
+      .map((path) => repoRelativePath(WEB_SOURCE, path))
       .toSorted();
 
     expect(owners).toEqual([
       "components/public-inspector-rail.tsx",
       "routes/-protected-app.tsx",
+    ]);
+  });
+});
+
+describe("inspector tab persistence ownership", () => {
+  const filesMatching = (pattern: RegExp) =>
+    listSourceFiles(WEB_SOURCE)
+      .filter((path) => pattern.test(readFileSync(path, "utf-8")))
+      .map((path) => repoRelativePath(WEB_SOURCE, path))
+      .toSorted();
+
+  // A member's tabs carry a legal document's one conversation across a
+  // reload. A shell that docks the inspector for a member without restoring
+  // them opens every document on a fresh, empty chat instead.
+  test("every member shell restores the member's tabs through one hook", () => {
+    expect(filesMatching(/\buseInspectorTabPersistence\(/u)).toEqual([
+      "routes/-protected-app.tsx",
+      "routes/law/-components/public-law-inspector.tsx",
+    ]);
+    // Calls, not the definition: the hook is the only place that starts it.
+    expect(filesMatching(/\binitializeInspectorTabBroadcast\(/u)).toEqual([
+      "components/inspector/use-inspector-tab-persistence.ts",
     ]);
   });
 });

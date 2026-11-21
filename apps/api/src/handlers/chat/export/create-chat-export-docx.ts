@@ -1,10 +1,9 @@
 import { panic } from "better-result";
-import JSZip from "jszip";
 
+import { documentToDocx } from "@stll/docx-authoring/document";
 import type { Footnote, ParagraphContent } from "@stll/docx-core/model";
+import { ZipArchive } from "@stll/docx-core/zip";
 import type { Document } from "@stll/folio-core";
-
-import { documentToDocx } from "@/api/lib/docx-authoring/document";
 
 const CONTENT_TYPES_PATH = "[Content_Types].xml";
 const DOCUMENT_RELATIONSHIPS_PATH = "word/_rels/document.xml.rels";
@@ -71,12 +70,15 @@ const serializeFootnotes = (footnotes: readonly Footnote[]): string =>
     "</w:footnotes>",
   ].join("");
 
-const requiredZipText = async (zip: JSZip, path: string): Promise<string> => {
-  const file = zip.file(path);
-  if (file === null) {
+const requiredZipText = async (
+  zip: ZipArchive,
+  path: string,
+): Promise<string> => {
+  const file = zip.entry(path);
+  if (file === undefined) {
     return panic(`Generated DOCX is missing ${path}`);
   }
-  return await file.async("text");
+  return await file.text();
 };
 
 const appendBeforeClosingTag = (
@@ -114,13 +116,14 @@ export const createChatExportDocx = async (
     return bytes;
   }
 
-  // oxlint-disable-next-line no-raw-zip-load/no-raw-zip-load -- unbounded archive read predating loadDocxArchive; frozen by the rule budget
-  const zip = await JSZip.loadAsync(bytes);
+  // The archive was just serialized here; the reader still holds every
+  // entry to its declared size.
+  const zip = await ZipArchive.read(bytes);
   const contentTypes = await requiredZipText(zip, CONTENT_TYPES_PATH);
   const relationships = await requiredZipText(zip, DOCUMENT_RELATIONSHIPS_PATH);
   const relationshipId = nextRelationshipId(relationships);
 
-  zip.file(
+  zip.set(
     CONTENT_TYPES_PATH,
     appendBeforeClosingTag(
       contentTypes,
@@ -128,7 +131,7 @@ export const createChatExportDocx = async (
       `<Override PartName="/${FOOTNOTES_PATH}" ContentType="${FOOTNOTES_CONTENT_TYPE}"/>`,
     ),
   );
-  zip.file(
+  zip.set(
     DOCUMENT_RELATIONSHIPS_PATH,
     appendBeforeClosingTag(
       relationships,
@@ -136,11 +139,7 @@ export const createChatExportDocx = async (
       `<Relationship Id="${relationshipId}" Type="${FOOTNOTES_RELATIONSHIP_TYPE}" Target="footnotes.xml"/>`,
     ),
   );
-  zip.file(FOOTNOTES_PATH, serializeFootnotes(footnotes));
+  zip.set(FOOTNOTES_PATH, serializeFootnotes(footnotes));
 
-  return await zip.generateAsync({
-    type: "arraybuffer",
-    compression: "DEFLATE",
-    compressionOptions: { level: 6 },
-  });
+  return (await zip.generate({ level: 6 })).buffer;
 };

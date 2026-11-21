@@ -3,19 +3,20 @@ import type * as v from "valibot";
 
 import {
   AGENT_INPUT_NORMALIZATION_KIND,
-  agentInputNormalizationMetadata,
   type AgentInputNormalizationAnnotation,
+  agentInputNormalizationMetadata,
 } from "@stll/agent-input";
 
 import { toJsonSchema } from "@/api/lib/json-schema/valibot-to-json-schema";
 import { isUnknownArray } from "@/api/lib/type-guards";
+import type { NullAsAbsentInputSchema } from "@/api/mcp/input-schemas";
 import type {
+  McpToolAnnotationReasons,
   McpToolDefinition,
   McpToolInputSchema,
   McpToolOutputContract,
   McpToolOutputSchema,
 } from "@/api/mcp/tool-types";
-import type { NullAsAbsentInputSchema } from "@/api/mcp/tool-utils";
 
 const VALIBOT_MCP_JSON_SCHEMA_CONFIG = {
   errorMode: "throw",
@@ -38,11 +39,12 @@ type JsonSchemaProjectionWaiver = {
 };
 
 type ToolWithoutInputSchema<TDefinition> = TDefinition extends McpToolDefinition
-  ? Omit<TDefinition, "inputSchema">
+  ? Omit<TDefinition, "annotationReasons" | "inputSchema">
   : never;
 
 type ValibotMcpToolInput = ToolWithoutInputSchema<McpToolDefinition> & {
   inputSchema: NullAsAbsentInputSchema;
+  annotationReasons?: McpToolAnnotationReasons;
   /** Explicit kinds JSON Schema cannot express, keyed by dotted field path. */
   inputNormalization?: Readonly<
     Record<string, AgentInputNormalizationAnnotation>
@@ -52,8 +54,12 @@ type ValibotMcpToolInput = ToolWithoutInputSchema<McpToolDefinition> & {
 
 type ValibotMcpToolDefinition<TDefinition extends ValibotMcpToolInput> = Omit<
   TDefinition,
-  "inputSchema" | "inputNormalization" | "jsonSchemaProjectionWaiver"
+  | "inputSchema"
+  | "inputNormalization"
+  | "jsonSchemaProjectionWaiver"
+  | "annotationReasons"
 > & {
+  annotationReasons: McpToolAnnotationReasons;
   inputSchema: McpToolInputSchema;
   inputSchemaSource: TDefinition["inputSchema"];
   inputSchemaProjectionWaiver: JsonSchemaProjectionWaiver | undefined;
@@ -62,17 +68,18 @@ type ValibotMcpToolDefinition<TDefinition extends ValibotMcpToolInput> = Omit<
 const appendGuidance = (
   schema: Record<string, unknown>,
   annotation: AgentInputNormalizationAnnotation,
-): void => {
+): Record<string, unknown> => {
   const description = schema["description"];
-  Object.assign(
-    schema,
-    agentInputNormalizationMetadata(
+  return {
+    ...schema,
+    ...agentInputNormalizationMetadata(
       annotation,
       typeof description === "string" ? description : undefined,
     ),
-  );
+  };
 };
 
+/** Rebuild only branches containing the declared path; absence stays explicit. */
 const annotateSchemaPath = ({
   schema,
   path,
@@ -81,40 +88,60 @@ const annotateSchemaPath = ({
   schema: Record<string, unknown>;
   path: readonly string[];
   annotation: AgentInputNormalizationAnnotation;
-}): boolean => {
+}): Record<string, unknown> | undefined => {
   const segment = path.at(0);
   if (segment === undefined) {
-    appendGuidance(schema, annotation);
-    return true;
+    return appendGuidance(schema, annotation);
   }
-  let found = false;
+  let annotated: Record<string, unknown> | undefined;
   for (const keyword of ["anyOf", "oneOf", "allOf"] as const) {
     const branches = schema[keyword];
-    if (!Array.isArray(branches)) {
+    if (!isUnknownArray(branches)) {
       continue;
     }
-    for (const branch of branches) {
-      if (isSchemaRecord(branch)) {
-        found =
-          annotateSchemaPath({ schema: branch, path, annotation }) || found;
-      }
+    const updated = branches.map((branch) =>
+      isSchemaRecord(branch)
+        ? annotateSchemaPath({ schema: branch, path, annotation })
+        : undefined,
+    );
+    if (updated.some((branch) => branch !== undefined)) {
+      annotated = {
+        ...(annotated ?? schema),
+        [keyword]: branches.map((branch, index) => updated[index] ?? branch),
+      };
     }
+  }
+  if (segment === "[]") {
+    const items = schema["items"];
+    const updated = isSchemaRecord(items)
+      ? annotateSchemaPath({ schema: items, path: path.slice(1), annotation })
+      : undefined;
+    return updated === undefined
+      ? annotated
+      : { ...(annotated ?? schema), items: updated };
   }
   const arraySegment = segment.endsWith("[]");
   const propertyName = arraySegment ? segment.slice(0, -2) : segment;
   const properties = schema["properties"];
-  const property = isSchemaRecord(properties) ? properties[propertyName] : null;
-  if (!isSchemaRecord(property)) {
-    return found;
+  if (!isSchemaRecord(properties) || !Object.hasOwn(properties, propertyName)) {
+    return annotated;
   }
-  const target = arraySegment ? property["items"] : property;
-  return isSchemaRecord(target)
-    ? annotateSchemaPath({
-        schema: target,
-        path: path.slice(1),
-        annotation,
-      }) || found
-    : found;
+  const property = properties[propertyName];
+  if (!isSchemaRecord(property)) {
+    return annotated;
+  }
+  // Resolve the property before its items so nullable arrays traverse their union.
+  const updated = annotateSchemaPath({
+    schema: property,
+    path: arraySegment ? ["[]", ...path.slice(1)] : path.slice(1),
+    annotation,
+  });
+  return updated === undefined
+    ? annotated
+    : {
+        ...(annotated ?? schema),
+        properties: { ...properties, [propertyName]: updated },
+      };
 };
 
 /**
@@ -160,11 +187,10 @@ const withConventionalNormalization = (
 ): Readonly<Record<string, AgentInputNormalizationAnnotation>> | undefined => {
   const conventional = CONVENTIONAL_PROPERTY_NORMALIZATION.filter((rule) => {
     const property = schema.properties?.[rule.property];
-    return (
-      plan?.[rule.property] === undefined &&
-      isSchemaRecord(property) &&
-      rule.applies(property)
-    );
+    if (plan?.[rule.property] !== undefined) {
+      return false;
+    }
+    return isSchemaRecord(property) && rule.applies(property);
   });
   return conventional.length === 0
     ? plan
@@ -179,25 +205,25 @@ const withConventionalNormalization = (
 const applyInputNormalizationPlan = (
   schema: McpToolInputSchema,
   explicitPlan:
-    | Readonly<Record<string, AgentInputNormalizationAnnotation>>
-    | undefined,
+    Readonly<Record<string, AgentInputNormalizationAnnotation>> | undefined,
 ): McpToolInputSchema => {
   const plan = withConventionalNormalization(schema, explicitPlan);
   if (plan === undefined) {
     return schema;
   }
+  let annotatedSchema = schema;
   for (const [path, annotation] of Object.entries(plan)) {
-    if (
-      !annotateSchemaPath({
-        schema,
-        path: path.split("."),
-        annotation,
-      })
-    ) {
+    const annotated = annotateSchemaPath({
+      schema: annotatedSchema,
+      path: path.split("."),
+      annotation,
+    });
+    if (annotated === undefined) {
       return panic(`Agent input normalization path does not exist: ${path}`);
     }
+    annotatedSchema = { ...annotated, type: schema.type };
   }
-  return schema;
+  return annotatedSchema;
 };
 
 const deriveMcpInputSchema = (
@@ -240,10 +266,19 @@ const deriveMcpInputSchema = (
  */
 type OutputSchemaCompaction = "equivalent" | "none";
 
-const deriveMcpOutputSchema = (
+type McpOutputSchemaOptions = {
+  customSchemaProjection?: "none" | "chat-string-ids";
+  compaction?: OutputSchemaCompaction;
+  objectUnionDisposition?: "compact" | "preserve";
+};
+
+export const deriveMcpOutputSchema = (
   schema: v.GenericSchema,
-  customSchemaProjection: "none" | "chat-string-ids" = "none",
-  compaction: OutputSchemaCompaction = "equivalent",
+  {
+    customSchemaProjection = "none",
+    compaction = "equivalent",
+    objectUnionDisposition = "compact",
+  }: McpOutputSchemaOptions = {},
 ): McpToolOutputSchema => {
   const { $schema: _dialect, ...jsonSchema } = toJsonSchema(
     schema,
@@ -265,7 +300,11 @@ const deriveMcpOutputSchema = (
         },
   );
   const projected = compactMcpOutputSchema(
-    simplifyMcpOutputSchema(projectSchemaKeywords(jsonSchema), compaction),
+    simplifyMcpOutputSchema(projectSchemaKeywords(jsonSchema), {
+      compaction,
+      objectUnionDisposition,
+    }),
+    { objectUnionDisposition },
   );
   const acceptsObject =
     projected["type"] === "object" ||
@@ -282,13 +321,92 @@ const deriveMcpOutputSchema = (
   if (!acceptsObject) {
     return panic("A native MCP tool output schema must accept an object root");
   }
-  return compaction === "equivalent"
-    ? nullableAsTypeArray(projected)
-    : projected;
+  return tolerateOutputWidening(
+    compaction === "equivalent" ? nullableAsTypeArray(projected) : projected,
+  );
 };
 
 const isSchemaRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
+
+/**
+ * Keywords whose value is data rather than a schema, so a nested keyword
+ * inside them is never rewritten.
+ */
+const SCHEMA_DATA_KEYWORDS = new Set([
+  "const",
+  "default",
+  "examples",
+  "required",
+]);
+
+/**
+ * Keywords whose subschema does not widen the result when it widens: `not`
+ * rejects what its subschema matches, and `if` picks which branch applies.
+ * Opening either would narrow the schema around it (`not: { examples }`
+ * rejects every value), so their subschemas stay exact. An exact `not`
+ * already admits every value it does not name.
+ */
+const EXACT_SUBSCHEMA_KEYWORDS = new Set(["if", "not"]);
+
+/**
+ * An advertised output schema tolerates what a later deploy may add. A client
+ * keeps the `tools/list` it fetched for its whole session and validates every
+ * result against that copy; a stateless connection is never told the list
+ * changed. A closed object or a closed value list would turn each field or
+ * value a deploy adds into a rejection of every call from every session listed
+ * before it. So an object admits keys it does not declare, and a value list is
+ * published as `examples`: the values known today, documented rather than
+ * enforced. The executable Valibot source stays exact: dispatch parses each
+ * result through it and strips and reports a key it does not declare, and
+ * rejects a value outside its list, so a client never receives either.
+ */
+const tolerateOutputWidening = (
+  schema: Record<string, unknown>,
+): Record<string, unknown> =>
+  Object.fromEntries(
+    Object.entries(schema).flatMap(([key, value]): [string, unknown][] => {
+      if (key === "additionalProperties" && value === false) {
+        return [];
+      }
+      if (key === "enum" && isUnknownArray(value)) {
+        const known: unknown = schema["examples"];
+        return [
+          [
+            "examples",
+            isUnknownArray(known) ? [...new Set([...known, ...value])] : value,
+          ],
+        ];
+      }
+      if (key === "examples" && isUnknownArray(schema["enum"])) {
+        return [];
+      }
+      if (SCHEMA_DATA_KEYWORDS.has(key) || EXACT_SUBSCHEMA_KEYWORDS.has(key)) {
+        return [[key, value]];
+      }
+      if (SCHEMA_MAP_KEYWORDS.has(key) && isSchemaRecord(value)) {
+        return [
+          [
+            key,
+            Object.fromEntries(
+              Object.entries(value).map(([name, nested]): [string, unknown] => [
+                name,
+                tolerateOutputWideningIn(nested),
+              ]),
+            ),
+          ],
+        ];
+      }
+      return [[key, tolerateOutputWideningIn(value)]];
+    }),
+  );
+
+const tolerateOutputWideningIn = (value: unknown): unknown => {
+  if (Array.isArray(value)) {
+    return value.map((nested: unknown) => tolerateOutputWideningIn(nested));
+  }
+  return isSchemaRecord(value) ? tolerateOutputWidening(value) : value;
+};
 
 /**
  * Keywords whose value maps names to schemas rather than being a schema. The
@@ -469,7 +587,11 @@ const combineSchemas = (
   const unique = uniqueSchemas(schemas);
   const combined =
     compaction === "equivalent" ? mergeLiteralAlternatives(unique) : unique;
-  return combined.length === 1 ? (combined.at(0) ?? {}) : { anyOf: combined };
+  // Normalize newly combined property unions before the depth limit counts
+  // their alternatives as another level of object detail.
+  return combined.length === 1
+    ? (combined.at(0) ?? {})
+    : simplifyMcpOutputSchema({ anyOf: combined }, { compaction });
 };
 
 const MERGEABLE_OBJECT_SCHEMA_KEYS = new Set([
@@ -517,7 +639,7 @@ const mergeObjectUnion = (
     }
   }
 
-  const properties: Record<string, unknown> = {};
+  const properties = new Map<string, unknown>();
   for (const name of propertyNames) {
     const schemas = objectBranches.flatMap((branch) => {
       const branchProperties = branch["properties"];
@@ -526,7 +648,7 @@ const mergeObjectUnion = (
         : undefined;
       return isSchemaRecord(property) ? [property] : [];
     });
-    properties[name] = combineSchemas(schemas, compaction);
+    properties.set(name, combineSchemas(schemas, compaction));
   }
 
   const required = [...propertyNames].filter((name) =>
@@ -538,7 +660,7 @@ const mergeObjectUnion = (
 
   return {
     type: "object",
-    properties,
+    properties: Object.fromEntries(properties),
     ...(required.length === 0 ? {} : { required }),
     ...(objectBranches.every(
       (branch) => branch["additionalProperties"] === false,
@@ -556,33 +678,47 @@ const mergeObjectUnion = (
  */
 const simplifyMcpOutputSchema = (
   schema: Record<string, unknown>,
-  compaction: OutputSchemaCompaction,
+  {
+    compaction,
+    objectUnionDisposition = "compact",
+  }: Required<Pick<McpOutputSchemaOptions, "compaction">> &
+    Pick<McpOutputSchemaOptions, "objectUnionDisposition">,
 ): Record<string, unknown> => {
-  const simplified: Record<string, unknown> = {};
+  const entries = new Map<string, unknown>();
   for (const [key, value] of Object.entries(schema)) {
     if (SCHEMA_MAP_KEYWORDS.has(key) && isSchemaRecord(value)) {
-      const mapped: Record<string, unknown> = {};
+      const mapped = new Map<string, unknown>();
       for (const [name, nested] of Object.entries(value)) {
-        mapped[name] = isSchemaRecord(nested)
-          ? simplifyMcpOutputSchema(nested, compaction)
-          : nested;
+        mapped.set(
+          name,
+          isSchemaRecord(nested)
+            ? simplifyMcpOutputSchema(nested, { compaction })
+            : nested,
+        );
       }
-      simplified[key] = mapped;
+      entries.set(key, Object.fromEntries(mapped));
       continue;
     }
     if (Array.isArray(value)) {
-      simplified[key] = value.map((nested: unknown) =>
-        isSchemaRecord(nested)
-          ? simplifyMcpOutputSchema(nested, compaction)
-          : nested,
+      entries.set(
+        key,
+        value.map((nested: unknown) =>
+          isSchemaRecord(nested)
+            ? simplifyMcpOutputSchema(nested, { compaction })
+            : nested,
+        ),
       );
       continue;
     }
-    simplified[key] = isSchemaRecord(value)
-      ? simplifyMcpOutputSchema(value, compaction)
-      : value;
+    entries.set(
+      key,
+      isSchemaRecord(value)
+        ? simplifyMcpOutputSchema(value, { compaction })
+        : value,
+    );
   }
 
+  const simplified = Object.fromEntries(entries);
   const alternatives = simplified["anyOf"];
   if (!Array.isArray(alternatives) || !alternatives.every(isSchemaRecord)) {
     return simplified;
@@ -600,12 +736,18 @@ const simplifyMcpOutputSchema = (
   ) {
     return { ...siblings, ...literalList };
   }
-  if (combined.length !== alternatives.length) {
-    simplified["anyOf"] = combined;
+  const normalized =
+    combined.length !== alternatives.length
+      ? { ...simplified, anyOf: combined }
+      : simplified;
+  // The omission envelope must remain an alternative to the normal output,
+  // rather than making both branches' required fields optional.
+  if (objectUnionDisposition === "preserve") {
+    return normalized;
   }
   const merged = mergeObjectUnion(combined, compaction);
   if (merged === undefined) {
-    return simplified;
+    return normalized;
   }
   return { ...siblings, ...merged };
 };
@@ -620,7 +762,12 @@ const MCP_OUTPUT_SCHEMA_MAX_DETAIL_DEPTH = 3;
  */
 const compactMcpOutputSchema = (
   schema: Record<string, unknown>,
-  depth = 0,
+  {
+    depth = 0,
+    objectUnionDisposition = "compact",
+  }: Pick<McpOutputSchemaOptions, "objectUnionDisposition"> & {
+    depth?: number;
+  } = {},
 ): Record<string, unknown> => {
   if (
     depth >= MCP_OUTPUT_SCHEMA_MAX_DETAIL_DEPTH &&
@@ -629,31 +776,46 @@ const compactMcpOutputSchema = (
     return { type: "object", additionalProperties: true };
   }
 
-  const compacted: Record<string, unknown> = {};
+  const compacted = new Map<string, unknown>();
   for (const [key, value] of Object.entries(schema)) {
     if (SCHEMA_MAP_KEYWORDS.has(key) && isSchemaRecord(value)) {
-      const mapped: Record<string, unknown> = {};
+      const mapped = new Map<string, unknown>();
       for (const [name, nested] of Object.entries(value)) {
-        mapped[name] = isSchemaRecord(nested)
-          ? compactMcpOutputSchema(nested, depth + 1)
-          : nested;
+        mapped.set(
+          name,
+          isSchemaRecord(nested)
+            ? compactMcpOutputSchema(nested, { depth: depth + 1 })
+            : nested,
+        );
       }
-      compacted[key] = mapped;
+      compacted.set(key, Object.fromEntries(mapped));
       continue;
     }
     if (Array.isArray(value)) {
-      compacted[key] = value.map((nested: unknown) =>
-        isSchemaRecord(nested)
-          ? compactMcpOutputSchema(nested, depth + 1)
-          : nested,
+      compacted.set(
+        key,
+        value.map((nested: unknown) =>
+          isSchemaRecord(nested)
+            ? compactMcpOutputSchema(nested, {
+                // Root alternatives describe the same instance as their parent.
+                depth:
+                  key === "anyOf" && objectUnionDisposition === "preserve"
+                    ? depth
+                    : depth + 1,
+              })
+            : nested,
+        ),
       );
       continue;
     }
-    compacted[key] = isSchemaRecord(value)
-      ? compactMcpOutputSchema(value, depth + 1)
-      : value;
+    compacted.set(
+      key,
+      isSchemaRecord(value)
+        ? compactMcpOutputSchema(value, { depth: depth + 1 })
+        : value,
+    );
   }
-  return compacted;
+  return Object.fromEntries(compacted);
 };
 
 /**
@@ -703,26 +865,36 @@ const isNullSchema = (schema: unknown): boolean =>
 const nullableAsTypeArray = (
   schema: Record<string, unknown>,
 ): Record<string, unknown> => {
-  const rewritten: Record<string, unknown> = {};
+  const entries = new Map<string, unknown>();
   for (const [key, value] of Object.entries(schema)) {
     if (SCHEMA_MAP_KEYWORDS.has(key) && isSchemaRecord(value)) {
-      rewritten[key] = Object.fromEntries(
-        Object.entries(value).map(([name, nested]): [string, unknown] => [
-          name,
-          isSchemaRecord(nested) ? nullableAsTypeArray(nested) : nested,
-        ]),
+      entries.set(
+        key,
+        Object.fromEntries(
+          Object.entries(value).map(([name, nested]): [string, unknown] => [
+            name,
+            isSchemaRecord(nested) ? nullableAsTypeArray(nested) : nested,
+          ]),
+        ),
       );
       continue;
     }
     if (Array.isArray(value)) {
-      rewritten[key] = value.map((nested: unknown) =>
-        isSchemaRecord(nested) ? nullableAsTypeArray(nested) : nested,
+      entries.set(
+        key,
+        value.map((nested: unknown) =>
+          isSchemaRecord(nested) ? nullableAsTypeArray(nested) : nested,
+        ),
       );
       continue;
     }
-    rewritten[key] = isSchemaRecord(value) ? nullableAsTypeArray(value) : value;
+    entries.set(
+      key,
+      isSchemaRecord(value) ? nullableAsTypeArray(value) : value,
+    );
   }
 
+  const rewritten = Object.fromEntries(entries);
   const { anyOf, ...siblings } = rewritten;
   if (!Array.isArray(anyOf) || anyOf.length !== 2) {
     return rewritten;
@@ -746,6 +918,28 @@ const nullableAsTypeArray = (
   return { ...siblings, ...branch, type: [type, "null"] };
 };
 
+type ValibotMcpToolInputContract = Pick<
+  ValibotMcpToolInput,
+  "inputSchema" | "inputNormalization" | "jsonSchemaProjectionWaiver"
+>;
+
+/**
+ * The JSON Schema a tool advertises for its declared input. Reading it needs
+ * only the input contract, not the tool's handler or its registry.
+ */
+export const deriveValibotMcpInputSchema = ({
+  inputSchema,
+  inputNormalization,
+  jsonSchemaProjectionWaiver,
+}: ValibotMcpToolInputContract): McpToolInputSchema =>
+  applyInputNormalizationPlan(
+    deriveMcpInputSchema(
+      inputSchema.advertisedSchema,
+      jsonSchemaProjectionWaiver,
+    ),
+    inputNormalization,
+  );
+
 /**
  * Defines a native tool from the same Valibot schema its handler parses.
  * `inputSchemaSource` retains that actual schema as internal registry metadata:
@@ -768,17 +962,39 @@ export const defineValibotMcpTool = <
     inputNormalization,
     inputSchema,
     jsonSchemaProjectionWaiver,
+    annotationReasons,
     ...toolDefinition
   } = definition;
+  const { annotations } = toolDefinition;
+  const subject = annotations.title;
+  let destructiveHintReason = `${subject} is additive and does not overwrite or remove existing state.`;
+  if (annotations.readOnlyHint) {
+    destructiveHintReason = `${subject} does not change state.`;
+  }
+  if (annotations.destructiveHint) {
+    destructiveHintReason =
+      toolDefinition.destructiveBehavior?.type === "outbound"
+        ? toolDefinition.destructiveBehavior.reason
+        : `${subject} can overwrite, delete, cancel, revoke, or otherwise irreversibly change existing state.`;
+  }
   return {
     ...toolDefinition,
-    inputSchema: applyInputNormalizationPlan(
-      deriveMcpInputSchema(
-        inputSchema.advertisedSchema,
-        jsonSchemaProjectionWaiver,
-      ),
-      inputNormalization,
-    ),
+    annotationReasons: annotationReasons ?? {
+      readOnlyHint: annotations.readOnlyHint
+        ? `${subject} only retrieves or computes data.`
+        : `${subject} changes state or starts stateful work.`,
+      destructiveHint: destructiveHintReason,
+      openWorldHint: annotations.openWorldHint
+        ? `${subject} can access public or external entities outside the private workspace.`
+        : `${subject} is confined to the private workspace or a bounded computation.`,
+    },
+    inputSchema: deriveValibotMcpInputSchema({
+      inputSchema,
+      ...(inputNormalization === undefined ? {} : { inputNormalization }),
+      ...(jsonSchemaProjectionWaiver === undefined
+        ? {}
+        : { jsonSchemaProjectionWaiver }),
+    }),
     inputSchemaSource: inputSchema,
     inputSchemaProjectionWaiver: jsonSchemaProjectionWaiver,
   };
@@ -828,7 +1044,9 @@ export const defineChatProjectionMcpToolOutput = <
 >(
   outputSchemaSource: TSchema,
 ): McpToolOutputContract<v.InferInput<TSchema>, TSchema, "identity"> => ({
-  outputSchema: deriveMcpOutputSchema(outputSchemaSource, "chat-string-ids"),
+  outputSchema: deriveMcpOutputSchema(outputSchemaSource, {
+    customSchemaProjection: "chat-string-ids",
+  }),
   outputSchemaSource,
   project: (data) => data,
   projection: "identity",
@@ -843,7 +1061,10 @@ export const defineChatProjectionMcpToolOutput = <
 export const deriveUncompactedMcpOutputSchema = (
   outputSchemaSource: v.GenericSchema,
 ): McpToolOutputSchema =>
-  deriveMcpOutputSchema(outputSchemaSource, "chat-string-ids", "none");
+  deriveMcpOutputSchema(outputSchemaSource, {
+    customSchemaProjection: "chat-string-ids",
+    compaction: "none",
+  });
 
 export const defineProjectedMcpToolOutput = <
   const TSchema extends v.GenericSchema,

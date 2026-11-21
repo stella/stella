@@ -32,11 +32,22 @@ import {
   initAgentAuthTestDb,
   releaseAgentAuthTestDb,
 } from "@/api/tests/helpers/mock-agent-auth-db";
+import { serveRoutesForTest } from "@/api/tests/helpers/serve-routes";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
+
+const routeServer = serveRoutesForTest([
+  ...workspaceEventsRoute,
+  ...workspacesRoute,
+]);
+afterAll(async () => {
+  await routeServer.stop();
+  stopSse();
+  await releaseAgentAuthTestDb();
+});
 
 // An open matter tab refreshes its lists from `resource_set_updated` events on
 // the matter's event stream. A write must announce itself there whichever
-// transport ran it: the REST route the web app calls, and `invoke_capability`,
+// transport ran it: the REST route the web app calls, and `write_capability`,
 // which MCP clients and the CLI use. Both drive the real handler, the real
 // database and the real event stream here.
 
@@ -47,11 +58,6 @@ let testDb: TestDatabase;
 beforeAll(async () => {
   testDb = await initAgentAuthTestDb();
   startSse(realtimeAuthorizers);
-});
-
-afterAll(async () => {
-  stopSse();
-  await releaseAgentAuthTestDb();
 });
 
 const BASE = "http://localhost";
@@ -118,7 +124,7 @@ const openResourceSetEvents = async (
   browser: HumanBrowser,
   workspaceId: SafeId<"workspace">,
 ) => {
-  const response = await workspaceEventsRoute.handle(
+  const response = await routeServer.fetch(
     new Request(`${BASE}/workspaces/${workspaceId}/events`, {
       headers: { cookie: browser.cookieHeader() },
     }),
@@ -195,7 +201,7 @@ const restUpdateMatter = async (
   fixture: MatterFixture,
   body: Record<string, unknown>,
 ) =>
-  await workspacesRoute.handle(
+  await routeServer.fetch(
     new Request(`${BASE}/workspaces/${fixture.workspaceId}`, {
       method: "POST",
       headers: {
@@ -220,6 +226,7 @@ const mcpUpdateMatter = async (
     { request },
   );
   return await handleMcpToolCall({
+    mode: "advanced",
     args: {
       capability: "matters.update",
       input: { params: { matterId: fixture.workspaceId }, body },
@@ -232,7 +239,7 @@ const mcpUpdateMatter = async (
           await Promise.resolve({ ok: true, retryAfterSeconds: 0 }),
       },
     },
-    toolName: "invoke_capability",
+    toolName: "write_capability",
   });
 };
 
@@ -261,11 +268,11 @@ describe("a matter write announces its resource set on the matter's event stream
       expect(renamed.status, await renamed.clone().text()).toBe(200);
       expect(await events.untilMarker()).toEqual([RESOURCE_TYPE.WORKSPACE]);
 
-      // Refused inside the handler: a bare client on a personal matter.
+      // Refused inside the handler: the contact does not exist.
       const refused = await restUpdateMatter(fixture, {
         clientId: createSafeId<"contact">(),
       });
-      expect(refused.status).toBe(400);
+      expect(refused.status).toBe(404);
       // Rolled back: the reference belongs to another matter, so the UPDATE
       // fails on the unique index and the transaction aborts.
       const rolledBack = await restUpdateMatter(fixture, {
@@ -283,7 +290,7 @@ describe("a matter write announces its resource set on the matter's event stream
     }
   });
 
-  test("through invoke_capability (MCP and CLI): once on success, never on a refusal or a rolled-back write", async () => {
+  test("through write_capability (MCP and CLI): once on success, never on a refusal or a rolled-back write", async () => {
     const fixture = await createMatter();
     const events = await openResourceSetEvents(
       fixture.owner,

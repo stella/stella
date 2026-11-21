@@ -1,9 +1,9 @@
+import { documentToDocx } from "@stll/docx-authoring/document";
 import {
   createEmptyDocument,
   createStellaStyleDocumentPreset,
 } from "@stll/folio-core/server";
 
-import { documentToDocx } from "@/api/lib/docx-authoring/document";
 import { extractScannedDocumentStyleSet } from "@/api/lib/file-scan/document-parsers";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 

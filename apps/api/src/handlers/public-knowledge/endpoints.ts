@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import type { TemplatePackCatalogue } from "@stll/template-packs";
 import type { GeneratedTemplatePack } from "@stll/template-packs/schema";
@@ -68,20 +68,25 @@ const findStarter = (id: string): Result<StarterPlaybook, HandlerError> => {
   return starter ? Result.ok(starter) : notFound();
 };
 
-const packParams = t.Object({
-  packId: t.String({ minLength: 1, maxLength: 64 }),
+const packParams = v.object({
+  packId: v.pipe(v.string(), v.minLength(1), v.maxLength(64)),
 });
-const templateParams = t.Object({
-  packId: t.String({ minLength: 1, maxLength: 64 }),
-  templateId: t.String({ minLength: 1, maxLength: 64 }),
+const templateParams = v.object({
+  packId: v.pipe(v.string(), v.minLength(1), v.maxLength(64)),
+  templateId: v.pipe(v.string(), v.minLength(1), v.maxLength(64)),
 });
-const starterParams = t.Object({
-  id: t.String({ minLength: 1, maxLength: 64 }),
+const starterParams = v.object({
+  id: v.pipe(v.string(), v.minLength(1), v.maxLength(64)),
 });
 
 const previewUnavailable = (cause: unknown) =>
   Result.err(
-    new HandlerError({ status: 503, message: "Preview unavailable", cause }),
+    new HandlerError({
+      status: 503,
+      code: "internal_error",
+      message: "Preview unavailable",
+      cause,
+    }),
   );
 
 const MAX_CACHED_PREVIEWS = 64;
@@ -139,6 +144,7 @@ export const createPublicKnowledgeEndpoints = (
 
   const listPacks = createSafePublicHandler(
     {
+      contract: "patch",
       cache: { kind: "public", maxAge: 300 },
       accountAccess: ACCOUNT_ACCESS.sandbox,
       mcp: { type: "internal", reason: "public_indexing" },
@@ -153,6 +159,7 @@ export const createPublicKnowledgeEndpoints = (
 
   const readPack = createSafePublicHandler(
     {
+      contract: "patch",
       cache: { kind: "public", maxAge: 300 },
       accountAccess: ACCOUNT_ACCESS.sandbox,
       mcp: { type: "internal", reason: "public_indexing" },
@@ -169,6 +176,7 @@ export const createPublicKnowledgeEndpoints = (
 
   const readTemplate = createSafePublicHandler(
     {
+      contract: "patch",
       cache: { kind: "public", maxAge: 300 },
       accountAccess: ACCOUNT_ACCESS.sandbox,
       mcp: { type: "internal", reason: "public_indexing" },
@@ -182,6 +190,7 @@ export const createPublicKnowledgeEndpoints = (
 
   const readTemplatePreview = createSafePublicHandler(
     {
+      contract: "patch",
       cache: { kind: "public", maxAge: 300 },
       accountAccess: ACCOUNT_ACCESS.sandbox,
       mcp: { type: "internal", reason: "public_indexing" },
@@ -260,6 +269,7 @@ export const createPublicKnowledgeEndpoints = (
 
   const listStarters = createSafePublicHandler(
     {
+      contract: "patch",
       cache: { kind: "public", maxAge: 300 },
       accountAccess: ACCOUNT_ACCESS.sandbox,
       mcp: { type: "internal", reason: "public_indexing" },
@@ -272,6 +282,7 @@ export const createPublicKnowledgeEndpoints = (
 
   const readStarter = createSafePublicHandler(
     {
+      contract: "patch",
       cache: { kind: "public", maxAge: 300 },
       accountAccess: ACCOUNT_ACCESS.sandbox,
       mcp: { type: "internal", reason: "public_indexing" },

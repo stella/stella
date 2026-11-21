@@ -3,6 +3,7 @@ import { and, asc, eq, exists, gt, isNull, lte, not, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
 import type { Verdict } from "@stll/db-load-gate/health";
+import { sanitizeErrorAttributesForOutput } from "@stll/errors";
 import { Temporal } from "@stll/time";
 import { isUuid } from "@stll/uuid-codec";
 
@@ -15,13 +16,13 @@ import { legislationDocuments, legislationSources } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { brandPersistedLegislationDocumentId } from "@/api/lib/safe-id-boundaries";
 import {
-  SCHEDULER_BACKFILL_CONFIG,
-  SCHEDULER_BACKFILL_IDS,
   logSchedulerBackfillStatus,
+  SCHEDULER_BACKFILL_IDS,
+  schedulerBackfillConfig,
 } from "@/api/lib/scheduler/backfill-config";
 import {
-  SchedulerTaskFailure,
   type SchedulerTask,
+  SchedulerTaskFailure,
 } from "@/api/lib/scheduler/types";
 import { recordSystemAudit } from "@/api/lib/system-audit/record";
 
@@ -319,7 +320,7 @@ export const createLegislationExpressionIdBackfill =
       initialSize: pageRows,
       initialCursor: backfillCursor(job.payload),
       config: {
-        ...SCHEDULER_BACKFILL_CONFIG,
+        ...schedulerBackfillConfig(),
         minSize: Math.min(100, pageRows),
         maxSize: pageRows,
       },
@@ -339,6 +340,17 @@ export const createLegislationExpressionIdBackfill =
               backfillCursor({ cursor }),
               size,
             );
+            await recordSystemAudit(
+              tx,
+              "system:legislation-expression-id-backfill",
+              {
+                subject: runId,
+                counts: {
+                  claimedDocuments:
+                    claimedPage.type === "page" ? claimedPage.claimed : 0,
+                },
+              },
+            );
             return {
               cursor: claimedPage.type === "page" ? claimedPage.last : null,
               done: claimedPage.type === "cycle-complete",
@@ -353,14 +365,17 @@ export const createLegislationExpressionIdBackfill =
     });
     if (settled.isErr()) {
       if (settled.error instanceof BackfillHeldError) {
-        logger.info("scheduler.legislation_expression_ids_held", {
-          ...(settled.error.holdUntil === null
-            ? {}
-            : { holdUntil: settled.error.holdUntil }),
-          ...(settled.error.heldSince === null
-            ? {}
-            : { heldSince: settled.error.heldSince }),
-        });
+        logger.info(
+          "scheduler.legislation_expression_ids_held",
+          sanitizeErrorAttributesForOutput({
+            ...(settled.error.holdUntil === null
+              ? {}
+              : { holdUntil: settled.error.holdUntil }),
+            ...(settled.error.heldSince === null
+              ? {}
+              : { heldSince: settled.error.heldSince }),
+          }),
+        );
         return undefined;
       }
       return Result.err(
@@ -388,10 +403,6 @@ export const createLegislationExpressionIdBackfill =
       }
     }
 
-    await recordSystemAudit(db, "system:legislation-expression-id-backfill", {
-      subject: runId,
-      counts: { claimedDocuments: page.type === "page" ? page.claimed : 0 },
-    });
     logger.info("scheduler.legislation_expression_ids_backfilled", {
       "legislationExpressionIds.claimed":
         page.type === "page" ? page.claimed : 0,

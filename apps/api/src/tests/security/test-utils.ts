@@ -8,6 +8,10 @@ import { createScopedDb, markRlsDatabase } from "@/api/db/scoped";
 import type { RlsDatabaseMarker, TransactionOf } from "@/api/db/scoped";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  instrumentQueryOrigins,
+  queryCountLogger,
+} from "@/api/lib/db-query-counter";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
 const allRelations = {
@@ -25,10 +29,13 @@ export type TestDatabaseTransaction = TransactionOf<TestDatabase>;
 const createTestDb = async (): Promise<TestDatabase> => {
   const client = await createTestPglite();
   return markRlsDatabase(
-    drizzle({
-      client,
-      relations: allRelations,
-    }),
+    instrumentQueryOrigins(
+      drizzle({
+        client,
+        relations: allRelations,
+        logger: queryCountLogger,
+      }),
+    ),
   );
 };
 
@@ -38,11 +45,20 @@ export const withQueryLogger = (
   logger: Logger,
 ): TestDatabase =>
   markRlsDatabase(
-    drizzle({
-      client: database.$client,
-      relations: allRelations,
-      logger,
-    }),
+    instrumentQueryOrigins(
+      drizzle({
+        client: database.$client,
+        relations: allRelations,
+        logger: {
+          logQuery: (query, params) => {
+            queryCountLogger.logQuery(query, params);
+            if (logger !== queryCountLogger) {
+              logger.logQuery(query, params);
+            }
+          },
+        },
+      }),
+    ),
   );
 
 const DEFAULT_TEST_USER_ID = toSafeId<"user">("user_test");

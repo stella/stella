@@ -1,0 +1,394 @@
+import { useLayoutEffect, useRef, useState } from "react";
+import type { ReactNode } from "react";
+
+import { useQuery } from "@tanstack/react-query";
+import { panic } from "better-result";
+import { useTranslations } from "use-intl";
+
+import type { ReaderAnnotationVisibility } from "@stll/api-contract/legal-reader-annotations";
+import type {
+  ReaderAnswer,
+  ReaderAnswerCitation,
+} from "@stll/api-contract/reader-answers";
+import { READER_ANSWER_QUESTION_MAX_LENGTH } from "@stll/api-contract/reader-answers";
+import { Button } from "@stll/ui/button";
+import { Form } from "@stll/ui/form";
+import { Skeleton } from "@stll/ui/skeleton";
+import { Textarea } from "@stll/ui/textarea";
+import { TruncatedText } from "@stll/ui/truncated-text";
+import { cn } from "@stll/ui/utils";
+
+import { CopyControl } from "@/components/copy-control";
+import { CitationChip } from "@/components/references/citation-chip";
+import { decisionOptions } from "@/features/case-law/queries/decisions";
+
+import { AnnotationVisibilityToggle } from "./analysis/annotation-visibility-toggle";
+import type { ReaderAnswerCitationTarget } from "./reader-answer-citation.logic";
+import { ReaderAnswerMarkdown } from "./reader-answer-markdown";
+
+type ReaderAnswerCitationChipProps = {
+  citation: ReaderAnswerCitation;
+  /** The open decision's language, for the paragraph text a chip previews. */
+  language: string;
+  onCitation: (citation: ReaderAnswerCitation) => void;
+  target: ReaderAnswerCitationTarget;
+};
+
+/**
+ * Fetches a cited decision while its chip is on screen; the workspace observes
+ * the same cache entry and redraws the chip once the decision arrives.
+ */
+const PendingCitedDecisionChip = ({ decisionId }: { decisionId: string }) => {
+  useQuery(decisionOptions(decisionId));
+  return <Skeleton className="h-4 w-16 rounded-sm" />;
+};
+
+/** Both chips follow the citation the way the card always has. */
+const ReaderAnswerCitationChip = ({
+  citation,
+  language,
+  onCitation,
+  target,
+}: ReaderAnswerCitationChipProps) => {
+  switch (target.type) {
+    case "paragraph":
+      return (
+        <CitationChip
+          kind="paragraph"
+          language={language}
+          onAnchorClick={() => onCitation(citation)}
+          reference={target.reference}
+        />
+      );
+    case "decision":
+      return (
+        <CitationChip
+          kind="decision"
+          decision={target.decision}
+          onOpenInSidePanel={() => onCitation(citation)}
+          paragraphNumber={target.paragraphNumber}
+          presentation="inline"
+        />
+      );
+    case "pending":
+      return <PendingCitedDecisionChip decisionId={citation.decisionId} />;
+    case "unresolved":
+      return null;
+    default:
+      target satisfies never;
+      return panic("Unhandled reader answer citation target");
+  }
+};
+
+export type ReaderAnswerCardProps = {
+  answer: ReaderAnswer;
+  generationMode: "enabled" | "gated";
+  onFollowUp: (question: string) => void;
+  onRegenerate: () => void;
+  onDelete: () => void;
+  onVisibility: (visibility: ReaderAnnotationVisibility) => void;
+  onCitation: (citation: ReaderAnswerCitation) => void;
+  active: boolean;
+  openRevision: number;
+  citationTarget: (
+    citation: ReaderAnswerCitation,
+  ) => ReaderAnswerCitationTarget;
+  /** The open decision's language. */
+  language: string;
+  onOpen: () => void;
+  busy: boolean;
+  languagePicker?: ReactNode;
+};
+
+export const ReaderAnswerCard = ({
+  answer,
+  generationMode,
+  onFollowUp,
+  onRegenerate,
+  onDelete,
+  onVisibility,
+  onCitation,
+  active,
+  openRevision,
+  citationTarget,
+  language,
+  onOpen,
+  busy,
+  languagePicker,
+}: ReaderAnswerCardProps) => {
+  const t = useTranslations();
+  const [display, setDisplay] = useState<"expanded" | "minimised">("expanded");
+  const [question, setQuestion] = useState("");
+  const composerRef = useRef<HTMLTextAreaElement>(null);
+  const cardRef = useRef<HTMLElement>(null);
+  const observerRef = useRef<IntersectionObserver>(null);
+  const revealedRevision = useRef<number | null>(null);
+  const visibility = useRef<
+    "awaiting-reveal" | "awaiting-visible" | "tracking"
+  >("tracking");
+  const [previousOpenRevision, setPreviousOpenRevision] =
+    useState(openRevision);
+  if (previousOpenRevision !== openRevision) {
+    setPreviousOpenRevision(openRevision);
+    if (active) {
+      setDisplay("expanded");
+    }
+  }
+  const expanded = busy || display === "expanded";
+  const busyReason = t(
+    answer.messages.some((message) => message.status === "streaming")
+      ? "readerAnswers.loading"
+      : "readerAnswers.waitForCurrentAction",
+  );
+  const observe = (node: HTMLElement | null) => {
+    if (node === null) {
+      return undefined;
+    }
+    cardRef.current = node;
+    const observer = new IntersectionObserver((entries) => {
+      for (const entry of entries) {
+        if (entry.isIntersecting && visibility.current !== "awaiting-reveal") {
+          visibility.current = "tracking";
+        } else if (visibility.current === "tracking") {
+          setDisplay("minimised");
+        }
+      }
+    });
+    observerRef.current = observer;
+    observer.observe(node);
+    return () => {
+      observer.disconnect();
+      observerRef.current = null;
+      cardRef.current = null;
+    };
+  };
+  useLayoutEffect(() => {
+    if (!active) {
+      visibility.current = "tracking";
+      revealedRevision.current = null;
+      return undefined;
+    }
+    if (revealedRevision.current === openRevision) {
+      return undefined;
+    }
+    // Ignore the observer's pre-scroll sample until the revealed card is seen.
+    visibility.current = "awaiting-reveal";
+    // Card expansion and the gutter's measured placement commit before this frame.
+    const frame = requestAnimationFrame(() => {
+      revealedRevision.current = openRevision;
+      const node = cardRef.current;
+      if (node === null) {
+        return;
+      }
+      node.scrollIntoView({ behavior: "instant", block: "nearest" });
+      // Reobserve for a fresh post-scroll sample, even if the card was visible.
+      observerRef.current?.disconnect();
+      observerRef.current?.takeRecords();
+      visibility.current = "awaiting-visible";
+      observerRef.current?.observe(node);
+      composerRef.current?.focus({ preventScroll: true });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [active, openRevision]);
+  const open = () => {
+    setDisplay("expanded");
+    onOpen();
+  };
+  const submit = () => {
+    const trimmed = question.trim();
+    if (trimmed === "" || busy) {
+      return;
+    }
+    onFollowUp(trimmed);
+    setQuestion("");
+  };
+  const lastAssistant = answer.messages.findLast(
+    (message) => message.role === "assistant",
+  );
+  const invalidCitationCount = answer.messages.reduce(
+    (count, message) => count + message.invalidCitationCount,
+    0,
+  );
+  return (
+    <section
+      aria-label={t("readerAnswers.title")}
+      aria-busy={busy}
+      className="reader-chrome bg-background rounded-md p-2 text-xs shadow-sm"
+      data-reader-answer-id={answer.id}
+      ref={observe}
+    >
+      <div className="flex items-center justify-between gap-1">
+        <TruncatedText className="text-foreground-muted">
+          {answer.anchor.spans.map(({ quote }) => quote).join(" ")}
+        </TruncatedText>
+        <Button
+          className="min-h-11 shrink-0"
+          size="sm"
+          type="button"
+          variant="ghost"
+          onClick={() => {
+            if (expanded) {
+              setDisplay("minimised");
+            } else {
+              open();
+            }
+          }}
+          disabled={busy}
+          disabledReason={busyReason}
+          aria-expanded={expanded}
+        >
+          {expanded ? t("readerAnswers.minimise") : t("readerAnswers.expand")}
+        </Button>
+      </div>
+      {expanded ? (
+        <>
+          <div aria-live="polite" className="space-y-2">
+            {answer.messages.map((message) => (
+              <div
+                key={message.id}
+                className={cn(
+                  message.role === "user"
+                    ? "text-foreground-muted"
+                    : "text-foreground",
+                )}
+              >
+                {message.content !== "" &&
+                  (message.role === "assistant" ? (
+                    <ReaderAnswerMarkdown
+                      content={message.content}
+                      status={message.status}
+                      citations={message.citations}
+                      renderCitation={(citation) => (
+                        <ReaderAnswerCitationChip
+                          citation={citation}
+                          language={language}
+                          onCitation={onCitation}
+                          target={citationTarget(citation)}
+                        />
+                      )}
+                    />
+                  ) : (
+                    <p className="wrap-break-word whitespace-pre-wrap">
+                      {message.content}
+                    </p>
+                  ))}
+                {message.status === "streaming" && message.content === "" && (
+                  <div
+                    role="status"
+                    aria-label={t("readerAnswers.loading")}
+                    className="space-y-2 py-1"
+                  >
+                    <Skeleton className="h-3 w-full rounded-sm" />
+                    <Skeleton className="h-3 w-5/6 rounded-sm" />
+                    <Skeleton className="h-3 w-2/3 rounded-sm" />
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+          {invalidCitationCount > 0 && (
+            <p className="text-foreground-muted mt-1">
+              {t("readerAnswers.invalidCitations", {
+                count: invalidCitationCount,
+              })}
+            </p>
+          )}
+          {languagePicker}
+          <div className="flex flex-wrap items-center gap-1">
+            <CopyControl
+              variant="ghost"
+              size="sm"
+              text={answer.messages
+                .map((message) => message.content)
+                .join("\n\n")}
+              className="min-h-11 min-w-11"
+            />
+            {answer.mine && generationMode === "enabled" && (
+              <>
+                <Button
+                  className="min-h-11"
+                  disabled={busy}
+                  disabledReason={busyReason}
+                  size="sm"
+                  type="button"
+                  variant="ghost"
+                  onClick={onRegenerate}
+                >
+                  {t("readerAnswers.regenerate")}
+                </Button>
+                <Button
+                  className="min-h-11"
+                  disabled={busy}
+                  disabledReason={busyReason}
+                  size="sm"
+                  type="button"
+                  variant="ghost"
+                  onClick={onDelete}
+                >
+                  {t("common.delete")}
+                </Button>
+                <AnnotationVisibilityToggle
+                  shareLabel={t("readerAnswers.share")}
+                  targetType="decision"
+                  visibility={answer.visibility}
+                  disabled={busy}
+                  onToggle={() =>
+                    onVisibility(
+                      answer.visibility === "private" ? "shared" : "private",
+                    )
+                  }
+                />
+              </>
+            )}
+          </div>
+          {answer.mine && generationMode === "enabled" && (
+            <Form
+              className="mt-1 flex flex-col gap-1"
+              onSubmit={(event) => {
+                event.preventDefault();
+                submit();
+              }}
+            >
+              <Textarea
+                ref={composerRef}
+                aria-label={t("readerAnswers.followUp")}
+                placeholder={t("readerAnswers.followUp")}
+                className="min-h-14"
+                maxLength={READER_ANSWER_QUESTION_MAX_LENGTH}
+                value={question}
+                disabled={busy}
+                onChange={(event) => setQuestion(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.nativeEvent.isComposing) {
+                    return;
+                  }
+                  if (event.key === "Enter" && !event.shiftKey) {
+                    event.preventDefault();
+                    submit();
+                  }
+                }}
+              />
+              <Button
+                className="min-h-11 self-end"
+                size="sm"
+                type="submit"
+                disabled={busy || question.trim() === ""}
+                disabledReason={
+                  busy ? busyReason : t("readerAnswers.followUpRequired")
+                }
+              >
+                {t("readerAnswers.send")}
+              </Button>
+            </Form>
+          )}
+        </>
+      ) : (
+        <Button className="min-h-11 w-full" onClick={open} variant="plain">
+          <span className="text-foreground-muted">
+            {lastAssistant?.content.slice(0, 140) || t("readerAnswers.expand")}
+          </span>
+        </Button>
+      )}
+    </section>
+  );
+};

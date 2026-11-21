@@ -1,8 +1,6 @@
-import { expect, setDefaultTimeout, test } from "bun:test";
+import { expect, test } from "bun:test";
 
 import { lintSingleRule } from "./lint-single-rule.ts";
-
-setDefaultTimeout(20_000);
 
 test("validator identity follows aliases and leaves presence and digest checks intact", async () => {
   const rejected = [

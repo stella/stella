@@ -1,6 +1,7 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import * as v from "valibot";
 
+import { emailAddressSchema } from "@/api/lib/email/normalized-email";
 import { FEATURE_REGISTRY } from "@/api/lib/feature-access/registry";
 import type { FeatureRegistry } from "@/api/lib/feature-access/registry";
 import { AUTH_PROVIDER_ID_PATTERN } from "@/api/lib/safe-id-boundaries";
@@ -16,10 +17,7 @@ const featureGrantSchema = v.variant("type", [
     type: v.literal("member"),
     organizationId: organizationIdSchema,
     email: v.pipe(
-      v.string(),
-      v.trim(),
-      v.toLowerCase(),
-      v.email(),
+      emailAddressSchema,
       v.check((email) => !email.includes("*")),
     ),
   }),
@@ -34,7 +32,10 @@ export type FeatureAccessGrants = Readonly<
   Record<string, readonly FeatureGrant[]>
 >;
 
-const grantsObjectSchema = v.record(v.string(), v.array(featureGrantSchema));
+// Validate entries so prototype-named keys receive the same shape checks.
+const grantsEntriesSchema = v.array(
+  v.tuple([v.string(), v.array(featureGrantSchema)]),
+);
 
 export const createFeatureAccessGrantsEnvSchema = (registry: FeatureRegistry) =>
   v.optional(
@@ -42,26 +43,47 @@ export const createFeatureAccessGrantsEnvSchema = (registry: FeatureRegistry) =>
       v.string(),
       v.rawTransform(({ dataset, addIssue, NEVER }) => {
         const json = Result.try((): unknown => JSON.parse(dataset.value));
-        const parsed = json.isOk()
-          ? v.safeParse(grantsObjectSchema, json.value)
-          : null;
+        const parsed =
+          json.isOk() && isRecord(json.value)
+            ? v.safeParse(grantsEntriesSchema, Object.entries(json.value))
+            : null;
+        if (parsed === null || !parsed.success) {
+          addIssue({
+            input: "[redacted]",
+            message:
+              "API_FEATURE_ACCESS_GRANTS must be a JSON object of feature grants",
+          });
+          return NEVER;
+        }
+        const entries = parsed.output;
+        const knownEntries = entries.filter(([featureId]) =>
+          Object.hasOwn(registry, featureId),
+        );
         if (
-          parsed === null ||
-          !parsed.success ||
-          !json.isOk() ||
-          !isRecord(json.value) ||
-          Object.keys(json.value).some(
-            (featureId) => !Object.hasOwn(registry, featureId),
-          )
+          knownEntries.some(([featureId, grants]) => {
+            const definition = registry[featureId];
+            if (definition === undefined) {
+              return panic(
+                "Known feature grants require a registered definition",
+              );
+            }
+            return (
+              definition.grantScope === "organization" &&
+              grants.some((grant) => grant.type !== "organization")
+            );
+          })
         ) {
           addIssue({
             input: "[redacted]",
             message:
-              "API_FEATURE_ACCESS_GRANTS must be a JSON object of registered feature grants",
+              "API_FEATURE_ACCESS_GRANTS contains a grant scope unsupported by its feature",
           });
           return NEVER;
         }
-        return parsed.output;
+        return {
+          grants: Object.fromEntries(knownEntries),
+          unknownGrantCount: entries.length - knownEntries.length,
+        };
       }),
     ),
     "{}",

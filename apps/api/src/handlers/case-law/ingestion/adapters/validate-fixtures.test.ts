@@ -5,20 +5,23 @@
  * expected IngestionResult shape. Catches schema drift
  * when a source API changes its response format.
  *
- * Run after `update-fixtures.ts` to verify the new
+ * Run after `update-adapter-fixtures.ts` to verify the new
  * fixtures are valid. Also runs in CI to catch stale
  * fixtures that no longer parse correctly.
  */
 
 import { Glob } from "bun";
 import { describe, expect, test } from "bun:test";
+import { fileURLToPath } from "node:url";
 
 import { metadataUrlSchemaForAdapter } from "@/api/handlers/case-law/ingestion/metadata-url-schemas";
 import { readGzipJson } from "@/api/lib/gzip-json";
 import {
-  toPlainTextIngestionResult,
   type RawIngestionResult,
+  toPlainTextIngestionResult,
 } from "@/api/lib/legal-search/ingestion-types";
+import { ukFclFixture } from "@/api/tests/helpers/case-law-enrolled-fixtures";
+import { assertReaderAcceptsAst } from "@/api/tests/helpers/parser-reader-guard";
 
 const FIXTURES_DIR = new URL("__fixtures__/", import.meta.url);
 
@@ -41,13 +44,9 @@ const loadPageFixtures = async (): Promise<
   }[] = [];
 
   const glob = new Glob("*-page.json.gz");
-  const fixturePath = FIXTURES_DIR.pathname.endsWith("/")
-    ? FIXTURES_DIR.pathname
-    : `${FIXTURES_DIR.pathname}/`;
-
-  for await (const filename of glob.scan(fixturePath)) {
+  for await (const filename of glob.scan(fileURLToPath(FIXTURES_DIR))) {
     const path = new URL(filename, FIXTURES_DIR);
-    // oxlint-disable-next-line typescript-eslint/no-unsafe-type-assertion -- committed fixture JSON; the assertions below are the shape validation
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- committed fixture JSON; the assertions below are the shape validation
     const data = (await readGzipJson(path)) as FixtureRecord;
     results.push({ filename, data });
   }
@@ -66,6 +65,8 @@ const validateDecision = (
     raw,
     metadataUrlSchemaForAdapter(adapter),
   ).unwrap(prefix);
+
+  assertReaderAcceptsAst(d.documentAst);
 
   // Required fields
   expect(d.caseNumber, `${prefix}.caseNumber`).toBeTruthy();
@@ -103,7 +104,7 @@ describe("fixture validation", () => {
 
     expect(
       fixtures.length,
-      "No page fixtures found. Run update-fixtures.ts first.",
+      "No page fixtures found. Run update-adapter-fixtures.ts first.",
     ).toBeGreaterThan(0);
 
     for (const { filename, data } of fixtures) {
@@ -142,7 +143,7 @@ describe("fixture validation", () => {
 
     expect(
       fixtures.length,
-      "No page fixtures found. Run update-fixtures.ts first.",
+      "No page fixtures found. Run update-adapter-fixtures.ts first.",
     ).toBeGreaterThan(0);
 
     const now = Date.now();
@@ -158,4 +159,14 @@ describe("fixture validation", () => {
       ).toBeLessThan(NINETY_DAYS);
     }
   });
+});
+
+test("synthetic UK fixture has the common decision shape", async () => {
+  // Building the decision replaces the global fetch with the fixture's.
+  const originalFetch = globalThis.fetch;
+  try {
+    validateDecision(await ukFclFixture().buildDecision(), 0, "uk-fcl");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });

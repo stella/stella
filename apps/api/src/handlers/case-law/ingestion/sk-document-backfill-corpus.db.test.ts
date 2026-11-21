@@ -1,3 +1,5 @@
+import { Result } from "better-result";
+import { beforeAll, describe, expect, test } from "bun:test";
 /**
  * A metadata-first ingest writes a corpus payload before the document
  * exists — an empty one — and points the row at it. When the document
@@ -14,22 +16,24 @@
  *
  * Runs in the nightly Postgres job; skipped elsewhere.
  */
-
-import { Result } from "better-result";
-import { beforeAll, describe, expect, test } from "bun:test";
 import { and, eq, inArray, sql } from "drizzle-orm";
+import * as v from "valibot";
+
+import { persistedDocumentAstSchema } from "@stll/legal-ast/document-ast";
+import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
   CASE_LAW_CORPUS_MIRROR_STATUS,
+  caseLawCorpusPackRefs,
   caseLawDecisions,
   caseLawSearchDocumentPreviewPassages,
   caseLawSearchDocuments,
   caseLawSources,
+  corpusIndexProjectionStates,
 } from "@/api/db/schema";
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
-import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
-import type { SafeId } from "@/api/lib/branded-types";
+import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { parseCorpusLocation } from "@/api/lib/legal-search/corpus-location";
 import {
   CorpusPackError,
@@ -114,12 +118,18 @@ const packPrefix = (jurisdiction: string) =>
   `legal-corpus/packs/jurisdiction=${jurisdiction}/`;
 
 /** The key of a pack that carries this jurisdiction's members. */
-const packKeyUnder = (jurisdiction: string) =>
-  expect.stringContaining(packPrefix(jurisdiction));
+const packKeyUnder = (jurisdiction: string): string => {
+  const matcher: string = expect.stringContaining(packPrefix(jurisdiction));
+  return matcher;
+};
 
 /** Every stored pointer addresses a member of such a pack. */
-const packedUnder = (jurisdiction: string) =>
-  expect.stringContaining(`pack:${packPrefix(jurisdiction)}`);
+const packedUnder = (jurisdiction: string): string => {
+  const matcher: string = expect.stringContaining(
+    `pack:${packPrefix(jurisdiction)}`,
+  );
+  return matcher;
+};
 
 if (!databaseUrl || !runPostgresTests) {
   describe.skip("sk-courts document backfill — corpus storage", () => {
@@ -227,6 +237,59 @@ if (!databaseUrl || !runPostgresTests) {
       }
     });
 
+    test("deferred storage keeps text when its AST has duplicate anchors", async () => {
+      const id = await insertDecision({
+        caseNumber: `reader-schema-${suffix}`,
+      });
+      const decision = await claimFor(id);
+      const block = parsedAst.blocks.at(0);
+      if (block === undefined) {
+        expect.unreachable("Fixture has a heading");
+      }
+      const invalidAst = {
+        ...parsedAst,
+        blocks: [block, { ...block, id: "b2" }],
+      };
+      (
+        await storeBackfilledDocument({
+          decision,
+          document: { ...parsedDocument, documentAst: invalidAst },
+          scopedDb,
+          mode: "off",
+          transfer: null,
+        })
+      ).unwrap();
+      const row = (
+        await db
+          .select({
+            fulltext: caseLawDecisions.fulltext,
+            documentAst: caseLawDecisions.documentAst,
+          })
+          .from(caseLawDecisions)
+          .where(eq(caseLawDecisions.id, id))
+      ).at(0);
+      expect(row?.fulltext).toBe(parsedDocument.fulltext);
+      const retainedAst = v.parse(persistedDocumentAstSchema, row?.documentAst);
+      expect(retainedAst.blocks.map(({ plainText }) => plainText)).toEqual(
+        invalidAst.blocks.map(({ plainText }) => plainText),
+      );
+      expect(retainedAst.blocks.map(({ type }) => type)).toEqual(
+        invalidAst.blocks.map(({ type }) => type),
+      );
+      expect(
+        new Set(retainedAst.blocks.map(({ id: blockId }) => blockId)).size,
+      ).toBe(2);
+      expect(
+        new Set(retainedAst.blocks.map(({ anchorId }) => anchorId)).size,
+      ).toBe(2);
+      for (const retainedBlock of retainedAst.blocks) {
+        if (retainedBlock.type !== "heading" || block.type !== "heading") {
+          expect.unreachable("Both stored blocks retain the listed heading");
+        }
+        expect(retainedBlock.inlines).toEqual(block.inlines);
+      }
+    });
+
     test("moves the row's keys and hash onto the real document", async () => {
       const emptyHash = EMPTY_CORPUS_CONTENT_HASHES.at(0) ?? "";
       const caseNumber = `corpus-${suffix}`;
@@ -241,33 +304,39 @@ if (!databaseUrl || !runPostgresTests) {
       /** The row's hash at the moment the pack was transferred. */
       const hashesDuringWrite: (string | null)[] = [];
 
-      await storeBackfilledDocument({
-        decision: await claimFor(id),
-        document: parsedDocument,
-        scopedDb,
-        transfer: {
-          layout: "packs",
-          putPacks: async ({ packs }) => {
-            for (const pack of packs) {
-              const footer = unwrapPackFooter(
-                await decodePackFooter(pack.bytes),
-              );
-              packedMembers.push(
-                ...footer.members.map(({ documentId }) => ({
-                  packKey: pack.packKey,
-                  documentId,
-                })),
-              );
-            }
-            const during = await db.query.caseLawDecisions.findFirst({
-              where: { id: { eq: id } },
-              columns: { contentHash: true },
-            });
-            hashesDuringWrite.push(during?.contentHash ?? null);
-            return Result.ok(undefined);
+      (
+        await storeBackfilledDocument({
+          decision: await claimFor(id),
+          document: parsedDocument,
+          capturedRaw: {
+            sourceRawS3Key: "deferred-raw-envelope",
+            sourceRawContentType: "application/vnd.stella.case-law-raw+json",
           },
-        },
-      });
+          scopedDb,
+          transfer: {
+            layout: "packs",
+            putPacks: async ({ packs }) => {
+              for (const pack of packs) {
+                const footer = unwrapPackFooter(
+                  await decodePackFooter(pack.bytes),
+                );
+                packedMembers.push(
+                  ...footer.members.map(({ documentId }) => ({
+                    packKey: pack.packKey,
+                    documentId,
+                  })),
+                );
+              }
+              const during = await db.query.caseLawDecisions.findFirst({
+                where: { id: { eq: id } },
+                columns: { contentHash: true },
+              });
+              hashesDuringWrite.push(during?.contentHash ?? null);
+              return Result.ok(undefined);
+            },
+          },
+        })
+      ).unwrap();
 
       const stored = await db.query.caseLawDecisions.findFirst({
         where: { id: { eq: id } },
@@ -277,9 +346,15 @@ if (!databaseUrl || !runPostgresTests) {
           normalizedS3Key: true,
           astS3Key: true,
           contentHash: true,
+          sourceRawS3Key: true,
+          sourceRawContentType: true,
         },
       });
 
+      expect(stored?.sourceRawS3Key).toBe("deferred-raw-envelope");
+      expect(stored?.sourceRawContentType).toBe(
+        "application/vnd.stella.case-law-raw+json",
+      );
       // The document reached object storage as members of one pack under
       // this decision's id and jurisdiction, not just the columns.
       expect(packedMembers).toEqual([
@@ -310,12 +385,14 @@ if (!databaseUrl || !runPostgresTests) {
         mirrorStatus: CASE_LAW_CORPUS_MIRROR_STATUS.PENDING,
       });
 
-      await storeBackfilledDocument({
-        decision: await claimFor(id),
-        document: parsedDocument,
-        scopedDb,
-        transfer: null,
-      });
+      (
+        await storeBackfilledDocument({
+          decision: await claimFor(id),
+          document: parsedDocument,
+          scopedDb,
+          transfer: null,
+        })
+      ).unwrap();
 
       const stored = await db.query.caseLawDecisions.findFirst({
         where: { id: { eq: id } },
@@ -342,12 +419,14 @@ if (!databaseUrl || !runPostgresTests) {
         mirrorStatus: CASE_LAW_CORPUS_MIRROR_STATUS.PENDING,
       });
 
-      await storeBackfilledDocument({
-        decision: await claimFor(id),
-        document: parsedDocument,
-        scopedDb,
-        transfer: landingTransfer,
-      });
+      (
+        await storeBackfilledDocument({
+          decision: await claimFor(id),
+          document: parsedDocument,
+          scopedDb,
+          transfer: landingTransfer,
+        })
+      ).unwrap();
 
       const stored = await db.query.caseLawDecisions.findFirst({
         where: { id: { eq: id } },
@@ -385,13 +464,15 @@ if (!databaseUrl || !runPostgresTests) {
         mirrorStatus: CASE_LAW_CORPUS_MIRROR_STATUS.PENDING,
       });
 
-      const outcome = await storeBackfilledDocument({
-        decision: await claimFor(id),
-        document: parsedDocument,
-        mode: "canonical",
-        scopedDb,
-        transfer: landingTransfer,
-      });
+      const outcome = (
+        await storeBackfilledDocument({
+          decision: await claimFor(id),
+          document: parsedDocument,
+          mode: "canonical",
+          scopedDb,
+          transfer: landingTransfer,
+        })
+      ).unwrap();
 
       expect(outcome).toBe("stored");
       expect(
@@ -438,13 +519,15 @@ if (!databaseUrl || !runPostgresTests) {
 
       const decision = await claimFor(id);
 
-      await storeBackfilledDocument({
-        decision,
-        document: parsedDocument,
-        mode: "canonical",
-        scopedDb,
-        transfer: landingTransfer,
-      });
+      (
+        await storeBackfilledDocument({
+          decision,
+          document: parsedDocument,
+          mode: "canonical",
+          scopedDb,
+          transfer: landingTransfer,
+        })
+      ).unwrap();
 
       // The attempt that was overtaken, finishing with nothing to store.
       await markDocumentUnavailable({
@@ -484,13 +567,15 @@ if (!databaseUrl || !runPostgresTests) {
       });
       const decision = await claimFor(id);
       const store = async () =>
-        await storeBackfilledDocument({
-          decision,
-          document: parsedDocument,
-          mode: "canonical",
-          scopedDb,
-          transfer: landingTransfer,
-        });
+        (
+          await storeBackfilledDocument({
+            decision,
+            document: parsedDocument,
+            mode: "canonical",
+            scopedDb,
+            transfer: landingTransfer,
+          })
+        ).unwrap();
 
       expect(await store()).toBe("stored");
       expect(await store()).toBe("superseded");
@@ -521,13 +606,15 @@ if (!databaseUrl || !runPostgresTests) {
 
       expect(await stillPending()).toBe(true);
 
-      await storeBackfilledDocument({
-        decision: await claimFor(id),
-        document: parsedDocument,
-        mode: "canonical",
-        scopedDb,
-        transfer: landingTransfer,
-      });
+      (
+        await storeBackfilledDocument({
+          decision: await claimFor(id),
+          document: parsedDocument,
+          mode: "canonical",
+          scopedDb,
+          transfer: landingTransfer,
+        })
+      ).unwrap();
 
       expect(await stillPending()).toBe(false);
     });
@@ -539,13 +626,15 @@ if (!databaseUrl || !runPostgresTests) {
         mirrorStatus: CASE_LAW_CORPUS_MIRROR_STATUS.PENDING,
       });
 
-      await storeBackfilledDocument({
-        decision: await claimFor(id),
-        document: parsedDocument,
-        mode: "dual-write",
-        scopedDb,
-        transfer: landingTransfer,
-      });
+      (
+        await storeBackfilledDocument({
+          decision: await claimFor(id),
+          document: parsedDocument,
+          mode: "dual-write",
+          scopedDb,
+          transfer: landingTransfer,
+        })
+      ).unwrap();
 
       expect(
         await db.query.caseLawDecisions.findFirst({
@@ -571,13 +660,15 @@ if (!databaseUrl || !runPostgresTests) {
         mirrorStatus: CASE_LAW_CORPUS_MIRROR_STATUS.PENDING,
       });
 
-      await storeBackfilledDocument({
-        decision: await claimFor(id),
-        document: parsedDocument,
-        mode: "canonical",
-        scopedDb,
-        transfer: null,
-      });
+      (
+        await storeBackfilledDocument({
+          decision: await claimFor(id),
+          document: parsedDocument,
+          mode: "canonical",
+          scopedDb,
+          transfer: null,
+        })
+      ).unwrap();
 
       expect(
         await db.query.caseLawDecisions.findFirst({
@@ -603,21 +694,27 @@ if (!databaseUrl || !runPostgresTests) {
         mirrorStatus: CASE_LAW_CORPUS_MIRROR_STATUS.PENDING,
       });
 
-      const outcome = await storeBackfilledDocument({
-        decision: await claimFor(id),
-        document: parsedDocument,
-        mode: "canonical",
-        scopedDb,
-        transfer: {
-          layout: "packs",
-          putPacks: async () =>
-            await Promise.resolve(
-              Result.err(
-                new CorpusPackError({ message: "bucket unreachable" }),
+      const outcome = (
+        await storeBackfilledDocument({
+          decision: await claimFor(id),
+          document: parsedDocument,
+          capturedRaw: {
+            sourceRawS3Key: "deferred-raw-envelope",
+            sourceRawContentType: "application/vnd.stella.case-law-raw+json",
+          },
+          mode: "canonical",
+          scopedDb,
+          transfer: {
+            layout: "packs",
+            putPacks: async () =>
+              await Promise.resolve(
+                Result.err(
+                  new CorpusPackError({ message: "bucket unreachable" }),
+                ),
               ),
-            ),
-        },
-      });
+          },
+        })
+      ).unwrap();
 
       // Nothing was stored, so the decision is reported exactly as one this
       // store did not fill: it keeps its place in the queue.
@@ -629,12 +726,16 @@ if (!databaseUrl || !runPostgresTests) {
             corpusMirrorStatus: true,
             fulltext: true,
             textS3Key: true,
+            sourceRawS3Key: true,
+            sourceRawContentType: true,
           },
         }),
       ).toMatchObject({
         corpusMirrorStatus: CASE_LAW_CORPUS_MIRROR_STATUS.PENDING,
         fulltext: null,
         textS3Key: null,
+        sourceRawS3Key: null,
+        sourceRawContentType: null,
       });
     });
 
@@ -691,12 +792,14 @@ if (!databaseUrl || !runPostgresTests) {
         .set({ redactedAt })
         .where(eq(caseLawDecisions.id, id));
 
-      const outcome = await storeBackfilledDocument({
-        decision,
-        document: parsedDocument,
-        scopedDb,
-        transfer: null,
-      });
+      const outcome = (
+        await storeBackfilledDocument({
+          decision,
+          document: parsedDocument,
+          scopedDb,
+          transfer: null,
+        })
+      ).unwrap();
 
       expect(outcome).toBe("superseded");
       expect(
@@ -720,6 +823,102 @@ if (!databaseUrl || !runPostgresTests) {
           .select({ id: caseLawSearchDocumentPreviewPassages.decisionId })
           .from(caseLawSearchDocumentPreviewPassages)
           .where(eq(caseLawSearchDocumentPreviewPassages.decisionId, id)),
+      ).toHaveLength(0);
+    });
+
+    test("a decision merge fence starts after transfer and leaves the document unsettled", async () => {
+      const emptyHash = EMPTY_CORPUS_CONTENT_HASHES.at(0) ?? "";
+      const id = await insertDecision({
+        caseNumber: `ownership-${suffix}`,
+        contentHash: emptyHash,
+      });
+      const decision = await claimFor(id);
+      const desiredBefore = await db
+        .select()
+        .from(corpusIndexProjectionStates)
+        .where(
+          and(
+            eq(corpusIndexProjectionStates.family, "case_law"),
+            eq(corpusIndexProjectionStates.entityId, id),
+          ),
+        );
+      let transferred = 0;
+      const outcome = (
+        await storeBackfilledDocument({
+          decision,
+          document: parsedDocument,
+          scopedDb,
+          transfer: {
+            layout: "packs",
+            putPacks: async () => {
+              transferred += 1;
+              await db
+                .update(caseLawSources)
+                .set({
+                  ingestionLeaseToken:
+                    createSafeId<"caseLawSourceIngestionLease">(),
+                  ingestionLeasePurpose: "decision-merge",
+                  ingestionLeaseExpiresAt: new Date(Date.now() + 60_000),
+                })
+                .where(eq(caseLawSources.id, sourceId));
+              return Result.ok(undefined);
+            },
+          },
+        })
+      ).unwrap();
+      await db
+        .update(caseLawSources)
+        .set({
+          ingestionLeaseToken: null,
+          ingestionLeaseExpiresAt: null,
+          ingestionLeasePurpose: "ingestion",
+        })
+        .where(eq(caseLawSources.id, sourceId));
+      expect(transferred).toBe(1);
+      expect(
+        await db
+          .select()
+          .from(caseLawCorpusPackRefs)
+          .where(eq(caseLawCorpusPackRefs.decisionId, id)),
+      ).toEqual([]);
+      expect(
+        await db
+          .select()
+          .from(corpusIndexProjectionStates)
+          .where(
+            and(
+              eq(corpusIndexProjectionStates.family, "case_law"),
+              eq(corpusIndexProjectionStates.entityId, id),
+            ),
+          ),
+      ).toEqual(desiredBefore);
+      expect(outcome).toEqual({ status: "lost" });
+      expect(
+        (
+          await db
+            .select({
+              fulltext: caseLawDecisions.fulltext,
+              contentHash: caseLawDecisions.contentHash,
+              textS3Key: caseLawDecisions.textS3Key,
+              normalizedS3Key: caseLawDecisions.normalizedS3Key,
+              astS3Key: caseLawDecisions.astS3Key,
+            })
+            .from(caseLawDecisions)
+            .where(eq(caseLawDecisions.id, id))
+            .limit(1)
+        ).at(0),
+      ).toEqual({
+        fulltext: null,
+        contentHash: emptyHash,
+        textS3Key: null,
+        normalizedS3Key: null,
+        astS3Key: null,
+      });
+      expect(
+        await db
+          .select({ id: caseLawSearchDocuments.decisionId })
+          .from(caseLawSearchDocuments)
+          .where(eq(caseLawSearchDocuments.decisionId, id)),
       ).toHaveLength(0);
     });
   });

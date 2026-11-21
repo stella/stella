@@ -1,6 +1,6 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 
-import type { Hotkey } from "@tanstack/react-hotkeys";
+import type { HotkeyChord } from "@tanstack/react-hotkeys";
 import { useQuery } from "@tanstack/react-query";
 import { useParams } from "@tanstack/react-router";
 import { panic } from "better-result";
@@ -8,11 +8,16 @@ import { useTranslations } from "use-intl";
 
 import { ENTITIES_PER_WORKSPACE_MAX } from "@stll/api-contract";
 
+import { INSPECTOR_FOCUS_INTENT } from "@/components/inspector/inspector-store-types";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
+import { newChatMatterScope } from "@/components/inspector/new-chat-scope";
 import { usePermissions } from "@/hooks/use-permissions";
-import { useTimeBillingPreviewEnabled } from "@/hooks/use-time-billing-preview";
+import { useTimeBillingChromeEnabled } from "@/hooks/use-time-billing-preview";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
+import { useActionCapabilities } from "@/lib/organization/feature-access/capability-actions";
+import { queryView } from "@/lib/query-view.logic";
 import { useEffectiveShortcutGroups } from "@/lib/use-effective-shortcuts";
+import { useQueryViewError } from "@/lib/use-query-view";
 import { useCreateMatterStore } from "@/lib/workspaces/create-matter-store";
 import { useCreateTask } from "@/lib/workspaces/mutations/tasks";
 import { entitySummariesCountOptions } from "@/lib/workspaces/queries/entities";
@@ -24,13 +29,11 @@ import type { CommandAction, CommandActionContext } from "../lib/types";
 
 export type ResolvedCommandAction = CommandAction & {
   title: string;
-  keywordLabels: readonly string[];
-  hotkey?: Hotkey;
+  hotkey?: HotkeyChord;
 };
 
 type UploadRequest =
-  | { type: "closed" }
-  | { type: "open"; workspaceId: string | undefined };
+  { type: "closed" } | { type: "open"; workspaceId: string | undefined };
 
 type UseCommandActionsResult = {
   uploadRequest: UploadRequest;
@@ -41,8 +44,9 @@ type UseCommandActionsResult = {
 
 export function useCommandActions(open: boolean): UseCommandActionsResult {
   const t = useTranslations();
+  const { capabilities, role } = useActionCapabilities("ai");
   const user = useAuthenticatedUser();
-  const previewEnabled = useTimeBillingPreviewEnabled();
+  const previewEnabled = useTimeBillingChromeEnabled();
   const canCreateTimeEntry = usePermissions({ timeEntry: ["create"] });
   const canLogTime = previewEnabled && canCreateTimeEntry;
   const openQuickEntry = useQuickEntryStore((state) => state.openDialog);
@@ -56,15 +60,25 @@ export function useCommandActions(open: boolean): UseCommandActionsResult {
   });
   const { mutate: createTask, isPending: isCreatingTask } = useCreateTask();
   const canCreateEntity = usePermissions({ entity: ["create"] });
-  const { data: entityCount } = useQuery({
+  const entityCountQuery = useQuery({
     ...entitySummariesCountOptions(workspaceId ?? ""),
     enabled: open && workspaceId !== undefined && canCreateEntity,
   });
-  const { data: workflow } = useQuery({
+  const entityCountView = queryView(entityCountQuery);
+  useQueryViewError(entityCountView, "useCommandActions:query");
+  const entityCount =
+    entityCountView.type === "items" ? entityCountView.items : undefined;
+  const workflowQuery = useQuery({
     ...workflowOptions({ key: { workspaceId: workspaceId ?? "" } }),
     enabled: open && workspaceId !== undefined && canCreateEntity,
   });
+  const workflowView = queryView(workflowQuery);
+  useQueryViewError(workflowView, "useCommandActions:query-2");
+  const workflow =
+    workflowView.type === "items" ? workflowView.items : undefined;
   const canCreateTask =
+    entityCountQuery.status === "success" &&
+    workflowQuery.status === "success" &&
     canCreateEntity &&
     workspaceId !== undefined &&
     entityCount !== undefined &&
@@ -77,52 +91,36 @@ export function useCommandActions(open: boolean): UseCommandActionsResult {
   const openChat = useInspectorTabsStore((s) => s.openChat);
   const shortcutGroups = useEffectiveShortcutGroups();
 
-  const context: CommandActionContext = useMemo(
-    () => ({
-      canCreateMatter,
-      canLogTime,
-      canUploadDocument: canCreateEntity,
-      canCreateTask,
-      openLogTime: () =>
-        openQuickEntry({
-          userId: user.id,
-          organizationId: user.activeOrganizationId,
-        }),
-      openUploadDocument: () => setUploadRequest({ type: "open", workspaceId }),
-      createTask: () => {
-        if (workspaceId === undefined) {
-          panic("Task action requires a matter");
-        }
-        createTask(workspaceId);
-      },
-      openCreateMatterDialog: () => {
-        openCreateMatterDialog();
-      },
-      openNewChat: () => {
-        openChat(
-          workspaceId === undefined
-            ? {}
-            : { workspaceId, contextMatterIds: [workspaceId] },
-        );
-      },
-    }),
-    [
-      canCreateMatter,
-      canCreateEntity,
-      canCreateTask,
-      canLogTime,
-      openQuickEntry,
-      user.id,
-      user.activeOrganizationId,
-      createTask,
-      openChat,
-      openCreateMatterDialog,
-      workspaceId,
-    ],
-  );
+  const context: CommandActionContext = {
+    canCreateMatter,
+    canLogTime,
+    canUploadDocument: canCreateEntity,
+    canCreateTask,
+    openLogTime: () =>
+      openQuickEntry({
+        userId: user.id,
+        organizationId: user.activeOrganizationId,
+      }),
+    openUploadDocument: () => setUploadRequest({ type: "open", workspaceId }),
+    createTask: () => {
+      if (workspaceId === undefined) {
+        panic("Task action requires a matter");
+      }
+      createTask(workspaceId);
+    },
+    openCreateMatterDialog: () => {
+      openCreateMatterDialog();
+    },
+    openNewChat: () => {
+      openChat({
+        ...newChatMatterScope(workspaceId),
+        focus: INSPECTOR_FOCUS_INTENT.claim,
+      });
+    },
+  };
 
-  const effectiveHotkeys = useMemo(() => {
-    const hotkeys = new Map<CommandAction["shortcutId"], Hotkey>();
+  const effectiveHotkeys = (() => {
+    const hotkeys = new Map<CommandAction["shortcutId"], HotkeyChord>();
     for (const group of shortcutGroups) {
       for (const shortcut of group.shortcuts) {
         if (shortcut.binding.type === "hotkey") {
@@ -131,46 +129,47 @@ export function useCommandActions(open: boolean): UseCommandActionsResult {
       }
     }
     return hotkeys;
-  }, [shortcutGroups]);
+  })();
 
-  const resolvedActions = useMemo(
-    () =>
-      COMMAND_ACTIONS.filter((action) => action.isAvailable(context)).map(
-        (action) => {
-          const resolved: ResolvedCommandAction = {
-            id: action.id,
-            group: action.group,
-            titleKey: action.titleKey,
-            icon: action.icon,
-            isAvailable: action.isAvailable,
-            run: action.run,
-            title: t(action.titleKey),
-            keywordLabels: action.keywords
-              ? action.keywords.map((keyword) => t(keyword))
-              : [],
-          };
-          if (action.keywords) {
-            resolved.keywords = action.keywords;
-          }
-          if (action.shortcutId === undefined) {
-            return resolved;
-          }
-          resolved.shortcutId = action.shortcutId;
-          const hotkey = effectiveHotkeys.get(action.shortcutId);
-          if (!hotkey) {
-            panic(`No effective hotkey for command action "${action.id}"`);
-          }
-          resolved.hotkey = hotkey;
-          return resolved;
-        },
-      ),
-    [context, effectiveHotkeys, t],
-  );
+  const resolvedActions = COMMAND_ACTIONS.filter(
+    (action) =>
+      action.isAvailable(context) &&
+      (action.capability === null ||
+        capabilities[action.capability].type === "available" ||
+        role === "admin"),
+  ).map((action) => {
+    const resolved: ResolvedCommandAction = {
+      id: action.id,
+      capability: action.capability,
+      group: action.group,
+      titleKey: action.titleKey,
+      icon: action.icon,
+      isAvailable: action.isAvailable,
+      run: action.run,
+      title: t(action.titleKey),
+    };
+    if (action.shortcutId === undefined) {
+      return resolved;
+    }
+    resolved.shortcutId = action.shortcutId;
+    const hotkey = effectiveHotkeys.get(action.shortcutId);
+    if (!hotkey) {
+      panic(`No effective hotkey for command action "${action.id}"`);
+    }
+    resolved.hotkey = hotkey;
+    return resolved;
+  });
 
   const executeAction = (actionId: string) => {
     const action = resolvedActions.find((a) => a.id === actionId);
     if (!action) {
       panic(`Unknown command action "${actionId}"`);
+    }
+    if (
+      action.capability !== null &&
+      capabilities[action.capability].type !== "available"
+    ) {
+      return;
     }
     action.run(context);
   };

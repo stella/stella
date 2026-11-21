@@ -3,6 +3,8 @@ import { Result, TaggedError } from "better-result";
 import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
+import { printError } from "@stll/errors";
+
 import { listApiTestPaths } from "./api-test-plan";
 import {
   measuredTestRssTable,
@@ -13,8 +15,8 @@ import {
   type TestRssEnvironment,
   type TestRssFile,
   type TestRssShard,
-  type TestRssTable,
   type TestRssSource,
+  type TestRssTable,
 } from "./test-batch-plan";
 
 class PeakRssRefreshError extends TaggedError("PeakRssRefreshError")<{
@@ -337,9 +339,7 @@ if (import.meta.main) {
     writeFileSync(outputJson, refreshed.content);
     console.log(JSON.stringify(refreshed.changes, null, 2));
   } catch (error) {
-    console.error(
-      error instanceof Error ? error.message : "Peak RSS refresh failed",
-    );
+    printError("Peak RSS refresh failed", error);
     process.exitCode = 1;
   }
 }

@@ -10,6 +10,7 @@ import { generateInboundAddressToken } from "@/api/lib/email/inbound/address";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const config = {
+  contract: "patch",
   accountAccess: ACCOUNT_ACCESS.standard,
   description:
     "Rotate a matter's inbound address; the previous address stops accepting mail immediately.",
@@ -24,11 +25,15 @@ const createMatterInboundAddress = createSafeHandler(
       return Result.err(
         new HandlerError({
           status: 503,
+          code: "internal_error",
           message: "Inbound mail domain is not configured",
         }),
       );
     }
-    const token = generateInboundAddressToken();
+    const token = generateInboundAddressToken({
+      userId: user.id,
+      organizationId: session.activeOrganizationId,
+    });
     yield* Result.await(
       safeDb(async (tx) => {
         await tx

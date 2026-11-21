@@ -1,4 +1,4 @@
-import { Result, panic } from "better-result";
+import { panic, Result } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
 
 import { abortableTx } from "@/api/db/safe-db";
@@ -16,11 +16,10 @@ import type { SafeId } from "@/api/lib/branded-types";
 import {
   lockObjectCleanupIntentsForWriter,
   lockOrganizationObjectIntentsForWriter,
-  reserveObjectCleanupIntents,
+  reserveObjectCleanupIntentsForKey,
   retirePublishedObjectCleanupIntentsInTransaction,
   settleObjectCleanupIntentsAfterWriterInTransaction,
 } from "@/api/lib/buffer-intent-reconciliation";
-import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { deriveManifestFromDocx } from "@/api/lib/docx/derived-manifest";
 import type { TemplateManifest } from "@/api/lib/docx/types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -28,6 +27,7 @@ import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { writeScannedObject } from "@/api/lib/file-scan/stored-object";
 import type { ScannedObject } from "@/api/lib/file-scan/stored-object";
 import { writeOrganizationFile } from "@/api/lib/files/organization-file-usage";
+import type { CheckedFileWrite } from "@/api/lib/files/organization-file-usage";
 import { LIMITS } from "@/api/lib/limits";
 import {
   S3_OBJECT_WRITE_CERTAINTY,
@@ -78,8 +78,7 @@ type WriteStoredTemplateOptions = {
 };
 
 type TemplateWriteAttempt =
-  | ({ type: "published" } & TemplateWriteResult)
-  | { type: "retry" };
+  ({ type: "published" } & TemplateWriteResult) | { type: "retry" };
 
 // One optimistic attempt owns exactly one prepared candidate and intent.
 const writeTemplateAttempt = async function* ({
@@ -137,7 +136,7 @@ const writeTemplateAttempt = async function* ({
     templateId,
     writeId: createSafeId<"templateVersion">(),
   });
-  const reservation = await reserveObjectCleanupIntents({
+  const reservation = await reserveObjectCleanupIntentsForKey({
     objectKey: s3Key,
     organizationId,
     safeDb,
@@ -157,23 +156,23 @@ const writeTemplateAttempt = async function* ({
   const intentIds = reservation.value;
   // On any uncertain upload or transaction failure, leave the durable intent
   // alone. A lost COMMIT acknowledgement must never delete published bytes.
-  const writeCandidate = async () =>
+  const writeCandidate = async ({
+    content,
+    objectKey,
+  }: CheckedFileWrite<ScannedFile>) =>
     await writeScannedObject(
-      { file, key: s3Key, write: writeObject },
+      { file: content, key: objectKey, write: writeObject },
       { type: "cleanup-intent", intent: intentIds },
     );
-  const { certainty, object: stored } = isDeploymentFeatureEnabled(
-    "FEATURE_FILE_USAGE_LIMITS",
-  )
-    ? yield* Result.await(
-        writeOrganizationFile({
-          organizationId,
-          objectKey: s3Key,
-          sizeBytes: file.bytes.byteLength,
-          write: writeCandidate,
-        }),
-      )
-    : yield* Result.await(Result.tryPromise(writeCandidate));
+  const { certainty, object: stored } = yield* Result.await(
+    writeOrganizationFile({
+      organizationId,
+      objectKey: s3Key,
+      sizeBytes: file.bytes.byteLength,
+      content: file,
+      write: writeCandidate,
+    }),
+  );
   switch (certainty) {
     case S3_OBJECT_WRITE_CERTAINTY.UNCERTAIN:
       // An earlier timed-out PUT may still land after this version is later
@@ -182,6 +181,7 @@ const writeTemplateAttempt = async function* ({
       return Result.err(
         new HandlerError({
           status: 503,
+          code: "internal_error",
           message:
             "Template storage write could not be confirmed. Retry the operation.",
         }),

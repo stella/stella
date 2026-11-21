@@ -1,90 +1,70 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 
-import { useInfiniteQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
-import { BidiText } from "@stll/ui/bidi-text";
+import { PROVISION_CITING_FILTER_LIMITS } from "@stll/api-contract/provision-citing-decisions";
 import { Button } from "@stll/ui/button";
+import { Form } from "@stll/ui/form";
 import { Input } from "@stll/ui/input";
+import { NumberInput } from "@stll/ui/number-input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@stll/ui/select";
 import { Skeleton } from "@stll/ui/skeleton";
 
-import { CitedDecisionLink } from "@/components/legal-reader/cited-decision-link";
-import { ProvisionVersionBasisLabel } from "@/components/provision-version-basis";
-import { filterCitingDecisions } from "@/features/statutes/provision-inspector.logic";
-import { citingDecisionsInfiniteOptions } from "@/features/statutes/queries/citing-decisions";
-import { formatValidityDate } from "@/features/statutes/statute-format";
+import { RecoverableErrorStatus } from "@/components/recoverable-error-status";
+import { CitingDecisionItem } from "@/features/statutes/components/citing-decision-item";
+import { orderCitingDecisions } from "@/features/statutes/components/provision-citing-decisions.logic";
+import {
+  citingDecisionsInfiniteOptions,
+  topCitingDecisionsOptions,
+} from "@/features/statutes/queries/citing-decisions";
+import { readProvisionCitingSearch } from "@/features/statutes/statute-page-search";
+import type { ProvisionCitingSearch } from "@/features/statutes/statute-page-search";
 import { useFormatter } from "@/i18n/formatting-context";
 import type { api } from "@/lib/api";
 import { optionalArray } from "@/lib/arrays";
 import { detached } from "@/lib/detached";
 import type { PublicLawData } from "@/lib/public-law-api";
 
-/** One decision citing the provision, as the citing-decisions read answers it. */
 export type CitingDecisionRow = PublicLawData<
   (typeof api.case.provisions)["citing-decisions"]["get"]
 >["items"][number];
 
-/** One citing decision with the passage that applies the provision. */
-export const CitingDecisionItem = ({
-  decision,
-}: {
-  decision: CitingDecisionRow;
-}) => {
-  const format = useFormatter();
-  const decided = formatValidityDate(decision.decisionDate, format);
-
-  return (
-    <CitedDecisionLink
-      className="hover:bg-accent -mx-2 flex flex-col gap-0.5 rounded-md px-2 py-1.5 no-underline"
-      decision={{
-        caseNumber: decision.caseNumber,
-        country: decision.country,
-        court: decision.court,
-        decisionDate: decision.decisionDate,
-        id: decision.decisionId,
-        language: decision.language,
-        languageAlternates: decision.languageAlternates,
-        slug: decision.slug,
-      }}
-    >
-      <BidiText as="span" className="text-foreground text-xs font-medium">
-        {decision.caseNumber}
-      </BidiText>
-      <span className="text-muted-foreground text-2xs">
-        {decided === null ? decision.court : `${decision.court} · ${decided}`}
-      </span>
-      <ProvisionVersionBasisLabel basis={decision.versionBasis} />
-      {decision.sentenceText === null ? null : (
-        <span className="text-foreground-strong-muted text-2xs line-clamp-3 leading-snug">
-          {decision.sentenceText}
-        </span>
-      )}
-    </CitedDecisionLink>
-  );
-};
-
 type ProvisionCitingDecisionsProps = {
-  /** The provision's anchor, the key its incoming citations are filed under. */
   anchorId: string;
   eli: string;
   jurisdiction: string;
+  currentVersionValidFrom: string | null;
+  filters: ProvisionCitingSearch;
+  onFiltersChange: (filters: ProvisionCitingSearch) => void;
 };
 
 /**
- * The case law citing one provision, newest application first.
- *
- * Mounted only inside the provision's inspector tab, so the read starts when
- * a reader asks about this one provision and is paged from there. The filter
- * narrows what has been loaded; it does not ask the server for more.
+ * Every decision citing the provision, as one list: the leading decisions
+ * first and marked as leading, then the rest in the order the reader picked.
+ * The two reads settle together, so a leading decision never jumps from the
+ * list's body to its head under the reader's eyes.
  */
 export const ProvisionCitingDecisions = ({
   anchorId,
   eli,
   jurisdiction,
+  currentVersionValidFrom,
+  filters,
+  onFiltersChange,
 }: ProvisionCitingDecisionsProps) => {
   const t = useTranslations();
-  const [filter, setFilter] = useState("");
-
+  const format = useFormatter();
+  // The year field keeps what was typed (no clamping on blur); a year outside
+  // the range blocks the filter and says why, as the native field did.
+  const [yearOutOfRange, setYearOutOfRange] = useState(false);
+  const yearErrorId = useId();
   const {
     data,
     fetchNextPage,
@@ -94,74 +74,172 @@ export const ProvisionCitingDecisions = ({
     isPending,
     refetch,
   } = useInfiniteQuery(
-    citingDecisionsInfiniteOptions({
-      anchor: anchorId,
-      eli,
-      jurisdiction,
-    }),
+    citingDecisionsInfiniteOptions(
+      { anchor: anchorId, eli, jurisdiction },
+      filters,
+    ),
   );
-
-  const decisions = optionalArray(data?.pages).flatMap((page) => page.items);
-  const visible = filterCitingDecisions(decisions, filter);
-
-  if (isPending) {
-    return <CitingDecisionsLoader />;
-  }
-
-  // A failed read is not an answer: saying "no results" here would state as
-  // legal fact that nothing cites this provision.
-  if (isError) {
-    return (
-      <div className="flex flex-col items-start gap-1">
-        <p className="text-muted-foreground text-xs">
-          {t("errors.actionFailed")}
-        </p>
-        <Button
-          onClick={() => {
-            detached(refetch(), "statutes.citing-decisions-retry");
-          }}
-          size="sm"
-          variant="ghost"
-        >
-          {t("common.retry")}
-        </Button>
-      </div>
-    );
-  }
-
-  if (decisions.length === 0) {
-    return (
-      <p className="text-muted-foreground text-xs">{t("common.noResults")}</p>
-    );
-  }
-
+  const leadingQuery = useQuery(
+    topCitingDecisionsOptions({ anchor: anchorId, eli, jurisdiction }),
+  );
+  // A court or year narrows the list to what matches; the leading read was
+  // not narrowed, so its decisions keep their mark but not the list's head.
+  const pinLeading =
+    filters.citingCourt === undefined && filters.citingYear === undefined;
+  const loaded = optionalArray(data?.pages).flatMap((page) => page.items);
+  const decisions = orderCitingDecisions({
+    leading: optionalArray(leadingQuery.data),
+    pinLeading,
+    rest: loaded,
+  });
+  const listPending = isPending || (pinLeading && leadingQuery.isPending);
+  const snapshot = data?.pages.at(0)?.snapshot;
   return (
     <div className="flex flex-col gap-2">
-      <Input
-        aria-label={t("common.filter")}
-        className="h-7 text-xs"
-        onChange={(event) => setFilter(event.target.value)}
-        placeholder={t("statutes.citingDecisionsFilterPlaceholder")}
-        type="search"
-        value={filter}
-      />
-      {visible.length === 0 && (
+      <Form
+        className="flex flex-row flex-wrap items-center gap-2"
+        key={JSON.stringify(filters)}
+        onSubmit={(event) => {
+          event.preventDefault();
+          const fields = new FormData(event.currentTarget);
+          const court = fields.get("court");
+          const year = fields.get("year");
+          const yearValue =
+            typeof year === "string" && year !== "" ? Number(year) : undefined;
+          const outOfRange =
+            yearValue !== undefined &&
+            (!Number.isInteger(yearValue) ||
+              yearValue < PROVISION_CITING_FILTER_LIMITS.yearMin ||
+              yearValue > PROVISION_CITING_FILTER_LIMITS.yearMax);
+          setYearOutOfRange(outOfRange);
+          if (outOfRange) {
+            return;
+          }
+          onFiltersChange(
+            readProvisionCitingSearch({
+              citingCourt:
+                typeof court === "string" && court.trim() !== ""
+                  ? court
+                  : undefined,
+              citingYear: yearValue,
+              citingSort: filters.citingSort,
+            }),
+          );
+        }}
+      >
+        <Input
+          aria-label={t("common.court")}
+          className="min-w-24 flex-1"
+          size="sm"
+          defaultValue={filters.citingCourt ?? ""}
+          maxLength={PROVISION_CITING_FILTER_LIMITS.courtChars}
+          name="court"
+          placeholder={t("statutes.citingDecisionsCourtPlaceholder")}
+          type="search"
+        />
+        <NumberInput
+          allowOutOfRange
+          className="w-24"
+          defaultValue={filters.citingYear}
+          // A year, not a quantity: no thousands separator.
+          format={{ useGrouping: false }}
+          inputProps={{
+            "aria-describedby": yearOutOfRange ? yearErrorId : undefined,
+            "aria-invalid": yearOutOfRange || undefined,
+            "aria-label": t("statutes.citingDecisionsYear"),
+            placeholder: t("statutes.citingDecisionsYearPlaceholder"),
+          }}
+          max={PROVISION_CITING_FILTER_LIMITS.yearMax}
+          min={PROVISION_CITING_FILTER_LIMITS.yearMin}
+          name="year"
+          size="sm"
+          step={1}
+        />
+        <Button size="sm" type="submit" variant="ghost">
+          {t("common.filter")}
+        </Button>
+        <Select
+          onValueChange={(value) => {
+            if (value !== null) {
+              onFiltersChange({ ...filters, citingSort: value });
+            }
+          }}
+          value={filters.citingSort}
+        >
+          <SelectTrigger aria-label={t("common.sort")} size="sm">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="newest">
+              {t("statutes.citingDecisionsSortDate")}
+            </SelectItem>
+            <SelectItem value="citations">
+              {t("statutes.citingDecisionsSortCitations")}
+            </SelectItem>
+          </SelectContent>
+        </Select>
+      </Form>
+      {yearOutOfRange && (
+        <p
+          className="text-destructive-foreground text-xs"
+          id={yearErrorId}
+          role="alert"
+        >
+          {t("statutes.citingDecisionsYearOutOfRange", {
+            // Years, not quantities: no locale grouping.
+            max: String(PROVISION_CITING_FILTER_LIMITS.yearMax),
+            min: String(PROVISION_CITING_FILTER_LIMITS.yearMin),
+          })}
+        </p>
+      )}
+      {snapshot?.type === "capped" && (
+        <p className="text-muted-foreground text-xs">
+          {t("statutes.citingDecisionsSnapshotCapped", {
+            count: format.number(
+              new Set(loaded.map((decision) => decision.decisionId)).size,
+            ),
+            limit: format.number(snapshot.limit),
+          })}
+        </p>
+      )}
+      {listPending && <CitingDecisionsLoader />}
+      {isError && (
+        <ReadRetry
+          onRetry={() => detached(refetch(), "statutes.citing-decisions-retry")}
+        />
+      )}
+      {/* Without the leading read the list still stands; it only loses its
+          head until the retry brings it back. */}
+      {leadingQuery.isError && (
+        <ReadRetry
+          onRetry={() =>
+            detached(leadingQuery.refetch(), "statutes.leading-decisions-retry")
+          }
+        />
+      )}
+      {!listPending && !isError && decisions.length === 0 && (
         <p className="text-muted-foreground text-xs">{t("common.noResults")}</p>
       )}
-      <ul className="m-0 flex list-none flex-col p-0">
-        {visible.map((decision) => (
-          <li key={`${decision.decisionId}-${decision.spanStart}`}>
-            <CitingDecisionItem decision={decision} />
-          </li>
-        ))}
-      </ul>
+      {!listPending && !isError && decisions.length > 0 && (
+        <ul className="divide-border/60 m-0 flex list-none flex-col divide-y p-0">
+          {decisions.map(({ decision, leading }) => (
+            <li key={decision.decisionId}>
+              <CitingDecisionItem
+                currentVersionValidFrom={currentVersionValidFrom}
+                decision={decision}
+                leading={leading}
+              />
+            </li>
+          ))}
+        </ul>
+      )}
       {hasNextPage && (
         <Button
-          className="w-full"
           disabled={isFetchingNextPage}
-          onClick={() => {
-            detached(fetchNextPage(), "statutes.citing-decisions-more");
-          }}
+          disabledReason={t("common.loading")}
+          onClick={() =>
+            detached(fetchNextPage(), "statutes.citing-decisions-more")
+          }
           size="sm"
           variant="ghost"
         >
@@ -172,10 +250,26 @@ export const ProvisionCitingDecisions = ({
   );
 };
 
+const ReadRetry = ({ onRetry }: { onRetry: () => void }) => {
+  const t = useTranslations();
+  return (
+    <RecoverableErrorStatus
+      className="flex flex-col items-start gap-1"
+      message={t("errors.actionFailed")}
+      messageClassName="text-muted-foreground text-xs"
+      actions={
+        <Button onClick={onRetry} size="sm" variant="ghost">
+          {t("common.retry")}
+        </Button>
+      }
+    />
+  );
+};
+
 const CitingDecisionsLoader = () => (
-  <div className="flex flex-col gap-2">
+  <div aria-busy="true" className="flex flex-col gap-2">
     {[0, 1, 2].map((row) => (
-      <Skeleton className="h-8 w-full" key={row} />
+      <Skeleton className="h-12 w-full" key={row} />
     ))}
   </div>
 );

@@ -3,7 +3,10 @@ import { describe, expect, test } from "bun:test";
 
 import { toSafeId } from "@/api/lib/branded-types";
 
-import { resolveActionPeriodBudget } from "./action-period-budget";
+import {
+  PER_KIND_PERIOD_SCOPE,
+  resolveActionPeriodBudget,
+} from "./action-period-budget";
 
 const organizationId = toSafeId<"organization">("period_org");
 const identity = { actionKind: "chat.send", logicalPhaseId: "message:phase" };
@@ -16,6 +19,7 @@ const resolve = (
     organizationId,
     identity,
     policy,
+    scope: PER_KIND_PERIOD_SCOPE,
     nowMs,
     ...overrides,
   });
@@ -85,8 +89,38 @@ describe("UTC action period identity", () => {
       { policy: { periodMs: 86_400_000, limit: 0 } },
       { policy: { periodMs: 86_400_000, limit: Number.MAX_SAFE_INTEGER + 1 } },
       { nowMs: Number.NaN },
-    ]) {
+      { scope: { type: "pooled", poolKey: " " } },
+    ] as const) {
       expect(Result.isError(resolve(invalid))).toBe(true);
     }
+  });
+
+  test("a pooled scope shares one count across kinds and keeps phases apart", () => {
+    const pooled = { type: "pooled", poolKey: "free" } as const;
+    const chat = budgetOf(resolve({ scope: pooled }));
+    const workflow = budgetOf(
+      resolve({
+        scope: pooled,
+        identity: { ...identity, actionKind: "workflow.start" },
+      }),
+    );
+    expect(workflow.key).toBe(chat.key);
+    expect(workflow.phaseField).not.toBe(chat.phaseField);
+    expect(chat.scope).toEqual(pooled);
+    expect(budgetOf(resolve({ scope: pooled })).phaseField).toBe(
+      chat.phaseField,
+    );
+    expect(chat.key).not.toBe(budgetOf(resolve()).key);
+    expect(chat.key).not.toBe(
+      budgetOf(resolve({ scope: { type: "pooled", poolKey: "other" } })).key,
+    );
+    expect(chat.key).not.toBe(
+      budgetOf(
+        resolve({
+          scope: pooled,
+          organizationId: toSafeId<"organization">("other_org"),
+        }),
+      ).key,
+    );
   });
 });

@@ -8,6 +8,7 @@ import {
   readCliActionAdmissionRefusal,
   readHttpActionAdmissionRefusal,
 } from "./action-admission-refusal.js";
+import { resolveEffectiveGrants } from "./auth/command-scopes.js";
 import { checkServerCompatibility } from "./compatibility.js";
 import type { Context } from "./context.js";
 import {
@@ -35,7 +36,11 @@ const EXPECTED_EXITS = {
   action_period_exhausted: EXIT_CODES.usageLimited,
   action_concurrency_busy: EXIT_CODES.server,
   action_not_enabled: EXIT_CODES.featureDisabled,
-  action_admission_unavailable: EXIT_CODES.server,
+  limiter_store_unavailable: EXIT_CODES.server,
+  action_admission_configuration_incomplete: EXIT_CODES.server,
+  action_admission_org_state_unreadable: EXIT_CODES.server,
+  action_admission_lease_lost: EXIT_CODES.server,
+  action_feature_disabled: EXIT_CODES.featureDisabled,
 } as const satisfies Record<ActionAdmissionCode, number>;
 
 const render = async (
@@ -47,7 +52,9 @@ const render = async (
   let exit: NodeJS.Process["exitCode"];
   const fakeProcess = new Proxy(process, {
     get: (target, property) =>
-      property === "exitCode" ? exit : Reflect.get(target, property),
+      property === "exitCode"
+        ? exit
+        : (Reflect.get(target, property) as unknown),
     set: (_target, property, value) => {
       if (property !== "exitCode") {
         throw new TypeError(`Unexpected process mutation ${String(property)}`);
@@ -71,6 +78,7 @@ const render = async (
       configDir: "/tmp/stella-refusal",
       serverUrl: undefined,
       token: undefined,
+      effectiveGrants: resolveEffectiveGrants({}),
     },
     {
       stderr: (text) => {
@@ -96,6 +104,7 @@ for (const code of Object.keys(EXPECTED_EXITS)) {
     const refusal = {
       ...metadata,
       hint: "Server recovery guidance",
+      ...(code === "action_concurrency_busy" ? { retryAfterMs: 1250 } : {}),
       contactUrl: "https://example.invalid/contact",
     };
     const contract = ACTION_ADMISSION_REFUSALS[refusal.code];
@@ -107,6 +116,11 @@ for (const code of Object.keys(EXPECTED_EXITS)) {
     };
     expect(errorEnvelope({ error: fixture })).toMatchObject(refusal);
     expect(readCliActionAdmissionRefusal({ error: fixture })).toEqual(refusal);
+    if (refusal.retryAfterMs !== undefined) {
+      expect(actionAdmissionRefusalLines(refusal)).toContain(
+        `retry-after-ms: ${refusal.retryAfterMs}`,
+      );
+    }
     expect(
       await readHttpActionAdmissionRefusal(Response.json(fixture)),
     ).toEqual(refusal);
@@ -117,12 +131,20 @@ for (const code of Object.keys(EXPECTED_EXITS)) {
           message: fixture.message,
           hint: fixture.hint,
           contactUrl: fixture.contactUrl,
+          ...(fixture.retryAfterMs === undefined
+            ? {}
+            : { retryAfterMs: fixture.retryAfterMs }),
         }),
       ),
     ).toEqual(refusal);
     expect(resolveMcpErrorCodeExit(code)).toBe(EXPECTED_EXITS[refusal.code]);
     const tool = await render((context, writers) =>
-      renderToolError({ context, writers, result: toolResult }),
+      renderToolError({
+        context,
+        command: "matter list",
+        writers,
+        result: toolResult,
+      }),
     );
     expect(tool).toEqual({
       stderr: expected,
@@ -130,7 +152,13 @@ for (const code of Object.keys(EXPECTED_EXITS)) {
       exit: EXPECTED_EXITS[refusal.code],
     });
     const toolJson = await render((context, writers) =>
-      renderToolError({ context, writers, result: toolResult, format: "json" }),
+      renderToolError({
+        context,
+        command: "matter list",
+        writers,
+        result: toolResult,
+        format: "json",
+      }),
     );
     expect(JSON.parse(toolJson.stderr)).toEqual({ error: refusal });
     expect(toolJson.stdout).toBe("");
@@ -201,7 +229,6 @@ for (const code of Object.keys(EXPECTED_EXITS)) {
           env: { XDG_CACHE_HOME: `/tmp/stella-refusal-${Bun.randomUUIDv7()}` },
           force: true,
           fetchRaw: async () => Result.err(error),
-          fetchLatestVersion: async () => undefined,
         });
         expect(refresh).toEqual({ status: "admission-refused", refusal });
       }
@@ -209,6 +236,7 @@ for (const code of Object.keys(EXPECTED_EXITS)) {
         async (context, writers) =>
           await streamOrRenderAllPages({
             context,
+            command: "matter list",
             writers,
             format: "json",
             textPath: undefined,

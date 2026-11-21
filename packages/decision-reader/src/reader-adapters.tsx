@@ -1,0 +1,124 @@
+import { createContext, useContext } from "react";
+import type { ReactElement, ReactNode } from "react";
+
+import { panic } from "better-result";
+
+import type { ReaderCitationTreatment } from "./citation-treatment";
+import type { MissingBodyReason } from "./decision-body-state.logic";
+import type { ReaderMessageKey } from "./reader-message-types";
+import type {
+  CitationAnchorSource,
+  CitedDecisionTarget,
+  CitedProvisionTarget,
+  CitedStatuteTarget,
+  ProvisionViewPayload,
+} from "./reader-types";
+
+export type { ReaderMessageKey } from "./reader-message-types";
+
+export type ReaderMessages = Record<ReaderMessageKey, string> & {
+  sourceAttribution: (
+    source: string,
+    link: (children: ReactNode) => ReactNode,
+  ) => ReactNode;
+  dissentByline: (names: readonly string[]) => ReactNode;
+  provisionPartTextUnavailable: (provisionLabel: string) => string;
+  provisionEffectiveFrom: (date: string) => string;
+  formatValidityDate: (date: string | null) => string | null;
+  /** The cited act by number and title, e.g. `89/2012 Sb., Občanský zákoník`. */
+  provisionActText: (provision: ProvisionViewPayload) => string;
+  /** Labels joined the way the reader's language lists them, abbreviated. */
+  formatLabelList: (labels: readonly string[]) => string;
+};
+
+export type ReaderDecisionLinkProps = {
+  children: ReactNode;
+  className?: string | undefined;
+  decision: CitedDecisionTarget;
+  citation: CitationAnchorSource;
+  treatment: ReaderCitationTreatment;
+  /** The block whose text names the decision at this link. */
+  blockId: string;
+};
+
+export type ReaderStatuteLinkProps =
+  | { type: "statute"; children: ReactNode; target: CitedStatuteTarget }
+  | { type: "provision"; children: ReactNode; provision: CitedProvisionTarget }
+  | {
+      type: "provision-expansion";
+      /** The citations of one provision in one paragraph, sharing a card. */
+      citations: readonly CitedProvisionTarget[];
+    };
+
+export type ReaderPresentationAdapters = {
+  messages: ReaderMessages;
+  /**
+   * Renders a block's permalink mark with the host's Copy of the block's
+   * link: `copy` copies it, and `copied` is true while the mark confirms in
+   * place, so the host raises no success toast. Omit when the host cannot
+   * copy a permalink; the marks are hidden.
+   */
+  renderPermalinkCopy?:
+    | ((props: {
+        anchorId: string;
+        render: (state: PermalinkCopyState) => ReactElement;
+      }) => ReactElement)
+    | undefined;
+};
+
+export type PermalinkCopyState = { copied: boolean; copy: () => void };
+
+export type DecisionReaderAdapters = ReaderPresentationAdapters & {
+  renderDecisionLink: (props: ReaderDecisionLinkProps) => ReactElement;
+  renderStatuteLink: (props: ReaderStatuteLinkProps) => ReactElement;
+  renderBodyUnavailable: (props: {
+    decisionId: string;
+    reason: MissingBodyReason;
+  }) => ReactNode;
+  /** Opens the provision in the side panel beside the text. */
+  openProvision: (provision: ProvisionViewPayload) => void;
+  /** A router link to the provision on its act's own page. */
+  provisionPageLink: (provision: CitedProvisionTarget) => ReactElement;
+};
+
+const ReaderPresentationContext =
+  createContext<ReaderPresentationAdapters | null>(null);
+
+export const ReaderPresentationProvider = ({
+  adapters,
+  children,
+}: {
+  adapters: ReaderPresentationAdapters;
+  children: ReactNode;
+}) => (
+  <ReaderPresentationContext value={adapters}>
+    {children}
+  </ReaderPresentationContext>
+);
+
+export const useReaderPresentation = (): ReaderPresentationAdapters =>
+  useContext(ReaderPresentationContext) ??
+  panic("ReaderPresentationProvider is required");
+
+const ReaderAdaptersContext = createContext<DecisionReaderAdapters | null>(
+  null,
+);
+
+export const DecisionReaderProvider = ({
+  adapters,
+  children,
+}: {
+  adapters: DecisionReaderAdapters;
+  children: ReactNode;
+}) => (
+  <ReaderPresentationProvider adapters={adapters}>
+    <ReaderAdaptersContext value={adapters}>{children}</ReaderAdaptersContext>
+  </ReaderPresentationProvider>
+);
+
+export const useReaderAdapters = (): DecisionReaderAdapters =>
+  useContext(ReaderAdaptersContext) ??
+  panic("DecisionReaderProvider is required");
+
+export const useReaderMessages = (): ReaderMessages =>
+  useReaderPresentation().messages;

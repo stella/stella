@@ -18,10 +18,6 @@ import {
 import { isElement, removeBlockUnit, W_NS } from "./ooxml";
 import type { RichPatchValue } from "./types";
 
-// Canonical pattern from @stll/template-conditions (markers.ts) — the single
-// source of truth shared with discover-placeholders, folio, and the web preview.
-export const PLACEHOLDER_RE = placeholderPattern();
-
 /** One substitutable marker in a paragraph's text: where it sits and which
  *  values-map key it fills from. Reading substitution targets through the
  *  grammar's scanner is what lets `{{ clause("X") }}` and `{{ path | number }}`

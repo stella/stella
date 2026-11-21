@@ -5,6 +5,7 @@ import {
   ENTITIES_PER_WORKSPACE_MAX,
   PROPERTIES_PER_WORKSPACE_MAX,
 } from "@stll/api-contract";
+import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 import { DiscordLogoIcon, GitHubLogoIcon } from "@stll/ui/brand-icons";
 import { Button } from "@stll/ui/button";
 import { BookTextIcon, MailIcon } from "@stll/ui/icons";
@@ -17,6 +18,7 @@ import {
   SheetTitle,
 } from "@stll/ui/sheet";
 
+import { RecoverableErrorStatus } from "@/components/recoverable-error-status";
 import { isGuideTourAvailable } from "@/features/guides/guide-availability";
 import {
   GuideChecklist,
@@ -40,7 +42,6 @@ import {
   TECHNICAL_DOCS_URL,
 } from "@/lib/consts";
 import { detached } from "@/lib/detached";
-import { sanitizeHref } from "@/lib/sanitize-href";
 import { entitySummariesCountOptions } from "@/lib/workspaces/queries/entities";
 import { propertiesOptions } from "@/lib/workspaces/queries/properties";
 import { viewsOptions } from "@/lib/workspaces/queries/views";
@@ -178,31 +179,34 @@ export const GuideHelpDrawer = ({
         </SheetHeader>
         <SheetPanel>
           {availabilityFailed && (
-            <div className="mb-3 flex flex-col items-start gap-1" role="alert">
-              <p className="text-muted-foreground text-sm">
-                {t("errors.actionFailed")}
-              </p>
-              <Button
-                disabled={availabilityRetrying}
-                onClick={() => {
-                  if (workspaceList.status === "failed") {
-                    workspaceList.retry();
-                  }
-                  detached(
-                    Promise.all(
-                      failedAvailabilityQueries.map(async (query) =>
-                        query.refetch(),
+            <RecoverableErrorStatus
+              className="mb-3 flex flex-col items-start gap-1"
+              message={t("errors.actionFailed")}
+              messageClassName="text-muted-foreground text-sm"
+              actions={
+                <Button
+                  disabled={availabilityRetrying}
+                  disabledReason={t("common.retrying")}
+                  onClick={() => {
+                    if (workspaceList.status === "failed") {
+                      workspaceList.retry();
+                    }
+                    detached(
+                      Promise.all(
+                        failedAvailabilityQueries.map(async (query) =>
+                          query.refetch(),
+                        ),
                       ),
-                    ),
-                    "guides.availability-retry",
-                  );
-                }}
-                size="sm"
-                variant="ghost"
-              >
-                {t("common.retry")}
-              </Button>
-            </div>
+                      "guides.availability-retry",
+                    );
+                  }}
+                  size="sm"
+                  variant="ghost"
+                >
+                  {t("common.retry")}
+                </Button>
+              }
+            />
           )}
           {availabilityPending ? (
             <GuideChecklistSkeleton tourCount={expectedTours.length} />

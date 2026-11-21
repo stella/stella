@@ -9,6 +9,7 @@ const INSERT_ONLY_OWNERS = [
   "handlers/properties/create.ts",
   "handlers/workspaces/create.ts",
   "handlers/workspaces/duplicate.ts",
+  "lib/properties/ensure-file-property.ts",
   "lib/views/template-properties.ts",
 ];
 const GUARDED_OWNERS = [

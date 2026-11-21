@@ -1,4 +1,4 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { and, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import type { PgAsyncDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
 
@@ -21,6 +21,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { remapNodePropertyIds } from "@/api/lib/conditions/ast-utils";
 import { PLAYBOOK_RUN_FAILURE_CODE } from "@/api/lib/document-review/playbook-run-refusal";
 import { LIMITS } from "@/api/lib/limits";
+import { requireComputedColumnInputs } from "@/api/lib/properties/computed-column-input";
 import { createDefaultTool } from "@/api/lib/properties/create-schema";
 import { deletePlaybookColumns } from "@/api/lib/properties/delete-playbook-columns";
 import { propertyKindsForTool } from "@/api/lib/properties/property-kinds";
@@ -159,7 +160,7 @@ export const resolveDocTypeClassifier = async (
 // its classified type matches. Returns null (ungated, legacy behavior) when the
 // scope's type slug is unknown for the org or the workspace has no matching
 // single-select AI classifier.
-export const resolveDocTypeGate = async ({
+const resolveDocTypeGate = async ({
   tx,
   workspaceId,
   organizationId,
@@ -239,7 +240,7 @@ export const resolveScopedGate = async ({
       status: 400,
       code: PLAYBOOK_RUN_FAILURE_CODE.SCOPE_UNRESOLVED,
       retryable: false,
-      hint: "Configure a matching Document Type classifier or change the playbook document-type scope before running it.",
+      hint: "Configure a matching Document Type classifier, or change the playbook document-type scope before running it. An approved playbook runs on its approved scope until it is approved again.",
       message:
         "This playbook is scoped to a document type, but the workspace has no matching Document Type classifier to gate on.",
     };
@@ -354,8 +355,6 @@ export const materializePlaybookRun = async ({
   if (!systemFileProperty || systemFileProperty.content.type !== "file") {
     panic("Workspace system file property is missing or not a file column");
   }
-  const filePropertyId = systemFileProperty.id;
-
   const sourceIds = enabledPositions.map((position) => position.sourceId);
   const owned = await tx
     .select({
@@ -448,15 +447,22 @@ export const materializePlaybookRun = async ({
     });
     materializedPropertyIds.push(askId);
 
-    // Wire the AI ASK column to the file column so the extraction batch
-    // receives the document as input (see systemFileProperty above).
     if (askTool.type === "ai-model") {
-      dependencyRows.push({
-        workspaceId,
-        propertyId: askId,
-        dependsOnPropertyId: filePropertyId,
-        condition: null,
+      const inputs = requireComputedColumnInputs({
+        candidates: [systemFileProperty],
+        inputs: [],
       });
+      if (Result.isError(inputs)) {
+        panic(inputs.error.message);
+      }
+      dependencyRows.push(
+        ...inputs.value.map(({ dependsOnPropertyId, condition }) => ({
+          workspaceId,
+          propertyId: askId,
+          dependsOnPropertyId,
+          condition,
+        })),
+      );
     }
 
     // Gate the ASK column on the document-type classifier so a non-matching

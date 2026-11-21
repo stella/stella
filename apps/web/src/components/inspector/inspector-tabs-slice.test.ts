@@ -2,7 +2,10 @@ import { describe, expect, test } from "bun:test";
 import { createStore } from "zustand";
 import { immer } from "zustand/middleware/immer";
 
-import { INSPECTOR_PANE_INTENT } from "@/components/inspector/inspector-store-types";
+import {
+  INSPECTOR_FOCUS_INTENT,
+  INSPECTOR_PANE_INTENT,
+} from "@/components/inspector/inspector-store-types";
 import type {
   InspectorTab,
   InspectorTabsStore,
@@ -99,7 +102,7 @@ describe("closing deleted inspector entities", () => {
 
 const createMinimizedStore = () => {
   const store = createStore<InspectorTabsStore>()(
-    immer((set) => createInspectorTabsSlice(set)),
+    immer((set, get) => createInspectorTabsSlice(set, get)),
   );
   store.setState({ minimized: true });
   return store;
@@ -144,6 +147,7 @@ describe("opening a tab without taking the pane", () => {
       id: chatTabId,
       label: "Decision chat",
       pane: INSPECTOR_PANE_INTENT.keep,
+      focus: INSPECTOR_FOCUS_INTENT.claim,
     });
 
     const state = store.getState();
@@ -155,8 +159,102 @@ describe("opening a tab without taking the pane", () => {
   test("openChat expands the pane by default", () => {
     const store = createMinimizedStore();
 
-    store.getState().openChat({ id: chatTabId });
+    store
+      .getState()
+      .openChat({ id: chatTabId, focus: INSPECTOR_FOCUS_INTENT.claim });
 
     expect(store.getState().minimized).toBe(false);
+  });
+});
+
+const createStoreWithActiveTab = () => {
+  const store = createStore<InspectorTabsStore>()(
+    immer((set, get) => createInspectorTabsSlice(set, get)),
+  );
+  store.getState().openChat({
+    id: chatTabId,
+    label: "The reader's chat",
+    focus: INSPECTOR_FOCUS_INTENT.claim,
+  });
+  return store;
+};
+
+const skillBody = {
+  content: "Instructions",
+  label: "SKILL.md",
+  mimeType: "text/markdown",
+  origin: "authored" as const,
+  resourcePath: "SKILL.md",
+  skillId: "agentSkill_1",
+  skillName: "review",
+  target: "body" as const,
+};
+const otherChatId = toChatThreadId("chat-2");
+
+describe("opening a tab with a focus intent", () => {
+  test("ifIdle adds the tab behind the active one and leaves it in front", () => {
+    const store = createStoreWithActiveTab();
+    const seq = store.getState().activationSeq;
+
+    store.getState().openSkillResourceTab({
+      ...skillBody,
+      focus: INSPECTOR_FOCUS_INTENT.ifIdle,
+    });
+    store.getState().openChat({
+      id: otherChatId,
+      focus: INSPECTOR_FOCUS_INTENT.ifIdle,
+    });
+
+    const state = store.getState();
+    expect(state.activeId).toBe(chatTabId);
+    expect(state.activationSeq).toBe(seq);
+    expect(state.tabs.map((tab) => tab.id)).toEqual([
+      chatTabId,
+      expect.stringContaining("SKILL.md"),
+      otherChatId,
+    ]);
+  });
+
+  test("ifIdle brings the tab forward when no tab is active", () => {
+    const store = createMinimizedStore();
+
+    store.getState().openSkillResourceTab({
+      ...skillBody,
+      focus: INSPECTOR_FOCUS_INTENT.ifIdle,
+    });
+
+    const state = store.getState();
+    expect(state.activeId).toEqual(expect.stringContaining("SKILL.md"));
+    expect(state.minimized).toBe(false);
+  });
+
+  test("ifIdle treats an active id with no tab behind it as idle", () => {
+    const store = createMinimizedStore();
+    store.setState({ activeId: "closed-elsewhere" });
+
+    store.getState().openChat({
+      id: otherChatId,
+      focus: INSPECTOR_FOCUS_INTENT.ifIdle,
+    });
+
+    expect(store.getState().activeId).toBe(otherChatId);
+  });
+
+  test("claim always brings the tab forward", () => {
+    const store = createStoreWithActiveTab();
+
+    store.getState().openSkillResourceTab({
+      ...skillBody,
+      focus: INSPECTOR_FOCUS_INTENT.claim,
+    });
+    expect(store.getState().activeId).toEqual(
+      expect.stringContaining("SKILL.md"),
+    );
+
+    store.getState().openChat({
+      id: otherChatId,
+      focus: INSPECTOR_FOCUS_INTENT.claim,
+    });
+    expect(store.getState().activeId).toBe(otherChatId);
   });
 });

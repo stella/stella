@@ -1,5 +1,4 @@
-import Elysia from "elysia";
-
+import bulkDeleteContacts from "@/api/handlers/contacts/bulk/delete";
 import businessRegistriesCheck from "@/api/handlers/contacts/business-registries/check";
 import businessRegistriesLookup from "@/api/handlers/contacts/business-registries/lookup";
 import createContact from "@/api/handlers/contacts/create";
@@ -13,81 +12,39 @@ import previewContactImport from "@/api/handlers/contacts/import-preview";
 import validateContactImport from "@/api/handlers/contacts/import-validate";
 import readContacts from "@/api/handlers/contacts/list";
 import presignProcuracao from "@/api/handlers/contacts/presign-procuracao";
+import listSanctionsEvents from "@/api/handlers/contacts/sanctions/events/list";
+import contactSanctions from "@/api/handlers/contacts/sanctions/get";
+import listSanctionsMatches from "@/api/handlers/contacts/sanctions/matches/list";
+import updateSanctionsMonitoring from "@/api/handlers/contacts/sanctions/monitoring/update";
+import reviewSanctions from "@/api/handlers/contacts/sanctions/reviews/update";
 import searchContacts from "@/api/handlers/contacts/search";
 import updateContactById from "@/api/handlers/contacts/update";
-import { authMacro, permissionMacro } from "@/api/lib/auth";
+import { routes } from "@/api/http/route";
 
-const contactIdParams = readContactById.config.params;
-
-export const contactsRoute = new Elysia({ prefix: "/contacts" })
-  .use(authMacro)
-  .use(permissionMacro)
-  .guard({
-    validateAuth: true,
-  })
-  .get("/", readContacts.handler, {
-    permissions: readContacts.config.permissions,
-    query: readContacts.config.query,
-  })
-  .get("/search", searchContacts.handler, {
-    permissions: searchContacts.config.permissions,
-    query: searchContacts.config.query,
-  })
-  .get("/business-registries", businessRegistriesLookup.handler, {
-    permissions: businessRegistriesLookup.config.permissions,
-    query: businessRegistriesLookup.config.query,
-  })
-  .post("/business-registries/checks", businessRegistriesCheck.handler, {
-    body: businessRegistriesCheck.config.body,
-    permissions: businessRegistriesCheck.config.permissions,
-  })
-  .get("/export", exportContacts.handler, {
-    permissions: exportContacts.config.permissions,
-    query: exportContacts.config.query,
-  })
-  .post("/import/inspect", inspectContactImport.handler, {
-    body: inspectContactImport.config.body,
-    permissions: inspectContactImport.config.permissions,
-  })
-  .post("/import/preview", previewContactImport.handler, {
-    body: previewContactImport.config.body,
-    permissions: previewContactImport.config.permissions,
-  })
-  .post("/import/validate", validateContactImport.handler, {
-    body: validateContactImport.config.body,
-    permissions: validateContactImport.config.permissions,
-  })
-  .put("/", createContact.handler, {
-    body: createContact.config.body,
-    permissions: createContact.config.permissions,
-  })
-  .put("/import", importContacts.handler, {
-    body: importContacts.config.body,
-    permissions: importContacts.config.permissions,
-  })
-  .post("/procuracao-upload", presignProcuracao.handler, {
-    body: presignProcuracao.config.body,
-    permissions: presignProcuracao.config.permissions,
-  })
-  .post("/extract-from-procuracao", extractProcuracao.handler, {
-    body: extractProcuracao.config.body,
-    permissions: extractProcuracao.config.permissions,
-  })
-  .group(
-    "/:contactId",
-    {
-      params: contactIdParams,
+// Every `/:contactId` route declares and validates the id in its own config.
+export const contactsRoute = routes(
+  {
+    "/": { DELETE: bulkDeleteContacts, GET: readContacts, PUT: createContact },
+    "/sanctions/matches": { GET: listSanctionsMatches },
+    "/sanctions/events": { GET: listSanctionsEvents },
+    "/search": { GET: searchContacts },
+    "/business-registries": { GET: businessRegistriesLookup },
+    "/business-registries/checks": { POST: businessRegistriesCheck },
+    "/export": { GET: exportContacts },
+    "/import/inspect": { POST: inspectContactImport },
+    "/import/preview": { POST: previewContactImport },
+    "/import/validate": { POST: validateContactImport },
+    "/import": { PUT: importContacts },
+    "/procuracao-upload": { POST: presignProcuracao },
+    "/extract-from-procuracao": { POST: extractProcuracao },
+    "/:contactId": {
+      GET: readContactById,
+      POST: updateContactById,
+      DELETE: deleteContactById,
     },
-    (app) =>
-      app
-        .get("/", readContactById.handler, {
-          permissions: readContactById.config.permissions,
-        })
-        .post("/", updateContactById.handler, {
-          body: updateContactById.config.body,
-          permissions: updateContactById.config.permissions,
-        })
-        .delete("/", deleteContactById.handler, {
-          permissions: deleteContactById.config.permissions,
-        }),
-  );
+    "/:contactId/sanctions": { GET: contactSanctions },
+    "/:contactId/sanctions/reviews": { POST: reviewSanctions },
+    "/:contactId/sanctions/monitoring": { POST: updateSanctionsMonitoring },
+  },
+  { prefix: "/contacts" },
+);

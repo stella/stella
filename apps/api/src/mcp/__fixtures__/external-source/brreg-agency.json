@@ -1,0 +1,77 @@
+{
+  "_links": {
+    "self": {
+      "href": "https://example.com/registry/123456785"
+    },
+    "overordnetEnhet": {
+      "href": "https://example.com/registry/123456785"
+    }
+  },
+  "aktivitet": [
+    "Example"
+  ],
+  "antallAnsatte": 1,
+  "epostadresse": "agency@example.com",
+  "erIKonsern": false,
+  "forretningsadresse": {
+    "adresse": [
+      "Example Street 1"
+    ],
+    "kommune": "Example Municipality",
+    "kommunenummer": "0000",
+    "land": "Example Country",
+    "landkode": "NO",
+    "postnummer": "0000",
+    "poststed": "Example City"
+  },
+  "harRegistrertAntallAnsatte": false,
+  "historiskeNavn": [
+    {
+      "fraDato": "Example",
+      "navn": "Example",
+      "tilDato": "Example"
+    }
+  ],
+  "hjemmeside": "https://example.com",
+  "institusjonellSektorkode": {
+    "beskrivelse": "Example",
+    "kode": "Example"
+  },
+  "konkurs": false,
+  "maalform": "Example",
+  "naeringskode1": {
+    "beskrivelse": "Example",
+    "kode": "Example"
+  },
+  "navn": "Example Agency",
+  "organisasjonsform": {
+    "kode": "ORGL",
+    "beskrivelse": "Example organization"
+  },
+  "organisasjonsnummer": "123456785",
+  "overordnetEnhet": "123456785",
+  "paategninger": [],
+  "postadresse": {
+    "adresse": [
+      "Example Street 1"
+    ],
+    "kommune": "Example Municipality",
+    "kommunenummer": "0000",
+    "land": "Example Country",
+    "landkode": "NO",
+    "postnummer": "0000",
+    "poststed": "Example City"
+  },
+  "registreringsdatoAntallAnsatteEnhetsregisteret": "2000-01-01",
+  "registreringsdatoAntallAnsatteNAVAaregisteret": "2000-01-01",
+  "registreringsdatoEnhetsregisteret": "2000-01-01",
+  "registrertIForetaksregisteret": false,
+  "registrertIFrivillighetsregisteret": false,
+  "registrertIMvaregisteret": false,
+  "registrertIPartiregisteret": false,
+  "registrertIStiftelsesregisteret": false,
+  "respons_klasse": "Example",
+  "telefon": "00000000",
+  "underAvvikling": false,
+  "underTvangsavviklingEllerTvangsopplosning": false
+}

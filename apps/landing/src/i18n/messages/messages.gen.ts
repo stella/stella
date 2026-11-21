@@ -18,32 +18,6 @@ type Messages = {
     "getCli": "Get the CLI";
     "startFree": "Start free";
   };
-  "demo": {
-    "addView": "Add view";
-    "askStella": "Ask stella";
-    "close": "Close";
-    "documentType": "Document type";
-    "documents": "Documents";
-    "dueDate": "Due date";
-    "files": "Files";
-    "filter": "Filter";
-    "matters": "Matters";
-    "notes": "Notes";
-    "overview": "Overview";
-    "sectionBody": "Captured directly from the running product. What you see here is what you use.";
-    "sectionLabel": "The actual product";
-    "sectionTitle": "stella, as it is.";
-    "sort": "Sort";
-    "source": "Source";
-    "sources": "Sources";
-    "status": "Status";
-    "statusActive": "Active";
-    "statusClosed": "Closed";
-    "statusInReview": "In review";
-    "statusOnHold": "On hold";
-    "table": "Table";
-    "todos": "Todos";
-  };
   "footer": {
     "agent": "AI agent";
     "anonymization": "Anonymization";
@@ -59,8 +33,8 @@ type Messages = {
     "privacy": "Privacy";
     "publicData": "Public data";
     "resources": "Resources";
-    "sourceCode": "Source code";
     "status": "Status";
+    "support": "Support";
     "tabularReview": "Tabular review";
     "tagline": "Open legal workspace for work that matters.";
     "templates": "Templates";
@@ -92,12 +66,23 @@ type Messages = {
   };
   "nav": {
     "aiFactSheet": "AI fact sheet";
-    "aiFactSheetBlurb": "stella in machine-readable form.";
-    "beta": "Beta";
     "blog": "Blog";
     "changelog": "Changelog";
     "chooseLanguage": "Choose a language";
     "docxEditor": "Standalone DOCX editor";
+    "featurePreviews": {
+      "documents": {
+        "comments": "Comments";
+      };
+      "matters": {
+        "done": "Done";
+        "inProgress": "In progress";
+        "open": "Open";
+      };
+      "research": {
+        "caseLaw": "Case law";
+      };
+    };
     "github": "stella on GitHub";
     "openMenu": "Open navigation";
     "pillars": {
@@ -139,7 +124,7 @@ type Messages = {
         "title": "Legal data, ready for your work.";
       };
       "tabular-review": {
-        "blurb": "Ask questions across a whole document set and get structured answers back as a table in the matter — sortable, filterable, and traceable to the source text. Built for due diligence, discovery, and research.";
+        "blurb": "Ask questions across a whole document set and get structured answers back as a table in the matter, sortable, filterable, and traceable to the source text. Built for due diligence, discovery, and research.";
         "discover": "Discover Tabular Review";
         "eyebrow": "Tabular Review";
         "title": "Turn a pile of documents into a table you can review.";
@@ -663,7 +648,7 @@ type Messages = {
           "question": "Where does the data come from?";
         };
         "1": {
-          "answer": "Two lists, both expanding. Connected registries already include ARES (Czechia), Companies House (UK), SEC EDGAR (US), KRS (Poland), PRH (Finland), and VIES (EU VAT). Beyond registries, official sources are connected jurisdiction by jurisdiction; Czechia, Spain, and Taiwan already have them, and the case-law reader lets you browse and filter by jurisdiction as more official sources are added.";
+          "answer": "The public case-law reader currently serves Czech decisions. Connected company registries include ARES (Czechia), Companies House (UK), SEC EDGAR (US), KRS (Poland), PRH (Finland), and VIES (EU VAT).";
           "question": "Which jurisdictions and registries are covered?";
         };
         "2": {
@@ -741,7 +726,7 @@ type Messages = {
           "title": "Built for scale";
         };
         "5": {
-          "body": "Take the table with you in standard formats — no lock-in on your own work product.";
+          "body": "Take the table with you in standard formats: no lock-in on your own work product.";
           "title": "Export anywhere";
         };
       };
@@ -765,7 +750,7 @@ type Messages = {
       "metaDescription": "Ask questions across a whole document set and get structured answers as a sortable, source-traceable table. Built for due diligence, discovery, and research.";
       "metaTitle": "Tabular document review for due diligence | stella";
       "quickAnswer": {
-        "answer": "You point Tabular Review at a set of documents in a matter and define columns as questions — for example 'governing law', 'termination notice period', or 'change-of-control clause'. stella extracts an answer for each document into a table you can sort, filter, and export, with every cell linked back to the passage it came from.";
+        "answer": "You point Tabular Review at a set of documents in a matter and define columns as questions, for example 'governing law', 'termination notice period', or 'change-of-control clause'. stella extracts an answer for each document into a table you can sort, filter, and export, with every cell linked back to the passage it came from.";
         "question": "How does Tabular Review work?";
       };
       "sections": {
@@ -887,6 +872,7 @@ type Messages = {
       };
     };
     "ui": {
+      "browseLaw": "Browse the public legal database";
       "capabilities": "Capabilities";
       "exploreMore": "Explore more";
       "faq": "FAQ";
@@ -926,8 +912,8 @@ type Messages = {
           "title": "Chat and knowledge tools";
         };
         "4": {
-          "body": "A desktop app acts as a local bridge for editing Office documents from stella.";
-          "title": "Desktop bridge";
+          "body": "Opens Office documents from stella in your local apps and saves edits back, and keeps a clipboard history that stays on your device.";
+          "title": "Desktop app";
         };
         "5": {
           "body": "Saved edits and uploads become document revisions, so the current file and its history stay together.";
@@ -986,9 +972,11 @@ type Messages = {
     "bringWorkspaceToFront": "Bring stella workspace to front";
     "controlBody": "stella is <gh>open-source</gh> legal software you can self-host: inspect the code, run it your way, and export everything in standard formats.";
     "controlTitle": "Keep control of your technology.";
-    "dataBody": "Case law and company registries from every jurisdiction you work in, loaded straight into the matter. Anonymization keeps identifying details away from the AI.";
+    "dataBody": "Read Czech case law with AI issue notes, highlights, underlines, lawyer comments and cited answers. Look up companies in connected official registries and reference the sources from a matter.";
+    "dataConstitutionalAlt": "Czech Constitutional Court decision IV.ÚS 1394/24 with numbered paragraphs, an AI issue note, a highlight and underline, a lawyer comment, and a chat with two questions and cited answers.";
     "dataEyebrow": "Legal data";
-    "dataMainAlt": "An official court decision open in stella";
+    "dataMainAlt": "Czech Supreme Court decision 27 Cdo 59/2022 with numbered paragraphs, an AI issue note, a highlight and underline, a lawyer comment, and a chat with two questions and cited answers.";
+    "dataSupremeAlt": "Czech Supreme Court decision 27 Cdo 1525/2025 with numbered paragraphs, an AI issue note, a highlight and underline, a lawyer comment, and a chat with two questions and cited answers.";
     "dataTitle": "Bring the law and the data with you.";
     "exploreAgent": "Explore AI agent";
     "exploreAnonymization": "Explore Anonymization";

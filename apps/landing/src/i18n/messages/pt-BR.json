@@ -15,32 +15,6 @@
     "getCli": "Obter a CLI",
     "startFree": "Começar grátis"
   },
-  "demo": {
-    "addView": "Adicionar visualização",
-    "askStella": "Perguntar à stella",
-    "close": "Fechar",
-    "documentType": "Tipo de documento",
-    "documents": "Documentos",
-    "dueDate": "Prazo",
-    "files": "Arquivos",
-    "filter": "Filtrar",
-    "matters": "Casos",
-    "notes": "Notas",
-    "overview": "Visão geral",
-    "sectionBody": "Capturado diretamente do produto em funcionamento. O que você vê aqui é o que você usa.",
-    "sectionLabel": "O produto real",
-    "sectionTitle": "stella, como ela é.",
-    "sort": "Ordenar",
-    "source": "Fonte",
-    "sources": "Fontes",
-    "status": "Status",
-    "statusActive": "Ativo",
-    "statusClosed": "Fechado",
-    "statusInReview": "Em revisão",
-    "statusOnHold": "Em espera",
-    "table": "Tabela",
-    "todos": "Tarefas"
-  },
   "footer": {
     "agent": "Agente de IA",
     "anonymization": "Anonimização",
@@ -56,8 +30,8 @@
     "privacy": "Privacidade",
     "publicData": "Dados públicos",
     "resources": "Recursos",
-    "sourceCode": "Código-fonte",
     "status": "Status",
+    "support": "Suporte",
     "tabularReview": "Revisão tabular",
     "tagline": "Espaço de trabalho jurídico aberto, para os casos que importam.",
     "templates": "Modelos",
@@ -89,12 +63,23 @@
   },
   "nav": {
     "aiFactSheet": "Ficha para IA",
-    "aiFactSheetBlurb": "stella em formato legível por máquinas.",
-    "beta": "Beta",
     "blog": "Blog",
     "changelog": "Novidades",
     "chooseLanguage": "Escolha um idioma",
     "docxEditor": "Editor DOCX independente",
+    "featurePreviews": {
+      "documents": {
+        "comments": "Comentários"
+      },
+      "matters": {
+        "done": "Concluído",
+        "inProgress": "Em andamento",
+        "open": "Aberta"
+      },
+      "research": {
+        "caseLaw": "Jurisprudência"
+      }
+    },
     "github": "stella no GitHub",
     "openMenu": "Abrir navegação",
     "pillars": {
@@ -660,7 +645,7 @@
           "question": "De onde vêm os dados?"
         },
         "1": {
-          "answer": "Duas listas, ambas em expansão. Os registros conectados já incluem ARES (Tchéquia), Companies House (Reino Unido), SEC EDGAR (EUA), KRS (Polônia), PRH (Finlândia) e VIES (IVA da UE). Além dos registros, as fontes oficiais são conectadas jurisdição por jurisdição; Tchéquia, Espanha e Taiwan, por exemplo, já têm fontes conectadas, e o leitor de jurisprudência foi feito para navegar e filtrar por jurisdição conforme novas fontes oficiais são adicionadas.",
+          "answer": "O leitor de jurisprudência pública oferece atualmente decisões tchecas. Os registros de empresas conectados incluem ARES (Tchéquia), Companies House (Reino Unido), SEC EDGAR (Estados Unidos), KRS (Polônia), PRH (Finlândia) e VIES (IVA da UE).",
           "question": "Quais jurisdições e registros estão cobertos?"
         },
         "2": {
@@ -884,6 +869,7 @@
       }
     },
     "ui": {
+      "browseLaw": "Explorar a base jurídica pública",
       "capabilities": "Funcionalidades",
       "exploreMore": "Explore mais",
       "faq": "Perguntas frequentes",
@@ -923,8 +909,8 @@
           "title": "Chat e ferramentas de conhecimento"
         },
         "4": {
-          "body": "Um aplicativo para desktop funciona como ponte local para editar documentos do Office a partir da stella.",
-          "title": "Ponte para o desktop"
+          "body": "Abre documentos do Office da stella nos aplicativos instalados no seu computador e salva as alterações de volta na stella. Também mantém um histórico da área de transferência que fica no seu dispositivo.",
+          "title": "Aplicativo para computador"
         },
         "5": {
           "body": "Edições salvas e arquivos enviados viram revisões do documento, então o arquivo atual e seu histórico ficam juntos.",
@@ -983,9 +969,11 @@
     "bringWorkspaceToFront": "Trazer o espaço de trabalho da stella para a frente",
     "controlBody": "A stella é um software jurídico de <gh>código aberto</gh> que você pode auto-hospedar: inspecione o código, rode do seu jeito e exporte tudo em formatos padrão.",
     "controlTitle": "Mantenha o controle da infraestrutura.",
-    "dataBody": "Jurisprudência e registros de empresas de todas as jurisdições em que você atua, carregados direto no caso. A anonimização mantém os dados identificadores longe da IA.",
+    "dataBody": "Leia jurisprudência tcheca com notas de IA sobre questões jurídicas, trechos destacados e sublinhados, comentários de um advogado e respostas com citações. Consulte empresas nos registros oficiais conectados e acesse as fontes a partir de um caso.",
+    "dataConstitutionalAlt": "Decisão do Tribunal Constitucional tcheco IV.ÚS 1394/24 com parágrafos numerados, uma nota de IA sobre a questão jurídica, um trecho destacado, um trecho sublinhado, um comentário de um advogado e uma conversa com duas perguntas e respostas com citações.",
     "dataEyebrow": "Dados jurídicos",
-    "dataMainAlt": "Uma decisão judicial oficial aberta na stella",
+    "dataMainAlt": "Decisão da Suprema Corte tcheca 27 Cdo 59/2022 com parágrafos numerados, uma nota de IA sobre a questão jurídica, um trecho destacado, um trecho sublinhado, um comentário de um advogado e uma conversa com duas perguntas e respostas com citações.",
+    "dataSupremeAlt": "Decisão da Suprema Corte tcheca 27 Cdo 1525/2025 com parágrafos numerados, uma nota de IA sobre a questão jurídica, um trecho destacado, um trecho sublinhado, um comentário de um advogado e uma conversa com duas perguntas e respostas com citações.",
     "dataTitle": "Jurisprudência e registros à mão.",
     "exploreAgent": "Explorar o agente de IA",
     "exploreAnonymization": "Explorar a anonimização",

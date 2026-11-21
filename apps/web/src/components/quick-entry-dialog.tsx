@@ -1,12 +1,13 @@
-import { Suspense, useId, useRef, useState } from "react";
+import { Suspense, useId, useState } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import {
   Dialog,
+  DialogFormState,
   DialogHeader,
   DialogPanel,
   DialogPopup,
@@ -19,11 +20,13 @@ import { ExpenseForm } from "@/components/billing/expense-form";
 import type { ExpenseFormValues } from "@/components/billing/expense-form";
 import { ManualTimeEntryForm } from "@/components/billing/manual-time-entry-form";
 import type { ManualTimeEntryValues } from "@/components/billing/manual-time-entry-form";
+import { isTimeEntryRateRequired } from "@/components/billing/time-entry-rate-error.logic";
 import { QuickEntryRefusal } from "@/components/quick-entry-refusal";
 import { emptyQuickEntryValues } from "@/components/quick-entry.logic";
 import { MatterCombobox } from "@/components/workspaces/matter-combobox";
 import type { MatterOption } from "@/components/workspaces/matter-combobox";
 import { usePermissions } from "@/hooks/use-permissions";
+import { useSingleFlight } from "@/hooks/use-single-flight";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { localISODate } from "@/lib/local-iso-date";
@@ -44,6 +47,9 @@ const QuickEntryDialog = () => {
   const t = useTranslations();
   const user = useAuthenticatedUser();
   const closeDialog = useQuickEntryStore((state) => state.closeDialog);
+  const finishClosing = useQuickEntryStore((state) => state.finishClosing);
+  const returnFocus = useQuickEntryStore((state) => state.returnFocus);
+  const isOpen = useQuickEntryStore((state) => state.dialog.status === "open");
   const canCreateExpense = usePermissions({ expense: ["create"] });
   const navigate = useNavigate();
   const client = useQueryClient();
@@ -55,9 +61,12 @@ const QuickEntryDialog = () => {
   );
   const createTime = useCreateTimeEntry();
   const createExpense = useCreateExpense();
-  const submitting = useRef(false);
+  const submitOnce = useSingleFlight();
   const matterId = useId();
   const [matter, setMatter] = useState<MatterOption | null>(null);
+  const [matterBaseline, setMatterBaseline] = useState<MatterOption | null>(
+    null,
+  );
   const [step, setStep] = useState<EntryStep>({
     type: "time",
     defaults: emptyQuickEntryValues(localISODate()),
@@ -70,10 +79,9 @@ const QuickEntryDialog = () => {
     values: ManualTimeEntryValues,
     action: SaveAction,
   ) => {
-    if (matter === null || step.type !== "time" || submitting.current) {
-      return;
+    if (matter === null || step.type !== "time") {
+      return undefined;
     }
-    submitting.current = true;
     setError(null);
     const result = await Result.tryPromise(async () =>
       createTime.mutateAsync({
@@ -82,10 +90,12 @@ const QuickEntryDialog = () => {
         timezoneId: user.timezoneId,
       }),
     );
-    submitting.current = false;
     if (Result.isError(result)) {
+      if (isTimeEntryRateRequired(result.error)) {
+        return Result.err(result.error);
+      }
       setError(result.error);
-      return;
+      return undefined;
     }
     detached(
       Promise.all([
@@ -111,32 +121,37 @@ const QuickEntryDialog = () => {
     switch (action) {
       case "close":
         closeDialog();
-        return;
+        return undefined;
       case "new":
+        setMatterBaseline(matter);
         setStep({
           type: "time",
           defaults: emptyQuickEntryValues(values.dateWorked),
           revision: step.revision + 1,
         });
-        return;
+        return undefined;
       case "expense":
+        setMatterBaseline(matter);
         setStep({ type: "expense", matter, date: values.dateWorked });
-        return;
+        return undefined;
+      default: {
+        action satisfies never;
+        return panic(`Unhandled save action: ${String(action)}`);
+      }
     }
   };
 
   const saveAndClose = async (values: ManualTimeEntryValues) =>
-    await saveTime(values, "close");
+    await submitOnce.run(async () => await saveTime(values, "close"));
   const saveAndNew = async (values: ManualTimeEntryValues) =>
-    await saveTime(values, "new");
+    await submitOnce.run(async () => await saveTime(values, "new"));
   const saveAndAddExpense = async (values: ManualTimeEntryValues) =>
-    await saveTime(values, "expense");
+    await submitOnce.run(async () => await saveTime(values, "expense"));
 
-  const saveExpense = async (values: ExpenseFormValues) => {
-    if (step.type !== "expense" || submitting.current) {
+  const createExpenseOnce = async (values: ExpenseFormValues) => {
+    if (step.type !== "expense") {
       return;
     }
-    submitting.current = true;
     setError(null);
     const result = await Result.tryPromise(async () =>
       createExpense.mutateAsync({
@@ -145,7 +160,6 @@ const QuickEntryDialog = () => {
         timezoneId: user.timezoneId,
       }),
     );
-    submitting.current = false;
     if (Result.isError(result)) {
       setError(result.error);
       return;
@@ -160,17 +174,28 @@ const QuickEntryDialog = () => {
     });
     closeDialog();
   };
+  const saveExpense = async (values: ExpenseFormValues) =>
+    await submitOnce.run(async () => await createExpenseOnce(values));
 
   return (
     <Dialog
-      open
+      onOpenChangeComplete={(open) => {
+        if (!open) {
+          finishClosing();
+        }
+      }}
+      open={isOpen}
       onOpenChange={(open) => {
         if (!open && !pending) {
           closeDialog();
         }
       }}
     >
-      <DialogPopup className="max-w-xl">
+      <DialogPopup className="max-w-xl" finalFocus={returnFocus}>
+        <DialogFormState
+          dirty={matter?.id !== matterBaseline?.id}
+          onDiscard={() => setMatter(matterBaseline)}
+        />
         <DialogHeader>
           <DialogTitle>
             {t(
@@ -191,8 +216,8 @@ const QuickEntryDialog = () => {
                 <Label htmlFor={matterId}>{t("common.matter")}</Label>
                 <MatterCombobox
                   activeOrganizationId={user.activeOrganizationId}
+                  userId={user.id}
                   id={matterId}
-                  order="recent"
                   onChange={(value) => {
                     setMatter(value);
                     setError(null);
@@ -210,6 +235,7 @@ const QuickEntryDialog = () => {
                 <ManualTimeEntryForm
                   key={`${matter.id}:${step.revision}`}
                   workspaceId={matter.id}
+                  userId={user.id}
                   defaultValues={step.defaults}
                   autofocusDuration
                   narrativeRequired={settings?.timeNarrativeRequired ?? false}

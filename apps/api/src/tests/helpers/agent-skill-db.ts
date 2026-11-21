@@ -1,6 +1,5 @@
 import { panic } from "better-result";
 import { desc, eq } from "drizzle-orm";
-import { ElysiaCustomStatusResponse } from "elysia/error";
 
 import type { roles } from "@stll/permissions";
 
@@ -8,11 +7,16 @@ import type { SafeDb } from "@/api/db/safe-db";
 import { agentSkillRevisions, agentSkills } from "@/api/db/schema";
 import type { AgentSkillOrigin, AgentSkillScope } from "@/api/db/schema";
 import { createSafeDb } from "@/api/db/scoped";
-import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
+import { isHttpStatusResponse } from "@/api/http/status";
+import type { AuditEvent } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
-import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
+import { auditRecorderDouble } from "@/api/tests/helpers/audit-recorder-double";
+import {
+  createTestHandlerContext,
+  NO_DB,
+} from "@/api/tests/helpers/handler-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
@@ -42,15 +46,15 @@ export const skillHandlerContext = <TContext>({
   userId,
   ...fields
 }: SkillHandlerContextOptions): TContext => {
-  const recordAuditEvent: AuditRecorder = async (_tx, events) => {
-    auditEvents.push(...(Array.isArray(events) ? events : [events]));
-    await Promise.resolve();
-  };
+  // Keeps the production delivery contract, so an audited download works.
+  const recordAuditEvent = auditRecorderDouble((events) => {
+    auditEvents.push(...events);
+  });
   return createTestHandlerContext<TContext>({
+    scopedDb: NO_DB,
     ...fields,
     memberRole: sessionMemberRole(role),
-    recordAuditEvent,
-    createAuditRecorder: () => recordAuditEvent,
+    audit: recordAuditEvent,
     safeDb: asTestRaw<SafeDb>(createSafeDb(testDb, [], organizationId, userId)),
     session: { activeOrganizationId: organizationId },
     user: { id: userId },
@@ -61,7 +65,7 @@ type HandlerFailure = { code: number; message: string };
 
 /** The status and message of a handler result, or null when it succeeded. */
 export const handlerFailure = (result: unknown): HandlerFailure | null => {
-  if (!(result instanceof ElysiaCustomStatusResponse)) {
+  if (!isHttpStatusResponse(result)) {
     return null;
   }
   const response: unknown = result.response;
@@ -72,7 +76,7 @@ export const handlerFailure = (result: unknown): HandlerFailure | null => {
     typeof response.message === "string"
       ? response.message
       : "";
-  return { code: Number(result.code), message };
+  return { code: result.code, message };
 };
 
 type InsertTestSkillOptions = {

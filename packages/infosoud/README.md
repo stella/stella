@@ -51,8 +51,8 @@ infosoud --courts --json
 
 ```ts
 import {
-  InfoSoudClient,
   formatSpisZnCanonical,
+  InfoSoudClient,
   parseSpisZn,
 } from "@stll/infosoud";
 

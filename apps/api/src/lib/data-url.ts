@@ -5,11 +5,11 @@ export class DataUrlError extends TaggedError("DataUrlError")<{
   cause?: unknown;
 }> {}
 
-export const DATA_URL_PAYLOAD_TOO_LARGE_MESSAGE =
+const DATA_URL_PAYLOAD_TOO_LARGE_MESSAGE =
   "Data URL payload exceeds size limit";
 
 export const toDataUrl = (bytes: Uint8Array, mimeType: string) =>
-  `data:${mimeType};base64,${Buffer.from(bytes).toString("base64")}`;
+  `data:${mimeType};base64,${Buffer.from(bytes).toBase64()}`;
 
 type ValidateDataUrlProps = {
   expectedMimeType?: string | undefined;
@@ -87,7 +87,7 @@ type ParseDataUrlProps = {
   url: string;
 };
 
-export type ParsedDataUrl = {
+type ParsedDataUrl = {
   bytes: Uint8Array;
   mimeType: string;
 };

@@ -13,9 +13,10 @@ import { detached } from "@/lib/detached";
 import type { ResolvedDocumentReference } from "@/lib/files/document-reference-queries";
 import { resolveFileDocumentReference } from "@/lib/files/document-reference-queries";
 import {
+  DUPLICATE_CHECK,
   REFERENCE_CHECK,
-  useCreateFileEntities,
-} from "@/lib/workspaces/mutations/use-create-file-entities";
+} from "@/lib/workspaces/mutations/create-file-entities-input.logic";
+import { useCreateFileEntities } from "@/lib/workspaces/mutations/use-create-file-entities";
 import { useUploadVersion } from "@/lib/workspaces/mutations/use-upload-version";
 import type { VersionOrNewFileDialogProps } from "@/routes/_protected.workspaces/$workspaceId/-components/version-or-new-file-dialog";
 import type { VersionOrNewFileChoice } from "@/routes/_protected.workspaces/$workspaceId/-components/version-or-new-file-dialog.logic";
@@ -50,10 +51,11 @@ type UseVersionOrNewFileDropResult = {
 };
 
 /**
- * Wires external file drops on a file row to the version-or-new resolution
- * flow. Returns the drop session state; the caller renders
- * `<VersionOrNewFileDialog>` from it. Disabled for folders, tasks, and
- * documents without a file.
+ * Wires external file drops on a row. A folder row uploads what was dropped
+ * into that folder. A file row runs the version-or-new resolution flow;
+ * the caller renders `<VersionOrNewFileDialog>` from the returned state.
+ * Disabled for tasks, read-only rows, and documents without a file, so those
+ * drops fall through to the surrounding view's drop zone.
  *
  * A dropped DOCX that left stella carries its own reference, so the dialog
  * asks the file which document it belongs to before falling back to comparing
@@ -78,11 +80,9 @@ export const useVersionOrNewFileDrop = ({
   const [, createFileEntities] = useCreateFileEntities(workspaceId);
 
   const file = getFirstFile(entity);
+  const isFolder = entity.kind === "folder";
   const canAcceptDrop =
-    entity.kind !== "folder" &&
-    entity.kind !== "task" &&
-    !entity.readOnly &&
-    file !== null;
+    !entity.readOnly && entity.kind !== "task" && (isFolder || file !== null);
 
   const resolveReference = async (dropped: File): Promise<void> => {
     const result = await Result.tryPromise(
@@ -96,7 +96,13 @@ export const useVersionOrNewFileDrop = ({
     if (Result.isError(result)) {
       // A failed lookup costs the offer to file this as a version, not the
       // upload: the dialog falls back to comparing extensions.
-      analytics.captureError(result.error);
+      analytics.captureError(result.error, {
+        fingerprintKey: "useVersionOrNewFileDrop.resolveReference:failure",
+        scope: {
+          type: "handler",
+          handlerId: "useVersionOrNewFileDrop.resolveReference:failure",
+        },
+      });
     }
 
     setDrop((current) =>
@@ -125,12 +131,23 @@ export const useVersionOrNewFileDrop = ({
   };
 
   const { isDropTarget } = useExternalFileDrop({
+    exceptionScope: {
+      type: "handler",
+      handlerId: "useVersionOrNewFileDrop.useExternalFileDrop",
+    },
     enabled: canAcceptDrop,
     externalRef: rowRef,
     onDrop: (files) => {
-      createFileEntities({ files, parentId: entity.parentId ?? null });
+      createFileEntities({
+        files,
+        parentId: isFolder ? entity.entityId : (entity.parentId ?? null),
+      });
     },
     onDropTree: (tree) => {
+      if (isFolder) {
+        createFileEntities({ tree, parentId: entity.entityId });
+        return;
+      }
       if (tree.directoryPaths.length === 0 && tree.files.length === 1) {
         const next = tree.files.at(0)?.file;
         if (next) {
@@ -163,8 +180,10 @@ export const useVersionOrNewFileDrop = ({
         createFileEntities({
           files: [drop.file],
           parentId: entity.parentId ?? null,
-          // This dialog just asked; the batch prompt must not ask again.
+          // This dialog just asked, and the user chose a new document: neither
+          // batch prompt may ask again, or confirming it would undo the choice.
           referenceCheck: REFERENCE_CHECK.skip,
+          duplicateCheck: DUPLICATE_CHECK.skip,
         });
         closeDialog();
         return;

@@ -20,15 +20,15 @@ export const WEB_SEARCH_FRESHNESS = [
   "any",
 ] as const;
 
-export type WebSearchFreshness = (typeof WEB_SEARCH_FRESHNESS)[number];
+type WebSearchFreshness = (typeof WEB_SEARCH_FRESHNESS)[number];
 
-export const WEB_SEARCH_PROVIDER_NAMES = ["tavily"] as const;
-export const URL_FETCHER_NAMES = ["jina"] as const;
+const WEB_SEARCH_PROVIDER_NAMES = ["tavily"] as const;
+const URL_FETCHER_NAMES = ["jina"] as const;
 
 export type WebSearchProviderName = (typeof WEB_SEARCH_PROVIDER_NAMES)[number];
 export type UrlFetcherName = (typeof URL_FETCHER_NAMES)[number];
 
-export const webSearchResultSchema = v.strictObject({
+const webSearchResultSchema = v.strictObject({
   id: v.string(),
   url: v.pipe(v.string(), v.url()),
   title: v.string(),

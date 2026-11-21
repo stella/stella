@@ -49,6 +49,9 @@ export const CHAT_ORACLE = {
   liveEqualsReload: "chat.live.equals-reload",
   /** (d) Every tool call and result appears exactly once, live and reloaded. */
   liveToolPartsOnce: "chat.live.tool-parts-once",
+  /** Subagent snapshots resume with updated messages, while terminal states
+   *  reject later active snapshots. */
+  liveSubagentLifecycle: "chat.live.subagent-lifecycle",
   /** The skills the composer offers in a chat are exactly the ones a send
    *  from that chat runs rather than names unavailable. */
   skillsMenuMatchesSend: "chat.skills.menu-matches-send",
@@ -62,7 +65,8 @@ export const CHAT_ORACLE = {
   /** Every request handed to a provider answers each tool call exactly once,
    *  right after the message making it, with no result for a call it does
    *  not hold; each signed thinking block stays, once and in order, first on
-   *  the message holding the calls it was produced with. */
+   *  the message holding the calls it was produced with; and each call's
+   *  arguments, where sent as text, are a JSON object. */
   providerTranscriptSettled: "chat.provider.transcript-settled",
   /** Every model request of a thread begins with the whole prompt of the
    *  one before it: its tools, system prompt and messages, in cache order
@@ -159,6 +163,18 @@ export const CHAT_ORACLE = {
    *  provider publishes and to the provider's documented rules the schema
    *  leaves out (`provider-request-schema.ts`). */
   providerWireRequestRules: "chat.provider-wire.request-rules",
+  // Reported by the two-way provider transcripts
+  // (`apps/api/src/handlers/chat/provider-wire-transcripts.integration.test.ts`).
+  /** Every request the send path makes to the provider is, normalized
+   *  (`provider-wire-transcript.ts`), the one the conversation's transcript
+   *  expects next; none is missing, and none comes after the transcript
+   *  ran out. */
+  providerWireOutbound: "chat.provider-wire.outbound",
+  // Reported by the tool-call end test
+  // (`apps/api/src/handlers/chat/tool-call-end-arguments.test.ts`).
+  /** A tool call's stored arguments are its normalized input, never the raw
+   *  wire string the provider streamed. */
+  providerWireToolArguments: "chat.provider-wire.tool-arguments",
 } as const;
 
 export type ChatOracleId = (typeof CHAT_ORACLE)[keyof typeof CHAT_ORACLE];

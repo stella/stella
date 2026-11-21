@@ -18,10 +18,54 @@
  * compiled package output must be scanned explicitly: node_modules is outside
  * Tailwind's default source detection. */
 @source "../../../../node_modules/@stll/folio-react/dist/**/*.js";
+/* Streamdown styles its own code blocks, tables and controls with utilities,
+ * for the same reason. scripts/check-tailwind-sources.ts fails when a
+ * dependency that ships class names has no @source here. */
+@source "../../../../node_modules/streamdown/dist/**/*.js";
 
 /* Resolved on the root element, where the theme and palette classes live,
  * because a subtree may re-point `--background` (the inspector's matter tint). */
 :root {
   --untinted-background: var(--background);
   --untinted-sidebar: var(--sidebar);
+}
+
+@source "../../../../packages/decision-reader/src/**/*.{ts,tsx}";
+
+/* The browser's selection blue is the loudest thing in a chat answer once the
+ * selection bar opens over it; a tint of the theme's own ink marks the words
+ * without shouting (the clause editor's selection uses the same mix). */
+[data-chat-message-id] ::selection {
+  background-color: color-mix(in srgb, var(--color-primary) 20%, transparent);
+}
+
+.auth-gradient {
+  background: linear-gradient(
+    to bottom,
+    var(--background) 40%,
+    var(--auth-gradient-end)
+  );
+}
+
+.pele {
+  --pele-bg: var(--background);
+  --pele-fg: var(--foreground);
+  --pele-muted: var(--muted-foreground);
+  --pele-line: var(--muted-foreground);
+  --pele-surface: color-mix(in oklab, var(--foreground) 6%, var(--background));
+  --pele-surface-alt: color-mix(
+    in oklab,
+    var(--foreground) 12%,
+    var(--background)
+  );
+  --pele-border: color-mix(in oklab, var(--foreground) 35%, var(--background));
+  --pele-accent: var(--chart-1);
+  --pele-series-1: var(--chart-1);
+  --pele-series-2: var(--chart-2);
+  --pele-series-3: var(--chart-3);
+  --pele-series-4: var(--chart-4);
+  --pele-series-5: var(--chart-5);
+  --pele-series-6: var(--chart-6);
+  --pele-series-7: var(--chart-7);
+  --pele-series-8: var(--chart-8);
 }

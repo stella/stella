@@ -8,6 +8,7 @@ import { createScopedDb } from "@/api/db/scoped";
 import { createSafeId } from "@/api/lib/branded-types";
 import { generateInboundAddressToken } from "@/api/lib/email/inbound/address";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import {
   getTestDb,
   releaseTestDb,
@@ -22,9 +23,9 @@ const workspaceB1 = createSafeId<"workspace">();
 const addressA1 = createSafeId<"matterInboundAddress">();
 const addressA2 = createSafeId<"matterInboundAddress">();
 const addressB1 = createSafeId<"matterInboundAddress">();
-const tokenA1 = generateInboundAddressToken();
-const tokenA2 = generateInboundAddressToken();
-const tokenB1 = generateInboundAddressToken();
+const tokenA1 = generateInboundAddressToken({ userId: null });
+const tokenA2 = generateInboundAddressToken({ userId: null });
+const tokenB1 = generateInboundAddressToken({ userId: null });
 const ownerRole = `inbound_token_owner_${Bun.randomUUIDv7().replaceAll("-", "")}`;
 
 let db: TestDatabase;
@@ -67,7 +68,7 @@ const ownerWrite = async (operation: "insert" | "update" | "delete") =>
           id: createSafeId<"matterInboundAddress">(),
           organizationId: organizationA,
           workspaceId: workspaceA1,
-          token: generateInboundAddressToken(),
+          token: generateInboundAddressToken({ userId: null }),
           revokedAt: new Date(),
         });
         return 1;
@@ -199,8 +200,8 @@ afterAll(async () => {
     await db
       .delete(workspaces)
       .where(eq(workspaces.organizationId, organizationB));
-    await db.delete(organization).where(eq(organization.id, organizationA));
-    await db.delete(organization).where(eq(organization.id, organizationB));
+    await deleteOrganizationsForTest(db, [organizationA]);
+    await deleteOrganizationsForTest(db, [organizationB]);
   } finally {
     await releaseTestDb();
   }

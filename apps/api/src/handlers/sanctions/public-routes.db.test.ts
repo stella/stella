@@ -1,13 +1,15 @@
-import { Value } from "@sinclair/typebox/value";
+// @api-test-heavy-db: retains a full-size 20,000-entry sanctions corpus.
 import { panic } from "better-result";
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, spyOn, test } from "bun:test";
 import { eq, getTableName, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
-import { createHash } from "node:crypto";
 import { Worker } from "node:worker_threads";
+import * as v from "valibot";
 
+import { chunk as chunkItems } from "@stll/concurrency/chunk";
 import { buildScreeningIndex, SANCTIONS_SOURCES } from "@stll/sanctions";
 import type { SanctionsEntry, SanctionsSource } from "@stll/sanctions";
+import { createSha256, sha256Hex as hashSha256Hex } from "@stll/sha256/node";
 
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -20,16 +22,17 @@ import {
 import { markRlsDatabase } from "@/api/db/scoped";
 import { createPublicSanctionsRoute } from "@/api/handlers/sanctions/public-routes";
 import { publicSanctionsResponseSchema } from "@/api/handlers/sanctions/search-response";
+import { createHttpApp } from "@/api/http/app";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { toSafeId } from "@/api/lib/branded-types";
 import { runEntityCheckShared } from "@/api/lib/business-registries/entity-checks";
 import type { CounterpartyCheckSubject } from "@/api/lib/business-registries/entity-checks";
 import { createSanctionsMatcherPool } from "@/api/lib/lists/sanctions/matcher-pool";
-import type {
-  SanctionsMatcherMessage,
-  SanctionsMatcherReply,
-} from "@/api/lib/lists/sanctions/matcher-protocol";
-import { createPublicSanctionsScreening } from "@/api/lib/lists/sanctions/public-screening";
+import type { SanctionsMatcherMessage } from "@/api/lib/lists/sanctions/matcher-protocol";
+import {
+  createPublicSanctionsScreening,
+  SANCTIONS_WARMING_RETRY_AFTER_SECONDS,
+} from "@/api/lib/lists/sanctions/public-screening";
 import { createSanctionsPublicReadDb } from "@/api/lib/lists/sanctions/read-db";
 import type { SanctionsPublicReadDb } from "@/api/lib/lists/sanctions/read-db";
 import {
@@ -44,7 +47,7 @@ import {
   SANCTIONS_SOURCE_CONFIG,
   sanctionsSourceIds,
 } from "@/api/lib/lists/sanctions/source-config";
-import { recordingMatcherWorker } from "@/api/lib/lists/sanctions/test-fixtures/recording-matcher-worker";
+import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
 import {
   InMemoryRateLimitContext,
   scopedGenerator,
@@ -53,8 +56,29 @@ import {
   installRecordingAnalytics,
   installRecordingLogger,
 } from "@/api/tests/helpers/recording-telemetry";
+import { serveForTest } from "@/api/tests/helpers/test-server";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
+
+/** The public sanctions route on a real port behind the error boundary. */
+const servePublicSanctions = (
+  options: Parameters<typeof createPublicSanctionsRoute>[0],
+) =>
+  serveForTest(
+    createHttpApp({
+      routes: createPublicSanctionsRoute(options),
+      middleware: [errorBoundary],
+    }),
+  );
+
+/** A public answer, checked against the route's own 200 schema. */
+const publicAnswer = (value: unknown) => {
+  const parsed = v.safeParse(publicSanctionsResponseSchema[200], value);
+  expect(parsed.issues).toBeUndefined();
+  return parsed.success
+    ? parsed.output
+    : panic("Public sanctions answer broke its schema");
+};
 
 const DB_TEST_TIMEOUT_MS = 120_000;
 const VERIFIED_AT = new Date("2026-09-20T08:00:00Z");
@@ -63,6 +87,10 @@ const STALE_NOW = new Date("2026-09-23T08:00:00Z");
 const MANY_MATCHES = SANCTIONS_MATCH_LIMIT + 5;
 const BENCHMARK_ENTRY_COUNT = 20_000;
 const INSERT_BATCH_SIZE = 100;
+const INCOMPLETE_SCAN_ENTRY_COUNT = 100;
+// Candidate traversal and alignment charge more than 80 work units per alias.
+const INCOMPLETE_SCAN_WORK_LIMIT = INCOMPLETE_SCAN_ENTRY_COUNT * 80;
+const INCOMPLETE_SCAN_NAME = "Bounded Scan Target";
 
 const pools = new Set<ReturnType<typeof createSanctionsMatcherPool>>();
 const benchmarkPool = () => {
@@ -80,8 +108,7 @@ const editionIds = new Map<
   ReturnType<typeof toSafeId<"sanctionsEdition">>
 >();
 
-const hash = (value: string) =>
-  createHash("sha256").update(value).digest("hex");
+const hash = (value: string) => hashSha256Hex(value);
 
 type EntryOptions = {
   source: SanctionsSource;
@@ -169,8 +196,7 @@ const seedEntries = async (
   source: SanctionsSource,
   entries: SanctionsEntry[],
 ) => {
-  for (let offset = 0; offset < entries.length; offset += INSERT_BATCH_SIZE) {
-    const batch = entries.slice(offset, offset + INSERT_BATCH_SIZE);
+  for (const batch of chunkItems(entries, INSERT_BATCH_SIZE)) {
     await db.insert(sanctionsEntryPayloads).values(
       batch.map((payload) => ({
         contentHash: hash(JSON.stringify(payload)),
@@ -271,6 +297,23 @@ const publicWireSubject = (subject: NameSubject) =>
         nationalityCodes: subject.nationalityCodes,
       };
 
+/** A cold public screening answers "warming"; settle its one background warmup. */
+const warmPublicScreen = async (
+  publicScreen: ReturnType<typeof createPublicSanctionsScreening>,
+  now: Date,
+) => {
+  const cold = (
+    await publicScreen({
+      db: publicDb,
+      now,
+      practiceJurisdictions: [],
+      subject: { type: "organization", name: "Warmup", identifiers: [] },
+    })
+  ).unwrap();
+  expect(cold.lists.some(({ reason }) => reason === "warming")).toBe(true);
+  await publicScreen.warmupSettled();
+};
+
 const assertParity = async ({
   subject,
   now = FRESH_NOW,
@@ -307,13 +350,17 @@ const assertParity = async ({
   const { kind, subject: checkedSubject, ...screening } = inProduct;
   expect(kind).toBe("sanctions");
   expect(checkedSubject.type).toBe(subject.type);
+  const publicScreen = createPublicSanctionsScreening({ pool: publicPool });
+  if (publicResponse === undefined) {
+    await warmPublicScreen(publicScreen, now);
+  }
   const analytics = installRecordingAnalytics();
   const logger = installRecordingLogger();
   const context = new InMemoryRateLimitContext();
-  const route = createPublicSanctionsRoute({
+  await using route = servePublicSanctions({
     db: publicDb,
     now,
-    screen: createPublicSanctionsScreening({ pool: publicPool }),
+    screen: publicScreen,
     rateLimitOptions: {
       context,
       generator: scopedGenerator("parity-test"),
@@ -325,7 +372,7 @@ const assertParity = async ({
   try {
     const response =
       publicResponse ??
-      (await route.handle(
+      (await route.fetch(
         new Request("http://localhost/sanctions/search", {
           method: "POST",
           headers: { "content-type": "application/json" },
@@ -333,13 +380,7 @@ const assertParity = async ({
         }),
       ));
     expect(response.status).toBe(200);
-    const body = Value.Decode(
-      publicSanctionsResponseSchema[200],
-      await response.json(),
-    );
-    expect([...Value.Errors(publicSanctionsResponseSchema[200], body)]).toEqual(
-      [],
-    );
+    const body = publicAnswer(await response.json());
     expect(JSON.stringify(body)).not.toContain("UnmatchedPrivateIdentityQxzv");
     if (publicResponse === undefined) {
       expect(JSON.stringify(analytics.events)).not.toContain(
@@ -353,6 +394,7 @@ const assertParity = async ({
     }
     expect(body).toEqual({
       ...screening,
+      retryAfterSeconds: null,
       lists: inProduct.lists.map((list) => ({
         ...list,
         classification: "informational",
@@ -382,16 +424,8 @@ const clearSubject = {
   companyId: null,
 } as const satisfies NameSubject;
 
-const exerciseColdWarmup = async (size: 1 | 2) => {
-  const firstEntered = Promise.withResolvers<undefined>();
-  const releaseFirst = Promise.withResolvers<undefined>();
-  const warmEntered = Promise.withResolvers<undefined>();
-  const releaseWarm = Promise.withResolvers<undefined>();
-  const warmCacheAccessed = Promise.withResolvers<undefined>();
-  const warmFinished = Promise.withResolvers<undefined>();
+const exerciseColdWarmup = async () => {
   const messages: SanctionsMatcherMessage[] = [];
-  const screenedSources = new Set<SanctionsSource>();
-  let reads = 0;
   class RecordingWorker extends Worker {
     constructor() {
       super(
@@ -400,16 +434,6 @@ const exerciseColdWarmup = async (size: 1 | 2) => {
           import.meta.url,
         ),
       );
-      this.on("message", (reply: SanctionsMatcherReply) => {
-        const message = messages.at(-1);
-        if (reply.status !== "screened" || message?.type !== "screen") {
-          return;
-        }
-        screenedSources.add(message.source);
-        if (message.source === sanctionsSourceIds().at(-1)) {
-          warmFinished.resolve(undefined);
-        }
-      });
     }
     override postMessage(...args: Parameters<Worker["postMessage"]>) {
       messages.push(asTestRaw<SanctionsMatcherMessage>(args[0]));
@@ -417,39 +441,14 @@ const exerciseColdWarmup = async (size: 1 | 2) => {
     }
   }
   const pool = createSanctionsMatcherPool({
-    size,
     deadlineMs: 250,
     createWorker: () => new RecordingWorker(),
   });
+  let reads = 0;
   const publicScreen = createPublicSanctionsScreening({
-    pool: {
-      close: pool.close,
-      run: async (operation, options) =>
-        await pool.run(
-          async (session) =>
-            await operation({
-              signal: session.signal,
-              match: session.match,
-              hasEdition: (source, editionId) => {
-                const cached = session.hasEdition(source, editionId);
-                if (options?.onSettled !== undefined && source === "eu") {
-                  warmCacheAccessed.resolve(undefined);
-                }
-                return cached;
-              },
-            }),
-          options,
-        ),
-    },
+    pool,
     loadEntries: async (options) => {
       reads += 1;
-      if (reads === 1) {
-        firstEntered.resolve(undefined);
-        await releaseFirst.promise;
-        return [];
-      }
-      warmEntered.resolve(undefined);
-      await releaseWarm.promise;
       return await loadEditionEntries(options);
     },
   });
@@ -464,36 +463,27 @@ const exerciseColdWarmup = async (size: 1 | 2) => {
       nationalityCodes: ["RU"],
     },
   } as const;
-  const missingProgress = Promise.withResolvers<never>();
-  const progressTimeout = setTimeout(
-    () =>
-      missingProgress.reject(
-        new TypeError("Background warming did not complete"),
-      ),
-    5000,
-  );
-  const first = publicScreen(props);
   try {
-    await Promise.race([firstEntered.promise, missingProgress.promise]);
-    const unavailable = (await first).unwrap();
-    expect(unavailable.status).toBe("unavailable");
+    const cold = (await publicScreen(props)).unwrap();
+    expect(cold.status).toBe("unavailable");
+    // Each list names the edition it is loading; none was screened.
     expect(
-      unavailable.lists.every(({ status }) => status === "unavailable"),
-    ).toBe(true);
-    if (size === 2) {
-      await Promise.race([warmCacheAccessed.promise, missingProgress.promise]);
-    }
-    releaseFirst.resolve(undefined);
-    await Promise.race([warmEntered.promise, missingProgress.promise]);
-    releaseWarm.resolve(undefined);
-    await Promise.race([warmFinished.promise, missingProgress.promise]);
-    expect([...screenedSources].toSorted()).toEqual(
-      sanctionsSourceIds().toSorted(),
+      cold.lists.map(({ source, status, reason, editionId }) => ({
+        source,
+        status,
+        reason,
+        editionId,
+      })),
+    ).toEqual(
+      cold.lists.map(({ source }) => ({
+        source,
+        status: "unavailable",
+        reason: "warming",
+        editionId: activeEdition(source),
+      })),
     );
-    await new Promise<void>((resolve) => {
-      setImmediate(resolve);
-    });
-    const warmedReads = reads;
+    await publicScreen.warmupSettled();
+    expect(reads).toBe(sanctionsSourceIds().length);
     const backgroundMessages = [...messages];
     const matched = (await publicScreen(props)).unwrap();
     expect(matched.status).toBe("possible-match");
@@ -504,13 +494,9 @@ const exerciseColdWarmup = async (size: 1 | 2) => {
     expect(matched.lists.find(({ source }) => source === "eu")?.editionId).toBe(
       activeEdition("eu"),
     );
-    expect(reads).toBe(warmedReads);
+    expect(reads).toBe(sanctionsSourceIds().length);
     return { messages: backgroundMessages, matched };
   } finally {
-    clearTimeout(progressTimeout);
-    releaseFirst.resolve(undefined);
-    releaseWarm.resolve(undefined);
-    await first;
     await pool.close();
   }
 };
@@ -520,9 +506,13 @@ describe("public sanctions search parity", () => {
     "a public reader grant failure does not poison signed-in screening",
     async () => {
       const context = new InMemoryRateLimitContext();
-      const route = createPublicSanctionsRoute({
+      const publicScreen = createPublicSanctionsScreening({
+        pool: benchmarkPool(),
+      });
+      await using route = servePublicSanctions({
         db: publicDb,
         now: FRESH_NOW,
+        screen: publicScreen,
         rateLimitOptions: {
           context,
           generator: scopedGenerator("failure-isolation-test"),
@@ -532,8 +522,8 @@ describe("public sanctions search parity", () => {
       });
       await db.execute(sql`REVOKE SELECT (content_hash, payload)
         ON sanctions_entry_payloads FROM stella_public_sanctions_reader`);
-      try {
-        const response = await route.handle(
+      const search = async () =>
+        await route.fetch(
           new Request("http://localhost/sanctions/search", {
             method: "POST",
             headers: { "content-type": "application/json" },
@@ -542,6 +532,11 @@ describe("public sanctions search parity", () => {
             }),
           }),
         );
+      try {
+        // The first answer only starts the background reads, which fail.
+        expect((await search()).status).toBe(200);
+        await publicScreen.warmupSettled();
+        const response = await search();
         expect(response.status).toBe(200);
         expect(await response.json()).toMatchObject({
           status: "unavailable",
@@ -887,19 +882,20 @@ describe("public sanctions search parity", () => {
         },
       });
       const pool = benchmarkPool();
+      const publicScreen = createPublicSanctionsScreening({
+        pool,
+        loadEntries: async (props) => {
+          loads += 1;
+          return await loadEditionEntries(props);
+        },
+      });
       const screen =
         engine === "index"
           ? async (props: Parameters<typeof screenSanctionsSubject>[0]) =>
               await screenSanctionsSubject({ ...props, indexCache: cache })
-          : createPublicSanctionsScreening({
-              pool,
-              loadEntries: async (props) => {
-                loads += 1;
-                return await loadEditionEntries(props);
-              },
-            });
+          : publicScreen;
       const context = new InMemoryRateLimitContext();
-      const route = createPublicSanctionsRoute({
+      await using route = servePublicSanctions({
         db: publicDb,
         now: FRESH_NOW,
         screen,
@@ -911,7 +907,7 @@ describe("public sanctions search parity", () => {
         },
       });
       const search = async (firstName: string, lastName: string) => {
-        const response = await route.handle(
+        const response = await route.fetch(
           new Request("http://localhost/sanctions/search", {
             method: "POST",
             headers: { "content-type": "application/json" },
@@ -921,13 +917,7 @@ describe("public sanctions search parity", () => {
           }),
         );
         expect(response.status).toBe(200);
-        const body = Value.Decode(
-          publicSanctionsResponseSchema[200],
-          await response.json(),
-        );
-        expect([
-          ...Value.Errors(publicSanctionsResponseSchema[200], body),
-        ]).toEqual([]);
+        const body = publicAnswer(await response.json());
         return body;
       };
       const id = toSafeId<"sanctionsEdition">(Bun.randomUUIDv7());
@@ -944,8 +934,22 @@ describe("public sanctions search parity", () => {
               : {},
         }),
       );
+      // The worker answers "warming" until its background load of a new edition settles.
+      const awaitWarmup = async () => {
+        if (engine === "index") {
+          return;
+        }
+        const warming = await search("Ivan", "Sidorov");
+        expect(warming.status).toBe("unavailable");
+        expect(warming.retryAfterSeconds).toBe(
+          SANCTIONS_WARMING_RETRY_AFTER_SECONDS,
+        );
+        await publicScreen.warmupSettled();
+      };
       try {
+        await awaitWarmup();
         const initial = await search("Ivan", "Sidorov");
+        expect(initial.retryAfterSeconds).toBeNull();
         expect(initial.status).toBe("possible-match");
         expect(
           (
@@ -985,6 +989,7 @@ describe("public sanctions search parity", () => {
           .set({ activeEditionId: id })
           .where(eq(sanctionsSources.id, "eu"));
         // The same mounted route and cache receive no refresh call or notification.
+        await awaitWarmup();
         const oldPerson = await search("Ivan", "Sidorov");
         expect(oldPerson.status).toBe("clear");
         expect(
@@ -1034,33 +1039,28 @@ describe("public sanctions search parity", () => {
     DB_TEST_TIMEOUT_MS,
   );
 
-  test.each([1, 2] as const)(
-    "cold deadline warms real indexes and the next public request matches (size %s)",
-    async (size) => {
-      await exerciseColdWarmup(size);
+  test(
+    "a cold search answers warming and one background warmup readies every list",
+    async () => {
+      await exerciseColdWarmup();
     },
     DB_TEST_TIMEOUT_MS,
   );
 
-  test.each([1, 2] as const)(
-    "deadline warmup never reuses the identity query (size %s)",
-    async (size) => {
-      const { messages, matched } = await exerciseColdWarmup(size);
-      const screens = messages.filter((message) => message.type === "screen");
-      expect(screens.map(({ source }) => source).toSorted()).toEqual(
-        sanctionsSourceIds().toSorted(),
-      );
-      for (const message of screens) {
-        expect(message.query).toEqual({
-          name: "Sanctions Cache Warmup",
-          nameSource: "free-text",
-          entityType: "organisation",
-          identifiers: [],
-        });
-        expect(JSON.stringify(message.query)).not.toContain("Ivan");
-        expect(JSON.stringify(message.query)).not.toContain("1960");
-        expect(JSON.stringify(message.query)).not.toContain("RU");
-      }
+  test(
+    "the background warmup sends the matcher list entries only, never the query",
+    async () => {
+      const { messages, matched } = await exerciseColdWarmup();
+      expect(messages.length).toBeGreaterThan(0);
+      expect(
+        messages.filter(({ type }) => type !== "entries" && type !== "index"),
+      ).toEqual([]);
+      expect(
+        messages
+          .filter((message) => message.type === "index")
+          .map(({ source }) => source)
+          .toSorted(),
+      ).toEqual(sanctionsSourceIds().toSorted());
       expect(
         matched.lists
           .find(({ source }) => source === "eu")
@@ -1117,7 +1117,7 @@ describe("public sanctions search parity", () => {
           },
         }),
       );
-      const partialAliases = Array.from({ length: 100 }, (_, index) =>
+      const completeAliases = Array.from({ length: 100 }, (_, index) =>
         entry({
           source: "eu",
           sourceId: `partial-${index}`,
@@ -1127,7 +1127,20 @@ describe("public sanctions search parity", () => {
           },
         }),
       );
-      await seedEntries("eu", [...costly, ...partialAliases]);
+      const incompleteScanAliases = Array.from(
+        { length: INCOMPLETE_SCAN_ENTRY_COUNT },
+        (_, index) =>
+          entry({
+            source: "ch",
+            sourceId: `incomplete-${index}`,
+            overrides: {
+              entityType: "person",
+              names: [{ name: INCOMPLETE_SCAN_NAME, quality: "weak" }],
+            },
+          }),
+      );
+      await seedEntries("eu", [...costly, ...completeAliases]);
+      await seedEntries("ch", incompleteScanAliases);
       await db
         .update(sanctionsEditions)
         .set({
@@ -1135,12 +1148,18 @@ describe("public sanctions search parity", () => {
             entriesFor("eu").length +
             BENCHMARK_ENTRY_COUNT +
             costly.length +
-            partialAliases.length,
+            completeAliases.length,
         })
         .where(eq(sanctionsEditions.id, activeEdition("eu")));
+      await db
+        .update(sanctionsEditions)
+        .set({
+          entryCount: entriesFor("ch").length + incompleteScanAliases.length,
+        })
+        .where(eq(sanctionsEditions.id, activeEdition("ch")));
       const inputDigests = new Map<SanctionsSource, string>();
       const digest = (lists: Parameters<typeof buildScreeningIndex>[0]) => {
-        const inputHash = createHash("sha256");
+        const inputHash = createSha256();
         for (const input of lists) {
           inputHash.update(
             JSON.stringify({
@@ -1154,38 +1173,89 @@ describe("public sanctions search parity", () => {
         }
         return inputHash.digest("hex");
       };
-      const recorded = recordingMatcherWorker();
+      const recorded = {
+        work: {
+          entryBatches: 0,
+          entries: 0,
+          maximumBatchEntries: 0,
+          screenings: 0,
+          indexes: 0,
+        },
+      };
+      const createWorker = () => {
+        const worker = new Worker(
+          new URL(
+            "../../lib/lists/sanctions/sanctions-matcher-worker.ts",
+            import.meta.url,
+          ),
+        );
+        const postMessage = worker.postMessage.bind(worker);
+        spyOn(worker, "postMessage").mockImplementation(
+          (message: SanctionsMatcherMessage, transferList) => {
+            switch (message.type) {
+              case "entries":
+                recorded.work.entryBatches += 1;
+                recorded.work.entries += message.entries.length;
+                recorded.work.maximumBatchEntries = Math.max(
+                  recorded.work.maximumBatchEntries,
+                  message.entries.length,
+                );
+                break;
+              case "index":
+                recorded.work.indexes += 1;
+                break;
+              case "screen":
+                recorded.work.screenings += 1;
+                break;
+              default: {
+                message satisfies never;
+                panic("Unexpected matcher message");
+              }
+            }
+            postMessage(
+              message.type === "screen" &&
+                message.source === "ch" &&
+                message.query.name === INCOMPLETE_SCAN_NAME
+                ? { ...message, maxWork: INCOMPLETE_SCAN_WORK_LIMIT }
+                : message,
+              transferList,
+            );
+          },
+        );
+        return worker;
+      };
       const pool = createSanctionsMatcherPool({
         deadlineMs: 10_000,
-        createWorker: recorded.createWorker,
+        createWorker,
       });
       pools.add(pool);
       const context = new InMemoryRateLimitContext();
-      const route = createPublicSanctionsRoute({
+      const publicScreen = createPublicSanctionsScreening({
+        pool,
+        loadEntries: async (props) => {
+          const entries = await loadEditionEntries(props);
+          const source =
+            entries.at(0)?.source ?? panic("Missing benchmark entry");
+          inputDigests.set(
+            source,
+            digest([
+              {
+                version: {
+                  source,
+                  publishedAt: props.edition.publishedAt,
+                  fileId: props.edition.fileId,
+                },
+                entries,
+              },
+            ]),
+          );
+          return entries;
+        },
+      });
+      await using route = servePublicSanctions({
         db: publicDb,
         now: FRESH_NOW,
-        screen: createPublicSanctionsScreening({
-          pool,
-          loadEntries: async (props) => {
-            const entries = await loadEditionEntries(props);
-            const source =
-              entries.at(0)?.source ?? panic("Missing benchmark entry");
-            inputDigests.set(
-              source,
-              digest([
-                {
-                  version: {
-                    source,
-                    publishedAt: props.edition.publishedAt,
-                    fileId: props.edition.fileId,
-                  },
-                  entries,
-                },
-              ]),
-            );
-            return entries;
-          },
-        }),
+        screen: publicScreen,
         rateLimitOptions: {
           context,
           generator: scopedGenerator("timing-test"),
@@ -1194,7 +1264,7 @@ describe("public sanctions search parity", () => {
         },
       });
       const run = async () =>
-        await route.handle(
+        await route.fetch(
           new Request("http://localhost/sanctions/search", {
             method: "POST",
             headers: { "content-type": "application/json" },
@@ -1208,21 +1278,28 @@ describe("public sanctions search parity", () => {
         const cold = await run();
         const coldBody = await cold.json();
         const coldMs = performance.now() - coldStart;
+        await publicScreen.warmupSettled();
+        const warmupMs = performance.now() - coldStart;
         const warmStart = performance.now();
         const warm = await run();
         const warmBody = await warm.json();
         const warmMs = performance.now() - warmStart;
         expect(cold.status).toBe(200);
         expect(warm.status).toBe(200);
-        expect(warmBody).toEqual(coldBody);
         expect(coldBody).toMatchObject({
+          status: "unavailable",
+          retryAfterSeconds: SANCTIONS_WARMING_RETRY_AFTER_SECONDS,
+        });
+        expect(warmBody).toMatchObject({
           status: "clear",
+          retryAfterSeconds: null,
           lists: expect.any(Array),
         });
         console.info(
           JSON.stringify({
             entries: BENCHMARK_ENTRY_COUNT,
             coldMs: Number(coldMs.toFixed(2)),
+            warmupMs: Number(warmupMs.toFixed(2)),
             warmMs: Number(warmMs.toFixed(2)),
           }),
         );
@@ -1236,7 +1313,7 @@ describe("public sanctions search parity", () => {
               headers: { "content-type": "application/json" },
               body: JSON.stringify({ subject: { type: "organization", name } }),
             });
-          expect((await route.handle(adversarialRequest())).status).toBe(200);
+          expect((await route.fetch(adversarialRequest())).status).toBe(200);
           const before = { ...recorded.work };
           const began = performance.now();
           let lastTick = began;
@@ -1249,7 +1326,7 @@ describe("public sanctions search parity", () => {
             ticks += 1;
           }, 1);
           try {
-            const response = await route.handle(adversarialRequest());
+            const response = await route.fetch(adversarialRequest());
             expect(response.status).toBe(200);
             maximumTurnMs = Math.max(
               maximumTurnMs,
@@ -1291,13 +1368,18 @@ describe("public sanctions search parity", () => {
           },
           { type: "organization", name: costlyName, companyId: null },
           { type: "organization", name: "Mohammed Ali", companyId: null },
+          {
+            type: "organization",
+            name: INCOMPLETE_SCAN_NAME,
+            companyId: null,
+          },
         ] as const satisfies readonly NameSubject[];
         const publicResponses = new Map<string, Response>();
         const analytics = installRecordingAnalytics();
         const logger = installRecordingLogger();
         try {
           for (const subject of subjects) {
-            const response = await route.handle(
+            const response = await route.fetch(
               new Request("http://localhost/sanctions/search", {
                 method: "POST",
                 headers: { "content-type": "application/json" },
@@ -1314,10 +1396,6 @@ describe("public sanctions search parity", () => {
           analytics.restore();
           logger.restore();
         }
-        // The worker phase reads and compiles the full corpus. Retire it before
-        // the product phase compiles the independently loaded, digest-checked rows.
-        await pool.close();
-        pools.delete(pool);
         const parityCaches = {
           product: createSanctionsIndexCache({
             build: (lists) => {
@@ -1363,33 +1441,71 @@ describe("public sanctions search parity", () => {
           nationalityCodes: [],
         });
         expect(person.status).toBe("possible-match");
-        const incomplete = await parity({
+        const expensive = await parity({
           type: "organization",
           name: costlyName,
           companyId: null,
         });
-        expect(
-          incomplete.lists.find(({ source }) => source === "eu"),
-        ).toMatchObject({
-          status: "unavailable",
-          reason: "load-failed",
-          totalMatches: 0,
-          possibleMatches: [],
+        const costlyMatches = expensive.lists.find(
+          ({ source }) => source === "eu",
+        );
+        expect(costlyMatches).toMatchObject({
+          status: "possible-match",
+          reason: null,
+          truncated: false,
+          totalMatches: 8,
         });
-        expect(incomplete.status).not.toBe("clear");
-        const partial = await parity({
+        expect(
+          costlyMatches?.possibleMatches.map(
+            ({ sourceEntryId }) => sourceEntryId,
+          ),
+        ).toEqual(Array.from({ length: 8 }, (_, index) => `costly-${index}`));
+        expect(expensive.status).toBe("possible-match");
+        const complete = await parity({
           type: "organization",
           name: "Mohammed Ali",
           companyId: null,
         });
-        expect(
-          partial.lists.find(({ source }) => source === "eu"),
-        ).toMatchObject({
-          status: "unavailable",
-          reason: "load-failed",
+        expect(complete.lists.find(({ source }) => source === "eu")).toEqual({
+          source: "eu",
+          issuer: "EU",
+          classification: "binding",
+          editionId: activeEdition("eu"),
+          publishedAt: "2026-09-19",
+          verifiedAt: VERIFIED_AT.toISOString(),
+          pendingUpdate: null,
+          status: "clear",
+          reason: null,
+          truncated: false,
+          totalMatches: 0,
           possibleMatches: [],
         });
-        expect(partial.status).not.toBe("clear");
+        expect(complete.status).toBe("clear");
+
+        const incompleteSubject = {
+          type: "organization",
+          name: INCOMPLETE_SCAN_NAME,
+          companyId: null,
+        } as const;
+        const incompleteResponse =
+          publicResponses.get(JSON.stringify(incompleteSubject)) ??
+          panic("Missing bounded worker response");
+        const incomplete = publicAnswer(await incompleteResponse.json());
+        expect(incomplete.lists.find(({ source }) => source === "ch")).toEqual({
+          source: "ch",
+          issuer: "CH",
+          classification: "informational",
+          editionId: activeEdition("ch"),
+          publishedAt: "2026-09-19",
+          verifiedAt: VERIFIED_AT.toISOString(),
+          pendingUpdate: null,
+          status: "incomplete",
+          reason: null,
+          truncated: true,
+          totalMatches: 0,
+          possibleMatches: [],
+        });
+        expect(incomplete.status).toBe("incomplete");
       } finally {
         context.kill();
         await pool.close();

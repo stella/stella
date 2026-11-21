@@ -1,10 +1,19 @@
 import { panic, Result, TaggedError } from "better-result";
 import { deepEquals } from "bun";
-import { and, asc, count, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, asc, count, eq, inArray, sql } from "drizzle-orm";
+
+import { chunk as chunkItems } from "@stll/concurrency/chunk";
 
 import type { Transaction } from "@/api/db/root";
-import { entities, entityVersions, fields, workspaces } from "@/api/db/schema";
-import type { EntityKind, FieldContent } from "@/api/db/schema-validators";
+import {
+  cellMetadata,
+  entities,
+  entityVersions,
+  fields,
+  justifications,
+  workspaces,
+} from "@/api/db/schema";
+import type { EntityKind } from "@/api/db/schema-validators";
 import { captureError } from "@/api/lib/analytics/capture";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
@@ -16,21 +25,30 @@ import type { EntityStamp } from "@/api/lib/document-counter";
 import { validateEntityRemovalState } from "@/api/lib/entities/entity-removal-state";
 import {
   createSiblingNamePlan,
-  resolveSiblingNameForInsert,
   type NamedEntityInsert,
   type ResolvedSiblingNames,
+  resolveSiblingNameForInsert,
 } from "@/api/lib/entities/sibling-name-insert";
 import {
   lockWorkspacesForEntityCap,
   lockWorkspacesForEntityTransfer,
 } from "@/api/lib/entity-cap-lock";
 import {
+  CELL_COMPANION_BATCH,
+  planCellCompanions,
+} from "@/api/lib/entity-versions/cell-companions";
+import {
+  CARRIED_FIELD_COLUMNS,
+  type CarriedFieldColumns,
+  carriedFieldValues,
+} from "@/api/lib/entity-versions/field-clone-policy";
+import {
   type CurrentVersionAssignment,
   insertEntityBatch,
 } from "@/api/lib/entity-versions/insert-entity-batch";
 import { carryVerificationCodes } from "@/api/lib/entity-versions/insert-entity-version";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { copyOrganizationFiles } from "@/api/lib/files/copy-organization-files";
+import { copyOrganizationFilesForPublication } from "@/api/lib/files/copy-organization-files";
 import { deleteOrganizationFilesWithSignal } from "@/api/lib/files/delete-organization-file";
 import { storedFileEncryption } from "@/api/lib/files/detect-file-encryption";
 import {
@@ -41,12 +59,19 @@ import {
 } from "@/api/lib/files/file-object-ids";
 import { pdfDerivativeStateForFile } from "@/api/lib/files/gotenberg";
 import { thumbnailDerivativeStateForFile } from "@/api/lib/files/image-derivative";
-import type { OrganizationFileUsageError } from "@/api/lib/files/organization-file-usage";
+import type {
+  CheckedFileCopy,
+  OrganizationFileUsageError,
+} from "@/api/lib/files/organization-file-usage";
 import { createFileKey } from "@/api/lib/files/utils";
 import { LIMITS } from "@/api/lib/limits";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { getPgErrorCode, PG_ERROR } from "@/api/lib/pg-error";
 import { copyObject, headObject } from "@/api/lib/s3-presign";
-import type { S3PresignError } from "@/api/lib/s3-presign";
+import type {
+  S3ObjectMissingError,
+  S3PresignError,
+} from "@/api/lib/s3-presign";
 import {
   nativeExtractionRunRequestForFields,
   requestNativeExtractionRuns,
@@ -59,17 +84,17 @@ import type {
 import { enqueueEntitySearchRepairs } from "@/api/lib/search/projection-repair-queue";
 import { findExtractionFileFieldRow } from "@/api/lib/search/types";
 
-export type EntityFieldSnapshot = {
+export type EntityFieldSnapshot = CarriedFieldColumns & {
   id: SafeId<"field">;
-  propertyId: SafeId<"property">;
-  content: FieldContent;
 };
 
 /**
  * The version columns a move carries across unchanged. A stamp and its
  * verification code are frozen the moment they are printed, so re-homing a
- * document must reproduce the row, not mint a replacement for it. Picked from
- * the table so each column keeps the type the schema gives it.
+ * document must reproduce the row, not mint a replacement for it. A tombstone
+ * (`deletedAt`/`deletedBy`) is part of that row: a deleted version keeps its
+ * tombstone wherever the document goes. Picked from the table so
+ * each column keeps the type the schema gives it.
  */
 type CarriedVersionColumns = Pick<
   typeof entityVersions.$inferSelect,
@@ -85,6 +110,8 @@ type CarriedVersionColumns = Pick<
   | "collaborationContributorUserIds"
   | "detectedLanguage"
   | "createdAt"
+  | "deletedAt"
+  | "deletedBy"
 >;
 
 /**
@@ -105,6 +132,8 @@ const CARRIED_VERSION_COLUMNS = {
   collaborationContributorUserIds: true,
   detectedLanguage: true,
   createdAt: true,
+  deletedAt: true,
+  deletedBy: true,
 } as const satisfies Record<keyof CarriedVersionColumns, true>;
 
 export type EntityVersionSnapshot = CarriedVersionColumns & {
@@ -114,7 +143,7 @@ export type EntityVersionSnapshot = CarriedVersionColumns & {
 /**
  * One source entity and the versions to write for it. A copy loads the current
  * version alone and mints a fresh identity for it; a move loads the whole
- * non-deleted history, so both run through one insert path.
+ * history, tombstones included, so both run through one insert path.
  */
 export type EntitySnapshot = {
   id: SafeId<"entity">;
@@ -126,9 +155,7 @@ export type EntitySnapshot = {
   versions: EntityVersionSnapshot[];
 };
 
-type WritableEntityFieldSnapshot = {
-  id: SafeId<"field">;
-  propertyId: SafeId<"property">;
+type WritableEntityFieldSnapshot = Omit<EntityFieldSnapshot, "content"> & {
   content: WritableFieldContent;
 };
 
@@ -163,7 +190,7 @@ const VERSION_FIELDS_SELECT = {
   // `findExtractionFileField` requires, so the copy resolves the
   // same extraction source as the entity it came from. At most
   // one field per property bounds the read.
-  columns: { id: true, propertyId: true, content: true },
+  columns: { id: true, ...CARRIED_FIELD_COLUMNS },
   orderBy: { id: "asc" },
   limit: LIMITS.propertiesCount,
 } as const;
@@ -177,18 +204,36 @@ export const CURRENT_VERSION_SELECT = {
 } as const;
 
 /**
- * A move re-homes the document itself, so it reads the whole surviving
- * history, oldest first. Tombstoned versions stay behind with the source rows.
+ * A move re-homes the document itself, so it reads the whole history, oldest
+ * first. Tombstoned versions are part of that history: the move writes them
+ * on the target with their `deletedAt`/`deletedBy` unchanged, so they stay
+ * hidden from reads there exactly as they were at the source, and the caller
+ * then deletes the source rows. Every move query selects versions through
+ * this select or {@link movedVersionRows}, never by `deletedAt`.
  */
-export const EVERY_LIVE_VERSION_SELECT = {
+export const EVERY_VERSION_SELECT = {
   versions: {
     columns: CARRIED_VERSION_COLUMNS,
-    where: { deletedAt: { isNull: true } },
     orderBy: { versionNumber: "asc" },
     limit: LIMITS.versionsPerEntity,
     with: { fields: VERSION_FIELDS_SELECT },
   },
 } as const;
+
+/**
+ * The `entity_versions` rows a move of `sourceIds` carries, as a SQL
+ * predicate: every version, tombstones included. The SQL-builder twin of
+ * {@link EVERY_VERSION_SELECT}, so the limit checks and row locks cover the
+ * same rows the snapshot reads.
+ */
+const movedVersionRows = (
+  sourceWorkspaceId: SafeId<"workspace">,
+  sourceIds: SafeId<"entity">[],
+) =>
+  and(
+    eq(entityVersions.workspaceId, sourceWorkspaceId),
+    inArray(entityVersions.entityId, sourceIds),
+  );
 
 type EntityRowWithCurrentVersion = Omit<EntitySnapshot, "versions"> & {
   currentVersion: EntityVersionSnapshot | null;
@@ -208,7 +253,7 @@ export const snapshotOfCurrentVersion = ({
   versions: currentVersion ? [currentVersion] : [],
 });
 
-export type CopiedEntity = {
+type CopiedEntity = {
   sourceId: SafeId<"entity">;
   entityId: SafeId<"entity">;
   kind: EntityKind;
@@ -217,29 +262,29 @@ export type CopiedEntity = {
 };
 
 /** File field info needed for PDF derivative enqueueing. */
-export type CopiedFileField = {
+type CopiedFileField = {
   entityId: SafeId<"entity">;
   fieldId: SafeId<"field">;
   mimeType: string;
   encrypted: boolean;
 };
 
-export type CopiedField = {
+type CopiedField = {
   sourceEntityId: SafeId<"entity">;
   sourceFieldId: SafeId<"field">;
   entityId: SafeId<"entity">;
   fieldId: SafeId<"field">;
 };
 
-type CopiedFieldInsert = {
+type CopiedFieldInsert = Omit<CarriedFieldColumns, "content"> & {
   id: SafeId<"field">;
   workspaceId: SafeId<"workspace">;
-  propertyId: SafeId<"property">;
   entityVersionId: SafeId<"entityVersion">;
   content: WritableFieldContent;
 };
 
 export type FileMapping = {
+  cleanupIntentIds: SafeId<"pendingUpload">[];
   sourceKey: string;
   targetKey: string;
   newFileId: MintedFileId;
@@ -329,6 +374,7 @@ export const collectFileCopySources = ({
 const FILE_COPY_CONCURRENCY = 16;
 
 type CopyFileObjectOptions = FileCopySource & {
+  fileUsageDb?: Parameters<typeof copyOrganizationFilesForPublication>[0]["db"];
   organizationId: SafeId<"organization">;
   targetWorkspaceId: SafeId<"workspace">;
   copiedS3Keys: string[];
@@ -343,13 +389,19 @@ type CopyFileObjectOptions = FileCopySource & {
 export const copyFileObject = async (
   options: CopyFileObjectOptions,
 ): Promise<
-  Result<FileMapping, S3PresignError | OrganizationFileUsageError>
+  Result<
+    FileMapping,
+    S3ObjectMissingError | S3PresignError | OrganizationFileUsageError
+  >
 > => {
   const copied = await stageAndCopyFiles({
     sources: [options],
     organizationId: options.organizationId,
     targetWorkspaceId: options.targetWorkspaceId,
     copiedS3Keys: options.copiedS3Keys,
+    ...(options.fileUsageDb === undefined
+      ? {}
+      : { fileUsageDb: options.fileUsageDb }),
   });
   if (Result.isError(copied)) {
     return Result.err(copied.error);
@@ -362,6 +414,7 @@ export const copyFileObject = async (
 };
 
 type CopyFileObjectsOptions = {
+  fileUsageDb?: Parameters<typeof copyOrganizationFilesForPublication>[0]["db"];
   sources: FileCopySource[];
   organizationId: SafeId<"organization">;
   targetWorkspaceId: SafeId<"workspace">;
@@ -378,8 +431,12 @@ const stageAndCopyFiles = async ({
   organizationId,
   targetWorkspaceId,
   copiedS3Keys,
+  fileUsageDb,
 }: CopyFileObjectsOptions): Promise<
-  Result<FileMapping[], S3PresignError | OrganizationFileUsageError>
+  Result<
+    FileMapping[],
+    S3ObjectMissingError | S3PresignError | OrganizationFileUsageError
+  >
 > => {
   const mappings = sources.map((source) => {
     const newFileId = allocateFileObject();
@@ -392,7 +449,10 @@ const stageAndCopyFiles = async ({
     copiedS3Keys.push(targetKey);
     return { ...source, targetKey, newFileId };
   });
-  const prepareFile = async ({ sourceKey, targetKey }: FileMapping) => {
+  const prepareFile = async ({
+    sourceKey,
+    targetKey,
+  }: Pick<FileMapping, "sourceKey" | "targetKey">) => {
     const source = isDeploymentFeatureEnabled("FEATURE_FILE_USAGE_LIMITS")
       ? await headObject(sourceKey)
       : Result.ok({ contentLength: 0 });
@@ -403,32 +463,52 @@ const stageAndCopyFiles = async ({
       organizationId,
       objectKey: targetKey,
       sizeBytes: source.value.contentLength,
-      copy: async () => await copyObject(sourceKey, targetKey),
+      source: sourceKey,
     });
   };
   const prepared: Awaited<ReturnType<typeof prepareFile>>[] = [];
-  for (let start = 0; start < mappings.length; start += FILE_COPY_CONCURRENCY) {
-    prepared.push(
-      ...(await Promise.all(
-        mappings.slice(start, start + FILE_COPY_CONCURRENCY).map(prepareFile),
-      )),
-    );
+  for (const itemBatch of chunkItems(mappings, FILE_COPY_CONCURRENCY)) {
+    prepared.push(...(await Promise.all(itemBatch.map(prepareFile))));
   }
   const inputs = Result.all(prepared);
   if (Result.isError(inputs)) {
     return Result.err(inputs.error);
   }
-  const copied = await copyOrganizationFiles({
-    inputs: inputs.value,
+  const copied = await copyOrganizationFilesForPublication({
+    inputs: inputs.value.map((input) => ({
+      ...input,
+      // The copy runs only inside the publication ledger's checked operation.
+      copy: async (checked: CheckedFileCopy<string>) =>
+        await copyObject(checked.source, checked.objectKey),
+      cleanupScope: {
+        type: "workspaces" as const,
+        workspaces: [{ id: targetWorkspaceId, state: "active" as const }],
+      },
+    })),
     concurrency: FILE_COPY_CONCURRENCY,
+    ...(fileUsageDb === undefined ? {} : { db: fileUsageDb }),
   });
   if (Result.isError(copied)) {
     return Result.err(copied.error);
   }
-  const completed = Result.all(copied.value);
-  return Result.isError(completed)
-    ? Result.err(completed.error)
-    : Result.ok(mappings);
+  const completed = Result.all(copied.value.copies);
+  if (Result.isError(completed)) {
+    return Result.err(completed.error);
+  }
+  const intentsByKey = new Map(
+    copied.value.publicationIntents.map(({ cleanupIntentIds, objectKey }) => [
+      objectKey,
+      cleanupIntentIds,
+    ]),
+  );
+  return Result.ok(
+    mappings.map((mapping) => ({
+      ...mapping,
+      cleanupIntentIds:
+        intentsByKey.get(mapping.targetKey) ??
+        panic("Successful file copy has no publication intent"),
+    })),
+  );
 };
 
 export const copyFileObjects = async (
@@ -481,11 +561,7 @@ const remapFieldFileId = ({
   idMap,
 }: RemapFieldFileIdOptions): WritableEntityFieldSnapshot => {
   if (field.content.type !== "file") {
-    return {
-      id: field.id,
-      content: field.content,
-      propertyId: field.propertyId,
-    };
+    return { ...field, content: field.content };
   }
 
   const newFileId = idMap.get(
@@ -531,19 +607,23 @@ const remapFieldFileId = ({
  * Best-effort cleanup of S3 keys. A failure never fails the rollback, but
  * it is reported: the object stays in the bucket, billed and unreferenced.
  */
-export const rollbackS3Copies = async (keys: string[]): Promise<void> => {
+export const rollbackS3Copies = async (
+  keys: string[],
+  deleteObjects = deleteOrganizationFilesWithSignal,
+): Promise<void> => {
   const result = Result.flatten(
     await Result.tryPromise({
-      try: async () =>
-        await deleteOrganizationFilesWithSignal(
-          keys,
-          AbortSignal.timeout(10_000),
-        ),
+      try: async () => await deleteObjects(keys, AbortSignal.timeout(10_000)),
       catch: (error: unknown) => error,
     }),
   );
   if (Result.isError(result)) {
-    captureError(result.error, { source: "entity-copy-rollback" });
+    captureError(
+      result.error,
+      handlerErrorContext("entities.rollbackS3Copies.result_error", {
+        source: "entity-copy-rollback",
+      }),
+    );
   }
 };
 
@@ -642,6 +722,12 @@ type CopyEntitiesProps = {
   /** Source workspace ID for audit log (cross-workspace only). */
   sourceWorkspaceId?: SafeId<"workspace">;
   /**
+   * Source property to target property for a copy into another matter. The
+   * snapshot's fields already carry target properties; a cell's lock and
+   * override are read from the source, so they map through this.
+   */
+  propertyIds?: ReadonlyMap<SafeId<"property">, SafeId<"property">> | undefined;
+  /**
    * Whether the target rows are a new document (a copy) or the same
    * document in another matter (a move, whose source rows the caller
    * deletes in this transaction). Only a move mutates the source
@@ -656,8 +742,7 @@ type CopyEntitiesProps = {
         sourceSnapshot: EntitySnapshot[];
       };
   fieldMapping:
-    | { type: "omit" }
-    | { type: "single"; sourceFieldId: SafeId<"field"> };
+    { type: "omit" } | { type: "single"; sourceFieldId: SafeId<"field"> };
   dependencies?: CopyEntitiesDependencies | undefined;
 };
 
@@ -730,7 +815,11 @@ const targetVersionValues = ({
           version.collaborationContributorUserIds,
         detectedLanguage: version.detectedLanguage,
         createdAt: version.createdAt,
-      };
+        deletedAt: version.deletedAt,
+        deletedBy: version.deletedBy,
+        // Total over the carried columns: one added there must be written here.
+      } satisfies CarriedVersionColumns &
+        Pick<typeof entityVersions.$inferInsert, "workspaceId" | "entityId">;
     default:
       transfer satisfies never;
       return panic("Unhandled entity transfer");
@@ -893,13 +982,7 @@ export const validateMoveSourceReadLimits = async ({
   const overVersionLimit = await tx
     .select({ entityId: entityVersions.entityId })
     .from(entityVersions)
-    .where(
-      and(
-        eq(entityVersions.workspaceId, sourceWorkspaceId),
-        inArray(entityVersions.entityId, sourceIds),
-        isNull(entityVersions.deletedAt),
-      ),
-    )
+    .where(movedVersionRows(sourceWorkspaceId, sourceIds))
     .groupBy(entityVersions.entityId)
     .having(sql`${count()} > ${LIMITS.versionsPerEntity}`)
     .limit(1);
@@ -910,8 +993,7 @@ export const validateMoveSourceReadLimits = async ({
     .where(
       and(
         eq(fields.workspaceId, sourceWorkspaceId),
-        inArray(entityVersions.entityId, sourceIds),
-        isNull(entityVersions.deletedAt),
+        movedVersionRows(sourceWorkspaceId, sourceIds),
       ),
     )
     .groupBy(fields.entityVersionId)
@@ -995,28 +1077,21 @@ const validateMoveSourceRows = async ({
     .for("update", { noWait: true });
   // Annotations and derived field content can change without an entity write.
   // Lock those owners as well before reading the full carried state.
-  const liveVersions = await tx
+  const movedVersions = await tx
     .select({ id: entityVersions.id })
     .from(entityVersions)
-    .where(
-      and(
-        eq(entityVersions.workspaceId, sourceWorkspaceId),
-        inArray(entityVersions.entityId, sourceIds),
-        isNull(entityVersions.deletedAt),
-      ),
-    )
+    .where(movedVersionRows(sourceWorkspaceId, sourceIds))
     .orderBy(asc(entityVersions.id))
     .limit(expectedVersionIds.size + 1)
     .for("update", { noWait: true });
-  const liveFields = await tx
+  const movedFields = await tx
     .select({ id: fields.id })
     .from(fields)
     .innerJoin(entityVersions, eq(fields.entityVersionId, entityVersions.id))
     .where(
       and(
         eq(fields.workspaceId, sourceWorkspaceId),
-        inArray(entityVersions.entityId, sourceIds),
-        isNull(entityVersions.deletedAt),
+        movedVersionRows(sourceWorkspaceId, sourceIds),
       ),
     )
     .orderBy(asc(fields.id))
@@ -1051,7 +1126,7 @@ const validateMoveSourceRows = async ({
       id: { in: sourceIds },
     },
     columns: ENTITY_SNAPSHOT_COLUMNS,
-    with: EVERY_LIVE_VERSION_SELECT,
+    with: EVERY_VERSION_SELECT,
     limit: sourceIds.length,
   });
   let membershipMatches = true;
@@ -1074,10 +1149,10 @@ const validateMoveSourceRows = async ({
   }
   if (
     !membershipMatches ||
-    liveVersions.length !== expectedVersionIds.size ||
-    liveVersions.some(({ id }) => !expectedVersionIds.has(id)) ||
-    liveFields.length !== expectedFieldIds.size ||
-    liveFields.some(({ id }) => !expectedFieldIds.has(id)) ||
+    movedVersions.length !== expectedVersionIds.size ||
+    movedVersions.some(({ id }) => !expectedVersionIds.has(id)) ||
+    movedFields.length !== expectedFieldIds.size ||
+    movedFields.some(({ id }) => !expectedFieldIds.has(id)) ||
     !sourceSnapshotsMatch(sourceSnapshot, currentEntities)
   ) {
     return Result.err(
@@ -1180,6 +1255,8 @@ type CopyRows = {
   versionTransfers: VersionTransfer[];
   currentVersions: CurrentVersionAssignment[];
   fieldRows: CopiedFieldInsert[];
+  /** Every source cell and the id of its clone. */
+  fieldClones: Map<SafeId<"field">, SafeId<"field">>;
   copiedEntities: CopiedEntity[];
   copiedField: CopiedField | null;
   entityIdsBySearchIndexOwner: Record<SearchIndexOwner, SafeId<"entity">[]>;
@@ -1355,13 +1432,14 @@ const appendFieldRows = ({
             }
           : field.content;
       const fieldRow = {
+        ...carriedFieldValues(field),
         id: fieldId,
         workspaceId: targetWorkspaceId,
-        propertyId: field.propertyId,
         entityVersionId,
         content,
       };
       rows.fieldRows.push(fieldRow);
+      rows.fieldClones.set(field.id, fieldId);
       if (isCurrentVersion) {
         currentFieldRows.push(fieldRow);
       }
@@ -1487,6 +1565,7 @@ const planEntityCopies = async ({
     versionTransfers: [],
     currentVersions: [],
     fieldRows: [],
+    fieldClones: new Map(),
     copiedEntities: [],
     copiedField: null,
     // Split by which mechanism owns each copy's search projection, so every
@@ -1530,6 +1609,7 @@ const planEntityCopies = async ({
 
 type WriteCopyPlanOptions = {
   tx: Transaction;
+  propertyIds: ReadonlyMap<SafeId<"property">, SafeId<"property">> | undefined;
   plan: CopyPlan;
   transfer: EntityTransfer;
   targetWorkspaceId: SafeId<"workspace">;
@@ -1544,6 +1624,7 @@ const writeCopyPlan = async ({
   transfer,
   targetWorkspaceId,
   sourceWorkspaceId,
+  propertyIds,
   recordAuditEvent,
 }: WriteCopyPlanOptions): Promise<void> => {
   await insertEntityBatch({
@@ -1554,6 +1635,26 @@ const writeCopyPlan = async ({
     currentVersions: plan.currentVersions,
     fieldRows: plan.fieldRows,
   });
+  // A cell's lock, override and citations travel with it; a move deletes the
+  // source rows afterwards, so they are carried before that.
+  const companions = await planCellCompanions({
+    tx,
+    kind: transfer.type,
+    sourceWorkspaceId: sourceWorkspaceId ?? targetWorkspaceId,
+    targetWorkspaceId,
+    versions: plan.versionTransfers,
+    fieldClones: plan.fieldClones,
+    propertyIds,
+  });
+  for (const rows of chunkItems(companions.metadata, CELL_COMPANION_BATCH)) {
+    await tx.insert(cellMetadata).values(rows);
+  }
+  for (const rows of chunkItems(
+    companions.justifications,
+    CELL_COMPANION_BATCH,
+  )) {
+    await tx.insert(justifications).values(rows);
+  }
 
   // A copy's versions were minted their own codes by the insert above. A move
   // is the same document elsewhere, so the codes already printed on its
@@ -1610,6 +1711,7 @@ export const copyEntities = async ({
   sourceEntityId,
   sourceEntities,
   sourceWorkspaceId: copySourceWorkspaceId,
+  propertyIds,
   targetRootEntityId,
   targetRootName,
   transfer,
@@ -1695,15 +1797,16 @@ export const copyEntities = async ({
     transfer,
     targetWorkspaceId,
     sourceWorkspaceId,
+    propertyIds,
     recordAuditEvent,
   });
 
   // Written here, inside the copy transaction: the mark commits or rolls back
   // with the copies themselves, so a lost post-commit flush costs nothing.
-  await dependencies.enqueueEntitySearchRepairs(
-    tx,
-    plan.entityIdsBySearchIndexOwner[SEARCH_INDEX_OWNER.searchMark],
-  );
+  await dependencies.enqueueEntitySearchRepairs(tx, [
+    ...plan.entityIdsBySearchIndexOwner[SEARCH_INDEX_OWNER.searchMark],
+    ...plan.entityIdsBySearchIndexOwner[SEARCH_INDEX_OWNER.durableExtraction],
+  ]);
   const nativeExtractionRunIds = await dependencies.requestNativeExtractionRuns(
     {
       requests: plan.nativeExtractionRequests,

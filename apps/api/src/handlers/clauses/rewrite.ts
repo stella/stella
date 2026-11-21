@@ -9,36 +9,42 @@
  * The model never emits structure: it returns revised text per editable
  * (non-directive) paragraph keyed by index, and we swap only that text. Lists,
  * headings, paragraph order, and every `{{ }}` directive stay exactly as
- * authored. Reuses the `generateTanStackObjectForRole` structured-output
+ * authored. Reuses the `generateTanStackObjectForTask` structured-output
  * pattern (see suggest-template-fields).
  */
 
 import { Result } from "better-result";
-import { t } from "elysia";
 import * as v from "valibot";
 
 import { resolveCaching } from "@/api/lib/ai-config";
+import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
+import { storedAIConfigUnreadableError } from "@/api/lib/ai-config-response";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
-import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
+import {
+  ACCOUNT_ACCESS,
+  configuredModelAdmission,
+  createSafeRootHandler,
+} from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { clauseBodySchema } from "@/api/lib/clauses/body-schema";
 import type { ClauseBody } from "@/api/lib/clauses/types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
+import { generateTanStackObjectForTask } from "@/api/lib/tanstack-ai-generate";
 
 const REWRITE_TIMEOUT_MS = 45_000;
 
-const rewriteClauseBodySchema = t.Object({
+const rewriteClauseBodySchema = v.object({
   body: clauseBodySchema,
-  instruction: t.String({ minLength: 1, maxLength: 2000 }),
-  usageNotes: t.Optional(t.Nullable(t.String({ maxLength: 2000 }))),
-  title: t.Optional(t.Nullable(t.String({ maxLength: 256 }))),
+  instruction: v.pipe(v.string(), v.minLength(1), v.maxLength(2000)),
+  usageNotes: v.optional(v.nullable(v.pipe(v.string(), v.maxLength(2000)))),
+  title: v.optional(v.nullable(v.pipe(v.string(), v.maxLength(256)))),
 });
 
 // strictObject + required (not optional): OpenAI strict structured output
 // rejects objects without `additionalProperties: false` / missing-from-required
 // properties. The model returns revised text per editable paragraph index.
-const rewriteOutputSchema = v.strictObject({
+/** Read by the structured-output role contract test. @public */
+export const rewriteOutputSchema = v.strictObject({
   paragraphs: v.array(
     v.strictObject({
       index: v.number(),
@@ -85,6 +91,8 @@ ${numbered}`;
 };
 
 const config = {
+  contract: "patch",
+  actionAdmission: { type: "handler", actionKind: "clauses.rewrite" },
   description:
     "Rewrite the prose of a clause body with the model, following a " +
     "free-text instruction plus the clause title and usage notes when " +
@@ -103,12 +111,14 @@ const config = {
     consumesServices: true,
   },
   body: rewriteClauseBodySchema,
-  requiresUsage: { actionType: "chat", modelRole: "fast" },
+  requiresUsage: { actionType: "chat", modelTask: "short-text" },
 } satisfies HandlerConfig;
 
 const rewriteClause = createSafeRootHandler(
   config,
   async function* ({
+    orgAIConfigStatus,
+    modelAdmission,
     session,
     body,
     safeDb,
@@ -116,6 +126,10 @@ const rewriteClause = createSafeRootHandler(
     orgAIConfig,
     managedAIResidency,
   }) {
+    if (orgAIConfigStatus === ORG_AI_CONFIG_STATUS.unreadable) {
+      return Result.err(storedAIConfigUnreadableError());
+    }
+
     const organizationId = session.activeOrganizationId;
 
     // Editable paragraphs = non-directive with non-empty text; directives and
@@ -143,8 +157,9 @@ const rewriteClause = createSafeRootHandler(
         workspaceId: null,
       },
       feature: "clauses.rewrite",
-      modelRole: "fast",
+      modelTask: "short-text",
       orgAIConfig,
+      modelTier: configuredModelAdmission({ modelAdmission }).modelTier,
       properties: { organization_id: organizationId },
       traceId: Bun.randomUUIDv7(),
     });
@@ -152,9 +167,11 @@ const rewriteClause = createSafeRootHandler(
     const output = yield* Result.await(
       Result.tryPromise({
         try: async () =>
-          await generateTanStackObjectForRole({
+          await generateTanStackObjectForTask({
+            userId: user.id,
             dataClass: "customer",
-            role: "fast",
+            admission: configuredModelAdmission({ modelAdmission }),
+            task: "short-text",
             orgAIConfig,
             managedAIResidency,
             organizationId,
@@ -163,7 +180,7 @@ const rewriteClause = createSafeRootHandler(
             analytics: aiAnalytics,
             caching: resolveCaching({
               promptCachingEnabled: false,
-              role: "fast",
+              task: "short-text",
               scopeKey: organizationId,
             }),
             system: SYSTEM_PROMPT,
@@ -175,12 +192,13 @@ const rewriteClause = createSafeRootHandler(
             }),
             outputSchema: rewriteOutputSchema,
             serviceTier: "standard",
-            abortSignal: AbortSignal.timeout(REWRITE_TIMEOUT_MS),
+            deadlineMs: REWRITE_TIMEOUT_MS,
           }),
         catch: (cause) => {
           aiAnalytics.captureError(cause);
           return new HandlerError({
             status: 502,
+            code: "internal_error",
             message: "AI rewrite failed",
             cause,
           });

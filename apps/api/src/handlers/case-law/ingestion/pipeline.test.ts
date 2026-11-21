@@ -2,13 +2,21 @@ import { Result } from "better-result";
 import { SQL } from "bun";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
-import { TEXT_ABSENCE_REASONS } from "@stll/api-contract/case-law-text-field";
+import {
+  DECISION_TEXT_ABSENCE_METADATA_KEY,
+  DECISION_TEXT_ABSENCE_SCHEMA_VERSION,
+  DECISION_TEXT_ABSENCE_VERSION_METADATA_KEY,
+  DECISION_TEXT_FIELD,
+  TEXT_ABSENCE_REASONS,
+} from "@stll/api-contract/case-law-text-field";
 import {
   DECISION_DOCUMENT_ROLE,
   DECISION_DOCUMENT_ROLE_METADATA_KEY,
 } from "@stll/api-contract/decision-document-role";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import type { DecisionIdentifiers } from "@stll/legal-ast/decision-identifier";
+import type { DocumentAst } from "@stll/legal-ast/document-ast";
+import { plainTextOf } from "@stll/legal-ast/document-ast";
 import {
   DOCUMENT_FETCH_EVENT,
   type DocumentStageObserver,
@@ -17,40 +25,40 @@ import {
   CYCLE_HALT_REASON,
   INGESTION_STOP_KIND,
 } from "@stll/legal-atlas/ingestion-cycle";
+import { createSha256 } from "@stll/sha256/node";
 
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
-import type { caseLawIngestionFailures } from "@/api/db/schema";
 import {
   caseLawDecisionIdentifiers,
   caseLawDecisions,
+  caseLawIngestionFailures,
   caseLawSources,
 } from "@/api/db/schema";
 import { envBase } from "@/api/env-base";
-import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
-import { plainTextOf } from "@/api/handlers/case-law/document-ast";
-import {
-  EMPTY_AST,
-  SOURCE_DOCUMENT_ID_MAX_LENGTH,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import { getAdapter } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
 import { czNsAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-ns";
 import {
   bareCitationKey,
   decisionIdentifiersFromStoredMetadata,
+  extractCitations,
+  normalizeDecisionIdentifierValue,
 } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import { runIngestionPipeline } from "@/api/handlers/case-law/ingestion/pipeline";
 import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
 import { wrappedErrorDetail } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
 import { createSafeId } from "@/api/lib/branded-types";
+import { CITATION_STORAGE_WIDTHS } from "@/api/lib/case-law/citation-storage-bounds";
+import { DECISION_IDENTIFIER_CLAIM } from "@/api/lib/case-law/decision-identifier-claims";
 import {
-  TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
   absentTextField,
   presentTextField,
   readDecisionTextMetadata,
+  splitStoredDecisionTextMetadata,
+  TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
+import { CASE_LAW_SEARCH_CANDIDATE_ROW_MAX_BYTES } from "@/api/lib/case-law/search-candidate-row-bound-sql";
 import { canonicalDecisionDate } from "@/api/lib/dates";
 import { errorTag } from "@/api/lib/errors/error-tag";
 import {
@@ -64,29 +72,41 @@ import type { CaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-la
 import { observePublisherDocumentFetch } from "@/api/lib/legal-search/document-stage-observation";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import {
+  fitsDecisionSearchCandidateRow,
   markListingOnly,
   observedDocketOf,
-  sanitizeResult,
   partialObservationFromMetadata,
+  sanitizeResult,
   storedCaseNumberOf,
 } from "@/api/lib/legal-search/ingestion-normalization";
 import type { ObservedDocket } from "@/api/lib/legal-search/ingestion-normalization";
-import { defineSourceAdapter } from "@/api/lib/legal-search/ingestion-types";
-import type { RawIngestionResult } from "@/api/lib/legal-search/ingestion-types";
+import {
+  defineSourceAdapter,
+  EMPTY_AST,
+  PUBLISHER_REQUEST,
+  SOURCE_DOCUMENT_ID_MAX_LENGTH,
+} from "@/api/lib/legal-search/ingestion-types";
+import type {
+  DecisionJudgeInput,
+  IngestionResult,
+  RawIngestionResult,
+} from "@/api/lib/legal-search/ingestion-types";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
 import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingLogger } from "@/api/tests/helpers/recording-telemetry";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
-// An insert whose values can be awaited directly or chained into an upsert,
-// as the refresh path does for identifier rows.
-// oxlint-disable-next-line typescript-eslint/promise-function-async -- the double returns a promise that also carries onConflictDoUpdate; `async` would drop the extra method
-const insertedValues = () =>
-  Object.assign(Promise.resolve(undefined), {
-    onConflictDoUpdate: async () => await Promise.resolve(undefined),
-  });
+const insertFixture = (table: unknown) => ({
+  values:
+    table === caseLawDecisionIdentifiers
+      ? () => ({
+          onConflictDoUpdate: async () => await Promise.resolve(undefined),
+        })
+      : async () => await Promise.resolve(undefined),
+});
 
 const baseResult = (
   documentAst: IngestionResult["documentAst"],
@@ -120,6 +140,7 @@ const testSourceLease = (
   beforeDatabaseMark: async () => undefined,
   beforeRemoteEffect: async (effect) => await effect(),
   leaseToken: createSafeId<"caseLawSourceIngestionLease">(),
+  purpose: "ingestion",
   release: async () => undefined,
   source,
 });
@@ -128,9 +149,12 @@ const cursorOnlyDb =
   (onCursor: (cursor: string | null | undefined) => void): ScopedDb =>
   async (callback) => {
     const tx = {
-      insert: () => ({ values: insertedValues }),
+      insert: insertFixture,
       query: {
-        caseLawDecisions: { findFirst: async () => undefined },
+        caseLawDecisions: {
+          findFirst: async () => undefined,
+          findMany: async () => await Promise.resolve([]),
+        },
       },
       select: () => ({
         from: (table: unknown) => ({
@@ -165,8 +189,7 @@ const cursorOnlyDb =
 
     // SAFETY: these cases exercise only the case_law_sources cursor update;
     // the fake implements that chain.
-    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-    return await callback(tx as unknown as Transaction);
+    return await callback(asTestRaw<Transaction>(tx));
   };
 
 afterEach(() => {
@@ -187,7 +210,7 @@ describe("publisher document role persistence", () => {
           publisherField: "REASONS",
         },
       };
-      const stored = sanitizeResult(input);
+      const stored = sanitizeResult(input).unwrap();
       expect(
         stored.metadata[DECISION_DOCUMENT_ROLE_METADATA_KEY] === documentRole,
       ).toBe(true);
@@ -199,7 +222,12 @@ describe("publisher document role persistence", () => {
       expect(input.metadata[DECISION_DOCUMENT_ROLE_METADATA_KEY]).toBe(
         "untrusted",
       );
-      expect(sanitizeResult(stored)).toEqual(stored);
+      expect(
+        sanitizeResult({
+          ...stored,
+          ...splitStoredDecisionTextMetadata(stored.metadata),
+        }).unwrap(),
+      ).toEqual(stored);
     },
   );
 
@@ -211,13 +239,18 @@ describe("publisher document role persistence", () => {
         [DECISION_DOCUMENT_ROLE_METADATA_KEY]: DECISION_DOCUMENT_ROLE.RULING,
       },
     };
-    const stored = sanitizeResult(input);
+    const stored = sanitizeResult(input).unwrap();
     expect(stored.documentRole).toBeUndefined();
     expect(
       Object.hasOwn(stored.metadata, DECISION_DOCUMENT_ROLE_METADATA_KEY),
     ).toBe(false);
     expect(stored.decisionType === input.decisionType).toBe(true);
-    expect(sanitizeResult(stored)).toEqual(stored);
+    expect(
+      sanitizeResult({
+        ...stored,
+        ...splitStoredDecisionTextMetadata(stored.metadata),
+      }).unwrap(),
+    ).toEqual(stored);
   });
 });
 
@@ -229,7 +262,7 @@ describe("sanitizeResult — decision text fields", () => {
         ...absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
         summary: presentTextField("Published summary"),
       },
-    });
+    }).unwrap();
 
     expect(sanitized.metadata["summary"] === "Published summary").toBe(true);
     expect(
@@ -248,7 +281,7 @@ describe("sanitizeResult — decision text fields", () => {
           ...absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
           summary: absentTextField(reason),
         },
-      });
+      }).unwrap();
 
       expect(sanitized.metadata["summary"]).toBeUndefined();
       expect(
@@ -274,7 +307,7 @@ describe("sanitizeResult — adapter-supplied sections", () => {
           text: "Text\u0000with\u200Bcontrol\uFEFFchars.",
         },
       ],
-    });
+    }).unwrap();
 
     expect(sanitized.sections?.at(0)?.title).toBe("Vyrok");
     expect(sanitized.sections?.at(0)?.text).toBe("Textwithcontrolchars.");
@@ -284,7 +317,7 @@ describe("sanitizeResult — adapter-supplied sections", () => {
     const sanitized = sanitizeResult({
       ...baseResult(EMPTY_AST),
       sections: [{ index: 0, type: "ruling", title: null, text: "Text." }],
-    });
+    }).unwrap();
 
     expect(sanitized.sections?.at(0)?.title).toBeNull();
   });
@@ -300,7 +333,7 @@ describe("sanitizeResult — decision identifiers", () => {
           value: "12 Test Reporter 34",
         },
       ],
-    });
+    }).unwrap();
 
     expect(
       decisionIdentifiersFromStoredMetadata({
@@ -345,7 +378,7 @@ describe("sanitizeResult — docket grammar", () => {
       caseNumber,
       removed: raw.slice(raw.indexOf(caseNumber) + caseNumber.length),
     });
-    const sanitized = sanitizeResult(input);
+    const sanitized = sanitizeResult(input).unwrap();
     expect(sanitized.caseNumber === caseNumber).toBe(true);
     expect(sanitized.metadata["caseNumber"] === raw).toBe(true);
   });
@@ -356,7 +389,9 @@ describe("sanitizeResult — docket grammar", () => {
     ["a docket as written", "33 Cdo 1751/2023"],
   ])("the stored reference of %s is the one the write stores", (_, raw) => {
     const input = observed("CZE", raw);
-    expect(storedCaseNumberOf(input)).toBe(sanitizeResult(input).caseNumber);
+    expect(storedCaseNumberOf(input)).toBe(
+      sanitizeResult(input).unwrap().caseNumber,
+    );
   });
 
   test("a docket keyed row keeps its tail and is reported unkeyed", () => {
@@ -369,9 +404,9 @@ describe("sanitizeResult — docket grammar", () => {
       caseNumber: "33 Cdo 1751/2023",
       removed: "- II.",
     });
-    expect(sanitizeResult(input).caseNumber === "33 Cdo 1751/2023- II.").toBe(
-      true,
-    );
+    expect(
+      sanitizeResult(input).unwrap().caseNumber === "33 Cdo 1751/2023- II.",
+    ).toBe(true);
   });
 
   test.each<[string, string, ObservedDocket["type"]]>([
@@ -382,7 +417,7 @@ describe("sanitizeResult — docket grammar", () => {
   ])("%s: %s is stored as written (%s)", (country, raw, type) => {
     const input = observed(country, raw);
     expect(observedDocketOf(input).type).toBe(type);
-    expect(sanitizeResult(input).caseNumber === raw).toBe(true);
+    expect(sanitizeResult(input).unwrap().caseNumber === raw).toBe(true);
   });
 
   test("a placeholder docket is never read against the grammar", () => {
@@ -402,7 +437,9 @@ describe("sanitizeResult — docket grammar", () => {
       caseNumberType: DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
     });
     expect(observedDocketOf(input)).toEqual({ type: "kept" });
-    expect(sanitizeResult(input).caseNumber === "347 U.S. 483.").toBe(true);
+    expect(sanitizeResult(input).unwrap().caseNumber === "347 U.S. 483.").toBe(
+      true,
+    );
   });
 });
 
@@ -416,14 +453,14 @@ describe("sanitizeResult — decision date bounds", () => {
       sanitizeResult({
         ...baseResult(EMPTY_AST),
         decisionDate: "2944-04-30",
-      }).decisionDate,
+      }).unwrap().decisionDate,
     ).toBeUndefined();
 
     expect(
       sanitizeResult({
         ...baseResult(EMPTY_AST),
         decisionDate: "0001-01-01",
-      }).decisionDate,
+      }).unwrap().decisionDate,
     ).toBeUndefined();
   });
 
@@ -432,7 +469,7 @@ describe("sanitizeResult — decision date bounds", () => {
       sanitizeResult({
         ...baseResult(EMPTY_AST),
         decisionDate: "2026-02-30",
-      }).decisionDate,
+      }).unwrap().decisionDate,
     ).toBeUndefined();
   });
 
@@ -441,19 +478,21 @@ describe("sanitizeResult — decision date bounds", () => {
       sanitizeResult({
         ...baseResult(EMPTY_AST),
         decisionDate: "2026-04-15",
-      }).decisionDate,
+      }).unwrap().decisionDate,
     ).toBe("2026-04-15");
 
     expect(
       sanitizeResult({
         ...baseResult(EMPTY_AST),
         decisionDate: "2026-04-15T00:00:00Z",
-      }).decisionDate,
+      }).unwrap().decisionDate,
     ).toBe("2026-04-15");
   });
 
   test("leaves an absent date absent", () => {
-    expect(sanitizeResult(baseResult(EMPTY_AST)).decisionDate).toBeUndefined();
+    expect(
+      sanitizeResult(baseResult(EMPTY_AST)).unwrap().decisionDate,
+    ).toBeUndefined();
   });
 });
 
@@ -462,7 +501,7 @@ describe("sanitizeResult — shared partial-observation quality", () => {
     const refused = sanitizeResult({
       ...baseResult(EMPTY_AST),
       observationDetail: "secondary-refused",
-    });
+    }).unwrap();
     expect(partialObservationFromMetadata(refused.metadata)).toEqual({
       caseNumberIsPlaceholder: false,
       detail: "secondary-refused",
@@ -480,7 +519,7 @@ describe("sanitizeResult — shared partial-observation quality", () => {
       ...baseResult(EMPTY_AST),
       caseNumberIsPlaceholder: true,
       isListingOnly: true,
-    });
+    }).unwrap();
     expect(partialObservationFromMetadata(partial.metadata)).toEqual({
       caseNumberIsPlaceholder: true,
       detail: "listing-only",
@@ -488,10 +527,11 @@ describe("sanitizeResult — shared partial-observation quality", () => {
 
     const recovered = sanitizeResult({
       ...partial,
+      ...splitStoredDecisionTextMetadata(partial.metadata),
       caseNumberIsPlaceholder: undefined,
       isListingOnly: undefined,
       observationDetail: "complete",
-    });
+    }).unwrap();
     expect(partialObservationFromMetadata(recovered.metadata)).toEqual({
       caseNumberIsPlaceholder: false,
       detail: "complete",
@@ -512,7 +552,7 @@ describe("sanitizeResult — shared publisher identity limits", () => {
         "publisher:repair",
         "x".repeat(SOURCE_DOCUMENT_ID_MAX_LENGTH + 1),
       ],
-    });
+    }).unwrap();
 
     expect(sanitized.sourceDocumentIdAliases).toEqual(["publisher:fallback"]);
     expect(sanitized.sourceDocumentIdRepairAliases).toEqual([
@@ -525,7 +565,7 @@ describe("sanitizeResult — shared publisher identity limits", () => {
       sanitizeResult({
         ...baseResult(EMPTY_AST),
         sourceDocumentId: "x".repeat(SOURCE_DOCUMENT_ID_MAX_LENGTH + 1),
-      }),
+      }).unwrap(),
     ).toThrow("Publisher document identity exceeds storage limits");
   });
 
@@ -538,7 +578,7 @@ describe("sanitizeResult — shared publisher identity limits", () => {
         "publisher:repair\u200Bchanged",
         "publisher:repair-clean",
       ],
-    });
+    }).unwrap();
 
     expect(sanitized.sourceDocumentIdAliases).toEqual(["publisher:ab"]);
     expect(sanitized.sourceDocumentIdRepairAliases).toEqual([
@@ -551,7 +591,7 @@ describe("sanitizeResult — shared publisher identity limits", () => {
       sanitizeResult({
         ...baseResult(EMPTY_AST),
         sourceDocumentId: "publisher:a\u200Bb",
-      }),
+      }).unwrap(),
     ).toThrow("Publisher document identity cannot be sanitized");
   });
 
@@ -576,7 +616,7 @@ describe("sanitizeResult — shared publisher identity limits", () => {
   ])("parks as an unpersistable %s, not a TypeError", (field, overrides) => {
     const thrown = ((): unknown => {
       try {
-        sanitizeResult({ ...baseResult(EMPTY_AST), ...overrides });
+        sanitizeResult({ ...baseResult(EMPTY_AST), ...overrides }).unwrap();
         return undefined;
       } catch (error: unknown) {
         return error;
@@ -646,7 +686,7 @@ describe("sanitizeResult — documentAst text fields", () => {
       ],
     };
 
-    const sanitized = sanitizeResult(baseResult(ast));
+    const sanitized = sanitizeResult(baseResult(ast)).unwrap();
     if (!("blocks" in sanitized.documentAst)) {
       throw new Error("sanitized documentAst should be a DocumentAst");
     }
@@ -689,7 +729,7 @@ describe("sanitizeResult — documentAst text fields", () => {
       writable: true,
     });
 
-    const sanitized = sanitizeResult(baseResult(ast));
+    const sanitized = sanitizeResult(baseResult(ast)).unwrap();
     if (!("blocks" in sanitized.documentAst)) {
       throw new Error("sanitized documentAst should be a DocumentAst");
     }
@@ -741,7 +781,7 @@ describe("sanitizeResult — documentAst text fields", () => {
       ],
     };
 
-    const sanitized = sanitizeResult(baseResult(ast));
+    const sanitized = sanitizeResult(baseResult(ast)).unwrap();
     if (!("blocks" in sanitized.documentAst)) {
       throw new Error("sanitized documentAst should be a DocumentAst");
     }
@@ -783,7 +823,7 @@ describe("sanitizeResult — documentAst text fields", () => {
       ],
     };
 
-    const sanitized = sanitizeResult(baseResult(ast));
+    const sanitized = sanitizeResult(baseResult(ast)).unwrap();
     if (!("blocks" in sanitized.documentAst)) {
       throw new Error("sanitized documentAst should be a DocumentAst");
     }
@@ -808,7 +848,11 @@ describe("runIngestionPipeline — database timeouts", () => {
 
     const decision = baseResult({});
     czNsAdapter.fetchPage = async () =>
-      Result.ok({ decisions: [decision], nextCursor: "cursor-2" });
+      Result.ok({
+        decisions: [decision],
+        publisherRequest: PUBLISHER_REQUEST.ANSWERED,
+        nextCursor: "cursor-2",
+      });
 
     let calls = 0;
     let persistedCursor: string | null | undefined;
@@ -819,7 +863,7 @@ describe("runIngestionPipeline — database timeouts", () => {
         throw new TimeoutError({
           message: "decision write exceeded deadline",
           label: "ingestion-db-transaction",
-          timeoutMs: 10,
+          timeoutMs: 10, // timeout under test
         });
       }
 
@@ -863,8 +907,7 @@ describe("runIngestionPipeline — database timeouts", () => {
 
       // SAFETY: this test exercises only the final case_law_sources cursor
       // update after the synthetic timeout; the fake implements that chain.
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-      return await callback(tx as unknown as Transaction);
+      return await callback(asTestRaw<Transaction>(tx));
     };
 
     const result = await runIngestionPipeline({
@@ -888,46 +931,80 @@ describe("runIngestionPipeline — failure records", () => {
   type FailureRow = typeof caseLawIngestionFailures.$inferInsert;
 
   /**
-   * A page of one decision whose write fails with an ordinary error, so the
-   * page collects one failure record. The first database call orders the
-   * observation; the second reads its source; the third is the decision's write; later calls reach the
-   * failure-record insert and the cursor update.
+   * Reject the third database call to simulate a decision failure after its
+   * observation and source read. With rejection disabled, planning reads reach
+   * storage validation; both paths must durably record the refusal before advancing.
    */
-  const failingDecisionDb = (insertError: Error | null) => {
+  const failingDecisionDb = (
+    insertError: Error | null,
+    rejectDecisionWrite = true,
+  ) => {
     const state: {
       persistedCursor: string | null | undefined;
       insertedRows: FailureRow[];
-    } = { persistedCursor: undefined, insertedRows: [] };
+      decisionWrites: number;
+    } = { persistedCursor: undefined, insertedRows: [], decisionWrites: 0 };
     let calls = 0;
     const scopedDb: ScopedDb = async (callback) => {
       calls++;
-      if (calls === 3) {
+      if (calls === 3 && rejectDecisionWrite) {
         throw new Error("decision rejected\u0000at byte 12");
       }
 
       const tx = {
-        select: () => ({
+        query: {
+          caseLawDecisions: {
+            findFirst: async () => undefined,
+            findMany: async () => [],
+          },
+        },
+        select: (selection: unknown) => ({
           from: (table: unknown) => ({
-            where: () => ({
-              limit: async () =>
-                table === caseLawSources
-                  ? [{ adapterKey: ADAPTER_KEYS.CZ_NS }]
-                  : [],
-            }),
+            where:
+              table === caseLawDecisionIdentifiers ||
+              (typeof selection === "object" &&
+                selection !== null &&
+                "polarity" in selection)
+                ? async () => await Promise.resolve([])
+                : // oxlint-disable-next-line typescript/promise-function-async -- returns awaitable rows with for/limit chains; async would discard those methods
+                  () =>
+                    Object.assign(Promise.resolve([]), {
+                      for: () => ({ limit: async () => [] }),
+                      limit: async () =>
+                        table === caseLawSources &&
+                        typeof selection === "object" &&
+                        selection !== null &&
+                        "adapterKey" in selection
+                          ? [{ adapterKey: ADAPTER_KEYS.CZ_NS }]
+                          : [],
+                    }),
           }),
         }),
-        insert: () => ({
-          values: async (rows: FailureRow[]) => {
+        insert: (table: unknown) => ({
+          // oxlint-disable-next-line typescript/promise-function-async -- returns awaitable rows with conflict chains; async would discard those methods
+          values: (rows: FailureRow[]) => {
+            if (table === caseLawDecisions) {
+              state.decisionWrites++;
+              throw new Error("unexpected decision write");
+            }
             if (insertError !== null) {
               throw insertError;
             }
-            state.insertedRows.push(...rows);
-            return await Promise.resolve([]);
+            if (table === caseLawIngestionFailures) {
+              state.insertedRows.push(...rows);
+            }
+            return Object.assign(Promise.resolve([]), {
+              onConflictDoNothing: async () => [],
+              onConflictDoUpdate: async () => [],
+            });
           },
         }),
         execute: async () => await Promise.resolve([]),
         update: (table: unknown) => ({
           set: (values: { syncCursor?: string | null }) => {
+            if (table === caseLawDecisions) {
+              state.decisionWrites++;
+            }
             if (table === caseLawSources) {
               state.persistedCursor = values.syncCursor;
             }
@@ -943,10 +1020,9 @@ describe("runIngestionPipeline — failure records", () => {
         }),
       };
 
-      // SAFETY: this test exercises the failure-record insert and the final
-      // case_law_sources cursor update; the fake implements those chains.
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-      return await callback(tx as unknown as Transaction);
+      // SAFETY: this fake implements identity and polarity reads, failure-record
+      // inserts and cursor updates; a decision insert fails explicitly.
+      return await callback(asTestRaw<Transaction>(tx));
     };
     return { scopedDb, state };
   };
@@ -967,19 +1043,164 @@ describe("runIngestionPipeline — failure records", () => {
     logs = null;
   });
 
+  for (const field of ["caseNumber", "court"] as const) {
+    test(`records an overwidth ${field} normalization refusal and advances the cursor`, async () => {
+      const source = caseLawSourceRow({ name: "Normalization failure source" });
+      const value = "X".repeat(CITATION_STORAGE_WIDTHS[field] + 1);
+      const input = plainTextIngestionResult({
+        ...baseResult({}),
+        [field]: value,
+      });
+      czNsAdapter.fetchPage = async () =>
+        Result.ok({
+          decisions: [input],
+          publisherRequest: PUBLISHER_REQUEST.ANSWERED,
+          nextCursor: "cursor-2",
+        });
+      // Normalization refuses before the decision write; the ledger insert is
+      // the next transaction and must not receive a synthetic write failure.
+      const { scopedDb, state } = failingDecisionDb(null, false);
+      const result = await runIngestionPipeline({
+        acquireStoredTotalAdmission: async () => "held",
+        source,
+        sourceLease: testSourceLease(source),
+        scopedDb,
+        maxPages: 1,
+      });
+      expect(state.insertedRows).toHaveLength(1);
+      const [row] = state.insertedRows;
+      expect(row?.recordIdentity).toMatch(/^input:[0-9a-f]{64}$/u);
+      expect(row?.caseNumber).toBe(
+        input.caseNumber.slice(0, CITATION_STORAGE_WIDTHS.caseNumber),
+      );
+      expect(row?.errorMessage).toContain(
+        field === "caseNumber"
+          ? "Decision number exceeds storage limits"
+          : "Decision court exceeds storage limits",
+      );
+      expect(result.inserted).toBe(0);
+      expect(result.skipped).toBe(1);
+      expect(result.haltReason).toBeNull();
+      expect(result.nextCursor).toBe("cursor-2");
+      expect(state.persistedCursor).toBe("cursor-2");
+    });
+  }
+
+  test("records an aggregate search-candidate byte refusal before writing and advances the cursor", async () => {
+    const source = caseLawSourceRow({
+      name: "Search candidate failure source",
+    });
+    const input = plainTextIngestionResult({
+      ...baseResult(EMPTY_AST),
+      decisionType: "é".repeat(
+        CASE_LAW_SEARCH_CANDIDATE_ROW_MAX_BYTES / Buffer.byteLength("é"),
+      ),
+      fulltext: "Decision text",
+    });
+    expect(fitsDecisionSearchCandidateRow(input)).toBe(false);
+    czNsAdapter.fetchPage = async () =>
+      Result.ok({
+        decisions: [input],
+        publisherRequest: PUBLISHER_REQUEST.ANSWERED,
+        nextCursor: "cursor-2",
+      });
+    const { scopedDb, state } = failingDecisionDb(null, false);
+    const result = await runIngestionPipeline({
+      acquireStoredTotalAdmission: async () => "held",
+      source,
+      sourceLease: testSourceLease(source),
+      scopedDb,
+      maxPages: 1,
+    });
+    expect(state.insertedRows).toHaveLength(1);
+    expect(state.insertedRows.at(0)?.errorMessage).toContain(
+      "Decision search candidate exceeds storage byte limits",
+    );
+    expect(state.decisionWrites).toBe(0);
+    expect(result.inserted).toBe(0);
+    expect(result.skipped).toBe(1);
+    expect(result.haltReason).toBeNull();
+    expect(result.nextCursor).toBe("cursor-2");
+    expect(state.persistedCursor).toBe("cursor-2");
+  });
+
+  test.each(["text", "normalizedIdentifier"] as const)(
+    "records an extracted citation exceeding %s width before writing the decision and advances the cursor",
+    async (field) => {
+      const source = caseLawSourceRow({ name: "Citation failure source" });
+      const prefix = "ECLI:CZ:NS:2026:";
+      const prefixLength =
+        field === "text"
+          ? prefix.length
+          : normalizeDecisionIdentifierValue(
+              DECISION_IDENTIFIER_TYPES.ECLI,
+              prefix,
+            ).length;
+      const citationText =
+        prefix + "1".repeat(CITATION_STORAGE_WIDTHS[field] + 1 - prefixLength);
+      const citations = extractCitations([{ index: 0, text: citationText }]);
+      expect(citations).toHaveLength(1);
+      const citation = citations.at(0);
+      expect(citation?.citationText).toBe(citationText);
+      if (citation === undefined) {
+        throw new Error("Expected an extracted citation");
+      }
+      const storedValue =
+        field === "text"
+          ? citation.citationText
+          : normalizeDecisionIdentifierValue(
+              citation.identifierType,
+              citation.identifierValue,
+            );
+      expect(storedValue.length).toBe(CITATION_STORAGE_WIDTHS[field] + 1);
+      const input = plainTextIngestionResult({
+        ...baseResult(EMPTY_AST),
+        fulltext: citationText,
+      });
+      czNsAdapter.fetchPage = async () =>
+        Result.ok({
+          decisions: [input],
+          publisherRequest: PUBLISHER_REQUEST.ANSWERED,
+          nextCursor: "cursor-2",
+        });
+      const { scopedDb, state } = failingDecisionDb(null, false);
+
+      const result = await runIngestionPipeline({
+        acquireStoredTotalAdmission: async () => "held",
+        source,
+        sourceLease: testSourceLease(source),
+        scopedDb,
+        maxPages: 1,
+      });
+
+      expect(state.insertedRows).toHaveLength(1);
+      expect(state.insertedRows.at(0)?.errorMessage).toContain(
+        `Citation field ${field} exceeds its storage width`,
+      );
+      expect(state.decisionWrites).toBe(0);
+      expect(result.inserted).toBe(0);
+      expect(result.skipped).toBe(1);
+      expect(result.haltReason).toBeNull();
+      expect(result.nextCursor).toBe("cursor-2");
+      expect(state.persistedCursor).toBe("cursor-2");
+    },
+  );
+
   test("writes a failure record within the column limits and moves the cursor on", async () => {
     const source = caseLawSourceRow({ name: "Failure-record source" });
-    const caseNumber = "X".repeat(300);
+    const caseNumber = "X".repeat(CITATION_STORAGE_WIDTHS.caseNumber);
     czNsAdapter.fetchPage = async () =>
       Result.ok({
         decisions: [
           plainTextIngestionResult({
             ...baseResult({}),
+            // A publisher id: a full-width docket forms no fallback identity.
+            sourceDocumentId: "failure-record-columns",
             caseNumber,
             language: "sk-SK-x-long",
           }),
         ],
-        itemBuildFailures: { type: "item_build_failed", count: 2 },
+        publisherRequest: PUBLISHER_REQUEST.ANSWERED,
         nextCursor: "cursor-2",
       });
     const { scopedDb, state } = failingDecisionDb(null);
@@ -1002,17 +1223,79 @@ describe("runIngestionPipeline — failure records", () => {
     expect(result.haltReason).toBeNull();
     expect(result.nextCursor).toBe("cursor-2");
     expect(state.persistedCursor).toBe("cursor-2");
-    expect(
-      logs.records.find(
-        ({ message }) => message === "case_law.ingestion.pipeline_page_done",
-      )?.attributes?.["itemBuildFailures"],
-    ).toBe(2);
   });
 
-  test("reports a failure record the database rejects as invalid data and moves the cursor on", async () => {
+  test.each([0, 1])(
+    "holds a page with %i retained typed failures and one omitted item",
+    async (retained) => {
+      const source = caseLawSourceRow({ name: "Incomplete failed page" });
+      const rejected = plainTextIngestionResult({
+        ...baseResult({}),
+        sourceDocumentId: "retained-failed-input",
+        caseNumber: "{\\rtf1 invalid label}",
+        sourceRaw: "original publisher listing",
+      });
+      expect(rejected.plainTextOutcome.type).toBe("item_build_failed");
+      czNsAdapter.fetchPage = async () =>
+        Result.ok({
+          decisions: retained === 0 ? [] : [rejected],
+          itemBuildFailures: { type: "item_build_failed", count: retained + 1 },
+          publisherRequest: PUBLISHER_REQUEST.ANSWERED,
+          nextCursor: "cursor-2",
+        });
+      const { scopedDb, state } = failingDecisionDb(null, false);
+      const result = await runIngestionPipeline({
+        source,
+        sourceLease: testSourceLease(source),
+        scopedDb,
+        maxPages: 1,
+        acquireStoredTotalAdmission: async () => "held",
+      });
+      expect(result.haltReason).toContain("lack replayable per-item outcomes");
+      expect(result.stopKind).toBe(INGESTION_STOP_KIND.ADAPTER_ERROR);
+      expect(result.nextCursor).toBe(source.syncCursor);
+      expect(state.persistedCursor).toBe(source.syncCursor);
+      expect(state.insertedRows).toHaveLength(retained);
+    },
+  );
+
+  test("passes a failed build only after its retained input reaches the ledger", async () => {
+    const source = caseLawSourceRow({ name: "Retained failed page" });
+    const rejected = plainTextIngestionResult({
+      ...baseResult({}),
+      sourceDocumentId: "retained-failed-input",
+      caseNumber: "{\\rtf1 invalid label}",
+      sourceRaw: "original publisher listing",
+    });
+    expect(rejected.plainTextOutcome.type).toBe("item_build_failed");
+    czNsAdapter.fetchPage = async () =>
+      Result.ok({
+        decisions: [rejected],
+        itemBuildFailures: { type: "item_build_failed", count: 1 },
+        publisherRequest: PUBLISHER_REQUEST.ANSWERED,
+        nextCursor: "cursor-2",
+      });
+    const { scopedDb, state } = failingDecisionDb(null, false);
+    const result = await runIngestionPipeline({
+      source,
+      sourceLease: testSourceLease(source),
+      scopedDb,
+      maxPages: 1,
+      acquireStoredTotalAdmission: async () => "held",
+    });
+    expect(result.haltReason).toBeNull();
+    expect(result.nextCursor).toBe("cursor-2");
+    expect(state.insertedRows).toHaveLength(1);
+  });
+
+  test("holds the cursor when the database rejects the failure record", async () => {
     const source = caseLawSourceRow({ name: "Failure-record source" });
     czNsAdapter.fetchPage = async () =>
-      Result.ok({ decisions: [baseResult({})], nextCursor: "cursor-2" });
+      Result.ok({
+        decisions: [baseResult({})],
+        publisherRequest: PUBLISHER_REQUEST.ANSWERED,
+        nextCursor: "cursor-2",
+      });
     const { scopedDb, state } = failingDecisionDb(postgresError("22021"));
     logs = installRecordingLogger();
 
@@ -1024,8 +1307,10 @@ describe("runIngestionPipeline — failure records", () => {
       maxPages: 1,
     });
 
-    expect(state.persistedCursor).toBe("cursor-2");
-    expect(result.haltReason).toBeNull();
+    expect(state.persistedCursor).toBe("cursor-1");
+    expect(result.nextCursor).toBe("cursor-1");
+    expect(result.pagesProcessed).toBe(0);
+    expect(result.haltReason).toContain("cursor held for retry");
     expect(
       logs
         .at("ERROR")
@@ -1039,7 +1324,11 @@ describe("runIngestionPipeline — failure records", () => {
   test("holds the source cursor when the failure record write meets a serialization failure", async () => {
     const source = caseLawSourceRow({ name: "Failure-record source" });
     czNsAdapter.fetchPage = async () =>
-      Result.ok({ decisions: [baseResult({})], nextCursor: "cursor-2" });
+      Result.ok({
+        decisions: [baseResult({})],
+        publisherRequest: PUBLISHER_REQUEST.ANSWERED,
+        nextCursor: "cursor-2",
+      });
     const { scopedDb, state } = failingDecisionDb(postgresError("40001"));
 
     const result = await runIngestionPipeline({
@@ -1070,7 +1359,11 @@ describe("runIngestionPipeline — empty-page cursor progress", () => {
     const controller = new AbortController();
     czNsAdapter.fetchPage = async () => {
       controller.abort();
-      return Result.ok({ decisions: [], nextCursor: "cursor-2" });
+      return Result.ok({
+        decisions: [],
+        publisherRequest: PUBLISHER_REQUEST.ANSWERED,
+        nextCursor: "cursor-2",
+      });
     };
 
     let acquires = 0;
@@ -1127,8 +1420,7 @@ describe("runIngestionPipeline — empty-page cursor progress", () => {
       // SAFETY: this test exercises only the final case_law_sources cursor
       // update (the empty page performs no decision writes); the fake
       // implements that chain.
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-      return await callback(tx as unknown as Transaction);
+      return await callback(asTestRaw<Transaction>(tx));
     };
 
     const result = await runIngestionPipeline({
@@ -1165,7 +1457,11 @@ describe("runIngestionPipeline — document observer failures", () => {
               fetch: async () => new Response("document"),
             });
           }
-          return Result.ok({ decisions: [], nextCursor: "cursor-2" });
+          return Result.ok({
+            decisions: [],
+            publisherRequest: PUBLISHER_REQUEST.ANSWERED,
+            nextCursor: "cursor-2",
+          });
         },
       });
       czNsAdapter.fetchPage = wrappedAdapter.fetchPage;
@@ -1227,9 +1523,14 @@ describe("runIngestionPipeline — document observer failures", () => {
     ];
 
     for (const { name, observe } of failures) {
-      const startedAt = performance.now();
-      const actual = await run({ observe });
-      expect(performance.now() - startedAt, name).toBeLessThan(2500);
+      let observerCalls = 0;
+      const actual = await run({
+        observe: async (observation) => {
+          observerCalls += 1;
+          await observe(observation);
+        },
+      });
+      expect(observerCalls, name).toBe(1);
       expect(actual.result, name).toEqual(baseline.result);
       expect(actual.cursorWrites, name).toEqual(baseline.cursorWrites);
       expect(actual.finalCursor, name).toBe(baseline.finalCursor);
@@ -1343,6 +1644,7 @@ describe("runIngestionPipeline — cycle deadline", () => {
         decisions: [
           { ...baseResult(EMPTY_AST), sourceRaw: "<html>source</html>" },
         ],
+        publisherRequest: PUBLISHER_REQUEST.ANSWERED,
         nextCursor: "cursor-2",
       });
     try {
@@ -1424,13 +1726,168 @@ describe("runIngestionPipeline — cycle deadline", () => {
     }
   });
 
+  test.each(["page", "cycle"] as const)(
+    "keeps a publisher failure that settled before the %s signal fired",
+    async (ending) => {
+      const source = caseLawSourceRow({ name: "Publisher-first source" });
+      const drain = new AbortController();
+      const originalPageTimeout = czNsAdapter.pageTimeoutMs;
+      if (ending === "page") {
+        czNsAdapter.pageTimeoutMs = 20;
+      }
+      let pageSignal: AbortSignal | undefined;
+      czNsAdapter.fetchPage = async (_cursor, _config, signal) => {
+        pageSignal = signal;
+        expect(signal?.aborted).toBe(false);
+        // The publisher's own request timeout, not ours.
+        return Result.err(
+          new AdapterFetchError({
+            message: "Publisher request timed out",
+            adapterKey: "cz-ns",
+            cursor: source.syncCursor,
+            cause: new DOMException("The operation timed out.", "TimeoutError"),
+          }),
+        );
+      };
+      // The lease renewal after the request waits on the database until our
+      // own page or cycle signal has fired.
+      const lease: CaseLawSourceIngestionLease = {
+        ...testSourceLease(source),
+        beforeRemoteEffect: async (effect) => {
+          const settled = await effect();
+          if (ending === "cycle") {
+            drain.abort();
+          }
+          const signal = pageSignal;
+          if (signal !== undefined && !signal.aborted) {
+            await new Promise<void>((resolve) => {
+              signal.addEventListener("abort", () => resolve(), { once: true });
+            });
+          }
+          return settled;
+        },
+      };
+      let persistedCursor: string | null | undefined;
+      try {
+        const result = await runIngestionPipeline({
+          source,
+          sourceLease: lease,
+          acquireStoredTotalAdmission: async () => "held",
+          scopedDb: cursorOnlyDb((cursor) => {
+            persistedCursor = cursor;
+          }),
+          cycle: { budgetMs: 60_000, abortEarlyOn: [drain.signal] },
+        });
+        expect(pageSignal?.aborted).toBe(true);
+        expect(result.stopKind).toBe(INGESTION_STOP_KIND.SOURCE_UNREACHABLE);
+        expect(result.pagesProcessed).toBe(0);
+        expect(result.nextCursor).toBe(source.syncCursor);
+        expect(persistedCursor).toBe(source.syncCursor);
+      } finally {
+        czNsAdapter.pageTimeoutMs = originalPageTimeout;
+      }
+    },
+  );
+
+  test.each(["page", "cycle"] as const)(
+    "a fetch that settles after the %s signal fired is a deadline",
+    async (ending) => {
+      const source = caseLawSourceRow({ name: "Deadline-only source" });
+      const drain = new AbortController();
+      const originalPageTimeout = czNsAdapter.pageTimeoutMs;
+      if (ending === "page") {
+        czNsAdapter.pageTimeoutMs = 20;
+      }
+      czNsAdapter.fetchPage = async (_cursor, _config, signal) => {
+        if (ending === "cycle") {
+          drain.abort(
+            new DOMException("The operation timed out.", "TimeoutError"),
+          );
+        }
+        if (signal !== undefined && !signal.aborted) {
+          await new Promise<void>((resolve) => {
+            signal.addEventListener("abort", () => resolve(), { once: true });
+          });
+        }
+        // Our own abort reason reads as a request timeout on its own; only
+        // the order of events says it was our deadline.
+        const error = new AdapterFetchError({
+          message: "Request aborted",
+          adapterKey: "cz-ns",
+          cursor: source.syncCursor,
+          cause: signal?.reason,
+        });
+        expect(error.stopKind).toBe(INGESTION_STOP_KIND.SOURCE_UNREACHABLE);
+        return Result.err(error);
+      };
+      try {
+        const result = await runIngestionPipeline({
+          source,
+          sourceLease: testSourceLease(source),
+          acquireStoredTotalAdmission: async () => "held",
+          scopedDb: cursorOnlyDb(() => undefined),
+          cycle: { budgetMs: 60_000, abortEarlyOn: [drain.signal] },
+        });
+        expect(result.stopKind).toBe(INGESTION_STOP_KIND.DEADLINE);
+        expect(result.pagesProcessed).toBe(0);
+        expect(result.nextCursor).toBe(source.syncCursor);
+      } finally {
+        czNsAdapter.pageTimeoutMs = originalPageTimeout;
+      }
+    },
+  );
+
+  test("a page the database brake holds until the cycle ends is a deadline", async () => {
+    const source = caseLawSourceRow({ name: "Brake-held source" });
+    const drain = new AbortController();
+    czNsAdapter.fetchPage = async () =>
+      Result.ok({
+        decisions: [baseResult(EMPTY_AST)],
+        publisherRequest: PUBLISHER_REQUEST.ANSWERED,
+        nextCursor: "cursor-2",
+      });
+    let releases = 0;
+    const dbSlot = {
+      acquire: async (signal?: AbortSignal) => {
+        // The brake holds the slot; the cycle ends while the page waits.
+        drain.abort();
+        expect(signal?.aborted).toBe(true);
+        throw new DOMException("aborted", "AbortError");
+      },
+      release: () => {
+        releases++;
+      },
+    };
+    let persistedCursor: string | null | undefined;
+    const result = await runIngestionPipeline({
+      source,
+      sourceLease: testSourceLease(source),
+      acquireStoredTotalAdmission: async () => "held",
+      scopedDb: cursorOnlyDb((cursor) => {
+        persistedCursor = cursor;
+      }),
+      dbSlot,
+      cycle: { budgetMs: 60_000, abortEarlyOn: [drain.signal] },
+    });
+    expect(releases).toBe(0);
+    expect(result.haltReason).toBe(CYCLE_HALT_REASON.TIMEOUT);
+    expect(result.stopKind).toBe(INGESTION_STOP_KIND.DEADLINE);
+    expect(result.pagesProcessed).toBe(0);
+    expect(result.nextCursor).toBe(source.syncCursor);
+    expect(persistedCursor).toBe(source.syncCursor);
+  });
+
   test("stops before a page the remaining budget cannot cover", async () => {
     const source = caseLawSourceRow({ name: "Short-budget source" });
 
     let fetches = 0;
     czNsAdapter.fetchPage = async () => {
       fetches++;
-      return Result.ok({ decisions: [], nextCursor: "cursor-2" });
+      return Result.ok({
+        decisions: [],
+        publisherRequest: PUBLISHER_REQUEST.ANSWERED,
+        nextCursor: "cursor-2",
+      });
     };
 
     let persistedCursor: string | null | undefined;
@@ -1461,7 +1918,11 @@ describe("runIngestionPipeline — cycle deadline", () => {
     let fetches = 0;
     czNsAdapter.fetchPage = async () => {
       fetches++;
-      return Result.ok({ decisions: [], nextCursor: "cursor-2" });
+      return Result.ok({
+        decisions: [],
+        publisherRequest: PUBLISHER_REQUEST.ANSWERED,
+        nextCursor: "cursor-2",
+      });
     };
 
     // The production lease renews itself before the request. This one ends
@@ -1494,6 +1955,7 @@ describe("runIngestionPipeline — cycle deadline", () => {
     expect(fetches).toBe(0);
     expect(result.pagesProcessed).toBe(0);
     expect(result.haltReason).toBe(CYCLE_HALT_REASON.TIMEOUT);
+    expect(result.stopKind).toBe(INGESTION_STOP_KIND.DEADLINE);
     expect(persistedCursor).toBe("cursor-1");
   });
 
@@ -1503,7 +1965,11 @@ describe("runIngestionPipeline — cycle deadline", () => {
     let fetches = 0;
     czNsAdapter.fetchPage = async () => {
       fetches++;
-      return Result.ok({ decisions: [], nextCursor: null });
+      return Result.ok({
+        decisions: [],
+        publisherRequest: PUBLISHER_REQUEST.ANSWERED,
+        nextCursor: null,
+      });
     };
 
     let persistedCursor: string | null | undefined;
@@ -1582,6 +2048,9 @@ describe("processDecision — corpus storage off", () => {
                     ? [{ adapterKey: ADAPTER_KEYS.SK_COURTS }]
                     : [],
                 ),
+              // The generation registry, read in generation order: no
+              // generation is registered, so nothing is projected.
+              orderBy: () => ({ limit: async () => await Promise.resolve([]) }),
             }),
           }),
         }),
@@ -1592,6 +2061,7 @@ describe("processDecision — corpus storage off", () => {
         query: {
           caseLawDecisions: {
             findFirst: async () => await Promise.resolve(existing),
+            findMany: async () => await Promise.resolve([existing]),
           },
         },
         update: (table: unknown) => ({
@@ -1607,32 +2077,35 @@ describe("processDecision — corpus storage off", () => {
           },
         }),
         delete: () => ({ where: async () => undefined }),
-        insert: () => ({ values: insertedValues }),
+        insert: insertFixture,
       };
 
       // SAFETY: the refresh path walks only these chains; anything else
       // would throw and fail the test loudly.
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-      return await callback(tx as unknown as Transaction);
+      return await callback(asTestRaw<Transaction>(tx));
     };
 
-    const outcome = await processDecision({
-      input: plainTextIngestionResult({
-        caseNumber: "X/1/2026",
-        court: "Test Court",
-        country: "SVK",
-        language: "sk",
-        fulltext: "Rozhodnutie o veci samej.",
-        metadata: {},
-        textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
-        rawHash: "new-hash",
-        documentAst: EMPTY_AST,
-      }),
-      observationOrder: 1n,
-      sourceId,
-      scopedDb,
-      observedAt: new Date("2026-07-31T12:00:00.000Z"),
-    });
+    const outcome = (
+      await processDecision({
+        input: plainTextIngestionResult({
+          caseNumber: "X/1/2026",
+          court: "Najvyšší súd Slovenskej republiky",
+          country: "SVK",
+          language: "sk",
+          fulltext: "Rozhodnutie o veci samej.",
+          metadata: {},
+          textFields: absentDecisionTextFields(
+            TEXT_ABSENCE_REASON.NOT_PUBLISHED,
+          ),
+          rawHash: "new-hash",
+          documentAst: EMPTY_AST,
+        }),
+        observationOrder: 1n,
+        sourceId,
+        scopedDb,
+        observedAt: new Date("2026-07-31T12:00:00.000Z"),
+      })
+    ).unwrap();
 
     expect(outcome.inserted).toBe(true);
     expect(updated).toMatchObject({
@@ -1648,7 +2121,7 @@ describe("processDecision — corpus storage off", () => {
 describe("processDecision — the decision's judges", () => {
   type ReplacedJudges = {
     decisionId: string;
-    judges: readonly { role: string; nameAsPrinted: string }[];
+    judges: readonly DecisionJudgeInput[];
     /** Whether the write happened inside the transaction that wrote the row. */
     inTransaction: boolean;
   };
@@ -1688,6 +2161,9 @@ describe("processDecision — the decision's judges", () => {
                     ? [{ adapterKey: ADAPTER_KEYS.SK_COURTS }]
                     : [],
                 ),
+              // The generation registry, read in generation order: no
+              // generation is registered, so nothing is projected.
+              orderBy: () => ({ limit: async () => await Promise.resolve([]) }),
             }),
           }),
         }),
@@ -1695,6 +2171,7 @@ describe("processDecision — the decision's judges", () => {
         query: {
           caseLawDecisions: {
             findFirst: async () => await Promise.resolve(existing),
+            findMany: async () => await Promise.resolve([existing]),
           },
         },
         update: () => ({
@@ -1705,37 +2182,38 @@ describe("processDecision — the decision's judges", () => {
           }),
         }),
         delete: () => ({ where: async () => undefined }),
-        insert: () => ({ values: insertedValues }),
+        insert: insertFixture,
       };
 
       inTransaction = true;
       try {
         // SAFETY: the refresh path walks only these chains; anything else
         // would throw and fail the test loudly.
-        // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-        return await callback(tx as unknown as Transaction);
+        return await callback(asTestRaw<Transaction>(tx));
       } finally {
         inTransaction = false;
       }
     };
 
-    await processDecision({
-      input: plainTextIngestionResult({
-        ...baseResult(EMPTY_AST),
-        fulltext: "Ústavní soud rozhodl o návrhu.",
-        ...(judges === undefined ? {} : { judges }),
-      }),
-      judges: {
-        replace: async (_tx, { decisionId, judges: written }) => {
-          replaced.push({ decisionId, judges: written, inTransaction });
-          await Promise.resolve();
+    (
+      await processDecision({
+        input: plainTextIngestionResult({
+          ...baseResult(EMPTY_AST),
+          fulltext: "Ústavní soud rozhodl o návrhu.",
+          ...(judges === undefined ? {} : { judges }),
+        }),
+        judges: {
+          replace: async (_tx, { decisionId, judges: written }) => {
+            replaced.push({ decisionId, judges: written, inTransaction });
+            await Promise.resolve();
+          },
         },
-      },
-      observationOrder: 1n,
-      sourceId,
-      scopedDb,
-      observedAt: new Date("2026-07-31T12:00:00.000Z"),
-    });
+        observationOrder: 1n,
+        sourceId,
+        scopedDb,
+        observedAt: new Date("2026-07-31T12:00:00.000Z"),
+      })
+    ).unwrap();
 
     return replaced;
   };
@@ -1800,6 +2278,9 @@ describe("processDecision — fields on an existing row", () => {
                     {
                       type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
                       normalizedValue: bareCitationKey("X/1/2026"),
+                      value: "X/1/2026",
+                      declaredAt: null,
+                      independentClaims: [DECISION_IDENTIFIER_CLAIM.HOST],
                     },
                   ],
                 }
@@ -1833,6 +2314,11 @@ describe("processDecision — fields on an existing row", () => {
                           ? [{ adapterKey: ADAPTER_KEYS.SK_COURTS }]
                           : [],
                       ),
+                    // The generation registry, read in generation order: no
+                    // generation is registered, so nothing is projected.
+                    orderBy: () => ({
+                      limit: async () => await Promise.resolve([]),
+                    }),
                   }),
                 },
         }),
@@ -1843,6 +2329,7 @@ describe("processDecision — fields on an existing row", () => {
         query: {
           caseLawDecisions: {
             findFirst: async () => await Promise.resolve(existing),
+            findMany: async () => await Promise.resolve([existing]),
           },
         },
         update: (table: unknown) => ({
@@ -1858,33 +2345,34 @@ describe("processDecision — fields on an existing row", () => {
           },
         }),
         delete: () => ({ where: async () => undefined }),
-        insert: () => ({ values: insertedValues }),
+        insert: insertFixture,
       };
 
       // SAFETY: the refresh path walks only these chains; anything else
       // would throw and fail the test loudly.
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-      return await callback(tx as unknown as Transaction);
+      return await callback(asTestRaw<Transaction>(tx));
     };
 
-    await processDecision({
-      input: plainTextIngestionResult({
-        caseNumber: "X/1/2026",
-        court: "Test Court",
-        country: "SVK",
-        language: "sk",
-        decisionDate,
-        fulltext: "Rozhodnutie o veci samej.",
-        metadata: {},
-        textFields,
-        rawHash: "new-hash",
-        documentAst: EMPTY_AST,
-      }),
-      observationOrder: 1n,
-      sourceId,
-      scopedDb,
-      observedAt: new Date("2026-07-31T12:00:00.000Z"),
-    });
+    (
+      await processDecision({
+        input: plainTextIngestionResult({
+          caseNumber: "X/1/2026",
+          court: "Najvyšší súd Slovenskej republiky",
+          country: "SVK",
+          language: "sk",
+          decisionDate,
+          fulltext: "Rozhodnutie o veci samej.",
+          metadata: {},
+          textFields,
+          rawHash: "new-hash",
+          documentAst: EMPTY_AST,
+        }),
+        observationOrder: 1n,
+        sourceId,
+        scopedDb,
+        observedAt: new Date("2026-07-31T12:00:00.000Z"),
+      })
+    ).unwrap();
 
     return updated;
   };
@@ -1916,7 +2404,25 @@ describe("processDecision — fields on an existing row", () => {
       },
     });
 
-    expect(updated?.["metadata"]).toEqual({ abstract: "Stored abstract" });
+    expect(updated?.["metadata"]).toEqual({
+      abstract: "Stored abstract",
+      [DECISION_TEXT_ABSENCE_VERSION_METADATA_KEY]:
+        DECISION_TEXT_ABSENCE_SCHEMA_VERSION,
+      [DECISION_TEXT_ABSENCE_METADATA_KEY]: [
+        {
+          field: DECISION_TEXT_FIELD.HEADNOTE,
+          reason: TEXT_ABSENCE_REASON.NOT_PUBLISHED,
+        },
+        {
+          field: DECISION_TEXT_FIELD.LEGAL_SENTENCE,
+          reason: TEXT_ABSENCE_REASON.NOT_PUBLISHED,
+        },
+        {
+          field: DECISION_TEXT_FIELD.SUMMARY,
+          reason: TEXT_ABSENCE_REASON.NOT_PUBLISHED,
+        },
+      ],
+    });
   });
 });
 
@@ -1938,7 +2444,7 @@ describe("processDecision — source raw upload failure", () => {
   /** The payload's own digest, under the decision's own raw prefix. */
   const rawKey = (sourceId: string, payload: string): RegExp =>
     new RegExp(
-      `^case-law/raw/${sourceId}/documents/[0-9a-f-]{36}/payloads/${new Bun.CryptoHasher("sha256").update(payload).digest("hex")}$`,
+      `^case-law/raw/${sourceId}/documents/[0-9a-f-]{36}/payloads/${createSha256().update(payload).digest("hex")}$`,
       "u",
     );
 
@@ -1970,6 +2476,9 @@ describe("processDecision — source raw upload failure", () => {
                     ? [{ adapterKey: ADAPTER_KEYS.SK_COURTS }]
                     : [],
                 ),
+              // The generation registry, read in generation order: no
+              // generation is registered, so nothing is projected.
+              orderBy: () => ({ limit: async () => await Promise.resolve([]) }),
             }),
           }),
         }),
@@ -1980,34 +2489,38 @@ describe("processDecision — source raw upload failure", () => {
         query: {
           caseLawDecisions: {
             findFirst: async () => await Promise.resolve(undefined),
+            findMany: async () => await Promise.resolve([]),
           },
         },
       };
 
       // SAFETY: the raw upload runs before any decision write, so the
       // dedup lookup is the only chain this path reaches.
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-      return await callback(tx as unknown as Transaction);
+      return await callback(asTestRaw<Transaction>(tx));
     };
 
-    const outcome = await processDecision({
-      input: plainTextIngestionResult({
-        caseNumber: "X/2/2026",
-        court: "Test Court",
-        country: "SVK",
-        language: "sk",
-        fulltext: "Rozhodnutie o veci samej.",
-        metadata: {},
-        textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
-        rawHash: "new-hash",
-        documentAst: EMPTY_AST,
-        sourceRaw,
-      }),
-      observationOrder: 1n,
-      sourceId,
-      scopedDb,
-      observedAt: new Date("2026-08-03T00:00:00.000Z"),
-    });
+    const outcome = (
+      await processDecision({
+        input: plainTextIngestionResult({
+          caseNumber: "X/2/2026",
+          court: "Najvyšší súd Slovenskej republiky",
+          country: "SVK",
+          language: "sk",
+          fulltext: "Rozhodnutie o veci samej.",
+          metadata: {},
+          textFields: absentDecisionTextFields(
+            TEXT_ABSENCE_REASON.NOT_PUBLISHED,
+          ),
+          rawHash: "new-hash",
+          documentAst: EMPTY_AST,
+          sourceRaw,
+        }),
+        observationOrder: 1n,
+        sourceId,
+        scopedDb,
+        observedAt: new Date("2026-08-03T00:00:00.000Z"),
+      })
+    ).unwrap();
 
     if (outcome.status !== "retryable") {
       throw new Error(`expected a retryable outcome, got ${outcome.status}`);
@@ -2056,6 +2569,9 @@ describe("processDecision — source raw upload failure", () => {
                     ? [{ adapterKey: ADAPTER_KEYS.SK_COURTS }]
                     : [],
                 ),
+              // The generation registry, read in generation order: no
+              // generation is registered, so nothing is projected.
+              orderBy: () => ({ limit: async () => await Promise.resolve([]) }),
             }),
           }),
         }),
@@ -2066,34 +2582,38 @@ describe("processDecision — source raw upload failure", () => {
         query: {
           caseLawDecisions: {
             findFirst: async () => await Promise.resolve(undefined),
+            findMany: async () => await Promise.resolve([]),
           },
         },
       };
 
       // SAFETY: the raw upload runs before any decision write, so the
       // dedup lookup is the only chain this path reaches.
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-      return await callback(tx as unknown as Transaction);
+      return await callback(asTestRaw<Transaction>(tx));
     };
 
-    await processDecision({
-      input: plainTextIngestionResult({
-        caseNumber: "X/3/2026",
-        court: "Test Court",
-        country: "SVK",
-        language: "sk",
-        fulltext: "Rozhodnutie o veci samej.",
-        metadata: {},
-        textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
-        rawHash: "new-hash",
-        documentAst: EMPTY_AST,
-        sourceRaw: "<html></html>",
-      }),
-      observationOrder: 1n,
-      sourceId: createSafeId<"caseLawSource">(),
-      scopedDb,
-      observedAt: new Date("2026-08-05T00:00:00.000Z"),
-    });
+    (
+      await processDecision({
+        input: plainTextIngestionResult({
+          caseNumber: "X/3/2026",
+          court: "Najvyšší súd Slovenskej republiky",
+          country: "SVK",
+          language: "sk",
+          fulltext: "Rozhodnutie o veci samej.",
+          metadata: {},
+          textFields: absentDecisionTextFields(
+            TEXT_ABSENCE_REASON.NOT_PUBLISHED,
+          ),
+          rawHash: "new-hash",
+          documentAst: EMPTY_AST,
+          sourceRaw: "<html></html>",
+        }),
+        observationOrder: 1n,
+        sourceId: createSafeId<"caseLawSource">(),
+        scopedDb,
+        observedAt: new Date("2026-08-05T00:00:00.000Z"),
+      })
+    ).unwrap();
 
     const failure = logs.at("ERROR").at(0);
     expect(failure?.attributes?.["error.code"]).toBe("AccessDenied");

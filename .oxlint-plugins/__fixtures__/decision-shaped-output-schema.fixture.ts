@@ -18,10 +18,10 @@ declare const v: {
   union: (members: readonly unknown[]) => unknown;
 };
 declare const describeSchema: (schema: unknown) => unknown;
-declare const generateTanStackObjectForRole: (
+declare const generateTanStackObjectForTask: (
   options: Record<string, unknown>,
 ) => Promise<unknown>;
-declare const streamTanStackObjectForRole: (
+declare const streamTanStackObjectForTask: (
   options: Record<string, unknown>,
 ) => AsyncIterable<unknown>;
 declare const parseWithSchema: (options: Record<string, unknown>) => unknown;
@@ -30,7 +30,7 @@ const SEVERITIES = ["low", "high"] as const;
 
 // MUST flag: a single boolean field is a yes/no the decision model answers.
 export const booleanOnly = async () =>
-  await generateTanStackObjectForRole({
+  await generateTanStackObjectForTask({
     role: "fixture",
     // oxlint-disable-next-line decision-shaped-output-schema/decision-shaped-output-schema -- fixture: a boolean-only output schema must route to decide()
     outputSchema: v.strictObject({ applies: v.boolean() }),
@@ -38,7 +38,7 @@ export const booleanOnly = async () =>
 
 // MUST flag: a closed choice, a bounded integer and a date are all decisions.
 export const closedChoicesAndNumbers = async () =>
-  await generateTanStackObjectForRole({
+  await generateTanStackObjectForTask({
     role: "fixture",
     // oxlint-disable-next-line decision-shaped-output-schema/decision-shaped-output-schema -- fixture: picklist, integer and ISO date fields carry no prose
     outputSchema: v.object({
@@ -62,7 +62,7 @@ const rowDispositionSchema = v.strictObject({
 });
 
 export const sameFileConstant = async () =>
-  await generateTanStackObjectForRole({
+  await generateTanStackObjectForTask({
     role: "fixture",
     // oxlint-disable-next-line decision-shaped-output-schema/decision-shaped-output-schema -- fixture: a same-file schema constant must resolve through its identifier
     outputSchema: rowDispositionSchema,
@@ -75,7 +75,7 @@ const pipedVerdictSchema = describeSchema(
 );
 
 export const pipeWrapped = () =>
-  streamTanStackObjectForRole({
+  streamTanStackObjectForTask({
     role: "fixture",
     // oxlint-disable-next-line decision-shaped-output-schema/decision-shaped-output-schema -- fixture: pipe-wrapped object literals must resolve to their entries
     outputSchema: v.pipe(v.strictObject({ verdict: v.picklist(SEVERITIES) })),
@@ -83,7 +83,7 @@ export const pipeWrapped = () =>
 
 // Allowed: a free-text field keeps the call generative.
 export const proseOnly = async () =>
-  await generateTanStackObjectForRole({
+  await generateTanStackObjectForTask({
     role: "fixture",
     // expect-clean: decision-shaped-output-schema/decision-shaped-output-schema
     outputSchema: v.strictObject({ summary: v.string() }),
@@ -91,7 +91,7 @@ export const proseOnly = async () =>
 
 // Allowed: prose beside a closed choice still needs the generative model.
 export const proseBesideChoice = async () =>
-  await generateTanStackObjectForRole({
+  await generateTanStackObjectForTask({
     role: "fixture",
     outputSchema: v.strictObject({
       verdict: v.picklist(SEVERITIES),
@@ -102,7 +102,7 @@ export const proseBesideChoice = async () =>
 // Allowed: an explicit generative mode documents an intentional fallback or
 // provider-path probe even when its result is decision-shaped.
 export const explicitGenerativeMode = async () =>
-  await generateTanStackObjectForRole({
+  await generateTanStackObjectForTask({
     role: "fixture",
     outputMode: "generative",
     outputSchema: v.strictObject({ applies: v.boolean() }),
@@ -110,7 +110,7 @@ export const explicitGenerativeMode = async () =>
 
 // Allowed: an entry list with nothing in it decides nothing.
 export const emptySchema = async () =>
-  await generateTanStackObjectForRole({
+  await generateTanStackObjectForTask({
     role: "fixture",
     outputSchema: v.strictObject({}),
   });
@@ -118,7 +118,7 @@ export const emptySchema = async () =>
 // Allowed: the schema is declared in another module, so this file cannot prove
 // its shape.
 export const unresolvedSchema = async (importedSchema: unknown) =>
-  await generateTanStackObjectForRole({
+  await generateTanStackObjectForTask({
     role: "fixture",
     outputSchema: importedSchema,
   });
@@ -132,7 +132,7 @@ export const throughWrapper = parseWithSchema({
 
 // Allowed: the wrapper itself forwards a schema it cannot resolve.
 export const wrapperBody = async (input: { outputSchema: unknown }) =>
-  await generateTanStackObjectForRole({
+  await generateTanStackObjectForTask({
     role: "fixture",
     outputSchema: input.outputSchema,
   });

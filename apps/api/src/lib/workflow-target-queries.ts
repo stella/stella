@@ -1,10 +1,11 @@
 import { panic } from "better-result";
 import { and, asc, count, eq, inArray, lte, sql } from "drizzle-orm";
 
+import { chunk as chunkItems } from "@stll/concurrency/chunk";
+
 import type { ScopedDb } from "@/api/db/safe-db";
 import { entities } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
-import { chunked } from "@/api/lib/chunked";
 import {
   createTimestampIdCursorCodec,
   parsePgTimestampCursorValue,
@@ -30,7 +31,7 @@ const parseTimestamp = (value: string) =>
   parsePgTimestampCursorValue(value) ??
   panic("Stored workflow timestamp cursor is invalid");
 
-export const fetchExplicitWorkflowTargetRows = async ({
+const fetchExplicitWorkflowTargetRows = async ({
   inputEntityIds,
   scopedDb,
   workspaceId,
@@ -40,7 +41,10 @@ export const fetchExplicitWorkflowTargetRows = async ({
   workspaceId: SafeId<"workspace">;
 }): Promise<WorkflowTargetEntityRow[]> => {
   const entityRows: WorkflowTargetEntityRow[] = [];
-  for (const chunk of chunked(inputEntityIds, LIMITS.workflowEntityBatchSize)) {
+  for (const chunk of chunkItems(
+    inputEntityIds,
+    LIMITS.workflowEntityBatchSize,
+  )) {
     const rows = await scopedDb((tx) =>
       tx
         .select({ id: entities.id, kind: entities.kind })
@@ -60,7 +64,7 @@ export const fetchExplicitWorkflowTargetRows = async ({
   return entityRows;
 };
 
-export const readFullWorkflowSnapshotCursor = async ({
+const readFullWorkflowSnapshotCursor = async ({
   scopedDb,
 }: {
   scopedDb: ScopedDb;
@@ -125,7 +129,7 @@ const fetchFullWorkflowTargetBatch = async ({
   );
 };
 
-export const collectFullWorkflowTargetIds = async ({
+const collectFullWorkflowTargetIds = async ({
   createdAtCutoff,
   scopedDb,
   workspaceId,
@@ -190,6 +194,37 @@ const countFullWorkflowTargets = async ({
   }
 
   return row.value;
+};
+
+type CollectWorkflowTargetIdsOptions = {
+  inputEntityIds: readonly SafeId<"entity">[] | undefined;
+  inputOrder: readonly SafeId<"entity">[] | undefined;
+  scopedDb: ScopedDb;
+  workspaceId: SafeId<"workspace">;
+};
+
+export const collectWorkflowTargetIds = async ({
+  inputEntityIds,
+  inputOrder,
+  scopedDb,
+  workspaceId,
+}: CollectWorkflowTargetIdsOptions) => {
+  if (inputEntityIds !== undefined && inputEntityIds.length > 0) {
+    return resolveWorkflowTargetEntityIds({
+      entityRows: await fetchExplicitWorkflowTargetRows({
+        inputEntityIds,
+        scopedDb,
+        workspaceId,
+      }),
+      inputEntityIds,
+      inputOrder,
+    });
+  }
+  return await collectFullWorkflowTargetIds({
+    createdAtCutoff: await readFullWorkflowSnapshotCursor({ scopedDb }),
+    scopedDb,
+    workspaceId,
+  });
 };
 
 export const countWorkflowTargetEntities = async ({

@@ -1,0 +1,7 @@
+# Reading extracted document content for system work
+
+Generated from `scripts/ownership/system-extracted-content-read.ts`. See [Module ownership](../module-ownership.md).
+
+| Capability                                                                           | Owner                                             | Enforcement                                                                                                                                                                     | Summary                                                                                                       |
+| ------------------------------------------------------------------------------------ | ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `system-extracted-content-read` — Reading extracted document content for system work | `apps/api/src/lib/document-content-provenance.ts` | import `loadCurrentExtractedContentsForSearchIndex`, `loadCurrentDeadlineSource`, `isCurrentDeadlineSource` from `@/api/lib/document-content-provenance` (plus 3 allowed files) | Organization-wide extracted-content reads are limited to background projection and deadline processing paths. |

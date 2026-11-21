@@ -1,0 +1,69 @@
+name: Journey canary
+
+defaults:
+  run:
+    shell: bash
+
+on:
+  schedule:
+    - cron: "11 * * * *"
+    - cron: "41 */6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: journey-canary
+  cancel-in-progress: false
+
+jobs:
+  journeys:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Checkout journey checks
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          fetch-depth: ${{ (github.event_name == 'workflow_dispatch' || github.event.schedule == '41 */6 * * *') && '0' || '1' }}
+          persist-credentials: false
+          sparse-checkout: |
+            /packages/db-load-gate/src/default-busy-windows.json
+            /scripts/journey-detail.jq
+            /scripts/check-cli-promotion.ts
+            /scripts/promoted-cli-target.ts
+            /scripts/check-journeys.sh
+            /scripts/changeset-entry.ts
+            /scripts/check-published-versions.ts
+            /scripts/check-npm-publish-lag.ts
+            /scripts/promoted-release-policy.ts
+            /scripts/publish-packages.ts
+            /package.json
+          sparse-checkout-cone-mode: false
+
+      - name: Check public journeys
+        timeout-minutes: 3
+        env:
+          MCP_CANARY_TOKEN: ${{ secrets.MCP_CANARY_TOKEN }}
+        run: bash scripts/check-journeys.sh
+
+      - name: Setup registry checks
+        if: ${{ !cancelled() && (github.event_name == 'workflow_dispatch' || github.event.schedule == '41 */6 * * *') }}
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: package.json
+
+      - name: Check released CLI journeys
+        timeout-minutes: 3
+        if: ${{ !cancelled() && (github.event_name == 'workflow_dispatch' || github.event.schedule == '41 */6 * * *') }}
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          MCP_CANARY_TOKEN: ${{ secrets.MCP_CANARY_TOKEN }}
+        run: bash scripts/check-journeys.sh --cli
+
+      - name: Check published versions
+        if: ${{ !cancelled() && (github.event_name == 'workflow_dispatch' || github.event.schedule == '41 */6 * * *') }}
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: bun scripts/check-published-versions.ts

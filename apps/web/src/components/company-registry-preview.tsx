@@ -6,9 +6,9 @@ import { isBusinessRegistryCredentialSlug } from "@stll/api-contract";
 import type { AresCompany } from "@stll/business-registries/ares";
 import { getAresCourtName } from "@stll/business-registries/ares/court-names";
 import { getAresLegalFormName } from "@stll/business-registries/ares/legal-forms";
+import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 import { Button } from "@stll/ui/button";
 import { ExternalLinkIcon } from "@stll/ui/icons";
-import { Skeleton } from "@stll/ui/skeleton";
 import {
   Table,
   TableBody,
@@ -19,6 +19,10 @@ import {
 
 import { registryDetailLabel } from "@/components/company-registry-labels";
 import { parseRegistryCalendarDate } from "@/components/company-registry-preview.logic";
+import {
+  CompanyRegistryPreviewFrame,
+  CompanyRegistryPreviewPending,
+} from "@/components/company-registry-preview.pending";
 import { CompanySpecification } from "@/components/company-specification";
 import { RegistryCredentialSetup } from "@/components/registry-credential-setup";
 import type { RegistryHit } from "@/components/templates/registry-autofill";
@@ -30,7 +34,6 @@ import { detached } from "@/lib/detached";
 import { APIError } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { CALENDAR_DATE_FORMAT } from "@/lib/relative-time";
-import { sanitizeHref } from "@/lib/sanitize-href";
 
 type CompanyRegistryPreviewProps = {
   companyId: string;
@@ -53,14 +56,54 @@ export const CompanyRegistryPreview = ({
       query: companyId,
     }),
   );
+  if (isPending) {
+    return <CompanyRegistryPreviewPending />;
+  }
+
+  if (data?.type === "name-search-not-found") {
+    if (data.candidates.length === 0) {
+      return (
+        <p className="text-muted-foreground p-6 text-sm">
+          {t("common.noResults")}
+        </p>
+      );
+    }
+    return (
+      <div className="space-y-3 p-6">
+        <p className="text-muted-foreground text-sm">
+          {t("search.registryNameSearchNotFound")}
+        </p>
+        <ul className="space-y-2">
+          {data.candidates.map((candidate) => (
+            <li className="text-sm" key={candidate.id}>
+              <bdi className="font-medium tabular-nums">{candidate.id}</bdi>
+              <span className="text-muted-foreground">
+                {" · "}
+                {candidate.reason === "name-mismatch"
+                  ? t("search.registryCandidateNameMismatch", {
+                      officialName: candidate.officialName ?? candidate.id,
+                    })
+                  : t("search.registryCandidateNoOfficialRecord")}
+              </span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    );
+  }
+
+  if (data?.type === "name-search-unavailable") {
+    return (
+      <p className="text-muted-foreground p-6 text-sm">
+        {t("common.noResults")}
+      </p>
+    );
+  }
+
   const hit: RegistryHit | null =
     data?.type === "lookup"
       ? data.hit
       : (data?.hits.find((candidate) => candidate.id === companyId) ?? null);
-
-  if (isPending) {
-    return <CompanyRegistryPreviewSkeleton />;
-  }
 
   if (error) {
     if (
@@ -101,7 +144,7 @@ export const CompanyRegistryPreview = ({
   }
 
   return (
-    <div className="h-full space-y-6 overflow-y-auto overscroll-contain p-5">
+    <CompanyRegistryPreviewFrame className="overflow-y-auto overscroll-contain">
       <CompanyIdentity hit={hit} registry={registry} />
       <CompanySpecification
         companyId={hit.id}
@@ -109,7 +152,7 @@ export const CompanyRegistryPreview = ({
         registry={registry}
       />
       {hit.details ? <RegistryDetails details={hit.details} /> : null}
-    </div>
+    </CompanyRegistryPreviewFrame>
   );
 };
 
@@ -470,15 +513,3 @@ const RegistryDetailLabel = ({
 
 const registryDetailEntries = (value: object): [string, unknown][] =>
   Object.entries(value);
-
-const CompanyRegistryPreviewSkeleton = () => (
-  <div className="space-y-4 p-5">
-    <Skeleton className="h-6 w-2/3" />
-    <Skeleton className="h-3 w-28" />
-    <Skeleton className="h-16 w-full" />
-    <div className="grid grid-cols-2 gap-3">
-      <Skeleton className="h-16" />
-      <Skeleton className="h-16" />
-    </div>
-  </div>
-);

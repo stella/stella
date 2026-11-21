@@ -1,5 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import { randomFillSync } from "node:crypto";
+import * as v from "valibot";
+
+import type { DocumentAst } from "@stll/legal-ast/document-ast";
+import { persistedDocumentAstSchema } from "@stll/legal-ast/document-ast";
 
 import { CASE_LAW_CORPUS_MIRROR_STATUS } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -13,6 +17,7 @@ import {
   CorpusMemberDigestMismatchError,
   CorpusMemberTombstonedError,
   CorpusPayloadUnavailableError,
+  StoredCorpusValidationError,
   TimeoutError,
 } from "@/api/lib/errors/tagged-errors";
 import {
@@ -22,11 +27,11 @@ import {
 import type { PackedCorpusLocation } from "@/api/lib/legal-search/corpus-location";
 import { corpusMemberDigest } from "@/api/lib/legal-search/corpus-pack";
 import {
+  CORPUS_TRANSFER_MAX_BYTES,
   corpusContentHash,
   corpusKeys,
   corpusMirrorColumns,
   corpusPayloadDisposition,
-  CORPUS_TRANSFER_MAX_BYTES,
   deleteCorpusDocument,
   EMPTY_CORPUS_CONTENT_HASHES,
   parsePersistedCorpusAst,
@@ -38,6 +43,7 @@ import {
   readCorpusText,
   storedCorpusWrite,
   TRIMMED_CORPUS_PAYLOAD_COLUMNS,
+  writeCorpusDocument,
 } from "@/api/lib/legal-search/corpus-storage";
 import type {
   CorpusPayload,
@@ -47,6 +53,11 @@ import type { CorpusTombstoneEntry } from "@/api/lib/legal-search/corpus-tombsto
 import { EMPTY_AST } from "@/api/lib/legal-search/document-types";
 import { LIMITS } from "@/api/lib/limits";
 import { MissingCorpusObjectError } from "@/api/lib/s3";
+import {
+  installRecordingAnalytics,
+  installRecordingLogger,
+} from "@/api/tests/helpers/recording-telemetry";
+import { HAPPY_PATH_TIMEOUT_MS } from "@/api/tests/test-timeouts";
 
 /** Nothing erased: the denial list a read consults when the case is not it. */
 const noTombstones = async (): Promise<ReadonlySet<string>> =>
@@ -147,7 +158,7 @@ describe("readCorpusText bounded corpus read", () => {
       await readCorpusText("legal-corpus/never/text.zst", {
         readObject: async () => await neverSettles,
         readTombstones: noTombstones,
-        timeoutMs: 25,
+        timeoutMs: 25, // timeout under test
       });
     } catch (error) {
       captured = error;
@@ -165,7 +176,7 @@ describe("readCorpusText bounded corpus read", () => {
         return await Promise.resolve(zstdCompress("hello corpus"));
       },
       readTombstones: noTombstones,
-      timeoutMs: 1000,
+      timeoutMs: HAPPY_PATH_TIMEOUT_MS,
     });
 
     expect(text).toBe("hello corpus");
@@ -296,12 +307,12 @@ describe("persisted corpus JSON validation", () => {
     ).toThrow('Invalid type: Expected number but received "0"');
     expect(() =>
       parsePersistedCorpusAst({ version: 1, blocks: [{ type: "paragraph" }] }),
-    ).toThrow("Invalid type: Expected (Object | unknown) but received Object");
+    ).toThrow(StoredCorpusValidationError);
     expect(() => parsePersistedCorpusAst([])).toThrow(
-      "Invalid type: Expected (Object | unknown) but received Array",
+      StoredCorpusValidationError,
     );
     expect(() => parsePersistedCorpusAst({ unexpected: true })).toThrow(
-      "Invalid type: Expected (Object | unknown) but received Object",
+      StoredCorpusValidationError,
     );
   });
 
@@ -323,7 +334,7 @@ describe("persisted corpus JSON validation", () => {
     expect(block?.type === "paragraph" ? block.role : null).toBe("unknown");
   });
 
-  test("serves a stored AST around a block kind this reader cannot render", () => {
+  test("serves a stored AST with a block kind this reader cannot render as an unread paragraph", () => {
     const parsed = parsePersistedCorpusAst({
       version: 1,
       blocks: [
@@ -339,10 +350,125 @@ describe("persisted corpus JSON validation", () => {
       ],
     });
     expect(parsed).not.toBeNull();
-    // The unrenderable block is gone; the paragraph beside it keeps every
-    // character the unknown inline carried.
-    expect(parsed?.blocks.map((block) => block.id)).toEqual(["p1"]);
-    expect(parsed?.blocks.at(0)?.plainText).toBe("NS");
+    // The block the reader has no shape for keeps its text and identity; the
+    // paragraph beside it keeps every character the unknown inline carried.
+    expect(
+      parsed !== null && "blocks" in parsed
+        ? parsed.blocks.map((block) => [
+            block.id,
+            block.type === "paragraph" ? (block.storedType ?? null) : null,
+            block.plainText,
+          ])
+        : null,
+    ).toEqual([
+      ["s1", "sidebar", "aside"],
+      ["p1", null, "NS"],
+    ]);
+  });
+
+  test("a read of late head matter is one degraded record and captures no exception", () => {
+    const analytics = installRecordingAnalytics();
+    const logs = installRecordingLogger();
+    try {
+      const paragraph = (id: string, role: string) => ({
+        id,
+        anchorId: id,
+        type: "paragraph",
+        role,
+        inlines: [{ type: "text", text: id }],
+      });
+      parsePersistedCorpusAst(
+        {
+          version: 1,
+          blocks: [
+            paragraph("reasons", "argumentation"),
+            paragraph("publisher", "apparatus"),
+          ],
+        },
+        "decision-stored-before-order-rule",
+      );
+      expect(analytics.exceptions()).toEqual([]);
+      expect(
+        logs.records.filter(
+          ({ message }) => message === "case_law.stored_ast_degraded",
+        ),
+      ).toMatchObject([
+        {
+          severityText: "WARN",
+          attributes: {
+            documentId: "decision-stored-before-order-rule",
+            outcome: "degraded",
+            "measure.astHeadMatterOrder": 1,
+            "failure.grade": "anticipated",
+            "failure.reason": "stored_ast_degraded",
+          },
+        },
+      ]);
+    } finally {
+      logs.restore();
+      analytics.restore();
+    }
+  });
+
+  test("a read of undeclared vocabulary is a graded record, not a captured exception", () => {
+    const analytics = installRecordingAnalytics();
+    const logs = installRecordingLogger();
+    try {
+      parsePersistedCorpusAst({
+        version: 1,
+        blocks: [{ id: "s1", anchorId: "s-1", type: "sidebar", body: "aside" }],
+      });
+      expect(analytics.exceptions()).toEqual([]);
+      const [record, ...rest] = logs.records.filter(
+        ({ message }) => message === "case_law.stored_ast_degraded",
+      );
+      expect(rest).toEqual([]);
+      expect(record?.attributes).toMatchObject({
+        outcome: "degraded",
+        vocabulary: "block-type:sidebar",
+        "measure.astBlockType": 1,
+        "error.class": "StoredAstDegradedError",
+      });
+      // A frame of this build, so the shadow aggregate never reads it as
+      // a degraded fingerprint.
+      expect(record?.attributes?.["error.frame"]).toEqual(
+        expect.stringContaining("stored-ast-outcome.ts:"),
+      );
+      expect(record?.attributes).not.toHaveProperty(
+        "error.fingerprint_degraded",
+      );
+      // The stored text never leaves in the record.
+      expect(JSON.stringify(record)).not.toContain("aside");
+    } finally {
+      logs.restore();
+      analytics.restore();
+    }
+  });
+
+  test("serves a row stored with head matter after the body, in stored order", () => {
+    const paragraph = (id: string, role: string) => ({
+      id,
+      anchorId: id,
+      type: "paragraph",
+      role,
+      inlines: [{ type: "text", text: id }],
+    });
+    const parsed = parsePersistedCorpusAst(
+      {
+        version: 1,
+        blocks: [
+          paragraph("caption", "apparatus"),
+          paragraph("reasons", "argumentation"),
+          paragraph("publisher", "apparatus"),
+        ],
+      },
+      "decision-stored-before-order-rule",
+    );
+    expect(parsed?.blocks.map((block) => block.id)).toEqual([
+      "caption",
+      "reasons",
+      "publisher",
+    ]);
   });
 });
 
@@ -509,29 +635,98 @@ describe("planCorpusDocumentWrite", () => {
     };
   };
 
-  test("refuses every payload shape that carries no document", () => {
+  test("classifies payloads by document content independently of AST metadata", () => {
     const texts = [null, ""];
     const sectionShapes = [null, []];
-    const astShapes = [EMPTY_AST, null];
+    const emptyEnvelope = {
+      version: 1,
+      source: {
+        system: "synthetic",
+        documentId,
+        webUrl: "",
+        printUrl: "",
+      },
+      metadata: {
+        caseNumber: "1 A 1/2026",
+        ecli: null,
+        court: null,
+        decisionDate: null,
+        decisionType: null,
+        keywords: [],
+        statutes: [],
+      },
+      blocks: [],
+    } satisfies DocumentAst;
+    // A decision-specific envelope is outside the constant empty hash set.
+    expect(
+      EMPTY_CORPUS_CONTENT_HASHES.includes(
+        corpusContentHash({ text: null, sections: null, ast: emptyEnvelope }),
+      ),
+    ).toBe(false);
+    const astShapes = [EMPTY_AST, null, emptyEnvelope];
     for (const text of texts) {
       for (const sections of sectionShapes) {
         for (const ast of astShapes) {
-          expect(
-            planCorpusDocumentWrite({
-              documentId,
-              jurisdiction,
-              text,
-              sections,
-              ast,
-              stored: null,
-            }),
-          ).toEqual({
-            type: "skipped-empty",
-            written: null,
-            contentHash: corpusContentHash({ text, sections, ast }),
-          });
+          const contentHash = corpusContentHash({ text, sections, ast });
+          const recorded = {
+            ...corpusKeys({ documentId, jurisdiction, contentHash }),
+            contentHash,
+          };
+          for (const stored of [null, recorded]) {
+            expect(
+              planCorpusDocumentWrite({
+                documentId,
+                jurisdiction,
+                text,
+                sections,
+                ast,
+                stored,
+              }),
+            ).toEqual({ type: "skipped-empty", written: null, contentHash });
+          }
         }
       }
+    }
+    const readablePayloads = [
+      { text: "Publisher headnote.", sections: null, ast: emptyEnvelope },
+      {
+        text: null,
+        sections: [
+          {
+            index: 0,
+            type: "header",
+            title: null,
+            text: "Publisher headnote.",
+          },
+        ],
+        ast: emptyEnvelope,
+      },
+      {
+        text: null,
+        sections: null,
+        ast: {
+          ...emptyEnvelope,
+          blocks: [
+            {
+              id: "p1",
+              anchorId: "p1",
+              type: "paragraph",
+              inlines: [{ type: "text", text: "Decision body." }],
+              plainText: "Decision body.",
+            },
+          ],
+        },
+      },
+    ] satisfies CorpusPayload[];
+    for (const payload of readablePayloads) {
+      expect(
+        planCorpusDocumentWrite({
+          documentId,
+          jurisdiction,
+          ...payload,
+          stored: null,
+        }).type,
+      ).toBe("put");
     }
   });
 
@@ -760,7 +955,7 @@ describe("readCorpusBytesAt", () => {
         return await Promise.resolve(member);
       },
       readTombstones: noTombstones,
-      timeoutMs: 1000,
+      timeoutMs: HAPPY_PATH_TIMEOUT_MS,
     });
 
     expect(text).toBe("packed corpus text");
@@ -777,7 +972,7 @@ describe("readCorpusBytesAt", () => {
         return await Promise.resolve(zstdCompress("x"));
       },
       readTombstones: noTombstones,
-      timeoutMs: 1000,
+      timeoutMs: HAPPY_PATH_TIMEOUT_MS,
     });
     // A member at the bound is served as one frame, so the digest the
     // address carries is that frame's.
@@ -900,4 +1095,81 @@ describe("deleteCorpusDocument", () => {
     // deleted object would outlive the key it names.
     expect(erasure.tombstoned).toEqual([[]]);
   });
+});
+
+test("standalone writes repair repeated identities before comparing the stored payload", async () => {
+  const invalidAst = {
+    version: 1,
+    source: {
+      system: "synthetic",
+      documentId: "synthetic",
+      webUrl: "",
+      printUrl: "",
+    },
+    metadata: {
+      caseNumber: null,
+      ecli: null,
+      court: null,
+      decisionDate: null,
+      decisionType: null,
+      keywords: [],
+      statutes: [],
+    },
+    blocks: [
+      {
+        id: "p1",
+        anchorId: "p1",
+        type: "paragraph",
+        inlines: [{ type: "text", text: "Body." }],
+        plainText: "Body.",
+      },
+      {
+        id: "p2",
+        anchorId: "p1",
+        type: "paragraph",
+        inlines: [{ type: "text", text: "Body." }],
+        plainText: "Body.",
+      },
+    ],
+  } satisfies DocumentAst;
+  const repaired = v.parse(persistedDocumentAstSchema, invalidAst);
+  expect(repaired).not.toEqual(invalidAst);
+  expect(
+    repaired.blocks.map(({ anchorId, plainText }) => [anchorId, plainText]),
+  ).toEqual([
+    ["p1", "Body."],
+    ["p1-2", "Body."],
+  ]);
+  const payload = {
+    text: "Synthetic decision.",
+    sections: null,
+    ast: repaired,
+  };
+  expect(corpusContentHash({ ...payload, ast: invalidAst })).not.toBe(
+    corpusContentHash(payload),
+  );
+  const plan = planCorpusDocumentWrite({
+    ...payload,
+    documentId: "synthetic",
+    jurisdiction: "SVK",
+    stored: null,
+  });
+  if (plan.type !== "put") {
+    expect.unreachable("Fixture must carry text");
+  }
+  // The repaired AST must converge to the already stored document. The
+  // aborted signal makes any unintended transfer fail before reaching S3.
+  const outcome = (
+    await writeCorpusDocument(
+      {
+        ...payload,
+        ast: invalidAst,
+        documentId: "synthetic",
+        jurisdiction: "SVK",
+        stored: plan.written,
+      },
+      { signal: AbortSignal.abort() },
+    )
+  ).unwrap();
+  expect(outcome).toEqual({ type: "skipped-unchanged", written: plan.written });
 });

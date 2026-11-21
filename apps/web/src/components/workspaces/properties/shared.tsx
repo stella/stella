@@ -3,17 +3,14 @@ import { useTranslations } from "use-intl";
 import { Button } from "@stll/ui/button";
 import { SquareMinusIcon } from "@stll/ui/icons";
 import { PopoverTrigger } from "@stll/ui/popover";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
+import { PropertyIcon } from "@stll/workspace-ui/property-icon";
 
 import Tooltip from "@/components/tooltip";
-import {
-  PropertyIcon,
-  PropertyName,
-  PropertyPopoverLabel,
-} from "@/components/workspaces/property-helpers";
 import { resolveOptionColor } from "@/components/workspaces/property-utils";
 import { HighlightedText } from "@/components/workspaces/table/find-highlight";
-import type { PropertyOptionColor, PropertyContent } from "@/lib/api-contract";
+import type { PropertyOptionColor } from "@/lib/api-contract";
 import type { WorkspaceProperty } from "@/lib/types";
 
 const isPropertyValid = (property: WorkspaceProperty) => {
@@ -65,27 +62,10 @@ export const PropertyPopoverTrigger = ({
         className={cn(isValid ? "" : "text-warning")}
         type={property.content.type}
       />
-      <span className="w-0 flex-1 truncate">
+      <TruncatedText className="w-0 flex-1">
         <HighlightedText text={name} />
-      </span>
+      </TruncatedText>
     </Tooltip>
-  );
-};
-
-type PropertyPopoverTypeProps = {
-  type: PropertyContent["type"];
-};
-
-export const PropertyPopoverType = ({ type }: PropertyPopoverTypeProps) => {
-  const t = useTranslations();
-
-  return (
-    <div className="w-full px-2.5 pt-2">
-      <div className="flex justify-between">
-        <PropertyPopoverLabel>{t("common.type")}</PropertyPopoverLabel>
-        <PropertyName type={type} />
-      </div>
-    </div>
   );
 };
 
@@ -101,7 +81,7 @@ export const SelectColorIcon = ({ color, className }: SelectColorIconProps) => {
 
   return (
     <span
-      className={cn("block size-4 shrink-0 rounded", className)}
+      className={cn("block size-4 shrink-0 rounded-sm", className)}
       style={{ backgroundColor: resolveOptionColor(color).color }}
     />
   );

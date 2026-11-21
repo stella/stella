@@ -1,4 +1,6 @@
 import { panic } from "better-result";
+import { fileURLToPath } from "node:url";
+
 /**
  * One-off script: inserts {{placeholder}} tags into the SPA DOCX
  * for testing template filling. Replaces specific text patterns
@@ -6,15 +8,19 @@ import { panic } from "better-result";
  *
  * Run: bun apps/api/src/scripts/prepare-spa-template.ts
  */
-import JSZip from "jszip";
+import { ZipArchive } from "@stll/docx-core/zip";
+import { printError } from "@stll/errors";
 
-const INPUT = new URL("../lib/docx/fixtures/spa-template.docx", import.meta.url)
-  .pathname;
+const INPUT = fileURLToPath(
+  new URL("../lib/docx/fixtures/spa-template.docx", import.meta.url),
+);
 
-const OUTPUT = new URL(
-  "../lib/docx/fixtures/spa-template-with-placeholders.docx",
-  import.meta.url,
-).pathname;
+const OUTPUT = fileURLToPath(
+  new URL(
+    "../lib/docx/fixtures/spa-template-with-placeholders.docx",
+    import.meta.url,
+  ),
+);
 
 /**
  * Replacements: [search text, placeholder tag].
@@ -45,14 +51,14 @@ const SIMPLE_REPLACEMENTS: [string, string][] = [
 
 const run = async () => {
   const file = Bun.file(INPUT);
-  const zip = await JSZip.loadAsync(await file.arrayBuffer());
+  const zip = await ZipArchive.read(await file.arrayBuffer());
 
-  const docEntry = zip.file("word/document.xml");
+  const docEntry = zip.entry("word/document.xml");
   if (!docEntry) {
     panic("No word/document.xml found");
   }
 
-  let xml = await docEntry.async("string");
+  let xml = await docEntry.text();
 
   // DOCX XML splits text across <w:t> elements. A simple
   // string like "xxxxx" might be in one <w:t> or split
@@ -74,17 +80,14 @@ const run = async () => {
     });
   }
 
-  zip.file("word/document.xml", xml);
+  zip.set("word/document.xml", xml);
 
-  const buffer = await zip.generateAsync({
-    type: "nodebuffer",
-    compression: "DEFLATE",
-  });
+  const buffer = Buffer.from(await zip.generate());
 
   await Bun.write(OUTPUT, buffer);
 };
 
 run().catch((error: unknown) => {
-  console.error(error);
+  printError(error);
   process.exit(1);
 });

@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 /**
  * Phase 2 end to end: embed the stored signature and write the signed
  * version, classifying every failure as one a retry can fix or one it
@@ -5,12 +6,13 @@
  * exchange open and the second into a closed exchange, so no failure leaves
  * an exchange open that nothing can finish.
  */
-
-import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 
-import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
+import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
+import { member } from "@/api/db/auth-schema";
+import type { Transaction } from "@/api/db/root";
 import { pdfSigningSessions } from "@/api/db/schema";
 import type {
   PdfSigningKeyType,
@@ -18,8 +20,11 @@ import type {
 } from "@/api/db/schema";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
+import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type { SafeId } from "@/api/lib/branded-types";
+import { holdMemberAccessOnTx } from "@/api/lib/db/member-access-hold";
 import type { DocumentSource } from "@/api/lib/document-source";
+import { canWriteWorkspaceEntities } from "@/api/lib/entities/workspace-entity-write-access";
 import { createEntityVersionFromBuffer } from "@/api/lib/entity-versions/create-entity-version-from-buffer";
 import type { EntityVersionTargetErrorCode } from "@/api/lib/entity-versions/create-entity-version-from-buffer";
 import { HandlerError, TimeoutError } from "@/api/lib/errors/tagged-errors";
@@ -38,7 +43,7 @@ import {
 } from "@/api/lib/files/pdf-signing/sign-pdf";
 import type { AppliedSignature } from "@/api/lib/files/pdf-signing/sign-pdf";
 import { configuredTimestampAuthorities } from "@/api/lib/files/pdf-signing/timestamp-authority";
-import { configuredTimestampTrustAnchors } from "@/api/lib/files/pdf-signing/timestamp-trust";
+import { configuredTimestampTrust } from "@/api/lib/files/pdf-signing/timestamp-trust";
 import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 
@@ -71,6 +76,40 @@ export const certificateRevokedError = () =>
 type FinalizedSignature = {
   versionId: SafeId<"entityVersion">;
   versionNumber: number;
+};
+
+/** Hold the creator's current write authority through the version commit. */
+export const holdCurrentPdfSigningWriteAuthority = async (
+  tx: Transaction,
+  session: AuthorizedPdfSigningSession,
+): Promise<boolean> => {
+  const access = await holdMemberAccessOnTx(tx, {
+    organizationId: session.organizationId,
+    userId: session.userId,
+    workspaceIds: [session.workspaceId],
+  });
+  if (
+    access.type !== "held" ||
+    !access.workspaceIds.includes(session.workspaceId)
+  ) {
+    return false;
+  }
+  const organizationRole = (
+    await tx
+      .select({ role: member.role })
+      .from(member)
+      .where(
+        and(
+          eq(member.organizationId, session.organizationId),
+          eq(member.userId, session.userId),
+        ),
+      )
+      .limit(1)
+  ).at(0)?.role;
+  return canWriteWorkspaceEntities({
+    organizationRole: organizationRole ?? null,
+    reachesMatter: true,
+  });
 };
 
 /** The hint every retryable answer carries; the desktop acts on the 503. */
@@ -137,9 +176,7 @@ const signatureSource = ({
 }): DocumentSource => ({
   kind: "signature",
   baseVersionId,
-  certificateSha256Hex: new Bun.CryptoHasher("sha256")
-    .update(prepared.signerCertificateDer)
-    .digest("hex"),
+  certificateSha256Hex: hashSha256Hex(prepared.signerCertificateDer),
   level: applied.level,
   signingTime: prepared.signingTime.toISOString(),
   timestampAuthorityUrl: applied.timestampAuthorityUrl,
@@ -149,6 +186,7 @@ const signatureSource = ({
 type FinalizeOptions = {
   /** The claimed attempt; only it may finalize the exchange. */
   attempt: number;
+  permit: ThirdPartyOutboundPermit;
   prepared: PreparedSigningState;
   recordAuditEvent: AuditRecorder;
   session: AuthorizedPdfSigningSession;
@@ -156,7 +194,7 @@ type FinalizeOptions = {
 };
 
 const embed = async (
-  { prepared, session, signature }: FinalizeOptions,
+  { permit, prepared, session, signature }: FinalizeOptions,
   basePdf: Uint8Array,
 ): Promise<Result<AppliedSignature, FinalizeFailure>> => {
   const certificateChain = decodeCertificateChain(
@@ -166,6 +204,7 @@ const embed = async (
     basePdf,
     certificate: new Uint8Array(prepared.signerCertificateDer),
     certificateChain,
+    permit,
     certificateChainComplete: chainReachesRoot(
       prepared.signerCertificateDer,
       certificateChain,
@@ -180,8 +219,8 @@ const embed = async (
       prepared.keyType === "RSA" ? "RSASSA-PKCS1-v1_5" : "ECDSA",
     signingTime: prepared.signingTime,
     stamp: session.stamp,
-    timestampAuthorities: configuredTimestampAuthorities(),
-    timestampTrustAnchors: configuredTimestampTrustAnchors(),
+    timestampAuthorities: configuredTimestampAuthorities(permit),
+    timestampTrust: await configuredTimestampTrust(),
   });
   if (Result.isOk(applied)) {
     return Result.ok(applied.value);
@@ -242,6 +281,18 @@ const writeSignedVersion = async (
   await Result.tryPromise(
     async () =>
       await createEntityVersionFromBuffer({
+        // Authorization and publication share this transaction, and the hold
+        // comes first, before the version writer's document and matter locks:
+        // membership removal or role downgrade either commits before it and
+        // refuses the version, or waits until the signed version commits.
+        authority: {
+          type: "current-member",
+          authorize: async (tx) => {
+            if (!(await holdCurrentPdfSigningWriteAuthority(tx, session))) {
+              tx.rollback();
+            }
+          },
+        },
         buffer: applied.bytes,
         entityId: session.entityId,
         fileName,

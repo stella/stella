@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
 import { DOCUMENT_PANE } from "@/components/inspector/document-pane";
 
@@ -104,7 +104,77 @@ describe("hosted DOCX editor: pane vocabulary", () => {
   });
 });
 
+type ClaimChange =
+  | "canUnlock"
+  | "isEditing"
+  | "scaleOffset"
+  | "propertyId"
+  | "bindings"
+  | "initialScrollTop";
+
+const changedClaim = (
+  base: DocxEditorClaim,
+  change: ClaimChange,
+): DocxEditorClaim => {
+  switch (change) {
+    case "canUnlock":
+      return { ...base, canUnlock: !base.canUnlock };
+    case "isEditing":
+      return { ...base, isEditing: !base.isEditing };
+    case "scaleOffset":
+      return { ...base, scaleOffset: 0.5 };
+    case "propertyId":
+      return { ...base, document: { ...document, propertyId: "property-2" } };
+    case "bindings":
+      return { ...base, bindings: { onClose: () => undefined } };
+    case "initialScrollTop":
+      return base.slot === DOCX_EDITOR_SLOT.inspector
+        ? { ...base, initialScrollTop: 99 }
+        : { ...base, canUnlock: !base.canUnlock };
+    default:
+      change satisfies never;
+      return base;
+  }
+};
+
 describe("hosted DOCX editor: claiming", () => {
+  test("equal claims preserve the registry while changed claims replace it", () => {
+    assertProperty(
+      "equal claims preserve the registry while changed claims replace it",
+      fc.property(
+        fc.constantFrom(DOCX_EDITOR_SLOT.main, DOCX_EDITOR_SLOT.inspector),
+        fc.constantFrom(
+          "canUnlock",
+          "isEditing",
+          "scaleOffset",
+          "propertyId",
+          "bindings",
+          "initialScrollTop",
+        ),
+        (slot, change) => {
+          const base = claimFor(slot, 1);
+          const registry = claimDocxEditorSlot(EMPTY_DOCX_EDITOR_REGISTRY, {
+            claim: base,
+            hostKey,
+          });
+          const equal = claimDocxEditorSlot(registry, {
+            claim: { ...claimFor(slot, 1), document: { ...document } },
+            hostKey,
+          });
+          expect(equal).toBe(registry);
+          const changed = changedClaim(base, change);
+          const next = claimDocxEditorSlot(equal, {
+            claim: changed,
+            hostKey,
+          });
+          expect(next).not.toBe(registry);
+          expect(next[hostKey]?.lastClaim).toBe(changed);
+        },
+      ),
+      {},
+    );
+  });
+
   test("a claim opens the entry and drives the instance", () => {
     const registry = claimDocxEditorSlot(EMPTY_DOCX_EDITOR_REGISTRY, {
       claim: mainClaim(1),
@@ -376,7 +446,8 @@ const slotOperations = fc.array(
 
 describe("hosted DOCX editor: any order of claims and releases", () => {
   test("a slot that still holds a claim always drives the instance", () => {
-    fc.assert(
+    assertProperty(
+      "a slot that still holds a claim always drives the instance",
       fc.property(slotOperations, (operations) => {
         let registry = EMPTY_DOCX_EDITOR_REGISTRY;
         let sequence = 0;
@@ -428,7 +499,7 @@ describe("hosted DOCX editor: any order of claims and releases", () => {
           );
         }
       }),
-      propertyConfig(),
+      {},
     );
   });
 });

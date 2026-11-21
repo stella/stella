@@ -8,6 +8,7 @@ import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { prewarmScopedDownloadSigning } from "@/api/lib/s3-presign";
 
 const config = {
+  contract: "patch",
   // permissions-exempt: the write touches only the caller's own last-active
   // workspace pointer on their member row — navigation state no colleague
   // sees. Every role that may open a matter may move its own pointer, so
@@ -27,10 +28,11 @@ const updateActiveWorkspace = createSafeHandler(
     // trip, which otherwise lands on the first document open as a >1s
     // GET /files/:id/url tail.
     detached(
-      prewarmScopedDownloadSigning({
-        organizationId: session.activeOrganizationId,
-        workspaceId,
-      }),
+      async () =>
+        prewarmScopedDownloadSigning({
+          organizationId: session.activeOrganizationId,
+          workspaceId,
+        }),
       "workspaces.prewarm-scoped-signing",
     );
 

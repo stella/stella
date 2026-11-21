@@ -1,8 +1,7 @@
-import { describe, expect, setDefaultTimeout, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 
 import { lintSingleRule } from "./lint-single-rule.ts";
 
-setDefaultTimeout(20_000);
 const imports =
   'import { notifyUserError as notify } from "@/lib/errors/user-toast"; import { userErrorFromThrown as safe } from "@/lib/errors/user-safe"; import { userErrorMessage } from "@/lib/errors/messages";';
 const lint = async (source: string) =>

@@ -13,8 +13,8 @@ import {
   sourceHasLiveLegacyReferences,
 } from "@/api/lib/legal-search/case-law-raw-sweeps";
 import {
-  rawDocumentPrefix,
   RAW_SOURCE_FAMILY,
+  rawDocumentPrefix,
 } from "@/api/lib/legal-search/raw-source-storage";
 import { isRecord } from "@/api/lib/type-guards";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";

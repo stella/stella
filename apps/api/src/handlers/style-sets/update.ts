@@ -1,12 +1,12 @@
 import { Result } from "better-result";
 import { and, eq, isNull } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { styleSets } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
-import { tDefaultVarchar, tSafeId } from "@/api/lib/custom-schema";
+import { displayNameSchema, resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   normalizeStyleSetName,
@@ -14,10 +14,11 @@ import {
   styleSetExportFileName,
 } from "@/api/lib/style-sets";
 
-const paramsSchema = t.Object({ styleSetId: tSafeId("styleSet") });
-const bodySchema = t.Object({ name: tDefaultVarchar });
+const paramsSchema = v.object({ styleSetId: resourceIdSchema("styleSet") });
+const bodySchema = v.object({ name: displayNameSchema() });
 
 const config = {
+  contract: "patch",
   description:
     "Rename one organization style set; its export file name follows the new " +
     "name. The stored style package is untouched, so use style-sets.replace " +

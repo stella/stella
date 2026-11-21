@@ -1,5 +1,14 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import { afterAll, afterEach, describe, expect, spyOn, test } from "bun:test";
+import { panic } from "better-result";
+import {
+  afterAll,
+  afterEach,
+  describe,
+  expect,
+  mock,
+  spyOn,
+  test,
+} from "bun:test";
 import * as v from "valibot";
 import { createStore } from "zustand";
 import type { StoreApi } from "zustand";
@@ -9,13 +18,19 @@ import {
   ACTION_ADMISSION_CODES,
   ACTION_ADMISSION_REFUSALS,
 } from "@stll/api-contract/action-admission";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 import { stellaToast } from "@stll/ui/toast";
 
 import type { DownloadVariant } from "@/components/inspector/file-download-service.logic";
 import type { FileTab } from "@/components/inspector/inspector-store-types";
 import englishMessages from "@/i18n/langs/en.json";
+import { browserStorage } from "@/lib/account/browser-storage";
+import { userStorageKey } from "@/lib/account/user-scoped-storage";
 
 import type { InspectorTabsStore } from "./inspector-store-types";
+
+const localArea = () =>
+  browserStorage("local") ?? panic("Test requires local browser storage");
 
 const NativeBroadcastChannel = globalThis.BroadcastChannel;
 GlobalRegistrator.register({ url: "http://localhost:3000" });
@@ -36,13 +51,11 @@ const { createInspectorBroadcastSession: broadcast } =
 const { getAnalytics } = await import("@/lib/analytics/provider");
 const { AuthenticatedUserProvider } =
   await import("@/lib/authenticated-user-context");
-const { entityViewKeys } =
-  await import("@/lib/workspaces/queries/entity-views");
-const { inboxKeys } = await import("@/lib/inbox/queries");
 const { entitiesKeys } =
   await import("@/lib/workspaces/queries/entities.logic");
-const { fileMetadataByFieldQueryRoot } =
-  await import("@/lib/files/file-metadata-query.logic");
+const { myWorkKeys } = await import("@/lib/workspaces/queries/my-work");
+const { tasksQueryRoot } = await import("@/lib/resource-query-roots.logic");
+const { workspacesKeys } = await import("@/lib/workspaces/queries.logic");
 const { downloadTabFile } = await import("./file-download-service");
 const { toSafeId } = await import("@/lib/safe-id");
 const { readStoredJson } = await import("@/lib/stored-json");
@@ -65,7 +78,7 @@ globalThis.fetch = Object.assign(
       if (typeof requestBody !== "string") {
         throw new TypeError("Expected a JSON string body for entity rename");
       }
-      const body = JSON.parse(requestBody);
+      const body: { name: string } = JSON.parse(requestBody);
       const answer = Promise.withResolvers<Response>();
       requests.push({ name: body.name, answer });
       return await answer.promise;
@@ -126,11 +139,9 @@ const mount = (
         React.createElement(
           QueryClientProvider,
           { client },
-          React.createElement(IntlProvider, {
-            locale: "en",
-            messages: englishMessages,
-            children: React.createElement(AuthenticatedUserProvider, {
-              user: {
+          <IntlProvider locale="en" messages={englishMessages}>
+            <AuthenticatedUserProvider
+              user={{
                 activeOrganizationId: "org",
                 id: "user",
                 email: "rename@example.test",
@@ -139,10 +150,11 @@ const mount = (
                 preferredName: null,
                 timezoneId: "UTC",
                 wordEditShortcut: null,
-              },
-              children,
-            }),
-          }),
+              }}
+            >
+              {children}
+            </AuthenticatedUserProvider>
+          </IntlProvider>,
         ),
     },
   );
@@ -175,6 +187,8 @@ const failure = (index: number) =>
     );
 
 afterEach(async () => {
+  // Spies created in a test stay attached if it fails before restoring them.
+  mock.restore();
   await act(async () => cleanup());
   requests.length = 0;
   useInspectorTabsStore.setState({
@@ -182,17 +196,33 @@ afterEach(async () => {
     activeId: null,
     ...originalActions,
   });
-  window.localStorage.clear();
+  localArea().clear();
 });
 afterAll(async () => {
   globalThis.fetch = originalFetch;
   await new Promise<void>((resolve) => {
     setImmediate(resolve);
   });
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 describe("confirmed file rename state", () => {
+  test("edits the base name and sends a typed extension once", async () => {
+    const target = file("A");
+    useInspectorTabsStore.getState().openFile(target);
+    const { result } = mount();
+
+    act(() => result.current.fileRename.startRename(target));
+    expect(result.current.fileRename.editValue).toBe("A");
+
+    act(() => result.current.fileRename.setEditValue("minutes.MD"));
+    act(() => result.current.fileRename.commitRename(target));
+    await waitFor(() => expect(requests).toHaveLength(1));
+    expect(requests.at(0)?.name).toBe("minutes.MD");
+    success(0, "A", "minutes.MD");
+    await waitFor(() => expect(tab("A")?.label).toBe("minutes.MD"));
+  });
+
   test("optimistic labels rollback by entity identity after version replacement", async () => {
     useInspectorTabsStore.getState().openFile(file("A"));
     const { result, client } = mount();
@@ -222,7 +252,7 @@ describe("confirmed file rename state", () => {
 
   test("a second window's confirmed rename survives the first window's refusal", async () => {
     const otherStore = createStore<InspectorTabsStore>()(
-      immer((set) => createInspectorTabsSlice(set)),
+      immer((set, get) => createInspectorTabsSlice(set, get)),
     );
     const scope = { organizationId: "two-windows", userId: "rename-user" };
     const stopFirst = broadcast(useInspectorTabsStore, scope);
@@ -307,14 +337,10 @@ describe("confirmed file rename state", () => {
       ).toEqual(
         new Set([
           JSON.stringify(entitiesKeys.all("matter")),
-          JSON.stringify(entityViewKeys.all("org", "user")),
-          JSON.stringify(inboxKeys.all("org", "user")),
-          JSON.stringify(
-            fileMetadataByFieldQueryRoot({
-              workspaceId: "matter",
-              fieldId: "field-A",
-            }),
-          ),
+          JSON.stringify(entitiesKeys.detail("matter", "A")),
+          JSON.stringify(myWorkKeys.all),
+          JSON.stringify(tasksQueryRoot("matter")),
+          JSON.stringify(workspacesKeys.overview("matter")),
         ]),
       );
       act(() =>
@@ -569,29 +595,36 @@ describe("confirmed file rename state", () => {
     const invalidate = spyOn(client, "invalidateQueries").mockRejectedValue(
       new Error("Refresh unavailable"),
     );
-    act(() =>
-      result.current.first.mutate({
-        workspaceId: "matter",
-        entityId: "A",
-        name: "confirmed.md",
-      }),
-    );
-    await waitFor(() => expect(requests).toHaveLength(1));
-    await act(async () => success(0, "A", "confirmed.md"));
-    await waitFor(() => expect(client.isMutating()).toBe(0));
-    expect(tab("A")).toMatchObject({
-      label: "confirmed.md",
-      fileName: "confirmed.md",
-    });
-    expect(result.current.first.isSuccess).toBe(true);
-    expect(toast).not.toHaveBeenCalled();
-    expect(capture).toHaveBeenCalledWith(expect.any(Error), {
-      type: "detached",
-      operation: "entity-rename.refresh",
-    });
-    capture.mockRestore();
-    toast.mockRestore();
-    invalidate.mockRestore();
+    try {
+      act(() =>
+        result.current.first.mutate({
+          workspaceId: "matter",
+          entityId: "A",
+          name: "confirmed.md",
+        }),
+      );
+      await waitFor(() => expect(requests).toHaveLength(1));
+      await act(async () => success(0, "A", "confirmed.md"));
+      await waitFor(() => expect(client.isMutating()).toBe(0));
+      expect(tab("A")).toMatchObject({
+        label: "confirmed.md",
+        fileName: "confirmed.md",
+      });
+      expect(result.current.first.isSuccess).toBe(true);
+      expect(toast).not.toHaveBeenCalled();
+      expect(capture).toHaveBeenCalledWith(expect.any(Error), {
+        fingerprintKey: "detached:resource-query.invalidate",
+        scope: {
+          type: "handler",
+          handlerId: "detached:resource-query.invalidate",
+        },
+        context: { type: "detached", operation: "resource-query.invalidate" },
+      });
+    } finally {
+      capture.mockRestore();
+      toast.mockRestore();
+      invalidate.mockRestore();
+    }
   });
 
   test("a throwing refusal completion releases the next invocation", async () => {
@@ -721,13 +754,21 @@ describe("confirmed file rename state", () => {
     });
     expect(
       readStoredJson(
-        window.localStorage.getItem(
-          "stella:inspector-state:v1:org-rename:user-rename",
+        localArea().getItem(
+          userStorageKey("stella:inspector-state:v1:org-rename:", {
+            kind: "user",
+            userId: "user-rename",
+          }),
         ),
         v.object({
-          tabs: v.array(v.object({ label: v.string(), fileName: v.string() })),
+          version: v.literal(1),
+          value: v.object({
+            tabs: v.array(
+              v.object({ label: v.string(), fileName: v.string() }),
+            ),
+          }),
         }),
-      )?.tabs,
+      )?.value.tabs,
     ).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -765,11 +806,13 @@ test("download errors preserve every admission refusal for all renditions", asyn
   const { actionAdmissionOutcome } =
     await import("@/lib/errors/action-admission");
   const variants = {
+    marked: "marked",
     original: "original",
     pdf: "pdf",
     reference: "reference",
     "reference-scrubbed": "reference-scrubbed",
     scrubbed: "scrubbed",
+    withComments: "withComments",
   } as const satisfies Record<DownloadVariant, DownloadVariant>;
   for (const variant of Object.values(variants)) {
     for (const code of Object.values(ACTION_ADMISSION_CODES)) {

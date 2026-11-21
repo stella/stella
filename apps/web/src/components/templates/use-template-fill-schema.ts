@@ -3,10 +3,10 @@ import { useQuery } from "@tanstack/react-query";
 import type { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import {
-  templateDetailOptions,
   templateClausesOptions,
-  templateFillDiscoverOptions,
   templateClauseSourceStamp,
+  templateDetailOptions,
+  templateFillDiscoverOptions,
 } from "@/lib/knowledge/queries";
 
 /**

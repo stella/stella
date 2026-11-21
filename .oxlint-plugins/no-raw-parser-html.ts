@@ -11,7 +11,7 @@ import {
   isIdentifier,
   isIdentifierReference,
   memberPropertyName,
-  resolveImportedExpression,
+  resolveImportedExpressionForEnforcement,
   resolveVariable,
   stableInitializer,
   staticStringValue,
@@ -19,9 +19,14 @@ import {
 } from "./utils.ts";
 
 const RULE_NAME = "no-raw-parser-html";
-const OWNER =
-  "apps/api/src/handlers/case-law/ingestion/parsers/shared-inlines.ts";
+const OWNERS = [
+  "apps/api/src/handlers/case-law/ingestion/parsers/shared-inlines.ts",
+  "apps/api/src/lib/legal-search/parsers/visible-html-text.ts",
+];
 const CHEERIO_TYPES = new Set(["Cheerio", "CheerioAPI"]);
+// Parsers load documents and take Cheerio types through @stll/html.
+const HTML_LOAD_SOURCE = "@stll/html";
+const HTML_IMPORT_SOURCES = new Set([HTML_LOAD_SOURCE]);
 const SELECTION_METHODS = new Set([
   "add",
   "addBack",
@@ -153,7 +158,7 @@ class ParserHtmlProvenance {
     for (const statement of node.body) {
       if (
         statement.type !== "ImportDeclaration" ||
-        staticStringValue(statement.source) !== "cheerio"
+        !HTML_IMPORT_SOURCES.has(staticStringValue(statement.source) ?? "")
       ) {
         continue;
       }
@@ -210,8 +215,13 @@ class ParserHtmlProvenance {
   }
 
   importedLoad(node: unknown): boolean {
-    const imported = resolveImportedExpression(this.context, node);
-    return imported?.source === "cheerio" && imported.imported === "load";
+    const imported = resolveImportedExpressionForEnforcement(
+      this.context,
+      node,
+    );
+    return (
+      imported?.source === HTML_LOAD_SOURCE && imported.imported === "load"
+    );
   }
 
   constantString(node: unknown, seen = new Set<unknown>()): string | null {
@@ -530,7 +540,9 @@ export default eslintCompatPlugin({
         return {
           before() {
             const filename = filenameForContext(context);
-            enabled = filename !== OWNER && !filename.endsWith(`/${OWNER}`);
+            enabled = !OWNERS.some(
+              (owner) => filename === owner || filename.endsWith(`/${owner}`),
+            );
           },
           Program(node) {
             provenance.readProgram(node);

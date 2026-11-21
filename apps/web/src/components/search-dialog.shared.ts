@@ -6,10 +6,7 @@ import { Temporal } from "@stll/time";
 import { SEARCH_HIT_DESCENDANT_MARK_CLASS } from "@stll/ui/text-mark";
 import { cn } from "@stll/ui/utils";
 
-import type {
-  SearchFilters,
-  TimeFilter,
-} from "@/components/search-filters.logic";
+import type { SearchFilters } from "@/components/search-filters.logic";
 import type { TranslationKey } from "@/i18n/types";
 import type { EntityKind, GlobalSearchHit } from "@/lib/api-contract";
 import type { TimePreset } from "@/lib/search";
@@ -26,7 +23,7 @@ export const KIND_TRANSLATION_KEYS = {
   contact: "search.kinds.contact",
   "case-law": "search.kinds.caseLaw",
   document: "common.document",
-  folder: "search.kinds.folder",
+  folder: "common.folder",
   task: "search.kinds.task",
   message: "search.kinds.message",
   link: "search.kinds.link",
@@ -40,7 +37,13 @@ export const TIME_PRESET_TRANSLATION_KEYS = {
   year: "search.updatedWithinOptions.year",
 } as const satisfies Record<TimePreset, TranslationKey>;
 
-export type FacetBucket = { value: string; label?: string; count: number };
+export type FacetBucket = {
+  value: string;
+  label?: string;
+  count: number;
+  /** Replaces the bare count when the number needs words to read right. */
+  countLabel?: string;
+};
 
 export const EMPTY_FACET_BUCKETS: readonly FacetBucket[] = [];
 export const EMPTY_SEARCH_HITS: readonly GlobalSearchHit[] = [];
@@ -56,39 +59,48 @@ export const isAvailableSearchKind = (
   includePublicLaw: boolean,
 ): boolean => type !== "case-law" || includePublicLaw;
 
+/**
+ * The non-empty, distinct parts of a result's metadata line. Each part renders
+ * in its own isolate, so a name's direction never carries into the date or
+ * the editor beside it.
+ */
 export const compactMeta = (
   parts: readonly (string | null | undefined)[],
-): string =>
-  parts
-    .flatMap((part) => {
+): readonly string[] => [
+  ...new Set(
+    parts.flatMap((part) => {
       const trimmed = part?.trim();
       return trimmed ? [trimmed] : [];
-    })
-    .join(" · ");
+    }),
+  ),
+];
 
+const MIME_TYPE_LABELS: ReadonlyMap<string, string> = new Map([
+  ["application/msword", "DOC"],
+  ["application/pdf", "PDF"],
+  ["application/vnd.ms-excel", "XLS"],
+  ["application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "XLSX"],
+  [
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "DOCX",
+  ],
+  ["application/x-msdownload", "EXE"],
+  ["image/jpeg", "JPEG"],
+  ["image/svg+xml", "SVG"],
+  ["message/rfc822", "EML"],
+  ["text/markdown", "Markdown"],
+  ["text/plain", "TXT"],
+]);
+
+/** File-format names read the same in every locale, so none is translated. */
 export const formatMimeTypeLabel = (mimeType: string): string => {
-  if (mimeType === "application/pdf") {
-    return "PDF";
+  const known = MIME_TYPE_LABELS.get(mimeType);
+  if (known !== undefined) {
+    return known;
   }
-  if (
-    mimeType ===
-    "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-  ) {
-    return "DOCX";
-  }
-  if (
-    mimeType ===
-    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-  ) {
-    return "XLSX";
-  }
-  if (mimeType.startsWith("image/")) {
-    return mimeType.replace("image/", "").toUpperCase();
-  }
-  if (mimeType.startsWith("text/")) {
-    return mimeType.replace("text/", "").toUpperCase();
-  }
-  return mimeType;
+  const subtype = mimeType.split("/").at(-1) ?? mimeType;
+  const [format = subtype] = subtype.split("+");
+  return format.replace(/^(?:vnd\.|x-)/u, "").toUpperCase();
 };
 
 export const isoToDateInputValue = (iso: string): string => iso.slice(0, 10);
@@ -146,5 +158,3 @@ export type SearchFacetParams = {
   updatedFrom?: string | undefined;
   updatedTo?: string | undefined;
 };
-
-export type SearchTimeFilter = TimeFilter;

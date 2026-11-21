@@ -11,20 +11,334 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import {
+  boundedInstallProblems,
+  compositeInstallProblems,
+  installWorkflowPolicy,
+} from "./ci-install-policy";
+import {
+  type Classification,
   conditionOperands,
   impliesCondition,
   importProblems,
+  type InstallFreeInvocation,
   installFreeInvocations,
   lexShell,
-  type Classification,
-  type InstallFreeInvocation,
 } from "./install-free-ci";
+import { flattenWorkflowSteps, workflowJobSteps } from "./workflow-steps";
 
 // CI runs this file in "Test install-free CI commands" without the dependency
 // install, which the check below enforces for this file too.
 
 const REPO_ROOT = path.resolve(import.meta.dir, "..");
 const CI_WORKFLOW = ".github/workflows/ci.yml";
+
+test("Windows installs and every explicit CI cold install retain bounded logs", () => {
+  for (const file of readdirSync(path.join(REPO_ROOT, ".github/workflows"))) {
+    if (!file.endsWith(".yml") && !file.endsWith(".yaml")) {
+      continue;
+    }
+    const workflow: unknown = Bun.YAML.parse(
+      readFileSync(path.join(REPO_ROOT, ".github/workflows", file), "utf-8"),
+    );
+    const policy = installWorkflowPolicy(file);
+    switch (policy.type) {
+      case "check": {
+        expect(boundedInstallProblems(workflow, policy.scope), file).toEqual(
+          [],
+        );
+        break;
+      }
+      case "pinned-release": {
+        expect(policy.reason).toContain("pinned release SHA");
+        break;
+      }
+      default: {
+        policy satisfies never;
+      }
+    }
+  }
+});
+
+test("every composite caller uses its job as the only outer deadline", () => {
+  for (const file of readdirSync(path.join(REPO_ROOT, ".github/workflows"))) {
+    if (!/\.ya?ml$/u.test(file)) {
+      continue;
+    }
+    const workflow: unknown = Bun.YAML.parse(
+      readFileSync(path.join(REPO_ROOT, ".github/workflows", file), "utf-8"),
+    );
+    expect(compositeInstallProblems(workflow), file).toEqual([]);
+  }
+});
+
+test("the caller policy rejects install deadlines and requires finite job bounds across platforms", () => {
+  for (const run of [
+    {
+      uses: "./.github/actions/ci-install",
+      with: { flags: '["--frozen-lockfile","--ignore-scripts"]' },
+    },
+    {
+      run: 'bun .workflow-tooling/scripts/ci-install.ts "$RUNNER_TEMP/bun-install/smoke.log" --frozen-lockfile',
+    },
+  ]) {
+    for (const runner of ["windows-latest", "ubuntu-latest", "macos-latest"]) {
+      const check = (step: unknown, timeout: unknown) =>
+        compositeInstallProblems({
+          jobs: {
+            fixture: {
+              "runs-on": runner,
+              "timeout-minutes": timeout,
+              steps: [step],
+            },
+          },
+        });
+      expect(check(run, 15)).toEqual([]);
+      expect(check({ ...run, "timeout-minutes": 3 }, 15)).toContain(
+        "fixture: install must use the job timeout as its only deadline",
+      );
+      for (const timeout of [undefined, 0, -1, "15", Infinity]) {
+        expect(check(run, timeout)).toContain(
+          "fixture: install needs a bounded job timeout",
+        );
+      }
+    }
+  }
+});
+
+test("the real Windows dry-run install has no deadline before its job regardless of cache restoration", () => {
+  const workflow: unknown = Bun.YAML.parse(
+    readFileSync(path.join(REPO_ROOT, CI_WORKFLOW), "utf-8"),
+  );
+  const steps = workflowJobSteps(workflow, "desktop-windows-dry-run");
+  const install = steps.find(
+    (step) => step["uses"] === "$/.github/actions/ci-install",
+  );
+  if (install === undefined) {
+    expect.unreachable("Missing fixed-owner Windows install action");
+  }
+  expect(install["timeout-minutes"]).toBeUndefined();
+  const check = (candidateSteps: unknown[]) =>
+    boundedInstallProblems(
+      {
+        jobs: {
+          fixture: {
+            "runs-on": "windows-latest",
+            "timeout-minutes": 10,
+            steps: candidateSteps,
+          },
+        },
+      },
+      "windows",
+    );
+  expect(check(steps)).toEqual([]);
+  expect(
+    check(
+      steps.filter(
+        (step) =>
+          typeof step["uses"] !== "string" ||
+          !step["uses"].startsWith("stella/.github/actions/setup-bun-cached@"),
+      ),
+    ),
+  ).toEqual([]);
+  for (const limit of [2, 5, 10]) {
+    expect(
+      check(
+        steps.map((step) =>
+          step === install ? { ...step, "timeout-minutes": limit } : step,
+        ),
+      ),
+    ).toContain(
+      "fixture: install must use the job timeout as its only deadline",
+    );
+  }
+});
+
+test("the install guard rejects bypasses, install deadlines, unbounded jobs and lost logs", () => {
+  const upload = {
+    uses: "actions/upload-artifact@fixture",
+    if: "failure()",
+    with: { path: `\${{ runner.temp }}/bun-install/*.log` },
+  };
+  const install = {
+    run: 'bun scripts/ci-install.ts "$RUNNER_TEMP/bun-install/scripts.log" --ignore-scripts',
+  };
+  const workflow = (steps: unknown[]) => ({
+    jobs: {
+      smoke: { "runs-on": "windows-latest", "timeout-minutes": 10, steps },
+    },
+  });
+  expect(
+    boundedInstallProblems(workflow([install, upload]), "windows"),
+  ).toEqual([]);
+  expect(
+    boundedInstallProblems(
+      workflow([{ run: "bun install" }, upload]),
+      "windows",
+    ),
+  ).toContain("smoke: install bypasses scripts/ci-install.ts");
+  expect(
+    boundedInstallProblems(
+      workflow([{ parallel: [{ run: "bun install" }] }, upload]),
+      "windows",
+    ),
+  ).toContain("smoke: install bypasses scripts/ci-install.ts");
+  expect(
+    boundedInstallProblems(
+      workflow([{ ...install, "timeout-minutes": 10 }, upload]),
+      "windows",
+    ),
+  ).toContain("smoke: install must use the job timeout as its only deadline");
+  expect(
+    boundedInstallProblems(
+      {
+        jobs: {
+          smoke: { "runs-on": "windows-latest", steps: [install, upload] },
+        },
+      },
+      "windows",
+    ),
+  ).toContain("smoke: install needs a bounded job timeout");
+  expect(boundedInstallProblems(workflow([install]), "windows")).toContain(
+    "smoke: install needs a retained failure log",
+  );
+  const policy = installWorkflowPolicy("new-windows-smoke.yml");
+  expect(policy.type).toBe("check");
+  if (policy.type !== "check") {
+    throw new Error("A new CI workflow must not inherit a release exclusion");
+  }
+  expect(
+    boundedInstallProblems(workflow([{ run: "bun install" }]), policy.scope),
+  ).toContain("smoke: install bypasses scripts/ci-install.ts");
+});
+
+test("the fixed local composite validates warning budgets without an install deadline", () => {
+  const action = {
+    uses: "$/.github/actions/ci-install",
+    with: {
+      flags:
+        '["--frozen-lockfile","--ignore-scripts","--filter","@stll/scripts"]',
+    },
+  };
+  const check = (steps: unknown[], runner = "windows-latest") =>
+    boundedInstallProblems(
+      {
+        jobs: {
+          smoke: { "runs-on": runner, "timeout-minutes": 12, steps },
+        },
+      },
+      "all",
+    );
+  expect(check([action])).toEqual([]);
+  expect(check([{ ...action, uses: "./.github/actions/ci-install" }])).toEqual(
+    [],
+  );
+  for (const runner of ["windows-latest", "ubuntu-latest"]) {
+    expect(check([{ ...action, "timeout-minutes": 3 }], runner)).toContain(
+      "smoke: install must use the job timeout as its only deadline",
+    );
+    expect(
+      check(
+        [
+          {
+            ...action,
+            with: { ...action.with, "installer-budget-ms": "91000" },
+          },
+        ],
+        runner,
+      ),
+    ).toEqual([]);
+  }
+  for (const budget of ["0", "invalid", "120001"]) {
+    expect(
+      check(
+        [
+          {
+            ...action,
+            with: { ...action.with, "installer-budget-ms": budget },
+          },
+        ],
+        "ubuntu-latest",
+      ),
+    ).toContain("smoke: invalid installer budget");
+  }
+  expect(
+    check([
+      {
+        ...action,
+        uses: "stella/.github/actions/ci-install@abcdef1234567890",
+      },
+    ]),
+  ).toContain("smoke: install bypasses scripts/ci-install.ts");
+  expect(
+    check([
+      {
+        ...action,
+        with: { flags: '["--ignore-scripts"]' },
+      },
+    ]),
+  ).toContain("smoke: ci-install action needs ordered frozen install flags");
+  expect(
+    check([
+      {
+        ...action,
+        with: { ...action.with, "log-file": "/tmp/install.log" },
+      },
+    ]),
+  ).toContain("smoke: ci-install action needs a retained failure log");
+  expect(
+    check([{ name: "Install dependencies", run: "bun install" }]),
+  ).toContain("smoke: install bypasses scripts/ci-install.ts");
+});
+
+test("the fixed ci-install composite owns the bounded wrapper and failure artifact", () => {
+  const action: unknown = Bun.YAML.parse(
+    readFileSync(
+      path.join(REPO_ROOT, ".github/actions/ci-install/action.yml"),
+      "utf-8",
+    ),
+  );
+  if (
+    typeof action !== "object" ||
+    action === null ||
+    !("runs" in action) ||
+    typeof action.runs !== "object" ||
+    action.runs === null ||
+    !("steps" in action.runs)
+  ) {
+    expect.unreachable("The fixed ci-install action must be composite");
+  }
+  const steps = flattenWorkflowSteps(action.runs.steps);
+  const install = steps.find(
+    (step) => step["name"] === "Run frozen install with progress watchdog",
+  );
+  expect(install?.["run"]).toBe(
+    [
+      'bun scripts/ci-install.ts "$',
+      '{INSTALL_LOG:-$RUNNER_TEMP/bun-install/$GITHUB_JOB.log}"',
+    ].join(""),
+  );
+  expect(install).toHaveProperty(
+    "env.STELLA_CI_INSTALL_BUDGET_MS",
+    `\${{ inputs.installer-budget-ms }}`,
+  );
+  const upload = steps.find(
+    (step) =>
+      typeof step["uses"] === "string" &&
+      step["uses"].startsWith("actions/upload-artifact@"),
+  );
+  expect(upload?.["uses"]).toMatch(/^actions\/upload-artifact@[0-9a-f]{40}/u);
+  expect(upload?.["if"]).toBe("failure()");
+  const uploadInputs = upload?.["with"];
+  if (
+    typeof uploadInputs !== "object" ||
+    uploadInputs === null ||
+    Array.isArray(uploadInputs) ||
+    !("path" in uploadInputs)
+  ) {
+    expect.unreachable("The failure artifact step must declare upload inputs");
+  }
+  expect(uploadInputs["path"]).toBe(`\${{ runner.temp }}/bun-install/*.log`);
+});
 
 /** Install-free commands allowed to fetch a package to run it, with why. */
 const FETCH_ALLOWLIST: readonly { command: string; reason: string }[] = [];
@@ -93,6 +407,68 @@ const invocationProblems = (
 };
 
 describe("shell lexing", () => {
+  test("keeps ANSI-C escaped quotes, backslashes and newlines in one literal word", () => {
+    expect(
+      lexShell(
+        String.raw`printf '%s' $'src=\'fixture\'; rg literal\\path\n$(rg hidden)'suffix`,
+      ),
+    ).toEqual([
+      {
+        type: "command",
+        words: [
+          "printf",
+          "%s",
+          "src='fixture'; rg literal\\path\n$(rg hidden)suffix",
+        ],
+      },
+    ]);
+    expect(lexShell("printf $'line one\nline two'\ntrue")).toEqual([
+      { type: "command", words: ["printf", "line one\nline two"] },
+      { type: "command", words: ["true"] },
+    ]);
+  });
+
+  test("decodes ANSI-C command names without interpreting literal command content", () => {
+    for (const escaped of [String.raw`\x72g`, String.raw`\162\147`, "rg"]) {
+      expect(lexShell(`$'${escaped}' file`)).toEqual([
+        { type: "command", words: ["rg", "file"] },
+      ]);
+    }
+    expect(lexShell(String.raw`printf $'rg\0; hidden' $'\q'`)).toEqual([
+      { type: "command", words: ["printf", "rg", String.raw`\q`] },
+    ]);
+  });
+
+  test("decodes ANSI-C byte escapes and preserves unknown escapes", () => {
+    expect(
+      lexShell(
+        String.raw`printf $'\a\b\e\E\f\n\r\t\v\"' $'\0123\1234\777\x7\x72g\x\z'`,
+      ),
+    ).toEqual([
+      {
+        type: "command",
+        words: [
+          "printf",
+          '\u0007\b\u001b\u001b\f\n\r\t\v"',
+          "\n3S4\u00ff\u0007rg\\x\\z",
+        ],
+      },
+    ]);
+  });
+
+  test("reports unsupported or unterminated ANSI-C literals instead of guessing", () => {
+    expect(lexShell(String.raw`printf $'escaped\'`).at(-1)).toEqual({
+      type: "unparsed",
+      reason: "unterminated ANSI-C quote",
+    });
+    for (const escape of ["u", "U", "c"]) {
+      expect(lexShell(`printf $'\\${escape}72'`).at(-1)).toEqual({
+        type: "unparsed",
+        reason: `unsupported ANSI-C escape \\${escape}`,
+      });
+    }
+  });
+
   test("reads quoted, substituted and continued commands", () => {
     expect(
       commands(
@@ -131,6 +507,32 @@ describe("shell lexing", () => {
     ).toEqual(["cat", "true"]);
   });
 
+  test("keeps only a standard-input heredoc as the command's stdin", () => {
+    const stdins = (source: string) =>
+      lexShell(source).flatMap((event) =>
+        event.type === "command" ? [event.stdin?.body] : [],
+      );
+    expect(
+      stdins(
+        [
+          "bun - <<'JS'",
+          'import "a";',
+          "JS",
+          "cat <<-EOF",
+          "\tindented",
+          "\tEOF",
+          "bun - 3<<EOF",
+          "x",
+          "EOF",
+          "bun - <<EOF < file",
+          "x",
+          "EOF",
+          "true",
+        ].join("\n"),
+      ),
+    ).toEqual(['import "a";', "indented", undefined, undefined, undefined]);
+  });
+
   test("reports an unterminated quote instead of guessing", () => {
     expect(lexShell("echo 'open").at(-1)).toEqual({
       reason: "unterminated single quote",
@@ -162,7 +564,14 @@ describe("shell lexing", () => {
       const lexed = commands(run);
       return run
         .split("\n")
-        .map((line) => line.trim().split(/\s+/u).slice(0, 2).join(" "))
+        .map((line) =>
+          line
+            .trim()
+            .split(/\s+/u)
+            .slice(0, 2)
+            .map((word) => word.replace(/^['"]|['"]$/gu, ""))
+            .join(" "),
+        )
         .filter((start) => start.startsWith("bun "))
         .filter((start) => !lexed.some((command) => command.includes(start)));
     });
@@ -235,6 +644,178 @@ describe("install-free invocation classification", () => {
       "scripts/pre.ts": "",
       ...extra,
     });
+
+  test("checks Bun inside an assigned command substitution with environment assignments", () => {
+    const root = repository(
+      `jobs:
+  fixture:
+    steps:
+      - run: 'x=$(A="$a" B="$b" bun scripts/s.ts)'
+`,
+      { "scripts/s.ts": 'import "fixture-package";\n' },
+    );
+    const invocations = installFreeInvocations({
+      root,
+      workflow: CI_WORKFLOW,
+    });
+
+    expect(invocations).toHaveLength(1);
+    expect(invocations.at(0)?.classification).toEqual({
+      type: "files",
+      cwd: "",
+      entries: ["scripts/s.ts"],
+    });
+    expect(
+      invocations.flatMap((invocation) => invocationProblems(root, invocation)),
+    ).toEqual([
+      "fixture › step 1: bun scripts/s.ts: scripts/s.ts imports fixture-package",
+    ]);
+  });
+
+  test("resolves pinned same-repository checkout paths and enforces sparse import availability", () => {
+    const source = (options: string, condition = "") => `jobs:
+  tooling:
+    steps:
+      - uses: actions/checkout@${"a".repeat(40)}
+        ${condition}
+        with:
+          path: .tooling
+          ${options}
+      - run: bun .tooling/scripts/check.ts
+`;
+    const complete = repository(source("sparse-checkout: scripts"));
+    const invocations = installFreeInvocations({
+      root: complete,
+      workflow: CI_WORKFLOW,
+    });
+    expect(invocations.at(0)?.classification).toEqual({
+      type: "files",
+      cwd: "",
+      entries: ["scripts/check.ts"],
+    });
+    expect(
+      invocations.flatMap((invocation) =>
+        invocationProblems(complete, invocation),
+      ),
+    ).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining("imports better-result"),
+      ]),
+    );
+    for (const options of [
+      "sparse-checkout: scripts/check.ts",
+      "sparse-checkout: scripts/helper.ts",
+    ]) {
+      const root = repository(source(options));
+      const [invocation] = installFreeInvocations({
+        root,
+        workflow: CI_WORKFLOW,
+      });
+      expect(invocation?.classification).toEqual({
+        type: "unclassified",
+        reason: expect.stringContaining("outside sparse checkout"),
+      });
+    }
+    for (const options of [
+      "repository: other/repository",
+      `repository: \${{ inputs.repository }}`,
+    ]) {
+      const root = repository(source(options));
+      expect(
+        installFreeInvocations({ root, workflow: CI_WORKFLOW }).at(0)
+          ?.classification,
+      ).toEqual({
+        type: "unclassified",
+        reason: ".tooling/scripts/check.ts does not exist",
+      });
+    }
+    const conditional = repository(
+      source("sparse-checkout: scripts", "if: inputs.tooling == true"),
+    );
+    expect(
+      installFreeInvocations({ root: conditional, workflow: CI_WORKFLOW }).at(0)
+        ?.classification,
+    ).toEqual({
+      type: "unclassified",
+      reason: ".tooling/scripts/check.ts does not exist",
+    });
+  });
+
+  test("checkout mappings cannot survive replacement or leak from parallel steps", () => {
+    const checkout = {
+      uses: `actions/checkout@${"a".repeat(40)}`,
+      with: { path: ".tooling", "sparse-checkout": "scripts" },
+    };
+    for (const steps of [
+      [
+        checkout,
+        {
+          ...checkout,
+          with: { path: ".tooling", repository: "other/repository" },
+        },
+        { run: "bun .tooling/scripts/check.ts" },
+      ],
+      [{ parallel: [checkout, { run: "bun .tooling/scripts/check.ts" }] }],
+    ]) {
+      const root = repository(JSON.stringify({ jobs: { job: { steps } } }));
+      const invocations = installFreeInvocations({
+        root,
+        workflow: CI_WORKFLOW,
+      });
+      expect(invocations).toHaveLength(1);
+      expect(invocations.at(0)?.classification).toEqual({
+        type: "unclassified",
+        reason: ".tooling/scripts/check.ts does not exist",
+      });
+    }
+  });
+
+  test("every checkout form invalidates overlapping recorded source mappings", () => {
+    const trustedCheckout = {
+      uses: `actions/checkout@${"a".repeat(40)}`,
+      with: { path: ".tooling", "sparse-checkout": "scripts" },
+    };
+    const replacementOptions = [
+      undefined,
+      {},
+      { repository: "other/repository" },
+      { path: ".", repository: "other/repository" },
+      { path: ".tooling", repository: "other/repository" },
+      { path: ".tooling/scripts", repository: "other/repository" },
+      { path: `\${{ inputs.path }}`, repository: "other/repository" },
+    ];
+    for (const ref of ["b".repeat(40), "v7"]) {
+      for (const options of replacementOptions) {
+        const replacement =
+          options === undefined
+            ? { uses: `actions/checkout@${ref}` }
+            : { uses: `actions/checkout@${ref}`, with: options };
+        const root = repository(
+          JSON.stringify({
+            jobs: {
+              tooling: {
+                steps: [
+                  trustedCheckout,
+                  { run: "bun .tooling/scripts/check.ts" },
+                  replacement,
+                  { run: "bun .tooling/scripts/check.ts" },
+                ],
+              },
+            },
+          }),
+        );
+        const invocations = installFreeInvocations({
+          root,
+          workflow: CI_WORKFLOW,
+        });
+        expect(invocations.at(0)?.classification.type).toBe("files");
+        expect(invocations.at(1)?.classification).toEqual({
+          type: "unclassified",
+          reason: ".tooling/scripts/check.ts does not exist",
+        });
+      }
+    }
+  });
 
   const classify = (run: string, extra: Record<string, string> = {}) => {
     const root = repository(
@@ -334,6 +915,7 @@ describe("install-free invocation classification", () => {
           "bun run absent",
           "bun --filter @fixture/none gen",
           "bun build scripts/check.ts",
+          "bun - < scripts/check.ts",
           "bash run-in-image.sh bun scripts/check.ts",
           'cd "$TARGET" && bun scripts/check.ts',
         ].join("\n"),
@@ -355,6 +937,7 @@ describe("install-free invocation classification", () => {
       ".#absent is not a package.json script",
       "--filter @fixture/none names no single workspace package",
       "bun build is not classified",
+      "reads code from a non-heredoc stdin",
       "bash runs Bun with arguments this check cannot follow",
       "scripts/check.ts is computed at run time",
     ]);
@@ -493,6 +1076,196 @@ describe("install-free invocation classification", () => {
         ].join("\n"),
       ),
     ).toEqual(["install", "install", "files"]);
+  });
+
+  test("parallel siblings share only the installs available before the group", () => {
+    const root = repository(
+      [
+        "jobs:",
+        "  job:",
+        "    steps:",
+        "      - parallel:",
+        "          - run: bun ci",
+        "          - parallel:",
+        "              - name: Nested invocation",
+        "                run: bun scripts/check.ts",
+        "      - name: After group",
+        "        run: bun scripts/check.ts",
+      ].join("\n"),
+    );
+    const invocations = installFreeInvocations({
+      root,
+      workflow: CI_WORKFLOW,
+    });
+    const files = invocations.filter(
+      ({ classification }) => classification.type === "files",
+    );
+    expect(files).toHaveLength(1);
+    expect(files.at(0)?.step).toBe("Nested invocation");
+  });
+
+  test("a parallel group waits for background installs without sharing them with siblings", () => {
+    const root = repository(
+      [
+        "jobs:",
+        "  job:",
+        "    steps:",
+        "      - parallel:",
+        "          - id: installed",
+        "            background: true",
+        "            run: bun ci",
+        "          - name: Concurrent invocation",
+        "            run: bun scripts/check.ts",
+        "      - name: After group",
+        "        run: bun scripts/check.ts",
+      ].join("\n"),
+    );
+    const files = installFreeInvocations({
+      root,
+      workflow: CI_WORKFLOW,
+    }).filter(({ classification }) => classification.type === "files");
+    expect(files).toHaveLength(1);
+    expect(files.at(0)?.step).toBe("Concurrent invocation");
+  });
+
+  test("a background install covers commands only after its wait", () => {
+    const root = repository(
+      [
+        "jobs:",
+        "  job:",
+        "    steps:",
+        "      - id: installed",
+        "        background: true",
+        "        run: bun ci",
+        "      - name: Before wait",
+        "        run: bun scripts/check.ts",
+        "      - wait: installed",
+        "      - name: After wait",
+        "        run: bun scripts/check.ts",
+      ].join("\n"),
+    );
+    const files = installFreeInvocations({
+      root,
+      workflow: CI_WORKFLOW,
+    }).filter(({ classification }) => classification.type === "files");
+    expect(files).toHaveLength(1);
+    expect(files.at(0)?.step).toBe("Before wait");
+  });
+
+  test("cancelled background installs stay unavailable after a wait barrier", () => {
+    for (const barrier of ["- wait: cancelled", "- wait-all: null"]) {
+      const root = repository(
+        [
+          "jobs:",
+          "  job:",
+          "    steps:",
+          "      - id: cancelled",
+          "        background: true",
+          "        run: bun ci",
+          "      - cancel: cancelled",
+          `      ${barrier}`,
+          "      - name: After cancel",
+          "        run: bun scripts/check.ts",
+          "      - id: retained",
+          "        background: true",
+          "        run: bun ci",
+          "      - wait: retained",
+          "      - name: After retained wait",
+          "        run: bun scripts/check.ts",
+        ].join("\n"),
+      );
+      const files = installFreeInvocations({
+        root,
+        workflow: CI_WORKFLOW,
+      }).filter(({ classification }) => classification.type === "files");
+      expect(files, barrier).toHaveLength(1);
+      expect(files.at(0)?.step, barrier).toBe("After cancel");
+    }
+  });
+
+  test("parallel cancellation dominates sibling waits and nested group proofs without losing other scopes", () => {
+    for (const installLocation of ["before-group", "nested-sibling"] as const) {
+      for (const depth of [0, 1, 2]) {
+        for (const siblingWaitPosition of [
+          "absent",
+          "before",
+          "after",
+        ] as const) {
+          for (const barrier of ["wait: tools", "wait-all: null"]) {
+            const cancelBranch = [
+              ...Array.from(
+                { length: depth },
+                (_, index) => `${"  ".repeat(index)}- parallel:`,
+              ),
+              `${"  ".repeat(depth)}- cancel: tools`,
+            ].join("\n");
+            const siblingWait = "- wait: tools";
+            const installerBranch = [
+              "- parallel:",
+              "  - id: tools",
+              "    background: true",
+              "    run: bun ci",
+            ].join("\n");
+            const parallelBranches = [cancelBranch];
+            if (siblingWaitPosition === "before") {
+              parallelBranches.unshift(siblingWait);
+            }
+            if (siblingWaitPosition === "after") {
+              parallelBranches.push(siblingWait);
+            }
+            if (installLocation === "nested-sibling") {
+              parallelBranches.unshift(installerBranch);
+            }
+            const parallelSteps = parallelBranches
+              .flatMap((branch) =>
+                branch.split("\n").map((line) => `          ${line}`),
+              )
+              .join("\n");
+            const root = repository(
+              [
+                "jobs:",
+                "  job:",
+                "    steps:",
+                "      - id: retained",
+                "        background: true",
+                "        run: bun ci",
+                "        working-directory: packages/tool",
+                "      - wait: retained",
+                ...(installLocation === "before-group"
+                  ? [
+                      "      - id: tools",
+                      "        background: true",
+                      "        run: bun ci",
+                    ]
+                  : []),
+                "      - parallel:",
+                parallelSteps,
+                `      - ${barrier}`,
+                "      - name: After cancel",
+                "        run: bun scripts/check.ts",
+                "      - name: Retained install scope",
+                "        run: bun gen.ts",
+                "        working-directory: packages/tool",
+              ].join("\n"),
+            );
+            const files = installFreeInvocations({
+              root,
+              workflow: CI_WORKFLOW,
+            }).filter(({ classification }) => classification.type === "files");
+            const scenario = {
+              installLocation,
+              depth,
+              siblingWaitPosition,
+              barrier,
+            };
+            expect(files, JSON.stringify(scenario)).toHaveLength(1);
+            expect(files.at(0)?.step, JSON.stringify(scenario)).toBe(
+              "After cancel",
+            );
+          }
+        }
+      }
+    }
   });
 
   const continuationCases: readonly {
@@ -736,6 +1509,28 @@ describe("install-free invocation classification", () => {
     ).toEqual(["install", "files", "files"]);
   });
 
+  test("checks code a heredoc feeds to `bun -` like inline code", () => {
+    expect(
+      classify(
+        ["bun --no-env-file - <<'JS'", 'import { z } from "zod";', "JS"].join(
+          "\n",
+        ),
+      ),
+    ).toEqual([
+      {
+        classification: {
+          code: 'import { z } from "zod";',
+          cwd: "",
+          type: "eval",
+        },
+        command: "bun --no-env-file -",
+      },
+    ]);
+    expect(
+      kinds(["bun -r ./scripts/pre.ts - <<'JS'", "1", "JS"].join("\n")),
+    ).toEqual(["unclassified"]);
+  });
+
   test("reports every installed package a file or inline code imports", () => {
     const root = repository("jobs: {}\n");
 
@@ -752,6 +1547,167 @@ describe("install-free invocation classification", () => {
     expect(
       importProblems({ entries: ["scripts/check.test.ts"], root }),
     ).toEqual([]);
+  });
+  test("installed Bun CLIs in subprocesses require the dependency install", () => {
+    for (const launcher of ["process.execPath", '"bun"', "`bun`"]) {
+      for (const method of ["spawn", "spawnSync"]) {
+        const source = `Bun.${method}([${launcher}, "--bun", "oxlint", "changed.ts"]);`;
+        const root = fixture({ "check.ts": source });
+        expect(importProblems({ root, entries: ["check.ts"] })).toEqual([
+          "check.ts launches installed Bun CLI oxlint",
+        ]);
+        expect(
+          importProblems({ root, entries: [], code: { cwd: "", source } }),
+        ).toEqual(["inline code in . launches installed Bun CLI oxlint"]);
+        writeFileSync(
+          path.join(root, "check.ts"),
+          `const fixture = ${JSON.stringify(source)};\n// ${source}\nBun.spawnSync([process.execPath, "scripts/check.ts"]);`,
+        );
+        expect(importProblems({ root, entries: ["check.ts"] })).toEqual([]);
+      }
+    }
+  });
+
+  test("static template CLI arguments are installed dependencies, computed templates stay unclassified", () => {
+    for (const argument of ["`oxlint`", `\`ox\${name}\``, "`ox\\lint`"]) {
+      const source = `Bun.spawnSync([process.execPath, ${argument}, "changed.ts"]);`;
+      const root = fixture({ "check.ts": source });
+      expect(importProblems({ root, entries: ["check.ts"] })).toEqual(
+        argument === "`oxlint`"
+          ? ["check.ts launches installed Bun CLI oxlint"]
+          : [],
+      );
+    }
+  });
+
+  test("the type-aware autofix fixture cannot run from a bare checkout", () => {
+    expect(
+      importProblems({
+        root: REPO_ROOT,
+        entries: ["scripts/autofix-type-aware.test.ts"],
+      }),
+    ).toContain(
+      "scripts/autofix-type-aware.test.ts launches installed Bun CLI oxlint",
+    );
+  });
+
+  test("an install through a retry helper copy outside scripts/ is an install", () => {
+    for (const helper of [
+      '"$RELEASE_TOOLING/scripts/retry.sh"',
+      "./scripts/retry.sh",
+      "tooling/retry.sh",
+      '"$NETWORK_RETRY_SCRIPT"',
+    ]) {
+      expect(
+        classify(`bash ${helper} bun ci --ignore-scripts`).map(
+          ({ classification }) => classification.type,
+        ),
+      ).toEqual(["install"]);
+    }
+    // A helper whose name only ends in retry.sh is a different program.
+    expect(
+      classify("bash scripts/gh-retry.sh bun ci --ignore-scripts").map(
+        ({ classification }) => classification.type,
+      ),
+    ).not.toEqual(["install"]);
+  });
+
+  test("a release gate recorder run is followed to the command it runs", () => {
+    for (const helper of [
+      '"$RUNNER_TEMP/release-gate.sh"',
+      "scripts/release-gate.sh",
+    ]) {
+      expect(
+        classify(`bash ${helper} run audit bun ci --ignore-scripts`).map(
+          ({ classification }) => classification.type,
+        ),
+      ).toEqual(["install"]);
+    }
+    // Only `run <gate>` hands its words to a command.
+    expect(
+      classify("bash scripts/release-gate.sh verdict bun ci").map(
+        ({ classification }) => classification.type,
+      ),
+    ).not.toEqual(["install"]);
+  });
+
+  test("bounded installs and planner calls retain dependency coverage", () => {
+    for (const prefix of [
+      ...["0", "1.5", ".5", "1.", "2s", "3.5m", "4h", "5d"].map(
+        (duration) => `timeout ${duration}`,
+      ),
+      "timeout 120s",
+      "timeout --kill-after=10s 120s",
+      "timeout -k 10s 120s",
+      "timeout --signal TERM -- 120s",
+    ]) {
+      const root = repository(
+        [
+          "jobs:",
+          "  job:",
+          "    steps:",
+          `      - run: bash scripts/retry.sh ${prefix} bun ci --ignore-scripts`,
+          "        id: installed",
+          "        if: inputs.run == true",
+          `      - run: ${prefix} bun scripts/check.ts`,
+          "        if: steps.installed.outcome == 'success'",
+        ].join("\n"),
+      );
+      expect(
+        installFreeInvocations({ root, workflow: CI_WORKFLOW }).map(
+          ({ classification }) => classification.type,
+        ),
+      ).toEqual(["install"]);
+      expect(
+        classify(`${prefix} bun scripts/check.ts`).map(
+          ({ classification }) => classification.type,
+        ),
+      ).toEqual(["files"]);
+    }
+  });
+
+  test("timeout invalid durations and options cannot certify dependency installation", () => {
+    for (const option of [
+      "--help",
+      "--version",
+      "--unknown",
+      "invalid",
+      "1ss",
+      "1..5",
+      "1x",
+      "-1",
+      "--kill-after=invalid 120s",
+      "-k invalid 120s",
+      "-kinvalid 120s",
+    ]) {
+      const root = repository(
+        [
+          "jobs:",
+          "  job:",
+          "    steps:",
+          `      - run: timeout ${option} bun ci`,
+          "        id: installed",
+          "      - run: bun scripts/check.ts",
+          "        if: steps.installed.outcome == 'success'",
+        ].join("\n"),
+      );
+      const invocations = installFreeInvocations({
+        root,
+        workflow: CI_WORKFLOW,
+      });
+      expect(
+        invocations.some(
+          ({ classification }) => classification.type === "install",
+        ),
+      ).toBe(false);
+      expect(
+        invocations.some(
+          ({ classification }) =>
+            classification.type === "files" &&
+            classification.entries.includes("scripts/check.ts"),
+        ),
+      ).toBe(true);
+    }
   });
 });
 
@@ -771,7 +1727,10 @@ test("everything CI runs without the dependency install imports only built-ins",
     "scripts/check-api-deployment.test.ts",
     "scripts/check-standalone-lockfiles.ts",
     "scripts/detect-e2e-changes.test.ts",
+    "scripts/e2e-spec-shards-core.ts",
     "scripts/install-free-ci.test.ts",
+    "scripts/ci-pr-jobs-cli.ts",
+    "scripts/ui-playground-shards.ts",
   ]) {
     expect(loaded).toContain(file);
   }
@@ -795,6 +1754,32 @@ test("everything CI runs without the dependency install imports only built-ins",
 // disable auto-install explicitly.
 const NO_FETCH_COMMAND =
   /^bun(?:\s+--[\w-]+)*\s+(?:dedupe\b|[^\n]*--no-install\b)/u;
+
+test("preserved staging proof commands resolve to their built-in import closure", () => {
+  const invocations = installFreeInvocations({
+    root: REPO_ROOT,
+    workflow: ".github/workflows/deploy-staging.yml",
+  }).filter(
+    ({ job, step }) =>
+      job === "promote-staging" &&
+      step === "Verify staging serves the release commit and environment",
+  );
+  expect(invocations.map(({ classification }) => classification)).toEqual([
+    {
+      type: "files",
+      cwd: "",
+      entries: ["scripts/staging-proof-readiness-cli.ts"],
+    },
+    {
+      type: "files",
+      cwd: "",
+      entries: ["scripts/staging-proof-readiness-cli.ts"],
+    },
+  ]);
+  for (const invocation of invocations) {
+    expect(invocationProblems(REPO_ROOT, invocation)).toEqual([]);
+  }
+});
 
 test("every workflow's install-free Bun commands load only built-ins", () => {
   const workflows = readdirSync(path.join(REPO_ROOT, ".github/workflows"))

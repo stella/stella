@@ -2,7 +2,7 @@
  * The statements behind `repair-legacy-usa-court-ids.ts`, apart from the
  * script so a test runs exactly what an operator runs.
  */
-import { sql, type SQL } from "drizzle-orm";
+import { type SQL, sql } from "drizzle-orm";
 
 import { legacyTrustedUsaCourts } from "@/api/lib/case-law/decision-court-identity";
 import { executedRows } from "@/api/lib/db/executed-rows";

@@ -33,10 +33,9 @@ const stripTrailingSlash = (value: string) => value.replace(/(?<!\/)\/+$/u, "");
 const appendPath = (baseUrl: string, path: string) =>
   new URL(path, `${baseUrl}/`).toString();
 
-const sleep = async (ms: number) =>
-  new Promise((resolve) => {
-    setTimeout(resolve, ms);
-  });
+const sleep = async (ms: number) => {
+  await Bun.sleep(ms);
+};
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);

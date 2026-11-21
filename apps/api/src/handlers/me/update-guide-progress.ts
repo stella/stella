@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import {
   GUIDE_PROGRESS_STATUSES,
@@ -14,15 +14,13 @@ import type { SessionHandlerConfig } from "@/api/lib/api-handlers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { patchUserGuideProgress } from "@/api/lib/guide-progress";
 
-const requestBody = t.Object(
-  {
-    tourId: t.UnionEnum(GUIDE_PROGRESS_TOUR_IDS),
-    status: t.UnionEnum(GUIDE_PROGRESS_STATUSES),
-  },
-  { additionalProperties: false },
-);
+const requestBody = v.strictObject({
+  tourId: v.picklist(GUIDE_PROGRESS_TOUR_IDS),
+  status: v.picklist(GUIDE_PROGRESS_STATUSES),
+});
 
 const config = {
+  contract: "patch",
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "auth_plumbing" },
   body: requestBody,

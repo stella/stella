@@ -4,10 +4,10 @@ import fc from "fast-check";
 import {
   DECISION_TEXT_ABSENCE_METADATA_KEY,
   DECISION_TEXT_FIELD_KEYS,
-  TEXT_ABSENCE_REASONS,
   TEXT_ABSENCE_REASON,
+  TEXT_ABSENCE_REASONS,
 } from "@stll/api-contract/case-law-text-field";
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
 import {
   absentTextField,
@@ -35,8 +35,9 @@ const unknownEntries = fc.uniqueArray(
   { selector: ({ field }) => field, maxLength: 8 },
 );
 
-test("sparse writes stay identical while future sidecars read the same text states", () => {
-  fc.assert(
+test("versioned writes and future sidecars read the same text states", () => {
+  assertProperty(
+    "versioned writes and future sidecars read the same text states",
     fc.property(
       fields,
       unknownEntries,
@@ -46,8 +47,11 @@ test("sparse writes stay identical while future sidecars read the same text stat
           metadata: { publisher: "fixture" },
           textFields,
         });
-        const expected: Record<string, unknown> = { publisher: "fixture" };
-        const sparse = [];
+        const expected: Record<string, unknown> = {
+          publisher: "fixture",
+          _stellaDecisionTextAbsenceVersion: 2,
+        };
+
         const explicit = [];
         for (const field of DECISION_TEXT_FIELD_KEYS) {
           const value = textFields[field];
@@ -56,12 +60,9 @@ test("sparse writes stay identical while future sidecars read the same text stat
             continue;
           }
           explicit.push({ field, reason: value.reason });
-          if (value.reason !== TEXT_ABSENCE_REASON.NOT_PUBLISHED) {
-            sparse.push({ field, reason: value.reason });
-          }
         }
-        if (sparse.length > 0) {
-          expected[DECISION_TEXT_ABSENCE_METADATA_KEY] = sparse;
+        if (explicit.length > 0) {
+          expected[DECISION_TEXT_ABSENCE_METADATA_KEY] = explicit;
         }
         expect(stored).toEqual(expected);
         expect(readDecisionTextMetadata(stored).textFields).toEqual(textFields);
@@ -78,7 +79,7 @@ test("sparse writes stay identical while future sidecars read the same text stat
         expect(readDecisionTextMetadata(future).textFields).toEqual(textFields);
       },
     ),
-    propertyConfig({ numRuns: 200 }),
+    { numRuns: 200 },
   );
 });
 

@@ -1,6 +1,5 @@
 import { panic, Result } from "better-result";
-import { t } from "elysia";
-import type { Static } from "elysia";
+import * as v from "valibot";
 
 import type {
   CompareChange,
@@ -20,9 +19,11 @@ import type {
 } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
+import { ownerSyntheticSessionAuthorityReader } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
+import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
 import type { DocumentSource } from "@/api/lib/document-source";
+import { CALLER_AUTHORIZED } from "@/api/lib/entities/buffer-write-authority";
 import { comparisonVersionId } from "@/api/lib/entity-versions/comparison-version-id";
 import { createEntityVersionFromBuffer } from "@/api/lib/entity-versions/create-entity-version-from-buffer";
 import type { EntityVersionFile } from "@/api/lib/entity-versions/load-entity-version-file-buffer";
@@ -41,7 +42,10 @@ import {
 } from "@/api/lib/files/read-file";
 import { LIMITS } from "@/api/lib/limits";
 import { buildDocumentUrl } from "@/api/lib/mcp-connectors/app-urls";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
+import { callerDownloadSource } from "@/api/lib/s3-presign";
 import { brandPersistedUserFileId } from "@/api/lib/safe-id-boundaries";
+import type { SyntheticSessionAuthorityReader } from "@/api/lib/synthetic-principal/session-authority";
 import {
   deliverTemporaryRedline,
   TEMPORARY_REDLINE_FAILURE_MESSAGE,
@@ -67,40 +71,32 @@ const COMPARE_MODES = ["strict", "best-effort"] as const;
 export type CompareMode = (typeof COMPARE_MODES)[number];
 export type CompareGranularity = "word" | "character";
 
-const compareSelectionSchema = t.Union([
-  t.Object(
-    {
-      type: t.Literal("versions"),
-      baseVersionId: tSafeId("entityVersion"),
-      targetVersionIds: t.Array(tSafeId("entityVersion"), {
-        minItems: 1,
-        maxItems: DOCUMENT_COMPARE_TARGET_LIMIT,
-      }),
-    },
-    { additionalProperties: false },
-  ),
-  t.Object(
-    {
-      type: t.Literal("previous"),
-      targetVersionId: tSafeId("entityVersion"),
-    },
-    { additionalProperties: false },
-  ),
+const compareSelectionSchema = v.union([
+  v.strictObject({
+    type: v.literal("versions"),
+    baseVersionId: resourceIdSchema("entityVersion"),
+    targetVersionIds: v.pipe(
+      v.array(resourceIdSchema("entityVersion")),
+      v.minLength(1),
+      v.maxLength(DOCUMENT_COMPARE_TARGET_LIMIT),
+    ),
+  }),
+  v.strictObject({
+    type: v.literal("previous"),
+    targetVersionId: resourceIdSchema("entityVersion"),
+  }),
 ]);
 
-const trackedChangeDispositionSchema = t.Union([
-  t.Literal("keep"),
-  t.Literal("accept"),
-  t.Literal("reject"),
-]);
+const trackedChangeDispositionSchema = v.picklist(["keep", "accept", "reject"]);
 
-const compareOutputSchema = t.Union([
-  t.Object({ type: t.Literal("preview") }, { additionalProperties: false }),
-  t.Object({ type: t.Literal("download") }, { additionalProperties: false }),
-  t.Object({ type: t.Literal("version") }, { additionalProperties: false }),
+const compareOutputSchema = v.union([
+  v.strictObject({ type: v.literal("preview") }),
+  v.strictObject({ type: v.literal("download") }),
+  v.strictObject({ type: v.literal("version") }),
 ]);
 
 const config = {
+  contract: "patch",
   contentDelivery: {
     type: "none",
     reason:
@@ -131,27 +127,16 @@ const config = {
   realtime: documentVersionRealtimeUpdates,
   mcp: { type: "tool", name: "compare_documents" },
   access: "write",
-  params: workspaceParams({ documentId: tSafeId("entity") }),
-  body: t.Object(
-    {
-      filePropertyId: tSafeId("property"),
-      selection: compareSelectionSchema,
-      mode: t.Optional(
-        t.Union([t.Literal("strict"), t.Literal("best-effort")], {
-          default: "strict",
-        }),
-      ),
-      granularity: t.Optional(
-        t.Union([t.Literal("word"), t.Literal("character")], {
-          default: "word",
-        }),
-      ),
-      baseTrackedChanges: trackedChangeDispositionSchema,
-      targetTrackedChanges: trackedChangeDispositionSchema,
-      output: compareOutputSchema,
-    },
-    { additionalProperties: false },
-  ),
+  params: workspaceParams({ documentId: resourceIdSchema("entity") }),
+  body: v.strictObject({
+    filePropertyId: resourceIdSchema("property"),
+    selection: compareSelectionSchema,
+    mode: v.optional(v.picklist(["strict", "best-effort"]), "strict"),
+    granularity: v.optional(v.picklist(["word", "character"]), "word"),
+    baseTrackedChanges: trackedChangeDispositionSchema,
+    targetTrackedChanges: trackedChangeDispositionSchema,
+    output: compareOutputSchema,
+  }),
 } satisfies WorkspaceHandlerConfig;
 
 export type CompareFailureCode =
@@ -241,9 +226,12 @@ export type DocumentCompareProps = {
   safeDb: SafeDb;
   scopedDb: ScopedDb;
   workspaceId: SafeId<"workspace">;
-  params: Static<typeof config.params>;
-  body: Static<typeof config.body>;
-  session: { activeOrganizationId: SafeId<"organization"> };
+  params: v.InferOutput<typeof config.params>;
+  body: v.InferOutput<typeof config.body>;
+  session: {
+    activeOrganizationId: SafeId<"organization">;
+    id: string | null;
+  };
   user: { id: SafeId<"user"> };
   recordAuditEvent: AuditRecorder;
   /** Caller's cancellation, ANDed with this operation's own deadline. */
@@ -513,6 +501,7 @@ const comparisonSource = ({
  */
 export const createDocumentCompareGenerator = (
   dependencies: DocumentCompareDependencies = DEFAULT_DOCUMENT_COMPARE_DEPENDENCIES,
+  readSessionAuthority: SyntheticSessionAuthorityReader = ownerSyntheticSessionAuthorityReader,
 ) =>
   async function* ({
     safeDb,
@@ -525,13 +514,13 @@ export const createDocumentCompareGenerator = (
     recordAuditEvent,
     abortSignal,
   }: DocumentCompareProps): SafeHandlerGenerator<DocumentCompareResponse> {
+    const downloadSource = callerDownloadSource(session);
     const comparisonSignal = AbortSignal.any([
       abortSignal,
       AbortSignal.timeout(DOCUMENT_COMPARE_DEADLINE_MS),
     ]);
     const documentId = params.documentId;
-    const mode = body.mode ?? "strict";
-    const granularity = body.granularity ?? "word";
+    const { mode, granularity } = body;
     const selection = body.selection;
     const targetIds =
       selection.type === "versions"
@@ -832,7 +821,13 @@ export const createDocumentCompareGenerator = (
       if (Result.isError(recorded)) {
         // The caller already holds the link; withdrawing it over a failed
         // audit write would lose the redline as well as the record.
-        captureError(recorded.error, { documentId, workspaceId });
+        captureError(
+          recorded.error,
+          handlerErrorContext("documents.recordDownloadAudit.recorded_error", {
+            documentId,
+            workspaceId,
+          }),
+        );
       }
     };
 
@@ -850,16 +845,24 @@ export const createDocumentCompareGenerator = (
         bytes: new Uint8Array(compared.buffer),
         fileName,
         organizationId: session.activeOrganizationId,
+        readSessionAuthority,
         scopedDb,
         signal: comparisonSignal,
+        source: downloadSource,
         userId: user.id,
       });
       if (Result.isError(delivered)) {
-        captureError(delivered.error.cause, {
-          documentId,
-          stage: "document-compare.deliver",
-          step: delivered.error.step,
-        });
+        captureError(
+          delivered.error.cause,
+          handlerErrorContext(
+            "documents.deliverRedline.delivered_error_cause",
+            {
+              documentId,
+              stage: "document-compare.deliver",
+              step: delivered.error.step,
+            },
+          ),
+        );
       }
       await recordDownloadAudit({ changeCount: compared.changes.length, pair });
       return delivered;
@@ -887,6 +890,7 @@ export const createDocumentCompareGenerator = (
           await dependencies.withTimeout(
             async () =>
               await dependencies.createEntityVersionFromBuffer({
+                authority: CALLER_AUTHORIZED,
                 safeDb,
                 organizationId: session.activeOrganizationId,
                 workspaceId,
@@ -1091,8 +1095,11 @@ export const createDocumentCompareGenerator = (
           await dependencies.withTimeout(
             async () =>
               await dependencies.readFileHandler({
+                readSessionAuthority,
                 scopedDb,
                 fieldId: saved.fieldId,
+                userId: user.id,
+                source: downloadSource,
                 organizationId: session.activeOrganizationId,
                 workspaceId,
                 purpose: "download",
@@ -1144,8 +1151,12 @@ export const createDocumentCompareGenerator = (
 
 export const createDocumentCompareHandler = (
   dependencies: DocumentCompareDependencies = DEFAULT_DOCUMENT_COMPARE_DEPENDENCIES,
+  readSessionAuthority: SyntheticSessionAuthorityReader = ownerSyntheticSessionAuthorityReader,
 ) => {
-  const compare = createDocumentCompareGenerator(dependencies);
+  const compare = createDocumentCompareGenerator(
+    dependencies,
+    readSessionAuthority,
+  );
   return createSafeHandler(config, (ctx) =>
     compare({ ...ctx, abortSignal: ctx.request.signal }),
   );

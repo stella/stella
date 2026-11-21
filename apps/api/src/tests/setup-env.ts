@@ -1,7 +1,34 @@
+import { envApiServerSchema } from "../env-schema";
 import { configureTestDatabaseEnvironment } from "./test-database-environment";
 
+// Preserve configured providers while preventing inherited credentials from
+// authenticating an unmocked model call. Derive coverage from the env owner.
+const nonModelServiceKeys = new Set([
+  "TAVILY_API_KEY",
+  "JINA_API_KEY",
+  "COMPANIES_HOUSE_API_KEY",
+  "HOSTED_USAGE_PROVIDER_API_KEY",
+  "AGENT_SANDBOX_HARNESS_API_KEY",
+]);
+// Also satisfies the WIF region schema, without naming a real AWS region.
+const providerCredentialPlaceholder = "stella-test-provider-credential-0";
+for (const name of Object.keys(envApiServerSchema)) {
+  const isModelCredential =
+    (name.endsWith("_API_KEY") && !nonModelServiceKeys.has(name)) ||
+    name.startsWith("GOOGLE_AI_API_KEY_") ||
+    name.startsWith("OPENROUTER_WIF_");
+  // An empty value means unconfigured (the env owner parses it as absent).
+  const value = process.env[name];
+  if (isModelCredential && value !== undefined && value !== "") {
+    process.env[name] = providerCredentialPlaceholder;
+  }
+}
+
 // Postgres fixtures are non-RDS: resolve telemetry before any env owner loads.
-if (process.env["STELLA_RUN_POSTGRES_TESTS"] === "true") {
+if (
+  process.env["STELLA_RUN_POSTGRES_TESTS"] === "true" ||
+  process.env["STELLA_RUN_QUERY_PERF_TESTS"] === "true"
+) {
   process.env["DB_LOAD_GATE_EBS_SIGNAL"] = "disabled";
   delete process.env["DB_LOAD_GATE_RDS_INSTANCE_IDENTIFIER"];
 }
@@ -11,6 +38,7 @@ configureTestDatabaseEnvironment();
 // route guards) exercise local development capabilities, which require an
 // explicit runtime opt-in. `bun test` already sets NODE_ENV=test. A test of
 // strict behaviour switches the mode through `setRuntimeModeForTesting`.
+process.env["DEPLOY_ENVIRONMENT"] ??= "development";
 process.env.NODE_ENV ??= "development";
 process.env["STELLA_LOCAL_DEV"] ??= "1";
 process.env["S3_ENDPOINT"] ??= "http://localhost:9000";
@@ -36,6 +64,10 @@ delete process.env["GOOGLE_AUTH_CLIENT_SECRET"];
 delete process.env["MICROSOFT_AUTH_CLIENT_ID"];
 delete process.env["MICROSOFT_AUTH_CLIENT_SECRET"];
 delete process.env["MICROSOFT_AUTH_TENANT_ID"];
+delete process.env["APPLE_AUTH_CLIENT_ID"];
+delete process.env["APPLE_AUTH_TEAM_ID"];
+delete process.env["APPLE_AUTH_KEY_ID"];
+delete process.env["APPLE_AUTH_PRIVATE_KEY"];
 // Same leak, different blast radius: a developer .env that turns corpus
 // object storage on sends ingestion tests down the real S3 write path, where
 // they fail against a bucket the test runner has never created. Tests assert
@@ -52,8 +84,6 @@ delete process.env["LEGAL_SEARCH_PROVIDER"];
 // require that endpoint only to build request URLs, so keep both sides local.
 delete process.env["PUBLIC_LAW_DATABASE_URL"];
 delete process.env["PUBLIC_LAW_DATABASE_POOL_MAX"];
-delete process.env["CASE_LAW_DATABASE_URL"];
-delete process.env["CASE_LAW_DATABASE_POOL_MAX"];
 
 // A fixed key so suites run the real AES-GCM content encryption instead of a
 // module mock; the value is test-only and derives per-organization keys the
@@ -68,6 +98,7 @@ process.env["SMTP_HOST"] ??= "localhost";
 process.env["SMTP_PORT"] ??= "1025";
 process.env["TRANSACTIONAL_EMAIL_FROM"] ??= "test@example.com";
 process.env["FRONTEND_URL"] ??= "http://localhost:3000";
+process.env["OUTLOOK_ADDIN_ORIGIN"] ??= "https://outlook.stella.example";
 // Never reached by tests: corpus-index tests stub global fetch and only
 // assert on the request contract.
 process.env["CORPUS_INDEX_Q09_ENDPOINT"] ??= "http://localhost:7290";

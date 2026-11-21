@@ -1,11 +1,10 @@
 import { Result, UnhandledException } from "better-result";
-import { Worker } from "bullmq";
 
 import type { EntityDeletionCleanupStatus } from "@/api/db/schema";
 import { captureError, detached } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createBullMqJobId } from "@/api/lib/bullmq-job-id";
-import { createLazyBullMqQueue } from "@/api/lib/bullmq-queue";
+import { BullMqWorker, createLazyBullMqQueue } from "@/api/lib/bullmq-queue";
 import type { BullMqWorkerContext } from "@/api/lib/bullmq-queue";
 import { requeueDeterministicJob } from "@/api/lib/bullmq-requeue";
 import type { RequeueableQueue } from "@/api/lib/bullmq-requeue";
@@ -22,6 +21,7 @@ import type {
 } from "@/api/lib/entity-deletion-effect-store";
 import { errorSystemFields, errorTag } from "@/api/lib/errors/utils";
 import { deleteS3Keys } from "@/api/lib/files/utils";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { logger } from "@/api/lib/observability/logger";
 import { createQueueWorkerErrorLogger } from "@/api/lib/queue-worker-error-log";
 import { createBullMqConnection } from "@/api/lib/redis-client";
@@ -127,18 +127,15 @@ export const createEntityDeletionCleanupReconciler = ({
       return;
     }
     reconciling = true;
-    detached(
-      (async () => {
-        try {
-          await run();
-        } catch (error) {
-          onError(error);
-        } finally {
-          reconciling = false;
-        }
-      })(),
-      "entity-deletion-cleanup.reconcile",
-    );
+    detached(async () => {
+      try {
+        await run();
+      } catch (error) {
+        onError(error);
+      } finally {
+        reconciling = false;
+      }
+    }, "entity-deletion-cleanup.reconcile");
   };
 };
 
@@ -272,7 +269,7 @@ export const initEntityDeletionCleanupWorker = ({
   db,
 }: BullMqWorkerContext) => {
   const cleanupRequestDeps = createCleanupRequestDeps(db);
-  const worker = new Worker<EntityDeletionCleanupJobData>(
+  const worker = new BullMqWorker<EntityDeletionCleanupJobData>(
     QUEUE_NAME,
     async (job) => {
       await processEntityDeletionCleanupRequest(
@@ -289,7 +286,12 @@ export const initEntityDeletionCleanupWorker = ({
   );
 
   worker.on("failed", (job, error) => {
-    captureError(error, { requestId: job?.data.requestId ?? "" });
+    captureError(
+      error,
+      handlerErrorContext("lib.initEntityDeletionCleanupWorker", {
+        requestId: job?.data.requestId ?? "",
+      }),
+    );
     logger.error("entity_deletion_cleanup.failed", {
       "error.type": errorTag(error),
       requestId: job?.data.requestId ?? "",
@@ -305,7 +307,7 @@ export const initEntityDeletionCleanupWorker = ({
       await enqueuePendingEntityDeletionCleanupRequests(db);
     },
     onError: (error) => {
-      captureError(error);
+      captureError(error, handlerErrorContext("entityDeletion.reconcile"));
       logger.error(
         "entity_deletion_cleanup.reconcile_failed",
         errorSystemFields(error),

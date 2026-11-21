@@ -57,7 +57,9 @@ type KeyOverrides = {
 };
 
 const validKey = (overrides: KeyOverrides = {}) => ({
+  createdAt: new Date("2026-07-01T00:00:00.000Z"),
   enabled: true,
+  expiresAt: null,
   id: KEY_ID,
   metadata: { organizationId: ORG_ID, scopes: SCOPES },
   name: "Machine API key",
@@ -79,6 +81,7 @@ const givenMemberRole = (role: string | null): void => {
     role === null
       ? null
       : {
+          billingAccess: false,
           memberId: "member_one",
           email: "standard@example.test",
           role,
@@ -99,7 +102,7 @@ const expectRejected = async (): Promise<Error> => {
     throw new Error("expected the credential to be rejected");
   }
   if (!(rejection instanceof Error)) {
-    throw new Error("expected the rejection to be an Error");
+    throw new TypeError("expected the rejection to be an Error");
   }
   return rejection;
 };
@@ -128,7 +131,7 @@ describe("machine API key audience binding", () => {
       (error: unknown) => error,
     );
     if (!(rejection instanceof Error)) {
-      throw new Error(`expected the credential to be rejected on ${mode}`);
+      throw new TypeError(`expected the credential to be rejected on ${mode}`);
     }
     return rejection;
   };
@@ -158,9 +161,9 @@ describe("machine API key audience binding", () => {
         continue;
       }
       const rejection = await expectRejectedOn(mode);
-      // The same generic rejection every other failure uses: which audience a
-      // credential belongs to is not something a probe gets told.
-      expect(rejection.message).toBe("Invalid or expired API key");
+      expect(rejection.message).toBe(
+        "This API key is bound to the law audience. Use /mcp-law.",
+      );
     }
   });
 
@@ -208,6 +211,42 @@ describe("machine API key audience binding", () => {
     expect(bindable).toEqual(grantable);
     expect(MACHINE_API_KEY_GRANTABLE_AUDIENCES).not.toContain("anonymized");
     expect(MACHINE_API_KEY_GRANTABLE_AUDIENCES).toContain("law");
+    expect(MACHINE_API_KEY_GRANTABLE_AUDIENCES).toContain("advanced");
+  });
+
+  test("advanced, default, and unbound keys retain their exact audience reach", async () => {
+    givenMemberRole("owner");
+
+    givenKey({
+      metadata: {
+        audience: "advanced",
+        organizationId: ORG_ID,
+        scopes: SCOPES,
+      },
+    });
+    expect(
+      (await resolveMachineApiKeySession(CREDENTIAL, { mode: "advanced" }))
+        .organizationId,
+    ).toBe(ORG_ID);
+
+    givenKey({
+      metadata: { audience: "default", organizationId: ORG_ID, scopes: SCOPES },
+    });
+    expect(
+      (await resolveMachineApiKeySession(CREDENTIAL, { mode: "default" }))
+        .organizationId,
+    ).toBe(ORG_ID);
+    expect((await expectRejectedOn("advanced")).message).toBe(
+      "This API key is bound to the default audience. Use /mcp.",
+    );
+
+    givenKey();
+    for (const mode of ["default", "advanced"] as const) {
+      expect(
+        (await resolveMachineApiKeySession(CREDENTIAL, { mode }))
+          .organizationId,
+      ).toBe(ORG_ID);
+    }
   });
 
   test("an audience the metadata schema does not know refuses the credential", async () => {
@@ -545,7 +584,9 @@ describe("authenticateMcpRequest credential dispatch", () => {
     // invalid.
     const { authenticateMcpRequest } = await import("@/api/mcp/auth");
 
-    const rejected = await authenticateMcpRequest("header.payload.signature");
+    const rejected = await authenticateMcpRequest("header.payload.signature", {
+      resolveApiKeySession: resolveMachineApiKeySession,
+    });
 
     expect(Result.isError(rejected)).toBe(true);
 

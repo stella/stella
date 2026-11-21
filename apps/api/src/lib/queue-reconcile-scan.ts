@@ -20,6 +20,9 @@ import {
 import type { RequeueableQueue } from "@/api/lib/bullmq-requeue";
 import { parsePgTimestampCursorValue } from "@/api/lib/db-pagination";
 import type { ParsedPgTimestampCursor } from "@/api/lib/db-pagination";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 
 /** Rows read per page. */
@@ -45,6 +48,77 @@ const RECONCILE_MAX_PAGES = 20;
 export type ReconcileScanResult = {
   handedOff: number;
   scanned: number;
+};
+
+export const MEMBER_RUN_AUTHORITY_REVOKED = "authority_revoked" as const;
+
+const MEMBER_RUN_EXECUTION_FAILED_SINK = failureSink({
+  event: "member_run.execution_failed",
+  expected: [],
+});
+
+type MemberRunActor = {
+  runId: string;
+  workspaceId: SafeId<"workspace">;
+};
+
+type ProcessClaimedMemberRunOptions<
+  Actor extends MemberRunActor,
+  ClaimedRun extends object,
+  ErrorCode extends string,
+> = {
+  actor: Actor;
+  claim: (
+    actor: Actor,
+  ) => Promise<ClaimedRun | typeof MEMBER_RUN_AUTHORITY_REVOKED | null>;
+  execute: (claimed: ClaimedRun) => Promise<ErrorCode | null>;
+  internalErrorCode: ErrorCode;
+  setFailed: (actor: Actor, errorCode: ErrorCode) => Promise<void>;
+};
+
+/**
+ * Close a claimed member run on revoked authority, an execution failure, or a
+ * domain failure code. Claim errors still escape to the queue's own failed
+ * handler; only errors after a successful claim belong to the run lifecycle.
+ */
+export const processClaimedMemberRun = async <
+  Actor extends MemberRunActor,
+  ClaimedRun extends object,
+  ErrorCode extends string,
+>({
+  actor,
+  claim,
+  execute,
+  internalErrorCode,
+  setFailed,
+}: ProcessClaimedMemberRunOptions<
+  Actor,
+  ClaimedRun,
+  ErrorCode
+>): Promise<void> => {
+  const claimed = await claim(actor);
+  if (claimed === MEMBER_RUN_AUTHORITY_REVOKED) {
+    await setFailed(actor, internalErrorCode);
+    return;
+  }
+  if (claimed === null) {
+    return;
+  }
+  const outcome = await Result.tryPromise({
+    try: async () => await execute(claimed),
+    catch: (cause) => cause,
+  });
+  if (Result.isError(outcome)) {
+    observeFailure(outcome.error, {
+      sink: MEMBER_RUN_EXECUTION_FAILED_SINK,
+      ctx: { runId: actor.runId, workspaceId: actor.workspaceId },
+    });
+    await setFailed(actor, internalErrorCode);
+    return;
+  }
+  if (outcome.value !== null) {
+    await setFailed(actor, outcome.value);
+  }
 };
 
 /**
@@ -156,6 +230,13 @@ type QueuedRunJob<DataType> = {
 };
 
 type ReconcileQueuedRunsOptions<Row extends QueuedRunRow, DataType> = {
+  /**
+   * Whether the run may still be handed back, asked before its requester is
+   * read. A run it refuses is counted as inspected and left for the hook to
+   * have settled (a queue that closes runs whose requester lost access does it
+   * here). Absent, every attributed run is handed back.
+   */
+  admit?: (run: Row) => Promise<boolean>;
   queue: RequeueableQueue<DataType>;
   /** Reads the next page of `queued` runs after `cursor`. */
   readPage: (cursor: Row | null) => Promise<readonly Row[]>;
@@ -168,7 +249,7 @@ type ReconcileQueuedRunsOptions<Row extends QueuedRunRow, DataType> = {
   }) => QueuedRunJob<DataType>;
 };
 
-type ReconcileQueuedRunsResult = ReconcileScanResult & {
+export type ReconcileQueuedRunsResult = ReconcileScanResult & {
   /** Runs whose requester is gone, so no job can carry their actor. */
   unattributed: number;
 };
@@ -180,6 +261,7 @@ type ReconcileQueuedRunsResult = ReconcileScanResult & {
  * requeue that fails is captured and the walk moves on.
  */
 export const reconcileQueuedRuns = async <Row extends QueuedRunRow, DataType>({
+  admit,
   queue,
   readPage,
   runJob,
@@ -190,8 +272,12 @@ export const reconcileQueuedRuns = async <Row extends QueuedRunRow, DataType>({
   let unattributed = 0;
 
   const handle = async (run: Row): Promise<boolean> => {
+    const admitted = admit === undefined ? true : await admit(run);
     if (run.requestedBy === null) {
       unattributed += 1;
+      return false;
+    }
+    if (!admitted) {
       return false;
     }
     const { data, name, opts } = runJob({
@@ -206,7 +292,10 @@ export const reconcileQueuedRuns = async <Row extends QueuedRunRow, DataType>({
       catch: (cause) => cause,
     });
     if (Result.isError(outcome)) {
-      captureError(outcome.error, { runId: run.id });
+      captureError(
+        outcome.error,
+        handlerErrorContext("lib.handle.outcome_error", { runId: run.id }),
+      );
       return false;
     }
     return outcome.value === QUEUE_REQUEUE_OUTCOME.REQUEUED;

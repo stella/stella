@@ -1,12 +1,12 @@
-import { Worker, type Job } from "bullmq";
+import type { Job } from "bullmq";
 import { and, asc, gt, inArray, lt, sql } from "drizzle-orm";
 
 import type { rootDb } from "@/api/db/root";
 import { flowRuns } from "@/api/db/schema";
-import { captureError } from "@/api/lib/analytics/capture";
+import { captureError, detached } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
+import { BullMqWorker } from "@/api/lib/bullmq-queue";
 import type { BullMqWorkerContext } from "@/api/lib/bullmq-queue";
-import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { errorSystemFields, errorTag } from "@/api/lib/errors/utils";
 import {
   executeFlowStep,
@@ -18,11 +18,13 @@ import {
   FLOW_RUN_QUEUE_NAME,
   type FlowStepJobData,
 } from "@/api/lib/flows/flow-run-queue";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { logger } from "@/api/lib/observability/logger";
 import { createQueueWorkerErrorLogger } from "@/api/lib/queue-worker-error-log";
 import { BACKGROUND_ACTION_KIND } from "@/api/lib/rate-limit/action-kinds";
 import { runBackgroundJob } from "@/api/lib/rate-limit/queued-action-admission";
 import { createBullMqConnection } from "@/api/lib/redis-client";
+import { createRootMembershipScopedDb } from "@/api/lib/root-scoped-db";
 import { brandPersistedFlowRunId } from "@/api/lib/safe-id-boundaries";
 
 // The BullMQ worker side of the flow-run engine. It lives in its own module so
@@ -59,13 +61,9 @@ const executeAdmittedFlowStep = async ({
   signal,
   database,
 }: AdmittedFlowStepOptions) => {
-  const run = async (executionSignal: AbortSignal) =>
-    await executeFlowStep(job.data, executionSignal, { database });
-  if (!isDeploymentFeatureEnabled("FEATURE_ACTION_ADMISSION")) {
-    await run(signal);
-    return;
-  }
-  // This worker door resolves tenant and actor from the durable run, never job-supplied identity.
+  // This worker door resolves tenant and actor from the durable run, never
+  // job-supplied identity. It does so with admission off too: the step's
+  // model dispatch needs the admission `runBackgroundJob` grants either way.
   const row = await database.query.flowRuns.findFirst({
     where: { id: { eq: brandPersistedFlowRunId(job.data.runId) } },
   });
@@ -78,17 +76,70 @@ const executeAdmittedFlowStep = async ({
   });
   const actor = await resolveActorUserId(row, database);
   if (!workspace || !actor) {
-    await run(signal);
+    // The executor refuses a run without tenant or actor before any step.
+    await executeFlowStep(job.data, signal, { admission: null, database });
     return;
   }
   await runBackgroundJob({
     actionKind: BACKGROUND_ACTION_KIND.flow,
     organizationId: workspace.organizationId,
     userId: actor,
+    organizationStateDb: createRootMembershipScopedDb({
+      organizationId: workspace.organizationId,
+      userId: actor,
+    }),
     job,
     signal,
-    run,
+    run: async (executionSignal, admission) =>
+      await executeFlowStep(job.data, executionSignal, {
+        admission,
+        database,
+      }),
   });
+};
+
+type FailedFlowStepJob = Pick<Job<FlowStepJobData>, "data" | "attemptsMade"> & {
+  opts: Pick<Job<FlowStepJobData>["opts"], "attempts">;
+};
+
+/** Record the failed attempt now; the worker detaches final settlement only when retries end. */
+export const prepareFlowStepFailure = ({
+  job,
+  error,
+  dependencies,
+}: {
+  job: FailedFlowStepJob | undefined;
+  error: Error;
+  dependencies: Parameters<typeof failFlowRunFromWorker>[2];
+}): (() => Promise<void>) | undefined => {
+  if (!job) {
+    return undefined;
+  }
+  logger.error("flow.step_failed", {
+    runId: job.data.runId,
+    stepIndex: String(job.data.stepIndex),
+    attemptsMade: String(job.attemptsMade),
+    "error.type": errorTag(error),
+  });
+
+  // Failed also fires for transient attempts. Keep the run eligible for its retry.
+  const totalAttempts = job.opts.attempts ?? 1;
+  if (job.attemptsMade < totalAttempts) {
+    return undefined;
+  }
+  return async () => {
+    await failFlowRunFromWorker(job.data, error, dependencies).catch(
+      (finalizeError: unknown) => {
+        captureError(
+          finalizeError,
+          handlerErrorContext("flows.initFlowRunWorker.finalizeError", {
+            runId: job.data.runId,
+            stepIndex: String(job.data.stepIndex),
+          }),
+        );
+      },
+    );
+  };
 };
 
 /**
@@ -101,7 +152,7 @@ export const initFlowRunWorker = ({ db }: BullMqWorkerContext) => {
     storeClass: "durable-coordination",
   });
 
-  const worker = new Worker<FlowStepJobData>(
+  const worker = new BullMqWorker<FlowStepJobData>(
     FLOW_RUN_QUEUE_NAME,
     async (job) => {
       const controller = new AbortController();
@@ -135,32 +186,14 @@ export const initFlowRunWorker = ({ db }: BullMqWorkerContext) => {
   );
 
   worker.on("failed", (job, error) => {
-    if (!job) {
-      return;
-    }
-    logger.error("flow.step_failed", {
-      runId: job.data.runId,
-      stepIndex: String(job.data.stepIndex),
-      attemptsMade: String(job.attemptsMade),
-      "error.type": errorTag(error),
+    const finalize = prepareFlowStepFailure({
+      job,
+      error,
+      dependencies: { database: db },
     });
-
-    // With retries enabled the failed event also fires for a transient first
-    // attempt; only flip the run to `failed` once BullMQ has exhausted its
-    // attempts, otherwise a retry would run against an already-failed run.
-    const totalAttempts = job.opts.attempts ?? 1;
-    if (job.attemptsMade < totalAttempts) {
-      return;
+    if (finalize !== undefined) {
+      detached(finalize, "flow-run-worker.fail-flow-run-from-worker");
     }
-
-    failFlowRunFromWorker(job.data, error, { database: db }).catch(
-      (finalizeError: unknown) => {
-        captureError(finalizeError, {
-          runId: job.data.runId,
-          stepIndex: String(job.data.stepIndex),
-        });
-      },
-    );
   });
 
   worker.on("error", createQueueWorkerErrorLogger("flow.worker_error"));
@@ -180,10 +213,16 @@ export const initFlowRunWorker = ({ db }: BullMqWorkerContext) => {
   // ground on a cadence, but only past a stall window. This call is kept
   // without one because a restart is proof that this process's in-flight
   // jobs are gone: waiting out the window would idle every run it just lost.
-  reconcileOrphanedFlowRuns({}, { database: db }).catch((error: unknown) => {
-    captureError(error);
-    logger.error("flow.reconcile_failed", errorSystemFields(error));
-  });
+  detached(
+    async () =>
+      reconcileOrphanedFlowRuns({}, { database: db }).catch(
+        (error: unknown) => {
+          captureError(error, handlerErrorContext("flows.initFlowRunWorker"));
+          logger.error("flow.reconcile_failed", errorSystemFields(error));
+        },
+      ),
+    "flow-run-worker.reconcile-orphaned-flow-runs",
+  );
 
   return {
     queues: [FLOW_RUN_QUEUE_NAME] as const,

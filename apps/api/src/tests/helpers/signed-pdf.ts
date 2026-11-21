@@ -1,13 +1,3 @@
-/**
- * Digitally signed PDF fixtures, and the check that a signature still covers
- * the bytes it was made over.
- *
- * The certificate is minted per run by the shared test PKI rather than
- * checked in: these tests care whether the signed byte ranges survive, never
- * whether the signer is trusted, and a checked-in key would be one more
- * secret-shaped file in the tree.
- */
-
 import {
   CryptoKeySigner,
   PDF,
@@ -19,7 +9,18 @@ import {
   PdfString,
   rgb,
 } from "@libpdf/core";
+/**
+ * Digitally signed PDF fixtures, and the check that a signature still covers
+ * the bytes it was made over.
+ *
+ * The certificate is minted per run by the shared test PKI rather than
+ * checked in: these tests care whether the signed byte ranges survive, never
+ * whether the signer is trusted, and a checked-in key would be one more
+ * secret-shaped file in the tree.
+ */
 import { panic } from "better-result";
+
+import { sha256Bytes as hashSha256Bytes } from "@stll/sha256/browser";
 
 import { createTestCertificate } from "@/api/tests/helpers/test-pki";
 import type { TestRsaKeyPool } from "@/api/tests/helpers/test-pki";
@@ -56,9 +57,7 @@ const createSigner = async (
  * - `remove-signature-field`: drops the field and its widget entirely.
  */
 export type SignatureHidingRevision =
-  | "drop-sig-flags"
-  | "inherit-signature-value"
-  | "remove-signature-field";
+  "drop-sig-flags" | "inherit-signature-value" | "remove-signature-field";
 
 type SignedPdfOptions = {
   keyPool?: TestRsaKeyPool;
@@ -69,6 +68,8 @@ type SignedPdfOptions = {
    */
   certify?: number | null;
   hidingRevision?: SignatureHidingRevision;
+  /** The unsigned PDF to sign; a one-page image-like PDF when absent. */
+  unsigned?: Uint8Array;
   /** How many signatures to apply, each in its own revision. */
   signatures?: number;
   /** Write cross-reference streams instead of classic xref tables. */
@@ -83,6 +84,12 @@ const drawScan = (pdf: PDF) => {
     height: 40,
     color: rgb(0.8, 0.8, 0.8),
   });
+};
+
+const createScanPdf = async (xrefStream: boolean) => {
+  const scan = PDF.create();
+  drawScan(scan);
+  return await scan.save({ useXRefStream: xrefStream });
 };
 
 /**
@@ -170,20 +177,20 @@ const appendHidingRevision = async (
 };
 
 /**
- * A one-page, image-like PDF (no native text) carrying real signatures made by
- * libpdf over a per-run certificate, optionally certified, and optionally with
- * a later revision that hides the signature from the current form view.
+ * The given PDF, or a one-page image-like one (no native text), carrying real
+ * signatures made by libpdf over a per-run certificate, optionally certified,
+ * and optionally with a later revision that hides the signature from the
+ * current form view.
  */
 export const createSignedPdf = async ({
   keyPool,
   certify,
   hidingRevision,
+  unsigned,
   signatures = 1,
   xrefStream = false,
 }: SignedPdfOptions = {}): Promise<Uint8Array> => {
-  const unsigned = PDF.create();
-  drawScan(unsigned);
-  let bytes = await unsigned.save({ useXRefStream: xrefStream });
+  let bytes = unsigned ?? (await createScanPdf(xrefStream));
   const signer = await createSigner(keyPool);
   for (let index = 0; index < signatures; index += 1) {
     const pdf = await PDF.load(bytes);
@@ -284,9 +291,7 @@ export const readSignatureIntegrity = async (
               at + MESSAGE_DIGEST_PREFIX.length,
               at + MESSAGE_DIGEST_PREFIX.length + 32,
             );
-      const actualDigest = new Uint8Array(
-        await crypto.subtle.digest("SHA-256", covered),
-      );
+      const actualDigest = new Uint8Array(await hashSha256Bytes(covered));
       return {
         coveredLength: second + secondLength,
         digestMatches:

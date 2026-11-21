@@ -1,18 +1,49 @@
-import { EventType } from "@tanstack/ai";
-import type { AnyTextAdapter, StreamChunk } from "@tanstack/ai";
+import {
+  chat,
+  createModel,
+  EventType,
+  extendAdapter,
+  maxIterations,
+  toolDefinition,
+} from "@tanstack/ai";
+import type { AnyTextAdapter, ModelMessage, StreamChunk } from "@tanstack/ai";
 import { createAnthropicChat } from "@tanstack/ai-anthropic";
 import { createOpenaiChat } from "@tanstack/ai-openai";
 import { resolveDebugOption } from "@tanstack/ai/adapter-internals";
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
+import * as v from "valibot";
 
+import { BYOK_MODEL_OPTIONS } from "@stll/ai-catalog";
+import { rejectionOf } from "@stll/property-testing/rejection";
+
+import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 import {
   INCOMPLETE_STREAM_CODE,
+  readOutputCeilingStopAsLength,
   withProviderStreamContract,
   withRunToolCallIds,
 } from "@/api/lib/chat/provider-stream-contract";
+import { reasoningProvenanceForSignature } from "@/api/lib/chat/reasoning-provenance";
 import { ToolCallIdLedger } from "@/api/lib/chat/unique-tool-call-ids";
+import {
+  resetMetricLineSinkForTesting,
+  setMetricLineSinkForTesting,
+} from "@/api/lib/observability/request-metrics";
+import { isRecord } from "@/api/lib/type-guards";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+
+// The product catalogue can precede the SDK's static model union. Use the
+// same public registration mechanism as the production adapter factory.
+const catalogAnthropicChat = extendAdapter(
+  createAnthropicChat,
+  BYOK_MODEL_OPTIONS.anthropic.map((model) =>
+    createModel(model, {
+      input: ["text", "image", "document"] as const,
+      features: ["structured_outputs"] as const,
+    }),
+  ),
+);
 
 const started: StreamChunk = {
   type: EventType.RUN_STARTED,
@@ -61,6 +92,7 @@ const adapterOf = (
 const run = async (adapter: AnyTextAdapter, signal?: AbortSignal) => {
   const chunks: StreamChunk[] = [];
   for await (const chunk of withProviderStreamContract(adapter).chatStream({
+    threadId: "provider-stream-contract-thread",
     logger: resolveDebugOption(false),
     messages: [],
     model: "model",
@@ -76,6 +108,86 @@ const run = async (adapter: AnyTextAdapter, signal?: AbortSignal) => {
 };
 
 describe("the provider stream contract", () => {
+  test("preserves activity snapshots and deltas while holding an output ceiling finish", async () => {
+    const activities = [
+      {
+        type: "ACTIVITY_SNAPSHOT",
+        messageId: "progress",
+        activityType: "review",
+        content: { progress: 1 },
+      },
+      {
+        type: "ACTIVITY_DELTA",
+        messageId: "progress",
+        activityType: "review",
+        patch: [{ op: "replace", path: "/progress", value: 2 }],
+      },
+    ] satisfies StreamChunk[];
+    const source = async function* () {
+      yield started;
+      yield { ...failed, code: "max_tokens" };
+      yield* activities;
+    };
+    const received: StreamChunk[] = [];
+    for await (const chunk of readOutputCeilingStopAsLength(source())) {
+      received.push(chunk);
+    }
+    expect(received).toEqual([
+      started,
+      ...activities,
+      {
+        type: EventType.RUN_FINISHED,
+        finishReason: "length",
+        runId: "run",
+        threadId: "thread",
+        timestamp: 1,
+      },
+    ]);
+  });
+
+  test("SDK iterations count reasoning drops once per turn and a later turn counts again", async () => {
+    const lines: string[] = [];
+    setMetricLineSinkForTesting((line) => {
+      lines.push(line);
+    });
+    const base = withProviderStreamContract(adapterOf([finished]), "openai");
+    const messages = [
+      {
+        role: "assistant",
+        content: "Historical answer",
+        thinking: [{ content: "Legacy first" }, { content: "Legacy second" }],
+      },
+    ] satisfies ModelMessage[];
+    const request = {
+      threadId: "provider-stream-contract-thread",
+      logger: resolveDebugOption(false),
+      messages,
+      model: "gpt-6-sol",
+    };
+    try {
+      const turn = withRunToolCallIds(base, new ToolCallIdLedger([]));
+      for (let iteration = 0; iteration < 4; iteration += 1) {
+        for await (const chunk of turn.chatStream(structuredClone(request))) {
+          expect(chunk.type).toBe(EventType.RUN_FINISHED);
+        }
+      }
+      expect(lines).toHaveLength(1);
+      expect(JSON.parse(lines.at(0) ?? "{}")).toMatchObject({
+        fromProvider: "unknown",
+        toProvider: "openai",
+        reason: "missing-provenance",
+        "chat.reasoning_replay_dropped": 2,
+      });
+      const laterTurn = withRunToolCallIds(base, new ToolCallIdLedger([]));
+      for await (const chunk of laterTurn.chatStream(request)) {
+        expect(chunk.type).toBe(EventType.RUN_FINISHED);
+      }
+      expect(lines).toHaveLength(2);
+    } finally {
+      resetMetricLineSinkForTesting();
+    }
+  });
+
   test("a stream that stops before its terminal event ends in a run error", async () => {
     expect(await run(adapterOf([started, delta]))).toEqual([
       "RUN_STARTED",
@@ -126,6 +238,7 @@ describe("the provider stream contract", () => {
       },
     });
     for await (const chunk of withProviderStreamContract(adapter).chatStream({
+      threadId: "provider-stream-contract-thread",
       logger: resolveDebugOption(false),
       messages: [],
       model: "model",
@@ -158,6 +271,7 @@ describe("the provider stream contract", () => {
       },
     });
     const request = {
+      threadId: "provider-stream-contract-thread",
       logger: resolveDebugOption(false),
       messages: [],
       model: "model",
@@ -363,21 +477,30 @@ const reasoningSignedBy = async (provider: ReasoningProvider) => {
   const adapter = reasoningAdapter(provider, fetch);
   const signatures: string[] = [];
   for await (const chunk of adapter.chatStream({
+    threadId: "provider-stream-contract-thread",
     logger: resolveDebugOption(false),
     messages: [{ role: "user", content: "Delete the draft." }],
     model: adapter.model,
   })) {
-    // The adapters carry a thinking step's signature on its finish.
-    const signature: unknown =
-      chunk.type === EventType.STEP_FINISHED
-        ? Reflect.get(chunk, "signature")
-        : undefined;
-    if (typeof signature === "string" && signature !== "") {
-      signatures.push(signature);
+    if (
+      chunk.type === EventType.REASONING_ENCRYPTED_VALUE &&
+      chunk.subtype === "message" &&
+      chunk.encryptedValue !== ""
+    ) {
+      signatures.push(chunk.encryptedValue);
     }
   }
   expect(signatures).toHaveLength(1);
-  return { content: REASONING, signature: signatures.join("") };
+  const signature = signatures.join("");
+  return {
+    content: REASONING,
+    signature,
+    provenance: reasoningProvenanceForSignature({
+      provider,
+      modelId: adapter.model,
+      signature,
+    }),
+  };
 };
 
 /** The body `provider`'s adapter sends for a thread holding `thinking`. */
@@ -388,6 +511,7 @@ const requestWithReasoning = async (
   const { bodies, fetch } = recordingFetch(refused);
   const adapter = reasoningAdapter(provider, fetch);
   for await (const _chunk of adapter.chatStream({
+    threadId: "provider-stream-contract-thread",
     logger: resolveDebugOption(false),
     messages: [
       { role: "user", content: "Delete the draft." },
@@ -419,5 +543,553 @@ describe("signed reasoning in a thread's history", () => {
         }
       });
     }
+  }
+});
+
+for (const boundary of ["base contract", "run tool-call ledger"] as const) {
+  test(`the SDK tool loop replays current Anthropic thinking unchanged with one result through the ${boundary}`, async () => {
+    const sink: ModelMessage[][] = [];
+    const model = "claude-sonnet-4-6";
+    const signature = "current-turn-signature";
+    const raw: AnyTextAdapter = {
+      ...adapterOf([]),
+      model,
+      async *chatStream({ messages, runId, threadId }) {
+        sink.push(structuredClone(messages));
+        yield {
+          ...started,
+          runId: runId ?? "run",
+          threadId,
+          model,
+        };
+        if (sink.length === 1) {
+          yield {
+            type: EventType.REASONING_START,
+            messageId: "thinking-1",
+            model,
+            timestamp: 1,
+          };
+          yield {
+            type: EventType.REASONING_MESSAGE_START,
+            messageId: "thinking-1",
+            role: "reasoning",
+            model,
+            timestamp: 1,
+          };
+          yield {
+            type: EventType.REASONING_MESSAGE_CONTENT,
+            messageId: "thinking-1",
+            delta: "Original thinking",
+            model,
+            timestamp: 1,
+          };
+          yield {
+            type: EventType.REASONING_ENCRYPTED_VALUE,
+            subtype: "message",
+            entityId: "thinking-1",
+            encryptedValue: signature,
+            model,
+            timestamp: 1,
+          };
+          yield {
+            type: EventType.REASONING_MESSAGE_END,
+            messageId: "thinking-1",
+            model,
+            timestamp: 1,
+          };
+          yield {
+            type: EventType.REASONING_END,
+            messageId: "thinking-1",
+            model,
+            timestamp: 1,
+          };
+          yield {
+            type: EventType.TOOL_CALL_START,
+            toolCallId: "call-1",
+            toolCallName: "search",
+            model,
+            timestamp: 1,
+          };
+          yield {
+            type: EventType.TOOL_CALL_ARGS,
+            toolCallId: "call-1",
+            delta: "{}",
+            model,
+            timestamp: 1,
+          };
+          yield {
+            type: "TOOL_CALL_END",
+            toolCallId: "call-1",
+            input: {},
+            model,
+            timestamp: 1,
+          };
+          yield { ...finished, model, finishReason: "tool_calls" };
+          return;
+        }
+        yield { ...delta, delta: "Answer", model };
+        yield { ...finished, model };
+      },
+    };
+    const baseContract = withProviderStreamContract(raw, "anthropic");
+    const adapter =
+      boundary === "base contract"
+        ? baseContract
+        : withRunToolCallIds(baseContract, new ToolCallIdLedger([]));
+    const search = toolDefinition({
+      name: "search",
+      description: "Search",
+      inputSchema: toTanStackToolSchema(v.object({})),
+    }).server(async () => ({ found: true }));
+    for await (const _chunk of chat({
+      threadId: "test-thread",
+      adapter,
+      messages: [{ role: "user", content: "Search" }],
+      tools: [search],
+      agentLoopStrategy: maxIterations(3),
+    })) {
+      // Drain the SDK's real conversion and tool-execution loop.
+    }
+    expect(sink).toHaveLength(2);
+    const continuation = sink.at(1) ?? [];
+    expect(
+      continuation.flatMap((message) => message.thinking ?? []),
+    ).toEqual<unknown>([
+      {
+        content: "Original thinking",
+        signature,
+        provenance: {
+          provider: "anthropic",
+          model,
+          format: "anthropic-thinking-signature",
+        },
+      },
+    ]);
+    const calls = continuation.flatMap((message) => message.toolCalls ?? []);
+    expect(calls.map(({ id }) => id)).toEqual(["call-1"]);
+    expect(
+      continuation
+        .filter((message) => message.role === "tool")
+        .map(({ toolCallId }) => toolCallId),
+    ).toEqual(["call-1"]);
+  });
+}
+
+describe("a resumed tool-use turn whose reasoning cannot be replayed", () => {
+  const openCall = {
+    id: "call-1",
+    type: "function",
+    function: { name: "delete", arguments: "{}" },
+  } as const;
+
+  /** A tool-use turn holding `thinking`, its call answered. */
+  const openTurn = (thinking: ModelMessage["thinking"]): ModelMessage[] => [
+    { role: "user", content: "Delete the draft." },
+    {
+      role: "assistant",
+      content: null,
+      toolCalls: [openCall],
+      ...(thinking === undefined ? {} : { thinking }),
+    },
+    {
+      role: "tool",
+      toolCallId: openCall.id,
+      content: JSON.stringify({ status: "completed" }),
+    },
+  ];
+  /** Reasoning stored before reasoning carried provenance. */
+  const legacyReasoning = [
+    { content: REASONING, signature: "stored-signature" },
+  ];
+  const anthropicThinking = { thinking: { type: "adaptive" } };
+  const outputSchema = { type: "object", properties: {}, required: [] };
+
+  const onlyBody = (bodies: readonly unknown[]) => {
+    expect(bodies).toHaveLength(1);
+    const body: unknown = bodies.at(0);
+    return isRecord(body) ? body : panic("The request body is not an object");
+  };
+
+  /** The body `provider` sends to continue a tool-use turn holding `thinking`. */
+  const continuationBody = async (
+    provider: ReasoningProvider,
+    thinking: ModelMessage["thinking"],
+    modelOptions: Record<string, unknown>,
+  ) => {
+    const { bodies, fetch } = recordingFetch(refused);
+    const adapter = reasoningAdapter(provider, fetch);
+    for await (const _chunk of adapter.chatStream({
+      threadId: "provider-stream-contract-thread",
+      logger: resolveDebugOption(false),
+      messages: openTurn(thinking),
+      model: adapter.model,
+      modelOptions,
+    })) {
+      // The refusal ends the stream once the request is written.
+    }
+    return onlyBody(bodies);
+  };
+
+  /** Each Anthropic content block as role, type and the call it names. */
+  const anthropicBlocks = (body: Record<string, unknown>) => {
+    const messages = body["messages"];
+    return (Array.isArray(messages) ? messages : []).flatMap(
+      (message: unknown) => {
+        if (!isRecord(message) || !Array.isArray(message["content"])) {
+          return [];
+        }
+        const role = message["role"];
+        return message["content"].flatMap((block: unknown) =>
+          isRecord(block)
+            ? [
+                {
+                  role,
+                  type: block["type"],
+                  call: block["id"] ?? block["tool_use_id"],
+                },
+              ]
+            : [],
+        );
+      },
+    );
+  };
+
+  const expectAnthropicContinuationWithoutThinking = (
+    body: Record<string, unknown>,
+  ) => {
+    expect(body["thinking"]).toEqual({ type: "disabled" });
+    const blocks = anthropicBlocks(body);
+    expect(blocks.filter(({ type }) => type === "thinking")).toEqual([]);
+    const use = blocks.findIndex(({ type }) => type === "tool_use");
+    const result = blocks.findIndex(({ type }) => type === "tool_result");
+    expect(blocks.at(use)).toEqual({
+      role: "assistant",
+      type: "tool_use",
+      call: openCall.id,
+    });
+    expect(blocks.at(result)).toEqual({
+      role: "user",
+      type: "tool_result",
+      call: openCall.id,
+    });
+    expect(result).toBeGreaterThan(use);
+  };
+
+  test("Anthropic continues it with thinking disabled for that request and the call still answered", async () => {
+    // Stored before reasoning carried provenance: it cannot be replayed.
+    const body = await continuationBody(
+      "anthropic",
+      legacyReasoning,
+      anthropicThinking,
+    );
+    expectAnthropicContinuationWithoutThinking(body);
+  });
+
+  test("Anthropic structured output continues it with thinking disabled and the call still answered", async () => {
+    const { bodies, fetch } = recordingFetch(refused);
+    const adapter = reasoningAdapter("anthropic", fetch);
+    const refusal: unknown = await adapter
+      .structuredOutput({
+        chatOptions: {
+          threadId: "provider-stream-contract-thread",
+          logger: resolveDebugOption(false),
+          messages: openTurn(legacyReasoning),
+          model: adapter.model,
+          modelOptions: anthropicThinking,
+        },
+        outputSchema,
+      })
+      .then(
+        () => undefined,
+        (error: unknown) => error,
+      );
+    // The recorded answer refuses; only the request matters here.
+    expect(refusal).toBeInstanceOf(Error);
+    expectAnthropicContinuationWithoutThinking(onlyBody(bodies));
+  });
+
+  test("a structured output stream continues it with thinking disabled and the call still answered", async () => {
+    const requests: unknown[] = [];
+    const adapter = withProviderStreamContract(
+      asTestRaw<AnyTextAdapter>({
+        ...adapterOf([]),
+        model: "claude-sonnet-4-6",
+        structuredOutput: async () => panic("Only the stream is requested"),
+        async *structuredOutputStream(options: { chatOptions: unknown }) {
+          requests.push(options.chatOptions);
+          await Promise.resolve();
+          yield* [];
+        },
+      }),
+      "anthropic",
+    );
+    const stream =
+      adapter.structuredOutputStream ??
+      panic("The contract hides the structured output stream");
+    for await (const _chunk of stream({
+      chatOptions: {
+        threadId: "provider-stream-contract-thread",
+        logger: resolveDebugOption(false),
+        messages: openTurn(legacyReasoning),
+        model: adapter.model,
+        modelOptions: anthropicThinking,
+      },
+      outputSchema,
+    })) {
+      // The fixture answers nothing; only the request matters here.
+    }
+    expect(requests).toHaveLength(1);
+    expect(requests.at(0)).toMatchObject({
+      modelOptions: { thinking: { type: "disabled" } },
+      messages: [
+        { role: "user" },
+        { role: "assistant", toolCalls: [{ id: openCall.id }] },
+        { role: "tool", toolCallId: openCall.id },
+      ],
+    });
+    const request = requests.at(0);
+    const assistant =
+      isRecord(request) && Array.isArray(request["messages"])
+        ? request["messages"].at(1)
+        : undefined;
+    expect(isRecord(assistant) && "thinking" in assistant).toBe(false);
+  });
+
+  test("OpenAI continues it with its reasoning options unchanged", async () => {
+    const body = await continuationBody(
+      "openai",
+      [{ content: REASONING, signature: "stored-signature" }],
+      { reasoning: { effort: "medium" } },
+    );
+    expect(body["reasoning"]).toMatchObject({ effort: "medium" });
+    expect(body["thinking"]).toBeUndefined();
+  });
+
+  test("Anthropic keeps thinking when the turn's own reasoning is replayed", async () => {
+    const thinking = await reasoningSignedBy("anthropic");
+    const body = await continuationBody("anthropic", [thinking], {
+      thinking: { type: "adaptive" },
+    });
+    expect(body["thinking"]).toEqual({ type: "adaptive" });
+    expect(
+      anthropicBlocks(body).filter(({ type }) => type === "thinking"),
+    ).toHaveLength(1);
+  });
+});
+
+describe("Anthropic native reasoning across adapter upgrades", () => {
+  const schema = {
+    type: "object",
+    properties: { answer: { type: "string" } },
+    required: ["answer"],
+    additionalProperties: false,
+  };
+  const success = () =>
+    Response.json({
+      id: "msg_structured",
+      type: "message",
+      role: "assistant",
+      model: "claude-sonnet-4-6",
+      content: [{ type: "text", text: '{"answer":"yes"}' }],
+      stop_reason: "end_turn",
+      stop_sequence: null,
+      usage: { input_tokens: 20, output_tokens: 8 },
+    });
+  const policies = [
+    { name: "provider default", options: {} },
+    { name: "adaptive default", options: { thinking: { type: "adaptive" } } },
+    { name: "disabled", options: { thinking: { type: "disabled" } } },
+    {
+      name: "explicit budget",
+      options: { thinking: { type: "enabled", budget_tokens: 10_000 } },
+    },
+    {
+      name: "explicit effort",
+      options: {
+        thinking: { type: "adaptive" },
+        output_config: { effort: "high" },
+      },
+    },
+  ] as const;
+  for (const policy of policies) {
+    for (const mode of ["stream", "structured"] as const) {
+      test(`${mode} preserves ${policy.name} without inventing effort or display`, async () => {
+        const { bodies, fetch } = recordingFetch(
+          mode === "structured" ? success : refused,
+        );
+        const adapter: AnyTextAdapter = createAnthropicChat(
+          "claude-sonnet-4-6",
+          "test-key",
+          { fetch },
+        );
+        const chatOptions = {
+          threadId: "provider-stream-contract-thread",
+          logger: resolveDebugOption(false),
+          model: adapter.model,
+          messages: [{ role: "user", content: "Answer" }],
+          modelOptions: policy.options,
+        } satisfies Parameters<AnyTextAdapter["chatStream"]>[0];
+        if (mode === "stream") {
+          for await (const _chunk of adapter.chatStream(chatOptions)) {
+            // Record the actual SDK request; the fixture refuses it.
+          }
+        } else {
+          const result = await adapter.structuredOutput({
+            chatOptions,
+            outputSchema: schema,
+          });
+          expect(result.data).toEqual({ answer: "yes" });
+          expect(result.usage).toMatchObject({
+            promptTokens: 20,
+            completionTokens: 8,
+            totalTokens: 28,
+          });
+        }
+        expect(bodies).toHaveLength(1);
+        const body = bodies[0];
+        if (!isRecord(body)) {
+          panic("The request must be an object");
+        }
+        expect(body["thinking"]).toEqual(
+          "thinking" in policy.options ? policy.options.thinking : undefined,
+        );
+        const nativeSchema =
+          mode === "structured" &&
+          "thinking" in policy.options &&
+          policy.options.thinking.type !== "disabled";
+        const effort =
+          "output_config" in policy.options
+            ? policy.options.output_config
+            : undefined;
+        expect(body["output_config"]).toEqual(
+          nativeSchema
+            ? { ...effort, format: { type: "json_schema", schema } }
+            : effort,
+        );
+        if (nativeSchema) {
+          expect(body["tool_choice"]).toBeUndefined();
+          expect(body["tools"]).toBeUndefined();
+        }
+      });
+    }
+  }
+
+  for (const mode of ["stream", "structured"] as const) {
+    test(`${mode} rejects competing reasoning representations before dispatch`, async () => {
+      const { bodies, fetch } = recordingFetch(refused);
+      const adapter: AnyTextAdapter = createAnthropicChat(
+        "claude-sonnet-4-6",
+        "test-key",
+        { fetch },
+      );
+      const chatOptions = {
+        threadId: "provider-stream-contract-thread",
+        logger: resolveDebugOption(false),
+        model: adapter.model,
+        messages: [{ role: "user", content: "Answer" }],
+        reasoning: { level: "high", summary: false },
+        modelOptions: { thinking: { type: "adaptive" } },
+      } satisfies Parameters<AnyTextAdapter["chatStream"]>[0];
+      if (mode === "stream") {
+        const chunks = [];
+        for await (const chunk of adapter.chatStream(chatOptions)) {
+          chunks.push(chunk);
+        }
+        expect(chunks).toContainEqual(
+          expect.objectContaining({
+            type: EventType.RUN_ERROR,
+            message:
+              "Specify either reasoning or native Anthropic thinking/effort options, not both.",
+          }),
+        );
+      } else {
+        expect(
+          await rejectionOf(
+            adapter.structuredOutput({
+              chatOptions,
+              outputSchema: { type: "object" },
+            }),
+          ),
+        ).toMatchObject({
+          message:
+            "Specify either reasoning or native Anthropic thinking/effort options, not both.",
+        });
+      }
+      expect(bodies).toHaveLength(0);
+    });
+  }
+  test("every offered Anthropic model supports the schema path required by thinking", () => {
+    for (const model of BYOK_MODEL_OPTIONS.anthropic) {
+      const adapter: AnyTextAdapter = catalogAnthropicChat(model, "test-key");
+      expect(adapter.supportsCombinedToolsAndSchema?.(), model).toBe(true);
+    }
+  });
+
+  test("streaming merges the generated schema with native effort", async () => {
+    const { bodies, fetch } = recordingFetch(refused);
+    const adapter: AnyTextAdapter = createAnthropicChat(
+      "claude-sonnet-4-6",
+      "test-key",
+      { fetch },
+    );
+    for await (const _chunk of adapter.chatStream({
+      threadId: "provider-stream-contract-thread",
+      logger: resolveDebugOption(false),
+      model: adapter.model,
+      messages: [{ role: "user", content: "Answer" }],
+      modelOptions: {
+        thinking: { type: "adaptive" },
+        output_config: { effort: "high" },
+      },
+      outputSchema: schema,
+    })) {
+      // Drain the real adapter stream; this canary observes its emitted request.
+    }
+    expect(bodies).toHaveLength(1);
+    const body = bodies[0];
+    if (!isRecord(body)) {
+      panic("The request must be an object");
+    }
+    expect(body["output_config"]).toEqual({
+      effort: "high",
+      format: { type: "json_schema", schema },
+    });
+  });
+
+  for (const model of [
+    "claude-fable-5-2",
+    "claude-haiku-4-5-20251001",
+  ] as const) {
+    test(`${model} preserves thinking through a successful native schema response`, async () => {
+      const { bodies, fetch } = recordingFetch(success);
+      const adapter: AnyTextAdapter = catalogAnthropicChat(model, "test-key", {
+        fetch,
+      });
+      const thinking =
+        model === "claude-fable-5-2"
+          ? { type: "adaptive" }
+          : { type: "enabled", budget_tokens: 10_000 };
+      const result = await adapter.structuredOutput({
+        chatOptions: {
+          threadId: "provider-stream-contract-thread",
+          logger: resolveDebugOption(false),
+          model,
+          messages: [{ role: "user", content: "Answer" }],
+          modelOptions: { thinking },
+        },
+        outputSchema: schema,
+      });
+      expect(result.data).toEqual({ answer: "yes" });
+      expect(bodies).toHaveLength(1);
+      const body = bodies[0];
+      if (!isRecord(body)) {
+        panic("The request must be an object");
+      }
+      expect(body["thinking"]).toEqual(thinking);
+      expect(body["output_config"]).toEqual({
+        format: { type: "json_schema", schema },
+      });
+      expect(body["tool_choice"]).toBeUndefined();
+    });
   }
 });

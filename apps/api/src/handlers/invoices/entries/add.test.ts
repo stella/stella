@@ -2,9 +2,11 @@ import { Result } from "better-result";
 import { describe, expect, mock, test } from "bun:test";
 
 import { BILLING_STATUS, INVOICE_STATUS, invoices } from "@/api/db/schema";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import { withTimeBillingEnrolment } from "@/api/tests/helpers/time-billing-enrolment";
 import {
   createScopedDbMock,
   createSelectQueryMock,
@@ -19,25 +21,28 @@ const createContext = (
   safeDb: AddEntriesCtx["safeDb"],
 ): AddEntriesCtx => {
   const { scopedDb } = createScopedDbMock({});
-  return asTestRaw<AddEntriesCtx>({
-    body,
-    request: new Request(
-      "https://example.test/v1/invoices/ws_test/inv_test/entries",
-      { method: "POST" },
-    ),
-    route: "/v1/invoices/:workspaceId/:invoiceId/entries",
-    safeDb,
-    scopedDb,
-    params: {
+  return withTimeBillingEnrolment(
+    asTestRaw<AddEntriesCtx>({
+      body,
+      request: new Request(
+        "https://example.test/v1/invoices/ws_test/inv_test/entries",
+        { method: "POST" },
+      ),
+      route:
+        "/v1/invoices/:workspaceId/:invoiceId/entries" satisfies ApiRoutePath,
+      safeDb,
+      scopedDb,
+      params: {
+        workspaceId: toSafeId<"workspace">("ws_test"),
+        invoiceId: toSafeId<"invoice">("inv_test"),
+      },
       workspaceId: toSafeId<"workspace">("ws_test"),
-      invoiceId: toSafeId<"invoice">("inv_test"),
-    },
-    workspaceId: toSafeId<"workspace">("ws_test"),
-    memberRole: sessionMemberRole("owner"),
-    session: { activeOrganizationId: toSafeId<"organization">("org_test") },
-    user: { id: toSafeId<"user">("user_test") },
-    recordAuditEvent: async () => {},
-  });
+      memberRole: sessionMemberRole("owner"),
+      session: { activeOrganizationId: toSafeId<"organization">("org_test") },
+      user: { id: toSafeId<"user">("user_test") },
+      recordAuditEvent: async () => {},
+    }),
+  );
 };
 
 describe("addEntries currency enforcement", () => {
@@ -91,9 +96,12 @@ describe("addEntries currency enforcement", () => {
           id: toSafeId<"invoice">("inv_test"),
           totalAmount: 0,
           currency: "USD",
+          finalizedAt: null,
         },
       ]);
       const { safeDb } = createScopedDbMock({
+        execute: async () => [{ id: toSafeId<"workspace">("ws_test") }],
+        selectDistinct: () => createSelectQueryMock([]),
         // The invoice holds no lines yet, so the line limit leaves room.
         $count: async () => 0,
         query: {
@@ -149,12 +157,14 @@ describe("addEntries currency enforcement", () => {
       const ctx = createContext(body, safeDb);
 
       const result = await addEntries.handler(
-        asTestRaw<AddEntriesCtx>({
-          ...ctx,
-          recordAuditEvent: async () => {
-            auditCalls += 1;
-          },
-        }),
+        withTimeBillingEnrolment(
+          asTestRaw<AddEntriesCtx>({
+            ...ctx,
+            recordAuditEvent: async () => {
+              auditCalls += 1;
+            },
+          }),
+        ),
       );
 
       expect(result).toEqual({

@@ -30,8 +30,10 @@ import {
 
 const openSourceId = createSafeId<"caseLawSource">();
 const closedSourceId = createSafeId<"caseLawSource">();
+const aiRestrictedSourceId = createSafeId<"caseLawSource">();
 const openId = createSafeId<"caseLawDecision">();
 const closedId = createSafeId<"caseLawDecision">();
+const aiRestrictedId = createSafeId<"caseLawDecision">();
 const unknownId = createSafeId<"caseLawDecision">();
 
 const HEADNOTE = "Ušlý zisk se nahrazuje jen v prokázaném rozsahu.";
@@ -72,6 +74,17 @@ beforeAll(async () => {
       id: closedSourceId,
       name: "closed",
     }),
+    caseLawSourceRow({
+      adapterKey: "ai-restricted",
+      descriptor: {
+        allowsDerivedAi: false,
+        allowsRedistribution: true,
+        attribution: null,
+        license: "permitted-redistribution",
+      },
+      id: aiRestrictedSourceId,
+      name: "ai restricted",
+    }),
   ]);
   await db.insert(caseLawDecisions).values([
     {
@@ -93,6 +106,16 @@ beforeAll(async () => {
       metadata: { [DECISION_TEXT_FIELD.LEGAL_SENTENCE]: HEADNOTE },
       slug: "closed-case",
       sourceId: closedSourceId,
+    },
+    {
+      caseNumber: "15 Cdo 45/2024",
+      country: "CZE",
+      court: "Nejvyšší soud",
+      id: aiRestrictedId,
+      language: "cs",
+      metadata: { [DECISION_TEXT_FIELD.LEGAL_SENTENCE]: HEADNOTE },
+      slug: "ai-restricted-case",
+      sourceId: aiRestrictedSourceId,
     },
   ]);
 }, DB_TEST_TIMEOUT_MS);
@@ -124,6 +147,22 @@ test("a decision whose source withholds redistribution is skipped", async () => 
   });
 
   expect(summaries.map((summary) => summary.id)).toEqual([openId]);
+});
+
+test("a redistributable decision marks AI-withheld text without losing its human summary", async () => {
+  const summaries = await readPublicDecisionSummaries({
+    caseLawDb,
+    decisionIds: [aiRestrictedId],
+  });
+
+  expect(summaries).toMatchObject([
+    {
+      id: aiRestrictedId,
+      caseNumber: "15 Cdo 45/2024",
+      headnote: { type: "present", text: HEADNOTE },
+      textWithheldReason: "source_licence",
+    },
+  ]);
 });
 
 test("an id nobody published is skipped rather than refused", async () => {

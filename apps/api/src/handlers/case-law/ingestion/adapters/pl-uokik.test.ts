@@ -1,3 +1,4 @@
+import { PDF } from "@libpdf/core";
 /**
  * pl-uokik against rows and pages the register actually served.
  *
@@ -8,24 +9,16 @@
  * and answers `Start`, `Count` and `NavigateReverse` the way Domino does. The
  * decision pages and the PDF are the register's own responses.
  */
-
-import { PDF } from "@libpdf/core";
 import { panic, Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import * as cheerio from "cheerio";
 
-import {
-  decodeSourceRawEnvelope,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import type {
-  IngestionResult,
-  StoredRawReparseInput,
-} from "@/api/handlers/case-law/ingestion/adapter";
+import { load } from "@stll/html";
+import { sha256Hex as legacySha256Hex } from "@stll/sha256/node";
+
 import { plCommonCourtRulingKeys } from "@/api/handlers/case-law/ingestion/adapters/pl-common-court-ruling-keys";
 import { plSupremeCourtRulingKeys } from "@/api/handlers/case-law/ingestion/adapters/pl-sn-ruling-keys";
 import {
-  assemblePlUokikDecision,
+  assemblePlUokikDecision as uncheckedAssemblePlUokikDecision,
   encodePlUokikCursor,
   listPlUokikSourceFields,
   normalizePlUokikRow,
@@ -44,15 +37,37 @@ import {
   plUokikListingIdentity,
   plUokikNextSlice,
   plUokikPreviousSlice,
+  plUokikQuarantineId,
   plUokikRawPartsOf,
   plUokikRulingId,
   plUokikSortKey,
   readPlUokikView,
 } from "@/api/handlers/case-law/ingestion/adapters/pl-uokik";
 import { PL_UOKIK_RULING_UNREAD } from "@/api/handlers/case-law/ingestion/parsers/pl-uokik";
+import { CITATION_STORAGE_WIDTHS } from "@/api/lib/case-law/citation-storage-bounds";
 import { readGzipJson } from "@/api/lib/gzip-json";
+import { sanitizeResult } from "@/api/lib/legal-search/ingestion-normalization";
+import {
+  decodeSourceRawEnvelope,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+  STORED_RAW_REPARSE_REJECTION,
+  withSourceRawObjects,
+} from "@/api/lib/legal-search/ingestion-types";
+import type {
+  IngestionResult,
+  StoredRawReparseInput,
+} from "@/api/lib/legal-search/ingestion-types";
+import {
+  RAW_SOURCE_FAMILY,
+  sourceBinaryRef,
+} from "@/api/lib/legal-search/raw-source-storage";
 import { isRecord } from "@/api/lib/type-guards";
+import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
+
+const assemblePlUokikDecision = guardParser(uncheckedAssemblePlUokikDecision);
+const testFetchState = createTestFetch();
 
 const FIXTURES = new URL("__fixtures__/", import.meta.url);
 
@@ -108,7 +123,6 @@ const entryOf = (entries: readonly Entry[], unid: string): Entry =>
   entries.find((entry) => unidOf(entry) === unid) ??
   panic(`the view fixtures lost ${unid}`);
 
-const originalFetch = globalThis.fetch;
 const originalSleep = Bun.sleep;
 
 beforeEach(() => {
@@ -117,7 +131,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  globalThis.fetch = originalFetch;
+  testFetchState.restore();
   Bun.sleep = originalSleep;
 });
 
@@ -202,18 +216,20 @@ const answerRegister = (model: RegisterModel, url: URL): Response => {
 };
 
 const serveRegister = (model: RegisterModel): void => {
-  globalThis.fetch = asFetchMock(
-    async (input: string | URL | Request) =>
-      await Promise.resolve(
-        answerRegister(
-          model,
-          new URL(
-            typeof input === "string" || input instanceof URL
-              ? input
-              : input.url,
+  testFetchState.set(
+    asFetchMock(
+      async (input: string | URL | Request) =>
+        await Promise.resolve(
+          answerRegister(
+            model,
+            new URL(
+              typeof input === "string" || input instanceof URL
+                ? input
+                : input.url,
+            ),
           ),
         ),
-      ),
+    ),
   );
 };
 
@@ -268,7 +284,11 @@ const parkedYesterday = (cursor: string): string =>
   });
 
 /** A made-up dated row, as the view states one, for rows the register adds. */
-const syntheticEntry = (unid: string, printed: string): Entry => ({
+const syntheticEntry = (
+  unid: string,
+  printed: string,
+  number = "DKK-999/2026",
+): Entry => ({
   "@position": "1",
   "@unid": unid,
   "@noteid": "1",
@@ -278,7 +298,7 @@ const syntheticEntry = (unid: string, printed: string): Entry => ({
       "@columnnumber": "0",
       "@name": "$7",
       text: {
-        "0": `[<B>Numer decyzji: </B>DKK-999/2026<BR><b>]Data decyzji:      [</B>${printed}<BR>][<A HREF=/bp/dec_prez.nsf/0/${unid}?OpenDocument   title='opis dokumentu'>Spółka</A>][<BR>]Kontrola koncentracji[<BR>]`,
+        "0": `[<B>Numer decyzji: </B>${number}<BR><b>]Data decyzji:      [</B>${printed}<BR>][<A HREF=/bp/dec_prez.nsf/0/${unid}?OpenDocument   title='opis dokumentu'>Spółka</A>][<BR>]Kontrola koncentracji[<BR>]`,
       },
     },
   ],
@@ -358,6 +378,11 @@ describe("a decision", () => {
         { name, status: PL_UOKIK_FILE_STATUS.READ, bytes: await pdfBytes() },
       ]),
     );
+    const sourceRaw =
+      decision.sourceRaw ?? panic("decision source envelope missing");
+    expect(decision.rawHash).toBe(
+      legacySha256Hex(`${sourceRaw}\n${legacySha256Hex(await pdfBytes())}`),
+    );
     expect(decision.sourceDocumentId).toBe(WITH_RULINGS);
     expect(decision.caseNumber === "DOK-9/2011").toBe(true);
     expect(decision.court === PRESIDENT).toBe(true);
@@ -414,6 +439,63 @@ describe("a decision", () => {
     expect(decision.caseNumber === NUMBERLESS).toBe(true);
     expect(decision.caseNumberIsPlaceholder).toBe(true);
     expect(decision.decisionDate).toBeUndefined();
+  });
+
+  test("numbers at the storage boundary retain exact text or the exact document identity", async () => {
+    const page = await pageOf(FILELESS);
+    const width = CITATION_STORAGE_WIDTHS.caseNumber;
+    for (const token of ["x", "é", "𐐀"]) {
+      for (const length of [width - 1, width, width + 1]) {
+        const number = token.repeat(length);
+        const entry = syntheticEntry(FILELESS, "22.09.2026", number);
+        for (const detail of [
+          undefined,
+          page.replaceAll("DIH-4/2009", () => number),
+        ]) {
+          const decision = decisionOf(await buildFrom(entry, detail));
+          expect(decision.sourceDocumentId).toBe(FILELESS);
+          expect(length > width ? FILELESS : number).toBe(decision.caseNumber);
+          expect(decision.caseNumberIsPlaceholder === true).toBe(
+            length > width,
+          );
+          expect(
+            decision.metadata["caseNumberFallbackReason"] ===
+              (length > width ? "overlong-number" : undefined),
+          ).toBe(true);
+          expect(decision.metadata["decisionNumber"] === number).toBe(true);
+          if (length > width || token === "𐐀") {
+            expect(decision.identifiers).toBeUndefined();
+          }
+          expect(
+            decision.metadata["identifierStorageReason"] ===
+              (length <= width && token === "𐐀"
+                ? "unrepresentable-identifier"
+                : undefined),
+          ).toBe(true);
+          expect(sanitizeResult(decision).unwrap().caseNumber).toBe(
+            decision.caseNumber,
+          );
+        }
+      }
+    }
+    const registerLine = Array.from(
+      { length: width },
+      (_, index) => `DKK-${index}/2026`,
+    ).join("; ");
+    const decision = decisionOf(
+      await buildFrom(
+        syntheticEntry(FILELESS, "22.09.2026", registerLine),
+        undefined,
+      ),
+    );
+    expect(FILELESS).toBe(decision.caseNumber);
+    expect(decision.caseNumberIsPlaceholder).toBe(true);
+    expect(decision.metadata["decisionNumberAsListed"] === registerLine).toBe(
+      true,
+    );
+    expect(
+      decision.metadata["caseNumberFallbackReason"] === "overlong-number",
+    ).toBe(true);
   });
 
   test("is identified by its number as the register prints it and as prose cites it", async () => {
@@ -593,8 +675,8 @@ describe("a decision with no text to read", () => {
 
   test("the census reads exactly those reasons as complete", () => {
     const held = plUokikAdapter.reconciliation.heldWithoutDocument;
-    expect(held?.metadataKey).toBe("documentAbsence");
-    expect([...(held?.reasons ?? [])].toSorted()).toEqual(
+    expect(held.metadataKey).toBe("documentAbsence");
+    expect([...held.reasons].toSorted()).toEqual(
       Object.values(PL_UOKIK_DOCUMENT_ABSENCE).toSorted(),
     );
   });
@@ -653,22 +735,28 @@ describe("what the register does not serve", () => {
 
   test("a view answering no rows for positions inside it fails the page rather than reading as caught up", async () => {
     const model = await registerOverFixtures();
-    globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
-      const url = new URL(
-        typeof input === "string" || input instanceof URL ? input : input.url,
-      );
-      return await Promise.resolve(
-        url.searchParams.get("Count") === "1"
-          ? answerRegister(model, url)
-          : Response.json({ "@toplevelentries": String(model.entries.length) }),
-      );
-    });
+    testFetchState.set(
+      asFetchMock(async (input: string | URL | Request) => {
+        const url = new URL(
+          typeof input === "string" || input instanceof URL ? input : input.url,
+        );
+        return await Promise.resolve(
+          url.searchParams.get("Count") === "1"
+            ? answerRegister(model, url)
+            : Response.json({
+                "@toplevelentries": String(model.entries.length),
+              }),
+        );
+      }),
+    );
     expect(Result.isError(await plUokikAdapter.fetchPage(null, {}))).toBe(true);
   });
 
   test("a view answer that is not a view fails the page rather than reading as empty", async () => {
-    globalThis.fetch = asFetchMock(
-      async () => await Promise.resolve(new Response("<html>Error</html>")),
+    testFetchState.set(
+      asFetchMock(
+        async () => await Promise.resolve(new Response("<html>Error</html>")),
+      ),
     );
     expect(Result.isError(await plUokikAdapter.fetchPage(null, {}))).toBe(true);
   });
@@ -846,7 +934,10 @@ describe("the year census", () => {
     serveRegister(model);
     expect(
       await plUokikAdapter.getTotalCount(new AbortController().signal),
-    ).toEqual({ type: "count", total: model.entries.length });
+    ).toEqual({
+      type: "count",
+      total: model.entries.length,
+    });
   });
 
   test("a row whose page failed is not counted held", async () => {
@@ -858,7 +949,9 @@ describe("the year census", () => {
       await plUokikAdapter.reconciliation.buildDecision(
         entryOf(entries, FILELESS),
       ),
-    ).toEqual({ type: "detail-unavailable" });
+    ).toEqual({
+      type: "detail-unavailable",
+    });
   });
 });
 
@@ -941,6 +1034,17 @@ describe("the court rulings a decision page attaches", () => {
     const { decisions } = await walkCrawl(null);
     expect(decisions).toHaveLength(4);
     const appeal = rulingNamed(decisions, "Wyrok VI ACa 527_08.pdf");
+    const kept =
+      appeal.sourceRawObjects?.["ruling-file"]?.bytes ??
+      panic("ruling bytes missing");
+    expect(appeal.metadata["attachmentSha256"] === legacySha256Hex(kept)).toBe(
+      true,
+    );
+    const sourceRaw =
+      appeal.sourceRaw ?? panic("appeal source envelope missing");
+    expect(appeal.rawHash).toBe(
+      legacySha256Hex(`${sourceRaw}\n${legacySha256Hex(kept)}`),
+    );
     expect(appeal.court === "Sąd Apelacyjny w Warszawie").toBe(true);
     expect(appeal.caseNumber === "VI ACa 527/08").toBe(true);
     expect(appeal.decisionDate).toBe("2008-09-29");
@@ -1047,16 +1151,18 @@ describe("the court rulings a decision page attaches", () => {
 
     const failing = await registerWithRulings();
     const answer = answerRegister;
-    globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
-      const url = new URL(
-        typeof input === "string" || input instanceof URL ? input : input.url,
-      );
-      return await Promise.resolve(
-        url.pathname.includes("VI%20ACa")
-          ? new Response("", { status: 500 })
-          : answer(failing, url),
-      );
-    });
+    testFetchState.set(
+      asFetchMock(async (input: string | URL | Request) => {
+        const url = new URL(
+          typeof input === "string" || input instanceof URL ? input : input.url,
+        );
+        return await Promise.resolve(
+          url.pathname.includes("VI%20ACa")
+            ? new Response("", { status: 500 })
+            : answer(failing, url),
+        );
+      }),
+    );
     expect(Result.isError(await plUokikAdapter.fetchPage(null, {}))).toBe(true);
   });
 
@@ -1125,7 +1231,7 @@ describe("the court rulings a decision page attaches", () => {
     });
   });
 
-  test("a ruling's stored envelope is not replayed as a decision", async () => {
+  test("a ruling without its stored object has a metadata-only replay outcome", async () => {
     serveRegister(await registerWithRulings());
     const { decisions } = await walkCrawl(null);
     const appeal = rulingNamed(decisions, "Wyrok VI ACa 527_08.pdf");
@@ -1143,13 +1249,17 @@ describe("the court rulings a decision page attaches", () => {
       documentUrl: appeal.documentUrl ?? null,
       metadata: appeal.metadata,
     });
-    expect(replayed?.type).toBe("rejected");
+    expect(replayed).toMatchObject({
+      type: "rejected",
+      rejection: STORED_RAW_REPARSE_REJECTION.INCOMPLETE_METADATA,
+      status: "metadata-only",
+    });
   });
 
   test("a file name too long to key on is keyed by its digest", () => {
-    const long = `${"a".repeat(400)}.pdf`;
+    const long = `${"Zażółć gęślą jaźń e\u0301".repeat(40)}.pdf`;
     const id = plUokikRulingId(APPEALED_TO_SUPREME, long);
-    expect(id.startsWith(`${APPEALED_TO_SUPREME}/sha256:`)).toBe(true);
+    expect(id).toBe(`${APPEALED_TO_SUPREME}/sha256:${legacySha256Hex(long)}`);
     expect(plUokikRulingId(APPEALED_TO_SUPREME, long)).toBe(id);
   });
 });
@@ -1255,9 +1365,137 @@ describe("replaying a stored envelope", () => {
     metadata: decision.metadata,
   });
 
+  const storedObjectsOf = (decision: IngestionResult) => {
+    const objects = new Map<string, Uint8Array>();
+    const refs = Object.fromEntries(
+      Object.entries(decision.sourceRawObjects ?? {})
+        .toReversed()
+        .map(([part, file]) => {
+          const ref = sourceBinaryRef({
+            family: RAW_SOURCE_FAMILY.CASE_LAW,
+            sourceId: "pl-uokik-fixture",
+            documentId:
+              decision.sourceDocumentId ?? panic("fixture has no identity"),
+            ...file,
+          });
+          objects.set(ref.location, file.bytes);
+          return [part, ref];
+        }),
+    );
+    expect(objects.size).toBeGreaterThan(0);
+    return {
+      stored: {
+        ...storedOf(decision),
+        raw: new TextEncoder().encode(
+          withSourceRawObjects(decision.sourceRaw ?? "", refs),
+        ),
+        readObject: async (key: string) => Result.ok(objects.get(key) ?? null),
+      } satisfies StoredRawReparseInput,
+      objects,
+    };
+  };
+
+  test("replays the ordered decision PDFs to the ingestion fixed point without fetching", async () => {
+    const entry = entryOf(await capturedEntries(), WITH_RULINGS);
+    const bytes = await pdfBytes();
+    const secondBytes = new Uint8Array(
+      await Bun.file(
+        new URL("pl-uokik-ruling-vi-aca-527-08.pdf", PARSER_FIXTURES),
+      ).arrayBuffer(),
+    );
+    expect(legacySha256Hex(bytes)).not.toBe(legacySha256Hex(secondBytes));
+    const $ = load(await pageOf(WITH_RULINGS));
+    const decisionCell = $("tr")
+      .filter(
+        (_, element) => $(element).find("b").first().text() === "Decyzja:",
+      )
+      .find("td")
+      .last();
+    decisionCell.html(
+      [
+        '<a href="/$FILE/missing.pdf">missing</a>',
+        '<a href="/$FILE/first.pdf">first</a>',
+        '<a href="/$FILE/second.pdf">second</a>',
+      ].join(""),
+    );
+    const detailHtml = $.html();
+    const detail =
+      parsePlUokikDetail(detailHtml) ?? panic("decision detail missing");
+    const decisionFiles =
+      detail.fields.find(({ label }) => label === PL_UOKIK_LABEL.DECISION_FILES)
+        ?.files ?? [];
+    expect(decisionFiles.map(({ name }) => name)).toEqual([
+      "missing.pdf",
+      "first.pdf",
+      "second.pdf",
+    ]);
+    const decision = decisionOf(
+      await assemblePlUokikDecision({
+        entry,
+        rawParts: plUokikRawPartsOf(entry, detailHtml),
+        files: [
+          { name: "missing.pdf", status: PL_UOKIK_FILE_STATUS.NOT_FOUND },
+          { name: "first.pdf", status: PL_UOKIK_FILE_STATUS.READ, bytes },
+          {
+            name: "second.pdf",
+            status: PL_UOKIK_FILE_STATUS.READ,
+            bytes: secondBytes,
+          },
+        ],
+      }),
+    );
+    expect(decision.fulltext?.length ?? 0).toBeGreaterThan(0);
+    const fixture = storedObjectsOf(decision);
+    testFetchState.set(asFetchMock(async () => panic("replay must not fetch")));
+    const replayed = await plUokikAdapter.reparseStoredRaw?.(fixture.stored);
+    expect(replayed?.type).toBe("parsed");
+    if (replayed?.type === "parsed") {
+      expect(replayed.result).toEqual(decision);
+      const again = await plUokikAdapter.reparseStoredRaw?.(
+        storedObjectsOf(replayed.result).stored,
+      );
+      expect(again).toEqual(replayed);
+    }
+    fixture.objects.clear();
+    expect(
+      await plUokikAdapter.reparseStoredRaw?.(fixture.stored),
+    ).toMatchObject({
+      type: "rejected",
+      rejection: STORED_RAW_REPARSE_REJECTION.INCOMPLETE_METADATA,
+      status: "metadata-only",
+    });
+  });
+
+  test("replays the stored court ruling PDF to the ingestion fixed point without fetching", async () => {
+    serveRegister(await registerWithRulings());
+    const { decisions } = await walkCrawl(null);
+    const decision = rulingNamed(decisions, "Wyrok VI ACa 527_08.pdf");
+    expect(decision.fulltext?.length ?? 0).toBeGreaterThan(0);
+    const fixture = storedObjectsOf(decision);
+    testFetchState.set(asFetchMock(async () => panic("replay must not fetch")));
+    const replayed = await plUokikAdapter.reparseStoredRaw?.(fixture.stored);
+    expect(replayed?.type).toBe("parsed");
+    if (replayed?.type === "parsed") {
+      expect(replayed.result).toEqual(decision);
+      const again = await plUokikAdapter.reparseStoredRaw?.(
+        storedObjectsOf(replayed.result).stored,
+      );
+      expect(again).toEqual(replayed);
+    }
+    fixture.objects.clear();
+    expect(
+      await plUokikAdapter.reparseStoredRaw?.(fixture.stored),
+    ).toMatchObject({
+      type: "rejected",
+      rejection: STORED_RAW_REPARSE_REJECTION.INCOMPLETE_METADATA,
+      status: "metadata-only",
+    });
+  });
+
   test("rebuilds the decision the crawl built from its row and page", async () => {
     const entry = entryOf(await capturedEntries(), FILELESS);
     const decision = decisionOf(await buildFrom(entry, await pageOf(FILELESS)));
+    testFetchState.set(asFetchMock(async () => panic("replay must not fetch")));
     const replayed = await plUokikAdapter.reparseStoredRaw?.(
       storedOf(decision),
     );
@@ -1277,6 +1515,7 @@ describe("replaying a stored envelope", () => {
         detailStatus: PL_UOKIK_DETAIL_STATUS.GONE,
       }),
     );
+    testFetchState.set(asFetchMock(async () => panic("replay must not fetch")));
     const replayed = await plUokikAdapter.reparseStoredRaw?.(
       storedOf(decision),
     );
@@ -1363,7 +1602,7 @@ for (const name of [
 ]) {
   test(`constructed attachment metadata URL filename boundary: ${name}`, async () => {
     const entry = entryOf(await capturedEntries(), WITH_RULINGS);
-    const $ = cheerio.load(await pageOf(WITH_RULINGS));
+    const $ = load(await pageOf(WITH_RULINGS));
     const labels = [PL_UOKIK_LABEL.DECISION_FILES, PL_UOKIK_LABEL.RULINGS];
     $("div.ck-content table tr").each((_, element) => {
       const cells = $(element).children("td");
@@ -1455,4 +1694,20 @@ test("competition metadata ignores excluded HTML in every label and value", asyn
   const expected = parsePlUokikDetail(html);
   expect(expected).not.toBeNull();
   expect(parsePlUokikDetail(contaminated)).toEqual(expected);
+});
+
+test("quarantine column identities retain legacy bytes including empty and Unicode", async () => {
+  const entry = entryOf(await capturedEntries(), WITH_RULINGS);
+  const row = normalizePlUokikRow(entry);
+  for (const column of [
+    "",
+    "ordinary",
+    "Zażółć gęślą jaźń",
+    "e\u0301",
+    "<A HREF=/removed>Łódź</A>",
+  ]) {
+    expect(plUokikQuarantineId({ ...row, column })).toBe(
+      `pl-uokik-quarantine:${legacySha256Hex(column.replaceAll(/HREF=[^\s>]*/gu, "HREF="))}`,
+    );
+  }
 });

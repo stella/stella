@@ -1,21 +1,26 @@
 import { existsSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 
+import { LOCAL_SEED_SCRIPTS } from "../apps/api/scripts/seed-local-scripts";
+import { cachedForRepository } from "./ci-repository-cache";
 import { GENERATORS } from "./generated-files";
 
 const repositoryRoot = path.resolve(import.meta.dir, "..");
 const infrastructurePaths = new Set([
   ".github/workflows/ci.yml",
+  "scripts/ci-repository-cache.ts",
   "scripts/detect-service-suite-changes.ts",
   "scripts/detect-service-suite-changes.test.ts",
   "scripts/generated-files.ts",
+  "packages/scripts/src/generated-files.ts",
   "scripts/ci-plan.test.ts",
   ".npmrc",
   "scripts/retry.sh",
   "package.json",
   "bun.lock",
   "bunfig.toml",
-  "docker/postgres/init.sql",
+  "scripts/configure-test-postgres.sh",
+  "scripts/configure-test-postgres.integration.sh",
 ]);
 
 const SUITES = {
@@ -25,6 +30,46 @@ const SUITES = {
   collab: { app: "collab" },
 } as const;
 type ServiceSuite = keyof typeof SUITES;
+
+// Own repository reads and parsing here so the four suite projections share
+// the same source inventory.
+const repositorySources = new Map<string, string>();
+const repositoryImports = new Map<
+  string,
+  ReturnType<Bun.Transpiler["scanImports"]>
+>();
+const repositoryGlobs = new Map<string, readonly string[]>();
+const tsTranspiler = new Bun.Transpiler({ loader: "ts" });
+const tsxTranspiler = new Bun.Transpiler({ loader: "tsx" });
+
+const sourceText = (root: string, file: string) =>
+  cachedForRepository(repositorySources, { root, key: file }, () =>
+    readFileSync(path.join(root, file), "utf-8"),
+  );
+
+const sourceImports = (root: string, file: string) =>
+  cachedForRepository(repositoryImports, { root, key: file }, () => {
+    const transpiler =
+      file.endsWith("tsx") || file.endsWith("jsx")
+        ? tsxTranspiler
+        : tsTranspiler;
+    return transpiler.scanImports(
+      sourceText(root, file).replace(/^#![^\n]*/u, ""),
+    );
+  });
+
+const globFiles = (root: string, pattern: string) =>
+  cachedForRepository(repositoryGlobs, { root, key: pattern }, () => [
+    ...new Bun.Glob(pattern).scanSync({ cwd: root }),
+  ]);
+
+const CORPUS_ENGINE_TEST_ALLOWLIST = new Map([
+  [
+    "apps/api/scripts/run-corpus-engine-suites.test.ts",
+    "Tests the runner and gate discovery without connecting to the engine.",
+  ],
+]);
+const CORPUS_ENGINE_TEST_ALLOWLIST_CEILING = 1;
 
 const readRunner = (runners: unknown, script: string) => {
   if (typeof runners !== "object" || runners === null) {
@@ -54,7 +99,7 @@ const readRunner = (runners: unknown, script: string) => {
 // this module must not dereference a runner that a package edit removed.
 const loadSuites = (root: string) => {
   const manifest: unknown = JSON.parse(
-    readFileSync(path.join(root, "apps/api/package.json"), "utf-8"),
+    sourceText(root, "apps/api/package.json"),
   );
   const runners: unknown =
     typeof manifest === "object" && manifest !== null
@@ -85,7 +130,11 @@ const loadSuites = (root: string) => {
 };
 
 const directlyRequired = (file: string, suite: ServiceSuite) => {
-  if (infrastructurePaths.has(file) || file.startsWith("patches/")) {
+  if (
+    infrastructurePaths.has(file) ||
+    file.startsWith("patches/") ||
+    file.startsWith("docker/postgres/")
+  ) {
     return true;
   }
   const { app } = SUITES[suite];
@@ -134,6 +183,14 @@ const DERIVED_OUTPUT_INPUTS: ReadonlyMap<string, readonly string[]> = new Map(
   ),
 );
 
+const DERIVED_OUTPUT_GLOBS = GENERATORS.filter(
+  ({ outputKind }) => outputKind === "derived",
+).flatMap(({ outputs, inputs }) =>
+  outputs
+    .filter((output) => /[*?[{]/u.test(output))
+    .map((output) => ({ glob: new Bun.Glob(output), inputs })),
+);
+
 const derivedInputFiles = (inputs: readonly string[], root: string) =>
   inputs.flatMap((input) =>
     /[*?[{]/u.test(input)
@@ -156,6 +213,12 @@ const resolveLocalImport = (
     .find((inputs) => inputs !== undefined);
   if (derivedInputs !== undefined) {
     return derivedInputFiles(derivedInputs, root);
+  }
+  const derivedGlob = DERIVED_OUTPUT_GLOBS.find(({ glob }) =>
+    [candidate, `${stem}.ts`].some((entry) => glob.match(entry)),
+  );
+  if (derivedGlob !== undefined) {
+    return derivedInputFiles(derivedGlob.inputs, root);
   }
   const resolved = [
     candidate,
@@ -184,7 +247,7 @@ const expandWorkspaceScopes = (packageScopes: Set<string>, root: string) => {
   const pendingPackages = [...packageScopes];
   for (const scope of pendingPackages) {
     const manifest: unknown = JSON.parse(
-      readFileSync(path.join(root, scope, "package.json"), "utf-8"),
+      sourceText(root, path.posix.join(scope, "package.json")),
     );
     if (typeof manifest !== "object" || manifest === null) {
       return `Invalid manifest: ${scope}`;
@@ -218,6 +281,63 @@ const expandWorkspaceScopes = (packageScopes: Set<string>, root: string) => {
   return undefined;
 };
 
+type LocalImportWalkOptions = {
+  root: string;
+  pending: string[];
+  dependencies: Set<string>;
+  packageScopes: Set<string>;
+};
+
+// Follows local imports from `pending` file by file and records the workspace
+// packages they reach as units. Returns why an import cannot be resolved.
+const walkLocalImports = ({
+  root,
+  pending,
+  dependencies,
+  packageScopes,
+}: LocalImportWalkOptions) => {
+  for (const file of pending) {
+    if (dependencies.has(file)) {
+      continue;
+    }
+    dependencies.add(file);
+    if (!/\.[cm]?[jt]sx?$/u.test(file)) {
+      continue;
+    }
+    for (const { path: specifier } of sourceImports(root, file)) {
+      if (specifier.startsWith("@stll/")) {
+        const name = workspacePackageName(specifier);
+        const scope = `packages/${name}/`;
+        if (packageScopes.has(scope)) {
+          continue;
+        }
+        if (!existsSync(path.join(root, scope, "package.json"))) {
+          // Published @stll packages are dependency inputs, covered by bun.lock.
+          continue;
+        }
+        packageScopes.add(scope);
+        continue;
+      }
+      let candidate: string;
+      if (specifier.startsWith("@/api/")) {
+        candidate = `apps/api/src/${specifier.slice("@/api/".length)}`;
+      } else if (specifier.startsWith(".")) {
+        candidate = path.posix.normalize(
+          path.posix.join(path.posix.dirname(file), specifier),
+        );
+      } else {
+        continue;
+      }
+      const resolved = resolveLocalImport(candidate, root);
+      if (resolved === undefined) {
+        return `Unresolved service-suite import: ${file}: ${specifier}`;
+      }
+      pending.push(...resolved);
+    }
+  }
+  return undefined;
+};
+
 /** Workspace packages are scoped as units, including exports and non-code assets.
  * Local API/collaboration imports are followed file by file. No install is needed
  * in ci-plan: package discovery uses the checkout, not node_modules.
@@ -225,8 +345,9 @@ const expandWorkspaceScopes = (packageScopes: Set<string>, root: string) => {
 export const serviceSuiteDependencies = (
   root = repositoryRoot,
   suite?: ServiceSuite,
+  manifestRoot = root,
 ) => {
-  const configuration = loadSuites(root);
+  const configuration = loadSuites(manifestRoot);
   if (configuration.status === "unresolved") {
     return configuration;
   }
@@ -264,148 +385,204 @@ export const serviceSuiteDependencies = (
     ]);
     const testFiles = new Set<string>();
     for (const glob of testGlobs) {
-      for (const file of new Bun.Glob(glob).scanSync({ cwd: root })) {
+      for (const file of globFiles(root, glob)) {
         testFiles.add(file);
       }
     }
     for (const file of testFiles) {
-      const source = readFileSync(path.join(root, file), "utf-8");
+      const source = sourceText(root, file);
       if (selected.some(({ gate }) => gate !== "" && source.includes(gate))) {
         pending.push(file);
       }
     }
   }
-  const tsTranspiler = new Bun.Transpiler({ loader: "ts" });
-  const tsxTranspiler = new Bun.Transpiler({ loader: "tsx" });
-  for (const file of pending) {
-    if (dependencies.has(file)) {
-      continue;
-    }
-    dependencies.add(file);
-    if (!/\.[cm]?[jt]sx?$/u.test(file)) {
-      continue;
-    }
-    const source = readFileSync(path.join(root, file), "utf-8");
-    const transpiler =
-      file.endsWith("tsx") || file.endsWith("jsx")
-        ? tsxTranspiler
-        : tsTranspiler;
-    for (const { path: specifier } of transpiler.scanImports(
-      source.replace(/^#![^\n]*/u, ""),
-    )) {
-      if (specifier.startsWith("@stll/")) {
-        const name = workspacePackageName(specifier);
-        const scope = `packages/${name}/`;
-        if (packageScopes.has(scope)) {
-          continue;
-        }
-        if (!existsSync(path.join(root, scope, "package.json"))) {
-          // Published @stll packages are dependency inputs, covered by bun.lock.
-          continue;
-        }
-        packageScopes.add(scope);
-        continue;
-      }
-      let candidate: string;
-      if (specifier.startsWith("@/api/")) {
-        candidate = `apps/api/src/${specifier.slice("@/api/".length)}`;
-      } else if (specifier.startsWith(".")) {
-        candidate = path.posix.normalize(
-          path.posix.join(path.posix.dirname(file), specifier),
-        );
-      } else {
-        continue;
-      }
-      const resolved = resolveLocalImport(candidate, root);
-      if (resolved === undefined) {
-        return {
-          status: "unresolved" as const,
-          message: `Unresolved service-suite import: ${file}: ${specifier}`,
-        };
-      }
-      pending.push(...resolved);
-    }
-  }
-  const packageError = expandWorkspaceScopes(packageScopes, root);
-  if (packageError !== undefined) {
-    return { status: "unresolved" as const, message: packageError };
+  const walkError =
+    walkLocalImports({ root, pending, dependencies, packageScopes }) ??
+    expandWorkspaceScopes(packageScopes, root);
+  if (walkError !== undefined) {
+    return { status: "unresolved" as const, message: walkError };
   }
   for (const scope of packageScopes) {
     dependencies.add(`${scope}package.json`);
   }
   // Configuration and runner harnesses can change execution without an import.
   for (const app of apps) {
-    for (const file of new Bun.Glob(
+    for (const file of globFiles(
+      root,
       `apps/${app}/{package.json,bunfig.toml,tsconfig.json,scripts/**,src/tests/**}`,
-    ).scanSync({ cwd: root })) {
+    )) {
       dependencies.add(file);
     }
   }
   return { status: "complete" as const, dependencies, packageScopes };
 };
 
-const defaultGraphs = new Map<
-  ServiceSuite,
+// `bun run agent:up` migrates its database with the committed migrations, then
+// runs db:seed-local, which spawns each of its scripts by file name.
+const DEV_SEED_ENTRY_POINTS = [
+  "apps/api/src/db/migrate.ts",
+  "apps/api/scripts/seed-local.ts",
+  ...LOCAL_SEED_SCRIPTS.map((script) => `apps/api/scripts/${script}`),
+];
+
+// What the seed reads without importing it: the migrations, its fixtures, the
+// environment template CI seeds with, and any non-code API source asset.
+const devSeedDirectlyRequired = (file: string) =>
+  infrastructurePaths.has(file) ||
+  file.startsWith("patches/") ||
+  file.startsWith("docker/postgres/") ||
+  [
+    "apps/api/package.json",
+    "apps/api/tsconfig.json",
+    "apps/api/bunfig.toml",
+    "apps/api/.env.example",
+  ].includes(file) ||
+  file.startsWith("apps/api/drizzle/") ||
+  file.startsWith("apps/api/scripts/__fixtures__/") ||
+  (file.startsWith("apps/api/src/") && !/\.[cm]?[jt]sx?$/u.test(file));
+
+/** The files `db:seed-local` runs on a freshly migrated database. */
+export const devSeedDependencies = (root = repositoryRoot) => {
+  const missing = DEV_SEED_ENTRY_POINTS.find(
+    (file) => !existsSync(path.join(root, file)),
+  );
+  if (missing !== undefined) {
+    return {
+      status: "unresolved" as const,
+      message: `Missing dev seed entry point: ${missing}`,
+    };
+  }
+  const dependencies = new Set<string>();
+  const packageScopes = new Set<string>();
+  const walkError =
+    walkLocalImports({
+      root,
+      pending: [...DEV_SEED_ENTRY_POINTS],
+      dependencies,
+      packageScopes,
+    }) ?? expandWorkspaceScopes(packageScopes, root);
+  if (walkError !== undefined) {
+    return { status: "unresolved" as const, message: walkError };
+  }
+  return { status: "complete" as const, dependencies, packageScopes };
+};
+
+type DependencyGraph =
+  | ReturnType<typeof serviceSuiteDependencies>
+  | ReturnType<typeof devSeedDependencies>;
+
+// An unreadable graph cannot prove a change outside it.
+const graphSelects = (
+  graph: DependencyGraph,
+  files: readonly string[],
+): boolean => {
+  if (graph.status === "unresolved") {
+    console.error(graph.message);
+    return true;
+  }
+  return files.some(
+    (file) =>
+      graph.dependencies.has(file) ||
+      [...graph.packageScopes].some((scope) => file.startsWith(scope)),
+  );
+};
+
+const suiteGraphs = new Map<
+  string,
   ReturnType<typeof serviceSuiteDependencies>
 >();
+const devSeedGraphs = new Map<string, ReturnType<typeof devSeedDependencies>>();
+const suiteConfigurations = new Map<string, ReturnType<typeof loadSuites>>();
+
+const suiteConfiguration = (root: string) =>
+  cachedForRepository(suiteConfigurations, { root, key: root }, () =>
+    loadSuites(root),
+  );
+
+type ServiceSuitePlan = Record<ServiceSuite | "devSeed", boolean>;
 
 export const planServiceSuites = (
   files: readonly string[],
   root = repositoryRoot,
-) => {
-  const configuration = loadSuites(root);
+  manifestRoot = root,
+): ServiceSuitePlan => {
+  const configuration = suiteConfiguration(manifestRoot);
   if (configuration.status === "unresolved") {
     console.error(configuration.message);
-    return { postgres: true, corpus: true, valkey: true, collab: true };
+    return {
+      postgres: true,
+      corpus: true,
+      valkey: true,
+      collab: true,
+      devSeed: true,
+    };
   }
-  const required = (suite: ServiceSuite): boolean => {
-    if (files.some((file) => directlyRequired(file, suite))) {
-      return true;
-    }
-    if (
-      !files.some(
-        (file) =>
-          file.startsWith(`apps/${SUITES[suite].app}/`) ||
-          file.startsWith("packages/"),
-      )
-    ) {
-      return false;
-    }
-    let graph = root === repositoryRoot ? defaultGraphs.get(suite) : undefined;
-    if (graph === undefined) {
-      graph = serviceSuiteDependencies(root, suite);
-      if (root === repositoryRoot) {
-        defaultGraphs.set(suite, graph);
-      }
-    }
-    let selected: boolean;
-    switch (graph.status) {
-      case "unresolved":
-        console.error(graph.message);
-        selected = true;
-        break;
-      case "complete":
-        selected = files.some(
-          (file) =>
-            graph.dependencies.has(file) ||
-            [...graph.packageScopes].some((scope) => file.startsWith(scope)),
-        );
-        break;
-    }
-    return selected;
-  };
+  const required = (suite: ServiceSuite): boolean =>
+    files.some((file) => directlyRequired(file, suite)) ||
+    graphSelects(
+      cachedForRepository(
+        suiteGraphs,
+        { root, key: `${manifestRoot}:${suite}` },
+        () => serviceSuiteDependencies(root, suite, manifestRoot),
+      ),
+      files,
+    );
+  const devSeed =
+    files.some(devSeedDirectlyRequired) ||
+    graphSelects(
+      cachedForRepository(devSeedGraphs, { root, key: root }, () =>
+        devSeedDependencies(root),
+      ),
+      files,
+    );
   return {
-    postgres: required("postgres"),
+    // The dev seed runs in the Postgres service job, so it selects that job.
+    postgres: devSeed || required("postgres"),
     corpus: required("corpus"),
     valkey: required("valkey"),
     collab: required("collab"),
-  } as const satisfies Record<ServiceSuite, boolean>;
+    devSeed,
+  };
 };
 
 export const requiresServiceSuites = (
   files: readonly string[],
   root = repositoryRoot,
 ) => Object.values(planServiceSuites(files, root)).some(Boolean);
+
+export const corpusEngineScopeViolations = (root = repositoryRoot) => {
+  const graph = serviceSuiteDependencies(root, "corpus");
+  if (graph.status === "unresolved") {
+    return [graph.message];
+  }
+  const candidates = [
+    ...new Bun.Glob("apps/api/**/*.test.{ts,tsx}").scanSync({ cwd: root }),
+  ].filter((file) =>
+    readFileSync(path.join(root, file), "utf-8").includes(
+      "STELLA_RUN_CORPUS_ENGINE_TESTS",
+    ),
+  );
+  const candidateSet = new Set(candidates);
+  const staleAllowlist = [...CORPUS_ENGINE_TEST_ALLOWLIST].filter(
+    ([file, reason]) => !candidateSet.has(file) || reason.trim().length === 0,
+  );
+  const outsideScope = candidates.filter(
+    (file) =>
+      !CORPUS_ENGINE_TEST_ALLOWLIST.has(file) && !graph.dependencies.has(file),
+  );
+  return [
+    ...(CORPUS_ENGINE_TEST_ALLOWLIST.size > CORPUS_ENGINE_TEST_ALLOWLIST_CEILING
+      ? ["Corpus engine census allowlist may only shrink"]
+      : []),
+    ...outsideScope.map(
+      (file) => `${file}: engine test is outside the corpus scope`,
+    ),
+    ...staleAllowlist.map(
+      ([file]) =>
+        `${file}: stale or unreasoned corpus engine census allowlist entry`,
+    ),
+  ];
+};
 
 /** The line the CLI prints for its arguments; ci-plan reads it. */
 export const serviceSuiteCliOutput = (args: readonly string[]): string => {

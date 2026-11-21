@@ -37,7 +37,7 @@ export type FtsConfigCache = {
 // -- Cache ---------------------------------------------------------------
 
 const CACHE_TTL_MS = 60_000;
-export const DEFAULT_FTS_CONFIG: FtsConfig = {
+const DEFAULT_FTS_CONFIG: FtsConfig = {
   regconfig: "simple",
   useUnaccent: true,
 };

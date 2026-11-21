@@ -1,10 +1,20 @@
-import { existsSync, lstatSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  lstatSync,
+  readdirSync,
+  readFileSync,
+  writeFileSync,
+} from "node:fs";
 import path from "node:path";
 
 const MAX_BASELINE_BYTES = 5 * 1024 * 1024;
+// The route waterfall depth method of apps/web/e2e/helpers/network.ts; this
+// script runs standalone, and a test keeps the two equal.
+export const NETWORK_DEPTH_METHOD = "round-barrier-v1";
 
 type BaselineEntry = {
   depth: number;
+  depthMethod?: string;
   requests: string[];
   requestCounts?: Record<string, number>;
   dbQueries?: Record<string, number>;
@@ -39,6 +49,8 @@ const isBaselineEntry = (value: unknown): value is BaselineEntry => {
     typeof value["depth"] !== "number" ||
     !Number.isInteger(value["depth"]) ||
     value["depth"] < 0 ||
+    (value["depthMethod"] !== undefined &&
+      typeof value["depthMethod"] !== "string") ||
     !Array.isArray(value["requests"]) ||
     !value["requests"].every(
       (item) => typeof item === "string" && item.length > 0,
@@ -68,6 +80,7 @@ const isBaselineEntry = (value: unknown): value is BaselineEntry => {
   return Object.keys(value).every((field) =>
     [
       "depth",
+      "depthMethod",
       "requests",
       "requestCounts",
       "dbQueries",
@@ -184,27 +197,60 @@ const touchedRoutesInTree = (
   return touched;
 };
 
-export const prepareComparisonBaseline = ({
-  base,
-  changedPaths,
-  baseRouteTree,
-  routeTree,
-  declarations,
-}: {
-  base: Baseline;
-  changedPaths: string[];
-  baseRouteTree: string;
-  routeTree: string;
-  declarations: unknown[];
-}) => {
-  const changed = new Set(changedPaths.map(normalizeSource));
-  const changedRoutes = [
-    ...new Set([
-      ...touchedRoutesInTree(baseRouteTree, changed),
-      ...touchedRoutesInTree(routeTree, changed),
-    ]),
-  ].toSorted();
-  const baseline = { ...base };
+const PER_REQUEST_KEYS = [
+  "requestCounts",
+  "dbQueries",
+  "responseSizes",
+] as const;
+
+// A budget file is written once while main keeps recording the route, so the
+// budget raises main's entry instead of replacing it: a request main gained
+// after the file was written must not read as new on a PR that edits it.
+const raiseRecorded = (
+  recorded: BaselineEntry | undefined,
+  budget: BaselineEntry,
+): BaselineEntry => {
+  if (recorded === undefined) {
+    return budget;
+  }
+  // Like the main recorder (mergeNetworkBaseline), overlapping values keep the
+  // higher one, so a budget written against older main never lowers a value.
+  const perRequest = new Map<
+    (typeof PER_REQUEST_KEYS)[number],
+    Record<string, number>
+  >();
+  for (const key of PER_REQUEST_KEYS) {
+    const values = [recorded[key], budget[key]].filter(
+      (value) => value !== undefined,
+    );
+    if (values.length === 0) {
+      continue;
+    }
+    const merged = new Map<string, number>();
+    for (const source of values) {
+      for (const [request, value] of Object.entries(source)) {
+        merged.set(request, Math.max(merged.get(request) ?? 0, value));
+      }
+    }
+    perRequest.set(key, Object.fromEntries(merged));
+  }
+  return {
+    ...recorded,
+    ...budget,
+    ...Object.fromEntries(perRequest),
+    depth:
+      recorded.depthMethod === budget.depthMethod
+        ? Math.max(recorded.depth, budget.depth)
+        : budget.depth,
+    requests: [...new Set([...recorded.requests, ...budget.requests])],
+  };
+};
+
+const applyNetworkBudgetDeclarations = (
+  base: Baseline,
+  declarations: unknown[],
+) => {
+  const baseline = new Map(Object.entries(base));
   const declared = new Set<string>();
   const notices: string[] = [];
   for (const declaration of declarations) {
@@ -228,10 +274,74 @@ export const prepareComparisonBaseline = ({
       fail(`Duplicate network budget declaration for ${route}`);
     }
     declared.add(route);
-    baseline[route] = declaration["budget"];
+    const budget = declaration["budget"];
+    // A declaration is written against the current depth method, so the
+    // recording keeps its depth as a floor instead of replacing it with one
+    // timing-dependent sample. A declaration for another method is stale.
+    if (
+      budget.depthMethod !== undefined &&
+      budget.depthMethod !== NETWORK_DEPTH_METHOD
+    ) {
+      fail(
+        `Invalid network budget declaration: ${route} uses depth method ${budget.depthMethod}; declare depth for ${NETWORK_DEPTH_METHOD}`,
+      );
+    }
+    baseline.set(
+      route,
+      raiseRecorded(baseline.get(route), {
+        ...budget,
+        depthMethod: NETWORK_DEPTH_METHOD,
+      }),
+    );
     notices.push(`- ${code(route)}: ${code(declaration["reason"])}`);
   }
-  return { baseline, changedRoutes, notices };
+  return { baseline: Object.fromEntries(baseline), notices };
+};
+
+export const prepareComparisonBaseline = ({
+  base,
+  changedPaths,
+  baseRouteTree,
+  routeTree,
+  declarations,
+}: {
+  base: Baseline;
+  changedPaths: string[];
+  baseRouteTree: string;
+  routeTree: string;
+  declarations: unknown[];
+}) => {
+  const changed = new Set(changedPaths.map(normalizeSource));
+  const changedRoutes = [
+    ...new Set([
+      ...touchedRoutesInTree(baseRouteTree, changed),
+      ...touchedRoutesInTree(routeTree, changed),
+    ]),
+  ].toSorted();
+  return {
+    ...applyNetworkBudgetDeclarations(base, declarations),
+    changedRoutes,
+  };
+};
+
+export const networkBudgetDeclarationProblem = ({
+  expectedKeys,
+  declarations,
+}: {
+  expectedKeys: string[];
+  declarations: unknown[];
+}): string | null => {
+  // Validate without reapplying inherited allowances to a prepared recording.
+  applyNetworkBudgetDeclarations({}, declarations);
+  for (const declaration of declarations) {
+    if (
+      isRecord(declaration) &&
+      !expectedKeys.includes(String(declaration["route"]))
+    ) {
+      return `Network budget declaration names an inactive route: ${String(declaration["route"])}`;
+    }
+  }
+  return null;
 };
 
 // Render declaration text as inert code spans in the job summary.
@@ -240,7 +350,7 @@ const code = (value: string): string =>
 
 const usage = `Usage:
   bun scripts/network-baseline-scope.ts prepare --base FILE --changed FILE --base-route-tree FILE --route-tree FILE --output FILE --context FILE
-  bun scripts/network-baseline-scope.ts validate FILE
+  bun scripts/network-baseline-scope.ts validate FILE [--route-tree FILE --context FILE]
 
 prepare loads a merge-base budget, scopes new/removed routes, and applies only changed, reviewed declaration files. validate checks a main recording's schema and size.`;
 
@@ -253,7 +363,7 @@ const option = (args: string[], name: string): string => {
   return value;
 };
 
-const main = (): void => {
+const main = async (): Promise<void> => {
   const [command, ...args] = process.argv.slice(2);
   if (command === "--help" || command === "-h" || command === undefined) {
     console.log(usage);
@@ -264,7 +374,54 @@ const main = (): void => {
     if (!file) {
       fail(usage);
     }
-    validateBaselineFile(file);
+    const baseline = validateBaselineFile(file);
+    if (args.includes("--route-tree")) {
+      const directory = "apps/web/e2e/network-budgets";
+      const declarations = (existsSync(directory) ? readdirSync(directory) : [])
+        .filter((name) => name.endsWith(".json"))
+        .map((name): unknown => {
+          const declarationFile = path.join(directory, name);
+          if (
+            lstatSync(declarationFile).isSymbolicLink() ||
+            lstatSync(declarationFile).size > MAX_BASELINE_BYTES
+          ) {
+            fail(`Invalid network budget declaration file: ${declarationFile}`);
+          }
+          return JSON.parse(readFileSync(declarationFile, "utf-8"));
+        });
+      const {
+        assertSmokeRouteCoverage,
+        networkBaselineKey,
+        networkBaselineCoverageProblem,
+      } = await import("../apps/web/e2e/helpers/smoke-route-coverage");
+      const { SMOKE_ROUTE_DEFS } =
+        await import("../apps/web/e2e/helpers/smoke-route-defs");
+      assertSmokeRouteCoverage(
+        readFileSync(option(args, "--route-tree"), "utf-8"),
+      );
+      const context: unknown = JSON.parse(
+        readFileSync(option(args, "--context"), "utf-8"),
+      );
+      if (
+        !Array.isArray(context) ||
+        !context.every(
+          (route) => typeof route === "string" && route.startsWith("/"),
+        )
+      ) {
+        fail("Invalid network baseline changed-route context");
+      }
+      const expectedKeys = SMOKE_ROUTE_DEFS.map(networkBaselineKey);
+      const problem =
+        networkBudgetDeclarationProblem({ expectedKeys, declarations }) ??
+        networkBaselineCoverageProblem({
+          actualKeys: Object.keys(baseline),
+          expectedKeys,
+          changedRoutes: context,
+        });
+      if (problem !== null) {
+        fail(problem);
+      }
+    }
     return;
   }
   if (command === "prepare") {
@@ -317,5 +474,5 @@ const main = (): void => {
 };
 
 if (import.meta.main) {
-  main();
+  await main();
 }

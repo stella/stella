@@ -1,21 +1,26 @@
-import { sql } from "drizzle-orm";
+import { type SQL, sql } from "drizzle-orm";
 
+import { courtAbbreviation } from "@stll/api-contract/case-law-court-abbreviations";
 import {
   COURT_TIER_LABELS,
   type CourtTierLabel,
 } from "@stll/api-contract/case-law-court-tiers";
 import { DAY_IN_MS, Temporal } from "@stll/time";
 
+import {
+  caseLawPopulationProjections,
+  publishedCaseLawDecisions,
+} from "@/api/db/schema";
 import { withSharedStatementTimeout } from "@/api/db/shared-pool-timeouts";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
-import { courtAbbreviation } from "@/api/lib/case-law/court-abbreviations";
 import {
   courtTierLabelFromMap,
   type CourtWeightMap,
 } from "@/api/lib/case-law/court-weights";
-import { publishedCaseLawDecisionSqlFor } from "@/api/lib/case-law/published-decisions";
+import { servedCaseLawSearchDocumentFor } from "@/api/lib/case-law/search-sql";
 import { executedRows } from "@/api/lib/db/executed-rows";
+import type { LegalSearchEngine } from "@/api/lib/legal-search/types";
 import {
   definePublicLawSharedQuery,
   PUBLIC_LAW_SHARED_QUERY,
@@ -56,20 +61,6 @@ import type { FacetBucket } from "@/api/lib/search/types";
 const WEEK_IN_MS = 7 * DAY_IN_MS;
 
 /**
- * Slack the window scan allows for a row whose `created_at` runs ahead of its
- * `updated_at`.
- *
- * `created_at` defaults to `clock_timestamp()` and `updated_at` to `now()`, so
- * a row inserted by a long transaction is stamped as created after it was last
- * updated, by at most that transaction's duration. The scan is an
- * `updated_at` range (that is the index it rides), so it widens by this much
- * to stay a superset of the rows the `created_at` filter then counts. An
- * insert transaction outrunning it would under-report a delta, never
- * over-report one.
- */
-const CLOCK_SKEW_MARGIN_MS = DAY_IN_MS / 24;
-
-/**
  * How long the breakdown's own statement may run.
  *
  * The public read transaction's guard is 30 s, which is three times the
@@ -78,12 +69,11 @@ const CLOCK_SKEW_MARGIN_MS = DAY_IN_MS / 24;
  * read is cancelled in the database and the caller degrades to no breakdown
  * while the count and the timestamp beside the search box still answer.
  *
- * Warm, the whole statement is two index probes per named court and runs in
- * milliseconds. It is this far above that because a missing or cold index is
- * the case worth surviving: without
- * `case_law_decisions_country_court_updated_idx` the same read took 31 s on a
- * million-row corpus, so the bound is what turns that into a fast, visible
- * degradation rather than a stalled page.
+ * Warm, the whole statement is two index probes per named court plus the
+ * week's arrivals of each, and runs in milliseconds. It is this far above
+ * that because a missing or cold index is the case worth surviving: the bound
+ * is what turns one into a fast, visible degradation rather than a stalled
+ * page.
  */
 const ACTIVITY_STATEMENT_TIMEOUT_MS = 3000;
 
@@ -134,14 +124,56 @@ export type CaseLawCourtStatusRow =
        * less the courts listed. The buckets are the largest courts up to a
        * limit, and a breakdown that stopped at the limit would sum to less
        * than the total beside it with nothing to say where the rest went.
-       * How many courts these are is not known, so the row names how many
-       * are listed instead; it carries no activity, because none was read.
+       * The court count is null when the serving provider cannot enumerate it;
+       * the row carries no activity, because none was read for those courts.
        */
-      type: "unlisted";
+      type: "other-courts";
       tier: "other";
-      listed: number;
+      courts: number | null;
       decisions: number;
     };
+
+/** Exact served court count, or null when the provider has no exact aggregate. */
+export const readCaseLawCourtCountQuery = definePublicLawSharedQuery(
+  PUBLIC_LAW_SHARED_QUERY.caseLawCourtCount,
+  async (
+    tx: CaseLawPublicReadTransaction,
+    {
+      country,
+      excludedSourceIds,
+      engine,
+    }: Pick<CourtActivityRead, "country" | "excludedSourceIds"> & {
+      engine: LegalSearchEngine;
+    },
+  ): Promise<number | null> => {
+    const eligibility = servedCaseLawSearchDocumentFor("d", engine);
+    if (eligibility === null) {
+      return null;
+    }
+    const admitted =
+      excludedSourceIds.length === 0
+        ? sql``
+        : sql`AND d.source_id <> ALL(
+          SELECT value::uuid
+          FROM jsonb_array_elements_text(${JSON.stringify([...excludedSourceIds])}::text::jsonb) AS value
+        )`;
+    const served = eligibility;
+    const result: unknown = await withSharedStatementTimeout(
+      tx,
+      ACTIVITY_STATEMENT_TIMEOUT_MS,
+      async () =>
+        await tx.execute(sql`
+        SELECT count(DISTINCT d.court)::integer AS courts
+        FROM ${publishedCaseLawDecisions} AS d
+        WHERE d.country = ${country}
+          AND ${served}
+          ${admitted}
+      `),
+    );
+    const row = executedRows(result).find(isRecord);
+    return toCount(row?.["courts"]);
+  },
+);
 
 /** What one court's rows say about recent ingestion and the last change. */
 export type CourtActivity = {
@@ -170,11 +202,16 @@ const toCount = (value: unknown): number => {
 /**
  * Per-court activity, one bounded read for the whole breakdown.
  *
- * Two laterals per named court, both riding
- * `case_law_decisions_country_court_updated_idx`: the newest admitted row of
- * the court, and the rows it has been touched in since the window opened. The
- * court list is what bounds the statement — it is the browse facets' buckets,
- * so it is the jurisdiction's largest courts and never the whole registry.
+ * Two laterals per named court over the population projection, one per index:
+ * the newest admitted row of the court rides
+ * `case_law_population_projection_activity_idx` (`updated_at` descending,
+ * stopping at the first admitted row), and the week's arrivals ride
+ * `case_law_population_projection_arrivals_idx` as a `created_at` range. The
+ * arrivals are a range over the column they count, never over `updated_at`:
+ * a reparse rewrites `updated_at` on every row of a court, and a scan bounded
+ * by it reads the whole court to count the few rows that arrived. The court
+ * list is what bounds the statement: it is the browse facets' buckets, so it
+ * is the jurisdiction's largest courts and never the whole registry.
  *
  * `GROUP BY court` over the jurisdiction is what this avoids, for the reason
  * `shelf-courts.ts` records: priced as a cheap index-only scan, it reads every
@@ -190,55 +227,13 @@ export const readCaseLawCourtActivityQuery = definePublicLawSharedQuery(
     if (courts.length === 0) {
       return new Map();
     }
-    const sinceDay = new Date(now.getTime() - DAY_IN_MS);
-    const sinceWeek = new Date(now.getTime() - WEEK_IN_MS);
-    const scanFrom = new Date(sinceWeek.getTime() - CLOCK_SKEW_MARGIN_MS);
-    // Emitted only when a source is actually withheld, so the ordinary read
-    // stays on the index alone.
-    const published = sql`AND ${sql.raw(publishedCaseLawDecisionSqlFor("d"))}`;
-    const admitted =
-      excludedSourceIds.length === 0
-        ? sql``
-        : sql`AND d.source_id <> ALL(
-              SELECT value::uuid
-              FROM jsonb_array_elements_text(${JSON.stringify([...excludedSourceIds])}::text::jsonb) AS value
-            )`;
-
     const result: unknown = await withSharedStatementTimeout(
       tx,
       ACTIVITY_STATEMENT_TIMEOUT_MS,
       async () =>
-        await tx.execute(sql`
-      SELECT
-        named.court AS court,
-        to_json(latest.updated_at) #>> '{}' AS updated_at,
-        coalesce(recent.added_last_day, 0) AS added_last_day,
-        coalesce(recent.added_last_week, 0) AS added_last_week
-      FROM jsonb_array_elements_text(${JSON.stringify([...courts])}::text::jsonb)
-        WITH ORDINALITY AS named(court, ordinality)
-      LEFT JOIN LATERAL (
-        SELECT d.updated_at
-        FROM case_law_decisions d
-        WHERE d.country = ${country}
-          AND d.court = named.court
-          ${published}
-          ${admitted}
-        ORDER BY d.updated_at DESC
-        LIMIT 1
-      ) latest ON true
-      LEFT JOIN LATERAL (
-        SELECT
-          count(*) FILTER (WHERE d.created_at >= ${sinceDay}::timestamptz) AS added_last_day,
-          count(*) FILTER (WHERE d.created_at >= ${sinceWeek}::timestamptz) AS added_last_week
-        FROM case_law_decisions d
-        WHERE d.country = ${country}
-          AND d.court = named.court
-          AND d.updated_at >= ${scanFrom}::timestamptz
-          ${published}
-          ${admitted}
-      ) recent ON true
-      ORDER BY named.ordinality
-    `),
+        await tx.execute(
+          courtActivityStatement({ country, courts, excludedSourceIds, now }),
+        ),
     );
 
     const rows = executedRows(result).filter(isRecord);
@@ -263,6 +258,55 @@ export const readCaseLawCourtActivityQuery = definePublicLawSharedQuery(
     );
   },
 );
+
+/** The breakdown's statement; exported so the plan registry can EXPLAIN it. */
+export const courtActivityStatement = ({
+  country,
+  courts,
+  excludedSourceIds,
+  now,
+}: CourtActivityRead): SQL => {
+  const sinceDay = new Date(now.getTime() - DAY_IN_MS);
+  const sinceWeek = new Date(now.getTime() - WEEK_IN_MS);
+  const admitted = (sourceId: SQL) =>
+    excludedSourceIds.length === 0
+      ? sql`TRUE`
+      : sql`${sourceId} <> ALL(
+          SELECT value::uuid
+          FROM jsonb_array_elements_text(${JSON.stringify([...excludedSourceIds])}::text::jsonb) AS value
+        )`;
+  return sql`
+      SELECT
+        named.court AS court,
+        to_json(latest.updated_at) #>> '{}' AS updated_at,
+        coalesce(recent.added_last_day, 0) AS added_last_day,
+        coalesce(recent.added_last_week, 0) AS added_last_week
+      FROM jsonb_array_elements_text(${JSON.stringify([...courts])}::text::jsonb)
+        WITH ORDINALITY AS named(court, ordinality)
+      LEFT JOIN LATERAL (
+        SELECT latest_decision.updated_at
+        FROM ${caseLawPopulationProjections} AS latest_decision
+        WHERE latest_decision.publication = 'published'
+          AND latest_decision.country = ${country}
+          AND latest_decision.court = named.court
+          AND ${admitted(sql`latest_decision.source_id`)}
+        ORDER BY latest_decision.updated_at DESC
+        LIMIT 1
+      ) latest ON true
+      LEFT JOIN LATERAL (
+        SELECT
+          count(*) FILTER (WHERE recent_decision.created_at >= ${sinceDay}::timestamptz) AS added_last_day,
+          count(*) AS added_last_week
+        FROM ${caseLawPopulationProjections} AS recent_decision
+        WHERE recent_decision.publication = 'published'
+          AND recent_decision.country = ${country}
+          AND recent_decision.court = named.court
+          AND recent_decision.created_at >= ${sinceWeek}::timestamptz
+          AND ${admitted(sql`recent_decision.source_id`)}
+      ) recent ON true
+      ORDER BY named.ordinality
+    `;
+};
 
 /** The newer of two timestamps, either of which may be unknown. */
 const laterOf = (left: string | null, right: string | null): string | null => {
@@ -289,6 +333,8 @@ type CourtStatusRowsOptions = {
   activity: ReadonlyMap<string, CourtActivity>;
   /** The jurisdiction's whole searchable count, which the rows must sum to. */
   total: number;
+  /** Exact served court count, or null when the provider cannot enumerate it. */
+  courtCount: number | null;
 };
 
 const NO_ACTIVITY: CourtActivity = {
@@ -308,6 +354,7 @@ export const caseLawCourtStatusRows = ({
   activity,
   buckets,
   country,
+  courtCount,
   courtWeights,
   total,
 }: CourtStatusRowsOptions): CaseLawCourtStatusRow[] => {
@@ -317,15 +364,16 @@ export const caseLawCourtStatusRows = ({
   // and a bucket sum above it would be the projection contradicting itself.
   // Clamped rather than asserted, because the two are read separately and a
   // reindex may land between the reads.
-  const unlisted = Math.max(0, total - listed);
-  if (unlisted === 0) {
+  const otherDecisions = Math.max(0, total - listed);
+  if (otherDecisions === 0) {
     return rows;
   }
   rows.push({
-    type: "unlisted",
+    type: "other-courts",
     tier: "other",
-    listed: buckets.length,
-    decisions: unlisted,
+    courts:
+      courtCount === null ? null : Math.max(0, courtCount - buckets.length),
+    decisions: otherDecisions,
   });
   return rows;
 };
@@ -335,7 +383,10 @@ const courtRowsByTier = ({
   buckets,
   country,
   courtWeights,
-}: Omit<CourtStatusRowsOptions, "total">): CaseLawCourtStatusRow[] => {
+}: Omit<
+  CourtStatusRowsOptions,
+  "total" | "courtCount"
+>): CaseLawCourtStatusRow[] => {
   // A list per tier up front, so every tier has one to collect into and there
   // is no absent case to stand in for. A tier added to the union has to be
   // given one here before this compiles. Annotated, not inferred: empty

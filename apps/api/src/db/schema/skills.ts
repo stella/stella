@@ -1,21 +1,27 @@
-import { SKILL_RESOURCE_KINDS } from "@stll/skills/resource-kinds";
+import { denyStellaAccessPolicies } from "@/api/db/rls";
 
 import {
   agentSkillChildPolicies,
   agentSkillPolicies,
-  agentSkillRevisionPolicies,
   agentSkillResourcePolicies,
+  agentSkillRevisionPolicies,
   jsonb,
   organization,
   p,
   pUuid,
   safeOrganizationId,
   safeUuid,
+  safeWorkspaceId,
   sql,
-  user,
   timestamptz,
+  user,
 } from "./common";
-import { AGENT_SKILL_ORIGINS, AGENT_SKILL_SCOPES } from "./files-views";
+import { contacts, workspaces } from "./contacts";
+import {
+  AGENT_SKILL_INVOCATIONS,
+  AGENT_SKILL_ORIGINS,
+  AGENT_SKILL_SCOPES,
+} from "./files-views";
 
 const sqlValueList = (values: readonly string[]) =>
   sql.join(
@@ -47,6 +53,16 @@ export const agentSkills = p.pgTable(
     contentHash: p.varchar("content_hash", { length: 64 }).notNull(),
     body: p.text().notNull(),
     enabled: p.boolean().notNull().default(true),
+    invocation: p
+      .text("invocation", { enum: AGENT_SKILL_INVOCATIONS })
+      .notNull()
+      .default("auto"),
+    // A skill bound to one matter, or to one client (every matter whose
+    // `client_id` it is), is readable and usable only there; at most one is
+    // set. `agentSkillPolicies` enforces the reach, and
+    // `lib/agent-skills/binding.ts` decides where a model may use it.
+    boundWorkspaceId: safeWorkspaceId("bound_workspace_id"),
+    boundClientId: safeUuid<"contact">("bound_client_id"),
     // Optional slash-command handle. When set, the skill surfaces in
     // the chat slash menu. Uniqueness is enforced by partial indexes
     // below: team commands are unique per org, private commands are
@@ -71,6 +87,37 @@ export const agentSkills = p.pgTable(
       "agent_skills_origin_check",
       sql`${table.origin} IN (${sqlValueList(AGENT_SKILL_ORIGINS)})`,
     ),
+    p.check(
+      "agent_skills_invocation_check",
+      sql`${table.invocation} IN (${sqlValueList(AGENT_SKILL_INVOCATIONS)})`,
+    ),
+    p.check(
+      "agent_skills_single_binding_check",
+      sql`num_nonnulls(${table.boundWorkspaceId}, ${table.boundClientId}) <= 1`,
+    ),
+    // Composite references keep a binding inside the skill's organization.
+    p
+      .foreignKey({
+        columns: [table.boundWorkspaceId, table.organizationId],
+        foreignColumns: [workspaces.id, workspaces.organizationId],
+        name: "agent_skills_bound_workspace_fk",
+      })
+      .onDelete("cascade"),
+    p
+      .foreignKey({
+        columns: [table.organizationId, table.boundClientId],
+        foreignColumns: [contacts.organizationId, contacts.id],
+        name: "agent_skills_bound_client_fk",
+      })
+      .onDelete("cascade"),
+    p
+      .index("agent_skills_bound_workspace_idx")
+      .on(table.boundWorkspaceId)
+      .where(sql`bound_workspace_id IS NOT NULL`),
+    p
+      .index("agent_skills_bound_client_idx")
+      .on(table.boundClientId)
+      .where(sql`bound_client_id IS NOT NULL`),
     p
       .uniqueIndex("agent_skills_org_team_slug_uidx")
       .on(table.organizationId, table.slug)
@@ -111,19 +158,34 @@ export const agentSkillResources = p.pgTable(
       .notNull()
       .references(() => agentSkills.id, { onDelete: "cascade" }),
     path: p.varchar({ length: 512 }).notNull(),
-    kind: p.text("kind", { enum: SKILL_RESOURCE_KINDS }).notNull(),
+    // The file's text: what models read and the editor shows. Empty for a
+    // file that has no text (an image, an archive); its bytes are only in
+    // the original below.
     content: p.text().notNull(),
     sizeBytes: p.integer("size_bytes").notNull(),
+    // The file as it was uploaded or imported, byte for byte, in object
+    // storage; null for a file that was only ever text. A write that changes
+    // `content` drops it (trigger `agent_skill_resources_original_staleness`)
+    // and a dropped or deleted original is queued for erasure.
+    originalS3Key: p.text("original_s3_key"),
+    originalSha256: p.varchar("original_sha256", { length: 64 }),
+    originalSizeBytes: p.integer("original_size_bytes"),
+    originalMediaType: p.text("original_media_type"),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [
-    p.check(
-      "agent_skill_resources_kind_check",
-      sql`${table.kind} IN (${sqlValueList(SKILL_RESOURCE_KINDS)})`,
-    ),
     p
       .uniqueIndex("agent_skill_resources_skill_path_uidx")
       .on(table.skillId, table.path),
+    // Finds the row naming an original: the cleanup intent policy refuses a
+    // key a stored file already names. Built in the online phase.
+    p
+      .index("agent_skill_resources_original_s3_key_idx")
+      .on(table.originalS3Key)
+      .where(sql`original_s3_key IS NOT NULL`),
+    p
+      .index("agent_skill_resources_path_billing_trgm_idx")
+      .using("gin", sql`${table.path} gin_trgm_ops`),
     p.index("agent_skill_resources_skill_idx").on(table.skillId),
     p
       .index("agent_skill_resources_org_skill_idx")
@@ -323,6 +385,49 @@ export const agentSkillComments = p.pgTable(
   ],
 );
 
+const agentSkillOriginalCleanupOwnerAccess = sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.agent_skill_original_cleanup_requests'::regclass)`;
+
+/**
+ * Skill file originals to erase from object storage: recorded by triggers on
+ * `agent_skill_resources` in the transaction that deletes a row or drops its
+ * original, whatever deleted it (a file, a skill, an account or an
+ * organization). It has no foreign key because it must outlive those rows
+ * until the erasure succeeds; the cleanup task deletes a row once its
+ * objects are gone and backs a failed one off. Only the owner's trigger and
+ * the scheduler reach it.
+ */
+export const agentSkillOriginalCleanupRequests = p.pgTable.withRLS(
+  "agent_skill_original_cleanup_requests",
+  {
+    id: pUuid<"agentSkillOriginalCleanupRequest">()
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    organizationId: safeOrganizationId("organization_id").notNull(),
+    s3Keys: p.text("s3_keys").array().notNull(),
+    /** Erasures that failed; each one backs the next try off. */
+    attempts: p.integer().notNull().default(0),
+    /** When the cleanup task may next try. */
+    nextAttemptAt: timestamptz("next_attempt_at").notNull().defaultNow(),
+    /** Why the last attempt did not erase the objects. */
+    lastError: p.text("last_error"),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+  },
+  (table) => [
+    p.index("agent_skill_original_cleanup_due_idx").on(table.nextAttemptAt),
+    p.check(
+      "agent_skill_original_cleanup_attempts_nonnegative",
+      sql`attempts >= 0`,
+    ),
+    p.pgPolicy("agent_skill_original_cleanup_owner_access", {
+      for: "all",
+      to: "public",
+      using: agentSkillOriginalCleanupOwnerAccess,
+      withCheck: agentSkillOriginalCleanupOwnerAccess,
+    }),
+    ...denyStellaAccessPolicies(),
+  ],
+);
+
 // -- Usage Entitlements & Ledger --
 
 export const USAGE_ENTITLEMENT_STATUSES = [
@@ -361,6 +466,7 @@ export const USAGE_ACTION_TYPES = [
   "case_law",
   "background",
   "subagent",
+  "transcription",
 ] as const;
 export type UsageActionType = (typeof USAGE_ACTION_TYPES)[number];
 

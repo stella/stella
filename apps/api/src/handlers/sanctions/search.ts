@@ -1,11 +1,11 @@
 import { panic, Result } from "better-result";
-import { status, t } from "elysia";
-import type { Static } from "elysia";
+import * as v from "valibot";
 
 import { isCountryCode } from "@stll/country-codes";
 import { hasExcessQueryTokens, MAX_QUERY_TOKENS } from "@stll/sanctions";
 
 import { publicSanctionsResponseSchema } from "@/api/handlers/sanctions/search-response";
+import type { PublicSanctionsScreening } from "@/api/handlers/sanctions/search-response";
 import {
   ACCOUNT_ACCESS,
   createSafePublicHandler,
@@ -18,43 +18,39 @@ import { resolveSanctionsNameSubject } from "@/api/lib/business-registries/sanct
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { API_RATE_LIMITS } from "@/api/lib/limits";
 import { sanctionsPublicReadDb } from "@/api/lib/lists/sanctions/public-read-owner";
-import { screenPublicSanctionsSubject } from "@/api/lib/lists/sanctions/public-screening";
+import {
+  SANCTIONS_WARMING_RETRY_AFTER_SECONDS,
+  screenPublicSanctionsSubject,
+} from "@/api/lib/lists/sanctions/public-screening";
 import type { SanctionsPublicReadDb } from "@/api/lib/lists/sanctions/read-db";
+import { publicScreeningBusyAnswer } from "@/api/lib/lists/sanctions/screening-failure";
 import { SANCTIONS_SUBJECT_ERROR_MESSAGES } from "@/api/lib/lists/sanctions/screening-service";
 import type {
-  screenSanctionsSubject,
   SanctionsScreening,
   SanctionsScreeningSubject,
+  screenSanctionsSubject,
 } from "@/api/lib/lists/sanctions/screening-service";
-import { logger } from "@/api/lib/observability/logger";
 
-const bodySchema = t.Object(
-  {
-    subject: t.Union([
-      t.Object(
-        {
-          type: t.Literal("organization"),
-          name: t.String({ minLength: 1, maxLength: 512 }),
-          companyId: t.Optional(t.String({ minLength: 1, maxLength: 32 })),
-        },
-        { additionalProperties: false },
+const bodySchema = v.strictObject({
+  subject: v.union([
+    v.strictObject({
+      type: v.literal("organization"),
+      name: v.pipe(v.string(), v.minLength(1), v.maxLength(512)),
+      companyId: v.optional(
+        v.pipe(v.string(), v.minLength(1), v.maxLength(32)),
       ),
-      t.Object(
-        {
-          type: t.Literal("person"),
-          firstName: t.String({ minLength: 1, maxLength: 100 }),
-          lastName: t.String({ minLength: 1, maxLength: 100 }),
-          dateOfBirth: t.Optional(dateOfBirthSchema),
-          nationalityCodes: t.Optional(nationalityCodesSchema),
-        },
-        { additionalProperties: false },
-      ),
-    ]),
-  },
-  { additionalProperties: false },
-);
+    }),
+    v.strictObject({
+      type: v.literal("person"),
+      firstName: v.pipe(v.string(), v.minLength(1), v.maxLength(100)),
+      lastName: v.pipe(v.string(), v.minLength(1), v.maxLength(100)),
+      dateOfBirth: v.optional(dateOfBirthSchema),
+      nationalityCodes: v.optional(nationalityCodesSchema),
+    }),
+  ]),
+});
 
-type PublicSanctionsBody = Static<typeof bodySchema>;
+type PublicSanctionsBody = v.InferOutput<typeof bodySchema>;
 
 const invalidSubject = (message: string) =>
   Result.err(
@@ -120,19 +116,19 @@ const screeningUnavailable = () =>
     message: "Could not screen the sanctions lists",
   });
 
-/**
- * An expected admission refusal, answered as a response rather than a
- * `HandlerError`: a 5xx error is reported as a fault, and this is capacity.
- */
-const screeningBusy = () =>
-  status(503, {
-    code: "service_unavailable",
-    message: "Sanctions screening is busy; try again shortly",
-  });
+const screeningBusy = publicScreeningBusyAnswer;
 
 type PublicSanctionsSearchResult =
-  | SanctionsScreening
-  | ReturnType<typeof screeningBusy>;
+  PublicSanctionsScreening | ReturnType<typeof screeningBusy>;
+
+const toPublicScreening = (
+  screening: SanctionsScreening,
+): PublicSanctionsScreening => ({
+  ...screening,
+  retryAfterSeconds: screening.lists.some((list) => list.reason === "warming")
+    ? SANCTIONS_WARMING_RETRY_AFTER_SECONDS
+    : null,
+});
 
 // CPU admission is per API process, shared by all mounted public handlers.
 let activePublicScreenings = 0;
@@ -145,6 +141,7 @@ export const createPublicSanctionsSearchHandler = ({
 }: PublicSanctionsSearchOptions = {}) =>
   createSafePublicHandler(
     {
+      contract: "patch",
       accountAccess: ACCOUNT_ACCESS.sandbox,
       cache: { kind: "none" },
       mcp: { type: "internal", reason: "public_indexing" },
@@ -169,10 +166,6 @@ export const createPublicSanctionsSearchHandler = ({
         activePublicScreenings >=
         API_RATE_LIMITS.publicSanctionsSearch.maxConcurrent
       ) {
-        // Expected admission refusal: record only the bounded capacity, never identity.
-        logger.warn("sanctions.search.busy", {
-          maxConcurrent: API_RATE_LIMITS.publicSanctionsSearch.maxConcurrent,
-        });
         return Result.ok(screeningBusy());
       }
       activePublicScreenings += 1;
@@ -197,7 +190,7 @@ export const createPublicSanctionsSearchHandler = ({
             catch: screeningUnavailable,
           }),
         );
-        return result.mapError(
+        return result.map(toPublicScreening).mapError(
           (error) =>
             new HandlerError({
               status: 400,

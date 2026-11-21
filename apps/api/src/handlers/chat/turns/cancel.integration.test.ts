@@ -1,4 +1,4 @@
-import { RUN_CANCEL_REASON } from "@tanstack/ai";
+import { memoryStream, RUN_CANCEL_REASON } from "@tanstack/ai";
 import type { StreamChunk } from "@tanstack/ai";
 import { panic, Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
@@ -8,6 +8,7 @@ import {
   CHAT_CONTINUATION_REJECTED_ERROR_CODE,
   CHAT_TURN_NOT_OWNED_ERROR_CODE,
 } from "@stll/api-contract";
+import { CHAT_TOOL_EXECUTOR_METADATA_KEY } from "@stll/api-contract/chat";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import {
@@ -21,6 +22,7 @@ import {
   chatMessageContentFromMessage,
   chatMessageFromPersisted,
   toPersistableChatMessage,
+  toPersistedChatMessageContentV3,
 } from "@/api/handlers/chat/chat-message-parts";
 import {
   finalizeAssistantTurn,
@@ -41,10 +43,12 @@ import type { CreateDocumentToolOutput } from "@/api/handlers/chat/tools/create-
 import { CREATE_DOCUMENT_TOOL_NAME } from "@/api/handlers/chat/tools/native-chat-tool-names";
 import cancelTurn from "@/api/handlers/chat/turns/cancel";
 import type { ChatPart, ChatTurnOutcome } from "@/api/handlers/chat/types";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { createBackgroundAuditRecorder } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { withChatRunPings } from "@/api/lib/chat/chat-run-pings";
 import { EMPTY_CHAT_THREAD_NAMES_READ } from "@/api/lib/chat/thread-names";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { createApprovalHarness } from "@/api/tests/helpers/chat-approval-harness";
@@ -53,6 +57,7 @@ import {
   findOfferedInteractions,
   findTurnOutcomeMismatches,
 } from "@/api/tests/helpers/chat-thread-invariants";
+import { HELD_TEST_STREAM_BINDING } from "@/api/tests/helpers/sse-stream-binding";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 import {
@@ -121,6 +126,7 @@ const seedAcceptedTurn = async () => {
     workspaceId: ids.wsA1,
   });
   const acceptance = createChatTurnAcceptance({
+    source: { type: "member" },
     organizationId: ids.orgA,
     threadId,
     userId: ids.userA1,
@@ -128,20 +134,27 @@ const seedAcceptedTurn = async () => {
     workspaceId: ids.wsA1,
   });
   unwrap(
-    await safeDb(async (tx) => {
-      await tx.insert(chatMessages).values({
-        content: { data: [{ text: "Draft it", type: "text" }], version: 1 },
-        id: userMessageId,
-        role: "user",
-        threadId,
-        userId: ids.userA1,
-        workspaceId: ids.wsA1,
-      });
-      expect(await insertChatTurnAcceptanceOnTx({ acceptance, tx })).toEqual({
-        superseded: undefined,
-        type: "accepted",
-      });
-    }),
+    await withChatRunPings(
+      async (pings) =>
+        await safeDb(async (tx) => {
+          await tx.insert(chatMessages).values({
+            content: toPersistedChatMessageContentV3({
+              data: [{ content: "Draft it", type: "text" }],
+            }),
+            id: userMessageId,
+            role: "user",
+            threadId,
+            userId: ids.userA1,
+            workspaceId: ids.wsA1,
+          });
+          expect(
+            await insertChatTurnAcceptanceOnTx({ pings, acceptance, tx }),
+          ).toEqual({
+            superseded: undefined,
+            type: "accepted",
+          });
+        }),
+    ),
   );
   return { threadId, turnId: acceptance.id, userMessageId };
 };
@@ -178,6 +191,7 @@ const COMPLETED_CALL = {
   output: { templates: [] },
   state: "complete",
   type: "tool-call",
+  metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "server" },
 } satisfies ChatPart;
 const CLIENT_CALL = {
   arguments: JSON.stringify({ name: "NDA", source: "@title NDA" }),
@@ -186,6 +200,7 @@ const CLIENT_CALL = {
   name: "create-document",
   state: "input-complete",
   type: "tool-call",
+  metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
 } satisfies ChatPart;
 const APPROVAL_CALL = {
   approval: { id: "call-delete", needsApproval: true },
@@ -195,6 +210,7 @@ const APPROVAL_CALL = {
   name: "mcp__external__delete",
   state: "approval-requested",
   type: "tool-call",
+  metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "server" },
 } satisfies ChatPart;
 
 const seedAwaitingTurn = async () => {
@@ -211,24 +227,28 @@ const seedAwaitingTurn = async () => {
     role: "assistant",
   });
   unwrap(
-    await safeDb(async (tx) => {
-      await tx.insert(chatMessages).values({
-        content: chatMessageContentFromMessage(message),
-        id: assistantMessageId,
-        role: "assistant",
-        threadId: seeded.threadId,
-        userId: ids.userA1,
-        workspaceId: ids.wsA1,
-      });
-      expect(
-        await settleChatTurnOnTx({
-          assistantMessageId,
-          execution: seeded.execution,
-          outcome: { interaction, type: "awaiting-user" },
-          tx,
+    await withChatRunPings(
+      async (pings) =>
+        await safeDb(async (tx) => {
+          await tx.insert(chatMessages).values({
+            content: chatMessageContentFromMessage(message),
+            id: assistantMessageId,
+            role: "assistant",
+            threadId: seeded.threadId,
+            userId: ids.userA1,
+            workspaceId: ids.wsA1,
+          });
+          expect(
+            await settleChatTurnOnTx({
+              pings,
+              assistantMessageId,
+              execution: seeded.execution,
+              outcome: { interaction, type: "awaiting-user" },
+              tx,
+            }),
+          ).toBe("settled");
         }),
-      ).toBe("settled");
-    }),
+    ),
   );
   return { ...seeded, assistantMessageId };
 };
@@ -254,7 +274,8 @@ const stop = async ({
         `http://localhost/v1/chat/threads/${threadId}/turns/${turnId}/cancel`,
         { method: "POST" },
       ),
-      route: "/v1/chat/threads/:threadId/turns/:turnId/cancel",
+      route:
+        "/v1/chat/threads/:threadId/turns/:turnId/cancel" satisfies ApiRoutePath,
       safeDb: as,
       session: { activeOrganizationId: ids.orgA },
       set,
@@ -302,8 +323,11 @@ const recordStop = async ({
   turnId: SafeId<"chatTurn">;
 }) =>
   unwrap(
-    await safeDb(
-      async (tx) => await stopChatTurnOnTx({ threadId, tx, turnId }),
+    await withChatRunPings(
+      async (pings) =>
+        await safeDb(
+          async (tx) => await stopChatTurnOnTx({ pings, threadId, tx, turnId }),
+        ),
     ),
   );
 
@@ -326,7 +350,7 @@ const produceUntilCut = ({
 }) => {
   const run = new ChatTurnRun({
     connectors: undefined,
-    deadlineMs: 60_000,
+    bound: { type: "provider-deadline", deadlineMs: 60_000 },
     mode: "raw",
     heartbeat,
     owner: {
@@ -365,7 +389,11 @@ const produceUntilCut = ({
       };
     });
   };
-  const response = run.produce(output());
+  const response = run.produce(
+    output(),
+    memoryStream({ runId: Bun.randomUUIDv7() }),
+    HELD_TEST_STREAM_BINDING,
+  );
   return { response, run };
 };
 
@@ -423,6 +451,7 @@ describe("stopping a chat turn", () => {
         name: CLIENT_CALL.name,
         state: "error",
         type: "tool-call",
+        metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
       },
     ]);
     expect((await readTurn(turnId)).status).toBe("cancelled");
@@ -671,77 +700,105 @@ describe("a running turn's owner, once the user asked to stop", () => {
     },
   );
 
-  /**
-   * Five stops and the owner's finish, the finish starting after `stopsFirst`
-   * of the stops. Returns how the turn ended once they all have.
-   */
-  const raceStopsWithFinish = async (stopsFirst: number) => {
+  const seedStopAndFinish = async () => {
     const { execution, threadId, turnId } = await seedRunningTurn();
     const messageId = toSafeId<"chatMessage">(Bun.randomUUIDv7());
     const finish = async () =>
-      await finalizeAssistantTurn({
-        acceptedSendMode: null,
-        threadNames: NO_THREAD_NAMES,
-        existingIds: new Set(),
-        execution,
-        outcome: { type: "completed" },
-        recordAuditEvent: createBackgroundAuditRecorder({
-          execution: {
-            performer: { id: ids.userA1, type: "user" },
-            trigger: { type: "direct" },
-          },
-          organizationId: ids.orgA,
+      unwrap(
+        await finalizeAssistantTurn({
+          acceptedSendMode: null,
+          threadNames: NO_THREAD_NAMES,
+          existingIds: new Set(),
+          execution,
+          outcome: { type: "completed" },
+          recordAuditEvent: createBackgroundAuditRecorder({
+            execution: {
+              performer: { id: ids.userA1, type: "user" },
+              trigger: { type: "direct" },
+            },
+            organizationId: ids.orgA,
+            userId: ids.userA1,
+            workspaceId: ids.wsA1,
+          }),
+          responseMessage: toPersistableChatMessage({
+            id: messageId,
+            parts: [TEXT_PART],
+            role: "assistant",
+          }),
+          safeDb,
+          threadId,
           userId: ids.userA1,
           workspaceId: ids.wsA1,
+          indexThread: async () => {},
         }),
-        responseMessage: toPersistableChatMessage({
-          id: messageId,
-          parts: [TEXT_PART],
-          role: "assistant",
-        }),
-        safeDb,
-        threadId,
-        userId: ids.userA1,
-        workspaceId: ids.wsA1,
-        indexThread: async () => {},
-      });
-    const racers = Array.from({ length: 6 }, (_, index) =>
-      index === stopsFirst
-        ? async () => await finish()
-        : async () => await stop({ threadId, turnId }),
-    );
-    await Promise.all(racers.map(async (run) => await run()));
+      );
+    const requestStop = async () => {
+      const response = await stop({ threadId, turnId });
+      expect(response.status).toBeOneOf([200, 202]);
+      return response;
+    };
 
-    const row = await readTurn(turnId);
-    // Exactly one outcome: the finish, or the stop that overtook it.
-    expect(["cancelled", "completed"]).toContain(row.status);
-    expect(await findTurnOutcomeMismatches({ db: testDb, threadId })).toEqual(
-      [],
-    );
-    // One stored message, audited once; a stop audits nothing.
-    expect(
-      await testDb
-        .select({ id: auditLogs.id })
-        .from(auditLogs)
-        .where(eq(auditLogs.resourceId, messageId)),
-    ).toHaveLength(1);
-    // A later stop reports the outcome and never moves the first time.
-    expect((await stop({ threadId, turnId })).status).toBe(200);
-    const after = await readTurn(turnId);
-    expect({
-      requested: after.cancelRequestedAt,
-      status: after.status,
-    }).toEqual({ requested: row.cancelRequestedAt, status: row.status });
-    return row.status;
+    const expectSettled = async () => {
+      const row = await readTurn(turnId);
+      // Exactly one outcome: the finish, or the stop that overtook it.
+      expect(["cancelled", "completed"]).toContain(row.status);
+      expect(await findTurnOutcomeMismatches({ db: testDb, threadId })).toEqual(
+        [],
+      );
+      // One stored message, audited once; a stop audits nothing.
+      expect(
+        await testDb.query.chatMessages.findMany({
+          where: { threadId: { eq: threadId }, role: { eq: "assistant" } },
+          columns: { id: true },
+        }),
+      ).toEqual([{ id: messageId }]);
+      expect(
+        await testDb
+          .select({ id: auditLogs.id })
+          .from(auditLogs)
+          .where(eq(auditLogs.resourceId, messageId)),
+      ).toHaveLength(1);
+      // A later stop reports the outcome and never moves the first time.
+      expect(await requestStop()).toEqual({
+        status: 200,
+        body: {
+          turn: {
+            id: turnId,
+            status: row.status,
+            ...(row.status === "cancelled" ? { reason: "user-stop" } : {}),
+          },
+        },
+      });
+      const after = await readTurn(turnId);
+      expect(after).toEqual(row);
+      return row.status;
+    };
+    return { expectSettled, finish, requestStop };
   };
 
   test("settles once when stops race its finish", async () => {
-    const outcomes = new Set<string>();
     for (const stopsFirst of [0, 1, 3, 5]) {
-      outcomes.add(await raceStopsWithFinish(stopsFirst));
+      const { expectSettled, finish, requestStop } = await seedStopAndFinish();
+      const racers = Array.from({ length: 6 }, (_, index) =>
+        index === stopsFirst ? finish : requestStop,
+      );
+      await Promise.all(racers.map(async (run) => await run()));
+      await expectSettled();
     }
-    // The fixture must reach both orders.
-    expect([...outcomes].toSorted()).toEqual(["cancelled", "completed"]);
+  });
+
+  test("settles as cancelled when the stop finishes before the owner", async () => {
+    const { expectSettled, finish, requestStop } = await seedStopAndFinish();
+    await requestStop();
+    expect((await finish()).outcome).toEqual(USER_STOP);
+    expect(await expectSettled()).toBe("cancelled");
+  });
+
+  test("stays completed when the owner finishes before the stop", async () => {
+    const { expectSettled, finish, requestStop } = await seedStopAndFinish();
+    expect((await finish()).outcome).toEqual({ type: "completed" });
+    await requestStop();
+    expect(await expectSettled()).toBe("completed");
   });
 });
 
@@ -751,6 +808,7 @@ describe("the thread a stopped turn belongs to", () => {
     expect((await stop({ threadId, turnId })).status).toBe(200);
     // A new message starts the thread's next turn.
     const next = createChatTurnAcceptance({
+      source: { type: "member" },
       organizationId: ids.orgA,
       threadId,
       userId: ids.userA1,
@@ -758,19 +816,28 @@ describe("the thread a stopped turn belongs to", () => {
       workspaceId: ids.wsA1,
     });
     unwrap(
-      await safeDb(async (tx) => {
-        await tx.insert(chatMessages).values({
-          content: { data: [{ text: "Next", type: "text" }], version: 1 },
-          id: next.userMessageId,
-          role: "user",
-          threadId,
-          userId: ids.userA1,
-          workspaceId: ids.wsA1,
-        });
-        expect(
-          await insertChatTurnAcceptanceOnTx({ acceptance: next, tx }),
-        ).toMatchObject({ type: "accepted" });
-      }),
+      await withChatRunPings(
+        async (pings) =>
+          await safeDb(async (tx) => {
+            await tx.insert(chatMessages).values({
+              content: toPersistedChatMessageContentV3({
+                data: [{ content: "Next", type: "text" }],
+              }),
+              id: next.userMessageId,
+              role: "user",
+              threadId,
+              userId: ids.userA1,
+              workspaceId: ids.wsA1,
+            });
+            expect(
+              await insertChatTurnAcceptanceOnTx({
+                pings,
+                acceptance: next,
+                tx,
+              }),
+            ).toMatchObject({ type: "accepted" });
+          }),
+      ),
     );
 
     expect((await stop({ threadId, turnId })).body).toEqual({

@@ -1,4 +1,4 @@
-import { panic } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 
 import type { ConditionNode } from "@stll/conditions";
 
@@ -17,6 +17,8 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { parseStoredCondition } from "@/api/lib/conditions/parse-stored";
 import { LIMITS } from "@/api/lib/limits";
 import { brandPersistedPropertyId } from "@/api/lib/safe-id-boundaries";
+import type { AnswerShape } from "@/api/lib/workflow/ai-answer-schema";
+import { answerShapeForRule } from "@/api/lib/workflow/position-runtime";
 
 /**
  * Whether a property is queued for the workflow to (re)compute it.
@@ -58,6 +60,7 @@ type BatchPropertyBase = {
 // An extraction column the LLM fills from the document.
 export type AIBatchProperty = BatchPropertyBase & {
   tool: AIModelTool;
+  answerShape: AnswerShape;
 };
 
 // A derived verdict column graded after its ASK extraction (see
@@ -90,6 +93,12 @@ export type PropertyBatch = {
 
 export type ExecutionLevel = PropertyBatch[];
 
+class ComputedColumnPlanError extends TaggedError("ComputedColumnPlanError")<{
+  message: string;
+  code: "ai-column-input-required";
+  propertyIds: string[];
+}> {}
+
 export type ExecutionPlanProperty = {
   id: SafeId<"property">;
   status: PropertyStatus;
@@ -109,6 +118,8 @@ type DependencyGraph = {
   inDegree: Map<string, number>;
   dependents: Map<string, string[]>;
   propertyIds: Set<string>;
+  /** The shape each verdict column asks of the ask column it reads. */
+  answerShapeByAskId: Map<string, AnswerShape>;
 };
 
 type ExecutionPlanData = {
@@ -208,7 +219,33 @@ export const buildDependencyGraph = ({
     dependents.get(edge.dependsOnPropertyId)?.push(edge.propertyId);
   }
 
+  // An ask read by several verdicts answers in the shape they all accept. A
+  // text answer cannot be both a summary and the value a check reads, so it
+  // stays the value. Any other type answers in that type on every shape, so it
+  // takes the shape that cites every block a tier match needs.
+  const textPropertyIds = new Set<string>(
+    properties
+      .filter(({ content }) => content.type === "text")
+      .map(({ id }) => id),
+  );
+  const answerShapeByAskId = new Map<string, AnswerShape>();
+  for (const { tool } of properties) {
+    if (tool.type !== "playbook-verdict") {
+      continue;
+    }
+    const shape = answerShapeForRule(tool.rule);
+    const shared = answerShapeByAskId.get(tool.askPropertyId);
+    const sharedByBoth = textPropertyIds.has(tool.askPropertyId)
+      ? "value"
+      : "clause-summary";
+    answerShapeByAskId.set(
+      tool.askPropertyId,
+      shared === undefined || shared === shape ? shape : sharedByBoth,
+    );
+  }
+
   return {
+    answerShapeByAskId,
     propertyDependenciesMap,
     dependsOn,
     inDegree,
@@ -264,7 +301,11 @@ export const buildLevelBatches = (
     // cannot distribute AIModelTool | PlaybookVerdictTool across the spread.
     const computed = signatureToProperties.get(signature);
     if (property.tool.type === "ai-model") {
-      computed?.push({ ...base, tool: property.tool });
+      computed?.push({
+        ...base,
+        tool: property.tool,
+        answerShape: graph.answerShapeByAskId.get(propId) ?? "value",
+      });
     }
     if (property.tool.type === "playbook-verdict") {
       computed?.push({ ...base, tool: property.tool });
@@ -288,7 +329,24 @@ export const buildLevelBatches = (
 export const getPropertyExecutionPlan = ({
   properties,
   dependencies,
-}: ExecutionPlanData): ExecutionLevel[] => {
+}: ExecutionPlanData): Result<ExecutionLevel[], ComputedColumnPlanError> => {
+  const inputlessComputedPropertyIds = properties
+    .filter(
+      ({ id, tool }) =>
+        (tool.type === "ai-model" || tool.type === "playbook-verdict") &&
+        !dependencies.some(({ propertyId }) => propertyId === id),
+    )
+    .map(({ id }) => id);
+  if (inputlessComputedPropertyIds.length > 0) {
+    return Result.err(
+      new ComputedColumnPlanError({
+        code: "ai-column-input-required",
+        message: "Stored computed columns have no input dependencies",
+        propertyIds: inputlessComputedPropertyIds,
+      }),
+    );
+  }
+
   const graph = buildDependencyGraph({ properties, dependencies });
   const propertiesById = new Map(properties.map((p) => [p.id, p]));
 
@@ -314,6 +372,6 @@ export const getPropertyExecutionPlan = ({
     currentLevelIds = nextLevelIds;
   }
 
-  // Remove the first level, which has only properties without inputs
-  return levels.slice(1);
+  // The first level contains user-entered source properties only.
+  return Result.ok(levels.slice(1));
 };

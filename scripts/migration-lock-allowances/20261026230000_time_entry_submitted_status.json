@@ -1,0 +1,3 @@
+{
+  "add-constraint": "The widened internal shape CHECK is added NOT VALID without scanning rows; every existing row satisfies it because it only adds the submitted status, new writes are checked at once, and validation runs online later, under a 1s lock_timeout and 5s statement_timeout."
+}

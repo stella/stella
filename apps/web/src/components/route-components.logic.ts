@@ -3,31 +3,18 @@ import { panic } from "better-result";
 import type { ClientAuthStatus } from "@/hooks/use-client-auth-status";
 import { APIError } from "@/lib/errors/api";
 import { AuthClientError } from "@/lib/errors/auth";
-import { isStaleDeploymentLoadError } from "@/lib/preload-error-recovery";
+import { isNativeFetchFailure } from "@/lib/errors/native-fetch-failure";
+import { recoverFromStaleDeploymentLoad } from "@/lib/preload-error-recovery";
 import { CriticalQueryTimeoutError } from "@/lib/react-query";
 
-/** Network errors that indicate a transient connectivity
- *  issue (API down, DNS failure, etc.).
- *  Message varies by browser engine:
- *  - Chromium: "Failed to fetch"
- *  - Firefox:  "NetworkError when attempting to fetch resource."
- *  - Safari:   "Load failed" */
-const NETWORK_ERROR_MESSAGES = Object.freeze([
-  "Failed to fetch",
-  "NetworkError when attempting to fetch resource.",
-  "Load failed",
-]);
-
 export type RouteErrorRecovery =
-  | { type: "reload-page" }
-  | { type: "retry-route" };
+  { type: "reload-page" } | { type: "retry-route" };
 
 export const resolveRouteErrorRecovery = (
-  error: unknown,
-): RouteErrorRecovery =>
-  isStaleDeploymentLoadError(error)
-    ? { type: "reload-page" }
-    : { type: "retry-route" };
+  _error: unknown,
+): RouteErrorRecovery => ({
+  type: "retry-route",
+});
 
 type RecoverRouteErrorOptions = {
   error: unknown;
@@ -42,6 +29,22 @@ export const recoverRouteError = async ({
   reloadPage,
   retryRoute,
 }: RecoverRouteErrorOptions): Promise<void> => {
+  const classification = await recoverFromStaleDeploymentLoad(error);
+  if (classification !== null) {
+    switch (classification.type) {
+      case "build-skew":
+        await recordRetryStarted("reload-page");
+        return;
+      case "not-skew":
+        break;
+      default:
+        classification satisfies never;
+        return panic(
+          `Unhandled failed chunk classification: ${String(classification)}`,
+        );
+    }
+  }
+
   const recovery = resolveRouteErrorRecovery(error);
   const retryDispatch = recordRetryStarted(recovery.type);
   switch (recovery.type) {
@@ -63,9 +66,7 @@ export const recoverRouteError = async ({
 };
 
 export type RouteErrorSupport =
-  | { type: "report" }
-  | { type: "administrator" }
-  | { type: "none" };
+  { type: "report" } | { type: "administrator" } | { type: "none" };
 
 type ResolveRouteErrorSupportOptions = {
   deployment: "hosted" | "selfHosted";
@@ -98,7 +99,5 @@ export const isNetworkError = (error: unknown): boolean => {
   if (APIError.is(error) || AuthClientError.is(error)) {
     return error.status === 0;
   }
-  return (
-    error instanceof TypeError && NETWORK_ERROR_MESSAGES.includes(error.message)
-  );
+  return isNativeFetchFailure(error);
 };

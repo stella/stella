@@ -1,14 +1,15 @@
 import { Result } from "better-result";
 
+import { envBase } from "@/api/env-base";
 import { HealthCheckError } from "@/api/lib/errors/tagged-errors";
 import { probeDatabase } from "@/api/lib/health/probe-database";
 import { probeDocumentConverter } from "@/api/lib/health/probe-document-converter";
 import { createRedisClient } from "@/api/lib/redis-client";
 import {
   deleteS3ObjectWithSignal,
-  getS3ObjectWithSignal,
   listS3ObjectPage,
   putTemporaryS3ObjectWithSignal,
+  readS3ObjectBounded,
 } from "@/api/lib/s3";
 import { withTimeout } from "@/api/lib/with-timeout";
 
@@ -29,10 +30,18 @@ export const API_READINESS_DEPENDENCIES = Object.values(READINESS_DEPENDENCY);
 type ReadinessProbe = (signal: AbortSignal) => Promise<void>;
 export type ReadinessProbes = Record<ReadinessDependency, ReadinessProbe>;
 export type ReadinessOutcome =
-  | { status: "ready" }
-  | { status: "not-ready"; failed: ReadinessDependency[] };
+  { status: "ready" } | { status: "not-ready"; failed: ReadinessDependency[] };
 
 const PROBE_TIMEOUT_MS = 5000;
+const READINESS_TIMEOUT_LABEL = {
+  [READINESS_DEPENDENCY.database]: "database readiness probe",
+  [READINESS_DEPENDENCY.documentConverter]:
+    "document-converter readiness probe",
+  [READINESS_DEPENDENCY.objectStorage]: "object-storage readiness probe",
+  [READINESS_DEPENDENCY.rawSourceErasure]: "raw-source-erasure readiness probe",
+  [READINESS_DEPENDENCY.redis]: "redis readiness probe",
+  [READINESS_DEPENDENCY.scheduledJobs]: "scheduled-jobs readiness probe",
+} as const satisfies Record<ReadinessDependency, string>;
 // Written with the temporary-upload tag, so readiness also proves the task may
 // tag objects, which every server-side temporary write depends on. The marker
 // expires with the bucket lifecycle and is rewritten; the key version moved
@@ -100,7 +109,12 @@ export const probeObjectStorageReadiness = async (
 
 const objectStorageReadinessProbe = {
   read: async (signal: AbortSignal) => {
-    await getS3ObjectWithSignal(S3_READINESS_KEY, signal);
+    await readS3ObjectBounded({
+      bucket: envBase.S3_BUCKET,
+      key: S3_READINESS_KEY,
+      maxBytes: S3_READINESS_BYTES.byteLength,
+      signal,
+    });
   },
   write: async (signal: AbortSignal) => {
     await putTemporaryS3ObjectWithSignal(
@@ -201,7 +215,7 @@ export const runReadinessProbes = async (
       const result = await Result.tryPromise({
         try: async () =>
           await withTimeout(probes[dependency], {
-            label: `${dependency} readiness probe`,
+            label: READINESS_TIMEOUT_LABEL[dependency],
             timeoutMs,
           }),
         catch: (cause) => cause,

@@ -1,10 +1,26 @@
-import { describe, expect, test } from "bun:test";
-import { ElysiaCustomStatusResponse } from "elysia/error";
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { eq } from "drizzle-orm";
 
 import type { ScopedDb } from "@/api/db/safe-db";
+import {
+  documentProcessingRuns,
+  entityVersions,
+  extractedContent,
+} from "@/api/db/schema";
+import { createMembershipScopedDb, markRlsDatabase } from "@/api/db/scoped";
+import { envBase } from "@/api/env-base";
+import { HttpStatusResponse } from "@/api/http/status";
 import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
+import { createOcrSearchablePdfKey } from "@/api/lib/file-key";
+import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import {
+  createTestIds,
+  setupRlsTestData,
+} from "@/api/tests/security/rls-helpers";
+import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
+import type { TestDatabase } from "@/api/tests/security/test-utils";
 
 import { readOcrExport } from "./ocr-export";
 
@@ -13,73 +29,60 @@ const workspaceId = toSafeId<"workspace">("ws_ocr_export");
 const fieldId = toSafeId<"field">("field_ocr_export");
 const entityId = toSafeId<"entity">("entity_ocr_export");
 const runId = toSafeId<"documentProcessingRun">("run_ocr_export");
+const userId = toSafeId<"user">("user_ocr_export");
 
 describe("OCR text export", () => {
-  test("returns the current projection as UTF-8 text and audits the download", async () => {
+  test("a searchable PDF export never decrypts the extracted text", async () => {
+    const fake = startFakeS3();
+    let decryptions = 0;
     let scopedDbCall = 0;
-    const events: AuditEvent[] = [];
-    const scopedDb = asTestRaw<ScopedDb>(
-      async (callback: (tx: object) => Promise<unknown>) => {
-        scopedDbCall += 1;
-        if (scopedDbCall === 1) {
-          return [
-            {
-              ciphertext: Buffer.from("Příliš žluťoučký kůň"),
+    try {
+      const scopedDb = asTestRaw<ScopedDb>(
+        async (callback: (tx: object) => Promise<unknown>) => {
+          scopedDbCall += 1;
+          if (scopedDbCall === 1) {
+            return {
               content: { fileName: "smlouva.pdf", type: "file" },
               entityId,
-              iv: Buffer.alloc(12),
               ocrRunId: runId,
-            },
-          ];
-        }
-        return await callback({});
-      },
-    );
-    const recordAuditEvent: AuditRecorder = async (_tx, event) => {
-      if (Array.isArray(event)) {
-        events.push(...event);
-      } else {
-        events.push(event);
-      }
-    };
-
-    const response = await readOcrExport({
-      fieldId,
-      format: "text",
-      organizationId,
-      recordAuditEvent,
-      scopedDb,
-      workspaceId,
-    });
-
-    expect(response).toBeInstanceOf(Response);
-    if (!(response instanceof Response)) {
-      return;
+              readText: async () => {
+                decryptions += 1;
+                return await Promise.reject(new Error("text unavailable"));
+              },
+            };
+          }
+          return await callback({});
+        },
+      );
+      const response = await readOcrExport({
+        source: { kind: "request", sessionId: "fixture-session" },
+        readSessionAuthority: async () => null,
+        fieldId,
+        format: "searchable-pdf",
+        organizationId,
+        recordAuditEvent: async () => await Promise.resolve(),
+        scopedDb,
+        userId,
+        workspaceId,
+      });
+      // No stored PDF in the fake store: the export answers from metadata alone.
+      expect(response).toBeInstanceOf(HttpStatusResponse);
+      expect(decryptions).toBe(0);
+    } finally {
+      fake.stop();
     }
-    expect(await response.text()).toBe("Příliš žluťoučký kůň");
-    expect(response.headers.get("content-type")).toBe(
-      "text/plain; charset=utf-8",
-    );
-    expect(response.headers.get("content-disposition")).toContain(
-      'filename="smlouva.txt"',
-    );
-    expect(events).toEqual([
-      expect.objectContaining({
-        action: "download",
-        metadata: { fieldId, format: "text" },
-        resourceId: entityId,
-        resourceType: "entity",
-      }),
-    ]);
   });
 
   test("returns 404 without auditing when no tenant-scoped current projection exists", async () => {
     let audited = false;
-    const scopedDb = asTestRaw<ScopedDb>(async () => []);
+    const scopedDb = asTestRaw<ScopedDb>(async () => null);
 
     const response = await readOcrExport({
+      source: { kind: "request", sessionId: "fixture-session" },
+      readSessionAuthority: async () => null,
       fieldId,
       format: "text",
+      userId,
       organizationId,
       recordAuditEvent: async () => {
         audited = true;
@@ -88,10 +91,270 @@ describe("OCR text export", () => {
       workspaceId,
     });
 
-    expect(response).toBeInstanceOf(ElysiaCustomStatusResponse);
-    if (response instanceof ElysiaCustomStatusResponse) {
+    expect(response).toBeInstanceOf(HttpStatusResponse);
+    if (response instanceof HttpStatusResponse) {
       expect(response.code).toBe(404);
     }
     expect(audited).toBe(false);
+  });
+});
+
+describe("OCR text export matter access", () => {
+  const ids = createTestIds();
+  const ocrRunId = toSafeId<"documentProcessingRun">(Bun.randomUUIDv7());
+  let database: TestDatabase;
+
+  beforeAll(async () => {
+    database = await getTestDb();
+    await setupRlsTestData(database, ids);
+    await database.insert(documentProcessingRuns).values({
+      id: ocrRunId,
+      organizationId: ids.orgA,
+      workspaceId: ids.wsA1,
+      entityId: ids.entityA1,
+      entityVersionId: ids.entityVersionA1,
+      fieldId: ids.fileFieldA1,
+      sourceFileId: ids.fileObjectA1,
+      sourceSha256Hex: "a".repeat(64),
+      kind: "ocr",
+      requestSource: "upload",
+      status: "succeeded",
+    });
+    await database
+      .update(extractedContent)
+      .set({
+        ocrRunId,
+        ocrPayloadCiphertext: Buffer.from("page geometry"),
+        ocrPayloadIv: Buffer.alloc(12),
+      })
+      .where(eq(extractedContent.entityId, ids.entityA1));
+  }, 120_000);
+
+  afterAll(async () => {
+    await releaseTestDb();
+  });
+
+  const memberScopedDb = ({
+    memberId,
+    workspaceIds,
+  }: {
+    memberId: typeof ids.userA1;
+    workspaceIds: (typeof ids.wsA1)[];
+  }) =>
+    asTestRaw<ScopedDb>(
+      createMembershipScopedDb(markRlsDatabase(database), {
+        organizationId: ids.orgA,
+        serverValidatedWorkspaceIds: workspaceIds,
+        userId: memberId,
+      }),
+    );
+
+  const read = async ({
+    memberId,
+    workspaceIds,
+    format = "text",
+    scopedDb = memberScopedDb({ memberId, workspaceIds }),
+    recordAuditEvent = async () => undefined,
+  }: {
+    memberId: typeof ids.userA1;
+    workspaceIds: (typeof ids.wsA1)[];
+    format?: "searchable-pdf" | "text";
+    scopedDb?: ScopedDb;
+    recordAuditEvent?: AuditRecorder;
+  }) =>
+    await readOcrExport({
+      source: { kind: "request", sessionId: "fixture-session" },
+      readSessionAuthority: async () => null,
+      fieldId: ids.fileFieldA1,
+      format,
+      organizationId: ids.orgA,
+      recordAuditEvent,
+      scopedDb,
+      userId: memberId,
+      workspaceId: ids.wsA1,
+    });
+
+  const withStoredSearchablePdf = async (run: () => Promise<void>) => {
+    const fake = startFakeS3();
+    try {
+      fake.put(
+        envBase.S3_BUCKET,
+        createOcrSearchablePdfKey({
+          organizationId: ids.orgA,
+          workspaceId: ids.wsA1,
+          runId: ocrRunId,
+        }),
+        new TextEncoder().encode("%PDF-1.7"),
+        "application/pdf",
+      );
+      await run();
+    } finally {
+      fake.stop();
+    }
+  };
+
+  test("a searchable PDF link for a live version expires within a minute", async () => {
+    await withStoredSearchablePdf(async () => {
+      const response = await read({
+        format: "searchable-pdf",
+        memberId: ids.userA1,
+        workspaceIds: [ids.wsA1],
+      });
+      expect(response).toBeInstanceOf(Response);
+      if (!(response instanceof Response)) {
+        return;
+      }
+      expect(response.status).toBe(302);
+      const location = new URL(response.headers.get("location") ?? "");
+      const expiresIn = Number(location.searchParams.get("X-Amz-Expires"));
+      expect(expiresIn).toBeGreaterThan(0);
+      expect(expiresIn).toBeLessThanOrEqual(60);
+    });
+  });
+
+  test("a version deleted while the export is prepared issues no link", async () => {
+    await withStoredSearchablePdf(async () => {
+      const scopedDb = memberScopedDb({
+        memberId: ids.userA1,
+        workspaceIds: [ids.wsA1],
+      });
+      let reads = 0;
+      const deletingAfterFirstRead = asTestRaw<ScopedDb>(
+        async (fn: Parameters<ScopedDb>[0]) => {
+          const result = await scopedDb(fn);
+          reads += 1;
+          if (reads === 1) {
+            await database
+              .update(entityVersions)
+              .set({ deletedAt: new Date("2026-02-01T00:00:00.000Z") })
+              .where(eq(entityVersions.id, ids.entityVersionA1));
+          }
+          return result;
+        },
+      );
+      const events: AuditEvent[] = [];
+      try {
+        const response = await read({
+          format: "searchable-pdf",
+          memberId: ids.userA1,
+          workspaceIds: [ids.wsA1],
+          scopedDb: deletingAfterFirstRead,
+          recordAuditEvent: async (_tx, event) => {
+            events.push(...(Array.isArray(event) ? event : [event]));
+          },
+        });
+        expect(response).toBeInstanceOf(HttpStatusResponse);
+        if (response instanceof HttpStatusResponse) {
+          expect(response.code).toBe(404);
+        }
+        expect(events).toEqual([]);
+      } finally {
+        await database
+          .update(entityVersions)
+          .set({ deletedAt: null })
+          .where(eq(entityVersions.id, ids.entityVersionA1));
+      }
+    });
+  });
+
+  const recordingAudit = () => {
+    const events: AuditEvent[] = [];
+    const recordAuditEvent: AuditRecorder = async (_tx, event) => {
+      events.push(...(Array.isArray(event) ? event : [event]));
+    };
+    return { events, recordAuditEvent };
+  };
+
+  test("returns the current projection as UTF-8 text and audits the download", async () => {
+    const { events, recordAuditEvent } = recordingAudit();
+
+    const response = await read({
+      memberId: ids.userA1,
+      workspaceIds: [ids.wsA1],
+      recordAuditEvent,
+    });
+
+    expect(response).toBeInstanceOf(Response);
+    if (!(response instanceof Response)) {
+      return;
+    }
+    expect(await response.text()).toBe("extracted text a1");
+    expect(response.headers.get("content-type")).toBe(
+      "text/plain; charset=utf-8",
+    );
+    expect(response.headers.get("content-disposition")).toContain(
+      'filename="agreement-a.txt"',
+    );
+    expect(events).toEqual([
+      expect.objectContaining({
+        action: "download",
+        metadata: { fieldId: ids.fileFieldA1, format: "text" },
+        resourceId: ids.entityA1,
+        resourceType: "entity",
+      }),
+    ]);
+  });
+
+  test("a version deleted while the text export is prepared answers 404 and records nothing", async () => {
+    const scopedDb = memberScopedDb({
+      memberId: ids.userA1,
+      workspaceIds: [ids.wsA1],
+    });
+    let reads = 0;
+    const deletingAfterFirstRead = asTestRaw<ScopedDb>(
+      async (fn: Parameters<ScopedDb>[0]) => {
+        const result = await scopedDb(fn);
+        reads += 1;
+        if (reads === 1) {
+          await database
+            .update(entityVersions)
+            .set({ deletedAt: new Date("2026-02-01T00:00:00.000Z") })
+            .where(eq(entityVersions.id, ids.entityVersionA1));
+        }
+        return result;
+      },
+    );
+    const { events, recordAuditEvent } = recordingAudit();
+    try {
+      const response = await read({
+        memberId: ids.userA1,
+        workspaceIds: [ids.wsA1],
+        scopedDb: deletingAfterFirstRead,
+        recordAuditEvent,
+      });
+      expect(response).toBeInstanceOf(HttpStatusResponse);
+      if (response instanceof HttpStatusResponse) {
+        expect(response.code).toBe(404);
+      }
+      expect(events).toEqual([]);
+    } finally {
+      await database
+        .update(entityVersions)
+        .set({ deletedAt: null })
+        .where(eq(entityVersions.id, ids.entityVersionA1));
+    }
+  });
+
+  test("exports a readable matter and returns not found for an unreadable matter", async () => {
+    const readable = await read({
+      memberId: ids.userA1,
+      workspaceIds: [ids.wsA1],
+    });
+    expect(readable).toBeInstanceOf(Response);
+    if (readable instanceof Response) {
+      expect(await readable.text()).toBe("extracted text a1");
+    }
+
+    const unreadable = await read({
+      memberId: ids.userA2,
+      workspaceIds: [ids.wsA2],
+    });
+    expect(unreadable).toBeInstanceOf(HttpStatusResponse);
+    if (unreadable instanceof HttpStatusResponse) {
+      expect(unreadable.code).toBe(404);
+      expect(JSON.stringify(unreadable.response)).not.toContain(
+        "extracted text a1",
+      );
+    }
   });
 });

@@ -3,10 +3,12 @@ import { describe, expect, test } from "bun:test";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import { withTimeBillingEnrolment } from "@/api/tests/helpers/time-billing-enrolment";
 
 import archiveSellerProfile from "./archive";
 
@@ -37,19 +39,22 @@ describe("seller profile archiving", () => {
       expect(auditTx).toBe(tx);
       auditEvent = event;
     };
-    const context = asTestRaw<ArchiveContext>({
-      params: { sellerProfileId: profileId },
-      request: new Request(
-        `https://example.test/v1/seller-profiles/${profileId}/archive`,
-        { method: "POST" },
-      ),
-      route: "/v1/seller-profiles/:sellerProfileId/archive",
-      safeDb,
-      session: { activeOrganizationId: organizationId },
-      memberRole: sessionMemberRole("owner"),
-      user: { id: toSafeId<"user">("user_test") },
-      recordAuditEvent,
-    });
+    const context = withTimeBillingEnrolment(
+      asTestRaw<ArchiveContext>({
+        params: { sellerProfileId: profileId },
+        request: new Request(
+          `https://example.test/v1/seller-profiles/${profileId}/archive`,
+          { method: "POST" },
+        ),
+        route:
+          "/v1/seller-profiles/:sellerProfileId/archive" satisfies ApiRoutePath,
+        safeDb,
+        session: { activeOrganizationId: organizationId },
+        memberRole: sessionMemberRole("owner"),
+        user: { id: toSafeId<"user">("user_test") },
+        recordAuditEvent,
+      }),
+    );
 
     const result = await archiveSellerProfile.handler(context);
 

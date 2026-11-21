@@ -45,6 +45,8 @@ const skillEntry = (overrides: Partial<CatalogueSkill>): CatalogueSkill => ({
   installState: "installed",
   installedConnectorSlug: null,
   installedSkillId: null,
+  invocation: null,
+  binding: null,
   isLocked: false,
   isRecommendedForOrg: false,
   jurisdictions: [],

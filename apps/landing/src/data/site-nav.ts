@@ -46,11 +46,11 @@ export type NavLink = NavLabel & { href: string };
 // the app, so every "Start free" and plan call to action links here.
 export const appUrl = "https://my.stll.app";
 export const githubUrl = "https://github.com/stella/stella";
-export const discordUrl = "https://discord.gg/8dZjmVFjTK";
-export const xUrl = "https://x.com/stll_app";
-export const linkedinUrl = "https://www.linkedin.com/company/stella-app";
-export const statusUrl = "https://status.stll.app";
-export const contactHref = "mailto:contact@stll.app";
+const discordUrl = "https://discord.gg/8dZjmVFjTK";
+const xUrl = "https://x.com/stll_app";
+const linkedinUrl = "https://www.linkedin.com/company/stella-app";
+const statusUrl = "https://status.stll.app";
+const contactHref = "mailto:contact@stll.app";
 export const selfHostingUrl = `${githubUrl}/blob/main/docs/self-hosting.md`;
 
 export const resourceLinks = [
@@ -118,27 +118,6 @@ export const productNavEntries = pillars.flatMap((pillar) =>
     footerLabel: productFooterLabels[slug],
   })),
 ) satisfies readonly ProductNavEntry[];
-
-/**
- * Every product eyebrow resolved for one locale. Astro components read
- * `nav.products.<slug>.eyebrow` straight off the translator; this exists for
- * the React islands, which have no translator of their own and take the names
- * as a prop. Written out per slug rather than derived from `productNavEntries`:
- * `Object.fromEntries` widens the keys back to `string`, and the `satisfies`
- * here makes a pillar slug without an eyebrow a typecheck error instead of an
- * undefined label at runtime.
- */
-export const resolveProductEyebrows = (t: (key: ProductEyebrowKey) => string) =>
-  ({
-    "public-data": t("nav.products.public-data.eyebrow"),
-    anonymization: t("nav.products.anonymization.eyebrow"),
-    "tabular-review": t("nav.products.tabular-review.eyebrow"),
-    agent: t("nav.products.agent.eyebrow"),
-    templates: t("nav.products.templates.eyebrow"),
-    editor: t("nav.products.editor.eyebrow"),
-    workspace: t("nav.products.workspace.eyebrow"),
-    "cli-mcp": t("nav.products.cli-mcp.eyebrow"),
-  }) satisfies Record<ProductSlug, string>;
 
 /**
  * The "discover this product" call to action, one whole phrase per product.

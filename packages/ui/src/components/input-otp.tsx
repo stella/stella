@@ -6,6 +6,9 @@ import { OTPInput, OTPInputContext } from "input-otp";
 
 import { MinusIcon } from "../icons";
 import { cn } from "../lib/utils";
+import { InputOTPSlotFace } from "./input-otp-face";
+
+export { InputOTPGroup } from "./input-otp-face";
 
 const InputOTP = ({
   className,
@@ -25,17 +28,6 @@ const InputOTP = ({
   />
 );
 
-const InputOTPGroup = ({
-  className,
-  ...props
-}: React.ComponentProps<"div">) => (
-  <div
-    className={cn("flex items-center", className)}
-    data-slot="input-otp-group"
-    {...props}
-  />
-);
-
 const InputOTPSlot = ({
   index,
   className,
@@ -47,22 +39,14 @@ const InputOTPSlot = ({
   const { char, hasFakeCaret, isActive } = inputOTPContext.slots[index] ?? {};
 
   return (
-    <div
-      className={cn(
-        "border-input aria-invalid:border-destructive data-[active=true]:border-ring data-[active=true]:ring-ring/50 data-[active=true]:aria-invalid:border-destructive data-[active=true]:aria-invalid:ring-destructive/20 dark:bg-input/30 dark:data-[active=true]:aria-invalid:ring-destructive/40 relative flex h-9 w-9 items-center justify-center border-y border-e text-sm shadow-xs outline-none first:rounded-s-md first:border-s last:rounded-e-md data-[active=true]:z-10 data-[active=true]:ring-[3px]",
-        className,
-      )}
-      data-active={isActive}
-      data-slot="input-otp-slot"
-      {...props}
-    >
+    <InputOTPSlotFace className={className} data-active={isActive} {...props}>
       {char}
       {hasFakeCaret && (
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-          <div className="animate-caret-blink bg-foreground h-4 w-px duration-1000" />
+          <div className="animate-caret-blink bg-foreground h-4 w-px" />
         </div>
       )}
-    </div>
+    </InputOTPSlotFace>
   );
 };
 
@@ -72,4 +56,4 @@ const InputOTPSeparator = ({ ...props }: React.ComponentProps<"div">) => (
   </div>
 );
 
-export { InputOTP, InputOTPGroup, InputOTPSlot, InputOTPSeparator };
+export { InputOTP, InputOTPSlot, InputOTPSeparator };

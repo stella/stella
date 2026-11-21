@@ -4,8 +4,10 @@ import { createPlaybookDefinitionHandler } from "@/api/handlers/playbooks/create
 import { playbookDefinitionBodySchema } from "@/api/handlers/playbooks/schema";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { createModelActionAdmitter } from "@/api/lib/rate-limit/model-action-admission";
 
 const config = {
+  contract: "patch",
   description:
     "Create a playbook definition in the organization from a name, an " +
     "optional description, an optional document-type scope, and its " +
@@ -22,7 +24,9 @@ const createPlaybookDefinition = createSafeRootHandler(
   config,
   async function* ({
     safeDb,
+    scopedDb,
     session,
+    user,
     body,
     recordAuditEvent,
     orgAIConfig,
@@ -35,6 +39,12 @@ const createPlaybookDefinition = createSafeRootHandler(
       Result.tryPromise(async () => await getActiveWorkspaceIds()),
     );
     return yield* createPlaybookDefinitionHandler({
+      admitModelAction: createModelActionAdmitter({
+        organizationId: session.activeOrganizationId,
+        userId: user.id,
+        organizationStateDb: scopedDb,
+        actionKind: "playbooks.derive-ask",
+      }),
       safeDb,
       organizationId: session.activeOrganizationId,
       accessibleWorkspaceIds,

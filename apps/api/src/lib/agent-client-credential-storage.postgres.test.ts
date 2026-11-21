@@ -1,6 +1,10 @@
-import { Result } from "better-result";
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { panic, Result } from "better-result";
+import { beforeEach, describe, expect, test } from "bun:test";
 import { asc, eq, sql } from "drizzle-orm";
+import { fileURLToPath } from "node:url";
+
+import { dbClock } from "@stll/test-kit/db";
+import { createTestState } from "@stll/test-state";
 
 import {
   AGENT_CLIENT_BATCH_SIZE,
@@ -16,37 +20,46 @@ import { createSafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   logger,
+  type LogRecord,
   resetLogSinkForTesting,
   setLogSinkForTesting,
-  type LogRecord,
 } from "@/api/lib/observability/logger";
 import { DueSlot } from "@/api/lib/scheduler/due-slot";
+import {
+  DECLARED_SCHEDULER_JOBS,
+  upsertSchedulerJob,
+} from "@/api/lib/scheduler/jobs";
+import { acquireNextDueJob } from "@/api/lib/scheduler/runner";
 import {
   BACKFILL_AGENT_CLIENT_STORAGE_TASK,
   backfillAgentClientStorage,
 } from "@/api/lib/scheduler/tasks/agent-client-storage-backfill";
+import type {
+  SchedulerDb,
+  SchedulerTaskRegistry,
+} from "@/api/lib/scheduler/types";
 import {
   type GatedTestDb,
   withGatedTestClients,
 } from "@/api/tests/gated-test-database";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
-let priorStorageSetting = false;
+const testState = createTestState({ file: import.meta.path, config: env });
+
+const databaseUrl = process.env["DATABASE_URL"];
+
 beforeEach(() => {
-  priorStorageSetting = env.AGENT_CLIENT_STORAGE_V1_ENABLED;
-  env.AGENT_CLIENT_STORAGE_V1_ENABLED = true;
-});
-afterEach(() => {
-  env.AGENT_CLIENT_STORAGE_V1_ENABLED = priorStorageSetting;
+  testState.setConfig("AGENT_CLIENT_STORAGE_V1_ENABLED", true);
 });
 
 type Transaction = Parameters<Parameters<GatedTestDb["transaction"]>[0]>[0];
-const databaseUrl = process.env["DATABASE_URL"];
+
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
-const credential = Buffer.alloc(32, 0x2a).toString("hex");
+const credential = Buffer.alloc(32, 0x2a).toHex();
 
 const withStoredValues = async (
   connectionUrl: string,
-  work: (db: GatedTestDb) => Promise<void>,
+  work: (db: GatedTestDb, schema: string) => Promise<void>,
 ) => {
   await withGatedTestClients(connectionUrl, async ({ openClient }) => {
     const { db } = openClient();
@@ -73,10 +86,10 @@ const withStoredValues = async (
           if (property === "transaction") {
             return transactionOverride;
           }
-          return Reflect.get(target, property, receiver);
+          return Reflect.get(target, property, receiver) as unknown;
         },
       });
-      await work(isolated);
+      await work(isolated, schema);
     } finally {
       await db.execute(sql`DROP SCHEMA ${sql.identifier(schema)} CASCADE`);
     }
@@ -166,7 +179,7 @@ if (!databaseUrl || !enabled) {
       });
     });
 
-    test("records completion across restarts and accepts an explicit reset", async () => {
+    test("records completion and self-heals later legacy writes", async () => {
       await withStoredValues(databaseUrl, async (db) => {
         await db.transaction(async (tx) => await seed(tx, 2));
         const job = await db.transaction(async (tx) =>
@@ -211,44 +224,77 @@ if (!databaseUrl || !enabled) {
           throw new Error("scheduler fixture missing");
         }
         expect(completed.payload?.["completed"]).toBe(true);
-        expect(completed.enabled).toBe(false);
+        expect(completed.enabled).toBe(true);
         await db.transaction(async (tx) => {
           await seed(tx, 1);
-          await tx
-            .update(schedulerJobs)
-            .set({ enabled: true })
-            .where(eq(schedulerJobs.id, job.id));
-        });
-        const unusedDatabase = new Proxy(db, {
-          get() {
-            throw new Error("completed task must not access storage");
-          },
         });
         await backfillAgentClientStorage({
           ...context,
-          db: unusedDatabase,
-          job: { ...completed, enabled: true },
+          job: completed,
           payload: completed.payload,
         });
-        expect(await countPreviousAgentClientValues(db)).toBe(1);
-        const reset = await db.transaction(async (tx) =>
-          (
-            await tx
-              .update(schedulerJobs)
-              .set({ payload: {}, enabled: true })
-              .where(eq(schedulerJobs.id, job.id))
-              .returning()
-          ).at(0),
+        expect(await countPreviousAgentClientValues(db)).toBe(0);
+      });
+    });
+
+    test("boot registration resumes a job an earlier build disabled at completion", async () => {
+      await withStoredValues(databaseUrl, async (db) => {
+        const declared = DECLARED_SCHEDULER_JOBS.find(
+          ({ task }) => task === BACKFILL_AGENT_CLIENT_STORAGE_TASK,
         );
-        if (!reset) {
-          throw new Error("scheduler fixture missing");
+        if (declared === undefined) {
+          return panic("Agent client storage job is not declared");
         }
+        // The earlier completion path disabled the row and recorded completion.
+        await db.transaction(
+          async (tx) =>
+            await tx.insert(schedulerJobs).values({
+              id: declared.id,
+              task: BACKFILL_AGENT_CLIENT_STORAGE_TASK,
+              schedule: declared.schedule,
+              nextRunAt: dbClock.ago(60_000),
+              enabled: false,
+              payload: { paused: false, completed: true },
+            }),
+        );
+        await db.transaction(async (tx) => await seed(tx, 1));
+        const registry: SchedulerTaskRegistry = new Map([
+          [BACKFILL_AGENT_CLIENT_STORAGE_TASK, backfillAgentClientStorage],
+        ]);
+        const claim = async () =>
+          await acquireNextDueJob({
+            db,
+            leaseMs: 30 * 60_000,
+            registry,
+            runnerId: "agent-client-storage-test",
+          });
+        expect(await claim()).toBeNull();
+
+        // Boot re-asserts the declared enablement; the deployment flag is on.
+        await db.transaction(
+          async (tx) =>
+            await upsertSchedulerJob(
+              { ...declared, enabled: true },
+              asTestRaw<SchedulerDb>(tx),
+            ),
+        );
+        const job = await claim();
+        if (job === null) {
+          return panic("The resumed job was not claimable");
+        }
+        expect(job.payload).toEqual({ paused: false, completed: true });
         await backfillAgentClientStorage({
-          ...context,
-          job: reset,
-          payload: reset.payload,
+          db,
+          job,
+          payload: job.payload,
+          dueAt: DueSlot.of(job),
+          runId: createSafeId<"schedulerJobRun">(),
+          scheduleContinuation: () => undefined,
+          signal: new AbortController().signal,
+          logger,
         });
         expect(await countPreviousAgentClientValues(db)).toBe(0);
+        return undefined;
       });
     });
 
@@ -272,7 +318,7 @@ if (!databaseUrl || !enabled) {
         if (!job) {
           throw new Error("scheduler fixture missing");
         }
-        env.AGENT_CLIENT_STORAGE_V1_ENABLED = false;
+        testState.setConfig("AGENT_CLIENT_STORAGE_V1_ENABLED", false);
         const unusedDatabase = new Proxy(db, {
           get() {
             throw new Error("disabled task must not access storage");
@@ -400,6 +446,55 @@ if (!databaseUrl || !enabled) {
       });
     });
 
+    test.each(["error", "no_change"] as const)(
+      "a deferred update preserves the caller transaction (%s)",
+      async (mode) => {
+        await withStoredValues(databaseUrl, async (db, schema) => {
+          await db.transaction(async (tx) => {
+            const seeded = (await seed(tx, 1)).at(0);
+            if (!seeded) {
+              throw new Error("registration fixture missing");
+            }
+            await tx
+              .update(agentRegistration)
+              .set({ authorizationCode: "pending-code" })
+              .where(eq(agentRegistration.id, seeded.id));
+            const body =
+              mode === "error"
+                ? sql`RAISE EXCEPTION 'Stored value update unavailable';`
+                : sql`RETURN NULL;`;
+            await tx.execute(
+              sql`CREATE FUNCTION ${sql.identifier(schema)}.defer_credential_update() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN ${body} END $$`,
+            );
+            await tx.execute(
+              sql`CREATE TRIGGER defer_credential_update BEFORE UPDATE OF client_secret_sink ON ${sql.identifier(schema)}.agent_registration FOR EACH ROW EXECUTE FUNCTION ${sql.identifier(schema)}.defer_credential_update()`,
+            );
+          });
+          await db.transaction(async (tx) => {
+            const original = (await tx.select().from(agentRegistration)).at(0);
+            if (!original) {
+              throw new Error("registration fixture missing");
+            }
+            expect(original.authorizationCode).toBe("pending-code");
+            await tx
+              .update(agentRegistration)
+              .set({ authorizationCode: null })
+              .where(eq(agentRegistration.id, original.id));
+            expect(
+              (await readStoredAgentClientCredential(tx, original)).unwrap(),
+            ).toBe(credential);
+            const rows = await tx.execute(sql`SELECT 1 AS healthy`, "objects");
+            expect(rows.at(0)?.["healthy"]).toBe(1);
+          });
+          const stored = await db.transaction(async (tx) =>
+            (await tx.select().from(agentRegistration)).at(0),
+          );
+          expect(stored?.authorizationCode).toBeNull();
+          expect<string | undefined>(stored?.clientSecretSink).toBe(credential);
+        });
+      },
+    );
+
     test("rejects a stale read after a different stored value wins", async () => {
       await withStoredValues(databaseUrl, async (db) => {
         await db.transaction(async (tx) => await seed(tx, 1));
@@ -410,9 +505,7 @@ if (!databaseUrl || !enabled) {
           throw new Error("registration fixture missing");
         }
         const replacement = (
-          await encryptAgentClientCredential(
-            Buffer.alloc(32, 0x2b).toString("hex"),
-          )
+          await encryptAgentClientCredential(Buffer.alloc(32, 0x2b).toHex())
         ).unwrap();
         await db.transaction(
           async (tx) =>
@@ -450,7 +543,7 @@ if (!databaseUrl || !enabled) {
         if (!stored) {
           throw new Error("registration fixture missing");
         }
-        const alternateKey = Buffer.alloc(32, 0x2b).toString("hex");
+        const alternateKey = Buffer.alloc(32, 0x2b).toHex();
         const child = Bun.spawn({
           cmd: [
             process.execPath,
@@ -472,12 +565,12 @@ if (!databaseUrl || !enabled) {
             } else process.exitCode = 1;
           `,
           ],
-          cwd: new URL("../../", import.meta.url).pathname,
+          cwd: fileURLToPath(new URL("../../", import.meta.url)),
           env: {
             ...process.env,
             CONTENT_ENCRYPTION_KEY:
               process.env["CONTENT_ENCRYPTION_KEY"] === alternateKey
-                ? Buffer.alloc(32, 0x2c).toString("hex")
+                ? Buffer.alloc(32, 0x2c).toHex()
                 : alternateKey,
             STORED_AGENT_TEST_VALUE: stored.clientSecretSink,
           },

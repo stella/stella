@@ -1,23 +1,25 @@
 import { panic, Result } from "better-result";
 import { sql } from "drizzle-orm";
 
-import {
-  decodeSourceRawEnvelope,
-  decodeSourceRawEnvelopeObjects,
-  encodeSourceRawEnvelope,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import type {
-  SourceRawParts,
-  SourceRawObjects,
-  StoredRawReadError,
-} from "@/api/handlers/case-law/ingestion/adapter";
+import { chunk as chunkItems } from "@stll/concurrency/chunk";
+
 import type { SkUsListingFetchOutcome } from "@/api/handlers/case-law/ingestion/adapters/sk-us";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   pgTimestampCursorBoundary,
   pgTimestampCursorValue,
 } from "@/api/lib/db-pagination";
+import {
+  decodeSourceRawEnvelope,
+  decodeSourceRawEnvelopeObjects,
+  encodeSourceRawEnvelope,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+} from "@/api/lib/legal-search/ingestion-types";
+import type {
+  SourceRawObjects,
+  SourceRawParts,
+  StoredRawReadError,
+} from "@/api/lib/legal-search/ingestion-types";
 
 export type SkUsRawCursor = {
   createdAt: string;
@@ -289,10 +291,10 @@ export const runSkUsRawBatch = async ({
   let scanned = 0;
   let cursor = after;
   let stopped = false;
-  for (let offset = 0; offset < rows.length; offset += pageSize) {
+  for (const itemBatch of chunkItems(rows, pageSize)) {
     const result = await runSkUsRawPage({
       ...options,
-      rows: rows.slice(offset, offset + pageSize),
+      rows: itemBatch,
     });
     for (const [outcome, count] of Object.entries(result.counts)) {
       counts[outcome] = (counts[outcome] ?? 0) + count;

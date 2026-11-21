@@ -19,8 +19,8 @@ import type { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tan
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import {
-  chatToolMapToArray,
   type ChatToolMap,
+  chatToolMapToArray,
 } from "@/api/lib/chat/chat-tool-types";
 import {
   guardModelMessages,
@@ -30,7 +30,6 @@ import type {
   GuardedModelMessages,
   GuardedSystemPrompt,
 } from "@/api/lib/chat/model-ingress-guard";
-import { generateChatObject } from "@/api/lib/chat/tanstack-chat-runtime";
 import type { AiOccurrenceAdapter } from "@/api/lib/docx/adapt-ai-fields";
 import {
   CONDITION_DECISION_ID,
@@ -39,6 +38,8 @@ import {
 } from "@/api/lib/docx/ai-condition-question";
 import {
   maybeSkillTools,
+  prepareConditionSkills,
+  SKILL_CATALOG_LOAD_SINK,
   SKILL_REF_GENERATOR_GUIDANCE,
   type SkillToolsContext,
 } from "@/api/lib/docx/ai-skill-tools";
@@ -48,11 +49,12 @@ import type {
   AiFieldDraft,
   AiFieldGenerator,
 } from "@/api/lib/docx/resolve-ai-fields";
-import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
+import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
 import {
   abortControllerFromSignal,
   collectTanStackTextRun,
+  generateTanStackChatObject,
   mergeGenerationOptions,
   resolveTanStackTextModel,
   systemPromptsPatch,
@@ -60,7 +62,6 @@ import {
 } from "@/api/lib/tanstack-ai-generate";
 import type { TanStackTextRun } from "@/api/lib/tanstack-ai-generate";
 import { hasTanStackInstanceProvider } from "@/api/lib/tanstack-ai-models";
-import { toTanStackValibotSchema } from "@/api/lib/tanstack-ai-schema";
 import { decide } from "@/api/lib/workflow/decisions/decide";
 import { hasInstanceDecisionModel } from "@/api/lib/workflow/decisions/decision-model";
 import type { DecisionModel } from "@/api/lib/workflow/decisions/decision-model";
@@ -190,7 +191,7 @@ const boundedAiSignal = (
  * fast-role model, disables prompt caching (these calls are not cache-shared),
  * threads analytics middleware, and attaches the optional skill tool loop. Skill
  * refs need the agentic loop (load-skill then draft), so these calls go through
- * `chat()` directly rather than the tool-free `generateTanStack*ForRole` helpers.
+ * `chat()` directly rather than the tool-free `generateTanStack*ForTask` helpers.
  */
 type FieldChatInput = {
   abortSignal: AbortSignal;
@@ -199,6 +200,7 @@ type FieldChatInput = {
   orgAIConfig: OrgAIConfig | null;
   managedAIResidency: ManagedAIResidency;
   organizationId: SafeId<"organization">;
+  admission: ModelDispatchAdmission;
   prompt: string;
   skillTools: ChatToolMap | undefined;
   system: string | undefined;
@@ -223,6 +225,7 @@ const resolveFieldChat = async ({
   orgAIConfig,
   managedAIResidency,
   organizationId,
+  admission,
   prompt,
   resolveTextModel,
   system,
@@ -231,7 +234,7 @@ const resolveFieldChat = async ({
   abortController: abortControllerFromSignal(abortSignal),
   caching: resolveCaching({
     promptCachingEnabled: false,
-    role: "fast",
+    task: "short-text",
     scopeKey: organizationId,
   }),
   messages: guardModelMessages({
@@ -239,11 +242,13 @@ const resolveFieldChat = async ({
     workspaceIds: tenantWorkspaceIds,
   }),
   model: await resolveTextModel({
+    userId: admission.userId,
     dataClass: "customer",
-    role: "fast",
+    task: "short-text",
     orgAIConfig,
     managedAIResidency,
     organizationId,
+    admission,
   }),
   system:
     system === undefined
@@ -257,6 +262,9 @@ const generateFieldText = async (
   const { abortController, caching, messages, model, system } =
     await resolveFieldChat(input);
   return await collectTanStackTextRun({
+    threadId: Bun.randomUUIDv7(),
+    userId: input.admission.userId,
+    admission: input.admission,
     model,
     adapter: textAdapterWithNormalizedStops(model),
     messages,
@@ -289,10 +297,15 @@ const generateFieldObject = async <TSchema extends v.GenericSchema>(
 ): Promise<v.InferOutput<TSchema>> => {
   const { abortController, caching, messages, model, system } =
     await resolveFieldChat(input);
-  const output = await generateChatObject({
+  return await generateTanStackChatObject({
+    threadId: Bun.randomUUIDv7(),
+    userId: input.admission.userId,
+    admission: input.admission,
+    model,
     adapter: model.adapter,
     messages,
-    outputSchema: toTanStackValibotSchema(input.outputSchema),
+    outputSchema: input.outputSchema,
+    tenantWorkspaceIds: input.tenantWorkspaceIds,
     abortController,
     ...systemPromptsPatch({ caching, model, system }),
     modelOptions: mergeGenerationOptions({
@@ -312,20 +325,13 @@ const generateFieldObject = async <TSchema extends v.GenericSchema>(
         }
       : {}),
   });
-  return v.parse(input.outputSchema, output);
 };
-
-// Loading the caller's skill catalog failed before any model call, so it is a
-// database failure of this adapter rather than a generation outcome.
-const SKILL_CATALOG_LOAD_SINK = failureSink({
-  event: "ai_field.skill_catalog_load_failed",
-  expected: [],
-});
 
 export const buildAiFieldGenerator = ({
   orgAIConfig,
   managedAIResidency,
   organizationId,
+  admission,
   tenantWorkspaceIds,
   skillContext,
   aiAnalytics,
@@ -335,6 +341,7 @@ export const buildAiFieldGenerator = ({
   orgAIConfig: OrgAIConfig | null;
   managedAIResidency: ManagedAIResidency;
   organizationId: SafeId<"organization">;
+  admission: ModelDispatchAdmission;
   /** Tenant set for the model-ingress guard on every field generation. */
   tenantWorkspaceIds: readonly SafeId<"workspace">[];
   /** When present, prompts that reference a skill get load-skill tools. */
@@ -382,6 +389,7 @@ export const buildAiFieldGenerator = ({
         orgAIConfig,
         managedAIResidency,
         organizationId,
+        admission,
         prompt: `You are drafting a single field of a legal document. Instruction: ${prompt}
 ${itemSection}${documentSection}
 Known details (JSON):
@@ -425,13 +433,7 @@ Reply with only the text for this field — no preamble, no quotes, no markdown.
 };
 
 const AI_CONDITION_TIMEOUT_MS = 20_000;
-const AI_CONDITION_MAX_TOKENS = 400;
-
-// strictObject + object root: OpenAI strict structured output rejects a bare
-// boolean root, so the yes/no answer rides in a single required boolean field.
-const conditionDecisionSchema = v.strictObject({
-  decision: v.boolean(),
-});
+const AI_CONDITION_MAX_TOKENS = 800;
 
 /**
  * Model-backed decider for AI-decided boolean fields (a boolean FieldMeta with
@@ -447,6 +449,7 @@ export const buildAiConditionDecider = ({
   orgAIConfig,
   managedAIResidency,
   organizationId,
+  admission,
   tenantWorkspaceIds,
   skillContext,
   aiAnalytics,
@@ -457,6 +460,7 @@ export const buildAiConditionDecider = ({
   orgAIConfig: OrgAIConfig | null;
   managedAIResidency: ManagedAIResidency;
   organizationId: SafeId<"organization">;
+  admission: ModelDispatchAdmission;
   /** Tenant set for the model-ingress guard on every field generation. */
   tenantWorkspaceIds: readonly SafeId<"workspace">[];
   /** When present, prompts that reference a skill get load-skill tools. */
@@ -481,63 +485,64 @@ export const buildAiConditionDecider = ({
   }
   return async ({ prompt, values }) => {
     try {
-      const skillToolsResult = await maybeSkillTools(prompt, skillContext);
+      const skillToolsResult = await prepareConditionSkills(
+        prompt,
+        skillContext,
+      );
       if (Result.isError(skillToolsResult)) {
         observeFailure(skillToolsResult.error, {
           sink: SKILL_CATALOG_LOAD_SINK,
         });
         return undefined;
       }
-      const skillTools = skillToolsResult.value;
-      // A prompt that references a skill needs the tools to load it, which
-      // only the generative run carries; every other condition is a yes/no
-      // the decision model settles first.
-      if (skillTools === undefined) {
-        const decided = await decide({
+      const skills = skillToolsResult.value;
+      const decided = await decide({
+        dataClass: "customer",
+        id: CONDITION_DECISION_ID,
+        orgAIConfig,
+        state: conditionState({ prompt, values }),
+        question: { ...CONDITION_QUESTION, ...skills.question },
+        abortSignal: operationSignal,
+        timeoutMs: AI_CONDITION_TIMEOUT_MS,
+        client: decisionModel,
+        usageMetering: aiAnalytics?.usageMetering
+          ? { ...aiAnalytics.usageMetering, callId: Bun.randomUUIDv7() }
+          : undefined,
+        generation: {
+          userId: admission.userId,
           dataClass: "customer",
-          id: CONDITION_DECISION_ID,
+          task: "classify",
+          serviceTier: "standard",
           orgAIConfig,
-          state: conditionState({ prompt, values }),
-          question: CONDITION_QUESTION,
+          managedAIResidency,
+          organizationId,
+          admission,
+          tenantWorkspaceIds,
+          analytics: aiAnalytics,
+          maxOutputTokens: AI_CONDITION_MAX_TOKENS,
           abortSignal: operationSignal,
-          timeoutMs: AI_CONDITION_TIMEOUT_MS,
-          client: decisionModel,
-          usageMetering: aiAnalytics?.usageMetering
-            ? { ...aiAnalytics.usageMetering, callId: Bun.randomUUIDv7() }
-            : undefined,
-        });
-        if (decided.state === "decided") {
-          const value = decided.answer.noul > 0.5;
-          return {
+          deadlineMs: AI_CONDITION_TIMEOUT_MS,
+          caching: resolveCaching({
+            promptCachingEnabled: false,
+            task: "classify",
+            scopeKey: organizationId,
+          }),
+          prompt: `You are deciding one yes/no condition of a legal document. Question: ${prompt}\n\nKnown details (JSON):\n${JSON.stringify(values)}`,
+          resolveTextModel,
+          ...skills.generation,
+        },
+      });
+      if (decided.state === "undecided") {
+        return { decidedBy: "undecided", reason: decided.reason };
+      }
+      const value = decided.answer.noul > 0.5;
+      return decided.source === "decision-model"
+        ? {
             decidedBy: "decision_model",
             value,
-            // The reading's probability is the yes; on a no the chosen side's
-            // is its complement (same rule the fill form's preview applies).
             probability: value ? decided.probability : 1 - decided.probability,
-          };
-        }
-      }
-      const { decision } = await generateFieldObject({
-        abortSignal: boundedAiSignal(AI_CONDITION_TIMEOUT_MS, operationSignal),
-        aiAnalytics,
-        maxOutputTokens: AI_CONDITION_MAX_TOKENS,
-        orgAIConfig,
-        managedAIResidency,
-        organizationId,
-        outputMode: "generative",
-        outputSchema: conditionDecisionSchema,
-        prompt: `You are deciding one yes/no condition of a legal document. Question: ${prompt}
-
-Known details (JSON):
-${JSON.stringify(values)}
-
-Decide true (yes) or false (no) for this condition.`,
-        skillTools,
-        resolveTextModel,
-        system: skillTools ? SKILL_REF_GENERATOR_GUIDANCE : undefined,
-        tenantWorkspaceIds,
-      });
-      return { decidedBy: "generative_model", value: decision };
+          }
+        : { decidedBy: "generative_model", value };
     } catch (error) {
       aiAnalytics?.captureError(error);
       return undefined;
@@ -575,7 +580,8 @@ const adaptTokenBudget = ({
 
 // strictObject (no optional members): OpenAI strict structured output rejects
 // plain objects and optional properties.
-const occurrenceRenderingsSchema = v.strictObject({
+/** Read by the structured-output role contract test. @public */
+export const occurrenceRenderingsSchema = v.strictObject({
   renderings: v.array(v.string()),
 });
 
@@ -625,6 +631,7 @@ export const buildAiOccurrenceAdapter = ({
   orgAIConfig,
   managedAIResidency,
   organizationId,
+  admission,
   tenantWorkspaceIds,
   documentLanguages = [],
   skillContext,
@@ -635,6 +642,7 @@ export const buildAiOccurrenceAdapter = ({
   orgAIConfig: OrgAIConfig | null;
   managedAIResidency: ManagedAIResidency;
   organizationId: SafeId<"organization">;
+  admission: ModelDispatchAdmission;
   /** Tenant set for the model-ingress guard on every field generation. */
   tenantWorkspaceIds: readonly SafeId<"workspace">[];
   /** Template-level BCP-47 tags (primary first); when present the model
@@ -678,6 +686,7 @@ export const buildAiOccurrenceAdapter = ({
         orgAIConfig,
         managedAIResidency,
         organizationId,
+        admission,
         outputSchema: occurrenceRenderingsSchema,
         prompt: buildAdaptPrompt(input, documentLanguages),
         skillTools,

@@ -33,7 +33,8 @@ import {
   spyOn,
   test,
 } from "bun:test";
-import { writeFileSync } from "node:fs";
+
+import { writeRegeneratedFile } from "@stll/test-kit";
 
 import { listAdapters } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
 import baseline from "@/api/handlers/case-law/ingestion/adapters/read-fault-guard-baseline.json";
@@ -41,11 +42,11 @@ import {
   isStoredReadAbsence,
   isStoredReadUnavailable,
   READ_OUTCOME_METADATA_KEY,
-  storedReadUnavailable,
-  UNAVAILABLE_CYCLES_BEFORE_MARKING,
   type ReadOutcome,
   type ReadRefusal,
   type ReadUnavailableCause,
+  storedReadUnavailable,
+  UNAVAILABLE_CYCLES_BEFORE_MARKING,
 } from "@/api/lib/errors/read-outcome";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import type { AdapterKey } from "@/api/lib/legal-search/ingestion-constants";
@@ -53,10 +54,16 @@ import { OBSERVATION_DETAIL } from "@/api/lib/legal-search/partial-observation-s
 import {
   atFindokFixture,
   atRisFixture,
+  brTjdftFixture,
+  brTstCrawlFixture,
+  czIsirFixture,
   czNsFixture,
+  czNsSbirkaFixture,
   czNssFixture,
   czRegionalFixture,
+  czUohsFixture,
   czUsFixture,
+  type EnrolledAdapterFixture,
   euEcjFixture,
   huBhgyFixture,
   plCourtsFixture,
@@ -70,23 +77,27 @@ import {
   plUokikFixture,
   skCourtsFixture,
   skUsFixture,
-  type EnrolledAdapterFixture,
+  ukFclFixture,
 } from "@/api/tests/helpers/case-law-enrolled-fixtures";
 import {
   buildWithFault,
   changedPaths,
   classifyFaultedBuild,
   classifyRefusedBuild,
+  type FaultOutcome,
   flattenBuilt,
   READ_FAULTS,
   READ_REFUSALS,
   recordFetchStages,
-  type FaultOutcome,
   type RefusalOutcome,
 } from "@/api/tests/helpers/read-fault-drivers";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
+import { HAPPY_PATH_TIMEOUT_MS } from "@/api/tests/test-timeouts";
 
 import { readPublisherText } from "./publisher-read";
+
+const testFetchState = createTestFetch();
 
 /**
  * What drives each adapter's reads. Total over the adapter keys, so a source
@@ -97,6 +108,8 @@ const READ_FAULT_COVERAGE = {
   [ADAPTER_KEYS.CZ_NSS]: czNssFixture,
   [ADAPTER_KEYS.CZ_US]: czUsFixture,
   [ADAPTER_KEYS.CZ_REGIONAL]: czRegionalFixture,
+  [ADAPTER_KEYS.CZ_UOHS]: czUohsFixture,
+  [ADAPTER_KEYS.BR_TST]: brTstCrawlFixture,
   [ADAPTER_KEYS.SK_COURTS]: skCourtsFixture,
   [ADAPTER_KEYS.SK_US]: skUsFixture,
   [ADAPTER_KEYS.PL_COURTS]: plCourtsFixture,
@@ -119,9 +132,13 @@ const READ_FAULT_COVERAGE = {
   [ADAPTER_KEYS.AT_FINDOK]: atFindokFixture,
   [ADAPTER_KEYS.EU_ECJ]: euEcjFixture,
   [ADAPTER_KEYS.HU_BHGY]: huBhgyFixture,
+  [ADAPTER_KEYS.UK_FCL]: ukFclFixture,
   [ADAPTER_KEYS.PL_KIS]: plKisFixture,
   [ADAPTER_KEYS.PL_UODO]: plUodoFixture,
   [ADAPTER_KEYS.PL_UOKIK]: plUokikFixture,
+  [ADAPTER_KEYS.BR_TJDFT]: brTjdftFixture,
+  [ADAPTER_KEYS.CZ_NS_SBIRKA]: czNsSbirkaFixture,
+  [ADAPTER_KEYS.CZ_ISIR]: czIsirFixture,
 } as const satisfies Record<AdapterKey, () => EnrolledAdapterFixture>;
 
 const UNDRIVEN_REASON =
@@ -135,7 +152,6 @@ const recorded: Readonly<Record<string, string>> = baseline.rows;
 const writing = process.env["READ_FAULT_BASELINE"] === "write";
 const observedRows = new Map<string, string>();
 
-const originalFetch = globalThis.fetch;
 beforeAll(() => {
   // Retry backoff and publisher pacing would only slow the faulted builds.
   spyOn(Bun, "sleep").mockImplementation(async () => {
@@ -143,7 +159,7 @@ beforeAll(() => {
   });
 });
 afterEach(() => {
-  globalThis.fetch = originalFetch;
+  testFetchState.restore();
 });
 afterAll(() => {
   mock.restore();
@@ -153,10 +169,12 @@ afterAll(() => {
         .toSorted()
         .map((key) => [key, recorded[key] ?? observedRows.get(key)]),
     );
-    writeFileSync(
-      BASELINE_FILE,
-      `${JSON.stringify({ comment: baseline.comment, rows }, null, 2)}\n`,
-    );
+    writeRegeneratedFile({
+      flag: "READ_FAULT_BASELINE",
+      value: "write",
+      file: BASELINE_FILE,
+      contents: `${JSON.stringify({ comment: baseline.comment, rows }, null, 2)}\n`,
+    });
   }
 });
 
@@ -272,8 +290,10 @@ test("a removed adapter cannot leave a stale row", () => {
 
 const PUBLISHER = "https://publisher.invalid/document/1";
 const servedDocument = () => {
-  globalThis.fetch = asFetchMock(
-    async () => await Promise.resolve(new Response("<p>decision text</p>")),
+  testFetchState.set(
+    asFetchMock(
+      async () => await Promise.resolve(new Response("<p>decision text</p>")),
+    ),
   );
 };
 
@@ -327,7 +347,7 @@ test("a read through readPublisherText surfaces every fault", async () => {
     const outcome = await readPublisherText(PUBLISHER, {
       adapterKey: ADAPTER_KEYS.CZ_NSS,
       fetchStage: "listing",
-      timeoutMs: 1000,
+      timeoutMs: HAPPY_PATH_TIMEOUT_MS,
     });
     return outcome.type === "present"
       ? { fulltext: outcome.value }
@@ -353,17 +373,19 @@ test("a read through readPublisherText surfaces every fault", async () => {
 
 const NOTICE = "https://publisher.invalid/notice/1";
 const servedDocumentAndNotice = () => {
-  globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
-    const href = input instanceof Request ? input.url : String(input);
-    return await Promise.resolve(
-      new Response(href === NOTICE ? "<notice/>" : "<p>decision text</p>"),
-    );
-  });
+  testFetchState.set(
+    asFetchMock(async (input: string | URL | Request) => {
+      const href = input instanceof Request ? input.url : String(input);
+      return await Promise.resolve(
+        new Response(href === NOTICE ? "<notice/>" : "<p>decision text</p>"),
+      );
+    }),
+  );
 };
 const readInit = {
   adapterKey: ADAPTER_KEYS.CZ_NSS,
   fetchStage: "listing",
-  timeoutMs: 1000,
+  timeoutMs: HAPPY_PATH_TIMEOUT_MS,
 } as const;
 
 const refusalOutcomes = async (

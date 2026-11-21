@@ -13,45 +13,30 @@ import {
   DialogPopup,
   DialogTitle,
 } from "@stll/ui/dialog";
+import { DownloadIcon, PlugIcon, RefreshCwIcon } from "@stll/ui/icons";
+import type { LucideIcon } from "@stll/ui/icons";
+import { MenuItem } from "@stll/ui/menu";
+import { stellaToast } from "@stll/ui/toast";
 
 import { DesktopDownloadButtons } from "@/components/desktop-download-buttons";
+import {
+  DESKTOP_ACTION_LABELS,
+  DESKTOP_ACTION_REASONS,
+  DESKTOP_SETUP_LABELS,
+  getDesktopActionStatus,
+} from "@/features/desktop/desktop-action-gate.logic";
+import type {
+  DesktopAction,
+  DesktopActionStatus,
+  DesktopSetupStep,
+} from "@/features/desktop/desktop-action-gate.logic";
+import { DESKTOP_LINK_REFUSAL_MESSAGE } from "@/features/desktop/desktop-link-refusal";
 import type { DesktopPresenceType } from "@/features/desktop/desktop-presence";
 import { useDesktopPresence } from "@/features/desktop/desktop-presence";
 import { useDesktopAccountConnection } from "@/features/desktop/use-desktop-account-connection";
-import type { TranslationKey } from "@/i18n/types";
+import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { detectDesktopPlatform } from "@/lib/desktop-downloads";
 import { detached } from "@/lib/detached";
-
-/** Work that only stella desktop can do for a file. */
-export type DesktopAction = "edit-file" | "sign-pdf";
-
-/**
- * Each action stays visible in every presence and names what it will do:
- * run, update the app, connect it, or install it.
- */
-const DESKTOP_ACTION_LABELS = {
-  "edit-file": {
-    current: "workspaces.files.desktopEdit.openAction",
-    none: "workspaces.files.desktopGate.editNone",
-    not_connected: "workspaces.files.desktopGate.connect",
-    outdated: "workspaces.files.desktopGate.editOutdated",
-  },
-  "sign-pdf": {
-    current: "workspaces.files.desktopGate.signCurrent",
-    none: "workspaces.files.desktopGate.signNone",
-    not_connected: "workspaces.files.desktopGate.connect",
-    outdated: "workspaces.files.desktopGate.signOutdated",
-  },
-} as const satisfies Record<
-  DesktopAction,
-  Record<DesktopPresenceType, TranslationKey>
->;
-
-/** Why the action needs the desktop app, shown before installing it. */
-const DESKTOP_ACTION_REASONS = {
-  "edit-file": "workspaces.files.desktopGate.editReason",
-  "sign-pdf": "workspaces.files.desktopGate.signReason",
-} as const satisfies Record<DesktopAction, TranslationKey>;
 
 /** Presences that need the app installed or updated before the action. */
 type DesktopRequiredPresence = Extract<
@@ -61,7 +46,12 @@ type DesktopRequiredPresence = Extract<
 
 type DesktopActionGateResult = {
   label: string;
+  status: DesktopActionStatus;
   isConnecting: boolean;
+  /** Links the running app to this account, or offers the install. */
+  connect: () => void;
+  /** Starts the step the status names: connect, install or update. */
+  setUp: (step: DesktopSetupStep) => void;
   /** Runs `perform` when the app can do it; otherwise connects or installs it. */
   run: (perform: () => void) => void;
   requiredDialog: DesktopRequiredDialogProps;
@@ -72,7 +62,7 @@ export const useDesktopActionGate = (
 ): DesktopActionGateResult => {
   const t = useTranslations();
   const presence = useDesktopPresence();
-  const { connect, state } = useDesktopAccountConnection();
+  const { connect, state, switchAccount } = useDesktopAccountConnection();
   const [required, setRequired] = useState<DesktopRequiredPresence | null>(
     null,
   );
@@ -80,41 +70,107 @@ export const useDesktopActionGate = (
   const connectApp = () => {
     detached(
       (async () => {
-        const outcome = await connect();
-        // Nothing answered on this computer: offer the install instead.
-        if (outcome.status === "error") {
-          setRequired("none");
+        const outcome = await connect("explicit");
+        switch (outcome.status) {
+          case "connected": {
+            stellaToast.add({
+              title: t("workspaces.files.desktopGate.connected"),
+              type: "success",
+            });
+            return;
+          }
+          // The app takes over in its own window and returns here.
+          case "started": {
+            return;
+          }
+          // A joined automatic attempt found no local proof; the settings
+          // page keeps the explicit approval on offer.
+          case "approval-required": {
+            return;
+          }
+          // Nothing answered on this computer: offer the install instead.
+          case "error": {
+            setRequired("none");
+            return;
+          }
+          // The app must update before it can link this account.
+          case "update-required": {
+            setRequired("outdated");
+            return;
+          }
+          // The app said why it kept its account; only a conflict can be
+          // resolved from here, by asking the app to switch.
+          case "refused": {
+            stellaToast.add({
+              title: t(DESKTOP_LINK_REFUSAL_MESSAGE[outcome.reason]),
+              ...(outcome.reason === "account_conflict"
+                ? {
+                    actionProps: {
+                      children: t("settings.account.desktopSwitchAccount"),
+                      onClick: switchAccount,
+                    },
+                  }
+                : {}),
+            });
+            return;
+          }
+          default: {
+            outcome satisfies never;
+            panic("Unhandled desktop connection outcome");
+          }
         }
       })(),
       "desktop-action-gate.connect",
     );
   };
 
-  const run = (perform: () => void) => {
-    switch (presence.type) {
-      case "current": {
-        perform();
-        return;
-      }
-      case "not_connected": {
+  const setUp = (step: DesktopSetupStep) => {
+    switch (step) {
+      case "connect": {
         connectApp();
         return;
       }
-      case "none":
-      case "outdated": {
-        setRequired(presence.type);
+      case "install": {
+        setRequired("none");
+        return;
+      }
+      case "update": {
+        setRequired("outdated");
         return;
       }
       default: {
-        presence satisfies never;
-        panic(`Unhandled desktop presence: ${String(presence)}`);
+        step satisfies never;
+        panic(`Unhandled desktop setup step: ${String(step)}`);
       }
     }
   };
 
+  const status = getDesktopActionStatus(presence.type);
+
+  // Toasts retain this callback while presence continues to refresh.
+  const run = useLatestCallback((perform: () => void) => {
+    switch (status.type) {
+      case "ready": {
+        perform();
+        return;
+      }
+      case "setup": {
+        setUp(status.step);
+        return;
+      }
+      default: {
+        status satisfies never;
+        panic("Unhandled desktop action status");
+      }
+    }
+  });
+
   return {
     label: t(DESKTOP_ACTION_LABELS[action][presence.type]),
-    isConnecting: state.status === "connecting",
+    status,
+    isConnecting: state.status === "connecting" || state.status === "opening",
+    connect: connectApp,
+    setUp,
     run,
     requiredDialog: {
       action,
@@ -126,6 +182,47 @@ export const useDesktopActionGate = (
       required,
     },
   };
+};
+
+const DESKTOP_SETUP_ICONS = {
+  connect: PlugIcon,
+  install: DownloadIcon,
+  update: RefreshCwIcon,
+} as const satisfies Record<DesktopSetupStep, LucideIcon>;
+
+type DesktopSetupMenuItemProps = {
+  status: DesktopActionStatus;
+  onSetUp: (step: DesktopSetupStep) => void;
+};
+
+/**
+ * The desktop status line at the top of a menu's desktop actions. The actions
+ * keep naming what they do; this row says what stella desktop needs first and
+ * starts that step.
+ */
+export const DesktopSetupMenuItem = ({
+  onSetUp,
+  status,
+}: DesktopSetupMenuItemProps) => {
+  const t = useTranslations();
+  switch (status.type) {
+    case "ready": {
+      return null;
+    }
+    case "setup": {
+      const Icon = DESKTOP_SETUP_ICONS[status.step];
+      return (
+        <MenuItem onClick={() => onSetUp(status.step)}>
+          <Icon />
+          {t(DESKTOP_SETUP_LABELS[status.step])}
+        </MenuItem>
+      );
+    }
+    default: {
+      status satisfies never;
+      return panic("Unhandled desktop action status");
+    }
+  }
 };
 
 export type DesktopRequiredDialogProps = {
@@ -158,7 +255,7 @@ export const DesktopRequiredDialog = ({
     >
       <DialogPopup className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>
+          <DialogTitle className="me-6">
             {t(DESKTOP_ACTION_LABELS[action][required ?? "none"])}
           </DialogTitle>
           <DialogDescription>

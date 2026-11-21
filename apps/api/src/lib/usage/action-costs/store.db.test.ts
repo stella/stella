@@ -1,10 +1,10 @@
 import { PGlite } from "@electric-sql/pglite";
 import { expect, test } from "bun:test";
-import { drizzle } from "drizzle-orm/bun-sql";
-import { PgDialect, getTableConfig } from "drizzle-orm/pg-core";
+import { getTableConfig, PgDialect } from "drizzle-orm/pg-core";
 import { readFileSync } from "node:fs";
 
 import { actionCostCalls, actionCostRecords } from "@/api/db/schema";
+import { createMockDatabase } from "@/api/db/sql-client";
 import { toSafeId } from "@/api/lib/branded-types";
 
 import type { ActionCostObservation } from "./context";
@@ -78,7 +78,7 @@ const createDatabase = async () => {
   return db;
 };
 const apply = async (db: PGlite, batch: ActionCostObservation[]) => {
-  for (const query of actionCostWriteQueries(drizzle.mock(), batch)) {
+  for (const query of actionCostWriteQueries(createMockDatabase(), batch)) {
     const { sql, params } = query.toSQL();
     await db.query(sql, params);
   }

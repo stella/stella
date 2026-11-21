@@ -4,12 +4,14 @@ import { eq, inArray } from "drizzle-orm";
 
 import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
 
+import { user as authUser } from "@/api/db/auth-schema";
 import type { ScopedDb } from "@/api/db/safe-db";
-import { invoices, timeEntries } from "@/api/db/schema";
+import { featureEnrolments, invoices, timeEntries } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import { exportCsvHandler } from "@/api/handlers/time-entries/csv/export";
 import { exportLedesHandler } from "@/api/handlers/time-entries/ledes/export";
 import { exportPdfHandler } from "@/api/handlers/time-entries/pdf/export";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { UNPRICED_TIME_ENTRY_CURRENCY } from "@/api/lib/billing-constants";
 import { createSafeId } from "@/api/lib/branded-types";
 import { cents } from "@/api/lib/money";
@@ -35,6 +37,21 @@ beforeAll(async () => {
   const fixture = await getRlsFixture();
   db = fixture.testDb;
   ids = fixture.ids;
+
+  await db
+    .update(authUser)
+    .set({ emailVerified: true })
+    .where(inArray(authUser.id, [ids.userAdmin]));
+  await db
+    .insert(featureEnrolments)
+    .values([
+      {
+        organizationId: ids.orgA,
+        userId: ids.userAdmin,
+        featureId: "time-billing",
+      },
+    ])
+    .onConflictDoNothing();
 });
 afterAll(async () => {
   if (createdIds.length > 0) {
@@ -99,7 +116,7 @@ test("a mixed client/internal invoice request refuses before claiming either row
   const result = await createInvoice.handler(
     asTestRaw<CreateContext>({
       request: new Request("https://example.test/invoices", { method: "POST" }),
-      route: "/invoices",
+      route: "/v1/invoices/:workspaceId" satisfies ApiRoutePath,
       workspaceId: ids.wsA2,
       user: { id: ids.userAdmin },
       memberRole: sessionMemberRole("owner"),

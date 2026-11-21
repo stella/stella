@@ -1,9 +1,13 @@
 import { describe, expect, test } from "bun:test";
 
-process.env["VITE_API_URL"] ??= "https://api.example.test";
+import { createTestState } from "@stll/test-state";
+
+const testState = createTestState({ file: import.meta.path, config: {} });
+
+testState.setEnvIfAbsent("VITE_API_URL", "https://api.example.test");
 const { describeSuggestChangesApplyOutcome, hasAutomaticApproval } =
   await import("@/components/chat/tool-approval-card.logic");
-const { isSuggestChangesApplyOutput } =
+const { isSuggestChangesApplyOutput, SUGGEST_CHANGES_TOOL_NAME } =
   await import("@/components/chat/chat-ui-tools");
 
 const noGrants = new Set<never>();
@@ -15,7 +19,6 @@ describe("automatic tool approval", () => {
         alwaysApprovedTools: noGrants,
         canAlwaysAllow: true,
         conversationApprovedTools: new Set(["mcp__connector__read"]),
-        isPublicOfficialApproval: false,
         name: "mcp__connector__read",
       }),
     ).toBe(true);
@@ -23,20 +26,33 @@ describe("automatic tool approval", () => {
 
   test.each([
     "delete_matter",
-    "manage_organization",
-    "spawn_subagents",
+    "update_organization_settings",
+    SUGGEST_CHANGES_TOOL_NAME,
   ] as const)(
     "never reuses a stored grant for approve-once tool %s",
     (name) => {
-      expect(
-        hasAutomaticApproval({
+      for (const grants of [
+        {
           alwaysApprovedTools: new Set([name]),
-          canAlwaysAllow: true,
+          conversationApprovedTools: noGrants,
+        },
+        {
+          alwaysApprovedTools: noGrants,
           conversationApprovedTools: new Set([name]),
-          isPublicOfficialApproval: false,
-          name,
-        }),
-      ).toBe(false);
+        },
+        {
+          alwaysApprovedTools: new Set([name]),
+          conversationApprovedTools: new Set([name]),
+        },
+      ]) {
+        expect(
+          hasAutomaticApproval({
+            ...grants,
+            canAlwaysAllow: true,
+            name,
+          }),
+        ).toBe(false);
+      }
     },
   );
 });

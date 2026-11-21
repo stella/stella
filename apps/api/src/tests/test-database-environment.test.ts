@@ -39,6 +39,17 @@ describe("test database environment", () => {
     );
   });
 
+  test("preserves the explicit query performance database", () => {
+    const environment = {
+      DATABASE_URL: "postgres://integration:password@db.example/stella",
+      STELLA_RUN_QUERY_PERF_TESTS: "true",
+    };
+    configureTestDatabaseEnvironment(environment);
+    expect(environment.DATABASE_URL).toBe(
+      "postgres://integration:password@db.example/stella",
+    );
+  });
+
   test("fails a query that reaches the sentinel at once, and counts it", async () => {
     const before = rootPoolConnectionCount() ?? 0;
     const failure = await withGatedTestClients(

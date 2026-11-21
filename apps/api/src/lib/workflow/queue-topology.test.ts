@@ -2,10 +2,10 @@ import { describe, expect, test } from "bun:test";
 
 import {
   combineLiveWorkflowJobSnapshots,
-  workflowQueueClassForServiceTier,
   WORKFLOW_QUEUE_CLASS,
   WORKFLOW_QUEUE_NAMES,
   WORKFLOW_WORKER_SPECS,
+  workflowQueueClassForServiceTier,
 } from "@/api/lib/workflow/queue-topology";
 
 describe("workflow queue topology", () => {

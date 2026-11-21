@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { sql } from "drizzle-orm";
-import { PgDialect, getTableConfig } from "drizzle-orm/pg-core";
+import { getTableConfig, PgDialect } from "drizzle-orm/pg-core";
 import { drizzle } from "drizzle-orm/pglite";
 import { readFileSync } from "node:fs";
 import nodePath from "node:path";
@@ -28,7 +28,7 @@ import { createTestPglite } from "@/api/tests/pglite-test-db";
 
 const MIGRATION_PATH = nodePath.resolve(
   import.meta.dir,
-  "../../drizzle/20260927200300_case_law_decision_date_floor_by_jurisdiction/migration.sql",
+  "../../drizzle/20261024190200_case_law_decision_date_floor_gbr/migration.sql",
 );
 
 let client: Awaited<ReturnType<typeof createTestPglite>>;
@@ -63,7 +63,7 @@ const BOUNDARY_DATES: readonly string[] = [
  * One country per floor, and one no jurisdiction declares: the default floor
  * must hold for it on every side.
  */
-const COUNTRIES: readonly string[] = ["CZE", "EU", "USA", "ROU"];
+const COUNTRIES: readonly string[] = ["CZE", "EU", "GBR", "USA", "ROU"];
 
 const acceptedByGuard = (date: string, country: string): boolean =>
   canonicalDecisionDate(date, country) !== null;
@@ -154,7 +154,7 @@ test("the SQL fragments are each other's negation and agree with the guard", asy
     ]);
   }
   // Guards the loop above against a fixture set that made it vacuous, and
-  // pins the floors themselves: 1600 for USA, 1800 for everyone else.
+  // pins the floors themselves: 1600 for GBR and USA, 1800 for everyone else.
   expect(BOUNDARY_DATES.some((date) => acceptedByGuard(date, "CZE"))).toBe(
     true,
   );
@@ -163,10 +163,10 @@ test("the SQL fragments are each other's negation and agree with the guard", asy
       COUNTRIES.map((country) => verdicts.get(`${country} ${date}`)),
     ),
   ).toEqual([
-    [false, false, false, false],
-    [false, false, true, false],
-    [false, false, true, false],
-    [true, true, true, true],
+    [false, false, false, false, false],
+    [false, false, true, true, false],
+    [false, false, true, true, false],
+    [true, true, true, true, true],
   ]);
 });
 

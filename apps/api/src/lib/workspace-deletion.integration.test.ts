@@ -1,5 +1,12 @@
 import { Result } from "better-result";
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import {
+  afterAll,
+  beforeAll,
+  describe,
+  expect,
+  setDefaultTimeout,
+  test,
+} from "bun:test";
 import { eq, inArray } from "drizzle-orm";
 
 import { member, organization, user } from "@/api/db/auth-schema";
@@ -12,14 +19,21 @@ import {
   chatMessages,
   chatThreadCompactions,
   chatThreads,
+  contacts,
   desktopEditSessions,
+  documentProcessingRuns,
   docxSuggestions,
   entities,
   entityDeletionCleanupRequests,
   entityVersions,
   expenses,
   fields,
+  flowRuns,
+  flowRunSteps,
   folioCollabRooms,
+  INVOICE_STATUS,
+  invoiceLines,
+  invoices,
   properties,
   timeEntries,
   userFiles,
@@ -27,6 +41,7 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import { createSafeDb } from "@/api/db/scoped";
+import { toPersistedChatMessageContentV3 } from "@/api/handlers/chat/chat-message-parts";
 import { auditEventChanges } from "@/api/lib/audit-log";
 import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -39,11 +54,19 @@ import { createFileKey, createUserFileKey } from "@/api/lib/file-key";
 import type { FileKey } from "@/api/lib/file-key";
 import { FOLIO_COLLAB_YJS_UPDATE_MIME_TYPE } from "@/api/lib/folio-collab-mime";
 import { cents } from "@/api/lib/money";
-import { completeOrganizationDeletion } from "@/api/lib/organization-storage-teardown";
+import {
+  completeOrganizationDeletion,
+  WorkspaceBillingHistoryError,
+} from "@/api/lib/organization-storage-teardown";
+import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 import { executeAuthorizedWorkspaceDeletion } from "@/api/lib/workspace-deletion";
 import type { WorkspaceDeletionDatabase } from "@/api/lib/workspace-deletion";
 import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import {
+  deleteAccountExports,
+  seedReadyOrganizationAuditExport,
+} from "@/api/tests/helpers/organization-audit-export";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
@@ -70,6 +93,9 @@ type Fixture = {
 let testDb: TestDatabase;
 let fixture: Fixture;
 let writerSafeDb: SafeDb;
+
+// timeout: Matter deletion drives the real teardown across database and object store.
+setDefaultTimeout(30_000);
 
 const seedUser = async (name: string) => {
   const id = mintAuthProviderId<"user">();
@@ -123,7 +149,11 @@ const seedThreadFile = async ({
 }) => {
   const threadId = createSafeId<"chatThread">();
   const fileId = createSafeId<"userFile">();
-  const s3Key = createUserFileKey({ fileId, mimeType: PDF_MIME_TYPE, userId });
+  const s3Key = createUserFileKey({
+    fileId,
+    mimeType: PDF_MIME_TYPE,
+    organizationId,
+  });
   await testDb.insert(chatThreads).values({
     id: threadId,
     dataWorkspaceIds,
@@ -158,6 +188,10 @@ beforeAll(async () => {
     name: "Workspace deletion fixture",
     slug: `workspace-deletion-${organizationId}`,
     createdAt: new Date(),
+  });
+  await recordNewOrganizationAccessState(testDb, {
+    organizationId,
+    now: new Date(),
   });
   await testDb.insert(member).values([
     {
@@ -267,33 +301,6 @@ beforeAll(async () => {
       thumbnailFileId,
     },
   });
-  await testDb.insert(timeEntries).values({
-    id: createSafeId<"timeEntry">(),
-    organizationId,
-    workspaceId: targetWorkspaceId,
-    userId: actorUserId,
-    workItemId: targetDocument.entityId,
-    dateWorked: "2026-08-30",
-    timezoneId: "Europe/Prague",
-    durationMinutes: 30,
-    billedMinutes: 30,
-    rateAtEntry: cents(100),
-    currency: "EUR",
-    narrative: "Ordinary matter work",
-  });
-  await testDb.insert(expenses).values({
-    id: createSafeId<"expense">(),
-    organizationId,
-    workspaceId: targetWorkspaceId,
-    userId: actorUserId,
-    matterId: targetDocument.entityId,
-    dateIncurred: "2026-08-30",
-    amount: cents(100),
-    currency: "EUR",
-    category: "filing_fee",
-    description: "Ordinary matter expense",
-  });
-
   const checkpointFileId = createSafeId<"userFile">();
   await testDb.insert(desktopEditSessions).values({
     id: createSafeId<"desktopEditSession">(),
@@ -353,7 +360,9 @@ beforeAll(async () => {
   });
   const retainedMessageId = createSafeId<"chatMessage">();
   await testDb.insert(chatMessages).values({
-    content: { data: [{ text: "Retained chat", type: "text" }], version: 1 },
+    content: toPersistedChatMessageContentV3({
+      data: [{ content: "Retained chat", type: "text" }],
+    }),
     id: retainedMessageId,
     role: "user",
     threadId: retainedThread.threadId,
@@ -481,13 +490,20 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
+  await seedReadyOrganizationAuditExport({
+    db: testDb,
+    userId: fixture.actorUserId,
+    organizationId: fixture.organizationId,
+  });
   await testDb.transaction(
     async (tx) =>
       await completeOrganizationDeletion({
+        deletedBy: fixture.actorUserId,
         organizationId: fixture.organizationId,
         tx: asTestRaw<Transaction>(tx),
       }),
   );
+  await deleteAccountExports(testDb, fixture.actorUserId);
   await testDb
     .delete(entityDeletionCleanupRequests)
     .where(
@@ -505,7 +521,189 @@ afterAll(async () => {
 });
 
 describe("workspace deletion", () => {
+  test("keeps a matter while an AI flow may be past its durable start fence", async () => {
+    const workspaceId = createSafeId<"workspace">();
+    const runId = createSafeId<"flowRun">();
+    await testDb.insert(workspaces).values({
+      id: workspaceId,
+      organizationId: fixture.organizationId,
+      name: "Active flow matter",
+      reference: "ACTIVE-FLOW-1",
+      status: "active",
+    });
+    await testDb.insert(workspaceMembers).values({
+      id: createSafeId<"workspaceMember">(),
+      workspaceId,
+      userId: fixture.actorUserId,
+    });
+    await testDb.insert(flowRuns).values({
+      id: runId,
+      workspaceId,
+      definitionSnapshot: {
+        name: "Active generation",
+        steps: [
+          {
+            kind: "ai",
+            name: "Generate",
+            prompt: "Generate a summary",
+            includeDocuments: false,
+          },
+        ],
+      },
+      status: "running",
+      startedAt: new Date("2026-01-01T09:00:00Z"),
+      currentStepIndex: 0,
+      triggerSource: { type: "manual", userId: fixture.actorUserId },
+      inputEntityIds: [],
+    });
+    await testDb.insert(flowRunSteps).values({
+      id: createSafeId<"flowRunStep">(),
+      workspaceId,
+      runId,
+      index: 0,
+      kind: "ai",
+      status: "running",
+      startedAt: new Date("2026-01-01T09:00:00Z"),
+    });
+    const auditEvents: AuditEvent[] = [];
+
+    const result = await executeAuthorizedWorkspaceDeletion(
+      {
+        actorUserId: fixture.actorUserId,
+        organizationId: fixture.organizationId,
+        recordAuditEvent: async (_tx, event) => {
+          auditEvents.push(...(Array.isArray(event) ? event : [event]));
+        },
+        workspaceId,
+      },
+      {
+        database: {
+          transaction: async (callback) =>
+            await testDb.transaction(
+              async (tx) => await callback(asTestRaw<Transaction>(tx)),
+            ),
+        },
+        enqueueCleanup: async () => {},
+        flushWorkspaceSearchRepairs: async () => ({ failed: 0, repaired: 0 }),
+      },
+    );
+
+    expect(Result.isOk(result)).toBe(true);
+    if (Result.isOk(result)) {
+      expect(result.value).toEqual({ status: "document-processing-running" });
+    }
+    expect(auditEvents).toEqual([]);
+    expect(
+      await testDb
+        .select({ status: workspaces.status })
+        .from(workspaces)
+        .where(eq(workspaces.id, workspaceId)),
+    ).toEqual([{ status: "active" }]);
+    expect(
+      await testDb
+        .select({ status: flowRuns.status })
+        .from(flowRuns)
+        .where(eq(flowRuns.id, runId)),
+    ).toEqual([{ status: "running" }]);
+  });
+
+  test("keeps a matter while an OCR run is still running", async () => {
+    const workspaceId = createSafeId<"workspace">();
+    await testDb.insert(workspaces).values({
+      id: workspaceId,
+      organizationId: fixture.organizationId,
+      name: "Active OCR matter",
+      reference: "ACTIVE-OCR-1",
+      status: "active",
+    });
+    await testDb.insert(workspaceMembers).values({
+      id: createSafeId<"workspaceMember">(),
+      workspaceId,
+      userId: fixture.actorUserId,
+    });
+    const document = await seedDocument(workspaceId);
+    const fieldId = createSafeId<"field">();
+    const sourceFileId = Bun.randomUUIDv7();
+    await testDb.insert(fields).values({
+      id: fieldId,
+      workspaceId,
+      propertyId: document.propertyId,
+      entityVersionId: document.entityVersionId,
+      content: {
+        type: "file",
+        version: 1,
+        id: sourceFileId,
+        fileName: "scan.pdf",
+        mimeType: PDF_MIME_TYPE,
+        sizeBytes: 10,
+        encrypted: false,
+        sha256Hex: "c".repeat(64),
+        pdfFileId: null,
+      },
+    });
+    const ocrRunId = createSafeId<"documentProcessingRun">();
+    await testDb.insert(documentProcessingRuns).values({
+      id: ocrRunId,
+      organizationId: fixture.organizationId,
+      workspaceId,
+      entityId: document.entityId,
+      entityVersionId: document.entityVersionId,
+      fieldId,
+      sourceFileId,
+      sourceSha256Hex: "c".repeat(64),
+      kind: "ocr",
+      requestSource: "upload",
+      status: "running",
+    });
+    const auditEvents: AuditEvent[] = [];
+
+    const result = await executeAuthorizedWorkspaceDeletion(
+      {
+        actorUserId: fixture.actorUserId,
+        organizationId: fixture.organizationId,
+        recordAuditEvent: async (_tx, event) => {
+          auditEvents.push(...(Array.isArray(event) ? event : [event]));
+        },
+        workspaceId,
+      },
+      {
+        database: {
+          transaction: async (callback) =>
+            await testDb.transaction(
+              async (tx) => await callback(asTestRaw<Transaction>(tx)),
+            ),
+        },
+        enqueueCleanup: async () => {},
+        flushWorkspaceSearchRepairs: async () => ({ failed: 0, repaired: 0 }),
+      },
+    );
+
+    expect(Result.isOk(result)).toBe(true);
+    if (Result.isOk(result)) {
+      expect(result.value).toEqual({ status: "document-processing-running" });
+    }
+    expect(auditEvents).toEqual([]);
+    expect(
+      await testDb
+        .select({ status: workspaces.status })
+        .from(workspaces)
+        .where(eq(workspaces.id, workspaceId)),
+    ).toEqual([{ status: "active" }]);
+    expect(
+      await testDb
+        .select({ status: documentProcessingRuns.status })
+        .from(documentProcessingRuns)
+        .where(eq(documentProcessingRuns.id, ocrRunId)),
+    ).toEqual([{ status: "running" }]);
+  });
+
   test("atomically removes the complete target while preserving unrelated chats", async () => {
+    let projectionOwnerReads = 0;
+    const flushWorkspaceSearchRepairs = async () => {
+      projectionOwnerReads += 1;
+      await testDb.select({ id: organization.id }).from(organization).limit(1);
+      return { failed: 0, repaired: 0 };
+    };
     const [compactionBefore, threadBefore] = await Promise.all([
       testDb
         .select({
@@ -545,10 +743,11 @@ describe("workspace deletion", () => {
         recordAuditEvent,
         workspaceId: fixture.targetWorkspaceId,
       },
-      { database, enqueueCleanup: async () => {} },
+      { database, enqueueCleanup: async () => {}, flushWorkspaceSearchRepairs },
     );
 
     expect(Result.isOk(result)).toBe(true);
+    expect(projectionOwnerReads).toBeGreaterThan(0);
     if (Result.isOk(result)) {
       expect(result.value).toEqual({ status: "deleted" });
     }
@@ -687,12 +886,14 @@ describe("workspace deletion", () => {
         .from(chatMessages)
         .where(eq(chatMessages.threadId, fixture.retainedThreadId)),
     ).toHaveLength(1);
-    expect(
-      await testDb
-        .select({ s3Key: userFiles.s3Key })
-        .from(userFiles)
-        .where(eq(userFiles.s3Key, fixture.retainedAttachmentKey)),
-    ).toEqual([{ s3Key: fixture.retainedAttachmentKey }]);
+    const retainedAttachments = await testDb
+      .select({ s3Key: userFiles.s3Key })
+      .from(userFiles)
+      .where(eq(userFiles.s3Key, fixture.retainedAttachmentKey));
+    expect(retainedAttachments).toHaveLength(1);
+    expect(retainedAttachments).toEqual([
+      { s3Key: fixture.retainedAttachmentKey },
+    ]);
     expect(
       await testDb
         .select({ id: docxSuggestions.id })
@@ -755,7 +956,11 @@ describe("workspace deletion", () => {
         recordAuditEvent,
         workspaceId,
       },
-      { database, enqueueCleanup: async () => {} },
+      {
+        database,
+        enqueueCleanup: async () => {},
+        flushWorkspaceSearchRepairs: async () => ({ failed: 0, repaired: 0 }),
+      },
     );
 
     expect(Result.isError(result)).toBe(true);
@@ -786,5 +991,252 @@ describe("workspace deletion", () => {
         .from(bufferObjectCleanupIntents)
         .where(eq(bufferObjectCleanupIntents.id, writerIntentId)),
     ).toEqual([{ status: BUFFER_OBJECT_CLEANUP_INTENT_STATUS.WRITING }]);
+  });
+
+  test("reports a committed deletion when the search flush afterwards fails", async () => {
+    const workspaceId = createSafeId<"workspace">();
+    await testDb.insert(workspaces).values({
+      id: workspaceId,
+      organizationId: fixture.organizationId,
+      name: "Flush failure matter",
+      reference: "FLUSH-FAIL-1",
+      status: "active",
+    });
+    await testDb.insert(workspaceMembers).values({
+      id: createSafeId<"workspaceMember">(),
+      workspaceId,
+      userId: fixture.actorUserId,
+    });
+    const database: WorkspaceDeletionDatabase = {
+      transaction: async (callback) =>
+        await testDb.transaction(
+          async (tx) => await callback(asTestRaw<Transaction>(tx)),
+        ),
+    };
+    const flushedWorkspaceIds: string[][] = [];
+
+    const result = await executeAuthorizedWorkspaceDeletion(
+      {
+        actorUserId: fixture.actorUserId,
+        organizationId: fixture.organizationId,
+        recordAuditEvent: async () => {},
+        workspaceId,
+      },
+      {
+        database,
+        enqueueCleanup: async () => {},
+        flushWorkspaceSearchRepairs: async (workspaceIds) => {
+          flushedWorkspaceIds.push([...workspaceIds]);
+          throw new Error("search repair flush unavailable");
+        },
+      },
+    );
+
+    expect(Result.isOk(result)).toBe(true);
+    if (Result.isOk(result)) {
+      expect(result.value).toEqual({ status: "deleted" });
+    }
+    expect(flushedWorkspaceIds).toEqual([[workspaceId]]);
+    expect(
+      await testDb
+        .select({ id: workspaces.id })
+        .from(workspaces)
+        .where(eq(workspaces.id, workspaceId)),
+    ).toEqual([]);
+  });
+
+  test("refuses a matter with billing records and leaves it untouched", async () => {
+    const database: WorkspaceDeletionDatabase = {
+      transaction: async (callback) =>
+        await testDb.transaction(
+          async (tx) => await callback(asTestRaw<Transaction>(tx)),
+        ),
+    };
+    const clientId = createSafeId<"contact">();
+    await testDb.insert(contacts).values({
+      id: clientId,
+      organizationId: fixture.organizationId,
+      type: "organization",
+      displayName: "Invoice client",
+    });
+    const seedMatter = async (reference: string) => {
+      const workspaceId = createSafeId<"workspace">();
+      await testDb.insert(workspaces).values({
+        id: workspaceId,
+        clientId,
+        organizationId: fixture.organizationId,
+        name: reference,
+        reference,
+        status: "active",
+      });
+      await testDb.insert(workspaceMembers).values({
+        id: createSafeId<"workspaceMember">(),
+        workspaceId,
+        userId: fixture.actorUserId,
+      });
+      return workspaceId;
+    };
+    const invoicedMatterId = await seedMatter("INVOICED-1");
+    const lineOnlyMatterId = await seedMatter("LINE-ONLY-1");
+    const timeOnlyMatterId = await seedMatter("TIME-ONLY-1");
+    const expenseOnlyMatterId = await seedMatter("EXPENSE-ONLY-1");
+    // Unbilled work in progress: a draft entry and an expense on no invoice.
+    const timeWorkItem = await seedDocument(timeOnlyMatterId);
+    const timeEntryId = createSafeId<"timeEntry">();
+    await testDb.insert(timeEntries).values({
+      id: timeEntryId,
+      organizationId: fixture.organizationId,
+      workspaceId: timeOnlyMatterId,
+      userId: fixture.actorUserId,
+      workItemId: timeWorkItem.entityId,
+      dateWorked: "2026-08-30",
+      timezoneId: "Europe/Prague",
+      durationMinutes: 30,
+      billedMinutes: 30,
+      rateAtEntry: cents(100),
+      currency: "EUR",
+      narrative: "Unbilled matter work",
+    });
+    const expenseItem = await seedDocument(expenseOnlyMatterId);
+    const expenseId = createSafeId<"expense">();
+    await testDb.insert(expenses).values({
+      id: expenseId,
+      organizationId: fixture.organizationId,
+      workspaceId: expenseOnlyMatterId,
+      userId: fixture.actorUserId,
+      matterId: expenseItem.entityId,
+      dateIncurred: "2026-08-30",
+      amount: cents(100),
+      currency: "EUR",
+      category: "filing_fee",
+      description: "Unbilled matter expense",
+    });
+    const refusedMatterIds = [
+      invoicedMatterId,
+      lineOnlyMatterId,
+      timeOnlyMatterId,
+      expenseOnlyMatterId,
+    ];
+    const invoiceId = createSafeId<"invoice">();
+    await testDb.insert(invoices).values({
+      id: invoiceId,
+      organizationId: fixture.organizationId,
+      workspaceId: invoicedMatterId,
+      invoiceNumber: `INV-RETAINED-${invoiceId}`,
+      invoiceDate: "2026-10-01",
+      currency: "EUR",
+      status: INVOICE_STATUS.DRAFT,
+    });
+    // A client invoice names no matter; it bills one only through its line.
+    const clientInvoiceId = createSafeId<"invoice">();
+    await testDb.insert(invoices).values({
+      id: clientInvoiceId,
+      organizationId: fixture.organizationId,
+      clientId,
+      workspaceId: null,
+      invoiceNumber: `INV-RETAINED-${clientInvoiceId}`,
+      invoiceDate: "2026-10-01",
+      currency: "EUR",
+      status: INVOICE_STATUS.DRAFT,
+    });
+    await testDb.insert(invoiceLines).values({
+      id: createSafeId<"invoiceLine">(),
+      organizationId: fixture.organizationId,
+      workspaceId: lineOnlyMatterId,
+      invoiceId: clientInvoiceId,
+      position: 0,
+      description: "Legal services",
+      quantity: "1.0000",
+      unit: "h",
+      unitPrice: cents(100),
+      vatRateBps: 2100,
+      vatTreatment: "domestic_vat",
+      netAmount: cents(100),
+      vatAmount: cents(21),
+      grossAmount: cents(121),
+      source: "manual",
+    });
+    const auditEvents: AuditEvent[] = [];
+
+    for (const workspaceId of refusedMatterIds) {
+      const result = await executeAuthorizedWorkspaceDeletion(
+        {
+          actorUserId: fixture.actorUserId,
+          organizationId: fixture.organizationId,
+          recordAuditEvent: async (_tx, event) => {
+            auditEvents.push(...(Array.isArray(event) ? event : [event]));
+          },
+          workspaceId,
+        },
+        {
+          database,
+          enqueueCleanup: async () => {},
+          flushWorkspaceSearchRepairs: async () => ({ failed: 0, repaired: 0 }),
+        },
+      );
+
+      expect(Result.isError(result)).toBe(true);
+      if (Result.isError(result)) {
+        const { error } = result;
+        expect(error).toBeInstanceOf(WorkspaceBillingHistoryError);
+        expect(
+          error instanceof WorkspaceBillingHistoryError ? error.message : null,
+        ).toBe(
+          "This matter has time, expenses or invoices and cannot be deleted. Archive it to keep its billing records intact.",
+        );
+      }
+    }
+    expect(auditEvents).toEqual([]);
+    expect(
+      await testDb
+        .select({ id: workspaces.id, status: workspaces.status })
+        .from(workspaces)
+        .where(inArray(workspaces.id, refusedMatterIds)),
+    ).toEqual(
+      expect.arrayContaining(
+        refusedMatterIds.map((id) => ({ id, status: "active" })),
+      ),
+    );
+    expect(
+      await testDb.$count(
+        invoiceLines,
+        eq(invoiceLines.invoiceId, clientInvoiceId),
+      ),
+    ).toBe(1);
+    expect(await testDb.$count(invoices, eq(invoices.id, invoiceId))).toBe(1);
+    expect(
+      await testDb
+        .select({
+          workspaceId: timeEntries.workspaceId,
+          workItemId: timeEntries.workItemId,
+          billedMinutes: timeEntries.billedMinutes,
+          rateAtEntry: timeEntries.rateAtEntry,
+        })
+        .from(timeEntries)
+        .where(eq(timeEntries.id, timeEntryId)),
+    ).toEqual([
+      {
+        workspaceId: timeOnlyMatterId,
+        workItemId: timeWorkItem.entityId,
+        billedMinutes: 30,
+        rateAtEntry: cents(100),
+      },
+    ]);
+    expect(
+      await testDb
+        .select({
+          workspaceId: expenses.workspaceId,
+          matterId: expenses.matterId,
+          amount: expenses.amount,
+        })
+        .from(expenses)
+        .where(eq(expenses.id, expenseId)),
+    ).toEqual([
+      {
+        workspaceId: expenseOnlyMatterId,
+        matterId: expenseItem.entityId,
+        amount: cents(100),
+      },
+    ]);
   });
 });

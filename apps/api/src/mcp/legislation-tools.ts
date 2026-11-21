@@ -1,7 +1,9 @@
 import { panic } from "better-result";
 import * as v from "valibot";
 
-import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
+import { AGENT_INPUT_NORMALIZATION_KIND } from "@stll/agent-input";
+import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
+import { apiDateSchema } from "@stll/api-contract/api-date";
 import {
   LEGISLATION_PUBLISHER_WINDOW_INCONSISTENT,
   LEGISLATION_PUBLISHER_WINDOW_INCONSISTENT_MESSAGE,
@@ -12,19 +14,30 @@ import {
   publicLegislationCountry,
 } from "@stll/api-contract/legislation-publication";
 import { publicCountryUnavailable } from "@stll/api-contract/public-country-capability";
+import { statuteActNumber } from "@stll/api-contract/statute-act-number";
+import { statuteAnchorSchemeFor } from "@stll/api-contract/statute-anchor-schemes";
 import { mapWithConcurrency } from "@stll/concurrency";
 import type { Block } from "@stll/legal-ast/document-ast";
 import { hasUsableAst } from "@stll/legal-ast/document-ast";
+import {
+  annexDesignator,
+  requestedAnnexDesignator,
+} from "@stll/legal-ast/statute-anchor-scheme";
+import type { StatuteAnchorScheme } from "@stll/legal-ast/statute-anchor-scheme";
+import { anchorProvisionCitation } from "@stll/legal-atlas/provision-citation-resolve";
+import { STATUTE_TIMELINE_RESOURCE_URI } from "@stll/mcp-apps/resource-uri";
 
 import type { StatuteExpressionResolution } from "@/api/handlers/legislation/by-eli";
 import type { readProvisionHistoryHandler } from "@/api/handlers/legislation/provision-history";
-import { extractProvisionText } from "@/api/handlers/legislation/provision-text";
+import { readProvision } from "@/api/handlers/legislation/provision-text";
 import type { LegislationProvisionVersion } from "@/api/handlers/legislation/provision-versions";
 import type { listStatuteVersionsHandler } from "@/api/handlers/legislation/versions";
 import {
   READ_PROVISION_HISTORY_PROJECTION,
-  READ_STATUTE_PROJECTION,
   READ_STATUTE_PROVISIONS_PROJECTION,
+} from "@/api/lib/chat/legislation-result-projections";
+import {
+  READ_STATUTE_PROJECTION,
   SEARCH_LEGISLATION_PROJECTION,
 } from "@/api/lib/chat/projections";
 import { CORPUS_SEARCH_CURSOR_WITH_PHASE_MAX_LENGTH } from "@/api/lib/legal-search/corpus-search-cursor";
@@ -32,6 +45,7 @@ import { PROVISION_STATUS } from "@/api/lib/legal-search/legislation-provision-v
 import { readVersionBlocks } from "@/api/lib/legal-search/legislation-version-blocks";
 import { legislationPublicReadDb } from "@/api/lib/legislation-public-read-db";
 import { LIMITS } from "@/api/lib/limits";
+import { projectionPayload } from "@/api/lib/projection-totality";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedLegislationDocumentId } from "@/api/lib/safe-id-boundaries";
 import {
@@ -39,8 +53,29 @@ import {
   actionRequestObserver,
 } from "@/api/lib/usage/action-costs/context";
 import {
-  isLegislationSearchSuccess,
-  isStatuteDocument,
+  isBoundTextCursor,
+  windowBoundText,
+} from "@/api/mcp/bound-text-window";
+import type { McpRequestContext } from "@/api/mcp/context";
+import {
+  continuationTokenInput,
+  countryInputSchema,
+  countryNormalization,
+  cursorInput,
+  ELI_NORMALIZATION,
+  FILTER_NORMALIZATION,
+  nullAsAbsent,
+  uuidInputSchema,
+} from "@/api/mcp/input-schemas";
+import {
+  anchorInputSchema,
+  eliInputSchema,
+  languageInputSchema,
+  READ_PROVISION_HISTORY_INPUT_NORMALIZATION,
+  readProvisionHistoryArgsSchema,
+} from "@/api/mcp/legislation-input";
+import type { StatuteDocument } from "@/api/mcp/public-law-handlers";
+import {
   defaultListStatuteVersionsHandler,
   defaultReadLegislationProvisionVersions,
   defaultReadProvisionHistoryHandler,
@@ -48,32 +83,34 @@ import {
   defaultResolveStatuteExpression,
   defaultResolveStatuteWorkVersion,
   defaultSearchLegislationHandler,
+  isLegislationSearchSuccess,
+  isStatuteDocument,
 } from "@/api/mcp/public-law-handlers";
+import {
+  createToolContinuation,
+  runContinuablePublicRead,
+} from "@/api/mcp/public-read-continuation";
 import { serializeAuthorizedCorpusMcpResourceName } from "@/api/mcp/resource-serialization";
 import type {
   InternalToolErrorResult,
+  InternalToolResult,
   McpToolDefinition,
   McpToolHandler,
   TypedMcpToolHandler,
 } from "@/api/mcp/tool-types";
 import { defineMcpToolSet } from "@/api/mcp/tool-types";
 import {
-  invalidCursorResult,
   buildLegislationDocumentAppUrl,
-  countryInputSchema,
-  countryNormalization,
-  ELI_NORMALIZATION,
-  FILTER_NORMALIZATION,
-  cursorInput,
   DEFAULT_SEARCH_LIMIT,
   errorResult,
   handlerStatusOf,
-  ISO_DATE_SCHEMA,
+  invalidCursorResult,
   isToolErrorResult,
-  MCP_CONTENT_MAX_CHARS,
+  legalCitationLinkFields,
   mapValibotIssues,
+  MCP_CONTENT_MAX_CHARS,
   notFoundResult,
-  nullAsAbsent,
+  searchRefusalResult,
   toolDataResult,
   toPlainCorpusText,
   toPlainTextSnippet,
@@ -84,6 +121,8 @@ import {
   defineChatProjectionMcpToolOutput,
   defineValibotMcpTool,
 } from "@/api/mcp/valibot-tool-definition";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
+import { openMcpRead } from "@/api/mcp/write-tool-authority";
 
 /**
  * The stella legislation corpus as agent-facing tools: find a statute, read
@@ -125,49 +164,14 @@ const PICK_AN_ANCHOR_HINT =
 
 /** One sentence for the one reason wording is withheld, in both tools. */
 const WITHHELD_WORDING_MESSAGE =
-  "The source licence does not permit AI use of this wording. Read it at the statute's appUrl instead.";
-
-const eliInputSchema = v.pipe(
-  v.string(),
-  v.minLength(1),
-  v.maxLength(512),
-  v.description(
-    "European Legislation Identifier of the work, as search_legislation " +
-      "returns it (for example https://www.e-sbirka.cz/eli/cz/sb/2012/89). " +
-      "It addresses the act, not one consolidation of it.",
-  ),
-);
-
-const anchorInputSchema = v.pipe(
-  v.string(),
-  v.minLength(1),
-  v.maxLength(256),
-  v.description(
-    "Publisher provision anchor; confirm it in read_statute's outline for " +
-      "the chosen consolidation. Czech e-Sbírka commonly uses par_<section>, " +
-      "-odst_<paragraph>, and -pism_<letter> (par_1729, par_1729-odst_1, " +
-      "par_1729-odst_2-pism_a). Subdivision anchors narrow the answer to " +
-      "that subdivision. Other publishers may use different schemes.",
-  ),
-);
+  "The source licence does not permit AI use of this wording. Read it at the statute's url instead.";
 
 const asOfInputSchema = v.pipe(
-  ISO_DATE_SCHEMA,
+  apiDateSchema,
   v.maxLength(10),
   v.description(
     "Read the consolidation in force on this ISO date (YYYY-MM-DD); omit it " +
       "for the text in force today.",
-  ),
-);
-
-const languageInputSchema = v.pipe(
-  v.string(),
-  v.minLength(2),
-  v.maxLength(8),
-  v.description(
-    "Language of the consolidation to read. Language is part of the work " +
-      "key, so an act published in two languages has one consolidation in " +
-      "each.",
   ),
 );
 
@@ -208,7 +212,7 @@ const searchLegislationArgsSchema = nullAsAbsent(
     ),
     date_from: v.optional(
       v.pipe(
-        ISO_DATE_SCHEMA,
+        apiDateSchema,
         v.maxLength(10),
         v.description(
           "Filter statutes effective from this ISO date (YYYY-MM-DD)",
@@ -217,10 +221,18 @@ const searchLegislationArgsSchema = nullAsAbsent(
     ),
     date_to: v.optional(
       v.pipe(
-        ISO_DATE_SCHEMA,
+        apiDateSchema,
         v.maxLength(10),
         v.description(
           "Filter statutes effective up to this ISO date (YYYY-MM-DD)",
+        ),
+      ),
+    ),
+    as_of: v.optional(
+      v.pipe(
+        asOfInputSchema,
+        v.description(
+          "Search text in force on this ISO date (YYYY-MM-DD); omit it to include historical wording.",
         ),
       ),
     ),
@@ -239,6 +251,7 @@ const searchLegislationArgsSchema = nullAsAbsent(
       description: "Opaque cursor from a previous search_legislation call",
       maxLength: CORPUS_SEARCH_CURSOR_WITH_PHASE_MAX_LENGTH,
     }),
+    continuation_token: continuationTokenInput,
   }),
 );
 
@@ -258,7 +271,16 @@ const provisionRequestSchema = v.strictObject({
   eli: eliInputSchema,
   anchor: anchorInputSchema,
   as_of: v.optional(asOfInputSchema),
+  document_id: v.optional(
+    uuidInputSchema(
+      "Exact consolidation handle returned as documentId by read_provision_history",
+    ),
+  ),
   language: v.optional(languageInputSchema),
+  text_cursor: cursorInput({
+    description: "Opaque nextTextCursor from this provision and consolidation",
+    issuedBy: isBoundTextCursor,
+  }),
 });
 
 const PROVISION_BATCH_MIN_ITEMS = 1;
@@ -304,32 +326,9 @@ const provisionsBatchEnvelopeSchema = nullAsAbsent(
 /** Stage two: one entry, through the element the advertised array declares. */
 const provisionEntrySchema = nullAsAbsent(provisionRequestSchema);
 
-const readProvisionHistoryArgsSchema = nullAsAbsent(
-  v.strictObject({
-    eli: eliInputSchema,
-    anchor: anchorInputSchema,
-    language: v.optional(languageInputSchema),
-    limit: v.optional(
-      v.pipe(
-        v.number(),
-        v.integer(),
-        v.minValue(1),
-        v.maxValue(LIMITS.legislationProvisionHistoryPageSizeMax),
-        v.description(
-          `Versions per page; defaults to ${LIMITS.legislationProvisionHistoryPageSizeDefault}, at most ${LIMITS.legislationProvisionHistoryPageSizeMax}.`,
-        ),
-      ),
-    ),
-    cursor: cursorInput({
-      description:
-        "Opaque cursor from a previous read_provision_history call to read the next page",
-    }),
-  }),
-);
-
 const LEGISLATION_TOOL_DEFINITIONS = [
   defineValibotMcpTool({
-    consumesServices: true,
+    consumesServices: false,
     annotations: {
       title: "Search legislation",
       destructiveHint: false,
@@ -341,10 +340,12 @@ const LEGISLATION_TOOL_DEFINITIONS = [
       "statutes, each with its ELI, title, language, document type, " +
       "publication status, effective date and a matched snippet. Filters: " +
       "document type, status, language, and an effective-date range (ISO " +
-      "YYYY-MM-DD). No facets are returned and `total` is not counted, so " +
-      "page with the returned nextCursor instead of reasoning about a result " +
-      "count. A hit is metadata only: pass its `eli` to read_statute for the " +
-      "text, the outline of anchors and the consolidated versions.",
+      "YYYY-MM-DD). `as_of` searches text in force on that date; omit it to include historical wording. " +
+      "No facets are returned; `total` is not counted, so page with nextCursor. " +
+      "A hit is metadata only: pass its `eli` to read_statute for the " +
+      "text, the outline of anchors and the consolidated versions. " +
+      "Use `url` for the stella reader when served, otherwise the publisher; `source_url` is the publisher source. " +
+      'Under load it may answer status "running": not a failure. After retryAfterMs, repeat the call with continuation_token.',
     inputSchema: searchLegislationArgsSchema,
     inputNormalization: {
       country: countryNormalization({
@@ -355,8 +356,10 @@ const LEGISLATION_TOOL_DEFINITIONS = [
       document_type: FILTER_NORMALIZATION,
       status: FILTER_NORMALIZATION,
       language: FILTER_NORMALIZATION,
+      as_of: { kind: AGENT_INPUT_NORMALIZATION_KIND.date, bound: "start" },
     },
     access: "read",
+    permissions: openMcpRead("public legislation corpus"),
     readClass: "public",
     anonymized: { exposure: "passthrough" },
     // Backed by the public legislation corpus (legislationPublicReadDb), the
@@ -366,7 +369,7 @@ const LEGISLATION_TOOL_DEFINITIONS = [
     scope: "stella:search",
   }),
   defineValibotMcpTool({
-    consumesServices: true,
+    consumesServices: false,
     annotations: {
       title: "Read statute",
       destructiveHint: false,
@@ -377,15 +380,19 @@ const LEGISLATION_TOOL_DEFINITIONS = [
       "Read one statute by ELI as it stood on a date: `as_of` picks the " +
       "consolidation in force that day, and omitting it reads the text in " +
       "force today. Returns that consolidation's metadata and validity " +
-      "window, `versions` (the newest page of the work's consolidations), " +
+      "window, `pendingChanges` (publisher-stated future or undated effects), " +
+      "`versions` (the newest page of the work's consolidations, with `amendedBy` effects), " +
       "`outline` (its heading anchors, the input read_statute_provisions " +
-      "takes) and its plain text. Long text comes back in windows; pass the " +
+      "takes) on page 1, plus its plain text. Later pages omit outline and " +
+      "versions; pass the " +
       "returned nextCursor back as cursor to read more. A source that bars " +
       "AI use of its wording still answers with metadata, versions and " +
-      "outline, and `textWithheldReason` in place of the text.",
+      "outline, and `textWithheldReason` in place of the text. " +
+      "Use `url` for the stella reader when served, otherwise the publisher; `source_url` is the publisher source.",
     inputSchema: readStatuteArgsSchema,
     inputNormalization: { eli: ELI_NORMALIZATION },
     access: "read",
+    permissions: openMcpRead("public legislation corpus"),
     readClass: "public",
     anonymized: { exposure: "passthrough" },
     feature: "FEATURE_PUBLIC_LAW",
@@ -393,7 +400,7 @@ const LEGISLATION_TOOL_DEFINITIONS = [
     scope: "stella:read",
   }),
   defineValibotMcpTool({
-    consumesServices: true,
+    consumesServices: false,
     annotations: {
       title: "Read statute provisions",
       destructiveHint: false,
@@ -401,17 +408,17 @@ const LEGISLATION_TOOL_DEFINITIONS = [
       openWorldHint: false,
     },
     description:
-      "Read named provisions of one or more statutes in one call: each " +
-      "`items[]` entry is { eli, anchor } plus an optional as_of and " +
-      "language. An anchor is the publisher's own (par_1729, " +
-      "par_1729-odst_1) and read_statute's `outline` lists them. Every entry " +
-      "is answered separately, in input order, under `status`: `found` " +
-      "carries the provision's text, while `not_found` (no such ELI), " +
-      "`uncovered_date` (no consolidation applies that day, including where " +
-      "the publisher's own dates are inconsistent), " +
-      "`provision_not_found` (that consolidation has no such anchor) and " +
-      "`text_withheld` (the source bars AI use of its wording) each carry a " +
-      "message. Prefer one batched call over one call per provision.",
+      "Read statute provisions: items[] entries are { eli, anchor } with optional " +
+      "as_of and language, or document_id from read_provision_history for an exact " +
+      "consolidation. document_id and as_of are mutually exclusive. " +
+      "Use publisher anchors from read_statute's outline (par_1729, par_1729-odst_1). " +
+      "Entries return in input order: found carries text and governingText " +
+      "(enclosing units' lead-in and closing wording; governingTextTruncated " +
+      "if cut); invalid, not_found, " +
+      "uncovered_date (no applicable consolidation, including inconsistent publisher dates), " +
+      "provision_not_found and text_withheld (AI use barred) carry messages. " +
+      "Continue long text with nextTextCursor as text_cursor on the same entry until null. " +
+      "url opens the stella reader when served, otherwise the publisher; source_url is the publisher source.",
     inputSchema: readStatuteProvisionsArgsSchema,
     // Each entry is answered on its own, so an ELI no spelling rescues is that
     // entry's `not_found`, not a refusal of the whole batch.
@@ -422,6 +429,7 @@ const LEGISLATION_TOOL_DEFINITIONS = [
       },
     },
     access: "read",
+    permissions: openMcpRead("public legislation corpus"),
     readClass: "public",
     anonymized: { exposure: "passthrough" },
     feature: "FEATURE_PUBLIC_LAW",
@@ -429,7 +437,7 @@ const LEGISLATION_TOOL_DEFINITIONS = [
     scope: "stella:read",
   }),
   defineValibotMcpTool({
-    consumesServices: true,
+    consumesServices: false,
     annotations: {
       title: "Read provision history",
       destructiveHint: false,
@@ -437,18 +445,24 @@ const LEGISLATION_TOOL_DEFINITIONS = [
       openWorldHint: false,
     },
     description:
-      "How one provision's wording changed: its text in each consolidation " +
+      "Read one provision's wording in each consolidation " +
       "of the work, newest validity window first, so two wordings can be " +
       "compared without downloading whole statutes. Takes the work's `eli` and " +
       "an `anchor` from read_statute's outline. A consolidation that does " +
       "not carry the anchor is left out of `items`. Pass the returned " +
-      "nextCursor back as cursor for older windows.",
+      "nextCursor back as cursor for older versions. Long wording returns " +
+      "nextTextCursor on its item; pass it back as text_cursor with the same " +
+      "eli, anchor, and version-page cursor until it is null. Items carry " +
+      "governingText as read_statute_provisions does. " +
+      "Use `url` for the stella reader when served, otherwise the publisher; `source_url` is the publisher source.",
     inputSchema: readProvisionHistoryArgsSchema,
-    inputNormalization: { eli: ELI_NORMALIZATION },
+    inputNormalization: READ_PROVISION_HISTORY_INPUT_NORMALIZATION,
     access: "read",
+    permissions: openMcpRead("public legislation corpus"),
     readClass: "public",
     anonymized: { exposure: "passthrough" },
     feature: "FEATURE_PUBLIC_LAW",
+    _meta: { ui: { resourceUri: STATUTE_TIMELINE_RESOURCE_URI } },
     name: "read_provision_history",
     scope: "stella:read",
   }),
@@ -462,10 +476,26 @@ const legislationResourceName = (documentId: string): string =>
     }),
   );
 
+/** A resolution that names a text to read: one in force, or a Work's text as promulgated. */
+type StatuteTextResolution = Extract<
+  StatuteExpressionResolution,
+  { type: "expression" | "promulgated-only" }
+>;
+
 type StatuteResolutionRefusal = Exclude<
   StatuteExpressionResolution,
-  { type: "expression" }
+  StatuteTextResolution
 >;
+
+/**
+ * Whether a resolution names a text these tools read. A text as promulgated
+ * is read too; its `expressionKind` tells the caller it is not the text in
+ * force.
+ */
+const namesStatuteText = (
+  resolution: StatuteExpressionResolution,
+): resolution is StatuteTextResolution =>
+  resolution.type === "expression" || resolution.type === "promulgated-only";
 
 /**
  * The versions an inconsistency names, as an agent reads them: which
@@ -514,23 +544,68 @@ const statuteResolutionError = (
 const invalidCursorError = (toolName: LegislationToolName, cursor: string) =>
   invalidCursorResult({ cursor, tool: toolName });
 
-/** Text cut to the provision budget, and whether the budget cut it. */
-const boundProvisionText = (text: string) => {
-  const bounded = text.slice(0, LIMITS.legislationProvisionTextChars);
-  return { text: bounded, truncated: bounded.length < text.length };
-};
-
 // --- search_legislation ---------------------------------------------------
 
+type SearchLegislationData = v.InferInput<typeof SEARCH_LEGISLATION_PROJECTION>;
+type FinishedSearchLegislationData = Exclude<
+  SearchLegislationData,
+  { status: "running" }
+>;
+
+export const createLegislationContinuation = (
+  options: Pick<
+    Parameters<typeof createToolContinuation>[1],
+    "store" | "ownerId" | "limits"
+  > = {},
+) =>
+  createToolContinuation<
+    typeof searchLegislationArgsSchema,
+    FinishedSearchLegislationData,
+    null
+  >(searchLegislationArgsSchema, { ...options, progress: () => null });
+
+export type LegislationContinuation = ReturnType<
+  typeof createLegislationContinuation
+>;
+
+let legislationContinuation: LegislationContinuation | undefined;
+
+/** One per process, so concurrent calls on this task can find each other. */
+const getLegislationContinuation = (): LegislationContinuation => {
+  legislationContinuation ??= createLegislationContinuation();
+  return legislationContinuation;
+};
+
 const handleSearchLegislationTool: TypedMcpToolHandler<
-  v.InferInput<typeof SEARCH_LEGISLATION_PROJECTION>
+  SearchLegislationData
 > = async ({ args, context }) => {
   const parsed = v.safeParse(searchLegislationArgsSchema, args);
   if (!parsed.success) {
     return validationErrorResult(parsed.issues);
   }
+  const { continuation_token: continuationToken, ...searchArgs } =
+    parsed.output;
+  return await runContinuablePublicRead({
+    toolName: SEARCH_LEGISLATION_TOOL,
+    continuation:
+      context.testDependencies?.legislationSearchContinuation ??
+      getLegislationContinuation(),
+    args: searchArgs,
+    continuationToken,
+    context,
+    execute: async (workArgs) => await searchLegislationWork(workArgs, context),
+    finish: async (response) => await Promise.resolve(response),
+  });
+};
+
+/** The search itself; it may outlive the call that started it. */
+const searchLegislationWork = async (
+  searchArgs: v.InferOutput<typeof searchLegislationArgsSchema>,
+  context: AuthorizedMcpRequestContext,
+): Promise<InternalToolResult<FinishedSearchLegislationData>> => {
   const {
     country,
+    as_of: asOf,
     cursor,
     date_from: dateFrom,
     date_to: dateTo,
@@ -538,12 +613,15 @@ const handleSearchLegislationTool: TypedMcpToolHandler<
     language,
     query,
     status,
-  } = parsed.output;
+  } = searchArgs;
   const limit = normalizeTenantPageLimit(
-    parsed.output.limit ?? DEFAULT_SEARCH_LIMIT,
+    searchArgs.limit ?? DEFAULT_SEARCH_LIMIT,
   );
 
-  const unavailable = publicCountryUnavailable(country);
+  const unavailable = publicCountryUnavailable(country, {
+    domain: "legislation",
+    surface: "search",
+  });
   if (unavailable !== null) {
     return toolDataResult(unavailable);
   }
@@ -573,10 +651,15 @@ const handleSearchLegislationTool: TypedMcpToolHandler<
       ...(language === undefined ? {} : { language }),
       ...(dateFrom === undefined ? {} : { dateFrom }),
       ...(dateTo === undefined ? {} : { dateTo }),
+      ...(asOf === undefined ? {} : { asOf }),
     },
     legislationPublicReadDb,
     observer,
   );
+  const refusal = searchRefusalResult(result);
+  if (refusal !== null) {
+    return refusal;
+  }
   if (!isLegislationSearchSuccess(result)) {
     const failure = handlerStatusOf(result);
     return failure?.message === "Invalid cursor"
@@ -584,32 +667,38 @@ const handleSearchLegislationTool: TypedMcpToolHandler<
       : errorResult(failure?.message ?? "Legislation search failed");
   }
 
-  return toolDataResult({
-    nextCursor: result.nextCursor,
-    paginationOutcome: result.paginationOutcome,
-    results: result.items.map((hit) => ({
-      appUrl: buildLegislationDocumentAppUrl({
+  return toolDataResult(
+    projectionPayload(SEARCH_LEGISLATION_PROJECTION, {
+      nextCursor: result.nextCursor,
+      paginationOutcome: result.paginationOutcome,
+      results: result.items.map((hit) => ({
+        ...legalCitationLinkFields({
+          url: buildLegislationDocumentAppUrl({
+            country: hit.country,
+            documentId: hit.documentId,
+            eli: hit.eli,
+            slug: hit.slug,
+          }),
+          sourceUrl: hit.sourceUrl,
+        }),
         country: hit.country,
         documentId: hit.documentId,
+        documentType: hit.documentType,
+        effectiveDate: hit.effectiveDate,
+        versionValidFrom: hit.versionValidFrom,
+        versionValidTo: hit.versionValidTo,
         eli: hit.eli,
-        slug: hit.slug,
-      }),
-      country: hit.country,
-      documentId: hit.documentId,
-      documentType: hit.documentType,
-      effectiveDate: hit.effectiveDate,
-      eli: hit.eli,
-      language: hit.language,
-      match: hit.match,
-      resourceName: legislationResourceName(hit.documentId),
-      score: hit.score,
-      snippet: toPlainTextSnippet(hit.headline),
-      sourceUrl: hit.sourceUrl,
-      status: hit.status,
-      title: hit.title,
-    })),
-    total: result.total,
-  } satisfies v.InferInput<typeof SEARCH_LEGISLATION_PROJECTION>);
+        language: hit.language,
+        match: hit.match,
+        resourceName: legislationResourceName(hit.documentId),
+        score: hit.score,
+        snippet: toPlainTextSnippet(hit.headline),
+        status: hit.status,
+        title: hit.title,
+      })),
+      total: result.total,
+    }),
+  );
 };
 
 // --- read_statute ---------------------------------------------------------
@@ -624,8 +713,18 @@ const isStatuteVersionsPage = (
 ): value is StatuteVersionsPage =>
   typeof value === "object" && "items" in value && Array.isArray(value.items);
 
-/** The heading blocks a consolidation carries, in document order, bounded. */
-const buildStatuteOutline = (blocks: readonly Block[]) => {
+/**
+ * The heading blocks a consolidation carries, in document order, bounded.
+ *
+ * Annexes come last in an act and are cited by number, so a bound that kept
+ * only the first headings would hide every annex anchor of a long act. Every
+ * annex heading is kept (up to half the bound) and the other headings fill
+ * the rest, still in document order.
+ */
+const buildStatuteOutline = (
+  blocks: readonly Block[],
+  scheme: StatuteAnchorScheme,
+) => {
   const headings = blocks.flatMap((block) =>
     block.type === "heading"
       ? [
@@ -637,14 +736,75 @@ const buildStatuteOutline = (blocks: readonly Block[]) => {
         ]
       : [],
   );
-  const outlineTruncated =
-    headings.length > LIMITS.legislationOutlineHeadingsMax;
-
+  const max = LIMITS.legislationOutlineHeadingsMax;
+  if (headings.length <= max) {
+    return { outline: headings, outlineTruncated: false };
+  }
+  const isAnnex = (heading: { anchorId: string }) =>
+    annexDesignator(scheme, heading.anchorId) !== null;
+  const annexes = headings.filter(isAnnex).slice(0, Math.floor(max / 2));
+  const kept = new Set([
+    ...headings
+      .filter((heading) => !isAnnex(heading))
+      .slice(0, max - annexes.length),
+    ...annexes,
+  ]);
   return {
-    outline: outlineTruncated
-      ? headings.slice(0, LIMITS.legislationOutlineHeadingsMax)
-      : headings,
-    outlineTruncated,
+    outline: headings.filter((heading) => kept.has(heading)),
+    outlineTruncated: true,
+  };
+};
+
+type ReadStatutePageContextOptions = {
+  cursor: string | undefined;
+  document: StatuteDocument;
+  context: McpRequestContext;
+};
+
+// Versions and navigation describe the whole consolidation; only its first
+// text page reads and emits them.
+const readStatutePageContext = async ({
+  cursor,
+  document,
+  context,
+}: ReadStatutePageContextOptions) => {
+  if (cursor !== undefined) {
+    return {};
+  }
+  const versionsPage = await (
+    context.testDependencies?.listStatuteVersionsHandler ??
+    defaultListStatuteVersionsHandler
+  )({
+    documentId: document.id,
+    query: {
+      limit: normalizeTenantPageLimit(
+        LIMITS.legislationVersionsPageSizeDefault,
+      ),
+    },
+    legislationDb: legislationPublicReadDb,
+    surface: "search",
+  });
+  if (!isStatuteVersionsPage(versionsPage)) {
+    return notFoundResult("Legislation not found", FIND_THE_ELI_HINT);
+  }
+  const navigation = hasUsableAst(document.documentAst)
+    ? buildStatuteOutline(
+        document.documentAst.blocks,
+        statuteAnchorSchemeFor(document.country),
+      )
+    : { outline: [], outlineTruncated: false };
+  return {
+    ...navigation,
+    versions: versionsPage.items.map((version) => ({
+      amendedBy: version.amendedBy ?? null,
+      documentId: version.id,
+      resourceName: legislationResourceName(version.id),
+      versionValidFrom: version.versionValidFrom,
+      versionValidTo: version.versionValidTo,
+      expressionKind: version.expressionKind,
+      windowDisposition: version.windowDisposition,
+      windowDispositionBasis: version.windowDispositionBasis,
+    })),
   };
 };
 
@@ -667,8 +827,9 @@ const handleReadStatuteTool: TypedMcpToolHandler<
       ...(asOf === undefined ? {} : { asOf }),
     },
     legislationPublicReadDb,
+    "search",
   );
-  if (resolved.type !== "expression") {
+  if (!namesStatuteText(resolved)) {
     return statuteResolutionError(resolved, {
       asOf,
       uncoveredHint:
@@ -679,32 +840,19 @@ const handleReadStatuteTool: TypedMcpToolHandler<
   const document = await (
     context.testDependencies?.readPublicLegislationHandler ??
     defaultReadPublicLegislationHandler
-  )(resolved.id, legislationPublicReadDb);
+  )(resolved.id, legislationPublicReadDb, "search");
   if (!isStatuteDocument(document)) {
     return notFoundResult("Legislation not found", FIND_THE_ELI_HINT);
   }
 
-  // What makes the version endpoint covered: the read that answers for one
-  // consolidation also says which other consolidations of the work exist.
-  const versionsPage = await (
-    context.testDependencies?.listStatuteVersionsHandler ??
-    defaultListStatuteVersionsHandler
-  )({
-    documentId: resolved.id,
-    query: {
-      limit: normalizeTenantPageLimit(
-        LIMITS.legislationVersionsPageSizeDefault,
-      ),
-    },
-    legislationDb: legislationPublicReadDb,
+  const pageContext = await readStatutePageContext({
+    cursor,
+    document,
+    context,
   });
-  if (!isStatuteVersionsPage(versionsPage)) {
-    return notFoundResult("Legislation not found", FIND_THE_ELI_HINT);
+  if (isToolErrorResult(pageContext)) {
+    return pageContext;
   }
-
-  const { outline, outlineTruncated } = hasUsableAst(document.documentAst)
-    ? buildStatuteOutline(document.documentAst.blocks)
-    : { outline: [], outlineTruncated: false };
   const ast = hasUsableAst(document.documentAst) ? document.documentAst : null;
 
   // Displaying the wording and feeding it to a model are separate
@@ -724,56 +872,52 @@ const handleReadStatuteTool: TypedMcpToolHandler<
           maxChars: MCP_CONTENT_MAX_CHARS,
           text: plainText,
         });
-  if (window !== null && isToolErrorResult(window)) {
+  if (isToolErrorResult(window)) {
     return window;
   }
 
-  return toolDataResult({
-    nextCursor: window?.nextCursor ?? null,
-    statute: {
-      appUrl: buildLegislationDocumentAppUrl({
+  return toolDataResult(
+    projectionPayload(READ_STATUTE_PROJECTION, {
+      nextCursor: window?.nextCursor ?? null,
+      statute: {
+        ...legalCitationLinkFields({
+          url: buildLegislationDocumentAppUrl({
+            country: document.country,
+            documentId: document.id,
+            eli: document.eli,
+            slug: document.slug,
+            version: asOf === undefined ? null : document.versionValidFrom,
+          }),
+          sourceUrl: document.sourceUrl,
+        }),
+        charCount: window?.charCount ?? null,
         country: document.country,
         documentId: document.id,
+        documentType: document.documentType,
+        effectiveDate: document.effectiveDate,
         eli: document.eli,
-        slug: document.slug,
-      }),
-      charCount: window?.charCount ?? null,
-      country: document.country,
-      documentId: document.id,
-      documentType: document.documentType,
-      effectiveDate: document.effectiveDate,
-      eli: document.eli,
-      language: document.language,
-      outline,
-      outlineTruncated,
-      resourceName: legislationResourceName(document.id),
-      sourceUrl: document.sourceUrl,
-      status: document.status,
-      text: window?.text ?? null,
-      title: document.title,
-      truncated: window?.truncated ?? false,
-      versionValidFrom: document.versionValidFrom,
-      versionValidTo: document.versionValidTo,
-      expressionKind: document.expressionKind,
-      windowDisposition: document.windowDisposition,
-      windowDispositionBasis: document.windowDispositionBasis,
-      versions: versionsPage.items.map((version) => ({
-        documentId: version.id,
-        resourceName: legislationResourceName(version.id),
-        versionValidFrom: version.versionValidFrom,
-        versionValidTo: version.versionValidTo,
-        expressionKind: version.expressionKind,
-        windowDisposition: version.windowDisposition,
-        windowDispositionBasis: version.windowDispositionBasis,
-      })),
-      ...(document.allowsDerivedAi
-        ? {}
-        : {
-            textWithheldReason:
-              "The source licence does not permit AI use of the full text.",
-          }),
-    },
-  } satisfies v.InferInput<typeof READ_STATUTE_PROJECTION>);
+        language: document.language,
+        ...pageContext,
+        resourceName: legislationResourceName(document.id),
+        status: document.status,
+        text: window?.text ?? null,
+        title: document.title,
+        truncated: window?.truncated ?? false,
+        versionValidFrom: document.versionValidFrom,
+        versionValidTo: document.versionValidTo,
+        expressionKind: document.expressionKind,
+        windowDisposition: document.windowDisposition,
+        windowDispositionBasis: document.windowDispositionBasis,
+        pendingChanges: document.pendingChanges,
+        ...(document.allowsDerivedAi
+          ? {}
+          : {
+              textWithheldReason:
+                "The source licence does not permit AI use of the full text.",
+            }),
+      },
+    }),
+  );
 };
 
 // --- read_statute_provisions ----------------------------------------------
@@ -784,9 +928,43 @@ type ProvisionItemResult = v.InferInput<
   typeof READ_STATUTE_PROVISIONS_PROJECTION
 >["items"][number];
 
-/** One (eli, language, as_of) address, spelled once so it resolves once. */
+/** One exact or date-based address, spelled once so it resolves once. */
 const provisionRequestKey = (item: ProvisionRequest): string =>
-  JSON.stringify([item.eli, item.language ?? null, item.as_of ?? null]);
+  JSON.stringify([
+    item.eli,
+    item.language ?? null,
+    item.as_of ?? null,
+    item.document_id ?? null,
+  ]);
+
+type ProvisionItemBuildResult =
+  { type: "item"; item: ProvisionItemResult } | { type: "invalid-cursor" };
+
+/**
+ * The provision's printed citation (`§ 1729 89/2012 Sb.`), beside its reader
+ * link: a source list names the link by it rather than by the link's host.
+ * Absent where the act has no number or its jurisdiction no citation profile.
+ */
+const provisionCitationField = ({
+  anchor,
+  country,
+  eli,
+}: {
+  anchor: string;
+  country: string;
+  eli: string;
+}): { citation?: string } => {
+  const work = statuteActNumber(eli);
+  const citation =
+    work === null
+      ? null
+      : anchorProvisionCitation({
+          anchor,
+          jurisdiction: country,
+          workIdentifier: work,
+        });
+  return citation === null ? {} : { citation };
+};
 
 const provisionItemResult = ({
   blocksByDocumentId,
@@ -798,7 +976,7 @@ const provisionItemResult = ({
   item: ProvisionRequest;
   resolution: StatuteExpressionResolution;
   versionsByDocumentId: ReadonlyMap<string, LegislationProvisionVersion>;
-}): ProvisionItemResult => {
+}): ProvisionItemBuildResult => {
   const subject = { anchor: item.anchor, eli: item.eli };
   const unknownWork = {
     ...subject,
@@ -808,36 +986,77 @@ const provisionItemResult = ({
 
   switch (resolution.type) {
     case "unknown-work":
-      return unknownWork;
+      return { type: "item", item: unknownWork };
     case "uncovered-date":
       return {
-        ...subject,
-        message:
-          item.as_of === undefined
-            ? "No version of this legislation is in force today."
-            : `No version of this legislation was in force on ${item.as_of}.`,
-        status: PROVISION_STATUS.uncoveredDate,
+        type: "item",
+        item: {
+          ...subject,
+          message:
+            item.as_of === undefined
+              ? "No version of this legislation is in force today."
+              : `No version of this legislation was in force on ${item.as_of}.`,
+          status: PROVISION_STATUS.uncoveredDate,
+        },
       };
     // The same next step as an uncovered date (another date, or the
     // history), so the same status; the message says why.
     case LEGISLATION_PUBLISHER_WINDOW_INCONSISTENT:
       return {
-        ...subject,
-        message: `${LEGISLATION_PUBLISHER_WINDOW_INCONSISTENT_MESSAGE}. ${describeInconsistentVersions(resolution.versions)}`,
-        status: PROVISION_STATUS.uncoveredDate,
+        type: "item",
+        item: {
+          ...subject,
+          message: `${LEGISLATION_PUBLISHER_WINDOW_INCONSISTENT_MESSAGE}. ${describeInconsistentVersions(resolution.versions)}`,
+          status: PROVISION_STATUS.uncoveredDate,
+        },
       };
-    case "expression": {
+    case "expression":
+    case "promulgated-only": {
       // Absent where the source was withdrawn between the resolution and
       // this read, which is the same answer as no such work.
       const version = versionsByDocumentId.get(String(resolution.id));
-      if (version === undefined) {
-        return unknownWork;
+      if (version === undefined || version.eli !== item.eli) {
+        return {
+          type: "item",
+          item:
+            item.document_id === undefined
+              ? unknownWork
+              : {
+                  ...subject,
+                  message:
+                    "This document_id does not belong to the requested eli.",
+                  status: PROVISION_STATUS.notFound,
+                },
+        };
       }
+      const links = legalCitationLinkFields({
+        url: buildLegislationDocumentAppUrl({
+          country: version.country,
+          documentId: version.id,
+          eli: item.eli,
+          slug: version.slug,
+          version: version.versionValidFrom,
+          anchor: item.anchor,
+        }),
+        sourceUrl: version.sourceUrl,
+      });
+      const cited = {
+        ...links,
+        ...provisionCitationField({
+          anchor: item.anchor,
+          country: version.country,
+          eli: item.eli,
+        }),
+      };
       if (!version.allowsDerivedAi) {
         return {
-          ...subject,
-          message: WITHHELD_WORDING_MESSAGE,
-          status: PROVISION_STATUS.textWithheld,
+          type: "item",
+          item: {
+            ...subject,
+            ...cited,
+            message: WITHHELD_WORDING_MESSAGE,
+            status: PROVISION_STATUS.textWithheld,
+          },
         };
       }
 
@@ -846,29 +1065,84 @@ const provisionItemResult = ({
       const blocks =
         blocksByDocumentId.get(String(version.id)) ??
         panic(`No block list was read for consolidation ${version.id}`);
-      const text = extractProvisionText(blocks, item.anchor);
-      if (text === null) {
+      const scheme = statuteAnchorSchemeFor(version.country);
+      const reading = readProvision({ blocks, scheme }, item.anchor);
+      if (reading === null) {
         return {
-          ...subject,
-          message: `This consolidation carries no such anchor. ${PICK_AN_ANCHOR_HINT}`,
-          status: PROVISION_STATUS.provisionNotFound,
+          type: "item",
+          item: {
+            ...subject,
+            message: `This consolidation carries no such anchor. ${annexAnchorHint(
+              { blocks, scheme },
+              item.anchor,
+            )}${PICK_AN_ANCHOR_HINT}`,
+            status: PROVISION_STATUS.provisionNotFound,
+          },
         };
       }
 
+      const window = windowBoundText({
+        ...(item.text_cursor === undefined ? {} : { cursor: item.text_cursor }),
+        limit: LIMITS.legislationProvisionTextChars,
+        subject: JSON.stringify([item.eli, item.anchor, String(version.id)]),
+        text: reading.text,
+      });
+      if (window.type === "invalid-cursor") {
+        return { type: "invalid-cursor" };
+      }
       return {
-        ...subject,
-        ...boundProvisionText(text),
-        documentId: version.id,
-        resourceName: legislationResourceName(version.id),
-        status: PROVISION_STATUS.found,
-        versionValidFrom: version.versionValidFrom,
-        versionValidTo: version.versionValidTo,
+        type: "item",
+        item: {
+          ...subject,
+          ...cited,
+          text: window.text,
+          // Once per read: a continuation window carries on the same text.
+          governingText:
+            item.text_cursor === undefined ? reading.governing : [],
+          ...(item.text_cursor === undefined && reading.governingTruncated
+            ? { governingTextTruncated: true as const }
+            : {}),
+          truncated: window.truncated,
+          nextTextCursor: window.nextTextCursor,
+          documentId: version.id,
+          resourceName: legislationResourceName(version.id),
+          status: PROVISION_STATUS.found,
+          versionValidFrom: version.versionValidFrom,
+          versionValidTo: version.versionValidTo,
+          expressionKind: version.expressionKind,
+          windowDisposition: version.windowDisposition,
+          windowDispositionBasis: version.windowDispositionBasis,
+        },
       };
     }
     default:
       resolution satisfies never;
       return panic("Unhandled statute expression resolution");
   }
+};
+
+/** Annex anchors a not-found hint names at most. */
+const ANNEX_HINT_MAX = 20;
+
+/**
+ * For a request that names an annex this consolidation does not resolve,
+ * the annex anchors it does carry, so the next call can name one.
+ */
+const annexAnchorHint = (
+  { blocks, scheme }: { blocks: readonly Block[]; scheme: StatuteAnchorScheme },
+  requested: string,
+): string => {
+  if (requestedAnnexDesignator(requested) === null) {
+    return "";
+  }
+  const annexes = blocks.flatMap((block) =>
+    block.type === "heading" && annexDesignator(scheme, block.anchorId) !== null
+      ? [block.anchorId]
+      : [],
+  );
+  return annexes.length === 0
+    ? "This consolidation carries no annex anchor. "
+    : `Its annex anchors: ${annexes.slice(0, ANNEX_HINT_MAX).join(", ")}. `;
 };
 
 /** One requested entry: either it parsed, or it is answered on its own. */
@@ -888,6 +1162,25 @@ const parseProvisionEntries = (
   items.map((item, index) => {
     const entry = v.safeParse(provisionEntrySchema, item);
     if (entry.success) {
+      if (
+        entry.output.as_of !== undefined &&
+        entry.output.document_id !== undefined
+      ) {
+        return {
+          type: "invalid",
+          result: {
+            index,
+            issues: [
+              {
+                message: "Pass document_id or as_of, not both",
+                path: "items[].document_id",
+              },
+            ],
+            message: "Pass document_id or as_of, not both",
+            status: PROVISION_STATUS.invalid,
+          },
+        };
+      }
       return { type: "entry", request: entry.output };
     }
     const issues = mapValibotIssues(entry.issues);
@@ -937,6 +1230,12 @@ const handleReadStatuteProvisionsTool: TypedMcpToolHandler<
     operation: async (key) => {
       const request =
         requestsByKey.get(key) ?? panic("Lost a provision request key");
+      if (request.document_id !== undefined) {
+        return {
+          type: "expression",
+          id: brandPersistedLegislationDocumentId(request.document_id),
+        } as const;
+      }
       return await resolve(
         {
           eli: request.eli,
@@ -946,6 +1245,7 @@ const handleReadStatuteProvisionsTool: TypedMcpToolHandler<
           ...(request.as_of === undefined ? {} : { asOf: request.as_of }),
         },
         legislationPublicReadDb,
+        "search",
       );
     },
   });
@@ -959,21 +1259,44 @@ const handleReadStatuteProvisionsTool: TypedMcpToolHandler<
   const documentIds = [
     ...new Set(
       [...resolutionsByKey.values()].flatMap((resolution) =>
-        resolution.type === "expression" ? [resolution.id] : [],
+        namesStatuteText(resolution) ? [resolution.id] : [],
       ),
     ),
   ];
-  const versions = await (
-    context.testDependencies?.readLegislationProvisionVersions ??
-    defaultReadLegislationProvisionVersions
-  )({ documentIds, legislationDb: legislationPublicReadDb });
+  const versions =
+    documentIds.length === 0
+      ? []
+      : await (
+          context.testDependencies?.readLegislationProvisionVersions ??
+          defaultReadLegislationProvisionVersions
+        )({
+          documentIds,
+          legislationDb: legislationPublicReadDb,
+          surface: "search",
+        });
   const versionsByDocumentId = new Map(
     versions.map((version) => [String(version.id), version]),
   );
 
   // Each AST is an object-storage hop, so the fan-out is bounded rather than
   // one read per requested item.
-  const readable = versions.filter((version) => version.allowsDerivedAi);
+  const requestedElisByDocumentId = new Map<string, Set<string>>();
+  for (const [key, resolution] of resolutionsByKey) {
+    if (!namesStatuteText(resolution)) {
+      continue;
+    }
+    const request = requestsByKey.get(key) ?? panic("Lost a provision request");
+    const id = String(resolution.id);
+    const requestedElis = requestedElisByDocumentId.get(id) ?? new Set();
+    requestedElis.add(request.eli);
+    requestedElisByDocumentId.set(id, requestedElis);
+  }
+  const readable = versions.filter(
+    (version) =>
+      version.allowsDerivedAi &&
+      requestedElisByDocumentId.get(String(version.id))?.has(version.eli) ===
+        true,
+  );
   const readBlocks =
     context.testDependencies?.readVersionBlocks ?? readVersionBlocks;
   const blocksByDocumentId = new Map(
@@ -984,6 +1307,7 @@ const handleReadStatuteProvisionsTool: TypedMcpToolHandler<
         [
           String(version.id),
           await readBlocks({
+            surface: "search",
             row: version,
             legislationDb: legislationPublicReadDb,
             step: PROVISION_READ_STEP,
@@ -993,20 +1317,41 @@ const handleReadStatuteProvisionsTool: TypedMcpToolHandler<
     }),
   );
 
-  return toolDataResult({
-    items: entries.map((entry) =>
-      entry.type === "invalid"
-        ? entry.result
-        : provisionItemResult({
-            blocksByDocumentId,
-            item: entry.request,
-            resolution:
-              resolutionsByKey.get(provisionRequestKey(entry.request)) ??
-              panic("Lost a provision resolution"),
-            versionsByDocumentId,
-          }),
-    ),
-  } satisfies v.InferInput<typeof READ_STATUTE_PROVISIONS_PROJECTION>);
+  const built = entries.map((entry) =>
+    entry.type === "invalid"
+      ? ({ type: "item", item: entry.result } as const)
+      : provisionItemResult({
+          blocksByDocumentId,
+          item: entry.request,
+          resolution:
+            resolutionsByKey.get(provisionRequestKey(entry.request)) ??
+            panic("Lost a provision resolution"),
+          versionsByDocumentId,
+        }),
+  );
+  return toolDataResult(
+    projectionPayload(READ_STATUTE_PROVISIONS_PROJECTION, {
+      items: built.map((result, index) => {
+        switch (result.type) {
+          case "item":
+            return result.item;
+          case "invalid-cursor": {
+            const message =
+              "Invalid text_cursor. Retry this entry without text_cursor to read its current wording.";
+            return {
+              index,
+              issues: [{ message, path: "items[].text_cursor" }],
+              message,
+              status: PROVISION_STATUS.invalid,
+            } satisfies ProvisionItemResult;
+          }
+          default:
+            result satisfies never;
+            return panic("Unhandled provision item result");
+        }
+      }),
+    }),
+  );
 };
 
 // --- read_provision_history -----------------------------------------------
@@ -1028,7 +1373,13 @@ const handleReadProvisionHistoryTool: TypedMcpToolHandler<
   if (!parsed.success) {
     return validationErrorResult(parsed.issues);
   }
-  const { anchor, cursor, eli, language } = parsed.output;
+  const {
+    anchor,
+    cursor,
+    eli,
+    language,
+    text_cursor: textCursor,
+  } = parsed.output;
   const limit = normalizeTenantPageLimit(
     parsed.output.limit ?? LIMITS.legislationProvisionHistoryPageSizeDefault,
   );
@@ -1043,6 +1394,7 @@ const handleReadProvisionHistoryTool: TypedMcpToolHandler<
   )(
     { eli, ...(language === undefined ? {} : { language }) },
     legislationPublicReadDb,
+    "search",
   );
   if (resolved.type !== "expression") {
     return statuteResolutionError(resolved, {
@@ -1060,6 +1412,7 @@ const handleReadProvisionHistoryTool: TypedMcpToolHandler<
     anchor,
     query: { limit, ...(cursor === undefined ? {} : { cursor }) },
     legislationDb: legislationPublicReadDb,
+    surface: "search",
   });
   if (!isProvisionHistoryPage(page)) {
     const failure = handlerStatusOf(page);
@@ -1071,11 +1424,28 @@ const handleReadProvisionHistoryTool: TypedMcpToolHandler<
       : notFoundResult("Legislation not found", FIND_THE_ELI_HINT);
   }
 
-  return toolDataResult({
-    anchor,
-    eli,
-    items: page.items.map((item) => {
+  // A consolidation whose structure could not be read carries no wording to
+  // hand over and no claim about it, so the agent-facing history leaves it
+  // out, as it always has; the reader shows it as a version without text.
+  const items = page.items
+    .filter(
+      (item): item is Extract<typeof item, { status: "found" }> =>
+        item.status === "found",
+    )
+    .map((item) => {
       const version = {
+        ...legalCitationLinkFields({
+          url: buildLegislationDocumentAppUrl({
+            country: item.country,
+            documentId: item.documentId,
+            eli,
+            slug: item.slug,
+            version: item.versionValidFrom,
+            anchor,
+          }),
+          sourceUrl: item.sourceUrl,
+        }),
+        ...provisionCitationField({ anchor, country: item.country, eli }),
         documentId: item.documentId,
         resourceName: legislationResourceName(item.documentId),
         versionValidFrom: item.versionValidFrom,
@@ -1084,24 +1454,59 @@ const handleReadProvisionHistoryTool: TypedMcpToolHandler<
         windowDisposition: item.windowDisposition,
         windowDispositionBasis: item.windowDispositionBasis,
       };
-      // The same publisher permission read_statute and
-      // read_statute_provisions apply, per consolidation: a Work may be
-      // re-licensed between versions, so the gate is per item and not per
-      // call.
-      return item.allowsDerivedAi
-        ? {
-            ...version,
-            ...boundProvisionText(item.text),
-            status: PROVISION_STATUS.found,
-          }
-        : {
+      if (!item.allowsDerivedAi) {
+        return {
+          type: "item" as const,
+          item: {
             ...version,
             message: WITHHELD_WORDING_MESSAGE,
             status: PROVISION_STATUS.textWithheld,
+          },
+        };
+      }
+      const window = windowBoundText({
+        ...(textCursor === undefined ? {} : { cursor: textCursor }),
+        limit: LIMITS.legislationProvisionTextChars,
+        subject: JSON.stringify([eli, anchor, String(item.documentId)]),
+        text: item.text,
+      });
+      return window.type === "invalid-cursor"
+        ? { type: "invalid-cursor" as const }
+        : {
+            type: "item" as const,
+            item: {
+              ...version,
+              text: window.text,
+              governingText: textCursor === undefined ? item.governingText : [],
+              ...(textCursor === undefined &&
+              item.governingTextTruncated === true
+                ? { governingTextTruncated: true as const }
+                : {}),
+              truncated: window.truncated,
+              nextTextCursor: window.nextTextCursor,
+              status: PROVISION_STATUS.found,
+            },
           };
+    });
+  const readableItems = items.filter(
+    (item) => item.type === "item" && "text" in item.item,
+  );
+  if (textCursor !== undefined && readableItems.length === 0) {
+    return invalidCursorError("read_provision_history", textCursor);
+  }
+
+  return toolDataResult(
+    projectionPayload(READ_PROVISION_HISTORY_PROJECTION, {
+      anchor,
+      eli,
+      items: (textCursor === undefined ? items : readableItems).map((item) =>
+        item.type === "item"
+          ? item.item
+          : panic("Invalid text cursor was not returned"),
+      ),
+      nextCursor: page.nextCursor,
     }),
-    nextCursor: page.nextCursor,
-  } satisfies v.InferInput<typeof READ_PROVISION_HISTORY_PROJECTION>);
+  );
 };
 
 export const LEGISLATION_TOOL_HANDLERS = {

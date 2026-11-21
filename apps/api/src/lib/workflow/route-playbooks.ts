@@ -1,18 +1,27 @@
+import { panic } from "better-result";
 import { and, eq, inArray, sql } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
-import { documentTypes, fields } from "@/api/db/schema";
+import {
+  documentTypes,
+  fields,
+  playbookDefinitionVersions,
+} from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createBackgroundAuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
+import { readBounded } from "@/api/lib/db/read-bounded";
 import { loadLatestApprovedVersions } from "@/api/lib/document-review/approved-playbook-versions";
 import { openPlaybookRun } from "@/api/lib/document-review/open-playbook-run";
 import {
   PLAYBOOK_RUN_START_OUTCOME,
   playbookRunStartOutcome,
 } from "@/api/lib/document-review/playbook-run-start";
+import { resolvePlaybookPin } from "@/api/lib/document-review/resolve-playbook-pin";
+import type { PlaybookVersionForPin } from "@/api/lib/document-review/resolve-playbook-pin";
 import { LIMITS } from "@/api/lib/limits";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import type { WorkflowStartStatus } from "@/api/lib/workflow-queue";
 import type { DocTypeClassifier } from "@/api/lib/workflow/materialize-playbook-run";
 import { resolveDocTypeClassifier } from "@/api/lib/workflow/materialize-playbook-run";
@@ -21,6 +30,7 @@ import type {
   PlaybookScope,
   PlaybookTrigger,
 } from "@/api/lib/workflow/playbook-positions";
+import { PLAYBOOK_VERSION_SOURCE } from "@/api/lib/workflow/playbook-positions";
 import { PLAYBOOK_RUN_PROJECTION } from "@/api/lib/workflow/playbook-run-projection";
 
 // One shared routing seam. `resolveApplicablePlaybooks` narrows a set of org
@@ -39,9 +49,35 @@ export type RoutablePlaybook = {
   scope: PlaybookScope | null;
 };
 
+/**
+ * Replace each playbook's live scope with the scope its run would pin: the
+ * approved snapshot's scope when the playbook was approved, the live scope
+ * when it was never approved. Applicability and routing read `scope`, so
+ * they must read the pinned one — a scope edited after approval takes effect
+ * only once the playbook is approved again, and a run must not be routed by
+ * an unapproved edit.
+ */
+export const withPinnedScopes = <T extends RoutablePlaybook>({
+  playbooks,
+  approvedVersions,
+}: {
+  playbooks: readonly T[];
+  approvedVersions: ReadonlyMap<
+    SafeId<"playbookDefinition">,
+    PlaybookVersionForPin
+  >;
+}): T[] =>
+  playbooks.map((playbook) => ({
+    ...playbook,
+    scope: resolvePlaybookPin({
+      definition: playbook,
+      latestApprovedVersion: approvedVersions.get(playbook.id) ?? null,
+    }).definitionSnapshot.scope,
+  }));
+
 // The scope column is nullable and `trigger` is optional, so a stored playbook
 // may carry no trigger at all. Reads must default to `manual` regardless of how
-// Elysia coerced the field at write time.
+// the field was written.
 export const playbookTrigger = (scope: PlaybookScope | null): PlaybookTrigger =>
   scope?.trigger ?? "manual";
 
@@ -96,6 +132,10 @@ export const classifierParticipatedInPlan = ({
 // Workspace-wide playbooks pass through; doc-type-scoped ones survive only when
 // their label is present among the classifier's values. One distinct query over
 // the candidate labels keeps the read bounded by the document-type count.
+//
+// The `scope` this reads is the caller's responsibility: pass the pinned scope
+// (see `withPinnedScopes`), never the live definition's, so a scope edited
+// after approval cannot route a run the approval never covered.
 export const resolveApplicablePlaybooks = async <T extends RoutablePlaybook>({
   tx,
   workspaceId,
@@ -243,19 +283,65 @@ export const routeClassifiedDocuments = async ({
     // `positions` JSONB for manual playbooks that would be discarded anyway.
     // (`scope->>'trigger'` is NULL for a null scope or an absent trigger, so a
     // manual/legacy playbook is excluded — matching `playbookTrigger`'s default.)
+    // A playbook routes on its pinned scope, so the candidates also include
+    // every playbook with an approved snapshot on `onClassified`: its live
+    // trigger may have been edited away since. The pinned check below decides.
+    // Bounded by the org's playbook cap: distinct definitions, each counted
+    // against it when created.
+    const approvedRead = await readBounded(
+      tx
+        .selectDistinct({
+          id: playbookDefinitionVersions.playbookDefinitionId,
+        })
+        .from(playbookDefinitionVersions)
+        .where(
+          and(
+            eq(playbookDefinitionVersions.organizationId, organizationId),
+            eq(
+              playbookDefinitionVersions.source,
+              PLAYBOOK_VERSION_SOURCE.APPROVAL,
+            ),
+            sql`${playbookDefinitionVersions.scope}->>'trigger' = 'onClassified'`,
+          ),
+        ),
+      LIMITS.playbookDefinitionsCount,
+    );
+    if (approvedRead.type === "overflow") {
+      // Each distinct id is a playbook of this org, which may hold at most
+      // the cap; the caller reports the failure.
+      return panic("Approved onClassified playbooks exceed the playbook cap", {
+        cap: approvedRead.cap,
+      });
+    }
+    const approvedOnClassified = approvedRead.rows;
     const routable = await tx.query.playbookDefinitions.findMany({
       where: {
         organizationId: { eq: organizationId },
-        RAW: (table) => sql`${table.scope}->>'trigger' = 'onClassified'`,
+        OR: [
+          { RAW: (table) => sql`${table.scope}->>'trigger' = 'onClassified'` },
+          ...(approvedOnClassified.length === 0
+            ? []
+            : [{ id: { in: approvedOnClassified.map((row) => row.id) } }]),
+        ],
       },
       columns: { id: true, name: true, positions: true, scope: true },
       limit: LIMITS.playbookDefinitionsCount,
     });
 
-    // Defense in depth: the SQL predicate already excludes non-`onClassified`
-    // playbooks; re-checking the returned rows keeps the invariant enforced in
-    // app code too, and is cheap over the already-narrowed set.
-    const onClassified = selectRoutablePlaybooks(routable);
+    // The SQL predicate narrows to candidates; this check decides, on the
+    // pinned scope rather than the live one: a trigger edited after approval
+    // takes effect only once the playbook is approved again, in either
+    // direction.
+    const approvedVersions = await loadLatestApprovedVersions({
+      tx,
+      organizationId,
+      playbookDefinitionIds: routable.map((playbook) => playbook.id),
+    });
+    const pinned = withPinnedScopes({
+      playbooks: routable,
+      approvedVersions,
+    });
+    const onClassified = selectRoutablePlaybooks(pinned);
     if (onClassified.length === 0) {
       const emptyPropertyIds: SafeId<"property">[] = [];
       return emptyPropertyIds;
@@ -287,13 +373,8 @@ export const routeClassifiedDocuments = async ({
       userId,
     });
 
-    // One read for the whole batch rather than a pin per playbook.
-    const approvedVersions = await loadLatestApprovedVersions({
-      tx,
-      organizationId,
-      playbookDefinitionIds: applicable.map((playbook) => playbook.id),
-    });
-
+    // The approved versions were loaded above so applicability already ran
+    // on the pinned scopes; reuse that read for the pins here.
     const ids: SafeId<"property">[] = [];
     for (const definition of applicable) {
       // db-await-in-loop: each playbook materializes its own columns and table runs; not one query
@@ -312,11 +393,14 @@ export const routeClassifiedDocuments = async ({
         // Fire-and-forget background path with no other feedback channel:
         // capture the reason so a per-playbook materialization failure (e.g.
         // hitting the properties cap) is not silently invisible.
-        captureError(new Error(result.message), {
-          workspaceId,
-          playbookId: definition.id,
-          status: String(result.status),
-        });
+        captureError(
+          new Error(result.message),
+          handlerErrorContext("workflow.materializedPropertyIds", {
+            workspaceId,
+            playbookId: definition.id,
+            status: String(result.status),
+          }),
+        );
         continue;
       }
       if (result.materializedPropertyIds.length === 0) {
@@ -346,9 +430,12 @@ export const routeClassifiedDocuments = async ({
     playbookRunStartOutcome(started.status) !==
     PLAYBOOK_RUN_START_OUTCOME.QUEUED
   ) {
-    captureError(new Error("routeClassifiedDocuments.workflow_not_started"), {
-      workspaceId,
-      status: started.status,
-    });
+    captureError(
+      new Error("routeClassifiedDocuments.workflow_not_started"),
+      handlerErrorContext("workflow.routeClassifiedDocuments", {
+        workspaceId,
+        status: started.status,
+      }),
+    );
   }
 };

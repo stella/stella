@@ -1,13 +1,15 @@
 import { TaggedError } from "better-result";
 
+import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 import { Temporal } from "@stll/time";
 
 import { errorTag } from "@/api/lib/errors/utils";
-import { LIMITS } from "@/api/lib/limits";
 import { logger } from "@/api/lib/observability/logger";
+import { MCP_RATE_LIMITS } from "@/api/lib/rate-limit/budget-config";
+import { recordBudgetRejection } from "@/api/lib/rate-limit/budget-observability";
 import { withCommandTimeout } from "@/api/lib/rate-limit/redis-command-timeout";
 import { createRedisClient } from "@/api/lib/redis-client";
-import { coordinationKey, type CoordinationKey } from "@/api/lib/redis-keys";
+import { type CoordinationKey, coordinationKey } from "@/api/lib/redis-keys";
 
 type RedisLike = {
   send: (command: string, args: string[]) => Promise<unknown>;
@@ -27,6 +29,7 @@ type McpGatewayRateLimiterOptions = {
   createRedis?: () => RedisLike;
   now?: () => number;
   onRedisError?: (error: unknown) => void;
+  recordRejection?: typeof recordBudgetRejection;
 };
 
 const REDIS_COMMAND_TIMEOUT_MS = 500;
@@ -51,6 +54,7 @@ export const createMcpGatewayRateLimiter = ({
       },
     }),
   now = () => Temporal.Now.instant().epochMilliseconds,
+  recordRejection = recordBudgetRejection,
   onRedisError = (error) => {
     logger.warn("mcp.gateway.rate_limit.redis_failed", {
       "error.type": errorTag(error),
@@ -75,6 +79,7 @@ export const createMcpGatewayRateLimiter = ({
   }): Promise<boolean> => {
     const key = `${userId}:${connectorSlug}`;
 
+    let allowed: boolean;
     try {
       const count = await consumeRedis({
         commandTimeoutMs,
@@ -85,16 +90,24 @@ export const createMcpGatewayRateLimiter = ({
         }),
         redis: getRedis(),
       });
-      return count <= LIMITS.mcpGatewayRateLimitMax;
+      allowed = count <= MCP_RATE_LIMITS.gateway.max;
     } catch (error) {
       onRedisError(error);
-      return consumeFallback({
+      allowed = consumeFallback({
         cleanupState,
         fallback,
         key,
         now: now(),
       });
     }
+    if (!allowed) {
+      recordRejection({
+        name: "mcp.gateway.user_client",
+        keyKind: "client",
+        windowMs: MCP_RATE_LIMITS.gateway.windowMs,
+      });
+    }
+    return allowed;
   };
 
   return { consume };
@@ -121,13 +134,20 @@ const consumeRedis = async ({
       CONSUME_SCRIPT,
       "1",
       key,
-      String(LIMITS.mcpGatewayRateLimitWindowMs),
+      String(MCP_RATE_LIMITS.gateway.windowMs),
     ]),
     commandTimeoutMs,
     label: "mcp-gateway-redis-command",
   });
-  const count = Number(rawCount);
-  if (!Number.isFinite(count)) {
+  let count: number | null = null;
+  if (typeof rawCount === "number") {
+    if (Number.isSafeInteger(rawCount) && rawCount >= 0) {
+      count = rawCount;
+    }
+  } else {
+    count = parseIntegerToken(rawCount, { sign: "unsigned" }).unwrapOr(null);
+  }
+  if (count === null) {
     throw new McpGatewayRedisReplyError({
       message: "Redis returned a non-numeric rate-limit count",
       reply: rawCount,
@@ -151,13 +171,13 @@ const consumeFallback = ({
   if (!current || current.expiresAt <= now) {
     fallback.set(key, {
       count: 1,
-      expiresAt: now + LIMITS.mcpGatewayRateLimitWindowMs,
+      expiresAt: now + MCP_RATE_LIMITS.gateway.windowMs,
     });
     cleanupFallbackIfNeeded(fallback, now, cleanupState);
     return true;
   }
 
-  if (current.count >= LIMITS.mcpGatewayRateLimitMax) {
+  if (current.count >= MCP_RATE_LIMITS.gateway.max) {
     return false;
   }
 

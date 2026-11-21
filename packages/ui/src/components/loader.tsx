@@ -1,32 +1,52 @@
 import type { ComponentProps } from "react";
 
+import { LoaderCircleIcon } from "../icons";
 import { cn } from "../lib/utils";
+import type { LoaderSize } from "./loader.shared";
 import { StellaMark } from "./stella-mark";
+import { TruncatedText } from "./truncated-text";
 
 /**
- * The one indeterminate loading indicator: the Stella mark breathing. Inline
- * (`sm`) next to a control that is busy, `md` in a row, `lg` for a region.
- * Content with a known shape gets a `Skeleton` instead, never a loader.
+ * The indeterminate loading indicator for a control or a row: a plain
+ * spinner. Inline (`sm`) next to a control that is busy, `md` in a row or a
+ * small panel. A whole region with no content yet is `LoaderState` (the only
+ * place the Stella mark breathes). Content with a known shape gets a
+ * `Skeleton` instead, never a loader.
  */
-const Loader = ({ label, size = "md", className, ...props }: LoaderProps) => (
+const Loader = ({
+  label,
+  variant = "status",
+  size = "md",
+  animation = "spin",
+  className,
+  ...props
+}: LoaderProps) => (
   <span
-    aria-busy="true"
-    aria-label={label}
     className={cn(
       "inline-flex shrink-0 items-center justify-center",
+      LOADER_SIZE[size],
       className,
     )}
     data-slot="loader"
-    role="status"
     {...props}
+    aria-busy={variant === "status" ? true : undefined}
+    aria-hidden={variant === "decorative" ? true : undefined}
+    aria-label={label}
+    role={variant === "status" ? "status" : undefined}
   >
-    <LoaderMark size={size} />
+    <LoaderCircleIcon
+      className={cn(
+        "text-muted-foreground size-full",
+        animation === "spin" && "animate-spin motion-reduce:animate-none",
+      )}
+    />
   </span>
 );
 
 /**
- * A region whose content has no shape yet (a job running, a first fetch): the
- * mark, one line saying what is happening, and at most one line of detail.
+ * A region whose content has no shape yet (an empty screen while a job runs or
+ * a first fetch lands): the Stella mark breathing, one line saying what is
+ * happening, and at most one line of detail.
  * Progress is stated in the detail text, never drawn as a bar that guesses.
  */
 const LoaderState = ({ label, detail, hint, className }: LoaderStateProps) => (
@@ -39,13 +59,18 @@ const LoaderState = ({ label, detail, hint, className }: LoaderStateProps) => (
     data-slot="loader-state"
     role="status"
   >
-    <LoaderMark size="lg" />
+    <span className={LOADER_SIZE.lg}>
+      <LoaderMark />
+    </span>
     <div className="space-y-1">
       <p className="text-foreground text-sm font-medium">{label}</p>
       {detail !== undefined && (
-        <p className="text-muted-foreground truncate text-xs tabular-nums">
+        <TruncatedText
+          className="text-muted-foreground text-xs tabular-nums"
+          render={<p />}
+        >
           {detail}
-        </p>
+        </TruncatedText>
       )}
       {hint !== undefined && (
         <p className="text-muted-foreground text-2xs text-pretty">{hint}</p>
@@ -58,24 +83,30 @@ const LOADER_SIZE = {
   sm: "size-4",
   md: "size-6",
   lg: "size-8",
-} as const;
+} as const satisfies Record<LoaderSize, string>;
 
-type LoaderSize = keyof typeof LOADER_SIZE;
-
-const LoaderMark = ({ size }: { size: LoaderSize }) => (
-  <StellaMark
-    className={cn(
-      "animate-loader text-muted-foreground motion-reduce:animate-none motion-reduce:opacity-70",
-      LOADER_SIZE[size],
-    )}
-  />
+const LoaderMark = () => (
+  <StellaMark className="animate-loader text-muted-foreground size-full motion-reduce:animate-none motion-reduce:opacity-70" />
 );
 
-type LoaderProps = Omit<ComponentProps<"span">, "children"> & {
-  /** What is pending, for assistive technology ("Loading matters"). */
-  label: string;
+type LoaderProps = Omit<
+  ComponentProps<"span">,
+  "children" | "role" | "aria-label" | "aria-hidden" | "aria-busy"
+> & {
   size?: LoaderSize;
-};
+  animation?: "none" | "spin";
+} & (
+    | {
+        variant?: "status";
+        /** What is pending, for assistive technology ("Loading matters"). */
+        label: string;
+      }
+    | {
+        /** The surrounding control or text announces the pending state. */
+        variant: "decorative";
+        label?: never;
+      }
+  );
 
 type LoaderStateProps = {
   /** What is happening, shown as the title and announced. */

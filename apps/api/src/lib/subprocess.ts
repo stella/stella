@@ -1,10 +1,30 @@
 import { Result } from "better-result";
 
 import {
-  SubprocessError,
   SUBPROCESS_TERMINATION_REASON,
+  SubprocessError,
   type SubprocessTerminationReason,
 } from "@/api/lib/errors/tagged-errors";
+
+/**
+ * Writes a worker's answer to stdout and resolves once the pipe has taken all
+ * of it. A worker exits right after answering, and `process.exit` drops what
+ * is still queued on the pipe, so an unawaited large answer reaches the
+ * parent cut short.
+ */
+export const writeWorkerStdout = async (
+  output: string | Uint8Array,
+): Promise<void> => {
+  await new Promise<void>((resolve, reject) => {
+    process.stdout.write(output, (error) => {
+      if (error) {
+        reject(error);
+        return;
+      }
+      resolve();
+    });
+  });
+};
 
 type SpawnWorkerOptions = {
   workerPath: string;
@@ -63,7 +83,7 @@ export const classifySubprocessTermination = ({
   timeoutAbort,
 }: {
   callerAbort: boolean;
-  signalCode: string;
+  signalCode: NonNullable<SpawnedWorker["signalCode"]>;
   timeoutAbort: boolean;
 }): SubprocessTerminationReason => {
   if (timeoutAbort) {
@@ -72,7 +92,7 @@ export const classifySubprocessTermination = ({
   if (callerAbort) {
     return SUBPROCESS_TERMINATION_REASON.cancelled;
   }
-  if (CRASH_SIGNAL_CODES.has(signalCode)) {
+  if (CRASH_SIGNAL_CODES.has(String(signalCode))) {
     return SUBPROCESS_TERMINATION_REASON.crashed;
   }
   return SUBPROCESS_TERMINATION_REASON.external;
@@ -87,7 +107,7 @@ const exitFailure = ({
 }: {
   callerAbort: boolean;
   exitCode: number;
-  signalCode: string | null;
+  signalCode: SpawnedWorker["signalCode"];
   stderr: string;
   timeoutAbort: boolean;
 }): SubprocessError => {
@@ -100,7 +120,7 @@ const exitFailure = ({
     return new SubprocessError({
       message: `Worker ${reason} (${signalCode})`,
       exitCode: null,
-      termination: { reason, signalCode },
+      termination: { reason, signalCode: String(signalCode) },
     });
   }
   return new SubprocessError({
@@ -110,13 +130,7 @@ const exitFailure = ({
   });
 };
 
-type SpawnedWorker = {
-  exited: Promise<number>;
-  kill: () => void;
-  signalCode: string | null;
-  stderr: ReadableStream<Uint8Array>;
-  stdout: ReadableStream<Uint8Array>;
-};
+type SpawnedWorker = ReturnType<typeof spawn>;
 
 type SpawnWorkerProcessOptions = {
   args: string[];
@@ -162,11 +176,7 @@ const watchWorkerTermination = ({
   });
 };
 
-const spawn = ({
-  args,
-  stdin,
-  workerPath,
-}: SpawnWorkerProcessOptions): SpawnedWorker =>
+const spawn = ({ args, stdin, workerPath }: SpawnWorkerProcessOptions) =>
   Bun.spawn(["bun", "run", "--no-env-file", workerPath, ...args], {
     stdin,
     stdout: "pipe",

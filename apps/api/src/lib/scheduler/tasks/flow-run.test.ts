@@ -1,10 +1,3 @@
-/**
- * A scheduled flow's weekly / monthly day is the day of the slot the job was
- * due for, whatever the wall clock says when the runner gets to it. Driven
- * against a real (PGlite) database so the task's definition and workspace
- * checks run as in production; only the run starter is recorded.
- */
-
 import {
   afterAll,
   afterEach,
@@ -14,6 +7,12 @@ import {
   setSystemTime,
   test,
 } from "bun:test";
+/**
+ * A scheduled flow's weekly / monthly day is the day of the slot the job was
+ * due for, whatever the wall clock says when the runner gets to it. Driven
+ * against a real (PGlite) database so the task's definition and workspace
+ * checks run as in production; only the run starter is recorded.
+ */
 
 import { member, organization, user } from "@/api/db/auth-schema";
 import { flowDefinitions, workspaces } from "@/api/db/schema";
@@ -23,17 +22,17 @@ import { flowScheduleToSchedulerSchedule } from "@/api/lib/flows/flow-trigger-lo
 import type { FlowTrigger } from "@/api/lib/flows/flow-types";
 import { logger } from "@/api/lib/observability/logger";
 import { DueSlot } from "@/api/lib/scheduler/due-slot";
+import {
+  FLOW_RUN_TASK,
+  flowScheduleJobId,
+} from "@/api/lib/scheduler/flow-schedule-identity";
 import type { SchedulerDb, SchedulerJob } from "@/api/lib/scheduler/types";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
-import {
-  createScheduledFlowTask,
-  FLOW_RUN_TASK,
-  flowScheduleJobId,
-} from "./flow-run";
+import { createScheduledFlowTask } from "./flow-run";
 
 const testDb: TestDatabase = await getTestDb();
 
@@ -128,6 +127,7 @@ describe("scheduled flow due day", () => {
       payload: { definitionId },
       enabled: true,
       pausedBy: null,
+      pausedSince: null,
       pausedUntil: null,
       pauseReason: null,
       nextRunAt,

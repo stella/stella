@@ -1,9 +1,13 @@
-import { Result } from "better-result";
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { eq } from "drizzle-orm";
+import { panic, Result } from "better-result";
+import { afterAll, describe, expect, test } from "bun:test";
+import { eq, sql } from "drizzle-orm";
+
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
+import { createTestState } from "@stll/test-state";
 
 import {
   fields,
+  FILE_USAGE_RECONCILIATION_STATE,
   organizationFileObjects,
   organizationFileUsage,
 } from "@/api/db/schema";
@@ -15,7 +19,10 @@ import {
   reconcileOrganizationFileObject,
   reserveOrganizationFileBytes,
 } from "@/api/lib/files/organization-file-usage";
-import { reconcileAbandonedOrganizationFileReservations } from "@/api/lib/files/organization-file-usage-reconcile";
+import {
+  ORGANIZATION_FILE_MISMATCH_QUARANTINE_AFTER_ATTEMPTS,
+  reconcileAbandonedOrganizationFileReservations,
+} from "@/api/lib/files/organization-file-usage-reconcile";
 import { createReconcileOrganizationFileReservationsTask } from "@/api/lib/scheduler/tasks/organization-file-reservation-reconcile";
 import type { SchedulerTask } from "@/api/lib/scheduler/types";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
@@ -29,35 +36,43 @@ import type { TestIds } from "@/api/tests/security/rls-helpers";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
+const testState = createTestState({ file: import.meta.path, config: env });
+const workerState = testState.forConfig(envDocumentProcessingWorker);
+
 let testDb: TestDatabase;
 let ids: TestIds;
 let fake: FakeS3;
-const priorFlag = env.FEATURE_FILE_USAGE_LIMITS;
-const priorWorkerFlag = envDocumentProcessingWorker.FEATURE_FILE_USAGE_LIMITS;
+/** The database's clock in epoch milliseconds; reconciliation reads its now(). */
+const databaseNowMs =
+  sql<number>`(extract(epoch from now()) * 1000)::float8`.mapWith(Number);
 const db = () =>
   asTestRaw<
     Parameters<typeof reconcileAbandonedOrganizationFileReservations>[0]["db"]
   >(testDb);
 
-beforeAll(async () => {
+testState.beforeAll(async () => {
   testDb = await getTestDb();
   ids = createTestIds();
   await setupRlsTestData(testDb, ids);
   fake = startFakeS3();
-  env.FEATURE_FILE_USAGE_LIMITS = true;
-  envDocumentProcessingWorker.FEATURE_FILE_USAGE_LIMITS = true;
+  testState.setConfig("FEATURE_FILE_USAGE_LIMITS", true);
+  workerState.setConfig("FEATURE_FILE_USAGE_LIMITS", true);
 });
 
 afterAll(async () => {
-  env.FEATURE_FILE_USAGE_LIMITS = priorFlag;
-  envDocumentProcessingWorker.FEATURE_FILE_USAGE_LIMITS = priorWorkerFlag;
   fake.stop();
   await testDb
     .delete(organizationFileObjects)
     .where(eq(organizationFileObjects.organizationId, ids.orgA));
   await testDb
+    .delete(organizationFileObjects)
+    .where(eq(organizationFileObjects.organizationId, ids.orgB));
+  await testDb
     .delete(organizationFileUsage)
     .where(eq(organizationFileUsage.organizationId, ids.orgA));
+  await testDb
+    .delete(organizationFileUsage)
+    .where(eq(organizationFileUsage.organizationId, ids.orgB));
   await releaseTestDb();
 });
 
@@ -65,7 +80,7 @@ const ageReservation = async (objectKey: string) => {
   const old = new Date(Date.now() - 2 * 60 * 60_000);
   await testDb
     .update(organizationFileObjects)
-    .set({ reservationStartedAt: old, updatedAt: old })
+    .set({ reconcileAfter: old, reservationStartedAt: old, updatedAt: old })
     .where(eq(organizationFileObjects.objectKey, objectKey));
 };
 
@@ -214,9 +229,7 @@ describe("abandoned organization file reservations", () => {
   test("a same-size overwrite settles only after its content hash matches", async () => {
     const key = `${ids.orgA}/${ids.wsA1}/same-size-overwrite.pdf`;
     const expectedBytes = new Uint8Array([1, 2, 3, 4, 5]);
-    const expectedSha256Hex = new Bun.CryptoHasher("sha256")
-      .update(expectedBytes)
-      .digest("hex");
+    const expectedSha256Hex = hashSha256Hex(expectedBytes);
     (
       await reconcileOrganizationFileObject(
         { organizationId: ids.orgA, objectKey: key, sizeBytes: 5 },
@@ -366,6 +379,102 @@ describe("abandoned organization file reservations", () => {
     }
   });
 
+  test("backs off and quarantines a repeated referenced mismatch without releasing its bytes", async () => {
+    const key = `${ids.orgB}/${ids.wsB1}/quarantined-overwrite.pdf`;
+    const expectedBytes = new Uint8Array([1, 2, 3, 4, 5, 6, 7]);
+    (
+      await reconcileOrganizationFileObject(
+        { organizationId: ids.orgB, objectKey: key, sizeBytes: 5 },
+        db(),
+      )
+    ).unwrap();
+    const overwrite = await reserveOrganizationFileBytes(
+      {
+        organizationId: ids.orgB,
+        objectKey: key,
+        sizeBytes: expectedBytes.byteLength,
+        contentSha256Hex: hashSha256Hex(expectedBytes),
+      },
+      db(),
+    );
+    expect(Result.isOk(overwrite)).toBe(true);
+    // The overwrite lands now on the database's clock, which stamps the
+    // reservation it is matched against.
+    const [databaseClock] = await testDb
+      .select({ epochMs: databaseNowMs })
+      .from(sql`(SELECT 1) AS database_clock`);
+    fake.put(
+      envBase.S3_BUCKET,
+      key,
+      new Uint8Array([7, 6, 5, 4, 3, 2, 1]),
+      undefined,
+      new Date(databaseClock?.epochMs ?? panic("Database clock missing")),
+    );
+
+    for (
+      let attempt = 1;
+      attempt <= ORGANIZATION_FILE_MISMATCH_QUARANTINE_AFTER_ATTEMPTS;
+      attempt++
+    ) {
+      await ageReservation(key);
+      const result = (
+        await reconcileAbandonedOrganizationFileReservations({
+          db: db(),
+          organizationId: ids.orgB,
+        })
+      ).unwrap();
+      expect(result.mismatched).toBe(1);
+      const row = await testDb
+        .select({
+          databaseNowMs,
+          attemptCount: organizationFileObjects.reconciliationAttemptCount,
+          reconcileAfter: organizationFileObjects.reconcileAfter,
+          reconciliationState: organizationFileObjects.reconciliationState,
+          writeId: organizationFileObjects.writeId,
+        })
+        .from(organizationFileObjects)
+        .where(eq(organizationFileObjects.objectKey, key))
+        .then((rows) => rows.at(0));
+      expect(row?.attemptCount).toBe(attempt);
+      expect(row?.writeId).toBeTruthy();
+      if (attempt < ORGANIZATION_FILE_MISMATCH_QUARANTINE_AFTER_ATTEMPTS) {
+        expect(row?.reconciliationState).toBe(
+          FILE_USAGE_RECONCILIATION_STATE.ACTIVE,
+        );
+        expect(row?.reconcileAfter?.getTime()).toBeGreaterThan(
+          row?.databaseNowMs ?? panic("Database clock missing"),
+        );
+      } else {
+        expect(row?.reconciliationState).toBe(
+          FILE_USAGE_RECONCILIATION_STATE.QUARANTINED,
+        );
+        expect(row?.reconcileAfter).toBeNull();
+      }
+    }
+
+    expect(
+      (
+        await reconcileAbandonedOrganizationFileReservations({
+          db: db(),
+          organizationId: ids.orgB,
+        })
+      ).unwrap().scanned,
+    ).toBe(0);
+    const usage = await testDb
+      .select({ reservedBytes: organizationFileUsage.reservedBytes })
+      .from(organizationFileUsage)
+      .where(eq(organizationFileUsage.organizationId, ids.orgB))
+      .then((rows) => rows.at(0));
+    expect(usage?.reservedBytes).toBe(2n);
+    const replacement = await reserveOrganizationFileBytes(
+      { organizationId: ids.orgB, objectKey: key, sizeBytes: 7 },
+      db(),
+    );
+    expect(replacement).toMatchObject({
+      error: { reason: "reservation_busy" },
+    });
+  });
+
   test("the periodic reservation sweep runs only when file usage is enabled", async () => {
     let calls = 0;
     let mismatchWarnings = 0;
@@ -391,13 +500,13 @@ describe("abandoned organization file reservations", () => {
       },
       signal: new AbortController().signal,
     });
-    env.FEATURE_FILE_USAGE_LIMITS = false;
-    envDocumentProcessingWorker.FEATURE_FILE_USAGE_LIMITS = false;
+    testState.setConfig("FEATURE_FILE_USAGE_LIMITS", false);
+    workerState.setConfig("FEATURE_FILE_USAGE_LIMITS", false);
     await task(context);
     expect(calls).toBe(0);
     expect(mismatchWarnings).toBe(0);
-    env.FEATURE_FILE_USAGE_LIMITS = true;
-    envDocumentProcessingWorker.FEATURE_FILE_USAGE_LIMITS = true;
+    testState.setConfig("FEATURE_FILE_USAGE_LIMITS", true);
+    workerState.setConfig("FEATURE_FILE_USAGE_LIMITS", true);
     await task(context);
     expect(calls).toBe(1);
     expect(mismatchWarnings).toBe(1);

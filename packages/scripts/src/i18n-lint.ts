@@ -13,6 +13,11 @@
  *    category the target locale needs (e.g. Polish few/many, Arabic's six).
  *  - terminology: per-locale renderings marked `forbidden` in glossary.json
  *    do not appear (keeps canonical terms consistent across the product).
+ *  - typography: no em dash, the catalogue half of the `no-em-dash-copy`
+ *    oxlint rule (oxlint does not parse JSON).
+ *  - bare errors: no en message says only that something failed ("Error",
+ *    "Something went wrong") without telling the person what to do next.
+ *    Never grandfathered.
  *
  * Existing debt is grandfathered in i18n-lint-baseline.json so the gate
  * catches only NEW regressions. Burn the baseline down over time.
@@ -27,20 +32,22 @@ import type { MessageFormatElement } from "@formatjs/icu-messageformat-parser";
 import { panic } from "better-result";
 import path from "node:path";
 
+import { normalizeUnicode } from "@stll/text-normalize";
+
 import { parseGlossary } from "./glossary-gen";
-import type { Glossary } from "./glossary-gen";
+import type { Glossary, Term } from "./glossary-gen";
 import { isPlainRecord, parseNestedMessages } from "./i18n-check";
 import type { NestedMessages } from "./i18n-check";
 
 const flatten = (
   obj: NestedMessages,
   prefix = "",
-  out: Record<string, string> = {},
-): Record<string, string> => {
+  out = new Map<string, string>(),
+): Map<string, string> => {
   for (const [key, value] of Object.entries(obj)) {
     const fullKey = prefix ? `${prefix}.${key}` : key;
     if (typeof value === "string") {
-      out[fullKey] = value;
+      out.set(fullKey, value);
     } else {
       flatten(value, fullKey, out);
     }
@@ -108,6 +115,17 @@ const collectArgNames = (
   }
 };
 
+/** The interpolation variables and rich-text tags a message carries; empty when it does not parse. */
+export const findArgumentNames = (value: string): string[] => {
+  const ast = safeParse(value);
+  if (!ast) {
+    return [];
+  }
+  const names = new Set<string>();
+  collectArgNames(ast, names);
+  return [...names];
+};
+
 /**
  * Interpolation variables present in the source but missing from the target,
  * or present in the target but absent from the source. Returns null when both
@@ -138,6 +156,27 @@ export const findPlaceholderMismatch = (
 };
 
 /** ICU parse error message, or null when the value is valid ICU MessageFormat. */
+/**
+ * An argument that names a storage handle (`blockId`, `paraId`, `commentIds`)
+ * rather than something the reader knows. A user-facing string that
+ * interpolates one shows a raw id ("Replace 707C9911"): say what the thing is
+ * or what changes instead, and pass that.
+ */
+const INTERNAL_ID_ARGUMENT = /(?:Id|ID|Ids|IDs)$/u;
+
+/** The internal-identifier arguments a message interpolates; empty when none. */
+export const findInternalIdArguments = (value: string): string[] => {
+  const ast = safeParse(value);
+  if (ast === null) {
+    return [];
+  }
+  const names = new Set<string>();
+  collectArgNames(ast, names);
+  return [...names]
+    .filter((name) => INTERNAL_ID_ARGUMENT.test(name))
+    .toSorted();
+};
+
 export const findIcuError = (value: string): string | null => {
   const result = cachedParse(value);
   return result instanceof Error ? result.message : null;
@@ -197,7 +236,9 @@ export const findMissingPluralCategories = (
     return [];
   }
 
-  const omitted = OMITTED_CARDINAL_PLURALS[locale];
+  const omitted = Object.hasOwn(OMITTED_CARDINAL_PLURALS, locale)
+    ? OMITTED_CARDINAL_PLURALS[locale]
+    : undefined;
   const cardinal = pluralCategories(locale, "cardinal").filter(
     (category) => !omitted?.has(category),
   );
@@ -395,6 +436,13 @@ export const findDroppedExactSelectors = (
 const escapeRegExp = (value: string): string =>
   value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
 
+// A glossary value, rather than a hard-coded catalogue exception: Unicode's
+// Extended_Pictographic property covers emoji bases without mistaking ordinary
+// symbols from non-Latin writing systems for emoji.
+export const EMOJI_GLOSSARY_PATTERN = "\\p{Emoji}";
+const EMOJI_PATTERN =
+  /(?:\p{Extended_Pictographic}|\p{Emoji_Presentation}|\p{Regional_Indicator}|[0-9#*]\uFE0F?\u20E3)/u;
+
 // Arabic attaches proclitics to the front of a word — conjunctions (و/ف),
 // prepositions (ب/ك/ل/س), and the definite article ال — so a forbidden term
 // like قضية also surfaces as القضية / وقضية / بالقضية / للقضية. Allow an
@@ -409,6 +457,9 @@ const containsWord = (
   needle: string,
   locale: string,
 ): boolean => {
+  if (needle === EMOJI_GLOSSARY_PATTERN) {
+    return EMOJI_PATTERN.test(haystack);
+  }
   const cacheKey = `${locale}:${needle}`;
   let regex = wordRegexCache.get(cacheKey);
   if (!regex) {
@@ -481,8 +532,136 @@ export const hasInvalidCapitalizedStella = (value: string): boolean => {
   return false;
 };
 
+// Match the `no-em-dash-copy` oxlint rule for locale JSON: copy breaks a
+// sentence with a period, comma, colon or parentheses, in every locale. A
+// value that is only the glyph is the empty-cell marker, not punctuation.
+export const hasEmDash = (value: string): boolean =>
+  value.includes("\u2014") && value !== "\u2014";
+
+export const EM_DASH_GUIDANCE =
+  "no em dash: rewrite the break with a period, comma, colon or parentheses";
+
+// Prefer the single Unicode horizontal ellipsis (…) over three ASCII dots (...).
+// Extract only literal text from an ICU message so placeholder names (e.g.
+// `{dir}` in German) and select branch keys are excluded from prose checks.
+const collectLiteralText = (
+  elements: readonly MessageFormatElement[],
+): string =>
+  elements
+    .map((el) => {
+      if (el.type === TYPE.literal) {
+        return el.value;
+      }
+      if (el.type === TYPE.plural || el.type === TYPE.select) {
+        return Object.values(el.options)
+          .map((opt) => collectLiteralText(opt.value))
+          .join(" ");
+      }
+      if (el.type === TYPE.tag) {
+        return collectLiteralText(el.children);
+      }
+      return " ";
+    })
+    .join("");
+
+const literalMessageText = (value: string): string => {
+  const ast = safeParse(value);
+  return ast === null ? value : collectLiteralText(ast);
+};
+
+export const hasAsciiEllipsis = (value: string): boolean =>
+  value.includes("...");
+
+export const ASCII_ELLIPSIS_GUIDANCE =
+  "use the single-character ellipsis (…) instead of three dots (...)";
+
+// Keep the product name uninflected in inflected locales (cs, sk, pl, hu, et,
+// lt, lv): declining a female first name (e.g. cs "do stelly", hu "stellába",
+// et "stellasse") sounds overly personal and inconsistent with B2B legal copy.
+// Decline an appositive noun in front of it instead (e.g. "do aplikace stella",
+// "w aplikacji stella", "a stella alkalmazásba"), and never leave a bare
+// ungrammatical preposition/verb before nominative "stella" either.
+const INFLECTED_STELLA_LOCALES = new Set([
+  "cs",
+  "sk",
+  "pl",
+  "hu",
+  "et",
+  "lt",
+  "lv",
+]);
+const INFLECTED_STELLA_PATTERN =
+  /(?<!\p{L})(?:stell(?:y|u|e|ou|i|ę|ą|át|ába|ából|ában|ához|ának|án|ával|asse|ast|as|at|aga|ale|al|alt|ai|os|oje|ā)|stella-(?:st|sse|s|ga|le|l|lt))(?!\p{L})/iu;
+
+const BARE_STELLA_LOCALES = new Set(["cs", "sk"]);
+const BARE_STELLA_PATTERN =
+  /(?<!\p{L})(?:do|od|ze|zo|k|ke|ku|pro|pre|otevřít|otevřete|otvoriť|otvorte|připojit|připojte|pripojiť|pripojte)\s+stella(?!\p{L}|\s+(?:desktop|web|CLI|MCP|Style|AI|Legal|Editor)\b)/iu;
+
+export const hasInflectedStella = (value: string, locale: string): boolean =>
+  INFLECTED_STELLA_LOCALES.has(locale) && INFLECTED_STELLA_PATTERN.test(value);
+
+export const hasBareUngrammaticalStella = (
+  value: string,
+  locale: string,
+): boolean =>
+  BARE_STELLA_LOCALES.has(locale) && BARE_STELLA_PATTERN.test(value);
+
+export const INFLECTED_STELLA_GUIDANCE =
+  "keep stella uninflected; decline a noun in front of it (e.g. cs 'do aplikace stella', pl 'w aplikacji stella', hu 'a stella alkalmazásba', et 'rakenduses stella')";
+
+// Avoid anthropomorphic 1st-person UI voice ("I am preparing/loading/working…"):
+// stella is a legal tool, not a persona. Prefer impersonal or verbal-noun forms.
+const FIRST_PERSON_APP_VOICE_PATTERNS = new Map<string, RegExp>([
+  [
+    "cs",
+    /(?<!\p{L})(?:připravuji|načítám|hledám|pracuji|zpracovávám|odesílám|ukládám|stahuji|kontroluji|analyzuji|vytvářím|ověřuji)(?!\p{L})/iu,
+  ],
+  [
+    "sk",
+    /(?<!\p{L})(?:pripravujem|načítavam|hľadám|pracujem|spracúvam|odosielam|ukladám|sťahujem|kontrolujem|analyzujem|vytváram|overujem)(?!\p{L})/iu,
+  ],
+  [
+    "de",
+    /(?<!\p{L})ich\s+(?:bereite|lade|suche|arbeite|prüfe|erstelle|speichere)(?!\p{L})/iu,
+  ],
+]);
+
+export const hasFirstPersonAppVoice = (
+  value: string,
+  locale: string,
+): boolean =>
+  FIRST_PERSON_APP_VOICE_PATTERNS.get(locale)?.test(
+    literalMessageText(value),
+  ) ?? false;
+
+export const FIRST_PERSON_APP_VOICE_GUIDANCE =
+  "avoid 1st-person app voice (e.g. cs 'Analyzuji…', sk 'Pracujem…'); use impersonal forms ('Analyzuje se…', 'Probíhá…') so the app does not speak as a persona";
+
+// Enforce the established T-V register per locale (de Sie, cs/sk vykání,
+// hu Ön, es tú) on unambiguous pronouns so informal/formal drift does not creep in.
+const REGISTER_DRIFT_PATTERNS = new Map<string, RegExp>([
+  [
+    "de",
+    /(?<!\p{L})(?:du|dich|dir|dein|deine|deinem|deinen|deiner|deines)(?!\p{L})/iu,
+  ],
+  ["cs", /(?<!\p{L})(?:tvůj|tvá|tvé|tvoje|tvého|tvému|tvým|tvých)(?!\p{L})/iu],
+  [
+    "sk",
+    /(?<!\p{L})(?:tvoj|tvoja|tvoje|tvojho|tvojmu|tvojím|tvojich)(?!\p{L})/iu,
+  ],
+  ["hu", /(?<!\p{L})(?:tied|neked|téged|veled)(?!\p{L})/iu],
+  ["es", /(?<!\p{L})(?:usted|ustedes)(?!\p{L})/iu],
+]);
+
+export const hasRegisterDrift = (value: string, locale: string): boolean =>
+  REGISTER_DRIFT_PATTERNS.get(locale)?.test(literalMessageText(value)) ?? false;
+
+export const REGISTER_DRIFT_GUIDANCE =
+  "keep the locale's established register (de Sie, cs/sk vykání, hu Ön, es tú)";
+
 export type ForbiddenRule = {
   concept: string;
+  guidance?: string;
   triggers: string[];
   keyTriggers: string[];
   // Substrings that exempt a key from this concept's bans entirely (see
@@ -518,7 +697,7 @@ export const buildForbiddenRules = (glossary: Glossary): ForbiddenRule[] => {
     if (!term.forbidden && !term.forbiddenOnKey && !term.forbiddenAlways) {
       continue;
     }
-    rules.push({
+    const rule: ForbiddenRule = {
       concept: term.id,
       triggers: [term.en],
       keyTriggers: term.keyTriggers ?? [],
@@ -527,9 +706,55 @@ export const buildForbiddenRules = (glossary: Glossary): ForbiddenRule[] => {
       byLocaleAlways: { ...term.forbiddenAlways },
       byLocaleOnKey: { ...term.forbiddenOnKey },
       sourceExempt: (term.sourceExempt ?? []).map((s) => s.toLowerCase()),
-    });
+    };
+    if (term.guidance) {
+      rule.guidance = term.guidance;
+    }
+    rules.push(rule);
   }
   return rules;
+};
+
+type ForbiddenGuidanceOptions = {
+  source: string;
+  target: string;
+  locale: string;
+  rules: ForbiddenRule[];
+  key?: string;
+};
+
+/** Actionable guidance for the forbidden rules matched by a catalogue value. */
+export const findForbiddenGuidance = ({
+  source,
+  target,
+  locale,
+  rules,
+  key,
+}: ForbiddenGuidanceOptions): string[] => {
+  const guidance = new Set<string>();
+  for (const rule of rules) {
+    if (
+      rule.guidance &&
+      findForbiddenTerms({
+        source,
+        target,
+        locale,
+        rules: [rule],
+        key,
+      }).length > 0
+    ) {
+      guidance.add(rule.guidance);
+    }
+  }
+  return [...guidance];
+};
+
+type FindForbiddenTermsOptions = {
+  source: string;
+  target: string;
+  locale: string;
+  rules: ForbiddenRule[];
+  key?: string | undefined;
 };
 
 /**
@@ -540,13 +765,13 @@ export const buildForbiddenRules = (glossary: Glossary): ForbiddenRule[] => {
  * key-path triggering; omit it for source-only checks. `forbiddenAlways` forms
  * are checked regardless of either trigger.
  */
-export const findForbiddenTerms = (
-  source: string,
-  target: string,
-  locale: string,
-  rules: ForbiddenRule[],
-  key?: string,
-): string[] => {
+export const findForbiddenTerms = ({
+  source,
+  target,
+  locale,
+  rules,
+  key,
+}: FindForbiddenTermsOptions): string[] => {
   const hits: string[] = [];
   for (const rule of rules) {
     // An exempt key opts out of every ban this concept carries, including the
@@ -595,6 +820,80 @@ export const findForbiddenTerms = (
   }
   return hits;
 };
+
+type FindMentionedTermsOptions = {
+  glossary: Glossary;
+  source: string;
+  key: string;
+};
+
+/** Glossary terms a message is about, by the same triggers the terminology lint uses. */
+export const findMentionedTerms = ({
+  glossary,
+  source,
+  key,
+}: FindMentionedTermsOptions): Term[] =>
+  [...glossary.verbs, ...glossary.legalConcepts, ...glossary.nouns].filter(
+    (term) =>
+      !(term.keyExempt ?? []).some((exempt) => key.includes(exempt)) &&
+      (containsWord(source, term.en, "en") ||
+        (term.keyTriggers ?? []).some((trigger) => key.includes(trigger))),
+  );
+
+/**
+ * Whole messages that say something failed and nothing else. Nobody can act
+ * on them, so a failure message says what to do next (try again, reload).
+ */
+const BARE_ERROR_MESSAGES = new Set([
+  "action failed",
+  "an error has occurred",
+  "an error occurred",
+  "an unexpected error occurred",
+  "an unknown error occurred",
+  "error",
+  "error occurred",
+  "errors",
+  "oops",
+  "oops, something went wrong",
+  "operation failed",
+  "request failed",
+  "something went wrong",
+  "unexpected error",
+  "unknown error",
+]);
+
+const TRAILING_ERROR_PUNCTUATION = new Set([".", "!", ":", "\u2026"]);
+
+const stripTrailingErrorPunctuation = (value: string): string => {
+  let end = value.length;
+  while (end > 0) {
+    const character = value.at(end - 1);
+    if (!character || !TRAILING_ERROR_PUNCTUATION.has(character)) {
+      break;
+    }
+    end -= 1;
+  }
+  return value.slice(0, end);
+};
+
+const bareErrorForm = (value: string): string => {
+  const normalized = normalizeUnicode(value, "NFC")
+    .toLowerCase()
+    .replaceAll("\u2019", "'")
+    .replaceAll(/\s+/gu, " ")
+    .trim();
+  return stripTrailingErrorPunctuation(normalized).trim();
+};
+
+export const isBareErrorMessage = (value: string): boolean =>
+  BARE_ERROR_MESSAGES.has(bareErrorForm(value));
+
+/** Keys of the en messages that only say something failed. */
+export const findBareErrors = (source: Record<string, string>): string[] =>
+  Object.entries(source)
+    .filter(([, value]) => isBareErrorMessage(value))
+    .map(([key]) => key)
+    .toSorted();
 
 // --- baseline ---
 
@@ -669,9 +968,16 @@ const findViolations = (
     if (targetValue === sourceValue) {
       if (
         locale === "en" &&
-        (findForbiddenTerms(sourceValue, targetValue, "en", rules, key).length >
-          0 ||
-          hasInvalidCapitalizedStella(targetValue))
+        (findForbiddenTerms({
+          source: sourceValue,
+          target: targetValue,
+          locale: "en",
+          rules,
+          key,
+        }).length > 0 ||
+          hasInvalidCapitalizedStella(targetValue) ||
+          hasEmDash(targetValue) ||
+          hasAsciiEllipsis(targetValue))
       ) {
         result.terminology.push(key);
       }
@@ -692,9 +998,20 @@ const findViolations = (
       result.plural.push(key);
     }
     if (
-      findForbiddenTerms(sourceValue, targetValue, locale, rules, key).length >
-        0 ||
-      hasInvalidCapitalizedStella(targetValue)
+      findForbiddenTerms({
+        source: sourceValue,
+        target: targetValue,
+        locale,
+        rules,
+        key,
+      }).length > 0 ||
+      hasInvalidCapitalizedStella(targetValue) ||
+      hasEmDash(targetValue) ||
+      hasAsciiEllipsis(targetValue) ||
+      hasInflectedStella(targetValue, locale) ||
+      hasBareUngrammaticalStella(targetValue, locale) ||
+      hasFirstPersonAppVoice(targetValue, locale) ||
+      hasRegisterDrift(targetValue, locale)
     ) {
       result.terminology.push(key);
     }
@@ -703,14 +1020,22 @@ const findViolations = (
   return result;
 };
 
+type IsSuppressedOptions = {
+  baseline: LintBaseline;
+  category: LintCategory;
+  key: string;
+  locale: string;
+  entry: BaselineEntry;
+};
+
 /** A violation is suppressed only if the baselined (source, target) still matches. */
-export const isSuppressed = (
-  baseline: LintBaseline,
-  category: LintCategory,
-  key: string,
-  locale: string,
-  entry: BaselineEntry,
-): boolean => {
+export const isSuppressed = ({
+  baseline,
+  category,
+  key,
+  locale,
+  entry,
+}: IsSuppressedOptions): boolean => {
   const stored = baseline[category][key]?.[locale];
   if (stored === undefined) {
     return false;
@@ -742,7 +1067,9 @@ if (import.meta.main) {
       return parseNestedMessages(text, filePath);
     };
 
-    const source = flatten(await readJson(path.resolve(langsDir, "en.json")));
+    const source = Object.fromEntries(
+      flatten(await readJson(path.resolve(langsDir, "en.json"))),
+    );
     const glossary = parseGlossary(await Bun.file(glossaryPath).text());
     const rules = buildForbiddenRules(glossary);
 
@@ -773,7 +1100,15 @@ if (import.meta.main) {
         .toSorted(),
     ];
 
-    const next = emptyBaseline();
+    const next: Record<
+      LintCategory,
+      Map<string, Map<string, BaselineEntry>>
+    > = {
+      placeholder: new Map(),
+      icu: new Map(),
+      plural: new Map(),
+      terminology: new Map(),
+    };
     let hasIssues = false;
 
     for (const file of localeFiles) {
@@ -781,7 +1116,9 @@ if (import.meta.main) {
       const target =
         locale === "en"
           ? source
-          : flatten(await readJson(path.resolve(langsDir, file)));
+          : Object.fromEntries(
+              flatten(await readJson(path.resolve(langsDir, file))),
+            );
       const violations = findViolations(source, target, locale, rules);
 
       const reported: string[] = [];
@@ -792,9 +1129,48 @@ if (import.meta.main) {
             target: target[key] ?? "",
           };
           if (writeBaseline) {
-            (next[category][key] ??= {})[locale] = entry;
-          } else if (!isSuppressed(baseline, category, key, locale, entry)) {
-            reported.push(`  ${category}: ${key}`);
+            const byLocale =
+              next[category].get(key) ?? new Map<string, BaselineEntry>();
+            byLocale.set(locale, entry);
+            next[category].set(key, byLocale);
+          } else if (
+            !isSuppressed({
+              baseline,
+              category,
+              key,
+              locale,
+              entry,
+            })
+          ) {
+            const guidance =
+              category === "terminology"
+                ? [
+                    ...findForbiddenGuidance({
+                      source: entry.source,
+                      target: entry.target,
+                      locale,
+                      rules,
+                      key,
+                    }),
+                    ...(hasEmDash(entry.target) ? [EM_DASH_GUIDANCE] : []),
+                    ...(hasAsciiEllipsis(entry.target)
+                      ? [ASCII_ELLIPSIS_GUIDANCE]
+                      : []),
+                    ...(hasInflectedStella(entry.target, locale) ||
+                    hasBareUngrammaticalStella(entry.target, locale)
+                      ? [INFLECTED_STELLA_GUIDANCE]
+                      : []),
+                    ...(hasFirstPersonAppVoice(entry.target, locale)
+                      ? [FIRST_PERSON_APP_VOICE_GUIDANCE]
+                      : []),
+                    ...(hasRegisterDrift(entry.target, locale)
+                      ? [REGISTER_DRIFT_GUIDANCE]
+                      : []),
+                  ]
+                : [];
+            const suffix =
+              guidance.length > 0 ? ` (${guidance.join("; ")})` : "";
+            reported.push(`  ${category}: ${key}${suffix}`);
           }
         }
       }
@@ -822,21 +1198,45 @@ if (import.meta.main) {
           console.log(`  icu (source): ${key}`);
         }
       }
+
+      // A bare failure message is never grandfathered either.
+      const bare = findBareErrors(source);
+      if (bare.length > 0) {
+        hasIssues = true;
+        console.log(`\n${path.resolve(langsDir, "en.json")}:`);
+        for (const key of bare) {
+          console.log(
+            `  bare-error (source): ${key} says only that something failed; say what to do next`,
+          );
+        }
+      }
+      // Never grandfathered either: a raw id in front of a user is never right.
+      const idArguments = Object.entries(source)
+        .map(([key, value]) => [key, findInternalIdArguments(value)] as const)
+        .filter(([, names]) => names.length > 0)
+        .toSorted(([a], [b]) => a.localeCompare(b));
+      if (idArguments.length > 0) {
+        hasIssues = true;
+        console.log(`\n${path.resolve(langsDir, "en.json")}:`);
+        for (const [key, names] of idArguments) {
+          console.log(
+            `  internal id (source): ${key} interpolates ${names.join(", ")}; describe the thing instead`,
+          );
+        }
+      }
     }
 
     if (writeBaseline) {
       const sortRecord = (
-        record: Record<string, Record<string, BaselineEntry>>,
+        record: Map<string, Map<string, BaselineEntry>>,
       ): Record<string, Record<string, BaselineEntry>> =>
         Object.fromEntries(
-          Object.entries(record)
+          [...record]
             .toSorted(([a], [b]) => a.localeCompare(b))
             .map(([key, byLocale]) => [
               key,
               Object.fromEntries(
-                Object.entries(byLocale).toSorted(([a], [b]) =>
-                  a.localeCompare(b),
-                ),
+                [...byLocale].toSorted(([a], [b]) => a.localeCompare(b)),
               ),
             ]),
         );
@@ -850,8 +1250,8 @@ if (import.meta.main) {
       const count = CATEGORIES.reduce(
         (sum, category) =>
           sum +
-          Object.values(next[category]).reduce(
-            (n, byLocale) => n + Object.keys(byLocale).length,
+          [...next[category].values()].reduce(
+            (n, byLocale) => n + byLocale.size,
             0,
           ),
         0,

@@ -9,22 +9,22 @@ import {
   test,
 } from "bun:test";
 import { and, eq, sql } from "drizzle-orm";
-import { ElysiaCustomStatusResponse } from "elysia/error";
 
 import { Temporal } from "@stll/time";
 
 import { member, organization, user } from "@/api/db/auth-schema";
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import {
-  BILLING_STATUS,
   auditLogs,
+  BILLING_STATUS,
   contacts,
-  organizationSettings,
   entities,
+  featureEnrolments,
+  organizationSettings,
   TIME_ENTRY_SOURCE,
   timeEntries,
-  timeTimers,
   timeTimerConfirmations,
+  timeTimers,
   workspaceMembers,
   workspaces,
 } from "@/api/db/schema";
@@ -42,6 +42,7 @@ import listTimers from "@/api/handlers/time-timers/list";
 import pauseTimer from "@/api/handlers/time-timers/pause";
 import resumeTimer from "@/api/handlers/time-timers/resume";
 import updateTimer from "@/api/handlers/time-timers/update";
+import { HttpStatusResponse } from "@/api/http/status";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import {
   AUDIT_ACTION,
@@ -49,6 +50,7 @@ import {
   createBackgroundAuditRecorder,
 } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
+import { loadFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { cents } from "@/api/lib/money";
@@ -58,8 +60,9 @@ import {
 } from "@/api/lib/permission-authorization";
 import type { CredentialAuthority } from "@/api/lib/permission-authorization";
 import { formatTodayInTimeZone } from "@/api/lib/timezone";
-import type { McpRequestContext } from "@/api/mcp/context";
+import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 import { handleMcpToolCall } from "@/api/mcp/tools";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
@@ -92,9 +95,12 @@ const noopAuditRecorder: AuditRecorder = async () => undefined;
 
 const createUser = async (name: string): Promise<SafeId<"user">> => {
   const userId = mintAuthProviderId<"user">();
-  await testDb
-    .insert(user)
-    .values({ id: userId, name, email: `${userId}@test.local` });
+  await testDb.insert(user).values({
+    id: userId,
+    name,
+    email: `${userId}@example.com`,
+    emailVerified: true,
+  });
   return userId;
 };
 
@@ -112,6 +118,10 @@ beforeAll(async () => {
     name: "Time firm",
     slug: `time-firm-${organizationId}`,
     createdAt: new Date(),
+  });
+  await recordNewOrganizationAccessState(testDb, {
+    organizationId,
+    now: new Date(),
   });
 
   await testDb.insert(organizationSettings).values({
@@ -134,6 +144,14 @@ beforeAll(async () => {
       userId: actor.userId,
       role: actor.role,
       createdAt: new Date(),
+    })),
+  );
+
+  await testDb.insert(featureEnrolments).values(
+    Object.values(actors).map(({ userId }) => ({
+      organizationId,
+      userId,
+      featureId: "time-billing" as const,
     })),
   );
 
@@ -278,8 +296,13 @@ type ConfirmCtx = Parameters<typeof confirmTimer.handler>[0];
 type AdminStopCtx = Parameters<typeof adminStopTimer.handler>[0];
 
 /** The failure status of a handler result, or null when it succeeded. */
-const statusOf = (result: unknown): number | null =>
-  result instanceof ElysiaCustomStatusResponse ? Number(result.code) : null;
+const statusOf = (result: unknown): number | null => {
+  if (!(result instanceof HttpStatusResponse)) {
+    return null;
+  }
+  const status: number = result.code;
+  return status;
+};
 
 // ── Per-entry operations ───────────────────────────────
 
@@ -1349,14 +1372,28 @@ describe("confirming a timer in a matter shared by several members", () => {
 
 // ── MCP tools ──────────────────────────────────────────
 
-const mcpContextFor = (name: ActorName): McpRequestContext => {
+const mcpContextFor = async (
+  name: ActorName,
+): Promise<AuthorizedMcpRequestContext> => {
   const actor = actors[name];
   const workspaceIds = [workspaceId];
   const accessibleWorkspaces = workspaceIds.map((id) => ({
     id,
     status: "active" as const,
   }));
-  return asTestRaw<McpRequestContext>({
+  const safeDb = asTestRaw<SafeDb>(
+    createSafeDb(testDb, workspaceIds, organizationId, actor.userId),
+  );
+  const snapshot = await loadFeatureAccessSnapshot({
+    safeDb,
+    organizationId,
+    userId: actor.userId,
+  });
+  if (Result.isError(snapshot)) {
+    throw snapshot.error;
+  }
+  return asTestRaw<AuthorizedMcpRequestContext>({
+    featureAccessSnapshot: snapshot.value,
     accessibleWorkspaceIds: workspaceIds,
     accessibleWorkspaceIdSet: new Set(workspaceIds),
     accessibleWorkspaceStatusById: new Map(
@@ -1415,7 +1452,7 @@ describe("time entry MCP tools between members of one organization", () => {
 
         const result = await handleMcpToolCall({
           args: operation.args(id),
-          context: mcpContextFor("colleague"),
+          context: await mcpContextFor("colleague"),
           toolName: operation.toolName,
         });
 
@@ -1430,7 +1467,7 @@ describe("time entry MCP tools between members of one organization", () => {
 
           const result = await handleMcpToolCall({
             args: operation.args(id),
-            context: mcpContextFor(actor),
+            context: await mcpContextFor(actor),
             toolName: operation.toolName,
           });
 

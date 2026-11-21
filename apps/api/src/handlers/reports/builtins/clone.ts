@@ -17,7 +17,7 @@
  */
 
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import {
   getBuiltinReportTemplate,
@@ -32,6 +32,7 @@ import { createStoredTemplate } from "@/api/lib/templates/create-template";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 const config = {
+  contract: "patch",
   contentDelivery: {
     type: "none",
     reason: "Clones a report template without delivering stored-file bytes.",
@@ -50,7 +51,7 @@ const config = {
     consumesServices: false,
   },
   params: workspaceParams({}),
-  body: t.Object({ key: t.String({ minLength: 1 }) }),
+  body: v.object({ key: v.pipe(v.string(), v.minLength(1)) }),
 } satisfies WorkspaceHandlerConfig;
 
 export type CloneBuiltinReportTemplateDependencies = {

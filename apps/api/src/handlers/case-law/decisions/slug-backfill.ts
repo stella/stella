@@ -3,6 +3,7 @@ import type { SQL } from "drizzle-orm";
 
 import { createCaseLawDecisionSlug } from "@stll/api-contract/case-law-decision-route";
 
+import { CASE_LAW_DECISIONS_SLUG_UIDX } from "@/api/db/online-unique-indexes";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawDecisions } from "@/api/db/schema";
 import {
@@ -11,6 +12,7 @@ import {
 } from "@/api/handlers/case-law/decisions/slug";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { isPgConstraintError, PG_ERROR } from "@/api/lib/pg-error";
 
 const BATCH_SIZE = 200;
@@ -28,7 +30,7 @@ const isSlugUniqueViolation = (error: unknown): boolean =>
   isPgConstraintError(
     error,
     PG_ERROR.UNIQUE_VIOLATION,
-    "case_law_decisions_slug_uidx",
+    CASE_LAW_DECISIONS_SLUG_UIDX,
   );
 
 const assignSlug = async (db: ScopedDb, row: BackfillRow): Promise<boolean> => {
@@ -47,17 +49,16 @@ const assignSlug = async (db: ScopedDb, row: BackfillRow): Promise<boolean> => {
     try {
       // Compare-and-set on a still-null slug: a concurrent writer may have
       // filled this row, in which case we leave its slug untouched.
-      // oxlint-disable-next-line arrow-body-style -- block body carries the audit-skip directive the require-audit-on-mutation rule scans for
-      const updated = await db((tx) => {
+      const updated = await db((tx) =>
         // audit: skip — backfills a derived public slug, not user-facing state
-        return tx
+        tx
           .update(caseLawDecisions)
           .set({ slug })
           .where(
             and(eq(caseLawDecisions.id, row.id), isNull(caseLawDecisions.slug)),
           )
-          .returning({ id: caseLawDecisions.id });
-      });
+          .returning({ id: caseLawDecisions.id }),
+      );
 
       return updated.length > 0;
     } catch (error) {
@@ -127,10 +128,13 @@ export const backfillCaseLawSlugs = async (
         }
       } catch (error) {
         failed += 1;
-        captureError(error, {
-          decisionId: row.id,
-          step: "backfillCaseLawSlugs",
-        });
+        captureError(
+          error,
+          handlerErrorContext("decisions.backfillCaseLawSlugs", {
+            decisionId: row.id,
+            step: "backfillCaseLawSlugs",
+          }),
+        );
       }
     }
 

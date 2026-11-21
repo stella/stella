@@ -1,19 +1,26 @@
 import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 
-import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
+import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
 
 import { workspaceViews } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
-import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
+import {
+  AVT_LAYOUT_FEATURE_ACCESS,
+  avtViewAccessStatus,
+  isAvtLayoutVisible,
+} from "@/api/lib/auth/feature-access/view-eligibility";
+import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { broadcastWorkspaceResourceDeleted } from "@/api/lib/resource-realtime";
 import { isRequiredViewLayout } from "@/api/lib/views";
 import { parseStoredViewLayout } from "@/api/lib/views-schema";
 
 const config = {
+  contract: "patch",
+  featureAccess: AVT_LAYOUT_FEATURE_ACCESS,
   description:
     "Delete one view (a shared tab) from a matter, removing it for everyone " +
     "with access. Refused when it is the matter's last view, or the last view " +
@@ -26,7 +33,7 @@ const config = {
     reason: "workspace_schema",
     consumesServices: false,
   },
-  params: workspaceParams({ viewId: tSafeId("workspaceView") }),
+  params: workspaceParams({ viewId: resourceIdSchema("workspaceView") }),
 } satisfies WorkspaceHandlerConfig;
 
 const deleteView = createSafeHandler(
@@ -36,6 +43,9 @@ const deleteView = createSafeHandler(
     workspaceId,
     params: { viewId },
     recordAuditEvent,
+    featureAccessSnapshot,
+    session,
+    user,
   }) {
     const allViews = yield* Result.await(
       safeDb((tx) =>
@@ -51,19 +61,33 @@ const deleteView = createSafeHandler(
       ),
     );
 
+    const target = allViews.find((v) => v.id === viewId);
+    if (!target) {
+      return Result.err(
+        new HandlerError({ status: 404, message: "View not found" }),
+      );
+    }
+
+    if (
+      !isAvtLayoutVisible(
+        target.layoutType,
+        avtViewAccessStatus({
+          snapshot: featureAccessSnapshot,
+          organizationId: session.activeOrganizationId,
+          userId: user.id,
+        }),
+      )
+    ) {
+      return Result.err(
+        new HandlerError({ status: 404, message: "Not found" }),
+      );
+    }
     if (allViews.length <= 1) {
       return Result.err(
         new HandlerError({
           status: 400,
           message: "Cannot delete the last view",
         }),
-      );
-    }
-
-    const target = allViews.find((v) => v.id === viewId);
-    if (!target) {
-      return Result.err(
-        new HandlerError({ status: 404, message: "View not found" }),
       );
     }
 

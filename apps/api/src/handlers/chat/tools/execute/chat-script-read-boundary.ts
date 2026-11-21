@@ -3,8 +3,8 @@ import { Result } from "better-result";
 import type { RegistryReadToolName } from "@/api/handlers/chat/tools/registry-adapter/ref-field-map";
 import type { runRegistryReadTool } from "@/api/handlers/chat/tools/registry-adapter/run-registry-tool";
 import {
-  knownDefectRefusalMessage,
   type ChatToolDefectMemo,
+  knownDefectRefusalMessage,
 } from "@/api/lib/chat/tool-defect-memo";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
 

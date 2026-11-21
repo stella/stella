@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 /**
  * The fingerprint change detection compares for a case-law decision.
  *
@@ -12,9 +13,17 @@
  * This module is the only constructor of {@link SourceFingerprint}. It takes
  * the stored fields themselves rather than a list of strings, so what is
  * hashed and what is stored cannot drift apart.
+ *
+ * Bump a source's `SOURCE_FINGERPRINT_VERSIONS` entry only when its fingerprint
+ * changes over the same stored bytes: the adapter changes which bytes it
+ * passes here from what it already stores, or the hashing itself changes.
+ * Changing which bytes the adapter stores is not fingerprint-only; existing
+ * rows must take the normal changed path when next observed. Bump the parser
+ * version separately only when parser output changes.
  */
 
-import { panic } from "better-result";
+// parser-output-unchanged: SHA-256 ownership changes preserve input bytes, serialization and update order, so stored hashes and parser output remain identical.
+import { createSha256 } from "@stll/sha256/bun";
 
 import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 
@@ -33,7 +42,7 @@ export type StoredSourceRaw = {
 };
 
 const sha256Hex = (input: string | Uint8Array): string =>
-  new Bun.CryptoHasher("sha256").update(input).digest("hex");
+  createSha256().update(input).digest("hex");
 
 const SHA256_HEX = /^[0-9a-f]{64}$/u;
 

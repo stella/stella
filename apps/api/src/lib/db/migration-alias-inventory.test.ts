@@ -5,6 +5,7 @@ import nodePath from "node:path";
 import migrationAliasInventory from "./migration-alias-inventory.json";
 import {
   deriveMigrationAliasHistory,
+  RETIRED_REWRITTEN_MIGRATION_INDEXES,
   REWRITTEN_MIGRATION_HISTORIES,
   REWRITTEN_MIGRATION_INDEXES,
 } from "./migration-history";
@@ -90,7 +91,13 @@ describe("migration alias inventory", () => {
       );
       if (typeof repair !== "string") {
         for (const index of repair.indexes) {
-          expect(REWRITTEN_MIGRATION_INDEXES).toContainEqual(index);
+          const derived = { ...index, introducedBy: fileName };
+          // A retired index keeps its receipt but is no longer required.
+          if (RETIRED_REWRITTEN_MIGRATION_INDEXES.has(index.name)) {
+            expect(REWRITTEN_MIGRATION_INDEXES).not.toContainEqual(derived);
+          } else {
+            expect(REWRITTEN_MIGRATION_INDEXES).toContainEqual(derived);
+          }
         }
       }
     }
@@ -123,7 +130,9 @@ describe("migration alias inventory", () => {
         ]),
       ).toThrow("Conflicting migration alias index records_record_id_idx");
     }
-    expect(deriveMigrationAliasHistory([first, next]).indexes).toEqual([index]);
+    expect(deriveMigrationAliasHistory([first, next]).indexes).toEqual([
+      { ...index, introducedBy: first.fileName },
+    ]);
   });
 
   test("all bundled SQL files are UTF-8 without a byte-order mark", async () => {

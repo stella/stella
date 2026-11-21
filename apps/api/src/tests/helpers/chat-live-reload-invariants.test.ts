@@ -83,6 +83,38 @@ describe("comparing the live view with a reload", () => {
     expect(diffLiveAgainstReload({ live, reload: reloaded })).toEqual([]);
   });
 
+  test("compares activity payloads, type and ownership across reload", () => {
+    const activity = {
+      type: "activity",
+      activityType: "review",
+      content: { stage: "reading", progress: 1 },
+      subagentRunId: "child-run",
+    } satisfies Part;
+    const reload = [assistant("turn", [activity])];
+    expect(
+      diffLiveAgainstReload({
+        live: [
+          assistant("turn", [
+            { ...activity, content: { progress: 1, stage: "reading" } },
+          ]),
+        ],
+        reload,
+      }),
+    ).toEqual([]);
+    for (const parts of [
+      [],
+      [{ ...activity, activityType: "search" }],
+      [{ ...activity, content: { stage: "done", progress: 1 } }],
+      [{ ...activity, subagentRunId: "other-run" }],
+      [activity, activity],
+    ]) {
+      expect(
+        diffLiveAgainstReload({ live: [assistant("turn", parts)], reload })
+          .length,
+      ).toBeGreaterThan(0);
+    }
+  });
+
   test("ignores the key order of a tool output", () => {
     const withOutput = (output: unknown) => [
       assistant("turn", [call("call-1", output)]),
@@ -174,15 +206,29 @@ describe("the wire identity oracle", () => {
     role: "user",
   };
 
-  test("flags the engine's snapshot of a message split at a tool result", () => {
+  test("passes unique native segment ids and still flags duplicate assistant ids", () => {
     const snapshot = buildEngineSnapshot([user, ...reloaded]);
-    // The fixture must reach the fault: the engine really emits two copies.
+    // v1 allocates a unique wire id to each result-boundary segment.
+    const assistants = snapshot.messages.filter(
+      (message) => message.role === "assistant",
+    );
+    expect(assistants.map(({ id }) => id)).toEqual(["turn", "turn-segment-1"]);
     expect(
-      snapshot.messages.filter(({ id }) => id === "turn").length,
-    ).toBeGreaterThan(1);
+      assistants.map((message) => message.toolCalls?.map(({ id }) => id)),
+    ).toEqual([["call-1"], ["call-2"]]);
+    expect(findWireIdentityViolations([snapshot])).toEqual([]);
 
+    const duplicated = unsafeFixture(
+      "Duplicate assistant ids remain invalid even though v1 no longer emits them.",
+      {
+        ...snapshot,
+        messages: snapshot.messages.map((message) =>
+          message.role === "assistant" ? { ...message, id: "turn" } : message,
+        ),
+      },
+    );
     expect(
-      findWireIdentityViolations([snapshot]).map(({ oracle }) => oracle),
+      findWireIdentityViolations([duplicated]).map(({ oracle }) => oracle),
     ).toEqual([CHAT_ORACLE.wireSnapshotIdentity]);
   });
 
@@ -195,7 +241,7 @@ describe("the wire identity oracle", () => {
     expect(findWireIdentityViolations([snapshot])).toEqual([]);
   });
 
-  test("flags the interrupt snapshot the engine emits when a later call needs approval", async () => {
+  test("passes the native interrupt snapshot with distinct historical segment ids", async () => {
     const approvalTool = toolDefinition({
       description: "Deletes a draft once the user approves",
       inputSchema: toTanStackToolSchema(v.object({ name: v.string() })),
@@ -225,19 +271,25 @@ describe("the wire identity oracle", () => {
         },
       ],
     });
-    // The fixture must reach the fault: the engine's snapshot repeats the
-    // earlier answer's id.
-    expect(
-      chunks.flatMap((chunk) =>
-        chunk.type === EventType.MESSAGES_SNAPSHOT
-          ? chunk.messages.filter(({ id }) => id === "turn")
-          : [],
-      ),
-    ).toHaveLength(2);
-
-    expect(
-      findWireIdentityViolations(chunks).map(({ oracle }) => oracle),
-    ).toEqual([CHAT_ORACLE.wireSnapshotIdentity]);
+    const historicalSegments = chunks.flatMap((chunk) =>
+      chunk.type === EventType.MESSAGES_SNAPSHOT
+        ? chunk.messages.filter(
+            (message) =>
+              message.role === "assistant" &&
+              (message.content === "Checking the drafts." ||
+                message.content === "The first is gone."),
+          )
+        : [],
+    );
+    expect(historicalSegments.map(({ id }) => id)).toEqual([
+      "turn",
+      "turn-segment-1",
+    ]);
+    expect(historicalSegments.map((message) => message.content)).toEqual([
+      "Checking the drafts.",
+      "The first is gone.",
+    ]);
+    expect(findWireIdentityViolations(chunks)).toEqual([]);
   });
 
   test("flags a malformed snapshot that lists one tool call twice", () => {
@@ -341,10 +393,12 @@ describe("the stored results oracle", () => {
 describe("the served snapshot oracle", () => {
   const served = {
     createdAt: "2026-01-02T03:04:05.000Z",
+    edited: false,
     id: toSafeId<"chatMessage">("01a0e22c-ba01-7525-803d-b57dcb87e6fb"),
     metadata: { turnOutcome: { type: "completed" } },
     parts: [{ content: "Draft the NDA", type: "text" }],
     role: "user",
+    revision: 0,
   } satisfies ClientMessage;
   const asEngineHolds: UIMessage = {
     id: served.id,
@@ -352,14 +406,20 @@ describe("the served snapshot oracle", () => {
     role: "user",
   };
 
-  /** The engine's snapshot of the message, as the stream presents it. */
-  const presented = async (): Promise<StreamChunk[]> => {
+  /**
+   * The engine's snapshot of the message, as the stream presents it. The
+   * stream carries a stored message only when the turn's acceptance rewrote
+   * it, which is the default here.
+   */
+  const presented = async (
+    rewritten: readonly ClientMessage[] = [served],
+  ): Promise<StreamChunk[]> => {
     const chunks: StreamChunk[] = [];
     for await (const chunk of presentStoredHistory({
       history: {
         loadServed: async () =>
           await Promise.resolve(Result.ok(new Map([[served.id, served]]))),
-        rewrittenOnAcceptance: [],
+        rewrittenOnAcceptance: rewritten,
       },
       source: (async function* () {
         yield await Promise.resolve(buildEngineSnapshot([asEngineHolds]));
@@ -392,6 +452,25 @@ describe("the served snapshot oracle", () => {
     ).toEqual([]);
   });
 
+  const snapshotIds = (chunks: readonly StreamChunk[]) =>
+    chunks.flatMap((chunk) =>
+      chunk.type === EventType.MESSAGES_SNAPSHOT
+        ? [chunk.messages.map(({ id }) => id)]
+        : [],
+    );
+
+  test("the engine's snapshot leaves out a stored message the page holds", async () => {
+    // The page keeps a message a snapshot leaves out, so repeating the
+    // stored history would only grow every snapshot with the thread.
+    expect(snapshotIds(await presented([]))).toEqual([[]]);
+  });
+
+  test("every snapshot carries a message acceptance rewrote, as stored", async () => {
+    // The page restores an omitted message from the copy it posted, from
+    // before the rewrite: the opening and the engine's snapshot both carry it.
+    expect(snapshotIds(await presented())).toEqual([[served.id], [served.id]]);
+  });
+
   // Any field the page serves differently is a disagreement, not only the
   // timestamp. The id is what pairs the two.
   test.each(Object.keys(served).filter((field) => field !== "id"))(
@@ -402,7 +481,11 @@ describe("the served snapshot oracle", () => {
           chunks: await presented(),
           served: [{ ...served, [field]: "differs" }],
         }).map(({ oracle }) => oracle),
-      ).toEqual([CHAT_ORACLE.wireSnapshotServed]);
+        // The opening snapshot and the engine's both carry the message.
+      ).toEqual([
+        CHAT_ORACLE.wireSnapshotServed,
+        CHAT_ORACLE.wireSnapshotServed,
+      ]);
     },
   );
 });

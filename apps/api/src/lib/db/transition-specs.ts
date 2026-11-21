@@ -1,31 +1,78 @@
+import { DESKTOP_TIME_ENTRY_BATCH_STATUSES } from "@stll/api-contract/desktop-time-entries";
+
 import {
+  accountExports,
+  caseLawDecisionCitationStatsState,
+  caseLawPopulationSeedState,
+  caseLawReplayBatches,
+  caseLawSitemapDrainProgress,
   desktopEditSessions,
+  desktopTimeEntryBatches,
   EU_COMPLETION_STATUSES,
   euCompletionApprovals,
   euCompletionControls,
   euCompletionReceipts,
+  folioCollabRooms,
+  hostedCustomerErasures,
+  invoices,
+  invoiceSends,
+  legalReaderAnswerMessages,
+  ORGANIZATION_ACCESS_STATE,
+  organizationAccessStates,
+  outboundActions,
   pdfSigningSessions,
+  sanctionsEditionFanouts,
+  sanctionsMonitoringBackfills,
+  sharepointConnections,
+  syntheticSessionControl,
+  timeEntries,
   workObligations,
 } from "@/api/db/schema";
+import { SESSION_SIGN_IN_REVIEW_TRANSITIONS } from "@/api/lib/auth/session-sign-in-review-transitions";
+import { DATA_EXPORT_TRANSITIONS } from "@/api/lib/db/data-export-transition-spec";
 import {
-  FLOW_RUN_TRANSITIONS_V1,
   FLOW_RUN_STEP_TRANSITIONS_V1,
+  FLOW_RUN_TRANSITIONS_V1,
 } from "@/api/lib/db/flow-run-transition-spec";
+import { FOLIO_COLLAB_TRANSITION_IDENTITIES } from "@/api/lib/db/folio-collab-transition-identities";
+import { READER_ANSWER_TRANSITION_IDENTITIES } from "@/api/lib/db/reader-answer-transition-identities";
 import type {
-  STATUS_COLUMNS,
   StatusTable,
+  WRITABLE_STATUS_COLUMNS,
 } from "@/api/lib/db/status-tables.gen";
 import {
   defineFixedLifecycle,
   defineKeyedTransitions,
   defineLifecycle,
+  defineScopedTransitions,
   defineTransitions,
 } from "@/api/lib/db/transitions";
 import type {
   FixedLifecycleSpec,
   LifecycleSpec,
+  ScopedTransitionDeclaration,
   TransitionSpec,
 } from "@/api/lib/db/transitions";
+import {
+  DESKTOP_RUNNER_FOLDER_RESTORE_TRANSITIONS,
+  DESKTOP_RUNNER_RUN_TRANSITIONS,
+} from "@/api/lib/desktop-runner/run-transitions";
+import { PROVIDER_WEBHOOK_RESULT_TRANSITIONS } from "@/api/lib/hosted-usage-provider/webhook-result-transitions";
+import { REQUEST_IDEMPOTENCY_RECEIPT_TRANSITIONS } from "@/api/lib/idempotency/request-receipt-transition-spec";
+import {
+  CONTACT_MONITORING_TRANSITIONS,
+  FIRM_MONITORING_TRANSITIONS,
+  MATCH_MEMBERSHIP_TRANSITIONS,
+  MATCH_REVIEW_TRANSITIONS,
+  SCREENING_COVERAGE_TRANSITIONS,
+} from "@/api/lib/lists/sanctions/monitoring-transition-specs";
+
+const SHAREPOINT_CONNECTION_TRANSITIONS = defineTransitions(
+  sharepointConnections,
+  { connected: ["reconnect_required"], reconnect_required: ["connected"] },
+  // A stale refresh failure must not disable a newer credential snapshot.
+  { terminal: [], fence: "accessTokenEncrypted" },
+);
 
 // Each table chooses an ownership category explicitly; new status tables must
 // choose a category or declare a managed spec before the total map compiles.
@@ -61,6 +108,176 @@ const UNMANAGED_REASONS = {
     "Timer state and its entry projection are coordinated by the timer transaction owner pending migration.",
 } as const;
 
+// A time entry's review lifecycle: a timekeeper submits a draft, an approver
+// approves it or returns it to draft, invoicing bills an approved entry and a
+// write-off retires one. The review moves go through this spec; invoicing,
+// write-off and the matter batch actions are still direct writes in the
+// shrinking ledger.
+const TIME_ENTRY_TRANSITIONS = defineTransitions(
+  timeEntries,
+  {
+    draft: ["submitted", "approved", "written_off"],
+    submitted: ["approved", "draft", "written_off"],
+    approved: ["draft", "billed", "written_off"],
+    billed: ["approved", "written_off"],
+    written_off: ["draft"],
+  },
+  { terminal: [] },
+);
+
+// An invoice's lifecycle. Recorded payments move a finalized or sent invoice
+// to paid and back (`lib/billing/invoice-payments`) through this spec;
+// finalize, send, revert and void use the same engine. Every move that leaves
+// issued states revokes link authority in its transaction.
+const INVOICE_TRANSITIONS = defineTransitions(
+  invoices,
+  {
+    draft: ["finalized"],
+    finalized: ["draft", "sent", "paid", "void"],
+    sent: ["paid", "void"],
+    paid: ["finalized", "sent", "void"],
+    void: [],
+  },
+  { terminal: ["void"], invoiceLinkAuthority: "revoke-on-leaving-issued" },
+);
+
+// Each email attempt completes once; a resend creates a separate pending row.
+const INVOICE_SEND_DELIVERY_TRANSITIONS = defineLifecycle({
+  table: invoiceSends,
+  key: "id",
+  graphs: {
+    deliveryStatus: {
+      edges: {
+        pending: ["delivered", "partial", "failed"],
+        delivered: [],
+        partial: [],
+        failed: [],
+      },
+      terminal: ["delivered", "partial", "failed"],
+    },
+  },
+});
+
+// A failed attempt retries until its budget is spent; a ready archive expires.
+const ACCOUNT_EXPORT_TRANSITIONS = defineTransitions(
+  accountExports,
+  {
+    requested: ["processing", "failed"],
+    processing: ["ready", "requested", "failed"],
+    ready: ["expired"],
+    failed: [],
+    expired: [],
+  },
+  { terminal: ["failed", "expired"] },
+);
+
+const OUTBOUND_ACTION_TRANSITIONS = defineScopedTransitions({
+  table: outboundActions,
+  key: "id",
+  scope: [],
+  stateColumn: "status",
+  edges: {
+    pending: ["sending", "discarded"],
+    sending: ["sending", "sent", "failed"],
+    sent: [],
+    failed: [],
+    discarded: [],
+    expired: [],
+  },
+  initial: ["pending"],
+});
+
+export const FOLIO_COLLAB_SEED_TRANSITIONS = defineScopedTransitions({
+  ...FOLIO_COLLAB_TRANSITION_IDENTITIES.FOLIO_COLLAB_SEED_TRANSITIONS,
+  table: folioCollabRooms,
+  edges: {
+    empty: ["empty", "claimed"],
+    claimed: ["empty", "claimed", "seeded"],
+    seeded: ["empty", "seeded"],
+  },
+  initial: ["empty"],
+});
+
+// Refresh atomically publishes a complete recount; later recounts remain exact.
+const DECISION_CITATION_STATS_TRANSITIONS = defineKeyedTransitions({
+  table: caseLawDecisionCitationStatsState,
+  key: "decisionId",
+  edges: { pending: ["exact"], exact: [] },
+  options: { terminal: ["exact"] },
+});
+
+export const SITEMAP_DRAIN_TRANSITION_IDENTITY = {
+  tableName: "caseLawSitemapDrainProgress",
+  key: "country",
+  scope: ["year", "month"],
+  stateColumn: "phase",
+} as const;
+
+const SITEMAP_DRAIN_TRANSITIONS = defineScopedTransitions({
+  table: caseLawSitemapDrainProgress,
+  key: SITEMAP_DRAIN_TRANSITION_IDENTITY.key,
+  scope: SITEMAP_DRAIN_TRANSITION_IDENTITY.scope,
+  stateColumn: SITEMAP_DRAIN_TRANSITION_IDENTITY.stateColumn,
+  edges: {
+    draining: ["awaiting_visibility"],
+    awaiting_visibility: ["draining"],
+  },
+  initial: ["draining"],
+});
+
+// The population seed scans every source, folds its queued deltas, then
+// completes; one call may finish the scan and the fold together.
+const CASE_LAW_POPULATION_SEED_TRANSITIONS = defineScopedTransitions({
+  table: caseLawPopulationSeedState,
+  key: "slot",
+  scope: [],
+  stateColumn: "phase",
+  edges: {
+    scan: ["fold", "complete"],
+    fold: ["complete"],
+    complete: [],
+  },
+  initial: ["scan"],
+});
+
+// Readmission and recovery move the attempt and receipt status atomically.
+// Legacy replay writers remain in the shrinking direct-write ledger.
+const CASE_LAW_REPLAY_BATCH_TRANSITIONS = defineLifecycle({
+  table: caseLawReplayBatches,
+  key: "id",
+  graphs: {
+    status: {
+      edges: {
+        reserved: [
+          "completed",
+          "blocked",
+          "superseded",
+          "retry-exhausted",
+          "retry-terminal",
+        ],
+        "retry-exhausted": ["reserved", "superseded"],
+        "retry-terminal": [],
+        completed: ["reserved", "retry-terminal"],
+        superseded: ["reserved", "retry-terminal"],
+        failed: [],
+        blocked: [],
+      },
+      terminal: ["retry-terminal", "failed", "blocked"],
+    },
+    attemptState: {
+      edges: { idle: ["picked-up"], "picked-up": ["idle"] },
+      terminal: [],
+    },
+  },
+});
+
+const READER_ANSWER_MESSAGE_TRANSITIONS = defineScopedTransitions({
+  ...READER_ANSWER_TRANSITION_IDENTITIES.READER_ANSWER_MESSAGE_TRANSITIONS,
+  table: legalReaderAnswerMessages,
+  edges: { streaming: ["complete", "failed"], complete: [], failed: [] },
+  initial: ["streaming", "complete"],
+});
+
 const DESKTOP_EDIT_SESSION_TRANSITIONS = defineTransitions(
   desktopEditSessions,
   {
@@ -77,6 +294,46 @@ const PDF_SIGNING_SESSION_TRANSITIONS = defineTransitions(
   { open: ["finalized", "cancelled"], finalized: [], cancelled: [] },
   { terminal: ["finalized", "cancelled"] },
 );
+
+export const HOSTED_CUSTOMER_ERASURE_TRANSITIONS = defineTransitions(
+  hostedCustomerErasures,
+  {
+    pending: ["erased", "failed"],
+    failed: ["erased", "failed"],
+    erased: [],
+  },
+  { terminal: ["erased"] },
+);
+
+const DESKTOP_TIME_ENTRY_BATCH_RECEIPT_LIFECYCLE = defineScopedTransitions({
+  table: desktopTimeEntryBatches,
+  key: "idempotencyKey",
+  scope: ["organizationId", "userId"],
+  stateColumn: "status",
+  edges: { committed: [], cancelled: [] },
+  initial: DESKTOP_TIME_ENTRY_BATCH_STATUSES,
+});
+
+export const ORGANIZATION_ACCESS_STATE_TRANSITIONS = defineScopedTransitions({
+  table: organizationAccessStates,
+  key: "organizationId",
+  scope: [],
+  stateColumn: "state",
+  edges: {
+    [ORGANIZATION_ACCESS_STATE.selfManagedKeys]: [
+      ORGANIZATION_ACCESS_STATE.evaluationPeriod,
+      ORGANIZATION_ACCESS_STATE.evaluationEnded,
+    ],
+    [ORGANIZATION_ACCESS_STATE.evaluationPeriod]: [
+      ORGANIZATION_ACCESS_STATE.evaluationEnded,
+    ],
+    [ORGANIZATION_ACCESS_STATE.evaluationEnded]: [],
+  },
+  initial: [
+    ORGANIZATION_ACCESS_STATE.selfManagedKeys,
+    ORGANIZATION_ACCESS_STATE.evaluationPeriod,
+  ],
+});
 
 const WORK_OBLIGATION_TRANSITIONS = defineKeyedTransitions({
   table: workObligations,
@@ -107,6 +364,34 @@ const WORK_OBLIGATION_TRANSITIONS = defineKeyedTransitions({
   options: { terminal: [] },
 });
 
+export const SANCTIONS_EDITION_FANOUT_TRANSITIONS = defineLifecycle({
+  table: sanctionsEditionFanouts,
+  key: "sourceId",
+  graphs: {
+    status: {
+      edges: { pending: ["complete"], complete: ["pending"] },
+      terminal: [],
+    },
+    freshnessStatus: {
+      edges: {
+        unknown: ["fresh", "unavailable"],
+        fresh: ["unavailable"],
+        unavailable: ["fresh"],
+      },
+      terminal: [],
+    },
+  },
+});
+
+export const SANCTIONS_MONITORING_BACKFILL_TRANSITIONS = defineKeyedTransitions(
+  {
+    table: sanctionsMonitoringBackfills,
+    key: "sourceId",
+    scope: ["organizationId"],
+    edges: { pending: ["complete"], complete: ["pending"] },
+    options: { terminal: [], fence: "generation" },
+  },
+);
 // Active receipts settle to any outcome; dry-run settles only fetched work.
 // Failed and mirror-repair receipts are readmitted; the rest are final.
 const EU_COMPLETION_SETTLEMENTS = EU_COMPLETION_STATUSES.filter(
@@ -159,6 +444,15 @@ const EU_COMPLETION_CONTROL_LIFECYCLE = defineLifecycle({
   graphs: { state: { edges: { off: ["on"], on: ["off"] }, terminal: [] } },
 });
 
+export const SYNTHETIC_SESSION_CONTROL_TRANSITIONS = defineTransitions(
+  syntheticSessionControl,
+  {
+    enabled: ["revoked"],
+    revoked: [],
+  },
+  { terminal: ["revoked"] },
+);
+
 // The approval copies its dry-run receipt's outcome as foreign-key proof.
 const EU_COMPLETION_APPROVAL_PROOF = defineFixedLifecycle({
   table: euCompletionApprovals,
@@ -167,11 +461,21 @@ const EU_COMPLETION_APPROVAL_PROOF = defineFixedLifecycle({
 });
 
 type StatusColumns<TTable extends StatusTable> =
-  (typeof STATUS_COLUMNS)[TTable];
+  (typeof WRITABLE_STATUS_COLUMNS)[TTable];
 
 // Each table's decision covers exactly its inventoried lifecycle columns.
 type TransitionDecision<TTable extends StatusTable> =
   | { unmanaged: string }
+  | {
+      scoped: {
+        readonly [
+          TColumn in StatusColumns<TTable>[number]
+        ]: ScopedTransitionDeclaration & { readonly stateColumn: TColumn };
+      } & Readonly<Record<string, ScopedTransitionDeclaration>>;
+    }
+  | (StatusColumns<TTable> extends readonly [infer TColumn extends string]
+      ? ScopedTransitionDeclaration & { readonly stateColumn: TColumn }
+      : never)
   | (StatusColumns<TTable> extends readonly ["status"] ? TransitionSpec : never)
   | LifecycleSpec<StatusColumns<TTable>[number]>
   | (StatusColumns<TTable> extends readonly [infer TColumn extends string]
@@ -180,9 +484,11 @@ type TransitionDecision<TTable extends StatusTable> =
 
 /** Existing domain owners remain explicit until their writers migrate. */
 export const TRANSITIONS = {
+  outboundActions: OUTBOUND_ACTION_TRANSITIONS,
   agentRegistration: { unmanaged: UNMANAGED_REASONS.authCeremony },
   accountDeletionEffectChunks: { unmanaged: UNMANAGED_REASONS.cleanup },
   accountDeletionRequests: { unmanaged: UNMANAGED_REASONS.cleanup },
+  accountExports: ACCOUNT_EXPORT_TRANSITIONS,
   agentSkillProposals: { unmanaged: UNMANAGED_REASONS.userDecision },
   aiMemories: { unmanaged: UNMANAGED_REASONS.userDecision },
   auditLogs: { unmanaged: UNMANAGED_REASONS.userDecision },
@@ -198,26 +504,33 @@ export const TRANSITIONS = {
   caseLawDecisionIdentifierBackfills: {
     unmanaged: UNMANAGED_REASONS.workerRun,
   },
+  caseLawDecisionCitationStatsState: DECISION_CITATION_STATS_TRANSITIONS,
   caseLawDecisions: { unmanaged: UNMANAGED_REASONS.projection },
   caseLawIndexJobs: { unmanaged: UNMANAGED_REASONS.workerRun },
   caseLawIngestionEvents: { unmanaged: UNMANAGED_REASONS.workerRun },
+  caseLawPopulationSeedState: CASE_LAW_POPULATION_SEED_TRANSITIONS,
   caseLawProvisionCitations: { unmanaged: UNMANAGED_REASONS.projection },
   caseLawProvisionExtractions: { unmanaged: UNMANAGED_REASONS.workerRun },
   caseLawProvisionExtractionScopes: { unmanaged: UNMANAGED_REASONS.workerRun },
   caseLawReconciliationItems: { unmanaged: UNMANAGED_REASONS.projection },
-  caseLawReplayBatches: { unmanaged: UNMANAGED_REASONS.workerRun },
+  caseLawReplayBatches: CASE_LAW_REPLAY_BATCH_TRANSITIONS,
   caseLawResearchAnswers: { unmanaged: UNMANAGED_REASONS.workerRun },
   caseLawSearchBackfillFailures: { unmanaged: UNMANAGED_REASONS.workerRun },
+  caseLawSitemapDrainProgress: SITEMAP_DRAIN_TRANSITIONS,
   caseLawStatuteCitationCountState: { unmanaged: UNMANAGED_REASONS.projection },
   chatThreadCompactions: { unmanaged: UNMANAGED_REASONS.workerRun },
   chatTurns: { unmanaged: UNMANAGED_REASONS.workerRun },
   contactExtractionUploads: { unmanaged: UNMANAGED_REASONS.fileLifecycle },
+  contacts: CONTACT_MONITORING_TRANSITIONS,
   corpusIndexGenerations: { unmanaged: UNMANAGED_REASONS.projection },
   corpusIndexGroupEnrollments: { unmanaged: UNMANAGED_REASONS.projection },
   corpusIndexProjectionIntents: { unmanaged: UNMANAGED_REASONS.projection },
   corpusIndexProjectionStates: { unmanaged: UNMANAGED_REASONS.projection },
   correspondence: { unmanaged: UNMANAGED_REASONS.userWorkflow },
   desktopEditSessions: DESKTOP_EDIT_SESSION_TRANSITIONS,
+  desktopRunnerFolderRestores: DESKTOP_RUNNER_FOLDER_RESTORE_TRANSITIONS,
+  desktopRunnerRuns: DESKTOP_RUNNER_RUN_TRANSITIONS,
+  desktopTimeEntryBatches: DESKTOP_TIME_ENTRY_BATCH_RECEIPT_LIFECYCLE,
   documentProcessingRuns: { unmanaged: UNMANAGED_REASONS.workerRun },
   documentReviewFindings: { unmanaged: UNMANAGED_REASONS.userDecision },
   documentReviewRuns: { unmanaged: UNMANAGED_REASONS.workerRun },
@@ -235,9 +548,12 @@ export const TRANSITIONS = {
   fileComparisonUploads: { unmanaged: UNMANAGED_REASONS.fileLifecycle },
   flowRuns: FLOW_RUN_TRANSITIONS_V1,
   flowRunSteps: FLOW_RUN_STEP_TRANSITIONS_V1,
-  folioCollabRooms: { unmanaged: UNMANAGED_REASONS.collaboration },
+  folioCollabRooms: FOLIO_COLLAB_SEED_TRANSITIONS,
+  hostedCustomerErasures: HOSTED_CUSTOMER_ERASURE_TRANSITIONS,
+  hostedUsageWebhookEvents: PROVIDER_WEBHOOK_RESULT_TRANSITIONS,
   invitation: { unmanaged: UNMANAGED_REASONS.delegatedAuth },
-  invoices: { unmanaged: UNMANAGED_REASONS.userWorkflow },
+  invoices: INVOICE_TRANSITIONS,
+  invoiceSends: INVOICE_SEND_DELIVERY_TRANSITIONS,
   legalListClaims: { unmanaged: UNMANAGED_REASONS.userWorkflow },
   legalListGenerationCandidates: { unmanaged: UNMANAGED_REASONS.workerRun },
   legalListGenerationRuns: { unmanaged: UNMANAGED_REASONS.workerRun },
@@ -245,6 +561,7 @@ export const TRANSITIONS = {
   legalListItemSources: { unmanaged: UNMANAGED_REASONS.projection },
   legalLists: { unmanaged: UNMANAGED_REASONS.userWorkflow },
   legalListVerificationRuns: { unmanaged: UNMANAGED_REASONS.workerRun },
+  legalReaderAnswerMessages: READER_ANSWER_MESSAGE_TRANSITIONS,
   legislationDocuments: { unmanaged: UNMANAGED_REASONS.projection },
   legislationIndexJobs: { unmanaged: UNMANAGED_REASONS.workerRun },
   mcpConnectorAuthorizationReviews: {
@@ -253,20 +570,31 @@ export const TRANSITIONS = {
   mcpOAuthState: { unmanaged: UNMANAGED_REASONS.antiForgery },
   mcpUserConnections: { unmanaged: UNMANAGED_REASONS.connection },
   officeFileEvidence: { unmanaged: UNMANAGED_REASONS.workerRun },
-  organizationAccessStates: { unmanaged: UNMANAGED_REASONS.projection },
+  organizationAccessStates: ORGANIZATION_ACCESS_STATE_TRANSITIONS,
   organizationConfiguredAccess: { unmanaged: UNMANAGED_REASONS.projection },
+  organizationDataExports: DATA_EXPORT_TRANSITIONS,
   organizationFileObjects: { unmanaged: UNMANAGED_REASONS.fileLifecycle },
+  organizationSettings: FIRM_MONITORING_TRANSITIONS,
   pdfSigningSessions: PDF_SIGNING_SESSION_TRANSITIONS,
   pendingUploads: { unmanaged: UNMANAGED_REASONS.fileLifecycle },
   playbookDefinitions: { unmanaged: UNMANAGED_REASONS.userDecision },
   properties: { unmanaged: UNMANAGED_REASONS.userWorkflow },
   reportExports: { unmanaged: UNMANAGED_REASONS.workerRun },
-  sanctionsContactMatches: { unmanaged: UNMANAGED_REASONS.projection },
-  sanctionsContactScreenings: { unmanaged: UNMANAGED_REASONS.projection },
+  requestIdempotencyReceipts: REQUEST_IDEMPOTENCY_RECEIPT_TRANSITIONS,
+  sanctionsContactMatches: {
+    scoped: {
+      state: MATCH_MEMBERSHIP_TRANSITIONS,
+      disposition: MATCH_REVIEW_TRANSITIONS,
+    },
+  },
+  sanctionsContactScreenings: SCREENING_COVERAGE_TRANSITIONS,
+  sanctionsEditionFanouts: SANCTIONS_EDITION_FANOUT_TRANSITIONS,
+  sanctionsMonitoringBackfills: SANCTIONS_MONITORING_BACKFILL_TRANSITIONS,
   sanctionsEditions: { unmanaged: UNMANAGED_REASONS.corpusEdition },
   schedulerJobRuns: { unmanaged: UNMANAGED_REASONS.workerRun },
   scoutRuns: { unmanaged: UNMANAGED_REASONS.workerRun },
-  sharepointConnections: { unmanaged: UNMANAGED_REASONS.connection },
+  sessionSignIns: SESSION_SIGN_IN_REVIEW_TRANSITIONS,
+  sharepointConnections: SHAREPOINT_CONNECTION_TRANSITIONS,
   sharepointOAuthState: { unmanaged: UNMANAGED_REASONS.antiForgery },
   signals: { unmanaged: UNMANAGED_REASONS.userWorkflow },
   softLawDocumentLocators: { unmanaged: UNMANAGED_REASONS.projection },
@@ -274,12 +602,13 @@ export const TRANSITIONS = {
   softLawIngestionAttempts: { unmanaged: UNMANAGED_REASONS.workerRun },
   softLawSources: { unmanaged: UNMANAGED_REASONS.workerRun },
   styleSets: { unmanaged: UNMANAGED_REASONS.fileLifecycle },
+  syntheticSessionControl: SYNTHETIC_SESSION_CONTROL_TRANSITIONS,
   templateDeletionCleanupRequests: { unmanaged: UNMANAGED_REASONS.cleanup },
   templateFills: { unmanaged: UNMANAGED_REASONS.workerRun },
   templatePersistenceRequests: { unmanaged: UNMANAGED_REASONS.cleanup },
   templates: { unmanaged: UNMANAGED_REASONS.fileLifecycle },
   templateVersions: { unmanaged: UNMANAGED_REASONS.fileLifecycle },
-  timeEntries: { unmanaged: UNMANAGED_REASONS.userWorkflow },
+  timeEntries: TIME_ENTRY_TRANSITIONS,
   timeEntrySuggestions: { unmanaged: UNMANAGED_REASONS.userDecision },
   timeEntryTimerStates: { unmanaged: UNMANAGED_REASONS.projection },
   timeTimers: { unmanaged: UNMANAGED_REASONS.coordinatedTimers },
@@ -288,4 +617,7 @@ export const TRANSITIONS = {
   workspaces: { unmanaged: UNMANAGED_REASONS.userWorkflow },
 } as const satisfies {
   [TTable in StatusTable]: TransitionDecision<TTable>;
+} & {
+  contacts: typeof CONTACT_MONITORING_TRANSITIONS;
+  organizationSettings: typeof FIRM_MONITORING_TRANSITIONS;
 };

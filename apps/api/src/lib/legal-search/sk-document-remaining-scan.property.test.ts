@@ -18,8 +18,8 @@ import {
 } from "@/api/lib/legal-search/sk-document-backfill";
 import { createPendingDocumentQueue } from "@/api/lib/legal-search/sk-document-queue";
 import {
-  DOCUMENT_SCAN_PAGE_LIMIT,
   createRemainingDocumentScan,
+  DOCUMENT_SCAN_PAGE_LIMIT,
 } from "@/api/lib/legal-search/sk-document-remaining-scan";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 

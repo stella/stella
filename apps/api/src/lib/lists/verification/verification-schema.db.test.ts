@@ -1,3 +1,4 @@
+// The STELLA_RUN_POSTGRES_TESTS runner also executes this verification suite.
 /**
  * The verdict and review invariants the verification tables state
  * themselves, so no writer (engine, handler, or a future import) can store a
@@ -5,10 +6,11 @@
  */
 
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 
 import { organization } from "@/api/db/auth-schema";
 import {
+  entities,
   legalListClaimReviewEvents,
   legalListClaims,
   legalListVerificationBlocks,
@@ -17,6 +19,16 @@ import {
 } from "@/api/db/schema";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  CLAIM_REVIEW_EVENT_KINDS,
+  CLAIM_REVIEW_REASON_RULE,
+  VERIFICATION_LIMITS,
+  VERIFICATION_RUN_ERROR_CODES,
+} from "@/api/lib/lists/verification/contract";
+import type {
+  ClaimReviewAction,
+  ClaimReviewEventKind,
+} from "@/api/lib/lists/verification/contract";
 import {
   createScopedQuery,
   getTestDb,
@@ -45,11 +57,15 @@ beforeAll(async () => {
     name: "Verification matter",
     reference: Bun.randomUUIDv7().slice(0, 8),
   });
+  const documentId1 = toSafeId<"entity">(Bun.randomUUIDv7());
+  await testDb
+    .insert(entities)
+    .values({ id: documentId1, workspaceId, name: "Verification document" });
   await testDb.insert(legalListVerificationRuns).values({
     id: runId,
     organizationId,
     workspaceId,
-    entityId: toSafeId<"entity">(Bun.randomUUIDv7()),
+    entityId: documentId1,
     fileFieldId: toSafeId<"field">(Bun.randomUUIDv7()),
     entityVersionId: toSafeId<"entityVersion">(Bun.randomUUIDv7()),
     contentSha256: "a".repeat(64),
@@ -128,6 +144,50 @@ describe("verification claims", () => {
   });
 });
 
+describe("verification claim qualifiers", () => {
+  const silent = [
+    { kind: "record-silent", explanation: "Background." },
+  ] as const;
+
+  test("only missing coverage is explained by a silent record", async () => {
+    for (const state of ["supported", "tension", "contradicted"] as const) {
+      await rejects(claim({ state, qualifiers: [...silent] }));
+    }
+    await testDb.insert(legalListClaims).values(
+      claim({
+        state: "nocover",
+        score: null,
+        refs: [],
+        qualifiers: [...silent],
+      }),
+    );
+  });
+
+  test("a scope mismatch may sit beside a scored verdict", async () => {
+    await testDb.insert(legalListClaims).values(
+      claim({
+        state: "tension",
+        score: 40,
+        qualifiers: [
+          { kind: "scope-mismatch", explanation: "The fact covers 2020." },
+        ],
+      }),
+    );
+  });
+
+  test("qualifiers are stored as a list", async () => {
+    const outcome = await testDb
+      .execute(
+        sql`UPDATE ${legalListClaims} SET qualifiers = '{}'::jsonb WHERE run_id = ${runId}`,
+      )
+      .then(
+        () => "stored",
+        () => "rejected",
+      );
+    expect(outcome).toBe("rejected");
+  });
+});
+
 describe("verification source text", () => {
   test("one ordinal belongs to one block in a run", async () => {
     const scopedQuery = createScopedQuery(testDb);
@@ -159,11 +219,15 @@ describe("verification source text", () => {
 
   test("deleting a run removes its pinned blocks", async () => {
     const cascadeRunId = createSafeId<"legalListVerificationRun">();
+    const documentId2 = toSafeId<"entity">(Bun.randomUUIDv7());
+    await testDb
+      .insert(entities)
+      .values({ id: documentId2, workspaceId, name: "Verification document" });
     await testDb.insert(legalListVerificationRuns).values({
       id: cascadeRunId,
       organizationId,
       workspaceId,
-      entityId: toSafeId<"entity">(Bun.randomUUIDv7()),
+      entityId: documentId2,
       fileFieldId: toSafeId<"field">(Bun.randomUUIDv7()),
       entityVersionId: toSafeId<"entityVersion">(Bun.randomUUIDv7()),
       contentSha256: "b".repeat(64),
@@ -217,13 +281,81 @@ describe("claim review events", () => {
         runId,
         claimId,
         kind: "override",
-        payload: { kind: "reopen" },
+        payload: { kind: "reopen", reason: "The date can be checked." },
       })
       .then(
         () => "stored",
         () => "rejected",
       );
     expect(outcome).toBe("rejected");
+  });
+
+  // The rule map is the one the request schema reads, so the database and
+  // the API cannot disagree about which actions need a reason.
+  test("a stored reason follows each kind's rule and is never blank", async () => {
+    const claimId = await seedClaim();
+    const actions = {
+      status: { kind: "status", status: "needs-evidence", origin: "single" },
+      override: { kind: "override", state: "tension" },
+      note: { kind: "note", note: "Check the diary." },
+      reopen: { kind: "reopen" },
+      "record-conflict": {
+        kind: "record-conflict",
+        resolution: { kind: "escalated" },
+      },
+      "fact-link": { kind: "fact-link", factEntityId: FACT, change: "link" },
+      recheck: {
+        kind: "recheck",
+        requestKey: "recheck-1",
+        grade: {
+          state: "nocover",
+          score: null,
+          recordConflict: null,
+          refs: [],
+          qualifiers: [],
+        },
+        facts: { changed: [], removed: [] },
+        modelRef: null,
+      },
+    } satisfies {
+      [Kind in ClaimReviewEventKind]: Extract<
+        ClaimReviewAction,
+        { kind: Kind }
+      >;
+    };
+    // Raw JSON, so the payloads no writer's type would allow reach the check.
+    const store = async (kind: ClaimReviewEventKind, payload: object) =>
+      await testDb
+        .execute(
+          sql`INSERT INTO legal_list_claim_review_events
+            (id, workspace_id, run_id, claim_id, kind, payload)
+            VALUES (${createSafeId<"legalListClaimReviewEvent">()},
+              ${workspaceId}, ${runId}, ${claimId}, ${kind},
+              ${JSON.stringify(payload)}::text::jsonb)`,
+        )
+        .then(
+          () => "stored",
+          () => "rejected",
+        );
+    for (const kind of CLAIM_REVIEW_EVENT_KINDS) {
+      const rule = CLAIM_REVIEW_REASON_RULE[kind];
+      const action = actions[kind];
+      expect(await store(kind, action)).toBe(
+        rule === "required" ? "rejected" : "stored",
+      );
+      expect(
+        await store(kind, { ...action, reason: "The minutes say so." }),
+      ).toBe(rule === "none" ? "rejected" : "stored");
+      for (const reason of [
+        "",
+        "   ",
+        42,
+        null,
+        "x".repeat(VERIFICATION_LIMITS.NOTE_MAX + 1),
+      ]) {
+        expect(await store(kind, { ...action, reason })).toBe("rejected");
+      }
+    }
   });
 
   test("a recorded action cannot be rewritten or removed", async () => {
@@ -269,4 +401,51 @@ describe("claim review events", () => {
     );
     expect(touched).toEqual({ updated: 0, deleted: 0, visible: 1 });
   });
+});
+
+test("persisted run failures accept every declared code and preserve the status invariant", async () => {
+  for (const errorCode of VERIFICATION_RUN_ERROR_CODES) {
+    const rows = await testDb
+      .update(legalListVerificationRuns)
+      .set({ status: "failed", errorCode })
+      .where(eq(legalListVerificationRuns.id, runId))
+      .returning({ errorCode: legalListVerificationRuns.errorCode });
+    expect(rows).toEqual([{ errorCode }]);
+  }
+  for (const status of ["queued", "running", "completed"] as const) {
+    const outcome = await testDb
+      .update(legalListVerificationRuns)
+      .set({ status, errorCode: "access_revoked" })
+      .where(eq(legalListVerificationRuns.id, runId))
+      .then(
+        () => "stored",
+        () => "rejected",
+      );
+    expect(outcome).toBe("rejected");
+  }
+  const missingReason = await testDb
+    .update(legalListVerificationRuns)
+    .set({ status: "failed", errorCode: null })
+    .where(eq(legalListVerificationRuns.id, runId))
+    .then(
+      () => "stored",
+      () => "rejected",
+    );
+  expect(missingReason).toBe("rejected");
+  const unknownReason = await testDb
+    .execute(
+      sql`
+    UPDATE ${legalListVerificationRuns} SET status = 'failed', error_code = 'unknown_failure'
+    WHERE id = ${runId}
+  `,
+    )
+    .then(
+      () => "stored",
+      () => "rejected",
+    );
+  expect(unknownReason).toBe("rejected");
+  await testDb
+    .update(legalListVerificationRuns)
+    .set({ status: "completed", errorCode: null })
+    .where(eq(legalListVerificationRuns.id, runId));
 });

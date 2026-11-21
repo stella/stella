@@ -1,52 +1,69 @@
 import type { CallToolResult } from "@modelcontextprotocol/server";
-import { panic, TaggedError } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 import * as v from "valibot";
 
-import type {
-  AgentInputNormalizationAnnotation,
-  CountrySpelling,
-} from "@stll/agent-input";
-import {
-  AGENT_INPUT_NORMALIZATION_KIND,
-  askForFix,
-  askSentence,
-  COUNTRY_INPUT_MAX_CHARS,
-} from "@stll/agent-input";
-import {
-  createCaseLawDecisionPath,
-  createCaseLawDecisionRouteParams,
-} from "@stll/api-contract/case-law-decision-route";
-import type { CaseLawDecisionRouteInput } from "@stll/api-contract/case-law-decision-route";
-import {
-  createStatutePath,
-  createStatuteRouteParams,
-} from "@stll/api-contract/statute-route";
-import type { StatuteRouteInput } from "@stll/api-contract/statute-route";
+import { askForFix, askSentence } from "@stll/agent-input";
+import { resolveLegalCitationLinks } from "@stll/api-contract/legal-citation-links";
+import { workspaceAcceptsWrites } from "@stll/api-contract/workspace-status";
 import { declareFailureClass } from "@stll/errors";
+import {
+  closestNames,
+  MAX_TOOL_NAME_CHARS,
+  toolNameDistance,
+  toolNameKey,
+} from "@stll/mcp-kit";
 
 import { captureError } from "@/api/lib/analytics/capture";
 import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
-import type { AccessibleWorkspace } from "@/api/lib/auth";
+import type { AccessibleWorkspace } from "@/api/lib/auth/accessible-workspace";
 import type { SafeId } from "@/api/lib/branded-types";
-import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
+import {
+  servedBlockText,
+  type ServedTextBlock,
+} from "@/api/lib/case-law/served-paragraph-number";
+import {
+  parseStrippingUndeclaredKeys,
+  reportToolOutputDegrade,
+} from "@/api/lib/chat/tool-output-degrade";
+import { maskUuids } from "@/api/lib/chat/uuid-mask";
+import { resolveHandlerError } from "@/api/lib/errors/handler-error-resolution";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import {
+  PUBLIC_READ_TIMEOUT_CODE,
+  PUBLIC_READ_TIMEOUT_HINT,
+  publicReadTimeoutError,
+  publicReadTimeoutRefusal,
+} from "@/api/lib/legal-search/public-read-timeout";
+import {
+  isSearchIndexUnavailable,
+  SEARCH_INDEX_UNAVAILABLE_CODE,
+  SEARCH_INDEX_UNAVAILABLE_HINT,
+  SEARCH_INDEX_UNAVAILABLE_MESSAGE,
+} from "@/api/lib/legal-search/search-index-unavailable";
 import { LIMITS } from "@/api/lib/limits";
+import { findRequestBudgetExpiry } from "@/api/lib/load/request-latency-budget";
 import { getAppBaseUrl } from "@/api/lib/mcp-connectors/app-urls";
-import { getCurrentRequestId } from "@/api/lib/observability/request-context";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
+import type { StableExceptionKey } from "@/api/lib/observability/exception-fingerprint";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
+import { getRequestId } from "@/api/lib/observability/request-context";
 import {
   decodePaginationCursor,
   encodePaginationCursor,
-  isIssuablePaginationCursor,
 } from "@/api/lib/pagination";
+import { getPgErrorCode, PG_ERROR } from "@/api/lib/pg-error";
 import { stripSearchHighlightMarkup } from "@/api/lib/search/highlight";
-import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
-import type { McpRequestContext } from "@/api/mcp/context";
+import { isRecord } from "@/api/lib/type-guards";
 import { getAccessibleWorkspaceId } from "@/api/mcp/context";
+import type { McpRequestContext } from "@/api/mcp/context";
 import type { McpErrorCode, McpValidationIssue } from "@/api/mcp/error-codes";
 import {
   projectMcpRefusal,
   statusCodeToErrorCode,
 } from "@/api/mcp/error-codes";
+import { uuidInputSchema } from "@/api/mcp/input-schemas";
+import type { CheckedOutput } from "@/api/mcp/output-excess-keys";
 import { MCP_INTERNAL_TOOL_FAILURE } from "@/api/mcp/tool-call-outcome";
 import { TOOL_CONFIRMATION } from "@/api/mcp/tool-confirmation";
 import type { ToolConfirmation } from "@/api/mcp/tool-confirmation";
@@ -54,8 +71,10 @@ import type {
   InternalToolErrorResult,
   InternalToolResult,
   InternalToolSuccess,
+  McpEgressPlan,
   RuntimeMcpToolOutputContract,
 } from "@/api/mcp/tool-types";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 
 /**
  * Wrap the request-scoped recorder so audit rows written by the reused backing
@@ -83,10 +102,8 @@ export const bindWorkspaceRecorder =
 export const DEFAULT_LIST_LIMIT = LIMITS.mcpListPageSizeDefault;
 export const DEFAULT_SEARCH_LIMIT = LIMITS.mcpSearchPageSizeDefault;
 export const MAX_LIST_LIMIT = LIMITS.mcpListPageSizeMax;
-export const MAX_SEARCH_LIMIT = LIMITS.mcpSearchPageSizeMax;
 export const DEFAULT_COMPAT_SEARCH_LIMIT =
   LIMITS.mcpCompatSearchPageSizeDefault;
-export const ISO_DATE_SCHEMA = v.pipe(v.string(), v.isoDate());
 
 /**
  * Characters of long document text one tool response may carry. Every
@@ -107,297 +124,23 @@ export const featureDisabledHint = (feature: string | undefined): string =>
     ? "This deployment has this feature turned off; it cannot be enabled from the client."
     : `This deployment has ${feature} turned off; a server operator enables it by setting ${feature}=true. It cannot be enabled from the client.`;
 
-/**
- * A UUID-shaped id input. Ids reach SQL as uuid columns, so a malformed one
- * must fail here as a validation error naming the field rather than as a
- * database cast failure reported as an internal error.
- */
-export const uuidInputSchema = (description: string) =>
-  v.pipe(v.string(), v.uuid(), v.description(description));
-
-/**
- * A country input, in any spelling that carries one meaning.
- *
- * The leniency itself is not here: it is the `country` agent-input kind, which
- * the tool binds to this property with `countryNormalization` so one reader
- * canonicalizes every surface. This schema is the declaration that says a
- * country is what the property holds, and its bounds are what make the
- * advertised contract match that: a schema capped at three characters tells a
- * model the names are refused when the reader in fact reads them.
- */
-export const countryInputSchema = (description: string) =>
+/** Native task references use the same visibility owner as safe HTTP handlers. */
+export const entityIdInputSchema = (description: string) =>
   v.pipe(
-    v.string(),
-    v.maxLength(COUNTRY_INPUT_MAX_CHARS),
-    v.description(description),
+    uuidInputSchema(description),
+    v.metadata({ "x-stella-resource-kind": "entity" }),
   );
-
-/**
- * Binds a country property to the shared reader.
- *
- * `spelling` is required rather than defaulted: alpha-3 is what the corpus
- * keys on and alpha-2 is what a practice-jurisdiction row holds, and guessing
- * would write one into the other's column.
- */
-export const countryNormalization = ({
-  spelling,
-  admitted,
-  tool,
-}: {
-  spelling: CountrySpelling;
-  admitted?: readonly string[];
-  tool?: string;
-}): AgentInputNormalizationAnnotation => ({
-  kind: AGENT_INPUT_NORMALIZATION_KIND.country,
-  country: {
-    spelling,
-    ...(admitted === undefined ? {} : { admitted }),
-    ...(tool === undefined ? {} : { tool }),
-  },
-});
-
-/**
- * An optional search filter whose values live in the corpus rather than in the
- * schema (a court, a decision type, a language). The shared reader drops the
- * placeholder a caller writes for "not filtering" (`" "`, `"all"`, `"-"`);
- * matching the value against the data is the handler's.
- */
-export const FILTER_NORMALIZATION: AgentInputNormalizationAnnotation = {
-  kind: AGENT_INPUT_NORMALIZATION_KIND.filter,
-};
-
-/** A statute's ELI, read back from the short and reordered spellings. */
-export const ELI_NORMALIZATION: AgentInputNormalizationAnnotation = {
-  kind: AGENT_INPUT_NORMALIZATION_KIND.eli,
-};
-
-/**
- * An MCP tool's declared input: `v.strictObject(...)`, or a pipe over one.
- * `entries` names every property the surface declares.
- */
-type ToolObjectInputSchema = v.GenericSchema & {
-  readonly entries: v.ObjectEntries;
-};
-
-/**
- * What a handler parses: the declared object with a strict client's nulls
- * already dropped. The declared object stays reachable as `advertisedSchema`
- * because JSON Schema projection reads a pipe's first schema, which here is
- * the `unknown` root the transform needs.
- */
-export type NullAsAbsentInputSchema = v.GenericSchema & {
-  readonly advertisedSchema: ToolObjectInputSchema;
-};
-
-/**
- * The wrapper's type for one declared object. Written out rather than inferred
- * from the `v.pipe(...)` expression: every tool input schema in this directory
- * goes through {@link nullAsAbsent}, so an inferred `SchemaWithPipe` over a
- * three-item tuple would be instantiated at each of them and carried into every
- * handler that reads `parsed.output`. This says the same thing in two nodes.
- */
-type NullAsAbsentSchema<TSchema extends ToolObjectInputSchema> =
-  v.GenericSchema<unknown, v.InferOutput<TSchema>> & {
-    readonly advertisedSchema: TSchema;
-  };
-
-/**
- * The values a client sends for a property it is not setting. `null` is the
- * convention this surface documents; a client that must fill every declared
- * property instead sends the empty value of the declared type. `0` and `false`
- * are absent from this list on purpose: they are values a number or boolean
- * property means.
- */
-const ABSENT_PLACEHOLDERS = [
-  "null",
-  "empty-string",
-  "empty-array",
-  "empty-object",
-] as const;
-
-type AbsentPlaceholder = (typeof ABSENT_PLACEHOLDERS)[number];
-
-/** The value each placeholder stands for, for probing a property's schema. */
-const PLACEHOLDER_VALUES = {
-  null: null,
-  "empty-string": "",
-  "empty-array": [],
-  "empty-object": {},
-} as const satisfies Record<AbsentPlaceholder, unknown>;
-
-const isPlaceholder = (value: unknown, placeholder: AbsentPlaceholder) => {
-  switch (placeholder) {
-    case "null":
-      return value === null;
-    case "empty-string":
-      return value === "";
-    case "empty-array":
-      return isUnknownArray(value) && value.length === 0;
-    case "empty-object":
-      return (
-        isRecord(value) &&
-        !isUnknownArray(value) &&
-        Object.keys(value).length === 0
-      );
-    default:
-      return panic(`Unhandled absent placeholder: ${String(placeholder)}`);
-  }
-};
-
-/** One object or array level of a declared input, as far as placeholder
- * dropping cares: which placeholders each property carries as absence, and
- * where to recurse. */
-type NullAsAbsentPlan =
-  | {
-      readonly kind: "object";
-      readonly absentWhen: ReadonlyMap<string, readonly AbsentPlaceholder[]>;
-      readonly properties: ReadonlyMap<string, NullAsAbsentPlan>;
-    }
-  | { readonly kind: "array"; readonly item: NullAsAbsentPlan };
-
-const isObjectSchema = (
-  schema: unknown,
-): schema is { entries: Record<string, v.GenericSchema> } =>
-  isRecord(schema) && isRecord(schema["entries"]);
-
-const isArraySchema = (schema: unknown): schema is { item: v.GenericSchema } =>
-  isRecord(schema) && isRecord(schema["item"]);
-
-/** Strip `optional`/`nullable`/... wrappers and pipes down to the schema that
- * declares the shape. */
-const declaredShapeOf = (schema: unknown): unknown => {
-  if (!isRecord(schema)) {
-    return schema;
-  }
-  const pipe = schema["pipe"];
-  if (isUnknownArray(pipe) && pipe.length > 0) {
-    return declaredShapeOf(pipe[0]);
-  }
-  const wrapped = schema["wrapped"];
-  return wrapped === undefined ? schema : declaredShapeOf(wrapped);
-};
-
-/**
- * The placeholders one property carries as absence: those it REJECTS, on a
- * property that accepts being omitted. A required property still fails on the
- * placeholder, and a property that accepts it keeps it — an empty string on a
- * plain text property is an empty label, not an omission.
- */
-const absentPlaceholdersOf = (schema: v.GenericSchema): AbsentPlaceholder[] => {
-  if (!v.safeParse(schema, undefined).success) {
-    return [];
-  }
-  return ABSENT_PLACEHOLDERS.filter(
-    (placeholder) =>
-      !v.safeParse(schema, PLACEHOLDER_VALUES[placeholder]).success,
-  );
-};
-
-const nullAsAbsentPlan = (schema: unknown): NullAsAbsentPlan | undefined => {
-  const declared = declaredShapeOf(schema);
-  if (isObjectSchema(declared)) {
-    const absentWhen = new Map<string, readonly AbsentPlaceholder[]>();
-    const properties = new Map<string, NullAsAbsentPlan>();
-    for (const [key, property] of Object.entries(declared.entries)) {
-      const placeholders = absentPlaceholdersOf(property);
-      if (placeholders.length > 0) {
-        absentWhen.set(key, placeholders);
-      }
-      const nested = nullAsAbsentPlan(property);
-      if (nested !== undefined) {
-        properties.set(key, nested);
-      }
-    }
-    return { kind: "object", absentWhen, properties };
-  }
-  if (!isArraySchema(declared)) {
-    return undefined;
-  }
-  const item = nullAsAbsentPlan(declared.item);
-  return item === undefined ? undefined : { kind: "array", item };
-};
-
-const applyNullAsAbsent = (value: unknown, plan: NullAsAbsentPlan): unknown => {
-  switch (plan.kind) {
-    case "array":
-      return isUnknownArray(value)
-        ? value.map((entry) => applyNullAsAbsent(entry, plan.item))
-        : value;
-    case "object": {
-      if (!isRecord(value)) {
-        return value;
-      }
-      return Object.fromEntries(
-        Object.entries(value).flatMap(([key, entry]) => {
-          const placeholders = plan.absentWhen.get(key);
-          if (
-            placeholders?.some((placeholder) =>
-              isPlaceholder(entry, placeholder),
-            )
-          ) {
-            return [];
-          }
-          const nested = plan.properties.get(key);
-          return [
-            [
-              key,
-              nested === undefined ? entry : applyNullAsAbsent(entry, nested),
-            ] as const,
-          ];
-        }),
-      );
-    }
-    default:
-      return panic(`Unhandled null-as-absent plan: ${JSON.stringify(plan)}`);
-  }
-};
-
-/**
- * Read a tool's input with a placeholder meaning absence, at every object level
- * the schema declares.
- *
- * A strict tool-schema client must send every declared property, so it sends
- * something for the ones it is not setting: `null`, or — the shape models
- * actually produce — the empty value of the declared type, `""` for a string,
- * `[]` for an array, `{}` for an object. None of those is a value on this
- * surface: `input_type: null` reads as a field with no input control,
- * `options_from: ""` as a dependent select sourced from a field with no path.
- * Normalizing inside one handler leaves every other consumer of the schema
- * (evals, tests, the capability catalog) with the raw contract, so the schema
- * owns it instead.
- *
- * Only a placeholder the property ITSELF rejects is dropped, and only on a
- * property that accepts being omitted. A required property set to a
- * placeholder, a placeholder under a misspelled key, and an empty string on a
- * property that accepts one all still read exactly as sent. `0` and `false`
- * are never placeholders.
- */
-export const nullAsAbsent = <TSchema extends ToolObjectInputSchema>(
-  advertisedSchema: TSchema,
-): NullAsAbsentSchema<TSchema> => {
-  const plan =
-    nullAsAbsentPlan(advertisedSchema) ??
-    panic("A tool input schema must declare object properties");
-  return Object.assign(
-    v.pipe(
-      v.unknown(),
-      v.transform((value: unknown) => applyNullAsAbsent(value, plan)),
-      advertisedSchema,
-    ),
-    { advertisedSchema },
-  );
-};
 
 export const enumProp = (description: string, values: readonly string[]) =>
   ({ type: "string", enum: values, description }) as const;
 
 /**
- * Boolean `confirm` gate for a destructive tool. The guardrail in
- * `handleMcpToolCall` rejects a `destructiveHint` call unless `confirm === true`,
- * so every destructive tool advertises this property with the same contract:
- * set it only after a human has approved the irreversible operation. Pass a
- * custom `description` for a tool whose gate is action-scoped (e.g.
- * `manage_organization`, where only the `remove_member` action requires it).
+ * Boolean input for a server confirmation gate declared by
+ * `destructiveBehavior`. `handleMcpToolCall` requires `confirm === true` when
+ * that behavior selects an irreversible operation or outbound send;
+ * `destructiveHint` alone does not require confirmation. Set it only after a
+ * human has approved the selected operation. Pass a custom `description` for
+ * outbound sends or an operation-specific confirmation reason.
  */
 export const confirmProp = (
   description = "Must be true to run this irreversible operation. Set it only after a " +
@@ -408,22 +151,65 @@ export const confirmProp = (
     description,
   }) as const;
 
-export const toolDataResult = <TData>(
-  data: TData,
+/**
+ * A tool's successful output. `TData` is read from the return context (the
+ * handler's declared output), and `data` may carry no property that type
+ * lacks: a strict output schema would reject it after the handler succeeded.
+ */
+export const toolDataResult = <TData, TActual extends TData>(
+  data: CheckedOutput<TActual, TData>,
 ): InternalToolSuccess<TData> => ({
   status: "success",
   data,
 });
+
+/**
+ * Output for a surface without a declared output type (gateway families,
+ * capability passthrough), which nothing validates against a Stella schema.
+ */
+export const untypedToolDataResult = (data: unknown): InternalToolSuccess => ({
+  status: "success",
+  data,
+});
+
+type StructuredEgressPlan<TPayload> = Extract<
+  McpEgressPlan<TPayload>,
+  { egress: "structured" }
+>;
+
+type StructuredEgressPlanOptions<TPayload, TActual> = Omit<
+  StructuredEgressPlan<TPayload>,
+  "egress" | "payload"
+> & { payload: CheckedOutput<TActual, TPayload> };
+
+/** `toolDataResult` for a payload the egress pipeline finalizes. */
+export const structuredEgressPlan = <TPayload, TActual extends TPayload>({
+  payload,
+  ...plan
+}: StructuredEgressPlanOptions<
+  TPayload,
+  TActual
+>): StructuredEgressPlan<TPayload> => ({
+  egress: "structured",
+  payload,
+  ...plan,
+});
+
+/** `untypedToolDataResult` for a payload the egress pipeline finalizes. */
+export const untypedStructuredEgressPlan = (
+  plan: Omit<StructuredEgressPlan<unknown>, "egress">,
+): StructuredEgressPlan<unknown> => ({ egress: "structured", ...plan });
 
 // TypeScript's JSON.stringify overload for `unknown` claims it always returns
 // a string, but the runtime returns undefined for unsupported root values.
 const stringifyJson = (value: unknown): unknown => JSON.stringify(value);
 
 /**
- * A tool succeeded but its output failed the output schema it advertises.
- * The cause of the panic `serializeToolResult` raises; observed as a defect:
- * the handler and its contract disagree, so every call on that path fails
- * until the code changes.
+ * A tool succeeded but its output failed the output schema it advertises on a
+ * declared field (missing or invalid; undeclared extra keys alone are
+ * stripped and reported instead). The cause of the panic
+ * `serializeToolResult` raises; observed as a defect: the handler and its
+ * contract disagree, so every call on that path fails until the code changes.
  */
 export class McpOutputContractError extends TaggedError(
   "McpOutputContractError",
@@ -448,20 +234,30 @@ const isJsonObject = (value: unknown): value is Record<string, unknown> =>
  * and the `{ error: … }` envelope is the absence of one. A client validating
  * it against an output schema must not be handed a failure envelope in that
  * slot.
+ *
+ * Output whose only violation is undeclared extra keys is stripped of them
+ * (the degrade shared with the chat projection) and reported as a defect; the
+ * caller still gets exactly the advertised shape.
  */
 const successStructuredContent = (
   result: InternalToolSuccess,
   outputContract: RuntimeMcpToolOutputContract | undefined,
+  toolName: string | undefined,
 ): Record<string, unknown> | undefined => {
   if (outputContract === undefined) {
     return isJsonObject(result.data) ? result.data : undefined;
   }
   const projected = outputContract.project(result.data);
-  const parsed = v.safeParse(outputContract.outputSchemaSource, projected);
-  if (!parsed.success) {
-    // Paths only: an issue's `input` is the tool's output, which carries
-    // matter content.
-    const paths = parsed.issues.map((issue) => v.getDotPath(issue) ?? "(root)");
+  const parsed = parseStrippingUndeclaredKeys(
+    outputContract.outputSchemaSource,
+    projected,
+  );
+  if (Result.isError(parsed)) {
+    // Paths only, ids masked: an issue's `input` is the tool's output, which
+    // carries matter content, and a dynamic key can be an id.
+    const paths = parsed.error.issues.map((issue) =>
+      maskUuids(v.getDotPath(issue) ?? "(root)"),
+    );
     return panic(
       "MCP tool output violated its advertised contract",
       new McpOutputContractError({
@@ -469,16 +265,27 @@ const successStructuredContent = (
       }),
     );
   }
-  if (!isJsonObject(parsed.output)) {
+  const { output, undeclaredPaths } = parsed.value;
+  if (undeclaredPaths.length > 0) {
+    reportToolOutputDegrade({
+      defect: "undeclared_fields",
+      paths: undeclaredPaths,
+      source: "mcp",
+      toolName: toolName ?? "(unknown)",
+    });
+  }
+  if (!isJsonObject(output)) {
     return panic("MCP tool output contract produced a non-object root");
   }
-  return parsed.output;
+  return output;
 };
 
 /** Serialize a canonical Stella tool result at the external MCP boundary. */
 export const serializeToolResult = (
   result: InternalToolResult,
   outputContract?: RuntimeMcpToolOutputContract,
+  /** Telemetry only: names the tool in a degraded-output defect report. */
+  toolName?: string,
 ): CallToolResult => {
   if (result.status === "success") {
     const serializedData = stringifyJson(result.data);
@@ -487,7 +294,11 @@ export const serializeToolResult = (
     }
     // A host shows the model either the text or `structuredContent`, so the
     // one text block is the JSON of the same validated object.
-    const structuredContent = successStructuredContent(result, outputContract);
+    const structuredContent = successStructuredContent(
+      result,
+      outputContract,
+      toolName,
+    );
     return {
       content: [
         {
@@ -527,7 +338,7 @@ export const serializeToolResult = (
  */
 export const serializeMcpData = (data: unknown): CallToolResult => {
   const { structuredContent: _upstream, ...result } = serializeToolResult(
-    toolDataResult(data),
+    untypedToolDataResult(data),
   );
   return result;
 };
@@ -590,7 +401,7 @@ export const oauthScopeRecoveryHint = ({
 
 /**
  * Structured tool-error envelope. The single text content is
- * `{"error":{"code","message","hint?","issues?","retryable?","requestId?"}}`;
+ * `{"error":{"code","message","hint?","issues?","retryable?","retryAfterMs?","requestId?"}}`;
  * `isError` is set so MCP clients still treat it as a failure. Undefined
  * `hint`/`issues`/`retryable` are omitted so the serialized shape stays minimal
  * (an empty `issues` array is treated as absent). Agents branch on `code`;
@@ -606,6 +417,7 @@ export const structuredErrorResult = ({
   issues,
   message,
   retryable,
+  retryAfterMs,
   contactUrl,
 }: {
   code: McpErrorCode;
@@ -613,15 +425,17 @@ export const structuredErrorResult = ({
   issues?: readonly McpValidationIssue[] | undefined;
   message: string;
   retryable?: boolean | undefined;
+  retryAfterMs?: number | undefined;
   contactUrl?: string | undefined;
 }): InternalToolErrorResult => {
-  const requestId = getCurrentRequestId();
+  const requestId = getRequestId();
   const fields = {
     type: "structured",
     message,
     ...(hint === undefined ? {} : { hint }),
     ...(issues === undefined || issues.length === 0 ? {} : { issues }),
     ...(retryable === undefined ? {} : { retryable }),
+    ...(retryAfterMs === undefined ? {} : { retryAfterMs }),
     ...(contactUrl === undefined ? {} : { contactUrl }),
     ...(requestId === undefined ? {} : { requestId }),
   } as const;
@@ -642,11 +456,17 @@ export const structuredErrorResult = ({
  */
 export const mapValibotIssues = (
   issues: readonly v.BaseIssue<unknown>[],
+  pathAliases: Readonly<Record<string, string>> = {},
 ): McpValidationIssue[] =>
-  issues.map((issue) => ({
-    path: v.getDotPath(issue) ?? "",
-    message: issue.message,
-  }));
+  issues.map((issue) => {
+    const path = v.getDotPath(issue) ?? "";
+    const [root, ...rest] = path.split(".");
+    const aliasedRoot = pathAliases[root ?? ""] ?? root;
+    return {
+      path: [aliasedRoot, ...rest].filter(Boolean).join("."),
+      message: issue.message,
+    };
+  });
 
 /**
  * Build the shared validation envelope. Prefer an actionable cross-field issue
@@ -657,11 +477,12 @@ export const mapValibotIssues = (
 export const validationErrorResult = (
   issues: readonly v.BaseIssue<unknown>[],
   hint?: string,
+  pathAliases?: Readonly<Record<string, string>>,
 ): InternalToolErrorResult =>
   structuredErrorResult({
     code: "validation_error",
     hint,
-    issues: mapValibotIssues(issues),
+    issues: mapValibotIssues(issues, pathAliases),
     message:
       issues.find((issue) => issue.type === "partial_check")?.message ??
       issues.at(0)?.message ??
@@ -670,8 +491,9 @@ export const validationErrorResult = (
 
 /**
  * The status a reused backing handler answered with, when it answered with
- * one rather than a payload. Elysia's `status(code, body)` returns
- * `{ code, response }`; a bare `{ message }` is accepted too because some
+ * one rather than a payload. The HTTP core's `status(code, body)` returns an
+ * `HttpStatusResponse`, `{ code, response }`; a bare `{ message }` is
+ * accepted too because some
  * handlers return that shape directly. One reader for both, so a tool that
  * branches on a handler's refusal cannot read it differently from its
  * neighbour.
@@ -709,6 +531,91 @@ export const notFoundResult = (
 ): InternalToolErrorResult =>
   structuredErrorResult({ code: "not_found", hint, message });
 
+/** A bounded case-law read may be retried with a narrower search. */
+const CASE_LAW_SEARCH_TIMEOUT_SINK = failureSink({
+  event: "mcp.case_law_search_timeout",
+  expected: [],
+});
+
+/**
+ * Whether a case-law search failure is its time budget running out: a
+ * cancelled statement, a read the request's deadline ended (the corpus
+ * database reports that as the budget's own `TimeoutError`, not a refusal), or
+ * a public-read timeout, thrown or answered. Reads
+ * only; `caseLawSearchTimeoutResult` records and answers the same failures.
+ */
+export const isCaseLawSearchTimeout = (error: unknown): boolean => {
+  const response = isRecord(error) ? error["response"] : undefined;
+  return (
+    getPgErrorCode(error) === PG_ERROR.QUERY_CANCELED ||
+    findRequestBudgetExpiry(error) !== undefined ||
+    resolveHandlerError(error)?.code === PUBLIC_READ_TIMEOUT_CODE ||
+    (isRecord(response) && response["code"] === PUBLIC_READ_TIMEOUT_CODE)
+  );
+};
+
+export const caseLawSearchTimeoutResult = (
+  error: unknown,
+): InternalToolErrorResult | null => {
+  if (!isCaseLawSearchTimeout(error)) {
+    return null;
+  }
+  // Observed as the refusal it stands for, whichever shape it arrived in: a
+  // handler's returned 503 is a status body and a cancelled statement a driver
+  // error, and neither grades as a timeout on its own.
+  observeFailure(publicReadTimeoutRefusal(error), {
+    sink: CASE_LAW_SEARCH_TIMEOUT_SINK,
+    ctx: { source: "mcp" },
+  });
+  return structuredErrorResult({
+    code: "public_read_timeout",
+    message: "Case-law search exceeded its time budget.",
+    hint: "Repeat the identical search_case_law call once before changing it. If it times out again, use fewer queries or a narrower court, date range or provision filter.",
+    retryable: true,
+  });
+};
+
+const SEARCH_INDEX_UNAVAILABLE_SINK = failureSink({
+  event: "mcp.search_index_unavailable",
+  expected: [],
+});
+
+/**
+ * Envelope for a search whose index could not be reached. Every tool backed
+ * by the public-law search index answers it the same way, whichever path the
+ * refusal took to the boundary (a thrown handler error, a failed `Result`, a
+ * safe handler's 503 body): the stable code to branch on, the cause in the
+ * message, and a retry, because the arguments did not cause it. The cause
+ * is still observed, so an index that stays away is seen.
+ */
+export const searchIndexUnavailableResult = (
+  error: unknown,
+): InternalToolErrorResult => {
+  observeFailure(error, {
+    sink: SEARCH_INDEX_UNAVAILABLE_SINK,
+    ctx: { source: "mcp" },
+  });
+  return structuredErrorResult({
+    code: SEARCH_INDEX_UNAVAILABLE_CODE,
+    message: SEARCH_INDEX_UNAVAILABLE_MESSAGE,
+    hint: SEARCH_INDEX_UNAVAILABLE_HINT,
+    retryable: true,
+  });
+};
+
+/**
+ * The envelope for a refusal a public-law search handler answered with (a
+ * read that ran out of time, an index that could not serve it), returned or
+ * thrown, or null for any other answer. The timeout is read first, so an
+ * expired budget never reads as the index being down.
+ */
+export const searchRefusalResult = (
+  answer: unknown,
+): InternalToolErrorResult | null =>
+  publicReadTimeoutError(answer) !== null || isSearchIndexUnavailable(answer)
+    ? internalFailureResult(answer, "mcp.searchRefusal")
+    : null;
+
 /**
  * Envelope for a failed backing-handler `Result`, the single sink for the
  * `errorResult(result.error.message)` class. Every tool site that unwraps a
@@ -733,23 +640,42 @@ export const notFoundResult = (
  */
 export const internalFailureResult = (
   error: unknown,
+  fingerprintKey: StableExceptionKey,
 ): InternalToolErrorResult => {
-  if (HandlerError.is(error)) {
-    if (error.code === "upstream_unavailable") {
-      captureError(error, { source: "mcp" });
-      return structuredErrorResult({
-        code: "upstream_unavailable",
-        message: error.message,
-        hint: MCP_UPSTREAM_UNAVAILABLE_HINT,
-        retryable: true,
-      });
-    }
-    const code = statusCodeToErrorCode(error.status);
-    if (code !== "internal_error") {
-      return structuredErrorResult(projectMcpRefusal(error));
-    }
+  // A read the request's budget ended is a timeout whatever it was waiting
+  // on, so it is read before the dependency's own failure.
+  const timeout = publicReadTimeoutError(error);
+  if (timeout === null && isSearchIndexUnavailable(error)) {
+    return searchIndexUnavailableResult(error);
   }
-  captureError(error, { source: "mcp" });
+  if (
+    timeout === null &&
+    HandlerError.is(error) &&
+    error.code !== "upstream_unavailable" &&
+    statusCodeToErrorCode(error.status) !== "internal_error"
+  ) {
+    return structuredErrorResult(projectMcpRefusal(error));
+  }
+  captureError(
+    timeout ?? error,
+    handlerErrorContext(fingerprintKey, { source: "mcp" }),
+  );
+  if (timeout !== null) {
+    return structuredErrorResult({
+      code: "public_read_timeout",
+      message: timeout.message,
+      hint: PUBLIC_READ_TIMEOUT_HINT,
+      retryable: true,
+    });
+  }
+  if (HandlerError.is(error) && error.code === "upstream_unavailable") {
+    return structuredErrorResult({
+      code: "upstream_unavailable",
+      message: error.message,
+      hint: MCP_UPSTREAM_UNAVAILABLE_HINT,
+      retryable: true,
+    });
+  }
   return structuredErrorResult({
     code: "internal_error",
     message: "Tool execution failed",
@@ -757,65 +683,16 @@ export const internalFailureResult = (
   });
 };
 
-// A name's words in sorted order, so `widgets.delete-part` and
-// `widgets.parts.delete` compare as `delete part widgets` / `delete parts widgets`.
-const sortedWords = (name: string): string =>
-  name.split(/[._-]/u).toSorted().join(" ");
+export { MAX_TOOL_NAME_CHARS, toolNameDistance, toolNameKey };
 
 /**
- * A tool name as an agent may have meant it: lowercased, without separators
- * and without a leading `external` (the prefix chat scripts put on read
- * functions). `listMatters`, `LIST_MATTERS`, `list-matters` and
- * `external_list_matters` all share the key of `list_matters`.
- */
-export const toolNameKey = (name: string): string =>
-  name
-    .toLowerCase()
-    .replaceAll(/[-_.]/gu, "")
-    .replace(/^external/u, "");
-
-/**
- * How far `target` is from the tool name `name`: the smallest of the plain
- * edit distance, the word-order-insensitive one (`widgets.delete-part` against
- * `widgets.parts.delete`) and the distance between their keys (case,
- * separators and an `external_` prefix ignored).
- */
-export const toolNameDistance = (target: string, name: string): number =>
-  Math.min(
-    levenshtein(target, name),
-    levenshtein(sortedWords(target), sortedWords(name)),
-    levenshtein(toolNameKey(target), toolNameKey(name)),
-  );
-
-/**
- * Up to `limit` known tool names closest to `target` by
- * {@link toolNameDistance}, used to hint an agent that fat-fingered a tool
- * name. Only candidates within a lenient edit budget (roughly half the longer
- * name) are kept, so an unrelated miss returns nothing rather than a confusing
- * suggestion. No dependency: a tiny DP implementation is enough for the short,
- * small candidate set.
+ * Up to three known tool names closest to `target`, through the shared bounded
+ * suggestion owner.
  */
 export const closestToolNames = (
   target: string,
   candidates: readonly string[],
-  limit = 3,
-): string[] => {
-  const scored: { name: string; distance: number }[] = [];
-  for (const name of candidates) {
-    const distance = toolNameDistance(target, name);
-    if (distance <= Math.ceil(name.length / 2)) {
-      scored.push({ name, distance });
-    }
-  }
-
-  return scored
-    .toSorted(
-      // oxlint-disable-next-line require-cached-collator/require-cached-collator -- tool names are machine identifiers (agent-facing "did you mean"), not display text
-      (a, b) => a.distance - b.distance || a.name.localeCompare(b.name),
-    )
-    .slice(0, limit)
-    .map(({ name }) => name);
-};
+): string[] => closestNames(target, candidates);
 
 /** A tool name as agent-facing text quotes it. */
 export const quoteToolName = (name: string): string => `\`${name}\``;
@@ -835,30 +712,6 @@ export const didYouMean = (labels: readonly string[]): string => {
     : `Did you mean one of ${labels.join(", ")}?`;
 };
 
-const levenshtein = (a: string, b: string): number => {
-  // Rolling single-row DP. `previous` always holds `b.length + 1` entries and
-  // every read below is in range by construction; `panic` documents that as a
-  // hard invariant instead of masking an out-of-range read with a default.
-  const cell = (row: readonly number[], index: number): number =>
-    row[index] ?? panic("levenshtein: DP cell index out of range");
-
-  const previous = Array.from({ length: b.length + 1 }, (_unused, i) => i);
-  for (let i = 1; i <= a.length; i += 1) {
-    let diagonal = cell(previous, 0);
-    previous[0] = i;
-    for (let j = 1; j <= b.length; j += 1) {
-      const candidate = Math.min(
-        cell(previous, j) + 1,
-        cell(previous, j - 1) + 1,
-        diagonal + (a[i - 1] === b[j - 1] ? 0 : 1),
-      );
-      diagonal = cell(previous, j);
-      previous[j] = candidate;
-    }
-  }
-  return cell(previous, b.length);
-};
-
 export const isToolErrorResult = (
   value: unknown,
 ): value is InternalToolErrorResult =>
@@ -866,52 +719,6 @@ export const isToolErrorResult = (
   value !== null &&
   "status" in value &&
   value.status === "error";
-
-/** Wire cap on an opaque pagination cursor, shared with the tool schemas. */
-const MAX_CURSOR_LENGTH = 512;
-
-type CursorInputOptions = {
-  description: string;
-  maxLength?: number;
-  /**
-   * Which strings the encoder behind this property can have issued. Defaults
-   * to the shared codecs' class. A surface paginated by something else (an
-   * upstream decimal offset) passes its own, because reading its cursors
-   * against the shared class would call every one of them made up.
-   */
-  issuedBy?: (value: string) => boolean;
-};
-
-/**
- * A pagination cursor property, with a made-up value read as absence.
- *
- * A client that fills every declared property has to put something in
- * `cursor` on its first call, and what it puts there is a placeholder: `" "`,
- * `"0"`, `"start"`, `"__start__"`. Handing those to a decoder answers
- * `Invalid cursor` to a caller holding no cursor, so it invents another one
- * and the call never reaches a first page. A value outside the issued class
- * therefore means "no cursor", exactly as `null` and `""` do through
- * {@link nullAsAbsent}.
- *
- * A value inside the class still goes to the tool's own decoder and still
- * fails there when it does not decode: a truncated real cursor decodes to a
- * readable prefix, and silently restarting that caller at page one would
- * repeat a page it had already read.
- */
-export const cursorInput = ({
-  description,
-  issuedBy = isIssuablePaginationCursor,
-  maxLength = MAX_CURSOR_LENGTH,
-}: CursorInputOptions) =>
-  v.optional(
-    v.pipe(
-      v.string(),
-      v.minLength(1),
-      v.maxLength(maxLength),
-      v.description(description),
-      v.transform((value: string) => (issuedBy(value) ? value : undefined)),
-    ),
-  );
 
 /**
  * The one refusal for a cursor inside the issued class that does not decode:
@@ -1066,7 +873,7 @@ export const ensureWorkspaceAccess = ({
   context,
   workspaceId,
 }: {
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   workspaceId: string;
 }) => {
   const resolved = getAccessibleWorkspaceId({
@@ -1084,15 +891,15 @@ export const getWorkspaceStatus = ({
   context,
   workspaceId,
 }: {
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   workspaceId: string;
 }): AccessibleWorkspace["status"] | undefined =>
   context.accessibleWorkspaceStatusById.get(workspaceId);
 
 /**
  * Resolve an accessible workspace that is also writable. Mirrors the HTTP
- * `validateWorkspaceAccess` macro, which rejects any workspace whose status is
- * not "active": archived matters stay readable but are read-only through MCP
+ * core's `authorizeWorkspace`, which by default rejects any workspace whose
+ * status is not "active": archived matters stay readable but are read-only through MCP
  * write tools. Returns the branded id when active, or an error result naming
  * the reason (not accessible vs archived). Callers that need to allow an
  * unarchive (`save_matter` with status:"active") should use
@@ -1102,7 +909,7 @@ export const ensureActiveWorkspace = ({
   context,
   workspaceId,
 }: {
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   workspaceId: string;
 }): SafeId<"workspace"> | InternalToolErrorResult => {
   const resolved = getAccessibleWorkspaceId({
@@ -1112,7 +919,7 @@ export const ensureActiveWorkspace = ({
   if (!resolved) {
     return notFoundResult("Matter not found or not accessible");
   }
-  if (getWorkspaceStatus({ context, workspaceId }) !== "active") {
+  if (!workspaceAcceptsWrites(getWorkspaceStatus({ context, workspaceId }))) {
     return errorResult("Matter is archived; unarchive it first");
   }
   if (context.pinServerValidatedWorkspaceId?.(resolved) === false) {
@@ -1126,20 +933,32 @@ export const buildMatterUrl = (workspaceId: string) =>
 
 export { buildDocumentUrl } from "@/api/lib/mcp-connectors/app-urls";
 
-export const buildCaseLawDecisionAppUrl = (
-  input: CaseLawDecisionRouteInput,
-): string | null =>
-  isDeploymentFeatureEnabled("FEATURE_PUBLIC_LAW")
-    ? buildCaseLawDecisionUrl(input)
-    : null;
+/** Return the primary reader or publisher link with its distinct source. */
+export const legalCitationLinkFields = ({
+  url,
+  sourceUrl,
+}: {
+  url: string | null;
+  sourceUrl: string | null;
+}) => {
+  const links = resolveLegalCitationLinks({
+    url,
+    sourceUrl,
+    appOrigins: new Set([new URL(getAppBaseUrl()).origin]),
+  });
+  return {
+    url: links.url,
+    ...(links.type === "external" || links.source_url === undefined
+      ? {}
+      : { source_url: links.source_url }),
+  };
+};
 
-/**
- * The route shape is owned by `@stll/api-contract/case-law-decision-route`, so
- * an agent-facing URL and the web route cannot address different pages: a
- * decision without a stored slug links by id, not by case number.
- */
-export const buildCaseLawDecisionUrl = (input: CaseLawDecisionRouteInput) =>
-  `${getAppBaseUrl()}${createCaseLawDecisionPath(createCaseLawDecisionRouteParams(input))}`;
+export {
+  buildCaseLawDecisionAppUrl,
+  buildCaseLawDecisionUrl,
+  buildLegislationDocumentAppUrl,
+} from "@/api/lib/legal-search/public-law-app-urls";
 
 /**
  * The plain text of one corpus document: its stored plain-text consolidation
@@ -1155,7 +974,7 @@ export const toPlainCorpusText = ({
   blocks,
   fulltext,
 }: {
-  blocks: readonly { plainText: string }[] | null;
+  blocks: readonly ServedTextBlock[] | null;
   fulltext: string | null;
 }): string | null => {
   if (typeof fulltext === "string" && fulltext.length > 0) {
@@ -1166,34 +985,11 @@ export const toPlainCorpusText = ({
   }
 
   return blocks
-    .flatMap((block) => (block.plainText === "" ? [] : [block.plainText]))
+    .flatMap((block, index) =>
+      block.plainText === "" ? [] : [servedBlockText(block, blocks[index - 1])],
+    )
     .join("\n\n");
 };
-
-/**
- * A statute's canonical public address, always the latest consolidation of
- * the Work: its stored slug, or the id form when the corpus holds none. The
- * route shape is owned by `@stll/api-contract/statute-route`, so the address
- * a tool reports and the page the web serves cannot diverge. Null only when
- * the public-law surface is off.
- */
-export const buildLegislationDocumentAppUrl = ({
-  country,
-  documentId,
-  eli,
-  slug,
-}: Omit<StatuteRouteInput, "version">): string | null =>
-  isDeploymentFeatureEnabled("FEATURE_PUBLIC_LAW")
-    ? `${getAppBaseUrl()}${createStatutePath(
-        createStatuteRouteParams({
-          country,
-          documentId,
-          eli,
-          slug,
-          version: null,
-        }),
-      )}`
-    : null;
 
 /**
  * Plain text for a search snippet built for the web UI. A snippet is

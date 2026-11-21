@@ -14,6 +14,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 
 const config = {
+  contract: "patch",
   description:
     "Ask a new question of every decision the organization looks at. " +
     "Answers are produced later, by an explicit run; the column starts " +

@@ -135,7 +135,7 @@ export const reviewDecisionKey = (
   positionId: string,
 ): string => `${entityId}:${positionId}`;
 
-export const severityRank = (severity: PositionSeverity): number =>
+const severityRank = (severity: PositionSeverity): number =>
   SEVERITY_ORDER.indexOf(severity);
 
 export const worstSeverity = (

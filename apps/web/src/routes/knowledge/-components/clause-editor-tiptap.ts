@@ -1,5 +1,6 @@
 import type { JSONContent } from "@tiptap/react";
 
+import { CLAUSE_NUMBERING_LEVEL_LIMITS } from "@stll/api-contract";
 import { isBlockDirectiveKind } from "@stll/template-conditions";
 
 import type {
@@ -77,8 +78,16 @@ const paragraphToNode = (
   return { type: "paragraph", content };
 };
 
-const listLevelOf = (p: ClauseParagraph): number =>
-  p.listKind ? Math.max(0, p.listLevel ?? 0) : 0;
+const listDepthOf = (p: ClauseParagraph): number =>
+  p.listKind ? Math.max(0, p.numbering?.ilvl ?? 0) : 0;
+
+type BuildListOptions = {
+  body: readonly ClauseParagraph[];
+  start: number;
+  level: number;
+  kind: ClauseListKind;
+  override?: ParagraphContentOverride | undefined;
+};
 
 /**
  * Build the TipTap list node(s) for one run of consecutive list paragraphs
@@ -86,13 +95,13 @@ const listLevelOf = (p: ClauseParagraph): number =>
  * child lists inside the preceding `listItem`. Returns the list node plus the
  * number of paragraphs it consumed, so the caller can resume after the run.
  */
-const buildList = (
-  body: readonly ClauseParagraph[],
-  start: number,
-  level: number,
-  kind: ClauseListKind,
-  override?: ParagraphContentOverride,
-): { node: JSONContent; consumed: number } => {
+const buildList = ({
+  body,
+  start,
+  level,
+  kind,
+  override,
+}: BuildListOptions): { node: JSONContent; consumed: number } => {
   const items: JSONContent[] = [];
   let i = start;
 
@@ -101,14 +110,20 @@ const buildList = (
     if (!p || p.isDirective || !p.listKind) {
       break;
     }
-    const pLevel = listLevelOf(p);
+    const pLevel = listDepthOf(p);
     if (pLevel < level || (pLevel === level && p.listKind !== kind)) {
       break;
     }
     if (pLevel > level) {
       // A deeper item with no own-level parent: nest it under the last item,
       // or open a fresh item so the structure stays well-formed.
-      const child = buildList(body, i, pLevel, p.listKind, override);
+      const child = buildList({
+        body,
+        start: i,
+        level: pLevel,
+        kind: p.listKind,
+        override,
+      });
       const lastItem = items.at(-1);
       if (lastItem?.content) {
         lastItem.content.push(child.node);
@@ -125,14 +140,14 @@ const buildList = (
     i += 1;
     // Pull any immediately-following deeper items into this item as a sub-list.
     const next = body[i];
-    if (next?.listKind && listLevelOf(next) > level) {
-      const child = buildList(
+    if (next?.listKind && listDepthOf(next) > level) {
+      const child = buildList({
         body,
-        i,
-        listLevelOf(next),
-        next.listKind,
+        start: i,
+        level: listDepthOf(next),
+        kind: next.listKind,
         override,
-      );
+      });
       itemContent.push(child.node);
       i += child.consumed;
     }
@@ -166,7 +181,13 @@ export const clauseBodyToTipTap = (
       continue;
     }
     if (p.listKind) {
-      const built = buildList(body, i, listLevelOf(p), p.listKind, override);
+      const built = buildList({
+        body,
+        start: i,
+        level: listDepthOf(p),
+        kind: p.listKind,
+        override,
+      });
       content.push(built.node);
       i += built.consumed;
       continue;
@@ -240,6 +261,8 @@ const nodeToParagraph = (node: JSONContent): ClauseParagraph => {
  * Flatten a `bulletList`/`orderedList` node to list-item paragraphs at `level`.
  * Each `listItem` contributes one paragraph (its leading block) tagged with the
  * list kind + level; any nested list inside the item recurses one level deeper.
+ * The emitted level stops at the deepest level the API accepts: nesting past
+ * it stays at that level, the same rule the stored-body migration applies.
  */
 const flattenList = (
   listNode: JSONContent,
@@ -258,7 +281,10 @@ const flattenList = (
     const leadBlock = blocks.find((b) => listKindOfNode(b.type) === null);
     const lead = leadBlock ? nodeToParagraph(leadBlock) : { text: "" };
     lead.listKind = kind;
-    lead.listLevel = level;
+    lead.numbering = {
+      kind: "levelOnly",
+      ilvl: Math.min(level, CLAUSE_NUMBERING_LEVEL_LIMITS.max),
+    };
     out.push(lead);
 
     for (const block of blocks) {

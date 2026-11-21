@@ -1,0 +1,696 @@
+import { panic, Result } from "better-result";
+import { describe, expect, expectTypeOf, test } from "bun:test";
+
+import {
+  PUBLIC_COUNTRIES,
+  PUBLIC_COUNTRY_CAPABILITIES,
+} from "@stll/api-contract/public-country-capability";
+
+import {
+  admitLawRead,
+  type LawReadAdmission,
+} from "@/api/handlers/legal-resolve/admission";
+import {
+  resolveCzechLaw,
+  resolveHungarianLaw,
+  resolveLawCitation,
+  resolveSlovakLaw,
+} from "@/api/handlers/legal-resolve/law";
+import type { resolveStatuteExpression } from "@/api/handlers/legislation/by-eli";
+import type { readProvisionPreviewHandler } from "@/api/handlers/legislation/provision-preview";
+import {
+  projectProvisionPreview,
+  projectStatuteReader,
+} from "@/api/handlers/legislation/reader-response";
+import { status } from "@/api/http/status";
+import { createSafeId } from "@/api/lib/branded-types";
+import { buildLegislationDocumentAppUrl } from "@/api/lib/legal-search/public-law-app-urls";
+import { parseAuthProviderId } from "@/api/lib/safe-id-boundaries";
+
+const organizationId =
+  parseAuthProviderId<"organization">("organization") ??
+  panic("Fixture organization id is invalid");
+const admissionResult = admitLawRead({
+  organizationId,
+  publicLawEnabled: () => true,
+});
+const admission = Result.isOk(admissionResult)
+  ? admissionResult.value
+  : panic("Fixture law read was not admitted");
+
+test("requires a law-read admission at compile time", () => {
+  type Options = Parameters<typeof resolveLawCitation>[0];
+  expectTypeOf<Options["admission"]>().toEqualTypeOf<LawReadAdmission>();
+  expectTypeOf<{
+    country: string;
+    input: { citation: string };
+  }>().not.toExtend<Options>();
+});
+
+const documentId = createSafeId<"legislationDocument">();
+const eli = "https://www.e-sbirka.cz/eli/cz/sb/2024/1";
+const resolveExpression: typeof resolveStatuteExpression = async () => ({
+  type: "expression",
+  id: documentId,
+});
+const documentFor = (
+  versionValidFrom: string | null,
+  versionValidTo: string | null,
+) =>
+  projectStatuteReader({
+    id: documentId,
+    eli,
+    slug: "act",
+    title: "Act",
+    country: "CZE",
+    language: "cs",
+    documentType: "act",
+    status: "in_force",
+    effectiveDate: null,
+    versionValidFrom,
+    versionValidTo,
+    expressionKind: "consolidation",
+    windowDisposition: "effective",
+    windowDispositionBasis: null,
+    sourceUrl: null,
+    documentUrl: null,
+    documentAst: null,
+    fulltext: null,
+    citationCaseCount: 0,
+    allowsDerivedAi: true,
+    createdAt: new Date(0),
+    updatedAt: new Date(0),
+    sections: null,
+  });
+const preview = projectProvisionPreview({
+  country: "CZE",
+  url: null,
+  documentId,
+  language: "cs",
+  anchorId: "par_12a",
+  citedAnchorId: null,
+  headings: [],
+  heading: null,
+  blocks: [],
+});
+const dependencies = (
+  anchor = "par_12a",
+  versionValidFrom: string | null = null,
+  versionValidTo: string | null = null,
+) => ({
+  resolveExpression,
+  readDocument: async () => documentFor(versionValidFrom, versionValidTo),
+  readPreview: (async (input) => {
+    expect(input.anchor).toBe(anchor);
+    return {
+      ...preview,
+      country: "CZE",
+      url: buildLegislationDocumentAppUrl({
+        country: "CZE",
+        documentId,
+        eli,
+        slug: "act",
+        version: versionValidFrom,
+        anchor,
+      }),
+    };
+  }) satisfies typeof readProvisionPreviewHandler,
+});
+
+describe("law citation resolution", () => {
+  test("resolves current and outdated versions", async () => {
+    const input = {
+      collection: "sb",
+      year: "2024",
+      number: "1",
+      section: "12 a",
+    };
+    expect(await resolveCzechLaw(input, dependencies())).toMatchObject({
+      status: "resolved",
+      document: {
+        kind: "provision",
+        section: "12a",
+        inForce: { from: null, to: null },
+        versionStatus: "current",
+      },
+    });
+    expect(
+      await resolveCzechLaw(
+        { ...input, asOf: "2023-01-01" },
+        {
+          ...dependencies("par_12a", "2020-01-01", null),
+          today: () => "2026-01-01",
+        },
+      ),
+    ).toMatchObject({
+      status: "resolved",
+      document: { versionStatus: "current" },
+    });
+    expect(
+      await resolveCzechLaw(
+        { ...input, asOf: "2023-01-01" },
+        {
+          ...dependencies("par_12a", "2020-01-01", "2024-01-01"),
+          today: () => "2026-01-01",
+        },
+      ),
+    ).toMatchObject({
+      status: "resolved",
+      document: { versionStatus: "outdated" },
+    });
+  });
+
+  test("returns the provision reader URL", async () => {
+    const result = await resolveCzechLaw(
+      { collection: "sb", year: "2024", number: "1", section: "12 a" },
+      dependencies(),
+    );
+    expect(result).toMatchObject({
+      status: "resolved",
+      document: {
+        readerUrl: buildLegislationDocumentAppUrl({
+          country: "CZE",
+          documentId,
+          eli,
+          slug: "act",
+          version: null,
+          anchor: "par_12a",
+        }),
+      },
+    });
+  });
+
+  test.each([" 12 A ", "§ 12a", "§12 A"])(
+    "normalizes section spelling %s",
+    async (section) => {
+      await resolveCzechLaw(
+        { collection: "sb", year: "2024", number: "1", section },
+        dependencies(),
+      );
+    },
+  );
+
+  test.each([
+    ["čl. 38", "cl_38"],
+    ["Čl. 95", "cl_95"],
+    ["článku 4", "cl_4"],
+    ["čl.3a", "cl_3a"],
+  ])("reads the article %s as an article", async (section, anchor) => {
+    expect(
+      await resolveCzechLaw(
+        { collection: "sb", year: "1993", number: "2", section },
+        dependencies(anchor),
+      ),
+    ).toMatchObject({
+      status: "resolved",
+      document: { section: `čl. ${anchor.slice("cl_".length)}` },
+    });
+  });
+
+  test("reads a Slovak article in the Slovak anchor grammar", async () => {
+    expect(
+      await resolveSlovakLaw(
+        {
+          collection: "Z. z.",
+          year: "2005",
+          number: "300",
+          section: "článok 46",
+        },
+        dependencies("clanok-46"),
+      ),
+    ).toMatchObject({ status: "resolved", document: { section: "čl. 46" } });
+  });
+
+  test("reads a bare number as the article of an act without that section", async () => {
+    const asked: string[] = [];
+    const result = await resolveCzechLaw(
+      { collection: "sb", year: "1993", number: "1", section: "95" },
+      {
+        ...dependencies(),
+        readPreview: (async (input) => {
+          asked.push(input.anchor);
+          return input.anchor === "cl_95"
+            ? { ...preview, url: "https://example.test/cl_95" }
+            : status(404, { message: "Provision not found" });
+        }) satisfies typeof readProvisionPreviewHandler,
+      },
+    );
+    expect(asked).toEqual(["par_95", "cl_95"]);
+    expect(result).toMatchObject({
+      status: "resolved",
+      document: { section: "čl. 95" },
+    });
+  });
+
+  test("does not read a cited article as a section", async () => {
+    const asked: string[] = [];
+    expect(
+      await resolveCzechLaw(
+        { collection: "sb", year: "1993", number: "2", section: "čl. 38" },
+        {
+          ...dependencies(),
+          readPreview: (async (input) => {
+            asked.push(input.anchor);
+            return status(404, { message: "Provision not found" });
+          }) satisfies typeof readProvisionPreviewHandler,
+        },
+      ),
+    ).toEqual({ status: "not_found", reason: "unknown_section" });
+    expect(asked).toEqual(["cl_38"]);
+  });
+
+  test("uses only the supported Collection of Laws identifier", async () => {
+    let resolveCount = 0;
+    const checkedDependencies = {
+      ...dependencies(),
+      resolveExpression: (async (input) => {
+        resolveCount += 1;
+        expect(input.eli).toBe(eli);
+        return { type: "expression", id: documentId };
+      }) satisfies typeof resolveStatuteExpression,
+    };
+
+    expect(
+      await resolveCzechLaw(
+        { collection: "sb", year: "2024", number: "1", section: "12a" },
+        checkedDependencies,
+      ),
+    ).toMatchObject({ status: "resolved" });
+    expect(
+      await resolveCzechLaw(
+        {
+          collection: "unknown",
+          year: "2024",
+          number: "1",
+          section: "12a",
+        },
+        checkedDependencies,
+      ),
+    ).toEqual({ status: "not_found", reason: "unknown_document" });
+    expect(resolveCount).toBe(1);
+  });
+
+  test.each(["", " ", "1e3", "0x10", "+1", "1junk", "1.5", "-1"])(
+    "structured identities reject non-integer tokens %j",
+    async (token) => {
+      for (const field of ["year", "number"] as const) {
+        expect(
+          await resolveCzechLaw(
+            {
+              collection: "sb",
+              year: "2024",
+              number: "1",
+              section: "12a",
+              [field]: token,
+            },
+            dependencies(),
+          ),
+        ).toEqual({ status: "not_found", reason: "unknown_document" });
+      }
+    },
+  );
+
+  test("distinguishes unknown sections and documents", async () => {
+    const input = {
+      collection: "sb",
+      year: "2024",
+      number: "1",
+      section: "12",
+    };
+    expect(
+      await resolveCzechLaw(input, {
+        ...dependencies("par_12"),
+        readPreview: async () =>
+          status(404, { message: "Provision not found" }),
+      }),
+    ).toEqual({ status: "not_found", reason: "unknown_section" });
+    expect(
+      await resolveCzechLaw(input, {
+        ...dependencies("par_12"),
+        resolveExpression: async () => ({ type: "unknown-work" }),
+      }),
+    ).toEqual({ status: "not_found", reason: "unknown_document" });
+  });
+});
+
+const CONSTITUTIONAL_COURT_ACT_ELI =
+  "https://www.e-sbirka.cz/eli/cz/sb/1993/182";
+const VICTIMS_ACT_ELI = "https://www.e-sbirka.cz/eli/cz/sb/2013/45";
+
+type WrittenCitationRead = {
+  eli: string | undefined;
+  namesRead: string[];
+  reported: string[];
+  response: Awaited<ReturnType<typeof resolveCzechLaw>>;
+};
+
+type ReadWrittenCitationOptions = {
+  citation: string;
+  asOf?: string;
+  namedWorks?: readonly { eli: string; validUntil: string | null }[];
+};
+
+/** Resolves a written citation, recording the ELI opened, names read and misses reported. */
+const readWrittenCitation = async ({
+  citation,
+  asOf,
+  namedWorks = [],
+}: ReadWrittenCitationOptions): Promise<WrittenCitationRead> => {
+  let openedEli: string | undefined;
+  const namesRead: string[] = [];
+  const reported: string[] = [];
+  const response = await resolveCzechLaw(
+    { citation, section: "2", ...(asOf === undefined ? {} : { asOf }) },
+    {
+      ...dependencies("par_2"),
+      resolveExpression: (async (input) => {
+        openedEli = input.eli;
+        return { type: "expression", id: documentId };
+      }) satisfies typeof resolveStatuteExpression,
+      readNamedWorks: async (name) => {
+        namesRead.push(name);
+        return await Promise.resolve(namedWorks);
+      },
+      reportUnresolvedAct: (actName) => {
+        reported.push(actName);
+      },
+      today: () => "2026-10-26",
+    },
+  );
+  return { eli: openedEli, namesRead, reported, response };
+};
+
+describe("written law citations", () => {
+  test.each([
+    "zákona o Ústavním soudu",
+    "§ 43 odst. 1 písm. a) zákona o Ústavním soudu",
+    "[§ 43 odst. 1 písm. a) zákona o Ústavním soudu]",
+    "zákona č. 182/1993 Sb.",
+  ])("%s opens 182/1993 Sb.", async (citation) => {
+    const read = await readWrittenCitation({ citation, asOf: "2026-10-06" });
+    expect(read.response.status).toBe("resolved");
+    expect(read.eli).toBe(CONSTITUTIONAL_COURT_ACT_ELI);
+    expect(read.namesRead).toEqual([]);
+    expect(read.reported).toEqual([]);
+  });
+
+  test("a recodified title opens the act in force on the date asked about", async () => {
+    expect(
+      (
+        await readWrittenCitation({
+          citation: "občanského zákoníku",
+          asOf: "2010-06-30",
+        })
+      ).eli,
+    ).toBe("https://www.e-sbirka.cz/eli/cz/sb/1964/40");
+    expect(
+      (await readWrittenCitation({ citation: "občanského zákoníku" })).eli,
+    ).toBe("https://www.e-sbirka.cz/eli/cz/sb/2012/89");
+  });
+
+  test("a short title the profile does not list is read from the corpus's titles", async () => {
+    const read = await readWrittenCitation({
+      citation: "§ 2 odst. 4 písm. b) zákona o obětech trestných činů",
+      namedWorks: [{ eli: VICTIMS_ACT_ELI, validUntil: null }],
+    });
+    expect(read.namesRead).toEqual(["zákona o obětech trestných činů"]);
+    expect(read.eli).toBe(VICTIMS_ACT_ELI);
+    expect(read.response.status).toBe("resolved");
+    expect(read.reported).toEqual([]);
+  });
+
+  test("a short title that names no act is reported, then answered as unknown", async () => {
+    const read = await readWrittenCitation({
+      citation: "zákona o obětech trestných činů",
+    });
+    expect(read.response).toEqual({
+      status: "not_found",
+      reason: "unknown_document",
+    });
+    expect(read.eli).toBeUndefined();
+    expect(read.reported).toEqual(["zákona o obětech trestných činů"]);
+  });
+
+  test("a name the corpus gives several acts opens none and reports nothing", async () => {
+    const read = await readWrittenCitation({
+      citation: "zákona o obětech trestných činů",
+      namedWorks: [
+        { eli: VICTIMS_ACT_ELI, validUntil: null },
+        { eli: CONSTITUTIONAL_COURT_ACT_ELI, validUntil: null },
+      ],
+    });
+    expect(read.response).toEqual({
+      status: "not_found",
+      reason: "unknown_document",
+    });
+    expect(read.reported).toEqual([]);
+  });
+
+  test("the citing date picks the act a name meant then", async () => {
+    const read = await readWrittenCitation({
+      citation: "zákona o obětech trestných činů",
+      namedWorks: [
+        {
+          eli: "https://www.e-sbirka.cz/eli/cz/sb/1963/57",
+          validUntil: "1976-01-01",
+        },
+        { eli: VICTIMS_ACT_ELI, validUntil: null },
+      ],
+    });
+    expect(read.eli).toBe(VICTIMS_ACT_ELI);
+  });
+
+  test("an act named only before it was issued, or after it ended, is not opened", async () => {
+    const read = await readWrittenCitation({
+      citation: "zákona o obětech trestných činů",
+      namedWorks: [
+        {
+          eli: "https://www.e-sbirka.cz/eli/cz/sb/1963/57",
+          validUntil: "1976-01-01",
+        },
+      ],
+    });
+    expect(read.eli).toBeUndefined();
+    expect(read.reported).toEqual([]);
+  });
+
+  test.each([
+    "89/2012 Sb. rozh.",
+    "67/2013 Sb. m. s.",
+    "§ 2 zákona č. 12/2020 Sb. NSS",
+  ])(
+    "%s names a reporter or treaty, not a statute, and opens nothing",
+    async (citation) => {
+      const read = await readWrittenCitation({ citation });
+      expect(read.response).toEqual({
+        status: "not_found",
+        reason: "unknown_document",
+      });
+      expect(read.eli).toBeUndefined();
+      expect(read.namesRead).toEqual([]);
+      expect(read.reported).toEqual([]);
+    },
+  );
+
+  test("text that is not shaped like an act name is not reported", async () => {
+    const read = await readWrittenCitation({ citation: "unknown" });
+    expect(read.response).toEqual({
+      status: "not_found",
+      reason: "unknown_document",
+    });
+    expect(read.reported).toEqual([]);
+  });
+});
+
+type HungarianRead = {
+  eli: string | undefined;
+  anchors: string[];
+  response: Awaited<ReturnType<typeof resolveHungarianLaw>>;
+};
+
+/** Resolves a Hungarian citation against a corpus holding every Work and the provisions named. */
+const readHungarian = async (
+  input: Parameters<typeof resolveHungarianLaw>[0],
+  provisions: readonly string[] = [],
+): Promise<HungarianRead> => {
+  let openedEli: string | undefined;
+  const anchors: string[] = [];
+  const response = await resolveHungarianLaw(input, {
+    ...dependencies(),
+    resolveExpression: (async (expression) => {
+      openedEli = expression.eli;
+      return { type: "expression", id: documentId };
+    }) satisfies typeof resolveStatuteExpression,
+    readPreview: (async (read) => {
+      anchors.push(read.anchor);
+      return provisions.includes(read.anchor)
+        ? {
+            ...preview,
+            country: "HUN",
+            url: `https://example.test/${read.anchor}`,
+          }
+        : status(404, { message: "Provision not found" });
+    }) satisfies typeof readProvisionPreviewHandler,
+    today: () => "2026-11-19",
+  });
+  return { eli: openedEli, anchors, response };
+};
+
+const CIVIL_CODE_URN = "urn:hu:magyar-kozlony:2013-evi-v-torveny";
+
+describe("Hungarian law citations", () => {
+  test.each([
+    "2013. évi V. törvény",
+    "a Polgári Törvénykönyvről szóló 2013. évi V. törvény",
+    "Ptk.",
+  ])(
+    "%s opens the 2013 Civil Code at its book-numbered section",
+    async (citation) => {
+      const read = await readHungarian({ citation, section: "6:519. §" }, [
+        "sz_6:519",
+      ]);
+      expect(read.eli).toBe(CIVIL_CODE_URN);
+      expect(read.anchors).toEqual(["sz_6:519"]);
+      expect(read.response).toMatchObject({
+        status: "resolved",
+        document: { country: "HUN", eli: CIVIL_CODE_URN, section: "6:519. §" },
+      });
+    },
+  );
+
+  test("a decree opens by its gazette designation", async () => {
+    const read = await readHungarian(
+      { citation: "123/2020. (IV. 30.) Korm. rendelet", section: "25/G. §" },
+      ["sz_25/G"],
+    );
+    expect(read.eli).toBe("urn:hu:magyar-kozlony:123-2020-iv-30-korm-rendelet");
+    expect(read.response).toMatchObject({
+      status: "resolved",
+      document: { section: "25/G. §" },
+    });
+  });
+
+  test("an article is read in the gazette's article anchors", async () => {
+    const read = await readHungarian(
+      { citation: "2011. évi CXII. törvény", section: "IV. cikk" },
+      ["cikk_IV"],
+    );
+    expect(read.anchors).toEqual(["cikk_IV"]);
+    expect(read.response).toMatchObject({
+      status: "resolved",
+      document: { section: "IV. cikk" },
+    });
+  });
+
+  test("a bare number is the section, else the article of that number", async () => {
+    const read = await readHungarian(
+      { citation: "2013. évi V. törvény", section: "3" },
+      ["cikk_3"],
+    );
+    expect(read.anchors).toEqual(["sz_3", "cikk_3"]);
+    expect(read.response).toMatchObject({
+      status: "resolved",
+      document: { section: "3. cikk" },
+    });
+  });
+
+  test("the citing date picks the code an abbreviation named then", async () => {
+    const read = await readHungarian({
+      citation: "Ptk.",
+      section: "339. §",
+      asOf: "2010-01-01",
+    });
+    expect(read.eli).toBe("urn:hu:magyar-kozlony:1959-evi-iv-torveny");
+  });
+
+  test("a decree cited without its signing day asks for it and opens nothing", async () => {
+    const read = await readHungarian({
+      citation: "123/2020. Korm. rendelet",
+      section: "1. §",
+    });
+    expect(read.eli).toBeUndefined();
+    expect(read.response).toMatchObject({
+      status: "not_found",
+      reason: "unknown_document",
+      hint: expect.stringContaining("(IV. 30.)"),
+    });
+  });
+
+  test("a structured identity names a law by year and number", async () => {
+    for (const number of ["5", "V"]) {
+      const read = await readHungarian(
+        { collection: "törvény", year: "2013", number, section: "6:519" },
+        ["sz_6:519"],
+      );
+      expect(read.eli).toBe(CIVIL_CODE_URN);
+    }
+    const decree = await readHungarian({
+      collection: "Korm. rendelet",
+      year: "2020",
+      number: "123",
+      section: "1",
+    });
+    expect(decree.eli).toBeUndefined();
+    expect(decree.response).toMatchObject({
+      status: "not_found",
+      reason: "unknown_document",
+    });
+  });
+
+  test("a citation naming two acts opens neither", async () => {
+    const read = await readHungarian({
+      citation: "2013. évi V. törvény és 2012. évi I. törvény",
+      section: "1. §",
+    });
+    expect(read.eli).toBeUndefined();
+    expect(read.response).toEqual({
+      status: "not_found",
+      reason: "unknown_document",
+    });
+  });
+});
+
+describe("country admission", () => {
+  test("returns country unavailable for an unsupported country", async () => {
+    expect(
+      await resolveLawCitation({
+        admission,
+        country: "DEU",
+        input: { citation: "unknown" },
+      }),
+    ).toEqual({
+      status: "country_unavailable",
+    });
+  });
+});
+
+for (const country of PUBLIC_COUNTRIES.filter(
+  (candidate) =>
+    PUBLIC_COUNTRY_CAPABILITIES[candidate].legislation === "admitted",
+)) {
+  test(`advertised legislation country ${country} has a citation resolver`, async () => {
+    expect(
+      await resolveLawCitation({
+        admission,
+        country,
+        input: { citation: "0/0000" },
+      }),
+    ).toEqual({ status: "not_found", reason: "unknown_document" });
+  });
+}
+
+for (const country of PUBLIC_COUNTRIES.filter(
+  (candidate) =>
+    PUBLIC_COUNTRY_CAPABILITIES[candidate].legislation !== "admitted",
+)) {
+  test(`legislation country ${country} answers unavailable until admitted`, async () => {
+    // A citation the Hungarian grammar reads: a resolver alone opens nothing.
+    expect(
+      await resolveLawCitation({
+        admission,
+        country,
+        input: { citation: "2013. évi V. törvény", section: "6:519. §" },
+      }),
+    ).toEqual({ status: "country_unavailable" });
+  });
+}

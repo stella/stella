@@ -14,6 +14,7 @@ import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import type { LucideIcon } from "@stll/ui/icons";
 import {
+  AiActionIcon,
   BracesIcon,
   CheckIcon,
   ChevronDownIcon,
@@ -21,10 +22,11 @@ import {
   RepeatIcon,
   SplitIcon,
   TextQuoteIcon,
-  AiActionIcon,
 } from "@stll/ui/icons";
 import { MenuPreviewLayout, PreviewPane } from "@stll/ui/preview-pane";
 import { Separator } from "@stll/ui/separator";
+import { Skeleton } from "@stll/ui/skeleton";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import type { BlockGestureKind } from "@/features/knowledge/views/templates/directive-kinds";
@@ -33,13 +35,14 @@ import type { TranslationKey } from "@/i18n/types";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { BoundedMap } from "@/lib/bounded-set";
+import { toAPIError } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { inputTypeValueKind, VALUE_TYPE_META } from "@/lib/value-types";
 import { reusableConditions } from "@/routes/knowledge/-components/template-studio-condition-source";
 import { isInputType } from "@/routes/knowledge/-components/template-studio-model";
 import {
-  useTemplateStudioStore,
   type StudioField,
+  useTemplateStudioStore,
 } from "@/routes/knowledge/-components/template-studio-store";
 import type { TemplateEditableField } from "@/routes/knowledge/-components/template-value-source";
 
@@ -71,7 +74,7 @@ export const TemplateStudioSelectionGesture = ({
   const [preview, setPreview] = useState<GestureInsertKind | null>(null);
   return (
     <div
-      className="bg-popover text-popover-foreground absolute z-50 flex max-h-[min(26rem,80vh)] max-w-[min(92vw,30rem,100%)] flex-col overflow-y-auto rounded-lg border p-1 shadow-lg/5 transition-opacity duration-100 starting:opacity-0"
+      className="bg-popover text-popover-foreground absolute z-50 flex max-h-[min(26rem,80dvh)] max-w-[min(92vw,30rem,100%)] flex-col overflow-y-auto rounded-lg border p-1 shadow-lg/5 transition-opacity duration-100 starting:opacity-0"
       role="group"
       style={{
         left: gesture.left,
@@ -288,6 +291,7 @@ export const useTemplateStudioSelectionGesture = ({
   });
   const enrichSeqRef = useRef(0);
 
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- react/exhaustive-deps cannot see compiler memoization, and this value is an effect dependency
   const hideGesture = useCallback(() => {
     enrichSeqRef.current += 1;
     gestureRef.current = null;
@@ -401,7 +405,15 @@ export const useTemplateStudioSelectionGesture = ({
       return;
     }
     if (error) {
-      getAnalytics().captureError(error);
+      getAnalytics().captureError(toAPIError(error), {
+        fingerprintKey:
+          "useTemplateStudioSelectionGesture.fetchGestureSuggestion:failure",
+        scope: {
+          type: "handler",
+          handlerId:
+            "useTemplateStudioSelectionGesture.fetchGestureSuggestion:failure",
+        },
+      });
       setEnrichment({ status: "idle" });
       return;
     }
@@ -438,7 +450,13 @@ export const useTemplateStudioSelectionGesture = ({
       if (sequence !== enrichSeqRef.current) {
         return;
       }
-      getAnalytics().captureError(error);
+      getAnalytics().captureError(error, {
+        fingerprintKey: "useTemplateStudioSelectionGesture:failure",
+        scope: {
+          type: "handler",
+          handlerId: "useTemplateStudioSelectionGesture:failure",
+        },
+      });
       setEnrichment({ status: "idle" });
       notifyUserError(error, t("errors.actionFailed"));
     });
@@ -687,7 +705,7 @@ const GestureInsertPreview = ({ kind }: { kind: GestureInsertKind }) => {
             marker={
               <span>
                 {GESTURE_PREVIEW_SAMPLE.fieldBefore}
-                <code className="bg-primary/10 text-primary rounded px-1 py-0.5 text-xs">
+                <code className="bg-primary/10 text-primary rounded-sm px-1 py-0.5 text-xs">
                   {GESTURE_PREVIEW_SAMPLE.fieldMarker}
                 </code>
                 {GESTURE_PREVIEW_SAMPLE.fieldAfter}
@@ -857,11 +875,14 @@ const GestureSplitRow = ({
                 variant="ghost"
               >
                 <OptionIcon className="text-muted-foreground size-3.5 shrink-0" />
-                <span className="min-w-0 truncate">{option.label}</span>
+                <TruncatedText>{option.label}</TruncatedText>
                 {option.sublabel === undefined ? null : (
-                  <code className="text-muted-foreground text-3xs ms-auto min-w-0 truncate">
+                  <TruncatedText
+                    className="text-muted-foreground text-3xs ms-auto"
+                    render={<code />}
+                  >
                     {option.sublabel}
-                  </code>
+                  </TruncatedText>
                 )}
               </Button>
             );
@@ -889,10 +910,7 @@ const GestureAiRow = ({
   if (enrichment.status !== "ready") {
     return (
       <div className="flex h-8 items-center px-2.5">
-        <span
-          aria-hidden="true"
-          className="bg-muted h-1.5 w-16 animate-pulse rounded-full"
-        />
+        <Skeleton className="h-1.5 w-16 rounded-full" />
       </div>
     );
   }
@@ -921,11 +939,10 @@ const GestureAiRow = ({
       onClick={onAcceptAi}
       onMouseDown={keepEditorFocus}
       size="sm"
-      title={label}
       variant="ghost"
     >
       <TypeIcon className="size-3.5 shrink-0" />
-      <span className="min-w-0 truncate">{label}</span>
+      <TruncatedText>{label}</TruncatedText>
       <AiActionIcon className="ms-auto size-3.5 shrink-0" />
     </Button>
   );

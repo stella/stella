@@ -1,24 +1,67 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import {
+  mkdtemp,
+  readFile,
+  rm,
+  stat,
+  truncate,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { readCapabilityCatalog } from "./capability-catalog-data.js";
+import { parseCapabilityCatalog } from "./capability-catalog-load.js";
+import { projectDeploymentCommands } from "./deployment-command-projection.js";
+import { projectFeatureCommands } from "./feature-command-projection.js";
+import { CLI_VERSION } from "./generated/cli-version.js";
 import { generatedRouteMap } from "./generated/route-map.js";
+import { generatedToolAnnotations } from "./generated/tool-annotations.js";
 import { McpClientError } from "./mcp-client.js";
 import {
   CACHE_SCHEMA_VERSION,
   cachePathFor,
   readCacheFile,
-  writeCacheFile,
   type RegistryCacheFile,
+  writeCacheFile,
 } from "./registry-cache.js";
+import {
+  PROJECTION_TTL_MS,
+  projectionCachePath,
+  readProjectionCache,
+  writeProjectionCache,
+} from "./registry-projection-cache.js";
 import {
   type CurrentRegistry,
   refreshRegistryCache,
   resolveCommandTree,
 } from "./registry-refresh.js";
+import {
+  MAX_LISTING_BYTES,
+  validateFetchedToolsList,
+} from "./registry-trust.js";
 import type { RegistryToolListing, RouteNode } from "./route-types.js";
+
+const repositoryCapabilityCatalog = readCapabilityCatalog();
+
+const capabilityCatalog = parseCapabilityCatalog(repositoryCapabilityCatalog);
+if (capabilityCatalog === null) {
+  panic("Invalid committed refresh-test capability catalog");
+}
+const gatedCapabilityIds = new Set(
+  capabilityCatalog
+    .filter((entry) => entry.featureAccess === "required")
+    .map(({ id }) => id),
+);
+const admittedFeatures = {
+  capabilities: capabilityCatalog
+    .filter((entry) => entry.featureId !== undefined)
+    .map(({ id }) => id),
+  tools: Object.entries(generatedToolAnnotations).flatMap(
+    ([name, annotation]) => (annotation.featureId === undefined ? [] : [name]),
+  ),
+};
 
 const ORIGIN = "https://api.example.com";
 const tempDirs: string[] = [];
@@ -59,6 +102,21 @@ const countLeavesOfKind = (
     count += countLeavesOfKind(child, kind);
   }
   return count;
+};
+
+const capabilityLeafIds = (node: RouteNode): string[] => {
+  switch (node.kind) {
+    case "capability-leaf":
+      return [node.spec.capabilityId];
+    case "leaf":
+      return [];
+    case "route":
+      return Object.values(node.children).flatMap(capabilityLeafIds);
+    default: {
+      node satisfies never;
+      return panic("Unexpected command node");
+    }
+  }
 };
 
 const curatedLeavesForTool = (
@@ -118,6 +176,8 @@ const writeCache = async (
     toolsListHash: "h",
     listings: [listing("list_matters")],
     delta: { added: [], removed: [], changed: [] },
+    featureOmittedTools: [],
+    featureOmittedCapabilities: [],
     ...over,
   };
   await writeCacheFile(filePath, file);
@@ -125,33 +185,142 @@ const writeCache = async (
 };
 
 describe("resolveCommandTree (S5.3)", () => {
-  test("no cache -> baked-in tree, no drift", async () => {
+  test("feature admission projects the caller tree without reporting registry drift", async () => {
     const env = await makeCacheEnv();
-    const { tree, drift, disabled } = await resolveCommandTree({
+    const toolName = "save_time_entry";
+    const spec = curatedLeavesForTool(generatedRouteMap, toolName).at(0);
+    if (spec?.featureId === undefined) {
+      panic("Missing real feature-gated command fixture");
+    }
+    const bakedTree = { kind: "leaf", spec } as const satisfies RouteNode;
+    const registry = await writeCache(env, {
+      listings: [
+        {
+          ...listing(toolName),
+          featureId: spec.featureId,
+          inputSchema: spec.inputSchema,
+        },
+      ],
+      delta: { added: [], removed: [], changed: [] },
+    });
+    for (const featureAccess of [
+      undefined,
+      { capabilities: [], tools: [] },
+      admittedFeatures,
+    ]) {
+      const resolved = await resolveCommandTree({
+        loadCatalog: () => capabilityCatalog,
+        serverOrigin: ORIGIN,
+        env,
+        registry,
+        bakedTree,
+        ...(featureAccess === undefined ? {} : { featureAccess }),
+      });
+      const visible = curatedLeavesForTool(resolved.tree, toolName);
+      expect(visible.length).toBe(featureAccess === admittedFeatures ? 1 : 0);
+      if (featureAccess === admittedFeatures) {
+        expect(visible.at(0)?.featureId).toBe(spec.featureId);
+        expect(visible.at(0)?.inputSchema).toEqual(spec.inputSchema);
+      }
+      expect(resolved.drift).toBeUndefined();
+    }
+  });
+
+  test("fresh admission metadata retains every emitted capability for an enrolled and granted caller", async () => {
+    const env = await makeCacheEnv();
+    const snapshot = validateFetchedToolsList(
+      await Bun.file(
+        new URL("generated/registry-snapshot.json", import.meta.url),
+      ).text(),
+    );
+    if (!snapshot.ok) {
+      panic(`Invalid committed refresh-test registry: ${snapshot.violation}`);
+    }
+    const outcome = await refreshRegistryCache({
+      serverOrigin: ORIGIN,
+      token: "admitted-caller",
+      env,
+      force: true,
+      bakedListings: snapshot.listings,
+      fetchRaw: okFetch(
+        JSON.stringify({
+          result: {
+            tools: snapshot.listings.map((entry) => {
+              const featureId = generatedToolAnnotations[entry.name]?.featureId;
+              return {
+                ...entry,
+                ...(featureId === undefined ? {} : { _meta: { featureId } }),
+              };
+            }),
+            _meta: { featureAccess: admittedFeatures },
+          },
+        }),
+        { featureOmittedTools: [], featureOmittedCapabilities: [] },
+      ),
+    });
+    if (outcome.status !== "refreshed") {
+      panic("Expected authenticated refresh fixture");
+    }
+    expect(outcome.featureAccess).toEqual(admittedFeatures);
+    const resolved = await resolveCommandTree({
+      loadCatalog: () => capabilityCatalog,
+      serverOrigin: ORIGIN,
+      env,
+      registry: outcome.registry,
+      ...(outcome.featureAccess === undefined
+        ? {}
+        : { featureAccess: outcome.featureAccess }),
+    });
+    expect(capabilityLeafIds(resolved.tree).toSorted()).toEqual(
+      capabilityLeafIds(generatedRouteMap).toSorted(),
+    );
+    expect(resolved.drift).toBeUndefined();
+  });
+
+  test("no cache hides deployment and caller feature commands without drift", async () => {
+    const env = await makeCacheEnv();
+    const { tree, drift } = await resolveCommandTree({
+      loadCatalog: () => capabilityCatalog,
       serverOrigin: ORIGIN,
       env,
     });
-    expect(tree).toBe(generatedRouteMap);
+    expect(tree).toEqual(
+      projectDeploymentCommands({
+        tree: projectFeatureCommands({
+          tree: generatedRouteMap,
+          featureAccess: undefined,
+        }),
+        featureOmittedTools: undefined,
+        featureOmittedCapabilities: undefined,
+      }),
+    );
     expect(drift).toBeUndefined();
-    expect(disabled).toEqual({ tools: [], capabilities: [] });
   });
 
-  test("feature-omitted tools and capabilities are reported as disabled for help and tools list", async () => {
+  test("feature-omitted tools and capabilities leave the command tree", async () => {
     const env = await makeCacheEnv();
     const registry = await writeCache(env, {
       featureOmittedTools: ["search_case_law", "get_usage"],
       featureOmittedCapabilities: ["usage.entitlement.get"],
     });
-    const { tree, disabled } = await resolveCommandTree({
+    const { tree } = await resolveCommandTree({
+      loadCatalog: () => capabilityCatalog,
       serverOrigin: ORIGIN,
       env,
       registry,
     });
-    expect(tree).toBe(generatedRouteMap);
-    expect(disabled).toEqual({
-      tools: ["search_case_law", "get_usage"],
-      capabilities: ["usage.entitlement.get"],
-    });
+    expect(tree).toEqual(
+      projectDeploymentCommands({
+        tree: projectFeatureCommands({
+          tree: generatedRouteMap,
+          featureAccess: undefined,
+        }),
+        featureOmittedTools: registry.featureOmittedTools,
+        featureOmittedCapabilities: registry.featureOmittedCapabilities,
+      }),
+    );
+    expect(curatedLeavesForTool(tree, "get_usage")).toHaveLength(0);
+    expect(capabilityLeafIds(tree)).not.toContain("usage.entitlement.get");
   });
 
   test("empty delta -> baked-in tree", async () => {
@@ -160,11 +329,17 @@ describe("resolveCommandTree (S5.3)", () => {
       delta: { added: [], removed: [], changed: [] },
     });
     const { tree, drift } = await resolveCommandTree({
+      loadCatalog: () => capabilityCatalog,
       serverOrigin: ORIGIN,
       env,
       registry,
     });
-    expect(tree).toBe(generatedRouteMap);
+    expect(tree).toEqual(
+      projectFeatureCommands({
+        tree: generatedRouteMap,
+        featureAccess: undefined,
+      }),
+    );
     expect(drift).toBeUndefined();
   });
 
@@ -175,6 +350,7 @@ describe("resolveCommandTree (S5.3)", () => {
       delta: { added: ["list_widgets"], removed: [], changed: [] },
     });
     const { tree, drift } = await resolveCommandTree({
+      loadCatalog: () => capabilityCatalog,
       serverOrigin: ORIGIN,
       env,
       registry,
@@ -196,6 +372,7 @@ describe("resolveCommandTree (S5.3)", () => {
       delta: { added: ["list_widgets"], removed: [], changed: [] },
     });
     const { tree } = await resolveCommandTree({
+      loadCatalog: () => capabilityCatalog,
       serverOrigin: ORIGIN,
       env,
       registry,
@@ -203,12 +380,13 @@ describe("resolveCommandTree (S5.3)", () => {
     expect(tree).not.toBe(generatedRouteMap);
     // The fetched curated tool is present...
     expect(countLeavesOfKind(tree, "leaf")).toBeGreaterThan(0);
-    // ...and the baked capability merge ran: the rebuilt tree carries the same
-    // capability leaves as the baked-in tree (they must never vanish on a
-    // registry divergence).
+    // Registry divergence preserves ordinary capability leaves; feature
+    // commands require this invocation's authenticated projection.
     const capabilityLeaves = countLeavesOfKind(tree, "capability-leaf");
     expect(capabilityLeaves).toBe(
-      countLeavesOfKind(generatedRouteMap, "capability-leaf"),
+      capabilityLeafIds(generatedRouteMap).filter(
+        (id) => !gatedCapabilityIds.has(id),
+      ).length,
     );
     expect(capabilityLeaves).toBeGreaterThan(200);
   });
@@ -228,6 +406,7 @@ describe("resolveCommandTree (S5.3)", () => {
     });
 
     const { tree } = await resolveCommandTree({
+      loadCatalog: () => capabilityCatalog,
       serverOrigin: ORIGIN,
       env,
       registry,
@@ -257,6 +436,7 @@ describe("resolveCommandTree (S5.3)", () => {
     });
 
     const { tree, drift } = await resolveCommandTree({
+      loadCatalog: () => capabilityCatalog,
       serverOrigin: ORIGIN,
       env,
       registry,
@@ -277,35 +457,37 @@ describe("resolveCommandTree (S5.3)", () => {
     });
 
     const { tree, drift } = await resolveCommandTree({
+      loadCatalog: () => capabilityCatalog,
       serverOrigin: ORIGIN,
       env,
       registry,
     });
 
-    expect(tree).toBe(generatedRouteMap);
+    expect(tree).toEqual(
+      projectFeatureCommands({
+        tree: generatedRouteMap,
+        featureAccess: undefined,
+      }),
+    );
     expect(drift).toBeUndefined();
   });
 
-  test("a feature-gated command stays in a diverged tree so the server can answer it", async () => {
+  test("a feature-omitted command stays hidden when the registry diverges", async () => {
     const env = await makeCacheEnv();
     const registry = await writeCache(env, {
       listings: [listing("list_matters"), listing("list_widgets")],
       delta: { added: ["list_widgets"], removed: [], changed: [] },
-      // `search_case_law` is baked but gated off in this deployment. Keeping the
-      // command means invoking it returns the server's feature_disabled with its
-      // real message, instead of the CLI claiming there is no such command.
       featureOmittedTools: ["search_case_law"],
     });
 
     const { tree } = await resolveCommandTree({
+      loadCatalog: () => capabilityCatalog,
       serverOrigin: ORIGIN,
       env,
       registry,
     });
 
-    expect(
-      curatedLeavesForTool(tree, "search_case_law").length,
-    ).toBeGreaterThan(0);
+    expect(curatedLeavesForTool(tree, "search_case_law")).toHaveLength(0);
   });
 
   test("a fully authorized omission does not restore a removed compound tool", async () => {
@@ -321,6 +503,7 @@ describe("resolveCommandTree (S5.3)", () => {
     });
 
     const { tree } = await resolveCommandTree({
+      loadCatalog: () => capabilityCatalog,
       serverOrigin: ORIGIN,
       env,
       registry,
@@ -341,6 +524,7 @@ describe("resolveCommandTree (S5.3)", () => {
     });
 
     const { tree } = await resolveCommandTree({
+      loadCatalog: () => capabilityCatalog,
       serverOrigin: ORIGIN,
       env,
       registry,
@@ -362,6 +546,7 @@ describe("resolveCommandTree (S5.3)", () => {
     });
 
     const { tree } = await resolveCommandTree({
+      loadCatalog: () => capabilityCatalog,
       serverOrigin: ORIGIN,
       env,
       registry,
@@ -380,11 +565,21 @@ describe("resolveCommandTree (S5.3)", () => {
     });
     // The cache path is keyed by ORIGIN's hash, so plant the mismatched file there.
     const { tree, drift } = await resolveCommandTree({
+      loadCatalog: () => capabilityCatalog,
       serverOrigin: ORIGIN,
       env,
       registry,
     });
-    expect(tree).toBe(generatedRouteMap);
+    expect(tree).toEqual(
+      projectDeploymentCommands({
+        tree: projectFeatureCommands({
+          tree: generatedRouteMap,
+          featureAccess: undefined,
+        }),
+        featureOmittedTools: undefined,
+        featureOmittedCapabilities: undefined,
+      }),
+    );
     expect(drift).toBeUndefined();
   });
 });
@@ -419,7 +614,6 @@ describe("refreshRegistryCache (S5.3/S5.5)", () => {
       serverOrigin: ORIGIN,
       token: "t",
       env,
-      fetchLatestVersion: async () => undefined,
       fetchRaw: okFetch(toolsBody(["list_matters"])),
       bakedListings: [listing("list_matters")],
     });
@@ -449,7 +643,6 @@ describe("refreshRegistryCache (S5.3/S5.5)", () => {
       token: "t",
       env,
       force: true,
-      fetchLatestVersion: async () => undefined,
       fetchRaw: okFetch(toolsBody(["list_matters", "list_widgets"]), {
         grantedScopes: ["stella:read", "stella:search"],
         scopeOmittedTools: ["save_filled_template"],
@@ -485,7 +678,6 @@ describe("refreshRegistryCache (S5.3/S5.5)", () => {
       token: "t",
       env,
       force: true,
-      fetchLatestVersion: async () => undefined,
       fetchRaw: okFetch(toolsBody(["list_matters"]), {
         grantedScopes: ["stella:read", "stella:search"],
         scopeOmittedTools: [],
@@ -510,11 +702,21 @@ describe("refreshRegistryCache (S5.3/S5.5)", () => {
       "time-entries.csv.export",
     ]);
     const { tree, drift } = await resolveCommandTree({
+      loadCatalog: () => capabilityCatalog,
       serverOrigin: ORIGIN,
       env,
     });
     expect(drift).toBeUndefined();
-    expect(tree).toBe(generatedRouteMap);
+    expect(tree).toEqual(
+      projectDeploymentCommands({
+        tree: projectFeatureCommands({
+          tree: generatedRouteMap,
+          featureAccess: undefined,
+        }),
+        featureOmittedTools: written?.featureOmittedTools,
+        featureOmittedCapabilities: written?.featureOmittedCapabilities,
+      }),
+    );
   });
 
   test("an unattested absence is still a removal (older self-hosted server)", async () => {
@@ -524,7 +726,6 @@ describe("refreshRegistryCache (S5.3/S5.5)", () => {
       token: "t",
       env,
       force: true,
-      fetchLatestVersion: async () => undefined,
       fetchRaw: okFetch(toolsBody(["list_matters"])),
       bakedListings: [listing("list_matters"), listing("search_case_law")],
     });
@@ -545,7 +746,6 @@ describe("refreshRegistryCache (S5.3/S5.5)", () => {
       token: "t",
       env,
       force: true,
-      fetchLatestVersion: async () => undefined,
       fetchRaw: okFetch(toolsBody(["list_matters"])),
       bakedListings: [listing("list_matters")],
     });
@@ -559,7 +759,6 @@ describe("refreshRegistryCache (S5.3/S5.5)", () => {
       token: "t",
       env,
       force: true,
-      fetchLatestVersion: async () => undefined,
       fetchRaw: okFetch(toolsBody(["Bad Name"])), // invalid tool name
       bakedListings: [listing("list_matters")],
     });
@@ -574,7 +773,6 @@ describe("refreshRegistryCache (S5.3/S5.5)", () => {
       token: "t",
       env,
       force: true,
-      fetchLatestVersion: async () => undefined,
       fetchRaw: errFetch(),
       bakedListings: [listing("list_matters")],
     });
@@ -591,7 +789,6 @@ describe("refreshRegistryCache (S5.3/S5.5)", () => {
       token: "t",
       env,
       force: true,
-      fetchLatestVersion: async () => undefined,
       fetchRaw: okFetch(toolsBody(["list_matters", "list_widgets"])),
       bakedListings: [listing("list_matters")],
     });
@@ -599,6 +796,7 @@ describe("refreshRegistryCache (S5.3/S5.5)", () => {
       throw new Error("Expected fresh registry");
     }
     const { tree } = await resolveCommandTree({
+      loadCatalog: () => capabilityCatalog,
       serverOrigin: ORIGIN,
       env,
       registry: outcome.registry,
@@ -637,8 +835,10 @@ describe("CLI update nudge (spec 051 addendum)", () => {
           ...(over.cliMinimum === undefined
             ? {}
             : { cliMinimum: over.cliMinimum }),
+          ...(over.npmLatest === undefined
+            ? {}
+            : { cliLatest: over.npmLatest }),
         }),
-        fetchLatestVersion: async () => over.npmLatest,
         bakedListings: [listing("list_matters")],
       }),
     };
@@ -652,7 +852,7 @@ describe("CLI update nudge (spec 051 addendum)", () => {
     expect(outcome).toMatchObject({
       status: "refreshed",
       deltaEmpty: true,
-      nudge: "stella 0.1.0 -> 0.2.0 available; npm i -g @stll/cli",
+      nudge: "update available: 0.1.0 -> 0.2.0, run npm i -g @stll/cli@latest",
     });
     // The anti-nag key is persisted for the next refresh.
     const written = await readCacheFile(cachePathFor(ORIGIN, env));
@@ -695,7 +895,7 @@ describe("CLI update nudge (spec 051 addendum)", () => {
     expect(outcome.status).toBe("refreshed");
     if (outcome.status === "refreshed") {
       expect(outcome.nudge).toBe(
-        "stella 0.1.0 is no longer supported (server requires >= 0.2.0); upgrade with: npm i -g @stll/cli",
+        "this CLI is too old for this server: 0.1.0 < 0.2.0; run npm i -g @stll/cli@latest",
       );
     }
   });
@@ -707,7 +907,7 @@ describe("CLI update nudge (spec 051 addendum)", () => {
     });
     expect(outcome.status).toBe("refreshed");
     if (outcome.status === "refreshed") {
-      expect(outcome.nudge).toContain("no longer supported");
+      expect(outcome.nudge).toContain("too old for this server");
     }
   });
 
@@ -719,4 +919,129 @@ describe("CLI update nudge (spec 051 addendum)", () => {
     });
     expect(outcome).toMatchObject({ status: "refreshed", deltaEmpty: true });
   });
+});
+
+describe("trusted projections survive separate invocations", () => {
+  test("cache hits skip fetch, expiry refetches, corrupt or untrusted data recovers", async () => {
+    const env = await makeCacheEnv();
+    const configDir = env.XDG_CACHE_HOME;
+    const now = 1_800_000_000_000;
+    let fetches = 0;
+    const fetchRaw = async () => {
+      fetches += 1;
+      return await okFetch(toolsBody(["list_matters"]), {
+        featureOmittedTools: ["list_time_entries"],
+      })();
+    };
+    const options = {
+      serverOrigin: ORIGIN,
+      token: "credential-a",
+      configDir,
+      env,
+      now,
+      fetchRaw,
+      bakedListings: [listing("list_matters")],
+    };
+    const first = await refreshRegistryCache(options);
+    const hit = await refreshRegistryCache(options);
+    expect(first.status).toBe("refreshed");
+    expect(hit).toEqual(first);
+    expect(fetches).toBe(1);
+    await refreshRegistryCache({ ...options, now: now + PROJECTION_TTL_MS });
+    expect(fetches).toBe(2);
+    const filePath = projectionCachePath({
+      ...options,
+      currentVersion: CLI_VERSION,
+    });
+    expect((await stat(filePath)).mode % 0o1000).toBe(0o600);
+    expect((await stat(path.dirname(filePath))).mode % 0o1000).toBe(0o700);
+    await writeFile(filePath, "{corrupt");
+    await refreshRegistryCache(options);
+    expect(fetches).toBe(3);
+    const saved: unknown = JSON.parse(await readFile(filePath, "utf-8"));
+    if (typeof saved !== "object" || saved === null || !("raw" in saved)) {
+      panic("Missing projection cache");
+    }
+    await writeFile(
+      filePath,
+      JSON.stringify({
+        ...saved,
+        raw: { rawBody: toolsBody(["bad tool name"]) },
+      }),
+    );
+    await refreshRegistryCache(options);
+    expect(fetches).toBe(4);
+  });
+
+  test("an oversized projection cache is rejected by size", async () => {
+    const env = await makeCacheEnv();
+    const filePath = path.join(env.XDG_CACHE_HOME, "oversized.json");
+    // A sparse file reports its size without occupying it.
+    await writeFile(filePath, "");
+    await truncate(filePath, MAX_LISTING_BYTES + 128 * 1024);
+    expect(await readProjectionCache(filePath, 1_800_000_000_000)).toEqual({
+      status: "invalid",
+    });
+  });
+
+  test("credentials, server URLs and CLI versions never share caller projections", async () => {
+    const env = await makeCacheEnv();
+    let fetches = 0;
+    const options = {
+      serverOrigin: ORIGIN,
+      token: "credential-a",
+      configDir: env.XDG_CACHE_HOME,
+      env,
+      now: 1_800_000_000_000,
+      fetchRaw: async () => {
+        fetches += 1;
+        return await okFetch(toolsBody(["list_matters"]))();
+      },
+      bakedListings: [listing("list_matters")],
+    };
+    await refreshRegistryCache(options);
+    await refreshRegistryCache({ ...options, token: "credential-b" });
+    await refreshRegistryCache({
+      ...options,
+      serverOrigin: "https://other.example",
+    });
+    await refreshRegistryCache({ ...options, currentVersion: "999.0.0" });
+    expect(fetches).toBe(4);
+    await refreshRegistryCache(options);
+    expect(fetches).toBe(4);
+  });
+});
+
+test("cached incompatible API protocol fails closed without fetching another registry", async () => {
+  const env = await makeCacheEnv();
+  const options = {
+    serverOrigin: ORIGIN,
+    token: "cached-protocol-token",
+    configDir: env.XDG_CACHE_HOME,
+    env,
+    now: 1_800_000_000_000,
+    currentVersion: CLI_VERSION,
+  };
+  const written = await writeProjectionCache({
+    filePath: projectionCachePath(options),
+    raw: { rawBody: toolsBody(["list_matters"]), apiProtocol: "999" },
+    now: options.now,
+  });
+  expect(written.isOk()).toBe(true);
+  let fetches = 0;
+  const outcome = await refreshRegistryCache({
+    ...options,
+    fetchRaw: async () => {
+      fetches += 1;
+      return await okFetch(toolsBody(["list_matters"]))();
+    },
+  });
+  expect(outcome).toEqual({
+    status: "incompatible",
+    cause: {
+      type: "protocol-incompatible",
+      message: "Server API protocol 999 is incompatible; this CLI supports 3.",
+    },
+  });
+  expect(fetches).toBe(0);
 });

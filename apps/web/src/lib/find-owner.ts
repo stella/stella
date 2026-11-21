@@ -1,7 +1,7 @@
-import type { RefObject } from "react";
+import { type RefObject, useLayoutEffect } from "react";
 
 import { matchesKeyboardEvent } from "@tanstack/react-hotkeys";
-import type { Hotkey } from "@tanstack/react-hotkeys";
+import type { HotkeyChord } from "@tanstack/react-hotkeys";
 
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
@@ -29,6 +29,23 @@ type FindSurface = {
 // older instance's cleanup delete the live one's registration. Nothing
 // subscribes: ownership is decided per key press, not per render.
 const surfaces = new LifecycleRegistry<symbol, FindSurface>();
+const modalBoundaries = new LifecycleRegistry<symbol, true>();
+
+/** Exclude app surfaces from find as soon as a lazy modal is opened. */
+export const useFindModalBoundary = (open: boolean): void => {
+  // The shell commits before the modal chunk arrives. A layout effect closes
+  // that gap before another key press, without waiting for DOM isolation.
+  useLayoutEffect(() => {
+    if (!open) {
+      return undefined;
+    }
+    const id = Symbol("find-modal-boundary");
+    modalBoundaries.set(id, true);
+    return () => {
+      modalBoundaries.delete(id);
+    };
+  }, [open]);
+};
 
 /**
  * The binding every surface answers, refreshed by each mounted surface from
@@ -36,7 +53,7 @@ const surfaces = new LifecycleRegistry<symbol, FindSurface>();
  * surface: one shortcut matched in one place is what stops a rebind from
  * leaving the panes listening for different keys.
  */
-let findHotkey: Hotkey = HOTKEYS.FIND;
+let findHotkey: HotkeyChord = HOTKEYS.FIND;
 
 /**
  * `offsetParent` is null while an inspector tab is CSS-hidden, which is how
@@ -90,7 +107,7 @@ const toCandidate = (
  * binding a listener is not how a surface takes part.
  */
 const handleFindKeyDown = (event: KeyboardEvent) => {
-  if (!matchesKeyboardEvent(event, findHotkey)) {
+  if (!matchesKeyboardEvent(event, findHotkey) || modalBoundaries.size !== 0) {
     return;
   }
 

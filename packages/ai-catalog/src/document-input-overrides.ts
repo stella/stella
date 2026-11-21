@@ -15,6 +15,30 @@ export type DocumentInputOverride = {
 export const DOCUMENT_INPUT_OVERRIDES: Partial<
   Record<OfferedBYOKModelId, DocumentInputOverride>
 > = {
+  "mistral-large-4": {
+    supported: false,
+    reason:
+      "2026-10-23: the TanStack Mistral adapter does not support PDF content " +
+      "parts; models.dev currently reports the pdf modality",
+  },
+  "mistral-large-latest": {
+    supported: false,
+    reason:
+      "2026-10-23: the TanStack Mistral adapter does not support PDF content " +
+      "parts; models.dev currently reports the pdf modality",
+  },
+  "mistral-medium-latest": {
+    supported: false,
+    reason:
+      "2026-10-23: the TanStack Mistral adapter does not support PDF content " +
+      "parts; models.dev currently reports the pdf modality",
+  },
+  "mistral-small-latest": {
+    supported: false,
+    reason:
+      "2026-10-23: the TanStack Mistral adapter does not support PDF content " +
+      "parts; models.dev currently reports the pdf modality",
+  },
   "gpt-5.4-mini": {
     supported: true,
     reason:

@@ -1,8 +1,13 @@
-import { defineConfig, devices } from "@playwright/test";
+import { defineConfig } from "@playwright/test";
 import path from "node:path";
+
+import { devices } from "@stll/playwright-tools/devices";
 
 const REPO_ROOT = path.resolve(import.meta.dirname, "../../..");
 const UI_PLAYGROUND_BASE_URL = "http://127.0.0.1:4175";
+/** The visual the dev server is probed and warmed on before any test runs. */
+export const UI_PLAYGROUND_WARM_VISUAL = "control-sizes";
+export const UI_PLAYGROUND_WARM_URL = `${UI_PLAYGROUND_BASE_URL}/dev?visual=${UI_PLAYGROUND_WARM_VISUAL}`;
 const IS_CI = process.env["CI"] !== undefined;
 
 const sharedUse = {
@@ -15,16 +20,34 @@ const sharedUse = {
 } as const;
 
 export default defineConfig({
+  reporter: process.env["CI"]
+    ? [
+        ["dot"],
+        [
+          "json",
+          {
+            outputFile:
+              process.env["PLAYWRIGHT_JSON_OUTPUT_FILE"] ??
+              ".cache/playwright-timings.json",
+          },
+        ],
+      ]
+    : [["list"]],
   testDir: "./ui-playground",
   // `*.visual.spec.ts` compares screenshots; `*.geometry.spec.ts` compares
   // measured boxes, which a screenshot cannot assert on and a unit test cannot
   // reach. Both run against the same playground routes, in the same projects.
   testMatch: "**/*.@(visual|geometry).spec.ts",
-  fullyParallel: false,
-  workers: 1,
+  // Every test loads its own page and shares nothing with the others, so they
+  // spread across workers. One page load on the dev server costs about 6 s,
+  // which made the single-worker run about 10 min long.
+  fullyParallel: true,
+  workers: 4,
   retries: 0,
-  // A clean Linux checkout compiles the shared app shell and focused route on
-  // the first visit; later theme projects reuse that graph and finish quickly.
+  // A clean checkout compiles the shared app shell on the first browser visit,
+  // which takes about two minutes on a CI runner. Global setup pays for that
+  // compile once, before any test starts, so no test's budget absorbs it.
+  globalSetup: "./ui-playground/global-setup.ts",
   timeout: 180_000,
   expect: { timeout: 120_000 },
   snapshotPathTemplate: path.join(
@@ -51,7 +74,7 @@ export default defineConfig({
   },
   webServer: {
     command: "bun run dev -- --host 127.0.0.1 --port 4175",
-    url: `${UI_PLAYGROUND_BASE_URL}/dev?visual=control-sizes`,
+    url: UI_PLAYGROUND_WARM_URL,
     reuseExistingServer: !IS_CI,
     timeout: 120_000,
   },

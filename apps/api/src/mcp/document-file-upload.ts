@@ -7,14 +7,17 @@ import {
   buildUploadFinalizeInput,
   DOCUMENT_VERSION_UPLOAD_TRANSPORT,
 } from "@stll/api-contract";
+import { MCP_CAPABILITY_EXECUTORS } from "@stll/api-contract/mcp-capability-executors";
+import { createSha256 } from "@stll/sha256/bun";
 
 import { captureError } from "@/api/lib/analytics/capture";
+import { safeOutboundFetchBytes } from "@/api/lib/auth/authorized-outbound-fetch";
 import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { putPresignedUpload } from "@/api/lib/s3-presign";
-import { safeOutboundFetchBytes } from "@/api/lib/safe-outbound-fetch";
 import { isRecord } from "@/api/lib/type-guards";
 import { CAPABILITY_TOOL_HANDLERS } from "@/api/mcp/capability-tools";
-import type { McpRequestContext } from "@/api/mcp/context";
+import { nullAsAbsent, uuidInputSchema } from "@/api/mcp/input-schemas";
 import { isMcpEgressPlan } from "@/api/mcp/tool-types";
 import type {
   InternalToolErrorResult,
@@ -22,10 +25,10 @@ import type {
 } from "@/api/mcp/tool-types";
 import {
   internalFailureResult,
-  nullAsAbsent,
+  structuredEgressPlan,
   structuredErrorResult,
-  uuidInputSchema,
 } from "@/api/mcp/tool-utils";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 
 export const DOCUMENT_UPLOAD_APP_RESOURCE_URI =
   DOCUMENT_VERSION_UPLOAD_TRANSPORT.resourceUri;
@@ -86,7 +89,6 @@ export const UPLOAD_DOCUMENT_VERSION_OUTPUT_SCHEMA = v.strictObject({
     fileId: v.string(),
     fileName: v.string(),
   }),
-  meta: v.optional(v.strictObject({ requestId: v.string() })),
 });
 
 export type UploadDocumentVersionInput = v.InferOutput<
@@ -102,9 +104,11 @@ const invokeCapability = async ({
   context,
 }: {
   args: Record<string, unknown>;
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
 }): Promise<CapabilityResult> => {
-  const response = await CAPABILITY_TOOL_HANDLERS.invoke_capability({
+  const response = await CAPABILITY_TOOL_HANDLERS[
+    MCP_CAPABILITY_EXECUTORS.write
+  ]({
     args,
     context,
   });
@@ -117,6 +121,7 @@ const invokeCapability = async ({
             new Error(
               "Upload capability returned an unexpected success result",
             ),
+            "mcp.uploadCapability.unexpectedResult",
           ),
         };
   }
@@ -125,6 +130,7 @@ const invokeCapability = async ({
       status: "error",
       result: internalFailureResult(
         new Error("Upload capability returned a non-structured egress plan"),
+        "mcp.uploadCapability.nonStructuredResult",
       ),
     };
   }
@@ -165,7 +171,7 @@ const abortReservation = async ({
   uploadId,
   workspaceId,
 }: {
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   uploadId: string;
   workspaceId: string;
 }): Promise<CapabilityResult> =>
@@ -218,7 +224,7 @@ const abortCreatedReservation = async ({
   uploadId,
   workspaceId,
 }: {
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   dependencies: DocumentFileUploadDependencies;
   uploadId: string;
   workspaceId: string;
@@ -229,11 +235,14 @@ const abortCreatedReservation = async ({
     catch: (cause) => cause,
   });
   if (Result.isError(aborted)) {
-    dependencies.captureCleanupFailure(aborted.error, {
-      source: "mcp_document_upload",
-      uploadId,
-      workspaceId,
-    });
+    dependencies.captureCleanupFailure(
+      aborted.error,
+      handlerErrorContext("abortCreatedReservation.aborted_error", {
+        source: "mcp_document_upload",
+        uploadId,
+        workspaceId,
+      }),
+    );
     return false;
   }
   if (aborted.value.status === "ok") {
@@ -244,11 +253,11 @@ const abortCreatedReservation = async ({
     new Error("Document upload reservation cleanup failed", {
       cause: aborted.value.result,
     }),
-    {
+    handlerErrorContext("abortCreatedReservation.failure", {
       source: "mcp_document_upload",
       uploadId,
       workspaceId,
-    },
+    }),
   );
   return false;
 };
@@ -274,7 +283,7 @@ export const uploadRemoteDocumentVersion = async ({
   file,
   workspaceId,
 }: {
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   dependencies?: DocumentFileUploadDependencies;
   entityId: string;
   file: UploadDocumentVersionInput["file"];
@@ -284,8 +293,19 @@ export const uploadRemoteDocumentVersion = async ({
     v.InferInput<typeof UPLOAD_DOCUMENT_VERSION_OUTPUT_SCHEMA>
   >
 > => {
+  const permit = context.thirdPartyOutboundPermit;
+  if (permit === undefined) {
+    return structuredErrorResult({
+      code: "permission_denied",
+      message:
+        "This tool reaches a third-party service and runs only as a direct tool call",
+      hint: "Call the tool directly instead of from a script.",
+    });
+  }
+
   const downloaded = await dependencies.download({
     maxBytes: FILE_SIZE_LIMIT_BYTES.document,
+    permit,
     timeoutMs: 60_000,
     url: file.download_url,
   });
@@ -304,7 +324,7 @@ export const uploadRemoteDocumentVersion = async ({
   }
 
   const bytes = new Uint8Array(downloaded.value.body);
-  const sha256Hex = new Bun.CryptoHasher("sha256").update(bytes).digest("hex");
+  const sha256Hex = createSha256().update(bytes).digest("hex");
   const name = (file.file_name ?? file.file_id).slice(0, 255);
   const created = await dependencies.invoke({
     context,
@@ -340,6 +360,7 @@ export const uploadRemoteDocumentVersion = async ({
     }
     return internalFailureResult(
       new Error("uploads.create returned an invalid reservation"),
+      "mcp.documentUpload.invalidReservation",
     );
   }
 
@@ -380,11 +401,11 @@ export const uploadRemoteDocumentVersion = async ({
   if (!parsedFinalized.success) {
     return internalFailureResult(
       new Error("uploads.update returned an invalid entity-version result"),
+      "mcp.documentUpload.invalidFinalizedResult",
     );
   }
-  return {
-    egress: "structured",
-    payload: parsedFinalized.output,
+  return structuredEgressPlan({
+    payload: { finalizedResult: parsedFinalized.output.finalizedResult },
     textFields: [],
-  };
+  });
 };

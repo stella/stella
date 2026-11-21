@@ -6,50 +6,25 @@ import type { Transaction } from "@/api/db/root";
 import type { SafeDb, SafeDbError, SafeDbOrTx } from "@/api/db/safe-db";
 import { withScopedTx } from "@/api/db/safe-db";
 import { chatMessages } from "@/api/db/schema";
-import {
-  chatMessageFromPersisted,
-  toChatMessageContent,
-} from "@/api/handlers/chat/chat-message-parts";
 import type { ChatThreadCompactionCheckpoint } from "@/api/handlers/chat/persistent-compaction";
 import {
   decodeChatCompactionDeltaCursor,
   readLatestChatCompactionOnTx,
 } from "@/api/handlers/chat/persistent-compaction";
 import type {
-  ChatMessageContent,
   ChatMessageRole,
   PersistedChatMessageContent,
 } from "@/api/handlers/chat/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { chatMessageCursorCodec } from "@/api/lib/chat/message-cursor";
+import { readChatCopyProjection } from "@/api/lib/chat/withdrawn-copies";
 import type { TimestampIdCursor } from "@/api/lib/db-pagination";
 import { LIMITS } from "@/api/lib/limits";
 
 export type WindowedThreadMessage = {
   id: SafeId<"chatMessage">;
   role: ChatMessageRole;
-  content: ChatMessageContent;
-};
-
-/**
- * Normalize a stored row's content (which may be a legacy v1 payload) into the
- * canonical version-2 `ChatMessageContent` the rest of the chat pipeline reads.
- */
-const toWindowedMessage = (row: {
-  id: SafeId<"chatMessage">;
-  role: ChatMessageRole;
   content: PersistedChatMessageContent;
-}): WindowedThreadMessage => {
-  const message = chatMessageFromPersisted(row);
-  return {
-    id: row.id,
-    role: row.role,
-    content: toChatMessageContent({
-      data: message.parts,
-      ...(message.metadata === undefined ? {} : { metadata: message.metadata }),
-      version: 2,
-    }),
-  };
 };
 
 /**
@@ -91,6 +66,7 @@ export const EMPTY_CHAT_HISTORY_SNAPSHOT: ChatHistorySnapshot = {
 };
 
 type LoadWindowedThreadMessagesOnTxArgs = {
+  caseLawDb?: Parameters<typeof readChatCopyProjection>[0]["caseLawDb"];
   tx: Transaction;
   threadId: SafeId<"chatThread">;
   /** Upper bound on rows read; defaults to the per-send history window. */
@@ -124,10 +100,11 @@ const loadWindowedThreadHistoryOnTx = async ({
   threadId,
   limit = LIMITS.chatSendHistoryWindowMax,
   checkpoint,
+  caseLawDb,
 }: LoadWindowedThreadMessagesOnTxArgs): Promise<WindowedThreadHistory> => {
   const resolvedCheckpoint =
     checkpoint === undefined
-      ? await readLatestChatCompactionOnTx({ threadId, tx })
+      ? await readLatestChatCompactionOnTx({ threadId, tx, caseLawDb })
       : checkpoint;
   const cursor = decodeChatCompactionDeltaCursor(resolvedCheckpoint);
 
@@ -158,9 +135,17 @@ const loadWindowedThreadHistoryOnTx = async ({
     .orderBy(desc(chatMessages.createdAt), desc(chatMessages.id))
     .limit(limit);
 
-  const ascending = rows.toReversed();
+  const { projection, subjectByThread } = await readChatCopyProjection({
+    tx,
+    threadIds: [threadId],
+    values: rows,
+    caseLawDb,
+  });
+  const ascending = rows
+    .toReversed()
+    .map((row) => projection.chat(row, subjectByThread.get(threadId)));
   return {
-    messages: ascending.map(toWindowedMessage),
+    messages: ascending,
     snapshot: {
       rows: ascending.map(({ id, version }) => ({ id, version })),
       scope: windowScope({ ascending, cursor, limit }),
@@ -199,6 +184,7 @@ export const loadWindowedThreadHistory = async ({
   threadId,
   limit,
   checkpoint,
+  caseLawDb,
   ...handle
 }: LoadWindowedThreadMessagesArgs): Promise<
   Result<WindowedThreadHistory, SafeDbError>
@@ -211,6 +197,7 @@ export const loadWindowedThreadHistory = async ({
         threadId,
         limit,
         checkpoint,
+        caseLawDb,
       }),
   );
 
@@ -445,7 +432,7 @@ export const resolveTruncationTarget = async ({
       .orderBy(asc(chatMessages.createdAt), asc(chatMessages.id));
 
     return {
-      messagesForPersistence: retainedPrefix.map(toWindowedMessage),
+      messagesForPersistence: retainedPrefix,
       deleteMessageIdsBeforeLatest: idsAfterTarget.map((row) => row.id),
       hasLaterUserMessage: idsAfterTarget.some((row) => row.role === "user"),
       // Exactly the rows every decision above came from, so whenever the

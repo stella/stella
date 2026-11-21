@@ -8,18 +8,18 @@ import {
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
 import {
-  DESTRUCTIVE_EFFECT_CHUNK_INSERT_BATCH_SIZE,
-  DESTRUCTIVE_EFFECT_LEGACY_STALE_PROCESSING_MS,
   assertValidS3DeletionEffectChunk,
   consumeInBatches,
   createS3DeletionEffectChunks,
+  DESTRUCTIVE_EFFECT_CHUNK_INSERT_BATCH_SIZE,
+  DESTRUCTIVE_EFFECT_LEGACY_STALE_PROCESSING_MS,
   getDestructiveEffectRetryDelayMs,
 } from "@/api/lib/destructive-effect-chunks";
 import { createEffectLease } from "@/api/lib/effect-lease";
 import type { EffectLease } from "@/api/lib/effect-lease";
 
 export const ENTITY_DELETION_EFFECT_KIND = "entity-deletion-s3" as const;
-export const ENTITY_DELETION_EFFECT_LEASE_MS = 15 * 60_000;
+const ENTITY_DELETION_EFFECT_LEASE_MS = 15 * 60_000;
 const RECOVERY_STATE_LIMIT = 50;
 
 export type EntityDeletionEffectClaim = {

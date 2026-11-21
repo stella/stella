@@ -2,6 +2,8 @@ import { toolDefinition } from "@tanstack/ai";
 import { Result } from "better-result";
 import * as v from "valibot";
 
+import { markdownToStellaDocx } from "@stll/docx-authoring/markdown";
+
 import { safeDbFromScoped } from "@/api/db/safe-db";
 import type { SafeDbError, ScopedDb } from "@/api/db/safe-db";
 import { CREATE_MATTER_DOCUMENT_TOOL_NAME } from "@/api/handlers/chat/tools/native-chat-tool-names";
@@ -12,7 +14,6 @@ import { captureError } from "@/api/lib/analytics/capture";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
-import { markdownToStellaDocx } from "@/api/lib/docx-authoring/from-markdown";
 import {
   authorizeDocumentWrite,
   documentWriteRefusalChatToolError,
@@ -22,6 +23,7 @@ import type {
   CreateDocumentOperation,
   DocumentWriteAccess,
 } from "@/api/lib/entities/authorize-document-write";
+import { CALLER_AUTHORIZED } from "@/api/lib/entities/buffer-write-authority";
 import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
 import { ChatToolError, unreachable } from "@/api/lib/errors/tagged-errors";
 import { serverBuiltFileEncryption } from "@/api/lib/files/detect-file-encryption";
@@ -30,6 +32,7 @@ import {
   organizationFileUsageHandlerError,
 } from "@/api/lib/files/organization-file-usage";
 import { LIMITS } from "@/api/lib/limits";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { sanitizeFilenamePreservingExtension } from "@/api/lib/sanitize-filename";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
@@ -194,9 +197,15 @@ export const createCreateWorkspaceDocumentTools = ({
 
     const docxResult = await markdownToStellaDocx(markdown);
     if (Result.isError(docxResult)) {
-      captureError(docxResult.error, {
-        source: "create_matter_document",
-      });
+      captureError(
+        docxResult.error,
+        handlerErrorContext(
+          "tools.createCreateWorkspaceDocumentTools.docxResult_error",
+          {
+            source: "create_matter_document",
+          },
+        ),
+      );
       throw new ChatToolError({
         kind: "server-defect",
         message: "The document body could not be converted to DOCX.",
@@ -223,6 +232,7 @@ export const createCreateWorkspaceDocumentTools = ({
     }
 
     const created = await createEntity({
+      authority: CALLER_AUTHORIZED,
       scopedDb,
       organizationId,
       workspaceId: authorized.value.operation.workspaceId,

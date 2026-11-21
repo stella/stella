@@ -5,7 +5,9 @@
  * never read as one.
  */
 
-import type { ParagraphRole } from "@/api/handlers/case-law/document-ast";
+// parser-output-unchanged: imports the document AST from its package owner
+import type { ParagraphRole } from "@stll/legal-ast/document-ast";
+
 import type { OpinionType } from "@/api/handlers/case-law/ingestion/adapters/courtlistener/vocabulary";
 
 type BodyClass = Extract<
@@ -87,8 +89,6 @@ const domClass = (domType: string | null): ClassDeclaration | null =>
 
 type UnitClass = {
   readonly body: BodyClass;
-  /** The element states a class of its own. */
-  readonly structural: boolean;
   /** Row and element state different classes; the body stays unknown. */
   readonly conflict: boolean;
   /** The unit may be read as the principal text, not a separate opinion. */
@@ -114,7 +114,6 @@ export const unitClass = (
   if (unrecognizedOpinionType(domType) !== null || position === "sibling") {
     return {
       body: "unknown",
-      structural: false,
       conflict: true,
       principal: false,
     };
@@ -122,7 +121,6 @@ export const unitClass = (
   if (position === "nested") {
     return {
       body: dom?.body ?? "unknown",
-      structural: dom !== null,
       conflict: false,
       principal: false,
     };
@@ -131,7 +129,6 @@ export const unitClass = (
   if (dom === null) {
     return {
       body: row.body,
-      structural: false,
       conflict: false,
       principal: !row.separate,
     };
@@ -139,7 +136,6 @@ export const unitClass = (
   if (row.body === "unknown") {
     return {
       body: dom.body,
-      structural: true,
       conflict: false,
       principal: !dom.separate,
     };
@@ -147,7 +143,6 @@ export const unitClass = (
   const conflict = row.body !== dom.body || row.separate !== dom.separate;
   return {
     body: conflict ? "unknown" : dom.body,
-    structural: true,
     conflict,
     principal: !conflict && !dom.separate,
   };

@@ -237,7 +237,7 @@ const omittedKeysOf = (typeNode, localTypes, open = new Set()): string[] => {
   if (typeNode === null || typeNode === undefined) {
     return [];
   }
-  // Redundant type parentheses do not survive oxfmt, so no committed file can
+  // Redundant type parentheses do not survive bun fmt, so no committed file can
   // carry one; unwrapping keeps the walk right on unformatted input.
   if (typeNode.type === "TSParenthesizedType") {
     return omittedKeysOf(typeNode.typeAnnotation, localTypes, open);

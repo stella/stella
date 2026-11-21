@@ -17,7 +17,9 @@
  */
 
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
+
+import { markdownToStellaDocument } from "@stll/docx-authoring/markdown";
 
 import { normalizePersistedChatMessageContent } from "@/api/handlers/chat/chat-message-parts";
 import {
@@ -34,8 +36,8 @@ import { createChatExportDocx } from "@/api/handlers/chat/export/create-chat-exp
 import {
   assembleMessageMarkdown,
   buildChatExportDownload,
-  composePersistedSearchSummaryMarkdown,
   composeExportMarkdown,
+  composePersistedSearchSummaryMarkdown,
   extractPersistedSearchSummarySources,
   type PersistedSearchSummarySources,
 } from "@/api/handlers/chat/export/export-shared";
@@ -44,11 +46,14 @@ import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { auditedPresignDownload } from "@/api/lib/audited-download";
-import { tSafeId } from "@/api/lib/custom-schema";
-import { markdownToStellaDocument } from "@/api/lib/docx-authoring/from-markdown";
+import { ownerSyntheticSessionAuthorityReader } from "@/api/lib/auth";
+import { formatCourtParagraphMark } from "@/api/lib/case-law/court-paragraph-mark";
+import { readChatExportSource } from "@/api/lib/chat/export-source";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { extractLangFromRequest } from "@/api/lib/locale";
 import { writeS3ObjectWithRetry } from "@/api/lib/s3";
+import { callerDownloadSource } from "@/api/lib/s3-presign";
 import { sanitizeFilenamePreservingExtension } from "@/api/lib/sanitize-filename";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
@@ -91,6 +96,7 @@ const onlySourceDocumentTitle = (
 };
 
 const config = {
+  contract: "patch",
   accountAccess: ACCOUNT_ACCESS.standard,
   contentDelivery: { type: "audited" },
   description:
@@ -103,18 +109,12 @@ const config = {
     reason: "assistant_chat",
     consumesServices: false,
   },
-  params: t.Object({ threadId: tSafeId("chatThread") }),
-  query: t.Object({ workspaceId: t.Optional(tSafeId("workspace")) }),
-  body: t.Object({
-    messageId: tSafeId("chatMessage"),
-    // Discriminators are threaded through explicitly (no hidden default). DOCX
-    // is the only Phase 1 format; PDF is deferred.
-    format: t.Literal("docx"),
-    citationStyle: t.Union([
-      t.Literal("footnotes"),
-      t.Literal("inline"),
-      t.Literal("none"),
-    ]),
+  params: v.object({ threadId: resourceIdSchema("chatThread") }),
+  query: v.object({ workspaceId: v.optional(resourceIdSchema("workspace")) }),
+  body: v.object({
+    messageId: resourceIdSchema("chatMessage"),
+    format: v.literal("docx"),
+    citationStyle: v.picklist(["footnotes", "inline", "none"]),
   }),
 } satisfies HandlerConfig;
 
@@ -131,22 +131,14 @@ const createMessageExport = createSafeRootHandler(
     session,
     user,
   }) {
-    const scope = yield* resolveChatScope({ getWorkspaceAccess, workspaceId });
+    const scope = yield* resolveChatScope({
+      admitted: "active-or-archived",
+      getWorkspaceAccess,
+      workspaceId,
+    });
 
     const thread = yield* Result.await(
-      safeDb(
-        async (tx) =>
-          await tx.query.chatThreads.findFirst({
-            where: { id: { eq: threadId }, userId: { eq: user.id } },
-            columns: { title: true, workspaceId: true },
-            with: {
-              messages: {
-                where: { id: { eq: messageId } },
-                columns: { content: true, role: true },
-              },
-            },
-          }),
-      ),
+      readChatExportSource({ safeDb, threadId, messageId, userId: user.id }),
     );
     if (!thread) {
       return Result.err(
@@ -216,6 +208,11 @@ const createMessageExport = createSafeRootHandler(
             citationStyle,
             {
               folioSourceTitle: onlySourceDocumentTitle(trustedSourceDocuments),
+              formatParagraphMark: (courtParagraphNumber) =>
+                formatCourtParagraphMark(
+                  citationLabels.locale,
+                  courtParagraphNumber,
+                ),
               internalCitationFallback: citationLabels.citation,
               internalReferenceMode: internalReferenceModeFor(
                 persistedSearchSources,
@@ -266,6 +263,7 @@ const createMessageExport = createSafeRootHandler(
         catch: (cause) =>
           new HandlerError({
             status: 502,
+            code: "internal_error",
             message: "The exported document could not be stored.",
             cause,
           }),
@@ -276,10 +274,13 @@ const createMessageExport = createSafeRootHandler(
       safeDb(
         async (tx) =>
           await auditedPresignDownload({
+            readSessionAuthority: ownerSyntheticSessionAuthorityReader,
             tx,
             recordAuditEvent,
             resourceType: AUDIT_RESOURCE_TYPE.CHAT_MESSAGE,
             resourceId: messageId,
+            userId: user.id,
+            source: callerDownloadSource(session),
             s3Key: key,
             s3Keyspace: "exports",
             expiresInSeconds: CHAT_EXPORT_URL_TTL_SECONDS,

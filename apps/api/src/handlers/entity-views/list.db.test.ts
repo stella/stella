@@ -1,15 +1,19 @@
 import { panic } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { inArray } from "drizzle-orm";
-import { ElysiaCustomStatusResponse } from "elysia/error";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { entityViews } from "@/api/db/schema";
 import { createSafeDb } from "@/api/db/scoped";
+import { HttpStatusResponse } from "@/api/http/status";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ViewLayout } from "@/api/lib/views-schema";
-import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
+import {
+  createTestHandlerContext,
+  NO_AUDIT,
+  NO_DB,
+} from "@/api/tests/helpers/handler-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -49,6 +53,8 @@ const contextFor = (
   userId: SafeId<"user">,
 ) =>
   createTestHandlerContext<Parameters<typeof listViews.handler>[0]>({
+    audit: NO_AUDIT,
+    scopedDb: NO_DB,
     session: { activeOrganizationId: organizationId },
     user: { id: userId },
     safeDb: asTestRaw<SafeDb>(createSafeDb(testDb, [], organizationId, userId)),
@@ -86,8 +92,8 @@ describe("entity view owner isolation", () => {
     await testDb.insert(entityViews).values(rows);
 
     const result = await listViews.handler(contextFor(ids.orgA, ids.userA1));
-    expect(result).not.toBeInstanceOf(ElysiaCustomStatusResponse);
-    if (result instanceof ElysiaCustomStatusResponse) {
+    expect(result).not.toBeInstanceOf(HttpStatusResponse);
+    if (result instanceof HttpStatusResponse) {
       panic("Expected the entity view list");
     }
     expect(result.items.map((view) => view.name)).toEqual(["A private"]);

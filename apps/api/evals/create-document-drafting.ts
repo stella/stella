@@ -37,6 +37,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import * as v from "valibot";
 
+import { createDocumentInputSchema } from "@stll/api-contract/chat-create-document";
 import { compileLegalSourceToDocument } from "@stll/docx-core";
 import type {
   BlockContent,
@@ -45,15 +46,13 @@ import type {
   Paragraph,
 } from "@stll/docx-core";
 
-import {
-  createCreateDocumentTool,
-  createDocumentToolInputSchema,
-} from "@/api/handlers/chat/tools/create-document-tool";
+import { createCreateDocumentTool } from "@/api/handlers/chat/tools/create-document-tool";
 import { resolveCaching } from "@/api/lib/ai-config";
 import {
   streamChatChunks,
   toolCallEndInputOf,
 } from "@/api/lib/chat/tanstack-chat-runtime";
+import { NO_ORGANIZATION_MODEL_DISPATCH } from "@/api/lib/rate-limit/model-dispatch-admission";
 import {
   mergeGenerationOptions,
   systemPromptsPatch,
@@ -261,7 +260,7 @@ const runModelTurn = async (
 ): Promise<ModelTurn> => {
   const caching = resolveCaching({
     promptCachingEnabled: false,
-    role: "fast",
+    task: "short-text",
     scopeKey: null,
   });
   let finalText = "";
@@ -271,6 +270,7 @@ const runModelTurn = async (
     timeoutMs: MODEL_REQUEST_TIMEOUT_MS,
     chat: (abortController) =>
       streamChatChunks({
+        threadId: Bun.randomUUIDv7(),
         abortController,
         adapter: model.adapter,
         messages: [{ role: "user", content: prompt }],
@@ -338,7 +338,7 @@ const parseJsonOrNull = (text: string): unknown => {
 const readToolInput = (
   input: unknown,
 ): { name: string; source: string } | null => {
-  const parsed = v.safeParse(createDocumentToolInputSchema, input);
+  const parsed = v.safeParse(createDocumentInputSchema, input);
   return parsed.success ? parsed.output : null;
 };
 
@@ -419,11 +419,17 @@ const collectParagraphs = (
       case "blockSdt":
       case "blockCustomXml":
         return collectParagraphs(block.content, tableHeader);
-      // Hold no paragraph: opaque preserved markup and bookmark markers carry
-      // no runs, so this scorer has nothing to read in them.
+      // Hold no paragraph: opaque preserved markup, bookmark markers and move
+      // range markers carry no runs, so this scorer has nothing to read in them.
       case "preservedBlock":
       case "bookmarkStart":
       case "bookmarkEnd":
+      case "commentRangeStart":
+      case "commentRangeEnd":
+      case "moveFromRangeStart":
+      case "moveFromRangeEnd":
+      case "moveToRangeStart":
+      case "moveToRangeEnd":
         return [];
       default:
         block satisfies never;
@@ -656,12 +662,14 @@ const resolveModels = async (
     modelIds.map(async (id) => ({
       id,
       model: await resolveTanStackTextModel({
+        userId: null,
         modelId: id,
         orgAIConfig: null,
         dataClass: "customer",
         managedAIResidency: "eu",
-        role: "fast",
+        task: "short-text",
         organizationId: null,
+        admission: NO_ORGANIZATION_MODEL_DISPATCH,
       }),
     })),
   );

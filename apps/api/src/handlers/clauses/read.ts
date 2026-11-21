@@ -1,12 +1,17 @@
 import { Result } from "better-result";
 import { and, asc, desc, eq, ilike, or, sql } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
+
+import { numberFromString } from "@stll/api-contract/http-input";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { clauses } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { isClauseBody, normalizeClauseBody } from "@/api/lib/clauses/types";
-import { tPaginationCursor, tSafeId } from "@/api/lib/custom-schema";
+import {
+  paginationCursorSchema,
+  resourceIdSchema,
+} from "@/api/lib/custom-schema";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { escapeLike } from "@/api/lib/escape-like";
@@ -26,27 +31,36 @@ const clauseCursor = createTimestampIdCursorCodec({
 
 // ── List ────────────────────────────────────────────
 
-export const listClausesQuerySchema = t.Object({
-  categoryId: t.Optional(
-    tSafeId("clauseCategory", {
+export const listClausesQuerySchema = v.object({
+  categoryId: v.exactOptional(
+    resourceIdSchema("clauseCategory", {
       description: "List only clauses filed under this category (list mode)",
     }),
   ),
-  q: t.Optional(
-    t.String({
-      minLength: 1,
-      description:
+  q: v.exactOptional(
+    v.pipe(
+      v.string(),
+      v.minLength(1),
+      v.maxLength(LIMITS.searchQueryMaxLength),
+      v.description(
         "Filter clauses by a text query over title and body (list mode)",
-    }),
+      ),
+    ),
   ),
-  limit: t.Optional(
-    t.Integer({
-      minimum: 1,
-      maximum: LIMITS.clausesPageSizeMax,
-      description: "Max clauses to return",
-    }),
+  limit: v.exactOptional(
+    numberFromString(
+      v.pipe(
+        v.pipe(
+          v.number(),
+          v.integer(),
+          v.minValue(1),
+          v.maxValue(LIMITS.clausesPageSizeMax),
+        ),
+        v.description("Max clauses to return"),
+      ),
+    ),
   ),
-  cursor: t.Optional(tPaginationCursor()),
+  cursor: v.exactOptional(paginationCursorSchema()),
 });
 
 type ListClausesProps = {
@@ -68,7 +82,7 @@ type ListClausesProps = {
  *  terms — `non-compete` → `non:* & compete:*`, matching the FTS lexemes — rather
  *  than one mashed-together token; the separators are also `tsquery` operators
  *  that would otherwise throw. */
-export const toClausePrefixTsQuery = (raw: string): string =>
+const toClausePrefixTsQuery = (raw: string): string =>
   raw
     .split(/[^\p{L}\p{N}]+/u)
     .filter((term) => term.length > 0)

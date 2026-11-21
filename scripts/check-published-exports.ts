@@ -14,6 +14,7 @@
 // usage: bun scripts/check-published-exports.ts <package-dir>
 
 import { panic } from "better-result";
+import { existsSync, readdirSync } from "node:fs";
 import { mkdir, mkdtemp, realpath, rm, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -22,12 +23,17 @@ import { pathToFileURL } from "node:url";
 import {
   distEntryFiles,
   isDistModuleEntry,
+  isShippedAssetPatternEntry,
+  matchShippedAssetPattern,
+  shippedAssetPatternDirectory,
   toPublishedManifest,
 } from "./publish-manifest";
 import {
+  importMetaUrlTargets,
   isExpectedPublishedExportResolution,
   isOwnDistLoadFailure,
   isPublishedTestArtifact,
+  isShippedUrlTarget,
   resolvePublishedExport,
 } from "./published-export-guards";
 
@@ -180,16 +186,26 @@ try {
     );
   }
 
-  const bundledTestRuntimes = (
-    await Promise.all(
-      [...packed]
-        .filter((file) => file.startsWith("dist/") && file.endsWith(".js"))
-        .map(async (file) => ({
-          contents: await Bun.file(path.join(pkgDir, file)).text(),
-          file,
-        })),
-    )
-  )
+  const distModules = await Promise.all(
+    [...packed]
+      .filter((file) => file.startsWith("dist/") && file.endsWith(".js"))
+      .map(async (file) => ({
+        contents: await Bun.file(path.join(pkgDir, file)).text(),
+        file,
+      })),
+  );
+
+  for (const module of distModules) {
+    for (const target of importMetaUrlTargets(module)) {
+      if (!isShippedUrlTarget({ target, packed })) {
+        failures.push(
+          `${module.file}: new URL(…, import.meta.url) names ${target}, which the tarball does not ship`,
+        );
+      }
+    }
+  }
+
+  const bundledTestRuntimes = distModules
     .filter(({ contents }) =>
       /from\s*["'](?:node:|@playwright\/test|playwright)["']/u.test(contents),
     )
@@ -201,10 +217,64 @@ try {
     );
   }
 
+  // A shipped asset pattern names a directory of files rather than one file:
+  // every match must ship, at least one must exist, and a concrete specifier
+  // has to resolve through the export map to the matching file.
+  const checkShippedAssetPattern = async (
+    subpath: string,
+    pattern: string,
+  ): Promise<void> => {
+    const directory = shippedAssetPatternDirectory(pattern) ?? "";
+    const absolute = path.join(pkgDir, directory);
+    const matches = existsSync(absolute)
+      ? matchShippedAssetPattern(
+          pattern,
+          readdirSync(absolute, { withFileTypes: true })
+            .filter((dirent) => dirent.isFile())
+            .map((dirent) => dirent.name),
+        )
+      : [];
+    const [probe] = matches;
+    if (probe === undefined) {
+      failures.push(`${subpath}: matches no file in ${directory}/`);
+      return;
+    }
+    const unshipped = matches.filter((file) => !packed.has(file));
+    const [firstUnshipped] = unshipped;
+    if (firstUnshipped !== undefined) {
+      failures.push(
+        `${subpath}: ${unshipped.length} matched file(s) are missing from the tarball (first: ${firstUnshipped})`,
+      );
+    }
+    const specifier = `${published.name}/${probe}`;
+    let resolved: string;
+    try {
+      resolved = await realpath(
+        resolvePublishedExport({ specifier, repoRoot, consumerDir }),
+      );
+    } catch {
+      failures.push(`${subpath}: "${specifier}" does not resolve`);
+      return;
+    }
+    if (
+      !isExpectedPublishedExportResolution({
+        entry: `./${probe}`,
+        packageDir: pkgDir,
+        resolved,
+      })
+    ) {
+      failures.push(`${subpath}: "${specifier}" did not resolve to ./${probe}`);
+    }
+  };
+
   // One check per subpath, run together: each pushes its own findings, so the
   // report names every broken entry rather than the first one.
   await Promise.all(
     Object.entries(published.exports).map(async ([subpath, entry]) => {
+      if (isShippedAssetPatternEntry(entry)) {
+        await checkShippedAssetPattern(subpath, entry);
+        return;
+      }
       await Promise.all(
         distEntryFiles(entry).map(async (file) => {
           const relative = file.replace(/^\.\//u, "");
@@ -246,7 +316,7 @@ try {
         failures.push(
           isDistModuleEntry(entry)
             ? `${subpath}: "${specifier}" resolved outside dist`
-            : `${subpath}: "${specifier}" did not resolve to ${entry}`,
+            : `${subpath}: "${specifier}" did not resolve to ${JSON.stringify(entry)}`,
         );
       }
       resolvedBySubpath.set(subpath, resolved);
@@ -299,7 +369,10 @@ try {
   // A grouped subpath is a deprecated alias of the flat one, so the two have
   // to land on the same module. Nothing else keeps them from drifting into two
   // components with one name once the flat map is the one people edit.
-  for (const subpath of Object.keys(published.exports)) {
+  for (const [subpath, entry] of Object.entries(published.exports)) {
+    if (isShippedAssetPatternEntry(entry)) {
+      continue;
+    }
     const segments = subpath.split("/");
     const name = segments.at(-1);
     if (segments.length < 3 || name === undefined) {

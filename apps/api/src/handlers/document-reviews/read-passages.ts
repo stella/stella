@@ -12,27 +12,29 @@
  */
 
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { DOCUMENT_REVIEW_LIMITS } from "@stll/api-contract";
 
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { readReferencePassageTexts } from "@/api/lib/document-review/reference-passages";
 
 const config = {
+  contract: "patch",
   description:
     "Read the text of reference passages by id. Answers only the passages whose matter the caller can open; every other review surface carries passage ids and reads their words here.",
   permissions: { workspace: ["read"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "read",
   mcp: { type: "internal", reason: "document_processing" },
-  body: t.Object({
-    ids: t.Array(tSafeId("documentReviewReferencePassage"), {
-      minItems: 1,
-      maxItems: DOCUMENT_REVIEW_LIMITS.passageReadMax,
-    }),
+  body: v.object({
+    ids: v.pipe(
+      v.array(resourceIdSchema("documentReviewReferencePassage")),
+      v.minLength(1),
+      v.maxLength(DOCUMENT_REVIEW_LIMITS.passageReadMax),
+    ),
   }),
 } satisfies HandlerConfig;
 

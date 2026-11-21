@@ -1,11 +1,13 @@
 import { Result } from "better-result";
 import { and, desc, eq, sql } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
+
+import { numberFromString } from "@stll/api-contract/http-input";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { playbookDefinitions } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tPaginationCursor } from "@/api/lib/custom-schema";
+import { paginationCursorSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import {
@@ -87,16 +89,22 @@ true satisfies UnexpectedProjectedPlaybookListColumn extends never
   ? true
   : never;
 
-export const listPlaybookDefinitionsQuerySchema = t.Object({
-  limit: t.Optional(
-    t.Integer({
-      minimum: 1,
-      maximum: LIMITS.playbookDefinitionsPageSizeMax,
-      description: "Max playbooks to return",
-    }),
+export const listPlaybookDefinitionsQuerySchema = v.object({
+  limit: v.exactOptional(
+    numberFromString(
+      v.pipe(
+        v.pipe(
+          v.number(),
+          v.integer(),
+          v.minValue(1),
+          v.maxValue(LIMITS.playbookDefinitionsPageSizeMax),
+        ),
+        v.description("Max playbooks to return"),
+      ),
+    ),
   ),
-  cursor: t.Optional(
-    tPaginationCursor({
+  cursor: v.exactOptional(
+    paginationCursorSchema({
       description:
         "Opaque cursor from a previous list_playbooks call to fetch the next page",
     }),

@@ -1,4 +1,6 @@
 import { panic, Result } from "better-result";
+
+import { sanitizeErrorForOutput } from "@stll/errors";
 /**
  * Morphological query expansion for the case-law corpus index.
  *
@@ -20,7 +22,7 @@ import { panic, Result } from "better-result";
  * all produce the query the reader would have gotten anyway. Expansion is
  * allowed to add recall and is never allowed to remove it or to fail a search.
  */
-
+import { createSha256 } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
 import { detached } from "@/api/lib/analytics/capture";
@@ -42,7 +44,10 @@ import {
   parseExpansionDictionaryOffLoop,
   unpackExpansionForms,
 } from "@/api/lib/legal-search/morphology/dictionary";
-import type { MorphologyLanguage } from "@/api/lib/legal-search/morphology/stem";
+import {
+  MORPHOLOGY_LANGUAGES,
+  type MorphologyLanguage,
+} from "@/api/lib/legal-search/morphology/stem";
 import type { QueryExpansionMode } from "@/api/lib/legal-search/query-expansion-mode";
 import type { LoggerAttributes } from "@/api/lib/observability/logger";
 import { logger } from "@/api/lib/observability/logger";
@@ -172,8 +177,7 @@ type LoadedDictionary = {
 const shortHash = (contentHash: string): string => contentHash.slice(0, 12);
 
 type DictionaryLoad =
-  | (LoadedDictionary & { status: "loaded" })
-  | { status: "unavailable" };
+  (LoadedDictionary & { status: "loaded" }) | { status: "unavailable" };
 
 const UNAVAILABLE: DictionaryLoad = { status: "unavailable" };
 
@@ -233,7 +237,7 @@ const readDictionaryPayload = async (
     compressed,
     MORPHOLOGY_DICTIONARY_MAX_BYTES,
   );
-  const hasher = new Bun.CryptoHasher("sha256");
+  const hasher = createSha256();
   hasher.update(payload);
   if (hasher.digest("hex") !== contentHash) {
     return { reason: "content_hash_mismatch", status: "rejected" };
@@ -252,11 +256,12 @@ const loadDictionary = async (
   });
 
   if (!Result.isOk(read)) {
+    const safeError = sanitizeErrorForOutput(read.error);
     logger.warn(DICTIONARY_UNAVAILABLE, {
       language,
       reason: "read_failed",
       errorClass:
-        read.error instanceof Error ? read.error.constructor.name : "unknown",
+        safeError instanceof Error ? safeError.constructor.name : "unknown",
     });
     return UNAVAILABLE;
   }
@@ -422,8 +427,46 @@ const dictionaryFor = async (
   // during a refresh window inherit the read's latency — up to the full resolve
   // deadline when object storage is slow — which is exactly the stall the
   // fallback exists to prevent.
-  detached(refresh, "legal-search.expansion-dictionary-refresh");
+  detached(async () => refresh, "legal-search.expansion-dictionary-refresh");
   return { ...previous, status: "loaded" };
+};
+
+/** The languages a deployment can expand, for the shadow-mode invariant. */
+export const PUBLISHED_EXPANSION_LANGUAGES = MORPHOLOGY_LANGUAGES.filter(
+  (language) => EXPANSION_DICTIONARY[language] === "published",
+);
+
+/**
+ * What resolving one language's dictionary answered. `stale` is a payload
+ * still served from memory while its latest read found nothing.
+ */
+export type ExpansionDictionaryProbe =
+  | { status: "loaded"; entries: number }
+  | { status: "stale"; entries: number }
+  | { status: "unavailable" };
+
+/**
+ * Resolve a language's dictionary as a cold request would, and say what came
+ * back. Shadow mode never waits for a cold load, so a dictionary that cannot
+ * be read turns every shadow record into `no_dictionary` and the rollout
+ * measures nothing while looking healthy; this lets an invariant ask directly.
+ */
+export const probeExpansionDictionary = async (
+  language: MorphologyLanguage,
+): Promise<ExpansionDictionaryProbe> => {
+  const dictionary = await dictionaryFor(language);
+  switch (dictionary.status) {
+    case "unavailable":
+      return { status: "unavailable" };
+    case "loaded":
+      return {
+        status: resolvedUnavailable.has(language) ? "stale" : "loaded",
+        entries: dictionary.entries.size,
+      };
+    default:
+      dictionary satisfies never;
+      return panic(`Unhandled dictionary: ${String(dictionary)}`);
+  }
 };
 
 /**
@@ -521,7 +564,10 @@ const corpusTermExpander = async (
   }
   if (availability === "resident_only" && !lastLoaded.has(language)) {
     // Warm it for the requests after this one, off the request path.
-    detached(dictionaryFor(language), "legal-search.expansion-dictionary-warm");
+    detached(
+      async () => dictionaryFor(language),
+      "legal-search.expansion-dictionary-warm",
+    );
     return null;
   }
   const dictionary = await dictionaryFor(language);
@@ -616,7 +662,7 @@ export const shadowExpansionAttributes = ({
 });
 
 /** Record what expansion would have done to a query that ran unexpanded. */
-export const logShadowExpansion = (log: ShadowExpansionLog): void => {
+const logShadowExpansion = (log: ShadowExpansionLog): void => {
   logger.info(EXPANSION_SHADOW, shadowExpansionAttributes(log));
 };
 

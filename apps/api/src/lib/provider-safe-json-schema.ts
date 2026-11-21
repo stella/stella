@@ -180,12 +180,10 @@ export type ProviderSafeJsonSchemaProjection = {
 };
 
 export type NullUnionStrategy = "json-schema" | "openapi";
-export type EnumValueStrategy = "json-schema" | "string-only";
+type EnumValueStrategy = "json-schema" | "string-only";
 export type ValueConstraintStrategy = "preserve" | "omit";
 export type ProviderJsonSchemaPurpose =
-  | "structured-output"
-  | "mock-structured-output"
-  | "tool";
+  "structured-output" | "mock-structured-output" | "tool";
 
 export type ProviderSafeJsonSchemaProjectionOptions = {
   enumValueStrategy?: EnumValueStrategy;
@@ -243,10 +241,11 @@ const resolveLocalJsonPointer = (root: JsonObject, ref: string): unknown => {
 
   let current: unknown = root;
   for (const segment of ref.slice(2).split("/")) {
-    if (!isJsonObject(current)) {
+    const key = decodeJsonPointerSegment(segment);
+    if (!isJsonObject(current) || !Object.hasOwn(current, key)) {
       return undefined;
     }
-    current = current[decodeJsonPointerSegment(segment)];
+    current = current[key];
   }
   return current;
 };
@@ -558,9 +557,14 @@ const mergeNumberBound = ({
     return false;
   }
 
-  const existing = target[key];
+  const existing = Object.hasOwn(target, key) ? target[key] : undefined;
   if (existing === undefined) {
-    target[key] = next;
+    Object.defineProperty(target, key, {
+      value: next,
+      enumerable: true,
+      configurable: true,
+      writable: true,
+    });
     return true;
   }
 
@@ -569,8 +573,12 @@ const mergeNumberBound = ({
     return false;
   }
 
-  target[key] =
-    mode === "max" ? Math.max(current, next) : Math.min(current, next);
+  Object.defineProperty(target, key, {
+    value: mode === "max" ? Math.max(current, next) : Math.min(current, next),
+    enumerable: true,
+    configurable: true,
+    writable: true,
+  });
   return true;
 };
 
@@ -605,9 +613,14 @@ const mergeJsonSchemaKeyword = ({
     return mergeNumberBound({ key, mode: "min", target, value });
   }
 
-  const existing = target[key];
+  const existing = Object.hasOwn(target, key) ? target[key] : undefined;
   if (existing === undefined) {
-    target[key] = value;
+    Object.defineProperty(target, key, {
+      value,
+      enumerable: true,
+      configurable: true,
+      writable: true,
+    });
     return true;
   }
   return jsonValueEquals(existing, value);
@@ -631,14 +644,14 @@ const mergeProperties = (target: JsonObject, value: unknown): boolean => {
   }
 
   const existingValue = target["properties"];
-  const properties: JsonObject = isJsonObject(existingValue)
-    ? { ...existingValue }
-    : {};
+  const properties = new Map(
+    Object.entries(isJsonObject(existingValue) ? existingValue : {}),
+  );
 
   for (const [key, propertySchema] of Object.entries(value)) {
-    const existingPropertySchema = properties[key];
+    const existingPropertySchema = properties.get(key);
     if (existingPropertySchema === undefined) {
-      properties[key] = propertySchema;
+      properties.set(key, propertySchema);
       continue;
     }
     if (
@@ -655,10 +668,10 @@ const mergeProperties = (target: JsonObject, value: unknown): boolean => {
     if (!mergeJsonSchemaObject(mergedPropertySchema, propertySchema)) {
       return false;
     }
-    properties[key] = mergedPropertySchema;
+    properties.set(key, mergedPropertySchema);
   }
 
-  target["properties"] = properties;
+  target["properties"] = Object.fromEntries(properties);
   return true;
 };
 
@@ -1038,7 +1051,7 @@ const filterProviderSafeKeywords = ({
   path: string;
   seenRefs: ReadonlySet<string>;
 }): JsonObject => {
-  const result: JsonObject = {};
+  const result = new Map<string, unknown>();
   const constraintDescriptions: string[] = [];
   for (const [key, value] of Object.entries(node)) {
     if (
@@ -1057,22 +1070,28 @@ const filterProviderSafeKeywords = ({
       context.dropped.push(joinPath(path, key));
       continue;
     }
-    result[key] = projectChild({
+    result.set(
       key,
-      value,
-      path: joinPath(path, key),
-      context,
-      seenRefs,
-    });
+      projectChild({
+        key,
+        value,
+        path: joinPath(path, key),
+        context,
+        seenRefs,
+      }),
+    );
   }
   if (constraintDescriptions.length > 0) {
-    const description = result["description"];
-    result["description"] = [
-      ...(typeof description === "string" ? [description] : []),
-      ...constraintDescriptions,
-    ].join("\n");
+    const description = result.get("description");
+    result.set(
+      "description",
+      [
+        ...(typeof description === "string" ? [description] : []),
+        ...constraintDescriptions,
+      ].join("\n"),
+    );
   }
-  return result;
+  return Object.fromEntries(result);
 };
 
 const projectNode = ({

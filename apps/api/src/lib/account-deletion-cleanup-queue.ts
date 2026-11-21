@@ -1,5 +1,4 @@
 import { Result } from "better-result";
-import { Worker } from "bullmq";
 
 import {
   claimNextAccountDeletionEffectChunk,
@@ -15,12 +14,13 @@ import type {
 import { captureError, detached } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createBullMqJobId } from "@/api/lib/bullmq-job-id";
-import { createLazyBullMqQueue } from "@/api/lib/bullmq-queue";
+import { BullMqWorker, createLazyBullMqQueue } from "@/api/lib/bullmq-queue";
 import type { BullMqWorkerContext } from "@/api/lib/bullmq-queue";
 import { requeueDeterministicJob } from "@/api/lib/bullmq-requeue";
 import type { RequeueableQueue } from "@/api/lib/bullmq-requeue";
 import { errorSystemFields, errorTag } from "@/api/lib/errors/utils";
 import { deleteS3Keys } from "@/api/lib/files/utils";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { logger } from "@/api/lib/observability/logger";
 import { createQueueWorkerErrorLogger } from "@/api/lib/queue-worker-error-log";
 import { createBullMqConnection } from "@/api/lib/redis-client";
@@ -143,7 +143,7 @@ export const processAccountDeletionCleanupRequest = async (
   });
 };
 
-export const enqueuePendingAccountDeletionCleanupRequests = async (
+const enqueuePendingAccountDeletionCleanupRequests = async (
   db: AccountDeletionEffectDb,
 ): Promise<number> => {
   const requestIds = await listRecoverableAccountDeletionEffectRequestIds(db);
@@ -162,7 +162,7 @@ export const initAccountDeletionCleanupWorker = ({
   });
   const cleanupRequestDeps = createAccountDeletionCleanupRequestDeps(db);
 
-  const worker = new Worker<AccountDeletionCleanupJobData>(
+  const worker = new BullMqWorker<AccountDeletionCleanupJobData>(
     QUEUE_NAME,
     async (job) => {
       await processAccountDeletionCleanupRequest(
@@ -177,7 +177,12 @@ export const initAccountDeletionCleanupWorker = ({
   );
 
   worker.on("failed", (job, error) => {
-    captureError(error, { requestId: job?.data.requestId ?? "" });
+    captureError(
+      error,
+      handlerErrorContext("lib.initAccountDeletionCleanupWorker", {
+        requestId: job?.data.requestId ?? "",
+      }),
+    );
     logger.error("account_deletion_cleanup.failed", {
       "error.type": errorTag(error),
       requestId: job?.data.requestId ?? "",
@@ -190,27 +195,24 @@ export const initAccountDeletionCleanupWorker = ({
   );
 
   const reconcile = () => {
-    detached(
-      (async () => {
-        try {
-          const count = await enqueuePendingAccountDeletionCleanupRequests(db);
-          if (count === 0) {
-            return;
-          }
-
-          logger.info("account_deletion_cleanup.reconciled", {
-            count: String(count),
-          });
-        } catch (error) {
-          captureError(error);
-          logger.error(
-            "account_deletion_cleanup.reconcile_failed",
-            errorSystemFields(error),
-          );
+    detached(async () => {
+      try {
+        const count = await enqueuePendingAccountDeletionCleanupRequests(db);
+        if (count === 0) {
+          return;
         }
-      })(),
-      "account-deletion-cleanup.reconcile",
-    );
+
+        logger.info("account_deletion_cleanup.reconciled", {
+          count: String(count),
+        });
+      } catch (error) {
+        captureError(error, handlerErrorContext("accountDeletion.reconcile"));
+        logger.error(
+          "account_deletion_cleanup.reconcile_failed",
+          errorSystemFields(error),
+        );
+      }
+    }, "account-deletion-cleanup.reconcile");
   };
   reconcile();
   const reconcileInterval = setInterval(reconcile, RECONCILE_INTERVAL_MS);

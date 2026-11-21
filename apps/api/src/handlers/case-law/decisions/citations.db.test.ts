@@ -8,11 +8,14 @@ import {
 } from "@/api/db/schema";
 import {
   listIncomingDecisionCitations,
+  listOutgoingDecisionCitationRoutes,
   listOutgoingDecisionCitations,
 } from "@/api/handlers/case-law/decisions/citations";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
+import { readDecisionWork } from "@/api/lib/case-law/decision-work";
+import { CASE_LAW_SURFACE_COUNTRIES } from "@/api/lib/case-law/public-subject";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
 import {
   createTestPglite,
@@ -86,11 +89,14 @@ beforeAll(
         id: subjectId,
         sourceId: openSourceId,
       }),
-      decisionRow({
-        caseNumber: "open-related",
-        id: openRelatedId,
-        sourceId: openSourceId,
-      }),
+      {
+        ...decisionRow({
+          caseNumber: "open-related",
+          id: openRelatedId,
+          sourceId: openSourceId,
+        }),
+        slug: "open-related",
+      },
       decisionRow({
         caseNumber: "closed-related",
         id: closedRelatedId,
@@ -168,14 +174,16 @@ test("citation reads traverse bounded pages without leaking restricted decisions
     listOutgoingDecisionCitations({
       tx,
       cursor: undefined,
-      decisionId: subjectId,
+      work: await readDecisionWork(tx, subjectId),
+      countries: CASE_LAW_SURFACE_COUNTRIES.pages,
     }),
   );
   const firstIncoming = await withReader(async (tx) =>
     listIncomingDecisionCitations({
       tx,
       cursor: undefined,
-      decisionId: subjectId,
+      work: await readDecisionWork(tx, subjectId),
+      countries: CASE_LAW_SURFACE_COUNTRIES.pages,
     }),
   );
   if (!("items" in firstOutgoing) || !("items" in firstIncoming)) {
@@ -191,7 +199,8 @@ test("citation reads traverse bounded pages without leaking restricted decisions
       listOutgoingDecisionCitations({
         tx,
         cursor,
-        decisionId: subjectId,
+        work: await readDecisionWork(tx, subjectId),
+        countries: CASE_LAW_SURFACE_COUNTRIES.pages,
       }),
     );
     if (!("items" in page)) {
@@ -205,7 +214,8 @@ test("citation reads traverse bounded pages without leaking restricted decisions
       listIncomingDecisionCitations({
         tx,
         cursor,
-        decisionId: subjectId,
+        work: await readDecisionWork(tx, subjectId),
+        countries: CASE_LAW_SURFACE_COUNTRIES.pages,
       }),
     );
     if (!("items" in page)) {
@@ -235,9 +245,47 @@ test("citation reads reject malformed cursors", async () => {
     listOutgoingDecisionCitations({
       tx,
       cursor: "not-a-cursor",
-      decisionId: subjectId,
+      work: await readDecisionWork(tx, subjectId),
+      countries: CASE_LAW_SURFACE_COUNTRIES.pages,
     }),
   );
 
   expect("items" in page).toBe(false);
+});
+
+test("reader citation URLs use canonical public identities and unresolved references have no URL", async () => {
+  const items: { citationText: string; url: string | null }[] = [];
+  let cursor: string | undefined;
+  for (let request = 0; request < 3; request += 1) {
+    const pageCursor = cursor;
+    const page = await withReader(async (tx) =>
+      listOutgoingDecisionCitationRoutes({
+        tx,
+        cursor: pageCursor,
+        decisionId: subjectId,
+        countries: CASE_LAW_SURFACE_COUNTRIES.pages,
+      }),
+    );
+    if (!("items" in page)) {
+      throw new TypeError("Expected a reader citation page");
+    }
+    items.push(...page.items);
+    cursor = page.nextCursor ?? undefined;
+    if (cursor === undefined) {
+      break;
+    }
+  }
+  expect(
+    items.filter(({ citationText }) => citationText.startsWith("restricted")),
+  ).toEqual([]);
+  const linked = items.filter(({ citationText }) =>
+    citationText.startsWith("outgoing"),
+  );
+  expect(linked).toHaveLength(55);
+  expect(new Set(linked.map(({ url }) => url))).toEqual(
+    new Set(["http://localhost:3000/law/cze/cases/court/open-related"]),
+  );
+  expect(
+    items.find(({ citationText }) => citationText === "unresolved")?.url,
+  ).toBeNull();
 });

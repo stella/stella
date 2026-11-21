@@ -1,4 +1,8 @@
-import { SESv2Client, SendEmailCommand } from "@aws-sdk/client-sesv2";
+import {
+  AttachmentContentDisposition,
+  SendEmailCommand,
+  SESv2Client,
+} from "@aws-sdk/client-sesv2";
 
 import type { EmailTransport } from "@/api/lib/email/transport";
 import { ConfigurationError } from "@/api/lib/errors/tagged-errors";
@@ -44,11 +48,12 @@ export const createSESTransport = (
   });
 
   return {
-    async send({ from, to, subject, html, text }) {
-      await client.send(
+    async send({ from, to, subject, html, text, replyTo, inlineImages }) {
+      const { MessageId } = await client.send(
         new SendEmailCommand({
           FromEmailAddress: from,
           Destination: { ToAddresses: [to] },
+          ...(replyTo === undefined ? {} : { ReplyToAddresses: [replyTo] }),
           ...(config.configurationSetName && {
             ConfigurationSetName: config.configurationSetName,
           }),
@@ -59,10 +64,24 @@ export const createSESTransport = (
                 Html: { Data: html, Charset: SES_CHARSET },
                 Text: { Data: text, Charset: SES_CHARSET },
               },
+              ...(inlineImages === undefined
+                ? {}
+                : {
+                    Attachments: inlineImages.map((image) => ({
+                      RawContent: image.content,
+                      FileName: image.filename,
+                      ContentType: image.contentType,
+                      ContentId: image.contentId,
+                      ContentDisposition: AttachmentContentDisposition.INLINE,
+                    })),
+                  }),
             },
           },
         }),
       );
+      return MessageId === undefined
+        ? { type: "accepted_untracked" }
+        : { type: "accepted", providerMessageId: MessageId };
     },
   };
 };

@@ -1,28 +1,33 @@
-import { useState } from "react";
-import type { MouseEvent, ReactNode } from "react";
+import type { ReactNode } from "react";
 
-import { Link, useNavigate } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
+import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
-import { createCaseLawDecisionRouteParams } from "@stll/api-contract/case-law-decision-route";
-import type { CaseLawDecisionLanguageAlternate } from "@stll/api-contract/case-law-decision-route";
+import {
+  createCaseLawDecisionPath,
+  createCaseLawDecisionRouteParams,
+} from "@stll/api-contract/case-law-decision-route";
+import { CourtTierBadge } from "@stll/decision-reader/court-tier-badge";
+import type {
+  CitationAnchorSource,
+  CitedDecisionTarget as ReaderCitedDecisionTarget,
+} from "@stll/decision-reader/reader-types";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
-import { Popover, PopoverPanel, PopoverTrigger } from "@stll/ui/popover";
-import { useIsMobile } from "@stll/ui/use-mobile";
+import { PopoverClose } from "@stll/ui/popover";
+import { Skeleton } from "@stll/ui/skeleton";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
-import {
-  createCaseDecisionViewTab,
-  navigateToCaseDecisionMain,
-} from "@/components/inspector/case-decision-view";
+import { createCaseDecisionViewTab } from "@/components/inspector/case-decision-view";
 import { useInspectorView } from "@/components/inspector/use-inspector-view";
-import { LEGAL_CITATION_LINK_CLASS_NAME } from "@/components/legal-reader/citation-link";
-import {
-  citedDecisionClick,
-  CITED_DECISION_CLICK,
-} from "@/components/legal-reader/cited-decision-link.logic";
-import type { CitationAnchorSource } from "@/features/case-law/citation-anchors";
+import type { CitationOccurrences } from "@/components/legal-reader/citation-occurrences.logic";
+import { QueryViewFeedback } from "@/components/query-view-feedback";
+import { CitationChip } from "@/components/references/citation-chip";
+import type { DecisionCitationDrawing } from "@/components/references/citation-chip";
+import { decisionCitationCourtLabel } from "@/components/references/decision-citation-chip.logic";
+import type { DecisionCitationPresentation } from "@/components/references/decision-citation-presentation.logic";
 import {
   CITATION_TREATMENT_DOT,
   CITATION_TREATMENT_LABEL,
@@ -32,78 +37,98 @@ import {
   CitationPassageQuote,
   useCitationPassage,
 } from "@/features/case-law/components/case-viewer/citation-passage-preview";
+import { decisionCardSummaryOptions } from "@/features/case-law/queries/decisions";
 import { useFormatter } from "@/i18n/formatting-context";
-import { citedDecisionLabel } from "@/lib/cited-decision-label";
-import { formatDecisionDate } from "@/lib/decision-date";
-import { detached } from "@/lib/detached";
-
-type CitedDecisionTarget = {
-  caseNumber: string;
-  country: string;
-  court: string;
-  decisionDate: string | null;
-  decisionType?: string | null | undefined;
-  id: string;
-  language: string | null;
-  languageAlternates: readonly CaseLawDecisionLanguageAlternate[] | null;
-  slug: string | null;
-};
+import { isPublicLawMissError } from "@/lib/public-law-api";
+import { queryView } from "@/lib/query-view.logic";
 
 /** Where the citing text names the decision, when a passage can be quoted. */
-type CitedDecisionPassage = {
-  citation: CitationAnchorSource;
-  /** The decision whose text holds the citation. */
-  textDecisionId: string;
-};
+type CitedDecisionPassage =
+  | {
+      type: "citation";
+      citation: CitationAnchorSource;
+      /** The decision whose text holds the citation. */
+      textDecisionId: string;
+    }
+  | { type: "text"; text: string };
 
 type CitedDecisionPreviewProps = {
-  decision: CitedDecisionTarget;
-  onOpen: () => void;
   passage?: CitedDecisionPassage | undefined;
   /** How the citing text treats the cited decision. */
   treatment?: CitationTreatment | undefined;
 };
 
-type CitedDecisionLinkProps = Omit<CitedDecisionPreviewProps, "onOpen"> & {
+type CitedDecisionTarget = Pick<
+  ReaderCitedDecisionTarget,
+  | "caseNumber"
+  | "country"
+  | "court"
+  | "courtAbbreviation"
+  | "sourceUrl"
+  | "decisionDate"
+  | "id"
+  | "language"
+  | "languageAlternates"
+  | "slug"
+>;
+
+/** The decision's other mentions in the text the reader is in. */
+type CitationOccurrenceNavigation = {
+  occurrences: CitationOccurrences;
+  /** The paragraph holding the mention whose card is open. */
+  currentBlockId: string;
+  onJump: (anchorId: string) => void;
+};
+
+type CitedDecisionChipProps = CitedDecisionPreviewProps & {
+  decision: CitedDecisionTarget;
+  occurrences?: CitationOccurrenceNavigation | undefined;
+} & DecisionCitationDrawing;
+
+type CitedDecisionLinkProps = CitedDecisionPreviewProps & {
+  decision: CitedDecisionTarget;
+  occurrences?: CitationOccurrenceNavigation | undefined;
+  presentation?: DecisionCitationPresentation | undefined;
+  children: ReactNode;
+  className?: string | undefined;
+};
+
+type CitedDecisionSourceTextProps = CitedDecisionPreviewProps & {
+  decision: CitedDecisionTarget;
+  occurrences?: CitationOccurrenceNavigation | undefined;
+  /** The decision text's own characters the reference was found at. */
   children: ReactNode;
   className?: string | undefined;
 };
 
 /**
- * Base UI adds `preventBaseUIHandler` to the rightmost handler of a merged
- * chain; calling it drops the handlers merged to its left, which is how the
- * popover trigger's own click is suppressed for a navigation gesture.
- */
-type TriggerClick = MouseEvent<HTMLAnchorElement> & {
-  preventBaseUIHandler?: (() => void) | undefined;
-};
-
-/**
  * What the citing text says about a cited decision: the passage, how it
- * treats the decision, its court and its date, and the one action that opens
- * it. Reading a citation and following it are separate gestures, so weighing
- * one never costs the reader the text they are in.
+ * treats the decision. Metadata and navigation belong to the shared chip.
+ * Reading a citation and following it are separate gestures, so weighing one
+ * never costs the reader the text they are in.
  */
 export const CitedDecisionPreview = ({
-  decision,
-  onOpen,
   passage,
   treatment,
 }: CitedDecisionPreviewProps) => {
   const t = useTranslations();
-  const format = useFormatter();
-  const decided = formatDecisionDate(decision.decisionDate, format);
+  let quoted: ReactNode;
+  if (passage !== undefined) {
+    switch (passage.type) {
+      case "citation":
+        quoted = <CitingPassage passage={passage} />;
+        break;
+      case "text":
+        quoted = <span dir="auto">{passage.text}</span>;
+        break;
+      default:
+        passage satisfies never;
+        return panic("Unhandled cited decision passage");
+    }
+  }
 
   return (
     <>
-      <span className="flex flex-col gap-0.5">
-        <BidiText as="span" className="text-foreground text-sm font-medium">
-          {citedDecisionLabel(decision)}
-        </BidiText>
-        <span className="text-muted-foreground text-xs">
-          {decided === null ? decision.court : `${decision.court} · ${decided}`}
-        </span>
-      </span>
       {treatment !== undefined && (
         <span className="text-muted-foreground flex items-center gap-1.5 text-[calc(0.7rem*var(--reader-text-scale))]">
           <span
@@ -116,15 +141,7 @@ export const CitedDecisionPreview = ({
           {t(CITATION_TREATMENT_LABEL[treatment])}
         </span>
       )}
-      {passage !== undefined && <CitingPassage passage={passage} />}
-      <Button
-        className="h-6 w-fit px-2"
-        onClick={onOpen}
-        size="sm"
-        variant="outline"
-      >
-        {t("caseLaw.citation.openDecision")}
-      </Button>
+      {quoted}
     </>
   );
 };
@@ -134,29 +151,62 @@ export const CitedDecisionPreview = ({
  * preview opens, not when the citation is rendered: a decision's text names
  * dozens of others, and none of those reads is worth paying up front.
  */
-const CitingPassage = ({ passage }: { passage: CitedDecisionPassage }) => {
+const CitingPassage = ({
+  passage,
+}: {
+  passage: Extract<CitedDecisionPassage, { type: "citation" }>;
+}) => {
   const read = useCitationPassage(passage);
 
   return <CitationPassageQuote read={read} />;
 };
 
 /**
- * A link to another decision that shows the preview above before it takes the
- * reader anywhere. Keyboard reaches both steps: Enter on the citation opens
- * the preview, whose only tabbable element is the action Base UI focuses, so
- * Enter again opens the decision.
+ * A cited decision in a list of citations: its label and, with it, the court
+ * chip, which together open the shared preview.
  */
 export const CitedDecisionLink = ({
   children,
   className,
-  decision,
-  passage,
-  treatment,
-}: CitedDecisionLinkProps) => {
-  const isMobile = useIsMobile();
+  presentation,
+  ...chip
+}: CitedDecisionLinkProps) => (
+  <CitedDecisionChip
+    {...chip}
+    citingText={<span className={className}>{children}</span>}
+    presentation={presentation}
+  />
+);
+
+/**
+ * A reference in the text of the decision being read. The court's own
+ * characters are the trigger and nothing is drawn beside them in the line,
+ * so the paragraph keeps every character it printed; the reader points at
+ * the reference they are reading and the preview says which decision it is.
+ */
+export const CitedDecisionSourceText = ({
+  children,
+  className,
+  ...chip
+}: CitedDecisionSourceTextProps) => (
+  <CitedDecisionChip
+    {...chip}
+    sourceText={<span className={className}>{children}</span>}
+  />
+);
+
+/** The shared decision chip, wired to open the decision beside the text. */
+export const CitedDecisionChip = (props: CitedDecisionChipProps) => {
+  const { decision, passage, treatment, occurrences } = props;
+  const drawing: DecisionCitationDrawing =
+    props.sourceText === undefined
+      ? {
+          label: props.label,
+          citingText: props.citingText,
+          presentation: props.presentation,
+        }
+      : { sourceText: props.sourceText };
   const inspector = useInspectorView();
-  const navigate = useNavigate();
-  const [open, setOpen] = useState(false);
   const params = createCaseLawDecisionRouteParams({
     caseNumber: decision.caseNumber,
     country: decision.country,
@@ -167,86 +217,219 @@ export const CitedDecisionLink = ({
     slug: decision.slug,
   });
 
-  const onTriggerClick = (event: TriggerClick) => {
-    if (citedDecisionClick(event) === CITED_DECISION_CLICK.navigate) {
-      event.preventBaseUIHandler?.();
-      return;
-    }
+  const searchQuery = passage?.type === "text" ? passage.text : undefined;
+  const readerPath = createCaseLawDecisionPath(params);
+  const readerUrl =
+    searchQuery === undefined
+      ? readerPath
+      : `${readerPath}?${new URLSearchParams({ q: searchQuery })}`;
 
-    // The trigger's own handler opens the preview; this only stops the
-    // navigation the anchor would otherwise do underneath it.
-    event.preventDefault();
-  };
-
-  const openDecision = () => {
-    setOpen(false);
-    const tab = createCaseDecisionViewTab({
-      caseNumber: decision.caseNumber,
-      country: decision.country,
-      court: decision.court,
-      decisionId: decision.id,
-      language: decision.language,
-      languageAlternates: decision.languageAlternates,
-      slug: decision.slug,
-    });
-    if (isMobile) {
-      // No inspector to dock beside: the decision takes the main view.
-      detached(
-        navigateToCaseDecisionMain(navigate, tab.payload),
-        "case-law.open-cited-decision",
-      );
-      return;
-    }
-    inspector.open(tab);
-  };
-
-  const linkClassName = cn(LEGAL_CITATION_LINK_CLASS_NAME, className);
-  const link =
-    params.language === undefined ? (
-      <Link
-        className={linkClassName}
-        onClick={onTriggerClick}
-        params={{
-          country: params.country,
-          court: params.court,
-          slug: params.slug,
-        }}
-        to="/law/$country/cases/$court/$slug"
-      />
-    ) : (
-      <Link
-        className={linkClassName}
-        onClick={onTriggerClick}
-        params={{
-          country: params.country,
-          court: params.court,
-          language: params.language,
-          slug: params.slug,
-        }}
-        to="/law/$country/cases/$court/$language/$slug"
-      />
+  const openInSidePanel = () => {
+    inspector.open(
+      createCaseDecisionViewTab({
+        caseNumber: decision.caseNumber,
+        country: decision.country,
+        court: decision.court,
+        decisionId: decision.id,
+        language: decision.language,
+        languageAlternates: decision.languageAlternates,
+        slug: decision.slug,
+        searchQuery,
+      }),
     );
+  };
 
   return (
-    <Popover onOpenChange={setOpen} open={open}>
-      <PopoverTrigger nativeButton={false} role="link" render={link}>
-        {children}
-      </PopoverTrigger>
-      {/* Panel, not Popup: Base UI renders popup children inside its own
-          viewport, so a content stack has to be laid out below that. */}
-      <PopoverPanel
-        align="start"
-        className="reader-chrome w-[min(28rem,calc(100vw-2rem))] max-w-none"
-        contentClassName="gap-2"
-        side="bottom"
-      >
-        <CitedDecisionPreview
-          decision={decision}
-          onOpen={openDecision}
-          passage={passage}
-          treatment={treatment}
-        />
-      </PopoverPanel>
-    </Popover>
+    <CitationChip
+      kind="decision"
+      decision={{
+        decisionId: decision.id,
+        court: decision.court,
+        courtShortCode: decisionCitationCourtLabel(decision),
+        caseNumber: decision.caseNumber,
+        decisionDate: decision.decisionDate,
+        readerUrl,
+        originalUrl: decision.sourceUrl ?? null,
+      }}
+      {...drawing}
+      onOpenInSidePanel={openInSidePanel}
+      preview={
+        <>
+          <CitedDecisionCard decision={decision} treatment={treatment} />
+          {occurrences !== undefined &&
+            occurrences.occurrences.mentions > 1 && (
+              <CitationOccurrenceLinks {...occurrences} />
+            )}
+        </>
+      }
+      passage={
+        passage !== undefined ? (
+          <CitedDecisionPreview passage={passage} />
+        ) : undefined
+      }
+    />
+  );
+};
+
+/**
+ * What the summary read adds to a cited decision's peek: its type, how the
+ * citing text treats it, its legal sentence and how often it is cited.
+ */
+export const CitedDecisionCard = ({
+  decision: knownDecision,
+  treatment,
+}: {
+  decision: Pick<CitedDecisionTarget, "id">;
+  treatment: CitationTreatment | undefined;
+}) => {
+  const t = useTranslations();
+  const read = useQuery(decisionCardSummaryOptions(knownDecision.id));
+  const view = queryView(read);
+
+  if (view.type === "pending") {
+    return (
+      <div aria-busy="true" className="flex flex-col gap-2 py-1">
+        <Skeleton className="h-4 w-3/4" />
+        <Skeleton className="h-3 w-1/2" />
+        <Skeleton className="h-16 w-full" />
+      </div>
+    );
+  }
+  // The peek's header already names the court, the case and the date.
+  if (view.type !== "items") {
+    // A miss is an answer, not a failure: the public corpus holds no such
+    // decision, so the card says so under the header's own facts.
+    return view.type === "error" && isPublicLawMissError(view.error) ? (
+      <span className="text-muted-foreground text-xs">
+        {t("caseLaw.citation.notInStella")}
+      </span>
+    ) : (
+      <QueryViewFeedback view={view} />
+    );
+  }
+
+  const decision = view.items;
+  const headnote =
+    decision.headnote.type === "present" ? decision.headnote.text : null;
+
+  return (
+    <div className="flex flex-col gap-3">
+      <QueryViewFeedback view={view} />
+      <div className="flex items-center justify-between gap-3">
+        {decision.decisionType !== null && (
+          <span className="text-muted-foreground text-xs capitalize">
+            {decision.decisionType}
+          </span>
+        )}
+        {treatment !== undefined && (
+          <span className="bg-muted text-muted-foreground inline-flex shrink-0 items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium">
+            <span
+              aria-hidden="true"
+              className={cn(
+                "size-1.5 rounded-full",
+                CITATION_TREATMENT_DOT[treatment],
+              )}
+            />
+            {t(CITATION_TREATMENT_LABEL[treatment])}
+          </span>
+        )}
+      </div>
+      {headnote !== null && (
+        <div className="space-y-1">
+          <div className="text-foreground-disabled flex items-center justify-between text-xs font-semibold tracking-wide uppercase">
+            <span>{t("caseLaw.viewer.legalSentence")}</span>
+            {decision.courtAbbreviation === null ? (
+              <span className="align-middle">{t("common.court")}</span>
+            ) : (
+              <CourtTierBadge
+                abbreviation={decision.courtAbbreviation}
+                className="align-middle"
+                tier={decision.courtTier}
+              />
+            )}
+          </div>
+          <TruncatedText
+            className="text-sm leading-relaxed"
+            lines={6}
+            render={<BidiText as="p" />}
+          >
+            {headnote}
+          </TruncatedText>
+        </div>
+      )}
+      <div className="text-muted-foreground flex flex-wrap gap-x-3 text-xs">
+        <span>
+          {t("caseLaw.citation.citedSummary", {
+            count: decision.citationCount,
+          })}
+        </span>
+        {decision.publication !== null && (
+          <BidiText as="span">{decision.publication}</BidiText>
+        )}
+      </div>
+    </div>
+  );
+};
+
+/**
+ * Where else the text names the decision, by paragraph. The reader is already
+ * in one of them, so the card repeats none of their words and only offers the
+ * way to the others.
+ */
+const CitationOccurrenceLinks = ({
+  occurrences: { mentions, paragraphs },
+  currentBlockId,
+  onJump,
+}: CitationOccurrenceNavigation) => {
+  const t = useTranslations();
+  const format = useFormatter();
+
+  return (
+    <div className="text-muted-foreground flex flex-wrap items-center gap-1 border-t pt-2 text-xs">
+      <span className="me-1">
+        {t("caseLaw.citation.mentionsInDecision", { count: mentions })}
+      </span>
+      {paragraphs.map((paragraph) => {
+        const mark =
+          paragraph.paragraphNumber === null
+            ? t("caseLaw.citation.mentionMark", {
+                number: format.number(paragraph.firstMention),
+              })
+            : t("caseLaw.citation.paragraphMark", {
+                paragraph: format.number(paragraph.paragraphNumber),
+              });
+        if (paragraph.blockId === currentBlockId) {
+          return (
+            <span
+              aria-current="location"
+              className="text-foreground px-2 font-medium whitespace-nowrap"
+              key={paragraph.blockId}
+            >
+              {mark}
+            </span>
+          );
+        }
+        return (
+          <PopoverClose
+            aria-label={
+              paragraph.paragraphNumber === null
+                ? t("caseLaw.citation.goToMention", {
+                    number: format.number(paragraph.firstMention),
+                  })
+                : t("caseLaw.citation.goToParagraph", {
+                    paragraph: format.number(paragraph.paragraphNumber),
+                  })
+            }
+            key={paragraph.blockId}
+            onClick={() => {
+              onJump(paragraph.anchorId);
+            }}
+            render={<Button size="xs" variant="muted" />}
+          >
+            {mark}
+          </PopoverClose>
+        );
+      })}
+    </div>
   );
 };

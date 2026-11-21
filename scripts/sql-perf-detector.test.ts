@@ -10,7 +10,7 @@ import {
 } from "./sql-perf-detector.ts";
 import { isSqlPerfMigration } from "./sql-perf-scope.ts";
 
-/* oxlint-disable eslint/no-template-curly-in-string -- test inputs contain literal template syntax */
+/* oxlint-disable no-template-curly-in-string -- test inputs contain literal template syntax */
 
 const kinds = (source: string) =>
   analyzeSqlPerf(source, "apps/api/src/handlers/example.ts").hits.map(
@@ -720,6 +720,47 @@ test("every high-volume relation receives the per-source count guard", () => {
   }
 });
 
+test.each(["case_law_published_decisions", "case_law_unredacted_decisions"])(
+  "publication view %s receives the per-source count guard",
+  (view) => {
+    expect(
+      kinds(`sql\`SELECT count(*) FROM ${view} WHERE source_id = $1\``),
+    ).toEqual(["per-source-full-count"]);
+  },
+);
+
+test.each(["publishedCaseLawDecisions", "unredactedCaseLawDecisions"])(
+  "a source join to %s does not restrict an aggregate to one source",
+  (view) => {
+    expect(
+      kinds(
+        `import { count, eq } from "drizzle-orm"; db.select({ total: count() }).from(${view}).innerJoin(caseLawSources, eq(caseLawSources.id, ${view}.sourceId));`,
+      ),
+    ).toEqual([]);
+  },
+);
+
+test("a projected corpus source id is not a fixed source in an aggregate join", () => {
+  const query = [
+    'import { eq, sql, alias } from "drizzle-orm";',
+    'const source = alias(caseLawSources, "related_source");',
+    'const candidate = db.select({ relatedId: caseLawCitations.citedDecisionId }).from(caseLawCitations).limit(25).as("candidate");',
+    'const relatedDecisionLookup = (tx, relatedId) => tx.select({ sourceId: publishedCaseLawDecisions.sourceId }).from(publishedCaseLawDecisions).where(eq(publishedCaseLawDecisions.id, relatedId)).limit(1).as("related");',
+    "const related = relatedDecisionLookup(db, candidate.relatedId);",
+    "db.select({ total: sql<number>`count(*) FILTER (WHERE true)` }).from(candidate).leftJoinLateral(related, sql`true`).leftJoin(source, eq(source.id, related.sourceId));",
+  ].join("\n");
+
+  expect(kinds(query)).not.toContain("per-source-full-count");
+  expect(
+    kinds(
+      query.replace(
+        "eq(source.id, related.sourceId)",
+        "eq(source.id, sourceId)",
+      ),
+    ),
+  ).toContain("per-source-full-count");
+});
+
 test.each([
   "sql`SELECT source_id, count(*) FROM legislation_documents WHERE country = ${country} GROUP BY source_id`",
   'import { count, eq } from "drizzle-orm"; db.select({ source: legislationDocuments.sourceId, count: count() }).from(legislationDocuments).where(eq(legislationDocuments.country, country)).groupBy(legislationDocuments.sourceId);',
@@ -1016,3 +1057,23 @@ test.each([
     ).not.toContain("per-source-full-count");
   },
 );
+
+test("SQL findings retain the exact source column after interpolation", () => {
+  const source = 'const query = sql`SELECT ${name} LIKE ${"%term%"}`;';
+  expect(analyzeSqlPerf(source, "query.ts").hits).toEqual([
+    {
+      kind: "leading-wildcard",
+      line: 1,
+      column: source.indexOf("LIKE") + 1,
+      anchorLines: [1, 1, 1],
+    },
+  ]);
+});
+
+test("an interpolated selected column is not itself a subquery operand", () => {
+  expect(
+    kinds(
+      'import { or, ilike } from "drizzle-orm"; const selected = db.select({ matched: sql`true` }).from(caseLawDecisions).limit(1); or(ilike(table.name, term), sql`${selected.matched} IS TRUE`);',
+    ),
+  ).toEqual([]);
+});

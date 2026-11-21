@@ -37,48 +37,6 @@
   },
   {
     "kind": "source-import",
-    "source": "apps/legal-atlas-runner/src/runners/case-law-corpus-storage-backfill.ts",
-    "specifier": "@/api/db/schema",
-    "target": "apps/api"
-  },
-  {
-    "kind": "source-import",
-    "source": "apps/legal-atlas-runner/src/runners/case-law-corpus-storage-backfill.ts",
-    "specifier": "@/api/lib/analytics/capture",
-    "target": "apps/api"
-  },
-  {
-    "kind": "source-import",
-    "source": "apps/legal-atlas-runner/src/runners/case-law-corpus-storage-backfill.ts",
-    "specifier": "@/api/lib/branded-types",
-    "target": "apps/api"
-  },
-  {
-    "kind": "source-import",
-    "source": "apps/legal-atlas-runner/src/runners/case-law-corpus-storage-backfill.ts",
-    "specifier": "@/api/lib/db/timestamp-cas",
-    "target": "apps/api"
-  },
-  {
-    "kind": "source-import",
-    "source": "apps/legal-atlas-runner/src/runners/case-law-corpus-storage-backfill.ts",
-    "specifier": "@/api/lib/legal-search/corpus-storage",
-    "target": "apps/api"
-  },
-  {
-    "kind": "source-import",
-    "source": "apps/legal-atlas-runner/src/runners/case-law-corpus-storage-backfill.ts",
-    "specifier": "@/api/lib/legal-search/document-types",
-    "target": "apps/api"
-  },
-  {
-    "kind": "source-import",
-    "source": "apps/legal-atlas-runner/src/runners/case-law-corpus-storage-backfill.ts",
-    "specifier": "@/api/lib/s3",
-    "target": "apps/api"
-  },
-  {
-    "kind": "source-import",
     "source": "apps/legal-atlas-runner/src/runners/case-law-ingest.ts",
     "specifier": "@/api/db/schema",
     "target": "apps/api"
@@ -230,12 +188,6 @@
   {
     "kind": "source-import",
     "source": "apps/legal-atlas-runner/src/runners/sk-document-drain.test.ts",
-    "specifier": "@/api/lib/case-law/document-ast",
-    "target": "apps/api"
-  },
-  {
-    "kind": "source-import",
-    "source": "apps/legal-atlas-runner/src/runners/sk-document-drain.test.ts",
     "specifier": "@/api/lib/legal-search/sk-document-backfill",
     "target": "apps/api"
   },
@@ -364,12 +316,6 @@
     "source": "apps/playground/src/main.tsx",
     "specifier": "../../web/src/i18n/langs/en.json",
     "target": "apps/web"
-  },
-  {
-    "kind": "tsconfig-include",
-    "source": "apps/legal-atlas-runner/tsconfig.json",
-    "specifier": "../api/src",
-    "target": "apps/api"
   },
   {
     "kind": "tsconfig-include",

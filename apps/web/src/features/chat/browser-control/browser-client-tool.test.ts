@@ -8,12 +8,14 @@ import {
   type BrowserExtensionRequest,
 } from "@stll/api-contract/browser-control";
 
-import { createBrowserClientTool } from "./browser-client-tool";
+import { createUuid } from "@/lib/uuid";
+
+import { createBrowserExtensionTool } from "./browser-client-tool";
 import { mountBrowserExtensionBridge } from "./browser-extension-bridge";
 
 describe("chat browser client tool", () => {
   test("registers the approved browser command as a native client tool", () => {
-    const { tool } = createBrowserClientTool({ turnIdFor: () => "turn-1" });
+    const { tool } = createBrowserExtensionTool({ turnIdFor: () => "turn-1" });
 
     expect(tool).toMatchObject({
       __toolSide: "client",
@@ -93,7 +95,7 @@ const connect = () => {
     controlledTabId: null,
     controllerId: "controller-1",
     protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
-    requestId: crypto.randomUUID(),
+    requestId: createUuid(),
     source: BROWSER_EXTENSION_MESSAGE_SOURCE.extension,
     type: "pong",
   });
@@ -126,7 +128,7 @@ describe("browser commands after a stop", () => {
   test("a stopped turn's command never runs until a regeneration resumes the turn", async () => {
     connect();
     // A regeneration reruns the same user message, so the same turn.
-    const browser = createBrowserClientTool({ turnIdFor: () => "user-1" });
+    const browser = createBrowserExtensionTool({ turnIdFor: () => "user-1" });
 
     browser.cancel();
     const stopped = await browser.tool.execute?.(

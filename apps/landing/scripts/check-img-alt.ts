@@ -10,6 +10,11 @@ import { panic } from "better-result";
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
+// Computed filesystem reads retain these repository Markdown inputs.
+export const CI_MARKDOWN_READER_INPUTS = [
+  "apps/landing/src/content/blog/**/*.md",
+];
+
 const SRC_ROOT = path.join(import.meta.dir, "..", "src");
 const BLOG_ROOT = path.join(SRC_ROOT, "content", "blog");
 const COMPONENT_EXTENSIONS = [".astro", ".tsx"];
@@ -269,11 +274,12 @@ const maskTsxComments = (source: string, masked: string[]): void => {
     }
     if (templateExpressionDepths.length > 0) {
       const depthIndex = templateExpressionDepths.length - 1;
+      const depth = templateExpressionDepths[depthIndex] ?? 0;
       if (character === "{") {
-        templateExpressionDepths[depthIndex] += 1;
+        templateExpressionDepths[depthIndex] = depth + 1;
       } else if (character === "}") {
-        templateExpressionDepths[depthIndex] -= 1;
-        if (templateExpressionDepths[depthIndex] === 0) {
+        templateExpressionDepths[depthIndex] = depth - 1;
+        if (depth - 1 === 0) {
           templateExpressionDepths.pop();
           mode = "template";
           index += 1;

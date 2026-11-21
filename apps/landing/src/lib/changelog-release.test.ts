@@ -2,9 +2,9 @@ import { describe, expect, test } from "bun:test";
 
 import {
   formatMaintenanceReleaseRange,
-  groupMaintenanceReleases,
   getMaintenanceReleaseTitle,
   getReleaseKind,
+  groupMaintenanceReleases,
   isStellaReleaseTag,
 } from "./changelog-release";
 
@@ -27,7 +27,8 @@ describe("Stella changelog releases", () => {
   });
 
   test("folds each consecutive run titled Maintenance release", () => {
-    const releases = [
+    type Release = { tagName: string; title: string };
+    const releases: readonly [Release, Release, Release, ...Release[]] = [
       { tagName: "v0.6.3", title: "Maintenance release" },
       { tagName: "v0.6.2", title: "Maintenance release" },
       { tagName: "v0.6.1", title: "Maintenance release" },

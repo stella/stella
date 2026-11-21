@@ -1,122 +1,38 @@
 import { useState } from "react";
 import type { RefObject } from "react";
 
-import {
-  attachClosestEdge,
-  extractClosestEdge,
-} from "@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge";
+import { attachClosestEdge } from "@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge/attach-closest-edge";
+import { extractClosestEdge } from "@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge/extract-closest-edge";
 import type { Edge } from "@atlaskit/pragmatic-drag-and-drop-hitbox/types";
-import { combine } from "@atlaskit/pragmatic-drag-and-drop/combine";
-import {
-  draggable,
-  dropTargetForElements,
-} from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
-import { panic } from "better-result";
+import { combine } from "@atlaskit/pragmatic-drag-and-drop/utils/combine";
 
 import {
   withDragAnnouncementData,
   withDropAnnouncementData,
 } from "@/components/drag-and-drop-live-region.logic";
+import { readKanbanDraggedCards } from "@/components/workspaces/kanban/kanban-selection.logic";
+import type { KanbanDraggedCard } from "@/components/workspaces/kanban/kanban-selection.logic";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
+import {
+  draggable,
+  dropTargetForElements,
+} from "@/lib/drag-and-drop/element-registration";
 import {
   COLUMN_DRAG_TYPE,
   ENTITY_DRAG_TYPE,
 } from "@/lib/workspaces/drag-constants";
 
-/**
- * Which named drop target currently lives on a given element, so a second
- * registration on the same node can be caught instead of silently replacing
- * the first. Keyed by element (not by name) because pragmatic-drag-and-drop's
- * own element adapter keeps exactly one live drop target per element the
- * same way — a `WeakMap<Element, ...>` registry — so a second
- * `dropTargetForElements` call on a node that already has one quietly
- * overwrites it, with no error anywhere. That is exactly how the flat-column
- * card target once went dark: both the card target and the column-reorder
- * target were registered on the column root, and only the second survived.
- */
-const liveElementDropTargets = new WeakMap<Element, string>();
-
-/**
- * Whether double-registration on one element should throw. On in local dev
- * and under test so the mistake is caught before it ships; off in
- * production builds so a reader never sees a thrown error for it — the
- * pre-existing "second call silently wins" behaviour is kept there instead.
- */
-const isDropTargetRegistryGuarded = (): boolean =>
-  import.meta.env.DEV || import.meta.env.NODE_ENV === "test";
-
-type AttachElementDropTargetParams = Parameters<
-  typeof dropTargetForElements
->[0] & {
-  /** Identifies this target in the conflict error; not sent anywhere. */
-  name: string;
-};
-
-/**
- * The one place every kanban element drop target must be registered
- * through. Guarded environments throw when `element` already carries a live
- * target rather than letting the registration silently replace it; the
- * returned cleanup un-registers the element regardless of environment so a
- * later, legitimate registration on the same node (a re-render, a different
- * column reusing a recycled node) is never mistaken for a conflict.
- */
-export const attachElementDropTarget = ({
-  name,
-  ...params
-}: AttachElementDropTargetParams): (() => void) => {
-  const { element } = params;
-
-  if (isDropTargetRegistryGuarded()) {
-    const existing = liveElementDropTargets.get(element);
-    if (existing !== undefined) {
-      panic(
-        `Kanban drop target conflict: "${existing}" is already registered on this element. Registering "${name}" on the same element would silently replace it — pragmatic-drag-and-drop keeps only one live drop target per element. Attach each target to a distinct element instead.`,
-      );
-    }
-    liveElementDropTargets.set(element, name);
-  }
-
-  const cleanup = dropTargetForElements(params);
-
-  return () => {
-    cleanup();
-    if (liveElementDropTargets.get(element) === name) {
-      liveElementDropTargets.delete(element);
-    }
-  };
-};
-
-/**
- * The dragged card's source subgroup lane, read from the drag payload.
- * `undefined` means the payload carried no lane at all (a flat board, or a
- * card that never declared one) — distinct from `null`, the Unassigned
- * lane, which is a real source value a caller must not discard.
- */
-export const readSourceSubgroupValue = (
-  data: Record<string, unknown>,
-): string | null | undefined => {
-  const raw = data["subgroupValue"];
-  if (typeof raw === "string") {
-    return raw;
-  }
-  return raw === null ? null : undefined;
-};
+export const attachElementDropTarget = dropTargetForElements;
 
 type UseKanbanEntityDropTargetParams<TElement extends HTMLElement> = {
   elementRef: RefObject<TElement | null>;
   enabled?: boolean;
   name: string;
-  canDrop?:
-    | ((
-        entityId: string,
-        sourceSubgroupValue: string | null | undefined,
-      ) => boolean)
-    | undefined;
-  onDrop: (
-    entityId: string,
-    sourceSubgroupValue: string | null | undefined,
-  ) => void;
+  /** Asked per card; a drag is accepted only when every card it carries is. */
+  canDrop?: ((card: KanbanDraggedCard) => boolean) | undefined;
+  /** Every card the drag carries: the selection, or the one card. */
+  onDrop: (cards: readonly KanbanDraggedCard[]) => void;
 };
 
 /** One card drop contract for flat columns and subgroup cells. */
@@ -130,8 +46,8 @@ export const useKanbanEntityDropTarget = <TElement extends HTMLElement>({
   const [isDragOver, setIsDragOver] = useState(false);
   const handleDrop = useLatestCallback(onDrop);
   const acceptsDrop = useLatestCallback(
-    (entityId: string, lane: string | null | undefined) =>
-      canDrop?.(entityId, lane) ?? true,
+    (cards: readonly KanbanDraggedCard[]) =>
+      cards.length > 0 && (canDrop === undefined || cards.every(canDrop)),
   );
 
   useExternalSyncEffect(() => {
@@ -143,22 +59,17 @@ export const useKanbanEntityDropTarget = <TElement extends HTMLElement>({
     return attachElementDropTarget({
       element,
       name,
-      canDrop: ({ source }) => {
-        const entityId = source.data["entityId"];
-        return (
-          source.data["type"] === ENTITY_DRAG_TYPE &&
-          typeof entityId === "string" &&
-          acceptsDrop(entityId, readSourceSubgroupValue(source.data))
-        );
-      },
+      canDrop: ({ source }) =>
+        source.data["type"] === ENTITY_DRAG_TYPE &&
+        acceptsDrop(readKanbanDraggedCards(source.data)),
       getData: () => withDropAnnouncementData({}, { type: "container", name }),
       onDragEnter: () => setIsDragOver(true),
       onDragLeave: () => setIsDragOver(false),
       onDrop: ({ source }) => {
         setIsDragOver(false);
-        const entityId = source.data["entityId"];
-        if (typeof entityId === "string") {
-          handleDrop(entityId, readSourceSubgroupValue(source.data));
+        const cards = readKanbanDraggedCards(source.data);
+        if (cards.length > 0) {
+          handleDrop(cards);
         }
       },
     });

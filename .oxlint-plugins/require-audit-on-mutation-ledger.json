@@ -1,13 +1,5 @@
 [
   {
-    "id": "apps/api/src/lib/account-deletion-effect-store.ts::claimNextAccountDeletionEffectChunk",
-    "writes": {
-      "update:accountDeletionEffectChunks": 2,
-      "update:accountDeletionRequests": 1
-    },
-    "reason": "Deletion or retention pipeline step; the deletion request and its effect store own the audit trail."
-  },
-  {
     "id": "apps/api/src/lib/account-deletion-effect-store.ts::completeAccountDeletionEffectChunk",
     "writes": {
       "update:accountDeletionEffectChunks": 1
@@ -32,14 +24,6 @@
     "id": "apps/api/src/lib/account-deletion-steps.ts::clearWorkspaceLeadRole",
     "writes": {
       "update:workspaces": 1
-    },
-    "reason": "Deletion or retention pipeline step; the deletion request and its effect store own the audit trail."
-  },
-  {
-    "id": "apps/api/src/lib/account-deletion-steps.ts::deleteChatThreadsAndFileLinks",
-    "writes": {
-      "delete:chatThreads": 1,
-      "delete:fileChatThreads": 1
     },
     "reason": "Deletion or retention pipeline step; the deletion request and its effect store own the audit trail."
   },
@@ -109,13 +93,6 @@
     "reason": "Deletion or retention pipeline step; the deletion request and its effect store own the audit trail."
   },
   {
-    "id": "apps/api/src/lib/account-deletion-steps.ts::deleteUserFiles",
-    "writes": {
-      "delete:userFiles": 1
-    },
-    "reason": "Deletion or retention pipeline step; the deletion request and its effect store own the audit trail."
-  },
-  {
     "id": "apps/api/src/lib/account-deletion-steps.ts::reassignActiveTaskAssignmentsAndDropMemberships",
     "writes": {
       "delete:member": 1,
@@ -136,26 +113,7 @@
   {
     "id": "apps/api/src/lib/account-deletion-steps.ts::resetFolioCollabUserState",
     "writes": {
-      "delete:folioCollabRoomTokens": 1,
-      "update:folioCollabRooms": 1
-    },
-    "reason": "Deletion or retention pipeline step; the deletion request and its effect store own the audit trail."
-  },
-  {
-    "id": "apps/api/src/lib/account-deletion-steps.ts::revokeAuthCredentialsAndInvitations",
-    "writes": {
-      "delete:account": 1,
-      "delete:apikey": 1,
-      "delete:invitation": 2,
-      "delete:twoFactor": 1
-    },
-    "reason": "Deletion or retention pipeline step; the deletion request and its effect store own the audit trail."
-  },
-  {
-    "id": "apps/api/src/lib/account-deletion-steps.ts::revokeOAuthTokensAndGrants",
-    "writes": {
-      "delete:oauthClient": 1,
-      "delete:oauthConsent": 1
+      "delete:folioCollabRoomTokens": 1
     },
     "reason": "Deletion or retention pipeline step; the deletion request and its effect store own the audit trail."
   },
@@ -256,13 +214,6 @@
     "writes": {
       "delete:anonymizationBlacklistEntries": 1,
       "insert:anonymizationBlacklistEntries": 1
-    },
-    "reason": "Write outside handlers that predates the audit scope; triage whether it needs its own audit event."
-  },
-  {
-    "id": "apps/api/src/lib/audit-log.ts::insertAuditRows",
-    "writes": {
-      "insert:auditLogs": 1
     },
     "reason": "Write outside handlers that predates the audit scope; triage whether it needs its own audit event."
   },
@@ -508,22 +459,6 @@
     "reason": "Shared public corpus or index maintenance with no tenant actor."
   },
   {
-    "id": "apps/api/src/lib/chat/run-log.ts::closeChatRunLogOnTx",
-    "writes": {
-      "update:chatRunLogs": 1
-    },
-    "reason": "Background work state transition; the request that started the work records the audit event."
-  },
-  {
-    "id": "apps/api/src/lib/chat/run-log.ts::createChatRunLog.append",
-    "writes": {
-      "insert:chatRunLogEntries": 1,
-      "insert:chatRunLogs": 1,
-      "update:chatRunLogs": 1
-    },
-    "reason": "Background work state transition; the request that started the work records the audit event."
-  },
-  {
     "id": "apps/api/src/lib/chat/run-log.ts::createChatRunLog.close",
     "writes": {
       "insert:chatRunLogs": 1,
@@ -629,20 +564,6 @@
     "reason": "Write outside handlers that predates the audit scope; triage whether it needs its own audit event."
   },
   {
-    "id": "apps/api/src/lib/document-processing-manual-ocr-restore.ts::restoreManualOcrRunAfterProjectionLoss",
-    "writes": {
-      "update:documentProcessingRuns": 1
-    },
-    "reason": "Write outside handlers that predates the audit scope; triage whether it needs its own audit event."
-  },
-  {
-    "id": "apps/api/src/lib/document-processing-queue.ts::markRunFailed",
-    "writes": {
-      "update:documentProcessingRuns": 1
-    },
-    "reason": "Background work state transition; the request that started the work records the audit event."
-  },
-  {
     "id": "apps/api/src/lib/document-processing-queue.ts::persistMissingNativeExtractionRuns",
     "writes": {
       "insert:documentProcessingRuns": 1
@@ -660,7 +581,7 @@
   {
     "id": "apps/api/src/lib/document-processing-queue.ts::processDocumentProcessingRun",
     "writes": {
-      "update:documentProcessingRuns": 4
+      "update:documentProcessingRuns": 3
     },
     "reason": "Background work state transition; the request that started the work records the audit event."
   },
@@ -947,7 +868,6 @@
     "id": "apps/api/src/lib/files/organization-file-usage.ts::reconcileOrganizationFileObject.try",
     "writes": {
       "insert:organizationFileObjects": 1,
-      "insert:organizationFileUsage": 1,
       "update:organizationFileObjects": 1,
       "update:organizationFileUsage": 1
     },
@@ -965,7 +885,6 @@
     "id": "apps/api/src/lib/files/organization-file-usage.ts::reserveOrganizationFileBytes.try",
     "writes": {
       "insert:organizationFileObjects": 1,
-      "insert:organizationFileUsage": 1,
       "update:organizationFileObjects": 1,
       "update:organizationFileUsage": 1
     },
@@ -974,7 +893,6 @@
   {
     "id": "apps/api/src/lib/files/organization-file-usage.ts::reserveOrganizationFilesBytesOnce.try",
     "writes": {
-      "insert:organization_file_objects": 1,
       "insert:organizationFileUsage": 1
     },
     "reason": "Document storage step called by an audited operation; confirm the caller records the event."
@@ -996,15 +914,14 @@
   {
     "id": "apps/api/src/lib/flows/automated-run-cap.ts::insertAutomatedFlowRunWithinCap",
     "writes": {
-      "insert:flowRuns": 1,
-      "insert:flowRunSteps": 1
+      "insert:flowRunSteps": 1,
+      "insert:flowRuns": 1
     },
     "reason": "Write outside handlers that predates the audit scope; triage whether it needs its own audit event."
   },
   {
     "id": "apps/api/src/lib/flows/flow-executor.ts::cancelFlowRun",
     "writes": {
-      "update:flowRuns": 1,
       "update:flowRunSteps": 1
     },
     "reason": "Background work state transition; the request that started the work records the audit event."
@@ -1012,32 +929,32 @@
   {
     "id": "apps/api/src/lib/flows/flow-executor.ts::completeStepInTransaction",
     "writes": {
-      "update:flowRuns": 2,
-      "update:flowRunSteps": 1
+      "update:flowRunSteps": 1,
+      "update:flowRuns": 2
     },
     "reason": "Background work state transition; the request that started the work records the audit event."
   },
   {
     "id": "apps/api/src/lib/flows/flow-executor.ts::executeFlowStep",
     "writes": {
-      "update:flowRuns": 1,
-      "update:flowRunSteps": 1
+      "update:flowRunSteps": 1,
+      "update:flowRuns": 1
     },
     "reason": "Background work state transition; the request that started the work records the audit event."
   },
   {
     "id": "apps/api/src/lib/flows/flow-executor.ts::failFlowRunFromWorker.writeFailure",
     "writes": {
-      "update:flowRuns": 1,
-      "update:flowRunSteps": 1
+      "update:flowRunSteps": 1,
+      "update:flowRuns": 1
     },
     "reason": "Background work state transition; the request that started the work records the audit event."
   },
   {
     "id": "apps/api/src/lib/flows/flow-executor.ts::pauseAtReviewGate",
     "writes": {
-      "update:flowRuns": 1,
-      "update:flowRunSteps": 1
+      "update:flowRunSteps": 1,
+      "update:flowRuns": 1
     },
     "reason": "Background work state transition; the request that started the work records the audit event."
   },
@@ -1051,8 +968,8 @@
   {
     "id": "apps/api/src/lib/flows/start-flow-run.ts::startFlowRun.createAndEnqueue",
     "writes": {
-      "insert:flowRuns": 1,
-      "insert:flowRunSteps": 1
+      "insert:flowRunSteps": 1,
+      "insert:flowRuns": 1
     },
     "reason": "Write outside handlers that predates the audit scope; triage whether it needs its own audit event."
   },
@@ -1110,20 +1027,6 @@
     "id": "apps/api/src/lib/hosted-usage-provider/webhook-store.ts::insertWebhookEventInTx",
     "writes": {
       "insert:hostedUsageWebhookEvents": 1
-    },
-    "reason": "Usage metering or counter row that is itself the accounting record."
-  },
-  {
-    "id": "apps/api/src/lib/hosted-usage-provider/webhook-store.ts::recordProviderEventReplayAuditInTx",
-    "writes": {
-      "update:hostedUsageWebhookEvents": 1
-    },
-    "reason": "Usage metering or counter row that is itself the accounting record."
-  },
-  {
-    "id": "apps/api/src/lib/hosted-usage-provider/webhook-store.ts::updateWebhookEventResultInTx",
-    "writes": {
-      "update:hostedUsageWebhookEvents": 1
     },
     "reason": "Usage metering or counter row that is itself the accounting record."
   },
@@ -1225,13 +1128,6 @@
     "reason": "Shared public corpus or index maintenance with no tenant actor."
   },
   {
-    "id": "apps/api/src/lib/legal-search/corpus-index-generation-store.ts::resumeRetiringCorpusIndexGenerationTx",
-    "writes": {
-      "update:corpusIndexGenerations": 1
-    },
-    "reason": "Shared public corpus or index maintenance with no tenant actor."
-  },
-  {
     "id": "apps/api/src/lib/legal-search/corpus-index-generation-store.ts::setServingCorpusIndexGenerationTx",
     "writes": {
       "update:corpusIndexGenerations": 2
@@ -1289,24 +1185,9 @@
     "reason": "Shared public corpus or index maintenance with no tenant actor."
   },
   {
-    "id": "apps/api/src/lib/legal-search/corpus-index-projection-census-store.ts::repairAppliedCorpusProjectionDriftTx",
-    "writes": {
-      "update:corpusIndexProjectionIntents": 1,
-      "update:corpusIndexProjectionStates": 1
-    },
-    "reason": "Shared public corpus or index maintenance with no tenant actor."
-  },
-  {
     "id": "apps/api/src/lib/legal-search/corpus-index-projection-cleanup-store.ts::chargeExpiredAppendStatesTx",
     "writes": {
       "update:corpusIndexProjectionStates": 1
-    },
-    "reason": "Shared public corpus or index maintenance with no tenant actor."
-  },
-  {
-    "id": "apps/api/src/lib/legal-search/corpus-index-projection-cleanup-store.ts::claimCorpusProjectionCleanupSettlementTx",
-    "writes": {
-      "update:corpusIndexProjectionIntents": 1
     },
     "reason": "Shared public corpus or index maintenance with no tenant actor."
   },
@@ -1334,7 +1215,7 @@
   {
     "id": "apps/api/src/lib/legal-search/corpus-index-projection-cleanup-store.ts::recoverExpiredCorpusProjectionIntentsTx",
     "writes": {
-      "update:corpusIndexProjectionIntents": 3
+      "update:corpusIndexProjectionIntents": 2
     },
     "reason": "Shared public corpus or index maintenance with no tenant actor."
   },
@@ -1361,13 +1242,6 @@
     "reason": "Shared public corpus or index maintenance with no tenant actor."
   },
   {
-    "id": "apps/api/src/lib/legal-search/corpus-index-projection-cleanup-store.ts::retryCorpusProjectionCleanupTx",
-    "writes": {
-      "update:corpusIndexProjectionIntents": 1
-    },
-    "reason": "Shared public corpus or index maintenance with no tenant actor."
-  },
-  {
     "id": "apps/api/src/lib/legal-search/corpus-index-projection-cleanup-store.ts::settleCorpusProjectionCleanupTx",
     "writes": {
       "update:corpusIndexProjectionIntents": 1
@@ -1390,14 +1264,6 @@
     "reason": "Shared public corpus or index maintenance with no tenant actor."
   },
   {
-    "id": "apps/api/src/lib/legal-search/corpus-index-projection-erasure-store.ts::advanceCorpusProjectionErasuresTx",
-    "writes": {
-      "update:corpusIndexProjectionIntents": 3,
-      "update:corpusIndexProjectionStates": 2
-    },
-    "reason": "Shared public corpus or index maintenance with no tenant actor."
-  },
-  {
     "id": "apps/api/src/lib/legal-search/corpus-index-projection-revision.ts::pruneCorpusIndexProjectionRevisionsTx",
     "writes": {
       "delete:?": 1
@@ -1413,13 +1279,6 @@
     "reason": "Shared public corpus or index maintenance with no tenant actor."
   },
   {
-    "id": "apps/api/src/lib/legal-search/corpus-index-projection-store.ts::cancelCorpusProjectionReservationTx",
-    "writes": {
-      "update:corpusIndexProjectionIntents": 1
-    },
-    "reason": "Shared public corpus or index maintenance with no tenant actor."
-  },
-  {
     "id": "apps/api/src/lib/legal-search/corpus-index-projection-store.ts::classifyCorpusProjectionReservationFailureTx",
     "writes": {
       "update:corpusIndexProjectionIntents": 1,
@@ -1428,39 +1287,9 @@
     "reason": "Shared public corpus or index maintenance with no tenant actor."
   },
   {
-    "id": "apps/api/src/lib/legal-search/corpus-index-projection-store.ts::commitCorpusProjectionAppendTx",
-    "writes": {
-      "update:corpusIndexProjectionIntents": 3,
-      "update:corpusIndexProjectionStates": 1
-    },
-    "reason": "Shared public corpus or index maintenance with no tenant actor."
-  },
-  {
     "id": "apps/api/src/lib/legal-search/corpus-index-projection-store.ts::continueCorpusProjectionAppendPartTx",
     "writes": {
       "update:corpusIndexProjectionIntents": 1
-    },
-    "reason": "Shared public corpus or index maintenance with no tenant actor."
-  },
-  {
-    "id": "apps/api/src/lib/legal-search/corpus-index-projection-store.ts::prepareCorpusProjectionReplacementsTx",
-    "writes": {
-      "update:corpusIndexProjectionIntents": 1,
-      "update:corpusIndexProjectionStates": 1
-    },
-    "reason": "Shared public corpus or index maintenance with no tenant actor."
-  },
-  {
-    "id": "apps/api/src/lib/legal-search/corpus-index-projection-store.ts::reserveCorpusProjectionIntentsTx",
-    "writes": {
-      "insert:corpusIndexProjectionIntents": 1
-    },
-    "reason": "Shared public corpus or index maintenance with no tenant actor."
-  },
-  {
-    "id": "apps/api/src/lib/legal-search/corpus-index-projection-store.ts::startCorpusProjectionAppendBatchTx",
-    "writes": {
-      "update:corpusIndexProjectionIntents": 3
     },
     "reason": "Shared public corpus or index maintenance with no tenant actor."
   },
@@ -1501,13 +1330,6 @@
     "reason": "Shared public corpus or index maintenance with no tenant actor."
   },
   {
-    "id": "apps/api/src/lib/lists/verification/run-queue.ts::reconcileStuckListVerificationRuns",
-    "writes": {
-      "update:legalListVerificationRuns": 1
-    },
-    "reason": "Background work state transition; the request that started the work records the audit event."
-  },
-  {
     "id": "apps/api/src/lib/matter-reference.ts::allocateMatterReference",
     "writes": {
       "insert:matterCounters": 1,
@@ -1529,13 +1351,6 @@
       "insert:notifications": 1
     },
     "reason": "Write outside handlers that predates the audit scope; triage whether it needs its own audit event."
-  },
-  {
-    "id": "apps/api/src/lib/oauth-connections.ts::disconnectOAuthConnectionForUser.try",
-    "writes": {
-      "delete:oauthConsent": 1
-    },
-    "reason": "Authentication or credential bookkeeping; the auth lifecycle owns its own security events."
   },
   {
     "id": "apps/api/src/lib/properties/property-status.ts::markPropertiesFresh",
@@ -1562,13 +1377,6 @@
     "id": "apps/api/src/lib/scheduler/jobs.ts::ensureOneShotSchedulerJob",
     "writes": {
       "insert:schedulerJobs": 1
-    },
-    "reason": "Scheduled system job bookkeeping with no member actor; audit when the job changes member-visible state."
-  },
-  {
-    "id": "apps/api/src/lib/scheduler/jobs.ts::removeSchedulerJob",
-    "writes": {
-      "delete:schedulerJobs": 1
     },
     "reason": "Scheduled system job bookkeeping with no member actor; audit when the job changes member-visible state."
   },
@@ -1718,16 +1526,6 @@
     "reason": "Search projection derived from a write that is audited at its source."
   },
   {
-    "id": "apps/api/src/lib/search/index-entity.ts::upsertSearchDocument",
-    "writes": {
-      "delete:search_document_preview_passages": 1,
-      "insert:search_document_preview_passages": 1,
-      "insert:search_documents": 1,
-      "update:search_documents": 1
-    },
-    "reason": "Search projection derived from a write that is audited at its source."
-  },
-  {
     "id": "apps/api/src/lib/search/index-global.ts::syncWorkspaceSearchActivity",
     "writes": {
       "update:workspace_search_documents": 1
@@ -1830,7 +1628,6 @@
     "id": "apps/api/src/lib/smoke-session/store.ts::ensureSmokePrincipal",
     "writes": {
       "insert:member": 1,
-      "insert:organization": 1,
       "insert:user": 1
     },
     "reason": "Authentication or credential bookkeeping; the auth lifecycle owns its own security events."
@@ -1872,23 +1669,9 @@
     "reason": "Usage metering or counter row that is itself the accounting record."
   },
   {
-    "id": "apps/api/src/lib/usage/organization-access-state.ts::endOrganizationEvaluation",
-    "writes": {
-      "update:organizationAccessStates": 1
-    },
-    "reason": "Usage metering or counter row that is itself the accounting record."
-  },
-  {
     "id": "apps/api/src/lib/usage/organization-access-state.ts::recordMissingOrganizationAccessStates",
     "writes": {
       "insert:?": 1
-    },
-    "reason": "Usage metering or counter row that is itself the accounting record."
-  },
-  {
-    "id": "apps/api/src/lib/usage/organization-access-state.ts::recordNewOrganizationAccessState",
-    "writes": {
-      "insert:organizationAccessStates": 1
     },
     "reason": "Usage metering or counter row that is itself the accounting record."
   },

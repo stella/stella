@@ -1,6 +1,6 @@
-import { Result } from "better-result";
-import { and, eq, inArray, ne, sql } from "drizzle-orm";
-import { t } from "elysia";
+import { panic, Result } from "better-result";
+import { and, eq, inArray, ne, or, sql } from "drizzle-orm";
+import * as v from "valibot";
 
 import { BILLING_STATUS, timeEntries } from "@/api/db/schema";
 import { timeEntryRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
@@ -20,15 +20,26 @@ import {
   timeEntryIsRunning,
 } from "@/api/lib/billing/time-entry-running";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
+import {
+  lockBatchTimeEntryCandidates,
+  lockRowsForWrite,
+  lockUnbillableRateCandidates,
+} from "@/api/lib/db/aggregate-lock";
+import { TRANSITIONS } from "@/api/lib/db/transition-specs";
+import { transitionBatch } from "@/api/lib/db/transitions";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import { sqlCaseFragment } from "@/api/lib/sql-case-expression";
 import { formatTodayInTimeZone } from "@/api/lib/timezone";
 
-const batchUpdateBodySchema = t.Object({
-  ids: t.Array(tSafeId("timeEntry"), { minItems: 1, maxItems: 200 }),
-  action: t.UnionEnum([
+const batchUpdateBodySchema = v.object({
+  ids: v.pipe(
+    v.array(resourceIdSchema("timeEntry")),
+    v.minLength(1),
+    v.maxLength(200),
+  ),
+  action: v.picklist([
     "approve",
     "revert_to_draft",
     "mark_billable",
@@ -37,14 +48,11 @@ const batchUpdateBodySchema = t.Object({
 });
 
 type BatchAction =
-  | "approve"
-  | "revert_to_draft"
-  | "mark_billable"
-  | "mark_non_billable";
+  "approve" | "revert_to_draft" | "mark_billable" | "mark_non_billable";
 
 const buildBatchEvents = (
   rows: { id: SafeId<"timeEntry"> }[],
-  action: BatchAction,
+  action: UniformBatchAction,
   rateChanges?: ReadonlyMap<
     SafeId<"timeEntry">,
     {
@@ -82,17 +90,12 @@ const buildBatchEvents = (
   return events;
 };
 
+// Approval records each entry's own previous status, read under its lock.
+type UniformBatchAction = Exclude<BatchAction, "approve">;
+
 const batchChangesFor = (
-  action: BatchAction,
+  action: UniformBatchAction,
 ): Record<string, { old: unknown; new: unknown }> => {
-  if (action === "approve") {
-    return {
-      status: {
-        old: BILLING_STATUS.DRAFT,
-        new: BILLING_STATUS.APPROVED,
-      },
-    };
-  }
   if (action === "revert_to_draft") {
     return {
       status: {
@@ -114,7 +117,7 @@ type PolicyCandidate = {
 };
 
 type BatchPolicyCheckOptions = {
-  candidates: PolicyCandidate[];
+  candidates: readonly PolicyCandidate[];
   policy: TimePolicy;
   now: Date;
   checkNarrative: boolean;
@@ -147,9 +150,12 @@ const getBatchPolicyViolation = ({
 
 const batchUpdate = createSafeHandler(
   {
+    contract: "patch",
     description:
       "Apply one action to up to 200 time entries in a matter at once: " +
       "approve, revert_to_draft, mark_billable, or mark_non_billable. " +
+      "approve takes submitted entries, and drafts only when they are the " +
+      "caller's own. " +
       "Entries that are not in the action's starting state are skipped and " +
       "only the number of changed rows is returned. Approval is refused " +
       "while any selected entry has a running timer or a billable entry has " +
@@ -157,6 +163,7 @@ const batchUpdate = createSafeHandler(
       "when one of them has no effective rate.",
     permissions: { timeEntry: ["approve"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
+    featureAccess: { featureId: "time-billing", type: "required" },
     realtime: timeEntryRealtimeUpdates,
     mcp: {
       type: "capability",
@@ -188,6 +195,16 @@ const batchUpdate = createSafeHandler(
       inArray(timeEntries.id, ids),
     );
 
+    // Submitted entries are approvable; a draft only by its own timekeeper,
+    // who approves their own work in one step. Others' drafts are skipped.
+    const approvable = or(
+      eq(timeEntries.status, BILLING_STATUS.SUBMITTED),
+      and(
+        eq(timeEntries.status, BILLING_STATUS.DRAFT),
+        eq(timeEntries.userId, user.id),
+      ),
+    );
+
     switch (action) {
       case "approve": {
         const rows = yield* Result.await(
@@ -201,21 +218,24 @@ const batchUpdate = createSafeHandler(
             if (runningError) {
               return { type: "policy" as const, error: runningError, rows: [] };
             }
-            const blockers = await tx
-              .select({
-                billable: timeEntries.billable,
-                currency: timeEntries.currency,
-                dateWorked: timeEntries.dateWorked,
-                narrative: timeEntries.narrative,
-                timezoneId: timeEntries.timezoneId,
-                running: timeEntryIsRunning(),
-              })
-              .from(timeEntries)
-              .where(
-                and(condition, eq(timeEntries.status, BILLING_STATUS.DRAFT)),
-              )
-              .limit(ids.length)
-              .for("update");
+            const locked = await lockRowsForWrite({
+              table: timeEntries,
+              query: tx
+                .select({
+                  id: timeEntries.id,
+                  status: timeEntries.status,
+                  billable: timeEntries.billable,
+                  currency: timeEntries.currency,
+                  dateWorked: timeEntries.dateWorked,
+                  narrative: timeEntries.narrative,
+                  timezoneId: timeEntries.timezoneId,
+                  running: timeEntryIsRunning(),
+                })
+                .from(timeEntries)
+                .where(and(condition, approvable))
+                .limit(ids.length),
+            });
+            const blockers = locked.rows;
             const violation = getBatchPolicyViolation({
               candidates: blockers,
               policy,
@@ -237,22 +257,51 @@ const batchUpdate = createSafeHandler(
             if (hasUnpricedEntry) {
               return { type: "unpriced" as const, rows: [] };
             }
-            const updated = await tx
-              .update(timeEntries)
-              .set({
-                status: BILLING_STATUS.APPROVED,
-                approvedByUserId: user.id,
-                approvedAt: now,
-                returnedAt: null,
-                returnedByUserId: null,
-                returnComment: null,
-                updatedAt: now,
-              })
-              .where(
-                and(condition, eq(timeEntries.status, BILLING_STATUS.DRAFT)),
-              )
-              .returning({ id: timeEntries.id });
-            await recordAuditEvent(tx, buildBatchEvents(updated, action));
+            // The rows were locked when read, so each one's status then is
+            // the status the approval moves it from.
+            const previousStatus = new Map(
+              blockers.map(({ id, status }) => [id, status]),
+            );
+            const updated = await transitionBatch({
+              tx,
+              spec: TRANSITIONS.timeEntries,
+              ids: locked.ids,
+              options: {
+                from: [BILLING_STATUS.DRAFT, BILLING_STATUS.SUBMITTED],
+                to: BILLING_STATUS.APPROVED,
+                guard:
+                  and(condition, approvable) ??
+                  panic("Batch approval eligibility predicate must exist"),
+                set: {
+                  approvedByUserId: user.id,
+                  approvedAt: now,
+                  returnedAt: null,
+                  returnedByUserId: null,
+                  returnComment: null,
+                  updatedAt: now,
+                },
+              },
+              recordTransitionAuditEvent: async (auditTx, changed) => {
+                await recordAuditEvent(
+                  auditTx,
+                  changed.map(({ id }) => ({
+                    action: AUDIT_ACTION.UPDATE,
+                    resourceType: AUDIT_RESOURCE_TYPE.TIME_ENTRY,
+                    resourceId: id,
+                    changes: {
+                      status: {
+                        old:
+                          previousStatus.get(id) ??
+                          panic(
+                            "An approved entry was not among the locked rows",
+                          ),
+                        new: BILLING_STATUS.APPROVED,
+                      },
+                    },
+                  })),
+                );
+              },
+            });
             await recordBillingCapCrossings(tx, {
               workspaceId,
               recordAuditEvent,
@@ -294,20 +343,13 @@ const batchUpdate = createSafeHandler(
             if (runningError) {
               return { type: "policy" as const, error: runningError, rows: [] };
             }
-            const candidates = await tx
-              .select({
-                dateWorked: timeEntries.dateWorked,
-                narrative: timeEntries.narrative,
-                timezoneId: timeEntries.timezoneId,
-              })
-              .from(timeEntries)
-              .where(
-                and(condition, eq(timeEntries.status, BILLING_STATUS.APPROVED)),
-              )
-              .limit(ids.length)
-              .for("update");
+            const locked = await lockBatchTimeEntryCandidates(
+              tx,
+              and(condition, eq(timeEntries.status, BILLING_STATUS.APPROVED)),
+              ids.length,
+            );
             const violation = getBatchPolicyViolation({
-              candidates,
+              candidates: locked.rows,
               policy,
               now,
               checkNarrative: false,
@@ -315,19 +357,31 @@ const batchUpdate = createSafeHandler(
             if (violation) {
               return { type: "policy" as const, error: violation };
             }
-            const updated = await tx
-              .update(timeEntries)
-              .set({
-                status: BILLING_STATUS.DRAFT,
-                approvedByUserId: null,
-                approvedAt: null,
-                updatedAt: now,
-              })
-              .where(
-                and(condition, eq(timeEntries.status, BILLING_STATUS.APPROVED)),
-              )
-              .returning({ id: timeEntries.id });
-            await recordAuditEvent(tx, buildBatchEvents(updated, action));
+            const updated = await transitionBatch({
+              tx,
+              spec: TRANSITIONS.timeEntries,
+              ids: locked.ids,
+              options: {
+                from: [BILLING_STATUS.APPROVED],
+                to: BILLING_STATUS.DRAFT,
+                guard:
+                  and(
+                    condition,
+                    eq(timeEntries.status, BILLING_STATUS.APPROVED),
+                  ) ?? panic("Batch revert eligibility predicate must exist"),
+                set: {
+                  approvedByUserId: null,
+                  approvedAt: null,
+                  updatedAt: now,
+                },
+              },
+              recordTransitionAuditEvent: async (auditTx, changed) => {
+                await recordAuditEvent(
+                  auditTx,
+                  buildBatchEvents([...changed], action),
+                );
+              },
+            });
             await recordBillingCapCrossings(tx, {
               workspaceId,
               recordAuditEvent,
@@ -353,26 +407,16 @@ const batchUpdate = createSafeHandler(
             if (runningError) {
               return { type: "policy" as const, error: runningError, rows: [] };
             }
-            const candidates = await tx
-              .select({
-                currency: timeEntries.currency,
-                dateWorked: timeEntries.dateWorked,
-                narrative: timeEntries.narrative,
-                timezoneId: timeEntries.timezoneId,
-                id: timeEntries.id,
-                rateAtEntry: timeEntries.rateAtEntry,
-                userId: timeEntries.userId,
-              })
-              .from(timeEntries)
-              .where(
-                and(
-                  condition,
-                  eq(timeEntries.billable, false),
-                  ne(timeEntries.status, BILLING_STATUS.BILLED),
-                  ne(timeEntries.status, BILLING_STATUS.WRITTEN_OFF),
-                ),
-              )
-              .for("update");
+            const locked = await lockUnbillableRateCandidates(
+              tx,
+              and(
+                condition,
+                eq(timeEntries.billable, false),
+                ne(timeEntries.status, BILLING_STATUS.BILLED),
+                ne(timeEntries.status, BILLING_STATUS.WRITTEN_OFF),
+              ),
+            );
+            const candidates = locked.rows;
             const violation = getBatchPolicyViolation({
               candidates,
               policy,
@@ -388,6 +432,7 @@ const batchUpdate = createSafeHandler(
                 ? [
                     {
                       dateWorked: row.dateWorked,
+                      activityCode: row.activityCode,
                       userId: brandPersistedUserId(row.userId),
                     },
                   ]
@@ -404,6 +449,7 @@ const batchUpdate = createSafeHandler(
                 !resolvedRates.has(
                   rateLookupKey({
                     dateWorked: row.dateWorked,
+                    activityCode: row.activityCode,
                     userId: brandPersistedUserId(row.userId),
                   }),
                 ),
@@ -426,6 +472,7 @@ const batchUpdate = createSafeHandler(
                 ? resolvedRates.get(
                     rateLookupKey({
                       dateWorked: row.dateWorked,
+                      activityCode: row.activityCode,
                       userId: brandPersistedUserId(row.userId),
                     }),
                   )
@@ -472,23 +519,28 @@ const batchUpdate = createSafeHandler(
                     fallback: sql`${timeEntries.currency}`,
                   })
                 : undefined;
-            const updated = await tx
-              .update(timeEntries)
-              .set({
-                billable: true,
-                ...(rateAtEntry === undefined ? {} : { rateAtEntry }),
-                ...(currency === undefined ? {} : { currency }),
-                updatedAt: new Date(),
-              })
-              .where(
-                and(
-                  condition,
-                  eq(timeEntries.billable, false),
-                  ne(timeEntries.status, BILLING_STATUS.BILLED),
-                  ne(timeEntries.status, BILLING_STATUS.WRITTEN_OFF),
-                ),
-              )
-              .returning({ id: timeEntries.id });
+            const updated =
+              locked.ids.length === 0
+                ? []
+                : await tx
+                    .update(timeEntries)
+                    .set({
+                      billable: true,
+                      ...(rateAtEntry === undefined ? {} : { rateAtEntry }),
+                      ...(currency === undefined ? {} : { currency }),
+                      updatedAt: new Date(),
+                    })
+                    .where(
+                      locked.where(
+                        and(
+                          condition,
+                          eq(timeEntries.billable, false),
+                          ne(timeEntries.status, BILLING_STATUS.BILLED),
+                          ne(timeEntries.status, BILLING_STATUS.WRITTEN_OFF),
+                        ),
+                      ),
+                    )
+                    .returning({ id: timeEntries.id });
             await recordAuditEvent(
               tx,
               buildBatchEvents(updated, action, rateChanges),
@@ -526,25 +578,18 @@ const batchUpdate = createSafeHandler(
             if (runningError) {
               return { type: "policy" as const, error: runningError, rows: [] };
             }
-            const candidates = await tx
-              .select({
-                dateWorked: timeEntries.dateWorked,
-                narrative: timeEntries.narrative,
-                timezoneId: timeEntries.timezoneId,
-              })
-              .from(timeEntries)
-              .where(
-                and(
-                  condition,
-                  eq(timeEntries.billable, true),
-                  ne(timeEntries.status, BILLING_STATUS.BILLED),
-                  ne(timeEntries.status, BILLING_STATUS.WRITTEN_OFF),
-                ),
-              )
-              .limit(ids.length)
-              .for("update");
+            const locked = await lockBatchTimeEntryCandidates(
+              tx,
+              and(
+                condition,
+                eq(timeEntries.billable, true),
+                ne(timeEntries.status, BILLING_STATUS.BILLED),
+                ne(timeEntries.status, BILLING_STATUS.WRITTEN_OFF),
+              ),
+              ids.length,
+            );
             const violation = getBatchPolicyViolation({
-              candidates,
+              candidates: locked.rows,
               policy,
               now,
               checkNarrative: false,
@@ -552,18 +597,23 @@ const batchUpdate = createSafeHandler(
             if (violation) {
               return { type: "policy" as const, error: violation };
             }
-            const updated = await tx
-              .update(timeEntries)
-              .set({ billable: false, updatedAt: new Date() })
-              .where(
-                and(
-                  condition,
-                  eq(timeEntries.billable, true),
-                  ne(timeEntries.status, BILLING_STATUS.BILLED),
-                  ne(timeEntries.status, BILLING_STATUS.WRITTEN_OFF),
-                ),
-              )
-              .returning({ id: timeEntries.id });
+            const updated =
+              locked.ids.length === 0
+                ? []
+                : await tx
+                    .update(timeEntries)
+                    .set({ billable: false, updatedAt: new Date() })
+                    .where(
+                      locked.where(
+                        and(
+                          condition,
+                          eq(timeEntries.billable, true),
+                          ne(timeEntries.status, BILLING_STATUS.BILLED),
+                          ne(timeEntries.status, BILLING_STATUS.WRITTEN_OFF),
+                        ),
+                      ),
+                    )
+                    .returning({ id: timeEntries.id });
             await recordAuditEvent(tx, buildBatchEvents(updated, action));
             await recordBillingCapCrossings(tx, {
               workspaceId,

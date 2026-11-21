@@ -33,27 +33,63 @@ import {
   MenuSeparator,
   MenuTrigger,
 } from "@stll/ui/menu";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { accountExpiryDelay } from "../shared/account-expiry";
 import { subscribeDesktopEvent } from "../shared/desktop-events";
 import {
+  describeError,
   DESKTOP_TELEMETRY_ERROR_CODES,
   DESKTOP_TELEMETRY_OPERATIONS,
   DESKTOP_TELEMETRY_WINDOWS,
-  describeError,
   reportDesktopError,
 } from "../telemetry/desktop-telemetry";
+import {
+  registryConnectionFailure,
+  registryOperationFailure,
+} from "./registry-errors";
 import { registryFormatHtml } from "./registry-format";
 
 const SEARCH_DEBOUNCE_MS = 300;
+const CONNECTION_FAILURE_MESSAGES = {
+  lookup: "registryErrorState",
+  connect: "registryErrorConnect",
+  role: "registryErrorRole",
+  keychain: "registryErrorKeychain",
+} as const satisfies Record<
+  ReturnType<typeof registryConnectionFailure> | "connect",
+  string
+>;
 // Emitted by the native bridge once a browser handoff stored a credential;
 // the non-activating panel gets no focus event to notice it otherwise.
 const CONNECTION_CHANGED_EVENT = "desktop-account-changed";
 
 type Connection =
   | { status: "disconnected" }
+  | { status: "expired" }
+  | { status: "reconnectRequired" }
   | { status: "unavailable" }
   | ({ status: "connected"; expiresAt: string } & DesktopRegistryConfig);
+
+const registrySearchHint = (
+  t: ReturnType<typeof useTranslations<"clipboard">>,
+  connection: Connection | null,
+  registryId: string,
+) => {
+  if (connection?.status !== "connected") {
+    return t("registrySearchHint");
+  }
+  const capabilities = connection.registries.find(
+    ({ id }) => id === registryId,
+  )?.searchCapabilities;
+  if (capabilities?.nameSearch !== "unsupported") {
+    return t("registrySearchHint");
+  }
+  return t("registryIdentifierSearchHint", {
+    identifiers: capabilities.identifierKinds.join(", "),
+  });
+};
+export type DesktopConnectionStatus = Connection["status"] | "loading";
 type ResultCard = Omit<
   DesktopRegistrySearchResponse["results"][number],
   "rendered"
@@ -79,9 +115,13 @@ type RegistrySearchProps = {
   source: "clips" | "registry";
   onConnectAccount: () => Promise<unknown>;
   onConnectionFlowChange: (flow: "signIn" | "idle") => void;
-  /** The shared search field; in registry scope ArrowUp and Enter act on the highlighted result. */
+  /** The shared search field; in registry scope Enter starts the search now and ArrowUp focuses the highlighted result. */
   searchInput: RefObject<HTMLInputElement | null>;
   children: (slots: {
+    connectionStatus: DesktopConnectionStatus;
+    connectionError: string | null;
+    connectControl: ReactNode;
+    retryConnection: () => void;
     controls: ReactNode;
     results: ReactNode;
     feedback: ReactNode;
@@ -100,7 +140,11 @@ export const RegistrySearch = ({
   children,
 }: RegistrySearchProps) => {
   const t = useTranslations("clipboard");
+  const settingsT = useTranslations("settings");
   const [connection, setConnection] = useState<Connection | null>(null);
+  const [connectionReadAttempt, setConnectionReadAttempt] = useState(0);
+  const retryConnection = () =>
+    setConnectionReadAttempt((current) => current + 1);
   const [registryId, setRegistryId] = useState("");
   const [searchState, setSearchState] = useState<SearchState>({
     status: "idle",
@@ -109,20 +153,31 @@ export const RegistrySearch = ({
     scope: string;
     message: string;
   } | null>(null);
-  const [connectionFailure, setConnectionFailure] = useState<string | null>(
-    null,
-  );
+  const [connectionFailure, setConnectionFailure] = useState<
+    keyof typeof CONNECTION_FAILURE_MESSAGES | null
+  >(null);
   const [attempt, setAttempt] = useState(0);
   const connectionRefresh = useRef<() => void>(() => undefined);
   const [activeResultId, setActiveResultId] = useState<string | null>(null);
   const generation = useRef(0);
+  // The search the user confirmed with Enter: it skips the debounce. A new
+  // object per Enter, so confirming the same query again retries a failure.
+  const [confirmedSearch, setConfirmedSearch] = useState<{
+    scope: string;
+  } | null>(null);
   const connectionGeneration = useRef(0);
   const rail = useRef<HTMLDivElement>(null);
   const formatRequests = useRef(new Map<string, number>());
   const defaultFormatRequests = useRef(0);
   const [savingDefaultFormat, setSavingDefaultFormat] = useState(false);
-  const connectionError = t("registryErrorState");
+  const connectionError =
+    connectionFailure === null
+      ? null
+      : t(CONNECTION_FAILURE_MESSAGES[connectionFailure]);
   const searchError = t("registryErrorSearch");
+  const roleError = t("registryErrorRole");
+  const operationError = (error: unknown, fallback: string) =>
+    registryOperationFailure(error) === "role" ? roleError : fallback;
   const connected = connection?.status === "connected";
   const formatType =
     connection?.status === "connected"
@@ -137,7 +192,7 @@ export const RegistrySearch = ({
     attempt,
   ]);
   const errorMessage =
-    failure?.scope === scope ? failure.message : connectionFailure;
+    failure?.scope === scope ? failure.message : connectionError;
   const setError = (message: string | null) =>
     setFailure(message === null ? null : { scope, message });
 
@@ -170,12 +225,12 @@ export const RegistrySearch = ({
           setAttempt((current) => current + 1);
           return;
         })
-        .catch(() => {
+        .catch((error: unknown) => {
           if (disposed || request !== connectionGeneration.current) {
             return;
           }
           setConnection({ status: "unavailable" });
-          setConnectionFailure(connectionError);
+          setConnectionFailure(registryConnectionFailure(error));
         });
     };
     refresh();
@@ -200,7 +255,14 @@ export const RegistrySearch = ({
       window.removeEventListener("focus", refresh);
       stopListening();
     };
-  }, [connectionError]);
+  }, []);
+
+  useEffect(() => {
+    if (connectionReadAttempt === 0) {
+      return;
+    }
+    connectionRefresh.current();
+  }, [connectionReadAttempt]);
 
   const connectionExpiresAt =
     connection?.status === "connected" ? connection.expiresAt : null;
@@ -232,7 +294,7 @@ export const RegistrySearch = ({
         generation.current += 1;
       };
     }
-    const timer = setTimeout(() => {
+    const search = () => {
       setSearchState({
         status: "loading",
         scope,
@@ -261,14 +323,24 @@ export const RegistrySearch = ({
           });
           return;
         })
-        .catch(() => {
+        .catch((error: unknown) => {
           if (generation.current !== request) {
             return;
           }
           setSearchState({ status: "idle" });
-          setFailure({ scope, message: searchError });
+          setFailure({
+            scope,
+            message:
+              registryOperationFailure(error) === "role"
+                ? roleError
+                : searchError,
+          });
         });
-    }, SEARCH_DEBOUNCE_MS);
+    };
+    const timer = setTimeout(
+      search,
+      confirmedSearch?.scope === scope ? 0 : SEARCH_DEBOUNCE_MS,
+    );
     return () => {
       clearTimeout(timer);
       generation.current += 1;
@@ -280,7 +352,9 @@ export const RegistrySearch = ({
     trimmedQuery,
     composing,
     scope,
+    confirmedSearch,
     searchError,
+    roleError,
   ]);
 
   const currentSearch =
@@ -291,10 +365,18 @@ export const RegistrySearch = ({
     generation.current += 1;
     setSearchState({ status: "idle" });
     setError(null);
+    setConnectionFailure(null);
     onConnectionFlowChange("signIn");
-    void onConnectAccount().catch(() => {
+    const reconnect = async () => {
+      if (connection?.status === "reconnectRequired") {
+        await invoke("account_disconnect");
+        setConnection({ status: "disconnected" });
+      }
+      await onConnectAccount();
+    };
+    void reconnect().catch(() => {
       onConnectionFlowChange("idle");
-      setError(t("registryErrorConnect"));
+      setConnectionFailure("connect");
     });
   };
   const disconnect = () => {
@@ -311,7 +393,7 @@ export const RegistrySearch = ({
       })
       .catch(() => setError(t("registryErrorDisconnect")));
   };
-  // The highlighted result: the last one focused, else the first, so Enter
+  // The highlighted result: the last one focused, else the first, so ArrowUp
   // from the search field always has a target.
   const activeResult =
     currentSearch.status === "ready"
@@ -380,7 +462,7 @@ export const RegistrySearch = ({
         );
         return;
       })
-      .catch(() => {
+      .catch((error: unknown) => {
         if (
           request !== generation.current ||
           formatRequests.current.get(card.id) !== operation
@@ -399,7 +481,7 @@ export const RegistrySearch = ({
               }
             : current,
         );
-        setError(t("registryErrorFormat"));
+        setError(operationError(error, t("registryErrorFormat")));
       });
   };
   // The reply carries the default the member now resolves to: clearing a
@@ -433,12 +515,12 @@ export const RegistrySearch = ({
         );
         return;
       })
-      .catch(() => {
+      .catch((error: unknown) => {
         if (defaultFormatRequests.current !== operation) {
           return;
         }
         setSavingDefaultFormat(false);
-        setError(t("registryErrorSetDefaultFormat"));
+        setError(operationError(error, t("registryErrorSetDefaultFormat")));
       });
   };
   const openCompanyFormat = (card: ResultCard) => {
@@ -463,19 +545,27 @@ export const RegistrySearch = ({
       return () => undefined;
     }
     const handleSearchKey = (event: KeyboardEvent) => {
+      if (event.isComposing) {
+        return;
+      }
+      // Enter in the search field only searches: it never copies or closes
+      // the window. Copying is Enter on a focused result card.
+      if (event.key === "Enter") {
+        event.preventDefault();
+        // Only a search that has not started yet is brought forward, so a
+        // second Enter never repeats a request already in flight or shown.
+        if (currentSearch.status === "idle") {
+          setConfirmedSearch({ scope });
+        }
+        return;
+      }
       if (
-        event.isComposing ||
         event.altKey ||
         event.ctrlKey ||
         event.metaKey ||
         event.shiftKey ||
         activeResult === null
       ) {
-        return;
-      }
-      if (event.key === "Enter") {
-        event.preventDefault();
-        copy(activeResult);
         return;
       }
       if (event.key === "ArrowUp") {
@@ -492,9 +582,11 @@ export const RegistrySearch = ({
     input.addEventListener("keydown", handleSearchKey);
     return () => input.removeEventListener("keydown", handleSearchKey);
   });
-  let emptyText = t("registrySearchHint");
+  let emptyText = registrySearchHint(t, connection, registryId);
   if (connection === null) {
     emptyText = t("registryLoading");
+  } else if (connection.status === "expired") {
+    emptyText = settingsT("connectionExpiredDescription");
   } else if (!connected) {
     emptyText = t("registryDisconnected");
   } else if (connection.registries.length === 0) {
@@ -524,17 +616,22 @@ export const RegistrySearch = ({
                 variant="ghost"
                 className="h-11 max-w-48 min-w-0 text-xs"
                 disabled={!connected}
+                disabledReason={
+                  connection?.status === "unavailable"
+                    ? t("registryErrorState")
+                    : emptyText
+                }
               />
             }
             aria-label={t("registrySelect")}
           >
             <Building2Icon aria-hidden="true" className="size-4" />
-            <span className="truncate">
+            <TruncatedText hint={false}>
               {connected
                 ? (connection.registries.find(({ id }) => id === registryId)
                     ?.name ?? t("registrySelect"))
                 : t("registrySelect")}
-            </span>
+            </TruncatedText>
             <ChevronDownIcon aria-hidden="true" className="size-3.5" />
           </MenuTrigger>
           <MenuPopup align="start">
@@ -584,10 +681,10 @@ export const RegistrySearch = ({
               className="clipboard-card relative flex min-h-0 w-[246px] shrink-0 flex-col overflow-hidden rounded-2xl"
               data-registry-result={card.id}
             >
-              <button
-                type="button"
+              <Button
                 data-registry-card
                 disabled={card.status === "formatting"}
+                disabledReason={t("registryFormatting")}
                 onKeyDown={(event) => {
                   if (
                     event.nativeEvent.isComposing ||
@@ -637,28 +734,38 @@ export const RegistrySearch = ({
                     inline: "nearest",
                   });
                 }}
-                className="focus-visible:ring-ring min-h-0 flex-1 overflow-y-auto px-4 py-3 text-start outline-none focus-visible:ring-2 focus-visible:ring-inset"
+                // A button centres its content vertically; a column pinned to
+                // the start keeps a short result at the top of a tall card.
+                className="flex min-h-0 flex-1 flex-col justify-start overflow-y-auto"
+                // The card clips its overflow; an outside ring would be cut
+                // off.
+                focusRing="inside"
+                variant="plain"
               >
-                <h2 className="truncate text-sm font-semibold" dir="auto">
-                  {card.name}
-                </h2>
-                <p
-                  className="text-foreground-muted mt-2 text-xs whitespace-pre-wrap"
-                  dir="auto"
-                >
-                  {parseRegistryFormatMarkdown(card.rendered).map(
-                    ({ text: runText, style, start }) => {
-                      if (style === "bold") {
-                        return <strong key={start}>{runText}</strong>;
-                      }
-                      if (style === "italic") {
-                        return <em key={start}>{runText}</em>;
-                      }
-                      return <span key={start}>{runText}</span>;
-                    },
-                  )}
-                </p>
-              </button>
+                <div className="px-4 py-3">
+                  <TruncatedText
+                    className="text-sm font-semibold"
+                    render={<h2 dir="auto">{card.name}</h2>}
+                    tooltip={card.name}
+                  />
+                  <p
+                    className="text-foreground-muted mt-2 text-xs whitespace-pre-wrap"
+                    dir="auto"
+                  >
+                    {parseRegistryFormatMarkdown(card.rendered).map(
+                      ({ text: runText, style, start }) => {
+                        if (style === "bold") {
+                          return <strong key={start}>{runText}</strong>;
+                        }
+                        if (style === "italic") {
+                          return <em key={start}>{runText}</em>;
+                        }
+                        return <span key={start}>{runText}</span>;
+                      },
+                    )}
+                  </p>
+                </div>
+              </Button>
               <footer className="clipboard-card-footer flex h-12 shrink-0 items-center px-2">
                 <Menu>
                   <MenuTrigger
@@ -667,15 +774,16 @@ export const RegistrySearch = ({
                         className="h-11 w-full justify-between text-xs"
                         variant="ghost"
                         disabled={card.status === "formatting"}
+                        disabledReason={t("registryFormatting")}
                       />
                     }
                     aria-label={t("registryFormat")}
                   >
-                    <span className="truncate">
+                    <TruncatedText hint={false}>
                       {currentSearch.formats.find(
                         ({ id }) => id === card.formatId,
                       )?.name ?? t("registryDefaultFormat")}
-                    </span>
+                    </TruncatedText>
                     <ChevronDownIcon aria-hidden="true" className="size-3.5" />
                   </MenuTrigger>
                   <MenuPopup align="start" side="top">
@@ -728,16 +836,18 @@ export const RegistrySearch = ({
           <p role="status" className="max-w-sm text-sm">
             {errorMessage ? "" : emptyText}
           </p>
-          {connection?.status === "disconnected" ? (
+          {connection !== null &&
+          !connected &&
+          connection.status !== "unavailable" ? (
             <Button className="min-h-11" onClick={connect}>
-              {t("registryConnect")}
+              {connection.status === "expired" ||
+              connection.status === "reconnectRequired"
+                ? settingsT("reconnectToStella")
+                : t("registryConnect")}
             </Button>
           ) : null}
           {connection?.status === "unavailable" ? (
-            <Button
-              className="min-h-11"
-              onClick={() => connectionRefresh.current()}
-            >
+            <Button className="min-h-11" onClick={retryConnection}>
               {t("registryRetry")}
             </Button>
           ) : null}
@@ -754,14 +864,30 @@ export const RegistrySearch = ({
           aria-atomic="true"
         >
           <CircleAlertIcon aria-hidden="true" className="size-3.5 shrink-0" />
-          <span className="truncate" title={errorMessage}>
-            {errorMessage}
-          </span>
+          {/* A long registry error truncates; the tooltip gives it back. */}
+          <TruncatedText>{errorMessage}</TruncatedText>
         </p>
       ) : null}
     </div>
   );
-  return children({ controls, results, feedback });
+  return children({
+    controls,
+    results,
+    feedback,
+    connectionStatus: connection?.status ?? "loading",
+    connectionError,
+    connectControl: (
+      <Button className="min-h-11 rounded-xl" onClick={connect} type="button">
+        {settingsT(
+          connection?.status === "expired" ||
+            connection?.status === "reconnectRequired"
+            ? "reconnectToStella"
+            : "connectToStella",
+        )}
+      </Button>
+    ),
+    retryConnection,
+  });
 };
 
 type DefaultFormatItemProps = DesktopRegistryDefaultFormat & {

@@ -3,22 +3,24 @@
  *
  * Orchestrates the classification cascade:
  * 1. Regex rules first (fast, free)
- * 2. A System One reading (Jev) when the deployment has a key: a typed
- *    choice with calibrated confidence, accepted above a floor
- * 3. The generative model for what the earlier tiers did not settle; it
- *    also extracts the key phrase a rule can be promoted from
+ * 2. A typed decision: the decision model first, with generative fallback
+ *    owned by decide; generative evidence supplies promotion phrases
  * 4. Track surface forms for auto-promotion to regex rules
  *
  * Over time, the regex ruleset grows and model usage drops.
  */
 
+import { panic } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawCitations, caseLawPolarityRules } from "@/api/db/schema";
+import { runCitationGraphTransaction } from "@/api/handlers/case-law/citation-graph-transaction";
+import { classifyCitedPart } from "@/api/handlers/case-law/polarity/cited-part";
 import {
   phraseToPattern,
   POLARITY,
+  POLARITY_CLASSIFIER_VERSION,
   PROMOTION_THRESHOLD,
   RULE_SOURCE,
 } from "@/api/handlers/case-law/polarity/consts";
@@ -27,22 +29,34 @@ import type {
   CitationContexts,
   CitationWindows,
 } from "@/api/handlers/case-law/polarity/context";
-import { classifyWithLLM } from "@/api/handlers/case-law/polarity/llm-classifier";
+import { POLARITY_READINGS } from "@/api/handlers/case-law/polarity/model-readings";
 import { unreviewedCitationSql } from "@/api/handlers/case-law/polarity/reviews";
 import {
   incrementMatchCount,
   matchRule,
 } from "@/api/handlers/case-law/polarity/rule-engine";
 import type { RuleCache } from "@/api/handlers/case-law/polarity/rule-engine";
+import type { ValidRuleKindPolarity } from "@/api/handlers/case-law/polarity/rule-kind";
 import { classifyWithSystemOne } from "@/api/handlers/case-law/polarity/system-one-classifier";
-import { captureError } from "@/api/lib/analytics/capture";
+import type { CitationTextRevision } from "@/api/handlers/case-law/polarity/text-revision";
+import { citationTextRevisionFence } from "@/api/handlers/case-law/polarity/text-revision";
+import { captureError, detached } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { CitationEvidenceWindows } from "@/api/lib/case-law/citation-evidence";
+import type {
+  CitationPolaritySource,
+  CitedPart,
+} from "@/api/lib/case-law/citation-vocabulary";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
+import type { DecisionGenerator } from "@/api/lib/workflow/decisions/decide";
 import type { SystemOneClient } from "@/api/lib/workflow/decisions/system-one";
 
 export { extractContexts } from "@/api/handlers/case-law/polarity/context";
 
 /** How many of a citation's windows the model tiers read. */
 const EXCERPT_WINDOWS = 5;
+const MIN_PROMOTION_PHRASE_LENGTH = 3;
+const MAX_PROMOTION_PHRASE_LENGTH = 100;
 
 /**
  * What the model tiers read: the citation's windows in reading order, with
@@ -57,26 +71,40 @@ const EXCERPT_WINDOWS = 5;
  * its own, which only the rule tier does, so it is a verdict that tier
  * reaches (`selectCitationPolarity`) and the model tiers do not.
  */
-export const excerptOf = (contexts: CitationContexts): string => {
-  if (contexts.length <= EXCERPT_WINDOWS) {
-    return contexts.join("\n[…]\n");
+const excerptItems = <T>(items: readonly [T, ...T[]]): readonly [T, ...T[]] => {
+  const selected =
+    items.length <= EXCERPT_WINDOWS
+      ? [...items]
+      : [...items.slice(0, 2), ...items.slice(-3)];
+  const [first, ...rest] = selected;
+  if (first === undefined) {
+    return panic("A citation excerpt must contain a context window");
   }
-  return [...contexts.slice(0, 2), ...contexts.slice(-3)].join("\n[…]\n");
+  return [first, ...rest];
+};
+
+export const excerptOf = (contexts: CitationContexts): string =>
+  excerptItems(contexts).join("\n[…]\n");
+
+const selectExcerptOf = (
+  windows: CitationWindows,
+): { text: string; evidenceWindows: CitationEvidenceWindows } => {
+  const contexts = excerptItems(windows.contexts);
+  return {
+    text: contexts.join("\n[…]\n"),
+    evidenceWindows: excerptItems(windows.contextEvidenceWindows),
+  };
 };
 
 type ClassifyResult = {
   polarity: Polarity;
   ruleId: SafeId<"caseLawPolarityRule"> | null;
   source: "regex" | "system-one" | "llm" | "fallback";
-  /**
-   * How much the deciding tier trusts this label: the rule's stored
-   * confidence for a regex match, the model's own for a System One or LLM
-   * call, and null on the fallback, where nothing read the text.
-   *
-   * `case_law_citations` has no column for it yet, so `persistPolarity`
-   * drops it and only in-process callers see it.
-   */
+  /** Confidence of the deciding tier; null when no tier read the text. */
   confidence: number | null;
+  classifierVersion: string;
+  evidenceWindows: CitationEvidenceWindows;
+  citedPart: CitedPart;
 };
 
 /**
@@ -102,6 +130,7 @@ type ClassifyCitationArgs = {
      * the tier. Injected so a comparison run can pin a model.
      */
     decisionModel?: SystemOneClient | null;
+    generator?: DecisionGenerator;
   };
 };
 
@@ -113,6 +142,14 @@ export const classifyCitation = async ({
   scopedDb,
   options,
 }: ClassifyCitationArgs): Promise<ClassifyResult> => {
+  const evidence = {
+    classifierVersion: POLARITY_CLASSIFIER_VERSION,
+    citedPart: classifyCitedPart({
+      contexts: windows.contexts,
+      citationText,
+      language,
+    }),
+  };
   // Tier 1: regex rules, over the mentions rather than the merged windows,
   // so two mentions that disagree are two readings and not one.
   const ruleMatch = await matchRule(
@@ -125,82 +162,99 @@ export const classifyCitation = async ({
   if (ruleMatch) {
     if (!options?.dryRun) {
       // Fire-and-forget: increment match count
-      incrementMatchCount({
-        observedAt,
-        ruleId: ruleMatch.ruleId,
-        scopedDb,
-      }).catch((error: unknown) => {
-        captureError(error, { ruleId: ruleMatch.ruleId });
-      });
+      detached(
+        async () =>
+          incrementMatchCount({
+            observedAt,
+            ruleId: ruleMatch.ruleId,
+            scopedDb,
+          }).catch((error: unknown) => {
+            captureError(
+              error,
+              handlerErrorContext("polarity.persistRuleMatch", {
+                ruleId: ruleMatch.ruleId,
+              }),
+            );
+          }),
+        "polarity-classifier.increment-match-count",
+      );
     }
     return {
+      ...evidence,
       polarity: ruleMatch.polarity,
       ruleId: ruleMatch.ruleId,
       source: "regex",
       confidence: ruleMatch.confidence,
+      evidenceWindows: windows.evidenceWindows,
     };
   }
 
-  // Tier 2: System One. A decided reading is the label; anything else falls
-  // through, including a transport failure and a deployment with no decision
-  // model, rather than becoming an `unknown` polarity: the generative tier
-  // still reads.
-  const context = excerptOf(windows.contexts);
+  // The decision owner asks both model tiers over the same excerpt.
+  const excerpt = selectExcerptOf(windows);
+  const context = excerpt.text;
   const reading = await classifyWithSystemOne({
     client: options?.decisionModel,
     context,
     citationText,
     language,
     abortSignal: options?.abortSignal,
+    generator: options?.generator,
   });
-  if (reading.state === "decided") {
+  if (reading.state === "undecided") {
     return {
-      polarity: reading.answer.choice,
-      ruleId: null,
-      source: "system-one",
-      confidence: reading.confidence,
-    };
-  }
-
-  // Tier 3: LLM classification
-  // Note: LLM is called even in dry-run mode (only DB writes
-  // are suppressed). Use small --limit values for cost preview.
-  const llmResult = await classifyWithLLM({
-    context,
-    citationText,
-    language,
-    abortSignal: options?.abortSignal,
-  });
-
-  if (llmResult.isErr()) {
-    // `unknown` here records that classification did not happen, not that the
-    // citation was read and found unclear. The two are not distinguishable
-    // once persisted, because the column has no value for "read it, could not
-    // decide"; adding one needs a CHECK-constraint migration.
-    return {
+      ...evidence,
       polarity: POLARITY.UNKNOWN,
       ruleId: null,
       source: "fallback",
       confidence: null,
+      evidenceWindows: excerpt.evidenceWindows,
     };
   }
-
-  const { polarity, keyPhrase, confidence } = llmResult.value;
+  const treatment = POLARITY_READINGS[reading.answer.choice];
+  const polarity = treatment.polarity;
+  const confidence = reading.confidence;
+  const keyPhrase = reading.evidence;
 
   // Track surface form for potential rule promotion
-  if (!options?.dryRun && confidence >= 0.8 && keyPhrase.length >= 3) {
-    trackSurfaceForm({
-      keyPhrase,
-      language,
-      observedAt,
-      polarity,
-      scopedDb,
-    }).catch((error: unknown) => {
-      captureError(error, { language, polarity });
-    });
+  if (
+    !options?.dryRun &&
+    reading.source === "generative" &&
+    confidence >= 0.8 &&
+    keyPhrase !== null &&
+    keyPhrase.length >= MIN_PROMOTION_PHRASE_LENGTH &&
+    keyPhrase.length <= MAX_PROMOTION_PHRASE_LENGTH &&
+    context.includes(keyPhrase) &&
+    keyPhrase.trim().length >= MIN_PROMOTION_PHRASE_LENGTH
+  ) {
+    detached(
+      async () =>
+        trackSurfaceForm({
+          ...treatment,
+          keyPhrase,
+          language,
+          observedAt,
+          scopedDb,
+        }).catch((error: unknown) => {
+          captureError(
+            error,
+            handlerErrorContext("polarity.persistModelMatch", {
+              language,
+              polarity,
+            }),
+          );
+        }),
+      "polarity-classifier.track-surface-form",
+    );
   }
 
-  return { polarity, ruleId: null, source: "llm", confidence };
+  return {
+    ...evidence,
+    polarity,
+    ruleId: null,
+    source: reading.source === "decision-model" ? "system-one" : "llm",
+    confidence,
+    evidenceWindows: excerpt.evidenceWindows,
+  };
 };
 
 /**
@@ -216,11 +270,11 @@ type TrackSurfaceFormArgs = {
   keyPhrase: string;
   language: string;
   observedAt: Date;
-  polarity: Polarity;
   scopedDb: ScopedDb;
-};
+} & ValidRuleKindPolarity;
 
 const trackSurfaceForm = async ({
+  kind,
   keyPhrase,
   language,
   observedAt,
@@ -233,13 +287,13 @@ const trackSurfaceForm = async ({
   // and `@>` compares against a jsonb string instead of the array.
   const formJson = JSON.stringify([keyPhrase]);
 
-  // oxlint-disable-next-line arrow-body-style -- block body holds the audit-skip directive that the require-audit-on-mutation rule scans for inside this arrow's body range
-  await scopedDb((tx) => {
+  await scopedDb((tx) =>
     // audit: skip — background polarity classification pipeline; no user-facing state change
-    return tx
+    tx
       .insert(caseLawPolarityRules)
       .values({
         pattern,
+        kind,
         polarity,
         language,
         source: RULE_SOURCE.LLM_PROPOSED,
@@ -257,6 +311,7 @@ const trackSurfaceForm = async ({
               @> ${formJson}::text::jsonb
             THEN ${caseLawPolarityRules.surfaceForms}
             WHEN ${caseLawPolarityRules.polarity} != ${polarity}
+              OR ${caseLawPolarityRules.kind} != ${kind}
             THEN ${caseLawPolarityRules.surfaceForms}
             ELSE ${caseLawPolarityRules.surfaceForms}
               || ${formJson}::text::jsonb
@@ -266,6 +321,7 @@ const trackSurfaceForm = async ({
           CASE
             WHEN ${caseLawPolarityRules.source} = ${RULE_SOURCE.LLM_PROPOSED}
               AND ${caseLawPolarityRules.polarity} = ${polarity}
+              AND ${caseLawPolarityRules.kind} = ${kind}
               AND jsonb_array_length(
                 CASE
                   WHEN ${caseLawPolarityRules.surfaceForms}
@@ -283,6 +339,7 @@ const trackSurfaceForm = async ({
           CASE
             WHEN ${caseLawPolarityRules.source} = ${RULE_SOURCE.LLM_PROPOSED}
               AND ${caseLawPolarityRules.polarity} = ${polarity}
+              AND ${caseLawPolarityRules.kind} = ${kind}
               AND jsonb_array_length(
                 CASE
                   WHEN ${caseLawPolarityRules.surfaceForms}
@@ -301,36 +358,70 @@ const trackSurfaceForm = async ({
             ${observedAt}
           )`,
         },
-      });
-  });
+      }),
+  );
 };
 
-/**
- * Persist a classification result to the citations table.
- *
- * `result.confidence` is deliberately not written: `case_law_citations` has
- * no column for it. Adding one is a schema change, not a write-path change.
- * A reviewed citation is left as it is.
- */
-export const persistPolarity = async (
-  citationId: SafeId<"caseLawCitation">,
-  result: ClassifyResult,
-  scopedDb: ScopedDb,
-) => {
-  // oxlint-disable-next-line arrow-body-style -- block body holds the audit-skip directive that the require-audit-on-mutation rule scans for inside this arrow's body range
-  await scopedDb((tx) => {
+const persistedPolaritySource = (
+  source: ClassifyResult["source"],
+): CitationPolaritySource | null => {
+  switch (source) {
+    case "regex":
+      return "rule";
+    case "system-one":
+      return "system-one";
+    case "llm":
+      return "llm";
+    case "fallback":
+      return null;
+    default: {
+      source satisfies never;
+      return panic("Unknown polarity classification source");
+    }
+  }
+};
+
+type PersistPolarityArgs = {
+  citationId: SafeId<"caseLawCitation">;
+  result: ClassifyResult;
+  scopedDb: ScopedDb;
+  textRevision: CitationTextRevision;
+};
+
+/** Persist only against the text revision classified; preserve reviewed rows. */
+export const persistPolarity = async ({
+  citationId,
+  result,
+  scopedDb,
+  textRevision,
+}: PersistPolarityArgs) => {
+  const written = await runCitationGraphTransaction(scopedDb, (tx) =>
     // audit: skip — background polarity classification pipeline; no user-facing state change
-    return tx
+    tx
       .update(caseLawCitations)
       .set({
         polarity: result.polarity,
         polarityRuleId: result.ruleId,
+        polaritySource: persistedPolaritySource(result.source),
+        polarityClassifierVersion:
+          result.source === "fallback" ? null : result.classifierVersion,
+        polarityEvidenceWindows:
+          result.source === "fallback" ? null : result.evidenceWindows,
+        polarityConfidence: result.confidence,
+        citedPart: result.citedPart,
       })
       .where(
         and(
           eq(caseLawCitations.id, citationId),
+          citationTextRevisionFence({
+            citingDecisionId: caseLawCitations.citingDecisionId,
+            expectedContentHash: sql`${textRevision.contentHash}::text`,
+            expectedSections: sql`${textRevision.sections === null ? null : JSON.stringify(textRevision.sections)}::text::jsonb`,
+          }),
           unreviewedCitationSql(caseLawCitations),
         ),
-      );
-  });
+      )
+      .returning({ id: caseLawCitations.id }),
+  );
+  return { applied: written.length, skipped: 1 - written.length };
 };

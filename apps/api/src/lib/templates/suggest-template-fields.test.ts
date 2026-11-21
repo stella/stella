@@ -81,6 +81,7 @@ describe("toSuggestFieldsError provider-run errors", () => {
   test("a 5xx HandlerError is remapped to the generic 500", () => {
     const providerRun = new HandlerError({
       status: 502,
+      code: "internal_error",
       message: "provider text that could echo request content",
     });
     const mapped = toSuggestFieldsError(providerRun);

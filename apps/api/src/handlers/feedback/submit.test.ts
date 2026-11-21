@@ -6,8 +6,8 @@ import type { FeedbackReportInput } from "@stll/api-contract/feedback";
 import { GithubDeliveryError } from "@/api/handlers/feedback/github-delivery";
 import type { GithubIssueCreator } from "@/api/handlers/feedback/github-delivery";
 import {
-  NO_DELIVERY_CHANNEL_WARNING,
   generateFeedbackReceipt,
+  NO_DELIVERY_CHANNEL_WARNING,
   submitFeedbackReport,
 } from "@/api/handlers/feedback/submit";
 import type {

@@ -1,17 +1,19 @@
 import { panic, Result } from "better-result";
 import { and, asc, eq, inArray, lte, ne, sql } from "drizzle-orm";
 
-import { Temporal, DAY_IN_MS } from "@stll/time";
+import { DAY_IN_MS, Temporal } from "@stll/time";
 
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
-  caseLawDecisionSourceIdentities,
+  caseLawDecisionAliasMovedIdentities,
   caseLawDecisions,
+  caseLawDecisionSourceIdentities,
   caseLawRawSweeps,
 } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
+import { replayWrite } from "@/api/lib/case-law/replay-write";
 import { liveCaseLawLegacyReferenceSql } from "@/api/lib/legal-search/case-law-legacy-reference-sql";
 import {
   eraseRawDocument,
@@ -22,6 +24,7 @@ import {
   rawDocumentPrefix,
 } from "@/api/lib/legal-search/raw-source-storage";
 import type { RawDocumentErasureIncompleteError } from "@/api/lib/legal-search/raw-source-storage";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { listS3ObjectPage } from "@/api/lib/s3";
 
 /**
@@ -84,10 +87,10 @@ export const enqueueCaseLawRawSweepsTx = async (
     )
     .onConflictDoUpdate({
       target: caseLawRawSweeps.decisionId,
-      set: {
+      ...replayWrite(caseLawRawSweeps, {
         settleAfter: sql`GREATEST(${caseLawRawSweeps.settleAfter}, excluded.settle_after)`,
         nextAttemptAt: sql`LEAST(${caseLawRawSweeps.nextAttemptAt}, excluded.next_attempt_at)`,
-      },
+      }),
     });
 };
 
@@ -316,11 +319,63 @@ export const sweepCaseLawRawDecision = async ({
     return { type: kept };
   }
 
-  const erased = await eraseRawDocument({ ...documentOwner(owner), signal });
-  if (Result.isError(erased)) {
-    return { type: "incomplete", error: erased.error };
+  // A linked identity's raw objects stay under the decision it was moved from.
+  const identities = await scopedDb(
+    async (tx) =>
+      await tx
+        .select({
+          decisionId: caseLawDecisionSourceIdentities.decisionId,
+          movedFrom: caseLawDecisionAliasMovedIdentities.retiredDecisionId,
+          sourceId: caseLawDecisionSourceIdentities.sourceId,
+        })
+        .from(caseLawDecisionSourceIdentities)
+        .leftJoin(
+          caseLawDecisionAliasMovedIdentities,
+          and(
+            eq(
+              caseLawDecisionAliasMovedIdentities.sourceId,
+              caseLawDecisionSourceIdentities.sourceId,
+            ),
+            eq(
+              caseLawDecisionAliasMovedIdentities.sourceDocumentId,
+              caseLawDecisionSourceIdentities.sourceDocumentId,
+            ),
+          ),
+        )
+        .where(eq(caseLawDecisionSourceIdentities.decisionId, decisionId)),
+  );
+  const identityOwners = identities.map(
+    ({ decisionId: ownerId, movedFrom, sourceId }) => ({
+      decisionId: movedFrom ?? ownerId,
+      sourceId,
+    }),
+  );
+  const rawOwners = new Map(
+    [owner, ...identityOwners].map((rawOwner) => [
+      `${rawOwner.decisionId}:${rawOwner.sourceId}`,
+      rawOwner,
+    ]),
+  );
+  const erased = await Promise.all(
+    [...rawOwners.values()].map(
+      async (rawOwner) =>
+        await eraseRawDocument({
+          ...documentOwner(rawOwner),
+          signal,
+        }),
+    ),
+  );
+  const failed = erased.find(Result.isError);
+  if (failed !== undefined && Result.isError(failed)) {
+    return { type: "incomplete", error: failed.error };
   }
-  const legacy = (await sourceHoldsLegacyRawObjects(owner.sourceId, signal))
+  const legacy = (
+    await Promise.all(
+      [...new Set([...rawOwners.values()].map(({ sourceId }) => sourceId))].map(
+        async (sourceId) => await sourceHoldsLegacyRawObjects(sourceId, signal),
+      ),
+    )
+  ).some(Boolean)
     ? "pending"
     : "none";
   if (legacy === "none") {
@@ -383,22 +438,26 @@ export const reconcileCaseLawRawSweeps = async ({
       .limit(limit)
       .for("update", { skipLocked: true });
     if (rows.length > 0) {
-      await tx
-        .update(caseLawRawSweeps)
-        .set({
-          attemptCount: sql`${caseLawRawSweeps.attemptCount} + 1`,
-          nextAttemptAt: sql`GREATEST(
+      const write = replayWrite(caseLawRawSweeps, {
+        attemptCount: sql`${caseLawRawSweeps.attemptCount} + 1`,
+        nextAttemptAt: sql`GREATEST(
             ${caseLawRawSweeps.settleAfter},
             now() + LEAST(
               ${DAY_IN_MS},
               ${RETRY_UNIT_MS} * POWER(2, LEAST(${caseLawRawSweeps.attemptCount}, 11))
             ) * interval '1 millisecond'
           )`,
-        })
+      });
+      await tx
+        .update(caseLawRawSweeps)
+        .set(write.set)
         .where(
-          inArray(
-            caseLawRawSweeps.decisionId,
-            rows.map(({ decisionId }) => decisionId),
+          and(
+            write.setWhere,
+            inArray(
+              caseLawRawSweeps.decisionId,
+              rows.map(({ decisionId }) => decisionId),
+            ),
           ),
         );
     }
@@ -427,11 +486,17 @@ export const reconcileCaseLawRawSweeps = async ({
         : swept;
     if (Result.isError(outcome)) {
       result.failed += 1;
-      captureError(outcome.error, {
-        decisionId: owner.decisionId,
-        prefix: rawDocumentPrefix(documentOwner(owner)),
-        step: "reconcileCaseLawRawSweeps.sweep",
-      });
+      captureError(
+        outcome.error,
+        handlerErrorContext(
+          "legalsearch.reconcileCaseLawRawSweeps.outcome_error",
+          {
+            decisionId: owner.decisionId,
+            prefix: rawDocumentPrefix(documentOwner(owner)),
+            step: "reconcileCaseLawRawSweeps.sweep",
+          },
+        ),
+      );
       continue;
     }
     if (outcome.value.type === "swept") {

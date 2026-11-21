@@ -1,16 +1,21 @@
 /** Thin client for the hosted usage provider's outbound HTTP API. */
 
-import { Result, TaggedError } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
+import * as v from "valibot";
 
+import { API_STORABLE_INSTANT_CHECK } from "@stll/api-contract/api-date";
 import { fetchWithTimeout } from "@stll/fetch";
+import { readBodyJsonWithIdleDeadline } from "@stll/fetch/body-reader";
+import { isNonNullObject } from "@stll/template-conditions/path";
 
 import {
-  getHostedUsageProviderKind,
   getHostedUsageProviderApiVersion,
+  getHostedUsageProviderKind,
   type HostedUsageProviderApiCredentials,
 } from "@/api/lib/hosted-usage-provider/config";
 
-const REQUEST_TIMEOUT_MS = 10_000;
+export const HOSTED_PROVIDER_REQUEST_TIMEOUT_MS = 10_000;
+const HOSTED_PROVIDER_SESSION_RESPONSE_MAX_BYTES = 1024 * 1024;
 
 export class HostedUsageProviderApiError extends TaggedError(
   "HostedUsageProviderApiError",
@@ -41,17 +46,19 @@ type CreateHostedSetupInput = {
 type CreateHostedSetupResult = {
   id: string;
   url: string;
+  /** When the provider closes the session; null when it reports none. */
+  expiresAt: Date | null;
 };
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null;
 
 const readJsonRecord = async (
   response: Response,
   context: string,
 ): Promise<Record<string, unknown>> => {
-  const body: unknown = await response.json();
-  if (isRecord(body)) {
+  const body = await readBodyJsonWithIdleDeadline(response, {
+    idleMs: HOSTED_PROVIDER_REQUEST_TIMEOUT_MS,
+    maxBytes: HOSTED_PROVIDER_SESSION_RESPONSE_MAX_BYTES,
+  });
+  if (isNonNullObject(body)) {
     return body;
   }
   throw new HostedUsageProviderApiError({
@@ -73,29 +80,103 @@ const readStringField = (
   });
 };
 
+const sessionExpirySchema = v.nullish(
+  v.pipe(
+    v.string(),
+    v.isoTimestamp(),
+    API_STORABLE_INSTANT_CHECK,
+    v.transform((value) => new Date(value)),
+  ),
+  null,
+);
+
+type ProviderRequest =
+  | { method: "POST"; path: string; body: Record<string, unknown> }
+  | { method: "DELETE"; path: string };
+
 /**
- * POST a JSON body to the provider API. The one outbound boundary of this
- * client: every endpoint is a path under the configured base URL.
+ * The one outbound boundary of this client: every endpoint is a path under
+ * the configured base URL, with the same credentials, version pin and
+ * timeout.
  */
+const sendProviderRequest = async (
+  credentials: HostedUsageProviderApiCredentials,
+  providerRequest: ProviderRequest,
+): Promise<Response> => {
+  const headers = {
+    authorization: `Bearer ${credentials.apiKey}`,
+    "Polar-Version": getHostedUsageProviderApiVersion(),
+  };
+  const init = (() => {
+    switch (providerRequest.method) {
+      case "POST":
+        return {
+          method: providerRequest.method,
+          headers: { ...headers, "content-type": "application/json" },
+          body: JSON.stringify(providerRequest.body),
+          timeoutMs: HOSTED_PROVIDER_REQUEST_TIMEOUT_MS,
+        };
+      case "DELETE":
+        return {
+          method: providerRequest.method,
+          headers,
+          timeoutMs: HOSTED_PROVIDER_REQUEST_TIMEOUT_MS,
+        };
+      default:
+        providerRequest satisfies never;
+        return panic("Unhandled provider request method");
+    }
+  })();
+  return await fetchWithTimeout(
+    // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- provider base URL from validated operator configuration (HOSTED_USAGE_PROVIDER_BASE_URL)
+    `${credentials.baseUrl}/v1/${providerRequest.path}`,
+    init,
+  );
+};
+
+/** POST a JSON body to the provider API. */
 const postProviderJson = async (
   credentials: HostedUsageProviderApiCredentials,
   path: string,
   body: Record<string, unknown>,
 ): Promise<Response> =>
-  await fetchWithTimeout(
-    // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- provider base URL from validated operator configuration (HOSTED_USAGE_PROVIDER_BASE_URL)
-    `${credentials.baseUrl}/v1/${path}`,
-    {
-      method: "POST",
-      headers: {
-        authorization: `Bearer ${credentials.apiKey}`,
-        "content-type": "application/json",
-        "Polar-Version": getHostedUsageProviderApiVersion(),
-      },
-      body: JSON.stringify(body),
-      timeoutMs: REQUEST_TIMEOUT_MS,
-    },
+  await sendProviderRequest(credentials, { method: "POST", path, body });
+
+export const eraseHostedCustomer = async ({
+  credentials,
+  externalCustomerRef,
+}: {
+  credentials: HostedUsageProviderApiCredentials;
+  externalCustomerRef: string;
+}): Promise<Result<void, HostedUsageProviderApiError>> => {
+  // Deletes the customer, cancels its subscriptions and anonymizes its
+  // personal data; the provider keeps historic orders and subscriptions.
+  const sent = await Result.tryPromise({
+    try: async () =>
+      await sendProviderRequest(credentials, {
+        method: "DELETE",
+        path: `customers/external/${encodeURIComponent(externalCustomerRef)}?anonymize=true`,
+      }),
+    catch: (cause) =>
+      new HostedUsageProviderApiError({
+        message: "Hosted customer erasure failed",
+        cause,
+      }),
+  });
+  if (Result.isError(sent)) {
+    return Result.err(sent.error);
+  }
+  const { status } = sent.value;
+  if (status === 204 || status === 404) {
+    return Result.ok(undefined);
+  }
+  return Result.err(
+    new HostedUsageProviderApiError({
+      message: `Hosted customer erasure returned ${status}`,
+      status,
+    }),
   );
+};
 
 const createNeutralSetupSession = async ({
   credentials,
@@ -130,6 +211,7 @@ const createNeutralSetupSession = async ({
       return {
         id: readStringField(json, "id", "Hosted setup session"),
         url: readStringField(json, "url", "Hosted setup session"),
+        expiresAt: v.parse(sessionExpirySchema, json["expires_at"]),
       };
     },
     catch: (cause) => {
@@ -166,6 +248,9 @@ export const createPolarSetupSession = async ({
         // Seat-based products take the seat count at checkout; the
         // resulting subscription reports it back on webhook events.
         seats,
+        // Every organization buys as a business. Polar then requires the
+        // billing name and full address, and its form collects the tax id.
+        is_business_customer: true,
         metadata,
       });
       if (!response.ok) {
@@ -178,6 +263,7 @@ export const createPolarSetupSession = async ({
       return {
         id: readStringField(json, "id", "Hosted setup session"),
         url: readStringField(json, "url", "Hosted setup session"),
+        expiresAt: v.parse(sessionExpirySchema, json["expires_at"]),
       };
     },
     catch: (cause) => {

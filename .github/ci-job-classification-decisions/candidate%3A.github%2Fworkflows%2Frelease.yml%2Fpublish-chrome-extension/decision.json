@@ -1,0 +1,4 @@
+{
+  "kind": "priority",
+  "qualifier": "Submits the published stable release's extension package to the Chrome Web Store for review."
+}

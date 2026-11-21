@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import type {
   KeyboardEvent as ReactKeyboardEvent,
   PointerEvent as ReactPointerEvent,
@@ -8,6 +8,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import { Input } from "@stll/ui/input";
 import { stellaToast } from "@stll/ui/toast";
 import { contentDir } from "@stll/ui/use-content-dir";
 import { cn } from "@stll/ui/utils";
@@ -24,13 +25,17 @@ import {
   registerOfficeEditIntentKeystroke,
 } from "@/components/office/office-edit-intent";
 import type {
-  OfficeViewerNavigationRequest,
   OfficeViewerFormat,
+  OfficeViewerNavigationRequest,
   OfficeViewerSpreadsheetSelection,
   OfficeViewerStatus,
 } from "@/components/office/silurus-office-viewer";
 import { SilurusOfficeFileViewer } from "@/components/office/silurus-office-viewer";
 import { useTheme } from "@/components/theme-provider";
+import {
+  DesktopRequiredDialog,
+  useDesktopActionGate,
+} from "@/features/desktop/desktop-action-gate";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { TOOLBAR_ROW_HEIGHT_PX } from "@/lib/consts";
@@ -38,6 +43,7 @@ import { detached } from "@/lib/detached";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { registerOfficeCitationNavigation } from "@/lib/files/office-citations";
 import { fileOptions } from "@/lib/files/queries";
+import { useActionCapabilities } from "@/lib/organization/feature-access/capability-actions";
 import "@/components/office/office-file-viewer.css";
 
 const OFFICE_AI_DOCK_CLEARANCE_PX = 96;
@@ -64,6 +70,9 @@ export const OfficeFileViewer = ({
   const t = useTranslations();
   const analytics = useAnalytics();
   const { resolvedTheme } = useTheme();
+  const desktopGate = useDesktopActionGate("edit-file");
+  const desktopCapability =
+    useActionCapabilities("desktop").capabilities.desktop;
   const editIntentStateRef = useRef(INITIAL_OFFICE_EDIT_INTENT_STATE);
   const navigationSequenceRef = useRef(0);
   const [attempt, setAttempt] = useState(0);
@@ -85,75 +94,69 @@ export const OfficeFileViewer = ({
   const requestDesktopOpenAttention = useInspectorCommandStore(
     (state) => state.requestDesktopOpenAttention,
   );
-  const handleStatusChange = useCallback((status: OfficeViewerStatus) => {
+  const handleStatusChange = (status: OfficeViewerStatus) => {
     setViewerStatus(status);
-  }, []);
-  const handleViewerError = useCallback(
-    (error: Error) => {
-      analytics.captureError(error);
-    },
-    [analytics],
-  );
-  const handleNavigationError = useCallback(
-    (error: Error) => {
-      analytics.captureError(error);
-      notifyUserError(error, t("errors.actionFailed"));
-    },
-    [analytics, t],
-  );
-  const handleNavigationApplied = useCallback((sequence: number) => {
+  };
+  const handleViewerError = (error: Error) => {
+    analytics.captureError(error, {
+      fingerprintKey: "OfficeFileViewer:failure",
+      scope: { type: "handler", handlerId: "OfficeFileViewer:failure" },
+    });
+  };
+  const handleNavigationError = (error: Error) => {
+    analytics.captureError(error, {
+      fingerprintKey: "OfficeFileViewer:failure-2",
+      scope: { type: "handler", handlerId: "OfficeFileViewer:failure-2" },
+    });
+    notifyUserError(error, t("errors.actionFailed"));
+  };
+  const handleNavigationApplied = (sequence: number) => {
     setNavigationRequest((current) =>
       current?.sequence === sequence ? null : current,
     );
-  }, []);
-  const handleEditIntentKeyDown = useCallback(
-    (event: ReactKeyboardEvent<HTMLDivElement>) => {
-      if (
-        desktopEditTarget === null ||
-        viewerStatus.type !== "ready" ||
-        !isOfficeEditIntentKey(event.nativeEvent)
-      ) {
-        return;
-      }
+  };
+  const handleEditIntentKeyDown = (
+    event: ReactKeyboardEvent<HTMLDivElement>,
+  ) => {
+    if (
+      desktopCapability.type !== "available" ||
+      desktopEditTarget === null ||
+      viewerStatus.type !== "ready" ||
+      !isOfficeEditIntentKey(event.nativeEvent)
+    ) {
+      return;
+    }
 
-      const result = registerOfficeEditIntentKeystroke({
-        state: editIntentStateRef.current,
-        timestamp: event.timeStamp,
-      });
-      editIntentStateRef.current = result.state;
-      if (!result.shouldPrompt) {
-        return;
-      }
+    const result = registerOfficeEditIntentKeystroke({
+      state: editIntentStateRef.current,
+      timestamp: event.timeStamp,
+    });
+    editIntentStateRef.current = result.state;
+    if (!result.shouldPrompt) {
+      return;
+    }
 
-      requestDesktopOpenAttention(fieldId);
-      stellaToast.add({
-        action: {
-          label: t("workspaces.files.desktopEdit.action"),
-          onClick: () => {
+    requestDesktopOpenAttention(fieldId);
+    stellaToast.add({
+      action: {
+        label: desktopGate.label,
+        onClick: () => {
+          desktopGate.run(() => {
             detached(openInDesktop(), "office-file-viewer.open-in-desktop");
-          },
+          });
         },
-        description: t("workspaces.files.desktopEdit.editLocallyPrompt"),
-        timeout: 10_000,
-        title: t("workspaces.files.desktopEdit.action"),
-        type: "info",
-      });
-    },
-    [
-      desktopEditTarget,
-      fieldId,
-      openInDesktop,
-      requestDesktopOpenAttention,
-      t,
-      viewerStatus.type,
-    ],
-  );
-  const handleViewerPointerDown = useCallback(
-    (event: ReactPointerEvent<HTMLDivElement>) => {
-      event.currentTarget.focus({ preventScroll: true });
-    },
-    [],
-  );
+      },
+      description: t("workspaces.files.desktopEdit.editLocallyPrompt"),
+      timeout: 10_000,
+      title: t("workspaces.files.desktopEdit.action"),
+      type: "info",
+    });
+  };
+  const handleViewerPointerDown = (
+    event: ReactPointerEvent<HTMLDivElement>,
+  ) => {
+    event.currentTarget.focus({ preventScroll: true });
+  };
 
   useExternalSyncEffect(
     () =>
@@ -190,6 +193,7 @@ export const OfficeFileViewer = ({
       activeFile={{ entityId, fileFieldId: fieldId, fileName }}
       workspaceId={workspaceId}
     >
+      <DesktopRequiredDialog {...desktopGate.requiredDialog} />
       <div
         aria-label={fileName}
         className="bg-muted flex h-full min-h-0 w-full flex-col overflow-hidden outline-none"
@@ -217,13 +221,16 @@ export const OfficeFileViewer = ({
             >
               {SPREADSHEET_FORMULA_SYMBOL}
             </span>
-            <input
-              aria-label={t("common.formula")}
-              className="text-foreground focus-visible:ring-ring h-full min-w-0 flex-1 bg-transparent px-2 font-mono outline-none focus-visible:ring-2 focus-visible:ring-inset"
-              dir={contentDir(formulaBarValue)}
-              readOnly
-              value={formulaBarValue}
-            />
+            <div className="text-foreground has-focus-visible:ring-ring flex h-full min-w-0 flex-1 px-2 font-mono has-focus-visible:ring-2 has-focus-visible:ring-inset">
+              <Input
+                aria-label={t("common.formula")}
+                className="flex h-full w-full"
+                dir={contentDir(formulaBarValue)}
+                readOnly
+                unstyled
+                value={formulaBarValue}
+              />
+            </div>
           </div>
         )}
         <div

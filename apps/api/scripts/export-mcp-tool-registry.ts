@@ -16,32 +16,38 @@
 // gate open).
 import "../src/tests/setup-env";
 import { panic } from "better-result";
+import { fileURLToPath } from "node:url";
 
 import { ACTION_ADMISSION_REFUSALS } from "@stll/api-contract/action-admission";
+import { LEGAL_HOLD_ACTIVE } from "@stll/api-contract/legal-holds";
+import { MCP_CAPABILITY_EXECUTORS } from "@stll/api-contract/mcp-capability-executors";
+import {
+  MCP_TOOL_NAME_MAX_LENGTH,
+  MCP_TOOL_NAME_PATTERN,
+} from "@stll/api-contract/mcp-tool-name";
+import { MODEL_RUN_CAP_CODES } from "@stll/api-contract/model-run-caps";
 
 import { WRITE_TOOL_REF_FIELD_MAP } from "@/api/handlers/chat/tools/registry-adapter/ref-field-map";
-import {
-  dynamicToolNamespacePrefix,
-  isDynamicToolNamespace,
-} from "@/api/lib/mcp-upstream/namespace";
+import { ACCOUNT_ACCESS } from "@/api/lib/api-handlers";
 import { pickDefined } from "@/api/lib/pick-defined";
-import { CHATGPT_APP_SUBMISSION_PROFILE } from "@/api/mcp/chatgpt-app-submission-profile";
+import { connectToolWeights } from "@/api/mcp/connect-tool-weights";
 import {
-  MCP_DEFAULT_RESOURCE_SCOPES,
-  MCP_DISCOVERY_PATH,
-  MCP_HTTP_PATH,
+  MCP_ADVANCED_DISCOVERY_PATH,
+  MCP_ADVANCED_HTTP_PATH,
+  MCP_ADVANCED_RESOURCE_SCOPES,
   MCP_OAUTH_PROTOCOL_SCOPES,
   STELLA_API_CONTRACT,
+  STELLA_MCP_API_CONTRACT_HEADER,
 } from "@/api/mcp/constants";
 import { MCP_ERROR_CODES } from "@/api/mcp/error-codes";
-import {
-  DYNAMIC_TOOL_FAMILY_POLICIES,
-  isStellaOwnedDynamicToolNamespace,
-  type StellaOwnedDynamicToolNamespace,
-} from "@/api/mcp/gateway/dynamic-tool-policy";
+import { hasGrantedScope } from "@/api/mcp/gateway/static-tool-visibility";
 import { listMcpResources } from "@/api/mcp/resources";
 import { DEFAULT_MCP_CLI_ANNOTATIONS } from "@/api/mcp/static-cli-metadata";
-import { DEFAULT_MCP_TOOL_DEFINITIONS } from "@/api/mcp/static-tool-definitions";
+import {
+  DEFAULT_MCP_TOOL_DEFINITIONS,
+  getStaticMcpToolOutputContract,
+  MODEL_VISIBLE_MCP_TOOL_DEFINITIONS,
+} from "@/api/mcp/static-tool-definitions";
 import {
   MCP_CLI_TOOL_SCOPES,
   type McpCliToolAnnotation,
@@ -56,7 +62,7 @@ const deriveCliAnnotation = (
   const declared = DEFAULT_MCP_CLI_ANNOTATIONS[tool.name];
   const annotation = {
     ...declared,
-    ...pickDefined(tool, ["featureId"]),
+    ...pickDefined(tool, ["feature", "featureId"]),
   };
   const behavior =
     "destructiveBehavior" in tool ? tool.destructiveBehavior : undefined;
@@ -103,25 +109,41 @@ const deriveCliAnnotation = (
   };
 };
 
-// The four wire fields exposed by `tools/list` (scope/feature/access/anonymized
-// are server-internal and never leave the server).
+// The tools/list wire fields plus build-time CLI metadata.
 type RegistryToolListing = {
   cli: McpCliToolAnnotation;
   name: string;
   description: string;
   inputSchema: unknown;
+  outputSchema: unknown;
   annotations?: unknown;
 };
 
 const listings: RegistryToolListing[] = [];
 for (const tool of DEFAULT_MCP_TOOL_DEFINITIONS) {
+  const output = getStaticMcpToolOutputContract(tool.name);
+  if (output === undefined) {
+    panic(`Static MCP tool is missing its output contract: ${tool.name}`);
+  }
   listings.push({
     cli: deriveCliAnnotation(tool),
     name: tool.name,
     description: tool.description,
     inputSchema: tool.inputSchema,
+    outputSchema: output.outputSchema,
     annotations: tool.annotations,
   });
+}
+
+const projectionOutputPath = process.argv
+  .find((argument) => argument.startsWith("--projection-output="))
+  ?.slice("--projection-output=".length);
+if (projectionOutputPath !== undefined) {
+  await Bun.write(
+    projectionOutputPath,
+    `${JSON.stringify({ tools: listings, httpPath: MCP_ADVANCED_HTTP_PATH, contract: STELLA_API_CONTRACT })}\n`,
+  );
+  process.exit(0);
 }
 
 const snapshotPath = new URL(
@@ -132,13 +154,23 @@ const snapshotPath = new URL(
 await Bun.write(snapshotPath, `${JSON.stringify(listings, null, 2)}\n`);
 
 process.stderr.write(
-  `Wrote ${listings.length} tool listings to ${snapshotPath.pathname}\n`,
+  `Wrote ${listings.length} tool listings to ${fileURLToPath(snapshotPath)}\n`,
 );
+
+const connectWeightPath = new URL(
+  "../mcp-connect-tool-weights.json",
+  import.meta.url,
+);
+await Bun.write(
+  connectWeightPath,
+  `${JSON.stringify(connectToolWeights(listings), null, 2)}\n`,
+);
+process.stderr.write(`Wrote ${fileURLToPath(connectWeightPath)}\n`);
 
 const projectedChatPolicyKinds: Record<string, "internal" | "mutation"> = {};
 const projectedChatGrantPolicies: Record<string, "approve-once" | "grantable"> =
   {};
-for (const tool of DEFAULT_MCP_TOOL_DEFINITIONS) {
+for (const tool of MODEL_VISIBLE_MCP_TOOL_DEFINITIONS) {
   if (
     tool.access !== "write" ||
     !WRITE_TOOL_REF_FIELD_MAP[tool.name].chatProjectable
@@ -147,9 +179,12 @@ for (const tool of DEFAULT_MCP_TOOL_DEFINITIONS) {
   }
 
   projectedChatPolicyKinds[tool.name] = "mutation";
-  projectedChatGrantPolicies[tool.name] = tool.annotations.destructiveHint
-    ? "approve-once"
-    : "grantable";
+  // Account-control changes need fresh consent even when they are reversible.
+  projectedChatGrantPolicies[tool.name] =
+    tool.accountAccess === ACCOUNT_ACCESS.accountControl ||
+    tool.annotations.destructiveHint
+      ? "approve-once"
+      : "grantable";
 }
 
 const generatedChatPolicyPath = new URL(
@@ -158,164 +193,22 @@ const generatedChatPolicyPath = new URL(
 );
 const generatedChatPolicy = `// GENERATED by apps/api/scripts/export-mcp-tool-registry.ts. Do not edit by hand.\n\nexport const MCP_CHAT_TOOL_POLICY_KINDS = ${JSON.stringify(projectedChatPolicyKinds, null, 2)} as const;\n\nexport const MCP_CHAT_TOOL_GRANT_POLICIES = ${JSON.stringify(projectedChatGrantPolicies, null, 2)} as const;\n`;
 await Bun.write(generatedChatPolicyPath, generatedChatPolicy);
-process.stderr.write(`Wrote ${generatedChatPolicyPath.pathname}\n`);
+process.stderr.write(`Wrote ${fileURLToPath(generatedChatPolicyPath)}\n`);
 
-const privateOpenWorldJustification =
-  "Operates within stella’s private workspace and does not change public internet or third-party state.";
-const externalOpenWorldJustification =
-  "May contact an external public-data provider or a selected external capability, while keeping resulting workspace changes private.";
-const nonDestructiveJustification =
-  "Does not delete, revoke access, overwrite irreversibly, or perform another destructive action.";
-
-const submissionTools = Object.fromEntries(
-  DEFAULT_MCP_TOOL_DEFINITIONS.map((tool) => {
-    const behavior =
-      "destructiveBehavior" in tool ? tool.destructiveBehavior : undefined;
-    let readOnlyJustification =
-      "Creates, updates, or starts work inside the user’s private stella workspace.";
-    if (tool.access === "read") {
-      readOnlyJustification =
-        "Retrieves or computes data from the user’s authorized stella workspace or configured source without changing stored records.";
-    }
-    if (behavior?.type === "always") {
-      readOnlyJustification =
-        "Deletes or writes off the selected record in the user’s private stella workspace.";
-    }
-    if (
-      tool.name === "upload_document_version" ||
-      tool.name === "open_document_version_upload"
-    ) {
-      readOnlyJustification =
-        "Starts or completes a private document-version upload in the user’s stella workspace.";
-    }
-    if (tool.name === "invoke_capability") {
-      readOnlyJustification =
-        "Dispatches the selected capability, which may create, update, delete, enqueue, or meter work in stella.";
-    }
-    if (tool.name === "manage_organization") {
-      readOnlyJustification =
-        "Adds or removes matter members or updates private organization settings.";
-    }
-    if (tool.name === "prepare_feedback") {
-      readOnlyJustification =
-        "Sanitizes user-provided feedback and returns it for human review without storing, sending, or changing any record.";
-    }
-    if (tool.name === "submit_feedback") {
-      readOnlyJustification =
-        "Stores the human-approved feedback report and delivers it to the maintainers configured by the deployment.";
-    }
-
-    let openWorldJustification = privateOpenWorldJustification;
-    if (tool.annotations.openWorldHint) {
-      openWorldJustification = externalOpenWorldJustification;
-    }
-    if (tool.name === "prepare_feedback") {
-      openWorldJustification =
-        "Only sanitizes the draft and returns it; it contacts nothing.";
-    }
-    if (tool.name === "submit_feedback") {
-      openWorldJustification =
-        "Sends the approved report to the maintainer channels the deployment configures, which may include a public issue tracker.";
-    }
-
-    let destructiveJustification = nonDestructiveJustification;
-    if (behavior?.type === "always") {
-      destructiveJustification =
-        "Can irreversibly delete or write off the selected private record and requires explicit confirmation.";
-    }
-    if (behavior?.type === "input-discriminator") {
-      destructiveJustification =
-        "Can revoke a member’s matter access; the remove_member action requires explicit confirmation.";
-    }
-    if (behavior?.type === "capability-catalog") {
-      destructiveJustification =
-        "Can dispatch a catalog capability marked destructive; destructive targets require explicit confirmation.";
-    }
-    if (behavior?.type === "outbound") {
-      destructiveJustification =
-        "Deletes nothing, but sends content out of the private workspace and therefore requires explicit confirmation.";
-    }
-
-    return [
-      tool.name,
-      {
-        annotations: {
-          readOnlyHint: tool.annotations.readOnlyHint,
-          openWorldHint: tool.annotations.openWorldHint,
-          destructiveHint: tool.annotations.destructiveHint,
-        },
-        justifications: {
-          read_only_justification: readOnlyJustification,
-          open_world_justification: openWorldJustification,
-          destructive_justification: destructiveJustification,
-        },
-      },
-    ];
-  }),
-);
-// Stella-owned dynamic tool families (skills) are exposed under per-account,
-// collision-safe names that no committed file can enumerate. The submission
-// schema keys `tools` by exact name and the review form matches a live scan
-// the same way, so a scanned dynamic tool cannot be matched from here. The
-// justification for every tool of a family is derived from the family policy
-// instead, under a namespace section the schema's open root permits; a
-// reviewer applies it to each scanned name carrying the family prefix.
-const DYNAMIC_TOOL_READ_ONLY_JUSTIFICATIONS = {
-  skill:
-    "Returns the stored instructions and metadata of one skill from the user’s private stella workspace without changing stored records.",
-} as const satisfies Record<StellaOwnedDynamicToolNamespace, string>;
-const submissionDynamicToolNamespaces = Object.fromEntries(
-  Object.keys(DYNAMIC_TOOL_READ_ONLY_JUSTIFICATIONS).flatMap((namespace) => {
-    if (
-      !isDynamicToolNamespace(namespace) ||
-      !isStellaOwnedDynamicToolNamespace(namespace)
-    ) {
-      return [];
-    }
-    const policy = DYNAMIC_TOOL_FAMILY_POLICIES[namespace];
-    return [
-      [
-        namespace,
-        {
-          tool_name_prefix: dynamicToolNamespacePrefix(namespace),
-          matching:
-            "Tool names under this prefix are account-specific and may carry a collision suffix; the submission form matches tools by exact name, so apply this entry to every scanned tool whose name starts with the prefix.",
-          annotations: {
-            readOnlyHint: policy.annotations.readOnlyHint,
-            openWorldHint: policy.annotations.openWorldHint,
-            destructiveHint: policy.annotations.destructiveHint,
-          },
-          justifications: {
-            read_only_justification:
-              DYNAMIC_TOOL_READ_ONLY_JUSTIFICATIONS[namespace],
-            open_world_justification: privateOpenWorldJustification,
-            destructive_justification: nonDestructiveJustification,
-          },
-        },
-      ],
-    ];
-  }),
-);
-const chatgptSubmissionPath = new URL(
-  "../../../chatgpt-app-submission.json",
+// Packages cannot import the API's registry, yet a local agent harness reports
+// stella tool calls by registry name and must recognize them. Project the
+// closed name list, nothing else.
+const generatedToolNamesPath = new URL(
+  "../../../packages/api-contract/src/mcp-tool-names.gen.ts",
   import.meta.url,
 );
-await Bun.write(
-  chatgptSubmissionPath,
-  `${JSON.stringify(
-    {
-      $schema:
-        "https://developers.openai.com/plugins/schemas/chatgpt-app-submission.v1.json",
-      schema_version: 1,
-      ...CHATGPT_APP_SUBMISSION_PROFILE,
-      tools: submissionTools,
-      dynamic_tool_namespaces: submissionDynamicToolNamespaces,
-    },
-    null,
-    2,
-  )}\n`,
-);
-process.stderr.write(`Wrote ${chatgptSubmissionPath.pathname}\n`);
+const generatedToolNames = `// GENERATED by apps/api/scripts/export-mcp-tool-registry.ts. Do not edit by hand.\n\n/** Every tool the default stella MCP server defines, by registry name. */\nexport const STELLA_MCP_TOOL_NAMES = ${JSON.stringify(
+  listings.map(({ name }) => name),
+  null,
+  2,
+)} as const;\n\nexport type StellaMcpToolName = (typeof STELLA_MCP_TOOL_NAMES)[number];\n`;
+await Bun.write(generatedToolNamesPath, generatedToolNames);
+process.stderr.write(`Wrote ${fileURLToPath(generatedToolNamesPath)}\n`);
 
 // The resource surface (spec 051 S5.4) is generated the same way: project
 // `resources/list` to its wire fields so the CLI's `reference` tree never drifts
@@ -330,7 +223,7 @@ type ResourceListing = {
 };
 
 const resourceListings: ResourceListing[] = [];
-for (const resource of listMcpResources("default")) {
+for (const resource of await listMcpResources("default")) {
   const listing: ResourceListing = { uri: resource.uri, name: resource.name };
   if (resource.title !== undefined) {
     listing.title = resource.title;
@@ -355,7 +248,7 @@ await Bun.write(
 );
 
 process.stderr.write(
-  `Wrote ${resourceListings.length} resource listings to ${resourceSnapshotPath.pathname}\n`,
+  `Wrote ${resourceListings.length} resource listings to ${fileURLToPath(resourceSnapshotPath)}\n`,
 );
 
 // The published CLI cannot depend on the private workspace API-contract
@@ -376,7 +269,7 @@ await Bun.write(
   uploadTransportOutputPath,
   `// GENERATED by \`bun run codegen\`. Do not edit by hand.\n${uploadTransportSource}`,
 );
-process.stderr.write(`Wrote ${uploadTransportOutputPath.pathname}\n`);
+process.stderr.write(`Wrote ${fileURLToPath(uploadTransportOutputPath)}\n`);
 
 // Bake the API-owned compatibility contract into the CLI. Published CLIs keep
 // their generated minimum revision while the server can advance independently;
@@ -394,7 +287,7 @@ export const CLI_MINIMUM_SERVER_REVISION = ${STELLA_API_CONTRACT.revision};
 export const CLI_REQUIRED_CAPABILITIES = ${JSON.stringify(STELLA_API_CONTRACT.capabilities, null, 2)} as const;
 `,
 );
-process.stderr.write(`Wrote ${apiContractOutputPath.pathname}\n`);
+process.stderr.write(`Wrote ${fileURLToPath(apiContractOutputPath)}\n`);
 
 // The CLI is published independently and cannot import the private API
 // workspace. Generate its stable MCP wire constants from the API-owned values
@@ -405,30 +298,39 @@ const mcpContractOutputPath = new URL(
 );
 const cliKnownScopes = [
   ...MCP_OAUTH_PROTOCOL_SCOPES,
-  ...MCP_DEFAULT_RESOURCE_SCOPES,
+  ...MCP_ADVANCED_RESOURCE_SCOPES,
 ];
 await Bun.write(
   mcpContractOutputPath,
   `// GENERATED by \`bun run codegen\`. Do not edit by hand.
 
-export const MCP_HTTP_PATH = ${JSON.stringify(MCP_HTTP_PATH)} as const;
-export const MCP_DISCOVERY_PATH = ${JSON.stringify(MCP_DISCOVERY_PATH)} as const;
+export const MCP_CAPABILITY_EXECUTORS = ${JSON.stringify(MCP_CAPABILITY_EXECUTORS, null, 2)} as const;
+export const MCP_HTTP_PATH = ${JSON.stringify(MCP_ADVANCED_HTTP_PATH)} as const;
+export const MCP_API_CONTRACT_HEADER = ${JSON.stringify(STELLA_MCP_API_CONTRACT_HEADER)} as const;
+export const MCP_DISCOVERY_PATH = ${JSON.stringify(MCP_ADVANCED_DISCOVERY_PATH)} as const;
+export const MCP_TOOL_NAME_MAX_LENGTH = ${MCP_TOOL_NAME_MAX_LENGTH};
+export const MCP_TOOL_NAME_PATTERN_SOURCE = ${JSON.stringify(MCP_TOOL_NAME_PATTERN.source)} as const;
+export const MCP_TOOL_NAME_PATTERN_FLAGS = ${JSON.stringify(MCP_TOOL_NAME_PATTERN.flags)} as const;
 export const CLI_KNOWN_SCOPES = ${JSON.stringify(cliKnownScopes, null, 2)} as const;
-export const CLI_REQUIRED_RESOURCE_SCOPES = ${JSON.stringify(MCP_DEFAULT_RESOURCE_SCOPES, null, 2)} as const;
+export const CLI_REQUIRED_RESOURCE_SCOPES = ${JSON.stringify(MCP_ADVANCED_RESOURCE_SCOPES, null, 2)} as const;
 export const MCP_ERROR_CODES = ${JSON.stringify(MCP_ERROR_CODES, null, 2)} as const;
 export type McpErrorCode = (typeof MCP_ERROR_CODES)[number];
+export const LEGAL_HOLD_ACTIVE = ${JSON.stringify(LEGAL_HOLD_ACTIVE)} as const;
+export const MODEL_RUN_CAP_CODES = ${JSON.stringify(MODEL_RUN_CAP_CODES, null, 2)} as const;
+export type ModelRunCapCode = (typeof MODEL_RUN_CAP_CODES)[keyof typeof MODEL_RUN_CAP_CODES];
 export const ACTION_ADMISSION_REFUSALS = ${JSON.stringify(ACTION_ADMISSION_REFUSALS, null, 2)} as const;
 export type ActionAdmissionCode = keyof typeof ACTION_ADMISSION_REFUSALS;
 export const MCP_CLI_TOOL_SCOPES = ${JSON.stringify(MCP_CLI_TOOL_SCOPES, null, 2)} as const;
+export const MCP_SCOPE_IMPLICATIONS = ${JSON.stringify(
+    MCP_ADVANCED_RESOURCE_SCOPES.flatMap((grant) =>
+      MCP_ADVANCED_RESOURCE_SCOPES.filter(
+        (scope) => scope !== grant && hasGrantedScope([grant], scope),
+      ).map((scope) => ({ grant, scope })),
+    ),
+    null,
+    2,
+  )} as const;
 export type McpCliToolScope = (typeof MCP_CLI_TOOL_SCOPES)[number];
 `,
 );
-process.stderr.write(`Wrote ${mcpContractOutputPath.pathname}\n`);
-
-// The registry transitively pulls in `@/api/lib/sse.ts`, which opens a
-// Redis subscriber connection at import time (for cross-instance SSE
-// broadcast) and never unrefs it. That's correct for the long-running API
-// process but leaves this one-off script's event loop open indefinitely.
-// The export is done at this point, so exit explicitly instead of waiting
-// on a handle this script never needed.
-process.exit(0);
+process.stderr.write(`Wrote ${fileURLToPath(mcpContractOutputPath)}\n`);

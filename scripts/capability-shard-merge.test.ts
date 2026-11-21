@@ -3,14 +3,15 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
-  readFileSync,
   readdirSync,
+  readFileSync,
   rmSync,
-  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+
+import { borrowDependencies } from "./borrowed-dependencies";
 
 const REPO_ROOT = path.resolve(import.meta.dirname, "..");
 const CATALOG_DIRECTORY = "packages/cli/capabilities";
@@ -23,8 +24,10 @@ import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 
 const config = {
+  contract: "patch",
   description: "List synthetic billing-code merge probes.",
   permissions: { workspace: ["read"] },
+  featureAccess: { type: "required", featureId: "time-billing" },
   mcp: {
     type: "capability",
     readClass: "tenant",
@@ -43,10 +46,57 @@ const fixturePath = (probe: string) =>
   `apps/api/src/handlers/billing-codes/${probe}/list.ts`;
 const capabilityId = (probe: string) => `billing-codes.${probe}.list`;
 
-/** Compare bytes of the complete two directories, including their file census. */
-const shardBytes = (checkout: string) =>
+// A capability runs the definition its REST route serves, so each probe is
+// mounted too. The two probes edit opposite ends of the route module, so
+// their branches merge without touching each other's lines.
+const ROUTES_PATH = "apps/api/src/handlers/billing-codes/routes.ts";
+const ROUTE_TABLE_OPEN = "export const billingCodesRoute = routes(\n  {\n";
+const ROUTE_TABLE_CLOSE = "    },\n  },\n  {\n    prefix:";
+const probeBinding = (probe: string) =>
+  probe.replaceAll(/-(\w)/gu, (_, letter: string) => letter.toUpperCase());
+const probeImport = (probe: string) =>
+  `import ${probeBinding(probe)} from "@/api/handlers/billing-codes/${probe}/list";\n`;
+const probeEntry = (probe: string) =>
+  `    "/${probe}": { GET: ${probeBinding(probe)} },\n`;
+
+const replaceOnce = (source: string, anchor: string, replacement: string) => {
+  if (source.split(anchor).length !== 2) {
+    throw new TypeError(`Route module anchor is not unique: ${anchor}`);
+  }
+  return source.replace(anchor, () => replacement);
+};
+
+const mountProbe = (routes: string, probe: string) =>
+  probe === PROBES[0]
+    ? replaceOnce(
+        probeImport(probe) + routes,
+        ROUTE_TABLE_OPEN,
+        ROUTE_TABLE_OPEN + probeEntry(probe),
+      )
+    : replaceOnce(
+        replaceOnce(
+          routes,
+          "\nexport const billingCodesRoute",
+          `${probeImport(probe)}\nexport const billingCodesRoute`,
+        ),
+        ROUTE_TABLE_CLOSE,
+        `    },\n${probeEntry(probe)}  },\n  {\n    prefix:`,
+      );
+
+const unmountProbe = (routes: string, probe: string) =>
+  replaceOnce(
+    replaceOnce(routes, probeImport(probe), ""),
+    probeEntry(probe),
+    "",
+  );
+
+/** Compare complete directories, including their file census. */
+const shardBytes = (
+  checkout: string,
+  directories = [CATALOG_DIRECTORY, DISPATCH_DIRECTORY],
+) =>
   Object.fromEntries(
-    [CATALOG_DIRECTORY, DISPATCH_DIRECTORY].flatMap((directory) =>
+    directories.flatMap((directory) =>
       readdirSync(path.join(checkout, directory))
         .toSorted()
         .map((filename) => {
@@ -59,7 +109,7 @@ const shardBytes = (checkout: string) =>
     ),
   );
 
-// Imports the actual handler graph and formatter; local constrained machines
+// Reuses the actual handler graph and runs the formatter; local constrained machines
 // leave this integration proof to CI. No installed dependencies are copied.
 test.skipIf(!process.env["CI"])(
   "independent real capability exports merge cleanly and regenerate to identical bytes",
@@ -67,10 +117,13 @@ test.skipIf(!process.env["CI"])(
     const temporary = mkdtempSync(path.join(tmpdir(), "stella-shard-merge-"));
     const checkout = path.join(temporary, "checkout");
     const run = async (command: string[], cwd = checkout) => {
+      const env = { ...process.env };
+      delete env["CI_GENERATED_SOURCES_MANIFEST"];
+      const started = performance.now();
       const child = Bun.spawn(command, {
         cwd,
         env: {
-          ...process.env,
+          ...env,
           GIT_CONFIG_NOSYSTEM: "1",
           GIT_CONFIG_GLOBAL: "/dev/null",
         },
@@ -82,6 +135,9 @@ test.skipIf(!process.env["CI"])(
         new Response(child.stdout).text(),
         new Response(child.stderr).text(),
       ]);
+      console.info(
+        `[phase] ${command.join(" ")}: ${((performance.now() - started) / 1000).toFixed(3)} s`,
+      );
       return { exitCode, stdout, stderr };
     };
     const succeed = async (command: string[], cwd = checkout) => {
@@ -92,17 +148,7 @@ test.skipIf(!process.env["CI"])(
       ).toBe(0);
       return result.stdout.trim();
     };
-    const generate = async (check = false) =>
-      run([
-        process.execPath,
-        "--env-file=apps/api/.env.example",
-        EXPORTER,
-        ...(check ? ["--check"] : []),
-      ]);
-    const regenerate = async () => {
-      const result = await generate();
-      expect(result.exitCode, `${result.stdout}\n${result.stderr}`).toBe(0);
-    };
+    let stopExporter: (() => Promise<void>) | undefined;
 
     try {
       await succeed(
@@ -118,12 +164,106 @@ test.skipIf(!process.env["CI"])(
         "user.email",
         "capability-merge-test@example.invalid",
       ]);
-      symlinkSync(
-        path.join(REPO_ROOT, "node_modules"),
-        path.join(checkout, "node_modules"),
-        "dir",
-      );
+      // The handler graph embeds the clone's own MCP App bundles, so they are
+      // built from its workspace packages before the first export.
+      borrowDependencies(REPO_ROOT, checkout);
+      await succeed([process.execPath, "scripts/prepare-mcp-apps.ts"]);
 
+      // Clone uses committed files. Include the entry point under test when
+      // validating an uncommitted change to its public invocation options.
+      writeFileSync(
+        path.join(checkout, EXPORTER),
+        readFileSync(path.join(REPO_ROOT, EXPORTER)),
+      );
+      let complete: ((exitCode: number) => void) | undefined;
+      const env = { ...process.env };
+      delete env["CI_GENERATED_SOURCES_MANIFEST"];
+      // Keep the real module graph warm while discovery, formatting and drift
+      // checks still run on every invocation. A loaded module keeps the source
+      // it was loaded with, so the worker is restarted whenever the route
+      // table that mounts the probes changes.
+      let generation = 0;
+      let stdoutPath = "";
+      let stderrPath = "";
+      const startWorker = () => {
+        generation += 1;
+        stdoutPath = path.join(
+          temporary,
+          `exporter-${String(generation)}.stdout`,
+        );
+        stderrPath = path.join(
+          temporary,
+          `exporter-${String(generation)}.stderr`,
+        );
+        writeFileSync(stdoutPath, "");
+        writeFileSync(stderrPath, "");
+        return Bun.spawn(
+          [
+            process.execPath,
+            "--env-file=apps/api/.env.example",
+            "-e",
+            `import { createInterface } from "node:readline";
+import { exportCapabilityCatalog } from ${JSON.stringify(path.join(checkout, EXPORTER))};
+for await (const mode of createInterface({ input: process.stdin })) {
+  if (mode !== "write" && mode !== "check") throw new TypeError("Invalid export mode");
+  // One catalog build per request: a write produces the shards and the
+  // runtime together, a check compares the shards.
+  process.send(await exportCapabilityCatalog(mode, mode === "write" ? "both" : "shards"));
+}
+process.exit(0);`,
+          ],
+          {
+            cwd: checkout,
+            env,
+            stdin: "pipe",
+            stdout: Bun.file(stdoutPath),
+            stderr: Bun.file(stderrPath),
+            ipc(message: unknown) {
+              if (typeof message !== "number" || complete === undefined) {
+                throw new TypeError("Unexpected exporter response");
+              }
+              complete(message);
+              complete = undefined;
+            },
+          },
+        );
+      };
+      let worker = startWorker();
+      stopExporter = async () => {
+        worker.kill();
+        await worker.exited;
+      };
+      const restartExporter = async () => {
+        await stopExporter?.();
+        worker = startWorker();
+      };
+      const generate = async (check = false) => {
+        const started = performance.now();
+        const stdoutOffset = readFileSync(stdoutPath, "utf-8").length;
+        const stderrOffset = readFileSync(stderrPath, "utf-8").length;
+        const response = new Promise<number>((resolve) => {
+          complete = resolve;
+        });
+        await worker.stdin.write(check ? "check\n" : "write\n");
+        // A short piped write can stay buffered; the worker waits for a full line.
+        await worker.stdin.flush();
+        const exitCode = await Promise.race([
+          response,
+          worker.exited.then((code) => (code === 0 ? 1 : code)),
+        ]);
+        const stdout = readFileSync(stdoutPath, "utf-8").slice(stdoutOffset);
+        const stderr = readFileSync(stderrPath, "utf-8").slice(stderrOffset);
+        console.info(
+          `[phase] exporter ${check ? "check" : "write"}: ${((performance.now() - started) / 1000).toFixed(3)} s`,
+        );
+        return { exitCode, stdout, stderr };
+      };
+      const regenerate = async () => {
+        const result = await generate();
+        expect(result.exitCode, `${result.stdout}\n${result.stderr}`).toBe(0);
+      };
+
+      const expectedDispatch = new Map<string, string>();
       for (const probe of PROBES) {
         await succeed(["git", "switch", "--quiet", "-c", probe, base]);
         const fixture = fixturePath(probe);
@@ -131,27 +271,51 @@ test.skipIf(!process.env["CI"])(
           recursive: true,
         });
         writeFileSync(path.join(checkout, fixture), fixtureSource);
+        const routesFile = path.join(checkout, ROUTES_PATH);
+        writeFileSync(
+          routesFile,
+          mountProbe(readFileSync(routesFile, "utf-8"), probe),
+        );
+        await restartExporter();
         await regenerate();
         const catalog = `${CATALOG_DIRECTORY}/${capabilityId(probe)}.json`;
         const dispatch = `${DISPATCH_DIRECTORY}/${capabilityId(probe)}.ts`;
         expect(existsSync(path.join(checkout, catalog))).toBe(true);
         expect(existsSync(path.join(checkout, dispatch))).toBe(true);
-        await succeed([
-          "git",
-          "add",
-          fixture,
-          CATALOG_DIRECTORY,
-          DISPATCH_DIRECTORY,
-        ]);
+        expect(
+          JSON.parse(readFileSync(path.join(checkout, catalog), "utf-8")),
+        ).toMatchObject({
+          featureId: "time-billing",
+          featureAccess: "required",
+        });
+        const generatedDispatch = readFileSync(
+          path.join(checkout, dispatch),
+          "utf-8",
+        );
+        expect(generatedDispatch).toContain('featureId: "time-billing"');
+        expect(generatedDispatch).toContain('featureAccess: "required"');
+        expectedDispatch.set(dispatch, generatedDispatch);
+        // Shards and dispatch modules are derived, never committed: a branch
+        // carries only the handler and its route.
+        await succeed(["git", "add", "--all", "--", "."]);
         const staged = await succeed([
           "git",
           "diff",
           "--cached",
           "--name-only",
+          "--",
+          ".",
+          ":!docs/capability-coverage.md",
         ]);
         expect(staged.split("\n").toSorted()).toEqual(
-          [fixture, catalog, dispatch].toSorted(),
+          [fixture, ROUTES_PATH].toSorted(),
         );
+        await succeed([
+          "git",
+          "restore",
+          "--staged",
+          "docs/capability-coverage.md",
+        ]);
         await succeed([
           "git",
           "commit",
@@ -160,7 +324,7 @@ test.skipIf(!process.env["CI"])(
           "test: add merge probe",
         ]);
         // Coverage tables belong to a separate layout migration. This proof
-        // isolates the catalog and dispatch artifacts that this PR shards.
+        // isolates the catalog shards and their source handlers.
         await succeed(["git", "restore", "docs/capability-coverage.md"]);
       }
 
@@ -178,9 +342,25 @@ test.skipIf(!process.env["CI"])(
         throw new TypeError("Missing merged tree");
       }
       await succeed(["git", "read-tree", "--reset", "-u", tree]);
-      const mergedBytes = shardBytes(checkout);
+      await restartExporter();
       await regenerate();
-      expect(shardBytes(checkout)).toEqual(mergedBytes);
+      for (const probe of PROBES) {
+        expect(
+          existsSync(
+            path.join(
+              checkout,
+              CATALOG_DIRECTORY,
+              `${capabilityId(probe)}.json`,
+            ),
+          ),
+        ).toBe(true);
+      }
+      for (const [dispatch, source] of expectedDispatch) {
+        expect(readFileSync(path.join(checkout, dispatch), "utf-8")).toBe(
+          source,
+        );
+      }
+      const mergedBytes = shardBytes(checkout);
       await regenerate();
       expect(shardBytes(checkout)).toEqual(mergedBytes);
       const clean = await generate(true);
@@ -202,7 +382,11 @@ test.skipIf(!process.env["CI"])(
       writeFileSync(shard, original);
 
       const removedFixture = path.join(checkout, fixturePath(probe));
+      const routesFile = path.join(checkout, ROUTES_PATH);
+      const mountedRoutes = readFileSync(routesFile, "utf-8");
       rmSync(removedFixture);
+      writeFileSync(routesFile, unmountProbe(mountedRoutes, probe));
+      await restartExporter();
       const stale = await generate(true);
       expect(stale.exitCode).not.toBe(0);
       expect(stale.stderr).toContain(
@@ -217,11 +401,18 @@ test.skipIf(!process.env["CI"])(
         ),
       ).toBe(false);
       writeFileSync(removedFixture, fixtureSource);
+      writeFileSync(routesFile, mountedRoutes);
+      await restartExporter();
       await regenerate();
       expect(shardBytes(checkout)).toEqual(mergedBytes);
     } finally {
+      await stopExporter?.();
       rmSync(temporary, { recursive: true, force: true });
     }
   },
-  600_000,
+  // This test exports and regenerates the real handler graph, cold once per
+  // route table change. It matches the CI check's --timeout: a hosted runner
+  // takes it from about 96 s to past 180 s, and a lower budget here would
+  // override the check's own.
+  400_000,
 );

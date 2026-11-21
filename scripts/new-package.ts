@@ -5,8 +5,8 @@
 //   bun run new-package <name> --description "<one line>"
 //
 // Extraction has to be cheaper than duplication, or duplication wins: this
-// writes the four files a workspace package needs (package.json, tsconfig.json,
-// src/index.ts, README.md), registers the knip workspace, and prints the wiring
+// writes the five files a workspace package needs (package.json, tsconfig.json,
+// bunfig.toml, src/index.ts, README.md), registers the knip workspace, and prints the wiring
 // steps. Templates track packages/chat-limits, the smallest package in the
 // repo.
 
@@ -90,9 +90,8 @@ export const parseArgs = (argv: readonly string[]): ParsedArgs => {
 
 // --- Templates ---------------------------------------------------------------
 
-// Key order is oxfmt's package.json order, and the arrays below are the ones it
-// keeps on one line: a scaffold that needs reformatting turns the first
-// `bun run format` into an unrelated diff. `new-package.test.ts` holds the
+// The arrays below are the ones the formatter keeps on one line: a scaffold
+// that needs reformatting turns the first `bun fmt` into an unrelated diff. `new-package.test.ts` holds the
 // templates to what the formatter actually produces.
 
 const packageJsonTemplate = ({
@@ -112,10 +111,9 @@ const packageJsonTemplate = ({
       scripts: {
         clean: "git clean -xdf .cache .turbo node_modules",
         test: "bun test src",
-        typecheck: "bun ../../packages/scripts/src/tsc-native.ts --noEmit",
-        lint: `cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware --type-check packages/${name}`,
-        "lint:fix": `cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/${name}`,
-        format: "bun ../../scripts/run-oxfmt.ts .",
+        typecheck: "bun check --no-pretty --all --project=tsconfig.json",
+        lint: `cd ../.. && bun scripts/lint.ts packages/${name}`,
+        "lint:fix": `cd ../.. && bun scripts/lint.ts --fix packages/${name}`,
       },
       devDependencies: {
         "@stll/typescript-config": "workspace:*",
@@ -126,8 +124,19 @@ const packageJsonTemplate = ({
     2,
   )}\n`;
 
+// scripts/check-standalone-lockfiles.ts requires the install block and
+// packages/scripts/src/test-event-loop-watchdog-coverage.test.ts the preload.
+const BUNFIG_TEMPLATE = `[install]
+# Fail on a missing import instead of installing it at run time.
+auto = "disable"
+
+[test]
+# Kills a test process whose event loop stops turning.
+preload = ["../../packages/scripts/src/test-event-loop-watchdog.ts"]
+`;
+
 // Written out rather than stringified: `JSON.stringify` breaks every array
-// across lines, and oxfmt keeps these on one.
+// across lines, and the formatter keeps these on one.
 const TSCONFIG_TEMPLATE = `{
   "extends": "@stll/typescript-config/base.json",
   "compilerOptions": {
@@ -284,6 +293,7 @@ export const scaffoldPackage = ({
       content: packageJsonTemplate({ name, description }),
     },
     { rel: `${rel}/tsconfig.json`, content: TSCONFIG_TEMPLATE },
+    { rel: `${rel}/bunfig.toml`, content: BUNFIG_TEMPLATE },
     { rel: `${rel}/src/index.ts`, content: INDEX_TEMPLATE },
     { rel: `${rel}/README.md`, content: readmeTemplate({ name, description }) },
   ];

@@ -3,9 +3,11 @@ import { describe, expect, test } from "bun:test";
 import {
   classifyProp,
   generateRouteMap,
+  type PropSchema,
   RouteGenerationError,
 } from "./generate-route-map.js";
 import { generatedToolAnnotations as TOOL_ANNOTATIONS } from "./generated/tool-annotations.js";
+import { validateFetchedToolsList } from "./registry-trust.js";
 import type {
   FlagSpec,
   LeafCommandSpec,
@@ -78,12 +80,97 @@ const leafEntries = (
   return entries;
 };
 
+test("every generated tool leaf preserves its registry read classification", () => {
+  const listings = new Map(
+    snapshotListings.map((listing) => [listing.name, listing]),
+  );
+  const generated = generateRouteMap(snapshotListings, TOOL_ANNOTATIONS);
+  const leaves = leafEntries(generated);
+  expect(leaves.length).toBeGreaterThan(0);
+  for (const { spec } of leaves) {
+    expect(listings.has(spec.toolName)).toBe(true);
+    expect(spec.readOnlyHint, spec.commandPath.join(" ")).toBe(
+      listings.get(spec.toolName)?.annotations?.readOnlyHint,
+    );
+  }
+});
+
+test.each([true, false, undefined])(
+  "runtime tool read classification %j survives leaf generation",
+  (readOnlyHint) => {
+    const listing = {
+      name: "fixture_tool",
+      description: "Fixture command",
+      inputSchema: { type: "object", properties: {} },
+      ...(readOnlyHint === undefined ? {} : { annotations: { readOnlyHint } }),
+    } satisfies RegistryToolListing;
+    const leaves = leafEntries(generateRouteMap([listing], {}));
+    expect(leaves).toHaveLength(1);
+    expect(leaves.at(0)?.spec.readOnlyHint).toBe(readOnlyHint);
+  },
+);
+
+test("capability list exposes free-text search", () => {
+  const tree = generateRouteMap(snapshotListings, TOOL_ANNOTATIONS);
+  const list = findLeaf(tree, ["capability", "list"]);
+
+  expect(flagFor(list ?? errorSpec(), "--query")).toMatchObject({
+    kind: "string",
+    required: false,
+  });
+});
+
 const flagFor = (spec: LeafCommandSpec, flag: string): FlagSpec | undefined =>
   spec.flags.find((f) => f.flag === flag);
 
 const tree = generateRouteMap(snapshotListings, TOOL_ANNOTATIONS);
 
 describe("generateRouteMap: structure", () => {
+  test("preserves deployment ownership on every discriminator leaf", () => {
+    const template =
+      TOOL_ANNOTATIONS["save_filled_template"] ??
+      expect.unreachable("Missing template CLI metadata");
+    const annotated = {
+      ...TOOL_ANNOTATIONS,
+      save_filled_template: {
+        ...template,
+        feature: "FEATURE_EXAMPLE",
+      },
+    };
+    const generated = generateRouteMap(snapshotListings, annotated);
+    const leaves = leafEntries(generated).filter(
+      ({ spec }) => spec.toolName === "save_filled_template",
+    );
+    const discriminator =
+      template.discriminator ??
+      expect.unreachable("Missing template CLI discriminator");
+    const expectedPaths = Object.values(discriminator.subcommands).map(
+      ({ command }) => [...template.command, command].join(" "),
+    );
+    expect(expectedPaths.length).toBeGreaterThan(0);
+    expect(leaves.map(({ path }) => path.join(" ")).toSorted()).toEqual(
+      expectedPaths.toSorted(),
+    );
+    for (const { spec } of leaves) {
+      expect(spec.feature).toBe(annotated.save_filled_template.feature);
+    }
+  });
+
+  test("preserves deployment ownership supplied by a registry listing", () => {
+    const listing = {
+      name: "read_example",
+      description: "Read example",
+      inputSchema: { type: "object", properties: {} },
+      feature: "FEATURE_EXAMPLE",
+    } satisfies RegistryToolListing;
+    const generated = generateRouteMap([listing], {
+      read_example: { command: ["example", "read"] },
+    });
+    expect(findLeaf(generated, ["example", "read"])?.feature).toBe(
+      listing.feature,
+    );
+  });
+
   test("excludes compat and host adapters from the command tree", () => {
     const paths = leafPaths(tree);
     expect(paths).not.toContain("search");
@@ -155,23 +242,21 @@ describe("generateRouteMap: structure", () => {
 });
 
 describe("generateRouteMap: discriminator split (S2)", () => {
-  const add = findLeaf(tree, ["organization", "add-member"]);
-  const remove = findLeaf(tree, ["organization", "remove-member"]);
+  const add = findLeaf(tree, ["matter", "add-member"]);
+  const remove = findLeaf(tree, ["matter", "remove-member"]);
   const settings = findLeaf(tree, ["organization", "update-settings"]);
 
-  test("manage_organization splits into three subcommands", () => {
-    expect(add?.toolName).toBe("manage_organization");
-    expect(remove?.toolName).toBe("manage_organization");
-    expect(settings?.toolName).toBe("manage_organization");
+  test("each membership and settings command calls its own tool", () => {
+    expect(add?.toolName).toBe("add_matter_member");
+    expect(remove?.toolName).toBe("remove_matter_member");
+    expect(settings?.toolName).toBe("update_organization_settings");
   });
 
-  test("the discriminator value is injected, not exposed as a flag", () => {
-    expect(add?.discriminatorInject).toEqual({ action: "add_member" });
-    expect(remove?.discriminatorInject).toEqual({ action: "remove_member" });
-    expect(settings?.discriminatorInject).toEqual({
-      action: "update_org_settings",
-    });
-    expect(flagFor(add ?? errorSpec(), "--action")).toBeUndefined();
+  test("separate tools need no injected action discriminator", () => {
+    for (const leaf of [add, remove, settings]) {
+      expect(leaf?.discriminatorInject).toBeUndefined();
+      expect(flagFor(leaf ?? errorSpec(), "--action")).toBeUndefined();
+    }
   });
 
   test("per-subcommand flag sets and required sets match the table", () => {
@@ -184,6 +269,7 @@ describe("generateRouteMap: discriminator split (S2)", () => {
       "--document-processing-mode",
       "--matter-number-padding",
       "--matter-number-pattern",
+      "--matter-numbering-enabled",
       "--prompt-caching-enabled",
       "--time-edit-window-days",
       "--time-locked-through-month",
@@ -201,19 +287,20 @@ describe("generateRouteMap: discriminator split (S2)", () => {
   });
 
   test("capability invocation defers destructiveness to the selected target", () => {
-    const invoke = findLeaf(tree, ["capability", "invoke"]);
-    expect(invoke?.destructive).toBe(false);
-    expect(invoke?.confirmPassthrough).toBe(true);
+    const write = findLeaf(tree, ["capability", "write"]);
+    expect(write?.destructive).toBe(false);
+    expect(write?.confirmPassthrough).toBe(true);
+    const read = findLeaf(tree, ["capability", "read"]);
+    expect(read?.destructive).toBe(false);
+    expect(read?.confirmPassthrough).toBeUndefined();
   });
 
-  test("no manage_organization subcommand emits a --confirm flag", () => {
-    // The tool's schema declares a `confirm` gate for remove_member, but the
-    // reserved --yes flow owns it, so it is hidden from EVERY leaf's flags
-    // (destructive or not) and reachable only via --input.
+  test("membership and settings commands hide the reserved confirmation flag", () => {
+    // The reserved --yes flow owns the member-removal confirmation.
     for (const leaf of [add, remove, settings]) {
       expect(flagFor(leaf ?? errorSpec(), "--confirm")).toBeUndefined();
     }
-    // It still lives in the shared input schema all three subcommands carry.
+    // Member removal still accepts confirmation in its input schema.
     const properties = remove?.inputSchema["properties"];
     expect(
       typeof properties === "object" &&
@@ -270,6 +357,57 @@ describe("generateRouteMap: discriminator split (S2)", () => {
 });
 
 describe("generateRouteMap: flag mapping (S3)", () => {
+  test("finite string literal unions produce enum flags", () => {
+    const schema = {
+      anyOf: [
+        { type: "string", const: "search" },
+        { type: "string", const: "decision" },
+        { type: "string", const: "statute" },
+      ],
+    } as const satisfies PropSchema;
+    expect(classifyProp("kind", schema)).toEqual({
+      kind: "flag",
+      spec: {
+        flag: "--kind",
+        prop: "kind",
+        kind: "enum",
+        enum: ["search", "decision", "statute"],
+        repeatable: false,
+      },
+    });
+  });
+
+  test("string literal unions without a stated type produce enum flags", () => {
+    const schema = {
+      anyOf: [{ const: "draft" }, { const: "approved" }],
+    } as const satisfies PropSchema;
+    expect(classifyProp("status", schema)).toEqual({
+      kind: "flag",
+      spec: {
+        flag: "--status",
+        prop: "status",
+        kind: "enum",
+        enum: ["draft", "approved"],
+        repeatable: false,
+      },
+    });
+  });
+
+  test.each([
+    { label: "number literal", branch: { type: "number", const: 1 } },
+    { label: "unbounded string", branch: { type: "string" } },
+    { label: "object", branch: { type: "object", properties: {} } },
+  ])(
+    "mixed string literal unions retain input-only safety: $label",
+    ({ branch }) => {
+      expect(
+        classifyProp("kind", {
+          anyOf: [{ type: "string", const: "search" }, branch],
+        }),
+      ).toEqual({ kind: "input-only" });
+    },
+  );
+
   test("one-character query properties get a parser-safe long flag", () => {
     expect(classifyProp("q", { type: "string" })).toEqual({
       kind: "flag",
@@ -538,6 +676,56 @@ describe("generateRouteMap: Phase 4 domains (S1/S3)", () => {
 });
 
 describe("generateRouteMap: unknown fetched tools (S1 rule 5)", () => {
+  for (const [name, command] of [
+    ["skill__", ["skill--"]],
+    ["list__", ["list--"]],
+    ["skill_", ["skill-"]],
+    ["list_", ["list-"]],
+    ["skill__-foo", ["skill", "foo"]],
+    ["list_-foo", ["foo", "list"]],
+    ["skill__-", ["skill---"]],
+    ["list__-", ["list---"]],
+  ] as const) {
+    test(`an accepted separator suffix ${name} keeps a nonempty command path`, () => {
+      const listing = {
+        name,
+        description: "List documents",
+        inputSchema: { type: "object", properties: {} },
+      } satisfies RegistryToolListing;
+      const trusted = validateFetchedToolsList(
+        JSON.stringify({ tools: [listing] }),
+      );
+      expect(trusted.ok).toBe(true);
+      if (!trusted.ok) {
+        return;
+      }
+      const node = generateRouteMap(trusted.listings, {});
+      const leaf = findLeaf(node, command);
+      expect(leaf?.toolName).toBe(name);
+      expect(leafPaths(node)).toEqual([command.join(" ")]);
+      expect(
+        leaf?.commandPath.every(
+          (segment) => segment.length > 0 && !segment.startsWith("-"),
+        ),
+      ).toBe(true);
+    });
+  }
+
+  for (const slug of ["compare-default", `compare-${"a".repeat(56)}`]) {
+    test(`a hyphenated skill ${slug} maps to usable command segments`, () => {
+      const listing = {
+        name: `skill__${slug}`,
+        description: "Compare documents",
+        inputSchema: { type: "object", properties: {} },
+      } satisfies RegistryToolListing;
+      const node = generateRouteMap([listing], {});
+      const leaf = findLeaf(node, ["skill", slug]);
+      expect(leaf?.toolName).toBe(listing.name);
+      expect(leaf?.commandPath).toEqual(["skill", slug]);
+      expect(leafPaths(node)).toEqual([`skill ${slug}`]);
+    });
+  }
+
   test("a tool with no annotation gets a heuristic verb/domain command path", () => {
     const unknown: RegistryToolListing = {
       name: "list_widgets",

@@ -1,59 +1,68 @@
-import {
-  useMutation,
-  useQueryClient,
-  useSuspenseQuery,
-} from "@tanstack/react-query";
-import { panic } from "better-result";
+import { useState } from "react";
+
+import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
+import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
 
+import { DOCUMENT_UPLOAD_PUT_TIMEOUT_MS } from "@stll/api-contract";
 import { fetchWithTimeout } from "@stll/fetch";
+import { readBodyTextWithIdleDeadline } from "@stll/fetch/body-reader";
 import { stellaToast } from "@stll/ui/toast";
 
 import { useStartWorkflow } from "@/components/workspaces/hooks/use-start-workflow";
 import { MAX_PARALLEL_FILE_UPLOADS } from "@/consts";
-import type { DroppedFileTree } from "@/hooks/external-file-drop.logic";
+import { getTranslator } from "@/i18n/translator";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
-import { actionAdmissionOutcome } from "@/lib/errors/action-admission";
-import { toAPIError, unwrapEden } from "@/lib/errors/api";
+import { toAPIError, unwrapApiResponse } from "@/lib/errors/api";
 import { ClientOperationError } from "@/lib/errors/client";
+import { readQueryResult } from "@/lib/errors/query-result";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import {
+  hashActiveUploadFile,
+  withActiveUpload,
+} from "@/lib/files/active-uploads";
 import {
   ATTACHED_TEMPLATE_UPLOAD_PREFLIGHT,
   preflightAttachedTemplateUpload,
 } from "@/lib/files/attached-template-upload-preflight";
 import { resolveDocumentReferenceMatches } from "@/lib/files/document-reference-queries";
 import { useDocumentReferenceUploadStore } from "@/lib/files/document-reference-upload-store";
+import {
+  exactDuplicateLookup,
+  resolveExactDuplicates,
+} from "@/lib/files/exact-duplicate-queries";
+import { useExactDuplicateUploadStore } from "@/lib/files/exact-duplicate-upload-store";
+import { useIdempotentMutation } from "@/lib/idempotency/use-idempotent-mutation";
 import { toSafeId } from "@/lib/safe-id";
 import { UploadQueue } from "@/lib/upload-queue";
+import type { CreateFileEntitiesInput } from "@/lib/workspaces/mutations/create-file-entities-input.logic";
+import {
+  afterDuplicateChoice,
+  DUPLICATE_CHECK,
+  hasUploadInputItems,
+  REFERENCE_CHECK,
+  uploadInputFiles,
+  withoutUploadInputFiles,
+  withUploadInputFileReplacements,
+} from "@/lib/workspaces/mutations/create-file-entities-input.logic";
 import {
   buildDroppedFolderUploadPlan,
   type DroppedFolderUploadPlan,
+  folderReservableFiles,
 } from "@/lib/workspaces/mutations/create-file-tree-upload.logic";
 import {
   buildEntityCreatePresignPayload,
   entityCreateLocalInvalidationKeys,
 } from "@/lib/workspaces/mutations/create-file-upload-payload.logic";
+import {
+  createFileEntityUploader,
+  type FileEntityUploadGrant,
+} from "@/lib/workspaces/mutations/file-entity-upload.logic";
+import { showUploadFailureToast } from "@/lib/workspaces/mutations/upload-failure-toast";
 import { propertiesOptions } from "@/lib/workspaces/queries/properties";
-
-const MAX_DISPLAYED_FAILURES = 5;
-// Matches the versions-sidebar PUT-to-S3 upload budget (same flow, uploaded
-// file can be arbitrarily large). This is a stall ceiling, not a target
-// duration: a healthy slow upload of a large file can legitimately take
-// several minutes.
-const UPLOAD_PUT_TIMEOUT_MS = 30 * 60 * 1000;
-
-const formatFailedFiles = (names: readonly string[]): string => {
-  const shown = names.slice(0, MAX_DISPLAYED_FAILURES);
-  const remaining = names.length - shown.length;
-  const list = shown.join(", ");
-  if (remaining > 0) {
-    return `${list} (+${remaining})`;
-  }
-  return list;
-};
 
 type UploadResult = {
   entityId: string;
@@ -62,31 +71,8 @@ type UploadResult = {
   renamed: boolean;
 };
 
-type PreparedFileEntityUpload = {
-  uploadId: string;
+type PreparedFileEntityUpload = FileEntityUploadGrant & {
   parentId: string | null;
-  url: string;
-  headers: Record<string, string>;
-};
-
-/**
- * Hex-encode a SHA-256 hash already computed via Web Crypto. The
- * API stores hex on `fields.content.sha256Hex` and converts to
- * base64 for the S3 `x-amz-checksum-sha256` header.
- */
-const bufferToHex = (buffer: ArrayBuffer): string => {
-  const view = new Uint8Array(buffer);
-  let out = "";
-  for (const byte of view) {
-    out += byte.toString(16).padStart(2, "0");
-  }
-  return out;
-};
-
-const hashFileSha256Hex = async (file: File): Promise<string> => {
-  const fileBuffer = await file.arrayBuffer();
-  const sha256Buffer = await crypto.subtle.digest("SHA-256", fileBuffer);
-  return bufferToHex(sha256Buffer);
 };
 
 type PrepareFolderTreeUploadOptions = {
@@ -108,34 +94,36 @@ const prepareFolderTreeUpload = async ({
   propertyId,
   plan,
 }: PrepareFolderTreeUploadOptions): Promise<PreparedFolderTreeUpload> => {
+  const reservable = folderReservableFiles(plan);
   const files = [];
-  for (const [index, placement] of plan.files.entries()) {
+  for (const { key, placement } of reservable) {
     files.push({
-      key: String(index),
+      key,
       parentKey: placement.parentKey,
       name: placement.file.name,
       mimeType: placement.file.type || "application/octet-stream",
       size: placement.file.size,
-      sha256Hex: await hashFileSha256Hex(placement.file),
+      sha256Hex: await hashActiveUploadFile(placement.file),
     });
   }
+  const uploadsApi = api.uploads({
+    workspaceId: toSafeId<"workspace">(workspaceId),
+  });
 
-  const response = await api
-    .uploads({ workspaceId: toSafeId<"workspace">(workspaceId) })
-    ["entity-create"].tree.post({
-      propertyId: propertyId ? toSafeId<"property">(propertyId) : null,
-      parentId: parentId === null ? null : toSafeId<"entity">(parentId),
-      directories: plan.directories,
-      files,
-    });
+  const response = await uploadsApi["entity-create"].tree.post({
+    propertyId: propertyId ? toSafeId<"property">(propertyId) : null,
+    parentId: parentId === null ? null : toSafeId<"entity">(parentId),
+    directories: plan.directories,
+    files,
+  });
 
   if (response.error) {
     throw toAPIError(response.error);
   }
 
   const fileByKey = new Map<string, File>();
-  for (const [index, placement] of plan.files.entries()) {
-    fileByKey.set(String(index), placement.file);
+  for (const { key, placement } of reservable) {
+    fileByKey.set(key, placement.file);
   }
 
   const preparedUploadByFile = new Map<File, PreparedFileEntityUpload>();
@@ -155,7 +143,7 @@ const prepareFolderTreeUpload = async ({
     });
   }
 
-  if (preparedUploadByFile.size !== plan.files.length) {
+  if (preparedUploadByFile.size !== reservable.length) {
     throw new ClientOperationError({
       action: "prepare-dropped-folder-upload",
       message: "Prepared upload response did not include every file",
@@ -196,7 +184,7 @@ const abortUpload = async (
     // SAFETY: best-effort abort; the bucket lifecycle rule and daily
     // prune already reclaim the tmp object and row within 24h, so a
     // failed abort here is not fatal and has no user-facing outcome.
-    // oxlint-disable-next-line require-eden-error-check/require-eden-error-check
+    // oxlint-disable-next-line require-api-error-check/require-api-error-check
     await api
       .uploads({ workspaceId: toSafeId<"workspace">(workspaceId) })({
         uploadId,
@@ -207,25 +195,6 @@ const abortUpload = async (
   }
 };
 
-type AbortPreparedUploadsForFilesOptions = {
-  workspaceId: string;
-  files: File[];
-  preparedUploadForFile: (file: File) => PreparedFileEntityUpload | undefined;
-};
-
-const abortPreparedUploadsForFiles = async ({
-  workspaceId,
-  files,
-  preparedUploadForFile,
-}: AbortPreparedUploadsForFilesOptions): Promise<void> => {
-  for (const file of files) {
-    const preparedUpload = preparedUploadForFile(file);
-    if (preparedUpload) {
-      await abortUpload(workspaceId, preparedUpload.uploadId);
-    }
-  }
-};
-
 /**
  * Upload a single file via the presigned-S3-PUT migration. Same
  * external shape as the legacy multipart upload (throws with
@@ -233,9 +202,8 @@ const abortPreparedUploadsForFiles = async ({
  * success) so the surrounding `UploadQueue` integration is
  * untouched.
  *
- *   1. Compute SHA-256 of the bytes in-thread. 50 MB takes
- *      ~200–500ms on modern hardware; a Web Worker is a phase-6
- *      optimisation, not a correctness requirement.
+ *   1. Compute SHA-256 in one pass of bounded chunks, counted
+ *      as an active upload while the file is read.
  *   2. POST `/uploads/:wsId/presign` with the declared metadata.
  *      The API records intent in `pending_uploads`, issues a
  *      5-minute URL bound to the exact size and checksum.
@@ -244,9 +212,11 @@ const abortPreparedUploadsForFiles = async ({
  *   4. POST `/uploads/:wsId/:uploadId/finalize`. The API runs the
  *      claim FSM, scans, server-side promotes `tmp/` → final key,
  *      commits the entity transaction.
- *   5. On any abort/error mid-flight, POST `/abort` to mark the
- *      pending row as rejected. Re-entry to step 2 returns the
- *      cached result so accidental double-finalizes are safe.
+ *   5. A failed PUT POSTs `/abort` to mark the pending row as
+ *      rejected; the next attempt reserves anew. A finalize that may
+ *      still complete is retried on the same upload id (see
+ *      `createFileEntityUploader`), so a lost finalize response
+ *      replays the committed result instead of uploading again.
  */
 type UploadSingleFileOptions = {
   file: File;
@@ -268,7 +238,7 @@ const prepareSingleFileEntityUpload = async ({
   signal.throwIfAborted();
 
   // 1. SHA-256 of file bytes.
-  const sha256Hex = await hashFileSha256Hex(file);
+  const sha256Hex = await hashActiveUploadFile(file);
 
   signal.throwIfAborted();
 
@@ -289,7 +259,9 @@ const prepareSingleFileEntityUpload = async ({
   );
   if (presign.error) {
     const error = toAPIError(presign.error);
-    attachResponseForRetry(error, presign.response);
+    if ("response" in presign) {
+      attachResponseForRetry(error, presign.response);
+    }
     throw error;
   }
 
@@ -299,23 +271,20 @@ const prepareSingleFileEntityUpload = async ({
   };
 };
 
-type UploadPreparedFileEntityOptions = {
+type PutFileEntityOptions = {
   file: File;
   workspaceId: string;
-  preparedUpload: PreparedFileEntityUpload;
+  grant: FileEntityUploadGrant;
   signal: AbortSignal;
 };
 
-const uploadPreparedFileEntity = async ({
+const putFileEntity = async ({
   file,
   workspaceId,
-  preparedUpload,
+  grant,
   signal,
-}: UploadPreparedFileEntityOptions): Promise<UploadResult> => {
-  const { uploadId, url, headers } = preparedUpload;
-  const wsClient = api.uploads({
-    workspaceId: toSafeId<"workspace">(workspaceId),
-  });
+}: PutFileEntityOptions): Promise<void> => {
+  const { uploadId, url, headers } = grant;
 
   // 3. PUT to S3. S3 enforces the signed checksum + length; a
   //    mismatched body comes back as 4xx and we surface the body
@@ -327,7 +296,7 @@ const uploadPreparedFileEntity = async ({
       headers,
       body: file,
       signal,
-      timeoutMs: UPLOAD_PUT_TIMEOUT_MS,
+      timeout: { type: "headers", ms: DOCUMENT_UPLOAD_PUT_TIMEOUT_MS },
     });
   } catch (error) {
     // Best-effort cleanup: abortUpload swallows its own errors and its
@@ -347,27 +316,44 @@ const uploadPreparedFileEntity = async ({
     });
   }
   if (!putResponse.ok) {
-    const detail = await putResponse.text().catch(() => "");
-    const error = new ClientOperationError({
-      action: "upload-file-to-s3",
-      message: `S3 rejected upload (${putResponse.status}${
-        detail ? `: ${detail.slice(0, 200)}` : ""
-      })`,
+    const errorBody = await Result.tryPromise(async () =>
+      readBodyTextWithIdleDeadline(putResponse, {
+        idleMs: DOCUMENT_UPLOAD_PUT_TIMEOUT_MS,
+        signal,
+      }),
+    );
+    const error = toAPIError({
+      status: putResponse.status,
+      value: errorBody.isErr() ? undefined : errorBody.value,
     });
     attachResponseForRetry(error, putResponse);
     await abortUpload(workspaceId, uploadId);
     throw error;
   }
+};
 
-  // 4. Finalize.
-  const finalize = await wsClient({ uploadId }).finalize.post(undefined, {
-    fetch: { signal },
-  });
+type FinalizeFileEntityOptions = {
+  workspaceId: string;
+  uploadId: string;
+  signal: AbortSignal;
+};
+
+const finalizeFileEntity = async ({
+  workspaceId,
+  uploadId,
+  signal,
+}: FinalizeFileEntityOptions): Promise<UploadResult> => {
+  // 4. Finalize. Finalize owns the pending row once called; whether a
+  //    failure may still complete on this upload id is decided by
+  //    `finalizeFailureKeepsUpload`.
+  const finalize = await api
+    .uploads({ workspaceId: toSafeId<"workspace">(workspaceId) })({ uploadId })
+    .finalize.post(undefined, { fetch: { signal } });
   if (finalize.error) {
     const error = toAPIError(finalize.error);
-    attachResponseForRetry(error, finalize.response);
-    // Finalize owns the pending row once called. 422s are terminal
-    // rejections, 409/5xx may still be in-flight or retryable.
+    if ("response" in finalize) {
+      attachResponseForRetry(error, finalize.response);
+    }
     throw error;
   }
 
@@ -389,18 +375,6 @@ const uploadPreparedFileEntity = async ({
   };
 };
 
-const uploadSingleFile = async (
-  options: UploadSingleFileOptions,
-): Promise<UploadResult> => {
-  const preparedUpload = await prepareSingleFileEntityUpload(options);
-  return await uploadPreparedFileEntity({
-    file: options.file,
-    workspaceId: options.workspaceId,
-    preparedUpload,
-    signal: options.signal,
-  });
-};
-
 type BatchUploadLabels = {
   uploading: string;
   uploadingDescription: string;
@@ -412,6 +386,7 @@ type BatchUploadLabels = {
   rateLimited: (seconds: number) => string;
   cancel: string;
   retryFailed: (count: number) => string;
+  additionalFailures: (count: number) => string;
 };
 
 export const useBatchUploadLabels = (): BatchUploadLabels => {
@@ -438,6 +413,7 @@ export const useBatchUploadLabels = (): BatchUploadLabels => {
     rateLimited: (seconds) => t("workspaces.files.rateLimited", { seconds }),
     cancel: t("common.cancel"),
     retryFailed: (count) => t("workspaces.files.retryFailed", { count }),
+    additionalFailures: (count) => t("chat.historyContext.unnamed", { count }),
   };
 };
 
@@ -447,11 +423,11 @@ type BatchUploadOptions = {
   propertyId: string;
   parentId?: string | null | undefined;
   parentIdForFile?: (file: File) => string | null | undefined;
-  preparedUploadForFile?: (file: File) => PreparedFileEntityUpload | undefined;
-  onPreparedUploadFailed?: (
-    file: File,
-    preparedUpload: PreparedFileEntityUpload,
-  ) => Promise<void> | void;
+  /**
+   * Reservations made ahead for some files (a dropped folder). Each is used
+   * by its file's first attempt and removed; a cancel aborts the unused ones.
+   */
+  preparedUploads?: Map<File, PreparedFileEntityUpload>;
   labels: BatchUploadLabels;
   onError?: (error: Error) => void;
 };
@@ -466,53 +442,51 @@ type BatchUploadOptions = {
 export const uploadFileEntitiesBatched = async (
   options: BatchUploadOptions,
 ): Promise<UploadResult[]> => {
-  const {
-    files,
-    workspaceId,
-    propertyId,
-    parentId,
-    parentIdForFile,
-    preparedUploadForFile,
-    onPreparedUploadFailed,
-    labels,
-    onError,
-  } = options;
-
-  if (files.length === 0) {
+  if (options.files.length === 0) {
     return [];
   }
 
-  return await new Promise<UploadResult[]>((resolve) => {
-    const completedFiles = new Set<File>();
-    const queue = new UploadQueue<UploadResult>(async (file, signal) => {
-      const preparedUpload = preparedUploadForFile?.(file);
-      if (preparedUpload) {
-        try {
-          const result = await uploadPreparedFileEntity({
-            file,
-            workspaceId,
-            preparedUpload,
-            signal,
-          });
-          completedFiles.add(file);
-          return result;
-        } catch (error) {
-          await onPreparedUploadFailed?.(file, preparedUpload);
-          throw error;
-        }
-      }
+  return await withActiveUpload(async () => await runUploadBatch(options));
+};
 
-      const fileParentId = parentIdForFile?.(file);
-      const result = await uploadSingleFile({
-        file,
-        workspaceId,
-        propertyId,
-        parentId: fileParentId === undefined ? parentId : fileParentId,
-        signal,
-      });
-      completedFiles.add(file);
-      return result;
-    }, MAX_PARALLEL_FILE_UPLOADS);
+const runUploadBatch = async ({
+  files,
+  workspaceId,
+  propertyId,
+  parentId,
+  parentIdForFile,
+  preparedUploads,
+  labels,
+  onError,
+}: BatchUploadOptions): Promise<UploadResult[]> =>
+  await new Promise<UploadResult[]>((resolve) => {
+    const uploader = createFileEntityUploader<UploadResult>({
+      reserve: async (file, signal) => {
+        const preparedUpload = preparedUploads?.get(file);
+        if (preparedUpload) {
+          preparedUploads?.delete(file);
+          return preparedUpload;
+        }
+        const fileParentId = parentIdForFile?.(file);
+        return await prepareSingleFileEntityUpload({
+          file,
+          workspaceId,
+          propertyId,
+          parentId: fileParentId === undefined ? parentId : fileParentId,
+          signal,
+        });
+      },
+      put: async (file, grant, signal) =>
+        await putFileEntity({ file, workspaceId, grant, signal }),
+      finalize: async (uploadId, signal) =>
+        await finalizeFileEntity({ workspaceId, uploadId, signal }),
+      abort: async (uploadId) => await abortUpload(workspaceId, uploadId),
+    });
+    const queue = new UploadQueue<UploadResult>(
+      async (file, signal) =>
+        readQueryResult(await uploader.upload(file, signal)),
+      MAX_PARALLEL_FILE_UPLOADS,
+    );
 
     const initialTotal = files.length;
     const showProgress = initialTotal > 1;
@@ -523,7 +497,6 @@ export const uploadFileEntitiesBatched = async (
       description: showProgress
         ? labels.progress(0, initialTotal)
         : labels.uploadingDescription,
-      timeout: 0,
       actionProps: {
         children: labels.cancel,
         onClick: () => queue.cancel(),
@@ -563,23 +536,23 @@ export const uploadFileEntitiesBatched = async (
         onError?.(error);
       }
 
-      if (cancelled && preparedUploadForFile) {
-        const unfinishedPreparedFiles = files.filter(
-          (file) => !completedFiles.has(file),
+      if (cancelled) {
+        const unusedPreparedUploads = preparedUploads
+          ? [...preparedUploads.values()]
+          : [];
+        preparedUploads?.clear();
+        detached(
+          (async () => {
+            for (const preparedUpload of unusedPreparedUploads) {
+              await abortUpload(workspaceId, preparedUpload.uploadId);
+            }
+            await uploader.abortStaged();
+          })(),
+          "use-create-file-entities.abort-cancelled-uploads",
         );
-        abortPreparedUploadsForFiles({
-          workspaceId,
-          files: unfinishedPreparedFiles,
-          preparedUploadForFile,
-        }).catch((error: unknown) => {
-          if (error instanceof Error) {
-            onError?.(error);
-          }
-        });
       }
 
-      const failedNames = failed.map((f) => f.file.name);
-      const failedCount = failedNames.length;
+      const failedCount = failed.length;
       const successCount = completed.length;
 
       if (cancelled) {
@@ -588,7 +561,6 @@ export const uploadFileEntitiesBatched = async (
           title: labels.partial(failedCount, total),
           description:
             successCount > 0 ? labels.progress(successCount, total) : undefined,
-          timeout: undefined,
           actionProps: undefined,
         });
       } else if (failedCount === 0) {
@@ -596,35 +568,34 @@ export const uploadFileEntitiesBatched = async (
           type: "success",
           title: labels.uploadedSuccessfully,
           description: undefined,
-          timeout: undefined,
           actionProps: undefined,
         });
       } else if (successCount > 0) {
-        stellaToast.update(toastId, {
-          type: "warning",
+        showUploadFailureToast({
+          toastId,
           title: labels.partial(failedCount, total),
-          description: formatFailedFiles(failedNames),
-          timeout: 0,
-          actionProps: {
-            children: labels.retryFailed(failedCount),
-            onClick: () => queue.retryFailed(),
+          type: "warning",
+          failures: failed,
+          labels: {
+            reasonFallback: labels.uploadFailed,
+            additionalFailures: labels.additionalFailures,
+            retryFailed: labels.retryFailed,
           },
+          onRetry: () => queue.retryFailed(),
         });
       } else {
-        notifyUserError(
-          failed.find(({ error }) => !actionAdmissionOutcome(error))?.error ??
-            failed.at(0)?.error,
-          labels.uploadFailed,
-          {
-            toastId,
-            description: formatFailedFiles(failedNames),
-            timeout: 0,
-            actionProps: {
-              children: labels.retryFailed(failedCount),
-              onClick: () => queue.retryFailed(),
-            },
+        showUploadFailureToast({
+          toastId,
+          title: labels.uploadFailed,
+          type: "error",
+          failures: failed,
+          labels: {
+            reasonFallback: labels.uploadFailed,
+            additionalFailures: labels.additionalFailures,
+            retryFailed: labels.retryFailed,
           },
-        );
+          onRetry: () => queue.retryFailed(),
+        });
       }
 
       if (renamedCount > 0) {
@@ -643,104 +614,144 @@ export const uploadFileEntitiesBatched = async (
 
     queue.enqueue(files);
   });
+
+type UploadAfterDuplicateCheckOptions = {
+  workspaceId: string;
+  /** Holds the upload controls disabled while files are hashed and looked up. */
+  whileCheckingFiles: <T>(check: () => Promise<T>) => Promise<T>;
 };
 
 /**
- * Whether these files still owe the user the question "is this a new version
- * of a document you already have?".
+ * Ask about files whose exact bytes the matter already holds, then upload
+ * the ones the user did not skip along with the rest of the batch.
  */
-export const REFERENCE_CHECK = {
-  ask: "ask",
-  /** The caller has already put the question and acted on the answer. */
-  skip: "skip",
-} as const;
+const useUploadAfterDuplicateCheck = ({
+  workspaceId,
+  whileCheckingFiles,
+}: UploadAfterDuplicateCheckOptions) => {
+  const analytics = useAnalytics();
+  const askAboutDuplicateFiles = useExactDuplicateUploadStore(
+    (store) => store.ask,
+  );
 
-type ReferenceCheckMode =
-  (typeof REFERENCE_CHECK)[keyof typeof REFERENCE_CHECK];
+  return async (
+    input: CreateFileEntitiesInput,
+    upload: (input: CreateFileEntitiesInput) => void,
+  ): Promise<void> => {
+    if (input.duplicateCheck === DUPLICATE_CHECK.skip) {
+      upload(input);
+      return;
+    }
 
-type CreateFileEntitiesOptions = {
-  parentId?: string | null | undefined;
-  referenceCheck?: ReferenceCheckMode | undefined;
-};
+    const duplicates = await whileCheckingFiles(
+      async () =>
+        await resolveExactDuplicates({
+          files: uploadInputFiles(input),
+          lookup: exactDuplicateLookup(workspaceId),
+          onError: (error) =>
+            analytics.captureError(error, {
+              fingerprintKey: "useUploadAfterDuplicateCheck:failure",
+              scope: {
+                type: "handler",
+                handlerId: "useUploadAfterDuplicateCheck:failure",
+              },
+            }),
+        }),
+    );
 
-export type CreateFileEntitiesInput =
-  | ({ files: File[] } & CreateFileEntitiesOptions)
-  | ({ tree: DroppedFileTree } & CreateFileEntitiesOptions);
+    if (duplicates.length === 0) {
+      upload(input);
+      return;
+    }
 
-const hasUploadInputItems = (input: CreateFileEntitiesInput): boolean => {
-  if ("tree" in input) {
-    return input.tree.files.length > 0 || input.tree.directoryPaths.length > 0;
-  }
-
-  return input.files.length > 0;
-};
-
-const uploadInputFiles = (input: CreateFileEntitiesInput): File[] =>
-  "tree" in input ? input.tree.files.map(({ file }) => file) : [...input.files];
-
-const withUploadInputFileReplacements = (
-  input: CreateFileEntitiesInput,
-  replacements: ReadonlyMap<File, File>,
-): CreateFileEntitiesInput => {
-  if ("tree" in input) {
-    return {
-      tree: {
-        files: input.tree.files.map(({ file, pathSegments }) => ({
-          file: replacements.get(file) ?? file,
-          pathSegments,
-        })),
-        directoryPaths: input.tree.directoryPaths,
+    askAboutDuplicateFiles({
+      duplicates,
+      onResolved: (uploadAnywayFiles) => {
+        const remaining = afterDuplicateChoice({
+          input,
+          duplicateFiles: duplicates.map(({ file }) => file),
+          uploadAnywayFiles,
+        });
+        if (hasUploadInputItems(remaining)) {
+          upload(remaining);
+        }
       },
-      parentId: input.parentId,
-      referenceCheck: input.referenceCheck,
-    };
-  }
-
-  return {
-    files: input.files.map((file) => replacements.get(file) ?? file),
-    parentId: input.parentId,
-    referenceCheck: input.referenceCheck,
+    });
   };
+};
+
+/** How long a file check runs before the "checking files" notice appears. */
+const CHECKING_FILES_NOTICE_DELAY_MS = 400;
+
+/** Runs a file check, naming the wait once it is long enough to notice. */
+const withCheckingFilesNotice = async <T>(
+  label: string,
+  check: () => Promise<T>,
+): Promise<T> => {
+  const notice: { toastId?: string } = {};
+  const showNotice = setTimeout(() => {
+    notice.toastId = stellaToast.loading(label);
+  }, CHECKING_FILES_NOTICE_DELAY_MS);
+  try {
+    return await check();
+  } finally {
+    clearTimeout(showNotice);
+    if (notice.toastId !== undefined) {
+      stellaToast.close(notice.toastId);
+    }
+  }
 };
 
 /**
- * The same upload minus the files the user chose to file as versions. A
- * dropped folder keeps its directories: they are created whether or not any
- * file lands inside them.
+ * Counts the hashing and lookups that run before an upload starts, so the
+ * caller's controls stay disabled until the upload itself takes over.
  */
-const withoutUploadInputFiles = (
-  input: CreateFileEntitiesInput,
-  excluded: ReadonlySet<File>,
-): CreateFileEntitiesInput => {
-  if ("tree" in input) {
-    return {
-      tree: {
-        files: input.tree.files.filter(({ file }) => !excluded.has(file)),
-        directoryPaths: input.tree.directoryPaths,
-      },
-      parentId: input.parentId ?? null,
-      referenceCheck: REFERENCE_CHECK.skip,
-    };
-  }
+const useCheckingFiles = () => {
+  const t = useTranslations();
+  const [checkingCount, setCheckingCount] = useState(0);
 
-  return {
-    files: input.files.filter((file) => !excluded.has(file)),
-    parentId: input.parentId ?? null,
-    referenceCheck: REFERENCE_CHECK.skip,
+  const whileCheckingFiles = async <T>(check: () => Promise<T>): Promise<T> => {
+    setCheckingCount((count) => count + 1);
+    return await withCheckingFilesNotice(
+      t("workspaces.files.checkingFiles"),
+      check,
+    ).finally(() => {
+      setCheckingCount((count) => count - 1);
+    });
   };
+
+  return [checkingCount > 0, whileCheckingFiles] as const;
 };
+
+/** Reports a failed reference lookup; the upload goes on without it. */
+const reportReferenceCheckError =
+  (analytics: ReturnType<typeof useAnalytics>) => (error: Error) =>
+    analytics.captureError(error, {
+      fingerprintKey:
+        "useCreateFileEntities.createFileEntitiesAfterReferenceCheck:failure",
+      scope: {
+        type: "handler",
+        handlerId:
+          "useCreateFileEntities.createFileEntitiesAfterReferenceCheck:failure",
+      },
+    });
 
 export const useCreateFileEntities = (workspaceId: string) => {
   const t = useTranslations();
-  const { activeOrganizationId } = useAuthenticatedUser();
   const labels = useBatchUploadLabels();
   const queryClient = useQueryClient();
+  const { activeOrganizationId } = useAuthenticatedUser();
   const { data: properties } = useSuspenseQuery(propertiesOptions(workspaceId));
   const analytics = useAnalytics();
   const startWorkflow = useStartWorkflow(workspaceId);
   const askAboutReferencedFiles = useDocumentReferenceUploadStore(
     (store) => store.ask,
   );
+  const [isCheckingFiles, whileCheckingFiles] = useCheckingFiles();
+  const uploadAfterDuplicateCheck = useUploadAfterDuplicateCheck({
+    workspaceId,
+    whileCheckingFiles,
+  });
 
   const ensureFileProperty = async (): Promise<string> => {
     let propertyId = properties.find((p) => p.content.type === "file")?.id;
@@ -753,7 +764,7 @@ export const useCreateFileEntities = (workspaceId: string) => {
       name: t("common.documents"),
       contentType: "file",
     });
-    propertyId = unwrapEden(response).id;
+    propertyId = unwrapApiResponse(response).id;
     return propertyId;
   };
 
@@ -773,7 +784,8 @@ export const useCreateFileEntities = (workspaceId: string) => {
     }
   };
 
-  const { isPending, mutate } = useMutation({
+  const { isPending, mutate } = useIdempotentMutation({
+    idempotencyScope: workspaceId,
     mutationFn: async (input: CreateFileEntitiesInput) => {
       const parentId = input.parentId ?? null;
 
@@ -781,31 +793,35 @@ export const useCreateFileEntities = (workspaceId: string) => {
         const plan = buildDroppedFolderUploadPlan(input.tree);
         const propertyId =
           plan.files.length > 0 ? await ensureFileProperty() : null;
-        const preparedTree = await prepareFolderTreeUpload({
-          workspaceId,
-          parentId,
-          propertyId,
-          plan,
-        });
+        const uploaded = await withActiveUpload(async () => {
+          const preparedTree = await prepareFolderTreeUpload({
+            workspaceId,
+            parentId,
+            propertyId,
+            plan,
+          });
 
-        if (preparedTree.files.length === 0 || propertyId === null) {
-          return;
-        }
+          if (preparedTree.files.length === 0 || propertyId === null) {
+            return [];
+          }
 
-        const uploaded = await uploadFileEntitiesBatched({
-          files: preparedTree.files,
-          workspaceId,
-          propertyId,
-          parentId,
-          parentIdForFile: (file) => preparedTree.parentIdByFile.get(file),
-          preparedUploadForFile: (file) =>
-            preparedTree.preparedUploadByFile.get(file),
-          onPreparedUploadFailed: async (file, preparedUpload) => {
-            preparedTree.preparedUploadByFile.delete(file);
-            await abortUpload(workspaceId, preparedUpload.uploadId);
-          },
-          labels,
-          onError: (error) => analytics.captureError(error),
+          return await uploadFileEntitiesBatched({
+            files: preparedTree.files,
+            workspaceId,
+            propertyId,
+            parentId,
+            parentIdForFile: (file) => preparedTree.parentIdByFile.get(file),
+            preparedUploads: preparedTree.preparedUploadByFile,
+            labels,
+            onError: (error) =>
+              analytics.captureError(error, {
+                fingerprintKey: "useCreateFileEntities.mutationFn:failure",
+                scope: {
+                  type: "handler",
+                  handlerId: "useCreateFileEntities.mutationFn:failure",
+                },
+              }),
+          });
         });
         startWorkflowForUploadedFiles(uploaded);
         return;
@@ -817,12 +833,23 @@ export const useCreateFileEntities = (workspaceId: string) => {
         propertyId: await ensureFileProperty(),
         parentId,
         labels,
-        onError: (error) => analytics.captureError(error),
+        onError: (error) =>
+          analytics.captureError(error, {
+            fingerprintKey: "useCreateFileEntities.mutationFn:failure-2",
+            scope: {
+              type: "handler",
+              handlerId: "useCreateFileEntities.mutationFn:failure-2",
+            },
+          }),
       });
       startWorkflowForUploadedFiles(uploaded);
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useCreateFileEntities:failure",
+        scope: { type: "handler", handlerId: "useCreateFileEntities:failure" },
+      });
+      notifyUserError(error, getTranslator()("errors.actionFailed"));
     },
     onSettled: () => {
       detached(
@@ -849,15 +876,18 @@ export const useCreateFileEntities = (workspaceId: string) => {
   const createFileEntitiesAfterReferenceCheck = async (
     input: CreateFileEntitiesInput,
   ): Promise<void> => {
-    const referenced = await resolveDocumentReferenceMatches({
-      queryClient,
-      files: uploadInputFiles(input),
-      organizationId: activeOrganizationId,
-      onError: (error) => analytics.captureError(error),
-    });
+    const referenced = await whileCheckingFiles(
+      async () =>
+        await resolveDocumentReferenceMatches({
+          queryClient,
+          files: uploadInputFiles(input),
+          organizationId: activeOrganizationId,
+          onError: reportReferenceCheckError(analytics),
+        }),
+    );
 
     if (referenced.length === 0) {
-      mutate(input);
+      await uploadAfterDuplicateCheck(input, mutate);
       return;
     }
 
@@ -872,7 +902,10 @@ export const useCreateFileEntities = (workspaceId: string) => {
         );
         const remaining = withoutUploadInputFiles(input, filedAsVersions);
         if (hasUploadInputItems(remaining)) {
-          mutate(remaining);
+          detached(
+            uploadAfterDuplicateCheck(remaining, mutate),
+            "use-create-file-entities.duplicate-check",
+          );
         }
       },
       onCancelled: () => {
@@ -885,7 +918,10 @@ export const useCreateFileEntities = (workspaceId: string) => {
     input: CreateFileEntitiesInput,
   ) => {
     if (input.referenceCheck === REFERENCE_CHECK.skip) {
-      mutate(input);
+      detached(
+        uploadAfterDuplicateCheck(input, mutate),
+        "use-create-file-entities.duplicate-check",
+      );
       return;
     }
     detached(
@@ -917,7 +953,7 @@ export const useCreateFileEntities = (workspaceId: string) => {
   };
 
   const handleCreateFileEntities = (input: CreateFileEntitiesInput) => {
-    if (isPending || !hasUploadInputItems(input)) {
+    if (!hasUploadInputItems(input)) {
       return;
     }
     detached(
@@ -926,5 +962,5 @@ export const useCreateFileEntities = (workspaceId: string) => {
     );
   };
 
-  return [isPending, handleCreateFileEntities] as const;
+  return [isPending || isCheckingFiles, handleCreateFileEntities] as const;
 };

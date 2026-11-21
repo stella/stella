@@ -8,36 +8,35 @@
  * not compile until it draws.
  */
 
-import { createContext, use, useMemo } from "react";
+import { createContext, use } from "react";
 
+import type { SortingState } from "@tanstack/react-table";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
-import {
-  CalendarIcon,
-  FileDigitIcon,
-  FileTextIcon,
-  GlobeIcon,
-  HashIcon,
-  LandmarkIcon,
-  LanguagesIcon,
-  QuoteIcon,
-  ShapesIcon,
-  TagIcon,
-} from "@stll/ui/icons";
+import { NO_QUERY_MARK_TOKENS } from "@stll/decision-reader/query-marks";
+import type { QueryMarkTokens } from "@stll/decision-reader/query-marks";
+import { TagIcon } from "@stll/ui/icons";
 import type { LucideIcon } from "@stll/ui/icons";
+import type { ColumnSortKind } from "@stll/workspace-ui/column-sort";
 
+import { UNORDERED_COLUMN } from "@/components/workspaces/properties/sort-property.logic";
+import type { SortDirectionOffers } from "@/components/workspaces/properties/sort-property.logic";
 import { MetadataPopover } from "@/components/workspaces/table/metadata-popover";
 import type {
   DecisionRowData,
   TableCellContext,
+  TableColumn,
   TableColumnDef,
   TableHeaderContext,
 } from "@/components/workspaces/table/types";
+import type { TableSortingLayout } from "@/components/workspaces/table/use-table-state";
 import type { Decision } from "@/features/case-law/components/decision-cells";
+import { DECISION_COLUMN_ICONS } from "@/features/case-law/components/decision-table.pending";
 import { renderDecisionCell } from "@/features/case-law/decision-columns";
 import {
   DECISION_COLUMN_LABEL_KEYS,
+  DECISION_COLUMN_MODEL,
   decisionColumnLabelKey,
   decisionIdentityLineFields,
 } from "@/features/case-law/decision-columns.logic";
@@ -47,6 +46,7 @@ import type {
   DecisionExtraColumn,
   DecisionReferenceColumnKind,
 } from "@/features/case-law/decision-columns.logic";
+import type { DecisionDateOrder } from "@/features/case-law/decision-order.logic";
 import {
   decisionTableSchema,
   NO_EXTRA_DECISION_COLUMNS,
@@ -65,19 +65,6 @@ import type {
   AvailableQuestionColumns,
   QuestionColumnSurface,
 } from "@/features/case-law/research/question-columns.logic";
-
-/** The icon each decision column wears in its header menu and the chooser. */
-export const DECISION_COLUMN_ICONS = {
-  caseNumber: FileDigitIcon,
-  summary: FileTextIcon,
-  court: LandmarkIcon,
-  country: GlobeIcon,
-  date: CalendarIcon,
-  type: ShapesIcon,
-  headnote: QuoteIcon,
-  citedBy: HashIcon,
-  language: LanguagesIcon,
-} as const satisfies Record<DecisionColumnId, LucideIcon>;
 
 /**
  * The decision field a column stands for. Not what the cell draws — that is
@@ -107,12 +94,11 @@ type DecisionRenderScopeValue = {
   /** The rows whose cut headnote the reader asked to see whole. */
   expandedHeadnoteIds: ReadonlySet<string>;
   onToggleHeadnote: (decisionId: string) => void;
-  queryTokens: readonly string[];
+  queryTokens: QueryMarkTokens;
   /** The query as typed, which every gesture that opens a row carries with it. */
   searchQuery: string | undefined;
 };
 
-const NO_QUERY_TOKENS: readonly string[] = [];
 const NO_EXPANDED_HEADNOTES: ReadonlySet<string> = new Set();
 
 const DecisionRenderScopeContext = createContext<DecisionRenderScopeValue>({
@@ -123,17 +109,98 @@ const DecisionRenderScopeContext = createContext<DecisionRenderScopeValue>({
   // expand.
   onToggleHeadnote: () =>
     panic("Decision cell rendered outside a decision render scope"),
-  queryTokens: NO_QUERY_TOKENS,
+  queryTokens: NO_QUERY_MARK_TOKENS,
   searchQuery: undefined,
 });
 
 export const DecisionRenderScope = DecisionRenderScopeContext.Provider;
 
+type OrderedDecisionColumn = {
+  [
+    Column in DecisionColumnId
+  ]: (typeof DECISION_COLUMN_MODEL)[Column]["sortKind"] extends null
+    ? never
+    : Column;
+}[DecisionColumnId];
+
+/** The one decision column a header may order the results by. */
+export const DECISION_DATE_COLUMN = "date" satisfies OrderedDecisionColumn;
+
+// A second column that orders the results would need its own order on the
+// page (`DecisionDateOrder` speaks for the date alone); until one is wired end
+// to end, the model may give no other column a sort kind.
+true satisfies OrderedDecisionColumn extends typeof DECISION_DATE_COLUMN
+  ? true
+  : never;
+
+const NO_SORTS: SortingState = [];
+
+/**
+ * The date order as the table's sorting state. The date header is the only
+ * one that can sort, so a change it makes is a change of the date order; one
+ * without the date column would come from a header this table never enabled.
+ */
+export const decisionTableSorting = (
+  dateOrder: DecisionDateOrder | null,
+): TableSortingLayout | null => {
+  if (dateOrder === null) {
+    return null;
+  }
+  return {
+    sorts:
+      dateOrder.active === null
+        ? NO_SORTS
+        : [{ id: DECISION_DATE_COLUMN, desc: dateOrder.active === "desc" }],
+    onChange: (sorts) => {
+      const date =
+        sorts.find((sort) => sort.id === DECISION_DATE_COLUMN) ??
+        panic("The decision table sorted by a column other than the date");
+      dateOrder.onChange(date.desc ? "desc" : "asc");
+    },
+  };
+};
+
+/**
+ * Which ways the date header may order the rows. Through a context rather
+ * than the column definitions for the reason the render scope is: it changes
+ * with the result set while the columns do not.
+ */
+const DecisionDateDirectionsContext = createContext<SortDirectionOffers | null>(
+  null,
+);
+
+export const DecisionDateDirectionsScope =
+  DecisionDateDirectionsContext.Provider;
+
+const DecisionDateHeader = ({
+  column,
+  icon,
+  kind,
+  label,
+}: {
+  column: TableColumn<DecisionRowData>;
+  icon: LucideIcon;
+  kind: ColumnSortKind;
+  label: string;
+}) => {
+  const directions =
+    use(DecisionDateDirectionsContext) ??
+    panic("An ordered decision header rendered outside a date order scope");
+  return (
+    <MetadataPopover
+      column={column}
+      icon={icon}
+      label={label}
+      sort={{ type: "ordered", kind, directions }}
+    />
+  );
+};
+
 /** What the table is showing, for the parts of a row that are not a cell. */
 export const useDecisionRenderScope = (): DecisionRenderScopeValue =>
   use(DecisionRenderScopeContext);
 
-type UseDecisionTableColumnsOptions = {
+type UseDecisionTableSchemaOptions = {
   /** Columns only the calling screen has; none on the results page. */
   extraColumns?: readonly DecisionExtraColumn[] | undefined;
   /** The organization's questions and what may be done to one. */
@@ -147,7 +214,7 @@ export const useDecisionTableSchema = ({
   extraColumns = NO_EXTRA_DECISION_COLUMNS,
   questions,
   referenceKind,
-}: UseDecisionTableColumnsOptions): DecisionTableSchema => {
+}: UseDecisionTableSchemaOptions): DecisionTableSchema => {
   const t = useTranslations();
   const questionColumns =
     questions.type === "available" ? questions.columns : NO_QUESTION_COLUMNS;
@@ -156,30 +223,38 @@ export const useDecisionTableSchema = ({
   // drops it.
   const withQuestionSurface = questions.type !== "hidden";
 
-  return useMemo(
-    () =>
-      decisionTableSchema({
-        extraColumns,
-        labels: {
-          caseNumber: t(decisionColumnLabelKey("caseNumber", referenceKind)),
-          summary: t(DECISION_COLUMN_LABEL_KEYS.summary),
-          court: t(DECISION_COLUMN_LABEL_KEYS.court),
-          country: t(DECISION_COLUMN_LABEL_KEYS.country),
-          date: t(DECISION_COLUMN_LABEL_KEYS.date),
-          type: t(DECISION_COLUMN_LABEL_KEYS.type),
-          headnote: t(DECISION_COLUMN_LABEL_KEYS.headnote),
-          citedBy: t(DECISION_COLUMN_LABEL_KEYS.citedBy),
-          language: t(DECISION_COLUMN_LABEL_KEYS.language),
-        },
-        questionColumns,
-        withQuestionSurface,
-      }),
-    [extraColumns, questionColumns, referenceKind, t, withQuestionSurface],
-  );
+  return decisionTableSchema({
+    extraColumns,
+    labels: {
+      caseNumber: t(decisionColumnLabelKey("caseNumber", referenceKind)),
+      summary: t(DECISION_COLUMN_LABEL_KEYS.summary),
+      court: t(DECISION_COLUMN_LABEL_KEYS.court),
+      country: t(DECISION_COLUMN_LABEL_KEYS.country),
+      date: t(DECISION_COLUMN_LABEL_KEYS.date),
+      type: t(DECISION_COLUMN_LABEL_KEYS.type),
+      headnote: t(DECISION_COLUMN_LABEL_KEYS.headnote),
+      citedBy: t(DECISION_COLUMN_LABEL_KEYS.citedBy),
+      language: t(DECISION_COLUMN_LABEL_KEYS.language),
+    },
+    questionColumns,
+    withQuestionSurface,
+  });
+};
+
+/**
+ * Who states the rows' order: a header, where the page lets the reader choose
+ * one through it, or the answer alone, where no order can be chosen (an
+ * identifier lookup).
+ */
+type DecisionTableOrdering = "header" | "answer";
+
+type UseDecisionTableColumnsOptions = UseDecisionTableSchemaOptions & {
+  ordering: DecisionTableOrdering;
 };
 
 export const useDecisionTableColumns = ({
   extraColumns,
+  ordering,
   questions,
   referenceKind,
 }: UseDecisionTableColumnsOptions): TableColumnDef<DecisionRowData>[] => {
@@ -190,25 +265,31 @@ export const useDecisionTableColumns = ({
   });
   const available = questions.type === "available" ? questions : null;
 
-  return useMemo(
-    () =>
-      schema.columns.map((column) => toDecisionColumnDef(column, available)),
-    [available, schema.columns],
+  return schema.columns.map((column) =>
+    toDecisionColumnDef({ column, ordering, questions: available }),
   );
 };
 
 const renderNothing = () => null;
 
-/** Null for a reader whose surface hides the questions; no cell is drawn then. */
-const toDecisionColumnDef = (
-  column: DecisionColumnDescriptor,
-  questions: AvailableQuestionColumns | null,
-): TableColumnDef<DecisionRowData> => {
+type ToDecisionColumnDefOptions = {
+  column: DecisionColumnDescriptor;
+  ordering: DecisionTableOrdering;
+  /** Null for a reader whose surface hides the questions; no cell is drawn then. */
+  questions: AvailableQuestionColumns | null;
+};
+
+const toDecisionColumnDef = ({
+  column,
+  ordering,
+  questions,
+}: ToDecisionColumnDefOptions): TableColumnDef<DecisionRowData> => {
+  const sortable = column.capabilities.sort && ordering === "header";
   const base = {
     id: column.id,
     size: column.size,
     ...(column.minSize === undefined ? {} : { minSize: column.minSize }),
-    enableSorting: column.capabilities.sort,
+    enableSorting: sortable,
     enableHiding: column.capabilities.hide,
     enableResizing: column.capabilities.resize,
     enablePinning: column.capabilities.pin,
@@ -228,16 +309,26 @@ const toDecisionColumnDef = (
       };
     case "decision": {
       const decisionColumn = render.column;
+      const { sortKind } = DECISION_COLUMN_MODEL[decisionColumn];
       return {
         ...base,
         accessorFn: (row) => row.decision[DECISION_ACCESSORS[decisionColumn]],
-        header: ({ header }: TableHeaderContext<unknown, DecisionRowData>) => (
-          <MetadataPopover
-            column={header.column}
-            icon={DECISION_COLUMN_ICONS[decisionColumn]}
-            label={column.label}
-          />
-        ),
+        header: ({ header }: TableHeaderContext<unknown, DecisionRowData>) =>
+          sortable && sortKind !== null ? (
+            <DecisionDateHeader
+              column={header.column}
+              icon={DECISION_COLUMN_ICONS[decisionColumn]}
+              kind={sortKind}
+              label={column.label}
+            />
+          ) : (
+            <MetadataPopover
+              column={header.column}
+              icon={DECISION_COLUMN_ICONS[decisionColumn]}
+              label={column.label}
+              sort={UNORDERED_COLUMN}
+            />
+          ),
         cell: ({ row, table }: TableCellContext<unknown, DecisionRowData>) => (
           <DecisionCell
             column={decisionColumn}
@@ -259,6 +350,7 @@ const toDecisionColumnDef = (
             column={header.column}
             icon={TagIcon}
             label={column.label}
+            sort={UNORDERED_COLUMN}
           />
         ),
         cell: ({ row }: TableCellContext<unknown, DecisionRowData>) =>
@@ -278,6 +370,7 @@ const toDecisionColumnDef = (
             column={header.column}
             isNew={questions?.addedIds.has(questionColumn.id) ?? false}
             question={questionColumn}
+            questions={questions}
             {...(questions === null
               ? {}
               : { onAction: questions.onColumnAction })}
@@ -287,6 +380,8 @@ const toDecisionColumnDef = (
           questions === null ? null : (
             <QuestionCell
               answersByKey={questions.answersByKey}
+              queuedAnswerKeys={questions.queuedAnswerKeys}
+              refusedAnswerKeys={questions.refusedAnswerKeys}
               column={questionColumn}
               decision={row.original.decision}
               onShowPassage={questions.onShowPassage}

@@ -1,12 +1,20 @@
-import { describe, expect, test, expectTypeOf } from "bun:test";
+import { describe, expect, expectTypeOf, test } from "bun:test";
 import fc from "fast-check";
 import * as v from "valibot";
 
-import { propertyConfig } from "@stll/property-testing";
+import {
+  DECISION_IDENTIFIER_MAX_LENGTH,
+  DECISION_IDENTIFIER_TYPES,
+  decisionIdentifierSchema,
+  reporterCitationIdentifierSchema,
+} from "@stll/legal-ast/decision-identifier";
+import { blockSchema } from "@stll/legal-ast/document-ast";
+import { assertProperty } from "@stll/property-testing";
 
+import { nullAsAbsent } from "@/api/mcp/input-schemas";
 import type { McpToolHandler } from "@/api/mcp/tool-types";
 import { defineMcpToolSet } from "@/api/mcp/tool-types";
-import { nullAsAbsent, toolDataResult } from "@/api/mcp/tool-utils";
+import { toolDataResult } from "@/api/mcp/tool-utils";
 import {
   defineChatProjectionMcpToolOutput,
   defineMcpToolOutput,
@@ -109,7 +117,6 @@ describe("Valibot-backed MCP tool definitions", () => {
         count: { type: "integer" },
       },
       required: ["id", "count"],
-      additionalProperties: false,
     });
     expect(contract.outputSchema).not.toHaveProperty("$schema");
   });
@@ -125,7 +132,6 @@ describe("Valibot-backed MCP tool definitions", () => {
       type: "object",
       properties: { result: {} },
       required: ["result"],
-      additionalProperties: false,
     });
   });
 
@@ -142,7 +148,6 @@ describe("Valibot-backed MCP tool definitions", () => {
       type: "object",
       properties: { matterId: { type: "string" } },
       required: ["matterId"],
-      additionalProperties: false,
     });
 
     expect(() =>
@@ -163,12 +168,11 @@ describe("Valibot-backed MCP tool definitions", () => {
     expect(contract.outputSchema).toEqual({
       type: "object",
       properties: {
-        type: { enum: ["left", "right"], type: "string" },
+        type: { examples: ["left", "right"], type: "string" },
         left: { type: "string" },
         right: { type: "number" },
       },
       required: ["type"],
-      additionalProperties: false,
     });
   });
 
@@ -194,13 +198,13 @@ describe("Valibot-backed MCP tool definitions", () => {
       properties: {
         status: {
           anyOf: [
-            { enum: ["found", "pending", "missing"], type: "string" },
-            { enum: [1, 2], type: "number" },
+            { examples: ["found", "pending", "missing"], type: "string" },
+            { examples: [1, 2], type: "number" },
           ],
         },
         mixed: {
           anyOf: [
-            { enum: ["none", "all"], type: "string" },
+            { examples: ["none", "all"], type: "string" },
             { type: "string", minLength: 3 },
           ],
         },
@@ -224,7 +228,10 @@ describe("Valibot-backed MCP tool definitions", () => {
         tags: { type: ["array", "null"], items: { type: "string" } },
         // `enum` would reject null beside a type array: the anyOf stays.
         color: {
-          anyOf: [{ enum: ["red", "green"], type: "string" }, { type: "null" }],
+          anyOf: [
+            { examples: ["red", "green"], type: "string" },
+            { type: "null" },
+          ],
         },
         either: {
           anyOf: [
@@ -238,7 +245,8 @@ describe("Valibot-backed MCP tool definitions", () => {
 
   test("compacted output schemas accept exactly what the uncompacted projection accepts", () => {
     const validator = createWireSchemaValidator();
-    fc.assert(
+    assertProperty(
+      "compacted output schemas accept exactly what the uncompacted projection accepts",
       fc.property(
         outputSourceArbitrary.chain((source) => {
           const compacted = defineMcpToolOutput(source).outputSchema;
@@ -262,7 +270,7 @@ describe("Valibot-backed MCP tool definitions", () => {
           }
         },
       ),
-      propertyConfig({ numRuns: 150 }),
+      { numRuns: 150 },
     );
   });
 
@@ -290,12 +298,10 @@ describe("Valibot-backed MCP tool definitions", () => {
               details: { type: "object", additionalProperties: true },
             },
             required: ["id", "details"],
-            additionalProperties: false,
           },
         },
       },
       required: ["items"],
-      additionalProperties: false,
     });
   });
 
@@ -303,6 +309,7 @@ describe("Valibot-backed MCP tool definitions", () => {
     const definition = defineValibotMcpTool({
       consumesServices: false,
       access: "read",
+      permissions: { type: "open-read", reason: "reads only fixture data" },
       readClass: "tenant",
       annotations: {
         title: "Read example",
@@ -362,6 +369,7 @@ describe("Valibot-backed MCP tool definitions", () => {
     const definition = defineValibotMcpTool({
       consumesServices: false,
       access: "read",
+      permissions: { type: "open-read", reason: "reads only fixture data" },
       readClass: "tenant",
       annotations: {
         title: "Read example",
@@ -541,6 +549,7 @@ describe("Valibot-backed MCP tool definitions", () => {
       defineValibotMcpTool({
         consumesServices: false,
         access: "read",
+        permissions: { type: "open-read", reason: "reads only fixture data" },
         readClass: "tenant",
         annotations: {
           title: "Read example",
@@ -563,6 +572,7 @@ describe("Valibot-backed MCP tool definitions", () => {
       defineValibotMcpTool({
         consumesServices: false,
         access: "read",
+        permissions: { type: "open-read", reason: "reads only fixture data" },
         readClass: "tenant",
         annotations: {
           title: "Read example",
@@ -588,6 +598,7 @@ describe("Valibot-backed MCP tool definitions", () => {
       defineValibotMcpTool({
         consumesServices: false,
         access: "read",
+        permissions: { type: "open-read", reason: "reads only fixture data" },
         readClass: "tenant",
         annotations: {
           title: "Read example",
@@ -604,5 +615,66 @@ describe("Valibot-backed MCP tool definitions", () => {
     ).toThrow(
       "A native MCP tool input schema must reject unknown root properties",
     );
+  });
+});
+
+describe("legal AST output identifiers", () => {
+  test("canonical identifier outputs publish bounded strings and retain runtime content checks", () => {
+    const source = v.strictObject({
+      identifier: decisionIdentifierSchema,
+      reporter: reporterCitationIdentifierSchema,
+    });
+    const contract = defineMcpToolOutput(source);
+    expect(contract.outputSchema).toMatchObject({
+      properties: {
+        reporter: {
+          properties: {
+            value: {
+              type: "string",
+              maxLength: DECISION_IDENTIFIER_MAX_LENGTH,
+            },
+          },
+        },
+      },
+    });
+    const parse = (visible: string, searchable: string) =>
+      v.safeParse(contract.outputSchemaSource, {
+        identifier: {
+          type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+          value: visible,
+        },
+        reporter: {
+          type: DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
+          value: searchable,
+        },
+      });
+    expect(parse("48 Cdo 1/2026", "Sb. NS 1/2026").success).toBe(true);
+    expect(parse("\u200B", "Sb. NS 1/2026").success).toBe(false);
+    expect(parse("48 Cdo 1/2026", "...").success).toBe(false);
+    expect(() =>
+      defineMcpToolOutput(
+        v.strictObject({
+          value: v.pipe(
+            v.string(),
+            v.check(() => false),
+          ),
+        }),
+      ),
+    ).toThrow('The "check" action cannot be converted to JSON Schema.');
+  });
+  test("full recursive AST block output schemas compile without accepting arbitrary checks", () => {
+    expect(() =>
+      defineMcpToolOutput(v.strictObject({ blocks: v.array(blockSchema) })),
+    ).not.toThrow();
+  });
+
+  test("recursive block output keeps every citation target status visible", () => {
+    const contract = defineMcpToolOutput(
+      v.strictObject({ blocks: v.array(blockSchema) }),
+    );
+    const published = JSON.stringify(contract.outputSchema);
+    for (const status of ["identified", "unresolved", "legislation"]) {
+      expect(published).toContain(JSON.stringify(status));
+    }
   });
 });

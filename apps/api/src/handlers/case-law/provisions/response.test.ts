@@ -1,6 +1,6 @@
-import { Value } from "@sinclair/typebox/value";
 import { expect, test } from "bun:test";
 import fc from "fast-check";
+import * as v from "valibot";
 
 import { assertProperty } from "@stll/property-testing";
 
@@ -45,6 +45,11 @@ const provisionItem = (text: string) =>
     anchor: text,
     versionValidFrom: text,
     versionBasis: { type: "inferred", kind: "decision_date" },
+    inferredVersionCandidate: {
+      type: "inferred",
+      kind: "decision_date",
+      versionValidFrom: text,
+    },
     sentenceText: text,
     spanStart: 0,
     spanEnd: 10,
@@ -75,10 +80,21 @@ const citingItem = (text: string) =>
     caseNumber: text,
     slug: text,
     court: text,
+    courtAbbreviation: text,
+    courtTier: "other",
+    mentionCount: 1,
+    snippetCitation: null,
+    sourceUrl: text,
     country: text,
     language: text,
     decisionDate: text,
+    versionValidFrom: text,
     versionBasis: { type: "inferred", kind: "decision_date" },
+    inferredVersionCandidate: {
+      type: "inferred",
+      kind: "decision_date",
+      versionValidFrom: text,
+    },
     citationAuthority: 1,
     sentenceText: text,
     spanStart: 0,
@@ -114,6 +130,8 @@ test("public decision provision previews bound serialized Unicode and disclose d
         limit: 1,
         nextCursor: null,
         status: { type: "current" },
+        capability: { type: "supported", languages: ["cs"] },
+        pendingSince: null,
         generation: "1",
         publishedProjectionDigest: null,
         previews: [preview],
@@ -123,9 +141,7 @@ test("public decision provision previews bound serialized Unicode and disclose d
         decisionProvisionsSuccessResponseSchema,
       );
       expect(preview.truncated).toBe(true);
-      expect(Value.Check(decisionProvisionsSuccessResponseSchema, output)).toBe(
-        true,
-      );
+      expect(v.is(decisionProvisionsSuccessResponseSchema, output)).toBe(true);
       expect(Buffer.byteLength(JSON.stringify(output))).toBeLessThanOrEqual(
         responseByteBound(decisionProvisionsSuccessResponseSchema),
       );
@@ -142,6 +158,7 @@ test("public provision citing decisions bound serialized Unicode and retain with
       const text = part.repeat(16_385);
       const input = {
         items: [citingItem(text), { ...citingItem(text), sentenceText: null }],
+        snapshot: null,
         nextCursor: null,
         limit: 2,
       };
@@ -149,9 +166,7 @@ test("public provision citing decisions bound serialized Unicode and retain with
         input,
         citingDecisionsSuccessResponseSchema,
       );
-      expect(Value.Check(citingDecisionsSuccessResponseSchema, output)).toBe(
-        true,
-      );
+      expect(v.is(citingDecisionsSuccessResponseSchema, output)).toBe(true);
       expect(output.items.at(1)?.sentenceText).toBeNull();
       expect(Buffer.byteLength(JSON.stringify(output))).toBeLessThanOrEqual(
         responseByteBound(citingDecisionsSuccessResponseSchema),
@@ -173,9 +188,7 @@ test("public provision citation counts bound serialized Unicode anchors", () => 
         input,
         citationCountsSuccessResponseSchema,
       );
-      expect(Value.Check(citationCountsSuccessResponseSchema, output)).toBe(
-        true,
-      );
+      expect(v.is(citationCountsSuccessResponseSchema, output)).toBe(true);
       expect(Buffer.byteLength(JSON.stringify(output))).toBeLessThanOrEqual(
         responseByteBound(citationCountsSuccessResponseSchema),
       );
@@ -191,34 +204,35 @@ test("provision reads require an explicit version basis", () => {
     limit: 1,
     nextCursor: null,
     status: { type: "legacy" },
+    capability: { type: "supported", languages: ["cs"] },
+    pendingSince: null,
     generation: "0",
     publishedProjectionDigest: null,
     previews: [],
   };
   const citingPage = {
     items: [citingItem("text")],
+    snapshot: null,
     limit: 1,
     nextCursor: null,
   };
-  expect(
-    Value.Check(decisionProvisionsSuccessResponseSchema, decisionPage),
-  ).toBe(true);
-  expect(Value.Check(citingDecisionsSuccessResponseSchema, citingPage)).toBe(
+  expect(v.is(decisionProvisionsSuccessResponseSchema, decisionPage)).toBe(
     true,
   );
+  expect(v.is(citingDecisionsSuccessResponseSchema, citingPage)).toBe(true);
   for (const versionBasis of [
     undefined,
     { type: "stated" },
     { type: "inferred", kind: "unknown" },
   ]) {
     expect(
-      Value.Check(decisionProvisionsSuccessResponseSchema, {
+      v.is(decisionProvisionsSuccessResponseSchema, {
         ...decisionPage,
         items: [{ ...provision, versionBasis }],
       }),
     ).toBe(false);
     expect(
-      Value.Check(citingDecisionsSuccessResponseSchema, {
+      v.is(citingDecisionsSuccessResponseSchema, {
         ...citingPage,
         items: [{ ...citingItem("text"), versionBasis }],
       }),

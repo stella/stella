@@ -2,6 +2,7 @@ import {
   enterCaseLawMaintenanceLane,
   openCaseLawReadOnlySession,
 } from "@/api/lib/case-law/maintenance-lane";
+import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import {
   countParkedDocuments,
   loadDeferredDocumentSourceId,
@@ -57,7 +58,10 @@ const { ingestionDb } =
     ? await openCaseLawReadOnlySession()
     : await enterCaseLawMaintenanceLane();
 
-const sourceId = await loadDeferredDocumentSourceId(ingestionDb);
+const sourceId = await loadDeferredDocumentSourceId(
+  ingestionDb,
+  ADAPTER_KEYS.SK_COURTS,
+);
 if (sourceId === undefined) {
   console.log("No sk-courts source; nothing is parked.");
   process.exit(0);

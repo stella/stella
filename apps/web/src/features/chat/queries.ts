@@ -1,34 +1,43 @@
 import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
-import type { DataTag, QueryClient, QueryKey } from "@tanstack/react-query";
+import type {
+  DataTag,
+  InvalidateQueryFilters,
+  QueryClient,
+  QueryKey,
+} from "@tanstack/react-query";
 import { panic } from "better-result";
 
 import type { ReasoningEffort } from "@stll/ai-catalog";
+import { RESOURCE_TYPE } from "@stll/api-contract";
+import type { ChatThreadPinState } from "@stll/api-contract/chat";
 import {
   DOCX_SUGGESTION_SURFACE,
   type DocxSuggestionSurface,
 } from "@stll/api-contract/chat-docx-suggestions";
+import type { ChatRunTarget } from "@stll/api-contract/chat-run-target";
+import {
+  CHAT_TURN_STEERING,
+  type ChatTurnSteering,
+} from "@stll/api-contract/chat-send-intent";
 
 import type { ChatContextUsage } from "@/components/chat/chat-context-meter";
 import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
-import {
-  isChatTurnInFlight,
-  sanitizeRunningToolCalls,
-} from "@/components/chat/chat-ui-tools";
+import { sanitizeRunningToolCalls } from "@/components/chat/chat-ui-tools";
+import type { ActiveSkillChatContext } from "@/components/inspector/inspector-active-skill";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
+import type { WebApiRoutes } from "@/lib/api";
 import type { ChatThreadId, ChatThreadRef } from "@/lib/chat-thread-ref";
 import { createChatThreadId, toChatThreadId } from "@/lib/chat-thread-ref";
 import { STALE_TIME } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { parseDeterministicDate } from "@/lib/deterministic-date";
-import { emitDevCanaryError } from "@/lib/dev-canary";
-import type { WebApiRoutes } from "@/lib/eden-client";
-import { toAPIError, unwrapEden } from "@/lib/errors/api";
+import { toAPIError, unwrapApiResponse } from "@/lib/errors/api";
 import { stringCursorSeed } from "@/lib/infinite-query";
 import { toSafeId } from "@/lib/safe-id";
 import type { SafeId } from "@/lib/safe-id";
+import { resourceQueryOptions } from "@/lib/workspace-realtime";
 import { invalidateWorkspaceActivity } from "@/lib/workspaces/queries";
-import { LifecycleRegistry } from "@/stores/lifecycle-registry";
 
 import { chatKeys, getChatRuntimeContextKind } from "./chat-query-contract";
 import type {
@@ -36,15 +45,12 @@ import type {
   ChatThreadOptionsContext,
   ChatThreadOptionsInput,
   ChatThreadTitleKey,
+  DecisionChatThreadKey,
   FileChatThreadKey,
   GroupedChatThreadsKey,
   TemplateChatThreadKey,
 } from "./chat-query-contract";
-import {
-  createChatRuntime,
-  resetChatRequestStateForTests,
-} from "./chat-runtime";
-import type { ChatRuntime } from "./chat-runtime";
+import { chatToolGrantsOptions } from "./chat-tool-grants";
 
 const CHAT_THREADS_PAGE_SIZE = 50;
 
@@ -55,11 +61,62 @@ const readChatTimestamp = (value: string): Date =>
   parseDeterministicDate(value) ??
   panic("The chat API returned an invalid timestamp");
 
+type SerializedSubagentPart = Extract<
+  SerializedChatMessage["parts"][number],
+  { type: "subagent" }
+>;
+type SubagentChatPart = Extract<
+  PersistedChatMessage["parts"][number],
+  { type: "subagent" }
+>;
+type SerializedChildMessage =
+  SerializedSubagentPart["subagent"]["messages"][number];
+type ChildMessage = SubagentChatPart["subagent"]["messages"][number];
+
+/** A sub-agent part as the page holds it: each of its child's messages and
+ *  parts read back as a message's own are. */
+const deserializeSubagentPart = (
+  part: SerializedSubagentPart,
+): SubagentChatPart => ({
+  ...part,
+  subagent: {
+    ...part.subagent,
+    messages: part.subagent.messages.map(deserializeChildMessage),
+  },
+});
+
+const deserializeChildMessage = ({
+  createdAt,
+  parts,
+  ...message
+}: SerializedChildMessage): ChildMessage => ({
+  ...message,
+  ...(createdAt === undefined
+    ? {}
+    : { createdAt: readChatTimestamp(createdAt) }),
+  parts: parts.map(deserializeChildPart),
+});
+
+const deserializeChildPart = (
+  part: SerializedChildMessage["parts"][number],
+): ChildMessage["parts"][number] => {
+  if (part.type === "subagent") {
+    return deserializeSubagentPart(part);
+  }
+  if (part.type !== "tool-result") {
+    return part;
+  }
+  const { createdAt, ...rest } = part;
+  return createdAt === undefined
+    ? rest
+    : { ...rest, createdAt: readChatTimestamp(createdAt) };
+};
+
 const deserializeChatPart = (
   part: SerializedChatMessage["parts"][number],
 ): PersistedChatMessage["parts"][number] => {
   if (part.type === "subagent") {
-    return panic("A persisted chat message contains a subagent part");
+    return deserializeSubagentPart(part);
   }
   if (part.type !== "tool-result") {
     return part;
@@ -110,8 +167,11 @@ const EMPTY_ATTACHED_FILES: ChatThreadAttachedFiles = {
 };
 
 type ThreadFetch = {
+  activeSkill: ActiveSkillChatContext | null;
   /** The thread's turn not yet settled; null when every turn has settled. */
   activeTurnId: SafeId<"chatTurn"> | null;
+  /** Whether that turn takes a message mid-turn, as the server knows it. */
+  activeTurnSteering: ChatTurnSteering;
   attachedFiles: ChatThreadAttachedFiles;
   /** Where this thread's opening history came from. */
   forkProvenance: ForkProvenance;
@@ -134,9 +194,31 @@ type ThreadFetch = {
   model: string | null;
   /** Explicit effort for a manual model; null in Auto/provider-default mode. */
   reasoningEffort: ReasoningEffort | null;
+  /** Where the thread's turns run; absent where only the cloud is offered. */
+  runTarget?: ChatRunTarget | undefined;
   /** Model-context estimate for the next send; null for a missing or empty
    *  thread (nothing to meter yet). */
   context: ChatContextUsage | null;
+};
+
+type FetchChatMessageOptions = {
+  threadId: string;
+  messageId: string;
+};
+
+export const fetchChatMessage = async ({
+  threadId,
+  messageId,
+}: FetchChatMessageOptions) => {
+  const message = unwrapApiResponse(
+    await api.chat.threads({ threadId }).messages({ messageId }).get(),
+  );
+  const { createdAt, parts, ...rest } = message;
+  return {
+    ...rest,
+    createdAt: readChatTimestamp(createdAt),
+    parts: parts.map(deserializeChatPart),
+  };
 };
 
 const fetchThreadMessages = async (
@@ -160,7 +242,9 @@ const fetchThreadMessages = async (
 
   if (response.error && allowMissingThread && response.error.status === 404) {
     return {
+      activeSkill: null,
       activeTurnId: null,
+      activeTurnSteering: CHAT_TURN_STEERING.notSteerable,
       attachedFiles: EMPTY_ATTACHED_FILES,
       forkProvenance: { type: "none" },
       messages: [],
@@ -178,9 +262,11 @@ const fetchThreadMessages = async (
     };
   }
 
-  const data = unwrapEden(response);
+  const data = unwrapApiResponse(response);
   return {
+    activeSkill: data.activeSkill,
     activeTurnId: data.activeTurnId,
+    activeTurnSteering: data.activeTurnSteering,
     attachedFiles: data.attachedFiles,
     forkProvenance: data.forkProvenance,
     messages: deserializeChatMessages(data.messages),
@@ -194,6 +280,7 @@ const fetchThreadMessages = async (
     webSearchEnabled: data.webSearchEnabled,
     model: data.model,
     reasoningEffort: data.reasoningEffort,
+    runTarget: data.runTarget,
     context: data.context,
   };
 };
@@ -221,7 +308,7 @@ export const fetchOlderMessages = async ({
       },
     });
 
-  const data = unwrapEden(response);
+  const data = unwrapApiResponse(response);
 
   return {
     messages: deserializeChatMessages(data.messages),
@@ -231,23 +318,31 @@ export const fetchOlderMessages = async ({
 
 const fetchGroupedChatThreads = async ({
   cursor,
+  pinState,
   search,
   signal,
+  workspaceId,
 }: {
   cursor?: string | undefined;
+  pinState?: ChatThreadPinState | undefined;
   search?: string | undefined;
   signal?: AbortSignal | undefined;
+  workspaceId?: string | undefined;
 } = {}) => {
   const response = await api.chat.threads.get({
     ...(signal !== undefined && { fetch: { signal } }),
     query: {
       limit: CHAT_THREADS_PAGE_SIZE,
       ...(cursor !== undefined && { cursor }),
+      ...(pinState !== undefined && { pinState }),
       ...(search !== undefined && { search }),
+      ...(workspaceId !== undefined && {
+        workspaceId: toSafeId<"workspace">(workspaceId),
+      }),
     },
   });
 
-  return unwrapEden(response);
+  return unwrapApiResponse(response);
 };
 
 type GroupedChatThreadsPage = Awaited<
@@ -306,16 +401,18 @@ const fetchFileChatThread = async ({
   fieldId,
   workspaceId,
 }: FileChatThreadKey): Promise<FileChatThreadFetchResult> => {
-  const response = await api.chat
-    .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
-    ["file-thread"].get({
-      query: {
-        entityId: toSafeId<"entity">(entityId),
-        fieldId: toSafeId<"field">(fieldId),
-      },
-    });
+  const workspaceApi = api.chat.workspaces({
+    workspaceId: toSafeId<"workspace">(workspaceId),
+  });
 
-  const data = unwrapEden(response);
+  const response = await workspaceApi["file-thread"].get({
+    query: {
+      entityId: toSafeId<"entity">(entityId),
+      fieldId: toSafeId<"field">(fieldId),
+    },
+  });
+
+  const data = unwrapApiResponse(response);
 
   return {
     threadId: data.threadId === null ? null : toChatThreadId(data.threadId),
@@ -343,7 +440,7 @@ const fetchTemplateChatThread = async ({
     templateId: toSafeId<"template">(templateId),
   });
 
-  return toChatThreadId(unwrapEden(response).threadId);
+  return toChatThreadId(unwrapApiResponse(response).threadId);
 };
 
 export const mergeGroupedChatThreadPages = (
@@ -436,22 +533,19 @@ export const listChatHistoryItems = (
   });
 };
 
-/**
- * Test-only escape hatch. The module-level caches are intentionally
- * not cleared automatically; this helper resets them between unit
- * tests so each one starts hermetically.
- */
-export const __resetChatRequestStateForTests = (): void => {
-  resetChatRequestStateForTests();
-  chatRuntimeRegistry.clear();
-};
-
 export type ChatThreadFetched = {
+  activeSkill: ActiveSkillChatContext | null;
   /**
    * The thread's turn not yet settled when this page was read, which the
    * composer's Stop cancels. Null when every turn has settled.
    */
   activeTurnId: SafeId<"chatTurn"> | null;
+  /**
+   * Whether that turn takes a message mid-turn (`ChatTurnSteering`), as the
+   * server knows it; absent for a file thread, whose turns run on stella and
+   * take none.
+   */
+  activeTurnSteering?: ChatTurnSteering | undefined;
   /**
    * The files the thread attached, for the header's file stack. Read with
    * the page because older messages page in on demand, so the transcript
@@ -513,6 +607,12 @@ export type ChatThreadFetched = {
    *  `webSearchEnabled` above. */
   model: string | null;
   reasoningEffort: ReasoningEffort | null;
+  /**
+   * Where the thread's turns run when that is a computer; absent runs them
+   * on stella's own models. Changed with the model, through
+   * PATCH /chat/threads/:id/model.
+   */
+  runTarget?: ChatRunTarget | undefined;
   /**
    * Model-context estimate for the next send, driving the composer
    * meter. Null for a missing or empty thread (nothing to meter yet).
@@ -600,6 +700,7 @@ const seedFileThreadMessageCache = ({
       attachedFiles: fetched.attachedFiles,
       messages: sanitizeRunningToolCalls(fetched.messages),
       olderCursor: fetched.olderCursor,
+      activeSkill: null,
       contextMatterIds: fetched.contextMatterIds,
       lastActivityAt: fetched.lastActivityAt,
       threadRevision: fetched.threadRevision,
@@ -652,6 +753,23 @@ export const fileChatThreadOptions = ({
         workspaceId: key.workspaceId,
       });
 
+      // The tool grants of this thread load with the binding, not after the
+      // overlay mounts: a draft thread has none, and a persisted one starts
+      // its read as soon as its id is known.
+      const grantsOptions = chatToolGrantsOptions({
+        activeOrganizationId,
+        threadId,
+        userId: key.userId,
+      });
+      if (fetched.threadId === null) {
+        client.setQueryData(grantsOptions.queryKey, { grants: [] });
+      } else {
+        detached(
+          client.query(grantsOptions),
+          "chat-queries.prefetch-file-thread-tool-grants",
+        );
+      }
+
       return { threadId, threadExists: fetched.threadId !== null };
     },
   });
@@ -682,15 +800,17 @@ export const materializeFileChatThread = async ({
   hasDocxEditSurface,
   key,
 }: MaterializeFileChatThreadArgs): Promise<FileChatThreadBinding> => {
-  const response = await api.chat
-    .workspaces({ workspaceId: toSafeId<"workspace">(key.workspaceId) })
-    ["file-thread"].post({
-      entityId: toSafeId<"entity">(key.entityId),
-      fieldId: toSafeId<"field">(key.fieldId),
-      threadId: toSafeId<"chatThread">(draftThreadId),
-    });
+  const workspaceApi = api.chat.workspaces({
+    workspaceId: toSafeId<"workspace">(key.workspaceId),
+  });
 
-  const data = unwrapEden(response);
+  const response = await workspaceApi["file-thread"].post({
+    entityId: toSafeId<"entity">(key.entityId),
+    fieldId: toSafeId<"field">(key.fieldId),
+    threadId: toSafeId<"chatThread">(draftThreadId),
+  });
+
+  const data = unwrapApiResponse(response);
   const threadId = toChatThreadId(data.threadId);
   const binding: FileChatThreadBinding = { threadId, threadExists: true };
 
@@ -746,18 +866,40 @@ export const templateChatThreadOptions = ({
     queryFn: async () => await fetchTemplateChatThread(key),
   });
 
+/**
+ * The reader's own conversation about a decision, found on the server by
+ * the decision it is about; null until the reader has sent a first message.
+ */
+export const decisionChatThreadOptions = ({
+  activeOrganizationId,
+  key,
+}: {
+  activeOrganizationId: string;
+  key: DecisionChatThreadKey;
+}) =>
+  queryOptions({
+    queryKey: chatKeys.decisionThread(activeOrganizationId, key),
+    queryFn: async ({ signal }) => {
+      const response = await api.chat["decision-threads"]({
+        decisionId: key.decisionId,
+      }).get({ fetch: { signal } });
+      const { threadId } = unwrapApiResponse(response);
+      return { threadId: threadId === null ? null : toChatThreadId(threadId) };
+    },
+  });
+
 export type ChatThreadOptionsArgs = ChatThreadOptionsInput & {
   activeOrganizationId: string;
 };
 
 /**
  * Cache-identity key shared by `chatThreadOptions`' `queryKey` and the
- * runtime registry below. Keeping both derivations behind this one
+ * runtime registry. Keeping both derivations behind this one
  * helper guarantees a query cache entry and its registered `ChatRuntime`
  * are always addressed by the exact same (org, thread, allowMissingThread,
  * contextKind) tuple — they can drift in content, never in identity.
  */
-const chatThreadCacheKey = ({
+export const chatThreadCacheKey = ({
   activeOrganizationId,
   context,
   key,
@@ -772,33 +914,6 @@ const chatThreadCacheKey = ({
     contextKind: getChatRuntimeContextKind(context),
   });
 
-/**
- * Durable identity of the THREAD a registry entry streams into: org +
- * scope (+ workspaceId for workspace scope) + threadId, and nothing
- * else. Deliberately excludes `allowMissingThread`, `contextKind`, and
- * the transport version — those vary per SURFACE (they are query-cache
- * concerns), while a live stream belongs to the thread itself: the
- * cross-fingerprint busy reattach and the rebuild-time cleanup of
- * superseded entries must see every entry for the thread regardless of
- * which surface's query key it was registered under. JSON-encoded so
- * user-controlled ids cannot collide with a separator.
- */
-const chatThreadIdentity = ({
-  activeOrganizationId,
-  key,
-}: {
-  activeOrganizationId: string;
-  key: ChatThreadKey;
-}): string =>
-  key.scope === "global"
-    ? JSON.stringify([activeOrganizationId, key.scope, key.threadId])
-    : JSON.stringify([
-        activeOrganizationId,
-        key.scope,
-        key.workspaceId,
-        key.threadId,
-      ]);
-
 // Every context capability (getter/handler) that changes what a runtime
 // SENDS. `allowMissingThread` is excluded: it shapes the fetch, not the
 // send, and is already part of the query key.
@@ -807,29 +922,6 @@ type ChatContextCapabilityKey = Exclude<
   keyof ChatThreadOptionsContext,
   ChatContextQueryOnlyKey
 >;
-
-const CHAT_CONTEXT_CAPABILITY_KEYS = [
-  "getActiveDecision",
-  "getActiveDraft",
-  "getActiveExternal",
-  "getActiveFile",
-  "getActiveSkill",
-  "getActiveStatute",
-  "getActiveTemplate",
-  "getContextMatterIds",
-  "getDocxEditRepresentation",
-  "getEditApplyMode",
-  "getSendMode",
-  "getUserContext",
-  "getDocxSuggestionSurface",
-] as const satisfies readonly ChatContextCapabilityKey[];
-
-type MissingChatContextCapabilityKey = Exclude<
-  ChatContextCapabilityKey,
-  (typeof CHAT_CONTEXT_CAPABILITY_KEYS)[number]
->;
-
-true satisfies MissingChatContextCapabilityKey extends never ? true : never;
 
 /**
  * Deterministic encoding of WHICH capabilities a context carries (fixed
@@ -845,12 +937,32 @@ true satisfies MissingChatContextCapabilityKey extends never ? true : never;
  * seed-equal by the richer one, and its sends would silently omit that
  * context.
  */
-const chatContextCapabilityFingerprint = (
+export const chatContextCapabilityFingerprint = (
   context: ChatThreadOptionsContext | undefined,
-): string =>
-  CHAT_CONTEXT_CAPABILITY_KEYS.filter(
-    (capability) => context?.[capability] !== undefined,
-  ).join(",");
+): string => {
+  const capabilities = {
+    getActiveDecision: context?.getActiveDecision,
+    getActiveDraft: context?.getActiveDraft,
+    getActiveExternal: context?.getActiveExternal,
+    getActiveFile: context?.getActiveFile,
+    getActiveSkill: context?.getActiveSkill,
+    getActiveStatute: context?.getActiveStatute,
+    getActiveTemplate: context?.getActiveTemplate,
+    getContextMatterIds: context?.getContextMatterIds,
+    getDocxEditRepresentation: context?.getDocxEditRepresentation,
+    getEditApplyMode: context?.getEditApplyMode,
+    getSendMode: context?.getSendMode,
+    getUserContext: context?.getUserContext,
+    getRunTarget: context?.getRunTarget,
+    getDocxSuggestionSurface: context?.getDocxSuggestionSurface,
+  } satisfies {
+    [Key in ChatContextCapabilityKey]-?: ChatThreadOptionsContext[Key];
+  };
+  return Object.entries(capabilities)
+    .filter(([, getter]) => getter !== undefined)
+    .map(([name]) => name)
+    .join(",");
+};
 
 export const chatThreadOptions = ({
   activeOrganizationId,
@@ -901,579 +1013,6 @@ export const chatThreadOptions = ({
     },
   });
 
-/**
- * Server-authoritative freshness signal a runtime was seeded with,
- * remembered alongside its registry entry so a later acquire can tell
- * whether the incoming pure-data fetch carries anything the runtime was
- * not BUILT from. The message id and activity timestamp detect appended or
- * replayed turns; `threadRevision` detects in-place changes to an existing
- * message, such as an approval resolved by another client.
- *
- * INVARIANT: frozen across ordinary stream progress. That staleness is
- * what drives replacement: after a turn finishes, `onFinish` only
- * invalidates the pure-data query (it does NOT evict — see the registry
- * docs for the race that eviction caused); until the refetch lands,
- * acquire compares the stale cached data against this equally stale
- * build-time seed → equal → reattach, and the runtime keeps showing the
- * finished turn it holds internally. Once the refetch lands, the fresh
- * data's signal diverges from this frozen seed → idle rebuild from
- * server-authoritative messages.
- *
- * The sole exception is an authoritative refresh that confirms the same
- * pending approval already held by the runtime. That acknowledgement
- * advances every alias of the runtime to the persisted approval's seed,
- * so resolving the approval locally cannot rebuild from that now-stale
- * pending transcript before the continuation refetch lands. Updating the
- * seed from stream progress itself would break the normal divergence
- * detection above.
- */
-type ChatRuntimeSeedSignal = {
-  lastActivityAt: string | null;
-  lastMessageId: string | null;
-  threadRevision: string | null;
-};
-
-type ChatRuntimeRegistryEntry = {
-  runtime: ChatRuntime;
-  seed: ChatRuntimeSeedSignal;
-  /**
-   * Stringified query key of the pure-data query this entry belongs to.
-   * The registry key is this string PLUS the context-capability
-   * fingerprint, so one query key can own several entries; the GC sweep
-   * in `installChatRuntimeCleanup` uses this field to find all of them
-   * (and ONLY them — a removed query must not sweep entries registered
-   * under a sibling query key for the same thread).
-   */
-  queryKeyString: string;
-  /**
-   * Durable thread identity (see `chatThreadIdentity`), shared by every
-   * entry for the thread across query keys and fingerprints. The busy
-   * cross-fingerprint reattach and the rebuild-time cleanup of
-   * superseded entries match on this, never on `queryKeyString`.
-   */
-  threadIdentity: string;
-};
-
-const toChatRuntimeSeedSignal = (
-  data: ChatThreadFetched,
-): ChatRuntimeSeedSignal => ({
-  lastActivityAt: data.lastActivityAt,
-  lastMessageId: data.messages.at(-1)?.id ?? null,
-  threadRevision: data.threadRevision,
-});
-
-const seedSignalsEqual = (
-  left: ChatRuntimeSeedSignal,
-  right: ChatRuntimeSeedSignal,
-): boolean =>
-  left.lastActivityAt === right.lastActivityAt &&
-  left.lastMessageId === right.lastMessageId &&
-  left.threadRevision === right.threadRevision;
-
-const getPendingToolApprovalIds = (
-  messages: readonly PersistedChatMessage[],
-): readonly string[] => {
-  const message = messages.at(-1);
-  if (!message || message.role !== "assistant") {
-    return [];
-  }
-
-  return message.parts.flatMap((part) =>
-    part.type === "tool-call" && part.state === "approval-requested"
-      ? [part.id]
-      : [],
-  );
-};
-
-const CHAT_RUNTIME_RECONCILE_DISPOSITION = {
-  idle: "idle",
-  replaceStaleApproval: "replace-stale-approval",
-  retainInFlight: "retain-in-flight",
-  retainPendingApproval: "retain-pending-approval",
-} as const;
-
-/**
- * Whether a runtime has live work in flight that a rebuild would kill:
- * an active stream (`status` submitted/streaming, `isLoading` covers a
- * locally-pending optimistic send whose response has not started yet),
- * a server-side generation session (`sessionGenerating`), or a running
- * tool call awaiting its result in the latest assistant turn (which
- * `status` alone does not cover — between tool hops the client is
- * technically "ready").
- */
-const hasInFlightChatRuntimeWork = (runtime: ChatRuntime): boolean => {
-  const snapshot = runtime.getSnapshot();
-  const turnInFlight = isChatTurnInFlight({
-    messages: snapshot.messages,
-    status: snapshot.status,
-    turnAbandoned: snapshot.turnAbandoned,
-  });
-  // A terminal runtime wins over any stale transport signal. In particular,
-  // TanStack preserves a partial tool part (and may still report a generation
-  // session) after RUN_ERROR, but that turn will never resume.
-  if (snapshot.status === "error" || snapshot.turnAbandoned) {
-    return false;
-  }
-
-  return snapshot.isLoading || snapshot.sessionGenerating || turnInFlight;
-};
-
-const getChatRuntimeReconcileDisposition = ({
-  data,
-  hasAuthoritativeRefresh,
-  runtime,
-}: {
-  data: ChatThreadFetched;
-  hasAuthoritativeRefresh: boolean;
-  runtime: ChatRuntime;
-}) => {
-  if (hasInFlightChatRuntimeWork(runtime)) {
-    return CHAT_RUNTIME_RECONCILE_DISPOSITION.retainInFlight;
-  }
-
-  const pendingApprovalIds = getPendingToolApprovalIds(
-    runtime.getSnapshot().messages,
-  );
-  if (pendingApprovalIds.length === 0) {
-    return CHAT_RUNTIME_RECONCILE_DISPOSITION.idle;
-  }
-
-  const authoritativeApprovalIds = new Set(
-    getPendingToolApprovalIds(data.messages),
-  );
-  if (pendingApprovalIds.every((id) => authoritativeApprovalIds.has(id))) {
-    return CHAT_RUNTIME_RECONCILE_DISPOSITION.retainPendingApproval;
-  }
-
-  return hasAuthoritativeRefresh
-    ? CHAT_RUNTIME_RECONCILE_DISPOSITION.replaceStaleApproval
-    : CHAT_RUNTIME_RECONCILE_DISPOSITION.retainPendingApproval;
-};
-
-/**
- * Live `ChatRuntime` instances, keyed by cache identity (see
- * `chatThreadCacheKey`) PLUS context-capability fingerprint (see
- * `chatContextCapabilityFingerprint`). A runtime is built lazily, from
- * whichever caller's live context getters are on hand the first time its
- * key is resolved, and then reused:
- *   - across a component unmount/remount (thread revisit within the pure
- *     data query's `gcTime`) so an in-flight stream stays attached — see
- *     `useChatThreadRuntime`;
- *   - across the `/chat` landing page's route-handoff send, which calls
- *     `acquireChatRuntime` directly (no mounted component yet) to start
- *     the stream before navigating; the destination route's first render
- *     resolves the same key (identical capability set) and reattaches
- *     instead of building a second, competing runtime;
- *   - across SURFACES while a stream is live: a busy runtime is
- *     reattached even from a different capability fingerprint or query
- *     key (moving a chat between the inspector and the main page
- *     mid-stream) — see `findBusyChatRuntimeEntryForThread` and the
- *     alias mechanism in `acquireChatRuntime`.
- *
- * A hit is NOT unconditional: when the runtime is idle and the incoming
- * pure-data fetch carries a signal that diverges from the entry's frozen
- * build-time seed, the entry is rebuilt from the current caller's live
- * getters and fresh messages — see `acquireChatRuntime`. That one rule
- * covers both refresh paths:
- *   - a background refetch (window-refocus staleness, cross-tab/device
- *     invalidation) picked up messages the runtime never saw;
- *   - this runtime's own finished turn: `onFinish` only INVALIDATES the
- *     pure-data query — it must not evict, because the component
- *     re-renders from the runtime's final stream updates BEFORE the
- *     refetch lands, and an evicted entry would make that render's
- *     acquire (still holding pre-send cached data) rebuild from stale
- *     messages, wiping the just-finished turn off the screen until (or
- *     unless) the refetch wins. With the entry left in place, that
- *     interim acquire sees stale-data-equals-stale-seed → reattach, and
- *     the post-refetch acquire sees the divergence → rebuild from
- *     server-authoritative messages with the mounted caller's getters.
- *
- * Entries are swept when TanStack garbage-collects the matching
- * pure-data query (see `installChatRuntimeCleanup`) so a thread opened
- * once and never revisited doesn't hold its runtime — and every message
- * it ever streamed — in memory indefinitely.
- */
-const chatRuntimeRegistry = new LifecycleRegistry<
-  string,
-  ChatRuntimeRegistryEntry
->();
-
-const advanceAcknowledgedApprovalSeed = ({
-  runtime,
-  seed,
-  threadIdentity,
-}: {
-  runtime: ChatRuntime;
-  seed: ChatRuntimeSeedSignal;
-  threadIdentity: string;
-}): void => {
-  for (const entry of chatRuntimeRegistry.values()) {
-    if (entry.runtime === runtime && entry.threadIdentity === threadIdentity) {
-      entry.seed = seed;
-    }
-  }
-};
-
-/**
- * Registry key: query-key string + capability fingerprint. IDLE entries
- * never cross capability sets even when they share a pure-data cache
- * entry; BUSY entries do — see `findBusyChatRuntimeEntryForThread`.
- */
-const toChatRuntimeRegistryKey = (
-  queryKeyString: string,
-  context: ChatThreadOptionsContext | undefined,
-): string => `${queryKeyString}#${chatContextCapabilityFingerprint(context)}`;
-
-/**
- * BUSYNESS OVERRIDES CAPABILITY SPLITTING. The fingerprint keeps idle
- * runtimes from crossing capability sets because what matters there is
- * the NEXT send: it must be configured by the acquiring surface's own
- * getters. A busy runtime is different — its in-flight turn was already
- * configured by the surface that started it, so reattaching another
- * surface to it for display cannot mis-scope anything, while NOT
- * reattaching would hide a live stream: moving a chat between surfaces
- * mid-stream (inspector "move to main"/"move to side") lands on a
- * surface whose fingerprint differs (the inspector always passes
- * `getActiveDecision`; the page does not), and an exact-fingerprint
- * lookup alone would miss the streaming runtime and rebuild from stale
- * data. Once the turn finishes, `onFinish` invalidates, the refetch
- * diverges the seed, and the idle reconcile rebuilds under the
- * acquiring surface's own fingerprint with its own getters — capability
- * purity is restored at exactly the moment it matters again.
- *
- * Matched on THREAD identity, not query key: the query key embeds
- * `contextKind` (and `allowMissingThread`), so an inspector surface
- * opened with `getActiveSkill` registers under an "active-skill" query
- * key while the main page acquires the same thread under the "plain"
- * one — a query-key-scoped scan would miss that live stream entirely.
- *
- * Sends are serialized per thread in the UI, so two busy entries for
- * one thread should not occur; if state ever degrades to that, the
- * first entry in Map insertion order wins, deterministically.
- */
-const findBusyChatRuntimeEntryForThread = ({
-  data,
-  seed,
-  threadIdentity,
-}: {
-  data: ChatThreadFetched;
-  seed: ChatRuntimeSeedSignal;
-  threadIdentity: string;
-}): ChatRuntimeRegistryEntry | undefined => {
-  for (const entry of chatRuntimeRegistry.values()) {
-    if (entry.threadIdentity !== threadIdentity) {
-      continue;
-    }
-    const hasAuthoritativeRefresh = !seedSignalsEqual(entry.seed, seed);
-    const disposition = getChatRuntimeReconcileDisposition({
-      data,
-      hasAuthoritativeRefresh,
-      runtime: entry.runtime,
-    });
-    if (
-      disposition !== CHAT_RUNTIME_RECONCILE_DISPOSITION.retainInFlight &&
-      disposition !== CHAT_RUNTIME_RECONCILE_DISPOSITION.retainPendingApproval
-    ) {
-      continue;
-    }
-    if (
-      disposition ===
-        CHAT_RUNTIME_RECONCILE_DISPOSITION.retainPendingApproval &&
-      hasAuthoritativeRefresh
-    ) {
-      advanceAcknowledgedApprovalSeed({
-        runtime: entry.runtime,
-        seed,
-        threadIdentity,
-      });
-    }
-    return entry;
-  }
-  return undefined;
-};
-
-const isChatThreadQueryKey = (queryKey: unknown): boolean =>
-  Array.isArray(queryKey) &&
-  queryKey.at(0) === "chat" &&
-  queryKey.at(2) === "thread";
-
-const chatRuntimeCleanupInstalledClients = new WeakSet<QueryClient>();
-
-/**
- * Wire `chatRuntimeRegistry` eviction to the query cache's own GC.
- * Idempotent per `QueryClient` (mirrors `installPDFDocumentCleanup`);
- * call once, e.g. wherever the app's `QueryClient` is constructed.
- */
-export const installChatRuntimeCleanup = (queryClient: QueryClient): void => {
-  if (chatRuntimeCleanupInstalledClients.has(queryClient)) {
-    return;
-  }
-  chatRuntimeCleanupInstalledClients.add(queryClient);
-
-  queryClient.getQueryCache().subscribe((event) => {
-    if (
-      event.type !== "removed" ||
-      !isChatThreadQueryKey(event.query.queryKey)
-    ) {
-      return;
-    }
-    // One query key can own several registry entries (one per context
-    // capability fingerprint), so sweep by the entry's recorded query
-    // key rather than deleting a single map key. Deleting during Map
-    // iteration is safe per spec.
-    const removedKeyString = JSON.stringify(event.query.queryKey);
-    for (const [registryKey, entry] of chatRuntimeRegistry) {
-      if (entry.queryKeyString === removedKeyString) {
-        chatRuntimeRegistry.delete(registryKey);
-        chatRuntimeRebuildTimes.delete(entry.threadIdentity);
-      }
-    }
-  });
-};
-
-// Dev-only rebuild-churn canary. A priority-4 rebuild is expected a handful
-// of times around a turn boundary (one per surface per authoritative
-// refetch). A rebuild on every render — the registry failing to converge —
-// swaps the store identity under `useSyncExternalStore` each pass and
-// presents in the field as an unattributed render storm. Counting rebuilds
-// per thread in a sliding window turns that failure mode into a named
-// canary error (which the e2e `browserErrors` fixture escalates to a CI
-// failure, like the render-storm canary). Entries evict with the thread's
-// runtime entries in `installChatRuntimeCleanup`.
-const CHAT_RUNTIME_REBUILD_CHURN_WINDOW_MS = 2000;
-const CHAT_RUNTIME_REBUILD_CHURN_THRESHOLD = 10;
-const chatRuntimeRebuildTimes = new LifecycleRegistry<string, number[]>();
-
-const trackChatRuntimeRebuildChurn = (threadIdentity: string): void => {
-  if (!import.meta.env.DEV) {
-    return;
-  }
-  const now = performance.now();
-  const previous = chatRuntimeRebuildTimes.get(threadIdentity);
-  const recent =
-    previous === undefined
-      ? []
-      : previous.filter(
-          (time) => now - time < CHAT_RUNTIME_REBUILD_CHURN_WINDOW_MS,
-        );
-  recent.push(now);
-  chatRuntimeRebuildTimes.set(threadIdentity, recent);
-  if (recent.length === CHAT_RUNTIME_REBUILD_CHURN_THRESHOLD) {
-    emitDevCanaryError(
-      "chat-runtime-churn",
-      `rebuilt the chat runtime for thread ${threadIdentity} ` +
-        `${String(CHAT_RUNTIME_REBUILD_CHURN_THRESHOLD)} times in ${String(CHAT_RUNTIME_REBUILD_CHURN_WINDOW_MS)}ms. ` +
-        "acquireChatRuntime is not converging: each render sees a seed that " +
-        "differs from the cached thread data, rebuilds, and re-renders. Compare " +
-        "the entry seed against toChatRuntimeSeedSignal(data) at the rebuild site.",
-    );
-  }
-};
-
-export type AcquireChatRuntimeArgs = {
-  activeOrganizationId: string;
-  context: ChatThreadOptionsContext | undefined;
-  /**
-   * The pure-data result of the matching `chatThreadOptions` query.
-   * Seeds a freshly built runtime (`messages` are already sanitized by
-   * the queryFn) and provides the freshness signal for the idle
-   * reconcile on a registry hit.
-   */
-  data: ChatThreadFetched;
-  key: ChatThreadKey;
-  queryClient: QueryClient;
-};
-
-/**
- * Resolve the live `ChatRuntime` for a thread, building and registering
- * one from `context`'s live getters on a registry miss. See
- * `chatRuntimeRegistry`'s docs for the full reuse/replacement lifecycle.
- *
- * Reattach priority, reconciled against `data`'s freshness signal:
- *   1. Runtime with in-flight work under the caller's exact registry key:
- *      returned regardless of signal. Never replace mid-stream —
- *      this is what keeps an in-flight chat alive across navigation, and
- *      what makes the `/chat` route-handoff work: the handoff sender
- *      registers the runtime and starts the stream BEFORE navigating, so
- *      the destination page's acquire (identical fingerprint) lands here
- *      and reattaches instead of rebuilding.
- *      A pending approval is retained while the query still carries the
- *      runtime's pre-send seed, or when a refreshed transcript contains every
- *      pending tool-call id. A refreshed mismatch replaces stale local state.
- *   2. Runtime with in-flight work under ANY other registry key for the
- *      same THREAD
- *      (any fingerprint, any query key — the inspector's active-skill
- *      surface and the main page's plain surface use different query
- *      keys for one thread): returned regardless of signal — see
- *      `findBusyChatRuntimeEntryForThread` (in-flight work overrides
- *      capability splitting). Checked BEFORE the idle exact reattach so
- *      a stale idle entry left under the acquiring surface's own key can
- *      never shadow a live stream running under a foreign one. The
- *      reattach also records an ALIAS entry under the ACQUIRER's
- *      registry key — same runtime object, the source entry's seed — so
- *      that after the stream finishes but before the refetch lands, the
- *      acquirer's stale-data render takes the idle seed-equal exact hit
- *      (priority 3) instead of missing and rebuilding from pre-send
- *      messages (the finding-1 race, reintroduced through this path
- *      without the alias). Idempotent across renders: once the alias
- *      exists, subsequent busy renders resolve it at priority 1.
- *   3. Idle exact-key runtime, signal equal to the entry's build-time
- *      seed: returned as-is. This covers a plain revisit AND the window
- *      between a turn's `onFinish` (which only invalidates) and its
- *      refetch landing: cached data is still pre-send, the frozen seed
- *      is too, so the runtime — which holds the finished turn
- *      internally — is kept and the transcript never flickers back.
- *   4. Rebuild: the refetch (or a cross-tab/device background refetch)
- *      delivered messages the exact-key runtime was not built from, or
- *      no entry exists. Build from the CURRENT caller's live getters and
- *      fresh sanitized messages (the pre-registry design rebuilt on
- *      every queryFn run; this is the idle-only equivalent). This is
- *      also forced when an authoritative transcript resolves a pending
- *      approval in place without changing the tail message id or timestamp.
- *      Rebuild is also the moment a busy-reattached foreign runtime — or a
- *      route-handoff runtime — sheds its originating surface's getters
- *      in favour of the mounted caller's. Superseded same-thread entries
- *      (idle, diverged seed — finished streams whose data has been
- *      refetched, including both a busy-reattach's SOURCE entry and any
- *      ALIAS of it under other keys) are explicitly deleted here so one
- *      thread does not accumulate a dead entry per fingerprint;
- *      seed-equal entries are kept — they belong to a concurrently
- *      mounted surface built from the same fresh data.
- */
-export const acquireChatRuntime = ({
-  activeOrganizationId,
-  context,
-  data,
-  key,
-  queryClient,
-}: AcquireChatRuntimeArgs): ChatRuntime => {
-  const queryKeyString = JSON.stringify(
-    chatThreadCacheKey({ activeOrganizationId, context, key }),
-  );
-  const registryKey = toChatRuntimeRegistryKey(queryKeyString, context);
-  const threadIdentity = chatThreadIdentity({ activeOrganizationId, key });
-  const seed = toChatRuntimeSeedSignal(data);
-  const existing = chatRuntimeRegistry.get(registryKey);
-  const existingDisposition =
-    existing === undefined
-      ? null
-      : getChatRuntimeReconcileDisposition({
-          data,
-          hasAuthoritativeRefresh: !seedSignalsEqual(existing.seed, seed),
-          runtime: existing.runtime,
-        });
-  // Priority 1: busy runtime under the exact registry key.
-  if (
-    existing !== undefined &&
-    existingDisposition === CHAT_RUNTIME_RECONCILE_DISPOSITION.retainInFlight
-  ) {
-    return existing.runtime;
-  }
-  if (
-    existing !== undefined &&
-    existingDisposition ===
-      CHAT_RUNTIME_RECONCILE_DISPOSITION.retainPendingApproval
-  ) {
-    if (!seedSignalsEqual(existing.seed, seed)) {
-      advanceAcknowledgedApprovalSeed({
-        runtime: existing.runtime,
-        seed,
-        threadIdentity,
-      });
-    }
-    return existing.runtime;
-  }
-  // Priority 2: busy runtime under any other registry key for this
-  // thread. Record an alias under the acquirer's key (same runtime, the
-  // source's seed) so the post-finish stale render reattaches via the
-  // seed-equal exact hit instead of rebuilding from pre-send messages.
-  // Overwrites a stale idle exact entry on purpose: the user is looking
-  // at the streaming runtime now, so a later seed-equal hit must return
-  // it, not the pre-stream leftover.
-  const busyEntry = findBusyChatRuntimeEntryForThread({
-    data,
-    seed,
-    threadIdentity,
-  });
-  if (busyEntry !== undefined) {
-    chatRuntimeRegistry.set(registryKey, {
-      runtime: busyEntry.runtime,
-      seed: busyEntry.seed,
-      queryKeyString,
-      threadIdentity,
-    });
-    return busyEntry.runtime;
-  }
-  // Priority 3: idle exact-key reattach on an unchanged signal.
-  if (
-    existing !== undefined &&
-    existingDisposition !==
-      CHAT_RUNTIME_RECONCILE_DISPOSITION.replaceStaleApproval &&
-    seedSignalsEqual(existing.seed, seed)
-  ) {
-    return existing.runtime;
-  }
-  // Priority 4: rebuild. Every entry for this thread is idle here (the
-  // busy scan above found none), so drop superseded same-thread entries —
-  // idle, diverged seed — before registering the replacement; the `set`
-  // at the end replaces the exact-key entry atomically.
-  trackChatRuntimeRebuildChurn(threadIdentity);
-  for (const [staleKey, entry] of chatRuntimeRegistry) {
-    if (
-      staleKey !== registryKey &&
-      entry.threadIdentity === threadIdentity &&
-      !seedSignalsEqual(entry.seed, seed)
-    ) {
-      chatRuntimeRegistry.delete(staleKey);
-    }
-  }
-
-  const refreshPersistedThread = () => {
-    detached(
-      Promise.all([
-        invalidateChatThread({ queryClient, threadRef: key }),
-        invalidateChatThreadLists({
-          queryClient,
-          workspaceId: key.scope === "workspace" ? key.workspaceId : undefined,
-        }),
-      ]),
-      "chat-queries.invalidate-chat-thread",
-    );
-  };
-  const runtime = createChatRuntime({
-    activeTurnId: data.activeTurnId,
-    context,
-    initialMessages: data.messages,
-    key,
-    onError: (error) => {
-      getAnalytics().captureError(error);
-      // The server persists a failed terminal outcome before emitting
-      // RUN_ERROR. Reconcile the ephemeral TanStack error runtime with that
-      // durable message metadata just as a successful finish does.
-      refreshPersistedThread();
-    },
-    onFinish: () => {
-      // Invalidate only — do NOT evict the registry entry here. The
-      // component re-renders from the runtime's final stream updates
-      // before this invalidation's refetch lands; with the entry gone
-      // that render's acquire would be a registry MISS against still
-      // stale cached data and would rebuild from pre-send messages,
-      // wiping the finished turn until the refetch wins (or forever if
-      // it fails). Kept in place, the entry reattaches seed-equal until
-      // the refetch lands, then the idle reconcile replaces it.
-      refreshPersistedThread();
-    },
-    reloadThread: refreshPersistedThread,
-  });
-  chatRuntimeRegistry.set(registryKey, {
-    runtime,
-    seed,
-    queryKeyString,
-    threadIdentity,
-  });
-  return runtime;
-};
-
 type ChatThreadRecapFetched = {
   recap: string | null;
 };
@@ -1493,7 +1032,10 @@ const fetchThreadRecap = async (
   if (response.error) {
     // A recap is a non-critical nicety: surface nothing on failure,
     // but keep the error in telemetry.
-    getAnalytics().captureError(toAPIError(response.error));
+    getAnalytics().captureError(toAPIError(response.error), {
+      fingerprintKey: "fetchThreadRecap:failure",
+      scope: { type: "handler", handlerId: "fetchThreadRecap:failure" },
+    });
     return { recap: null };
   }
 
@@ -1530,17 +1072,25 @@ type ChatThreadSuggestedPromptsFetched = {
 const fetchThreadSuggestedPrompts = async (
   threadRef: ChatThreadRef,
 ): Promise<ChatThreadSuggestedPromptsFetched> => {
-  const response = await api.chat
-    .threads({ threadId: toSafeId<"chatThread">(threadRef.threadId) })
-    ["suggested-prompts"].post(undefined, {
-      query:
-        threadRef.scope === "workspace"
-          ? { workspaceId: toSafeId<"workspace">(threadRef.workspaceId) }
-          : {},
-    });
+  const threadApi = api.chat.threads({
+    threadId: toSafeId<"chatThread">(threadRef.threadId),
+  });
+
+  const response = await threadApi["suggested-prompts"].post(undefined, {
+    query:
+      threadRef.scope === "workspace"
+        ? { workspaceId: toSafeId<"workspace">(threadRef.workspaceId) }
+        : {},
+  });
 
   if (response.error) {
-    getAnalytics().captureError(toAPIError(response.error));
+    getAnalytics().captureError(toAPIError(response.error), {
+      fingerprintKey: "fetchThreadSuggestedPrompts:failure",
+      scope: {
+        type: "handler",
+        handlerId: "fetchThreadSuggestedPrompts:failure",
+      },
+    });
     return { prompts: [] };
   }
 
@@ -1575,7 +1125,7 @@ export const chatThreadSuggestedPromptsOptions = ({
 const fetchChatModelOptions = async () => {
   const response = await api.chat["model-options"].get();
 
-  return unwrapEden(response);
+  return unwrapApiResponse(response);
 };
 
 export type ChatModelBenchmarkOption = Awaited<
@@ -1592,25 +1142,54 @@ export const modelOptionsOptions = (activeOrganizationId: string) =>
     queryFn: async () => await fetchChatModelOptions(),
   });
 
+const fetchChatLocalRunners = async (signal: AbortSignal) =>
+  unwrapApiResponse(await api.chat["local-runners"].get({ fetch: { signal } }));
+
+/**
+ * The member's computers, what each can run and the folders linked on them.
+ * Read when the Models submenu opens, like the model options, and kept
+ * briefly: a computer signing in or reaching a limit shows on the next open.
+ * The computers report themselves over their own sockets; the member's one
+ * write here, allowing a linked folder, refreshes the read.
+ */
+export const localRunnersOptions = (activeOrganizationId: string) =>
+  resourceQueryOptions(
+    queryOptions({
+      queryKey: chatKeys.localRunners(activeOrganizationId),
+      staleTime: 30_000,
+      queryFn: async ({ signal }) => await fetchChatLocalRunners(signal),
+    }),
+    {
+      resources: [RESOURCE_TYPE.USER],
+      scope: { type: "organization", organizationId: activeOrganizationId },
+    },
+  );
+
 export const groupedChatThreadsOptions = ({
   activeOrganizationId,
+  pinState,
   search,
   userId,
+  workspaceId,
 }: GroupedChatThreadsKey) => {
   const normalizedSearch = search?.trim() || undefined;
   return infiniteQueryOptions({
     queryKey: chatKeys.groupedThreads({
       activeOrganizationId,
+      pinState,
       search: normalizedSearch,
       userId,
+      workspaceId,
     }),
     staleTime: STALE_TIME.FIVETEEN.MINUTES,
     refetchOnWindowFocus: false,
     queryFn: async ({ pageParam, signal }): Promise<GroupedChatThreadsPage> =>
       await fetchGroupedChatThreads({
         cursor: pageParam,
+        pinState,
         search: normalizedSearch,
         signal,
+        workspaceId,
       }),
     initialPageParam: stringCursorSeed(),
     getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
@@ -1629,7 +1208,7 @@ const fetchChatThreadTitle = async ({
         : {},
     });
 
-  return unwrapEden(response).title;
+  return unwrapApiResponse(response).title;
 };
 
 type ChatDraftMetaOptionsArgs = {
@@ -1656,12 +1235,17 @@ export const chatDraftMetaOptions = ({
           query: { allowMissingThread: true },
           fetch: { signal },
         });
-      const data = unwrapEden(response);
+      const data = unwrapApiResponse(response);
       return {
         webSearchAvailable: data.webSearchAvailable,
         webSearchEnabled: data.webSearchEnabled,
         model: data.model,
         reasoningEffort: data.reasoningEffort,
+        // Where the first send runs, as the draft's Run on choice stored it.
+        runTarget: data.runTarget,
+        // A draft the server holds no row for starts from the member's last
+        // Run on choice instead.
+        threadExists: data.threadExists,
         // The draft's cache-stable context floor (system prompt + tools), so
         // the hero meter shows the honest baseline instead of 0% before send.
         context: data.context,
@@ -1671,31 +1255,56 @@ export const chatDraftMetaOptions = ({
 
 type ChatThreadTitleOptionsArgs = {
   activeOrganizationId: string;
-  enabled: boolean;
   key: ChatThreadTitleKey;
+  /**
+   * The server's read of this thread (`chatThreadOptions`), undefined until it
+   * resolves. The title is read only once that read reports the row exists: a
+   * thread whose first message is still being sent has no row yet, so its
+   * GET /title answers 404 and the error would stay on screen after the turn
+   * lands. Local message state is never that evidence, which is why this takes
+   * the whole server read rather than a flag.
+   */
+  persistedThread: ChatThreadFetched | undefined;
+  /** False when the caller already holds the title (the grouped list). */
+  needed?: boolean;
 };
 
-// By-id title read for shared chrome (the chat breadcrumb). The grouped-threads
-// list only holds the first loaded pages, so opening an older thread that has
-// scrolled out of that window would otherwise leave the crumb without a title.
-// The breadcrumb reads the grouped cache first and only enables this query on a
-// miss, so a thread already in the list never triggers a redundant fetch.
+// By-id title read for shared chrome (the chat breadcrumb, the floating thread
+// card). The grouped-threads list only holds the first loaded pages, so opening
+// an older thread that has scrolled out of that window would otherwise leave
+// the crumb without a title. The breadcrumb reads the grouped cache first and
+// only needs this query on a miss, so a thread already in the list never
+// triggers a redundant fetch.
 export const chatThreadTitleOptions = ({
   activeOrganizationId,
-  enabled,
   key,
+  persistedThread,
+  needed = true,
 }: ChatThreadTitleOptionsArgs) =>
-  queryOptions({
-    enabled,
-    staleTime: STALE_TIME.FIVETEEN.MINUTES,
-    gcTime: STALE_TIME.FIVETEEN.MINUTES,
-    queryKey: chatKeys.threadTitle(activeOrganizationId, key),
-    queryFn: async () => await fetchChatThreadTitle(key),
-  });
+  resourceQueryOptions(
+    queryOptions({
+      enabled: needed && persistedThread?.threadExists === true,
+      staleTime: STALE_TIME.FIVETEEN.MINUTES,
+      gcTime: STALE_TIME.FIVETEEN.MINUTES,
+      queryKey: chatKeys.threadTitle(activeOrganizationId, key),
+      queryFn: async () => await fetchChatThreadTitle(key),
+    }),
+    // The thread's title, in the matter it belongs to or in the
+    // organization for a thread outside any matter.
+    key.workspaceId === undefined
+      ? {
+          resources: [RESOURCE_TYPE.CHAT_THREAD],
+          scope: { type: "organization", organizationId: activeOrganizationId },
+        }
+      : {
+          resources: [RESOURCE_TYPE.CHAT_THREAD],
+          scope: { type: "workspace", workspaceId: key.workspaceId },
+        },
+  );
 
-// Match every cached `chatKeys.groupedThreads` entry, whatever org, user and
-// search term it carries: the invalidator cannot reconstruct those ids, so it
-// walks by structural shape instead.
+// Match every cached `chatKeys.groupedThreads` entry, whatever org, user,
+// search term and matter filter it carries: the invalidator cannot reconstruct
+// those ids, so it walks by structural shape instead.
 const matchesGroupedChatThreads = (queryKey: readonly unknown[]): boolean =>
   queryKey.at(0) === "chat" &&
   queryKey.at(3) === "threads" &&
@@ -1797,18 +1406,23 @@ export const matchesChatThreadAcrossScopes = (
  * different cache key (the scope is part of the key), so the old
  * scope's entry would otherwise serve stale data on the next
  * visit. Scoped by `threadId` only because that's the durable
- * identity; scope+workspace are surface-bound.
+ * identity; scope+workspace are surface-bound. `refetchType: "none"`
+ * marks the entries stale without refetching a still-observed one, so a
+ * cache seed survives until the destination surface reads it.
  */
 export const invalidateChatThreadAcrossScopes = async ({
   queryClient,
+  refetchType,
   threadId,
 }: {
   queryClient: QueryClient;
+  refetchType?: InvalidateQueryFilters["refetchType"];
   threadId: ChatThreadId;
 }) =>
   await queryClient.invalidateQueries({
     predicate: (query) =>
       matchesChatThreadAcrossScopes(query.queryKey, threadId),
+    ...(refetchType === undefined ? {} : { refetchType }),
   });
 
 /**
@@ -1824,22 +1438,36 @@ export const invalidateChatThreadAcrossScopes = async ({
 export const applyChatModelChange = ({
   model,
   reasoningEffort,
+  runTarget,
   queryClient,
   queryKey,
   threadId,
 }: {
   model: string | null;
   reasoningEffort: ReasoningEffort | null;
+  /** Absent when the change left where turns run as it was. */
+  runTarget?: ChatRunTarget | undefined;
   queryClient: QueryClient;
   queryKey: DataTag<
     QueryKey,
-    { model: string | null; reasoningEffort: ReasoningEffort | null },
+    {
+      model: string | null;
+      reasoningEffort: ReasoningEffort | null;
+      runTarget?: ChatRunTarget | undefined;
+    },
     Error
   >;
   threadId: ChatThreadId;
 }): void => {
   queryClient.setQueryData(queryKey, (prev) =>
-    prev ? { ...prev, model, reasoningEffort } : prev,
+    prev
+      ? {
+          ...prev,
+          model,
+          reasoningEffort,
+          ...(runTarget === undefined ? {} : { runTarget }),
+        }
+      : prev,
   );
   detached(
     invalidateChatThreadAcrossScopes({ queryClient, threadId }),

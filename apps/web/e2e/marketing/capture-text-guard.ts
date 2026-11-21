@@ -1,0 +1,180 @@
+/// <reference lib="dom" />
+// The collector runs in the page; the DOM lib types it wherever it is checked.
+
+/**
+ * Text that must never reach a marketing capture: placeholder and fixture
+ * markers that would show invented data as if it were the product's. The
+ * capture scans each visible element's own text before it takes a screenshot.
+ */
+
+/** One visible element's own text, with where it sits on the page. */
+export type CaptureTextElement = {
+  descriptor: string;
+  text: string;
+};
+
+/**
+ * Each visible element's own text, read in the page: its text, including what
+ * its inline children render inside it, and for a form field the text it
+ * shows (its value, or its placeholder while empty).
+ * Self-contained, because `page.evaluate` runs it from its source; a DOM
+ * without layout passes `checkLayout: false`.
+ */
+export const collectCaptureText = ({
+  checkLayout,
+}: {
+  checkLayout: boolean;
+}): CaptureTextElement[] => {
+  const visible = (element: HTMLElement) => {
+    if (!checkLayout) {
+      return true;
+    }
+    const style = getComputedStyle(element);
+    // A `display: contents` wrapper has no box of its own but renders its
+    // children, whose text it reads.
+    if (style.display === "contents") {
+      return style.visibility !== "hidden";
+    }
+    const bounds = element.getBoundingClientRect();
+    return (
+      style.display !== "none" &&
+      style.visibility !== "hidden" &&
+      bounds.width > 0 &&
+      bounds.height > 0
+    );
+  };
+  const descriptorFor = (element: HTMLElement) => {
+    const landmark = element.closest<HTMLElement>(
+      "[id], [data-slot], [role], [aria-label], main, article, nav, aside, header, footer",
+    );
+    const described = landmark ?? element;
+    if (described.id) {
+      return `#${CSS.escape(described.id)}`;
+    }
+    for (const attribute of ["data-slot", "role", "aria-label"] as const) {
+      const value = described.getAttribute(attribute);
+      if (value) {
+        return `${described.localName}[${attribute}=${JSON.stringify(value)}]`;
+      }
+    }
+    return described.localName;
+  };
+  // Inline markup runs one line of text through several elements
+  // (`example<strong>.com</strong>`), so an element reads its text through its
+  // inline children, and an inline element is read by its parent.
+  const inlineTags = new Set([
+    "a",
+    "abbr",
+    "b",
+    "bdi",
+    "bdo",
+    "cite",
+    "code",
+    "em",
+    "i",
+    "kbd",
+    "mark",
+    "q",
+    "s",
+    "samp",
+    "small",
+    "span",
+    "strong",
+    "sub",
+    "sup",
+    "time",
+    "u",
+    "var",
+  ]);
+  const isInline = (node: Node): node is HTMLElement =>
+    node instanceof HTMLElement && inlineTags.has(node.localName);
+  const flowText = (element: HTMLElement): string =>
+    [...element.childNodes]
+      .map((node) => {
+        if (node.nodeType === Node.TEXT_NODE) {
+          return node.textContent ?? "";
+        }
+        return isInline(node) && visible(node) ? flowText(node) : " ";
+      })
+      .join("");
+  const readHere = (element: HTMLElement) =>
+    !isInline(element) || element.parentElement === document.body;
+  const shownText = (element: HTMLElement) => {
+    if (
+      element instanceof HTMLInputElement ||
+      element instanceof HTMLTextAreaElement
+    ) {
+      // A password shows dots and a hidden input shows nothing; the
+      // placeholder of either still shows while it is empty.
+      const masked =
+        element instanceof HTMLInputElement &&
+        (element.type === "password" || element.type === "hidden");
+      if (element.value.length > 0) {
+        return masked ? "" : element.value;
+      }
+      return element instanceof HTMLInputElement && element.type === "hidden"
+        ? ""
+        : element.placeholder;
+    }
+    return flowText(element);
+  };
+  return [...document.body.querySelectorAll<HTMLElement>("*")]
+    .filter((element) => visible(element) && readHere(element))
+    .flatMap((element) => {
+      const text = shownText(element).replaceAll(/\s+/gu, " ").trim();
+      return text ? [{ descriptor: descriptorFor(element), text }] : [];
+    });
+};
+
+const wholeWord = (text: string) =>
+  new RegExp(`(?<![\\p{L}\\p{N}_])${text}(?![\\p{L}\\p{N}_])`, "gu");
+
+// The single owner of banned capture text. Matching is whole-word and
+// case-sensitive, so real prose ("testament", "Barcelona", "Bar association")
+// passes.
+const BANNED_CAPTURE_TEXT = [
+  // The prefix the development seed gives invented case numbers.
+  { marker: "DEMO", pattern: wholeWord("DEMO") },
+  // Uppercase fixture marker.
+  { marker: "TEST", pattern: wholeWord("TEST") },
+  // Placeholder prose, opener and continuation.
+  { marker: "Lorem", pattern: wholeWord("Lorem") },
+  { marker: "ipsum", pattern: wholeWord("ipsum") },
+  // Copy that was never replaced.
+  { marker: "placeholder", pattern: wholeWord("placeholder") },
+  // The reserved example domain fixtures use.
+  { marker: "example.com", pattern: wholeWord("example\\.com") },
+  // Metasyntactic fixture values; lowercase only, so the proper noun Bar passes.
+  { marker: "foo", pattern: wholeWord("foo") },
+  { marker: "bar", pattern: wholeWord("bar") },
+  // An unfinished implementation note.
+  { marker: "TODO", pattern: wholeWord("TODO") },
+  // The development corpus's own disclosure.
+  { marker: "synthetic", pattern: wholeWord("synthetic") },
+  // A whole case number in the shape seed-case-law-synthetic.ts generates.
+  {
+    marker: "synthetic case number",
+    pattern:
+      /(?<![\p{L}\p{N}_])DEMO\s+\d+\s+[\p{L}\p{N}]+\s+\d+\/\d{4}(?![\p{L}\p{N}_])/gu,
+  },
+] as const satisfies readonly { marker: string; pattern: RegExp }[];
+
+export type CaptureTextViolation = {
+  element: string;
+  marker: (typeof BANNED_CAPTURE_TEXT)[number]["marker"];
+  matchedText: string;
+};
+
+/** Every banned marker in the elements' text, with the element it sits in. */
+export const findCaptureTextViolations = (
+  elements: readonly CaptureTextElement[],
+): CaptureTextViolation[] =>
+  elements.flatMap(({ descriptor, text }) =>
+    BANNED_CAPTURE_TEXT.flatMap(({ marker, pattern }) =>
+      [...text.matchAll(pattern)].map(({ 0: matchedText }) => ({
+        element: descriptor,
+        marker,
+        matchedText,
+      })),
+    ),
+  );

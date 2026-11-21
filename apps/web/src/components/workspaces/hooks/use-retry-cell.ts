@@ -28,12 +28,12 @@ export const useRetryCell = (workspaceId: WorkspaceId) => {
 
   return async ({ entityId, propertyId }: RetryCellArgs) => {
     try {
-      const response = await api
-        .workspaces({ workspaceId })
-        ["cell-retry"].post({
-          entityId,
-          propertyId,
-        });
+      const workspaceApi = api.workspaces({ workspaceId });
+
+      const response = await workspaceApi["cell-retry"].post({
+        entityId,
+        propertyId,
+      });
 
       if (response.error) {
         const apiError = toAPIError(response.error);
@@ -48,6 +48,13 @@ export const useRetryCell = (workspaceId: WorkspaceId) => {
               message: `Cell retry failed (status ${apiError.status})`,
               cause: apiError,
             }),
+            {
+              fingerprintKey: "useRetryCell:ClientTelemetryError",
+              scope: {
+                type: "handler",
+                handlerId: "useRetryCell:ClientTelemetryError",
+              },
+            },
           );
         }
         // Surface server-side rejections (locked cell, concurrent
@@ -72,7 +79,10 @@ export const useRetryCell = (workspaceId: WorkspaceId) => {
 
       return response.data;
     } catch (error) {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useRetryCell:failure",
+        scope: { type: "handler", handlerId: "useRetryCell:failure" },
+      });
       notifyUserError(error, t("errors.actionFailed"));
       return undefined;
     }

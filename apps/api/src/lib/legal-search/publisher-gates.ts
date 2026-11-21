@@ -1,4 +1,12 @@
+// parser-output-unchanged: the Finanční správa and Ministry of the Interior gate entries are new; existing adapters read only their own keys, so their parsed output is unchanged.
+// parser-output-unchanged: the cz-ns-sbirka adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
+// parser-output-unchanged: the br-tjdft adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
+// parser-output-unchanged: the TST adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
+// parser-output-unchanged: the ÚOHS adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
 // parser-output-unchanged: the EU Publications Office gate paces one request per second; request timing only, parsed output is unchanged.
+// parser-output-unchanged: the SÚIP gate entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
+// parser-output-unchanged: the Czech ÚOOÚ gate interval changes pacing only; parsed output is unchanged.
+// parser-output-unchanged: the Slovak ÚOOÚ gate entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
 import { DAY_IN_MS } from "@stll/time";
 
 type PublisherGate = {
@@ -40,7 +48,79 @@ const NALUS_REQUEST_BUDGET_SHARE = 0.96;
  * Austrian tribunals is one budget, not ten.
  */
 export const PUBLISHER_GATES = {
-  "uoou-cz": { publisher: "ÚOOÚ", intervalMs: 1000, hosts: ["uoou.gov.cz"] },
+  /**
+   * uoou.gov.cz states no limit. A full walk is about a thousand requests;
+   * a 5 s gap keeps it under two hours across bounded runs.
+   */
+  "uoou-cz": { publisher: "ÚOOÚ", intervalMs: 5000, hosts: ["uoou.gov.cz"] },
+  /**
+   * dataprotection.gov.sk states no limit. A full walk is one index request
+   * plus one per annual report, so a 5 s gap keeps it under two minutes.
+   */
+  "uoou-sk": {
+    publisher: "ÚOOÚ SR",
+    intervalMs: 5000,
+    hosts: ["dataprotection.gov.sk"],
+  },
+  /**
+   * suip.gov.cz states no limit; robots.txt only disallows its REST endpoints.
+   * A full walk is about 120 requests.
+   */
+  "suip-cz": { publisher: "SÚIP", intervalMs: 5000, hosts: ["suip.gov.cz"] },
+  /**
+   * financnisprava.gov.cz states no limit; robots.txt disallows only search,
+   * view-mode switches and form folders. A full walk of both pokyn series is
+   * about 45 year pages and 450 documents; a 2 s gap keeps it near 16 minutes.
+   */
+  "financnisprava-cz": {
+    publisher: "Finanční správa",
+    intervalMs: 2000,
+    hosts: ["financnisprava.gov.cz"],
+  },
+  /**
+   * mv.gov.cz states no limit and its robots.txt disallows nothing. A listing
+   * walk is one page; with full texts, one request per závěr.
+   */
+  "mv-cz": {
+    publisher: "Ministerstvo vnitra",
+    intervalMs: 5000,
+    hosts: ["mv.gov.cz"],
+  },
+  "bfdi-de": {
+    publisher: "BfDI",
+    intervalMs: 30_000,
+    hosts: ["www.bfdi.bund.de"],
+  },
+  "uohs-cz": { publisher: "ÚOHS", intervalMs: 1000, hosts: ["uohs.gov.cz"] },
+  /**
+   * jurisdf.tjdft.jus.br. The search answers `x-ratelimit-limit: 60` per
+   * 60-second window; a gap of a little over a second keeps a window that
+   * does not start on a request below that count.
+   */
+  "tjdft-jus-br": {
+    publisher: "TJDFT",
+    intervalMs: 1100,
+    hosts: ["jurisdf.tjdft.jus.br"],
+  },
+  /**
+   * The TST jurisprudence backend. It states no limit; one request a second
+   * is politeness, and each answer can run to megabytes of full text.
+   */
+  "tst-jus-br": {
+    publisher: "TST",
+    intervalMs: 1000,
+    hosts: ["jurisprudencia-backend2.tst.jus.br"],
+  },
+  "edpb-eu": {
+    publisher: "European Data Protection Board",
+    intervalMs: 1000,
+    hosts: ["www.edpb.europa.eu"],
+  },
+  "commission-eu": {
+    publisher: "European Commission archives",
+    intervalMs: 1000,
+    hosts: ["ec.europa.eu"],
+  },
   /**
    * nalus.usoud.cz. 4,800 requests a day against the 5,000 the court allows,
    * and it redirects a client past the ceiling to a limit page rather than
@@ -100,11 +180,34 @@ export const PUBLISHER_GATES = {
     intervalMs: POLITE_INTERVAL_MS,
     hosts: ["rozhodnuti.nsoud.cz"],
   },
-  /** vyhledavac.nssoud.cz. */
+  /**
+   * The court's collection site, a separate server from its database. It
+   * states no limit; one request a second is the pace a reader browsing the
+   * archive keeps, and a full walk of about ten thousand entries is under
+   * three hours.
+   */
+  "nsoud-sbirka-cz": {
+    publisher: "Nejvyšší soud",
+    intervalMs: 1000,
+    hosts: ["sbirka.nsoud.cz"],
+  },
+  /**
+   * The insolvency register's public web service and its document servlet.
+   * Its operating terms let the Ministry block a user sending more than
+   * 3,000 requests a day or 50 a minute; forty seconds apart is 2,160 a day.
+   * Register lookups spend the rest through their own budget
+   * (`lib/business-registries/isir-lookup-budget.ts`).
+   */
+  "isir-justice-cz": {
+    publisher: "Ministerstvo spravedlnosti",
+    intervalMs: 40_000,
+    hosts: ["isir.justice.cz"],
+  },
+  /** NSS search portal and the court's original-document registry. */
   "nssoud-cz": {
     publisher: "Nejvyšší správní soud",
     intervalMs: POLITE_INTERVAL_MS,
-    hosts: ["vyhledavac.nssoud.cz"],
+    hosts: ["vyhledavac.nssoud.cz", "www.nssoud.cz"],
   },
   /** rozhodnuti.justice.cz. */
   "justice-cz": {
@@ -178,6 +281,11 @@ export const PUBLISHER_GATES = {
     publisher: "Prezes UOKiK",
     intervalMs: 2000,
     hosts: ["decyzje.uokik.gov.pl"],
+  },
+  "fcl-uk": {
+    publisher: "Find Case Law",
+    intervalMs: 500,
+    hosts: ["caselaw.nationalarchives.gov.uk"],
   },
   /** eakta.birosag.hu. */
   "birosag-hu": {

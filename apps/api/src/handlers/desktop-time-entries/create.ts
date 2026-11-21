@@ -1,0 +1,108 @@
+import { Result } from "better-result";
+import * as v from "valibot";
+
+import { TIME_ENTRY_SOURCE } from "@stll/api-contract";
+
+import {
+  ACCOUNT_ACCESS,
+  createSafeBoundedPublicHandler,
+  safePublicHandlerResponseSchemasWithStatusText,
+} from "@/api/lib/api-handlers";
+import { createAuditRecorder } from "@/api/lib/audit-log";
+import { createTimeEntryBodySchema } from "@/api/lib/billing/time-entry-body";
+import { createTimeEntryHandler } from "@/api/lib/billing/time-entry-insert";
+import { authorizeDesktopAccount } from "@/api/lib/business-registries/desktop/auth";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
+import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { hasMemberPermission } from "@/api/lib/permission-authorization";
+
+import { authorizeDesktopTimeEntries } from "./authorize";
+
+const desktopTimeEntryBodySchema = v.pick(createTimeEntryBodySchema, [
+  "dateWorked",
+  "timezoneId",
+  "durationMinutes",
+  "narrative",
+  "billable",
+]);
+
+// Unexpected activity data is refused, never silently dropped.
+const strictDesktopTimeEntryBodySchema = v.strictObject(
+  desktopTimeEntryBodySchema.entries,
+);
+
+export const createDesktopTimeEntryEndpoint = (
+  authorizeAccount: typeof authorizeDesktopAccount = authorizeDesktopAccount,
+) =>
+  createSafeBoundedPublicHandler(
+    {
+      contract: "patch",
+      accountAccess: ACCOUNT_ACCESS.sandbox,
+      mcp: { type: "internal", reason: "auth_plumbing" },
+      cache: { kind: "none" },
+      params: v.object({ workspaceId: resourceIdSchema("workspace") }),
+      body: strictDesktopTimeEntryBodySchema,
+      response: safePublicHandlerResponseSchemasWithStatusText(
+        v.object({ id: resourceIdSchema("timeEntry") }),
+      ),
+    },
+    async function* ({ request, params: { workspaceId }, body }) {
+      const account = yield* Result.await(
+        authorizeDesktopTimeEntries(request, authorizeAccount),
+      );
+      if (!hasMemberPermission(account.memberRole, { timeEntry: ["create"] })) {
+        return Result.err(
+          new HandlerError({
+            status: 403,
+            message: "Time entry creation is not permitted",
+          }),
+        );
+      }
+      const workspace = yield* Result.await(
+        account.safeDb((tx) =>
+          tx.query.workspaces.findFirst({
+            where: {
+              id: { eq: workspaceId },
+              organizationId: { eq: account.organizationId },
+              status: { eq: "active" },
+            },
+            columns: { id: true },
+          }),
+        ),
+      );
+      if (!workspace) {
+        return Result.err(
+          new HandlerError({ status: 404, message: "Matter not found" }),
+        );
+      }
+      return yield* createTimeEntryHandler({
+        safeDb: account.safeDb,
+        organizationId: account.organizationId,
+        userId: account.userId,
+        memberRole: account.memberRole,
+        workspaceId,
+        body,
+        source: TIME_ENTRY_SOURCE.ACTIVITY,
+        recordAuditEvent: createAuditRecorder({
+          organizationId: account.organizationId,
+          userId: account.userId,
+          workspaceId,
+          request,
+          server: null,
+        }),
+      });
+    },
+  );
+
+const desktopTimeEntryEndpoint = createDesktopTimeEntryEndpoint();
+
+// Inserts one entry through the shared time-entry insert, which takes no
+// aggregate lock and maintains no invariant across rows.
+declareAggregateMutation(desktopTimeEntryEndpoint, {
+  type: "independent",
+  reason:
+    "Inserts one time entry for an authorized matter; no cross-row invariant.",
+});
+
+export default desktopTimeEntryEndpoint;

@@ -1,11 +1,14 @@
 import { Result } from "better-result";
-import { describe, expect, mock, test } from "bun:test";
+import { beforeEach, describe, expect, mock, test } from "bun:test";
 import type { SQL } from "drizzle-orm";
-import { PgDialect } from "drizzle-orm/pg-core";
+import { PgDialect, QueryBuilder } from "drizzle-orm/pg-core";
+
+import { DOCUMENT_OCR_AVAILABILITY } from "@stll/api-contract/document-ocr-availability";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
-import type { documentProcessingRuns } from "@/api/db/schema";
+import { documentProcessingRuns, entities, workspaces } from "@/api/db/schema";
+import { createMockDatabase } from "@/api/db/sql-client";
 import { requestManualOcrHandler } from "@/api/handlers/entities/ocr/create";
 import { toSafeId } from "@/api/lib/branded-types";
 import {
@@ -13,8 +16,14 @@ import {
   persistManualOcrRun,
 } from "@/api/lib/document-processing-request";
 import type { PersistManualOcrRunOptions } from "@/api/lib/document-processing-request";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+
+beforeEach(() => {
+  recordAuditEvent.mockClear();
+  rootTransactionMock.mockReset();
+});
 
 const rootTransactionMock = mock();
 const recordAuditEvent = mock(async () => undefined);
@@ -39,6 +48,75 @@ const sourceFileContent = {
   version: 1 as const,
 };
 
+const executeParentLock = async (query: SQL) => {
+  const compiled = new PgDialect().sqlToQuery(query);
+  expect(compiled.sql).toContain("FOR ");
+  if (compiled.sql.includes('FROM "organization"')) {
+    expect(compiled.params).toEqual([organizationId]);
+    return [{ id: organizationId }];
+  }
+  if (compiled.sql.includes('"entities"')) {
+    return [{ id: entityId }];
+  }
+  if (compiled.sql.includes('"document_processing_runs"')) {
+    return [{ id: runId }];
+  }
+  expect(compiled.sql).toContain('"workspaces"');
+  expect(compiled.params).toContain(workspaceId);
+  return [{ id: workspaceId }];
+};
+
+const createSourceLockSelect = (selectCount: number) => {
+  if (selectCount === 1) {
+    const query = createMockDatabase()
+      .select({ id: workspaces.id, organizationId: workspaces.organizationId })
+      .from(workspaces);
+    return {
+      from: () =>
+        Object.assign(query, {
+          for: async () => [{ id: workspaceId, organizationId }],
+        }),
+    };
+  }
+  const query = createMockDatabase()
+    .select({ id: entities.id, workspaceId: entities.workspaceId })
+    .from(entities);
+  return {
+    from: () =>
+      Object.assign(query, {
+        for: async () => [{ id: entityId, workspaceId }],
+      }),
+  };
+};
+
+type LockedRun = Pick<
+  typeof documentProcessingRuns.$inferSelect,
+  | "attemptCount"
+  | "errorCode"
+  | "id"
+  | "requestSource"
+  | "status"
+  | "workspaceId"
+>;
+
+const lockedRunSelect = (run: LockedRun) => ({
+  from: () => {
+    const query = new QueryBuilder().select().from(documentProcessingRuns);
+    return {
+      toSQL: () => query.toSQL(),
+      as: (alias: string) => query.as(alias),
+      where: (predicate: SQL) => {
+        const scoped = query.where(predicate);
+        return {
+          toSQL: () => scoped.toSQL(),
+          as: (alias: string) => scoped.as(alias),
+          for: async () => [run],
+        };
+      },
+    };
+  },
+});
+
 const createSafeDb =
   (content: unknown): SafeDb =>
   async (callback) => {
@@ -60,6 +138,7 @@ test("manual OCR collisions preserve owners and restart post-projection promotio
   for (const status of ["queued", "running"] as const) {
     expect(
       classifyManualOcrCollision({
+        attemptCount: 0,
         errorCode: null,
         projectionState: "absent",
         requestSource: "manual",
@@ -70,6 +149,7 @@ test("manual OCR collisions preserve owners and restart post-projection promotio
 
   expect(
     classifyManualOcrCollision({
+      attemptCount: 0,
       errorCode: null,
       projectionState: "different",
       requestSource: "upload",
@@ -79,12 +159,29 @@ test("manual OCR collisions preserve owners and restart post-projection promotio
   for (const projectionState of ["absent", "matching"] as const) {
     expect(
       classifyManualOcrCollision({
+        attemptCount: 0,
         errorCode: null,
         projectionState,
         requestSource: "upload",
         status: "running",
       }),
     ).toBe("promote");
+  }
+});
+
+test("manual OCR starts a fresh retry across failed request sources", () => {
+  for (const requestSource of ["manual", "upload", "repair"] as const) {
+    for (const attemptCount of [4, 5, 6]) {
+      expect(
+        classifyManualOcrCollision({
+          attemptCount,
+          errorCode: "search_index_failed",
+          projectionState: "absent",
+          requestSource,
+          status: "failed",
+        }),
+      ).toBe("retry");
+    }
   }
 });
 
@@ -100,6 +197,7 @@ describe("requestManualOcrHandler", () => {
         fieldId,
         organizationId,
         persistRun,
+        readAvailability: async () => DOCUMENT_OCR_AVAILABILITY.live,
         recordAuditEvent,
         safeDb: createSafeDb({
           content: {
@@ -124,7 +222,13 @@ describe("requestManualOcrHandler", () => {
       }),
     );
 
-    expect(result).toEqual(Result.ok({ outcome: "queued", runId }));
+    expect(result).toEqual(
+      Result.ok({
+        outcome: "queued",
+        runId,
+        availability: DOCUMENT_OCR_AVAILABILITY.live,
+      }),
+    );
     expect(persistRun).toHaveBeenCalledWith({
       organizationId,
       recordAuditEvent,
@@ -151,6 +255,7 @@ describe("requestManualOcrHandler", () => {
         fieldId,
         organizationId,
         persistRun,
+        readAvailability: async () => DOCUMENT_OCR_AVAILABILITY.live,
         recordAuditEvent,
         safeDb: createSafeDb({
           content: {
@@ -178,6 +283,76 @@ describe("requestManualOcrHandler", () => {
     expect(result).toEqual(Result.ok({ outcome: "already_processed", runId }));
   });
 
+  const pdfFieldRow = {
+    content: sourceFileContent,
+    entityId,
+    entityVersionId,
+    fieldId,
+    readOnly: false,
+    versionDeletedAt: null,
+  };
+
+  test.each([
+    DOCUMENT_OCR_AVAILABILITY.live,
+    DOCUMENT_OCR_AVAILABILITY.batched,
+  ])("queues while OCR is $type and reports when it runs", async (status) => {
+    const persistRun = mock(async () => ({
+      id: runId,
+      status: "queued" as const,
+    }));
+    const result = await Result.gen(() =>
+      requestManualOcrHandler({
+        entityId,
+        fieldId,
+        organizationId,
+        persistRun,
+        readAvailability: async () => status,
+        recordAuditEvent,
+        safeDb: createSafeDb(pdfFieldRow),
+        userId,
+        workspaceId,
+      }),
+    );
+
+    expect(result).toEqual(
+      Result.ok({ outcome: "queued", runId, availability: status }),
+    );
+    expect(persistRun).toHaveBeenCalledTimes(1);
+  });
+
+  test("refuses before persisting anything while OCR is unconfigured", async () => {
+    const persistRun = mock(async () => ({
+      id: runId,
+      status: "queued" as const,
+    }));
+    let reads = 0;
+    const safeDb: SafeDb = async (callback) => {
+      reads += 1;
+      return await createSafeDb(pdfFieldRow)(callback);
+    };
+    const result = await Result.gen(() =>
+      requestManualOcrHandler({
+        entityId,
+        fieldId,
+        organizationId,
+        persistRun,
+        readAvailability: async () => DOCUMENT_OCR_AVAILABILITY.unconfigured,
+        recordAuditEvent,
+        safeDb,
+        userId,
+        workspaceId,
+      }),
+    );
+
+    expect(Result.isError(result)).toBe(true);
+    if (Result.isError(result)) {
+      expect(result.error).toBeInstanceOf(HandlerError);
+      expect(result.error).toMatchObject({ status: 503, retryable: true });
+    }
+    expect(persistRun).not.toHaveBeenCalled();
+    expect(reads).toBe(0);
+  });
+
   test.each([
     "manual_selection_superseded",
     "source_superseded",
@@ -189,16 +364,21 @@ describe("requestManualOcrHandler", () => {
       let retryWhere: SQL | undefined;
       let selectCount = 0;
       const tx = asTestRaw<Transaction>({
+        execute: executeParentLock,
         select: () => {
           selectCount += 1;
           if (selectCount <= 2) {
-            return {
-              from: () => ({
-                where: () => ({
-                  limit: () => ({ for: async () => [{ id: entityId }] }),
-                }),
-              }),
-            };
+            return createSourceLockSelect(selectCount);
+          }
+          if (selectCount === 5) {
+            return lockedRunSelect({
+              attemptCount: 0,
+              errorCode,
+              id: runId,
+              requestSource: "upload",
+              status: "cancelled",
+              workspaceId,
+            });
           }
           if (selectCount === 3) {
             return {
@@ -212,16 +392,14 @@ describe("requestManualOcrHandler", () => {
           return {
             from: () => ({
               where: () => ({
-                limit: () => ({
-                  for: async () => [
-                    {
-                      errorCode,
-                      id: runId,
-                      requestSource: "upload" as const,
-                      status: "cancelled" as const,
-                    },
-                  ],
-                }),
+                limit: async () => [
+                  {
+                    errorCode,
+                    id: runId,
+                    requestSource: "upload" as const,
+                    status: "cancelled" as const,
+                  },
+                ],
               }),
             }),
           };
@@ -314,16 +492,21 @@ describe("requestManualOcrHandler", () => {
       let updateSet: unknown;
       let updateWhere: SQL | undefined;
       const tx = asTestRaw<Transaction>({
+        execute: executeParentLock,
         select: () => {
           selectCount += 1;
           if (selectCount <= 2) {
-            return {
-              from: () => ({
-                where: () => ({
-                  limit: () => ({ for: async () => [{ id: entityId }] }),
-                }),
-              }),
-            };
+            return createSourceLockSelect(selectCount);
+          }
+          if (selectCount === 5) {
+            return lockedRunSelect({
+              attemptCount: 0,
+              errorCode: null,
+              id: runId,
+              requestSource,
+              status,
+              workspaceId,
+            });
           }
           if (selectCount === 3) {
             return {
@@ -338,16 +521,14 @@ describe("requestManualOcrHandler", () => {
             return {
               from: () => ({
                 where: () => ({
-                  limit: () => ({
-                    for: async () => [
-                      {
-                        errorCode: null,
-                        id: runId,
-                        requestSource,
-                        status,
-                      },
-                    ],
-                  }),
+                  limit: async () => [
+                    {
+                      errorCode: null,
+                      id: runId,
+                      requestSource,
+                      status,
+                    },
+                  ],
                 }),
               }),
             };
@@ -429,16 +610,21 @@ describe("requestManualOcrHandler", () => {
       let selectCount = 0;
       let updateSet: unknown;
       const tx = asTestRaw<Transaction>({
+        execute: executeParentLock,
         select: () => {
           selectCount += 1;
           if (selectCount <= 2) {
-            return {
-              from: () => ({
-                where: () => ({
-                  limit: () => ({ for: async () => [{ id: entityId }] }),
-                }),
-              }),
-            };
+            return createSourceLockSelect(selectCount);
+          }
+          if (selectCount === 5) {
+            return lockedRunSelect({
+              attemptCount: 0,
+              errorCode: null,
+              id: runId,
+              requestSource: "upload",
+              status: "succeeded",
+              workspaceId,
+            });
           }
           if (selectCount === 3) {
             return {
@@ -453,16 +639,14 @@ describe("requestManualOcrHandler", () => {
             return {
               from: () => ({
                 where: () => ({
-                  limit: () => ({
-                    for: async () => [
-                      {
-                        errorCode: null,
-                        id: runId,
-                        requestSource: "upload" as const,
-                        status: "succeeded" as const,
-                      },
-                    ],
-                  }),
+                  limit: async () => [
+                    {
+                      errorCode: null,
+                      id: runId,
+                      requestSource: "upload" as const,
+                      status: "succeeded" as const,
+                    },
+                  ],
                 }),
               }),
             };
@@ -545,6 +729,7 @@ describe("requestManualOcrHandler", () => {
     let cancellationWhere: SQL | undefined;
     let selectCount = 0;
     const tx = asTestRaw<Transaction>({
+      execute: executeParentLock,
       insert: () => ({
         values: () => ({
           onConflictDoNothing: () => ({
@@ -555,13 +740,7 @@ describe("requestManualOcrHandler", () => {
       select: () => {
         selectCount += 1;
         if (selectCount <= 2) {
-          return {
-            from: () => ({
-              where: () => ({
-                limit: () => ({ for: async () => [{ id: entityId }] }),
-              }),
-            }),
-          };
+          return createSourceLockSelect(selectCount);
         }
         return {
           from: () => ({
@@ -644,17 +823,12 @@ describe("requestManualOcrHandler", () => {
       }),
     }));
     const tx = asTestRaw<Transaction>({
+      execute: executeParentLock,
       insert,
       select: () => {
         selectCount += 1;
         if (selectCount <= 2) {
-          return {
-            from: () => ({
-              where: () => ({
-                limit: () => ({ for: async () => [{ id: entityId }] }),
-              }),
-            }),
-          };
+          return createSourceLockSelect(selectCount);
         }
         return {
           from: () => ({
@@ -697,25 +871,24 @@ describe("requestManualOcrHandler", () => {
   });
 
   test("locks the source only while its workspace is active", async () => {
-    let selectCount = 0;
-    let workspaceWhere: SQL | undefined;
+    let workspaceQuery: { sql: string; params: unknown[] } | undefined;
     const tx = asTestRaw<Transaction>({
+      execute: executeParentLock,
       select: () => {
-        selectCount += 1;
+        const query = createMockDatabase()
+          .select({
+            id: workspaces.id,
+            organizationId: workspaces.organizationId,
+          })
+          .from(workspaces);
         return {
-          from: () => ({
-            where: (condition: SQL) => {
-              if (selectCount === 2) {
-                workspaceWhere = condition;
-              }
-              return {
-                limit: () => ({
-                  for: async () =>
-                    selectCount === 1 ? [{ id: entityId }] : [],
-                }),
-              };
-            },
-          }),
+          from: () =>
+            Object.assign(query, {
+              for: async () => {
+                workspaceQuery = query.toSQL();
+                return [];
+              },
+            }),
         };
       },
     });
@@ -740,11 +913,10 @@ describe("requestManualOcrHandler", () => {
     });
 
     expect(run).toBeNull();
-    expect(workspaceWhere).toBeDefined();
-    if (workspaceWhere) {
-      const compiled = new PgDialect().sqlToQuery(workspaceWhere);
-      expect(compiled.sql).toContain('"workspaces"."status" =');
-      expect(compiled.params).toContain("active");
+    expect(workspaceQuery).toBeDefined();
+    if (workspaceQuery) {
+      expect(workspaceQuery.sql).toContain('"workspaces"."status" =');
+      expect(workspaceQuery.params).toContain("active");
     }
   });
 });

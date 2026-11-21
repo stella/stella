@@ -10,7 +10,6 @@ import {
   writeCallNeedsMatter,
 } from "@/api/mcp/matter-requirement";
 import type { McpWriteToolName } from "@/api/mcp/matter-requirement";
-import { MANAGE_ORG_ACTIONS } from "@/api/mcp/research-admin-tools";
 import {
   DEFAULT_MCP_TOOL_DEFINITIONS,
   getStaticMcpToolDefinition,
@@ -52,19 +51,27 @@ describe("write tool scope classification", () => {
     }
   });
 
-  test("decides every manage_organization action", () => {
-    const { byValue } = WRITE_TOOL_SCOPES.manage_organization;
-    expect(Object.keys(byValue).toSorted()).toEqual(
-      [...MANAGE_ORG_ACTIONS].toSorted(),
+  test("account-level creation requires no matter or active organization", () => {
+    expect(WRITE_TOOL_SCOPES.create_organization).toBe(
+      WRITE_TOOL_SCOPE.account,
     );
+    expect(writeCallNeedsMatter("create_organization", {})).toBe(false);
     expect(
-      writeCallNeedsMatter("manage_organization", { action: "add_member" }),
-    ).toBe(true);
-    expect(
-      writeCallNeedsMatter("manage_organization", {
-        action: "update_org_settings",
+      matterRequiredResult({
+        args: { name: "New organization" },
+        context: { accessibleWorkspaceIds: [], memberRole: "member" },
+        saveMatterCallable: false,
+        toolName: "create_organization",
       }),
-    ).toBe(false);
+    ).toBeNull();
+  });
+
+  test("membership operations need a matter and organization settings do not", () => {
+    expect(writeCallNeedsMatter("add_matter_member", {})).toBe(true);
+    expect(writeCallNeedsMatter("remove_matter_member", {})).toBe(true);
+    expect(writeCallNeedsMatter("update_organization_settings", {})).toBe(
+      false,
+    );
   });
 
   test("compares staged uploads without a matter, stored versions in one", () => {
@@ -81,7 +88,7 @@ describe("write tool scope classification", () => {
     }
   });
 
-  test("keeps creating a matter and the organization library matter-free", () => {
+  test("keeps organization-scoped writes matter-free", () => {
     for (const name of [
       "save_matter",
       "save_playbook",
@@ -91,6 +98,7 @@ describe("write tool scope classification", () => {
       "configure_template_fields",
       "save_contact",
       "set_practice_jurisdictions",
+      "mint_web_handoff",
     ] as const) {
       expect(writeCallNeedsMatter(name, {}), name).toBe(false);
     }

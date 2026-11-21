@@ -1,10 +1,11 @@
 import { useState } from "react";
 
 import { useForm, useSelector } from "@tanstack/react-form";
-import { useMutation, useSuspenseQuery } from "@tanstack/react-query";
+import { useSuspenseQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
+import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
 import { Dialog, DialogPopup } from "@stll/ui/dialog";
@@ -13,17 +14,19 @@ import { Form } from "@stll/ui/form";
 import { PlusIcon, TrashIcon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import { Tabs, TabsList, TabsTab } from "@stll/ui/tabs";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
+import { useCapabilityMutation } from "@/lib/capabilities/use-capability-mutation";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import type { NonEmptyPatch } from "@/lib/mutation-command";
 import { toSafeId } from "@/lib/safe-id";
 import {
-  schemaFormOptions,
   requiredTrimmedStringSchema,
+  schemaFormOptions,
   toFormErrors,
 } from "@/lib/schema";
 import { billingCodesManagementOptions } from "@/lib/workspaces/queries/billing-codes";
@@ -48,49 +51,75 @@ export const BillingCodesDialog = ({
     billingCodesManagementOptions(workspaceId, activeTab),
   );
   const analytics = useAnalytics();
+  const matter = resourceRef({
+    type: RESOURCE_TYPE.WORKSPACE,
+    id: toSafeId<"workspace">(workspaceId),
+  });
 
-  const createCode = useMutation({
-    mutationFn: async ({
-      workspaceId: ws,
-      ...body
-    }: {
-      workspaceId: string;
-      type: "task" | "activity";
-      code: string;
-      label: string;
-      active?: boolean;
-      sortOrder?: number;
-    }) => {
+  const createCode = useCapabilityMutation({
+    capability: "billing-codes.create",
+    target: matter,
+    mutationFn: async (
+      {
+        workspaceId: ws,
+        ...body
+      }: {
+        workspaceId: string;
+        type: "task" | "activity";
+        code: string;
+        label: string;
+        active?: boolean;
+        sortOrder?: number;
+      },
+      request,
+    ) => {
       const response = await api["billing-codes"]({
         workspaceId: toSafeId<"workspace">(ws),
-      }).put({
-        ...body,
-      });
+      }).put(
+        {
+          ...body,
+        },
+        request,
+      );
 
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "BillingCodesDialog:failure",
+        scope: { type: "handler", handlerId: "BillingCodesDialog:failure" },
+      });
     },
   });
-  const deleteCode = useMutation({
-    mutationFn: async ({
-      workspaceId: ws,
-      id,
-    }: {
-      workspaceId: string;
-      id: string;
-    }) => {
+  const deleteCode = useCapabilityMutation({
+    capability: "billing-codes.delete",
+    target: matter,
+    mutationFn: async (
+      {
+        workspaceId: ws,
+        id,
+      }: {
+        workspaceId: string;
+        id: string;
+      },
+      request,
+    ) => {
       const response = await api["billing-codes"]({
         workspaceId: toSafeId<"workspace">(ws),
-      }).delete({
-        id: toSafeId<"billingCode">(id),
-      });
+      }).delete(
+        {
+          id: toSafeId<"billingCode">(id),
+        },
+        request,
+      );
 
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "BillingCodesDialog:failure-2",
+        scope: { type: "handler", handlerId: "BillingCodesDialog:failure-2" },
+      });
     },
   });
   type UpdateBillingCodeVars = {
@@ -103,19 +132,30 @@ export const BillingCodesDialog = ({
     sortOrder: number;
   }>;
 
-  const updateCode = useMutation({
-    mutationFn: async ({ workspaceId: ws, ...body }: UpdateBillingCodeVars) => {
+  const updateCode = useCapabilityMutation({
+    capability: "billing-codes.update",
+    target: matter,
+    mutationFn: async (
+      { workspaceId: ws, ...body }: UpdateBillingCodeVars,
+      request,
+    ) => {
       const response = await api["billing-codes"]({
         workspaceId: toSafeId<"workspace">(ws),
-      }).patch({
-        ...body,
-        id: toSafeId<"billingCode">(body.id),
-      });
+      }).patch(
+        {
+          ...body,
+          id: toSafeId<"billingCode">(body.id),
+        },
+        request,
+      );
 
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "BillingCodesDialog:failure-3",
+        scope: { type: "handler", handlerId: "BillingCodesDialog:failure-3" },
+      });
     },
   });
 
@@ -206,14 +246,16 @@ export const BillingCodesDialog = ({
                     <span className="text-muted-foreground shrink-0 font-mono text-xs">
                       {code.code}
                     </span>
-                    <span className="truncate text-sm">{code.label}</span>
+                    <TruncatedText className="text-sm">
+                      {code.label}
+                    </TruncatedText>
                     {!code.active && (
-                      <span className="bg-muted text-muted-foreground text-3xs shrink-0 rounded px-1.5 py-0.5">
+                      <span className="bg-muted text-muted-foreground text-3xs shrink-0 rounded-sm px-1.5 py-0.5">
                         {t("billing.codes.inactive")}
                       </span>
                     )}
                   </div>
-                  <div className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                  <div className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100 pointer-coarse:opacity-100">
                     <Button
                       className="size-7"
                       onClick={() => handleToggleActive(code.id, code.active)}
@@ -276,12 +318,15 @@ const CreateCodeForm = ({
       },
     }),
   );
-  const formErrors = useSelector(form.store, (state) =>
-    toFormErrors(state.fieldMeta),
-  );
+  const { formErrors, dirty } = useSelector(form.store, (state) => ({
+    formErrors: toFormErrors(state.fieldMeta),
+    dirty: !state.isDefaultValue,
+  }));
 
   return (
     <Form
+      dirty={dirty}
+      onDiscard={() => form.reset()}
       className="flex flex-col gap-3 rounded-md border p-3"
       errors={formErrors}
       onSubmit={(e) => {

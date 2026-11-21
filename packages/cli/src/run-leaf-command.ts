@@ -1,22 +1,20 @@
-// The generic executor every generated leaf command dispatches through (spec 051
-// S3/S4). It builds the tool-args object from parsed flags (or the `--input`
-// escape hatch), runs the client-side scope precheck, confirms destructive ops,
-// calls the MCP endpoint (following cursors under `--all`, bounded by the
-// ceilings), and renders the result. Exit codes are set on `process.exitCode`
-// directly so stricli's `??=` never overrides them.
-
 import { panic, Result } from "better-result";
 import { readFile } from "node:fs/promises";
 import { createInterface } from "node:readline/promises";
 import { text as readStreamText } from "node:stream/consumers";
 
 import {
+  parseDecimalToken,
+  parseIntegerToken,
+} from "@stll/agent-input/numeric-token";
+
+import {
   actionAdmissionRefusalLines,
   actionAdmissionRefusalOutput,
   readCliActionAdmissionRefusal,
 } from "./action-admission-refusal.js";
-import { decodeAccessTokenClaims } from "./auth/jwt.js";
-import { RESOURCE_SCOPE_PREFIX } from "./auth/scopes.js";
+import { scopePreflightFailure } from "./auth/command-scopes.js";
+import { parseIds } from "./batch/ids.js";
 import type { Context } from "./context.js";
 import { expandSchemaDefs } from "./expand-schema-defs.js";
 import { flagKey } from "./flag-name.js";
@@ -35,23 +33,25 @@ import {
 } from "./mcp-client.js";
 import {
   EXIT_CODES,
+  type ExitCode,
   FEATURE_DISABLED_ERROR_CODES,
+  mapHttpStatusExit,
   MAX_ALL_BYTES,
   MAX_ALL_ITEMS,
   MAX_ALL_PAGES,
-  mapHttpStatusExit,
   resolveMcpErrorCodeExit,
-  type ExitCode,
 } from "./mcp-constants.js";
 import {
   buildRenderPlan,
   jsonlLine,
   MERGED_TEXT_PATH,
+  type OutputFormat,
+  type RenderPlan,
+  renderPlanExitCode,
   renderResult,
   selectFormat,
   terminalWidth,
   valueAtPath,
-  type OutputFormat,
   type Writers,
 } from "./output.js";
 import { RESERVED_FLAG_KEYS } from "./reserved-flag-keys.js";
@@ -60,6 +60,14 @@ import type {
   FlagSpec,
   LeafCommandSpec,
 } from "./route-types.js";
+import { timingDuration, timingEnd } from "./timing.js";
+// The generic executor every generated leaf command dispatches through (spec 051
+// S3/S4). It builds the tool-args object from parsed flags (or the `--input`
+// escape hatch), runs the client-side scope precheck, confirms destructive ops,
+// calls the MCP endpoint (following cursors under `--all`, bounded by the
+// ceilings), and renders the result. Exit codes are set on `process.exitCode`
+// directly so stricli's `??=` never overrides them.
+import { commandUnavailableMessage } from "./unavailable-command.js";
 
 export { flagKey } from "./flag-name.js";
 export { RESERVED_FLAG_KEYS } from "./reserved-flag-keys.js";
@@ -124,6 +132,14 @@ export const setExit = (context: Context, code: ExitCode): void => {
   context.process.exitCode = code;
 };
 
+/** Apply the exit class a rendered plan decides, if it decides one. */
+const setPlanExit = (context: Context, plan: RenderPlan): void => {
+  const code = renderPlanExitCode(plan);
+  if (code !== undefined) {
+    setExit(context, code);
+  }
+};
+
 // Read all of stdin to a string (the `@-` / `--input -` escape hatch). Consumes
 // `process.stdin` to EOF so the published CLI runs under plain Node.
 const readAllStdin = async (): Promise<string> =>
@@ -162,16 +178,26 @@ export const setPath = (
   let node = target;
   for (let index = 0; index < segments.length - 1; index += 1) {
     const segment = segments[index] ?? "";
-    const next = node[segment];
+    const next = Object.hasOwn(node, segment) ? node[segment] : undefined;
     if (isRecord(next)) {
       node = next;
     } else {
       const created: Record<string, unknown> = {};
-      node[segment] = created;
+      Object.defineProperty(node, segment, {
+        value: created,
+        enumerable: true,
+        configurable: true,
+        writable: true,
+      });
       node = created;
     }
   }
-  node[segments.at(-1) ?? path] = value;
+  Object.defineProperty(node, segments.at(-1) ?? path, {
+    value,
+    enumerable: true,
+    configurable: true,
+    writable: true,
+  });
 };
 
 /**
@@ -187,7 +213,7 @@ const hasInputPath = (
   const segments = path.split(".");
   let node: unknown = target;
   for (const segment of segments) {
-    if (!isRecord(node)) {
+    if (!isRecord(node) || !Object.hasOwn(node, segment)) {
       return false;
     }
     node = node[segment];
@@ -199,10 +225,14 @@ const parseBoundedInt = (
   spec: FlagSpec,
   raw: string,
 ): Result<number | string, string> => {
-  if (!/^-?\d+$/u.test(raw.trim())) {
-    return Result.ok(raw);
+  const parsed = parseIntegerToken(raw);
+  // Localized spellings remain the server normalizer's responsibility; unsafe integers cannot be sent without losing precision.
+  if (parsed.isErr()) {
+    return parsed.error.reason === "unsafe-integer"
+      ? Result.err(`${spec.flag} expects a safe integer`)
+      : Result.ok(raw);
   }
-  const value = Number.parseInt(raw.trim(), 10);
+  const value = parsed.value;
   if (spec.range !== "clamp" && spec.min !== undefined && value < spec.min) {
     return Result.err(`${spec.flag} must be >= ${spec.min}`);
   }
@@ -216,10 +246,12 @@ const parseBoundedNumber = (
   spec: FlagSpec,
   raw: string,
 ): Result<number | string, string> => {
-  const value = Number(raw.trim());
-  if (!Number.isFinite(value)) {
+  const parsed = parseDecimalToken(raw);
+  // Do not coerce an empty token to zero; unresolved spellings go to the server normalizer.
+  if (parsed.isErr()) {
     return Result.ok(raw);
   }
+  const value = parsed.value;
   if (spec.range !== "clamp" && spec.min !== undefined && value < spec.min) {
     return Result.err(`${spec.flag} must be >= ${spec.min}`);
   }
@@ -233,10 +265,10 @@ const parseBoundedNumber = (
 const asFlagString = (value: unknown): string | null =>
   typeof value === "string" ? value : null;
 
-const coerceArrayFlag = (
+const coerceArrayFlag = async (
   flagSpec: FlagSpec,
   value: unknown,
-): Result<unknown, string> => {
+): Promise<Result<unknown, string>> => {
   const raw: string[] = [];
   for (const element of Array.isArray(value) ? value : []) {
     const asString = asFlagString(element);
@@ -246,6 +278,9 @@ const coerceArrayFlag = (
     raw.push(asString);
   }
   if (flagSpec.kind === "string-array") {
+    if (/(?:^|[._])ids$|Ids$/u.test(flagSpec.prop)) {
+      return parseIds(raw);
+    }
     return Result.ok(raw);
   }
   if (flagSpec.kind === "enum-array") {
@@ -304,8 +339,7 @@ const coerceFlagValue = async (
 };
 
 type ArgsResult =
-  | { ok: true; args: Record<string, unknown> }
-  | { ok: false; message: string };
+  { ok: true; args: Record<string, unknown> } | { ok: false; message: string };
 
 type ComposeInputFromFlagsOptions<T extends FlagSpec> = {
   base: Record<string, unknown>;
@@ -322,7 +356,8 @@ export const composeInputFromFlags = async <T extends FlagSpec>({
 }: ComposeInputFromFlagsOptions<T>): Promise<ArgsResult> => {
   for (const flagSpec of flagSpecs) {
     const path = flagPath(flagSpec);
-    const value = flags[flagKey(flagSpec)];
+    const key = flagKey(flagSpec);
+    const value = Object.hasOwn(flags, key) ? flags[key] : undefined;
     if (!flagValueProvided(flagSpec, value)) {
       continue;
     }
@@ -401,86 +436,18 @@ export const parseInputObject = async ({
   return parsed.value;
 };
 
-export const scopeGranted = ({
-  token,
-  scope,
-}: {
-  token: string;
-  scope: string;
-}): boolean => {
-  const claims = decodeAccessTokenClaims(token);
-  if (claims?.scope === undefined) {
-    // Opaque token or no scope claim: cannot verify locally, let the server rule.
-    return true;
-  }
-  return claims.scope.split(/\s+/u).includes(`stella:${scope}`);
-};
-
-export const scopePreflightFailure = ({
-  additionalScopes,
-  scope,
-  token,
-}: {
-  additionalScopes?: readonly string[] | undefined;
-  scope?: string | undefined;
-  token: string;
-}): { loginCommand: string; missingScope: string } | undefined => {
-  const claims = decodeAccessTokenClaims(token);
-  if (claims?.scope === undefined) {
-    // Opaque token or no scope claim: cannot verify locally, let the server rule.
-    return undefined;
-  }
-
-  const requiredScopes: string[] = [];
-  if (scope !== undefined) {
-    requiredScopes.push(scope);
-  }
-  if (additionalScopes !== undefined) {
-    requiredScopes.push(...additionalScopes);
-  }
-
-  const grantedScopes = claims.scope
-    .split(/\s+/u)
-    .filter((grantedScope) => grantedScope.length > 0);
-  const grantedScopeSet = new Set(grantedScopes);
-  const missingScope = requiredScopes.find(
-    (requiredScope) =>
-      !grantedScopeSet.has(`${RESOURCE_SCOPE_PREFIX}${requiredScope}`),
-  );
-  if (missingScope === undefined) {
-    return undefined;
-  }
-
-  // `--scopes` takes resource scopes only (the CLI always requests the
-  // identity set itself), so the hint must not echo granted identity scopes
-  // back: a command that `parseScopesFlag` rejects is a hint that loses the
-  // user their refresh token.
-  const requestedScopes = [
-    ...new Set([
-      ...grantedScopes.filter((grantedScope) =>
-        grantedScope.startsWith(RESOURCE_SCOPE_PREFIX),
-      ),
-      ...requiredScopes.map(
-        (requiredScope) => `${RESOURCE_SCOPE_PREFIX}${requiredScope}`,
-      ),
-    ]),
-  ];
-  return {
-    loginCommand: `stella auth login --scopes ${requestedScopes.join(",")}`,
-    missingScope,
-  };
-};
-
 export const confirmDestructive = async ({
   context,
   flags,
   writers,
   label,
+  operation = "destructive",
 }: {
   context: Context;
   flags: LeafFlags;
   writers: Writers;
   label: string;
+  operation?: "destructive" | "approval";
 }): Promise<"proceed" | "aborted"> => {
   if (flags[RESERVED_FLAG_KEYS.yes] === true) {
     return "proceed";
@@ -494,7 +461,9 @@ export const confirmDestructive = async ({
     return "aborted";
   }
   if (!context.process.stdin.isTTY) {
-    writers.stderr("refusing destructive op without --yes on non-TTY\n");
+    writers.stderr(
+      `refusing ${operation === "destructive" ? "destructive op" : "operation requiring approval"} without --yes on non-TTY\n`,
+    );
     return "aborted";
   }
   // A TTY confirmation must read a single line: `readAllStdin` waits for EOF,
@@ -504,7 +473,7 @@ export const confirmDestructive = async ({
     output: context.process.stdout,
   });
   const rawAnswer = await rl.question(
-    `Run destructive command '${label}'? [y/N] `,
+    `Run ${operation === "destructive" ? "destructive command" : "command requiring approval"} '${label}'? [y/N] `,
   );
   rl.close();
   const answer = rawAnswer.trim().toLowerCase();
@@ -550,7 +519,7 @@ export const renderClientError = ({
 };
 
 /**
- * `invoke_capability` returns the capability's output under `result`, its one
+ * A capability executor returns the capability's output under `result`, its one
  * key (a structured result must be an object, and a capability may return a
  * list). Unwrapped here so a capability page renders like a curated tool's.
  */
@@ -567,9 +536,13 @@ export const parsePayload = (result: CallToolResult): unknown => {
   return Result.isOk(parsed) ? unwrapCapabilityResult(parsed.value) : undefined;
 };
 
-/** One structured validation issue: dot-path (empty for root) plus reason. */
+/**
+ * One structured issue: dot-path (empty for root), reason, and an optional
+ * machine code (a legal-hold refusal names each hold's scope there).
+ */
 type ErrorIssue = {
   path: string;
+  code?: string;
   message: string;
 };
 
@@ -586,6 +559,7 @@ type ErrorEnvelope = {
   hint: string | undefined;
   issues: readonly ErrorIssue[];
   retryable?: boolean;
+  retryAfterMs?: number;
   contactUrl?: string;
   requestId: string | undefined;
 };
@@ -608,8 +582,11 @@ const parseErrorIssues = (error: Record<string, unknown>): ErrorIssue[] => {
     }
     const path = entry["path"];
     const message = entry["message"];
+    const code = entry["code"];
     if (typeof path === "string" && typeof message === "string") {
-      issues.push({ path, message });
+      issues.push(
+        typeof code === "string" ? { path, code, message } : { path, message },
+      );
     }
   }
   return issues;
@@ -617,7 +594,7 @@ const parseErrorIssues = (error: Record<string, unknown>): ErrorIssue[] => {
 
 /**
  * Parse the structured tool-error envelope
- * (`{"error":{"code","message","hint?","issues?","retryable?"}}`) a modern
+ * (`{"error":{"code","message","hint?","issues?","retryable?","retryAfterMs?"}}`) a modern
  * server tags every tool failure with. Unknown fields are ignored, so a newer
  * server that grows the envelope never breaks this parser. Returns `null` for a
  * legacy plain-text or bare-`{code}` error so the caller falls back to today's
@@ -646,6 +623,11 @@ export const errorEnvelope = (payload: unknown): ErrorEnvelope | null => {
     ...(typeof error["retryable"] === "boolean"
       ? { retryable: error["retryable"] }
       : {}),
+    ...(typeof error["retryAfterMs"] === "number" &&
+    Number.isFinite(error["retryAfterMs"]) &&
+    error["retryAfterMs"] >= 0
+      ? { retryAfterMs: error["retryAfterMs"] }
+      : {}),
     ...(typeof error["contactUrl"] === "string"
       ? { contactUrl: error["contactUrl"] }
       : {}),
@@ -670,8 +652,7 @@ const RECEIPT_RESET = "\u001B[0m";
 
 /**
  * The `request id: …` receipt line, dimmed on a TTY and plain on a pipe (so an
- * agent capturing stderr reads a clean, greppable line). Shared by the error
- * path (after the envelope) and the capability write path (after a mutation).
+ * agent capturing stderr reads a clean, greppable line) after an error envelope.
  * Callers only receive ids that passed {@link parseRequestId}, so the value is
  * terminal-safe by construction.
  */
@@ -679,21 +660,6 @@ export const requestIdLine = (requestId: string, isTTY: boolean): string =>
   isTTY
     ? `${RECEIPT_DIM}request id: ${requestId}${RECEIPT_RESET}\n`
     : `request id: ${requestId}\n`;
-
-/**
- * Read the `meta.requestId` receipt off a success payload, if present and
- * well-formed (see {@link parseRequestId}; a malformed id is dropped).
- */
-export const readRequestReceipt = (payload: unknown): string | undefined => {
-  if (!isRecord(payload)) {
-    return undefined;
-  }
-  const meta = payload["meta"];
-  if (!isRecord(meta)) {
-    return undefined;
-  }
-  return parseRequestId(meta["requestId"]);
-};
 
 /**
  * Map a tool `isError` result to an exit class (spec 051 S4). A structured
@@ -726,15 +692,11 @@ export const classifyToolError = (payload: unknown): ExitCode => {
 
 /**
  * True when the tool declares a boolean `confirm` gate in its input schema (the
- * destructive delete_* tools, and `manage_organization` which gates its
- * remove_member action). The generated per-tool flags hide `confirm` (the
- * reserved --yes flow owns it), so after a confirmed destructive op the executor
- * injects `confirm: true` to satisfy the server gate. Injection only runs on a
- * leaf marked `destructive`, so a non-destructive sibling subcommand (e.g.
- * `organization update-settings`, sharing the one schema) never has `confirm`
- * injected even though this returns true for the shared schema.
+ * destructive delete_* tools and remove_matter_member). The generated flags
+ * hide `confirm`; after human approval the reserved --yes flow injects
+ * `confirm: true` for a leaf marked destructive.
  */
-const specHasConfirmGate = (spec: LeafCommandSpec): boolean => {
+export const specHasConfirmGate = (spec: LeafCommandSpec): boolean => {
   const properties = spec.inputSchema["properties"];
   return isRecord(properties) && "confirm" in properties;
 };
@@ -823,11 +785,11 @@ export const reservedFlagUsageError = (flags: LeafFlags): string | null => {
     return `--output must be one of: json, table, jsonl (got "${output}")`;
   }
   const limit = flags[RESERVED_FLAG_KEYS.limit];
-  if (typeof limit === "string") {
-    const trimmed = limit.trim();
-    if (!/^\d+$/u.test(trimmed) || Number.parseInt(trimmed, 10) < 1) {
-      return `--limit expects a positive integer (got "${limit}")`;
-    }
+  if (
+    typeof limit === "string" &&
+    parseIntegerToken(limit, { sign: "unsigned", min: 1 }).isErr()
+  ) {
+    return `--limit expects a positive integer (got "${limit}")`;
   }
   return null;
 };
@@ -838,6 +800,12 @@ type AllFailure =
 
 type AllOutcome = {
   payload: unknown;
+  /**
+   * Where `payload` holds its text on a windowed-text walk: the merged
+   * `MERGED_TEXT_PATH`, or the leaf's own path when the first window carried
+   * no text and is rendered as it came. Undefined for an items walk.
+   */
+  textPath: string | undefined;
   /** Where a ceiling stopped the walk short of the last page; null when complete. */
   resumeCursor: string | null;
   count: number;
@@ -867,7 +835,7 @@ const followAll = async ({
   baseArgs: Record<string, unknown>;
   serverUrl: string;
   token: string;
-  /** The tool to call each page (the curated tool, or `invoke_capability`). */
+  /** The tool to call each page (the curated tool or capability executor). */
   toolName: string;
   /** Merge a cursor into the base args for the next page (part-aware for capabilities). */
   cursorInto: (
@@ -908,6 +876,16 @@ const followAll = async ({
     }
     pages += 1;
 
+    // A first window without text has nothing to concatenate: render it as
+    // it came, so the plan types the absence instead of merging it into "".
+    if (
+      textPath !== undefined &&
+      pages === 1 &&
+      typeof valueAtPath(payload, textPath) !== "string"
+    ) {
+      return Result.ok({ payload, textPath, resumeCursor: null, count: 0 });
+    }
+
     if (textPath !== undefined) {
       const chunk = asStringAtPath(payload, textPath);
       bytes += Buffer.byteLength(chunk);
@@ -937,17 +915,39 @@ const followAll = async ({
     }
   } while (cursor !== null);
 
+  const firstWindow = buildRenderPlan({
+    payload: firstPayload,
+    textPath,
+    itemsKey,
+    singleReadActive: false,
+    columns: undefined,
+  });
+  const citationFields =
+    firstWindow.kind === "windowed-text"
+      ? {
+          ...(firstWindow.url === undefined ? {} : { url: firstWindow.url }),
+          ...(firstWindow.source_url === undefined
+            ? {}
+            : { source_url: firstWindow.source_url }),
+        }
+      : {};
+
   // The merged windowed payload is the CLI's own shape, flat at
   // `MERGED_TEXT_PATH` whatever path the tool nested its window under.
   const mergedPayload =
     textPath === undefined
       ? { ...firstPayload, [itemsKey ?? "items"]: items, nextCursor: null }
-      : { [MERGED_TEXT_PATH]: text, nextCursor: null };
+      : {
+          ...citationFields,
+          [MERGED_TEXT_PATH]: text,
+          nextCursor: null,
+        };
 
   const itemCount = stream === undefined ? items.length : streamedCount;
   const count = textPath === undefined ? itemCount : Buffer.byteLength(text);
   return Result.ok({
     payload: mergedPayload,
+    textPath: textPath === undefined ? undefined : MERGED_TEXT_PATH,
     resumeCursor: cursor,
     count,
   });
@@ -962,6 +962,7 @@ const followAll = async ({
  */
 export const streamOrRenderAllPages = async ({
   context,
+  command,
   writers,
   format,
   textPath,
@@ -972,8 +973,12 @@ export const streamOrRenderAllPages = async ({
   toolName,
   cursorInto,
   requestTimeoutMs,
+  now = () => performance.now(),
+  reportOutputDuration = (durationMs) => timingDuration("output", durationMs),
 }: {
   context: Context;
+  /** The command as the caller typed it, without the `stella` prefix. */
+  command: string;
   writers: Writers;
   format: OutputFormat;
   /** Set exactly for a windowed-text leaf; see `LeafCommandSpec.textPath`. */
@@ -988,70 +993,91 @@ export const streamOrRenderAllPages = async ({
     cursor: string,
   ) => Record<string, unknown>;
   requestTimeoutMs?: number;
+  now?: () => number;
+  reportOutputDuration?: (durationMs: number) => void;
 }): Promise<void> => {
-  const streaming = format === "jsonl" && textPath === undefined;
-  const outcome = await followAll({
-    textPath,
-    itemsKey,
-    baseArgs,
-    serverUrl,
-    token,
-    toolName,
-    cursorInto,
-    ...(requestTimeoutMs === undefined ? {} : { requestTimeoutMs }),
-    ...(streaming
-      ? {
-          stream: (item: unknown) => {
-            writers.stdout(jsonlLine(item));
-          },
+  let outputDurationMs = 0;
+  const measureOutput = (render: () => void): void => {
+    const started = now();
+    render();
+    outputDurationMs += now() - started;
+  };
+  try {
+    const streaming = format === "jsonl" && textPath === undefined;
+    const outcome = await followAll({
+      textPath,
+      itemsKey,
+      baseArgs,
+      serverUrl,
+      token,
+      toolName,
+      cursorInto,
+      ...(requestTimeoutMs === undefined ? {} : { requestTimeoutMs }),
+      ...(streaming
+        ? {
+            stream: (item: unknown) => {
+              measureOutput(() => writers.stdout(jsonlLine(item)));
+            },
+          }
+        : {}),
+    });
+    if (Result.isError(outcome)) {
+      const failure = outcome.error;
+      switch (failure.type) {
+        case "client":
+          measureOutput(() =>
+            renderClientError({
+              context,
+              error: failure.error,
+              writers,
+              format,
+            }),
+          );
+          return;
+        case "tool":
+          measureOutput(() =>
+            renderToolError({
+              context,
+              command,
+              result: failure.result,
+              writers,
+              format,
+            }),
+          );
+          return;
+        default: {
+          failure satisfies never;
+          panic("Unknown pagination failure");
         }
-      : {}),
-  });
-  if (Result.isError(outcome)) {
-    switch (outcome.error.type) {
-      case "client":
-        renderClientError({
-          context,
-          error: outcome.error.error,
-          writers,
-          format,
-        });
-        return;
-      case "tool":
-        renderToolError({
-          context,
-          result: outcome.error.result,
-          writers,
-          format,
-        });
-        return;
-      default: {
-        outcome.error satisfies never;
-        panic("Unknown pagination failure");
       }
     }
-  }
-  if (!streaming) {
-    const plan = buildRenderPlan({
-      payload: outcome.value.payload,
-      itemsKey,
-      textPath: textPath === undefined ? undefined : MERGED_TEXT_PATH,
-      singleReadActive: false,
-      columns: undefined,
+    measureOutput(() => {
+      if (!streaming) {
+        const plan = buildRenderPlan({
+          payload: outcome.value.payload,
+          itemsKey,
+          textPath: outcome.value.textPath,
+          singleReadActive: false,
+          columns: undefined,
+        });
+        renderResult({
+          plan,
+          format,
+          writers,
+          allActive: true,
+          width: terminalWidth(context),
+        });
+        setPlanExit(context, plan);
+      }
+      const { count, resumeCursor } = outcome.value;
+      if (resumeCursor !== null) {
+        writers.stderr(
+          `--all truncated at ${count} items/pages; resume with --cursor ${resumeCursor}\n`,
+        );
+      }
     });
-    renderResult({
-      plan,
-      format,
-      writers,
-      allActive: true,
-      width: terminalWidth(context),
-    });
-  }
-  const { count, resumeCursor } = outcome.value;
-  if (resumeCursor !== null) {
-    writers.stderr(
-      `--all truncated at ${count} items/pages; resume with --cursor ${resumeCursor}\n`,
-    );
+  } finally {
+    reportOutputDuration(outputDurationMs);
   }
 };
 
@@ -1080,12 +1106,23 @@ export const toolErrorLines = (
     message: string;
     code?: string;
     retryable?: boolean;
+    retryAfterMs?: number;
     contactUrl?: string;
     hint: string | undefined;
-    issues: readonly { path: string; message: string }[];
+    issues: readonly ErrorIssue[];
   },
-  flagPaths?: ReadonlySet<string>,
+  {
+    command,
+    flagPaths,
+  }: {
+    /** The command the caller ran; the server's text names only its tool. */
+    command: string;
+    flagPaths?: ReadonlySet<string> | undefined;
+  },
 ): string[] => {
+  if (envelope.code === "unknown_tool") {
+    return [commandUnavailableMessage({ type: "unknown-to-server", command })];
+  }
   const admission = readCliActionAdmissionRefusal(envelope);
   if (admission !== undefined) {
     return actionAdmissionRefusalLines(admission);
@@ -1101,10 +1138,14 @@ export const toolErrorLines = (
   } else {
     lines.push(`error: ${envelope.message}`);
     for (const issue of envelope.issues) {
+      const reason =
+        issue.code === undefined
+          ? issue.message
+          : `${issue.message} [${issue.code}]`;
       lines.push(
         issue.path === ""
-          ? `  ${issue.message}`
-          : `  ${issueLocation(issue.path, flagPaths)}: ${issue.message}`,
+          ? `  ${reason}`
+          : `  ${issueLocation(issue.path, flagPaths)}: ${reason}`,
       );
     }
   }
@@ -1123,12 +1164,15 @@ export const toolErrorLines = (
  */
 export const renderToolError = ({
   context,
+  command,
   result,
   writers,
   flagPaths,
   format,
 }: {
   context: Context;
+  /** The command as the caller typed it, without the `stella` prefix. */
+  command: string;
   format?: OutputFormat | undefined;
   result: CallToolResult;
   writers: Writers;
@@ -1142,16 +1186,16 @@ export const renderToolError = ({
       actionAdmissionRefusalOutput({
         refusal: admission,
         format,
-        ...(envelope?.requestId === undefined
-          ? {}
-          : { requestId: envelope.requestId }),
+        ...(envelope?.requestId !== undefined
+          ? { requestId: envelope.requestId }
+          : {}),
       }),
     );
     setExit(context, classifyToolError(errorPayload));
     return;
   }
   if (envelope !== null) {
-    for (const line of toolErrorLines(envelope, flagPaths)) {
+    for (const line of toolErrorLines(envelope, { command, flagPaths })) {
       writers.stderr(`${line}\n`);
     }
     if (envelope.requestId !== undefined) {
@@ -1167,6 +1211,8 @@ export const renderToolError = ({
 
 type RenderCommandResultOptions = {
   context: Context;
+  /** The command as the caller typed it, without the `stella` prefix. */
+  command: string;
   format: OutputFormat;
   itemsKey: string | undefined;
   /** See `LeafCommandSpec.composite`. */
@@ -1175,24 +1221,23 @@ type RenderCommandResultOptions = {
   /** Set exactly for a windowed-text leaf; see `LeafCommandSpec.textPath`. */
   textPath: string | undefined;
   writers: Writers;
-  writeReceipt: boolean;
   /** Input paths the leaf exposes as flags, so an issue can name the flag. */
   flagPaths?: ReadonlySet<string> | undefined;
 };
 
 export const renderCommandResult = ({
   context,
+  command,
   format,
   itemsKey,
   composite,
   result,
   textPath,
   writers,
-  writeReceipt,
   flagPaths,
 }: RenderCommandResultOptions): void => {
   if (result.isError) {
-    renderToolError({ context, result, writers, flagPaths, format });
+    renderToolError({ context, command, result, writers, flagPaths, format });
     return;
   }
   const payload = parsePayload(result);
@@ -1215,6 +1260,7 @@ export const renderCommandResult = ({
     allActive: false,
     width: terminalWidth(context),
   });
+  setPlanExit(context, plan);
 
   // Generic two-phase handshake affordance (driven by the response fields, not
   // any tool name): a phase-1 `approval_required` response carries a
@@ -1225,12 +1271,6 @@ export const renderCommandResult = ({
   });
   if (hint !== null) {
     writers.stderr(`${hint}\n`);
-  }
-  if (writeReceipt) {
-    const requestId = readRequestReceipt(payload);
-    if (requestId !== undefined) {
-      writers.stderr(requestIdLine(requestId, context.process.stderr.isTTY));
-    }
   }
 };
 
@@ -1309,7 +1349,10 @@ export const runLeafCommand = async ({
   const localFileProp = spec.localFileBase64Prop;
   const localFilePath = flags[LOCAL_FILE_FLAG_KEY];
   if (localFileProp !== undefined && typeof localFilePath === "string") {
-    if (args[localFileProp] !== undefined) {
+    if (
+      Object.hasOwn(args, localFileProp) &&
+      args[localFileProp] !== undefined
+    ) {
       writers.stderr(
         `${LOCAL_FILE_FLAG} and --${kebabCase(localFileProp)} both carry the document; pass one of them\n`,
       );
@@ -1330,7 +1373,7 @@ export const runLeafCommand = async ({
       setExit(context, EXIT_CODES.validation);
       return;
     }
-    args[localFileProp] = encoded.value;
+    args = { ...args, [localFileProp]: encoded.value };
   }
 
   if (spec.discriminatorInject !== undefined) {
@@ -1341,17 +1384,16 @@ export const runLeafCommand = async ({
   // validation for both JSON and flags. Keeping a second client validator here
   // would reject lenient spellings before the canonical reader sees them.
 
-  // Client-side scope precheck (spec S3): fail before any server call. Opaque
-  // tokens still defer to the server, which enforces the same full set.
+  // Reuse discovery's grant snapshot; decoding the token here could contradict
+  // authenticated server evidence.
   const scopeFailure = scopePreflightFailure({
     additionalScopes: spec.additionalScopes,
     scope: spec.scope,
-    token,
+    effectiveGrants: context.effectiveGrants,
+    serverUrl,
   });
   if (scopeFailure !== undefined) {
-    writers.stderr(
-      `Missing scope stella:${scopeFailure.missingScope}. Re-run '${scopeFailure.loginCommand}' to grant the complete scope set.\n`,
-    );
+    writers.stderr(`${commandUnavailableMessage(scopeFailure)}\n`);
     setExit(context, EXIT_CODES.auth);
     return;
   }
@@ -1370,26 +1412,29 @@ export const runLeafCommand = async ({
   args = gated.args;
 
   // Windowed-text commands print raw document text by default; only an explicit
-  // --json / --output json switches them to a structured envelope (spec S4).
+  // --json / --output json/jsonl switches them to a structured envelope (spec S4).
   const explicitJson =
     flags[RESERVED_FLAG_KEYS.json] === true ||
-    flags[RESERVED_FLAG_KEYS.output] === "json";
+    flags[RESERVED_FLAG_KEYS.output] === "json" ||
+    flags[RESERVED_FLAG_KEYS.output] === "jsonl";
   const format =
     spec.windowedText && !explicitJson
       ? "table"
       : readOutputFormat(flags, context);
   const renderCall = (result: CallToolResult) => {
+    const started = performance.now();
     renderCommandResult({
       context,
+      command: spec.commandPath.join(" "),
       format,
       itemsKey: spec.itemsKey,
       composite: spec.composite,
       result,
       textPath: spec.textPath,
       writers,
-      writeReceipt: false,
       flagPaths: leafFlagPaths(spec),
     });
+    timingEnd("output", started);
   };
   const allActive = spec.paginated && flags[RESERVED_FLAG_KEYS.all] === true;
 
@@ -1402,12 +1447,18 @@ export const runLeafCommand = async ({
     args["cursor"] = cursorFlag;
   }
   if (typeof limitFlag === "string") {
-    args["limit"] = Number.parseInt(limitFlag.trim(), 10);
+    args["limit"] = parseIntegerToken(limitFlag, {
+      sign: "unsigned",
+      min: 1,
+    }).unwrap(
+      "Reserved pagination limit was validated before building the request",
+    );
   }
 
   if (allActive) {
     await streamOrRenderAllPages({
       context,
+      command: spec.commandPath.join(" "),
       writers,
       format,
       textPath: spec.textPath,
@@ -1466,7 +1517,7 @@ type ConfirmGateOutcome = { aborted: boolean; args: Record<string, unknown> };
  *  - a DESTRUCTIVE leaf prompts (or honors --yes) before any server call and
  *    injects `confirm: true` when the schema declares the gate;
  *  - a confirm-PASSTHROUGH leaf (per-target destructiveness, e.g.
- *    `capability invoke`) never prompts upfront, but --yes pre-approves the
+ *    `capability write`) never prompts upfront, but --yes pre-approves the
  *    server's confirmation_required gate by injecting `confirm: true`; without
  *    --yes the post-call prompt-and-retry flow handles it.
  */

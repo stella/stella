@@ -1,8 +1,8 @@
 import {
   RESOURCE_TYPE,
-  toResourceName,
   type ResourceRef,
   type ResourceType,
+  toResourceName,
 } from "@stll/api-contract";
 
 type SearchDisposition = { type: "searchable" } | { type: "not_searched" };
@@ -10,7 +10,7 @@ type SearchDisposition = { type: "searchable" } | { type: "not_searched" };
 const NOT_SEARCHED = { type: "not_searched" } as const;
 
 /** Every canonical resource kind must explicitly choose global-search behavior. */
-export const SEARCH_RESOURCE_DISPOSITION = {
+const SEARCH_RESOURCE_DISPOSITION = {
   [RESOURCE_TYPE.AGENT_SKILL]: NOT_SEARCHED,
   [RESOURCE_TYPE.AGENT_SKILL_COMMENT]: NOT_SEARCHED,
   [RESOURCE_TYPE.AGENT_SKILL_PROPOSAL]: NOT_SEARCHED,
@@ -36,6 +36,7 @@ export const SEARCH_RESOURCE_DISPOSITION = {
   [RESOURCE_TYPE.FLOW_RUN]: NOT_SEARCHED,
   [RESOURCE_TYPE.INVOICE]: NOT_SEARCHED,
   [RESOURCE_TYPE.LEGAL_LIST]: NOT_SEARCHED,
+  [RESOURCE_TYPE.LEGAL_LIST_VERIFICATION]: NOT_SEARCHED,
   [RESOURCE_TYPE.LEGISLATION_DOCUMENT]: NOT_SEARCHED,
   [RESOURCE_TYPE.LEGISLATION_SOURCE]: NOT_SEARCHED,
   [RESOURCE_TYPE.MCP_CONNECTOR]: NOT_SEARCHED,

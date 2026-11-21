@@ -2,6 +2,8 @@ import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
+import { createTestState } from "@stll/test-state";
+
 import { env } from "@/api/env";
 import { envApiServerSchema } from "@/api/env-schema";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -10,6 +12,8 @@ import {
   resolveMcpReadFencePolicy,
 } from "@/api/lib/rate-limit/mcp-read-fence";
 import { MCP_READ_MAX_ENTRIES } from "@/api/lib/rate-limit/mcp-read-fence-policy";
+
+const testState = createTestState({ file: import.meta.path, config: env });
 
 const identity = {
   organizationId: toSafeId<"organization">("org_read_a"),
@@ -122,9 +126,7 @@ describe("shared read windows", () => {
       expect(Result.isError(result)).toBe(true);
       if (Result.isError(result)) {
         expect(result.error.code).toBe(
-          reply === 0
-            ? "action_period_exhausted"
-            : "action_admission_unavailable",
+          reply === 0 ? "action_period_exhausted" : "limiter_store_unavailable",
         );
       }
     }
@@ -141,7 +143,7 @@ describe("shared read windows", () => {
     if (!Result.isError(failure)) {
       throw new TypeError("Expected closed read");
     }
-    expect(failure.error.code).toBe("action_admission_unavailable");
+    expect(failure.error.code).toBe("limiter_store_unavailable");
   });
 
   test("invalid bytes or policy fail closed before store access", async () => {
@@ -192,13 +194,9 @@ describe("shared read windows", () => {
   });
 
   test("missing operator configuration is unavailable", () => {
-    const previous = env.MCP_READ_WINDOW_MS;
-    env.MCP_READ_WINDOW_MS = undefined;
-    try {
-      expect(Result.isError(resolveMcpReadFencePolicy())).toBe(true);
-    } finally {
-      env.MCP_READ_WINDOW_MS = previous;
-    }
+    testState.setConfig("MCP_READ_WINDOW_MS", undefined);
+
+    expect(Result.isError(resolveMcpReadFencePolicy())).toBe(true);
   });
 
   test("a timeout with disconnected cancellation stays unavailable with both causes", async () => {
@@ -226,7 +224,7 @@ describe("shared read windows", () => {
     expect(calls).toBe(2);
     expect(Result.isError(outcome)).toBe(true);
     if (Result.isError(outcome)) {
-      expect(outcome.error.code).toBe("action_admission_unavailable");
+      expect(outcome.error.code).toBe("limiter_store_unavailable");
       expect(outcome.error.cause).toMatchObject({
         charge: { cause: { label: "mcp-read-fence" } },
         cancellation: {

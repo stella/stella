@@ -9,20 +9,23 @@ import { resolveDebugOption } from "@tanstack/ai/adapter-internals";
 import { panic, Result } from "better-result";
 import * as v from "valibot";
 
-import { BYOK_DEFAULT_MODELS, BYOK_MODEL_OPTIONS } from "@stll/ai-catalog";
+import { BYOK_MODEL_OPTIONS } from "@stll/ai-catalog";
+import { MODEL_DEFAULTS_LEDGER } from "@stll/ai-catalog/model-defaults-ledger";
+import { sleep } from "@stll/concurrency/sleep";
 
-import { chatAttemptRequestOptions } from "@/api/handlers/chat/chat-request";
 import { classifyRunErrorChunk } from "@/api/handlers/chat/stream-chat";
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
+import { chatAttemptRequestOptions } from "@/api/lib/chat/chat-request";
 import { chatToolMapToArray } from "@/api/lib/chat/chat-tool-types";
 import { streamChatChunks } from "@/api/lib/chat/tanstack-chat-runtime";
 import { ToolCallIdLedger } from "@/api/lib/chat/unique-tool-call-ids";
 import {
   clearByokAdapterCache,
   createTanStackTextAdapterFactory,
-  getTanStackTextModelForRole,
+  getTanStackTextModelForTask,
 } from "@/api/lib/tanstack-ai-models";
+import { MANAGED_MODEL_TIER } from "@/api/lib/usage/managed-model-tier";
 import { CHAT_ORACLE, violationsOf } from "@/api/tests/helpers/chat-oracles";
 import type { OracleViolation } from "@/api/tests/helpers/chat-oracles";
 import {
@@ -53,7 +56,7 @@ import type {
 /** The declared input of the wire tool: `note` is optional, so a strict
  *  provider widens it to `null` on the wire, and a route that fills every
  *  field sends ""; a note is never empty, so "" is not one. */
-export const WIRE_TOOL_INPUT = v.object({
+const WIRE_TOOL_INPUT = v.object({
   name: v.string(),
   note: v.optional(v.pipe(v.string(), v.minLength(1))),
 });
@@ -70,7 +73,7 @@ const TEXT_PROMPT = `Reply with exactly this sentence and nothing else: ${EXPECT
 
 /** The one user message each scenario sends. Recordings capture exactly
  *  these prompts and nothing else. */
-export const SCENARIO_PROMPTS = {
+const SCENARIO_PROMPTS = {
   text: TEXT_PROMPT,
   "text-terminal-only": TEXT_PROMPT,
   "tool-call": `Call the ${WIRE_TOOL_NAME} tool once with name "draft". Do not write any text.`,
@@ -113,7 +116,7 @@ export const UNKNOWN_MODEL_ID = "stella-cassette-no-such-model";
 
 /** The chat model a provider's corpus is recorded with by default. */
 export const wireChatModel = (provider: ProviderWireProvider): string =>
-  BYOK_DEFAULT_MODELS[provider].chat;
+  MODEL_DEFAULTS_LEDGER.chat[provider].candidate.modelId;
 
 /** A model of the provider's other than `chat`, for side calls such as
  *  thread titles. */
@@ -174,14 +177,18 @@ const prepareWireRequest = ({
   clearByokAdapterCache();
   // The rejected request names a model no provider serves, so its options
   // come from the provider's chat default.
-  const resolved = getTanStackTextModelForRole(
+  const resolved = getTanStackTextModelForTask(
     "chat",
     wireOrgAIConfig({
       apiKey,
       chatModel: scenario === "bad-request" ? wireChatModel(provider) : model,
       provider,
     }),
-    { dataClass: "public_corpus", organizationId: null },
+    {
+      dataClass: "public_corpus",
+      organizationId: null,
+      modelTier: MANAGED_MODEL_TIER.standard,
+    },
   );
   // The chat attempt's own request options, so each cassette pins the
   // request a chat turn sends (its system prompt aside: the scenarios send
@@ -203,7 +210,7 @@ const prepareWireRequest = ({
             })(model),
           },
     modelTools: chatToolMapToArray({ [WIRE_TOOL_NAME]: wireTool() }),
-    role: "chat",
+    task: "chat",
     system: undefined,
     toolCallIds: new ToolCallIdLedger([]),
   });
@@ -293,7 +300,7 @@ const RUN_DEADLINE_MS = 15_000;
  * is (its abort controller) once the first text delta arrives. The engine
  * is what production reads a cancelled run through.
  */
-export const runCancelledWireScenario = async (options: {
+const runCancelledWireScenario = async (options: {
   apiKey: string;
   model: string;
   provider: ProviderWireProvider;
@@ -340,9 +347,7 @@ export const runCancelledWireScenario = async (options: {
     abortController.signal.addEventListener(
       "abort",
       () => {
-        setTimeout(() => {
-          resolve("abandoned");
-        }, CANCEL_ABANDON_MS);
+        void sleep(CANCEL_ABANDON_MS).then(() => resolve("abandoned"));
       },
       { once: true },
     );
@@ -454,6 +459,18 @@ const usageProblems = (usage: TokenUsage | undefined): string[] => {
   return problems;
 };
 
+type ExpectedUsage = NonNullable<ProviderWireCassette["expect"]["usage"]>;
+
+/** Whether `reported` is other than the usage a cassette expects; reasoning
+ *  is compared where the cassette states it. */
+const usageDiffers = (expected: ExpectedUsage, reported: TokenUsage): boolean =>
+  reported.promptTokens !== expected.promptTokens ||
+  reported.completionTokens !== expected.completionTokens ||
+  reported.totalTokens !== expected.totalTokens ||
+  (expected.reasoningTokens !== undefined &&
+    reported.completionTokensDetails?.reasoningTokens !==
+      expected.reasoningTokens);
+
 /**
  * A provider that reported usage before the run failed billed it: the run
  * error carries exactly that, and no usage the wire never reported.
@@ -471,12 +488,7 @@ const runErrorUsageProblems = (
       : [{ expected: null, got: failed.usage }];
   }
   const problems: unknown[] = usageProblems(failed.usage);
-  if (
-    failed.usage !== undefined &&
-    (failed.usage.promptTokens !== expected.promptTokens ||
-      failed.usage.completionTokens !== expected.completionTokens ||
-      failed.usage.totalTokens !== expected.totalTokens)
-  ) {
+  if (failed.usage !== undefined && usageDiffers(expected, failed.usage)) {
     problems.push({ expected, got: failed.usage });
   }
   return problems;
@@ -593,9 +605,7 @@ export const findWireContractViolations = ({
       if (
         expected.usage !== undefined &&
         reported !== undefined &&
-        (reported.promptTokens !== expected.usage.promptTokens ||
-          reported.completionTokens !== expected.usage.completionTokens ||
-          reported.totalTokens !== expected.usage.totalTokens)
+        usageDiffers(expected.usage, reported)
       ) {
         usage.push({ expected: expected.usage, got: reported });
       }

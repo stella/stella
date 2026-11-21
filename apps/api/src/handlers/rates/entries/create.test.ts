@@ -1,13 +1,20 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { and, eq } from "drizzle-orm";
 
+import { cents } from "@stll/money";
+
 import type { SafeDb } from "@/api/db/safe-db";
 import { rateEntries, rateTables } from "@/api/db/schema";
 import { createSafeDb } from "@/api/db/scoped";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
+import { auditRecorderDouble } from "@/api/tests/helpers/audit-recorder-double";
+import {
+  createTestHandlerContext,
+  NO_DB,
+} from "@/api/tests/helpers/handler-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import { withTimeBillingEnrolment } from "@/api/tests/helpers/time-billing-enrolment";
 import {
   createTestIds,
   setupRlsTestData,
@@ -42,29 +49,40 @@ afterAll(async () => await releaseTestDb());
 const scopedSafeDb = () =>
   asTestRaw<SafeDb>(createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userA1));
 type CreateContext = Parameters<typeof createRateEntry.handler>[0];
-const create = async (body: CreateContext["body"], tableId = rateTableId) =>
+const create = async (
+  body: Omit<CreateContext["body"], "currency">,
+  tableId = rateTableId,
+) =>
   await createRateEntry.handler(
-    createTestHandlerContext<CreateContext>({
-      workspaceId: ids.wsA1,
-      session: { activeOrganizationId: ids.orgA },
-      user: { id: ids.userA1 },
-      safeDb: scopedSafeDb(),
-      params: { rateTableId: tableId },
-      body,
-    }),
+    withTimeBillingEnrolment(
+      createTestHandlerContext<CreateContext>({
+        scopedDb: NO_DB,
+        audit: auditRecorderDouble(),
+        workspaceId: ids.wsA1,
+        session: { activeOrganizationId: ids.orgA },
+        user: { id: ids.userA1 },
+        safeDb: scopedSafeDb(),
+        params: { rateTableId: tableId },
+        body: { ...body, currency: "USD" },
+      }),
+    ),
   );
 
 type UpdateContext = Parameters<typeof updateRateEntry.handler>[0];
-const update = async (body: UpdateContext["body"]) =>
+const update = async (body: Omit<UpdateContext["body"], "currency">) =>
   await updateRateEntry.handler(
-    createTestHandlerContext<UpdateContext>({
-      workspaceId: ids.wsA1,
-      session: { activeOrganizationId: ids.orgA },
-      user: { id: ids.userA1 },
-      safeDb: scopedSafeDb(),
-      params: { rateTableId },
-      body,
-    }),
+    withTimeBillingEnrolment(
+      createTestHandlerContext<UpdateContext>({
+        scopedDb: NO_DB,
+        audit: auditRecorderDouble(),
+        workspaceId: ids.wsA1,
+        session: { activeOrganizationId: ids.orgA },
+        user: { id: ids.userA1 },
+        safeDb: scopedSafeDb(),
+        params: { rateTableId },
+        body: { ...body, currency: "USD" },
+      }),
+    ),
   );
 
 const clearEntries = async () =>
@@ -73,7 +91,7 @@ const clearEntries = async () =>
     .where(eq(rateEntries.rateTableId, rateTableId));
 
 const window = {
-  hourlyRate: 12_000,
+  hourlyRate: cents(12_000),
   effectiveFrom: "2025-01-01",
   effectiveTo: "2025-01-31",
 };
@@ -116,13 +134,17 @@ describe("effective-dated rate selectors", () => {
     ).toHaveLength(2);
     type ListContext = Parameters<typeof readRateEntries.handler>[0];
     const page = await readRateEntries.handler(
-      createTestHandlerContext<ListContext>({
-        workspaceId: ids.wsA1,
-        session: { activeOrganizationId: ids.orgA },
-        safeDb: scopedSafeDb(),
-        params: { rateTableId },
-        query: { limit: 50 },
-      }),
+      withTimeBillingEnrolment(
+        createTestHandlerContext<ListContext>({
+          scopedDb: NO_DB,
+          audit: auditRecorderDouble(),
+          workspaceId: ids.wsA1,
+          session: { activeOrganizationId: ids.orgA },
+          safeDb: scopedSafeDb(),
+          params: { rateTableId },
+          query: { limit: 50 },
+        }),
+      ),
     );
     expect(page).toHaveProperty("items");
     if (!("items" in page)) {
@@ -187,5 +209,76 @@ describe("effective-dated rate selectors", () => {
         eq(rateEntries.rateTableId, rateTableId),
       ),
     ).toBe(0);
+  });
+
+  test("refuses rate values submitted in a stale table currency", async () => {
+    await clearEntries();
+    try {
+      await testDb
+        .update(rateTables)
+        .set({ currency: "JPY" })
+        .where(eq(rateTables.id, rateTableId));
+      expect(await create({ ...window })).toMatchObject({
+        code: 409,
+        response: { code: "rate_table_currency_changed" },
+      });
+      expect(
+        await testDb.$count(
+          rateEntries,
+          eq(rateEntries.rateTableId, rateTableId),
+        ),
+      ).toBe(0);
+
+      await testDb
+        .update(rateTables)
+        .set({ currency: "USD" })
+        .where(eq(rateTables.id, rateTableId));
+      const created = await create({ ...window });
+      expect(created).toHaveProperty("id");
+      if (!("id" in created)) {
+        return;
+      }
+      await testDb
+        .update(rateTables)
+        .set({ currency: "JPY" })
+        .where(eq(rateTables.id, rateTableId));
+      expect(
+        await update({ id: created.id, hourlyRate: 25_000 }),
+      ).toMatchObject({
+        code: 409,
+        response: { code: "rate_table_currency_changed" },
+      });
+      const row = await testDb.query.rateEntries.findFirst({
+        where: { id: { eq: created.id } },
+        columns: { hourlyRate: true },
+      });
+      expect(row?.hourlyRate).toBe(window.hourlyRate);
+    } finally {
+      await testDb
+        .update(rateTables)
+        .set({ currency: "USD" })
+        .where(eq(rateTables.id, rateTableId));
+    }
+  });
+  test("invalid activity selection returns a typed refusal without leaving a rate entry", async () => {
+    await clearEntries();
+    const activityCodeId = toSafeId<"billingCode">(Bun.randomUUIDv7());
+    expect(await create({ ...window, activityCodeId })).toMatchObject({
+      code: 400,
+      response: { message: "Activity code not found in this matter" },
+    });
+    expect(
+      await testDb.$count(
+        rateEntries,
+        eq(rateEntries.rateTableId, rateTableId),
+      ),
+    ).toBe(0);
+    expect(await create(window)).toHaveProperty("id");
+    expect(
+      await testDb.$count(
+        rateEntries,
+        eq(rateEntries.rateTableId, rateTableId),
+      ),
+    ).toBe(1);
   });
 });

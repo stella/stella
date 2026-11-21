@@ -7,60 +7,90 @@ import {
   expect,
   test,
 } from "bun:test";
-import { asc, eq, sql } from "drizzle-orm";
+import { and, asc, eq, getColumns, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 import fc from "fast-check";
+import * as v from "valibot";
 
-import { propertyConfig, propertyTestTimeout } from "@stll/property-testing";
+import { compareCodeUnit } from "@stll/collation";
+import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
+import {
+  CYCLE_OUTCOME,
+  INGESTION_PAUSE_REASON,
+  INGESTION_STOP_KIND,
+} from "@stll/legal-atlas/ingestion-cycle";
+import { assertProperty, propertyTestTimeout } from "@stll/property-testing";
 
 import { authRelationsPart } from "@/api/db/auth-schema";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
   CASE_LAW_CORPUS_MIRROR_STATUS,
   caseLawDecisions,
+  caseLawDecisionSourceIdentities,
+  caseLawIngestionFailureEvidence,
   caseLawIngestionFailures,
   caseLawSources,
+  corpusIndexGenerations,
+  corpusIndexProjectionStates,
   relations,
 } from "@/api/db/schema";
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
-import { SOURCE_DOCUMENT_ID_MAX_LENGTH } from "@/api/handlers/case-law/ingestion/adapter";
-import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import { czNsAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-ns";
 import { PL_COURTS_METADATA_URL_SCHEMA } from "@/api/handlers/case-law/ingestion/adapters/pl-courts.metadata-urls";
 import { runIngestionPipeline } from "@/api/handlers/case-law/ingestion/pipeline";
 import {
   applyCaseLawIngestionBatch,
+  applyDecisionBatch,
   recordIngestionFailures,
 } from "@/api/handlers/case-law/ingestion/pipeline/batch";
 import {
   admitPageDecisions,
+  type BoundedCaseLawIngestionBatch,
   CASE_LAW_BATCH_BOUNDS_REASON,
   CASE_LAW_BATCH_FAILURE,
   CASE_LAW_INGESTION_BATCH_LIMITS,
   DECISION_ADMISSION,
   encodedIngestionResultBytes,
   prepareCaseLawIngestionBatch,
-  type BoundedCaseLawIngestionBatch,
   type RejectedCaseLawIngestionRecord,
 } from "@/api/handlers/case-law/ingestion/pipeline/batch-types";
+import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
 import type { CaseLawCorpusDependencies } from "@/api/handlers/case-law/ingestion/pipeline/dependencies";
+import {
+  clearIngestionFailureEvidenceTx,
+  parkIngestionFailureTx,
+} from "@/api/handlers/case-law/ingestion/pipeline/failure-evidence-persistence";
 import {
   PROCESS_DECISION_RETRY_REASON,
   PROCESS_DECISION_STATUS,
   processResultForCorpusOutcome,
 } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
+import {
+  type SourceContract,
+  sourceContractForAdapter,
+} from "@/api/handlers/case-law/ingestion/pipeline/source-contract";
 import { DECISION_REFRESH } from "@/api/handlers/case-law/ingestion/pipeline/types";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
-  TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
   checkedDecisionMetadata,
+  TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
+import { parkAttachmentsOfErasedDecisionTx } from "@/api/lib/case-law/held-attachment-erasure";
 import { toPlainTextMetadataObject } from "@/api/lib/case-law/plain-text";
 import { acquireCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
+import {
+  CORPUS_INDEX_MANIFESTS,
+  corpusIndexManifestDigest,
+} from "@/api/lib/legal-search/corpus-index-manifest";
 import { CorpusPackError } from "@/api/lib/legal-search/corpus-pack";
 import type { EncodedPack } from "@/api/lib/legal-search/corpus-pack";
+import {
+  PUBLISHER_REQUEST,
+  SOURCE_DOCUMENT_ID_MAX_LENGTH,
+} from "@/api/lib/legal-search/ingestion-types";
+import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import {
   approveMetadataUrls,
   META_URL_DIAGNOSTICS,
@@ -69,8 +99,12 @@ import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-asse
 import { toMetadataUrl } from "@/api/lib/sanitize-url";
 import { plCourtsFixture } from "@/api/tests/helpers/case-law-enrolled-fixtures";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
+import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
-import { createTestPglite } from "@/api/tests/pglite-test-db";
+import {
+  createIngestionRoleScopedDb,
+  createTestPglite,
+} from "@/api/tests/pglite-test-db";
 
 // One batch application behind two callers: a crawl page and a caller that
 // hands over records it already holds. Whatever stops a batch short of every
@@ -84,8 +118,7 @@ let scopedDb: ScopedDb;
 beforeAll(async () => {
   client = await createTestPglite();
   db = drizzle({ client, relations: { ...relations, ...authRelationsPart } });
-  scopedDb = async (callback) =>
-    await db.transaction(async (tx) => await callback(asTestRaw(tx)));
+  scopedDb = createIngestionRoleScopedDb(db);
 }, propertyTestTimeout(120_000));
 
 afterAll(async () => {
@@ -154,6 +187,367 @@ const record = (n: number): IngestionResult =>
 
 const records = (count: number): IngestionResult[] =>
   Array.from({ length: count }, (_, n) => record(n + 1));
+
+const syntheticAttachingContract = () =>
+  ({
+    ...sourceContractForAdapter("synthetic-collection"),
+    heldDecisionAttachment: {
+      hostAdapterKeys: ["synthetic-host"],
+      metadataKey: "publisherEntry",
+      metadataSchema: v.record(v.string(), v.unknown()),
+      declaredIdentifierTypes: [DECISION_IDENTIFIER_TYPES.REPORTER_CITATION],
+      docketHeldUnderOtherDate: "park-for-review",
+    },
+  }) as const satisfies SourceContract;
+
+test("an unbacked reservation holds a park without treating its input as withdrawn", async () => {
+  const sourceId = await recordSource();
+  const decisionId = createSafeId<"caseLawDecision">();
+  const input = plainTextIngestionResult({
+    caseNumber: "No. 24-120",
+    sourceDocumentId: "opinion-120",
+    country: "USA",
+    language: "en",
+    court: "Supreme Court of the United States",
+    courtId: "scotus",
+    metadata: { publisherEntry: { number: 120 } },
+    textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+    sourceRaw: "publisher input retained while its owner is pending",
+    rawHash: "synthetic-opinion-120",
+    documentAst: {},
+  });
+  const initialObservation = {
+    order: 1n,
+    observedAt: new Date("2026-01-01T00:00:00Z"),
+  };
+  const park = async (observation = initialObservation) =>
+    await scopedDb(
+      async (tx) =>
+        await parkIngestionFailureTx(tx, {
+          sourceId,
+          input,
+          observation,
+          errorType: "held-ambiguous",
+          errorMessage: "Publisher identity needs review",
+        }),
+    );
+  const evidence = async () =>
+    await scopedDb(
+      async (tx) =>
+        await tx
+          .select({
+            ...getColumns(caseLawIngestionFailureEvidence),
+            rowVersion: sql<string>`xmin::text`,
+          })
+          .from(caseLawIngestionFailureEvidence)
+          .where(eq(caseLawIngestionFailureEvidence.sourceId, sourceId)),
+    );
+  expect(Result.isOk(await park())).toBe(true);
+  const before = await evidence();
+  await scopedDb(
+    async (tx) =>
+      await tx
+        .insert(caseLawDecisionSourceIdentities)
+        .values({ sourceId, sourceDocumentId: "opinion-120", decisionId }),
+  );
+  const unavailable = await park();
+  expect(Result.isError(unavailable)).toBe(true);
+  if (Result.isError(unavailable)) {
+    expect(unavailable.error.reason).toBe("owner-unavailable");
+  }
+  expect(await evidence()).toEqual(before);
+  const processed = await processDecision(
+    {
+      input: plainTextIngestionResult({
+        ...input,
+        court: "Unrecognized Court",
+        courtId: "not-in-directory",
+      }),
+      sourceId,
+      scopedDb,
+      observedAt: new Date("2026-01-01T00:00:00Z"),
+      observationOrder: 1n,
+      corpus: landingTransfer().corpus,
+    },
+    async () => syntheticAttachingContract(),
+  );
+  expect(processed.unwrap()).toEqual({
+    status: PROCESS_DECISION_STATUS.RETRYABLE,
+    inserted: false,
+    reason: PROCESS_DECISION_RETRY_REASON.CONTENTION,
+  });
+  expect(await evidence()).toEqual(before);
+  await db.insert(caseLawDecisions).values({
+    id: decisionId,
+    sourceId,
+    caseNumber: input.caseNumber,
+    sourceDocumentId: input.sourceDocumentId,
+    country: input.country,
+    language: input.language,
+    court: input.court,
+    courtId: input.courtId,
+  });
+  const later = { order: 2n, observedAt: new Date("2026-01-02T00:00:00Z") };
+  expect(
+    Result.isOk(
+      await withSerializationFault("evidence", async () => await park(later)),
+    ),
+  ).toBe(true);
+  const latest = await evidence();
+  expect(latest.at(0)?.observationOrder).toBe(2n);
+  expect(latest.at(0)?.payload).toBe(before.at(0)?.payload);
+  expect(latest.at(0)?.rowVersion).not.toBe(before.at(0)?.rowVersion);
+  expect(
+    Result.isOk(
+      await withSerializationFault("evidence", async () => await park()),
+    ),
+  ).toBe(true);
+  expect(await evidence()).toEqual(latest);
+  expect(
+    Result.isOk(
+      await withSerializationFault("evidence", async () => await park(later)),
+    ),
+  ).toBe(true);
+  expect(await evidence()).toEqual(latest);
+});
+
+test("a known identity's takedown removes parked bytes and prevents their reintroduction", async () => {
+  const sourceId = await recordSource();
+  const decisionId = createSafeId<"caseLawDecision">();
+  const input = plainTextIngestionResult({
+    caseNumber: "No. 24-110",
+    sourceDocumentId: "opinion-110",
+    country: "USA",
+    language: "en",
+    court: "Supreme Court of the United States",
+    courtId: "scotus",
+    metadata: {},
+    textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+    sourceRaw: "publisher bytes to remove",
+    rawHash: "synthetic-opinion-110",
+    documentAst: {},
+  });
+  await db.insert(caseLawDecisions).values({
+    id: decisionId,
+    sourceId,
+    caseNumber: input.caseNumber,
+    sourceDocumentId: input.sourceDocumentId,
+    country: input.country,
+    language: input.language,
+    court: input.court,
+    courtId: input.courtId,
+  });
+  const park = async () =>
+    await scopedDb(
+      async (tx) =>
+        await parkIngestionFailureTx(tx, {
+          sourceId,
+          input,
+          observation: {
+            order: 1n,
+            observedAt: new Date("2026-01-01T00:00:00Z"),
+          },
+          errorType: "held-ambiguous",
+          errorMessage: "Publisher identity needs review",
+        }),
+    );
+  expect(Result.isOk(await park())).toBe(true);
+  const evidence = async () =>
+    await scopedDb(
+      async (tx) =>
+        await tx
+          .select()
+          .from(caseLawIngestionFailureEvidence)
+          .where(eq(caseLawIngestionFailureEvidence.sourceId, sourceId)),
+    );
+  expect((await evidence()).at(0)?.payload).toContain(
+    "publisher bytes to remove",
+  );
+  await scopedDb(async (tx) => {
+    await tx
+      .update(caseLawDecisions)
+      .set({
+        redactedAt: new Date("2026-01-02T00:00:00Z"),
+        corpusMirrorStatus: CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED,
+      })
+      .where(eq(caseLawDecisions.id, decisionId));
+    await parkAttachmentsOfErasedDecisionTx(tx, decisionId);
+  });
+  expect(await evidence()).toEqual([]);
+  expect(Result.isOk(await park())).toBe(true);
+  const marker = (await evidence()).at(0)?.payload;
+  expect(marker).toContain('"type":"withdrawn"');
+  expect(marker).not.toContain("publisher bytes to remove");
+});
+
+test("an unrecognized attaching court parks the source post and exact replay input without a host", async () => {
+  const sourceId = await recordSource();
+  const decision = plainTextIngestionResult({
+    caseNumber: "No. 24-100",
+    sourceDocumentId: "collection-post-42",
+    country: "USA",
+    language: "en",
+    court: "Unrecognized Court",
+    courtId: "not-in-directory",
+    metadata: { publisherEntry: { number: 42 } },
+    textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+    sourceRaw: "publisher\u0000detail",
+    sourceRawBytes: Uint8Array.from([0, 255, 42]),
+    sourceRawObjects: {
+      opinion: {
+        bytes: Uint8Array.from([1, 2, 255]),
+        contentType: "application/pdf",
+      },
+    },
+    rawHash: "synthetic-collection-42",
+    documentAst: {},
+  });
+  const decisions = [
+    decision,
+    ...Array.from({ length: 11 }, (_, index) => ({
+      ...decision,
+      sourceDocumentId: `collection-post-${index}`,
+    })),
+  ];
+  const batch = prepareCaseLawIngestionBatch({ decisions }).unwrap();
+  const apply = async () =>
+    await applyDecisionBatch(
+      {
+        batch,
+        sourceId,
+        scopedDb,
+        observation: {
+          order: 1n,
+          observedAt: new Date("2026-01-01T00:00:00Z"),
+        },
+        refresh: DECISION_REFRESH.WHEN_SOURCE_CHANGED,
+        corpus: landingTransfer().corpus,
+        polarityRules: new Map(),
+        context: { adapterKey: "synthetic-collection", cursor: "page-1" },
+      },
+      async () => syntheticAttachingContract(),
+    );
+  const failed = await withSerializationFault("evidence", apply);
+  expect(failed.failureLedger).toEqual({ type: "transient", count: 1 });
+  expect(failed.settlements).toEqual([
+    { type: "unsettled", reason: CASE_LAW_BATCH_FAILURE.FAILURE_WRITE },
+  ]);
+  expect(await ledgerRows(sourceId)).toEqual([]);
+  const applied = await apply();
+  expect(applied.failureLedger).toEqual({ type: "written" });
+  expect(applied.halt).toBeNull();
+  expect(applied.settlements).toHaveLength(decisions.length);
+  expect((await apply()).failureLedger).toEqual({ type: "written" });
+  expect(
+    await db
+      .select()
+      .from(caseLawDecisions)
+      .where(eq(caseLawDecisions.sourceId, sourceId)),
+  ).toEqual([]);
+  expect(
+    await scopedDb(
+      async (tx) =>
+        await tx
+          .select()
+          .from(caseLawDecisionSourceIdentities)
+          .where(eq(caseLawDecisionSourceIdentities.sourceId, sourceId)),
+    ),
+  ).toEqual([]);
+  expect(
+    await db
+      .select({
+        identity: caseLawIngestionFailures.recordIdentity,
+        kind: caseLawIngestionFailures.errorType,
+      })
+      .from(caseLawIngestionFailures)
+      .where(eq(caseLawIngestionFailures.sourceId, sourceId))
+      .orderBy(asc(caseLawIngestionFailures.recordIdentity)),
+  ).toEqual(
+    decisions
+      .map(({ sourceDocumentId }) => ({
+        identity: sourceDocumentId,
+        kind: "court_unrecognized",
+      }))
+      .toSorted((a, b) => compareCodeUnit(a.identity, b.identity)),
+  );
+  const evidence = await scopedDb(
+    async (tx) =>
+      await tx
+        .select()
+        .from(caseLawIngestionFailureEvidence)
+        .where(eq(caseLawIngestionFailureEvidence.sourceId, sourceId)),
+  );
+  expect(evidence).toHaveLength(decisions.length);
+  const selected = evidence.find(
+    ({ sourceDocumentId }) => sourceDocumentId === "collection-post-42",
+  );
+  expect(selected?.payload).toContain('"sourceRaw":"publisher\\u0000detail"');
+  expect(selected?.payload).toContain('"sourceRawBytes":"AP8q"');
+  expect(selected?.payload).toContain('"bytes":"AQL/"');
+  expect(selected?.identityKind).toBe("source-document");
+  expect(selected?.observationOrder).toBe(1n);
+  const parked = await scopedDb(
+    async (tx) =>
+      await parkIngestionFailureTx(tx, {
+        sourceId,
+        input: decision,
+        observation: {
+          order: 2n,
+          observedAt: new Date("2026-01-02T00:00:00Z"),
+        },
+        errorType: "held-ambiguous",
+        errorMessage: "Several held decisions match the publisher record",
+      }),
+  );
+  expect(Result.isOk(parked)).toBe(true);
+  const kinds = await scopedDb(
+    async (tx) =>
+      await tx
+        .select({ kind: caseLawIngestionFailureEvidence.errorType })
+        .from(caseLawIngestionFailureEvidence)
+        .where(
+          and(
+            eq(caseLawIngestionFailureEvidence.sourceId, sourceId),
+            eq(
+              caseLawIngestionFailureEvidence.sourceDocumentId,
+              "collection-post-42",
+            ),
+          ),
+        )
+        .orderBy(asc(caseLawIngestionFailureEvidence.errorType)),
+  );
+  expect(kinds).toEqual([
+    { kind: "court_unrecognized" },
+    { kind: "held-ambiguous" },
+  ]);
+  await scopedDb(
+    async (tx) =>
+      await clearIngestionFailureEvidenceTx(tx, {
+        sourceId,
+        sourceDocumentId: "collection-post-42",
+      }),
+  );
+  expect(
+    await scopedDb(
+      async (tx) =>
+        await tx
+          .select()
+          .from(caseLawIngestionFailureEvidence)
+          .where(eq(caseLawIngestionFailureEvidence.sourceId, sourceId)),
+    ),
+  ).toHaveLength(decisions.length - 1);
+  await db.delete(caseLawSources).where(eq(caseLawSources.id, sourceId));
+  expect(
+    await scopedDb(
+      async (tx) =>
+        await tx
+          .select()
+          .from(caseLawIngestionFailureEvidence)
+          .where(eq(caseLawIngestionFailureEvidence.sourceId, sourceId)),
+    ),
+  ).toEqual([]);
+  expect(await ledgerRows(sourceId)).toEqual([]);
+});
 
 /** A record the ingestion boundary refuses: its identity cannot be stored. */
 const rejectedRecord = (n = 99): IngestionResult =>
@@ -243,6 +637,7 @@ const loseLease = async (sourceId: SafeId<"caseLawSource">): Promise<void> => {
 /** The tables a test makes unwritable. */
 const SERIALIZATION_FAULT_TABLES = {
   ledger: "case_law_ingestion_failures",
+  evidence: "case_law_ingestion_failure_evidence",
   decisions: "case_law_decisions",
 } as const;
 
@@ -322,7 +717,11 @@ const crawlCaller: Caller = {
     const nextCursor = `${sourceLease.source.syncCursor ?? "page"}+`;
     czNsAdapter.fetchPage = async () =>
       await Promise.resolve(
-        Result.ok({ decisions: [...decisions], nextCursor }),
+        Result.ok({
+          decisions: [...decisions],
+          publisherRequest: PUBLISHER_REQUEST.ANSWERED,
+          nextCursor,
+        }),
       );
     const run = await Result.tryPromise({
       try: async () =>
@@ -382,6 +781,301 @@ const prepared = (
   const batch = prepareCaseLawIngestionBatch({ decisions });
   return Result.isOk(batch) ? batch.value : panic(batch.error.message);
 };
+
+describe("crawl cancellation", () => {
+  test(
+    "cancelled decisions remain reachable on replay",
+    async () => {
+      await assertProperty(
+        "cancelled decisions remain reachable on replay",
+        fc.asyncProperty(fc.integer({ min: 3, max: 10 }), async (cancelAt) => {
+          const sourceId = await crawlSource();
+          const decisions = records(4);
+          const transfer = landingTransfer();
+          const drain = new AbortController();
+          const logs = installRecordingLogger();
+          let operations = 0;
+          const interruptedDb: ScopedDb = async (operation) => {
+            operations++;
+            if (operations === cancelAt) {
+              drain.abort();
+              throw new TypeError("operation interrupted");
+            }
+            return await scopedDb(operation);
+          };
+          czNsAdapter.fetchPage = async () =>
+            Result.ok({
+              decisions,
+              nextCursor: "next-page",
+              publisherRequest: PUBLISHER_REQUEST.ANSWERED,
+            });
+          const sourceLease = await leaseFor(sourceId);
+          try {
+            const result = await runIngestionPipeline({
+              source: sourceLease.source,
+              sourceLease,
+              scopedDb: interruptedDb,
+              corpus: transfer.corpus,
+              maxPages: 1,
+              cycle: { budgetMs: 60_000, abortEarlyOn: [drain.signal] },
+              acquireStoredTotalAdmission: async () => "held",
+            });
+            expect(drain.signal.aborted).toBe(true);
+            expect(result.stopKind).toBe(INGESTION_STOP_KIND.DEADLINE);
+            expect(result.pagesProcessed).toBe(0);
+            expect(result.nextCursor).toBe(sourceLease.source.syncCursor);
+            expect(await sourceCursor(sourceId)).toBe(
+              sourceLease.source.syncCursor,
+            );
+            expect(await ledgerRows(sourceId)).toEqual([]);
+            expect(
+              logs.records.filter(
+                ({ message }) =>
+                  message === "case_law.ingestion.decision_failed" ||
+                  message === "case_law.ingestion.failure_records_not_written",
+              ),
+            ).toEqual([]);
+          } finally {
+            await sourceLease.release();
+            logs.restore();
+          }
+          const replay = await crawlCaller.apply({
+            sourceId,
+            decisions,
+            corpus: transfer.corpus,
+          });
+          expect(replay.type).toBe("certified");
+          expect(
+            (await decisionRows(sourceId)).map(
+              ({ sourceDocumentId }) => sourceDocumentId,
+            ),
+          ).toEqual(
+            decisions.map(({ sourceDocumentId }) => sourceDocumentId ?? null),
+          );
+          expect(await ledgerRows(sourceId)).toEqual([]);
+        }),
+        { numRuns: 8 },
+      );
+    },
+    propertyTestTimeout(120_000),
+  );
+
+  test.each([1, 2])(
+    "certifies %i reported build failures only when every input was retained",
+    async (reported) => {
+      const sourceId = await crawlSource();
+      const sourceLease = await leaseFor(sourceId);
+      const input = await plCourtsFixture().buildDecision();
+      const failed = plainTextIngestionResult({
+        ...input,
+        sourceDocumentId: "failed-publisher-entry",
+        caseNumber: "{\\rtf1 invalid label}",
+        sourceRaw: "original publisher listing for a failed label",
+      });
+      expect(failed.country).toBe("POL");
+      expect(failed.plainTextOutcome.type).toBe("item_build_failed");
+      czNsAdapter.fetchPage = async () =>
+        Result.ok({
+          decisions: [failed],
+          itemBuildFailures: { type: "item_build_failed", count: reported },
+          nextCursor: "next-page",
+          publisherRequest: PUBLISHER_REQUEST.ANSWERED,
+        });
+      try {
+        const result = await runIngestionPipeline({
+          source: sourceLease.source,
+          sourceLease,
+          scopedDb,
+          corpus: landingTransfer().corpus,
+          maxPages: 1,
+          acquireStoredTotalAdmission: async () => "held",
+        });
+        const evidence = await db
+          .select()
+          .from(caseLawIngestionFailureEvidence)
+          .where(eq(caseLawIngestionFailureEvidence.sourceId, sourceId));
+        expect(evidence).toHaveLength(1);
+        expect(evidence.at(0)?.sourceDocumentId).toBe("failed-publisher-entry");
+        expect(evidence.at(0)?.errorType).toBe("PlainTextError");
+        expect(evidence.at(0)?.payload).toContain(
+          "original publisher listing for a failed label",
+        );
+        expect(await ledgerRows(sourceId)).toHaveLength(1);
+        expect(
+          await db
+            .select()
+            .from(caseLawDecisions)
+            .where(eq(caseLawDecisions.sourceId, sourceId)),
+        ).toEqual([]);
+        if (reported === 1) {
+          expect(result.haltReason).toBeNull();
+          expect(await sourceCursor(sourceId)).toBe("next-page");
+        } else {
+          expect(result.stopKind).toBe(INGESTION_STOP_KIND.ADAPTER_ERROR);
+          expect(result.haltReason).toContain(
+            "lack replayable per-item outcomes",
+          );
+          expect(await sourceCursor(sourceId)).toBe(
+            sourceLease.source.syncCursor,
+          );
+        }
+      } finally {
+        await sourceLease.release();
+      }
+    },
+  );
+
+  test("a mid-page decision allowance pauses durably and resumes the same page", async () => {
+    const sourceId = await crawlSource();
+    const sourceLease = await leaseFor(sourceId);
+    const decisions = records(3);
+    czNsAdapter.fetchPage = async () =>
+      Result.ok({
+        decisions,
+        nextCursor: "next-page",
+        publisherRequest: PUBLISHER_REQUEST.ANSWERED,
+      });
+    try {
+      const paused = await runIngestionPipeline({
+        source: sourceLease.source,
+        sourceLease,
+        scopedDb,
+        corpus: landingTransfer().corpus,
+        maxDecisions: 1,
+        maxPages: 1,
+        acquireStoredTotalAdmission: async () => "held",
+      });
+      expect(paused.outcome).toBe(CYCLE_OUTCOME.PAUSED);
+      expect(paused.pauseReason).toBe(
+        INGESTION_PAUSE_REASON.DECISION_ALLOWANCE_EXHAUSTED,
+      );
+      expect(paused.stopKind).toBeUndefined();
+      expect(paused.inserted).toBe(1);
+      expect(paused.pagesProcessed).toBe(0);
+      expect(paused.nextCursor).toBe(sourceLease.source.syncCursor);
+      expect(await sourceCursor(sourceId)).toBe(sourceLease.source.syncCursor);
+      expect(await ledgerRows(sourceId)).toEqual([]);
+      const resumed = await runIngestionPipeline({
+        source: sourceLease.source,
+        sourceLease,
+        scopedDb,
+        corpus: landingTransfer().corpus,
+        maxPages: 1,
+        acquireStoredTotalAdmission: async () => "held",
+      });
+      expect(resumed.outcome).toBe(CYCLE_OUTCOME.COMPLETED);
+      expect(await sourceCursor(sourceId)).toBe("next-page");
+      expect(
+        await db
+          .select()
+          .from(caseLawDecisions)
+          .where(eq(caseLawDecisions.sourceId, sourceId)),
+      ).toHaveLength(3);
+    } finally {
+      await sourceLease.release();
+    }
+  });
+
+  test("a decision allowance cannot mask a failed corpus write", async () => {
+    const sourceId = await crawlSource();
+    const sourceLease = await leaseFor(sourceId);
+    czNsAdapter.fetchPage = async () =>
+      Result.ok({
+        decisions: records(3),
+        nextCursor: "next-page",
+        publisherRequest: PUBLISHER_REQUEST.ANSWERED,
+      });
+    try {
+      const result = await runIngestionPipeline({
+        source: sourceLease.source,
+        sourceLease,
+        scopedDb,
+        corpus: failingTransfer(),
+        maxDecisions: 1,
+        maxPages: 1,
+        acquireStoredTotalAdmission: async () => "held",
+      });
+      expect(result.outcome).toBe(CYCLE_OUTCOME.FAILED);
+      expect(result.stopKind).toBe(INGESTION_STOP_KIND.INTERNAL_ERROR);
+      expect(result.pauseReason).toBeUndefined();
+      expect(result.s3UploadFailures).toBeGreaterThan(0);
+      expect(result.nextCursor).toBe(sourceLease.source.syncCursor);
+      expect(await sourceCursor(sourceId)).toBe(sourceLease.source.syncCursor);
+    } finally {
+      await sourceLease.release();
+    }
+  });
+
+  test("an admission pause holds the page without recording failures", async () => {
+    const sourceId = await crawlSource();
+    const sourceLease = await leaseFor(sourceId);
+    czNsAdapter.fetchPage = async () =>
+      Result.ok({
+        decisions: records(3),
+        nextCursor: "next-page",
+        publisherRequest: PUBLISHER_REQUEST.ANSWERED,
+      });
+    let batches = 0;
+    try {
+      const result = await runIngestionPipeline({
+        source: sourceLease.source,
+        sourceLease,
+        scopedDb,
+        corpus: landingTransfer().corpus,
+        batchRecordLimit: 1,
+        maxPages: 1,
+        acquireBatchAdmission: async () =>
+          ++batches === 1 ? "granted" : "paused",
+        acquireStoredTotalAdmission: async () => "held",
+      });
+      expect(result.stopKind).toBe(INGESTION_STOP_KIND.DEADLINE);
+      expect(result.inserted).toBe(1);
+      expect(await sourceCursor(sourceId)).toBe(sourceLease.source.syncCursor);
+      expect(await ledgerRows(sourceId)).toEqual([]);
+    } finally {
+      await sourceLease.release();
+    }
+  });
+
+  test("an operation error without cancellation records a decision failure", async () => {
+    const sourceId = await crawlSource();
+    const sourceLease = await leaseFor(sourceId);
+    const logs = installRecordingLogger();
+    let operations = 0;
+    const failedDb: ScopedDb = async (operation) => {
+      if (++operations === 3) {
+        throw new TypeError("operation interrupted");
+      }
+      return await scopedDb(operation);
+    };
+    czNsAdapter.fetchPage = async () =>
+      Result.ok({
+        decisions: records(1),
+        nextCursor: "next-page",
+        publisherRequest: PUBLISHER_REQUEST.ANSWERED,
+      });
+    try {
+      const result = await runIngestionPipeline({
+        source: sourceLease.source,
+        sourceLease,
+        scopedDb: failedDb,
+        corpus: landingTransfer().corpus,
+        maxPages: 1,
+        acquireStoredTotalAdmission: async () => "held",
+      });
+      expect(result.stopKind).not.toBe(INGESTION_STOP_KIND.DEADLINE);
+      expect(await ledgerRows(sourceId)).toHaveLength(1);
+      expect(
+        logs.records.filter(
+          ({ message }) => message === "case_law.ingestion.decision_failed",
+        ),
+      ).toHaveLength(1);
+    } finally {
+      await sourceLease.release();
+      logs.restore();
+    }
+  });
+});
 
 test("the registered batch clones and persists declared URL scalars and diagnostics without display-text decoding", async () => {
   const rootUrl = "https://example.test/?root=&amp;amp;&encoded=%26";
@@ -589,12 +1283,15 @@ const directCaller: Caller = {
   },
 };
 
+/** An asymmetric matcher standing in for each settled decision row. */
 const settledRows = (count: number) =>
-  Array.from({ length: count }, () =>
-    expect.objectContaining({
-      corpusMirrorStatus: CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED,
-    }),
-  );
+  Array.from({ length: count }, () => {
+    const row: Awaited<ReturnType<typeof decisionRows>>[number] =
+      expect.objectContaining({
+        corpusMirrorStatus: CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED,
+      });
+    return row;
+  });
 
 describe.each([crawlCaller, directCaller])("$name", (caller) => {
   test("settles every record, and applying them again is a fixed point", async () => {
@@ -818,11 +1515,6 @@ describe("source-rejected batch records", () => {
         errorMessage: rejection.message,
         cursor: `${rejection.recordKey}:${rejection.recordHash}`,
       },
-      {
-        errorType: rejection.reason,
-        errorMessage: rejection.message,
-        cursor: `${rejection.recordKey}:${rejection.recordHash}`,
-      },
     ]);
   });
 
@@ -860,7 +1552,7 @@ describe("source-rejected batch records", () => {
 
     const anonymous = failure(undefined);
     expect(await write([anonymous, failure("import:m:1")])).toEqual({
-      type: "written",
+      type: "unreplayable",
     });
 
     // An identity-less row keeps the plain insert: its own conflict is not
@@ -879,7 +1571,7 @@ describe("source-rejected batch records", () => {
         failure("import:m:1"),
         failure("import:m:2"),
       ]),
-    ).toEqual({ type: "written" });
+    ).toEqual({ type: "unreplayable" });
     expect((await rows()).toSorted()).toEqual([
       "anonymous",
       "anonymous",
@@ -944,6 +1636,32 @@ describe("source-rejected batch records", () => {
     }
   });
 
+  test("live decision failures derive one bounded ledger identity across replays", async () => {
+    const sourceId = await recordSource();
+    const decision = rejectedRecord(92);
+    const first = prepareCaseLawIngestionBatch({ decisions: [decision] });
+    const replay = prepareCaseLawIngestionBatch({ decisions: [decision] });
+    if (Result.isError(first) || Result.isError(replay)) {
+      throw new TypeError("fixture batch refused");
+    }
+    const { corpus } = landingTransfer();
+    for (const batch of [first.value, replay.value]) {
+      const applied = await applyPrepared({ sourceId, batch, corpus });
+      expect(Result.isError(applied) ? applied.error.reason : null).toBe(
+        CASE_LAW_BATCH_FAILURE.RECORD_REJECTED,
+      );
+    }
+
+    // The replay lands on the first run's row: one ledger row, keyed by the
+    // captured input's hash because the publisher id is over its bound.
+    const rows = await db
+      .select({ recordIdentity: caseLawIngestionFailures.recordIdentity })
+      .from(caseLawIngestionFailures)
+      .where(eq(caseLawIngestionFailures.sourceId, sourceId));
+    expect(rows).toHaveLength(1);
+    expect(rows.at(0)?.recordIdentity).toMatch(/^input:[0-9a-f]{64}$/u);
+  });
+
   test("unwritten failures outrank rejected records, with no decision identity", async () => {
     const sourceId = await recordSource();
     const batch = prepareCaseLawIngestionBatch({
@@ -1004,7 +1722,7 @@ describe("source-rejected batch records", () => {
     expect(await decisionRows(sourceId)).toHaveLength(1);
   });
 
-  test("ten consecutive source rejections stop before later records", async () => {
+  test("consecutive source rejections do not prevent later records", async () => {
     const sourceId = await recordSource();
     const batch = prepareCaseLawIngestionBatch({
       records: [
@@ -1021,10 +1739,10 @@ describe("source-rejected batch records", () => {
       corpus: landingTransfer().corpus,
     });
     if (Result.isOk(applied)) {
-      throw new Error("expected a failure streak");
+      throw new Error("expected recorded source rejections");
     }
-    expect(applied.error.reason).toBe(CASE_LAW_BATCH_FAILURE.FAILURE_STREAK);
-    expect(applied.error.unsettled).toBe(11);
+    expect(applied.error.reason).toBe(CASE_LAW_BATCH_FAILURE.RECORD_REJECTED);
+    expect(applied.error.unsettled).toBe(10);
     expect(applied.error.records.map(({ index }) => index)).toEqual(
       Array.from({ length: 10 }, (_, index) => index),
     );
@@ -1032,7 +1750,7 @@ describe("source-rejected batch records", () => {
       Array.from({ length: 10 }, () => CASE_LAW_BATCH_FAILURE.RECORD_REJECTED),
     );
     expect(await ledgerRows(sourceId)).toHaveLength(10);
-    expect(await decisionRows(sourceId)).toEqual([]);
+    expect(await decisionRows(sourceId)).toEqual(settledRows(1));
   });
 });
 
@@ -1153,7 +1871,8 @@ describe("the batch bounds", () => {
   });
 
   test("a binary payload weighs its byte length, as a Buffer or a Uint8Array", () => {
-    fc.assert(
+    assertProperty(
+      "a binary payload weighs its byte length, as a Buffer or a Uint8Array",
       fc.property(fc.uint8Array({ maxLength: 4096 }), (bytes) => {
         const asBuffer = Buffer.from(bytes);
         // The fixture reaches the fault: a Buffer serializes as a JSON array.
@@ -1176,7 +1895,7 @@ describe("the batch bounds", () => {
           measured(new Uint8Array()) + 2 * bytes.length,
         );
       }),
-      propertyConfig(),
+      { numRuns: 100 },
     );
 
     const payload = Buffer.alloc(8 * 1024 * 1024, 255);
@@ -1261,7 +1980,7 @@ describe("the batch bounds", () => {
 });
 
 describe("why a batch is not certified", () => {
-  test("a streak of rejections whose ledger rows are not written names the ledger", async () => {
+  test("rejections whose ledger rows are not written name the ledger", async () => {
     const decisions = Array.from({ length: 10 }, (_, n) =>
       rejectedRecord(90 + n),
     );
@@ -1285,7 +2004,7 @@ describe("why a batch is not certified", () => {
     );
     expect(await ledgerRows(recordsSourceId)).toEqual([]);
 
-    // The crawl keeps its own precedence: the streak names the halt.
+    // A transient ledger write failure still holds the cursor for retry.
     const crawlSourceId = await crawlSource();
     const held = await withUnwritableLedger(
       async () =>
@@ -1293,7 +2012,7 @@ describe("why a batch is not certified", () => {
     );
     expect(held).toEqual({
       type: "held",
-      detail: expect.stringMatching(/^10 consecutive failures;/u),
+      detail: "10 failure record(s) not written; cursor held for retry",
     });
     expect(await sourceCursor(crawlSourceId)).toBeNull();
   });
@@ -1316,8 +2035,10 @@ describe("why a batch is not certified", () => {
       throw new Error("expected no receipt");
     }
     expect(applied.error.reason).toBe(CASE_LAW_BATCH_FAILURE.TRANSIENT);
+    // The first transient failure stops the batch: the second record is
+    // unreached, never called rejected.
+    expect(applied.error.unsettled).toBe(2);
     expect(applied.error.records.map(({ reason }) => reason)).toEqual([
-      CASE_LAW_BATCH_FAILURE.TRANSIENT,
       CASE_LAW_BATCH_FAILURE.TRANSIENT,
     ]);
 
@@ -1329,19 +2050,26 @@ describe("why a batch is not certified", () => {
     expect(Result.isOk(replayed) ? replayed.value.applied : null).toBe(2);
     expect(await decisionRows(recordsSourceId)).toEqual(settledRows(2));
 
-    // The crawl's policy is unchanged: the ledger holds both, and the page
-    // is stepped over.
+    // The crawl holds its cursor too, and reads the page again.
     const crawlSourceId = await crawlSource();
     const crawled = await withSerializationFault(
       "decisions",
       async () =>
         await crawlCaller.apply({ sourceId: crawlSourceId, decisions, corpus }),
     );
-    expect(crawled.type).toBe("certified");
-    expect(await ledgerRows(crawlSourceId)).toHaveLength(2);
+    expect(crawled).toEqual({
+      type: "held",
+      detail: expect.stringContaining("cursor held for retry"),
+    });
+    expect(await sourceCursor(crawlSourceId)).toBeNull();
+    expect(
+      (await crawlCaller.apply({ sourceId: crawlSourceId, decisions, corpus }))
+        .type,
+    ).toBe("certified");
+    expect(await decisionRows(crawlSourceId)).toEqual(settledRows(2));
   });
 
-  test("records a rejection streak did not reach are not called rejected", async () => {
+  test("rejection runs still reach later valid records", async () => {
     const sourceId = await recordSource();
     const decisions = [
       ...Array.from({ length: 10 }, (_, n) => rejectedRecord(70 + n)),
@@ -1358,10 +2086,10 @@ describe("why a batch is not certified", () => {
     if (Result.isOk(applied)) {
       throw new Error("expected no receipt");
     }
-    expect(applied.error.reason).toBe(CASE_LAW_BATCH_FAILURE.FAILURE_STREAK);
-    expect(applied.error.unsettled).toBe(12);
+    expect(applied.error.reason).toBe(CASE_LAW_BATCH_FAILURE.RECORD_REJECTED);
+    expect(applied.error.unsettled).toBe(10);
     expect(await ledgerRows(sourceId)).toHaveLength(10);
-    expect(await decisionRows(sourceId)).toEqual([]);
+    expect(await decisionRows(sourceId)).toEqual(settledRows(2));
 
     // A streak that ends on the last record leaves nothing unreached.
     const rejectedOnlySourceId = await recordSource();
@@ -1422,5 +2150,69 @@ describe("why a batch is not certified", () => {
       inserted: true,
       reason: PROCESS_DECISION_RETRY_REASON.CORPUS_WRITE,
     });
+  });
+});
+
+describe("a decision a writer cannot project into every generation", () => {
+  test("holds the crawl's cursor, and lands when the page is read again", async () => {
+    const known = {
+      family: "case_law",
+      generation: "case_law_v5",
+      cluster: "q09",
+      manifestDigest: corpusIndexManifestDigest(
+        CORPUS_INDEX_MANIFESTS.case_law_v5,
+      ),
+      status: "building",
+    } as const;
+    // A generation a newer release registered: this process has no manifest.
+    const unknown = {
+      family: "case_law",
+      generation: "case_law_v99",
+      cluster: "q09",
+      manifestDigest: "f".repeat(64),
+      status: "building",
+    } as const;
+    await db.insert(corpusIndexGenerations).values(known);
+    try {
+      const sourceId = await crawlSource();
+      const decisions = [record(1)];
+      const { corpus } = landingTransfer();
+      expect(
+        (await crawlCaller.apply({ sourceId, decisions, corpus })).type,
+      ).toBe("certified");
+      const cursor = await sourceCursor(sourceId);
+      const settled = await decisionRows(sourceId);
+
+      await db.insert(corpusIndexGenerations).values(unknown);
+      const held = await crawlCaller.apply({ sourceId, decisions, corpus });
+
+      expect(held).toEqual({
+        type: "held",
+        detail: expect.stringContaining(
+          "cursor held for retry: [CorpusIndexGenerationUnknownError]",
+        ),
+      });
+      expect(await sourceCursor(sourceId)).toBe(cursor);
+      expect(await decisionRows(sourceId)).toEqual(settled);
+
+      // Once no writer is asked for a generation it does not know, the same
+      // page is read again and the existing row settles as before.
+      await db
+        .update(corpusIndexGenerations)
+        .set({ status: "retired" })
+        .where(eq(corpusIndexGenerations.generation, unknown.generation));
+      expect(
+        (await crawlCaller.apply({ sourceId, decisions, corpus })).type,
+      ).toBe("certified");
+      expect(await sourceCursor(sourceId)).not.toBe(cursor);
+      expect(await decisionRows(sourceId)).toEqual(settledRows(1));
+    } finally {
+      await db
+        .delete(corpusIndexProjectionStates)
+        .where(eq(corpusIndexProjectionStates.family, "case_law"));
+      await db
+        .delete(corpusIndexGenerations)
+        .where(eq(corpusIndexGenerations.family, "case_law"));
+    }
   });
 });

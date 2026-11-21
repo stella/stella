@@ -1,9 +1,5 @@
 import { useMemo, useRef, useState } from "react";
 
-import {
-  draggable,
-  dropTargetForElements,
-} from "@atlaskit/pragmatic-drag-and-drop/adapter/element-adapter";
 import { combine } from "@atlaskit/pragmatic-drag-and-drop/utils/combine";
 import { useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
@@ -15,6 +11,7 @@ import {
   Dialog,
   DialogDescription,
   DialogFooter,
+  DialogFormState,
   DialogHeader,
   DialogPanel,
   DialogPopup,
@@ -24,7 +21,6 @@ import { DirectionalIcon } from "@stll/ui/directional-icon";
 import {
   ChevronDownIcon,
   ChevronRightIcon,
-  LoaderCircleIcon,
   RotateCcwIcon,
   Rows3Icon,
   SparklesIcon,
@@ -32,9 +28,11 @@ import {
   TriangleAlertIcon,
 } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
+import { Loader } from "@stll/ui/loader";
 import { Skeleton } from "@stll/ui/skeleton";
 import { Textarea } from "@stll/ui/textarea";
 import { stellaToast } from "@stll/ui/toast";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import {
@@ -46,12 +44,17 @@ import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useFormatter } from "@/i18n/formatting-context";
 import { useI18nStore } from "@/i18n/i18n-store";
-import { userStorageKey } from "@/lib/account/user-scoped-storage";
+import { useUserStorageState } from "@/lib/account/use-user-storage-state";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
-import { toAPIError, unwrapEden } from "@/lib/errors/api";
+import {
+  draggable,
+  dropTargetForElements,
+} from "@/lib/drag-and-drop/element-registration";
+import { toAPIError, unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
 import { toSafeId } from "@/lib/safe-id";
 import { workspacesKeys } from "@/lib/workspaces/queries";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities";
@@ -62,19 +65,22 @@ import {
 } from "@/routes/_protected.workspaces/$workspaceId/-components/import-organizer.logic";
 import type { FileNameSuggestion } from "@/routes/_protected.workspaces/$workspaceId/-components/import-organizer.logic";
 
-export type ExistingImportFolder = {
+type ExistingImportFolder = {
   entityId: string;
   name: string;
   path: string;
   parentId: string | null;
 };
 
-export type ExistingOrganizerFile = {
+type ExistingOrganizerFile = {
   entityId: string;
   originalName: string;
   parentId: string | null;
   mimeType: string | null;
 };
+
+const decodeInstructions = (raw: string | null) => raw ?? "";
+const encodeInstructions = (value: string) => value;
 
 type ExistingFileOrganizerDialogProps = {
   workspaceId: string;
@@ -125,20 +131,19 @@ export const ExistingFileOrganizerDialog = ({
   open,
   onOpenChange,
 }: ExistingFileOrganizerDialogProps) => {
+  const submit = useIdempotentSubmit();
   const t = useTranslations();
   // organize-suggestions caps locale at 16 chars; send the base language.
   const locale = useI18nStore((s) => s.loadedLang);
   const queryClient = useQueryClient();
   const analytics = useAnalytics();
-  const userInstructionsKey = userStorageKey(
-    `stella.organize-suggestions.user-instructions.${workspaceId}`,
-  );
-  const [userInstructions, setUserInstructions] = useState(() => {
-    if (typeof window === "undefined") {
-      return "";
-    }
-    return window.localStorage.getItem(userInstructionsKey) ?? "";
-  });
+  const { value: userInstructions, setValue: setUserInstructions } =
+    useUserStorageState({
+      baseKey: `stella.organize-suggestions.user-instructions.${workspaceId}`,
+      area: "local",
+      decode: decodeInstructions,
+      encode: encodeInstructions,
+    });
   const [showInstructions, setShowInstructions] = useState(false);
   const getSuggestionRequestContext = useLatestCallback(() => ({
     locale,
@@ -163,14 +168,17 @@ export const ExistingFileOrganizerDialog = ({
     suggestionStatus !== "generating" &&
     (rows.length > 0 || selectedDeleteFolders.length > 0);
 
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing, without this memo boundary the React Compiler does not cache this value
   const folderByEntityId = useMemo(
     () => new Map(existingFolders.map((folder) => [folder.entityId, folder])),
     [existingFolders],
   );
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing, without this memo boundary the React Compiler does not cache this value
   const fileByEntityId = useMemo(
     () => new Map(files.map((file) => [file.entityId, file])),
     [files],
   );
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing, without this memo boundary the React Compiler does not cache this value
   const initialRows = useMemo(
     () =>
       buildFileNameSuggestions(
@@ -197,44 +205,32 @@ export const ExistingFileOrganizerDialog = ({
       }),
     [files, fileByEntityId, folderByEntityId],
   );
-  const requestKey = useMemo(
-    () =>
-      JSON.stringify({
-        existingFolders: existingFolders.map((folder) => ({
-          id: folder.entityId,
-          name: folder.name,
-          path: folder.path,
-          parentId: folder.parentId,
-        })),
-        files: files.map((file) => ({
-          id: file.entityId,
-          name: file.originalName,
-          parentId: file.parentId,
-        })),
-      }),
-    [existingFolders, files],
-  );
+  const requestKey = JSON.stringify({
+    existingFolders: existingFolders.map((folder) => ({
+      id: folder.entityId,
+      name: folder.name,
+      path: folder.path,
+      parentId: folder.parentId,
+    })),
+    files: files.map((file) => ({
+      id: file.entityId,
+      name: file.originalName,
+      parentId: file.parentId,
+    })),
+  });
   const getSuggestionRequestState = useLatestCallback(() => ({
     open,
     requestKey,
   }));
-  const suggestionRequestFolders = useMemo(
-    () =>
-      existingFolders.map((folder) => ({
-        entityId: toSafeId<"entity">(folder.entityId),
-        name: folder.name,
-        path: folder.path,
-      })),
-    [existingFolders],
-  );
-  const suggestionRequestFiles = useMemo(
-    () =>
-      files.map((file) => ({
-        entityId: toSafeId<"entity">(file.entityId),
-        originalName: file.originalName,
-      })),
-    [files],
-  );
+  const suggestionRequestFolders = existingFolders.map((folder) => ({
+    entityId: toSafeId<"entity">(folder.entityId),
+    name: folder.name,
+    path: folder.path,
+  }));
+  const suggestionRequestFiles = files.map((file) => ({
+    entityId: toSafeId<"entity">(file.entityId),
+    originalName: file.originalName,
+  }));
 
   // The toolbar keeps this dialog mounted and only toggles `open`, so reset the
   // editable rows on each open. Cached AI results for the same files are reshown
@@ -365,7 +361,7 @@ export const ExistingFileOrganizerDialog = ({
     );
   };
 
-  const summary = useMemo<RowChangeSummary>(() => {
+  const summary: RowChangeSummary = (() => {
     // Move and rename are counted independently: a file that both
     // moves and renames increments both "moved" and "renamed". Only
     // files that neither move nor rename count as "unchanged". The
@@ -400,7 +396,7 @@ export const ExistingFileOrganizerDialog = ({
       renamedCount: renamed,
       unchangedCount: unchanged,
     };
-  }, [fileByEntityId, folderByEntityId, rows]);
+  })();
 
   const handleApply = () => {
     const rowsSnapshot = rows;
@@ -412,11 +408,11 @@ export const ExistingFileOrganizerDialog = ({
     const toastId = stellaToast.add({
       type: "loading",
       title: t("workspaces.importOrganizer.applying"),
-      timeout: 0,
     });
 
     const run = async () => {
       const folderIds = await ensureFolders({
+        submit,
         workspaceId,
         rows: rowsSnapshot,
         existingFolders: existingFoldersSnapshot,
@@ -511,15 +507,19 @@ export const ExistingFileOrganizerDialog = ({
         stellaToast.update(toastId, {
           type: "success",
           title: t("workspaces.importOrganizer.organized"),
-          timeout: undefined,
         });
         return;
       })
       .catch((error: unknown) => {
-        analytics.captureError(error);
+        analytics.captureError(error, {
+          fingerprintKey: "ExistingFileOrganizerDialog.handleApply:failure",
+          scope: {
+            type: "handler",
+            handlerId: "ExistingFileOrganizerDialog.handleApply:failure",
+          },
+        });
         notifyUserError(error, t("workspaces.importOrganizer.failed"), {
           toastId,
-          timeout: undefined,
         });
       });
   };
@@ -546,21 +546,23 @@ export const ExistingFileOrganizerDialog = ({
           trimmedInstructions,
         ],
         queryFn: async ({ signal }) => {
-          const response = await api
-            .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
-            ["organize-suggestions"].post(
-              {
-                existingFolders: suggestionRequestFolders,
-                files: suggestionRequestFiles,
-                locale: requestLocale,
-                ...(trimmedInstructions.length > 0
-                  ? { userInstructions: trimmedInstructions }
-                  : {}),
-              },
-              { fetch: { signal } },
-            );
+          const entitiesApi = api.entities({
+            workspaceId: toSafeId<"workspace">(workspaceId),
+          });
 
-          return unwrapEden(response);
+          const response = await entitiesApi["organize-suggestions"].post(
+            {
+              existingFolders: suggestionRequestFolders,
+              files: suggestionRequestFiles,
+              locale: requestLocale,
+              ...(trimmedInstructions.length > 0
+                ? { userInstructions: trimmedInstructions }
+                : {}),
+            },
+            { fetch: { signal } },
+          );
+
+          return unwrapApiResponse(response);
         },
       });
 
@@ -616,7 +618,14 @@ export const ExistingFileOrganizerDialog = ({
       ) {
         return;
       }
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey:
+          "ExistingFileOrganizerDialog.requestAiSuggestions:failure",
+        scope: {
+          type: "handler",
+          handlerId: "ExistingFileOrganizerDialog.requestAiSuggestions:failure",
+        },
+      });
       setSuggestionStatus("failed");
     }
   };
@@ -626,6 +635,17 @@ export const ExistingFileOrganizerDialog = ({
   return (
     <Dialog onOpenChange={onOpenChange} open={open}>
       <DialogPopup className="max-w-3xl">
+        <DialogFormState
+          dirty={
+            (rows.length > 0 &&
+              JSON.stringify(rows) !== JSON.stringify(initialRows)) ||
+            selectedDeleteFolders.length > 0
+          }
+          onDiscard={() => {
+            setRows(initialRows);
+            setDeleteFolders([]);
+          }}
+        />
         <DialogHeader>
           <DialogTitle>{t("workspaces.importOrganizer.title")}</DialogTitle>
           <DialogDescription>
@@ -642,12 +662,7 @@ export const ExistingFileOrganizerDialog = ({
           <UserInstructionsSection
             disabled={false}
             expanded={showInstructions}
-            onChange={(value) => {
-              setUserInstructions(value);
-              if (typeof window !== "undefined") {
-                window.localStorage.setItem(userInstructionsKey, value);
-              }
-            }}
+            onChange={setUserInstructions}
             onRegenerate={() => {
               detached(
                 requestAiSuggestions(),
@@ -702,6 +717,11 @@ export const ExistingFileOrganizerDialog = ({
             <Button
               className="me-auto"
               disabled={isGeneratingSuggestions || rows.length === 0}
+              disabledReason={
+                isGeneratingSuggestions
+                  ? t("common.loading")
+                  : t("workspaces.importOrganizer.noFilesToOrganize")
+              }
               onClick={() => {
                 detached(
                   requestAiSuggestions(),
@@ -712,7 +732,7 @@ export const ExistingFileOrganizerDialog = ({
               variant="outline"
             >
               {isGeneratingSuggestions ? (
-                <LoaderCircleIcon className="animate-spin" />
+                <Loader label={t("common.loading")} size="sm" />
               ) : (
                 <SparklesIcon />
               )}
@@ -721,6 +741,11 @@ export const ExistingFileOrganizerDialog = ({
           )}
           <Button
             disabled={isGeneratingSuggestions || !canApply}
+            disabledReason={
+              isGeneratingSuggestions
+                ? t("common.loading")
+                : t("workspaces.importOrganizer.noChangesToApply")
+            }
             onClick={handleApply}
             type="button"
           >
@@ -744,8 +769,12 @@ const SummaryBar = ({ isGenerating, summary }: SummaryBarProps) => {
   return (
     <div className="bg-muted/40 mb-3 flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-md border px-3 py-2 text-sm">
       {isGenerating ? (
-        <span className="text-muted-foreground flex items-center gap-2">
-          <LoaderCircleIcon className="size-3.5 animate-spin" />
+        <span
+          aria-busy="true"
+          className="text-muted-foreground flex items-center gap-2"
+          role="status"
+        >
+          <Loader className="size-3.5" size="sm" variant="decorative" />
           {t("workspaces.importOrganizer.generating")}
         </span>
       ) : (
@@ -823,32 +852,35 @@ const UserInstructionsSection = ({
   return (
     <div className="mb-3 rounded-md border">
       <div className="flex items-center gap-2 px-3 py-2 text-sm">
-        <button
+        <Button
           aria-expanded={expanded}
-          className="flex min-w-0 flex-1 items-center gap-2 text-start"
+          className="min-w-0 flex-1"
           onClick={onToggle}
-          type="button"
+          variant="plain"
         >
-          {expanded ? (
-            <ChevronDownIcon className="text-muted-foreground size-3.5 shrink-0" />
-          ) : (
-            <DirectionalIcon
-              className="text-muted-foreground size-3.5 shrink-0"
-              icon={ChevronRightIcon}
-            />
-          )}
-          <span className="shrink-0 font-medium">
-            {t("workspaces.importOrganizer.instructionsTitle")}
-          </span>
-          {!expanded && (
-            <span className="text-muted-foreground truncate text-xs">
-              {summary}
+          <span className="flex w-full min-w-0 items-center gap-2">
+            {expanded ? (
+              <ChevronDownIcon className="text-muted-foreground size-3.5 shrink-0" />
+            ) : (
+              <DirectionalIcon
+                className="text-muted-foreground size-3.5 shrink-0"
+                icon={ChevronRightIcon}
+              />
+            )}
+            <span className="shrink-0 font-medium">
+              {t("workspaces.importOrganizer.instructionsTitle")}
             </span>
-          )}
-        </button>
+            {!expanded && (
+              <TruncatedText className="text-muted-foreground text-xs">
+                {summary}
+              </TruncatedText>
+            )}
+          </span>
+        </Button>
         {expanded && (
           <Button
             disabled={disabled}
+            disabledReason={t("common.loading")}
             onClick={onRegenerate}
             size="xs"
             type="button"
@@ -894,6 +926,7 @@ const FailureBanner = ({ disabled, onRetry }: FailureBannerProps) => {
       </div>
       <Button
         disabled={disabled}
+        disabledReason={t("common.loading")}
         onClick={onRetry}
         size="xs"
         type="button"
@@ -978,6 +1011,7 @@ const OrganizerTreePreview = ({
 }: OrganizerTreePreviewProps) => {
   const t = useTranslations();
   const locale = useI18nStore((s) => s.loadedLang);
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing, without this memo boundary the React Compiler does not cache this value
   const root = useMemo(() => buildOrganizerTree(rows, locale), [rows, locale]);
   const containerRef = useRef<HTMLDivElement>(null);
   const [isRootOver, setIsRootOver] = useState(false);
@@ -1167,23 +1201,29 @@ const OrganizerFolderNode = ({
         )}
         ref={headerRef}
       >
-        <button
-          aria-label={
-            isExpanded
-              ? t("workspaces.importOrganizer.collapseFolder")
-              : t("workspaces.importOrganizer.expandFolder")
-          }
-          className="text-muted-foreground hover:text-foreground flex size-4 shrink-0 items-center justify-center"
-          disabled={!hasChildren}
-          onClick={() => setIsExpanded((prev) => !prev)}
-          type="button"
-        >
-          {isExpanded ? (
-            <ChevronDownIcon className="size-3.5" />
-          ) : (
-            <DirectionalIcon className="size-3.5" icon={ChevronRightIcon} />
-          )}
-        </button>
+        {hasChildren ? (
+          <Button
+            aria-label={
+              isExpanded
+                ? t("workspaces.importOrganizer.collapseFolder")
+                : t("workspaces.importOrganizer.expandFolder")
+            }
+            className="shrink-0"
+            onClick={() => setIsExpanded((prev) => !prev)}
+            size="icon-xs"
+            variant="muted"
+          >
+            {isExpanded ? (
+              <ChevronDownIcon className="size-3.5" />
+            ) : (
+              <DirectionalIcon className="size-3.5" icon={ChevronRightIcon} />
+            )}
+          </Button>
+        ) : (
+          // A leaf folder has nothing to expand: keep the toggle's column so
+          // names line up, without a focusable control that does nothing.
+          <span aria-hidden="true" className="size-7 shrink-0 sm:size-6" />
+        )}
         <div
           className={cn(
             "flex shrink-0 items-center",
@@ -1207,13 +1247,15 @@ const OrganizerFolderNode = ({
             value={folder.name}
           />
         ) : (
-          <button
-            className="hover:bg-muted/40 truncate rounded-sm px-1 text-start"
+          <Button
+            className="min-w-0 shrink"
             onClick={() => setIsEditing(true)}
-            type="button"
+            variant="plain"
           >
-            {folder.name}
-          </button>
+            <TruncatedText className="hover:bg-muted/40 rounded-sm px-1 font-medium">
+              {folder.name}
+            </TruncatedText>
+          </Button>
         )}
         <span className="text-muted-foreground shrink-0 text-xs tabular-nums">
           {countFilesInFolder(folder)}
@@ -1316,9 +1358,12 @@ const OrganizerFileNode = ({
           value={row.suggestedName}
         />
         {secondaryParts.length > 0 && (
-          <p className="text-muted-foreground truncate ps-3 text-xs">
+          <TruncatedText
+            className="text-muted-foreground ps-3 text-xs"
+            render={<p />}
+          >
             {secondaryParts.join(" · ")}
-          </p>
+          </TruncatedText>
         )}
       </div>
     </li>
@@ -1392,33 +1437,35 @@ const DeleteFoldersSection = ({
 
   return (
     <div className="mt-3 rounded-md border">
-      <button
+      <Button
         aria-expanded={expanded}
-        className="flex w-full items-center gap-2 px-3 py-2 text-sm"
+        className="block w-full"
         onClick={onToggle}
-        type="button"
+        variant="plain"
       >
-        {expanded ? (
-          <ChevronDownIcon className="text-muted-foreground size-3.5" />
-        ) : (
-          <DirectionalIcon
-            className="text-muted-foreground size-3.5"
-            icon={ChevronRightIcon}
-          />
-        )}
-        <Trash2Icon className="text-muted-foreground size-4" />
-        <span className="font-medium">
-          {t("workspaces.importOrganizer.emptyFoldersToDelete", {
-            count: folders.length,
-          })}
+        <span className="flex w-full items-center gap-2 px-3 py-2 text-sm">
+          {expanded ? (
+            <ChevronDownIcon className="text-muted-foreground size-3.5" />
+          ) : (
+            <DirectionalIcon
+              className="text-muted-foreground size-3.5"
+              icon={ChevronRightIcon}
+            />
+          )}
+          <Trash2Icon className="text-muted-foreground size-4" />
+          <span className="font-medium">
+            {t("workspaces.importOrganizer.emptyFoldersToDelete", {
+              count: folders.length,
+            })}
+          </span>
+          <span className="text-muted-foreground ms-auto text-xs tabular-nums">
+            {t("workspaces.importOrganizer.selectedOfTotal", {
+              selected: selectedCount,
+              total: folders.length,
+            })}
+          </span>
         </span>
-        <span className="text-muted-foreground ms-auto text-xs tabular-nums">
-          {t("workspaces.importOrganizer.selectedOfTotal", {
-            selected: selectedCount,
-            total: folders.length,
-          })}
-        </span>
-      </button>
+      </Button>
       {expanded && (
         <ul className="border-t">
           {folders.map((folder) => (
@@ -1435,7 +1482,9 @@ const DeleteFoldersSection = ({
                 }
               />
               <div className="min-w-0 flex-1">
-                <p className="truncate font-medium">{folder.folderPath}</p>
+                <TruncatedText className="font-medium" render={<p />}>
+                  {folder.folderPath}
+                </TruncatedText>
                 <p className="text-muted-foreground text-xs">{folder.reason}</p>
               </div>
             </li>
@@ -1509,6 +1558,7 @@ const sortFolderNode = (node: FolderPreviewNode, locale: string): void => {
 };
 
 type EnsureFoldersOptions = {
+  submit: ReturnType<typeof useIdempotentSubmit>;
   workspaceId: string;
   rows: readonly FileNameSuggestion[];
   existingFolders: readonly ExistingImportFolder[];
@@ -1522,6 +1572,7 @@ type EnsureFoldersOptions = {
 // keeps the user's existing structure intact, and an empty path means
 // "place at workspace root".
 const ensureFolders = async ({
+  submit,
   workspaceId,
   rows,
   existingFolders,
@@ -1557,16 +1608,20 @@ const ensureFolders = async ({
 
       const parentSafeId =
         currentParentId === null ? null : toSafeId<"entity">(currentParentId);
-      // oxlint-disable-next-line no-network-await-in-loop/no-network-await-in-loop -- each folder is created under the id the previous iteration returned
-      const response = await api
-        .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
-        .put({
+      const response = await submit.run({
+        operation: `organizer-folder:${workspaceId}:${pathKey}`,
+        body: {
           kind: "folder",
           name: segment,
           parentId: parentSafeId,
-        });
+        } as const,
+        send: async (body) =>
+          api
+            .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
+            .put(body),
+      });
 
-      const newEntityId: string = unwrapEden(response).entityId;
+      const newEntityId: string = unwrapApiResponse(response).entityId;
       currentParentId = newEntityId;
       knownFolders.set(key, newEntityId);
       folderIds.set(pathKey, newEntityId);

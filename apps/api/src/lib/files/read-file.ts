@@ -1,141 +1,163 @@
-import { and, eq, isNull } from "drizzle-orm";
-import { status } from "elysia";
+import { panic, Result } from "better-result";
+
+import {
+  buildVersionedApiUrl,
+  PREVIEW_UNAVAILABLE_ERROR_CODE,
+} from "@stll/api-contract";
+import { Temporal } from "@stll/time";
 
 import type { ScopedDb } from "@/api/db/safe-db";
-import { entities, entityVersions, fields } from "@/api/db/schema";
+import type { entities, entityVersions, fields } from "@/api/db/schema";
+import { env } from "@/api/env";
+import { status } from "@/api/http/status";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
-import { auditedPresignDownload } from "@/api/lib/audited-download";
+import {
+  CONTENT_DELIVERY_AUDIT_ACTION,
+  type ContentDisposition,
+} from "@/api/lib/audited-download";
 import type { SafeId } from "@/api/lib/branded-types";
 import { isStampableDocx } from "@/api/lib/docx-stamp";
+import { markContentDeliveryIntent } from "@/api/lib/files/content-delivery";
+import {
+  createFileContentGrant,
+  type FileContentPurpose,
+} from "@/api/lib/files/file-content-grant";
 import { isNativelyRenderableMimeType } from "@/api/lib/files/gotenberg";
+import { lockLiveVersionField } from "@/api/lib/files/live-version-field";
+import { openWithinDeadline } from "@/api/lib/files/storage-open-deadline";
 import { createFileKey } from "@/api/lib/files/utils";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observedStatus } from "@/api/lib/observability/server-error-answer";
+import { openS3ObjectStreamWithSignal } from "@/api/lib/s3";
+import type { SignedDownloadSource } from "@/api/lib/s3-presign";
+import { sanitizeFilename } from "@/api/lib/sanitize-filename";
+import { secureDocumentResponse } from "@/api/lib/secure-document-response";
+import { issueSessionBoundCredentialTtl } from "@/api/lib/synthetic-principal/credential-policy";
+import type { SyntheticSessionAuthorityReader } from "@/api/lib/synthetic-principal/session-authority";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 
-export const FILE_READ_URL_EXPIRY_SECONDS = 15 * 60;
+const STORED_FILE_CONTENT_UNREADABLE = failureSink({
+  event: "files.content_grant_unreadable",
+  expected: [],
+});
 
-type FilePurpose = "download" | "display" | "native-display";
+export const FILE_READ_URL_EXPIRY_SECONDS = 15 * 60;
+const FILE_READ_STORAGE_TIMEOUT_MS = 30_000;
+const refuseBackgroundSessionAuthority: SyntheticSessionAuthorityReader =
+  async () => await Promise.resolve(null);
+
+const previewUnavailable = () =>
+  status(400, {
+    code: PREVIEW_UNAVAILABLE_ERROR_CODE,
+    message: "This file has no preview. Download it instead.",
+  });
 
 type ReadFileHandlerProps = {
+  source: SignedDownloadSource;
   scopedDb: ScopedDb;
   fieldId: SafeId<"field">;
   organizationId: SafeId<"organization">;
   workspaceId: SafeId<"workspace">;
-  purpose: FilePurpose;
+  userId: SafeId<"user">;
+  purpose: FileContentPurpose;
   recordAuditEvent: AuditRecorder;
+  readSessionAuthority: SyntheticSessionAuthorityReader;
 };
 
-export const fileFieldQuery = async (
-  scopedDb: ScopedDb,
-  fieldId: SafeId<"field">,
-  workspaceId: SafeId<"workspace">,
-) =>
-  await scopedDb((tx) =>
-    tx
-      .select({
-        content: fields.content,
-        entityId: entities.id,
-        entityName: entities.name,
-        entityVersionId: entityVersions.id,
-        propertyId: fields.propertyId,
-        versionStamp: entityVersions.stamp,
-        verificationCode: entityVersions.verificationCode,
-      })
-      .from(fields)
-      .innerJoin(entityVersions, eq(fields.entityVersionId, entityVersions.id))
-      .innerJoin(
-        entities,
-        and(
-          eq(entityVersions.entityId, entities.id),
-          eq(entities.workspaceId, workspaceId),
-        ),
-      )
-      // Exclude tombstoned versions: a withdrawn version's bytes are retained
-      // under legal hold but must be unreachable, even to a client that
-      // captured the fieldId before the version was tombstoned.
-      .where(and(eq(fields.id, fieldId), isNull(entityVersions.deletedAt)))
-      .limit(1),
+/** What a delivery reads from a live version's file field. */
+type FileFieldRow = {
+  content: (typeof fields.$inferSelect)["content"];
+  entityId: (typeof entities.$inferSelect)["id"];
+  verificationCode: (typeof entityVersions.$inferSelect)["verificationCode"];
+  versionStamp: (typeof entityVersions.$inferSelect)["stamp"];
+};
+
+type DisplayedFileContent = {
+  id: string;
+  mimeType: string;
+  pdfFileId: string | null;
+};
+
+/**
+ * The PDF the viewer shows for a file field: its PDF rendition, else the
+ * file itself when it is a PDF. Null when the viewer renders the file
+ * natively, or there is no PDF to show. Anything anchored to what the
+ * reader saw (a mark's page text) reads these bytes.
+ */
+export const displayedPdfFileId = (
+  content: DisplayedFileContent,
+): string | null => {
+  if (isNativelyRenderableMimeType(content.mimeType)) {
+    return null;
+  }
+  return (
+    content.pdfFileId ??
+    (content.mimeType === PDF_MIME_TYPE ? content.id : null)
   );
+};
 
-export const readFileHandler = async ({
-  scopedDb,
-  fieldId,
+type FileDelivery = {
+  disposition: ContentDisposition;
+  encrypted: boolean;
+  entityId: SafeId<"entity">;
+  fileId: string;
+  fileName: string;
+  mimeType: string;
+  originalMimeType: string;
+  s3Key: string;
+  sizeBytes?: number;
+  stampable: boolean;
+};
+
+type FileDeliveryResolution =
+  | { type: "found"; delivery: FileDelivery }
+  | { type: "invalid" | "not-found" | "preview-unavailable" };
+
+const resolveFileDelivery = ({
   organizationId,
-  workspaceId,
   purpose,
-  recordAuditEvent,
-}: ReadFileHandlerProps) => {
-  const rows = await fileFieldQuery(scopedDb, fieldId, workspaceId);
-  const row = rows.at(0);
-
+  row,
+  workspaceId,
+}: {
+  organizationId: SafeId<"organization">;
+  purpose: FileContentPurpose;
+  row: FileFieldRow | undefined;
+  workspaceId: SafeId<"workspace">;
+}): FileDeliveryResolution => {
   if (!row) {
-    return status(404);
+    return { type: "not-found" };
   }
   if (row.content.type !== "file") {
-    return status(400);
+    return { type: "invalid" };
   }
 
   const content = row.content;
-  const fileKey = createFileKey({
+  const originalKey = createFileKey({
     organizationId,
     workspaceId,
     fileId: content.id,
     mimeType: content.mimeType,
   });
-
-  // Every purpose grants the stored bytes through the audited helper; `purpose`
-  // and the delivered object identify what the caller received.
-  const grantUrl = async ({
-    s3Key,
-    fileName,
-    mimeType,
-    sizeBytes,
-  }: {
-    s3Key: string;
-    fileName?: string;
-    mimeType: string;
-    // Known for the stored original only, not for a derived rendition.
-    sizeBytes?: number;
-  }) =>
-    await scopedDb(
-      async (tx) =>
-        await auditedPresignDownload({
-          tx,
-          recordAuditEvent,
-          resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
-          resourceId: row.entityId,
-          s3Key,
-          expiresInSeconds: FILE_READ_URL_EXPIRY_SECONDS,
-          ...(fileName === undefined ? {} : { fileName }),
-          organizationId,
-          workspaceId,
-          metadata: {
-            fieldId,
-            purpose,
-            mimeType,
-            ...(sizeBytes === undefined ? {} : { sizeBytes }),
-          },
-        }),
-    );
-
   if (purpose === "download") {
     return {
-      fileId: content.id,
-      mimeType: content.mimeType,
-      originalMimeType: content.mimeType,
-      fileName: content.fileName,
-      encrypted: content.encrypted,
-      presignedUrl: await grantUrl({
-        s3Key: fileKey,
+      type: "found",
+      delivery: {
+        disposition: "attachment",
+        encrypted: content.encrypted,
+        entityId: row.entityId,
+        fileId: content.id,
         fileName: content.fileName,
         mimeType: content.mimeType,
+        originalMimeType: content.mimeType,
+        s3Key: originalKey,
         sizeBytes: content.sizeBytes,
-      }),
-      stampable:
-        !!row.versionStamp &&
-        !!row.verificationCode &&
-        isStampableDocx(content.mimeType, content.sizeBytes) &&
-        !content.encrypted,
+        stampable:
+          !!row.versionStamp &&
+          !!row.verificationCode &&
+          isStampableDocx(content.mimeType, content.sizeBytes) &&
+          !content.encrypted,
+      },
     };
   }
 
@@ -143,48 +165,230 @@ export const readFileHandler = async ({
     purpose === "native-display" &&
     !isNativelyRenderableMimeType(content.mimeType)
   ) {
-    return status(400);
+    return { type: "preview-unavailable" };
   }
-
   if (
     purpose === "native-display" ||
     isNativelyRenderableMimeType(content.mimeType)
   ) {
     return {
-      fileId: content.id,
-      mimeType: content.mimeType,
-      originalMimeType: content.mimeType,
-      fileName: content.fileName,
-      encrypted: content.encrypted,
-      presignedUrl: await grantUrl({
-        s3Key: fileKey,
+      type: "found",
+      delivery: {
+        disposition: "inline",
+        encrypted: content.encrypted,
+        entityId: row.entityId,
+        fileId: content.id,
+        fileName: content.fileName,
         mimeType: content.mimeType,
+        originalMimeType: content.mimeType,
+        s3Key: originalKey,
         sizeBytes: content.sizeBytes,
-      }),
-      stampable: false,
+        stampable: false,
+      },
     };
   }
 
-  if (!content.pdfFileId && content.mimeType !== PDF_MIME_TYPE) {
-    return status(400);
+  const displayFileId = displayedPdfFileId(content);
+  if (displayFileId === null) {
+    return { type: "preview-unavailable" };
   }
-  const displayFileId = content.pdfFileId ?? content.id;
-  const displayFileKey = createFileKey({
-    organizationId,
-    workspaceId,
-    fileId: displayFileId,
-    mimeType: PDF_MIME_TYPE,
-  });
   return {
-    fileId: displayFileId,
-    mimeType: PDF_MIME_TYPE,
-    originalMimeType: content.mimeType,
-    fileName: content.fileName,
-    encrypted: content.encrypted,
-    presignedUrl: await grantUrl({
-      s3Key: displayFileKey,
+    type: "found",
+    delivery: {
+      disposition: "inline",
+      encrypted: content.encrypted,
+      entityId: row.entityId,
+      fileId: displayFileId,
+      fileName: content.fileName,
       mimeType: PDF_MIME_TYPE,
-    }),
-    stampable: false,
+      originalMimeType: content.mimeType,
+      s3Key: createFileKey({
+        organizationId,
+        workspaceId,
+        fileId: displayFileId,
+        mimeType: PDF_MIME_TYPE,
+      }),
+      stampable: false,
+    },
   };
+};
+
+const fileContentGrantUrl = (grant: string): string =>
+  buildVersionedApiUrl(
+    env.PUBLIC_URL ?? env.BETTER_AUTH_URL,
+    `/file-content/${encodeURIComponent(grant)}`,
+  );
+
+/**
+ * Issue a grant for a matter file's bytes for `purpose`. The lookup, the audit
+ * row and the grant share one transaction that holds the version's share
+ * lock, so a tombstone either commits before the lookup (404) or waits until
+ * the grant is issued and audited. Redeeming the grant checks liveness again.
+ */
+export const readFileHandler = async ({
+  scopedDb,
+  source,
+  fieldId,
+  organizationId,
+  workspaceId,
+  userId,
+  purpose,
+  recordAuditEvent,
+  readSessionAuthority,
+}: ReadFileHandlerProps) =>
+  await scopedDb(async (tx) => {
+    const row = await lockLiveVersionField(tx, fieldId, workspaceId);
+    const resolution = resolveFileDelivery({
+      organizationId,
+      purpose,
+      row: row ?? undefined,
+      workspaceId,
+    });
+    switch (resolution.type) {
+      case "found":
+        break;
+      case "not-found":
+        return status(404);
+      case "preview-unavailable":
+        return previewUnavailable();
+      case "invalid":
+        return status(400);
+      default:
+        resolution satisfies never;
+        return panic("Unhandled file delivery resolution");
+    }
+
+    const delivery: FileDelivery = resolution.delivery;
+    const now = Temporal.Now.instant().epochMilliseconds;
+    const expiresIn = await issueSessionBoundCredentialTtl("signedDownload", {
+      userId,
+      organizationId,
+      fileOrganizationId: organizationId,
+      requestedTtlSeconds: FILE_READ_URL_EXPIRY_SECONDS,
+      now: new Date(now),
+      sessionId: source.kind === "request" ? source.sessionId : null,
+      readSessionAuthority:
+        source.kind === "request"
+          ? readSessionAuthority
+          : refuseBackgroundSessionAuthority,
+    });
+    await recordAuditEvent(tx, {
+      action: CONTENT_DELIVERY_AUDIT_ACTION[delivery.disposition],
+      resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
+      resourceId: delivery.entityId,
+      metadata: {
+        disposition: delivery.disposition,
+        fieldId,
+        mimeType: delivery.mimeType,
+        purpose,
+        s3Key: delivery.s3Key,
+        ...(delivery.disposition === "attachment"
+          ? { fileName: delivery.fileName }
+          : {}),
+        ...(delivery.sizeBytes === undefined
+          ? {}
+          : { sizeBytes: delivery.sizeBytes }),
+      },
+    });
+    const grant = createFileContentGrant({
+      expiresAt: now + expiresIn * 1000,
+      fieldId,
+      now,
+      organizationId,
+      purpose,
+      secret: env.BETTER_AUTH_SECRET,
+      userId,
+      workspaceId,
+    });
+    markContentDeliveryIntent();
+    return {
+      fileId: delivery.fileId,
+      mimeType: delivery.mimeType,
+      originalMimeType: delivery.originalMimeType,
+      fileName: delivery.fileName,
+      encrypted: delivery.encrypted,
+      // Kept for client compatibility; this is now a Stella grant URL whose
+      // redemption rechecks version liveness, rather than a direct S3 URL.
+      presignedUrl: fileContentGrantUrl(grant),
+      stampable: delivery.stampable,
+    };
+  });
+
+type ReadFileContentHandlerProps = {
+  abortSignal: AbortSignal;
+  fieldId: SafeId<"field">;
+  organizationId: SafeId<"organization">;
+  purpose: FileContentPurpose;
+  scopedDb: ScopedDb;
+  workspaceId: SafeId<"workspace">;
+};
+
+export const readFileContentHandler = async ({
+  abortSignal,
+  fieldId,
+  organizationId,
+  purpose,
+  scopedDb,
+  workspaceId,
+}: ReadFileContentHandlerProps) => {
+  const result = await scopedDb(async (tx) => {
+    // The version stays share-locked until object storage has accepted the
+    // GET: a tombstone waits, and one that committed first leaves no row.
+    const row = await lockLiveVersionField(tx, fieldId, workspaceId);
+    const resolution = resolveFileDelivery({
+      organizationId,
+      purpose,
+      row: row ?? undefined,
+      workspaceId,
+    });
+    if (resolution.type !== "found") {
+      return resolution;
+    }
+    const { delivery } = resolution;
+    // The deadline bounds the open; the body then streams for as long as
+    // the client keeps reading, and stops when it disconnects.
+    const opened = await Result.tryPromise(
+      async () =>
+        await openWithinDeadline({
+          open: async (signal) =>
+            await openS3ObjectStreamWithSignal(delivery.s3Key, signal),
+          signal: abortSignal,
+          timeoutMs: FILE_READ_STORAGE_TIMEOUT_MS,
+        }),
+    );
+    if (Result.isError(opened)) {
+      abortSignal.throwIfAborted();
+      return { type: "storage-failure" as const, cause: opened.error };
+    }
+    return { type: "response" as const, delivery, source: opened.value };
+  });
+
+  switch (result.type) {
+    case "invalid":
+      return status(400);
+    case "preview-unavailable":
+      return previewUnavailable();
+    case "not-found":
+      return status(404);
+    case "storage-failure":
+      return observedStatus(
+        { sink: STORED_FILE_CONTENT_UNREADABLE, cause: result.cause },
+        502,
+        "Bad Gateway",
+      );
+    case "response": {
+      return secureDocumentResponse({
+        body: result.source.body,
+        ...(result.source.contentLength === undefined
+          ? {}
+          : { contentLength: result.source.contentLength }),
+        contentType: result.delivery.mimeType,
+        disposition: result.delivery.disposition,
+        fileName: sanitizeFilename(result.delivery.fileName),
+      });
+    }
+    default:
+      result satisfies never;
+      return panic("Unhandled file content delivery result");
+  }
 };

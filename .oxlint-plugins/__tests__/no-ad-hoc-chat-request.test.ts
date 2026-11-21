@@ -1,8 +1,6 @@
-import { describe, expect, setDefaultTimeout, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 
 import { lintSingleRule } from "./lint-single-rule.ts";
-
-setDefaultTimeout(20_000);
 
 const lint = async (
   lines: readonly string[],
@@ -44,7 +42,7 @@ describe.serial("no-ad-hoc-chat-request", () => {
   test("accepts system prompts from the request module imported by a relative path", async () => {
     expect(
       await lint([
-        'import { chatSystemPrompts } from "./chat-request";',
+        'import { chatSystemPrompts } from "../../lib/chat/chat-request";',
         "declare const input: never;",
         "export const a = { systemPrompts: chatSystemPrompts(input) };",
       ]),
@@ -67,7 +65,7 @@ describe.serial("no-ad-hoc-chat-request", () => {
   test("accepts system prompts taken from the request module", async () => {
     expect(
       await lint([
-        'import { chatRequestOptions, chatSystemPrompts as prompts } from "@/api/handlers/chat/chat-request";',
+        'import { chatRequestOptions, chatSystemPrompts as prompts } from "@/api/lib/chat/chat-request";',
         "declare const input: never;",
         "declare const patch: { systemPrompts?: unknown };",
         "export const options = { ...chatRequestOptions(input) };",
@@ -83,9 +81,9 @@ describe.serial("no-ad-hoc-chat-request", () => {
       'import { systemPromptsPatch } from "@/api/lib/tanstack-ai-generate";',
       "export const a = { systemPrompts: [systemPromptsPatch] };",
     ];
-    expect(
-      await lint(source, "apps/api/src/handlers/chat/chat-request.ts"),
-    ).toEqual([]);
+    expect(await lint(source, "apps/api/src/lib/chat/chat-request.ts")).toEqual(
+      [],
+    );
     expect(
       await lint(source, "apps/api/src/handlers/chat/stream-chat.test.ts"),
     ).toEqual([]);

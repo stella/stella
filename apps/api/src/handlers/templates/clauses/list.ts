@@ -1,17 +1,18 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { listTemplateClausesHandler } from "@/api/lib/template-clause-links";
 
-const listTemplateClausesParamsSchema = t.Object({
-  templateId: tSafeId("template"),
+const listTemplateClausesParamsSchema = v.object({
+  templateId: resourceIdSchema("template"),
 });
 
 const config = {
+  contract: "patch",
   description:
     "List the clauses linked to one template: each link's id, clause, pinned " +
     "variant and version, slot name, sort order, and whether the pinned " +

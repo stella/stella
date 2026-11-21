@@ -1,9 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  nextRecomputeDelayMs,
   RECOMPUTE_OUTCOME,
   type RecomputeOutcome,
-  nextRecomputeDelayMs,
 } from "./recompute-schedule";
 
 const OUTCOMES = Object.values(

@@ -1,11 +1,10 @@
+import { panic, Result } from "better-result";
 /**
  * `compare_documents`: the curated tool over the document comparison the REST
  * endpoint serves. It owns no comparison logic — the same generator runs
  * behind both — only the agent-facing contract: a discriminated source, a
  * server-resolved matter and file property, and a bounded result summary.
  */
-
-import { panic, Result } from "better-result";
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import * as v from "valibot";
 
@@ -17,18 +16,19 @@ import {
 import type { DocumentCompareResponse } from "@/api/handlers/documents/compare";
 import type { SafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
+import { projectionPayload } from "@/api/lib/projection-totality";
 import {
   brandPersistedEntityVersionId,
   brandPersistedFileComparisonUploadId,
   brandPersistedPropertyId,
 } from "@/api/lib/safe-id-boundaries";
-import type { McpRequestContext } from "@/api/mcp/context";
 import { resolveDocumentWriteTarget } from "@/api/mcp/document-entity-access";
 import {
   runFileComparison,
   UPLOADS_OUTPUT_MODES,
 } from "@/api/mcp/file-comparison-run";
 import type { FileComparisonRunResult } from "@/api/mcp/file-comparison-run";
+import { nullAsAbsent, uuidInputSchema } from "@/api/mcp/input-schemas";
 import type {
   InternalToolErrorResult,
   TypedMcpToolHandler,
@@ -38,16 +38,15 @@ import {
   bindWorkspaceRecorder,
   internalFailureResult,
   notFoundResult,
-  nullAsAbsent,
   structuredErrorResult,
   toolDataResult,
-  uuidInputSchema,
   validationErrorResult,
 } from "@/api/mcp/tool-utils";
 import {
   defineMcpToolOutput,
   defineValibotMcpTool,
 } from "@/api/mcp/valibot-tool-definition";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 const TARGET_LIMIT_TEXT = String(DOCUMENT_COMPARE_TARGET_LIMIT);
@@ -306,22 +305,20 @@ export const COMPARE_DOCUMENTS_TOOL_DEFINITION = defineValibotMcpTool({
     readOnlyHint: false,
   },
   description:
-    "Create a tracked-changes DOCX redline. source versions compares an " +
-    `explicit stored base with up to ${TARGET_LIMIT_TEXT} targets; source ` +
-    "previous compares one stored version with its predecessor; source " +
-    "uploads compares two .docx files stella does not hold, staged by " +
+    "Create a tracked-changes DOCX redline. source 'versions' compares a stored " +
+    `base with up to ${TARGET_LIMIT_TEXT} targets; 'previous' uses its predecessor; ` +
+    "'uploads' compares two .docx files from " +
     "open_file_comparison, prepare_file_comparison_from_links or " +
-    "prepare_file_comparison. base_tracked_changes and target_tracked_changes " +
-    "handle tracked changes each side already carries: accept (the usual " +
-    "choice) compares its final text. output_mode preview " +
-    "compares without writing; download returns each redline as an expiring " +
-    "link, not a version; version saves each redline as a derived version and " +
-    "needs a stored source. Results are independent, so read every status. " +
-    "Show the user each redline's openUrl or download link.",
+    "prepare_file_comparison. *_tracked_changes controls existing changes; 'accept' " +
+    "compares final text. output_mode 'preview' does not write, 'download' returns an " +
+    "expiring link, and 'version' saves a derived version from a stored source. " +
+    "Show every openUrl or download link.",
   inputSchema: COMPARE_DOCUMENTS_INPUT_SCHEMA,
   access: "write",
   accountAccess: "sandbox",
   permissions: { type: "all", permissions: { entity: ["update"] } },
+  nonDestructiveReason:
+    "Comparison creates previews, downloads, or derived versions without replacing a stored version.",
   anonymized: { exposure: "excluded", reason: "write" },
   name: "compare_documents",
   scope: "stella:documents_write",
@@ -344,7 +341,7 @@ const sharedDocxFileProperties = async ({
   versionIds,
   workspaceId,
 }: {
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   entityId: SafeId<"entity">;
   versionIds: readonly SafeId<"entityVersion">[];
   workspaceId: SafeId<"workspace">;
@@ -417,7 +414,7 @@ const resolveFilePropertyId = async ({
   versionIds,
   workspaceId,
 }: {
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   entityId: SafeId<"entity">;
   explicitFilePropertyId: string | undefined;
   versionIds: readonly SafeId<"entityVersion">[];
@@ -534,49 +531,48 @@ const comparisonSummary = (comparison: ComparisonSummaryInput) => ({
   ),
 });
 
-const toToolOutput = (
-  response: DocumentCompareResponse,
-): CompareDocumentsOutput => ({
-  results: response.results.map((comparison) => {
-    if (comparison.status === "failed") {
+const toToolOutput = (response: DocumentCompareResponse) =>
+  projectionPayload(COMPARE_DOCUMENTS_OUTPUT_SCHEMA, {
+    results: response.results.map((comparison) => {
+      if (comparison.status === "failed") {
+        return {
+          status: "failed" as const,
+          baseVersionId: comparison.baseVersionId,
+          targetVersionId: comparison.targetVersionId,
+          error: comparison.error,
+        };
+      }
+      if (comparison.status === "previewed") {
+        return {
+          status: "previewed" as const,
+          baseVersionId: comparison.baseVersionId,
+          targetVersionId: comparison.targetVersionId,
+          ...comparisonSummary(comparison),
+        };
+      }
+      if (comparison.status === "downloadable") {
+        return {
+          status: "downloadable" as const,
+          baseVersionId: comparison.baseVersionId,
+          targetVersionId: comparison.targetVersionId,
+          fileName: comparison.fileName,
+          download: comparison.download,
+          ...comparisonSummary(comparison),
+        };
+      }
       return {
-        status: "failed" as const,
+        status: "created" as const,
         baseVersionId: comparison.baseVersionId,
         targetVersionId: comparison.targetVersionId,
-        error: comparison.error,
-      };
-    }
-    if (comparison.status === "previewed") {
-      return {
-        status: "previewed" as const,
-        baseVersionId: comparison.baseVersionId,
-        targetVersionId: comparison.targetVersionId,
+        redlineVersionId: comparison.redlineVersionId,
+        fileName: comparison.file.fileName,
+        versionNumber: comparison.file.versionNumber,
+        openUrl: comparison.file.openUrl,
+        download: comparison.file.download,
         ...comparisonSummary(comparison),
       };
-    }
-    if (comparison.status === "downloadable") {
-      return {
-        status: "downloadable" as const,
-        baseVersionId: comparison.baseVersionId,
-        targetVersionId: comparison.targetVersionId,
-        fileName: comparison.fileName,
-        download: comparison.download,
-        ...comparisonSummary(comparison),
-      };
-    }
-    return {
-      status: "created" as const,
-      baseVersionId: comparison.baseVersionId,
-      targetVersionId: comparison.targetVersionId,
-      redlineVersionId: comparison.redlineVersionId,
-      fileName: comparison.file.fileName,
-      versionNumber: comparison.file.versionNumber,
-      openUrl: comparison.file.openUrl,
-      download: comparison.file.download,
-      ...comparisonSummary(comparison),
-    };
-  }),
-});
+    }),
+  });
 
 const compareSelection = (
   source: Exclude<CompareToolInput["source"], { type: "uploads" }>,
@@ -615,39 +611,46 @@ const compareSelection = (
 };
 
 /** One result per staged pair, in the shape the tool's `results` array takes. */
-const uploadsResult = (
-  result: FileComparisonRunResult,
-): CompareDocumentsOutput["results"][number] => {
+const uploadsResult = (result: FileComparisonRunResult) => {
   switch (result.status) {
     case "upload_failed":
-      return {
-        status: "upload_failed",
-        baseUploadId: result.baseUploadId,
-        targetUploadId: result.targetUploadId,
-        error: result.error,
-      };
+      return projectionPayload(
+        COMPARE_DOCUMENTS_OUTPUT_SCHEMA.entries.results.item,
+        {
+          status: "upload_failed",
+          baseUploadId: result.baseUploadId,
+          targetUploadId: result.targetUploadId,
+          error: result.error,
+        },
+      );
     case "upload_previewed":
-      return {
-        status: "upload_previewed",
-        baseUploadId: result.baseUploadId,
-        targetUploadId: result.targetUploadId,
-        ...(result.scanWarnings.length > 0
-          ? { scanWarnings: result.scanWarnings }
-          : {}),
-        ...comparisonSummary(result.comparison),
-      };
+      return projectionPayload(
+        COMPARE_DOCUMENTS_OUTPUT_SCHEMA.entries.results.item,
+        {
+          status: "upload_previewed",
+          baseUploadId: result.baseUploadId,
+          targetUploadId: result.targetUploadId,
+          ...(result.scanWarnings.length > 0
+            ? { scanWarnings: result.scanWarnings }
+            : {}),
+          ...comparisonSummary(result.comparison),
+        },
+      );
     case "upload_downloadable":
-      return {
-        status: "upload_downloadable",
-        baseUploadId: result.baseUploadId,
-        targetUploadId: result.targetUploadId,
-        fileName: result.fileName,
-        download: result.download,
-        ...(result.scanWarnings.length > 0
-          ? { scanWarnings: result.scanWarnings }
-          : {}),
-        ...comparisonSummary(result.comparison),
-      };
+      return projectionPayload(
+        COMPARE_DOCUMENTS_OUTPUT_SCHEMA.entries.results.item,
+        {
+          status: "upload_downloadable",
+          baseUploadId: result.baseUploadId,
+          targetUploadId: result.targetUploadId,
+          fileName: result.fileName,
+          download: result.download,
+          ...(result.scanWarnings.length > 0
+            ? { scanWarnings: result.scanWarnings }
+            : {}),
+          ...comparisonSummary(result.comparison),
+        },
+      );
     default:
       result satisfies never;
       return panic("Unhandled staged comparison result");
@@ -668,7 +671,7 @@ export const handleCompareDocumentsTool = async (
   {
     args,
     context,
-  }: { args: Record<string, unknown>; context: McpRequestContext },
+  }: { args: Record<string, unknown>; context: AuthorizedMcpRequestContext },
   dependencies: CompareDocumentsDependencies = DEFAULT_COMPARE_DOCUMENTS_DEPENDENCIES,
 ): Promise<TypedMcpToolResponse<CompareDocumentsOutput>> => {
   const parsed = v.safeParse(COMPARE_DOCUMENTS_INPUT_SCHEMA, args);
@@ -698,7 +701,11 @@ export const handleCompareDocumentsTool = async (
     });
     return run.status === "error"
       ? run.response
-      : toolDataResult({ results: [uploadsResult(run.result)] });
+      : toolDataResult(
+          projectionPayload(COMPARE_DOCUMENTS_OUTPUT_SCHEMA, {
+            results: [uploadsResult(run.result)],
+          }),
+        );
   }
 
   const target = await resolveDocumentWriteTarget({
@@ -739,7 +746,7 @@ export const handleCompareDocumentsTool = async (
         // uploads source above has one fewer, and it never reaches here.
         output: { type: input.output_mode },
       },
-      session: { activeOrganizationId: context.organizationId },
+      session: { activeOrganizationId: context.organizationId, id: null },
       user: { id: context.userId },
       recordAuditEvent: bindWorkspaceRecorder(context, workspaceId),
       // The MCP transport carries the client's request; the chat projection
@@ -749,7 +756,10 @@ export const handleCompareDocumentsTool = async (
     }),
   );
   if (Result.isError(compared)) {
-    return internalFailureResult(compared.error);
+    return internalFailureResult(
+      compared.error,
+      "mcp.handleCompareDocumentsTool.compared_error",
+    );
   }
 
   return toolDataResult(toToolOutput(compared.value));

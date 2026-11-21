@@ -61,6 +61,21 @@ const DELIBERATE_NARROWINGS = [
   },
   {
     rule: "no-restricted-imports",
+    scope:
+      "apps/web/src/components/references/citation-chip.tsx, apps/web/src/components/references/decision-citation-chip.dom.test.tsx, apps/web/src/components/legal-reader/annotations/selection-anchor-contract.dom.test.tsx",
+    drops: ["pattern:**/paragraph-reference|**/decision-citation-chip"],
+    reason:
+      "The citation chip owner dispatches each citation kind to its chip, so it and the chip's own test are the web modules that import the chips.",
+  },
+  {
+    rule: "no-restricted-imports",
+    scope: "apps/web/src/i18n/message-locale.ts",
+    drops: ["path:use-intl#useLocale"],
+    reason:
+      "This module owns the UI-language read: it wraps use-intl's useLocale as useMessageLocale so every other web module names which locale it means.",
+  },
+  {
+    rule: "no-restricted-imports",
     scope: "apps/api/src/lib/json-schema/valibot-to-json-schema.ts",
     drops: ["path:@valibot/to-json-schema+types"],
     reason:
@@ -85,10 +100,18 @@ const DELIBERATE_NARROWINGS = [
       "path:@/api/db/root#rlsDb,rootDb",
       "path:@/api/lib/branded-types#toSafeId",
       "path:@stll/api-contract/safe-id#toSafeId",
+      "path:@stll/errors#createDetached",
       ...PROVIDER_ADAPTER_IMPORT_KEYS,
     ],
     reason:
       "Tests build handler context, owner-level DB handles and provider adapters directly; that is the fixture surface the production restrictions exist to keep out of handlers.",
+  },
+  {
+    rule: "no-restricted-imports",
+    scope: "apps/api/src/lib/analytics/capture.ts",
+    drops: ["path:@stll/errors#createDetached"],
+    reason:
+      "This module owns API detached work: it builds `detached` from the shared factory once, so it is the one API module that imports createDetached.",
   },
   {
     rule: "no-restricted-imports",
@@ -100,19 +123,26 @@ const DELIBERATE_NARROWINGS = [
   },
   {
     rule: "no-restricted-imports",
-    scope:
-      "apps/web/src/components/workspaces/kanban/use-kanban-drop-targets.ts",
+    scope: "apps/web/src/lib/drag-and-drop/element-registration.ts",
     drops: [
-      "path:@atlaskit/pragmatic-drag-and-drop/element/adapter#draggable,dropTargetForElements",
+      "path:@atlaskit/pragmatic-drag-and-drop/adapter/element-adapter#draggable,dropTargetForElements",
     ],
     reason:
-      "This is the web kanban drag-and-drop owner: the one module that may call the adapter's draggable/dropTargetForElements directly, behind its conflict-guarded attachElementDropTarget.",
+      "This is the web element-registration owner: all element registrations share its conflict registry.",
+  },
+  {
+    rule: "no-restricted-imports",
+    scope:
+      "packages/ui/src/**/*.test.{ts,tsx}, packages/ui/src/**/*.dom.test.tsx",
+    drops: ["pattern:@stll/*|@stll/*/**"],
+    reason:
+      "@stll/ui tests may import the workspace test-helper packages (UI_TEST_HELPER_PACKAGES); the same scope re-declares the pattern with those packages excepted, and tsdown builds no test file, so nothing ships.",
   },
   {
     rule: "no-restricted-imports",
     scope: "packages/ui/src/kanban/drag-interactions.ts",
     drops: [
-      "path:@atlaskit/pragmatic-drag-and-drop/element/adapter#draggable,dropTargetForElements",
+      "path:@atlaskit/pragmatic-drag-and-drop/adapter/element-adapter#draggable,dropTargetForElements",
     ],
     reason:
       "This is the @stll/ui kanban drag-and-drop owner: the one module that may call the adapter's draggable/dropTargetForElements directly.",
@@ -474,4 +504,34 @@ test("no override silently drops an inherited restriction", () => {
   // Both directions: an undeclared drop is the bug this guard exists for, and
   // a declared drop that no longer happens means the table is stale.
   expect(sorted(observed)).toEqual(sorted(declared));
+});
+
+test("new web and UI surfaces cannot import element registration outside an owner", () => {
+  const scopes = readScopes(config).filter(
+    (scope) => "no-restricted-imports" in scope.rules,
+  );
+  for (const file of [
+    "apps/web/src/components/matter-target-picker.tsx",
+    "apps/web/src/components/app-sidebar.tsx",
+    "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/existing-file-organizer-dialog.tsx",
+    "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-day-cell.tsx",
+    "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-entity-chip.tsx",
+    "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/filesystem/tree-view.tsx",
+    "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/entity-row-cells.tsx",
+    "apps/web/src/routes/knowledge/-components/position-editor.tsx",
+    "apps/web/src/routes/_protected.settings/organization/-components/organization/document-types-card.tsx",
+    "apps/web/src/components/pdf/page-organizer.tsx",
+    "apps/web/src/components/workspaces/table/workspace-table/header-cells.tsx",
+    "apps/web/src/components/workspaces/kanban/use-kanban-drop-targets.ts",
+    "apps/web/src/lib/drag-and-drop/another-registration.ts",
+    "apps/web/src/components/new-drag-surface.tsx",
+    "packages/ui/src/new-drag-surface.tsx",
+  ]) {
+    const winner = scopes.findLast((scope) => scopeMatches(scope, file));
+    expect(
+      restrictedImportKeys(winner?.rules["no-restricted-imports"]),
+    ).toContain(
+      "path:@atlaskit/pragmatic-drag-and-drop/adapter/element-adapter#draggable,dropTargetForElements",
+    );
+  }
 });

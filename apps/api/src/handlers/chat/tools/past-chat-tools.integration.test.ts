@@ -3,11 +3,12 @@ import { inArray, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
 import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
+import { CHAT_TOOL_EXECUTOR_METADATA_KEY } from "@stll/api-contract/chat";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { chatMessages, chatThreads } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
-import { toChatMessageContent } from "@/api/handlers/chat/chat-message-parts";
+import { toPersistedChatMessageContentV3 } from "@/api/handlers/chat/chat-message-parts";
 import { createChatHistoryTools } from "@/api/handlers/chat/tools/chat-history-tools";
 import {
   createPastChatTools,
@@ -75,7 +76,9 @@ const seedThread = async ({
     userId,
     workspaceId,
     role: "user",
-    content: { version: 1, data: [{ type: "text", text }] },
+    content: toPersistedChatMessageContentV3({
+      data: [{ type: "text", content: text }],
+    }),
     createdAt: new Date(),
   });
   await testDb.execute(sql`
@@ -249,9 +252,8 @@ const seedCodeModeChat = async () => {
     userId: ids.userA1,
     workspaceId: ids.wsA1,
     role: "user",
-    content: toChatMessageContent({
+    content: toPersistedChatMessageContentV3({
       data: [{ content: "Is ent_1 the latest draft?", type: "text" }],
-      version: 2,
     }),
     createdAt: new Date(Date.now() - 60_000),
   });
@@ -261,7 +263,7 @@ const seedCodeModeChat = async () => {
     userId: ids.userA1,
     workspaceId: ids.wsA1,
     role: "assistant",
-    content: toChatMessageContent({
+    content: toPersistedChatMessageContentV3({
       data: [
         {
           content: "The literal ent_1 was used in the example.",
@@ -271,6 +273,7 @@ const seedCodeModeChat = async () => {
           arguments: "{}",
           id: "call-1",
           input: {},
+          metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "server" },
           name: "execute_typescript",
           output: { result: [{ id: "ent_1", name: "entityA1" }] },
           state: "complete",
@@ -287,7 +290,6 @@ const seedCodeModeChat = async () => {
         },
         refEncoding: CHAT_REF_ENCODING.PERSISTED_RESOURCE_REFS_V2,
       },
-      version: 2,
     }),
     createdAt: new Date(),
   });

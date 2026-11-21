@@ -19,14 +19,17 @@ const periodIdentity = {
 } as const satisfies AdmittedActionIdentity;
 const periodPolicy = { periodMs: 86_400_000, limit: 2 };
 
-const expectUnavailable = (result: Result<unknown, unknown>) => {
+const expectUnavailable = (
+  result: Result<unknown, unknown>,
+  reason: ActionAdmissionError["reason"] = "configuration_incomplete",
+) => {
   expect(Result.isError(result)).toBe(true);
   if (Result.isOk(result)) {
     throw new Error("Expected rejection");
   }
   expect(ActionAdmissionError.is(result.error)).toBe(true);
   if (ActionAdmissionError.is(result.error)) {
-    expect(result.error.reason).toBe("unavailable");
+    expect(result.error.reason).toBe(reason);
   }
 };
 
@@ -169,7 +172,7 @@ describe("period admission boundary", () => {
         ran = true;
       },
     });
-    expectUnavailable(result);
+    expectUnavailable(result, "store_unavailable");
     expect(acquisitions).toBe(2);
     expect(ran).toBe(false);
   });
@@ -190,7 +193,7 @@ describe("period admission boundary", () => {
         ran = true;
       },
     });
-    expectUnavailable(result);
+    expectUnavailable(result, "store_unavailable");
     expect(ran).toBe(false);
   });
 

@@ -1,5 +1,5 @@
 import type { ModelMessage } from "@tanstack/ai";
-import { ChatClient, fetchServerSentEvents } from "@tanstack/ai-client";
+import { ChatClient } from "@tanstack/ai-client";
 import type {
   ChatClientState,
   ChatInterruptState,
@@ -9,6 +9,7 @@ import type {
   UIMessage,
 } from "@tanstack/ai-client";
 import { panic, Result } from "better-result";
+import * as v from "valibot";
 
 import { CHAT_SEND_MODE, isChatSendMode } from "@stll/anonymize-chat";
 import type { ChatSendMode } from "@stll/anonymize-chat";
@@ -16,23 +17,83 @@ import {
   CHAT_CONTINUATION_REJECTED_ERROR_CODE,
   CHAT_TURN_ID_HEADER,
   CHAT_TURN_INTENT,
+  CHAT_TURN_NOT_OWNED_ERROR_CODE,
 } from "@stll/api-contract";
-import type { ChatSendRequest } from "@stll/api-contract";
+import type { ChatSendRequest, ChatTurnIntent } from "@stll/api-contract";
+import { CHAT_COMMAND_MAX_RETRIES } from "@stll/api-contract/chat-command";
+import {
+  isSameLocalRunQuestionPause,
+  type LocalRunQuestionPause,
+  localRunQuestionPauseOf,
+} from "@stll/api-contract/chat-local-run-question";
+import { CHAT_LOCAL_RUN_INTERRUPT_REASONS } from "@stll/api-contract/chat-local-run-tool";
+import {
+  CHAT_LOCAL_RUN_COMPUTER_EVENT,
+  CHAT_LOCAL_RUN_STEER_EVENT,
+  chatLocalRunComputerEventSchema,
+  type ChatLocalRunQuestionReply,
+  type ChatLocalRunSteerEvent,
+  chatLocalRunSteerEventSchema,
+  type ChatLocalRunSteerOutcome,
+  type ChatLocalRunSteerRefusal,
+  type ChatLocalRunSteerSource,
+} from "@stll/api-contract/chat-run-target";
+import {
+  CHAT_TURN_STEERING,
+  CHAT_TURN_STEERING_EVENT,
+  type ChatTurnSteering,
+  chatTurnSteeringEventSchema,
+} from "@stll/api-contract/chat-send-intent";
+import { createChatTurnTimingObserver } from "@stll/api-contract/chat-turn-duration";
+import type { ProviderDiagnostic } from "@stll/api-contract/provider-setup";
+import {
+  ChatReconnectError,
+  createDurableChatTransport,
+  finishedChatRunResponse,
+} from "@stll/chat/durable-transport";
+import {
+  chatResumeSnapshotSchema,
+  chatTurnResumeProbeSchema,
+} from "@stll/chat/resume-contract";
+import { sleep } from "@stll/concurrency/sleep";
+import { fetchWithTimeout } from "@stll/fetch";
+import { readBodyJsonWithIdleDeadline } from "@stll/fetch/body-reader";
 
 import type {
   ChatClientTools,
   PersistedChatMessage,
 } from "@/components/chat/chat-ui-tools";
 import {
+  getAwaitedAssistantMessageId,
   hasRunningToolCallInLatestAssistantMessage,
   isChatClientRequestActive,
 } from "@/components/chat/chat-ui-tools";
-import { createBrowserClientTool } from "@/features/chat/browser-control/browser-client-tool";
-import { getBrowserClientCapability } from "@/features/chat/browser-control/browser-extension-bridge";
+import { createBrowserExtensionTool } from "@/features/chat/browser-control/browser-client-tool";
+import {
+  BrowserBridgeUnmountedError,
+  getBrowserExtensionState,
+  isBrowserExtensionBridgeMounted,
+} from "@/features/chat/browser-control/browser-extension-bridge";
 import { browserTurnId } from "@/features/chat/browser-control/browser-turn";
+import {
+  toPersistedChatMessages,
+  withCurrentChatMessages,
+} from "@/features/chat/chat-persisted-messages";
+import { getChatRuntimeContextKind } from "@/features/chat/chat-query-contract";
+import { keepShownRejoinMessages } from "@/features/chat/chat-rejoin-messages";
+import { createChatSendTiming } from "@/features/chat/chat-send-timing";
 import { keepPostedMessagesInSnapshots } from "@/features/chat/chat-snapshot-history";
+import { getDesktopLaunch } from "@/features/chat/desktop-launch";
+import {
+  type ChatComputerWait,
+  heldForDesktop,
+  OPENING_DESKTOP_WAIT,
+} from "@/features/chat/desktop-launch.logic";
+import { getAnalytics } from "@/lib/analytics/provider";
+import type { ChatTimingSurface } from "@/lib/analytics/types";
 import { api } from "@/lib/api";
 import { apiUrl } from "@/lib/api-url";
+import { invokeAppOnlyWrite } from "@/lib/capabilities/capability-request";
 import {
   CHAT_EDIT_APPLY_MODE,
   DOCX_EDIT_REPRESENTATION,
@@ -46,17 +107,40 @@ import { detached } from "@/lib/detached";
 import { actionAdmissionOutcome } from "@/lib/errors/action-admission";
 import { APIError, chatRefusal, toAPIError } from "@/lib/errors/api";
 import { ClientOperationError } from "@/lib/errors/client";
+import {
+  providerDiagnosticFromThrown,
+  withProviderDiagnostic,
+} from "@/lib/errors/provider-diagnostic";
+import { readQueryResult } from "@/lib/errors/query-result";
 import { toSafeId } from "@/lib/safe-id";
 import type { SafeId } from "@/lib/safe-id";
 import { LifecycleRegistry } from "@/stores/lifecycle-registry";
 
-import { chatFetchClient } from "./chat-fetch";
+import {
+  chatCommandFetchClient,
+  ChatCommandReplayedError,
+  chatFetchClient,
+  chatResponseError,
+} from "./chat-fetch";
+import {
+  localRunLimitResetsAtFromThrown,
+  withLocalRunLimitResetsAt,
+} from "./chat-local-run-limit";
+import {
+  isClassifiedRunError,
+  observeChatProviderDiagnostic,
+} from "./chat-provider-diagnostic";
 import { SUGGEST_TEMPLATE_FIELDS_TOOL_SCOPE } from "./chat-query-contract";
 import type {
   ActiveFileContext,
   ChatThreadKey,
   ChatThreadOptionsContext,
 } from "./chat-query-contract";
+import {
+  ChatRequestError,
+  findChatRequestError,
+  normalizeChatStreamError,
+} from "./chat-request-error";
 
 type ChatToolScope = typeof SUGGEST_TEMPLATE_FIELDS_TOOL_SCOPE;
 
@@ -70,11 +154,20 @@ export type ChatContinuationRequestBody = {
   sendMode?: ChatSendMode | undefined;
   toolScope?: ChatToolScope | undefined;
   truncateAfterMessageId?: SafeId<"chatMessage"> | undefined;
-  turnIntent?: (typeof CHAT_TURN_INTENT)["regenerate"] | undefined;
+  turnIntent?: ChatTurnIntent | undefined;
 };
 export type ChatSendMessageOptions = {
   body?: ChatContinuationRequestBody | undefined;
+  /** Where the message was sent from; a send without it is not timed. */
+  timingSurface?: ChatTimingSurface | undefined;
 };
+/** A new chat's first message, sent before the page moved to the chat. */
+export type ChatRouteHandoff = {
+  /** Whether the server took the message's turn, once it answered. */
+  accepted: Promise<ChatSendAcceptance>;
+  message: ChatRouteHandoffMessage;
+};
+
 export type ChatRouteHandoffStart = {
   messageId: SafeId<"chatMessage">;
   status: "started";
@@ -83,8 +176,14 @@ export type ChatRouteHandoffStart = {
 
 /**
  * The composer's Stop, as the server hears it: nothing asked, a stop the
- * server has not answered yet, or one it refused (Stop stays available).
+ * server has not settled yet, or one it did not accept (the request stays
+ * open, so Stop stays available). A stop the server accepted never fails:
+ * the page reloads the turn as the server stores it.
  */
+/** Whether a local question's answer went out; one that did not can be
+ *  sent again. */
+export type LocalRunAnswerDelivery = "sent" | "not_sent";
+
 export type ChatStopState =
   | { status: "idle" }
   | { status: "pending"; turnId: SafeId<"chatTurn"> }
@@ -93,11 +192,35 @@ export type ChatStopState =
 type ChatRuntimeSnapshot = {
   error: Error | undefined;
   isLoading: boolean;
+  /** The question a run on the member's computer paused the turn on. */
+  localRunQuestion: LocalRunQuestionPause | null;
+  reconnecting: boolean;
   messages: PersistedChatMessage[];
   sessionGenerating: boolean;
   status: ChatClientState;
   stop: ChatStopState;
   turnAbandoned: boolean;
+  /** The turn runs on the member's computer and waits on it: for stella
+   *  desktop to open before this page sends it, for it to pick the run up
+   *  (counted from the send), or to come back after it went away mid-turn;
+   *  `null` while it runs. A rejoin replays the run's events, so a reload
+   *  reads the same. */
+  computerWait: ChatComputerWait | null;
+  /** Whether the turn running or waiting now takes a message mid-turn, as
+   *  the server tells it (the turn's stream, else the thread's page). A new
+   *  turn takes none until its stream says so; a cloud turn never does. */
+  turnSteering: ChatTurnSteering;
+  /** When this page sent the message its running request carries, on the
+   *  `performance.now()` clock: the start every turn's live elapsed time
+   *  counts from, on stella or on the member's computer alike. `null` once
+   *  that request is over, and for a turn this page joined (a reload). */
+  turnSentAt: number | null;
+  /** How many turns this page has started on the thread: one for each new
+   *  message and each retry, never for a continuation of a turn (an
+   *  approval, a tool result) or a turn it joined. It tells an attempt from
+   *  the one before it when both leave the thread on the same message, and
+   *  never goes back while the page keeps a runtime for the thread. */
+  turnsStarted: number;
 };
 
 type TanStackClientToolResult = Parameters<
@@ -110,7 +233,41 @@ export type ChatToolResultInput = Omit<TanStackClientToolResult, "output"> & {
 
 const CHAT_RUNTIME_BRAND: unique symbol = Symbol("StellaChatRuntime");
 
-export type ChatRuntime = {
+/**
+ * What became of a message handed to a turn running on the member's
+ * computer: the turn took it (`steered`), the turn runs on and did not
+ * (`refused`, with why), or nothing settled it before the turn ended
+ * (`unsettled`).
+ */
+export type ChatSteerOutcome =
+  | { type: "steered" }
+  | { type: "refused"; reason: ChatLocalRunSteerRefusal }
+  | { type: "unsettled" };
+
+const STEER_UNSETTLED = {
+  type: "unsettled",
+} as const satisfies ChatSteerOutcome;
+
+/** What the turn's stream says became of a steer. */
+const steerOutcomeOfEvent = ({
+  status,
+}: ChatLocalRunSteerEvent): ChatSteerOutcome => {
+  switch (status) {
+    case "steered":
+      return { type: "steered" };
+    case "refused":
+      return { type: "refused", reason: "not_taken" };
+    default:
+      status satisfies never;
+      return panic("Unhandled steer status");
+  }
+};
+
+export type ChatActivitySession = {
+  readonly reportedUnknownActivityTypes: Set<string>;
+};
+
+export type ChatRuntime = ChatActivitySession & {
   readonly [CHAT_RUNTIME_BRAND]: true;
   resolveToolApproval: (
     response: {
@@ -123,18 +280,47 @@ export type ChatRuntime = {
     result: ChatToolResultInput,
     options?: ChatSendMessageOptions,
   ) => Promise<void>;
+  /**
+   * Answer the question a local run paused on, or, with `null`, dismiss it:
+   * the server then stops the run's turn. A pause is answered once.
+   */
+  answerLocalRunQuestion: (
+    interruptId: string,
+    answers: ChatLocalRunQuestionReply["answers"] | null,
+  ) => Promise<LocalRunAnswerDelivery>;
+  /**
+   * Hand a message to the turn running on the member's computer without
+   * stopping it; idempotent on `inputId`. See `ChatSteerOutcome`.
+   */
+  steerLocalTurn: (input: {
+    inputId: string;
+    text: string;
+    source: ChatLocalRunSteerSource;
+  }) => Promise<ChatSteerOutcome>;
   getSnapshot: () => ChatRuntimeSnapshot;
+  /** Answer the latest message again: a regeneration, which the server
+   *  takes only for a message it stores. */
   reload: (options?: ChatSendMessageOptions) => Promise<void>;
   setMessages: (messages: PersistedChatMessage[]) => void;
+  /** Show the thread as the server stores it, after a request the server did
+   *  not accept: its messages replace the page's, and the request's error
+   *  leaves with the turn it described. */
+  showStoredMessages: (messages: PersistedChatMessage[]) => void;
+  /** Resolves once the message is appended, without waiting for its stream. */
   startRouteHandoffMessage: (
     message: ChatRouteHandoffMessage,
     options?: ChatSendMessageOptions,
-  ) => ChatRouteHandoffStart;
+  ) => Promise<ChatRouteHandoffStart>;
+  /**
+   * The route handoff this runtime started that no page has taken yet, once:
+   * the page the member lands on takes it, to hand the message back to its
+   * composer if the server refuses it.
+   */
+  takeRouteHandoff: () => ChatRouteHandoff | null;
   /** The user's Stop: the server ends the turn as stopped. */
   stop: () => void;
   /** The page leaves the thread: it closes its own request and asks the
-   *  server for nothing, so the turn carries on or ends as that request
-   *  leaves it. */
+   *  server for nothing, so the turn carries on detached. */
   leave: () => void;
   subscribe: (listener: () => void) => () => void;
 };
@@ -162,6 +348,69 @@ export const sendThreadChatMessage = async (
   await sendMessage(message, options);
 };
 
+/**
+ * What the server answered a sent message, as soon as it answered: it
+ * accepted the turn (whose answer then streams on), or the request failed
+ * before it did, with the failure it reported.
+ */
+export type ChatSendAcceptance =
+  { status: "accepted" } | { status: "failed"; error: Error };
+
+type ChatThreadSendUntilAccepted = (
+  message: ChatUserMessageInput,
+  options?: ChatSendMessageOptions,
+) => Promise<ChatSendAcceptance>;
+
+const threadSendUntilAcceptedByRuntime = new WeakMap<
+  ChatRuntime,
+  ChatThreadSendUntilAccepted
+>();
+
+/** Send `message` and resolve once the server accepted or refused its turn,
+ *  without waiting for the answer to stream. */
+export const sendThreadChatMessageUntilAccepted = async (
+  chat: ChatRuntime,
+  message: ChatUserMessageInput,
+  options?: ChatSendMessageOptions,
+): Promise<ChatSendAcceptance> => {
+  const send =
+    threadSendUntilAcceptedByRuntime.get(chat) ??
+    panic("Missing thread send capability for chat runtime");
+  return await send(message, options);
+};
+
+/**
+ * The send a message would make, as the chat's queue keeps it: everything the
+ * page sends with it now (its mode, the open document, the run target), but
+ * no run, which the queue's sender gives it when it sends it.
+ */
+export type QueuedChatSendBody = Omit<
+  ChatSendRequestDraft,
+  "message" | "runId" | "threadId" | "truncateAfterMessageId" | "turnIntent"
+> & {
+  message: Omit<ChatSendRequestDraft["message"], "role"> & { role: "user" };
+};
+
+type ChatThreadQueuedSend = (
+  message: ChatUserMessageInput,
+  options?: ChatSendMessageOptions,
+) => QueuedChatSendBody;
+
+const threadQueuedSendByRuntime = new WeakMap<
+  ChatRuntime,
+  ChatThreadQueuedSend
+>();
+
+export const queuedChatSendOf = (
+  chat: ChatRuntime,
+  message: ChatUserMessageInput,
+  options?: ChatSendMessageOptions,
+): QueuedChatSendBody =>
+  (
+    threadQueuedSendByRuntime.get(chat) ??
+    panic("Missing thread queued send capability for chat runtime")
+  )(message, options);
+
 const getChatApiPath = () => apiUrl("/chat");
 
 /** Runs `callback` once, later; the returned function cancels it. */
@@ -186,6 +435,9 @@ type CreateChatRuntimeProps = {
   /** The thread's turn not yet settled when the page loaded, which Stop
    *  cancels until a request names a newer one. */
   activeTurnId: SafeId<"chatTurn"> | null;
+  /** Whether that turn takes a message mid-turn; absent where the thread's
+   *  turns run on stella and take none. */
+  activeTurnSteering?: ChatTurnSteering | undefined;
   context: ChatThreadOptionsContext | undefined;
   initialMessages: PersistedChatMessage[];
   key: ChatThreadKey;
@@ -197,6 +449,9 @@ type CreateChatRuntimeProps = {
   /** When subscribers hear about messages that changed while a response
    *  streams. Defaults to `STREAM_EMIT_INTERVAL_MS` later. */
   scheduleEmit?: ChatEmitScheduler | undefined;
+  /** The turns the page started on the thread in the runtimes this one
+   *  replaces: replacing a runtime is not a turn, so the count goes on. */
+  turnsStarted?: number | undefined;
 };
 
 type ActiveToolResultOperation = {
@@ -206,15 +461,16 @@ type ActiveToolResultOperation = {
 const toError = (error: unknown): Error =>
   error instanceof Error ? error : new Error(String(error));
 
-const isRejectedChatContinuation = (error: unknown): boolean => {
+/** The run id a queued send is built under; the queue never sends it. */
+const QUEUED_SEND_RUN_ID = "queued";
+
+/** Whether `error`, or an error it was caused by, is the API's `code`. */
+export const hasChatErrorCode = (error: unknown, code: string): boolean => {
   const visited = new Set<Error>();
   let current = error;
 
   while (current instanceof Error && !visited.has(current)) {
-    if (
-      APIError.is(current) &&
-      current.code === CHAT_CONTINUATION_REJECTED_ERROR_CODE
-    ) {
+    if (APIError.is(current) && current.code === code) {
       return true;
     }
     visited.add(current);
@@ -224,40 +480,85 @@ const isRejectedChatContinuation = (error: unknown): boolean => {
   return false;
 };
 
+const isRejectedChatContinuation = (error: unknown): boolean =>
+  hasChatErrorCode(error, CHAT_CONTINUATION_REJECTED_ERROR_CODE);
+
+/** The server refused a request for a turn it already settled (failed,
+ *  completed or superseded): its stored outcome is the answer. */
+const isSettledTurnRefusal = (error: unknown): boolean =>
+  hasChatErrorCode(error, CHAT_TURN_NOT_OWNED_ERROR_CODE);
+
+/**
+ * The SDK replays a transport failure as a generic error after its typed
+ * cause reached the page (a refused rejoin ends its stream as a bare
+ * `HTTP error! status: 502`). The typed error already shown stays: losing it
+ * would report an ended session or an admission refusal as a failed send.
+ */
+const keepsShownChatError = (shown: Error | undefined, next: Error): boolean =>
+  (actionAdmissionOutcome(shown) && !actionAdmissionOutcome(next)) ||
+  (chatRefusal(shown) !== null && chatRefusal(next) === null) ||
+  (findChatRequestError(shown) !== undefined &&
+    findChatRequestError(next) === undefined) ||
+  (providerDiagnosticFromThrown(shown) !== undefined &&
+    providerDiagnosticFromThrown(next) === undefined) ||
+  (localRunLimitResetsAtFromThrown(shown) !== null &&
+    localRunLimitResetsAtFromThrown(next) === null) ||
+  (shown !== undefined &&
+    isClassifiedRunError(shown) &&
+    !isClassifiedRunError(next));
+
+const CHAT_RESUME_PROBE_TIMEOUT_MS = 10_000;
+
 /** How often, and how many times, a Stop the server accepted but has not
  *  settled yet (its run lives on another instance) asks again. */
 const STOP_SETTLE_POLL_MS = 500;
 const STOP_SETTLE_POLL_ATTEMPTS = 20;
-
-const waitMs = async (ms: number): Promise<void> =>
-  await new Promise((resolve) => {
-    setTimeout(resolve, ms);
-  });
+/** How long one stop request may take. Above the server's own wait for a run
+ *  it produces to settle (10 s), so a stop it answers is never cut short. */
+const STOP_REQUEST_TIMEOUT_MS = 20_000;
 
 /** Whether the stopped turn still runs (its owner settles it soon) or is
  *  settled. */
 type StopAnswer = "running" | "settled";
 
-/** Ask the server to stop `turnId`: its answer is the turn as it stands. */
+/**
+ * Ask the server to stop `turnId`: its answer is the turn as it stands. An
+ * answer that never arrived (the connection failed, or it timed out) is asked
+ * for again up to `retries` times: a stop names its turn, so asking again can
+ * stop only that turn, and the server answers each ask the same way.
+ */
 const requestChatTurnStop = async ({
+  retries = 0,
   threadId,
   turnId,
 }: {
+  retries?: number | undefined;
   threadId: string;
   turnId: SafeId<"chatTurn">;
 }): Promise<Result<StopAnswer, Error>> => {
-  const sent = await Result.tryPromise(
-    async (): Promise<Result<StopAnswer, APIError>> => {
+  const ask = async () =>
+    await Result.tryPromise(async (): Promise<Result<StopAnswer, APIError>> => {
       const { data, error } = await api.chat
         .threads({ threadId: toSafeId<"chatThread">(threadId) })
         .turns({ turnId })
-        .cancel.post();
+        .cancel.post(undefined, {
+          fetch: { signal: AbortSignal.timeout(STOP_REQUEST_TIMEOUT_MS) },
+        });
       if (error) {
         return Result.err(toAPIError(error));
       }
       return Result.ok(data.turn.status === "running" ? "running" : "settled");
-    },
-  );
+    });
+  /** No answer arrived: the request failed before any status came back. */
+  const lost = (asked: Awaited<ReturnType<typeof ask>>) =>
+    Result.isError(asked) ||
+    (Result.isError(asked.value) &&
+      (asked.value.error.transportKind === "network" ||
+        asked.value.error.transportKind === "timeout"));
+  let sent = await ask();
+  for (let retry = 0; retry < retries && lost(sent); retry += 1) {
+    sent = await ask();
+  }
   return Result.isError(sent)
     ? Result.err(toError(sent.error.cause))
     : sent.value;
@@ -265,13 +566,16 @@ const requestChatTurnStop = async ({
 
 const ignoreAbandonedStreamError = (_error: unknown): void => undefined;
 
-class ChatMessageStartError extends Error {
+class ChatMessageStartError extends ChatRequestError {
   readonly messageId: SafeId<"chatMessage">;
 
-  constructor(messageId: SafeId<"chatMessage">) {
-    super(
-      `TanStack ChatClient did not append user message "${messageId}" before starting the stream.`,
-    );
+  constructor(messageId: SafeId<"chatMessage">, cause?: unknown) {
+    super({
+      kind: "not_started",
+      message:
+        "Chat client did not start the message while another request was active",
+      cause,
+    });
     this.name = "ChatMessageStartError";
     this.messageId = messageId;
   }
@@ -291,6 +595,7 @@ const hasUserMessage = (
 
 export const createChatRuntime = ({
   activeTurnId,
+  activeTurnSteering = CHAT_TURN_STEERING.notSteerable,
   context,
   initialMessages,
   key,
@@ -298,18 +603,33 @@ export const createChatRuntime = ({
   onFinish,
   reloadThread,
   scheduleEmit = scheduleStreamEmit,
+  turnsStarted = 0,
 }: CreateChatRuntimeProps): ChatRuntime => {
+  const observeTurnTimings = createChatTurnTimingObserver();
+  observeTurnTimings(initialMessages, performance.now());
+  const sendTiming = createChatSendTiming(getAnalytics);
   const listeners = new Set<() => void>();
+  let subscriberCount = 0;
+  let replayFloor = activeTurnId === null ? undefined : initialMessages;
   let activeToolResultOperation: ActiveToolResultOperation | undefined;
   let toolResultQueue = Promise.resolve();
   let snapshot: ChatRuntimeSnapshot = {
     error: undefined,
     isLoading: false,
+    localRunQuestion: null,
+    reconnecting: activeTurnId !== null,
     messages: initialMessages,
     sessionGenerating: false,
     status: "ready",
     stop: { status: "idle" },
     turnAbandoned: false,
+    computerWait: null,
+    turnSteering:
+      activeTurnId === null
+        ? CHAT_TURN_STEERING.notSteerable
+        : activeTurnSteering,
+    turnSentAt: null,
+    turnsStarted,
   };
   /** The server turn the latest request runs; null from a new message until
    *  the server names its turn. */
@@ -317,16 +637,64 @@ export const createChatRuntime = ({
   /** The turn the user last stopped. Its continuations never leave the page:
    *  the server settles it, and a result for it would only be refused. */
   let stoppedTurnId: SafeId<"chatTurn"> | null = null;
+  let stopBeforeHeaders: "none" | "requested" = "none";
+  /** A send held while stella desktop opens, before anything is posted.
+   *  Stop releases it at once and nothing is sent. */
+  let desktopHold: AbortController | null = null;
   const isStoppedTurn = (): boolean =>
     stoppedTurnId !== null && stoppedTurnId === turnId;
-  /** A new message starts a new turn: until the server names it, Stop can
-   *  only close the request, and a stop of the previous turn is over. */
+  /** Settles once the request of the page's current loading has its
+   *  answer's headers, or the loading ends: the server holds the turn by
+   *  then, as one that runs again after a resumed wait. A new loading opens
+   *  a new one, before its request is posted. */
+  let requestAnswered = Promise.withResolvers<undefined>();
+  requestAnswered.resolve(undefined);
+  /** The route handoff no page has taken yet (`takeRouteHandoff`). */
+  let routeHandoff: ChatRouteHandoff | null = null;
+  /** Counts the page's loadings, so a steer stays with the one it was asked
+   *  in. */
+  let loadingGeneration = 0;
+  /** Steers waiting to hear from the running turn, by input id. */
+  const pendingSteers = new Map<string, (outcome: ChatSteerOutcome) => void>();
+  const settleSteer = (inputId: string, outcome: ChatSteerOutcome) => {
+    const settle = pendingSteers.get(inputId);
+    pendingSteers.delete(inputId);
+    settle?.(outcome);
+  };
+  /** The request ended: no steer still waiting can hear from its turn. */
+  const settleOpenSteers = () => {
+    for (const inputId of [...pendingSteers.keys()]) {
+      settleSteer(inputId, STEER_UNSETTLED);
+    }
+  };
+  /** The server refused the latest request for a turn it had already
+   *  settled. Kept apart from `snapshot.error`, which stays empty for it, so
+   *  a generic replay of the same failure stays quiet too; the next request
+   *  clears it. */
+  let settledTurnRefused = false;
+  /** A send that waits to hear whether the server accepted its turn; the
+   *  request the send posts answers it (see `turnObservingFetchClient`). */
+  let awaitedSendAcceptance:
+    PromiseWithResolvers<ChatSendAcceptance> | undefined;
+  /** The run of the member's command (a send, an answer) the next request
+   *  posts, sent under a command id and again when its response is lost;
+   *  an edit or a regeneration is no command. */
+  let postedCommandRunId: string | undefined;
+  /** TanStack's delivery of the page's latest send, until it has finished. */
+  let clientDelivery: Promise<void> | undefined;
+  /** A new message starts a new turn. Stop waits for its response headers
+   *  to name the turn; a stop of the previous turn is over. */
   const startTurn = (): void => {
     turnId = null;
     stoppedTurnId = null;
-    if (snapshot.stop.status !== "idle") {
-      setSnapshot({ stop: { status: "idle" } });
-    }
+    settledTurnRefused = false;
+    stopBeforeHeaders = "none";
+    setSnapshot({
+      turnSentAt: performance.now(),
+      turnSteering: CHAT_TURN_STEERING.notSteerable,
+      turnsStarted: snapshot.turnsStarted + 1,
+      ...(snapshot.stop.status === "idle" ? {} : { stop: { status: "idle" } }),
+    });
   };
 
   let cancelScheduledEmit: (() => void) | undefined;
@@ -359,11 +727,31 @@ export const createChatRuntime = ({
 
   const setSnapshot = (patch: Partial<ChatRuntimeSnapshot>) => {
     snapshot = { ...snapshot, ...patch };
+    if (patch.messages !== undefined) {
+      observeTurnTimings(snapshot.messages, performance.now());
+    }
     emit();
   };
 
+  let providerDiagnostic: ProviderDiagnostic | undefined;
+  /** When the usage limit of the harness that ran the turn resets. */
+  let localRunLimitResetsAt: string | null = null;
+  /** The run error's own details, which the SDK's error drops. */
+  const withRunErrorDetails = (error: Error) =>
+    withLocalRunLimitResetsAt(
+      withProviderDiagnostic(error, providerDiagnostic),
+      localRunLimitResetsAt,
+    );
   const captureRuntimeError = (error: unknown): Error => {
-    const normalized = toError(error);
+    const normalized = withRunErrorDetails(toError(error));
+    // Interrupt submission reports the same transport failure again after
+    // the SDK has reduced it to a generic interrupt error. Keep its typed cause.
+    if (
+      snapshot.error !== undefined &&
+      keepsShownChatError(snapshot.error, normalized)
+    ) {
+      return snapshot.error;
+    }
     if (snapshot.error !== normalized) {
       onError(normalized);
       setSnapshot({ error: normalized });
@@ -434,32 +822,204 @@ export const createChatRuntime = ({
 
   const turnObservingFetchClient = Object.assign(
     async (input: RequestInfo | URL, init?: RequestInit) => {
-      const response = await chatFetchClient(input, init);
-      const servedTurnId = response.headers.get(CHAT_TURN_ID_HEADER);
+      // A send waiting to hear whether its turn was accepted hears it from
+      // the next request the page posts; a rejoin replays with GET.
+      const acceptance =
+        init?.method === "GET" ? undefined : awaitedSendAcceptance;
+      if (acceptance !== undefined) {
+        awaitedSendAcceptance = undefined;
+      }
+      const commandRunId =
+        init?.method === "GET" ? undefined : postedCommandRunId;
+      postedCommandRunId = undefined;
+      const received = await Result.tryPromise({
+        try: async () =>
+          commandRunId === undefined
+            ? await chatFetchClient(input, init)
+            : await chatCommandFetchClient(input, init),
+        catch: toError,
+      });
+      requestAnswered.resolve(undefined);
+      const replayed =
+        Result.isError(received) &&
+        ChatCommandReplayedError.is(received.error) &&
+        commandRunId !== undefined
+          ? { runId: commandRunId, turnId: received.error.turnId }
+          : undefined;
+      if (Result.isError(received) && replayed === undefined) {
+        acceptance?.resolve({ status: "failed", error: received.error });
+        return readQueryResult(received);
+      }
+      acceptance?.resolve({ status: "accepted" });
+      // An earlier attempt of this command was accepted and its response
+      // lost: its turn is this request's. The page follows it in the thread
+      // as stored, which rejoins the turn while it runs, as after a stream
+      // whose run log is gone.
+      const response =
+        replayed === undefined
+          ? readQueryResult(received)
+          : finishedChatRunResponse(replayed.runId);
+      if (replayed !== undefined) {
+        setSnapshot({ turnAbandoned: true });
+        reloadThread();
+      }
+      const servedTurnId =
+        replayed?.turnId ?? response.headers.get(CHAT_TURN_ID_HEADER);
       if (servedTurnId !== null) {
         turnId = toSafeId<"chatTurn">(servedTurnId);
+        if (stopBeforeHeaders === "requested") {
+          stopBeforeHeaders = "none";
+          stoppedTurnId = turnId;
+          setSnapshot({
+            stop: { status: "pending", turnId },
+            turnAbandoned: true,
+          });
+          detached(settleStop(turnId), "chat-runtime.stop-before-headers");
+        }
       }
       return response;
     },
     { preconnect: () => undefined },
   ) satisfies typeof globalThis.fetch;
-  const upstreamConnection = fetchServerSentEvents(getChatApiPath(), {
-    credentials: "include",
-    headers: { "Content-Type": "application/json" },
-    fetchClient: turnObservingFetchClient,
-  });
+  const turnUrl = (action: "resume" | "join") => {
+    if (turnId === null) {
+      return panic("Cannot rejoin a chat before the server names its turn");
+    }
+    const url = new URL(
+      apiUrl(`/chat/threads/${key.threadId}/turns/${turnId}/${action}`),
+    );
+    if (key.scope === "workspace") {
+      url.searchParams.set("workspaceId", key.workspaceId);
+    }
+    return url.toString();
+  };
+  const loadedResume = v.safeParse(
+    chatResumeSnapshotSchema,
+    initialMessages.at(-1)?.metadata?.resumeSnapshot,
+  );
+  const { connection: upstreamConnection, persistence } =
+    createDurableChatTransport({
+      initialMessages,
+      initialTurn:
+        loadedResume.success &&
+        (loadedResume.output.pendingInterrupts?.length ?? 0) > 0
+          ? { type: "parked", runId: loadedResume.output.resumeState.runId }
+          : {
+              // A turn parked by a release without native resume state is
+              // already whole on the loaded page; reloading cannot change it.
+              type:
+                activeTurnId === null ||
+                getAwaitedAssistantMessageId(initialMessages) !== null
+                  ? "settled"
+                  : "active",
+            },
+      threadId: key.threadId,
+      sendUrl: getChatApiPath(),
+      joinUrl: () => turnUrl("join"),
+      fetchClient: turnObservingFetchClient,
+      onReconnectChange: (reconnecting) => {
+        setSnapshot({ reconnecting });
+      },
+      onError: (error) => {
+        captureRuntimeError(error);
+      },
+      onTranscript: () => {
+        setSnapshot({ turnAbandoned: true });
+        reloadThread();
+      },
+      // The SDK adapter consumes Promise rejections; shared transport catches
+      // typed probe failures with Result and surfaces them through onError.
+      probe: async (signal) => {
+        if (turnId === null) {
+          const resume: unknown =
+            initialMessages.at(-1)?.metadata?.resumeSnapshot;
+          if (resume === undefined) {
+            return { type: "transcript", turnId: "" };
+          }
+          const parsed = v.safeParse(chatResumeSnapshotSchema, resume);
+          if (!parsed.success) {
+            return await Promise.reject(
+              new ChatReconnectError({
+                code: "invalid-response",
+                message: "Invalid chat resume state.",
+              }),
+            );
+          }
+          return {
+            type: "transcript",
+            turnId: "",
+            resumeSnapshot: parsed.output,
+          };
+        }
+        const response = await fetchWithTimeout(turnUrl("resume"), {
+          credentials: "include",
+          ...(signal === undefined || signal === null ? {} : { signal }),
+          timeout: { type: "headers", ms: CHAT_RESUME_PROBE_TIMEOUT_MS },
+        });
+        if (!response.ok) {
+          if (response.status === 404) {
+            return { type: "transcript", turnId };
+          }
+          const refused = response.status === 401 || response.status === 403;
+          return await Promise.reject(
+            new ChatReconnectError({
+              // The server's refusal stays the cause, so the page tells an
+              // ended session (sign in again) from lost access.
+              ...(refused
+                ? {
+                    code: "refused" as const,
+                    cause: await chatResponseError(response),
+                  }
+                : {}),
+              message: `Chat resume probe failed (${response.status}).`,
+            }),
+          );
+        }
+        const data = await readBodyJsonWithIdleDeadline(response, {
+          idleMs: CHAT_RESUME_PROBE_TIMEOUT_MS,
+          ...(signal === undefined || signal === null ? {} : { signal }),
+        });
+        const parsed = v.safeParse(chatTurnResumeProbeSchema, data);
+        if (!parsed.success) {
+          return await Promise.reject(
+            new ChatReconnectError({
+              code: "invalid-response",
+              message: "Invalid chat resume state.",
+            }),
+          );
+        }
+        return parsed.output;
+      },
+    });
   const connection = {
+    joinRun: (runId, signal) =>
+      keepPostedMessagesInSnapshots(
+        snapshot.messages,
+        upstreamConnection.joinRun(runId, signal),
+      ),
     connect: (messages, data, abortSignal, runContext) => {
-      if (runContext === undefined) {
-        return panic("TanStack connection omitted the AG-UI run context");
-      }
       if (!messages.every(isChatUiMessage)) {
         return panic("Stella chat connection received model messages");
       }
-      return keepPostedMessagesInSnapshots(
-        messages,
-        upstreamConnection.connect(
-          messages,
+      providerDiagnostic = undefined;
+      localRunLimitResetsAt = null;
+      if (!isBrowserExtensionBridgeMounted()) {
+        getAnalytics().captureError(
+          new BrowserBridgeUnmountedError({
+            message:
+              "Chat sent without the browser extension bridge mounted; the browser tool is unavailable for this turn",
+          }),
+          {
+            fingerprintKey: "chatRuntime:browserBridgeUnmounted",
+            scope: {
+              type: "handler",
+              handlerId: "chatRuntime:browserBridgeUnmounted",
+            },
+          },
+        );
+      }
+      const prepared = Result.try({
+        try: () =>
           buildSendRequestBody({
             context,
             key,
@@ -467,23 +1027,152 @@ export const createChatRuntime = ({
             run: runContext,
             requestBody: normalizeChatContinuationRequestBody(data),
           }),
-          abortSignal,
-          runContext,
-        ),
-      );
+        catch: (cause) =>
+          new ChatRequestError({
+            kind: "preparation_failed",
+            message: "Chat request could not be prepared",
+            cause,
+          }),
+      });
+      const requestBody = readQueryResult(prepared);
+      const send = () => {
+        postedCommandRunId =
+          requestBody.turnIntent === undefined ? runContext.runId : undefined;
+        return observeChatProviderDiagnostic(
+          keepPostedMessagesInSnapshots(
+            messages,
+            upstreamConnection.connect(
+              // The envelope names only the message this request posts: the
+              // server reads the thread's history from its own store and
+              // checks just that the envelope carries the posted message, so
+              // a long thread is never uploaded again with every send
+              // (`chat-runtime-send-budget.test.ts`).
+              messages.slice(-1),
+              requestBody,
+              abortSignal,
+              {
+                ...runContext,
+                // The API owns tool schemas and derives browser availability
+                // from browserExtension. Keep local executors registered
+                // without uploading their schemas on every send and
+                // continuation.
+                clientTools: [],
+              },
+            ),
+          ),
+          {
+            scope: {
+              type: "handler",
+              handlerId: `chat-provider-diagnostic.${key.scope}.${getChatRuntimeContextKind(context)}`,
+            },
+            onDiagnostic: (diagnostic) => {
+              providerDiagnostic = diagnostic;
+            },
+            onLocalRunLimit: (resetsAt) => {
+              localRunLimitResetsAt = resetsAt;
+            },
+          },
+        );
+      };
+      // A new message for the member's computer while stella desktop opens
+      // (the member's own send or Run on pick started it) waits for the
+      // launch, shown as such, and goes out once it ends. A continuation of
+      // a turn the server already accepted (`turnId` names it) is never
+      // held: that turn owns its wait for the computer, and Stop must reach
+      // it through the server.
+      const launching =
+        turnId === null && context?.getRunTarget?.().kind === "local"
+          ? (getDesktopLaunch().pending()?.outcome ?? null)
+          : null;
+      if (launching === null) {
+        return send();
+      }
+      const hold = new AbortController();
+      desktopHold = hold;
+      return heldForDesktop({
+        outcome: launching,
+        signal:
+          abortSignal === undefined
+            ? hold.signal
+            : AbortSignal.any([abortSignal, hold.signal]),
+        onHold: (held) => {
+          if (!held && desktopHold === hold) {
+            desktopHold = null;
+          }
+          setSnapshot({ computerWait: held ? OPENING_DESKTOP_WAIT : null });
+        },
+        send,
+      });
     },
   } satisfies ConnectConnectionAdapter;
 
   // The extension budgets browser commands per chat turn, named by its
   // persisted user message, so a runtime rebuilt mid-turn charges the same
   // turn.
-  const browserTool = createBrowserClientTool({
+  const browserTool = createBrowserExtensionTool({
     turnIdFor: (toolCallId) => browserTurnId(snapshot.messages, toolCallId),
   });
+
+  // The SDK rejoins a persisted in-flight run only while a view tails it, and
+  // drops a resume that lands earlier. Read server truth once one is attached.
+  const viewerAttached = Promise.withResolvers<undefined>();
+  /**
+   * The client's mount read of server truth, the only path that rejoins a
+   * turn this page did not start. TanStack drops the read, resume included,
+   * when the client's message list changes while it is pending. So until it
+   * settles, the page's own message writes stay in the snapshot
+   * (`showMessages`), and the read hands TanStack the messages shown then.
+   */
+  let mountRead: "pending" | "settled" = "pending";
+  let mountReadHeldMessages = false;
+  /** The read found a run with nothing to answer: TanStack rejoins it. */
+  let mountReadFoundRun = false;
+  const attachedPersistence = {
+    ...persistence,
+    getItem: async (threadId: string) => {
+      await viewerAttached.promise;
+      const state = await persistence.getItem(threadId);
+      if (state === undefined) {
+        return undefined;
+      }
+      const resume: { pendingInterrupts?: readonly unknown[] } | undefined =
+        state.resume;
+      mountReadFoundRun =
+        resume !== undefined && (resume.pendingInterrupts?.length ?? 0) === 0;
+      return withCurrentChatMessages(state, () => snapshot.messages);
+    },
+  } satisfies typeof persistence;
+
+  /**
+   * The mount read has settled: TanStack applied it, dropped it, or a request
+   * took the client over first. A request owns the turn from here. Otherwise
+   * the client takes the messages the page held back, and a run the read
+   * found but nothing rejoined (the last view left meanwhile) is reloaded
+   * from the server instead of staying "reconnecting".
+   */
+  const settleMountRead = (): void => {
+    if (mountRead === "settled") {
+      return;
+    }
+    mountRead = "settled";
+    const heldMessages = mountReadHeldMessages;
+    mountReadHeldMessages = false;
+    if (client.getIsLoading()) {
+      return;
+    }
+    if (heldMessages) {
+      client.setMessagesManually(snapshot.messages);
+    }
+    if (mountReadFoundRun) {
+      setSnapshot({ reconnecting: false, turnAbandoned: true });
+      reloadThread();
+    }
+  };
 
   const client = new ChatClient<ChatClientTools, unknown, readonly []>({
     threadId: key.threadId,
     initialMessages,
+    persistence: attachedPersistence,
     connection,
     onError: (error) => {
       // A request of a turn the user stopped fails as the stop's own effect
@@ -492,47 +1181,173 @@ export const createChatRuntime = ({
       if (isStoppedTurn()) {
         return;
       }
+      // The same holds for a turn the server settled on its own: a
+      // continuation posted after it ended is refused as not owned, and the
+      // page shows what the server stored instead of reporting a failure.
+      if (isSettledTurnRefusal(error)) {
+        if (activeToolResultOperation !== undefined) {
+          activeToolResultOperation.rejection = error;
+        }
+        if (!settledTurnRefused) {
+          settledTurnRefused = true;
+          reloadThread();
+        }
+        return;
+      }
+      if (settledTurnRefused) {
+        return;
+      }
       if (
         activeToolResultOperation !== undefined &&
         isRejectedChatContinuation(error)
       ) {
         activeToolResultOperation.rejection = error;
       }
-      onError(error);
-      setSnapshot({ error });
+      const normalized = withRunErrorDetails(normalizeChatStreamError(error));
+      if (keepsShownChatError(snapshot.error, normalized)) {
+        return;
+      }
+      onError(normalized);
+      setSnapshot({ error: normalized });
     },
     onErrorChange: (error) => {
       // The SDK can replay a transport failure as a generic RUN_ERROR after
       // reporting its typed cause. A new request clears the error first.
+      if (error === undefined) {
+        settledTurnRefused = false;
+      } else if (settledTurnRefused) {
+        return;
+      }
       if (
         error !== undefined &&
-        ((actionAdmissionOutcome(snapshot.error) &&
-          !actionAdmissionOutcome(error)) ||
-          (chatRefusal(snapshot.error) !== null && chatRefusal(error) === null))
+        keepsShownChatError(snapshot.error, withRunErrorDetails(error))
       ) {
         return;
       }
-      if (error === undefined || !isStoppedTurn()) {
-        setSnapshot({ error });
+      if (
+        error === undefined ||
+        (!isStoppedTurn() && !isSettledTurnRefusal(error))
+      ) {
+        setSnapshot({
+          error: error === undefined ? undefined : withRunErrorDetails(error),
+        });
       }
     },
-    onFinish,
-    onInterruptStateChange: observeInterruptSubmission,
+    onFinish: () => {
+      replayFloor = undefined;
+      onFinish();
+    },
+    onHydratingChange: (hydrating) => {
+      if (!hydrating) {
+        settleMountRead();
+      }
+    },
+    onInterruptStateChange: (state) => {
+      observeInterruptSubmission(state);
+      // TanStack holds a local run's question as an interrupt it cannot
+      // resolve (it carries no resume binding): the server owns the pause,
+      // and the card answers it through `answerLocalRunQuestion`.
+      const localRunQuestion = localRunQuestionPauseOf(state.interrupts);
+      if (
+        !isSameLocalRunQuestionPause(
+          snapshot.localRunQuestion,
+          localRunQuestion,
+        )
+      ) {
+        setSnapshot({ localRunQuestion });
+      }
+    },
+    onCustomEvent: (name, value) => {
+      if (name === CHAT_LOCAL_RUN_STEER_EVENT) {
+        // A malformed or unknown one settles nothing; the turn's end does.
+        const steer = v.safeParse(chatLocalRunSteerEventSchema, value);
+        if (steer.success) {
+          settleSteer(steer.output.inputId, steerOutcomeOfEvent(steer.output));
+        }
+        return;
+      }
+      if (name === CHAT_TURN_STEERING_EVENT) {
+        // Unreadable, the turn keeps what it was told: a message then waits.
+        const steering = v.safeParse(chatTurnSteeringEventSchema, value);
+        if (steering.success) {
+          setSnapshot({ turnSteering: steering.output.steering });
+        }
+        return;
+      }
+      if (name !== CHAT_LOCAL_RUN_COMPUTER_EVENT) {
+        return;
+      }
+      const parsed = v.safeParse(chatLocalRunComputerEventSchema, value);
+      if (!parsed.success) {
+        getAnalytics().captureError(
+          new ClientOperationError({
+            action: "chat.localRunComputerEvent",
+            message: "A local run sent a computer status the page cannot read",
+          }),
+          {
+            fingerprintKey: "chatRuntime:localRunComputerEvent",
+            scope: {
+              type: "handler",
+              handlerId: "chatRuntime:localRunComputerEvent",
+            },
+          },
+        );
+        return;
+      }
+      setSnapshot({
+        computerWait:
+          parsed.output.status === "connected" ? null : parsed.output,
+      });
+    },
     onLoadingChange: (isLoading) => {
+      if (isLoading) {
+        loadingGeneration += 1;
+        requestAnswered = Promise.withResolvers<undefined>();
+      } else {
+        requestAnswered.resolve(undefined);
+        settleOpenSteers();
+      }
       setSnapshot({
         isLoading,
-        ...(isLoading ? { turnAbandoned: false } : {}),
+        // A wait belongs to the request that reported it.
+        computerWait: null,
+        ...(!isLoading ? { reconnecting: false, turnSentAt: null } : {}),
+        ...(isLoading && stopBeforeHeaders === "none" && !isStoppedTurn()
+          ? { turnAbandoned: false }
+          : {}),
       });
     },
     onMessagesChange: (messages) => {
-      snapshot = { ...snapshot, messages: toPersistedChatMessages(messages) };
+      const persisted = toPersistedChatMessages(messages);
+      snapshot = {
+        ...snapshot,
+        messages:
+          replayFloor === undefined
+            ? persisted
+            : keepShownRejoinMessages(replayFloor, persisted),
+      };
+      observeTurnTimings(snapshot.messages, performance.now());
+      sendTiming.messagesChanged(snapshot.messages);
       emitMessagesChange();
     },
     onSessionGeneratingChange: (sessionGenerating) =>
       setSnapshot({ sessionGenerating }),
-    onStatusChange: (status) => setSnapshot({ status }),
+    onStatusChange: (status) => {
+      sendTiming.statusChanged(status);
+      setSnapshot({ status });
+    },
     tools: [browserTool.tool],
   });
+
+  /** Replace the shown messages; the one writer of the client's list. */
+  const showMessages = (messages: PersistedChatMessage[]): void => {
+    if (mountRead === "pending") {
+      mountReadHeldMessages = true;
+    } else {
+      client.setMessagesManually(messages);
+    }
+    setSnapshot({ messages });
+  };
 
   /**
    * Wait for the page's request to end before answering a card or an
@@ -562,16 +1377,16 @@ export const createChatRuntime = ({
     return !isStoppedTurn();
   };
 
-  const withBody = async (
+  const withBody = async <T>(
     options: ChatSendMessageOptions | undefined,
-    action: () => Promise<void>,
+    action: () => Promise<T>,
   ) => {
     if (options?.body !== undefined) {
       client.updateOptions({ forwardedProps: options.body });
     }
 
     try {
-      await action();
+      return await action();
     } finally {
       if (options?.body !== undefined) {
         client.updateOptions({ forwardedProps: {} });
@@ -664,26 +1479,158 @@ export const createChatRuntime = ({
     client.stop();
   };
 
+  /** Tails the client first, so a persisted resume read after it rejoins. */
+  const attachClient = () => {
+    client.attach();
+    viewerAttached.resolve(undefined);
+  };
+
+  type ChatClientSendStart =
+    | ChatRouteHandoffStart
+    | {
+        status: "not_started";
+        messageId: SafeId<"chatMessage">;
+        stream: Promise<void>;
+      };
+
   const startClientSend = (
     message: ChatUserMessageInput,
     options: ChatSendMessageOptions | undefined,
-  ): ChatRouteHandoffStart => {
+  ): ChatClientSendStart => {
+    attachClient();
     supersedePendingInterrupts();
-    const stream = client.sendMessage(message, options?.body);
+    const requestWasActive =
+      snapshot.isLoading || isChatClientRequestActive(snapshot.status);
+    // TanStack would queue a send made while it is busy and post it later on
+    // its own; the session's queue retries a refused send itself, so a busy
+    // client refuses it instead of sending it twice.
+    const stream = client.sendMessage(message, options?.body, {
+      whenBusy: "drop",
+    });
     if (!hasUserMessage(snapshot.messages, message.id)) {
-      detached(stream.catch(ignoreAbandonedStreamError), "chat-queries.stream");
-      throw captureRuntimeError(new ChatMessageStartError(message.id));
+      return {
+        messageId: message.id,
+        status: "not_started",
+        stream: stream.catch((error: unknown) =>
+          readQueryResult(
+            Result.err(
+              requestWasActive
+                ? new ChatMessageStartError(message.id, error)
+                : new ChatRequestError({
+                    kind: "preparation_failed",
+                    message: "Chat client failed before starting the message",
+                    cause: error,
+                  }),
+            ),
+          ),
+        ),
+      };
     }
     startTurn();
+    sendTiming.started(options?.timingSurface, message.id);
+    const delivered = stream.then(
+      () => undefined,
+      () => undefined,
+    );
+    clientDelivery = delivered;
+    detached(
+      (async () => {
+        await delivered;
+        if (clientDelivery === delivered) {
+          clientDelivery = undefined;
+        }
+      })(),
+      "chat-runtime.client-delivery",
+    );
     return { messageId: message.id, status: "started", stream };
   };
 
   const sendThreadMessage: ChatThreadSendMessage = async (message, options) => {
-    const { stream } = startClientSend(message, options);
-    try {
-      await stream;
-    } catch (error) {
-      throw captureRuntimeError(error);
+    // A turn reads ready a few ticks before TanStack has finished delivering
+    // it; a send in that window would be refused as busy, so it waits for
+    // the delivery to end. A request still running is refused as before.
+    if (
+      clientDelivery !== undefined &&
+      !snapshot.isLoading &&
+      !isChatClientRequestActive(snapshot.status)
+    ) {
+      await clientDelivery;
+    }
+    const started = startClientSend(message, options);
+    const outcome = await Result.tryPromise({
+      try: async () => await started.stream,
+      catch: (cause) => captureRuntimeError(cause),
+    });
+    readQueryResult(outcome);
+    if (started.status === "not_started") {
+      return readQueryResult(
+        Result.err(captureRuntimeError(new ChatMessageStartError(message.id))),
+      );
+    }
+  };
+
+  /**
+   * Listen for whether the server takes the turn of the next send the page
+   * posts; call before starting it. The answer comes as soon as the server
+   * answered; a send that ends before its request was answered (it never
+   * started, or failed while it was prepared) answers from how its
+   * `delivery` ended.
+   */
+  const listenForSendAcceptance = () => {
+    const acceptance = Promise.withResolvers<ChatSendAcceptance>();
+    awaitedSendAcceptance = acceptance;
+    const errorBeforeSend = snapshot.error;
+    return async (delivery: Promise<void>): Promise<ChatSendAcceptance> =>
+      await settleSendAcceptance({ acceptance, delivery, errorBeforeSend });
+  };
+
+  const settleSendAcceptance = async ({
+    acceptance,
+    delivery,
+    errorBeforeSend,
+  }: {
+    acceptance: PromiseWithResolvers<ChatSendAcceptance>;
+    delivery: Promise<void>;
+    errorBeforeSend: Error | undefined;
+  }): Promise<ChatSendAcceptance> => {
+    const delivered = Result.tryPromise({
+      try: async () => {
+        await delivery;
+      },
+      catch: toError,
+    }).then((outcome): ChatSendAcceptance => {
+      if (Result.isError(outcome)) {
+        return { status: "failed", error: outcome.error };
+      }
+      return snapshot.error !== undefined && snapshot.error !== errorBeforeSend
+        ? { status: "failed", error: snapshot.error }
+        : { status: "accepted" };
+    });
+    const answer = await Promise.race([acceptance.promise, delivered]);
+    if (awaitedSendAcceptance === acceptance) {
+      awaitedSendAcceptance = undefined;
+    }
+    if (answer.status === "failed") {
+      // A refused request is over only once TanStack has handled it: it puts
+      // back the messages it showed before the send, so a caller that shows
+      // other messages afterwards must not race that rollback.
+      await delivered;
+    }
+    return answer;
+  };
+
+  const sendThreadMessageUntilAccepted: ChatThreadSendUntilAccepted = async (
+    message,
+    options,
+  ) => {
+    const answer = listenForSendAcceptance();
+    return await answer(sendThreadMessage(message, options));
+  };
+
+  const showStoredMessages = (messages: PersistedChatMessage[]): void => {
+    showMessages(messages);
+    if (snapshot.error !== undefined) {
+      setSnapshot({ error: undefined });
     }
   };
 
@@ -695,34 +1642,151 @@ export const createChatRuntime = ({
    */
   const approvalAnswers = new Map<string, Promise<void>>();
 
+  /** Local-run pauses already answered or dismissed, by interrupt id. */
+  const answeredLocalRunQuestions = new Set<string>();
+
+  /**
+   * Resume the turn a local run paused on its question. TanStack exposes the
+   * pause as an unbound interrupt it cannot resolve, so the resume goes out as
+   * the AG-UI resume item the server reads: the answers as the reply payload,
+   * or a cancellation the server turns into a stop of the run's turn.
+   */
+  const answerLocalRunQuestion = async (
+    interruptId: string,
+    answers: ChatLocalRunQuestionReply["answers"] | null,
+  ): Promise<LocalRunAnswerDelivery> => {
+    if (isStoppedTurn()) {
+      return "not_sent";
+    }
+    // Already on its way: the one answer stands.
+    if (answeredLocalRunQuestions.has(interruptId)) {
+      return "sent";
+    }
+    answeredLocalRunQuestions.add(interruptId);
+    if (!(await awaitRequestEnd())) {
+      answeredLocalRunQuestions.delete(interruptId);
+      return "not_sent";
+    }
+    const resumed = await Result.tryPromise(
+      async () =>
+        await client.resumeInterruptsUnsafe([
+          answers === null
+            ? { interruptId, status: "cancelled" }
+            : {
+                interruptId,
+                status: "resolved",
+                payload: {
+                  answers,
+                } satisfies ChatLocalRunQuestionReply,
+              },
+        ]),
+    );
+    if (Result.isError(resumed)) {
+      answeredLocalRunQuestions.delete(interruptId);
+      captureRuntimeError(resumed.error.cause);
+      return "not_sent";
+    }
+    // The client resolves false, not throws, when the request failed.
+    if (!resumed.value) {
+      answeredLocalRunQuestions.delete(interruptId);
+      return "not_sent";
+    }
+    return "sent";
+  };
+
+  /**
+   * Hand `text` to the turn running on the member's computer without
+   * stopping it. Resolves once the turn said what became of it (`steered`:
+   * its answer holds the message now; `refused`: it still runs and did not
+   * take it, as a cloud turn never does), or `unsettled` when no turn of
+   * this page runs any more or it ended before saying. A request that
+   * failed settles nothing: the turn's stream or its end does.
+   */
+  const steerLocalTurn = async ({
+    inputId,
+    text,
+    source,
+  }: {
+    inputId: string;
+    text: string;
+    source: ChatLocalRunSteerSource;
+  }): Promise<ChatSteerOutcome> => {
+    // The loading the steer was asked in: a later one is another request,
+    // which the steer must not reach.
+    const loading = loadingGeneration;
+    const running = () =>
+      loadingGeneration === loading && snapshot.isLoading && !isStoppedTurn();
+    if (!running()) {
+      return STEER_UNSETTLED;
+    }
+    const settled = new Promise<ChatSteerOutcome>((resolve) => {
+      pendingSteers.set(inputId, resolve);
+    });
+    // The turn's stream settles the steer, possibly before this request
+    // answers, so the caller hears it as soon as the stream says.
+    const send = async () => {
+      // A request still on its way has no turn the server runs yet: a new
+      // turn has no id until then, and a turn resumed after its wait still
+      // reads as waiting.
+      await requestAnswered.promise;
+      const steeredTurn = turnId;
+      if (!running() || steeredTurn === null) {
+        settleSteer(inputId, STEER_UNSETTLED);
+        return;
+      }
+      const sent = await Result.tryPromise(
+        async (): Promise<Result<ChatLocalRunSteerOutcome, APIError>> =>
+          await invokeAppOnlyWrite("chat.turns.steer", async () => {
+            const { data, error } = await api.chat
+              .threads({ threadId: toSafeId<"chatThread">(key.threadId) })
+              .turns({ turnId: steeredTurn })
+              .steer.post({ inputId, text, source });
+            return error
+              ? Result.err(toAPIError(error))
+              : Result.ok(data.steer);
+          }),
+      );
+      // A failed request may still have queued the input: the turn's stream
+      // or its end settles it, never a guess that it was refused.
+      if (Result.isError(sent)) {
+        captureRuntimeError(sent.error.cause);
+        return;
+      }
+      if (Result.isError(sent.value)) {
+        captureRuntimeError(sent.value.error);
+        return;
+      }
+      const outcome = sent.value.value;
+      if (outcome.type === "queued") {
+        return;
+      }
+      // Only a turn that still runs is one that refused it.
+      settleSteer(
+        inputId,
+        running()
+          ? { type: "refused", reason: outcome.reason }
+          : STEER_UNSETTLED,
+      );
+    };
+    detached(send(), "chat-runtime.steer-local-turn");
+    return await settled;
+  };
+
   const answerToolApproval = async (
     response: { approved: boolean; id: string },
     options: ChatSendMessageOptions | undefined,
-  ) => {
+  ): Promise<Result<void, ChatRequestError>> => {
     if (!(await awaitRequestEnd())) {
-      return;
+      return Result.ok();
     }
-    await withBody(options, async () => {
+    return await withBody(options, async () => {
       const interrupt = client
         .getInterrupts()
         .find(
           (candidate) =>
-            (candidate.kind === "tool-approval" &&
-              candidate.toolCallId === response.id) ||
-            (candidate.kind === "generic" &&
-              (candidate.interruptId === response.id ||
-                candidate.id === response.id)),
+            candidate.interruptId === response.id ||
+            candidate.id === response.id,
         );
-      if (interrupt?.kind === "tool-approval") {
-        await resolveNativeInterrupt(() => {
-          if (response.approved) {
-            interrupt.resolveInterrupt(true);
-          } else {
-            interrupt.resolveInterrupt(false);
-          }
-        });
-        return;
-      }
       if (interrupt?.kind === "generic") {
         // Stella's server tool catalog is dynamic, so the browser has no
         // runtime tool definitions with which to specialize the binding.
@@ -731,13 +1795,77 @@ export const createChatRuntime = ({
         await resolveNativeInterrupt(() => {
           interrupt.resolveInterrupt({ approved: response.approved });
         });
-        return;
+        return Result.ok();
+      }
+
+      if (
+        interrupt?.kind === "unbound" &&
+        interrupt.reason === CHAT_LOCAL_RUN_INTERRUPT_REASONS.approval
+      ) {
+        // Desktop harness approvals carry the local-run protocol, not a
+        // TanStack tool binding. Resume the exact server-owned interrupt,
+        // just as for a local-run question; never use legacy tool approval.
+        const messages = client.getMessages();
+        const pending = messages.some((message) =>
+          message.parts.some(
+            (part) =>
+              part.type === "tool-call" &&
+              part.state === "approval-requested" &&
+              "approval" in part &&
+              part.approval.id === interrupt.interruptId &&
+              part.approval.approved === undefined,
+          ),
+        );
+        if (!pending) {
+          return Result.err(
+            new ChatRequestError({
+              kind: "preparation_failed",
+              message: "The local-run approval is no longer pending",
+            }),
+          );
+        }
+        // Unsafe resume submits the protocol reply but does not apply the
+        // SDK's bound-approval message transition. Keep the posted call and
+        // its native resolution consistent for the server's validation.
+        client.setMessagesManually(
+          messages.map((message) => ({
+            ...message,
+            parts: message.parts.map((part) =>
+              part.type === "tool-call" &&
+              "approval" in part &&
+              part.approval.id === interrupt.interruptId
+                ? {
+                    ...part,
+                    approval: { ...part.approval, approved: response.approved },
+                    state: "approval-responded" as const,
+                  }
+                : part,
+            ),
+          })),
+        );
+        const sent = await client.resumeInterruptsUnsafe([
+          {
+            interruptId: interrupt.interruptId,
+            status: "resolved",
+            payload: { approved: response.approved },
+          },
+        ]);
+        if (!sent) {
+          return Result.err(
+            new ChatRequestError({
+              kind: "preparation_failed",
+              message: "The local-run approval response was not sent",
+            }),
+          );
+        }
+        return Result.ok();
       }
 
       // Transitional reload path for turns persisted before native AG-UI
       // interrupt descriptors were available. New live turns always resolve
       // through the bound interrupt above.
-      await client.addToolApprovalResponse(response);
+      await client.addLegacyToolApprovalResponse(response);
+      return Result.ok();
     });
   };
 
@@ -749,6 +1877,9 @@ export const createChatRuntime = ({
    */
   const settleStop = async (stoppedTurn: SafeId<"chatTurn">) => {
     let answer = await requestChatTurnStop({
+      // The member's Stop is a command like a send: a lost answer is asked
+      // for again before Stop is shown as failed.
+      retries: CHAT_COMMAND_MAX_RETRIES,
       threadId: key.threadId,
       turnId: stoppedTurn,
     });
@@ -769,16 +1900,16 @@ export const createChatRuntime = ({
     }
     // The server holds the stop, so closing the request can no longer turn it
     // into a dropped connection. A run on another instance settles once it
-    // sees the stop; the page reloads after that.
+    // sees the stop; the page asks until it has, and a failed ask only means
+    // the next one decides.
     client.stop();
     for (
       let attempt = 0;
-      Result.isOk(answer) &&
-      answer.value === "running" &&
+      !(Result.isOk(answer) && answer.value === "settled") &&
       attempt < STOP_SETTLE_POLL_ATTEMPTS;
       attempt += 1
     ) {
-      await waitMs(STOP_SETTLE_POLL_MS);
+      await sleep(STOP_SETTLE_POLL_MS);
       answer = await requestChatTurnStop({
         threadId: key.threadId,
         turnId: stoppedTurn,
@@ -787,44 +1918,51 @@ export const createChatRuntime = ({
     if (!isCurrent()) {
       return;
     }
-    // A failed poll is not a settled turn. The server already holds the stop,
-    // so Stop stays available to ask again.
-    if (Result.isError(answer)) {
-      stoppedTurnId = null;
-      setSnapshot({
-        stop: { error: answer.error, status: "failed", turnId: stoppedTurn },
-        turnAbandoned: false,
-      });
-      return;
-    }
-    // Settled, or still running once the polls run out (its owner is gone
-    // and its lease has yet to lapse): reload what the server stores. The
-    // stopped turn's continuations stay held back either way.
+    // Settled, or not known settled once the polls run out (its owner is gone
+    // and its lease has yet to lapse, or the server did not answer): reload
+    // what the server stores. A turn it still runs reloads as running, with
+    // Stop on it again. The stopped turn's continuations stay held back.
     setSnapshot({ stop: { status: "idle" } });
     reloadThread();
   };
 
   const isTurnActive = (): boolean =>
     snapshot.isLoading ||
+    snapshot.reconnecting ||
     snapshot.sessionGenerating ||
     isChatClientRequestActive(snapshot.status) ||
     hasRunningToolCallInLatestAssistantMessage({
       messages: snapshot.messages,
     });
 
-  /** Close the page's request, and reload the thread if a turn was running:
-   *  the server stores what the closed request leaves. */
+  /** Detach delivery and refresh the thread; its server turn keeps running. */
   const closeRequest = (): void => {
     const turnWasActive = isTurnActive();
-    client.stop();
+    client.detach();
+    // The detached delivery is over for this page; a later send never waits
+    // on it.
+    clientDelivery = undefined;
     if (turnWasActive) {
       setSnapshot({ turnAbandoned: true });
       reloadThread();
     }
   };
 
+  /** Start a turn on the page's latest user message again, as the body
+   *  says. */
+  const postLatestMessageAgain = async (
+    options: ChatSendMessageOptions,
+  ): Promise<void> => {
+    startTurn();
+    browserTool.resume();
+    await withBody(options, async () => {
+      await client.reload();
+    });
+  };
+
   const runtime = {
     [CHAT_RUNTIME_BRAND]: true,
+    reportedUnknownActivityTypes: new Set<string>(),
     resolveToolApproval: async (response, options) => {
       if (isStoppedTurn()) {
         return;
@@ -834,9 +1972,10 @@ export const createChatRuntime = ({
         await pending;
         return;
       }
-      const answer = Result.tryPromise(
-        async () => await answerToolApproval(response, options),
-      );
+      const answer = Result.tryPromise({
+        try: async () => await answerToolApproval(response, options),
+        catch: toError,
+      }).then((outcome) => outcome.andThen((result) => result));
       approvalAnswers.set(
         response.id,
         answer.then(() => undefined),
@@ -847,9 +1986,11 @@ export const createChatRuntime = ({
         // The failed continuation is the turn's error, shown like any other.
         // Its card stays answered; the thread reloads from the server, and
         // the next message settles the turn.
-        captureRuntimeError(outcome.error.cause);
+        captureRuntimeError(outcome.error);
       }
     },
+    answerLocalRunQuestion,
+    steerLocalTurn,
     addToolResult: async (result, options) => {
       if (isStoppedTurn()) {
         return;
@@ -875,6 +2016,15 @@ export const createChatRuntime = ({
                   : { errorText: result.errorText }),
               });
               if (
+                operation.rejection !== undefined &&
+                isSettledTurnRefusal(operation.rejection)
+              ) {
+                // The turn had settled: the result was never stored, and the
+                // reload shows the turn as the server ended it.
+                showMessages(messagesBeforeResult);
+                return;
+              }
+              if (
                 snapshot.error !== undefined &&
                 snapshot.error !== errorBeforeResult
               ) {
@@ -892,8 +2042,7 @@ export const createChatRuntime = ({
                 // proof. A failure after a successful HTTP response is
                 // different: the server has already persisted the result, so
                 // the optimistic state is true.
-                client.setMessagesManually(messagesBeforeResult);
-                setSnapshot({ messages: messagesBeforeResult });
+                showMessages(messagesBeforeResult);
               }
               throw error;
             }
@@ -907,40 +2056,68 @@ export const createChatRuntime = ({
     },
     getSnapshot: () => snapshot,
     reload: async (options) => {
-      startTurn();
-      browserTool.resume();
-      await withBody(
-        {
-          body: {
-            ...options?.body,
-            turnIntent: CHAT_TURN_INTENT.regenerate,
-          },
+      await postLatestMessageAgain({
+        body: {
+          ...options?.body,
+          turnIntent: CHAT_TURN_INTENT.regenerate,
         },
-        async () => {
-          await client.reload();
-        },
-      );
+      });
     },
-    setMessages: (messages) => {
-      client.setMessagesManually(messages);
-      setSnapshot({ messages });
-    },
-    startRouteHandoffMessage: (message, options) => {
+    setMessages: showMessages,
+    showStoredMessages,
+    startRouteHandoffMessage: async (message, options) => {
+      const answer = listenForSendAcceptance();
       const started = startClientSend(message, options);
+      const accepted = answer(started.stream);
+      if (started.status === "not_started") {
+        const outcome = await Result.tryPromise({
+          try: async () => await started.stream,
+          catch: (cause) => captureRuntimeError(cause),
+        });
+        readQueryResult(outcome);
+        return readQueryResult(
+          Result.err(
+            captureRuntimeError(new ChatMessageStartError(message.id)),
+          ),
+        );
+      }
       detached(
         started.stream.catch(captureRuntimeError),
         "chat-queries.stream",
       );
+      routeHandoff = { accepted, message };
       return started;
+    },
+    takeRouteHandoff: () => {
+      const taken = routeHandoff;
+      routeHandoff = null;
+      return taken;
     },
     stop: () => {
       // Stopping the request does not stop the extension: a browser command
       // already approved would otherwise keep acting on the page.
       browserTool.cancel();
+      sendTiming.abandoned();
+      if (desktopHold !== null) {
+        // A new message still waits for stella desktop and nothing was
+        // posted: it ends here, unsent, whenever a computer connects. The
+        // thread is read again, so the transcript drops the message the
+        // server never received, as after any other stop.
+        desktopHold.abort();
+        desktopHold = null;
+        setSnapshot({ turnAbandoned: true });
+        reloadThread();
+        return;
+      }
       const stoppedTurn = turnId;
+      if (stoppedTurn === null && isTurnActive()) {
+        // Delivery cancellation no longer ends the accepted server turn.
+        // Keep this request until its headers name the turn to cancel.
+        stopBeforeHeaders = "requested";
+        setSnapshot({ turnAbandoned: true });
+        return;
+      }
       if (!isTurnActive() || stoppedTurn === null) {
-        // Nothing runs, or the server has not named the turn yet and nothing
-        // has streamed: closing the request is all that can stop it.
         closeRequest();
         return;
       }
@@ -958,40 +2135,62 @@ export const createChatRuntime = ({
       setSnapshot({ stop: { status: "pending", turnId: stoppedTurn } });
       detached(settleStop(stoppedTurn), "chat-runtime.stop");
     },
-    leave: closeRequest,
+    leave: () => {
+      sendTiming.abandoned();
+      closeRequest();
+    },
     subscribe: (listener) => {
       listeners.add(listener);
+      subscriberCount += 1;
+      attachClient();
       return () => {
         listeners.delete(listener);
+        subscriberCount -= 1;
+        // TanStack's detach aborts an open request, and a run this client
+        // sent itself leaves no resume pointer for the next attach to
+        // rejoin: the runtime would keep generating with only what it had
+        // shown. So the last view going (a route handoff's destination
+        // remounting, a move between surfaces) leaves an open request to
+        // end with its turn; `leave` is what drops delivery on purpose.
+        if (subscriberCount === 0 && !client.getIsLoading()) {
+          client.detach();
+        }
       };
     },
   } satisfies ChatRuntime;
 
   threadSendMessageByRuntime.set(runtime, sendThreadMessage);
+  threadQueuedSendByRuntime.set(runtime, (message, options) => {
+    const {
+      runId: _runId,
+      threadId: _threadId,
+      truncateAfterMessageId: _truncateAfterMessageId,
+      turnIntent: _turnIntent,
+      ...send
+    } = buildSendRequestBody({
+      context,
+      key,
+      messages: toPersistedChatMessages([
+        {
+          id: message.id,
+          role: "user",
+          parts:
+            typeof message.content === "string"
+              ? [{ type: "text", content: message.content }]
+              : [...message.content],
+          createdAt: new Date(),
+        },
+      ]),
+      purpose: "queue",
+      run: { runId: QUEUED_SEND_RUN_ID, threadId: key.threadId },
+      requestBody: normalizeChatContinuationRequestBody(options?.body),
+    });
+    return { ...send, message: { ...send.message, role: "user" } };
+  });
+  threadSendUntilAcceptedByRuntime.set(runtime, sendThreadMessageUntilAccepted);
 
   return runtime;
 };
-
-const toPersistedChatMessages = (
-  messages: readonly UIMessage<ChatClientTools>[],
-): PersistedChatMessage[] =>
-  messages.map((message) => {
-    if (
-      message.role !== "assistant" ||
-      !message.parts.some(
-        (part) => part.type === "text" && part.content.trim().length === 0,
-      )
-    ) {
-      return message;
-    }
-    // RUN_ERROR can leave whitespace parts that server finalization drops.
-    return {
-      ...message,
-      parts: message.parts.filter(
-        (part) => part.type !== "text" || part.content.trim().length > 0,
-      ),
-    };
-  });
 
 const isChatUiMessage = (
   message: ModelMessage | UIMessage,
@@ -1024,16 +2223,25 @@ type ChatSendRequestDraft = Omit<
   message: ChatSendRequest["message"];
 };
 
+/**
+ * What a send body is built for: `send` it now, which makes its message the
+ * turn the page runs (a continuation of that turn keeps its mode), or
+ * `queue` it, which runs nothing yet.
+ */
+type ChatSendBodyPurpose = "queue" | "send";
+
 export const buildSendRequestBody = ({
   context,
   key,
   messages,
+  purpose = "send",
   run,
   requestBody,
 }: {
   context: ChatThreadOptionsContext | undefined;
   key: ChatThreadKey;
   messages: PersistedChatMessage[];
+  purpose?: ChatSendBodyPurpose | undefined;
   run: Pick<
     RunAgentInputContext,
     "parentRunId" | "resume" | "runId" | "threadId"
@@ -1045,25 +2253,36 @@ export const buildSendRequestBody = ({
     panic("Missing chat message");
   }
 
+  switch (message.role) {
+    case "activity":
+      return panic("An activity cannot submit or continue a chat turn");
+    case "assistant":
+    case "system":
+    case "user":
+      break;
+    default:
+      message.role satisfies never;
+      return panic(`Unhandled chat role: ${String(message.role)}`);
+  }
+
   const body: ChatSendRequestDraft = {
     message: {
       ...message,
+      role: message.role,
       id: toSafeId<"chatMessage">(message.id),
     },
     sendMode: resolveChatRequestSendMode({
       context,
       key,
       messages,
+      purpose,
       requestBody,
     }),
     runId: run.runId,
     threadId: key.threadId,
   };
 
-  const browserClient = getBrowserClientCapability();
-  if (browserClient) {
-    body.browserClient = browserClient;
-  }
+  body.browserExtension = getBrowserExtensionState();
 
   if (requestBody?.truncateAfterMessageId !== undefined) {
     body.truncateAfterMessageId = requestBody.truncateAfterMessageId;
@@ -1088,11 +2307,19 @@ export const buildSendRequestBody = ({
 
   applyChatContext({ body, context });
 
+  // A surface with a Run on choice names it, cloud included; the server runs
+  // a send that names none where its thread runs.
+  const runTarget = context?.getRunTarget?.();
+  if (runTarget !== undefined) {
+    body.runTarget = runTarget;
+  }
+
   const { editApplyMode, docxEditRepresentation } =
     resolveChatRequestDocxEditPreferences({
       context,
       key,
       messages,
+      purpose,
       requestBody,
     });
   if (editApplyMode !== undefined) {
@@ -1297,6 +2524,7 @@ type ResolveChatRequestSendModeProps = {
   context: ChatThreadOptionsContext | undefined;
   key: ChatThreadKey;
   messages: readonly PersistedChatMessage[];
+  purpose: ChatSendBodyPurpose;
   requestBody: ChatContinuationRequestBody | undefined;
 };
 
@@ -1304,6 +2532,7 @@ const resolveChatRequestSendMode = ({
   context,
   key,
   messages,
+  purpose,
   requestBody,
 }: ResolveChatRequestSendModeProps): ChatSendMode => {
   const explicitSendMode = getRequestSendMode(requestBody);
@@ -1318,7 +2547,7 @@ const resolveChatRequestSendMode = ({
     context?.getSendMode?.() ??
     CHAT_SEND_MODE.rawOverride;
 
-  if (userMessageId) {
+  if (userMessageId && purpose === "send") {
     activeTurnSendModes.set(threadKey, { sendMode, userMessageId });
   }
 
@@ -1358,6 +2587,7 @@ const resolveChatRequestDocxEditPreferences = ({
   context,
   key,
   messages,
+  purpose,
   requestBody,
 }: ResolveChatRequestSendModeProps): Omit<
   ActiveTurnDocxEditPreferences,
@@ -1391,7 +2621,7 @@ const resolveChatRequestDocxEditPreferences = ({
     };
   }
 
-  if (userMessageId !== null) {
+  if (userMessageId !== null && purpose === "send") {
     activeTurnDocxEditPreferences.set(threadKey, {
       ...preferences,
       userMessageId,
@@ -1446,7 +2676,10 @@ const normalizeChatContinuationRequestBody = (
       data["truncateAfterMessageId"],
     );
   }
-  if (data["turnIntent"] === CHAT_TURN_INTENT.regenerate) {
+  if (
+    data["turnIntent"] === CHAT_TURN_INTENT.regenerate ||
+    data["turnIntent"] === CHAT_TURN_INTENT.edit
+  ) {
     body.turnIntent = data["turnIntent"];
   }
 

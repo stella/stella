@@ -1,5 +1,7 @@
 import { panic, Result } from "better-result";
 
+import { printError } from "@stll/errors";
+
 import type { Transaction } from "@/api/db/root";
 import { SOURCE_TOTAL_ORIGIN } from "@/api/db/schema";
 import {
@@ -181,7 +183,7 @@ if (census) {
   };
   const plan = await inspectListingCensus(request);
   if (Result.isError(plan)) {
-    console.error(plan.error.message);
+    printError(plan.error);
     process.exit(1);
   }
   const { asOf: planAsOf, fromSlice, start, toSlice } = plan.value;
@@ -203,8 +205,9 @@ if (census) {
     },
   });
   if (Result.isError(ran)) {
-    console.error(
-      `${ran.error.message}; every slice before it is kept, and a re-run resumes there`,
+    printError(
+      "Census failed; every completed slice is kept and a re-run resumes there:",
+      ran.error,
     );
     process.exit(1);
   }
@@ -291,9 +294,7 @@ if (totalFlag !== undefined) {
     .then((applied) => ({ ok: true, applied }) as const)
     .catch((error: unknown) => ({ ok: false, error }) as const);
   if (!write.ok) {
-    console.error(
-      `not recorded: ${write.error instanceof Error ? write.error.message : "the write failed"}`,
-    );
+    printError("Not recorded:", write.error);
     process.exit(1);
   }
   if (!write.applied) {
@@ -349,7 +350,7 @@ const pollOne = async (adapterKey: string): Promise<PollResult> => {
     .then((count) => ({ ok: true, count }) as const)
     .catch((error: unknown) => ({ ok: false, error }) as const);
   if (!probe.ok) {
-    console.error(`${adapterKey}: poll failed —`, probe.error);
+    printError(`${adapterKey}: poll failed`, probe.error);
     return {
       adapterKey,
       outcome: POLL_OUTCOME.FAILED,
@@ -392,10 +393,11 @@ const pollOne = async (adapterKey: string): Promise<PollResult> => {
     .then((applied) => ({ ok: true, applied }) as const)
     .catch((error: unknown) => ({ ok: false, error }) as const);
   if (!write.ok) {
+    printError(`${adapterKey}: poll write failed:`, write.error);
     return {
       adapterKey,
       outcome: POLL_OUTCOME.FAILED,
-      line: `${adapterKey}: ${write.error instanceof Error ? write.error.message : "poll write failed"}, nothing recorded`,
+      line: `${adapterKey}: poll write failed, nothing recorded`,
     };
   }
   return write.applied

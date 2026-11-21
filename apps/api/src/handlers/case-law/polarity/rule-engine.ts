@@ -18,33 +18,38 @@ import { caseLawPolarityRules } from "@/api/db/schema";
 import { aggregateMentionPolarities } from "@/api/handlers/case-law/polarity/aggregate";
 import {
   CLASSIFIABLE_POLARITIES,
-  isClassifiablePolarity,
   POLARITY_PRECEDENCE,
+  REPORTED_PARTY_SUBMISSION_GROUP,
   RULE_SOURCE,
 } from "@/api/handlers/case-law/polarity/consts";
-import type {
-  ClassifiablePolarity,
-  Polarity,
-} from "@/api/handlers/case-law/polarity/consts";
-import { captureError } from "@/api/lib/analytics/capture";
+import type { Polarity } from "@/api/handlers/case-law/polarity/consts";
+import {
+  invalidRuleKindPolarityMessage,
+  isValidRuleKindPolarity,
+  typedRuleKindPolarity,
+} from "@/api/handlers/case-law/polarity/rule-kind";
+import type { ValidRuleKindPolarity } from "@/api/handlers/case-law/polarity/rule-kind";
 import type { SafeId } from "@/api/lib/branded-types";
 import { TelemetryError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 
-export type CompiledRule = {
+const invalidPolarityRule = failureSink({
+  event: "case_law.polarity.invalid_rule",
+  expected: [],
+});
+
+type CompiledRuleBase = {
   id: SafeId<"caseLawPolarityRule">;
   regex: RegExp;
-  /**
-   * Narrower than the column, which the CHECK constraint still lets carry any
-   * `Polarity`. A rule reads one mention, so it can neither assert that
-   * classification did not happen (`unknown`) nor that two mentions disagreed
-   * (`mixed`); both are the pipeline's own words about a citation.
-   */
-  polarity: ClassifiablePolarity;
   /** Kept for the specificity tiebreak; the compiled regex hides its length. */
   pattern: string;
   confidence: number;
 };
+
+/** A compiled rule; its kind decides which polarity it may carry. */
+export type CompiledRule = CompiledRuleBase & ValidRuleKindPolarity;
 
 /** The rule tier's label for one citation, over all of its mentions. */
 export type CitationPolarityVerdict = {
@@ -109,7 +114,7 @@ export type RuleCache = Map<string, CompiledRule[]>;
 /** Compile a pattern string into a case-insensitive RegExp. */
 const compilePattern = (pattern: string): RegExp | null => {
   try {
-    return new RegExp(pattern, "iu");
+    return new RegExp(pattern, "idu");
   } catch {
     return null;
   }
@@ -147,8 +152,10 @@ export const rankPolarityRulesByTier = (language: string) =>
     .select({
       id: caseLawPolarityRules.id,
       pattern: caseLawPolarityRules.pattern,
+      kind: caseLawPolarityRules.kind,
       polarity: caseLawPolarityRules.polarity,
       confidence: caseLawPolarityRules.confidence,
+      source: caseLawPolarityRules.source,
       tierRank: sql<number>`row_number() over (
         partition by ${caseLawPolarityRules.polarity}
         order by length(${caseLawPolarityRules.pattern}) desc, ${caseLawPolarityRules.id}
@@ -167,7 +174,7 @@ export const rankPolarityRulesByTier = (language: string) =>
 /** The columns `compileRules` reads; the DB read that produces them is the caller's. */
 type PolarityRuleRow = Pick<
   typeof caseLawPolarityRules.$inferSelect,
-  "id" | "pattern" | "polarity" | "confidence"
+  "id" | "pattern" | "polarity" | "confidence" | "kind"
 >;
 
 /**
@@ -193,21 +200,21 @@ export const compileRules = (
   for (const row of rows) {
     const regex = compilePattern(row.pattern);
     if (!regex) {
-      captureError(
+      observeFailure(
         new TelemetryError({
           message: "Polarity rule pattern does not compile",
         }),
-        { pattern: row.pattern, ruleId: row.id },
+        { sink: invalidPolarityRule, ctx: { entityId: row.id } },
       );
       continue;
     }
 
-    if (!isClassifiablePolarity(row.polarity)) {
-      captureError(
+    if (!isValidRuleKindPolarity(row)) {
+      observeFailure(
         new TelemetryError({
-          message: "Polarity rule carries a polarity no match may assign",
+          message: invalidRuleKindPolarityMessage(row.polarity),
         }),
-        { polarity: row.polarity, ruleId: row.id },
+        { sink: invalidPolarityRule, ctx: { entityId: row.id } },
       );
       continue;
     }
@@ -215,9 +222,9 @@ export const compileRules = (
     compiled.push({
       id: row.id,
       regex,
-      polarity: row.polarity,
       pattern: row.pattern,
       confidence: row.confidence,
+      ...typedRuleKindPolarity(row),
     });
   }
 
@@ -225,10 +232,68 @@ export const compileRules = (
 };
 
 /**
+ * Scope is declared by the rule's named capture, not by a jurisdiction or by
+ * every neutral cue in the window. Ordinary procedural neutral rules retain
+ * their precedence. All occurrences are read: a reported departure cannot
+ * hide a court's later departure matched by the same pattern.
+ */
+const selectMentionRule = (
+  rules: readonly CompiledRule[],
+  window: string,
+): CompiledRule | undefined => {
+  const submissions = rules
+    .filter(
+      (rule) =>
+        rule.polarity === "neutral" &&
+        rule.pattern.includes(`(?<${REPORTED_PARTY_SUBMISSION_GROUP}>`),
+    )
+    .flatMap((rule) =>
+      [
+        ...window.matchAll(
+          new RegExp(rule.regex.source, `${rule.regex.flags}g`),
+        ),
+      ].flatMap((match) => {
+        const span = match.indices?.groups?.[REPORTED_PARTY_SUBMISSION_GROUP];
+        return span ? [{ span, rule }] : [];
+      }),
+    );
+
+  if (submissions.length === 0) {
+    return rules.find((rule) => rule.regex.test(window));
+  }
+
+  let reportedReading: CompiledRule | undefined;
+  for (const rule of rules) {
+    if (rule.polarity !== "negative") {
+      if (reportedReading) {
+        return reportedReading;
+      }
+      if (rule.regex.test(window)) {
+        return rule;
+      }
+      continue;
+    }
+    for (const match of window.matchAll(
+      new RegExp(rule.regex.source, `${rule.regex.flags}g`),
+    )) {
+      const end = match.index + match[0].length;
+      const submission = submissions.find(
+        ({ span }) => match.index >= span[0] && end <= span[1],
+      );
+      if (!submission) {
+        return rule;
+      }
+      reportedReading ??= submission.rule;
+    }
+  }
+  return reportedReading;
+};
+
+/**
  * The rule tier's verdict for one citation, or null when no rule reads it.
  *
- * `rules` must be in `compileRules` order, which is what makes the first
- * rule matching a window that window's label. The windows are the citation's
+ * `rules` must be in `compileRules` order. Reported-submission scope is
+ * applied before choosing the window's label. The windows are the citation's
  * mentions in the citing decision (`extractContexts`): each is read on its
  * own, and `aggregateMentionPolarities` collapses the readings. So a
  * supportive recital followed by a rejection is stored `mixed` rather than
@@ -248,7 +313,7 @@ export const selectCitationPolarity = (
   const windows = typeof contexts === "string" ? [contexts] : contexts;
   const mentions: CompiledRule[] = [];
   for (const window of windows) {
-    const rule = rules.find((candidate) => candidate.regex.test(window));
+    const rule = selectMentionRule(rules, window);
     if (rule) {
       mentions.push(rule);
     }
@@ -308,6 +373,7 @@ export const loadRules = async (
         pattern: ranked.pattern,
         polarity: ranked.polarity,
         confidence: ranked.confidence,
+        kind: ranked.kind,
       })
       .from(ranked)
       .where(lte(ranked.tierRank, RULES_PER_POLARITY)),
@@ -351,10 +417,9 @@ export const incrementMatchCount = async ({
   ruleId,
   scopedDb,
 }: IncrementMatchCountArgs) => {
-  // oxlint-disable-next-line arrow-body-style -- block body holds the audit-skip directive that the require-audit-on-mutation rule scans for inside this arrow's body range
-  await scopedDb((tx) => {
+  await scopedDb((tx) =>
     // audit: skip — background polarity classification pipeline; no user-facing state change
-    return tx
+    tx
       .update(caseLawPolarityRules)
       .set({
         matchCount: sql`${caseLawPolarityRules.matchCount} + 1`,
@@ -363,6 +428,6 @@ export const incrementMatchCount = async ({
           ${observedAt}
         )`,
       })
-      .where(eq(caseLawPolarityRules.id, ruleId));
-  });
+      .where(eq(caseLawPolarityRules.id, ruleId)),
+  );
 };

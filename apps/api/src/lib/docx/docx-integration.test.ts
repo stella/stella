@@ -8,7 +8,9 @@
  */
 
 import { describe, expect, setDefaultTimeout, test } from "bun:test";
-import JSZip from "jszip";
+import { fileURLToPath } from "node:url";
+
+import { ZipArchive } from "@stll/docx-core/zip";
 
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { testDocxFile } from "@/api/tests/helpers/scanned-file";
@@ -42,9 +44,9 @@ const splitRuns = (text: string, chunkSize: number) => {
 };
 
 const makeDocx = async (documentXml: string): Promise<ScannedFile> => {
-  const zip = new JSZip();
-  zip.file("word/document.xml", documentXml);
-  zip.file(
+  const zip = new ZipArchive();
+  zip.set("word/document.xml", documentXml);
+  zip.set(
     "[Content_Types].xml",
     [
       '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
@@ -57,7 +59,7 @@ const makeDocx = async (documentXml: string): Promise<ScannedFile> => {
       "</Types>",
     ].join(""),
   );
-  zip.file(
+  zip.set(
     "_rels/.rels",
     [
       '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
@@ -70,7 +72,7 @@ const makeDocx = async (documentXml: string): Promise<ScannedFile> => {
       "</Relationships>",
     ].join(""),
   );
-  return testDocxFile(await zip.generateAsync({ type: "uint8array" }));
+  return testDocxFile(await zip.generate({ compression: "store" }));
 };
 
 /** Build a DOCX with header and footer parts containing placeholders. */
@@ -79,11 +81,11 @@ const makeDocxWithHeaderFooter = async (
   headerXml: string,
   footerXml: string,
 ): Promise<ScannedFile> => {
-  const zip = new JSZip();
-  zip.file("word/document.xml", bodyXml);
-  zip.file("word/header1.xml", headerXml);
-  zip.file("word/footer1.xml", footerXml);
-  zip.file(
+  const zip = new ZipArchive();
+  zip.set("word/document.xml", bodyXml);
+  zip.set("word/header1.xml", headerXml);
+  zip.set("word/footer1.xml", footerXml);
+  zip.set(
     "[Content_Types].xml",
     [
       '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
@@ -102,7 +104,7 @@ const makeDocxWithHeaderFooter = async (
       "</Types>",
     ].join(""),
   );
-  zip.file(
+  zip.set(
     "_rels/.rels",
     [
       '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
@@ -115,7 +117,7 @@ const makeDocxWithHeaderFooter = async (
       "</Relationships>",
     ].join(""),
   );
-  zip.file(
+  zip.set(
     "word/_rels/document.xml.rels",
     [
       '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
@@ -132,7 +134,7 @@ const makeDocxWithHeaderFooter = async (
       "</Relationships>",
     ].join(""),
   );
-  return testDocxFile(await zip.generateAsync({ type: "uint8array" }));
+  return testDocxFile(await zip.generate({ compression: "store" }));
 };
 
 const HEADER_WRAP = (body: string) =>
@@ -143,10 +145,9 @@ const FOOTER_WRAP = (body: string) =>
   `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
   `<w:ftr xmlns:w="${W_NS}">${body}</w:ftr>`;
 
-const SPA_FIXTURE = new URL(
-  "fixtures/spa-template-with-placeholders.docx",
-  import.meta.url,
-).pathname;
+const SPA_FIXTURE = fileURLToPath(
+  new URL("fixtures/spa-template-with-placeholders.docx", import.meta.url),
+);
 
 const spaTemplate = async (): Promise<ScannedFile> =>
   testDocxFile(await Bun.file(SPA_FIXTURE).arrayBuffer());
@@ -170,11 +171,11 @@ describe("filled output is valid DOCX", () => {
     const docx = await makeDocx(xml);
 
     const result = await fillTemplate(docx, { name: "Alice" });
-    const zip = await JSZip.loadAsync(result.file.bytes);
+    const zip = await ZipArchive.read(result.file.bytes);
 
     // Core OOXML parts must exist
-    expect(zip.file("[Content_Types].xml")).not.toBeNull();
-    expect(zip.file("word/document.xml")).not.toBeNull();
+    expect(zip.entry("[Content_Types].xml")).toBeDefined();
+    expect(zip.entry("word/document.xml")).toBeDefined();
   });
 
   test("output document.xml is well-formed XML", async () => {
@@ -187,8 +188,8 @@ describe("filled output is valid DOCX", () => {
       c: "unicode: šťůčřž",
     });
 
-    const zip = await JSZip.loadAsync(result.file.bytes);
-    const docXml = await zip.file("word/document.xml")?.async("string");
+    const zip = await ZipArchive.read(result.file.bytes);
+    const docXml = await zip.entry("word/document.xml")?.text();
 
     // Should not contain unescaped special chars that break XML
     expect(docXml).toBeDefined();
@@ -200,14 +201,14 @@ describe("filled output is valid DOCX", () => {
 
   test("SPA fixture output preserves ZIP structure", async () => {
     const result = await fillTemplate(await spaTemplate(), spaValues);
-    const zip = await JSZip.loadAsync(result.file.bytes);
+    const zip = await ZipArchive.read(result.file.bytes);
 
-    expect(zip.file("[Content_Types].xml")).not.toBeNull();
-    expect(zip.file("word/document.xml")).not.toBeNull();
-    expect(zip.file("_rels/.rels")).not.toBeNull();
+    expect(zip.entry("[Content_Types].xml")).toBeDefined();
+    expect(zip.entry("word/document.xml")).toBeDefined();
+    expect(zip.entry("_rels/.rels")).toBeDefined();
 
     // Content types XML should still be parseable
-    const ct = await zip.file("[Content_Types].xml")?.async("string");
+    const ct = await zip.entry("[Content_Types].xml")?.text();
     expect(ct).toContain("<Types");
     expect(ct).toContain("</Types>");
   });
@@ -288,20 +289,20 @@ describe("idempotent operations", () => {
 
     // Compare logical content, not raw bytes: ZIP entry
     // timestamps make byte-identical comparison unreliable.
-    const zip1 = await JSZip.loadAsync(first.file.bytes);
-    const zip2 = await JSZip.loadAsync(second.file.bytes);
+    const zip1 = await ZipArchive.read(first.file.bytes);
+    const zip2 = await ZipArchive.read(second.file.bytes);
 
-    const file1 = zip1.file("word/document.xml");
-    const file2 = zip2.file("word/document.xml");
+    const file1 = zip1.entry("word/document.xml");
+    const file2 = zip2.entry("word/document.xml");
     expect(file1).not.toBeNull();
     expect(file2).not.toBeNull();
 
-    const doc1 = await file1?.async("string");
-    const doc2 = await file2?.async("string");
+    const doc1 = await file1?.text();
+    const doc2 = await file2?.text();
     expect(doc1).toBe(doc2);
 
-    const entries1 = Object.keys(zip1.files).toSorted();
-    const entries2 = Object.keys(zip2.files).toSorted();
+    const entries1 = zip1.paths().toSorted();
+    const entries2 = zip2.paths().toSorted();
     expect(entries1).toEqual(entries2);
   });
 
@@ -332,9 +333,9 @@ describe("a legacy custom XML manifest never leaves in a filled document", () =>
   const withLegacyManifest = async (
     docx: ScannedFile,
   ): Promise<ScannedFile> => {
-    const zip = await JSZip.loadAsync(docx.bytes);
-    zip.file("customXml/item1.xml", LEGACY_MANIFEST_PART);
-    return testDocxFile(await zip.generateAsync({ type: "uint8array" }));
+    const zip = await ZipArchive.read(docx.bytes);
+    zip.set("customXml/item1.xml", LEGACY_MANIFEST_PART);
+    return testDocxFile(await zip.generate({ compression: "store" }));
   };
 
   test("the part is gone from the output and the fill is unaffected", async () => {
@@ -343,16 +344,16 @@ describe("a legacy custom XML manifest never leaves in a filled document", () =>
     // The fixture has to reach the stripper for the assertion below to mean
     // anything.
     expect(
-      (await JSZip.loadAsync(docx.bytes)).file("customXml/item1.xml"),
-    ).not.toBeNull();
+      (await ZipArchive.read(docx.bytes)).entry("customXml/item1.xml"),
+    ).toBeDefined();
 
     const result = await fillTemplate(docx, {
       name: "Bob",
       date: "2026-06-01",
     });
 
-    const filledZip = await JSZip.loadAsync(result.file.bytes);
-    expect(filledZip.file("customXml/item1.xml")).toBeNull();
+    const filledZip = await ZipArchive.read(result.file.bytes);
+    expect(filledZip.entry("customXml/item1.xml")).toBeUndefined();
     const extracted = await extractDocxDocument(result.file);
     const allText = extracted.paragraphs.map((p) => p.text).join("\n");
     expect(allText).toContain("Bob");
@@ -376,18 +377,18 @@ describe("header and footer placeholders", () => {
       footer_text: "FOOTER_VALUE",
     });
 
-    const zip = await JSZip.loadAsync(result.file.bytes);
+    const zip = await ZipArchive.read(result.file.bytes);
 
     // Body should be filled
-    const docXml = await zip.file("word/document.xml")?.async("string");
+    const docXml = await zip.entry("word/document.xml")?.text();
     expect(docXml).toContain("BODY_VALUE");
 
     // Header should be filled
-    const headerXml = await zip.file("word/header1.xml")?.async("string");
+    const headerXml = await zip.entry("word/header1.xml")?.text();
     expect(headerXml).toContain("HEADER_VALUE");
 
     // Footer should be filled
-    const footerXml = await zip.file("word/footer1.xml")?.async("string");
+    const footerXml = await zip.entry("word/footer1.xml")?.text();
     expect(footerXml).toContain("FOOTER_VALUE");
   });
 
@@ -440,9 +441,9 @@ describe("header and footer placeholders", () => {
       show_header: true,
       tags: ["urgent", "signed"],
     });
-    const zip = await JSZip.loadAsync(result.file.bytes);
-    const headerXml = await zip.file("word/header1.xml")?.async("string");
-    const footerXml = await zip.file("word/footer1.xml")?.async("string");
+    const zip = await ZipArchive.read(result.file.bytes);
+    const headerXml = await zip.entry("word/header1.xml")?.text();
+    const footerXml = await zip.entry("word/footer1.xml")?.text();
     expect(headerXml).toContain("Alice");
     expect(footerXml).toContain("urgent");
     expect(footerXml).toContain("signed");
@@ -473,9 +474,9 @@ describe("header and footer placeholders", () => {
       body_items: [{}],
       footer_items: [{}],
     });
-    const zip = await JSZip.loadAsync(result.file.bytes);
-    const bodyXml = await zip.file("word/document.xml")?.async("string");
-    const footerXml = await zip.file("word/footer1.xml")?.async("string");
+    const zip = await ZipArchive.read(result.file.bytes);
+    const bodyXml = await zip.entry("word/document.xml")?.text();
+    const footerXml = await zip.entry("word/footer1.xml")?.text();
 
     expect(bodyXml).toContain("Body 1");
     expect(footerXml).toContain("Footer 2");
@@ -570,8 +571,8 @@ describe("placeholders in tables", () => {
       date: "2026-01-01",
     });
 
-    const zip = await JSZip.loadAsync(result.file.bytes);
-    const docXml = await zip.file("word/document.xml")?.async("string");
+    const zip = await ZipArchive.read(result.file.bytes);
+    const docXml = await zip.entry("word/document.xml")?.text();
     expect(docXml).toContain("Alice");
     expect(docXml).toContain("2026-01-01");
   });

@@ -11,22 +11,42 @@ import { cn } from "../lib/utils";
  */
 export type CourtBadgeWeight = "solid" | "tinted" | "outline" | "dashed";
 
+/**
+ * `default` stands on its own beside a court's name; `inline` sits inside a
+ * line of small text (a list row's meta line) without making it taller;
+ * `prose` sits inside running text (an answer's sentence), where it takes the
+ * text's own face instead of the monospaced one.
+ */
+export type CourtBadgeSize = "default" | "inline" | "prose";
+
 type CourtBadgeProps = {
   /** The court's own abbreviation, in the language its name is in. */
   abbreviation: string;
   weight: CourtBadgeWeight;
+  size?: CourtBadgeSize | undefined;
   className?: string;
 };
 
 const COURT_BADGE_BASE_CLASS =
-  // Monospaced and tracked out: these are two to four capitals read as a
-  // unit, and a proportional face at this size turns ÚS and NS into blots of
-  // different widths down a column.
-  //
-  // The line box runs a third taller than the type, with padding on top of
-  // that, because these capitals carry diacritics (Ú, Ř, Š) whose ink rises
-  // above cap height; a tighter box sets the acute against the pill's border.
-  "inline-flex shrink-0 items-center rounded-sm border px-1 py-0.5 font-mono text-xs leading-4 font-semibold tracking-wide whitespace-nowrap";
+  "inline-flex shrink-0 items-center rounded-sm border font-semibold whitespace-nowrap";
+
+// Monospaced and tracked out where badges stack: these are two to four
+// capitals read as a unit, and a proportional face at this size turns ÚS and
+// NS into blots of different widths down a column. Running text has no
+// column, so there a monospaced badge is only a second typeface in the line.
+const COLUMN_FACE_CLASS = "font-mono tracking-wide";
+
+/**
+ * The line box runs a third taller than the type, because these capitals
+ * carry diacritics (Ú, Ř, Š) whose ink rises above cap height; a tighter box
+ * sets the acute against the pill's border. `inline` keeps that ratio at a
+ * smaller size and drops the padding, so the chip fits a 16px text line.
+ */
+const SIZE_CLASS = {
+  default: cn(COLUMN_FACE_CLASS, "px-1 py-0.5 text-xs leading-4"),
+  inline: cn(COLUMN_FACE_CLASS, "text-3xs px-0.5 leading-3.5"),
+  prose: "px-1 text-xs leading-4 tabular-nums",
+} as const satisfies Record<CourtBadgeSize, string>;
 
 /**
  * Every weight keeps a border, because `--muted` is a 4% tint: a borderless
@@ -61,10 +81,16 @@ const WEIGHT_CLASS = {
 export const CourtBadge = ({
   abbreviation,
   className,
+  size = "default",
   weight,
 }: CourtBadgeProps) => (
   <span
-    className={cn(COURT_BADGE_BASE_CLASS, WEIGHT_CLASS[weight], className)}
+    className={cn(
+      COURT_BADGE_BASE_CLASS,
+      SIZE_CLASS[size],
+      WEIGHT_CLASS[weight],
+      className,
+    )}
     data-slot="court-badge"
     // Latin capitals inside a name in any script, including an RTL one: the
     // isolate keeps the chip from reordering with the text around it.

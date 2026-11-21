@@ -1,12 +1,14 @@
 import { Result } from "better-result";
-import { and, eq, inArray } from "drizzle-orm";
-import { t } from "elysia";
-import type { Static } from "elysia";
+import { and, eq, isNull } from "drizzle-orm";
+import * as v from "valibot";
 
-import { MATTER_REFERENCE_RETIRED_CODE } from "@stll/api-contract";
+import {
+  API_VERSION_CONFLICT_ERROR_CODE,
+  MATTER_REFERENCE_RETIRED_CODE,
+} from "@stll/api-contract";
 
-import { member } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
+import { abortTransaction, transactionAbortError } from "@/api/db/safe-db";
 import type { SafeDb } from "@/api/db/safe-db";
 import {
   contacts,
@@ -15,55 +17,51 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import { workspaceRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
-import { captureError } from "@/api/lib/analytics/capture";
+import { createErrorCapture, detached } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
-import { checkDemoAccountOperation } from "@/api/lib/auth/demo-account";
+import { narrativeLanguageSchema } from "@/api/lib/billing/narrative-language";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tDefaultVarchar, tSafeId } from "@/api/lib/custom-schema";
+import {
+  displayNameSchema,
+  resourceIdSchema,
+  userIdSchema,
+} from "@/api/lib/custom-schema";
+import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
-import { LIMITS } from "@/api/lib/limits";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { PG_ERROR } from "@/api/lib/pg-error";
 import { pickDefined } from "@/api/lib/pick-defined";
-import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import { flushWorkspaceSearchRepairs } from "@/api/lib/search/projection-repair-flush";
 import { enqueueWorkspaceSearchRepairs } from "@/api/lib/search/projection-repair-queue";
+import { requireNoHold } from "@/api/lib/workspaces/legal-holds/holds";
+import { legalHoldRefusal } from "@/api/lib/workspaces/legal-holds/refusal";
 
-const updateWorkspaceBodySchema = t.Object({
-  name: t.Optional(tDefaultVarchar),
-  clientId: t.Optional(tSafeId("contact")),
-  reference: t.Optional(t.String({ maxLength: 64, minLength: 1 })),
-  billingReference: t.Optional(t.Nullable(t.String({ maxLength: 128 }))),
-  color: t.Optional(t.Nullable(t.String({ maxLength: 32 }))),
-  // Pinned-first avatar on the matters list. Must be an existing
-  // workspace member (validated at handler time); pass null to clear.
-  leadUserId: t.Optional(t.Nullable(t.String({ maxLength: 128 }))),
-  // Promotion (personal -> client) is one-way and is itself the
-  // sharing event: the optional memberUserIds list is added to
-  // the workspace at the same time as the client is attached.
-  promote: t.Optional(
-    t.Object({
-      clientId: tSafeId("contact"),
-      memberUserIds: t.Optional(
-        t.Array(t.String({ maxLength: 128 }), {
-          maxItems: LIMITS.workspaceMembersCount - 1,
-        }),
-      ),
-    }),
+const updateWorkspaceBodySchema = v.object({
+  billingNarrativeLanguage: v.optional(narrativeLanguageSchema),
+  name: v.optional(displayNameSchema()),
+  clientId: v.optional(resourceIdSchema("contact")),
+  expectedClientId: v.optional(v.nullable(resourceIdSchema("contact"))),
+  reference: v.optional(v.pipe(v.string(), v.maxLength(64), v.minLength(1))),
+  billingReference: v.optional(
+    v.nullable(v.pipe(v.string(), v.maxLength(128))),
   ),
+  color: v.optional(v.nullable(v.pipe(v.string(), v.maxLength(32)))),
+  leadUserId: v.optional(v.nullable(userIdSchema)),
 });
 
 const config = {
+  contract: "patch",
   description:
-    "Change a matter: its name, reference, billing reference, colour, or " +
-    "lead (who must already be a member of it). Only the fields you pass are " +
-    "written. Attaching a client to a personal matter is a one-way promotion " +
-    "and must go through promote, which takes the client contact and " +
-    "optionally the members to share it with at the same time; a bare " +
-    "clientId on a personal matter, and any attempt to re-promote a matter " +
-    "that already has a client, are refused.",
+    "Change a matter: its name, client, reference, billing reference, the " +
+    "language its billing narratives are written in, colour, or lead (who " +
+    "must already be a member of it). Only the fields you pass " +
+    "are written. clientId attaches a client to a personal matter or replaces " +
+    "the client of a client matter; members are managed separately. " +
+    "Pass expectedClientId (null for a personal matter) to change the client " +
+    `only if its current assignment still matches; otherwise returns ${API_VERSION_CONFLICT_ERROR_CODE}.`,
   permissions: { workspace: ["update"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   realtime: workspaceRealtimeUpdates,
@@ -81,7 +79,6 @@ const validateLeadIsMember = async (
   tx: Transaction,
   leadUserId: string | null | undefined,
   workspaceId: SafeId<"workspace">,
-  requestedMemberUserIds: readonly string[] = [],
 ): Promise<LeadValidationFailure | null> => {
   if (leadUserId === undefined || leadUserId === null) {
     return null;
@@ -96,7 +93,7 @@ const validateLeadIsMember = async (
       ),
     )
     .limit(1);
-  if (existing.length === 0 && !requestedMemberUserIds.includes(leadUserId)) {
+  if (existing.length === 0) {
     return {
       ok: false,
       status: 400,
@@ -165,29 +162,72 @@ const checkReferenceNotRetired = async ({
 };
 
 export type UpdateWorkspaceHandlerProps = {
-  userEmail: string;
   safeDb: SafeDb;
   organizationId: SafeId<"organization">;
   workspaceId: SafeId<"workspace">;
   recordAuditEvent: AuditRecorder;
-  body: Static<typeof updateWorkspaceBodySchema>;
+  body: v.InferOutput<typeof updateWorkspaceBodySchema>;
+};
+
+/** Repairs the matter's search projection after the response, off the request. */
+const flushUpdatedWorkspaceSearch = (workspaceId: SafeId<"workspace">) => {
+  detached(
+    async () =>
+      flushWorkspaceSearchRepairs([workspaceId]).catch(
+        createErrorCapture(
+          handlerErrorContext(
+            "updateWorkspaceHandler.flushWorkspaceSearchRepairs",
+          ),
+        ),
+      ),
+    "workspaces-update.flush-workspace-search-repairs",
+  );
+};
+
+type HeldClientOptions = {
+  tx: Transaction;
+  organizationId: SafeId<"organization">;
+  body: { clientId?: SafeId<"contact"> | undefined };
+  workspace: { id: SafeId<"workspace">; clientId: SafeId<"contact"> | null };
+};
+
+/** A held matter keeps the client its evidence names. */
+const heldClient = async ({
+  tx,
+  organizationId,
+  body,
+  workspace,
+}: HeldClientOptions) => {
+  if (body.clientId === undefined || body.clientId === workspace.clientId) {
+    return null;
+  }
+  const hold = await requireNoHold({
+    tx,
+    organizationId,
+    target: { type: "matter", workspaceId: workspace.id },
+  });
+  return hold.isErr()
+    ? { ok: false as const, refusal: legalHoldRefusal(hold.error) }
+    : null;
 };
 
 // Shared matter-update logic reused by the HTTP handler and the
 // `save_matter` MCP tool, so both emit identical audit events and
 // search-index writes.
 export const updateWorkspaceHandler = async function* ({
-  userEmail,
   safeDb,
   organizationId,
   workspaceId,
   recordAuditEvent,
   body,
 }: UpdateWorkspaceHandlerProps) {
-  if ((body.promote?.memberUserIds?.length ?? 0) > 0) {
-    yield* checkDemoAccountOperation(userEmail);
-  }
   const txResult = await safeDb(async (tx) => {
+    await withAggregateLock({
+      aggregate: "workspace",
+      id: { id: workspaceId, organizationId },
+      tx,
+      mode: "update",
+    });
     const workspaceRows = await tx
       .select({
         id: workspaces.id,
@@ -195,12 +235,17 @@ export const updateWorkspaceHandler = async function* ({
         clientId: workspaces.clientId,
         reference: workspaces.reference,
         billingReference: workspaces.billingReference,
+        billingNarrativeLanguage: workspaces.billingNarrativeLanguage,
         color: workspaces.color,
         leadUserId: workspaces.leadUserId,
       })
       .from(workspaces)
-      .where(eq(workspaces.id, workspaceId))
-      .for("update");
+      .where(
+        and(
+          eq(workspaces.id, workspaceId),
+          eq(workspaces.organizationId, organizationId),
+        ),
+      );
     const workspace = workspaceRows.at(0);
 
     if (!workspace) {
@@ -211,37 +256,18 @@ export const updateWorkspaceHandler = async function* ({
       };
     }
 
-    // Promotion is only valid for personal matters (clientId IS
-    // NULL). Reject any attempt to "re-promote" a client matter so
-    // the call site does not silently overwrite the existing
-    // client + member set.
-    if (body.promote && workspace.clientId !== null) {
-      return {
-        ok: false as const,
-        status: 400 as const,
-        message: "Workspace is already a client matter",
-      };
+    const held = await heldClient({ tx, organizationId, body, workspace });
+    if (held) {
+      return held;
     }
 
-    // Bare clientId on a personal matter is conceptually a
-    // promotion we want to be explicit about. Force callers to
-    // use `promote` for personal -> client.
-    if (body.clientId && workspace.clientId === null) {
-      return {
-        ok: false as const,
-        status: 400 as const,
-        message: "Use promote to attach a client to a personal matter",
-      };
-    }
-
-    const promotionClientId = body.promote?.clientId ?? body.clientId;
-    if (promotionClientId) {
+    if (body.clientId !== undefined) {
       const client = await tx
         .select({ id: contacts.id })
         .from(contacts)
         .where(
           and(
-            eq(contacts.id, promotionClientId),
+            eq(contacts.id, body.clientId),
             eq(contacts.organizationId, organizationId),
           ),
         )
@@ -258,43 +284,10 @@ export const updateWorkspaceHandler = async function* ({
       }
     }
 
-    const requestedMemberUserIds = body.promote?.memberUserIds
-      ? Array.from(new Set(body.promote.memberUserIds))
-      : [];
-
-    if (requestedMemberUserIds.length > 0) {
-      const orgMembers = await tx
-        .select({ userId: member.userId })
-        .from(member)
-        .where(
-          and(
-            eq(member.organizationId, organizationId),
-            inArray(member.userId, requestedMemberUserIds),
-          ),
-        )
-        .for("update");
-
-      if (orgMembers.length !== requestedMemberUserIds.length) {
-        return {
-          ok: false as const,
-          status: 400 as const,
-          message: "Some users are not members of this organization",
-        };
-      }
-    }
-
-    const promotionUpdate = body.promote
-      ? { clientId: body.promote.clientId }
-      : {};
-
-    // Lead must be a member of the workspace. Accept both pre-existing
-    // members and any added in this same call (promotion path) so the
-    // caller can promote + add team + set lead atomically.
     const leadCheck = await validateLeadIsMember(
       tx,
       body.leadUserId,
       workspaceId,
-      requestedMemberUserIds,
     );
     if (leadCheck) {
       return leadCheck;
@@ -317,7 +310,14 @@ export const updateWorkspaceHandler = async function* ({
       }
     }
 
-    await tx
+    const conditions = [eq(workspaces.id, workspaceId)];
+    if (body.expectedClientId === null) {
+      conditions.push(isNull(workspaces.clientId));
+    } else if (body.expectedClientId !== undefined) {
+      conditions.push(eq(workspaces.clientId, body.expectedClientId));
+    }
+
+    const updated = await tx
       .update(workspaces)
       .set({
         ...pickDefined(body, [
@@ -325,39 +325,31 @@ export const updateWorkspaceHandler = async function* ({
           "clientId",
           "reference",
           "billingReference",
+          "billingNarrativeLanguage",
           "color",
           "leadUserId",
         ]),
-        ...promotionUpdate,
       })
-      .where(eq(workspaces.id, workspaceId));
+      .where(and(...conditions))
+      .returning({ id: workspaces.id });
 
-    // Audit reflects rows actually inserted, not the raw request:
-    // onConflictDoNothing silently skips users already on the
-    // workspace (e.g., the creator on a freshly-promoted personal
-    // matter), and we don't want the log to claim they were added.
-    let insertedMemberUserIds: string[] = [];
-    if (body.promote && requestedMemberUserIds.length > 0) {
-      const inserted = await tx
-        .insert(workspaceMembers)
-        .values(
-          requestedMemberUserIds.map((id) => ({
-            workspaceId,
-            userId: brandPersistedUserId(id),
-          })),
-        )
-        .onConflictDoNothing()
-        .returning({ userId: workspaceMembers.userId });
-      insertedMemberUserIds = inserted.map((row) => row.userId);
+    if (updated.length === 0) {
+      return abortTransaction(
+        new HandlerError({
+          status: 409,
+          code: API_VERSION_CONFLICT_ERROR_CODE,
+          message:
+            "Matter client has changed; refresh the matter before retrying",
+        }),
+      );
     }
 
-    const newClientId = body.promote?.clientId ?? body.clientId;
     const changes: Record<string, { old: unknown; new: unknown }> = {};
     if (body.name !== undefined && body.name !== workspace.name) {
       changes["name"] = { old: workspace.name, new: body.name };
     }
-    if (newClientId !== undefined && newClientId !== workspace.clientId) {
-      changes["clientId"] = { old: workspace.clientId, new: newClientId };
+    if (body.clientId !== undefined && body.clientId !== workspace.clientId) {
+      changes["clientId"] = { old: workspace.clientId, new: body.clientId };
     }
     if (
       body.reference !== undefined &&
@@ -367,6 +359,17 @@ export const updateWorkspaceHandler = async function* ({
         old: workspace.reference,
         new: body.reference,
       };
+    }
+    if (
+      body.billingNarrativeLanguage !== undefined &&
+      body.billingNarrativeLanguage !== workspace.billingNarrativeLanguage
+    ) {
+      Object.assign(changes, {
+        billingNarrativeLanguage: {
+          old: workspace.billingNarrativeLanguage,
+          new: body.billingNarrativeLanguage,
+        },
+      });
     }
     if (
       body.billingReference !== undefined &&
@@ -389,12 +392,6 @@ export const updateWorkspaceHandler = async function* ({
         new: body.leadUserId,
       };
     }
-    if (insertedMemberUserIds.length > 0) {
-      changes["membersAdded"] = {
-        old: null,
-        new: insertedMemberUserIds,
-      };
-    }
 
     await recordAuditEvent(tx, {
       action: AUDIT_ACTION.UPDATE,
@@ -409,47 +406,37 @@ export const updateWorkspaceHandler = async function* ({
   });
 
   if (Result.isError(txResult)) {
-    if (
-      DatabaseError.is(txResult.error) &&
-      txResult.error.code === PG_ERROR.UNIQUE_VIOLATION
-    ) {
+    const error = transactionAbortError(txResult.error);
+    if (DatabaseError.is(error) && error.code === PG_ERROR.UNIQUE_VIOLATION) {
       return yield* Result.err(
         new HandlerError({ status: 409, message: "Duplicate value" }),
       );
     }
-    return yield* Result.err(txResult.error);
+    return yield* Result.err(error);
   }
 
   const failure = txResult.value;
   if (!failure.ok) {
     return yield* Result.err(
-      new HandlerError({
-        status: failure.status,
-        message: failure.message,
-        // Only the retired-reference refusal carries a code; the status is its
-        // discriminator, so a branch without one cannot reach this spread.
-        ...(failure.status === 409 ? { code: failure.code } : {}),
-      }),
+      "refusal" in failure
+        ? failure.refusal
+        : new HandlerError({
+            status: failure.status,
+            message: failure.message,
+            ...(failure.status === 409 ? { code: failure.code } : {}),
+          }),
     );
   }
 
-  flushWorkspaceSearchRepairs([workspaceId]).catch(captureError);
+  flushUpdatedWorkspaceSearch(workspaceId);
 
   return Result.ok({});
 };
 
 const updateWorkspace = createSafeHandler(
   config,
-  async function* ({
-    safeDb,
-    session,
-    user,
-    workspaceId,
-    body,
-    recordAuditEvent,
-  }) {
+  async function* ({ safeDb, session, workspaceId, body, recordAuditEvent }) {
     return yield* updateWorkspaceHandler({
-      userEmail: user.email,
       safeDb,
       organizationId: session.activeOrganizationId,
       workspaceId,

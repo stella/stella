@@ -11,12 +11,12 @@
 // piped through `v.isoDate()` / `v.isoDateTime()` makes the schema prose.
 //
 // Flagged:
-//   generateTanStackObjectForRole({
+//   generateTanStackObjectForTask({
 //     outputSchema: v.strictObject({ applies: v.boolean() }),
 //   })
 //
 // Allowed:
-//   generateTanStackObjectForRole({
+//   generateTanStackObjectForTask({
 //     outputSchema: v.strictObject({
 //       verdict: v.picklist(VERDICTS),
 //       rationale: v.string(),

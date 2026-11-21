@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { TANSTACK_AI_PROVIDERS } from "@stll/ai-catalog";
 
@@ -12,21 +12,28 @@ import {
 } from "@/api/lib/api-handlers";
 import type { SessionHandlerConfig } from "@/api/lib/api-handlers";
 import { isActiveOrganizationMember } from "@/api/lib/auth";
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
+import { ANTHROPIC_WORKSPACE_ID_PATTERN } from "@/api/lib/chat/anthropic-config";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { logger } from "@/api/lib/observability/logger";
 
-const MAX_PROBE_ERROR_DETAIL_LEN = 200;
-
-export const validateProviderBody = t.Object({
-  provider: t.UnionEnum(TANSTACK_AI_PROVIDERS),
-  apiKey: t.String({ minLength: 1, maxLength: 512 }),
-  region: t.Optional(
-    t.Union([t.Literal("global"), t.Literal("eu"), t.Literal("ch")]),
+export const validateProviderBody = v.object({
+  provider: v.picklist(TANSTACK_AI_PROVIDERS),
+  apiKey: v.pipe(v.string(), v.minLength(1), v.maxLength(512)),
+  anthropicWorkspaceId: v.optional(
+    v.pipe(
+      v.string(),
+      v.minLength(1),
+      v.maxLength(256),
+      v.regex(new RegExp(ANTHROPIC_WORKSPACE_ID_PATTERN, "u")),
+    ),
   ),
+  region: v.optional(v.picklist(["global", "eu", "ch"])),
 });
 
 const config = {
-  accountAccess: ACCOUNT_ACCESS.standard,
+  contract: "patch",
+  accountAccess: ACCOUNT_ACCESS.accountControl,
   mcp: { type: "internal", reason: "provider_secret" },
   body: validateProviderBody,
 } satisfies SessionHandlerConfig;
@@ -38,11 +45,6 @@ const probeUnavailable = (error: unknown): HandlerError =>
     message: "Could not validate the provider key",
     cause: error,
   });
-
-const truncateProbeError = (message: string): string =>
-  message.length > MAX_PROBE_ERROR_DETAIL_LEN
-    ? message.slice(0, MAX_PROBE_ERROR_DETAIL_LEN)
-    : message;
 
 /**
  * Authenticated AI provider key health-check. The onboarding flow
@@ -58,6 +60,18 @@ const truncateProbeError = (message: string): string =>
 const validateProvider = createSafeSessionHandler(
   config,
   async function* ({ body, request, set, user }) {
+    if (
+      body.anthropicWorkspaceId !== undefined &&
+      body.provider !== "anthropic"
+    ) {
+      return Result.err(
+        new HandlerError({
+          code: "ai_config_provider_invalid",
+          status: 400,
+          message: "Workspace ID is supported only for Anthropic",
+        }),
+      );
+    }
     if (
       body.region &&
       body.region !== "global" &&
@@ -110,7 +124,13 @@ const validateProvider = createSafeSessionHandler(
 
     const result = yield* Result.await(
       Result.tryPromise({
-        try: async () => await probeProvider(body.provider, body.apiKey),
+        try: async () =>
+          await probeProvider({
+            apiKey: body.apiKey,
+            anthropicWorkspaceId: body.anthropicWorkspaceId,
+            permit: grantThirdPartyOutboundPermit(),
+            provider: body.provider,
+          }),
         catch: (error: unknown) => {
           const raw = error instanceof Error ? error.message : "Unknown error";
           logger.warn("ai_config.provider_validation_unreachable", {
@@ -118,7 +138,8 @@ const validateProvider = createSafeSessionHandler(
           });
           return new HandlerError({
             status: 502,
-            message: truncateProbeError(raw),
+            code: "internal_error",
+            message: raw,
             cause: error,
           });
         },
@@ -129,12 +150,6 @@ const validateProvider = createSafeSessionHandler(
       logger.warn("ai_config.provider_validation_rejected", {
         provider: body.provider,
       });
-      if (result.error && result.error.length > MAX_PROBE_ERROR_DETAIL_LEN) {
-        return Result.ok({
-          valid: false as const,
-          error: truncateProbeError(result.error),
-        });
-      }
     }
 
     return Result.ok(result);

@@ -1,5 +1,7 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
+
+import { AGENT_CLAIM_CODE_MAX_LENGTH } from "@stll/api-contract/limits";
 
 import { confirmServiceAuthRegistration } from "@/api/lib/agent-auth";
 import { confirmIdJagDelegation } from "@/api/lib/agent-auth-idjag";
@@ -14,14 +16,19 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
  * exchange. Ownership comes from the validated session — never the body.
  */
 const config = {
-  body: t.Object({
-    user_code: t.String({ minLength: 1, maxLength: 32 }),
+  contract: "patch",
+  body: v.object({
+    user_code: v.pipe(
+      v.string(),
+      v.minLength(1),
+      v.maxLength(AGENT_CLAIM_CODE_MAX_LENGTH),
+    ),
   }),
   // Binding an agent client to oneself is an integration the member owns:
   // the agent inherits the confirming user's least-privilege scopes, not
   // the organization's. External collaborators hold no integration grant.
   permissions: { integration: ["create"] },
-  accountAccess: ACCOUNT_ACCESS.standard,
+  accountAccess: ACCOUNT_ACCESS.accountControl,
   mcp: { type: "internal", reason: "auth_plumbing" },
 } satisfies HandlerConfig;
 

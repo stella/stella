@@ -1,45 +1,53 @@
 import { expect, test } from "@playwright/test";
-import type { APIRequestContext, Page } from "@playwright/test";
+import type { APIRequestContext, BrowserContext, Page } from "@playwright/test";
+import * as v from "valibot";
 
-import { isPublicCaseLawCountry } from "@stll/api-contract/case-law-launch-readiness";
+import {
+  isPublicCaseLawCountry,
+  isPublicCaseLawPageCountry,
+} from "@stll/api-contract/case-law-launch-readiness";
+import {
+  PROFESSIONAL_USE_DISPLAYED_VERSION_FIELD,
+  PROFESSIONAL_USE_STATEMENT_VERSION,
+} from "@stll/api-contract/professional-use";
+import { MARKETING_CASE_LAW } from "@stll/playwright-tools/marketing-case-law";
+import {
+  MARKETING_LOCALE_ACCOUNTS,
+  MARKETING_LOCALE_MARKERS,
+  MARKETING_LOCALES,
+} from "@stll/playwright-tools/marketing-locales";
+import type { MarketingLocale } from "@stll/playwright-tools/marketing-locales";
+import { setFixedBrowserTime } from "@stll/ui/browser-clock";
 
-import { setFixedBrowserTime } from "../helpers/clock";
+import { setPresentationPrefs } from "../helpers/presentation-prefs";
+import {
+  getMarketingAgentThreadId,
+  settleMarketingAgentThread,
+} from "./agent-thread";
+import { TIME_TRACKING_ENTRIES_SELECTOR } from "./capture-readiness";
+import {
+  collectCaptureText,
+  findCaptureTextViolations,
+} from "./capture-text-guard";
+import { CAPTURE_DPR } from "./captures";
+import { getMarketingDecisionPaths } from "./case-law-reader";
+import {
+  assertNoActiveEditBadge,
+  releaseSupplierAgreementEditLock,
+  supplierAgreementEditorPath,
+} from "./edit-locks";
+import { marketingSeedIds } from "./seed-ids";
+import { uiText } from "./ui-text";
 
-const AKVIZICE_WORKSPACE_ID = "6cbf3f81-bcc9-55da-8a4e-840221d4cabe";
-const EXPORT_REVIEW_WORKSPACE_ID = "bb8641dc-0667-574c-8e30-152a1fd4b3f5";
-// Seeded Supplier Agreement redline in the "Meridian supply agreement"
-// matter; keep in sync with record-product-story.ts (seed-dev.ts
-// `ws-akvizice-energo-doc-7`).
-const SUPPLIER_AGREEMENT_ENTITY_ID = "84824638-eb81-58c5-8a81-5d7e961fb7d5";
-const SUPPLIER_AGREEMENT_FIELD_ID = "3f985a8b-26be-5a07-89d3-2a05acb94354";
-// Seeded `Redacted_Due_Diligence_Extract.docx` in the same matter, opened by
-// the anonymization capture.
-const ANONYMIZED_EXTRACT_ENTITY_ID = "c3dc74a6-7855-5157-84db-ddf14f886df4";
-const ANONYMIZED_EXTRACT_FIELD_ID = "e98a6746-dae9-5509-888b-d58bfbca9a33";
-// Seeded "Change-of-control" thread in the Export Review matter (seed-dev.ts
-// `marketing-agent-thread`), already containing the cited Q&A; keep in sync
-// with record-product-story.ts's MARKETING_AGENT_THREAD_TITLE. Resolved by
-// title via the chat threads API rather than a fixed thread id, mirroring
-// the video recorder's resolveMarketingViewRoutes, so the agent screenshot
-// never lands on the empty /chat/new composer.
-const MARKETING_AGENT_THREAD_TITLE = "Project Atlas · Change-of-control review";
-// The org that owns every seeded marketing workspace (AKVIZICE/EXPORT_REVIEW/
-// Meridian). Fixed id from seed-utils' DEFAULT_ORG_ID ("Harbrook & Partners",
-// apps/api/scripts/seed-test-user.ts), seeded by
-// db:seed-test-user then populated by db:seed-dev. A fresh email-OTP sign-in
-// starts with no active organization, so we set it server-side (below) instead
-// of driving the org-picker UI, which the workspace routes below depend on.
-const MARKETING_ORGANIZATION_ID = "test-org-stella-dev";
-// Duplicated from apps/web/src/consts.ts, exactly as
-// apps/web/public/prepaint-init.js duplicates it: the e2e project has no
-// `@/` path alias. Writing any other key silently leaves the app on its
-// system colour-scheme preference.
-const THEME_STORAGE_KEY = "stella-ui-theme";
 const INSPECTOR_STORAGE_PREFIXES = [
   "stella:inspector-minimized:v1:",
   "stella:inspector-state:v1:",
 ] as const;
 const requestedCapture = process.env["MARKETING_CAPTURE"];
+const MARKETING_URLS = {
+  apiUrl: process.env["E2E_API_URL"] ?? "http://localhost:3001",
+  webUrl: process.env["E2E_WEB_URL"] ?? "http://localhost:3000",
+};
 
 // Route chunks are compiled on demand by the dev server, so the first visit to
 // each route pays a cold build that the config's 15s expect timeout cannot
@@ -55,109 +63,200 @@ const COLD_COMPILE_TIMEOUT = 60_000;
 // either boundary, and reads as a natural "just edited" label.
 const VERSION_CAPTION_OFFSET_MS = 5 * 60_000;
 
-const captures = [
-  {
-    name: "workspace",
-    path: `/workspaces/${AKVIZICE_WORKSPACE_ID}/`,
-    prepare: "open-files",
-    readyText: "Meridian supply agreement",
-  },
-  {
-    name: "tabular-review",
-    path: `/workspaces/${EXPORT_REVIEW_WORKSPACE_ID}/`,
-    prepare: "open-table",
-    readyText: "Export Review - Project Atlas Data Room",
-  },
-  // Three different national decisions (CZE, POL, SVK), each rendering with
-  // the structured reader (structure/AI margin populated) so the chapter can
-  // cross-fade between jurisdictions. Keep in sync with
-  // HomeProductStory.astro's data chapter.
-  {
-    name: "story-public-data-1",
-    prepare: "open-decision",
-    country: "CZE",
-    decisionText: "IV.ÚS 1394/24",
-    readyText: "Case Law",
-    clip: { x: 0, y: 0, width: 1440, height: 760 },
-  },
-  {
-    name: "story-public-data-2",
-    prepare: "open-decision",
-    country: "POL",
-    decisionText: "IV C 1273/16",
-    readyText: "Case Law",
-    clip: { x: 0, y: 0, width: 1440, height: 760 },
-  },
-  {
-    name: "story-public-data-3",
-    prepare: "open-decision",
-    country: "SVK",
-    decisionText: "25Cbr/166/2024",
-    readyText: "Case Law",
-    clip: { x: 0, y: 0, width: 1440, height: 760 },
-  },
-  {
-    name: "editor",
-    path:
-      `/workspaces/${AKVIZICE_WORKSPACE_ID}/all/document` +
-      "?editing=true" +
-      `&entity=${SUPPLIER_AGREEMENT_ENTITY_ID}` +
-      `&field=${SUPPLIER_AGREEMENT_FIELD_ID}`,
-    readyText: "Supplier_Agreement.docx",
-    readySelector: '[aria-label="Document content"][contenteditable="true"]',
-    // `?editing=true` is a request, not a state: without this the shot can
-    // land on the read-only viewer while the editor is still unlocking. The
-    // editable ProseMirror surface exists only after the request succeeds.
-    versionAnchor: {
-      workspaceId: AKVIZICE_WORKSPACE_ID,
-      entityId: SUPPLIER_AGREEMENT_ENTITY_ID,
-    },
-  },
-  {
-    name: "agent",
-    prepare: "open-agent-thread",
-    // The question from the seeded thread; the answer and its source chips
-    // are asserted separately in the "open-agent-thread" prepare block below
-    // so the shot never ships mid-render.
-    readyText: "Compare the change-of-control clauses across this matter.",
-  },
-  {
-    name: "public-data",
-    prepare: "open-decision",
-    country: "CZE",
-    decisionText: "IV.ÚS 1394/24",
-    readyText: "Case Law",
-  },
-  { name: "templates", path: "/knowledge/templates", readyText: "Templates" },
-  {
-    name: "anonymization",
-    path:
-      `/workspaces/${AKVIZICE_WORKSPACE_ID}/all/document` +
-      `?entity=${ANONYMIZED_EXTRACT_ENTITY_ID}` +
-      `&field=${ANONYMIZED_EXTRACT_FIELD_ID}`,
-    readyText: "Redacted_Due_Diligence_Extract.docx",
-    readySelector: ".layout-run-text",
-    versionAnchor: {
-      workspaceId: AKVIZICE_WORKSPACE_ID,
-      entityId: ANONYMIZED_EXTRACT_ENTITY_ID,
-    },
-  },
-] as const;
+// The product-shot frame for captures without their own clip: the app's main
+// column, below the sidebar.
+const DEFAULT_CLIP = { x: 255, y: 0, width: 1137, height: 710 } as const;
 
-test("capture landing product screenshots", async ({
+// The time entries span fixed dates (Dec 2024 - Feb 2025); naming the day in
+// the URL keeps the timesheet off the wall-clock "today".
+const TIME_TRACKING_DATE = "2024-12-13";
+
+/**
+ * Every product shot of one locale's firm. All content comes from that
+ * firm's seed (apps/api/scripts/seed-marketing-locales.ts, English:
+ * db:seed-dev), including the AI answers, which are stored fixtures.
+ */
+const capturesFor = (locale: MarketingLocale) => {
+  const ids = marketingSeedIds(locale);
+  const markers = MARKETING_LOCALE_MARKERS[locale];
+  const caseLawSearchCountry = markers.caseLawSearchCountry;
+  return [
+    {
+      name: "workspace",
+      path: `/workspaces/${ids.meridianWorkspaceId}/`,
+      prepare: "open-files",
+      readyText: markers.meridianMatterName,
+    },
+    {
+      name: "tabular-review",
+      path: `/workspaces/${ids.exportReviewWorkspaceId}/`,
+      prepare: "open-table",
+      readyText: markers.exportReviewMatterName,
+    },
+    ...MARKETING_CASE_LAW[locale].map(
+      (scenario, index) =>
+        ({
+          name: `story-public-data-${String(index + 1)}`,
+          prepare: "open-decision",
+          country: scenario.country,
+          decisionText: scenario.caseNumber,
+          readyText: uiText(locale, "common.caseLaw"),
+          clip: { x: 0, y: 0, width: 1440, height: 760 },
+        }) as const,
+    ),
+    {
+      name: "editor",
+      path: supplierAgreementEditorPath(ids.supplierAgreement),
+      readyText: markers.supplierAgreementFileName,
+      readySelector: '[aria-label="Document content"][contenteditable="true"]',
+      // `?editing=true` is a request, not a state: without this the shot can
+      // land on the read-only viewer while the editor is still unlocking. The
+      // editable ProseMirror surface exists only after the request succeeds.
+      versionAnchor: {
+        workspaceId: ids.meridianWorkspaceId,
+        entityId: ids.supplierAgreement.entityId,
+      },
+    },
+    {
+      // The seeded change-of-control thread in the Export Review matter
+      // (apps/api/scripts/seed-marketing-agent-thread.ts), resolved by title so
+      // the shot never lands on the empty /chat/new composer.
+      name: "agent",
+      prepare: "open-agent-thread",
+      // The thread's first question; the answers, citations, generated view
+      // and recap are awaited in the "open-agent-thread" prepare block below
+      // so the shot never ships mid-render.
+      readyText: markers.agent.questions[0],
+    },
+    {
+      name: "templates",
+      path: "/knowledge/templates",
+      readyText: uiText(locale, "navigation.templates"),
+    },
+    {
+      name: "anonymization",
+      path:
+        `/workspaces/${ids.meridianWorkspaceId}/all/document` +
+        `?entity=${ids.anonymizedExtract.entityId}` +
+        `&field=${ids.anonymizedExtract.fieldId}`,
+      readyText: markers.redactedExtractFileName,
+      readySelector: ".layout-run-text",
+      versionAnchor: {
+        workspaceId: ids.meridianWorkspaceId,
+        entityId: ids.anonymizedExtract.entityId,
+      },
+    },
+    {
+      // Contacts are listed by display name, so the first seeded organisation
+      // heads the list on every run.
+      name: "contacts",
+      path: "/contacts",
+      readyText: markers.firstContactName,
+    },
+    {
+      name: "time-tracking",
+      path: `/time?date=${TIME_TRACKING_DATE}`,
+      prepare: "await-time-entries",
+      readyText: uiText(locale, "billing.timesheets"),
+    },
+    {
+      // The sent invoice (`invoice-2`) whose billed time entries the
+      // capture lists.
+      name: "invoicing",
+      path: `/workspaces/${ids.dueDiligenceWorkspaceId}/invoices/${ids.sentInvoiceId}`,
+      prepare: "await-invoice-entries",
+      readyText: markers.sentInvoiceNumber,
+    },
+    {
+      // The Export Review table with its export menu open.
+      name: "import-export",
+      path: `/workspaces/${ids.exportReviewWorkspaceId}/`,
+      prepare: "open-table-export",
+      readyText: markers.exportReviewMatterName,
+    },
+    // The results listing without a query: every seeded decision of the
+    // country, in the listing's own order. A keyword query depends on what
+    // the best-effort seed search index matched and returned no rows in CI.
+    ...(caseLawSearchCountry === null
+      ? []
+      : [
+          {
+            name: "case-law-search",
+            path: `/law/cases?country=${caseLawSearchCountry.toLowerCase()}`,
+            prepare: "await-search-results",
+            country: caseLawSearchCountry,
+            readyText: uiText(locale, "common.caseLaw"),
+            clip: { x: 0, y: 0, width: 1440, height: 760 },
+          } as const,
+        ]),
+  ] as const;
+};
+
+// Stills share the recordings' device pixel ratio, so the PNGs are twice the
+// CSS clip size and stay sharp on retina screens. Clips stay in CSS pixels.
+test.use({ deviceScaleFactor: CAPTURE_DPR });
+
+// One test per locale firm: each signs in as that firm's owner with the
+// browser in the firm's language, and writes `{name}{suffix}{-dark}.png`
+// (English keeps the unsuffixed names; Czech `-cs`, Slovak `-sk`).
+for (const locale of MARKETING_LOCALES) {
+  const account = MARKETING_LOCALE_ACCOUNTS[locale];
+  test.describe(locale, () => {
+    test.use({ locale: account.browserLocale });
+
+    test(`capture landing product screenshots (${locale})`, async ({
+      context,
+      page,
+      request,
+    }) => {
+      await captureLocale({ context, locale, page, request });
+    });
+  });
+}
+
+type CaptureLocaleOptions = {
+  context: BrowserContext;
+  locale: MarketingLocale;
+  page: Page;
+  request: APIRequestContext;
+};
+
+const captureLocale = async ({
   context,
+  locale,
   page,
   request,
-}) => {
-  await authenticateMarketingSession(request);
+}: CaptureLocaleOptions) => {
+  const account = MARKETING_LOCALE_ACCOUNTS[locale];
+  const ids = marketingSeedIds(locale);
+  const captures = capturesFor(locale);
+  const editLock = {
+    ...MARKETING_URLS,
+    supplierAgreement: ids.supplierAgreement,
+  };
+  await authenticateMarketingSession(request, locale);
   const { cookies } = await request.storageState();
   await context.addCookies(cookies);
 
   // The active organization is set server-side in authenticateMarketingSession
   // (via better-auth's set-active endpoint), so the workspace routes below are
-  // already org-scoped — no org-picker UI to drive. Land on a real page first:
-  // a fresh page sits on about:blank, where the localStorage access in the
-  // theme loop below throws a SecurityError.
+  // already org-scoped — no org-picker UI to drive. Choose the language the
+  // way the language picker does: the account's locale, which every later
+  // server render reads. The browser locale (test.use above) already
+  // matches, for regional formatting.
+  const localeResponse = await page.request.post(
+    `${MARKETING_URLS.apiUrl}/api/auth/update-user`,
+    {
+      data: { locale },
+      headers: { Origin: MARKETING_URLS.webUrl },
+    },
+  );
+  expect(localeResponse.ok()).toBe(true);
+  await setPresentationPrefs({
+    context,
+    url: MARKETING_URLS.webUrl,
+    patch: { visitorLocale: locale },
+  });
   await page.goto("/law", { waitUntil: "domcontentloaded" });
   // `domcontentloaded` only means the document parsed; on a cold dev server the
   // client still has to compile and hydrate the app before anything but the
@@ -167,16 +266,40 @@ test("capture landing product screenshots", async ({
   await expect(page.locator("main").first()).toBeVisible({
     timeout: COLD_COMPILE_TIMEOUT,
   });
-  await expect(page.getByText("Legal database").first()).toBeVisible({
+  await expect(
+    page.getByText(uiText(locale, "common.legalDatabase")).first(),
+  ).toBeVisible({
     timeout: COLD_COMPILE_TIMEOUT,
   });
+
+  // Start from no edit lock: a lock left by an earlier run would badge the
+  // Supplier Agreement row in the workspace shot.
+  await releaseSupplierAgreementEditLock(page.request, editLock);
 
   // Resolved once (not per capture/theme): only needed when the "agent"
   // capture is actually part of this run.
   const agentThreadPath =
     !requestedCapture || requestedCapture === "agent"
-      ? await resolveAgentThreadPath(page.request)
+      ? await resolveAgentThreadPath(page.request, locale)
       : undefined;
+
+  const decisionPaths =
+    !requestedCapture || requestedCapture.startsWith("story-public-data-")
+      ? await resolveDecisionPaths(page.request, locale)
+      : new Map<string, string>();
+
+  // The workspace tabs carry their views' names, which the API localizes
+  // for the reader's language.
+  const viewTabName = async (
+    workspaceId: string,
+    layoutType: "filesystem" | "table",
+  ) =>
+    await resolveViewName({
+      layoutType,
+      locale,
+      request: page.request,
+      workspaceId,
+    });
 
   // Whether the shared page still carries a pinned clock from a previous
   // capture; see the anchor block in the capture loop.
@@ -184,34 +307,35 @@ test("capture landing product screenshots", async ({
 
   for (const theme of ["light", "dark"] as const) {
     await page.emulateMedia({ colorScheme: theme });
-    // Pin the stored theme as well as the media preference. localStorage is
-    // origin-scoped, so this survives the navigations below; both inputs must
-    // agree because prepaint-init.js reads the stored value first and only
-    // falls back to the media query.
-    await page.evaluate(
-      ([storageKey, nextTheme]) => {
-        localStorage.setItem(storageKey, nextTheme);
-      },
-      [THEME_STORAGE_KEY, theme] as const,
-    );
+    await setPresentationPrefs({
+      context: page.context(),
+      url: MARKETING_URLS.webUrl,
+      patch: { theme },
+    });
 
     for (const capture of captures) {
       if (requestedCapture && capture.name !== requestedCapture) {
         continue;
       }
-      if ("country" in capture && !isPublicCaseLawCountry(capture.country)) {
-        continue;
+      if ("country" in capture) {
+        // A reader films a published decision page; the listing films
+        // public search.
+        const isPublic =
+          capture.prepare === "open-decision"
+            ? isPublicCaseLawPageCountry(capture.country)
+            : isPublicCaseLawCountry(capture.country);
+        expect(
+          isPublic,
+          `${capture.name}: the filmed jurisdiction is publicly supported`,
+        ).toBe(true);
       }
-      // A decision capture scopes the search to its country so only a
-      // matching decision is deterministically on screen.
-      const searchedPath =
+      const decisionPath =
         "decisionText" in capture
-          ? `/law/cases?country=${capture.country.toLowerCase()}&q=${encodeURIComponent(
-              capture.decisionText,
-            )}`
+          ? decisionPaths.get(capture.decisionText)
           : undefined;
       const declaredPath = "path" in capture ? capture.path : agentThreadPath;
-      const capturePath = searchedPath ?? declaredPath;
+      const capturePath =
+        "decisionText" in capture ? decisionPath : declaredPath;
       if (!capturePath) {
         throw new Error(`${capture.name}: no path resolved for this capture`);
       }
@@ -219,7 +343,7 @@ test("capture landing product screenshots", async ({
       // Anchor the inspector's relative timestamp before navigating, so the
       // caption paints with the pinned clock on its first render. Captures
       // without an anchor run on real time; the clock is only restored when a
-      // previous capture actually pinned it, so the eight captures that never
+      // previous capture actually pinned it, so the captures that never
       // show a timestamp keep an untouched Date/timer implementation.
       if ("versionAnchor" in capture) {
         const versionCreatedAt = await resolveCurrentVersionCreatedAt(
@@ -235,7 +359,13 @@ test("capture landing product screenshots", async ({
         await page.clock.setSystemTime(Date.now());
         clockPinned = false;
       }
-      await page.goto(capturePath, { waitUntil: "domcontentloaded" });
+      // The navigation policy reads `waitUntil` as a literal, so the two
+      // lifecycles are separate calls.
+      if ("decisionText" in capture) {
+        await page.goto(capturePath, { waitUntil: "commit" });
+      } else {
+        await page.goto(capturePath, { waitUntil: "domcontentloaded" });
+      }
       await expect(page).not.toHaveURL(/\/sign-in(?:\/|\?|$)/u);
       // Each capture is the first visit to its route, so its chunk compiles on
       // demand here too; the config's 15s expect timeout is not enough for that
@@ -249,30 +379,8 @@ test("capture landing product screenshots", async ({
         });
       }
       if ("prepare" in capture && capture.prepare === "open-decision") {
-        // Film a specific national decision deterministically, rather than
-        // whatever happens to be newest in the seeded corpus.
-        const decisionLink = page
-          .locator('main a[href*="/cases/"]')
-          .filter({ hasText: capture.decisionText });
-        await expect(decisionLink).toBeVisible({
-          timeout: COLD_COMPILE_TIMEOUT,
-        });
-        // A plain click on a results row opens that decision in the inspector
-        // beside the results; this capture wants the full reader page, which
-        // is what the row's own href names. Take the href rather than a
-        // rebuilt path, so the shot follows the product's link even if the
-        // decision route's shape changes.
-        const decisionPath = await decisionLink.getAttribute("href");
-        if (decisionPath === null) {
-          throw new Error(
-            `${capture.name}: the "${capture.decisionText}" result row has no href to the decision`,
-          );
-        }
-        // The reader carries its own inspector, which must start from the same
-        // clean state as every other capture rather than inheriting whatever
-        // the results page persisted.
-        await clearPersistedInspectorState(page);
-        await page.goto(decisionPath, { waitUntil: "commit" });
+        // Open the reader directly from its seeded conversation metadata.
+        // Search-page SSR is independent of the completed reader state.
         await expect(page).toHaveURL(/\/law\/[a-z-]+\/cases\//u);
         // The case detail is its own code-split chunk, so this is the first
         // load of another route: same cold-compile allowance as the
@@ -291,67 +399,234 @@ test("capture landing product screenshots", async ({
         // These decisions have analysis cached server-side. Wait for the
         // automatic fetch so the capture never lands on the loading margin.
         await expect(
-          page.getByRole("group", { name: "Outline" }),
+          page.getByRole("group", {
+            name: uiText(locale, "statutes.outline"),
+          }),
         ).toBeVisible();
         // Decision routes intentionally seed their inspector tabs without
         // opening the pane. This capture includes the chat, so open it as an
         // explicit user action and assert the route honored that contract.
         const inspectorDock = page.locator('[data-slot="inspector-dock"]');
         await inspectorDock
-          .getByRole("button", { exact: true, name: "Show pane" })
+          .getByRole("button", {
+            exact: true,
+            name: uiText(locale, "inspector.showPane"),
+          })
           .click();
-        // The inspector chat loads its saved-skill prompts independently of
-        // the decision and analysis queries. The empty state paints the logo
-        // first, so waiting only for the reader can record a blank inspector.
-        // Scope readiness to the visible inspector: other route shells may
-        // remain mounted and must not satisfy the capture gate.
+        const scenario = MARKETING_CASE_LAW[locale].find(
+          (item) => item.caseNumber === capture.decisionText,
+        );
+        if (scenario === undefined) {
+          throw new Error(`${capture.name}: no rich reader scenario`);
+        }
         const inspectorChat = page.locator(
           '[data-slot="inspector-chat-panel"]:visible',
         );
         await expect(inspectorChat).toHaveCount(1, {
           timeout: COLD_COMPILE_TIMEOUT,
         });
-        // This component only exists when at least one prompt card rendered.
+        const messages = inspectorChat.locator("[data-chat-message-id]");
+        await expect(messages).toHaveCount(4, {
+          timeout: COLD_COMPILE_TIMEOUT,
+        });
+        for (const [index, text] of [
+          scenario.question,
+          scenario.answer,
+          scenario.followUp,
+          scenario.followUpAnswer,
+        ].entries()) {
+          await expect(messages.nth(index)).toContainText(text);
+        }
         await expect(
           inspectorChat.locator('[data-slot="prompt-suggestions"]'),
-        ).toBeVisible({ timeout: COLD_COMPILE_TIMEOUT });
-        // The first margin annotation may sit below a long headnote (e.g. a
-        // Constitutional Court "legal sentence" summary); scroll it into view
-        // so the capture shows the structure margin, not just headnote text.
-        await page.locator("aside button").first().scrollIntoViewIfNeeded();
-        // `scrollIntoViewIfNeeded` positions the nested reader correctly, but
-        // can also move the document viewport. Restore only the outer viewport
-        // so the breadcrumb remains in frame without undoing the reader scroll.
+        ).toHaveCount(0);
+        const citations = inspectorChat.locator("[data-decision-citation]");
+        await expect(citations).toHaveCount(2);
+        // Compact inline cards show the court's short form; the full case
+        // number is their accessible name.
+        await expect(citations.first()).toHaveAttribute(
+          "aria-label",
+          expect.stringContaining(scenario.caseNumber),
+        );
+        await inspectorChat
+          .locator('[data-slot="scroll-area-viewport"]')
+          .evaluate((element) => {
+            element.scrollTop = 0;
+          });
+
+        // Align the earlier marked paragraph with the reader's top, rather
+        // than centering it against the taller browser viewport.
+        const clip = "clip" in capture ? capture.clip : DEFAULT_CLIP;
+        const readerAnchors = page.locator(
+          `article [data-anchor="${scenario.highlightAnchor}"], article [data-anchor="${scenario.underlineAnchor}"]`,
+        );
+        await expect(readerAnchors).toHaveCount(2);
+        await readerAnchors.evaluateAll((elements, clipTop) => {
+          const first = elements.at(0);
+          const scroller = first?.closest(".reader-scroll");
+          if (scroller === undefined || scroller === null) {
+            throw new Error("The case-law reader has no scroll container");
+          }
+          const anchorTop = Math.min(
+            ...elements.map((element) => element.getBoundingClientRect().top),
+          );
+          const frameTop = Math.max(
+            clipTop,
+            scroller.getBoundingClientRect().top,
+          );
+          scroller.scrollTop += anchorTop - frameTop - 16;
+        }, clip.y);
         await page.evaluate(() => window.scrollTo({ left: 0, top: 0 }));
+        // The left notes column is the point of this shot. Require the
+        // seeded AI note and comment as typed margin notes, not merely text
+        // in some `aside`, and no visitor placeholders in their place.
+        const notesColumn = page.locator("aside[data-reader-notes-column]");
+        await expect(notesColumn).toBeVisible();
+        await expect(
+          notesColumn.locator('[data-margin-note="example"]'),
+        ).toHaveCount(0);
+        const requiredElements = [
+          notesColumn
+            .locator(
+              '[data-margin-note="card"], [data-margin-note="annotation"]',
+            )
+            .getByText(scenario.aiNote, { exact: true }),
+          notesColumn
+            .locator('[data-margin-note="comment"]')
+            .getByText(scenario.comment, { exact: true }),
+        ];
+        for (const [anchor, variant, paragraphNumber] of [
+          [
+            scenario.highlightAnchor,
+            "text-foreground",
+            scenario.highlightNumber,
+          ],
+          [scenario.underlineAnchor, "underline", scenario.underlineNumber],
+        ] as const) {
+          requiredElements.push(
+            page
+              .locator(
+                `article [data-anchor="${anchor}"] mark[data-annotation-id].${variant}:not(.decoration-dotted)`,
+              )
+              .first(),
+          );
+          // A published paragraph number stays visible independently of
+          // how long the paragraph below it is.
+          const number = page.locator(
+            `article [data-anchor="${anchor}"] > span.reader-chrome.absolute`,
+          );
+          await expect(number).toHaveCount(1);
+          await expect(number).toHaveText(String(paragraphNumber));
+          requiredElements.push(number);
+        }
+        requiredElements.push(
+          ...(await messages.all()),
+          ...(await citations.all()),
+        );
+        for (const element of requiredElements) {
+          await expect(element).toBeVisible();
+          await expect(element).toBeInViewport({ ratio: 1 });
+          await expect
+            .poll(
+              async () => {
+                const box = await element.boundingBox();
+                return (
+                  box !== null &&
+                  box.x >= clip.x &&
+                  box.y >= clip.y &&
+                  box.x + box.width <= clip.x + clip.width &&
+                  box.y + box.height <= clip.y + clip.height
+                );
+              },
+              {
+                message: `${capture.name}: required reader content fits the screenshot clip`,
+              },
+            )
+            .toBe(true);
+        }
+        await expectNoMarginNoteCut(page, clip.y);
       }
       if ("prepare" in capture && capture.prepare === "open-files") {
-        await page.getByRole("tab", { name: "Files" }).click();
+        await page
+          .getByRole("tab", {
+            name: await viewTabName(ids.meridianWorkspaceId, "filesystem"),
+          })
+          .click();
         await expect(page).toHaveURL(
-          new RegExp(`/workspaces/${AKVIZICE_WORKSPACE_ID}/[^/?]+`, "u"),
+          new RegExp(`/workspaces/${ids.meridianWorkspaceId}/[^/?]+`, "u"),
         );
+        const markers = MARKETING_LOCALE_MARKERS[locale];
         await expect(
-          page.getByText("Internal_SAFE_Agreement.docx").first(),
+          page.getByText(markers.safeAgreementFileName).first(),
         ).toBeVisible();
+        // Both themes must show the same rows: no document carries an edit
+        // lock badge (the editor capture releases its lock below).
+        await expect(
+          page.getByText(markers.supplierAgreementFileName).first(),
+        ).toBeVisible();
+        await assertNoActiveEditBadge(page, capture.name);
       }
       if ("prepare" in capture && capture.prepare === "open-table") {
-        await page.getByRole("tab", { name: "Table" }).click();
+        await page
+          .getByRole("tab", {
+            name: await viewTabName(ids.exportReviewWorkspaceId, "table"),
+          })
+          .click();
         await expect(page.getByRole("grid")).toBeVisible();
       }
+      if ("prepare" in capture && capture.prepare === "await-time-entries") {
+        await expect(
+          page.locator(TIME_TRACKING_ENTRIES_SELECTOR).first(),
+        ).toBeVisible();
+      }
+      if ("prepare" in capture && capture.prepare === "await-invoice-entries") {
+        await expect(
+          page.getByText(uiText(locale, "billing.invoices.linkedTimeEntries")),
+        ).toBeVisible();
+        await expect(page.locator("table tbody tr").first()).toBeVisible();
+      }
+      if ("prepare" in capture && capture.prepare === "open-table-export") {
+        await page
+          .getByRole("tab", {
+            name: await viewTabName(ids.exportReviewWorkspaceId, "table"),
+          })
+          .click();
+        await expect(page.getByRole("grid")).toBeVisible();
+        await page
+          .getByRole("button", {
+            exact: true,
+            name: uiText(locale, "workspaces.views.exportTable"),
+          })
+          .first()
+          .click();
+        await expect(
+          page.getByRole("menuitem", {
+            name: uiText(locale, "workspaces.views.exportXlsx"),
+          }),
+        ).toBeVisible();
+      }
+      if ("prepare" in capture && capture.prepare === "await-search-results") {
+        // Several result rows, not just the first, so the shot shows a list
+        // rather than a single hit.
+        await expect(
+          page.locator('main a[href*="/cases/"]').nth(1),
+        ).toBeVisible({ timeout: COLD_COMPILE_TIMEOUT });
+        await page.waitForLoadState("networkidle");
+        await expect(page.locator("#route-error-title")).toHaveCount(0);
+      }
       if ("prepare" in capture && capture.prepare === "open-agent-thread") {
-        // The seeded thread already contains the full cited answer; wait for
-        // it and one of its source chips so the shot never lands on a
-        // pre-render/loading state (the empty /chat/new composer this
-        // replaces had neither).
-        await expect(
-          page.getByText(/assignment or a material service change/u).first(),
-        ).toBeVisible();
-        await expect(
-          page.getByText(/Aurora_Retail_Shareholder_Register_2018/u).first(),
-        ).toBeVisible();
+        // Waits for every answer, citation chip, the generated view's guest
+        // page (content, fonts, final height, host theme) and the recap, then
+        // frames the final turn. The guest page has no animations or
+        // transitions of its own, so the animation freeze below, which the
+        // style tag applies to this document only, misses nothing.
+        await settleMarketingAgentThread(page, {
+          frameBottom: DEFAULT_CLIP.y + DEFAULT_CLIP.height,
+          locale,
+        });
       }
       await page.locator("body").waitFor({ state: "visible" });
       await page.evaluate(async () => document.fonts.ready);
-      await page.waitForTimeout(300);
       await page.addStyleTag({
         content: `
           *, *::before, *::after {
@@ -364,31 +639,49 @@ test("capture landing product screenshots", async ({
         `,
       });
 
+      // Placeholder or fixture text fails the capture before it is shot: a
+      // hard stop, so an update run can never write it into a baseline.
+      const violations = findCaptureTextViolations(
+        await page.evaluate(collectCaptureText, { checkLayout: true }),
+      );
+      expect(
+        violations,
+        `${capture.name}: banned marketing text ${violations
+          .map(
+            ({ element, matchedText }) =>
+              `${JSON.stringify(matchedText)} in ${element}`,
+          )
+          .join(", ")}`,
+      ).toEqual([]);
+
       const themeSuffix = theme === "dark" ? "-dark" : "";
+      const fileName = `${capture.name}${account.captureSuffix}${themeSuffix}.png`;
       // Soft, so one run reports every drifted capture; a hard assertion
       // aborts the loop at the first mismatch and hides the rest until the
       // next run.
-      await expect
-        .soft(page)
-        .toHaveScreenshot(`${capture.name}${themeSuffix}.png`, {
-          animations: "disabled",
-          caret: "hide",
-          clip:
-            "clip" in capture
-              ? capture.clip
-              : { x: 255, y: 0, width: 1137, height: 710 },
-          // Baselines are produced on the CI runner by the "Update marketing
-          // screenshots" workflow (.github/workflows/
-          // marketing-screenshots-update.yml) and compared on that same runner
-          // image, so this only has to absorb run-to-run rendering noise, not
-          // a macOS-to-Linux font gap. Dispatch that workflow on the branch
-          // when the UI change is intended.
-          maxDiffPixelRatio: 0.005,
-          scale: "css",
-        });
+      await expect.soft(page).toHaveScreenshot(fileName, {
+        animations: "disabled",
+        caret: "hide",
+        clip: "clip" in capture ? capture.clip : DEFAULT_CLIP,
+        // Baselines are produced on the CI runner by the "Update marketing
+        // screenshots" workflow (.github/workflows/
+        // marketing-screenshots-update.yml) and compared on that same runner
+        // image, so this only has to absorb run-to-run rendering noise, not
+        // a macOS-to-Linux font gap. Dispatch that workflow on the branch
+        // when the UI change is intended.
+        maxDiffPixelRatio: 0.005,
+        scale: "device",
+      });
+      // `?editing=true` opened an edit session, i.e. a lease-backed lock on the
+      // Supplier Agreement. A full navigation never unmounts the editor, so
+      // the session would outlive this capture and badge the document in the
+      // next theme pass's workspace shot. Release it explicitly.
+      if (capture.name === "editor") {
+        await releaseSupplierAgreementEditLock(page.request, editLock);
+      }
     }
   }
-});
+};
 
 // Each product capture owns its Inspector state. Full navigation creates a
 // fresh store, while removing the persisted Inspector state prevents an editor
@@ -405,22 +698,161 @@ const clearPersistedInspectorState = async (page: Page) => {
   }, INSPECTOR_STORAGE_PREFIXES);
 };
 
+// No margin note is half hidden at the top of the margin, under the sticky
+// section header or the frame's top edge. One running off the bottom edge
+// is fine: it reads as the page continuing.
+const expectNoMarginNoteCut = async (page: Page, clipTop: number) => {
+  await expect
+    .poll(
+      async () =>
+        await page.evaluate(
+          (band) => {
+            const scroller = document
+              .querySelector('[data-slot="reader-document-column"]')
+              ?.closest(".reader-scroll");
+            if (!(scroller instanceof HTMLElement)) {
+              return ["the reader's scroller is missing"];
+            }
+            const frame = scroller.getBoundingClientRect();
+            // A note under the margin's sticky section header is as cut as
+            // one under the frame's edge: the header's contents bound it.
+            const aside = scroller
+              .querySelector('[data-slot="reader-document-column"]')
+              ?.parentElement?.querySelector("aside");
+            const stuckBottoms = aside
+              ? [...aside.querySelectorAll<HTMLElement>("*")]
+                  .filter(
+                    (element) =>
+                      getComputedStyle(element).position === "sticky" &&
+                      element.getBoundingClientRect().top <= frame.top + 1,
+                  )
+                  .map((element) =>
+                    Math.max(
+                      element.getBoundingClientRect().bottom,
+                      ...[...element.querySelectorAll("*")].map(
+                        (child) => child.getBoundingClientRect().bottom,
+                      ),
+                    ),
+                  )
+              : [];
+            const top = Math.max(frame.top, band.top, ...stuckBottoms);
+            const cut: string[] = [];
+            for (const note of document.querySelectorAll(
+              "[data-margin-note] > *",
+            )) {
+              const box = note.getBoundingClientRect();
+              if (box.top < top && box.bottom > top) {
+                const kind = note.parentElement?.dataset["marginNote"] ?? "?";
+                cut.push(
+                  `${kind} note "${note.textContent.slice(0, 40)}" spans ${String(Math.round(box.top))}-${String(Math.round(box.bottom))}`,
+                );
+              }
+            }
+            return cut;
+          },
+          { top: clipTop },
+        ),
+      {
+        message: "No margin note may be half hidden at the top of the margin",
+      },
+    )
+    .toEqual([]);
+};
+
 // Resolves the seeded agent thread's route by title via the chat threads
-// API (same lookup as record-product-story.ts's
-// resolveMarketingViewRoutes/getMarketingAgentThreadId), instead of a fixed
-// thread id that would need updating whenever the dev seed reruns.
-const resolveAgentThreadPath = async (request: APIRequestContext) => {
-  const apiBaseURL = process.env["E2E_API_URL"] ?? "http://localhost:3001";
-  const response = await request.get(`${apiBaseURL}/v1/chat/threads?limit=50`);
+// API (the same lookup record-product-story.ts's resolveMarketingViewRoutes
+// uses), instead of a fixed thread id that would need updating whenever the
+// dev seed reruns.
+const resolveAgentThreadPath = async (
+  request: APIRequestContext,
+  locale: MarketingLocale,
+) => {
+  const response = await request.get(
+    `${MARKETING_URLS.apiUrl}/v1/chat/threads?limit=50`,
+  );
   expect(response.ok(), await response.text()).toBe(true);
-  const threadId = getMarketingAgentThreadId(await response.json());
+  const threadId = getMarketingAgentThreadId(await response.json(), locale);
   if (!threadId) {
     throw new Error(
-      `Could not find the seeded "${MARKETING_AGENT_THREAD_TITLE}" thread ` +
-        "for the agent screenshot",
+      `Could not find the seeded "${MARKETING_LOCALE_MARKERS[locale].agent.threadTitle}" ` +
+        "thread for the agent screenshot",
     );
   }
-  return `/chat/workspaces/${EXPORT_REVIEW_WORKSPACE_ID}/${threadId}`;
+  return `/chat/workspaces/${marketingSeedIds(locale).exportReviewWorkspaceId}/${threadId}`;
+};
+
+const viewListSchema = v.array(
+  v.looseObject({
+    name: v.string(),
+    layout: v.looseObject({ type: v.string() }),
+  }),
+);
+
+type ResolveViewNameOptions = {
+  layoutType: "filesystem" | "table";
+  locale: MarketingLocale;
+  request: APIRequestContext;
+  workspaceId: string;
+};
+
+/** The name a workspace's default view of this layout shows in its tab. */
+const resolveViewName = async ({
+  layoutType,
+  locale,
+  request,
+  workspaceId,
+}: ResolveViewNameOptions) => {
+  const response = await request.get(
+    `${MARKETING_URLS.apiUrl}/v1/views/${workspaceId}`,
+    { headers: { "Accept-Language": locale } },
+  );
+  expect(response.ok(), await response.text()).toBe(true);
+  const view = v
+    .parse(viewListSchema, await response.json())
+    .find(({ layout }) => layout.type === layoutType);
+  if (view === undefined) {
+    throw new Error(`Workspace ${workspaceId} has no ${layoutType} view`);
+  }
+  return view.name;
+};
+
+const DECISION_THREAD_PAGE_LIMIT = 100;
+const threadPageSchema = v.object({
+  global: v.array(v.unknown()),
+  nextCursor: v.nullable(v.string()),
+});
+
+// The threads endpoint lists newest first, so the seeded readers can sit
+// beyond the first page on a busy dev account: follow its cursor to the end.
+const resolveDecisionPaths = async (
+  request: APIRequestContext,
+  locale: MarketingLocale,
+) => {
+  const global: unknown[] = [];
+  let cursor: string | null = null;
+  for (let page = 0; page < DECISION_THREAD_PAGE_LIMIT; page++) {
+    const query: string =
+      cursor === null
+        ? "limit=50"
+        : `limit=50&cursor=${encodeURIComponent(cursor)}`;
+    const response = await request.get(
+      `${MARKETING_URLS.apiUrl}/v1/chat/threads?${query}`,
+    );
+    expect(response.ok(), await response.text()).toBe(true);
+    const payload: unknown = await response.json();
+    const parsed = v.safeParse(threadPageSchema, payload);
+    if (!parsed.success) {
+      throw new Error("Chat thread list response is malformed");
+    }
+    global.push(...parsed.output.global);
+    if (parsed.output.nextCursor === null) {
+      return getMarketingDecisionPaths({ global }, MARKETING_CASE_LAW[locale]);
+    }
+    cursor = parsed.output.nextCursor;
+  }
+  throw new Error(
+    `Chat thread list exceeded ${String(DECISION_THREAD_PAGE_LIMIT)} pages`,
+  );
 };
 
 // Reads the timestamp the inspector's version caption formats, from the same
@@ -483,48 +915,15 @@ const getCurrentVersionCreatedAt = (payload: unknown): string | undefined => {
 const isUnknownArray = (value: unknown): value is unknown[] =>
   Array.isArray(value);
 
-const getMarketingAgentThreadId = (payload: unknown): string | undefined => {
-  if (
-    typeof payload !== "object" ||
-    payload === null ||
-    !("workspaces" in payload) ||
-    !isUnknownArray(payload.workspaces)
-  ) {
-    return undefined;
-  }
-
-  for (const workspace of payload.workspaces) {
-    if (
-      typeof workspace !== "object" ||
-      workspace === null ||
-      !("threads" in workspace) ||
-      !isUnknownArray(workspace.threads)
-    ) {
-      continue;
-    }
-    for (const thread of workspace.threads) {
-      if (
-        typeof thread === "object" &&
-        thread !== null &&
-        "id" in thread &&
-        typeof thread.id === "string" &&
-        "title" in thread &&
-        thread.title === MARKETING_AGENT_THREAD_TITLE
-      ) {
-        return thread.id;
-      }
-    }
-  }
-
-  return undefined;
-};
-
-const authenticateMarketingSession = async (request: APIRequestContext) => {
+const authenticateMarketingSession = async (
+  request: APIRequestContext,
+  locale: MarketingLocale,
+) => {
+  const { email, organizationId } = MARKETING_LOCALE_ACCOUNTS[locale];
   const apiBaseURL = process.env["E2E_API_URL"] ?? "http://localhost:3001";
   const webOrigin = new URL(
     process.env["E2E_WEB_URL"] ?? "http://localhost:3000",
   ).origin;
-  const email = "test@stella.dev";
   const sendResponse = await request.post(
     `${apiBaseURL}/api/auth/email-otp/send-verification-otp`,
     { data: { email, type: "sign-in" }, headers: { origin: webOrigin } },
@@ -539,7 +938,15 @@ const authenticateMarketingSession = async (request: APIRequestContext) => {
 
   const signInResponse = await request.post(
     `${apiBaseURL}/api/auth/sign-in/email-otp`,
-    { data: { email, otp }, headers: { origin: webOrigin } },
+    {
+      data: {
+        email,
+        otp,
+        [PROFESSIONAL_USE_DISPLAYED_VERSION_FIELD]:
+          PROFESSIONAL_USE_STATEMENT_VERSION,
+      },
+      headers: { origin: webOrigin },
+    },
   );
   expect(signInResponse.ok(), await signInResponse.text()).toBe(true);
 
@@ -549,7 +956,7 @@ const authenticateMarketingSession = async (request: APIRequestContext) => {
   const setActiveResponse = await request.post(
     `${apiBaseURL}/api/auth/organization/set-active`,
     {
-      data: { organizationId: MARKETING_ORGANIZATION_ID },
+      data: { organizationId },
       headers: { origin: webOrigin },
     },
   );

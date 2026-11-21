@@ -13,8 +13,15 @@ import { eq, inArray, sql } from "drizzle-orm";
 import { BILLING_STATUS, TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
 import { Temporal } from "@stll/time";
 
-import { auditLogs, organizationSettings, timeEntries } from "@/api/db/schema";
+import { user as authUser } from "@/api/db/auth-schema";
+import {
+  auditLogs,
+  featureEnrolments,
+  organizationSettings,
+  timeEntries,
+} from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { AUDIT_ACTION, createAuditRecorder } from "@/api/lib/audit-log";
 import { UNPRICED_TIME_ENTRY_CURRENCY } from "@/api/lib/billing-constants";
 import { DEFAULT_TIME_POLICY } from "@/api/lib/billing-time";
@@ -22,6 +29,7 @@ import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { cents } from "@/api/lib/money";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { isPgError, PG_ERROR } from "@/api/lib/pg-error";
+import { createOrganizationScopedTestDb } from "@/api/tests/helpers/handler-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -57,6 +65,21 @@ beforeAll(async () => {
   const fixture = await getRlsFixture();
   db = fixture.testDb;
   ids = fixture.ids;
+
+  await db
+    .update(authUser)
+    .set({ emailVerified: true })
+    .where(inArray(authUser.id, [ids.userA1]));
+  await db
+    .insert(featureEnrolments)
+    .values([
+      {
+        organizationId: ids.orgA,
+        userId: ids.userA1,
+        featureId: "time-billing",
+      },
+    ])
+    .onConflictDoNothing();
 });
 const cleanup = async () => {
   if (createdIds.length) {
@@ -85,8 +108,12 @@ const createFor = async (body: CreateCtx["body"]) => {
     asTestRaw<CreateCtx>({
       body,
       request,
-      route: "/time-entries/internal",
+      route: "/v1/time-entries/internal" satisfies ApiRoutePath,
       safeDb: createSafeDb(db, [], ids.orgA, ids.userA1),
+      scopedDb: createOrganizationScopedTestDb(db, {
+        organizationId: ids.orgA,
+        userId: ids.userA1,
+      }),
       session: { activeOrganizationId: ids.orgA },
       user: { id: ids.userA1 },
       memberRole: sessionMemberRole("member"),

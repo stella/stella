@@ -1,5 +1,5 @@
 // The executor for generated capability leaves (spec 049 Phase 3). Unlike the
-// curated executor it calls the ONE generic `invoke_capability` tool with
+// curated executor it selects the read or write capability executor with
 // `{ capability, input: { body?, params?, query? }, validate_only?, confirm? }`,
 // mapping each flag back to the input part its schema declared. It shares the
 // curated executor's helpers (confirm gates, scope precheck, `--all` follow,
@@ -7,30 +7,36 @@
 
 import { Result } from "better-result";
 
+import { parseIntegerToken } from "@stll/agent-input/numeric-token";
+
+import { scopePreflightFailure } from "./auth/command-scopes.js";
+import { chunkCapabilityIds, resolveBulkIdFlags } from "./batch/bulk.js";
+import { runCapabilityChunks } from "./batch/capability-chunks.js";
 import type { Context } from "./context.js";
+import { MCP_CAPABILITY_EXECUTORS } from "./generated/mcp-contract.js";
 import { callTool, type CallToolResult } from "./mcp-client.js";
 import { EXIT_CODES } from "./mcp-constants.js";
 import type { CapabilityLeafSpec } from "./route-types.js";
 import {
   composeInputFromFlags,
   confirmDestructive,
-  renderClientError,
   maybeConfirmAndRetry,
   parseInputObject,
+  parsePayload,
   readOutputFormat,
+  renderClientError,
   renderCommandResult,
   RESERVED_FLAG_KEYS,
   reservedFlagUsageError,
-  scopePreflightFailure,
   setExit,
   setPath,
   streamOrRenderAllPages,
   writeInputSchema,
   writersFor,
 } from "./run-leaf-command.js";
-
-/** The generic capability tool every capability leaf dispatches to. */
-const INVOKE_TOOL = "invoke_capability";
+import { saveDownload } from "./save-download.js";
+import { timingEnd } from "./timing.js";
+import { commandUnavailableMessage } from "./unavailable-command.js";
 
 type LeafFlags = Record<string, unknown>;
 
@@ -51,6 +57,29 @@ const withCursor = (
   };
 };
 
+type ComposeCapabilityFlagsOptions = {
+  base: Record<string, unknown>;
+  flags: LeafFlags;
+  spec: CapabilityLeafSpec;
+};
+
+const composeCapabilityFlags = async ({
+  base,
+  flags,
+  spec,
+}: ComposeCapabilityFlagsOptions) => {
+  const inputFlags = resolveBulkIdFlags(spec, flags);
+  if (Result.isError(inputFlags)) {
+    return { ok: false, message: inputFlags.error } as const;
+  }
+  return await composeInputFromFlags({
+    base,
+    flagPath: (flagSpec) => `${flagSpec.part}.${flagSpec.partPath}`,
+    flagSpecs: spec.flags,
+    flags: inputFlags.value,
+  });
+};
+
 /** Run one capability leaf end to end. Sets `process.exitCode` per spec S4. */
 export const runCapabilityCommand = async ({
   context,
@@ -62,6 +91,7 @@ export const runCapabilityCommand = async ({
   spec: CapabilityLeafSpec;
 }): Promise<void> => {
   const writers = writersFor(context);
+  const toolName = MCP_CAPABILITY_EXECUTORS[spec.access];
 
   if (flags[RESERVED_FLAG_KEYS.schema] === true) {
     writeInputSchema({ context, inputSchema: spec.inputSchema, writers });
@@ -98,12 +128,7 @@ export const runCapabilityCommand = async ({
     setExit(context, EXIT_CODES.validation);
     return;
   }
-  const built = await composeInputFromFlags({
-    base: inputBase,
-    flagPath: (flagSpec) => `${flagSpec.part}.${flagSpec.partPath}`,
-    flagSpecs: spec.flags,
-    flags,
-  });
+  const built = await composeCapabilityFlags({ base: inputBase, flags, spec });
   if (!built.ok) {
     writers.stderr(`${built.message}\n`);
     setExit(context, EXIT_CODES.validation);
@@ -115,31 +140,33 @@ export const runCapabilityCommand = async ({
   // validation for both JSON and flags. Keeping a snapshot validator here would
   // reject lenient spellings before the canonical reader sees them.
 
-  // Client-side scope precheck (spec S3): fail before any server call.
+  // Reuse discovery's grant snapshot; decoding the token here could contradict
+  // authenticated server evidence.
   const scopeFailure = scopePreflightFailure({
     additionalScopes: spec.additionalScopes,
     scope: spec.scope,
-    token,
+    effectiveGrants: context.effectiveGrants,
+    serverUrl,
   });
   if (scopeFailure !== undefined) {
-    writers.stderr(
-      `Missing scope stella:${scopeFailure.missingScope}. Re-run '${scopeFailure.loginCommand}' to grant the complete scope set.\n`,
-    );
+    writers.stderr(`${commandUnavailableMessage(scopeFailure)}\n`);
     setExit(context, EXIT_CODES.auth);
     return;
   }
 
   const format = readOutputFormat(flags, context);
   const renderCall = (result: CallToolResult) => {
+    const started = performance.now();
     renderCommandResult({
       context,
+      command: spec.commandPath.join(" "),
       format,
       itemsKey: spec.itemsKey,
       result,
       textPath: undefined,
       writers,
-      writeReceipt: spec.access === "write",
     });
+    timingEnd("output", started);
   };
   const allActive = spec.paginated && flags[RESERVED_FLAG_KEYS.all] === true;
   const paginationPart = spec.paginationPart;
@@ -157,7 +184,9 @@ export const runCapabilityCommand = async ({
       setPath(
         input,
         `${paginationPart}.limit`,
-        Number.parseInt(limitFlag.trim(), 10),
+        parseIntegerToken(limitFlag, { sign: "unsigned", min: 1 }).unwrap(
+          "Reserved pagination limit was validated before building the request",
+        ),
       );
     }
   }
@@ -170,27 +199,34 @@ export const runCapabilityCommand = async ({
     toolArgs["validate_only"] = true;
   }
 
-  // Confirm gates. A known-destructive capability prompts up front; any
-  // capability pre-approves the server's per-capability gate with --yes.
-  if (spec.destructive) {
+  // Write capabilities own confirmation; read arguments never carry a gate.
+  if (
+    spec.access === "write" &&
+    (spec.destructive || spec.confirmation === "required")
+  ) {
     const outcome = await confirmDestructive({
       context,
       flags,
       writers,
       label: spec.commandPath.join(" "),
+      operation: spec.destructive ? "destructive" : "approval",
     });
     if (outcome === "aborted") {
       setExit(context, EXIT_CODES.aborted);
       return;
     }
     toolArgs["confirm"] = true;
-  } else if (flags[RESERVED_FLAG_KEYS.yes] === true) {
+  } else if (
+    spec.access === "write" &&
+    flags[RESERVED_FLAG_KEYS.yes] === true
+  ) {
     toolArgs["confirm"] = true;
   }
 
   if (allActive && paginationPart !== undefined) {
     await streamOrRenderAllPages({
       context,
+      command: spec.commandPath.join(" "),
       writers,
       format,
       textPath: undefined,
@@ -198,7 +234,7 @@ export const runCapabilityCommand = async ({
       baseArgs: toolArgs,
       serverUrl,
       token,
-      toolName: INVOKE_TOOL,
+      toolName,
       cursorInto: (base, cursor) => withCursor(base, paginationPart, cursor),
       ...(spec.requestTimeoutMs === undefined
         ? {}
@@ -207,10 +243,25 @@ export const runCapabilityCommand = async ({
     return;
   }
 
+  const chunks = chunkCapabilityIds(spec, input);
+  if (chunks.length > 1) {
+    await runCapabilityChunks({
+      context,
+      flags,
+      spec,
+      chunks,
+      toolArgs,
+      serverUrl,
+      token,
+      renderCall,
+    });
+    return;
+  }
+
   const call = await callTool({
     serverUrl,
     token,
-    name: INVOKE_TOOL,
+    name: toolName,
     args: toolArgs,
     ...(spec.requestTimeoutMs === undefined
       ? {}
@@ -225,14 +276,14 @@ export const runCapabilityCommand = async ({
     args: toolArgs,
     call: call.value,
     context,
-    enabled: true,
+    enabled: spec.access === "write",
     flags,
     label: spec.commandPath.join(" "),
     renderCall,
     serverUrl,
     timeoutMs: spec.requestTimeoutMs,
     token,
-    toolName: INVOKE_TOOL,
+    toolName,
     writers,
   });
   if (retried) {
@@ -240,4 +291,42 @@ export const runCapabilityCommand = async ({
   }
 
   renderCall(call.value);
+  await saveResultDownload({ context, flags, result: call.value, writers });
+};
+
+/**
+ * `--save <path>`: write the file the successful result's downloadUrl points
+ * to. The JSON answer is already printed; a failed save says why on stderr
+ * and sets its own exit code.
+ */
+const saveResultDownload = async ({
+  context,
+  flags,
+  result,
+  writers,
+}: {
+  context: Context;
+  flags: LeafFlags;
+  result: CallToolResult;
+  writers: ReturnType<typeof writersFor>;
+}): Promise<void> => {
+  const savePath = flags[RESERVED_FLAG_KEYS.save];
+  if (typeof savePath !== "string" || result.isError === true) {
+    return;
+  }
+  const saved = await saveDownload({
+    path: savePath,
+    payload: parsePayload(result),
+  });
+  if (Result.isError(saved)) {
+    writers.stderr(`${saved.error.message}\n`);
+    setExit(
+      context,
+      saved.error.kind === "usage"
+        ? EXIT_CODES.validation
+        : EXIT_CODES.unexpected,
+    );
+    return;
+  }
+  writers.stderr(`Saved ${String(saved.value)} bytes to ${savePath}\n`);
 };

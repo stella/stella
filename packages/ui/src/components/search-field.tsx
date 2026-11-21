@@ -2,7 +2,7 @@
 
 import type * as React from "react";
 
-import { SearchIcon, XIcon } from "../icons";
+import { XIcon } from "../icons";
 import { cn } from "../lib/utils";
 import { Button } from "./button";
 import { InputGroup, InputGroupAddon, InputGroupInput } from "./input-group";
@@ -15,6 +15,7 @@ type SearchFieldProps = Omit<
   onValueChange: (value: string) => void;
   /** Accessible name of the clear button; the package ships no copy. */
   clearLabel: string;
+  disabledReason?: string | undefined;
   /** Class for the outer group (width, margins). */
   groupClassName?: string;
 };
@@ -29,15 +30,13 @@ const SearchField = ({
   value,
   onValueChange,
   clearLabel,
+  disabledReason,
   groupClassName,
   className,
   onKeyDown,
   ...props
 }: SearchFieldProps) => (
   <InputGroup className={cn("min-h-11 sm:min-h-0", groupClassName)}>
-    <InputGroupAddon>
-      <SearchIcon />
-    </InputGroupAddon>
     <InputGroupInput
       autoComplete="off"
       spellCheck={false}
@@ -61,6 +60,9 @@ const SearchField = ({
       <InputGroupAddon align="inline-end">
         <Button
           aria-label={clearLabel}
+          // A disabled field cannot be edited, so it cannot be cleared either.
+          disabled={props.disabled}
+          disabledReason={disabledReason}
           onClick={() => {
             onValueChange("");
           }}

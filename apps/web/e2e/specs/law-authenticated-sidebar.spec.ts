@@ -1,11 +1,125 @@
-import { setFixedBrowserTime } from "../helpers/clock";
+import * as v from "valibot";
+
+import { setFixedBrowserTime } from "@stll/ui/browser-clock";
+
+import { SIDEBAR_STATE_COOKIE } from "../../src/components/sidebar/sidebar-state-cookie";
+import { PRESENTATION_PREFS_COOKIE } from "../../src/lib/account/presentation-prefs/preferences";
+import { E2E_API_ORIGIN } from "../helpers/api";
 import { openGlobalSearchDatePicker } from "../helpers/global-search";
+import {
+  readPresentationPrefsCookie,
+  setPresentationPrefs,
+} from "../helpers/presentation-prefs";
+import { createProfileTestSession } from "../helpers/profile-session";
 import { expect, test } from "../helpers/test";
+import { PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS } from "../helpers/wait-budgets";
 import { createTestWorkspace, deleteTestWorkspace } from "../helpers/workspace";
 
 const MACOS_USER_AGENT =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) " +
   "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36";
+
+for (const persistence of ["browser-default", "without-cookie-store"]) {
+  test(`sidebar toggles survive reload: ${persistence}`, async ({ page }) => {
+    const context = page.context();
+    await context.clearCookies({ name: SIDEBAR_STATE_COOKIE });
+    await context.clearCookies({ name: PRESENTATION_PREFS_COOKIE });
+    if (persistence === "without-cookie-store") {
+      await page.addInitScript(() => {
+        Reflect.deleteProperty(globalThis, "cookieStore");
+      });
+    }
+    const scripts = Promise.withResolvers<undefined>();
+    // Keep parser-blocking prepaint scripts available; delay the app modules.
+    await page.route("**/assets/*.js", async (route) => {
+      await scripts.promise;
+      await route.fallback();
+    });
+    await page.goto("/law", { waitUntil: "commit" });
+    const sidebar = page.locator('[data-slot="sidebar"]');
+    const toggle = sidebar
+      .locator('[data-slot="sidebar-header"]')
+      .getByRole("button");
+    try {
+      await expect(sidebar).toHaveAttribute("data-state", "expanded");
+      // Server-rendered controls stay unavailable until their handlers mount.
+      await expect(toggle).toBeDisabled();
+      if (persistence === "without-cookie-store") {
+        expect(await page.evaluate(() => "cookieStore" in globalThis)).toBe(
+          false,
+        );
+      }
+    } finally {
+      scripts.resolve(undefined);
+    }
+    for (const sidebarOpen of [false, true]) {
+      const state = sidebarOpen ? "expanded" : "collapsed";
+      await toggle.click();
+      await expect(sidebar).toHaveAttribute("data-state", state);
+      await expect
+        .poll(async () => {
+          const cookie = await readPresentationPrefsCookie(context, page.url());
+          if (!cookie) {
+            return null;
+          }
+          expect(cookie.httpOnly).toBe(true);
+          return cookie.prefs.sidebarOpen;
+        })
+        .toBe(sidebarOpen);
+      await page.reload({ waitUntil: "domcontentloaded" });
+      await expect(sidebar).toHaveAttribute("data-state", state);
+    }
+  });
+}
+
+test("an existing sidebar cookie keeps its first-paint state until a unified preference replaces it", async ({
+  baseURL,
+  page,
+}) => {
+  if (baseURL === undefined) {
+    throw new Error("Sidebar migration requires a base URL");
+  }
+  const context = page.context();
+  await context.clearCookies({ name: PRESENTATION_PREFS_COOKIE });
+  await context.addCookies([
+    { name: SIDEBAR_STATE_COOKIE, value: "collapsed", url: baseURL },
+  ]);
+  const scripts = Promise.withResolvers<undefined>();
+  await page.route("**/assets/*.js", async (route) => {
+    await scripts.promise;
+    await route.fallback();
+  });
+  await page.goto("/law", { waitUntil: "commit" });
+  const sidebar = page.locator('[data-slot="sidebar"]');
+  try {
+    await expect(sidebar).toHaveAttribute("data-state", "collapsed");
+    await expect(
+      sidebar.locator('[data-slot="sidebar-header"]').getByRole("button"),
+    ).toBeDisabled();
+  } finally {
+    scripts.resolve(undefined);
+  }
+  await sidebar
+    .locator('[data-slot="sidebar-header"]')
+    .getByRole("button")
+    .click();
+  await expect(sidebar).toHaveAttribute("data-state", "expanded");
+  // The frame's own preference writes (the time billing hint) also replace
+  // the legacy cookie, carrying its collapsed state, and can land before the
+  // toggle's write: only the toggled value proves the reload will read it.
+  await expect
+    .poll(async () => ({
+      legacyCookie: (await context.cookies(baseURL)).some(
+        ({ name }) => name === SIDEBAR_STATE_COOKIE,
+      ),
+      sidebarOpen:
+        (await readPresentationPrefsCookie(context, baseURL))?.prefs
+          .sidebarOpen ?? null,
+    }))
+    .toEqual({ legacyCookie: false, sidebarOpen: true });
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await expect(sidebar).toHaveAttribute("data-state", "expanded");
+});
 
 test("authenticated law pages retain the user's recent matters", async ({
   page,
@@ -24,11 +138,48 @@ test("authenticated law pages retain the user's recent matters", async ({
       page
         .locator('[data-slot="sidebar"]')
         .getByText(workspaceName, { exact: true }),
-    ).toBeVisible({ timeout: 30_000 });
+    ).toBeVisible({ timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS });
   } finally {
     await deleteTestWorkspace(request, workspace.id);
   }
 });
+
+for (const theme of ["light", "dark"] as const) {
+  test(`the sidebar paints the same surface on matters and law pages: ${theme}`, async ({
+    baseURL,
+    page,
+  }) => {
+    if (baseURL === undefined) {
+      throw new Error("Sidebar surface comparison requires a base URL");
+    }
+    await setPresentationPrefs({
+      context: page.context(),
+      url: baseURL,
+      patch: { theme, palette: "flexoki" },
+    });
+    const inner = page.locator(
+      '[data-slot="sidebar"] [data-slot="sidebar-inner"]',
+    );
+    // The locator re-resolves on every read, so a sidebar that hydration or
+    // the jurisdiction redirect replaces is read again instead of detached.
+    const sidebarFill = async () =>
+      await inner.evaluate(
+        (element) => getComputedStyle(element).backgroundColor,
+      );
+    const openPage = async (url: string) => {
+      await page.goto(url, { waitUntil: "domcontentloaded" });
+      const html = expect(page.locator("html"));
+      await (theme === "dark" ? html : html.not).toHaveClass(/\bdark\b/u);
+      await expect(inner).toBeVisible();
+    };
+
+    await openPage("/workspaces");
+    await expect.poll(sidebarFill).not.toMatch(/^(?:|rgba\(0, 0, 0, 0\))$/u);
+    const matters = await sidebarFill();
+    await openPage("/law?country=cze");
+    await expect.poll(sidebarFill).toBe(matters);
+  });
+}
 
 test.describe("public law hydration", () => {
   test.use({
@@ -37,8 +188,9 @@ test.describe("public law hydration", () => {
     userAgent: MACOS_USER_AGENT,
   });
 
-  test("persisted locale activates without hydration errors", async ({
+  test("profile locale activates without hydration errors", async ({
     page,
+    baseURL,
   }) => {
     const fixedBrowserDate = new Date();
     fixedBrowserDate.setUTCHours(2, 0, 0, 0);
@@ -46,20 +198,44 @@ test.describe("public law hydration", () => {
       .toISOString()
       .slice(0, 10);
     await setFixedBrowserTime(page, fixedBrowserDate);
-    await page.addInitScript({
-      content: `window.localStorage.setItem(
-        "stella-i18n",
-        JSON.stringify({ state: { lang: "cs" }, version: 0 }),
-      );`,
+    const profileSession = await createProfileTestSession({
+      page,
+      label: "law-locale-hydration",
+      webUrl: baseURL ?? "http://localhost:3000",
     });
+    try {
+      await page.goto("/settings/account/profile", {
+        waitUntil: "domcontentloaded",
+      });
+      await page.locator("#language-select").click();
+      await page.getByRole("option", { name: "Čeština", exact: true }).click();
+      await expect
+        .poll(async () => {
+          const response = await page.request.get(
+            `${E2E_API_ORIGIN}/api/auth/get-session`,
+          );
+          expect(response.ok()).toBe(true);
+          const session = v.parse(
+            v.nullable(
+              v.object({
+                user: v.object({ locale: v.nullish(v.string(), null) }),
+              }),
+            ),
+            await response.json(),
+          );
+          return session?.user.locale ?? null;
+        })
+        .toBe("cs");
+      await page.goto("/law?country=cze", { waitUntil: "commit" });
+      await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+      await expect(page.locator("html")).toHaveAttribute("lang", "cs");
+      await openGlobalSearchDatePicker(page);
 
-    await page.goto("/law?country=cze", { waitUntil: "commit" });
-    await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
-    await expect(page.locator("html")).toHaveAttribute("lang", "cs");
-    await openGlobalSearchDatePicker(page);
-
-    await expect(
-      page.locator('[role="gridcell"][aria-current="date"]'),
-    ).toHaveAttribute("data-date", expectedToday);
+      await expect(
+        page.locator('[role="gridcell"][aria-current="date"]'),
+      ).toHaveAttribute("data-date", expectedToday);
+    } finally {
+      await profileSession.cleanup();
+    }
   });
 });

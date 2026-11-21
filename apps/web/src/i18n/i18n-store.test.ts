@@ -1,18 +1,22 @@
 import { beforeEach, expect, spyOn, test } from "bun:test";
 import { runInNewContext } from "node:vm";
+import { createFormatter, createTranslator } from "use-intl";
 
 import { stellaToast } from "@stll/ui/toast";
 
 import {
   buildFormattingLocale,
+  buildMessageLocale,
   folioMessageLoaders,
   getFormatter,
   getFormattingLocale,
   getMessageLocale,
+  loadLocaleMessages,
   messageLoaders,
   supportedLanguages,
   useI18nStore,
 } from "@/i18n/i18n-store";
+import type { NumberingPreference, SupportedLanguage } from "@/i18n/i18n-store";
 import en from "@/i18n/langs/en.json";
 import { getAnalytics } from "@/lib/analytics/provider";
 
@@ -36,10 +40,13 @@ const runPrepaint = async ({
   ).text();
   const classNames = new Set<string>();
   const documentElement = {
+    dataset: { theme: attributes["data-theme"] },
     lang: "en",
     dir: "ltr",
     getAttribute: (name: string) => attributes[name] ?? null,
     classList: {
+      toggle: (token: string, force: boolean) =>
+        force ? classNames.add(token) : classNames.delete(token),
       add: (...tokens: string[]) => {
         for (const token of tokens) {
           if (/\s/u.test(token)) {
@@ -104,7 +111,7 @@ test("switching to an unbundled language keeps the boot latch on", async () => {
     hasLoadedOnceSeen.push(state.hasLoadedOnce);
   });
 
-  await useI18nStore.getState().setLang("cs");
+  await useI18nStore.getState().loadMessages("cs");
   unsubscribe();
 
   // A non-English bundle is loaded async, so isLoaded must dip false while it
@@ -162,68 +169,23 @@ test("cold boot in English latches the spinner off synchronously", async () => {
   await load;
 });
 
-test("prepaint-init.js uses the first supported browser locale", async () => {
-  const arabicFirst = await runPrepaint({ languages: ["ar-SA", "en-US"] });
-  expect(arabicFirst.documentElement.lang).toBe("ar");
-  expect(arabicFirst.documentElement.dir).toBe("rtl");
-
-  const englishFirst = await runPrepaint({ languages: ["en-US", "ar-SA"] });
-  expect(englishFirst.documentElement.lang).toBe("en");
-  expect(englishFirst.documentElement.dir).toBe("ltr");
-});
-
-test("prepaint-init.js prefers the persisted locale", async () => {
+test("prepaint resolves system theme without changing server locale", async () => {
   const result = await runPrepaint({
-    languages: ["en-US"],
-    storage: {
-      "stella-i18n": JSON.stringify({ state: { lang: "ar" }, version: 0 }),
-    },
+    attributes: { "data-theme": "system" },
+    prefersDark: true,
+    languages: ["ar"],
   });
-
-  expect(result.documentElement.lang).toBe("ar");
-  expect(result.documentElement.dir).toBe("rtl");
-});
-
-test("prepaint-init.js keeps a server-rendered document language", async () => {
-  const result = await runPrepaint({
-    attributes: { "data-lang-source": "document" },
-    languages: ["ar-SA"],
-  });
-
+  expect(result.classNames.has("dark")).toBe(true);
   expect(result.documentElement.lang).toBe("en");
-  expect(result.documentElement.dir).toBe("rtl");
+  expect(result.documentElement.dir).toBe("ltr");
 });
 
-test("prepaint-init.js survives malformed or unavailable storage", async () => {
-  const malformed = await runPrepaint({
-    languages: ["ar-SA"],
-    storage: {
-      "stella-i18n": "{",
-      "stella-ui-palette": "invalid palette",
-    },
-  });
-  expect(malformed.documentElement.lang).toBe("ar");
-  expect(malformed.documentElement.dir).toBe("rtl");
-
-  const unavailable = await runPrepaint({
-    languages: ["ar-SA"],
-    storageThrows: true,
-  });
-  expect(unavailable.documentElement.lang).toBe("ar");
-  expect(unavailable.documentElement.dir).toBe("rtl");
-});
-
-test("prepaint-init.js preserves valid theme and palette preferences", async () => {
+test("explicit light ignores the system dark preference", async () => {
   const result = await runPrepaint({
-    storage: {
-      "stella-ui-palette": "nord",
-      "stella-ui-theme": "dark",
-    },
+    attributes: { "data-theme": "light" },
+    prefersDark: true,
   });
-
-  expect(result.classNames).toEqual(new Set(["dark", "palette-nord"]));
-  expect(result.documentElement.style.colorScheme).toBe("dark");
-  expect(result.documentElement.style.backgroundColor).toBe("#0c0c0d");
+  expect(result.classNames.has("dark")).toBe(false);
 });
 
 test("buildFormattingLocale never builds an invalid tag for any language + region", () => {
@@ -242,6 +204,39 @@ test("buildFormattingLocale never builds an invalid tag for any language + regio
   }
 });
 
+test("numbers inside a message use the same digits as the formatter", () => {
+  // A plural's `#` is formatted by the message locale, `{n}` arguments by
+  // the formatter; with Arabic UI the two printed different digits.
+  const expectSameDigits = (
+    lang: SupportedLanguage,
+    numberingSystem: NumberingPreference,
+  ) => {
+    const options = {
+      lang,
+      region: "",
+      regionalFormat: "auto",
+      calendar: "auto",
+      numberingSystem,
+      weekStart: "auto",
+    } as const;
+    const translate = createTranslator({
+      locale: buildMessageLocale(options),
+      messages: { probe: "{count, plural, other {#}}" },
+    });
+    const formatter = createFormatter({
+      locale: buildFormattingLocale(options),
+      timeZone: "UTC",
+    });
+    expect(translate("probe", { count: 6 })).toBe(formatter.number(6));
+    expect(new Intl.Locale(buildMessageLocale(options)).baseName).toBe(lang);
+  };
+  for (const lang of supportedLanguages) {
+    expectSameDigits(lang, "auto");
+    expectSameDigits(lang, "latn");
+    expectSameDigits(lang, "arab");
+  }
+});
+
 test("Indian regional format uses lakh and crore grouping", () => {
   useI18nStore.getState().setRegionalFormat("en-IN");
 
@@ -257,7 +252,7 @@ test("Indian regional format uses lakh and crore grouping", () => {
 
 test("regional format stays independent from the display language", async () => {
   useI18nStore.getState().setRegionalFormat("en-IN");
-  await useI18nStore.getState().setLang("de");
+  await useI18nStore.getState().loadMessages("de");
 
   expect(useI18nStore.getState().lang).toBe("de");
   expect(getMessageLocale()).toBe("de");
@@ -279,12 +274,12 @@ test("automatic regional format restores the detected language-region pair", () 
 });
 
 test("loadedLang and messages advance together", async () => {
-  await useI18nStore.getState().setLang("cs");
+  await useI18nStore.getState().loadMessages("cs");
   const afterCs = useI18nStore.getState();
   expect(afterCs.loadedLang).toBe("cs");
   const csMessages = afterCs.messages;
 
-  await useI18nStore.getState().setLang("en");
+  await useI18nStore.getState().loadMessages("en");
   const afterEn = useI18nStore.getState();
   expect(afterEn.loadedLang).toBe("en");
   expect(afterEn.messages).not.toBe(csMessages);
@@ -300,13 +295,16 @@ const expectFailedCsSwitchIsReported = async (
   );
 
   try {
-    await useI18nStore.getState().setLang("cs");
+    await useI18nStore.getState().loadMessages("cs");
 
     const state = useI18nStore.getState();
     expect(state.lang).toBe("en");
     expect(state.loadedLang).toBe("en");
     expect(state.isLoaded).toBe(true);
-    expect(captureSpy).toHaveBeenCalledWith(bundleError);
+    expect(captureSpy).toHaveBeenCalledWith(bundleError, {
+      fingerprintKey: "loadMessages:failure",
+      scope: { type: "handler", handlerId: "loadMessages:failure" },
+    });
     expect(toastSpy).toHaveBeenCalledWith({
       type: "error",
       title: en.common.languageLoadFailed,
@@ -340,5 +338,44 @@ test("reports a folio catalog that fails to load and keeps the previous language
     await expectFailedCsSwitchIsReported(bundleError);
   } finally {
     loaderSpy.mockRestore();
+  }
+});
+
+test("folio defaults preserve frozen app catalogs and app-owned messages", async () => {
+  const appMessages = {
+    ...en,
+    folio: {
+      ...en.folio,
+      editor: Object.freeze({
+        outlineDepthAll: "App outline depths",
+        outlineDepthLabel: en.folio.editor.outlineDepthLabel,
+        outlineDepthThree: en.folio.editor.outlineDepthThree,
+        outlineDepthTwo: en.folio.editor.outlineDepthTwo,
+      }),
+    },
+  };
+  const before = structuredClone(appMessages);
+  const folioCatalog = await folioMessageLoaders.cs();
+  const editorDefaults = folioCatalog.folio["editor"];
+  if (editorDefaults === undefined || typeof editorDefaults === "string") {
+    throw new TypeError("The editor catalog must contain message defaults");
+  }
+  const accessibleName = editorDefaults["accessibleName"];
+  if (typeof accessibleName !== "string") {
+    throw new TypeError("The editor catalog must contain its accessible name");
+  }
+  const catalogBefore = structuredClone(folioCatalog);
+  const loader = spyOn(messageLoaders, "cs").mockResolvedValue(appMessages);
+  try {
+    const merged = await loadLocaleMessages("cs");
+    expect(merged.folio.editor).not.toBe(appMessages.folio.editor);
+    expect(merged.folio.editor.outlineDepthAll).toBe("App outline depths");
+    expect(merged.folio.editor).toMatchObject({
+      accessibleName,
+    });
+    expect(appMessages).toEqual(before);
+    expect(folioCatalog).toEqual(catalogBefore);
+  } finally {
+    loader.mockRestore();
   }
 });

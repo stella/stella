@@ -29,9 +29,8 @@ type EnsureAccount = (options?: EnsureAccountOptions) => AccountGateOutcome;
 /**
  * The one account gate on the public law surface.
  *
- * Every AI affordance is drawn for a visitor exactly as it is for a member,
- * and the account is asked for at the moment the visitor tries to create
- * something with one: the shell's sign-in dialog opens directly and returns
+ * Every AI affordance stays in view for a visitor, and the account is asked
+ * for at the moment the visitor tries to create something with one: the shell's sign-in dialog opens directly and returns
  * to this page. There is no intermediate prompt of its own;
  * `no-custom-account-modal` keeps it that way.
  */

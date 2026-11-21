@@ -1,21 +1,32 @@
-import { useState, type PropsWithChildren } from "react";
+import {
+  type PropsWithChildren,
+  type ReactElement,
+  type ReactNode,
+  useState,
+} from "react";
 
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 import {
+  BanIcon,
   CheckIcon,
   EqualIcon,
   EyeIcon,
   MinusIcon,
+  PlusIcon,
   RefreshCwIcon,
   XIcon,
 } from "@stll/ui/icons";
 import type { LucideIcon } from "@stll/ui/icons";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
+import type { ReviewVerdict } from "@/components/ai-suggestions/document-review-queries";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import Tooltip from "@/components/tooltip";
 import { ActiveEditBadge } from "@/components/workspaces/active-edit-badge";
+import { AiCell } from "@/components/workspaces/ai-cell";
+import { propertyAiCellState } from "@/components/workspaces/ai-cell-state.logic";
 import {
   CellMetadataFlags,
   useCellMetadataFlags,
@@ -27,6 +38,7 @@ import {
   emptyColor,
   resolveOptionColor,
 } from "@/components/workspaces/property-utils";
+import { offersCellReview } from "@/components/workspaces/row-actions.logic";
 import type { TranslationKey } from "@/i18n/types";
 import { detached } from "@/lib/detached";
 import type {
@@ -40,14 +52,15 @@ import {
   useWorkspaceStore,
 } from "@/lib/workspaces/store";
 import { AICellSourceCard } from "@/routes/_protected.workspaces/$workspaceId/-components/ai-cell-source-card";
+import { CellOverrideCard } from "@/routes/_protected.workspaces/$workspaceId/-components/cell-override-card";
 import {
+  type AIExtractionTarget,
   isAIExtractionProperty,
   resolveAiCellTargets,
-  type AIExtractionTarget,
   type SourceFileTarget,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/table-column.logic";
 
-export const PropertyCell = ({
+const PropertyCellContent = ({
   entity,
   property,
 }: {
@@ -71,6 +84,20 @@ export const PropertyCell = ({
   const justification = useWorkspaceStore((s) =>
     selectJustificationByFieldId(s.justifications, field?.id),
   );
+  const override = cellMetadata?.override;
+  const withOverride = (cell: ReactElement): ReactElement =>
+    override === undefined || cellMetadata === undefined ? (
+      cell
+    ) : (
+      <CellOverrideCard
+        entity={entity}
+        metadata={cellMetadata}
+        override={override}
+        property={property}
+      >
+        {cell}
+      </CellOverrideCard>
+    );
   const extractionPreview = useWorkspaceStore((s) =>
     fieldContent?.type === "pending"
       ? s.getExtractionPreview(entity.entityId, property.id)
@@ -97,12 +124,14 @@ export const PropertyCell = ({
   if (property.content.type === "file" || fieldContent?.type === "file") {
     return (
       <span className="flex min-w-0 items-center gap-1.5">
-        <CellMetadataFlags
-          entityId={entity.entityId}
-          metadata={cellMetadata}
-          propertyId={property.id}
-          workspaceId={property.workspaceId}
-        />
+        {offersCellReview("file") && (
+          <CellMetadataFlags
+            entityId={entity.entityId}
+            metadata={cellMetadata}
+            propertyId={property.id}
+            workspaceId={property.workspaceId}
+          />
+        )}
         <EditableField
           content={fieldContent}
           displayVariant="table"
@@ -203,7 +232,10 @@ export const PropertyCell = ({
       const cell = (
         <WithOpenEntityButton
           extraction={targets.extraction}
-          retryDisabled={cellMetadata?.locked === true || entity.readOnly}
+          retryBlockerKey={cellRetryBlockerKey({
+            readOnly: entity.readOnly,
+            locked: cellMetadata?.locked === true,
+          })}
           sourceFile={targets.sourceFile}
         >
           <CellMetadataFlags
@@ -228,7 +260,7 @@ export const PropertyCell = ({
       );
 
       if (!justification) {
-        return cell;
+        return withOverride(cell);
       }
       return (
         <AICellSourceCard
@@ -255,7 +287,7 @@ export const PropertyCell = ({
     }
   }
 
-  return (
+  return withOverride(
     <>
       <CellMetadataFlags
         entityId={entity.entityId}
@@ -274,7 +306,35 @@ export const PropertyCell = ({
         showDateIcon={false}
         workspaceId={property.workspaceId}
       />
-    </>
+    </>,
+  );
+};
+
+export const PropertyCell = ({
+  entity,
+  property,
+}: {
+  entity: WorkspaceEntity;
+  property: WorkspaceProperty;
+}) => {
+  const content = entity.fields[property.id]?.content;
+  const preview = useWorkspaceStore((s) =>
+    content?.type === "pending"
+      ? s.getExtractionPreview(entity.entityId, property.id)
+      : null,
+  );
+  if (property.tool.type !== "ai-model") {
+    return <PropertyCellContent entity={entity} property={property} />;
+  }
+  const state = propertyAiCellState(entity.fields[property.id]);
+  let failure: ReactNode;
+  if (content?.type === "error") {
+    failure = <PropertyCellContent entity={entity} property={property} />;
+  }
+  return (
+    <AiCell state={state} preview={preview} failure={failure}>
+      <PropertyCellContent entity={entity} property={property} />
+    </AiCell>
   );
 };
 
@@ -287,17 +347,22 @@ const VERDICT_TIER_LABEL_KEYS = {
   fallback: "knowledge.playbooks.verdict.fallback",
   deviation: "knowledge.playbooks.verdict.deviation",
   missing: "knowledge.playbooks.verdict.missing",
-} as const satisfies Record<string, TranslationKey>;
+  additional: "knowledge.playbooks.verdict.additional",
+  "not-applicable": "knowledge.playbooks.verdict.notApplicable",
+} as const satisfies Record<ReviewVerdict, TranslationKey>;
 
 // Each tier also carries a distinct glyph so the badge encodes the verdict by
 // shape as well as color (colorblind-safe): check = on standard, equals = an
-// accepted alternative, cross = a deviation, dash = nothing extracted.
+// accepted alternative, cross = a deviation, dash = nothing extracted, plus =
+// beyond the standard, ban = does not pertain to this document.
 const VERDICT_TIER_ICONS = {
   compliant: CheckIcon,
   fallback: EqualIcon,
   deviation: XIcon,
   missing: MinusIcon,
-} as const satisfies Record<string, LucideIcon>;
+  additional: PlusIcon,
+  "not-applicable": BanIcon,
+} as const satisfies Record<ReviewVerdict, LucideIcon>;
 
 // Narrows an arbitrary tier id to a known tier without widening to the full
 // TranslationKey union, so `t()` resolves the placeholder-free overload.
@@ -380,7 +445,7 @@ export const VerdictBadge = ({
             style={{ color: color.foreground }}
           />
         )}
-        <span className="truncate">{label}</span>
+        <TruncatedText>{label}</TruncatedText>
       </span>
     </span>
   );
@@ -442,16 +507,28 @@ const resolveVerdictColor = (
     : resolveOptionColor(optionColor);
 };
 
+type CellRetryBlockerOptions = {
+  readOnly: boolean;
+  locked: boolean;
+};
+
+const cellRetryBlockerKey = ({ readOnly, locked }: CellRetryBlockerOptions) => {
+  if (readOnly) {
+    return "workspaces.properties.retryReadOnlyRecord";
+  }
+  return locked ? "workspaces.properties.unlockFieldToRetry" : undefined;
+};
+
 type WithOpenEntityButtonProps = {
   extraction: AIExtractionTarget;
-  retryDisabled: boolean;
+  retryBlockerKey: ReturnType<typeof cellRetryBlockerKey>;
   sourceFile: SourceFileTarget;
 };
 
 /** Shows a peek PDF preview in the inspector with the AI justification visible. */
 const WithOpenEntityButton = ({
   extraction,
-  retryDisabled,
+  retryBlockerKey,
   sourceFile,
   children,
 }: PropsWithChildren<WithOpenEntityButtonProps>) => {
@@ -463,6 +540,7 @@ const WithOpenEntityButton = ({
   );
   const retryCell = useRetryCell(workspaceId);
   const [isRetrying, setIsRetrying] = useState(false);
+  const disabledReasonKey = isRetrying ? "common.retrying" : retryBlockerKey;
 
   const handleOpenPreview = () => {
     openFile({
@@ -551,7 +629,10 @@ const WithOpenEntityButton = ({
         <Button
           aria-label={t("common.retry")}
           className={inlineActionClass}
-          disabled={retryDisabled || isRetrying}
+          disabled={disabledReasonKey !== undefined}
+          disabledReason={
+            disabledReasonKey === undefined ? undefined : t(disabledReasonKey)
+          }
           onClick={(event) => {
             event.stopPropagation();
             handleRetry();

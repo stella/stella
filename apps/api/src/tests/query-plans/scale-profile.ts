@@ -34,6 +34,14 @@ export type ScaleProfile = {
 /** Round synthetic sizes; no catalog observations or corpus values belong here. */
 export const SYNTHETIC_SCALE_PROFILE = {
   tables: {
+    case_law_decision_citation_stats: {
+      reltuples: 100_000_000,
+      allVisibleFraction: 0.5,
+    },
+    case_law_decision_citation_stats_state: {
+      reltuples: 100_000_000,
+      allVisibleFraction: 0.5,
+    },
     case_law_citations: { reltuples: 100_000_000, allVisibleFraction: 0.2 },
     case_law_decision_identifiers: {
       reltuples: 100_000_000,
@@ -41,6 +49,14 @@ export const SYNTHETIC_SCALE_PROFILE = {
     },
     case_law_decisions: { reltuples: 100_000_000, allVisibleFraction: 0.5 },
     case_law_index_jobs: { reltuples: 100_000_000, allVisibleFraction: 0.5 },
+    case_law_population_deltas: {
+      reltuples: 1_000_000,
+      allVisibleFraction: 0.5,
+    },
+    case_law_population_projections: {
+      reltuples: 100_000_000,
+      allVisibleFraction: 0.5,
+    },
     case_law_provision_citations: {
       reltuples: 100_000_000,
       allVisibleFraction: 0.5,
@@ -134,6 +150,14 @@ export const SYNTHETIC_SCALE_PROFILE = {
     },
     {
       table: "case_law_decisions",
+      column: "citation_key",
+      nullFraction: 0.2,
+      distinctValues: -0.8,
+      mostCommonValues: [],
+      mostCommonFrequencies: [],
+    },
+    {
+      table: "case_law_decisions",
       column: "docket_family_key",
       nullFraction: 0.5,
       distinctValues: -0.4,
@@ -184,7 +208,7 @@ const relationStats = async (
       SELECT c.relpages, c.reltuples, c.relallvisible
         FROM pg_class AS c
         JOIN pg_namespace AS n ON n.oid = c.relnamespace
-       WHERE n.nspname = 'public' AND c.relname = ${table}
+       WHERE n.nspname = current_schema() AND c.relname = ${table}
     `),
   );
   const row = rows.at(0);
@@ -209,11 +233,211 @@ const restored = (result: unknown, table: string): void => {
   }
 };
 
+/**
+ * One node string per expression of a `pg_index.indexprs` list, in index
+ * column order. Node strings escape their own braces with a backslash.
+ */
+const indexExpressionNodes = (tree: string): string[] => {
+  const nodes: string[] = [];
+  let depth = 0;
+  let start = 0;
+  for (let at = 0; at < tree.length; at += 1) {
+    const char = tree[at];
+    if (char === "\\") {
+      at += 1;
+    } else if (char === "{") {
+      if (depth === 0) {
+        start = at;
+      }
+      depth += 1;
+    } else if (char === "}") {
+      depth -= 1;
+      if (depth === 0) {
+        nodes.push(tree.slice(start, at + 1));
+      }
+    }
+  }
+  if (depth !== 0) {
+    return panic(`Malformed index expression tree: ${tree}`);
+  }
+  return nodes;
+};
+
+/** The table column numbers one expression node reads. */
+const expressionColumnNumbers = (node: string): number[] => {
+  const numbers = Array.from(
+    node.matchAll(/\{VAR :varno \d+ :varattno (-?\d+) /gu),
+    (match) => Number(match[1]),
+  );
+  // A node format this does not read must not look like a constant.
+  if (numbers.length !== node.split("{VAR ").length - 1) {
+    return panic(`Unreadable column reference in index expression: ${node}`);
+  }
+  return [...new Set(numbers)];
+};
+
+type ExpressionColumnScale = {
+  index: string;
+  /** The index column's own name, which `pg_stats` lists it under. */
+  column: string;
+  attnum: number;
+  source: AttributeScale;
+};
+
+const textField = (row: unknown, field: string, table: string): string => {
+  const value = isRecord(row) ? row[field] : undefined;
+  return typeof value === "string"
+    ? value
+    : panic(`Scale profile index catalog row is malformed: ${table}`);
+};
+
+/**
+ * Expression columns of full indexes that read a profiled column. The
+ * planner takes an expression's statistics only from a full index (a
+ * partial index's are ignored), and ANALYZE took those from the physical
+ * seed: once the profile rewrites the column, the expression must follow it
+ * or its estimates describe a different table. An expression that maps the
+ * seed's values one to one (same distinct count, NULL exactly where the
+ * column is) has the column's distribution; any other expression over a
+ * profiled column has no honest statistics here and fails the gate.
+ */
+const expressionColumnScales = async (
+  db: ScaleDb,
+  tables: readonly string[],
+  attributes: readonly AttributeScale[],
+): Promise<ExpressionColumnScale[]> => {
+  const scales: ExpressionColumnScale[] = [];
+  for (const table of tables) {
+    const profiled = attributes.filter(
+      (attribute) => attribute.table === table,
+    );
+    const indexes = executedRows(
+      await db.execute(sql`
+        SELECT c.relname AS name, i.indexrelid::oid::text AS oid,
+               i.indkey::text AS keys, i.indexprs::text AS expressions
+          FROM pg_index AS i
+          JOIN pg_class AS c ON c.oid = i.indexrelid
+         WHERE i.indrelid = ${table}::regclass
+           AND i.indexprs IS NOT NULL
+           AND i.indpred IS NULL
+         ORDER BY c.relname
+      `),
+    );
+    if (indexes.length === 0) {
+      continue;
+    }
+    const columns = new Map(
+      executedRows(
+        await db.execute(sql`
+          SELECT attnum::text AS attnum, attname
+            FROM pg_attribute
+           WHERE attrelid = ${table}::regclass AND attnum > 0
+        `),
+      ).map((row) => [
+        Number(textField(row, "attnum", table)),
+        textField(row, "attname", table),
+      ]),
+    );
+    for (const index of indexes) {
+      const name = textField(index, "name", table);
+      const oid = textField(index, "oid", table);
+      const nodes = indexExpressionNodes(
+        textField(index, "expressions", table),
+      );
+      const expressionPositions = textField(index, "keys", table)
+        .split(" ")
+        .flatMap((key, at) => (key === "0" ? [at + 1] : []));
+      if (expressionPositions.length !== nodes.length) {
+        return panic(`Scale profile misread index expressions: ${name}`);
+      }
+      for (const [at, attnum] of expressionPositions.entries()) {
+        const sources = expressionColumnNumbers(nodes[at] ?? "").map(
+          (number) =>
+            columns.get(number) ??
+            panic(`Scale profile index reads an unknown column: ${name}`),
+        );
+        const profiledSources = profiled.filter(({ column }) =>
+          sources.includes(column),
+        );
+        if (profiledSources.length === 0) {
+          continue;
+        }
+        const definition = executedRows(
+          await db.execute(sql`
+            SELECT pg_get_indexdef(${oid}::oid, ${attnum}::integer, true) AS expression,
+                   a.attname AS column
+              FROM pg_attribute AS a
+             WHERE a.attrelid = ${oid}::oid AND a.attnum = ${attnum}
+          `),
+        ).at(0);
+        const expression = textField(definition, "expression", name);
+        const [source] = profiledSources;
+        if (sources.length !== 1 || source === undefined) {
+          return panic(
+            `Scale profile has no statistics for ${name} expression ${expression}: it reads a profiled column among others`,
+          );
+        }
+        const seed = executedRows(
+          await db.execute(sql`
+            SELECT count(DISTINCT (${sql.raw(expression)})) =
+                     count(DISTINCT ${sql.identifier(source.column)})
+                   AND bool_and(
+                     ((${sql.raw(expression)}) IS NULL) =
+                       (${sql.identifier(source.column)} IS NULL)
+                   ) IS NOT FALSE AS one_to_one
+              FROM ${sql.identifier(table)}
+          `),
+        ).at(0);
+        if (!isRecord(seed) || seed["one_to_one"] !== true) {
+          return panic(
+            `Scale profile has no statistics for ${name} expression ${expression}: it does not map ${source.column} one to one`,
+          );
+        }
+        scales.push({
+          index: name,
+          column: textField(definition, "column", name),
+          attnum,
+          source,
+        });
+      }
+    }
+  }
+  return scales;
+};
+
+/** Give each expression over a profiled column that column's statistics. */
+const injectExpressionColumnStats = async (
+  db: ScaleDb,
+  tables: readonly string[],
+  attributes: readonly AttributeScale[],
+): Promise<void> => {
+  for (const scale of await expressionColumnScales(db, tables, attributes)) {
+    // ANALYZE's seed MCVs are values of the seed, not of the profile.
+    await db.execute(sql`
+      SELECT pg_clear_attribute_stats(
+        current_schema()::text, ${scale.index}::text, ${scale.column}::text, false
+      )
+    `);
+    restored(
+      await db.execute(sql`
+        SELECT pg_restore_attribute_stats(
+          'schemaname', current_schema()::text, 'relname', ${scale.index}::text,
+          'attnum', ${scale.attnum}::smallint, 'inherited', false,
+          'null_frac', ${scale.source.nullFraction}::real,
+          'n_distinct', ${scale.source.distinctValues}::real
+        ) AS restored
+      `),
+      `${scale.index}.${scale.column}`,
+    );
+  }
+};
+
 /** Run only after the physical seed and its final ANALYZE. */
 export const injectScaleProfile = async (
   db: ScaleDb,
   profile: ScaleProfile,
 ): Promise<void> => {
+  await assertSeedMatchesProfile(db, profile);
   for (const table of PLAN_GUARD_TABLES) {
     const stats = await relationStats(db, table);
     if (stats.relpages < 1) {
@@ -223,7 +447,7 @@ export const injectScaleProfile = async (
     restored(
       await db.execute(sql`
         SELECT pg_restore_relation_stats(
-          'schemaname', 'public', 'relname', ${table}::text,
+          'schemaname', current_schema()::text, 'relname', ${table}::text,
           'reltuples', ${tableProfile.reltuples}::real,
           'relallvisible', ${Math.round(stats.relpages * tableProfile.allVisibleFraction)}::integer
         ) AS restored
@@ -236,7 +460,7 @@ export const injectScaleProfile = async (
     // ANALYZE's physical-seed MCVs would otherwise survive a partial restore.
     await db.execute(sql`
       SELECT pg_clear_attribute_stats(
-        'public', ${attribute.table}::text, ${attribute.column}::text, false
+        current_schema()::text, ${attribute.table}::text, ${attribute.column}::text, false
       )
     `);
     const commonStats =
@@ -253,7 +477,7 @@ export const injectScaleProfile = async (
     restored(
       await db.execute(sql`
         SELECT pg_restore_attribute_stats(
-          'schemaname', 'public', 'relname', ${attribute.table}::text,
+          'schemaname', current_schema()::text, 'relname', ${attribute.table}::text,
           'attname', ${attribute.column}::text, 'inherited', false,
           'null_frac', ${attribute.nullFraction}::real,
           'n_distinct', ${attribute.distinctValues}::real
@@ -263,6 +487,7 @@ export const injectScaleProfile = async (
       `${attribute.table}.${attribute.column}`,
     );
   }
+  await injectExpressionColumnStats(db, PLAN_GUARD_TABLES, profile.attributes);
   await assertScaleProfileApplied(db, profile);
 };
 
@@ -279,6 +504,8 @@ export const scaleTableToProfile = async <Table extends string>(
   profile: {
     tables: Record<Table, TableScale>;
     attributes: readonly AttributeScale[];
+    /** Scale heap pages when the fixture must model the table-to-index size ratio. */
+    scaleRelationPages?: boolean;
   },
 ): Promise<void> => {
   const scale = profile.tables[table];
@@ -287,6 +514,10 @@ export const scaleTableToProfile = async <Table extends string>(
     panic(`Scale profile requires physical rows before scaling: ${table}`);
   }
   const growth = scale.reltuples / stats.reltuples;
+  const scaledPages = Math.ceil(stats.relpages * growth);
+  const relationPages = profile.scaleRelationPages
+    ? sql`, 'relpages', ${scaledPages}::integer`
+    : sql``;
   const indexes = executedRows(
     await db.execute(sql`
       SELECT c.relname, c.relpages, c.reltuples
@@ -310,7 +541,7 @@ export const scaleTableToProfile = async <Table extends string>(
     restored(
       await db.execute(sql`
         SELECT pg_restore_relation_stats(
-          'schemaname', 'public', 'relname', ${index["relname"]}::text,
+          'schemaname', current_schema()::text, 'relname', ${index["relname"]}::text,
           'relpages', ${Math.ceil(index["relpages"] * growth)}::integer,
           'reltuples', ${Math.max(index["reltuples"], 0) * growth}::real
         ) AS restored
@@ -321,9 +552,13 @@ export const scaleTableToProfile = async <Table extends string>(
   restored(
     await db.execute(sql`
       SELECT pg_restore_relation_stats(
-        'schemaname', 'public', 'relname', ${table}::text,
+        'schemaname', current_schema()::text, 'relname', ${table}::text,
         'reltuples', ${scale.reltuples}::real,
-        'relallvisible', ${Math.round(stats.relpages * scale.allVisibleFraction)}::integer
+        'relallvisible', ${Math.round(
+          (profile.scaleRelationPages ? scaledPages : stats.relpages) *
+            scale.allVisibleFraction,
+        )}::integer
+        ${relationPages}
       ) AS restored
     `),
     table,
@@ -335,19 +570,102 @@ export const scaleTableToProfile = async <Table extends string>(
     // The fixture's own distribution would otherwise survive the restore.
     await db.execute(sql`
       SELECT pg_clear_attribute_stats(
-        'public', ${table}::text, ${attribute.column}::text, false
+        current_schema()::text, ${table}::text, ${attribute.column}::text, false
       )
     `);
     restored(
       await db.execute(sql`
         SELECT pg_restore_attribute_stats(
-          'schemaname', 'public', 'relname', ${table}::text,
+          'schemaname', current_schema()::text, 'relname', ${table}::text,
           'attname', ${attribute.column}::text, 'inherited', false,
           'null_frac', ${attribute.nullFraction}::real,
           'n_distinct', ${attribute.distinctValues}::real
         ) AS restored
       `),
       `${table}.${attribute.column}`,
+    );
+  }
+  await injectExpressionColumnStats(db, [table], profile.attributes);
+};
+
+/**
+ * Refuse a physical seed that contradicts the profile it is scaled to. The
+ * profile rewrites a column's statistics, but every index over the column
+ * keeps the seed's pages: a column profiled as mostly set but seeded all NULL
+ * leaves its partial indexes empty, so a whole-index read ties with a probe
+ * and no statistic can break the tie.
+ */
+export const assertSeedMatchesProfile = async (
+  db: ScaleDb,
+  profile: ScaleProfile,
+): Promise<void> => {
+  // Every contradiction at once, so one run names all of them.
+  const contradictions: string[] = [];
+  for (const attribute of profile.attributes) {
+    const name = `${attribute.table}.${attribute.column}`;
+    const row = executedRows(
+      await db.execute(sql`
+        SELECT count(${sql.identifier(attribute.column)})::integer AS set_rows,
+               count(DISTINCT ${sql.identifier(attribute.column)})::integer AS distinct_values
+          FROM ${sql.identifier(attribute.table)}
+      `),
+    ).at(0);
+    if (
+      !isRecord(row) ||
+      typeof row["set_rows"] !== "number" ||
+      typeof row["distinct_values"] !== "number"
+    ) {
+      return panic(`Scale profile could not read the seed of ${name}`);
+    }
+    if (attribute.nullFraction < 1 && row["set_rows"] === 0) {
+      contradictions.push(
+        `${name} is profiled with null fraction ${String(attribute.nullFraction)} but seeded entirely NULL`,
+      );
+    }
+    const profiledDistinct =
+      attribute.distinctValues < 0 || attribute.distinctValues > 1;
+    if (profiledDistinct && row["distinct_values"] < 2) {
+      contradictions.push(
+        `${name} is profiled with n_distinct ${String(attribute.distinctValues)} but seeded with ${String(row["distinct_values"])} distinct values`,
+      );
+    }
+    if (attribute.mostCommonValues.length === 0) {
+      continue;
+    }
+    // A common value the seed never holds has no rows behind any index
+    // probe for it, however often the profile says it occurs.
+    const missing = executedRows(
+      await db.execute(sql`
+        SELECT profiled.value
+          FROM unnest(ARRAY[${sql.join(
+            attribute.mostCommonValues.map((value) => sql`${value}`),
+            sql`, `,
+          )}]::text[]) WITH ORDINALITY AS profiled(value, position)
+         WHERE NOT EXISTS (
+           SELECT 1 FROM ${sql.identifier(attribute.table)} AS seeded
+            WHERE seeded.${sql.identifier(attribute.column)}::text = profiled.value
+         )
+         ORDER BY profiled.position
+      `),
+    ).map((value) =>
+      isRecord(value) && typeof value["value"] === "string"
+        ? value["value"]
+        : panic(`Scale profile could not read the seed of ${name}`),
+    );
+    if (missing.length > 0) {
+      contradictions.push(
+        `${name} is profiled with common values the seed never holds: ${missing.join(", ")}`,
+      );
+    }
+  }
+  if (contradictions.length > 0) {
+    panic(
+      contradictions
+        .map(
+          (contradiction) =>
+            `Scale profile contradicts the seed: ${contradiction}`,
+        )
+        .join("\n"),
     );
   }
 };
@@ -369,6 +687,33 @@ export const assertScaleProfileApplied = async (
       stats.relallvisible !== visiblePages
     ) {
       panic(`Scale profile was overwritten or not applied: ${table}`);
+    }
+  }
+  const expressions = await expressionColumnScales(
+    db,
+    PLAN_GUARD_TABLES,
+    profile.attributes,
+  );
+  for (const { index, column, source } of expressions) {
+    const row = executedRows(
+      await db.execute(sql`
+        SELECT null_frac, n_distinct, most_common_vals IS NULL AS no_common_values
+          FROM pg_stats
+         WHERE schemaname = current_schema()
+           AND tablename = ${index} AND attname = ${column}
+      `),
+    ).at(0);
+    if (
+      !isRecord(row) ||
+      typeof row["null_frac"] !== "number" ||
+      typeof row["n_distinct"] !== "number" ||
+      Math.abs(row["null_frac"] - source.nullFraction) > 1e-6 ||
+      Math.abs(row["n_distinct"] - source.distinctValues) > 1e-6 ||
+      row["no_common_values"] !== true
+    ) {
+      panic(
+        `Scale profile left an index expression on seed statistics: ${index}.${column}`,
+      );
     }
   }
 };

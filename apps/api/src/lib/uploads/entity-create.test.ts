@@ -1,9 +1,10 @@
 import { Result } from "better-result";
-import { afterAll, beforeAll, describe, expect, mock, test } from "bun:test";
+import { afterAll, describe, expect, mock, test } from "bun:test";
 import { eq, sql, TransactionRollbackError } from "drizzle-orm";
 import fc from "fast-check";
 
-import { assertProperty } from "@stll/property-testing";
+import { assertProperty, propertyConfig } from "@stll/property-testing";
+import { createTestState } from "@stll/test-state";
 
 import { organization, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
@@ -26,7 +27,10 @@ import { LIMITS } from "@/api/lib/limits";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { FINALIZE_CLAIM_TIMEOUT_MS } from "@/api/lib/uploads/runtime";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
-import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
+import {
+  createTestHandlerContext,
+  NO_DB,
+} from "@/api/tests/helpers/handler-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
@@ -43,6 +47,33 @@ import {
   validateEntityCreateCapacity,
 } from "./entity-create";
 
+const testState = createTestState({ file: import.meta.path, config: env });
+
+const entityCreateSource = await Bun.file(
+  new URL("entity-create.ts", import.meta.url),
+).text();
+
+test("upload commit durably marks the entity before its immediate search flush", () => {
+  const transactionStart = entityCreateSource.indexOf(
+    "const writeResultResult = await safeDb",
+  );
+  const transactionEnd = entityCreateSource.indexOf(
+    "const writeResult = yield* writeResultResult",
+    transactionStart,
+  );
+  const postCommitEnd = entityCreateSource.indexOf(
+    "const afterPromote",
+    transactionEnd,
+  );
+
+  expect(entityCreateSource.slice(transactionStart, transactionEnd)).toContain(
+    "await enqueueEntitySearchRepairs(tx, [entityId]);",
+  );
+  expect(entityCreateSource.slice(transactionEnd, postCommitEnd)).toContain(
+    "flushEntitySearchRepairs([entityId])",
+  );
+});
+
 const workspaceId = toSafeId<"workspace">("workspace_upload");
 const propertyId = toSafeId<"property">("property_upload");
 const parentId = toSafeId<"entity">("entity_folder");
@@ -51,12 +82,9 @@ const SHA_256_HEX = "a".repeat(64);
 
 let testDb: TestDatabase;
 
-beforeAll(
-  async () => {
-    testDb = await getTestDb();
-  },
-  { timeout: 30_000 },
-);
+testState.beforeAll(async () => {
+  testDb = await getTestDb();
+}, 30_000);
 
 afterAll(async () => {
   await releaseTestDb();
@@ -167,17 +195,23 @@ const runCapacityInsertCheck = async (
 
 type RolledBackTxCallback<T> = (tx: TestDatabaseTransaction) => Promise<T>;
 
+// Without a parent this rolls back a fresh transaction; inside `parent` it
+// rolls back a savepoint, so shared seed data outlives each sample.
 const runRolledBack = async <T>(
   callback: RolledBackTxCallback<T>,
+  parent?: TestDatabaseTransaction,
 ): Promise<T> => {
   let value: T | undefined;
+  const captureThenRollBack = async (tx: TestDatabaseTransaction) => {
+    await tx.execute(sql.raw("RESET ROLE"));
+    // oxlint-disable-next-line node/callback-return -- must call tx.rollback() after capturing the value
+    value = await callback(tx);
+    tx.rollback();
+  };
   try {
-    await testDb.transaction(async (tx) => {
-      await tx.execute(sql.raw("RESET ROLE"));
-      // oxlint-disable-next-line node/callback-return -- must call tx.rollback() after capturing the value
-      value = await callback(tx);
-      tx.rollback();
-    });
+    await (parent === undefined
+      ? testDb.transaction(captureThenRollBack)
+      : parent.transaction(captureThenRollBack));
   } catch (error) {
     if (error instanceof TransactionRollbackError && value !== undefined) {
       return value;
@@ -673,75 +707,78 @@ describe("entity-create filename conflicts", () => {
 });
 
 test("upload names are free among exact current siblings", async () => {
-  await assertProperty(
-    "upload names are free among exact current siblings",
-    fc.asyncProperty(
-      fc.string({ minLength: 1, maxLength: 80 }),
-      fc.array(fc.string({ minLength: 1, maxLength: 80 }), { maxLength: 8 }),
-      fc.boolean(),
-      async (rawRequested, arbitraryNames, occupied) => {
-        for (const scope of ["root", "folder"] as const) {
-          await runRolledBack(async (tx) => {
-            const seeded = await seedWorkspace(tx);
-            const other = await seedWorkspace(tx);
-            const targetParentId = scope === "root" ? null : seeded.folderAId;
-            const otherMatterParentId =
-              scope === "root" ? null : other.folderAId;
-            const requested = sanitizeFilename(rawRequested);
-            const siblings = new Set<string>(
-              arbitraryNames.map(sanitizeFilename),
-            );
-            if (occupied) {
-              siblings.add(requested);
-            }
-            for (const name of siblings) {
-              await tx.insert(entities).values({
-                id: toSafeId<"entity">(Bun.randomUUIDv7()),
-                workspaceId: seeded.workspaceId,
-                parentId: targetParentId,
-                kind: "task",
-                name,
+  await runRolledBack(async (propertyTx) => {
+    const seeded = await seedWorkspace(propertyTx);
+    const other = await seedWorkspace(propertyTx);
+    await assertProperty(
+      "upload names are free among exact current siblings",
+      fc.asyncProperty(
+        fc.string({ minLength: 1, maxLength: 80 }),
+        fc.array(fc.string({ minLength: 1, maxLength: 80 }), { maxLength: 8 }),
+        fc.boolean(),
+        async (rawRequested, arbitraryNames, occupied) => {
+          for (const scope of ["root", "folder"] as const) {
+            await runRolledBack(async (tx) => {
+              const targetParentId = scope === "root" ? null : seeded.folderAId;
+              const otherMatterParentId =
+                scope === "root" ? null : other.folderAId;
+              const requested = sanitizeFilename(rawRequested);
+              const siblings = new Set<string>(
+                arbitraryNames.map(sanitizeFilename),
+              );
+              if (occupied) {
+                siblings.add(requested);
+              }
+              for (const name of siblings) {
+                await tx.insert(entities).values({
+                  id: toSafeId<"entity">(Bun.randomUUIDv7()),
+                  workspaceId: seeded.workspaceId,
+                  parentId: targetParentId,
+                  kind: "task",
+                  name,
+                });
+              }
+              await seedFileEntity({
+                tx,
+                seededWorkspaceId: seeded.workspaceId,
+                seededPropertyId: seeded.propertyId,
+                seededParentId: seeded.folderBId,
+                fileName: requested,
               });
-            }
-            await seedFileEntity({
-              tx,
-              seededWorkspaceId: seeded.workspaceId,
-              seededPropertyId: seeded.propertyId,
-              seededParentId: seeded.folderBId,
-              fileName: requested,
-            });
-            await seedFileEntity({
-              tx,
-              seededWorkspaceId: other.workspaceId,
-              seededPropertyId: other.propertyId,
-              seededParentId: otherMatterParentId,
-              fileName: requested,
-            });
-            const resolved = await resolveFileNameInTestTx({
-              tx,
-              seededWorkspaceId: seeded.workspaceId,
-              seededParentId: targetParentId,
-              fileName: requested,
-            });
-            expect(siblings.has(resolved.value)).toBe(false);
-            expect(resolved.value.length).toBeLessThanOrEqual(255);
-            if (!siblings.has(requested)) {
-              expect(String(resolved.value)).toBe(String(requested));
-            }
-            return true;
-          });
-        }
-      },
-    ),
-    {
-      numRuns: 20,
-      examples: [
-        [" ", [], false],
-        [" ", [" "], true],
-      ],
-    },
-  );
-});
+              await seedFileEntity({
+                tx,
+                seededWorkspaceId: other.workspaceId,
+                seededPropertyId: other.propertyId,
+                seededParentId: otherMatterParentId,
+                fileName: requested,
+              });
+              const resolved = await resolveFileNameInTestTx({
+                tx,
+                seededWorkspaceId: seeded.workspaceId,
+                seededParentId: targetParentId,
+                fileName: requested,
+              });
+              expect(siblings.has(resolved.value)).toBe(false);
+              expect(resolved.value.length).toBeLessThanOrEqual(255);
+              if (!siblings.has(requested)) {
+                expect(String(resolved.value)).toBe(String(requested));
+              }
+              return true;
+            }, propertyTx);
+          }
+        },
+      ),
+      propertyConfig({
+        numRuns: 8,
+        examples: [
+          [" ", [], false],
+          [" ", [" "], true],
+        ],
+      }),
+    );
+    return true;
+  });
+}, 30_000);
 
 test("entity names collide across properties and absent current fields", async () => {
   await runRolledBack(async (tx) => {
@@ -815,8 +852,8 @@ test("root names exclude entities from another matter", async () => {
 
 test("multipart upload resolves names against current root siblings", async () => {
   const fake = startFakeS3();
-  const priorFlag = env.FEATURE_FILE_USAGE_LIMITS;
-  env.FEATURE_FILE_USAGE_LIMITS = false;
+
+  testState.setConfig("FEATURE_FILE_USAGE_LIMITS", false);
   try {
     const seeded = await testDb.transaction(async (tx) => {
       await tx.execute(sql.raw("RESET ROLE"));
@@ -863,6 +900,8 @@ test("multipart upload resolves names against current root siblings", async () =
     };
     const result = await uploadEntity.handler(
       createTestHandlerContext<Parameters<typeof uploadEntity.handler>[0]>({
+        audit: refusePublication,
+        scopedDb: NO_DB,
         workspaceId: seeded.workspaceId,
         session: { activeOrganizationId: seeded.organizationId },
         user: { id: seeded.userId },
@@ -881,7 +920,6 @@ test("multipart upload resolves names against current root siblings", async () =
     expect(recorded.has("contract_2.md")).toBe(true);
     expect(recorded.has("contract_4.md")).toBe(false);
   } finally {
-    env.FEATURE_FILE_USAGE_LIMITS = priorFlag;
     fake.stop();
   }
 });

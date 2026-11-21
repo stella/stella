@@ -13,12 +13,13 @@ import {
   CHAT_MAX_FILE_BYTES,
   TEXT_PLAIN_MIME_TYPE,
 } from "@/api/handlers/chat/attachment-validation";
+import type { chatMessageFromPersisted } from "@/api/handlers/chat/chat-message-parts";
 import {
-  chatMessageFromPersisted,
   createChatAttachmentPart,
   getChatAttachmentFilename,
   getChatAttachmentMimeType,
   getChatAttachmentUrl,
+  isAnswerFilePart,
   isChatAttachmentPart,
   isProviderVisibleChatPart,
 } from "@/api/handlers/chat/chat-message-parts";
@@ -37,8 +38,9 @@ import { loadAnonymizationAllowlistCanonicals } from "@/api/lib/anonymization-al
 import { loadAnonymizationGazetteerEntries } from "@/api/lib/anonymization-blacklist";
 import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
-import type { ChatToolMap } from "@/api/lib/chat/chat-tool-types";
+import type { ChatTool, ChatToolMap } from "@/api/lib/chat/chat-tool-types";
 import { parseDataUrl, toDataUrl } from "@/api/lib/data-url";
+import { ChatToolError } from "@/api/lib/errors/tagged-errors";
 import { anonymizeTextFields } from "@/api/mcp/anonymization";
 import { protectValuesForAnonymization } from "@/api/mcp/field-markers";
 
@@ -95,22 +97,9 @@ export type ChatThirdPartyBoundary =
 export const storedRestorationsOf = (
   messages: readonly Parameters<typeof chatMessageFromPersisted>[0][],
 ): ChatAnonRestoration[] =>
-  messages.flatMap((message) => {
-    const { content } = message;
-    switch (content.version) {
-      case 1:
-        // Legacy rows keep their restorations as a data part.
-        return arrayOrEmpty(
-          chatMessageFromPersisted(message).metadata?.anonRestorations?.pairs,
-        );
-      case 2:
-      case 3:
-        return arrayOrEmpty(content.metadata?.anonRestorations?.pairs);
-      default:
-        content satisfies never;
-        return panic(`Unhandled content version: ${String(content)}`);
-    }
-  });
+  messages.flatMap(({ content }) =>
+    arrayOrEmpty(content.metadata?.anonRestorations?.pairs),
+  );
 
 /**
  * The placeholder maps a boundary starts from: every placeholder the history
@@ -1114,6 +1103,7 @@ const preparePartForThirdParty = ({
     case "video":
     case "ui-resource":
     case "subagent":
+    case "activity":
       return refuseUnpreparedPart(part.type);
     default:
       part satisfies never;
@@ -1251,6 +1241,9 @@ const removeProviderInvisibleParts = (
   for (const message of messages) {
     const parts: ChatMessage["parts"] = [];
     for (const part of message.parts) {
+      if (isAnswerFilePart(message.role, part)) {
+        continue;
+      }
       if (isProviderVisibleChatPart(part)) {
         parts.push(part);
       }
@@ -1775,8 +1768,7 @@ const anonymizeToolResultTextContent = ({
 };
 
 type ParsedToolResultContent =
-  | { type: "json"; value: unknown }
-  | { type: "text"; value: string };
+  { type: "json"; value: unknown } | { type: "text"; value: string };
 
 const parseToolResultContent = (content: string): ParsedToolResultContent =>
   Result.try((): ParsedToolResultContent => ({
@@ -1824,6 +1816,35 @@ const DEANONYMIZE_INPUT_BY_POLICY_KIND = {
   [CHAT_TOOL_POLICY_KIND.scopeExpansion]: true,
 } as const satisfies Record<ChatToolPolicyKind, boolean>;
 
+const anonymizedToolExecutionError = async ({
+  boundary,
+  error,
+}: {
+  boundary: Extract<ChatThirdPartyBoundary, { type: "anonymized" }>;
+  error: unknown;
+}): Promise<ChatToolError> => {
+  let message = "Tool execution failed";
+  if (error instanceof Error) {
+    message = error.message;
+  } else if (typeof error === "string") {
+    message = error;
+  }
+  const prepared = await prepareUnknownForThirdParty({
+    boundary,
+    value: message,
+  });
+  if (Result.isError(prepared)) {
+    throw prepared.error;
+  }
+  return new ChatToolError({
+    kind: ChatToolError.is(error) ? error.kind : "server-defect",
+    message:
+      typeof prepared.value === "string"
+        ? prepared.value
+        : "Tool execution failed",
+  });
+};
+
 export const prepareToolsForThirdParty = ({
   boundary,
   tools,
@@ -1841,7 +1862,7 @@ export const prepareToolsForThirdParty = ({
     return tools;
   }
 
-  const wrapped: ChatToolMap = {};
+  const wrapped = new Map<string, ChatTool>();
 
   for (const [key, current] of Object.entries(tools)) {
     if (!current) {
@@ -1849,7 +1870,7 @@ export const prepareToolsForThirdParty = ({
     }
 
     if (!current.execute) {
-      wrapped[key] = current;
+      wrapped.set(key, current);
       continue;
     }
 
@@ -1857,7 +1878,7 @@ export const prepareToolsForThirdParty = ({
     const policy = getChatToolPolicy(current);
     const deanonymizeInputBeforeExecute =
       DEANONYMIZE_INPUT_BY_POLICY_KIND[policy.kind];
-    wrapped[key] = {
+    wrapped.set(key, {
       ...current,
       execute: async (input, context) => {
         if (boundary.type === "raw") {
@@ -1886,20 +1907,34 @@ export const prepareToolsForThirdParty = ({
           );
         }
 
-        const outputValue: unknown = await execute(toolInput, context);
+        const executed = await Result.tryPromise({
+          try: async () => {
+            const outputValue: unknown = await execute(toolInput, context);
+            return outputValue;
+          },
+          catch: (error) => error,
+        });
+        if (Result.isError(executed)) {
+          // The thrown error is model-visible tool output. It crosses the
+          // same third-party boundary as a successful return value.
+          throw await anonymizedToolExecutionError({
+            boundary,
+            error: executed.error,
+          });
+        }
         const anonymized = await anonymizeToolOutputForThirdParty({
           boundary,
-          outputValue,
+          outputValue: executed.value,
         });
         if (Result.isError(anonymized)) {
           throw anonymized.error;
         }
         return anonymized.value;
       },
-    };
+    });
   }
 
-  return wrapped;
+  return Object.fromEntries(wrapped);
 };
 
 export const prepareMcpToolSourceForThirdParty = ({

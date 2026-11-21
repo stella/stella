@@ -41,10 +41,11 @@ import { stellaToast } from "@stll/ui/toast";
 
 import Tooltip from "@/components/tooltip";
 import { useFormatter } from "@/i18n/formatting-context";
+import { matchesConnectionQuery } from "@/lib/account/connections.logic";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import {
   toOAuthScopeDisplayEntries,
@@ -56,8 +57,6 @@ import {
   connectedAppsKeys,
   connectedAppsOptions,
 } from "@/routes/_protected.settings/-queries/connections";
-
-import { matchesConnectionQuery } from "./connections.logic";
 
 /** Apps the user let into their account (OAuth consents: Claude, Cursor, the
  * CLI). Access is summarised as a count; the full list opens on demand, so a
@@ -94,7 +93,7 @@ export const AppsGroup = ({
           <ListGroupTitle id="connections-apps">
             {t("settings.connections.connectedAppsTitle")}
             {all.length > 0 && (
-              <ListGroupCount>{format.number(visible.length)}</ListGroupCount>
+              <ListGroupCount count={format.number(visible.length)} />
             )}
           </ListGroupTitle>
           <ListGroupDescription>
@@ -170,7 +169,7 @@ const AccessPopover = ({
     <Popover>
       <PopoverTrigger render={<Button size="xs" variant="muted" />}>
         <span className="tabular-nums">
-          {t("settings.connections.permissionCount", { count: labels.length })}
+          {t("common.permissionCount", { count: labels.length })}
         </span>
       </PopoverTrigger>
       <PopoverPopup align="end" className="w-72" side="bottom">
@@ -212,7 +211,7 @@ const DisconnectButton = ({ clientName, consentId }: DisconnectButtonProps) => {
         consentId,
       }).delete();
 
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onSuccess: async () => {
       stellaToast.add({
@@ -228,7 +227,10 @@ const DisconnectButton = ({ clientName, consentId }: DisconnectButtonProps) => {
     // context and can retry.
     onError: (error) => {
       notifyUserError(error, t("errors.actionFailed"));
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "DisconnectButton:failure",
+        scope: { type: "handler", handlerId: "DisconnectButton:failure" },
+      });
     },
   });
 

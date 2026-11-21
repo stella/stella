@@ -1,3 +1,14 @@
+import { Result } from "better-result";
+import { and, eq, inArray } from "drizzle-orm";
+
+import { pendingUploads } from "@/api/db/schema";
+import {
+  authorizeUploadPurpose,
+  uploadRoutePermission,
+} from "@/api/handlers/uploads/permissions";
+import { captureError } from "@/api/lib/analytics/capture";
+import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
+import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 /**
  * Mark a pending upload as `rejected` so its `tmp/` slot stops
  * counting against the user's intent and so a later finalize call
@@ -10,27 +21,18 @@
  * 409 because at that point the bytes are part of the workspace
  * and "aborting" no longer has a meaning.
  */
-import { Result } from "better-result";
-import { and, eq, inArray } from "drizzle-orm";
-
-import { pendingUploads } from "@/api/db/schema";
-import {
-  authorizeUploadPurpose,
-  uploadRoutePermission,
-} from "@/api/handlers/uploads/permissions";
-import { captureError } from "@/api/lib/analytics/capture";
-import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
-import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
-import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
+import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { getS3 } from "@/api/lib/s3";
 import { tmpUploadKeys } from "@/api/lib/uploads/runtime";
 
 const abortParamsSchema = workspaceParams({
-  uploadId: tSafeId("pendingUpload"),
+  uploadId: resourceIdSchema("pendingUpload"),
 });
 
 const config = {
+  contract: "patch",
   description:
     "Abandon an upload reserved by uploads.create, discarding the staged " +
     "object. Call this when the presigned PUT fails or the upload is no " +
@@ -93,12 +95,9 @@ const abortUpload = createSafeHandler(
     }
 
     const abortedRows = yield* Result.await(
-      // oxlint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
-      safeDb((tx) => {
-        // audit: skip — pending_uploads bookkeeping; the row never
-        // became a durable entity, so there's nothing for the audit
-        // log to attribute it to.
-        return tx
+      safeDb((tx) =>
+        // audit: skip — pending_uploads bookkeeping; the row never became a durable entity, so there's nothing for the audit log to attribute it to.
+        tx
           .update(pendingUploads)
           .set({
             status: "rejected",
@@ -113,8 +112,8 @@ const abortUpload = createSafeHandler(
               inArray(pendingUploads.status, ["pending", "failed"]),
             ),
           )
-          .returning({ id: pendingUploads.id });
-      }),
+          .returning({ id: pendingUploads.id }),
+      ),
     );
     if (!abortedRows.at(0)) {
       const latest = yield* Result.await(
@@ -159,11 +158,14 @@ const abortUpload = createSafeHandler(
       await getS3()
         .delete(key)
         .catch((error: unknown) =>
-          captureError(error, {
-            key,
-            uploadId,
-            stage: "tmp-cleanup-after-abort",
-          }),
+          captureError(
+            error,
+            handlerErrorContext("uploads.abortUpload", {
+              key,
+              uploadId,
+              stage: "tmp-cleanup-after-abort",
+            }),
+          ),
         );
     }
 

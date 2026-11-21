@@ -3,7 +3,9 @@ import { Temporal } from "@stll/time";
 import { getAuth } from "@/api/lib/auth";
 import { getAuthIssuerUrl } from "@/api/lib/auth/auth-paths";
 import type { SafeId } from "@/api/lib/branded-types";
+import { requireSessionCredentialIssuer } from "@/api/lib/synthetic-principal/credential-policy";
 import {
+  AGENT_RUN_TOKEN_PURPOSE,
   getMcpResourceUrl,
   MCP_OAUTH_SCOPES,
   type McpOAuthScope,
@@ -40,15 +42,20 @@ const AGENT_RUN_SCOPE_DISPOSITION = {
   offline_access: "excluded",
   "stella:search": "default",
   "stella:read": "default",
+  "stella:law_read": "default",
   "stella:templates": "default",
   "stella:documents_write": "default",
   "stella:matters_write": "default",
   "stella:contacts_write": "excluded",
   "stella:chat": "default",
+  "stella:memory_write": "excluded",
   "stella:knowledge_write": "default",
   "stella:billing_write": "excluded",
   "stella:admin_read": "excluded",
   "stella:admin_write": "excluded",
+  "stella:account_export_read": "excluded",
+  "stella:account_export_write": "excluded",
+  "stella:organization_create": "excluded",
   "stella:onboarding": "excluded",
   "stella:skills": "default",
   "stella:external_mcps": "excluded",
@@ -76,8 +83,7 @@ export const AGENT_RUN_DEFAULT_SCOPES = MCP_OAUTH_SCOPES.filter(
 );
 
 /** Agent-run tokens are short-lived: a run should outlive its token rarely. */
-export const AGENT_RUN_TOKEN_TTL_SECONDS = 15 * 60;
-export const AGENT_RUN_TOKEN_PURPOSE = "agent-run" as const;
+const AGENT_RUN_TOKEN_TTL_SECONDS = 15 * 60;
 
 export type AgentRunTokenClaims = {
   sub: string;
@@ -147,6 +153,7 @@ export type MintedAgentRunToken = {
 export const mintAgentRunToken = async (
   input: MintAgentRunTokenInput,
 ): Promise<MintedAgentRunToken> => {
+  requireSessionCredentialIssuer("agentRun", input);
   const nowSeconds = Math.floor(
     Temporal.Now.instant().epochMilliseconds / 1000,
   );

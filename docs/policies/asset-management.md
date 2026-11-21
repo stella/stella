@@ -48,16 +48,21 @@ and container base images used in the Stella monorepo.
 
 5. **Dependabot monitoring.** Dependabot tracks four
    ecosystems (`.github/dependabot.yml`):
-   - **Bun packages:** daily checks; minor and patch updates in one
+   - **Bun packages:** weekly checks; minor and patch updates in one
      group, major updates grouped by library family.
-   - **GitHub Actions:** daily checks; minor and patch updates grouped.
-   - **Docker base images:** daily checks; minor and patch updates
+   - **GitHub Actions:** weekly checks; shared workflow and action references
+     grouped, other minor and patch updates grouped.
+   - **Docker base images:** weekly checks; minor and patch updates
      grouped.
-   - **Cargo crates:** daily checks; minor and patch updates in one
+   - **Cargo crates:** weekly checks; minor and patch updates in one
      group, major updates grouped by runtime family.
 
    All updates use a five-day cooldown before adoption, aligned with
-   Bun's `minimumReleaseAge` quarantine.
+   Bun's `minimumReleaseAge` quarantine. CI checks every new pin in a
+   `bun.lock` or `Cargo.lock` against that quarantine
+   (`scripts/check-lockfile-release-ages.ts`). Cargo applies the same
+   window itself when resolving crates (`global-min-publish-age` in the
+   root `.cargo/config.toml`).
 
 6. **Workspace consistency.** `sherif` runs as a `postinstall`
    hook and is available via `bun run lint:ws`. It flags
@@ -80,7 +85,7 @@ and container base images used in the Stella monorepo.
 
 ### License compliance
 
-10. **Dependency review.** The `dependency-review.yml` workflow
+10. **Dependency review.** The `ci.yml` workflow
     blocks PRs that introduce dependencies under copyleft or
     proprietary licenses incompatible with stella's Apache-2.0
     distribution and commercial-license arrangements. The deny

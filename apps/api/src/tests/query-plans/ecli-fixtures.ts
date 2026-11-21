@@ -3,7 +3,10 @@ import { and, eq, inArray, or } from "drizzle-orm";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 
 import type { Transaction } from "@/api/db/root";
-import { caseLawDecisionIdentifiers, caseLawDecisions } from "@/api/db/schema";
+import {
+  caseLawDecisionIdentifiers,
+  publishedCaseLawDecisions as caseLawDecisions,
+} from "@/api/db/schema";
 import { normalizeDecisionIdentifierValue } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import { LIMITS } from "@/api/lib/limits";
 import { QUERY_PLAN_SAMPLE } from "@/api/tests/query-plans/seed";

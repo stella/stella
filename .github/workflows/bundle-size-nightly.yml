@@ -1,0 +1,52 @@
+name: Bundle size nightly
+
+# The web-build job blocks pull requests on the startup bundle gates. This
+# on-demand run applies the same gates to main and writes their table (initial
+# JS against its budget, the pending layer, every listed offender) to the job
+# summary.
+
+defaults:
+  run:
+    shell: bash
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bundle-size-nightly
+  cancel-in-progress: false
+
+jobs:
+  report:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Bun
+        uses: stella/.github/actions/setup-bun-cached@2664e46f02aea7164ba71bcdd485a686166993a4
+        with:
+          save: ${{ github.ref == 'refs/heads/main' }}
+
+      - name: Install dependencies
+        timeout-minutes: 5
+        run: bash scripts/retry.sh bun ci --ignore-scripts
+        env:
+          NPM_TOKEN: ""
+
+      - name: Prepare environment
+        run: |
+          cd ./apps/web
+          cp .env.example .env
+
+      - name: Build web
+        uses: ./.github/actions/build-e2e-web
+
+      - name: Startup bundle gates
+        run: bun --preload ./scripts/offline-network-preload.ts scripts/bundle-baseline.ts --check

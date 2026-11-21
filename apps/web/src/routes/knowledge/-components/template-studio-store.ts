@@ -6,8 +6,8 @@ import type { GroupDirectiveKind } from "@/features/knowledge/views/templates/di
 import type { TemplateRecipeDefinition } from "@/lib/api-contract";
 import type { ReplacementSpec } from "@/routes/knowledge/-components/template-studio-suggestions";
 import {
-  templateValueSourceTransition,
   type TemplateEditableField,
+  templateValueSourceTransition,
 } from "@/routes/knowledge/-components/template-value-source";
 
 // The Studio's editable manifest data + live document selection. Lives in a
@@ -135,14 +135,14 @@ export type StudioActions = {
 /** A bilingual-mirror proposal the page queues for the chat surface — the
  *  Studio's only AISuggestion decoration writer — to place in-document as
  *  an accept/reject suggestion. */
-export type MirrorSuggestionRequest = {
+type MirrorSuggestionRequest = {
   spec: ReplacementSpec;
   /** Runs once when the placed suggestion is accepted. */
   onAccepted?: (() => void) | undefined;
 };
 
 /** Page-owned UI state the inspector's action row reflects. */
-export type StudioUiState = {
+type StudioUiState = {
   metaLabel: string;
   showDirectives: boolean;
   hasSelection: boolean;

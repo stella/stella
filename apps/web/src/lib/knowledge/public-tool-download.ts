@@ -1,16 +1,21 @@
-import JSZip from "jszip";
-
 import { loadCatalogue } from "@stll/catalogue";
 import { findCatalogueSkillInstallPayload } from "@stll/catalogue/install-payloads";
+import { ZipArchive } from "@stll/docx-core/zip";
+import {
+  buildSkillPackage,
+  SKILL_PACKAGE_FILE_TYPES,
+  skillPackageFileName,
+} from "@stll/skills/package";
 
 import { ssrCacheClassHeaders } from "@/route-response-policy";
 
 const notFound = () => new Response("Not Found", { status: 404 });
 
 /**
- * A published skill as a zip. Built from the static in-tree install-payload
- * bundle: no session, no DB, no org data. Github-sourced skills have no
- * in-tree bytes to zip, so they 404 here and link to the upstream archive.
+ * A published skill as a skill package zip, the same layout an export from
+ * a workspace has. Built from the static in-tree install-payload bundle: no
+ * session, no DB, no org data. Github-sourced skills have no in-tree bytes
+ * to zip, so they 404 here and link to the upstream archive.
  */
 export const publicToolDownloadResponse = async (
   slug: string,
@@ -25,19 +30,28 @@ export const publicToolDownloadResponse = async (
     return notFound();
   }
 
-  const zip = new JSZip();
-  zip.file("SKILL.md", payload.body);
-  for (const resource of payload.resourceFiles) {
-    zip.file(resource.path, resource.content);
+  const encoder = new TextEncoder();
+  const zip = new ZipArchive();
+  for (const file of buildSkillPackage({
+    command: null,
+    displayName: entry.displayName,
+    resources: payload.resourceFiles.map((resource) => ({
+      bytes: encoder.encode(resource.content),
+      path: resource.path,
+    })),
+    skillMd: payload.body,
+    slug,
+  })) {
+    zip.set(file.path, file.bytes);
   }
-  const bytes = await zip.generateAsync({ type: "arraybuffer" });
+  const bytes = (await zip.generate({ compression: "store" })).buffer;
 
   return new Response(bytes, {
     headers: {
       ...ssrCacheClassHeaders("public-anonymous"),
       "Cache-Control": "public, max-age=3600",
-      "Content-Disposition": `attachment; filename="${slug}.zip"`,
-      "Content-Type": "application/zip",
+      "Content-Disposition": `attachment; filename="${skillPackageFileName(slug, "zip")}"`,
+      "Content-Type": SKILL_PACKAGE_FILE_TYPES.zip.mediaType,
     },
   });
 };

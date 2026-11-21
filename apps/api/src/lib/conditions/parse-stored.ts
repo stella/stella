@@ -6,8 +6,8 @@
 import * as v from "valibot";
 
 import {
-  type ConditionNode,
   conditionHasFormula,
+  type ConditionNode,
   conditionNodeSchema,
 } from "@stll/conditions";
 import { MAX_CONDITION_NESTING } from "@stll/template-conditions";
@@ -31,8 +31,7 @@ const legacyConditionSchema = v.variant("type", [
 ]);
 
 export type ParsedStoredCondition =
-  | { status: "valid"; condition: ConditionNode | null }
-  | { status: "invalid" };
+  { status: "valid"; condition: ConditionNode | null } | { status: "invalid" };
 
 const exceedsStoredDepth = (value: unknown): boolean => {
   const pending = [{ value, depth: 0 }];

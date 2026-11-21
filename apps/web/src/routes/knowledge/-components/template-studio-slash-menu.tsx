@@ -20,7 +20,7 @@ import {
   getTemplateSlashMenu,
   resetTemplateSlashQuery,
 } from "@stll/folio-react";
-import { isSafeFieldPath } from "@stll/template-conditions";
+import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import type { LucideIcon } from "@stll/ui/icons";
 import {
@@ -31,8 +31,8 @@ import {
   TextQuoteIcon,
 } from "@stll/ui/icons";
 import { MenuPreviewLayout, PreviewPane } from "@stll/ui/preview-pane";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { containedEventHandler } from "@stll/ui/use-contained-handler";
-import { cn } from "@stll/ui/utils";
 
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import type { TranslationKey } from "@/i18n/types";
@@ -41,25 +41,30 @@ import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
 import { userErrorMessage } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
 import {
   clausesOptions as clauseLibraryOptions,
   invalidateTemplateClauseSources,
 } from "@/lib/knowledge/queries";
+import { queryView } from "@/lib/query-view.logic";
 import { toSafeId } from "@/lib/safe-id";
+import { useQueryViewError } from "@/lib/use-query-view";
 import { inputTypeValueKind, VALUE_TYPE_META } from "@/lib/value-types";
 import {
   clauseSlotMarker,
-  conditionOpenTag,
   CONDITION_CLOSE_TAG,
+  conditionOpenTag,
   fieldMarker,
 } from "@/routes/knowledge/-components/template-markers";
+import { slugify } from "@/routes/knowledge/-components/template-studio-model";
 import {
-  sanitizeFieldPath,
-  slugify,
-} from "@/routes/knowledge/-components/template-studio-model";
+  buildSlashRootItems,
+  matchingSlashFields,
+  type SlashRootItem,
+} from "@/routes/knowledge/-components/template-studio-search.logic";
 import {
-  useTemplateStudioStore,
   type StudioField,
+  useTemplateStudioStore,
 } from "@/routes/knowledge/-components/template-studio-store";
 
 // Marker shapes the menu shows as a hint badge or a preview: document
@@ -121,7 +126,7 @@ export const TemplateStudioSlashMenu = ({
           </PreviewPane>
         }
       >
-        <div className="max-h-[min(18rem,60vh)] min-h-0 w-56 overflow-y-auto p-1">
+        <div className="max-h-[min(18rem,60dvh)] min-h-0 w-56 overflow-y-auto p-1">
           {rows.items.length === 0 && (
             <p className="text-muted-foreground px-2 py-1.5 text-xs">{empty}</p>
           )}
@@ -152,7 +157,6 @@ const SLASH_MENU_PREVIEW_WIDTH_PX = 256 + 9;
 const SLASH_MENU_WIDTH_PX =
   SLASH_MENU_LIST_WIDTH_PX + SLASH_MENU_PREVIEW_WIDTH_PX;
 const SLASH_MENU_PREVIEW_BREAKPOINT_PX = 640;
-const SLASH_MENU_MAX_FIELDS = 50;
 const SLASH_MENU_CLAUSE_LIMIT = 50;
 
 /** Frames to wait for the browser to lay out a freshly moved caret. */
@@ -193,13 +197,6 @@ type SlashMenu = {
 
 type SlashView = "root" | "fields" | "clauses";
 
-type SlashRootItem =
-  | { kind: "create-field"; path: string }
-  | { kind: "create-condition" }
-  | { kind: "field"; path: string; label: string }
-  | { kind: "open-fields" }
-  | { kind: "open-clauses" };
-
 type SlashClause = {
   id: string;
   title: string;
@@ -211,85 +208,6 @@ type SlashRows =
   | { view: "root"; items: SlashRootItem[] }
   | { view: "fields"; items: StudioField[] }
   | { view: "clauses"; items: SlashClause[] };
-
-const createFieldPathFromQuery = (trimmed: string): string => {
-  if (trimmed === "") {
-    return "field";
-  }
-  if (isSafeFieldPath(trimmed)) {
-    return trimmed;
-  }
-  const sanitized = sanitizeFieldPath(trimmed);
-  return isSafeFieldPath(sanitized) ? sanitized : "field";
-};
-
-const uniqueFieldPath = (base: string, fields: StudioField[]): string => {
-  let path = base;
-  for (let n = 2; fields.some((field) => field.path === path); n++) {
-    path = `${base}_${n}`;
-  }
-  return path;
-};
-
-const buildSlashRootItems = (
-  query: string,
-  fields: StudioField[],
-): SlashRootItem[] => {
-  const trimmed = query.trim();
-  const needle = trimmed.toLowerCase();
-  const matches = (...keywords: string[]): boolean =>
-    keywords.some((keyword) => keyword.includes(needle));
-
-  if (trimmed === "") {
-    const items: SlashRootItem[] = [
-      { kind: "create-field", path: uniqueFieldPath("field", fields) },
-      { kind: "create-condition" },
-    ];
-    if (fields.length > 0) {
-      items.push({ kind: "open-fields" });
-    }
-    items.push({ kind: "open-clauses" });
-    return items;
-  }
-
-  const createPath = createFieldPathFromQuery(trimmed);
-  const reuseExact = fields.some((field) => field.path === createPath);
-  const items: SlashRootItem[] = matchingSlashFields(query, fields).map(
-    (field) => ({
-      kind: "field" as const,
-      path: field.path,
-      label: field.label === "" ? field.path : field.label,
-    }),
-  );
-  if (matches("clause")) {
-    items.push({ kind: "open-clauses" });
-  }
-  if (matches("condition", "if")) {
-    items.push({ kind: "create-condition" });
-  }
-  if (!reuseExact) {
-    items.push({ kind: "create-field", path: createPath });
-  }
-  return items;
-};
-
-const matchingSlashFields = (
-  query: string,
-  fields: StudioField[],
-): StudioField[] => {
-  const needle = query.trim().toLowerCase();
-  const matches = (field: StudioField): boolean => {
-    if (needle === "") {
-      return true;
-    }
-    const label = field.label === "" ? field.path : field.label;
-    return (
-      field.path.toLowerCase().includes(needle) ||
-      label.toLowerCase().includes(needle)
-    );
-  };
-  return fields.filter(matches).slice(0, SLASH_MENU_MAX_FIELDS);
-};
 
 const slashRowCount = (
   view: SlashView,
@@ -326,6 +244,7 @@ export const useTemplateStudioSlashMenu = ({
   markDirty,
   upsertField,
 }: UseTemplateStudioSlashMenuOptions) => {
+  const idempotentSubmit = useIdempotentSubmit();
   const t = useTranslations();
   const queryClient = useQueryClient();
   const [slash, setSlashState] = useState<SlashMenu | null>(null);
@@ -334,14 +253,15 @@ export const useTemplateStudioSlashMenu = ({
   const slashViewRef = useRef<SlashView>("root");
   const slashHighlightRef = useRef(0);
   const slashFromRef = useRef<number | null>(null);
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- react/exhaustive-deps cannot see compiler memoization, and this value is an effect dependency
   const setSlashView = useCallback((view: SlashView) => {
     slashViewRef.current = view;
     setSlashViewState(view);
   }, []);
-  const setSlashHighlight = useCallback((index: number) => {
+  const setSlashHighlight = (index: number) => {
     slashHighlightRef.current = index;
     setSlashHighlightState(index);
-  }, []);
+  };
   const studioFields = useTemplateStudioStore((state) => state.fields);
 
   const slashClausesEnabled = slash !== null && slashView === "clauses";
@@ -349,13 +269,20 @@ export const useTemplateStudioSlashMenu = ({
     slashView === "clauses" ? (slash?.query ?? "") : "",
     120,
   );
-  const { data: slashClauseData } = useQuery({
+  const slashClauseDataQuery = useQuery({
     ...clauseLibraryOptions(activeOrganizationId, {
       search: debouncedClauseSearch,
       limit: SLASH_MENU_CLAUSE_LIMIT,
     }),
     enabled: slashClausesEnabled,
   });
+  const slashClauseDataView = queryView(slashClauseDataQuery);
+  useQueryViewError(slashClauseDataView, "useTemplateStudioSlashMenu:query");
+  const slashClauseData =
+    slashClauseDataView.type === "items"
+      ? slashClauseDataView.items
+      : undefined;
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- react/exhaustive-deps cannot see compiler memoization, and this value is an effect dependency
   const slashClauses: SlashClause[] = useMemo(
     () =>
       slashClauseData && "items" in slashClauseData
@@ -370,7 +297,7 @@ export const useTemplateStudioSlashMenu = ({
     debouncedClauseSearchRef.current = debouncedClauseSearch;
   }, [slashClauses, debouncedClauseSearch]);
 
-  const slashRows = useMemo((): SlashRows => {
+  const slashRows = ((): SlashRows => {
     if (slash === null) {
       return { view: "root", items: [] };
     }
@@ -387,63 +314,60 @@ export const useTemplateStudioSlashMenu = ({
       view: "root",
       items: buildSlashRootItems(slash.query, studioFields),
     };
-  }, [slash, slashView, studioFields, slashClauses]);
+  })();
 
-  const positionSlashMenu = useCallback(
-    (from: number) => {
-      const host = overlayHostRef.current;
-      if (!host) {
-        return;
-      }
-      detached(
-        (async () => {
-          const rect = await pollForCaretRect(() => {
-            const liveView = editorViewRef.current;
-            const live = liveView ? getTemplateSlashMenu(liveView.state) : null;
-            if (
-              !liveView ||
-              live === null ||
-              !live.active ||
-              live.from !== from
-            ) {
-              return null;
-            }
-            return getFolioCaretViewportRect(liveView);
-          });
-          if (rect === null) {
-            return;
+  const positionSlashMenu = (from: number) => {
+    const host = overlayHostRef.current;
+    if (!host) {
+      return;
+    }
+    detached(
+      (async () => {
+        const rect = await pollForCaretRect(() => {
+          const liveView = editorViewRef.current;
+          const live = liveView ? getTemplateSlashMenu(liveView.state) : null;
+          if (
+            !liveView ||
+            live === null ||
+            !live.active ||
+            live.from !== from
+          ) {
+            return null;
           }
-          const hostRect = host.getBoundingClientRect();
-          const caretLeft = rect.left - hostRect.left;
-          const caretTop = rect.top - hostRect.top;
-          const caretBottom = rect.bottom - hostRect.top;
-          const fitsAbove =
-            caretTop - SLASH_MENU_OFFSET_PX - SLASH_MENU_EST_HEIGHT_PX >= 0;
-          const placement = fitsAbove ? "above" : "below";
-          const renderedWidth =
-            window.innerWidth >= SLASH_MENU_PREVIEW_BREAKPOINT_PX
-              ? SLASH_MENU_WIDTH_PX
-              : SLASH_MENU_LIST_WIDTH_PX;
-          const left = Math.max(
-            0,
-            Math.min(caretLeft, host.clientWidth - renderedWidth),
-          );
-          setSlashState((previous) =>
-            previous === null
-              ? previous
-              : {
-                  ...previous,
-                  left,
-                  top: placement === "below" ? caretBottom : caretTop,
-                  placement,
-                },
-          );
-        })(),
-        "template-studio-slash-menu.position",
-      );
-    },
-    [editorViewRef, overlayHostRef],
-  );
+          return getFolioCaretViewportRect(liveView);
+        });
+        if (rect === null) {
+          return;
+        }
+        const hostRect = host.getBoundingClientRect();
+        const caretLeft = rect.left - hostRect.left;
+        const caretTop = rect.top - hostRect.top;
+        const caretBottom = rect.bottom - hostRect.top;
+        const fitsAbove =
+          caretTop - SLASH_MENU_OFFSET_PX - SLASH_MENU_EST_HEIGHT_PX >= 0;
+        const placement = fitsAbove ? "above" : "below";
+        const renderedWidth =
+          window.innerWidth >= SLASH_MENU_PREVIEW_BREAKPOINT_PX
+            ? SLASH_MENU_WIDTH_PX
+            : SLASH_MENU_LIST_WIDTH_PX;
+        const left = Math.max(
+          0,
+          Math.min(caretLeft, host.clientWidth - renderedWidth),
+        );
+        setSlashState((previous) =>
+          previous === null
+            ? previous
+            : {
+                ...previous,
+                left,
+                top: placement === "below" ? caretBottom : caretTop,
+                placement,
+              },
+        );
+      })(),
+      "template-studio-slash-menu.position",
+    );
+  };
 
   const onSlashMenuChange = (state: TemplateSlashMenuState) => {
     if (!state.active) {
@@ -467,6 +391,7 @@ export const useTemplateStudioSlashMenu = ({
     }
   };
 
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- react/exhaustive-deps cannot see compiler memoization, and this value is an effect dependency
   const dismissSlash = useCallback(() => {
     const view = editorViewRef.current;
     if (view && getTemplateSlashMenu(view.state).active) {
@@ -583,9 +508,14 @@ export const useTemplateStudioSlashMenu = ({
   };
 
   const linkClauseToSlot = async (clauseId: string, slotName: string) => {
-    const response = await api
-      .templates({ templateId: toSafeId<"template">(templateId) })
-      .clauses.put({ clauseId: toSafeId<"clause">(clauseId), slotName });
+    const response = await idempotentSubmit.run({
+      operation: `templates.${templateId}.clauses.create`,
+      body: { clauseId: toSafeId<"clause">(clauseId), slotName },
+      send: async (body) =>
+        api
+          .templates({ templateId: toSafeId<"template">(templateId) })
+          .clauses.put(body),
+    });
     if (response.error) {
       notifyUserError(toAPIError(response.error), t("clauses.linkFailed"), {
         description: userErrorMessage(
@@ -775,9 +705,12 @@ const SlashMenuHeader = ({
   const t = useTranslations();
   if (view === "root") {
     return (
-      <p className="text-muted-foreground text-2xs truncate border-b px-3 py-1.5 leading-snug">
+      <TruncatedText
+        className="text-muted-foreground text-2xs border-b px-3 py-1.5 leading-snug"
+        render={<p />}
+      >
         {query === "" ? t("templates.studio.slashHint") : `/${query}`}
-      </p>
+      </TruncatedText>
     );
   }
   const label =
@@ -785,18 +718,20 @@ const SlashMenuHeader = ({
       ? t("templates.studio.existingField")
       : t("common.clauses");
   return (
-    <button
-      className="text-muted-foreground hover:text-foreground text-2xs flex items-center gap-1 border-b px-3 py-1.5 text-start leading-snug"
+    <Button
+      className="w-full"
       onClick={onBack}
       onMouseDown={keepEditorFocus}
-      type="button"
+      variant="plain"
     >
-      <DirectionalIcon className="size-3 shrink-0" icon={ChevronLeftIcon} />
-      <span className="truncate">
-        {label}
-        {query === "" ? "" : ` · ${query}`}
+      <span className="text-muted-foreground hover:text-foreground text-2xs flex w-full items-center gap-1 border-b px-3 py-1.5 leading-snug">
+        <DirectionalIcon className="size-3 shrink-0" icon={ChevronLeftIcon} />
+        <TruncatedText>
+          {label}
+          {query === "" ? "" : ` · ${query}`}
+        </TruncatedText>
       </span>
-    </button>
+    </Button>
   );
 };
 
@@ -943,12 +878,8 @@ const SlashMenuRow = ({
     }
   }, [selected]);
   return (
-    <button
+    <Button
       aria-selected={selected}
-      className={cn(
-        "flex w-full items-center gap-2 rounded-sm px-2 py-1 text-start",
-        selected ? "bg-accent text-accent-foreground" : "text-foreground",
-      )}
       onClick={containedEventHandler(onSelect)}
       onMouseDown={containedEventHandler((event: ReactMouseEvent) =>
         event.preventDefault(),
@@ -956,17 +887,19 @@ const SlashMenuRow = ({
       onMouseEnter={onHighlight}
       ref={rowRef}
       role="option"
+      selected={selected}
+      size="row"
       tabIndex={-1}
-      type="button"
+      variant="ghost"
     >
       <Icon className="text-muted-foreground size-3.5 shrink-0" />
-      <span className="flex-1 truncate" dir="auto">
+      <TruncatedText className="flex-1" dir="auto">
         {label}
-      </span>
+      </TruncatedText>
       {hint !== undefined && (
-        <span className="text-muted-foreground text-3xs shrink-0 truncate font-mono">
+        <TruncatedText className="text-muted-foreground text-3xs shrink-0 font-mono">
           {hint}
-        </span>
+        </TruncatedText>
       )}
       {chevron && (
         <DirectionalIcon
@@ -974,7 +907,7 @@ const SlashMenuRow = ({
           icon={ChevronRightIcon}
         />
       )}
-    </button>
+    </Button>
   );
 };
 
@@ -1072,7 +1005,7 @@ const SlashTextPreview = ({
   body: string;
 }) => (
   <div className="flex h-full flex-col gap-1.5 overflow-hidden text-xs">
-    <code className="bg-primary/10 text-primary text-3xs w-fit rounded px-1 py-0.5">
+    <code className="bg-primary/10 text-primary text-3xs w-fit rounded-sm px-1 py-0.5">
       {marker}
     </code>
     <p className="text-foreground font-medium">{title}</p>

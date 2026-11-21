@@ -1,5 +1,7 @@
+import { panic } from "better-result";
 import * as v from "valibot";
 
+import { apiDateSchema } from "@stll/api-contract/api-date";
 import { SIGNAL_SEVERITY } from "@stll/api-contract/signals";
 import type { SignalSeverity } from "@stll/api-contract/signals";
 import { failureGradeOf } from "@stll/errors";
@@ -9,8 +11,29 @@ import {
   AI_ERROR_KIND_FAILURE_REASON,
   classifyAIError,
 } from "@/api/lib/ai-error";
+import { ActionAdmissionError } from "@/api/lib/errors/action-admission-error";
 
 export const DEADLINE_SCOUT_MAX_ATTEMPTS = 5;
+
+/** Whether admission refused a scan for an exhausted period, and until when. */
+export type DeadlineScanAdmission =
+  { type: "admitted" } | { type: "period_exhausted"; skippedUntil: Date };
+
+/**
+ * A scan refused for an exhausted period skips until that period resets. The
+ * refusal names the reset of the budget it exhausted: the organization's
+ * service period and the generic action period are configured apart.
+ */
+export const deadlineScanAdmission = (error: unknown): DeadlineScanAdmission =>
+  ActionAdmissionError.is(error) && error.reason === "period_exhausted"
+    ? {
+        type: "period_exhausted",
+        skippedUntil: new Date(
+          error.retryAtMs ??
+            panic("An action period refusal names its period's reset"),
+        ),
+      }
+    : { type: "admitted" };
 
 export const deadlineScoutFailureStatus = (
   attemptCount: number,
@@ -31,20 +54,20 @@ export const deadlineScoutFailureStatus = (
   return "pending";
 };
 
-export const DEADLINE_TEXT_CAP_CHARS = 60_000;
+const DEADLINE_TEXT_CAP_CHARS = 60_000;
 export const DEADLINE_TEXT_MIN_CHARS = 200;
-export const DEADLINE_MIN_CONFIDENCE = 0.6;
-export const DEADLINE_MAX_ITEMS = 10;
-export const DEADLINE_QUOTE_MAX_CHARS = 300;
+const DEADLINE_MIN_CONFIDENCE = 0.6;
+const DEADLINE_MAX_ITEMS = 10;
+const DEADLINE_QUOTE_MAX_CHARS = 300;
 /** Deadlines slightly in the past are still worth surfacing (missed ones). */
-export const DEADLINE_PAST_GRACE_MS = 7 * DAY_IN_MS;
+const DEADLINE_PAST_GRACE_MS = 7 * DAY_IN_MS;
 
 export const deadlineExtractionSchema = v.object({
   deadlines: v.pipe(
     v.array(
       v.object({
         label: v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(200)),
-        dueDate: v.pipe(v.string(), v.isoDate()),
+        dueDate: apiDateSchema,
         quote: v.pipe(
           v.string(),
           v.trim(),

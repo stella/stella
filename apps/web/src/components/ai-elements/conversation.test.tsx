@@ -4,7 +4,6 @@ import { expect, test } from "bun:test";
 import { IntlProvider } from "use-intl";
 
 import { ConversationScrollButton } from "@/components/ai-elements/conversation";
-import { SuggestedFollowupChips } from "@/features/chat/components/suggested-followup-chips";
 import { StickToBottomContext } from "@/hooks/use-stick-to-bottom";
 import messages from "@/i18n/langs/ar.json";
 
@@ -28,21 +27,6 @@ test("announces the scroll action in the active locale", () => {
 
   expect(html).toContain('aria-label="التمرير إلى الأسفل"');
   expect(html).not.toContain('aria-label="Scroll to bottom"');
-});
-
-test("leaves the scroll action out of the follow-up chips", () => {
-  const html = renderToStaticMarkup(
-    <IntlProvider locale="ar" messages={messages} timeZone="UTC">
-      <StickToBottomContext value={STICK_TO_BOTTOM}>
-        <SuggestedFollowupChips onSelect={() => {}} prompts={["لخّص النتيجة"]} />
-      </StickToBottomContext>
-    </IntlProvider>,
-  );
-
-  expect(html).toContain(
-    `aria-label="${messages.chat.suggestedFollowupsLabel}"`,
-  );
-  expect(html).not.toContain('aria-label="التمرير إلى الأسفل"');
 });
 
 test("renders nothing at the bottom or outside a conversation", () => {

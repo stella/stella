@@ -7,23 +7,29 @@ import { assertProperty } from "@stll/property-testing";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
-import { isReadRefusal } from "@/api/lib/errors/read-outcome";
+import {
+  isReadRefusal,
+  readOutcomeOfStatus,
+} from "@/api/lib/errors/read-outcome";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
 import {
   PUBLISHER_BODY_MAX_BYTES,
+  type PublisherReadInit,
   readBodyText,
+  readGatedResponseText,
   readPublisher,
   readPublisherBytes,
   readPublisherText,
   unreadPublisherError,
-  type PublisherReadInit,
 } from "./publisher-read";
 
-const originalFetch = globalThis.fetch;
+const testFetchState = createTestFetch();
+
 afterEach(() => {
-  globalThis.fetch = originalFetch;
+  testFetchState.restore();
 });
 
 const URL_UNDER_TEST = "https://publisher.invalid/document/1";
@@ -33,12 +39,12 @@ const init = (
 ): PublisherReadInit => ({
   adapterKey: ADAPTER_KEYS.CZ_NSS,
   fetchStage: "listing",
-  timeout: { type: "idle", ms: 1000 },
+  timeout: { type: "headers", ms: 1000 },
   ...overrides,
 });
 
 const serve = (response: () => Response | Promise<Response>) => {
-  globalThis.fetch = asFetchMock(async () => await response());
+  testFetchState.set(asFetchMock(async () => await response()));
 };
 
 const nullBodyStatus = (status: number) =>
@@ -114,7 +120,7 @@ describe("readPublisher", () => {
 
   test("a thrown request (timeout, network) is a failure to read", async () => {
     const timeout = new DOMException("timed out", "TimeoutError");
-    globalThis.fetch = asFetchMock(async () => await Promise.reject(timeout));
+    testFetchState.set(asFetchMock(async () => await Promise.reject(timeout)));
     const outcome = await readPublisher(URL_UNDER_TEST, init());
     expect(outcome.type).toBe("unavailable");
     expect(outcome.type === "unavailable" ? outcome.cause.kind : null).toBe(
@@ -125,9 +131,11 @@ describe("readPublisher", () => {
   test("the caller's cancellation still ends the read by throwing", async () => {
     const controller = new AbortController();
     controller.abort(new DOMException("cancelled", "AbortError"));
-    globalThis.fetch = asFetchMock(
-      async () =>
-        await Promise.reject(new DOMException("cancelled", "AbortError")),
+    testFetchState.set(
+      asFetchMock(
+        async () =>
+          await Promise.reject(new DOMException("cancelled", "AbortError")),
+      ),
     );
     const rejection = await rejectionOf(
       readPublisher(URL_UNDER_TEST, init({ signal: controller.signal })),
@@ -137,15 +145,17 @@ describe("readPublisher", () => {
 
   test("a 429 halts the cycle as a typed publisher refusal after one request", async () => {
     let requests = 0;
-    globalThis.fetch = asFetchMock(async () => {
-      requests += 1;
-      return await Promise.resolve(
-        new Response("slow down", {
-          status: 429,
-          headers: { "Retry-After": "120" },
-        }),
-      );
-    });
+    testFetchState.set(
+      asFetchMock(async () => {
+        requests += 1;
+        return await Promise.resolve(
+          new Response("slow down", {
+            status: 429,
+            headers: { "Retry-After": "120" },
+          }),
+        );
+      }),
+    );
     const rejection = await rejectionOf(
       readPublisherText(URL_UNDER_TEST, init()),
     );
@@ -206,11 +216,16 @@ describe("unreadPublisherError", () => {
   ] as const)(
     "a $scope refusal carries its typed marker and stops as $stopKind",
     async ({ scope, stopKind }) => {
-      globalThis.fetch = asFetchMock(
-        async () =>
-          await Promise.resolve(
-            new Response("", { status: 403, headers: { "Retry-After": "60" } }),
-          ),
+      testFetchState.set(
+        asFetchMock(
+          async () =>
+            await Promise.resolve(
+              new Response("", {
+                status: 403,
+                headers: { "Retry-After": "60" },
+              }),
+            ),
+        ),
       );
       const outcome = await readPublisher(
         URL_UNDER_TEST,
@@ -307,10 +322,11 @@ describe.each([
       type: "unavailable",
       cause: { kind: "too-large", maxBytes: PUBLISHER_BODY_MAX_BYTES },
     });
-    // The stream never ends, so returning at all proves the read stopped;
-    // the pull count proves where.
+    // The stream never ends, so returning at all proves the read stopped. One
+    // chunk detects overflow; the Response and stream layers may each have one
+    // pending pull, but the capped reader never retains those queued chunks.
     expect(state.pulled).toBeLessThanOrEqual(
-      PUBLISHER_BODY_MAX_BYTES / CHUNK_BYTES + 2,
+      PUBLISHER_BODY_MAX_BYTES / CHUNK_BYTES + 3,
     );
   });
 
@@ -419,4 +435,39 @@ test("no publisher status other than 404 and 410 reads as an absence, and only 4
     ),
     { numRuns: 200 },
   );
+});
+
+describe("gate refusal results", () => {
+  for (const status of [401, 403, 451]) {
+    for (const scope of ["document", "part", "source"] as const) {
+      test(`HTTP ${status} thrown by a gate retains ${scope} scope`, async () => {
+        const outcome = readOutcomeOfStatus(status, scope, "60");
+        if (outcome.type !== "refused") {
+          panic("Expected refusal fixture");
+        }
+        const error = unreadPublisherError({
+          outcome,
+          message: "Gate refused",
+          adapterKey: ADAPTER_KEYS.CZ_US,
+          cursor: null,
+        });
+        const request = async (): Promise<Response> => {
+          throw error;
+        };
+        const options = { request, signal: undefined, refusalScope: scope };
+        if (scope === "source") {
+          expect(await rejectionOf(readGatedResponseText(options))).toBe(error);
+        } else {
+          expect(await readGatedResponseText(options)).toEqual(outcome);
+          const controller = new AbortController();
+          controller.abort();
+          expect(
+            await rejectionOf(
+              readGatedResponseText({ ...options, signal: controller.signal }),
+            ),
+          ).toBe(error);
+        }
+      });
+    }
+  }
 });

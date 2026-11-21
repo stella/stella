@@ -1,0 +1,200 @@
+import { expect, test } from "bun:test";
+import path from "node:path";
+import * as v from "valibot";
+
+const root = path.resolve(import.meta.dir, "..");
+const stepSchema = v.looseObject({
+  name: v.optional(v.string()),
+  id: v.optional(v.string()),
+  uses: v.optional(v.string()),
+  with: v.optional(v.record(v.string(), v.unknown())),
+  run: v.optional(v.string()),
+  if: v.optional(v.string()),
+  env: v.optional(v.record(v.string(), v.unknown())),
+});
+const workflowSchema = v.looseObject({
+  on: v.looseObject({
+    pull_request: v.optional(v.unknown()),
+    push: v.optional(
+      v.nullable(v.looseObject({ branches: v.array(v.string()) })),
+    ),
+    schedule: v.optional(
+      v.nullable(v.array(v.looseObject({ cron: v.string() }))),
+    ),
+    workflow_dispatch: v.optional(
+      v.nullable(
+        v.looseObject({
+          inputs: v.record(v.string(), v.looseObject({ type: v.string() })),
+        }),
+      ),
+    ),
+  }),
+  jobs: v.record(
+    v.string(),
+    v.looseObject({
+      if: v.optional(v.string()),
+      needs: v.optional(v.union([v.string(), v.array(v.string())])),
+      permissions: v.optional(v.record(v.string(), v.string())),
+      outputs: v.optional(v.record(v.string(), v.string())),
+      concurrency: v.optional(
+        v.object({ group: v.string(), "cancel-in-progress": v.boolean() }),
+      ),
+      steps: v.optional(v.array(stepSchema), []),
+    }),
+  ),
+});
+const readWorkflow = async (name: string) =>
+  v.parse(
+    workflowSchema,
+    Bun.YAML.parse(
+      await Bun.file(path.join(root, ".github/workflows", name)).text(),
+    ),
+  );
+const auditWorkflow = await readWorkflow("dependency-audit.yml");
+const ciWorkflow = await readWorkflow("ci.yml");
+const releaseWorkflow = await readWorkflow("release-tag.yml");
+const catalogWorkflow = await readWorkflow("model-catalog-check.yml");
+
+const step = (
+  workflow: v.InferOutput<typeof workflowSchema>,
+  job: string,
+  name: string,
+) => {
+  const found = workflow.jobs[job]?.steps.find(
+    (candidate) => candidate.name === name,
+  );
+  expect(found, `missing ${name}`).toBeDefined();
+  if (found === undefined) {
+    throw new TypeError(`workflow step ${name} is missing`);
+  }
+  return found;
+};
+
+test("pull request and merge-group audits are plan-gated in CI", () => {
+  expect(auditWorkflow.on.pull_request).toBeUndefined();
+  const audit = ciWorkflow.jobs["dependency-audit"];
+  expect(audit?.if).toBe(
+    "!cancelled() && needs.ci-plan.result == 'success' && inputs.heavy_only != true && inputs.pr_depth_only != true && (github.event_name == 'pull_request' || github.event_name == 'merge_group') && needs.ci-plan.outputs.run_required != 'false' && needs.ci-plan.outputs.dependency_changes_required == 'true'",
+  );
+  expect(audit?.permissions).toEqual({ contents: "read" });
+  const pullRequestAudit = step(
+    ciWorkflow,
+    "dependency-audit",
+    "Audit changed dependency resolutions",
+  );
+  expect(pullRequestAudit.env?.["BASE_SHA"]).toBe(
+    githubExpression("needs.ci-plan.outputs.target_base_sha"),
+  );
+  expect(pullRequestAudit.run).toBe(
+    'bun scripts/dependency-audit.ts --check-diff "$BASE_SHA"',
+  );
+});
+
+test("full audits run on main and every six hours with one stable remediation identity", () => {
+  expect(auditWorkflow.on.push?.branches).toEqual(["main"]);
+  expect(auditWorkflow.on.schedule).toEqual([{ cron: "0 */6 * * *" }]);
+  const remediation = step(auditWorkflow, "remediate", "Prepare remediation");
+  expect(auditWorkflow.jobs["remediate"]?.if).toBe(
+    "always() && (needs.audit.outputs.advisory_failure == 'true' || needs.audit.outputs.stale_acceptance == 'true')",
+  );
+  expect(auditWorkflow.jobs["audit"]?.outputs?.["stale_acceptance"]).toContain(
+    "steps.full-audit.outputs.stale_acceptance || 'false'",
+  );
+  expect(remediation.env?.["FIX_BRANCH"]).toBe(
+    "automation/dependency-audit-fix",
+  );
+  expect(remediation.run).toBe("bash scripts/remediate-dependency-audit.sh");
+});
+
+test("release audit blocks findings unless a reasoned explicit waiver is supplied", () => {
+  const inputs = releaseWorkflow.on.workflow_dispatch?.inputs;
+  expect(inputs?.["waive_dependency_audit"]?.type).toBe("boolean");
+  expect(inputs?.["dependency_audit_waiver_reason"]?.type).toBe("string");
+  const gate = step(
+    releaseWorkflow,
+    "tag",
+    "Refuse a release with known dependency advisories",
+  );
+  expect(gate.run).toBe(
+    'bash "$RUNNER_TEMP/release-gate.sh" run dependency-audit bash scripts/check-release-dependency-audit.sh',
+  );
+});
+
+const githubExpression = (body: string) => `\${{ ${body} }}`;
+
+test("remediation pushes and pull requests authenticate with a repository-scoped app token", () => {
+  const token = step(auditWorkflow, "remediate", "Mint app token");
+  const catalogToken = step(
+    catalogWorkflow,
+    "model-catalog-check",
+    "Mint app token",
+  );
+  expect(token.id).toBe("app-token");
+  expect(token.uses).toBe(catalogToken.uses);
+  expect(token.with).toEqual(catalogToken.with);
+  expect(token.with).toEqual({
+    "app-id": githubExpression("secrets.PROVENANCE_APP_ID"),
+    "private-key": githubExpression("secrets.PROVENANCE_APP_PRIVATE_KEY"),
+    owner: githubExpression("github.repository_owner"),
+    repositories: githubExpression("github.event.repository.name"),
+    "permission-contents": "write",
+    "permission-pull-requests": "write",
+  });
+  expect(auditWorkflow.jobs["remediate"]?.concurrency).toEqual({
+    group: "dependency-audit-remediation",
+    "cancel-in-progress": false,
+  });
+  expect(auditWorkflow.jobs["remediate"]?.permissions).toEqual({
+    contents: "read",
+  });
+  expect(
+    step(auditWorkflow, "remediate", "Checkout").with?.["persist-credentials"],
+  ).toBe(false);
+  const remediation = step(auditWorkflow, "remediate", "Prepare remediation");
+  expect(remediation.env?.["GH_TOKEN"]).toBe(
+    githubExpression("steps.app-token.outputs.token"),
+  );
+  expect(remediation.env?.["GITHUB_TOKEN"]).toBeUndefined();
+  expect(remediation.run).toBe("bash scripts/remediate-dependency-audit.sh");
+});
+
+test("remediation commits use the shared signed action and app identity", () => {
+  const prepare = step(auditWorkflow, "remediate", "Prepare remediation");
+  const commit = step(auditWorkflow, "remediate", "Open one remediation");
+  const catalogCommit = step(
+    catalogWorkflow,
+    "model-catalog-check",
+    "Open or update the refresh PR",
+  );
+  expect(prepare.id).toBe("remediation");
+  expect(commit.if).toBe("steps.remediation.outputs.changed == 'true'");
+  expect(commit.uses).toBe(catalogCommit.uses);
+  expect(commit.with?.["token"]).toBe(
+    githubExpression("steps.app-token.outputs.token"),
+  );
+  expect(commit.with?.["mode"]).toBe("refresh-pr");
+  expect(commit.with?.["branch"]).toBe(prepare.env?.["FIX_BRANCH"]);
+  expect(commit.with?.["base"]).toBe("main");
+  expect(commit.with?.["paths"]).toBe(
+    "bun.lock\nbunfig.toml\nscripts/dependency-audit-baseline.json\n:(glob)**/package.json\n",
+  );
+  expect(commit.id).toBe("signed-commit");
+  expect(commit.with?.["pr-body"]).toContain(
+    "steps.remediation.outputs.quarantined == 'true'",
+  );
+  const hold = step(
+    auditWorkflow,
+    "remediate",
+    "Hold quarantined remediation for publisher review",
+  );
+  expect(hold.if).toBe(
+    "steps.remediation.outputs.changed == 'true' && steps.remediation.outputs.quarantined == 'true'",
+  );
+  expect(hold.env?.["GH_TOKEN"]).toBe(
+    githubExpression("steps.app-token.outputs.token"),
+  );
+  expect(hold.env?.["PR_NUMBER"]).toBe(
+    githubExpression("steps.signed-commit.outputs.pull-request-number"),
+  );
+  expect(hold.run).toBe('gh pr edit "$PR_NUMBER" --add-label hold');
+});

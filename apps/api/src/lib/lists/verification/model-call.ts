@@ -9,25 +9,39 @@ import type { ModelMessage, TextPart } from "@tanstack/ai";
  * from the prompt cache.
  */
 import type { AnthropicTextMetadata } from "@tanstack/ai-anthropic";
+import { Result, TaggedError } from "better-result";
 import type * as v from "valibot";
 
 import type { AIRequestServiceTier, OrgAIConfig } from "@/api/lib/ai-config";
 import { resolveCaching } from "@/api/lib/ai-config";
 import {
-  createTanStackAIAnalyticsCallbacks,
   type AIUsageMetering,
+  createTanStackAIAnalyticsCallbacks,
 } from "@/api/lib/analytics/tanstack-ai";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
+import { LIST_VERIFICATION_FEATURE_ID } from "@/api/lib/feature-access/registry";
+import type { ListVerificationAccessProof } from "@/api/lib/lists/verification/access";
 import type { VerificationBlock } from "@/api/lib/lists/verification/document-text";
+import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
 import { markTanStackCacheBreakpoint } from "@/api/lib/tanstack-ai-caching";
-import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
+import { generateTanStackObjectForTask } from "@/api/lib/tanstack-ai-generate";
+import type { ModelRunCapError } from "@/api/lib/usage/model-run-caps/caps";
 
-/** The role both passes dispatch on, and the one a run records. */
-export const VERIFICATION_MODEL_ROLE = "pdf" as const;
+/** The task both passes dispatch on, and the one a run records. */
+export const VERIFICATION_MODEL_TASK = "pdf";
 const CALL_TIMEOUT_MS = 120_000;
 
+export class ListVerificationAccessRevokedError extends TaggedError(
+  "ListVerificationAccessRevokedError",
+)<{ message: string }> {}
+
 export type VerificationModelDeps = {
+  accessProof: ListVerificationAccessProof;
+  refreshAccessProof: () => Promise<ListVerificationAccessProof | null>;
+  admission: ModelDispatchAdmission;
+  checkRunBudget: () => Promise<Result<void, ModelRunCapError>>;
   organizationId: SafeId<"organization">;
   workspaceId: SafeId<"workspace">;
   entityVersionId: SafeId<"entityVersion">;
@@ -38,7 +52,41 @@ export type VerificationModelDeps = {
   usageMetering: AIUsageMetering;
   abortSignal: AbortSignal;
   /** External model-dispatch boundary; supplied by focused tests. */
-  generateObjectForRole?: typeof generateTanStackObjectForRole | undefined;
+  generateObjectForTask?: typeof generateTanStackObjectForTask | undefined;
+};
+
+const proofMatchesRequest = (
+  proof: ListVerificationAccessProof,
+  deps: VerificationModelDeps,
+) =>
+  proof.featureId === LIST_VERIFICATION_FEATURE_ID &&
+  proof.organizationId === deps.organizationId &&
+  proof.userId === deps.usageMetering.userId;
+
+/**
+ * Whether a verification pass may send customer text to a model now: the
+ * requester still holds access and the run's budget has room. Every model
+ * call of a pass, generative or decision, asks first.
+ */
+export const admitVerificationDispatch = async (
+  deps: VerificationModelDeps,
+): Promise<
+  Result<void, ListVerificationAccessRevokedError | ModelRunCapError>
+> => {
+  const proof = await deps.refreshAccessProof();
+  if (
+    !isDeploymentFeatureEnabled("FEATURE_LEGAL_LISTS") ||
+    proof === null ||
+    !proofMatchesRequest(proof, deps) ||
+    !proofMatchesRequest(deps.accessProof, deps)
+  ) {
+    return Result.err(
+      new ListVerificationAccessRevokedError({
+        message: "List verification access is unavailable",
+      }),
+    );
+  }
+  return await deps.checkRunBudget();
 };
 
 /** Blocks as `[id] text` lines: the ids are what the model cites. */
@@ -57,7 +105,14 @@ type VerificationCallArgs<TSchema extends v.GenericSchema> = {
 export type VerificationCall<TSchema extends v.GenericSchema> = {
   /** The first request of a call: the shared text, then `task`. */
   request: (task: string) => ModelMessage;
-  generate: (messages: ModelMessage[]) => Promise<v.InferOutput<TSchema>>;
+  generate: (
+    messages: ModelMessage[],
+  ) => Promise<
+    Result<
+      v.InferOutput<TSchema>,
+      ListVerificationAccessRevokedError | ModelRunCapError
+    >
+  >;
   captureError: (cause: unknown) => void;
 };
 
@@ -70,14 +125,15 @@ export const createVerificationCall = <TSchema extends v.GenericSchema>({
 }: VerificationCallArgs<TSchema>): VerificationCall<TSchema> => {
   const caching = resolveCaching({
     promptCachingEnabled: deps.promptCachingEnabled,
-    role: VERIFICATION_MODEL_ROLE,
+    task: VERIFICATION_MODEL_TASK,
     scopeKey: `list-verification:${deps.entityVersionId}`,
   });
   const analytics = createTanStackAIAnalyticsCallbacks({
     dataClass: "customer",
     feature,
-    modelRole: VERIFICATION_MODEL_ROLE,
+    modelTask: VERIFICATION_MODEL_TASK,
     orgAIConfig: deps.orgAIConfig,
+    modelTier: deps.admission.modelTier,
     properties: {
       organization_id: deps.organizationId,
       workspace_id: deps.workspaceId,
@@ -94,32 +150,39 @@ export const createVerificationCall = <TSchema extends v.GenericSchema>({
             { decision: caching },
           ),
         ];
-  const generate = deps.generateObjectForRole ?? generateTanStackObjectForRole;
+  const generate = deps.generateObjectForTask ?? generateTanStackObjectForTask;
 
   return {
     request: (task) => ({
       role: "user",
       content: [...sharedParts, { type: "text", content: task }],
     }),
-    generate: async (messages) =>
-      await generate({
-        dataClass: "customer",
-        role: VERIFICATION_MODEL_ROLE,
-        orgAIConfig: deps.orgAIConfig,
-        managedAIResidency: deps.managedAIResidency,
-        organizationId: deps.organizationId,
-        analytics,
-        caching,
-        serviceTier: deps.serviceTier,
-        tenantWorkspaceIds: [deps.workspaceId],
-        system,
-        messages,
-        abortSignal: AbortSignal.any([
-          deps.abortSignal,
-          AbortSignal.timeout(CALL_TIMEOUT_MS),
-        ]),
-        outputSchema,
-      }),
+    generate: async (messages) => {
+      const admitted = await admitVerificationDispatch(deps);
+      if (Result.isError(admitted)) {
+        return admitted;
+      }
+      return Result.ok(
+        await generate({
+          userId: deps.admission.userId,
+          dataClass: "customer",
+          task: VERIFICATION_MODEL_TASK,
+          orgAIConfig: deps.orgAIConfig,
+          managedAIResidency: deps.managedAIResidency,
+          organizationId: deps.organizationId,
+          admission: deps.admission,
+          analytics,
+          caching,
+          serviceTier: deps.serviceTier,
+          tenantWorkspaceIds: [deps.workspaceId],
+          system,
+          messages,
+          abortSignal: deps.abortSignal,
+          deadlineMs: CALL_TIMEOUT_MS,
+          outputSchema,
+        }),
+      );
+    },
     captureError: (cause) => {
       analytics.captureError(cause);
     },

@@ -1,9 +1,10 @@
 import { panic, Result } from "better-result";
-import { and, count, eq, ilike, inArray, sql } from "drizzle-orm";
-import { t } from "elysia";
+import { and, count, eq, ilike, inArray } from "drizzle-orm";
+import * as v from "valibot";
+
+import { chunk as chunkItems } from "@stll/concurrency/chunk";
 
 import { member } from "@/api/db/auth-schema";
-import { SETTING_WORKSPACE_IDS } from "@/api/db/rls";
 import { resultTx } from "@/api/db/safe-db";
 import {
   type fields,
@@ -16,10 +17,19 @@ import {
 } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
 import { organizationWorkspaceRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
-import { captureError } from "@/api/lib/analytics/capture";
+import {
+  captureError,
+  createErrorCapture,
+  detached,
+} from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import {
+  AVT_LAYOUT_DISCOVERY_FEATURE_ACCESS,
+  avtViewAccessStatus,
+  isAvtLayoutVisible,
+} from "@/api/lib/auth/feature-access/view-eligibility";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -41,9 +51,18 @@ import {
 import type { EntityVersionValues } from "@/api/lib/entity-versions/insert-entity-version";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { escapeLike } from "@/api/lib/escape-like";
-import { copyOrganizationFiles } from "@/api/lib/files/copy-organization-files";
+import {
+  abortCopyPublicationTransaction,
+  copyOrganizationFilesForPublication,
+  lockCopyPublicationIntentsInTransaction,
+  retirePublishedCopyIntentsInTransaction,
+} from "@/api/lib/files/copy-organization-files";
 import { deleteOrganizationFilesWithSignal } from "@/api/lib/files/delete-organization-file";
 import { THUMBNAIL_MIME_TYPE } from "@/api/lib/files/image-derivative";
+import type {
+  CheckedFileCopy,
+  OrganizationFileUsageError,
+} from "@/api/lib/files/organization-file-usage";
 import { createFileKey } from "@/api/lib/files/utils";
 import { LIMITS } from "@/api/lib/limits";
 import {
@@ -51,11 +70,19 @@ import {
   DEFAULT_MATTER_NUMBER_PADDING,
   DEFAULT_MATTER_NUMBER_PATTERN,
 } from "@/api/lib/matter-reference";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
+import { requireComputedColumnInputs } from "@/api/lib/properties/computed-column-input";
+import { computedColumnInputHandlerError } from "@/api/lib/properties/computed-column-input-handler-error";
 import {
   assertPropertyDependencyReadWithinLimit,
   propertyDependencyReadLimit,
 } from "@/api/lib/properties/dependency-limits";
-import { copyObject, headObject } from "@/api/lib/s3-presign";
+import {
+  copyObject,
+  headObject,
+  S3ObjectMissingError,
+  type S3PresignError,
+} from "@/api/lib/s3-presign";
 import {
   nativeExtractionRunRequestForFields,
   requestNativeExtractionRuns,
@@ -77,9 +104,11 @@ import { findExtractionFileFieldRow } from "@/api/lib/search/types";
 import type { ViewLayout } from "@/api/lib/views-schema";
 import { parseStoredViewLayout } from "@/api/lib/views-schema";
 import { portableLayout } from "@/api/lib/views/utils";
+import { createWorkspaceInTransaction } from "@/api/lib/workspaces/create-workspace-row";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 
 const config = {
+  contract: "patch",
   accountAccess: ACCOUNT_ACCESS.standard,
   realtime: organizationWorkspaceRealtimeUpdates,
   contentDelivery: {
@@ -87,6 +116,7 @@ const config = {
     reason:
       "Copies stored content and returns operation metadata rather than file bytes.",
   },
+  featureAccess: AVT_LAYOUT_DISCOVERY_FEATURE_ACCESS,
   description:
     "Copy a matter into a new one: its columns with their dependencies, " +
     "views, members, party contacts, client, billing reference, colour, and " +
@@ -101,14 +131,14 @@ const config = {
     reason: "workflow_orchestration",
     consumesServices: true,
   },
-  body: t.Object({
-    includeContent: t.Boolean(),
-  }),
+  body: v.object({ includeContent: v.boolean() }),
 } satisfies WorkspaceHandlerConfig;
 
 const FILE_COPY_CONCURRENCY = 4;
 
 export type DuplicateWorkspaceDependencies = {
+  cleanupCopiedS3Keys?: typeof cleanupCopiedS3Keys;
+  copyWorkspaceFiles?: typeof copyWorkspaceFiles;
   enqueueDocumentProcessingRun: typeof enqueueDocumentProcessingRun;
   enqueueEntitySearchRepairs: typeof enqueueEntitySearchRepairs;
   enqueueWorkspaceSearchRepairs: typeof enqueueWorkspaceSearchRepairs;
@@ -355,7 +385,12 @@ const copyWorkspaceFiles = async ({
   organizationId: SafeId<"organization">;
   sourceWorkspaceId: SafeId<"workspace">;
   targetWorkspaceId: SafeId<"workspace">;
-}) => {
+}): Promise<
+  Result<
+    SafeId<"pendingUpload">[],
+    S3ObjectMissingError | S3PresignError | OrganizationFileUsageError
+  >
+> => {
   const prepareFile = async (copy: FileCopy) => {
     const sourceKey = createFileKey({
       organizationId,
@@ -380,33 +415,44 @@ const copyWorkspaceFiles = async ({
       organizationId,
       objectKey: targetKey,
       sizeBytes: source.value.contentLength,
-      copy: async () => await copyObject(sourceKey, targetKey),
+      source: sourceKey,
     });
   };
   const prepared: Awaited<ReturnType<typeof prepareFile>>[] = [];
-  for (let start = 0; start < copies.length; start += FILE_COPY_CONCURRENCY) {
-    prepared.push(
-      ...(await Promise.all(
-        copies.slice(start, start + FILE_COPY_CONCURRENCY).map(prepareFile),
-      )),
-    );
+  for (const itemBatch of chunkItems(copies, FILE_COPY_CONCURRENCY)) {
+    prepared.push(...(await Promise.all(itemBatch.map(prepareFile))));
   }
   const inputs = Result.all(prepared);
   if (Result.isError(inputs)) {
     return Result.err(inputs.error);
   }
-  const copied = await copyOrganizationFiles({
-    inputs: inputs.value,
+  const copied = await copyOrganizationFilesForPublication({
+    inputs: inputs.value.map((input) => ({
+      ...input,
+      // The copy runs only inside the publication ledger's checked operation.
+      copy: async (checked: CheckedFileCopy<string>) =>
+        await copyObject(checked.source, checked.objectKey),
+      cleanupScope: {
+        type: "workspaces" as const,
+        workspaces: [
+          { id: targetWorkspaceId, state: "pending-publication" as const },
+        ],
+      },
+    })),
     concurrency: FILE_COPY_CONCURRENCY,
   });
   if (Result.isError(copied)) {
     return Result.err(copied.error);
   }
-  const completed = Result.all(copied.value);
+  const completed = Result.all(copied.value.copies);
   if (Result.isError(completed)) {
     return Result.err(completed.error);
   }
-  return Result.ok(undefined);
+  return Result.ok(
+    copied.value.publicationIntents.flatMap(
+      ({ cleanupIntentIds }) => cleanupIntentIds,
+    ),
+  );
 };
 
 const cleanupCopiedS3Keys = async ({
@@ -431,8 +477,75 @@ const cleanupCopiedS3Keys = async ({
   );
 
   if (Result.isError(cleanupResult)) {
-    captureError(cleanupResult.error, { targetWorkspaceId });
+    captureError(
+      cleanupResult.error,
+      handlerErrorContext(
+        "workspaces.cleanupCopiedS3Keys.cleanupResult_error",
+        { targetWorkspaceId },
+      ),
+    );
   }
+};
+
+type DuplicatedDependency = typeof propertyDependencies.$inferInsert;
+type DuplicatedProperty = Omit<typeof properties.$inferInsert, "tool"> & {
+  tool: (typeof properties.$inferInsert)["tool"] | null;
+};
+
+/** "Name (n)" when earlier copies exist, else the original name. */
+const duplicatedMatterName = (name: string, earlierCopies: number) =>
+  earlierCopies > 0 ? `${name} (${earlierCopies})` : name;
+/**
+ * Every duplicated computed column keeps an input: copied edges stay, and a column
+ * that arrives without one is wired by the computed-column input owner (or refused).
+ */
+const wireDuplicatedComputedInputs = ({
+  newProperties,
+  dependencies,
+  workspaceId,
+}: {
+  newProperties: readonly DuplicatedProperty[];
+  dependencies: readonly DuplicatedDependency[];
+  workspaceId: DuplicatedDependency["workspaceId"];
+}): Result<DuplicatedDependency[], HandlerError> => {
+  const wired = [...dependencies];
+  const candidates = newProperties.flatMap((candidate) =>
+    candidate.id ? [{ id: candidate.id, content: candidate.content }] : [],
+  );
+  for (const property of newProperties) {
+    if (property.tool?.type !== "ai-model") {
+      continue;
+    }
+    if (!property.id) {
+      panic("Duplicated property is missing its minted id");
+    }
+    const propertyId = property.id;
+    const existingInputs = wired
+      .filter((dependency) => dependency.propertyId === propertyId)
+      .map(({ dependsOnPropertyId, condition }) => ({
+        dependsOnPropertyId,
+        condition: condition ?? null,
+      }));
+    const inputs = requireComputedColumnInputs({
+      candidates,
+      inputs: existingInputs,
+    });
+    if (Result.isError(inputs)) {
+      return Result.err(computedColumnInputHandlerError(inputs.error));
+    }
+    if (existingInputs.length === 0) {
+      wired.push(
+        ...inputs.value.map(({ dependsOnPropertyId, condition }) => ({
+          id: createSafeId<"propertyDependency">(),
+          workspaceId,
+          propertyId,
+          dependsOnPropertyId,
+          condition,
+        })),
+      );
+    }
+  }
+  return Result.ok(wired);
 };
 
 export const createDuplicateWorkspace = (
@@ -447,8 +560,15 @@ export const createDuplicateWorkspace = (
       workspaceId: sourceWorkspaceId,
       body: { includeContent },
       recordAuditEvent,
+      featureAccessSnapshot,
     }) {
       const organizationId = session.activeOrganizationId;
+      const avtAvailable =
+        avtViewAccessStatus({
+          snapshot: featureAccessSnapshot,
+          organizationId,
+          userId: user.id,
+        }) === "available";
       const targetWorkspaceId = createSafeId<"workspace">();
 
       const snapshot = yield* Result.await(
@@ -539,7 +659,12 @@ export const createDuplicateWorkspace = (
             workspace,
             properties: workspaceProperties,
             dependencies: propertyDependencyRows,
-            views,
+            views: views.filter((view) =>
+              isAvtLayoutVisible(
+                view.layout,
+                avtAvailable ? "available" : "unavailable",
+              ),
+            ),
             members,
             contacts,
             entities: sourceEntities,
@@ -566,12 +691,14 @@ export const createDuplicateWorkspace = (
         fileCopies.map((copy) => [copy.sourceFileId, copy.targetFileId]),
       );
       const copiedS3Keys: string[] = [];
+      let copyCleanupIntentIds: SafeId<"pendingUpload">[] = [];
 
       if (includeContent) {
+        const copyFiles = dependencies.copyWorkspaceFiles ?? copyWorkspaceFiles;
         const copyResult = Result.flatten(
           await Result.tryPromise(
             async () =>
-              await copyWorkspaceFiles({
+              await copyFiles({
                 copiedS3Keys,
                 copies: fileCopies,
                 organizationId,
@@ -582,18 +709,21 @@ export const createDuplicateWorkspace = (
         );
 
         if (Result.isError(copyResult)) {
-          await cleanupCopiedS3Keys({
+          await (dependencies.cleanupCopiedS3Keys ?? cleanupCopiedS3Keys)({
             copiedS3Keys,
             targetWorkspaceId,
           });
           return Result.err(
             new HandlerError({
-              status: 500,
-              message: "Failed to copy matter files",
+              status: S3ObjectMissingError.is(copyResult.error) ? 404 : 500,
+              message: S3ObjectMissingError.is(copyResult.error)
+                ? "Matter file not found"
+                : "Failed to copy matter files",
               cause: copyResult.error,
             }),
           );
         }
+        copyCleanupIntentIds = copyResult.value;
       }
 
       // Every rejection below throws rather than returning: returning from a
@@ -601,6 +731,16 @@ export const createDuplicateWorkspace = (
       // rejection raised part-way through would persist half a matter and then
       // have the caller delete the objects those committed rows point at.
       const txResult = await resultTx(safeDb, async (tx) => {
+        abortCopyPublicationTransaction(
+          await lockCopyPublicationIntentsInTransaction({
+            intentIds: copyCleanupIntentIds,
+            organizationId,
+            pendingWorkspaceIds: [targetWorkspaceId],
+            tx,
+            workspaceIds: [targetWorkspaceId],
+            workspaceMode: "update",
+          }),
+        );
         const [countResult, duplicatedNames, settings, orgMembers] =
           await Promise.all([
             tx
@@ -661,10 +801,10 @@ export const createDuplicateWorkspace = (
           });
         }
 
-        const newName =
-          duplicatedNames.length > 0
-            ? `${snapshot.workspace.name} (${duplicatedNames.length})`
-            : snapshot.workspace.name;
+        const newName = duplicatedMatterName(
+          snapshot.workspace.name,
+          duplicatedNames.length,
+        );
         const pattern =
           settings?.matterNumberPattern ?? DEFAULT_MATTER_NUMBER_PATTERN;
         const padding =
@@ -683,9 +823,8 @@ export const createDuplicateWorkspace = (
         }
         const reference = referenceResult.value;
 
-        await tx.insert(workspaces).values({
+        await createWorkspaceInTransaction(tx, {
           id: targetWorkspaceId,
-          organizationId,
           clientId: snapshot.workspace.clientId,
           billingReference: snapshot.workspace.billingReference,
           color: snapshot.workspace.color,
@@ -694,29 +833,24 @@ export const createDuplicateWorkspace = (
           reference,
         });
 
-        await tx.execute(
-          sql`SELECT set_config(
-            ${SETTING_WORKSPACE_IDS},
-            array_append(
-              current_setting(${SETTING_WORKSPACE_IDS}, true)::text[],
-              ${targetWorkspaceId}
-            )::text,
-            true
-          )`,
-        );
-
         if (snapshot.members.length > 0) {
-          await tx.insert(workspaceMembers).values(
-            snapshot.members.map((workspaceMember) => ({
-              workspaceId: targetWorkspaceId,
-              userId: workspaceMember.userId,
-            })),
-          );
+          await tx
+            .insert(workspaceMembers)
+            .values(
+              snapshot.members.map((workspaceMember) => ({
+                workspaceId: targetWorkspaceId,
+                userId: workspaceMember.userId,
+              })),
+            )
+            .onConflictDoNothing({
+              target: [workspaceMembers.workspaceId, workspaceMembers.userId],
+            });
         }
 
         const propertyIdMap = new Map<string, SafeId<"property">>();
+        let newProperties: (typeof properties.$inferInsert)[] = [];
         if (snapshot.properties.length > 0) {
-          const newProperties = snapshot.properties.map((property) => {
+          newProperties = snapshot.properties.map((property) => {
             const id = createSafeId<"property">();
             propertyIdMap.set(property.id, id);
             return {
@@ -758,8 +892,17 @@ export const createDuplicateWorkspace = (
             };
           })
           .filter((dependency) => dependency !== null);
-        if (newDependencies.length > 0) {
-          await tx.insert(propertyDependencies).values(newDependencies);
+
+        const wiredDependencies = wireDuplicatedComputedInputs({
+          newProperties,
+          dependencies: newDependencies,
+          workspaceId: targetWorkspaceId,
+        });
+        if (Result.isError(wiredDependencies)) {
+          return Result.err(wiredDependencies.error);
+        }
+        if (wiredDependencies.value.length > 0) {
+          await tx.insert(propertyDependencies).values(wiredDependencies.value);
         }
 
         if (snapshot.views.length > 0) {
@@ -980,10 +1123,10 @@ export const createDuplicateWorkspace = (
           },
         });
 
-        await dependencies.enqueueEntitySearchRepairs(
-          tx,
-          duplicatedEntityIds[SEARCH_INDEX_OWNER.searchMark],
-        );
+        await dependencies.enqueueEntitySearchRepairs(tx, [
+          ...duplicatedEntityIds[SEARCH_INDEX_OWNER.searchMark],
+          ...duplicatedEntityIds[SEARCH_INDEX_OWNER.durableExtraction],
+        ]);
         const nativeExtractionRunIds =
           await dependencies.requestNativeExtractionRuns({
             requests: nativeExtractionRequests,
@@ -992,6 +1135,14 @@ export const createDuplicateWorkspace = (
         await dependencies.enqueueWorkspaceSearchRepairs(tx, [
           targetWorkspaceId,
         ]);
+        abortCopyPublicationTransaction(
+          await retirePublishedCopyIntentsInTransaction({
+            intentIds: copyCleanupIntentIds,
+            organizationId,
+            tx,
+            workspaceIds: [targetWorkspaceId],
+          }),
+        );
 
         return Result.ok({
           workspaceId: targetWorkspaceId,
@@ -1003,7 +1154,7 @@ export const createDuplicateWorkspace = (
       // An aborted duplicate leaves no target matter, so every object copied
       // for it is an orphan and the whole set goes back.
       if (Result.isError(txResult)) {
-        await cleanupCopiedS3Keys({
+        await (dependencies.cleanupCopiedS3Keys ?? cleanupCopiedS3Keys)({
           copiedS3Keys,
           targetWorkspaceId,
         });
@@ -1012,19 +1163,46 @@ export const createDuplicateWorkspace = (
 
       // These post-commit calls only accelerate work the transaction already
       // made durable: projection marks and immutable-source extraction runs.
-      dependencies
-        .flushWorkspaceSearchRepairs([txResult.value.workspaceId])
-        .catch(captureError);
-      dependencies
-        .flushEntitySearchRepairs(
-          txResult.value.entityIds[SEARCH_INDEX_OWNER.searchMark],
-        )
-        .catch(captureError);
+      detached(
+        async () =>
+          dependencies
+            .flushWorkspaceSearchRepairs([txResult.value.workspaceId])
+            .catch(
+              createErrorCapture(
+                handlerErrorContext("matterDuplicate.flushMatterSearch"),
+              ),
+            ),
+        "workspaces-duplicate.flush-workspace-search-repairs",
+      );
+      detached(
+        async () =>
+          dependencies
+            .flushEntitySearchRepairs([
+              ...txResult.value.entityIds[SEARCH_INDEX_OWNER.searchMark],
+              ...txResult.value.entityIds[SEARCH_INDEX_OWNER.durableExtraction],
+            ])
+            .catch(
+              createErrorCapture(
+                handlerErrorContext("matterDuplicate.flushEntitySearch"),
+              ),
+            ),
+        "workspaces-duplicate.flush-entity-search-repairs",
+      );
 
-      handoffCommittedDocumentProcessingRuns({
-        enqueue: dependencies.enqueueDocumentProcessingRun,
-        runIds: txResult.value.nativeExtractionRunIds,
-      }).catch(captureError);
+      detached(
+        async () =>
+          handoffCommittedDocumentProcessingRuns({
+            enqueue: dependencies.enqueueDocumentProcessingRun,
+            runIds: txResult.value.nativeExtractionRunIds,
+          }).catch(
+            createErrorCapture(
+              handlerErrorContext(
+                "createDuplicateWorkspace.handoffCommittedDocumentProcessingRuns",
+              ),
+            ),
+          ),
+        "workspaces-duplicate.handoff-committed-document-processing-runs",
+      );
 
       return Result.ok({ workspaceId: txResult.value.workspaceId });
     },

@@ -1,7 +1,15 @@
-import { useCallback, useLayoutEffect, useMemo, useState } from "react";
+import {
+  addTransitionType,
+  startTransition,
+  useCallback,
+  useLayoutEffect,
+  useMemo,
+  useState,
+} from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getRouteApi, useNavigate } from "@tanstack/react-router";
+import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import {
@@ -12,34 +20,34 @@ import {
 import { stellaToast } from "@stll/ui/toast";
 
 import {
-  createDefaultRoleModels,
   createProviderCredentialDraft,
-  getProviderValues,
   hasUsableProviderDrafts,
-  serializeOverrideModels,
   serializeProviderDrafts,
 } from "@/components/ai-config-role-models.logic";
 import type {
   ProviderCredentialDraft,
   ProviderPreview,
-  RoleModelSelections,
 } from "@/components/ai-config-role-models.logic";
-import { LanguagePicker } from "@/components/language-picker";
-import { ThemePicker } from "@/components/theme-picker";
 import {
   GUIDE_DRAWER_OPEN_SOURCES,
   useGuideDrawerStore,
 } from "@/features/guides/guide-drawer-store";
 import { useBrowserRegion } from "@/hooks/use-browser-region";
+import { useSingleFlight } from "@/hooks/use-single-flight";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { authClient } from "@/lib/auth-client";
 import { refreshAuthQueries, sessionOptions } from "@/lib/auth-queries";
+import { invokeCapability } from "@/lib/capabilities/capability-request";
 import { installCatalogueEntry } from "@/lib/catalogue-install";
 import { detached } from "@/lib/detached";
-import { toAPIError } from "@/lib/errors/api";
+import { toAPIError, unwrapApiResponse } from "@/lib/errors/api";
 import { toAuthClientError } from "@/lib/errors/auth";
-import { notifyAuthClientError } from "@/lib/errors/user-toast";
+import {
+  notifyAuthClientError,
+  notifyUserError,
+} from "@/lib/errors/user-toast";
+import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
 import type { PracticeJurisdiction } from "@/lib/jurisdictions";
 import { suggestedCountryCodes as getSuggestedCountryCodes } from "@/lib/jurisdictions";
 import { invalidateAIConfigurationCaches } from "@/lib/organization/ai-config-cache";
@@ -47,7 +55,9 @@ import {
   aiAvailabilityOptions,
   updateCachedAIAvailability,
 } from "@/lib/organization/ai-config-queries";
+import { queryView } from "@/lib/query-view.logic";
 import { afterOnboardingNavigation } from "@/lib/redirect";
+import { useQueryViewError } from "@/lib/use-query-view";
 import { CatalogueDetailPreview } from "@/routes/onboarding/-components/catalogue-detail-preview";
 import { CatalogueStackPreview } from "@/routes/onboarding/-components/catalogue-stack-preview";
 import {
@@ -56,7 +66,12 @@ import {
   isCatalogueEntryAvailableDuringOnboarding,
   reconcileCatalogueSlugsForJurisdictions,
 } from "@/routes/onboarding/-components/onboarding-catalogue-setup.logic";
-import { OnboardingLayout } from "@/routes/onboarding/-components/onboarding-layout";
+import {
+  ONBOARDING_TRANSITION_TYPE,
+  OnboardingLayout,
+} from "@/routes/onboarding/-components/onboarding-layout";
+import { onboardingStepIndex } from "@/routes/onboarding/-components/onboarding-steps.logic";
+import type { OnboardingStep } from "@/routes/onboarding/-components/onboarding-steps.logic";
 import { SidebarPreview } from "@/routes/onboarding/-components/sidebar-preview";
 import { AIStep } from "@/routes/onboarding/-components/steps/ai-step";
 import { CatalogueStep } from "@/routes/onboarding/-components/steps/catalogue-step";
@@ -73,34 +88,13 @@ import {
 import { OrganizationStep } from "@/routes/onboarding/-components/steps/organization-step";
 import { nativeToolDeployAvailabilityOptions } from "@/routes/onboarding/-queries";
 
-type Step =
-  | "organization"
-  | "jurisdiction"
-  | "catalogue"
-  | "ai"
-  | "invite"
-  | "download";
-
 type WizardData = {
   orgName: string;
-  orgSlug: string;
   practiceJurisdictions: PracticeJurisdiction[];
   catalogueSlugs: string[];
   emails: string[];
   aiProviders: ProviderCredentialDraft[];
-  aiRoleModels: RoleModelSelections;
 };
-
-const TOTAL_STEPS = 6;
-
-const STEP_TO_PROGRESS = {
-  organization: 0,
-  jurisdiction: 1,
-  catalogue: 2,
-  ai: 3,
-  invite: 4,
-  download: 5,
-} as const satisfies Record<Step, number>;
 
 const onboardingRouteApi = getRouteApi("/onboarding");
 
@@ -111,15 +105,33 @@ export const OnboardingWizard = () => {
     select: (search) => search.redirectTo,
   });
   const analytics = useAnalytics();
+  const creationFlight = useSingleFlight();
+  const createIntent = useIdempotentSubmit();
   const browserRegion = useBrowserRegion();
   const queryClient = useQueryClient();
   const openGuideDrawer = useGuideDrawerStore((store) => store.open);
-  const { data: sessionData } = useQuery(sessionOptions);
-  const { data: nativeToolDeployAvailability } = useQuery(
-    nativeToolDeployAvailabilityOptions,
+  const sessionView = queryView(useQuery(sessionOptions));
+  useQueryViewError(sessionView, "OnboardingWizard:query");
+  const sessionData =
+    sessionView.type === "items" ? sessionView.items : undefined;
+  const nativeToolView = queryView(
+    useQuery(nativeToolDeployAvailabilityOptions),
   );
+  useQueryViewError(nativeToolView, "OnboardingWizard:query-2");
+  const nativeToolDeployAvailability =
+    nativeToolView.type === "items" ? nativeToolView.items : undefined;
   const userEmail = sessionData?.user.email ?? "";
-  const [step, setStep] = useState<Step>("organization");
+  const [step, setStep] = useState<OnboardingStep>("organization");
+  const navigateStep = (nextStep: OnboardingStep) => {
+    startTransition(() => {
+      addTransitionType(
+        onboardingStepIndex(nextStep) > onboardingStepIndex(step)
+          ? ONBOARDING_TRANSITION_TYPE.forward
+          : ONBOARDING_TRANSITION_TYPE.backward,
+      );
+      setStep(nextStep);
+    });
+  };
   const [catalogueFocusedSlug, setCatalogueFocusedSlug] = useState<
     string | null
   >(null);
@@ -130,12 +142,10 @@ export const OnboardingWizard = () => {
     useState<DownloadTarget>("desktop");
   const [data, setData] = useState<WizardData>(() => ({
     orgName: "",
-    orgSlug: "",
     practiceJurisdictions: [],
     catalogueSlugs: [],
     emails: [],
     aiProviders: [createProviderCredentialDraft()],
-    aiRoleModels: createDefaultRoleModels(),
   }));
   const suggestedCountryCodes = getSuggestedCountryCodes({
     email: userEmail,
@@ -153,16 +163,16 @@ export const OnboardingWizard = () => {
   const [previewAiProviders, setPreviewAiProviders] = useState<
     readonly ProviderPreview[]
   >([]);
-  const unavailableNativeToolBackendSlugs = useMemo<
-    ReadonlySet<string> | undefined
-  >(() => {
-    if (!nativeToolDeployAvailability) {
-      return undefined;
-    }
-    return new Set(
-      nativeToolDeployAvailability.unavailableNativeToolBackendSlugs,
-    );
-  }, [nativeToolDeployAvailability]);
+  const unavailableNativeToolBackendSlugs: ReadonlySet<string> | undefined =
+    (() => {
+      if (!nativeToolDeployAvailability) {
+        return undefined;
+      }
+      return new Set(
+        nativeToolDeployAvailability.unavailableNativeToolBackendSlugs,
+      );
+    })();
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing, without this memo boundary the React Compiler does not cache this value
   const onboardingCatalogueEntries = useMemo(
     () =>
       loadCatalogue().filter((entry) =>
@@ -239,7 +249,7 @@ export const OnboardingWizard = () => {
       ],
     }));
     setCatalogueFocusedSlug(null);
-    setStep("catalogue");
+    navigateStep("catalogue");
   };
 
   const setCatalogueSlugRemoved = (slug: string, removed: boolean) => {
@@ -273,31 +283,55 @@ export const OnboardingWizard = () => {
     });
   };
 
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing, without this memo boundary the React Compiler does not cache this value
   const executeSetup = useCallback(
     async (finalData: WizardData) => {
       setIsCreating(true);
 
-      const { data: orgData, error: createOrgError } =
-        await authClient.organization.create({
-          name: finalData.orgName,
-          slug: finalData.orgSlug,
-        });
+      const createResult = await Result.tryPromise({
+        try: async () =>
+          await invokeCapability("organizations.create", async (request) =>
+            unwrapApiResponse(
+              await api.organizations.post(
+                { name: finalData.orgName },
+                {
+                  ...request,
+                  headers: {
+                    "Idempotency-Key": createIntent.prepare({
+                      body: { name: finalData.orgName },
+                      operation: "organizations.create",
+                    }).headers["Idempotency-Key"],
+                    ...request.headers,
+                  },
+                },
+              ),
+            ),
+          ),
+        catch: (error) => error,
+      });
 
-      if (createOrgError) {
-        analytics.captureError(toAuthClientError(createOrgError));
-        notifyAuthClientError(createOrgError, t("errors.actionFailed"));
+      if (Result.isError(createResult)) {
+        analytics.captureError(createResult.error, {
+          fingerprintKey: "OnboardingWizard:failure",
+          scope: { type: "handler", handlerId: "OnboardingWizard:failure" },
+        });
+        notifyUserError(createResult.error, t("errors.actionFailed"));
         setIsCreating(false);
         return;
       }
+      const orgData = createResult.value;
 
       const { error: setActiveError } = await authClient.organization.setActive(
         {
-          organizationId: orgData.id,
+          organizationId: orgData.organizationId,
         },
       );
 
       if (setActiveError) {
-        analytics.captureError(toAuthClientError(setActiveError));
+        analytics.captureError(toAuthClientError(setActiveError), {
+          fingerprintKey: "OnboardingWizard:failure-2",
+          scope: { type: "handler", handlerId: "OnboardingWizard:failure-2" },
+        });
         notifyAuthClientError(setActiveError, t("errors.actionFailed"));
         setIsCreating(false);
         return;
@@ -314,7 +348,19 @@ export const OnboardingWizard = () => {
         // immediately, and since the session now has an
         // `activeOrganizationId`, the guard would redirect away from
         // /onboarding before the wizard ever reaches the apps step.
-        await refreshAuthQueries(queryClient);
+        const refreshed = await Result.tryPromise(
+          async () => await refreshAuthQueries(queryClient),
+        );
+        if (refreshed.isErr()) {
+          analytics.captureError(refreshed.error, {
+            fingerprintKey: "OnboardingWizard.refresh:failure",
+            scope: {
+              type: "handler",
+              handlerId: "OnboardingWizard.refresh:failure",
+            },
+          });
+          notifyUserError(refreshed.error, t("errors.actionFailed"));
+        }
 
         if (finalData.practiceJurisdictions.length > 0) {
           const { error: jurisdictionError } = await api[
@@ -324,7 +370,13 @@ export const OnboardingWizard = () => {
           });
 
           if (jurisdictionError) {
-            analytics.captureError(toAPIError(jurisdictionError));
+            analytics.captureError(toAPIError(jurisdictionError), {
+              fingerprintKey: "OnboardingWizard:failure-3",
+              scope: {
+                type: "handler",
+                handlerId: "OnboardingWizard:failure-3",
+              },
+            });
             stellaToast.add({
               title: t("onboarding.jurisdictionSaveFailed"),
               type: "warning",
@@ -384,39 +436,40 @@ export const OnboardingWizard = () => {
         }
 
         // Phase 2: Save AI config (BYOK) if user provided one
-        const aiProviderValues = getProviderValues(finalData.aiProviders);
-        const aiOverrideModels = serializeOverrideModels({
-          providers: aiProviderValues,
-          roleModels: finalData.aiRoleModels,
-        });
-
-        if (
-          hasUsableProviderDrafts(finalData.aiProviders) &&
-          aiOverrideModels !== null
-        ) {
+        if (hasUsableProviderDrafts(finalData.aiProviders)) {
           const { error: aiConfigError } = await api["organization-settings"][
             "ai-config"
           ].post({
             providers: serializeProviderDrafts(finalData.aiProviders),
-            overrideModels: aiOverrideModels,
+            overrideModels: null,
           });
 
           if (aiConfigError) {
-            analytics.captureError(toAPIError(aiConfigError));
+            analytics.captureError(toAPIError(aiConfigError), {
+              fingerprintKey: "OnboardingWizard:failure-4",
+              scope: {
+                type: "handler",
+                handlerId: "OnboardingWizard:failure-4",
+              },
+            });
             stellaToast.add({
               title: t("onboarding.aiConfigFailed"),
               type: "warning",
             });
           } else {
             queryClient.setQueryData(
-              aiAvailabilityOptions({ organizationId: orgData.id }).queryKey,
+              aiAvailabilityOptions({ organizationId: orgData.organizationId })
+                .queryKey,
               (current) =>
                 updateCachedAIAvailability({
                   current,
                   orgConfigured: true,
                 }),
             );
-            await invalidateAIConfigurationCaches(queryClient, orgData.id);
+            await invalidateAIConfigurationCaches(
+              queryClient,
+              orgData.organizationId,
+            );
           }
         }
 
@@ -432,9 +485,16 @@ export const OnboardingWizard = () => {
             ),
           );
 
-          const failedCount = inviteResults.filter(
-            (r) => r.error !== null,
-          ).length;
+          const failures = inviteResults.flatMap(({ error }) =>
+            error ? [error] : [],
+          );
+          for (const failure of failures) {
+            analytics.captureError(toAuthClientError(failure), {
+              fingerprintKey: "OnboardingWizard:invite",
+              scope: { type: "handler", handlerId: "OnboardingWizard:invite" },
+            });
+          }
+          const failedCount = failures.length;
 
           if (failedCount > 0) {
             stellaToast.add({
@@ -446,14 +506,23 @@ export const OnboardingWizard = () => {
           }
         }
       } catch (error) {
-        analytics.captureError(error);
+        analytics.captureError(error, {
+          fingerprintKey: "OnboardingWizard:failure-5",
+          scope: { type: "handler", handlerId: "OnboardingWizard:failure-5" },
+        });
+        notifyUserError(error, t("errors.actionFailed"));
       }
 
       setIsCreating(false);
-      setStep("download");
+      // Setup only ever moves on to the download step.
+      startTransition(() => {
+        addTransitionType(ONBOARDING_TRANSITION_TYPE.forward);
+        setStep("download");
+      });
     },
     [
       analytics,
+      createIntent,
       queryClient,
       setIsCreating,
       t,
@@ -532,21 +601,19 @@ export const OnboardingWizard = () => {
     if (step === "organization") {
       return (
         <OnboardingLayout
-          currentStep={STEP_TO_PROGRESS.organization}
+          currentStep={onboardingStepIndex("organization")}
           preview={preview}
-          totalSteps={TOTAL_STEPS}
         >
           <OrganizationStep
             defaultName={data.orgName}
             onNameChange={setPreviewOrgName}
-            onNext={({ name, slug }) => {
+            onNext={({ name }) => {
               setData((d) => ({
                 ...d,
                 orgName: name,
-                orgSlug: slug,
               }));
               setPreviewOrgName(name);
-              setStep("jurisdiction");
+              navigateStep("jurisdiction");
             }}
           />
         </OnboardingLayout>
@@ -556,10 +623,9 @@ export const OnboardingWizard = () => {
     if (step === "jurisdiction") {
       return (
         <OnboardingLayout
-          currentStep={STEP_TO_PROGRESS.jurisdiction}
-          onBack={() => setStep("organization")}
+          currentStep={onboardingStepIndex("jurisdiction")}
+          onBack={() => navigateStep("organization")}
           preview={preview}
-          totalSteps={TOTAL_STEPS}
         >
           <JurisdictionStep
             selected={data.practiceJurisdictions}
@@ -577,7 +643,7 @@ export const OnboardingWizard = () => {
               }));
               setJurisdictionSuggestionApplied(true);
               setCatalogueFocusedSlug(null);
-              setStep("catalogue");
+              navigateStep("catalogue");
             }}
           />
         </OnboardingLayout>
@@ -587,10 +653,9 @@ export const OnboardingWizard = () => {
     if (step === "catalogue") {
       return (
         <OnboardingLayout
-          currentStep={STEP_TO_PROGRESS.catalogue}
-          onBack={() => setStep("jurisdiction")}
+          currentStep={onboardingStepIndex("catalogue")}
+          onBack={() => navigateStep("jurisdiction")}
           preview={preview}
-          totalSteps={TOTAL_STEPS}
         >
           <CatalogueStep
             focusedSlug={catalogueFocusedSlug}
@@ -604,7 +669,7 @@ export const OnboardingWizard = () => {
               });
             }}
             onFocusChange={setCatalogueFocusedSlug}
-            onNext={() => setStep("ai")}
+            onNext={() => navigateStep("ai")}
             onRemove={(slug) => {
               setCatalogueSlugRemoved(slug, true);
               setData((d) => ({
@@ -618,7 +683,7 @@ export const OnboardingWizard = () => {
             onSkip={() => {
               markCatalogueSlugsRemoved(data.catalogueSlugs);
               setData((d) => ({ ...d, catalogueSlugs: [] }));
-              setStep("ai");
+              navigateStep("ai");
             }}
             practiceJurisdictions={data.practiceJurisdictions}
             selectedSlugs={data.catalogueSlugs}
@@ -633,10 +698,9 @@ export const OnboardingWizard = () => {
     if (step === "invite") {
       return (
         <OnboardingLayout
-          currentStep={STEP_TO_PROGRESS.invite}
+          currentStep={onboardingStepIndex("invite")}
           preview={preview}
-          totalSteps={TOTAL_STEPS}
-          {...(isCreating ? {} : { onBack: () => setStep("ai") })}
+          {...(isCreating ? {} : { onBack: () => navigateStep("ai") })}
         >
           <InviteStep
             isSubmitting={isCreating}
@@ -646,7 +710,7 @@ export const OnboardingWizard = () => {
               const finalData = { ...data, emails };
               setData(finalData);
               detached(
-                executeSetup(finalData),
+                creationFlight.run(async () => await executeSetup(finalData)),
                 "onboarding-wizard.execute-setup",
               );
             }}
@@ -658,28 +722,23 @@ export const OnboardingWizard = () => {
     if (step === "ai") {
       return (
         <OnboardingLayout
-          currentStep={STEP_TO_PROGRESS.ai}
-          onBack={() => setStep("catalogue")}
+          currentStep={onboardingStepIndex("ai")}
+          onBack={() => navigateStep("catalogue")}
           preview={preview}
-          totalSteps={TOTAL_STEPS}
         >
           <AIStep
-            onNext={() => setStep("invite")}
+            onNext={() => navigateStep("invite")}
             onPreviewChange={setPreviewAiProviders}
             onProvidersChange={(aiProviders) => {
               setData((d) => ({ ...d, aiProviders }));
-            }}
-            onRoleModelsChange={(aiRoleModels) => {
-              setData((d) => ({ ...d, aiRoleModels }));
             }}
             onSkip={() => {
               setData((d) => ({
                 ...d,
                 aiProviders: [createProviderCredentialDraft()],
-                aiRoleModels: createDefaultRoleModels(),
               }));
               setPreviewAiProviders([]);
-              setStep("invite");
+              navigateStep("invite");
             }}
             providers={data.aiProviders}
           />
@@ -692,9 +751,8 @@ export const OnboardingWizard = () => {
     // land the user in the app.
     return (
       <OnboardingLayout
-        currentStep={STEP_TO_PROGRESS.download}
+        currentStep={onboardingStepIndex("download")}
         preview={preview}
-        totalSteps={TOTAL_STEPS}
       >
         <DownloadStep
           onSelect={setDownloadTarget}
@@ -711,13 +769,5 @@ export const OnboardingWizard = () => {
     );
   };
 
-  return (
-    <>
-      {renderStep()}
-      <div className="fixed end-4 top-4 z-20 flex items-center gap-2 lg:end-8 lg:top-6">
-        <ThemePicker />
-        <LanguagePicker />
-      </div>
-    </>
-  );
+  return renderStep();
 };

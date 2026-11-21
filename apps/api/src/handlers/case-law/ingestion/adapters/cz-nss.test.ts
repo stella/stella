@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 /**
  * The cz-nss listing reconciliation capability, and the parser it keys on.
  *
@@ -6,8 +7,6 @@
  * regexes rather than the ones the crawl runs, which is how this suite's
  * predecessor came to assert a citation pattern the adapter no longer had.
  */
-
-import { Result } from "better-result";
 import {
   afterAll,
   afterEach,
@@ -26,29 +25,34 @@ import {
 } from "@stll/api-contract/case-law-text-field";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 
-import type { StoredRawReparseInput } from "@/api/handlers/case-law/ingestion/adapter";
 import {
-  buildCzNssDecision,
+  buildCzNssDecision as uncheckedBuildCzNssDecision,
+  CZ_NSS_CONTINUATION_PAGE_ROWS,
+  CZ_NSS_FIRST_PAGE_ROWS,
+  CZ_NSS_FIRST_SLICE,
   czNssAdapter,
   czNssExpectedRows,
   czNssListingIdentity,
   czNssTotalPages,
-  CZ_NSS_CONTINUATION_PAGE_ROWS,
-  CZ_NSS_FIRST_SLICE,
-  CZ_NSS_FIRST_PAGE_ROWS,
+  parseCzNssDetailMetadata,
   parseResultRows,
 } from "@/api/handlers/case-law/ingestion/adapters/cz-nss";
 import type { ParsedRow } from "@/api/handlers/case-law/ingestion/adapters/cz-nss";
-import { requireReconciliation } from "@/api/handlers/case-law/ingestion/adapters/test-utils";
+import {
+  isNssDocumentPlaceholder,
+  readNssRegistryMetadata,
+} from "@/api/handlers/case-law/ingestion/adapters/cz-nss-documents";
+import { parseNssDecisionHtml as uncheckedParseNssDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/cz-nss";
 import { tipWindowSlices } from "@/api/handlers/case-law/ingestion/reconciliation-plan";
 import { shouldSkipRefresh } from "@/api/handlers/case-law/ingestion/refresh-policy";
 import { sourceFingerprint } from "@/api/handlers/case-law/ingestion/source-fingerprint";
 import {
+  absentDecisionTextFields,
+  readDecisionTextMetadata,
+  splitStoredDecisionTextMetadata,
+  storeDecisionTextFields,
   TEXT_ABSENCE_REASON,
   TEXT_FIELD_TYPE,
-  absentDecisionTextFields,
-  storeDecisionTextFields,
-  readDecisionTextMetadata,
 } from "@/api/lib/case-law/decision-text";
 import { toPlainText } from "@/api/lib/case-law/plain-text";
 import {
@@ -56,15 +60,29 @@ import {
   isStoredReadUnavailable,
   READ_OUTCOME_METADATA_KEY,
 } from "@/api/lib/errors/read-outcome";
+import type { StoredRawReparseInput } from "@/api/lib/legal-search/ingestion-types";
 import {
   decodeSourceRawEnvelope,
   listingIdentityKey,
   SOURCE_DOCUMENT_ID_MAX_LENGTH,
 } from "@/api/lib/legal-search/ingestion-types";
+import {
+  inspectPublisherFieldCoverage,
+  PUBLISHER_FIELD_COVERAGE_EVENT,
+} from "@/api/lib/legal-search/publisher-field-coverage";
+import { encodeSourceRawEnvelope } from "@/api/lib/legal-search/source-raw-envelope";
 import { isRecord } from "@/api/lib/type-guards";
+import { requireReconciliation } from "@/api/tests/helpers/case-law-adapter-test-utils";
+import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingLogger } from "@/api/tests/helpers/recording-telemetry";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
+
+const buildCzNssDecision = guardParser(uncheckedBuildCzNssDecision);
+
+const parseNssDecisionHtml = guardParser(uncheckedParseNssDecisionHtml);
+const testFetchState = createTestFetch();
 
 const reconciliation = requireReconciliation(czNssAdapter);
 
@@ -72,6 +90,72 @@ const BASE_URL = "https://vyhledavac.nssoud.cz";
 
 /** One backslash, for fixtures that must carry a literal escape. */
 const BACKSLASH = String.fromCodePoint(92);
+
+test("NSS publisher labels remain observable when their mapping is removed", async () => {
+  const detail = await Bun.file(
+    new URL(
+      "__fixtures__/cz-nss-publisher-field-excerpt.html",
+      import.meta.url,
+    ),
+  ).text();
+  const observed = await czNssAdapter.sourceFields.listSourceFields({ detail });
+  expect(observed).toContain("krajskysoud");
+  expect(observed).toContain("vztahkpredpisům");
+  expect(observed).toContain("spzncjnapadenarozhodnutinss");
+
+  const result = Object.freeze({
+    sourceRaw: encodeSourceRawEnvelope({ detail }),
+  });
+  const reports: unknown[] = [];
+  const report = (...args: unknown[]) => {
+    reports.push(args);
+  };
+  const fullyAccounted = {
+    ...czNssAdapter.sourceFields,
+    fields: Object.fromEntries(
+      observed.map((field) => [
+        field,
+        { disposition: "stored", target: { type: "identity" } } as const,
+      ]),
+    ),
+  };
+  await inspectPublisherFieldCoverage({
+    adapterKey: czNssAdapter.key,
+    inventory: fullyAccounted,
+    result,
+    report,
+  });
+  expect(reports).toEqual([]);
+
+  for (const removed of observed) {
+    reports.length = 0;
+    await inspectPublisherFieldCoverage({
+      adapterKey: czNssAdapter.key,
+      inventory: {
+        ...fullyAccounted,
+        fields: Object.fromEntries(
+          Object.entries(fullyAccounted.fields).filter(
+            ([field]) => field !== removed,
+          ),
+        ),
+      },
+      result,
+      report,
+    });
+    expect(reports).toEqual([
+      [
+        PUBLISHER_FIELD_COVERAGE_EVENT.UNMAPPED,
+        {
+          adapterKey: czNssAdapter.key,
+          recordCount: 1,
+          unmappedFieldCount: 1,
+          retainedRaw: true,
+        },
+      ],
+    ]);
+    expect(decodeSourceRawEnvelope(result.sourceRaw)?.["detail"]).toBe(detail);
+  }
+});
 
 // ── Portal-shaped fixtures ───────────────────────────────
 
@@ -323,15 +407,19 @@ const installStub = ({
   htmlDocumentStatus = documentStatus,
   legalSentence,
   search = [],
-}: StubOptions): { requests: RecordedRequest[] } => {
+}: StubOptions): { requests: RecordedRequest[]; timeouts: number[] } => {
   const requests: RecordedRequest[] = [];
+  const timeouts: number[] = [];
   let searchCalls = 0;
   let continuationCalls = 0;
 
-  globalThis.fetch = asFetchMock(
-    async (input: string | URL | Request, init?: RequestInit) => {
+  testFetchState.set(
+    asFetchMock(async (input: string | URL | Request, init?: RequestInit) => {
       const url = new URL(input instanceof Request ? input.url : String(input));
       const method = init?.method ?? "GET";
+      if (init && "timeoutMs" in init && typeof init.timeoutMs === "number") {
+        timeouts.push(init.timeoutMs);
+      }
       requests.push({
         method,
         url: url.toString(),
@@ -372,6 +460,14 @@ const installStub = ({
             ? utf16Response(DOCUMENT_TEXT)
             : new Response(null, { status: documentStatus });
         }
+        if (
+          url.hostname === "www.nssoud.cz" &&
+          url.pathname === "/rozhodovaci-cinnost/rozsireny-senat"
+        ) {
+          return htmlResponse(
+            "<table><tbody><tr><td>Nebyl nalezen žádný záznam.</td></tr></tbody></table>",
+          );
+        }
         if (url.pathname === "/") {
           return htmlResponse(SESSION_PAGE);
         }
@@ -379,10 +475,10 @@ const installStub = ({
       };
 
       return await Promise.resolve(answer());
-    },
+    }),
   );
 
-  return { requests };
+  return { requests, timeouts };
 };
 
 /**
@@ -407,26 +503,30 @@ const throughJsonb = (value: unknown): unknown =>
 const SLICE = "2026-06-10";
 
 test("allows the NSS listing endpoints to use their source-specific budget", async () => {
-  installStub({ search: [htmlResponse("", 503)] });
-  const invalidation = await czNssAdapter.fetchPage("2026-08-20:0", {});
-  expect(invalidation.isErr()).toBe(true);
-
+  const originalFetch = globalThis.fetch;
   const originalTimeout = AbortSignal.timeout;
-  const timeouts: number[] = [];
+  const pageDeadlines: number[] = [];
   const timeoutSpy = spyOn(AbortSignal, "timeout").mockImplementation(
     (milliseconds) => {
-      timeouts.push(milliseconds);
+      pageDeadlines.push(milliseconds);
       return originalTimeout(milliseconds);
     },
   );
   try {
     installStub({ search: [htmlResponse("", 503)] });
+    const invalidation = await czNssAdapter.fetchPage("2026-08-20:0", {});
+    expect(invalidation.isErr()).toBe(true);
+    pageDeadlines.length = 0;
+
+    const failedStub = installStub({ search: [htmlResponse("", 503)] });
     const failed = await czNssAdapter.fetchPage("2026-08-20:0", {});
     expect(failed.isErr()).toBe(true);
-    expect(timeouts).toEqual([90_000, 60_000, 60_000]);
-    timeouts.length = 0;
+    // The page's own budget first, then one deadline per listing request.
+    expect(failedStub.timeouts).toEqual([60_000, 60_000]);
+    expect(pageDeadlines).toEqual([90_000, ...failedStub.timeouts]);
+    pageDeadlines.length = 0;
 
-    installStub({
+    const pageStub = installStub({
       search: [
         htmlResponse(
           searchPage({
@@ -440,9 +540,11 @@ test("allows the NSS listing endpoints to use their source-specific budget", asy
     const page = await czNssAdapter.fetchPage(`${SLICE}:1`, {});
 
     expect(page.isOk()).toBe(true);
-    expect(timeouts.slice(0, 4)).toEqual([90_000, 60_000, 60_000, 60_000]);
+    expect(pageStub.timeouts.slice(0, 3)).toEqual([60_000, 60_000, 60_000]);
+    expect(pageDeadlines).toEqual([90_000, ...pageStub.timeouts]);
   } finally {
     timeoutSpy.mockRestore();
+    globalThis.fetch = originalFetch;
   }
 });
 
@@ -616,6 +718,26 @@ describe("cz-nss listing rows", () => {
     ]);
   });
 
+  // Production stored references such as `63 az 17/2026 - 28` as decision
+  // types: a docket in the type field is a column out of place, not a type.
+  test("a docket number where the type belongs is not stored as the type", () => {
+    const docketTypedRow = rowBlock(MUNICIPAL_ROW).replace(
+      "<td> Rozsudek </td>",
+      "<td> 63&#xA0;Az&#xA0;17/2026&#xA0;-&#xA0;28 </td>",
+    );
+    expect(docketTypedRow).not.toContain("Rozsudek");
+    const [row] = parseResultRows(docketTypedRow);
+    expect(row?.caseNumber).toBe("1 Az 4/2026");
+    expect(row?.decisionType).toBeUndefined();
+
+    const detail = (value: string) =>
+      parseCzNssDetailMetadata(
+        `<div id="druhdokumentuavyrokrozhodnuti"><span class="det-textitle">Druh:</span><span class="det-textval" title="${value}">${value}</span></div>`,
+      ).decisionType;
+    expect(detail("Rozsudek")).toBe("Rozsudek");
+    expect(detail("8 Afs 24/2025 - 50")).toBeUndefined();
+  });
+
   test("finds nothing in a page that lists nothing", () => {
     expect(parseResultRows("")).toHaveLength(0);
     expect(parseResultRows(searchPage({ statedCount: 0, rows: [] }))).toEqual(
@@ -719,10 +841,8 @@ describe("cz-nss page arithmetic", () => {
 // ── Listing walk ─────────────────────────────────────────
 
 describe("cz-nss listSlicePage", () => {
-  const originalFetch = globalThis.fetch;
-
   afterEach(() => {
-    globalThis.fetch = originalFetch;
+    testFetchState.restore();
   });
 
   test("searches the day the slice names", async () => {
@@ -990,7 +1110,9 @@ describe("cz-nss listSlicePage", () => {
     // that matters is not the byte string but that it is still JSON: the
     // escaped backslashes around each codelist title are exactly what a
     // reader resolving `\\uXXXX` on its own destroys.
-    expect(() => JSON.parse(posted ?? "")).not.toThrow();
+    expect(() => {
+      JSON.parse(posted ?? "");
+    }).not.toThrow();
   });
 
   test("a literal ending at an escaped apostrophe is not truncated", async () => {
@@ -1026,7 +1148,7 @@ describe("cz-nss listSlicePage", () => {
 
     expect(
       await reconciliation.listSlicePage({ slice: "2026-08-09", page: 0 }),
-    ).toEqual({ items: [], totalPages: 0 });
+    ).toEqual({ items: [], totalPages: 0, publisherCount: 0 });
   });
 
   test("a failed search throws rather than reporting an empty day", async () => {
@@ -1104,14 +1226,12 @@ describe("cz-nss listSlicePage", () => {
 // ── Crawl cursor ─────────────────────────────────────────
 
 describe("cz-nss fetchPage", () => {
-  const originalFetch = globalThis.fetch;
-
   beforeEach(() => {
     setSystemTime(new Date("2026-08-11T09:30:00.000Z"));
   });
 
   afterEach(() => {
-    globalThis.fetch = originalFetch;
+    testFetchState.restore();
   });
 
   afterAll(() => {
@@ -1370,10 +1490,8 @@ describe("cz-nss fetchPage", () => {
 // ── Per-item build ───────────────────────────────────────
 
 describe("cz-nss buildDecision", () => {
-  const originalFetch = globalThis.fetch;
-
   afterEach(() => {
-    globalThis.fetch = originalFetch;
+    testFetchState.restore();
   });
 
   const listedRow = async (): Promise<unknown> => {
@@ -1578,9 +1696,11 @@ describe("cz-nss buildDecision", () => {
       throw new TypeError("Expected cz-nss to implement stored-raw replay");
     }
 
-    globalThis.fetch = asFetchMock(() => {
-      throw new TypeError("Stored-raw replay must not contact the publisher");
-    });
+    testFetchState.set(
+      asFetchMock(() => {
+        throw new TypeError("Stored-raw replay must not contact the publisher");
+      }),
+    );
 
     const stored = {
       raw: new TextEncoder().encode(decision.sourceRaw ?? ""),
@@ -1622,9 +1742,11 @@ describe("cz-nss buildDecision", () => {
     if (reparse === undefined) {
       throw new TypeError("Expected cz-nss to implement stored-raw replay");
     }
-    globalThis.fetch = asFetchMock(() => {
-      throw new TypeError("Stored-raw replay must not contact the publisher");
-    });
+    testFetchState.set(
+      asFetchMock(() => {
+        throw new TypeError("Stored-raw replay must not contact the publisher");
+      }),
+    );
 
     const outcome = await reparse({
       raw: new TextEncoder().encode(decision.sourceRaw ?? ""),
@@ -1952,15 +2074,61 @@ describe("cz-nss buildDecision", () => {
     expect(without.metadata).not.toHaveProperty("legalSentence");
   });
 
+  test("a publisher dash persists as a placeholder on crawl and replay", async () => {
+    const decision = await crawledWithHeadnote("-");
+    expect(decision.textFields.legalSentence).toEqual({
+      type: TEXT_FIELD_TYPE.ABSENT,
+      reason: TEXT_ABSENCE_REASON.PUBLISHER_PLACEHOLDER,
+    });
+    const metadata = storeDecisionTextFields({
+      metadata: decision.metadata,
+      textFields: decision.textFields,
+    });
+    expect(metadata["legalSentence"] ?? null).toBeNull();
+    expect(splitStoredDecisionTextMetadata(metadata).textFields).toEqual(
+      decision.textFields,
+    );
+    const reparse = czNssAdapter.reparseStoredRaw;
+    if (reparse === undefined || decision.sourceRaw === undefined) {
+      throw new TypeError("Expected cz-nss stored-raw replay evidence");
+    }
+    testFetchState.set(
+      asFetchMock(() => {
+        throw new TypeError("Stored-raw replay must not contact the publisher");
+      }),
+    );
+    const replay = await reparse({
+      raw: new TextEncoder().encode(decision.sourceRaw),
+      contentType: decision.sourceRawContentType ?? null,
+      metadata,
+      caseNumber: decision.caseNumber,
+      sourceDocumentId: decision.sourceDocumentId ?? null,
+      language: decision.language,
+      court: decision.court,
+      ecli: decision.ecli ?? null,
+      decisionDate: decision.decisionDate ?? null,
+      decisionType: decision.decisionType ?? null,
+      sourceUrl: decision.sourceUrl ?? null,
+      documentUrl: decision.documentUrl ?? null,
+    });
+    expect(replay.type).toBe("parsed");
+    if (replay.type !== "parsed") {
+      throw new TypeError(`Expected placeholder replay, got ${replay.type}`);
+    }
+    expect(replay.result.textFields).toEqual(decision.textFields);
+  });
+
   test("a replay moves the stored headnote into the text-field contract", async () => {
     const decision = await crawledWithHeadnote(HEADNOTE);
     const reparse = czNssAdapter.reparseStoredRaw;
     if (reparse === undefined) {
       throw new TypeError("Expected cz-nss to implement stored-raw replay");
     }
-    globalThis.fetch = asFetchMock(() => {
-      throw new TypeError("Stored-raw replay must not contact the publisher");
-    });
+    testFetchState.set(
+      asFetchMock(() => {
+        throw new TypeError("Stored-raw replay must not contact the publisher");
+      }),
+    );
 
     const replayed = async (
       stored: Pick<StoredRawReparseInput, "raw" | "contentType" | "metadata">,
@@ -2089,6 +2257,44 @@ describe("cz-nss buildDecision", () => {
     ]);
   });
 
+  test("a rich document with no parsed blocks remains stored beside the fallback text", async () => {
+    const payload = await listedRow();
+    const html = "<html><body><p>pokračování</p></body></html>";
+    expect(isNssDocumentPlaceholder(html)).toBe(false);
+    expect(
+      parseNssDecisionHtml({
+        caseNumber: "1 Az 4/2026",
+        ecli: undefined,
+        court: "Městský soud v Praze",
+        decisionDate: undefined,
+        decisionType: undefined,
+        sourceUrl: undefined,
+        html,
+        detailMetadata: {},
+      }).documentAst.blocks,
+    ).toHaveLength(0);
+    installStub({ search: [] });
+    const served = globalThis.fetch;
+    testFetchState.set(
+      asFetchMock(async (input: string | URL | Request, init?: RequestInit) => {
+        const url = new URL(
+          input instanceof Request ? input.url : String(input),
+        );
+        return url.pathname.startsWith("/DokumentOriginal/Html/")
+          ? htmlResponse(html)
+          : await served(input, init);
+      }),
+    );
+    const built = await reconciliation.buildDecision(payload);
+    if (built.type !== "built") {
+      throw new TypeError("Expected the text fallback to build a decision");
+    }
+    expect(built.decision.fulltext).toContain("Kasační stížnost");
+    const parts = decodeSourceRawEnvelope(built.decision.sourceRaw ?? "");
+    expect(parts?.["document"]).toBe(html);
+    expect(parts?.["text"]).toBe(DOCUMENT_TEXT);
+  });
+
   test("a replay rebuilds the text-served row the crawl built", async () => {
     const payload = await listedRow();
     installStub({ search: [], htmlDocumentStatus: 404 });
@@ -2100,9 +2306,11 @@ describe("cz-nss buildDecision", () => {
     if (reparse === undefined) {
       throw new TypeError("Expected cz-nss to implement stored-raw replay");
     }
-    globalThis.fetch = asFetchMock(() => {
-      throw new TypeError("Stored-raw replay must not contact the publisher");
-    });
+    testFetchState.set(
+      asFetchMock(() => {
+        throw new TypeError("Stored-raw replay must not contact the publisher");
+      }),
+    );
 
     const outcome = await reparse({
       raw: new TextEncoder().encode(built.decision.sourceRaw ?? ""),
@@ -2221,7 +2429,6 @@ describe("cz-nss buildDecision", () => {
 // ── Reads the portal did not answer ──────────────────────
 
 describe("cz-nss reads the portal did not answer", () => {
-  const originalFetch = globalThis.fetch;
   let recording: RecordingLogger;
 
   beforeEach(() => {
@@ -2230,7 +2437,7 @@ describe("cz-nss reads the portal did not answer", () => {
   });
 
   afterEach(() => {
-    globalThis.fetch = originalFetch;
+    testFetchState.restore();
     recording.restore();
   });
 
@@ -2255,8 +2462,8 @@ describe("cz-nss reads the portal did not answer", () => {
   ): { requests: RecordedRequest[] } => {
     const recorded = installStub(stub ?? { search: [] });
     const served = globalThis.fetch;
-    globalThis.fetch = asFetchMock(
-      async (input: string | URL | Request, init?: RequestInit) => {
+    testFetchState.set(
+      asFetchMock(async (input: string | URL | Request, init?: RequestInit) => {
         const url = new URL(
           input instanceof Request ? input.url : String(input),
         );
@@ -2264,7 +2471,7 @@ describe("cz-nss reads the portal did not answer", () => {
           return await Promise.reject(failure());
         }
         return await served(input, init);
-      },
+      }),
     );
     return recorded;
   };
@@ -2378,8 +2585,8 @@ describe("cz-nss reads the portal did not answer", () => {
     installStub(stub);
     const served = globalThis.fetch;
     let detailReads = 0;
-    globalThis.fetch = asFetchMock(
-      async (input: string | URL | Request, init?: RequestInit) => {
+    testFetchState.set(
+      asFetchMock(async (input: string | URL | Request, init?: RequestInit) => {
         const url = new URL(
           input instanceof Request ? input.url : String(input),
         );
@@ -2390,7 +2597,7 @@ describe("cz-nss reads the portal did not answer", () => {
           }
         }
         return await served(input, init);
-      },
+      }),
     );
     return { detailReads: () => detailReads };
   };
@@ -2595,8 +2802,8 @@ describe("cz-nss reads the portal did not answer", () => {
   ): { requests: RecordedRequest[] } => {
     const recorded = installStub({ search: [] });
     const served = globalThis.fetch;
-    globalThis.fetch = asFetchMock(
-      async (input: string | URL | Request, init?: RequestInit) => {
+    testFetchState.set(
+      asFetchMock(async (input: string | URL | Request, init?: RequestInit) => {
         const url = new URL(
           input instanceof Request ? input.url : String(input),
         );
@@ -2604,7 +2811,7 @@ describe("cz-nss reads the portal did not answer", () => {
           return await Promise.resolve().then(fail);
         }
         return await served(input, init);
-      },
+      }),
     );
     return recorded;
   };
@@ -2684,13 +2891,15 @@ describe("cz-nss reads the portal did not answer", () => {
     test(`holds a row whose text read answers ${status} with the typed refusal`, async () => {
       installStub({ search: [], htmlDocumentStatus: 404 });
       const served = globalThis.fetch;
-      globalThis.fetch = asFetchMock(
-        async (input: string | URL | Request, init?: RequestInit) =>
-          new URL(
-            input instanceof Request ? input.url : String(input),
-          ).pathname.startsWith("/DokumentOriginal/Text/")
-            ? htmlResponse("", status)
-            : await served(input, init),
+      testFetchState.set(
+        asFetchMock(
+          async (input: string | URL | Request, init?: RequestInit) =>
+            new URL(
+              input instanceof Request ? input.url : String(input),
+            ).pathname.startsWith("/DokumentOriginal/Text/")
+              ? htmlResponse("", status)
+              : await served(input, init),
+        ),
       );
 
       const built = await buildCzNssDecision({
@@ -2736,4 +2945,38 @@ describe("cz-nss reads the portal did not answer", () => {
     expect(built.type).toBe("built");
     expect(built.decision.fulltext).toContain("Kasační stížnost");
   });
+});
+
+describe("NSS publisher retention", () => {
+  test("retains reporter components from table cells and keyword codes", () => {
+    const detail = parseCzNssDetailMetadata(`
+      <table><tr><td class="det-textval" data-field-id="nssjudikat">3540</td>
+      <td class="det-textval" data-field-id="nssrok">2017</td>
+      <td class="det-textval" data-field-id="nsssesit">4</td></tr></table>
+      <div data-field-id="vyhledavanidlehesel"><span class="det-textval">017</span></div>
+    `);
+    expect(detail).toMatchObject({
+      nssReporterNumber: "3540",
+      nssReporterYear: "2017",
+      nssReporterIssue: "4",
+      nssKeywordSearchCode: "017",
+    });
+  });
+});
+
+test("registry metadata belongs to the exact decision rather than its referral", () => {
+  const html = `<table><thead><tr><th>Spisová značka</th><th>Předkládací usnesení</th><th>Rozhodnutí RS</th><th>Stav</th></tr></thead><tbody>
+    <tr><td>RS 20/2017</td><td><a href="/referral">5 As 140/2014-76</a></td><td><a href="/other">8 As 1/2017-42</a></td><td>Other status</td></tr>
+    <tr><td>RS 10/2016</td><td><a href="/earlier">5 As 140/2014-53</a></td><td><a href="/original">5 As 140/2014-76</a></td><td>Rozhodnuto</td></tr>
+    <tr class="nssext-extra-table-row"><td><strong>Anotace:</strong> Publisher annotation</td></tr>
+  </tbody></table>`;
+  expect(
+    readNssRegistryMetadata({ html, reference: "5 As 140/2014-76" }),
+  ).toMatchObject({
+    nssRegistryCaseNumber: "RS 10/2016",
+    nssRegistryReferral: "5 As 140/2014-53",
+    nssRegistryStatus: "Rozhodnuto",
+    nssRegistryAnnotation: "Publisher annotation",
+  });
+  expect(readNssRegistryMetadata({ html, reference: "missing" })).toEqual({});
 });

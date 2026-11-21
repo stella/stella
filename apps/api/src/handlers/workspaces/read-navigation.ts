@@ -1,49 +1,63 @@
-import { Result } from "better-result";
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
-import { t } from "elysia";
+import { panic, Result } from "better-result";
+import { and, desc, eq, sql } from "drizzle-orm";
+import * as v from "valibot";
+
+import { numberFromString } from "@stll/api-contract/http-input";
+import { WORKSPACE_STATUS } from "@stll/api-contract/workspace-status";
 
 import { contacts, workspaces, workspaceViews } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { tPaginationCursor } from "@/api/lib/custom-schema";
+import {
+  AVT_LAYOUT_DISCOVERY_FEATURE_ACCESS,
+  avtLayoutVisibilityCondition,
+  avtViewAccessStatus,
+} from "@/api/lib/auth/feature-access/view-eligibility";
+import { paginationCursorSchema } from "@/api/lib/custom-schema";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { isFeatureEnabled } from "@/api/lib/feature-access/policy";
 import { LIMITS } from "@/api/lib/limits";
 import { createCursorPage } from "@/api/lib/pagination";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedWorkspaceId } from "@/api/lib/safe-id-boundaries";
+import { visibleWorkspaceSql } from "@/api/lib/workspaces/visible-workspace-sql";
 
 const WORKSPACE_NAVIGATION_STATUS_SCOPE = {
   ACTIVE: "active",
   ACTIVE_AND_ARCHIVED: "active-and-archived",
 } as const;
 
-const NON_DELETING_WORKSPACE_STATUSES = ["active", "archived"] as const;
-
-export const workspaceNavigationCursor = createTimestampIdCursorCodec({
+const workspaceNavigationCursor = createTimestampIdCursorCodec({
   column: workspaces.lastActivityAt,
   brandId: brandPersistedWorkspaceId,
 });
 
 const config = {
+  contract: "patch",
+  featureAccess: AVT_LAYOUT_DISCOVERY_FEATURE_ACCESS,
   permissions: {
     workspace: ["read"],
   },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "ui_navigation_state" },
   access: "read",
-  query: t.Object({
-    cursor: t.Optional(tPaginationCursor()),
-    limit: t.Optional(
-      t.Integer({
-        minimum: 1,
-        maximum: LIMITS.workspaceNavigationPageSizeMax,
-      }),
+  query: v.object({
+    cursor: v.optional(paginationCursorSchema()),
+    limit: v.optional(
+      numberFromString(
+        v.pipe(
+          v.number(),
+          v.integer(),
+          v.minValue(1),
+          v.maxValue(LIMITS.workspaceNavigationPageSizeMax),
+        ),
+      ),
     ),
-    statusScope: t.Optional(
-      t.Union([
-        t.Literal(WORKSPACE_NAVIGATION_STATUS_SCOPE.ACTIVE),
-        t.Literal(WORKSPACE_NAVIGATION_STATUS_SCOPE.ACTIVE_AND_ARCHIVED),
+    statusScope: v.optional(
+      v.union([
+        v.literal(WORKSPACE_NAVIGATION_STATUS_SCOPE.ACTIVE),
+        v.literal(WORKSPACE_NAVIGATION_STATUS_SCOPE.ACTIVE_AND_ARCHIVED),
       ]),
     ),
   }),
@@ -51,7 +65,18 @@ const config = {
 
 const readWorkspaceNavigation = createSafeRootHandler(
   config,
-  async function* ({ query, safeDb, session }) {
+  async function* ({ query, safeDb, session, user, featureAccessSnapshot }) {
+    if (featureAccessSnapshot === undefined) {
+      return panic(
+        "Authenticated navigation requires a feature access snapshot",
+      );
+    }
+    const avtAvailable =
+      avtViewAccessStatus({
+        snapshot: featureAccessSnapshot,
+        organizationId: session.activeOrganizationId,
+        userId: user.id,
+      }) === "available";
     const statusScope =
       query.statusScope ?? WORKSPACE_NAVIGATION_STATUS_SCOPE.ACTIVE;
     const limit = normalizeTenantPageLimit(
@@ -63,8 +88,8 @@ const readWorkspaceNavigation = createSafeRootHandler(
     const conditions = [
       eq(workspaces.organizationId, session.activeOrganizationId),
       statusScope === WORKSPACE_NAVIGATION_STATUS_SCOPE.ACTIVE
-        ? eq(workspaces.status, "active")
-        : inArray(workspaces.status, NON_DELETING_WORKSPACE_STATUSES),
+        ? eq(workspaces.status, WORKSPACE_STATUS.active)
+        : visibleWorkspaceSql(),
     ];
 
     if (query.cursor) {
@@ -93,6 +118,7 @@ const readWorkspaceNavigation = createSafeRootHandler(
               select ${workspaceViews.id}
               from ${workspaceViews}
               where ${workspaceViews.workspaceId} = ${workspaces.id}
+              and ${avtLayoutVisibilityCondition(workspaceViews.layout, avtAvailable ? "available" : "unavailable")}
               order by ${workspaceViews.position}, ${workspaceViews.id}
               limit 1
             )`.as("default_view_id"),
@@ -144,6 +170,12 @@ const readWorkspaceNavigation = createSafeRootHandler(
     );
 
     return Result.ok({
+      features: {
+        timeBilling: isFeatureEnabled(featureAccessSnapshot, "time-billing", {
+          organizationId: session.activeOrganizationId,
+          userId: user.id,
+        }),
+      },
       items,
       limit: page.limit,
       nextCursor: page.nextCursor,

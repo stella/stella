@@ -7,3 +7,12 @@ import type { ChatToolError } from "@/api/lib/errors/tagged-errors";
 export const raiseChatToolError = (error: ChatToolError): never => {
   throw error;
 };
+
+/**
+ * Re-raise the failure a wrapped tool's server function threw. Wrappers that
+ * audit or fence a call settle the inner function into a `Result`, then report
+ * its failure back to TanStack AI through this one module.
+ */
+export const reraiseChatToolFailure = (error: unknown): never => {
+  throw error;
+};

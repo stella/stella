@@ -1,19 +1,31 @@
 import { panic, TaggedError } from "better-result";
 
+import { CASE_LAW_JURISDICTIONS } from "@stll/api-contract/case-law-jurisdictions";
+
+import { isCaseLawIndexGroup } from "@/api/lib/legal-search/case-law-index-groups";
 import type { CorpusFamily } from "@/api/lib/legal-search/corpus-generation-contract";
+import { PROVISION_KEYS_FIELD } from "@/api/lib/legal-search/corpus-index-config";
+import {
+  caseLawManifestGroups,
+  corpusIndexGroupContractForJurisdiction,
+  resolveCorpusIndexGroupContract,
+} from "@/api/lib/legal-search/corpus-index-group-contract";
 import {
   corpusIndexFastFields,
+  corpusIndexManifestCoversJurisdiction,
+  corpusIndexPositionalFields,
+  type CorpusIndexPublisherFields,
   corpusIndexPublisherFields,
+  type CorpusIndexStemFields,
   corpusIndexStemFields,
   requireCorpusIndexManifest,
-  type CorpusIndexPublisherFields,
-  type CorpusIndexStemFields,
 } from "@/api/lib/legal-search/corpus-index-manifest";
 import type {
   CorpusLegacyStemming,
   CorpusStemming,
 } from "@/api/lib/legal-search/corpus-query";
 import {
+  caseLawDocumentStemLanguages,
   corpusMorphologyLanguage,
   documentMorphologyLanguage,
 } from "@/api/lib/legal-search/morphology/corpus-language";
@@ -46,6 +58,11 @@ export type CaseLawIndexReadContract = {
    * narrower query but an invalid one.
    */
   stemFields: CorpusIndexStemFields | null;
+  /**
+   * The fields this generation indexes with positions, read off its mapping.
+   * Only these can answer a phrase.
+   */
+  positionalFields: ReadonlySet<string>;
   /**
    * Full-text fields this generation maps beside the ones a bare term already
    * reaches. Named explicitly by a query or not matched at all.
@@ -125,14 +142,78 @@ export const requireCaseLawDecisionCountField = (
   return panic(message, new CorpusIndexReadContractError({ message }));
 };
 
+/**
+ * What one index group of a case-law generation lets a query name. Per group
+ * rather than per generation, because a group created under a contract of its
+ * own maps fields its generation's other groups do not, and a clause over a
+ * field the index never declared is not a narrower query but an invalid one.
+ */
+export type CaseLawIndexGroupReadContract = {
+  /** The raw multi-valued provision key field, or null where none is mapped. */
+  provisionKeysField: string | null;
+};
+
+/**
+ * The read contract of one index group of a case-law generation. A group the
+ * generation does not hold maps nothing in it.
+ */
+export const caseLawIndexGroupReadContract = (
+  generation: string,
+  indexGroup: string,
+): CaseLawIndexGroupReadContract => {
+  const manifest = requireCorpusIndexManifest("case_law", generation);
+  if (manifest.family !== "case_law") {
+    return panic(`Not a case-law generation: ${generation}`);
+  }
+  const held =
+    isCaseLawIndexGroup(indexGroup) &&
+    caseLawManifestGroups(manifest).includes(indexGroup);
+  const contract = held
+    ? resolveCorpusIndexGroupContract({ manifest, indexGroup })
+    : null;
+  return {
+    provisionKeysField:
+      contract?.type === "provision_keys_v1" ? PROVISION_KEYS_FIELD : null,
+  };
+};
+
+/**
+ * The read contract of the one group a jurisdiction's decisions are written
+ * to in this generation: does the target serving this jurisdiction have
+ * provision keys? A read with no jurisdiction spans groups and so names no
+ * group-specific field.
+ */
+export const caseLawJurisdictionReadContract = (
+  generation: string,
+  jurisdiction: string | undefined,
+): CaseLawIndexGroupReadContract => {
+  if (jurisdiction === undefined) {
+    return { provisionKeysField: null };
+  }
+  const manifest = requireCorpusIndexManifest("case_law", generation);
+  if (
+    manifest.family !== "case_law" ||
+    !corpusIndexManifestCoversJurisdiction(manifest, jurisdiction)
+  ) {
+    return { provisionKeysField: null };
+  }
+  const contract = corpusIndexGroupContractForJurisdiction(
+    manifest,
+    jurisdiction,
+  );
+  return {
+    provisionKeysField:
+      contract.type === "provision_keys_v1" ? PROVISION_KEYS_FIELD : null,
+  };
+};
+
 export type LegislationIndexReadContract = {
   family: "legislation";
   openingPassageQuery: string;
 };
 
 export type CorpusIndexReadContract =
-  | CaseLawIndexReadContract
-  | LegislationIndexReadContract;
+  CaseLawIndexReadContract | LegislationIndexReadContract;
 
 /**
  * Query capabilities owned by a generation's physical schema. Every field name
@@ -163,6 +244,7 @@ export function corpusIndexReadContract(
         openingPassageQuery: `${manifest.projection.openingField}:true`,
         yearFacetField: manifest.projection.yearFacetField,
         stemFields: corpusIndexStemFields(manifest),
+        positionalFields: corpusIndexPositionalFields(manifest),
         ...publisherQueryFields(corpusIndexPublisherFields(manifest)),
       };
     case "legislation":
@@ -184,10 +266,32 @@ type CaseLawCorpusQueryFieldsOptions = {
   language: string | undefined;
 };
 
+type CaseLawDocumentStems = {
+  /** Sorted, at least one. */
+  languages: readonly [MorphologyLanguage, ...MorphologyLanguage[]];
+  /** The headnote's stem field. */
+  headnoteField: string;
+  /** Each passage's own stem field, beside its surface `text`. */
+  textField: string;
+};
+
 export type CaseLawCorpusQueryFields = {
   surfaceFields: readonly string[];
   keywordFields: readonly string[];
   stemming: CorpusStemming | null;
+  /**
+   * The stemmers the searched documents' stems were written with, for the
+   * fields that hold each document's stems in its own language (the
+   * decision-level terms, the headnote stems); null where the generation
+   * writes no stems or no searched document's language has a stemmer.
+   *
+   * Not {@link stemming}'s one language: that answers which language the
+   * reader writes in, and a search spanning several (unscoped, or the
+   * European index without a language filter) has none, yet its documents
+   * were each stemmed under their own. Asking those fields only for the typed
+   * form would miss every inflection.
+   */
+  documentStems: CaseLawDocumentStems | null;
   legacyStemming?: CorpusLegacyStemming | undefined;
   /**
    * The words a query in this language may stop requiring, or null where it
@@ -239,12 +343,52 @@ export const caseLawQueryLanguage = ({
     ? corpusMorphologyLanguage(jurisdiction)
     : documentMorphologyLanguage(language);
 
+/**
+ * The stemmers the documents a case-law read reaches were projected under.
+ *
+ * A language filter names the documents' language, so it answers alone (and
+ * a language with no stemmer answers none). Otherwise the documents are those
+ * of the read's jurisdiction, or of every jurisdiction the generation holds,
+ * each in the languages its jurisdiction declares: the same declaration the
+ * projection refuses an undeclared language against, so the two sides cannot
+ * drift.
+ */
+const caseLawReadDocumentStemLanguages = ({
+  generation,
+  jurisdiction,
+  language,
+}: CaseLawCorpusQueryFieldsOptions): readonly MorphologyLanguage[] => {
+  if (language !== undefined) {
+    const stem = documentMorphologyLanguage(language);
+    return stem === null ? [] : [stem];
+  }
+  if (jurisdiction !== undefined) {
+    return caseLawDocumentStemLanguages([jurisdiction]);
+  }
+  const manifest = requireCorpusIndexManifest("case_law", generation);
+  return caseLawDocumentStemLanguages(
+    CASE_LAW_JURISDICTIONS.filter((held) =>
+      corpusIndexManifestCoversJurisdiction(manifest, held),
+    ),
+  );
+};
+
+const caseLawDocumentStems = (
+  languages: readonly MorphologyLanguage[],
+  { headnoteField, textField }: { headnoteField: string; textField: string },
+): CaseLawDocumentStems | null => {
+  const [first, ...rest] = languages;
+  return first === undefined
+    ? null
+    : { languages: [first, ...rest], headnoteField, textField };
+};
+
 export const caseLawCorpusQueryFields = ({
   generation,
   jurisdiction,
   language,
 }: CaseLawCorpusQueryFieldsOptions): CaseLawCorpusQueryFields => {
-  const { stemFields, searchableFields, keywordFields } =
+  const { stemFields, positionalFields, searchableFields, keywordFields } =
     corpusIndexReadContract("case_law", generation);
   const stemLanguage = caseLawQueryLanguage({ jurisdiction, language });
   const legacyStemmer =
@@ -261,12 +405,30 @@ export const caseLawCorpusQueryFields = ({
     surfaceFields: searchableFields,
     keywordFields,
     functionWords: functionWordsFor(stemLanguage),
+    documentStems:
+      stemFields === null
+        ? null
+        : caseLawDocumentStems(
+            caseLawReadDocumentStemLanguages({
+              generation,
+              jurisdiction,
+              language,
+            }),
+            {
+              headnoteField: stemFields.publisherSummary,
+              textField: stemFields.text,
+            },
+          ),
     stemming:
       stemFields === null || stemLanguage === null
         ? null
         : {
             language: stemLanguage,
             fields: [stemFields.text, stemFields.publisherSummary],
+            positionlessFields: [
+              stemFields.text,
+              stemFields.publisherSummary,
+            ].filter((field) => !positionalFields.has(field)),
           },
   };
 };

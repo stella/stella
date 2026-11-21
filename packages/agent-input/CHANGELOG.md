@@ -1,5 +1,115 @@
 # @stll/agent-input
 
+## 0.5.1
+
+### Patch Changes
+
+- [#8562](https://github.com/stella/stella/pull/8562) [`33ec58c`](https://github.com/stella/stella/commit/33ec58c4131a9fbca812b32dac502913684e6d63) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Update the shared time dependency to 0.4.3 with Temporal polyfill 1.0.8.
+
+## 0.5.0
+
+### Minor Changes
+
+- [#8898](https://github.com/stella/stella/pull/8898) [`f1d0195`](https://github.com/stella/stella/commit/f1d019508fa4bdcd2160b4f90d555ce0ed99cc10) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `normalizeEli` takes `urnPrefixes`: a work named by a URN under one of them (a publisher without ELIs) is read as that URN, in any case and with surrounding space trimmed, and a citation the caller reads as such a URN is accepted.
+
+## 0.4.5
+
+### Patch Changes
+
+- Updated dependencies [[`2bd32fc`](https://github.com/stella/stella/commit/2bd32fc25f460bde72f255886a4008de8ac18b70)]:
+  - @stll/template-conditions@0.7.0
+
+## 0.4.4
+
+### Patch Changes
+
+- [#8537](https://github.com/stella/stella/pull/8537) [`001c640`](https://github.com/stella/stella/commit/001c640e64cb00e3948bdf68a18a40347c65a40f) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Build declarations through the native tsrs API supported by tsdown 0.23.7, resolving the compiler from each package.
+- Updated dependencies [[`001c640`](https://github.com/stella/stella/commit/001c640e64cb00e3948bdf68a18a40347c65a40f)]:
+  - @stll/template-conditions@0.6.6
+
+## 0.4.3
+
+### Patch Changes
+
+- Updated dependencies [[`74bfae6`](https://github.com/stella/stella/commit/74bfae60cecf3be82e6d9554cf3448ef9a3c17eb)]:
+  - @stll/text-normalize@0.8.0
+
+## 0.4.2
+
+### Patch Changes
+
+- [#7924](https://github.com/stella/stella/pull/7924) [`8bcf336`](https://github.com/stella/stella/commit/8bcf336068af58ccb4a28150967aa128e586ba88) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Update compatible runtime dependencies: `@stll/time` 0.4.2, `temporal-polyfill` 1.0.6, `lucide-react` 1.65.0, Tiptap 3.32.1 and the MCP client 2.4.0.
+- Updated dependencies [[`8bcf336`](https://github.com/stella/stella/commit/8bcf336068af58ccb4a28150967aa128e586ba88), [`c1f546a`](https://github.com/stella/stella/commit/c1f546aff35c2c7e3d97a380642161b0c79799ba)]:
+  - @stll/template-conditions@0.6.5
+  - @stll/text-normalize@0.7.0
+
+## 0.4.1
+
+### Patch Changes
+
+- Updated dependencies [[`228b271`](https://github.com/stella/stella/commit/228b271affce5a3f531e0adf036b5e02e3494f97)]:
+  - @stll/text-normalize@0.6.0
+
+## 0.4.0
+
+### Minor Changes
+
+- Share JSON Schema optional-value handling through the agent-input package.
+
+## 0.3.0
+
+### Minor Changes
+
+- [#7607](https://github.com/stella/stella/pull/7607) [`34a741f`](https://github.com/stella/stella/commit/34a741fa7878e68f1cf01093d1208719e783df75) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Normalize surrounding whitespace in slug inputs while preserving their lowercase token identity.
+
+## 0.2.2
+
+### Patch Changes
+
+- Updated dependencies [[`0ecb2de`](https://github.com/stella/stella/commit/0ecb2de044bc19abd46d44ac933d0f3c1cd724ef), [`15e7031`](https://github.com/stella/stella/commit/15e7031924012f3998e399392d1add7eb603583d)]:
+  - @stll/text-normalize@0.5.0
+
+## 0.2.1
+
+### Patch Changes
+
+- Updated dependencies [[`c89ddbb`](https://github.com/stella/stella/commit/c89ddbb42c973e447f05dcf0f30c124b7462824b)]:
+  - @stll/text-normalize@0.4.0
+
+## 0.2.0
+
+### Minor Changes
+
+- [#5894](https://github.com/stella/stella/pull/5894) [`678a9d5`](https://github.com/stella/stella/commit/678a9d5c93cd72ff4d94d0bdb23c159982f710c9) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add strict whole-token numeric parsers for machine input. Reject malformed CLI pagination tokens while preserving localized tool-value normalization.
+
+## 0.1.8
+
+### Patch Changes
+
+- [#6011](https://github.com/stella/stella/pull/6011) [`6f9f7d4`](https://github.com/stella/stella/commit/6f9f7d46bd87eda5bf37efc402e7611f21044633) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Update the fuzzy-search dependency to 1.4.0.
+
+## 0.1.7
+
+### Patch Changes
+
+- [#6093](https://github.com/stella/stella/pull/6093) [`0e4c5d2`](https://github.com/stella/stella/commit/0e4c5d2457e5f027e1e986d8c5c96c7ae474c9f5) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Closed enum near-miss suggestions count Unicode scalar values, including astral characters.
+
+- [#6284](https://github.com/stella/stella/pull/6284) [`438816f`](https://github.com/stella/stella/commit/438816fdbd3c3e0b1ac8d8211a45feb2ad6109b0) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Depends on the published @stll/time release.
+
+## 0.1.6
+
+### Patch Changes
+
+- Updated dependencies [[`df74ff6`](https://github.com/stella/stella/commit/df74ff6f4cd3947f948a5d2b227ecb852ae4f24a), [`3e92069`](https://github.com/stella/stella/commit/3e92069e5fb6a491f432adc849aef76e993805e7)]:
+  - @stll/text-normalize@0.3.0
+
+## 0.1.5
+
+### Patch Changes
+
+- Updated dependencies [[`d532682`](https://github.com/stella/stella/commit/d5326822357958276e9fbfae7eabf009a9a3a5e3)]:
+  - @stll/text-normalize@0.2.0
+
 ## 0.1.4
 
 ### Patch Changes

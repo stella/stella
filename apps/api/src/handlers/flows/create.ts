@@ -13,6 +13,7 @@ import { syncFlowScheduleTrigger } from "@/api/lib/flows/sync-flow-schedule-trig
 import { LIMITS } from "@/api/lib/limits";
 
 const config = {
+  contract: "patch",
   description:
     "Create an automation flow definition in the organization: name, " +
     "description, ordered steps, a trigger, and whether it is enabled. The " +
@@ -99,8 +100,7 @@ const createFlowDefinition = createSafeRootHandler(
     // never throws).
     await syncFlowScheduleTrigger({
       id: flowId,
-      trigger: input.trigger,
-      enabled: input.enabled,
+      organizationId,
     });
 
     return Result.ok({ id: inserted.id });

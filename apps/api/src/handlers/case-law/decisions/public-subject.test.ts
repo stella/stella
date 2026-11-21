@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
 
 import {
-  isSubjectGatedHandler,
-  subjectGatedHandlers,
+  isSubjectGatedDefinition,
+  subjectGatedDefinitions,
 } from "@/api/handlers/case-law/decisions/public-subject";
 import { publicCaseLawRoute } from "@/api/handlers/case-law/public-routes";
 
@@ -23,9 +23,15 @@ const SUBJECT_FREE_ROUTES = [
   // the redistribution gate the subject factory would apply per row is
   // applied once, to the source catalogue, so a withheld feed reaches none
   // of the figures.
+  // The browse tree names courts and periods, never a decision: its court
+  // list reads the policy-filtered folded counts, and its calendar counts
+  // rows of a court the court list admitted.
+  "GET /case/browse/calendar",
+  "GET /case/browse/courts",
   "GET /case/coverage",
   "GET /case/decisions",
   "GET /case/decisions/facets",
+  "GET /case/decisions/filter-validation",
   "GET /case/decisions/latest",
   "GET /case/decisions/status",
   // A judge's portrait belongs to the roster, not to any one decision: the
@@ -42,30 +48,22 @@ const routeId = (route: { method: string; path: string }) =>
   `${route.method} ${route.path}`;
 
 describe("public decision routes are gated by construction", () => {
-  const routes = publicCaseLawRoute.routes
-    .map((route) => ({
-      handler: route.handler,
-      method: route.method,
-      path: route.path,
-    }))
-    // Elysia mounts internal entries (HEAD, error pages) that carry no
-    // handler of ours; the census is about the routes this slice declares.
-    .filter((route) => typeof route.handler === "function");
+  const routes = publicCaseLawRoute;
 
   const subjectFree = new Set<string>(SUBJECT_FREE_ROUTES);
 
   test("every route that is not declared subject-free is gated", () => {
     const ungated = routes
       .filter((route) => !subjectFree.has(routeId(route)))
-      .filter((route) => !isSubjectGatedHandler(route.handler))
+      .filter((route) => !isSubjectGatedDefinition(route.definition))
       .map(routeId);
     expect(ungated).toEqual([]);
   });
 
   test("every factory-made handler is mounted", () => {
-    const mounted = new Set<unknown>(routes.map((route) => route.handler));
-    const orphaned = [...subjectGatedHandlers()].filter(
-      (handler) => !mounted.has(handler),
+    const mounted = new Set<unknown>(routes.map((route) => route.definition));
+    const orphaned = [...subjectGatedDefinitions()].filter(
+      (definition) => !mounted.has(definition),
     );
     expect(orphaned).toEqual([]);
   });
@@ -73,7 +71,7 @@ describe("public decision routes are gated by construction", () => {
   test("no route declared subject-free carries the gate", () => {
     const misapplied = routes
       .filter((route) => subjectFree.has(routeId(route)))
-      .filter((route) => isSubjectGatedHandler(route.handler))
+      .filter((route) => isSubjectGatedDefinition(route.definition))
       .map(routeId);
     expect(misapplied).toEqual([]);
   });
@@ -88,16 +86,19 @@ describe("public decision routes are gated by construction", () => {
 
   test("the census covers the routes this slice is known to expose", () => {
     const gated = routes
-      .filter((route) => isSubjectGatedHandler(route.handler))
+      .filter((route) => isSubjectGatedDefinition(route.definition))
       .map(routeId)
       .toSorted();
     expect(gated).toEqual([
       "GET /case/decisions/:decisionId",
+      "GET /case/decisions/:decisionId/anchor-redirects",
       "GET /case/decisions/:decisionId/citations",
       "GET /case/decisions/:decisionId/citations/leading",
       "GET /case/decisions/:decisionId/citations/summary",
       "GET /case/decisions/:decisionId/provisions",
+      "GET /case/decisions/:decisionId/summary",
       "GET /case/decisions/by-slug/:slug",
+      "POST /case/decisions/quotes/verify",
     ]);
   });
 });

@@ -6,21 +6,23 @@ import {
 import { useRouter } from "@tanstack/react-router";
 import { panic } from "better-result";
 
+import { DEFAULT_FILE_PROPERTY_NAME } from "@stll/api-contract/property-policy";
+
+import { getTranslator } from "@/i18n/translator";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
+import { invokeCapability } from "@/lib/capabilities/capability-request";
 import { detached } from "@/lib/detached";
 import {
   shouldRetryAPIRequest,
   toAPIError,
-  unwrapEden,
+  unwrapApiResponse,
 } from "@/lib/errors/api";
+import { notifyUserError } from "@/lib/errors/user-toast";
+import { useIdempotentMutation } from "@/lib/idempotency/use-idempotent-mutation";
 import { toSafeId } from "@/lib/safe-id";
 import { workspacesKeys } from "@/lib/workspaces/queries";
 import { useTableStore } from "@/lib/workspaces/table-store";
-
-// Hardcoded in English: these are persisted in the DB and shared
-// across all organization members regardless of their locale.
-const DEFAULT_FILE_PROPERTY_NAME = "Documents";
 
 type CreateWorkspaceVars = {
   // Omit `clientId` to create a personal matter (initially visible
@@ -35,9 +37,9 @@ export const useCreateWorkspace = () => {
   const analytics = useAnalytics();
   const queryClient = useQueryClient();
 
-  return useMutation({
-    mutationFn: async (vars: CreateWorkspaceVars) => {
-      const id = crypto.randomUUID();
+  return useIdempotentMutation({
+    mutationFn: async (vars: CreateWorkspaceVars, request) => {
+      const id = request.headers["Idempotency-Key"];
       const response = await api.workspaces.put({
         id: toSafeId<"workspace">(id),
         ...(vars.clientId !== undefined && {
@@ -62,31 +64,32 @@ export const useCreateWorkspace = () => {
       });
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useCreateWorkspace:failure",
+        scope: { type: "handler", handlerId: "useCreateWorkspace:failure" },
+      });
+      notifyUserError(error, getTranslator()("errors.actionFailed"));
     },
   });
 };
 
 type WorkspaceUpdateValueByType = {
-  clientId: string;
   color: string | null;
   leadUserId: string | null;
   name: string;
-  promote: {
-    clientId: string;
-    memberUserIds?: string[];
-  };
   reference: string;
 };
 
 type WorkspaceUpdateType = keyof WorkspaceUpdateValueByType;
 
-export type WorkspaceUpdate = {
-  [Type in WorkspaceUpdateType]: {
-    type: Type;
-    value: WorkspaceUpdateValueByType[Type];
-  };
-}[WorkspaceUpdateType];
+export type WorkspaceUpdate =
+  | { type: "clientId"; value: string; expectedClientId: string | null }
+  | {
+      [Type in WorkspaceUpdateType]: {
+        type: Type;
+        value: WorkspaceUpdateValueByType[Type];
+      };
+    }[WorkspaceUpdateType];
 
 type WorkspaceUpdateRefreshScope = "query-cache" | "route-metadata";
 
@@ -95,7 +98,6 @@ const WORKSPACE_UPDATE_REFRESH_SCOPE = {
   color: "query-cache",
   leadUserId: "query-cache",
   name: "route-metadata",
-  promote: "query-cache",
   reference: "query-cache",
 } as const satisfies Record<
   WorkspaceUpdate["type"],
@@ -113,23 +115,19 @@ export const workspaceUpdateRefreshScope = (update: WorkspaceUpdate) =>
 export const workspaceUpdateBody = (update: WorkspaceUpdate) => {
   switch (update.type) {
     case "clientId":
-      return { clientId: toSafeId<"contact">(update.value) };
+      return {
+        clientId: toSafeId<"contact">(update.value),
+        expectedClientId:
+          update.expectedClientId === null
+            ? null
+            : toSafeId<"contact">(update.expectedClientId),
+      };
     case "color":
       return { color: update.value };
     case "leadUserId":
       return { leadUserId: update.value };
     case "name":
       return { name: update.value };
-    case "promote":
-      return {
-        promote: {
-          clientId: toSafeId<"contact">(update.value.clientId),
-          ...(update.value.memberUserIds &&
-            update.value.memberUserIds.length > 0 && {
-              memberUserIds: update.value.memberUserIds,
-            }),
-        },
-      };
     case "reference":
       return { reference: update.value };
     default: {
@@ -189,13 +187,45 @@ export const useUpdateWorkspace = () => {
       }
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useUpdateWorkspace:failure",
+        scope: { type: "handler", handlerId: "useUpdateWorkspace:failure" },
+      });
+      notifyUserError(error, getTranslator()("errors.actionFailed"));
     },
   });
 };
 
 type ArchiveWorkspaceVars = {
   workspaceId: string;
+};
+
+export const useArchiveWorkspace = () => {
+  const analytics = useAnalytics();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ workspaceId }: ArchiveWorkspaceVars) => {
+      await invokeCapability("matters.archive", async (request) => {
+        const response = await api
+          .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
+          .archive.post({}, request);
+
+        return unwrapApiResponse(response);
+      });
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: workspacesKeys.all,
+      });
+    },
+    onError: (error) => {
+      analytics.captureError(error, {
+        fingerprintKey: "useArchiveWorkspace:failure",
+        scope: { type: "handler", handlerId: "useArchiveWorkspace:failure" },
+      });
+    },
+  });
 };
 
 export const useUnarchiveWorkspace = () => {
@@ -218,7 +248,11 @@ export const useUnarchiveWorkspace = () => {
       });
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useUnarchiveWorkspace:failure",
+        scope: { type: "handler", handlerId: "useUnarchiveWorkspace:failure" },
+      });
+      notifyUserError(error, getTranslator()("errors.actionFailed"));
     },
   });
 };
@@ -245,7 +279,11 @@ export const useDeleteWorkspace = () => {
       useTableStore.getState().dropMatter(workspaceId);
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useDeleteWorkspace:failure",
+        scope: { type: "handler", handlerId: "useDeleteWorkspace:failure" },
+      });
+      notifyUserError(error, getTranslator()("errors.actionFailed"));
     },
   });
 };
@@ -259,7 +297,7 @@ export const useDuplicateWorkspace = () => {
   const analytics = useAnalytics();
   const queryClient = useQueryClient();
 
-  return useMutation({
+  return useIdempotentMutation({
     mutationFn: async ({
       includeContent,
       workspaceId,
@@ -270,7 +308,7 @@ export const useDuplicateWorkspace = () => {
           includeContent,
         });
 
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onSuccess: () => {
       detached(
@@ -279,7 +317,11 @@ export const useDuplicateWorkspace = () => {
       );
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useDuplicateWorkspace:failure",
+        scope: { type: "handler", handlerId: "useDuplicateWorkspace:failure" },
+      });
+      notifyUserError(error, getTranslator()("errors.actionFailed"));
     },
   });
 };

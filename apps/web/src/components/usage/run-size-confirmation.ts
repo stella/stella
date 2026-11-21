@@ -5,7 +5,7 @@ import { toAPIError } from "@/lib/errors/api";
  * go-ahead. The body carries the estimate; the caller re-issues the same
  * request with `confirmedUnits` covering it.
  */
-export const RUN_CONFIRMATION_STATUS = 428;
+const RUN_CONFIRMATION_STATUS = 428;
 
 export type RunSizeConfirmationDetail = {
   estimatedUnits: number;

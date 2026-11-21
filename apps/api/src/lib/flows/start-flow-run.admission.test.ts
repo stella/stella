@@ -1,20 +1,25 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import { createTestState } from "@stll/test-state";
+
 import { safeDbFromScoped } from "@/api/db/safe-db";
 import type { flowDefinitions } from "@/api/db/schema";
 import { env } from "@/api/env";
+import { authorizeHandlerRunSize } from "@/api/lib/api-handlers";
 import { createSafeId } from "@/api/lib/branded-types";
 import { startAutomatedFlowRun } from "@/api/lib/flows/start-automated-flow-run";
 import { startFlowRun } from "@/api/lib/flows/start-flow-run";
 import { ActionAdmissionError } from "@/api/lib/rate-limit/action-admission";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { PLAIN_MEMBER_FACTS } from "@/api/tests/helpers/member-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const organizationId = mintAuthProviderId<"organization">();
 const userId = mintAuthProviderId<"user">();
 const workspaceId = createSafeId<"workspace">();
 const definitionId = createSafeId<"flowDefinition">();
+const state = createTestState({ file: import.meta.path, config: env });
 const definition = {
   id: definitionId,
   name: "Review document",
@@ -33,16 +38,137 @@ const definition = {
 >;
 
 const withAdmission = async (run: () => Promise<void>) => {
-  const previous = env.FEATURE_ACTION_ADMISSION;
-  env.FEATURE_ACTION_ADMISSION = true;
-  try {
-    await run();
-  } finally {
-    env.FEATURE_ACTION_ADMISSION = previous;
-  }
+  state.setConfig("FEATURE_ACTION_ADMISSION", true);
+  await run();
 };
 
 describe("flow kickoff acceptance", () => {
+  test("pending automated admission retains its definition and execution input", async () => {
+    const entered = Promise.withResolvers<undefined>();
+    const proceed = Promise.withResolvers<undefined>();
+    const loadedDefinition = {
+      ...definition,
+      steps: definition.steps.map((step) => ({ ...step })),
+    };
+    const originalInput = createSafeId<"entity">();
+    const inputEntityIds = [originalInput];
+    const written: unknown[] = [];
+    const result = startAutomatedFlowRun(
+      {
+        definitionId,
+        organizationId,
+        workspaceId,
+        createdByUserId: userId,
+        triggerSource: { type: "schedule" },
+        inputEntityIds,
+        logContext: {},
+      },
+      {
+        findDefinition: async () => loadedDefinition,
+        resolveAuthorization: async () => {
+          entered.resolve(undefined);
+          await proceed.promise;
+          return {
+            billingAccess: false,
+            memberId: "member",
+            email: "member@example.test",
+            role: "owner",
+            workspace: { id: workspaceId, status: "active" },
+            ...PLAIN_MEMBER_FACTS,
+          };
+        },
+        insertWithinCap: async ({ rows }) => {
+          written.push(rows.run, rows.steps);
+          return { outcome: "started" };
+        },
+        enqueueStep: async () => await Promise.resolve(),
+        kickoff: async ({ run }) =>
+          await run(new AbortController().signal, async () => undefined),
+      },
+    );
+    await entered.promise;
+    inputEntityIds.push(createSafeId<"entity">());
+    loadedDefinition.steps.push({
+      kind: "review-gate",
+      name: "Changed",
+      instructions: "Changed instructions.",
+    });
+    proceed.resolve(undefined);
+    await result;
+    expect(written).toHaveLength(2);
+    expect(written.at(0)).toMatchObject({ inputEntityIds: [originalInput] });
+    expect(written.at(1)).toHaveLength(1);
+  });
+
+  test("pending flow admission retains its definition and execution input", async () => {
+    const entered = Promise.withResolvers<undefined>();
+    const proceed = Promise.withResolvers<undefined>();
+    const loadedDefinition = {
+      ...definition,
+      steps: definition.steps.map((step) => ({ ...step })),
+    };
+    const written: unknown[] = [];
+    const safeDb = safeDbFromScoped(
+      async (run) =>
+        await run(
+          asTestRaw({
+            query: {
+              flowDefinitions: { findFirst: async () => loadedDefinition },
+            },
+            insert: () => ({
+              values: async (rows: unknown) => {
+                written.push(rows);
+              },
+            }),
+          }),
+        ),
+    );
+    const originalInput = createSafeId<"entity">();
+    const inputEntityIds = [originalInput];
+    const options = {
+      admit: async () => {
+        entered.resolve(undefined);
+        await proceed.promise;
+        return await authorizeHandlerRunSize({
+          metering: null,
+          orgAIConfig: null,
+          organizationId,
+          workspaceId,
+          userId,
+          safeDb,
+          estimatedUnits: 0,
+          confirmedUnits: undefined,
+        });
+      },
+      safeDb,
+      organizationId,
+      workspaceId,
+      definitionId,
+      triggerSource: { type: "manual", userId },
+      inputEntityIds,
+      kickoff: async ({ run }) =>
+        await run(new AbortController().signal, async () => undefined),
+      enqueueStep: async () => await Promise.resolve(),
+    } satisfies Parameters<typeof startFlowRun>[0];
+    const result = startFlowRun(options);
+    await entered.promise;
+    inputEntityIds.push(createSafeId<"entity">());
+    loadedDefinition.steps.push({
+      kind: "review-gate",
+      name: "Changed",
+      instructions: "Changed instructions.",
+    });
+    options.triggerSource.userId = mintAuthProviderId<"user">();
+    proceed.resolve(undefined);
+    expect(Result.isOk(await result)).toBe(true);
+    expect(written).toHaveLength(2);
+    expect(written.at(0)).toMatchObject({
+      inputEntityIds: [originalInput],
+      triggerSource: { type: "manual", userId },
+    });
+    expect(written.at(1)).toHaveLength(1);
+  });
+
   test("manual starts enqueue the committed run after a lease abort", async () => {
     await withAdmission(async () => {
       const lease = new AbortController();
@@ -63,13 +189,24 @@ describe("flow kickoff acceptance", () => {
           lease.abort(
             new ActionAdmissionError({
               message: "Lease lost at commit",
-              reason: "unavailable",
+              reason: "lease_lost",
             }),
           );
         }
         return result;
       });
       const result = await startFlowRun({
+        admit: async () =>
+          await authorizeHandlerRunSize({
+            metering: null,
+            orgAIConfig: null,
+            organizationId,
+            workspaceId,
+            userId,
+            safeDb,
+            estimatedUnits: 0,
+            confirmedUnits: undefined,
+          }),
         safeDb,
         organizationId,
         workspaceId,
@@ -94,7 +231,7 @@ describe("flow kickoff acceptance", () => {
 
   test("manual admission refusals retain their original typed error and write nothing", async () => {
     await withAdmission(async () => {
-      for (const reason of ["busy", "unavailable"] as const) {
+      for (const reason of ["busy", "lease_lost"] as const) {
         let inserted = false;
         let enqueued = false;
         const error = new ActionAdmissionError({
@@ -117,6 +254,17 @@ describe("flow kickoff acceptance", () => {
             ),
         );
         const result = await startFlowRun({
+          admit: async () =>
+            await authorizeHandlerRunSize({
+              metering: null,
+              orgAIConfig: null,
+              organizationId,
+              workspaceId,
+              userId,
+              safeDb,
+              estimatedUnits: 0,
+              confirmedUnits: undefined,
+            }),
           safeDb,
           organizationId,
           workspaceId,
@@ -156,6 +304,17 @@ describe("flow kickoff acceptance", () => {
           ),
       );
       const result = await startFlowRun({
+        admit: async () =>
+          await authorizeHandlerRunSize({
+            metering: null,
+            orgAIConfig: null,
+            organizationId,
+            workspaceId,
+            userId,
+            safeDb,
+            estimatedUnits: 0,
+            confirmedUnits: undefined,
+          }),
         safeDb,
         organizationId,
         workspaceId,
@@ -166,7 +325,7 @@ describe("flow kickoff acceptance", () => {
           lease.abort(
             new ActionAdmissionError({
               message: "Lease lost before insertion",
-              reason: "unavailable",
+              reason: "lease_lost",
             }),
           );
           return await run(lease.signal, async () => undefined);
@@ -201,10 +360,12 @@ describe("flow kickoff acceptance", () => {
           {
             findDefinition: async () => definition,
             resolveAuthorization: async () => ({
+              billingAccess: false,
               memberId: "member",
               email: "member@example.test",
               role: "owner",
               workspace: { id: workspaceId, status: "active" },
+              ...PLAIN_MEMBER_FACTS,
             }),
             insertWithinCap: async ({ rows }) => {
               inserted = true;
@@ -212,7 +373,7 @@ describe("flow kickoff acceptance", () => {
               lease.abort(
                 new ActionAdmissionError({
                   message: "Lease lost at commit",
-                  reason: "unavailable",
+                  reason: "lease_lost",
                 }),
               );
               return { outcome: "started" };
@@ -225,7 +386,7 @@ describe("flow kickoff acceptance", () => {
                 lease.abort(
                   new ActionAdmissionError({
                     message: "Lease lost before insertion",
-                    reason: "unavailable",
+                    reason: "lease_lost",
                   }),
                 );
               }

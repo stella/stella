@@ -12,11 +12,13 @@ import type { ChatRefsWritten } from "@/api/lib/chat/ref-registry";
  * call it answers, which is read there.
  */
 const PART_REFS = {
+  activity: "none",
   audio: "none",
   document: "none",
   image: "none",
   "structured-output": "whole",
-  // Stella drops TanStack subagent parts at the persistence boundary.
+  // A tool-mode sub-agent's child runs its own conversation; the parent model
+  // reads only the result of the call that started it, which is read there.
   subagent: "none",
   text: "whole",
   thinking: "whole",
@@ -43,7 +45,7 @@ export const chatRefsWrittenIn = ({
   isServerTool,
   parts,
 }: {
-  isServerTool: (toolName: string) => boolean;
+  isServerTool: (part: Extract<ChatPart, { type: "tool-call" }>) => boolean;
   parts: readonly ChatPart[];
 }): ChatRefsWritten => {
   const values: unknown[] = [];
@@ -58,7 +60,7 @@ export const chatRefsWrittenIn = ({
     if ("input" in part) {
       values.push(part.input);
     }
-    if ("output" in part && isServerTool(part.name)) {
+    if ("output" in part && isServerTool(part)) {
       values.push(part.output);
     }
   }

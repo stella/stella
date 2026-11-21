@@ -4,7 +4,8 @@ import type {
   Block,
   HeadingBlock,
   ParagraphBlock,
-} from "@/api/handlers/case-law/document-ast";
+} from "@stll/legal-ast/document-ast";
+
 import {
   AST_CONTENT_LOST,
   AST_MISSING,
@@ -71,6 +72,15 @@ const MARKER_ONLY_SOURCE =
 // ── Content completeness ────────────────────────────────────
 
 describe("validateAst", () => {
+  test("paragraph input validates extracted text without interpreting it as HTML", () => {
+    const result = validateAst(
+      { type: "paragraphs", paragraphs: ["alpha <missingword> omega"] },
+      [makeBlock({ plainText: "alpha omega" })],
+    );
+
+    expect(result.stats.missingWords).toContain("missingword");
+  });
+
   // A view that changes more than whitespace could hide a real loss, so it is
   // ignored and the source words decide.
   test("a comparison override that changes words is ignored", () => {
@@ -774,8 +784,33 @@ describe("validationSignal", () => {
  * between is machine noise, so a wide bound separates the two behaviours
  * without flaking when the suite runs in parallel.
  */
+describe("validateAst on deeply nested markup", () => {
+  // Deeper than any recursive tree walk reaches. A wrapper <div> is checked
+  // for content descendants; a <p> has its visible text read.
+  const NESTING = 200_000;
+  const nested = (text: string): string =>
+    `${"<span>".repeat(NESTING)}${text}${"</span>".repeat(NESTING)}`;
+  const DEEP_SHAPES = {
+    "inside a paragraph": `<body><p>${nested("Soud rozhodl takto")}</p></body>`,
+    "inside a wrapper": `<body><div>${nested("Soud rozhodl takto")}</div></body>`,
+  } as const satisfies Record<string, string>;
+
+  for (const [shape, html] of Object.entries(DEEP_SHAPES)) {
+    test(`reads the text ${shape}`, () => {
+      const result = validateAst(html, [
+        makeBlock({ plainText: "Soud rozhodl takto" }),
+      ]);
+
+      expect(result.stats.missingWords).toEqual([]);
+      expect(
+        result.issues.filter((issue) => issue.severity === "error"),
+      ).toEqual([]);
+    });
+  }
+});
+
 describe("validateAst scaling", () => {
-  test("a flat many-paragraph document validates in linear-ish time", () => {
+  test("a flat many-paragraph document validates within a linear work budget", () => {
     const count = 6000;
     const paragraphs = Array.from(
       { length: count },
@@ -790,13 +825,83 @@ describe("validateAst scaling", () => {
       plainText: `Paragraf ${index} sądu okręgowego w sprawie.`,
     }));
 
-    const start = performance.now();
     const result = validateAst(html, blocks);
-    const elapsed = performance.now() - start;
 
     expect(result.issues.filter((issue) => issue.severity === "error")).toEqual(
       [],
     );
-    expect(elapsed).toBeLessThan(20_000);
+    const sourceCharacters = blocks.reduce(
+      (total, block) => total + block.plainText.length,
+      0,
+    );
+    expect(result.stats.work.textComputations).toBeGreaterThanOrEqual(count);
+    expect(result.stats.work.textComputations).toBeLessThanOrEqual(count + 1);
+    expect(result.stats.work.textCharacters).toBeGreaterThanOrEqual(
+      sourceCharacters,
+    );
+    expect(result.stats.work.textCharacters).toBeLessThanOrEqual(
+      sourceCharacters * 3,
+    );
+    expect(result.stats.work.ancestorChecks).toBe(count);
   });
+
+  /**
+   * Validation work must grow linearly with a flat document. The counters are
+   * deterministic, so the bound is tight and a loaded runner cannot fail it:
+   * eight times the paragraphs may do at most nine times the work, while a
+   * cache or traversal regression multiplies it by the paragraph count.
+   * Covers both wide shapes a source produces: one wrapper per paragraph
+   * directly under the body, and every paragraph inside a single wrapper.
+   */
+  const SCALING_PARAGRAPHS = 5000;
+  const SCALING_FACTOR = 8;
+  const MAX_WORK_GROWTH = SCALING_FACTOR + 1;
+
+  const paragraphText = (index: number): string =>
+    `Odstavec ${index} vyhlášky o seznamu výkonů.`;
+  const paragraphBlocks = (count: number): Block[] =>
+    Array.from({ length: count }, (_, index) =>
+      makeBlock({ plainText: paragraphText(index) }),
+    );
+  const validationWork = (html: string, blocks: Block[]) => {
+    const result = validateAst(html, blocks);
+    expect(result.issues.filter((issue) => issue.severity === "error")).toEqual(
+      [],
+    );
+    return result.stats.work;
+  };
+
+  const WIDE_SHAPES = {
+    "one wrapper per paragraph under the body": (count: number) =>
+      `<html><body>${Array.from(
+        { length: count },
+        (_, index) =>
+          `<div data-fragment="${index}"><p>${paragraphText(index)}</p></div>`,
+      ).join("")}</body></html>`,
+    "every paragraph in one wrapper": (count: number) =>
+      `<html><body><div>${Array.from(
+        { length: count },
+        (_, index) => `<p>${paragraphText(index)}</p>`,
+      ).join("")}</div></body></html>`,
+  };
+
+  for (const [shape, build] of Object.entries(WIDE_SHAPES)) {
+    test(`validation work grows linearly with ${shape}`, () => {
+      const small = SCALING_PARAGRAPHS;
+      const large = SCALING_PARAGRAPHS * SCALING_FACTOR;
+      const smallWork = validationWork(build(small), paragraphBlocks(small));
+      const largeWork = validationWork(build(large), paragraphBlocks(large));
+
+      expect(smallWork.textComputations).toBeGreaterThan(0);
+      expect(
+        largeWork.textComputations / smallWork.textComputations,
+      ).toBeLessThanOrEqual(MAX_WORK_GROWTH);
+      expect(
+        largeWork.textCharacters / smallWork.textCharacters,
+      ).toBeLessThanOrEqual(MAX_WORK_GROWTH);
+      expect(largeWork.ancestorChecks).toBeLessThanOrEqual(
+        Math.max(smallWork.ancestorChecks, 1) * MAX_WORK_GROWTH,
+      );
+    });
+  }
 });

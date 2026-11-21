@@ -2,9 +2,11 @@ import { describe, expect, test } from "bun:test";
 import path from "node:path";
 
 import {
+  boldStampFonts,
   loadStampFontLicenses,
   loadStampFonts,
 } from "@/api/lib/files/pdf-signing/stamp-font";
+import { layoutStampRow } from "@/api/lib/files/pdf-signing/stamp-layout";
 import { stampTextCheck } from "@/api/lib/files/pdf-signing/stamp-text";
 
 describe("the stamp fonts", () => {
@@ -26,12 +28,32 @@ describe("the stamp fonts", () => {
       ".ttf",
       ".ttf",
       ".ttf",
+      ".ttf",
       ".txt",
       ".txt",
       ".txt",
       ".txt",
       ".wasm",
     ]);
+  });
+
+  test("set a name in bold, falling back to the regular faces where bold has no glyph", async () => {
+    const fonts = await loadStampFonts();
+    // Bold first, then every regular face: bold can draw all regular can.
+    expect(fonts.bold.at(0)?.key).toBe("DejaVuSansBold");
+    expect(fonts.bold.slice(1)).toEqual([...fonts.faces]);
+    const facesOf = (text: string) =>
+      new Set(
+        layoutStampRow({
+          direction: "ltr",
+          fonts: boldStampFonts(fonts),
+          text,
+        }).runs.map(({ face }) => face.key),
+      );
+    expect(facesOf("Jiří Čermák")).toEqual(new Set(["DejaVuSansBold"]));
+    expect(facesOf("王小明")).toEqual(new Set(["NotoSansSC"]));
+    const bold = fonts.bold.at(0);
+    expect(bold?.font.postScriptName).toBe("DejaVuSans-Bold");
   });
 
   test("load on first use and cover the scripts the stamp promises", async () => {

@@ -14,7 +14,7 @@ import {
   RECORDINGS_MANIFEST_PATH,
 } from "../apps/web/e2e/marketing/captures";
 import {
-  computeVerdicts,
+  computeProvenanceVerdicts,
   judgeEntry,
   readManifestEntries,
   recordingArtifactsHash,
@@ -169,7 +169,7 @@ const main = () => {
     manifestEntries.map((entry) => `${entry.captureId}:${entry.theme}`),
   );
   const selectedStaleKeys = new Set(
-    computeVerdicts()
+    computeProvenanceVerdicts()
       .filter(
         ({ captureId, status }) =>
           status === "STALE" && (options.captureIds?.has(captureId) ?? true),
@@ -249,6 +249,7 @@ const main = () => {
     `${JSON.stringify({ entries }, null, 2)}\n`,
   );
   const head = execFileSync("git", ["rev-parse", "--short", "HEAD"], {
+    maxBuffer: 2 ** 30,
     cwd: ROOT_DIR,
     encoding: "utf-8",
   }).trim();

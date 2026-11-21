@@ -3,9 +3,10 @@
 import { panic } from "better-result";
 import { existsSync, readFileSync } from "node:fs";
 import nodePath from "node:path";
-import { pathToFileURL } from "node:url";
 
+import { buildCapabilityCatalog } from "../apps/api/scripts/export-capability-catalog";
 import { CLI_DEMO_TOOLS } from "../apps/landing/src/data/cli-demo";
+import { productCaptures } from "../apps/landing/src/data/product-captures";
 import {
   productStoryEditorPortraitMedia,
   productStoryHeroMedia,
@@ -13,36 +14,101 @@ import {
 } from "../apps/landing/src/data/product-story";
 import { products } from "../apps/landing/src/data/products/registry";
 import { securityControls } from "../apps/landing/src/data/security-controls";
-import { readCapabilityCatalog } from "../packages/cli/src/capability-catalog-data";
 import { readProductMediaManifestSync } from "./product-media";
 
-const CAPABILITY_CATALOG_PATH = "packages/cli/capabilities";
 const POLICY_EVIDENCE_PATH = "docs/policies/evidence.json";
 const CLI_REGISTRY_SNAPSHOT_PATH =
   "packages/cli/src/generated/registry-snapshot.json";
 
+const ROOT_README_PATH = "README.md";
+
+// Computed filesystem reads retain these repository Markdown inputs.
+export const CI_MARKDOWN_READER_INPUTS = ["README.md"];
+export const CI_MARKDOWN_READER_COMMAND =
+  "bun scripts/check-marketing-content.ts";
+
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
 
-const getCapabilityIds = (rootDir: string): Set<string> => {
-  const catalogPath = nodePath.join(rootDir, CAPABILITY_CATALOG_PATH);
-  const raw = readCapabilityCatalog(
-    pathToFileURL(`${catalogPath}${nodePath.sep}`),
+const isRemoteReference = (reference: string) =>
+  reference.startsWith("//") || /^[a-z][a-z\d+.-]*:/iu.test(reference);
+
+// GitHub reads `#gh-dark-mode-only` style fragments and query strings off an
+// image URL; the file on disk is the path before them.
+const imageFilePath = (reference: string) => {
+  const suffix = reference.search(/[?#]/u);
+  return suffix === -1 ? reference : reference.slice(0, suffix);
+};
+
+// One pass, in document order: `src`, each `srcset` candidate (without its
+// width or density descriptor), inline `![alt](path "title")`, and
+// reference-style `![alt][label]` / `![label]`, which resolve through a
+// `[label]: path` definition (labels match case-insensitively).
+const IMAGE_REFERENCE =
+  /\bsrc="([^"]+)"|\bsrcset="([^"]+)"|!\[([^\]]*)\](?:\(\s*<?([^\s)>]+)|\[([^\]]*)\])?/gu;
+
+const readmeImageReferences = (readme: string): string[] => {
+  const definitions = new Map(
+    [...readme.matchAll(/^ {0,3}\[([^\]]+)\]:[ \t]*<?([^\s>]+)/gmu)].map(
+      (match) => [(match[1] ?? "").toLowerCase(), match[2] ?? ""] as const,
+    ),
   );
+  return [...readme.matchAll(IMAGE_REFERENCE)].flatMap((match) => {
+    const [, src, srcset, alt, inline, label] = match;
+    if (src !== undefined) {
+      return [src];
+    }
+    if (srcset !== undefined) {
+      return srcset
+        .split(",")
+        .map((candidate) => candidate.trim().split(/\s+/u)[0] ?? "");
+    }
+    if (inline !== undefined) {
+      return [inline];
+    }
+    const key = (label === undefined || label === "" ? alt : label) ?? "";
+    const destination = definitions.get(key.toLowerCase());
+    return destination === undefined ? [] : [destination];
+  });
+};
+
+// The root README's tour embeds the captured product screenshots by
+// repository-relative path; a renamed capture must fail here, not render as
+// a broken image on GitHub.
+export const findMissingReadmeImages = (
+  readme: string,
+  exists: (relativePath: string) => boolean,
+): string[] => {
+  const missing: string[] = [];
+  for (const reference of readmeImageReferences(readme)) {
+    if (reference === "" || isRemoteReference(reference)) {
+      continue;
+    }
+    if (!exists(imageFilePath(reference)) && !missing.includes(reference)) {
+      missing.push(reference);
+    }
+  }
+  return missing;
+};
+
+const getCapabilityIds = async (): Promise<Set<string>> => {
+  const raw = await buildCapabilityCatalog();
 
   const ids = new Set<string>();
   for (const capability of raw) {
     if (!isRecord(capability) || typeof capability["id"] !== "string") {
-      panic(`${CAPABILITY_CATALOG_PATH} contains a capability without an id`);
+      panic(`Generated capability catalog contains a capability without an id`);
     }
     ids.add(capability["id"]);
   }
   return ids;
 };
 
-export const checkMarketingContent = (rootDir: string): string[] => {
+export const checkMarketingContent = async (
+  rootDir: string,
+): Promise<string[]> => {
   const errors: string[] = [];
-  const capabilityIds = getCapabilityIds(rootDir);
+  const capabilityIds = await getCapabilityIds();
   const productMediaPaths = new Set(
     readProductMediaManifestSync(rootDir).assets.map(({ path }) => `/${path}`),
   );
@@ -168,14 +234,29 @@ export const checkMarketingContent = (rootDir: string): string[] => {
       continue;
     }
 
-    const heroPath = nodePath.join(
-      rootDir,
-      "apps/landing/public",
-      product.hero.src.replace(/^\//u, ""),
-    );
-    if (!existsSync(heroPath)) {
-      errors.push(`${product.slug}: missing captured hero ${product.hero.src}`);
+    const capture = productCaptures[product.hero.captureId];
+    for (const sources of [capture.src, capture.darkSrc]) {
+      for (const publicPath of new Set(Object.values(sources))) {
+        const heroPath = nodePath.join(
+          rootDir,
+          "apps/landing/public",
+          publicPath.replace(/^\//u, ""),
+        );
+        if (!existsSync(heroPath)) {
+          errors.push(`${product.slug}: missing captured hero ${publicPath}`);
+        }
+      }
     }
+  }
+
+  const readme = readFileSync(
+    nodePath.join(rootDir, ROOT_README_PATH),
+    "utf-8",
+  );
+  for (const reference of findMissingReadmeImages(readme, (relativePath) =>
+    existsSync(nodePath.join(rootDir, relativePath)),
+  )) {
+    errors.push(`${ROOT_README_PATH}: missing image ${reference}`);
   }
 
   const policyManifest: unknown = JSON.parse(
@@ -214,7 +295,7 @@ export const checkMarketingContent = (rootDir: string): string[] => {
 };
 
 if (import.meta.main) {
-  const errors = checkMarketingContent(process.cwd());
+  const errors = await checkMarketingContent(process.cwd());
   if (errors.length > 0) {
     process.stderr.write(
       `${errors.map((error) => `marketing-content: ${error}`).join("\n")}\n`,
@@ -225,4 +306,5 @@ if (import.meta.main) {
   process.stdout.write(
     `marketing-content: ${products.length} product pages and ${securityControls.length} security controls verified against source\n`,
   );
+  process.exit(0);
 }

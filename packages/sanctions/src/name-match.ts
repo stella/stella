@@ -1,18 +1,28 @@
 import { panic } from "better-result";
 
-import { distance } from "@stll/fuzzy-search";
+import {
+  distance,
+  type EntityIndex,
+  EntityIndexBuilder,
+  type EntitySearchResult,
+} from "@stll/fuzzy-search";
 
+import {
+  NumberColumn,
+  ObjectColumn,
+  type SpellingColumn,
+  spellingColumnSteps,
+  stringIdsSteps,
+  StringMap,
+} from "./compact-storage";
 import type { AliasQuality, EntityType, SanctionsEntry } from "./entry";
-import { nameReading } from "./normalise";
-import type { NameToken, NameReading } from "./normalise";
+import { nameReading, nameReadings, readingKey } from "./normalise";
+import type { NameReading, NameToken } from "./normalise";
 
-// One budget covers vocabulary lookups, postings and scoring across readings.
-export const MAX_SCREENING_WORK = 2_000_000;
-export type ScreeningWorkBudget = {
-  remaining: number;
-  exhausted: boolean;
-  selection: "complete" | "partial";
-};
+/** What the name index reads of a screened record: its names and its kind. */
+export type NamedRecord = Pick<SanctionsEntry, "names" | "entityType">;
+
+export type ScreeningWorkBudget = { remaining: number; exhausted: boolean };
 export const spendScreeningWork = (
   budget: ScreeningWorkBudget,
   cost = 1,
@@ -24,14 +34,6 @@ export const spendScreeningWork = (
   budget.remaining -= cost;
   return true;
 };
-// A call, not a property read: callees spend the budget, so a narrowed
-// `budget.exhausted` would go stale across them.
-const screeningWorkExhausted = (budget: ScreeningWorkBudget): boolean =>
-  budget.exhausted;
-
-const MAX_SCORED_PATTERNS = 256;
-const MAX_FUZZY_STRINGS = 64;
-
 const METRIC = "damerau-levenshtein";
 
 // Weights are inverse document frequencies over entries, so a shared
@@ -65,32 +67,14 @@ const PARTICLES = new Set([
   "von",
 ]);
 
-/** Edit budget for a token pair, from the shorter token's length. */
-const editBudget = (length: number): number => {
-  if (length <= 3) {
-    return 0;
-  }
-  return length <= 5 ? 1 : 2;
-};
-
-/**
- * Distinct strings of one spelling form, with a bigram index over them keyed
- * by string length, so a lookup only walks lengths within its edit budget.
- */
 type Vocabulary = {
-  strings: string[];
-  /** Per string, its length in code points and its number of distinct bigrams. */
-  lengths: number[];
-  gramCounts: number[];
-  characterCounts: Map<string, number>[];
-  ids: Map<string, number>;
-  bigrams: Map<string, number[]>;
-  /** Aliases that contain the string as a token. */
-  postings: number[][];
-  /** Aliases in which two adjacent tokens join into the string. */
-  joinPostings: number[][];
+  strings: ObjectColumn<string> | SpellingColumn;
+  ids: Pick<StringMap<number>, "get">;
 };
-
+type BuildingVocabulary = {
+  strings: ObjectColumn<string>;
+  ids: StringMap<number>;
+};
 type IndexedAlias = {
   entry: number;
   name: string;
@@ -106,414 +90,508 @@ type IndexedAlias = {
     folded: number;
     raw: number;
   }[];
-  exactKey: string;
   patternKey: string;
 };
 
+const QUALITIES = [
+  "strong",
+  "weak",
+  "unknown",
+] as const satisfies readonly AliasQuality[];
+
+type AliasMetadata = Omit<IndexedAlias, "name" | "tokens">;
+
+type AliasColumnOptions = {
+  folded: Vocabulary["strings"];
+  raw: Vocabulary["strings"];
+};
+class AliasColumn {
+  private readonly names = new ObjectColumn<string>();
+  private readonly entries = new NumberColumn();
+  private readonly qualities = new NumberColumn();
+  private readonly entityTypes = new ObjectColumn<EntityType>();
+  private readonly tokenOffsets = new NumberColumn();
+  private readonly joinOffsets = new NumberColumn();
+  private readonly tokenIds = new NumberColumn();
+  private readonly joinIds = new NumberColumn();
+
+  private folded;
+  private raw;
+  constructor({ folded, raw }: AliasColumnOptions) {
+    this.folded = folded;
+    this.raw = raw;
+    this.tokenOffsets.push(0);
+    this.joinOffsets.push(0);
+  }
+
+  setVocabularies(
+    folded: Vocabulary["strings"],
+    raw: Vocabulary["strings"],
+  ): void {
+    this.folded = folded;
+    this.raw = raw;
+  }
+
+  get length(): number {
+    return this.names.length;
+  }
+
+  setQuality(id: number, quality: AliasQuality): void {
+    this.qualities.set(id, QUALITIES.indexOf(quality));
+  }
+
+  push(alias: IndexedAlias): number {
+    const id = this.names.push(alias.name);
+    this.entries.push(alias.entry);
+    this.qualities.push(QUALITIES.indexOf(alias.quality));
+    this.entityTypes.push(alias.entityType);
+    for (let position = 0; position < alias.tokens.length; position += 1) {
+      this.tokenIds.push(
+        alias.folded[position] ?? panic("Missing folded token"),
+      );
+      this.tokenIds.push(alias.raw[position] ?? panic("Missing raw token"));
+    }
+    for (const join of alias.joins) {
+      this.joinIds.push(join.positions[0]);
+      this.joinIds.push(join.positions[1]);
+      this.joinIds.push(join.folded);
+      this.joinIds.push(join.raw);
+    }
+    this.tokenOffsets.push(this.tokenIds.length);
+    this.joinOffsets.push(this.joinIds.length);
+    return id;
+  }
+
+  metadata(id: number): AliasMetadata {
+    const folded: number[] = [];
+    const raw: number[] = [];
+    const joins: IndexedAlias["joins"][number][] = [];
+    const tokenEnd = this.tokenOffsets.get(id + 1);
+    for (
+      let offset = this.tokenOffsets.get(id);
+      offset < tokenEnd;
+      offset += 2
+    ) {
+      const foldedId = this.tokenIds.getUnchecked(offset);
+      const rawId = this.tokenIds.getUnchecked(offset + 1);
+      folded.push(foldedId);
+      raw.push(rawId);
+    }
+    const joinEnd = this.joinOffsets.get(id + 1);
+    for (let offset = this.joinOffsets.get(id); offset < joinEnd; offset += 4) {
+      joins.push({
+        positions: [
+          this.joinIds.getUnchecked(offset),
+          this.joinIds.getUnchecked(offset + 1),
+        ],
+        folded: this.joinIds.getUnchecked(offset + 2),
+        raw: this.joinIds.getUnchecked(offset + 3),
+      });
+    }
+    const entityType = this.entityTypes.get(id);
+    const key = `${raw.join(",")}|${joins.map((join) => join.positions.join(",")).join(";")}`;
+    return {
+      entry: this.entries.get(id),
+      quality:
+        QUALITIES[this.qualities.get(id)] ?? panic("Missing alias quality"),
+      entityType,
+      folded,
+      raw,
+      joins,
+      patternKey: `${entityType}|${key}`,
+    };
+  }
+
+  get(id: number): IndexedAlias {
+    const metadata = this.metadata(id);
+    const tokens = metadata.raw.map((rawId, position) => {
+      const foldedId =
+        metadata.folded[position] ?? panic("Missing folded token");
+      const folded = this.folded.get(foldedId);
+      return {
+        folded,
+        raw: this.raw === this.folded ? folded : this.raw.get(rawId),
+      };
+    });
+    return { ...metadata, name: this.names.get(id), tokens };
+  }
+}
+
 export type NameIndex = {
-  aliases: readonly IndexedAlias[];
+  aliases: AliasColumn;
   folded: Vocabulary;
   raw: Vocabulary;
-  /** Inverse document frequency per folded id; join-only strings get the maximum. */
-  weights: readonly number[];
+  weights: NumberColumn;
   maxWeight: number;
+  sharedVocabulary: boolean;
+  wordIds: NumberColumn;
+  entities: Pick<
+    EntityIndex,
+    "search" | "toBytes" | "nativeBytes" | "postingCount"
+  >;
 };
-
-const emptyVocabulary = (): Vocabulary => ({
-  strings: [],
-  lengths: [],
-  gramCounts: [],
-  characterCounts: [],
-  ids: new Map(),
-  bigrams: new Map(),
-  postings: [],
-  joinPostings: [],
-});
-
-const bigrams = (text: string): Set<string> => {
-  const chars = ["^", ...Array.from(text), "$"];
-  const grams = new Set<string>();
-  for (const [index, char] of chars.entries()) {
-    const previous = chars[index - 1];
-    if (previous !== undefined) {
-      grams.add(`${previous}${char}`);
-    }
-  }
-  return grams;
-};
-
-const gramKey = (length: number, gram: string) => `${length}:${gram}`;
-
-const characterCounts = (text: string): Map<string, number> => {
-  const counts = new Map<string, number>();
-  for (const character of text) {
-    counts.set(character, (counts.get(character) ?? 0) + 1);
-  }
-  return counts;
-};
-
-const intern = (vocabulary: Vocabulary, text: string): number => {
+const intern = (vocabulary: BuildingVocabulary, text: string): number => {
   const known = vocabulary.ids.get(text);
   if (known !== undefined) {
     return known;
   }
-  const id = vocabulary.strings.length;
-  const grams = bigrams(text);
-  const length = Array.from(text).length;
-  vocabulary.strings.push(text);
-  vocabulary.lengths.push(length);
-  vocabulary.gramCounts.push(grams.size);
-  vocabulary.characterCounts.push(characterCounts(text));
+  const id = vocabulary.strings.push(text);
   vocabulary.ids.set(text, id);
-  vocabulary.postings.push([]);
-  vocabulary.joinPostings.push([]);
-  for (const gram of grams) {
-    const key = gramKey(length, gram);
-    const ids = vocabulary.bigrams.get(key);
-    if (ids === undefined) {
-      vocabulary.bigrams.set(key, [id]);
-    } else {
-      ids.push(id);
-    }
-  }
   return id;
 };
+const positionWeights = (
+  index: Pick<NameIndex, "weights">,
+  alias: IndexedAlias,
+) =>
+  alias.tokens.map((token, position) => {
+    const id = alias.folded[position] ?? panic("Missing folded token");
+    const weight =
+      Array.from(token.raw).length === 1
+        ? INITIAL_WEIGHT
+        : index.weights.get(id);
+    const optional =
+      alias.entityType === "person" &&
+      ((position > 0 && position < alias.tokens.length - 1) ||
+        PATRONYMIC.test(token.folded) ||
+        PARTICLES.has(token.folded));
+    return {
+      weight,
+      minimumWeight: optional ? weight * MIDDLE_NAME_DISCOUNT : weight,
+    };
+  });
 
-const post = (lists: number[][], ids: readonly number[], alias: number) => {
-  for (const id of new Set(ids)) {
-    lists[id]?.push(alias);
-  }
+type EntityIndexBuildOptions = {
+  aliases: AliasColumn;
+  folded: BuildingVocabulary;
+  raw: BuildingVocabulary;
+  weights: NumberColumn;
 };
+export type IndexBuildSteps<T> = Generator<
+  | {
+      builder: EntityIndexBuilder;
+      weights: Float64Array[];
+      complete: (index: EntityIndex) => void;
+    }
+  | undefined,
+  T,
+  void
+>;
+function* entityIndexSteps({
+  aliases,
+  folded,
+  raw,
+  weights,
+}: EntityIndexBuildOptions): IndexBuildSteps<EntityIndex> {
+  const formCount = raw === folded ? 1 : 2;
+  const builder = new EntityIndexBuilder({
+    forms: formCount,
+    budget: { byLength: [0, 0, 0, 0, 1, 1, 2], basis: "shorter" },
+    initialWeight: INITIAL_WEIGHT,
+    initialSimilarity: INITIAL_SIMILARITY,
+  });
+  for (const [form, vocabulary] of [folded, raw]
+    .slice(0, formCount)
+    .entries()) {
+    for (let id = 0; id < vocabulary.strings.length; id += 1) {
+      const text = vocabulary.strings.get(id);
+      if (builder.intern(form, text) !== id) {
+        panic("Entity vocabulary ids diverged");
+      }
+      if (id % 4096 === 0) {
+        yield;
+      }
+    }
+  }
+  const rawWeights = new Float64Array(raw.strings.length);
+  for (let id = 0; id < aliases.length; id += 1) {
+    const alias = aliases.get(id);
+    for (const [position, rawId] of alias.raw.entries()) {
+      rawWeights[rawId] = weights.get(
+        alias.folded[position] ?? panic("Missing folded weight"),
+      );
+    }
+    for (const join of alias.joins) {
+      rawWeights[join.raw] = weights.get(join.folded);
+    }
+    const positions = positionWeights({ weights }, alias);
+    builder.addAlias({
+      entryId: alias.entry,
+      entityGroup: alias.entityType === "person" ? 0 : 1,
+      // Quality stays in final scoring; lowering this bound could lose candidates.
+      quality: 1,
+      forms: [alias.folded, alias.raw].slice(0, formCount).map((ids, form) => ({
+        form,
+        tokens: ids.map((token, position) => ({
+          id: token,
+          ...(positions[position] ?? panic("Missing position weights")),
+        })),
+        joins: alias.joins.map((join) => ({
+          id: form === 0 ? join.folded : join.raw,
+          left: join.positions[0],
+          right: join.positions[1],
+        })),
+        minimumTotal: positions.reduce(
+          (total, position) => total + position.minimumWeight,
+          0,
+        ),
+      })),
+    });
+    yield;
+  }
+  const foldedWeights = Float64Array.from(
+    { length: folded.strings.length },
+    (_, id) => weights.get(id),
+  );
+  // Native construction units can prepare an entire vocabulary or finalize
+  // all postings; the cooperative driver must run that work off-thread.
+  let entities: EntityIndex | undefined;
+  yield {
+    builder,
+    weights: [foldedWeights, rawWeights].slice(0, formCount),
+    complete: (index) => {
+      entities = index;
+    },
+  };
+  return entities ?? panic("Entity index construction did not return an index");
+}
 
-export const buildNameIndex = (
-  entries: readonly SanctionsEntry[],
-): NameIndex => {
-  const folded = emptyVocabulary();
-  const raw = emptyVocabulary();
-  const aliases: IndexedAlias[] = [];
-  const entryCounts = new Map<number, number>();
+type IndexedEntries = Iterable<NamedRecord> & {
+  readonly length: number;
+  entries: () => Iterable<[number, NamedRecord]>;
+};
+type AliasSource = {
+  entryIndex: number;
+  entry: NamedRecord;
+  name: string;
+  quality: AliasQuality;
+  reading: NameReading;
+  folded: BuildingVocabulary;
+  raw: BuildingVocabulary;
+};
+const indexedAlias = ({
+  entryIndex,
+  entry,
+  name,
+  quality,
+  reading: { tokens, adjacent },
+  folded,
+  raw,
+}: AliasSource): IndexedAlias => ({
+  entry: entryIndex,
+  name,
+  quality,
+  entityType: entry.entityType,
+  tokens,
+  folded: tokens.map((token) => intern(folded, token.folded)),
+  raw: tokens.map((token) => intern(raw, token.raw)),
+  joins: adjacent.map((positions) => ({
+    positions,
+    folded: intern(
+      folded,
+      positions.map((position) => tokens[position]?.folded ?? "").join(""),
+    ),
+    raw: intern(
+      raw,
+      positions.map((position) => tokens[position]?.raw ?? "").join(""),
+    ),
+  })),
+  patternKey: `${entry.entityType}|${readingKey({ tokens, adjacent })}`,
+});
 
+/**
+ * Further readings of each listed name (without brackets, dotted acronyms
+ * joined), indexed only after every listed name and never counted, so token
+ * frequencies and vocabulary order are those of the listed names.
+ */
+function* furtherAliasSteps(
+  entries: IndexedEntries,
+  {
+    aliases,
+    folded,
+    raw,
+  }: {
+    aliases: AliasColumn;
+    folded: BuildingVocabulary;
+    raw: BuildingVocabulary;
+  },
+): Generator<undefined, void, void> {
   for (const [entryIndex, entry] of entries.entries()) {
-    const byKey = new Map<string, IndexedAlias>();
-    const entryTokens = new Set<number>();
-    for (const { name, quality } of entry.names) {
-      const { tokens, adjacent } = nameReading(name, entry.entityType);
-      const key = `${tokens.map((token) => token.raw).join(" ")}|${adjacent.join(";")}`;
+    const further = entry.names.flatMap(({ name, quality }) =>
+      nameReadings(name, entry.entityType)
+        .slice(1)
+        .map((reading) => ({ name, quality, reading })),
+    );
+    const listed = new Set(
+      further.length === 0
+        ? []
+        : entry.names.map(({ name }) =>
+            readingKey(nameReading(name, entry.entityType)),
+          ),
+    );
+    const byKey = new Map<string, { quality: AliasQuality; id: number }>();
+    for (const { name, quality, reading } of further) {
+      const key = readingKey(reading);
       const existing = byKey.get(key);
-      if (tokens.length === 0 || existing?.quality === "strong") {
+      if (listed.has(key) || existing?.quality === "strong") {
         continue;
       }
       if (existing !== undefined) {
-        // A weak alias the entry also lists as a strong one counts as strong.
         if (
           quality === "strong" ||
           (quality === "unknown" && existing.quality === "weak")
         ) {
           existing.quality = quality;
+          aliases.setQuality(existing.id, quality);
         }
         continue;
       }
-      const alias: IndexedAlias = {
-        entry: entryIndex,
+      byKey.set(key, { quality, id: aliases.length });
+      aliases.push(
+        indexedAlias({
+          entryIndex,
+          entry,
+          name,
+          quality,
+          reading,
+          folded,
+          raw,
+        }),
+      );
+    }
+    yield;
+  }
+}
+
+export function* nameIndexSteps(
+  entries: IndexedEntries,
+): IndexBuildSteps<NameIndex> {
+  let share = true;
+  for (const entry of entries) {
+    if (
+      entry.names.some(({ name }) =>
+        nameReadings(name, entry.entityType).some(({ tokens }) =>
+          tokens.some(({ raw, folded }) => raw !== folded),
+        ),
+      )
+    ) {
+      share = false;
+      break;
+    }
+    yield;
+  }
+  const folded: BuildingVocabulary = {
+    strings: new ObjectColumn(),
+    ids: new StringMap(),
+  };
+  const raw = share
+    ? folded
+    : { strings: new ObjectColumn<string>(), ids: new StringMap<number>() };
+  const aliases = new AliasColumn({ folded: folded.strings, raw: raw.strings });
+  const counts = new Map<number, number>();
+  for (const [entryIndex, entry] of entries.entries()) {
+    const byKey = new Map<string, { alias: IndexedAlias; id: number }>();
+    const entryTokens = new Set<number>();
+    for (const { name, quality } of entry.names) {
+      const reading = nameReading(name, entry.entityType);
+      const key = readingKey(reading);
+      const existing = byKey.get(key);
+      if (reading.tokens.length === 0 || existing?.alias.quality === "strong") {
+        continue;
+      }
+      if (existing !== undefined) {
+        if (
+          quality === "strong" ||
+          (quality === "unknown" && existing.alias.quality === "weak")
+        ) {
+          existing.alias.quality = quality;
+          aliases.setQuality(existing.id, quality);
+        }
+        continue;
+      }
+      const alias = indexedAlias({
+        entryIndex,
+        entry,
         name,
         quality,
-        entityType: entry.entityType,
-        tokens,
-        folded: tokens.map((token) => intern(folded, token.folded)),
-        raw: tokens.map((token) => intern(raw, token.raw)),
-        joins: adjacent.map((positions) => ({
-          positions,
-          folded: intern(
-            folded,
-            positions
-              .map((position) => tokens[position]?.folded ?? "")
-              .join(""),
-          ),
-          raw: intern(
-            raw,
-            positions.map((position) => tokens[position]?.raw ?? "").join(""),
-          ),
-        })),
-        patternKey: `${entry.entityType}|${key}`,
-        exactKey: tokens
-          .map((token) => token.raw)
-          .toSorted()
-          .join(" "),
-      };
-      byKey.set(key, alias);
-      post(folded.postings, alias.folded, aliases.length);
-      post(raw.postings, alias.raw, aliases.length);
-      post(
-        folded.joinPostings,
-        alias.joins.map((join) => join.folded),
-        aliases.length,
-      );
-      post(
-        raw.joinPostings,
-        alias.joins.map((join) => join.raw),
-        aliases.length,
-      );
+        reading,
+        folded,
+        raw,
+      });
+      byKey.set(key, { alias, id: aliases.length });
       for (const id of alias.folded) {
         entryTokens.add(id);
       }
       aliases.push(alias);
     }
     for (const id of entryTokens) {
-      entryCounts.set(id, (entryCounts.get(id) ?? 0) + 1);
+      counts.set(id, (counts.get(id) ?? 0) + 1);
+    }
+    yield;
+  }
+  yield* furtherAliasSteps(entries, { aliases, folded, raw });
+  const maxWeight = Math.log(Math.max(entries.length, 1)) + 1;
+  const weights = new NumberColumn("float");
+  const wordIds = new NumberColumn("byte");
+  for (let id = 0; id < folded.strings.length; id += 1) {
+    const count = counts.get(id) ?? 0;
+    wordIds.push(count > 0 ? 1 : 0);
+    weights.push(
+      count === 0 ? maxWeight : Math.log(entries.length / count) + 1,
+    );
+    if (id % 4096 === 0) {
+      yield;
     }
   }
-
-  const maxWeight = Math.log(Math.max(entries.length, 1)) + 1;
+  const entities = yield* entityIndexSteps({ aliases, folded, raw, weights });
+  const foldedStrings = yield* spellingColumnSteps(folded.strings);
+  const compactFolded = {
+    strings: foldedStrings,
+    ids: yield* stringIdsSteps(foldedStrings),
+  };
+  const rawStrings =
+    raw === folded ? foldedStrings : yield* spellingColumnSteps(raw.strings);
+  const compactRaw =
+    raw === folded
+      ? compactFolded
+      : { strings: rawStrings, ids: yield* stringIdsSteps(rawStrings) };
+  // AliasColumn owns the build spellings; keep its decoding source compact too.
+  aliases.setVocabularies(compactFolded.strings, compactRaw.strings);
   return {
     aliases,
-    folded,
-    raw,
-    weights: folded.strings.map((_, id) => {
-      const count = entryCounts.get(id);
-      return count === undefined
-        ? maxWeight
-        : Math.log(entries.length / count) + 1;
-    }),
+    folded: compactFolded,
+    raw: compactRaw,
+    weights,
     maxWeight,
+    sharedVocabulary: raw === folded,
+    wordIds,
+    entities,
   };
+}
+export const runSteps = <T>(steps: IndexBuildSteps<T>): T => {
+  for (;;) {
+    const step = steps.next();
+    if (step.done === true) {
+      return step.value;
+    }
+    if (step.value !== undefined) {
+      step.value.complete(step.value.builder.finish(step.value.weights));
+    }
+  }
 };
+export const buildNameIndex = (entries: readonly NamedRecord[]): NameIndex =>
+  runSteps(nameIndexSteps(entries));
 
-/**
- * Vocabulary strings within the edit budget of `text`, with similarity
- * 1 - distance / longer length. A bigram count filter limits the exact edit
- * distance to a few candidates instead of the whole vocabulary: one edit (or
- * transposition) destroys at most three of a string's distinct bigrams, so a
- * string within budget k shares at least max(bigrams) - 3k of them.
- */
-type CharacterDistanceOptions = {
-  query: ReadonlyMap<string, number>;
-  candidate: ReadonlyMap<string, number>;
-  lengthDifference: number;
-};
-
-// Transpositions preserve counts; other edits repair at most one deficit per side.
-const characterDistanceLowerBound = ({
-  query,
-  candidate,
-  lengthDifference,
-}: CharacterDistanceOptions): number => {
-  let missing = 0;
-  for (const [character, count] of query) {
-    missing += Math.max(0, count - (candidate.get(character) ?? 0));
-  }
-  return Math.max(missing, lengthDifference + missing);
-};
-
-type SimilarStringsOptions = {
-  vocabulary: Vocabulary;
-  text: string;
-  work: ScreeningWorkBudget;
-};
-const similarStrings = ({
-  vocabulary,
-  text,
-  work,
-}: SimilarStringsOptions): Map<number, number> => {
-  const similar = new Map<number, number>();
-  if (!spendScreeningWork(work, text.length + 1)) {
-    return similar;
-  }
-  const exact = vocabulary.ids.get(text);
-  if (exact !== undefined) {
-    similar.set(exact, 1);
-  }
-  const length = Array.from(text).length;
-  const budget = editBudget(length);
-  if (budget === 0) {
-    return similar;
-  }
-  const grams = bigrams(text);
-  const counts = characterCounts(text);
-  const shared = new Map<number, number>();
-  const touched: number[] = [];
-  for (let other = length - budget; other <= length + budget; other += 1) {
-    for (const gram of grams) {
-      for (const id of vocabulary.bigrams.get(gramKey(other, gram)) ?? []) {
-        if (!spendScreeningWork(work)) {
-          return similar;
-        }
-        if (!shared.has(id)) {
-          touched.push(id);
-        }
-        shared.set(id, (shared.get(id) ?? 0) + 1);
-      }
-    }
-  }
-  const candidates: number[] = [];
-  for (const id of touched) {
-    if (!spendScreeningWork(work)) {
-      return similar;
-    }
-    const candidateLength = vocabulary.lengths[id] ?? 0;
-    const pairBudget = editBudget(Math.min(length, candidateLength));
-    if (
-      id === exact ||
-      pairBudget === 0 ||
-      Math.abs(candidateLength - length) > pairBudget ||
-      (shared.get(id) ?? 0) <
-        Math.max(grams.size, vocabulary.gramCounts[id] ?? 0) - 3 * pairBudget
-    ) {
-      continue;
-    }
-    const otherCounts =
-      vocabulary.characterCounts[id] ??
-      panic("Missing indexed character counts");
-    if (
-      characterDistanceLowerBound({
-        query: counts,
-        candidate: otherCounts,
-        lengthDifference: candidateLength - length,
-      }) > pairBudget
-    ) {
-      continue;
-    }
-    candidates.push(id);
-  }
-  if (
-    !spendScreeningWork(
-      work,
-      candidates.length * Math.ceil(Math.log2(candidates.length + 1)),
-    )
-  ) {
-    return similar;
-  }
-  candidates.sort(
-    (left, right) =>
-      (shared.get(right) ?? 0) /
-        Math.max(grams.size, vocabulary.gramCounts[right] ?? 0) -
-        (shared.get(left) ?? 0) /
-          Math.max(grams.size, vocabulary.gramCounts[left] ?? 0) ||
-      left - right,
-  );
-  if (candidates.length > MAX_FUZZY_STRINGS) {
-    work.selection = "partial";
-  }
-  for (const id of candidates.slice(0, MAX_FUZZY_STRINGS)) {
-    const candidateLength = vocabulary.lengths[id] ?? 0;
-    const pairBudget = editBudget(Math.min(length, candidateLength));
-    if (!spendScreeningWork(work, length * candidateLength)) {
-      return similar;
-    }
-    const edits = distance(text, vocabulary.strings[id] ?? "", METRIC);
-    if (edits <= pairBudget) {
-      similar.set(id, 1 - edits / Math.max(length, candidateLength));
-    }
-  }
-  return similar;
-};
-
-/** One query token, or two adjacent ones read as a single word. */
 type QueryUnit = {
   positions: readonly number[];
-  folded: ReadonlyMap<number, number>;
-  raw: ReadonlyMap<number, number>;
+  folded: Map<number, number>;
+  raw: Map<number, number>;
 };
-
 type PreparedQuery = {
   tokens: readonly NameToken[];
   weights: readonly number[];
   initials: readonly boolean[];
   units: readonly QueryUnit[];
 };
-
-const isInitial = (token: NameToken) => Array.from(token.raw).length === 1;
-
-type QueryUnitOptions = {
-  index: NameIndex;
-  positions: readonly number[];
-  token: NameToken;
-  work: ScreeningWorkBudget;
-};
-const unit = ({
-  index,
-  positions,
-  token,
-  work,
-}: QueryUnitOptions): QueryUnit | undefined => {
-  const folded = similarStrings({
-    vocabulary: index.folded,
-    text: token.folded,
-    work,
-  });
-  if (screeningWorkExhausted(work)) {
-    return undefined;
-  }
-  const raw = similarStrings({ vocabulary: index.raw, text: token.raw, work });
-  if (screeningWorkExhausted(work)) {
-    return undefined;
-  }
-  return { positions, folded, raw };
-};
-
-type PrepareQueryOptions = {
-  index: NameIndex;
-  reading: NameReading;
-  work: ScreeningWorkBudget;
-};
-const prepareQuery = ({
-  index,
-  reading: { tokens, adjacent },
-  work,
-}: PrepareQueryOptions): PreparedQuery | undefined => {
-  if (!spendScreeningWork(work, tokens.length + adjacent.length)) {
-    return undefined;
-  }
-  const initials = tokens.map(isInitial);
-  const units: QueryUnit[] = [];
-  const singles = new Map<number, QueryUnit>();
-  for (const [position, token] of tokens.entries()) {
-    if (!initials[position]) {
-      const single = unit({ index, positions: [position], token, work });
-      if (single === undefined) {
-        return undefined;
-      }
-      units.push(single);
-      singles.set(position, single);
-    }
-  }
-  for (const positions of adjacent) {
-    if (positions.some((position) => initials[position])) {
-      continue;
-    }
-    const joined = unit({
-      index,
-      positions,
-      token: {
-        raw: positions.map((position) => tokens[position]?.raw ?? "").join(""),
-        folded: positions
-          .map((position) => tokens[position]?.folded ?? "")
-          .join(""),
-      },
-      work,
-    });
-    if (joined === undefined) {
-      return undefined;
-    }
-    units.push(joined);
-  }
-  const weights = initials.map((initial, position) => {
-    if (initial) {
-      return INITIAL_WEIGHT;
-    }
-    const single = singles.get(position);
-    let weight = index.maxWeight;
-    let best = -1;
-    for (const [id, similarity] of single?.folded ?? []) {
-      if (similarity > best && (index.folded.postings[id]?.length ?? 0) > 0) {
-        best = similarity;
-        weight = index.weights[id] ?? weight;
-      }
-    }
-    return weight;
-  });
-  return { tokens, weights, initials, units };
-};
-
 type Pair = {
   /** "initial" pairs an initial with a word it abbreviates. */
   kind: "word" | "initial";
@@ -639,26 +717,35 @@ const align = (pairs: Pair[]): Alignment => {
 /** Shares of the listed name's weight for ranking and optimistic filtering. */
 type ListedCoverageOptions = {
   index: NameIndex;
-  alias: IndexedAlias;
+  alias: AliasMetadata;
   matched: ReadonlyMap<number, number>;
 };
 const listedCoverage = ({ index, alias, matched }: ListedCoverageOptions) => {
   let alignedTotal = 0;
-  let minimumTotal = 0;
   let explained = 0;
-  const last = alias.tokens.length - 1;
-  for (const [listed, token] of alias.tokens.entries()) {
+  const last = alias.raw.length - 1;
+  for (const [listed, rawId] of alias.raw.entries()) {
+    const raw = index.raw.strings.get(rawId);
     const weight =
-      token.raw.length === 1
+      raw.length === 1
         ? INITIAL_WEIGHT
-        : (index.weights[alias.folded[listed] ?? -1] ?? index.maxWeight);
+        : index.weights.get(
+            alias.folded[listed] ?? panic("Missing weighted token"),
+          );
     const optional =
       alias.entityType === "person" &&
       ((listed > 0 && listed < last) ||
-        PATRONYMIC.test(token.folded) ||
-        PARTICLES.has(token.folded));
+        PATRONYMIC.test(
+          index.folded.strings.get(
+            alias.folded[listed] ?? panic("Missing folded token"),
+          ),
+        ) ||
+        PARTICLES.has(
+          index.folded.strings.get(
+            alias.folded[listed] ?? panic("Missing folded token"),
+          ),
+        ));
     const minimumWeight = optional ? weight * MIDDLE_NAME_DISCOUNT : weight;
-    minimumTotal += minimumWeight;
     const similarity = matched.get(listed);
     alignedTotal += similarity === undefined ? minimumWeight : weight;
     if (similarity !== undefined) {
@@ -666,9 +753,21 @@ const listedCoverage = ({ index, alias, matched }: ListedCoverageOptions) => {
     }
   }
   return {
-    minimum: Math.min(1, explained / minimumTotal),
     aligned: Math.min(1, explained / alignedTotal),
   };
+};
+
+const queryCoverage = (
+  weights: readonly number[],
+  matched: ReadonlyMap<number, number>,
+): number => {
+  let totalWeight = 0;
+  let explainedWeight = 0;
+  for (const [position, weight] of weights.entries()) {
+    totalWeight += weight;
+    explainedWeight += weight * (matched.get(position) ?? 0);
+  }
+  return explainedWeight / totalWeight;
 };
 
 /**
@@ -685,14 +784,8 @@ const scoreAlias = (
   if (!alignment.anchored) {
     return 0;
   }
-  let queryTotal = 0;
-  let queryExplained = 0;
-  for (const [position, weight] of query.weights.entries()) {
-    queryTotal += weight;
-    queryExplained += weight * (alignment.query.get(position) ?? 0);
-  }
   const score = Math.sqrt(
-    (queryExplained / queryTotal) *
+    queryCoverage(query.weights, alignment.query) *
       listedCoverage({
         index,
         alias,
@@ -702,314 +795,255 @@ const scoreAlias = (
   return alias.quality === "weak" ? score * WEAK_ALIAS_FACTOR : score;
 };
 
-type CandidateEstimate = { bound: number; rank: number };
-type CandidateEstimateOptions = {
-  index: NameIndex;
-  alias: IndexedAlias;
-  query: PreparedQuery;
-};
-const candidateEstimate = ({
-  index,
-  alias,
-  query,
-}: CandidateEstimateOptions): CandidateEstimate => {
-  const single = query.units.at(0);
-  if (
-    query.tokens.length === 1 &&
-    query.units.length === 1 &&
-    single !== undefined &&
-    alias.joins.every(
-      (join) => unitSimilarity(single, join.folded, join.raw) === 0,
-    )
-  ) {
-    const matched = new Map<number, number>();
-    let similarity = 0;
-    for (let position = 0; position < alias.tokens.length; position += 1) {
-      const current = unitSimilarity(
-        single,
-        alias.folded[position],
-        alias.raw[position],
-      );
-      if (current === 0) {
-        continue;
-      }
-      similarity = Math.max(similarity, current);
-      matched.set(position, current);
-    }
-    const coverage = listedCoverage({ index, alias, matched });
-    return {
-      bound: Math.sqrt(similarity * coverage.minimum),
-      rank: Math.sqrt(similarity * coverage.aligned),
-    };
-  }
-  const pairs = candidatePairs(alias, query);
-  if (!pairs.some((pair) => pair.kind === "word")) {
-    return { bound: 0, rank: 0 };
-  }
-  const queryMatched = new Map<number, number>();
-  const listedMatched = new Map<number, number>();
-  for (const pair of pairs) {
-    for (const position of pair.query) {
-      queryMatched.set(
-        position,
-        Math.max(queryMatched.get(position) ?? 0, pair.similarity),
-      );
-    }
-    for (const position of pair.listed) {
-      listedMatched.set(
-        position,
-        Math.max(listedMatched.get(position) ?? 0, pair.similarity),
-      );
-    }
-  }
-  let queryTotal = 0;
-  let queryExplained = 0;
-  for (const [position, weight] of query.weights.entries()) {
-    queryTotal += weight;
-    queryExplained += weight * (queryMatched.get(position) ?? 0);
-  }
-  const queryShare = queryExplained / queryTotal;
-  const coverage = listedCoverage({ index, alias, matched: listedMatched });
-  return {
-    bound: Math.sqrt(queryShare * coverage.minimum),
-    rank: Math.sqrt(queryShare * coverage.aligned),
-  };
-};
-
 export type NameMatches = {
   matches: Map<number, NameMatch>;
   truncated: boolean;
 };
-
 export type NameMatch = { score: number; name: string };
-
-/**
- * Best name score per entry index. `ceiling` maps the largest share of the
- * query weight an alias could explain to the best final score it could still
- * reach; aliases whose ceiling is below `cutoff` are skipped unscored.
- */
-type CandidateGroup = {
-  aliasIndices: [number, ...number[]];
-  bound: number;
-  rank: number;
-  exact: boolean;
-};
-
 type MatchNamesOptions = {
   index: NameIndex;
   reading: NameReading;
   ceiling: (queryShare: number) => number;
-  rankEntry: (entry: number, nameScore: number) => number | undefined;
   cutoff: number;
   work: ScreeningWorkBudget;
 };
-type RankCandidateGroupsOptions = {
+type QuerySource = {
+  type: "token" | "join";
+  positions: readonly number[];
+  token: NameToken;
+};
+type PopulateQueryUnitsOptions = {
   index: NameIndex;
-  query: PreparedQuery;
-  reachedWeight: ReadonlyMap<number, number>;
-  initialWeight: number;
-  totalWeight: number;
-  ceiling: (share: number) => number;
-  rankEntry: MatchNamesOptions["rankEntry"];
-  cutoff: number;
+  sources: readonly QuerySource[];
+  result: EntitySearchResult;
   work: ScreeningWorkBudget;
 };
-
-const rankCandidateGroups = ({
+const populateQueryUnits = ({
   index,
-  query,
-  reachedWeight,
-  initialWeight,
-  totalWeight,
-  ceiling,
-  rankEntry,
-  cutoff,
+  sources,
+  result,
   work,
-}: RankCandidateGroupsOptions): CandidateGroup[] | undefined => {
-  const byPattern = new Map<string, CandidateGroup>();
-  const estimates = new Map<string, CandidateEstimate>();
-  const exactKey = query.tokens
-    .map((token) => token.raw)
-    .toSorted()
-    .join(" ");
-  for (const [aliasIndex, weight] of reachedWeight) {
-    if (!spendScreeningWork(work)) {
+}: PopulateQueryUnitsOptions): QueryUnit[] | undefined => {
+  const units: QueryUnit[] = sources.map(({ positions }) => ({
+    positions,
+    folded: new Map(),
+    raw: new Map(),
+  }));
+  for (let hit = 0; hit < result.similarities.length; hit += 1) {
+    const unitId = result.matchKeys[hit * 3] ?? panic("Missing match unit");
+    const form = result.matchKeys[hit * 3 + 1] ?? panic("Missing match form");
+    const id = result.matchKeys[hit * 3 + 2] ?? panic("Missing match token");
+    const sourceId = index.sharedVocabulary ? unitId : Math.floor(unitId / 2);
+    const unit = units[sourceId] ?? panic("Invalid match unit");
+    const source = sources[sourceId] ?? panic("Missing query source");
+    const vocabulary = form === 0 ? index.folded : index.raw;
+    const text = form === 0 ? source.token.folded : source.token.raw;
+    const listed = vocabulary.strings.get(id);
+    if (
+      !spendScreeningWork(
+        work,
+        Math.max(1, Array.from(text).length * Array.from(listed).length),
+      )
+    ) {
       return undefined;
     }
-    if (ceiling((weight + initialWeight) / totalWeight) < cutoff) {
-      continue;
-    }
-    const alias =
-      index.aliases[aliasIndex] ?? panic("Missing reached candidate alias");
-    const exact = alias.exactKey === exactKey;
-    let estimate = exact
-      ? { bound: 1, rank: 1 }
-      : estimates.get(alias.patternKey);
-    if (estimate === undefined) {
-      const pairWork =
-        query.units.length * (alias.tokens.length + alias.joins.length) +
-        query.tokens.length * alias.tokens.length;
-      if (!spendScreeningWork(work, pairWork)) {
-        return undefined;
-      }
-      estimate = candidateEstimate({ index, alias, query });
-    }
-    estimates.set(alias.patternKey, estimate);
-    const bound = ceiling(estimate.bound * estimate.bound);
-    if (bound < cutoff) {
-      continue;
-    }
-    const rank = rankEntry(
-      alias.entry,
-      estimate.rank * (alias.quality === "weak" ? WEAK_ALIAS_FACTOR : 1),
+    // Retain the sanctions metric as the verification and scoring authority.
+    const edits = distance(text, listed, METRIC);
+    const shorter = Math.min(
+      Array.from(text).length,
+      Array.from(listed).length,
     );
-    if (rank === undefined) {
-      return undefined;
+    let budget = 2;
+    if (shorter <= 3) {
+      budget = 0;
+    } else if (shorter <= 5) {
+      budget = 1;
     }
-    const groupKey = `${alias.patternKey}|${alias.quality}`;
-    const group = byPattern.get(groupKey);
-    if (group === undefined) {
-      byPattern.set(groupKey, {
-        aliasIndices: [aliasIndex],
-        bound,
-        rank,
-        exact,
-      });
-    } else {
-      group.aliasIndices.push(aliasIndex);
-      group.rank = Math.max(group.rank, rank);
+    if (edits > budget) {
+      continue;
     }
+    const similarity =
+      result.similarities[hit] ?? panic("Missing token similarity");
+    const verified =
+      1 - edits / Math.max(Array.from(text).length, Array.from(listed).length);
+    if (Math.abs(similarity - verified) > Number.EPSILON) {
+      panic("Entity token similarity disagrees with the sanctions metric");
+    }
+    (form === 0 ? unit.folded : unit.raw).set(id, similarity);
   }
-  const candidates = [...byPattern.values()];
-  if (
-    !spendScreeningWork(
-      work,
-      candidates.length * Math.ceil(Math.log2(candidates.length + 1)),
-    )
-  ) {
-    return undefined;
-  }
-  candidates.sort(
-    (left, right) =>
-      Number(right.exact) - Number(left.exact) ||
-      right.rank - left.rank ||
-      right.bound - left.bound ||
-      left.aliasIndices[0] - right.aliasIndices[0],
-  );
-  return candidates;
+  return units;
 };
 
 export const matchNames = ({
   index,
   reading,
   ceiling,
-  rankEntry,
   cutoff,
   work,
 }: MatchNamesOptions): NameMatches | undefined => {
-  const query = prepareQuery({ index, reading, work });
-  if (query === undefined) {
+  const initials = reading.tokens.map(
+    (token) => Array.from(token.raw).length === 1,
+  );
+  const tokenSources = reading.tokens.flatMap((token, position) =>
+    initials[position]
+      ? []
+      : [{ type: "token" as const, positions: [position], token }],
+  );
+  // Every joined query spelling is searched: even when each part is a listed
+  // word, the join can fuzzily match a different listed single word.
+  const joinedSources = reading.adjacent
+    .filter((positions) => !positions.some((position) => initials[position]))
+    .map((positions) => ({
+      type: "join" as const,
+      positions,
+      token: {
+        raw: positions
+          .map((position) => reading.tokens[position]?.raw ?? "")
+          .join(""),
+        folded: positions
+          .map((position) => reading.tokens[position]?.folded ?? "")
+          .join(""),
+      },
+    }));
+  const sources = [...tokenSources, ...joinedSources];
+  // ceiling(s) = a + (1-a)*sqrt(s); EntityIndex bounds the name score.
+  const a = ceiling(0);
+  const threshold = a === 1 ? 0 : Math.max(0, (cutoff - a) / (1 - a));
+  const queryWeights = reading.tokens.map((token, position) => {
+    if (initials[position]) {
+      return INITIAL_WEIGHT;
+    }
+    const id = index.folded.ids.get(token.folded);
+    return id === undefined || index.wordIds.get(id) === 0
+      ? index.maxWeight
+      : index.weights.get(id);
+  });
+  const lookupQuery = {
+    tokens: reading.tokens.map((token, position) => ({
+      form: initials[position] && !index.sharedVocabulary ? 1 : 0,
+      text: initials[position] ? token.raw : token.folded,
+      weight: queryWeights[position] ?? panic("Missing query weight"),
+    })),
+    units: sources.flatMap(({ positions, token }) => {
+      const uniquePositions = [...new Set(positions)];
+      const folded = {
+        form: 0,
+        text: token.folded,
+        positions: uniquePositions,
+      };
+      return index.sharedVocabulary
+        ? [folded]
+        : [folded, { form: 1, text: token.raw, positions: uniquePositions }];
+    }),
+  };
+  const needsWeights = reading.tokens.some((token, position) => {
+    if (initials[position]) {
+      return false;
+    }
+    const id = index.folded.ids.get(token.folded);
+    return id === undefined || index.wordIds.get(id) === 0;
+  });
+  const search = (tau: number) => {
+    const query = {
+      ...lookupQuery,
+      tokens: lookupQuery.tokens.map((token, position) => ({
+        ...token,
+        weight: queryWeights[position] ?? panic("Missing selected weight"),
+      })),
+    };
+    return index.entities.search(query, {
+      tau,
+      quality: 1,
+      maxCost: work.remaining,
+    });
+  };
+  // Unknown words select IDF from all equally close folded word spellings,
+  // in caller intern order. A tau=0 lookup cannot prune that weight source.
+  let result = search(
+    needsWeights ? 0 : Math.max(0, threshold - Number.EPSILON * 8),
+  );
+  const chargeSearch = () => {
+    const cost = Object.values(result.cost).reduce(
+      (total, value) => total + value,
+      0,
+    );
+    // The native index reports the exact work performed, including a shared
+    // vocabulary's single search, so charge that cost without a multiplier.
+    if (!spendScreeningWork(work, cost) || result.exhausted) {
+      work.exhausted = true;
+      return false;
+    }
+    return true;
+  };
+  if (!chargeSearch()) {
     return undefined;
   }
-  const reachedWeight = new Map<number, number>();
-  let initialWeight = 0;
-  let totalWeight = 0;
-  for (const [position, weight] of query.weights.entries()) {
-    totalWeight += weight;
-    if (query.initials[position]) {
-      // Initials match by prefix at scoring time, so every alias may use them.
-      initialWeight += weight;
-      continue;
-    }
-    const reached = new Set<number>();
-    for (const queryUnit of query.units) {
-      if (!queryUnit.positions.includes(position)) {
+  const units = populateQueryUnits({ index, sources, result, work });
+  if (units === undefined) {
+    return undefined;
+  }
+  if (needsWeights) {
+    for (const [unitId, source] of sources.entries()) {
+      if (source.type !== "token") {
         continue;
       }
-      for (const [vocabulary, similar] of [
-        [index.folded, queryUnit.folded],
-        [index.raw, queryUnit.raw],
-      ] as const) {
-        for (const id of similar.keys()) {
-          for (const alias of vocabulary.postings[id] ?? []) {
-            if (!spendScreeningWork(work)) {
-              return undefined;
-            }
-            reached.add(alias);
-          }
-          for (const alias of vocabulary.joinPostings[id] ?? []) {
-            if (!spendScreeningWork(work)) {
-              return undefined;
-            }
-            reached.add(alias);
-          }
+      const position =
+        source.positions.at(0) ?? panic("Missing single position");
+      const unit = units[unitId] ?? panic("Missing query unit");
+      let best = -1;
+      let bestId = Number.MAX_SAFE_INTEGER;
+      for (const [id, similarity] of unit.folded) {
+        if (index.wordIds.get(id) === 0) {
+          continue;
+        }
+        if (similarity > best || (similarity === best && id < bestId)) {
+          best = similarity;
+          bestId = id;
+          queryWeights[position] = index.weights.get(id);
         }
       }
     }
-    for (const alias of reached) {
-      if (!spendScreeningWork(work)) {
-        return undefined;
-      }
-      reachedWeight.set(alias, (reachedWeight.get(alias) ?? 0) + weight);
+    result = search(Math.max(0, threshold - Number.EPSILON * 8));
+    if (!chargeSearch()) {
+      return undefined;
     }
   }
-
-  const candidates = rankCandidateGroups({
-    index,
-    query,
-    reachedWeight,
-    initialWeight,
-    totalWeight,
-    ceiling,
-    rankEntry,
-    cutoff,
-    work,
-  });
-  if (candidates === undefined) {
-    return undefined;
-  }
+  const query: PreparedQuery = {
+    tokens: reading.tokens,
+    initials,
+    weights: queryWeights,
+    units,
+  };
   const best = new Map<number, NameMatch>();
-  const selected = [
-    ...candidates.filter((candidate) => candidate.exact),
-    ...candidates
-      .filter((candidate) => !candidate.exact)
-      .slice(0, MAX_SCORED_PATTERNS),
-  ];
-  for (const { aliasIndices, exact } of selected) {
-    const alias =
-      index.aliases[aliasIndices[0]] ??
-      panic("Missing selected candidate alias");
-    let score = alias.quality === "weak" ? WEAK_ALIAS_FACTOR : 1;
-    if (!exact) {
+  const scores = new Map<string, number>();
+  for (const id of result.survivors) {
+    const alias = index.aliases.get(id);
+    const key = `${alias.patternKey}|${alias.quality}`;
+    let score = scores.get(key);
+    if (score === undefined) {
       const pairs =
-        query.units.length * (alias.tokens.length + alias.joins.length) +
-        query.tokens.length * alias.tokens.length;
+        units.length * (alias.tokens.length + alias.joins.length) +
+        reading.tokens.length * alias.tokens.length;
       if (
         !spendScreeningWork(
           work,
           pairs * Math.max(1, Math.ceil(Math.log2(pairs + 1))) +
-            alias.tokens.length,
+            alias.tokens.length +
+            1,
         )
       ) {
         return undefined;
       }
       score = scoreAlias(index, alias, query);
+      scores.set(key, score);
     }
-    for (const aliasIndex of aliasIndices) {
-      if (!spendScreeningWork(work)) {
-        return undefined;
-      }
-      const member =
-        index.aliases[aliasIndex] ?? panic("Missing grouped candidate alias");
-      const current = best.get(member.entry);
-      if (score > 0 && (current === undefined || score > current.score)) {
-        best.set(member.entry, { score, name: member.name });
-      }
+    if (!spendScreeningWork(work)) {
+      return undefined;
+    }
+    const current = best.get(alias.entry);
+    if (score > 0 && (current === undefined || score > current.score)) {
+      best.set(alias.entry, { score, name: alias.name });
     }
   }
-  return {
-    matches: best,
-    truncated:
-      work.selection === "partial" || selected.length < candidates.length,
-  };
+  return { matches: best, truncated: false };
 };

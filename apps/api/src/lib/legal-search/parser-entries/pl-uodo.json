@@ -1,0 +1,11 @@
+{
+  "type": "parser",
+  "name": "PL_UODO",
+  "key": "pl-uodo",
+  "parserVersion": 22,
+  "sourceFingerprintVersion": 0,
+  "scope": {
+    "type": "all",
+    "reason": "Retain the publisher's excluded fields in the stored record instead of naming them as exclusions. Re-derive stored citations with rule kinds, polarity evidence windows and cited parts; the canonical AST and publisher metadata do not change."
+  }
+}

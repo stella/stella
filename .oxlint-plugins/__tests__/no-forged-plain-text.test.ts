@@ -1,8 +1,6 @@
-import { describe, expect, setDefaultTimeout, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 
 import { lintSingleRule } from "./lint-single-rule.ts";
-
-setDefaultTimeout(20_000);
 
 const OWNER = "apps/api/src/lib/case-law/plain-text.ts";
 const lint = async (source: string, sourcePath = "adapter.ts") =>

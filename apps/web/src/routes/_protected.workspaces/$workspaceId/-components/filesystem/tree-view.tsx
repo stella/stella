@@ -7,11 +7,7 @@ import {
   useState,
 } from "react";
 
-import {
-  draggable,
-  dropTargetForElements,
-  monitorForElements,
-} from "@atlaskit/pragmatic-drag-and-drop/adapter/element-adapter";
+import { monitorForElements } from "@atlaskit/pragmatic-drag-and-drop/adapter/element-adapter";
 import { combine } from "@atlaskit/pragmatic-drag-and-drop/utils/combine";
 import { setCustomNativeDragPreview } from "@atlaskit/pragmatic-drag-and-drop/utils/set-custom-native-drag-preview";
 import { useHotkey } from "@tanstack/react-hotkeys";
@@ -21,25 +17,28 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import { panic } from "better-result";
 import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
-import * as v from "valibot";
 
 import { Temporal } from "@stll/time";
-import { BidiText } from "@stll/ui/bidi-text";
 import {
   Breadcrumb,
   BreadcrumbItem,
   BreadcrumbList,
   BreadcrumbSeparator,
 } from "@stll/ui/breadcrumb";
+import { Button } from "@stll/ui/button";
+import { getFileSizeDisplay } from "@stll/ui/file-size";
 import {
   ArrowDownIcon,
   ArrowUpIcon,
   EyeOffIcon,
   FileIcon,
 } from "@stll/ui/icons";
-import { Menu, MenuItem, MenuPopup, MenuTrigger } from "@stll/ui/menu";
+import { Menu, MenuAnchor, MenuItem, MenuPopup } from "@stll/ui/menu";
+import { MiddleTruncate } from "@stll/ui/middle-truncate";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { containedEventHandler } from "@stll/ui/use-contained-handler";
 import { cn } from "@stll/ui/utils";
+import { RecordFieldValue } from "@stll/workspace-ui/field-value";
 
 import { DocumentIcon } from "@/components/document-icon";
 import {
@@ -54,7 +53,6 @@ import type { DragPreviewData } from "@/components/drag-preview";
 import { FileTreeNameCell } from "@/components/file-tree/file-tree";
 import { InlineEdit } from "@/components/inline-edit";
 import { openInspectorSelection } from "@/components/inspector/inspector-actions";
-import Tooltip from "@/components/tooltip";
 import { ActiveEditBadge } from "@/components/workspaces/active-edit-badge";
 import { resolveAncestorIds } from "@/components/workspaces/copy-to-matter-dialog.logic";
 import { EntityKindIcon } from "@/components/workspaces/entity-kind-icon";
@@ -66,26 +64,28 @@ import {
   getFirstFile,
   getInternalPropertyId,
 } from "@/components/workspaces/entity-utils";
-import type { InternalPropertyId } from "@/components/workspaces/entity-utils";
 import { flashElement } from "@/components/workspaces/hooks/use-inspector-flash";
 import { RowActions } from "@/components/workspaces/row-actions";
 import type { TableTreeNode } from "@/components/workspaces/table/types";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
-import { useFormatter, useLocale } from "@/i18n/formatting-context";
+import { useFormatter, useFormattingLocale } from "@/i18n/formatting-context";
 import { detached } from "@/lib/detached";
+import {
+  draggable,
+  dropTargetForElements,
+} from "@/lib/drag-and-drop/element-registration";
 import { notifyUserError } from "@/lib/errors/user-toast";
-import { getFileSizeDisplay } from "@/lib/file-size";
 import { UTC_CALENDAR_DATE_FORMAT } from "@/lib/relative-time";
 import { toSafeId } from "@/lib/safe-id";
-import { readStoredJson, writeStoredJson } from "@/lib/stored-json";
-import type {
-  WorkspaceEntity,
-  WorkspaceProperty,
-  WorkspaceView,
-} from "@/lib/types";
+import type { WorkspaceEntity, WorkspaceView } from "@/lib/types";
 import { useEffectiveHotkey } from "@/lib/use-effective-shortcuts";
 import { ENTITY_DRAG_TYPE } from "@/lib/workspaces/drag-constants";
+import {
+  applySelectionGesture,
+  SELECTION_GESTURE,
+  selectionGestureForModifiers,
+} from "@/lib/workspaces/multi-selection.logic";
 import {
   useMoveEntity,
   useRenameEntity,
@@ -103,10 +103,36 @@ import { EmptyState } from "@/routes/_protected.workspaces/$workspaceId/-compone
 import { calculateFolderStatistics } from "@/routes/_protected.workspaces/$workspaceId/-components/filesystem/folder-statistics.logic";
 import type { FolderStatistics } from "@/routes/_protected.workspaces/$workspaceId/-components/filesystem/folder-statistics.logic";
 import {
+  buildGridTemplate,
+  DEFAULT_EXTRA_WIDTH_PX,
+  FILESYSTEM_CREATED_BY_ID,
+  FILESYSTEM_METADATA_LABEL_IDS,
+  FILESYSTEM_ROW_HEIGHT_PX,
+  FILESYSTEM_UPDATED_AT_ID,
+  FILESYSTEM_VERSION_ID,
+  filesystemRowContentStyle,
+  NAME_COL_ID,
+  resolveExtraColumns,
+} from "@/routes/_protected.workspaces/$workspaceId/-components/filesystem/tree-view-columns.logic";
+import type { ExtraColumn } from "@/routes/_protected.workspaces/$workspaceId/-components/filesystem/tree-view-columns.logic";
+import {
   getFileRowClickIntent,
   getFolderClickIntent,
   orderSelectedIds,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/filesystem/tree-view-selection.logic";
+import {
+  FILESYSTEM_BREADCRUMB_ROW_CLASS,
+  FILESYSTEM_COLUMN_HEAD_CLASS,
+  FILESYSTEM_COLUMN_HEADER_CLASS,
+  FILESYSTEM_COLUMN_LABEL_CLASS,
+  FILESYSTEM_CONTENT_CLASS,
+  FILESYSTEM_EXTRA_CELL_CLASS,
+  FILESYSTEM_FOOTER_CLASS,
+  FILESYSTEM_ROW_GRID_CLASS,
+  FILESYSTEM_ROWS_CLASS,
+  FILESYSTEM_SCROLL_CLASS,
+  FILESYSTEM_VIEW_CLASS,
+} from "@/routes/_protected.workspaces/$workspaceId/-components/filesystem/tree-view.pending";
 import {
   flattenFilesystemRows,
   planFilesystemReveal,
@@ -119,33 +145,9 @@ import {
 import { VersionOrNewFileDialog } from "@/routes/_protected.workspaces/$workspaceId/-components/version-or-new-file-dialog";
 import { useVersionOrNewFileDrop } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-version-or-new-file-drop";
 
-const FILESYSTEM_ROW_HEIGHT_PX = 36;
+import { useColumnWidths } from "./use-column-widths";
+
 const FILESYSTEM_ROW_OVERSCAN = 16;
-const FILESYSTEM_CREATED_BY_ID = "_created-by" satisfies InternalPropertyId;
-const FILESYSTEM_UPDATED_AT_ID = "_updated-at" satisfies InternalPropertyId;
-const FILESYSTEM_VERSION_ID = "_version" satisfies InternalPropertyId;
-const FILESYSTEM_METADATA_IDS = [
-  FILESYSTEM_CREATED_BY_ID,
-  FILESYSTEM_UPDATED_AT_ID,
-  FILESYSTEM_VERSION_ID,
-] as const;
-
-// -- Column descriptors --
-
-type FilesystemMetadataId = (typeof FILESYSTEM_METADATA_IDS)[number];
-
-type ExtraColumn =
-  | { type: "property"; id: string; label: string; property: WorkspaceProperty }
-  | {
-      type: "metadata";
-      id: FilesystemMetadataId;
-      label: string;
-    };
-
-const ACTIONS_COL_RE = / 2rem$/u;
-
-const isFilesystemMetadataId = (id: string): id is FilesystemMetadataId =>
-  FILESYSTEM_METADATA_IDS.some((metadataId) => metadataId === id);
 
 const isStringArray = (value: unknown): value is string[] =>
   Array.isArray(value) && value.every((item) => typeof item === "string");
@@ -181,115 +183,6 @@ const getDragEntityIds = (
 ): string[] | null => {
   const entityIds = data["entityIds"];
   return isStringArray(entityIds) ? entityIds : null;
-};
-
-const resolveExtraColumns = (
-  hiddenProperties: string[],
-  properties: WorkspaceProperty[],
-  metadataLabels: Record<string, string>,
-): ExtraColumn[] => {
-  const propertyById = new Map(
-    properties.map((property) => [property.id, property]),
-  );
-  const ids = [
-    ...FILESYSTEM_METADATA_IDS,
-    ...properties.map((p) => p.id),
-  ].filter((id) => !hiddenProperties.includes(id));
-
-  const cols: ExtraColumn[] = [];
-
-  for (const id of ids) {
-    if (isFilesystemMetadataId(id)) {
-      cols.push({
-        type: "metadata",
-        id,
-        label: metadataLabels[id] ?? id,
-      });
-    } else {
-      const prop = propertyById.get(id);
-      // Skip file-type properties — the Name column already
-      // shows the filename, so a "Documents" column is redundant.
-      if (prop && prop.content.type !== "file") {
-        cols.push({
-          type: "property",
-          id: prop.id,
-          label: prop.name,
-          property: prop,
-        });
-      }
-    }
-  }
-
-  return cols;
-};
-
-// -- Grid template helpers --
-
-const NAME_COL_ID = "__name__";
-const DEFAULT_EXTRA_WIDTH_PX = 128;
-const MIN_COL_WIDTH_PX = 80;
-const MAX_COL_WIDTH_PX = 800;
-
-const buildGridTemplate = (
-  extraColumns: ExtraColumn[],
-  widths: Record<string, number>,
-): string => {
-  const nameWidth = widths[NAME_COL_ID];
-  const nameTrack =
-    nameWidth !== undefined ? `${nameWidth}px` : "minmax(20rem, 1fr)";
-  const extraTracks = extraColumns
-    .map((col) => `${widths[col.id] ?? DEFAULT_EXTRA_WIDTH_PX}px`)
-    .join(" ");
-  return `${nameTrack}${extraTracks ? ` ${extraTracks}` : ""} 2rem`;
-};
-
-type ColumnWidthsApi = {
-  widths: Record<string, number>;
-  setWidth: (id: string, width: number) => void;
-};
-
-// Top-level shape only: each value is checked for finite-number below, so
-// one non-numeric entry drops just that column rather than the whole map.
-const ColumnWidthsRecordSchema = v.record(v.string(), v.unknown());
-
-const useColumnWidths = (storageKey: string): ColumnWidthsApi => {
-  const [widths, setWidths] = useState<Record<string, number>>(() => {
-    if (typeof window === "undefined") {
-      return {};
-    }
-    const raw = window.localStorage.getItem(storageKey);
-    const parsed = readStoredJson(raw, ColumnWidthsRecordSchema);
-    if (!parsed) {
-      return {};
-    }
-    const result: Record<string, number> = {};
-    for (const [key, value] of Object.entries(parsed)) {
-      if (typeof value === "number" && Number.isFinite(value)) {
-        result[key] = value;
-      }
-    }
-    return result;
-  });
-
-  const setWidth = useCallback(
-    (id: string, width: number) => {
-      const clamped = Math.max(
-        MIN_COL_WIDTH_PX,
-        Math.min(MAX_COL_WIDTH_PX, Math.round(width)),
-      );
-      setWidths((prev) => {
-        if (prev[id] === clamped) {
-          return prev;
-        }
-        const next = { ...prev, [id]: clamped };
-        writeStoredJson(window.localStorage, storageKey, next);
-        return next;
-      });
-    },
-    [storageKey],
-  );
-
-  return { widths, setWidth };
 };
 
 // -- Component --
@@ -580,9 +473,15 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
 
   const metadataLabels = useMemo(
     () => ({
-      [FILESYSTEM_CREATED_BY_ID]: t("common.author"),
-      [FILESYSTEM_UPDATED_AT_ID]: t("common.lastUpdated"),
-      [FILESYSTEM_VERSION_ID]: t("common.version"),
+      [FILESYSTEM_CREATED_BY_ID]: t(
+        FILESYSTEM_METADATA_LABEL_IDS[FILESYSTEM_CREATED_BY_ID],
+      ),
+      [FILESYSTEM_UPDATED_AT_ID]: t(
+        FILESYSTEM_METADATA_LABEL_IDS[FILESYSTEM_UPDATED_AT_ID],
+      ),
+      [FILESYSTEM_VERSION_ID]: t(
+        FILESYSTEM_METADATA_LABEL_IDS[FILESYSTEM_VERSION_ID],
+      ),
     }),
     [t],
   );
@@ -624,9 +523,15 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
     setExpandedIds((prev) => new Set(prev).add(entityId));
   };
 
-  const handleSubfolderCreated = (entityId: string, parentId: string) => {
+  const handleSubfolderCreated = (
+    entityId: string,
+    parentId: string | null,
+  ) => {
     setEditingEntityId(entityId);
-    setExpandedIds((prev) => new Set(prev).add(parentId).add(entityId));
+    setExpandedIds((prev) => {
+      const next = new Set(prev).add(entityId);
+      return parentId === null ? next : next.add(parentId);
+    });
   };
 
   const flattenedRows = useMemo(
@@ -659,35 +564,18 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
     entityId: string,
     mods: { meta: boolean; shift: boolean },
   ) => {
-    const selectedEntityId = toSafeId<"entity">(entityId);
-    setSelectedIds((prev) => {
-      if (mods.shift && anchorIdRef.current !== null) {
-        const from = orderedEntityIds.indexOf(
-          toSafeId<"entity">(anchorIdRef.current),
-        );
-        const to = orderedEntityIds.indexOf(selectedEntityId);
-        if (from !== -1 && to !== -1) {
-          const [lo, hi] = from <= to ? [from, to] : [to, from];
-          return new Set(orderedEntityIds.slice(lo, hi + 1));
-        }
-      }
-      // A plain or cmd/ctrl click makes this row the new range anchor.
-      anchorIdRef.current = selectedEntityId;
-      if (mods.meta) {
-        const next = new Set(prev);
-        if (next.has(selectedEntityId)) {
-          next.delete(selectedEntityId);
-        } else {
-          next.add(selectedEntityId);
-        }
-        return next;
-      }
+    const next = applySelectionGesture({
+      selection: { selectedIds, anchorId: anchorIdRef.current },
       // Plain click: sole selection (clicking the only selected row clears it).
-      if (prev.size === 1 && prev.has(selectedEntityId)) {
-        return new Set();
-      }
-      return new Set([selectedEntityId]);
+      gesture: selectionGestureForModifiers(
+        mods,
+        SELECTION_GESTURE.exclusiveToggle,
+      ),
+      id: entityId,
+      orderedIds: orderedEntityIds,
     });
+    anchorIdRef.current = next.anchorId;
+    setSelectedIds(new Set(next.selectedIds));
   };
 
   const rowsViewportRef = useRef<HTMLDivElement>(null);
@@ -837,9 +725,9 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
   }
 
   return (
-    // oxlint-disable-next-line jsx_a11y/no-static-element-interactions, jsx_a11y/click-events-have-key-events -- layout container; click-empty-to-deselect is a mouse convenience, keyboard deselect is the Escape hotkey
+    // oxlint-disable-next-line jsx-a11y/no-static-element-interactions, jsx-a11y/click-events-have-key-events -- layout container; click-empty-to-deselect is a mouse convenience, keyboard deselect is the Escape hotkey
     <div
-      className="flex h-full flex-1 flex-col overflow-hidden p-2"
+      className={FILESYSTEM_VIEW_CLASS}
       onClick={(e) => {
         // Clear selection when clicking empty background
         // (not inside a row).
@@ -852,30 +740,26 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
       }}
       onContextMenu={handleBgContextMenu}
     >
-      <div className="mb-2 px-2">
+      <div className={FILESYSTEM_BREADCRUMB_ROW_CLASS}>
         <div className="min-w-0">
           {currentFolderId && (
             <Breadcrumb>
               <BreadcrumbList>
                 <BreadcrumbItem>
-                  <Tooltip
-                    content={t("workspaces.copyToMatter.rootFolder")}
-                    render={
-                      <button
-                        aria-label={t("workspaces.copyToMatter.rootFolder")}
-                        className="text-muted-foreground hover:text-foreground text-xs"
-                        onClick={() => {
-                          detached(
-                            navigateToFolder(),
-                            "tree-view.navigate-to-folder",
-                          );
-                        }}
-                        type="button"
-                      />
-                    }
+                  <Button
+                    aria-label={t("workspaces.copyToMatter.rootFolder")}
+                    onClick={() => {
+                      detached(
+                        navigateToFolder(),
+                        "tree-view.navigate-to-folder",
+                      );
+                    }}
+                    size="inline"
+                    tooltip={t("workspaces.copyToMatter.rootFolder")}
+                    variant="muted"
                   >
                     <EntityKindIcon className="size-3.5" kind="folder" />
-                  </Tooltip>
+                  </Button>
                 </BreadcrumbItem>
                 {breadcrumbs.map((crumb, i) => {
                   const isLast = i === breadcrumbs.length - 1;
@@ -888,7 +772,6 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
                           if (isEditingCrumb) {
                             return (
                               <InlineEdit
-                                inputClassName="h-5 w-40 text-xs"
                                 onCancel={() => setEditingEntityId(null)}
                                 onChange={setBreadcrumbEditValue}
                                 onCommit={() => {
@@ -908,8 +791,7 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
                           }
                           if (isLast) {
                             return (
-                              <button
-                                className="text-xs font-medium"
+                              <Button
                                 onClick={() => {
                                   detached(
                                     navigateToFolder(),
@@ -921,25 +803,28 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
                                   setBreadcrumbEditValue(crumb.name);
                                   setEditingEntityId(crumb.id);
                                 }}
-                                type="button"
+                                size="inline"
+                                variant="link"
                               >
-                                {crumb.name}
-                              </button>
+                                <span className="text-xs font-medium whitespace-pre">
+                                  {crumb.name}
+                                </span>
+                              </Button>
                             );
                           }
                           return (
-                            <button
-                              className="text-muted-foreground hover:text-foreground text-xs"
+                            <Button
                               onClick={() => {
                                 detached(
                                   navigateToFolder(crumb.id),
                                   "tree-view.navigate-to-folder",
                                 );
                               }}
-                              type="button"
+                              size="inline"
+                              variant="muted"
                             >
-                              {crumb.name}
-                            </button>
+                              <span className="text-xs">{crumb.name}</span>
+                            </Button>
                           );
                         })()}
                       </BreadcrumbItem>
@@ -953,7 +838,7 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
       </div>
       <div
         className={cn(
-          "text-muted-foreground mt-1 flex items-center gap-2 rounded border border-dashed px-3 py-1.5 text-xs",
+          "text-muted-foreground mt-1 flex items-center gap-2 rounded-sm border border-dashed px-3 py-1.5 text-xs",
           isDragActive ? "visible" : "hidden",
           isRootDropTarget
             ? "border-primary bg-primary/10 text-foreground"
@@ -964,10 +849,10 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
         <EntityKindIcon className="size-3.5" kind="folder" />
         {t("workspaces.filesystem.moveToRoot")}
       </div>
-      <div className="mt-1 min-h-0 flex-1 overflow-auto" ref={rowsViewportRef}>
-        <div className="w-max min-w-full">
+      <div className={FILESYSTEM_SCROLL_CLASS} ref={rowsViewportRef}>
+        <div className={FILESYSTEM_CONTENT_CLASS}>
           <div
-            className="text-muted-foreground bg-background sticky top-0 z-10 grid w-full items-center gap-x-4 border-b px-2 pb-1 text-xs font-medium"
+            className={FILESYSTEM_COLUMN_HEADER_CLASS}
             style={{ gridTemplateColumns: gridTemplate }}
           >
             <ColumnHeaderCell
@@ -994,7 +879,7 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
             <span />
           </div>
           <div
-            className="relative mt-1"
+            className={FILESYSTEM_ROWS_CLASS}
             style={{ height: rowVirtualizer.getTotalSize() }}
           >
             {virtualRows.map((virtualRow) => {
@@ -1080,7 +965,7 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
           </div>
         </div>
       </div>
-      <div className="mt-2 shrink-0 px-2">
+      <div className={FILESYSTEM_FOOTER_CLASS}>
         <AddEntityMenu
           onFolderCreated={setEditingEntityId}
           parentId={currentFolderId}
@@ -1101,11 +986,11 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
         parentId={currentFolderId}
         showTaskOption={false}
         render={
-          <button
+          <Button
             aria-label={t("common.add")}
             className="sr-only"
             tabIndex={-1}
-            type="button"
+            variant="plain"
           />
         }
         workspaceId={workspaceId}
@@ -1184,24 +1069,33 @@ const ColumnHeaderCell = ({
   return (
     <div
       className={cn(
-        "group/column relative flex min-w-0 items-center",
+        FILESYSTEM_COLUMN_HEAD_CLASS,
         align === "end" ? "justify-end" : "justify-start",
       )}
       onContextMenu={containedEventHandler(handleContextMenu)}
       ref={containerRef}
     >
-      <button
+      <Button
         className={cn(
-          "hover:text-foreground flex min-w-0 items-center gap-1 rounded-sm py-0.5",
-          align === "end" ? "justify-end text-end" : "justify-start text-start",
-          isActive && "text-foreground",
+          "flex min-w-0 shrink",
+          align === "end" ? "justify-end" : "justify-start",
         )}
         onClick={() => onSort(propertyId)}
-        type="button"
+        variant="plain"
       >
-        <span className="truncate">{label}</span>
-        {isActive && <SortIcon className="size-3 shrink-0" />}
-      </button>
+        <span
+          className={cn(
+            FILESYSTEM_COLUMN_LABEL_CLASS,
+            align === "end"
+              ? "justify-end text-end"
+              : "justify-start text-start",
+            isActive && "text-foreground",
+          )}
+        >
+          <TruncatedText className="font-medium">{label}</TruncatedText>
+          {isActive && <SortIcon className="size-3 shrink-0" />}
+        </span>
+      </Button>
       <div
         aria-hidden="true"
         className="absolute -end-2 top-0 z-10 h-full w-2 cursor-col-resize touch-none select-none"
@@ -1218,16 +1112,7 @@ const ColumnHeaderCell = ({
           }}
           open={isContextOpen}
         >
-          <MenuTrigger
-            render={
-              <button
-                aria-label={t("common.options")}
-                className="sr-only"
-                tabIndex={-1}
-                type="button"
-              />
-            }
-          />
+          <MenuAnchor />
           <MenuPopup anchor={contextAnchor ?? undefined}>
             <MenuItem
               onClick={() => {
@@ -1271,7 +1156,7 @@ type FilesystemRowProps = {
   ) => void;
   onClearSelection: () => void;
   onSelect: (entityId: string, mods: { meta: boolean; shift: boolean }) => void;
-  onSubfolderCreated: (entityId: string, parentId: string) => void;
+  onSubfolderCreated: (entityId: string, parentId: string | null) => void;
   getSelectedDragItems: (ids: Set<string>) => DragPreviewData[];
   getSelectedEntities: (ids: Set<string>) => WorkspaceEntity[];
   getAncestorIds: (id: string) => string[];
@@ -1628,7 +1513,7 @@ export const FilesystemRow = ({
             />
           );
         }
-        if (file?.mimeType) {
+        if (file) {
           return (
             <DocumentIcon
               className="size-4 shrink-0"
@@ -1649,7 +1534,6 @@ export const FilesystemRow = ({
       {isEditing ? (
         <InlineEdit
           className="max-w-full min-w-0"
-          inputClassName="min-w-48 [field-sizing:content]"
           onCancel={cancelEditing}
           onChange={setEditValue}
           onCommit={commitRename}
@@ -1662,9 +1546,7 @@ export const FilesystemRow = ({
         />
       ) : (
         <span className="flex min-w-0 items-center gap-1.5">
-          <BidiText as="span" className="truncate" title={name}>
-            {name}
-          </BidiText>
+          <MiddleTruncate value={name} />
           {folderStatistics && formattedFolderSize && (
             <span className="text-muted-foreground flex shrink-0 items-center gap-1 text-xs tabular-nums">
               <span>
@@ -1675,7 +1557,7 @@ export const FilesystemRow = ({
                   { count: folderStatistics.fileCount },
                 )}
               </span>
-              <span className="flex items-center gap-1 opacity-0 transition-opacity duration-150 group-focus-within/row:opacity-100 group-hover/row:opacity-100">
+              <span className="flex items-center gap-1 opacity-0 transition-opacity duration-150 group-focus-within/row:opacity-100 group-hover/row:opacity-100 pointer-coarse:opacity-100">
                 <span aria-hidden="true">·</span>
                 <span>{formattedFolderSize}</span>
               </span>
@@ -1694,32 +1576,22 @@ export const FilesystemRow = ({
   );
 
   const extraCells = extraColumns.map((col) => (
-    <span
-      className="text-muted-foreground flex h-full min-w-0 items-center justify-end overflow-hidden text-end text-xs text-ellipsis whitespace-nowrap"
-      key={col.id}
-    >
+    <span className={FILESYSTEM_EXTRA_CELL_CLASS} key={col.id}>
       <ExtraColumnCell column={col} entity={node} />
     </span>
   ));
 
   const gridCls = cn(
-    "hover:bg-muted grid h-full w-full items-center gap-x-4 rounded px-2 text-start text-sm",
+    FILESYSTEM_ROW_GRID_CLASS,
     (isFolderDropTarget || isExternalDropTarget) && "bg-accent",
     isSelected && "bg-accent",
   );
   const rowButtonCls =
-    "min-w-0 rounded text-start outline-none focus-visible:bg-muted/70";
+    "min-w-0 rounded-sm text-start outline-none focus-visible:bg-muted/70";
 
   // Content area: Name + Type + extras (interactive, clickable)
   // gridColumn spans all content columns (excluding the actions column)
-  const contentSpanStyle = {
-    gridColumn: "1 / -2",
-    display: "grid",
-    gridTemplateColumns: gridTemplate.replace(ACTIONS_COL_RE, ""),
-    alignItems: "center",
-    alignSelf: "stretch",
-    columnGap: "1rem",
-  } as const;
+  const contentSpanStyle = filesystemRowContentStyle(gridTemplate);
   const contentCells = (
     <>
       {nameCell}
@@ -1777,8 +1649,8 @@ export const FilesystemRow = ({
       {contentCells}
     </div>
   ) : (
-    <button
-      className={rowButtonCls}
+    <Button
+      className="min-w-0"
       onClick={(event) => {
         if (!isFolder) {
           const intent = getFileRowClickIntent({
@@ -1827,6 +1699,24 @@ export const FilesystemRow = ({
           onToggleFolder(node.entityId);
         }
       }}
+      onKeyDown={(event) => {
+        if (
+          isFolder ||
+          event.defaultPrevented ||
+          event.key !== "Enter" ||
+          event.shiftKey ||
+          event.metaKey ||
+          event.ctrlKey ||
+          event.altKey
+        ) {
+          return;
+        }
+        event.preventDefault();
+        if (!event.repeat) {
+          dblClickSelectionRef.current = undefined;
+          openInInspector();
+        }
+      }}
       onDoubleClick={() => {
         if (isFolder) {
           onNavigateToFolder(node.entityId);
@@ -1834,11 +1724,12 @@ export const FilesystemRow = ({
         }
         openInInspector();
       }}
+      focusRing="inside"
       style={contentSpanStyle}
-      type="button"
+      variant="plain"
     >
       {contentCells}
-    </button>
+    </Button>
   );
 
   return (
@@ -1886,7 +1777,7 @@ const formatDateValue = (
 };
 
 const ExtraColumnCell = ({ column, entity }: ExtraColumnCellProps) => {
-  const locale = useLocale();
+  const locale = useFormattingLocale();
   if (column.type === "metadata") {
     switch (column.id) {
       case FILESYSTEM_CREATED_BY_ID:
@@ -1908,17 +1799,27 @@ const ExtraColumnCell = ({ column, entity }: ExtraColumnCellProps) => {
   if (field?.content.type === "date") {
     const formatted = formatDateValue(field.content.value, locale);
     return (
-      <span className="text-muted-foreground truncate text-xs">
+      <TruncatedText className="text-muted-foreground text-xs">
         {formatted || "-"}
-      </span>
+      </TruncatedText>
+    );
+  }
+
+  // A record's state (candidates to choose, a count, review) is part of
+  // what it says; the flat text would hide it behind "-".
+  if (field?.content.type === "record") {
+    return (
+      <TruncatedText className="text-muted-foreground text-xs">
+        <RecordFieldValue content={field.content} variant="table" />
+      </TruncatedText>
     );
   }
 
   const value = getFieldValue(field);
 
   return (
-    <span className="text-muted-foreground truncate text-xs">
+    <TruncatedText className="text-muted-foreground text-xs">
       {value || "-"}
-    </span>
+    </TruncatedText>
   );
 };

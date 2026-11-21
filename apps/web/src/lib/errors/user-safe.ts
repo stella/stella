@@ -1,3 +1,6 @@
+import { UnhandledException } from "better-result";
+
+import { isAIFailureCode } from "@stll/api-contract";
 import { isActionAdmissionCode } from "@stll/api-contract/action-admission";
 
 import {
@@ -7,38 +10,69 @@ import {
   type ToAPIErrorProps,
 } from "@/lib/errors/api";
 import { AuthClientError } from "@/lib/errors/auth";
+import {
+  ClientOperationError,
+  isUserSafeClientOperation,
+} from "@/lib/errors/client";
+import { UploadFileSizeError } from "@/lib/files/upload-file-validation";
 
 const SERVER_ERROR_THRESHOLD = 500;
+
+/**
+ * Which text the user sees for an API error. A server error keeps the
+ * caller's own fallback: its message describes the server, not the action.
+ * The one exception is a typed AI failure, whose message says what to do
+ * (retry, fix the provider key), and which is often answered with a 5xx.
+ */
+const displayedMessage = (error: APIError, fallback: string): string => {
+  if (isActionAdmissionCode(error.code)) {
+    return error.message;
+  }
+  if (!isDisplayableAPIError(error)) {
+    return fallback;
+  }
+  return error.status < SERVER_ERROR_THRESHOLD || isAIFailureCode(error.code)
+    ? error.message
+    : fallback;
+};
 
 export const userErrorMessage = (
   error: ToAPIErrorProps,
   fallback: string,
-): string => {
-  const apiError = toAPIError(error);
-  if (isActionAdmissionCode(apiError.code)) {
-    return apiError.message;
+): string => displayedMessage(toAPIError(error), fallback);
+
+/**
+ * `Result.tryPromise` wraps whatever a call threw, so the typed error the
+ * message depends on sits one level down. A transport failure stays wrapped:
+ * it says nothing about the operation, so the caller's own wording stands.
+ */
+const unwrapThrown = (error: unknown): unknown => {
+  if (!UnhandledException.is(error)) {
+    return error;
   }
-  if (error.status >= SERVER_ERROR_THRESHOLD) {
-    return fallback;
-  }
-  return isDisplayableAPIError(apiError) ? apiError.message : fallback;
+  const { cause } = error;
+  return APIError.is(cause) && cause.transportKind !== undefined
+    ? error
+    : cause;
 };
 
 export const userErrorFromThrown = (
-  error: unknown,
+  thrown: unknown,
   fallback: string,
 ): string => {
-  if (AuthClientError.is(error)) {
+  const error = unwrapThrown(thrown);
+  if (
+    AuthClientError.is(error) ||
+    UploadFileSizeError.is(error) ||
+    (ClientOperationError.is(error) && isUserSafeClientOperation(error.action))
+  ) {
     return error.message;
   }
   if (APIError.is(error)) {
-    if (isActionAdmissionCode(error.code)) {
+    if (error.transportKind !== undefined) {
       return error.message;
     }
-    if (error.status >= SERVER_ERROR_THRESHOLD) {
-      return fallback;
-    }
-    return isDisplayableAPIError(error) ? error.message : fallback;
+    return displayedMessage(error, fallback);
   }
   return fallback;
 };

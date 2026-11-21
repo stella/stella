@@ -27,7 +27,11 @@ const CONVERTIBLE_MIME_TYPES = {
   "text/plain": null,
 } as const satisfies Record<string, null>;
 
-export const isConvertibleMimeType = (mimeType: string): boolean =>
+export type ConvertibleMime = keyof typeof CONVERTIBLE_MIME_TYPES;
+
+export const isConvertibleMimeType = (
+  mimeType: string,
+): mimeType is ConvertibleMime =>
   Object.hasOwn(CONVERTIBLE_MIME_TYPES, mimeType);
 
 /** OOXML formats rendered in-browser and therefore excluded from the derivative queue. */

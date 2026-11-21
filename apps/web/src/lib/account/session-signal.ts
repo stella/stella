@@ -1,5 +1,8 @@
 import { Result } from "better-result";
 
+import { deviceStorage } from "@/lib/account/browser-storage";
+import { createRandomValue } from "@/lib/uuid";
+
 /**
  * A note between the tabs of one browser that who is signed in may have
  * changed: after a sign-in, a change of organization or a sign-out. Each tab
@@ -35,17 +38,12 @@ const openChannel = (): BroadcastChannel | null =>
         null,
       );
 
-const localStorageOf = (): Storage | null =>
-  typeof window === "undefined"
-    ? null
-    : Result.try(() => window.localStorage).unwrapOr(null);
-
 /** Tells the browser's other tabs to read their session again. */
 export const signalSessionChange = (): void => {
   const signal: SessionSignal = {
     type: "session-changed",
     sender: TAB_ID,
-    nonce: crypto.randomUUID(),
+    nonce: createRandomValue(),
   };
   const channel = openChannel();
   if (channel !== null) {
@@ -59,9 +57,9 @@ export const signalSessionChange = (): void => {
   }
   // Without channels, a changed entry reaches the other tabs as a storage
   // event; the nonce makes every note a change.
-  const storage = localStorageOf();
+  const storage = deviceStorage("local");
   Result.try(() => {
-    storage?.setItem(SESSION_SIGNAL_KEY, JSON.stringify(signal));
+    storage.setItem(SESSION_SIGNAL_KEY, JSON.stringify(signal));
   }).unwrapOr(undefined);
 };
 

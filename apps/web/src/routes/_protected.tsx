@@ -1,23 +1,25 @@
 import { createFileRoute } from "@tanstack/react-router";
 
+import { DefaultPendingComponent } from "@/components/route-components";
+import {
+  APP_FRAME_SCOPE,
+  MEMBER_PROVIDER_SCOPES,
+} from "@/routes/-app-frame-scope";
 import {
   loadProtectedContext,
   prefetchProtectedShell,
 } from "@/routes/-protected-guard";
-import { ProtectedPendingSkeleton } from "@/routes/-protected-pending-skeleton";
 
 // The signed-in frame itself renders from the root (`AppFrameHost`), above
 // this guard, so it stays mounted across every signed-in route.
 export const Route = createFileRoute("/_protected")({
+  staticData: {
+    appFrame: APP_FRAME_SCOPE.member,
+    providerScopes: MEMBER_PROVIDER_SCOPES,
+  },
   ssr: false,
   beforeLoad: loadProtectedContext,
   loader: prefetchProtectedShell,
-  // This subtree is private and client-only. Rendering a loading
-  // shell in SSR gives no SEO value and previously tripped React's
-  // streamed Suspense boundary path under Bun in CI, so the fallback
-  // must stay PURE STATIC: plain layout divs + Skeleton blocks, no
-  // hooks, context, data, lazy(), or Suspense. It renders identically
-  // on server and client to shape the shell during hydration instead
-  // of flashing a blank white screen.
-  pendingComponent: ProtectedPendingSkeleton,
+  // Static content only: AppFrameHost owns the first-load and mounted shell.
+  pendingComponent: DefaultPendingComponent,
 });

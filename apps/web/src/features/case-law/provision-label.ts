@@ -12,12 +12,29 @@ import type {
   ProvisionPartKey,
   ProvisionReference,
 } from "@stll/legal-ast/provision-reference";
+import { provisionCitationFormFor } from "@stll/legal-atlas/provision-citation-grammars";
 
 /** Renders one named subdivision, e.g. `("subsection", "1") => "para. 1"`. */
 export type RenderProvisionPart = (
   key: ProvisionPartKey,
   value: string,
 ) => string;
+
+/**
+ * The label in the citing jurisdiction's own form: a grammar that prints its
+ * citations one way (`§ 1983(a)(1)`) renders them itself, every other one is
+ * assembled from the catalog's words.
+ */
+export const formatProvisionLabel = (
+  jurisdiction: string,
+  reference: ProvisionReference,
+  render: RenderProvisionPart,
+): string => {
+  const form = provisionCitationFormFor(jurisdiction);
+  return form.type === "printed"
+    ? form.format(reference)
+    : formatProvisionReference(reference, render);
+};
 
 export const formatProvisionReference = (
   reference: ProvisionReference,

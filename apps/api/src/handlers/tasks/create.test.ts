@@ -9,7 +9,16 @@ import {
   workspaceMembers,
   workspaces,
 } from "@/api/db/schema";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { toSafeId } from "@/api/lib/branded-types";
+import {
+  createFeatureAccessSnapshot,
+  decideFeatureAccess,
+} from "@/api/lib/feature-access/policy";
+import {
+  FEATURE_REGISTRY,
+  LEGAL_LISTS_FEATURE_ID,
+} from "@/api/lib/feature-access/registry";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { createTaskEntityHandler } from "@/api/lib/tasks/create-task-entity";
 import { entityVersionInsertResult } from "@/api/tests/helpers/entity-version-insert-mock";
@@ -40,6 +49,9 @@ const userId = toSafeId<"user">("user_abc");
 const sourceEntityId = toSafeId<"entity">(
   "11111111-1111-4111-8111-111111111248",
 );
+const assignmentId = toSafeId<"taskAssignee">(
+  "22222222-2222-4222-8222-222222222248",
+);
 
 /** Mock scopedDb that throws if called (validates early return). */
 const throwingScopedDb = () =>
@@ -66,6 +78,28 @@ const createHandlerContext = ({
 }): CreateTaskCtx =>
   asTestRaw<CreateTaskCtx>({
     workspaceId,
+    featureAccessSnapshot: createFeatureAccessSnapshot({
+      organizationId: "org_test123",
+      userId,
+      decisions: new Map([
+        [
+          LEGAL_LISTS_FEATURE_ID,
+          decideFeatureAccess({
+            registry: FEATURE_REGISTRY,
+            featureId: LEGAL_LISTS_FEATURE_ID,
+            grants: {
+              [LEGAL_LISTS_FEATURE_ID]: [
+                { type: "organization", organizationId: "org_test123" },
+              ],
+            },
+            organizationId: "org_test123",
+            userId,
+            membership: true,
+            user: { email: "member@example.test", emailVerified: true },
+          }),
+        ],
+      ]),
+    }),
     user: { id: userId },
     session: {
       activeOrganizationId: toSafeId<"organization">("org_test123"),
@@ -75,7 +109,7 @@ const createHandlerContext = ({
     request: new Request(`https://example.test/v1/tasks/${workspaceId}`, {
       method: "PUT",
     }),
-    route: "/v1/tasks/:workspaceId",
+    route: "/v1/tasks/:workspaceId" satisfies ApiRoutePath,
     safeDb,
     scopedDb,
   });
@@ -223,6 +257,7 @@ describe("createTaskHandler validation", () => {
   test("assigns legacy task creation to its workspace-member creator", async () => {
     const assigneeRows: Record<string, unknown>[] = [];
     const { safeDb } = createScopedDbMock({
+      execute: async () => [{ id: workspaceId }],
       $count: async () => 0,
       select: () => ({
         from: (table: unknown) =>
@@ -243,7 +278,14 @@ describe("createTaskHandler validation", () => {
           }
           return table === entityVersions
             ? entityVersionInsertResult(values)
-            : { onConflictDoUpdate: async () => [] };
+            : {
+                onConflictDoUpdate: () => ({
+                  returning: async () =>
+                    (Array.isArray(values) ? values : [values]).map(
+                      (value) => ({ ...value, id: assignmentId }),
+                    ),
+                }),
+              };
         },
         select: () => ({ onConflictDoUpdate: async () => [] }),
       }),
@@ -251,6 +293,7 @@ describe("createTaskHandler validation", () => {
         set: () => ({ where: async () => [] }),
       }),
     });
+    const filed: unknown[] = [];
 
     const result = await Result.gen(() =>
       createTaskEntityHandler({
@@ -260,12 +303,92 @@ describe("createTaskHandler validation", () => {
         recordAuditEvent: async () => {},
         body: { name: "Prepare filing" },
         features: TASK_FEATURES_DISABLED,
+        fileNotifications: (rows) => {
+          filed.push(...rows);
+        },
       }),
     );
 
     expect(Result.isOk(result)).toBe(true);
     expect(assigneeRows).toEqual([
       expect.objectContaining({ userId, role: "assignee" }),
+    ]);
+    // Assigning yourself is not news.
+    expect(filed).toEqual([]);
+  });
+
+  test("tells a colleague assigned at creation who assigned them", async () => {
+    const colleagueId = toSafeId<"user">("user_colleague");
+    const { safeDb } = createScopedDbMock({
+      execute: async () => [{ id: workspaceId }],
+      $count: async () => 0,
+      select: () => ({
+        from: (table: unknown) =>
+          table === workspaces
+            ? createSelectQueryMock([
+                {
+                  organizationId: "org_test123",
+                  actorName: "Ada Lovelace",
+                  writeId: "7",
+                },
+              ]).from()
+            : createSelectQueryMock(
+                table === workspaceMembers || table === member
+                  ? [{ userId }, { userId: colleagueId }]
+                  : [],
+              ).from(),
+      }),
+      insert: (table: unknown) => ({
+        values: (
+          values: Record<string, unknown> | Record<string, unknown>[],
+        ) =>
+          table === entityVersions
+            ? entityVersionInsertResult(values)
+            : {
+                onConflictDoUpdate: () => ({
+                  returning: async () =>
+                    (Array.isArray(values) ? values : [values]).map(
+                      (value) => ({ ...value, id: assignmentId }),
+                    ),
+                }),
+              },
+        select: () => ({ onConflictDoUpdate: async () => [] }),
+      }),
+      update: () => ({
+        set: () => ({ where: async () => [] }),
+      }),
+    });
+    const filed: unknown[] = [];
+
+    const result = await Result.gen(() =>
+      createTaskEntityHandler({
+        safeDb,
+        workspaceId,
+        userId,
+        recordAuditEvent: async () => {},
+        body: { name: "Draft the reply", assigneeIds: [colleagueId, userId] },
+        features: TASK_FEATURES_DISABLED,
+        fileNotifications: (rows) => {
+          filed.push(...rows);
+        },
+      }),
+    );
+
+    if (!Result.isOk(result)) {
+      expect.unreachable("the task was not created");
+    }
+    const { entityId } = result.value;
+    expect(filed).toEqual([
+      {
+        kind: "task_assigned",
+        metadata: { actorName: "Ada Lovelace" },
+        entityType: "task",
+        entityId,
+        workspaceId,
+        organizationId: "org_test123",
+        userId: colleagueId,
+        idempotencyKey: `task_assigned:${entityId}:${colleagueId}:${assignmentId}:7`,
+      },
     ]);
   });
 
@@ -304,6 +427,7 @@ describe("createTaskHandler validation", () => {
   test("creates unassigned work for an authorized caller without workspace membership", async () => {
     const obligationRows: Record<string, unknown>[] = [];
     const { safeDb } = createScopedDbMock({
+      execute: async () => [{ id: workspaceId }],
       $count: async () => 0,
       select: () => ({
         from: (table: unknown) =>
@@ -345,7 +469,7 @@ describe("createTaskHandler validation", () => {
       }),
     );
 
-    expect(Result.isOk(result)).toBe(true);
+    expect(result).toMatchObject({ status: "ok" });
     expect(obligationRows).toEqual([
       expect.objectContaining({
         ownerUserId: null,
@@ -387,6 +511,7 @@ describe("createTaskHandler validation", () => {
   test("a non-task List row is created without governed work", async () => {
     const obligationRows: Record<string, unknown>[] = [];
     const { safeDb } = createScopedDbMock({
+      execute: async () => [{ id: workspaceId, enabled: true }],
       $count: async () => 0,
       select: () => ({
         from: (table: unknown) =>
@@ -421,7 +546,7 @@ describe("createTaskHandler validation", () => {
       }),
     );
 
-    expect(Result.isOk(result)).toBe(true);
+    expect(result).toMatchObject({ status: "ok" });
     expect(obligationRows).toEqual([]);
   });
 

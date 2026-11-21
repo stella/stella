@@ -1,4 +1,4 @@
-import type { ChatMessage } from "@/api/handlers/chat/types";
+import type { SafeHandlerLogContext } from "@/api/lib/api-handlers";
 import type { ChatToolMap } from "@/api/lib/chat/chat-tool-types";
 
 /**
@@ -41,28 +41,16 @@ export const readTestJson = async <T>(resp: Response): Promise<T> =>
   // oxlint-disable-next-line typescript/no-unsafe-type-assertion
   (await resp.json()) as T;
 
-/**
- * Build a `ChatMessage["parts"][number]` fixture from a literal object.
- *
- * The persisted UI message-parts union is a discriminated union over
- * ~12 variants (text, file, tool, dynamic-tool, ...); building one in
- * a test fixture from a literal misses the discriminator narrowing
- * unless the literal exactly matches one variant's shape. This helper
- * absorbs the resulting cast in one place so tests can express the
- * fixture inline.
- */
-export const asChatPart = (part: object): ChatMessage["parts"][number] =>
-  // SAFETY: each call site spells out the variant's discriminator
-  // (type, state) explicitly; the helper widens that literal back to
-  // the canonical persisted-part union.
-  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-  part as unknown as ChatMessage["parts"][number];
-
 type TestFetchMock =
   | (() => Promise<Response>)
   | ((input: string) => Promise<Response>)
   | ((input: string | URL | Request) => Promise<Response>)
   | ((input: string | URL | Request, init?: RequestInit) => Promise<Response>);
+
+// Keep native static methods complete when a test captures another fetch fake.
+const FETCH_MOCK_PROPERTIES = {
+  preconnect: () => undefined,
+} satisfies Pick<typeof fetch, keyof typeof fetch>;
 
 /**
  * Cast a test fetch mock to the global `fetch` signature.
@@ -71,13 +59,14 @@ type TestFetchMock =
  * Request, RequestInit) that's awkward to satisfy in tests that
  * only care about the URL string. This helper centralises the
  * widening so the per-test mock can use the input shape it asserts.
+ * Preconnect is inert so mocked requests cannot open real connections.
  */
 export const asFetchMock = (fn: TestFetchMock): typeof fetch =>
   // SAFETY: production code calls the mock with the URL it would
   // pass to real `fetch`; the test asserts on that exact input.
   // Absent fetch overloads are not exercised at runtime.
   // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-  fn as unknown as typeof fetch;
+  Object.assign(fn, FETCH_MOCK_PROPERTIES) as unknown as typeof fetch;
 
 /**
  * Narrow an `unknown` raw value to a caller-declared test shape.
@@ -87,11 +76,16 @@ export const asFetchMock = (fn: TestFetchMock): typeof fetch =>
  * exact shape, but the abstraction's type is intentionally
  * `unknown` to force production callers to validate explicitly.
  */
-// SAFETY: tests construct the raw object directly, so its shape
-// matches by construction. This helper centralises the assertion
-// in one place per test file. The single-use type parameter is
-// the helper's whole API surface.
-// oxlint-disable-next-line typescript/no-unnecessary-type-parameters
-export const asTestRaw = <T>(raw: unknown): T =>
-  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- centralised test-only raw cast; the helper IS the cast
-  raw as T;
+// Handler invocations may fake unrelated collaborators, but must carry the
+// request and declared route that the safe-handler boundary always reads.
+// oxlint-disable-next-line typescript/no-unnecessary-type-parameters -- the explicit target type is the test cast API
+export function asTestRaw<T extends SafeHandlerLogContext>(
+  raw: Pick<SafeHandlerLogContext, "request" | "route"> &
+    Record<string, unknown>,
+): T;
+export function asTestRaw<T>(
+  raw: T extends SafeHandlerLogContext ? never : unknown,
+): T;
+export function asTestRaw(raw: unknown): unknown {
+  return raw;
+}

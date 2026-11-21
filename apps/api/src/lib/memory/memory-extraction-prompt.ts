@@ -1,7 +1,7 @@
 /** Encode the only characters capable of opening or closing the XML-like
  * trust delimiter while preserving the summary's readable text for the model.
  */
-export const escapeUntrustedPromptContent = (content: string): string =>
+const escapeUntrustedPromptContent = (content: string): string =>
   content
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")

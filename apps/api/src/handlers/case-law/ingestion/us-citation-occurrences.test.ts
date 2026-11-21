@@ -3,8 +3,15 @@ import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
 import { parseUsReporterReference } from "@stll/api-contract/us-reporter-citation";
+import { plainTextOf } from "@stll/legal-ast/document-ast";
+import type {
+  Block,
+  DocumentAst,
+  Inline,
+  ParagraphBlock,
+} from "@stll/legal-ast/document-ast";
 import type { InlineCitationPinPart } from "@stll/legal-ast/inline";
-import { propertyConfig, propertySeed } from "@stll/property-testing";
+import { assertProperty, propertySeed } from "@stll/property-testing";
 
 import {
   extractCitations,
@@ -20,17 +27,7 @@ import {
   US_CITATION_OCCURRENCE_LIMIT,
 } from "@/api/handlers/case-law/ingestion/us-citation-occurrences";
 import type { UsCitationOccurrence } from "@/api/handlers/case-law/ingestion/us-citation-occurrences";
-import { plainTextOf } from "@/api/lib/case-law/document-ast";
-import type {
-  Block,
-  DocumentAst,
-  Inline,
-  ParagraphBlock,
-} from "@/api/lib/case-law/document-ast";
 import type { CitationOpinionScope } from "@/api/lib/legal-search/ingestion-types";
-
-const config = (numRuns: number) =>
-  propertyConfig({ numRuns, seed: propertySeed() });
 
 const paragraph = (
   id: string,
@@ -821,6 +818,39 @@ describe("case captions", () => {
     ).toBe("missing-antecedent");
   });
 
+  test("prose particles before government parties preserve repeated captions", () => {
+    assertProperty(
+      "prose particles before government parties preserve repeated captions",
+      fc.property(
+        fc.constantFrom("de", "la", "du", "von", "van"),
+        fc.constantFrom("People", "State", "United States"),
+        (particle, party) => {
+          expect(
+            readingOf([
+              paragraph(
+                "p",
+                `En el caso ${particle} ${party} v. Qorvix, 9137 N.Y. 9246. ${party} v. Qorvix, 9137 N.Y.,9246.`,
+              ),
+            ]).occurrences.map((reading) => reading.at(2)),
+          ).toEqual([["9137 N.Y. 9246"], ["9137 N.Y. 9246"]]);
+        },
+      ),
+      { numRuns: 30, seed: propertySeed() },
+    );
+  });
+
+  test("surname particles remain part of distinct party names", () => {
+    // Re exercises the grammatical-word boundary; Zulnax is a fictional party.
+    expect(
+      readingOf([
+        paragraph(
+          "p",
+          "de Re v. Zulnax, 9137 N.Y. 9246. Re v. Zulnax, 9137 N.Y. 9246.",
+        ),
+      ]).occurrences.map((reading) => reading.at(2)),
+    ).toEqual(["conflicting-parallels", "conflicting-parallels"]);
+  });
+
   test("the same caption repeated is one decision", () => {
     expect(
       readingOf([
@@ -1065,7 +1095,8 @@ const separator = fc.constantFrom(". ", "; ", "; see ");
 
 describe("occurrences (properties)", () => {
   test("any unsupported authority between a case and Id. stops it", () => {
-    fc.assert(
+    assertProperty(
+      "any unsupported authority between a case and Id. stops it",
       fc.property(
         reference,
         unsupportedAuthority,
@@ -1085,12 +1116,13 @@ describe("occurrences (properties)", () => {
           });
         },
       ),
-      config(300),
+      { numRuns: 300, seed: propertySeed() },
     );
   });
 
   test("spacing and spelling variants read as the same bases", () => {
-    fc.assert(
+    assertProperty(
+      "spacing and spelling variants read as the same bases",
       fc.property(
         fc.array(reference, { minLength: 1, maxLength: 4 }),
         (references) => {
@@ -1107,12 +1139,13 @@ describe("occurrences (properties)", () => {
           );
         },
       ),
-      config(200),
+      { numRuns: 200, seed: propertySeed() },
     );
   });
 
   test("a pin never changes what a reference names", () => {
-    fc.assert(
+    assertProperty(
+      "a pin never changes what a reference names",
       fc.property(reference, pinText, ({ printed }, pin) => {
         const bare = targetsOf([paragraph("p", `${printed}. Id.`)]);
         const pinned = targetsOf([
@@ -1120,12 +1153,13 @@ describe("occurrences (properties)", () => {
         ]);
         expect(pinned).toEqual(bare);
       }),
-      config(200),
+      { numRuns: 200, seed: propertySeed() },
     );
   });
 
   test("renaming an opinion never links across opinions", () => {
-    fc.assert(
+    assertProperty(
+      "renaming an opinion never links across opinions",
       fc.property(
         fc.uniqueArray(fc.stringMatching(/^[a-z]{1,6}$/u), {
           minLength: 2,
@@ -1147,12 +1181,13 @@ describe("occurrences (properties)", () => {
           ]);
         },
       ),
-      config(100),
+      { numRuns: 100, seed: propertySeed() },
     );
   });
 
   test("repeating a reference or its short forms adds occurrences, never edges", () => {
-    fc.assert(
+    assertProperty(
+      "repeating a reference or its short forms adds occurrences, never edges",
       fc.property(
         reference,
         fc.integer({ min: 1, max: 5 }),
@@ -1174,7 +1209,7 @@ describe("occurrences (properties)", () => {
           );
         },
       ),
-      config(100),
+      { numRuns: 100, seed: propertySeed() },
     );
   });
 });

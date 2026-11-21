@@ -2,6 +2,7 @@ import { panic } from "better-result";
 import * as v from "valibot";
 
 import { MCP_DEFAULT_RESOURCE_SCOPES } from "@stll/api-contract";
+import { sha256Bytes as hashSha256Bytes } from "@stll/sha256/browser";
 
 import { getAuth } from "@/api/lib/auth";
 import { getAuthEndpointUrl } from "@/api/lib/auth/auth-paths";
@@ -18,7 +19,7 @@ const GRANTED_SCOPES = [...MCP_DEFAULT_RESOURCE_SCOPES, "offline_access"];
 
 export type RegisteredOAuthClient = {
   clientId: string;
-  clientSecret: string;
+  clientSecret?: string;
 };
 
 export type OAuthGrant = {
@@ -29,7 +30,7 @@ export type OAuthGrant = {
 
 const registrationSchema = v.looseObject({
   client_id: v.pipe(v.string(), v.minLength(1)),
-  client_secret: v.pipe(v.string(), v.minLength(1)),
+  client_secret: v.optional(v.pipe(v.string(), v.minLength(1))),
 });
 const redirectSchema = v.looseObject({ url: v.string() });
 
@@ -48,15 +49,18 @@ const nextClientAddress = () => {
   return `198.51.${String(100 + Math.floor(requestsIssued / 250))}.${String((requestsIssued % 250) + 1)}`;
 };
 
-const formRequest = (path: string, body: Record<string, string>) =>
-  new Request(getAuthEndpointUrl(path), {
+const formRequest = (path: string, body: Record<string, string>) => {
+  const address = nextClientAddress();
+  return new Request(getAuthEndpointUrl(path), {
     method: "POST",
     headers: {
       "content-type": "application/x-www-form-urlencoded",
-      "x-forwarded-for": nextClientAddress(),
+      "x-forwarded-for": address,
+      [AUTH_CLIENT_ADDRESS_HEADER]: address,
     },
     body: new URLSearchParams(body),
   });
+};
 
 const readJson = async <TSchema extends v.GenericSchema>(
   response: Response,
@@ -74,10 +78,11 @@ const readJson = async <TSchema extends v.GenericSchema>(
 export const readOAuthRedirect = async (response: Response): Promise<URL> =>
   new URL((await readJson(response, redirectSchema)).url);
 
-/** Register a confidential web client the way a hosted connector does. */
+/** Register a web client through the provider. */
 export const registerOAuthClient = async (
   // For suites that register from documentation addresses of their own.
   clientAddress: string = nextClientAddress(),
+  tokenEndpointAuthMethod: "client_secret_post" | "none" = "client_secret_post",
 ): Promise<RegisteredOAuthClient> => {
   const response = await getAuth().handler(
     new Request(getAuthEndpointUrl("oauth2/register"), {
@@ -96,25 +101,36 @@ export const registerOAuthClient = async (
         redirect_uris: [REDIRECT_URI],
         response_types: ["code"],
         scope: GRANTED_SCOPES.join(" "),
-        token_endpoint_auth_method: "client_secret_post",
+        token_endpoint_auth_method: tokenEndpointAuthMethod,
       }),
     }),
   );
   const registered = await readJson(response, registrationSchema);
+  if (tokenEndpointAuthMethod === "none") {
+    if (registered.client_secret !== undefined) {
+      panic("Public client must not receive a secret");
+    }
+    return { clientId: registered.client_id };
+  }
   return {
     clientId: registered.client_id,
-    clientSecret: registered.client_secret,
+    clientSecret:
+      registered.client_secret ??
+      panic("Confidential client requires a secret"),
   };
 };
 
 const toCodeChallenge = async (verifier: string) =>
   Buffer.from(
-    await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier)),
-  ).toString("base64url");
+    await hashSha256Bytes(new TextEncoder().encode(verifier)),
+  ).toBase64({ alphabet: "base64url", omitPadding: true });
 
 const readCode = (redirectUrl: string): string =>
   new URL(redirectUrl).searchParams.get("code") ??
   panic(`consent redirect carried no code: ${redirectUrl}`);
+
+/** The web sign-in page the provider sends a browser to when it must sign in. */
+export const OAUTH_LOGIN_PAGE_PATH = "/auth";
 
 /** The web page the provider sends a browser to when consent is needed. */
 export const OAUTH_CONSENT_PAGE_PATH = "/consent";
@@ -145,6 +161,7 @@ export const authorizeOAuthClient = async (
   client: RegisteredOAuthClient,
   // `null` sends no `scope` parameter at all.
   scope: string | null = GRANTED_SCOPES.join(" "),
+  prompt?: string,
 ): Promise<AuthorizationStart> => {
   const codeVerifier = `${Bun.randomUUIDv7()}${Bun.randomUUIDv7()}`;
   const authorizeUrl = new URL(getAuthEndpointUrl("oauth2/authorize"));
@@ -156,13 +173,20 @@ export const authorizeOAuthClient = async (
     resource: getMcpResourceUrl(),
     response_type: "code",
     ...(scope === null ? {} : { scope }),
+    ...(prompt === undefined ? {} : { prompt }),
     state: Bun.randomUUIDv7(),
   }).toString();
 
+  const address = nextClientAddress();
   const authorized = await readJson(
     await getAuth().handler(
       new Request(authorizeUrl.href, {
-        headers: { accept: "application/json", cookie: browser.cookieHeader() },
+        headers: {
+          accept: "application/json",
+          cookie: browser.cookieHeader(),
+          "x-forwarded-for": address,
+          [AUTH_CLIENT_ADDRESS_HEADER]: address,
+        },
       }),
     ),
     redirectSchema,
@@ -170,32 +194,30 @@ export const authorizeOAuthClient = async (
   return { codeVerifier, redirect: new URL(authorized.url) };
 };
 
-type ConsentAndExchangeOptions = {
+type ConsentOptions = {
   browser: HumanBrowser;
-  client: RegisteredOAuthClient;
-  codeVerifier: string;
   consentPage: URL;
 };
 
-/** Accept on the consent page the provider sent the browser to, then exchange the code. */
-export const consentAndExchange = async ({
+/** Accept on the consent page the provider sent the browser to; the redirect carries the code. */
+export const consentOAuthClient = async ({
   browser,
-  client,
-  codeVerifier,
   consentPage,
-}: ConsentAndExchangeOptions): Promise<OAuthGrant> => {
-  const auth = getAuth();
+}: ConsentOptions): Promise<URL> => {
   if (consentPage.pathname !== OAUTH_CONSENT_PAGE_PATH) {
     panic(`expected the consent page, got ${consentPage.pathname}`);
   }
   const signedQuery = readSignedQuery(consentPage);
+  const address = nextClientAddress();
   const consented = await readJson(
-    await auth.handler(
+    await getAuth().handler(
       new Request(getAuthEndpointUrl("oauth2/consent"), {
         method: "POST",
         headers: {
           "content-type": "application/json",
           cookie: browser.cookieHeader(),
+          "x-forwarded-for": address,
+          [AUTH_CLIENT_ADDRESS_HEADER]: address,
         },
         body: JSON.stringify({
           accept: true,
@@ -205,39 +227,66 @@ export const consentAndExchange = async ({
     ),
     redirectSchema,
   );
+  return new URL(consented.url);
+};
 
-  return await exchangeOAuthCode({
+type ConsentAndExchangeOptions = ConsentOptions & {
+  client: RegisteredOAuthClient;
+  codeVerifier: string;
+  /** The callback the authorization used, when not the default one. */
+  redirectUri?: string;
+};
+
+/** Accept on the consent page the provider sent the browser to, then exchange the code. */
+export const consentAndExchange = async ({
+  browser,
+  client,
+  codeVerifier,
+  consentPage,
+  redirectUri = REDIRECT_URI,
+}: ConsentAndExchangeOptions): Promise<OAuthGrant> =>
+  await exchangeOAuthCode({
     client,
     codeVerifier,
-    redirect: new URL(consented.url),
+    redirect: await consentOAuthClient({ browser, consentPage }),
+    redirectUri,
   });
-};
 
 type ExchangeOAuthCodeOptions = {
   client: RegisteredOAuthClient;
   codeVerifier: string;
   /** The redirect back to the client that carries the code. */
   redirect: URL;
+  redirectUri?: string;
 };
 
-/** Exchange the code a redirect back to the client carries. */
-export const exchangeOAuthCode = async ({
+/** Present the code a redirect back to the client carries; returns the raw response. */
+export const requestOAuthCodeExchange = async ({
   client,
   codeVerifier,
   redirect,
-}: ExchangeOAuthCodeOptions): Promise<OAuthGrant> => {
+  redirectUri = REDIRECT_URI,
+}: ExchangeOAuthCodeOptions): Promise<Response> =>
+  await getAuth().handler(
+    formRequest("oauth2/token", {
+      client_id: client.clientId,
+      ...(client.clientSecret === undefined
+        ? {}
+        : { client_secret: client.clientSecret }),
+      code: readCode(redirect.href),
+      code_verifier: codeVerifier,
+      grant_type: "authorization_code",
+      redirect_uri: redirectUri,
+      resource: getMcpResourceUrl(),
+    }),
+  );
+
+/** Exchange the code a redirect back to the client carries. */
+export const exchangeOAuthCode = async (
+  options: ExchangeOAuthCodeOptions,
+): Promise<OAuthGrant> => {
   const tokens = await readJson(
-    await getAuth().handler(
-      formRequest("oauth2/token", {
-        client_id: client.clientId,
-        client_secret: client.clientSecret,
-        code: readCode(redirect.href),
-        code_verifier: codeVerifier,
-        grant_type: "authorization_code",
-        redirect_uri: REDIRECT_URI,
-        resource: getMcpResourceUrl(),
-      }),
-    ),
+    await requestOAuthCodeExchange(options),
     tokenSchema,
   );
   return {
@@ -285,7 +334,9 @@ export const isOAuthTokenActive = async ({
   const response = await getAuth().handler(
     formRequest("oauth2/introspect", {
       client_id: client.clientId,
-      client_secret: client.clientSecret,
+      ...(client.clientSecret === undefined
+        ? {}
+        : { client_secret: client.clientSecret }),
       token,
       token_type_hint: tokenTypeHint,
     }),
@@ -296,22 +347,51 @@ export const isOAuthTokenActive = async ({
   return v.parse(introspectionSchema, await response.json()).active;
 };
 
+type RevokeOAuthTokenOptions = {
+  client: RegisteredOAuthClient;
+  token: string;
+  /** `none` sends no `token_type_hint`. */
+  tokenTypeHint: "access_token" | "refresh_token" | "none";
+};
+
+/** Present a token at the revocation endpoint (RFC 7009); returns the raw response. */
+export const revokeOAuthToken = async ({
+  client,
+  token,
+  tokenTypeHint,
+}: RevokeOAuthTokenOptions): Promise<Response> =>
+  await getAuth().handler(
+    formRequest("oauth2/revoke", {
+      client_id: client.clientId,
+      ...(client.clientSecret === undefined
+        ? {}
+        : { client_secret: client.clientSecret }),
+      token,
+      ...(tokenTypeHint === "none" ? {} : { token_type_hint: tokenTypeHint }),
+    }),
+  );
+
 type RefreshOAuthGrantOptions = {
   client: RegisteredOAuthClient;
   refreshToken: string;
+  scope?: string;
 };
 
 /** Present a refresh token at the token endpoint; returns the raw response. */
 export const refreshOAuthGrant = async ({
   client,
   refreshToken,
+  scope,
 }: RefreshOAuthGrantOptions): Promise<Response> =>
   await getAuth().handler(
     formRequest("oauth2/token", {
       client_id: client.clientId,
-      client_secret: client.clientSecret,
+      ...(client.clientSecret === undefined
+        ? {}
+        : { client_secret: client.clientSecret }),
       grant_type: "refresh_token",
       refresh_token: refreshToken,
       resource: getMcpResourceUrl(),
+      ...(scope === undefined ? {} : { scope }),
     }),
   );

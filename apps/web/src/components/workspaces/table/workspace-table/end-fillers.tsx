@@ -15,10 +15,10 @@ import { PinnedBoundary } from "@/components/workspaces/table/workspace-table/in
 import {
   getEndFillerGridColumn,
   getGridPinningStyles,
+  getWorkspaceGridColumnMetadata,
   isPinnedBoundaryColumn,
   tableEndFillerCellStyle,
 } from "@/components/workspaces/table/workspace-table/internals-helpers";
-import type { EndFillerInput } from "@/components/workspaces/table/workspace-table/internals-helpers";
 
 type TableEndFillerProps<TRow extends TableRowData> = {
   renderColumns: TableColumn<TRow>[];
@@ -71,38 +71,15 @@ export const TableEndFiller = <TRow extends TableRowData>({
   </WorkspaceGridRow>
 );
 
-type RowEndFillerCellProps<TRow extends TableRowData> = EndFillerInput<TRow> & {
-  selected: boolean;
-};
-
-export const RowEndFillerCell = <TRow extends TableRowData>({
-  renderColumns,
-  addPropertyColumn,
-  selected,
-}: RowEndFillerCellProps<TRow>) => (
-  <WorkspaceGridCell
-    aria-hidden="true"
-    className={cn("p-0", addPropertyColumn && "border-e-0")}
-    data-state={selected ? "selected" : undefined}
-    role="presentation"
-    style={{
-      gridColumn: getEndFillerGridColumn({
-        renderColumns,
-        addPropertyColumn,
-      }),
-    }}
-  />
-);
-
 type AddPropertyCellProps<TRow extends TableRowData> = {
   cell: TableCell<TRow> | undefined;
-  columnIndex: number;
+  renderColumns: TableColumn<TRow>[];
   selected: boolean;
 };
 
 export const AddPropertyCell = <TRow extends TableRowData>({
   cell,
-  columnIndex,
+  renderColumns,
   selected,
 }: AddPropertyCellProps<TRow>) => {
   if (!cell) {
@@ -111,7 +88,12 @@ export const AddPropertyCell = <TRow extends TableRowData>({
 
   return (
     <WorkspaceGridCell
-      aria-colindex={columnIndex}
+      aria-colindex={
+        getWorkspaceGridColumnMetadata({
+          renderColumns,
+          addPropertyColumn: cell.column,
+        }).addPropertyColumnIndex
+      }
       className="border-s-2 border-e-2 p-0"
       data-add-property-surface
       data-state={selected ? "selected" : undefined}

@@ -1,3 +1,11 @@
+import {
+  CopyObjectCommand,
+  GetObjectCommand,
+  type GetObjectCommandOutput,
+  HeadObjectCommand,
+  PutObjectCommand,
+  S3Client as AwsS3Client,
+} from "@aws-sdk/client-s3";
 /**
  * AWS SDK v3 wrapper for presigned PUT uploads and the matching
  * post-upload verification calls.
@@ -20,31 +28,49 @@
  * presigned URLs can then be issued through an STS session policy
  * scoped to one organization/workspace key prefix.
  */
-import {
-  CopyObjectCommand,
-  GetObjectCommand,
-  HeadObjectCommand,
-  PutObjectCommand,
-  S3Client as AwsS3Client,
-} from "@aws-sdk/client-s3";
 import { AssumeRoleCommand, STSClient } from "@aws-sdk/client-sts";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { Result, TaggedError } from "better-result";
+import { TransformStream } from "node:stream/web";
 
 import { fetchWithTimeout } from "@stll/fetch";
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
+import { readCappedBytes } from "@stll/skills/streaming";
 import { Temporal } from "@stll/time";
 
 import { envBase } from "@/api/env-base";
+import { PRIVATE_CACHE_CONTROL } from "@/api/http/cache";
 import { detached } from "@/api/lib/analytics/capture";
 import { contentDisposition } from "@/api/lib/content-disposition";
 import { markContentDeliveryIntent } from "@/api/lib/files/content-delivery";
-import { resolveS3Credentials, TEMP_UPLOAD_TAGGING } from "@/api/lib/s3";
+import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
+import { recordReadWork } from "@/api/lib/observability/request-work";
+import {
+  isMissingS3ObjectError,
+  resolveS3Credentials,
+  TEMP_UPLOAD_TAGGING,
+} from "@/api/lib/s3";
 import { createS3CredentialGuard } from "@/api/lib/s3/credential-guard";
-import { PRIVATE_CACHE_CONTROL } from "@/api/lib/security-headers";
+import {
+  issueSessionBoundCredentialTtl,
+  requireSessionCredentialIssuer,
+} from "@/api/lib/synthetic-principal/credential-policy";
+import type { SyntheticSessionAuthorityReader } from "@/api/lib/synthetic-principal/session-authority";
 
 export class S3PresignError extends TaggedError("S3PresignError")<{
   message: string;
   cause?: unknown;
+}> {}
+
+/**
+ * The store confirmed the key holds no object. Every other read failure
+ * (timeout, throttling, refused credentials) stays an `S3PresignError`,
+ * which says nothing about the key, so a caller cannot record absence for a
+ * store that did not answer.
+ */
+export class S3ObjectMissingError extends TaggedError("S3ObjectMissingError")<{
+  message: string;
+  cause: unknown;
 }> {}
 
 /**
@@ -62,6 +88,7 @@ export type PresignedUploadHeaders = {
 };
 
 export type PresignUploadOptions = {
+  userId: string | null;
   /** Final S3 key the client will write to. */
   key: string;
   /** Lifetime of the signed URL in seconds. Keep short — finalize is fast. */
@@ -104,7 +131,7 @@ type ScopedClientCacheEntry = {
   cached?: CachedScopedClient;
   promise: Promise<CachedScopedClient>;
 };
-export const S3_SIGNING_KEYSPACES = ["tenant", "exports"] as const;
+const S3_SIGNING_KEYSPACES = ["tenant", "exports"] as const;
 export type S3SigningKeyspace = (typeof S3_SIGNING_KEYSPACES)[number];
 
 export type S3SigningScope = {
@@ -250,10 +277,7 @@ const assertKeyInSigningScope = (key: string, scope: S3SigningScope): void => {
 };
 
 const roleSessionName = (scope: S3SigningScope): string => {
-  const scopeHash = new Bun.CryptoHasher("sha256")
-    .update(s3SigningScopePrefix(scope))
-    .digest("hex")
-    .slice(0, 24);
+  const scopeHash = hashSha256Hex(s3SigningScopePrefix(scope)).slice(0, 24);
   return `s3-scope-${scopeHash}`;
 };
 
@@ -373,7 +397,7 @@ let scopedS3ClientFactory: ScopedS3ClientFactory = buildScopedAwsS3Client;
 
 const disposeScopedClient = (entry: ScopedClientCacheEntry): void => {
   detached(
-    entry.promise.then(({ client }) => client.destroy()),
+    async () => entry.promise.then(({ client }) => client.destroy()),
     "s3-presign.dispose-scoped-client",
   );
 };
@@ -450,11 +474,12 @@ const getScopedAwsS3Client = async (
     throw error;
   });
   detached(
-    entry.promise.then((cached) => {
-      entry.cached = cached;
-      pruneScopedClientCache();
-      return undefined;
-    }),
+    async () =>
+      entry.promise.then((cached) => {
+        entry.cached = cached;
+        pruneScopedClientCache();
+        return undefined;
+      }),
     "s3-presign.cache-entry-settled",
   );
   _scopedClientCache.set(cacheKey, entry);
@@ -532,6 +557,55 @@ export const createTenantS3RequestSignal = (
   timeoutMs = AWS_SDK_REQUEST_TIMEOUT_MS,
 ): AbortSignal => AbortSignal.any([signal, AbortSignal.timeout(timeoutMs)]);
 
+const readTenantObjectBody = async ({
+  Body,
+  ContentLength,
+}: GetObjectCommandOutput): Promise<Result<Uint8Array, S3PresignError>> => {
+  if (
+    ContentLength === undefined ||
+    ContentLength > FILE_SIZE_LIMIT_BYTES.document
+  ) {
+    return Result.err(
+      new S3PresignError({
+        message: "S3 object length does not satisfy the document byte limit",
+      }),
+    );
+  }
+  if (!Body) {
+    return Result.err(
+      new S3PresignError({
+        message: "S3 returned an object without a response body",
+      }),
+    );
+  }
+  const body: ReadableStream<unknown> = Body.transformToWebStream();
+  const bytes = await readCappedBytes(
+    body.pipeThrough(
+      new TransformStream<unknown, Uint8Array>({
+        transform(chunk, controller) {
+          if (chunk instanceof Uint8Array) {
+            controller.enqueue(chunk);
+          } else {
+            controller.error(
+              new S3PresignError({
+                message: "S3 returned an invalid response chunk",
+              }),
+            );
+          }
+        },
+      }),
+    ),
+    FILE_SIZE_LIMIT_BYTES.document,
+  );
+  return bytes === null
+    ? Result.err(
+        new S3PresignError({
+          message: "S3 object body exceeds the document byte limit",
+        }),
+      )
+    : Result.ok(bytes);
+};
+
 const DEFAULT_TENANT_S3_OPERATION_HOOKS: TenantS3OperationHooks = {
   resolveClient: getTenantAwsS3Client,
   headObjectSize: async (client, command, signal) => {
@@ -541,15 +615,22 @@ const DEFAULT_TENANT_S3_OPERATION_HOOKS: TenantS3OperationHooks = {
     return response.ContentLength ?? null;
   },
   readObject: async (client, command, signal) => {
-    const response = await client.send(command, {
-      abortSignal: createTenantS3RequestSignal(signal),
-    });
-    if (!response.Body) {
-      throw new S3PresignError({
-        message: "S3 returned an object without a response body",
+    const operation = new AbortController();
+    try {
+      const response = await client.send(command, {
+        abortSignal: createTenantS3RequestSignal(
+          AbortSignal.any([signal, operation.signal]),
+        ),
       });
+      const body = await readTenantObjectBody(response);
+      if (Result.isError(body)) {
+        throw body.error;
+      }
+      return body.value;
+    } finally {
+      // Header refusal must close the unread body without aborting its caller.
+      operation.abort();
     }
-    return await response.Body.transformToByteArray();
   },
   writeObject: async (client, command, signal) => {
     await client.send(command, {
@@ -698,6 +779,7 @@ export const readTenantS3ArrayBuffer = async ({
       ),
     scope,
   });
+  recordReadWork("storageReadBytes", bytes.byteLength);
   if (bytes.buffer instanceof ArrayBuffer) {
     return bytes.buffer.slice(
       bytes.byteOffset,
@@ -864,6 +946,7 @@ export const putPresignedUpload = async ({
  * S3 reject the upload with `403 SignatureDoesNotMatch`.
  */
 export const presignUploadUrl = async ({
+  userId,
   key,
   expiresIn,
   contentType,
@@ -873,8 +956,12 @@ export const presignUploadUrl = async ({
   tagAsTemporaryUpload = false,
 }: PresignUploadOptions): Promise<
   Result<PresignUploadResult, S3PresignError>
-> =>
-  await Result.tryPromise({
+> => {
+  requireSessionCredentialIssuer("signedUpload", {
+    userId,
+    organizationId: scope?.organizationId,
+  });
+  return await Result.tryPromise({
     try: async () => {
       const client = await getPresignClient({
         expiresIn,
@@ -943,16 +1030,49 @@ export const presignUploadUrl = async ({
         cause,
       }),
   });
+};
+
+export type SignedDownloadSource =
+  | { kind: "request"; sessionId: string }
+  | { kind: "background"; reason: string };
+
+/**
+ * The source of a download a caller asked for: bound to their browser session,
+ * or, for a credential that has none (an MCP session), not bound to a session.
+ */
+export const callerDownloadSource = (session: {
+  readonly id: string | null;
+}): SignedDownloadSource =>
+  session.id === null
+    ? {
+        kind: "background",
+        reason: "requested with a credential that has no browser session",
+      }
+    : { kind: "request", sessionId: session.id };
 
 export type PresignDownloadOptions = {
+  userId: string | null;
+  organizationId?: string | null;
+  email?: string;
   expiresIn: number;
+  source: SignedDownloadSource;
+  readSessionAuthority: SyntheticSessionAuthorityReader;
   fileName?: string;
   scope?: S3SigningScope;
 };
 
-export const presignDownloadUrl = async (
+const refuseBackgroundSessionAuthority: SyntheticSessionAuthorityReader =
+  async () => await Promise.resolve(null);
+
+type PresignInternalDownloadOptions = Pick<
+  PresignDownloadOptions,
+  "expiresIn" | "fileName" | "scope"
+>;
+
+/** Sign a server-internal fetch. The URL must never be returned to a caller. */
+const presignInternalDownloadUrl = async (
   key: string,
-  { expiresIn, fileName, scope }: PresignDownloadOptions,
+  { expiresIn, fileName, scope }: PresignInternalDownloadOptions,
 ): Promise<string> => {
   const result = await Result.tryPromise({
     try: async () => {
@@ -986,8 +1106,45 @@ export const presignDownloadUrl = async (
     throw result.error;
   }
 
-  markContentDeliveryIntent();
   return result.value;
+};
+
+export const presignDownloadUrl = async (
+  key: string,
+  {
+    userId,
+    email,
+    scope,
+    organizationId = scope?.organizationId,
+    expiresIn,
+    source,
+    readSessionAuthority,
+    fileName,
+  }: PresignDownloadOptions,
+): Promise<string> => {
+  const issuedExpiresIn = await issueSessionBoundCredentialTtl(
+    "signedDownload",
+    {
+      userId,
+      email,
+      organizationId,
+      fileOrganizationId: scope?.organizationId,
+      requestedTtlSeconds: expiresIn,
+      now: new Date(Temporal.Now.instant().epochMilliseconds),
+      sessionId: source.kind === "request" ? source.sessionId : null,
+      readSessionAuthority:
+        source.kind === "request"
+          ? readSessionAuthority
+          : refuseBackgroundSessionAuthority,
+    },
+  );
+  const url = await presignInternalDownloadUrl(key, {
+    expiresIn: issuedExpiresIn,
+    ...(fileName === undefined ? {} : { fileName }),
+    ...(scope === undefined ? {} : { scope }),
+  });
+  markContentDeliveryIntent();
+  return url;
 };
 
 export type HeadObjectResult = {
@@ -1004,10 +1161,12 @@ export type HeadObjectResult = {
  * said they would. The checksum is only present when the upload
  * was made with `x-amz-checksum-sha256` and the client requested
  * checksum mode — both of which the presign helper above enforces.
+ * Fails with `S3ObjectMissingError` only when the store confirms the key is
+ * empty; any other failure is an `S3PresignError`.
  */
 export const headObject = async (
   key: string,
-): Promise<Result<HeadObjectResult, S3PresignError>> =>
+): Promise<Result<HeadObjectResult, S3ObjectMissingError | S3PresignError>> =>
   await Result.tryPromise({
     try: async () => {
       const client = await getAwsS3Client();
@@ -1026,10 +1185,12 @@ export const headObject = async (
       };
     },
     catch: (cause) =>
-      new S3PresignError({
-        message: "Failed to head object",
-        cause,
-      }),
+      isMissingS3ObjectError(cause)
+        ? new S3ObjectMissingError({ message: "Object not found", cause })
+        : new S3PresignError({
+            message: "Failed to head object",
+            cause,
+          }),
   });
 
 /**

@@ -1,4 +1,4 @@
-import { lazy, Suspense, useId, useMemo } from "react";
+import { lazy, Suspense, useId } from "react";
 
 import { useQuery } from "@tanstack/react-query";
 import { panic } from "better-result";
@@ -7,6 +7,7 @@ import { useTranslations } from "use-intl";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { Skeleton } from "@stll/ui/skeleton";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { contentDir } from "@stll/ui/use-content-dir";
 
 import { SearchHitIcon } from "@/components/search-dialog-results";
@@ -16,8 +17,8 @@ import {
   getRecentFilePreviewHit,
 } from "@/components/search-dialog.logic";
 import {
-  KIND_TRANSLATION_KEYS,
   EMPTY_SEARCH_PREVIEW_LOCATOR_CANDIDATES,
+  KIND_TRANSLATION_KEYS,
   SEARCH_PREVIEW_COLUMN_CLASS_NAME,
   SEARCH_PREVIEW_CONTENT_CLASS_NAME,
 } from "@/components/search-dialog.shared";
@@ -30,7 +31,7 @@ import {
   recentFilePreviewFieldOptions,
   searchPreviewOptions,
 } from "@/lib/search";
-import type { RecentFile } from "@/lib/search-recents";
+import type { RecentFileWithIdentity } from "@/lib/search-recents";
 import { searchTextQueryKey } from "@/lib/search-text";
 import {
   getEmailSearchPreviewTarget,
@@ -77,7 +78,7 @@ type SearchPreviewPanelProps = {
 };
 
 type RecentFilePreviewPanelProps = {
-  file: RecentFile;
+  file: RecentFileWithIdentity;
   locationModifierHeld?: boolean | undefined;
   onOpen: () => void;
   organizationId: string;
@@ -250,10 +251,17 @@ const SearchPreviewContent = ({
         <div className="flex items-start gap-3">
           <SearchHitIcon hit={hit} />
           <div className="min-w-0 flex-1">
-            <BidiText as="p" className="line-clamp-2 text-sm font-medium">
+            <TruncatedText
+              className="text-sm font-medium"
+              lines={2}
+              render={<BidiText as="p" />}
+            >
               {hit.title || hit.id}
-            </BidiText>
-            <p className="text-muted-foreground mt-0.5 truncate text-xs">
+            </TruncatedText>
+            <TruncatedText
+              className="text-muted-foreground mt-0.5 text-xs"
+              render={<p />}
+            >
               <BidiText>{t(KIND_TRANSLATION_KEYS[hit.type])}</BidiText>
               {location && (
                 <>
@@ -267,7 +275,7 @@ const SearchPreviewContent = ({
                   <BidiText>{formattedPreviewDate}</BidiText>
                 </>
               )}
-            </p>
+            </TruncatedText>
           </div>
           <Button
             className="min-w-0 shrink-0"
@@ -278,12 +286,12 @@ const SearchPreviewContent = ({
             variant="outline"
           >
             {opensLocation ? (
-              <span className="max-w-48 truncate">
+              <TruncatedText className="max-w-48">
                 {t.rich("search.openMatter", {
                   bdi: (chunks) => <BidiText>{chunks}</BidiText>,
                   name: location,
                 })}
-              </span>
+              </TruncatedText>
             ) : (
               t("common.open")
             )}
@@ -308,15 +316,11 @@ type SearchPreviewBodyProps = Pick<
 
 const SearchPreviewBody = (props: SearchPreviewBodyProps) => {
   const { hit } = props;
-  const searchText = useMemo(
-    () =>
-      getSearchHighlightText({
-        headline: hit.headline,
-        previewLocatorCandidates: props.previewLocatorCandidates,
-        query: props.query,
-      }),
-    [hit.headline, props.previewLocatorCandidates, props.query],
-  );
+  const searchText = getSearchHighlightText({
+    headline: hit.headline,
+    previewLocatorCandidates: props.previewLocatorCandidates,
+    query: props.query,
+  });
   const emailPreviewTarget = getEmailSearchPreviewTarget(hit);
   if (hit.type === "matter") {
     return <SearchMatterPreview workspaceId={hit.workspaceId} />;
@@ -369,15 +373,11 @@ const SearchTextPreview = ({
   userId,
 }: SearchPreviewBodyProps) => {
   const t = useTranslations();
-  const searchText = useMemo(
-    () =>
-      getSearchHighlightText({
-        headline: hit.headline,
-        previewLocatorCandidates,
-        query,
-      }),
-    [hit.headline, previewLocatorCandidates, query],
-  );
+  const searchText = getSearchHighlightText({
+    headline: hit.headline,
+    previewLocatorCandidates,
+    query,
+  });
   const target = getSearchPreviewTarget(hit);
   const { data, isError, isFetching, refetch } = useQuery(
     searchPreviewOptions({
@@ -415,6 +415,7 @@ const SearchTextPreview = ({
           </p>
           <Button
             disabled={isFetching}
+            disabledReason={t("common.loading")}
             onClick={() => {
               detached(refetch(), "search-dialog.refetch");
             }}

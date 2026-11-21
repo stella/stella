@@ -1,5 +1,5 @@
 // A chat surface's provider request is shaped in one module,
-// `apps/api/src/handlers/chat/chat-request.ts`: it projects the tools for the
+// `apps/api/src/lib/chat/chat-request.ts`: it projects the tools for the
 // provider, splits the system prompt at its cacheable layers and places the
 // cache markers, and merges the generation options. A second place that did
 // any of it would send a prompt the cache layering never saw: a system prompt
@@ -29,7 +29,7 @@ import {
 } from "./utils.ts";
 
 const CHAT_DIRECTORY = "apps/api/src/handlers/chat/";
-const REQUEST_MODULE = "apps/api/src/handlers/chat/chat-request";
+const REQUEST_MODULE = "apps/api/src/lib/chat/chat-request";
 const FIXTURE =
   ".oxlint-plugins/__fixtures__/no-ad-hoc-chat-request.fixture.ts";
 
@@ -64,11 +64,11 @@ export default eslintCompatPlugin({
         type: "problem",
         messages: {
           ownedBuilder:
-            "Build a chat request through handlers/chat/chat-request.ts " +
+            "Build a chat request through lib/chat/chat-request.ts " +
             "(chatRequestOptions, chatAttemptRequestOptions): it places the " +
             "cache markers at the prompt's layer boundaries.",
           systemPrompts:
-            "Take systemPrompts from handlers/chat/chat-request.ts " +
+            "Take systemPrompts from lib/chat/chat-request.ts " +
             "(chatRequestOptions or chatSystemPrompts), so the system prompt " +
             "keeps its cache layers.",
         },

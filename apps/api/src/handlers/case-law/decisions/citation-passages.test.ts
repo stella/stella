@@ -1,8 +1,16 @@
 import { describe, expect, test } from "bun:test";
+import fc from "fast-check";
 
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
+import { assertProperty } from "@stll/property-testing";
 
-import { citationPassageIn } from "@/api/handlers/case-law/decisions/citation-passages";
+import {
+  citationPassageIn,
+  citationTextFields,
+  CitationTextGateError,
+  polarityExcerptIn,
+} from "@/api/handlers/case-law/decisions/citation-passages";
+import { decisionTextCompletionOf } from "@/api/handlers/case-law/decisions/text-completion";
 import { LIMITS } from "@/api/lib/limits";
 
 const astOf = (
@@ -42,7 +50,6 @@ describe("the excerpt a citation travels with", () => {
     const passage = citationPassageIn({
       ast: astOf([{ anchorId: "p1", text: blockText }]),
       citationText,
-      sectionText: undefined,
     });
 
     expect(passage).toEqual({
@@ -61,13 +68,52 @@ describe("the excerpt a citation travels with", () => {
         { anchorId: "p4", text: `${filler} ${citationText} ${filler}` },
       ]),
       citationText,
-      sectionText: undefined,
     });
 
     expect(passage?.text.length).toBe(LIMITS.caseLawCitationPassageChars);
     expect(passage?.text).toContain(citationText);
     // An agent reading this as the whole paragraph would be reading a cut one.
     expect(passage?.truncated).toBe(true);
+  });
+
+  test("cuts to a smaller allowance around the citation", () => {
+    const citationText = "21 Cdo 500/2019";
+    const filler = "x".repeat(LIMITS.caseLawCitationPassageChars);
+    const passage = citationPassageIn({
+      ast: astOf([
+        { anchorId: "p4", text: `${filler} ${citationText} ${filler}` },
+      ]),
+      citationText,
+      maxChars: LIMITS.caseLawCitationCompactPassageChars,
+    });
+
+    expect(passage?.text.length).toBe(
+      LIMITS.caseLawCitationCompactPassageChars,
+    );
+    expect(passage?.text).toContain(citationText);
+    expect(passage?.truncated).toBe(true);
+  });
+
+  test("has no passage when the paragraph does not satisfy the filter", () => {
+    const citationText = "21 Cdo 500/2019";
+    const ast = astOf([
+      { anchorId: "p4", text: `Soud odkázal na ${citationText}.` },
+    ]);
+
+    expect(
+      citationPassageIn({
+        ast,
+        citationText,
+        paragraphMatches: () => false,
+      }),
+    ).toBeNull();
+    expect(
+      citationPassageIn({
+        ast,
+        citationText,
+        paragraphMatches: (paragraph) => paragraph.includes("odkázal"),
+      })?.anchorId,
+    ).toBe("p4");
   });
 
   test("keeps a citation at the very end of a long paragraph", () => {
@@ -80,7 +126,6 @@ describe("the excerpt a citation travels with", () => {
         },
       ]),
       citationText,
-      sectionText: undefined,
     });
 
     expect(passage?.text).toEndWith(citationText);
@@ -96,11 +141,59 @@ describe("the excerpt a citation travels with", () => {
         },
       ]),
       citationText: "21 Cdo 500/2019",
-      sectionText: undefined,
     });
 
     expect(passage?.anchorId).toBe("p9");
     expect(passage?.mention).toBe("latest_of_several");
+  });
+
+  test("keeps the review quote verbatim beside the canonical citation excerpt", () => {
+    const evidenceQuote = "The earlier decision concerns different facts.";
+    const classified = "The court cites 21 Cdo 500/2019.";
+    const passage = citationPassageIn({
+      ast: astOf([
+        { anchorId: "p1", text: classified },
+        { anchorId: "p2", text: `21 Cdo 500/2019: ${evidenceQuote}` },
+      ]),
+      citationText: "21 Cdo 500/2019",
+      classifiedBlockIds: ["b0"],
+      evidenceQuote,
+    });
+    expect(passage).toEqual({
+      anchorId: "p1",
+      text: classified,
+      mention: "classified_section",
+      truncated: false,
+      evidenceQuote,
+      evidenceAnchorId: "p2",
+    });
+  });
+
+  test("anchors a review quote in a paragraph that does not repeat the citation", () => {
+    const evidenceQuote = "That ruling concerned a different contract.";
+    const citing = "The court cites 21 Cdo 500/2019.";
+    const passage = citationPassageIn({
+      ast: astOf([
+        { anchorId: "p1", text: citing },
+        { anchorId: "p2", text: `However, ${evidenceQuote}` },
+      ]),
+      citationText: "21 Cdo 500/2019",
+      evidenceQuote,
+    });
+    expect(passage).toMatchObject({
+      anchorId: "p1",
+      evidenceQuote,
+      evidenceAnchorId: "p2",
+    });
+  });
+
+  test("does not publish a quote absent from the decision text", () => {
+    const passage = citationPassageIn({
+      ast: astOf([{ anchorId: "p1", text: "21 Cdo 500/2019 is cited." }]),
+      citationText: "21 Cdo 500/2019",
+      evidenceQuote: "Different facts.",
+    });
+    expect(passage).not.toHaveProperty("evidenceQuote");
   });
 
   test("is absent when no paragraph carries the citation", () => {
@@ -108,8 +201,194 @@ describe("the excerpt a citation travels with", () => {
       citationPassageIn({
         ast: astOf([{ anchorId: "p1", text: "Nic k věci." }]),
         citationText: "21 Cdo 500/2019",
-        sectionText: undefined,
       }),
     ).toBeNull();
   });
+});
+
+describe("stored polarity evidence windows", () => {
+  test("slice the original joined sections across Unicode and section boundaries", () => {
+    assertProperty(
+      "slice the original joined sections across Unicode and section boundaries",
+      fc.property(
+        fc.array(
+          fc
+            .array(
+              fc.constantFrom("ě", "😀", "e\u0301", " ", "\n", "\t", "X"),
+              { minLength: 1, maxLength: 40 },
+            )
+            .map((characters) => characters.join("")),
+          { minLength: 1, maxLength: 8 },
+        ),
+        fc.nat(),
+        fc.nat(),
+        (texts, first, second) => {
+          const text = texts.join("\n");
+          const start = first % text.length;
+          const end = start + 1 + (second % (text.length - start));
+          const sections = texts.map((sectionText, index) => ({
+            index,
+            text: sectionText,
+            type: "unknown" as const,
+            title: null,
+          }));
+          expect(
+            polarityExcerptIn({ sections, evidenceWindows: [{ start, end }] }),
+          ).toBe(text.slice(start, end));
+        },
+      ),
+    );
+  });
+
+  test("unknown offsets never substitute a display passage", () => {
+    const sections = [
+      {
+        index: 0,
+        text: "Synthetic citation window",
+        type: "unknown" as const,
+        title: null,
+      },
+    ];
+    expect(polarityExcerptIn({ sections, evidenceWindows: null })).toBeNull();
+    expect(
+      polarityExcerptIn({
+        sections: null,
+        evidenceWindows: [{ start: 0, end: 2 }],
+      }),
+    ).toBeNull();
+    expect(
+      polarityExcerptIn({ sections, evidenceWindows: [{ start: -1, end: 2 }] }),
+    ).toBeNull();
+    expect(
+      polarityExcerptIn({ sections, evidenceWindows: [{ start: 2, end: 1 }] }),
+    ).toBeNull();
+  });
+});
+
+test("widely separated polarity mentions return bounded evidence with an explicit omission", () => {
+  const prefix = "Synthetic rejection 😀 ";
+  const suffix = " Separate opinion conclusion.";
+  const original =
+    prefix + "middle ".repeat(LIMITS.caseLawCitationPassageChars) + suffix;
+  const excerpt = polarityExcerptIn({
+    sections: [
+      { index: 0, text: original, type: "argumentation", title: null },
+    ],
+    evidenceWindows: [{ start: 0, end: original.length }],
+  });
+  expect(excerpt?.length).toBe(LIMITS.caseLawCitationPassageChars);
+  expect(excerpt).toStartWith(prefix);
+  expect(excerpt).toEndWith(suffix);
+  expect(excerpt).toContain("\n[…]\n");
+});
+
+test("every long evidence window stays bounded and preserves both recorded ends", () => {
+  assertProperty(
+    "every long evidence window stays bounded and preserves both recorded ends",
+    fc.property(
+      fc.integer({
+        min: LIMITS.caseLawCitationPassageChars + 1,
+        max: LIMITS.caseLawCitationPassageChars * 10,
+      }),
+      fc.constantFrom("ě", "😀", "e\u0301", "\t", " "),
+      (length, character) => {
+        const prefix = "Synthetic first mention ";
+        const suffix = " Synthetic last mention";
+        const text = prefix + character.repeat(length) + suffix;
+        const excerpt = polarityExcerptIn({
+          sections: [{ index: 0, text, type: "argumentation", title: null }],
+          evidenceWindows: [{ start: 0, end: text.length }],
+        });
+        expect(excerpt?.length).toBeLessThanOrEqual(
+          LIMITS.caseLawCitationPassageChars,
+        );
+        expect(excerpt).toStartWith(prefix);
+        expect(excerpt).toEndWith(suffix);
+        expect(excerpt).toContain("\n[…]\n");
+      },
+    ),
+  );
+});
+
+test("a text-eligibility failure returns no citation text and an incomplete reason", async () => {
+  const citationText = "21 Cdo 500/2019";
+  const text = {
+    type: "gate-failed",
+    error: new CitationTextGateError({
+      message: "Synthetic read failure",
+      reason: "gate_failed",
+    }),
+  } as const;
+  expect(
+    citationTextFields({
+      text,
+      textWithheldReason: null,
+      citationText,
+      sectionIndex: 0,
+      evidenceWindows: [{ start: 0, end: 10 }],
+    }),
+  ).toEqual({
+    citationText: null,
+    passage: null,
+    evidenceExcerpt: null,
+    textIncompleteReason: "gate_failed",
+  });
+});
+
+test("an absent analysis retains eligible citation text without excerpts", () => {
+  expect(
+    citationTextFields({
+      text: { type: "absent-ast" },
+      textWithheldReason: null,
+      citationText: "21 Cdo 500/2019",
+      sectionIndex: 0,
+      evidenceWindows: [{ start: 0, end: 10 }],
+    }),
+  ).toEqual({
+    citationText: "21 Cdo 500/2019",
+    passage: null,
+    evidenceExcerpt: null,
+    textIncompleteReason: "absent_ast",
+  });
+});
+
+test("eligible citation text preserves doctrine evidence without polarity windows", () => {
+  const citationText = "21 Cdo 500/2019";
+  const evidenceQuote = "The earlier decision concerns different facts.";
+  const fields = citationTextFields({
+    text: {
+      type: "eligible",
+      ast: astOf([
+        { anchorId: "citation", text: `See ${citationText}.` },
+        { anchorId: "doctrine", text: evidenceQuote },
+      ]),
+      sections: null,
+    },
+    citationText,
+    sectionIndex: null,
+    textWithheldReason: null,
+    evidenceWindows: null,
+    evidenceQuote,
+  });
+  expect(fields.evidenceExcerpt).toBeNull();
+  expect(fields.passage).toMatchObject({
+    anchorId: "citation",
+    evidenceQuote,
+    evidenceAnchorId: "doctrine",
+  });
+});
+
+test("a citing decision country change invalidates text even within the admitted surface", async () => {
+  const eligibility = {
+    published: true,
+    redistributable: true,
+    textRevisionFingerprint: "same-text-revision",
+    descriptor: { allowsDerivedAi: true },
+    documentUrl: null,
+  };
+  const original = decisionTextCompletionOf({ ...eligibility, country: "CZE" });
+  const changed = decisionTextCompletionOf({ ...eligibility, country: "SVK" });
+  expect(changed.textEligibilityFingerprint).not.toBe(
+    original.textEligibilityFingerprint,
+  );
 });

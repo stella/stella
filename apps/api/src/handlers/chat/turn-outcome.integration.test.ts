@@ -1,12 +1,13 @@
 import { panic, Result } from "better-result";
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { desc, eq, inArray } from "drizzle-orm";
+import { afterAll, describe, expect, test } from "bun:test";
+import { eq, inArray } from "drizzle-orm";
 
 import { TANSTACK_AI_PROVIDERS } from "@stll/ai-catalog";
 import type { TanStackAIProvider } from "@stll/ai-catalog";
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import { AI_ERROR_KINDS } from "@stll/api-contract";
 import { propertyTestTimeout } from "@stll/property-testing";
+import { createTestState } from "@stll/test-state";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import {
@@ -17,11 +18,8 @@ import {
 } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import { env } from "@/api/env";
-import { toChatMessageContent } from "@/api/handlers/chat/chat-message-parts";
-import {
-  CHAT_TURN_INTERACTION_TYPES,
-  CHAT_TURN_STATUSES,
-} from "@/api/handlers/chat/chat-turn-state";
+import { toPersistedChatMessageContentV3 } from "@/api/handlers/chat/chat-message-parts";
+import { CHAT_TURN_INTERACTION_TYPES } from "@/api/handlers/chat/chat-turn-state";
 import { generateThreadTitle } from "@/api/handlers/chat/generate-thread-title";
 import getSuggestedPrompts from "@/api/handlers/chat/get-suggested-prompts";
 import { runSubagent } from "@/api/handlers/chat/subagent-runner";
@@ -37,6 +35,8 @@ import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { runChatThreadCompaction } from "@/api/lib/chat/thread-compaction";
+import { NEWEST_CHAT_TURN_FIRST } from "@/api/lib/chat/turn-order";
+import { CHAT_TURN_STATUSES } from "@/api/lib/chat/turn-status";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 import { insertTestSkill } from "@/api/tests/helpers/agent-skill-db";
@@ -45,12 +45,21 @@ import {
   approvalToolArguments,
   createApprovalHarness,
 } from "@/api/tests/helpers/chat-approval-harness";
+import { createChatHarnessProfile } from "@/api/tests/helpers/chat-harness-profile";
 import { CHAT_ORACLE, violationsOf } from "@/api/tests/helpers/chat-oracles";
 import type { OracleViolation } from "@/api/tests/helpers/chat-oracles";
 import { createPromptPrefixLedger } from "@/api/tests/helpers/chat-prompt-prefix";
 import type { ScriptedTurn } from "@/api/tests/helpers/chat-round-trip";
 import { TURN_STATUS_CLAIM } from "@/api/tests/helpers/chat-turn-outcome";
-import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
+import {
+  createTestHandlerContext,
+  NO_AUDIT,
+  NO_DB,
+} from "@/api/tests/helpers/handler-context";
+import {
+  testModelAdmission,
+  testOrganizationStateDb,
+} from "@/api/tests/helpers/model-dispatch-admission";
 import {
   cassetteForModel,
   planCombinationRun,
@@ -65,7 +74,7 @@ import type {
   ProviderWireCassette,
   ProviderWireExchange,
 } from "@/api/tests/helpers/provider-wire-cassette";
-import { installProviderWireReplay } from "@/api/tests/helpers/provider-wire-replay";
+import { registerProviderWireReplay } from "@/api/tests/helpers/provider-wire-replay";
 import type { ProviderWireReplay } from "@/api/tests/helpers/provider-wire-replay";
 import { replayedHarnessModel } from "@/api/tests/helpers/replayed-harness-model";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -91,8 +100,8 @@ import type {
   ExpectedSettlement,
   ResponseShape,
   SurfaceCombination,
-  TurnCombination,
   SURFACES,
+  TurnCombination,
 } from "@/api/tests/helpers/turn-outcome-matrix";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 import {
@@ -100,7 +109,10 @@ import {
   releaseRlsFixture,
 } from "@/api/tests/security/rls-fixture";
 import type { TestIds } from "@/api/tests/security/rls-helpers";
+import { withQueryLogger } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
+
+const testState = createTestState({ file: import.meta.path, config: env });
 
 // Every settled chat turn against what it showed the user. A turn runs
 // through the real send handler and `streamChat`, answered by a provider's
@@ -116,10 +128,11 @@ import type { TestDatabase } from "@/api/tests/security/test-utils";
 // - Every combination of response shape, turn position and provider that
 //   the product and the provider's protocol can produce is enumerated, and
 //   every exclusion names its predicate (`turn-outcome-matrix.ts`). Pull
-//   requests run the all-pairs cover; every night runs every combination
-//   in shards (`nightly-property-test.yml`, `TURN_OUTCOME_COMBINATIONS=all`
-//   and `TURN_OUTCOME_SHARD`). With three dimensions, the all-triples cover
-//   is every combination.
+//   requests run a cover that takes every shape, position and provider at
+//   least once; every night runs every combination in shards
+//   (`nightly-property-test.yml`, `TURN_OUTCOME_COMBINATIONS=all` and
+//   `TURN_OUTCOME_SHARD`). With three dimensions, the all-triples cover is
+//   every combination.
 // - The builders that show model output beside the turn (title, recap,
 //   suggested prompts, a subagent's answer) never show a blank for any
 //   shape, on every provider.
@@ -138,12 +151,14 @@ const surfaces = enumerateSurfaceCombinations(cassettes);
 const turnPlan = planCombinationRun({
   included: turns.included,
   mode: process.env["TURN_OUTCOME_COMBINATIONS"],
+  pullRequestStrength: 1,
   shard: process.env["TURN_OUTCOME_SHARD"],
   valuesOf: turnCombinationValues,
 });
 const surfacePlan = planCombinationRun({
   included: surfaces.included,
   mode: process.env["TURN_OUTCOME_COMBINATIONS"],
+  pullRequestStrength: 1,
   shard: process.env["TURN_OUTCOME_SHARD"],
   valuesOf: surfaceCombinationValues,
 });
@@ -165,51 +180,62 @@ type KnownRule = {
  */
 const knownTurnRulesOf = (_combination: TurnCombination): KnownRule[] => [];
 
+const profile = createChatHarnessProfile("turn-outcome.integration.test.ts");
+
 let testDb: TestDatabase;
 let ids: TestIds;
 let safeDb: SafeDb;
 let scopedDb: ScopedDb;
 let replay: ProviderWireReplay;
-let previousMockAI: typeof env.USE_MOCK_AI;
-let previousBedrockEndpoint: string | undefined;
+
 const seededThreadIds: SafeId<"chatThread">[] = [];
 const seededSkillIds: SafeId<"agentSkill">[] = [];
 
-beforeAll(async () => {
-  const fixture = await getRlsFixture();
-  testDb = fixture.testDb;
-  ids = fixture.ids;
-  scopedDb = asTestRaw<ScopedDb>(
-    createScopedDb(testDb, [ids.wsA1, ids.wsA2], ids.orgA, ids.userA1),
-  );
-  safeDb = toSafeDbMock(scopedDb);
-  previousMockAI = env.USE_MOCK_AI;
-  env.USE_MOCK_AI = false;
-  previousBedrockEndpoint = process.env["AWS_ENDPOINT_URL_BEDROCK_RUNTIME"];
-  process.env["AWS_ENDPOINT_URL_BEDROCK_RUNTIME"] =
-    "https://bedrock-runtime.us-east-1.amazonaws.com.cassette.invalid";
-  replay = installProviderWireReplay();
+registerProviderWireReplay({
+  onInstall: (active) => {
+    replay = active;
+  },
+  options: () => ({ profile }),
 });
 
+testState.beforeAll(
+  async () =>
+    await profile.measure("fixture", async () => {
+      const fixture = await getRlsFixture();
+      testDb = withQueryLogger(fixture.testDb, profile.logger);
+      ids = fixture.ids;
+      scopedDb = asTestRaw<ScopedDb>(
+        createScopedDb(testDb, [ids.wsA1, ids.wsA2], ids.orgA, ids.userA1),
+      );
+      safeDb = toSafeDbMock(scopedDb);
+
+      testState.setConfig("USE_MOCK_AI", false);
+
+      testState.setEnv(
+        "AWS_ENDPOINT_URL_BEDROCK_RUNTIME",
+        "https://bedrock-runtime.us-east-1.amazonaws.com.cassette.invalid",
+      );
+    }),
+);
+
 afterAll(async () => {
-  replay.restore();
-  env.USE_MOCK_AI = previousMockAI;
-  if (previousBedrockEndpoint === undefined) {
-    delete process.env["AWS_ENDPOINT_URL_BEDROCK_RUNTIME"];
-  } else {
-    process.env["AWS_ENDPOINT_URL_BEDROCK_RUNTIME"] = previousBedrockEndpoint;
+  try {
+    await profile.measure("close", async () => {
+      if (seededThreadIds.length > 0) {
+        await testDb
+          .delete(chatThreads)
+          .where(inArray(chatThreads.id, seededThreadIds));
+      }
+      if (seededSkillIds.length > 0) {
+        await testDb
+          .delete(agentSkills)
+          .where(inArray(agentSkills.id, seededSkillIds));
+      }
+      await releaseRlsFixture();
+    });
+  } finally {
+    profile.report();
   }
-  if (seededThreadIds.length > 0) {
-    await testDb
-      .delete(chatThreads)
-      .where(inArray(chatThreads.id, seededThreadIds));
-  }
-  if (seededSkillIds.length > 0) {
-    await testDb
-      .delete(agentSkills)
-      .where(inArray(agentSkills.id, seededSkillIds));
-  }
-  await releaseRlsFixture();
 });
 
 const newThreadId = (): SafeId<"chatThread"> => {
@@ -302,8 +328,8 @@ const SCRIPTED_CALL = {
 
 /**
  * The thread as the position leaves it for the turn under test, written by
- * the production send path on a scripted model (the history does not depend
- * on the provider that answers next).
+ * the production send path on a scripted adapter. Its configured model must
+ * match the recorded provider: a continuation keeps the model that began it.
  */
 const prepareThread = async (
   combination: TurnCombination,
@@ -313,7 +339,14 @@ const prepareThread = async (
   const script = async (
     run: (harness: ReturnType<typeof createApprovalHarness>) => Promise<void>,
   ) => {
-    const harness = createApprovalHarness({ ids, safeDb, scopedDb, testDb });
+    const harness = createApprovalHarness({
+      profile,
+      ids,
+      organizationAIConfig: orgConfigOf(provider, { fallback: false }),
+      safeDb,
+      scopedDb,
+      testDb,
+    });
     try {
       await run(harness);
     } finally {
@@ -366,14 +399,16 @@ const prepareThread = async (
       );
       const outcome = await runChatThreadCompaction({
         abortSignal: AbortSignal.timeout(TURN_TIMEOUT_MS),
-        dataWorkspaceIds: [],
         orgAIConfig: orgConfigOf(provider, { fallback: false }),
         managedAIResidency: "eu" as const,
         organizationId: ids.orgA,
+        admission: testModelAdmission(ids.orgA),
         preserveTokens: 1,
         safeDb,
         threadId,
         triggerTokens: 1,
+        userId: ids.userA1,
+        withStoredContentEgress: async ({ work }) => await work(),
       });
       replay.takeFindings();
       expect(
@@ -460,136 +495,141 @@ type TurnResult = {
  * on the provider's adapter answering the position's action, whose model
  * call reads the shape off the wire.
  */
-const runTurn = async (combination: TurnCombination): Promise<TurnResult> => {
-  const { position, provider, shape } = combination;
-  const answer = shapeAnswerOf(cassettes, provider, shape);
-  if ("notApplicable" in answer) {
-    return panic(`Excluded: ${answer.notApplicable}`);
-  }
-  const expected = expectedSettlement(answer.verdict, position);
-  const threadId = newThreadId();
-  replay.forgetSignedCalls();
-  await prepareThread(combination, threadId);
+const runTurn = async (combination: TurnCombination): Promise<TurnResult> =>
+  await profile.measure("action", async () => {
+    const { position, provider, shape } = combination;
+    const answer = shapeAnswerOf(cassettes, provider, shape);
+    if ("notApplicable" in answer) {
+      return panic(`Excluded: ${answer.notApplicable}`);
+    }
+    const expected = expectedSettlement(answer.verdict, position);
+    const threadId = newThreadId();
+    replay.forgetSignedCalls();
+    await profile.measure(
+      "prepare",
+      async () => await prepareThread(combination, threadId),
+    );
 
-  const fallback = position === "fallback";
-  const seam = replayedHarnessModel({
-    prompts: createPromptPrefixLedger(),
-    provider,
-    replay,
-  });
-  const harness = createApprovalHarness({
-    ids,
-    model: seam,
-    organizationAIConfig: orgConfigOf(provider, { fallback }),
-    safeDb,
-    scopedDb,
-    testDb,
-  });
-  const context =
-    position === "skill-run"
-      ? await (async () => {
-          const skill = await activeSkillOf();
-          return { getActiveSkill: () => skill };
-        })()
-      : undefined;
-  const client = await harness.openWebClient(threadId, { context });
-  try {
-    const chatModel = chatModelOf(cassettes, provider);
-    replay.takeFindings();
-    if (fallback) {
-      // The chat model says nothing; the fallback answers with the shape.
-      replay.answerSideCalls(
-        silentAnswerOf(
-          provider,
+    const fallback = position === "fallback";
+    const seam = replayedHarnessModel({
+      prompts: createPromptPrefixLedger(),
+      provider,
+      replay,
+    });
+    const harness = createApprovalHarness({
+      profile,
+      ids,
+      model: seam,
+      organizationAIConfig: orgConfigOf(provider, { fallback }),
+      safeDb,
+      scopedDb,
+      testDb,
+    });
+    const context =
+      position === "skill-run"
+        ? await (async () => {
+            const skill = await activeSkillOf();
+            return { getActiveSkill: () => skill };
+          })()
+        : undefined;
+    const client = await harness.openWebClient(threadId, { context });
+    try {
+      const chatModel = chatModelOf(cassettes, provider);
+      replay.takeFindings();
+      if (fallback) {
+        // The chat model says nothing; the fallback answers with the shape.
+        replay.answerSideCalls(
+          silentAnswerOf(
+            provider,
+            answersFor(
+              provider,
+              cassetteFor(cassettes, provider, "text").exchanges,
+              chatModel,
+            ),
+          ).exchanges[0],
+        );
+        replay.serve(
+          answersFor(provider, answer.exchanges, otherModelOf(provider)),
+        );
+      } else {
+        replay.answerSideCalls(
           answersFor(
             provider,
             cassetteFor(cassettes, provider, "text").exchanges,
+            otherModelOf(provider),
+          ).exchanges[0],
+        );
+        replay.serve(
+          answersFor(
+            provider,
+            position === "after-tool-result"
+              ? [...plainCallOf(provider), ...answer.exchanges]
+              : answer.exchanges,
             chatModel,
           ),
-        ).exchanges[0],
-      );
-      replay.serve(
-        answersFor(provider, answer.exchanges, otherModelOf(provider)),
-      );
-    } else {
-      replay.answerSideCalls(
-        answersFor(
-          provider,
-          cassetteFor(cassettes, provider, "text").exchanges,
-          otherModelOf(provider),
-        ).exchanges[0],
-      );
-      replay.serve(
-        answersFor(
-          provider,
-          position === "after-tool-result"
-            ? [...plainCallOf(provider), ...answer.exchanges]
-            : answer.exchanges,
-          chatModel,
-        ),
-      );
-    }
-    switch (position) {
-      case "fresh":
-      case "after-tool-result":
-      case "after-compaction":
-      case "skill-run":
-      case "fallback":
-      case "subagent-child":
-        await client.sendUserMessage(Bun.randomUUIDv7(), "Summarize the NDA");
-        break;
-      case "after-ask-user":
-        await client.answer(CALL_UNDER_TEST, ASK_USER_ANSWER);
-        break;
-      case "after-approval":
-      case "after-denial":
-        await client.approve(CALL_UNDER_TEST, position === "after-approval");
-        break;
-      case "after-client-tool":
-        await client.runClientTool(
-          CALL_UNDER_TEST,
-          CREATE_DOCUMENT_TOOL_NAME,
-          DRAFT_RESULT,
         );
-        break;
-      case "resume-after-restart":
-        await client.resend();
-        break;
-      default:
-        position satisfies never;
+      }
+      switch (position) {
+        case "fresh":
+        case "after-tool-result":
+        case "after-compaction":
+        case "skill-run":
+        case "fallback":
+        case "subagent-child":
+          await client.sendUserMessage(Bun.randomUUIDv7(), "Summarize the NDA");
+          break;
+        case "after-ask-user":
+          await client.answer(CALL_UNDER_TEST, ASK_USER_ANSWER);
+          break;
+        case "after-approval":
+        case "after-denial":
+          await client.approve(CALL_UNDER_TEST, position === "after-approval");
+          break;
+        case "after-client-tool":
+          await client.runClientTool(
+            CALL_UNDER_TEST,
+            CREATE_DOCUMENT_TOOL_NAME,
+            DRAFT_RESULT,
+          );
+          break;
+        case "resume-after-restart":
+          await client.resend();
+          break;
+        default:
+          position satisfies never;
+      }
+      const violations = await harness.checkWebClient({
+        client,
+        expected: { runFailure: expected.status === "failed" },
+        threadId,
+      });
+      const [turn] = await testDb
+        .select({
+          failureCode: chatTurns.failureCode,
+          failureRetryable: chatTurns.failureRetryable,
+          status: chatTurns.status,
+        })
+        .from(chatTurns)
+        .where(eq(chatTurns.threadId, threadId))
+        .orderBy(...NEWEST_CHAT_TURN_FIRST)
+        .limit(1);
+      const stored = await harness.readThreadMessages(threadId);
+      return {
+        reasoningStored: answer.reasoning
+          ? stored.some(({ parts }) =>
+              parts.some(({ type }) => type === "thinking"),
+            )
+          : "n/a",
+        settlement: settlementOf(turn, expected),
+        violations,
+      };
+    } finally {
+      client.dispose();
+      await harness.close();
+      replay.answerSideCalls(undefined);
+      replay.takeFindings();
     }
-    const violations = await harness.checkWebClient({
-      client,
-      expected: { runFailure: expected.status === "failed" },
-      threadId,
-    });
-    const [turn] = await testDb
-      .select({
-        failureCode: chatTurns.failureCode,
-        failureRetryable: chatTurns.failureRetryable,
-        status: chatTurns.status,
-      })
-      .from(chatTurns)
-      .where(eq(chatTurns.threadId, threadId))
-      .orderBy(desc(chatTurns.createdAt), desc(chatTurns.id))
-      .limit(1);
-    const stored = await harness.readThreadMessages(threadId);
-    return {
-      reasoningStored: answer.reasoning
-        ? stored.some(({ parts }) =>
-            parts.some(({ type }) => type === "thinking"),
-          )
-        : "n/a",
-      settlement: settlementOf(turn, expected),
-      violations,
-    };
-  } finally {
-    client.dispose();
-    await harness.close();
-    replay.answerSideCalls(undefined);
-    replay.takeFindings();
-  }
-};
+  });
 
 // --- Surfaces -------------------------------------------------------------------
 
@@ -620,9 +660,8 @@ const seedThread = async (): Promise<SafeId<"chatThread">> => {
   });
   await testDb.insert(chatMessages).values(
     TRANSCRIPT.map((text, index) => ({
-      content: toChatMessageContent({
+      content: toPersistedChatMessageContentV3({
         data: [{ content: text, type: "text" }],
-        version: 2,
       }),
       createdAt: new Date(Date.parse("2026-08-03T12:00:00.000Z") + index),
       id: toSafeId<"chatMessage">(Bun.randomUUIDv7()),
@@ -676,6 +715,7 @@ const SURFACE_SHOWS = {
       promptCachingEnabled: false,
       recordAuditEvent: async () => await Promise.resolve(),
       safeDb: safeDbOf(),
+      organizationStateDb: testOrganizationStateDb,
       threadId,
       threadWorkspaceId: null,
       userId: ids.userA1,
@@ -690,6 +730,7 @@ const SURFACE_SHOWS = {
     const recap = await generateThreadRecapText({
       messages: chatMessagesOf(TRANSCRIPT),
       organizationId: ids.orgA,
+      admission: testModelAdmission(ids.orgA),
       orgAIConfig,
       managedAIResidency: "eu" as const,
       promptCachingEnabled: false,
@@ -702,6 +743,8 @@ const SURFACE_SHOWS = {
     const answer: unknown = await getSuggestedPrompts.handler(
       asTestRaw<Parameters<typeof getSuggestedPrompts.handler>[0]>(
         createTestHandlerContext({
+          audit: NO_AUDIT,
+          scopedDb: NO_DB,
           memberRole: sessionMemberRole("owner"),
           orgAIConfig,
           orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
@@ -736,9 +779,10 @@ const SURFACE_SHOWS = {
         workspaceId: null,
       },
       organizationId: ids.orgA,
+      admission: testModelAdmission(ids.orgA),
       orgAIConfig,
       managedAIResidency: "eu" as const,
-      role: "fast",
+      task: "short-text",
       systemSafe: "Answer briefly.",
       systemUntrusted: "Return the clause text.",
       tenantWorkspaceIds: [],
@@ -763,33 +807,124 @@ const SURFACE_SHOWS = {
  *  whether its builder reached the provider at all. */
 const runSurface = async (
   combination: SurfaceCombination,
-): Promise<{ reachedProvider: boolean; violations: OracleViolation[] }> => {
-  const { provider, shape, surface } = combination;
-  const answer = shapeAnswerOf(cassettes, provider, shape);
-  if ("notApplicable" in answer) {
-    return panic(`Excluded: ${answer.notApplicable}`);
+): Promise<{ reachedProvider: boolean; violations: OracleViolation[] }> =>
+  await profile.measure("action", async () => {
+    const { provider, shape, surface } = combination;
+    const answer = shapeAnswerOf(cassettes, provider, shape);
+    if ("notApplicable" in answer) {
+      return panic(`Excluded: ${answer.notApplicable}`);
+    }
+    const model = chatModelOf(cassettes, provider);
+    replay.takeFindings();
+    replay.forgetSignedCalls();
+    replay.serve(answersFor(provider, answer.exchanges, model));
+    try {
+      const shown = await SURFACE_SHOWS[surface](
+        orgConfigOf(provider, { fallback: false }),
+      );
+      return {
+        reachedProvider: replay.requests().length > 0,
+        violations: violationsOf(
+          CHAT_ORACLE.surfaceEmptyShowsNothing,
+          shown.filter(isBlank).map((blank) => ({ blank, surface })),
+        ),
+      };
+    } finally {
+      replay.takeFindings();
+    }
+  });
+
+// --- Tests --------------------------------------------------------------------
+
+const checkPinnedContinuationFallback = async (
+  selection: "automatic" | "explicit",
+) => {
+  const provider = "openai";
+  const threadId = newThreadId();
+  await prepareThread(
+    { provider, position: "after-approval", shape: "text" },
+    threadId,
+  );
+  const primaryModel = chatModelOf(cassettes, provider);
+  const fallbackModel = otherModelOf(provider);
+  expect(fallbackModel).not.toBe(primaryModel);
+  if (selection === "explicit") {
+    await testDb
+      .update(chatThreads)
+      .set({ chatModel: `${provider}::${primaryModel}` })
+      .where(eq(chatThreads.id, threadId));
   }
-  const model = chatModelOf(cassettes, provider);
-  replay.takeFindings();
-  replay.forgetSignedCalls();
-  replay.serve(answersFor(provider, answer.exchanges, model));
+  const seam = replayedHarnessModel({
+    prompts: createPromptPrefixLedger(),
+    provider,
+    replay,
+  });
+  const harness = createApprovalHarness({
+    ids,
+    model: seam,
+    organizationAIConfig: orgConfigOf(provider, { fallback: true }),
+    safeDb,
+    scopedDb,
+    testDb,
+  });
+  const client = await harness.openWebClient(threadId);
   try {
-    const shown = await SURFACE_SHOWS[surface](
-      orgConfigOf(provider, { fallback: false }),
-    );
-    return {
-      reachedProvider: replay.requests().length > 0,
-      violations: violationsOf(
-        CHAT_ORACLE.surfaceEmptyShowsNothing,
-        shown.filter(isBlank).map((blank) => ({ blank, surface })),
+    const before = await harness.readThreadMessages(threadId);
+    expect(
+      before.some(
+        ({ metadata }) => metadata?.turnModel?.model === primaryModel,
       ),
-    };
+    ).toBe(true);
+    replay.takeFindings();
+    const answer = cassetteFor(cassettes, provider, "text");
+    replay.answerSideCalls(
+      silentAnswerOf(
+        provider,
+        answersFor(provider, answer.exchanges, primaryModel),
+      ).exchanges.at(0),
+    );
+    replay.serve(
+      answersFor(
+        provider,
+        selection === "automatic" ? answer.exchanges : [],
+        fallbackModel,
+      ),
+    );
+    await client.approve(CALL_UNDER_TEST, true);
+    const sent = seam.sentRequests();
+    expect(sent.some(({ model }) => model === primaryModel)).toBe(true);
+    expect(sent.some(({ model }) => model === fallbackModel)).toBe(
+      selection === "automatic",
+    );
+    expect(
+      await harness.checkWebClient({
+        client,
+        expected: { runFailure: selection === "explicit" },
+        threadId,
+      }),
+    ).toEqual([]);
+    const [turn] = await testDb
+      .select({ status: chatTurns.status })
+      .from(chatTurns)
+      .where(eq(chatTurns.threadId, threadId))
+      .orderBy(...NEWEST_CHAT_TURN_FIRST)
+      .limit(1);
+    expect(turn?.status).toBe(
+      selection === "automatic" ? "completed" : "failed",
+    );
   } finally {
+    client.dispose();
+    await harness.close();
+    replay.answerSideCalls(undefined);
     replay.takeFindings();
   }
 };
 
-// --- Tests --------------------------------------------------------------------
+test.each(["automatic", "explicit"] as const)(
+  "an empty pinned continuation follows %s model selection for fallback",
+  checkPinnedContinuationFallback,
+  TURN_TIMEOUT_MS,
+);
 
 /** What a combination's turn owes: its settlement, and no violation. */
 const expectedResultOf = (combination: TurnCombination): TurnResult => {
@@ -819,8 +954,10 @@ describe(`settled chat turns: ${String(turns.included.length)} combinations the 
   test("every wire scenario, finish reason and error kind names a shape, and every shape is named by one", () => {
     const named = new Set<ResponseShape>(
       [WIRE_SCENARIO_SHAPES, FINISH_REASON_SHAPES, AI_ERROR_KIND_SHAPES]
-        .flatMap((record) => Object.values(record))
-        .flatMap((entry) => (Array.isArray(entry) ? entry : [])),
+        .flatMap((record) => Object.values<unknown>(record))
+        .flatMap((entry) =>
+          Array.isArray(entry) ? (entry as readonly ResponseShape[]) : [],
+        ),
     );
     expect(
       RESPONSE_SHAPE_NAMES.filter(

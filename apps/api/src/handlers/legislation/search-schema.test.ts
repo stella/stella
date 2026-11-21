@@ -1,6 +1,5 @@
-import { Value } from "@sinclair/typebox/value";
 import { describe, expect, expectTypeOf, test } from "bun:test";
-import type { Static } from "elysia";
+import * as v from "valibot";
 
 import {
   SEARCH_PAGINATION_COMPLETE,
@@ -28,6 +27,8 @@ const validResponse = {
       documentType: null,
       status: "status",
       effectiveDate: null,
+      versionValidFrom: null,
+      versionValidTo: null,
       sourceUrl: null,
       headline: null,
       score: 0,
@@ -36,27 +37,38 @@ const validResponse = {
   nextCursor: null,
   paginationOutcome: SEARCH_PAGINATION_COMPLETE,
   total: SEARCH_TOTAL_NOT_COUNTED,
-} satisfies Static<typeof searchLegislationSuccessResponseSchema>;
+} satisfies SearchLegislationSuccess;
 
 describe("legislation search response schema", () => {
   test("matches the handler's complete success payload", () => {
     expectTypeOf<
-      Static<typeof searchLegislationSuccessResponseSchema>
+      v.InferOutput<typeof searchLegislationSuccessResponseSchema>
     >().toEqualTypeOf<SearchLegislationSuccess>();
   });
 
   test("accepts the complete response", () => {
-    expect(
-      Value.Check(searchLegislationSuccessResponseSchema, validResponse),
-    ).toBe(true);
+    expect(v.is(searchLegislationSuccessResponseSchema, validResponse)).toBe(
+      true,
+    );
   });
 
-  test.each([
-    { ...validResponse, total: null },
-    { ...validResponse, unexpected: true },
-  ])("rejects a response outside the declared contract", (response) => {
-    expect(Value.Check(searchLegislationSuccessResponseSchema, response)).toBe(
-      false,
-    );
+  test("rejects a response outside the declared contract", () => {
+    expect(
+      v.is(searchLegislationSuccessResponseSchema, {
+        ...validResponse,
+        total: null,
+      }),
+    ).toBe(false);
+  });
+
+  test("sends only the declared fields of a response", () => {
+    // The validated output is what leaves the server, so an undeclared field
+    // is dropped rather than sent.
+    const parsed = v.safeParse(searchLegislationSuccessResponseSchema, {
+      ...validResponse,
+      unexpected: true,
+    });
+    expect(parsed.success).toBe(true);
+    expect(parsed.output).toEqual(validResponse);
   });
 });

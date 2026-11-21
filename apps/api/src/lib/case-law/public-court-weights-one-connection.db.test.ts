@@ -137,6 +137,7 @@ describe("a cold court registry inside a one-connection public read", () => {
   test("a decision read draws its court tier", async () => {
     const decision = await withRedistributableSubject(
       readerDb,
+      "pages",
       { kind: "id", id: subjectId },
       async (subject) => await readDecisionHandler({ subject }),
     );

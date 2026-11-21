@@ -1,6 +1,9 @@
 import { posthog } from "posthog-js";
 
+import { sleep } from "@stll/concurrency/sleep";
+
 import { getFormattingLocale, getMessageLocale } from "@/i18n/i18n-store";
+import { ssrApiHeaders } from "@/lib/account/ssr-api-headers";
 import { getSimulateSlowLoadDelayMs } from "@/lib/dev-store";
 
 const FORMATTING_LOCALE_HEADER = "x-stella-formatting-locale";
@@ -10,14 +13,16 @@ export const waitForSimulatedApiDelay = async (): Promise<void> => {
   if (delayMs <= 0) {
     return;
   }
-  await new Promise<void>((resolve) => {
-    setTimeout(resolve, delayMs);
-  });
+  await sleep(delayMs);
 };
 
 export const getApiRequestHeaders = (): Record<string, string> => {
   if (typeof window === "undefined") {
-    return {};
+    return {
+      ...ssrApiHeaders(),
+      "Accept-Language": getMessageLocale(),
+      [FORMATTING_LOCALE_HEADER]: getFormattingLocale(),
+    };
   }
 
   const result: Record<string, string> = {

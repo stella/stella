@@ -9,28 +9,21 @@ import {
   type CaseLawDecisionRouteParams,
   extractCaseLawDecisionIdFromIdRouteParam,
   isCaseLawDecisionId,
+  pickCaseLawDecisionHit,
 } from "@stll/api-contract/case-law-decision-route";
+import type { ChatDecisionLocator } from "@stll/api-contract/chat-reference-href";
 
 import { openPublicLawLink } from "@/components/chat/public-law-open";
-import { publicCaseLawCountryFromParam } from "@/features/case-law/case-law-jurisdiction";
+import { publicCaseLawPageCountryFromParam } from "@/features/case-law/case-law-jurisdiction";
 import type { DecisionTabTarget } from "@/features/case-law/decision-inspector.logic";
 import { getMessageLocale } from "@/i18n/i18n-store";
 import { api } from "@/lib/api";
 import {
   decodeCaseLawDecisionRef,
   defaultCaseLawCountryForLocale,
-  pickCaseLawDecisionHit,
 } from "@/lib/case-law-route";
-import { unwrapPublicLawEden } from "@/lib/public-law-api";
+import { unwrapPublicLawResponse } from "@/lib/public-law-api";
 import { toSafeId } from "@/lib/safe-id";
-
-/**
- * How a chat link names a decision: by the id or docket a `#stella-decision=`
- * href carries, or by the route params of the decision page's own URL.
- */
-export type CaseLawDecisionLocator =
-  | { type: "ref"; ref: string }
-  | { type: "route"; params: CaseLawDecisionRouteParams };
 
 type OpenCaseLawDecisionOptions = {
   /** A passage of the decision to open at, rather than its beginning. */
@@ -100,7 +93,7 @@ const readDecisionById = async (decisionId: string): Promise<Resolution> => {
     .get();
 
   return fromDecisionRead(
-    unwrapPublicLawEden(response, "resolvePublicCaseLawDecision"),
+    unwrapPublicLawResponse(response, "resolvePublicCaseLawDecision"),
   );
 };
 
@@ -125,7 +118,7 @@ const resolveByRef = async (rawRef: string): Promise<Resolution | null> => {
     limit: CASE_LAW_LINK_SEARCH_LIMIT,
   });
 
-  const data = unwrapPublicLawEden(
+  const data = unwrapPublicLawResponse(
     response,
     "searchPublicCaseLawDecisionLinks",
   );
@@ -146,7 +139,7 @@ const resolveByRoute = async ({
     return await readDecisionById(decisionId);
   }
 
-  const routeCountry = publicCaseLawCountryFromParam(country);
+  const routeCountry = publicCaseLawPageCountryFromParam(country);
   if (routeCountry === null) {
     return null;
   }
@@ -159,12 +152,26 @@ const resolveByRoute = async ({
   });
 
   return fromDecisionRead(
-    unwrapPublicLawEden(response, "readPublicCaseLawDecisionBySlug"),
+    unwrapPublicLawResponse(response, "readPublicCaseLawDecisionBySlug"),
   );
 };
 
+const openResolution = async (
+  resolved: Resolution,
+  open: (target: DecisionTabTarget) => void,
+  anchorId: string | undefined,
+) => {
+  const { decision } = resolved;
+  // Loaded on open: the document parser stays out of the chunks every
+  // page preloads.
+  const { anchorAfterResolution } =
+    await import("@/features/case-law/decision-resolution.logic");
+  const target = anchorAfterResolution({ ...resolved, anchorId });
+  open(target === undefined ? decision : { ...decision, anchorId: target });
+};
+
 const resolveCaseLawDecision = async (
-  locator: CaseLawDecisionLocator,
+  locator: ChatDecisionLocator,
 ): Promise<Resolution | null> => {
   switch (locator.type) {
     case "ref":
@@ -183,19 +190,29 @@ const resolveCaseLawDecision = async (
  * where there is an inspector, the decision's own page on a phone.
  */
 export const openCaseLawDecision = async (
-  locator: CaseLawDecisionLocator,
+  locator: ChatDecisionLocator,
   open: (target: DecisionTabTarget) => void,
   { anchorId }: OpenCaseLawDecisionOptions = {},
 ) =>
   await openPublicLawLink({
     resolve: async () => await resolveCaseLawDecision(locator),
     open: async (resolved) => {
-      const { decision } = resolved;
-      // Loaded on open: the document parser stays out of the chunks every
-      // page preloads.
-      const { anchorAfterResolution } =
-        await import("@/features/case-law/decision-resolution.logic");
-      const target = anchorAfterResolution({ ...resolved, anchorId });
-      open(target === undefined ? decision : { ...decision, anchorId: target });
+      await openResolution(resolved, open, anchorId);
+    },
+  });
+
+/**
+ * Open a decision the caller has already read, at the same anchor
+ * `openCaseLawDecision` would choose, without reading it a second time.
+ */
+export const openReadCaseLawDecision = async (
+  read: DecisionRead,
+  open: (target: DecisionTabTarget) => void,
+  { anchorId }: OpenCaseLawDecisionOptions = {},
+) =>
+  await openPublicLawLink({
+    resolve: () => fromDecisionRead(read),
+    open: async (resolved) => {
+      await openResolution(resolved, open, anchorId);
     },
   });

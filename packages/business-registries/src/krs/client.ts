@@ -1,8 +1,8 @@
 import { encodeRegistryComponent } from "../shared/encode-registry-component.js";
 import {
   hasOptionalString,
-  isRecord,
   isOptionalArrayOf,
+  isRecord,
 } from "../shared/guards.js";
 import {
   performRegistryRequest,

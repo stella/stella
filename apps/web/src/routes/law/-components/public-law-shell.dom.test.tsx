@@ -1,0 +1,286 @@
+import { GlobalRegistrator } from "@happy-dom/global-registrator";
+import {
+  createMemoryHistory,
+  createRootRoute,
+  createRoute,
+  createRouter,
+  RouterContextProvider,
+} from "@tanstack/react-router";
+import { afterAll, afterEach, expect, test } from "bun:test";
+
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
+
+import ar from "@/i18n/langs/ar.json";
+import en from "@/i18n/langs/en.json";
+import { toSafeId } from "@/lib/safe-id";
+
+import type {
+  decisionLawCrumbTrailOf,
+  statuteLawCrumbTrailOf,
+} from "../-law-crumb-trail.logic";
+
+GlobalRegistrator.register({ url: "http://localhost:3000" });
+const { act, cleanup, fireEvent, render, screen, waitFor } =
+  await import("@testing-library/react");
+const { IntlProvider } = await import("use-intl");
+const { FormattingProvider } = await import("@/i18n/formatting-context");
+const { TooltipProvider } = await import("@stll/ui/tooltip");
+const { PublicLawBreadcrumbs } = await import("./public-law-shell");
+
+afterEach(cleanup);
+afterAll(async () => await unregisterDomEnvironment());
+
+const statute = {
+  status: "current",
+  versionValidFrom: "2026-01-01",
+  expressionKind: "consolidation",
+  windowDisposition: "effective",
+  country: "CZE",
+  eli: "/eli/cz/sb/2026/178",
+  title: "178/2026 Sb., o portálu kritické infrastruktury",
+} satisfies Parameters<typeof statuteLawCrumbTrailOf>[0];
+const decision = {
+  country: "CZE",
+  caseFile: { items: [], nextCursor: null, limit: 50 },
+  id: toSafeId<"caseLawDecision">("decision-7-azs-172-2025"),
+  languageGroupKey: null,
+  court: "Nejvyšší správní soud",
+  courtAbbreviation: "NSS",
+  courtTier: "supreme",
+  caseNumber: "7 Azs 172/2025",
+  decisionDate: "2026-01-10",
+  metadata: { legalArea: "Správní právo" },
+} satisfies Parameters<typeof decisionLawCrumbTrailOf>[0];
+
+type MountOptions = {
+  kind: "statute" | "versioned-statute" | "decision";
+  locale?: string;
+  document?: Parameters<typeof statuteLawCrumbTrailOf>[0];
+  caseDecision?: Parameters<typeof decisionLawCrumbTrailOf>[0];
+};
+
+const mount = async ({
+  kind,
+  locale = "en",
+  document = statute,
+  caseDecision = decision,
+}: MountOptions) => {
+  const root = createRootRoute();
+  const route =
+    kind !== "decision"
+      ? createRoute({
+          getParentRoute: () => root,
+          path:
+            kind === "versioned-statute"
+              ? "/law/$country/statutes/$slug/v/$version"
+              : "/law/$country/statutes/$slug/",
+          loader: () => ({ statute: document, work: statute }),
+        })
+      : createRoute({
+          getParentRoute: () => root,
+          path: "/law/$country/cases/$court/$slug",
+          loader: () => caseDecision,
+        });
+  const statuteUrl =
+    kind === "versioned-statute"
+      ? "/law/cze/statutes/178-2026-sb/v/2026-01-01"
+      : "/law/cze/statutes/178-2026-sb";
+  const router = createRouter({
+    isServer: false,
+    routeTree: root.addChildren([route]),
+    history: createMemoryHistory({
+      initialEntries: [
+        kind !== "decision" ? statuteUrl : "/law/cze/cases/nss/7-azs-172-2025",
+      ],
+    }),
+  });
+  await router.load();
+  return render(
+    <IntlProvider
+      locale={locale}
+      messages={locale === "ar" ? ar : en}
+      timeZone="UTC"
+    >
+      <FormattingProvider locale={locale} timeZone="UTC">
+        <TooltipProvider delay={0}>
+          <RouterContextProvider router={router}>
+            <PublicLawBreadcrumbs />
+          </RouterContextProvider>
+        </TooltipProvider>
+      </FormattingProvider>
+    </IntlProvider>,
+  );
+};
+
+test("statute shell shows linked hierarchy, identity, short title and a tooltip with the full title and status", async () => {
+  const { container } = await mount({ kind: "statute" });
+  expect(
+    screen
+      .getByRole("link", { name: en.common.legalDatabase })
+      .getAttribute("href"),
+  ).toBe("/law");
+  expect(
+    screen.getByRole("link", { name: en.statutes.title }).getAttribute("href"),
+  ).toBe("/law/cze/statutes");
+  expect(
+    screen.getByRole("link", { name: "Czechia" }).getAttribute("href"),
+  ).toBe("/law/cze/statutes");
+  expect(screen.getByRole("link", { name: "2026" }).getAttribute("href")).toBe(
+    "/law/cze/statutes?year=2026",
+  );
+  const page = container.querySelector('[aria-current="page"]');
+  expect(page?.textContent).toContain("178/2026");
+  expect(page?.textContent).toContain("o portálu kritické infrastruktury");
+  expect(page?.querySelector('[data-kind="statute"]')).not.toBeNull();
+  const trigger = page?.querySelector('[data-slot="tooltip-trigger"]');
+  expect(trigger).toBeTruthy();
+  if (trigger === null || trigger === undefined) {
+    return;
+  }
+  await act(async () => fireEvent.mouseEnter(trigger));
+  await waitFor(() =>
+    expect(
+      screen
+        .getByText(statute.title)
+        .closest('[data-slot="tooltip-popup"][data-open]')?.textContent,
+    ).toBe(`${statute.title}${en.statutes.status.current}`),
+  );
+});
+
+test("decision shell links court and decision year before the current docket and legal area", async () => {
+  const { container } = await mount({ kind: "decision" });
+  expect(
+    screen.getByRole("link", { name: en.common.caseLaw }).getAttribute("href"),
+  ).toBe("/law/cases?country=cze");
+  const court = screen.getByRole("link", { name: /Nejvyšší správní soud/u });
+  expect(
+    new URL(
+      court.getAttribute("href") ?? "",
+      "http://localhost:3000",
+    ).searchParams.get("court"),
+  ).toBe(decision.court);
+  expect(
+    new URL(
+      court.getAttribute("href") ?? "",
+      "http://localhost:3000",
+    ).searchParams.get("country"),
+  ).toBe("cze");
+  expect(
+    screen.getByRole("link", { name: "Czechia" }).getAttribute("href"),
+  ).toBe("/law/cases?country=cze");
+  expect(court.querySelector('[data-kind="decision"]')).not.toBeNull();
+  const yearUrl = new URL(
+    screen.getByRole("link", { name: "2026" }).getAttribute("href") ?? "",
+    "http://localhost:3000",
+  );
+  expect(yearUrl.searchParams.get("country")).toBe("cze");
+  expect(yearUrl.pathname).toBe("/law/cases");
+  expect(yearUrl.searchParams.get("court")).toBe(decision.court);
+  expect(yearUrl.searchParams.get("from")).toBe("2026-01-01");
+  expect(yearUrl.searchParams.get("to")).toBe("2026-12-31");
+  expect(yearUrl.searchParams.has("year")).toBe(false);
+  expect(container.querySelector('[aria-current="page"]')?.textContent).toBe(
+    decision.caseNumber,
+  );
+  expect(screen.getByText(/Správní právo/u)).toBeTruthy();
+});
+
+test("Arabic chrome keeps statute identity isolated and the publisher title intact", async () => {
+  const { container } = await mount({ kind: "statute", locale: "ar" });
+  expect(
+    screen.getByRole("link", { name: ar.statutes.title }).getAttribute("href"),
+  ).toBe("/law/cze/statutes");
+  expect(
+    container.querySelector('[data-kind="statute"]')?.getAttribute("dir"),
+  ).toBe("ltr");
+  expect(
+    screen.getByText("o portálu kritické infrastruktury").getAttribute("dir"),
+  ).toBe("auto");
+});
+
+test.each([{ kind: "statute" }, { kind: "versioned-statute" }] as const)(
+  "$kind breadcrumb retains the accessible status alongside its identity",
+  async ({ kind }) => {
+    await mount({ kind });
+    const status = screen.getByRole("img", {
+      name: en.statutes.status.current,
+    });
+    expect(status.closest('[aria-current="page"]')).not.toBeNull();
+    expect(
+      status
+        .querySelector('[data-slot="review-status-dot"]')
+        ?.classList.contains("bg-success"),
+    ).toBe(true);
+  },
+);
+
+test("versioned statute breadcrumb names an expression that never entered into force", async () => {
+  await mount({
+    kind: "versioned-statute",
+    document: { ...statute, windowDisposition: "never-in-force" },
+  });
+  const status = screen.getByRole("img", {
+    name: en.statutes.status.neverInForce,
+  });
+  expect(
+    status
+      .querySelector('[data-slot="review-status-dot"]')
+      ?.classList.contains("bg-muted-foreground"),
+  ).toBe(true);
+  expect(
+    screen.queryByRole("img", { name: en.statutes.status.current }),
+  ).toBeNull();
+});
+
+test("Hungarian decision breadcrumb names its country and keeps court and year in Hungary", async () => {
+  await mount({
+    kind: "decision",
+    caseDecision: {
+      ...decision,
+      country: "HUN",
+      court: "Kúria",
+      courtAbbreviation: null,
+      caseNumber: "Pfv.20353/2026/4",
+    },
+  });
+  const country = screen.getByRole("link", { name: "Hungary" });
+  expect(country.getAttribute("href")).toBe("/law/cases?country=hun");
+  for (const name of [/Kúria/u, "2026"]) {
+    const url = new URL(
+      screen.getByRole("link", { name }).getAttribute("href") ?? "",
+      "http://localhost:3000",
+    );
+    expect(url.searchParams.get("country")).toBe("hun");
+    expect(url.searchParams.get("court")).toBe("Kúria");
+  }
+});
+
+// The bar narrows with the pane beside an open inspector, not only with the
+// window, so a crumb that may shrink has to clip its own text: one that
+// shrinks while its text keeps its width is drawn over its neighbours.
+test.each([{ kind: "statute" }, { kind: "decision" }] as const)(
+  "$kind trail folds by the bar's width and no crumb shrinks without truncating",
+  async ({ kind }) => {
+    const { container } = await mount({ kind });
+    expect(
+      container.querySelector('[data-slot="breadcrumb"]')?.parentElement
+        ?.className,
+    ).toContain("@container/law-crumbs");
+    const crumbs = [
+      ...container.querySelectorAll(
+        '[data-slot="breadcrumb-item"], [data-slot="breadcrumb-separator"]',
+      ),
+    ];
+    expect(crumbs.length).toBeGreaterThan(0);
+    for (const crumb of crumbs) {
+      const classes = [...crumb.classList];
+      // Folding by the window's width would leave a narrow pane unfolded.
+      expect(classes.filter((name) => /^(max-)?sm:/u.test(name))).toEqual([]);
+      if (classes.includes("min-w-0")) {
+        expect(crumb.querySelector(".truncate")).not.toBeNull();
+      } else {
+        expect(classes).toContain("shrink-0");
+      }
+    }
+  },
+);

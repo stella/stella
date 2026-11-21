@@ -31,9 +31,13 @@ export const REHEARSAL_DEFAULT_DECISIONS = 200_000;
 /** Per-decision multiples; the totals a run reports are `decisions * ratio`. */
 export const REHEARSAL_ROWS_PER_DECISION = {
   case_law_citations: 5,
+  case_law_decision_citation_stats: 1,
+  case_law_decision_citation_stats_state: 1,
   case_law_decision_identifiers: 1,
   case_law_decisions: 1,
   case_law_index_jobs: 1,
+  case_law_population_deltas: 1,
+  case_law_population_projections: 1,
   case_law_provision_citations: 2,
   case_law_provision_extractions: 1,
   case_law_statute_citation_memberships: 2,
@@ -169,6 +173,87 @@ export const REHEARSAL_SEEDERS = {
            ${ZERO_DIGEST},
            ${PROJECTION_EPOCH}
     FROM generate_series(1, ${String(decisions)}) AS g(k)`,
+  // The decision write trigger projects every seeded decision; this fills any
+  // decision it did not. Conditional until the promoted base schema carries
+  // the population tables.
+  case_law_population_projections: () => `
+    DO $rehearsal$
+    BEGIN
+      IF to_regclass('case_law_population_projections') IS NOT NULL THEN
+        EXECUTE $seed$
+          INSERT INTO case_law_population_projections
+            (decision_id, source_id, country, buckets, court, created_at, updated_at, publication)
+          SELECT d.id, d.source_id, d.country, public.case_law_population_buckets(d),
+                 d.court, d.created_at, d.updated_at,
+                 CASE WHEN public.case_law_statute_citation_is_published(d.metadata, d.redacted_at)
+                   THEN 'published' ELSE 'unpublished' END
+          FROM case_law_decisions d
+          JOIN rehearsal_decisions r ON r.id = d.id
+          ON CONFLICT ON CONSTRAINT case_law_population_projections_pkey DO NOTHING
+        $seed$;
+      END IF;
+    END
+    $rehearsal$`,
+  // A backlog of one pending country delta per decision, the queue a
+  // per-decision ingestion leaves before its fold. The trigger's aggregated
+  // deltas fold through the owner first; the country bucket then moves back
+  // from the folded counts into the queue, so counts plus deltas still equal
+  // the projected population.
+  case_law_population_deltas: () => `
+    DO $rehearsal$
+    DECLARE
+      fold_done boolean := false;
+      attempts integer := 0;
+    BEGIN
+      IF to_regclass('case_law_population_deltas') IS NOT NULL THEN
+        WHILE NOT fold_done LOOP
+          attempts := attempts + 1;
+          IF attempts > 10000 THEN
+            RAISE EXCEPTION 'Rehearsal population fold did not finish';
+          END IF;
+          EXECUTE 'SELECT done FROM public.fold_case_law_population_counts(2048)'
+            INTO STRICT fold_done;
+        END LOOP;
+        EXECUTE $seed$
+          DELETE FROM case_law_population_counts
+          WHERE kind = 'country' AND country = 'CZE'
+            AND source_id = '${SOURCE_ID}' AND value = 'CZE'
+        $seed$;
+        EXECUTE $seed$
+          INSERT INTO case_law_population_deltas (kind, country, source_id, value, delta)
+          SELECT 'country', 'CZE', '${SOURCE_ID}', 'CZE', 1
+          FROM rehearsal_decisions d
+          ORDER BY d.rn
+        $seed$;
+      END IF;
+    END
+    $rehearsal$`,
+  // Introduced by the pending citation-stats migration. Conditional until the
+  // promoted base schema used by upgrade rehearsals carries it.
+  case_law_decision_citation_stats: () => `
+    DO $rehearsal$
+    BEGIN
+      IF to_regclass('case_law_decision_citation_stats') IS NOT NULL THEN
+        EXECUTE $seed$
+          INSERT INTO case_law_decision_citation_stats
+            (decision_id, direction, related_year, related_country, related_source_id, polarity, count)
+          SELECT d.id, 'incoming', 2024, 'CZE', '${SOURCE_ID}', 'unknown', 1
+          FROM rehearsal_decisions d
+        $seed$;
+      END IF;
+    END
+    $rehearsal$`,
+  case_law_decision_citation_stats_state: () => `
+    DO $rehearsal$
+    BEGIN
+      IF to_regclass('case_law_decision_citation_stats_state') IS NOT NULL THEN
+        EXECUTE $seed$
+          INSERT INTO case_law_decision_citation_stats_state (decision_id, status)
+          SELECT d.id, 'pending' FROM rehearsal_decisions d
+        $seed$;
+      END IF;
+    END
+    $rehearsal$`,
   case_law_decision_identifiers: () => `
     INSERT INTO case_law_decision_identifiers (decision_id, type, value, normalized_value)
     SELECT d.id, 'case-number', d.case_number, lower(d.case_number)
@@ -313,8 +398,12 @@ export const REHEARSAL_SEEDERS = {
  */
 export const REHEARSAL_SEED_ORDER = [
   "case_law_decisions",
+  "case_law_population_projections",
+  "case_law_population_deltas",
   "case_law_decision_identifiers",
   "case_law_citations",
+  "case_law_decision_citation_stats",
+  "case_law_decision_citation_stats_state",
   "case_law_provision_citations",
   "case_law_provision_extractions",
   "case_law_statute_citation_memberships",

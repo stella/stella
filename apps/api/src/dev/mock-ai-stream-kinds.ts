@@ -212,7 +212,10 @@ const STREAMS = {
       {
         input: {
           subagents: [
-            { task: `${MOCK_AI_STREAM_KIND_MARKERS.text}, for the subagent` },
+            {
+              title: "Stream a reply",
+              task: `${MOCK_AI_STREAM_KIND_MARKERS.text}, for the subagent`,
+            },
           ],
         },
         name: SPAWN_SUBAGENTS_TOOL_NAME,

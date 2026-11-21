@@ -2,16 +2,17 @@ import { expect, test } from "bun:test";
 import fc from "fast-check";
 
 import { assertProperty, propertyTestTimeout } from "@stll/property-testing";
+import { normalizeUnicode } from "@stll/text-normalize";
 
 import { caseLawCorpusQueryFields } from "./corpus-index-read-contract";
 import {
+  caseLawCorpusQuery,
   CORPUS_QUERY_LEAF_BUDGET,
   corpusFreeTextClause,
-  caseLawCorpusQuery,
-  quoteCorpusValue,
-  partitionCorpusFunctionWords,
-  tokenizeCorpusFreeText,
   type CorpusFreeTextOptions,
+  partitionCorpusFunctionWords,
+  quoteCorpusValue,
+  tokenizeCorpusFreeText,
 } from "./corpus-query";
 import type { CorpusIndexQueryVariant } from "./corpus-query-variant-policy";
 import { stemSlovakUpstream } from "./morphology/slovak";
@@ -130,7 +131,10 @@ test(
               );
             }
             if (required.length <= CORPUS_QUERY_LEAF_BUDGET / 3) {
-              const normalized = token.value.normalize("NFC").toLowerCase();
+              const normalized = normalizeUnicode(
+                token.value,
+                "NFC",
+              ).toLowerCase();
               const faithful = stemSlovakUpstream(normalized) || normalized;
               expect(candidate).toContain(
                 `text_stem:${quoteCorpusValue(faithful)}`,

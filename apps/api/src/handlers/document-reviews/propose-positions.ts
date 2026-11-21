@@ -3,16 +3,27 @@ import { Result } from "better-result";
 import { DOCUMENT_REVIEW_LIMITS } from "@stll/api-contract";
 
 import { prepareReferenceProposal } from "@/api/handlers/document-reviews/prepare-proposal";
-import { proposeReferencePositions } from "@/api/handlers/document-reviews/reference-positions";
+import {
+  proposalHandlerError,
+  proposeReferencePositions,
+} from "@/api/handlers/document-reviews/reference-positions";
 import { proposeReviewPositionsBodySchema } from "@/api/handlers/document-reviews/schemas";
-import { aiHandlerError } from "@/api/lib/ai-error";
-import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
+import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
+import { storedAIConfigUnreadableError } from "@/api/lib/ai-config-response";
+import {
+  ACCOUNT_ACCESS,
+  configuredModelAdmission,
+  createSafeHandler,
+} from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { pinProposedPositions } from "@/api/lib/document-review/reference-passages";
 
-const TIMEOUT_MS = 120_000;
-
 const config = {
+  contract: "patch",
+  actionAdmission: {
+    type: "handler",
+    actionKind: "document-reviews.propose-positions",
+  },
   description:
     "Propose review positions from one or more reference documents: one reviewable term each, with its kind, its severity, what the term is for and what to compare, and the reference passages that state the standard for it, plus what was read and deliberately not compared.",
   permissions: { workspace: ["read"] },
@@ -34,6 +45,7 @@ export const createProposePositions = ({
   createSafeHandler(
     config,
     async function* ({
+      modelAdmission,
       safeDb,
       workspaceId,
       body,
@@ -42,8 +54,13 @@ export const createProposePositions = ({
       managedAIResidency,
       orgAIConfigStatus,
       promptCachingEnabled,
+      request,
       user,
     }) {
+      if (orgAIConfigStatus === ORG_AI_CONFIG_STATUS.unreadable) {
+        return Result.err(storedAIConfigUnreadableError());
+      }
+
       const organizationId = session.activeOrganizationId;
       const prepared = yield* yield* prepareProposal({
         body,
@@ -57,6 +74,7 @@ export const createProposePositions = ({
 
       const serviceTier = "standard" as const;
       const proposal = await proposePositions({
+        admission: configuredModelAdmission({ modelAdmission }),
         target: prepared.target,
         references: prepared.references,
         seededPositions: body.seededPositions,
@@ -77,18 +95,13 @@ export const createProposePositions = ({
           userId: user.id,
           workspaceId,
         },
-        abortSignal: AbortSignal.timeout(TIMEOUT_MS),
+        abortSignal: request.signal,
       });
       if (Result.isError(proposal)) {
         // `WorkflowIntegrationError.cause` carries the provider's own failure —
         // classify against that so an exhausted quota or a rejected key answers
         // with the status that names it instead of an opaque 500.
-        return Result.err(
-          aiHandlerError(proposal.error.cause, {
-            status: 502,
-            message: "Position proposal failed",
-          }),
-        );
+        return Result.err(proposalHandlerError(proposal.error.cause));
       }
       // The words leave through their own rows, never through this answer: the
       // proposed positions are pinned first and answered as ids. Seeds lead the

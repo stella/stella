@@ -1,13 +1,9 @@
 import { ROUTE_ERROR_HEADING } from "../helpers/app-shell";
 import { expect, test } from "../helpers/test";
+import { PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS } from "../helpers/wait-budgets";
 
-// Marker recognized by the mock AI adapter (apps/api/src/dev/register-mock-ai.ts,
-// E2E_SLOW_STREAM_MARKER) — grep either file to find the other. It cannot be
-// imported here: this spec runs in apps/web and has no dependency on apps/api.
-// When the latest user message contains it, the mock streams its reply as ~50
-// delayed chunks (~5s total) instead of one instant chunk, giving this spec a
-// real window to type into the composer while a response is still streaming.
-const SLOW_STREAM_MARKER = "Stream slowly please";
+// The registered mock keeps producing paced durable batches until Stop.
+const CONTINUOUS_STREAM_MARKER = "Stream continuously please";
 
 // The seeded e2e user (test@stella.dev) is an org owner whose org has NO
 // usage_entitlements row — the dark-launch default every production org
@@ -37,7 +33,9 @@ test("composer draft survives typing while a response is streaming", async ({
   // First locator after navigation: a cold Vite dev server compiles the
   // chat route chunk on demand, which can exceed the default 10s expect
   // timeout on a fresh CI runner (see playwright.config.ts).
-  await expect(composer).toBeVisible({ timeout: 30_000 });
+  await expect(composer).toBeVisible({
+    timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
+  });
 
   await composer.click();
   await composer.pressSequentially("Start this test thread");
@@ -51,12 +49,12 @@ test("composer draft survives typing while a response is streaming", async ({
   // timeout on a cold CI runner — the same headroom the waits below use.
   await expect(page).toHaveURL(
     /\/chat\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u,
-    { timeout: 30_000 },
+    { timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS },
   );
 
   const transcript = page.getByRole("log");
   await expect(transcript.getByRole("button", { name: "Retry" })).toBeVisible({
-    timeout: 30_000,
+    timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
   });
 
   // New-thread navigation settles after its first response, so exercise the
@@ -67,38 +65,32 @@ test("composer draft survives typing while a response is streaming", async ({
     '[role="textbox"][contenteditable="true"]',
   );
   await threadComposer.click();
-  await threadComposer.pressSequentially(SLOW_STREAM_MARKER);
+  await threadComposer.pressSequentially(CONTINUOUS_STREAM_MARKER);
   await page.getByRole("button", { name: "Send message" }).click();
 
-  // Wait for the action button to enter its streaming state. This proves the
-  // mock marker survived the server's message preparation before the typing
-  // assertion starts.
   const stopButton = page.getByRole("button", { name: "Stop", exact: true });
-  await expect(stopButton).toBeVisible({ timeout: 30_000 });
+  await expect(stopButton).toBeVisible({
+    timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
+  });
+  const answer = transcript.getByText("This mock reply streams back", {
+    exact: false,
+  });
+  await expect(answer).toBeVisible();
+  const beforeTyping = await answer.textContent();
 
-  // The mock reply streams for ~5s once the marker is recognized (see
-  // register-mock-ai.ts). Type into the composer, overlapping
-  // the assistant message's re-renders as chunks keep arriving — a
-  // regression that re-runs the whole composer subtree on every stream
-  // chunk (or worse, loops it) would either drop keystrokes or throw
-  // React's "Maximum update depth exceeded", which the auto `browserErrors`
-  // fixture (apps/web/e2e/helpers/test.ts) turns into a console.error and
-  // fails this test on its own — no explicit assertion needed for that class
-  // of bug.
-  //
+  // The provider keeps emitting while keystrokes exercise chunk-driven renders.
   const draftText = "Draft typed while assistant is replying";
   await threadComposer.click();
   await threadComposer.pressSequentially(draftText, { delay: 30 });
   await expect(threadComposer).toContainText(draftText);
   await expect(stopButton).toBeVisible();
+  expect(await answer.textContent()).not.toBe(beforeTyping);
 
-  // "Retry" appears on the latest assistant message only once the stream
-  // finished, so waiting for it pins the turn as complete before the
-  // assertions below.
-  await expect(stopButton).toBeHidden({ timeout: 30_000 });
-  await expect(transcript.getByRole("button", { name: "Retry" })).toBeVisible({
-    timeout: 30_000,
+  await stopButton.click();
+  await expect(stopButton).toBeHidden({
+    timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
   });
+  await expect(transcript).toContainText("Stopped");
 
   // The draft typed during streaming must have survived every re-render the
   // stream chunks triggered along the way.
@@ -126,17 +118,19 @@ test("a streamed tool input does not re-render the page per delta", async ({
 }) => {
   await page.goto("/chat", { waitUntil: "commit" });
   const composer = page.getByRole("textbox", { name: /type your question/iu });
-  await expect(composer).toBeVisible({ timeout: 30_000 });
+  await expect(composer).toBeVisible({
+    timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
+  });
   await composer.click();
   await composer.pressSequentially("Start this test thread");
   await page.getByRole("button", { name: "Send message" }).click();
   await expect(page).toHaveURL(
     /\/chat\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u,
-    { timeout: 30_000 },
+    { timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS },
   );
   const transcript = page.getByRole("log");
   await expect(transcript.getByRole("button", { name: "Retry" })).toBeVisible({
-    timeout: 30_000,
+    timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
   });
 
   // The second turn streams inside the settled thread route, as in the test
@@ -154,10 +148,10 @@ test("a streamed tool input does not re-render the page per delta", async ({
   // console.error fails this test through the `browserErrors` fixture.
   await expect(
     page.getByRole("textbox", { name: /chat about or edit Mutual NDA/iu }),
-  ).toBeVisible({ timeout: 30_000 });
+  ).toBeVisible({ timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS });
   await expect(
     transcript.getByText("The draft is open in the panel"),
-  ).toBeVisible({ timeout: 30_000 });
+  ).toBeVisible({ timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS });
   await expect(transcript.getByRole("button", { name: "Resend" })).toHaveCount(
     0,
   );

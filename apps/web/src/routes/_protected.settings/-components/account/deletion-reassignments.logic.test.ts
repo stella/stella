@@ -21,7 +21,7 @@ test("account erasure permits default and partial handoff", () => {
     validAccountDeletionReassignments({
       tasks,
       members,
-      reassignments: { task: "" },
+      reassignments: { task: null },
     }),
   ).toBe(true);
   expect(
@@ -55,7 +55,7 @@ test("the unassigned notice shows while any active task has no handoff", () => {
   expect(
     accountDeletionLeavesTasksUnassigned({
       tasks,
-      reassignments: { task: "member", second: "" },
+      reassignments: { task: "member", second: null },
     }),
   ).toBe(true);
   expect(

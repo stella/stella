@@ -1,0 +1,528 @@
+import { useId, useState } from "react";
+
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
+import { panic, Result } from "better-result";
+import { useTranslations } from "use-intl";
+
+import type { TimeSubmitRefusal } from "@stll/api-contract/time-entries";
+import { Button } from "@stll/ui/button";
+import { Dialog, DialogPanel, DialogPopup, DialogTitle } from "@stll/ui/dialog";
+import { Label } from "@stll/ui/label";
+import { ScrollArea } from "@stll/ui/scroll-area";
+
+import {
+  ManualTimeEntryForm,
+  type ManualTimeEntryValues,
+} from "@/components/billing/manual-time-entry-form";
+import { isTimeEntryRateRequired } from "@/components/billing/time-entry-rate-error.logic";
+import { weekOf } from "@/components/billing/work-week.logic";
+import { QueryViewFeedback } from "@/components/query-view-feedback";
+import {
+  MatterCombobox,
+  type MatterOption,
+} from "@/components/workspaces/matter-combobox";
+import { MoveEntryField } from "@/features/my-week/move-entry-field";
+import { type MyTimeEntry, MyWeekDay } from "@/features/my-week/my-week-day";
+import { MyWeekDaySkeleton } from "@/features/my-week/my-week-day.pending";
+import { MyWeekHeader } from "@/features/my-week/my-week-header";
+import {
+  pendingCountByDay,
+  weekTotals,
+} from "@/features/my-week/my-week.logic";
+import { PendingApprovalsLink } from "@/features/my-week/pending-approvals-link";
+import {
+  SUBMIT_REFUSAL_KEYS,
+  SubmitWeekActions,
+} from "@/features/my-week/submit-week";
+import {
+  type SuggestionTarget,
+  useMyWeekActions,
+} from "@/features/my-week/use-my-week-actions";
+import { WeekStrip } from "@/features/my-week/week-strip";
+import { usePermissions } from "@/hooks/use-permissions";
+import { useSingleFlight } from "@/hooks/use-single-flight";
+import { detached } from "@/lib/detached";
+import { notifyUserError } from "@/lib/errors/user-toast";
+import { queryView, queryViewError } from "@/lib/query-view.logic";
+import { myTimeEntriesInfiniteOptions } from "@/lib/workspaces/queries/my-time-entries";
+import { myTimeSuggestionsOptions } from "@/lib/workspaces/queries/my-time-suggestions";
+
+type MyWeekProps = {
+  organizationId: string;
+  userId: string;
+  timezoneId: string;
+  /** The opened day; its Monday-to-Sunday week is the one shown. */
+  date: string;
+  onSelectDate: (date: string) => void;
+  onToday: () => void;
+};
+
+type WeekDialog =
+  | { type: "closed" }
+  | { type: "create"; date: string; matter: MatterOption | null }
+  | {
+      type: "edit";
+      entry: MyTimeEntry;
+      /** Where a draft goes on save; null when the entry cannot move. */
+      matter: MatterOption | null;
+    }
+  | { type: "accept"; target: SuggestionTarget; narrative: string };
+
+const dialogDefaults = (dialog: WeekDialog): ManualTimeEntryValues => {
+  switch (dialog.type) {
+    case "create":
+      return {
+        dateWorked: dialog.date,
+        durationMinutes: 0,
+        narrative: "",
+        narrativeLanguage: null,
+        billable: false,
+      };
+    case "accept":
+      return {
+        dateWorked: dialog.target.date,
+        durationMinutes: dialog.target.suggestion.durationMinutes,
+        narrative: dialog.narrative,
+        narrativeLanguage: null,
+        billable: dialog.target.suggestion.billableByDefault,
+      };
+    case "edit":
+      return {
+        dateWorked: dialog.entry.dateWorked,
+        durationMinutes: dialog.entry.durationMinutes,
+        narrative: dialog.entry.narrative,
+        narrativeLanguage: dialog.entry.narrativeLanguage,
+        billable: dialog.entry.billable,
+      };
+    case "closed":
+      return panic("A closed week dialog has no form");
+    default:
+      dialog satisfies never;
+      return panic("Unhandled week dialog state");
+  }
+};
+
+/** A draft in a matter can move to another; reviewed or internal time stays. */
+const movableMatterOf = (entry: MyTimeEntry): MatterOption | null =>
+  entry.status === "draft" && entry.workspaceId !== null
+    ? {
+        id: entry.workspaceId,
+        name: entry.workspaceName,
+        clientName: null,
+        color: null,
+      }
+    : null;
+
+const dialogMatterId = (dialog: WeekDialog) => {
+  switch (dialog.type) {
+    case "create":
+      return dialog.matter?.id ?? null;
+    case "accept":
+      return dialog.target.matter.id;
+    case "edit":
+      return dialog.entry.workspaceId;
+    case "closed":
+      return null;
+    default:
+      dialog satisfies never;
+      return panic("Unhandled week dialog state");
+  }
+};
+
+const useWeekData = ({
+  organizationId,
+  userId,
+  timezoneId,
+  date,
+}: Omit<MyWeekProps, "onSelectDate" | "onToday">) => {
+  const week = weekOf(date);
+  const range = { startDate: week.start, endDate: week.end };
+  const entriesQuery = useInfiniteQuery(
+    myTimeEntriesInfiniteOptions(organizationId, userId, range),
+  );
+  const entriesView = queryView(entriesQuery);
+  const suggestionsQuery = useQuery(
+    myTimeSuggestionsOptions(organizationId, userId, {
+      ...range,
+      timezoneId,
+    }),
+  );
+  const suggestionsView = queryView(suggestionsQuery);
+  const failed =
+    entriesView.type === "error" || suggestionsView.type === "error";
+  let feedback = null;
+  if (entriesView.type === "error") {
+    feedback = <QueryViewFeedback view={entriesView} />;
+  } else if (queryViewError(suggestionsView) !== undefined) {
+    feedback = <QueryViewFeedback view={suggestionsView} />;
+  } else if (
+    queryViewError(entriesView) !== undefined &&
+    !entriesQuery.isFetchNextPageError
+  ) {
+    feedback = <QueryViewFeedback view={entriesView} />;
+  }
+  const suggestionRange =
+    suggestionsView.type === "items" ? suggestionsView.items : undefined;
+  const pages = entriesView.type === "items" ? entriesView.items.pages : [];
+  const ready = entriesView.type === "items" && suggestionRange !== undefined;
+  // Every page carries the totals for the whole week; the first is enough.
+  const firstPage = pages.at(0);
+  const totals =
+    firstPage === undefined ? undefined : weekTotals(firstPage.days);
+  const entries = pages
+    .flatMap((page) => page.items)
+    .filter((entry) => entry.dateWorked === date);
+  const loggedMinutes = totals?.byDay.get(date) ?? 0;
+  // The week's entries are paged, and any page may hold the day's entries
+  // (running timers count zero minutes), so no day is empty until all load.
+  const entriesComplete = !entriesQuery.hasNextPage;
+  const suggestionDay = suggestionRange?.days.find((day) => day.date === date);
+  const suggestions = suggestionDay === undefined ? [] : suggestionDay.matters;
+  // Submission covers the whole week, so drafts on pages not loaded yet count:
+  // with a page left, the week may still hold some.
+  const canSubmitWeek =
+    entriesQuery.hasNextPage ||
+    pages
+      .flatMap((page) => page.items)
+      .some((entry) => entry.status === "draft");
+  return {
+    canSubmitWeek,
+    entries,
+    entriesComplete,
+    entriesQuery,
+    failed,
+    feedback,
+    loggedMinutes,
+    pendingByDay:
+      suggestionRange === undefined
+        ? undefined
+        : pendingCountByDay(suggestionRange.days),
+    ready,
+    suggestions,
+    totals,
+    week,
+  };
+};
+
+type WeekSubmitDisabledReasonOptions = {
+  ready: boolean;
+  failed: boolean;
+  t: (key: "timesheets.week.noDraftEntries") => string;
+  tCommon: (key: "loadFailed" | "loading") => string;
+};
+
+const weekSubmitDisabledReason = ({
+  ready,
+  failed,
+  t,
+  tCommon,
+}: WeekSubmitDisabledReasonOptions) => {
+  if (ready) {
+    return t("timesheets.week.noDraftEntries");
+  }
+  return failed ? tCommon("loadFailed") : tCommon("loading");
+};
+
+export const MyWeek = ({
+  organizationId,
+  userId,
+  timezoneId,
+  date,
+  onSelectDate,
+  onToday,
+}: MyWeekProps) => {
+  const matterFieldId = useId();
+  const t = useTranslations();
+  const tCommon = useTranslations("common");
+  const tBilling = useTranslations("billing");
+  const tErrors = useTranslations("errors");
+  const {
+    canSubmitWeek,
+    entries,
+    entriesComplete,
+    entriesQuery,
+    failed,
+    feedback,
+    loggedMinutes,
+    pendingByDay,
+    ready,
+    suggestions,
+    totals,
+    week,
+  } = useWeekData({ organizationId, userId, timezoneId, date });
+  const tReport = useTranslations("billing.timeReport");
+  const canReadTime = usePermissions({ timeEntry: ["read"] });
+  const canDecide = usePermissions({ timeEntry: ["create"] });
+  const canEdit = usePermissions({ timeEntry: ["update"] });
+  const canApprove = usePermissions({ timeEntry: ["approve"] });
+  const actions = useMyWeekActions({ organizationId, timezoneId });
+  const submitGuard = useSingleFlight();
+  const [dialog, setDialog] = useState<WeekDialog>({ type: "closed" });
+  const [refusals, setRefusals] = useState<
+    ReadonlyMap<string, TimeSubmitRefusal>
+  >(() => new Map());
+
+  const matterId = dialogMatterId(dialog);
+  const submitDisabledReason = weekSubmitDisabledReason({
+    ready,
+    failed,
+    t,
+    tCommon,
+  });
+  const refusalNotes = new Map(
+    [...refusals].map(([id, reason]) => [id, t(SUBMIT_REFUSAL_KEYS[reason])]),
+  );
+
+  const submitDialog = async (values: ManualTimeEntryValues) =>
+    await submitGuard.run(async () => {
+      const saved = await Result.tryPromise({
+        try: async () => {
+          switch (dialog.type) {
+            case "create":
+              if (dialog.matter === null) {
+                return panic("Creating time requires a matter");
+              }
+              await actions.createEntry(dialog.matter.id, values);
+              break;
+            case "accept":
+              await actions.accept(dialog.target, values);
+              break;
+            case "edit":
+              await actions.editEntry(dialog.entry, values, dialog.matter?.id);
+              break;
+            case "closed":
+              return panic("A closed week dialog cannot submit");
+            default:
+              dialog satisfies never;
+              return panic("Unhandled week dialog state");
+          }
+          return undefined;
+        },
+        catch: (cause: unknown): unknown => cause,
+      });
+      if (Result.isError(saved)) {
+        if (isTimeEntryRateRequired(saved.error)) {
+          return Result.err(saved.error);
+        }
+        // The create mutation reports its own failures.
+        if (dialog.type !== "create") {
+          actions.reportFailure(saved.error);
+        }
+        return Result.ok(undefined);
+      }
+      setDialog({ type: "closed" });
+      return Result.ok(undefined);
+    });
+
+  return (
+    <>
+      <MyWeekHeader
+        actions={
+          <>
+            {canDecide && (
+              <Button
+                onClick={() =>
+                  setDialog({ type: "create", date, matter: null })
+                }
+                size="sm"
+              >
+                {tCommon("logTime")}
+              </Button>
+            )}
+            {canReadTime && <Link to="/time/report">{tReport("title")}</Link>}
+            {/* Members approve what is assigned to them, so the link follows
+                the queue, not the role; it shows nothing while none waits. */}
+            <PendingApprovalsLink
+              organizationId={organizationId}
+              userId={userId}
+            />
+            <SubmitWeekActions
+              canApproveOwn={canApprove}
+              canSubmit={ready && canSubmitWeek}
+              disabledReason={submitDisabledReason}
+              onRefusals={setRefusals}
+              submit={actions.submitWeek}
+              submitting={actions.submitting}
+              week={week}
+            />
+          </>
+        }
+        date={date}
+        onSelectDate={onSelectDate}
+        onToday={onToday}
+        totals={totals}
+      />
+      <WeekStrip
+        onSelectDate={onSelectDate}
+        pendingByDay={pendingByDay}
+        selectedDate={date}
+        totals={totals}
+        week={week}
+      />
+      <ScrollArea className="min-h-0 flex-1">
+        {feedback !== null && (
+          <div className="mx-auto w-full max-w-4xl p-4">{feedback}</div>
+        )}
+        {ready ? (
+          <MyWeekDay
+            busyFingerprints={actions.busyFingerprints}
+            canDecide={canDecide}
+            canEdit={canEdit}
+            notes={refusalNotes}
+            date={date}
+            entries={entries}
+            entriesComplete={entriesComplete}
+            loggedMinutes={loggedMinutes}
+            onAccept={(matter, suggestion, narrative) =>
+              detached(
+                actions.fromRow(
+                  actions.accept(
+                    { matter, date, suggestion },
+                    {
+                      durationMinutes: suggestion.durationMinutes,
+                      narrative,
+                      narrativeLanguage: null,
+                      billable: suggestion.billableByDefault,
+                    },
+                  ),
+                ),
+                "my-week.accept-suggestion",
+              )
+            }
+            onDismiss={(matter, suggestion) =>
+              detached(
+                actions.fromRow(actions.dismiss({ matter, date, suggestion })),
+                "my-week.dismiss-suggestion",
+              )
+            }
+            onEdit={(matter, suggestion, narrative) =>
+              setDialog({
+                type: "accept",
+                target: { matter, date, suggestion },
+                narrative,
+              })
+            }
+            onCreate={() => setDialog({ type: "create", date, matter: null })}
+            onEditEntry={(entry) =>
+              setDialog({ type: "edit", entry, matter: movableMatterOf(entry) })
+            }
+            suggestions={suggestions}
+          />
+        ) : (
+          !failed && <MyWeekDaySkeleton date={date} />
+        )}
+        {entriesQuery.hasNextPage && (
+          <div className="flex justify-center pb-4">
+            <Button
+              disabled={entriesQuery.isFetchingNextPage}
+              disabledReason={t("common.loading")}
+              onClick={() =>
+                detached(
+                  (async () => {
+                    const page = await entriesQuery.fetchNextPage();
+                    // Loaded entries stay; the failure is said, and the
+                    // button stays to retry.
+                    if (page.isFetchNextPageError) {
+                      notifyUserError(page.error, tErrors("actionFailed"));
+                    }
+                  })(),
+                  "my-week.next-page",
+                )
+              }
+              size="sm"
+              variant="outline"
+            >
+              {tCommon("loadMore")}
+            </Button>
+          </div>
+        )}
+      </ScrollArea>
+      <Dialog
+        onOpenChange={(open) => {
+          if (!open) {
+            setDialog({ type: "closed" });
+          }
+        }}
+        open={dialog.type !== "closed"}
+      >
+        <DialogPopup className="max-w-lg">
+          <DialogPanel className="flex flex-col gap-4">
+            <DialogTitle>
+              {(() => {
+                switch (dialog.type) {
+                  case "create":
+                  case "closed":
+                    return tCommon("logTime");
+                  case "edit":
+                    return tBilling("editEntry");
+                  case "accept":
+                    return tBilling("suggestions.title");
+                  default:
+                    dialog satisfies never;
+                    return panic("Unhandled week dialog state");
+                }
+              })()}
+            </DialogTitle>
+            {dialog.type === "create" && (
+              <fieldset
+                disabled={actions.pending || submitGuard.pending}
+                className="flex min-w-0 flex-col gap-1.5"
+              >
+                <Label htmlFor={matterFieldId}>{tCommon("matter")}</Label>
+                <MatterCombobox
+                  activeOrganizationId={organizationId}
+                  userId={userId}
+                  id={matterFieldId}
+                  value={dialog.matter}
+                  onChange={(matter) =>
+                    setDialog({ type: "create", date: dialog.date, matter })
+                  }
+                />
+                {dialog.matter === null && (
+                  <Button
+                    onClick={() => setDialog({ type: "closed" })}
+                    variant="ghost"
+                  >
+                    {tCommon("cancel")}
+                  </Button>
+                )}
+              </fieldset>
+            )}
+            {matterId !== null && (
+              <ManualTimeEntryForm
+                dateLocked={dialog.type === "accept"}
+                defaultValues={dialogDefaults(dialog)}
+                leading={
+                  dialog.type === "edit" && dialog.matter !== null ? (
+                    <MoveEntryField
+                      currentMatterId={matterId}
+                      onChange={(matter) =>
+                        setDialog({ type: "edit", entry: dialog.entry, matter })
+                      }
+                      organizationId={organizationId}
+                      userId={userId}
+                      value={dialog.matter}
+                    />
+                  ) : undefined
+                }
+                onCancel={() => setDialog({ type: "closed" })}
+                onSubmit={submitDialog}
+                pending={actions.pending || submitGuard.pending}
+                activityCode={
+                  dialog.type === "edit" ? dialog.entry.activityCode : null
+                }
+                userId={userId}
+                workspaceId={
+                  dialog.type === "edit"
+                    ? (dialog.matter?.id ?? matterId)
+                    : matterId
+                }
+              />
+            )}
+          </DialogPanel>
+        </DialogPopup>
+      </Dialog>
+    </>
+  );
+};

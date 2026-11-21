@@ -8,6 +8,7 @@ import {
   removedCommandError,
   shouldReportRegistryDrift,
 } from "./registry-drift.js";
+import { commandUnavailableMessage } from "./unavailable-command.js";
 
 const delta = (over: Partial<RegistryDelta> = {}): RegistryDelta => ({
   added: [],
@@ -100,19 +101,57 @@ describe("removedCommandError", () => {
       baked: generatedRouteMap,
       delta: delta({ removed: ["list_matters"] }),
     });
-    expect(message).toContain("stella matter list is not available");
-    expect(message).toContain("list_matters");
-    expect(message).toContain("stella tools list");
+    expect(message).toBe(
+      `${commandUnavailableMessage({ type: "unknown-to-server", command: "matter list" })}\n`,
+    );
   });
 
-  test("a capability leaf goes missing with invoke_capability", () => {
+  test("a capability leaf goes missing with read_capability", () => {
     const message = removedCommandError({
       argv: ["capability", "usage", "entitlement-get"],
       baked: generatedRouteMap,
-      delta: delta({ removed: ["invoke_capability"] }),
+      delta: delta({ removed: ["read_capability"] }),
     });
-    expect(message).toContain("invoke_capability");
+    expect(message).toContain("unknown");
   });
+
+  for (const access of ["read", "write"] as const) {
+    test(`a ${access} capability depends only on its executor`, () => {
+      const leaf = {
+        kind: "capability-leaf",
+        spec: {
+          commandPath: ["operation"],
+          capabilityId: "a.operation",
+          access,
+          flags: [],
+          inputOnly: [],
+          paginated: false,
+          destructive: false,
+          inputSchema: { type: "object" },
+        },
+      } as const;
+      const baked = { kind: "route", children: { operation: leaf } } as const;
+      const removed = `${access}_capability`;
+      expect(
+        removedCommandError({
+          argv: ["operation"],
+          baked,
+          delta: delta({ removed: [removed] }),
+        }),
+      ).toContain("unknown");
+      expect(
+        removedCommandError({
+          argv: ["operation"],
+          baked,
+          delta: delta({
+            removed: [
+              access === "read" ? "write_capability" : "read_capability",
+            ],
+          }),
+        }),
+      ).toBeUndefined();
+    });
+  }
 
   test("drift that does not touch this command stays silent", () => {
     expect(
@@ -131,6 +170,16 @@ describe("removedCommandError", () => {
     ).toBeUndefined();
   });
 
+  test("a validated live schema change does not imply protocol incompatibility", () => {
+    expect(
+      removedCommandError({
+        argv: ["matter", "list"],
+        baked: generatedRouteMap,
+        delta: delta({ changed: ["list_matters"] }),
+      }),
+    ).toBeUndefined();
+  });
+
   test("an unknown command path is stricli's to report, not this", () => {
     expect(
       removedCommandError({
@@ -140,4 +189,16 @@ describe("removedCommandError", () => {
       }),
     ).toBeUndefined();
   });
+});
+
+test("inherited object properties never resolve as retired command bindings", () => {
+  for (const name of ["constructor", "toString", "__proto__"]) {
+    expect(
+      removedCommandError({
+        argv: [name],
+        baked: generatedRouteMap,
+        delta: { added: [], changed: [], removed: ["list_matters"] },
+      }),
+    ).toBeUndefined();
+  }
 });

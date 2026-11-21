@@ -1,15 +1,22 @@
 import { panic, TaggedError } from "better-result";
+import { afterEach, beforeEach } from "bun:test";
 
+import type { ChatHarnessProfile } from "@/api/tests/helpers/chat-harness-profile";
 import {
   providerWireFormatOf,
   signedGeminiCallsOf,
 } from "@/api/tests/helpers/provider-request-transcript";
-import type { ProviderRequest } from "@/api/tests/helpers/provider-request-transcript";
+import type {
+  ProviderRequest,
+  SignedGeminiCall,
+} from "@/api/tests/helpers/provider-request-transcript";
 import type {
   AwsEventStreamMessage,
   ProviderWireCassette,
   ProviderWireExchange,
 } from "@/api/tests/helpers/provider-wire-cassette";
+import type { ReplayGate } from "@/api/tests/helpers/provider-wire-gate";
+import { installTestFetch } from "@/api/tests/helpers/test-fetch";
 
 /** A request the replay would not answer. */
 class ProviderWireRefusal extends TaggedError("ProviderWireRefusal")<{
@@ -18,10 +25,10 @@ class ProviderWireRefusal extends TaggedError("ProviderWireRefusal")<{
 
 // A fetch-level provider: every request an SDK makes goes through
 // `globalThis.fetch`, so replacing it serves cassettes to the real adapters
-// with nothing mocked above the socket. The replacement is installed once
-// and serves whatever is queued now, because some SDK clients keep the fetch
-// they were constructed with. Nothing reaches the network: a request to any
-// other host, or with no exchange queued, is refused and recorded.
+// with nothing mocked above the socket. A fixture reinstalls the same function
+// for each test, because some SDK clients keep the fetch they were constructed
+// with. Requests to another host or with no exchange queued are refused and
+// recorded, so no provider request reaches the network.
 
 /** Hosts the supported provider APIs are served from. */
 const PROVIDER_HOST =
@@ -198,6 +205,26 @@ type ServeOptions = {
   holdAfterBytes?: number | undefined;
 };
 
+/** Where an answer goes quiet until `gate` releases the label: before the
+ *  byte at `atByte`. */
+type PausePoints = {
+  gate: ReplayGate;
+  points: readonly { atByte: number; label: string }[];
+};
+
+/**
+ * One model call of a two-way transcript: the request the app must send
+ * (`vet` returns why a request is not that one, or null), and the answer
+ * served to it, with its pause points.
+ */
+export type TranscriptStep = {
+  exchange: ProviderWireExchange;
+  /** Names the step in findings. */
+  label: string;
+  pauses?: PausePoints | undefined;
+  vet: (request: ReplayedRequest) => string | null;
+};
+
 /** A request the replay answered or refused. */
 export type ReplayedRequest = {
   /** The body the SDK sent, as text. */
@@ -279,12 +306,28 @@ const responseFor = (
   signal: AbortSignal | null,
   holdAfterBytes: number | undefined,
   chunking: Chunking = DEFAULT_CHUNKING,
+  pauses?: PausePoints,
 ): Response => {
   const bytes = bodyBytesOf(exchange.response.body);
   const limit = holdAfterBytes ?? bytes.length;
-  const ends = readEnds(bytes.length, chunking);
+  // A read never crosses a pause point: it ends there, and the next one
+  // waits for the gate.
+  const pending = (pauses?.points ?? []).toSorted(
+    (left, right) => left.atByte - right.atByte,
+  );
+  const ends = [
+    ...new Set([
+      ...readEnds(bytes.length, chunking),
+      ...pending.map(({ atByte }) => atByte),
+    ]),
+  ]
+    .filter((end) => end > 0 && end <= bytes.length)
+    .toSorted((left, right) => left - right);
   let offset = 0;
   let onAbort: (() => void) | undefined;
+  // Read through a call so a check after an await is not narrowed by the
+  // one before it.
+  const isAborted = () => signal?.aborted === true;
   const body = new ReadableStream<Uint8Array>({
     start(controller) {
       onAbort = () => {
@@ -301,6 +344,15 @@ const responseFor = (
       await Promise.resolve();
       if (signal?.aborted === true) {
         controller.error(abortError());
+        return;
+      }
+      const due = pending[0];
+      if (pauses !== undefined && due !== undefined && due.atByte <= offset) {
+        pending.shift();
+        await pauses.gate.pause(due.label, signal);
+        if (isAborted()) {
+          controller.error(abortError());
+        }
         return;
       }
       if (offset >= limit && limit < bytes.length) {
@@ -348,22 +400,34 @@ const responseFor = (
   });
 };
 
-/**
- * Installs the replay as `globalThis.fetch` until `restore`. Queue a
- * cassette with `serve`, run the adapter, then read `takeFindings`.
- */
-export const installProviderWireReplay = ({
-  passThroughOrigins = [],
-  retryAfterMs,
-}: {
+type ProviderWireReplayOptions = {
   /** In-process services (a fake object store) whose requests go through
    *  untouched; nothing else leaves the replay. */
   passThroughOrigins?: readonly string[];
+  profile?: ChatHarnessProfile | undefined;
   /** OpenAI/Anthropic retry hints; omitted to preserve recorded headers. */
   retryAfterMs?: number | undefined;
-} = {}) => {
+};
+
+/**
+ * Installs the replay as `globalThis.fetch` until `restore`. Test-local
+ * callers restore in teardown; suites use registerProviderWireReplay.
+ */
+export const installProviderWireReplay = ({
+  passThroughOrigins = [],
+  profile,
+  retryAfterMs,
+}: ProviderWireReplayOptions = {}) => {
   const originalFetch = globalThis.fetch;
-  let queue: { exchange: ProviderWireExchange; served: number }[] = [];
+  let queue: {
+    exchange: ProviderWireExchange;
+    served: number;
+    /** A two-way transcript's step: kept across `takeFindings` until a
+     *  request takes it or `takeTranscriptRemainder` reports it. */
+    step?: TranscriptStep | undefined;
+  }[] = [];
+  /** How many transcript steps requests have taken since `play`. */
+  let transcriptTaken = 0;
   let cursor = 0;
   let model: string | null = null;
   let sideAnswer: ProviderWireExchange | undefined;
@@ -371,8 +435,9 @@ export const installProviderWireReplay = ({
   let unexpected: string[] = [];
   let requests: ReplayedRequest[] = [];
   const transcripts: ProviderRequest[] = [];
-  // The signed calls the conversation's served answers made so far.
-  const signedCalls = new Map<string, string>();
+  // The signed calls the conversation's served answers made so far, with
+  // the model each answer came from.
+  const signedCalls = new Map<string, SignedGeminiCall>();
 
   const replayFetch = async (
     input: string | URL | Request,
@@ -385,135 +450,170 @@ export const installProviderWireReplay = ({
     ) {
       return await originalFetch(input, init);
     }
-    const { bodyText, headers, method, signal, url } = await readRequest(
-      input,
-      init,
-    );
-    const path = cassetteRequestPath(url);
-    const requestModel = requestModelOf(url, bodyText);
-    const format = providerWireFormatOf(url);
-    if (format !== null) {
-      let body: unknown = null;
-      try {
-        body = JSON.parse(bodyText);
-        // swallow-ok: unparseable request bodies remain null and are reported by transcript validation
-      } catch {
-        // Unreadable: the transcript check reports it.
-      }
-      transcripts.push(
-        format === "gemini"
-          ? { body, format, signedCalls: new Map(signedCalls) }
-          : { body, format },
+    const answerRequest = async () => {
+      const { bodyText, headers, method, signal, url } = await readRequest(
+        input,
+        init,
       );
-    }
-    const refuse = (reason: string): never => {
-      unexpected.push(`${method} ${url.host}${path}: ${reason}`);
+      const path = cassetteRequestPath(url);
+      const requestModel = requestModelOf(url, bodyText);
+      const format = providerWireFormatOf(url);
+      if (format !== null) {
+        let body: unknown = null;
+        try {
+          body = JSON.parse(bodyText);
+          // swallow-ok: unparseable request bodies remain null and are reported by transcript validation
+        } catch {
+          // Unreadable: the transcript check reports it.
+        }
+        transcripts.push(
+          format === "gemini"
+            ? {
+                body,
+                format,
+                model: requestModel,
+                signedCalls: new Map(signedCalls),
+              }
+            : { body, format },
+        );
+      }
+      const refuse = (reason: string): never => {
+        unexpected.push(`${method} ${url.host}${path}: ${reason}`);
+        requests.push({
+          body: bodyText,
+          exchange: null,
+          headers,
+          method,
+          model: requestModel,
+          path,
+          url: url.toString(),
+        });
+        // A rejected fetch, which every SDK reads as a connection failure.
+        throw new ProviderWireRefusal({
+          message: `Provider wire replay refused the request: ${reason}`,
+        });
+      };
+      if (!PROVIDER_HOST.test(url.hostname)) {
+        return refuse(
+          "not a provider host; the replay never reaches the network",
+        );
+      }
+      if (signal.aborted) {
+        throw abortError();
+      }
+      if (
+        sideAnswer !== undefined &&
+        model !== null &&
+        requestModel !== null &&
+        requestModel !== model
+      ) {
+        requests.push({
+          body: bodyText,
+          exchange: "side",
+          headers,
+          method,
+          model: requestModel,
+          path,
+          url: url.toString(),
+        });
+        return responseFor(sideAnswer, signal, undefined, options.chunking);
+      }
+      // A repeated exchange answers every retry until a request asks for
+      // something else.
+      const previous = queue[cursor - 1];
+      const current =
+        previous?.exchange.repeat === true &&
+        previous.exchange.request.path === path
+          ? { entry: previous, index: cursor - 1 }
+          : { entry: queue[cursor], index: cursor };
+      if (current.entry === undefined) {
+        return refuse(
+          transcriptTaken > 0
+            ? `the transcript ran out after ${String(transcriptTaken)} model calls`
+            : "no exchange left to answer it",
+        );
+      }
+      if (current.entry.exchange.request.path !== path) {
+        return refuse(`expected ${current.entry.exchange.request.path}`);
+      }
+      if (method !== current.entry.exchange.request.method) {
+        return refuse(`expected ${current.entry.exchange.request.method}`);
+      }
+      if (model !== null && requestModel !== null && requestModel !== model) {
+        return refuse(`expected model ${model}, got ${requestModel}`);
+      }
+      const { step } = current.entry;
+      if (step !== undefined) {
+        const mismatch = step.vet({
+          body: bodyText,
+          exchange: current.index,
+          headers,
+          method,
+          model: requestModel,
+          path,
+          url: url.toString(),
+        });
+        if (mismatch !== null) {
+          return refuse(
+            `not the request the transcript expects at ${step.label}: ${mismatch}`,
+          );
+        }
+        transcriptTaken += 1;
+      }
+      if (current.index === cursor) {
+        cursor += 1;
+      }
+      current.entry.served += 1;
+      const { body: answer } = current.entry.exchange.response;
+      if (format === "gemini" && answer.encoding === "text") {
+        for (const [id, signature] of signedGeminiCallsOf(answer.text)) {
+          signedCalls.set(id, { signature, model: requestModel });
+        }
+      }
       requests.push({
         body: bodyText,
-        exchange: null,
+        exchange: current.index,
         headers,
         method,
         model: requestModel,
         path,
         url: url.toString(),
       });
-      // A rejected fetch, which every SDK reads as a connection failure.
-      throw new ProviderWireRefusal({
-        message: `Provider wire replay refused the request: ${reason}`,
-      });
+      const response = responseFor(
+        current.entry.exchange,
+        signal,
+        current.index === 0 && current.entry.served === 1
+          ? options.holdAfterBytes
+          : undefined,
+        options.chunking,
+        step?.pauses,
+      );
+      if (
+        retryAfterMs !== undefined &&
+        (url.hostname === "api.openai.com" ||
+          url.hostname === "api.anthropic.com") &&
+        (response.status === 408 ||
+          response.status === 409 ||
+          response.status === 429 ||
+          response.status >= 500) &&
+        current.entry.served > (options.recordedRetryResponses ?? 0)
+      ) {
+        response.headers.set("retry-after-ms", String(retryAfterMs));
+      }
+      return response;
     };
-    if (!PROVIDER_HOST.test(url.hostname)) {
-      return refuse(
-        "not a provider host; the replay never reaches the network",
-      );
-    }
-    if (signal.aborted) {
-      throw abortError();
-    }
-    if (
-      sideAnswer !== undefined &&
-      model !== null &&
-      requestModel !== null &&
-      requestModel !== model
-    ) {
-      requests.push({
-        body: bodyText,
-        exchange: "side",
-        headers,
-        method,
-        model: requestModel,
-        path,
-        url: url.toString(),
-      });
-      return responseFor(sideAnswer, signal, undefined, options.chunking);
-    }
-    // A repeated exchange answers every retry until a request asks for
-    // something else.
-    const previous = queue[cursor - 1];
-    const current =
-      previous?.exchange.repeat === true &&
-      previous.exchange.request.path === path
-        ? { entry: previous, index: cursor - 1 }
-        : { entry: queue[cursor], index: cursor };
-    if (current.entry === undefined) {
-      return refuse("no exchange left to answer it");
-    }
-    if (current.entry.exchange.request.path !== path) {
-      return refuse(`expected ${current.entry.exchange.request.path}`);
-    }
-    if (method !== current.entry.exchange.request.method) {
-      return refuse(`expected ${current.entry.exchange.request.method}`);
-    }
-    if (model !== null && requestModel !== null && requestModel !== model) {
-      return refuse(`expected model ${model}, got ${requestModel}`);
-    }
-    if (current.index === cursor) {
-      cursor += 1;
-    }
-    current.entry.served += 1;
-    const { body: answer } = current.entry.exchange.response;
-    if (format === "gemini" && answer.encoding === "text") {
-      for (const [id, signature] of signedGeminiCallsOf(answer.text)) {
-        signedCalls.set(id, signature);
-      }
-    }
-    requests.push({
-      body: bodyText,
-      exchange: current.index,
-      headers,
-      method,
-      model: requestModel,
-      path,
-      url: url.toString(),
-    });
-    const response = responseFor(
-      current.entry.exchange,
-      signal,
-      current.index === 0 && current.entry.served === 1
-        ? options.holdAfterBytes
-        : undefined,
-      options.chunking,
-    );
-    if (
-      retryAfterMs !== undefined &&
-      (url.hostname === "api.openai.com" ||
-        url.hostname === "api.anthropic.com") &&
-      (response.status === 408 ||
-        response.status === 409 ||
-        response.status === 429 ||
-        response.status >= 500) &&
-      current.entry.served > (options.recordedRetryResponses ?? 0)
-    ) {
-      response.headers.set("retry-after-ms", String(retryAfterMs));
-    }
-    return response;
+    return profile === undefined
+      ? await answerRequest()
+      : await profile.measure("replay", answerRequest);
   };
 
-  globalThis.fetch = Object.assign(replayFetch, {
+  const installedFetch = Object.assign(replayFetch, {
     preconnect: () => undefined,
   });
+  const fetchInstallation = installTestFetch(installedFetch);
 
   return {
+    install: fetchInstallation.install,
     /** Queues `cassette`'s exchanges, replacing anything still queued. */
     serve: (
       cassette: Pick<ProviderWireCassette, "exchanges" | "model">,
@@ -532,6 +632,33 @@ export const installProviderWireReplay = ({
       );
       model = cassette.model;
     },
+    /**
+     * Queues a two-way transcript's model calls after anything queued, on
+     * `model`. Each request must be the one its step expects, or it is
+     * refused; the steps outlive `takeFindings`, since a conversation's
+     * checks run between its model calls.
+     */
+    play: (transcriptModel: string, steps: readonly TranscriptStep[]) => {
+      queue.push(
+        ...steps.map((step) => ({
+          exchange: step.exchange,
+          served: 0,
+          step,
+        })),
+      );
+      model = transcriptModel;
+      transcriptTaken = 0;
+    },
+    /** The transcript steps no request took, cleared on read. */
+    takeTranscriptRemainder: (): string[] => {
+      const remainder = queue
+        .slice(cursor)
+        .flatMap(({ step }) => (step === undefined ? [] : [step.label]));
+      queue = queue
+        .slice(0, cursor)
+        .concat(queue.slice(cursor).filter(({ step }) => step === undefined));
+      return remainder;
+    },
     /** Answers requests for any other model (a thread title, a summary)
      *  with `exchange`, outside the queue. */
     answerSideCalls: (exchange: ProviderWireExchange | undefined) => {
@@ -549,25 +676,49 @@ export const installProviderWireReplay = ({
     takeRequests: (): ProviderRequest[] => transcripts.splice(0),
     /** Findings since the last call, cleared on read. */
     takeFindings: (): ProviderWireReplayFindings => {
+      const pending = queue.slice(cursor);
       const findings = {
-        unconsumed: queue
-          .slice(cursor)
+        unconsumed: pending
+          .filter(({ step }) => step === undefined)
           .map(
             ({ exchange }) =>
               `${exchange.request.method} ${exchange.request.path}`,
           ),
         unexpected,
       };
-      queue = [];
+      // A transcript's later model calls wait for their requests.
+      queue = pending.filter(({ step }) => step !== undefined);
       cursor = 0;
       unexpected = [];
       requests = [];
       return findings;
     },
-    restore: () => {
-      globalThis.fetch = originalFetch;
-    },
+    restore: fetchInstallation.restore,
   };
 };
 
 export type ProviderWireReplay = ReturnType<typeof installProviderWireReplay>;
+
+type RegisterProviderWireReplayOptions = {
+  onInstall: (replay: ProviderWireReplay) => void;
+  options?: () => ProviderWireReplayOptions;
+};
+
+/** Register in suite scope so restoration precedes the global fetch leak guard. */
+export const registerProviderWireReplay = ({
+  onInstall,
+  options = () => ({}),
+}: RegisterProviderWireReplayOptions) => {
+  let replay: ProviderWireReplay | undefined;
+  beforeEach(() => {
+    if (replay === undefined) {
+      replay = installProviderWireReplay(options());
+    } else {
+      replay.install();
+    }
+    onInstall(replay);
+  });
+  afterEach(() => {
+    replay?.restore();
+  });
+};

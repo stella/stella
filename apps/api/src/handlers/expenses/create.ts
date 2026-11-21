@@ -1,7 +1,9 @@
 import { Result } from "better-result";
 import { eq } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
+import { apiDateSchema } from "@stll/api-contract/api-date";
+import { currencyCodeSchema } from "@stll/api-contract/currency-code";
 import { Temporal } from "@stll/time";
 
 import { expenseCategorySchema } from "@/api/db/billing-validators";
@@ -11,29 +13,35 @@ import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import {
-  tCurrencyCode,
-  tMinorUnitAmount,
-  tSafeId,
+  minorUnitAmountSchema,
+  resourceIdSchema,
 } from "@/api/lib/custom-schema";
+import { lockExpenseCapacity } from "@/api/lib/db/aggregate-lock";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { cents } from "@/api/lib/money";
 import { formatTodayInTimeZone } from "@/api/lib/timezone";
 
-const createExpenseBodySchema = t.Object({
-  matterId: tSafeId("entity"),
-  dateIncurred: t.String({ format: "date" }),
-  timezoneId: t.String({ minLength: 1, maxLength: 64 }),
-  amount: tMinorUnitAmount(1),
-  currency: tCurrencyCode,
+const createExpenseBodySchema = v.object({
+  matterId: resourceIdSchema("entity"),
+  dateIncurred: apiDateSchema,
+  timezoneId: v.pipe(v.string(), v.minLength(1), v.maxLength(64)),
+  amount: minorUnitAmountSchema(1),
+  currency: currencyCodeSchema,
   category: expenseCategorySchema,
-  description: t.String({ minLength: 1, maxLength: 10_000 }),
-  invoiceDescription: t.Optional(t.Nullable(t.String({ maxLength: 10_000 }))),
-  billable: t.Optional(t.Boolean()),
-  markup: t.Optional(t.Integer({ minimum: 0, maximum: 100 })),
+  description: v.pipe(v.string(), v.minLength(1), v.maxLength(10_000)),
+  invoiceDescription: v.optional(
+    v.nullable(v.pipe(v.string(), v.maxLength(10_000))),
+  ),
+  billable: v.optional(v.boolean()),
+  markup: v.optional(
+    v.pipe(v.number(), v.integer(), v.minValue(0), v.maxValue(100)),
+  ),
 });
 
 const config = {
+  contract: "patch",
+  idempotency: { type: "replay" },
   description:
     "Record a disbursement in the current matter against a work item " +
     "(matterId: the document, folder, or task the cost belongs to). amount " +
@@ -43,6 +51,7 @@ const config = {
     "as a draft.",
   permissions: { expense: ["create"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
+  featureAccess: { featureId: "time-billing", type: "required" },
   realtime: expenseRealtimeUpdates,
   mcp: { type: "capability", reason: "billing_admin", consumesServices: false },
   body: createExpenseBodySchema,
@@ -83,44 +92,29 @@ const createExpense = createSafeHandler(
       );
     }
 
-    const matter = yield* Result.await(
-      safeDb((tx) =>
-        tx.query.entities.findFirst({
+    const outcome = yield* Result.await(
+      safeDb(async (tx) => {
+        await lockExpenseCapacity(tx, workspaceId);
+
+        const matter = await tx.query.entities.findFirst({
           where: {
             id: { eq: body.matterId },
             workspaceId: { eq: workspaceId },
           },
           columns: { id: true },
-        }),
-      ),
-    );
+        });
+        if (!matter) {
+          return { status: "matter-not-found" as const };
+        }
 
-    if (!matter) {
-      return Result.err(
-        new HandlerError({
-          status: 400,
-          message: "Matter not found in this workspace",
-        }),
-      );
-    }
+        const totalExpenses = await tx.$count(
+          expenses,
+          eq(expenses.workspaceId, workspaceId),
+        );
+        if (totalExpenses >= LIMITS.expensesPerWorkspace) {
+          return { status: "limit" as const };
+        }
 
-    const totalExpenses = yield* Result.await(
-      safeDb((tx) =>
-        tx.$count(expenses, eq(expenses.workspaceId, workspaceId)),
-      ),
-    );
-
-    if (totalExpenses >= LIMITS.expensesPerWorkspace) {
-      return Result.err(
-        new HandlerError({
-          status: 400,
-          message: "Expenses limit reached for this workspace",
-        }),
-      );
-    }
-
-    const entry = yield* Result.await(
-      safeDb(async (tx) => {
         const inserted = await tx
           .insert(expenses)
           .values({
@@ -161,11 +155,27 @@ const createExpense = createSafeHandler(
             },
           });
         }
-        return created;
+        return { status: "created" as const, entry: created };
       }),
     );
 
-    if (!entry) {
+    if (outcome.status === "matter-not-found") {
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message: "Matter not found in this workspace",
+        }),
+      );
+    }
+    if (outcome.status === "limit") {
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message: "Expenses limit reached for this workspace",
+        }),
+      );
+    }
+    if (!outcome.entry) {
       return Result.err(
         new HandlerError({
           status: 500,
@@ -173,7 +183,7 @@ const createExpense = createSafeHandler(
         }),
       );
     }
-    return Result.ok({ id: entry.id });
+    return Result.ok({ id: outcome.entry.id });
   },
 );
 

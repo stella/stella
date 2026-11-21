@@ -1,18 +1,29 @@
 import { useState } from "react";
 
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
+import type {
+  CitationTextIncompleteReason,
+  DecisionTextWithheldReason,
+} from "@stll/api-contract/case-law-text-field";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
+import { DirectionalIcon } from "@stll/ui/directional-icon";
+import { DocumentIdentityBadge } from "@stll/ui/document-identity-badge";
 import { ChevronRightIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 
 import { CitedDecisionLink } from "@/components/legal-reader/cited-decision-link";
+import { decisionCitationCourtLabel } from "@/components/references/decision-citation-chip.logic";
+import { decisionCitationPresentationsById } from "@/components/references/decision-citation-presentation.logic";
+import type { DecisionCitationPresentation } from "@/components/references/decision-citation-presentation.logic";
 import {
   CITATION_TREATMENT_DOT,
   CITATION_TREATMENT_LABEL,
   CITATION_TREATMENT_ORDER,
+  citationSummaryIsCapped,
   totalCitations,
 } from "@/features/case-law/citation-treatment";
 import type {
@@ -22,6 +33,7 @@ import type {
   DecisionCitation,
 } from "@/features/case-law/citation-treatment";
 import {
+  CITATION_DIRECTIONS,
   decisionCitationsInfiniteOptions,
   decisionCitationSummaryOptions,
 } from "@/features/case-law/queries/citations";
@@ -30,12 +42,13 @@ import { useHydrated } from "@/hooks/use-hydrated";
 import { useFormatter } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
 import { optionalArray } from "@/lib/arrays";
-import { citedDecisionLabel } from "@/lib/cited-decision-label";
 import { formatDecisionDate } from "@/lib/decision-date";
 import { detached } from "@/lib/detached";
+import { citedDecisionLabel } from "@/lib/legal/cited-decision-label";
+import { decisionDocumentIdentity } from "@/lib/legal/document-identity";
 import type { SafeId } from "@/lib/safe-id";
 
-export const DIRECTION_TITLE = {
+const DIRECTION_TITLE = {
   incoming: "caseLaw.viewer.citedBy",
   outgoing: "caseLaw.viewer.cites",
 } as const satisfies Record<CitationDirection, TranslationKey>;
@@ -44,93 +57,8 @@ type DecisionCitationsProps = {
   /** The decision being read, as a citation names it. */
   decision: CitedDecisionAddress;
   decisionId: SafeId<"caseLawDecision">;
-};
-
-/**
- * The decisions that cite this one and the decisions it cites, each side
- * headed by how many and how they treat it.
- *
- * Incoming first, because "is this still good law" is the question a reader
- * brings; negative treatment leads every list for the same reason.
- */
-export const DecisionCitations = ({
-  decision,
-  decisionId,
-}: DecisionCitationsProps) => {
-  const t = useTranslations();
-  const {
-    data: summary,
-    isError,
-    refetch,
-  } = useQuery(decisionCitationSummaryOptions(decisionId));
-  // The summary is prefetched without blocking the route, so whether it is
-  // known differs between the server pass and the client's hydration pass.
-  // Rendering nothing until hydrated keeps the two passes identical.
-  const hydrated = useHydrated();
-
-  // Absent is the answer for a decision nobody cites. A failed read is not
-  // that answer, so it says so and offers a retry instead of disappearing.
-  if (!hydrated || summary === undefined) {
-    if (!hydrated || !isError) {
-      return null;
-    }
-    return (
-      <section className="reader-chrome border-border/60 mb-6 rounded-lg border px-3 py-2 print:hidden">
-        <div className="flex items-center gap-2">
-          <p className="text-muted-foreground text-xs">
-            {t("errors.actionFailed")}
-          </p>
-          <Button
-            onClick={() => {
-              detached(refetch(), "case-law.citations-retry");
-            }}
-            size="sm"
-            variant="ghost"
-          >
-            {t("common.retry")}
-          </Button>
-        </div>
-      </section>
-    );
-  }
-
-  const incomingTotal = totalCitations(summary.incoming);
-  const outgoingTotal = totalCitations(summary.outgoing);
-  if (
-    incomingTotal === 0 &&
-    outgoingTotal === 0 &&
-    !summary.capped.incoming &&
-    !summary.capped.outgoing &&
-    !isError
-  ) {
-    return null;
-  }
-
-  return (
-    <>
-      {(incomingTotal > 0 || summary.capped.incoming) && (
-        <CitationDirectionSection
-          capped={summary.capped.incoming}
-          counts={summary.incoming}
-          decision={decision}
-          decisionId={decisionId}
-          direction="incoming"
-          // A decision tab reuses this component; a new decision starts collapsed.
-          key={`${decisionId}-incoming`}
-        />
-      )}
-      {(outgoingTotal > 0 || summary.capped.outgoing) && (
-        <CitationDirectionSection
-          capped={summary.capped.outgoing}
-          counts={summary.outgoing}
-          decision={decision}
-          decisionId={decisionId}
-          direction="outgoing"
-          key={`${decisionId}-outgoing`}
-        />
-      )}
-    </>
-  );
+  /** The compact inspector owns the one disclosure around both directions. */
+  expanded?: boolean;
 };
 
 const CitationDirectionSection = ({
@@ -152,24 +80,28 @@ const CitationDirectionSection = ({
 
   return (
     <section className="reader-chrome border-border/60 mb-6 rounded-lg border print:hidden">
-      <button
+      <Button
         aria-expanded={open}
-        className="text-foreground-strong-muted hover:text-foreground flex w-full items-center gap-1.5 px-3 py-2 text-start text-xs font-medium"
+        className="group/plain flex w-full"
         onClick={() => setOpen(!open)}
-        type="button"
+        variant="plain"
       >
-        <ChevronRightIcon
-          className={cn("size-3.5 transition-transform", open && "rotate-90")}
-        />
-        <span>{t(DIRECTION_TITLE[direction])}</span>
-        <span className="text-muted-foreground font-normal">
-          {capped
-            ? `${format.number(totalCitations(counts))}+`
-            : t("caseLaw.citation.decisionCount", {
-                count: totalCitations(counts),
-              })}
+        <span className="text-foreground-strong-muted group-hover/plain:text-foreground flex w-full items-center gap-1.5 px-3 py-2 text-xs font-medium">
+          <DirectionalIcon
+            className={cn("size-3.5 transition-transform", open && "rotate-90")}
+            flip={!open}
+            icon={ChevronRightIcon}
+          />
+          <span>{t(DIRECTION_TITLE[direction])}</span>
+          <span className="text-muted-foreground font-normal">
+            {capped
+              ? `${format.number(totalCitations(counts))}+`
+              : t("caseLaw.citation.decisionCount", {
+                  count: totalCitations(counts),
+                })}
+          </span>
         </span>
-      </button>
+      </Button>
       {capped ? (
         <p className="text-muted-foreground px-3 ps-8 pb-2 text-xs">
           {t("caseLaw.citation.partialSummary")}
@@ -246,7 +178,7 @@ const groupByTreatment = (
   return ordered;
 };
 
-export const CitationList = ({
+const CitationList = ({
   decision,
   decisionId,
   direction,
@@ -261,9 +193,20 @@ export const CitationList = ({
     refetch,
   } = useInfiniteQuery(decisionCitationsInfiniteOptions(decisionId, direction));
 
-  const groups = groupByTreatment(
-    optionalArray(data?.pages).flatMap((page) => page.items),
+  const items = optionalArray(data?.pages).flatMap((page) => page.items);
+  const presentations = decisionCitationPresentationsById(
+    items.flatMap(({ decision: cited }) =>
+      cited === null
+        ? []
+        : [
+            {
+              decisionId: cited.id,
+              courtShortCode: decisionCitationCourtLabel(cited),
+            },
+          ],
+    ),
   );
+  const groups = groupByTreatment(items);
 
   return (
     <div className="flex flex-col gap-3 px-3 pb-3">
@@ -301,6 +244,7 @@ export const CitationList = ({
                 decision={decision}
                 direction={direction}
                 item={item}
+                presentations={presentations}
                 key={item.id}
               />
             ))}
@@ -311,6 +255,7 @@ export const CitationList = ({
         <Button
           className="w-fit"
           disabled={isFetchingNextPage}
+          disabledReason={t("common.loading")}
           onClick={() => {
             detached(fetchNextPage(), "case-law.citations-more");
           }}
@@ -324,27 +269,182 @@ export const CitationList = ({
   );
 };
 
+/**
+ * The decisions that cite this one and the decisions it cites, each side
+ * headed by how many and how they treat it.
+ *
+ * Incoming first, because "is this still good law" is the question a reader
+ * brings; negative treatment leads every list for the same reason.
+ */
+export const DecisionCitations = ({
+  decision,
+  decisionId,
+  expanded,
+}: DecisionCitationsProps) => {
+  const t = useTranslations();
+  const {
+    data: summary,
+    isError,
+    refetch,
+  } = useQuery(decisionCitationSummaryOptions(decisionId));
+  // The summary is prefetched without blocking the route, so whether it is
+  // known differs between the server pass and the client's hydration pass.
+  // Rendering nothing until hydrated keeps the two passes identical.
+  const hydrated = useHydrated();
+  const compactExpanded = expanded === true;
+
+  // Absent is the answer for a decision nobody cites. A failed read is not
+  // that answer, so it says so and offers a retry instead of disappearing.
+  if (!hydrated || summary === undefined) {
+    if (!hydrated || !isError) {
+      return null;
+    }
+    return (
+      <section className="reader-chrome border-border/60 mb-6 rounded-lg border px-3 py-2 print:hidden">
+        <div className="flex items-center gap-2">
+          <p className="text-muted-foreground text-xs">
+            {t("errors.actionFailed")}
+          </p>
+          <Button
+            onClick={() => {
+              detached(refetch(), "case-law.citations-retry");
+            }}
+            size="sm"
+            variant="ghost"
+          >
+            {t("common.retry")}
+          </Button>
+        </div>
+      </section>
+    );
+  }
+
+  const incomingTotal = totalCitations(summary.incoming);
+  const outgoingTotal = totalCitations(summary.outgoing);
+  if (expanded !== undefined) {
+    if (!compactExpanded) {
+      return null;
+    }
+    return (
+      <div className="flex flex-col gap-3">
+        {CITATION_DIRECTIONS.map((direction) =>
+          totalCitations(summary[direction]) > 0 ||
+          citationSummaryIsCapped(summary, direction) ? (
+            <section className="flex flex-col gap-2" key={direction}>
+              <h3 className="text-foreground-strong-muted text-xs font-medium">
+                {t(DIRECTION_TITLE[direction])}
+              </h3>
+              <CitationList
+                decision={decision}
+                decisionId={decisionId}
+                direction={direction}
+              />
+            </section>
+          ) : null,
+        )}
+      </div>
+    );
+  }
+
+  if (
+    incomingTotal === 0 &&
+    outgoingTotal === 0 &&
+    !citationSummaryIsCapped(summary, "incoming") &&
+    !citationSummaryIsCapped(summary, "outgoing") &&
+    !isError
+  ) {
+    return null;
+  }
+
+  return (
+    <>
+      {(incomingTotal > 0 || citationSummaryIsCapped(summary, "incoming")) && (
+        <CitationDirectionSection
+          capped={citationSummaryIsCapped(summary, "incoming")}
+          counts={summary.incoming}
+          decision={decision}
+          decisionId={decisionId}
+          direction="incoming"
+          // A decision tab reuses this component; a new decision starts collapsed.
+          key={`${decisionId}-incoming`}
+        />
+      )}
+      {(outgoingTotal > 0 || citationSummaryIsCapped(summary, "outgoing")) && (
+        <CitationDirectionSection
+          capped={citationSummaryIsCapped(summary, "outgoing")}
+          counts={summary.outgoing}
+          decision={decision}
+          decisionId={decisionId}
+          direction="outgoing"
+          key={`${decisionId}-outgoing`}
+        />
+      )}
+    </>
+  );
+};
+
+const CITATION_TEXT_EMPTY_MESSAGE = {
+  absent_ast: "caseLaw.viewer.textPending",
+  gate_failed: "caseLaw.viewer.textReadFailed",
+  missing_text: "inspector.review.passageUnavailable",
+  source_licence: "inspector.review.passageUnavailable",
+  text_changed: "caseLaw.viewer.textReadFailed",
+} as const satisfies Record<
+  CitationTextIncompleteReason | DecisionTextWithheldReason,
+  TranslationKey
+>;
+
+export const UnresolvedCitationRow = ({
+  item,
+}: {
+  // An unresolved citation names no decision, so it carries no identity.
+  item: {
+    citationText: string | null;
+    textIncompleteReason: CitationTextIncompleteReason | null;
+    textWithheldReason: DecisionTextWithheldReason | null;
+  };
+}) => {
+  const t = useTranslations();
+  const reason = item.textWithheldReason ?? item.textIncompleteReason;
+
+  return (
+    <li className="text-foreground-strong-muted flex items-baseline gap-2 text-xs">
+      {item.citationText === null ? (
+        <span
+          className="text-muted-foreground"
+          data-text-unavailable-reason={reason ?? undefined}
+        >
+          {t(
+            reason === null
+              ? "inspector.review.passageUnavailable"
+              : CITATION_TEXT_EMPTY_MESSAGE[reason],
+          )}
+        </span>
+      ) : (
+        <BidiText as="span">{item.citationText}</BidiText>
+      )}
+      <span className="text-muted-foreground text-[calc(0.7rem*var(--reader-text-scale))]">
+        {t("caseLaw.citation.unresolved")}
+      </span>
+    </li>
+  );
+};
+
 const CitationRow = ({
   decision,
   direction,
   item,
+  presentations,
 }: {
+  presentations: ReadonlyMap<string, DecisionCitationPresentation>;
   decision: CitedDecisionAddress;
   direction: CitationDirection;
   item: DecisionCitation;
 }) => {
-  const t = useTranslations();
   const format = useFormatter();
 
   if (item.decision === null) {
-    return (
-      <li className="text-foreground-strong-muted flex items-baseline gap-2 text-xs">
-        <BidiText as="span">{item.citationText}</BidiText>
-        <span className="text-muted-foreground text-[calc(0.7rem*var(--reader-text-scale))]">
-          {t("caseLaw.citation.unresolved")}
-        </span>
-      </li>
-    );
+    return <UnresolvedCitationRow item={item} />;
   }
 
   const decided = formatDecisionDate(item.decision.decisionDate, format);
@@ -357,18 +457,31 @@ const CitationRow = ({
 
   return (
     <li className="flex flex-wrap items-baseline gap-x-2 text-xs">
+      <DocumentIdentityBadge
+        identity={decisionDocumentIdentity(item.decision)}
+        title={`${item.decision.caseNumber} · ${item.decision.court}`}
+      />
       <CitedDecisionLink
         decision={item.decision}
-        passage={{
-          citation: {
-            citationText: item.citationText,
-            decision: cited,
-            id: item.id,
-            sectionIndex: item.sectionIndex,
-            treatment: item.treatment,
-          },
-          textDecisionId,
-        }}
+        presentation={
+          presentations.get(item.decision.id) ??
+          panic("Citation list target missing collected identity")
+        }
+        passage={
+          item.citationText === null
+            ? undefined
+            : {
+                type: "citation",
+                citation: {
+                  citationText: item.citationText,
+                  decision: cited,
+                  id: item.id,
+                  sectionIndex: item.sectionIndex,
+                  treatment: item.treatment,
+                },
+                textDecisionId,
+              }
+        }
         treatment={item.treatment}
       >
         <BidiText as="span">{citedDecisionLabel(item.decision)}</BidiText>

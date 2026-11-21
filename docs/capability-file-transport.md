@@ -4,7 +4,7 @@ Status: design. Companion to `docs/capability-coverage.md`.
 
 ## Problem
 
-The generic capability transport (`invoke_capability`) carries JSON in and JSON
+The capability executors (`read_capability` and `write_capability`) carry JSON in and JSON
 out. A capability whose input contains a `t.File()` field, or whose success value
 is a web `Response`/raw bytes, cannot cross it.
 
@@ -91,16 +91,14 @@ generate it, with the `file` field withheld:
 
 - the CLI emits no `--file` flag and strips the field from the `--input` wrapper
   schema, and `--help` says the command covers the JSON modes only;
-- `invoke_capability` removes the field from the live TypeBox schema before
-  validating (a `t.File()` carries `default: "File"`, which the Default step
-  would otherwise inject into the absent optional field and then reject), and
-  refuses a call that supplies the field rather than dropping it — a
-  bytes-as-a-string value must never produce a success computed from the other
-  sources.
+- each capability executor validates the body against the route's own schema,
+  where the file field is optional, and refuses a call that supplies the field
+  rather than dropping it — a bytes-as-a-string value must never produce a
+  success computed from the other sources.
 
 `required: false` on the declaration is cross-checked against the schema's
-`required` list, so flipping `t.Optional` fails the export until the transport is
-re-reviewed. That flip is exactly the moment a capability enters or leaves the
+`required` list, so making the field required (dropping its `v.optional`) fails
+the export until the transport is re-reviewed. That flip is exactly the moment a capability enters or leaves the
 agent surface.
 
 ## Where the work could go next (not built)
@@ -222,7 +220,7 @@ are unchanged, so no HTTP client is affected. Each capability carries a
 description that states its step number and names the next call, which is what an
 agent reads.
 
-**Rate limiting.** `invoke_capability` bypasses the Elysia route middleware, so
+**Rate limiting.** Capability executors bypass the middleware mounted on `uploadsRoute`, so
 the `upload-presigned` limiter (500/min, `API_RATE_LIMITS.upload`) does not
 apply on the generic path. These capabilities inherit
 `DEFAULT_INVOKE_RATE_LIMIT` (60/min per organization per capability), which is
@@ -235,8 +233,10 @@ rate-limit policy entry, not removing the default.
 ## Suppression accounting
 
 `suppressed` must mean "cannot work over a file transport", not "nobody has done
-the work yet". A ratchet metric (`capability-file-transport-suppressed`) freezes
-the count so a newly suppressed capability cannot appear without a reviewed
-baseline bump. The metric counts a capability, not a flag, and excludes an
-optional file input — so exposing a fileless mode is a real burn-down, and
-re-suppressing one shows up as a regression.
+the work yet". An exact-id ledger
+(`apps/api/capability-file-transport-ledger.json`, checked by
+`apps/api/scripts/capability-file-transport-guard.ts` over the catalog derived
+in memory) lists every suppressed capability, so a newly suppressed capability
+cannot appear without a reviewed ledger line. It lists a capability, not a
+flag, and excludes an optional file input — so exposing a fileless mode is a
+real burn-down that deletes its line, and re-suppressing one fails the guard.

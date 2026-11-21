@@ -1,5 +1,67 @@
 # @stll/text-normalize
 
+## 0.8.0
+
+### Minor Changes
+
+- [#8245](https://github.com/stella/stella/pull/8245) [`74bfae6`](https://github.com/stella/stella/commit/74bfae60cecf3be82e6d9554cf3448ef9a3c17eb) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `@stll/text-normalize/hungarian-letters` adds `restoreHungarianLetters`, which reads the Latin-1 stand-ins "õ" and "û" (and their capitals) as the Hungarian "ő" and "ű".
+
+## 0.7.0
+
+### Minor Changes
+
+- [#8098](https://github.com/stella/stella/pull/8098) [`c1f546a`](https://github.com/stella/stella/commit/c1f546aff35c2c7e3d97a380642161b0c79799ba) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `@stll/text-normalize` reads letter-spaced text in one place: `collapseLetterSpacing`, `documentWordCounts`, `isLetterSpacedEmphasis`, `letterSpacingJoins`, `letterGapCounts` and `joinWordSeams` are added, and `collapseSpacedLetters` is now that reading with spaces squeezed. A short spaced word beside a spaced word reads as a word, a row of one-letter words a sentence writes stays apart, and a no-break space separates words. `spacedLetterRunRegex` is removed from `@stll/text-normalize`; use `letterSpacingJoins` for the gaps a fold removes.
+
+## 0.6.0
+
+### Minor Changes
+
+- [#7366](https://github.com/stella/stella/pull/7366) [`228b271`](https://github.com/stella/stella/commit/228b271affce5a3f531e0adf036b5e02e3494f97) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `findSearchMatchRanges` and `hasFoldedSearchMatch` take opt-in `matchCase`, `matchDiacritics` and `wholeWords` options. `foldSearchMatchTextWithOptions` and `foldSearchMatchTextWithOffsetsAndOptions` take `matchCase` and `matchDiacritics`. The unary fold helpers and calls without options fold and match as before.
+
+## 0.5.2
+
+### Patch Changes
+
+- [#7462](https://github.com/stella/stella/pull/7462) [`5a7bfa7`](https://github.com/stella/stella/commit/5a7bfa7e45b652a24792c542e43b96dbeb52145b) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Preserve numeric superscript index boundaries before search query compatibility folding.
+
+## 0.5.1
+
+### Patch Changes
+
+- [#7103](https://github.com/stella/stella/pull/7103) [`5a279ca`](https://github.com/stella/stella/commit/5a279cac4dcaa80087c6c92f2e621ad124c661d9) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Keep every item when the search query folds to an empty key, including items without searchable fields.
+
+## 0.5.0
+
+### Minor Changes
+
+- [#7088](https://github.com/stella/stella/pull/7088) [`0ecb2de`](https://github.com/stella/stella/commit/0ecb2de044bc19abd46d44ac933d0f3c1cd724ef) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add `foldLikePostgresSearch`, `foldLikePostgresSearchWithOffsets` and `findPostgresSearchFoldRanges` at `@stll/text-normalize/postgres-search-fold`: PostgreSQL's `lower(unaccent(...))` reproduced code point for code point, with offsets back into the original text, for highlighting exactly what a server-side `unaccent` match found. `POSTGRES_UNACCENT_RULES` (`@stll/text-normalize/unaccent-rules`) is the extension's full default rule set.
+
+- [#7087](https://github.com/stella/stella/pull/7087) [`15e7031`](https://github.com/stella/stella/commit/15e7031924012f3998e399392d1add7eb603583d) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `slugify` with the `ascii` charset transliterates Latin letters instead of dropping them: accented letters lose their marks (`café` is `cafe`), and letters with no decomposition follow the `unaccent()` table (`Łódź` is `lodz`, `Straße` is `strasse`, `Æsir` is `aesir`). Keys minted earlier are not recomputed; a caller that re-derives a stored key must recognise both forms.
+
+## 0.4.0
+
+### Minor Changes
+
+- [#7056](https://github.com/stella/stella/pull/7056) [`c89ddbb`](https://github.com/stella/stella/commit/c89ddbb42c973e447f05dcf0f30c124b7462824b) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add `createSearchQueryMatcher` and `filterBySearchQuery` at `@stll/text-normalize/search-query-matcher`: the client-side match for user-typed queries. Both sides fold through `foldSearchMatchText`, so case, accents, `ß`/`ł`/`ø`, ligatures and Arabic variants are ignored the same way in every locale.
+
+## 0.3.0
+
+### Minor Changes
+
+- [#6049](https://github.com/stella/stella/pull/6049) [`df74ff6`](https://github.com/stella/stella/commit/df74ff6f4cd3947f948a5d2b227ecb852ae4f24a) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Expose literal substring matching and bounded UTF-16 match ranges for caller-prepared search keys.
+
+  Replace lone surrogates with U+FFFD on both sides before match-key searches, retaining UTF-16 offsets.
+
+### Patch Changes
+
+- [#5099](https://github.com/stella/stella/pull/5099) [`3e92069`](https://github.com/stella/stella/commit/3e92069e5fb6a491f432adc849aef76e993805e7) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `stripDiacritics`, `foldToAscii`, and `foldSearchMatchText` keep non-Latin spacing marks such as `ー` and `·` instead of deleting them.
+
+## 0.2.0
+
+### Minor Changes
+
+- [#5538](https://github.com/stella/stella/pull/5538) [`d532682`](https://github.com/stella/stella/commit/d5326822357958276e9fbfae7eabf009a9a3a5e3) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Centralize Unicode normalization and mark stripping in `@stll/text-normalize` and use the shared behavior in dependent packages.
+
 ## 0.1.1
 
 ### Patch Changes

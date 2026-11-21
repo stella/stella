@@ -10,8 +10,9 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { parseEnv } from "node:util";
-import ts from "typescript";
 import * as v from "valibot";
+
+import { repoRelativePath } from "@stll/portable-path";
 
 import { resolveDatabaseUrl } from "../apps/api/src/db-url";
 import {
@@ -28,16 +29,23 @@ import { collabEnvInvariantViolation } from "../apps/collab/src/env-schema";
 import { envWebInvariantViolation } from "../apps/web/src/env-schema";
 import {
   BUILD_KIND,
-  secretExampleInvariantViolation,
   LOCAL_DEV_OPT_IN,
   resolveRuntimeMode,
+  secretExampleInvariantViolation,
 } from "../packages/runtime-mode/src/index";
+import {
+  type ArrowFunctionExpression,
+  type CallExpression,
+  type Function as SyntaxFunction,
+  type Node,
+  parseSource,
+  walk,
+} from "../packages/scripts/src/syntax-tree.ts";
 import {
   AMBIENT_ENV_KEYS,
   API_ENV_SCHEMA,
   COLLAB_ENV_SCHEMA,
   DEPLOYMENT_ENV_KEYS,
-  DEPLOYMENT_FLAG_PAIRS,
   ENV_CATALOG,
   ENV_CREDENTIAL_KIND,
   ENV_EXPOSURE,
@@ -190,38 +198,30 @@ export const renderEnvironmentEntries = (
 export const renderApiEnvExample = () =>
   renderEnvironmentEntries(
     ENV_CATALOG.filter(
-      ({ documented, owner }) =>
-        documented && owner !== ENV_OWNER.web && owner !== ENV_OWNER.collab,
+      ({ owner }) => owner !== ENV_OWNER.web && owner !== ENV_OWNER.collab,
     ),
   );
 
 export const renderWebEnvExample = () =>
   renderEnvironmentEntries(
-    ENV_CATALOG.filter(
-      ({ documented, owner }) => documented && owner === ENV_OWNER.web,
-    ),
+    ENV_CATALOG.filter(({ owner }) => owner === ENV_OWNER.web),
   );
 
 export const renderCollabEnvExample = () =>
   renderEnvironmentEntries(
-    ENV_CATALOG.filter(
-      ({ documented, owner }) => documented && owner === ENV_OWNER.collab,
-    ),
+    ENV_CATALOG.filter(({ owner }) => owner === ENV_OWNER.collab),
   );
 
 const BUN_ENV_READER =
   'const names=JSON.parse(process.argv[1]??"[]");process.stdout.write(JSON.stringify(Object.fromEntries(names.map(name=>[name,process.env[name]??""]))));';
 const BUN_ENV_LOAD_TIMEOUT_MS = 10_000;
 
-const definedEnvironment = (environment: NodeJS.ProcessEnv) => {
-  const defined: Record<string, string> = {};
-  for (const [name, value] of Object.entries(environment)) {
-    if (value !== undefined) {
-      defined[name] = value;
-    }
-  }
-  return defined;
-};
+const definedEnvironment = (environment: NodeJS.ProcessEnv) =>
+  Object.fromEntries(
+    Object.entries(environment).flatMap(([name, value]) =>
+      value === undefined ? [] : [[name, value] as const],
+    ),
+  );
 
 export const parseEnvLayers = (
   texts: string[],
@@ -301,7 +301,7 @@ const generatedEnvironmentArtifacts = () => [
 const generateEnvironmentArtifacts = () => {
   for (const artifact of generatedEnvironmentArtifacts()) {
     writeFileSync(artifact.path, artifact.content);
-    console.log(`Generated ${path.relative(REPO_ROOT, artifact.path)}`);
+    console.log(`Generated ${repoRelativePath(REPO_ROOT, artifact.path)}`);
   }
 };
 
@@ -316,7 +316,7 @@ const checkEnvironmentArtifacts = () => {
     return true;
   }
   for (const { path: artifactPath } of stale) {
-    console.error(`${path.relative(REPO_ROOT, artifactPath)} is stale.`);
+    console.error(`${repoRelativePath(REPO_ROOT, artifactPath)} is stale.`);
   }
   console.error("Run `bun run env:generate` and commit the result.");
   return false;
@@ -501,17 +501,18 @@ export const renderWebBuildContract = ({
     return panic("Cannot render an incomplete web build contract.");
   }
   const { exported } = parseWebBuildContract(dockerfile);
-  const variables: Record<string, string> = {};
-  for (const name of clientKeys.toSorted()) {
-    const value = exported.get(name);
-    const reference = value?.match(/^\$\{([A-Z][A-Z0-9_]*)\}$/u)?.at(1);
-    if (reference === undefined) {
-      return panic(
-        `${WEB_DOCKERFILE_LABEL}: ${name} must map directly to one build argument before it can be published in the web build contract.`,
-      );
-    }
-    variables[name] = reference;
-  }
+  const variables = Object.fromEntries(
+    clientKeys.toSorted().map((name) => {
+      const value = exported.get(name);
+      const reference = value?.match(/^\$\{([A-Z][A-Z0-9_]*)\}$/u)?.at(1);
+      if (reference === undefined) {
+        return panic(
+          `${WEB_DOCKERFILE_LABEL}: ${name} must map directly to one build argument before it can be published in the web build contract.`,
+        );
+      }
+      return [name, reference] as const;
+    }),
+  );
   return `${JSON.stringify({ version: 1, variables }, null, 2)}\n`;
 };
 
@@ -585,13 +586,15 @@ const findComputedEnvUsages = (file: string, text: string): EnvUsage[] => {
     return [];
   }
 
-  const source = ts.createSourceFile(
-    file,
-    text,
-    ts.ScriptTarget.Latest,
-    true,
-    file.endsWith("x") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
-  );
+  const source = parseSource(file, text);
+  const parents = new Map<Node, Node>();
+  walk(source.program, (node, ancestors) => {
+    const parent = ancestors.at(-1);
+    if (parent !== undefined) {
+      parents.set(node, parent);
+    }
+  });
+  const lineOf = (node: Node) => source.locate(node.start).line;
   const constants = new Map<string, string>();
   type HelperReference =
     | { parameterIndex: number; type: "positional" }
@@ -603,117 +606,134 @@ const findComputedEnvUsages = (file: string, text: string): EnvUsage[] => {
   const helpers = new Map<string, HelperReference>();
   const usages: EnvUsage[] = [];
 
-  const literalEnvName = (node: ts.Node | undefined) => {
-    if (
-      node &&
-      (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node))
-    ) {
-      return ENV_NAME_PATTERN.test(node.text) ? node.text : undefined;
+  const literalEnvName = (node: Node | null | undefined) => {
+    if (node?.type === "Literal" && typeof node.value === "string") {
+      return ENV_NAME_PATTERN.test(node.value) ? node.value : undefined;
     }
-    if (node && ts.isIdentifier(node)) {
-      return constants.get(node.text);
+    if (node?.type === "TemplateLiteral" && node.expressions.length === 0) {
+      const value = node.quasis.at(0)?.value.cooked ?? "";
+      return ENV_NAME_PATTERN.test(value) ? value : undefined;
+    }
+    if (node?.type === "Identifier") {
+      return constants.get(node.name);
     }
     return undefined;
   };
 
-  const collectConstants = (node: ts.Node) => {
-    if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name)) {
-      const value = literalEnvName(node.initializer);
+  walk(source.program, (node) => {
+    if (node.type === "VariableDeclarator" && node.id.type === "Identifier") {
+      const value = literalEnvName(node.init);
       if (value) {
-        constants.set(node.name.text, value);
+        constants.set(node.id.name, value);
       }
     }
-    ts.forEachChild(node, collectConstants);
-  };
-  collectConstants(source);
+  });
 
-  const envArgument = (node: ts.Node) => {
-    if (!ts.isElementAccessExpression(node)) {
+  // `process.env[name]` and `Bun.env[name]`.
+  const envArgument = (node: Node) => {
+    if (node.type !== "MemberExpression" || !node.computed) {
       return undefined;
     }
-    const envAccess = node.expression;
+    const envAccess = node.object;
     if (
-      !ts.isPropertyAccessExpression(envAccess) ||
-      envAccess.name.text !== "env" ||
-      !ts.isIdentifier(envAccess.expression) ||
-      (envAccess.expression.text !== "process" &&
-        envAccess.expression.text !== "Bun")
+      envAccess.type !== "MemberExpression" ||
+      envAccess.computed ||
+      envAccess.property.type !== "Identifier" ||
+      envAccess.property.name !== "env" ||
+      envAccess.object.type !== "Identifier" ||
+      (envAccess.object.name !== "process" && envAccess.object.name !== "Bun")
     ) {
       return undefined;
     }
-    return node.argumentExpression;
+    return node.property;
   };
 
-  type HelperDeclaration =
-    | ts.ArrowFunction
-    | ts.FunctionDeclaration
-    | ts.FunctionExpression;
+  type HelperDeclaration = ArrowFunctionExpression | SyntaxFunction;
 
-  const isHelperDeclaration = (node: ts.Node): node is HelperDeclaration =>
-    ts.isArrowFunction(node) ||
-    ts.isFunctionDeclaration(node) ||
-    ts.isFunctionExpression(node);
-
-  // `ts.Node.parent` is declared non-optional but is undefined once the walk
-  // reaches the source file. Reading it through a nullable view keeps the
-  // termination check meaningful instead of narrowing it away.
-  const parentOf = (node: ts.Node): ts.Node | undefined => {
-    const { parent }: { parent?: ts.Node } = node;
-    return parent;
+  // A method's function is its member's, not a helper of its own.
+  const isHelperDeclaration = (node: Node): node is HelperDeclaration => {
+    if (
+      node.type === "ArrowFunctionExpression" ||
+      node.type === "FunctionDeclaration"
+    ) {
+      return true;
+    }
+    if (node.type !== "FunctionExpression") {
+      return false;
+    }
+    const parent = parents.get(node);
+    return !(
+      parent?.type === "MethodDefinition" ||
+      (parent?.type === "Property" && (parent.method || parent.kind !== "init"))
+    );
   };
 
   const helperName = (node: HelperDeclaration) => {
-    if (ts.isFunctionDeclaration(node) && node.name) {
-      return node.name.text;
+    if (node.type === "FunctionDeclaration" && node.id) {
+      return node.id.name;
     }
+    const parent = parents.get(node);
     if (
-      (ts.isArrowFunction(node) || ts.isFunctionExpression(node)) &&
-      ts.isVariableDeclaration(node.parent) &&
-      ts.isIdentifier(node.parent.name)
+      node.type !== "FunctionDeclaration" &&
+      parent?.type === "VariableDeclarator" &&
+      parent.id.type === "Identifier"
     ) {
-      return node.parent.name.text;
+      return parent.id.name;
     }
     return undefined;
   };
 
-  const bindingPropertyName = (element: ts.BindingElement) => {
-    if (element.propertyName === undefined && ts.isIdentifier(element.name)) {
-      return element.name.text;
+  // The bound name of a parameter or pattern entry, defaults and rests
+  // included.
+  const boundName = (node: Node): string | undefined => {
+    if (node.type === "Identifier") {
+      return node.name;
     }
-    if (
-      element.propertyName &&
-      (ts.isIdentifier(element.propertyName) ||
-        ts.isStringLiteral(element.propertyName))
-    ) {
-      return element.propertyName.text;
+    if (node.type === "AssignmentPattern") {
+      return boundName(node.left);
     }
-    return undefined;
+    return node.type === "RestElement" ? boundName(node.argument) : undefined;
+  };
+
+  // The property a destructured entry reads, as written.
+  const entryPropertyName = (entry: Node) => {
+    if (entry.type === "RestElement") {
+      return boundName(entry);
+    }
+    if (entry.type !== "Property" || entry.computed) {
+      return undefined;
+    }
+    if (entry.key.type === "Identifier") {
+      return entry.key.name;
+    }
+    return entry.key.type === "Literal" && typeof entry.key.value === "string"
+      ? entry.key.value
+      : undefined;
   };
 
   const helperReference = (
     declaration: HelperDeclaration,
     argumentName: string,
   ): HelperReference | undefined => {
-    for (const [
-      parameterIndex,
-      parameter,
-    ] of declaration.parameters.entries()) {
+    for (const [parameterIndex, parameter] of declaration.params.entries()) {
       if (
-        ts.isIdentifier(parameter.name) &&
-        parameter.name.text === argumentName
+        parameter.type !== "TSParameterProperty" &&
+        boundName(parameter) === argumentName
       ) {
         return { parameterIndex, type: "positional" };
       }
-      if (!ts.isObjectBindingPattern(parameter.name)) {
+      const pattern =
+        parameter.type === "AssignmentPattern" ? parameter.left : parameter;
+      if (pattern.type !== "ObjectPattern") {
         continue;
       }
-      const element = parameter.name.elements.find(
-        ({ name }) => ts.isIdentifier(name) && name.text === argumentName,
+      const entry = pattern.properties.find((property) =>
+        property.type === "RestElement"
+          ? boundName(property) === argumentName
+          : boundName(property.value) === argumentName,
       );
-      if (!element) {
-        continue;
-      }
-      const propertyName = bindingPropertyName(element);
+      const propertyName =
+        entry === undefined ? undefined : entryPropertyName(entry);
       if (propertyName) {
         return { parameterIndex, propertyName, type: "object-property" };
       }
@@ -721,87 +741,67 @@ const findComputedEnvUsages = (file: string, text: string): EnvUsage[] => {
     return undefined;
   };
 
-  const collectReads = (node: ts.Node) => {
+  walk(source.program, (node) => {
     const argument = envArgument(node);
-    if (argument && ts.isIdentifier(argument)) {
-      const constantName = constants.get(argument.text);
-      if (constantName) {
-        usages.push({
-          file,
-          line:
-            source.getLineAndCharacterOfPosition(argument.getStart(source))
-              .line + 1,
-          name: constantName,
-        });
-      } else {
-        let parent = parentOf(node);
-        while (parent && !isHelperDeclaration(parent)) {
-          parent = parentOf(parent);
-        }
-        if (parent && isHelperDeclaration(parent)) {
-          const name = helperName(parent);
-          const reference = helperReference(parent, argument.text);
-          if (name && reference) {
-            helpers.set(name, reference);
-          }
-        }
+    if (argument?.type !== "Identifier") {
+      return;
+    }
+    const constantName = constants.get(argument.name);
+    if (constantName) {
+      usages.push({ file, line: lineOf(argument), name: constantName });
+      return;
+    }
+    let parent = parents.get(node);
+    while (parent && !isHelperDeclaration(parent)) {
+      parent = parents.get(parent);
+    }
+    if (parent && isHelperDeclaration(parent)) {
+      const name = helperName(parent);
+      const reference = helperReference(parent, argument.name);
+      if (name && reference) {
+        helpers.set(name, reference);
       }
     }
-    ts.forEachChild(node, collectReads);
-  };
-  collectReads(source);
-
-  const propertyName = (node: ts.PropertyName) =>
-    ts.isIdentifier(node) || ts.isStringLiteral(node) ? node.text : undefined;
+  });
 
   const referencedCallArgument = (
-    call: ts.CallExpression,
+    call: CallExpression,
     reference: HelperReference,
   ) => {
     const argument = call.arguments.at(reference.parameterIndex);
     if (reference.type === "positional") {
       return argument;
     }
-    if (!argument || !ts.isObjectLiteralExpression(argument)) {
+    if (argument?.type !== "ObjectExpression") {
       return undefined;
     }
     for (const property of argument.properties) {
       if (
-        ts.isPropertyAssignment(property) &&
-        propertyName(property.name) === reference.propertyName
+        property.type === "Property" &&
+        property.kind === "init" &&
+        !property.method &&
+        entryPropertyName(property) === reference.propertyName
       ) {
-        return property.initializer;
-      }
-      if (
-        ts.isShorthandPropertyAssignment(property) &&
-        property.name.text === reference.propertyName
-      ) {
-        return property.name;
+        return property.value;
       }
     }
     return undefined;
   };
 
-  const collectCalls = (node: ts.Node) => {
-    if (ts.isCallExpression(node) && ts.isIdentifier(node.expression)) {
-      const reference = helpers.get(node.expression.text);
-      if (reference) {
-        const argument = referencedCallArgument(node, reference);
-        const name = literalEnvName(argument);
-        if (name && argument) {
-          usages.push({
-            file,
-            line:
-              source.getLineAndCharacterOfPosition(argument.getStart(source))
-                .line + 1,
-            name,
-          });
-        }
-      }
+  walk(source.program, (node) => {
+    if (node.type !== "CallExpression" || node.callee.type !== "Identifier") {
+      return;
     }
-    ts.forEachChild(node, collectCalls);
-  };
-  collectCalls(source);
+    const reference = helpers.get(node.callee.name);
+    if (!reference) {
+      return;
+    }
+    const argument = referencedCallArgument(node, reference);
+    const name = literalEnvName(argument);
+    if (name && argument) {
+      usages.push({ file, line: lineOf(argument), name });
+    }
+  });
 
   return usages;
 };
@@ -929,14 +929,16 @@ type DoctorValidationResult =
 const isEnvApp = (value: string): value is EnvApp =>
   Object.values(ENV_APP).some((app) => app === value);
 
-export const normalizeEmptyEnvironment = (input: DoctorInput): DoctorInput => {
-  const normalized: DoctorInput = {};
-  for (const [name, value] of Object.entries(input)) {
-    normalized[name] =
-      value === "" && !EMPTY_VALUE_VARIABLES.has(name) ? undefined : value;
-  }
-  return normalized;
-};
+export const normalizeEmptyEnvironment = (input: DoctorInput): DoctorInput =>
+  Object.fromEntries(
+    Object.entries(input).map(
+      ([name, value]) =>
+        [
+          name,
+          value === "" && !EMPTY_VALUE_VARIABLES.has(name) ? undefined : value,
+        ] as const,
+    ),
+  );
 
 const validateApiEnvironment = (input: DoctorInput): DoctorValidationResult => {
   // Mirrors apps/api/src/env-base.ts: placeholders go first, so the doctor
@@ -1009,6 +1011,7 @@ const validateApiEnvironment = (input: DoctorInput): DoctorValidationResult => {
     contentEncryptionKey: output.CONTENT_ENCRYPTION_KEY,
     redisUrl: output.REDIS_URL,
     runtimeMode,
+    scheduledJobsMode: output.SCHEDULED_JOBS_MODE,
   });
   if (documentProcessingIssue !== null) {
     issues.push(documentProcessingIssue);
@@ -1209,37 +1212,6 @@ export const validateDoctorEnvironment = ({
   return ENV_APP_CONFIG[app].validate(normalizeEmptyEnvironment(selectedInput));
 };
 
-type DeploymentFlagPairingInput = {
-  api: DoctorInput;
-  web: DoctorInput;
-};
-
-const isFlagEnabled = (schema: v.GenericSchema, value: string | undefined) => {
-  const parsed = v.safeParse(schema, value);
-  return parsed.success && parsed.output === true;
-};
-
-/**
- * The one check for web build flags whose feature only the paired API flag
- * serves (`DEPLOYMENT_FLAG_PAIRS`). Values are read through each app's own
- * schema, so a flag counts as on exactly when that app would treat it so.
- */
-export const deploymentFlagPairingIssues = ({
-  api,
-  web,
-}: DeploymentFlagPairingInput): string[] => {
-  const apiValues = normalizeEmptyEnvironment(api);
-  const webValues = normalizeEmptyEnvironment(web);
-  return DEPLOYMENT_FLAG_PAIRS.filter(
-    (pair) =>
-      isFlagEnabled(WEB_ENV_SCHEMA[pair.web], webValues[pair.web]) &&
-      !isFlagEnabled(API_ENV_SCHEMA[pair.api], apiValues[pair.api]),
-  ).map(
-    (pair) =>
-      `${pair.web}=true needs ${pair.api}=true on the API: the web build would offer a feature the API does not serve.`,
-  );
-};
-
 type ReadDoctorInputOptions = {
   app: EnvApp;
   mode: EnvMode | undefined;
@@ -1276,11 +1248,9 @@ const runDoctor = (app: EnvApp, mode: EnvMode | undefined) => {
   const validation = validateDoctorEnvironment({ app, input, mode });
   const displayedEnvPaths = (
     existingEnvPaths.length > 0 ? existingEnvPaths : [baseEnvPath]
-  ).map((envPath) => path.relative(REPO_ROOT, envPath));
+  ).map((envPath) => repoRelativePath(REPO_ROOT, envPath));
   console.log(`Environment doctor: ${app} (${displayedEnvPaths.join(", ")})`);
-  for (const entry of ENV_CATALOG.filter(
-    ({ documented, owner }) => documented && owners.has(owner),
-  )) {
+  for (const entry of ENV_CATALOG.filter(({ owner }) => owners.has(owner))) {
     const value = validation.values[entry.name];
     console.log(
       `${entry.name}: ${formatEnvValue(entry, value)} [${sourceLabel(entry.name, fileValues)}; ${entry.exposure}]`,

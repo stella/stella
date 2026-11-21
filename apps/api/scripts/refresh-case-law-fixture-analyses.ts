@@ -28,8 +28,8 @@ import { gzipSync } from "node:zlib";
 
 import {
   CASE_LAW_FIXTURES_DIR,
-  readCaseLawFixtureAnalyses,
   type CaseLawFixtureAnalysis,
+  readCaseLawFixtureAnalyses,
 } from "./lib/case-law-fixture-analyses";
 
 const check = process.argv.includes("--check");
@@ -67,17 +67,14 @@ if (stale.length === 0) {
   console.log(
     `case-law fixture analyses: every stored analysis names the current input (${CASE_LAW_FIXTURES_DIR}).`,
   );
-  process.exit(0);
-}
-
-if (check) {
+} else if (check) {
   console.error(
     `case-law fixture analyses: ${String(stale.length)} stale. Run ` +
       "`bun run apps/api/scripts/refresh-case-law-fixture-analyses.ts` and commit the fixtures.",
   );
   process.exit(1);
+} else {
+  console.log(
+    `case-law fixture analyses: re-stamped ${String(stale.length)} analyses across ${String(rewritten)} fixtures.`,
+  );
 }
-
-console.log(
-  `case-law fixture analyses: re-stamped ${String(stale.length)} analyses across ${String(rewritten)} fixtures.`,
-);

@@ -10,7 +10,7 @@
  * and recognition crops are cut from the source at full resolution.
  */
 
-export const DET_LIMIT_SIDE = 960;
+const DET_LIMIT_SIDE = 960;
 export const REC_INPUT_HEIGHT = 48;
 export const REC_BATCH_SIZE = 6;
 export const REC_MAX_INPUT_WIDTH = 4000;

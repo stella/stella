@@ -1,0 +1,1197 @@
+// parser-output-unchanged: adds an explicit exact-document recovery capability; standing crawl and stored replay outputs are unchanged.
+// parser-output-unchanged: A null list now reads as empty; records that parsed before keep their exact output.
+// parser-output-unchanged: a page states whether the publisher was asked; parsed decision output is unchanged.
+// parser-output-unchanged: imports ingestion bindings directly from their existing owner.
+// parser-output-unchanged: Stored-object replay reuses the ingestion PDF parser and assembly without changing their output.
+import { panic, Result } from "better-result";
+import * as v from "valibot";
+
+import { caseLawSectionHeading } from "@stll/legal-ast/case-law-heading";
+import {
+  CZ_JUDGE_NAME_RE,
+  czechAuthorityHeadRoles,
+  isCzechAuthorityDecisionTitle,
+  isCzechAuthoritySignatureLine,
+  isCzechInstructionHeading,
+  isCzechReasonsHeading,
+} from "@stll/legal-ast/czech-document-roles";
+import {
+  DECISION_IDENTIFIER_TYPES,
+  isDecisionIdentifier,
+} from "@stll/legal-ast/decision-identifier";
+import type {
+  Block,
+  DocumentAst,
+  HeadingLevel,
+  Inline,
+  ParagraphRole,
+} from "@stll/legal-ast/document-ast";
+import { CZ_PROFILE } from "@stll/legal-atlas/cz-provision-citation-profile";
+import {
+  printedDateOf,
+  printedDatePattern,
+} from "@stll/legal-atlas/printed-date";
+import { sha256Hex } from "@stll/sha256/bun";
+import { Temporal } from "@stll/time";
+
+import { publisherRequestIntervalMs } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
+import {
+  readPublisherBytes,
+  readPublisherText,
+  unreadPublisherError,
+} from "@/api/handlers/case-law/ingestion/adapters/publisher-read";
+import { adapterCatch } from "@/api/handlers/case-law/ingestion/adapters/utils";
+import {
+  assemblePdfParagraphs,
+  extractPdfBodyAndNotes,
+  PDF_PARAGRAPH_START,
+  pdfNotesOf,
+  pdfRunInlines,
+} from "@/api/handlers/case-law/ingestion/parsers/pdf-bands";
+import type { PdfRun } from "@/api/handlers/case-law/ingestion/parsers/pdf-bands";
+import { sourceFingerprint } from "@/api/handlers/case-law/ingestion/source-fingerprint";
+import {
+  absentDecisionTextFields,
+  checkedDecisionMetadata,
+  TEXT_ABSENCE_REASON,
+} from "@/api/lib/case-law/decision-text";
+import {
+  READ_OUTCOME_METADATA_KEY,
+  type ReadOutcome,
+  type StoredReadOutcome,
+  storedReadUnavailable,
+  UNAVAILABLE_CYCLES_BEFORE_MARKING,
+} from "@/api/lib/errors/read-outcome";
+import type { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
+import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
+import {
+  ADAPTER_KEYS,
+  ADAPTER_TIMEOUT,
+  PARSER_VERSIONS,
+} from "@/api/lib/legal-search/ingestion-constants";
+import {
+  defineSourceAdapter,
+  EMPTY_AST,
+  encodeSourceRawEnvelope,
+  PUBLISHER_REQUEST,
+  readStoredRawListing,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+  SOURCE_TOTAL_PROBE_FAILURE,
+  sourceTotalProbeFailed,
+  sourceTotalRead,
+  STORED_RAW_REPARSE_REJECTION,
+  STORED_RAW_REPLAY_STATUS,
+  storedSourceSurface,
+} from "@/api/lib/legal-search/ingestion-types";
+import type {
+  IngestionResult,
+  SourceFieldDisposition,
+  StoredRawReparseInput,
+  StoredRawReparseValue,
+} from "@/api/lib/legal-search/ingestion-types";
+import { courtParagraphNumbers } from "@/api/lib/legal-search/parsers/court-paragraph-numbers";
+import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
+import { readStoredDocumentObject } from "@/api/lib/legal-search/stored-document-replay";
+import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
+import { isRecord } from "@/api/lib/type-guards";
+
+const LISTING_URL = "https://uohs.gov.cz/opendata/rozhodnuti.jsonld";
+const ORIGIN = "https://uohs.gov.cz";
+const HOST_POLICY = { type: "exact-origin", origins: [ORIGIN] } as const;
+// parser-output-unchanged: request deadlines only; no parsed record changes.
+export const CZ_UOHS_PAGE_SIZE = 20;
+const PAGE_SIZE = CZ_UOHS_PAGE_SIZE;
+const CURSOR_VERSION = 1;
+
+/** Ceiling for one decision document read. */
+export const CZ_UOHS_DOCUMENT_TIMEOUT_MS = 120_000;
+
+/**
+ * The pipeline's deadline for one crawl page. A page reads every document of
+ * its records inline, one gated request at a time, so the deadline leaves room
+ * for a full page of documents at the publisher's pace plus one slow read.
+ */
+const CZ_UOHS_PAGE_TIMEOUT_MS = 300_000;
+
+export const CZ_UOHS_COLLECTIONS = [
+  "hospodarska-soutez",
+  "verejne-zakazky",
+  "verejna-podpora",
+  "vyznamna-trzni-sila",
+  "pristup-k-dopravni-infrastrukture",
+] as const;
+export type CzUohsCollection = (typeof CZ_UOHS_COLLECTIONS)[number];
+
+const collectionFromUrl = (url: string): CzUohsCollection | undefined =>
+  CZ_UOHS_COLLECTIONS.find(
+    (collection) => url === `https://uohs.gov.cz/cs/${collection}.html`,
+  );
+
+/**
+ * The publisher writes `null` for a list it has nothing to put in. One such
+ * record must not fail the whole listing, so it reads as an empty list.
+ */
+const statedList = <TItem extends v.GenericSchema>(item: TItem) =>
+  v.nullable(v.array(item), () => []);
+
+const recordSchema = v.looseObject({
+  typ: v.unknown(),
+  iri: v.string(),
+  věc: v.looseObject({ cs: v.string() }),
+  číslo_jednací: v.string(),
+  spisová_značka: v.string(),
+  instance: statedList(v.string()),
+  odbor: statedList(v.string()),
+  datum_právní_moci: v.optional(
+    v.looseObject({ typ: v.string(), datum: v.string() }),
+  ),
+  účastník: statedList(v.unknown()),
+  typ_řízení: statedList(v.string()),
+  typ_rozhodnutí: statedList(v.string()),
+  dokument: statedList(v.looseObject({ typ: v.string(), url: v.string() })),
+});
+type CzUohsRecord = v.InferOutput<typeof recordSchema>;
+type CzUohsPublisherRecord = {
+  [TField in keyof typeof recordSchema.entries]: CzUohsRecord[TField];
+};
+
+const listingSchema = v.looseObject({ rozhodnutí: v.array(recordSchema) });
+
+export const parseCzUohsListing = (payload: unknown): CzUohsRecord[] =>
+  v.parse(listingSchema, payload).rozhodnutí;
+
+/**
+ * The collection a decision belongs to, or undefined when its departments do
+ * not name exactly one known collection. An unknown department is a new
+ * publisher category, not a reason to stop the walk: the decision is still
+ * stored, keeping its department URLs, with no collection.
+ */
+export const czUohsCollectionOf = (
+  record: Pick<CzUohsRecord, "odbor">,
+): CzUohsCollection | undefined => {
+  const values = record.odbor
+    .map(collectionFromUrl)
+    .filter((value): value is CzUohsCollection => value !== undefined);
+  return values.length === 1 ? values.at(0) : undefined;
+};
+
+const publisherReadOptions = (
+  stage: "listing" | "document",
+  signal?: AbortSignal,
+) => ({
+  adapterKey: ADAPTER_KEYS.CZ_UOHS,
+  fetchStage: stage,
+  timeoutMs:
+    stage === "document" ? CZ_UOHS_DOCUMENT_TIMEOUT_MS : ADAPTER_TIMEOUT.LIST,
+  signal,
+  redirect: "error" as const,
+});
+
+const readListingText = async (
+  cursor: string | null,
+  signal?: AbortSignal,
+): Promise<Result<string, AdapterFetchError>> => {
+  // A refused listing is the source refusing the crawl, not one document.
+  const outcome = await readPublisherText(LISTING_URL, {
+    ...publisherReadOptions("listing", signal),
+    refusalScope: "source",
+  });
+  if (outcome.type === "present") {
+    return Result.ok(outcome.value);
+  }
+  return Result.err(
+    unreadPublisherError({
+      outcome,
+      message: "ÚOHS listing could not be read",
+      adapterKey: ADAPTER_KEYS.CZ_UOHS,
+      cursor,
+    }),
+  );
+};
+
+/**
+ * The proceeding's file number as the office prints it, "ÚOHS-R0003/2018/HS".
+ * Older export rows state only the file's serial ("R0003") and carry the
+ * whole number at the head of the reference number
+ * ("R0003/2018/HS-31751/310/MHf"). A serial alone repeats every year, so it
+ * never stands for the file: two proceedings would share one identity.
+ */
+export const czUohsFileNumber = (
+  record: Pick<CzUohsRecord, "spisová_značka" | "číslo_jednací">,
+): string => {
+  const stated = record.spisová_značka.replace(/^ÚOHS-/u, "");
+  const reference = record.číslo_jednací.replace(/^ÚOHS-/u, "");
+  if (/\/\d{4}(?:\/|$)/u.test(stated) || !reference.startsWith(`${stated}/`)) {
+    return `ÚOHS-${stated}`;
+  }
+  // After the serial the reference states the year and, when the file has
+  // one, its section letters; whatever follows (the decision's own number,
+  // set off by a hyphen, a space or nothing) belongs to the decision.
+  const head = FILE_NUMBER_TAIL.exec(reference.slice(stated.length))?.[0];
+  return `ÚOHS-${stated}${head ?? ""}`;
+};
+
+/** `/2018/HS` in `R0003/2018/HS-31751/…`, `/2014/VZ` in `S817/2014/VZ 26112/…`. */
+const FILE_NUMBER_TAIL = /^\/\d{4}(?:\/\p{Lu}+)?/u;
+
+/**
+ * The decision's citable identifiers: the file number, then the reference
+ * number of this one decision, each as the office prints it. The pipeline
+ * keys them for lookup (`normalized_value`); a value stays the printed
+ * spelling a reader is shown.
+ *
+ * The reference number of a joined proceeding lists every joined file and
+ * can run past the identifier storage bound. It is a secondary lookup key,
+ * so one the corpus cannot hold is left out rather than truncated; the file
+ * number stays the decision's identity.
+ */
+export const czUohsDecisionIdentifiers = (
+  record: Pick<CzUohsRecord, "spisová_značka" | "číslo_jednací">,
+) => {
+  const identifier = (printed: string) =>
+    ({
+      type: DECISION_IDENTIFIER_TYPES.AUTHORITY_DECISION_NUMBER,
+      value: printed,
+    }) as const;
+  const reference = identifier(
+    `ÚOHS-${record.číslo_jednací.replace(/^ÚOHS-/u, "")}`,
+  );
+  return [
+    identifier(czUohsFileNumber(record)),
+    ...(isDecisionIdentifier(reference) ? [reference] : []),
+  ] as const;
+};
+
+type CzUohsPdf = {
+  /** The text layer line by line, letterhead first, its footnotes last. */
+  text: string;
+  /** The typeset lines joined back into the paragraphs they were broken from. */
+  paragraphs: PdfRun[][];
+  notes: { label: string; noteId: string; runs: PdfRun[] }[];
+};
+
+// The office numbers its reasoning with a hanging indent ("1.  Úřad obdržel").
+const readCzUohsPdf = async (bytes: Uint8Array): Promise<CzUohsPdf> => {
+  const { body, notes } = await extractPdfBodyAndNotes(
+    bytes,
+    PDF_PARAGRAPH_START.INDENT_OR_OUTDENT,
+  );
+  const read = pdfNotesOf(notes).map(({ label, noteId, lines }) => ({
+    label,
+    noteId,
+    runs: assemblePdfParagraphs(lines).flat(),
+  }));
+  const textOf = (runs: readonly PdfRun[]) =>
+    runs.map(({ text }) => text).join("");
+  return {
+    // The notes are the decision's text too, so search finds them.
+    text: [
+      ...body.map((line) => (line.type === "blank" ? "" : textOf(line.runs))),
+      ...read.map(({ runs }) => textOf(runs).trim()),
+    ]
+      .join("\n")
+      .trim(),
+    paragraphs: assemblePdfParagraphs(body),
+    notes: read,
+  };
+};
+
+type CzUohsDocumentInput = {
+  paragraphs: readonly PdfRun[][];
+  notes: readonly { label: string; noteId: string; runs: PdfRun[] }[];
+  caseNumber: string;
+  court: string;
+  decisionDate: string | undefined;
+  decisionType: string | undefined;
+  sourceUrl: string;
+  documentUrl: string | undefined;
+};
+
+/**
+ * The decision as a document: one paragraph block per printed paragraph, with
+ * the office's own "N." numbering moved into the block by the shared reader.
+ */
+/**
+ * The Office's document identifier printed as a barcode and its caption at
+ * the head of the first page (`*UOHSX00BKPME*`): the filing system's, not
+ * the decision's words.
+ */
+const DOCUMENT_BARCODE_RE = /^\*?UOHSX[0-9A-Z]{7}\*?$/u;
+
+/**
+ * Roles by the decision's own parts: the head matter and the operative part
+ * through the Czech grammar of an authority's decision, the barcode as
+ * apparatus, and the signature under the office the decision is signed
+ * under, with the name printed above it. A decision printing no lead-in or
+ * no reasons heading keeps the operative part up to its first numbered
+ * paragraph of reasons.
+ */
+const czUohsParagraphRoles = (
+  texts: readonly string[],
+): (ParagraphRole | undefined)[] => {
+  const head = czechAuthorityHeadRoles(texts);
+  const numberedReasoningStart = texts.findIndex((text) =>
+    /^1\.\s+\p{Lu}/u.test(text),
+  );
+  return texts.map((text, index): ParagraphRole | undefined => {
+    if (DOCUMENT_BARCODE_RE.test(text)) {
+      return "apparatus";
+    }
+    if (head !== undefined) {
+      const role = head[index];
+      if (role !== undefined) {
+        return role;
+      }
+    } else if (
+      numberedReasoningStart !== -1 &&
+      index < numberedReasoningStart
+    ) {
+      return "holding";
+    }
+    const next = texts[index + 1];
+    return isCzechAuthoritySignatureLine(text) ||
+      (next !== undefined &&
+        isCzechAuthoritySignatureLine(next) &&
+        CZ_JUDGE_NAME_RE.test(text) &&
+        text.length < 80)
+      ? "signature"
+      : undefined;
+  });
+};
+
+type CzUohsHeading = {
+  level: HeadingLevel;
+  role?: "decision-title" | "section-heading";
+};
+
+/**
+ * The decision's own headings: its title in the head matter, the reasons
+ * and instruction headings, and the reasons' Roman section titles between
+ * the two. Each
+ * keeps the anchor its paragraph had, so a heading only changes the type.
+ */
+const czUohsHeadings = (
+  texts: readonly string[],
+  roles: readonly (ParagraphRole | undefined)[],
+): (CzUohsHeading | undefined)[] => {
+  let reasoned = false;
+  let titled = false;
+  return texts.map((text, index): CzUohsHeading | undefined => {
+    if (isCzechReasonsHeading(text)) {
+      reasoned = true;
+      return { level: 2, role: "section-heading" };
+    }
+    if (isCzechInstructionHeading(text)) {
+      // The instruction closes the reasons: what follows is the signature
+      // and the distribution, never a section of the reasons.
+      reasoned = false;
+      titled = true;
+      return { level: 2, role: "section-heading" };
+    }
+    if (
+      !titled &&
+      !reasoned &&
+      roles[index] === "intro" &&
+      isCzechAuthorityDecisionTitle(text)
+    ) {
+      titled = true;
+      return { level: 1, role: "decision-title" };
+    }
+    const section =
+      reasoned && roles[index] !== "signature"
+        ? caseLawSectionHeading(text)
+        : null;
+    return section === null ? undefined : { level: section.level };
+  });
+};
+
+export const czUohsDocumentAst = ({
+  paragraphs,
+  notes,
+  caseNumber,
+  court,
+  decisionDate,
+  decisionType,
+  sourceUrl,
+  documentUrl,
+}: CzUohsDocumentInput): DocumentAst => {
+  // The unnumbered letterhead and operative part precede the numbered
+  // reasoning; keeping them out of the body-numbering candidate set prevents
+  // their typeset paragraphs from counting as an implausibly long lead-in.
+  const textOf = (runs: readonly PdfRun[]) =>
+    runs
+      .map(({ text }) => text)
+      .join("")
+      .trim();
+  const texts = paragraphs.map(textOf);
+  const roles = czUohsParagraphRoles(texts);
+  const headings = czUohsHeadings(texts, roles);
+  const blocks: Block[] = paragraphs.map((runs, index): Block => {
+    const id = `b${index + 1}`;
+    const anchorId = `p-${index + 1}`;
+    const inlines: Inline[] = pdfRunInlines(runs);
+    const plainText = texts[index] ?? "";
+    const heading = headings[index];
+    if (heading !== undefined) {
+      return {
+        id,
+        anchorId,
+        type: "heading",
+        level: heading.level,
+        ...(heading.role === undefined ? {} : { role: heading.role }),
+        inlines,
+        plainText,
+      };
+    }
+    const role = roles[index];
+    return {
+      id,
+      anchorId,
+      type: "paragraph",
+      ...(role === undefined ? {} : { role }),
+      inlines,
+      plainText,
+    };
+  });
+  for (const { label, noteId, runs } of notes) {
+    const plainText = textOf(runs);
+    blocks.push({
+      id: `b${blocks.length + 1}`,
+      anchorId: noteId,
+      type: "paragraph",
+      note: { type: "footnote", label, noteId },
+      inlines: pdfRunInlines(runs),
+      plainText,
+    });
+  }
+  return {
+    version: 1,
+    source: {
+      system: "uohs.gov.cz",
+      documentId: sourceUrl,
+      webUrl: sourceUrl,
+      printUrl: documentUrl ?? "",
+    },
+    metadata: {
+      caseNumber,
+      ecli: null,
+      court,
+      decisionDate: decisionDate ?? null,
+      decisionType: decisionType ?? null,
+      keywords: [],
+      statutes: [],
+    },
+    blocks: courtParagraphNumbers(blocks, {
+      parser: ADAPTER_KEYS.CZ_UOHS,
+      caseNumber,
+      url: sourceUrl,
+    }),
+  };
+};
+
+/** The decision's document, or the empty placeholder when no file yielded text. */
+const decisionDocumentAst = (
+  canonical: (CzUohsPdf & { url: string }) | undefined,
+  identity: Omit<CzUohsDocumentInput, "paragraphs" | "notes" | "documentUrl">,
+) =>
+  canonical === undefined
+    ? EMPTY_AST
+    : czUohsDocumentAst({
+        ...identity,
+        paragraphs: canonical.paragraphs,
+        notes: canonical.notes,
+        documentUrl: canonical.url,
+      });
+
+/** One recorded decision PDF as the adapter reads it, for evidence checks. */
+export const parseCzUohsDocumentPdf = async (
+  bytes: Uint8Array,
+  identity: Pick<CzUohsDocumentInput, "caseNumber" | "sourceUrl">,
+): Promise<DocumentAst> => {
+  const read = await readCzUohsPdf(bytes);
+  return czUohsDocumentAst({
+    ...identity,
+    paragraphs: read.paragraphs,
+    notes: read.notes,
+    court: ADAPTER_MANIFESTS[ADAPTER_KEYS.CZ_UOHS].publisher,
+    decisionDate: czUohsLetterheadDate(read.text),
+    decisionType: czUohsPrintedDecisionType(read.text),
+    documentUrl: undefined,
+  });
+};
+
+/**
+ * The letterhead of every ÚOHS decision states its issue date beside the
+ * place, in one of the layouts the office has used: labelled ("Datum, místo
+ * 12. 10. 2026, Brno"), or after a labelled reference ("Č. j.:
+ * ÚOHS-R0003/2018/HS-31751/310/MHf   Brno 1. listopadu 2018", "Číslo
+ * jednací: ÚOHS-37007/2024/163 Brno 1. 10. 2024", "Spisová značka:
+ * ÚOHS-S0876/2023/KS Brno 8. 1. 2024 Číslo jednací: …"). Body dates ("dne
+ * 5. 8. 2026", "sp. zn. ÚOHS-… ze dne …") carry neither the label nor the
+ * place, so only these shapes are read, and only from the head.
+ */
+const LETTERHEAD_SPAN = 1500;
+const PRINTED_DATE = printedDatePattern(CZ_PROFILE.versionGrammar.monthNames);
+// Each value must follow its own label: a date elsewhere in the head is not it.
+const LETTERHEAD_DATES = [
+  new RegExp(`Datum,\\s*místo\\s+${PRINTED_DATE},\\s*Brno`, "u"),
+  new RegExp(
+    `(?:Č\\.\\s?j\\.|Číslo jednací|Spisová značka):?\\s*ÚOHS-[^\\s]+\\s*Brno:?\\s*${PRINTED_DATE}`,
+    "u",
+  ),
+] as const;
+
+/**
+ * The decision's own title line in the letterhead ("ROZHODNUTÍ", "USNESENÍ",
+ * "PŘÍKAZ"), as its type in Czech; undefined when the head prints none.
+ */
+const PRINTED_DECISION_TYPES: ReadonlySet<string> = new Set([
+  "ROZHODNUTÍ",
+  "USNESENÍ",
+  "PŘÍKAZ",
+]);
+
+export const czUohsPrintedDecisionType = (text: string): string | undefined =>
+  text
+    .slice(0, LETTERHEAD_SPAN)
+    .split("\n")
+    .map((line) => line.trim())
+    .find((line) => PRINTED_DECISION_TYPES.has(line.toLocaleUpperCase("cs")))
+    ?.toLocaleLowerCase("cs");
+
+/**
+ * What the decision's own text states about it. The date comes from the
+ * letterhead, so a text without one is a source that publishes none; the
+ * type is the printed title, since the export names it only by a code-list
+ * address (which stays in metadata). An unread document says neither.
+ */
+const czUohsPrintedFacts = (
+  fulltext: string | undefined,
+): { decisionDate: string | undefined; decisionType: string | undefined } =>
+  fulltext === undefined
+    ? { decisionDate: undefined, decisionType: undefined }
+    : {
+        decisionDate: czUohsLetterheadDate(fulltext),
+        decisionType: czUohsPrintedDecisionType(fulltext),
+      };
+
+/** Where a ÚOHS decision date was read from; the export states none. */
+export const CZ_UOHS_DECISION_DATE_SOURCE = "document";
+
+export const czUohsLetterheadDate = (text: string): string | undefined => {
+  const head = text.slice(0, LETTERHEAD_SPAN);
+  for (const pattern of LETTERHEAD_DATES) {
+    const match = pattern.exec(head);
+    if (match !== null) {
+      return printedDateOf(match.groups, CZ_PROFILE.versionGrammar.monthNames);
+    }
+  }
+  return undefined;
+};
+
+/**
+ * How the decision date was established: read from the document, stated as
+ * not published by a document that carries none, or unknown while the
+ * document is unread.
+ */
+const decisionDateMetadata = (
+  decisionDate: string | undefined,
+  documentRead: boolean,
+) => {
+  if (decisionDate !== undefined) {
+    return { decisionDateSource: CZ_UOHS_DECISION_DATE_SOURCE };
+  }
+  if (!documentRead) {
+    return {};
+  }
+  return { decisionDateAvailability: { status: "not-published-by-source" } };
+};
+
+/**
+ * The export names the type only by a code-list address, so a decision whose
+ * text prints no title states its type in no words; the absence is typed.
+ */
+const decisionTypeMetadata = (
+  decisionType: string | undefined,
+  documentRead: boolean,
+) =>
+  decisionType !== undefined || !documentRead
+    ? {}
+    : { decisionTypeAvailability: { status: "not-published-by-source" } };
+
+type CzUohsDocumentRead =
+  | { type: "publisher"; signal: AbortSignal | undefined }
+  | { type: "stored"; documents: ReadonlyMap<string, Uint8Array> };
+
+type ReadCzUohsDocumentOptions = {
+  input: CzUohsDocumentRead;
+  part: string;
+  url: string;
+};
+
+const readCzUohsDocument = async ({
+  input,
+  part,
+  url,
+}: ReadCzUohsDocumentOptions): Promise<ReadOutcome<Uint8Array> | null> => {
+  const target = restrictOutboundUrl({ hostPolicy: HOST_POLICY, rawUrl: url });
+  if (target === null) {
+    return null;
+  }
+  switch (input.type) {
+    case "publisher":
+      return await readPublisherBytes(target, {
+        ...publisherReadOptions("document", input.signal),
+        redirect: "error",
+      });
+    case "stored":
+      return {
+        type: "present",
+        value:
+          input.documents.get(part) ??
+          panic(`Stored ÚOHS document not loaded: ${part}`),
+      };
+    default:
+      input satisfies never;
+      return panic(`Unhandled ÚOHS document input: ${String(input)}`);
+  }
+};
+
+type AssembleCzUohsDecisionOptions = {
+  record: CzUohsRecord;
+  read: CzUohsDocumentRead;
+};
+
+const assembleCzUohsDecision = async ({
+  record,
+  read,
+}: AssembleCzUohsDecisionOptions): Promise<IngestionResult> => {
+  const collection = czUohsCollectionOf(record);
+  const primaryDocumentUrl = record.dokument.at(0)?.url;
+  const rawObjectEntries: [
+    string,
+    { bytes: Uint8Array; contentType: string },
+  ][] = [];
+  const provenanceEntries: [string, { url: string; sha256: string }][] = [];
+  const documentFailures: {
+    index: number;
+    type: "fetch-failed" | "parse-failed";
+    reason: string;
+    url: string;
+  }[] = [];
+  let documentReadOutcome: StoredReadOutcome | undefined;
+  // The document the decision text is read from, with the URL it came from.
+  let canonical: (CzUohsPdf & { url: string }) | undefined;
+  for (const [index, document] of record.dokument.entries()) {
+    const part = index === 0 ? "document" : `document-${index}`;
+    const documentUrl = document.url;
+    const outcome = await readCzUohsDocument({
+      input: read,
+      part,
+      url: documentUrl,
+    });
+    if (outcome === null) {
+      documentFailures.push({
+        index,
+        type: "fetch-failed",
+        reason: "document escaped publisher origin",
+        url: documentUrl,
+      });
+      continue;
+    }
+    if (outcome.type !== "present") {
+      if (outcome.type === "unavailable") {
+        documentReadOutcome = storedReadUnavailable({
+          cause: outcome.cause,
+          scope: "document",
+          consecutiveCycles: UNAVAILABLE_CYCLES_BEFORE_MARKING,
+        });
+      } else if (outcome.type === "refused") {
+        documentReadOutcome = { ...outcome, scope: "document" };
+      } else {
+        documentReadOutcome = outcome;
+      }
+      documentFailures.push({
+        index,
+        type: "fetch-failed",
+        reason: unreadPublisherError({
+          outcome,
+          message: "ÚOHS PDF could not be read",
+          adapterKey: ADAPTER_KEYS.CZ_UOHS,
+          cursor: null,
+        }).message,
+        url: documentUrl,
+      });
+      continue;
+    }
+    const documentBytes = outcome.value;
+    rawObjectEntries.push([
+      part,
+      { bytes: documentBytes, contentType: "application/pdf" },
+    ]);
+    provenanceEntries.push([
+      part,
+      { url: documentUrl, sha256: sha256Hex(documentBytes) },
+    ]);
+    const extracted = await Result.tryPromise({
+      try: async () => await readCzUohsPdf(documentBytes),
+      catch: String,
+    });
+    if (Result.isError(extracted) || extracted.value.text.length === 0) {
+      documentFailures.push({
+        index,
+        type: "parse-failed",
+        reason: Result.isError(extracted) ? extracted.error : "empty-text",
+        url: documentUrl,
+      });
+    } else {
+      // The first successfully parsed document in publisher order is the
+      // canonical decision text; every document is still retained below.
+      canonical ??= { ...extracted.value, url: documentUrl };
+    }
+  }
+  const sourceRawObjects = Object.fromEntries(rawObjectEntries);
+  const documentProvenance = Object.fromEntries(provenanceEntries);
+  // The export is one JSON-LD document for every decision; each decision
+  // keeps its own record, every key included. Provenance names where each
+  // stored part came from and its digest, never when it was read, so an
+  // unchanged decision keeps its fingerprint across reads.
+  const rawRecord = JSON.stringify(record);
+  const sourceRaw = encodeSourceRawEnvelope({
+    listing: rawRecord,
+    provenance: JSON.stringify({
+      listing: { url: LISTING_URL, sha256: sha256Hex(rawRecord) },
+      documents: documentProvenance,
+    }),
+  });
+  const fulltext = canonical?.text;
+  // A link to the document points at the file the text was read from; the
+  // first listed file only when none of them yielded text.
+  const decisionDocumentUrl = canonical?.url ?? primaryDocumentUrl;
+  const identifiers = czUohsDecisionIdentifiers(record);
+  const caseNumber = czUohsFileNumber(record);
+  const { decisionDate, decisionType } = czUohsPrintedFacts(fulltext);
+  return plainTextIngestionResult({
+    caseNumber,
+    caseNumberType: "case-number",
+    identifiers,
+    sourceDocumentId: record.iri,
+    court: ADAPTER_MANIFESTS[ADAPTER_KEYS.CZ_UOHS].publisher,
+    country: "CZE",
+    language: "cs",
+    ...(decisionDate === undefined ? {} : { decisionDate }),
+    ...(decisionType === undefined ? {} : { decisionType }),
+    ...(fulltext === undefined ? {} : { fulltext }),
+    ...(fulltext === undefined && documentReadOutcome !== undefined
+      ? { isListingOnly: true }
+      : {}),
+    sourceUrl: record.iri,
+    ...(decisionDocumentUrl === undefined
+      ? {}
+      : { documentUrl: decisionDocumentUrl }),
+    textFields: absentDecisionTextFields(
+      documentFailures.length === 0 && record.dokument.length === 0
+        ? TEXT_ABSENCE_REASON.NOT_PUBLISHED
+        : TEXT_ABSENCE_REASON.PARSE_FAILED,
+    ),
+    metadata: checkedDecisionMetadata({
+      subject: record.věc,
+      referenceNumber: record.číslo_jednací,
+      fileNumber: record.spisová_značka,
+      instance: record.instance,
+      department: record.odbor,
+      collection: collection ?? null,
+      // An authority decision carries no ECLI, and the export states none.
+      ecliAvailability: { status: "not_published" },
+      ...decisionDateMetadata(decisionDate, fulltext !== undefined),
+      ...decisionTypeMetadata(decisionType, fulltext !== undefined),
+      legalForceDate: record.datum_právní_moci ?? null,
+      proceedingTypes: record.typ_řízení,
+      decisionTypes: record.typ_rozhodnutí,
+      participants: record.účastník,
+      recordTypes: record.typ,
+      documents: record.dokument,
+      ...(documentFailures.length === 0
+        ? {}
+        : {
+            documentExtraction: {
+              type: "failed",
+              failures: documentFailures,
+            },
+          }),
+      ...(documentReadOutcome === undefined
+        ? {}
+        : { [READ_OUTCOME_METADATA_KEY]: documentReadOutcome }),
+    }),
+    rawHash: sourceFingerprint({
+      sourceRaw,
+      ...(Object.keys(sourceRawObjects).length === 0
+        ? {}
+        : { sourceRawObjects }),
+    }),
+    parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.CZ_UOHS],
+    documentAst: decisionDocumentAst(canonical, {
+      caseNumber,
+      court: ADAPTER_MANIFESTS[ADAPTER_KEYS.CZ_UOHS].publisher,
+      decisionDate,
+      decisionType,
+      sourceUrl: record.iri,
+    }),
+    sourceRaw,
+    ...(Object.keys(sourceRawObjects).length === 0 ? {} : { sourceRawObjects }),
+    sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+  });
+};
+
+export const buildCzUohsDecision = async (
+  record: CzUohsRecord,
+  signal?: AbortSignal,
+): Promise<IngestionResult> =>
+  await assembleCzUohsDecision({
+    record,
+    read: { type: "publisher", signal },
+  });
+
+const reparseCzUohsStoredRaw = async (
+  stored: StoredRawReparseInput,
+): Promise<StoredRawReparseValue> => {
+  const read = readStoredRawListing({
+    stored,
+    part: "listing",
+    identityOf: (listing) =>
+      typeof listing["iri"] === "string" ? listing["iri"] : undefined,
+  });
+  if (read.type === "rejected") {
+    return read;
+  }
+  const parsed = v.safeParse(recordSchema, read.listing);
+  if (!parsed.success) {
+    return {
+      type: "rejected",
+      rejection: STORED_RAW_REPARSE_REJECTION.INCOMPLETE_METADATA,
+      detail: "the stored listing does not contain a complete ÚOHS record",
+    };
+  }
+  const documents = new Map<string, Uint8Array>();
+  for (const [index, document] of parsed.output.dokument.entries()) {
+    if (
+      restrictOutboundUrl({ hostPolicy: HOST_POLICY, rawUrl: document.url }) ===
+      null
+    ) {
+      continue;
+    }
+    const part = index === 0 ? "document" : `document-${index}`;
+    const readObject = await readStoredDocumentObject(stored, part);
+    if (Result.isError(readObject)) {
+      return readObject;
+    }
+    const bytes = readObject.value;
+    if (bytes === null) {
+      return {
+        type: "rejected",
+        rejection: STORED_RAW_REPARSE_REJECTION.INCOMPLETE_METADATA,
+        status: STORED_RAW_REPLAY_STATUS.METADATA_ONLY,
+        detail: `the stored record has no document object for ${part}`,
+      };
+    }
+    documents.set(part, bytes);
+  }
+  if (documents.size === 0) {
+    return {
+      type: "rejected",
+      rejection: STORED_RAW_REPARSE_REJECTION.INCOMPLETE_METADATA,
+      status: STORED_RAW_REPLAY_STATUS.METADATA_ONLY,
+      detail: "the stored record names no document object",
+    };
+  }
+  const result = await assembleCzUohsDecision({
+    record: parsed.output,
+    read: { type: "stored", documents },
+  });
+  // The row is the publisher document (its IRI), which the envelope proved
+  // above; a file number an earlier release spelled otherwise (a lowercased
+  // lookup key) is that row's older spelling, never another decision.
+  return {
+    type: "parsed",
+    result,
+    ...(result.caseNumber === stored.caseNumber
+      ? {}
+      : { legacyCaseNumber: stored.caseNumber }),
+  };
+};
+
+type CzUohsListing = {
+  records: CzUohsRecord[];
+  snapshotId: string;
+};
+
+type CzUohsCursor = {
+  version: typeof CURSOR_VERSION;
+  afterId?: string;
+  parkedOn?: string;
+  snapshotId?: string;
+};
+
+const listingSnapshots = new Map<string, CzUohsListing>();
+
+const todayUtc = (): string => Temporal.Now.plainDateISO("UTC").toString();
+
+export const encodeCzUohsCursor = (cursor: CzUohsCursor): string =>
+  JSON.stringify(cursor);
+
+const cursorSchema = v.strictObject({
+  version: v.literal(CURSOR_VERSION),
+  afterId: v.optional(v.string()),
+  parkedOn: v.optional(v.string()),
+  snapshotId: v.optional(v.string()),
+});
+
+// A cursor this adapter did not write is refused: restarting the walk would
+// silently re-fetch every decision.
+export const parseCzUohsCursor = (
+  cursor: string | null,
+): Result<CzUohsCursor, AdapterFetchError> =>
+  cursor === null
+    ? Result.ok({ version: CURSOR_VERSION })
+    : Result.try({
+        try: (): CzUohsCursor => {
+          const { afterId, parkedOn, snapshotId } = v.parse(
+            cursorSchema,
+            JSON.parse(cursor),
+          );
+          return {
+            version: CURSOR_VERSION,
+            ...(afterId === undefined ? {} : { afterId }),
+            ...(parkedOn === undefined ? {} : { parkedOn }),
+            ...(snapshotId === undefined ? {} : { snapshotId }),
+          };
+        },
+        catch: adapterCatch(ADAPTER_KEYS.CZ_UOHS, cursor),
+      });
+
+const readListing = async (
+  cursor: string | null,
+  signal?: AbortSignal,
+): Promise<Result<CzUohsListing, AdapterFetchError>> => {
+  const rawResult = await readListingText(cursor, signal);
+  if (Result.isError(rawResult)) {
+    return rawResult;
+  }
+  const raw = rawResult.value;
+  return Result.try({
+    try: () => ({
+      records: parseCzUohsListing(JSON.parse(raw)).toSorted((left, right) => {
+        if (left.iri === right.iri) {
+          return 0;
+        }
+        return left.iri < right.iri ? -1 : 1;
+      }),
+      snapshotId: sha256Hex(raw),
+    }),
+    catch: adapterCatch(ADAPTER_KEYS.CZ_UOHS, cursor),
+  });
+};
+
+const listingForCursor = async (
+  cursor: string | null,
+  position: CzUohsCursor,
+  signal?: AbortSignal,
+): Promise<Result<CzUohsListing, AdapterFetchError>> => {
+  const cached =
+    position.snapshotId === undefined
+      ? undefined
+      : listingSnapshots.get(position.snapshotId);
+  if (cached !== undefined && position.parkedOn === undefined) {
+    return Result.ok(cached);
+  }
+  const read = await readListing(cursor, signal);
+  if (Result.isError(read)) {
+    return read;
+  }
+  listingSnapshots.clear();
+  listingSnapshots.set(read.value.snapshotId, read.value);
+  return read;
+};
+
+export const czUohsAdapter = defineSourceAdapter({
+  key: ADAPTER_KEYS.CZ_UOHS,
+  reparseStoredRaw: reparseCzUohsStoredRaw,
+  documentStage: "inline",
+  pageTimeoutMs: CZ_UOHS_PAGE_TIMEOUT_MS,
+  language: "cs",
+  minRequestIntervalMs: publisherRequestIntervalMs(ADAPTER_KEYS.CZ_UOHS),
+  sourceSurfaces: {
+    surfaces: {
+      listing: storedSourceSurface("listing"),
+      document: storedSourceSurface("document"),
+    },
+  },
+  sourceFields: {
+    status: "declared",
+    fields: {
+      typ: {
+        disposition: "stored",
+        target: { type: "metadata", key: "recordTypes" },
+      },
+      iri: { disposition: "stored", target: { type: "identity" } },
+      věc: {
+        disposition: "stored",
+        target: { type: "metadata", key: "subject" },
+      },
+      číslo_jednací: {
+        disposition: "stored",
+        target: { type: "metadata", key: "referenceNumber" },
+      },
+      spisová_značka: {
+        disposition: "stored",
+        target: { type: "metadata", key: "fileNumber" },
+      },
+      instance: {
+        disposition: "stored",
+        target: { type: "metadata", key: "instance" },
+      },
+      odbor: {
+        disposition: "stored",
+        target: { type: "metadata", key: "department" },
+      },
+      datum_právní_moci: {
+        disposition: "stored",
+        target: { type: "metadata", key: "legalForceDate" },
+      },
+      účastník: {
+        disposition: "stored",
+        target: { type: "metadata", key: "participants" },
+      },
+      typ_řízení: {
+        disposition: "stored",
+        target: { type: "metadata", key: "proceedingTypes" },
+      },
+      typ_rozhodnutí: {
+        disposition: "stored",
+        target: { type: "metadata", key: "decisionTypes" },
+      },
+      dokument: {
+        disposition: "stored",
+        target: { type: "metadata", key: "documents" },
+      },
+    } as const satisfies Record<
+      keyof CzUohsPublisherRecord,
+      SourceFieldDisposition
+    >,
+    listSourceFields: ({ listing }) => {
+      const parsed: unknown = JSON.parse(listing ?? "{}");
+      return isRecord(parsed) ? Object.keys(parsed) : [];
+    },
+  },
+  fetchPage: async (cursor, _config, signal) => {
+    const parsedPosition = parseCzUohsCursor(cursor);
+    if (Result.isError(parsedPosition)) {
+      return parsedPosition;
+    }
+    const position = parsedPosition.value;
+    const encoded = encodeCzUohsCursor(position);
+    if (position.parkedOn !== undefined && position.parkedOn >= todayUtc()) {
+      return Result.ok({
+        decisions: [],
+        publisherRequest: PUBLISHER_REQUEST.NONE,
+        nextCursor: encoded,
+      });
+    }
+    const listing = await listingForCursor(cursor, position, signal);
+    if (Result.isError(listing)) {
+      return listing;
+    }
+    // A parked walk resumes after its frontier: one listing read per cycle,
+    // new documents only (rule 19); reconciliation covers the rest.
+    const afterId = position.afterId;
+    const remaining = listing.value.records.filter(
+      (record) => afterId === undefined || record.iri > afterId,
+    );
+    const selected = remaining.slice(0, PAGE_SIZE);
+    const decisions: IngestionResult[] = [];
+    for (const record of selected) {
+      decisions.push(await buildCzUohsDecision(record, signal));
+    }
+    const lastId = selected.at(-1)?.iri ?? afterId;
+    const reachedTip = selected.length < PAGE_SIZE;
+    return Result.ok({
+      decisions,
+      publisherRequest: PUBLISHER_REQUEST.ANSWERED,
+      nextCursor: encodeCzUohsCursor({
+        version: CURSOR_VERSION,
+        ...(lastId === undefined ? {} : { afterId: lastId }),
+        snapshotId: listing.value.snapshotId,
+        ...(reachedTip ? { parkedOn: todayUtc() } : {}),
+      }),
+    });
+  },
+  getTotalCount: async (signal) => {
+    const listing = await readListing(null, signal);
+    if (Result.isOk(listing)) {
+      return sourceTotalRead(listing.value.records.length);
+    }
+    return listing.error.httpStatus === undefined
+      ? sourceTotalProbeFailed(SOURCE_TOTAL_PROBE_FAILURE.UNREADABLE_PAYLOAD)
+      : sourceTotalProbeFailed(SOURCE_TOTAL_PROBE_FAILURE.HTTP_STATUS);
+  },
+  buildStoredDocument: async ({ stored, signal }) => {
+    const read = readStoredRawListing({
+      stored,
+      part: "listing",
+      identityOf: (listing) =>
+        typeof listing["iri"] === "string" ? listing["iri"] : undefined,
+    });
+    if (read.type === "rejected") {
+      return { type: "incomplete-locator", detail: read.detail };
+    }
+    const parsed = v.safeParse(recordSchema, read.listing);
+    return parsed.success
+      ? {
+          type: "built",
+          decision: await buildCzUohsDecision(parsed.output, signal),
+        }
+      : {
+          type: "incomplete-locator",
+          detail: "Stored listing is not a complete ÚOHS record",
+        };
+  },
+  reconciliation: {
+    // The publisher exposes one atomic listing, so its one slice contains
+    // every collection and makes every newly published record tip-visible.
+    firstSlice: "all",
+    sliceOf: () => "all",
+    nextSlice: () => null,
+    previousSlice: () => null,
+    tipWindowDays: 1,
+    revisionOf: (payload) => payload,
+    listSlicePage: async ({ slice, page, signal }) => {
+      if (slice !== "all" || page !== 0) {
+        return { items: [], totalPages: 0 };
+      }
+      const listing = await readListing(null, signal);
+      if (Result.isError(listing)) {
+        return await Promise.reject(listing.error);
+      }
+      return {
+        items: listing.value.records.map((payload) => ({
+          identity: {
+            type: "document",
+            sourceDocumentId: payload.iri,
+          },
+          payload,
+        })),
+        totalPages: listing.value.records.length === 0 ? 0 : 1,
+      };
+    },
+    buildDecision: async (payload, signal) =>
+      isRecord(payload)
+        ? {
+            type: "built",
+            decision: await buildCzUohsDecision(
+              v.parse(recordSchema, payload),
+              signal,
+            ),
+          }
+        : { type: "unkeyable" },
+  },
+});

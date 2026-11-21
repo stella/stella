@@ -4,6 +4,7 @@ import { rootDb } from "@/api/db/root";
 import { envDocumentProcessingWorker } from "@/api/env-document-processing-worker";
 import { detached } from "@/api/lib/analytics/capture";
 import { createBullMqWorkerHost } from "@/api/lib/bullmq-queue";
+import { assertDatabaseLoginPosture } from "@/api/lib/db/assert-database-login-posture";
 import { countPendingDocumentProcessingJobs } from "@/api/lib/document-processing-enqueue";
 import {
   createIdleExitCheck,
@@ -75,11 +76,13 @@ const idleExitFields = (reason: IdleExitReason): LoggerAttributes => {
   }
 };
 
+await assertDatabaseLoginPosture(rootDb);
 await refreshS3();
 // The host owns the root connection and hands it to its worker.
 const documentProcessingWorkers = createBullMqWorkerHost(
   "document-processing-worker",
   { db: rootDb },
+  envDocumentProcessingWorker.SCHEDULED_JOBS_MODE,
   [initDocumentProcessingWorker],
 );
 
@@ -97,10 +100,16 @@ const shutdown = async (signal: string): Promise<void> => {
 };
 
 process.once("SIGTERM", () => {
-  detached(shutdown("SIGTERM"), "document-processing.shutdown-sigterm");
+  detached(
+    async () => shutdown("SIGTERM"),
+    "document-processing.shutdown-sigterm",
+  );
 });
 process.once("SIGINT", () => {
-  detached(shutdown("SIGINT"), "document-processing.shutdown-sigint");
+  detached(
+    async () => shutdown("SIGINT"),
+    "document-processing.shutdown-sigint",
+  );
 });
 
 // Batch mode: when an idle-exit window is configured (the scheduled batch
@@ -147,11 +156,14 @@ if (idleExitMinutes !== undefined) {
         idleMinutes: idleExitMinutes,
         ...idleExitFields(reason),
       });
-      detached(shutdown("idle-exit"), "document-processing.idle-exit");
+      detached(
+        async () => shutdown("idle-exit"),
+        "document-processing.idle-exit",
+      );
     },
   });
   const idleTimer = setInterval(() => {
-    detached(idleTick(), "document-processing.idle-exit-check");
+    detached(async () => idleTick(), "document-processing.idle-exit-check");
   }, IDLE_CHECK_INTERVAL_MS);
   stopIdleSampling = () => {
     clearInterval(idleTimer);

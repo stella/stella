@@ -12,33 +12,41 @@
  * the document: email HTML is untrusted input.
  */
 import { panic, Result, TaggedError } from "better-result";
-import { type Cheerio, load } from "cheerio";
-import { type Element, isTag, isText } from "domhandler";
 import PostalMime, { type Address } from "postal-mime";
 
 import {
   EMAIL_CITATION_BLOCK_MODE,
-  type EmailAttachmentDescriptor,
   EMAIL_HEADER_CITATION_ID,
   EMAIL_TEXT_ATTACHMENT_CHARSET,
   EMAIL_TEXT_ATTACHMENT_CHARSET_LABELS,
+  type EmailAttachmentDescriptor,
   type EmailCitationBlock,
   type EmailCitationBlockMode,
   type EmailTextAttachmentCharset,
-  MAX_EMAIL_CITATION_BLOCKS,
   MAX_EMAIL_CITATION_BLOCK_TEXT_LENGTH,
+  MAX_EMAIL_CITATION_BLOCKS,
 } from "@stll/api-contract";
 import {
   EML_MIME_TYPE,
   MSG_MIME_TYPE,
 } from "@stll/api-contract/email-mime-types";
+import { ownEntry } from "@stll/api-contract/own-key";
+import type { Cheerio } from "@stll/html";
+import {
+  loadEmailDocument,
+  serializeEmailNode,
+  serializeEmailPreviewMarkup,
+} from "@stll/html/email";
+import { type Element, isTag, isText } from "@stll/html/nodes";
 
 import { arrayOrEmpty } from "@/api/lib/array";
 import { MAX_EMAIL_ATTACHMENT_DESCRIPTORS } from "@/api/lib/files/email-attachment-token";
+import { EMAIL_PREVIEW_PALETTE as PALETTE } from "@/api/lib/files/email-preview-palette";
+import { EMAIL_SENDER_CLASS_CSS } from "@/api/lib/files/email-sender-styles";
 import { parseOutlookMsg } from "@/api/lib/files/outlook-msg";
 import { isRecord } from "@/api/lib/type-guards";
 
-const EMAIL_ATTACHMENT_PREVIEW_EXTENSION_MIME_TYPES: Record<string, string> = {
+const EMAIL_ATTACHMENT_PREVIEW_EXTENSION_MIME_TYPES = {
   gif: "image/gif",
   jpeg: "image/jpeg",
   jpg: "image/jpeg",
@@ -46,13 +54,13 @@ const EMAIL_ATTACHMENT_PREVIEW_EXTENSION_MIME_TYPES: Record<string, string> = {
   png: "image/png",
   txt: "text/plain",
   webp: "image/webp",
-};
+} as const;
 
 const GENERIC_PREVIEW_ATTACHMENT_MIME_TYPES = {
   "": null,
   "application/octet-stream": null,
   "binary/octet-stream": null,
-} as const satisfies Record<string, null>;
+} as const;
 
 const EMAIL_WRITING_DIRECTIONS = {
   auto: null,
@@ -77,8 +85,7 @@ export type EmailAttachment = {
 };
 
 type EmailBody =
-  | { type: "html"; html: string }
-  | { type: "text"; text: string };
+  { type: "html"; html: string } | { type: "text"; text: string };
 
 export type ParsedEmail = {
   subject: string | null;
@@ -267,7 +274,10 @@ export const resolveEmailAttachmentMimeType = ({
     return mimeType;
   }
   const extension = fileName.slice(dotIndex + 1).toLowerCase();
-  return EMAIL_ATTACHMENT_PREVIEW_EXTENSION_MIME_TYPES[extension] ?? mimeType;
+  return (
+    ownEntry(EMAIL_ATTACHMENT_PREVIEW_EXTENSION_MIME_TYPES, extension) ??
+    mimeType
+  );
 };
 
 export const parseEmail = async (
@@ -454,7 +464,7 @@ const parseEml = async (
           attachment.mimeType,
           attachment.filename,
         ),
-        dataBase64: Buffer.from(bytes).toString("base64"),
+        dataBase64: Buffer.from(bytes).toBase64(),
       });
     }
   }
@@ -512,7 +522,7 @@ const formatAddress = (address: Address): string => {
 
 // ── .msg parsing (narrow in-repo CFB/MAPI reader) ───────
 
-const IMAGE_EXTENSION_MIME: Record<string, string> = {
+const IMAGE_EXTENSION_MIME = {
   png: "image/png",
   jpg: "image/jpeg",
   jpeg: "image/jpeg",
@@ -521,9 +531,9 @@ const IMAGE_EXTENSION_MIME: Record<string, string> = {
   webp: "image/webp",
   tif: "image/tiff",
   tiff: "image/tiff",
-};
+} as const;
 
-const SAFE_INLINE_IMAGE_MIME_TYPES = new Set(
+const SAFE_INLINE_IMAGE_MIME_TYPES = new Set<string>(
   Object.values(IMAGE_EXTENSION_MIME),
 );
 const GENERIC_ATTACHMENT_MIME_TYPES = new Set([
@@ -564,7 +574,7 @@ const parseMsg = (fileBuffer: ArrayBuffer): ParsedEmail => {
         attachment.mimeType,
         attachment.fileName,
       ),
-      dataBase64: Buffer.from(attachment.bytes).toString("base64"),
+      dataBase64: Buffer.from(attachment.bytes).toBase64(),
     });
   }
 
@@ -607,7 +617,9 @@ const parseMsg = (fileBuffer: ArrayBuffer): ParsedEmail => {
 
 const guessImageMime = (fileName: string | undefined): string => {
   const extension = (fileName ?? "").split(".").pop()?.toLowerCase() ?? "";
-  return IMAGE_EXTENSION_MIME[extension] ?? "application/octet-stream";
+  return (
+    ownEntry(IMAGE_EXTENSION_MIME, extension) ?? "application/octet-stream"
+  );
 };
 
 const resolveAttachmentMimeType = (
@@ -631,7 +643,7 @@ const isSafeInlineImage = (
 
 // ── HTML rendering + sanitization ───────────────────────
 
-const HR_STYLE = "border: none; border-top: 1px solid #d4d4d8; margin: 12px 0;";
+const HR_STYLE = `border: none; border-top: 1px solid ${PALETTE.divider}; margin: 12px 0;`;
 const PRE_STYLE =
   "white-space: pre-wrap; word-break: break-word; font-family: ui-monospace, monospace; font-size: 13px; margin: 0;";
 const EMAIL_PREVIEW_CSP =
@@ -641,12 +653,12 @@ const EMAIL_PREVIEW_CSS = `
   color-scheme: light;
 }
 html {
-  background: #fff;
-  color: #18181b;
+  background: ${PALETTE.paper};
+  color: ${PALETTE.ink};
 }
 body {
-  background: #fff;
-  color: #18181b;
+  background: ${PALETTE.paper};
+  color: ${PALETTE.ink};
   color-scheme: light;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   font-size: 14px;
@@ -655,27 +667,10 @@ body {
 }
 body, table, td, div, p, span {
   color-scheme: light;
-}
-.primary-text {
-  color: #3c4043;
-}
-.secondary-text, .grey-button-text {
-  color: #70757a;
-}
-.accent-text {
-  color: #1a73e8;
-}
-.primary-button {
-  background: #1a73e8;
-  border-radius: 4px;
-  color: #fff;
-}
-.primary-button-text {
-  color: #fff;
-}
+}${EMAIL_SENDER_CLASS_CSS}
 .postal-email-header {
-  background: #fafafa;
-  border: 1px solid #e4e4e7;
+  background: ${PALETTE.headerSurface};
+  border: 1px solid ${PALETTE.headerBorder};
   border-radius: 8px 8px 0 0;
   font-size: 13px;
   margin: 16px 0 0;
@@ -688,7 +683,7 @@ body, table, td, div, p, span {
   padding: 2px 0;
 }
 .postal-email-header-key {
-  color: #71717a;
+  color: ${PALETTE.label};
   white-space: nowrap;
 }
 .postal-email-header-value {
@@ -696,7 +691,7 @@ body, table, td, div, p, span {
   overflow-wrap: anywhere;
 }
 .postal-email-header + div {
-  border: 1px solid #e4e4e7;
+  border: 1px solid ${PALETTE.headerBorder};
   border-radius: 0 0 8px 8px;
   border-top: 0;
   margin: 0 0 14px;
@@ -712,7 +707,7 @@ body, table, td, div, p, span {
 [data-stella-email-fold] > summary {
   align-items: center;
   border-radius: 6px;
-  color: #71717a;
+  color: ${PALETTE.label};
   cursor: pointer;
   display: inline-flex;
   justify-content: center;
@@ -722,8 +717,8 @@ body, table, td, div, p, span {
   user-select: none;
 }
 [data-stella-email-fold] > summary:hover {
-  background: #f4f4f5;
-  color: #3f3f46;
+  background: ${PALETTE.foldHoverSurface};
+  color: ${PALETTE.foldHoverInk};
 }
 [data-stella-email-fold] > summary::-webkit-details-marker {
   display: none;
@@ -741,9 +736,9 @@ body, table, td, div, p, span {
   margin-bottom: 8px;
 }
 [data-stella-email-citation-active] {
-  background: #fef3c7;
+  background: ${PALETTE.citationSurface};
   border-radius: 3px;
-  outline: 2px solid #f59e0b;
+  outline: 2px solid ${PALETTE.citationOutline};
   outline-offset: 2px;
 }
 .stella-email-plain-line {
@@ -756,10 +751,13 @@ export const renderEmailHtml = (parsed: ParsedEmail): string => {
   const header = buildHeaderHtml(parsed);
 
   if (parsed.body.type === "text") {
-    return `<!DOCTYPE html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${EMAIL_PREVIEW_CSP}"><meta name="color-scheme" content="light"><style>${EMAIL_PREVIEW_CSS}</style></head><body>${header}<hr style="${HR_STYLE}"><pre style="${PRE_STYLE}">${escapeHtml(parsed.body.text)}</pre></body></html>`;
+    const $ = loadEmailDocument(
+      `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="color-scheme" content="light"><style>${EMAIL_PREVIEW_CSS}</style></head><body>${header}<hr style="${HR_STYLE}"><pre style="${PRE_STYLE}">${escapeHtml(parsed.body.text)}</pre></body></html>`,
+    );
+    return serializeEmailDocument($);
   }
 
-  const $ = load(parsed.body.html);
+  const $ = loadEmailDocument(parsed.body.html);
   sanitizeDom($);
   stripDuplicateNestedMessageHeaders($);
   inlineCidImages($, parsed.inlineImages);
@@ -767,14 +765,11 @@ export const renderEmailHtml = (parsed: ParsedEmail): string => {
   if ($("meta[charset]").length === 0) {
     $("head").prepend('<meta charset="utf-8">');
   }
-  $("head").append(
-    `<meta http-equiv="Content-Security-Policy" content="${EMAIL_PREVIEW_CSP}">`,
-  );
   $("head").append('<meta name="color-scheme" content="light">');
   $("head").append(`<style>${EMAIL_PREVIEW_CSS}</style>`);
   $("body").prepend(`${header}<hr style="${HR_STYLE}">`);
 
-  return $.html();
+  return serializeEmailDocument($);
 };
 
 /**
@@ -796,19 +791,19 @@ const renderEmailBody = (
 ): RenderedEmailBody => {
   if (parsed.body.type === "text") {
     const renderedTextBody = renderPlainTextBody(parsed.body.text);
-    const $ = load(
-      `<!DOCTYPE html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${EMAIL_PREVIEW_CSP}"><meta name="color-scheme" content="light"><style>${EMAIL_PREVIEW_CSS}</style></head><body dir="auto">${renderedTextBody.html}</body></html>`,
+    const $ = loadEmailDocument(
+      `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="color-scheme" content="light"><style>${EMAIL_PREVIEW_CSS}</style></head><body dir="auto">${renderedTextBody.html}</body></html>`,
     );
     const citationBlocks = annotateEmailCitationBlocks($, maxCitationBlocks);
     return {
       bodyFolds: renderedTextBody.bodyFolds,
-      bodyHtml: `<!DOCTYPE html>${$.html()}`,
+      bodyHtml: serializeEmailDocument($),
       citationBlocks,
       referencedContentIds: new Set(),
     };
   }
 
-  const $ = load(parsed.body.html);
+  const $ = loadEmailDocument(parsed.body.html);
   sanitizeDom($);
   stripDuplicateNestedMessageHeaders($);
   const bodyFolds = foldQuotedHistoryAndSignatures($);
@@ -819,9 +814,6 @@ const renderEmailBody = (
   if ($("meta[charset]").length === 0) {
     $("head").prepend('<meta charset="utf-8">');
   }
-  $("head").append(
-    `<meta http-equiv="Content-Security-Policy" content="${EMAIL_PREVIEW_CSP}">`,
-  );
   $("head").append('<meta name="color-scheme" content="light">');
   $("head").append(`<style>${EMAIL_PREVIEW_CSS}</style>`);
   if (!hasExplicitWritingDirection($)) {
@@ -830,7 +822,7 @@ const renderEmailBody = (
 
   return {
     bodyFolds,
-    bodyHtml: `<!DOCTYPE html>${$.html()}`,
+    bodyHtml: serializeEmailDocument($),
     citationBlocks,
     referencedContentIds,
   };
@@ -840,12 +832,9 @@ export const renderEmailBodyHtml = (parsed: ParsedEmail): string =>
   renderEmailBody(parsed).bodyHtml;
 
 export const sanitizeEmailBodyHtml = (html: string): string => {
-  const $ = load(html);
+  const $ = loadEmailDocument(html);
   sanitizeDom($);
-  $("head").prepend(
-    `<meta http-equiv="Content-Security-Policy" content="${EMAIL_PREVIEW_CSP}">`,
-  );
-  return $.html();
+  return serializeEmailDocument($);
 };
 
 const getReferencedInlineContentIds = ($: CheerioApi): Set<string> => {
@@ -865,8 +854,9 @@ const hasExplicitWritingDirection = ($: CheerioApi): boolean => {
   const bodyDirection = $("body").attr("dir")?.trim().toLowerCase();
   return (
     (htmlDirection !== undefined &&
-      htmlDirection in EMAIL_WRITING_DIRECTIONS) ||
-    (bodyDirection !== undefined && bodyDirection in EMAIL_WRITING_DIRECTIONS)
+      Object.hasOwn(EMAIL_WRITING_DIRECTIONS, htmlDirection)) ||
+    (bodyDirection !== undefined &&
+      Object.hasOwn(EMAIL_WRITING_DIRECTIONS, bodyDirection))
   );
 };
 
@@ -875,13 +865,21 @@ const emailBodyToText = (body: EmailBody): string => {
     return normalizeExtractedText(body.text);
   }
 
-  const $ = load(body.html);
+  const $ = loadEmailDocument(body.html);
   sanitizeDom($);
   stripDuplicateNestedMessageHeaders($);
   $("br").replaceWith("\n");
   $("p, div, tr, li, blockquote, h1, h2, h3, h4, h5, h6").append("\n");
   return normalizeExtractedText($.root().text());
 };
+
+const RAW_TEXT_CONTAINER_TAGS = [
+  "noembed",
+  "noframes",
+  "xmp",
+  "plaintext",
+  "template",
+];
 
 const STRIP_TAGS = [
   "script",
@@ -901,6 +899,7 @@ const STRIP_TAGS = [
   "select",
   "svg",
   "math",
+  ...RAW_TEXT_CONTAINER_TAGS,
 ];
 
 // oxlint-disable-next-line no-script-url -- listing the schemes we strip from untrusted HTML
@@ -995,10 +994,17 @@ type EmailFoldCandidate = {
 };
 
 type EmailBodyToken =
-  | { type: "candidate"; candidate: EmailFoldCandidate }
-  | { type: "content" };
+  { type: "candidate"; candidate: EmailFoldCandidate } | { type: "content" };
 
-type CheerioApi = ReturnType<typeof load>;
+type CheerioApi = ReturnType<typeof loadEmailDocument>;
+
+const serializeEmailDocument = ($: CheerioApi): string => {
+  $("noscript").remove();
+  $("head").prepend(
+    `<meta http-equiv="Content-Security-Policy" content="${EMAIL_PREVIEW_CSP}">`,
+  );
+  return `<!DOCTYPE html>${serializeEmailPreviewMarkup($)}`;
+};
 
 const sanitizeDom = ($: CheerioApi): void => {
   $(STRIP_TAGS.join(",")).remove();
@@ -1453,7 +1459,11 @@ const stripLeadingRfc822Headers = (body: ReturnType<CheerioApi>): void => {
     return;
   }
 
-  const html = body.html();
+  const html = body
+    .contents()
+    .toArray()
+    .map((node) => serializeEmailNode(node))
+    .join("");
   if (!html) {
     return;
   }
@@ -1469,7 +1479,8 @@ const stripLeadingRfc822Headers = (body: ReturnType<CheerioApi>): void => {
     return;
   }
 
-  body.html(parts.slice(blankIndex + 1).join("<br>"));
+  const fragment = loadEmailDocument(parts.slice(blankIndex + 1).join("<br>"));
+  body.empty().append(fragment("body").contents());
 };
 
 const normalizeUrlAttribute = (value: string): string => {
@@ -1525,7 +1536,7 @@ const buildHeaderHtml = (parsed: ParsedEmail): string => {
   const addRow = (label: string, value: string | null) => {
     if (value && value.trim().length > 0) {
       rows.push(
-        `<tr><td style="padding: 2px 12px 2px 0; color: #71717a; vertical-align: top; white-space: nowrap;">${escapeHtml(label)}</td><td style="padding: 2px 0; color: #18181b;">${escapeHtml(value)}</td></tr>`,
+        `<tr><td style="padding: 2px 12px 2px 0; color: ${PALETTE.label}; vertical-align: top; white-space: nowrap;">${escapeHtml(label)}</td><td style="padding: 2px 0; color: ${PALETTE.ink};">${escapeHtml(value)}</td></tr>`,
       );
     }
   };
@@ -1581,13 +1592,13 @@ const normalizeExtractedText = (value: string): string =>
     .replace(/\n{3,}/gu, "\n\n")
     .trim();
 
-const HTML_ESCAPES: Record<string, string> = {
+const HTML_ESCAPES = {
   "&": "&amp;",
   "<": "&lt;",
   ">": "&gt;",
   '"': "&quot;",
   "'": "&#39;",
-};
+} as const;
 
 const escapeHtml = (value: string): string =>
-  value.replace(/[&<>"']/gu, (char) => HTML_ESCAPES[char] ?? char);
+  value.replace(/[&<>"']/gu, (char) => ownEntry(HTML_ESCAPES, char) ?? char);

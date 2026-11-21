@@ -18,6 +18,7 @@
     "allow-is-autostart-enabled",
     "allow-set-autostart",
     "allow-clipboard-get-snapshot",
+    "allow-clipboard-get-capture-update",
     "allow-clipboard-get-image-preview",
     "allow-clipboard-complete-welcome",
     "allow-clipboard-set-capture-status",
@@ -31,16 +32,21 @@
     "allow-clipboard-create-group",
     "allow-clipboard-delete-group",
     "allow-clipboard-update-group",
+    "allow-clipboard-move-group",
     "allow-clipboard-set-item-name",
     "allow-clipboard-set-item-group",
     "allow-clipboard-open-editor",
     "allow-clipboard-copy-item",
+    "allow-clipboard-copy-items",
+    "allow-clipboard-copy-selection",
     "allow-clipboard-hide",
     "allow-clipboard-open-stella",
+    "allow-account-record-use",
     "allow-desktop-report-error",
     "allow-desktop-report-timing",
     "allow-account-get-state",
     "allow-account-disconnect",
-    "allow-open-stella-account"
+    "allow-open-stella-account",
+    "allow-shortcut-get-snapshot"
   ]
 }

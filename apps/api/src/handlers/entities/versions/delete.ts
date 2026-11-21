@@ -1,7 +1,7 @@
 import { Result } from "better-result";
 import { and, asc, desc, eq, isNull, ne, or } from "drizzle-orm";
 
-import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
+import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import {
@@ -9,21 +9,27 @@ import {
   documentProcessingRuns,
   entities,
   entityVersions,
+  extractedContent,
   fields,
   folioCollabRooms,
   pdfSigningSessions,
   searchDocuments,
 } from "@/api/db/schema";
-import { captureError } from "@/api/lib/analytics/capture";
+import {
+  captureError,
+  createErrorCapture,
+  detached,
+} from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
+import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
 import { lockDocxEditTarget } from "@/api/lib/entity-versions/desktop-edit-session-utils";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import {
   broadcastWorkspaceResourceSetUpdated,
   broadcastWorkspaceResourceUpdated,
@@ -31,13 +37,16 @@ import {
 import { processExtraction } from "@/api/lib/search/process-extraction";
 import { flushEntitySearchRepairs } from "@/api/lib/search/projection-repair-flush";
 import { enqueueEntitySearchRepairs } from "@/api/lib/search/projection-repair-queue";
+import { requireNoHold } from "@/api/lib/workspaces/legal-holds/holds";
+import { legalHoldRefusal } from "@/api/lib/workspaces/legal-holds/refusal";
 
 const paramsSchema = workspaceParams({
-  entityId: tSafeId("entity"),
-  versionId: tSafeId("entityVersion"),
+  entityId: resourceIdSchema("entity"),
+  versionId: resourceIdSchema("entityVersion"),
 });
 
 const config = {
+  contract: "patch",
   description:
     "Tombstone one version of a document: it disappears from listings, " +
     "downloads, and restores, but the row and its stored file are retained for " +
@@ -57,6 +66,7 @@ type DeleteEntityVersionHandlerProps = {
   versionId: SafeId<"entityVersion">;
   deletedByUserId: string;
   recordAuditEvent: AuditRecorder;
+  processPromotedVersion?: typeof processExtraction;
 };
 
 export const deleteEntityVersionHandler = async function* ({
@@ -66,6 +76,7 @@ export const deleteEntityVersionHandler = async function* ({
   versionId,
   deletedByUserId,
   recordAuditEvent,
+  processPromotedVersion = processExtraction,
 }: DeleteEntityVersionHandlerProps) {
   const params = { entityId, versionId };
 
@@ -84,6 +95,30 @@ export const deleteEntityVersionHandler = async function* ({
   // whether the version can be tombstoned.
   const txOutcome = yield* Result.await(
     safeDb(async (tx) => {
+      const workspace = await tx.query.workspaces.findFirst({
+        where: { id: { eq: workspaceId } },
+        columns: { organizationId: true },
+      });
+      if (!workspace) {
+        return {
+          ok: false as const,
+          status: 404 as const,
+          message: "Version not found",
+        };
+      }
+      const hold = await requireNoHold({
+        tx,
+        organizationId: workspace.organizationId,
+        target: { type: "entityVersion", entityVersionId: versionId },
+      });
+      if (hold.isErr()) {
+        return {
+          ok: false as const,
+          status: 409 as const,
+          message: hold.error.message,
+          error: hold.error,
+        };
+      }
       const targetProperties = await tx
         .select({ propertyId: fields.propertyId })
         .from(fields)
@@ -110,8 +145,10 @@ export const deleteEntityVersionHandler = async function* ({
         });
       }
 
-      // Lock every edit owner anchored to this version first, establishing the
-      // edit-state -> entity order. Desktop sessions can be cancelled below;
+      // Lock every edit owner anchored to this version first, whatever its
+      // state, establishing the edit-state -> entity order: a session's base
+      // never changes, so the cancellations below reach only rows locked
+      // here or opened since. Desktop sessions can be cancelled below;
       // durable collaboration rooms must instead block the tombstone so their
       // shared working state never loses its base.
       await tx
@@ -121,7 +158,6 @@ export const deleteEntityVersionHandler = async function* ({
           and(
             eq(desktopEditSessions.baseVersionId, params.versionId),
             eq(desktopEditSessions.workspaceId, workspaceId),
-            eq(desktopEditSessions.status, "open"),
           ),
         )
         .for("update");
@@ -132,7 +168,6 @@ export const deleteEntityVersionHandler = async function* ({
           and(
             eq(pdfSigningSessions.baseVersionId, params.versionId),
             eq(pdfSigningSessions.workspaceId, workspaceId),
-            eq(pdfSigningSessions.status, "open"),
           ),
         )
         .for("update");
@@ -294,20 +329,38 @@ export const deleteEntityVersionHandler = async function* ({
               updatedAt: new Date(),
             })
             .where(eq(entities.id, params.entityId));
-          // The existing projection belongs to the withdrawn current version.
-          // Remove it atomically with promotion; post-commit processing below
-          // rebuilds the promoted version's projection.
-          await tx
-            .delete(searchDocuments)
-            .where(
-              and(
-                eq(searchDocuments.entityId, params.entityId),
-                eq(searchDocuments.workspaceId, workspaceId),
-              ),
-            );
           promotedVersionId = next.id;
         }
       }
+
+      await tx
+        .delete(extractedContent)
+        .where(
+          and(
+            eq(extractedContent.entityId, params.entityId),
+            eq(extractedContent.workspaceId, workspaceId),
+            or(
+              eq(extractedContent.sourceEntityVersionId, params.versionId),
+              isDeletingCurrent
+                ? isNull(extractedContent.sourceEntityVersionId)
+                : undefined,
+            ),
+          ),
+        );
+
+      // The projection includes reference stamps from every live version.
+      // Withdraw it atomically for current and historical tombstones alike;
+      // the durable repair queued below rebuilds only from versions that remain
+      // live. Missing search results are safer than serving withdrawn metadata
+      // while asynchronous repair is pending.
+      await tx
+        .delete(searchDocuments)
+        .where(
+          and(
+            eq(searchDocuments.entityId, params.entityId),
+            eq(searchDocuments.workspaceId, workspaceId),
+          ),
+        );
 
       // Tombstone the version instead of deleting it. `fields` and S3 objects
       // stay; the row is hidden by the deletedAt filter on every read path.
@@ -413,6 +466,9 @@ export const deleteEntityVersionHandler = async function* ({
   );
 
   if (!txOutcome.ok) {
+    if ("error" in txOutcome) {
+      return Result.err(legalHoldRefusal(txOutcome.error));
+    }
     return Result.err(
       new HandlerError({
         status: txOutcome.status,
@@ -421,15 +477,28 @@ export const deleteEntityVersionHandler = async function* ({
     );
   }
 
-  flushEntitySearchRepairs([params.entityId]).catch(captureError);
+  detached(
+    async () =>
+      flushEntitySearchRepairs([params.entityId]).catch(
+        createErrorCapture(
+          handlerErrorContext(
+            "deleteEntityVersionHandler.flushEntitySearchRepairs",
+          ),
+        ),
+      ),
+    "versions-delete.flush-entity-search-repairs",
+  );
 
   const promotedVersionId = txOutcome.promotedVersionId;
   if (promotedVersionId !== null) {
-    await processExtraction(params.entityId).catch((error: unknown) =>
-      captureError(error, {
-        entityId: params.entityId,
-        versionId: promotedVersionId,
-      }),
+    await processPromotedVersion(params.entityId).catch((error: unknown) =>
+      captureError(
+        error,
+        handlerErrorContext("versions.deleteEntityVersionHandler", {
+          entityId: params.entityId,
+          versionId: promotedVersionId,
+        }),
+      ),
     );
   }
 

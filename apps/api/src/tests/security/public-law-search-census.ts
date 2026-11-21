@@ -12,6 +12,7 @@ import {
   readCaseLawSearchHits,
   readCaseLawSearchTotal,
 } from "@/api/handlers/case-law/decisions/search";
+import { readCaseLawCourtCountQuery } from "@/api/handlers/case-law/decisions/status-courts";
 import { readLegislationSearchHits } from "@/api/handlers/legislation/search";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -236,6 +237,12 @@ export const runSearchCensus = async (
 ): Promise<SearchCensusObservation> => {
   const ftsRows = await readFtsConfigRowsQuery(tx);
   exercised.add(readFtsConfigRowsQuery.publicLawSharedQuery);
+  await readCaseLawCourtCountQuery(tx, {
+    country: COUNTRY,
+    excludedSourceIds: [],
+    engine: "pg-fts",
+  });
+  exercised.add(readCaseLawCourtCountQuery.publicLawSharedQuery);
   const courtWeightRows = await readCourtWeightRowsQuery(tx);
   exercised.add(readCourtWeightRowsQuery.publicLawSharedQuery);
 

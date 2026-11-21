@@ -5,8 +5,12 @@ import fc from "fast-check";
 import * as v from "valibot";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
-import { BROWSER_CONTROL_TOOL_NAME } from "@stll/api-contract/browser-control";
-import { propertyConfig, propertySeed } from "@stll/property-testing";
+import {
+  BROWSER_CONTROL_CONTENT_TRUST,
+  BROWSER_CONTROL_PROTOCOL_VERSION,
+  BROWSER_CONTROL_TOOL_NAME,
+} from "@stll/api-contract/browser-control";
+import { assertProperty, propertySeed } from "@stll/property-testing";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { TEXT_PLAIN_MIME_TYPE } from "@/api/handlers/chat/attachment-validation";
@@ -15,7 +19,7 @@ import {
   getChatAttachmentUrl,
   isChatAttachmentPart,
   isProviderVisibleChatPart,
-  toChatMessageContent,
+  toPersistedChatMessageContentV3,
 } from "@/api/handlers/chat/chat-message-parts";
 import {
   applyChatToolPolicy,
@@ -28,6 +32,7 @@ import type {
 } from "@/api/handlers/chat/types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { toDataUrl } from "@/api/lib/data-url";
+import { ChatToolError } from "@/api/lib/errors/tagged-errors";
 import {
   resetMetricLineSinkForTesting,
   setMetricLineSinkForTesting,
@@ -47,6 +52,10 @@ import {
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 import { richChatParts } from "./__fixtures__/rich-chat-parts";
+
+beforeEach(() => {
+  anonymizeTextFieldsMock.mockClear();
+});
 
 const anonymizeTextFieldsMock = mock(
   async ({
@@ -135,6 +144,11 @@ const textDataUrl = (text: string) =>
  *  content the provider would read. Typed over the part union, so a new part
  *  type fails typecheck until it has an entry here. */
 const STORED_PART_CENSUS = {
+  activity: {
+    type: "activity",
+    activityType: "progress",
+    content: { text: STORED_PART_VALUE },
+  },
   audio: {
     type: "audio",
     source: {
@@ -172,12 +186,26 @@ const STORED_PART_CENSUS = {
     subagent: {
       id: "subagent-run-1",
       name: "research",
+      // The one shape a thread stores: a tool-mode run, whose child reaches
+      // the parent model only through the result of `parentToolCallId`.
+      parentToolCallId: "call_census",
       status: "finished",
       messages: [
         {
           id: "subagent-msg-1",
           role: "assistant",
-          parts: [{ type: "text", content: STORED_PART_VALUE }],
+          parts: [
+            { type: "text", content: STORED_PART_VALUE },
+            {
+              type: "tool-call",
+              id: "child_call",
+              name: "use-browser",
+              arguments: JSON.stringify({ query: STORED_PART_VALUE }),
+              state: "complete",
+              input: { query: STORED_PART_VALUE },
+              output: { title: STORED_PART_VALUE },
+            },
+          ],
         },
       ],
     },
@@ -534,9 +562,7 @@ describe("chat third-party anonymization boundary", () => {
       throw new TypeError("Expected prepared attachment part");
     }
     expect(getChatAttachmentUrl(part)).toContain(
-      Buffer.from("[CUSTOM_1] notes for [PERSON_1]", "utf-8").toString(
-        "base64",
-      ),
+      Buffer.from("[CUSTOM_1] notes for [PERSON_1]", "utf-8").toBase64(),
     );
   });
 
@@ -697,7 +723,12 @@ describe("chat third-party anonymization boundary", () => {
   test("every stored part type is prepared for the send mode", async () => {
     for (const [partType, part] of Object.entries(STORED_PART_CENSUS)) {
       const messages: ChatMessage[] = [
-        { id: `msg_${partType}`, role: "assistant", parts: [part] },
+        {
+          id: `msg_${partType}`,
+          // A member sends files; one on an answer never reaches a model.
+          role: isChatAttachmentPart(part) ? "user" : "assistant",
+          parts: [part],
+        },
       ];
       const raw = await prepareMessagesForThirdParty({
         boundary: createRawBoundary(),
@@ -716,6 +747,45 @@ describe("chat third-party anonymization boundary", () => {
       );
       // Anonymized mode sends it prepared, or not at all.
       expect(providerViewOf(anonymized)).not.toContain(STORED_PART_VALUE);
+    }
+  });
+
+  test("a file on an answer reaches no model, in either mode, whatever holds it", async () => {
+    for (const part of [
+      createChatAttachmentPart({
+        filename: "report.pdf",
+        mimeType: "application/pdf",
+        url: "stella://file::019a0000-0000-7000-8000-000000000001",
+      }),
+      createChatAttachmentPart({
+        filename: "chart.png",
+        mimeType: "image/png",
+        url: "stella://file::019a0000-0000-7000-8000-000000000002",
+      }),
+    ]) {
+      const text = { type: "text", content: "Here it is." } as const;
+      const withText: ChatMessage = {
+        id: "msg_answer",
+        role: "assistant",
+        parts: [text, part],
+      };
+      const fileOnly: ChatMessage = {
+        id: "msg_file_only",
+        role: "assistant",
+        parts: [part],
+      };
+      for (const boundary of [createRawBoundary(), createBoundary()]) {
+        // await-in-loop: each boundary keeps its own replacement state.
+        const prepared = await prepareMessagesForThirdParty({
+          boundary,
+          messages: [withText, fileOnly],
+        });
+        expect(Result.isOk(prepared)).toBe(true);
+        const sent = prepared.unwrap();
+        // The answer keeps its text; a message that was only a file goes.
+        expect(sent.map(({ id }) => id)).toEqual(["msg_answer"]);
+        expect(sent.at(0)?.parts.map(({ type }) => type)).toEqual(["text"]);
+      }
     }
   });
 
@@ -1091,6 +1161,43 @@ describe("chat third-party anonymization boundary", () => {
       participants: ["[PERSON_1]", "[CUSTOM_1]"],
       text: "[CUSTOM_1] notes for [PERSON_1]",
     });
+  });
+
+  test("anonymizes a live tool error before it reaches the model", async () => {
+    const boundary = createBoundary();
+    const tools = {
+      failing_lookup: applyChatToolPolicy(
+        toolDefinition({
+          name: "failing_lookup",
+          description: "Fail with a sensitive fixture.",
+        }).server(async () => {
+          throw new ChatToolError({
+            kind: "invalid-input",
+            message: "Jan Novák cannot access Secret notes",
+          });
+        }),
+        CHAT_TOOL_POLICY_KIND.internal,
+      ),
+    };
+    const prepared = prepareToolsForThirdParty({
+      boundary,
+      tools: asTestToolSet(tools),
+    });
+    const executable = asTestExecutable<unknown, unknown>(
+      prepared["failing_lookup"],
+    );
+    if (!executable?.execute) {
+      throw new TypeError("Expected an executable tool");
+    }
+
+    const failure = await rejectionOf(executable.execute(undefined));
+
+    expect(failure).toMatchObject({
+      _tag: "ChatToolError",
+      kind: "invalid-input",
+      message: "[PERSON_1] cannot access [CUSTOM_1] notes",
+    });
+    expect(JSON.stringify(failure)).not.toContain("Jan Novák");
   });
 
   test("returns anonymized external MCP source tool output values", async () => {
@@ -2143,7 +2250,8 @@ describe("anonymization placeholders across a thread's requests", () => {
   });
 
   test("one placeholder never names two originals in a thread", async () => {
-    await fc.assert(
+    await assertProperty(
+      "one placeholder never names two originals in a thread",
       fc.asyncProperty(
         // Each request mentions some of the people in some order.
         fc.array(fc.shuffledSubarray([...PEOPLE], { minLength: 1 }), {
@@ -2181,40 +2289,36 @@ describe("anonymization placeholders across a thread's requests", () => {
           }
         },
       ),
-      propertyConfig({ numRuns: 200, seed: propertySeed() }),
+      { numRuns: 200, seed: propertySeed() },
     );
   });
 });
 
 describe("the restorations a request's history holds", () => {
-  test("are read from current and legacy stored turns, oldest first", () => {
+  test("are read from stored turns, oldest first", () => {
     const pairs = storedRestorationsOf([
       {
         id: toSafeId<"chatMessage">("00000000-0000-4000-8000-000000000001"),
         role: "assistant",
-        content: {
-          version: 1,
-          data: [
-            {
-              type: "data-stella-anon-restorations",
-              data: {
-                pairs: [{ placeholder: "[PERSON_1]", original: "Alice" }],
-              },
+        content: toPersistedChatMessageContentV3({
+          data: [],
+          metadata: {
+            anonRestorations: {
+              pairs: [{ placeholder: "[PERSON_1]", original: "Alice" }],
             },
-          ],
-        },
+          },
+        }),
       },
       {
         id: toSafeId<"chatMessage">("00000000-0000-4000-8000-000000000002"),
         role: "assistant",
-        content: toChatMessageContent({
+        content: toPersistedChatMessageContentV3({
           data: [{ type: "text", content: "Noted." }],
           metadata: {
             anonRestorations: {
               pairs: [{ placeholder: "[PERSON_2]", original: "Bob" }],
             },
           },
-          version: 2,
         }),
       },
     ]);
@@ -2439,5 +2543,99 @@ describe("anonymization output that lost its field structure", () => {
     expect(Result.isOk(prepared) ? prepared.value : prepared.error).toBe(
       "Bob briefed [PERSON_1].",
     );
+  });
+});
+
+describe("a suspended browsing run's child", () => {
+  test("crosses the anonymized boundary like the thread it sits in", async () => {
+    const { prepareSuspendedBrowseRuns } =
+      await import("@/api/handlers/chat/browse-web-agent");
+    const childCall: ChatPart = {
+      arguments: JSON.stringify({ action: "snapshot" }),
+      id: "child-call",
+      input: { action: "snapshot" },
+      name: BROWSER_CONTROL_TOOL_NAME,
+      output: {
+        protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
+        snapshot: {
+          contentTrust: BROWSER_CONTROL_CONTENT_TRUST.untrustedWebContent,
+          elements: [],
+          elementsLeftOut: false,
+          facts: { meta: [] },
+          revision: "rev-profile",
+          tabId: 7,
+          tabs: [{ active: true, tabId: 7, url: "https://example.cz/profile" }],
+          text: `Profile of ${STORED_PART_VALUE}.`,
+          title: `${STORED_PART_VALUE} profile`,
+          url: "https://example.cz/profile",
+          window: {
+            cursor: "r1.window-profile",
+            fromPercent: 0,
+            toPercent: 100,
+          },
+        },
+        status: "success",
+      },
+      state: "complete",
+      type: "tool-call",
+    };
+    const messages: ChatMessage[] = [
+      {
+        id: "assistant-1",
+        parts: [
+          {
+            subagent: {
+              id: "browse-run",
+              interruptIds: ["approval-1"],
+              messages: [
+                {
+                  id: "child-1",
+                  parts: [
+                    { content: `Reading ${STORED_PART_VALUE}.`, type: "text" },
+                    childCall,
+                  ],
+                  role: "assistant",
+                },
+              ],
+              name: "browse_web",
+              parentToolCallId: "call-browse",
+              status: "suspended",
+            },
+            type: "subagent",
+          },
+        ],
+        role: "assistant",
+      },
+    ];
+
+    const prepared = await prepareSuspendedBrowseRuns({
+      boundary: createBoundary(),
+      messages,
+      workspaceIds: [],
+    });
+    if (Result.isError(prepared)) {
+      throw prepared.error;
+    }
+    // The planted value reaches the boundary's input ...
+    expect(JSON.stringify(messages)).toContain(STORED_PART_VALUE);
+    // ... and leaves only as its placeholder, in the child's history and in
+    // the part the SDK resumes from.
+    const sent = JSON.stringify([
+      [...prepared.value.runs.values()],
+      prepared.value.parts,
+    ]);
+    expect(sent).not.toContain(STORED_PART_VALUE);
+    expect(sent).toContain("[PERSON_1]");
+    expect(prepared.value.messageId).toBe("assistant-1");
+
+    // A raw boundary sends it unchanged.
+    const raw = await prepareSuspendedBrowseRuns({
+      boundary: createRawBoundary(),
+      messages,
+      workspaceIds: [],
+    });
+    expect(
+      JSON.stringify(Result.isOk(raw) ? [...raw.value.runs.values()] : null),
+    ).toContain(STORED_PART_VALUE);
   });
 });

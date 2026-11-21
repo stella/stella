@@ -185,14 +185,24 @@ describe("iterateJustificationCitations — decision passages", () => {
     const content: JustificationContent = {
       version: 1,
       blocks: [
-        { kind: "decision-passage", anchorId: "p-12", excerpt: "the holding" },
+        {
+          kind: "decision-passage",
+          anchorId: "p-12",
+          courtParagraphNumber: 8,
+          excerpt: "the holding",
+        },
       ],
     };
 
     const citations = [...iterateJustificationCitations(content)];
 
     expect(citations).toEqual([
-      { kind: "decision-passage", anchorId: "p-12", excerpt: "the holding" },
+      {
+        kind: "decision-passage",
+        anchorId: "p-12",
+        courtParagraphNumber: 8,
+        excerpt: "the holding",
+      },
     ]);
     expect(citations.map(citationFileFieldId)).toEqual([null]);
   });
@@ -210,7 +220,12 @@ describe("iterateJustificationCitations — decision passages", () => {
             { text: "as filed", citations: [{ bates: "B1", pageNumber: 3 }] },
           ],
         },
-        { kind: "decision-passage", anchorId: "p-1", excerpt: "as held" },
+        {
+          kind: "decision-passage",
+          anchorId: "p-1",
+          courtParagraphNumber: null,
+          excerpt: "as held",
+        },
       ],
     };
 
@@ -224,7 +239,12 @@ describe("iterateJustificationCitations — decision passages", () => {
       version: 1,
       blocks: [
         { kind: "playbook-verdict", rationale: "graded" },
-        { kind: "decision-passage", anchorId: "p-1", excerpt: "first" },
+        {
+          kind: "decision-passage",
+          anchorId: "p-1",
+          courtParagraphNumber: null,
+          excerpt: "first",
+        },
         {
           kind: "docx-folio",
           fileFieldId: "field-1",
@@ -237,7 +257,12 @@ describe("iterateJustificationCitations — decision passages", () => {
             },
           ],
         },
-        { kind: "decision-passage", anchorId: "p-2", excerpt: "second" },
+        {
+          kind: "decision-passage",
+          anchorId: "p-2",
+          courtParagraphNumber: null,
+          excerpt: "second",
+        },
       ],
     };
 

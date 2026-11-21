@@ -4,12 +4,13 @@ import type { Transaction } from "@/api/db/root";
 import { entities } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
-  resolveSiblingName,
   type ResolvedSiblingName,
+  resolveSiblingName,
+  type SiblingNumbering,
 } from "@/api/lib/entities/sibling-name";
 import {
-  sanitizeFilename,
   type SanitizedFileName,
+  sanitizeFilename,
 } from "@/api/lib/sanitize-filename";
 
 export type ResolvedSiblingNames = {
@@ -32,8 +33,7 @@ type SiblingScope = {
 
 type ReadSiblingNamesOptions = Omit<SiblingScope, "parentId"> & {
   scope:
-    | { type: "parent"; parentId: SafeId<"entity"> | null }
-    | { type: "matter" };
+    { type: "parent"; parentId: SafeId<"entity"> | null } | { type: "matter" };
 };
 
 /** The workspace cap bounds this complete internal sibling set. */
@@ -58,6 +58,7 @@ const readSiblingNames = async ({
 type ResolveSiblingNameForInsertOptions = SiblingScope & {
   name: string;
   kind: typeof entities.$inferSelect.kind;
+  numbering?: SiblingNumbering;
 };
 
 /** Call after the creation flow's workspace lock and before publishing rows. */
@@ -67,6 +68,7 @@ export const resolveSiblingNameForInsert = async ({
   tx,
   workspaceId,
   parentId,
+  numbering,
 }: ResolveSiblingNameForInsertOptions): Promise<ResolvedSiblingNames> => {
   const siblings = await readSiblingNames({
     tx,
@@ -77,6 +79,7 @@ export const resolveSiblingNameForInsert = async ({
     name,
     kind,
     siblingNames: new Set(siblings.map(({ name: sibling }) => sibling)),
+    ...(numbering === undefined ? {} : { numbering }),
   });
 };
 
@@ -109,7 +112,10 @@ export const createSiblingNamePlan = async ({
     parentId,
     name,
     kind,
-  }: Omit<ResolveSiblingNameForInsertOptions, "tx" | "workspaceId">) => {
+  }: Omit<
+    ResolveSiblingNameForInsertOptions,
+    "tx" | "workspaceId" | "numbering"
+  >) => {
     let siblingNames = namesByParent.get(parentId);
     if (siblingNames === undefined) {
       siblingNames = new Set();

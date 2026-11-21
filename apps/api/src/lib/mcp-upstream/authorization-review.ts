@@ -66,6 +66,11 @@ export const resolveMcpIssuerBinding = ({
   return { type: "unconfigured" };
 };
 
+export const approvedMcpAuthorizationReview = sql<boolean>`(
+  ${mcpConnectorAuthorizationReviews.status} IS NULL OR
+  ${mcpConnectorAuthorizationReviews.status} = 'approved'
+)`;
+
 /**
  * What recording a review does to the observing user's own connection.
  * `mark` sets it to `needs_approval`; `leased` does so only while the caller

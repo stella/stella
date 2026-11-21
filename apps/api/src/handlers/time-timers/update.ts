@@ -14,14 +14,17 @@ import {
   timerParams,
 } from "@/api/lib/billing/time-timers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { scheduleTimerActivityUpdates } from "@/api/lib/push/timer-activity-queue";
 import { hasCurrentTimerMatterAccess } from "@/api/lib/time-entry-timer-access";
 
 const updateTimer = createSafeRootHandler(
   {
+    contract: "patch",
     description:
       "Set your timer's description or matter. Pass null to clear either field. Confirm requires a matter and any narrative required by the organization.",
     permissions: { timeEntry: ["update"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
+    featureAccess: { featureId: "time-billing", type: "required" },
     mcp: {
       type: "capability",
       reason: "billing_admin",
@@ -86,6 +89,9 @@ const updateTimer = createSafeRootHandler(
         return Result.ok(timerItem(updated));
       }),
     );
+    if (outcome.isOk()) {
+      scheduleTimerActivityUpdates([owner]);
+    }
     return outcome;
   },
 );

@@ -1,28 +1,96 @@
-/**
- * Whether stella desktop can do work for the signed-in account, as the server
- * last heard from this account's desktop apps.
- *
- * - `current`: reported recently with a supported protocol.
- * - `outdated`: reported recently with an older protocol.
- * - `not_connected`: reported before, not recently (installed, not running).
- * - `none`: never reported for this account. An app that is installed but not
- *   linked to this account cannot report, so it reads as `none` too.
- */
-export type DesktopPresence =
-  | { type: "current" }
-  | { type: "outdated" }
-  | { type: "not_connected" }
-  | { type: "none" };
+import { queryOptions, useQuery } from "@tanstack/react-query";
+import { panic, Result, UnhandledException } from "better-result";
+
+import { RESOURCE_TYPE } from "@stll/api-contract";
+import type { DesktopPresence } from "@stll/api-contract/desktop-presence";
+
+import { SIGNED_OUT_QUERY_OWNER } from "@/lib/account/queries";
+import { api } from "@/lib/api";
+import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
+import { unwrapApiResponse } from "@/lib/errors/api";
+import { captureQueryError, readQueryResult } from "@/lib/errors/query-result";
+import { queryView } from "@/lib/query-view.logic";
+import { resourceQueryOptions } from "@/lib/workspace-realtime";
 
 export type DesktopPresenceType = DesktopPresence["type"];
 
+type DesktopPresenceKey = {
+  userId: string;
+  organizationId: string;
+};
+
+const desktopPresenceKeys = {
+  all: ({ userId, organizationId }: DesktopPresenceKey) =>
+    ["desktop-presence", organizationId, userId] as const,
+};
+
+const DESKTOP_PRESENCE_STALE_TIME_MS = 30_000;
+
+export const desktopPresenceOptions = (key: DesktopPresenceKey) =>
+  resourceQueryOptions(
+    queryOptions({
+      queryKey: desktopPresenceKeys.all(key),
+      queryFn: async ({ signal }) => {
+        const result = await Result.tryPromise({
+          try: async () =>
+            unwrapApiResponse(
+              await api.desktop.presence.get({ fetch: { signal } }),
+            ),
+          catch: (cause) =>
+            cause instanceof Error ? cause : new UnhandledException({ cause }),
+        });
+        if (Result.isError(result) && !signal.aborted) {
+          captureQueryError(result.error, {
+            fingerprintKey: "desktopPresenceOptions.queryFn:failure",
+            scope: {
+              type: "handler",
+              handlerId: "desktopPresenceOptions.queryFn:failure",
+            },
+          });
+        }
+        return readQueryResult(result);
+      },
+      staleTime: DESKTOP_PRESENCE_STALE_TIME_MS,
+      refetchOnWindowFocus: "always",
+      retry: false,
+    }),
+    key.userId === SIGNED_OUT_QUERY_OWNER ||
+      key.organizationId === SIGNED_OUT_QUERY_OWNER
+      ? { type: "independent" }
+      : {
+          resources: [RESOURCE_TYPE.USER],
+          scope: {
+            type: "organization",
+            organizationId: key.organizationId,
+            userId: key.userId,
+          },
+        },
+  );
+
 const ASSUMED_PRESENCE = {
   type: "current",
-} as const satisfies DesktopPresence;
+} as const satisfies Pick<DesktopPresence, "type">;
 
-/**
- * The desktop app's presence for this account. Until the presence endpoint
- * ships, a current app is assumed: desktop actions deep-link into it, which
- * is how they behaved before presence existed.
- */
-export const useDesktopPresence = (): DesktopPresence => ASSUMED_PRESENCE;
+/** A missing or failed observation must not block a working desktop deep link. */
+export const useDesktopPresence = (): Pick<DesktopPresence, "type"> => {
+  const user = useMaybeAuthenticatedUser();
+  const query = useQuery({
+    ...desktopPresenceOptions({
+      userId: user?.id ?? SIGNED_OUT_QUERY_OWNER,
+      organizationId: user?.activeOrganizationId ?? SIGNED_OUT_QUERY_OWNER,
+    }),
+    enabled: user !== null,
+  });
+  const view = queryView(query);
+  switch (view.type) {
+    case "items":
+      return view.refetchError === undefined ? view.items : ASSUMED_PRESENCE;
+    case "pending":
+    case "error":
+    case "empty":
+      return ASSUMED_PRESENCE;
+    default:
+      view satisfies never;
+      return panic("Unhandled desktop presence query state");
+  }
+};

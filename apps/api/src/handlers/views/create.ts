@@ -3,8 +3,8 @@ import { eq, sql } from "drizzle-orm";
 
 import {
   isSingleViewLayout,
-  resourceRef,
   RESOURCE_TYPE,
+  resourceRef,
   type ViewLayoutType,
 } from "@stll/api-contract";
 
@@ -16,9 +16,17 @@ import {
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import {
+  AVT_LAYOUT_FEATURE_ACCESS,
+  avtViewAccessStatus,
+} from "@/api/lib/auth/feature-access/view-eligibility";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+import {
+  avtLayoutErrorDetail,
+  rejectAvtLayout,
+} from "@/api/lib/lists/verification/view-layout";
 import { hasMemberPermission } from "@/api/lib/permission-authorization";
 import { isPgConstraintError, PG_ERROR } from "@/api/lib/pg-error";
 import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
@@ -27,10 +35,6 @@ import {
   parseViewLayout,
   tCreateViewInputSchema,
 } from "@/api/lib/views-schema";
-import {
-  avtLayoutErrorDetail,
-  rejectAvtLayout,
-} from "@/api/lib/views/avt-layout";
 import { resolveTemplateProperties } from "@/api/lib/views/template-properties";
 import {
   cleanStalePropertyIds,
@@ -39,6 +43,7 @@ import {
 } from "@/api/lib/views/utils";
 
 const config = {
+  contract: "patch",
   description:
     "Add a view (a tab) to a matter with a name and a layout. Duplicate " +
     "sorts and multiple kind filters are refused, the columns the layout " +
@@ -46,6 +51,7 @@ const config = {
     "columns that do not exist are dropped. A matter may hold only one " +
     "overview view and one correspondence view, and a fixed maximum of " +
     "views in total.",
+  featureAccess: AVT_LAYOUT_FEATURE_ACCESS,
   permissions: { view: ["create"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
@@ -70,8 +76,22 @@ const createView = createSafeHandler(
     memberRole,
     body,
     recordAuditEvent,
+    featureAccessSnapshot,
+    session,
+    user,
   }) {
+    const avtAccessStatus = avtViewAccessStatus({
+      snapshot: featureAccessSnapshot,
+      organizationId: session.activeOrganizationId,
+      userId: user.id,
+    });
     const layout = parseViewLayout(body.layout);
+
+    if (layout.type === "avt" && avtAccessStatus !== "available") {
+      return Result.err(
+        new HandlerError({ status: 404, message: "Not found" }),
+      );
+    }
 
     if (hasDuplicateSorts(layout.sorts)) {
       return Result.err(
@@ -113,6 +133,7 @@ const createView = createSafeHandler(
         workspaceId,
         layout,
         legalListsEnabled: isDeploymentFeatureEnabled("FEATURE_LEGAL_LISTS"),
+        accessStatus: avtAccessStatus,
       });
       if (avtRejection !== null) {
         // Nothing is written yet, so returning commits no partial view.

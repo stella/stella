@@ -1,3 +1,5 @@
+import { normalizeUnicode } from "@stll/text-normalize";
+
 import {
   corpusFreeTextClause,
   quoteCorpusValue,
@@ -30,12 +32,13 @@ export const relaxedLegislationClause = ({
   language,
 }: RelaxedLegislationClauseOptions): string | null => {
   const designations: string[] = [];
-  const rest = query
-    .normalize("NFC")
-    .replace(SECTION_DESIGNATION, (_designation, value: string) => {
+  const rest = normalizeUnicode(query, "NFC").replace(
+    SECTION_DESIGNATION,
+    (_designation, value: string) => {
       designations.push(value);
       return " ";
-    });
+    },
+  );
   // Quoted designations survive function-word filtering and take the first leaves.
   const text = `${designations.map(quoteCorpusValue).join(" ")} ${rest.replace(NUMERIC_VALUE, " ")}`;
   const functionWords = functionWordsFor(

@@ -1,9 +1,16 @@
 import { describe, expect, test } from "bun:test";
 import nodePath from "node:path";
 
+import { repoRelativePath } from "@stll/portable-path";
+
 import { publicLegislationRoute } from "@/api/handlers/legislation/public-routes";
-import { isSafePublicHandler } from "@/api/lib/api-handlers";
-import { apiSourceRoot, collectApiImports } from "@/api/tests/api-module-graph";
+import type { RouteDefinition } from "@/api/http/route";
+import { isPublicReadBudgetHandler } from "@/api/lib/api-handlers";
+import {
+  apiSourceRoot,
+  collectApiImports,
+  scanModuleImports,
+} from "@/api/tests/api-module-graph";
 
 const PUBLIC_LEGISLATION_ROUTES = [
   "GET /law/sitemap/shards",
@@ -21,6 +28,10 @@ const PUBLIC_LEGISLATION_ROUTES = [
   "POST /law/statutes/resolve",
 ] as const;
 
+/** The safe factory's handler a definition carries, when a factory built it. */
+const handlerOf = (definition: RouteDefinition): unknown =>
+  "handler" in definition ? definition.handler : undefined;
+
 const routesFile = nodePath.resolve(
   apiSourceRoot,
   "handlers/legislation/public-routes.ts",
@@ -36,6 +47,7 @@ const PUBLIC_SCHEMA_DOMAIN_IMPORTS = new Set([
   "@/api/handlers/chat/chat-turn-state",
   "@/api/lib/chat/ai-data-policy",
   "@/api/lib/chat/thread-name-kinds",
+  "@/api/lib/chat/turn-status",
 ]);
 
 const isForbiddenPublicRuntimeImport = (path: string): boolean => {
@@ -74,17 +86,18 @@ const collectPublicOperationGraph = async (
 };
 
 describe("public legislation route boundary", () => {
-  test("every declared public legislation route uses a public-safe handler", () => {
-    const declared = publicLegislationRoute.routes.filter(
-      (route) => typeof route.handler === "function",
-    );
+  test("every declared public legislation route uses a budgeted public-safe handler", () => {
     expect(
-      declared
-        .filter((route) => !isSafePublicHandler(route.handler))
+      publicLegislationRoute
+        .filter(
+          (route) => !isPublicReadBudgetHandler(handlerOf(route.definition)),
+        )
         .map((route) => `${route.method} ${route.path}`),
     ).toEqual([]);
     expect(
-      declared.map((route) => `${route.method} ${route.path}`).toSorted(),
+      publicLegislationRoute
+        .map((route) => `${route.method} ${route.path}`)
+        .toSorted(),
     ).toEqual([...PUBLIC_LEGISLATION_ROUTES]);
   });
 
@@ -100,18 +113,14 @@ describe("public legislation route boundary", () => {
 
     const forbiddenImports: string[] = [];
     for (const module of modules) {
-      const relativePath = nodePath.relative(apiSourceRoot, module);
+      const relativePath = repoRelativePath(apiSourceRoot, module);
       if (isForbiddenPublicRuntimeImport(`@/api/${relativePath}`)) {
         forbiddenImports.push(relativePath);
       }
-      const source = await Bun.file(module).text();
-      const imports = new Bun.Transpiler({
-        loader: module.endsWith(".tsx") ? "tsx" : "ts",
-      }).scan(source).imports;
-      for (const { path } of imports) {
+      for (const path of await scanModuleImports(module)) {
         if (isForbiddenPublicRuntimeImport(path)) {
           forbiddenImports.push(
-            `${nodePath.relative(apiSourceRoot, module)} -> ${path}`,
+            `${repoRelativePath(apiSourceRoot, module)} -> ${path}`,
           );
         }
       }
@@ -162,11 +171,17 @@ describe("public legislation route boundary", () => {
   });
 
   test("public legislation routing never installs authenticated context", async () => {
+    // Who may call a route is its definition's own decision.
+    expect(
+      publicLegislationRoute
+        .filter((route) => route.definition.access !== "public")
+        .map((route) => `${route.method} ${route.path}`),
+    ).toEqual([]);
     const source = await Bun.file(routesFile).text();
     for (const token of [
-      "authMacro",
-      "permissionMacro",
-      "workspaceAccessMacro",
+      "authenticateMember",
+      "authenticateSession",
+      "authorizeWorkspace",
       "validateAuth",
       "permissions:",
     ]) {

@@ -1,3 +1,4 @@
+import type { SQL } from "drizzle-orm";
 /**
  * Online repair behind migration 20260902100000_case_law_decision_date_ceiling,
  * and behind 20260927200300_case_law_decision_date_floor_by_jurisdiction,
@@ -12,9 +13,8 @@
  * remains the constraint is validated.
  *
  * The same plan and the same batch as `repair-decision-dates.ts`, the operator
- * script: 50 decisions per transaction, decision rows locked before the
- * citation-graph lock (the ingestion pipeline's order, which is what keeps a
- * concurrent refresh from deadlocking against a batch), edges reopened through
+ * script: 50 decisions per transaction, graph acquired before decision rows,
+ * matching the ingestion pipeline; edges reopened through
  * the helpers the pipeline itself uses, each bounded by an index. The first
  * form of the migration did this with one UPDATE whose predicate
  * `case_law_citations` cannot serve from an index; on a corpus-sized table
@@ -26,22 +26,26 @@
  * adaptive sizing and holds. A committed checkpoint admits a pending repair
  * through deploy and startup; `pg_constraint.convalidated` proves completion.
  */
-
-import type { SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 
 import { runBackfillPass } from "@stll/db-load-gate/backfill-pass";
-import { defaultConfig, type Verdict } from "@stll/db-load-gate/health";
+import type { Verdict } from "@stll/db-load-gate/health";
 
+import { runCitationGraphTransaction } from "@/api/handlers/case-law/citation-graph-transaction";
+
+import { loadGateHealthConfig } from "../env-online-index";
 import { CASE_LAW_DECISION_DATE_BOUNDS_CONSTRAINT } from "../lib/decision-date-bounds-sql";
 import type { CorruptDecisionDateRow } from "../scripts/repair-decision-dates-plan";
 import { repairDecisionDateBatch } from "../scripts/repair-decision-dates-plan";
 import { createBackfillRuntime } from "./backfill-runtime";
 import { readConstraintCompletion } from "./online-constraint-completion";
+import { validateOnlineConstraints } from "./online-ddl";
+import type { OnlineConstraintValidation, OnlineTableGate } from "./online-ddl";
 import { onlineMigrationParams } from "./online-migration-connection";
 import type {
+  MigrationOwnedOnlineRepair,
   OnlineMigrationConnection,
-  OnlineRepair,
+  OnlineMigrationOutcome,
 } from "./online-migration-connection";
 
 const REPAIR_NAME = "decision-date-ceiling";
@@ -62,13 +66,6 @@ const BATCH = 50;
  */
 const BATCH_LOCK_TIMEOUT = "30s";
 const BATCH_STATEMENT_TIMEOUT = "5min";
-/**
- * VALIDATE takes SHARE UPDATE EXCLUSIVE, which queues behind an autovacuum of
- * the table until that vacuum notices the waiter and yields. Longer than the
- * online phase's default, which is sized for index builds; the phase restores
- * its own setting afterwards.
- */
-const VALIDATE_LOCK_TIMEOUT = "1min";
 
 const dialect = new PgDialect();
 
@@ -116,7 +113,7 @@ const repairUntilEmpty = async (
     tableName: TABLE_NAME,
     initialSize: BATCH,
     config: {
-      ...defaultConfig,
+      ...loadGateHealthConfig(),
       batchLockTimeoutMs: 30_000,
       batchStatementTimeoutMs: 300_000,
     },
@@ -135,9 +132,13 @@ const repairUntilEmpty = async (
           await tx.execute(
             `SET LOCAL statement_timeout = '${BATCH_STATEMENT_TIMEOUT}'`,
           );
-          const batch = await repairDecisionDateBatch(bindTo(tx), size, {
-            reconcileProjection: null,
-          });
+          const batch = await runCitationGraphTransaction(
+            async (run) => await run(bindTo(tx)),
+            async (graphTx) =>
+              await repairDecisionDateBatch(graphTx, size, {
+                reconcileProjection: null,
+              }),
+          );
           return {
             cursor,
             done: batch.cleared + batch.rederived + batch.skipped === 0,
@@ -154,16 +155,27 @@ const repairUntilEmpty = async (
   }
 };
 
+export const DECISION_DATE_CEILING_CONSTRAINTS = [
+  {
+    tableName: TABLE_NAME,
+    constraintName: CASE_LAW_DECISION_DATE_BOUNDS_CONSTRAINT,
+  },
+] as const satisfies readonly OnlineConstraintValidation[];
+
+/**
+ * VALIDATE takes SHARE UPDATE EXCLUSIVE, which queues behind an autovacuum of
+ * the table until that vacuum notices the waiter and yields; the gate watches
+ * that wait and defers the phase rather than failing it.
+ */
 const validateConstraint = async (
   connection: OnlineMigrationConnection,
-): Promise<void> => {
-  await connection.execute(`SET lock_timeout = '${VALIDATE_LOCK_TIMEOUT}'`);
-  // A no-op on an already validated constraint, which is what makes the
-  // repair a fixed point.
-  await connection.execute(
-    `ALTER TABLE public."${TABLE_NAME}" VALIDATE CONSTRAINT "${CASE_LAW_DECISION_DATE_BOUNDS_CONSTRAINT}"`,
-  );
-};
+  tables: OnlineTableGate,
+): Promise<OnlineMigrationOutcome> =>
+  await validateOnlineConstraints({
+    connection,
+    tables,
+    constraints: DECISION_DATE_CEILING_CONSTRAINTS,
+  });
 
 type RepairRuntimeOptions = {
   readVerdict?: () => Promise<Verdict>;
@@ -174,7 +186,8 @@ type RepairRuntimeOptions = {
 
 export const createDecisionDateCeilingRepair = (
   options: RepairRuntimeOptions = {},
-): OnlineRepair => ({
+): MigrationOwnedOnlineRepair => ({
+  introducedBy: "20260902100000_case_law_decision_date_ceiling",
   name: REPAIR_NAME,
   readCompletion: async (connection) =>
     await readConstraintCompletion({
@@ -184,20 +197,19 @@ export const createDecisionDateCeilingRepair = (
       backfillName: REPAIR_NAME,
       tableName: TABLE_NAME,
     }),
-  repair: async (connection) => {
+  repair: async (connection, tables) => {
     // Empty fresh databases have no heavy data work and no metric source yet.
     if (
       (await connection.query(`SELECT 1 FROM public."${TABLE_NAME}" LIMIT 1`))
         .length === 0
     ) {
-      await validateConstraint(connection);
-      return;
+      return await validateConstraint(connection, tables);
     }
     const pass = await repairUntilEmpty(connection, options);
     if (pass.isErr()) {
       throw pass.error;
     }
-    await validateConstraint(connection);
+    return await validateConstraint(connection, tables);
   },
 });
 

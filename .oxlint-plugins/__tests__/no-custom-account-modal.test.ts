@@ -1,8 +1,6 @@
-import { describe, expect, setDefaultTimeout, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 
 import { lintSingleRule } from "./lint-single-rule.ts";
-
-setDefaultTimeout(20_000);
 
 const RULE = "no-custom-account-modal";
 
@@ -65,6 +63,22 @@ const REMOVED_ACCOUNT_GATE_DIALOG = [
 describe.serial(RULE, () => {
   test("reports the account gate's removed intermediate dialog once, at its modal import", async () => {
     expect(await lint(REMOVED_ACCOUNT_GATE_DIALOG)).toEqual([4]);
+  });
+
+  test.each([
+    "DialogFormState",
+    "DialogProvider",
+    "DialogTitle",
+    "DialogTrigger",
+    "DialogClose",
+  ])("%s does not create a custom account modal", async (exportName) => {
+    expect(
+      await lint([
+        `import { ${exportName} as Part } from "@stll/ui/dialog";`,
+        "const submit = () => authClient.signIn.email(input);",
+        "export const Panel = () => <Part onSubmit={submit}>Sign in</Part>;",
+      ]),
+    ).toEqual([]);
   });
 
   /** A module whose one component renders a dialog around `inside`, after

@@ -2,18 +2,28 @@ import { Panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import { propertyToolSchema } from "@/api/db/schema-validators";
+import type {
+  PlaybookVerdictTool,
+  PropertyContent,
+} from "@/api/db/schema-validators";
 import { toSafeId } from "@/api/lib/branded-types";
 import {
   buildDependencyGraph,
   buildLevelBatches,
   COMPUTED_PROPERTY_TOOL_TYPES,
-  getPropertyExecutionPlan,
+  getPropertyExecutionPlan as getPropertyExecutionPlanResult,
 } from "@/api/lib/workflow/get-execution-plan";
 import type {
+  AIBatchProperty,
   BatchPropertyDependency,
   ExecutionPlanProperty,
   PropertyDependencyEdge,
 } from "@/api/lib/workflow/get-execution-plan";
+import { splitPropertiesForSystemOne } from "@/api/lib/workflow/system-one-batch";
+
+const getPropertyExecutionPlan = (
+  input: Parameters<typeof getPropertyExecutionPlanResult>[0],
+) => getPropertyExecutionPlanResult(input).unwrap();
 
 const aiModelTool = {
   version: 1 as const,
@@ -107,9 +117,9 @@ describe("buildDependencyGraph", () => {
   test("builds graph with diamond dependency structure", () => {
     // A -> B, A -> C, B -> D, C -> D
     const properties: ExecutionPlanProperty[] = [
-      createProperty("A"),
+      createProperty("A", { tool: manualInputTool }),
       createProperty("B"),
-      createProperty("C"),
+      createProperty("C", { tool: manualInputTool }),
       createProperty("D"),
     ];
     const edges: PropertyDependencyEdge[] = [
@@ -146,7 +156,7 @@ describe("buildDependencyGraph", () => {
 
   test("builds graph with duplicate edges (B depends on A twice)", () => {
     const properties: ExecutionPlanProperty[] = [
-      createProperty("A"),
+      createProperty("A", { tool: manualInputTool }),
       createProperty("B"),
     ];
     const edges: PropertyDependencyEdge[] = [
@@ -165,7 +175,7 @@ describe("buildDependencyGraph", () => {
 
   test("builds graph with dangling edge (dependency references property not in properties)", () => {
     const properties: ExecutionPlanProperty[] = [
-      createProperty("A"),
+      createProperty("A", { tool: manualInputTool }),
       createProperty("B"),
     ];
     const edges: PropertyDependencyEdge[] = [
@@ -203,6 +213,7 @@ describe("buildLevelBatches", () => {
     dependsOn.set(propertyId("C"), propertySet("A"));
 
     const graph = {
+      answerShapeByAskId: new Map(),
       propertyDependenciesMap,
       dependsOn,
       inDegree: new Map(),
@@ -234,6 +245,7 @@ describe("buildLevelBatches", () => {
     const pFile = createProperty("p1", { content: fileContent });
     const propertiesById = propertyMap([["p1", pFile]]);
     const graph = {
+      answerShapeByAskId: new Map(),
       propertyDependenciesMap: new Map(),
       dependsOn: new Map<TestPropertyId, Set<TestPropertyId>>([
         [propertyId("p1"), propertySet()],
@@ -252,6 +264,7 @@ describe("buildLevelBatches", () => {
     const pManual = createProperty("p1", { tool: manualInputTool });
     const propertiesById = propertyMap([["p1", pManual]]);
     const graph = {
+      answerShapeByAskId: new Map(),
       propertyDependenciesMap: new Map(),
       dependsOn: new Map<TestPropertyId, Set<TestPropertyId>>([
         [propertyId("p1"), propertySet()],
@@ -270,6 +283,7 @@ describe("buildLevelBatches", () => {
     const pFresh = createProperty("p1", { status: "fresh" });
     const propertiesById = propertyMap([["p1", pFresh]]);
     const graph = {
+      answerShapeByAskId: new Map(),
       propertyDependenciesMap: new Map(),
       dependsOn: new Map<TestPropertyId, Set<TestPropertyId>>([
         [propertyId("p1"), propertySet()],
@@ -304,6 +318,7 @@ describe("buildLevelBatches", () => {
     dependsOn.set(propertyId("B"), propertySet("X"));
 
     const graph = {
+      answerShapeByAskId: new Map(),
       propertyDependenciesMap,
       dependsOn,
       inDegree: new Map(),
@@ -345,6 +360,7 @@ describe("buildLevelBatches", () => {
     dependsOn.set(propertyId("C"), propertySet());
 
     const graph = {
+      answerShapeByAskId: new Map(),
       propertyDependenciesMap,
       dependsOn,
       inDegree: new Map(),
@@ -380,23 +396,28 @@ describe("getPropertyExecutionPlan", () => {
     expect(plan).toEqual([]);
   });
 
-  test("returns empty array when properties have no dependencies", () => {
+  test("reports stored computed columns with no dependencies", () => {
     const properties: ExecutionPlanProperty[] = [
       createProperty("p1"),
       createProperty("p2"),
     ];
 
-    const plan = getPropertyExecutionPlan({
+    const result = getPropertyExecutionPlanResult({
       properties,
       dependencies: [],
     });
-
-    expect(plan).toEqual([]);
+    expect(result.isErr()).toBe(true);
+    if (result.isOk()) {
+      return;
+    }
+    expect(result.error.message).toBe(
+      "Stored computed columns have no input dependencies",
+    );
   });
 
   test("first level does not contain properties without dependencies", () => {
     const properties: ExecutionPlanProperty[] = [
-      createProperty("A"),
+      createProperty("A", { tool: manualInputTool }),
       createProperty("B"),
       createProperty("C"),
     ];
@@ -415,7 +436,7 @@ describe("getPropertyExecutionPlan", () => {
 
   test("returns single level for simple chain A -> B", () => {
     const properties: ExecutionPlanProperty[] = [
-      createProperty("A"),
+      createProperty("A", { tool: manualInputTool }),
       createProperty("B"),
     ];
     const dependencies: PropertyDependencyEdge[] = [
@@ -434,7 +455,7 @@ describe("getPropertyExecutionPlan", () => {
 
   test("returns two levels for chain A -> B -> C", () => {
     const properties: ExecutionPlanProperty[] = [
-      createProperty("A"),
+      createProperty("A", { tool: manualInputTool }),
       createProperty("B"),
       createProperty("C"),
     ];
@@ -459,7 +480,7 @@ describe("getPropertyExecutionPlan", () => {
   test("groups properties with same dependency signature in diamond structure", () => {
     // A -> B, A -> C, B -> D, C -> D
     const properties: ExecutionPlanProperty[] = [
-      createProperty("A"),
+      createProperty("A", { tool: manualInputTool }),
       createProperty("B"),
       createProperty("C"),
       createProperty("D"),
@@ -551,7 +572,7 @@ describe("getPropertyExecutionPlan", () => {
 
   test("panics when dangling edge references property not in properties", () => {
     const properties: ExecutionPlanProperty[] = [
-      createProperty("A"),
+      createProperty("A", { tool: manualInputTool }),
       createProperty("B"),
     ];
     const dependencies: PropertyDependencyEdge[] = [
@@ -567,8 +588,8 @@ describe("getPropertyExecutionPlan", () => {
 
 describe("COMPUTED_PROPERTY_TOOL_TYPES", () => {
   /** Every tool type a column can carry, read from the stored shape itself. */
-  const allToolTypes = propertyToolSchema.anyOf.map(
-    (member) => member.properties.type.const,
+  const allToolTypes = propertyToolSchema.options.map(
+    (member) => member.entries.type.literal,
   );
   /** The rest: columns a person fills in, which sit stale legitimately. */
   const USER_ENTERED_TOOL_TYPES = ["manual-input"] as const;
@@ -612,4 +633,170 @@ describe("COMPUTED_PROPERTY_TOOL_TYPES", () => {
       [...COMPUTED_PROPERTY_TOOL_TYPES].toSorted(),
     );
   });
+});
+
+describe("answer shape of an ask column", () => {
+  const verdictOf = (
+    askId: string,
+    rule: PlaybookVerdictTool["rule"],
+  ): ExecutionPlanProperty => ({
+    id: propertyId(`verdict-${askId}`),
+    status: "stale",
+    content: {
+      version: 1,
+      type: "single-select",
+      options: [],
+      fallback: null,
+    },
+    tool: {
+      version: 1,
+      type: "playbook-verdict",
+      askPropertyId: propertyId(askId),
+      rule,
+      severity: "medium",
+      tiers: { fallbacks: [], acceptableRules: [], notAcceptableRules: [] },
+    },
+  });
+  const askOf = (id: string): ExecutionPlanProperty => ({
+    id: propertyId(id),
+    status: "stale",
+    content: textContent,
+    tool: aiModelTool,
+  });
+
+  test("only an ask a tier match reads becomes a clause summary", () => {
+    const properties: ExecutionPlanProperty[] = [
+      {
+        id: propertyId("file"),
+        status: "fresh",
+        content: textContent,
+        tool: { version: 1, type: "manual-input" },
+      },
+      askOf("tier-match"),
+      askOf("presence"),
+      askOf("plain-column"),
+      verdictOf("tier-match", { kind: "positionMatch" }),
+      verdictOf("presence", { kind: "presence", expectation: "required" }),
+    ];
+    const asks = ["tier-match", "presence", "plain-column"];
+    const levels = getPropertyExecutionPlan({
+      properties,
+      dependencies: [
+        ...asks.map((id) => propertyDependency(id, "file")),
+        propertyDependency("verdict-tier-match", "tier-match"),
+        propertyDependency("verdict-presence", "presence"),
+      ],
+    });
+    const shapes = new Map(
+      levels
+        .flat()
+        .flatMap(({ properties: batch }) => batch)
+        .flatMap((property) =>
+          property.tool.type === "ai-model" && "answerShape" in property
+            ? [[property.id, property.answerShape]]
+            : [],
+        ),
+    );
+    expect(shapes.get(propertyId("tier-match"))).toBe("clause-summary");
+    expect(shapes.get(propertyId("presence"))).toBe("value");
+    expect(shapes.get(propertyId("plain-column"))).toBe("value");
+  });
+
+  // A constraint reads the answer itself, so a summary would make it fail
+  // silently; the order the columns are listed in must not decide that.
+  test("an ask a tier match shares with a value check stays a value, in any order", () => {
+    const tierMatch = {
+      ...verdictOf("shared", { kind: "positionMatch" }),
+      id: propertyId("verdict-shared-tier-match"),
+    };
+    const presence = {
+      ...verdictOf("shared", { kind: "presence", expectation: "required" }),
+      id: propertyId("verdict-shared-presence"),
+    };
+    const shapeOfSharedAsk = (verdicts: ExecutionPlanProperty[]) =>
+      getPropertyExecutionPlan({
+        properties: [
+          {
+            id: propertyId("file"),
+            status: "fresh",
+            content: textContent,
+            tool: { version: 1, type: "manual-input" },
+          },
+          askOf("shared"),
+          ...verdicts,
+        ],
+        dependencies: [
+          propertyDependency("shared", "file"),
+          ...verdicts.map(({ id }) => propertyDependency(id, "shared")),
+        ],
+      })
+        .flat()
+        .flatMap(({ properties: batch }) => batch)
+        .flatMap((property) =>
+          property.id === propertyId("shared") && "answerShape" in property
+            ? [property.answerShape]
+            : [],
+        );
+
+    expect(shapeOfSharedAsk([tierMatch, presence])).toEqual(["value"]);
+    expect(shapeOfSharedAsk([presence, tierMatch])).toEqual(["value"]);
+  });
+
+  // Only a text answer changes with the shape, so a typed ask can keep the
+  // value a check reads and still get every citation a tier match needs.
+  const typedAsks: [string, PropertyContent][] = [
+    [
+      "select",
+      { version: 1, type: "single-select", options: [], fallback: null },
+    ],
+    ["integer", { version: 1, type: "int" }],
+  ];
+  test.each(typedAsks)(
+    "a shared %s ask read by a tier match and a value check skips System One, in any order",
+    (_label, content) => {
+      const ask = { ...askOf("shared"), content };
+      const tierMatch = {
+        ...verdictOf("shared", { kind: "positionMatch" }),
+        id: propertyId("verdict-shared-tier-match"),
+      };
+      const presence = {
+        ...verdictOf("shared", { kind: "presence", expectation: "required" }),
+        id: propertyId("verdict-shared-presence"),
+      };
+      const planned = (verdicts: ExecutionPlanProperty[]) =>
+        getPropertyExecutionPlan({
+          properties: [
+            {
+              id: propertyId("file"),
+              status: "fresh",
+              content: textContent,
+              tool: { version: 1, type: "manual-input" },
+            },
+            ask,
+            ...verdicts,
+          ],
+          dependencies: [
+            propertyDependency("shared", "file"),
+            ...verdicts.map(({ id }) => propertyDependency(id, "shared")),
+          ],
+        })
+          .flat()
+          .flatMap(({ properties: batch }) => batch)
+          .filter(
+            (property): property is AIBatchProperty =>
+              property.tool.type === "ai-model",
+          );
+
+      for (const verdicts of [
+        [tierMatch, presence],
+        [presence, tierMatch],
+      ]) {
+        const asks = planned(verdicts);
+        expect(asks.map(({ answerShape }) => answerShape)).toEqual([
+          "clause-summary",
+        ]);
+        expect(splitPropertiesForSystemOne(asks).systemOne).toEqual([]);
+      }
+    },
+  );
 });

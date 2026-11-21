@@ -1,4 +1,5 @@
 import { describe, expect, it, test } from "bun:test";
+import path from "node:path";
 
 const MODES = ["draft", "final"] as const;
 const LABELS: readonly string[] = ["a", "b"];
@@ -12,19 +13,7 @@ const CASES = [
   { mode: "final", rank: 2 },
 ] as const;
 
-const MIXED: readonly (string | readonly [number, boolean])[] = ["a"];
-
 type Mode = (typeof MODES)[number];
-
-test("a table mixing scalar and array rows does not typecheck", () => {
-  // Bun spreads the array rows and passes the scalar rows whole, so no
-  // callback signature describes both.
-  // @ts-expect-error mixed row shapes
-  const register = () => test.each(MIXED);
-  // @ts-expect-error mixed row shapes
-  const registerGroup = () => describe.each(MIXED);
-  expect([register, registerGroup]).toHaveLength(2);
-});
 
 describe("readonly each tables", () => {
   test.each(MODES)("test.each accepts an as-const tuple: %s", (mode) => {
@@ -83,3 +72,20 @@ describe.each(PAIRS)(
     });
   },
 );
+
+// Runtime table spreading and contextual callback inference are separate
+// contracts. Compile this same canary under the repository's configuration so
+// removing the literal parameter types cannot turn it into a runtime-only test.
+test("the shared configuration typechecks readonly each callback inference", () => {
+  const compiled = Bun.spawnSync(
+    [
+      process.execPath,
+      "check",
+      "--no-pretty",
+      "--all",
+      `--project=${path.join(import.meta.dir, "tsconfig.json")}`,
+    ],
+    { stdout: "pipe", stderr: "pipe" },
+  );
+  expect(compiled.exitCode, compiled.stderr.toString()).toBe(0);
+});

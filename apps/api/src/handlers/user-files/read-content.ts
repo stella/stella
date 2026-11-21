@@ -1,26 +1,34 @@
 import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
+
+import { isDownloadOnlyFileMimeType } from "@stll/api-contract/chat-file-types";
 
 import { chatThreads, userFiles } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { auditedPresignDownload } from "@/api/lib/audited-download";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { ownerSyntheticSessionAuthorityReader } from "@/api/lib/auth";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { storedUserFileKey } from "@/api/lib/file-key";
+import { callerDownloadSource } from "@/api/lib/s3-presign";
+import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
+import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 
 const readUserFileContent = createSafeRootHandler(
   {
+    contract: "patch",
     contentDelivery: { type: "audited" },
     permissions: { chat: ["create"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "internal", reason: "upload_mechanics" },
-    params: t.Object({ fileId: tSafeId("userFile") }),
+    params: v.object({ fileId: resourceIdSchema("userFile") }),
   },
   async function* ({
     params: { fileId },
     safeDb,
-    session: { activeOrganizationId },
+    session: { activeOrganizationId, id: sourceSessionId },
     user,
     recordAuditEvent,
   }) {
@@ -29,7 +37,10 @@ const readUserFileContent = createSafeRootHandler(
         const file = (
           await tx
             .select({
+              fileName: userFiles.fileName,
+              mimeType: userFiles.mimeType,
               s3Key: userFiles.s3Key,
+              userId: userFiles.userId,
               workspaceId: chatThreads.workspaceId,
             })
             .from(userFiles)
@@ -54,15 +65,30 @@ const readUserFileContent = createSafeRootHandler(
         if (!file) {
           return null;
         }
+        const s3Key = storedUserFileKey({
+          key: file.s3Key,
+          organizationId: activeOrganizationId,
+          uploaderUserId: brandPersistedUserId(file.userId),
+        });
+        if (s3Key === null) {
+          return null;
+        }
 
         const presignedUrl = await auditedPresignDownload({
+          readSessionAuthority: ownerSyntheticSessionAuthorityReader,
           tx,
           recordAuditEvent,
           resourceType: AUDIT_RESOURCE_TYPE.USER_FILE,
           resourceId: fileId,
-          s3Key: file.s3Key,
+          userId: user.id,
+          source: callerDownloadSource({ id: sourceSessionId }),
+          s3Key,
           expiresInSeconds: 900,
           workspaceId: file.workspaceId,
+          // A name forces a download; every other file reads in the browser.
+          ...(isDownloadOnlyFileMimeType(file.mimeType)
+            ? { fileName: sanitizeFilename(file.fileName) }
+            : {}),
         });
 
         return presignedUrl;

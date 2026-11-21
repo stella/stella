@@ -14,6 +14,11 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { sqlCaseFragment } from "@/api/lib/sql-case-expression";
 
 const config = {
+  contract: "replace",
+  precondition: {
+    type: "deferred",
+    baselineId: "apps/api/src/handlers/case-law/research/columns-reorder.ts",
+  },
   description:
     "Set the order of the organization's question columns. The list must " +
     "name every column the organization keeps, exactly once.",

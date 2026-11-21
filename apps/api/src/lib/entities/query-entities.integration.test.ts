@@ -2,8 +2,8 @@ import { panic, Result } from "better-result";
 import {
   afterAll,
   afterEach,
-  beforeEach,
   beforeAll,
+  beforeEach,
   describe,
   expect,
   setDefaultTimeout,
@@ -24,6 +24,7 @@ import type { FieldContent, PropertyContent } from "@/api/db/schema-validators";
 import { createScopedDb } from "@/api/db/scoped";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { EntitiesWindowCursorValues } from "@/api/lib/entities/window-cursor";
 import { TASK_ASSIGNEE_ROLE } from "@/api/lib/entity-constants";
 import {
   buildFilterConditions,
@@ -120,6 +121,7 @@ const insertLiveSession = async ({
 
 const readActiveEditor = async () => {
   const result = await queryEntities({
+    textMode: "full",
     safeDb,
     scope: { type: "matter", workspaceId: ids.wsA1 },
     currentUserId: ids.userA1,
@@ -233,6 +235,7 @@ describe("entity creator projection", () => {
 
     try {
       const result = await queryEntities({
+        textMode: "full",
         safeDb,
         scope: { type: "matter", workspaceId: ids.wsA1 },
         currentUserId: ids.userA1,
@@ -271,6 +274,7 @@ describe("creator sort", () => {
     try {
       for (const desc of [false, true]) {
         const result = await queryEntities({
+          textMode: "full",
           safeDb,
           scope: { type: "matter", workspaceId: ids.wsA1 },
           currentUserId: ids.userA1,
@@ -340,6 +344,7 @@ describe("task assignee projection", () => {
     includeAssignees = true,
   ) => {
     const result = await queryEntities({
+      textMode: "full",
       safeDb,
       scope: { type: "matter", workspaceId: ids.wsA1 },
       currentUserId: ids.userA1,
@@ -669,6 +674,7 @@ describe("find in table", () => {
     search?: string;
   }): Promise<string[]> => {
     const result = await queryEntities({
+      textMode: "full",
       safeDb,
       scope: { type: "matter", workspaceId: ids.wsA1 },
       currentUserId: ids.userA1,
@@ -790,6 +796,7 @@ describe("find in table", () => {
       term: TERM,
     };
     const first = await queryEntities({
+      textMode: "full",
       safeDb,
       scope: { type: "matter", workspaceId: ids.wsA1 },
       currentUserId: ids.userA1,
@@ -809,6 +816,7 @@ describe("find in table", () => {
     expect(cursor).toBeDefined();
 
     const second = await queryEntities({
+      textMode: "full",
       safeDb,
       scope: { type: "matter", workspaceId: ids.wsA1 },
       currentUserId: ids.userA1,
@@ -881,4 +889,204 @@ describe("work type filters", () => {
       );
     }
   });
+});
+
+describe("property sort order", () => {
+  const sortEntityIds: SafeId<"entity">[] = [];
+  const sortPropertyIds = {
+    int: createSafeId<"property">(),
+    money: createSafeId<"property">(),
+    person: createSafeId<"property">(),
+  };
+
+  const seedRow = async (
+    name: string,
+    cells: { content: FieldContent; propertyId: SafeId<"property"> }[],
+  ): Promise<void> => {
+    const entityId = createSafeId<"entity">();
+    const versionId = createSafeId<"entityVersion">();
+    sortEntityIds.push(entityId);
+    await testDb.insert(entities).values({
+      id: entityId,
+      workspaceId: ids.wsA1,
+      kind: "document",
+      name,
+      displayName: name,
+    });
+    await testDb
+      .insert(entityVersions)
+      .values({ id: versionId, workspaceId: ids.wsA1, entityId });
+    await testDb
+      .update(entities)
+      .set({ currentVersionId: versionId })
+      .where(eq(entities.id, entityId));
+    if (cells.length > 0) {
+      await testDb.insert(fields).values(
+        cells.map((cell) => ({
+          id: createSafeId<"field">(),
+          workspaceId: ids.wsA1,
+          propertyId: cell.propertyId,
+          entityVersionId: versionId,
+          content: cell.content,
+        })),
+      );
+    }
+  };
+
+  const int = (value: number): FieldContent => ({
+    version: 1,
+    type: "int",
+    value,
+    currency: null,
+  });
+  const money = (amountCents: number, currency: string): FieldContent => ({
+    version: 1,
+    type: "money",
+    amountCents,
+    currency,
+  });
+  const person = (name: string): FieldContent => ({
+    version: 1,
+    type: "person",
+    userId: null,
+    name,
+    image: null,
+  });
+
+  beforeAll(async () => {
+    const tool = { version: 1 as const, type: "manual-input" as const };
+    const definitions: {
+      content: PropertyContent;
+      id: SafeId<"property">;
+      name: string;
+    }[] = [
+      {
+        id: sortPropertyIds.int,
+        name: "Count",
+        content: { version: 1, type: "int" },
+      },
+      {
+        id: sortPropertyIds.money,
+        name: "Amount",
+        content: { version: 1, type: "money", currency: null },
+      },
+      {
+        id: sortPropertyIds.person,
+        name: "Owner",
+        content: { version: 1, type: "person" },
+      },
+    ];
+    await testDb.insert(properties).values(
+      definitions.map((definition) => ({
+        id: definition.id,
+        workspaceId: ids.wsA1,
+        name: definition.name,
+        content: definition.content,
+        tool,
+        status: "fresh" as const,
+      })),
+    );
+
+    // Values chosen so text order differs from numeric order (100 < 9 < 20 as
+    // strings) and so an amount-only order would interleave currencies.
+    await seedRow("r1", [
+      { propertyId: sortPropertyIds.int, content: int(9) },
+      { propertyId: sortPropertyIds.money, content: money(900, "USD") },
+      { propertyId: sortPropertyIds.person, content: person("Zora") },
+    ]);
+    await seedRow("r2", [
+      { propertyId: sortPropertyIds.int, content: int(100) },
+      { propertyId: sortPropertyIds.money, content: money(10_000, "USD") },
+      { propertyId: sortPropertyIds.person, content: person("Adam") },
+    ]);
+    await seedRow("r3", [
+      { propertyId: sortPropertyIds.int, content: int(-5) },
+      { propertyId: sortPropertyIds.money, content: money(5000, "CZK") },
+      { propertyId: sortPropertyIds.person, content: person("Marta") },
+    ]);
+    await seedRow("r4", [
+      { propertyId: sortPropertyIds.int, content: int(20) },
+      { propertyId: sortPropertyIds.money, content: money(100, "CZK") },
+    ]);
+    await seedRow("r5", []);
+  });
+
+  afterAll(async () => {
+    if (sortEntityIds.length > 0) {
+      await testDb.delete(entities).where(inArray(entities.id, sortEntityIds));
+    }
+    await testDb
+      .delete(properties)
+      .where(inArray(properties.id, Object.values(sortPropertyIds)));
+  });
+
+  /** Every row, read one window at a time through the returned cursors. */
+  const readSortedNames = async (
+    propertyId: SafeId<"property">,
+    desc: boolean,
+    pageSize: number,
+  ): Promise<string[]> => {
+    const names: string[] = [];
+    let cursor: EntitiesWindowCursorValues | undefined;
+    for (let page = 0; page <= sortEntityIds.length; page++) {
+      const result = await queryEntities({
+        textMode: "full",
+        safeDb,
+        scope: { type: "matter", workspaceId: ids.wsA1 },
+        currentUserId: ids.userA1,
+        currentOrganizationId: ids.orgA,
+        filters: [],
+        sorts: [{ propertyId, desc }],
+        cursor,
+        limit: pageSize,
+        fieldMode: "visible",
+        fieldIds: [],
+        entityConditions: [inArray(entities.id, sortEntityIds)],
+      });
+      if (Result.isError(result)) {
+        throw result.error;
+      }
+      const rows = result.value.entities;
+      names.push(...rows.map((entity) => entity.name ?? ""));
+      const last = rows.at(-1);
+      if (rows.length < pageSize || last === undefined) {
+        return names;
+      }
+      cursor = result.value.cursorValuesByEntityId.get(last.entityId);
+    }
+    return panic("Paging did not terminate");
+  };
+
+  // Number and money rows without a value come last in both directions;
+  // person rows sort by their text key, so rows without one come first
+  // ascending and last descending.
+  const expectations = [
+    {
+      label: "int by number",
+      propertyId: sortPropertyIds.int,
+      asc: ["r3", "r1", "r4", "r2", "r5"],
+      desc: ["r2", "r4", "r1", "r3", "r5"],
+    },
+    {
+      label: "money by amount within its currency",
+      propertyId: sortPropertyIds.money,
+      asc: ["r4", "r3", "r1", "r2", "r5"],
+      desc: ["r2", "r1", "r3", "r4", "r5"],
+    },
+    {
+      label: "person by the name shown",
+      propertyId: sortPropertyIds.person,
+      asc: ["r4", "r5", "r2", "r3", "r1"],
+      desc: ["r1", "r3", "r2", "r4", "r5"],
+    },
+  ];
+
+  for (const { label, propertyId, asc, desc } of expectations) {
+    test(`orders ${label}, identically across page sizes`, async () => {
+      for (const pageSize of [1, 2, 50]) {
+        expect(await readSortedNames(propertyId, false, pageSize)).toEqual(asc);
+        expect(await readSortedNames(propertyId, true, pageSize)).toEqual(desc);
+      }
+    });
+  }
 });

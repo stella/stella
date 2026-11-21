@@ -1,0 +1,307 @@
+import { describe, expect, test } from "bun:test";
+import path from "node:path";
+
+import packageJson from "../package.json" with { type: "json" };
+import {
+  anyBootsPgliteTestDatabase,
+  assertTemplateDatabaseTestsAreExclusive,
+  bootsPgliteTestDatabase,
+  clusterExclusivePostgresTests,
+  EXCLUSIVE_SHARED_TABLE_DDL_TEST_PATHS,
+  findSharedTableDdlViolations,
+  isolateSharedTableDdlTests,
+  needsTemplateDatabase,
+  TEMPLATE_DATABASE_TEST_PATHS,
+} from "./postgres-test-plan";
+import { discoverGatedTestFiles } from "./run-gated-tests";
+
+const SHARED_TABLES = new Set(["contacts", "organization_settings"]);
+
+describe("PostgreSQL cluster-wide migration isolation", () => {
+  test.each([
+    'import { runMigrations } from "./migration-runner";',
+    'import { runMigrations as migrate } from "./migration-runner.js";',
+    'import * as runner from "@/api/db/migration-runner";',
+    'import runner = require("./migration-runner");',
+    'const runner = await import("./migration-runner");',
+    'const runner = require("./migration-runner");',
+    'import "./migration-runner";',
+  ])("isolates canonical migration runner access: %s", (source) => {
+    const testPath = "src/db/replay.db.test.ts";
+    expect(
+      clusterExclusivePostgresTests(new Map([[testPath, source]])),
+    ).toEqual(new Set([testPath]));
+  });
+
+  test.each([
+    'import type { MigrationTiming } from "./migration-runner";',
+    'import { type MigrationTiming } from "./migration-runner";',
+    'import { runMigrations } from "unrelated/migration-runner";',
+    'import { runMigrations } from "../other/migration-runner";',
+    '// import { runMigrations } from "./migration-runner";',
+    "const fixture = 'import { runMigrations } from \"./migration-runner\"';",
+  ])("retains parallelism for non-owning source: %s", (source) => {
+    expect(
+      clusterExclusivePostgresTests(
+        new Map([["src/db/example.db.test.ts", source]]),
+      ),
+    ).toEqual(new Set());
+  });
+
+  test.each([
+    "src/db/migration-runner.db.test.ts",
+    "src/db/skill-resource-folders-migration.db.test.ts",
+    "src/db/public-sanctions-reader.postgres.test.ts",
+  ])("isolates the actual committed-bundle replay in %s", async (testPath) => {
+    const source = await Bun.file(
+      path.join(import.meta.dirname, "..", testPath),
+    ).text();
+    expect(
+      clusterExclusivePostgresTests(new Map([[testPath, source]])),
+    ).toEqual(new Set([testPath]));
+  });
+});
+
+describe("PostgreSQL shared-table DDL isolation", () => {
+  test("rejects a non-isolated PostgreSQL DDL test and names every target", () => {
+    const testPath = "src/example.postgres.test.ts";
+    const violations = findSharedTableDdlViolations({
+      sources: new Map([
+        [
+          testPath,
+          `
+            await db.execute(sql\`DROP TRIGGER fixture ON public.contacts\`);
+            await db.execute(sql\`ALTER TABLE "public"."organization_settings" DROP COLUMN fixture\`);
+          `,
+        ],
+      ]),
+      sharedTables: SHARED_TABLES,
+      isolatedPaths: new Set(),
+    });
+
+    expect(violations).toEqual([
+      { testPath, tables: ["contacts", "organization_settings"] },
+    ]);
+  });
+
+  test("detects every target of TRUNCATE and DROP TABLE lists, with or without TABLE", () => {
+    for (const statement of [
+      "TRUNCATE contacts",
+      "TRUNCATE TABLE fixture, contacts RESTART IDENTITY CASCADE",
+      'TRUNCATE ONLY fixture, "public"."contacts"',
+      "DROP TABLE IF EXISTS fixture, public.contacts",
+      // Adjacent statements without semicolons each keep their own targets.
+      'const statements = ["TRUNCATE fixture", "TRUNCATE contacts"]',
+      'db.execute("DROP TABLE fixture")\ndb.execute("LOCK contacts")',
+    ]) {
+      expect(
+        findSharedTableDdlViolations({
+          sources: new Map([["src/example.postgres.test.ts", statement]]),
+          sharedTables: SHARED_TABLES,
+          isolatedPaths: new Set(),
+        }),
+        statement,
+      ).toEqual([
+        { testPath: "src/example.postgres.test.ts", tables: ["contacts"] },
+      ]);
+    }
+  });
+
+  test("detects every DDL form that names its table after ON, and LOCK lists", () => {
+    for (const statement of [
+      "CREATE OR REPLACE TRIGGER fixture BEFORE INSERT ON public.contacts FOR EACH ROW EXECUTE FUNCTION f()",
+      "CREATE CONSTRAINT TRIGGER fixture AFTER INSERT ON contacts FOR EACH ROW EXECUTE FUNCTION f()",
+      "ALTER TRIGGER fixture ON contacts RENAME TO other",
+      'DROP TRIGGER IF EXISTS fixture ON "public"."contacts"',
+      "CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS fixture ON ONLY contacts (id)",
+      "CREATE OR REPLACE RULE fixture AS ON INSERT TO contacts DO NOTHING",
+      "CREATE POLICY fixture ON contacts USING (true)",
+      "DROP POLICY IF EXISTS fixture ON contacts",
+      "LOCK TABLE fixture, contacts IN ACCESS EXCLUSIVE MODE",
+      "LOCK contacts",
+    ]) {
+      expect(
+        findSharedTableDdlViolations({
+          sources: new Map([["src/example.postgres.test.ts", statement]]),
+          sharedTables: SHARED_TABLES,
+          isolatedPaths: new Set(),
+        }),
+        statement,
+      ).toEqual([
+        { testPath: "src/example.postgres.test.ts", tables: ["contacts"] },
+      ]);
+    }
+  });
+
+  test("accepts shared-table DDL only when its file is isolated", () => {
+    const testPath =
+      "src/lib/lists/sanctions/monitoring-migrations.postgres.test.ts";
+    expect(
+      findSharedTableDdlViolations({
+        sources: new Map([
+          [testPath, "DROP TRIGGER fixture ON public.contacts"],
+        ]),
+        sharedTables: SHARED_TABLES,
+        isolatedPaths: EXCLUSIVE_SHARED_TABLE_DDL_TEST_PATHS,
+      }),
+    ).toEqual([]);
+  });
+
+  test("runs each shared-table DDL file after the ordinary batch", () => {
+    const isolated = "src/isolated.postgres.test.ts";
+    expect(
+      isolateSharedTableDdlTests(
+        ["src/first.postgres.test.ts", isolated, "src/last.postgres.test.ts"],
+        new Set([isolated]),
+      ),
+    ).toEqual([
+      ["src/first.postgres.test.ts", "src/last.postgres.test.ts"],
+      [isolated],
+    ]);
+  });
+});
+
+describe("PostgreSQL migrated template planning", () => {
+  test("creates a template only when a declared path is selected", () => {
+    expect(needsTemplateDatabase(["src/example.postgres.test.ts"])).toBeFalse();
+    expect(
+      needsTemplateDatabase([
+        "src/example.postgres.test.ts",
+        ...TEMPLATE_DATABASE_TEST_PATHS,
+      ]),
+    ).toBeTrue();
+  });
+
+  test("requires every template consumer to run exclusively", () => {
+    expect(() => assertTemplateDatabaseTestsAreExclusive()).not.toThrow();
+    expect(() =>
+      assertTemplateDatabaseTestsAreExclusive(
+        TEMPLATE_DATABASE_TEST_PATHS,
+        new Set(),
+      ),
+    ).toThrow("src/db/online-repairs-beside-writer.postgres.test.ts");
+  });
+});
+
+describe("PostgreSQL suites on the PGlite test database", () => {
+  test.each([
+    'import { getRlsFixture } from "@/api/tests/security/rls-fixture";',
+    'import { getTestDb } from "@/api/tests/security/test-utils";',
+    'import { createTestPglite } from "@/api/tests/pglite-test-db";',
+  ])("boots PGlite: %s", (source) => {
+    expect(bootsPgliteTestDatabase(source)).toBe(true);
+  });
+
+  test("a suite on PostgreSQL alone does not boot PGlite", () => {
+    expect(
+      bootsPgliteTestDatabase('import { getDb } from "@/api/db/root";'),
+    ).toBe(false);
+  });
+
+  // The runner boots these from one snapshot; this suite is the one whose
+  // in-process schema build outlasted its setup hook on a loaded runner.
+  test("detects the invoice export suite", async () => {
+    const apiRoot = path.resolve(import.meta.dir, "..");
+    expect(
+      await anyBootsPgliteTestDatabase(apiRoot, [
+        "src/handlers/invoices/pdf/export.integration.test.ts",
+      ]),
+    ).toBe(true);
+  });
+});
+
+describe("PostgreSQL shared batch", () => {
+  // Every shared-batch file reuses one process and one cached auth instance,
+  // so a module mock there arrives after another file built auth and never
+  // reaches it.
+  test("contains no module mocks", async () => {
+    const apiRoot = path.resolve(import.meta.dir, "..");
+    const runner = packageJson.ciGateTestRunners["test:postgres"];
+    const sharedFiles = (
+      await discoverGatedTestFiles({
+        apiRoot,
+        gate: runner.gate,
+        testFileGlob: runner.testFileGlob,
+      })
+    ).filter(
+      (testPath) => !EXCLUSIVE_SHARED_TABLE_DDL_TEST_PATHS.has(testPath),
+    );
+    expect(sharedFiles.length).toBeGreaterThan(0);
+    const mocking: string[] = [];
+    for (const testPath of sharedFiles) {
+      const source = await Bun.file(path.join(apiRoot, testPath)).text();
+      if (/\bmock\.module\s*\(/u.test(source)) {
+        mocking.push(testPath);
+      }
+    }
+    expect(
+      mocking,
+      `These PostgreSQL suites call mock.module in the shared test process; move the mocked cases to a .db.test.ts file, which runs in its own process:\n${mocking.join("\n")}`,
+    ).toEqual([]);
+  });
+});
+
+test.each([
+  "src/lib/case-law/sitemap-fairness-drain.postgres.test.ts",
+  "src/lib/case-law/sitemap-removal-refresh.postgres.test.ts",
+  "src/lib/case-law/sitemap-shard-refresh.postgres.test.ts",
+  "src/db/case-law-sitemap-packing-enrollment.postgres.test.ts",
+  "src/lib/case-law/sitemap-backlog-drain.postgres.test.ts",
+  "src/lib/case-law/sitemap-visibility-drain.postgres.test.ts",
+])(
+  "snapshot visibility proof %s runs after all cluster workers finish",
+  (testPath) => {
+    expect(
+      clusterExclusivePostgresTests(
+        new Map([[testPath, "test('visibility', () => {})"]]),
+      ),
+    ).toEqual(new Set([testPath]));
+  },
+);
+
+test("the scheduled-run block measurement runs after all cluster workers finish", async () => {
+  const testPath = "src/tests/query-perf/scheduled-run.postgres.test.ts";
+  const runner = packageJson.ciGateTestRunners["test:postgres"];
+  expect(
+    await discoverGatedTestFiles({
+      apiRoot: path.resolve(import.meta.dir, ".."),
+      gate: runner.gate,
+      testFileGlob: runner.testFileGlob,
+    }),
+  ).toContain(testPath);
+  expect(
+    clusterExclusivePostgresTests(
+      new Map([[testPath, "test('measurement', () => {})"]]),
+    ),
+  ).toEqual(new Set([testPath]));
+});
+
+test.each([
+  "SELECT pg_stat_get_backend_wal(pg_backend_pid())",
+  "SELECT pg_catalog.PG_STAT_GET_BACKEND_WAL \n (pg_backend_pid())",
+])(
+  "backend WAL measurement %s waits for every cluster worker",
+  (measurement) => {
+    const testPath = "src/tests/another-wal-measurement.postgres.test.ts";
+    expect(
+      clusterExclusivePostgresTests(new Map([[testPath, measurement]])),
+    ).toEqual(new Set([testPath]));
+  },
+);
+
+test("the replay WAL invariant is discovered and cluster exclusive", async () => {
+  const testPath = "src/lib/case-law/replay-write.postgres.test.ts";
+  const apiRoot = path.resolve(import.meta.dir, "..");
+  const runner = packageJson.ciGateTestRunners["test:postgres"];
+  expect(
+    await discoverGatedTestFiles({
+      apiRoot,
+      gate: runner.gate,
+      testFileGlob: runner.testFileGlob,
+    }),
+  ).toContain(testPath);
+  const source = await Bun.file(path.join(apiRoot, testPath)).text();
+  expect(clusterExclusivePostgresTests(new Map([[testPath, source]]))).toEqual(
+    new Set([testPath]),
+  );
+});

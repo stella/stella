@@ -1,40 +1,17 @@
-import Elysia from "elysia";
-
 import cloneBuiltinReportTemplate from "@/api/handlers/reports/builtins/clone";
 import readReportExport from "@/api/handlers/reports/exports/get";
 import listReportExports from "@/api/handlers/reports/exports/list";
 import listReportTemplates from "@/api/handlers/reports/templates/list";
 import exportViewReport from "@/api/handlers/reports/views/export";
-import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
+import { routes } from "@/api/http/route";
 
-export const reportsRoute = new Elysia({
-  prefix: "/workspaces/:workspaceId/reports",
-})
-  .use(workspaceAccessMacro)
-  .use(permissionMacro)
-  .guard({
-    validateWorkspaceAccess: true,
-  })
-  .get("/", listReportExports.handler, {
-    params: listReportExports.config.params,
-    permissions: listReportExports.config.permissions,
-    query: listReportExports.config.query,
-  })
-  .get("/templates", listReportTemplates.handler, {
-    params: listReportTemplates.config.params,
-    permissions: listReportTemplates.config.permissions,
-  })
-  .post("/templates/clone-builtin", cloneBuiltinReportTemplate.handler, {
-    body: cloneBuiltinReportTemplate.config.body,
-    params: cloneBuiltinReportTemplate.config.params,
-    permissions: cloneBuiltinReportTemplate.config.permissions,
-  })
-  .post("/export", exportViewReport.handler, {
-    body: exportViewReport.config.body,
-    params: exportViewReport.config.params,
-    permissions: exportViewReport.config.permissions,
-  })
-  .get("/:exportId", readReportExport.handler, {
-    params: readReportExport.config.params,
-    permissions: readReportExport.config.permissions,
-  });
+export const reportsRoute = routes(
+  {
+    "/": { GET: listReportExports },
+    "/templates": { GET: listReportTemplates },
+    "/templates/clone-builtin": { POST: cloneBuiltinReportTemplate },
+    "/export": { POST: exportViewReport },
+    "/:exportId": { GET: readReportExport },
+  },
+  { prefix: "/workspaces/:workspaceId/reports" },
+);

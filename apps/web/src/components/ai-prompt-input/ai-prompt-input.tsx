@@ -1,6 +1,5 @@
 import { useMemo, useRef, useState } from "react";
 
-import { useInfiniteQuery } from "@tanstack/react-query";
 import type { AnyExtension } from "@tiptap/core";
 import Paragraph from "@tiptap/extension-paragraph";
 import Text from "@tiptap/extension-text";
@@ -39,9 +38,9 @@ import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
-import { skillsOptions } from "@/lib/knowledge/queries";
+import { useSkillsPages } from "@/lib/knowledge/built-in-skills";
 import { useChatUnavailableSkillIds } from "@/lib/prompts/use-chat-unavailable-skills";
-import { useQueryView } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
 
 /**
  * How the controlled string `value` round-trips through the editor.
@@ -53,10 +52,11 @@ import { useQueryView } from "@/lib/use-query-view";
  *   `{{path}}` via each node's `renderText`, so the stored string stays
  *   resolvable by a backend prompt consumer without HTML parsing.
  */
-export type AIPromptValueFormat = "html" | "text";
+type AIPromptValueFormat = "html" | "text";
 
 type AIPromptEditAction = {
   disabled: boolean;
+  disabledReason?: string | undefined;
   isPending: boolean;
   label: string;
   onClick: (instruction: string) => void;
@@ -114,10 +114,11 @@ export const AIPromptInput = ({
   className,
 }: AIPromptInputProps) => {
   const { activeOrganizationId, id: userId } = useAuthenticatedUser();
-  const skillsQuery = useInfiniteQuery(
-    skillsOptions(activeOrganizationId, userId),
-  );
-  const skillsView = useQueryView(skillsQuery, {
+  const skillsQuery = useSkillsPages({
+    organizationId: activeOrganizationId,
+    userId,
+  });
+  const skillsView = queryView(skillsQuery, {
     isEmpty: (data) =>
       data.pages.every(
         (page) => page.builtIn.length === 0 && page.installed.length === 0,
@@ -134,6 +135,7 @@ export const AIPromptInput = ({
     activeOrganizationId,
     userId,
   );
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing, without this memo boundary the React Compiler does not cache this value
   const slashShortcutRows = useMemo(
     () =>
       commandShortcutRowsFromSkillPages(skillPages?.pages, unavailableSkillIds),
@@ -150,6 +152,7 @@ export const AIPromptInput = ({
     isFetchingNextSkillPage,
     isNextSkillPageError,
   ]);
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing, without this memo boundary the React Compiler does not cache this value
   const slashItems = useMemo<SlashItem[]>(
     () =>
       buildChatSlashItems({
@@ -317,6 +320,7 @@ export const AIPromptInput = ({
             variant === "filled" && "end-1 top-1",
           )}
           disabled={aiEditAction.disabled}
+          disabledReason={aiEditAction.disabledReason}
           isPending={aiEditAction.isPending}
           label={aiEditAction.label}
           onRewrite={aiEditAction.onClick}

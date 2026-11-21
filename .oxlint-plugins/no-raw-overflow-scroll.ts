@@ -42,6 +42,26 @@ const SCROLLING_OVERFLOW = new Set([
   "overflow-y-auto",
   "overflow-y-scroll",
 ]);
+const HORIZONTAL_SCROLLING_OVERFLOW = new Set([
+  "overflow-auto",
+  "overflow-scroll",
+  "overflow-x-auto",
+  "overflow-x-scroll",
+]);
+
+const hasHiddenScrollbar = (value: string): boolean =>
+  classTokens(value).some(
+    (token) =>
+      classBaseName(token) === "scrollbar-none" ||
+      (token.includes("scrollbar") &&
+        (token.includes("none") || token.includes(":hidden"))),
+  );
+
+const hasHiddenHorizontalScroller = (value: string): boolean =>
+  hasHiddenScrollbar(value) &&
+  classTokens(value).some((token) =>
+    HORIZONTAL_SCROLLING_OVERFLOW.has(classBaseName(token)),
+  );
 
 // Content whose scroller the browser has to own: a code block, a wide table,
 // and the editor surface are emitted by a renderer, so a caller reaches them
@@ -137,6 +157,10 @@ export default eslintCompatPlugin({
       meta: {
         type: "problem",
         messages: {
+          hiddenHorizontalScroller:
+            "Hidden horizontal scrollbars strand mouse and keyboard users. " +
+            "Use HorizontalScroller from @stll/ui/horizontal-scroller for a " +
+            "visible scrollbar, overflow controls, and wheel conversion.",
           rawOverflowScroll:
             "App chrome scrolls through ScrollArea from @stll/ui/scroll-area, " +
             "not a raw overflow-auto/scroll utility, so every scrollbar in the " +
@@ -155,12 +179,16 @@ export default eslintCompatPlugin({
             if (typeof node.value !== "string") {
               return;
             }
-            if (hasRawScrollingOverflow(node.value)) {
+            if (hasHiddenHorizontalScroller(node.value)) {
+              context.report({ node, messageId: "hiddenHorizontalScroller" });
+            } else if (hasRawScrollingOverflow(node.value)) {
               context.report({ node, messageId: "rawOverflowScroll" });
             }
           },
           TemplateElement(node) {
-            if (hasRawScrollingOverflow(node.value.raw)) {
+            if (hasHiddenHorizontalScroller(node.value.raw)) {
+              context.report({ node, messageId: "hiddenHorizontalScroller" });
+            } else if (hasRawScrollingOverflow(node.value.raw)) {
               context.report({ node, messageId: "rawOverflowScroll" });
             }
           },

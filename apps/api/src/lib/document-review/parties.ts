@@ -15,8 +15,8 @@ import * as v from "valibot";
 import type { AIRequestServiceTier, OrgAIConfig } from "@/api/lib/ai-config";
 import { resolveCaching } from "@/api/lib/ai-config";
 import {
-  createTanStackAIAnalyticsCallbacks,
   type AIUsageMetering,
+  createTanStackAIAnalyticsCallbacks,
 } from "@/api/lib/analytics/tanstack-ai";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
@@ -28,13 +28,16 @@ import {
 import type { ReviewParty } from "@/api/lib/document-review/contract";
 import {
   buildReviewDocumentParts,
+  fitReviewDocuments,
   reviewDocumentsScopeKey,
 } from "@/api/lib/document-review/review-document-messages";
 import { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
-import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
+import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
+import { generateTanStackObjectForTask } from "@/api/lib/tanstack-ai-generate";
 import type { PreparedDocxFile } from "@/api/lib/workflow/generate-batch";
+import { requestBudgetBytesForTask } from "@/api/lib/workflow/request-budget";
 
-const ROLE = "pdf" as const;
+const MODEL_TASK = "pdf";
 const TIMEOUT_MS = 60_000;
 
 // Bumped whenever `SYSTEM_PROMPT` or `proposedPartySchema` changes shape, so
@@ -74,7 +77,8 @@ export const normalizeParties = (
   return normalized;
 };
 
-const proposedPartiesSchema = v.strictObject({
+/** Read by the structured-output role contract test. @public */
+export const proposedPartiesSchema = v.strictObject({
   parties: v.array(proposedPartySchema),
 });
 
@@ -86,6 +90,7 @@ export type DetectReviewPartiesArgs = {
   target: PreparedDocxFile;
   targetEntityVersionId: SafeId<"entityVersion">;
   organizationId: SafeId<"organization">;
+  admission: ModelDispatchAdmission;
   workspaceId: SafeId<"workspace">;
   orgAIConfig: OrgAIConfig | null;
   managedAIResidency: ManagedAIResidency;
@@ -101,6 +106,7 @@ export const detectReviewParties = async ({
   target,
   targetEntityVersionId,
   organizationId,
+  admission,
   workspaceId,
   orgAIConfig,
   managedAIResidency,
@@ -111,16 +117,30 @@ export const detectReviewParties = async ({
 }: DetectReviewPartiesArgs): Promise<
   Result<ReviewParty[], WorkflowIntegrationError>
 > => {
+  const fitted = fitReviewDocuments({
+    target,
+    references: [],
+    budgetBytes: requestBudgetBytesForTask(MODEL_TASK, orgAIConfig, {
+      dataClass: "customer",
+      organizationId,
+      modelTier: admission.modelTier,
+    }),
+  });
+  if (Result.isError(fitted)) {
+    return Result.err(fitted.error);
+  }
+
   const caching = resolveCaching({
     promptCachingEnabled,
-    role: ROLE,
+    task: MODEL_TASK,
     scopeKey: reviewDocumentsScopeKey(targetEntityVersionId, []),
   });
   const aiAnalytics = createTanStackAIAnalyticsCallbacks({
     dataClass: "customer",
     feature: "document-review.parties",
-    modelRole: ROLE,
+    modelTask: MODEL_TASK,
     orgAIConfig,
+    modelTier: admission.modelTier,
     properties: {
       file_count: 1,
       organization_id: organizationId,
@@ -132,12 +152,14 @@ export const detectReviewParties = async ({
 
   return await Result.tryPromise({
     try: async () => {
-      const output = await generateTanStackObjectForRole({
+      const output = await generateTanStackObjectForTask({
         dataClass: "customer",
-        role: ROLE,
+        task: MODEL_TASK,
         orgAIConfig,
         managedAIResidency,
         organizationId,
+        admission,
+        userId: admission.userId,
         analytics: aiAnalytics,
         caching,
         serviceTier,
@@ -147,16 +169,14 @@ export const detectReviewParties = async ({
           {
             role: "user",
             content: buildReviewDocumentParts({
-              target,
+              target: fitted.value.target,
               references: [],
               caching,
             }),
           },
         ],
-        abortSignal: AbortSignal.any([
-          abortSignal,
-          AbortSignal.timeout(TIMEOUT_MS),
-        ]),
+        abortSignal,
+        deadlineMs: TIMEOUT_MS,
         outputSchema: proposedPartiesSchema,
       });
       return normalizeParties(output.parties);

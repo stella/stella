@@ -1,0 +1,174 @@
+import { GlobalRegistrator } from "@happy-dom/global-registrator";
+import { afterAll, afterEach, expect, test } from "bun:test";
+
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
+
+import messages from "@/i18n/langs/en.json";
+
+GlobalRegistrator.register({ url: "https://app.example.test" });
+const { act, useSyncExternalStore } = await import("react");
+const { cleanup, fireEvent, render, waitFor } =
+  await import("@testing-library/react");
+const { IntlProvider } = await import("use-intl");
+const { ChatComposerActionButton } =
+  await import("./chat-composer-action-button");
+const { isChatTurnGenerating } = await import("./chat-user-actions");
+const { isChatClientRequestActive } = await import("./chat-ui-tools");
+const { createChatRuntime } = await import("@/features/chat/chat-runtime");
+const { toChatThreadId } = await import("@/lib/chat-thread-ref");
+const { toSafeId } = await import("@/lib/safe-id");
+
+const previousFetch = globalThis.fetch;
+afterEach(() => {
+  cleanup();
+  globalThis.fetch = previousFetch;
+});
+afterAll(async () => {
+  await unregisterDomEnvironment();
+});
+
+test("a reattached Stop becomes disabled Send on the same element when its delayed probe finds a settled turn", async () => {
+  const probe = Promise.withResolvers<Response>();
+  globalThis.fetch = Object.assign(async () => await probe.promise, {
+    preconnect: () => undefined,
+  });
+  const errors: Error[] = [];
+  let reloads = 0;
+  const runtime = createChatRuntime({
+    activeTurnId: toSafeId<"chatTurn">("018f0000-0000-7000-8000-00000000000a"),
+    context: undefined,
+    initialMessages: [],
+    key: { scope: "global", threadId: toChatThreadId("observer-settled") },
+    onError: (error) => {
+      errors.push(error);
+    },
+    onFinish: () => undefined,
+    reloadThread: () => {
+      reloads += 1;
+    },
+  });
+  const Viewer = () => {
+    const snapshot = useSyncExternalStore(
+      runtime.subscribe,
+      runtime.getSnapshot,
+      runtime.getSnapshot,
+    );
+    return (
+      <IntlProvider locale="en" messages={messages} timeZone="UTC">
+        <ChatComposerActionButton
+          canSend={false}
+          isGenerating={isChatTurnGenerating({
+            hasError: snapshot.error !== undefined,
+            messages: snapshot.messages,
+            requestActive:
+              snapshot.reconnecting ||
+              isChatClientRequestActive(snapshot.status),
+            sessionGenerating: snapshot.sessionGenerating,
+            stopStatus: snapshot.stop.status,
+          })}
+          onSend={() => undefined}
+          onStop={runtime.stop}
+        />
+      </IntlProvider>
+    );
+  };
+  const ui = render(<Viewer />);
+  const stop = ui.getByRole("button", { name: messages.chat.stopResponse });
+  expect(stop.getAttribute("aria-disabled")).toBeNull();
+  await act(async () => {
+    probe.resolve(
+      Response.json({ type: "transcript", turnId: "settled-turn" }),
+    );
+  });
+  expect(
+    ui.queryByRole("button", { name: messages.chat.stopResponse }),
+  ).toBeNull();
+  expect(ui.getByRole("button", { name: messages.chat.sendPrompt })).toBe(stop);
+  // Disabled but still hoverable: its tooltip says why (`aria-disabled`).
+  expect(stop.getAttribute("aria-disabled")).toBe("true");
+  expect(reloads).toBe(1);
+  expect(errors).toEqual([]);
+});
+
+test("a stop on its way says Stopping and takes no second click", () => {
+  let stops = 0;
+  const ui = render(
+    <IntlProvider locale="en" messages={messages} timeZone="UTC">
+      <ChatComposerActionButton
+        canSend={false}
+        isGenerating
+        onSend={() => undefined}
+        onStop={() => {
+          stops += 1;
+        }}
+        stopping
+      />
+    </IntlProvider>,
+  );
+  const button = ui.getByRole("button", { name: messages.chat.stopping });
+  expect(button.getAttribute("aria-busy")).toBe("true");
+  expect(button.getAttribute("aria-disabled")).toBe("true");
+  button.click();
+  expect(stops).toBe(0);
+});
+
+test("an empty draft keeps Send reachable and names what to do", () => {
+  let sends = 0;
+  const ui = render(
+    <IntlProvider locale="en" messages={messages} timeZone="UTC">
+      <ChatComposerActionButton
+        canSend={false}
+        disabledReason={messages.chat.sendPromptEmpty}
+        isGenerating={false}
+        onSend={() => {
+          sends += 1;
+        }}
+      />
+    </IntlProvider>,
+  );
+  const button = ui.getByRole("button", { name: messages.chat.sendPrompt });
+  // Focusable and hoverable, so the tooltip with the reason can open.
+  expect(button.getAttribute("aria-disabled")).toBe("true");
+  expect(button.hasAttribute("disabled")).toBe(false);
+  button.click();
+  expect(sends).toBe(0);
+});
+
+const hover = (element: HTMLElement) => {
+  fireEvent.pointerEnter(element, { pointerType: "mouse" });
+  fireEvent.pointerMove(element, { pointerType: "mouse" });
+  fireEvent.mouseEnter(element);
+  fireEvent.mouseMove(element);
+};
+
+const openTooltips = () =>
+  [...document.querySelectorAll('[data-slot="tooltip-popup"]')].map(
+    (popup) => popup.textContent,
+  );
+
+test("a resting pointer keeps a tooltip open on Send only while it says why Send is disabled", async () => {
+  const Composer = ({ canSend }: { canSend: boolean }) => (
+    <IntlProvider locale="en" messages={messages} timeZone="UTC">
+      <ChatComposerActionButton
+        canSend={canSend}
+        disabledReason={messages.chat.sendPromptEmpty}
+        isGenerating={false}
+        onSend={() => undefined}
+      />
+    </IntlProvider>
+  );
+  const ui = render(<Composer canSend={false} />);
+  const send = ui.getByRole("button", { name: messages.chat.sendPrompt });
+  act(() => {
+    hover(send);
+  });
+  await waitFor(() => {
+    expect(openTooltips()).toEqual([messages.chat.sendPromptEmpty]);
+  });
+  // The draft fills under the resting pointer: an enabled Send names
+  // itself and keeps no tooltip open over the turn it starts.
+  ui.rerender(<Composer canSend />);
+  await waitFor(() => {
+    expect(openTooltips()).toEqual([]);
+  });
+});

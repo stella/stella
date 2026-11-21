@@ -1,17 +1,18 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { mapBoeError } from "@/api/handlers/legislation/boe-error";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { boeClient } from "@/api/lib/legal-search/boe-client";
 
-const paramsSchema = t.Object({
-  date: t.String({ pattern: "^\\d{8}$" }),
+const paramsSchema = v.object({
+  date: v.pipe(v.string(), v.regex(/^\d{8}$/u)),
 });
 
 const bormeSummary = createSafeRootHandler(
   {
+    contract: "patch",
     description:
       "Read the BORME summary the Spanish commercial registry gazette " +
       "published on one date, given as YYYYMMDD.",
@@ -21,7 +22,7 @@ const bormeSummary = createSafeRootHandler(
       type: "capability",
       readClass: "public",
       reason: "legal_corpus_admin",
-      consumesServices: true,
+      consumesServices: false,
     },
     access: "read",
     params: paramsSchema,

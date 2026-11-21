@@ -5,7 +5,7 @@ import { documentProcessingRuns } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
 
-export type OcrDerivativeRun = {
+type OcrDerivativeRun = {
   id: SafeId<"documentProcessingRun">;
 };
 

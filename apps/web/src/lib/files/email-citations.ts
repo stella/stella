@@ -1,9 +1,9 @@
-import { useMemo, useSyncExternalStore } from "react";
+import { useSyncExternalStore } from "react";
 
 import {
   EMAIL_CITATION_HREF_PREFIX,
-  parseEmailCitationHref,
   type EmailCitationHrefTarget,
+  parseEmailCitationHref,
 } from "@stll/api-contract";
 
 export { EMAIL_CITATION_HREF_PREFIX, parseEmailCitationHref };
@@ -147,7 +147,7 @@ const subscribeToNoEmailCitations = (): (() => void) => noEmailCitationCleanup;
 export const useKnownEmailCitationTarget = (
   href: string,
 ): EmailCitationTarget | null => {
-  const target = useMemo(() => parseEmailCitationHref(href), [href]);
+  const target = parseEmailCitationHref(href);
   const known = useSyncExternalStore(
     target
       ? subscribeToEmailCitationRegistrations

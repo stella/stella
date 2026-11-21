@@ -2,7 +2,7 @@
  * Generate the built-in "Due Diligence Report" DOCX asset.
  *
  * Bun-runnable: `bun apps/api/scripts/generate-dd-report-template.ts`.
- * Hand-builds the OOXML with JSZip (literal `{{...}}` / `{% for %}` / `{% if %}`
+ * Hand-builds the OOXML with ZipArchive (literal `{{...}}` / `{% for %}` / `{% if %}`
  * markers placed verbatim in paragraphs, which a structured document builder
  * would fight) and writes the committed asset the runtime loads. The two
  * AI-drafted fields carry their configuration in their own markers' filter
@@ -22,7 +22,9 @@
  */
 
 import { panic } from "better-result";
+import { fileURLToPath } from "node:url";
 
+import { ZipArchive } from "@stll/docx-core/zip";
 import {
   filtersFromFieldConfig,
   renderValueMarker,
@@ -531,10 +533,9 @@ const CONTENT_TYPE = {
 } as const;
 
 const createDocx = async (): Promise<Buffer> => {
-  const JSZip = (await import("jszip")).default;
-  const zip = new JSZip();
+  const zip = new ZipArchive();
 
-  zip.file(
+  zip.set(
     "[Content_Types].xml",
     '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
       '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
@@ -547,40 +548,35 @@ const createDocx = async (): Promise<Buffer> => {
       "</Types>",
   );
 
-  zip
-    .folder("_rels")
-    ?.file(
-      ".rels",
-      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
-        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
-        `<Relationship Id="rId1" Type="${REL.officeDocument}" Target="word/document.xml"/>` +
-        "</Relationships>",
-    );
+  zip.set(
+    "_rels/.rels",
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+      `<Relationship Id="rId1" Type="${REL.officeDocument}" Target="word/document.xml"/>` +
+      "</Relationships>",
+  );
 
-  const word = zip.folder("word");
-  word?.file(
-    "document.xml",
+  zip.set(
+    "word/document.xml",
     '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
       '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"' +
       ' xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">' +
       `<w:body>${bodyXml}${SECT_PR}</w:body></w:document>`,
   );
-  word?.file("styles.xml", STYLES_XML);
-  word?.file("header1.xml", HEADER_XML);
-  word?.file("footer1.xml", FOOTER_XML);
-  word
-    ?.folder("_rels")
-    ?.file(
-      "document.xml.rels",
-      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
-        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
-        `<Relationship Id="rId1" Type="${REL.styles}" Target="styles.xml"/>` +
-        `<Relationship Id="rId2" Type="${REL.header}" Target="header1.xml"/>` +
-        `<Relationship Id="rId3" Type="${REL.footer}" Target="footer1.xml"/>` +
-        "</Relationships>",
-    );
+  zip.set("word/styles.xml", STYLES_XML);
+  zip.set("word/header1.xml", HEADER_XML);
+  zip.set("word/footer1.xml", FOOTER_XML);
+  zip.set(
+    "word/_rels/document.xml.rels",
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+      `<Relationship Id="rId1" Type="${REL.styles}" Target="styles.xml"/>` +
+      `<Relationship Id="rId2" Type="${REL.header}" Target="header1.xml"/>` +
+      `<Relationship Id="rId3" Type="${REL.footer}" Target="footer1.xml"/>` +
+      "</Relationships>",
+  );
 
-  const buffer = await zip.generateAsync({ type: "nodebuffer" });
+  const buffer = Buffer.from(await zip.generate({ compression: "store" }));
   return Buffer.from(buffer);
 };
 
@@ -590,7 +586,7 @@ const main = async (): Promise<void> => {
     import.meta.url,
   );
   await Bun.write(outUrl, await createDocx());
-  console.info(`[generate-dd-report-template] wrote ${outUrl.pathname}`);
+  console.info(`[generate-dd-report-template] wrote ${fileURLToPath(outUrl)}`);
 };
 
 await main();

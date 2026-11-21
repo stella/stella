@@ -26,9 +26,9 @@ describe("decisionMatchToOpen", () => {
   test("one decision found in a file that may hold more opens with the note", () => {
     expect(
       decisionMatchToOpen<Hit>({
-        candidates: [first],
-        reason: "file_incomplete",
-        status: "ambiguous",
+        decision: first,
+        missing: ["sheet"],
+        status: "incomplete_identifier",
       }),
     ).toEqual({ decision: first, fileMayHoldOthers: true });
   });
@@ -36,12 +36,6 @@ describe("decisionMatchToOpen", () => {
   test("several candidates, or a selector nobody carries, stay with the list", () => {
     const stays: DecisionIdentityResolution<Hit>[] = [
       { status: "none" },
-      {
-        candidates: [first, second],
-        reason: "file_incomplete",
-        status: "ambiguous",
-      },
-      { candidates: [], reason: "file_incomplete", status: "ambiguous" },
       { candidates: [first, second], reason: "several", status: "ambiguous" },
       { candidates: [first], reason: "several", status: "ambiguous" },
       {
@@ -70,7 +64,10 @@ test("the selected source narrows both browse and ranked decision requests", () 
       country: "CZ",
       sourceId,
       excerpt: DEFAULT_SEARCH_EXCERPT,
-      ...(q === undefined ? {} : { search: q, sort: "relevance" }),
+      // A listing walks the dates (newest first by default); a search ranks.
+      ...(q === undefined
+        ? { sort: "newest" }
+        : { search: q, sort: "relevance" }),
     });
   }
 });

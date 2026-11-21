@@ -29,16 +29,20 @@ import * as externalMcpToolsModule from "@/api/handlers/chat/tools/external-mcp-
 import { GET_DOCUMENT_OUTLINE_TOOL_NAME } from "@/api/handlers/chat/tools/folio-agent-tools";
 import { SEARCH_ALL_PAST_CHATS_TOOL_NAME } from "@/api/handlers/chat/tools/past-chat-tools";
 import { WEB_SEARCH_TOOL_NAME } from "@/api/handlers/chat/tools/web-search-tools";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
-import type { AccessibleWorkspace } from "@/api/lib/auth";
+import type { AccessibleWorkspace } from "@/api/lib/auth/accessible-workspace";
 import type { SafeId } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { CHAT_ORACLE, violationsOf } from "@/api/tests/helpers/chat-oracles";
 import { createChatStreamMock } from "@/api/tests/helpers/chat-stream-mock";
-import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
+import {
+  createTestHandlerContext,
+  NO_AUDIT,
+} from "@/api/tests/helpers/handler-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 import {
@@ -184,7 +188,6 @@ type Chat = {
 };
 
 // Only its shape matters: no tool built here runs.
-const FILE_FIELD_ID = toSafeId<"field">(Bun.randomUUIDv7());
 
 const workspaces = (): AccessibleWorkspace[] => [
   { id: ids.wsA1, status: "active" },
@@ -200,6 +203,7 @@ const callerContext = () => ({
   orgAIConfig,
   safeDb,
   scopedDb,
+  set: { headers: {}, status: 200 },
   session: { activeOrganizationId: ids.orgA },
   user: { id: ids.userA1 },
 });
@@ -210,6 +214,7 @@ const menuOffers = async (chat: Chat): Promise<ReadonlySet<string>> => {
     createTestHandlerContext<
       Parameters<typeof listUnavailableChatSkills.handler>[0]
     >({
+      audit: NO_AUDIT,
       ...callerContext(),
       query: {
         anonymized: chat.anonymized,
@@ -223,7 +228,7 @@ const menuOffers = async (chat: Chat): Promise<ReadonlySet<string>> => {
           : {
               document: CHAT_SKILL_DOCUMENT.file,
               documentId: ids.entityA1,
-              ...(chat.file.withField ? { fileFieldId: FILE_FIELD_ID } : {}),
+              ...(chat.file.withField ? { fileFieldId: ids.fieldA1 } : {}),
             }),
         ...(chat.matter ? { workspaceId: ids.wsA1 } : {}),
         ...(chat.pinned === true ? { contextMatterIds: [ids.wsA2] } : {}),
@@ -279,7 +284,12 @@ const sendAccepts = async (chat: Chat): Promise<ReadonlySet<string>> => {
   };
   const forwardedProps = {
     ...(chat.browserExtension
-      ? { browserClient: { protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION } }
+      ? {
+          browserExtension: {
+            protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
+            status: "connected" as const,
+          },
+        }
       : {}),
     ...(chat.editApplyMode === undefined
       ? {}
@@ -291,7 +301,7 @@ const sendAccepts = async (chat: Chat): Promise<ReadonlySet<string>> => {
             entityId: ids.entityA1,
             fileName: "entityA1.docx",
             supportsDocxEdits: true,
-            ...(chat.file.withField ? { fileFieldId: FILE_FIELD_ID } : {}),
+            ...(chat.file.withField ? { fileFieldId: ids.fieldA1 } : {}),
           },
         }),
     ...(workspaceId === null ? {} : { workspaceId }),
@@ -323,8 +333,9 @@ const sendAccepts = async (chat: Chat): Promise<ReadonlySet<string>> => {
       pinServerValidatedWorkspaceId: () => false,
       promptCachingEnabled: false,
       recordAuditEvent: async () => undefined,
-      request: new Request("http://localhost/v1/chat/send"),
-      route: "/v1/chat/send",
+      request: new Request("http://localhost/v1/chat"),
+      route: "/v1/chat" satisfies ApiRoutePath,
+      headers: {},
     }),
   );
   expect(result).toBeInstanceOf(Response);

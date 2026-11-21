@@ -1,43 +1,105 @@
 import { PGlite } from "@electric-sql/pglite";
 import { pg_trgm } from "@electric-sql/pglite/contrib/pg_trgm";
-import { getTableName, sql } from "drizzle-orm";
+import { panic } from "better-result";
+import {
+  Column,
+  getColumns,
+  getTableName,
+  is,
+  isTable,
+  SQL,
+  sql,
+} from "drizzle-orm";
 import type { SQLWrapper } from "drizzle-orm";
+import { getViewConfig, isPgView, PgDialect } from "drizzle-orm/pg-core";
 import { drizzle } from "drizzle-orm/pglite";
 
 import * as agentAuthSchema from "@/api/db/agent-auth-schema";
 import * as authSchema from "@/api/db/auth-schema";
 import * as rlsExports from "@/api/db/rls";
+import type { Transaction } from "@/api/db/root";
+import type { ScopedDb } from "@/api/db/safe-db";
 import * as schema from "@/api/db/schema";
 import type { AnyDrizzle } from "@/api/db/scoped";
 import {
+  caseLawDecisionViewGrantStatement,
+  CITATION_POLARITY_EVIDENCE_COLUMN_GRANTS_BY_RELATION,
+  COLLECTION_BODY_COLUMN_GRANTS_BY_RELATION,
+  COLLECTION_OBSERVATION_COLUMN_GRANTS_BY_RELATION,
+  COLLECTION_PART_COLUMN_GRANTS_BY_RELATION,
   PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION,
+  type PublicLawColumnGrant,
+  publicLawColumnPairs,
   ROLLOUT_CASE_LAW_SOURCE_COLUMNS,
   ROLLOUT_CASE_LAW_SOURCE_RELATION,
   ROLLOUT_CASE_LAW_WHOLE_RELATIONS,
 } from "@/api/lib/public-law-relations";
+import { readPgliteTestSnapshotPath } from "@/api/tests/env";
+import { installCorpusProjectionSeedingGuard } from "@/api/tests/helpers/corpus-projection-seeding-guard";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   createSchemaPglite,
-  installPgliteDecisionAliases,
-  installPgliteFlowTransitions,
-  installPgliteChatRunLogRls,
-  installPgliteChatTurnRunIdLookup,
+  installPgliteAccountAuditRls,
   installPgliteAgentSkillRevisionTrigger,
+  installPgliteAiMemoryActiveUserGuard,
+  installPgliteCaseLawContentChangedAt,
+  installPgliteCaseLawCountryShape,
+  installPgliteCaseLawCoverageSummary,
   installPgliteCaseLawObservationFence,
+  installPgliteCaseLawParsedSourceInvalidation,
+  installPgliteCaseLawPopulationCounts,
+  installPgliteCaseLawRankingSignalChanges,
+  installPgliteCaseLawSitemapChanges,
+  installPgliteChatMessageRevisionsRls,
+  installPgliteChatRunLogRls,
+  installPgliteChatSecretRls,
+  installPgliteChatStoredContentEgress,
+  installPgliteChatTurnOrdinal,
+  installPgliteChatTurnRunIdLookup,
+  installPgliteCitationDoctrineRls,
+  installPgliteConflictCheckRoutines,
+  installPgliteCorpusIndexGenerationRetire,
+  installPgliteCorpusIndexSeedingLifecycle,
+  installPgliteCorpusProjectionDeleteTasks,
   installPgliteCorpusProjectionRevisionFence,
+  installPgliteCorrespondenceSources,
+  installPgliteDecisionAliases,
+  installPgliteDecisionCitationStats,
+  installPgliteDecisionDocketFilingYear,
+  installPgliteDesktopPresenceRls,
+  installPgliteEntityFeatureGateMaintenance,
+  installPgliteFileObjectReconciliationFill,
+  installPgliteFindingDecisionHistory,
+  installPgliteFlowTransitions,
+  installPgliteInvoiceLinks,
+  installPgliteInvoiceObjects,
+  installPgliteLegalHoldDeleteBackstop,
   installPgliteLegislationExpressionIdentity,
   installPgliteLegislationPayloadRevision,
-  installPgliteProvisionExtractionState,
-  installPgliteSchedulerJobPauseLog,
+  installPgliteMatterTimerPresence,
+  installPgliteModelRunBudgets,
+  installPgliteOrganizationDeleteOwnerGuard,
   installPgliteOrganizationMemberCapacity,
-  installPgliteWorkspaceContactCapacity,
   installPglitePdfSigningTokenScopes,
   installPglitePlaybookDocumentTypeKey,
+  installPgliteProvisionExtractionState,
+  installPgliteReaderAnnotationMatterRows,
+  installPgliteReaderAnswerRls,
+  installPgliteSanctionsMonitoringTriggers,
+  installPgliteSchedulerJobPauseLog,
   installPgliteSchemaPrerequisites,
-  readPglitePublicSanctionsGrants,
+  installPgliteSearchHistoryClearFence,
+  installPgliteServiceClientCredentialCascade,
+  installPgliteSharepointPolicyFence,
+  installPgliteSsoProviderIdentityGuard,
   installPgliteStatuteCitationCounts,
+  installPgliteSyntheticMembershipTrigger,
   installPgliteTimeEntryTimerSignals,
   installPgliteTreeParentGuards,
+  installPgliteUserFileOrganizationKeyGuard,
   installPgliteWorkspaceAccessObjects,
+  installPgliteWorkspaceContactCapacity,
+  readPglitePublicSanctionsGrants,
 } from "@/api/tests/pglite-schema";
 import {
   deriveStellaTablePrivileges,
@@ -50,7 +112,7 @@ import {
 // costs a ~2.2 GB peak (drizzle-kit's push diffing plus PGlite WASM churn);
 // loading a snapshot skips drizzle-kit entirely and keeps the process near
 // PGlite's runtime floor.
-export const PGLITE_TEST_SNAPSHOT_ENV = "PGLITE_TEST_SNAPSHOT";
+const PGLITE_TEST_SNAPSHOT_ENV = "PGLITE_TEST_SNAPSHOT";
 
 const allSchema = {
   ...schema,
@@ -58,6 +120,19 @@ const allSchema = {
   ...agentAuthSchema,
   ...rlsExports,
 };
+
+const publicLawRelations = new Set(
+  Object.keys(PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION),
+);
+const publicLawViews = Object.values(allSchema).flatMap((entity) => {
+  if (!isPgView(entity)) {
+    return [];
+  }
+  const config = getViewConfig(entity);
+  return !config.isExisting && publicLawRelations.has(config.name)
+    ? [entity]
+    : [];
+});
 
 const quoteSqlIdentifier = (identifier: string) =>
   `"${identifier.replaceAll('"', '""')}"`;
@@ -206,13 +281,17 @@ export const CORPUS_SAMPLE_READER_SELECT_COLUMNS = {
  * reader grant and no writer.
  */
 export const CASE_LAW_SOURCE_INGESTION_UPDATE_COLUMNS = [
+  "config",
   "sync_cursor",
   "last_sync_at",
   "updated_at",
   "observation_order",
   "checkpoint_observation_order",
+  "removal_checkpoint",
   "ingestion_lease_token",
   "ingestion_lease_expires_at",
+  "ingestion_lease_purpose",
+  "decision_merge_epoch",
   "reported_total",
   "reported_total_as_of",
   "reported_total_origin",
@@ -222,7 +301,21 @@ export const CASE_LAW_SOURCE_INGESTION_UPDATE_COLUMNS = [
   "stored_total_next_refresh_at",
   "stored_total_held_since",
   "stored_total_warned_slot",
+  "import_snapshot_date",
 ] as const;
+
+/**
+ * Build the transaction boundary used by case-law ingestion tests. Fixture
+ * setup and assertions keep using the owner handle; only pipeline callbacks
+ * assume the deployment's least-privileged ingestion role.
+ */
+export const createIngestionRoleScopedDb =
+  (database: AnyDrizzle): ScopedDb =>
+  async <T>(callback: (tx: Transaction) => Promise<T>): Promise<T> =>
+    await database.transaction(async (tx) => {
+      await tx.execute(sql`SET LOCAL ROLE stella_ingestion`);
+      return await callback(asTestRaw<Transaction>(tx));
+    });
 
 /**
  * Execute a read callback under the same role used by the external public-law
@@ -275,7 +368,77 @@ const CORPUS_PROJECTION_REVISION_TABLE_SQL = quoteSqlIdentifier(
  * harness mirrors the migrations, so it leaves them ungranted too.
  */
 const PUBLIC_LAW_COLUMNS_GRANTED_IN_A_LATER_RELEASE: ReadonlySet<string> =
-  new Set(["case_law_decisions.docket_family_key"]);
+  new Set(
+    [
+      CITATION_POLARITY_EVIDENCE_COLUMN_GRANTS_BY_RELATION,
+      COLLECTION_BODY_COLUMN_GRANTS_BY_RELATION,
+      COLLECTION_OBSERVATION_COLUMN_GRANTS_BY_RELATION,
+      COLLECTION_PART_COLUMN_GRANTS_BY_RELATION,
+    ]
+      .flatMap(publicLawColumnPairs)
+      .map(({ relation, column }) => `${relation}.${column}`),
+  );
+
+const installedSchemaColumns = new Map(
+  Object.values(schema).flatMap((relation) => {
+    if (!isTable(relation) && !isPgView(relation)) {
+      return [];
+    }
+    const name = isTable(relation)
+      ? getTableName(relation)
+      : getViewConfig(relation).name;
+    const columns = new Set(
+      Object.values(getColumns(relation)).map((column) => {
+        if (is(column, Column)) {
+          return column.name;
+        }
+        if (is(column, SQL.Aliased)) {
+          return column.fieldAlias;
+        }
+        return panic(
+          `Unsupported fixture column in public-law relation ${name}`,
+        );
+      }),
+    );
+    return [[name, columns] as const];
+  }),
+);
+
+export const grantedPublicLawColumns = (
+  relation: string,
+  columns: Readonly<Record<string, PublicLawColumnGrant>>,
+  installedColumns: ReadonlySet<string> | undefined,
+) =>
+  Object.entries(columns).flatMap(([column, grant]) => {
+    switch (grant) {
+      case "required":
+        if (!installedColumns?.has(column)) {
+          return panic(
+            `Required public-law fixture column is absent: ${relation}.${column}`,
+          );
+        }
+        break;
+      case "permitted":
+        if (!installedColumns?.has(column)) {
+          return [];
+        }
+        break;
+      default:
+        grant satisfies never;
+        return panic("Unhandled public-law fixture column grant");
+    }
+    return PUBLIC_LAW_COLUMNS_GRANTED_IN_A_LATER_RELEASE.has(
+      `${relation}.${column}`,
+    )
+      ? []
+      : [column];
+  });
+
+// Expansion releases may declare permitted grants before their relations exist.
+// The harness pushes only this checkout's schema, so it cannot grant those yet.
+export const availableSchemaRelationNames = new Set(
+  installedSchemaColumns.keys(),
+);
 
 /**
  * Role grants the harness runs after `stella`'s table privileges are set from
@@ -284,10 +447,17 @@ const PUBLIC_LAW_COLUMNS_GRANTED_IN_A_LATER_RELEASE: ReadonlySet<string> =
  * is how a REVOKE goes missing from the harness.
  */
 export const ROLE_GRANT_STATEMENTS = [
+  `GRANT UPDATE (${schema.INVOICE_SEND_UPDATE_COLUMNS.map(({ name }) => quoteSqlIdentifier(name)).join(", ")}) ON TABLE "invoice_sends" TO stella`,
+  `GRANT SELECT (generation_provenance), UPDATE (generation_provenance), INSERT (generation_provenance) ON chat_threads TO stella`,
   `GRANT SELECT ON TABLE "soft_law_sources", "soft_law_documents", "soft_law_document_versions", "soft_law_document_locators", "soft_law_ingestion_attempts" TO stella_ingestion`,
   `GRANT INSERT, UPDATE ON TABLE "soft_law_documents", "soft_law_document_versions", "soft_law_document_locators", "soft_law_ingestion_attempts" TO stella_ingestion`,
   `GRANT UPDATE (listing_baseline, listing_seen, listing_expected_total, sync_cursor, last_sync_at, run_state, run_id, run_started_at, lease_token, lease_expires_at, failure_tag) ON TABLE "soft_law_sources" TO stella_ingestion`,
+  `GRANT INSERT ON TABLE "soft_law_sources" TO stella_ingestion`,
+  `GRANT INSERT ON TABLE "system_audit_runs" TO stella_ingestion`,
   `GRANT SELECT, INSERT, UPDATE ON TABLE "case_law_decision_aliases" TO stella_ingestion`,
+  `GRANT SELECT, INSERT, UPDATE ON TABLE "case_law_completeness_census" TO stella_ingestion`,
+  `GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "case_law_decision_alias_moved_identities" TO stella_ingestion`,
+  caseLawDecisionViewGrantStatement("later", "stella_ingestion"),
   `
     GRANT SELECT (${AUTH_USER_STELLA_SELECT_COLUMNS_SQL})
       ON TABLE "user" TO stella
@@ -319,6 +489,7 @@ export const ROLE_GRANT_STATEMENTS = [
       "case_law_judges",
       "case_law_decision_judges",
       "case_law_citations",
+      "case_law_decision_reviews",
       "case_law_provision_citations",
       "case_law_statute_citation_memberships",
       "case_law_statute_citation_counts",
@@ -331,8 +502,13 @@ export const ROLE_GRANT_STATEMENTS = [
       "case_law_ingestion_events",
       "case_law_ingestion_failures",
       "case_law_index_jobs",
-      "case_law_citation_reviews"
+      "case_law_citation_reviews",
+      "case_law_citation_doctrine_reviews"
     TO stella_ingestion
+  `,
+  // Redaction erases the doctrine evidence quoted from the citing decision.
+  `
+    GRANT DELETE ON TABLE "case_law_citation_doctrine_reviews", "case_law_citation_reviews" TO stella_ingestion
   `,
   `
     GRANT INSERT, UPDATE, DELETE ON TABLE
@@ -342,6 +518,7 @@ export const ROLE_GRANT_STATEMENTS = [
       "case_law_judges",
       "case_law_decision_judges",
       "case_law_citations",
+      "case_law_decision_reviews",
       "case_law_provision_citations",
       "case_law_statute_citation_memberships",
       "case_law_statute_citation_counts",
@@ -366,29 +543,69 @@ export const ROLE_GRANT_STATEMENTS = [
   `
     GRANT MAINTAIN ON TABLE "case_law_sources" TO stella_ingestion
   `,
+  `
+    GRANT SELECT ("removal_checkpoint") ON TABLE "case_law_sources" TO stella_ingestion
+  `,
+  `
+    GRANT SELECT ("import_snapshot_date") ON TABLE "case_law_sources" TO stella_ingestion
+  `,
   // Ingestion-owned case-law tables the migrations grant one by one, as they
   // were added. `pglite-role-grants.test.ts` holds this list and the
   // migrations to agreement, so the next such table cannot be forgotten here.
   `
     GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE
       "case_law_reconciliation_items",
+      "case_law_removal_reconciliation_items",
       "case_law_search_backfill_failures",
       "case_law_coverage_slices",
       "case_law_corpus_upload_intents",
       "case_law_corpus_pack_refs",
       "case_law_corpus_tombstones",
       "case_law_decision_source_identities",
+      "case_law_decision_fallback_identities",
       "case_law_decision_supplements",
+      "case_law_held_decision_attachments",
+      "case_law_ingestion_failure_evidence",
       "case_law_search_document_preview_passages",
       "case_law_citation_resolution_census",
       "case_law_citation_resolution_census_runs",
       "case_law_citation_resolution_progress",
       "case_law_raw_sweeps",
-      "case_law_citation_authority_sweep"
+      "case_law_citation_authority_sweep",
+      "case_law_decision_citation_stats",
+      "case_law_decision_citation_stats_state",
+      "case_law_decision_anchor_redirects"
     TO stella_ingestion
   `,
   `
     GRANT SELECT, INSERT ON TABLE "case_law_corpus_jurisdictions"
+    TO stella_ingestion
+  `,
+  `
+    GRANT SELECT, DELETE ON TABLE
+      "case_law_browse_facet_counts",
+      "case_law_coverage_summaries",
+      "case_law_sitemap_shard_counts",
+      "case_law_ranking_signal_changes",
+      "case_law_sitemap_shards",
+      "case_law_source_arrivals"
+    TO stella_ingestion
+  `,
+  `
+    GRANT UPDATE ("claimed_until") ON TABLE "case_law_ranking_signal_changes"
+    TO stella_ingestion
+  `,
+  `
+    GRANT SELECT, DELETE ON TABLE "corpus_index_projection_delete_tasks"
+    TO stella_ingestion
+  `,
+  `
+    GRANT UPDATE ("lease_token", "lease_expires_at")
+    ON TABLE "corpus_index_projection_delete_tasks"
+    TO stella_ingestion
+  `,
+  `
+    GRANT SELECT, INSERT, UPDATE ON TABLE "case_law_sitemap_country_generations"
     TO stella_ingestion
   `,
   // Provision extraction state: request code reads it and ingestion updates
@@ -411,8 +628,14 @@ export const ROLE_GRANT_STATEMENTS = [
   `,
   // Global sanctions lists are readable by requests and writable by ingestion.
   `
+    REVOKE INSERT, UPDATE, DELETE ON TABLE
+      "sanctions_sources", "sanctions_editions", "sanctions_edition_fanouts",
+      "sanctions_entry_payloads", "sanctions_edition_entries"
+    FROM stella
+  `,
+  `
     GRANT SELECT, INSERT, UPDATE ON TABLE
-      "sanctions_sources", "sanctions_editions"
+      "sanctions_sources", "sanctions_editions", "sanctions_edition_fanouts"
     TO stella_ingestion
   `,
   `
@@ -456,6 +679,12 @@ export const ROLE_GRANT_STATEMENTS = [
     GRANT SELECT, INSERT, DELETE ON TABLE "legislation_work_names"
     TO stella_ingestion
   `,
+  `GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "legislation_work_identifiers" TO stella_ingestion`,
+  `
+    GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE
+      "legislation_amendment_snapshots", "legislation_amendments"
+    TO stella_ingestion
+  `,
   // Final-generation state is observable by request code but mutated only by
   // ingestion. A narrowly scoped database function owns retirement deletes.
   `
@@ -483,9 +712,42 @@ export const ROLE_GRANT_STATEMENTS = [
     GRANT UPDATE (provisioning_status, attested_at, updated_at)
       ON TABLE "corpus_index_group_enrollments" TO stella_ingestion
   `,
+  // The serving pointer is written by the gated flip and deleted when a
+  // whole generation is promoted; ingestion may not rewrite its key.
+  `
+    GRANT SELECT, INSERT, DELETE ON TABLE "corpus_index_jurisdiction_serving"
+    TO stella_ingestion
+  `,
+  `
+    GRANT UPDATE (generation, from_generation, flipped_at)
+      ON TABLE "corpus_index_jurisdiction_serving" TO stella_ingestion
+  `,
   // The withdrawal trail is append-only: ingestion records, the app reads.
   `
     GRANT SELECT, INSERT ON TABLE "corpus_index_group_withdrawals"
+    TO stella_ingestion
+  `,
+  // Flip receipts are append-only: the guarded flip records, the app reads.
+  `
+    GRANT SELECT, INSERT ON TABLE "corpus_index_generation_flips"
+    TO stella_ingestion
+  `,
+  // Route proofs: the projection runner advances and revokes them; only the
+  // generation's cascade deletes one.
+  `
+    GRANT SELECT, INSERT, UPDATE ON TABLE "corpus_index_route_proofs"
+    TO stella_ingestion
+  `,
+  // Seeding passes: the seeding walk writes them; the transition that takes
+  // a generation out of the active set deletes its pass, and its route rows
+  // cascade.
+  `
+    GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE
+      "corpus_index_generation_seeding_passes"
+    TO stella_ingestion
+  `,
+  `
+    GRANT SELECT, INSERT, UPDATE ON TABLE "corpus_index_route_seedings"
     TO stella_ingestion
   `,
   `
@@ -523,17 +785,21 @@ export const ROLE_GRANT_STATEMENTS = [
   // Alias reader grants land only after the release declaring them optional.
   ...Object.entries(PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION)
     .filter(
-      ([relation]) => relation !== getTableName(schema.caseLawDecisionAliases),
+      ([relation, columns]) =>
+        relation !== getTableName(schema.caseLawDecisionAliases) &&
+        grantedPublicLawColumns(
+          relation,
+          columns,
+          installedSchemaColumns.get(relation),
+        ).length > 0,
     )
     .map(
       ([relation, columns]) => `
-      GRANT SELECT (${Object.keys(columns)
-        .filter(
-          (column) =>
-            !PUBLIC_LAW_COLUMNS_GRANTED_IN_A_LATER_RELEASE.has(
-              `${relation}.${column}`,
-            ),
-        )
+      GRANT SELECT (${grantedPublicLawColumns(
+        relation,
+        columns,
+        installedSchemaColumns.get(relation),
+      )
         .map(quoteSqlIdentifier)
         .join(", ")})
         ON TABLE ${quoteSqlIdentifier(relation)}
@@ -614,6 +880,52 @@ const applyStellaTablePrivileges = async (client: PGlite): Promise<void> => {
   await client.exec(statements.join(";\n"));
 };
 
+const installTestPublicLawViews = async (
+  db: Pick<ReturnType<typeof drizzle>, "execute">,
+): Promise<void> => {
+  const dialect = new PgDialect();
+  for (const view of publicLawViews) {
+    const config = getViewConfig(view);
+    const query = config.query;
+    if (query === undefined) {
+      panic(`Public-law view ${config.name} has no query`);
+    }
+    if (config.with !== undefined) {
+      panic(
+        `Public-law fixture view ${config.name} must use plain view semantics`,
+      );
+    }
+    const rendered = dialect.sqlToQuery(query);
+    if (rendered.params.length > 0) {
+      panic(`Public-law view ${config.name} query has bound parameters`);
+    }
+    await db.execute(sql`
+      CREATE VIEW ${sql.identifier(config.schema ?? "public")}.${sql.identifier(config.name)}
+      AS (${sql.raw(rendered.sql)})
+    `);
+  }
+};
+
+/** Rebuild schema-derived views and their grants after a fixture column change. */
+export const rebuildTestPublicLawViews = async (
+  client: PGlite,
+  change: () => Promise<void>,
+): Promise<void> => {
+  const db = drizzle({ client });
+  for (const view of publicLawViews) {
+    const config = getViewConfig(view);
+    await db.execute(sql`
+      DROP VIEW ${sql.identifier(config.schema ?? "public")}.${sql.identifier(config.name)}
+    `);
+  }
+  await change();
+  await installTestPublicLawViews(db);
+  await applyStellaTablePrivileges(client);
+  for (const statement of ROLE_GRANT_STATEMENTS) {
+    await db.execute(sql.raw(statement));
+  }
+};
+
 /**
  * Build a fully provisioned test PGlite from scratch: RLS roles, schema
  * prerequisites, the drizzle schema push, workspace-access objects, and
@@ -627,6 +939,16 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   const pushSchemaDb = drizzle({ client });
 
   await db.execute(sql.raw("CREATE ROLE stella NOLOGIN"));
+  await db.execute(
+    sql.raw(
+      "CREATE ROLE stella_correspondence_source NOLOGIN NOINHERIT NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION",
+    ),
+  );
+  await db.execute(
+    sql.raw(
+      "CREATE ROLE stella_entity_gate NOLOGIN NOINHERIT NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION",
+    ),
+  );
   await db.execute(sql.raw("CREATE ROLE stella_ingestion NOLOGIN"));
   await db.execute(sql.raw("CREATE ROLE stella_caselaw_reader NOLOGIN"));
   await db.execute(sql.raw("CREATE ROLE stella_public_law_reader NOLOGIN"));
@@ -641,6 +963,8 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   );
   await db.execute(sql.raw("CREATE ROLE stella_corpus_sample_reader NOLOGIN"));
   await installPgliteSchemaPrerequisites(db);
+  // Coverage's partial index needs the immutable filing-year predicate at creation.
+  await installPgliteDecisionDocketFilingYear(db);
 
   // drizzle-kit is a heavyweight dev dependency; import it only on this
   // build path so snapshot-booted test processes never load it.
@@ -651,28 +975,73 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   }
   await installPgliteFlowTransitions(db);
   await installPgliteWorkspaceAccessObjects(db);
+  await installPgliteInvoiceObjects(db);
+  await installPgliteMatterTimerPresence(db);
+  await db.transaction(async (tx) => {
+    await installPgliteEntityFeatureGateMaintenance(tx);
+  });
   await installPgliteAgentSkillRevisionTrigger(db);
+  await installPgliteSyntheticMembershipTrigger(db);
+  await installPgliteSharepointPolicyFence(db);
+  await installPgliteUserFileOrganizationKeyGuard(db);
+  await installPgliteConflictCheckRoutines(db);
+  await installPgliteAiMemoryActiveUserGuard(db);
   await installPgliteDecisionAliases(db);
   await installPgliteCorpusProjectionRevisionFence(db);
+  await installPgliteCorpusIndexGenerationRetire(db);
+  await installPgliteServiceClientCredentialCascade(db);
   await installPgliteStatuteCitationCounts(db);
+  await installPgliteDecisionCitationStats(db);
   await installPgliteLegislationPayloadRevision(db);
   await installPgliteLegislationExpressionIdentity(db);
   await installPgliteProvisionExtractionState(db);
+  await installPgliteCaseLawCountryShape(db);
+  await installPgliteCaseLawCoverageSummary(db);
   await installPgliteCaseLawObservationFence(db);
+  await installPgliteCaseLawParsedSourceInvalidation(db);
+  await installPgliteCaseLawContentChangedAt(db);
+  await installPgliteCaseLawSitemapChanges(db);
+  await installPgliteCaseLawRankingSignalChanges(db);
+  await installPgliteCorpusProjectionDeleteTasks(db);
+  await installPgliteCaseLawPopulationCounts(db);
+  await installPgliteCorpusIndexSeedingLifecycle(db);
   await installPglitePdfSigningTokenScopes(db);
+  await installPgliteInvoiceLinks(db);
+  await installPgliteDesktopPresenceRls(db);
   await installPgliteChatTurnRunIdLookup(db);
   await installPgliteOrganizationMemberCapacity(db);
   await installPgliteWorkspaceContactCapacity(db);
+  await installPgliteModelRunBudgets(db);
   await installPgliteChatRunLogRls(db);
+  await installPgliteAccountAuditRls(db);
+  await installPgliteChatMessageRevisionsRls(db);
+  await installPgliteChatSecretRls(db);
+  await installPgliteCitationDoctrineRls(db);
+  await installPgliteReaderAnswerRls(db);
+  await installPgliteReaderAnnotationMatterRows(db);
   await installPgliteSchedulerJobPauseLog(db);
   await installPgliteTreeParentGuards(db);
+  await installPgliteOrganizationDeleteOwnerGuard(db);
+  await installPgliteSsoProviderIdentityGuard(db);
 
   await applyStellaTablePrivileges(client);
   for (const statement of ROLE_GRANT_STATEMENTS) {
     await db.execute(sql.raw(statement));
   }
   await installPgliteTimeEntryTimerSignals(db);
+  await installPgliteChatStoredContentEgress(db);
+  await installPgliteFileObjectReconciliationFill(db);
+  await installPgliteSanctionsMonitoringTriggers(db);
+  await installPgliteSearchHistoryClearFence(db);
+  await installPgliteChatTurnOrdinal(db);
   await installPglitePlaybookDocumentTypeKey(db);
+  await installPgliteFindingDecisionHistory(db);
+  await db.transaction(async (tx) => {
+    await installPgliteCorrespondenceSources(tx);
+  });
+  await installPgliteLegalHoldDeleteBackstop(db);
+  // On by default: every suite that commits a canonical row is checked.
+  await installCorpusProjectionSeedingGuard(client);
 
   return client;
 };
@@ -690,7 +1059,7 @@ export const createTestPglite = async (snapshot?: Blob): Promise<PGlite> => {
       loadDataDir: snapshot,
     });
   }
-  const snapshotPath = process.env[PGLITE_TEST_SNAPSHOT_ENV];
+  const snapshotPath = readPgliteTestSnapshotPath(PGLITE_TEST_SNAPSHOT_ENV);
   if (snapshotPath === undefined || snapshotPath.length === 0) {
     return await buildFullTestPglite();
   }
@@ -698,4 +1067,270 @@ export const createTestPglite = async (snapshot?: Blob): Promise<PGlite> => {
     extensions: { pg_trgm },
     loadDataDir: Bun.file(snapshotPath),
   });
+};
+
+const RESET_SCHEMA = "pglite_test_reset";
+const RESET_TRIGGER_PREFIX = "pglite_test_track_";
+
+type PgliteStructuralObject = {
+  definition: string;
+  identity: string;
+  kind: "function" | "sequence" | "table" | "trigger" | "view";
+};
+
+export type PgliteDatabaseBaseline = {
+  objects: PgliteStructuralObject[];
+  populatedTables: Set<string>;
+};
+
+const structuralFingerprintSql = `
+  WITH namespaces AS (
+    SELECT oid, nspname
+    FROM pg_namespace
+    WHERE nspname NOT IN ('pg_catalog', 'information_schema', '${RESET_SCHEMA}')
+      AND nspname NOT LIKE 'pg_toast%'
+      AND nspname NOT LIKE 'pg_temp_%'
+  )
+  SELECT 'function' AS kind,
+         n.nspname || '.' || p.proname || '(' || pg_get_function_identity_arguments(p.oid) || ')' AS identity,
+         pg_get_functiondef(p.oid) AS definition
+  FROM pg_proc p JOIN namespaces n ON n.oid = p.pronamespace
+  UNION ALL
+  SELECT CASE c.relkind WHEN 'r' THEN 'table' WHEN 'p' THEN 'table'
+                        WHEN 'v' THEN 'view' WHEN 'm' THEN 'view'
+                        WHEN 'S' THEN 'sequence' END AS kind,
+         n.nspname || '.' || c.relname AS identity,
+         CASE c.relkind
+           WHEN 'v' THEN pg_get_viewdef(c.oid, true)
+           WHEN 'm' THEN pg_get_viewdef(c.oid, true)
+           WHEN 'S' THEN concat_ws('|', s.seqstart, s.seqincrement, s.seqmax, s.seqmin, s.seqcache, s.seqcycle)
+           ELSE concat_ws(
+             '|',
+             c.relpersistence,
+             c.relkind,
+             (SELECT string_agg(
+               concat_ws(':', a.attnum, a.attname, a.atttypid, a.atttypmod, a.attnotnull, pg_get_expr(d.adbin, d.adrelid)),
+               ',' ORDER BY a.attnum
+             )
+             FROM pg_attribute a
+             LEFT JOIN pg_attrdef d ON d.adrelid = a.attrelid AND d.adnum = a.attnum
+             WHERE a.attrelid = c.oid AND a.attnum > 0 AND NOT a.attisdropped),
+             (SELECT string_agg(pg_get_constraintdef(k.oid, true), ',' ORDER BY k.conname)
+              FROM pg_constraint k WHERE k.conrelid = c.oid)
+           )
+         END AS definition
+  FROM pg_class c
+  JOIN namespaces n ON n.oid = c.relnamespace
+  LEFT JOIN pg_sequence s ON s.seqrelid = c.oid
+  WHERE c.relkind IN ('r', 'p', 'v', 'm', 'S')
+  UNION ALL
+  SELECT 'trigger' AS kind,
+         n.nspname || '.' || c.relname || '.' || t.tgname AS identity,
+         t.tgenabled::text || '|' || pg_get_triggerdef(t.oid, true) AS definition
+  FROM pg_trigger t
+  JOIN pg_class c ON c.oid = t.tgrelid
+  JOIN namespaces n ON n.oid = c.relnamespace
+  WHERE NOT t.tgisinternal AND t.tgname NOT LIKE '${RESET_TRIGGER_PREFIX}%'
+  ORDER BY kind, identity
+`;
+
+const readStructuralFingerprint = async (
+  client: PGlite,
+): Promise<PgliteStructuralObject[]> => {
+  const { rows } = await client.query<PgliteStructuralObject>(
+    structuralFingerprintSql,
+  );
+  return rows;
+};
+
+const quoteQualifiedName = (identity: string) =>
+  identity.split(".").map(quoteSqlIdentifier).join(".");
+
+const quoteFunctionIdentity = (identity: string) => {
+  const argumentOffset = identity.indexOf("(");
+  const qualifiedName = identity.slice(0, argumentOffset);
+  return `${quoteQualifiedName(qualifiedName)}${identity.slice(argumentOffset)}`;
+};
+
+const parseTriggerIdentity = (identity: string) => {
+  const parts = identity.split(".");
+  const schemaName = parts.at(0);
+  const tableName = parts.at(1);
+  const triggerName = parts.at(2);
+  if (
+    parts.length !== 3 ||
+    schemaName === undefined ||
+    tableName === undefined ||
+    triggerName === undefined
+  ) {
+    return panic(`Invalid PGlite trigger identity ${identity}`);
+  }
+  return { schemaName, tableName, triggerName };
+};
+
+/** Capture schema state once, before suite seed rows are installed. */
+export const capturePgliteDatabaseBaseline = async (
+  client: PGlite,
+): Promise<PgliteDatabaseBaseline> => {
+  await client.exec(`
+    CREATE SCHEMA IF NOT EXISTS ${RESET_SCHEMA};
+    CREATE TABLE ${RESET_SCHEMA}.written_tables (identity text PRIMARY KEY);
+    CREATE FUNCTION ${RESET_SCHEMA}.record_write() RETURNS trigger
+    LANGUAGE plpgsql AS $$
+    BEGIN
+      INSERT INTO ${RESET_SCHEMA}.written_tables VALUES (TG_TABLE_SCHEMA || '.' || TG_TABLE_NAME)
+      ON CONFLICT DO NOTHING;
+      RETURN NULL;
+    END $$;
+    CREATE TEMP TABLE pglite_baseline_populated (identity text PRIMARY KEY) ON COMMIT PRESERVE ROWS;
+    DO $$
+    DECLARE relation record;
+    BEGIN
+      FOR relation IN
+        SELECT n.nspname AS schema_name, c.relname AS table_name
+        FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+        WHERE c.relkind IN ('r', 'p')
+          AND n.nspname NOT IN ('pg_catalog', 'information_schema', '${RESET_SCHEMA}')
+          AND n.nspname NOT LIKE 'pg_toast%'
+          AND n.nspname NOT LIKE 'pg_temp_%'
+      LOOP
+        EXECUTE format(
+          'INSERT INTO pglite_baseline_populated SELECT %L WHERE EXISTS (SELECT 1 FROM %I.%I LIMIT 1)',
+          relation.schema_name || '.' || relation.table_name,
+          relation.schema_name,
+          relation.table_name
+        );
+        EXECUTE format(
+          'CREATE TRIGGER ${RESET_TRIGGER_PREFIX}%s AFTER INSERT OR UPDATE OR DELETE OR TRUNCATE ON %I.%I FOR EACH STATEMENT EXECUTE FUNCTION ${RESET_SCHEMA}.record_write()',
+          relation.table_name,
+          relation.schema_name,
+          relation.table_name
+        );
+      END LOOP;
+    END $$;
+  `);
+  const [objects, { rows }] = await Promise.all([
+    readStructuralFingerprint(client),
+    client.query<{ identity: string }>(
+      "SELECT identity FROM pglite_baseline_populated ORDER BY identity",
+    ),
+  ]);
+  return {
+    objects,
+    populatedTables: new Set(rows.map(({ identity }) => identity)),
+  };
+};
+
+const objectKey = ({ identity, kind }: PgliteStructuralObject) =>
+  `${kind}:${identity}`;
+
+/** Restore a captured schema-only baseline without scanning application rows. */
+export const resetPgliteDatabase = async (
+  client: PGlite,
+  baseline: PgliteDatabaseBaseline,
+): Promise<void> => {
+  const [{ rows: writtenRows }, currentObjects] = await Promise.all([
+    client.query<{ identity: string }>(
+      `SELECT identity FROM ${RESET_SCHEMA}.written_tables ORDER BY identity`,
+    ),
+    readStructuralFingerprint(client),
+  ]);
+  const writtenTables = writtenRows.map(({ identity }) => identity);
+  const populatedWrite = writtenTables.find((identity) =>
+    baseline.populatedTables.has(identity),
+  );
+  if (populatedWrite !== undefined) {
+    panic(
+      `PGlite reset cannot restore populated baseline table ${populatedWrite}`,
+    );
+  }
+
+  const baselineByKey = new Map(
+    baseline.objects.map((object) => [objectKey(object), object]),
+  );
+  const extras = currentObjects.filter(
+    (object) => !baselineByKey.has(objectKey(object)),
+  );
+  const changedTriggers = currentObjects.filter((object) => {
+    const baselineObject = baselineByKey.get(objectKey(object));
+    return (
+      object.kind === "trigger" &&
+      baselineObject !== undefined &&
+      baselineObject.definition !== object.definition
+    );
+  });
+  const statements: string[] = [];
+  for (const trigger of extras.filter(({ kind }) => kind === "trigger")) {
+    const { schemaName, tableName, triggerName } = parseTriggerIdentity(
+      trigger.identity,
+    );
+    statements.push(
+      `DROP TRIGGER ${quoteSqlIdentifier(triggerName)} ON ${quoteSqlIdentifier(schemaName)}.${quoteSqlIdentifier(tableName)}`,
+    );
+  }
+  const triggerActions = {
+    A: "ENABLE ALWAYS",
+    D: "DISABLE",
+    O: "ENABLE",
+    R: "ENABLE REPLICA",
+  } as const;
+  const dropOrder = {
+    view: 0,
+    table: 1,
+    sequence: 2,
+    function: 3,
+    trigger: 4,
+  } as const;
+  for (const object of extras
+    .filter(({ kind }) => kind !== "trigger")
+    .toSorted((left, right) => dropOrder[left.kind] - dropOrder[right.kind])) {
+    const keyword =
+      object.kind === "function" ? "FUNCTION" : object.kind.toUpperCase();
+    const identity =
+      object.kind === "function"
+        ? quoteFunctionIdentity(object.identity)
+        : quoteQualifiedName(object.identity);
+    statements.push(`DROP ${keyword} IF EXISTS ${identity} CASCADE`);
+  }
+  for (const trigger of changedTriggers) {
+    const baselineTrigger = baselineByKey.get(objectKey(trigger));
+    const { schemaName, tableName, triggerName } = parseTriggerIdentity(
+      trigger.identity,
+    );
+    const enabled = baselineTrigger?.definition.at(0);
+    if (
+      enabled !== "A" &&
+      enabled !== "D" &&
+      enabled !== "O" &&
+      enabled !== "R"
+    ) {
+      return panic(`Invalid PGlite trigger state for ${trigger.identity}`);
+    }
+    const action = triggerActions[enabled];
+    statements.push(
+      `ALTER TABLE ${quoteSqlIdentifier(schemaName)}.${quoteSqlIdentifier(tableName)} ${action} TRIGGER ${quoteSqlIdentifier(triggerName)}`,
+    );
+  }
+  if (writtenTables.length > 0) {
+    statements.push(
+      `TRUNCATE ${writtenTables.map(quoteQualifiedName).join(", ")} RESTART IDENTITY CASCADE`,
+    );
+  }
+  statements.push(`TRUNCATE ${RESET_SCHEMA}.written_tables`);
+  await client.exec(`${statements.join(";\n")};`);
+
+  const restored = await readStructuralFingerprint(client);
+  const restoredByKey = new Map(
+    restored.map((object) => [objectKey(object), object]),
+  );
+  const difference =
+    baseline.objects.find(
+      (object) =>
+        restoredByKey.get(objectKey(object))?.definition !== object.definition,
+    ) ?? restored.find((object) => !baselineByKey.has(objectKey(object)));
+  if (difference !== undefined || restored.length !== baseline.objects.length) {
+    panic(
+      `PGlite reset structural mismatch: ${difference?.identity ?? "object count"}`,
+    );
+  }
 };

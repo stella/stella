@@ -1,0 +1,20 @@
+{
+  "extends": "@stll/typescript-config/base.json",
+  "compilerOptions": {
+    "target": "ES2024",
+    "lib": ["ESNext", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "paths": {
+      "@/api/*": ["./src/*"]
+    },
+    "types": ["bun-types"],
+    "tsBuildInfoFile": "${configDir}/.cache/tsbuildinfo.visual-sandbox.json"
+  },
+  "include": [
+    "src/handlers/visual-sandbox/browser/**/*.ts",
+    "e2e/**/*.ts",
+    "e2e/**/*.mts"
+  ],
+  "exclude": []
+}

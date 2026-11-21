@@ -9,6 +9,7 @@ import {
   DialogClose,
   DialogDescription,
   DialogFooter,
+  DialogFormState,
   DialogHeader,
   DialogPanel,
   DialogPopup,
@@ -17,9 +18,9 @@ import {
 import { Field, FieldLabel } from "@stll/ui/field";
 import { Input } from "@stll/ui/input";
 
-import { authClient } from "@/lib/auth-client";
+import { createUserUpdateMutation } from "@/lib/account/update-user";
 import { sessionOptions } from "@/lib/auth-queries";
-import { toAuthClientError } from "@/lib/errors/auth";
+import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { notifyUserError } from "@/lib/errors/user-toast";
 
 const PREFERRED_NAME_MAX_LENGTH = 120;
@@ -47,18 +48,19 @@ export const AuthorNameRequiredDialog = ({
 }: AuthorNameRequiredDialogProps) => {
   const t = useTranslations();
   const queryClient = useQueryClient();
+  const user = useMaybeAuthenticatedUser();
   const [preferredName, setPreferredName] = useState("");
   const trimmedName = preferredName.trim();
 
   const { mutate, isPending } = useMutation({
-    mutationFn: async () => {
-      const { error } = await authClient.updateUser({
-        preferredName: trimmedName,
-      });
-      if (error) {
-        throw toAuthClientError(error);
-      }
-    },
+    mutationFn: createUserUpdateMutation({
+      queryClient,
+      owner:
+        user === null
+          ? null
+          : { userId: user.id, organizationId: user.activeOrganizationId },
+      input: () => ({ preferredName: trimmedName }),
+    }),
     onSuccess: async () => {
       await queryClient.invalidateQueries({
         queryKey: sessionOptions.queryKey,
@@ -81,6 +83,12 @@ export const AuthorNameRequiredDialog = ({
       open={open}
     >
       <DialogPopup className="max-w-sm">
+        <DialogFormState
+          dirty={preferredName !== ""}
+          onDiscard={() => {
+            setPreferredName("");
+          }}
+        />
         <DialogHeader>
           <DialogTitle>
             {t("chat.tool.suggestChangesAuthorNameDialogTitle")}
@@ -120,6 +128,9 @@ export const AuthorNameRequiredDialog = ({
           </DialogClose>
           <Button
             disabled={trimmedName.length === 0 || isPending}
+            disabledReason={
+              isPending ? t("common.saving") : t("chat.enterAuthorName")
+            }
             loading={isPending}
             onClick={() => mutate()}
           >

@@ -2,7 +2,6 @@ import { Result } from "better-result";
 import {
   afterAll,
   afterEach,
-  beforeAll,
   beforeEach,
   describe,
   expect,
@@ -11,6 +10,8 @@ import {
   test,
 } from "bun:test";
 import { eq, inArray, sql } from "drizzle-orm";
+
+import { createTestState } from "@stll/test-state";
 
 import { stella } from "@/api/db/rls";
 import type { Transaction } from "@/api/db/root";
@@ -24,18 +25,21 @@ import {
   entityVersions,
   fields,
   pendingUploads,
+  searchProjectionRepairQueue,
   workspaces,
 } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
 import { env } from "@/api/env";
 import { envBase } from "@/api/env-base";
 import { envDocumentProcessingWorker } from "@/api/env-document-processing-worker";
+import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   authorizeDocumentWrite,
   DocumentWriteRefusedError,
 } from "@/api/lib/entities/authorize-document-write";
+import { CALLER_AUTHORIZED } from "@/api/lib/entities/buffer-write-authority";
 import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
 import type { CreateEntityFromBufferDependencies } from "@/api/lib/entities/create-from-buffer";
 import {
@@ -45,6 +49,7 @@ import {
 import type { FileEncryption } from "@/api/lib/files/detect-file-encryption";
 import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
 import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
+import { enqueueEntitySearchRepairs } from "@/api/lib/search/projection-repair-queue";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 import { memberDocumentWriteAccess } from "@/api/tests/helpers/document-write-access";
 import { entityVersionInsertResult } from "@/api/tests/helpers/entity-version-insert-mock";
@@ -61,8 +66,20 @@ import {
 import type { TestIds } from "@/api/tests/security/rls-helpers";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
+const testState = createTestState({ file: import.meta.path, config: env });
+
+beforeEach(() => {
+  broadcastMock.mockReset();
+  enqueueImageThumbnailOrMarkFailedMock.mockClear();
+  enqueuePdfDerivativeOrMarkFailedMock.mockClear();
+  flushSearchRepairsMock.mockClear();
+  processExtractionMock.mockClear();
+});
+
 setDefaultTimeout(120_000);
 
+const enqueueSearchRepairsMock = mock(enqueueEntitySearchRepairs);
+const flushSearchRepairsMock = mock(async () => ({ failed: 0, repaired: 0 }));
 const processExtractionMock = mock(async () => {});
 const enqueueImageThumbnailOrMarkFailedMock = mock(async () => {});
 const enqueuePdfDerivativeOrMarkFailedMock = mock(async () => {});
@@ -79,15 +96,21 @@ const createEntityFromBufferDependencies = {
   enqueuePdfDerivativeOrMarkFailed: enqueuePdfDerivativeOrMarkFailedMock,
   processExtraction: processExtractionMock,
   requestNativeExtractionRun: mock(async () => null),
+  enqueueEntitySearchRepairs: enqueueSearchRepairsMock,
+  flushEntitySearchRepairs: flushSearchRepairsMock,
 } satisfies CreateEntityFromBufferDependencies;
 
 const createEntityFromBufferForTest = async (
   input: Omit<
     Parameters<typeof createEntityFromBuffer>[0],
-    "dependencies" | "encryption"
-  > & { encryption?: FileEncryption },
+    "authority" | "dependencies" | "encryption"
+  > & {
+    authority?: Parameters<typeof createEntityFromBuffer>[0]["authority"];
+    encryption?: FileEncryption;
+  },
 ) =>
   await createEntityFromBuffer({
+    authority: CALLER_AUTHORIZED,
     encryption: serverBuiltFileEncryption(),
     ...input,
     dependencies: createEntityFromBufferDependencies,
@@ -193,6 +216,9 @@ describe("createEntityFromBuffer", () => {
     enqueuePdfDerivativeOrMarkFailedMock.mockClear();
     broadcastMock.mockClear();
     intentStatuses = [];
+    enqueueSearchRepairsMock.mockClear();
+    enqueueSearchRepairsMock.mockImplementation(async () => undefined);
+    flushSearchRepairsMock.mockClear();
   });
 
   afterEach(() => {
@@ -244,7 +270,7 @@ describe("createEntityFromBuffer", () => {
     const priorFlag = env.FEATURE_FILE_USAGE_LIMITS;
     const priorWorkerFlag =
       envDocumentProcessingWorker.FEATURE_FILE_USAGE_LIMITS;
-    env.FEATURE_FILE_USAGE_LIMITS = true;
+    testState.setConfig("FEATURE_FILE_USAGE_LIMITS", true);
     envDocumentProcessingWorker.FEATURE_FILE_USAGE_LIMITS = false;
     fake.failNext({ method: "PUT", code: "AccessDenied", status: 403 });
     try {
@@ -267,7 +293,7 @@ describe("createEntityFromBuffer", () => {
       expect(processExtractionMock).not.toHaveBeenCalled();
       expect(intentStatuses).toEqual(["scanning"]);
     } finally {
-      env.FEATURE_FILE_USAGE_LIMITS = priorFlag;
+      testState.setConfig("FEATURE_FILE_USAGE_LIMITS", priorFlag);
       envDocumentProcessingWorker.FEATURE_FILE_USAGE_LIMITS = priorWorkerFlag;
     }
   });
@@ -277,6 +303,7 @@ describe("createEntityFromBuffer", () => {
     let insertedEntity: unknown;
     let insertedField: unknown;
     const tx = {
+      execute: async () => [{ id: workspaceId }],
       query: {
         properties: {
           findMany: async () => [
@@ -331,12 +358,15 @@ describe("createEntityFromBuffer", () => {
     const { scopedDb } = createScopedDbMock(withIntentPersistence(tx));
 
     const recordedAuditEvents: unknown[] = [];
+    let auditTransaction: Parameters<AuditRecorder>[0] | undefined;
     const result = await createEntityFromBufferForTest({
       scopedDb,
       organizationId,
       workspaceId,
       userId,
-      recordAuditEvent: async (_tx, event) => {
+      recordAuditEvent: async (transaction, event) => {
+        auditTransaction = transaction;
+        expect(flushSearchRepairsMock).not.toHaveBeenCalled();
         recordedAuditEvents.push(event);
       },
       buffer: new TextEncoder().encode("pdf bytes"),
@@ -357,6 +387,12 @@ describe("createEntityFromBuffer", () => {
     expect(result).toMatchObject({
       value: { fileName: "Encrypted Agreement.pdf", renamed: false },
     });
+    expect(enqueueSearchRepairsMock).toHaveBeenCalledWith(auditTransaction, [
+      expect.any(String),
+    ]);
+    expect(flushSearchRepairsMock).toHaveBeenCalledWith(
+      enqueueSearchRepairsMock.mock.calls.at(0)?.at(1),
+    );
     expect(recordedAuditEvents).toHaveLength(1);
     expect(recordedAuditEvents.at(0)).toEqual({
       action: "create",
@@ -417,6 +453,10 @@ describe("createEntityFromBuffer", () => {
   test("locks and rechecks the parent in the insert transaction", async () => {
     const locks: unknown[] = [];
     const tx = {
+      execute: async () => {
+        locks.push("update");
+        return [{ id: workspaceId }];
+      },
       query: {
         properties: {
           findMany: async () => [
@@ -476,6 +516,7 @@ describe("createEntityFromBuffer", () => {
 
   test("cleans up uploaded bytes when the in-transaction callback fails", async () => {
     const tx = {
+      execute: async () => [{ id: workspaceId }],
       query: {
         properties: {
           findMany: async () => [
@@ -540,6 +581,7 @@ describe("createEntityFromBuffer", () => {
 
   test("keeps a failed-cleanup intent available for bounded reconciliation", async () => {
     const tx = {
+      execute: async () => [{ id: workspaceId }],
       query: {
         properties: {
           findMany: async () => [
@@ -610,7 +652,7 @@ describe("createEntityFromBuffer", () => {
   test("preserves bytes when the entity commit acknowledgement is ambiguous", async () => {
     let nextDocumentSequence = 0;
     const tx = withIntentPersistence({
-      execute: async () => undefined,
+      execute: async () => [{ id: workspaceId }],
       query: {
         properties: {
           findMany: async () => [
@@ -685,6 +727,8 @@ describe("createEntityFromBuffer", () => {
       requestKeys("PUT").map((key) => `${envBase.S3_BUCKET}/${key}`),
     );
     expect(processExtractionMock).not.toHaveBeenCalled();
+    expect(enqueueSearchRepairsMock).toHaveBeenCalledTimes(1);
+    expect(flushSearchRepairsMock).not.toHaveBeenCalled();
     expect(broadcastMock).not.toHaveBeenCalled();
   });
 });
@@ -734,7 +778,7 @@ describe("service-owned buffer publication in the database", () => {
       afterCreate,
     });
 
-  beforeAll(async () => {
+  testState.beforeAll(async () => {
     const fixture = await getRlsFixture();
     db = fixture.testDb;
     ids = fixture.ids;
@@ -766,6 +810,9 @@ describe("service-owned buffer publication in the database", () => {
   });
 
   beforeEach(() => {
+    enqueueSearchRepairsMock.mockClear();
+    enqueueSearchRepairsMock.mockImplementation(enqueueEntitySearchRepairs);
+    flushSearchRepairsMock.mockClear();
     fake = startFakeS3();
     enqueueImageThumbnailOrMarkFailedMock.mockClear();
     enqueuePdfDerivativeOrMarkFailedMock.mockClear();
@@ -841,6 +888,11 @@ describe("service-owned buffer publication in the database", () => {
       expect.objectContaining({ renamed: true }),
     ]);
     for (const result of results) {
+      const marks = await db
+        .select({ sourceId: searchProjectionRepairQueue.sourceId })
+        .from(searchProjectionRepairQueue)
+        .where(eq(searchProjectionRepairQueue.sourceId, result.entityId));
+      expect(marks).toEqual([{ sourceId: result.entityId }]);
       const entity = await db.query.entities.findFirst({
         where: { id: { eq: result.entityId } },
       });
@@ -1081,18 +1133,18 @@ const createParentSelect =
     return {
       from: (table: unknown) => ({
         where: () => ({
-          limit: () => ({
-            for: async (strength: unknown) => {
-              onLock?.(strength);
-              if (table === workspaces) {
-                return [{ status: workspaceStatus }];
-              }
-              if (parentKind !== null) {
-                return [{ id: parentId, kind: parentKind }];
-              }
-              return [];
-            },
-          }),
+          limit: (): unknown => {
+            const parentRows =
+              parentKind === null ? [] : [{ id: parentId, kind: parentKind }];
+            const rows =
+              table === workspaces ? [{ status: workspaceStatus }] : parentRows;
+            return Object.assign(Promise.resolve(rows), {
+              for: async (strength: unknown) => {
+                onLock?.(strength);
+                return rows;
+              },
+            });
+          },
         }),
       }),
     };

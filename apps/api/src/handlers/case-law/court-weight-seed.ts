@@ -227,6 +227,54 @@ const COURT_WEIGHT_SEED_BY_JURISDICTION = {
       },
     ],
   },
+  GBR: {
+    type: "ranked-by-name",
+    rows: [
+      {
+        courtPattern:
+          "^uksc$|^ukpc$|^ukhl$|^supreme court( of the united kingdom)?$|^judicial committee of the privy council$|^house of lords$",
+        ...RANK.supreme,
+      },
+      {
+        courtPattern:
+          "^ewca( civ| crim)?$|^court of appeal( \\(civil division\\)| \\(criminal division\\))?$",
+        ...RANK.appeal,
+      },
+      {
+        courtPattern:
+          "^ewhc($| )|^ukut($| )|^eat$|^high court( of justice)?($| )|^upper tribunal($| )|^employment appeal tribunal$",
+        ...RANK.regional,
+      },
+      {
+        courtPattern:
+          "^ukftt($| )|^ewfc$|^ewcop$|^first-tier tribunal($| )|^family court$|^court of protection$",
+        ...RANK.district,
+      },
+    ],
+  },
+  // The STF is the constitutional court and the apex of the system; the
+  // four superior courts head their branches (common, labour, electoral,
+  // military). The second instance is the state, federal regional, labour
+  // regional, electoral regional and state military courts.
+  BRA: {
+    type: "ranked-by-name",
+    rows: [
+      {
+        courtPattern: "^stf$|^supremo tribunal federal$",
+        ...RANK.constitutional,
+      },
+      {
+        courtPattern:
+          "^(stj|tst|tse|stm)$|^superior tribunal (de justiça|militar)$|^tribunal superior (do trabalho|eleitoral)$",
+        ...RANK.supreme,
+      },
+      {
+        courtPattern:
+          "^(tj[a-z]{2}|tjdft|tjm[a-z]{2}|trf[1-6]|trt([1-9]|1[0-9]|2[0-4])|tre-?[a-z]{2})$|^tribunal de justiça |^tribunal regional (federal|do trabalho|eleitoral) ",
+        ...RANK.appeal,
+      },
+    ],
+  },
 } as const satisfies Record<CaseLawJurisdiction, CourtWeightSeedDisposition>;
 
 const seededPatterns = (

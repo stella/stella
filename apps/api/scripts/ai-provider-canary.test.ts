@@ -1,31 +1,37 @@
 import { EventType } from "@tanstack/ai";
 import type { AnyTextAdapter, StreamChunk } from "@tanstack/ai";
+import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
 import {
   BYOK_MODEL_OPTIONS,
   CHAT_PDF_ATTACHMENT_MODEL_OPTIONS,
-  DEFAULT_MODELS,
   isBYOKProviderRoleSupported,
-  MODEL_ROLES,
+  MODEL_TASK_OVERRIDE_GROUP,
+  MODEL_TASKS,
+  resolveDefaultModel,
 } from "@stll/ai-catalog";
+import { AI_ERROR_KINDS, type AIErrorKind } from "@stll/api-contract";
 
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 import type { CachingDecision } from "@/api/lib/ai-config";
+import { ProviderCallError } from "@/api/lib/errors/provider-call-error";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { generateTanStackTextForRole } from "@/api/lib/tanstack-ai-generate";
+import { NO_ORGANIZATION_MODEL_DISPATCH } from "@/api/lib/rate-limit/model-dispatch-admission";
+import { generateTanStackTextForTask } from "@/api/lib/tanstack-ai-generate";
 import type { ResolvedTanStackTextModel } from "@/api/lib/tanstack-ai-models";
 import { createScriptedTextAdapter } from "@/api/tests/helpers/chat-round-trip";
+import { HAPPY_PATH_TIMEOUT_MS } from "@/api/tests/test-timeouts";
 
 import {
   CANARY_TEXT_FINISH_POLICY,
+  canaryCapabilityProbeTimeout,
   CanaryCredentialRejectedError,
   CanaryError,
-  CanaryProviderUnavailableError,
   CanaryProviderRunError,
+  CanaryProviderUnavailableError,
   CATALOG_SWEEP_BUDGET_MS,
-  canaryCapabilityProbeTimeout,
   catalogModelIds,
   classifyCanaryFailure,
   createCanaryConfig,
@@ -46,6 +52,16 @@ import {
   toolRoundTripPromptForProvider,
 } from "./ai-provider-canary";
 import { CANARY_PROVIDERS } from "./ai-provider-canary-config";
+
+class ProviderStatusError extends Error {
+  readonly status: number;
+
+  constructor(status: number) {
+    super(`Synthetic provider HTTP ${status}`);
+    this.name = "ProviderStatusError";
+    this.status = status;
+  }
+}
 
 describe("AI provider canary probe deadlines", () => {
   test("gives the budget-edge probe the extended structured-output deadline", () => {
@@ -76,7 +92,7 @@ const createProbeFinishAdapter = (finish: ProbeFinish): AnyTextAdapter => ({
   },
   async *chatStream({ runId, threadId }) {
     const resolvedRunId = runId ?? "run-1";
-    const resolvedThreadId = threadId ?? "thread-1";
+    const resolvedThreadId = threadId;
     const messageId = "provider-message-1";
     yield {
       type: EventType.RUN_STARTED,
@@ -121,7 +137,7 @@ const generateProbeTextFinishing = async (finish: ProbeFinish) => {
     provider: "openai",
   } as ResolvedTanStackTextModel;
 
-  return await generateTanStackTextForRole({
+  return await generateTanStackTextForTask({
     dataClass: "public_corpus",
     caching: {
       enabled: false,
@@ -130,10 +146,12 @@ const generateProbeTextFinishing = async (finish: ProbeFinish) => {
     finishPolicy: CANARY_TEXT_FINISH_POLICY,
     maxOutputTokens: 16,
     organizationId: null,
+    userId: null,
+    admission: NO_ORGANIZATION_MODEL_DISPATCH,
     orgAIConfig: null,
     prompt: "Reply with exactly OK.",
     resolveTextModel: () => model,
-    role: "chat",
+    task: "chat",
     serviceTier: "standard",
     tenantWorkspaceIds: [],
   });
@@ -173,8 +191,20 @@ describe("AI provider catalog canary coverage", () => {
     for (const provider of CANARY_PROVIDERS) {
       const ids = catalogModelIds(provider);
       expect(new Set(ids).size).toBe(ids.length);
-      for (const role of MODEL_ROLES) {
-        expect(ids).toContain(DEFAULT_MODELS[provider][role]);
+      for (const task of MODEL_TASKS) {
+        const modelId =
+          resolveDefaultModel({ task, orgProviders: [provider] })?.modelId ??
+          null;
+        if (modelId === null) {
+          expect(
+            isBYOKProviderRoleSupported({
+              provider,
+              role: MODEL_TASK_OVERRIDE_GROUP[task],
+            }),
+          ).toBe(false);
+          continue;
+        }
+        expect(ids).toContain(modelId);
       }
       for (const modelId of BYOK_MODEL_OPTIONS[provider]) {
         expect(ids).toContain(modelId);
@@ -235,7 +265,11 @@ describe("AI provider catalog canary coverage", () => {
           apiKey: "test-key",
           provider: "bedrock",
           probeModel: async () => {
-            throw new HandlerError({ message, status: 502 });
+            throw new HandlerError({
+              code: "provider_error",
+              message,
+              status: 502,
+            });
           },
           runProbe: runProbeWithoutBackoff,
         },
@@ -258,7 +292,7 @@ describe("AI provider canary overload backoff", () => {
           throw new ProviderStatusError(503);
         }
       },
-      timeoutMs: 1000,
+      timeoutMs: HAPPY_PATH_TIMEOUT_MS,
       wait: async (delayMs) => {
         waits.push(delayMs);
       },
@@ -269,7 +303,7 @@ describe("AI provider canary overload backoff", () => {
 });
 
 describe("AI provider PDF canary contract", () => {
-  test("sends a real inline PDF rather than a text-only pdf-role probe", () => {
+  test("sends a real inline PDF rather than a text-only PDF task probe", () => {
     const message = createPdfCanaryMessages().at(0);
     expect(message?.role).toBe("user");
     const content = message?.content;
@@ -295,8 +329,11 @@ describe("AI provider PDF canary contract", () => {
       const selection = pdfCanarySelection(provider);
       if (isBYOKProviderRoleSupported({ provider, role: "pdf" })) {
         expect(selection).toEqual({
-          modelId: DEFAULT_MODELS[provider].pdf,
-          role: "pdf",
+          modelId:
+            resolveDefaultModel({ task: "pdf", orgProviders: [provider] })
+              ?.modelId ??
+            panic(`${provider} supports PDF without a default PDF model`),
+          task: "pdf",
         });
         continue;
       }
@@ -306,13 +343,13 @@ describe("AI provider PDF canary contract", () => {
       expect(selection).toEqual(
         chatAttachmentModel === undefined
           ? null
-          : { modelId: chatAttachmentModel, role: "chat" },
+          : { modelId: chatAttachmentModel, task: "chat" },
       );
     }
 
     expect(pdfCanarySelection("mistral")).toEqual({
       modelId: "mistral-medium-latest",
-      role: "chat",
+      task: "chat",
     });
   });
 });
@@ -522,16 +559,6 @@ describe("AI provider canary error summaries", () => {
   });
 });
 
-class ProviderStatusError extends Error {
-  readonly status: number;
-
-  constructor(status: number) {
-    super(`Synthetic provider HTTP ${status}`);
-    this.name = "ProviderStatusError";
-    this.status = status;
-  }
-}
-
 describe("AI provider canary retry contract", () => {
   test("retries exactly once for every retryable HTTP status class", async () => {
     const statuses = [
@@ -554,7 +581,7 @@ describe("AI provider canary retry contract", () => {
             calls += 1;
             throw new ProviderStatusError(status);
           },
-          timeoutMs: 1000,
+          timeoutMs: HAPPY_PATH_TIMEOUT_MS,
           wait: async () => {},
         });
         return { calls, result, retryable, status };
@@ -588,7 +615,7 @@ describe("AI provider canary retry contract", () => {
           throw new CanaryProviderRunError({}, "before-tool-call");
         }
       },
-      timeoutMs: 1000,
+      timeoutMs: HAPPY_PATH_TIMEOUT_MS,
       wait: async () => {},
     });
 
@@ -608,7 +635,7 @@ describe("AI provider canary retry contract", () => {
           });
         }
       },
-      timeoutMs: 1000,
+      timeoutMs: HAPPY_PATH_TIMEOUT_MS,
       wait: async () => {},
     });
 
@@ -627,7 +654,7 @@ describe("AI provider canary retry contract", () => {
         calls += 1;
         throw error;
       },
-      timeoutMs: 1000,
+      timeoutMs: HAPPY_PATH_TIMEOUT_MS,
       wait: async () => {},
     });
 
@@ -665,6 +692,95 @@ describe("AI provider canary retry contract", () => {
         signal,
       ),
     ).toBe(false);
+  });
+
+  test("uses ProviderCallError kind only after retryability facts and provider status", () => {
+    const signal = new AbortController().signal;
+    const expectedRetryability = {
+      quota_exhausted: true,
+      provider_billing: false,
+      provider_credentials_rejected: false,
+      model_unavailable: false,
+      provider_unavailable: true,
+      provider_stream_incomplete: true,
+      output_incomplete: true,
+      output_invalid: false,
+      output_moderated: false,
+      deadline_exceeded: true,
+      loop_detected: false,
+      empty_completion: false,
+      local_runner_needs_login: false,
+      local_runner_limit_reached: false,
+      local_runner_unavailable: false,
+      local_runner_turn_too_large: false,
+      turn_too_large: false,
+      local_runner_not_reached: false,
+      local_runner_relinked: false,
+      local_runner_restoring: false,
+      local_runner_folder_unavailable: false,
+      local_runner_no_computer: false,
+      local_runner_harness_unavailable: false,
+      local_runner_model_unavailable: false,
+      local_runner_reasoning_effort_unavailable: false,
+      local_runner_approvals_unavailable: false,
+      local_runner_folder_not_approved: false,
+      unknown: false,
+    } as const satisfies Record<AIErrorKind, boolean>;
+
+    expect(Object.keys(expectedRetryability).toSorted()).toEqual(
+      [...AI_ERROR_KINDS].toSorted(),
+    );
+    expect(
+      AI_ERROR_KINDS.map((kind) =>
+        isRetryableCanaryError(
+          new ProviderCallError({
+            model: { provider: "openai", keySource: "instance" },
+            status: 502,
+            code: "provider_error",
+            kind,
+          }),
+          signal,
+        ),
+      ),
+    ).toEqual(AI_ERROR_KINDS.map((kind) => expectedRetryability[kind]));
+
+    const statusResults = AI_ERROR_KINDS.flatMap((kind) =>
+      [503, 401].map((status) =>
+        isRetryableCanaryError(
+          new ProviderCallError({
+            model: { provider: "openai", keySource: "instance" },
+            status: 502,
+            code: "provider_error",
+            kind,
+            facts: { status },
+          }),
+          signal,
+        ),
+      ),
+    );
+    expect(statusResults).toEqual(AI_ERROR_KINDS.flatMap(() => [true, false]));
+
+    const explicitRetryabilityResults = AI_ERROR_KINDS.flatMap((kind) =>
+      [
+        { isRetryable: false, status: 503 },
+        { isRetryable: true, status: 401 },
+        { isRetryable: true, status: 400 },
+      ].map(({ isRetryable, status }) =>
+        isRetryableCanaryError(
+          new ProviderCallError({
+            model: { provider: "openai", keySource: "instance" },
+            status: 502,
+            code: "provider_error",
+            kind,
+            facts: { isRetryable, status },
+          }),
+          signal,
+        ),
+      ),
+    );
+    expect(explicitRetryabilityResults).toEqual(
+      AI_ERROR_KINDS.flatMap(() => [false, false, true]),
+    );
   });
 
   test("prefers a provider status nested beneath a generic transport wrapper", () => {
@@ -874,7 +990,7 @@ const runProbeWithoutBackoff = async ({
   await runCanaryProbe({
     retryDelayMs: 0,
     run,
-    timeoutMs,
+    timeoutMs, // timeout: forwarded from the caller
     wait: async () => {},
   });
 
@@ -993,7 +1109,7 @@ describe("AI provider canary credential rejection", () => {
           "Authentication failed: Please make sure your API Key is valid.",
         );
       },
-      timeoutMs: 1000,
+      timeoutMs: HAPPY_PATH_TIMEOUT_MS,
       wait: async () => {},
     });
 
@@ -1005,8 +1121,8 @@ describe("AI provider canary credential rejection", () => {
   test("aborts the remaining probes after a first-probe credential rejection", async () => {
     const invoked: string[] = [];
     const probeRuns = [
-      "role-fast:model",
-      "role-chat:model",
+      "task-short-text:model",
+      "task-chat:model",
       "prompt-caching",
     ].map((label) => ({
       label,
@@ -1016,7 +1132,7 @@ describe("AI provider canary credential rejection", () => {
           "Authentication failed: Please make sure your API Key is valid.",
         );
       },
-      timeoutMs: 1000,
+      timeoutMs: HAPPY_PATH_TIMEOUT_MS,
     }));
 
     const failure = await runCanaryProbeSequence({
@@ -1031,17 +1147,17 @@ describe("AI provider canary credential rejection", () => {
     expect(failure).toBeInstanceOf(CanaryCredentialRejectedError);
     expect(failure).toHaveProperty(
       "message",
-      "bedrock: credential rejected (role-fast:model, authentication failed); " +
+      "bedrock: credential rejected (task-short-text:model, authentication failed); " +
         "rotate AI_CANARY_API_KEY for this provider",
     );
-    expect(invoked).toEqual(["role-fast:model"]);
+    expect(invoked).toEqual(["task-short-text:model"]);
   });
 
   test("runs the remaining probes when the first probe fails for another reason", async () => {
     const invoked: string[] = [];
     const probeRuns = [
-      "role-fast:model",
-      "role-chat:model",
+      "task-short-text:model",
+      "task-chat:model",
       "prompt-caching",
     ].map((label, index) => ({
       label,
@@ -1051,7 +1167,7 @@ describe("AI provider canary credential rejection", () => {
           throw new CanaryError({ message: "Provider returned no text." });
         }
       },
-      timeoutMs: 1000,
+      timeoutMs: HAPPY_PATH_TIMEOUT_MS,
     }));
 
     const failures = await runCanaryProbeSequence({
@@ -1062,22 +1178,24 @@ describe("AI provider canary credential rejection", () => {
 
     expect(failures).toBe(1);
     expect(invoked).toEqual([
-      "role-fast:model",
-      "role-chat:model",
+      "task-short-text:model",
+      "task-chat:model",
       "prompt-caching",
     ]);
   });
 
   test("stops after a provider remains rate-limited through its retries", async () => {
     const invoked: string[] = [];
-    const probeRuns = ["role-fast:model", "role-chat:model"].map((label) => ({
-      label,
-      run: async () => {
-        invoked.push(label);
-        throw new ProviderStatusError(429);
-      },
-      timeoutMs: 1000,
-    }));
+    const probeRuns = ["task-short-text:model", "task-chat:model"].map(
+      (label) => ({
+        label,
+        run: async () => {
+          invoked.push(label);
+          throw new ProviderStatusError(429);
+        },
+        timeoutMs: HAPPY_PATH_TIMEOUT_MS,
+      }),
+    );
 
     const failure = await runCanaryProbeSequence({
       probeRuns,
@@ -1091,13 +1209,13 @@ describe("AI provider canary credential rejection", () => {
     expect(failure).toBeInstanceOf(CanaryProviderUnavailableError);
     expect(failure).toHaveProperty(
       "message",
-      "mistral: provider unavailable after retries (role-fast:model, HTTP 429); " +
+      "mistral: provider unavailable after retries (task-short-text:model, HTTP 429); " +
         "restore the canary credential quota",
     );
     expect(invoked).toEqual([
-      "role-fast:model",
-      "role-fast:model",
-      "role-fast:model",
+      "task-short-text:model",
+      "task-short-text:model",
+      "task-short-text:model",
     ]);
   });
 });
@@ -1215,6 +1333,7 @@ describe("AI provider canary wrapped generate errors", () => {
   test("reads a prefixed provider body for its status and rejection", () => {
     const tier = new HandlerError({
       status: 502,
+      code: "provider_error",
       message:
         'Mistral API error 403: {"object":"error","message":"This model is not available in your subscription tier","type":"tier_not_allowed","param":null,"code":"1910","raw_status_code":403}',
     });
@@ -1227,6 +1346,7 @@ describe("AI provider canary wrapped generate errors", () => {
       errorSummary(
         new HandlerError({
           status: 502,
+          code: "provider_error",
           message:
             'Mistral API error 503: {"object":"error","message":"busy","type":"service_unavailable","raw_status_code":503}',
         }),

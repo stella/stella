@@ -1,12 +1,5 @@
 import { describe, expect, test } from "bun:test";
-
-import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
-import type {
-  Block,
-  DocumentAst,
-  ParagraphNote,
-  ParagraphRole,
-} from "@stll/legal-ast/document-ast";
+import fc from "fast-check";
 
 import {
   annotationsOverlappingTextSpan,
@@ -14,11 +7,86 @@ import {
   courtHeadnoteOrigin,
   decisionCaseName,
   decisionDisplayReference,
-  editorialSupplementBlocks,
   footnoteParts,
-  visibleDecisionBlocks,
-} from "@/features/case-law/components/case-viewer/decision-text.logic";
-import type { HeadnoteOrigin } from "@/features/case-law/components/case-viewer/headnote-block";
+  resolveDecisionLinkOverlaps,
+} from "@stll/decision-reader/decision-text.logic";
+import type { HeadnoteOrigin } from "@stll/decision-reader/headnote-block";
+import { editorialSupplementBlocks } from "@stll/decision-reader/reader-text-pieces.logic";
+import { visibleDecisionBlocks } from "@stll/legal-ast/case-law-reader";
+import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
+import type {
+  Block,
+  DocumentAst,
+  ParagraphNote,
+  ParagraphRole,
+} from "@stll/legal-ast/document-ast";
+import { buildDocumentAstSearchPieces } from "@stll/legal-ast/document-search-pieces";
+import { assertProperty } from "@stll/property-testing";
+
+test("every cross-kind overlap accounts for displaced provisions and retains adjacent links", () => {
+  for (const kind of ["decision", "statute", "external"]) {
+    const competing = { key: `${kind}:citation`, start: 0, end: 20 };
+    const displaced = { key: "provision:displaced", start: 5, end: 10 };
+    const adjacent = { key: "provision:adjacent", start: 20, end: 25 };
+    for (const links of [
+      [competing, displaced, adjacent],
+      [adjacent, displaced, competing],
+    ]) {
+      expect(resolveDecisionLinkOverlaps(links)).toEqual({
+        links: [competing, adjacent],
+        failures: [{ id: "displaced", reason: "span-overlap" }],
+      });
+    }
+    const longerProvision = { key: "provision:retained", start: 0, end: 25 };
+    expect(resolveDecisionLinkOverlaps([competing, longerProvision])).toEqual({
+      links: [longerProvision],
+      failures: [],
+    });
+  }
+});
+
+test("overlap accounting distinguishes discarded spans even when their source keys coincide", () => {
+  const first = { key: "provision:repeated", start: 0, end: 10 };
+  const overlapping = { key: "provision:repeated", start: 5, end: 15 };
+  expect(resolveDecisionLinkOverlaps([first, overlapping])).toEqual({
+    links: [first],
+    failures: [{ id: "repeated", reason: "span-overlap" }],
+  });
+});
+
+test("final link disposition accounts for every nested provision across generated offsets", () => {
+  assertProperty(
+    "final link disposition accounts for every nested provision across generated offsets",
+    fc.property(fc.nat(), fc.integer({ min: 3 }), (start, length) => {
+      for (const kind of ["decision", "statute", "external"]) {
+        const outer = { key: `${kind}:outer`, start, end: start + length };
+        const inner = {
+          key: "provision:inner",
+          start: start + 1,
+          end: start + length - 1,
+        };
+        const after = {
+          key: "provision:after",
+          start: outer.end,
+          end: outer.end + 1,
+        };
+        for (const links of [
+          [inner, outer, after],
+          [after, outer, inner],
+        ]) {
+          const disposition = resolveDecisionLinkOverlaps(links);
+          expect(disposition.links).toEqual([outer, after]);
+          expect(disposition.failures).toEqual([
+            { id: "inner", reason: "span-overlap" },
+          ]);
+          expect(disposition.links.length + disposition.failures.length).toBe(
+            links.length,
+          );
+        }
+      }
+    }),
+  );
+});
 
 const titleBlock = (plainText: string): Block => ({
   anchorId: "title",
@@ -43,6 +111,30 @@ const astOf = (blocks: Block[]): DocumentAst => ({
     statutes: [],
   },
   blocks,
+});
+
+test("storage-resolved fulltext placement keeps the rendered paragraph ids and characters", () => {
+  const fulltext =
+    "  Žalobce použil § 42.\nPokračování věty.\n\n\nOdkaz na 2 As 2/2025.  ";
+  const blocks = visibleDecisionBlocks(
+    null,
+    DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+    fulltext,
+  );
+  expect(buildDocumentAstSearchPieces(blocks)).toEqual([
+    { id: "fulltext:0", text: "  Žalobce použil § 42.\nPokračování věty." },
+    { id: "fulltext:1", text: "Odkaz na 2 As 2/2025.  " },
+  ]);
+  expect(
+    visibleDecisionBlocks(null, DECISION_IDENTIFIER_TYPES.CASE_NUMBER, null),
+  ).toEqual([]);
+  expect(
+    visibleDecisionBlocks(
+      astOf([]),
+      DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+      fulltext,
+    ),
+  ).toEqual(blocks);
 });
 
 describe("citable case name", () => {
@@ -265,7 +357,7 @@ describe("visible decision blocks", () => {
     ).toEqual(["case-number", "title", "body"]);
   });
 
-  test("repairs legacy same-line Roman headings after Odůvodnění", () => {
+  test("leaves canonical section types unchanged", () => {
     const legacyAst = {
       ...ast,
       blocks: [
@@ -283,14 +375,16 @@ describe("visible decision blocks", () => {
           id: "b127",
           inlines: [{ text: "VIII. Vlastní přezkum", type: "text" }],
           plainText: "VIII. Vlastní přezkum",
-          type: "paragraph",
+          level: 3,
+          type: "heading",
         },
         {
           anchorId: "p-128",
           id: "b128",
           inlines: [{ text: "VIII. A) Tzv. data retention", type: "text" }],
           plainText: "VIII. A) Tzv. data retention",
-          type: "paragraph",
+          level: 4,
+          type: "heading",
         },
       ],
     } as const satisfies DocumentAst;
@@ -325,6 +419,9 @@ describe("visible decision blocks", () => {
         type: "heading",
       },
     ]);
+    expect(
+      visibleDecisionBlocks(legacyAst, DECISION_IDENTIFIER_TYPES.CASE_NUMBER),
+    ).toEqual(legacyAst.blocks);
   });
 });
 
@@ -446,7 +543,7 @@ describe("apparatus block ids", () => {
       plainText: "",
     }));
 
-  test("folds every publisher-authored role, and leaves the bench alone", () => {
+  test("folds publisher-authored roles and leaves court participants visible", () => {
     expect([
       ...apparatusBlockIds(
         roleBlocks([
@@ -460,7 +557,20 @@ describe("apparatus block ids", () => {
           undefined,
         ]),
       ),
-    ]).toEqual(["apparatus", "syllabus", "headnotes", "summary", "counsel"]);
+    ]).toEqual(["apparatus", "syllabus", "headnotes", "summary"]);
+  });
+
+  test("publisher footnotes stay in the decision's note flow", () => {
+    const publisherNotes = roleBlocks([
+      "apparatus",
+      "headnotes",
+      "summary",
+    ]).map((block) => ({
+      ...block,
+      note: { type: "footnote", label: "1" } as const,
+    }));
+
+    expect([...apparatusBlockIds(publisherNotes)]).toEqual([]);
   });
 });
 

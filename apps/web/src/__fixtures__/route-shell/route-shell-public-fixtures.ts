@@ -1,0 +1,411 @@
+import { panic } from "better-result";
+
+import { publicCaseLawPageCountry } from "@stll/api-contract/case-law-launch-readiness";
+import { noDecisionReviewFound } from "@stll/api-contract/case-law-reviews";
+import { DECISION_READ_RESOLUTION } from "@stll/api-contract/case-law-decision-resolution";
+import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
+
+import type { PublicCaseLawDecision } from "@/features/case-law/public-decision";
+import type { PublicStatute } from "@/features/statutes/queries/statutes";
+import type { api } from "@/lib/api";
+import { toSafeId } from "@/lib/safe-id";
+import type { Route as CourtBrowseRoute } from "@/routes/law/$country/courts/$";
+import type { Route as JurisdictionHubRoute } from "@/routes/law/$country/index";
+import type { Route as StatuteRoute } from "@/routes/law/$country/statutes/$slug/index";
+
+export const publicRouteExceptions: Record<string, string> = {
+  "/": "RootRedirect immediately navigates according to the audience; it has no stable leaf body. Destination routes are covered separately.",
+  "/law/cases/research/":
+    "Retired research link redirects to the case-law results, covered separately.",
+  "/law/cases/research/$tableId":
+    "Retired research table redirects to the case-law results, covered separately.",
+  "/auth/handoff":
+    "The handoff confirmation route requires root-loader state captured from an MCP handoff; its panel is covered separately.",
+  "/sharepoint/oauth-callback":
+    "The SharePoint OAuth callback reports the outcome and navigates to the connections settings on mount; it has no stable leaf body. The destination route is covered separately.",
+  "/knowledge/templates:anonymous":
+    "An organization's templates send a visitor to the published catalogue (`/knowledge/templates/catalogue`, covered separately) before the page body mounts.",
+  "/knowledge/playbooks:anonymous":
+    "An organization's playbooks send a visitor to the ready-made ones (`/knowledge/playbooks/catalogue`, covered separately) before the page body mounts.",
+  "/knowledge/tools:anonymous":
+    "An organization's tools send a visitor to the published list (`/knowledge/tools/catalogue`, covered separately) before the page body mounts.",
+  "/knowledge/tools_/skills/$skillId:member":
+    "The skill editor needs a browser editing surface (EditContext, execCommand) the DOM fixture lacks; agent-skills.spec.ts drives it in a browser.",
+  "/knowledge/tools_/skills/$skillId:anonymous":
+    "A skill belongs to an organization: a visitor gets the not-found page, not the editor.",
+  "/knowledge/clauses:anonymous":
+    "KnowledgeMemberOnly redirects anonymous visitors to the Knowledge landing before its page body mounts.",
+  "/knowledge/styles:anonymous":
+    "KnowledgeMemberOnly redirects anonymous visitors to the Knowledge landing before its page body mounts.",
+  "/knowledge/workflows:anonymous":
+    "KnowledgeMemberOnly redirects anonymous visitors to the Knowledge landing before its page body mounts.",
+  "/knowledge/company-formats/$registry/$companyId:anonymous":
+    "KnowledgeMemberOnly redirects anonymous visitors to the Knowledge landing before its page body mounts.",
+};
+
+const absentText = { type: "absent", reason: "not_published" } as const;
+
+const decision = {
+  appealReviews: noDecisionReviewFound(),
+  caseFile: { items: [], nextCursor: null, limit: 50 },
+  caseNumber: "SYN 1/2026",
+  caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+  citationCount: 0,
+  citationsFrom: [],
+  citationsNextCursor: null,
+  citationsTo: [],
+  country: "CZE",
+  court: "Fixture court",
+  courtId: null,
+  courtAbbreviation: null,
+  courtTier: "other",
+  createdAt: "2026-01-01T00:00:00.000Z",
+  decisionDate: null,
+  decisionType: null,
+  documentAst: null,
+  documentAstSource: null,
+  projectionDigest: null,
+  hasDocument: true,
+  documentPending: false,
+  documentReadFailed: false,
+  documentUnavailable: false,
+  textIncompleteReason: null,
+  textWithheldReason: null,
+  documentUrl: null,
+  ecli: null,
+  extractionWarnings: [],
+  fulltext: "Fixture decision text.",
+  headnote: absentText,
+  id: toSafeId<"caseLawDecision">("00000000-0000-4000-8000-000000000011"),
+  identifiers: [
+    { type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER, value: "SYN 1/2026" },
+  ],
+  judges: [],
+  language: "cs",
+  languageAlternates: [],
+  languageGroupKey: null,
+  metadata: {},
+  resolution: { type: DECISION_READ_RESOLUTION.DIRECT },
+  sections: null,
+  slug: "fixture",
+  source: {
+    adapterKey: "fixture",
+    allowsDerivedAi: true,
+    id: toSafeId<"caseLawSource">("00000000-0000-4000-8000-000000000012"),
+    name: "Fixture source",
+  },
+  sourceAttributionUrl: null,
+  sourceLanguages: null,
+  sourceUrl: null,
+  textFields: {
+    abstract: absentText,
+    headnote: absentText,
+    legalSentence: absentText,
+    summary: absentText,
+  },
+  updatedAt: "2026-01-01T00:00:00.000Z",
+} satisfies PublicCaseLawDecision;
+
+const statute = {
+  pendingChanges: null,
+  expressionKind: "consolidation",
+  windowDisposition: "effective",
+  windowDispositionBasis: null,
+  allowsDerivedAi: true,
+  citationCaseCount: null,
+  country: "CZE",
+  createdAt: "2026-01-01T00:00:00.000Z",
+  documentAst: null,
+  documentType: "act",
+  documentUrl: null,
+  effectiveDate: "2026-01-01",
+  eli: "/eli/cz/sb/2026/1",
+  fulltext: "§ 1\nFixture provision.",
+  id: toSafeId<"legislationDocument">("00000000-0000-4000-8000-000000000013"),
+  language: "cs",
+  sections: null,
+  slug: "fixture",
+  sourceUrl: null,
+  status: "current",
+  title: "1/2026 Sb., Fixture act",
+  updatedAt: "2026-01-01T00:00:00.000Z",
+  versionValidFrom: "2026-01-01",
+  versionValidTo: null,
+} satisfies PublicStatute;
+
+const statuteData = {
+  statute,
+  versions: [],
+  windowGap: null,
+  work: statute,
+} satisfies typeof StatuteRoute.types.loaderData;
+
+const HUB_SCOPE =
+  publicCaseLawPageCountry("CZE") ?? panic("CZE has public case-law pages");
+
+const jurisdictionHubData = {
+  scope: HUB_SCOPE,
+  courts: [{ name: "Nejvyšší soud", segment: "nejvyssi-soud" }],
+  head: {
+    description: "Courts with public decisions in Czechia.",
+    items: [],
+    path: "/law/cze",
+    title: "Czech case law",
+  },
+} satisfies typeof JurisdictionHubRoute.types.loaderData;
+
+const courtBrowseData = {
+  scope: HUB_SCOPE,
+  court: "Nejvyšší soud",
+  page: {
+    kind: "periods",
+    target: { level: "court", court: "nejvyssi-soud" },
+    periods: [{ value: 2023, count: 0 }],
+  },
+  head: {
+    description: "Decisions of Nejvyšší soud by year.",
+    items: [],
+    path: "/law/cze/courts/nejvyssi-soud",
+    title: "Nejvyšší soud",
+  },
+} satisfies typeof CourtBrowseRoute.types.loaderData;
+
+export const publicFixtureLoaderData = (routeId: string) => {
+  switch (routeId) {
+    case "/law/$country/cases/$court/$slug":
+    case "/law/$country/cases/$court/$language/$slug":
+      return decision;
+    case "/law/$country/statutes/$slug/":
+    case "/law/$country/statutes/$slug/v/$version":
+      return statuteData;
+    case "/law/$country/":
+      return jurisdictionHubData;
+    case "/law/$country/courts/$":
+      return courtBrowseData;
+    default:
+      return undefined;
+  }
+};
+
+type DecisionEndpoint = ReturnType<typeof api.case.decisions>;
+const emptyTreatments = {
+  negative: 0,
+  neutral: 0,
+  positive: 0,
+  supportive: 0,
+  mixed: 0,
+  unclassified: 0,
+};
+
+export const publicFixtureResponse = (
+  pathname: string,
+): Response | undefined => {
+  switch (pathname) {
+    case "/v1/mcp/connectors":
+      return Response.json({
+        canManageCustomConnectors: false,
+        connectors: [],
+        nativeTools: [],
+      } satisfies NonNullable<
+        Awaited<ReturnType<typeof api.mcp.connectors.get>>["data"]
+      >);
+    case "/v1/case/research/columns":
+      return Response.json({ items: [] } satisfies NonNullable<
+        Awaited<ReturnType<typeof api.case.research.columns.get>>["data"]
+      >);
+    case "/v1/contacts/00000000-0000-4000-8000-000000000003":
+      return Response.json({
+        id: toSafeId<"contact">("00000000-0000-4000-8000-000000000003"),
+        organizationId: toSafeId<"organization">("org-fixture"),
+        type: "person",
+        prefix: null,
+        firstName: "Fixture",
+        middleName: null,
+        lastName: "Contact",
+        suffix: null,
+        dateOfBirth: null,
+        nationalityCodes: [],
+        organizationName: null,
+        sanctionsMonitoringMode: "included",
+        displayName: "Fixture contact",
+        externalSource: null,
+        externalId: null,
+        externalChangeKey: null,
+        importedAt: null,
+        notes: null,
+        emails: [],
+        phones: [],
+        addresses: [],
+        tags: [],
+        metadata: null,
+        color: null,
+        registrationNumber: null,
+        taxId: null,
+        vatId: null,
+        vatPayer: false,
+        invoiceLanguage: null,
+        timeBillingFormat: "categories",
+        bankAccounts: [],
+        billingAddress: null,
+        defaultHourlyRate: null,
+        currency: null,
+        paymentTermDays: null,
+        originatingAttorneyId: null,
+        responsibleAttorneyId: null,
+        createdBy: null,
+        createdAt: "2026-01-01T00:00:00.000Z",
+        updatedAt: "2026-01-01T00:00:00.000Z",
+        originatingAttorney: null,
+        responsibleAttorney: null,
+        clientMatterCount: 0,
+        clientMatters: [],
+        partyMatters: [],
+        partyCount: 0,
+      } satisfies NonNullable<
+        Awaited<ReturnType<ReturnType<typeof api.contacts>["get"]>>["data"]
+      >);
+    case "/v1/case/decisions":
+      return Response.json({
+        items: [],
+        limit: 25,
+        nextCursor: null,
+      } satisfies NonNullable<
+        Awaited<ReturnType<typeof api.case.decisions.get>>["data"]
+      >);
+    case "/v1/case/decisions/facets":
+      return Response.json({
+        country: [],
+        court: [],
+        year: [],
+      } satisfies NonNullable<
+        Awaited<ReturnType<typeof api.case.decisions.facets.get>>["data"]
+      >);
+    case "/v1/case/coverage":
+      return Response.json({
+        message: "Coverage is unavailable",
+      } satisfies NonNullable<
+        Awaited<ReturnType<typeof api.case.coverage.get>>["data"]
+      >);
+    case "/v1/law/statutes":
+      return Response.json({
+        items: [],
+        limit: 25,
+        nextCursor: null,
+      } satisfies NonNullable<
+        Awaited<ReturnType<typeof api.law.statutes.get>>["data"]
+      >);
+    case "/v1/law/statutes/facets":
+      return Response.json({ documentType: [] } satisfies NonNullable<
+        Awaited<ReturnType<typeof api.law.statutes.facets.get>>["data"]
+      >);
+    case "/v1/reader/answers":
+      return Response.json({
+        items: [],
+        limit: 50,
+        nextCursor: null,
+      } satisfies NonNullable<
+        Awaited<ReturnType<typeof api.reader.answers.get>>["data"]
+      >);
+    case "/v1/reader/annotations":
+      return Response.json({
+        items: [],
+        limit: 100,
+        nextCursor: null,
+      } satisfies NonNullable<
+        Awaited<ReturnType<typeof api.reader.annotations.get>>["data"]
+      >);
+    case `/v1/chat/decision-threads/${decision.id}`:
+      return Response.json({ threadId: null } satisfies NonNullable<
+        Awaited<
+          ReturnType<ReturnType<(typeof api.chat)["decision-threads"]>["get"]>
+        >["data"]
+      >);
+    case "/v1/case/provisions/citation-counts":
+      return Response.json({
+        status: "ready",
+        provisions: [],
+      } satisfies NonNullable<
+        Awaited<
+          ReturnType<(typeof api.case.provisions)["citation-counts"]["get"]>
+        >["data"]
+      >);
+    case `/v1/case/decisions/${decision.id}`:
+      return Response.json(decision);
+    case `/v1/law/statutes/${statute.id}`:
+      return Response.json(statute);
+    case `/v1/case/decisions/${decision.id}/citations/summary`:
+      return Response.json({
+        incoming: emptyTreatments,
+        outgoing: emptyTreatments,
+        precision: { status: "exact" },
+        incomingByYear: [],
+      } satisfies NonNullable<
+        Awaited<
+          ReturnType<DecisionEndpoint["citations"]["summary"]["get"]>
+        >["data"]
+      >);
+    case `/v1/case/decisions/${decision.id}/citations`:
+      return Response.json({
+        items: [],
+        limit: 25,
+        nextCursor: null,
+        doctrineAvailability: "available",
+      } satisfies NonNullable<
+        Awaited<ReturnType<DecisionEndpoint["citations"]["get"]>>["data"]
+      >);
+    case `/v1/case/decisions/${decision.id}/citations/leading`:
+      return Response.json({ items: [] } satisfies NonNullable<
+        Awaited<
+          ReturnType<DecisionEndpoint["citations"]["leading"]["get"]>
+        >["data"]
+      >);
+    case `/v1/case/decisions/${decision.id}/provisions`:
+      return Response.json({
+        items: [],
+        limit: 50,
+        nextCursor: null,
+        status: { type: "current" },
+        capability: { type: "supported", languages: ["cs"] },
+        pendingSince: null,
+        generation: "1",
+        publishedProjectionDigest: null,
+        previews: [],
+      } satisfies NonNullable<
+        Awaited<ReturnType<DecisionEndpoint["provisions"]["get"]>>["data"]
+      >);
+    default:
+      return undefined;
+  }
+};
+
+export const publicFixtureReadyText = (routeId: string) => {
+  const data = publicFixtureLoaderData(routeId);
+  if (data === undefined) {
+    return undefined;
+  }
+  if ("statute" in data) {
+    return data.statute.fulltext.split("\n").at(-1);
+  }
+  // The hubs list links, not a document: their court name is the content.
+  if ("courts" in data) {
+    return data.courts[0]?.name;
+  }
+  if ("page" in data) {
+    return data.court;
+  }
+  return data.fulltext;
+};
+
+export const publicFixtureReadySelector = (
+  routeId: string,
+  audience: "member" | "anonymous",
+) => {
+  const data = publicFixtureLoaderData(routeId);
+  // The hubs have no document viewer to wait for.
+  if (data === undefined || "courts" in data || "page" in data) {
+    return undefined;
+  }
+  return audience === "member"
+    ? '[data-slot="workspace-shell-main"] [data-file-viewer-root] [contenteditable="true"]'
+    : '[data-slot="workspace-shell-main"] [data-file-viewer-root] [data-slot="gated-chat-sign-in"]';
+};

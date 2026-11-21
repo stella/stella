@@ -1,49 +1,86 @@
+/** Deployed MCP journeys. Diagnostics contain assertions, never response bodies.
+ * Full mode registers a client; frequent mode uses existing client metadata.
+ * Staging mints credentials from its smoke session and revokes them each run.
+ */
+import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import {
   CLIENT_CAPABILITIES_META_KEY,
   CLIENT_INFO_META_KEY,
   LATEST_PROTOCOL_VERSION,
   PROTOCOL_VERSION_META_KEY,
 } from "@modelcontextprotocol/server";
-/**
- * Canary for the MCP transport of a *deployed* API.
- *
- * The transport can fail while every response still carries a 2xx: an
- * missing or truncated authenticated `GET` event channel, an `initialize` that
- * returns a JSON-RPC error inside a 200, or a tool list that comes back empty.
- * None of those necessarily raise a 5xx, log an error, or trip an alarm, so the
- * only observer is the client whose session silently stops working. This canary
- * drives the handshake a real client drives and treats a well-formed session as
- * the pass condition.
- *
- * Read-only by construction: it never calls a tool, so it cannot touch tenant
- * data. Response bodies are parsed but never printed, only the shape assertions
- * that failed.
- *
- * Without `MCP_CANARY_TOKEN` the authenticated probes cannot run. They are then
- * reported as skipped and the run stays green on the public surface alone;
- * skips are always named so a credential-less run never reads as full coverage.
- */
+import type { CallToolRequestParams } from "@modelcontextprotocol/server";
+import { Result, TaggedError } from "better-result";
+import {
+  calculateJwkThumbprint,
+  exportJWK,
+  generateKeyPair,
+  SignJWT,
+} from "jose";
+import { randomBytes } from "node:crypto";
 import * as v from "valibot";
 
+import { MCP_DEFAULT_RESOURCE_SCOPES, MCP_HTTP_PATH } from "@stll/api-contract";
+import {
+  AI_FAILURE_CODES,
+  isAIFailureCode,
+} from "@stll/api-contract/ai-errors";
+import {
+  DESKTOP_ACCOUNT_POLICY,
+  DESKTOP_ACCOUNT_PROTOCOL_HEADER,
+} from "@stll/api-contract/desktop-registry";
+import { cliClientMetadataUrl } from "@stll/cli/client-metadata-document";
+import { printError } from "@stll/errors";
 import { fetchWithTimeout } from "@stll/fetch";
-import { Temporal } from "@stll/time";
+import {
+  BodyByteLimitError,
+  readBodyTextWithIdleDeadline,
+  readBodyWithIdleDeadline,
+} from "@stll/fetch/body-reader";
+import { sha256Base64Url, sha256Hex } from "@stll/sha256/bun";
+import { DAY_IN_MS, Temporal } from "@stll/time";
+
+import { SAMPLE_MATTERS } from "@/api/lib/review-organization/sample-data";
+import { MCP_ERROR_CODES } from "@/api/mcp/error-codes";
+import { MCP_DISCOVERY_PATH } from "@/api/mcp/resource-policy-contract";
+import { judgeMcpToolLatency } from "@/api/mcp/tool-latency-budgets";
+import { MCP_NOTIFICATION_KEEP_ALIVE_MS } from "@/api/mcp/transport-contract";
 
 import {
-  MCP_DISCOVERY_PATH,
-  MCP_HTTP_PATH,
-  MCP_NOTIFICATION_KEEP_ALIVE_MS,
-} from "@/api/mcp/constants";
+  type CallCaseLawTool,
+  sampleCaseLawIdentities,
+} from "./mcp-canary-case-law-identity";
+import { MCP_CANARY_JOURNEY_CREDENTIALS } from "./mcp-canary-credentials";
+import {
+  describeReleaseLoad,
+  jobsRunDuringLoad,
+  judgeReleaseLoad,
+  runReleaseLoad,
+} from "./mcp-canary-release-load";
+
+export { MCP_CANARY_JOURNEY_CREDENTIALS } from "./mcp-canary-credentials";
+
+export const canaryPkceChallenge = (verifier: string) =>
+  sha256Base64Url(verifier);
+export const canaryVerifierHash = (verifier: string) => sha256Hex(verifier);
 
 const PROBE_TIMEOUT_MS = MCP_NOTIFICATION_KEEP_ALIVE_MS * 4;
+const REFRESH_REQUEST_BUDGET_MS = 10_000;
 const STREAM_OPEN_OBSERVATION_MS = 100;
 const SSE_CONTENT_TYPE = "text/event-stream";
 const CANARY_CLIENT_NAME = "stella-mcp-canary";
 const MODERN_PROTOCOL_VERSION = "2026-07-28";
+const CLIENT_METADATA_BYTE_CAP = 64 * 1024;
+const MAX_RETRY_AFTER_SECONDS = 60;
 
 const PROBE_STATUS = {
   failed: "failed",
+  warned: "warned",
   passed: "passed",
   skipped: "skipped",
+  notApplicable: "not_applicable",
+  rateLimited: "rate_limited",
+  upstream: "upstream",
 } as const;
 
 type ProbeStatus = (typeof PROBE_STATUS)[keyof typeof PROBE_STATUS];
@@ -67,10 +104,111 @@ const failed = (name: string, detail: string): ProbeResult => ({
   detail,
 });
 
-const describeProbeFailure = (error: unknown): string => {
+const upstream = (name: string, detail: string): ProbeResult => ({
+  name,
+  status: PROBE_STATUS.upstream,
+  detail,
+});
+
+class CanaryRateLimitError extends TaggedError("CanaryRateLimitError")<{
+  message: string;
+}> {}
+
+// Retry-After is either delay-seconds or an HTTP-date (IMF-fixdate).
+const HTTP_DATE =
+  /^(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun), (\d{2}) (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) (\d{4}) (\d{2}):(\d{2}):(\d{2}) GMT$/u;
+const HTTP_DATE_MONTHS = new Map(
+  [
+    "Jan",
+    "Feb",
+    "Mar",
+    "Apr",
+    "May",
+    "Jun",
+    "Jul",
+    "Aug",
+    "Sep",
+    "Oct",
+    "Nov",
+    "Dec",
+  ].map((name, index) => [name, index + 1] as const),
+);
+
+const httpDateEpochMilliseconds = (value: string): number | undefined => {
+  const match = HTTP_DATE.exec(value);
+  if (!match) {
+    return undefined;
+  }
+  const [, day, monthName, year, hour, minute, second] = match;
+  const month =
+    monthName === undefined ? undefined : HTTP_DATE_MONTHS.get(monthName);
+  if (month === undefined) {
+    return undefined;
+  }
+  const instant = Result.try(() =>
+    Temporal.PlainDateTime.from({
+      year: Number(year),
+      month,
+      day: Number(day),
+      hour: Number(hour),
+      minute: Number(minute),
+      second: Number(second),
+    })
+      .toZonedDateTime("UTC")
+      .toInstant(),
+  );
+  return instant.isOk() ? instant.value.epochMilliseconds : undefined;
+};
+
+const retryAfterMilliseconds = (value: string | null): number | undefined => {
+  if (!value) {
+    return undefined;
+  }
+  if (/^\d+$/u.test(value)) {
+    return Number(value) * 1000;
+  }
+  const epochMilliseconds = httpDateEpochMilliseconds(value);
+  return epochMilliseconds === undefined
+    ? undefined
+    : Math.max(0, epochMilliseconds - Temporal.Now.instant().epochMilliseconds);
+};
+
+const fetchWithRateLimitRetry = async (
+  name: string,
+  fetcher: CanaryFetcher,
+  input: Parameters<CanaryFetcher>[0],
+  init: Parameters<CanaryFetcher>[1],
+): Promise<Response> => {
+  let response = await fetcher(input, init);
+  if (response.status !== 429) {
+    return response;
+  }
+  const waitMs = retryAfterMilliseconds(response.headers.get("Retry-After"));
+  if (waitMs === undefined || waitMs > MAX_RETRY_AFTER_SECONDS * 1000) {
+    await response.body?.cancel();
+    throw new CanaryRateLimitError({
+      message: `${name} rate limited; Retry-After exceeds 60 seconds or is invalid`,
+    });
+  }
+  await response.body?.cancel();
+  await Bun.sleep(waitMs);
+  response = await fetcher(input, init);
+  if (response.status === 429) {
+    await response.body?.cancel();
+    throw new CanaryRateLimitError({
+      message: `${name} remained rate limited after one retry`,
+    });
+  }
+  return response;
+};
+
+const describeProbeFailure = (
+  error: unknown,
+  timeoutMs = PROBE_TIMEOUT_MS,
+): string => {
   if (error instanceof DOMException) {
     if (error.name === "TimeoutError") {
-      return `request timed out after ${String(PROBE_TIMEOUT_MS)} ms`;
+      return `request timed out after ${String(timeoutMs)} ms`;
     }
     if (error.name === "AbortError") {
       return "request was aborted";
@@ -91,6 +229,9 @@ export const runNamedProbe = async (
   try {
     return await operation();
   } catch (error) {
+    if (error instanceof CanaryRateLimitError) {
+      return { name, status: PROBE_STATUS.rateLimited, detail: error.message };
+    }
     return failed(name, describeProbeFailure(error));
   }
 };
@@ -140,6 +281,9 @@ const PROBE_NAMES = {
   initialize: `POST ${MCP_HTTP_PATH} (legacy initialize)`,
   stream: `GET ${MCP_HTTP_PATH} (notification stream)`,
   toolsList: `POST ${MCP_HTTP_PATH} (modern tools/list)`,
+  toolCall: `POST ${MCP_HTTP_PATH} (search_case_law)`,
+  legislationSearch: `POST ${MCP_HTTP_PATH} (search_legislation)`,
+  caseLawCoverage: `POST ${MCP_HTTP_PATH} (case_law_coverage)`,
   unauthenticated: `POST ${MCP_HTTP_PATH} (no credential)`,
 } as const;
 
@@ -247,8 +391,11 @@ export const evaluateToolsList = ({
 
 const readProbeResponse = async (
   response: Response,
+  idleMs = PROBE_TIMEOUT_MS,
 ): Promise<ProbeResponse> => {
-  const text = await response.text();
+  const text = await readBodyTextWithIdleDeadline(response, {
+    idleMs,
+  });
   let body: unknown;
   try {
     body = JSON.parse(text);
@@ -269,10 +416,11 @@ type JsonRpcCall = {
   baseUrl: string;
   era: "legacy" | "modern";
   id: number;
-  method: string;
-  params: Record<string, unknown>;
   token: string;
-};
+} & (
+  | { method: "tools/call"; params: CallToolRequestParams }
+  | { method: "initialize" | "tools/list"; params: Record<string, unknown> }
+);
 
 export const createJsonRpcRequest = ({
   baseUrl,
@@ -311,17 +459,79 @@ export const createJsonRpcRequest = ({
       authorization: `Bearer ${token}`,
       "content-type": "application/json",
       ...(era === "modern" ? { "mcp-method": method } : {}),
+      ...(era === "modern" && method === "tools/call"
+        ? { "mcp-name": params.name }
+        : {}),
       "mcp-protocol-version": protocolVersion,
     },
     method: "POST",
   });
 };
 
-const postJsonRpc = async (call: JsonRpcCall): Promise<ProbeResponse> =>
+class CanaryTargetError extends TaggedError("CanaryTargetError")<{
+  message: string;
+}> {}
+
+type DeploymentFetcherOptions = {
+  baseUrl: string;
+  /** First-party app origin the advertised OAuth endpoints may live on. */
+  appUrl?: string | undefined;
+  edgeHeaderName?: string | undefined;
+  edgeHeaderValue?: string | undefined;
+};
+
+// Redirects are never followed: neither bearer keys nor the staging edge
+// credential may travel to a Location supplied by a remote response.
+export const createDeploymentFetcher =
+  (
+    {
+      baseUrl,
+      appUrl,
+      edgeHeaderName,
+      edgeHeaderValue,
+    }: DeploymentFetcherOptions,
+    fetcher: CanaryFetcher = fetchWithTimeout,
+  ): CanaryFetcher =>
+  async (input, init) => {
+    const url = new URL(input instanceof Request ? input.url : input);
+    const allowedOrigins = new Set([new URL(baseUrl).origin]);
+    if (appUrl) {
+      allowedOrigins.add(new URL(appUrl).origin);
+    }
+    if (!allowedOrigins.has(url.origin)) {
+      throw new CanaryTargetError({
+        message: "Canary target must remain on the configured origin",
+      });
+    }
+    const headers = new Headers(
+      input instanceof Request ? input.headers : undefined,
+    );
+    for (const [key, value] of new Headers(init.headers)) {
+      headers.set(key, value);
+    }
+    if (edgeHeaderName && edgeHeaderValue) {
+      headers.set(edgeHeaderName, edgeHeaderValue);
+    }
+    return await fetcher(input, { ...init, headers, redirect: "manual" });
+  };
+
+const deploymentFetcher: CanaryFetcher = async (input, init) =>
+  await createDeploymentFetcher({
+    baseUrl:
+      process.env["MCP_CANARY_BASE_URL"] ??
+      new URL(input instanceof Request ? input.url : input).origin,
+    appUrl: process.env["MCP_CANARY_FRONTEND_URL"],
+    edgeHeaderName: process.env["E2E_EDGE_HEADER_NAME"],
+    edgeHeaderValue: process.env["E2E_EDGE_HEADER_VALUE"],
+  })(input, init);
+
+const postJsonRpc = async (
+  call: JsonRpcCall,
+  fetcher: CanaryFetcher = deploymentFetcher,
+): Promise<ProbeResponse> =>
   await readProbeResponse(
-    // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- operator-run canary against the deployment named by MCP_CANARY_BASE_URL
-    await fetchWithTimeout(createJsonRpcRequest(call), {
-      timeoutMs: PROBE_TIMEOUT_MS,
+    await fetcher(createJsonRpcRequest(call), {
+      timeout: { type: "headers", ms: PROBE_TIMEOUT_MS },
     }),
   );
 
@@ -330,11 +540,10 @@ const runPublicProbes = async (baseUrl: string): Promise<ProbeResult[]> =>
     runNamedProbe(PROBE_NAMES.discovery, async () =>
       evaluateDiscovery(
         await readProbeResponse(
-          // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- operator-run canary against the deployment named by MCP_CANARY_BASE_URL
-          await fetchWithTimeout(new URL(MCP_DISCOVERY_PATH, baseUrl), {
+          await deploymentFetcher(new URL(MCP_DISCOVERY_PATH, baseUrl), {
             headers: { accept: "application/json" },
             method: "GET",
-            timeoutMs: PROBE_TIMEOUT_MS,
+            timeout: { type: "headers", ms: PROBE_TIMEOUT_MS },
           }),
         ),
       ),
@@ -342,8 +551,7 @@ const runPublicProbes = async (baseUrl: string): Promise<ProbeResult[]> =>
     runNamedProbe(PROBE_NAMES.unauthenticated, async () =>
       evaluateUnauthenticated(
         await readProbeResponse(
-          // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- operator-run canary against the deployment named by MCP_CANARY_BASE_URL
-          await fetchWithTimeout(new URL(MCP_HTTP_PATH, baseUrl), {
+          await deploymentFetcher(new URL(MCP_HTTP_PATH, baseUrl), {
             body: JSON.stringify({
               id: 1,
               jsonrpc: "2.0",
@@ -354,7 +562,7 @@ const runPublicProbes = async (baseUrl: string): Promise<ProbeResult[]> =>
               "content-type": "application/json",
             },
             method: "POST",
-            timeoutMs: PROBE_TIMEOUT_MS,
+            timeout: { type: "headers", ms: PROBE_TIMEOUT_MS },
           }),
         ),
       ),
@@ -388,7 +596,9 @@ const inspectNotificationStream = async (
         reader.read().then(
           ({ done }) => (done ? ("closed" as const) : ("frame" as const)),
           (error: unknown) => {
-            console.error("MCP probe stream read failed", error);
+            printError(
+              `[mcp-canary] stream read failed: ${describeProbeFailure(error)}`,
+            );
             return "read_failed" as const;
           },
         ),
@@ -416,7 +626,7 @@ const inspectNotificationStream = async (
 
 export const runAuthenticatedStreamProbe = async (
   { baseUrl, token }: CanaryTarget,
-  fetcher: CanaryFetcher = fetchWithTimeout,
+  fetcher: CanaryFetcher = deploymentFetcher,
 ): Promise<ProbeResult> => {
   const response = await fetcher(new URL(MCP_HTTP_PATH, baseUrl), {
     headers: {
@@ -424,7 +634,7 @@ export const runAuthenticatedStreamProbe = async (
       authorization: `Bearer ${token}`,
     },
     method: "GET",
-    timeoutMs: PROBE_TIMEOUT_MS,
+    timeout: { type: "headers", ms: PROBE_TIMEOUT_MS },
   });
   const headerResult = evaluateStreamAvailability({
     contentType: response.headers.get("content-type"),
@@ -456,9 +666,188 @@ export const runAuthenticatedStreamProbe = async (
   return headerResult;
 };
 
+const TOOL_FAILURE_DETAIL_MAX_LENGTH = 200;
+
+const jsonRpcErrorSchema = v.object({
+  error: v.object({
+    code: v.optional(v.number()),
+    message: v.optional(v.string()),
+  }),
+});
+
+const firstContentText = (result: Record<string, unknown>) => {
+  const parsed = v.safeParse(
+    v.object({ content: v.array(v.unknown()) }),
+    result,
+  );
+  if (!parsed.success) {
+    return undefined;
+  }
+  const first = v.safeParse(
+    v.object({ text: v.string() }),
+    parsed.output.content.at(0),
+  );
+  return first.success ? first.output.text : undefined;
+};
+
+/**
+ * One line saying why a tool call failed, so a red run names the cause: the
+ * HTTP status, the JSON-RPC error, the tool's own error text, or empty content.
+ */
+export const describeToolCallFailure = ({
+  status,
+  body,
+}: Pick<ProbeResponse, "body" | "status">): string => {
+  const reason = (() => {
+    if (status !== 200) {
+      return `HTTP ${String(status)}`;
+    }
+    if (v.is(jsonRpcErrorSchema, body)) {
+      const { code, message } = body.error;
+      return `JSON-RPC error ${code === undefined ? "" : String(code)} ${message ?? ""}`;
+    }
+    const result = jsonRpcResult(body);
+    if (!result) {
+      return "no JSON-RPC result";
+    }
+    if (result["isError"] === true) {
+      return `tool error: ${firstContentText(result) ?? "no error text"}`;
+    }
+    return "result without content";
+  })();
+  const line = reason.replaceAll(/\s+/gu, " ").trim();
+  return line.length > TOOL_FAILURE_DETAIL_MAX_LENGTH
+    ? `${line.slice(0, TOOL_FAILURE_DETAIL_MAX_LENGTH)}...`
+    : line;
+};
+
+export const evaluateToolCall = (
+  { status, body }: Pick<ProbeResponse, "body" | "status">,
+  {
+    name = PROBE_NAMES.toolCall,
+    answered = "read-only case-law search returned content",
+  }: { name?: string; answered?: string } = {},
+): ProbeResult => {
+  const result = jsonRpcResult(body);
+  if (
+    status !== 200 ||
+    !result ||
+    result["isError"] === true ||
+    !v.is(
+      v.object({ content: v.pipe(v.array(v.unknown()), v.minLength(1)) }),
+      result,
+    )
+  ) {
+    return failed(
+      name,
+      `expected a non-error JSON-RPC tool result with content (${describeToolCallFailure({ status, body })})`,
+    );
+  }
+  return passed(name, answered);
+};
+
+/**
+ * Why a tool call failed its latency budget, or undefined within it. The
+ * budget is the API's own table (`mcp/tool-latency-budgets.ts`), the one the
+ * slow-tool alarm counts by, so a slow tool fails the canary, and with it the
+ * release proof, before it ships.
+ */
+export const describeToolLatencyOverBudget = ({
+  toolName,
+  elapsedMs,
+}: {
+  toolName: string;
+  elapsedMs: number;
+}): string | undefined => {
+  const { budgetMs, overBudget } = judgeMcpToolLatency({
+    toolName,
+    elapsedMs,
+  });
+  return overBudget
+    ? `${toolName} answered in ${String(Math.round(elapsedMs))} ms, over its ${String(budgetMs)} ms latency budget`
+    : undefined;
+};
+
+/** A tool call's correctness result, failed as well when it ran over budget. */
+export const judgeToolCallProbe = (
+  result: ProbeResult,
+  { toolName, elapsedMs }: { toolName: string; elapsedMs: number },
+): ProbeResult => {
+  const overBudget = describeToolLatencyOverBudget({ toolName, elapsedMs });
+  if (overBudget === undefined) {
+    return result.status === PROBE_STATUS.passed
+      ? {
+          ...result,
+          detail: `${result.detail} in ${String(Math.round(elapsedMs))} ms`,
+        }
+      : result;
+  }
+  return result.status === PROBE_STATUS.failed
+    ? { ...result, detail: `${result.detail}; ${overBudget}` }
+    : failed(result.name, overBudget);
+};
+
+type ToolCallProbe = {
+  name: string;
+  toolName: string;
+  arguments: Record<string, unknown>;
+  /** The pass line: what a correct answer showed. */
+  answered: string;
+};
+
+/**
+ * The read-only tools a credentialed run calls, each judged for content and
+ * for latency. Public-corpus reads: they need no tenant data, so the same
+ * calls hold for the release proof and the deployed canary.
+ */
+export const TOOL_CALL_PROBES = [
+  {
+    name: PROBE_NAMES.toolCall,
+    toolName: "search_case_law",
+    arguments: { queries: ["contract"], country: "CZ", limit: 1 },
+    answered: "read-only case-law search returned content",
+  },
+  {
+    name: PROBE_NAMES.legislationSearch,
+    toolName: "search_legislation",
+    arguments: { query: "zákoník práce", country: "CZ", limit: 1 },
+    answered: "read-only legislation search returned content",
+  },
+  {
+    name: PROBE_NAMES.caseLawCoverage,
+    toolName: "case_law_coverage",
+    arguments: {},
+    answered: "case-law coverage returned content",
+  },
+] as const satisfies readonly ToolCallProbe[];
+
+const runToolCallProbe =
+  ({ name, toolName, arguments: args, answered }: ToolCallProbe) =>
+  async (
+    { baseUrl, token }: CanaryTarget,
+    fetcher: CanaryFetcher = deploymentFetcher,
+  ): Promise<ProbeResult> => {
+    const startedAt = performance.now();
+    const response = await postJsonRpc(
+      {
+        baseUrl,
+        token,
+        era: "modern",
+        id: 3,
+        method: "tools/call",
+        params: { name: toolName, arguments: args },
+      },
+      fetcher,
+    );
+    return judgeToolCallProbe(evaluateToolCall(response, { name, answered }), {
+      toolName,
+      elapsedMs: performance.now() - startedAt,
+    });
+  };
+
 type AuthenticatedProbe = {
   name: string;
-  run: (target: CanaryTarget) => Promise<ProbeResult>;
+  run: (target: CanaryTarget, fetcher?: CanaryFetcher) => Promise<ProbeResult>;
 };
 
 /**
@@ -466,68 +855,2464 @@ type AuthenticatedProbe = {
  * skip report both read it, so neither can describe a probe the other lacks.
  */
 export const AUTHENTICATED_PROBES = [
+  ...TOOL_CALL_PROBES.map((probe) => ({
+    name: probe.name,
+    run: runToolCallProbe(probe),
+  })),
   {
     name: PROBE_NAMES.stream,
     run: runAuthenticatedStreamProbe,
   },
   {
     name: PROBE_NAMES.initialize,
-    run: async ({ baseUrl, token }) =>
+    run: async ({ baseUrl, token }, fetcher = deploymentFetcher) =>
       evaluateInitialize(
-        await postJsonRpc({
-          baseUrl,
-          era: "legacy",
-          id: 1,
-          method: "initialize",
-          params: {
-            capabilities: {},
-            clientInfo: { name: CANARY_CLIENT_NAME, version: "1.0.0" },
-            protocolVersion: LATEST_PROTOCOL_VERSION,
+        await postJsonRpc(
+          {
+            baseUrl,
+            era: "legacy",
+            id: 1,
+            method: "initialize",
+            params: {
+              capabilities: {},
+              clientInfo: { name: CANARY_CLIENT_NAME, version: "1.0.0" },
+              protocolVersion: LATEST_PROTOCOL_VERSION,
+            },
+            token,
           },
-          token,
-        }),
+          fetcher,
+        ),
       ),
   },
   {
     name: PROBE_NAMES.toolsList,
-    run: async ({ baseUrl, token }) =>
+    run: async ({ baseUrl, token }, fetcher = deploymentFetcher) =>
       evaluateToolsList(
-        await postJsonRpc({
-          baseUrl,
-          era: "modern",
-          id: 2,
-          method: "tools/list",
-          params: {},
-          token,
-        }),
+        await postJsonRpc(
+          {
+            baseUrl,
+            era: "modern",
+            id: 2,
+            method: "tools/list",
+            params: {},
+            token,
+          },
+          fetcher,
+        ),
       ),
   },
 ] as const satisfies readonly AuthenticatedProbe[];
 
-// Concurrent because both eras are stateless: neither the legacy initialize
-// nor the modern per-request envelope establishes state for another probe.
-const runAuthenticatedProbes = async (
+const CASE_LAW_IDENTITY_PROBE_ID = 4;
+
+/** A case-law tool call's JSON payload, or the line saying why there is none. */
+const caseLawToolCaller =
+  (
+    { baseUrl, token }: CanaryTarget,
+    fetcher: CanaryFetcher = deploymentFetcher,
+  ): CallCaseLawTool =>
+  async (name, args) => {
+    const response = await postJsonRpc(
+      {
+        baseUrl,
+        token,
+        era: "modern",
+        id: CASE_LAW_IDENTITY_PROBE_ID,
+        method: "tools/call",
+        params: { name, arguments: args },
+      },
+      fetcher,
+    );
+    const result = jsonRpcResult(response.body);
+    const text =
+      response.status === 200 && result && result["isError"] !== true
+        ? firstContentText(result)
+        : undefined;
+    if (text === undefined) {
+      return { type: "error", detail: describeToolCallFailure(response) };
+    }
+    const payload = Result.try((): unknown => JSON.parse(text));
+    return payload.isOk()
+      ? { type: "ok", payload: payload.value }
+      : { type: "error", detail: "tool content is not JSON" };
+  };
+
+/** One result per probed country: a sampled decision resolves to itself. */
+const runCaseLawIdentityProbes = async (
   target: CanaryTarget,
+  fetcher: CanaryFetcher = deploymentFetcher,
 ): Promise<ProbeResult[]> =>
-  await Promise.all(
-    AUTHENTICATED_PROBES.map(
-      async ({ name, run }) =>
-        await runNamedProbe(name, async () => await run(target)),
-    ),
+  (await sampleCaseLawIdentities(caseLawToolCaller(target, fetcher))).map(
+    ({ country, outcome: { status, detail } }) => ({
+      name: `case-law identity (${country})`,
+      status: status === "not_applicable" ? PROBE_STATUS.notApplicable : status,
+      detail,
+    }),
   );
 
+// Concurrent because both eras are stateless: neither the legacy initialize
+// nor the modern per-request envelope establishes state for another probe.
+// Credentialed probes share the caller's action admission capacity.
+export const runAuthenticatedProbes = async (
+  target: CanaryTarget,
+  fetcher: CanaryFetcher = deploymentFetcher,
+): Promise<ProbeResult[]> => {
+  const results: ProbeResult[] = [];
+  for (const { name, run } of AUTHENTICATED_PROBES) {
+    results.push(
+      await runNamedProbe(name, async () => await run(target, fetcher)),
+    );
+  }
+  return results;
+};
+
 export const summarize = (results: readonly ProbeResult[]) => ({
-  failed: results.filter((result) => result.status === PROBE_STATUS.failed)
-    .length,
+  failed: results.filter(
+    (result) =>
+      result.status === PROBE_STATUS.failed ||
+      result.status === PROBE_STATUS.rateLimited,
+  ).length,
   skipped: results.filter((result) => result.status === PROBE_STATUS.skipped)
     .length,
 });
 
 const PROBE_ICONS = {
   [PROBE_STATUS.failed]: "FAIL",
+  [PROBE_STATUS.warned]: "WARN",
   [PROBE_STATUS.passed]: "PASS",
   [PROBE_STATUS.skipped]: "SKIP",
+  [PROBE_STATUS.notApplicable]: "N/A",
+  [PROBE_STATUS.rateLimited]: "RATE_LIMITED",
+  [PROBE_STATUS.upstream]: "UPSTREAM",
 } as const satisfies Record<ProbeStatus, string>;
+
+const authorizationMetadataSchema = v.object({
+  authorization_endpoint: v.pipe(v.string(), v.url()),
+  token_endpoint: v.pipe(v.string(), v.url()),
+  registration_endpoint: v.pipe(v.string(), v.url()),
+  code_challenge_methods_supported: v.array(v.string()),
+});
+export const evaluateAuthorizationMetadata = ({
+  body,
+  status,
+}: Pick<ProbeResponse, "body" | "status">): ProbeResult => {
+  if (
+    status !== 200 ||
+    !v.is(authorizationMetadataSchema, body) ||
+    !body.code_challenge_methods_supported.includes("S256")
+  ) {
+    return failed(
+      "authorization server discovery",
+      "expected endpoints and PKCE S256 in a 200 metadata document",
+    );
+  }
+  return passed(
+    "authorization server discovery",
+    "authorize, token, registration endpoints and PKCE S256 advertised",
+  );
+};
+
+export const LOOPBACK_REDIRECTS = [
+  "http://localhost:49152/callback",
+  "http://127.0.0.1:49152/callback",
+  "http://[::1]:49152/callback",
+] as const;
+export const CANARY_CLIENT_IDS = [
+  "https://claude.ai/oauth/claude-code-client-metadata",
+  "https://chatgpt.com/oauth/codex/client.json",
+] as const;
+const CANARY_SCOPE = MCP_DEFAULT_RESOURCE_SCOPES.filter(
+  (scope) => scope === "stella:search" || scope === "stella:read",
+).join(" ");
+
+const parseJsonObjectBody = (
+  bytes: Uint8Array,
+): Record<string, unknown> | undefined => {
+  const parsed = Result.try((): unknown =>
+    JSON.parse(new TextDecoder().decode(bytes)),
+  );
+  return parsed.isOk() && v.is(v.record(v.string(), v.unknown()), parsed.value)
+    ? parsed.value
+    : undefined;
+};
+
+const readClientMetadataBody = async (
+  response: Response,
+): Promise<Record<string, unknown> | undefined> => {
+  const declaredLength = Number(response.headers.get("content-length"));
+  if (
+    Number.isFinite(declaredLength) &&
+    declaredLength > CLIENT_METADATA_BYTE_CAP
+  ) {
+    await response.body?.cancel();
+    return undefined;
+  }
+  const bytes = await Result.tryPromise(async () =>
+    readBodyWithIdleDeadline(response, {
+      idleMs: PROBE_TIMEOUT_MS,
+      maxBytes: CLIENT_METADATA_BYTE_CAP,
+    }),
+  );
+  if (Result.isError(bytes)) {
+    if (BodyByteLimitError.is(bytes.error.cause)) {
+      return undefined;
+    }
+    throw bytes.error.cause;
+  }
+  return parseJsonObjectBody(bytes.value);
+};
+
+type AuthorizeResponseOptions = {
+  response: Response;
+  endpoint: string;
+  name: string;
+  frontendUrl?: string | undefined;
+};
+export const evaluateAuthorize = ({
+  response,
+  endpoint,
+  name,
+  frontendUrl = endpoint,
+}: AuthorizeResponseOptions): ProbeResult => {
+  const location = response.headers.get("location");
+  if (response.status >= 300 && response.status < 400 && location) {
+    const target = new URL(location, endpoint);
+    if (
+      target.origin === new URL(frontendUrl).origin &&
+      target.pathname === "/auth" &&
+      new URLSearchParams(
+        new URLSearchParams(target.hash.slice(1)).get("oauth_query") ?? "",
+      ).has("sig")
+    ) {
+      return passed(name, "redirects to the application sign-in bridge");
+    }
+  }
+  return failed(
+    name,
+    `${String(response.status)} without the application sign-in redirect`,
+  );
+};
+
+export const evaluateRegistration = ({
+  status,
+  body,
+}: Pick<ProbeResponse, "body" | "status">): ProbeResult => {
+  if (
+    (status !== 200 && status !== 201) ||
+    !v.is(v.object({ client_id: v.pipe(v.string(), v.nonEmpty()) }), body)
+  ) {
+    return failed(
+      "dynamic client registration",
+      "expected a successful registration with client_id",
+    );
+  }
+  return passed(
+    "dynamic client registration",
+    "registered all loopback redirects",
+  );
+};
+
+/** Known third-party clients publish their metadata on their own hosts. A
+ * target that must not depend on those hosts (a local server) turns the probes
+ * that fetch them off explicitly, and each one is reported as skipped. */
+export const THIRD_PARTY_FETCHES_SKIP_REASON =
+  "third-party fetches are off (MCP_CANARY_THIRD_PARTY_FETCHES=skip): client metadata and authorize probes for this client did not run";
+
+type OAuthJourneyOptions = {
+  baseUrl: string;
+  mode: "frequent" | "full";
+  frontendUrl?: string | undefined;
+  thirdPartyFetches?: "run" | "skip";
+};
+export const runOAuthJourneys = async (
+  {
+    baseUrl,
+    mode,
+    frontendUrl,
+    thirdPartyFetches = "run",
+  }: OAuthJourneyOptions,
+  fetcher: CanaryFetcher = deploymentFetcher,
+): Promise<ProbeResult[]> => {
+  const results: ProbeResult[] = [];
+  const clients: string[] = [...CANARY_CLIENT_IDS];
+  let endpoint: string | undefined;
+  let registrationEndpoint: string | undefined;
+  results.push(
+    await runNamedProbe("authorization server discovery", async () => {
+      const resource = await readProbeResponse(
+        await fetcher(new URL(MCP_DISCOVERY_PATH, baseUrl), {
+          timeout: { type: "headers", ms: PROBE_TIMEOUT_MS },
+        }),
+      );
+      const discovery = evaluateDiscovery(resource);
+      if (
+        discovery.status !== "passed" ||
+        !v.is(protectedResourceMetadataSchema, resource.body)
+      ) {
+        return discovery;
+      }
+      const issuer = resource.body.authorization_servers.at(0);
+      if (!issuer) {
+        return failed("authorization server discovery", "no issuer advertised");
+      }
+      const issuerUrl = new URL(issuer);
+      const metadataUrl = new URL(
+        `/.well-known/oauth-authorization-server${issuerUrl.pathname.replace(/\/$/u, "")}`,
+        issuerUrl.origin,
+      );
+      const metadata = await readProbeResponse(
+        await fetcher(metadataUrl, {
+          timeout: { type: "headers", ms: PROBE_TIMEOUT_MS },
+        }),
+      );
+      const evaluation = evaluateAuthorizationMetadata(metadata);
+      if (
+        evaluation.status === "passed" &&
+        v.is(authorizationMetadataSchema, metadata.body)
+      ) {
+        endpoint = metadata.body.authorization_endpoint;
+        registrationEndpoint = metadata.body.registration_endpoint;
+      }
+      return evaluation;
+    }),
+  );
+  if (mode === "full") {
+    results.push(
+      await runNamedProbe("dynamic client registration", async () => {
+        if (!registrationEndpoint) {
+          return failed(
+            "dynamic client registration",
+            "discovery did not supply registration endpoint",
+          );
+        }
+        const registration = await readProbeResponse(
+          await fetcher(registrationEndpoint, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            timeout: { type: "headers", ms: PROBE_TIMEOUT_MS },
+            body: JSON.stringify({
+              client_name: CANARY_CLIENT_NAME,
+              redirect_uris: LOOPBACK_REDIRECTS,
+              token_endpoint_auth_method: "none",
+              grant_types: ["authorization_code", "refresh_token"],
+              response_types: ["code"],
+              scope: CANARY_SCOPE,
+            }),
+          }),
+        );
+        const evaluation = evaluateRegistration(registration);
+        if (
+          evaluation.status === "passed" &&
+          v.is(v.object({ client_id: v.string() }), registration.body)
+        ) {
+          clients.push(registration.body.client_id);
+        }
+        return evaluation;
+      }),
+    );
+  }
+  const authorizationEndpoint = endpoint;
+  const clientMetadataFetcher =
+    fetcher === deploymentFetcher ? fetchWithTimeout : fetcher;
+  for (const clientId of clients) {
+    if (CANARY_CLIENT_IDS.some((knownClientId) => knownClientId === clientId)) {
+      const metadataName = `client metadata ${clientId}`;
+      if (thirdPartyFetches === "skip") {
+        results.push(skipped(metadataName, THIRD_PARTY_FETCHES_SKIP_REASON));
+        continue;
+      }
+      const metadataResult = await runNamedProbe(metadataName, async () => {
+        // A third-party host that cannot be reached is an upstream state,
+        // never a canary failure; rate limiting keeps its own result.
+        const attempt = await Result.tryPromise(async () => {
+          const response = await fetchWithRateLimitRetry(
+            metadataName,
+            clientMetadataFetcher,
+            clientId,
+            {
+              headers: { accept: "application/json" },
+              method: "GET",
+              timeout: { type: "headers", ms: PROBE_TIMEOUT_MS },
+            },
+          );
+          if (!response.ok) {
+            await response.body?.cancel();
+            return upstream(
+              metadataName,
+              `client metadata unavailable upstream (HTTP ${String(response.status)})`,
+            );
+          }
+          return (await readClientMetadataBody(response))
+            ? passed(metadataName, "client metadata available upstream")
+            : upstream(
+                metadataName,
+                "client metadata unavailable upstream (invalid JSON document)",
+              );
+        });
+        if (Result.isOk(attempt)) {
+          return attempt.value;
+        }
+        if (CanaryRateLimitError.is(attempt.error.cause)) {
+          throw attempt.error.cause;
+        }
+        return upstream(
+          metadataName,
+          "client metadata unavailable upstream (unreachable)",
+        );
+      });
+      results.push(metadataResult);
+      if (metadataResult.status !== PROBE_STATUS.passed) {
+        continue;
+      }
+    }
+    let authorizeFailed = false;
+    for (const redirectUri of LOOPBACK_REDIRECTS) {
+      const name = `authorize ${clientId} -> ${redirectUri}`;
+      if (authorizeFailed) {
+        results.push(skipped(name, "an earlier authorize variant failed"));
+        continue;
+      }
+      results.push(
+        await runNamedProbe(name, async () => {
+          if (!authorizationEndpoint) {
+            return failed(
+              name,
+              "discovery did not supply authorization endpoint",
+            );
+          }
+          const url = new URL(authorizationEndpoint);
+          const challenge = canaryPkceChallenge(
+            randomBytes(32).toBase64({
+              alphabet: "base64url",
+              omitPadding: true,
+            }),
+          );
+          url.search = new URLSearchParams({
+            client_id: clientId,
+            redirect_uri: redirectUri,
+            response_type: "code",
+            code_challenge_method: "S256",
+            code_challenge: challenge,
+            scope: CANARY_SCOPE,
+            state: Bun.randomUUIDv7(),
+            resource: new URL(MCP_HTTP_PATH, baseUrl).toString(),
+          }).toString();
+          const response = await fetchWithRateLimitRetry(name, fetcher, url, {
+            method: "GET",
+            redirect: "manual",
+            timeout: { type: "headers", ms: PROBE_TIMEOUT_MS },
+          });
+          const result = evaluateAuthorize({
+            response,
+            endpoint: authorizationEndpoint,
+            name,
+            frontendUrl,
+          });
+          await response.body?.cancel();
+          return result;
+        }),
+      );
+      authorizeFailed = results.at(-1)?.status !== PROBE_STATUS.passed;
+    }
+  }
+  return results;
+};
+
+const desktopIdentitySchema = v.object({
+  userId: v.pipe(v.string(), v.nonEmpty()),
+  organizationId: v.pipe(v.string(), v.nonEmpty()),
+});
+export const evaluateDesktopRedeem = ({
+  status,
+  body,
+  identity,
+}: Pick<ProbeResponse, "body" | "status"> & {
+  identity: v.InferOutput<typeof desktopIdentitySchema>;
+}): ProbeResult => {
+  const schema = v.object({
+    status: v.literal("connected"),
+    identity: desktopIdentitySchema,
+  });
+  if (
+    status !== 200 ||
+    !v.is(schema, body) ||
+    body.identity.userId !== identity.userId ||
+    body.identity.organizationId !== identity.organizationId
+  ) {
+    return failed(
+      "desktop handoff redeem",
+      "expected connected with the existing desktop account identity",
+    );
+  }
+  return passed(
+    "desktop handoff redeem",
+    "redeemed a handoff using the existing desktop credential",
+  );
+};
+const notApplicable = (name: string, detail: string): ProbeResult => ({
+  name,
+  status: PROBE_STATUS.notApplicable,
+  detail,
+});
+
+const STAGING_KEY_NAME = "MCP staging canary";
+const STAGING_KEY_PERMISSIONS = { workspace: ["read"] };
+const EXPIRY_ALERT_WINDOW_MS = 15 * DAY_IN_MS;
+
+export const evaluateCredentialExpiry = ({
+  status,
+  body,
+  nowMs,
+}: Pick<ProbeResponse, "body" | "status"> & { nowMs: number }): ProbeResult => {
+  const name = "canary bearer expiry";
+  const schema = v.object({
+    expiresAt: v.nullable(v.pipe(v.string(), v.isoTimestamp())),
+  });
+  // The status decides the fix: 404 means the target predates the endpoint,
+  // 401 means the key itself was refused, anything else is the deployment.
+  if (status === 404) {
+    return failed(
+      name,
+      "HTTP 404: the target does not serve the key expiry endpoint yet",
+    );
+  }
+  if (status === 401) {
+    return failed(name, "HTTP 401: the target refused MCP_CANARY_TOKEN");
+  }
+  if (status !== 200 || !v.is(schema, body)) {
+    return failed(
+      name,
+      `HTTP ${status}: could not inspect the current machine key expiry`,
+    );
+  }
+  if (body.expiresAt === null) {
+    return passed(name, "credential has no expiry");
+  }
+  const remainingMs =
+    Temporal.Instant.from(body.expiresAt).epochMilliseconds - nowMs;
+  if (remainingMs <= EXPIRY_ALERT_WINDOW_MS) {
+    return failed(
+      name,
+      "key expires within 15 days: rotate MCP_CANARY_TOKEN (14-day notice plus scheduling margin)",
+    );
+  }
+  return passed(name, "credential expiry is more than 15 days away");
+};
+
+export const runCredentialExpiryProbe = async (
+  { baseUrl, token }: CanaryTarget,
+  fetcher: CanaryFetcher = deploymentFetcher,
+): Promise<ProbeResult> =>
+  evaluateCredentialExpiry({
+    ...(await readProbeResponse(
+      await fetcher(new URL("/v1/api-keys/current", baseUrl), {
+        headers: { authorization: `Bearer ${token}` },
+        timeout: { type: "headers", ms: PROBE_TIMEOUT_MS },
+      }),
+    )),
+    nowMs: Temporal.Now.instant().epochMilliseconds,
+  });
+
+type DesktopProbeOptions = { baseUrl: string; sessionCookie: string };
+export const runDesktopProbe = async (
+  { baseUrl, sessionCookie }: DesktopProbeOptions,
+  fetcher: CanaryFetcher = deploymentFetcher,
+): Promise<ProbeResult[]> => {
+  const results: ProbeResult[] = [];
+  let desktopKey: string | undefined;
+  const { privateKey, publicKey } = await generateKeyPair("ES256", {
+    extractable: true,
+  });
+  const jwk = await exportJWK(publicKey);
+  const deviceJkt = await calculateJwkThumbprint(jwk, "sha256");
+  type DesktopProbeProofOptions = {
+    path: string;
+    credential?: string;
+    nonce?: string;
+  };
+  const signProof = async ({
+    path,
+    credential,
+    nonce,
+  }: DesktopProbeProofOptions) =>
+    await new SignJWT({
+      htm: "POST",
+      htu: new URL(path, baseUrl).toString(),
+      ...(credential ? { ath: sha256Base64Url(credential) } : {}),
+      ...(nonce ? { nonce } : {}),
+    })
+      .setProtectedHeader({ typ: "dpop+jwt", alg: "ES256", jwk })
+      .setIssuedAt()
+      .setJti(Bun.randomUUIDv7())
+      .sign(privateKey);
+  try {
+    results.push(
+      await runNamedProbe("desktop handoff redeem", async () => {
+        const sessionResponse = await readProbeResponse(
+          await fetcher(new URL("/api/auth/get-session", baseUrl), {
+            headers: { cookie: sessionCookie },
+            timeout: { type: "headers", ms: PROBE_TIMEOUT_MS },
+          }),
+        );
+        const schema = v.object({
+          user: v.object({ id: v.pipe(v.string(), v.nonEmpty()) }),
+          session: v.object({
+            activeOrganizationId: v.pipe(v.string(), v.nonEmpty()),
+          }),
+        });
+        if (
+          sessionResponse.status !== 200 ||
+          !v.is(schema, sessionResponse.body)
+        ) {
+          return failed(
+            "desktop handoff redeem",
+            "smoke browser session did not return an account identity",
+          );
+        }
+        const identity = {
+          userId: sessionResponse.body.user.id,
+          organizationId: sessionResponse.body.session.activeOrganizationId,
+        };
+        const redeemHandoff = async (key?: string) => {
+          const correlationId = Bun.randomUUIDv7();
+          const verifier = randomBytes(32).toHex();
+          const grant = await fetcher(
+            new URL("/v1/desktop-registry/grant", baseUrl),
+            {
+              method: "POST",
+              headers: {
+                cookie: sessionCookie,
+                "content-type": "application/json",
+              },
+              body: JSON.stringify({
+                correlationId,
+                deviceJkt,
+                verifierHash: canaryVerifierHash(verifier),
+              }),
+              timeout: { type: "headers", ms: PROBE_TIMEOUT_MS },
+            },
+          );
+          await grant.body?.cancel();
+          if (!grant.ok) {
+            return { body: undefined, status: grant.status };
+          }
+          return await readProbeResponse(
+            await fetcher(
+              new URL("/v1/desktop-registry/redeem-link", baseUrl),
+              {
+                method: "POST",
+                headers: {
+                  ...(key ? { authorization: `Bearer ${key}` } : {}),
+                  "content-type": "application/json",
+                  "user-agent": "stella-desktop",
+                  DPoP: await signProof({
+                    path: "/v1/desktop-registry/redeem-link",
+                    ...(key === undefined ? {} : { credential: key }),
+                    nonce: correlationId,
+                  }),
+                  [DESKTOP_ACCOUNT_PROTOCOL_HEADER]: String(
+                    DESKTOP_ACCOUNT_POLICY.linkProtocol,
+                  ),
+                },
+                body: JSON.stringify({
+                  correlationId,
+                  deviceJkt,
+                  verifier,
+                  expectedUserId: identity.userId,
+                  expectedOrganizationId: identity.organizationId,
+                }),
+                timeout: { type: "headers", ms: PROBE_TIMEOUT_MS },
+              },
+            ),
+          );
+        };
+        const minted = await redeemHandoff();
+        // Capture a returned key before classifying the rest of the response so
+        // malformed success responses still trigger credential cleanup.
+        if (
+          v.is(v.object({ key: v.pipe(v.string(), v.nonEmpty()) }), minted.body)
+        ) {
+          desktopKey = minted.body.key;
+        }
+        if (
+          minted.status !== 200 ||
+          !desktopKey ||
+          !v.is(v.object({ status: v.literal("credential") }), minted.body)
+        ) {
+          return failed(
+            "desktop handoff redeem",
+            "could not mint a desktop credential from the smoke browser session",
+          );
+        }
+        return evaluateDesktopRedeem({
+          ...(await redeemHandoff(desktopKey)),
+          identity,
+        });
+      }),
+    );
+  } finally {
+    const keyToRevoke = desktopKey;
+    if (keyToRevoke) {
+      results.push(
+        await runNamedProbe("desktop credential cleanup", async () => {
+          const response = await readProbeResponse(
+            await fetcher(new URL("/v1/desktop-registry/request", baseUrl), {
+              method: "POST",
+              headers: {
+                authorization: `Bearer ${keyToRevoke}`,
+                DPoP: await signProof({
+                  path: "/v1/desktop-registry/request",
+                  credential: keyToRevoke,
+                }),
+                "user-agent": "stella-desktop",
+                "content-type": "application/json",
+              },
+              body: JSON.stringify({ type: "revoke" }),
+              timeout: { type: "headers", ms: PROBE_TIMEOUT_MS },
+            }),
+          );
+          if (
+            response.status !== 200 ||
+            !v.is(v.object({ revoked: v.literal(true) }), response.body)
+          ) {
+            return failed(
+              "desktop credential cleanup",
+              "could not revoke the per-run desktop credential",
+            );
+          }
+          return passed(
+            "desktop credential cleanup",
+            "per-run desktop key revoked",
+          );
+        }),
+      );
+    } else {
+      results.push(
+        notApplicable(
+          "desktop credential cleanup",
+          "no desktop credential was returned",
+        ),
+      );
+    }
+  }
+  return results;
+};
+
+const RELEASE_LOAD_PROBE = "release load during scheduled jobs";
+
+const scheduledLoadRunsSchema = v.object({
+  runs: v.array(
+    v.object({
+      jobId: v.string(),
+      startedAt: v.string(),
+      finishedAt: v.nullable(v.string()),
+    }),
+  ),
+});
+
+/**
+ * Brings the scheduled corpus jobs forward, runs the MCP load while they run
+ * (`mcp-canary-release-load.ts`), and fails when a heavy tool's 95th
+ * percentile is over its budget or when no job ran inside the window.
+ */
+export const runReleaseLoadProbe = async (
+  { baseUrl, token, smokeSecret }: CanaryTarget & { smokeSecret: string },
+  fetcher: CanaryFetcher = deploymentFetcher,
+  load: typeof runReleaseLoad = runReleaseLoad,
+): Promise<ProbeResult> =>
+  await runNamedProbe(RELEASE_LOAD_PROBE, async () => {
+    const jobsUrl = new URL("/smoke/scheduled-jobs", baseUrl);
+    const smokeHeaders = { "x-smoke-secret": smokeSecret };
+    const forward = await readProbeResponse(
+      await fetcher(jobsUrl, {
+        method: "POST",
+        headers: smokeHeaders,
+        timeout: { type: "headers", ms: PROBE_TIMEOUT_MS },
+      }),
+    );
+    if (
+      forward.status !== 200 ||
+      !v.is(
+        v.object({ dueAt: v.string(), jobs: v.array(v.unknown()) }),
+        forward.body,
+      )
+    ) {
+      return failed(
+        RELEASE_LOAD_PROBE,
+        "could not bring the scheduled corpus jobs forward",
+      );
+    }
+    const search = await readProbeResponse(
+      await fetcher(new URL("/v1/case/decisions/search", baseUrl), {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ query: "contract", country: "CZ", limit: 5 }),
+        timeout: { type: "headers", ms: PROBE_TIMEOUT_MS },
+      }),
+    );
+    const decisionIds = v.is(
+      v.object({ hits: v.array(v.object({ decisionId: v.string() })) }),
+      search.body,
+    )
+      ? search.body.hits.map(({ decisionId }) => decisionId)
+      : [];
+    if (decisionIds.length === 0) {
+      return failed(RELEASE_LOAD_PROBE, "no case-law decision to read");
+    }
+    let id = 100;
+    const { samples, window } = await load({
+      decisionIds,
+      call: async ({ toolName, arguments: args }) => {
+        id += 1;
+        const response = await postJsonRpc(
+          {
+            baseUrl,
+            token,
+            era: "modern",
+            id,
+            method: "tools/call",
+            params: { name: toolName, arguments: args },
+          },
+          fetcher,
+        );
+        if (response.status === 429) {
+          return "rate_limited";
+        }
+        return evaluateToolCall(response).status === PROBE_STATUS.passed
+          ? "answered"
+          : "failed";
+      },
+    });
+    const { verdicts, failures } = judgeReleaseLoad(samples);
+    const after = await readProbeResponse(
+      await fetcher(jobsUrl, {
+        method: "GET",
+        headers: smokeHeaders,
+        timeout: { type: "headers", ms: PROBE_TIMEOUT_MS },
+      }),
+    );
+    const ran =
+      window !== null && v.is(scheduledLoadRunsSchema, after.body)
+        ? jobsRunDuringLoad(after.body.runs, window)
+        : [];
+    if (ran.length === 0) {
+      failures.push("no scheduled corpus job ran during the load");
+    }
+    const detail = `${describeReleaseLoad(verdicts)}; jobs run during the load: ${ran.join(", ") || "none"}`;
+    return failures.length === 0
+      ? passed(RELEASE_LOAD_PROBE, detail)
+      : failed(RELEASE_LOAD_PROBE, `${failures.join("; ")}; ${detail}`);
+  });
+
+type StagingJourneyOptions = {
+  baseUrl: string;
+  smokeSecret?: string | undefined;
+  /** Runs the release load after the credentialed probes. */
+  load?: boolean | undefined;
+};
+export const runStagingCredentialJourneys = async (
+  { baseUrl, smokeSecret, load = false }: StagingJourneyOptions,
+  fetcher: CanaryFetcher = deploymentFetcher,
+): Promise<ProbeResult[]> => {
+  const bootstrapName = "staging credential bootstrap";
+  if (!smokeSecret) {
+    return [
+      skipped(
+        bootstrapName,
+        "missing SMOKE_SESSION_SECRET: staging mints its credentials per run",
+      ),
+      ...AUTHENTICATED_PROBES.map(({ name }) =>
+        skipped(name, "no staging smoke session available"),
+      ),
+      skipped("desktop handoff redeem", "missing SMOKE_SESSION_SECRET"),
+      ...(load
+        ? [skipped(RELEASE_LOAD_PROBE, "missing SMOKE_SESSION_SECRET")]
+        : []),
+    ];
+  }
+  const results: ProbeResult[] = [];
+  let sessionCookie: string | undefined;
+  let keyId: string | undefined;
+  let token: string | undefined;
+  try {
+    results.push(
+      await runNamedProbe(bootstrapName, async () => {
+        const smoke = await readProbeResponse(
+          // Mounted at the root, outside the versioned API prefix.
+          await fetcher(new URL("/smoke/session", baseUrl), {
+            method: "POST",
+            headers: { "x-smoke-secret": smokeSecret },
+            timeout: { type: "headers", ms: PROBE_TIMEOUT_MS },
+          }),
+        );
+        if (
+          smoke.status !== 200 ||
+          !v.is(
+            v.object({
+              cookieName: v.pipe(v.string(), v.nonEmpty()),
+              cookieValue: v.pipe(v.string(), v.nonEmpty()),
+            }),
+            smoke.body,
+          )
+        ) {
+          return failed(
+            bootstrapName,
+            "could not mint the staging browser session",
+          );
+        }
+        sessionCookie = `${smoke.body.cookieName}=${smoke.body.cookieValue}`;
+        const minted = await readProbeResponse(
+          await fetcher(new URL("/v1/api-keys", baseUrl), {
+            method: "POST",
+            headers: {
+              cookie: sessionCookie,
+              "content-type": "application/json",
+            },
+            timeout: { type: "headers", ms: PROBE_TIMEOUT_MS },
+            body: JSON.stringify({
+              name: STAGING_KEY_NAME,
+              scopes: CANARY_SCOPE.split(" "),
+              permissions: STAGING_KEY_PERMISSIONS,
+              audience: "default",
+              expiresInDays: 1,
+            }),
+          }),
+        );
+        if (
+          v.is(v.object({ id: v.pipe(v.string(), v.nonEmpty()) }), minted.body)
+        ) {
+          keyId = minted.body.id;
+        }
+        if (
+          minted.status !== 200 ||
+          !v.is(
+            v.object({ key: v.pipe(v.string(), v.nonEmpty()) }),
+            minted.body,
+          ) ||
+          !keyId
+        ) {
+          return failed(
+            bootstrapName,
+            "could not mint the per-run MCP machine key",
+          );
+        }
+        token = minted.body.key;
+        return passed(
+          bootstrapName,
+          "minted a short-lived MCP key using the staging smoke browser session",
+        );
+      }),
+    );
+    const mintedToken = token;
+    if (mintedToken) {
+      results.push(
+        ...(await runAuthenticatedProbes(
+          { baseUrl, token: mintedToken },
+          fetcher,
+        )),
+      );
+      if (load) {
+        results.push(
+          await runReleaseLoadProbe(
+            { baseUrl, token: mintedToken, smokeSecret },
+            fetcher,
+          ),
+        );
+      }
+    } else {
+      results.push(
+        ...AUTHENTICATED_PROBES.map(({ name }) =>
+          skipped(name, "staging credential bootstrap failed"),
+        ),
+        ...(load
+          ? [skipped(RELEASE_LOAD_PROBE, "staging credential bootstrap failed")]
+          : []),
+      );
+    }
+    const browserCookie = sessionCookie;
+    if (browserCookie) {
+      results.push(
+        ...(await runDesktopProbe(
+          { baseUrl, sessionCookie: browserCookie },
+          fetcher,
+        )),
+      );
+    } else {
+      results.push(
+        skipped(
+          "desktop handoff redeem",
+          "staging smoke browser session unavailable",
+        ),
+      );
+    }
+  } finally {
+    const idToRevoke = keyId;
+    const browserCookie = sessionCookie;
+    if (idToRevoke && browserCookie) {
+      results.push(
+        await runNamedProbe("MCP credential cleanup", async () => {
+          const response = await readProbeResponse(
+            await fetcher(new URL("/v1/api-keys/revoke", baseUrl), {
+              method: "POST",
+              headers: {
+                cookie: browserCookie,
+                "content-type": "application/json",
+              },
+              timeout: { type: "headers", ms: PROBE_TIMEOUT_MS },
+              body: JSON.stringify({ keyId: idToRevoke }),
+            }),
+          );
+          if (
+            response.status !== 200 ||
+            !v.is(
+              v.object({ id: v.literal(idToRevoke), revoked: v.literal(true) }),
+              response.body,
+            )
+          ) {
+            return failed(
+              "MCP credential cleanup",
+              "could not revoke the per-run MCP credential",
+            );
+          }
+          return passed("MCP credential cleanup", "per-run MCP key revoked");
+        }),
+      );
+    } else {
+      results.push(
+        notApplicable(
+          "MCP credential cleanup",
+          "no MCP credential id was returned",
+        ),
+      );
+    }
+  }
+  return results;
+};
+
+const REVIEW_KNOWN_ERROR_CODES: ReadonlySet<string> = new Set([
+  ...MCP_ERROR_CODES,
+  ...Object.keys(BASE_ERROR_CODES),
+]);
+
+const REVIEW_JOURNEY_SCOPE = [
+  "stella:read",
+  "stella:matters_write",
+  // Request excluded scopes too: their tools must remain unavailable even
+  // when the public client is allowed to request them.
+  "stella:admin_read",
+  "stella:admin_write",
+  "stella:billing_write",
+].join(" ");
+
+const REVIEW_FORBIDDEN_TOOLS = [
+  "list_audit_log",
+  "save_time_entry",
+  "delete_time_entry",
+] as const;
+
+const reviewJourneyName = (step: string) => `restricted account: ${step}`;
+
+class ReviewJourneyError extends TaggedError("ReviewJourneyError")<{
+  message: string;
+}> {}
+
+/** Machine codes are public identifiers. Response messages and tool content
+ * never enter logs.
+ */
+const reviewEnvelopeCode = (body: unknown): string => {
+  const envelope = v.safeParse(
+    v.union([
+      v.object({
+        error: v.object({ code: v.union([v.string(), v.number()]) }),
+      }),
+      v.object({ error: v.string() }),
+      v.object({ code: v.string() }),
+    ]),
+    body,
+  );
+  if (!envelope.success) {
+    return "none";
+  }
+  let code: string | number;
+  if ("error" in envelope.output) {
+    const error = envelope.output.error;
+    code = typeof error === "string" ? error : error.code;
+  } else {
+    code = envelope.output.code;
+  }
+  // The code comes from a response body: only known public codes are logged
+  // verbatim; anything else could carry secrets, so only its length is kept.
+  if (typeof code === "number") {
+    return [-32_700, -32_600, -32_601, -32_602, -32_603].includes(code)
+      ? String(code)
+      : "unrecognized";
+  }
+  return REVIEW_KNOWN_ERROR_CODES.has(code) ||
+    isAIFailureCode(code) ||
+    [
+      "invalid_request",
+      "invalid_scope",
+      "invalid_grant",
+      "access_denied",
+      "account_access_unavailable",
+      "TOO_MANY_REQUESTS",
+    ].includes(code)
+    ? code
+    : `unrecognized (redacted, ${String(code.length)} chars)`;
+};
+
+const reviewToolPayload = (body: unknown): unknown => {
+  const result = jsonRpcResult(body);
+  if (!result || result["isError"] === true) {
+    return undefined;
+  }
+  return result["structuredContent"];
+};
+
+const reviewRedirectSchema = v.object({ url: v.pipe(v.string(), v.url()) });
+const reviewTaskIdSchema = v.pipe(v.string(), v.uuid());
+const reviewTaskListSchema = v.object({
+  tasks: v.array(
+    v.object({
+      id: reviewTaskIdSchema,
+      name: v.string(),
+      matterId: reviewTaskIdSchema,
+    }),
+  ),
+});
+
+const REVIEW_CALLBACK_PATH = "/callback";
+
+// The canary owns this receiver; only its exact callback URL is fetched, with
+// no cookie, password, edge credential or bearer header.
+const createReviewCallback = (state: string) => {
+  let code: string | undefined;
+  const server = Bun.serve({
+    hostname: "127.0.0.1",
+    port: 0,
+    fetch: (request) => {
+      const url = new URL(request.url);
+      if (url.pathname !== REVIEW_CALLBACK_PATH) {
+        return new Response(null, { status: 404 });
+      }
+      const receivedCode = url.searchParams.get("code");
+      if (!receivedCode || url.searchParams.get("state") !== state || code) {
+        return new Response(null, { status: 400 });
+      }
+      code = receivedCode;
+      return new Response(null, { status: 204 });
+    },
+  });
+  return {
+    redirectUri: `http://127.0.0.1:${String(server.port)}${REVIEW_CALLBACK_PATH}`,
+    code: () => code,
+    close: async () => await server.stop(true),
+  };
+};
+
+type ReviewAccountJourneyOptions = {
+  baseUrl: string;
+  configuredBaseUrl: string;
+  frontendUrl?: string | undefined;
+  password?: string | undefined;
+  email?: string | undefined;
+  mode: "full" | "frequent";
+};
+
+const createReviewJourneyContext = (
+  {
+    baseUrl,
+    configuredBaseUrl,
+    frontendUrl,
+    journey = "restricted account",
+    scope = REVIEW_JOURNEY_SCOPE,
+    requestBudgetMs,
+  }: {
+    baseUrl: string;
+    configuredBaseUrl: string;
+    frontendUrl: string;
+    journey?: string;
+    scope?: string;
+    requestBudgetMs?: number;
+  },
+  fetcher: CanaryFetcher,
+) => {
+  const results: ProbeResult[] = [];
+  const cookies = new Map<string, Map<string, string>>();
+  // Both origins come from configuration, never discovery or dispatch input.
+  // Cookies remain with the origin that set them; redirects are never followed.
+  const targetFetch = createDeploymentFetcher(
+    {
+      baseUrl: configuredBaseUrl,
+      appUrl: frontendUrl,
+    },
+    fetcher,
+  );
+  const state: {
+    step: string;
+    lastResponse: Pick<ProbeResponse, "body" | "status"> | undefined;
+    callback?: ReturnType<typeof createReviewCallback>;
+    token?: string;
+    refreshToken?: string;
+    createdTaskId?: string;
+    toolLatencyFailure: string | undefined;
+  } = {
+    step: "sign-in",
+    lastResponse: undefined,
+    toolLatencyFailure: undefined,
+  };
+
+  const reject: (assertion: string) => never = (assertion) => {
+    throw new ReviewJourneyError({
+      message: `HTTP ${state.lastResponse ? String(state.lastResponse.status) : "unavailable"}; envelope code ${reviewEnvelopeCode(state.lastResponse?.body)}; ${assertion}`,
+    });
+  };
+  const complete = () => {
+    // Let the step retain a successful mutation's identity before a timing
+    // failure interrupts it, so cleanup can still remove the created record.
+    const latencyFailure = state.toolLatencyFailure;
+    state.toolLatencyFailure = undefined;
+    if (latencyFailure !== undefined) {
+      reject(latencyFailure);
+    }
+    results.push(passed(`${journey}: ${state.step}`, "assertions passed"));
+  };
+  const request = async (
+    url: string | URL,
+    options: Pick<RequestInit, "body" | "headers" | "method"> & {
+      expectedStatus?: number;
+    } = {},
+  ) => {
+    const { expectedStatus = 200, ...init } = options;
+    state.lastResponse = undefined;
+    const origin = new URL(url).origin;
+    const headers = new Headers(init.headers);
+    const requestCookies = cookies.get(origin);
+    if (requestCookies && requestCookies.size > 0) {
+      headers.set(
+        "cookie",
+        [...requestCookies].map(([key, value]) => `${key}=${value}`).join("; "),
+      );
+    }
+    headers.set("origin", new URL(frontendUrl).origin);
+    const started = performance.now();
+    const response = await fetchWithRateLimitRetry(
+      `${journey}: ${state.step}`,
+      targetFetch,
+      url,
+      {
+        ...init,
+        headers,
+        timeout: { type: "headers", ms: requestBudgetMs ?? PROBE_TIMEOUT_MS },
+      },
+    );
+    const responseCookies = cookies.get(origin) ?? new Map<string, string>();
+    for (const cookie of response.headers.getSetCookie()) {
+      const pair = cookie.split(";").at(0);
+      const separator = pair?.indexOf("=") ?? -1;
+      if (pair && separator > 0) {
+        responseCookies.set(
+          pair.slice(0, separator),
+          pair.slice(separator + 1),
+        );
+      }
+    }
+    cookies.set(origin, responseCookies);
+    state.lastResponse = await readProbeResponse(
+      response,
+      requestBudgetMs ?? PROBE_TIMEOUT_MS,
+    );
+    if (
+      requestBudgetMs !== undefined &&
+      performance.now() - started >= requestBudgetMs
+    ) {
+      reject(`request exceeded ${String(requestBudgetMs)} ms budget`);
+    }
+    if (state.lastResponse.status !== expectedStatus) {
+      reject(`expected HTTP ${String(expectedStatus)}`);
+    }
+    return state.lastResponse.body;
+  };
+  const rpc = async (call: JsonRpcCall) => {
+    state.lastResponse = undefined;
+    const startedAt = performance.now();
+    state.lastResponse = await postJsonRpc(call, targetFetch);
+    state.toolLatencyFailure =
+      call.method === "tools/call"
+        ? describeToolLatencyOverBudget({
+            toolName: call.params.name,
+            elapsedMs: performance.now() - startedAt,
+          })
+        : undefined;
+    const result = jsonRpcResult(state.lastResponse.body);
+    if (
+      state.lastResponse.status !== 200 ||
+      !result ||
+      result["isError"] === true
+    ) {
+      // Tool error envelopes live in text content. Parse only for a known code.
+      if (result?.["isError"] === true) {
+        const text = firstContentText(result);
+        const parsed = Result.try((): unknown => JSON.parse(text ?? ""));
+        if (parsed.isOk()) {
+          state.lastResponse = {
+            status: state.lastResponse.status,
+            body: parsed.value,
+          };
+        }
+      }
+      reject("expected a successful JSON-RPC result");
+    }
+    return state.lastResponse.body;
+  };
+  const callTool = async (name: string, args: Record<string, unknown>) => {
+    if (!state.token) {
+      reject("access token unavailable");
+    }
+    return reviewToolPayload(
+      await rpc({
+        baseUrl,
+        token: state.token,
+        era: "modern",
+        id: 3,
+        method: "tools/call",
+        params: { name, arguments: args },
+      }),
+    );
+  };
+
+  return {
+    baseUrl,
+    frontendUrl,
+    scope,
+    results,
+    cookies,
+    state,
+    reject,
+    complete,
+    request,
+    rpc,
+    callTool,
+  };
+};
+
+type ReviewJourneyContext = ReturnType<typeof createReviewJourneyContext>;
+
+const requireReviewToken = (context: ReviewJourneyContext): string => {
+  const reject: (assertion: string) => never = context.reject;
+  if (!context.state.token) {
+    reject("access token unavailable");
+  }
+  return context.state.token;
+};
+
+type ReviewSignInOptions = {
+  context: ReviewJourneyContext;
+  email: string;
+  password: string;
+};
+const signInReviewAccount = async ({
+  context,
+  email,
+  password,
+}: ReviewSignInOptions) => {
+  const { frontendUrl, cookies, complete, request } = context;
+  const reject: (assertion: string) => never = context.reject;
+  // Exactly one password attempt. A failed sign-in aborts the journey; there
+  // is no retry and no negative-password probe against the lockout budget.
+  const signedIn = await request(
+    new URL("/api/auth/sign-in/email", frontendUrl),
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      // oxlint-disable-next-line no-secret-in-log-sink/no-secret-in-log-sink -- the sign-in request body itself, sent only to the configured frontend origin; never logged, and step errors never include the body
+      body: JSON.stringify({ email, password }),
+    },
+  );
+  // Reviewers have only the password: a second step (an emailed code, a
+  // verification or two-factor challenge) would strand them at sign-in.
+  if (v.is(v.object({ twoFactorRedirect: v.literal(true) }), signedIn)) {
+    reject("expected the password alone to sign in, without a second step");
+  }
+  if (
+    !v.is(
+      v.object({ user: v.object({ email: v.literal(email) }) }),
+      signedIn,
+    ) ||
+    (cookies.get(new URL(frontendUrl).origin)?.size ?? 0) === 0
+  ) {
+    reject("expected the review identity and a session cookie");
+  }
+  complete();
+};
+
+const checkReviewSession = async (
+  context: ReviewJourneyContext,
+  email: string,
+) => {
+  const { frontendUrl, state, complete, request } = context;
+  const reject: (assertion: string) => never = context.reject;
+  state.step = "session";
+  const session = await request(new URL("/api/auth/get-session", frontendUrl));
+  if (
+    !v.is(
+      v.object({
+        user: v.object({ email: v.literal(email) }),
+        session: v.object({
+          activeOrganizationId: v.pipe(v.string(), v.nonEmpty()),
+        }),
+      }),
+      session,
+    )
+  ) {
+    reject("expected the review identity with an active organization");
+  }
+  complete();
+};
+
+const discoverReviewOAuth = async (context: ReviewJourneyContext) => {
+  const { baseUrl, state, request } = context;
+  const reject: (assertion: string) => never = context.reject;
+  state.step = "discovery";
+  const resource = await request(new URL(MCP_DISCOVERY_PATH, baseUrl));
+  if (!v.is(protectedResourceMetadataSchema, resource)) {
+    reject("expected protected-resource discovery");
+  }
+  const advertisedIssuer = resource.authorization_servers.at(0);
+  if (!advertisedIssuer) {
+    reject("expected an authorization server issuer");
+  }
+  const issuer = new URL(advertisedIssuer);
+  const metadata = await request(
+    new URL(
+      `/.well-known/oauth-authorization-server${issuer.pathname.replace(/\/$/u, "")}`,
+      issuer.origin,
+    ),
+  );
+  if (
+    !v.is(authorizationMetadataSchema, metadata) ||
+    !metadata.code_challenge_methods_supported.includes("S256")
+  ) {
+    reject("expected OAuth endpoints and PKCE S256");
+  }
+  return { metadata, advertisedIssuer };
+};
+
+/**
+ * An https deployment publishes the CLI's client document, whose URL is the
+ * journey's client_id. A plain http target (a local server) has none, so the
+ * journey registers a public loopback client there, as the CLI does.
+ */
+const registerReviewClient = async (
+  context: ReviewJourneyContext,
+  metadata: v.InferOutput<typeof authorizationMetadataSchema>,
+) => {
+  const { state, complete, request } = context;
+  const reject: (assertion: string) => never = context.reject;
+  state.step = "register";
+  const registered = await request(metadata.registration_endpoint, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    expectedStatus: 201,
+    body: JSON.stringify({
+      application_type: "native",
+      client_name: CANARY_CLIENT_NAME,
+      grant_types: ["authorization_code", "refresh_token"],
+      // Loopback redirects match on any port (RFC 8252 §7.3).
+      redirect_uris: [`http://127.0.0.1${REVIEW_CALLBACK_PATH}`],
+      response_types: ["code"],
+      scope: context.scope,
+      token_endpoint_auth_method: "none",
+    }),
+  });
+  if (
+    !v.is(v.object({ client_id: v.pipe(v.string(), v.nonEmpty()) }), registered)
+  ) {
+    reject("expected a registered public client");
+  }
+  complete();
+  return registered.client_id;
+};
+
+const authorizeReviewOAuth = async (
+  context: ReviewJourneyContext,
+  metadata: v.InferOutput<typeof authorizationMetadataSchema>,
+) => {
+  const { baseUrl, state, complete, request } = context;
+  const reject: (assertion: string) => never = context.reject;
+  const clientId =
+    cliClientMetadataUrl(baseUrl) ??
+    (await registerReviewClient(context, metadata));
+  state.step = "authorize";
+  const verifier = randomBytes(32).toBase64({
+    alphabet: "base64url",
+    omitPadding: true,
+  });
+  const stateValue = randomBytes(32).toBase64({
+    alphabet: "base64url",
+    omitPadding: true,
+  });
+  state.callback = createReviewCallback(stateValue);
+  const authorize = new URL(metadata.authorization_endpoint);
+  authorize.search = new URLSearchParams({
+    client_id: clientId,
+    redirect_uri: state.callback.redirectUri,
+    response_type: "code",
+    code_challenge_method: "S256",
+    code_challenge: canaryPkceChallenge(verifier),
+    state: stateValue,
+    scope: context.scope,
+    resource: new URL(MCP_HTTP_PATH, baseUrl).toString(),
+  }).toString();
+  const authorized = await request(authorize, {
+    headers: { accept: "application/json" },
+  });
+  if (!v.is(reviewRedirectSchema, authorized)) {
+    reject("expected an OAuth continuation URL");
+  }
+  complete();
+  return {
+    callback: state.callback,
+    verifier,
+    stateValue,
+    clientId,
+    redirect: new URL(authorized.url),
+    tokenEndpoint: metadata.token_endpoint,
+  };
+};
+
+const consentReviewOAuth = async (
+  context: ReviewJourneyContext,
+  redirect: URL,
+) => {
+  const { frontendUrl, state, complete, request } = context;
+  const reject: (assertion: string) => never = context.reject;
+  if (
+    redirect.pathname === "/consent" &&
+    redirect.origin === new URL(frontendUrl).origin
+  ) {
+    state.step = "consent";
+    const signedQuery = new URLSearchParams(redirect.hash.slice(1)).get(
+      "oauth_query",
+    );
+    if (!signedQuery) {
+      reject("expected signed consent query");
+    }
+    const consent = await request(
+      new URL("/api/auth/oauth2/consent", frontendUrl),
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ accept: true, oauth_query: signedQuery }),
+      },
+    );
+    if (!v.is(reviewRedirectSchema, consent)) {
+      reject("expected consent callback URL");
+    }
+    complete();
+    return new URL(consent.url);
+  }
+  return redirect;
+};
+
+type ReviewCallbackOptions = {
+  context: ReviewJourneyContext;
+  redirect: URL;
+  stateValue: string;
+  callback: ReturnType<typeof createReviewCallback>;
+  issuer?: string;
+};
+const captureReviewCallback = async ({
+  context,
+  redirect,
+  stateValue,
+  callback,
+  issuer,
+}: ReviewCallbackOptions) => {
+  const { state, complete } = context;
+  const reject: (assertion: string) => never = context.reject;
+  state.step = "callback";
+  const expected = new URL(callback.redirectUri);
+  if (
+    redirect.origin !== expected.origin ||
+    redirect.pathname !== expected.pathname ||
+    redirect.searchParams.get("state") !== stateValue ||
+    !redirect.searchParams.get("code") ||
+    redirect.searchParams.has("error") ||
+    redirect.username !== "" ||
+    redirect.password !== ""
+  ) {
+    reject("expected the owned loopback callback and matching state");
+  }
+  if (issuer !== undefined && redirect.searchParams.get("iss") !== issuer) {
+    reject(
+      "expected callback issuer to equal the authorization server issuer exactly",
+    );
+  }
+  state.lastResponse = undefined;
+  // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- the canary's own loopback receiver; origin, path and state checked against the issued redirect before this call; no credentials, redirects manual
+  const delivered = await fetchWithTimeout(redirect, {
+    redirect: "manual",
+    timeout: { type: "headers", ms: PROBE_TIMEOUT_MS },
+  });
+  await delivered.body?.cancel();
+  state.lastResponse = { status: delivered.status, body: undefined };
+  const code = callback.code();
+  if (delivered.status !== 204 || !code) {
+    reject("loopback receiver did not capture the authorization code");
+  }
+  complete();
+  return code;
+};
+
+type ReviewTokenOptions = {
+  context: ReviewJourneyContext;
+  authorization: ReviewAuthorization;
+  code: string;
+};
+const exchangeReviewToken = async ({
+  context,
+  authorization,
+  code,
+}: ReviewTokenOptions) => {
+  const { baseUrl, state, request } = context;
+  const reject: (assertion: string) => never = context.reject;
+  state.step = "token";
+  const exchanged = await request(authorization.tokenEndpoint, {
+    method: "POST",
+    headers: { "content-type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      grant_type: "authorization_code",
+      client_id: authorization.clientId,
+      redirect_uri: authorization.callback.redirectUri,
+      code_verifier: authorization.verifier,
+      code,
+      resource: new URL(MCP_HTTP_PATH, baseUrl).toString(),
+    }).toString(),
+  });
+  if (
+    v.is(
+      v.object({ refresh_token: v.pipe(v.string(), v.nonEmpty()) }),
+      exchanged,
+    )
+  ) {
+    state.refreshToken = exchanged.refresh_token;
+  }
+  if (
+    !v.is(
+      v.object({ access_token: v.pipe(v.string(), v.nonEmpty()) }),
+      exchanged,
+    )
+  ) {
+    reject("expected an OAuth access token");
+  }
+  state.token = exchanged.access_token;
+  return exchanged;
+};
+
+const initializeReviewMcp = async (
+  context: ReviewJourneyContext,
+  step = "initialize",
+) => {
+  const { baseUrl, state, complete, rpc } = context;
+  const reject: (assertion: string) => never = context.reject;
+  state.step = step;
+  const initialized = await rpc({
+    baseUrl,
+    token: requireReviewToken(context),
+    era: "legacy",
+    id: 1,
+    method: "initialize",
+    params: {
+      capabilities: {},
+      clientInfo: { name: CANARY_CLIENT_NAME, version: "1.0.0" },
+      protocolVersion: LATEST_PROTOCOL_VERSION,
+    },
+  });
+  if (!v.is(initializeResultSchema, jsonRpcResult(initialized))) {
+    reject("expected a negotiated MCP session");
+  }
+  complete();
+};
+
+const listReviewTools = async (context: ReviewJourneyContext) => {
+  const { baseUrl, state, complete, rpc } = context;
+  const reject: (assertion: string) => never = context.reject;
+  state.step = "tools/list";
+  const listed = jsonRpcResult(
+    await rpc({
+      baseUrl,
+      token: requireReviewToken(context),
+      era: "modern",
+      id: 2,
+      method: "tools/list",
+      params: {},
+    }),
+  );
+  if (!v.is(toolsListResultSchema, listed)) {
+    reject("expected a nonempty tool list");
+  }
+  const tools = new Set(listed.tools.map(({ name }) => name));
+  if (
+    REVIEW_FORBIDDEN_TOOLS.some((name) => tools.has(name)) ||
+    ["list_tasks", "save_task", "delete_task"].some((name) => !tools.has(name))
+  ) {
+    reject("expected read/write tools and no admin or billing tools");
+  }
+  complete();
+};
+
+const readReviewSample = async (context: ReviewJourneyContext) => {
+  const { state, complete, callTool } = context;
+  const reject: (assertion: string) => never = context.reject;
+  state.step = "read";
+  const read = await callTool("list_tasks", { limit: 100 });
+  if (!v.is(reviewTaskListSchema, read)) {
+    reject("expected sample task records");
+  }
+  const sampleNames: ReadonlySet<string> = new Set(
+    SAMPLE_MATTERS.flatMap(({ tasks }) => tasks.map(({ name }) => name)),
+  );
+  const sample = read.tasks.find(({ name }) => sampleNames.has(name));
+  if (!sample) {
+    reject("expected at least one seeded sample task");
+  }
+  complete();
+  return sample;
+};
+
+const writeReviewTask = async (
+  context: ReviewJourneyContext,
+  sample: v.InferOutput<typeof reviewTaskListSchema>["tasks"][number],
+) => {
+  const { state, complete, callTool } = context;
+  const reject: (assertion: string) => never = context.reject;
+  state.step = "write";
+  const taskName = `Restricted account canary ${Bun.randomUUIDv7()}`;
+  const written = await callTool("save_task", {
+    matter_id: sample.matterId,
+    name: taskName,
+  });
+  if (!v.is(v.object({ taskId: reviewTaskIdSchema }), written)) {
+    reject("expected the created task ID");
+  }
+  state.createdTaskId = written.taskId;
+  complete();
+  return taskName;
+};
+
+type ReviewTaskAssertionOptions = {
+  context: ReviewJourneyContext;
+  sample: v.InferOutput<typeof reviewTaskListSchema>["tasks"][number];
+  taskName: string;
+};
+const assertReviewTask = async ({
+  context,
+  sample,
+  taskName,
+}: ReviewTaskAssertionOptions) => {
+  const { state, complete, callTool } = context;
+  const reject: (assertion: string) => never = context.reject;
+  state.step = "assert";
+  const taskId = state.createdTaskId;
+  if (!taskId) {
+    reject("created task ID unavailable");
+  }
+  const reread = await callTool("list_tasks", {
+    matter_id: sample.matterId,
+    task_id: state.createdTaskId,
+  });
+  if (
+    !v.is(
+      v.object({
+        task: v.object({
+          taskId: v.literal(taskId),
+          name: v.literal(taskName),
+        }),
+      }),
+      reread,
+    )
+  ) {
+    reject("created task did not round-trip in the sample matter");
+  }
+  complete();
+};
+
+type ReviewAuthorization = Awaited<ReturnType<typeof authorizeReviewOAuth>>;
+
+const cleanupReviewTask = async (context: ReviewJourneyContext) => {
+  const { state, results } = context;
+  if (state.createdTaskId && state.token) {
+    state.step = "cleanup";
+    const cleanup = await Result.tryPromise({
+      try: async () => {
+        const deleted = await context.callTool("delete_task", {
+          task_id: state.createdTaskId,
+          confirm: true,
+        });
+        if (!v.is(v.object({ deleted: v.literal(true) }), deleted)) {
+          context.reject("expected the per-run task to be deleted");
+        }
+        context.complete();
+      },
+      catch: (error) => error,
+    });
+    if (cleanup.isErr()) {
+      results.push(
+        failed(
+          reviewJourneyName(state.step),
+          cleanup.error instanceof ReviewJourneyError
+            ? cleanup.error.message
+            : `HTTP unavailable; envelope code none; ${describeProbeFailure(cleanup.error)}`,
+        ),
+      );
+    }
+  }
+};
+
+export const runReviewAccountJourney = async (
+  {
+    baseUrl,
+    configuredBaseUrl,
+    frontendUrl = baseUrl,
+    password,
+    email = "review@stll.app",
+    mode,
+  }: ReviewAccountJourneyOptions,
+  fetcher: CanaryFetcher = deploymentFetcher,
+): Promise<ProbeResult[]> => {
+  if (mode !== "full") {
+    return [];
+  }
+  if (!password || baseUrl !== configuredBaseUrl) {
+    return [
+      skipped(
+        reviewJourneyName("sign-in"),
+        !password
+          ? "no REVIEW_ACCOUNT_PASSWORD configured"
+          : "credential withheld: target is not the configured endpoint",
+      ),
+    ];
+  }
+
+  const context = createReviewJourneyContext(
+    { baseUrl, configuredBaseUrl, frontendUrl },
+    fetcher,
+  );
+  const { results, state } = context;
+  const outcome = await Result.tryPromise({
+    try: async () => {
+      await signInReviewAccount({ context, email, password });
+      await checkReviewSession(context, email);
+      const { metadata } = await discoverReviewOAuth(context);
+      context.complete();
+      const authorization = await authorizeReviewOAuth(context, metadata);
+      const redirect = await consentReviewOAuth(
+        context,
+        authorization.redirect,
+      );
+      const code = await captureReviewCallback({
+        context,
+        redirect,
+        stateValue: authorization.stateValue,
+        callback: authorization.callback,
+      });
+      await exchangeReviewToken({ context, authorization, code });
+      context.complete();
+      await initializeReviewMcp(context);
+      await listReviewTools(context);
+      const sample = await readReviewSample(context);
+      const taskName = await writeReviewTask(context, sample);
+      await assertReviewTask({ context, sample, taskName });
+    },
+    catch: (error) => error,
+  });
+  if (outcome.isErr()) {
+    const error = outcome.error;
+    const name = reviewJourneyName(state.step);
+    results.push(
+      error instanceof CanaryRateLimitError
+        ? { name, status: PROBE_STATUS.rateLimited, detail: error.message }
+        : failed(
+            name,
+            error instanceof ReviewJourneyError
+              ? error.message
+              : `HTTP unavailable; envelope code none; ${describeProbeFailure(error)}`,
+          ),
+    );
+  }
+  await state.callback?.close();
+  await cleanupReviewTask(context);
+  return results;
+};
+
+const RESEARCH_JOURNEY_NAME = "case-law research column";
+/**
+ * A published decision the hourly read journeys also open
+ * (`scripts/check-journeys.sh`). Its source states no reuse restrictions, the
+ * case a research read once mistook for a missing source.
+ */
+export const RESEARCH_CANARY_DECISION_ID =
+  "01a10c6e-cd77-77cc-97bd-19a8dc2e360c";
+const RESEARCH_ANSWER_DEADLINE_MS = 180_000;
+const RESEARCH_POLL_INTERVAL_MS = 5000;
+const researchColumnSchema = v.object({ id: v.pipe(v.string(), v.nonEmpty()) });
+const researchRunSchema = v.object({ queued: v.literal(1) });
+const researchLookupSchema = v.object({
+  items: v.array(
+    v.object({
+      columnId: v.string(),
+      decisionId: v.string(),
+      state: v.string(),
+      failureReason: v.nullable(v.string()),
+    }),
+  ),
+});
+
+const researchRunWithoutModelSchema = v.object({
+  status: v.literal(403),
+  body: v.object({ code: v.literal(AI_FAILURE_CODES.role_not_configured) }),
+});
+
+type ResearchColumnJourneyOptions = ReviewAccountJourneyOptions & {
+  environment: "staging" | "production";
+  /** Injected by tests; the poll otherwise waits on the wall clock. */
+  wait?: ((ms: number) => Promise<void>) | undefined;
+  now?: (() => number) | undefined;
+};
+
+/**
+ * Ask one AI research question of a known public decision, through the same
+ * browser API the case-law table uses, and fail on anything but an answer.
+ * Answer runs read the decision, its source terms and its text before any
+ * model is asked, so a read that breaks for every decision fails every cell;
+ * nothing else exercises that path end to end against production data.
+ */
+export const runResearchColumnJourney = async (
+  {
+    baseUrl,
+    configuredBaseUrl,
+    frontendUrl = baseUrl,
+    password,
+    email = "review@stll.app",
+    mode,
+    environment,
+    wait = async (ms) => {
+      await Bun.sleep(ms);
+    },
+    now = () => performance.now(),
+  }: ResearchColumnJourneyOptions,
+  fetcher: CanaryFetcher = deploymentFetcher,
+): Promise<ProbeResult[]> => {
+  if (mode !== "full") {
+    return [];
+  }
+  if (environment !== "production") {
+    return [
+      notApplicable(
+        `${RESEARCH_JOURNEY_NAME}: answer`,
+        "the known decision and the model budget are production's",
+      ),
+    ];
+  }
+  if (!password || baseUrl !== configuredBaseUrl) {
+    return [
+      skipped(
+        `${RESEARCH_JOURNEY_NAME}: sign-in`,
+        !password
+          ? "no REVIEW_ACCOUNT_PASSWORD configured"
+          : "credential withheld: target is not the configured endpoint",
+      ),
+    ];
+  }
+  const context = createReviewJourneyContext(
+    {
+      baseUrl,
+      configuredBaseUrl,
+      frontendUrl,
+      journey: RESEARCH_JOURNEY_NAME,
+    },
+    fetcher,
+  );
+  const { results, state, request, complete } = context;
+  const reject: (assertion: string) => never = context.reject;
+  // The browser reaches the API under the app origin's `/api` prefix, where
+  // the session cookie the sign-in set is sent.
+  const researchUrl = (path: string) =>
+    new URL(`/api/v1/case/research${path}`, frontendUrl);
+  const json = { "content-type": "application/json" };
+  let columnId: string | undefined;
+  const outcome = await Result.tryPromise({
+    try: async () => {
+      await signInReviewAccount({ context, email, password });
+      await checkReviewSession(context, email);
+
+      state.step = "create column";
+      const column = await request(researchUrl("/columns"), {
+        method: "POST",
+        headers: json,
+        body: JSON.stringify({
+          question: "Did the court grant the application?",
+          answerType: "single-select",
+          options: [
+            { color: "green", value: "yes" },
+            { color: "red", value: "no" },
+          ],
+        }),
+      });
+      if (!v.is(researchColumnSchema, column)) {
+        reject("expected the created column's id");
+      }
+      const createdColumnId = column.id;
+      columnId = createdColumnId;
+      complete();
+
+      state.step = "run";
+      const run = await request(researchUrl("/answers/run"), {
+        method: "POST",
+        headers: json,
+        body: JSON.stringify({
+          columnIds: [createdColumnId],
+          decisionIds: [RESEARCH_CANARY_DECISION_ID],
+          force: true,
+        }),
+      });
+      if (!v.is(researchRunSchema, run)) {
+        reject("expected exactly one queued cell");
+      }
+      complete();
+
+      state.step = "answer";
+      const deadline = now() + RESEARCH_ANSWER_DEADLINE_MS;
+      for (;;) {
+        const lookup = await request(researchUrl("/answers/lookup"), {
+          method: "POST",
+          headers: json,
+          body: JSON.stringify({ decisionIds: [RESEARCH_CANARY_DECISION_ID] }),
+        });
+        if (!v.is(researchLookupSchema, lookup)) {
+          reject("expected the decision's research cells");
+        }
+        const cell = lookup.items.find(
+          (item) => item.columnId === createdColumnId,
+        );
+        if (cell === undefined) {
+          reject("expected a cell for the per-run column");
+        }
+        if (cell.state === "answered" || cell.state === "not_stated") {
+          break;
+        }
+        if (cell.state !== "pending") {
+          reject(
+            `expected an answer, got ${cell.state}${cell.failureReason === null ? "" : ` (${cell.failureReason})`}`,
+          );
+        }
+        if (now() >= deadline) {
+          reject(
+            `cell still pending after ${String(RESEARCH_ANSWER_DEADLINE_MS / 1000)} s`,
+          );
+        }
+        await wait(RESEARCH_POLL_INTERVAL_MS);
+      }
+      complete();
+    },
+    catch: (error) => error,
+  });
+  if (outcome.isErr()) {
+    const error = outcome.error;
+    const name = `${RESEARCH_JOURNEY_NAME}: ${state.step}`;
+    // Where every organization brings its own provider key and the review
+    // organization holds none, the run is refused before any decision is
+    // read. That is the deployment's configuration, not a broken read, so it
+    // warns that the read went unexercised instead of failing.
+    const refusedWithoutModel =
+      state.step === "run" &&
+      v.is(researchRunWithoutModelSchema, state.lastResponse);
+    if (refusedWithoutModel) {
+      results.push({
+        name,
+        status: PROBE_STATUS.warned,
+        detail:
+          "the review organization has no model for this task, so no research question was asked",
+      });
+    } else {
+      results.push(
+        error instanceof CanaryRateLimitError
+          ? { name, status: PROBE_STATUS.rateLimited, detail: error.message }
+          : failed(
+              name,
+              error instanceof ReviewJourneyError
+                ? error.message
+                : `HTTP unavailable; envelope code none; ${describeProbeFailure(error)}`,
+            ),
+      );
+    }
+  }
+  if (columnId !== undefined) {
+    const id = columnId;
+    // A column left behind only clutters the review organization until its
+    // nightly reset, so a failed delete warns rather than fails.
+    const cleanup = await runNamedProbe(
+      `${RESEARCH_JOURNEY_NAME}: delete column`,
+      async () => {
+        state.step = "delete column";
+        await request(researchUrl(`/columns/${encodeURIComponent(id)}`), {
+          method: "DELETE",
+        });
+        return passed(
+          `${RESEARCH_JOURNEY_NAME}: delete column`,
+          "per-run column deleted",
+        );
+      },
+    );
+    results.push(
+      cleanup.status === PROBE_STATUS.failed
+        ? { ...cleanup, status: PROBE_STATUS.warned }
+        : cleanup,
+    );
+  }
+  return results;
+};
+
+const REFRESH_JOURNEY_NAME = "OAuth refresh";
+const REFRESH_ROUNDS = [1, 2, 3] as const;
+const refreshTokenSchema = v.object({
+  access_token: v.pipe(v.string(), v.nonEmpty()),
+  refresh_token: v.pipe(v.string(), v.nonEmpty()),
+});
+const revocationMetadataSchema = v.object({
+  revocation_endpoint: v.pipe(v.string(), v.url()),
+});
+
+type RefreshJourneyOptions = {
+  baseUrl: string;
+  frontendUrl?: string | undefined;
+  environment: "staging" | "production";
+  smokeSecret?: string | undefined;
+  mode?: "full" | "frequent";
+  configuredBaseUrl?: string | undefined;
+  email?: string | undefined;
+  password?: string | undefined;
+};
+
+type RefreshSessionOptions = {
+  context: ReviewJourneyContext;
+} & Pick<
+  RefreshJourneyOptions,
+  "environment" | "smokeSecret" | "email" | "password"
+>;
+
+const bootstrapRefreshSession = async ({
+  context,
+  environment,
+  smokeSecret,
+  email,
+  password,
+}: RefreshSessionOptions) => {
+  const { state, baseUrl, frontendUrl, request, cookies, complete } = context;
+  const reject: (assertion: string) => never = context.reject;
+  if (environment === "production") {
+    if (!email || !password) {
+      reject("restricted-account sign-in credentials unavailable");
+    }
+    await signInReviewAccount({ context, email, password });
+    await checkReviewSession(context, email);
+  } else {
+    state.step = "bootstrap";
+    if (!smokeSecret) {
+      reject("staging session credential unavailable");
+    }
+    const smoke = await request(new URL("/smoke/session", baseUrl), {
+      method: "POST",
+      headers: { "x-smoke-secret": smokeSecret },
+    });
+    const sessionSchema = v.object({
+      cookieName: v.pipe(v.string(), v.nonEmpty()),
+      cookieValue: v.pipe(v.string(), v.nonEmpty()),
+    });
+    if (!v.is(sessionSchema, smoke)) {
+      reject("expected a staging browser session");
+    }
+    // The smoke session is issued for the configured app and API origins.
+    for (const origin of new Set([
+      new URL(baseUrl).origin,
+      new URL(frontendUrl).origin,
+    ])) {
+      cookies.set(origin, new Map([[smoke.cookieName, smoke.cookieValue]]));
+    }
+    complete();
+  }
+};
+
+type AcceptRefreshTokensOptions = {
+  context: ReviewJourneyContext;
+  body: unknown;
+  previous?: string;
+};
+const acceptRefreshTokens = ({
+  context,
+  body,
+  previous,
+}: AcceptRefreshTokensOptions) => {
+  const { state } = context;
+  const reject: (assertion: string) => never = context.reject;
+  // Retain a returned successor for cleanup even if its access token is malformed.
+  if (
+    v.is(v.object({ refresh_token: v.pipe(v.string(), v.nonEmpty()) }), body)
+  ) {
+    state.refreshToken = body.refresh_token;
+  }
+  if (!v.is(refreshTokenSchema, body) || body.refresh_token === previous) {
+    reject("expected an access token and a rotated refresh token");
+  }
+  state.token = body.access_token;
+  return body;
+};
+
+const discoverRefreshOAuth = async (context: ReviewJourneyContext) => {
+  const reject: (assertion: string) => never = context.reject;
+  const { metadata, advertisedIssuer } = await discoverReviewOAuth(context);
+  if (!v.is(v.object({ issuer: v.literal(advertisedIssuer) }), metadata)) {
+    reject(
+      "expected metadata issuer to equal the protected-resource authorization server exactly",
+    );
+  }
+  if (!v.is(revocationMetadataSchema, metadata)) {
+    reject("expected a revocation endpoint");
+  }
+  context.complete();
+  return { metadata, advertisedIssuer };
+};
+
+type RefreshReplayOptions = {
+  context: ReviewJourneyContext;
+  authorization: ReviewAuthorization;
+  previous: string;
+  tokens: v.InferOutput<typeof refreshTokenSchema>;
+  round: number;
+};
+const verifyRefreshReplay = async ({
+  context,
+  authorization,
+  previous,
+  tokens,
+  round,
+}: RefreshReplayOptions) => {
+  const { state, request, baseUrl, complete } = context;
+  const reject: (assertion: string) => never = context.reject;
+  state.step = `refresh ${String(round)} replay`;
+  const replay = await request(authorization.tokenEndpoint, {
+    method: "POST",
+    headers: { "content-type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      grant_type: "refresh_token",
+      client_id: authorization.clientId,
+      refresh_token: previous,
+      resource: new URL(MCP_HTTP_PATH, baseUrl).toString(),
+    }).toString(),
+  });
+  if (
+    !v.is(refreshTokenSchema, replay) ||
+    replay.access_token !== tokens.access_token ||
+    replay.refresh_token !== tokens.refresh_token
+  ) {
+    reject(
+      "expected the identical access and refresh token pair within the replay window",
+    );
+  }
+  complete();
+};
+
+export const runRefreshJourney = async (
+  {
+    baseUrl,
+    frontendUrl = baseUrl,
+    environment,
+    smokeSecret,
+    mode = "full",
+    configuredBaseUrl,
+    email,
+    password,
+  }: RefreshJourneyOptions,
+  fetcher: CanaryFetcher = deploymentFetcher,
+): Promise<ProbeResult[]> => {
+  if (environment === "production" && mode !== "full") {
+    return [];
+  }
+  if (environment === "production" && baseUrl !== configuredBaseUrl) {
+    return [
+      skipped(
+        `${REFRESH_JOURNEY_NAME}: sign-in`,
+        "credential withheld: target is not the configured production endpoint",
+      ),
+    ];
+  }
+  if (environment === "production" && (!email || !password)) {
+    return [
+      failed(
+        `${REFRESH_JOURNEY_NAME}: sign-in`,
+        "missing restricted-account sign-in credentials",
+      ),
+    ];
+  }
+  if (environment === "staging" && !smokeSecret) {
+    return [
+      failed(
+        `${REFRESH_JOURNEY_NAME}: bootstrap`,
+        "missing SMOKE_SESSION_SECRET",
+      ),
+    ];
+  }
+  const context = createReviewJourneyContext(
+    {
+      baseUrl,
+      configuredBaseUrl: baseUrl,
+      frontendUrl,
+      journey: REFRESH_JOURNEY_NAME,
+      requestBudgetMs: REFRESH_REQUEST_BUDGET_MS,
+      scope: `${CANARY_SCOPE} offline_access`,
+    },
+    fetcher,
+  );
+  const { state, results, request, complete } = context;
+  const reject: (assertion: string) => never = context.reject;
+  let authorization: ReviewAuthorization | undefined;
+  let revocationEndpoint: string | undefined;
+  const outcome = await Result.tryPromise({
+    try: async () => {
+      await bootstrapRefreshSession({
+        context,
+        environment,
+        smokeSecret,
+        email,
+        password,
+      });
+      const { metadata, advertisedIssuer } =
+        await discoverRefreshOAuth(context);
+      revocationEndpoint = metadata.revocation_endpoint;
+      authorization = await authorizeReviewOAuth(context, metadata);
+      const redirect = await consentReviewOAuth(
+        context,
+        authorization.redirect,
+      );
+      const code = await captureReviewCallback({
+        context,
+        redirect,
+        stateValue: authorization.stateValue,
+        callback: authorization.callback,
+        issuer: advertisedIssuer,
+      });
+      acceptRefreshTokens({
+        context,
+        body: await exchangeReviewToken({ context, authorization, code }),
+      });
+      complete();
+      for (const round of environment === "production"
+        ? [1, 2]
+        : REFRESH_ROUNDS) {
+        state.step = `refresh ${String(round)}`;
+        const previous = state.refreshToken;
+        if (!previous) {
+          reject("refresh token unavailable");
+        }
+        const refreshed = await request(authorization.tokenEndpoint, {
+          method: "POST",
+          headers: { "content-type": "application/x-www-form-urlencoded" },
+          body: new URLSearchParams({
+            grant_type: "refresh_token",
+            client_id: authorization.clientId,
+            refresh_token: previous,
+            resource: new URL(MCP_HTTP_PATH, baseUrl).toString(),
+          }).toString(),
+        });
+        const tokens = acceptRefreshTokens({
+          context,
+          body: refreshed,
+          previous,
+        });
+        complete();
+        await verifyRefreshReplay({
+          context,
+          authorization,
+          previous,
+          tokens,
+          round,
+        });
+        await initializeReviewMcp(
+          context,
+          `successor ${String(round)} initialize`,
+        );
+        state.step = `successor ${String(round)} read`;
+        const body = await context.rpc({
+          baseUrl,
+          token: requireReviewToken(context),
+          era: "modern",
+          id: 3,
+          method: "tools/call",
+          params: {
+            name: "search_case_law",
+            arguments: { queries: ["contract"], country: "CZ", limit: 1 },
+          },
+        });
+        if (
+          evaluateToolCall({ status: 200, body }).status !== PROBE_STATUS.passed
+        ) {
+          reject("expected a read-only tool result with content");
+        }
+        complete();
+      }
+    },
+    catch: (error) => error,
+  });
+  if (outcome.isErr()) {
+    results.push(
+      failed(
+        `${REFRESH_JOURNEY_NAME}: ${state.step}`,
+        outcome.error instanceof ReviewJourneyError
+          ? outcome.error.message
+          : describeProbeFailure(outcome.error, REFRESH_REQUEST_BUDGET_MS),
+      ),
+    );
+  }
+  const cleanupToken = state.refreshToken;
+  if (cleanupToken && authorization && revocationEndpoint) {
+    const tokenToRevoke = cleanupToken;
+    const clientId = authorization.clientId;
+    const endpoint = revocationEndpoint;
+    const cleanup = await runNamedProbe(
+      `${REFRESH_JOURNEY_NAME}: revoke`,
+      async () => {
+        await request(endpoint, {
+          method: "POST",
+          headers: { "content-type": "application/x-www-form-urlencoded" },
+          body: new URLSearchParams({
+            client_id: clientId,
+            token: tokenToRevoke,
+            token_type_hint: "refresh_token",
+          }).toString(),
+        });
+        return passed(
+          `${REFRESH_JOURNEY_NAME}: revoke`,
+          "per-run grant revoked",
+        );
+      },
+    );
+    results.push(
+      cleanup.status === PROBE_STATUS.failed
+        ? { ...cleanup, status: PROBE_STATUS.warned }
+        : cleanup,
+    );
+  } else {
+    results.push(
+      notApplicable(
+        `${REFRESH_JOURNEY_NAME}: revoke`,
+        "no refresh token returned",
+      ),
+    );
+  }
+  await state.callback?.close();
+  return results;
+};
 
 const run = async () => {
   const baseUrl = process.env["MCP_CANARY_BASE_URL"];
@@ -537,29 +3322,176 @@ const run = async () => {
     return;
   }
 
-  const token = process.env["MCP_CANARY_TOKEN"];
+  const token =
+    process.env[MCP_CANARY_JOURNEY_CREDENTIALS.productionBearer.env.token];
+  const mode = process.env["MCP_CANARY_MODE"] ?? "frequent";
+  if (mode !== "frequent" && mode !== "full") {
+    console.error("[mcp-canary] MCP_CANARY_MODE must be frequent or full.");
+    process.exitCode = 1;
+    return;
+  }
+  const environment = process.env["MCP_CANARY_ENVIRONMENT"] ?? "production";
+  if (environment !== "production" && environment !== "staging") {
+    console.error(
+      "[mcp-canary] MCP_CANARY_ENVIRONMENT must be production or staging.",
+    );
+    process.exitCode = 1;
+    return;
+  }
+  const thirdPartyFetches =
+    process.env["MCP_CANARY_THIRD_PARTY_FETCHES"] ?? "run";
+  if (thirdPartyFetches !== "run" && thirdPartyFetches !== "skip") {
+    console.error(
+      "[mcp-canary] MCP_CANARY_THIRD_PARTY_FETCHES must be run or skip.",
+    );
+    process.exitCode = 1;
+    return;
+  }
   const results = [
+    ...(await runOAuthJourneys({
+      baseUrl,
+      mode,
+      frontendUrl: process.env["MCP_CANARY_FRONTEND_URL"],
+      thirdPartyFetches,
+    })),
     ...(await runPublicProbes(baseUrl)),
-    ...(token
-      ? await runAuthenticatedProbes({ baseUrl, token })
-      : AUTHENTICATED_PROBES.map(({ name }) =>
-          skipped(name, "no MCP_CANARY_TOKEN configured"),
-        )),
   ];
+  results.push(
+    ...(await runRefreshJourney({
+      baseUrl,
+      frontendUrl: process.env["MCP_CANARY_FRONTEND_URL"],
+      environment,
+      mode,
+      configuredBaseUrl:
+        process.env[
+          MCP_CANARY_JOURNEY_CREDENTIALS.reviewAccount.env.configuredBaseUrl
+        ] ?? "https://api.stll.app",
+      email:
+        process.env[MCP_CANARY_JOURNEY_CREDENTIALS.reviewAccount.env.email],
+      password:
+        process.env[MCP_CANARY_JOURNEY_CREDENTIALS.reviewAccount.env.password],
+      smokeSecret:
+        process.env[
+          MCP_CANARY_JOURNEY_CREDENTIALS.stagingSession.env.smokeSecret
+        ],
+    })),
+  );
+  results.push(
+    ...(await runReviewAccountJourney({
+      baseUrl,
+      configuredBaseUrl:
+        process.env[
+          MCP_CANARY_JOURNEY_CREDENTIALS.reviewAccount.env.configuredBaseUrl
+        ] ?? "https://api.stll.app",
+      frontendUrl: process.env["MCP_CANARY_FRONTEND_URL"],
+      email:
+        process.env[MCP_CANARY_JOURNEY_CREDENTIALS.reviewAccount.env.email],
+      password:
+        process.env[MCP_CANARY_JOURNEY_CREDENTIALS.reviewAccount.env.password],
+      mode,
+    })),
+  );
+  results.push(
+    ...(await runResearchColumnJourney({
+      baseUrl,
+      environment,
+      configuredBaseUrl:
+        process.env[
+          MCP_CANARY_JOURNEY_CREDENTIALS.reviewAccount.env.configuredBaseUrl
+        ] ?? "https://api.stll.app",
+      frontendUrl: process.env["MCP_CANARY_FRONTEND_URL"],
+      email:
+        process.env[MCP_CANARY_JOURNEY_CREDENTIALS.reviewAccount.env.email],
+      password:
+        process.env[MCP_CANARY_JOURNEY_CREDENTIALS.reviewAccount.env.password],
+      mode,
+    })),
+  );
+  if (environment === "staging") {
+    results.push(
+      ...(await runStagingCredentialJourneys({
+        baseUrl,
+        smokeSecret:
+          process.env[
+            MCP_CANARY_JOURNEY_CREDENTIALS.stagingSession.env.smokeSecret
+          ],
+        load: process.env["MCP_CANARY_RELEASE_LOAD"] === "on",
+      })),
+    );
+  } else {
+    results.push(
+      notApplicable(
+        "desktop handoff redeem",
+        "browser-authorized desktop handoffs are exercised by the staging smoke; production needs no browser credential",
+      ),
+    );
+    if (token) {
+      results.push(...(await runAuthenticatedProbes({ baseUrl, token })));
+      // Daily: it samples every court, a few hundred tool calls.
+      if (mode === "full") {
+        const identity = await Result.tryPromise({
+          try: async () => await runCaseLawIdentityProbes({ baseUrl, token }),
+          catch: (error) => error,
+        });
+        results.push(
+          ...(identity.isOk()
+            ? identity.value
+            : [
+                failed(
+                  "case-law identity",
+                  describeProbeFailure(identity.error),
+                ),
+              ]),
+        );
+      }
+      results.push(
+        await runNamedProbe(
+          "canary bearer expiry",
+          async () => await runCredentialExpiryProbe({ baseUrl, token }),
+        ),
+      );
+    } else {
+      results.push(
+        ...AUTHENTICATED_PROBES.map(({ name }) =>
+          skipped(name, "no MCP_CANARY_TOKEN configured"),
+        ),
+      );
+      results.push(
+        skipped("canary bearer expiry", "no MCP_CANARY_TOKEN configured"),
+      );
+    }
+  }
 
   for (const result of results) {
+    if (
+      result.status === PROBE_STATUS.skipped ||
+      result.status === PROBE_STATUS.warned
+    ) {
+      console.warn(
+        `::warning title=MCP canary coverage incomplete::${result.name}: ${result.detail}`,
+      );
+    }
     console.log(
       `[mcp-canary] ${PROBE_ICONS[result.status]} ${result.name}: ${result.detail}`,
     );
   }
 
   const { failed: failures, skipped: skips } = summarize(results);
+  const upstreamFailures = results.filter(
+    (result) => result.status === PROBE_STATUS.upstream,
+  ).length;
+  console.log(
+    `[mcp-canary] summary: ${String(failures)} failed, ${String(upstreamFailures)} upstream, ${String(skips)} skipped`,
+  );
   if (skips > 0) {
     console.log(
-      `[mcp-canary] ${String(skips)} probe(s) skipped: the authenticated session was not exercised.`,
+      `[mcp-canary] ${String(skips)} probe(s) skipped: journey coverage is incomplete; each SKIP line names its reason.`,
     );
   }
-  if (failures > 0) {
+  if (
+    failures > 0 ||
+    (skips > 0 && process.env["MCP_CANARY_REQUIRE_CREDENTIALS"] === "true")
+  ) {
     process.exitCode = 1;
   }
 };
@@ -570,7 +3502,7 @@ if (import.meta.main) {
     // headers, and the token rides in one of them.
     const message =
       error instanceof Error ? error.constructor.name : "unknown error";
-    console.error(`[mcp-canary] probe run failed (${message}).`);
+    printError(`[mcp-canary] probe run failed (${message}).`);
     process.exitCode = 1;
   });
 }

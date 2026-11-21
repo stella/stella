@@ -5,6 +5,8 @@ import {
   ACTION_ADMISSION_CODES,
   ACTION_ADMISSION_REFUSALS,
 } from "@stll/api-contract/action-admission";
+import { sleep } from "@stll/concurrency/sleep";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import messages from "@/i18n/langs/en.json";
 import { toSafeId } from "@/lib/safe-id";
@@ -22,11 +24,9 @@ afterEach(cleanup);
 afterAll(async () => {
   cleanup();
   await act(async () => {
-    await new Promise((resolve) => {
-      setTimeout(resolve, 50);
-    });
+    await sleep(50);
   });
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 test("only a refused AI export offers an explicit fallback preserving request fields", () => {
@@ -67,7 +67,8 @@ test("only a refused AI export offers an explicit fallback preserving request fi
               name: messages.workspaces.views.reportExport.withoutAiSummaries,
             });
             expect(fallback !== null).toBe(
-              code === ACTION_ADMISSION_CODES.notEnabled &&
+              (code === ACTION_ADMISSION_CODES.notEnabled ||
+                code === ACTION_ADMISSION_CODES.featureDisabled) &&
                 aiNarrative === true,
             );
             if (fallback) {

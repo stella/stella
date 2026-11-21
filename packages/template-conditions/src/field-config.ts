@@ -47,11 +47,7 @@ export type MarkerFieldLookup = {
 
 /** The input controls a marker can name. */
 export type MarkerFieldInputType =
-  | "text"
-  | "number"
-  | "boolean"
-  | "date"
-  | "select";
+  "text" | "number" | "boolean" | "date" | "select";
 
 /**
  * Everything about a field that a marker's filter chain can carry. A caller's

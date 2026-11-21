@@ -2,12 +2,13 @@ import type { Page } from "@playwright/test";
 import { randomUUID } from "node:crypto";
 
 import { createUploadedDocumentRoute } from "../helpers/document";
+import { respond, staticBody } from "../helpers/route-mock";
 import { EXPECTS_DEV_RUNTIME } from "../helpers/runtime-mode";
 import { expect, test } from "../helpers/test";
 import {
-  type TestWorkspace,
   createTestWorkspace,
   deleteTestWorkspace,
+  type TestWorkspace,
 } from "../helpers/workspace";
 
 const ROUTE_READY_TIMEOUT_MS = 60_000;
@@ -28,12 +29,14 @@ test.describe("Vite dependency optimizer canary", () => {
     workspace = await createTestWorkspace(request, "vite-canary");
   });
 
-  test.afterEach(async ({ request }) => {
+  test.afterEach(async ({ page, request }, testInfo) => {
     if (workspace === null) {
       return;
     }
 
-    await deleteTestWorkspace(request, workspace.id);
+    await deleteTestWorkspace(request, workspace.id, {
+      leave: { page, testInfo },
+    });
     workspace = null;
   });
 
@@ -112,7 +115,7 @@ const mountDocumentRoute = async (page: Page, route: string): Promise<void> => {
 };
 
 const mountAutocomplete = async (page: Page): Promise<void> => {
-  await page.goto("/dev/autocomplete", { waitUntil: "commit" });
+  await page.goto("/dev?visual=autocomplete", { waitUntil: "commit" });
   await expect(
     page.getByRole("heading", {
       name: "stella autocomplete — dev playground",
@@ -135,10 +138,13 @@ test.describe("Temporal browser runtime", () => {
     await page.route(
       "**/e2e/temporal-runtime?*",
       async (route) =>
-        await route.fulfill({
-          contentType: "text/html",
-          body: "<!doctype html><html><head><title>Temporal runtime</title></head><body></body></html>",
-        }),
+        await respond(
+          route,
+          staticBody({
+            contentType: "text/html",
+            body: "<!doctype html><html><head><title>Temporal runtime</title></head><body></body></html>",
+          }),
+        ),
     );
     const implementationRequests: string[] = [];
     page.on("request", (request) => {

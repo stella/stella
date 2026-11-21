@@ -1,14 +1,8 @@
-import { useMemo, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import type { KeyboardEvent } from "react";
 
-import {
-  attachClosestEdge,
-  extractClosestEdge,
-} from "@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge";
-import {
-  draggable,
-  dropTargetForElements,
-} from "@atlaskit/pragmatic-drag-and-drop/adapter/element-adapter";
+import { attachClosestEdge } from "@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge/attach-closest-edge";
+import { extractClosestEdge } from "@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge/extract-closest-edge";
 import { combine } from "@atlaskit/pragmatic-drag-and-drop/utils/combine";
 import { preserveOffsetOnSource } from "@atlaskit/pragmatic-drag-and-drop/utils/preserve-offset-on-source";
 import { setCustomNativeDragPreview } from "@atlaskit/pragmatic-drag-and-drop/utils/set-custom-native-drag-preview";
@@ -16,6 +10,7 @@ import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
 
+import type { ScanOptions } from "@stll/scan-engine/types";
 import {
   AlertDialog,
   AlertDialogClose,
@@ -27,32 +22,29 @@ import {
 } from "@stll/ui/alert-dialog";
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
-import {
-  Dialog,
-  DialogClose,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogPopup,
-  DialogTitle,
-} from "@stll/ui/dialog";
+import { Dialog, DialogPopup } from "@stll/ui/dialog";
 import { openFilePicker } from "@stll/ui/file-picker";
 import {
-  CopyIcon,
   CropIcon,
   DownloadIcon,
+  DuplicateIcon,
   GripVerticalIcon,
   PlusIcon,
   Redo2Icon,
   RotateCcwIcon,
   RotateCwIcon,
   SaveIcon,
+  ScanTextIcon,
   Trash2Icon,
   TriangleAlertIcon,
   Undo2Icon,
 } from "@stll/ui/icons";
-import { Input } from "@stll/ui/input";
 import { Label } from "@stll/ui/label";
+import {
+  MATTER_TINT_GROUND,
+  matterTint,
+  resolveMatterColor,
+} from "@stll/ui/matter-colors";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { Separator } from "@stll/ui/separator";
 import { stellaToast } from "@stll/ui/toast";
@@ -62,6 +54,8 @@ import {
   withDragAnnouncementData,
   withDropAnnouncementData,
 } from "@/components/drag-and-drop-live-region.logic";
+import type { PdfSignTarget } from "@/components/inspector/pdf-sign-action";
+import { readSavedPdfSignTarget } from "@/components/inspector/pdf-signing";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useHydrationSafeHotkeyPlatform } from "@/hooks/use-hydration-safe-hotkey-platform";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
@@ -71,19 +65,25 @@ import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
-import { notifyUserError } from "@/lib/errors/user-toast";
-import { filesKeys, fileOptions } from "@/lib/files/queries";
+import {
+  draggable,
+  dropTargetForElements,
+} from "@/lib/drag-and-drop/element-registration";
+import { unwrapApiResponse } from "@/lib/errors/api";
+import { ClientOperationError } from "@/lib/errors/client";
+import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
+import { fileOptions, filesKeys } from "@/lib/files/queries";
 import {
   ENTITY_VERSION_UPLOAD_RESULT,
   uploadEntityVersion,
 } from "@/lib/files/upload-entity-version";
-import {
-  MATTER_TINT_GROUND,
-  matterTint,
-  resolveMatterColor,
-} from "@/lib/matter-colors";
 import { usePDFDocument } from "@/lib/pdf/hooks/use-pdf-document";
+import { drawCleanScanPage } from "@/lib/pdf/page-editor/clean-scan-canvas";
+import type { PageCleanScan } from "@/lib/pdf/page-editor/clean-scan-placement";
+import {
+  type CleanScanFailure,
+  runCleanScan,
+} from "@/lib/pdf/page-editor/clean-scan-run";
 import {
   MAX_PAGE_EDITOR_PAGES,
   MAX_PAGE_EDITOR_SOURCE_BYTES,
@@ -96,26 +96,52 @@ import type { PageInfo } from "@/lib/pdf/pdf-context";
 import type { PDFViewerError } from "@/lib/pdf/pdf-errors";
 import { loadPDF } from "@/lib/pdf/pdf-loader";
 import type { PDFDocument } from "@/lib/pdf/pdf-loader";
-import { getCanvasSize, getCanvasTransform } from "@/lib/pdf/utils";
+import {
+  getCanvasSize,
+  getCanvasTransform,
+  getDevicePixelRatio,
+} from "@/lib/pdf/utils";
 import { downloadFile } from "@/lib/utils";
+import { createUuid } from "@/lib/uuid";
 import { workspaceOptions } from "@/lib/workspaces/queries";
 import { entityVersionsKeys } from "@/lib/workspaces/queries/entity-versions";
 
 import {
+  isKnownUnrecognizedReason,
+  PageOrganizerCleanScan,
+} from "./page-organizer-clean-scan";
+import type { CleanScanPageContext } from "./page-organizer-clean-scan";
+import { PageOrganizerCrop } from "./page-organizer-crop";
+import { PageOrganizerSignAction } from "./page-organizer-sign";
+import type { PageOrganizerSign } from "./page-organizer-sign";
+import {
+  createPageOrganizerOperationOwner,
+  createPageOrganizerUploadOwner,
+} from "./page-organizer-upload.logic";
+import type { OrganizerOperationRequest } from "./page-organizer-upload.logic";
+import {
   createPageOrganizerState,
+  DEFAULT_CLEAN_SCAN_OPTIONS,
   getPageMoveDestination,
   isPageOrganizerDirty,
-  reducePageOrganizer,
-  type NormalizedCrop,
   type OrganizerPage,
+  pageCleanScan,
   type PageDropEdge,
   type PageOrganizerState,
   type PageRotation,
+  reducePageOrganizer,
+  transformPagePlanEntries,
 } from "./page-organizer.logic";
 
 const ORIGINAL_SOURCE_ID = "original";
 const PAGE_DRAG_TYPE = "pdf-page";
 const THUMBNAIL_WIDTH = 176;
+// Each reviewed page holds its cleaned image until the review closes; this
+// keeps one review's memory bounded.
+const MAX_CLEAN_SCAN_PAGES = 50;
+
+const loadScanEngine = async () =>
+  (await import("@stll/scan-engine")).scanEngine;
 
 const isRenderCancellation = (error: unknown): boolean =>
   error instanceof Error &&
@@ -128,9 +154,7 @@ type AddedSource = {
 };
 
 type EditorOperation =
-  | { type: "idle" }
-  | { type: "transforming" }
-  | { type: "uploading" };
+  { type: "idle" } | { type: "transforming" } | { type: "uploading" };
 
 type PDFPageOrganizerProps = {
   canSaveVersion: boolean;
@@ -138,6 +162,8 @@ type PDFPageOrganizerProps = {
   fieldId: string;
   fileName: string;
   onClose: () => void;
+  /** Signing from the footer; `null` where the open version cannot be signed. */
+  pdfSign: PageOrganizerSign | null;
   workspaceId: string;
 };
 
@@ -164,27 +190,6 @@ const resolveOrganizerSourceDocument = ({
   }
   throw sourceDocumentResult.error;
 };
-
-type CropMargins = {
-  top: string;
-  right: string;
-  bottom: string;
-  left: string;
-};
-
-const EMPTY_CROP_MARGINS: CropMargins = {
-  top: "0",
-  right: "0",
-  bottom: "0",
-  left: "0",
-};
-
-const CROP_LABEL_KEYS = {
-  top: "cropTop",
-  right: "cropRight",
-  bottom: "cropBottom",
-  left: "cropLeft",
-} as const satisfies Record<keyof CropMargins, string>;
 
 const normalizePDFRotation = (degrees: number): PageRotation => {
   const normalized = ((degrees % 360) + 360) % 360;
@@ -213,31 +218,6 @@ const safePDFBaseName = (fileName: string): string => {
   }
   safe = safe.trim();
   return safe.length > 0 ? safe : "document";
-};
-
-const cropFromMargins = ({
-  top,
-  right,
-  bottom,
-  left,
-}: CropMargins): NormalizedCrop | null => {
-  const topValue = Number(top);
-  const rightValue = Number(right);
-  const bottomValue = Number(bottom);
-  const leftValue = Number(left);
-  const values = [topValue, rightValue, bottomValue, leftValue];
-  if (values.some((value) => !Number.isFinite(value) || value < 0)) {
-    return null;
-  }
-  if (topValue + bottomValue >= 100 || leftValue + rightValue >= 100) {
-    return null;
-  }
-  return {
-    x: leftValue / 100,
-    y: bottomValue / 100,
-    width: 1 - (leftValue + rightValue) / 100,
-    height: 1 - (topValue + bottomValue) / 100,
-  };
 };
 
 const makeFile = (bytes: ArrayBuffer, name: string) =>
@@ -293,8 +273,12 @@ const loadAddedSources = async ({
   }
 
   const bytes = await file.arrayBuffer();
-  const sourceId = crypto.randomUUID();
-  const result = await loadPDF({ fileId: sourceId, buffer: bytes });
+  const sourceId = createUuid();
+  const result = await loadPDF({
+    fileId: sourceId,
+    buffer: bytes,
+    pageSource: "portfolio",
+  });
   if (Result.isError(result)) {
     throw result.error;
   }
@@ -353,15 +337,17 @@ const authorizePDFOrganizerExport = async ({
     .files({ workspaceId })
     .url({ fieldId })
     .get({ query: { purpose: "download" } });
-  unwrapEden(response);
+  unwrapApiResponse(response);
 };
 
 type PageThumbnailProps = {
+  /** Drawn instead of the source page once a cleaned scan is applied. */
+  cleanScan: PageCleanScan | undefined;
   page: OrganizerPage;
   pageInfo: PageInfo;
 };
 
-const PageThumbnail = ({ page, pageInfo }: PageThumbnailProps) => {
+const PageThumbnail = ({ cleanScan, page, pageInfo }: PageThumbnailProps) => {
   const [container, setContainer] = useState<HTMLDivElement | null>(null);
   const [canvas, setCanvas] = useState<HTMLCanvasElement | null>(null);
   const [shouldRender, setShouldRender] = useState(false);
@@ -390,6 +376,15 @@ const PageThumbnail = ({ page, pageInfo }: PageThumbnailProps) => {
 
   useExternalSyncEffect(() => {
     if (!canvas || pageInfo.proxy.destroyed) {
+      return undefined;
+    }
+    if (cleanScan) {
+      drawCleanScanPage({
+        canvas,
+        rotation: page.rotation,
+        scan: cleanScan,
+        widthPx: THUMBNAIL_WIDTH * getDevicePixelRatio(),
+      });
       return undefined;
     }
 
@@ -424,32 +419,42 @@ const PageThumbnail = ({ page, pageInfo }: PageThumbnailProps) => {
       "pdf-page-organizer.render-thumbnail",
     );
     return () => renderTask.cancel();
-  }, [canvas, page.rotation, pageInfo.proxy]);
+  }, [canvas, cleanScan, page.rotation, pageInfo.proxy]);
 
   const crop = page.crop;
   const cropTop = crop ? (1 - crop.y - crop.height) * 100 : 0;
+  const display = pageInfo.proxy.getViewport({
+    scale: 1,
+    rotation: page.rotation,
+  });
 
   return (
     <div
-      className="bg-muted relative flex min-h-44 w-full items-center justify-center overflow-hidden rounded-sm"
+      className="bg-muted flex min-h-44 w-full items-center justify-center overflow-hidden rounded-sm"
       ref={setContainer}
     >
       {shouldRender && (
-        <canvas
-          className="bg-card block h-auto max-h-64 w-full"
-          ref={setCanvas}
-        />
-      )}
-      {crop && (
         <div
-          className="border-primary pointer-events-none absolute border-2 shadow-[0_0_0_999px_rgb(0_0_0/0.42)]"
+          className="relative"
+          dir="ltr"
           style={{
-            height: `${crop.height * 100}%`,
-            insetInlineStart: `${crop.x * 100}%`,
-            top: `${cropTop}%`,
-            width: `${crop.width * 100}%`,
+            aspectRatio: `${display.width} / ${display.height}`,
+            width: `min(100%, calc(16rem * ${display.width / display.height}))`,
           }}
-        />
+        >
+          <canvas className="bg-card block size-full" ref={setCanvas} />
+          {crop && (
+            <div
+              className="border-primary pointer-events-none absolute border-2 shadow-[0_0_0_999px_rgb(0_0_0/0.42)]"
+              style={{
+                height: `${crop.height * 100}%`,
+                left: `${crop.x * 100}%`,
+                top: `${cropTop}%`,
+                width: `${crop.width * 100}%`,
+              }}
+            />
+          )}
+        </div>
       )}
     </div>
   );
@@ -462,6 +467,8 @@ type PageMoveOptions = {
 };
 
 type OrganizerPageCardProps = {
+  busyReason: string | undefined;
+  cleanScan: PageCleanScan | undefined;
   getDropDestination: (options: PageMoveOptions) => number | null;
   index: number;
   isBusy: boolean;
@@ -475,6 +482,8 @@ type OrganizerPageCardProps = {
 };
 
 const OrganizerPageCard = ({
+  busyReason,
+  cleanScan,
   getDropDestination,
   index,
   isBusy,
@@ -661,25 +670,28 @@ const OrganizerPageCard = ({
         dir="ltr"
       >
         <div className="absolute inset-x-2 top-2 z-10 flex items-center justify-between">
-          <label
-            className="bg-background/90 text-foreground flex size-11 cursor-pointer items-center justify-center rounded-md"
-            htmlFor={`pdf-page-select-${page.id}`}
-          >
-            <Checkbox
-              aria-label={tPageEditor("selectPage", {
-                number: pageNumber,
-              })}
-              checked={isSelected}
-              id={`pdf-page-select-${page.id}`}
-              onCheckedChange={() => onSelect(page.id, false, true)}
-            />
-          </label>
+          <div className="bg-background/90 rounded-md">
+            <Label
+              className="flex size-11 cursor-pointer justify-center"
+              htmlFor={`pdf-page-select-${page.id}`}
+            >
+              <Checkbox
+                aria-label={tPageEditor("selectPage", {
+                  number: pageNumber,
+                })}
+                checked={isSelected}
+                id={`pdf-page-select-${page.id}`}
+                onCheckedChange={() => onSelect(page.id, false, true)}
+              />
+            </Label>
+          </div>
           <Button
             aria-label={tPageEditor("reorderPage", {
               number: pageNumber,
             })}
             className="bg-background/90 text-foreground [:hover,[data-pressed]]:bg-background/90 size-11 cursor-grab"
             disabled={isBusy}
+            disabledReason={busyReason}
             onKeyDown={handleKeyDown}
             ref={setHandle}
             size="icon"
@@ -688,27 +700,107 @@ const OrganizerPageCard = ({
             <GripVerticalIcon />
           </Button>
         </div>
-        <button
+        <Button
           aria-pressed={isSelected}
-          className="focus-visible:ring-ring block w-full rounded-sm outline-none focus-visible:ring-2"
+          className="block w-full"
           onClick={(event) =>
             onSelect(page.id, event.shiftKey, event.metaKey || event.ctrlKey)
           }
-          type="button"
+          variant="plain"
         >
-          <PageThumbnail page={page} pageInfo={pageInfo} />
-        </button>
+          <PageThumbnail
+            cleanScan={cleanScan}
+            page={page}
+            pageInfo={pageInfo}
+          />
+        </Button>
         <div className="flex items-center justify-between gap-2 px-1 pt-2 text-xs">
           <span className="font-medium">{pageLabel}</span>
-          {page.rotation !== 0 && (
-            <span className="text-muted-foreground">
-              {format.number(page.rotation)}°
-            </span>
-          )}
+          <span className="text-muted-foreground flex items-center gap-2">
+            {cleanScan && <span>{tPageEditor("cleanScan.cleaned")}</span>}
+            {page.rotation !== 0 && (
+              <span>{format.number(page.rotation)}°</span>
+            )}
+          </span>
         </div>
       </article>
     </li>
   );
+};
+
+type PdfOrganizerDisabledReasonsOptions = {
+  isAddingPDF: boolean;
+  operation: EditorOperation;
+  selectionEmpty: boolean;
+  canSaveVersion: boolean;
+  isDirty: boolean;
+  tPageEditor: (
+    key:
+      | "addingPdf"
+      | "transforming"
+      | "selectPagesFirst"
+      | "versionPermissionRequired"
+      | "keepOnePage",
+  ) => string;
+  tCommon: (key: "saving" | "noChangesToSave") => string;
+  tHistory: (key: "nothingToUndo" | "nothingToRedo") => string;
+};
+
+const pdfOrganizerBusyReason = ({
+  isAddingPDF,
+  operation,
+  tPageEditor,
+  tCommon,
+}: Pick<
+  PdfOrganizerDisabledReasonsOptions,
+  "isAddingPDF" | "operation" | "tPageEditor" | "tCommon"
+>) => {
+  if (isAddingPDF) {
+    return tPageEditor("addingPdf");
+  }
+  switch (operation.type) {
+    case "transforming":
+      return tPageEditor("transforming");
+    case "uploading":
+      return tCommon("saving");
+    case "idle":
+      return undefined;
+    default:
+      operation satisfies never;
+      return panic("Unhandled page organizer operation");
+  }
+};
+
+const pdfOrganizerDisabledReasons = ({
+  isAddingPDF,
+  operation,
+  selectionEmpty,
+  canSaveVersion,
+  isDirty,
+  tPageEditor,
+  tCommon,
+  tHistory,
+}: PdfOrganizerDisabledReasonsOptions) => {
+  const busy = pdfOrganizerBusyReason({
+    isAddingPDF,
+    operation,
+    tPageEditor,
+    tCommon,
+  });
+  const select =
+    busy ?? (selectionEmpty ? tPageEditor("selectPagesFirst") : undefined);
+  const versionPermission = !canSaveVersion
+    ? tPageEditor("versionPermissionRequired")
+    : undefined;
+  return {
+    busy,
+    select,
+    delete: select ?? tPageEditor("keepOnePage"),
+    undo: busy ?? tHistory("nothingToUndo"),
+    redo: busy ?? tHistory("nothingToRedo"),
+    sign: busy ?? (isDirty ? versionPermission : undefined),
+    save: busy ?? versionPermission ?? tCommon("noChangesToSave"),
+  };
 };
 
 const LoadedPDFPageOrganizer = ({
@@ -719,11 +811,13 @@ const LoadedPDFPageOrganizer = ({
   matterColor,
   onClose,
   originalBytes,
+  pdfSign,
   sourceDocument,
   workspaceId,
 }: LoadedPDFPageOrganizerProps) => {
   const tCommon = useTranslations("common");
   const tErrors = useTranslations("errors");
+  const tHistory = useTranslations("legalReader.annotations.history");
   const tPageEditor = useTranslations("workspaces.pdf.pageEditor");
   const format = useFormatter();
   const hotkeyPlatform = useHydrationSafeHotkeyPlatform();
@@ -731,6 +825,9 @@ const LoadedPDFPageOrganizer = ({
   const queryClient = useQueryClient();
   const savedRef = useRef(false);
   const abortRef = useRef<AbortController | null>(null);
+  const uploadOwnerRef = useRef(createPageOrganizerUploadOwner());
+  const [operationOwner] = useState(() => createPageOrganizerOperationOwner());
+  const cleanScanAbortRef = useRef<AbortController | null>(null);
   const isMountedRef = useRef(true);
   const addedSourceDocumentsRef = useRef(new Set<PDFDocument>());
   const [addedSources, setAddedSources] = useState<AddedSource[]>([]);
@@ -750,11 +847,20 @@ const LoadedPDFPageOrganizer = ({
   const [operation, setOperation] = useState<EditorOperation>({ type: "idle" });
   const [isAddingPDF, setIsAddingPDF] = useState(false);
   const [isCropOpen, setIsCropOpen] = useState(false);
-  const [cropMargins, setCropMargins] = useState(EMPTY_CROP_MARGINS);
   const plan = state.history.present;
   const selectedIds = new Set(state.ui.selectedPageIds);
   const isDirty = isPageOrganizerDirty(state);
-  const isBusy = operation.type !== "idle" || isAddingPDF;
+  const reasons = pdfOrganizerDisabledReasons({
+    isAddingPDF,
+    operation,
+    selectionEmpty: selectedIds.size === 0,
+    canSaveVersion,
+    isDirty,
+    tPageEditor,
+    tCommon,
+    tHistory,
+  });
+  const isBusy = reasons.busy !== undefined;
   const navigationBlocker = useUnsavedWork({
     surface: "pdf-page-organizer",
     guard: "confirm-navigation",
@@ -765,14 +871,14 @@ const LoadedPDFPageOrganizer = ({
     maxPages: format.number(MAX_PAGE_EDITOR_PAGES),
     maxSources: format.number(MAX_PAGE_EDITOR_SOURCES),
   });
-  const pageInfoBySource = useMemo(() => {
+  const pageInfoBySource = (() => {
     const bySource = new Map<string, readonly PageInfo[]>();
     bySource.set(ORIGINAL_SOURCE_ID, [...sourceDocument.pages.values()]);
     for (const source of addedSources) {
       bySource.set(source.id, [...source.document.pages.values()]);
     }
     return bySource;
-  }, [addedSources, sourceDocument]);
+  })();
   const baseName = safePDFBaseName(fileName);
   const isUnsupported =
     sourceDocument.isXfa ||
@@ -780,15 +886,24 @@ const LoadedPDFPageOrganizer = ({
     sourceDocument.pages.size > MAX_PAGE_EDITOR_PAGES ||
     originalBytes.byteLength > MAX_PAGE_EDITOR_SOURCE_BYTES;
 
-  useMountEffect(() => () => {
-    isMountedRef.current = false;
-    abortRef.current?.abort();
-    for (const document of addedSourceDocumentsRef.current) {
-      detached(
-        destroyPDFDocument(document),
-        "pdf-page-organizer.destroy-added-source",
-      );
-    }
+  // React can unmount and remount effects while keeping this state (StrictMode
+  // in development), so the setup re-arms what the cleanup revokes.
+  useMountEffect(() => {
+    isMountedRef.current = true;
+    operationOwner.activate();
+    return () => {
+      isMountedRef.current = false;
+      operationOwner.revoke();
+      abortRef.current?.abort();
+      uploadOwnerRef.current.cancelCurrent();
+      cleanScanAbortRef.current?.abort();
+      for (const document of addedSourceDocumentsRef.current) {
+        detached(
+          destroyPDFDocument(document),
+          "pdf-page-organizer.destroy-added-source",
+        );
+      }
+    };
   });
 
   const dispatch = (action: Parameters<typeof reducePageOrganizer>[1]) => {
@@ -798,11 +913,19 @@ const LoadedPDFPageOrganizer = ({
   const pageInfoFor = (page: OrganizerPage): PageInfo | undefined =>
     pageInfoBySource.get(page.sourceId)?.at(page.sourcePageIndex);
 
-  const transform = async (requestedOutputs: string[][]) => {
+  const transform = async (
+    operationRequest: OrganizerOperationRequest,
+    requestedOutputs: string[][],
+  ) => {
+    const operationToken = operationRequest.operation;
+    if (!operationOwner.isCurrent(operationRequest)) {
+      return { type: "cancelled" } as const;
+    }
     const controller = new AbortController();
+    operationOwner.ownController(operationRequest, controller);
     abortRef.current = controller;
     setOperation({ type: "transforming" });
-    return await withCleanup(
+    const outputs = await withCleanup(
       async () =>
         transformPDFInWorker({
           sources: [
@@ -812,32 +935,53 @@ const LoadedPDFPageOrganizer = ({
               bytes: source.bytes,
             })),
           ],
-          pages: plan.pages,
+          pages: transformPagePlanEntries(state),
           outputs: requestedOutputs,
           signal: controller.signal,
+          operation: operationToken,
+          operationRequest,
+          isOperationCurrent: (candidate, request) =>
+            operationOwner.isLive(candidate) &&
+            operationOwner.isCurrent(request),
         }),
       () => {
-        abortRef.current = null;
-        setOperation({ type: "idle" });
+        operationOwner.releaseController(operationRequest, controller);
+        if (abortRef.current === controller) {
+          abortRef.current = null;
+          setOperation({ type: "idle" });
+        }
       },
     );
+    return operationOwner.isCurrent(operationRequest)
+      ? ({ type: "completed", outputs } as const)
+      : ({ type: "cancelled" } as const);
+  };
+
+  const reportOperationError = (error: unknown) => {
+    if (error instanceof DOMException && error.name === "AbortError") {
+      return;
+    }
+    analytics.captureError(error, {
+      fingerprintKey: "LoadedPDFPageOrganizer.runOperation:failure",
+      scope: {
+        type: "handler",
+        handlerId: "LoadedPDFPageOrganizer.runOperation:failure",
+      },
+    });
+    notifyUserError(error, tErrors("actionFailed"));
   };
 
   const runOperation = async (work: () => Promise<void>) => {
     try {
       await work();
     } catch (error: unknown) {
-      if (error instanceof DOMException && error.name === "AbortError") {
-        return;
-      }
-      analytics.captureError(error);
-      notifyUserError(error, tErrors("actionFailed"));
+      reportOperationError(error);
     }
   };
 
   const handleAddPDFs = async (files: File[]) => {
     if (1 + addedSources.length + files.length > MAX_PAGE_EDITOR_SOURCES) {
-      notifyUserError(undefined, documentLimitMessage);
+      notifyUserProblem(documentLimitMessage);
       return;
     }
     const totalBytes =
@@ -845,7 +989,7 @@ const LoadedPDFPageOrganizer = ({
       addedSources.reduce((sum, source) => sum + source.bytes.byteLength, 0) +
       files.reduce((sum, file) => sum + file.size, 0);
     if (totalBytes > MAX_PAGE_EDITOR_SOURCE_BYTES) {
-      notifyUserError(undefined, tPageEditor("sourceLimit"));
+      notifyUserProblem(tPageEditor("sourceLimit"));
       return;
     }
 
@@ -873,7 +1017,7 @@ const LoadedPDFPageOrganizer = ({
             dispatch({
               type: "appendSourcePages",
               pages: sourcePageInfos.map((pageInfo, sourcePageIndex) => ({
-                id: crypto.randomUUID(),
+                id: createUuid(),
                 sourceId: source.id,
                 sourcePageIndex,
                 rotation: normalizePDFRotation(pageInfo.proxy.rotate),
@@ -885,26 +1029,42 @@ const LoadedPDFPageOrganizer = ({
               return;
             }
             limitToastShown = true;
-            notifyUserError(undefined, documentLimitMessage);
+            notifyUserProblem(documentLimitMessage);
           },
           onUnsupported: () => {
-            notifyUserError(undefined, tPageEditor("unsupportedPDF"));
+            notifyUserProblem(tPageEditor("unsupportedPDF"));
           },
         }),
       () => setIsAddingPDF(false),
     );
   };
 
-  const handleSaveVersion = async () => {
-    const [bytes] = await transform([plan.pages.map((page) => page.id)]);
+  /** Upload the edited PDF as a new version; the caller closes the editor. */
+  const saveVersion = async (request: OrganizerOperationRequest) => {
+    const transformed = await transform(request, [
+      plan.pages.map((page) => page.id),
+    ]);
+    if (transformed.type === "cancelled") {
+      return transformed;
+    }
+    const [bytes] = transformed.outputs;
     if (!bytes) {
-      return;
+      return { type: "skipped" } as const;
+    }
+    if (!operationOwner.isCurrent(request)) {
+      return { type: "cancelled" } as const;
     }
     setOperation({ type: "uploading" });
     const uploadController = new AbortController();
+    operationOwner.ownController(request, uploadController);
     abortRef.current = uploadController;
-    await withCleanup(
+    const pendingUpload = uploadOwnerRef.current.begin(request);
+    return await withCleanup(
       async () => {
+        if (!operationOwner.isCurrent(request)) {
+          uploadOwnerRef.current.cancel(pendingUpload);
+          return { type: "cancelled" } as const;
+        }
         const uploadResult = await uploadEntityVersion({
           workspaceId,
           entityId,
@@ -915,12 +1075,24 @@ const LoadedPDFPageOrganizer = ({
           case ENTITY_VERSION_UPLOAD_RESULT.uploaded:
             break;
           case ENTITY_VERSION_UPLOAD_RESULT.cancelled:
-            return panic("Generated PDF version upload was cancelled");
+            uploadOwnerRef.current.cancel(pendingUpload);
+            return { type: "cancelled" } as const;
           default:
             uploadResult satisfies never;
             return panic(
               `Unhandled entity version upload: ${String(uploadResult)}`,
             );
+        }
+        const provisional = uploadOwnerRef.current.prepareCompletion(
+          pendingUpload,
+          uploadResult,
+        );
+        if (provisional.type !== "provisional") {
+          return provisional;
+        }
+        if (!operationOwner.isCurrent(request)) {
+          uploadOwnerRef.current.cancelCurrent();
+          return { type: "cancelled" } as const;
         }
         await Promise.all([
           queryClient.invalidateQueries({
@@ -928,19 +1100,209 @@ const LoadedPDFPageOrganizer = ({
           }),
           queryClient.invalidateQueries({ queryKey: filesKeys.all() }),
         ]);
+        if (!operationOwner.isCurrent(request)) {
+          uploadOwnerRef.current.cancelCurrent();
+          return { type: "cancelled" } as const;
+        }
+        const outcome = uploadOwnerRef.current.commit(provisional);
+        if (outcome.type !== "completed") {
+          return outcome;
+        }
         stellaToast.add({
           title: tPageEditor("versionSaved"),
           type: "success",
         });
         savedRef.current = true;
-        onClose();
-        return uploadResult.type;
+        return outcome;
       },
       () => {
-        abortRef.current = null;
-        setOperation({ type: "idle" });
+        operationOwner.releaseController(request, uploadController);
+        if (abortRef.current === uploadController) {
+          abortRef.current = null;
+          setOperation({ type: "idle" });
+        }
       },
     );
+  };
+
+  const handleSaveVersion = async () => {
+    const request = operationOwner.beginRequest(operationOwner.operation);
+    if (
+      (await saveVersion(request)).type === "completed" &&
+      operationOwner.isCurrent(request)
+    ) {
+      onClose();
+    }
+  };
+
+  /**
+   * Save the edits, then resolve that exact version from the upload receipt so the
+   * sign flow stamps and signs it rather than the version the editor opened.
+   */
+  const saveVersionForSigning = async (
+    request: OrganizerOperationRequest,
+    target: PdfSignTarget,
+  ): Promise<PdfSignTarget | null> => {
+    const result = await Result.tryPromise({
+      try: async () => {
+        const savedVersion = await saveVersion(request);
+        if (savedVersion.type !== "completed") {
+          return Result.ok(null);
+        }
+        const targetResult = await uploadOwnerRef.current.consume(
+          request,
+          operationOwner,
+          savedVersion,
+          async (upload) =>
+            await readSavedPdfSignTarget({
+              entityVersionId: upload.entityVersionId,
+              fileId: upload.fileId,
+              target,
+            }),
+        );
+        if (!operationOwner.isCurrent(request)) {
+          return Result.ok(null);
+        }
+        if (targetResult === null) {
+          return Result.err(
+            new ClientOperationError({
+              action: "sign-saved-pdf-version",
+              message: tPageEditor("signSavedVersionMissing"),
+            }),
+          );
+        }
+        return Result.ok(targetResult);
+      },
+      catch: (cause) => cause,
+    }).then(Result.flatten);
+    if (Result.isError(result)) {
+      reportOperationError(result.error);
+      return null;
+    }
+    return result.value;
+  };
+
+  const startCleanScan = (
+    pages: readonly OrganizerPage[],
+    options: ScanOptions,
+  ) => {
+    cleanScanAbortRef.current?.abort();
+    const controller = new AbortController();
+    cleanScanAbortRef.current = controller;
+    const runId = createUuid();
+    dispatch({
+      type: "startCleanScan",
+      runId,
+      pageIds: pages.map((page) => page.id),
+      options,
+    });
+    const runPages = pages.map((page) => {
+      const pageInfo = pageInfoFor(page);
+      if (!pageInfo) {
+        return panic("Clean scan page has no source");
+      }
+      return {
+        pageId: page.id,
+        proxy: pageInfo.proxy,
+        rotation: page.rotation,
+      };
+    });
+    const reportFailure = (failure: CleanScanFailure) => {
+      analytics.captureError(
+        new ClientOperationError({
+          action: "clean-scan-page",
+          message: `${failure.reason}: ${failure.message}`,
+        }),
+        {
+          fingerprintKey: "LoadedPDFPageOrganizer.cleanScan:failure",
+          scope: {
+            type: "handler",
+            handlerId: "LoadedPDFPageOrganizer.cleanScan:failure",
+          },
+        },
+      );
+      dispatch({ type: "cleanScanPageFailed", runId, failure });
+    };
+    detached(
+      (async () => {
+        const engine = await Result.tryPromise({
+          try: loadScanEngine,
+          catch: (cause) =>
+            cause instanceof Error
+              ? cause.message
+              : "The scan engine could not be loaded",
+        });
+        if (Result.isError(engine)) {
+          for (const page of runPages) {
+            reportFailure({
+              pageId: page.pageId,
+              reason: "engine-failure",
+              message: engine.error,
+            });
+          }
+          return;
+        }
+        await runCleanScan({
+          engine: engine.value,
+          options,
+          pages: runPages,
+          signal: controller.signal,
+          onFailed: reportFailure,
+          onReviewed: (review, geometry) => {
+            if (
+              review.type === "unrecognized" &&
+              !isKnownUnrecognizedReason(review.reason)
+            ) {
+              analytics.captureError(
+                new ClientOperationError({
+                  action: "clean-scan-page",
+                  message: `Unknown unrecognized reason: ${review.reason}`,
+                }),
+                {
+                  fingerprintKey:
+                    "LoadedPDFPageOrganizer.cleanScan:unrecognized",
+                  scope: {
+                    type: "handler",
+                    handlerId: "LoadedPDFPageOrganizer.cleanScan:unrecognized",
+                  },
+                },
+              );
+            }
+            dispatch({
+              type: "cleanScanPageReviewed",
+              runId,
+              review,
+              geometry,
+            });
+          },
+        });
+      })(),
+      "pdf-page-organizer.clean-scan",
+    );
+  };
+
+  const openCleanScan = () => {
+    const pages =
+      selectedIds.size > 0
+        ? plan.pages.filter((page) => selectedIds.has(page.id))
+        : plan.pages;
+    if (pages.length > MAX_CLEAN_SCAN_PAGES) {
+      notifyUserProblem(
+        tPageEditor("cleanScan.pageLimit", {
+          max: format.number(MAX_CLEAN_SCAN_PAGES),
+        }),
+      );
+      return;
+    }
+    startCleanScan(pages, DEFAULT_CLEAN_SCAN_OPTIONS);
+  };
+
+  const closeCleanScan = (outcome: "commit" | "cancel") => {
+    cleanScanAbortRef.current?.abort();
+    cleanScanAbortRef.current = null;
+    dispatch({
+      type: outcome === "commit" ? "commitCleanScan" : "cancelCleanScan",
+    });
   };
 
   const handleDownload = async () => {
@@ -950,11 +1312,22 @@ const LoadedPDFPageOrganizer = ({
             .filter((page) => selectedIds.has(page.id))
             .map((page) => page.id)
         : plan.pages.map((page) => page.id);
-    const [output] = await transform([pageIds]);
+    const request = operationOwner.beginRequest(operationOwner.operation);
+    const transformed = await transform(request, [pageIds]);
+    if (transformed.type === "cancelled") {
+      return;
+    }
+    const [output] = transformed.outputs;
     if (!output) {
       return;
     }
+    if (!operationOwner.isCurrent(request)) {
+      return;
+    }
     await authorizePDFOrganizerExport({ fieldId, workspaceId });
+    if (!operationOwner.isCurrent(request)) {
+      return;
+    }
     downloadOutput({
       baseName:
         selectedIds.size > 0 ? `${baseName} - selected pages` : baseName,
@@ -1000,12 +1373,21 @@ const LoadedPDFPageOrganizer = ({
     });
   };
 
-  const crop = cropFromMargins(cropMargins);
   const downloadLabel = tPageEditor(
     selectedIds.size > 0 ? "downloadSelectedPages" : "downloadCopy",
   );
   const allPagesSelected = selectedIds.size === plan.pages.length;
   const multiSelectModifier = hotkeyPlatform === "mac" ? "Cmd" : "Ctrl";
+  const cleanScanSession = state.cleanScan;
+  const cleanScanPageContexts = new Map<string, CleanScanPageContext>();
+  if (cleanScanSession !== null) {
+    for (const [index, page] of plan.pages.entries()) {
+      cleanScanPageContexts.set(page.id, {
+        pageNumber: format.number(index + 1),
+        rotation: page.rotation,
+      });
+    }
+  }
   const chromeStyle = {
     backgroundColor: matterTint(matterColor, MATTER_TINT_GROUND.content),
   };
@@ -1039,6 +1421,7 @@ const LoadedPDFPageOrganizer = ({
           <Button
             className="-ms-2"
             disabled={isBusy}
+            disabledReason={reasons.busy}
             onClick={() => dispatch({ type: "toggleSelectAll" })}
             size="sm"
             variant="ghost"
@@ -1049,6 +1432,7 @@ const LoadedPDFPageOrganizer = ({
           <Button
             aria-label={tPageEditor("rotateLeft")}
             disabled={selectedIds.size === 0 || isBusy}
+            disabledReason={reasons.select}
             onClick={() => dispatch({ type: "rotateSelected", degrees: -90 })}
             size="icon-sm"
             tooltip={tPageEditor("rotateLeft")}
@@ -1059,6 +1443,7 @@ const LoadedPDFPageOrganizer = ({
           <Button
             aria-label={tPageEditor("rotateRight")}
             disabled={selectedIds.size === 0 || isBusy}
+            disabledReason={reasons.select}
             onClick={() => dispatch({ type: "rotateSelected", degrees: 90 })}
             size="icon-sm"
             tooltip={tPageEditor("rotateRight")}
@@ -1069,6 +1454,7 @@ const LoadedPDFPageOrganizer = ({
           <Button
             aria-label={tPageEditor("crop")}
             disabled={selectedIds.size === 0 || isBusy}
+            disabledReason={reasons.select}
             onClick={() => setIsCropOpen(true)}
             size="icon-sm"
             tooltip={tPageEditor("crop")}
@@ -1077,21 +1463,33 @@ const LoadedPDFPageOrganizer = ({
             <CropIcon />
           </Button>
           <Button
+            disabled={isBusy}
+            disabledReason={reasons.busy}
+            onClick={openCleanScan}
+            size="sm"
+            tooltip={tPageEditor("cleanScan.scope", {
+              count: selectedIds.size,
+            })}
+            variant="ghost"
+          >
+            <ScanTextIcon />
+            {tPageEditor("cleanScan.heading")}
+          </Button>
+          <Button
             aria-label={tPageEditor("duplicate")}
             disabled={selectedIds.size === 0 || isBusy}
+            disabledReason={reasons.select}
             onClick={() =>
               dispatch({
                 type: "duplicateSelected",
-                newPageIds: state.ui.selectedPageIds.map(() =>
-                  crypto.randomUUID(),
-                ),
+                newPageIds: state.ui.selectedPageIds.map(() => createUuid()),
               })
             }
             size="icon-sm"
             tooltip={tPageEditor("duplicate")}
             variant="ghost"
           >
-            <CopyIcon />
+            <DuplicateIcon />
           </Button>
           <Button
             aria-label={tPageEditor("delete")}
@@ -1100,6 +1498,7 @@ const LoadedPDFPageOrganizer = ({
               selectedIds.size >= plan.pages.length ||
               isBusy
             }
+            disabledReason={reasons.delete}
             onClick={() => dispatch({ type: "deleteSelected" })}
             size="icon-sm"
             tooltip={tPageEditor("delete")}
@@ -1110,6 +1509,7 @@ const LoadedPDFPageOrganizer = ({
           <div className="ms-auto flex items-center gap-1">
             <Button
               disabled={isBusy}
+              disabledReason={reasons.busy}
               loading={isAddingPDF}
               onClick={() => {
                 openFilePicker({
@@ -1133,6 +1533,7 @@ const LoadedPDFPageOrganizer = ({
             <Button
               aria-label={tPageEditor("undo")}
               disabled={state.history.past.length === 0 || isBusy}
+              disabledReason={reasons.undo}
               onClick={() => dispatch({ type: "undo" })}
               size="icon-sm"
               tooltip={tPageEditor("undo")}
@@ -1143,6 +1544,7 @@ const LoadedPDFPageOrganizer = ({
             <Button
               aria-label={tPageEditor("redo")}
               disabled={state.history.future.length === 0 || isBusy}
+              disabledReason={reasons.redo}
               onClick={() => dispatch({ type: "redo" })}
               size="icon-sm"
               tooltip={tPageEditor("redo")}
@@ -1166,6 +1568,7 @@ const LoadedPDFPageOrganizer = ({
               }
               return (
                 <OrganizerPageCard
+                  cleanScan={pageCleanScan(state, page)}
                   getDropDestination={(options) =>
                     getPageMoveDestination({
                       ...options,
@@ -1173,6 +1576,7 @@ const LoadedPDFPageOrganizer = ({
                       selectedPageIds: state.ui.selectedPageIds,
                     })
                   }
+                  busyReason={reasons.busy}
                   index={index}
                   isBusy={isBusy}
                   isSelected={selectedIds.has(page.id)}
@@ -1220,10 +1624,13 @@ const LoadedPDFPageOrganizer = ({
       >
         <p className="text-muted-foreground me-auto flex max-w-2xl items-start gap-2 text-xs">
           <TriangleAlertIcon className="mt-0.5 size-3.5 shrink-0" />
-          {tPageEditor("signatureWarning")}
+          {tPageEditor(
+            pdfSign === null ? "signatureWarning" : "signatureWarningWithSign",
+          )}
         </p>
         <Button
           disabled={isBusy}
+          disabledReason={reasons.busy}
           onClick={() => {
             detached(
               runOperation(handleDownload),
@@ -1236,8 +1643,25 @@ const LoadedPDFPageOrganizer = ({
           <DownloadIcon />
           {downloadLabel}
         </Button>
+        {pdfSign !== null && (
+          <PageOrganizerSignAction
+            closeEditor={onClose}
+            disabled={isBusy || (isDirty && !canSaveVersion)}
+            disabledReason={reasons.sign}
+            isDirty={isDirty}
+            beginRequest={(operationToken) =>
+              operationOwner.beginRequest(operationToken)
+            }
+            operation={operationOwner.operation}
+            saveVersion={async (request) =>
+              await saveVersionForSigning(request, pdfSign.target)
+            }
+            sign={pdfSign}
+          />
+        )}
         <Button
           disabled={!canSaveVersion || !isDirty || isBusy}
+          disabledReason={reasons.save}
           loading={operation.type !== "idle"}
           onClick={() => {
             detached(
@@ -1253,66 +1677,64 @@ const LoadedPDFPageOrganizer = ({
       </footer>
 
       <Dialog onOpenChange={setIsCropOpen} open={isCropOpen}>
-        <DialogPopup>
-          <DialogHeader>
-            <DialogTitle>{tPageEditor("cropTitle")}</DialogTitle>
-            <DialogDescription>
-              {tPageEditor("cropDescription", {
-                count: selectedIds.size,
-              })}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="grid grid-cols-2 gap-4 px-6 pb-6">
-            {(["top", "right", "bottom", "left"] as const).map((side) => (
-              <div className="space-y-1.5" key={side}>
-                <Label htmlFor={`pdf-crop-${side}`}>
-                  {tPageEditor(CROP_LABEL_KEYS[side])}
-                </Label>
-                <Input
-                  id={`pdf-crop-${side}`}
-                  inputMode="decimal"
-                  min="0"
-                  onChange={(event) =>
-                    setCropMargins((current) => ({
-                      ...current,
-                      [side]: event.target.value,
-                    }))
-                  }
-                  step="0.5"
-                  type="number"
-                  value={cropMargins[side]}
-                />
-              </div>
-            ))}
-          </div>
-          <DialogFooter>
-            <Button
+        <DialogPopup className="max-w-3xl">
+          {isCropOpen && (
+            <PageOrganizerCrop
               disabled={isBusy}
-              onClick={() => {
-                dispatch({ type: "setCrop", crop: null });
-                setCropMargins(EMPTY_CROP_MARGINS);
+              disabledReason={reasons.busy}
+              pages={plan.pages
+                .filter((page) => selectedIds.has(page.id))
+                .map((page) => {
+                  const pageInfo = pageInfoFor(page);
+                  if (!pageInfo) {
+                    return panic("Selected crop page has no source");
+                  }
+                  return { page, pageInfo };
+                })}
+              onApply={(crops) => {
+                dispatch({ type: "setPageCrops", crops });
                 setIsCropOpen(false);
               }}
-              variant="ghost"
-            >
-              {tPageEditor("resetCrop")}
-            </Button>
-            <DialogClose render={<Button variant="outline" />}>
-              {tCommon("cancel")}
-            </DialogClose>
-            <Button
-              disabled={crop === null || isBusy}
-              onClick={() => {
-                if (!crop) {
-                  return;
-                }
-                dispatch({ type: "setCrop", crop });
+              onReset={() => {
+                dispatch({
+                  type: "setPageCrops",
+                  crops: new Map(
+                    state.ui.selectedPageIds.map((id) => [id, null]),
+                  ),
+                });
                 setIsCropOpen(false);
               }}
-            >
-              {tPageEditor("applyCrop")}
-            </Button>
-          </DialogFooter>
+            />
+          )}
+        </DialogPopup>
+      </Dialog>
+
+      <Dialog
+        onOpenChange={(open) => {
+          if (!open) {
+            closeCleanScan("cancel");
+          }
+        }}
+        open={cleanScanSession !== null}
+      >
+        <DialogPopup className="max-w-4xl">
+          {cleanScanSession !== null && (
+            <PageOrganizerCleanScan
+              onAction={dispatch}
+              onCommit={() => closeCleanScan("commit")}
+              onOptionsChange={(options) => {
+                const reviewed = new Set(
+                  cleanScanSession.review.pages.map((page) => page.pageId),
+                );
+                startCleanScan(
+                  plan.pages.filter((page) => reviewed.has(page.id)),
+                  options,
+                );
+              }}
+              pages={cleanScanPageContexts}
+              session={cleanScanSession}
+            />
+          )}
         </DialogPopup>
       </Dialog>
 
@@ -1337,6 +1759,7 @@ const LoadedPDFPageOrganizer = ({
             </AlertDialogClose>
             <Button
               disabled={isBusy}
+              disabledReason={reasons.busy}
               onClick={() => {
                 if (navigationBlocker.status === "blocked") {
                   navigationBlocker.proceed();
@@ -1359,6 +1782,7 @@ export const PDFPageOrganizer = ({
   fieldId,
   fileName,
   onClose,
+  pdfSign,
   workspaceId,
 }: PDFPageOrganizerProps) => {
   const providerDocument = usePDFStore((state) => state.document);
@@ -1367,7 +1791,7 @@ export const PDFPageOrganizer = ({
   );
   const { data: workspace } = useSuspenseQuery(workspaceOptions(workspaceId));
   const { data: sourceDocumentResult } = usePDFDocument({
-    key: { fileId: fieldId },
+    key: { fileId: fieldId, pageSource: "portfolio" },
     context: { buffer: originalFile.buffer },
   });
   const sourceDocument = resolveOrganizerSourceDocument({
@@ -1377,6 +1801,7 @@ export const PDFPageOrganizer = ({
 
   return (
     <LoadedPDFPageOrganizer
+      key={`${workspaceId}:${entityId}:${fieldId}`}
       canSaveVersion={canSaveVersion}
       entityId={entityId}
       fieldId={fieldId}
@@ -1384,6 +1809,7 @@ export const PDFPageOrganizer = ({
       matterColor={resolveMatterColor(workspaceId, workspace.color ?? null)}
       onClose={onClose}
       originalBytes={originalFile.buffer}
+      pdfSign={pdfSign}
       sourceDocument={sourceDocument}
       workspaceId={workspaceId}
     />

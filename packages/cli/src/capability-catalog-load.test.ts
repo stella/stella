@@ -3,6 +3,8 @@ import { describe, expect, test } from "bun:test";
 import { readCapabilityCatalog } from "./capability-catalog-data.js";
 import { parseCapabilityCatalog } from "./capability-catalog-load.js";
 
+const repositoryCapabilityCatalog = readCapabilityCatalog();
+
 // `parseCapabilityCatalog` is the trust boundary between the committed catalog
 // snapshot (produced api-side) and both consumers: build-time codegen (which
 // panics on `null`) and the runtime registry-refresh path (which falls back to
@@ -25,6 +27,40 @@ const validEntry = (
 });
 
 describe("parseCapabilityCatalog fail-closed parsing", () => {
+  test("preserves declared receipt replay and rejects unknown replay policies", () => {
+    const parsed = parseCapabilityCatalog([
+      validEntry({ idempotency: { type: "replay" } }),
+    ]);
+    expect(parsed?.at(0)?.idempotency).toEqual({ type: "replay" });
+    for (const idempotency of [true, "replay", {}, { type: "best-effort" }]) {
+      expect(parseCapabilityCatalog([validEntry({ idempotency })])).toBeNull();
+    }
+  });
+
+  test("preserves deployment ownership independently from caller feature access", () => {
+    expect(
+      parseCapabilityCatalog([validEntry({ feature: "FEATURE_EXAMPLE" })]),
+    ).toEqual([
+      {
+        id: "matters.list",
+        handlerKind: "workspace",
+        access: "read",
+        destructive: false,
+        scope: "stella:read",
+        inputSchema: {},
+        transport: { type: "json" },
+        feature: "FEATURE_EXAMPLE",
+      },
+    ]);
+  });
+
+  test.each(["", "x".repeat(129), 42, null])(
+    "rejects malformed deployment ownership %j",
+    (feature) => {
+      expect(parseCapabilityCatalog([validEntry({ feature })])).toBeNull();
+    },
+  );
+
   test("returns null for values that are not an array", () => {
     expect(parseCapabilityCatalog(null)).toBeNull();
     expect(parseCapabilityCatalog(undefined)).toBeNull();
@@ -234,15 +270,15 @@ describe("parseCapabilityCatalog fail-closed parsing", () => {
 });
 
 // The committed snapshot's ids are PUBLIC: they become CLI command paths and are
-// passed verbatim to MCP's `invoke_capability`. The api-side exporter enforces
+// passed verbatim to MCP's capability executors. The api-side exporter enforces
 // the shape at derivation time; this asserts it on the artifact the CLI actually
 // ships, so a hand-edited or stale snapshot cannot reintroduce an id whose final
 // segment is an internal handler identifier (e.g. `deleteWorkspaceFooEntry`).
 const CAPABILITY_ID_SEGMENT_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/u;
 
-describe("committed capability-catalog snapshot", () => {
+describe("generated capability-catalog snapshot", () => {
   test("every id is dotted lowercase kebab-case", async () => {
-    const catalog = parseCapabilityCatalog(readCapabilityCatalog());
+    const catalog = parseCapabilityCatalog(repositoryCapabilityCatalog);
     if (catalog === null) {
       throw new TypeError("Invalid capability catalog");
     }

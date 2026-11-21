@@ -8,10 +8,27 @@ import type {
   TokenUsage,
 } from "@tanstack/ai";
 import { panic } from "better-result";
+import * as v from "valibot";
 
+import {
+  REQUEST_SECRET_TOOL_NAME,
+  requestSecretInputSchema,
+} from "@stll/api-contract/chat-secret";
+import type { RequestSecretInput } from "@stll/api-contract/chat-secret";
 import { Temporal } from "@stll/time";
 
 import { isMockAI } from "@/api/consts";
+import {
+  MOCK_AI_CANCELLATION_MARKER,
+  MOCK_AI_CONTINUOUS_MARKER,
+  mockAiCancellationChunks,
+  mockAiCancellationSignal,
+  mockAiContinuousChunks,
+} from "@/api/dev/mock-ai-cancellation";
+import {
+  mockClaimGrades,
+  mockExtractedClaims,
+} from "@/api/dev/mock-ai-list-verification";
 import {
   mockAiStreamKindChunks,
   mockAiStreamKindOf,
@@ -54,12 +71,6 @@ const MOCK_REPLY =
   "law, and liability caps are the provisions that differ most. Ask a " +
   "follow-up to open any of them at the cited passage.";
 
-// A user message containing this marker makes the mock adapter stream its
-// reply as many small delayed chunks instead of one instant chunk, giving an
-// e2e spec a real streaming window to hold open (e.g. to type into the
-// composer while a response is still arriving).
-const E2E_SLOW_STREAM_MARKER = "Stream slowly please";
-
 // A user message containing this marker makes the mock adapter finish the run
 // with zero output — the shape of a real provider empty completion — so specs
 // can exercise the server's ChatEmptyCompletionError path (stream-chat.ts) and
@@ -75,6 +86,18 @@ const EMPTY_COMPLETION_DELAY_MS = 1500;
 // continuation already holds the question, so this exercises the server's
 // empty-answer check on a message that is not itself empty.
 const E2E_EMPTY_CONTINUATION_MARKER = "Ask me, then answer with nothing please";
+
+// The mock pauses on the same private request card used in a normal turn.
+const E2E_REQUEST_SECRET_MARKER =
+  "Request a private connector credential please";
+const E2E_PRIVATE_INPUT_REQUEST = v.parse(requestSecretInputSchema, {
+  purpose: "Authenticate the sample connector",
+  kind: "token",
+  target: {
+    type: "mcp-connector",
+    connectorSlug: "fixture-private-connector",
+  },
+}) satisfies RequestSecretInput;
 
 const E2E_ASK_USER_ARGUMENTS = {
   analysis: "The answer depends on the side the user represents.",
@@ -121,21 +144,6 @@ const E2E_STREAMED_CREATE_DOCUMENT_SOURCE =
       "[[Receiving Party]] keeps the Confidential Information of " +
       "[[Disclosing Party]] secret and uses it only for the Purpose.\n",
   ).join("")}@signatures\nparty: [[Party A]]\nparty: [[Party B]]\n`;
-
-const SLOW_STREAM_REPLY =
-  "This mock reply streams back in many small pieces instead of arriving all " +
-  "at once, so an end to end test has a real window while the assistant is " +
-  "still responding. Each small piece lands only after a short delay, giving " +
-  "the interface time to re-render before the whole message finally finishes " +
-  "and the run completes for the test to inspect.";
-
-// Word-ish deltas (each chunk keeps its trailing whitespace so the deltas
-// concatenate back into SLOW_STREAM_REPLY exactly).
-const SLOW_STREAM_CHUNKS = SLOW_STREAM_REPLY.match(/\S+\s*/gu) ?? [
-  SLOW_STREAM_REPLY,
-];
-
-const SLOW_STREAM_CHUNK_DELAY_MS = 100;
 
 const mockUsage: TokenUsage = {
   promptTokens: 1,
@@ -269,6 +277,70 @@ function* emptyContinuationChunks({
   };
 }
 
+type RequestSecretPhase = "call" | "reply" | null;
+
+const resolveRequestSecretPhase = ({
+  latestUserText,
+  messages,
+}: {
+  latestUserText: string;
+  messages: ModelMessage[];
+}): RequestSecretPhase => {
+  if (!latestUserText.includes(E2E_REQUEST_SECRET_MARKER)) {
+    return null;
+  }
+  return messages.at(-1)?.role === "tool" ? "reply" : "call";
+};
+
+type RequestSecretCallChunksOptions = {
+  messageId: string;
+  model: string;
+  runId: string;
+  threadId: string;
+  timestamp: number;
+};
+
+function* requestSecretCallChunks({
+  messageId,
+  model,
+  runId,
+  threadId,
+  timestamp,
+}: RequestSecretCallChunksOptions): Generator<AdapterYieldChunk> {
+  const toolCallId = "mock-request-secret-call";
+  yield {
+    type: EventType.TEXT_MESSAGE_START,
+    messageId,
+    role: "assistant",
+    model,
+    timestamp,
+  };
+  yield {
+    type: EventType.TOOL_CALL_START,
+    toolCallId,
+    toolCallName: REQUEST_SECRET_TOOL_NAME,
+    parentMessageId: messageId,
+    timestamp,
+  };
+  yield {
+    type: EventType.TOOL_CALL_ARGS,
+    toolCallId,
+    delta: JSON.stringify(E2E_PRIVATE_INPUT_REQUEST),
+    model,
+    timestamp,
+  };
+  yield { type: EventType.TOOL_CALL_END, toolCallId, timestamp };
+  yield {
+    type: EventType.RUN_FINISHED,
+    runId,
+    threadId,
+    model,
+    timestamp,
+    finishReason: "tool_calls",
+    usage: mockUsage,
+  };
+}
+
 type CreateDocumentCallChunksOptions = {
   messageId: string;
   model: string;
@@ -354,7 +426,7 @@ async function* createDocumentCallChunks({
   };
 }
 
-const createMockTextAdapter = (modelId: string): AnyTextAdapter => ({
+export const createMockTextAdapter = (modelId: string): AnyTextAdapter => ({
   kind: "text",
   name: "mock",
   model: modelId,
@@ -366,17 +438,21 @@ const createMockTextAdapter = (modelId: string): AnyTextAdapter => ({
     toolCallMetadata: {},
     systemPromptMetadata: undefined,
   },
-  async *chatStream({ model, runId, threadId, messages }) {
+  async *chatStream(options) {
+    const { model, runId, threadId, messages } = options;
     logger.debug("mock_ai.turn_answered", { "ai.model": model });
     const resolvedRunId = runId ?? "mock-run";
-    const resolvedThreadId = threadId ?? "mock-thread";
+    const resolvedThreadId = threadId;
     const messageId = "mock-message";
     const timestamp = Temporal.Now.instant().epochMilliseconds;
     const latestUserText = getLatestUserText(messages);
-    const slowStream = latestUserText.includes(E2E_SLOW_STREAM_MARKER);
     // The continuation after the client posted the draft result ends with a
     // tool message; only the first turn of the marker prompt calls the tool.
     const createDocumentPhase = resolveCreateDocumentPhase({
+      latestUserText,
+      messages,
+    });
+    const requestSecretPhase = resolveRequestSecretPhase({
       latestUserText,
       messages,
     });
@@ -419,6 +495,50 @@ const createMockTextAdapter = (modelId: string): AnyTextAdapter => ({
       return;
     }
 
+    if (requestSecretPhase === "call") {
+      yield* requestSecretCallChunks({
+        messageId,
+        model,
+        runId: resolvedRunId,
+        threadId: resolvedThreadId,
+        timestamp,
+      });
+      return;
+    }
+
+    if (requestSecretPhase === "reply") {
+      yield {
+        type: EventType.TEXT_MESSAGE_START,
+        messageId,
+        role: "assistant",
+        model,
+        timestamp,
+      } satisfies AdapterYieldChunk;
+      yield {
+        type: EventType.TEXT_MESSAGE_CONTENT,
+        messageId,
+        delta: "Done.",
+        model,
+        timestamp,
+      } satisfies AdapterYieldChunk;
+      yield {
+        type: EventType.TEXT_MESSAGE_END,
+        messageId,
+        model,
+        timestamp,
+      } satisfies AdapterYieldChunk;
+      yield {
+        type: EventType.RUN_FINISHED,
+        runId: resolvedRunId,
+        threadId: resolvedThreadId,
+        model,
+        timestamp,
+        finishReason: "stop",
+        usage: mockUsage,
+      } satisfies AdapterYieldChunk;
+      return;
+    }
+
     if (latestUserText.includes(E2E_EMPTY_CONTINUATION_MARKER)) {
       yield* emptyContinuationChunks({
         answered: messages.at(-1)?.role === "tool",
@@ -457,8 +577,10 @@ const createMockTextAdapter = (modelId: string): AnyTextAdapter => ({
       timestamp,
     } satisfies AdapterYieldChunk;
 
-    if (slowStream) {
-      for (const delta of SLOW_STREAM_CHUNKS) {
+    if (latestUserText.includes(MOCK_AI_CANCELLATION_MARKER)) {
+      for await (const delta of mockAiCancellationChunks(
+        mockAiCancellationSignal(options),
+      )) {
         yield {
           type: EventType.TEXT_MESSAGE_CONTENT,
           messageId,
@@ -466,7 +588,18 @@ const createMockTextAdapter = (modelId: string): AnyTextAdapter => ({
           model,
           timestamp,
         } satisfies AdapterYieldChunk;
-        await Bun.sleep(SLOW_STREAM_CHUNK_DELAY_MS);
+      }
+    } else if (latestUserText.includes(MOCK_AI_CONTINUOUS_MARKER)) {
+      for await (const delta of mockAiContinuousChunks(
+        mockAiCancellationSignal(options),
+      )) {
+        yield {
+          type: EventType.TEXT_MESSAGE_CONTENT,
+          messageId,
+          delta,
+          model,
+          timestamp,
+        } satisfies AdapterYieldChunk;
       }
     } else {
       yield {
@@ -497,9 +630,9 @@ const createMockTextAdapter = (modelId: string): AnyTextAdapter => ({
       usage: mockUsage,
     } satisfies AdapterYieldChunk;
   },
-  structuredOutput: async ({ outputSchema }) => {
+  structuredOutput: async ({ outputSchema, chatOptions }) => {
     await Promise.resolve();
-    const data = mockStructuredData(outputSchema);
+    const data = mockStructuredData(outputSchema, chatOptions.messages);
     return {
       data,
       rawText: JSON.stringify(data),
@@ -513,7 +646,7 @@ const createMockTextAdapter = (modelId: string): AnyTextAdapter => ({
 // schema validity. Every other structured-output caller falls through to
 // `synthesizeJsonSchemaObject`, which walks the JSON schema TanStack hands the
 // adapter (already converted from the caller's Valibot schema, see
-// `generateTanStackObjectForRole` in tanstack-ai-generate.ts) and builds the
+// `generateTanStackObjectForTask` in tanstack-ai-generate.ts) and builds the
 // minimal value that satisfies it. Returning `{}` here previously passed
 // schema validation to the caller's `v.parse`, which throws on any missing
 // required field — every new structured-output feature was born broken
@@ -626,10 +759,208 @@ const TMPL_SUPPLY_PREFILL_FIXTURE: {
   },
 ];
 
+// lists.generation.extract-facts (apps/api/src/lib/lists/generation/
+// fact-extract.ts). The worker keeps only facts whose quote it can find in
+// the block the fact names, so a fixed answer would ground nothing in a real
+// document. This one quotes the opening sentence of the prose blocks it is
+// asked about and states the fact that sentence supports, in a reviewer's
+// words, with the date the sentence gives. A sentence no rule recognises
+// proposes nothing, so a fact never cites a passage about something else.
+// A person's account is held as contested, so a run shows included and held
+// facts with sources.
+const MOCK_FACTS_PER_WINDOW = 3;
+const MOCK_QUOTE_MAX = 200;
+// A heading or a label is not a passage a fact can rest on.
+const MOCK_QUOTE_MIN = 40;
+
+const MONTHS = [
+  "january",
+  "february",
+  "march",
+  "april",
+  "may",
+  "june",
+  "july",
+  "august",
+  "september",
+  "october",
+  "november",
+  "december",
+];
+
+/** The first date a sentence states, as YYYY-MM-DD or YYYY, else null. */
+const mockDateIn = (sentence: string) => {
+  const day =
+    /\b(?<day>\d{1,2}) (?<month>[A-Z][a-z]+) (?<year>(?:19|20)\d{2})\b/u.exec(
+      sentence,
+    )?.groups;
+  const month = MONTHS.indexOf(day?.["month"]?.toLowerCase() ?? "");
+  if (day?.["day"] !== undefined && day["year"] !== undefined && month !== -1) {
+    return `${day["year"]}-${String(month + 1).padStart(2, "0")}-${day["day"].padStart(2, "0")}`;
+  }
+  return /\b(?:19|20)\d{2}\b/u.exec(sentence)?.[0] ?? null;
+};
+
+type MockFactRule = {
+  matches: RegExp;
+  fact: string;
+  kind: "document" | "testimony";
+  medium: string;
+};
+
+// Checked in order; the first rule a sentence matches states its fact.
+const MOCK_FACT_RULES: readonly MockFactRule[] = [
+  {
+    matches: /\b(?:said|says|told|recalls?|stated)\b/iu,
+    fact: "A witness describes the decision as settled.",
+    kind: "testimony",
+    medium: "Witness statement",
+  },
+  {
+    matches: /\bboard\b.*\bapprov/iu,
+    fact: "The board approved the decision.",
+    kind: "document",
+    medium: "Board minutes",
+  },
+  {
+    matches: /\bentered into\b/iu,
+    fact: "The parties concluded the agreement.",
+    kind: "document",
+    medium: "Contract",
+  },
+  {
+    matches: /\bterminat/iu,
+    fact: "Either party may end the agreement on written notice.",
+    kind: "document",
+    medium: "Contract",
+  },
+  {
+    matches: /\binsurance\b/iu,
+    fact: "The supplier must keep product liability insurance in place.",
+    kind: "document",
+    medium: "Contract",
+  },
+  {
+    matches: /\bliabilit.*\b(?:exceed|cap)/iu,
+    fact: "The supplier's total liability is capped at the annual fees.",
+    kind: "document",
+    medium: "Contract",
+  },
+  {
+    matches: /\b(?:excludes or limits|death or personal injury)\b/iu,
+    fact: "Liability for death, personal injury and fraud is not limited.",
+    kind: "document",
+    medium: "Contract",
+  },
+  {
+    matches: /\b(?:payment|invoices?|shall pay)\b/iu,
+    fact: "The agreement sets when and how payment falls due.",
+    kind: "document",
+    medium: "Contract",
+  },
+  {
+    matches: /\bdeliver/iu,
+    fact: "The supplier delivers on the agreed schedule.",
+    kind: "document",
+    medium: "Contract",
+  },
+  {
+    matches: /\bconfidential/iu,
+    fact: "The parties must keep the terms confidential.",
+    kind: "document",
+    medium: "Contract",
+  },
+  {
+    matches: /\bgoverned by\b/iu,
+    fact: "The agreement names the law that governs it.",
+    kind: "document",
+    medium: "Contract",
+  },
+];
+
+// A heading ("NEGOTIATION DRAFT v4") is mostly capitals; prose is not.
+const isMostlyLowercase = (text: string) => {
+  const letters = text.match(/\p{L}/gu)?.length ?? 0;
+  const lower = text.match(/\p{Ll}/gu)?.length ?? 0;
+  return letters > 0 && lower / letters > 0.5;
+};
+
+const mockExtractedFacts = (messages: readonly ModelMessage[]) => {
+  const request = getLatestUserText([...messages]);
+  const askedList = /List the facts in these blocks only: (?<ids>.+)$/mu.exec(
+    request,
+  )?.groups?.["ids"];
+  const asked = askedList === undefined ? [] : askedList.split(", ");
+  const blockText = new Map<string, string>();
+  for (const line of request.split("\n")) {
+    const block = /^\[(?<id>[^\]]+)\] (?<text>.+)$/u.exec(line)?.groups;
+    if (block?.["id"] !== undefined && block["text"] !== undefined) {
+      blockText.set(block["id"], block["text"]);
+    }
+  }
+  return asked
+    .flatMap((blockId) => {
+      const sentence = (blockText.get(blockId) ?? "")
+        .split(/(?<=[.!?])\s/u)
+        .at(0)
+        ?.trim()
+        .slice(0, MOCK_QUOTE_MAX);
+      if (
+        sentence === undefined ||
+        sentence.length < MOCK_QUOTE_MIN ||
+        !isMostlyLowercase(sentence)
+      ) {
+        return [];
+      }
+      const rule = MOCK_FACT_RULES.find(({ matches }) =>
+        matches.test(sentence),
+      );
+      return rule === undefined ? [] : [{ blockId, sentence, rule }];
+    })
+    .slice(0, MOCK_FACTS_PER_WINDOW)
+    .map(({ blockId, sentence, rule }) => ({
+      blockId,
+      quote: sentence,
+      fact: rule.fact,
+      occurredOn: mockDateIn(sentence),
+      evidenceKind: rule.kind,
+      medium: rule.medium,
+      confidence: rule.kind === "testimony" ? "medium" : "high",
+      contestedMeaning:
+        rule.kind === "testimony"
+          ? "An account of what was said, not a record of the decision."
+          : null,
+    }));
+};
+
 export const mockStructuredData = (
   outputSchema: unknown,
+  messages: readonly ModelMessage[] = [],
 ): Record<string, unknown> => {
   const properties = jsonSchemaProperties(outputSchema);
+
+  // lists.generation.extract-facts — answered from the request (see above).
+  if (
+    "facts" in properties &&
+    JSON.stringify(properties["facts"]).includes("contestedMeaning")
+  ) {
+    return { facts: mockExtractedFacts(messages) };
+  }
+
+  // lists.verification.extract and lists.verification.grade — answered from
+  // the request (apps/api/src/dev/mock-ai-list-verification.ts).
+  if (
+    "claims" in properties &&
+    JSON.stringify(properties["claims"]).includes("framing")
+  ) {
+    return { claims: mockExtractedClaims(getLatestUserText([...messages])) };
+  }
+  if (
+    "grades" in properties &&
+    JSON.stringify(properties["grades"]).includes("qualifiers")
+  ) {
+    return { grades: mockClaimGrades(getLatestUserText([...messages])) };
+  }
 
   // playbook.verdict — tier-match. Return a plain "deviation" with no `matched`
   // so the object is valid regardless of whether the prompt listed fallbacks.
@@ -904,7 +1235,7 @@ const synthesizeJsonSchemaArray = (node: JsonSchemaNode): unknown[] => {
   );
 };
 
-if (isMockAI()) {
+export const registerMockAI = () => {
   registerBatchGenerator(generateBatchMock);
   registerTanStackMockTextAdapterFactory(createMockTextAdapter);
   logger.warn("mock_ai.enabled", {
@@ -914,4 +1245,8 @@ if (isMockAI()) {
         ? "every AI request gets a canned reply, organization keys included"
         : "AI requests get canned replies unless the organization configured its own key",
   });
+};
+
+if (isMockAI()) {
+  registerMockAI();
 }

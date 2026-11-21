@@ -3,9 +3,9 @@ import path from "node:path";
 
 import {
   batchModuleMockTests,
+  type ModuleMockTest,
   readModuleMockMetadata,
   resolveModuleSpecifier,
-  type ModuleMockTest,
 } from "./module-mock-batching";
 
 type ModuleMockTestOptions = {

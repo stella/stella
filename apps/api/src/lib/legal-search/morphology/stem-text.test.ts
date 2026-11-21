@@ -1,5 +1,7 @@
 import { expect, test } from "bun:test";
 
+import { normalizeUnicode } from "@stll/text-normalize";
+
 import { corpusTokens } from "@/api/lib/legal-search/corpus-tokens";
 import {
   corpusMorphologyLanguage,
@@ -78,7 +80,7 @@ test("decomposed text stems exactly like its precomposed spelling", () => {
   // each stemming to itself and matching nothing. Extracted text arrives in
   // whatever form its producer used, and NFD is common from PDFs and macOS.
   const precomposed = "Nájemního bytu se to netýká.";
-  const decomposed = precomposed.normalize("NFD");
+  const decomposed = normalizeUnicode(precomposed, "NFD");
 
   expect(decomposed).not.toBe(precomposed);
   expect(stemCorpusText(decomposed, "cs")).toBe(

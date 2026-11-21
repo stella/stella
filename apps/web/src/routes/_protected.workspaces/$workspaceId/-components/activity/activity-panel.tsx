@@ -2,7 +2,6 @@ import {
   createContext,
   Suspense,
   use,
-  useCallback,
   useDeferredValue,
   useState,
 } from "react";
@@ -28,20 +27,23 @@ import {
   ComboboxList,
   ComboboxPopup,
 } from "@stll/ui/combobox";
+import { DetailsGrid, DetailsItem } from "@stll/ui/details-grid";
 import {
-  BotIcon,
+  AiActionIcon,
   ChevronDownIcon,
   Clock3Icon,
   DownloadIcon,
-  LanguagesIcon,
   LandmarkIcon,
+  LanguagesIcon,
   ListChecksIcon,
-  ListIcon,
   ListFilterIcon,
+  ListIcon,
   MailIcon,
   UsersIcon,
   WorkflowIcon,
 } from "@stll/ui/icons";
+import { Label } from "@stll/ui/label";
+import { MatterIcon } from "@stll/ui/matter-icon";
 import {
   Menu,
   MenuItem,
@@ -51,6 +53,10 @@ import {
   MenuTrigger,
 } from "@stll/ui/menu";
 import { Popover, PopoverPanel, PopoverTrigger } from "@stll/ui/popover";
+import {
+  fadeScrollEdges,
+  SCROLL_EDGE_FADE_CLASS,
+} from "@stll/ui/scroll-edge-fade";
 import { SegmentedIconToggle } from "@stll/ui/segmented-icon-toggle";
 import {
   Select,
@@ -70,13 +76,21 @@ import {
   SheetTitle,
 } from "@stll/ui/sheet";
 import { Skeleton } from "@stll/ui/skeleton";
+import {
+  Table,
+  TableBody,
+  TableCaption,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@stll/ui/table";
 import { cn } from "@stll/ui/utils";
 
-import { DatePickerPopover } from "@/components/date-picker-popover";
+import { DateRangeFilter } from "@/components/date-range-filter";
 import { DocumentIcon } from "@/components/document-icon";
 import { FileThumbnail } from "@/components/file-thumbnail";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
-import { MatterIcon } from "@/components/matter-icon";
 import { PersonMentionLabel } from "@/components/person-mention-label";
 import Tooltip from "@/components/tooltip";
 import { EntityKindIcon } from "@/components/workspaces/entity-kind-icon";
@@ -100,33 +114,35 @@ import {
   exportOverviewActivity,
   MATTER_ACTIVITY_ACTIONS,
   MATTER_ACTIVITY_CATEGORIES,
-  overviewActivityActorsOptions,
-  overviewActivityOptions,
-  type MatterActivityActor,
   type MatterActivityAction,
+  type MatterActivityActor,
   type MatterActivityCategory,
   type MatterActivityFilters,
   type MatterActivityItem,
+  overviewActivityActorsOptions,
+  overviewActivityOptions,
 } from "@/lib/workspaces/queries";
 
 import type { ActivityGroup } from "./activity-panel.logic";
 import {
   activityDayKey,
+  CHANGED_FIELD_LABEL_KEYS,
   expandActivityGroupsForList,
   groupActivityItems,
-  resolveVisibleActivityTriggerType,
   resolveSelectedActivityGroup,
+  resolveVisibleActivityTriggerType,
   ROW_ACTION_LABEL_KEYS,
   TARGET_LABEL_KEYS,
-  toSingleActivityGroup,
-  toMatterActivityDateRange,
   toMatterActivityDatePickerValues,
+  toMatterActivityDateRange,
+  toSingleActivityGroup,
 } from "./activity-panel.logic";
+import { HorizontalTodayMarker } from "./activity-today-marker";
 
 type ActivityPanelProps = { workspaceId: string };
 
 /** The matter whose activity is shown; file thumbnails are served per matter. */
-const ActivityWorkspaceContext = createContext<string | null>(null);
+export const ActivityWorkspaceContext = createContext<string | null>(null);
 
 type ActivityDay = [ActivityGroup, ...ActivityGroup[]];
 type ActivityViewMode = "timeline" | "list";
@@ -382,12 +398,9 @@ const ActivityAdvancedFilters = ({
       </PopoverTrigger>
       <PopoverPanel align="end" className="w-80">
         <div className="space-y-1.5">
-          <label
-            className="text-muted-foreground text-xs font-medium"
-            htmlFor="matter-activity-action"
-          >
+          <Label htmlFor="matter-activity-action" variant="muted">
             {t("common.actions")}
-          </label>
+          </Label>
           <Select<MatterActivityAction>
             onValueChange={(action) => {
               if (action) {
@@ -413,12 +426,9 @@ const ActivityAdvancedFilters = ({
           </Select>
         </div>
         <div className="space-y-1.5">
-          <label
-            className="text-muted-foreground text-xs font-medium"
-            htmlFor="matter-activity-actor"
-          >
+          <Label htmlFor="matter-activity-actor" variant="muted">
             {t("workspaces.overview.activity.list.actor")}
-          </label>
+          </Label>
           <Combobox<MatterActivityActor>
             filter={null}
             items={actors}
@@ -456,12 +466,19 @@ const ActivityAdvancedFilters = ({
                 <Button
                   className="m-1 min-h-11"
                   disabled={actorsQuery.isFetchingNextPage}
+                  disabledReason={t("common.loading")}
                   onClick={() => {
                     const request = actorsQuery
                       .fetchNextPage()
                       .then((result) => {
                         if (result.isError) {
-                          getAnalytics().captureError(result.error);
+                          getAnalytics().captureError(result.error, {
+                            fingerprintKey: "ActivityAdvancedFilters:failure",
+                            scope: {
+                              type: "handler",
+                              handlerId: "ActivityAdvancedFilters:failure",
+                            },
+                          });
                           notifyUserError(
                             result.error,
                             t("errors.actionFailed"),
@@ -476,7 +493,13 @@ const ActivityAdvancedFilters = ({
                         return result;
                       })
                       .catch((error: unknown) => {
-                        getAnalytics().captureError(error);
+                        getAnalytics().captureError(error, {
+                          fingerprintKey: "ActivityAdvancedFilters:failure-2",
+                          scope: {
+                            type: "handler",
+                            handlerId: "ActivityAdvancedFilters:failure-2",
+                          },
+                        });
                         notifyUserError(error, t("errors.actionFailed"), {
                           description: userErrorFromThrown(
                             error,
@@ -497,41 +520,18 @@ const ActivityAdvancedFilters = ({
             </ComboboxPopup>
           </Combobox>
         </div>
-        <div className="grid grid-cols-2 gap-2">
-          <div className="space-y-1.5">
-            <span
-              className="text-muted-foreground block text-xs font-medium"
-              id="matter-activity-from-label"
-            >
-              {t("workspaces.filters.from")}
-            </span>
-            <DatePickerPopover
-              id="matter-activity-from"
-              labelledBy="matter-activity-from-label"
-              {...(toDate === null ? {} : { maxDate: toDate })}
-              onChange={onFromDateChange}
-              value={fromDate}
-            />
-          </div>
-          <div className="space-y-1.5">
-            <span
-              className="text-muted-foreground block text-xs font-medium"
-              id="matter-activity-to-label"
-            >
-              {t("workspaces.filters.to")}
-            </span>
-            <DatePickerPopover
-              id="matter-activity-to"
-              labelledBy="matter-activity-to-label"
-              {...(fromDate === null ? {} : { minDate: fromDate })}
-              onChange={onToDateChange}
-              value={toDate}
-            />
-          </div>
-        </div>
+        <DateRangeFilter
+          from={fromDate}
+          to={toDate}
+          fromLabel={t("workspaces.filters.from")}
+          toLabel={t("workspaces.filters.to")}
+          onFromChange={onFromDateChange}
+          onToChange={onToDateChange}
+        />
         <Button
           className="w-full"
           disabled={activeFilterCount === 0 && filters.category === "all"}
+          disabledReason={t("common.noFiltersToClear")}
           onClick={() => {
             onFromDateChange(null);
             onToDateChange(null);
@@ -571,7 +571,10 @@ const ActivityExportMenu = ({
     });
     setExporting(false);
     if (Result.isError(result)) {
-      getAnalytics().captureError(result.error);
+      getAnalytics().captureError(result.error, {
+        fingerprintKey: "ActivityExportMenu.exportActivity:failure",
+        scope: { type: "handler", handlerId: `activity-export.${format}` },
+      });
       notifyUserError(
         result.error,
         APIError.is(result.error) && result.error.status === 413
@@ -604,7 +607,10 @@ const ActivityExportMenu = ({
   const startExport = (format: "csv" | "json") => {
     detached(
       exportActivity(format).catch((error: unknown) => {
-        getAnalytics().captureError(error);
+        getAnalytics().captureError(error, {
+          fingerprintKey: "ActivityExportMenu.startExport:failure",
+          scope: { type: "handler", handlerId: `activity-export.${format}` },
+        });
         notifyUserError(error, t("workspaces.views.exportFailed"));
       }),
       "activity-panel.export",
@@ -646,9 +652,13 @@ const ActivityTimeline = ({
   workspaceId: string;
 }) => {
   const t = useTranslations();
-  const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
+  const user = useAuthenticatedUser();
   const query = useSuspenseInfiniteQuery(
-    overviewActivityOptions({ activeOrganizationId, filters, workspaceId }),
+    overviewActivityOptions({
+      viewer: { userId: user.id, organizationId: user.activeOrganizationId },
+      filters,
+      workspaceId,
+    }),
   );
   const items = query.data.pages.flatMap((page) => page.items);
   const groups = groupActivityItems(items);
@@ -665,7 +675,13 @@ const ActivityTimeline = ({
           // The resolved error result reaches the user through the same toast
           // as a rejection, so it is captured here too; the `.catch` below only
           // sees a rejected request.
-          getAnalytics().captureError(result.error);
+          getAnalytics().captureError(result.error, {
+            fingerprintKey: "ActivityTimeline.loadEarlier:failure",
+            scope: {
+              type: "handler",
+              handlerId: "ActivityTimeline.loadEarlier:failure",
+            },
+          });
           notifyUserError(result.error, t("errors.actionFailed"), {
             description: userErrorFromThrown(
               result.error,
@@ -676,7 +692,13 @@ const ActivityTimeline = ({
         return result;
       })
       .catch((error: unknown) => {
-        getAnalytics().captureError(error);
+        getAnalytics().captureError(error, {
+          fingerprintKey: "ActivityTimeline.loadEarlier:failure-2",
+          scope: {
+            type: "handler",
+            handlerId: "ActivityTimeline.loadEarlier:failure-2",
+          },
+        });
         notifyUserError(error, t("errors.actionFailed"), {
           description: userErrorFromThrown(error, t("common.unexpectedError")),
         });
@@ -780,7 +802,7 @@ const observeActivityIntersection = ({
 }: ObserveActivityIntersectionOptions) => {
   const observer = new IntersectionObserver(
     (entries) => {
-      if (!entries.at(0)?.isIntersecting) {
+      if (!entries.at(-1)?.isIntersecting) {
         return;
       }
       observer.disconnect();
@@ -800,23 +822,20 @@ const ActivityLoadSentinel = ({
 }: ActivityLoadSentinelProps) => {
   const t = useTranslations();
   const loadEarlier = useLatestCallback(onLoadEarlier);
-  const sentinelRef = useCallback(
-    (node: HTMLSpanElement | null) => {
-      if (!node || hasError || isFetching) {
-        return undefined;
-      }
-      const root = horizontal ? node.closest("[data-activity-scroll]") : null;
-      if (horizontal && !root) {
-        return undefined;
-      }
-      return observeActivityIntersection({
-        node,
-        onIntersect: loadEarlier,
-        root,
-      });
-    },
-    [hasError, horizontal, isFetching, loadEarlier],
-  );
+  const sentinelRef = (node: HTMLSpanElement | null) => {
+    if (!node || hasError || isFetching) {
+      return undefined;
+    }
+    const root = horizontal ? node.closest("[data-activity-scroll]") : null;
+    if (horizontal && !root) {
+      return undefined;
+    }
+    return observeActivityIntersection({
+      node,
+      onIntersect: loadEarlier,
+      root,
+    });
+  };
 
   if (hasError) {
     return (
@@ -825,6 +844,7 @@ const ActivityLoadSentinel = ({
           horizontal ? "mx-4 min-h-11 shrink-0 self-end" : "m-2 min-h-11",
         )}
         disabled={isFetching}
+        disabledReason={t("workspaces.overview.activity.loading")}
         onClick={loadEarlier}
         size="sm"
         variant="ghost"
@@ -929,8 +949,12 @@ const HorizontalTimeline = ({
   onSelectGroup: (group: ActivityGroup) => void;
 }) => (
   <div
-    className="hidden overflow-x-auto overscroll-x-contain md:block"
+    className={cn(
+      "hidden overflow-x-auto overscroll-x-contain [--fade-size:2.5rem] md:block",
+      SCROLL_EDGE_FADE_CLASS,
+    )}
     data-activity-scroll=""
+    ref={fadeScrollEdges}
   >
     <div className="flex min-w-max snap-x snap-proximity flex-row-reverse px-5 pt-4 pb-5">
       <HorizontalTodayMarker />
@@ -966,22 +990,6 @@ const HorizontalTimeline = ({
   </div>
 );
 
-const HorizontalTodayMarker = () => {
-  const t = useTranslations();
-  return (
-    <div className="w-20 shrink-0 snap-end">
-      <div className="h-5" />
-      <div className="text-destructive text-2xs mt-1 h-4 text-end font-medium">
-        {t("common.today")}
-      </div>
-      <div aria-hidden="true" className="relative mt-2 h-3">
-        <span className="bg-border absolute start-0 end-0 top-1/2 h-px" />
-        <span className="bg-destructive absolute end-0 top-0 h-3 w-px" />
-      </div>
-    </div>
-  );
-};
-
 const HorizontalActivityMilestone = ({
   dateAt,
   group,
@@ -998,20 +1006,22 @@ const HorizontalActivityMilestone = ({
   if (group.type !== "automation_run") {
     return (
       <HorizontalMilestoneFrame activityAt={first.activityAt} dateAt={dateAt}>
-        <button
-          className="hover:bg-muted/40 -ms-2 flex min-h-11 w-[calc(100%+0.5rem)] items-start rounded-md px-2 py-1 text-start"
+        <Button
+          className="-ms-2 block w-[calc(100%+0.5rem)]"
           onClick={() => onSelectGroup(group)}
-          type="button"
+          variant="plain"
         >
-          <ActivityTriplet detail="provenance" group={group} size="compact" />
-        </button>
+          <span className="hover:bg-muted/40 flex min-h-11 w-full items-start rounded-md px-2 py-1">
+            <ActivityTriplet detail="provenance" group={group} size="compact" />
+          </span>
+        </Button>
       </HorizontalMilestoneFrame>
     );
   }
 
   const marker =
     first.performer.type === "agent" ? (
-      <BotIcon className="size-4" />
+      <AiActionIcon className="size-4" />
     ) : (
       <WorkflowIcon className="size-4" />
     );
@@ -1095,13 +1105,15 @@ const HorizontalRunActivityItem = ({
   item: MatterActivityItem;
   onSelectGroup: (group: ActivityGroup) => void;
 }) => (
-  <button
-    className="hover:bg-muted/40 -ms-2 flex min-h-11 w-[calc(100%+0.5rem)] items-center rounded-md px-2 text-start"
+  <Button
+    className="-ms-2 block w-[calc(100%+0.5rem)]"
     onClick={() => onSelectGroup(toSingleActivityGroup(item))}
-    type="button"
+    variant="plain"
   >
-    <ActivityTriplet group={toSingleActivityGroup(item)} size="compact" />
-  </button>
+    <span className="hover:bg-muted/40 flex min-h-11 w-full items-center rounded-md px-2">
+      <ActivityTriplet group={toSingleActivityGroup(item)} size="compact" />
+    </span>
+  </Button>
 );
 
 const ActivityRunRow = ({
@@ -1122,7 +1134,7 @@ const ActivityRunRow = ({
     resolveVisibleActivityTriggerType(first.trigger.type) !== null;
   const marker =
     first.performer.type === "agent" ? (
-      <BotIcon className="size-3.5" />
+      <AiActionIcon className="size-3.5" />
     ) : (
       <WorkflowIcon className="size-3.5" />
     );
@@ -1230,13 +1242,15 @@ const RunActivityItem = ({
   item: MatterActivityItem;
   onSelectGroup: (group: ActivityGroup) => void;
 }) => (
-  <button
-    className="hover:bg-muted/40 -ms-2 flex min-h-11 w-[calc(100%+0.5rem)] items-center rounded-md px-2 text-start"
+  <Button
+    className="-ms-2 block w-[calc(100%+0.5rem)]"
     onClick={() => onSelectGroup(toSingleActivityGroup(item))}
-    type="button"
+    variant="plain"
   >
-    <ActivityTriplet group={toSingleActivityGroup(item)} size="default" />
-  </button>
+    <span className="hover:bg-muted/40 flex min-h-11 w-full items-center rounded-md px-2">
+      <ActivityTriplet group={toSingleActivityGroup(item)} size="default" />
+    </span>
+  </Button>
 );
 
 const RunCount = ({ count }: { count: number }) => {
@@ -1256,13 +1270,15 @@ const ActivityItemRow = ({
 
   return (
     <TimelineEntry activityAt={item.activityAt} marker={icon}>
-      <button
-        className="hover:bg-muted/40 flex min-h-11 w-full items-center rounded-md py-2 ps-3 pe-4 text-start"
+      <Button
+        className="block w-full"
         onClick={() => onSelectGroup(group)}
-        type="button"
+        variant="plain"
       >
-        <ActivityTriplet detail="provenance" group={group} size="default" />
-      </button>
+        <span className="hover:bg-muted/40 flex min-h-11 w-full items-center rounded-md py-2 ps-3 pe-4">
+          <ActivityTriplet detail="provenance" group={group} size="default" />
+        </span>
+      </Button>
     </TimelineEntry>
   );
 };
@@ -1279,86 +1295,109 @@ const ActivityList = ({
   const listGroups = expandActivityGroupsForList(groups);
   return (
     <div className="overflow-x-auto">
-      <table className="w-full border-collapse text-start">
-        <caption className="sr-only">
+      <Table inset="card" scroll="parent">
+        <TableCaption className="sr-only">
           {t("workspaces.overview.activity.title")}
-        </caption>
-        <thead className="sr-only md:not-sr-only">
-          <tr className="text-muted-foreground text-2xs border-b font-medium">
-            <th className="w-40 px-4 py-2 text-start font-medium" scope="col">
+        </TableCaption>
+        <TableHeader className="sr-only md:not-sr-only">
+          <TableRow>
+            <TableHead className="w-40" scope="col">
               {t("workspaces.overview.activity.list.dateTime")}
-            </th>
-            <th className="w-48 px-4 py-2 text-start font-medium" scope="col">
+            </TableHead>
+            <TableHead className="w-48" scope="col">
               {t("workspaces.overview.activity.list.actor")}
-            </th>
-            <th className="px-4 py-2 text-start font-medium" scope="col">
+            </TableHead>
+            <TableHead scope="col">
               {t("common.itemTypeValues.event")}
-            </th>
-            <th className="w-56 px-4 py-2 text-start font-medium" scope="col">
+            </TableHead>
+            <TableHead className="w-56" scope="col">
               {t("workspaces.overview.activity.list.provenance")}
-            </th>
-          </tr>
-        </thead>
-        <tbody className="block md:table-row-group">
+            </TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody className="block md:table-row-group">
           {listGroups.map((group) => {
             const item = group.items[0];
             const showProvenance =
               resolveVisibleActivityTriggerType(item.trigger.type) !== null;
             return (
-              <tr
-                className="group grid grid-cols-2 border-b last:border-b-0 md:table-row"
+              <TableRow
+                className="group grid grid-cols-2 md:table-row"
                 key={group.id}
               >
-                <td className="px-4 pt-3 align-middle md:table-cell md:py-2.5">
-                  <time
-                    className="text-muted-foreground text-xs tabular-nums"
-                    dateTime={item.activityAt}
-                  >
-                    {format.dateTime(
-                      Temporal.Instant.from(item.activityAt).epochMilliseconds,
-                      MEDIUM_DATE_SHORT_TIME_FORMAT,
-                    )}
-                  </time>
-                </td>
-                <td className="min-w-0 px-4 pt-3 text-end align-middle text-sm md:table-cell md:py-2.5 md:text-start">
-                  <Performer item={item} />
-                </td>
-                <td className="col-span-2 min-w-0 p-0 align-middle text-sm leading-5 md:table-cell">
-                  <button
-                    className="hover:bg-muted/40 focus-visible:bg-muted/40 min-h-14 w-full px-4 py-2.5 text-start"
+                {/* Below md the row is a two-column card: the date and the
+                    performer open it and the provenance closes it, so their
+                    padding differs by breakpoint and lives inside the cell. */}
+                <TableCell className="md:table-cell" flush>
+                  <div className="px-4 pt-3 md:py-2.5">
+                    <time
+                      className="text-muted-foreground text-xs tabular-nums"
+                      dateTime={item.activityAt}
+                    >
+                      {format.dateTime(
+                        Temporal.Instant.from(item.activityAt)
+                          .epochMilliseconds,
+                        MEDIUM_DATE_SHORT_TIME_FORMAT,
+                      )}
+                    </time>
+                  </div>
+                </TableCell>
+                <TableCell
+                  className="min-w-0 text-end whitespace-normal md:table-cell md:text-start"
+                  flush
+                >
+                  <div className="px-4 pt-3 md:py-2.5">
+                    <Performer item={item} />
+                  </div>
+                </TableCell>
+                <TableCell
+                  className="col-span-2 min-w-0 whitespace-normal md:table-cell"
+                  flush
+                >
+                  <Button
+                    className="block w-full"
+                    focusRing="inside"
                     onClick={() => onSelectGroup(group)}
-                    type="button"
+                    variant="plain"
                   >
-                    <span className="block">
-                      <ActivityAction group={group} />
-                    </span>
-                    <span className="mt-1 grid grid-cols-[1.25rem_minmax(0,1fr)] items-start gap-x-1.5 font-medium">
-                      <span className="flex size-5 items-center justify-center">
-                        {activityGroupTargetIcon(group)}
+                    <span className="hover:bg-muted/40 in-focus-visible:bg-muted/40 block min-h-14 w-full px-4 py-2.5 text-sm leading-5">
+                      <span className="block">
+                        <ActivityAction group={group} />
                       </span>
-                      <BidiText as="span">
-                        <ActivityGroupTargetName group={group} />
-                      </BidiText>
-                      <ActivityTargetThumbnail
-                        className="col-start-2 mt-1.5 size-10"
-                        group={group}
-                      />
+                      <span className="mt-1 grid grid-cols-[1.25rem_minmax(0,1fr)] items-start gap-x-1.5 font-medium">
+                        <span className="flex size-5 items-center justify-center">
+                          {activityGroupTargetIcon(group)}
+                        </span>
+                        <BidiText as="span">
+                          <ActivityGroupTargetName group={group} />
+                        </BidiText>
+                        <ActivityTargetThumbnail
+                          className="col-start-2 mt-1.5 size-10"
+                          group={group}
+                        />
+                      </span>
                     </span>
-                  </button>
-                </td>
-                <td className="text-muted-foreground col-span-2 min-w-0 px-4 pb-3 align-middle text-xs leading-4 md:table-cell md:py-2.5">
-                  {showProvenance ? <TriggerDetail item={item} /> : null}
-                </td>
-              </tr>
+                  </Button>
+                </TableCell>
+                <TableCell
+                  className="col-span-2 min-w-0 whitespace-normal md:table-cell"
+                  flush
+                  tone="muted"
+                >
+                  <div className="px-4 pb-3 text-xs leading-4 md:py-2.5">
+                    {showProvenance ? <TriggerDetail item={item} /> : null}
+                  </div>
+                </TableCell>
+              </TableRow>
             );
           })}
-        </tbody>
-      </table>
+        </TableBody>
+      </Table>
     </div>
   );
 };
 
-const ActivityDetailsSheet = ({
+export const ActivityDetailsSheet = ({
   group,
   onOpenChange,
   workspaceId,
@@ -1431,13 +1470,6 @@ const ActivityDetailsSheet = ({
                               MEDIUM_DATE_SHORT_TIME_FORMAT,
                             )}
                           </time>
-                          <span aria-hidden="true"> · </span>
-                          {t(
-                            "workspaces.overview.activity.details.eventId",
-                          )}:{" "}
-                          <BidiText as="span" className="break-all">
-                            {batchItem.id}
-                          </BidiText>
                         </span>
                       </span>
                     </>
@@ -1453,17 +1485,19 @@ const ActivityDetailsSheet = ({
                     );
                   }
                   return (
-                    <button
-                      className="hover:bg-muted -ms-2 grid min-h-11 w-[calc(100%+0.5rem)] grid-cols-[1.25rem_minmax(0,1fr)] items-center gap-x-1.5 rounded-md px-2 py-1 text-start"
+                    <Button
+                      className="-ms-2 block w-[calc(100%+0.5rem)]"
                       key={batchItem.id}
                       onClick={() => {
                         onOpenChange(false);
                         batchOpenTarget();
                       }}
-                      type="button"
+                      variant="plain"
                     >
-                      {content}
-                    </button>
+                      <span className="hover:bg-muted grid min-h-11 w-full grid-cols-[1.25rem_minmax(0,1fr)] items-center gap-x-1.5 rounded-md px-2 py-1">
+                        {content}
+                      </span>
+                    </Button>
                   );
                 })}
               </div>
@@ -1503,10 +1537,6 @@ const ActivityDetailsSheet = ({
           },
         ]
       : []),
-    {
-      label: t("workspaces.overview.activity.details.eventId"),
-      value: <BidiText as="span">{item.id}</BidiText>,
-    },
   ];
 
   return (
@@ -1521,16 +1551,13 @@ const ActivityDetailsSheet = ({
           </SheetDescription>
         </SheetHeader>
         <SheetPanel>
-          <dl className="divide-y">
+          <DetailsGrid>
             {rows.map((row) => (
-              <div className="grid gap-1 py-3" key={row.label}>
-                <dt className="text-muted-foreground text-xs font-medium">
-                  {row.label}
-                </dt>
-                <dd className="min-w-0 text-sm wrap-break-word">{row.value}</dd>
-              </div>
+              <DetailsItem key={row.label} label={row.label}>
+                {row.value}
+              </DetailsItem>
             ))}
-          </dl>
+          </DetailsGrid>
         </SheetPanel>
         <SheetFooter>
           <SheetClose render={<Button variant="ghost" />}>
@@ -1619,7 +1646,7 @@ const Performer = ({ item }: { item: MatterActivityItem }) => {
     >
       <span className="flex size-5 items-center justify-center">
         {item.performer.type === "agent" ? (
-          <BotIcon className="size-3.5" />
+          <AiActionIcon className="size-3.5" />
         ) : (
           <WorkflowIcon className="size-3.5" />
         )}
@@ -1707,7 +1734,7 @@ const PerformerCells = ({ item }: { item: MatterActivityItem }) => {
     <>
       <span className="flex size-5 items-center justify-center">
         {item.performer.type === "agent" ? (
-          <BotIcon className="size-3.5" />
+          <AiActionIcon className="size-3.5" />
         ) : (
           <WorkflowIcon className="size-3.5" />
         )}
@@ -1773,7 +1800,50 @@ const ActivityAction = ({ group }: { group: ActivityGroup }) => {
   if (item.target.kind === "documentReviewRun" && item.action === "execute") {
     return t("workspaces.overview.activity.documentReview.started");
   }
-  return t(ROW_ACTION_LABEL_KEYS[item.action]);
+  if (item.detail.type !== "none") {
+    return <ActivityDetailAction detail={item.detail} />;
+  }
+  if (item.action !== "update") {
+    return t(ROW_ACTION_LABEL_KEYS[item.action]);
+  }
+  const changedFields = [
+    ...new Set(group.items.flatMap((activity) => activity.changedFields)),
+  ];
+  if (changedFields.length === 0) {
+    return t(ROW_ACTION_LABEL_KEYS[item.action]);
+  }
+  return t("workspaces.overview.activity.updatedFields", {
+    fields: changedFields
+      .map((field) => t(CHANGED_FIELD_LABEL_KEYS[field]))
+      .join(", "),
+  });
+};
+
+const ActivityDetailAction = ({
+  detail,
+}: {
+  detail: Exclude<MatterActivityItem["detail"], { type: "none" }>;
+}) => {
+  const t = useTranslations();
+  if (detail.type === "version") {
+    const version = String(detail.versionNumber);
+    return detail.change === "added"
+      ? t("workspaces.overview.activity.versions.added", { version })
+      : t("workspaces.overview.activity.versions.deleted", { version });
+  }
+  const name = detail.linkedName;
+  if (name === null) {
+    return detail.change === "added"
+      ? t("workspaces.overview.activity.taskLinks.addedUnnamed")
+      : t("workspaces.overview.activity.taskLinks.removedUnnamed");
+  }
+  return detail.change === "added"
+    ? t("workspaces.overview.activity.taskLinks.added", {
+        name: isolateBidi(name),
+      })
+    : t("workspaces.overview.activity.taskLinks.removed", {
+        name: isolateBidi(name),
+      });
 };
 
 const TargetName = ({ item }: { item: MatterActivityItem }) => {

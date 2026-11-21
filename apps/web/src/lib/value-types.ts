@@ -10,6 +10,7 @@
  * starts consistent.
  */
 
+import type { PropertyContentType } from "@stll/api-contract";
 import {
   AlignLeftIcon,
   CalendarIcon,
@@ -24,13 +25,7 @@ import type { LucideIcon } from "@stll/ui/icons";
 import type { TranslationKey } from "@/i18n/types";
 
 export type ValueTypeKind =
-  | "text"
-  | "number"
-  | "boolean"
-  | "date"
-  | "select"
-  | "multiSelect"
-  | "company";
+  "text" | "number" | "boolean" | "date" | "select" | "multiSelect" | "company";
 
 export type ValueTypeMeta = {
   icon: LucideIcon;
@@ -70,7 +65,10 @@ const CONTENT_TYPE_KIND = {
   date: "date",
   "single-select": "select",
   "multi-select": "multiSelect",
-} as const satisfies Record<string, ValueTypeKind>;
+} as const satisfies Record<
+  Exclude<PropertyContentType, "file" | "money" | "person" | "record">,
+  ValueTypeKind
+>;
 
 export const contentTypeValueKind = (
   contentType: keyof typeof CONTENT_TYPE_KIND,

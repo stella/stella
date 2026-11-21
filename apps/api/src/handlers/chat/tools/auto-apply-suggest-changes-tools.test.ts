@@ -1,17 +1,25 @@
 import { Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
+import type { SQL } from "drizzle-orm";
+import { PgDialect } from "drizzle-orm/pg-core";
+import type { SelectedFields } from "drizzle-orm/pg-core";
 
+import { markdownToStellaDocx } from "@stll/docx-authoring/markdown";
 import {
   FolioDocxReviewer,
   isFolioAIContentBlock,
 } from "@stll/folio-core/server";
 
 import {
+  entities,
   entityVersions,
   fields,
   fileChatThreads,
   pendingUploads,
+  searchProjectionRepairQueue,
+  workspaces,
 } from "@/api/db/schema";
+import { createMockDatabase } from "@/api/db/sql-client";
 import { envBase } from "@/api/env-base";
 import {
   createAutoApplySuggestChangesTools as createAutoApplySuggestChangesToolsWithDependencies,
@@ -21,7 +29,7 @@ import type { CreateAutoApplySuggestChangesToolsProps } from "@/api/handlers/cha
 import { SUGGEST_CHANGES_TOOL_NAME } from "@/api/handlers/chat/tools/folio-agent-tools";
 import type { SafeId } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
-import { markdownToStellaDocx } from "@/api/lib/docx-authoring/from-markdown";
+import { CALLER_AUTHORIZED } from "@/api/lib/entities/buffer-write-authority";
 import { createEntityVersionFromBuffer as createEntityVersionFromBufferWithDependencies } from "@/api/lib/entity-versions/create-entity-version-from-buffer";
 import type { CreateEntityVersionFromBufferDependencies } from "@/api/lib/entity-versions/create-entity-version-from-buffer";
 import { writeFileVersion } from "@/api/lib/entity-versions/write-file-version";
@@ -31,13 +39,28 @@ import { allocateFileObject } from "@/api/lib/files/file-object-ids";
 import { createFileKey } from "@/api/lib/files/utils";
 import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
 import { createRootScopedDb } from "@/api/lib/root-scoped-db";
+import { enqueueEntitySearchRepairs } from "@/api/lib/search/projection-repair-queue";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 import { memberDocumentWriteAccess } from "@/api/tests/helpers/document-write-access";
 import { entityVersionInsertResult } from "@/api/tests/helpers/entity-version-insert-mock";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
-import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
+import {
+  createScopedDbMock,
+  createSelectQueryMock,
+} from "@/api/tests/scoped-db-mock";
+
+beforeEach(() => {
+  broadcastMock.mockClear();
+  computeVersionDiffStatsMock.mockClear();
+  enqueueImageThumbnailOrMarkFailedMock.mockClear();
+  enqueuePdfDerivativeOrMarkFailedMock.mockClear();
+  flushEntitySearchRepairsMock.mockClear();
+  processExtractionMock.mockClear();
+  requestNativeExtractionRunMock.mockClear();
+  scanFileMock.mockClear();
+});
 
 const processExtractionMock = mock(async () => {});
 const enqueueImageThumbnailOrMarkFailedMock = mock(async () => {});
@@ -45,6 +68,10 @@ const enqueuePdfDerivativeOrMarkFailedMock = mock(async () => {});
 const computeVersionDiffStatsMock = mock(async () => {});
 const broadcastMock = mock(() => {});
 const requestNativeExtractionRunMock = mock(async () => null);
+const flushEntitySearchRepairsMock = mock(async () => ({
+  failed: 0,
+  repaired: 0,
+}));
 let fileScanResult: ScanResult = { verdict: "pass", findings: [] };
 const scanFileMock = mock(async () => Result.ok(fileScanResult));
 
@@ -61,6 +88,8 @@ const createVersionDependencies = {
   writeFileVersion,
   processExtraction: processExtractionMock,
   requestNativeExtractionRun: requestNativeExtractionRunMock,
+  enqueueEntitySearchRepairs,
+  flushEntitySearchRepairs: flushEntitySearchRepairsMock,
   enqueuePdfDerivativeOrMarkFailed: enqueuePdfDerivativeOrMarkFailedMock,
   enqueueImageThumbnailOrMarkFailed: enqueueImageThumbnailOrMarkFailedMock,
   computeVersionDiffStats: computeVersionDiffStatsMock,
@@ -186,22 +215,6 @@ const buildTx = ({
   const insertedTables: unknown[] = [];
   const updatedTables: { table: unknown; values: unknown }[] = [];
 
-  const entitiesSelect = {
-    from: () => ({
-      where: () => ({
-        limit: () => ({
-          for: async () => [
-            {
-              currentVersionId: lockedCurrentVersionId,
-              docSequence: null,
-              kind: "document",
-              readOnly,
-            },
-          ],
-        }),
-      }),
-    }),
-  };
   const cellMetadataSelect = {
     from: () => ({
       where: () => ({
@@ -221,15 +234,6 @@ const buildTx = ({
       where: () => ({
         limit: async () =>
           openDesktopEditSession ? [{ id: "open-edit-session" }] : [],
-      }),
-    }),
-  };
-  const workspaceStatusSelect = {
-    from: () => ({
-      where: () => ({
-        limit: () => ({
-          for: async () => [{ status: "active" }],
-        }),
       }),
     }),
   };
@@ -294,9 +298,43 @@ const buildTx = ({
         findFirst: async () => ({ reference: null, status: "active" }),
       },
     },
-    select: (selectedFields: Record<string, unknown>) => {
-      if ("status" in selectedFields) {
-        return workspaceStatusSelect;
+    select: (selectedFields: SelectedFields) => {
+      if ("status" in selectedFields || "currentVersionId" in selectedFields) {
+        const table = "status" in selectedFields ? workspaces : entities;
+        const rows = [
+          "status" in selectedFields
+            ? {
+                id: workspaceId,
+                organizationId,
+                reference: null,
+                status: "active",
+              }
+            : {
+                id: entityId,
+                workspaceId,
+                currentVersionId: lockedCurrentVersionId,
+                docSequence: null,
+                kind: "document",
+                readOnly,
+              },
+        ];
+        return {
+          from: () => {
+            const query = createMockDatabase()
+              .select(selectedFields)
+              .from(table);
+            const fixtureQuery = createSelectQueryMock(rows).from().where();
+            return {
+              toSQL: () => query.toSQL(),
+              as: (alias: string) => query.as(alias),
+              where: (predicate: SQL) => ({
+                toSQL: () => query.where(predicate).toSQL(),
+                for: fixtureQuery.for,
+                limit: fixtureQuery.limit,
+              }),
+            };
+          },
+        };
       }
       if ("metadata" in selectedFields) {
         return cellMetadataSelect;
@@ -304,13 +342,26 @@ const buildTx = ({
       if ("max" in selectedFields) {
         return maxVersionNumberSelect;
       }
-      if ("currentVersionId" in selectedFields) {
-        return entitiesSelect;
+      if ("sourceId" in selectedFields && "organizationId" in selectedFields) {
+        return {
+          from: () => ({
+            innerJoin: () => ({ where: async () => [{ sourceId: entityId }] }),
+          }),
+        };
       }
       return editSessionSelect;
     },
-    execute: async () => undefined,
+    execute: async (query: SQL) =>
+      new PgDialect().sqlToQuery(query).params.map((id) => ({ id })),
     insert: (table: unknown) => ({
+      select: (query: Promise<unknown>) => ({
+        onConflictDoUpdate: async () => {
+          if (table !== searchProjectionRepairQueue) {
+            throw new TypeError("Unexpected insert-select target");
+          }
+          await query;
+        },
+      }),
       values: (values: unknown) => {
         insertedTables.push({ table, values });
         if (table === pendingUploads) {
@@ -363,6 +414,7 @@ describe("createAutoApplySuggestChangesTools", () => {
     const { safeDb } = createScopedDbMock(tx);
 
     const result = await createEntityVersionFromBuffer({
+      authority: CALLER_AUTHORIZED,
       safeDb,
       organizationId,
       workspaceId,

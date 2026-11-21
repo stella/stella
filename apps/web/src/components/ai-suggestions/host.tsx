@@ -13,7 +13,7 @@
  */
 
 import "@/components/chat-editor.css";
-import { useCallback, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import type {
   FocusEvent as ReactFocusEvent,
   KeyboardEvent as ReactKeyboardEvent,
@@ -21,9 +21,10 @@ import type {
   RefObject,
 } from "react";
 
+import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
-import { resolveChatComposerAction } from "@stll/chat/composer";
+import { CHAT_MEMBER_SEND_ACTION } from "@stll/api-contract/chat-send-intent";
 import type {
   AISuggestion,
   AISuggestionPreset,
@@ -39,32 +40,37 @@ import {
 } from "@stll/ui/composer";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import {
+  AiActionIcon,
   CheckIcon,
   ChevronDownIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
-  LoaderCircleIcon,
   MessageSquareIcon,
   UserIcon,
-  AiActionIcon,
 } from "@stll/ui/icons";
+import { Loader } from "@stll/ui/loader";
 import { OVERLAY_LAYER_CLASS_NAMES } from "@stll/ui/overlay-layer";
-import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { useChatComposerWiring } from "@/components/chat-editor-provider";
 import type {
   ChatEditorController,
   ChatInputDraft,
+  ChatSendOutcome,
 } from "@/components/chat-editor-provider";
 import { ChatComposerActionButton } from "@/components/chat/chat-composer-action-button";
 import { ChatDraftAttachmentChips } from "@/components/chat/chat-draft-attachment-chips";
 import type { ComposerEditModeMenuProps } from "@/components/chat/chat-edit-mode-menu";
 import type { ComposerModelsMenuProps } from "@/components/chat/chat-model-options-menu";
-import { ComposerControlSlot } from "@/components/chat/composer-control-slot";
 import { ComposerPlusMenu } from "@/components/chat/composer-plus-menu";
 import type { ComposerContextMenuProps } from "@/components/chat/composer-plus-menu";
-import { DockedChatSurface } from "@/components/chat/docked-chat-stack";
+import { ComposerControlSlot } from "@/components/chat/composer-row.pending";
+import {
+  DOCKED_CHAT_COLUMN_SLOT,
+  DockedChatSurface,
+  isPressOutsideDockedChat,
+} from "@/components/chat/docked-chat-stack";
 import {
   DOC_FLOAT_SURFACE_CLASS,
   DockedComposer,
@@ -72,6 +78,7 @@ import {
 } from "@/components/chat/docked-composer";
 import { PromptEditorContent } from "@/components/prompt-editor";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { usePulse } from "@/hooks/use-pulse";
 import { useFormatter } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
@@ -159,17 +166,19 @@ type PromptBarProps = {
   layout: FileAIChatLayout;
   status: FileAIChatStatus;
   canSubmitNow?: (() => boolean) | undefined;
+  sendDisabled?: boolean;
   /**
    * Emitted on send. `files` carries any attachments the user added via
    * the shared (+) menu, always an array (empty for preset chips, which
    * never attach); callers thread them into `buildChatRequestMessage`
-   * without a fallback.
+   * without a fallback. The outcome says whether the composer keeps the
+   * draft (see `ChatSendOutcome`); preset sends carry no draft to keep.
    */
   onSubmit: (input: {
     prompt: string;
     presetId?: string;
     files: ChatInputDraft["files"];
-  }) => Promise<void> | void;
+  }) => Promise<ChatSendOutcome>;
   onSubmitError?: ((error: unknown) => void) | undefined;
   presetScopeChooser?: PromptBarPresetScopeChooser | undefined;
   /**
@@ -188,6 +197,8 @@ type PromptBarProps = {
    * floating control on top of the bar.
    */
   onStop?: () => void;
+  /** See `ChatComposerActionButton`'s `stopping`. */
+  stopping?: boolean;
   /**
    * Offered after a user-initiated stop: while provided AND the
    * composer is empty, the send arrow becomes a retry button that
@@ -247,13 +258,6 @@ type PromptBarProps = {
    */
   dock?: ReactNode | undefined;
   /**
-   * Follow-up-prompt chips stacked above the bar (typically
-   * `SuggestedFollowupChips`). Routed through `DockedComposer` so the
-   * chip offset stays owned in one place instead of each surface
-   * hand-positioning it. Omit on surfaces without follow-up chips.
-   */
-  followupChips?: ReactNode | undefined;
-  /**
    * Opt in to the shared (+) composer menu on the left (attach files via
    * the controller's picker). Only surfaces that thread `files` through
    * `onSubmit` set this; leaving it off keeps the affordance hidden so a
@@ -267,8 +271,12 @@ type PromptBarProps = {
    * Only meaningful together with `attachmentsEnabled` (the (+) menu
    * renders inside that block). The Skills/Context submenus are wired to
    * this bar's own editor, so their props omit `editor` (supplied here).
+   *
+   * `models` is required: a bar that starts or continues a thread states its
+   * model menu (with where its turns run), or `null` when the surface pins
+   * the model, so none can drop the Run on choice by leaving a prop out.
    */
-  models?: ComposerModelsMenuProps | undefined;
+  models: ComposerModelsMenuProps | null;
   /**
    * The (+) menu's leading "New chat" row: the same action the dock's
    * new-chat button carries. `null` hides the row (nothing to leave yet).
@@ -299,27 +307,48 @@ type PromptBarProps = {
  * Collapse affordance rendered by `ChatThreadCard` in its top end
  * corner, so the composer bar never carries a thread-visibility
  * control. The card reopens automatically on the next send.
+ *
+ * `cue` lights the control up when a press lands outside the open card,
+ * so a reader who clicks back into the document sees where the card
+ * closes. The flash is a tint fading in and out twice; with reduced
+ * motion it holds still for the same time instead.
  */
 const ThreadCardCollapseButton = ({
+  cue,
   onCollapse,
 }: {
+  cue: { seq: number; shown: boolean };
   onCollapse: () => void;
 }) => {
   const t = useTranslations();
   return (
-    <Button
-      aria-label={t("chat.hideThread")}
-      className="text-muted-foreground hover:text-foreground rounded-full"
-      onClick={onCollapse}
-      size="icon-xs"
-      tooltip={t("chat.hideThread")}
-      type="button"
-      variant="ghost"
-    >
-      <ChevronDownIcon aria-hidden="true" className="size-3.5" />
-    </Button>
+    <span className="relative inline-flex rounded-full">
+      <Button
+        aria-label={t("chat.hideThread")}
+        className="text-muted-foreground hover:text-foreground rounded-full"
+        onClick={onCollapse}
+        size="icon-xs"
+        tooltip={t("chat.hideThread")}
+        type="button"
+        variant="ghost"
+      >
+        <ChevronDownIcon aria-hidden="true" className="size-3.5" />
+      </Button>
+      {cue.shown && (
+        // Keyed on the press, so a second press restarts the flash.
+        <span
+          aria-hidden
+          className="bg-primary/20 animate-attention-flash-twice pointer-events-none absolute inset-0 rounded-full opacity-0 motion-reduce:animate-none motion-reduce:opacity-100"
+          data-collapse-cue=""
+          key={cue.seq}
+        />
+      )}
+    </span>
   );
 };
+
+// `animate-attention-flash-twice`: two 700ms flashes.
+const COLLAPSE_CUE_MS = 1400;
 
 type ChatThreadCardProps = {
   /** Scroll container ref for the transcript inside the card. */
@@ -350,6 +379,38 @@ export const ChatThreadCard = ({
   children,
 }: ChatThreadCardProps) => {
   const t = useTranslations();
+  // A press on the page behind the open card (the document being read)
+  // does not close it, which would lose the conversation mid-read; it
+  // points at the control that does.
+  const [collapseCueSeq, setCollapseCueSeq] = useState(0);
+  const { isPulsing: collapseCueShown, pulse: pulseCollapseCue } =
+    usePulse(COLLAPSE_CUE_MS);
+  const cueCollapse = useLatestCallback(() => {
+    setCollapseCueSeq((seq) => seq + 1);
+    pulseCollapseCue();
+  });
+  const watchOutsidePresses = (card: HTMLDivElement | null) => {
+    if (card === null) {
+      return undefined;
+    }
+    const column =
+      card.closest(`[data-slot="${DOCKED_CHAT_COLUMN_SLOT}"]`) ?? card;
+    const onPointerDown = (event: PointerEvent) => {
+      if (
+        event.button === 0 &&
+        isPressOutsideDockedChat({ column, target: event.target })
+      ) {
+        cueCollapse();
+      }
+    };
+    // Capture phase: the reader handles its own presses (selection,
+    // links) and may stop them before they bubble to the document.
+    const owner = card.ownerDocument;
+    owner.addEventListener("pointerdown", onPointerDown, true);
+    return () => {
+      owner.removeEventListener("pointerdown", onPointerDown, true);
+    };
+  };
   return (
     <DockedChatSurface slot="thread">
       <div
@@ -363,6 +424,7 @@ export const ChatThreadCard = ({
           "shadow-[0_1px_2px_rgb(0_0_0/0.06),0_20px_64px_rgb(0_0_0/0.18)]",
           "animate-in fade-in-0 zoom-in-95 slide-in-from-bottom-1 motion-reduce:animate-none",
         )}
+        ref={watchOutsidePresses}
         role="dialog"
       >
         {/* The header is its own opaque row with a hairline under it, so the
@@ -374,7 +436,10 @@ export const ChatThreadCard = ({
               {titleSlot}
             </div>
           )}
-          <ThreadCardCollapseButton onCollapse={onCollapse} />
+          <ThreadCardCollapseButton
+            cue={{ seq: collapseCueSeq, shown: collapseCueShown }}
+            onCollapse={onCollapse}
+          />
         </div>
         {/* Plain scroll container — bypasses the legacy Conversation's
           `size-full` chain, which only resolves when the parent has an
@@ -462,12 +527,14 @@ export const PromptBar = (props: PromptBarProps) => {
     status,
     pendingCount,
     canSubmitNow,
+    sendDisabled,
     onSubmit,
     onSubmitError,
     presetScopeChooser,
     presets,
     threadHasMessages = false,
     onStop,
+    stopping = false,
     onRetry,
     editorController,
     emptyPlaceholder,
@@ -475,7 +542,6 @@ export const PromptBar = (props: PromptBarProps) => {
     sendDisabledReason,
     queueWhileGenerating = false,
     dock,
-    followupChips,
     attachmentsEnabled = false,
     models,
     onNewThread,
@@ -497,11 +563,11 @@ export const PromptBar = (props: PromptBarProps) => {
     isEmpty,
     openFilePicker,
     removeFile,
+    expandPastedText,
   } = editorController;
 
   const {
     busy,
-    composerActionMode,
     composerSubmitDisabled,
     inputDisabled,
     isGenerating,
@@ -511,10 +577,17 @@ export const PromptBar = (props: PromptBarProps) => {
   } = getPromptBarAvailability({
     isEmpty,
     onRetry,
-    onStop,
+    sendDisabled,
     queueWhileGenerating,
     sendDisabledReason,
     status,
+  });
+  const sendDisabledText = resolveSendDisabledText({
+    canSubmit,
+    composerSubmitDisabled,
+    sendDisabledReason,
+    status,
+    t,
   });
   // With queuing enabled the composer keeps accepting input while a
   // response streams: `useChatSession` holds submitted drafts until the
@@ -548,12 +621,10 @@ export const PromptBar = (props: PromptBarProps) => {
   // The bar emits `{ prompt }`; the underlying composer emits the
   // raw editor draft. Adapting here lets the rest of the wiring
   // (Enter handler, blur/setEditable, submit gating) stay shared.
-  const handleComposerSubmit = useCallback(
-    async (draft: ChatInputDraft) => {
-      await onSubmit({ prompt: draft.html, files: draft.files });
-    },
-    [onSubmit],
-  );
+  const handleComposerSubmit = async (
+    draft: ChatInputDraft,
+  ): Promise<ChatSendOutcome> =>
+    await onSubmit({ prompt: draft.html, files: draft.files });
 
   const { submitDraft } = useChatComposerWiring({
     controller: editorController,
@@ -571,6 +642,7 @@ export const PromptBar = (props: PromptBarProps) => {
   // silently drop the attached file. With attachments present the user sends
   // through the normal composer path instead.
   const presetChipsVisible =
+    !sendDisabled &&
     layout === "floating" &&
     !threadHasMessages &&
     presets !== undefined &&
@@ -593,61 +665,52 @@ export const PromptBar = (props: PromptBarProps) => {
   if (!presetChipsVisible && scopePromptPreset !== null) {
     setScopePromptPreset(null);
   }
-  const submitPreset = useCallback(
-    (preset: AISuggestionPreset) => {
-      if (canSubmitNow !== undefined && !canSubmitNow()) {
+  const submitPreset = (preset: AISuggestionPreset) => {
+    if (canSubmitNow !== undefined && !canSubmitNow()) {
+      return;
+    }
+    if (presetScopeChooser?.appliesTo(preset)) {
+      if (presetScopeChooser.shouldAskForScope()) {
+        setScopePromptPreset(preset);
         return;
       }
-      if (presetScopeChooser?.appliesTo(preset)) {
-        if (presetScopeChooser.shouldAskForScope()) {
-          setScopePromptPreset(preset);
-          return;
-        }
-        presetScopeChooser.onSubmit(preset, "document");
-        return;
-      }
-      detached(
-        Promise.resolve(
-          onSubmit({ prompt: preset.prompt, presetId: preset.id, files: [] }),
-        ),
-        "ai-suggestions-host.submit-preset",
-      );
-    },
-    [canSubmitNow, onSubmit, presetScopeChooser],
-  );
-  const resolvePresetScope = useCallback(
-    (scope: PromptBarPresetScope) => {
-      const preset = scopePromptPreset;
-      setScopePromptPreset(null);
-      if (preset === null || presetScopeChooser === undefined) {
-        return;
-      }
-      presetScopeChooser.onSubmit(preset, scope);
-    },
-    [scopePromptPreset, presetScopeChooser],
-  );
+      presetScopeChooser.onSubmit(preset, "document");
+      return;
+    }
+    detached(
+      Promise.resolve(
+        onSubmit({ prompt: preset.prompt, presetId: preset.id, files: [] }),
+      ),
+      "ai-suggestions-host.submit-preset",
+    );
+  };
+  const resolvePresetScope = (scope: PromptBarPresetScope) => {
+    const preset = scopePromptPreset;
+    setScopePromptPreset(null);
+    if (preset === null || presetScopeChooser === undefined) {
+      return;
+    }
+    presetScopeChooser.onSubmit(preset, scope);
+  };
   // Tab with an empty input writes the first preset INTO the composer (the
   // user can edit before sending); clicking a chip accepts and sends as-is.
   // Escape backs out of the inline preset-scope chooser.
-  const handleShellKeyDown = useCallback(
-    (event: ReactKeyboardEvent) => {
-      if (event.key === "Escape" && scopePromptPreset !== null) {
-        event.preventDefault();
-        setScopePromptPreset(null);
-        return;
-      }
-      if (event.key !== "Tab" || event.shiftKey || !presetChipsVisible) {
-        return;
-      }
-      const first = presets.at(0);
-      if (!first || !editor) {
-        return;
-      }
+  const handleShellKeyDown = (event: ReactKeyboardEvent) => {
+    if (event.key === "Escape" && scopePromptPreset !== null) {
       event.preventDefault();
-      editor.chain().focus().insertContent(first.prompt).run();
-    },
-    [presetChipsVisible, presets, editor, scopePromptPreset],
-  );
+      setScopePromptPreset(null);
+      return;
+    }
+    if (event.key !== "Tab" || event.shiftKey || !presetChipsVisible) {
+      return;
+    }
+    const first = presets.at(0);
+    if (!first || !editor) {
+      return;
+    }
+    event.preventDefault();
+    editor.chain().focus().insertContent(first.prompt).run();
+  };
   const handleShellFocus = () => {
     onFocusChange?.(true);
   };
@@ -759,6 +822,7 @@ export const PromptBar = (props: PromptBarProps) => {
               <ChatDraftAttachmentChips
                 files={attachments}
                 onRemove={removeFile}
+                onExpand={expandPastedText}
               />
             </div>
           )}
@@ -837,11 +901,12 @@ export const PromptBar = (props: PromptBarProps) => {
               "inset-x-1.5 top-1/2 z-10 flex min-w-0 -translate-y-1/2 items-center gap-2",
             )}
           >
-            <LoaderCircleIcon
-              aria-hidden="true"
-              className="size-3.5 shrink-0 animate-spin"
+            <Loader
+              className="size-3.5 shrink-0"
+              size="sm"
+              variant="decorative"
             />
-            <span className="truncate">{t("chat.thinking")}</span>
+            <TruncatedText>{t("chat.thinking")}</TruncatedText>
           </div>
         )}
         {isEmpty && !busy && isSendBlocked && (
@@ -851,15 +916,16 @@ export const PromptBar = (props: PromptBarProps) => {
               "inset-x-1.5 top-1/2 z-10 flex min-w-0 -translate-y-1/2 items-center gap-2",
             )}
           >
-            <LoaderCircleIcon
-              aria-hidden="true"
-              className="size-3.5 shrink-0 animate-spin"
+            <Loader
+              className="size-3.5 shrink-0"
+              size="sm"
+              variant="decorative"
             />
-            <span className="truncate">
+            <TruncatedText>
               {sendDisabledReason === "editor-loading"
                 ? t("chat.editorLoading")
                 : t("folio.savingDocument")}
-            </span>
+            </TruncatedText>
           </div>
         )}
         {isEmpty &&
@@ -893,93 +959,108 @@ export const PromptBar = (props: PromptBarProps) => {
         />
       </div>
 
-      <Tooltip>
-        <TooltipTrigger
-          render={
-            // The control slot mirrors the (+) menu's seating: the shell
-            // is items-end, so the slot rides the bottom text line as the
-            // editor grows.
-            <ComposerControlSlot>
-              <ChatComposerActionButton
-                canSend={!composerSubmitDisabled && canSubmit}
-                isGenerating={isGenerating}
-                onRetry={retryOffer}
-                onSend={() => {
-                  detached(submitDraft(), "ai-suggestions-host.submit-draft");
-                }}
-                onStop={onStop}
-              />
-            </ComposerControlSlot>
-          }
+      {/* The control slot mirrors the (+) menu's seating: the shell is
+          items-end, so the slot rides the bottom text line as the editor
+          grows. The button owns its tooltip: its action when it can act,
+          and why not when it cannot. */}
+      <ComposerControlSlot>
+        <ChatComposerActionButton
+          canSend={!composerSubmitDisabled && canSubmit}
+          disabledReason={sendDisabledText}
+          isGenerating={isGenerating}
+          onRetry={retryOffer}
+          onSend={() => {
+            detached(
+              submitDraft(CHAT_MEMBER_SEND_ACTION.send),
+              "ai-suggestions-host.submit-draft",
+            );
+          }}
+          onStop={onStop}
+          stopping={stopping}
         />
-        <TooltipPopup side="top">
-          {/* Labels the same state the button resolves internally —
-              `composerActionMode` comes from the button module's own
-              resolver, so the tooltip cannot drift from the morph. */}
-          {(() => {
-            if (composerActionMode === "stop") {
-              return t("chat.stopResponse");
-            }
-            if (composerActionMode === "retry") {
-              return t("common.retry");
-            }
-            if (canSubmit) {
-              return t("chat.sendPrompt");
-            }
-            return t("chat.askAnything");
-          })()}
-        </TooltipPopup>
-      </Tooltip>
+      </ComposerControlSlot>
     </PromptBarShell>
   );
 
   // One docked layout for every surface: `DockedComposer` owns the bar's
-  // position, width, the follow-up-chip offset, and the status-row
+  // position, width, and the status-row
   // placement, so the inspector chat and the file-overlay chat are
   // positionally identical by construction. Surface-specific features
   // (preset chips, the pending badge, the thread-toggle chevron) stay
   // gated on props above; only geometry is unified here.
   return (
-    <DockedComposer
-      bar={shell}
-      {...(followupChips === undefined ? {} : { chips: followupChips })}
-      {...(dock === undefined ? {} : { dock })}
-    />
+    <DockedComposer bar={shell} {...(dock === undefined ? {} : { dock })} />
   );
+};
+
+/**
+ * What the send button says while it cannot act: the editor or a save holding
+ * it reads as that, and an empty draft says what to do. `t` is typed to the
+ * keys it reads, so the full message tree is not re-instantiated here.
+ */
+const resolveSendDisabledText = ({
+  canSubmit,
+  composerSubmitDisabled,
+  sendDisabledReason,
+  status,
+  t,
+}: {
+  canSubmit: boolean;
+  composerSubmitDisabled: boolean;
+  status: PromptBarProps["status"];
+  sendDisabledReason: PromptBarProps["sendDisabledReason"];
+  t: (
+    key:
+      | "chat.editorLoading"
+      | "chat.sendPromptEmpty"
+      | "chat.composer.waitForChat"
+      | "folio.savingDocument",
+  ) => string;
+}): string | undefined => {
+  switch (sendDisabledReason) {
+    case "editor-loading":
+      return t("chat.editorLoading");
+    case "draft-saving":
+      return t("folio.savingDocument");
+    case undefined:
+      if (status === "applying") {
+        return t("folio.savingDocument");
+      }
+      if (composerSubmitDisabled) {
+        return t("chat.composer.waitForChat");
+      }
+      return canSubmit ? undefined : t("chat.sendPromptEmpty");
+    default:
+      sendDisabledReason satisfies never;
+      return panic(`Unhandled send block: ${String(sendDisabledReason)}`);
+  }
 };
 
 const getPromptBarAvailability = ({
   isEmpty,
   onRetry,
-  onStop,
   queueWhileGenerating,
   sendDisabledReason,
+  sendDisabled = false,
   status,
 }: {
   isEmpty: boolean;
   onRetry: PromptBarProps["onRetry"];
-  onStop: PromptBarProps["onStop"];
   queueWhileGenerating: boolean;
   sendDisabledReason: PromptBarProps["sendDisabledReason"];
+  sendDisabled: PromptBarProps["sendDisabled"];
   status: PromptBarProps["status"];
 }) => {
   const isGenerating = status === "generating";
   const busy = isGenerating || status === "applying";
   const isSendBlocked = sendDisabledReason !== undefined;
-  const submitDisabled = busy || isSendBlocked;
+  const submitDisabled = busy || isSendBlocked || sendDisabled;
   const retryOffer =
-    onRetry !== undefined && isEmpty && !busy && !isSendBlocked
-      ? onRetry
-      : undefined;
+    onRetry !== undefined && isEmpty && !submitDisabled ? onRetry : undefined;
   return {
     busy,
-    composerActionMode: resolveChatComposerAction({
-      isGenerating,
-      onStop,
-      onRetry: retryOffer,
-    }),
     composerSubmitDisabled: queueWhileGenerating
-      ? status === "applying" || isSendBlocked
+      ? status === "applying" || isSendBlocked || sendDisabled
       : submitDisabled,
     inputDisabled: isSendBlocked,
     isGenerating,
@@ -1020,7 +1101,7 @@ export const SuggestionCard = (props: SuggestionCardProps) => {
     // button stays the keyboard/AT path); clicks owned by interior
     // buttons (header, accept, reject) are skipped so they don't
     // double-fire.
-    // oxlint-disable-next-line jsx_a11y/no-static-element-interactions, jsx_a11y/click-events-have-key-events
+    // oxlint-disable-next-line jsx-a11y/no-static-element-interactions, jsx-a11y/click-events-have-key-events
     <div
       data-status={suggestion.status}
       onClick={(event) => {
@@ -1037,46 +1118,48 @@ export const SuggestionCard = (props: SuggestionCardProps) => {
         focused && "border-foreground-disabled bg-muted/40",
       )}
     >
-      <button
-        type="button"
-        className="text-muted-foreground text-2xs flex w-full cursor-pointer items-center gap-1.5 border-0 bg-transparent p-0 text-start"
-        onClick={() => onFocus(suggestion.id)}
+      <Button
         aria-label={t("chat.focusSuggestion", { topic: suggestion.topic })}
+        className="flex w-full"
+        onClick={() => onFocus(suggestion.id)}
+        variant="plain"
       >
-        {display ? (
-          <SuggestionDisplayBadges display={display} />
-        ) : (
-          <>
-            <span
-              className={cn(
-                "size-1.5 shrink-0 rounded-full",
-                SEVERITY_DOT_CLASS[suggestion.severity],
-              )}
-              aria-hidden="true"
-            />
-            <span className="text-foreground font-medium">
-              {suggestion.topic}
+        <span className="text-muted-foreground text-2xs flex min-w-0 flex-1 items-center gap-1.5">
+          {display ? (
+            <SuggestionDisplayBadges display={display} />
+          ) : (
+            <>
+              <span
+                className={cn(
+                  "size-1.5 shrink-0 rounded-full",
+                  SEVERITY_DOT_CLASS[suggestion.severity],
+                )}
+                aria-hidden="true"
+              />
+              <span className="text-foreground font-medium">
+                {suggestion.topic}
+              </span>
+              <span aria-hidden="true">·</span>
+              <span>{t(SEVERITY_LABEL_KEYS[suggestion.severity])}</span>
+            </>
+          )}
+          {suggestion.status === "stale" && (
+            <span className="bg-destructive/12 text-destructive text-3xs ms-1 inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 font-medium tracking-wider uppercase">
+              {t("common.stale")}
             </span>
-            <span aria-hidden="true">·</span>
-            <span>{t(SEVERITY_LABEL_KEYS[suggestion.severity])}</span>
-          </>
-        )}
-        {suggestion.status === "stale" && (
-          <span className="bg-destructive/12 text-destructive text-3xs ms-1 inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 font-medium tracking-wider uppercase">
-            {t("common.stale")}
-          </span>
-        )}
-        {suggestion.status === "accepted" && (
-          <span className="bg-success/15 text-success text-3xs ms-1 inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 font-medium tracking-wider uppercase">
-            {t("chat.suggestionStatus.accepted")}
-          </span>
-        )}
-        {suggestion.status === "rejected" && (
-          <span className="bg-muted text-muted-foreground text-3xs ms-1 inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 font-medium tracking-wider uppercase">
-            {t("chat.suggestionStatus.rejected")}
-          </span>
-        )}
-      </button>
+          )}
+          {suggestion.status === "accepted" && (
+            <span className="bg-success/15 text-success text-3xs ms-1 inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 font-medium tracking-wider uppercase">
+              {t("chat.suggestionStatus.accepted")}
+            </span>
+          )}
+          {suggestion.status === "rejected" && (
+            <span className="bg-muted text-muted-foreground text-3xs ms-1 inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 font-medium tracking-wider uppercase">
+              {t("chat.suggestionStatus.rejected")}
+            </span>
+          )}
+        </span>
+      </Button>
 
       {display ? (
         <>
@@ -1136,6 +1219,7 @@ export const SuggestionCard = (props: SuggestionCardProps) => {
             className="rounded-md"
             onClick={() => onAccept(suggestion.id)}
             disabled={suggestion.status === "stale"}
+            disabledReason={t("docxReview.suggestionOutOfDate")}
           >
             <CheckIcon aria-hidden="true" />
             {t("common.accept")}
@@ -1215,7 +1299,7 @@ const ValueKindChip = ({ valueKind }: { valueKind: string }) => {
   return (
     <span className="text-foreground inline-flex min-w-0 items-center gap-1 font-medium">
       <Icon aria-hidden="true" className="size-3.5 shrink-0 opacity-70" />
-      <span className="truncate">{t(meta.labelKey)}</span>
+      <TruncatedText>{t(meta.labelKey)}</TruncatedText>
     </span>
   );
 };

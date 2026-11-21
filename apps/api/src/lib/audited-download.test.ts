@@ -14,25 +14,49 @@ import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 const DELIVERY_ERROR = "Could not complete content delivery.";
 
 describe("signed content delivery", () => {
+  test("a document's file is signed only under its version lock", () => {
+    const grant = {
+      readSessionAuthority: async () => null,
+      userId: null,
+      source: { kind: "request", sessionId: "fixture-session" },
+      tx: asTestRaw<Transaction>({}),
+      recordAuditEvent: async () => undefined,
+      resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
+      resourceId: "fixture-entity",
+      s3Key: "fixture-key",
+      expiresInSeconds: 60,
+    } as const;
+    // @ts-expect-error a bare transaction cannot sign a link to a version's file; only lockLiveVersionField yields the lock
+    const unlocked: Parameters<typeof auditedPresignDownload>[0] = grant;
+    expect(unlocked.resourceType).toBe(AUDIT_RESOURCE_TYPE.ENTITY);
+  });
+
   test.each([
     { fileName: undefined, action: AUDIT_ACTION.ACCESS },
     { fileName: "fixture.pdf", action: AUDIT_ACTION.DOWNLOAD },
   ])("a completed $action row permits a URL", async ({ fileName, action }) => {
     const events: (AuditEvent | AuditEvent[])[] = [];
+    const signedSourceSessionIds: (string | null)[] = [];
     const url = await runWithContentDeliveryScope(
       { type: "audited" },
       async () => {
         const result = await auditedPresignDownload({
+          readSessionAuthority: async () => null,
+          userId: null,
+          source: { kind: "request", sessionId: "fixture-session" },
           tx: asTestRaw<Transaction>({}),
           recordAuditEvent: async (_tx, event) => {
             events.push(event);
           },
-          resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
-          resourceId: "fixture-entity",
+          resourceType: AUDIT_RESOURCE_TYPE.USER_FILE,
+          resourceId: "fixture-user-file",
           s3Key: "fixture-key",
           expiresInSeconds: 60,
           ...(fileName === undefined ? {} : { fileName }),
-          signDownload: async () => {
+          signDownload: async (_key, options) => {
+            if (options.source.kind === "request") {
+              signedSourceSessionIds.push(options.source.sessionId);
+            }
             markContentDeliveryIntent();
             return "https://example.test/fixture";
           },
@@ -42,10 +66,11 @@ describe("signed content delivery", () => {
       },
     );
     expect(url).toBe("https://example.test/fixture");
+    expect(signedSourceSessionIds).toEqual(["fixture-session"]);
     expect(events).toHaveLength(1);
     expect(events.at(0)).toMatchObject({
       action,
-      resourceId: "fixture-entity",
+      resourceId: "fixture-user-file",
     });
   });
 
@@ -55,10 +80,13 @@ describe("signed content delivery", () => {
     await runWithContentDeliveryScope({ type: "audited" }, async () => {
       markContentDeliveryIntent();
       const result = await auditedPresignDownload({
+        readSessionAuthority: async () => null,
+        userId: null,
+        source: { kind: "request", sessionId: "fixture-session" },
         tx: asTestRaw<Transaction>({}),
         recordAuditEvent: async () => await Promise.reject(failure),
-        resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
-        resourceId: "fixture-entity",
+        resourceType: AUDIT_RESOURCE_TYPE.USER_FILE,
+        resourceId: "fixture-user-file",
         s3Key: "fixture-key",
         expiresInSeconds: 60,
         signDownload: async () => {
@@ -84,13 +112,16 @@ describe("signed content delivery", () => {
     await runWithContentDeliveryScope({ type: "audited" }, async () => {
       markContentDeliveryIntent();
       const delivery = auditedPresignDownload({
+        readSessionAuthority: async () => null,
+        userId: null,
+        source: { kind: "request", sessionId: "fixture-session" },
         tx: asTestRaw<Transaction>({}),
         recordAuditEvent: async () => {
           started.resolve(undefined);
           await insert.promise;
         },
-        resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
-        resourceId: "fixture-entity",
+        resourceType: AUDIT_RESOURCE_TYPE.USER_FILE,
+        resourceId: "fixture-user-file",
         s3Key: "fixture-key",
         expiresInSeconds: 60,
         signDownload: async () => {

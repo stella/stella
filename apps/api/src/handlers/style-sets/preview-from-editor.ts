@@ -15,6 +15,7 @@ import { readStyleSetPackage } from "@/api/lib/style-sets";
 import { OCTET_STREAM_MIME_TYPE } from "@/api/mime-types";
 
 const config = {
+  contract: "patch",
   contentDelivery: {
     type: "none",
     reason: "Renders a style configuration against sample content.",

@@ -1,9 +1,9 @@
 import { and, asc, desc, eq, sql } from "drizzle-orm";
-import { status, t } from "elysia";
-import type { Static } from "elysia";
+import * as v from "valibot";
 
+import { apiDateSchema } from "@stll/api-contract/api-date";
 import { LEGISLATION_PUBLISHER_WINDOW_INCONSISTENT } from "@stll/api-contract/legislation-expression";
-import { PUBLIC_LEGISLATION_COUNTRIES } from "@stll/api-contract/legislation-publication";
+import { PUBLIC_LEGISLATION_PAGE_COUNTRIES } from "@stll/api-contract/legislation-publication";
 import {
   isStatuteSlug,
   STATUTE_SLUG_MAX_LENGTH,
@@ -16,34 +16,43 @@ import {
   selectDefaultVersionId,
   workKeyConditions,
 } from "@/api/handlers/legislation/work-key";
-import { publishedLegislationDocument } from "@/api/lib/legal-search/legislation-redistribution";
+import { status } from "@/api/http/status";
+import { publishedLegislationDocumentFor } from "@/api/lib/legal-search/legislation-redistribution";
 import {
   inForceOn,
   legislationVersionRef,
   versionSortKey,
 } from "@/api/lib/legal-search/legislation-validity-window";
-import { selectInconsistentWindowVersions } from "@/api/lib/legal-search/legislation-window-gap";
+import {
+  selectInconsistentWindowVersions,
+  selectPromulgatedOnlyVersion,
+} from "@/api/lib/legal-search/legislation-window-gap";
 import {
   readPublicLawCountry,
   tPublicLawCountry,
 } from "@/api/lib/legal-search/public-law-country";
 import type { LegislationReadDb } from "@/api/lib/legislation-public-read-db";
 
-export const readStatuteBySlugParamsSchema = t.Object({
-  slug: t.String({ minLength: 1, maxLength: STATUTE_SLUG_MAX_LENGTH }),
+export const readStatuteBySlugParamsSchema = v.object({
+  slug: v.pipe(
+    v.string(),
+    v.minLength(1),
+    v.maxLength(STATUTE_SLUG_MAX_LENGTH),
+  ),
 });
 
-export const readStatuteBySlugQuerySchema = t.Object({
+export const readStatuteBySlugQuerySchema = v.object({
   country: tPublicLawCountry,
-  /** Absent means the version in force today, else the latest one. */
-  asOf: t.Optional(t.String({ format: "date" })),
+  asOf: v.optional(apiDateSchema),
 });
 
-type ReadStatuteBySlugQuery = Static<typeof readStatuteBySlugQuerySchema>;
+type ReadStatuteBySlugQuery = v.InferOutput<
+  typeof readStatuteBySlugQuerySchema
+>;
 
 type ReadStatuteBySlugOptions = {
   legislationDb: LegislationReadDb;
-  params: Static<typeof readStatuteBySlugParamsSchema>;
+  params: v.InferOutput<typeof readStatuteBySlugParamsSchema>;
   query: ReadStatuteBySlugQuery;
 };
 
@@ -73,7 +82,9 @@ export const readStatuteBySlugHandler = async ({
   }
 
   const countryRead = readPublicLawCountry(query.country, {
-    admitted: PUBLIC_LEGISLATION_COUNTRIES,
+    domain: "legislation",
+    admitted: PUBLIC_LEGISLATION_PAGE_COUNTRIES,
+    surface: "pages",
   });
   if (countryRead.kind === "unavailable") {
     return countryRead.answer;
@@ -104,7 +115,7 @@ export const readStatuteBySlugHandler = async ({
         and(
           eq(legislationDocuments.country, country),
           eq(legislationDocuments.slug, slug),
-          publishedLegislationDocument,
+          publishedLegislationDocumentFor("pages"),
         ),
       )
       .orderBy(asc(legislationDocuments.eli), asc(legislationDocuments.id))
@@ -115,7 +126,7 @@ export const readStatuteBySlugHandler = async ({
     }
 
     if (asOf === undefined) {
-      const defaultId = await selectDefaultVersionId(tx, work);
+      const defaultId = await selectDefaultVersionId(tx, work, "pages");
       return defaultId === null
         ? ({ type: "uncovered-date" } as const)
         : ({ type: "expression", id: defaultId } as const);
@@ -127,7 +138,7 @@ export const readStatuteBySlugHandler = async ({
       .from(legislationDocuments)
       .where(
         and(
-          ...workKeyConditions(work),
+          ...workKeyConditions(work, "pages"),
           inForceOn(legislationVersionRef(legislationDocuments), asOfDate),
         ),
       )
@@ -142,15 +153,24 @@ export const readStatuteBySlugHandler = async ({
     }
 
     const inconsistent = await selectInconsistentWindowVersions(tx, {
-      conditions: workKeyConditions(work),
+      conditions: workKeyConditions(work, "pages"),
       asOf: asOfDate,
     });
-    return inconsistent.length > 0
-      ? ({
-          type: LEGISLATION_PUBLISHER_WINDOW_INCONSISTENT,
-          versions: inconsistent,
-        } as const)
-      : ({ type: "uncovered-date" } as const);
+    if (inconsistent.length > 0) {
+      return {
+        type: LEGISLATION_PUBLISHER_WINDOW_INCONSISTENT,
+        versions: inconsistent,
+      } as const;
+    }
+    // A Work held only as promulgated reads as that text on a date, as it
+    // does without one; its kind travels with the reply.
+    const promulgated = await selectPromulgatedOnlyVersion(tx, {
+      conditions: workKeyConditions(work, "pages"),
+      asOf: asOfDate,
+    });
+    return promulgated === null
+      ? ({ type: "uncovered-date" } as const)
+      : ({ type: "expression", id: promulgated } as const);
   });
 
   if (resolved.type === "unknown-work") {
@@ -169,5 +189,9 @@ export const readStatuteBySlugHandler = async ({
     return status(404, publisherWindowInconsistentBody(resolved.versions));
   }
 
-  return await readPublicLegislationHandler(resolved.id, legislationDb);
+  return await readPublicLegislationHandler(
+    resolved.id,
+    legislationDb,
+    "pages",
+  );
 };

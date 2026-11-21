@@ -191,7 +191,7 @@ export const providerSearchPlan = ({
       d.citation_authority,
       d.created_at
     FROM case_law_search_documents sd
-    JOIN case_law_decisions d
+    JOIN case_law_published_decisions d
       ON d.id = sd.decision_id
     ${publicCaseLawDecisionJoin}
     ${bodyPreviewJoin}
@@ -208,7 +208,7 @@ export const providerSearchPlan = ({
   ) => sql`
     SELECT d.${sql.raw(column)} AS value, count(*)::int AS count
     FROM case_law_search_documents sd
-    JOIN case_law_decisions d ON d.id = sd.decision_id
+    JOIN case_law_published_decisions d ON d.id = sd.decision_id
     ${publicCaseLawDecisionJoin}
     WHERE ${ftsSearch.predicate}
       ${omit === "court" ? sql`` : courtFilter}

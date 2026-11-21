@@ -3,9 +3,8 @@ import { useTranslations } from "use-intl";
 import { Button } from "@stll/ui/button";
 import { CheckIcon, XIcon } from "@stll/ui/icons";
 import { Separator } from "@stll/ui/separator";
-import { cn } from "@stll/ui/utils";
 
-import { DatePickerPopover } from "@/components/date-picker-popover";
+import { DateRangeFilter } from "@/components/date-range-filter";
 import type { DateFilter, DateFilterPreset } from "@/lib/workspaces/types";
 import { DATE_FILTER_PRESETS } from "@/lib/workspaces/types";
 
@@ -36,44 +35,31 @@ export const DateFilterPopover = ({
       {DATE_FILTER_PRESETS.map((preset) => {
         const active = preset === activePreset;
         return (
-          <button
-            className={cn(
-              "hover:bg-accent flex items-center justify-between rounded px-2 py-1.5 text-sm",
-              active && "text-foreground",
-            )}
+          <Button
+            aria-pressed={active}
+            className="justify-between"
             key={preset}
             onClick={() => handlePreset(preset)}
-            type="button"
+            size="row"
+            variant="ghost"
           >
             <span>{labels[preset]}</span>
             {active && <CheckIcon className="text-primary size-3.5" />}
-          </button>
+          </Button>
         );
       })}
       {isCustom && (
         <>
           <Separator className="my-1" />
-          <div className="flex flex-col gap-2 px-1">
-            <div className="flex flex-col gap-1">
-              <span className="text-muted-foreground text-xs">
-                {t("workspaces.filters.from")}
-              </span>
-              <DatePickerPopover
-                onChange={(v) => onChange(buildCustom(v, value?.to))}
-                value={value?.from ?? null}
-                {...(value?.to && { maxDate: value.to })}
-              />
-            </div>
-            <div className="flex flex-col gap-1">
-              <span className="text-muted-foreground text-xs">
-                {t("workspaces.filters.to")}
-              </span>
-              <DatePickerPopover
-                onChange={(v) => onChange(buildCustom(value?.from, v))}
-                value={value?.to ?? null}
-                {...(value?.from && { minDate: value.from })}
-              />
-            </div>
+          <div className="px-1">
+            <DateRangeFilter
+              from={value?.from ?? null}
+              to={value?.to ?? null}
+              fromLabel={t("workspaces.filters.from")}
+              toLabel={t("workspaces.filters.to")}
+              onFromChange={(from) => onChange(buildCustom(from, value?.to))}
+              onToChange={(to) => onChange(buildCustom(value?.from, to))}
+            />
           </div>
         </>
       )}

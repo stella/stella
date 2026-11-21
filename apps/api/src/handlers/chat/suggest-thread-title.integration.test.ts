@@ -1,16 +1,25 @@
-import { afterAll, beforeAll, describe, expect, mock, test } from "bun:test";
+import {
+  afterAll,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  mock,
+  test,
+} from "bun:test";
 import { eq, inArray } from "drizzle-orm";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { CHAT_TITLE_SOURCE, chatMessages, chatThreads } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
-import { toChatMessageContent } from "@/api/handlers/chat/chat-message-parts";
+import { toPersistedChatMessageContentV3 } from "@/api/handlers/chat/chat-message-parts";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
-import type { generateTanStackTextForRole } from "@/api/lib/tanstack-ai-generate";
+import type { generateTanStackTextForTask } from "@/api/lib/tanstack-ai-generate";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 import {
@@ -20,13 +29,17 @@ import {
 import type { TestIds } from "@/api/tests/security/rls-helpers";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
+beforeEach(() => {
+  generateTextMock.mockClear();
+});
+
 const generateTextMock = mock(async () => '"Title: Drafting an NDA"');
 // SAFETY: The test fake ignores request details and returns a fixture title.
 const generateTextForTest =
-  generateTextMock as typeof generateTanStackTextForRole;
+  generateTextMock as typeof generateTanStackTextForTask;
 const { createSuggestThreadTitle } = await import("./suggest-thread-title");
 const suggestThreadTitle = createSuggestThreadTitle({
-  generateTextForRole: generateTextForTest,
+  generateTextForTask: generateTextForTest,
 });
 type SuggestCtx = Parameters<typeof suggestThreadTitle.handler>[0];
 
@@ -96,9 +109,8 @@ const seedThread = async ({
   if (messageTexts.length > 0) {
     await testDb.insert(chatMessages).values(
       messageTexts.map((text, index) => ({
-        content: toChatMessageContent({
+        content: toPersistedChatMessageContentV3({
           data: [{ content: text, type: "text" }],
-          version: 2,
         }),
         createdAt: new Date(Date.parse("2026-08-03T12:00:00.000Z") + index),
         id: toSafeId<"chatMessage">(Bun.randomUUIDv7()),
@@ -130,6 +142,7 @@ const createContext = ({
     promptCachingEnabled: false,
     query: workspaceId ? { workspaceId } : {},
     request: new Request("http://localhost/v1/chat/threads/title/suggest"),
+    route: "/v1/chat/threads/:threadId/title/suggest" satisfies ApiRoutePath,
     safeDb,
     session: { activeOrganizationId: ids.orgA },
     user: { id: ids.userA1 },

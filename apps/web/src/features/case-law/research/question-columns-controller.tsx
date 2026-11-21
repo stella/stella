@@ -1,4 +1,6 @@
 import { useState } from "react";
+
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 /**
  * The organization's question columns on a decision table: which of them this
  * search draws, and what the reader can add, edit, remove and run.
@@ -7,8 +9,6 @@ import { useState } from "react";
  * headers and the toolbar's controls — and a controller passed between them is
  * cheaper than a context nobody else reads.
  */
-
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
@@ -22,9 +22,10 @@ import {
   AlertDialogTitle,
 } from "@stll/ui/alert-dialog";
 import { Button } from "@stll/ui/button";
-import { Skeleton } from "@stll/ui/skeleton";
 import { stellaToast } from "@stll/ui/toast";
 
+import { AiColumnSelectionAction } from "@/components/workspaces/ai-column-run-controls";
+import { aiColumnRunScope } from "@/components/workspaces/ai-column-run.logic";
 import { BulkAddColumns } from "@/components/workspaces/bulk-add-columns";
 import type { Decision } from "@/features/case-law/components/decision-cells";
 import { AddQuestionColumn } from "@/features/case-law/research/add-question-column";
@@ -35,12 +36,15 @@ import {
   questionColumnsOptions,
   runAnswers,
 } from "@/features/case-law/research/queries";
+import { QuestionColumnControlsPending } from "@/features/case-law/research/question-column-controls.pending";
 import {
   answerKey,
   NO_QUESTION_ANSWERS,
   NO_QUESTION_COLUMNS,
   questionColumnSurface,
+  questionQueuedAnswerKeys,
   questionReads,
+  questionRefusedAnswerKeys,
   questionRunSet,
 } from "@/features/case-law/research/question-columns.logic";
 import type {
@@ -48,6 +52,7 @@ import type {
   QuestionColumn,
   QuestionColumnAction,
   QuestionColumnGrants,
+  QuestionColumnRunOptions,
   QuestionColumnSurface,
   QuestionRunSet,
   QuestionSuggestionSearch,
@@ -59,10 +64,12 @@ import {
 } from "@/features/case-law/research/search-questions.logic";
 import { useClientAuthStatus } from "@/hooks/use-client-auth-status";
 import { usePermissions } from "@/hooks/use-permissions";
+import type { ExceptionFingerprintKey } from "@/lib/analytics/exception-fingerprint";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";
+import { APIError } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
-import { useQueryView } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
 
 type QuestionColumnsInput = {
   /**
@@ -104,6 +111,7 @@ type RunRequest = {
 
 /** A run the reader has been shown the size of and has not yet confirmed. */
 type PendingRun = {
+  force: boolean;
   runSet: QuestionRunSet;
   /** Named so the toast and the dialog can say which question is being asked. */
   question: string | null;
@@ -117,14 +125,17 @@ export type QuestionColumnsController = {
   pendingRun: PendingRun | null;
   onCancelRun: () => void;
   onConfirmRun: () => void;
-  /** Asks every question this search shows of every row that lacks an answer. */
-  onRunAll: () => void;
   removing: QuestionColumn | null;
   onCancelRemove: () => void;
   onConfirmRemove: () => void;
 };
 
 const NO_ADDED_IDS: ReadonlySet<string> = new Set();
+const ANSWER_BUDGET_REFUSAL_CODE = "usage_limit_exceeded";
+const DEFAULT_RUN_OPTIONS = {
+  type: "remaining",
+  scope: "selection",
+} as const satisfies QuestionColumnRunOptions;
 
 export const useQuestionColumns = ({
   enabled,
@@ -175,8 +186,8 @@ export const useQuestionColumns = ({
     enabled: enabled && activeOrganizationId !== null && decisionIds.length > 0,
   });
 
-  const columnsView = useQueryView(columnsQuery);
-  const answersView = useQueryView(answersQuery);
+  const columnsView = queryView(columnsQuery);
+  const answersView = queryView(answersQuery);
   const reads = questionReads({
     columns: columnsView,
     answers: decisionIds.length === 0 ? null : answersView,
@@ -199,8 +210,14 @@ export const useQuestionColumns = ({
     answersByKey.set(answerKey(answer.columnId, answer.decisionId), answer);
   }
 
-  const reportFailure = (error: unknown) => {
-    analytics.captureError(error);
+  const reportFailure = (
+    error: unknown,
+    fingerprintKey: ExceptionFingerprintKey,
+  ) => {
+    analytics.captureError(error, {
+      fingerprintKey,
+      scope: { type: "handler", handlerId: fingerprintKey },
+    });
     notifyUserError(error, t("common.somethingWentWrong"));
   };
 
@@ -218,12 +235,10 @@ export const useQuestionColumns = ({
       );
       await invalidateColumns();
     },
-    onError: reportFailure,
+    onError: (error) => reportFailure(error, "useQuestionColumns:save-column"),
   });
 
-  // `force` is the retry of one cell that already holds a failure: the server
-  // treats anything but `pending` as answered, so without it a failed cell
-  // would be skipped and the retry would do nothing.
+  // The shared policy skips active work and licensing refusals even when forced.
   const run = useMutation({
     mutationFn: async ({ force, runSet }: RunRequest) =>
       await runAnswers({
@@ -239,11 +254,17 @@ export const useQuestionColumns = ({
       });
       await invalidateColumns();
     },
-    onError: reportFailure,
+    onError: (error) => {
+      setPendingRun(null);
+      reportFailure(error, "useQuestionColumns:run-column");
+    },
   });
 
   /** Ask for a run, or say there is nothing to ask; never run silently. */
-  const askToRun = (column: QuestionColumn | null) => {
+  const askToRun = (
+    column: QuestionColumn | null,
+    options: QuestionColumnRunOptions = DEFAULT_RUN_OPTIONS,
+  ) => {
     if (!canRun) {
       return;
     }
@@ -252,13 +273,15 @@ export const useQuestionColumns = ({
       ...(column === null ? {} : { columnId: column.id }),
       columns: shown,
       pageDecisionIds,
-      selectedDecisionIds,
+      selectedDecisionIds: options.scope === "page" ? [] : selectedDecisionIds,
+      force: options.type === "rerun",
     });
     if (runSet.cells === 0) {
       stellaToast.add({ title: t("caseLaw.research.nothingToRun") });
       return;
     }
     setPendingRun({
+      force: options.type === "rerun",
       runSet,
       question: column === null ? null : column.question,
     });
@@ -327,6 +350,26 @@ export const useQuestionColumns = ({
             activeOrganizationId,
             enabled,
             answersByKey,
+            pageDecisionIds,
+            selectedDecisionIds,
+            queuedAnswerKeys: run.isPending
+              ? questionQueuedAnswerKeys({
+                  answersByKey,
+                  force: run.variables.force,
+                  runSet: run.variables.runSet,
+                })
+              : NO_ADDED_IDS,
+            refusedAnswerKeys:
+              run.isError &&
+              APIError.is(run.error) &&
+              run.error.code === ANSWER_BUDGET_REFUSAL_CODE
+                ? questionRefusedAnswerKeys({
+                    answersByKey,
+                    runSet: run.variables.runSet,
+                  })
+                : NO_ADDED_IDS,
+            onRunColumn: askToRun,
+            onRunSelectedRows: () => askToRun(null),
             columns: shown,
             addable,
             onAddToSearch: (columnIds) => {
@@ -378,11 +421,10 @@ export const useQuestionColumns = ({
         return;
       }
       detached(
-        run.mutateAsync({ force: false, runSet: pendingRun.runSet }),
+        run.mutateAsync({ force: pendingRun.force, runSet: pendingRun.runSet }),
         "case-law-questions.run",
       );
     },
-    onRunAll: () => askToRun(null),
     removing,
     onCancelRemove: () => setRemoving(null),
     onConfirmRemove: () => {
@@ -424,6 +466,35 @@ const QuestionReadError = ({ retry }: { retry: () => Promise<unknown> }) => {
   );
 };
 
+export const QuestionColumnSelectionBar = ({
+  surface,
+}: {
+  surface: QuestionColumnSurface;
+}) => {
+  if (
+    surface.type !== "available" ||
+    !surface.grants.run ||
+    surface.columns.length === 0
+  ) {
+    return null;
+  }
+  const scope = aiColumnRunScope({
+    pageRowIds: surface.pageDecisionIds,
+    selectedRowIds: surface.selectedDecisionIds,
+  });
+  if (scope.type !== "selection") {
+    return null;
+  }
+  return (
+    <AiColumnSelectionAction
+      columns={surface.columns.length}
+      rows={scope.count}
+      disabled={surface.isRunning}
+      onRun={surface.onRunSelectedRows}
+    />
+  );
+};
+
 export const QuestionColumnControls = ({
   controller,
 }: {
@@ -434,11 +505,7 @@ export const QuestionColumnControls = ({
 
   switch (surface.type) {
     case "pending":
-      return (
-        <div role="status" aria-label={t("common.loading")}>
-          <Skeleton className="h-7 w-32" />
-        </div>
-      );
+      return <QuestionColumnControlsPending label={t("common.loading")} />;
     case "error":
       return <QuestionReadError retry={surface.retry} />;
     case "hidden":
@@ -457,17 +524,6 @@ export const QuestionColumnControls = ({
         <QuestionReadError retry={surface.readNotice.retry} />
       )}
       <AddQuestionColumn surface={surface} triggerVariant="labelled" />
-      {surface.grants.run && surface.columns.length > 0 && (
-        <Button
-          className="text-muted-foreground h-7 min-h-0"
-          disabled={surface.isRunning}
-          onClick={controller.onRunAll}
-          size="sm"
-          variant="ghost"
-        >
-          {t("caseLaw.research.runAll")}
-        </Button>
-      )}
 
       {editing !== null && (
         <BulkAddColumns
@@ -482,7 +538,7 @@ export const QuestionColumnControls = ({
           open
           target={{
             kind: "organisation",
-            editing,
+            mode: { type: "edit", column: editing },
             suggestion: surface.suggestion,
           }}
           triggerVariant="none"
@@ -518,6 +574,11 @@ export const QuestionColumnControls = ({
             </AlertDialogClose>
             <Button
               disabled={surface.isRunning || !surface.grants.run}
+              disabledReason={
+                surface.isRunning
+                  ? t("caseLaw.research.runInProgress")
+                  : t("caseLaw.research.runPermissionRequired")
+              }
               onClick={controller.onConfirmRun}
             >
               {t("caseLaw.research.runConfirm")}

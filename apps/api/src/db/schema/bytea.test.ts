@@ -12,8 +12,8 @@ describe("binary database driver decoding", () => {
       const driverValues = [
         bytes,
         new Uint8Array(bytes),
-        bytes.toString("hex"),
-        `\\x${bytes.toString("hex")}`,
+        bytes.toHex(),
+        `\\x${bytes.toHex()}`,
       ];
       for (const driverValue of driverValues) {
         const decoded =
@@ -41,9 +41,9 @@ describe("binary database driver decoding", () => {
   test.each([null, {}, [0, 255], new DataView(new ArrayBuffer(2)), 42])(
     "rejects unsupported driver values instead of guessing their encoding",
     (value) => {
-      expect(() =>
-        businessRegistryCredentials.ciphertext.mapFromDriverValue(value),
-      ).toThrow("Unexpected bytea driver value");
+      expect(() => {
+        businessRegistryCredentials.ciphertext.mapFromDriverValue(value);
+      }).toThrow("Unexpected bytea driver value");
     },
   );
 });

@@ -1,0 +1,7 @@
+# Gating and sizing heavy database maintenance
+
+Generated from `scripts/ownership/database-load-gate.ts`. See [Module ownership](../module-ownership.md).
+
+| Capability                                                          | Owner                                                                 | Enforcement | Summary                                                                                                                                                                                                                                                                       |
+| ------------------------------------------------------------------- | --------------------------------------------------------------------- | ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `database-load-gate` — Gating and sizing heavy database maintenance | `packages/db-load-gate/`, `apps/api/src/lib/db/ebs-balance-reader.ts` | none        | One transport-free package combines health signals, records decisions, sizes batches and arbitrates a database-wide priority slot. The API adapter alone reads both RDS EBS balances through CloudWatch; index runners and backfills use the same source and freshness rules. |

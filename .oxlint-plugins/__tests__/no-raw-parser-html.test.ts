@@ -1,4 +1,6 @@
-import { describe, expect, setDefaultTimeout, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 import {
   readGitTree,
@@ -6,7 +8,6 @@ import {
 } from "../../scripts/check-parser-versions.ts";
 import { lintSingleRule } from "./lint-single-rule.ts";
 
-setDefaultTimeout(20_000);
 const RULE_NAME = "no-raw-parser-html";
 
 const lint = async (lines: readonly string[], sourcePath = "parser.ts") =>
@@ -14,8 +15,10 @@ const lint = async (lines: readonly string[], sourcePath = "parser.ts") =>
 
 describe.serial("HTML parser helper ownership", () => {
   test("covers every registered parser owner in the root lint scope", async () => {
-    const root = new URL("../../", import.meta.url).pathname;
-    const configured = await Bun.file(`${root}oxlint.config.ts`).text();
+    const root = fileURLToPath(new URL("../../", import.meta.url));
+    const configured = await Bun.file(
+      path.join(root, "oxlint.config.ts"),
+    ).text();
     const ruleIndex = configured.indexOf(
       '"no-raw-parser-html/no-raw-parser-html": "error"',
     );
@@ -66,24 +69,35 @@ describe.serial("HTML parser helper ownership", () => {
     }
 
     const bannedHtml = [
-      'import * as cheerio from "cheerio";',
-      'const $ = cheerio.load("<table><tr><td><script>hidden</script></td></tr></table>");',
+      'import { load } from "@stll/html"; import type * as cheerio from "@stll/html";',
+      'const $ = load("<table><tr><td><script>hidden</script></td></tr></table>");',
       '$("main").text();',
       '$("table").find("tr");',
       'const tag = "p"; tag !== "style";',
     ];
-    for (const ownerModule of ownerModules) {
-      expect(matches(includeGlobs, ownerModule)).toBe(true);
-      expect(matches(excludeGlobs, ownerModule)).toBe(false);
-      expect(await lint(bannedHtml, ownerModule)).toEqual([3, 4, 5]);
-    }
+    const results = await Promise.all(
+      [...ownerModules].map(async (lintCase, index) => {
+        const ownerModule = lintCase;
+        expect(matches(includeGlobs, ownerModule)).toBe(true);
+        expect(matches(excludeGlobs, ownerModule)).toBe(false);
+
+        return {
+          label: `case ${index + 1}: ${JSON.stringify(lintCase)}`,
+          result: await lint(bannedHtml, ownerModule),
+          expected: [3, 4, 5],
+        };
+      }),
+    );
+    expect(results.map(({ label, result }) => ({ label, result }))).toEqual(
+      results.map(({ label, expected }) => ({ label, result: expected })),
+    );
   });
 
   test("rejects raw text reads through load aliases, selection aliases and typed parameters", async () => {
     expect(
       await lint([
-        'import { load as read, type Cheerio as Nodes, type CheerioAPI as Document } from "cheerio";',
-        'import * as html from "cheerio";',
+        'import { load as read } from "@stll/html"; import type { Cheerio as Nodes, CheerioAPI as Document } from "@stll/html";',
+        'import type * as html from "@stll/html"; import * as htmlLoader from "@stll/html";',
         'const parse = read; const $ = parse("<p>Visible</p>");',
         '$("p").text();',
         'const selection = $("p"); const alias = selection;',
@@ -93,7 +107,7 @@ describe.serial("HTML parser helper ownership", () => {
         "const typed = (selection: Nodes<unknown>) => selection.text();",
         'const api = (document: Document) => document("p").text();',
         "const qualified = (document: html.CheerioAPI) => document.root().text();",
-        'html.load("<p>Visible</p>").text();',
+        'htmlLoader.load("<p>Visible</p>").text();',
       ]),
     ).toEqual([4, 6, 7, 8, 9, 10, 11, 12]);
   });
@@ -101,7 +115,7 @@ describe.serial("HTML parser helper ownership", () => {
   test("rejects descendant rows and cells across selector spellings and constant aliases", async () => {
     expect(
       await lint([
-        'import { load } from "cheerio";',
+        'import { load } from "@stll/html";',
         'const $ = load("<table></table>"); const table = $("table");',
         'table.find("tr");',
         'table.find("td");',
@@ -126,7 +140,7 @@ describe.serial("HTML parser helper ownership", () => {
   test("rejects comparisons, switch cases, sets, includes lists and exclusion selectors", async () => {
     expect(
       await lint([
-        'import { load } from "cheerio";',
+        'import { load } from "@stll/html";',
         'const $ = load("<p></p>"); const tag = "p";',
         'const script = "script"; const same = tag === script;',
         'const other = "style" !== tag;',
@@ -142,8 +156,8 @@ describe.serial("HTML parser helper ownership", () => {
   test("accepts helper calls, direct cells, text setters, unrelated methods and selector attributes", async () => {
     expect(
       await lint([
-        'import * as cheerio from "cheerio";',
-        'const $ = cheerio.load("<table></table>"); const table = $("table");',
+        'import { load } from "@stll/html"; import type * as cheerio from "@stll/html";',
+        'const $ = load("<table></table>"); const table = $("table");',
         'visibleHtmlText(table); ownTableRows(table); isExcludedHtmlTag("p");',
         'table.children("td, th");',
         'table.find("[data-kind=td], [data-tag=script], .tr");',
@@ -162,7 +176,7 @@ describe.serial("HTML parser helper ownership", () => {
 
   test("reserves the raw operations to the exact shared helper owner", async () => {
     const source = [
-      'import { load } from "cheerio";',
+      'import { load } from "@stll/html";',
       'const $ = load("<p></p>");',
       '$("p").text();',
     ];
@@ -186,7 +200,7 @@ describe.serial("HTML parser helper ownership", () => {
     ];
     expect(
       await lint([
-        'import { load } from "cheerio";',
+        'import { load } from "@stll/html";',
         'const $ = load("<table></table>"); const table = $("table");',
         ...selectors.map(
           (selector) => `table.find(${JSON.stringify(selector)});`,
@@ -198,9 +212,9 @@ describe.serial("HTML parser helper ownership", () => {
   test("preserves XML text semantics while guarding HTML in a mixed parser", async () => {
     expect(
       await lint([
-        'import * as cheerio from "cheerio";',
-        'const xml = cheerio.load("<record></record>", { xml: true });',
-        'const html = cheerio.load("<p></p>");',
+        'import { load } from "@stll/html"; import type * as cheerio from "@stll/html";',
+        'const xml = load("<record></record>", { xml: true });',
+        'const html = load("<p></p>");',
         'xml("record").text(); xml("record").find("td").text();',
         'html("p").text();',
         'const metadata = ($: cheerio.CheerioAPI) => $("record").text();',
@@ -211,7 +225,7 @@ describe.serial("HTML parser helper ownership", () => {
     ).toEqual([5, 8]);
     expect(
       await lint([
-        'import { load } from "cheerio";',
+        'import { load } from "@stll/html";',
         'const options = { xmlMode: true }; const $ = load("<record></record>", options);',
         '$("record").text(); $("table tr");',
         'const tags = new Set(["script", "style"]);',
@@ -222,9 +236,9 @@ describe.serial("HTML parser helper ownership", () => {
   test("follows XML provenance through stable state properties", async () => {
     expect(
       await lint([
-        'import * as cheerio from "cheerio";',
-        'const xml = cheerio.load("<record></record>", { xml: true });',
-        'const html = cheerio.load("<p></p>");',
+        'import { load } from "@stll/html"; import type * as cheerio from "@stll/html";',
+        'const xml = load("<record></record>", { xml: true });',
+        'const html = load("<p></p>");',
         "const state = { $: xml };",
         'const readXml = ($: cheerio.CheerioAPI) => $("record").text();',
         "readXml(state.$);",
@@ -233,13 +247,13 @@ describe.serial("HTML parser helper ownership", () => {
       ]),
     ).toEqual([7]);
 
-    const root = new URL("../../", import.meta.url).pathname;
+    const root = fileURLToPath(new URL("../../", import.meta.url));
     const plUodoPath =
       "apps/api/src/handlers/case-law/ingestion/parsers/pl-uodo.ts";
     expect(
       await lintSingleRule(
         RULE_NAME,
-        await Bun.file(`${root}${plUodoPath}`).text(),
+        await Bun.file(path.join(root, plUodoPath)).text(),
         { sourcePath: plUodoPath },
       ),
     ).toEqual([]);
@@ -248,7 +262,7 @@ describe.serial("HTML parser helper ownership", () => {
   test("guards HTML helper modules and local Cheerio type aliases without a load call", async () => {
     expect(
       await lint([
-        'import * as cheerio from "cheerio";',
+        'import { load } from "@stll/html"; import type * as cheerio from "@stll/html";',
         'import { visibleHtmlText } from "./shared-inlines";',
         "type Root = cheerio.CheerioAPI;",
         "type Nodes = cheerio.Cheerio<unknown>;",

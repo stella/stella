@@ -1,17 +1,19 @@
 import type { PGlite } from "@electric-sql/pglite";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { getTableName, isTable } from "drizzle-orm";
+import { getTableName, getViewName, isTable, isView } from "drizzle-orm";
 import { readdir } from "node:fs/promises";
 import nodePath from "node:path";
 
 import * as schema from "@/api/db/schema";
 import {
+  availableSchemaRelationNames as harnessSchemaRelationNames,
   createTestPglite,
   HARNESS_RELATIONS_SQL,
   ROLE_GRANT_STATEMENTS,
 } from "@/api/tests/pglite-test-db";
 import {
   deriveStellaTablePrivileges,
+  migrationSqlWithoutLineComments,
   readCommittedMigrations,
 } from "@/api/tests/stella-table-privileges";
 import type {
@@ -27,15 +29,86 @@ import type {
  * migration and never here, so every suite that SET ROLE'd to ingestion saw a
  * permission error the real deployment does not have.
  *
- * This is the mirror check. Every `(role, table)` pair a committed migration
- * grants must also be granted by the harness, for every table the schema still
- * defines. It compares the pairs, not the verbs: the harness deliberately
- * spells some grants more coarsely (one statement per role rather than per
- * migration), and a table nobody may touch at all is the failure worth
- * catching.
+ * This is the mirror check. Every effective relation-wide `(role, relation)`
+ * grant committed migrations leave must also be granted by the harness, for
+ * every relation the schema still defines. Column grants are checked
+ * separately below.
  */
 
 const MIGRATIONS_DIR = nodePath.resolve(import.meta.dir, "../../drizzle");
+const API_SRC_DIR = nodePath.resolve(import.meta.dir, "..");
+
+const INGESTION_ROLE_HELPER_IMPORT =
+  /import\s*\{[^}]*\bcreateIngestionRoleScopedDb\b[^}]*\}\s*from\s*["']@\/api\/tests\/pglite-test-db["']/su;
+const PIPELINE_ENTRYPOINT =
+  /\b(?:runIngestionPipeline|acquireCaseLawSourceIngestionLease)\s*\(/u;
+
+/**
+ * Existing suites outside this change's PGlite pipeline set. This list may
+ * only shrink: the guard rejects entries that stop calling an entrypoint or
+ * start using the shared role helper.
+ */
+const INGESTION_ROLE_HELPER_EXEMPTIONS = {
+  "handlers/case-law/ingestion/background-replay-store.postgres.test.ts":
+    "Postgres replay-store fixture owns its transaction boundary",
+  "handlers/case-law/ingestion/background-replay.postgres.test.ts":
+    "Postgres replay fixture owns its transaction boundary",
+  "handlers/case-law/ingestion/pipeline-canonical.test.ts":
+    "in-memory transaction double has no Drizzle PGlite handle",
+  "handlers/case-law/ingestion/pipeline-unread-items.db.test.ts":
+    "inline ingestion role from PR 7679; moves to the helper with its owner",
+  "handlers/case-law/ingestion/pipeline.test.ts":
+    "unit transaction doubles have no Drizzle PGlite handle",
+  "handlers/case-law/ingestion/primary-reference.db.test.ts":
+    "primary-reference fixture belongs to a separate suite owner",
+  "handlers/case-law/ingestion/reconciliation-listing-revisions.postgres.test.ts":
+    "Postgres reconciliation fixture owns its transaction boundary",
+  "handlers/case-law/ingestion/replay-apply.db.test.ts":
+    "replay-apply fixture belongs to a separate suite owner",
+  "handlers/case-law/ingestion/source-total-maintenance.db.test.ts":
+    "Postgres fixture uses production createIngestionDb",
+  "handlers/case-law/ingestion/supplement-fold.db.test.ts":
+    "supplement-fold fixture belongs to a separate suite owner",
+  "lib/case-law/replay-write-contracts.postgres.test.ts":
+    "Postgres replay contract fixture owns its transaction boundary",
+  "lib/legal-search/deferred-document-source-ownership.db.test.ts":
+    "Postgres ownership fixture owns its transaction boundary",
+  "scripts/eu-completion-tick.postgres.test.ts":
+    "Postgres script fixture uses production createIngestionDb",
+  "scripts/eu-ecj-formex-refresh.postgres.test.ts":
+    "Postgres script fixture uses production createIngestionDb",
+} as const;
+
+test("pipeline suites use the ingestion-role ScopedDb helper", async () => {
+  const glob = new Bun.Glob("**/*.test.ts");
+  const callers = new Map<string, string>();
+  for await (const path of glob.scan({ cwd: API_SRC_DIR })) {
+    const source = await Bun.file(nodePath.join(API_SRC_DIR, path)).text();
+    if (PIPELINE_ENTRYPOINT.test(source)) {
+      callers.set(path, source);
+    }
+  }
+
+  const missingHelper = [...callers]
+    .filter(
+      ([path, source]) =>
+        !INGESTION_ROLE_HELPER_IMPORT.test(source) &&
+        !(path in INGESTION_ROLE_HELPER_EXEMPTIONS),
+    )
+    .map(([path]) => path)
+    .toSorted();
+  const staleExemptions = Object.keys(INGESTION_ROLE_HELPER_EXEMPTIONS)
+    .filter((path) => {
+      const source = callers.get(path);
+      return source === undefined || INGESTION_ROLE_HELPER_IMPORT.test(source);
+    })
+    .toSorted();
+
+  expect({ missingHelper, staleExemptions }).toEqual({
+    missingHelper: [],
+    staleExemptions: [],
+  });
+});
 
 /**
  * Roles whose table privileges this pair check leaves to another one.
@@ -44,19 +117,25 @@ const MIGRATIONS_DIR = nodePath.resolve(import.meta.dir, "../../drizzle");
  */
 const WHOLESALE_ROLES = new Set(["stella", "public"]);
 
+/** The PGlite schema installer replays these migration-owned grants verbatim. */
+const MIGRATION_REPLAYED_ROLES = new Set([
+  "stella_entity_gate",
+  "stella_correspondence_source",
+]);
+
 /**
  * Column grants are compared for every role but `public`: the harness narrows
  * `stella` table by table, and those column lists must match the deployment.
  */
 const COLUMN_UNSCOPED_ROLES = new Set(["public"]);
 
-const GRANT_STATEMENT =
-  /\bGRANT\b([\s\S]*?)\bTO\s+("?[a-zA-Z_][a-zA-Z0-9_]*"?)\s*(?:;|$)/gu;
+const GRANT_OR_REVOKE_STATEMENT =
+  /\b(GRANT|REVOKE)\b([^;]*?)\b(TO|FROM)\s+("?[a-zA-Z_][a-zA-Z0-9_]*"?)\s*(?:;|$)/gu;
 
 const OBJECT_CLAUSE = /\bON\s+(?:TABLE\s+)?([\s\S]*?)$/u;
 
 const NOT_A_TABLE_GRANT =
-  /\bON\s+(?:ALL\s+TABLES|ALL\s+SEQUENCES|SCHEMA|SEQUENCE|FUNCTION|PROCEDURE|ROUTINE|DATABASE|TYPE|LARGE\s+OBJECT)\b/iu;
+  /\bON\s+(?:ALL\s+TABLES|ALL\s+SEQUENCES|SCHEMA|SEQUENCE|FUNCTION|PROCEDURE|ROUTINE|DATABASE|TYPE|PARAMETER|LARGE\s+OBJECT)\b/iu;
 
 const IDENTIFIER = /"([a-zA-Z_][a-zA-Z0-9_]*)"|\b([a-z_][a-z0-9_]*)\b/gu;
 
@@ -88,17 +167,22 @@ const PRIVILEGE_WORDS = new Set([
  * A column-scoped grant carries its list in parentheses after the privilege
  * and before `ON`, which the table parser above deliberately discards.
  */
-const COLUMN_GRANT =
-  /\b(SELECT|INSERT|UPDATE|REFERENCES)\s*\(([^)]*)\)[\s\S]*?\bON\s+(?:TABLE\s+)?("?[a-zA-Z_][a-zA-Z0-9_]*"?)/giu;
+const COLUMN_PRIVILEGE = /\b(SELECT|INSERT|UPDATE|REFERENCES)\s*\(([^)]*)\)/giu;
 
 const unquote = (value: string): string => value.replaceAll('"', "");
 
-/** Every `(role, table)` pair the given SQL grants, as `role:table`. */
+/** Effective relation-wide grants, as `role:relation`. */
 const grantedPairs = (sqlText: string): Set<string> => {
   const pairs = new Set<string>();
-  for (const match of sqlText.matchAll(GRANT_STATEMENT)) {
-    const [, body = "", rawRole = ""] = match;
+  for (const match of migrationSqlWithoutLineComments(sqlText).matchAll(
+    GRANT_OR_REVOKE_STATEMENT,
+  )) {
+    const [, verb = "", body = "", , rawRole = ""] = match;
     if (NOT_A_TABLE_GRANT.test(body)) {
+      continue;
+    }
+    // Column-scoped privileges do not grant relation-wide access.
+    if (/\b(?:SELECT|INSERT|UPDATE|REFERENCES)\s*\(/iu.test(body)) {
       continue;
     }
     const objects = OBJECT_CLAUSE.exec(body)?.[1];
@@ -113,28 +197,50 @@ const grantedPairs = (sqlText: string): Set<string> => {
       if (name.length === 0 || PRIVILEGE_WORDS.has(name.toLowerCase())) {
         continue;
       }
-      pairs.add(`${role}:${name}`);
+      const pair = `${role}:${name}`;
+      if (verb.toUpperCase() === "GRANT") {
+        pairs.add(pair);
+      } else {
+        pairs.delete(pair);
+      }
     }
   }
   return pairs;
 };
 
 /**
- * Every `(role, table, column, privilege)` the given SQL grants column by
- * column, as `role:table:column:PRIVILEGE`.
+ * Effective `(role, relation, column, privilege)` grants, as
+ * `role:relation:column:PRIVILEGE`.
  */
 const grantedColumnPairs = (sqlText: string): Set<string> => {
   const pairs = new Set<string>();
-  for (const match of sqlText.matchAll(GRANT_STATEMENT)) {
-    const [, body = "", rawRole = ""] = match;
+  for (const match of migrationSqlWithoutLineComments(sqlText).matchAll(
+    GRANT_OR_REVOKE_STATEMENT,
+  )) {
+    const [, verb = "", body = "", , rawRole = ""] = match;
     const role = unquote(rawRole);
-    for (const columnGrant of body.matchAll(COLUMN_GRANT)) {
-      const [, privilege = "", columnList = "", rawTable = ""] = columnGrant;
-      const table = unquote(rawTable);
-      for (const rawColumn of columnList.split(",")) {
-        const column = unquote(rawColumn.trim());
-        if (column.length > 0) {
-          pairs.add(`${role}:${table}:${column}:${privilege.toUpperCase()}`);
+    const objects = OBJECT_CLAUSE.exec(body)?.[1];
+    if (objects === undefined) {
+      continue;
+    }
+    const tables = objects.split(",").map((object) => {
+      const identifiers = [...object.matchAll(IDENTIFIER)];
+      const identifier = identifiers.at(-1);
+      return unquote(identifier?.[1] ?? identifier?.[2] ?? "");
+    });
+    for (const columnPrivilege of body.matchAll(COLUMN_PRIVILEGE)) {
+      const [, privilege = "", columnList = ""] = columnPrivilege;
+      for (const table of tables) {
+        for (const rawColumn of columnList.split(",")) {
+          const column = unquote(rawColumn.trim());
+          if (table.length > 0 && column.length > 0) {
+            const pair = `${role}:${table}:${column}:${privilege.toUpperCase()}`;
+            if (verb.toUpperCase() === "GRANT") {
+              pairs.add(pair);
+            } else {
+              pairs.delete(pair);
+            }
+          }
         }
       }
     }
@@ -142,10 +248,12 @@ const grantedColumnPairs = (sqlText: string): Set<string> => {
   return pairs;
 };
 
-const schemaTableNames = new Set<string>(
+const availableSchemaRelationNames = new Set<string>(
   Object.values(schema)
-    .filter((value) => isTable(value))
-    .map((table) => getTableName(table)),
+    .filter((value) => isTable(value) || isView(value))
+    .map((relation) =>
+      isTable(relation) ? getTableName(relation) : getViewName(relation),
+    ),
 );
 
 const readMigrationSql = async (): Promise<string> => {
@@ -166,6 +274,19 @@ const readMigrationSql = async (): Promise<string> => {
 };
 
 describe("pglite role grants mirror the committed migrations", () => {
+  test("the public reader harness grants only relations present in its schema", () => {
+    const harnessPairs = grantedPairs(ROLE_GRANT_STATEMENTS.join(";\n"));
+    const absent = [...harnessPairs].filter((pair) => {
+      const [role, table = ""] = pair.split(":");
+      return (
+        role === "stella_public_law_reader" &&
+        !harnessSchemaRelationNames.has(table)
+      );
+    });
+
+    expect(absent).toEqual([]);
+  });
+
   test("the migrations grant no table the harness leaves ungranted", async () => {
     const migrationPairs = grantedPairs(await readMigrationSql());
     const harnessPairs = grantedPairs(ROLE_GRANT_STATEMENTS.join(";\n"));
@@ -175,7 +296,8 @@ describe("pglite role grants mirror the committed migrations", () => {
         const [role = "", table = ""] = pair.split(":");
         return (
           !WHOLESALE_ROLES.has(role) &&
-          schemaTableNames.has(table) &&
+          !MIGRATION_REPLAYED_ROLES.has(role) &&
+          availableSchemaRelationNames.has(table) &&
           !harnessPairs.has(pair)
         );
       })
@@ -202,7 +324,11 @@ describe("pglite role grants mirror the committed migrations", () => {
   test("the migration and harness column grants are the same set", async () => {
     const inScope = (pair: string): boolean => {
       const [role = "", table = ""] = pair.split(":");
-      return !COLUMN_UNSCOPED_ROLES.has(role) && schemaTableNames.has(table);
+      return (
+        !COLUMN_UNSCOPED_ROLES.has(role) &&
+        !MIGRATION_REPLAYED_ROLES.has(role) &&
+        availableSchemaRelationNames.has(table)
+      );
     };
     const migrationColumns = [
       ...grantedColumnPairs(await readMigrationSql()),
@@ -226,6 +352,24 @@ describe("pglite role grants mirror the committed migrations", () => {
       migrationPairs.has("stella_ingestion:case_law_reconciliation_items"),
     ).toBe(true);
     expect(harnessPairs.has("stella_ingestion:case_law_decisions")).toBe(true);
+    expect(
+      migrationPairs.has("stella_public_law_reader:case_law_decisions"),
+    ).toBe(false);
+    // Both readers read decisions through the views; the contract migration
+    // revokes the base table, and the parser has to apply that REVOKE.
+    expect(migrationPairs.has("stella_caselaw_reader:case_law_decisions")).toBe(
+      false,
+    );
+    expect(harnessPairs.has("stella_caselaw_reader:case_law_decisions")).toBe(
+      false,
+    );
+    for (const view of [
+      "case_law_published_decisions",
+      "case_law_unredacted_decisions",
+    ]) {
+      expect(migrationPairs.has(`stella_caselaw_reader:${view}`)).toBe(true);
+      expect(harnessPairs.has(`stella_caselaw_reader:${view}`)).toBe(true);
+    }
 
     // An empty column set on both sides would satisfy the equality above.
     const migrationColumns = grantedColumnPairs(await readMigrationSql());
@@ -236,6 +380,25 @@ describe("pglite role grants mirror the committed migrations", () => {
       "stella_ingestion:case_law_sources:stored_total:UPDATE";
     expect(migrationColumns.has(storedTotalGrant)).toBe(true);
     expect(harnessColumns.has(storedTotalGrant)).toBe(true);
+    // The multi-line column REVOKE in the contract migration has to undo
+    // the earlier column grants on the base table.
+    expect(
+      migrationColumns.has(
+        "stella_public_law_reader:case_law_decisions:case_number:SELECT",
+      ),
+    ).toBe(false);
+    expect(
+      harnessColumns.has(
+        "stella_public_law_reader:case_law_decisions:case_number:SELECT",
+      ),
+    ).toBe(false);
+    for (const columns of [migrationColumns, harnessColumns]) {
+      expect(
+        columns.has(
+          "stella_public_law_reader:case_law_published_decisions:case_number:SELECT",
+        ),
+      ).toBe(true);
+    }
   });
 });
 
@@ -335,6 +498,116 @@ describe("pglite stella table privileges mirror the committed migrations", () =>
     expect(harness.get("legal_lists")).toEqual(
       new Set(["SELECT", "INSERT", "UPDATE", "DELETE"]),
     );
+  });
+
+  test("the maintenance role has only its migration-owned column grants", async () => {
+    const migrationColumns = [...grantedColumnPairs(await readMigrationSql())]
+      .filter((pair) => pair.startsWith("stella_entity_gate:"))
+      .toSorted();
+    const harnessColumns = await client.query<{
+      table_name: string;
+      column_name: string;
+      privilege_type: string;
+    }>(`
+      SELECT table_name, column_name, privilege_type
+      FROM information_schema.column_privileges
+      WHERE table_schema = 'public'
+        AND grantee = 'stella_entity_gate'
+      ORDER BY table_name, column_name, privilege_type
+    `);
+    const actualColumns = harnessColumns.rows.map(
+      ({ table_name, column_name, privilege_type }) =>
+        `stella_entity_gate:${table_name}:${column_name}:${privilege_type}`,
+    );
+    const tablePrivileges = await client.query<{ relation: string }>(`
+      SELECT c.relname AS relation
+      FROM pg_catalog.pg_class c
+      JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+      CROSS JOIN LATERAL pg_catalog.aclexplode(c.relacl) acl
+      WHERE n.nspname = 'public'
+        AND acl.grantee = 'stella_entity_gate'::regrole
+    `);
+
+    expect(migrationColumns).not.toHaveLength(0);
+    expect(actualColumns).toEqual(migrationColumns);
+    expect(tablePrivileges.rows).toEqual([]);
+  });
+
+  test("source maintenance privileges match its replayed migration exactly", async () => {
+    const migration = await readMigrationSql();
+    const role = "stella_correspondence_source";
+    const expectedColumns = [...grantedColumnPairs(migration)]
+      .filter((pair) => pair.startsWith(`${role}:`))
+      .toSorted();
+    const expectedTables = new Set<string>();
+    for (const [
+      ,
+      verb = "",
+      body = "",
+      ,
+      rawRole = "",
+    ] of migrationSqlWithoutLineComments(migration).matchAll(
+      GRANT_OR_REVOKE_STATEMENT,
+    )) {
+      if (unquote(rawRole) !== role || NOT_A_TABLE_GRANT.test(body)) {
+        continue;
+      }
+      const objects = OBJECT_CLAUSE.exec(body)?.at(1);
+      if (objects === undefined) {
+        continue;
+      }
+      const privileges = body
+        .slice(0, body.indexOf("ON"))
+        .replaceAll(COLUMN_PRIVILEGE, "")
+        .split(",")
+        .map((privilege) => privilege.trim().toUpperCase())
+        .filter(Boolean);
+      for (const object of objects.split(",")) {
+        const identifier = [...object.matchAll(IDENTIFIER)].at(-1);
+        const table = identifier?.at(1) ?? identifier?.at(2);
+        if (table === undefined) {
+          throw new TypeError("Source maintenance grant has no table");
+        }
+        for (const privilege of privileges) {
+          if (verb.toUpperCase() === "GRANT") {
+            expectedTables.add(`${table}:${privilege}`);
+          } else {
+            expectedTables.delete(`${table}:${privilege}`);
+          }
+        }
+      }
+    }
+    const columns = await client.query<{
+      table_name: string;
+      column_name: string;
+      privilege_type: string;
+    }>(`
+      SELECT table_name, column_name, privilege_type
+      FROM information_schema.column_privileges
+      WHERE table_schema = 'public' AND grantee = 'stella_correspondence_source'
+      ORDER BY table_name, column_name, privilege_type
+    `);
+    const tables = await client.query<{ relation: string; privilege: string }>(`
+      SELECT c.relname AS relation, acl.privilege_type AS privilege
+      FROM pg_catalog.pg_class c
+      JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+      CROSS JOIN LATERAL pg_catalog.aclexplode(c.relacl) acl
+      WHERE n.nspname = 'public'
+        AND acl.grantee = 'stella_correspondence_source'::regrole
+    `);
+    expect(expectedColumns).not.toHaveLength(0);
+    expect(expectedTables.size).toBeGreaterThan(0);
+    expect(
+      columns.rows.map(
+        ({ table_name, column_name, privilege_type }) =>
+          `${role}:${table_name}:${column_name}:${privilege_type}`,
+      ),
+    ).toEqual(expectedColumns);
+    expect(
+      tables.rows
+        .map(({ relation, privilege }) => `${relation}:${privilege}`)
+        .toSorted(),
+    ).toEqual([...expectedTables].toSorted());
   });
 
   test("a migration privilege change the harness ignores is drift", async () => {
@@ -452,6 +725,32 @@ describe("stella table privilege derivation", () => {
         "t",
       ),
     ).toEqual([]);
+  });
+
+  test("column grants are read from statements rather than comments or view projections", () => {
+    const pairs = grantedColumnPairs(`
+      -- GRANT access through the published view.
+      CREATE VIEW published_rows AS
+        SELECT (redacted_at IS NULL AND jsonb_extract_path_text(metadata, 'marker', 'field') IS DISTINCT FROM 'true') AS published
+        FROM decisions;
+      -- GRANT SELECT (comment_field) ON decisions TO reader;
+      GRANT SELECT (id) ON published_rows TO reader;
+    `);
+    expect([...pairs]).toEqual(["reader:published_rows:id:SELECT"]);
+  });
+
+  test("reads mixed column grants on schema-qualified tables", () => {
+    const pairs = grantedColumnPairs(`
+      GRANT SELECT ("id", "workspace_id"),
+        UPDATE ("entity_feature_gate")
+      ON public."maintenance_table" TO stella_entity_gate;
+    `);
+
+    expect([...pairs].toSorted()).toEqual([
+      "stella_entity_gate:maintenance_table:entity_feature_gate:UPDATE",
+      "stella_entity_gate:maintenance_table:id:SELECT",
+      "stella_entity_gate:maintenance_table:workspace_id:SELECT",
+    ]);
   });
 
   test("a schema-wide grant reaches every public relation that exists", () => {

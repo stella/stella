@@ -1,0 +1,18 @@
+{
+  "id": "no-floating-promise-chain",
+  "rules": ["no-floating-promise-chain/no-floating-promise-chain"],
+  "type": "changed-lines",
+  "expiresAt": "2026-11-07T00:00:00.000Z",
+  "check": [
+    "bun",
+    "--bun",
+    "oxlint",
+    "-c",
+    "oxlint.config.ts",
+    "--allow",
+    "all",
+    "--deny",
+    "no-floating-promise-chain/no-floating-promise-chain",
+    "apps/api/src"
+  ]
+}

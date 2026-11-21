@@ -13,6 +13,11 @@ import type { ControlSize } from "../lib/control-size";
 import { FIELD_TRIGGER_CLASS_NAME } from "../lib/field-trigger";
 import { OVERLAY_LAYER_CLASS_NAMES } from "../lib/overlay-layer";
 import { cn } from "../lib/utils";
+import {
+  SELECT_TRIGGER_ICON_CLASS_NAME,
+  SELECT_TRIGGER_SIZE_CLASS_NAMES,
+  SELECT_VALUE_CLASS_NAME,
+} from "./select-classes";
 
 type SelectItemProps = SelectPrimitive.Item.Props & {
   label?: string;
@@ -81,16 +86,19 @@ const Select = <Value, Multiple extends boolean | undefined = false>({
 
 const SelectTrigger = ({
   className,
+  align = "center",
   size = CONTROL_SIZE.default,
   children,
   ...props
 }: SelectPrimitive.Trigger.Props & {
   size?: ControlSize;
+  align?: "start" | "center";
 }) => (
   <SelectPrimitive.Trigger
     className={cn(
       FIELD_TRIGGER_CLASS_NAME,
       SELECT_TRIGGER_SIZE_CLASS_NAMES[size],
+      align === "start" && "justify-start",
       className,
     )}
     data-slot="select-trigger"
@@ -98,17 +106,10 @@ const SelectTrigger = ({
   >
     {children}
     <SelectPrimitive.Icon data-slot="select-icon">
-      <ChevronsUpDownIcon className="-me-1 size-4.5 opacity-80 sm:size-4" />
+      <ChevronsUpDownIcon className={SELECT_TRIGGER_ICON_CLASS_NAME} />
     </SelectPrimitive.Icon>
   </SelectPrimitive.Trigger>
 );
-
-const SELECT_TRIGGER_SIZE_CLASS_NAMES = {
-  [CONTROL_SIZE.sm]:
-    "min-h-8 gap-1.5 px-[calc(--spacing(2.5)-1px)] text-sm sm:min-h-7 sm:text-xs",
-  [CONTROL_SIZE.default]: undefined,
-  [CONTROL_SIZE.lg]: "min-h-10 sm:min-h-9",
-} as const satisfies Record<ControlSize, string | undefined>;
 
 const SelectValue = ({
   className,
@@ -124,10 +125,7 @@ const SelectValue = ({
   if (children !== undefined || displays.size === 0) {
     return (
       <SelectPrimitive.Value
-        className={cn(
-          "data-placeholder:text-muted-foreground flex-1 truncate",
-          className,
-        )}
+        className={cn(SELECT_VALUE_CLASS_NAME, className)}
         data-slot="select-value"
         placeholder={placeholder}
         {...props}
@@ -199,7 +197,7 @@ const SelectPopup = ({
         <div className="bg-popover text-popover-foreground relative h-full min-w-(--anchor-width) rounded-lg border shadow-lg/5 not-dark:bg-clip-padding before:pointer-events-none before:absolute before:inset-0 before:rounded-[calc(var(--radius-lg)-1px)] before:shadow-[0_1px_--theme(--color-black/4%)] dark:before:shadow-[0_-1px_--theme(--color-white/6%)]">
           <SelectPrimitive.List
             className={cn(
-              "max-h-(--available-height) overflow-y-auto p-1",
+              "max-h-(--available-height) overflow-y-auto overscroll-contain p-1",
               className,
             )}
             data-slot="select-list"

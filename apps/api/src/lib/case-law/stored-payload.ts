@@ -1,3 +1,4 @@
+// parser-output-unchanged: Adds the shared current-supplement merge predicate; existing decision document predicates and parser output are unchanged.
 /**
  * One definition of "this decision holds a document", shared by
  * everything that has to decide whether a payload is safe to overwrite,
@@ -11,11 +12,8 @@
  */
 
 import { notInArray, sql } from "drizzle-orm";
-import type { SQL } from "drizzle-orm";
+import type { Column, SQL } from "drizzle-orm";
 
-import { caseLawDecisions } from "@/api/db/schema";
-import { hasUsableAst } from "@/api/lib/case-law/document-ast";
-import type { CorpusPayload } from "@/api/lib/legal-search/corpus-storage";
 import {
   EMPTY_CORPUS_CONTENT_HASHES,
   storedCorpusWriteIsCompleteSql,
@@ -26,19 +24,18 @@ import {
  * `jsonb_array_length` raises on a non-array, and these columns hold
  * `{}` (the empty-AST placeholder) as often as they hold a document.
  */
-const jsonbArrayLength = (column: SQL | typeof caseLawDecisions.sections) =>
+const jsonbArrayLength = (column: SQL | Column) =>
   sql`coalesce(jsonb_array_length(case when jsonb_typeof(${column}) = 'array' then ${column} else '[]'::jsonb end), 0)`;
 
-type DecisionPayloadColumns = Pick<
-  typeof caseLawDecisions,
-  | "fulltext"
-  | "documentAst"
-  | "sections"
-  | "contentHash"
-  | "textS3Key"
-  | "normalizedS3Key"
-  | "astS3Key"
->;
+type DecisionPayloadColumns = {
+  fulltext: Column;
+  documentAst: Column;
+  sections: Column;
+  contentHash: Column;
+  textS3Key: Column;
+  normalizedS3Key: Column;
+  astS3Key: Column;
+};
 
 /**
  * Whether the row's own Postgres columns hold a document.
@@ -47,7 +44,7 @@ type DecisionPayloadColumns = Pick<
  * rather than a document, and `{}` is the placeholder an adapter without
  * a parser emits, so neither counts.
  */
-const pgPayloadCarriesDocumentFor = ({
+export const pgPayloadCarriesDocumentFor = ({
   fulltext,
   documentAst,
   sections,
@@ -60,9 +57,6 @@ const pgPayloadCarriesDocumentFor = ({
   or ${jsonbArrayLength(sections)} > 0
 )`;
 
-export const pgPayloadCarriesDocument =
-  pgPayloadCarriesDocumentFor(caseLawDecisions);
-
 /** Whether either storage location holds a readable decision document. */
 export const rowHoldsDocumentFor = (
   table: DecisionPayloadColumns,
@@ -74,7 +68,17 @@ export const rowHoldsDocumentFor = (
   )
 )`;
 
-export const rowHoldsDocument = rowHoldsDocumentFor(caseLawDecisions);
+/** A supplement is placed only when its judgment includes the current source version. */
+export const supplementIsMergedFor = ({
+  decisionId,
+  sourceHash,
+  mergedSourceHash,
+}: {
+  decisionId: Column;
+  sourceHash: Column;
+  mergedSourceHash: Column;
+}): SQL<boolean> =>
+  sql<boolean>`coalesce(${decisionId} is not null and ${mergedSourceHash} = ${sourceHash}, false)`;
 
 /**
  * Public reads cannot inspect the normalized corpus key. Confirm the readable
@@ -92,22 +96,6 @@ export const publicRowHoldsDocumentFor = (
     and ${notInArray(table.contentHash, [...EMPTY_CORPUS_CONTENT_HASHES])}
   )
 )`;
-
-export const publicRowHoldsDocument =
-  publicRowHoldsDocumentFor(caseLawDecisions);
-
-/**
- * The same question as `pgPayloadCarriesDocument`, asked of a payload
- * already in hand rather than of a row. The two must agree: this one
- * judges what the trim is about to delete, that one filters rows the
- * trim and the ingestion refresh never load.
- */
-export const payloadCarriesDocument = ({
-  text,
-  sections,
-  ast,
-}: CorpusPayload): boolean =>
-  (text ?? "") !== "" || hasUsableAst(ast) || (sections?.length ?? 0) > 0;
 
 /**
  * Whether a content hash names the payload a metadata-first ingest

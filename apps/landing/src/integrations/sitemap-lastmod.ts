@@ -31,6 +31,7 @@ const UTILITY_SOURCES: ReadonlyMap<string, readonly string[]> = new Map([
   ["changelog", [`${SRC}/pages/changelog.astro`, ...CHANGELOG_SOURCES]],
   ["press", [`${SRC}/pages/press.astro`]],
   ["privacy", [`${SRC}/pages/privacy.astro`]],
+  ["support", [`${SRC}/pages/support.astro`]],
   ["terms", [`${SRC}/pages/terms.astro`]],
   ["imprint", [`${SRC}/pages/imprint.astro`]],
   ["docx-editor", [`${SRC}/pages/docx-editor.astro`]],
@@ -89,7 +90,11 @@ export const sitemapSources = ({
   }
   if (head === "docs") {
     const entry = tail.length === 0 ? "index" : tail.join("/");
-    return [`${DOCS}/${entry}.md`, `${DOCS}/${entry}.mdx`];
+    const sources = [`${DOCS}/${entry}.md`, `${DOCS}/${entry}.mdx`];
+    if (entry === "reference/tools") {
+      sources.push("packages/cli/src/generated/tool-reference.json");
+    }
+    return sources;
   }
   if (head === "blog" && slug !== undefined && tail.length === 1) {
     return [`${BLOG}/${slug}.md`];
@@ -211,8 +216,7 @@ export const sitemapLastmod = ({
   localeTagByPath,
 }: SitemapLastmodOptions): SitemapLastmod => {
   let history:
-    | { dateBySource: ReadonlyMap<string, string> | undefined }
-    | undefined;
+    { dateBySource: ReadonlyMap<string, string> | undefined } | undefined;
   return {
     integration: {
       name: "sitemap-lastmod",

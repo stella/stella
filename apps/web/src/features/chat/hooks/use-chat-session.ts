@@ -9,34 +9,72 @@ import {
 import type { ComponentProps } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useRouter } from "@tanstack/react-router";
 import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
-import { v7 as uuidv7 } from "uuid";
-import * as v from "valibot";
 
 import type { ChatSendMode } from "@stll/anonymize-chat";
+import { CHAT_MESSAGE_EDIT_ERROR_CODE } from "@stll/api-contract";
+import type {
+  ConnectConnectorDecision,
+  ConnectConnectorOutput,
+} from "@stll/api-contract/chat-connector";
+import { buildCreateDocumentDownloadFileName } from "@stll/api-contract/chat-create-document";
+import {
+  CHAT_QUEUE_ERROR_CODE,
+  QUEUED_MESSAGE_FILES_ON_REMOVE,
+  type QueuedMessageFilesOnRemove,
+} from "@stll/api-contract/chat-queue";
+import { CHAT_LOCAL_RUN_STEER_SOURCE } from "@stll/api-contract/chat-run-target";
+import { requiresPerCallChatApproval } from "@stll/api-contract/chat-secret";
+import type { RequestSecretOutput } from "@stll/api-contract/chat-secret";
+import {
+  CHAT_MEMBER_SEND_ACTION,
+  CHAT_SEND_INTENT,
+  CHAT_TURN_STEERING,
+  type ChatMemberSendAction,
+  chatSendIntent,
+  type ChatThreadSendState,
+} from "@stll/api-contract/chat-send-intent";
+import type { ChatToolGrantScope } from "@stll/api-contract/chat-tool-grants";
+import { sleep } from "@stll/concurrency/sleep";
+import type { HandlerExceptionScope } from "@stll/errors";
+import { sha256Hex } from "@stll/sha256/browser";
 import { stellaToast } from "@stll/ui/toast";
+import { useIsMobile } from "@stll/ui/use-mobile";
 
+import { createDocumentDraftReviewId } from "@/components/ai-suggestions/file-review-session";
 import { useReviewStore } from "@/components/ai-suggestions/review-store";
+import {
+  CHAT_SEND_KEPT,
+  CHAT_SEND_SENT,
+  type ChatSendOutcome,
+  useOptionalChatEditorManager,
+} from "@/components/chat-editor-provider";
 import { AnonymizedSpan } from "@/components/chat/anonymized-span";
+import type {
+  RequestSecretDecision,
+  SecretTargetResolution,
+} from "@/components/chat/chat-approval-context";
+import type { ChatTableChartProps } from "@/components/chat/chat-table-chart";
 import type {
   ApprovalToolName,
   AskUserOutput,
-  ChatPart,
   ChatUITools,
-  ToolApprovalGrant,
+  PersistedChatMessage,
+  PlaybookSaveTarget,
 } from "@/components/chat/chat-ui-tools";
 import {
-  getExternalMcpConnectorApprovalGrant,
+  consumePlaybookSaveToolCalls,
+  getAwaitedAssistantMessageId,
   getChatAssistantTurnError,
+  getChatWorkAwaitedAtOpen,
   getCurrentApprovalPendingMessageId,
-  getExternalMcpConnectorSlugFromToolName,
-  getToolApprovalGrant,
-  isApprovalToolName,
   isChatClientRequestActive,
-  isExternalMcpToolName,
+  isNonPersistentGrantChatToolName,
   isSuggestChangesApplyOutput,
-  isToolApprovalGrant,
+  openHarnessApprovalRequestIds,
+  openMemberWaitKeys,
   projectCanonicalChatUIMessages,
   sanitizeRunningToolCalls,
   SUGGEST_CHANGES_TOOL_NAME,
@@ -53,37 +91,86 @@ import {
 } from "@/components/chat/create-document-draft-runtime";
 import {
   buildCreateDocumentDraftPayload,
-  buildCreateDocumentDownloadFileName,
   CREATE_DOCUMENT_DRAFT_VIEW,
-  createDocumentDraftReviewId,
-  createDocumentDraftTabId,
   type CreateDocumentDraft,
+  createDocumentDraftTabId,
   findReadyCreateDocumentDraftMessageId,
   isCreateDocumentDraftPayload,
   isCreateDocumentDraftSettlementActive,
   isSameCreateDocumentDraftPayload,
   replaceReadyCreateDocumentDraftOutput,
   selectCreateDocumentDrafts,
-  selectTerminalCreateDocumentDraftIds,
   selectSettleableCreateDocumentDrafts,
+  selectTerminalCreateDocumentDraftIds,
   setCreateDocumentDraftPayloadStatus,
   terminalizeUnsettledCreateDocumentDraft,
 } from "@/components/chat/create-document-draft.logic";
-import "@/components/chat/create-document-draft-inspector";
 import { openEntityInInspector } from "@/components/chat/entity-open";
 import type { CreateDocumentDestination } from "@/components/chat/needs-matter-card";
 import { StreamdownMentionLink } from "@/components/chat/streamdown-mention-link";
+import { buildEditedUserMessage } from "@/components/chat/user-message-edit.logic";
+import type {
+  UserMessageEdit,
+  UserMessageEditOutcome,
+} from "@/components/chat/user-message-edit.logic";
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
+import { queryView } from "@/lib/query-view.logic";
+import "@/components/chat/create-document-draft-inspector";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { entityReferenceHref } from "@/components/references/reference.logic";
-import { mountBrowserExtensionBridge } from "@/features/chat/browser-control/browser-extension-bridge";
+import { chatKeys } from "@/features/chat/chat-query-contract";
 import {
-  isChatMessageStartError,
-  sendThreadChatMessage,
+  type ChatQueue,
+  chatQueueOptions,
+  type ChatQueueView,
+  enqueueChatMessage,
+  moveQueuedChatMessage,
+  pauseChatQueue,
+  readQueuedChatMessage,
+  removeQueuedChatMessage,
+  resumeChatQueue,
+  sendQueuedChatMessageNow,
+  updateCachedChatQueue,
+} from "@/features/chat/chat-queue";
+import {
+  CHAT_STEER_REFUSAL_MESSAGES,
+  type ChatSteerRefusal,
+  composerDraftOfParts,
+  isQueueInsteadRefusal,
+  messagePartsOf,
+  queuedSendNow,
+  queuedSteerOf,
+  queueMoveTarget,
+  snapshotChatRequestOptions,
+  steerableMessageText,
+  withQueuedMessageMoved,
+  withQueuedMessageRemoved,
+} from "@/features/chat/chat-queue.logic";
+import { chatErrorTranslationKey } from "@/features/chat/chat-request-error";
+import {
   type ChatRuntime,
   type ChatSendMessageOptions,
   type ChatUserMessageInput,
+  hasChatErrorCode,
+  queuedChatSendOf,
+  sendThreadChatMessageUntilAccepted,
 } from "@/features/chat/chat-runtime";
+import {
+  settleRouteHandoff,
+  showStoredChatThread,
+} from "@/features/chat/chat-runtime-registry";
+import {
+  chatToolGrantsOptions,
+  projectChatToolGrants,
+  readChatToolGrantCoverage,
+  storeChatToolGrant,
+} from "@/features/chat/chat-tool-grants";
+import { LazyChatTableChart } from "@/features/chat/components/lazy-chat-table-chart";
+import {
+  planTruncatedReplay,
+  userMessageEditFailure,
+} from "@/features/chat/hooks/edit-user-message";
+import type { TruncatedReplayTarget } from "@/features/chat/hooks/edit-user-message";
 import {
   invalidateCreatedDocumentQueries,
   promoteCreateDocumentDraftInspectorTab,
@@ -92,23 +179,26 @@ import {
   setCreateDocumentDraftInspectorTabStatus,
 } from "@/features/chat/hooks/use-chat-session-created-document.logic";
 import { reconcileDocumentDeletionToolCalls } from "@/features/chat/hooks/use-chat-session-document-deletion.logic";
-import { reconcilePlaybookSaveToolCalls } from "@/features/chat/hooks/use-chat-session-playbook-save.logic";
+import {
+  followReconciledPlaybookSave,
+  playbookPaneReaction,
+  playbookPaneState,
+  reconcilePlaybookSaveToolCalls,
+} from "@/features/chat/hooks/use-chat-session-playbook-save.logic";
+import type { PlaybookPaneMode } from "@/features/chat/hooks/use-chat-session-playbook-save.logic";
 import { reconcileReaderAnnotationWriteToolCalls } from "@/features/chat/hooks/use-chat-session-reader-annotation-write.logic";
 import {
-  createInitialSendQueueState,
-  describeQueuedMessage,
-  reduceSendQueue,
-  snapshotChatRequestOptions,
-  type QueuedChatEntry,
-  type SendQueueEvent,
-  type SendQueueState,
-} from "@/features/chat/hooks/use-chat-session-send-queue.logic";
-import { fetchOlderMessages } from "@/features/chat/queries";
-import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
+  fetchChatMessage,
+  fetchOlderMessages,
+  invalidateChatThreadAcrossScopes,
+} from "@/features/chat/queries";
+import { getChatTurnPhase } from "@/features/chat/turn-notifications.logic";
+import { useChatTurnNotifications } from "@/features/chat/use-chat-turn-notifications";
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
-import { userStorageKey } from "@/lib/account/user-scoped-storage";
 import { getAnalytics } from "@/lib/analytics/provider";
-import { api } from "@/lib/api";
+import type { ChatTimingSurface } from "@/lib/analytics/types";
+import { api, chatConnectorReceipt } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import type {
   ChatEditApplyMode,
@@ -119,24 +209,35 @@ import { DOCX_MIME } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import {
   APIError,
+  chatRefusal,
   internalToolErrorMessage,
   toAPIError,
+  unwrapApiResponse,
 } from "@/lib/errors/api";
 import { ClientOperationError } from "@/lib/errors/client";
-import { notifyUserError } from "@/lib/errors/user-toast";
+import { readQueryResult } from "@/lib/errors/query-result";
+import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
 import { fileOptions } from "@/lib/files/queries";
-import { sha256Hex } from "@/lib/files/sha256";
-import { knowledgeKeys, mcpConnectorsOptions } from "@/lib/knowledge/queries";
+import {
+  isPlaybookDraftViewPayload,
+  PLAYBOOK_DRAFT_VIEW,
+  playbookDraftTabId,
+} from "@/lib/knowledge/playbook-draft-view";
+import { knowledgeKeys, playbookDetailOptions } from "@/lib/knowledge/queries";
 import { toSafeId } from "@/lib/safe-id";
-import { readStoredJson, writeStoredJson } from "@/lib/stored-json";
-import { useQueryView } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view";
 import { downloadFile } from "@/lib/utils";
+import { createUuid } from "@/lib/uuid";
 import {
   workspacesKeys,
   workspacesNavigationOptions,
 } from "@/lib/workspaces/queries";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities.logic";
 import { propertiesOptions } from "@/lib/workspaces/queries/properties";
+import {
+  type CurrentWorkspaceDocument,
+  getCurrentWorkspaceDocument,
+} from "@/lib/workspaces/use-workspace-view-params";
 
 type CreateDocumentInput = ChatUITools["create-document"]["input"];
 type CreateDocumentOutput = ChatUITools["create-document"]["output"];
@@ -147,11 +248,11 @@ type CreateDocumentMatterSuccess = Extract<
 >;
 
 type UseChatSessionOptions = {
+  exceptionScope: HandlerExceptionScope;
   chat: ChatRuntime;
   conversationId: string;
   getDocxEditRepresentation?:
-    | (() => DocxEditRepresentation | undefined)
-    | undefined;
+    (() => DocxEditRepresentation | undefined) | undefined;
   getEditApplyMode?: (() => ChatEditApplyMode) | undefined;
   getContextMatterIds?: (() => readonly string[]) | undefined;
   getSendMode?: (() => ChatSendMode) | undefined;
@@ -166,13 +267,12 @@ type UseChatSessionOptions = {
    * here — only the live transition matters.
    */
   onError?: ((error: Error) => void) | undefined;
+  /** Whether a playbook this thread saves opens beside it by itself. */
+  playbookPane: PlaybookPaneMode;
   threadRef: ChatThreadRef;
+  /** Where the conversation is shown; every send is timed under it. */
+  timingSurface: ChatTimingSurface;
   workspaceId?: string | undefined;
-};
-
-type McpConnectorApprovalIdentity = {
-  id: string;
-  slug: string;
 };
 
 export type ResendLatestMessageOptions = {
@@ -180,8 +280,6 @@ export type ResendLatestMessageOptions = {
   sendMode?: ChatSendMode | undefined;
 };
 
-const EMPTY_MCP_CONNECTOR_IDENTITIES: readonly McpConnectorApprovalIdentity[] =
-  [];
 const EMPTY_CONTEXT_MATTER_IDS: readonly string[] = [];
 
 type PreparedCreateDocumentDraft = {
@@ -192,6 +290,12 @@ type PreparedCreateDocumentDraft = {
 type OpenCreateDocumentDraftOptions = {
   draft: CreateDocumentDraft;
   mode: "automatic" | "explicit";
+};
+
+type FollowPlaybookSaveOptions = {
+  saved: PlaybookSaveTarget;
+  /** The thread pane that was current when the save was reconciled. */
+  paneTabId: string;
 };
 
 const prepareCreateDocumentDraft = async (
@@ -212,7 +316,13 @@ const prepareCreateDocumentDraft = async (
   });
   switch (prepared.status) {
     case "failed":
-      getAnalytics().captureError(prepared.error);
+      getAnalytics().captureError(prepared.error, {
+        fingerprintKey: "prepareCreateDocumentDraft:failure",
+        scope: {
+          type: "handler",
+          handlerId: "prepareCreateDocumentDraft:failure",
+        },
+      });
       return null;
     case "ready":
       return { buffer: prepared.buffer, fileName };
@@ -224,14 +334,32 @@ const prepareCreateDocumentDraft = async (
   }
 };
 
+const downloadCreateDocumentDraft = async (
+  toolCallId: string,
+  input: CreateDocumentInput,
+) =>
+  Result.tryPromise(async () => {
+    const draft = await prepareCreateDocumentDraft(toolCallId, input);
+    if (draft === null) {
+      return { status: "invalid-source" } as const;
+    }
+    downloadFile(
+      new Blob([new Uint8Array(draft.buffer)], { type: DOCX_MIME }),
+      draft.fileName,
+    );
+    return { status: "downloaded", fileName: draft.fileName } as const;
+  });
+
 const openCreatedDocumentInInspector = async (
   output: CreateDocumentMatterSuccess,
+  documentOnScreen: CurrentWorkspaceDocument,
 ) => {
-  await openEntityInInspector(
-    output.entityId,
-    output.fileName,
-    output.workspaceId,
-  );
+  await openEntityInInspector({
+    documentOnScreen,
+    entityId: output.entityId,
+    label: output.fileName,
+    workspaceId: output.workspaceId,
+  });
   const tab = useInspectorTabsStore
     .getState()
     .tabs.find(
@@ -243,27 +371,10 @@ const openCreatedDocumentInInspector = async (
   }
 };
 
-// `QueuedChatMessage` is the view-facing shape of a queued entry; the
-// canonical definition (plus `QueuedChatEntry` and the send-queue
-// reducer) lives in the sibling `.logic.ts` file. Re-exported here so
-// existing consumers keep importing it from this hook.
-export type { QueuedChatMessage } from "@/features/chat/hooks/use-chat-session-send-queue.logic";
-
-type AskUserToolCallPart = Extract<
-  ChatPart,
-  { name: "ask-user"; type: "tool-call" }
->;
-
-const resetAskUserToolCall = (
-  part: AskUserToolCallPart,
-): AskUserToolCallPart => {
-  const { output: _discardedOutput, ...partWithoutOutput } = part;
-  return { ...partWithoutOutput, state: "input-complete" };
-};
-
-const ignoreQueuedDispatchError = (_error: unknown): void => undefined;
+const EMPTY_CHAT_QUEUE: ChatQueue = { hold: null, items: [] };
 
 export const useChatSession = ({
+  exceptionScope: { handlerId: exceptionHandlerId },
   chat,
   conversationId,
   getDocxEditRepresentation,
@@ -272,20 +383,35 @@ export const useChatSession = ({
   getSendMode,
   initialOlderCursor,
   onError,
+  playbookPane,
   threadRef,
+  timingSurface,
   workspaceId,
 }: UseChatSessionOptions) => {
-  useMountEffect(mountBrowserExtensionBridge);
   const t = useTranslations();
-  const organizationId = useAuthenticatedUser().activeOrganizationId;
-  const { data: mcpCatalog } = useQuery(mcpConnectorsOptions(organizationId));
-  const mcpConnectorIdentities =
-    mcpCatalog?.connectors ?? EMPTY_MCP_CONNECTOR_IDENTITIES;
-  const [conversationApprovedTools, setConversationApprovedTools] = useState(
-    () => readConversationApprovedTools(conversationId),
+  const { activeOrganizationId: organizationId, id: userId } =
+    useAuthenticatedUser();
+  const queryClient = useQueryClient();
+  const router = useRouter();
+  const chatToolGrantsQuery = useQuery(
+    chatToolGrantsOptions({
+      activeOrganizationId: organizationId,
+      threadId: conversationId,
+      userId,
+    }),
   );
-  const [alwaysApprovedTools, setAlwaysApprovedTools] = useState(() =>
-    readAlwaysApprovedTools({ organizationId, mcpConnectorIdentities: [] }),
+  const chatToolGrantsView = queryView(chatToolGrantsQuery);
+  useQueryViewError(chatToolGrantsView, "useChatSession:query");
+  const storedChatToolGrants =
+    chatToolGrantsView.type === "items"
+      ? chatToolGrantsView.items.grants
+      : undefined;
+  const {
+    always: alwaysApprovedTools,
+    conversation: conversationApprovedTools,
+  } = useMemo(
+    () => projectChatToolGrants(storedChatToolGrants),
+    [storedChatToolGrants],
   );
 
   const snapshot = useSyncExternalStore(
@@ -293,12 +419,25 @@ export const useChatSession = ({
     chat.getSnapshot,
     chat.getSnapshot,
   );
+  // What the thread already waits on when this page opens it: it resumes only
+  // once the user acts. Read per page open, not per runtime, because the
+  // registry keeps a waiting thread's runtime across a reopen.
+  const workAwaitedAtOpen = useMemo(
+    () => getChatWorkAwaitedAtOpen(chat.getSnapshot().messages),
+    [chat],
+  );
   const {
     error: runtimeError,
+    isLoading: clientLoading,
     sessionGenerating,
+    reconnecting,
     status,
     stop: stopState,
     turnAbandoned,
+    computerWait,
+    turnSteering,
+    turnSentAt,
+    turnsStarted,
   } = snapshot;
   const notifyError = useLatestCallback((nextError: Error) => {
     onError?.(nextError);
@@ -486,14 +625,15 @@ export const useChatSession = ({
               });
             },
             wait: async () => {
-              await new Promise<void>((resolve) => {
-                setTimeout(resolve, 250);
-              });
+              await sleep(250);
             },
           });
           if (settleResult.status === "failed") {
             settlingCreateDocumentDraftIdsRef.current.delete(draft.toolCallId);
-            getAnalytics().captureError(settleResult.error);
+            getAnalytics().captureError(settleResult.error, {
+              fingerprintKey: "useChatSession:failure",
+              scope: { type: "handler", handlerId: exceptionHandlerId },
+            });
             chat.setMessages(
               terminalizeUnsettledCreateDocumentDraft(
                 chat.getSnapshot().messages,
@@ -509,13 +649,7 @@ export const useChatSession = ({
         "use-chat-session.settle-create-document-draft-with-retry",
       );
     }
-  }, [addToolResult, chat, messages, status, t]);
-  const sendChatMessage = useCallback(
-    async (message: ChatUserMessageInput, options?: ChatSendMessageOptions) => {
-      await sendThreadChatMessage(chat, message, options);
-    },
-    [chat],
-  );
+  }, [addToolResult, chat, messages, status, t, exceptionHandlerId]);
   const setMessages = chat.setMessages;
   const stop = chat.stop;
   const leave = chat.leave;
@@ -538,6 +672,7 @@ export const useChatSession = ({
   const [seededChat, setSeededChat] = useState(chat);
   const isLoadingOlderRef = useRef(false);
   const olderCursorRef = useRef(olderCursor);
+  const historicalPlaybookSaveToolCallIdsRef = useRef(new Set<string>());
   // Render-current runtime identity for the stale-response guard below. A fresh
   // runtime means the thread was rehydrated — a thread switch OR a same-thread
   // refetch (sending a message rebuilds the runtime from a newer first page) —
@@ -557,6 +692,33 @@ export const useChatSession = ({
     // oxlint-disable-next-line react/refs -- deliberate render-time ref write: render-current runtime identity for the stale-response guard in loadOlder
     seededChatRef.current = chat;
   }
+
+  const refreshAnswers = useCallback(
+    async (messageId: string) => {
+      const runtime = chat;
+      const [refreshed] = await Promise.all([
+        fetchChatMessage({ threadId: threadRef.threadId, messageId }),
+        invalidateChatThreadAcrossScopes({
+          queryClient,
+          threadId: threadRef.threadId,
+        }),
+      ]);
+      if (seededChatRef.current === runtime) {
+        runtime.setMessages(
+          runtime
+            .getSnapshot()
+            .messages.map((message) =>
+              message.id === refreshed.id &&
+              (message.revision === undefined ||
+                message.revision <= refreshed.revision)
+                ? refreshed
+                : message,
+            ),
+        );
+      }
+    },
+    [chat, queryClient, threadRef],
+  );
 
   const loadOlder = useCallback(async () => {
     const before = olderCursorRef.current;
@@ -588,7 +750,10 @@ export const useChatSession = ({
       // for telemetry and surface a toast so the user knows the older history
       // failed to load. Keep the cursor but flag the error so auto-loading
       // pauses (the manual button retries) instead of looping the request.
-      getAnalytics().captureError(result.error);
+      getAnalytics().captureError(result.error, {
+        fingerprintKey: "useChatSession:failure-2",
+        scope: { type: "handler", handlerId: exceptionHandlerId },
+      });
       setLoadOlderError(true);
       notifyUserError(result.error, t("chat.loadEarlierMessagesError"));
       return;
@@ -605,44 +770,98 @@ export const useChatSession = ({
       (message) => !existingIds.has(message.id),
     );
     if (prepend.length > 0) {
+      // Record provenance before publishing the page to the live runtime.
+      // Reconciliation still refreshes caches for these saves.
+      consumePlaybookSaveToolCalls({
+        handledToolCallIds: historicalPlaybookSaveToolCallIdsRef.current,
+        messages: prepend,
+      });
       setMessages([...prepend, ...current]);
     }
     olderCursorRef.current = older.olderCursor;
     setOlderCursor(older.olderCursor);
-  }, [chat, setMessages, t, threadRef]);
+  }, [chat, setMessages, t, threadRef, exceptionHandlerId]);
 
-  // Mirror `isGenerating` (computed below) and the live queue into
-  // refs so the stable `sendMessage` callback can branch on the
-  // latest committed values. The ref is updated in effects or
-  // queue-event helpers (not during render) so a concurrent re-render
-  // that bails out can't strand it ahead of committed state.
-  //
-  // The four pieces of queue bookkeeping (generating flag, queue
-  // contents, "was generating last check" edge marker, and the
-  // conversation the queue belongs to) all live in one
-  // `SendQueueState`, and every write goes through `reduceSendQueue` via
-  // `applySendQueueEvent` below — see use-chat-session-send-queue.logic.ts.
-  // No call site writes a single field by hand anymore, so an exit path
-  // can no longer update one without the others.
-  const sendQueueRef = useRef<SendQueueState>(
-    createInitialSendQueueState(conversationId),
+  // The chat's queue is the server's: it sends the first message as the
+  // member once the turn has ended and nothing holds it. Read for a thread
+  // the server stores (one with messages), and again on every queue change
+  // and every turn's start or end (the user stream).
+  const queueThread = useMemo(
+    () => ({
+      activeOrganizationId: organizationId,
+      threadId: threadRef.threadId,
+      userId,
+    }),
+    [organizationId, threadRef.threadId, userId],
   );
-  const [queuedMessages, setQueuedMessages] = useState<
-    readonly QueuedChatEntry[]
-  >([]);
-
-  const applySendQueueEvent = useCallback((event: SendQueueEvent) => {
-    const { state: nextState, dispatchedEntry } = reduceSendQueue(
-      sendQueueRef.current,
-      event,
-    );
-    const queueChanged = nextState.queue !== sendQueueRef.current.queue;
-    sendQueueRef.current = nextState;
-    if (queueChanged) {
-      setQueuedMessages(nextState.queue);
-    }
-    return dispatchedEntry;
-  }, []);
+  const chatQueueView = queryView(
+    useQuery({
+      ...chatQueueOptions(queueThread),
+      enabled: messages.length > 0,
+    }),
+  );
+  useQueryViewError(chatQueueView, "useChatSession:queue");
+  const chatQueue: ChatQueue =
+    chatQueueView.type === "items" ? chatQueueView.items : EMPTY_CHAT_QUEUE;
+  /** The queue as last read, for decisions made in event handlers. */
+  const readQueue = useCallback(
+    (): ChatQueue =>
+      queryClient.getQueryData(chatQueueOptions(queueThread).queryKey) ??
+      EMPTY_CHAT_QUEUE,
+    [queryClient, queueThread],
+  );
+  const refreshQueue = useCallback(async () => {
+    await queryClient.invalidateQueries({
+      queryKey: chatQueueOptions(queueThread).queryKey,
+    });
+  }, [queryClient, queueThread]);
+  const draftManager = useOptionalChatEditorManager();
+  /** Queued messages this page removed (or handed to a turn): their leaving
+   *  the queue is no turn the server started. */
+  const removedHereRef = useRef(new Set<string>());
+  /**
+   * After a steer the turn took: the server removed the message at the
+   * revision the turn was handed. One edited since stays queued, and when the
+   * server later sends it, that is a turn this page did not start.
+   */
+  const settleSteeredHandOff = useCallback(
+    async (id: string) => {
+      await refreshQueue();
+      if (readQueue().items.some((queued) => queued.id === id)) {
+        removedHereRef.current.delete(id);
+      }
+    },
+    [readQueue, refreshQueue],
+  );
+  /** Remove queued message `id` at the `revision` this page read: one
+   *  edited since stays queued (the server refuses the removal). */
+  const removeFromQueue = useCallback(
+    async (
+      id: string,
+      {
+        files,
+        revision,
+      }: { files: QueuedMessageFilesOnRemove; revision: number },
+    ) => {
+      removedHereRef.current.add(id);
+      const removed = await Result.tryPromise(
+        async () =>
+          await removeQueuedChatMessage({
+            files,
+            messageId: id,
+            revision,
+            threadId: threadRef.threadId,
+          }),
+      );
+      // Not removed here after all: if it leaves the queue later, the
+      // server sent it.
+      if (Result.isError(removed)) {
+        removedHereRef.current.delete(id);
+      }
+      return readQueryResult(removed);
+    },
+    [threadRef.threadId],
+  );
 
   const withRequestSnapshots = useCallback(
     (options?: ChatSendMessageOptions): ChatSendMessageOptions | undefined => {
@@ -663,79 +882,619 @@ export const useChatSession = ({
     [getDocxEditRepresentation, getEditApplyMode, getSendMode],
   );
 
-  const enqueueMessage = useCallback(
-    (message: ChatUserMessageInput, options?: ChatSendMessageOptions) => {
-      const entry: QueuedChatEntry = {
-        id: uuidv7(),
-        message,
-        ...describeQueuedMessage(message),
-        ...(options === undefined ? {} : { options }),
-      };
-      applySendQueueEvent({ type: "message-enqueued", entry });
-    },
-    [applySendQueueEvent],
+  /** Whether a turn of the thread runs on this page now. */
+  const turnRuns = useCallback((): boolean => {
+    const runtime = chat.getSnapshot();
+    const shown = projectCanonicalChatUIMessages(runtime.messages);
+    return (
+      runtime.isLoading ||
+      isChatTurnGenerating({
+        hasError:
+          (runtime.error ?? getChatAssistantTurnError(shown.at(-1) ?? null)) !==
+          undefined,
+        messages: shown,
+        requestActive:
+          runtime.reconnecting || isChatClientRequestActive(runtime.status),
+        sessionGenerating: runtime.sessionGenerating,
+        stopStatus: runtime.stop.status,
+      })
+    );
+  }, [chat]);
+
+  /** What the thread is doing now, as the send routing reads it. */
+  const threadSendState = useCallback((): ChatThreadSendState => {
+    // A wait is read first: a card can show while the request that brought
+    // it still ends, and a steer then has to decline it to reach the turn.
+    const {
+      localRunQuestion,
+      messages: shown,
+      turnSteering: steering,
+    } = chat.getSnapshot();
+    if (
+      openMemberWaitKeys({
+        localRunQuestion,
+        messages: projectCanonicalChatUIMessages(shown),
+      }).length > 0
+    ) {
+      return { type: "waiting_on_member", steering };
+    }
+    if (turnRuns()) {
+      return { type: "working", steering };
+    }
+    // Messages queued ahead that nothing holds go first: the server is
+    // about to send them, and refuses a new one that would jump them.
+    const current = readQueue();
+    return current.items.length > 0 && current.hold === null
+      ? { type: "working", steering: CHAT_TURN_STEERING.notSteerable }
+      : { type: "idle" };
+  }, [chat, readQueue, turnRuns]);
+
+  /** Put a message the server did not take back into the composer. Falls
+   *  back to a notice when this surface shows no composer of the thread. */
+  const restoreIntoComposer = useCallback(
+    (message: ChatUserMessageInput): boolean =>
+      draftManager?.restoreMessageDraftIntoThread(
+        threadRef,
+        composerDraftOfParts(messagePartsOf(message)),
+      ) ?? false,
+    [draftManager, threadRef],
   );
 
-  const dispatchQueuedMessage = useCallback(
-    async (entry: QueuedChatEntry) => {
-      try {
-        await sendChatMessage(entry.message, entry.options);
-      } catch (sendError) {
-        applySendQueueEvent({
-          type: "dispatch-failed",
-          entry,
-          requeue: isChatMessageStartError(sendError),
-        });
-        throw sendError;
+  /**
+   * Say why a message the server refused before storing it was not sent,
+   * while the composer holds it again: in the words the thread used for a
+   * failed request.
+   */
+  const notifySendRefused = useCallback(
+    (refused: Error) => {
+      // The server's refusal is found beneath the transport's wrapping: its
+      // message, as the thread showed it, unless a notice of its own (an
+      // expired session, an admission refusal) says more.
+      const refusal = chatRefusal(refused);
+      const copy = chatErrorTranslationKey(refused);
+      if (refusal !== null) {
+        notifyUserError(refusal, refusal.message);
+      } else if (copy === "chat.sendError") {
+        notifyUserError(refused, t(copy));
+      } else {
+        notifyUserProblem(t(copy));
       }
     },
-    [applySendQueueEvent, sendChatMessage],
+    [t],
   );
 
-  const sendMessage = useCallback(
-    async (message: ChatUserMessageInput, options?: ChatSendMessageOptions) => {
-      if (sendQueueRef.current.conversationId !== conversationId) {
-        applySendQueueEvent({ type: "conversation-switched", conversationId });
-      }
-
-      const requestOptions = withRequestSnapshots(options);
-      if (sendQueueRef.current.isGenerating) {
-        enqueueMessage(message, requestOptions);
-        return;
-      }
-
-      // When the queue is gated after an errored turn, a manual send
-      // should resume the queue without reordering the transcript:
-      // append the new prompt, then dispatch the oldest waiting one.
-      if (sendQueueRef.current.queue.length > 0) {
-        enqueueMessage(message, requestOptions);
-        const dispatched = applySendQueueEvent({
-          type: "oldest-dispatch-started",
-        });
-        if (dispatched) {
-          await dispatchQueuedMessage(dispatched);
+  // A new chat's first message was sent before the page existed (the landing
+  // page, `/new`, Ask AI); this page takes it from the runtime. Refused before
+  // the server stored it, it goes back into this chat's composer, like any
+  // send the server refused.
+  useExternalSyncEffect(() => {
+    const handoff = chat.takeRouteHandoff();
+    if (handoff === null) {
+      return;
+    }
+    detached(
+      (async () => {
+        const settled = await settleRouteHandoff(chat, handoff);
+        if (settled.type === "sent") {
+          return;
         }
-        return;
-      }
+        notifySendRefused(settled.error);
+        restoreIntoComposer(handoff.message);
+      })(),
+      "use-chat-session.settle-route-handoff",
+    );
+  }, [chat, notifySendRefused, restoreIntoComposer]);
 
-      await sendChatMessage(message, requestOptions);
+  /**
+   * Queue `message` at the end of the chat's queue, as it would be sent now
+   * (its mode and document preferences snapshotted). `kept` when the server
+   * did not take it: the composer gets it back.
+   */
+  const enqueueMessage = useCallback(
+    async (
+      message: ChatUserMessageInput,
+      options?: ChatSendMessageOptions,
+    ): Promise<ChatSendOutcome> => {
+      const send = queuedChatSendOf(
+        chat,
+        message,
+        withRequestSnapshots(options),
+      );
+      const queued = await Result.tryPromise(
+        async () => await enqueueChatMessage(threadRef.threadId, send),
+      );
+      if (Result.isError(queued)) {
+        notifyUserError(queued.error, t("chat.sendError"));
+        return CHAT_SEND_KEPT;
+      }
+      const { item } = queued.value;
+      updateCachedChatQueue({
+        queryClient,
+        thread: queueThread,
+        update: (current) =>
+          current.items.some(({ id }) => id === item.id)
+            ? current
+            : { hold: current.hold, items: [...current.items, item] },
+      });
+      return CHAT_SEND_SENT;
     },
     [
-      applySendQueueEvent,
-      conversationId,
-      dispatchQueuedMessage,
-      enqueueMessage,
-      sendChatMessage,
+      chat,
+      queryClient,
+      queueThread,
+      t,
+      threadRef.threadId,
       withRequestSnapshots,
     ],
   );
 
+  /** Run a write on the queue, telling the member when it failed; the queue
+   *  is read again either way. */
+  const writeQueue = useCallback(
+    async (write: () => Promise<unknown>): Promise<boolean> => {
+      const written = await Result.tryPromise(write);
+      if (Result.isError(written)) {
+        notifyUserError(written.error, t("errors.actionFailed"));
+      }
+      await refreshQueue();
+      return Result.isOk(written);
+    },
+    [refreshQueue, t],
+  );
+
+  // A steer that left the message queued says why; the queue shows it.
+  const notifySteerRefused = useCallback(
+    (reason: ChatSteerRefusal) => {
+      stellaToast.add({
+        title: t("chat.steerRefused.title"),
+        description: t(CHAT_STEER_REFUSAL_MESSAGES[reason]),
+        type: "info",
+      });
+    },
+    [t],
+  );
+
+  /**
+   * Hand `text` to the turn running on the member's computer under `id`. A
+   * turn that does not take it leaves `onNotTaken` to place the message.
+   */
+  const steerTurn = useCallback(
+    (input: { id: string; text: string }, onNotTaken: () => Promise<void>) => {
+      detached(
+        (async () => {
+          const outcome = await chat.steerLocalTurn({
+            inputId: input.id,
+            text: input.text,
+            source: { type: CHAT_LOCAL_RUN_STEER_SOURCE.composer },
+          });
+          if (outcome.type === "steered") {
+            return;
+          }
+          if (outcome.type === "refused") {
+            notifySteerRefused(outcome.reason);
+          }
+          await onNotTaken();
+        })(),
+        "use-chat-session.steer",
+      );
+    },
+    [chat, notifySteerRefused],
+  );
+
+  /**
+   * The edit forms of sent messages open on this page, and whether the page
+   * paused the queue for them (`holdQueueForMessageEdit`). An edit drops
+   * every later turn, so a new message waits until the edit was sent or
+   * cancelled.
+   */
+  const editPauseRef = useRef<{ paused: boolean; sessions: Set<string> }>({
+    paused: false,
+    sessions: new Set(),
+  });
+
+  /** A message steered into a turn waiting on the member, handed to the
+   *  turn once declining the wait lets it run again; it waits queued. */
+  const steerOnResumeRef = useRef<{
+    id: string;
+    revision: number;
+    text: string;
+  } | null>(null);
+
+  // Where a message goes is `chatSendIntent`'s call, by what the thread is
+  // doing and whether the member sent it plainly or queued it.
+  const routeMessage = useCallback(
+    async (
+      action: ChatMemberSendAction,
+      message: ChatUserMessageInput,
+      options?: ChatSendMessageOptions,
+    ): Promise<ChatSendOutcome> => {
+      if (editPauseRef.current.sessions.size > 0) {
+        stellaToast.info(t("chat.queue.waitForEdit"));
+        return CHAT_SEND_KEPT;
+      }
+      const state = threadSendState();
+      const intent = chatSendIntent(state, action);
+      switch (intent) {
+        case CHAT_SEND_INTENT.steer: {
+          const text = steerableMessageText(
+            message,
+            withRequestSnapshots(options),
+          );
+          if (text === null) {
+            // Files or anonymized: only ever a message of its own.
+            const queued = await enqueueMessage(message, options);
+            if (queued.kind === "sent") {
+              notifySteerRefused("message_not_plain");
+            }
+            return queued;
+          }
+          if (state.type === "waiting_on_member") {
+            // The shown approval is declined, explicitly, as the member's
+            // own Deny would, so the turn goes on and is handed the message
+            // once it runs again. A question is never dismissed for it:
+            // dismissing one stops the run's turn. Either way the message
+            // waits queued until then.
+            const queued = await enqueueMessage(message, options);
+            const approvalIds = openHarnessApprovalRequestIds(
+              projectCanonicalChatUIMessages(chat.getSnapshot().messages),
+            );
+            // As queued just now: an edit before the turn resumes keeps it
+            // queued rather than remove what the turn was not handed.
+            const queuedItem = readQueue().items.find(
+              ({ id }) => id === message.id,
+            );
+            if (
+              queued.kind === "sent" &&
+              approvalIds.length > 0 &&
+              queuedItem !== undefined
+            ) {
+              steerOnResumeRef.current = {
+                id: message.id,
+                revision: queuedItem.revision,
+                text,
+              };
+              for (const approvalId of approvalIds) {
+                detached(
+                  resolveToolApproval({ id: approvalId, approved: false }),
+                  "use-chat-session.decline-for-steer",
+                );
+              }
+            }
+            return queued;
+          }
+          // The running turn takes it; one that does not keeps it queued
+          // for its end, so messages go in the order they were sent.
+          steerTurn({ id: message.id, text }, async () => {
+            // Not queued either (the refusal was told): the composer
+            // gets it back, where the thread shows one.
+            if ((await enqueueMessage(message, options)).kind === "kept") {
+              restoreIntoComposer(message);
+            }
+          });
+          return CHAT_SEND_SENT;
+        }
+        case CHAT_SEND_INTENT.queue:
+          return await enqueueMessage(message, options);
+        case CHAT_SEND_INTENT.start:
+          break;
+        default:
+          intent satisfies never;
+          return panic(`Unhandled send intent: ${String(intent)}`);
+      }
+
+      const shownBefore = chat.getSnapshot().messages;
+      const acceptance = await sendThreadChatMessageUntilAccepted(
+        chat,
+        message,
+        { ...withRequestSnapshots(options), timingSurface },
+      );
+      if (acceptance.status === "accepted") {
+        return CHAT_SEND_SENT;
+      }
+      // Refused: the page shows the thread as the server stores it. A message
+      // the server stored (it took the turn before the request failed) stays
+      // there with its turn; any other goes into the queue when a turn or the
+      // queue was ahead of it, or back into the composer.
+      await showStoredChatThread(chat, shownBefore);
+      if (
+        chat.getSnapshot().messages.some((shown) => shown.id === message.id)
+      ) {
+        return CHAT_SEND_SENT;
+      }
+      if (isQueueInsteadRefusal(acceptance.error)) {
+        return await enqueueMessage(message, options);
+      }
+      notifySendRefused(acceptance.error);
+      return CHAT_SEND_KEPT;
+    },
+    [
+      chat,
+      enqueueMessage,
+      notifySendRefused,
+      notifySteerRefused,
+      readQueue,
+      resolveToolApproval,
+      restoreIntoComposer,
+      steerTurn,
+      t,
+      threadSendState,
+      timingSurface,
+      withRequestSnapshots,
+    ],
+  );
+
+  const sendMessage = useCallback(
+    async (
+      message: ChatUserMessageInput,
+      options?: ChatSendMessageOptions,
+    ): Promise<ChatSendOutcome> =>
+      await routeMessage(CHAT_MEMBER_SEND_ACTION.send, message, options),
+    [routeMessage],
+  );
+
+  /** The member's queue action: the message waits for the turn's end
+   *  wherever a turn runs or waits; on an idle thread it is sent. */
+  const queueMessage = useCallback(
+    async (
+      message: ChatUserMessageInput,
+      options?: ChatSendMessageOptions,
+    ): Promise<ChatSendOutcome> =>
+      await routeMessage(CHAT_MEMBER_SEND_ACTION.queue, message, options),
+    [routeMessage],
+  );
+
+  /**
+   * "Send now" on a queued message: a running turn on the member's computer
+   * that takes a message mid-turn is handed it (and the message leaves the
+   * queue); otherwise the server sends it next, stopping a turn that runs.
+   * A turn that waits on the member is ended only once the member confirms
+   * (`confirm`, then `replaceWithQueuedMessage`).
+   */
+  const sendQueuedMessageNow = useCallback(
+    (id: string): "confirm" | "done" => {
+      const item = readQueue().items.find((queued) => queued.id === id);
+      if (item === undefined) {
+        return "done";
+      }
+      const route = queuedSendNow(threadSendState(), item);
+      switch (route.type) {
+        case "steer":
+          detached(
+            (async () => {
+              // The queue's read shows only the message's beginning; the
+              // turn is handed it whole, or it is sent next as before.
+              const whole = await Result.tryPromise(
+                async () => await readQueuedChatMessage(threadRef.threadId, id),
+              );
+              // A read of another revision than the queue showed is a
+              // message changed since (switched to anonymized, say): it is
+              // sent next, as it now is.
+              const steer = Result.isOk(whole)
+                ? queuedSteerOf({ item, read: whole.value })
+                : null;
+              // Taken, the server removes it from the queue at the revision
+              // the turn was handed (one edited since stays queued).
+              removedHereRef.current.add(id);
+              const steered =
+                steer !== null &&
+                (
+                  await chat.steerLocalTurn({
+                    inputId: id,
+                    text: steer.text,
+                    source: {
+                      type: CHAT_LOCAL_RUN_STEER_SOURCE.queued,
+                      revision: steer.revision,
+                    },
+                  })
+                ).type === "steered";
+              if (steered) {
+                await settleSteeredHandOff(id);
+                return;
+              }
+              removedHereRef.current.delete(id);
+              await writeQueue(
+                async () =>
+                  await sendQueuedChatMessageNow(threadRef.threadId, id),
+              );
+            })(),
+            "use-chat-session.steer-queued-message",
+          );
+          return "done";
+        case "replace":
+          return "confirm";
+        case "send":
+          detached(
+            writeQueue(
+              async () =>
+                await sendQueuedChatMessageNow(threadRef.threadId, id),
+            ),
+            "use-chat-session.send-queued-message-now",
+          );
+          return "done";
+        default:
+          route satisfies never;
+          return panic("Unhandled send-now route");
+      }
+    },
+    [
+      chat,
+      readQueue,
+      settleSteeredHandOff,
+      threadRef.threadId,
+      threadSendState,
+      writeQueue,
+    ],
+  );
+
+  /** The confirmed Send now over a turn waiting on the member: it ends what
+   *  the turn waits on, and the message goes next. */
+  const replaceWithQueuedMessage = useCallback(
+    (id: string) => {
+      detached(
+        writeQueue(
+          async () => await sendQueuedChatMessageNow(threadRef.threadId, id),
+        ),
+        "use-chat-session.replace-with-queued-message",
+      );
+    },
+    [threadRef.threadId, writeQueue],
+  );
+
   const removeQueuedMessage = useCallback(
     (id: string) => {
-      applySendQueueEvent({ type: "queued-message-removed", id });
+      const item = readQueue().items.find((queued) => queued.id === id);
+      if (item === undefined) {
+        return;
+      }
+      updateCachedChatQueue({
+        queryClient,
+        thread: queueThread,
+        update: (current) => withQueuedMessageRemoved({ id, queue: current }),
+      });
+      detached(
+        writeQueue(
+          async () =>
+            await removeFromQueue(id, {
+              files: QUEUED_MESSAGE_FILES_ON_REMOVE.delete,
+              revision: item.revision,
+            }),
+        ),
+        "use-chat-session.remove-queued-message",
+      );
     },
-    [applySendQueueEvent],
+    [queryClient, queueThread, readQueue, removeFromQueue, writeQueue],
   );
+
+  /** "Edit": the message leaves the queue and goes back into the composer,
+   *  to be written again and sent or queued anew. */
+  const editQueuedMessage = useCallback(
+    (id: string) => {
+      // The message goes back into this chat's composer; without one here
+      // it stays queued rather than leave the queue for nowhere.
+      if (draftManager?.hasLiveComposer(threadRef) !== true) {
+        stellaToast.info(t("chat.queue.editNeedsComposer"));
+        return;
+      }
+      detached(
+        (async () => {
+          // Read whole and put into the composer first, then removed: a
+          // removal whose answer is lost leaves the message in the composer
+          // (and at worst still queued), never in neither.
+          const whole = await Result.tryPromise(
+            async () => await readQueuedChatMessage(threadRef.threadId, id),
+          );
+          if (Result.isError(whole)) {
+            await refreshQueue();
+            if (hasChatErrorCode(whole.error, CHAT_QUEUE_ERROR_CODE.notFound)) {
+              stellaToast.info(t("chat.queue.noLongerQueued"));
+              return;
+            }
+            notifyUserError(whole.error, t("errors.actionFailed"));
+            return;
+          }
+          draftManager.restoreMessageDraftIntoThread(
+            threadRef,
+            composerDraftOfParts(whole.value.message.parts),
+          );
+          // At the revision put into the composer: one edited since stays.
+          // Its stored files stay too: the composer sends them again.
+          await writeQueue(
+            async () =>
+              await removeFromQueue(id, {
+                files: QUEUED_MESSAGE_FILES_ON_REMOVE.keep,
+                revision: whole.value.revision,
+              }),
+          );
+        })(),
+        "use-chat-session.edit-queued-message",
+      );
+    },
+    [draftManager, refreshQueue, removeFromQueue, t, threadRef, writeQueue],
+  );
+
+  const moveQueuedMessage = useCallback(
+    (id: string, direction: "down" | "up") => {
+      const target = queueMoveTarget({
+        direction,
+        id,
+        items: readQueue().items,
+      });
+      if (target === undefined) {
+        return;
+      }
+      updateCachedChatQueue({
+        queryClient,
+        thread: queueThread,
+        update: (current) =>
+          withQueuedMessageMoved({
+            beforeId: target.beforeId,
+            id,
+            queue: current,
+          }),
+      });
+      detached(
+        writeQueue(
+          async () =>
+            await moveQueuedChatMessage({
+              beforeId: target.beforeId,
+              messageId: id,
+              threadId: threadRef.threadId,
+            }),
+        ),
+        "use-chat-session.move-queued-message",
+      );
+    },
+    [queryClient, queueThread, readQueue, threadRef.threadId, writeQueue],
+  );
+
+  const pauseQueue = useCallback(() => {
+    detached(
+      writeQueue(async () => await pauseChatQueue(threadRef.threadId)),
+      "use-chat-session.pause-queue",
+    );
+  }, [threadRef.threadId, writeQueue]);
+
+  const resumeQueue = useCallback(() => {
+    detached(
+      writeQueue(async () => await resumeChatQueue(threadRef.threadId)),
+      "use-chat-session.resume-queue",
+    );
+  }, [threadRef.threadId, writeQueue]);
+
+  const queue: ChatQueueView = useMemo(
+    () => ({
+      actions: {
+        edit: editQueuedMessage,
+        move: moveQueuedMessage,
+        pause: pauseQueue,
+        remove: removeQueuedMessage,
+        replaceWith: replaceWithQueuedMessage,
+        resume: resumeQueue,
+        sendNow: sendQueuedMessageNow,
+      },
+      hold: chatQueue.hold,
+      items: chatQueue.items,
+    }),
+    [
+      chatQueue,
+      editQueuedMessage,
+      moveQueuedMessage,
+      pauseQueue,
+      removeQueuedMessage,
+      replaceWithQueuedMessage,
+      resumeQueue,
+      sendQueuedMessageNow,
+    ],
+  );
+
+  // A turn paused on its budget runs its next step only on the user's word:
+  // Continue sends that word as their next message, which opens a new budget.
+  const continuePausedTurn = useCallback(async () => {
+    await sendMessage({
+      content: t("chat.turnPaused.continue"),
+      id: toSafeId<"chatMessage">(createUuid()),
+    });
+  }, [sendMessage, t]);
 
   const resendLatestMessage = useCallback(
     async ({ messageId, sendMode }: ResendLatestMessageOptions = {}) => {
@@ -767,58 +1526,81 @@ export const useChatSession = ({
     },
     [resolveToolApproval],
   );
-  const handleAllowInConversation = useCallback(
-    async (id: string, toolName: ApprovalToolName) => {
-      const next = new Set(conversationApprovedTools).add(
-        getToolApprovalGrant(toolName),
-      );
-      setConversationApprovedTools(next);
-      writeStoredApprovedTools(
-        getConversationApprovedToolsStorageKey(conversationId),
-        next,
-        "session",
-      );
-      dispatchApprovedToolsChanged({
-        conversationId,
-        scope: "session",
-      });
-      await resolveToolApproval({ id, approved: true });
-    },
-    [resolveToolApproval, conversationApprovedTools, conversationId],
-  );
-  const handleAlwaysAllow = useCallback(
-    async (id: string, toolName: ApprovalToolName) => {
-      const approvalKey = getAlwaysApprovalKey({
-        mcpConnectorIdentities,
-        organizationId,
-        toolName,
-      });
-      if (approvalKey === null) {
-        await resolveToolApproval({ id, approved: true });
-        return;
+  // The API stores the grant and decides what it covers; it refuses tools
+  // that ask on every call. This call is approved either way, since the user
+  // approved it.
+  const approveAndStoreGrant = useCallback(
+    async (
+      id: string,
+      toolName: ApprovalToolName,
+      scope: ChatToolGrantScope,
+    ) => {
+      if (
+        !requiresPerCallChatApproval(toolName) &&
+        !isNonPersistentGrantChatToolName(toolName)
+      ) {
+        const stored = await Result.tryPromise({
+          try: async () =>
+            await storeChatToolGrant({
+              scope,
+              threadId: conversationId,
+              toolName,
+            }),
+          catch: (cause) =>
+            cause instanceof Error
+              ? cause
+              : new Error("Could not store the approval"),
+        });
+        if (Result.isError(stored)) {
+          notifyError(stored.error);
+        }
+        await queryClient.invalidateQueries({
+          queryKey: chatKeys.toolGrants(organizationId, userId, conversationId),
+        });
       }
-
-      const nextStored = new Set(
-        readStoredStrings(
-          userStorageKey(CHAT_ALWAYS_APPROVED_TOOLS_STORAGE_KEY),
-        ),
-      ).add(approvalKey);
-      setAlwaysApprovedTools(
-        new Set(alwaysApprovedTools).add(getToolApprovalGrant(toolName)),
-      );
-      writeStoredApprovedStrings(
-        userStorageKey(CHAT_ALWAYS_APPROVED_TOOLS_STORAGE_KEY),
-        nextStored,
-      );
-      dispatchApprovedToolsChanged({ scope: "local" });
       await resolveToolApproval({ id, approved: true });
     },
     [
-      resolveToolApproval,
-      alwaysApprovedTools,
-      mcpConnectorIdentities,
+      conversationId,
+      notifyError,
       organizationId,
+      queryClient,
+      resolveToolApproval,
+      userId,
     ],
+  );
+  const confirmStoredApprovalGrant = useCallback(
+    async (toolName: ApprovalToolName): Promise<boolean> => {
+      // The API resolves the exact tool or connector; the cached grants only
+      // decide whether to ask.
+      const coverage = await Result.tryPromise(
+        async () =>
+          await readChatToolGrantCoverage({
+            threadId: conversationId,
+            toolName,
+          }),
+      );
+      if (Result.isError(coverage) || !coverage.value.covered) {
+        await queryClient.invalidateQueries({
+          queryKey: chatKeys.toolGrants(organizationId, userId, conversationId),
+        });
+        return false;
+      }
+      return true;
+    },
+    [conversationId, organizationId, queryClient, userId],
+  );
+  const handleAllowInConversation = useCallback(
+    async (id: string, toolName: ApprovalToolName) => {
+      await approveAndStoreGrant(id, toolName, "conversation");
+    },
+    [approveAndStoreGrant],
+  );
+  const handleAlwaysAllow = useCallback(
+    async (id: string, toolName: ApprovalToolName) => {
+      await approveAndStoreGrant(id, toolName, "always");
+    },
+    [approveAndStoreGrant],
   );
   const handleDeny = useCallback(
     async (id: string) => {
@@ -836,106 +1618,282 @@ export const useChatSession = ({
     },
     [addToolResult],
   );
+  // Submitting the decision and continuing the chat are separate
+  // steps: once the server commits a decision, the card keeps the
+  // returned receipt (never the value) and retries only the
+  // continuation, so a failed continuation never re-sends the value.
+  const handleRequestSecret = useCallback(
+    async (
+      toolCallId: string,
+      decision: RequestSecretDecision,
+    ): Promise<RequestSecretOutput> =>
+      unwrapApiResponse(
+        await api.chat
+          .threads({ threadId: toSafeId<"chatThread">(conversationId) })
+          .secrets({ toolCallId })
+          .post(decision),
+      ),
+    [conversationId],
+  );
+  const continueRequestSecret = useCallback(
+    async (toolCallId: string, receipt: RequestSecretOutput) => {
+      await addToolResult({
+        tool: "request_secret",
+        toolCallId,
+        output: receipt,
+      });
+    },
+    [addToolResult],
+  );
+  // Same two steps as private input: the server confirms the connection and
+  // returns the receipt, then the chat continues with it.
+  const handleConnectConnector = useCallback(
+    async (
+      toolCallId: string,
+      decision: ConnectConnectorDecision,
+    ): Promise<ConnectConnectorOutput> =>
+      chatConnectorReceipt.submit({
+        threadId: toSafeId<"chatThread">(conversationId),
+        toolCallId,
+        decision,
+      }),
+    [conversationId],
+  );
+  const continueConnectConnector = useCallback(
+    async (toolCallId: string, receipt: ConnectConnectorOutput) => {
+      await addToolResult({
+        tool: "connect_connector",
+        toolCallId,
+        output: receipt,
+      });
+    },
+    [addToolResult],
+  );
+  const resolveSecretTarget = useCallback(
+    async (
+      connectorSlug: string,
+      signal: AbortSignal,
+    ): Promise<SecretTargetResolution> => {
+      const thread = api.chat.threads({
+        threadId: toSafeId<"chatThread">(conversationId),
+      });
+      const response = await thread["saved-secret"].get({
+        query: { connectorSlug },
+        fetch: { signal },
+      });
+      return unwrapApiResponse(response);
+    },
+    [conversationId],
+  );
 
   /**
-   * Edit an already-answered ask-user card and replay the model
-   * from that point. TanStack ChatClient does not expose a
-   * rewind-to-tool-call primitive, so this is a truncate-and-replay:
+   * The one truncate-and-replay path. TanStack ChatClient has no rewind
+   * primitive, so the page drops every message after the target
+   * (`planTruncatedReplay`) and the replay request names the same target
+   * (`truncateAfterMessageId`), so the server drops the same persisted turns
+   * before the model runs again.
    *
-   *   1. Find the assistant message that owns the ask-user part.
-   *   2. Drop every message after it locally; the backend receives
-   *      the same truncation target for persisted history.
-   *   3. Reset the ask-user `tool-call` to `input-complete` and
-   *      remove its paired `tool-result` so `addToolResult` writes
-   *      a fresh output and TanStack's continuation logic drives the
-   *      next turn.
-   *
-   * The replay request also carries `truncateAfterMessageId`, so the
-   * backend drops persisted downstream turns before preparing the next
-   * model context.
+   * The plan reads the runtime's messages when the replay starts, not the
+   * rendered ones, so the callbacks built on it keep their identity while a
+   * turn streams and the transcript's edit actions do not re-render.
+   */
+  const replayFromTruncation = useCallback(
+    async <TReplayed>(
+      target: TruncatedReplayTarget,
+      replay: (
+        options: ChatSendMessageOptions | undefined,
+        /** The page's messages before the replay rewound them. */
+        rewoundFrom: PersistedChatMessage[],
+      ) => Promise<TReplayed>,
+    ): Promise<TReplayed | null> => {
+      const rewoundFrom = projectCanonicalChatUIMessages(
+        chat.getSnapshot().messages,
+      );
+      const plan = planTruncatedReplay(rewoundFrom, target);
+      if (plan === null) {
+        return null;
+      }
+      setMessages(plan.messages);
+      return await replay(
+        snapshotChatRequestOptions({
+          docxEditRepresentation: undefined,
+          editApplyMode: undefined,
+          options: { body: plan.body },
+          sendMode: getSendMode?.(),
+        }),
+        rewoundFrom,
+      );
+    },
+    [chat, getSendMode, setMessages],
+  );
+
+  /**
+   * Answer an answered ask-user card again: its card goes back to awaiting
+   * the answer, and `addToolResult` writes the new one, which drives the
+   * next turn.
    */
   const handleAskUserEditAndRerun = useCallback(
     async (toolCallId: string, output: AskUserOutput) => {
-      let targetIndex = -1;
-      for (let i = 0; i < messages.length; i += 1) {
-        const candidate = messages[i];
-        if (!candidate || candidate.role !== "assistant") {
-          continue;
-        }
-        const hasPart = candidate.parts.some(
-          (part) =>
-            part.type === "tool-call" &&
-            part.name === "ask-user" &&
-            part.id === toolCallId,
-        );
-        if (hasPart) {
-          targetIndex = i;
-          break;
-        }
-      }
-      if (targetIndex === -1) {
-        return;
-      }
-      const targetMessage = messages[targetIndex];
-      if (!targetMessage || targetMessage.role !== "assistant") {
-        return;
-      }
-
-      // slice's elements are shared refs with the original `messages`
-      // array; mutating in place would corrupt the SDK's history, so the
-      // spread builds a new message object that owns the rewritten parts.
-      const truncated = messages.slice(0, targetIndex + 1).map((message) => {
-        if (message.role !== "assistant") {
-          return message;
-        }
-        // Reset the matching ask-user part so `addToolResult` can
-        // overwrite its output. Keeping `input` on the tool-call
-        // keeps the card body stable during the brief frame between
-        // truncation and the next tool-result write.
-        const nextParts: ChatPart[] = [];
-        for (const part of message.parts) {
-          if (part.type === "tool-result" && part.toolCallId === toolCallId) {
-            continue;
-          }
-          if (
-            part.type === "tool-call" &&
-            part.name === "ask-user" &&
-            part.id === toolCallId &&
-            part.state === "complete"
-          ) {
-            nextParts.push(resetAskUserToolCall(part));
-            continue;
-          }
-          nextParts.push(part);
-        }
-        return { ...message, parts: nextParts };
-      });
-      setMessages(truncated);
-      const replayOptions = snapshotChatRequestOptions({
-        docxEditRepresentation: undefined,
-        editApplyMode: undefined,
-        options: {
-          body: {
-            truncateAfterMessageId: toSafeId<"chatMessage">(targetMessage.id),
-          },
+      await replayFromTruncation(
+        { type: "ask-user-answer", toolCallId },
+        async (options) => {
+          await addToolResult(
+            {
+              tool: "ask-user",
+              toolCallId,
+              output,
+            },
+            options,
+          );
         },
-        sendMode: getSendMode?.(),
-      });
-      await addToolResult(
-        {
-          tool: "ask-user",
-          toolCallId,
-          output,
-        },
-        replayOptions,
       );
     },
-    [addToolResult, getSendMode, messages, setMessages],
+    [addToolResult, replayFromTruncation],
   );
 
-  const createDocumentMattersView = useQueryView(
+  /**
+   * An open edit form holds the queue: the edit drops every turn after its
+   * message, so nothing queued may be sent meanwhile. While any edit form of
+   * this page is open, the page pauses the server's queue whenever it has
+   * messages nothing holds yet (also ones another tab or device queues
+   * later), and resumes it once the last form closes without sending; a
+   * sent edit releases it itself (its turn goes first and the queue waits
+   * behind it). The page's pause and resume run one at a time, each decided
+   * by the forms open when it runs, so a form that closed earlier never
+   * releases a newer form's hold.
+   */
+  const editHoldRef = useRef<Promise<boolean>>(Promise.resolve(true));
+  const syncEditHold = useCallback(
+    async ({ forStop }: { forStop: boolean }): Promise<boolean> => {
+      const run = async (): Promise<boolean> => {
+        const pause = editPauseRef.current;
+        const current = readQueue();
+        if (forStop || pause.sessions.size > 0) {
+          if (
+            pause.paused ||
+            current.items.length === 0 ||
+            current.hold !== null
+          ) {
+            return true;
+          }
+          pause.paused = await writeQueue(
+            async () => await pauseChatQueue(threadRef.threadId),
+          );
+          return pause.paused;
+        }
+        if (pause.paused) {
+          pause.paused = !(await writeQueue(
+            async () => await resumeChatQueue(threadRef.threadId),
+          ));
+        }
+        return true;
+      };
+      const next = editHoldRef.current.then(run, run);
+      editHoldRef.current = next;
+      return await next;
+    },
+    [readQueue, threadRef.threadId, writeQueue],
+  );
+
+  // Messages another tab or device queues while an edit form is open are
+  // held too.
+  useExternalSyncEffect(() => {
+    const pause = editPauseRef.current;
+    if (pause.sessions.size > 0 && !pause.paused && chatQueue.hold === null) {
+      detached(
+        syncEditHold({ forStop: false }),
+        "use-chat-session.pause-for-edit",
+      );
+    }
+  }, [chatQueue, syncEditHold]);
+
+  /**
+   * Opening the editor of a sent message while a turn runs stops that turn
+   * through the composer's Stop, so the edit can be sent once it settled.
+   * The queue is paused first, so the turn's end does not send a queued
+   * message ahead of the edit; a pause that did not go through stops
+   * nothing (its failure is told).
+   */
+  const startUserMessageEdit = useCallback(() => {
+    if (!turnRuns()) {
+      return;
+    }
+    detached(
+      (async () => {
+        if (await syncEditHold({ forStop: true })) {
+          stop();
+        }
+      })(),
+      "use-chat-session.stop-for-edit",
+    );
+  }, [stop, syncEditHold, turnRuns]);
+
+  /** The edit form of session `sessionId` opened; the release it returns
+   *  runs when that form closes. */
+  const holdQueueForMessageEdit = useCallback(
+    (sessionId: string) => {
+      const pause = editPauseRef.current;
+      pause.sessions.add(sessionId);
+      detached(
+        syncEditHold({ forStop: false }),
+        "use-chat-session.pause-for-edit",
+      );
+      return () => {
+        pause.sessions.delete(sessionId);
+        detached(
+          syncEditHold({ forStop: false }),
+          "use-chat-session.resume-after-edit",
+        );
+      };
+    },
+    [syncEditHold],
+  );
+
+  /**
+   * Replace one of the user's own messages and run the assistant again from
+   * there: the message and every later turn leave the thread, and the edited
+   * message is sent under the same id. Resolves once the server accepted the
+   * edit's turn or did not; when it did not, the page shows the thread as the
+   * server stores it again. Should that thread no longer hold the edited
+   * message, the page's edit sessions hand the edit on, as they do for a
+   * message that leaves the thread any other way.
+   */
+  const editUserMessage = useCallback(
+    async (
+      messageId: string,
+      edit: UserMessageEdit,
+    ): Promise<UserMessageEditOutcome> => {
+      const replayed = await replayFromTruncation(
+        { type: "user-message", messageId },
+        async (options, rewoundFrom): Promise<UserMessageEditOutcome> => {
+          const acceptance = await sendThreadChatMessageUntilAccepted(
+            chat,
+            buildEditedUserMessage({ edit, messageId }),
+            { ...options, timingSurface },
+          );
+          if (acceptance.status === "accepted") {
+            // The edit's acceptance released the queue: nothing to resume.
+            editPauseRef.current.paused = false;
+            return { type: "accepted" };
+          }
+          await showStoredChatThread(chat, rewoundFrom);
+          return userMessageEditFailure(acceptance.error);
+        },
+      );
+      // A message the page no longer holds cannot be edited from it.
+      return (
+        replayed ?? {
+          type: "edit-refused",
+          code: CHAT_MESSAGE_EDIT_ERROR_CODE.targetMissing,
+        }
+      );
+    },
+    [chat, replayFromTruncation, timingSurface],
+  );
+
+  const createDocumentMattersView = queryView(
     useQuery({
-      ...workspacesNavigationOptions(organizationId),
+      ...workspacesNavigationOptions({ organizationId, userId }),
       select: (navigation) =>
         navigation.workspaces.map((matter) => ({
           id: matter.id,
@@ -948,7 +1906,6 @@ export const useChatSession = ({
     }),
   );
 
-  const queryClient = useQueryClient();
   const handledDocumentDeletionToolCallIdsRef = useRef(new Set<string>());
   const handledDocxReplacementToolCallIdsRef = useRef(new Set<string>());
   const handledPlaybookSaveToolCallIdsRef = useRef(new Set<string>());
@@ -978,20 +1935,138 @@ export const useChatSession = ({
     );
   }, [getContextMatterIds, messages, queryClient, workspaceId]);
 
-  // A chat `save_playbook` writes an org-level playbook from any surface, so
-  // an open playbooks list or editor refetches once per completed save.
+  const playbookPaneTabId = playbookDraftTabId(threadRef.threadId);
+  /** The tab label for a playbook: its cached name, until the pane reads it. */
+  const playbookPaneLabel = useCallback(
+    (playbookId: string) => {
+      const detail = queryClient.getQueryData(
+        playbookDetailOptions(organizationId, playbookId).queryKey,
+      );
+      return detail !== undefined && "name" in detail && detail.name !== ""
+        ? detail.name
+        : t("knowledge.playbooks.review.playbookLabel");
+    },
+    [organizationId, queryClient, t],
+  );
+
+  const isMobile = useIsMobile();
+  const openedPlaybookPaneIdsRef = useRef(new Set<string>());
+  const playbookPaneShown = useInspectorTabsStore((state) =>
+    state.tabs.some(({ id }) => id === playbookPaneTabId),
+  );
+  // A pane restored with the inspector counts as opened, so closing it keeps
+  // the next save from reopening it.
   useExternalSyncEffect(() => {
+    if (playbookPaneShown) {
+      openedPlaybookPaneIdsRef.current.add(playbookPaneTabId);
+    }
+  }, [playbookPaneShown, playbookPaneTabId]);
+  /** Opens (or focuses) this thread's playbook pane on `playbookId`. */
+  const handleOpenPlaybook = useCallback(
+    (playbookId: string) => {
+      openedPlaybookPaneIdsRef.current.add(playbookPaneTabId);
+      useInspectorTabsStore.getState().openView({
+        type: PLAYBOOK_DRAFT_VIEW,
+        id: playbookPaneTabId,
+        label: playbookPaneLabel(playbookId),
+        payload: { type: "playbook", playbookId },
+      });
+    },
+    [playbookPaneLabel, playbookPaneTabId],
+  );
+
+  /**
+   * Moves or opens this thread's pane as `playbookPaneReaction` decides. A
+   * save that finishes after the page moved to another thread is dropped.
+   */
+  const followPlaybookSave = useLatestCallback(
+    ({ saved, paneTabId }: FollowPlaybookSaveOptions) => {
+      if (paneTabId !== playbookPaneTabId) {
+        return;
+      }
+      const { playbookId } = saved;
+      const inspector = useInspectorTabsStore.getState();
+      const tab = inspector.tabs.find(({ id }) => id === playbookPaneTabId);
+      const reaction = playbookPaneReaction({
+        mode: playbookPane,
+        isMobile,
+        openedThisSession: openedPlaybookPaneIdsRef.current.has(paneTabId),
+        pane: playbookPaneState(
+          tab?.type === "view" &&
+            tab.viewType === PLAYBOOK_DRAFT_VIEW &&
+            isPlaybookDraftViewPayload(tab.payload)
+            ? tab.payload
+            : null,
+        ),
+        saved,
+      });
+      switch (reaction) {
+        case "none":
+          return;
+        case "open":
+          handleOpenPlaybook(playbookId);
+          return;
+        case "update":
+          inspector.updateView({
+            id: playbookPaneTabId,
+            label: playbookPaneLabel(playbookId),
+            payload: { type: "playbook", playbookId },
+          });
+          return;
+        default:
+          reaction satisfies never;
+          panic(`Unhandled playbook pane reaction: ${String(reaction)}`);
+      }
+    },
+  );
+
+  // A chat `save_playbook` writes an org-level playbook from any surface, so
+  // an open playbooks list or editor refetches once per completed save. The
+  // pane follows only the newest save: a refetch that settles after a later
+  // save's is dropped.
+  const playbookSaveSequenceRef = useRef(0);
+  const observedPlaybookSaveRuntimesRef = useRef(new WeakSet<object>());
+  useExternalSyncEffect(() => {
+    const source = observedPlaybookSaveRuntimesRef.current.has(chat)
+      ? "live"
+      : "history";
+    observedPlaybookSaveRuntimesRef.current.add(chat);
+    const reconciliation = reconcilePlaybookSaveToolCalls({
+      handledToolCallIds: handledPlaybookSaveToolCallIdsRef.current,
+      historicalToolCallIds: historicalPlaybookSaveToolCallIdsRef.current,
+      messages,
+      organizationId,
+      playbookKeys: knowledgeKeys.playbooks,
+      queryClient,
+      source,
+    });
+    if (reconciliation === null) {
+      return;
+    }
+    const paneTabId = playbookPaneTabId;
+    if (reconciliation.target?.source === "live") {
+      playbookSaveSequenceRef.current += 1;
+    }
+    const sequence = playbookSaveSequenceRef.current;
+    const requestedChat = chat;
     detached(
-      reconcilePlaybookSaveToolCalls({
-        handledToolCallIds: handledPlaybookSaveToolCallIdsRef.current,
-        messages,
-        organizationId,
-        playbookKeys: knowledgeKeys.playbooks,
-        queryClient,
+      followReconciledPlaybookSave({
+        reconciliation,
+        isCurrent: () =>
+          seededChatRef.current === requestedChat &&
+          playbookSaveSequenceRef.current === sequence,
+        follow: (saved) => followPlaybookSave({ saved, paneTabId }),
       }),
       "use-chat-session.reconcile-playbook-save-tool-calls",
     );
-  }, [messages, organizationId, queryClient]);
+  }, [
+    chat,
+    followPlaybookSave,
+    messages,
+    organizationId,
+    playbookPaneTabId,
+    queryClient,
+  ]);
 
   // A chat highlight or comment on the open decision or statute writes outside
   // the reader's own mutations, so its margin refetches once per completed write.
@@ -1057,30 +2132,24 @@ export const useChatSession = ({
       input: CreateDocumentInput,
     ) => {
       if (destination.type === "download") {
-        const downloadResult = await Result.tryPromise(async () => {
-          const draft = await prepareCreateDocumentDraft(toolCallId, input);
-          if (draft === null) {
-            return { status: "invalid-source" } as const;
-          }
-          downloadFile(
-            new Blob([new Uint8Array(draft.buffer)], { type: DOCX_MIME }),
-            draft.fileName,
-          );
-          return { status: "downloaded", fileName: draft.fileName } as const;
-        });
-
+        const downloadResult = await downloadCreateDocumentDraft(
+          toolCallId,
+          input,
+        );
+        if (Result.isError(downloadResult)) {
+          getAnalytics().captureError(downloadResult.error, {
+            fingerprintKey: "useChatSession:failure-3",
+            scope: { type: "handler", handlerId: exceptionHandlerId },
+          });
+        }
         if (
           Result.isError(downloadResult) ||
           downloadResult.value.status === "invalid-source"
         ) {
-          if (Result.isError(downloadResult)) {
-            getAnalytics().captureError(downloadResult.error);
-          }
           notifyUserError(
             Result.isError(downloadResult) ? downloadResult.error : undefined,
             t("chat.createDocument.failedHeader"),
           );
-          return;
         }
         return;
       }
@@ -1153,29 +2222,29 @@ export const useChatSession = ({
           type: DOCX_MIME,
         });
         const contentSha256Hex = await sha256Hex(draft.buffer);
-        const response = await api
-          .entities({ workspaceId: toSafeId<"workspace">(matterId) })
-          ["upload-generated-document"].post({
-            file,
-            contentSha256Hex,
-            messageId: toSafeId<"chatMessage">(draftMessageId),
-            name: draft.fileName,
-            propertyId: fileProperty.id,
-            ...(draftChatThreadId === null
-              ? {}
-              : {
-                  draftChatThreadId: toSafeId<"chatThread">(draftChatThreadId),
-                }),
-            threadId: toSafeId<"chatThread">(threadRef.threadId),
-            ...(threadRef.scope === "workspace"
-              ? {
-                  threadWorkspaceId: toSafeId<"workspace">(
-                    threadRef.workspaceId,
-                  ),
-                }
-              : {}),
-            toolCallId,
-          });
+        const entitiesApi = api.entities({
+          workspaceId: toSafeId<"workspace">(matterId),
+        });
+
+        const response = await entitiesApi["upload-generated-document"].post({
+          file,
+          contentSha256Hex,
+          messageId: toSafeId<"chatMessage">(draftMessageId),
+          name: draft.fileName,
+          propertyId: fileProperty.id,
+          ...(draftChatThreadId === null
+            ? {}
+            : {
+                draftChatThreadId: toSafeId<"chatThread">(draftChatThreadId),
+              }),
+          threadId: toSafeId<"chatThread">(threadRef.threadId),
+          ...(threadRef.scope === "workspace"
+            ? {
+                threadWorkspaceId: toSafeId<"workspace">(threadRef.workspaceId),
+              }
+            : {}),
+          toolCallId,
+        });
         if (response.error) {
           throw toAPIError(response.error);
         }
@@ -1204,7 +2273,10 @@ export const useChatSession = ({
           getInspector: useInspectorTabsStore.getState,
           toolCallId,
         });
-        getAnalytics().captureError(createResult.error);
+        getAnalytics().captureError(createResult.error, {
+          fingerprintKey: "useChatSession:failure-4",
+          scope: { type: "handler", handlerId: exceptionHandlerId },
+        });
         notifyUserError(
           createResult.error,
           APIError.is(createResult.error)
@@ -1261,20 +2333,31 @@ export const useChatSession = ({
       );
 
       if (!promotedDraftInPlace) {
-        await openCreatedDocumentInInspector(output);
+        await openCreatedDocumentInInspector(
+          output,
+          getCurrentWorkspaceDocument(router.state.matches),
+        );
       }
     },
-    [chat, queryClient, setMessages, t, threadRef],
+    [chat, queryClient, router, setMessages, t, threadRef, exceptionHandlerId],
   );
 
   const handleOpenCreatedDocument = useCallback(
     async (output: CreateDocumentMatterSuccess) => {
-      await openCreatedDocumentInInspector(output);
+      await openCreatedDocumentInInspector(
+        output,
+        getCurrentWorkspaceDocument(router.state.matches),
+      );
     },
-    [],
+    [router],
   );
   const streamdownComponents = useMemo(
     () => ({
+      table: (props: Omit<ChatTableChartProps, "cacheScope">) =>
+        createElement(LazyChatTableChart, {
+          ...props,
+          cacheScope: [organizationId, userId],
+        }),
       a: (props: ComponentProps<"a">) =>
         createElement(StreamdownMentionLink, {
           ...props,
@@ -1284,7 +2367,7 @@ export const useChatSession = ({
       "stll-anon": (props: ComponentProps<"button"> & { ph?: string }) =>
         createElement(AnonymizedSpan, props),
     }),
-    [workspaceId],
+    [workspaceId, organizationId, userId],
   );
 
   const approvalPendingMessageId = useMemo(
@@ -1297,15 +2380,36 @@ export const useChatSession = ({
       isChatTurnGenerating({
         hasError: error !== undefined,
         messages,
-        requestActive: isChatClientRequestActive(status),
+        requestActive: reconnecting || isChatClientRequestActive(status),
         sessionGenerating,
         stopStatus: stopState.status,
       }),
-    [error, messages, sessionGenerating, status, stopState.status],
+    [
+      error,
+      messages,
+      reconnecting,
+      sessionGenerating,
+      status,
+      stopState.status,
+    ],
   );
-  useExternalSyncEffect(() => {
-    applySendQueueEvent({ type: "generation-status-synced", isGenerating });
-  }, [applySendQueueEvent, isGenerating]);
+  // A turn runs, or the client's request has not ended: TanStack can report a
+  // turn ready while it still loads.
+  const turnRunning = isGenerating || clientLoading;
+  // A turn paused on the member: an approval or a question is open.
+  const turnAwaitsMember =
+    openMemberWaitKeys({
+      localRunQuestion: snapshot.localRunQuestion,
+      messages,
+    }).length > 0;
+  useChatTurnNotifications({
+    conversationId,
+    phase: getChatTurnPhase({
+      awaitingUser: getAwaitedAssistantMessageId(messages) !== null,
+      hasError: error !== undefined,
+      isGenerating,
+    }),
+  });
 
   // Notify `onError` exactly once per new error instance. TanStack keeps
   // the same Error reference alive across renders until the turn is
@@ -1337,114 +2441,97 @@ export const useChatSession = ({
       return;
     }
     lastStopFailureRef.current = stopState.error;
-    getAnalytics().captureError(stopState.error);
-    notifyUserError(stopState.error, t("chat.stopFailed"));
-  }, [stopState, t]);
-
-  useExternalSyncEffect(() => {
-    applySendQueueEvent({ type: "conversation-switched", conversationId });
-  }, [applySendQueueEvent, conversationId]);
-
-  // Drain the queue one message per turn. When the response
-  // finishes (`isGenerating` falls back to false) the oldest queued
-  // message is dispatched; sending it flips the status straight
-  // back, so the next queued message waits for that turn to end
-  // too — queued messages never overlap a stream. We hold the
-  // queue if the turn ended in error: firing every queued message
-  // into a failing provider just burns quota and spams the user
-  // with repeats of the same error. The next manual send (or a
-  // successful `regenerate`) lifts the gate. `reduceSendQueue` owns the
-  // finished-turn edge detection and the error gate (see
-  // `turn-boundary-checked` in use-chat-session-send-queue.logic.ts);
-  // this effect only forwards the runtime's latest status and, if a
-  // dispatch was returned, sends it.
-  useExternalSyncEffect(() => {
-    const dispatched = applySendQueueEvent({
-      type: "turn-boundary-checked",
-      isGenerating,
-      status,
+    getAnalytics().captureError(stopState.error, {
+      fingerprintKey: "useChatSession:failure-5",
+      scope: { type: "handler", handlerId: exceptionHandlerId },
     });
-    if (!dispatched) {
+    notifyUserError(stopState.error, t("chat.stopFailed"));
+  }, [stopState, t, exceptionHandlerId]);
+
+  // A message steered into a turn that waited on the member goes to it once
+  // the declined wait lets it run again. Taken, it leaves the queue; not
+  // taken, it stays queued for the turn's end.
+  useExternalSyncEffect(() => {
+    const steered = steerOnResumeRef.current;
+    if (steered === null || !turnRunning) {
       return;
     }
-    // Preserve the request options the message was queued with —
-    // notably `body.sendMode` and the DOCX edit preferences snapshotted by
-    // withRequestSnapshots at queue time. The manual drain path
-    // already passes them; the automatic drain must too, otherwise
-    // toggling the mode between queueing and draining sends the
-    // queued turn with the wrong mode.
+    steerOnResumeRef.current = null;
     detached(
-      dispatchQueuedMessage(dispatched).catch(ignoreQueuedDispatchError),
-      "use-chat-session.dispatch-queued-message",
+      (async () => {
+        // Taken, the server removes it from the queue at that revision.
+        removedHereRef.current.add(steered.id);
+        const outcome = await chat.steerLocalTurn({
+          inputId: steered.id,
+          text: steered.text,
+          source: {
+            type: CHAT_LOCAL_RUN_STEER_SOURCE.queued,
+            revision: steered.revision,
+          },
+        });
+        if (outcome.type !== "steered") {
+          removedHereRef.current.delete(steered.id);
+        }
+        switch (outcome.type) {
+          case "steered":
+            await settleSteeredHandOff(steered.id);
+            return;
+          case "refused":
+            notifySteerRefused(outcome.reason);
+            return;
+          case "unsettled":
+            return;
+          default:
+            outcome satisfies never;
+            panic("Unhandled steer outcome");
+        }
+      })(),
+      "use-chat-session.steer-on-resume",
     );
-  }, [
-    applySendQueueEvent,
-    dispatchQueuedMessage,
-    isGenerating,
-    // Not read in the body — `sendQueueRef` is always current — but kept
-    // as a dependency so this effect still re-runs on every queue change,
-    // matching the original effect's re-run cadence 1:1.
-    queuedMessages,
-    status,
-  ]);
+  }, [chat, notifySteerRefused, settleSteeredHandOff, turnRunning]);
 
+  // The server sends the first queued message as a turn of its own, which
+  // this page did not start: once that message has left the queue (not
+  // removed from this page) and the page runs nothing, the page reads the
+  // thread again, and the runtime the read rebuilds joins the running turn.
+  const queueHeadId = chatQueue.items.at(0)?.id ?? null;
+  const queuedIds = chatQueue.items.map(({ id }) => id).join(" ");
+  // Every head seen counts, also while this page's turn runs: the server may
+  // send one from the queue before this page's request has ended.
+  const seenQueueHeadsRef = useRef(new Set<string>());
   useExternalSyncEffect(() => {
-    setConversationApprovedTools(readConversationApprovedTools(conversationId));
-    setAlwaysApprovedTools(
-      readAlwaysApprovedTools({ organizationId, mcpConnectorIdentities }),
+    const seen = seenQueueHeadsRef.current;
+    if (queueHeadId !== null) {
+      seen.add(queueHeadId);
+    }
+    // Joining waits for this page's own turn to end.
+    if (turnRunning) {
+      return;
+    }
+    const queued = new Set(queuedIds.split(" "));
+    const left = [...seen].filter((id) => !queued.has(id));
+    for (const id of left) {
+      seen.delete(id);
+    }
+    if (left.every((id) => removedHereRef.current.has(id))) {
+      return;
+    }
+    detached(
+      invalidateChatThreadAcrossScopes({
+        queryClient,
+        threadId: threadRef.threadId,
+      }),
+      "use-chat-session.join-queued-turn",
     );
-  }, [conversationId, mcpConnectorIdentities, organizationId]);
-  useExternalSyncEffect(() => {
-    const handleApprovedToolsChanged = (event: Event) => {
-      const detail = getApprovedToolsChangedDetail(event);
-      if (!detail) {
-        return;
-      }
-
-      if (detail.scope === "local") {
-        setAlwaysApprovedTools(
-          readAlwaysApprovedTools({ organizationId, mcpConnectorIdentities }),
-        );
-        return;
-      }
-
-      if (detail.conversationId !== conversationId) {
-        return;
-      }
-
-      setConversationApprovedTools(
-        readConversationApprovedTools(conversationId),
-      );
-    };
-    const handleStorage = (event: StorageEvent) => {
-      if (
-        event.key !== userStorageKey(CHAT_ALWAYS_APPROVED_TOOLS_STORAGE_KEY)
-      ) {
-        return;
-      }
-
-      setAlwaysApprovedTools(
-        readAlwaysApprovedTools({ organizationId, mcpConnectorIdentities }),
-      );
-    };
-
-    window.addEventListener(
-      CHAT_APPROVED_TOOLS_CHANGED_EVENT,
-      handleApprovedToolsChanged,
-    );
-    window.addEventListener("storage", handleStorage);
-
-    return () => {
-      window.removeEventListener(
-        CHAT_APPROVED_TOOLS_CHANGED_EVENT,
-        handleApprovedToolsChanged,
-      );
-      window.removeEventListener("storage", handleStorage);
-    };
-  }, [conversationId, mcpConnectorIdentities, organizationId]);
+  }, [queryClient, queueHeadId, queuedIds, threadRef.threadId, turnRunning]);
 
   return {
+    activitySession: chat,
+    approvalIdsAwaitedAtOpen: workAwaitedAtOpen.approvalIds,
+    workAwaitedAtOpen,
     clientStatus: status,
+    reconnecting,
+    refreshAnswers,
     error,
     messages,
     loadOlder,
@@ -1453,278 +2540,56 @@ export const useChatSession = ({
     loadOlderError,
     resendLatestMessage,
     sendMessage,
-    queuedMessages,
+    queueMessage,
+    continuePausedTurn,
+    queue,
+    editQueuedMessage,
+    moveQueuedMessage,
+    pauseQueue,
     removeQueuedMessage,
+    replaceWithQueuedMessage,
+    resumeQueue,
+    sendQueuedMessageNow,
     stop,
     leave,
     isGenerating,
+    /** The turn waits on the member: an approval or a question is open. */
+    turnAwaitsMember,
+    /** A stop was asked for and the turn has not ended yet. */
+    stopPending: stopState.status === "pending",
     turnAbandoned,
+    computerWait,
+    /** Whether the running turn takes a message mid-turn, as the server says. */
+    turnSteering,
+    turnSentAt,
+    turnsStarted,
     alwaysApprovedTools,
     conversationApprovedTools,
     handleApprove,
     handleAllowInConversation,
     handleDeny,
     handleAskUserSubmit,
+    handleRequestSecret,
+    continueRequestSecret,
+    handleConnectConnector,
+    continueConnectConnector,
+    resolveSecretTarget,
+    secretAvailabilityKey: conversationId,
     handleAskUserEditAndRerun,
+    startUserMessageEdit,
+    holdQueueForMessageEdit,
+    editUserMessage,
     handleAlwaysAllow,
+    confirmStoredApprovalGrant,
     handleCreateDocumentResolve,
     handleOpenCreateDocumentDraft,
     handleOpenCreatedDocument,
+    handleOpenPlaybook,
     createDocumentMattersView,
     addToolResult,
     streamdownComponents,
     approvalPendingMessageId,
+    localRunQuestion: snapshot.localRunQuestion,
+    answerLocalRunQuestion: chat.answerLocalRunQuestion,
   };
-};
-
-// Kept per signed-in user.
-const CHAT_ALWAYS_APPROVED_TOOLS_STORAGE_KEY =
-  "stella.chat.alwaysApprovedTools";
-const CHAT_CONVERSATION_APPROVED_TOOLS_STORAGE_KEY_PREFIX =
-  "stella.chat.conversationApprovedTools:";
-const CHAT_APPROVED_TOOLS_CHANGED_EVENT = "stella:chat-approved-tools-changed";
-
-type ApprovedToolsChangedDetail =
-  | {
-      scope: "local";
-    }
-  | {
-      scope: "session";
-      conversationId: string;
-    };
-
-const getConversationApprovedToolsStorageKey = (conversationId: string) =>
-  `${CHAT_CONVERSATION_APPROVED_TOOLS_STORAGE_KEY_PREFIX}${conversationId}`;
-
-const readConversationApprovedTools = (conversationId: string) =>
-  readStoredApprovedTools(
-    getConversationApprovedToolsStorageKey(conversationId),
-  );
-
-const readAlwaysApprovedTools = ({
-  mcpConnectorIdentities,
-  organizationId,
-}: {
-  mcpConnectorIdentities: readonly McpConnectorApprovalIdentity[];
-  organizationId: string;
-}) => {
-  const stored = readStoredStrings(
-    userStorageKey(CHAT_ALWAYS_APPROVED_TOOLS_STORAGE_KEY),
-  );
-  const approvedTools: ToolApprovalGrant[] = [];
-
-  for (const value of stored) {
-    if (isApprovalToolName(value) && !isExternalMcpToolName(value)) {
-      approvedTools.push(value);
-      continue;
-    }
-
-    const scopedMcpTool = parseScopedMcpApprovalKey({
-      mcpConnectorIdentities,
-      organizationId,
-      value,
-    });
-    if (scopedMcpTool) {
-      approvedTools.push(scopedMcpTool);
-    }
-  }
-
-  return new Set(approvedTools);
-};
-
-const getStorage = (scope: "local" | "session") => {
-  if (typeof window === "undefined") {
-    return null;
-  }
-
-  return scope === "local" ? window.localStorage : window.sessionStorage;
-};
-
-const readStoredApprovedTools = (
-  key: string,
-  scope: "local" | "session" = "session",
-) => {
-  const stored = readStoredStrings(key, scope);
-  return new Set(stored.filter(isToolApprovalGrant));
-};
-
-// Top-level shape only: elements are filtered to strings below, so one
-// non-string entry drops just that entry rather than the whole list.
-const JsonArraySchema = v.array(v.unknown());
-
-const readStoredStrings = (
-  key: string,
-  scope: "local" | "session" = "local",
-) => {
-  const storage = getStorage(scope);
-  if (!storage) {
-    return [];
-  }
-
-  const raw = storage.getItem(key);
-  const parsed = readStoredJson(raw, JsonArraySchema);
-  return parsed
-    ? parsed.filter((value): value is string => typeof value === "string")
-    : [];
-};
-
-const writeStoredApprovedTools = (
-  key: string,
-  tools: ReadonlySet<ToolApprovalGrant>,
-  scope: "local" | "session",
-) => {
-  const storage = getStorage(scope);
-  if (!storage) {
-    return;
-  }
-
-  writeStoredJson(storage, key, [...tools]);
-};
-
-const writeStoredApprovedStrings = (
-  key: string,
-  values: ReadonlySet<string>,
-) => {
-  const storage = getStorage("local");
-  if (!storage) {
-    return;
-  }
-
-  writeStoredJson(storage, key, [...values]);
-};
-
-const getAlwaysApprovalKey = ({
-  mcpConnectorIdentities,
-  organizationId,
-  toolName,
-}: {
-  mcpConnectorIdentities: readonly McpConnectorApprovalIdentity[];
-  organizationId: string;
-  toolName: ApprovalToolName;
-}): string | null => {
-  if (!isExternalMcpToolName(toolName)) {
-    return toolName;
-  }
-
-  const connectorSlug = getExternalMcpConnectorSlugFromToolName(toolName);
-  if (!connectorSlug) {
-    return null;
-  }
-
-  const connector = findMcpConnectorIdentity({
-    connectorSlug,
-    mcpConnectorIdentities,
-  });
-  if (!connector) {
-    return null;
-  }
-
-  return [
-    "mcp-approval",
-    encodeURIComponent(organizationId),
-    encodeURIComponent(connector.id),
-    encodeURIComponent(connectorSlug),
-  ].join(":");
-};
-
-const parseScopedMcpApprovalKey = ({
-  mcpConnectorIdentities,
-  organizationId,
-  value,
-}: {
-  mcpConnectorIdentities: readonly McpConnectorApprovalIdentity[];
-  organizationId: string;
-  value: string;
-}): ToolApprovalGrant | null => {
-  const [
-    kind,
-    encodedOrganizationId,
-    encodedConnectorId,
-    encodedConnectorSlug,
-    extra,
-  ] = value.split(":");
-  if (
-    kind !== "mcp-approval" ||
-    encodedOrganizationId !== encodeURIComponent(organizationId) ||
-    !encodedConnectorId ||
-    !encodedConnectorSlug ||
-    extra !== undefined
-  ) {
-    return null;
-  }
-
-  const connectorId = safeDecodeURIComponent(encodedConnectorId);
-  const connectorSlug = safeDecodeURIComponent(encodedConnectorSlug);
-  if (!connectorId || !connectorSlug) {
-    return null;
-  }
-
-  const connector = findMcpConnectorIdentity({
-    connectorSlug,
-    mcpConnectorIdentities,
-  });
-  if (connector?.id !== connectorId) {
-    return null;
-  }
-
-  return getExternalMcpConnectorApprovalGrant(connectorSlug);
-};
-
-const findMcpConnectorIdentity = ({
-  connectorSlug,
-  mcpConnectorIdentities,
-}: {
-  connectorSlug: string;
-  mcpConnectorIdentities: readonly McpConnectorApprovalIdentity[];
-}) =>
-  mcpConnectorIdentities.find(
-    (connector) => connector.slug === connectorSlug,
-  ) ?? null;
-
-const safeDecodeURIComponent = (value: string) => {
-  try {
-    return decodeURIComponent(value);
-  } catch {
-    return null;
-  }
-};
-
-const dispatchApprovedToolsChanged = (detail: ApprovedToolsChangedDetail) => {
-  if (typeof window === "undefined") {
-    return;
-  }
-
-  window.dispatchEvent(
-    new CustomEvent(CHAT_APPROVED_TOOLS_CHANGED_EVENT, { detail }),
-  );
-};
-
-const getApprovedToolsChangedDetail = (
-  event: Event,
-): ApprovedToolsChangedDetail | null => {
-  if (!(event instanceof CustomEvent)) {
-    return null;
-  }
-
-  const detail: unknown = event.detail;
-  if (typeof detail !== "object" || detail === null || !("scope" in detail)) {
-    return null;
-  }
-
-  if (detail.scope === "local") {
-    return { scope: "local" };
-  }
-
-  if (
-    detail.scope === "session" &&
-    "conversationId" in detail &&
-    typeof detail.conversationId === "string"
-  ) {
-    return {
-      scope: "session",
-      conversationId: detail.conversationId,
-    };
-  }
-
-  return null;
 };

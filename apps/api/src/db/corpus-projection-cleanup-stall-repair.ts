@@ -11,7 +11,9 @@
  */
 
 import { readConstraintCompletion } from "./online-constraint-completion";
-import type { OnlineRepair } from "./online-migration-connection";
+import { validateOnlineConstraints } from "./online-ddl";
+import type { OnlineConstraintValidation } from "./online-ddl";
+import type { MigrationOwnedOnlineRepair } from "./online-migration-connection";
 
 const REPAIR_NAME = "corpus-projection-cleanup-stall";
 const TABLE_NAME = "corpus_index_projection_intents";
@@ -20,37 +22,35 @@ const CONSTRAINT_NAMES = [
   "corpus_index_projection_intents_status_shape",
   "corpus_index_projection_intents_delete_reissues_nonnegative",
 ] as const;
-/**
- * VALIDATE queues behind an autovacuum of the table until that vacuum notices
- * the waiter and yields. Longer than the online phase's default, which is
- * sized for index builds; the phase restores its own setting afterwards.
- */
-const VALIDATE_LOCK_TIMEOUT = "1min";
 
-export const CORPUS_PROJECTION_CLEANUP_STALL_REPAIR: OnlineRepair = {
-  name: REPAIR_NAME,
-  readCompletion: async (connection) => {
-    for (const constraintName of CONSTRAINT_NAMES) {
-      const completion = await readConstraintCompletion({
-        connection,
-        constraintName,
-        repairName: REPAIR_NAME,
-        tableName: TABLE_NAME,
-      });
-      if (completion.type !== "complete") {
-        return completion;
+export const CORPUS_PROJECTION_CLEANUP_STALL_CONSTRAINTS = CONSTRAINT_NAMES.map(
+  (constraintName) => ({ tableName: TABLE_NAME, constraintName }),
+) satisfies readonly OnlineConstraintValidation[];
+
+export const CORPUS_PROJECTION_CLEANUP_STALL_REPAIR: MigrationOwnedOnlineRepair =
+  {
+    introducedBy: "20261003123500_corpus_projection_cleanup_reissue",
+    name: REPAIR_NAME,
+    readCompletion: async (connection) => {
+      for (const constraintName of CONSTRAINT_NAMES) {
+        const completion = await readConstraintCompletion({
+          connection,
+          constraintName,
+          repairName: REPAIR_NAME,
+          tableName: TABLE_NAME,
+        });
+        if (completion.type !== "complete") {
+          return completion;
+        }
       }
-    }
-    return { type: "complete" };
-  },
-  repair: async (connection) => {
-    await connection.execute(`SET lock_timeout = '${VALIDATE_LOCK_TIMEOUT}'`);
-    // A no-op on an already validated constraint, which is what makes the
-    // repair a fixed point.
-    for (const constraintName of CONSTRAINT_NAMES) {
-      await connection.execute(
-        `ALTER TABLE public."${TABLE_NAME}" VALIDATE CONSTRAINT "${constraintName}"`,
-      );
-    }
-  },
-};
+      return { type: "complete" };
+    },
+    // VALIDATE queues behind an autovacuum of the table until that vacuum
+    // notices the waiter and yields; the gate watches that wait and defers.
+    repair: async (connection, tables) =>
+      await validateOnlineConstraints({
+        connection,
+        tables,
+        constraints: CORPUS_PROJECTION_CLEANUP_STALL_CONSTRAINTS,
+      }),
+  };

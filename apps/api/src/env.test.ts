@@ -1,8 +1,10 @@
 import { describe, expect, test } from "bun:test";
+import { fileURLToPath } from "node:url";
 
 import { DEMO_ACCOUNT_OTP_WARNING_EVENT } from "@/api/lib/auth/demo-account-otp-policy";
 
 const baseEnv = {
+  DEPLOY_ENVIRONMENT: "development",
   DATABASE_URL: "postgres://postgres:postgres@localhost:5432/stella",
   S3_ENDPOINT: "http://localhost:9000",
   S3_BUCKET: "stella-test",
@@ -23,7 +25,7 @@ const LOCAL_DEV_ENV = {
 } as const;
 
 const envModuleUrl = new URL("env.ts", import.meta.url).href;
-const repoRoot = new URL("../../..", import.meta.url).pathname;
+const repoRoot = fileURLToPath(new URL("../../..", import.meta.url));
 
 // A developer's .env in the repository root would otherwise leak into these
 // runtimes and decide their outcome.
@@ -80,11 +82,19 @@ describe("API environment", () => {
       "handlers/health/routes.ts",
       import.meta.url,
     ).href;
+    const appModuleUrl = new URL("http/app.ts", import.meta.url).href;
+    const testServerModuleUrl = new URL(
+      "tests/helpers/test-server.ts",
+      import.meta.url,
+    ).href;
     const script = `const { getDemoAccountOtpOverride } = await import(${JSON.stringify(otpModuleUrl)});
       const { createHealthRoute } = await import(${JSON.stringify(routesModuleUrl)});
+      const { createHttpApp } = await import(${JSON.stringify(appModuleUrl)});
+      const { serveForTest } = await import(${JSON.stringify(testServerModuleUrl)});
       const codes = [" Account@Example.Test ", "standard@example.test", "standard@example.test", "account@example.test"].map(email => getDemoAccountOtpOverride({ email, type: "sign-in" }) ?? null);
-      const route = createHealthRoute({ probeReadiness: async () => ({ status: "ready" }) });
-      const response = await route.handle(new Request("http://localhost/ready"));
+      const server = serveForTest(createHttpApp({ middleware: [], routes: createHealthRoute({ probeReadiness: async () => ({ status: "ready" }) }) }));
+      const response = await server.fetch("http://localhost/ready");
+      await server.stop();
       console.log(JSON.stringify({ status: response.status, codes }));`;
     const result = spawnApiEnvironment(
       {
@@ -204,6 +214,27 @@ describe("API environment", () => {
           .exitCode,
       ).not.toBe(0);
     }
+  });
+
+  test("the free tier refuses to boot alongside usage enforcement", () => {
+    const freeTier = {
+      ...baseEnv,
+      FEATURE_FREE_TIER: "true",
+      FEATURE_ORG_ACCESS_STATE: "true",
+      FEATURE_ORG_SERVICE_BUDGETS: "true",
+      FEATURE_ACTION_ADMISSION: "true",
+      ORG_EVALUATION_PERIOD_DAYS: "11",
+    };
+    const booted = bootApiEnvironment(freeTier);
+    expect(booted.exitCode, booted.stderr.toString()).toBe(0);
+    const enforced = bootApiEnvironment({
+      ...freeTier,
+      USAGE_ENFORCEMENT_ENABLED: "true",
+    });
+    expect(enforced.exitCode).not.toBe(0);
+    expect(enforced.stderr.toString()).toContain(
+      "FEATURE_FREE_TIER requires USAGE_ENFORCEMENT_ENABLED to be off.",
+    );
   });
 
   test("infers SMTP provider from complete SMTP settings", () => {

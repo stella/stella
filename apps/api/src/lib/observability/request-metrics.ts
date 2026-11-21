@@ -1,54 +1,391 @@
 import { panic } from "better-result";
 
 import type { AIProvider, TanStackAIProvider } from "@stll/ai-catalog";
-import { Temporal } from "@stll/time";
+import type { TranscriptionModelId } from "@stll/ai-catalog/transcription";
+import type {
+  CaseLawResearchAnswerFailureReason,
+  CaseLawResearchAnswerState,
+} from "@stll/api-contract";
+import type { SanctionsSource } from "@stll/sanctions";
 
+import type { RAW_SOURCE_FAMILY } from "@/api/lib/legal-search/raw-source-family";
+import type { VerificationRunErrorCode } from "@/api/lib/lists/verification/contract";
+import type { RootPoolReport } from "@/api/lib/observability/root-pool-window";
+import type { BudgetName } from "@/api/lib/rate-limit/budget-observability";
+import { APP_VERSION, SERVICE_VERSION_KEY } from "@/api/lib/version";
 import type { PublicCorpusClass } from "@/api/public-corpus-policy";
 import { isLocalDevOpen } from "@/api/runtime-mode";
 
-/**
- * Per-request latency, split by request class, emitted as a CloudWatch
- * Embedded Metric Format (EMF) line on stdout.
- *
- * Why EMF on stdout rather than the structured `logger`: the OTel logs
- * pipeline has no exporter wired (see `otel.ts`), so `logger.info`
- * records never leave the process. EMF instead rides the container's
- * stdout into the awslogs driver, where CloudWatch auto-extracts the
- * embedded metric — no agent, no metric filter, no log exporter needed.
- *
- * The `class` dimension is the whole point: it lets the p95 latency
- * alarm watch `class=crud` in isolation, so an inherently multi-second
- * synchronous AI endpoint (template field suggestions, chat, summaries)
- * cannot trip an SLO meant for CRUD. A separate, looser alarm watches
- * `class=ai`. Keeping `class` the only dimension caps this at two
- * extracted metrics regardless of route cardinality; `http.route` and
- * `http.status_code` ride along as queryable properties, not dimensions.
- */
-
-const METRIC_NAMESPACE = "Stella/Api";
 const METRIC_NAME = "RequestDuration";
 const FAILURE_METRIC_NAME = "RequestTransientFailures";
+
+type RawSourceStoredMetricInput = {
+  family: (typeof RAW_SOURCE_FAMILY)[keyof typeof RAW_SOURCE_FAMILY];
+  sourceId: string;
+  kind: "document" | "payload";
+  bytes: number;
+};
+
+/** Successful raw write volume; conditional duplicates contribute no sample. */
+export const emitRawSourceStoredMetric = ({
+  family,
+  sourceId,
+  kind,
+  bytes,
+}: RawSourceStoredMetricInput): void => {
+  writeMetricLine({
+    family,
+    source: sourceId,
+    kind,
+    RawSourceStoredBytes: bytes,
+    RawSourceStoredObjects: 1,
+  });
+};
+
+const REQUEST_STAGE_FAMILIES = {
+  legislation_search: [
+    "index_scan",
+    "candidate_hydration",
+    "work_collapse_ranking",
+    "response_serialization",
+  ],
+  chat_turn: ["request_setup", "provider_first_token", "stream_finish"],
+} as const;
+
+export type RequestStage =
+  (typeof REQUEST_STAGE_FAMILIES)[keyof typeof REQUEST_STAGE_FAMILIES][number];
+
+const REQUEST_STAGE_FAMILY = {
+  index_scan: "legislation_search",
+  candidate_hydration: "legislation_search",
+  work_collapse_ranking: "legislation_search",
+  response_serialization: "legislation_search",
+  request_setup: "chat_turn",
+  provider_first_token: "chat_turn",
+  stream_finish: "chat_turn",
+} as const satisfies Record<RequestStage, keyof typeof REQUEST_STAGE_FAMILIES>;
+
+export type RequestStageOutcome =
+  "completed" | "failed" | "refused" | "cancelled";
+
+type RequestStageRecordInput = {
+  route: string;
+  tool?: string;
+  stage: RequestStage;
+  durationMs: number;
+  rounds?: number;
+  candidateCount?: number;
+  resultCount?: number;
+  outcome: RequestStageOutcome;
+};
+
+/** Stage detail for per-route and per-tool log queries. */
+export const buildRequestStageRecord = ({
+  route,
+  tool,
+  stage,
+  durationMs,
+  rounds,
+  candidateCount,
+  resultCount,
+  outcome,
+}: RequestStageRecordInput) => ({
+  event: "request.stage",
+  class: REQUEST_STAGE_FAMILY[stage],
+  "http.route": route,
+  ...(tool === undefined ? {} : { tool }),
+  stage,
+  durationMs: Math.max(0, Math.round(durationMs)),
+  ...(rounds === undefined ? {} : { rounds }),
+  ...(candidateCount === undefined ? {} : { candidateCount }),
+  ...(resultCount === undefined ? {} : { resultCount }),
+  outcome,
+});
+
+export const emitRequestStage = (input: RequestStageRecordInput): void => {
+  writeMetricLine(buildRequestStageRecord(input));
+};
+
+type McpRequestMetricInput = {
+  method: string;
+  mode: string;
+  overlap: boolean;
+  path: string;
+  toolName?: string;
+  phases: Record<
+    "auth" | "context" | "server_build" | "tool_projection" | "dispatch",
+    number
+  >;
+  queryCount: number;
+  totalMs: number;
+  /**
+   * The called tool's latency budget (`mcp/tool-latency-budgets.ts`), on a
+   * `tools/call` record only. `overBudget` is what the slow-tool log metric
+   * filter counts, so the alarm and the canary judge by the same table.
+   */
+  latencyBudgetMs?: number;
+};
+
+export const buildMcpRequestMetricRecord = ({
+  phases,
+  totalMs,
+  latencyBudgetMs,
+  ...fields
+}: McpRequestMetricInput) => {
+  const total = Math.ceil(totalMs);
+  return {
+    event: "mcp.request.phases",
+    ...fields,
+    auth: Math.floor(phases.auth),
+    context: Math.floor(phases.context),
+    server_build: Math.floor(phases.server_build),
+    tool_projection: Math.floor(phases.tool_projection),
+    dispatch: Math.floor(phases.dispatch),
+    total,
+    ...(latencyBudgetMs === undefined
+      ? {}
+      : { budget: latencyBudgetMs, overBudget: total > latencyBudgetMs }),
+  };
+};
+
+export const emitMcpRequestMetric = (input: McpRequestMetricInput): void => {
+  writeMetricLine(buildMcpRequestMetricRecord(input));
+};
+
+/** One rejection per budget name; caller identifiers are never dimensions. */
+export const emitRateLimitRejectedMetric = (budgetName: BudgetName): void => {
+  writeMetricLine({
+    budgetName,
+    RateLimitRejected: 1,
+  });
+};
+
+/** Reasoning items dropped per turn; the adapter ledger excludes SDK rereads. */
+export const emitReasoningReplayDroppedMetric = ({
+  count,
+  ...dimensions
+}: {
+  fromProvider: TanStackAIProvider | "unknown";
+  toProvider: TanStackAIProvider;
+  reason:
+    | "missing-provenance"
+    | "incompatible-provenance"
+    | "unpaired-reasoning"
+    | "continuation-thinking-disabled";
+  count: number;
+}): void => {
+  const name = "chat.reasoning_replay_dropped";
+  writeMetricLine({
+    ...dimensions,
+    [name]: count,
+  });
+};
+
+/** Counts observed failure transitions; a later transaction rollback does not
+ * retract telemetry. */
+export const emitVerificationRunFailureMetric = (
+  errorCode: VerificationRunErrorCode,
+): void => {
+  switch (errorCode) {
+    case "extraction_failed":
+    case "grading_failed":
+    case "no_text":
+    case "access_revoked":
+      writeMetricLine({
+        event: `list_verification_run.${errorCode}`,
+        errorCode,
+        VerificationRunFailures: 1,
+      });
+      return;
+    case "pin_unresolved":
+    case "pin_content_changed":
+    case "unsupported_format":
+    case "ai_unavailable":
+    case "enqueue_failed":
+    case "run_limit_reached":
+    case "internal":
+      return;
+    default:
+      errorCode satisfies never;
+      panic("Unknown verification failure code");
+  }
+};
+
+export const CASE_LAW_RESEARCH_CELLS_EVENT = "case_law.research_answer.cells";
+
+/**
+ * Research cells one write settled, one line per outcome, counted only where
+ * the write landed. `decision_unavailable` and `no_text` on a decision the
+ * search just served mean the read path is broken, not that a model refused:
+ * the API log's metric filter counts them against all settled cells, so a
+ * read that starts failing every cell alarms within the hour instead of
+ * waiting for someone to notice empty columns.
+ */
+export const emitCaseLawResearchCellsMetric = ({
+  state,
+  failureReason,
+  cells,
+}: {
+  state: Exclude<CaseLawResearchAnswerState, "pending">;
+  failureReason: CaseLawResearchAnswerFailureReason | null;
+  cells: number;
+}): void => {
+  writeMetricLine({
+    event: CASE_LAW_RESEARCH_CELLS_EVENT,
+    state,
+    failureReason: failureReason ?? "none",
+    CaseLawResearchAnswerCells: cells,
+  });
+};
 
 export const emitAdmissionStorePolicyMetric = (refused: boolean): void => {
   const name = "AdmissionStoreEvictionPolicyRefused";
   writeMetricLine({
-    _aws: {
-      Timestamp: Temporal.Now.instant().epochMilliseconds,
-      CloudWatchMetrics: [
-        {
-          Namespace: METRIC_NAMESPACE,
-          Dimensions: [[]],
-          Metrics: [{ Name: name, Unit: "Count" }],
-        },
-      ],
-    },
     [name]: refused ? 1 : 0,
   });
 };
 
-// Test seam, like the logger's: when set, every EMF line goes here instead of
-// stdout, whatever the environment, so a test reads the line CloudWatch would
-// have parsed.
+const SANCTIONS_SCREENING_WORK_METRIC = "SanctionsScreeningWorkUsage";
+
+/**
+ * Share of its deterministic work budget one completed sanctions screening
+ * spent. Grouped by list so a growing list shows before it starts
+ * refusing common names.
+ */
+export const emitSanctionsScreeningWorkMetric = ({
+  source,
+  percent,
+}: {
+  source: string;
+  percent: number;
+}): void => {
+  writeMetricLine({
+    source,
+    [SANCTIONS_SCREENING_WORK_METRIC]: percent,
+  });
+};
+
+const SANCTIONS_SCREENING_COMPLETION_METRIC =
+  "SanctionsScreeningListCompletion";
+
+/** One complete or incomplete result per source; no subject data is logged. */
+export const emitSanctionsScreeningCompletionMetric = ({
+  source,
+  outcome,
+}: {
+  source: SanctionsSource;
+  outcome: "complete" | "incomplete";
+}): void => {
+  writeMetricLine({
+    source,
+    outcome,
+    [SANCTIONS_SCREENING_COMPLETION_METRIC]: 1,
+  });
+};
+
+const DATA_INVARIANT_METRIC = "DataInvariantUnhealthy";
+
+type DataInvariantMetricInput = {
+  /** A stable id from `DATA_INVARIANT_ID`. */
+  invariant: string;
+  owner: string;
+  severity: string;
+  status: "held" | "violated" | "errored";
+  checked: number;
+  findings: number;
+};
+
+/**
+ * One evaluated data invariant: 0 when it held, 1 when it was violated or
+ * could not be checked. Emitted on every run for log queries.
+ */
+export const emitDataInvariantMetric = ({
+  invariant,
+  owner,
+  severity,
+  status,
+  checked,
+  findings,
+}: DataInvariantMetricInput): void => {
+  writeMetricLine({
+    event: "data_invariant.evaluated",
+    invariant,
+    severity,
+    owner,
+    status,
+    checked,
+    findings,
+    [DATA_INVARIANT_METRIC]: status === "held" ? 0 : 1,
+  });
+};
+
+const EVENT_LOOP_DELAY_METRIC = {
+  max: "EventLoopDelayMax",
+  p99: "EventLoopDelayP99",
+} as const;
+
+/**
+ * The process's memory at the end of a reporting window. File work holds its
+ * bytes in array buffers outside the JS heap, so those are reported apart
+ * from the heap, beside the bytes upload finalization has admitted.
+ */
+export type ProcessMemoryReport = {
+  rssBytes: number;
+  heapUsedBytes: number;
+  arrayBuffersBytes: number;
+  workPools: Record<
+    string,
+    {
+      inFlight: number;
+      queued: number;
+      bytesInFlight: number;
+      refusedBusy: number;
+      refusedMemory: number;
+      deadlineCancelled: number;
+    }
+  >;
+};
+
+/** Log-only: memory diagnostics must not create billable custom metrics. */
+export const emitProcessMemoryLog = (memory: ProcessMemoryReport): void => {
+  const poolFields = Object.fromEntries(
+    Object.entries(memory.workPools).flatMap(([pool, metrics]) =>
+      Object.entries(metrics).map(([field, value]) => [
+        `work_pool.${pool}.${field}`,
+        value,
+      ]),
+    ),
+  );
+  writeMetricLine({
+    severity: "INFO",
+    message: "runtime.process_memory",
+    rssBytes: memory.rssBytes,
+    heapUsedBytes: memory.heapUsedBytes,
+    arrayBuffersBytes: memory.arrayBuffersBytes,
+    ...poolFields,
+  });
+};
+
+/**
+ * One reporting window of the process's event-loop delay.
+ */
+export const emitEventLoopDelayMetric = ({
+  maxMs,
+  p99Ms,
+  rootPool,
+}: {
+  maxMs: number;
+  p99Ms: number;
+  rootPool?: RootPoolReport;
+}): void => {
+  writeMetricLine({
+    ...(rootPool === undefined ? {} : { rootPool }),
+    [EVENT_LOOP_DELAY_METRIC.max]: maxMs,
+    [EVENT_LOOP_DELAY_METRIC.p99]: p99Ms,
+  });
+};
+
+// Capture the same structured line normally written to stdout.
 let metricLineSink: ((line: string) => void) | null = null;
 
 export const setMetricLineSinkForTesting = (
@@ -61,7 +398,7 @@ export const resetMetricLineSinkForTesting = (): void => {
   metricLineSink = null;
 };
 
-const writeMetricLine = (record: object): void => {
+export const writeMetricLine = (record: object): void => {
   const line = JSON.stringify(record);
   if (metricLineSink !== null) {
     metricLineSink(line);
@@ -76,7 +413,181 @@ const writeMetricLine = (record: object): void => {
   process.stdout.write(`${line}\n`);
 };
 
-export type RequestClass = "ai" | "crud";
+export const CASE_LAW_FRESHNESS_METRIC = {
+  projectionBacklogItems: "CaseLawProjectionBacklogItems",
+  oldestUnpublishedAgeSeconds: "CaseLawOldestUnpublishedAgeSeconds",
+  sourceSyncAgeSeconds: "CaseLawSourceSyncAgeSeconds",
+  projectionConvergence: "CaseLawProjectionConvergence",
+  decisionIdentifierRepairs: "CaseLawDecisionIdentifierRepairs",
+  decisionIdentifierPassAgeSeconds: "CaseLawDecisionIdentifierPassAgeSeconds",
+  waitingReplacements: "CaseLawProjectionWaitingReplacements",
+  waitingReplacementOldestSeconds:
+    "CaseLawProjectionWaitingReplacementOldestSeconds",
+} as const satisfies Record<string, string>;
+
+const buildCaseLawMetricRecord = ({
+  name,
+  value,
+}: {
+  name: (typeof CASE_LAW_FRESHNESS_METRIC)[keyof typeof CASE_LAW_FRESHNESS_METRIC];
+  value: number;
+}) => ({
+  [name]: value,
+});
+
+export const buildCaseLawProjectionBacklogMetric = (value: number) =>
+  buildCaseLawMetricRecord({
+    name: CASE_LAW_FRESHNESS_METRIC.projectionBacklogItems,
+    value,
+  });
+
+export const buildCaseLawOldestUnpublishedAgeMetric = (value: number) =>
+  buildCaseLawMetricRecord({
+    name: CASE_LAW_FRESHNESS_METRIC.oldestUnpublishedAgeSeconds,
+    value,
+  });
+
+export const buildCaseLawSourceSyncAgeMetric = (
+  source: string,
+  value: number,
+) => ({
+  ...buildCaseLawMetricRecord({
+    name: CASE_LAW_FRESHNESS_METRIC.sourceSyncAgeSeconds,
+    value,
+  }),
+  source,
+});
+
+type CaseLawWaitingReplacementDimensions = {
+  generation: string;
+  index: string;
+};
+
+/** Replacements of one index still served at their previous revision. */
+export const buildCaseLawWaitingReplacementsMetric = (
+  { generation, index }: CaseLawWaitingReplacementDimensions,
+  value: number,
+) => ({
+  ...buildCaseLawMetricRecord({
+    name: CASE_LAW_FRESHNESS_METRIC.waitingReplacements,
+    value,
+  }),
+  generation,
+  index,
+});
+
+export const buildCaseLawWaitingReplacementOldestMetric = (
+  { generation, index }: CaseLawWaitingReplacementDimensions,
+  value: number,
+) => ({
+  ...buildCaseLawMetricRecord({
+    name: CASE_LAW_FRESHNESS_METRIC.waitingReplacementOldestSeconds,
+    value,
+  }),
+  generation,
+  index,
+});
+
+export const buildCaseLawDecisionIdentifierRepairMetric = (value: number) =>
+  buildCaseLawMetricRecord({
+    name: CASE_LAW_FRESHNESS_METRIC.decisionIdentifierRepairs,
+    value,
+  });
+
+export const buildCaseLawDecisionIdentifierPassAgeMetric = (value: number) =>
+  buildCaseLawMetricRecord({
+    name: CASE_LAW_FRESHNESS_METRIC.decisionIdentifierPassAgeSeconds,
+    value,
+  });
+
+export const buildCaseLawProjectionConvergenceMetric = (status: string) => ({
+  ...buildCaseLawMetricRecord({
+    name: CASE_LAW_FRESHNESS_METRIC.projectionConvergence,
+    value: 1,
+  }),
+  status,
+});
+
+export const CORPUS_PROJECTION_UNSERVED_METRIC = {
+  entities: "CorpusProjectionUnservedEntities",
+  oldestAgeSeconds: "CorpusProjectionUnservedOldestAgeSeconds",
+} as const;
+
+/** `at_least` when the count stopped at its cap. */
+type CorpusProjectionUnservedCountBound = "exact" | "at_least";
+
+/** A generation's record sums its indexes; an index record names one. */
+type CorpusProjectionUnservedMetricScope =
+  { type: "generation" } | { type: "index"; indexId: string };
+
+/** An unknown age emits no age field: a lower bound would read as the age. */
+type CorpusProjectionUnservedMetricAge =
+  { type: "measured"; seconds: number } | { type: "unknown" };
+
+type CorpusProjectionUnservedMetricInput = {
+  family: string;
+  generation: string;
+  kind: "at_risk" | "absent";
+  scope: CorpusProjectionUnservedMetricScope;
+  entities: number;
+  countBound: CorpusProjectionUnservedCountBound;
+  oldestAge: CorpusProjectionUnservedMetricAge;
+};
+
+const unservedMetricScopeFields = (
+  scope: CorpusProjectionUnservedMetricScope,
+) => {
+  switch (scope.type) {
+    case "generation":
+      return { scope: scope.type };
+    case "index":
+      return { scope: scope.type, indexId: scope.indexId };
+    default:
+      scope satisfies never;
+      return panic("Unhandled unserved metric scope");
+  }
+};
+
+const unservedMetricAgeFields = (age: CorpusProjectionUnservedMetricAge) => {
+  switch (age.type) {
+    case "measured":
+      return {
+        [CORPUS_PROJECTION_UNSERVED_METRIC.oldestAgeSeconds]: age.seconds,
+      };
+    case "unknown":
+      return {};
+    default:
+      age satisfies never;
+      return panic("Unhandled unserved metric age");
+  }
+};
+
+export const buildCorpusProjectionUnservedMetric = ({
+  family,
+  generation,
+  kind,
+  scope,
+  entities,
+  countBound,
+  oldestAge,
+}: CorpusProjectionUnservedMetricInput) => ({
+  [CORPUS_PROJECTION_UNSERVED_METRIC.entities]: entities,
+  ...unservedMetricAgeFields(oldestAge),
+  family,
+  generation,
+  kind,
+  ...unservedMetricScopeFields(scope),
+  countBound,
+});
+
+export const REQUEST_CLASSES = [
+  "ai",
+  "crud",
+  "search",
+  "batch",
+  "stream",
+] as const;
+export type RequestClass = (typeof REQUEST_CLASSES)[number];
 
 type EmitRequestDurationMetricInput = {
   durationMs: number;
@@ -85,28 +596,13 @@ type EmitRequestDurationMetricInput = {
   route: string;
 };
 
-/**
- * Build the EMF record. Pure (caller supplies the timestamp) so the
- * structure that CloudWatch silently depends on — and silently drops
- * when malformed — is testable without env or stdout.
- */
+/** Log fields consumed by request-class metric filters and log queries. */
 export const buildRequestDurationRecord = ({
   durationMs,
   requestClass,
   statusCode,
   route,
-  timestamp,
-}: EmitRequestDurationMetricInput & { timestamp: number }) => ({
-  _aws: {
-    Timestamp: timestamp,
-    CloudWatchMetrics: [
-      {
-        Namespace: METRIC_NAMESPACE,
-        Dimensions: [["class"]],
-        Metrics: [{ Name: METRIC_NAME, Unit: "Milliseconds" }],
-      },
-    ],
-  },
+}: EmitRequestDurationMetricInput) => ({
   class: requestClass,
   [METRIC_NAME]: Math.round(durationMs),
   "http.route": route,
@@ -116,12 +612,7 @@ export const buildRequestDurationRecord = ({
 export const emitRequestDurationMetric = (
   input: EmitRequestDurationMetricInput,
 ): void => {
-  writeMetricLine(
-    buildRequestDurationRecord({
-      ...input,
-      timestamp: Temporal.Now.instant().epochMilliseconds,
-    }),
-  );
+  writeMetricLine(buildRequestDurationRecord(input));
 };
 
 export type OpenRouterTokenExchangeOutcome =
@@ -137,16 +628,6 @@ export const emitOpenRouterTokenExchange = (
   policyId: string,
 ): void => {
   writeMetricLine({
-    _aws: {
-      Timestamp: Temporal.Now.instant().epochMilliseconds,
-      CloudWatchMetrics: [
-        {
-          Namespace: METRIC_NAMESPACE,
-          Dimensions: [["outcome"]],
-          Metrics: [{ Name: "OpenRouterTokenExchange", Unit: "Count" }],
-        },
-      ],
-    },
     outcome,
     federation_policy_id: policyId,
     OpenRouterTokenExchange: 1,
@@ -155,16 +636,6 @@ export const emitOpenRouterTokenExchange = (
 
 export const emitManagedCredentialUnavailable = (): void => {
   writeMetricLine({
-    _aws: {
-      Timestamp: Temporal.Now.instant().epochMilliseconds,
-      CloudWatchMetrics: [
-        {
-          Namespace: METRIC_NAMESPACE,
-          Dimensions: [[]],
-          Metrics: [{ Name: "ManagedCredentialUnavailable", Unit: "Count" }],
-        },
-      ],
-    },
     ManagedCredentialUnavailable: 1,
   });
 };
@@ -175,41 +646,16 @@ type FailureMetricInput = {
   reason: string;
 };
 
-/**
- * One transient failure a request observed, as an EMF count dimensioned by
- * sink and reason, plus an undimensioned total an alarm can watch for a
- * sustained rate. Emitted per observation, before any log or capture
- * suppression, so the count is the failure rate rather than the admitted
- * rate. Cardinality is bounded by the closed handle and reason sets; a frame,
- * request id or tenant id never becomes a dimension.
- */
-const buildFailureMetricRecord = ({
+/** One transient failure per observation, before log or capture suppression. */
+const buildFailureMetricRecord = ({ sink, reason }: FailureMetricInput) => ({
   sink,
   reason,
-  timestamp,
-}: FailureMetricInput & { timestamp: number }) => ({
-  _aws: {
-    Timestamp: timestamp,
-    CloudWatchMetrics: [
-      {
-        Namespace: METRIC_NAMESPACE,
-        Dimensions: [["sink", "reason"], []],
-        Metrics: [{ Name: FAILURE_METRIC_NAME, Unit: "Count" }],
-      },
-    ],
-  },
-  sink,
-  reason,
+  [SERVICE_VERSION_KEY]: APP_VERSION,
   [FAILURE_METRIC_NAME]: 1,
 });
 
 export const emitFailureMetric = (input: FailureMetricInput): void => {
-  writeMetricLine(
-    buildFailureMetricRecord({
-      ...input,
-      timestamp: Temporal.Now.instant().epochMilliseconds,
-    }),
-  );
+  writeMetricLine(buildFailureMetricRecord(input));
 };
 
 const CHAT_RUN_LOG_METRIC = {
@@ -223,43 +669,49 @@ type ChatRunLogMetric =
   | { type: "turn"; rows: number; bytes: number };
 
 export const emitChatRunLogMetric = (metric: ChatRunLogMetric): void => {
-  const payload = (() => {
-    switch (metric.type) {
-      case "append":
-        return {
-          values: { [CHAT_RUN_LOG_METRIC.appendDuration]: metric.durationMs },
-          metrics: [
-            { Name: CHAT_RUN_LOG_METRIC.appendDuration, Unit: "Milliseconds" },
-          ],
-        };
-      case "turn":
-        return {
-          values: {
-            [CHAT_RUN_LOG_METRIC.rows]: metric.rows,
-            [CHAT_RUN_LOG_METRIC.bytes]: metric.bytes,
-          },
-          metrics: [
-            { Name: CHAT_RUN_LOG_METRIC.rows, Unit: "Count" },
-            { Name: CHAT_RUN_LOG_METRIC.bytes, Unit: "Bytes" },
-          ],
-        };
-      default:
-        metric satisfies never;
-        return panic("Unhandled chat run log metric");
-    }
-  })();
+  switch (metric.type) {
+    case "append":
+      writeMetricLine({
+        [CHAT_RUN_LOG_METRIC.appendDuration]: metric.durationMs,
+      });
+      return;
+    case "turn":
+      writeMetricLine({
+        [CHAT_RUN_LOG_METRIC.rows]: metric.rows,
+        [CHAT_RUN_LOG_METRIC.bytes]: metric.bytes,
+      });
+      return;
+    default:
+      metric satisfies never;
+      panic("Unhandled chat run log metric");
+  }
+};
+
+const LOCAL_RUN_STEP_CONTENT_METRIC = {
+  storedBytes: "LocalRunStepContentStoredBytes",
+  budgetReached: "LocalRunStepContentBudgetReached",
+  tooLarge: "LocalRunStepContentTooLarge",
+  refused: "LocalRunStepContentRefused",
+} as const;
+
+type LocalRunStepContentMetric = {
+  /** How the step's content settled; `refused` for a write to a settled step. */
+  state: "stored" | "too_large" | "run_budget_reached" | "refused";
+  /** Bytes this write stored. */
+  storedBytes: number;
+};
+
+/** One write of a local run's step content, by how it settled or that it was refused. */
+export const emitLocalRunStepContentMetric = ({
+  state,
+  storedBytes,
+}: LocalRunStepContentMetric): void => {
   writeMetricLine({
-    _aws: {
-      Timestamp: Temporal.Now.instant().epochMilliseconds,
-      CloudWatchMetrics: [
-        {
-          Namespace: METRIC_NAMESPACE,
-          Dimensions: [[]],
-          Metrics: payload.metrics,
-        },
-      ],
-    },
-    ...payload.values,
+    [LOCAL_RUN_STEP_CONTENT_METRIC.storedBytes]: storedBytes,
+    [LOCAL_RUN_STEP_CONTENT_METRIC.budgetReached]:
+      state === "run_budget_reached" ? 1 : 0,
+    [LOCAL_RUN_STEP_CONTENT_METRIC.tooLarge]: state === "too_large" ? 1 : 0,
+    [LOCAL_RUN_STEP_CONTENT_METRIC.refused]: state === "refused" ? 1 : 0,
   });
 };
 
@@ -269,8 +721,7 @@ const PROMPT_CACHE_METRIC = {
   inputTokens: "PromptInputTokens",
 } as const;
 
-/** The AI surfaces whose prompt caching is measured: a closed set, so the
- *  `surface` dimension stays bounded. */
+/** The AI surfaces whose prompt caching is measured. */
 export type PromptCacheMetricSurface = "chat";
 
 type PromptCacheMetricInput = {
@@ -282,35 +733,13 @@ type PromptCacheMetricInput = {
   surface: PromptCacheMetricSurface;
 };
 
-/**
- * One model call's prompt-cache use, as EMF
- * dimensioned by surface and provider: its input tokens, the tokens the
- * provider served from its cache, and that share as a percentage. An alarm on
- * a drop divides the summed counts, which weighs each call by its size; the
- * per-call rate is for dashboards. Cardinality is the surface set times the
- * provider set; no model, tenant or thread id becomes a dimension.
- */
+/** One model call's input tokens, cached tokens, and cache percentage. */
 const buildPromptCacheRecord = ({
   cachedInputTokens,
   inputTokens,
   provider,
   surface,
-  timestamp,
-}: PromptCacheMetricInput & { timestamp: number }) => ({
-  _aws: {
-    Timestamp: timestamp,
-    CloudWatchMetrics: [
-      {
-        Namespace: METRIC_NAMESPACE,
-        Dimensions: [["surface", "provider"]],
-        Metrics: [
-          { Name: PROMPT_CACHE_METRIC.inputTokens, Unit: "Count" },
-          { Name: PROMPT_CACHE_METRIC.cachedInputTokens, Unit: "Count" },
-          { Name: PROMPT_CACHE_METRIC.hitRate, Unit: "Percent" },
-        ],
-      },
-    ],
-  },
+}: PromptCacheMetricInput) => ({
   provider,
   surface,
   [PROMPT_CACHE_METRIC.inputTokens]: inputTokens,
@@ -326,26 +755,11 @@ export const emitPromptCacheMetric = (input: PromptCacheMetricInput): void => {
   if (input.inputTokens <= 0) {
     return;
   }
-  writeMetricLine(
-    buildPromptCacheRecord({
-      ...input,
-      timestamp: Temporal.Now.instant().epochMilliseconds,
-    }),
-  );
+  writeMetricLine(buildPromptCacheRecord(input));
 };
 
 export const emitActionCostDropMetric = (dropped: number): void => {
   writeMetricLine({
-    _aws: {
-      Timestamp: Temporal.Now.instant().epochMilliseconds,
-      CloudWatchMetrics: [
-        {
-          Namespace: METRIC_NAMESPACE,
-          Dimensions: [[]],
-          Metrics: [{ Name: "ActionCostObservationsDropped", Unit: "Count" }],
-        },
-      ],
-    },
     ActionCostObservationsDropped: dropped,
   });
 };
@@ -370,13 +784,7 @@ type ChatTurnSettlementMetricInput<
   failureCode: TFailureCode | null;
 };
 
-/**
- * One settled chat turn, counted by outcome and boundary mode, and again by
- * provider, so an alarm can divide failed by settled turns per mode (and per
- * provider) instead of watching a raw failure count that moves with traffic.
- * Every dimension is a closed set; the failure code rides along as a
- * queryable property, never a thread, turn or tenant id.
- */
+/** One settled chat turn, grouped by outcome, boundary mode, and provider. */
 export const buildChatTurnSettlementRecord = <
   TOutcome extends string,
   TFailureCode extends string,
@@ -385,23 +793,7 @@ export const buildChatTurnSettlementRecord = <
   mode,
   outcome,
   provider,
-  timestamp,
-}: ChatTurnSettlementMetricInput<TOutcome, TFailureCode> & {
-  timestamp: number;
-}) => ({
-  _aws: {
-    Timestamp: timestamp,
-    CloudWatchMetrics: [
-      {
-        Namespace: METRIC_NAMESPACE,
-        Dimensions: [
-          ["outcome", "mode"],
-          ["outcome", "mode", "provider"],
-        ],
-        Metrics: [{ Name: CHAT_TURN_SETTLEMENT_METRIC_NAME, Unit: "Count" }],
-      },
-    ],
-  },
+}: ChatTurnSettlementMetricInput<TOutcome, TFailureCode>) => ({
   outcome,
   mode,
   provider,
@@ -415,12 +807,7 @@ export const emitChatTurnSettlementMetric = <
 >(
   input: ChatTurnSettlementMetricInput<TOutcome, TFailureCode>,
 ): void => {
-  writeMetricLine(
-    buildChatTurnSettlementRecord({
-      ...input,
-      timestamp: Temporal.Now.instant().epochMilliseconds,
-    }),
-  );
+  writeMetricLine(buildChatTurnSettlementRecord(input));
 };
 
 /**
@@ -437,6 +824,7 @@ export const ANONYMIZATION_REFUSAL_SITES = [
   "rich_media",
   "external_tool",
   "agent_run",
+  "local_run",
   "file_hydration",
   "mcp_egress",
 ] as const;
@@ -465,24 +853,12 @@ type AnonymizationRefusalMetricInput = {
 };
 
 /**
- * One refusal to send content across the anonymized boundary, dimensioned by
- * site and reason, plus an undimensioned total an alarm can watch.
+ * One refusal to send content across the anonymized boundary, with site and reason.
  */
 export const buildAnonymizationRefusalRecord = ({
   reason,
   site,
-  timestamp,
-}: AnonymizationRefusalMetricInput & { timestamp: number }) => ({
-  _aws: {
-    Timestamp: timestamp,
-    CloudWatchMetrics: [
-      {
-        Namespace: METRIC_NAMESPACE,
-        Dimensions: [["site", "reason"], []],
-        Metrics: [{ Name: ANONYMIZATION_REFUSAL_METRIC_NAME, Unit: "Count" }],
-      },
-    ],
-  },
+}: AnonymizationRefusalMetricInput) => ({
   site,
   reason,
   [ANONYMIZATION_REFUSAL_METRIC_NAME]: 1,
@@ -491,15 +867,21 @@ export const buildAnonymizationRefusalRecord = ({
 export const emitAnonymizationRefusalMetric = (
   input: AnonymizationRefusalMetricInput,
 ): void => {
-  writeMetricLine(
-    buildAnonymizationRefusalRecord({
-      ...input,
-      timestamp: Temporal.Now.instant().epochMilliseconds,
-    }),
-  );
+  writeMetricLine(buildAnonymizationRefusalRecord(input));
 };
 
 const ACTION_RESPONSE_OVERSIZE_METRIC = "ActionResponseOversize";
+const TRANSCRIPTION_DURATION_MISMATCH_METRIC = "TranscriptionDurationMismatch";
+
+export const emitTranscriptionDurationMismatchMetric = (
+  modelId: TranscriptionModelId,
+): void => {
+  writeMetricLine({
+    event: "transcription.duration_mismatch",
+    modelId,
+    [TRANSCRIPTION_DURATION_MISMATCH_METRIC]: 1,
+  });
+};
 
 type PublicCorpusAdmissionMetric = {
   class: Exclude<PublicCorpusClass, "browse">;
@@ -510,16 +892,6 @@ export const emitPublicCorpusAdmissionMetric = (
   input: PublicCorpusAdmissionMetric,
 ): void => {
   writeMetricLine({
-    _aws: {
-      Timestamp: Temporal.Now.instant().epochMilliseconds,
-      CloudWatchMetrics: [
-        {
-          Namespace: METRIC_NAMESPACE,
-          Dimensions: [["class", "outcome"]],
-          Metrics: [{ Name: "PublicCorpusAdmissions", Unit: "Count" }],
-        },
-      ],
-    },
     ...input,
     PublicCorpusAdmissions: 1,
   });
@@ -529,16 +901,6 @@ export const emitActionResponseOversizeMetric = (
   transport: "http" | "mcp",
 ): void => {
   writeMetricLine({
-    _aws: {
-      Timestamp: Temporal.Now.instant().epochMilliseconds,
-      CloudWatchMetrics: [
-        {
-          Namespace: METRIC_NAMESPACE,
-          Dimensions: [["transport"]],
-          Metrics: [{ Name: ACTION_RESPONSE_OVERSIZE_METRIC, Unit: "Count" }],
-        },
-      ],
-    },
     transport,
     [ACTION_RESPONSE_OVERSIZE_METRIC]: 1,
   });

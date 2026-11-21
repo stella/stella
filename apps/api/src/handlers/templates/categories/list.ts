@@ -7,6 +7,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { listTemplateCategoriesHandler } from "../categories";
 
 const config = {
+  contract: "patch",
   description:
     "List the organization's template categories with their parents, " +
     "descriptions, and sort order, enough to render the whole tree. The set " +

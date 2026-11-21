@@ -18,8 +18,8 @@ import { isUuid } from "@stll/uuid-codec";
 import { withLongRunningConnection } from "@/api/db/long-running-connection";
 import type { Transaction } from "@/api/db/root";
 import {
-  CORPUS_INDEX_JOB_SUCCEEDED_CHECKS,
   caseLawIndexJobs,
+  CORPUS_INDEX_JOB_SUCCEEDED_CHECKS,
   legislationIndexJobs,
   schedulerJobs,
 } from "@/api/db/schema";

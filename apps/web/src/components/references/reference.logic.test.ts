@@ -2,19 +2,21 @@ import { describe, expect, test } from "bun:test";
 
 import {
   entityDisplayLabel,
+  referenceFromHref,
+  UNRESOLVED_REFERENCE_HREF,
+} from "@stll/api-contract/chat-reference-href";
+import type { ChatReference } from "@stll/api-contract/chat-reference-href";
+
+import {
+  decisionReferenceHref,
   entityReferenceHref,
   mentionAttrsToHref,
   mentionTagAttrs,
   referenceFromDecisionRoute,
-  referenceFromHref,
   referenceFromMentionAttrs,
   resolveReferenceVisual,
-  UNRESOLVED_REFERENCE_HREF,
 } from "@/components/references/reference.logic";
-import type {
-  ChatReference,
-  ReferenceLiveFacts,
-} from "@/components/references/reference.logic";
+import type { ReferenceLiveFacts } from "@/components/references/reference.logic";
 
 const MATTER_ID = "0dc54d0c-10d7-501d-897e-e801dbd0998c";
 const OTHER_MATTER_ID = "4e919658-a448-5354-8e3a-e99911214d2c";
@@ -161,6 +163,7 @@ describe("one reference, every source", () => {
         category: "decision",
       }),
     ).toBe("#stella-decision=dec-1");
+    expect(decisionReferenceHref("dec-1")).toBe("#stella-decision=dec-1");
     expect(
       entityReferenceHref({ entityId: TASK_ID, matterId: MATTER_ID }),
     ).toBe(`#stella-entity=${MATTER_ID}:${TASK_ID}`);
@@ -368,12 +371,23 @@ describe("labels and decisions", () => {
     expect(referenceOf(referenceFromHref(href, ""))).toEqual({
       type: "decision",
       locator: { type: "ref", ref: "33333333-3333-4333-8333-333333333333" },
-      anchorId: "p-12",
+      paragraph: { anchorId: "p-12", courtParagraphNumber: null },
       label: "p-12",
     });
     expect(
       referenceOf(referenceFromHref(href, "the appeal fails")),
-    ).toMatchObject({ label: "the appeal fails", anchorId: "p-12" });
+    ).toMatchObject({
+      label: "the appeal fails",
+      paragraph: { anchorId: "p-12", courtParagraphNumber: null },
+    });
+  });
+
+  test("a passage the server stamped carries the court's paragraph number", () => {
+    const href =
+      "#stella-decision-passage=33333333-3333-4333-8333-333333333333:p-12:8";
+    expect(referenceOf(referenceFromHref(href, "as held"))).toMatchObject({
+      paragraph: { anchorId: "p-12", courtParagraphNumber: 8 },
+    });
   });
 
   test("an app decision page link is a decision reference", () => {
@@ -381,8 +395,126 @@ describe("labels and decisions", () => {
     expect(referenceFromDecisionRoute(params, "Ns 1/2")).toEqual({
       type: "decision",
       locator: { type: "route", params },
-      anchorId: null,
+      paragraph: null,
       label: "Ns 1/2",
     });
+  });
+});
+
+describe("a corpus scope chip", () => {
+  const CORPUS_ATTRS = {
+    id: "case_law:CZE",
+    label: "Case law · Czechia",
+    category: "corpus",
+    kind: "corpus",
+  };
+
+  test("the composer chip, the sent tag and the persisted href are one reference", () => {
+    const expected: ChatReference = {
+      type: "corpus",
+      scope: { corpus: "case_law", country: "CZE" },
+      label: "Case law · Czechia",
+    };
+    expect(referenceFromMentionAttrs(CORPUS_ATTRS)).toEqual(expected);
+    const href = mentionAttrsToHref(CORPUS_ATTRS);
+    expect(href).toBe("#stella-corpus=case_law:CZE");
+    expect(
+      referenceOf(referenceFromHref(href ?? "", "Case law · Czechia")),
+    ).toEqual(expected);
+  });
+
+  test("draws its corpus glyph and no matter colour", () => {
+    const reference = referenceOf(
+      referenceFromHref(
+        "#stella-corpus=legislation:SVK",
+        "Legislation · Slovakia",
+      ),
+    );
+    expect(resolveReferenceVisual(reference, PENDING_FACTS)).toEqual({
+      type: "chip",
+      glyph: { type: "corpus", corpus: "legislation" },
+      matter: { type: "none" },
+      label: "Legislation · Slovakia",
+    });
+  });
+
+  test("a scope that names no public corpus does not look real", () => {
+    expect(referenceFromHref("#stella-corpus=registry:CZE", "x")).toEqual({
+      type: "unresolved",
+    });
+    expect(
+      referenceFromMentionAttrs({ ...CORPUS_ATTRS, id: "case_law:XXX" }),
+    ).toBeNull();
+    expect(mentionAttrsToHref({ ...CORPUS_ATTRS, id: "case_law" })).toBeNull();
+  });
+});
+
+describe("registry and connector scope chips", () => {
+  test.each([
+    {
+      attrs: {
+        id: "ares",
+        label: "ARES",
+        category: "registry",
+        kind: "registry",
+      },
+      href: "#stella-registry=ares",
+      expected: { type: "registry", registry: "ares", label: "ARES" },
+      glyph: { type: "registry" },
+    },
+    {
+      attrs: {
+        id: "legal-search",
+        label: "Legal Search",
+        category: "connector",
+        kind: "connector",
+      },
+      href: "#stella-connector=legal-search",
+      expected: {
+        type: "connector",
+        connector: "legal-search",
+        label: "Legal Search",
+      },
+      glyph: { type: "connector" },
+    },
+  ] as const)(
+    "the $attrs.category chip, the sent tag and the persisted href are one reference",
+    ({ attrs, href, expected, glyph }) => {
+      const reference: ChatReference = expected;
+      expect(referenceFromMentionAttrs(attrs)).toEqual(reference);
+      expect(mentionAttrsToHref(attrs)).toBe(href);
+      expect(referenceOf(referenceFromHref(href, attrs.label))).toEqual(
+        reference,
+      );
+      expect(resolveReferenceVisual(reference, PENDING_FACTS)).toEqual({
+        type: "chip",
+        glyph,
+        matter: { type: "none" },
+        label: attrs.label,
+      });
+    },
+  );
+
+  test("a slug that names no registry or connector does not look real", () => {
+    expect(referenceFromHref("#stella-registry=nope", "x")).toEqual({
+      type: "unresolved",
+    });
+    expect(referenceFromHref("#stella-connector=Bad Slug", "x")).toEqual({
+      type: "unresolved",
+    });
+    // A skill link that names no skill reads as its label too.
+    expect(referenceFromHref("#stella-skill-ref=", "x")).toEqual({
+      type: "unresolved",
+    });
+    expect(
+      referenceFromMentionAttrs({
+        id: "nope",
+        label: "x",
+        category: "registry",
+      }),
+    ).toBeNull();
+    expect(
+      mentionAttrsToHref({ id: "-x", label: "x", category: "connector" }),
+    ).toBeNull();
   });
 });

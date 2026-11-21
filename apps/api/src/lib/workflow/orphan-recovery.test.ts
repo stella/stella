@@ -3,11 +3,61 @@ import { describe, expect, test } from "bun:test";
 import {
   isCurrentWorkflowRequestState,
   parseRunningLockWorkspaceId,
+  pendingCellRecovery,
   selectExpiredStaleRunWorkspaceIds,
   selectOrphanWorkspaceIds,
   selectRecoverableOrphanWorkspaceIds,
   selectRunningLockReservation,
 } from "@/api/lib/workflow/orphan-recovery";
+
+describe("pendingCellRecovery", () => {
+  const now = new Date("2026-01-01T00:00:00.000Z");
+
+  test("only leaves a current owner before its deadline alone", () => {
+    expect(
+      pendingCellRecovery(
+        {
+          ownerRunId: "current",
+          deadlineAt: new Date(now.getTime() + 1),
+          attempt: 0,
+        },
+        "current",
+        now,
+      ),
+    ).toEqual({ type: "leave-owned" });
+    expect(
+      pendingCellRecovery(
+        { ownerRunId: "current", deadlineAt: now, attempt: 0 },
+        "current",
+        now,
+      ),
+    ).toEqual({ type: "retry", attempt: 1, delayMs: 1000 });
+  });
+
+  test("retries a superseded first owner once and terminals every other orphan", () => {
+    expect(
+      pendingCellRecovery(
+        { ownerRunId: "old", deadlineAt: null, attempt: 0 },
+        "current",
+        now,
+      ),
+    ).toEqual({ type: "retry", attempt: 1, delayMs: 1000 });
+    expect(
+      pendingCellRecovery(
+        { ownerRunId: null, deadlineAt: null, attempt: null },
+        "current",
+        now,
+      ),
+    ).toEqual({ type: "retry", attempt: 1, delayMs: 1000 });
+    expect(
+      pendingCellRecovery(
+        { ownerRunId: "old", deadlineAt: null, attempt: 1 },
+        "current",
+        now,
+      ),
+    ).toEqual({ type: "error", retry: "manual" });
+  });
+});
 
 const RECOVERY_LOCK_VALUE = "recovery";
 const TRANSITIONAL_RUNNING_LOCK_VALUE = "1";

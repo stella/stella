@@ -1,14 +1,21 @@
 import { describe, expect, test } from "bun:test";
+import fc from "fast-check";
+
+import { assertProperty } from "@stll/property-testing";
 
 import {
   adjustStampBox,
   canPlaceStamp,
   defaultStampBox,
+  drawnStampBox,
+  type PagePoint,
   previewDeltaToPoints,
+  settleDrawnStampBox,
   STAMP_LIMITS_PT,
-  stampKeyAdjustment,
   type StampBox,
+  stampKeyAdjustment,
   type StampPageSize,
+  stampSizeCheck,
 } from "@/components/inspector/pdf-signing-stamp.logic";
 
 const A4_PORTRAIT = { height: 841.89, width: 595.28 } as const;
@@ -275,5 +282,224 @@ describe("stamp availability", () => {
     expect(canPlaceStamp(A4_PORTRAIT)).toBe(true);
     expect(canPlaceStamp({ height: 200, width: 60 })).toBe(false);
     expect(canPlaceStamp({ height: 20, width: 200 })).toBe(false);
+  });
+});
+
+const EPSILON = 1e-6;
+
+const expectSameBox = (actual: StampBox | null, expected: StampBox) => {
+  expect(actual).not.toBeNull();
+  expect(actual?.x ?? Number.NaN).toBeCloseTo(expected.x, 6);
+  expect(actual?.y ?? Number.NaN).toBeCloseTo(expected.y, 6);
+  expect(actual?.width ?? Number.NaN).toBeCloseTo(expected.width, 6);
+  expect(actual?.height ?? Number.NaN).toBeCloseTo(expected.height, 6);
+};
+
+const expectWithinPageAndLimits = (box: StampBox, page: StampPageSize) => {
+  const points = inPoints(box, page);
+  expect(points.x).toBeGreaterThanOrEqual(-EPSILON);
+  expect(points.y).toBeGreaterThanOrEqual(-EPSILON);
+  expect(points.x + points.width).toBeLessThanOrEqual(page.width + EPSILON);
+  expect(points.y + points.height).toBeLessThanOrEqual(page.height + EPSILON);
+  expect(stampSizeCheck(box, page)).toBe("fits");
+};
+
+/** A point on an A4 portrait page, given in points from its top-left corner. */
+const at = (x: number, y: number): PagePoint => ({
+  x: x / A4_PORTRAIT.width,
+  y: y / A4_PORTRAIT.height,
+});
+
+describe("drawing a stamp on the page", () => {
+  test("spans the drag in whichever direction it went", () => {
+    const forward = drawnStampBox({
+      anchor: at(100, 200),
+      current: at(300, 260),
+    });
+    const backward = drawnStampBox({
+      anchor: at(300, 260),
+      current: at(100, 200),
+    });
+    expect(backward).toEqual(forward);
+    expectPoints(forward, A4_PORTRAIT, {
+      height: 60,
+      width: 200,
+      x: 100,
+      y: 200,
+    });
+  });
+
+  test("cuts a drag that leaves the page at the page edge", () => {
+    expectPoints(
+      drawnStampBox({ anchor: at(500, 800), current: { x: 1.4, y: 1.2 } }),
+      A4_PORTRAIT,
+      { height: 841.89 - 800, width: 595.28 - 500, x: 500, y: 800 },
+    );
+  });
+
+  test("tells a box inside the size limits from one outside them", () => {
+    const sized = (width: number, height: number) =>
+      stampSizeCheck(
+        drawnStampBox({ anchor: at(0, 0), current: at(width, height) }),
+        A4_PORTRAIT,
+      );
+    expect(sized(STAMP_LIMITS_PT.minWidth, STAMP_LIMITS_PT.minHeight)).toBe(
+      "fits",
+    );
+    expect(sized(STAMP_LIMITS_PT.maxWidth, STAMP_LIMITS_PT.maxHeight)).toBe(
+      "fits",
+    );
+    expect(sized(STAMP_LIMITS_PT.minWidth - 1, 100)).toBe("too_small");
+    expect(sized(200, STAMP_LIMITS_PT.minHeight - 1)).toBe("too_small");
+    expect(sized(STAMP_LIMITS_PT.maxWidth + 1, 100)).toBe("too_large");
+    expect(sized(200, STAMP_LIMITS_PT.maxHeight + 1)).toBe("too_large");
+  });
+
+  test("a click places a default stamp with its corner at the click", () => {
+    const box = settleDrawnStampBox({
+      anchor: at(120, 300),
+      current: at(122, 301),
+      page: A4_PORTRAIT,
+    });
+    expect(box).not.toBeNull();
+    expectPoints(box ?? defaultStampBox(A4_PORTRAIT), A4_PORTRAIT, {
+      height: 60,
+      width: 200,
+      x: 120,
+      y: 300,
+    });
+  });
+
+  test("a click near the page edge keeps the stamp whole on the page", () => {
+    const box = settleDrawnStampBox({
+      anchor: at(590, 840),
+      current: at(590, 840),
+      page: A4_PORTRAIT,
+    });
+    expectPoints(box ?? defaultStampBox(A4_PORTRAIT), A4_PORTRAIT, {
+      height: 60,
+      width: 200,
+      x: 595.28 - 200,
+      y: 841.89 - 60,
+    });
+  });
+
+  test("a drag too small grows to the smallest stamp from the corner it started at", () => {
+    // Dragged up and to the left: the anchor is the box's bottom-right corner.
+    const box = settleDrawnStampBox({
+      anchor: at(400, 500),
+      current: at(380, 490),
+      page: A4_PORTRAIT,
+    });
+    expectPoints(box ?? defaultStampBox(A4_PORTRAIT), A4_PORTRAIT, {
+      height: STAMP_LIMITS_PT.minHeight,
+      width: STAMP_LIMITS_PT.minWidth,
+      x: 400 - STAMP_LIMITS_PT.minWidth,
+      y: 500 - STAMP_LIMITS_PT.minHeight,
+    });
+  });
+
+  test("a drag too large shrinks to the largest stamp from the corner it started at", () => {
+    const box = settleDrawnStampBox({
+      anchor: at(50, 100),
+      current: at(590, 800),
+      page: A4_PORTRAIT,
+    });
+    expectPoints(box ?? defaultStampBox(A4_PORTRAIT), A4_PORTRAIT, {
+      height: STAMP_LIMITS_PT.maxHeight,
+      width: STAMP_LIMITS_PT.maxWidth,
+      x: 50,
+      y: 100,
+    });
+  });
+
+  test("a drag inside the limits is kept as drawn", () => {
+    const anchor = at(300, 260);
+    const current = at(100, 200);
+    expectSameBox(
+      settleDrawnStampBox({ anchor, current, page: A4_PORTRAIT }),
+      drawnStampBox({ anchor, current }),
+    );
+  });
+
+  test("a page too small for any stamp takes none", () => {
+    expect(
+      settleDrawnStampBox({
+        anchor: { x: 0, y: 0 },
+        current: { x: 1, y: 1 },
+        page: { height: 20, width: 200 },
+      }),
+    ).toBeNull();
+  });
+});
+
+// From a sliver to well past A0, in points.
+const LARGEST_PAGE_PT = 2000;
+const pageSideArbitrary = fc.double({
+  max: LARGEST_PAGE_PT,
+  min: 1,
+  noNaN: true,
+});
+const pageArbitrary = fc.record({
+  height: pageSideArbitrary,
+  width: pageSideArbitrary,
+});
+// Pointer positions run past the page on every side, as a drag can.
+const POINTER_REACH = 0.5;
+const pointerFractionArbitrary = fc.double({
+  max: 1 + POINTER_REACH,
+  min: -POINTER_REACH,
+  noNaN: true,
+});
+const pointArbitrary = fc.record({
+  x: pointerFractionArbitrary,
+  y: pointerFractionArbitrary,
+});
+
+describe("released stamp drags", () => {
+  test("every released drag leaves a stamp whole on the page and within the limits", () => {
+    assertProperty(
+      "every released drag leaves a stamp whole on the page and within the limits",
+      fc.property(
+        pageArbitrary,
+        pointArbitrary,
+        pointArbitrary,
+        (page, anchor, current) => {
+          const box = settleDrawnStampBox({ anchor, current, page });
+          if (!canPlaceStamp(page)) {
+            expect(box).toBeNull();
+            return;
+          }
+          expect(box).not.toBeNull();
+          if (box !== null) {
+            expectWithinPageAndLimits(box, page);
+          }
+        },
+      ),
+    );
+  });
+
+  test("a drawn box always stays on the page, and a fitting one is kept on release", () => {
+    assertProperty(
+      "a drawn box always stays on the page, and a fitting one is kept on release",
+      fc.property(
+        pageArbitrary,
+        pointArbitrary,
+        pointArbitrary,
+        (page, anchor, current) => {
+          const drawn = drawnStampBox({ anchor, current });
+          expect(drawn.x).toBeGreaterThanOrEqual(0);
+          expect(drawn.y).toBeGreaterThanOrEqual(0);
+          expect(drawn.x + drawn.width).toBeLessThanOrEqual(1 + EPSILON);
+          expect(drawn.y + drawn.height).toBeLessThanOrEqual(1 + EPSILON);
+          if (stampSizeCheck(drawn, page) === "fits") {
+            expectSameBox(
+              settleDrawnStampBox({ anchor, current, page }),
+              drawn,
+            );
+          }
+        },
+      ),
+    );
   });
 });

@@ -14,12 +14,12 @@ const STAGE_PADDING_PX = 6;
 const STAGE_RADIUS_PX = 8;
 
 // The step's "when would I pick this?" line, already localized.
-export type GuideEngineWhen = {
+type GuideEngineWhen = {
   label: string;
   text: string;
 };
 
-export type GuideEngineStep = {
+type GuideEngineStep = {
   element: Element;
   title: string;
   body: string;
@@ -116,8 +116,7 @@ const renderLeaveControl =
 export const createGuideEngine = (): GuideEngine => {
   let activeLeave: (() => void) | undefined;
   let activeTarget:
-    | { element: Element; attributes: PreservedTargetAttributes }
-    | undefined;
+    { element: Element; attributes: PreservedTargetAttributes } | undefined;
   let destroyed = false;
   const handleKeyDown = (event: KeyboardEvent) => {
     if (event.key !== "Escape") {

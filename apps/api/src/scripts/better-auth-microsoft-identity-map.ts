@@ -9,9 +9,7 @@
  */
 
 import { Result, TaggedError } from "better-result";
-import { SQL } from "bun";
 import { sql } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/bun-sql";
 import {
   createRemoteJWKSet,
   customFetch,
@@ -22,12 +20,15 @@ import { open, writeFile } from "node:fs/promises";
 import * as v from "valibot";
 
 import { hasSecureDatabaseTransport, resolveDatabaseUrl } from "@/api/db-url";
+import { createDatabase, createSqlClient } from "@/api/db/sql-client";
+import { safeOutboundFetchBytes } from "@/api/lib/auth/authorized-outbound-fetch";
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
+import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { executedRows } from "@/api/lib/db/executed-rows";
-import { safeOutboundFetchBytes } from "@/api/lib/safe-outbound-fetch";
 import { isRecord } from "@/api/lib/type-guards";
 import {
-  BetterAuthMicrosoftIdentityMapInfrastructureError,
   BetterAuthMicrosoftIdentityMapError,
+  BetterAuthMicrosoftIdentityMapInfrastructureError,
   deriveBetterAuthMicrosoftIdentityMap,
 } from "@/api/scripts/better-auth-microsoft-identity-map.logic";
 import type { BetterAuthMicrosoftIdentitySource } from "@/api/scripts/better-auth-microsoft-identity-map.logic";
@@ -78,7 +79,7 @@ export const parseBetterAuthMicrosoftIdentityMapArgs = (
   return Result.ok({ outputPath: parsed.output[1] });
 };
 
-const readSources = async (database: ReturnType<typeof drizzle>) => {
+const readSources = async (database: ReturnType<typeof createDatabase>) => {
   const queried = await Result.tryPromise({
     try: async () =>
       await database.transaction(async (transaction) => {
@@ -200,33 +201,36 @@ const persistIdentityMap = async (
       );
 };
 
-const microsoftJwksFetch: FetchImplementation = async (url, options) => {
-  const response = await safeOutboundFetchBytes({
-    headers: new Headers(options.headers),
-    maxBytes: JWKS_MAX_BYTES,
-    method: options.method,
-    redirect: "error",
-    timeoutMs: JWKS_FETCH_TIMEOUT_MS,
-    url,
-  });
-  if (Result.isError(response)) {
-    throw new BetterAuthMicrosoftIdentityMapInfrastructureError({
-      cause: response.error,
-      code: "signing-key-fetch-failed",
-      message: "Microsoft signing keys could not be fetched",
+const microsoftJwksFetch =
+  (permit: ThirdPartyOutboundPermit): FetchImplementation =>
+  async (url, options) => {
+    const response = await safeOutboundFetchBytes({
+      permit,
+      headers: new Headers(options.headers),
+      maxBytes: JWKS_MAX_BYTES,
+      method: options.method,
+      redirect: "error",
+      timeoutMs: JWKS_FETCH_TIMEOUT_MS,
+      url,
     });
-  }
-  if (response.value.status !== 200) {
-    throw new BetterAuthMicrosoftIdentityMapInfrastructureError({
-      code: "signing-key-fetch-failed",
-      message: "Microsoft signing keys could not be fetched",
+    if (Result.isError(response)) {
+      throw new BetterAuthMicrosoftIdentityMapInfrastructureError({
+        cause: response.error,
+        code: "signing-key-fetch-failed",
+        message: "Microsoft signing keys could not be fetched",
+      });
+    }
+    if (response.value.status !== 200) {
+      throw new BetterAuthMicrosoftIdentityMapInfrastructureError({
+        code: "signing-key-fetch-failed",
+        message: "Microsoft signing keys could not be fetched",
+      });
+    }
+    return new Response(response.value.body, {
+      headers: response.value.headers,
+      status: response.value.status,
     });
-  }
-  return new Response(response.value.body, {
-    headers: response.value.headers,
-    status: response.value.status,
-  });
-};
+  };
 
 const run = async (args: readonly string[]) => {
   const parsed = parseBetterAuthMicrosoftIdentityMapArgs(args);
@@ -251,8 +255,8 @@ const run = async (args: readonly string[]) => {
     );
   }
 
-  const client = new SQL({ max: 1, url: databaseUrl });
-  const database = drizzle({ client });
+  const client = createSqlClient({ max: 1, url: databaseUrl });
+  const database = createDatabase({ client });
   const sources = await readSources(database);
   if (Result.isError(sources)) {
     await client.end();
@@ -262,7 +266,7 @@ const run = async (args: readonly string[]) => {
     new URL(`${MICROSOFT_AUTHORITY}/${tenantId}/discovery/v2.0/keys`),
     {
       timeoutDuration: JWKS_FETCH_TIMEOUT_MS,
-      [customFetch]: microsoftJwksFetch,
+      [customFetch]: microsoftJwksFetch(grantThirdPartyOutboundPermit()),
     },
   );
   const derivation = await deriveBetterAuthMicrosoftIdentityMap({

@@ -67,29 +67,12 @@ export type UserField = (typeof USER_FIELDS)[number];
 export const FIRM_FIELDS = ["name"] as const;
 export type FirmField = (typeof FIRM_FIELDS)[number];
 
-/** The source-kind discriminator. */
-export const BINDING_SOURCE_KINDS = [
-  "contact",
-  "party",
-  "matter",
-  "attorney",
-  "firm",
-] as const;
-export type BindingSourceKind = (typeof BINDING_SOURCE_KINDS)[number];
-
 /**
  * A contact/matter data binding on a template field. Discriminated on `kind`;
  * `field` is the stable key within the resolved record (see module docs).
  */
 const workspaceContactRoleSchema = v.picklist(WORKSPACE_CONTACT_ROLES);
 const attorneyRefSchema = v.picklist(ATTORNEY_REFS);
-
-export const isWorkspaceContactRole = (
-  value: unknown,
-): value is WorkspaceContactRole => v.is(workspaceContactRoleSchema, value);
-
-export const isAttorneyRef = (value: unknown): value is AttorneyRef =>
-  v.is(attorneyRefSchema, value);
 
 export const fieldSourceSchema = v.variant("kind", [
   v.strictObject({
@@ -146,12 +129,3 @@ export const fieldSourceToolInputSchema = v.union([
 ]);
 
 export type FieldSource = v.InferOutput<typeof fieldSourceSchema>;
-
-/**
- * Validate a {@link FieldSource}: a known `kind`, a `field` key allowed for
- * that kind, and (where applicable) a valid `role`/`ref`. Built-in field keys
- * are checked against the per-kind allow-lists; when the registry lands this
- * widens to also accept property ids.
- */
-export const isFieldSource = (value: unknown): value is FieldSource =>
-  v.is(fieldSourceSchema, value);

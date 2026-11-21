@@ -42,6 +42,18 @@ describe("provider-call-error-message", () => {
     ).toEqual([3, 5]);
   });
 
+  test("rejects a message on a model run error, aliased or not", async () => {
+    expect(
+      await lintProviderError([
+        'import { ModelRunError as RunFailure } from "@/api/lib/errors/provider-call-error";',
+        "declare const modelText: string;",
+        'new RunFailure({ model: "openrouter" });',
+        'new RunFailure({ model: "openrouter", message: modelText });',
+        'new ModelRunError({ model: "openrouter", message: "fixed" });',
+      ]),
+    ).toEqual([4, 5]);
+  });
+
   test("does not constrain HandlerError messages outside the owning source", async () => {
     expect(
       await lintSingleRule(

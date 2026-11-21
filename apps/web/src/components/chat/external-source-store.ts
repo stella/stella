@@ -2,6 +2,8 @@ import { create } from "zustand";
 
 import type { BusinessRegistrySlug } from "@stll/api-contract";
 
+import type { DecisionCitationMetadata } from "@/components/references/decision-citation-chip.logic";
+
 export type BusinessRegistrySourceReference = {
   registry: BusinessRegistrySlug;
   companyId: string;
@@ -11,9 +13,16 @@ export type BusinessRegistrySourceReference = {
 export type CaseLawDecisionSourceReference = {
   caseNumber: string;
   decisionId: string;
+  citation?:
+    | Pick<
+        DecisionCitationMetadata,
+        "court" | "courtShortCode" | "decisionDate"
+      >
+    | undefined;
 };
 
 export type ExternalSourceReference = {
+  sourceUrl?: string | undefined;
   businessRegistry?: BusinessRegistrySourceReference | undefined;
   caseLawDecision?: CaseLawDecisionSourceReference | undefined;
   connectorSlug?: string | undefined;
@@ -26,31 +35,55 @@ export type ExternalSourceReference = {
   url: string;
 };
 
+const sourceKey = (url: string) =>
+  URL.canParse(url) ? new URL(url).href : url;
+
 type ExternalSourceState = {
   sourcesByUrl: Record<string, ExternalSourceReference>;
   getSource: (url: string) => ExternalSourceReference | undefined;
+  getDecisionSource: (ref: string) => ExternalSourceReference | undefined;
   registerSources: (sources: ExternalSourceReference[]) => void;
 };
 
 export const useExternalSourceStore = create<ExternalSourceState>()(
   (set, get) => ({
     sourcesByUrl: {},
-    getSource: (url) => get().sourcesByUrl[url],
+    getSource: (url) => get().sourcesByUrl[sourceKey(url)],
+    getDecisionSource: (ref) =>
+      Object.values(get().sourcesByUrl).find(
+        (source) => source.caseLawDecision?.decisionId === ref,
+      ),
     registerSources: (sources) =>
       set((state) => {
-        const sourcesByUrl = { ...state.sourcesByUrl };
+        const sourcesByUrl = new Map(Object.entries(state.sourcesByUrl));
         for (const source of sources) {
-          const existing = sourcesByUrl[source.url];
-          sourcesByUrl[source.url] = {
+          const existing =
+            sourcesByUrl.get(sourceKey(source.url)) ??
+            (source.sourceUrl === undefined
+              ? undefined
+              : sourcesByUrl.get(sourceKey(source.sourceUrl)));
+          const merged = {
             ...existing,
             ...source,
+            // A publisher-only refresh enriches the citation without replacing its reader.
+            url:
+              existing?.sourceUrl !== undefined &&
+              sourceKey(source.url) === sourceKey(existing.sourceUrl)
+                ? existing.url
+                : source.url,
+            sourceUrl: source.sourceUrl ?? existing?.sourceUrl,
             businessRegistry:
               source.businessRegistry ?? existing?.businessRegistry,
             caseLawDecision:
               source.caseLawDecision ?? existing?.caseLawDecision,
           };
+          for (const url of [source.url, merged.url, merged.sourceUrl]) {
+            if (url !== undefined) {
+              sourcesByUrl.set(sourceKey(url), merged);
+            }
+          }
         }
-        return { sourcesByUrl };
+        return { sourcesByUrl: Object.fromEntries(sourcesByUrl) };
       }),
   }),
 );

@@ -1,13 +1,20 @@
 import { QueryClient } from "@tanstack/react-query";
 import { panic } from "better-result";
-import { describe, expect, test } from "bun:test";
+import { describe, expect, spyOn, test } from "bun:test";
 
 import { DECISION_READ_RESOLUTION } from "@stll/api-contract/case-law-decision-resolution";
-import { publicCaseLawCountry } from "@stll/api-contract/case-law-launch-readiness";
+import {
+  CASE_LAW_BROWSER_COUNTRIES,
+  publicCaseLawCountry,
+} from "@stll/api-contract/case-law-launch-readiness";
+import { noDecisionReviewFound } from "@stll/api-contract/case-law-reviews";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
-import { decisionBySlugOptions } from "@/features/case-law/queries/decisions";
+import {
+  decisionBySlugOptions,
+  decisionOptions,
+} from "@/features/case-law/queries/decisions";
 import { createPublicLawHead } from "@/lib/public-law-seo";
 import { toSafeId } from "@/lib/safe-id";
 import {
@@ -28,6 +35,9 @@ type DecisionBySlug = Awaited<
 >;
 
 const UNPUBLISHED_DECISION = {
+  appealReviews: noDecisionReviewFound(),
+  extractionWarnings: [],
+  citationCount: 0,
   caseNumber: "SYN 1/2026",
   caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
   citationsFrom: [],
@@ -35,6 +45,7 @@ const UNPUBLISHED_DECISION = {
   citationsTo: [],
   country: "XAA",
   court: "Synthetic court",
+  courtId: null,
   courtAbbreviation: null,
   courtTier: "other",
   createdAt: "2026-01-01T00:00:00.000Z",
@@ -47,6 +58,8 @@ const UNPUBLISHED_DECISION = {
   documentPending: false,
   documentReadFailed: false,
   documentUnavailable: false,
+  textIncompleteReason: null,
+  textWithheldReason: null,
   documentUrl: null,
   ecli: null,
   fulltext: null,
@@ -60,6 +73,7 @@ const UNPUBLISHED_DECISION = {
   ],
   judges: [],
   language: "en",
+  caseFile: { items: [], nextCursor: null, limit: 50 },
   languageAlternates: [],
   languageGroupKey: null,
   metadata: {},
@@ -73,6 +87,7 @@ const UNPUBLISHED_DECISION = {
     name: "Synthetic source",
   },
   sourceAttributionUrl: null,
+  sourceLanguages: null,
   sourceUrl: null,
   textFields: {
     abstract: ABSENT_TEXT_FIELD,
@@ -89,7 +104,7 @@ const PUBLISHED_DECISION = {
 } satisfies DecisionBySlug;
 
 test("textless decision heads stay noindex until the text arrives", async () => {
-  for (const country of ["CZE", "SVK", "POL"]) {
+  for (const country of CASE_LAW_BROWSER_COUNTRIES) {
     const params = {
       country: country.toLowerCase(),
       court: "synthetic-court",
@@ -165,7 +180,7 @@ test("a readable decision omits textless language variants from alternate links"
     },
   });
   expect(
-    head.links.flatMap((link) => ("hreflang" in link ? [link.hreflang] : [])),
+    head.links.flatMap((link) => ("hrefLang" in link ? [link.hrefLang] : [])),
   ).toEqual(["cs", "en", "x-default"]);
 });
 
@@ -223,31 +238,34 @@ describe("canonical decision redirect", () => {
     return queryClient;
   };
 
-  test("carries the passage the reader came for to the canonical path", async () => {
-    // A citation chip opens the decision at a block. Canonicalising the path
-    // must not drop the fragment, or the reader lands at the top of the
-    // decision instead of on the passage the answer cited.
-    const redirected = await loadPublicCaseLawDecisionRoute({
-      hash: "p-12",
-      params: {
-        country: "cze",
-        court: "synthetic-court",
-        slug: "stale-slug",
-      },
-      queryClient: seedStaleSlug(),
-      search: {},
-    }).then(
-      () => panic("Expected the stale slug to redirect."),
-      (error: unknown) => error,
-    );
+  test.each(["p-12", "par=48", "par=48-53", "par=garbage"])(
+    "carries fragment %s to the canonical path",
+    async (hash) => {
+      // A citation chip opens the decision at a block. Canonicalising the path
+      // must not drop the fragment, or the reader lands at the top of the
+      // decision instead of on the passage the answer cited.
+      const redirected = await loadPublicCaseLawDecisionRoute({
+        hash,
+        params: {
+          country: "cze",
+          court: "synthetic-court",
+          slug: "stale-slug",
+        },
+        queryClient: seedStaleSlug(),
+        search: {},
+      }).then(
+        () => panic("Expected the stale slug to redirect."),
+        (error: unknown) => error,
+      );
 
-    expect(redirected).toMatchObject({
-      options: { params: { slug: "synthetic-decision" } },
-    });
-    // The same path the no-fragment case asserts the absence of, so that
-    // assertion cannot pass by naming a property neither case carries.
-    expect(redirected).toHaveProperty("options.hash", "p-12");
-  });
+      expect(redirected).toMatchObject({
+        options: { params: { slug: "synthetic-decision" } },
+      });
+      // The same path the no-fragment case asserts the absence of, so that
+      // assertion cannot pass by naming a property neither case carries.
+      expect(redirected).toHaveProperty("options.hash", hash);
+    },
+  );
 
   test("a decision opened at no passage keeps a bare canonical URL", async () => {
     const redirected = await loadPublicCaseLawDecisionRoute({
@@ -268,6 +286,120 @@ describe("canonical decision redirect", () => {
       options: { params: { slug: "synthetic-decision" } },
     });
     expect(redirected).not.toHaveProperty("options.hash");
+  });
+});
+
+describe("pre-transliteration path redirect", () => {
+  const POLISH_COUNTRY =
+    publicCaseLawCountry("POL") ?? panic("Expected Poland to be public.");
+  const DECISION_ID = toSafeId<"caseLawDecision">(
+    "019dd47d-f507-7c84-b827-980af11b8980",
+  );
+  const COMPACT_DECISION_ID = "AZ3UffUHfIS4J5gK8RuJgA";
+  const LODZ_DECISION = {
+    ...PUBLISHED_DECISION,
+    caseNumber: "III SA/Łd 223/21",
+    country: POLISH_COUNTRY,
+    court: "Wojewódzki Sąd Administracyjny w Łodzi",
+    id: DECISION_ID,
+    // Minted under the old fold and stored, so it stays the canonical slug.
+    slug: "iii-sa-d-223-21",
+  } satisfies DecisionBySlug;
+  const NEW_COURT = "wojewodzki-sad-administracyjny-w-lodzi";
+  const OLD_COURT = "wojewodzki-sad-administracyjny-w-odzi";
+
+  const bySlugClient = () => {
+    const queryClient = new QueryClient();
+    queryClient.setQueryData(
+      decisionBySlugOptions({
+        country: POLISH_COUNTRY,
+        slug: LODZ_DECISION.slug,
+      }).queryKey,
+      LODZ_DECISION,
+    );
+    return queryClient;
+  };
+
+  const byIdClient = () => {
+    const queryClient = new QueryClient();
+    queryClient.setQueryData(decisionOptions(DECISION_ID).queryKey, {
+      ...LODZ_DECISION,
+      slug: null,
+    });
+    return queryClient;
+  };
+
+  const redirectOf = async (
+    params: { country: string; court: string; slug: string },
+    queryClient: QueryClient,
+  ): Promise<unknown> =>
+    await loadPublicCaseLawDecisionRoute({
+      hash: "",
+      params,
+      queryClient,
+      search: {},
+    }).then(
+      () => panic("Expected the path to redirect."),
+      (error: unknown) => error,
+    );
+
+  test("moves the old court segment permanently to the new one", async () => {
+    const redirected = await redirectOf(
+      { country: "pol", court: OLD_COURT, slug: LODZ_DECISION.slug },
+      bySlugClient(),
+    );
+    expect(redirected).toMatchObject({
+      options: {
+        to: "/law/$country/cases/$court/$slug",
+        params: { country: "pol", court: NEW_COURT, slug: LODZ_DECISION.slug },
+        statusCode: 308,
+      },
+    });
+    // Built from route params alone, so the target stays on this origin.
+    expect(redirected).not.toHaveProperty("options.href");
+  });
+
+  test("moves the old id-form prefix permanently to the new one", async () => {
+    const redirected = await redirectOf(
+      {
+        country: "pol",
+        court: OLD_COURT,
+        slug: `iii-sa-d-223-21--${COMPACT_DECISION_ID}`,
+      },
+      byIdClient(),
+    );
+    expect(redirected).toMatchObject({
+      options: {
+        params: {
+          court: NEW_COURT,
+          slug: `iii-sa-ld-223-21--${COMPACT_DECISION_ID}`,
+        },
+        statusCode: 308,
+      },
+    });
+  });
+
+  test("keeps a temporary redirect for a path the old fold never published", async () => {
+    const redirected = await redirectOf(
+      { country: "pol", court: "some-other-court", slug: LODZ_DECISION.slug },
+      bySlugClient(),
+    );
+    expect(redirected).toMatchObject({
+      options: { params: { court: NEW_COURT }, statusCode: 307 },
+    });
+  });
+
+  test("serves the new path without a redirect", async () => {
+    const queryClient = bySlugClient();
+    const decision = await loadPublicCaseLawDecisionRoute({
+      hash: "",
+      params: { country: "pol", court: NEW_COURT, slug: LODZ_DECISION.slug },
+      queryClient,
+      search: {},
+    });
+    expect(decision.id).toBe(DECISION_ID);
+    await queryClient.cancelQueries();
+    queryClient.clear();
   });
 });
 
@@ -350,9 +482,106 @@ describe("absorbed supplement redirect", () => {
     expect(redirected).toHaveProperty("options.hash", `${ANCHOR_PREFIX}h-1`);
   });
 
+  test.each(["par=48", "par=48-53", "par=garbage"])(
+    "preserves court range %s when reasons resolve to a judgment",
+    async (hash) => {
+      expect(await redirectFromReasons(hash)).toHaveProperty(
+        "options.hash",
+        hash,
+      );
+    },
+  );
+
   test("maps a passage of the reasons onto the same block in the judgment", async () => {
     const redirected = await redirectFromReasons("p-4");
 
     expect(redirected).toHaveProperty("options.hash", `${ANCHOR_PREFIX}p-4`);
+  });
+});
+
+describe("secondary decision reads", () => {
+  const PARAMS = {
+    country: "cze",
+    court: "synthetic-court",
+    slug: PUBLISHED_DECISION.slug,
+  };
+
+  const seededClient = () => {
+    const queryClient = new QueryClient();
+    queryClient.setQueryData(
+      decisionBySlugOptions({
+        country: PUBLIC_COUNTRY,
+        slug: PUBLISHED_DECISION.slug,
+      }).queryKey,
+      PUBLISHED_DECISION,
+    );
+    return queryClient;
+  };
+
+  // A read that never answers until it is cancelled: the slowest a secondary
+  // read can be.
+  const hangingFetch = () =>
+    spyOn(globalThis, "fetch").mockImplementation(
+      Object.assign(
+        async (_input: RequestInfo | URL, init?: RequestInit) =>
+          await new Promise<Response>((_resolve, reject) => {
+            const signal = init?.signal;
+            signal?.addEventListener("abort", () => {
+              reject(new Error("Read cancelled", { cause: signal.reason }));
+            });
+          }),
+        { preconnect: () => undefined },
+      ),
+    );
+
+  test("a server render reads the decision alone", async () => {
+    const fetchSpy = hangingFetch();
+    const queryClient = seededClient();
+    try {
+      const decision = await loadPublicCaseLawDecisionRoute({
+        hash: "",
+        params: PARAMS,
+        queryClient,
+        search: {},
+        warmSecondaryReads: false,
+      });
+
+      expect(decision.id).toBe(PUBLISHED_DECISION.id);
+      // Every read a server render starts leaves from the same server, so a
+      // crawled page costs one API read, not the decision plus its panels.
+      expect(fetchSpy).not.toHaveBeenCalled();
+      expect(queryClient.getQueryCache().getAll()).toHaveLength(1);
+    } finally {
+      fetchSpy.mockRestore();
+      queryClient.clear();
+    }
+  });
+
+  test("a browser load warms the panels without waiting for them", async () => {
+    const fetchSpy = hangingFetch();
+    const queryClient = seededClient();
+    try {
+      const decision = await loadPublicCaseLawDecisionRoute({
+        hash: "",
+        params: PARAMS,
+        queryClient,
+        search: {},
+        warmSecondaryReads: true,
+      });
+
+      expect(decision.id).toBe(PUBLISHED_DECISION.id);
+      const secondary = queryClient
+        .getQueryCache()
+        .getAll()
+        .filter((query) => query.state.data === undefined);
+      expect(secondary.length).toBeGreaterThan(0);
+      expect(
+        secondary.every((query) => query.state.fetchStatus === "fetching"),
+      ).toBe(true);
+    } finally {
+      await queryClient.cancelQueries();
+      fetchSpy.mockRestore();
+      queryClient.clear();
+    }
   });
 });

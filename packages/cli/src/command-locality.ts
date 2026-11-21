@@ -16,6 +16,8 @@ const LOCAL_COMMAND_ROUTES: ReadonlySet<string> = new Set([
   "compatibility",
   "tools",
   "upload",
+  "update",
+  "doctor",
 ]);
 
 /**
@@ -25,9 +27,28 @@ const LOCAL_COMMAND_ROUTES: ReadonlySet<string> = new Set([
  * so purely local commands never round-trip to the server.
  */
 export const commandNeedsRegistry = (argv: readonly string[]): boolean => {
-  const first = argv.at(0);
+  let index = 0;
+  while (index < argv.length) {
+    const arg = argv.at(index);
+    if (arg === "--server") {
+      index += 2;
+    } else if (arg?.startsWith("--server=")) {
+      index += 1;
+    } else {
+      break;
+    }
+  }
+  const first = argv.at(index);
   if (first === undefined || first.startsWith("-")) {
     return false;
   }
   return !LOCAL_COMMAND_ROUTES.has(first);
+};
+
+/** Startup flags end at the parser's positional-argument terminator. */
+export const argumentsBeforeTerminator = (
+  argv: readonly string[],
+): readonly string[] => {
+  const terminator = argv.indexOf("--");
+  return terminator === -1 ? argv : argv.slice(0, terminator);
 };

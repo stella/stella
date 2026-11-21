@@ -1,6 +1,8 @@
-import { describe, expect, test } from "bun:test";
+import { panic, Result } from "better-result";
+import { describe, expect, expectTypeOf, test } from "bun:test";
 
 import { roles } from "@stll/permissions";
+import { createTestState } from "@stll/test-state";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { env } from "@/api/env";
@@ -10,25 +12,34 @@ import { checkDemoAccountAccess } from "@/api/lib/auth/demo-account-policy";
 import { toSafeId } from "@/api/lib/branded-types";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { createChatToolDefectMemo } from "@/api/lib/chat/tool-defect-memo";
+import {
+  queryCountLogger,
+  runWithQueryCounter,
+} from "@/api/lib/db-query-counter";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
 import { isMemberRole, type MemberRole } from "@/api/lib/member-roles";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { MCP_MODES } from "@/api/mcp/constants";
-import type { McpRequestContext } from "@/api/mcp/context";
+import type { McpRequestResources } from "@/api/mcp/context";
 import { listOfferedStaticMcpToolDefinitions } from "@/api/mcp/gateway/static-tool-visibility";
 import { listStaticMcpToolDefinitions } from "@/api/mcp/static-tool-definitions";
 import type { McpToolDefinition } from "@/api/mcp/tool-types";
 import { handleMcpToolCall } from "@/api/mcp/tools";
 import {
+  type AuthorizedMcpRequestContext,
+  authorizeMcpToolContext,
   isAccountAuthorizedForMcpTool,
   isMemberAuthorizedForMcpTool,
   type McpToolAuthorityDeclaration,
 } from "@/api/mcp/write-tool-authority";
 import { callMcpToolOverHttp } from "@/api/tests/helpers/mcp-http-tool-call";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import { enrolledTimeBillingSnapshot } from "@/api/tests/helpers/time-billing-enrolment";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 
 import ledger from "./write-tool-authority-ledger.json" with { type: "json" };
+
+const testState = createTestState({ file: import.meta.path, config: env });
 
 const MEMBER_ROLES: readonly MemberRole[] =
   Object.keys(roles).filter(isMemberRole);
@@ -48,13 +59,63 @@ const writeDefinitions = (): McpToolDefinition[] => {
   );
 };
 
-const mcpContextFor = (role: MemberRole): McpRequestContext =>
-  asTestRaw<McpRequestContext>({
+const mcpContextFor = (role: MemberRole): AuthorizedMcpRequestContext =>
+  asTestRaw<AuthorizedMcpRequestContext>({
+    featureAccessSnapshot: enrolledTimeBillingSnapshot({
+      organizationId: "org_1",
+      userId: "user_1",
+    }),
+    organizationId: toSafeId<"organization">("org_1"),
+    userId: toSafeId<"user">("user_1"),
+    userEmail: "member@example.test",
     accessibleWorkspaceIds: [],
-    enabledRegistrySlugs: undefined,
     grantedScopes: [],
     memberRole: role,
   });
+
+const inaccessibleData = {
+  safeDb: async () => panic("safeDb must not run during authorization"),
+  scopedDb: async () => panic("scopedDb must not run during authorization"),
+};
+
+test("raw request resources require authorization before handler use", () => {
+  expectTypeOf<McpRequestResources>().not.toExtend<AuthorizedMcpRequestContext>();
+  expectTypeOf<AuthorizedMcpRequestContext>().toExtend<McpRequestResources>();
+});
+
+test("declared authorization issues no database statements before refusal or handler entry", async () => {
+  const definition: McpToolAuthorityDeclaration = {
+    access: "write",
+    accountAccess: "sandbox",
+    permissions: { type: "all", permissions: { workspace: ["update"] } },
+  };
+
+  await runWithQueryCounter(async (counter) => {
+    const refused = authorizeMcpToolContext({
+      context: mcpContextFor("intern"),
+      dataAccess: inaccessibleData,
+      definition,
+      input: {},
+      toolName: "authorization_probe",
+    });
+    expect(refused.authorized).toBeFalse();
+    expect(counter.count).toBe(0);
+  });
+
+  await runWithQueryCounter(async (counter) => {
+    const admitted = authorizeMcpToolContext({
+      context: mcpContextFor("owner"),
+      dataAccess: inaccessibleData,
+      definition,
+      input: {},
+      toolName: "authorization_probe",
+    });
+    expect(admitted.authorized).toBeTrue();
+    expect(counter.count).toBe(0);
+    queryCountLogger.logQuery("handler probe", []);
+    expect(counter.count).toBe(1);
+  });
+});
 
 /**
  * The guard: every tool a role is offered must be one its declared
@@ -82,6 +143,7 @@ const mcpOffered = (role: MemberRole): ReadonlySet<string> =>
       listOfferedStaticMcpToolDefinitions({
         context: mcpContextFor(role),
         mode,
+        enabledRegistrySlugs: undefined,
       }).map((definition) => definition.name),
     ),
   );
@@ -93,14 +155,34 @@ const noopScopedDb = asTestRaw<ScopedDb>(
 const chatWriteTools = (
   role: MemberRole,
   currentRole: MemberRole | null = role,
-) =>
-  buildChatWriteTools({
+) => {
+  const featureAccessSnapshot = enrolledTimeBillingSnapshot({
+    organizationId: "org_1",
+    userId: "user_1",
+  });
+  return buildChatWriteTools({
+    featureAccessSnapshot,
     memberRole: sessionMemberRole(role),
     organizationId: toSafeId<"organization">("org_1"),
     pinServerValidatedWorkspaceId: () => true,
     refRegistry: createChatRefRegistry(),
-    resolveCurrentMembership: async () =>
-      currentRole === null ? null : { role: currentRole },
+    resolveCurrentExecutionContext: async () =>
+      await Promise.resolve(
+        Result.ok(
+          currentRole === null
+            ? null
+            : {
+                billingAccess: false,
+                accessibleWorkspaces: [],
+                featureAccessSnapshot,
+                pinServerValidatedWorkspaceId: () => false,
+                role: currentRole,
+                safeDb: toSafeDbMock(noopScopedDb),
+                scopedDb: noopScopedDb,
+                userEmail: "member@example.test",
+              },
+        ),
+      ),
     safeDb: toSafeDbMock(noopScopedDb),
     scopedDb: noopScopedDb,
     toolDefectMemo: createChatToolDefectMemo(),
@@ -112,6 +194,7 @@ const chatWriteTools = (
     userId: toSafeId<"user">("user_1"),
     workspaceStatusById: new Map(),
   });
+};
 
 /** Run a registered chat write tool and return the refusal it throws, if any. */
 const chatExecutionFailure = async ({
@@ -149,6 +232,24 @@ const ledgerId = (definition: McpToolDefinition): string | null => {
 };
 
 describe("write tool permissions", () => {
+  test("enrolled principals exercise every feature-bound write tool's authority", () => {
+    const featureBoundWrites = writeDefinitions().filter(
+      (definition) => definition.featureId !== undefined,
+    );
+    expect(featureBoundWrites.length).toBeGreaterThan(0);
+    for (const role of MEMBER_ROLES) {
+      const offered = mcpOffered(role);
+      for (const definition of featureBoundWrites) {
+        expect(
+          offered.has(definition.name),
+          `${role}: ${definition.name}`,
+        ).toBe(
+          isMemberAuthorizedForMcpTool(sessionMemberRole(role), definition),
+        );
+      }
+    }
+  });
+
   test("every write tool declares an authority some role can hold", () => {
     const definitions = writeDefinitions();
     expect(definitions.length).toBeGreaterThan(0);
@@ -158,7 +259,9 @@ describe("write tool permissions", () => {
       }
       const { permissions } = definition;
       expect(["all", "input", "any", "delegated"]).toContain(permissions.type);
-      expect(["standard", "sandbox"]).toContain(definition.accountAccess);
+      expect(["standard", "sandbox", "account-control"]).toContain(
+        definition.accountAccess,
+      );
       if (permissions.type === "any" || permissions.type === "delegated") {
         expect(permissions.reason.trim().length).toBeGreaterThan(0);
       }
@@ -184,11 +287,11 @@ describe("write tool permissions", () => {
     }
   });
 
-  test("MCP discovery offers no role a write tool its permissions do not grant", () => {
+  test("MCP discovery offers no role a model-visible write tool its permissions do not grant", () => {
     expect(unauthorizedOffers(writeDefinitions(), mcpOffered)).toEqual([]);
   });
 
-  test("chat registers no role a write tool its permissions do not grant", () => {
+  test("chat registers no role a model-visible write tool its permissions do not grant", () => {
     expect(unauthorizedOffers(writeDefinitions(), chatOffered)).toEqual([]);
   });
 
@@ -216,7 +319,7 @@ describe("write tool permissions", () => {
     context,
     transport,
   }: {
-    context: McpRequestContext;
+    context: AuthorizedMcpRequestContext;
     transport: keyof typeof TRANSPORTS;
   }): Promise<unknown> => {
     const result = await TRANSPORTS[transport]({
@@ -252,7 +355,7 @@ describe("write tool permissions", () => {
     async (transport) => {
       expect(
         await refusalOver({
-          context: asTestRaw<McpRequestContext>({
+          context: asTestRaw<AuthorizedMcpRequestContext>({
             ...mcpContextFor("owner"),
             credentialPermissions: { workspace: ["read"] },
           }),
@@ -274,7 +377,7 @@ describe("write tool permissions", () => {
     { denial: "member-role", context: mcpContextFor("external") },
     {
       denial: "credential",
-      context: asTestRaw<McpRequestContext>({
+      context: asTestRaw<AuthorizedMcpRequestContext>({
         ...mcpContextFor("owner"),
         credentialPermissions: { workspace: ["read"] },
       }),
@@ -379,6 +482,12 @@ describe("write tool permissions self-test", () => {
       },
       anonymized: { exposure: "excluded", reason: "write" },
       consumesServices: false,
+      annotationReasons: {
+        readOnlyHint: "Writes fixture data.",
+        destructiveHint:
+          "Creates fixture data without changing existing records.",
+        openWorldHint: "The fixture writes local data only.",
+      },
       description: "Fixture write tool",
       inputSchema: { type: "object" },
       name: "fixture_write",
@@ -397,6 +506,12 @@ describe("write tool permissions self-test", () => {
       },
       anonymized: { exposure: "excluded", reason: "write" },
       consumesServices: false,
+      annotationReasons: {
+        readOnlyHint: "Writes fixture data.",
+        destructiveHint:
+          "Creates fixture data without changing existing records.",
+        openWorldHint: "The fixture writes local data only.",
+      },
       description: "Fixture write tool",
       inputSchema: { type: "object" },
       name: "fixture_write",
@@ -414,6 +529,12 @@ describe("write tool permissions self-test", () => {
       },
       anonymized: { exposure: "excluded", reason: "write" },
       consumesServices: false,
+      annotationReasons: {
+        readOnlyHint: "Writes fixture data.",
+        destructiveHint:
+          "Creates fixture data without changing existing records.",
+        openWorldHint: "The fixture writes local data only.",
+      },
       description: "Fixture write tool",
       inputSchema: { type: "object" },
       name: "fixture_write",
@@ -434,7 +555,7 @@ const payloadOf = (result: Awaited<ReturnType<typeof handleMcpToolCall>>) => {
 const OPERATION_DENIED = (tool: string) => ({
   error: {
     code: "permission_denied",
-    message: `Your member role does not permit this ${tool} operation`,
+    message: `Your member role does not permit ${tool}`,
     hint: "Call tools/list for the tools your role offers, or ask an organization administrator for a role that includes this tool.",
   },
 });
@@ -496,36 +617,34 @@ describe("write tools whose input selects the operation", () => {
     expect(problems).toEqual([]);
   });
 
-  test("dispatch checks the grant of the selected operation before the handler runs", async () => {
+  test("membership and settings tools enforce their separate grants", async () => {
     // A member may change matter membership but not organization settings.
     const settings = await handleMcpToolCall({
-      args: { action: "update_org_settings", prompt_caching_enabled: true },
+      args: { prompt_caching_enabled: true },
       context: mcpContextFor("member"),
-      toolName: "manage_organization",
+      toolName: "update_organization_settings",
     });
     expect(payloadOf(settings)).toEqual(
-      OPERATION_DENIED("manage_organization"),
+      OPERATION_DENIED("update_organization_settings"),
     );
 
     const membership = await handleMcpToolCall({
       args: {
-        action: "add_member",
         matter_id: "00000000-0000-4000-8000-000000000001",
         user_id: "user_2",
       },
       context: mcpContextFor("member"),
-      toolName: "manage_organization",
+      toolName: "add_matter_member",
     });
     expect(payloadOf(membership)).not.toEqual(
-      OPERATION_DENIED("manage_organization"),
+      OPERATION_DENIED("add_matter_member"),
     );
   });
 
   test("dispatch refuses deleting a document to a credential that may only update it", async () => {
-    const updateOnly = asTestRaw<McpRequestContext>({
+    const updateOnly = asTestRaw<AuthorizedMcpRequestContext>({
       accessibleWorkspaceIds: [],
       credentialPermissions: { entity: ["update"] },
-      enabledRegistrySlugs: undefined,
       grantedScopes: [],
       memberRole: "owner",
     });
@@ -555,18 +674,17 @@ describe("write tools whose input selects the operation", () => {
     );
   });
 
-  test("chat execution checks the grant of the selected operation", async () => {
+  test("chat settings tool checks the current grant", async () => {
     const failure = await chatExecutionFailure({
-      args: { action: "update_org_settings", prompt_caching_enabled: true },
+      args: { prompt_caching_enabled: true },
       currentRole: "member",
-      registeredRole: "member",
-      tool: "manage_organization",
+      registeredRole: "owner",
+      tool: "update_organization_settings",
     });
     expect(failure).toBeInstanceOf(ChatToolError);
     expect(failure).toMatchObject({
       kind: "unavailable",
-      message:
-        "Your member role does not permit this manage_organization operation.",
+      message: "Your member role does not permit update_organization_settings.",
     });
   });
 });
@@ -583,15 +701,26 @@ describe("write tool account access", () => {
     const definitions = writeDefinitions();
     const standard = definitions.filter(
       (definition) =>
-        definition.access === "write" &&
-        definition.accountAccess === "standard",
+        definition.access === "write" && definition.accountAccess !== "sandbox",
     );
-    expect(standard.map((definition) => definition.name).toSorted()).toEqual([
-      "fill_template",
-      "manage_organization",
-      "save_filled_template",
-      "set_practice_jurisdictions",
-      "submit_feedback",
+    expect(
+      standard
+        .map((definition) =>
+          definition.access === "write"
+            ? `${definition.name}:${definition.accountAccess}`
+            : definition.name,
+        )
+        .toSorted(),
+    ).toEqual([
+      "add_matter_member:standard",
+      "create_organization:account-control",
+      "fill_template:standard",
+      "mint_web_handoff:standard",
+      "remove_matter_member:standard",
+      "save_filled_template:standard",
+      "set_practice_jurisdictions:standard",
+      "submit_feedback:standard",
+      "update_organization_settings:account-control",
     ]);
     for (const definition of definitions) {
       expect({
@@ -616,27 +745,28 @@ describe("write tool account access", () => {
 
   test("discovery and dispatch read the declared account access", async () => {
     const previousEmail = env.DEMO_ACCOUNT_EMAIL;
-    env.DEMO_ACCOUNT_EMAIL = "limited@example.test";
+    testState.setConfig("DEMO_ACCOUNT_EMAIL", "limited@example.test");
     try {
-      const context = asTestRaw<McpRequestContext>({
-        enabledRegistrySlugs: undefined,
+      const context = asTestRaw<AuthorizedMcpRequestContext>({
         grantedScopes: [],
         memberRole: "owner",
         userEmail: "limited@example.test",
       });
       const offered = new Set(
-        listOfferedStaticMcpToolDefinitions({ context, mode: "default" }).map(
-          (definition) => definition.name,
-        ),
+        listOfferedStaticMcpToolDefinitions({
+          context,
+          mode: "default",
+          enabledRegistrySlugs: undefined,
+        }).map((definition) => definition.name),
       );
-      expect(offered.has("manage_organization")).toBe(false);
+      expect(offered.has("update_organization_settings")).toBe(false);
       expect(offered.has("set_practice_jurisdictions")).toBe(false);
       expect(offered.has("save_matter")).toBe(true);
 
       const result = await handleMcpToolCall({
-        args: { action: "update_org_settings", prompt_caching_enabled: true },
+        args: { prompt_caching_enabled: true },
         context,
-        toolName: "manage_organization",
+        toolName: "update_organization_settings",
       });
       expect(payloadOf(result)).toEqual({
         error: {
@@ -645,7 +775,7 @@ describe("write tool account access", () => {
         },
       });
     } finally {
-      env.DEMO_ACCOUNT_EMAIL = previousEmail;
+      testState.setConfig("DEMO_ACCOUNT_EMAIL", previousEmail);
     }
   });
 });

@@ -17,8 +17,8 @@ import {
   tryAdvanceCitationAuthoritySweep,
 } from "@/api/handlers/case-law/citation-authority";
 import {
-  citationScore,
   type CitationInput,
+  citationScore,
 } from "@/api/handlers/case-law/citation-score";
 import { courtWeightMapFromSeed } from "@/api/handlers/case-law/court-weight-seed";
 import { POLARITY } from "@/api/handlers/case-law/polarity/consts";

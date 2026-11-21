@@ -1,23 +1,27 @@
 import { panic } from "better-result";
 import { and, eq, isNull, lte, ne, or, sql } from "drizzle-orm";
-import { createHash } from "node:crypto";
 
+import { chunk as chunkItems } from "@stll/concurrency/chunk";
+import { createEventLoopSlicer } from "@stll/concurrency/event-loop";
 import {
   checkListReplacement,
   type ListReplacementError,
   type ListStats,
   type ParsedList,
+  type SanctionsEntry,
   type SanctionsSource,
 } from "@stll/sanctions";
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 import { stableStringify } from "@stll/stable-stringify";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
-  sanctionsEditions,
   sanctionsEditionEntries,
+  sanctionsEditions,
   sanctionsEntryPayloads,
   sanctionsSources,
 } from "@/api/db/schema";
+import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type { SafeId } from "@/api/lib/branded-types";
 import { SANCTIONS_SOURCE_CONFIG } from "@/api/lib/lists/sanctions/source-config";
 import {
@@ -34,6 +38,14 @@ const MAX_SOURCE_ENTRY_ID_LENGTH = 512;
 // Bump this when the package parser or entry normalisation changes. It keeps
 // an interrupted stage from mixing rows produced by two parser versions.
 export const SANCTIONS_PARSER_VERSION = "1";
+
+/**
+ * How long one source may spend on its publisher: marker, download and
+ * parse, retries included. One refresh run checks every source in turn, so a
+ * publisher that stalls must not use up the time of the sources after it.
+ * Running out of it is a failed fetch, recorded like any other.
+ */
+export const SANCTIONS_FETCH_DEADLINE_MS = 3 * 60_000;
 
 const REPLACEMENT_FAILURE_CODES = {
   "below-minimum": "replacement-below-minimum",
@@ -61,17 +73,16 @@ export type SanctionsRefreshOutcome =
   | { status: "aborted"; source: SanctionsSource };
 
 type RefreshOptions = {
+  permit: ThirdPartyOutboundPermit;
   db: ScopedDb;
   source: SanctionsSource;
   signal: AbortSignal;
   euXmlUrlOverride?: string | undefined;
   userAgent?: string | undefined;
+  fetchDeadlineMs?: number | undefined;
   fetchMarker?: typeof fetchSanctionsMarker | undefined;
   fetchEdition?: typeof fetchSanctionsEdition | undefined;
 };
-
-const sha256 = (value: string): string =>
-  createHash("sha256").update(value).digest("hex");
 
 /**
  * The change key of an edition. Some publishers state only the calendar date
@@ -83,7 +94,7 @@ const markerKeyOf = ({
   version,
   lastModified,
 }: Pick<FetchedMarker, "version" | "lastModified">): string =>
-  sha256(
+  hashSha256Hex(
     stableStringify(
       lastModified === null
         ? { parserVersion: SANCTIONS_PARSER_VERSION, version }
@@ -325,12 +336,14 @@ const recordRejectedReplacement = async ({
     : { status: "lost-race", source };
 };
 
+type StagedEntry = { sourceEntryId: string; contentHash: string };
+
 type ActivateStagedArgs = {
   db: ScopedDb;
   source: SanctionsSource;
   snapshotActiveId: SafeId<"sanctionsEdition"> | null;
   editionId: SafeId<"sanctionsEdition">;
-  expectedEntries: readonly { sourceEntryId: string; contentHash: string }[];
+  expectedEntries: readonly StagedEntry[];
   previousEntryCount: number | null;
   entryCount: number;
 };
@@ -387,6 +400,8 @@ const activateStagedEdition = async ({
       .from(sanctionsEditionEntries)
       .where(eq(sanctionsEditionEntries.editionId, editionId))
       .limit(expectedEntries.length + 1);
+    // A single pass under the edition lock; small next to the list itself,
+    // and not sliced so the lock is never held across a yield.
     const expectedById = new Map(
       expectedEntries.map((entry) => [entry.sourceEntryId, entry.contentHash]),
     );
@@ -556,27 +571,43 @@ const stageAcceptedEdition = async ({
     }
   }
 
-  const expectedEntries = parsed.entries
-    .map((entry) => ({
+  // Hashing every entry of a large list takes seconds of CPU; it gives way to
+  // requests as it goes, as the parse before it did.
+  const pause = createEventLoopSlicer();
+  const hashedEntries: (StagedEntry & { payload: SanctionsEntry })[] = [];
+  for (const entry of parsed.entries) {
+    await pause();
+    if (signal.aborted) {
+      return { status: "aborted", source };
+    }
+    hashedEntries.push({
       sourceEntryId: entry.sourceId,
-      contentHash: sha256(stableStringify(entry)),
+      contentHash: hashSha256Hex(stableStringify(entry)),
       payload: entry,
-    }))
-    .toSorted((left, right) => {
-      if (left.sourceEntryId < right.sourceEntryId) {
-        return -1;
-      }
-      if (left.sourceEntryId > right.sourceEntryId) {
-        return 1;
-      }
-      return 0;
     });
+  }
+  const expectedEntries = hashedEntries.toSorted((left, right) => {
+    if (left.sourceEntryId < right.sourceEntryId) {
+      return -1;
+    }
+    if (left.sourceEntryId > right.sourceEntryId) {
+      return 1;
+    }
+    return 0;
+  });
 
-  const persistNextBatch = async (start: number): Promise<void> => {
-    if (start >= expectedEntries.length || signal.aborted) {
+  const itemBatches = chunkItems(expectedEntries, ENTRY_BATCH_SIZE)[
+    Symbol.iterator
+  ]();
+  const persistNextBatch = async (): Promise<void> => {
+    const nextBatch = itemBatches.next();
+    if (nextBatch.done) {
       return;
     }
-    const batch = expectedEntries.slice(start, start + ENTRY_BATCH_SIZE);
+    if (signal.aborted) {
+      return;
+    }
+    const batch = nextBatch.value;
     await db(async (tx) => {
       await tx
         .insert(sanctionsEntryPayloads)
@@ -598,9 +629,9 @@ const stageAcceptedEdition = async ({
         )
         .onConflictDoNothing();
     });
-    await persistNextBatch(start + ENTRY_BATCH_SIZE);
+    await persistNextBatch();
   };
-  await persistNextBatch(0);
+  await persistNextBatch();
   if (signal.aborted) {
     return { status: "aborted", source };
   }
@@ -634,18 +665,28 @@ type FetchCurrentOptions = {
   fetchEdition: typeof fetchSanctionsEdition;
 };
 
-const validParsedEntries = (
+const validParsedEntries = async (
   source: SanctionsSource,
   parsed: ParsedList,
-): boolean =>
-  parsed.entries.every(
-    (entry) =>
-      entry.source === source &&
-      entry.sourceId.length > 0 &&
-      entry.sourceId.length <= MAX_SOURCE_ENTRY_ID_LENGTH,
-  ) &&
-  new Set(parsed.entries.map((entry) => entry.sourceId)).size ===
-    parsed.entries.length;
+  isAborted: () => boolean,
+): Promise<boolean> => {
+  const pause = createEventLoopSlicer();
+  const sourceIds = new Set<string>();
+  for (const entry of parsed.entries) {
+    await pause();
+    if (
+      isAborted() ||
+      entry.source !== source ||
+      entry.sourceId.length === 0 ||
+      entry.sourceId.length > MAX_SOURCE_ENTRY_ID_LENGTH ||
+      sourceIds.has(entry.sourceId)
+    ) {
+      return false;
+    }
+    sourceIds.add(entry.sourceId);
+  }
+  return true;
+};
 
 const fetchCurrentEdition = async ({
   source,
@@ -717,19 +758,23 @@ const fetchCurrentEdition = async ({
 
   if (
     !downloadMatchesMarker(marker, edition.value) ||
-    !validParsedEntries(source, edition.value.parsed)
+    !(await validParsedEntries(source, edition.value.parsed, isAborted))
   ) {
-    return { status: "failed", code: "parse-failed" };
+    return isAborted()
+      ? { status: "aborted" }
+      : { status: "failed", code: "parse-failed" };
   }
   return { status: "ready", markerKey, edition: edition.value };
 };
 
 export const refreshSanctionsSource = async ({
   db,
+  permit,
   source,
   signal,
   euXmlUrlOverride,
   userAgent,
+  fetchDeadlineMs = SANCTIONS_FETCH_DEADLINE_MS,
   fetchMarker = fetchSanctionsMarker,
   fetchEdition = fetchSanctionsEdition,
 }: RefreshOptions): Promise<SanctionsRefreshOutcome> => {
@@ -782,14 +827,28 @@ export const refreshSanctionsSource = async ({
     return panic("Sanctions active edition reference is broken");
   }
 
-  const current = await fetchCurrentEdition({
+  // The deadline bounds the publisher's part only. Staging rows afterwards
+  // answers to the caller's signal alone and resumes on the next run.
+  const deadline = AbortSignal.timeout(fetchDeadlineMs);
+  const fetched = await fetchCurrentEdition({
     source,
     activeMarkerKey: snapshot.markerKey,
     hasActiveEdition: snapshot.activeEditionId !== null,
-    fetchOptions: { signal, euXmlUrlOverride, userAgent },
+    fetchOptions: {
+      permit,
+      signal: AbortSignal.any([signal, deadline]),
+      euXmlUrlOverride,
+      userAgent,
+    },
     fetchMarker,
     fetchEdition,
   });
+  // A publisher that outlived its deadline failed to deliver; an abort that
+  // came from the caller alone stays an abort.
+  const current: CurrentEditionResult =
+    fetched.status === "aborted" && deadline.aborted
+      ? { status: "failed", code: "fetch-failed" }
+      : fetched;
   switch (current.status) {
     case "aborted":
       return { status: "aborted", source };

@@ -1,0 +1,76 @@
+import contract from "./desktop-dictation-transcription.json";
+
+// The audio limits live in desktop-dictation-transcription.json, which the
+// desktop compiles in, so the API and the desktop read one copy.
+
+// OpenRouter's STT guide documents a 60-second processing deadline (2026-10-29):
+// https://openrouter.ai/docs/guides/overview/multimodal/stt
+// Catalog models do not promise a processing/audio speed ratio. Use a conservative
+// real-time chunk ceiling; this is an audio policy bound, not a throughput guarantee.
+export const MAX_TRANSCRIPTION_AUDIO_SECONDS = contract.maxAudioSeconds;
+// MP4 and WAV timescales can round a chunk boundary by a few milliseconds.
+export const TRANSCRIPTION_DURATION_TOLERANCE_MS = 20;
+export const TRANSCRIPTION_AUDIO_MEDIA_TYPES = [
+  "audio/mp4",
+  "audio/m4a",
+  "audio/x-m4a",
+  "audio/wav",
+  "audio/x-wav",
+] as const;
+
+export const MAX_TRANSCRIPTION_PROVIDER_BODY_BYTES = 25 * 1024 * 1024;
+// The vocabulary limits also live in desktop-dictation-transcription.json,
+// where the desktop reads them for its custom words.
+export const MAX_TRANSCRIPTION_VOCABULARY_TERMS = contract.maxVocabularyTerms;
+/** Lengths are UTF-16 code units, matching JavaScript string validation. */
+export const MAX_TRANSCRIPTION_VOCABULARY_TERM_LENGTH =
+  contract.maxVocabularyTermLength;
+export const MAX_TRANSCRIPTION_MODEL_ID_LENGTH = 128;
+
+/** The optional multipart field (set to `1`) a member client sends with a
+ *  transcription when the place it chose the model showed the models list's
+ *  `outsideRegion` and `retainsData` labels. Only then may the request name
+ *  a model outside the organization's region, or one whose provider keeps
+ *  the audio to a member granted such models. Without it a request gets the
+ *  region's models only. */
+export const TRANSCRIPTION_LABELS_SHOWN_FIELD = "labels" as const;
+
+// A control character or unpaired surrogate takes six bytes in escaped JSON.
+const MAX_JSON_BYTES_PER_CODE_UNIT = 6;
+const MAX_VOCABULARY_JSON_CONTENT_BYTES =
+  MAX_TRANSCRIPTION_VOCABULARY_TERMS *
+    (2 +
+      MAX_TRANSCRIPTION_VOCABULARY_TERM_LENGTH * MAX_JSON_BYTES_PER_CODE_UNIT) +
+  MAX_TRANSCRIPTION_VOCABULARY_TERMS -
+  1;
+
+/** The most audio whose base64, padding included, still fits
+ *  `MAX_TRANSCRIPTION_PROVIDER_BODY_BYTES` beside every bounded provider
+ *  request field at its escaped maximum (Azure's phrase list wraps the
+ *  most): 3 * floor((body - envelope) / 4). transcription.test.ts builds
+ *  that largest request and proves this is the exact maximum. */
+export const MAX_TRANSCRIPTION_AUDIO_BYTES = contract.maxAudioBytes;
+
+// Six form parts: file, model, language, vocabulary JSON, a matter UUID and
+// the labels-shown flag.
+const MULTIPART_PARTS = 6;
+const MULTIPART_BOUNDARY_LENGTH = 70;
+const MULTIPART_PART_HEADER_BYTES = 512;
+const MULTIPART_FRAMING_BYTES =
+  MULTIPART_PARTS *
+    (2 * MULTIPART_BOUNDARY_LENGTH + MULTIPART_PART_HEADER_BYTES + 16) +
+  MULTIPART_BOUNDARY_LENGTH +
+  8;
+const MAX_MULTIPART_METADATA_BYTES =
+  3 * MAX_TRANSCRIPTION_MODEL_ID_LENGTH +
+  2 +
+  36 +
+  2 +
+  MAX_VOCABULARY_JSON_CONTENT_BYTES +
+  1;
+
+/** Framing is bounded independently of the parsed file's byte limit. */
+export const MAX_TRANSCRIPTION_MULTIPART_BYTES =
+  MAX_TRANSCRIPTION_AUDIO_BYTES +
+  MAX_MULTIPART_METADATA_BYTES +
+  MULTIPART_FRAMING_BYTES;

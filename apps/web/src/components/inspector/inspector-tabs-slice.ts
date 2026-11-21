@@ -1,16 +1,25 @@
 import { panic } from "better-result";
 import { current, type Draft } from "immer";
-import { v7 as uuidv7 } from "uuid";
 
 import { forgetDocxDocuments } from "@/components/docx/docx-document-cache";
+import {
+  CASE_DECISION_PLACEMENT,
+  CASE_DECISION_VIEW,
+  caseDecisionTabId,
+  isCaseDecisionViewPayload,
+} from "@/components/inspector/case-decision-view";
 import {
   getInspectorTabGroupId,
   normalizeInspectorGroupAssignments,
 } from "@/components/inspector/inspector-groups.logic";
-import { INSPECTOR_PANE_INTENT } from "@/components/inspector/inspector-store-types";
+import {
+  INSPECTOR_FOCUS_INTENT,
+  INSPECTOR_PANE_INTENT,
+} from "@/components/inspector/inspector-store-types";
 import type {
   ExternalTabId,
   FileTab,
+  InspectorFocusIntent,
   InspectorTab,
   InspectorTabsSet,
   InspectorTabsStore,
@@ -19,15 +28,19 @@ import type {
   SkillResourceTabId,
   TaskTab,
 } from "@/components/inspector/inspector-store-types";
+import { mainDecisionReaderStore } from "@/components/inspector/main-decision-reader";
+import { getInspectorView } from "@/components/inspector/view-registry";
 import type { LegalDocumentChatKey } from "@/features/chat/legal-document-chat-key";
 import {
   adoptLegalDocumentChatThread,
   ensureLegalDocumentChatThread,
 } from "@/features/chat/legal-document-chat-threads";
+import { documentOpenTiming } from "@/lib/analytics/document-open-timing";
 import { normalizeOptionalArray } from "@/lib/arrays";
 import { createChatThreadId } from "@/lib/chat-thread-ref";
 import type { ChatThreadId } from "@/lib/chat-thread-ref";
 import { isEmailFile } from "@/lib/consts";
+import { createUuid } from "@/lib/uuid";
 
 export const buildSkillResourceTabId = ({
   skillName,
@@ -100,6 +113,27 @@ const activateInspectorTab = (
   state.activeId = id;
 };
 
+/**
+ * Brings an opened tab forward as its opener asked: always for `claim`, and
+ * for `ifIdle` only when no open tab is active. Returns whether it did, so
+ * the opener shows the pane only for a tab it brought forward.
+ */
+const focusOpenedTab = (
+  state: Draft<InspectorTabsStore>,
+  id: string,
+  focus: InspectorFocusIntent,
+): boolean => {
+  const idle =
+    state.activeId === null ||
+    !state.tabs.some((tab) => tab.id === state.activeId);
+  if (focus === INSPECTOR_FOCUS_INTENT.ifIdle && !idle) {
+    return false;
+  }
+  activateInspectorTab(state, id);
+  state.activationSeq += 1;
+  return true;
+};
+
 const removeGroupAssignment = (
   state: Draft<InspectorTabsStore>,
   tabId: string,
@@ -123,7 +157,7 @@ const upsertFileTab = (
       (candidate.entityId === tab.entityId || candidate.id === tab.id),
   );
   if (matchIndex === -1) {
-    state.tabs.push({ type: "pdf", renderId: uuidv7(), ...tab });
+    state.tabs.push({ type: "pdf", renderId: createUuid(), ...tab });
     return null;
   }
 
@@ -146,6 +180,11 @@ const upsertFileTab = (
   existing.justificationFieldId = tab.justificationFieldId;
   existing.propertyId = tab.propertyId;
   existing.metadataLane = tab.metadataLane;
+  // A caller that names a facet asks for it even when the file is already
+  // open; one that names none keeps the facet the reader chose.
+  if (tab.facet !== undefined) {
+    existing.facet = tab.facet;
+  }
   if (tab.label) {
     existing.label = tab.label;
   }
@@ -154,12 +193,15 @@ const upsertFileTab = (
     existing.mimeType = tab.mimeType;
   }
   normalizeFileTabFacet(existing);
+  if (previousId !== tab.id || tab.encrypted !== undefined) {
+    existing.encrypted = tab.encrypted;
+  }
   existing.pdfFileId = tab.pdfFileId;
   if (
     renderIdPolicy === FILE_TAB_RENDER_ID_POLICY.always ||
     previousId !== tab.id
   ) {
-    existing.renderId = uuidv7();
+    existing.renderId = createUuid();
   }
   state.tabs = state.tabs.filter(
     (candidate, index) =>
@@ -257,8 +299,38 @@ const openTabs = (
   });
 };
 
+type RequestInspectorLeavesOptions = {
+  tabs: readonly InspectorTab[];
+  proceed: () => void;
+};
+
+const requestInspectorLeaves = ({
+  tabs,
+  proceed,
+}: RequestInspectorLeavesOptions) => {
+  const [tab, ...remaining] = tabs;
+  if (tab === undefined) {
+    proceed();
+    return;
+  }
+  const next = () => requestInspectorLeaves({ tabs: remaining, proceed });
+  const registration =
+    tab.type === "view" ? getInspectorView(tab.viewType) : undefined;
+  if (tab.type === "view" && registration?.beforeLeave) {
+    registration.beforeLeave({
+      tabId: tab.id,
+      payload: tab.payload,
+      nextPayload: null,
+      proceed: next,
+    });
+    return;
+  }
+  next();
+};
+
 export const createInspectorTabsSlice = (
   set: InspectorTabsSet,
+  get: () => InspectorTabsStore,
 ): InspectorTabsStore => ({
   tabs: [],
   groups: [],
@@ -272,7 +344,7 @@ export const createInspectorTabsSlice = (
   reviveSuggestion: null,
 
   createGroup: ({ name, color }) => {
-    const id = `custom:${uuidv7()}`;
+    const id = `custom:${createUuid()}`;
     set((state) => {
       state.groups.push({ id, type: "custom", name, color });
     });
@@ -347,11 +419,17 @@ export const createInspectorTabsSlice = (
       );
     }),
 
-  openFile: (tab) =>
+  openFile: (tab) => {
+    // Only a new tab mounts a new editor; activating an existing one may
+    // reuse a mounted viewer whose layout never reports again.
+    if (!get().tabs.some((existing) => existing.id === tab.id)) {
+      documentOpenTiming.requested(tab.id, "inspector");
+    }
     openTabs(set, {
       targets: [{ type: "pdf", ...tab }],
       activeId: tab.id,
-    }),
+    });
+  },
 
   openFileForEntity: (tab) =>
     set((state) => {
@@ -386,7 +464,7 @@ export const createInspectorTabsSlice = (
   openTabs: (args) => openTabs(set, args),
 
   openPendingTask: ({ workspaceId, label = "" }) => {
-    const pendingTaskId = `pending-task:${uuidv7()}`;
+    const pendingTaskId = `pending-task:${createUuid()}`;
     set((state) => {
       state.tabs.push({
         type: "task",
@@ -493,13 +571,13 @@ export const createInspectorTabsSlice = (
 
   openSkillResourceTab: ({
     skillName,
-    skillDisplayName,
     resourcePath,
     label,
     mimeType,
     content,
     refreshContent = false,
     target = "resource",
+    focus,
     ...source
   }) =>
     set((state) => {
@@ -511,7 +589,6 @@ export const createInspectorTabsSlice = (
         id,
         label,
         skillName,
-        ...(skillDisplayName === undefined ? {} : { skillDisplayName }),
         target,
         resourcePath,
         mimeType,
@@ -528,9 +605,9 @@ export const createInspectorTabsSlice = (
           content: sourceChanged || refreshContent ? content : existing.content,
         };
       }
-      activateInspectorTab(state, id);
-      state.activationSeq += 1;
-      state.minimized = false;
+      if (focusOpenedTab(state, id, focus)) {
+        state.minimized = false;
+      }
     }),
 
   updateSkillResourceTabContent: (tabId, content) =>
@@ -541,7 +618,7 @@ export const createInspectorTabsSlice = (
       }
     }),
 
-  openChat: (args = {}) => {
+  openChat: (args) => {
     const id = resolveChatTabThreadId(args);
     const { pane = INSPECTOR_PANE_INTENT.expand } = args;
     set((state) => {
@@ -555,8 +632,12 @@ export const createInspectorTabsSlice = (
           contextMatterIds: normalizeOptionalArray(args.contextMatterIds),
           activeLegalKey: args.activeLegalKey,
           activeSkill: args.activeSkill,
+          started: args.started,
         });
       } else if (existing.type === "chat") {
+        if (args.started !== undefined) {
+          existing.started = args.started;
+        }
         if (args.label !== undefined) {
           existing.label = args.label;
         }
@@ -573,13 +654,22 @@ export const createInspectorTabsSlice = (
           existing.activeSkill = args.activeSkill;
         }
       }
-      activateInspectorTab(state, id);
-      state.activationSeq += 1;
-      if (pane === INSPECTOR_PANE_INTENT.expand) {
+      if (
+        focusOpenedTab(state, id, args.focus) &&
+        pane === INSPECTOR_PANE_INTENT.expand
+      ) {
         state.minimized = false;
       }
     });
   },
+
+  markChatStarted: (tabId) =>
+    set((state) => {
+      const tab = state.tabs.find((candidate) => candidate.id === tabId);
+      if (tab?.type === "chat" && tab.started !== true) {
+        tab.started = true;
+      }
+    }),
 
   setChatContext: (tabId, matterIds) =>
     set((state) => {
@@ -596,6 +686,8 @@ export const createInspectorTabsSlice = (
       if (tab?.type === "chat") {
         rotatedLegalKey = tab.activeLegalKey;
         tab.id = newId;
+        // Another conversation: whether it has begun is for it to say.
+        tab.started = undefined;
         if (Object.hasOwn(state.groupAssignments, oldId)) {
           state.groupAssignments[newId] = state.groupAssignments[oldId] ?? null;
           removeGroupAssignment(state, oldId);
@@ -618,48 +710,106 @@ export const createInspectorTabsSlice = (
 
   openView: ({
     type,
-    id,
+    id: requestedId,
     label,
     payload,
     ownerRouteId,
+    decisionPlacement = CASE_DECISION_PLACEMENT.mainIfOpen,
     pane = INSPECTOR_PANE_INTENT.expand,
-  }) =>
-    set((state) => {
-      const existing = state.tabs.find((tab) => tab.id === id);
-      if (!existing) {
-        state.tabs.push({
-          type: "view",
-          viewType: type,
-          id,
-          label,
-          payload,
-          ownerRouteId,
-        });
-      } else if (isGenericInspectorTab(existing)) {
-        existing.viewType = type;
-        existing.label = label;
-        existing.payload = payload;
-        existing.ownerRouteId = ownerRouteId;
-      }
-      activateInspectorTab(state, id);
-      state.activationSeq += 1;
-      if (pane === INSPECTOR_PANE_INTENT.expand) {
-        state.minimized = false;
-      }
-      if (state.reviveSuggestion?.id === id) {
-        state.reviveSuggestion = null;
-      }
-    }),
-
-  updateView: ({ id, label, payload }) =>
-    set((state) => {
-      const existing = state.tabs.find((tab) => tab.id === id);
-      if (!existing || !isGenericInspectorTab(existing)) {
+  }) => {
+    const decision =
+      type === CASE_DECISION_VIEW && isCaseDecisionViewPayload(payload)
+        ? payload
+        : null;
+    const reader = mainDecisionReaderStore.getState().reader;
+    if (
+      decisionPlacement === CASE_DECISION_PLACEMENT.mainIfOpen &&
+      decision !== null &&
+      reader?.decisionId === decision.decisionId
+    ) {
+      reader.openPassage(decision);
+      return;
+    }
+    const id =
+      decision === null ? requestedId : caseDecisionTabId(decision.decisionId);
+    const proceed = () => {
+      if (get().tabs.find((tab) => tab.id === id) !== existing) {
         return;
       }
-      existing.label = label;
-      existing.payload = payload;
-    }),
+      set((state) => {
+        const existing = state.tabs.find((tab) => tab.id === id);
+        if (!existing) {
+          state.tabs.push({
+            type: "view",
+            viewType: type,
+            id,
+            label,
+            payload,
+            ownerRouteId,
+          });
+        } else if (isGenericInspectorTab(existing)) {
+          existing.viewType = type;
+          existing.label = label;
+          existing.payload = payload;
+          existing.ownerRouteId = ownerRouteId;
+        }
+        activateInspectorTab(state, id);
+        state.activationSeq += 1;
+        if (pane === INSPECTOR_PANE_INTENT.expand) {
+          state.minimized = false;
+        }
+        if (state.reviveSuggestion?.id === id) {
+          state.reviveSuggestion = null;
+        }
+      });
+    };
+    const existing = get().tabs.find((tab) => tab.id === id);
+    const guard =
+      existing?.type === "view"
+        ? getInspectorView(existing.viewType)?.beforeLeave
+        : undefined;
+    if (existing?.type === "view" && guard) {
+      guard({
+        tabId: id,
+        payload: existing.payload,
+        nextPayload: payload,
+        proceed,
+      });
+      return;
+    }
+    proceed();
+  },
+
+  updateView: ({ id, label, payload }) => {
+    const proceed = () => {
+      if (get().tabs.find((tab) => tab.id === id) !== existing) {
+        return;
+      }
+      set((state) => {
+        const existing = state.tabs.find((tab) => tab.id === id);
+        if (!existing || !isGenericInspectorTab(existing)) {
+          return;
+        }
+        existing.label = label;
+        existing.payload = payload;
+      });
+    };
+    const existing = get().tabs.find((tab) => tab.id === id);
+    const guard =
+      existing?.type === "view"
+        ? getInspectorView(existing.viewType)?.beforeLeave
+        : undefined;
+    if (existing?.type === "view" && guard) {
+      guard({
+        tabId: id,
+        payload: existing.payload,
+        nextPayload: payload,
+        proceed,
+      });
+      return;
+    }
+    proceed();
+  },
 
   flashTab: (tabId) =>
     set((state) => {
@@ -699,55 +849,103 @@ export const createInspectorTabsSlice = (
       }
     }),
 
-  closeTab: (id, options) =>
-    set((state) => {
-      const index = state.tabs.findIndex((tab) => tab.id === id);
-      if (index === -1) {
-        if (state.reviveSuggestion?.id === id) {
+  closeTab: (id, options) => {
+    const existing = get().tabs.find((tab) => tab.id === id);
+    const registration =
+      existing?.type === "view"
+        ? getInspectorView(existing.viewType)
+        : undefined;
+    const proceed = () => {
+      if (get().tabs.find((tab) => tab.id === id) !== existing) {
+        return;
+      }
+      registration?.onClose?.(id);
+      set((state) => {
+        const index = state.tabs.findIndex((tab) => tab.id === id);
+        if (index === -1) {
+          if (state.reviveSuggestion?.id === id) {
+            state.reviveSuggestion = null;
+          }
+          return;
+        }
+        const closing = state.tabs[index];
+        if (
+          closing !== undefined &&
+          options?.suggestRevive === true &&
+          isMainViewBoundTab(closing)
+        ) {
+          state.reviveSuggestion = current(closing);
+        } else if (state.reviveSuggestion?.id === id) {
           state.reviveSuggestion = null;
         }
-        return;
-      }
-      const closing = state.tabs[index];
-      if (
-        closing !== undefined &&
-        options?.suggestRevive === true &&
-        isMainViewBoundTab(closing)
-      ) {
-        state.reviveSuggestion = current(closing);
-      } else if (state.reviveSuggestion?.id === id) {
-        state.reviveSuggestion = null;
-      }
-      state.tabs.splice(index, 1);
-      removeGroupAssignment(state, id);
-      if (state.activeId === id) {
-        const next = state.tabs[Math.min(index, state.tabs.length - 1)];
-        if (next === undefined) {
-          state.activeId = null;
-        } else {
-          activateInspectorTab(state, next.id);
+        state.tabs.splice(index, 1);
+        removeGroupAssignment(state, id);
+        if (options?.movedToMain === true) {
+          state.minimized = true;
         }
-      }
-    }),
+        if (state.activeId === id) {
+          const next = state.tabs[Math.min(index, state.tabs.length - 1)];
+          if (next === undefined) {
+            state.activeId = null;
+          } else {
+            activateInspectorTab(state, next.id);
+          }
+        }
+      });
+    };
+    if (existing?.type === "view" && registration?.beforeLeave) {
+      registration.beforeLeave({
+        tabId: id,
+        payload: existing.payload,
+        nextPayload: null,
+        proceed,
+      });
+      return;
+    }
+    proceed();
+  },
 
-  closeOthers: (id) =>
-    set((state) => {
-      const target = state.tabs.find((tab) => tab.id === id);
-      if (!target) {
-        return;
-      }
-      const closingBound = state.tabs.find(
-        (tab) => tab.id !== id && isMainViewBoundTab(tab),
-      );
-      if (closingBound !== undefined) {
-        state.reviveSuggestion = current(closingBound);
-      }
-      state.tabs = [target];
-      state.groupAssignments = Object.hasOwn(state.groupAssignments, id)
-        ? { [id]: state.groupAssignments[id] ?? null }
-        : {};
-      activateInspectorTab(state, id);
-    }),
+  closeOthers: (id) => {
+    const closingTabs = get().tabs.filter((tab) => tab.id !== id);
+    requestInspectorLeaves({
+      tabs: closingTabs,
+      proceed: () => {
+        if (!get().tabs.some((tab) => tab.id === id)) {
+          return;
+        }
+        const currentClosingTabs = get().tabs.filter((tab) => tab.id !== id);
+        if (
+          currentClosingTabs.length !== closingTabs.length ||
+          currentClosingTabs.some((tab, index) => tab !== closingTabs[index])
+        ) {
+          get().closeOthers(id);
+          return;
+        }
+        for (const tab of closingTabs) {
+          if (tab.type === "view") {
+            getInspectorView(tab.viewType)?.onClose?.(tab.id);
+          }
+        }
+        set((state) => {
+          const target = state.tabs.find((tab) => tab.id === id);
+          if (!target) {
+            return;
+          }
+          const closingBound = state.tabs.find(
+            (tab) => tab.id !== id && isMainViewBoundTab(tab),
+          );
+          if (closingBound !== undefined) {
+            state.reviveSuggestion = current(closingBound);
+          }
+          state.tabs = [target];
+          state.groupAssignments = Object.hasOwn(state.groupAssignments, id)
+            ? { [id]: state.groupAssignments[id] ?? null }
+            : {};
+          activateInspectorTab(state, id);
+        });
+      },
+    });
+  },
 
   reviveSuggestedTab: () =>
     set((state) => {
@@ -778,16 +976,36 @@ export const createInspectorTabsSlice = (
       state.activationSeq += 1;
     }),
 
-  closeAll: () =>
-    set((state) => {
-      const closingBound = state.tabs.find(isMainViewBoundTab);
-      if (closingBound !== undefined) {
-        state.reviveSuggestion = current(closingBound);
-      }
-      state.tabs = [];
-      state.groupAssignments = {};
-      state.activeId = null;
-    }),
+  closeAll: () => {
+    const closingTabs = get().tabs.slice();
+    requestInspectorLeaves({
+      tabs: closingTabs,
+      proceed: () => {
+        const currentClosingTabs = get().tabs;
+        if (
+          currentClosingTabs.length !== closingTabs.length ||
+          currentClosingTabs.some((tab, index) => tab !== closingTabs[index])
+        ) {
+          get().closeAll();
+          return;
+        }
+        for (const tab of closingTabs) {
+          if (tab.type === "view") {
+            getInspectorView(tab.viewType)?.onClose?.(tab.id);
+          }
+        }
+        set((state) => {
+          const closingBound = state.tabs.find(isMainViewBoundTab);
+          if (closingBound !== undefined) {
+            state.reviveSuggestion = current(closingBound);
+          }
+          state.tabs = [];
+          state.groupAssignments = {};
+          state.activeId = null;
+        });
+      },
+    });
+  },
 
   clearTaskNewFlag: (taskId) =>
     set((state) => {
@@ -818,7 +1036,7 @@ export const createInspectorTabsSlice = (
         removeGroupAssignment(state, oldFieldId);
       }
       if (idChanged) {
-        tab.renderId = uuidv7();
+        tab.renderId = createUuid();
         // A new version supersedes the document behind both ids: the old field
         // will never be read again, and the new one must not be served the
         // bytes a previous tab left under that id.
@@ -838,6 +1056,9 @@ export const createInspectorTabsSlice = (
       }
       if (next.mimeType !== undefined) {
         tab.mimeType = next.mimeType;
+      }
+      if (idChanged || next.encrypted !== undefined) {
+        tab.encrypted = next.encrypted;
       }
       if (next.pdfFileId !== undefined) {
         tab.pdfFileId = next.pdfFileId;

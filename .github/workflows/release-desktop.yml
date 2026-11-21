@@ -1,8 +1,16 @@
 name: Release Desktop App
+# The desktop release canary finds a tag's in-flight run by this name. A run
+# started by Release Artifacts borrows that run's name, which carries the tag.
+run-name: Desktop ${{ inputs.release_ref && format('Release Artifacts {0}', inputs.release_ref) || github.event.workflow_run.display_title }}
+
+# release-chain-alert
+defaults:
+  run:
+    shell: bash
 
 # Build, sign, and publish the Tauri desktop app for each release tag.
-# Runs after release.yml succeeds so the GitHub Release object already
-# exists; this workflow only adds desktop installers + the updater
+# Runs after release.yml's production promotion succeeds, including a run
+# with failed publication jobs; adds desktop installers + the updater
 # manifest to it. Skipped automatically (for STABLE tags as well as
 # prereleases) when nothing the desktop actually ships changed since
 # the previous same-channel release, so backend-only releases don't
@@ -14,8 +22,8 @@ name: Release Desktop App
 # /releases/latest/download deep links never 404 and in-app updaters see no
 # spurious update.
 #
-# Builds Windows + macOS in parallel. Windows uses Azure Trusted
-# Signing; macOS uses a Developer ID Application cert + App Store
+# Builds Windows (x64 and ARM64) + macOS in parallel. Windows uses Azure
+# Trusted Signing; macOS uses a Developer ID Application cert + App Store
 # Connect API key for notarization.
 
 on:
@@ -34,34 +42,26 @@ on:
 permissions: {}
 
 concurrency:
-  group: release-desktop-${{ github.event.workflow_run.head_branch || inputs.release_ref }}
+  group: release-desktop-${{ inputs.release_ref && format('Release Artifacts {0}', inputs.release_ref) || github.event.workflow_run.display_title }}
   cancel-in-progress: false
 
 jobs:
   resolve:
-    # Only a successful Release Artifacts run may trigger the desktop
-    # publication path. Release Artifacts publishes the GitHub Release only
-    # after production promotion is verified, so a failed run leaves a draft;
-    # accepting `failure` here would attach installers to that draft and
-    # reach the CDN publication steps below. Manual dispatch remains
-    # available for recovery, but its stable path is gated by the post-build
-    # production verification job.
-    #
-    # Skip `cancelled` (a newer release.yml run replaced it; that newer run
-    # will trigger us instead) and `skipped` (release.yml never actually ran,
-    # so there's nothing for us to release).
-    #
+    # A successful production promotion authorizes this ref even when another
+    # publication job failed. The resolve step verifies the upstream job receipt.
     # A workflow_run trigger is accepted only from this repository's own
-    # release workflow, started by a tag push or a manual dispatch. Signing
-    # builds restore no caches.
+    # release workflow, started by a tag push or a manual dispatch. The tag
+    # comes from that run's release manifest, never its head branch (a
+    # dispatched run reports main). Signing builds restore no caches. A
+    # release run whose jobs were all skipped carries no receipt and is ignored.
     if: >-
-      github.event_name == 'workflow_dispatch'
-      || (github.event.workflow_run.conclusion == 'success'
-      && startsWith(github.event.workflow_run.head_branch, 'v')
-      && github.event.workflow_run.head_repository.full_name == github.repository
+      (github.event_name == 'workflow_dispatch'
+      && github.ref == 'refs/heads/main')
+      || (github.event.workflow_run.head_repository.full_name == github.repository
       && github.event.workflow_run.path == '.github/workflows/release.yml'
-      && contains(fromJSON('["push", "workflow_dispatch"]'), github.event.workflow_run.event))
-    runs-on: ubuntu-latest
+      && contains(fromJSON('["push", "workflow_dispatch"]'), github.event.workflow_run.event)
+      && github.event.workflow_run.conclusion != 'skipped')
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
       actions: read # read upstream workflow_run artifacts
@@ -82,43 +82,50 @@ jobs:
       # build never polls or overwrites the production manifest.
       channel: ${{ steps.ref.outputs.channel }}
     steps:
+      - name: Checkout GitHub API tooling
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.workflow_sha }}
+          path: .gh-retry
+          persist-credentials: false
+          sparse-checkout: scripts/gh-retry.sh
+          sparse-checkout-cone-mode: false
+
+      - name: Preserve GitHub API tooling across source checkouts
+        run: |
+          cp "$GITHUB_WORKSPACE/.gh-retry/scripts/gh-retry.sh" "$RUNNER_TEMP/gh-retry.sh"
+          echo "GH_RETRY_SCRIPT=$RUNNER_TEMP/gh-retry.sh" >> "$GITHUB_ENV"
+
       # Lightweight first-pass checkout of the workflow's own ref
       # (not the release tag yet — that resolves below) so the
       # Resolve step can shell out to scripts/release-channel.sh.
-      # The pinned-SHA checkout further down then re-checks out
-      # the release commit for everything else.
+      # It lives in its own directory: actions/checkout reusing a
+      # sparse repository restores the sparse patterns after its
+      # `sparse-checkout disable`, so the release checkout below
+      # would stay sparse. That checkout clears the workspace and
+      # clones the release commit fresh for everything else.
       - name: Checkout workflow scripts
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          path: .workflow-scripts
           fetch-depth: 0
           sparse-checkout: scripts
           sparse-checkout-cone-mode: false
           persist-credentials: false
 
       - name: Resolve release ref
+        timeout-minutes: 5
         id: ref
+        working-directory: .workflow-scripts
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
-          HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
           RELEASE_INPUT: ${{ inputs.release_ref }}
-          UPSTREAM_EVENT: ${{ github.event.workflow_run.event }}
           UPSTREAM_RUN_ID: ${{ github.event.workflow_run.id }}
         run: |
-          if [[ -n "$RELEASE_INPUT" ]]; then
-            REF="$RELEASE_INPUT"
-          elif [[ "$HEAD_BRANCH" == v* ]]; then
-            REF="$HEAD_BRANCH"
-          elif [[ "$UPSTREAM_EVENT" == "workflow_dispatch" ]]; then
-            manifest_artifact=$(
-              gh api "repos/${GITHUB_REPOSITORY}/actions/runs/$UPSTREAM_RUN_ID/artifacts" \
-                --jq '.artifacts[].name | select(startswith("release-manifest-v"))' \
-                | head -n 1
-            )
-            REF="${manifest_artifact#release-manifest-}"
-          else
-            REF="$HEAD_BRANCH"
-          fi
+          cp scripts/check-release-publication-source.sh "$RUNNER_TEMP/check-release-publication-source.sh"
+          REF=$(bash scripts/desktop-release-ref.sh "$RELEASE_INPUT" "$UPSTREAM_RUN_ID")
 
           # Pattern must stay aligned with scripts/release-channel.sh
           # and .github/workflows/release.yml — all three gate on the
@@ -137,7 +144,7 @@ jobs:
           # signing secrets — checking out attacker-controlled
           # branch code under a release-tag name would mint
           # officially-signed installers.
-          if gh api "repos/${GITHUB_REPOSITORY}/branches/${REF}" --silent 2>/dev/null; then
+          if bash "$GH_RETRY_SCRIPT" api "repos/${GITHUB_REPOSITORY}/branches/${REF}" --silent; then
             echo "::error::A branch named '$REF' exists alongside the tag; refusing to build to avoid ref ambiguity"
             exit 1
           fi
@@ -146,7 +153,7 @@ jobs:
           # downstream checkout is pinned to this SHA so the build
           # cannot be swapped out by a same-named branch later in
           # the workflow.
-          tag_ref_json=$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${REF}" 2>/dev/null) || {
+          tag_ref_json=$(bash "$GH_RETRY_SCRIPT" api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${REF}") || {
             echo "::error::Tag $REF does not exist in ${GITHUB_REPOSITORY}"
             exit 1
           }
@@ -154,7 +161,7 @@ jobs:
           tag_object_sha=$(echo "$tag_ref_json" | jq -r '.object.sha')
           if [[ "$tag_object_type" == "tag" ]]; then
             # Annotated tag — dereference to the underlying commit.
-            RELEASE_SHA=$(gh api "repos/${GITHUB_REPOSITORY}/git/tags/${tag_object_sha}" --jq '.object.sha')
+            RELEASE_SHA=$(bash "$GH_RETRY_SCRIPT" api "repos/${GITHUB_REPOSITORY}/git/tags/${tag_object_sha}" --jq '.object.sha')
           else
             RELEASE_SHA="$tag_object_sha"
           fi
@@ -163,13 +170,30 @@ jobs:
             exit 1
           fi
 
-          git fetch --no-tags origin "refs/tags/${REF}:refs/tags/${REF}" main:refs/remotes/origin/main
-          if ! git merge-base --is-ancestor "$RELEASE_SHA" origin/main; then
-            echo "::error::Release tag $REF is not reachable from protected main"
-            exit 1
+          bash scripts/retry.sh git fetch --no-tags origin "refs/tags/${REF}:refs/tags/${REF}"
+          if [[ -n "$UPSTREAM_RUN_ID" ]]; then
+            receipt_status=0
+            bash "$RUNNER_TEMP/check-release-publication-source.sh" "$UPSTREAM_RUN_ID" "$REF" "$RELEASE_SHA" || receipt_status=$?
+            case "$receipt_status" in
+              0) ;;
+              1)
+                echo "::notice::No production promotion receipt for $REF; no desktop publication."
+                exit 0
+                ;;
+              *)
+                # An unreadable receipt must not pass as a run with nothing to publish.
+                echo "::error::The production promotion receipt for $REF could not be read"
+                exit 1
+                ;;
+            esac
+          else
+            [[ "$REF" != *-* ]] || { echo 'Desktop publication requires a stable promoted ref' >&2; exit 1; }
+            # Manual recovery must target the commit production currently serves.
+            served=$(bash scripts/retry.sh curl --fail --silent --show-error https://api.stll.app/ready | jq -er '.commit')
+            [[ "$served" == "$RELEASE_SHA" ]] || { echo 'Production is not serving the requested release' >&2; exit 1; }
           fi
 
-          if ! gh release view "$REF" >/dev/null 2>&1; then
+          if ! bash "$GH_RETRY_SCRIPT" release view "$REF" >/dev/null; then
             echo "::error::GitHub Release $REF does not exist; refusing to run signing jobs"
             exit 1
           fi
@@ -188,6 +212,7 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: Checkout
+        if: steps.ref.outputs.value != ''
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # Pin to the resolved commit SHA to eliminate tag/branch
@@ -198,21 +223,15 @@ jobs:
           persist-credentials: false
 
       - name: Decide whether desktop changed since previous tag
+        if: steps.ref.outputs.value != ''
         id: diff
         env:
           CURRENT_TAG: ${{ steps.ref.outputs.value }}
           EVENT_NAME: ${{ github.event_name }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Manual dispatch is the rebuild escape hatch (e.g. re-running
-          # a release whose signing job failed), so it never skips.
-          # Mirrors ci.yml's dispatch-forces-checks behaviour.
           if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
-            echo "Manual dispatch; forcing a desktop build."
-            {
-              echo "should_build=true"
-              echo "previous_tag="
-            } >> "$GITHUB_OUTPUT"
+            echo "should_build=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
@@ -225,7 +244,7 @@ jobs:
   build:
     needs: resolve
     if: ${{ needs.resolve.outputs.should_build == 'true' }}
-    name: Build ${{ matrix.os }}
+    name: Build ${{ matrix.target }}
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 60
     permissions:
@@ -241,8 +260,18 @@ jobs:
             runner: windows-latest
             target: x86_64-pc-windows-msvc
             rust_targets: x86_64-pc-windows-msvc
+            install_timeout_minutes: 30
+          # Cross-compiled on the x64 runner: the frontend build and signing
+          # tools stay x64 and only the Rust binary targets ARM64. Build
+          # scripts run on x64, so its crates are fetched too.
+          - os: windows
+            runner: windows-latest
+            target: aarch64-pc-windows-msvc
+            rust_targets: aarch64-pc-windows-msvc,x86_64-pc-windows-msvc
+            install_timeout_minutes: 30
           - os: macos
-            runner: macos-14
+            runner: macos-15
+            install_timeout_minutes: 5
             # Tauri builds a universal binary by lipoing the two
             # native-arch outputs together; rustup needs the two real
             # archs as targets, not the synthetic "universal" name.
@@ -250,6 +279,30 @@ jobs:
             rust_targets: aarch64-apple-darwin,x86_64-apple-darwin
 
     steps:
+      - name: Checkout release workflow tooling
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.workflow_sha }}
+          path: .gh-retry
+          persist-credentials: false
+          sparse-checkout: |
+            scripts/gh-retry.sh
+            scripts/retry.sh
+            scripts/desktop-release-step.ts
+            .github/actions/desktop-windows-build/
+          sparse-checkout-cone-mode: false
+
+      - name: Preserve release workflow tooling across source checkouts
+        run: |
+          cp "$GITHUB_WORKSPACE/.gh-retry/scripts/gh-retry.sh" "$RUNNER_TEMP/gh-retry.sh"
+          echo "GH_RETRY_SCRIPT=$RUNNER_TEMP/gh-retry.sh" >> "$GITHUB_ENV"
+          mkdir -p "$RUNNER_TEMP/release-tooling/scripts" "$RUNNER_TEMP/release-tooling/actions"
+          cp "$GITHUB_WORKSPACE/.gh-retry/scripts/desktop-release-step.ts" "$RUNNER_TEMP/release-tooling/scripts/desktop-release-step.ts"
+          cp "$GITHUB_WORKSPACE/.gh-retry/scripts/retry.sh" "$RUNNER_TEMP/release-tooling/scripts/retry.sh"
+          cp -R "$GITHUB_WORKSPACE/.gh-retry/.github/actions/desktop-windows-build" "$RUNNER_TEMP/release-tooling/actions/desktop-windows-build"
+          echo "RELEASE_TOOLING=$RUNNER_TEMP/release-tooling" >> "$GITHUB_ENV"
+
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -258,6 +311,12 @@ jobs:
           ref: ${{ needs.resolve.outputs.release_sha }}
           persist-credentials: false
 
+      - name: Restore desktop build action
+        run: |
+          rm -rf .github/actions/desktop-windows-build
+          mkdir -p .github/actions
+          cp -R "$RELEASE_TOOLING/actions/desktop-windows-build" .github/actions/desktop-windows-build
+
       - name: Setup Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
@@ -265,7 +324,14 @@ jobs:
           no-cache: true
 
       - name: Install dependencies
-        run: bun ci --ignore-scripts
+        # Sized per runner OS like every fetching step: three attempts at the
+        # measured worst install plus backoff. An uncached install takes about
+        # 30 s on macOS but up to 9 min on Windows, where a shared 5 min
+        # deadline ends the first attempt before retry.sh can start another.
+        timeout-minutes: ${{ matrix.install_timeout_minutes }}
+        # The pinned release checkout may predate retry.sh; the workflow
+        # revision's copy is kept with the other release tooling.
+        run: bash "$RELEASE_TOOLING/scripts/retry.sh" bun ci --ignore-scripts
         env:
           # Signing-key secrets are loaded into later steps in this job.
           # Keep NPM_TOKEN out of the install-time environment so a
@@ -276,51 +342,33 @@ jobs:
           NPM_TOKEN: ""
 
       - name: Setup Rust
-        uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
+        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
         with:
-          toolchain: stable
+          toolchain: 1.100.0
           targets: ${{ matrix.rust_targets }}
 
-      - name: Stamp release version into tauri.conf.json + Cargo.toml
-        shell: bash
+      # The locked crates for every target download once, retried as a unit;
+      # the builds below compile with CARGO_NET_OFFLINE and never reach the
+      # registry themselves.
+      - name: Fetch Rust dependencies
+        timeout-minutes: 10
+        env:
+          RUST_TARGETS: ${{ matrix.rust_targets }}
+        run: |
+          targets=()
+          IFS=, read -ra names <<<"$RUST_TARGETS"
+          for name in "${names[@]}"; do
+            targets+=(--target "$name")
+          done
+          bash "$RELEASE_TOOLING/scripts/retry.sh" cargo fetch --manifest-path apps/desktop/src-tauri/Cargo.toml --locked "${targets[@]}"
+
+      # The updater endpoint is baked into the binary per channel so prerelease
+      # installations never poll or overwrite the production update feed.
+      - name: Stamp desktop release metadata
         env:
           VERSION: ${{ needs.resolve.outputs.app_version }}
-        run: |
-          # tauri.conf.json: replace `"version": "..."` on a single line.
-          node -e "
-            const fs = require('fs');
-            const path = 'apps/desktop/src-tauri/tauri.conf.json';
-            const conf = JSON.parse(fs.readFileSync(path, 'utf8'));
-            conf.version = process.env.VERSION;
-            fs.writeFileSync(path, JSON.stringify(conf, null, 2) + '\n');
-          "
-          # Cargo.toml: replace the package version line in-place.
-          node -e "
-            const fs = require('fs');
-            const path = 'apps/desktop/src-tauri/Cargo.toml';
-            const toml = fs.readFileSync(path, 'utf8');
-            const out = toml.replace(/^version = \"[^\"]+\"/m, 'version = \"' + process.env.VERSION + '\"');
-            fs.writeFileSync(path, out);
-          "
-
-      # The updater endpoint is baked into the binary at build time.
-      # Without per-channel pinning, every build (stable + rc + beta)
-      # would poll the same endpoint, defeating the channel split on
-      # the publish side. Stamp the channel-specific URL into the
-      # config so an rc-built install only ever sees rc updates.
-      - name: Pin updater endpoint to release channel
-        shell: bash
-        env:
           CHANNEL: ${{ needs.resolve.outputs.channel }}
-        run: |
-          channel_dir="${CHANNEL:-prod}"
-          endpoint="https://downloads.stll.app/desktop/$channel_dir/latest.json"
-          conf=apps/desktop/src-tauri/tauri.conf.json
-          jq --arg e "$endpoint" \
-            '.plugins.updater.endpoints = [$e]' \
-            "$conf" > "$conf.tmp"
-          mv "$conf.tmp" "$conf"
-          echo "Updater endpoint set to: $endpoint"
+        run: bun "$RELEASE_TOOLING/scripts/desktop-release-step.ts" stamp
 
       # ─── Windows: Azure Trusted Signing ────────────────────
       # trusted-signing-cli is invoked by Tauri's bundler via
@@ -332,169 +380,29 @@ jobs:
       # baptiste0928/cargo-install caches ~/.cargo/bin/<binary>
       # keyed on tool + version + runner image, so subsequent runs
       # short-circuit the ~5 min source compile.
-      - name: Install trusted-signing-cli (Windows only)
+      - name: Build and sign Windows artifacts
         if: matrix.os == 'windows'
-        uses: baptiste0928/cargo-install@8195d4f734a149db85385bb4102b42efcd373759 # v3.5.0
+        uses: ./.github/actions/desktop-windows-build
         with:
-          crate: trusted-signing-cli
-          version: "0.10.0"
-          locked: true
-
-      # windows-latest currently resolves to windows-2025, which
-      # ships only newer Windows SDKs. trusted-signing-cli falls
-      # back to a hard-coded SDK path that no longer exists on the
-      # image, exiting silently before any signing happens. Resolve
-      # signtool.exe at runtime and pass SIGNTOOL_PATH to the build.
-      # Per tauri-apps/tauri#13991.
-      - name: Locate signtool.exe (Windows only)
-        id: signtool
-        if: matrix.os == 'windows'
-        shell: pwsh
-        run: |
-          $st = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin\10.*\x64\signtool.exe" |
-                Sort-Object Name -Descending |
-                Select-Object -First 1
-          if (-not $st) { throw "signtool.exe not found under Windows Kits 10 bin" }
-
-          $path = $st.FullName
-          $pattern = '^C:\\Program Files \(x86\)\\Windows Kits\\10\\bin\\10\.\d+\.\d+\.\d+\\x64\\signtool\.exe$'
-          if ($path -notmatch $pattern) { throw "Unexpected signtool.exe path: $path" }
-          if ($path.Contains("`r") -or $path.Contains("`n")) { throw "Unexpected newline in signtool.exe path" }
-
-          Write-Host "Using $path"
-          "path=$path" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
-
-      # Tauri spawns bundle.windows.signCommand directly via
-      # Command::new (no shell), so %VAR%-style env interpolation
-      # isn't applied — placeholders arrive at trusted-signing-cli
-      # as literal strings and the auth call fails. Substitute the
-      # values at build time so the spawned process gets the real
-      # endpoint/account/profile.
-      #
-      # Shape mirrors Yaak's proven Trusted Signing config: single-
-      # token args only, %1 placeholder, and no `-d` description.
-      # trusted-signing-cli doesn't require -d; including a multi-
-      # word value invites shell-quoting failures because Tauri
-      # parses signCommand with shlex::split and forwards each
-      # token verbatim — embedded \" survives literally and signtool
-      # then treats the second word as a separate file path.
-      - name: Inline Azure values into bundle.windows.signCommand
-        if: matrix.os == 'windows'
-        shell: bash
-        env:
-          AZURE_ENDPOINT: ${{ secrets.AZURE_ENDPOINT }}
-          AZURE_CODE_SIGNING_ACCOUNT: ${{ secrets.AZURE_CODE_SIGNING_ACCOUNT }}
-          AZURE_CERT_PROFILE: ${{ secrets.AZURE_CERT_PROFILE }}
-        run: |
-          conf=apps/desktop/src-tauri/tauri.conf.json
-          cmd="trusted-signing-cli -e $AZURE_ENDPOINT -a $AZURE_CODE_SIGNING_ACCOUNT -c $AZURE_CERT_PROFILE %1"
-          jq --arg c "$cmd" '.bundle.windows.signCommand = $c' "$conf" > "$conf.tmp"
-          mv "$conf.tmp" "$conf"
-
-      - name: Build (Windows)
-        if: matrix.os == 'windows'
-        working-directory: apps/desktop
+          dry-run: "false"
+          target: ${{ matrix.target }}
+          release-sha: ${{ needs.resolve.outputs.release_sha }}
+          script-path: ${{ env.RELEASE_TOOLING }}/scripts/desktop-release-step.ts
+          azure-endpoint: ${{ secrets.AZURE_ENDPOINT }}
+          azure-account: ${{ secrets.AZURE_CODE_SIGNING_ACCOUNT }}
+          azure-profile: ${{ secrets.AZURE_CERT_PROFILE }}
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-          # OAuth triple consumed by trusted-signing-cli (invoked
-          # via tauri.conf.json bundle.windows.signCommand).
           AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
           AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
           AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
-          AZURE_ENDPOINT: ${{ secrets.AZURE_ENDPOINT }}
-          AZURE_CODE_SIGNING_ACCOUNT: ${{ secrets.AZURE_CODE_SIGNING_ACCOUNT }}
-          AZURE_CERT_PROFILE: ${{ secrets.AZURE_CERT_PROFILE }}
-          SIGNTOOL_PATH: ${{ steps.signtool.outputs.path }}
-          # SPA origins the shipped distribution build trusts at runtime.
-          # Read at compile time by config.rs via option_env!(); builds
-          # without this variable default to loopback-only.
-          STELLA_DESKTOP_DEFAULT_ORIGINS: "https://my.stll.app,https://app.stll.app"
-          # Public browser-ingestion configuration, compiled into the desktop
-          # adapter. The adapter accepts fixed error codes only and creates no
-          # person profile, persistence, autocapture, or session recording.
-          VITE_POSTHOG_HOST: "https://eu.i.posthog.com"
           VITE_POSTHOG_KEY: ${{ secrets.VITE_POSTHOG_KEY }}
-          STELLA_COMMIT_SHA: ${{ needs.resolve.outputs.release_sha }}
-        # `--verbose --verbose` surfaces the per-line stdout/stderr
-        # Tauri captures from signCommand but otherwise hides behind
-        # log::debug. Without it, a trusted-signing-cli failure
-        # bubbles up as the opaque "failed to run trusted-signing-cli"
-        # with no SignTool error attached. Per the Tauri maintainer
-        # in tauri-apps/tauri#11778 + tauri-apps/tauri#13991.
-        # NSIS only (no MSI). MSI uses a 4-part 16-bit Windows
-        # installer version that can't represent semver prerelease
-        # suffixes. NSIS has no such constraint and is what most
-        # OSS Tauri apps ship (Yaak, etc.).
-        #
-        # Do NOT add `updater` to --bundles. In Tauri 2 the updater
-        # archives are emitted as a side effect of building the
-        # platform installer when bundle.createUpdaterArtifacts is
-        # true; passing the (no-longer-existing) `updater` bundle
-        # name explicitly silently bypasses that side effect, so
-        # only the .exe lands and no .nsis.zip is created.
-        run: bun run build -- --target ${{ matrix.target }} --bundles nsis --verbose --verbose
-
-      # GitHub-hosted Windows runners can start without the default PSGallery
-      # registration. The Azure action installs ArtifactSigning from PSGallery
-      # and otherwise fails before authentication or signing begins.
-      - name: Ensure PSGallery is registered (Windows only)
-        if: matrix.os == 'windows'
-        shell: pwsh
-        run: |
-          $expectedSourceLocation = "https://www.powershellgallery.com/api/v2"
-          $repository = Get-PSRepository -Name PSGallery -ErrorAction SilentlyContinue
-
-          if (-not $repository) {
-            Register-PSRepository -Default
-            $repository = Get-PSRepository -Name PSGallery -ErrorAction Stop
-          }
-
-          if ($repository.SourceLocation.TrimEnd("/") -ne $expectedSourceLocation) {
-            throw "PSGallery has an unexpected source location: $($repository.SourceLocation)"
-          }
-
-      - name: Sign Windows installers via Azure Trusted Signing
-        if: matrix.os == 'windows'
-        uses: azure/trusted-signing-action@c7ab2a863ab5f9a846ddb8265964877ef296ee82 # v2.0.0
-        with:
-          azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          azure-client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          azure-client-secret: ${{ secrets.AZURE_CLIENT_SECRET }}
-          endpoint: ${{ secrets.AZURE_ENDPOINT }}
-          trusted-signing-account-name: ${{ secrets.AZURE_CODE_SIGNING_ACCOUNT }}
-          certificate-profile-name: ${{ secrets.AZURE_CERT_PROFILE }}
-          files-folder: apps/desktop/src-tauri/target/${{ matrix.target }}/release/bundle
-          files-folder-filter: exe
-          files-folder-recurse: true
-          file-digest: SHA256
-          timestamp-rfc3161: http://timestamp.acs.microsoft.com
-          timestamp-digest: SHA256
-
-      - name: Re-sign updater zip for Tauri after binary signing
-        if: matrix.os == 'windows'
-        working-directory: apps/desktop
-        shell: bash
-        env:
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-        # Tauri's bundler signs the update package alongside the binary.
-        # Azure resigns the binary (changing its hash), so the .sig that
-        # the bundler produced is no longer valid. Run the signer over
-        # the resigned installer to refresh its .sig file.
-        run: |
-          bundle_dir="src-tauri/target/${{ matrix.target }}/release/bundle"
-          for installer in "$bundle_dir"/msi/*.msi "$bundle_dir"/nsis/*-setup.exe; do
-            [[ -f "$installer" ]] || continue
-            zip="$installer.zip"
-            (cd "$(dirname "$installer")" && bun x @tauri-apps/cli signer sign "$(basename "$installer")")
-            (cd "$(dirname "$zip")" && bun x @tauri-apps/cli signer sign "$(basename "$zip")") 2>/dev/null || true
-          done
 
       # ─── macOS: Developer ID + App Store Connect notarization ─
       - name: Import Apple Developer ID certificate into temporary keychain
         if: matrix.os == 'macos'
-        uses: apple-actions/import-codesign-certs@5142e029c445c10ffc7149d172e540235a065466 # v7.0.0
+        uses: apple-actions/import-codesign-certs@288b8ec97b82c66b6f2a6baaf7acc8dfbcbe331c # v7.2.0
         with:
           p12-file-base64: ${{ secrets.APPLE_CERTIFICATE }}
           p12-password: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
@@ -503,6 +411,7 @@ jobs:
         if: matrix.os == 'macos'
         working-directory: apps/desktop
         env:
+          CARGO_NET_OFFLINE: "true"
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           # Tauri's bundler uses notarytool with API-key auth when
@@ -540,7 +449,6 @@ jobs:
       - name: Verify macOS update identity
         if: matrix.os == 'macos'
         working-directory: apps/desktop
-        shell: bash
         env:
           TARGET: ${{ matrix.target }}
         run: |
@@ -558,10 +466,53 @@ jobs:
             --test-requirement="$expected_requirement" \
             "${app_bundles[0]}"
 
+      # The PKCS #11 helper is signed before Tauri bundles the app, with its
+      # own entitlements (the desktop's build:pkcs11-helper script), and
+      # bundled as is; the app's signature seals it and Tauri notarizes both.
+      # Only the helper may load libraries signed by another team.
+      - name: Verify PKCS #11 helper signature
+        if: matrix.os == 'macos'
+        working-directory: apps/desktop
+        env:
+          TARGET: ${{ matrix.target }}
+        run: |
+          if [[ ! -f src-tauri/Pkcs11HelperEntitlements.plist ]]; then
+            echo "This release predates the PKCS #11 helper."
+            exit 0
+          fi
+          shopt -s nullglob
+          app_bundles=(src-tauri/target/"$TARGET"/release/bundle/macos/*.app)
+          app="${app_bundles[0]}"
+          helper="$app/Contents/MacOS/stella-pkcs11-helper"
+          if [[ ! -f "$helper" ]]; then
+            echo "::error::The app bundle has no PKCS #11 helper"
+            exit 1
+          fi
+          codesign --verify --strict --verbose=2 \
+            --test-requirement='=anchor apple generic and certificate leaf[subject.OU] = "4N3QVH454C"' \
+            "$helper"
+          # Read whole, then searched: `grep -q` closing a pipe early would
+          # fail the producer under pipefail.
+          helper_details=$(codesign --display --verbose=2 "$helper" 2>&1)
+          if ! grep -q 'flags=.*runtime' <<<"$helper_details"; then
+            echo "::error::The PKCS #11 helper is not signed with the hardened runtime"
+            exit 1
+          fi
+          entitlement=com.apple.security.cs.disable-library-validation
+          helper_entitlements=$(codesign --display --entitlements - --xml "$helper" 2>/dev/null)
+          if ! grep -q "$entitlement" <<<"$helper_entitlements"; then
+            echo "::error::The PKCS #11 helper lacks $entitlement"
+            exit 1
+          fi
+          app_entitlements=$(codesign --display --entitlements - --xml "$app" 2>/dev/null)
+          if grep -q "$entitlement" <<<"$app_entitlements"; then
+            echo "::error::The app itself must not carry $entitlement"
+            exit 1
+          fi
+
       - name: Build styled DMG without Finder automation
         if: matrix.os == 'macos'
         working-directory: apps/desktop
-        shell: bash
         env:
           TARGET: ${{ matrix.target }}
         run: |
@@ -599,9 +550,26 @@ jobs:
           APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
           APPLE_API_KEY_BASE64: ${{ secrets.APPLE_API_KEY }}
           APPLE_API_KEY_PATH: ${{ runner.temp }}/apple-api.p8
-        shell: bash
         run: |
           printf '%s' "$APPLE_API_KEY_BASE64" | base64 -d > "$APPLE_API_KEY_PATH"
+          # Stapling and validation fetch the ticket from Apple's servers.
+          # Both are idempotent: a dropped connection (NSURLErrorDomain) is
+          # retried up to three attempts; any other failure fails at once.
+          stapler() {
+            local dmg="$1" action="$2" attempt output
+            for attempt in 1 2 3; do
+              if output=$(xcrun stapler "$action" "$dmg" 2>&1); then
+                printf '%s\n' "$output"
+                return 0
+              fi
+              printf '%s\n' "$output" >&2
+              if ((attempt == 3)) || ! grep -q 'NSURLErrorDomain' <<< "$output"; then
+                return 1
+              fi
+              echo "stapler $action: network error on attempt $attempt/3; retrying in $((attempt * 20))s" >&2
+              sleep $((attempt * 20))
+            done
+          }
           bundle_dir="src-tauri/target/${{ matrix.target }}/release/bundle"
           for dmg in "$bundle_dir"/dmg/*.dmg; do
             [[ -f "$dmg" ]] || continue
@@ -614,8 +582,8 @@ jobs:
               --key-id   "$APPLE_API_KEY_ID" \
               --issuer   "$APPLE_API_ISSUER" \
               --wait --timeout 30m
-            xcrun stapler staple "$dmg"
-            xcrun stapler validate "$dmg"
+            stapler "$dmg" staple
+            stapler "$dmg" validate
           done
 
       - name: Rename artifacts to stable, version-less filenames
@@ -626,28 +594,13 @@ jobs:
         # Stella-windows-x64-setup.exe` regardless of the release
         # version. The .sig files for updater archives keep their
         # ordering so latest.json continues to find them.
-        shell: bash
-        run: bash scripts/rename-desktop-artifacts.sh "apps/desktop/src-tauri/target/${{ matrix.target }}/release/bundle"
+        run: bash scripts/rename-desktop-artifacts.sh "apps/desktop/src-tauri/target/${{ matrix.target }}/release/bundle" "${{ matrix.target }}"
 
       - name: Upload installers to GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_REF: ${{ needs.resolve.outputs.release_ref }}
-        shell: bash
-        run: |
-          bundle_dir="apps/desktop/src-tauri/target/${{ matrix.target }}/release/bundle"
-          # `mapfile` is bash 4+; macOS runners ship system bash 3.2,
-          # so use a portable while-read loop to populate the array.
-          artifacts=()
-          while IFS= read -r f; do
-            artifacts+=("$f")
-          done < <(find "$bundle_dir" -type f -name 'Stella-*')
-          if [[ ${#artifacts[@]} -eq 0 ]]; then
-            echo "::error::No desktop artifacts found under $bundle_dir"
-            exit 1
-          fi
-          printf '  uploading %s\n' "${artifacts[@]}"
-          bash scripts/retry.sh gh release upload "$RELEASE_REF" "${artifacts[@]}" --clobber
+        run: bun "$RELEASE_TOOLING/scripts/desktop-release-step.ts" upload "apps/desktop/src-tauri/target/${{ matrix.target }}/release/bundle"
 
   verify-production:
     # Build the signed desktop artifacts first, then confirm that production
@@ -656,7 +609,7 @@ jobs:
     # release workflow's promotion check and desktop publication.
     needs: [resolve, build]
     if: ${{ needs.resolve.outputs.should_build == 'true' && needs.resolve.outputs.channel == 'prod' }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
       contents: read
@@ -694,12 +647,27 @@ jobs:
     # that promises an installer that doesn't exist.
     needs: [resolve, build, verify-production]
     if: ${{ always() && needs.resolve.outputs.should_build == 'true' && needs.build.result == 'success' && (needs.resolve.outputs.channel != 'prod' || needs.verify-production.result == 'success') }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
       contents: write # upload latest.json to GitHub Release
       id-token: write # OIDC for AWS S3 + CloudFront
     steps:
+      - name: Checkout GitHub API tooling
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.workflow_sha }}
+          path: .gh-retry
+          persist-credentials: false
+          sparse-checkout: scripts/gh-retry.sh
+          sparse-checkout-cone-mode: false
+
+      - name: Preserve GitHub API tooling across source checkouts
+        run: |
+          cp "$GITHUB_WORKSPACE/.gh-retry/scripts/gh-retry.sh" "$RUNNER_TEMP/gh-retry.sh"
+          echo "GH_RETRY_SCRIPT=$RUNNER_TEMP/gh-retry.sh" >> "$GITHUB_ENV"
+
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -714,8 +682,7 @@ jobs:
           RELEASE_REF: ${{ needs.resolve.outputs.release_ref }}
           APP_VERSION: ${{ needs.resolve.outputs.app_version }}
           REPO: ${{ github.repository }}
-        shell: bash
-        run: bash scripts/build-updater-manifest.sh > latest.json && bash scripts/retry.sh gh release upload "$RELEASE_REF" latest.json --clobber
+        run: bash scripts/build-updater-manifest.sh > latest.json && bash "$GH_RETRY_SCRIPT" release upload "$RELEASE_REF" latest.json --clobber
 
       # Mirror the manifest to the downloads CDN so the in-app
       # updater (which polls a stable URL on a domain we control)
@@ -738,8 +705,9 @@ jobs:
         run: |
           echo "::add-mask::$BUCKET"
           echo "::add-mask::$DIST_ID"
-          account_id="$(printf '%s' "$BUCKET" | grep -oE '[0-9]{12}' | head -n1 || true)"
-          [ -n "$account_id" ] && echo "::add-mask::$account_id"
+          if [[ "$BUCKET" =~ [0-9]{12} ]]; then
+            echo "::add-mask::${BASH_REMATCH[0]}"
+          fi
 
       - name: Mirror latest.json to downloads CDN
         env:
@@ -769,7 +737,7 @@ jobs:
     # publication so a failed manifest job cannot advertise a partial release.
     needs: [resolve, manifest]
     if: ${{ always() && needs.resolve.outputs.should_build == 'true' && needs.resolve.outputs.channel == 'prod' && needs.manifest.result == 'success' }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
       contents: write # mark the fully assembled desktop release as latest
@@ -787,6 +755,7 @@ jobs:
           persist-credentials: false
 
       - name: Promote release to latest
+        timeout-minutes: 10
         run: bash scripts/promote-desktop-release.sh
 
   carry-forward:
@@ -809,7 +778,7 @@ jobs:
     # a skipped prerelease needs no carry-forward (today's behaviour).
     needs: resolve
     if: ${{ needs.resolve.outputs.should_build == 'false' && needs.resolve.outputs.channel == 'prod' }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
       contents: write # download from / upload to / edit GitHub Releases
@@ -821,6 +790,21 @@ jobs:
       RELEASE_REF: ${{ needs.resolve.outputs.release_ref }}
       PREVIOUS_TAG: ${{ needs.resolve.outputs.previous_tag }}
     steps:
+      - name: Checkout GitHub API tooling
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.workflow_sha }}
+          path: .gh-retry
+          persist-credentials: false
+          sparse-checkout: scripts/gh-retry.sh
+          sparse-checkout-cone-mode: false
+
+      - name: Preserve GitHub API tooling across source checkouts
+        run: |
+          cp "$GITHUB_WORKSPACE/.gh-retry/scripts/gh-retry.sh" "$RUNNER_TEMP/gh-retry.sh"
+          echo "GH_RETRY_SCRIPT=$RUNNER_TEMP/gh-retry.sh" >> "$GITHUB_ENV"
+
       - name: Checkout workflow policy scripts
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -843,7 +827,7 @@ jobs:
           # Fail loudly if the previous release has no matching assets:
           # a stable release with no installers to carry means the
           # invariant above is already violated upstream.
-          bash scripts/retry.sh gh release download "$PREVIOUS_TAG" \
+          bash "$GH_RETRY_SCRIPT" release download "$PREVIOUS_TAG" \
             --pattern 'Stella-*' \
             --pattern 'latest.json' \
             --dir assets \
@@ -852,7 +836,7 @@ jobs:
           # Attach first, THEN verify production and flip --latest: the deep
           # links must resolve and the release must be deployed before
           # /releases/latest points here.
-          bash scripts/retry.sh gh release upload "$RELEASE_REF" assets/* --clobber
+          bash "$GH_RETRY_SCRIPT" release upload "$RELEASE_REF" assets/* --clobber
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
@@ -875,4 +859,45 @@ jobs:
         run: bun scripts/check-api-deployment.ts
 
       - name: Promote release to latest
+        timeout-minutes: 10
         run: bash scripts/promote-desktop-release.sh
+
+  release-complete:
+    needs:
+      [
+        resolve,
+        build,
+        verify-production,
+        manifest,
+        promote-latest,
+        carry-forward,
+      ]
+    if: ${{ always() && needs.resolve.result == 'success' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Require all release jobs to complete
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+        # The verdict is computed before it is read, so an unreadable needs
+        # record fails the job instead of reading as "nothing failed".
+        run: |
+          set -euo pipefail
+          unfinished=$(jq -nr '
+            input
+            | .resolve.outputs as $release
+            | to_entries[]
+            | select(.key != "resolve")
+            | select(if $release.should_build == "true" then
+                .key != "carry-forward"
+                and ($release.channel == "prod" or (.key != "verify-production" and .key != "promote-latest"))
+              else .key == "carry-forward" and $release.channel == "prod" end)
+            | select(.value.result != "success")
+            | [.key, .value.result] | @tsv' <<< "$NEEDS")
+          failed=0
+          while IFS=$'\t' read -r job result; do
+            [[ -n "$job" ]] || continue
+            echo "::error::Required desktop release job $job ended $result"
+            failed=1
+          done <<< "$unfinished"
+          exit "$failed"

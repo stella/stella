@@ -3,20 +3,13 @@ import type { ComponentProps } from "react";
 import { FilterIcon } from "../icons";
 import { cn } from "../lib/utils";
 import { Button } from "./button";
+import {
+  VIEW_FILTER_BUTTON,
+  VIEW_FILTER_CHIP,
+  VIEW_FILTER_ICON_CLASS_NAME,
+} from "./view-toolbar-classes";
 
-/** Shared view controls stay compact and scroll horizontally on small screens. */
-export const ViewToolbarChrome = ({
-  className,
-  ...props
-}: ComponentProps<"div">) => (
-  <div
-    className={cn(
-      "flex min-w-0 shrink-0 [scrollbar-width:none] flex-nowrap items-center gap-1 overflow-x-auto px-2 py-1 [-ms-overflow-style:none] md:flex-wrap md:overflow-visible [&::-webkit-scrollbar]:hidden",
-      className,
-    )}
-    {...props}
-  />
-);
+export { ViewChromeBar, ViewToolbarChrome } from "./view-toolbar-shell";
 
 type ViewFilterButtonProps = Omit<
   ComponentProps<typeof Button>,
@@ -32,11 +25,11 @@ export const ViewFilterButton = ({
   <Button
     {...props}
     aria-label={label}
-    size="icon-xs"
+    size={VIEW_FILTER_BUTTON.size}
     title={label}
-    variant="ghost"
+    variant={VIEW_FILTER_BUTTON.variant}
   >
-    <FilterIcon className="size-3.5" />
+    <FilterIcon className={VIEW_FILTER_ICON_CLASS_NAME} />
   </Button>
 );
 
@@ -46,8 +39,8 @@ export const ViewFilterChip = ({
 }: Omit<ComponentProps<typeof Button>, "size" | "variant">) => (
   <Button
     {...props}
-    className={cn("gap-1.5 font-normal", className)}
-    size="xs"
-    variant="secondary"
+    className={cn(VIEW_FILTER_CHIP.className, className)}
+    size={VIEW_FILTER_CHIP.size}
+    variant={VIEW_FILTER_CHIP.variant}
   />
 );

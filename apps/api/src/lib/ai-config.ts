@@ -2,19 +2,24 @@ import { panic } from "better-result";
 
 import {
   BYOK_MODEL_OPTIONS,
-  resolveWorkingBYOKModelForRole,
+  MODEL_OVERRIDE_GROUP_TASK,
+  MODEL_OVERRIDE_GROUPS,
+  MODEL_TASK_OVERRIDE_GROUP,
+  resolveDefaultModel,
+  resolveWorkingBYOKModelForTask,
 } from "@stll/ai-catalog";
-import type { AIProvider, BYOKProvider, ModelRole } from "@stll/ai-catalog";
+import type {
+  AIProvider,
+  BYOKProvider,
+  DecisionModelProvider,
+  ModelOverrideGroup,
+  ModelTask,
+} from "@stll/ai-catalog";
 
 import type { UsageServiceTier } from "@/api/db/schema";
 
 export type DataRegion = "eu" | "global" | "ch";
 export type AIRequestServiceTier = UsageServiceTier;
-
-export const STELLA_PROVIDER_METADATA_KEY = "stella";
-export const SERVICE_TIER_PROVIDER_METADATA_KEY = "effectiveServiceTier";
-export const FALLBACK_FROM_SERVICE_TIER_PROVIDER_METADATA_KEY =
-  "fallbackFromServiceTier";
 
 /**
  * Check whether a provider supports regional routing.
@@ -29,15 +34,7 @@ export const supportsRegion = (_provider: AIProvider): boolean => false;
  * Legal work prioritizes determinism over creativity. Every role
  * is pinned to 0 so the same input yields the same output.
  */
-const TEMPERATURE_PER_ROLE = {
-  fast: 0,
-  chat: 0,
-  reasoning: 0,
-  pdf: 0,
-} as const satisfies Record<ModelRole, number>;
-
-export const getTemperatureForRole = (role: ModelRole): number =>
-  TEMPERATURE_PER_ROLE[role];
+export const getTemperatureForTask = (_task: ModelTask): number => 0;
 
 /**
  * Whether stella may annotate this AI request with prompt-cache
@@ -53,26 +50,18 @@ export type CachingDecision =
   | { enabled: false; reason: "org-disabled" }
   | { enabled: true; ttl: "5m"; scopeKey: string | null };
 
-const TTL_BY_ROLE = {
-  fast: "5m",
-  chat: "5m",
-  reasoning: "5m",
-  pdf: "5m",
-} as const satisfies Record<ModelRole, "5m">;
-
 export const resolveCaching = ({
   promptCachingEnabled,
-  role,
   scopeKey,
 }: {
   promptCachingEnabled: boolean;
-  role: ModelRole;
+  task: ModelTask;
   scopeKey: string | null;
 }): CachingDecision => {
   if (!promptCachingEnabled) {
     return { enabled: false, reason: "org-disabled" };
   }
-  return { enabled: true, ttl: TTL_BY_ROLE[role], scopeKey };
+  return { enabled: true, ttl: "5m", scopeKey };
 };
 
 export type OrgAIConfig = {
@@ -82,37 +71,49 @@ export type OrgAIConfig = {
    * configured provider. Additional configured providers may
    * be stored for later assignment.
    */
-  overrideModels: Record<ModelRole, OrgAIModelSelection>;
+  overrideModels: Partial<
+    Record<ModelOverrideGroup, OrgAIModelSelection | undefined>
+  > | null;
   /**
    * The model typed decisions go to (see `lib/decisions/decide.ts`). It is
    * not one of the generative roles: a decision model answers choice and
    * yes/no questions with probabilities and writes no text, so it has its
-   * own provider space and its own key. Null means the org has none; the
-   * instance's, if any, answers then.
+   * own provider space. OpenAI may reuse the org's generative key. Null means
+   * the org has none; the instance's, if any, answers then.
    */
   decision: OrgDecisionModelConfig | null;
 };
 
-export const DECISION_MODEL_PROVIDERS = ["typesafe"] as const;
-export type DecisionModelProvider = (typeof DECISION_MODEL_PROVIDERS)[number];
+export { DECISION_MODEL_PROVIDERS } from "@stll/ai-catalog";
+export type { DecisionModelProvider };
 
-export type OrgDecisionModelConfig = {
-  provider: DecisionModelProvider;
-  /** Decrypted API key. */
-  apiKey: string;
-  /** The provider's model id; a versioned id holds calibrated confidence floors. */
-  modelId: string;
-};
+export type OrgDecisionModelConfig =
+  | { provider: "typesafe"; apiKey: string; modelId: string }
+  | {
+      provider: "openai";
+      /** Absent reuses the organization's generative OpenAI key. */
+      apiKey?: string | undefined;
+      region: "eu" | "global";
+      modelId: string;
+    };
 
-export type StandardOrgAIProviderConfig = {
-  provider: Exclude<AIProvider, "azure_foundry" | "huggingface">;
+type StandardOrgAIProviderConfig = {
+  provider: Exclude<AIProvider, "azure_foundry" | "huggingface" | "anthropic">;
   /** Decrypted API key. */
   apiKey: string;
   /** Stored endpoint selection; validated against the provider on save. */
   region?: DataRegion | undefined;
 };
 
-export type AzureFoundryOrgAIProviderConfig = {
+type AnthropicOrgAIProviderConfig = {
+  provider: "anthropic";
+  apiKey: string;
+  /** Stored in the encrypted configuration alongside the key. */
+  anthropicWorkspaceId?: string | undefined;
+  region?: DataRegion | undefined;
+};
+
+type AzureFoundryOrgAIProviderConfig = {
   provider: "azure_foundry";
   /** Decrypted API key. */
   apiKey: string;
@@ -121,7 +122,7 @@ export type AzureFoundryOrgAIProviderConfig = {
   apiVersion?: string | undefined;
 };
 
-export type HuggingFaceOrgAIProviderConfig = {
+type HuggingFaceOrgAIProviderConfig = {
   provider: "huggingface";
   /** Decrypted API key (HF user token or Inference Endpoint token). */
   apiKey: string;
@@ -134,6 +135,7 @@ export type HuggingFaceOrgAIProviderConfig = {
 
 export type OrgAIProviderConfig =
   | StandardOrgAIProviderConfig
+  | AnthropicOrgAIProviderConfig
   | AzureFoundryOrgAIProviderConfig
   | HuggingFaceOrgAIProviderConfig;
 
@@ -153,7 +155,7 @@ export const normalizeProviderRegion = (
   return "global";
 };
 
-export const normalizeOrgAIProviderConfig = (
+const normalizeOrgAIProviderConfig = (
   config: OrgAIProviderConfig,
 ): OrgAIProviderConfig => {
   switch (config.provider) {
@@ -196,16 +198,16 @@ const isBYOKProviderId = (provider: AIProvider): provider is BYOKProvider =>
  * to a different provider.
  */
 const healOverrideModel = (
-  role: ModelRole,
+  role: ModelOverrideGroup,
   selection: OrgAIModelSelection,
 ): OrgAIModelSelection => {
   if (!isBYOKProviderId(selection.provider)) {
     return selection;
   }
-  const working = resolveWorkingBYOKModelForRole({
+  const working = resolveWorkingBYOKModelForTask({
     provider: selection.provider,
     modelId: selection.modelId,
-    role,
+    task: MODEL_OVERRIDE_GROUP_TASK[role],
   });
   if (!working || working === selection.modelId) {
     return selection;
@@ -214,13 +216,81 @@ const healOverrideModel = (
 };
 
 const healOverrideModels = (
-  overrideModels: Record<ModelRole, OrgAIModelSelection>,
-): Record<ModelRole, OrgAIModelSelection> => ({
-  fast: healOverrideModel("fast", overrideModels.fast),
-  chat: healOverrideModel("chat", overrideModels.chat),
-  reasoning: healOverrideModel("reasoning", overrideModels.reasoning),
-  pdf: healOverrideModel("pdf", overrideModels.pdf),
-});
+  overrideModels: OrgAIConfig["overrideModels"],
+): OrgAIConfig["overrideModels"] => {
+  if (overrideModels === null) {
+    return null;
+  }
+  // Every role, derived from the role list: a hand-written list silently
+  // dropped any role it did not name when the config was read back.
+  return Object.fromEntries(
+    MODEL_OVERRIDE_GROUPS.flatMap((role) => {
+      const selection = overrideModels[role];
+      return selection === undefined
+        ? []
+        : [[role, healOverrideModel(role, selection)] as const];
+    }),
+  );
+};
+
+/** Task defaults stay distinct from persisted override groups. */
+export const resolveOrgAIModelForTask = (
+  config: OrgAIConfig,
+  task: ModelTask,
+): OrgAIModelSelection | null => {
+  const override = config.overrideModels?.[MODEL_TASK_OVERRIDE_GROUP[task]];
+  if (override !== undefined) {
+    return override;
+  }
+  const candidate = resolveDefaultModel({
+    task,
+    orgProviders: config.providers.map(({ provider }) => provider),
+  });
+  return candidate === null
+    ? null
+    : { provider: candidate.provider, modelId: candidate.modelId };
+};
+
+/**
+ * The model a role runs on: the admin's pick for that role, else the model of
+ * the task it inherits (`MODEL_OVERRIDE_GROUP_TASK`). For a role that owns its
+ * task this equals the task lookup; `browse` unset runs on the org's fast
+ * model, whether the admin picked one or it is the catalog default.
+ */
+export const resolveOrgAIModelForOverrideGroup = (
+  config: OrgAIConfig,
+  group: ModelOverrideGroup,
+): OrgAIModelSelection | null =>
+  config.overrideModels?.[group] ??
+  resolveOrgAIModelForTask(config, MODEL_OVERRIDE_GROUP_TASK[group]);
+
+/**
+ * What a model call is for: a task (its role's pick, else the task default)
+ * or a role whose pick the admin makes (its pick, else the task it inherits).
+ * The task decides capability checks and sampling; the lookup decides the
+ * model and is what usage analytics records.
+ */
+export type ModelLookup =
+  { task: ModelTask } | { overrideGroup: ModelOverrideGroup };
+
+export const modelLookupTask = (lookup: ModelLookup): ModelTask =>
+  "task" in lookup
+    ? lookup.task
+    : MODEL_OVERRIDE_GROUP_TASK[lookup.overrideGroup];
+
+/** The label usage analytics records: the task, or the role it ran for. */
+export const modelLookupLabel = (
+  lookup: ModelLookup,
+): ModelTask | ModelOverrideGroup =>
+  "task" in lookup ? lookup.task : lookup.overrideGroup;
+
+export const resolveOrgAIModel = (
+  config: OrgAIConfig,
+  lookup: ModelLookup,
+): OrgAIModelSelection | null =>
+  "task" in lookup
+    ? resolveOrgAIModelForTask(config, lookup.task)
+    : resolveOrgAIModelForOverrideGroup(config, lookup.overrideGroup);
 
 export const normalizeOrgAIConfig = (config: OrgAIConfig): OrgAIConfig => ({
   providers: config.providers.map(normalizeOrgAIProviderConfig),

@@ -1,0 +1,1095 @@
+/**
+ * The court's own paragraph numbers, read off the start of its paragraphs.
+ *
+ * Czech and Slovak courts number the paragraphs of a decision's reasoning
+ * and cite them ("bod 12", `#par=12`). The number arrives as text at the start
+ * of the paragraph — `[12]`, `12.` or `12)` — and is moved into
+ * `ParagraphBlock.number`, the place every consumer reads it from (the
+ * reader's gutter, paragraph-range links, citations). The text keeps every
+ * other character the court wrote.
+ *
+ * The same shapes also open things that are not the court's numbering: a
+ * list of questions inside paragraph 3 (`1)`, `2)`), a heading-like item of
+ * an older unnumbered decision (`1.`), a paragraph opening with a date
+ * (`12. 3. 2020 …`). So a number is moved only when the paragraphs of a
+ * decision read as numbering within each opinion, with nested lists
+ * restarting at 1 beside it. A marker that cannot be read confidently stays
+ * text; it does not invalidate the labels on the other paragraphs.
+ */
+
+import { parseIntegerToken } from "@stll/agent-input/numeric-token";
+
+import { closedQuotationParagraphStarts } from "./closed-quotation-paragraphs";
+import type { Block, ParagraphBlock } from "./document-ast.js";
+import { normalizeInlineLine, stripInlineLinePrefix } from "./inline-line.js";
+import {
+  COURT_PARAGRAPH_MARKER_PATTERNS,
+  COURT_PARAGRAPH_MARKER_STYLES,
+  type CourtParagraphMarkerStyle,
+  OCR_DOT_MARKER,
+  opensWithItemLabel,
+  withoutLeadingNumber,
+} from "./printed-paragraph-labels.js";
+import { separateOpinionHeading } from "./separate-opinion-heading.js";
+
+const markerNumber = (
+  style: CourtParagraphMarkerStyle,
+  text: string,
+): number | null => {
+  const raw =
+    COURT_PARAGRAPH_MARKER_PATTERNS[style].exec(text)?.groups?.["number"];
+  if (raw === undefined) {
+    return null;
+  }
+  const value = parseIntegerToken(raw, { sign: "unsigned" }).unwrap(
+    "Court marker matches bounded decimal digits",
+  );
+  return value >= 1 ? value : null;
+};
+
+/**
+ * Whether a line opens with a marker in any of the court's paragraph styles.
+ * A parser that assigns roles line by line asks this first: a line the court
+ * numbered is body text, never a closing or a signature, even when its words
+ * read like one ("3. Věc projednala samosoudkyně …"). Leaving it in the body
+ * keeps the decision's numbering whole.
+ */
+export const opensWithCourtParagraphMarker = (text: string): boolean => {
+  const line = text.trimStart();
+  return COURT_PARAGRAPH_MARKER_STYLES.some(
+    (style) => markerNumber(style, line) !== null,
+  );
+};
+
+/** The instruction on remedies, which closes a decision's reasoning. */
+const INSTRUCTION_RE = /^\s*P\s*o\s*u\s*[čc]\s*e\s*n\s*(?:[íi]|i\s*e)\s*:/iu;
+
+/** Preference when two styles explain the same number of paragraphs. */
+const STYLE_PRIORITY: Readonly<Record<CourtParagraphMarkerStyle, number>> = {
+  bracket: 0,
+  dot: 1,
+  paren: 2,
+};
+
+export const COURT_PARAGRAPH_NUMBERING_LIMITS = {
+  /**
+   * Fewest numbered paragraphs that make a numbering. A bracketed `[1]` is
+   * the court's marker on its own — nothing else in a Czech or Slovak
+   * decision opens a paragraph with one, footnotes aside, and those are not
+   * body paragraphs — so a one-paragraph order keeps its number. A lone `1.`
+   * or `1)` is as likely the first item of a list.
+   */
+  minParagraphs: { bracket: 1, dot: 2, paren: 2 },
+  /** Largest forward jump accepted without a consecutive pair as evidence. */
+  maxJump: 3,
+  /**
+   * Unnumbered body paragraphs before the first number: the introductory
+   * sentence of the decision and a short lead-in. Numbering that starts deep
+   * in the body is an enumeration inside it.
+   */
+  maxLeadIn: 4,
+  /**
+   * Share of the body paragraphs from the first number to the end of its
+   * part that the numbering itself accounts for, nested lists aside. Below
+   * it the markers are scattered or leading items, not the reasoning's
+   * paragraphs, unless the run spans its part (`maxTail`).
+   */
+  minDensity: 0.4,
+  /**
+   * Unnumbered body paragraphs after the last number of a run that counts
+   * up one by one: a closing line or two. A run that opens its part within
+   * `maxLeadIn`, steps by one throughout and ends within this many
+   * paragraphs of the part's end (and within the widest gap between two of
+   * its own numbers) is the court numbering its reasoning, however many
+   * unnumbered paragraphs (quoted evidence, the items of a list) it carries
+   * between its numbers. A list read as numbering ends early, with the
+   * reasoning running on after it; that is what the density protects
+   * against, and a run that reaches the end is not one.
+   */
+  maxTail: 4,
+  /**
+   * Fewest numbers of a run read by its span rather than its density. Two
+   * numbers spread over a part are as often the part's two halves, each
+   * titled "1." and "2." ("1. K výroku …", "2. K výroku …"), as the court
+   * counting its paragraphs; a third makes it a count.
+   */
+  minSpanningRun: 3,
+} as const;
+
+/** Local evidence never invalidates another paragraph's printed label. */
+export type CourtParagraphNumberingEvidence =
+  | {
+      readonly type: "duplicate";
+      readonly blockIndex: number;
+      readonly number: number;
+      readonly previousBlockIndex: number;
+    }
+  | {
+      readonly type: "ocr";
+      readonly blockIndex: number;
+      readonly number: number;
+      readonly marker: string;
+    }
+  | {
+      readonly type: "unassigned";
+      readonly blockIndex: number;
+      readonly number: number;
+    }
+  | {
+      /**
+       * The court printed no 1: the one paragraph that opens the reasoning
+       * stands before its printed 2, and is given the 1 the run implies.
+       */
+      readonly type: "implied";
+      readonly blockIndex: number;
+      readonly number: 1;
+    };
+
+type ScopeStart =
+  | { readonly type: "fresh-start"; readonly startingAt: 1 }
+  | { readonly type: "continuation"; readonly startingAt: number };
+
+export type CourtParagraphNumberingScope = {
+  readonly type: ScopeStart["type"];
+  readonly blockIndex: number;
+};
+
+export type CourtParagraphNumbering =
+  | {
+      readonly type: "numbered";
+      readonly blocks: Block[];
+      readonly numbered: number;
+      readonly style: CourtParagraphMarkerStyle;
+      readonly evidence: readonly CourtParagraphNumberingEvidence[];
+      readonly scopes: readonly CourtParagraphNumberingScope[];
+    }
+  | { readonly type: "unnumbered"; readonly blocks: Block[] };
+
+const SENTENCE_END_RE = /[.!?:;…]["'»«“”„)\]]*$/u;
+
+/** A body paragraph opening with a marker of the style being read. */
+type Candidate = {
+  /** Position among the document's body paragraphs. */
+  readonly bodyIndex: number;
+  /** Position in the document's blocks. */
+  readonly blockIndex: number;
+  readonly number: number;
+  readonly source: "printed" | "ocr" | "structured" | "implied";
+  readonly marker: string;
+};
+
+/**
+ * The paragraphs that can carry the court's number: body text in the
+ * court's own voice. Holdings, headings, captions, closings, signatures,
+ * notes and publisher apparatus never do.
+ */
+const NUMBERABLE_ROLES = new Set<ParagraphBlock["role"]>([
+  undefined,
+  "argumentation",
+  "history",
+  "dissent",
+]);
+
+const isBodyParagraph = (block: Block): block is ParagraphBlock =>
+  block.type === "paragraph" &&
+  block.note === undefined &&
+  NUMBERABLE_ROLES.has(block.role);
+
+type Body = {
+  /** Block indexes of the body paragraphs, in document order. */
+  readonly paragraphs: readonly number[];
+  /** Body positions where a separate opinion begins. */
+  readonly opinionStarts: ReadonlySet<number>;
+  /** Body positions inside a closed quotation begun before them. */
+  readonly quotedStarts: ReadonlySet<number>;
+  /**
+   * Body positions that open the text after an operative part: the
+   * reasoning, which a court's numbering opens. Head matter printed before
+   * the ruling is not its lead-in, whatever role a parser gave it.
+   */
+  readonly reasoningStarts: ReadonlySet<number>;
+  /** Body positions a heading or a separate opinion opens. */
+  readonly sectionStarts: ReadonlySet<number>;
+};
+
+/**
+ * The body paragraphs, and where each separate opinion printed after the
+ * decision begins: an opinion either counts from 1 again or carries on the
+ * decision's numbering, and both read as one numbering.
+ */
+const bodyOf = (blocks: readonly Block[]): Body => {
+  const paragraphs: number[] = [];
+  const opinionStarts = new Set<number>();
+  /** Body positions a heading or a separate opinion opens. */
+  const sectionStarts = new Set<number>();
+  let headingSinceBody = false;
+  // Explicit opinion headings delimit scopes even when paragraph roles vary.
+  let opinionBoundary: "role" | "heading" = "role";
+  let inDissent = false;
+  let inInstruction = false;
+  const reasoningStarts = new Set<number>();
+  let holdingSinceBody = false;
+  for (const [index, block] of blocks.entries()) {
+    if (block.type === "paragraph" && block.role === "holding") {
+      holdingSinceBody = true;
+      continue;
+    }
+    if (block.type === "heading") {
+      headingSinceBody = true;
+      const opinionHeading =
+        separateOpinionHeading(withoutLeadingNumber(block.plainText), 1000) !==
+        undefined;
+      if (opinionHeading) {
+        opinionStarts.add(paragraphs.length);
+        opinionBoundary = "heading";
+        inInstruction = false;
+      } else {
+        inInstruction ||= INSTRUCTION_RE.test(block.plainText);
+      }
+      continue;
+    }
+    if (!isBodyParagraph(block)) {
+      continue;
+    }
+    const dissent = block.role === "dissent";
+    // The instruction on remedies ("Poučení: …") and what follows it up to a
+    // separate opinion is not reasoning: never numbered, and not text the
+    // numbering leaves out.
+    if (INSTRUCTION_RE.test(block.plainText)) {
+      inInstruction = true;
+    }
+    if (inInstruction && !dissent) {
+      continue;
+    }
+    inInstruction = false;
+    if (opinionBoundary === "role" && dissent && !inDissent) {
+      opinionStarts.add(paragraphs.length);
+    }
+    if (headingSinceBody) {
+      sectionStarts.add(paragraphs.length);
+    }
+    if (holdingSinceBody) {
+      reasoningStarts.add(paragraphs.length);
+    }
+    inDissent = dissent;
+    headingSinceBody = false;
+    holdingSinceBody = false;
+    paragraphs.push(index);
+  }
+  const quotedStarts = closedQuotationParagraphStarts(
+    paragraphs.map((blockIndex) => blocks[blockIndex]?.plainText ?? ""),
+    new Set([...sectionStarts, ...opinionStarts]),
+  );
+  return {
+    paragraphs,
+    opinionStarts,
+    quotedStarts,
+    reasoningStarts,
+    sectionStarts,
+  };
+};
+
+/**
+ * Whose a number is when it both continues the court's run and the open
+ * nested list. Past the list's own continuation (value + 1, value + 2, …):
+ * a same or smaller non-initial number follows, so this one is the list's;
+ * or a number that continues neither, and is not a new list's 1,
+ * breaks the list off, so this one is the court's. A new list's 1 proves
+ * nothing — it may follow the list or the court's paragraph — and reaching
+ * the end with only the continuation seen leaves both readings standing:
+ * neither may be stored.
+ */
+const readContinuation = (
+  candidates: readonly Candidate[],
+  from: number,
+  value: number,
+): "list" | "court" | "ambiguous" => {
+  let listNext = value + 1;
+  for (const later of candidates.slice(from + 1)) {
+    if (later.number > 1 && later.number <= value) {
+      return "list";
+    }
+    if (later.number !== listNext) {
+      return later.number === 1 ? "ambiguous" : "court";
+    }
+    listNext += 1;
+  }
+  return "ambiguous";
+};
+
+/**
+ * Whether the printed repeat at `from` opens a nested list: the numbers after
+ * it count up from it, and the run that breaks them steps back into their
+ * range, which is the court resuming its own paragraphs after the list.
+ */
+const repeatOpensList = (
+  candidates: readonly Candidate[],
+  from: number,
+  value: number,
+): boolean => {
+  let next = value + 1;
+  for (const later of candidates.slice(from + 1)) {
+    if (later.number !== next) {
+      return later.number > value && later.number < next;
+    }
+    next += 1;
+  }
+  return false;
+};
+
+type Walk = {
+  /** The court's paragraphs, in order. */
+  readonly accepted: Candidate[];
+  /**
+   * Markers of this style that are neither the court's paragraph nor
+   * provably an item of a nested list: a step backwards, an isolated large
+   * jump, or a number both readings could claim.
+   */
+  readonly unassigned: Candidate[];
+};
+
+/**
+ * Read a style's candidates as the court's run beside nested lists. A
+ * nested list starts at 1 after a court paragraph and counts up; a separate
+ * opinion may start the run again at 1; a forward skip of a few numbers is
+ * the court's own. Quoted markers are excluded before this walk. Everything
+ * else is left unassigned without invalidating the other labels.
+ */
+const walk = (candidates: readonly Candidate[], startingAt: number): Walk => {
+  const accepted: Candidate[] = [];
+  const unassigned: Candidate[] = [];
+  let expected = startingAt;
+  let nestedNext: number | null = null;
+  for (const [index, candidate] of candidates.entries()) {
+    const { number } = candidate;
+    if (accepted.length === 0 && number === 1) {
+      accepted.push(candidate);
+      expected = 2;
+      nestedNext = null;
+      continue;
+    }
+    const courtNext = number === expected;
+    const listNext = nestedNext !== null && number === nestedNext;
+    if (courtNext && listNext) {
+      const reading = readContinuation(candidates, index, number);
+      if (reading === "ambiguous") {
+        unassigned.push(candidate);
+        // Both readings remain possible. Advance the court frontier as well
+        // as the list frontier so a later list cannot steal this same label.
+        expected = number + 1;
+        nestedNext = number + 1;
+        continue;
+      }
+      if (reading === "list") {
+        nestedNext = number + 1;
+        continue;
+      }
+    }
+    if (courtNext) {
+      accepted.push(candidate);
+      expected = number + 1;
+      nestedNext = null;
+      continue;
+    }
+    // A repeat above 1 cannot start a nested list. Keep what was printed;
+    // the next expected number is unchanged.
+    if (
+      nestedNext === null &&
+      number > 1 &&
+      number === accepted.at(-1)?.number
+    ) {
+      if (repeatOpensList(candidates, index, number)) {
+        nestedNext = number + 1;
+        continue;
+      }
+      accepted.push(candidate);
+      continue;
+    }
+    if (listNext || (number === 1 && accepted.length > 0)) {
+      nestedNext = number + 1;
+      continue;
+    }
+    // Before the first number, `last` is 0: a run the parser picked up at 2
+    // (its paragraph 1 merged into the preamble) still reads as numbering.
+    const last = accepted.at(-1)?.number ?? startingAt - 1;
+    const jump = number - last;
+    const next = candidates[index + 1];
+    const continuationStart = expected;
+    const continuationEnd = last + COURT_PARAGRAPH_NUMBERING_LIMITS.maxJump;
+    // A pair inside a cited passage must not displace the court's run when
+    // the next paragraph later resumes that run, even without quotation marks.
+    const resumesAfterGap =
+      jump > COURT_PARAGRAPH_NUMBERING_LIMITS.maxJump &&
+      nestedNext === null &&
+      next?.number === number + 1 &&
+      next.bodyIndex === candidate.bodyIndex + 1 &&
+      !candidates
+        .slice(index + 2)
+        .some(
+          (later) =>
+            later.number >= continuationStart &&
+            later.number <= continuationEnd,
+        );
+    if (
+      jump > 1 &&
+      (jump <= COURT_PARAGRAPH_NUMBERING_LIMITS.maxJump || resumesAfterGap)
+    ) {
+      accepted.push(candidate);
+      expected = number + 1;
+      nestedNext = null;
+      continue;
+    }
+    unassigned.push(candidate);
+  }
+  return { accepted, unassigned };
+};
+
+type Scope = { readonly from: number; readonly to: number };
+
+const candidatesOf = (
+  blocks: readonly Block[],
+  body: Body,
+  style: CourtParagraphMarkerStyle,
+  { from, to }: Scope,
+): Candidate[] =>
+  body.paragraphs.slice(from, to).flatMap((blockIndex, position) => {
+    const bodyIndex = from + position;
+    if (body.quotedStarts.has(bodyIndex)) {
+      return [];
+    }
+    const block = blocks[blockIndex];
+    if (block?.type !== "paragraph") {
+      return [];
+    }
+    const text = block.plainText.trimStart();
+    const printed = markerNumber(style, text);
+    let number = printed;
+    let source: Candidate["source"] = "printed";
+    let marker = "";
+    if (number === null && style === "dot") {
+      const raw = OCR_DOT_MARKER.exec(text)?.groups?.["number"];
+      if (raw === undefined || !/[lI]/u.test(raw)) {
+        return [];
+      }
+      // `I.`, `II.` before a title is a Roman section number. A paragraph
+      // the OCR misread ends like a sentence; a section title does not.
+      if (
+        /^I+$/u.test(raw) &&
+        !SENTENCE_END_RE.test(text.slice(raw.length + 1).trimEnd())
+      ) {
+        return [];
+      }
+      const recovered = parseIntegerToken(raw.replace(/[lI]/gu, "1"), {
+        sign: "unsigned",
+      }).unwrap("OCR court marker normalizes to bounded decimal digits");
+      const neighbourNumber = (index: number): number | null => {
+        const neighbourIndex = body.paragraphs[index];
+        const neighbour =
+          neighbourIndex === undefined ? undefined : blocks[neighbourIndex];
+        return neighbour?.type === "paragraph" && !body.quotedStarts.has(index)
+          ? (neighbour.number ??
+              markerNumber(style, neighbour.plainText.trimStart()))
+          : null;
+      };
+      // Scope start supplies the zero before paragraph 1. Else both immediate
+      // neighbours must print the consecutive values; OCR never repairs itself.
+      const previous = position === 0 ? 0 : neighbourNumber(bodyIndex - 1);
+      const next = bodyIndex + 1 < to ? neighbourNumber(bodyIndex + 1) : null;
+      if (previous !== recovered - 1 || next !== recovered + 1) {
+        return [];
+      }
+      number = recovered;
+      source = "ocr";
+      marker = raw;
+    }
+    return number === null
+      ? []
+      : [{ bodyIndex, blockIndex, number, source, marker }];
+  });
+
+/** Whether a body paragraph opens with any marker shape at all. */
+const opensWithMarker = (block: Block | undefined): boolean =>
+  block?.type === "paragraph" && opensWithItemLabel(block.plainText);
+
+type NumberAssignment = {
+  readonly candidate: Candidate;
+  readonly style: CourtParagraphMarkerStyle;
+};
+
+type Reading = {
+  readonly numbers: ReadonlyMap<number, NumberAssignment>;
+  readonly style: CourtParagraphMarkerStyle;
+  readonly evidence: readonly CourtParagraphNumberingEvidence[];
+  readonly scopes: readonly CourtParagraphNumberingScope[];
+};
+
+type BridgeScopeOptions = {
+  readonly blocks: readonly Block[];
+  readonly body: Body;
+  readonly numbers: Map<number, NumberAssignment>;
+  readonly evidence: CourtParagraphNumberingEvidence[];
+  readonly from: number;
+  readonly to: number;
+};
+
+type MarkerOccurrence = {
+  readonly blockIndex: number;
+  readonly bodyIndex: number;
+  readonly raw: string;
+};
+
+type ObservedMarkers = Map<
+  CourtParagraphMarkerStyle,
+  Map<number, MarkerOccurrence[]>
+>;
+
+type ObserveMarkersOptions = Pick<BridgeScopeOptions, "blocks" | "body"> & {
+  readonly from: number;
+  readonly to: number;
+};
+
+const observeMarkers = ({
+  blocks,
+  body,
+  from,
+  to,
+}: ObserveMarkersOptions): ObservedMarkers => {
+  const observed: ObservedMarkers = new Map();
+  for (let bodyIndex = from; bodyIndex < to; bodyIndex += 1) {
+    const blockIndex = body.paragraphs[bodyIndex];
+    const block = blockIndex === undefined ? undefined : blocks[blockIndex];
+    if (
+      blockIndex === undefined ||
+      block?.type !== "paragraph" ||
+      body.quotedStarts.has(bodyIndex)
+    ) {
+      continue;
+    }
+    for (const markerStyle of COURT_PARAGRAPH_MARKER_STYLES) {
+      const text = block.plainText.trimStart();
+      const raw =
+        markerStyle === "dot"
+          ? OCR_DOT_MARKER.exec(text)?.groups?.["number"]
+          : undefined;
+      const recovered = raw !== undefined && /[lI]/u.test(raw);
+      const number = recovered
+        ? parseIntegerToken(raw.replace(/[lI]/gu, "1"), {
+            sign: "unsigned",
+          }).unwrap("OCR court marker normalizes to bounded decimal digits")
+        : markerNumber(markerStyle, text);
+      if (number === null) {
+        continue;
+      }
+      const byNumber =
+        observed.get(markerStyle) ?? new Map<number, MarkerOccurrence[]>();
+      const occurrences = byNumber.get(number) ?? [];
+      occurrences.push({ blockIndex, bodyIndex, raw: raw ?? "" });
+      byNumber.set(number, occurrences);
+      observed.set(markerStyle, byNumber);
+    }
+  }
+  return observed;
+};
+
+/** Local proofs also apply when an upstream parser already supplied labels. */
+const bridgeScope = ({
+  blocks,
+  body,
+  numbers,
+  evidence,
+  from,
+  to,
+}: BridgeScopeOptions): void => {
+  let previousBodyIndex: number | undefined;
+  for (let bodyIndex = from; bodyIndex < to; bodyIndex += 1) {
+    const nextIndex = body.paragraphs[bodyIndex];
+    const nextAssignment =
+      nextIndex === undefined ? undefined : numbers.get(nextIndex);
+    if (nextAssignment === undefined) {
+      continue;
+    }
+    if (previousBodyIndex === undefined) {
+      previousBodyIndex = bodyIndex;
+      continue;
+    }
+    const previousIndex = body.paragraphs[previousBodyIndex];
+    const previousAssignment =
+      previousIndex === undefined ? undefined : numbers.get(previousIndex);
+    const expected = (previousAssignment?.candidate.number ?? 0) + 1;
+    if (nextAssignment.candidate.number !== expected + 1) {
+      previousBodyIndex = bodyIndex;
+      continue;
+    }
+
+    const observed = observeMarkers({
+      blocks,
+      body,
+      from: previousBodyIndex,
+      to: bodyIndex,
+    });
+    let bridge: NumberAssignment | undefined;
+    for (const markerStyle of COURT_PARAGRAPH_MARKER_STYLES) {
+      const byNumber = observed.get(markerStyle);
+      const candidates = byNumber?.get(expected) ?? [];
+      const candidate = candidates.at(0);
+      const hasSameStyleSequence =
+        markerStyle !== previousAssignment?.style &&
+        (byNumber?.has(expected - 1) === true ||
+          byNumber?.has(expected + 1) === true);
+      if (
+        candidates.length !== 1 ||
+        candidate === undefined ||
+        hasSameStyleSequence
+      ) {
+        continue;
+      }
+      if (bridge !== undefined) {
+        bridge = undefined;
+        break;
+      }
+      bridge = {
+        style: markerStyle,
+        candidate: {
+          blockIndex: candidate.blockIndex,
+          bodyIndex: candidate.bodyIndex,
+          number: expected,
+          source: candidate.raw === "" ? "printed" : "ocr",
+          marker: candidate.raw,
+        },
+      };
+    }
+    if (bridge !== undefined) {
+      numbers.set(bridge.candidate.blockIndex, bridge);
+      if (bridge.candidate.source === "ocr") {
+        evidence.push({
+          type: "ocr",
+          blockIndex: bridge.candidate.blockIndex,
+          number: bridge.candidate.number,
+          marker: bridge.candidate.marker,
+        });
+      }
+    }
+    previousBodyIndex = bodyIndex;
+  }
+};
+
+type ImpliedFirstOptions = {
+  readonly blocks: readonly Block[];
+  readonly body: Body;
+  /** The run's first printed paragraph. */
+  readonly first: Candidate;
+  /** Where the reasoning that run opens begins. */
+  readonly leadInFrom: number;
+  readonly start: ScopeStart;
+};
+
+/**
+ * Paragraph 1 of a run the court printed from 2, when it can be proven: the
+ * run starts the decision's numbering afresh at 2, and exactly one paragraph
+ * stands before that 2, the one that opens the reasoning after the operative
+ * part, in the same section, quoting nothing and opening with no label of its
+ * own. Courts that leave the first paragraph of the reasoning unlabelled
+ * still cite it as paragraph 1. Anything short of that proof leaves the
+ * paragraph unnumbered: no number is given that the court's text does not
+ * fix.
+ */
+const impliedFirst = ({
+  blocks,
+  body,
+  first,
+  leadInFrom,
+  start,
+}: ImpliedFirstOptions): Candidate | null => {
+  const bodyIndex = first.bodyIndex - 1;
+  const blockIndex = body.paragraphs[bodyIndex];
+  const block = blockIndex === undefined ? undefined : blocks[blockIndex];
+  if (
+    start.type !== "fresh-start" ||
+    first.number !== 2 ||
+    first.source === "structured" ||
+    bodyIndex !== leadInFrom ||
+    !body.reasoningStarts.has(bodyIndex) ||
+    body.sectionStarts.has(first.bodyIndex) ||
+    body.quotedStarts.has(bodyIndex) ||
+    blockIndex === undefined ||
+    block?.type !== "paragraph" ||
+    block.number !== undefined ||
+    opensWithMarker(block)
+  ) {
+    return null;
+  }
+  return { bodyIndex, blockIndex, number: 1, source: "implied", marker: "" };
+};
+
+type ScopeReading = Walk & {
+  readonly scopeIndex: number;
+  readonly style: CourtParagraphMarkerStyle;
+  readonly start: ScopeStart;
+};
+
+/** A short opinion needs corroboration from the run it actually continues. */
+const corroboratedReadings = (
+  readings: readonly ScopeReading[],
+): ScopeReading[] => {
+  const groups: ScopeReading[][] = [];
+  for (const reading of readings) {
+    const group = groups.at(-1);
+    const previous = group?.at(-1);
+    const continuesPrevious =
+      reading.start.type === "continuation" &&
+      reading.accepted.at(0)?.number === reading.start.startingAt;
+    if (
+      group !== undefined &&
+      previous !== undefined &&
+      previous.scopeIndex + 1 === reading.scopeIndex &&
+      continuesPrevious
+    ) {
+      group.push(reading);
+      continue;
+    }
+    groups.push([reading]);
+  }
+  return groups.flatMap((group) => {
+    const count = group.reduce(
+      (total, reading) => total + reading.accepted.length,
+      0,
+    );
+    return group.filter(
+      (reading) =>
+        reading.accepted.at(0)?.source === "structured" ||
+        count >= COURT_PARAGRAPH_NUMBERING_LIMITS.minParagraphs[reading.style],
+    );
+  });
+};
+
+/**
+ * Whether a run's printed numbers title the sections of a form rather than
+ * count the court's paragraphs: most of the numbered lines end without a
+ * sentence's close ("1. USTALENIE FAKTÓW", "2. OCENA DOWODÓW"), with the
+ * section's rows and text under each. A section number is the court's text,
+ * and the run's span alone does not prove it is a paragraph's.
+ */
+const titlesSections = (
+  blocks: readonly Block[],
+  printed: readonly Candidate[],
+): boolean =>
+  printed.filter((candidate) => {
+    const block = blocks[candidate.blockIndex];
+    return (
+      block?.type === "paragraph" &&
+      !SENTENCE_END_RE.test(block.plainText.trimEnd())
+    );
+  }).length *
+    2 >
+  printed.length;
+
+type ProvenRunOptions = {
+  readonly blocks: readonly Block[];
+  readonly body: Body;
+  readonly numbers: ReadonlyMap<number, NumberAssignment>;
+  /** The scope's best reading of one style. */
+  readonly best: Walk & {
+    readonly style: CourtParagraphMarkerStyle;
+    readonly start: ScopeStart;
+  };
+  readonly from: number;
+  readonly to: number;
+};
+
+/**
+ * The court's paragraphs a scope's best reading proves, with an implied 1
+ * where `impliedFirst` proves one, or null when the markers do not read as
+ * the reasoning's numbering.
+ */
+const provenRun = ({
+  blocks,
+  body,
+  numbers,
+  best,
+  from,
+  to,
+}: ProvenRunOptions): Candidate[] | null => {
+  const limits = COURT_PARAGRAPH_NUMBERING_LIMITS;
+  const first = best.accepted.at(0);
+  const last = best.accepted.at(-1);
+  if (first === undefined || last === undefined) {
+    return null;
+  }
+  // The lead-in is counted from where the reasoning opens: the scope's
+  // start, or the first paragraph after the operative part before the run.
+  const leadInFrom = Math.max(
+    from,
+    ...[...body.reasoningStarts].filter((start) => start <= first.bodyIndex),
+  );
+  if (first.bodyIndex - leadInFrom > limits.maxLeadIn) {
+    return null;
+  }
+  const implied = impliedFirst({
+    blocks,
+    body,
+    first,
+    leadInFrom,
+    start: best.start,
+  });
+  const accepted =
+    implied === null ? best.accepted : [implied, ...best.accepted];
+  const span = body.paragraphs
+    .slice(first.bodyIndex, to)
+    .filter(
+      (blockIndex) =>
+        !opensWithMarker(blocks[blockIndex]) && !numbers.has(blockIndex),
+    ).length;
+  const density = best.accepted.length / (best.accepted.length + span);
+  if (density >= limits.minDensity) {
+    return accepted;
+  }
+  // Counting up one by one from where the scope starts, with nothing left
+  // unread, and running on to the scope's end: the unnumbered paragraphs
+  // after the last number are a closing line or two, and no more than the
+  // run itself carries between two of its numbers. A list the reasoning
+  // runs on after leaves more text after its last item than between any
+  // two of its items.
+  const tail = to - 1 - last.bodyIndex;
+  const widestGap = Math.max(
+    0,
+    ...accepted.map((candidate, position) =>
+      position === 0
+        ? 0
+        : candidate.bodyIndex - (accepted[position - 1]?.bodyIndex ?? 0) - 1,
+    ),
+  );
+  const spansScope =
+    best.unassigned.length === 0 &&
+    accepted.length >=
+      Math.max(limits.minParagraphs[best.style], limits.minSpanningRun) &&
+    accepted.at(0)?.number === best.start.startingAt &&
+    accepted.every(
+      (candidate, position) =>
+        position === 0 ||
+        candidate.number === (accepted[position - 1]?.number ?? 0) + 1,
+    ) &&
+    tail <= Math.min(limits.maxTail, widestGap) &&
+    !titlesSections(blocks, best.accepted);
+  return spansScope ? accepted : null;
+};
+
+const readNumbering = (blocks: readonly Block[]): Reading => {
+  const body = bodyOf(blocks);
+  const numbers = new Map<number, NumberAssignment>();
+  const evidence: CourtParagraphNumberingEvidence[] = [];
+  const scopes: CourtParagraphNumberingScope[] = [];
+  const starts = [...new Set([0, ...body.opinionStarts])].toSorted(
+    (left, right) => left - right,
+  );
+  let style: CourtParagraphMarkerStyle = "bracket";
+  let previousScopeLast = 0;
+  const readings: ScopeReading[] = [];
+  for (const [index, from] of starts.entries()) {
+    const to = starts[index + 1] ?? body.paragraphs.length;
+    // Keep existing numbers as anchors. Raw markers in this scope need the
+    // local bridge below; replay must not reinterpret an entire nested list.
+    const firstStructuredIndex = body.paragraphs
+      .slice(from, to)
+      .find((blockIndex) => {
+        const block = blocks[blockIndex];
+        return block?.type === "paragraph" && block.number !== undefined;
+      });
+    if (firstStructuredIndex !== undefined) {
+      const previousLast = previousScopeLast;
+      const accepted: Candidate[] = [];
+      for (const [position, blockIndex] of body.paragraphs
+        .slice(from, to)
+        .entries()) {
+        const block = blocks[blockIndex];
+        if (block?.type !== "paragraph" || block.number === undefined) {
+          continue;
+        }
+        previousScopeLast = block.number;
+        accepted.push({
+          bodyIndex: from + position,
+          blockIndex,
+          number: block.number,
+          source: "structured",
+          marker: "",
+        });
+      }
+      const firstNumber = accepted.at(0)?.number;
+      const start =
+        previousLast > 0 && firstNumber === previousLast + 1
+          ? ({
+              type: "continuation",
+              startingAt: firstNumber,
+            } as const satisfies ScopeStart)
+          : ({
+              type: "fresh-start",
+              startingAt: 1,
+            } as const satisfies ScopeStart);
+      readings.push({
+        scopeIndex: index,
+        style,
+        start,
+        accepted,
+        unassigned: [],
+      });
+      continue;
+    }
+    const freshStart = {
+      type: "fresh-start",
+      startingAt: 1,
+    } as const satisfies ScopeStart;
+    const scopeStarts =
+      previousScopeLast === 0
+        ? [freshStart]
+        : [
+            freshStart,
+            {
+              type: "continuation",
+              startingAt: previousScopeLast + 1,
+            } as const satisfies ScopeStart,
+          ];
+    // Compare the evidence within this opinion. A fresh run may start at 2
+    // when paragraph 1 merged into its preamble; the preceding opinion must
+    // not make those markers look like steps backwards.
+    const best = COURT_PARAGRAPH_MARKER_STYLES.flatMap((candidateStyle) => {
+      const candidates = candidatesOf(blocks, body, candidateStyle, {
+        from,
+        to,
+      });
+      return scopeStarts.map((start) => {
+        const reading = walk(candidates, start.startingAt);
+        let startPriority = 1;
+        if (start.type === "continuation") {
+          startPriority =
+            reading.accepted.at(0)?.number === start.startingAt ? 0 : 2;
+        }
+        return {
+          style: candidateStyle,
+          start,
+          ...reading,
+          startPriority,
+        };
+      });
+    })
+      .toSorted(
+        (left, right) =>
+          right.accepted.length - left.accepted.length ||
+          STYLE_PRIORITY[left.style] - STYLE_PRIORITY[right.style] ||
+          left.startPriority - right.startPriority,
+      )
+      .at(0);
+    const last = best?.accepted.at(-1);
+    if (best === undefined || last === undefined) {
+      continue;
+    }
+    const accepted = provenRun({ blocks, body, numbers, best, from, to });
+    if (accepted === null) {
+      continue;
+    }
+    style = best.style;
+    previousScopeLast = last.number;
+    readings.push({
+      scopeIndex: index,
+      style: best.style,
+      start: best.start,
+      accepted,
+      unassigned: best.unassigned,
+    });
+  }
+  for (const reading of corroboratedReadings(readings)) {
+    const first = reading.accepted.at(0);
+    if (first === undefined) {
+      continue;
+    }
+    style = reading.style;
+    scopes.push({ type: reading.start.type, blockIndex: first.blockIndex });
+    const seen = new Map<number, number>();
+    for (const candidate of reading.accepted) {
+      numbers.set(candidate.blockIndex, { candidate, style: reading.style });
+      const previousBlockIndex = seen.get(candidate.number);
+      if (previousBlockIndex !== undefined) {
+        evidence.push({
+          type: "duplicate",
+          blockIndex: candidate.blockIndex,
+          number: candidate.number,
+          previousBlockIndex,
+        });
+      }
+      seen.set(candidate.number, candidate.blockIndex);
+      if (candidate.source === "ocr") {
+        evidence.push({
+          type: "ocr",
+          blockIndex: candidate.blockIndex,
+          number: candidate.number,
+          marker: candidate.marker,
+        });
+      }
+      if (candidate.source === "implied") {
+        evidence.push({
+          type: "implied",
+          blockIndex: candidate.blockIndex,
+          number: 1,
+        });
+      }
+    }
+    for (const candidate of reading.unassigned) {
+      evidence.push({
+        type: "unassigned",
+        blockIndex: candidate.blockIndex,
+        number: candidate.number,
+      });
+    }
+  }
+  for (const [scopeIndex, from] of starts.entries()) {
+    const to = starts[scopeIndex + 1] ?? body.paragraphs.length;
+    bridgeScope({ blocks, body, numbers, evidence, from, to });
+  }
+  return { numbers, style, evidence, scopes };
+};
+
+const withNumber = (
+  block: ParagraphBlock,
+  { style, candidate }: NumberAssignment,
+): ParagraphBlock => {
+  if (candidate.source === "structured") {
+    return block;
+  }
+  // The court printed no label to move: the paragraph keeps its text whole.
+  if (candidate.source === "implied") {
+    return { ...block, number: candidate.number };
+  }
+  const { line } = stripInlineLinePrefix(
+    normalizeInlineLine(block.inlines),
+    candidate.source === "ocr"
+      ? OCR_DOT_MARKER
+      : COURT_PARAGRAPH_MARKER_PATTERNS[style],
+  );
+  return {
+    ...block,
+    number: candidate.number,
+    inlines: line.inlines,
+    plainText: line.plainText,
+  };
+};
+
+/** Move each scope's proven printed labels without discarding other labels. */
+export const extractCourtParagraphNumbers = (
+  blocks: readonly Block[],
+): CourtParagraphNumbering => {
+  const reading = readNumbering(blocks);
+  if (reading.numbers.size === 0) {
+    return { type: "unnumbered", blocks: [...blocks] };
+  }
+  return {
+    type: "numbered",
+    blocks: blocks.map((block, index) => {
+      const assignment = reading.numbers.get(index);
+      return assignment === undefined || block.type !== "paragraph"
+        ? block
+        : withNumber(block, assignment);
+    }),
+    numbered: reading.numbers.size,
+    style: reading.style,
+    evidence: reading.evidence,
+    scopes: reading.scopes,
+  };
+};

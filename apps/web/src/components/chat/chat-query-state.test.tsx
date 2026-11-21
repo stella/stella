@@ -2,8 +2,10 @@ import type { ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { beforeAll, expect, test } from "bun:test";
+import { expect, test } from "bun:test";
 import { IntlProvider } from "use-intl";
+
+import { createTestState } from "@stll/test-state";
 
 import { FormattingProvider } from "@/i18n/formatting-context";
 import en from "@/i18n/langs/en.json";
@@ -11,8 +13,9 @@ import { AuthenticatedUserProvider } from "@/lib/authenticated-user-context";
 import type { AuthenticatedUser } from "@/lib/authenticated-user-context";
 import { toChatThreadId } from "@/lib/chat-thread-ref";
 
-beforeAll(() => {
-  process.env["VITE_API_URL"] ??= "https://api.example.test";
+const state = createTestState({ file: import.meta.path, config: {} });
+state.beforeAll(() => {
+  state.setEnvIfAbsent("VITE_API_URL", "https://api.example.test");
 });
 
 const COMPOSER_CONTENT = "Composer";
@@ -60,9 +63,11 @@ const models = {
     scope: "global",
     threadId: toChatThreadId("thread-query-state"),
   },
+  state: "ready",
   selectedModel: "provider::explicit-model",
   selectedReasoningEffort: null,
   selectModel: () => {},
+  runTarget: { type: "cloud_only" },
 } as const;
 
 test("matter picker failure does not label selected context as no matter", async () => {
@@ -70,7 +75,10 @@ test("matter picker failure does not label selected context as no matter", async
   const { workspacesNavigationOptions } =
     await import("@/lib/workspaces/queries");
   const client = createClient();
-  const options = workspacesNavigationOptions(ORGANIZATION_ID);
+  const options = workspacesNavigationOptions({
+    organizationId: ORGANIZATION_ID,
+    userId: USER.id,
+  });
   client.getQueryCache().build(client, { queryKey: options.queryKey });
   markFailed(client, options.queryKey);
   const markup = render(
@@ -98,7 +106,10 @@ test("mention source failure shows a retry instead of silently removing choices"
   const { workspacesNavigationOptions } =
     await import("@/lib/workspaces/queries");
   const client = createClient();
-  const options = workspacesNavigationOptions(ORGANIZATION_ID);
+  const options = workspacesNavigationOptions({
+    organizationId: ORGANIZATION_ID,
+    userId: USER.id,
+  });
   client.getQueryCache().build(client, { queryKey: options.queryKey });
   markFailed(client, options.queryKey);
   const markup = render(
@@ -117,8 +128,14 @@ test("mention sources keep cached empty data with a failed refresh notice", asyn
   const { workspacesNavigationOptions } =
     await import("@/lib/workspaces/queries");
   const client = createClient();
-  const options = workspacesNavigationOptions(ORGANIZATION_ID);
-  client.setQueryData(options.queryKey, { workspaces: [] });
+  const options = workspacesNavigationOptions({
+    organizationId: ORGANIZATION_ID,
+    userId: USER.id,
+  });
+  client.setQueryData(options.queryKey, {
+    workspaces: [],
+    features: { timeBilling: false },
+  });
   markFailed(client, options.queryKey);
   const markup = render(
     client,

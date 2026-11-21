@@ -4,7 +4,6 @@ import { drizzle } from "drizzle-orm/pglite";
 
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 
-import type { Transaction } from "@/api/db/root";
 import {
   caseLawCitations,
   caseLawDecisionIdentifiers,
@@ -12,6 +11,7 @@ import {
   caseLawSources,
 } from "@/api/db/schema";
 import { CITATION_DECISION_TYPE_HINT } from "@/api/handlers/case-law/citation-decision-type-hint";
+import { runCitationGraphTransaction } from "@/api/handlers/case-law/citation-graph-transaction";
 import { resolveCitationsForDecision } from "@/api/handlers/case-law/citation-resolution";
 import {
   CITATION_RESOLUTION_RULE,
@@ -63,11 +63,6 @@ const sheetOverDateCitation = createSafeId<"caseLawCitation">();
 
 const DOCKET = "8 As 287/2020";
 const DOCKET_KEY = bareCitationKey(DOCKET);
-
-// The pglite handle stands in for a transaction, matching the pattern the
-// other case-law database tests use for their fakes.
-// oxlint-disable-next-line typescript/no-unsafe-type-assertion
-const asTx = () => db as unknown as Transaction;
 
 const court = {
   sourceId,
@@ -213,7 +208,10 @@ const AMBIGUOUS = {
 };
 
 test("the sheet a text names picks the decision out of its case file", async () => {
-  const counts = await resolveCitationsForDecision(asTx(), citing);
+  const counts = await runCitationGraphTransaction(
+    db.transaction.bind(db),
+    async (tx) => resolveCitationsForDecision(tx, citing),
+  );
 
   expect(counts.resolvedByRule).toMatchObject({
     [CITATION_RESOLUTION_RULE.SHEET_NUMBER]: 2,

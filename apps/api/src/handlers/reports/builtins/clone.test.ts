@@ -1,6 +1,7 @@
 import { Result } from "better-result";
-import { describe, expect, mock, test } from "bun:test";
+import { beforeEach, describe, expect, mock, test } from "bun:test";
 
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import { deriveManifestFromDocx } from "@/api/lib/docx/derived-manifest";
@@ -16,6 +17,10 @@ import {
 } from "../builtin-templates";
 import { createCloneBuiltinReportTemplate } from "./clone";
 import type { CloneBuiltinReportTemplateDependencies } from "./clone";
+
+beforeEach(() => {
+  createStoredTemplateMock.mockClear();
+});
 
 // The fidelity regression this file guards is that a clone of the built-in
 // fills the way the built-in does. The configuration travels in the bytes, so
@@ -57,6 +62,7 @@ const createContext = (
     request: new Request("https://example.test/v1/reports/templates/clone"),
     server: null,
   };
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test fixture only provides fields the handler touches
   return {
     workspaceId,
     user: { id: userId },
@@ -64,11 +70,11 @@ const createContext = (
     memberRole: sessionMemberRole("owner"),
     body: { key },
     request: recorderBindings.request,
-    route: "/v1/workspaces/:workspaceId/reports/templates/clone-builtin",
+    route:
+      "/v1/workspaces/:workspaceId/reports/templates/clone-builtin" satisfies ApiRoutePath,
     safeDb,
     recordAuditEvent: createAuditRecorder(recorderBindings),
     createAuditRecorder: () => createAuditRecorder(recorderBindings),
-    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test fixture only provides fields the handler touches
   } as Parameters<typeof cloneBuiltinReportTemplate.handler>[0];
 };
 

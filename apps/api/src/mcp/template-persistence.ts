@@ -1,6 +1,8 @@
 import { panic, TaggedError } from "better-result";
 import { and, eq, lte } from "drizzle-orm";
 
+import { createSha256 } from "@stll/sha256/bun";
+
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import {
@@ -19,7 +21,7 @@ export const persistFilledTemplateDocument = createEntityFromBuffer;
 export const persistFilledTemplateVersion = createEntityVersionFromBuffer;
 
 export const fingerprintTemplatePersistenceRequest = (input: unknown): string =>
-  new Bun.CryptoHasher("sha256")
+  createSha256()
     .update(JSON.stringify(sortDeep(input)))
     .digest("hex");
 

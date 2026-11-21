@@ -1,0 +1,30 @@
+import type {
+  AgentCaseLawSearchWarning,
+  DecisionQueryWarning,
+} from "../lib/case-law/search-warnings";
+
+/** Agent guidance remains in tool results, never in the human-facing app. */
+export const MCP_NOTE_AUDIENCE = {
+  input_read: "agent",
+  function_words_optional: "agent",
+  no_hits: "agent",
+  no_hits_filtered: "agent",
+  collection_citation_unresolved: "agent",
+  partial_matches_appended: "agent",
+  partial_matches_ranked: "agent",
+  filter_read: "agent",
+  filter_dropped: "agent",
+  filter_unread: "agent",
+  many_required_terms: "agent",
+  provision_cited_widely: "agent",
+  provision_scope_unread: "agent",
+  phrasing_timed_out: "agent",
+  partial_matches_unread: "agent",
+  query_words_apart: "agent",
+  query_words_absent: "agent",
+} as const satisfies Record<
+  | AgentCaseLawSearchWarning["code"]
+  | DecisionQueryWarning["code"]
+  | "input_read",
+  "agent" | "user"
+>;

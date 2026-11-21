@@ -8,114 +8,48 @@ import { cva } from "class-variance-authority";
 import type { VariantProps } from "class-variance-authority";
 
 import { cn } from "../lib/utils";
+import { AnimatedCount } from "./animated-count";
+import {
+  List,
+  LIST_ITEM_ROW_CLASS,
+  ListGroup,
+  ListGroupAction,
+  ListGroupDescription,
+  ListGroupHeader,
+  ListGroupHeading,
+  ListGroupTitle,
+  ListItemMedia,
+} from "./list-shell";
+import { TruncatedText } from "./truncated-text";
+import type { TruncatedTextLines } from "./truncated-text";
 
-/**
+/*
  * Grouped list: a titled section holding one surface of hairline-divided
  * rows. Use it for settings and inventories of named things (connections,
  * sessions, members, keys) where each row is icon + name + one quiet line +
  * trailing status or action. Rows never scroll sideways: the content column
  * truncates and the trailing column keeps its width, so actions stay on
- * screen at any viewport.
+ * screen at any viewport. The group, its header, title and description and
+ * the surface live in ./list-shell.tsx, beside the rows' loading placeholder.
  */
-const ListGroup = ({
-  className,
-  ...props
-}: React.ComponentProps<"section">) => (
-  <section
-    className={cn("flex flex-col gap-2.5", className)}
-    data-slot="list-group"
-    {...props}
-  />
-);
 
-const ListGroupHeader = ({
-  className,
-  ...props
-}: React.ComponentProps<"header">) => (
-  <header
-    className={cn("flex items-end gap-4 px-1", className)}
-    data-slot="list-group-header"
-    {...props}
-  />
-);
-
-/** Title and description stack; takes the space the header action leaves. */
-const ListGroupHeading = ({
-  className,
-  ...props
-}: React.ComponentProps<"div">) => (
-  <div
-    className={cn("flex min-w-0 flex-1 flex-col gap-0.5", className)}
-    data-slot="list-group-heading"
-    {...props}
-  />
-);
-
-const ListGroupTitle = ({
-  className,
-  children,
-  ...props
-}: React.ComponentProps<"h2">) => (
-  <h2
-    className={cn(
-      "text-foreground text-sm font-medium text-balance",
-      className,
-    )}
-    data-slot="list-group-title"
-    {...props}
-  >
-    {children}
-  </h2>
-);
-
-/** Quiet item count after the title; shows matches while a search filters. */
+/**
+ * Quiet item count after the title; shows matches while a search filters,
+ * and a changed digit fades in rather than snapping. `count` arrives
+ * formatted in the caller's locale.
+ */
 const ListGroupCount = ({
   className,
+  count,
   ...props
-}: React.ComponentProps<"span">) => (
+}: Omit<React.ComponentProps<"span">, "children"> & { count: string }) => (
   <span
-    className={cn(
-      "text-muted-foreground ms-1.5 font-normal tabular-nums",
-      className,
-    )}
+    className={cn("text-muted-foreground ms-1.5 font-normal", className)}
     data-slot="list-group-count"
     {...props}
-  />
-);
-
-const ListGroupDescription = ({
-  className,
-  ...props
-}: React.ComponentProps<"p">) => (
-  <p
-    className={cn("text-muted-foreground text-xs text-pretty", className)}
-    data-slot="list-group-description"
-    {...props}
-  />
-);
-
-/** Quiet trailing affordance on the header row (a link or ghost button). */
-const ListGroupAction = ({
-  className,
-  ...props
-}: React.ComponentProps<"div">) => (
-  <div
-    className={cn("flex shrink-0 items-center gap-1", className)}
-    data-slot="list-group-action"
-    {...props}
-  />
-);
-
-/** The surface. Depth comes from a ring plus a soft shadow, not a frame. */
-const List = ({ className, ...props }: React.ComponentProps<"ul">) => (
-  <ul
-    className={cn(
-      "bg-background ring-border divide-border flex flex-col divide-y overflow-hidden rounded-xl shadow-xs/5 ring-1",
-      className,
-    )}
-    data-slot="list"
-    {...props}
-  />
+  >
+    <AnimatedCount value={count} />
+  </span>
 );
 
 /**
@@ -131,7 +65,7 @@ const ListItem = ({
 }: useRender.ComponentProps<"div">) => {
   const defaultProps = {
     className: cn(
-      "flex min-h-14 w-full items-center gap-3 px-4 py-2.5 text-start",
+      LIST_ITEM_ROW_CLASS,
       render !== undefined &&
         "hover:bg-muted/50 focus-visible:bg-muted/50 focus-visible:ring-ring cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-inset",
       className,
@@ -148,36 +82,6 @@ const ListItem = ({
   return <li className="flex">{row}</li>;
 };
 
-const listItemMediaVariants = cva(
-  "bg-muted grid size-8 shrink-0 place-items-center overflow-hidden rounded-lg outline-1 -outline-offset-1 outline-black/5 dark:outline-white/10",
-  {
-    defaultVariants: { variant: "icon" },
-    variants: {
-      variant: {
-        /** A glyph or logo, drawn quietly. */
-        icon: "text-muted-foreground [&_svg:not([class*='size-'])]:size-4",
-        /** A letter standing in for a name that has no logo. */
-        initial: "text-foreground text-xs font-medium",
-      },
-    },
-  },
-);
-
-/** Fixed 32px tile for an icon, logo or initial. */
-const ListItemMedia = ({
-  className,
-  variant,
-  ...props
-}: React.ComponentProps<"div"> &
-  VariantProps<typeof listItemMediaVariants>) => (
-  <div
-    aria-hidden="true"
-    className={cn(listItemMediaVariants({ variant }), className)}
-    data-slot="list-item-media"
-    {...props}
-  />
-);
-
 const ListItemContent = ({
   className,
   ...props
@@ -189,14 +93,39 @@ const ListItemContent = ({
   />
 );
 
+const listItemTitleVariants = cva("text-foreground text-sm font-medium", {
+  defaultVariants: { variant: "name" },
+  variants: {
+    variant: {
+      /** A name: one line, cut at the end. */
+      name: "",
+      /** A statement a reader must see whole to judge (a proposed fact): up
+       *  to two lines, then cut. */
+      statement: "text-pretty wrap-break-word",
+    },
+  },
+});
+
+type ListItemTitleVariant = NonNullable<
+  VariantProps<typeof listItemTitleVariants>["variant"]
+>;
+
+const LIST_ITEM_TITLE_LINES = {
+  name: 1,
+  statement: 2,
+} as const satisfies Record<ListItemTitleVariant, TruncatedTextLines>;
+
 const ListItemTitle = ({
   className,
+  variant,
   ...props
-}: React.ComponentProps<"span">) => (
-  <span
-    className={cn("text-foreground truncate text-sm font-medium", className)}
+}: React.ComponentProps<"span"> &
+  VariantProps<typeof listItemTitleVariants>) => (
+  <TruncatedText
+    className={cn(listItemTitleVariants({ variant }), className)}
     data-slot="list-item-title"
     dir="auto"
+    lines={LIST_ITEM_TITLE_LINES[variant ?? "name"]}
     {...props}
   />
 );
@@ -205,28 +134,34 @@ const listItemDescriptionVariants = cva("text-muted-foreground text-xs", {
   defaultVariants: { variant: "text" },
   variants: {
     variant: {
-      /** Prose, clamped to one line so long provider copy cannot widen the row. */
-      text: "line-clamp-1 wrap-break-word",
-      /** A URL or command: monospace, left-to-right, truncated at the end. */
-      code: "truncate font-mono",
+      /** Prose, cut to one line so long provider copy cannot widen the row. */
+      text: "wrap-break-word",
+      /** Prose that genuinely needs a second line (a reason, an error). */
+      paragraph: "wrap-break-word",
+      /** A URL or command: monospace, left-to-right, cut at the end. */
+      code: "font-mono",
     },
   },
 });
 
 /**
- * Secondary line. Pass `line-clamp-2` when two lines are genuinely needed;
- * never `whitespace-nowrap`.
+ * Secondary line, one line by default. Use the `paragraph` variant (two
+ * lines) or `lines` when more is genuinely needed; never `whitespace-nowrap`.
  */
 const ListItemDescription = ({
   className,
   variant,
+  lines,
   ...props
 }: React.ComponentProps<"span"> &
-  VariantProps<typeof listItemDescriptionVariants>) => (
-  <span
+  VariantProps<typeof listItemDescriptionVariants> & {
+    lines?: TruncatedTextLines;
+  }) => (
+  <TruncatedText
     className={cn(listItemDescriptionVariants({ variant }), className)}
     data-slot="list-item-description"
     dir={variant === "code" ? "ltr" : "auto"}
+    lines={lines ?? (variant === "paragraph" ? 2 : 1)}
     {...props}
   />
 );

@@ -2,20 +2,24 @@ import type { RefObject } from "react";
 
 import { useQuery } from "@tanstack/react-query";
 
+import { statuteAnchorSchemeFor } from "@stll/api-contract/statute-anchor-schemes";
+import { statuteDisplayLabel } from "@stll/api-contract/statute-display-label";
+import { SourceLinkPolicyProvider } from "@stll/decision-reader/source-link-policy";
 import type { Block } from "@stll/legal-ast/document-ast";
 
-import { SourceLinkPolicyProvider } from "@/components/legal-reader/source-link-policy";
 import { AnnotatedStatuteText } from "@/features/statutes/components/annotated-statute-text";
 import { statuteCitationCountsOptions } from "@/features/statutes/queries/citing-decisions";
 import type { PublicStatute } from "@/features/statutes/queries/statutes";
 import { provisionCitationCountByBlockAnchor } from "@/features/statutes/statute-reader-blocks";
 import type { StatuteMasthead } from "@/features/statutes/statute-reader-blocks";
+import { queryView } from "@/lib/query-view.logic";
+import { useQueryViewError } from "@/lib/use-query-view";
 
 type StatuteReaderBodyProps = {
   /** Parsed blocks. The caller owns the parse: the page also builds an outline. */
   blocks: readonly Block[];
-  /** The rendered block the reader was sent to, if any. */
-  landingAnchorId?: string | undefined;
+  /** The rendered blocks the reader was sent to, the first scrolled to. */
+  landingAnchorIds?: readonly string[] | undefined;
   masthead: StatuteMasthead | null;
   scrollContainerRef: RefObject<HTMLElement | null>;
   statute: PublicStatute;
@@ -32,7 +36,7 @@ type StatuteReaderBodyProps = {
  */
 export const StatuteReaderBody = ({
   blocks,
-  landingAnchorId,
+  landingAnchorIds,
   masthead,
   scrollContainerRef,
   statute,
@@ -51,11 +55,13 @@ export const StatuteReaderBody = ({
     enabled:
       citationWork !== null && typeof statute.citationCaseCount === "number",
   });
+  const citationCountsView = queryView(citationCounts);
+  useQueryViewError(citationCountsView, "StatuteReaderBody:query");
+  const countsData =
+    citationCountsView.type === "items" ? citationCountsView.items : undefined;
   const provisionCitationCounts = provisionCitationCountByBlockAnchor(
-    blocks,
-    citationCounts.data?.status === "ready"
-      ? citationCounts.data.provisions
-      : [],
+    { blocks, scheme: statuteAnchorSchemeFor(statute.country) },
+    countsData?.status === "ready" ? countsData.provisions : [],
   );
 
   return (
@@ -70,12 +76,12 @@ export const StatuteReaderBody = ({
         documentId={statute.id}
         eli={statute.eli}
         fulltext={statute.fulltext}
-        landingAnchorId={landingAnchorId}
+        landingAnchorIds={landingAnchorIds}
         language={statute.language}
         masthead={masthead}
         provisionCitationCounts={provisionCitationCounts}
         scrollContainerRef={scrollContainerRef}
-        statuteTitle={statute.title}
+        statuteTitle={statuteDisplayLabel(statute).text}
         versionCount={versionCount}
         versionValidFrom={statute.versionValidFrom}
       />

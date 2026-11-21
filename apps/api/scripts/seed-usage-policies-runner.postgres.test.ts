@@ -40,6 +40,7 @@ describe.skipIf(!runPostgres)("usage policy seed outcomes (postgres)", () => {
       try {
         const inserted = await runSeedReport({
           mode: "apply",
+          freeTier: "off",
           input: JSON.stringify([policy, retired]),
           resultsPath: nodePath.join(dir, "insert.jsonl"),
           openDb: () => db,
@@ -50,6 +51,7 @@ describe.skipIf(!runPostgres)("usage policy seed outcomes (postgres)", () => {
         ]);
         const replay = await runSeedReport({
           mode: "apply",
+          freeTier: "off",
           input: JSON.stringify([policy, retired]),
           resultsPath: nodePath.join(dir, "replay.jsonl"),
           openDb: () => db,
@@ -60,6 +62,7 @@ describe.skipIf(!runPostgres)("usage policy seed outcomes (postgres)", () => {
         ]);
         const updated = await runSeedReport({
           mode: "apply",
+          freeTier: "off",
           input: JSON.stringify([
             { ...policy, storageBytesPerAssignment: 100 },
           ]),
@@ -79,6 +82,7 @@ describe.skipIf(!runPostgres)("usage policy seed outcomes (postgres)", () => {
         const restore = JSON.stringify([policy, retired]);
         const dryRun = await runSeedReport({
           mode: "dry_run",
+          freeTier: "off",
           input: restore,
           resultsPath: nodePath.join(dir, "dry-run.jsonl"),
           openDb: () => db,
@@ -90,6 +94,7 @@ describe.skipIf(!runPostgres)("usage policy seed outcomes (postgres)", () => {
         expect(await snapshot()).toEqual(beforeDryRun);
         const restored = await runSeedReport({
           mode: "apply",
+          freeTier: "off",
           input: restore,
           resultsPath: nodePath.join(dir, "restored.jsonl"),
           openDb: () => db,
@@ -100,6 +105,7 @@ describe.skipIf(!runPostgres)("usage policy seed outcomes (postgres)", () => {
         const path = nodePath.join(dir, "failed.jsonl");
         const failed = await runSeedReport({
           mode: "apply",
+          freeTier: "off",
           input: JSON.stringify([
             { ...policy, monthlyUsageUnits: 20 },
             { ...policy, key: "collision" },
@@ -125,6 +131,114 @@ describe.skipIf(!runPostgres)("usage policy seed outcomes (postgres)", () => {
           { key: "retained", units: 10 },
           { key: "retired", units: 10 },
         ]);
+      } finally {
+        await db.execute(sql`DROP TABLE pg_temp.usage_policies`);
+        rmSync(dir, { recursive: true });
+      }
+    });
+  });
+
+  test("replacing the seeded free key commits under the one-active-free index", async () => {
+    if (!databaseUrl) {
+      panic("DATABASE_URL required");
+    }
+    await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+      const { db } = openClient({ max: 1 });
+      const dir = mkdtempSync(
+        nodePath.join(tmpdir(), "policy-postgres-free-swap-"),
+      );
+      await db.execute(
+        sql`CREATE TEMP TABLE usage_policies (LIKE public.usage_policies INCLUDING ALL)`,
+      );
+      const freeSeed = (key: string) =>
+        JSON.stringify([
+          {
+            key,
+            displayName: "Free",
+            kind: "free",
+            monthlyUsageUnits: 0,
+            maxMembers: 1,
+            storageBytesPerAssignment: 1024,
+            serviceActionsPerPeriod: 3,
+          },
+        ]);
+      try {
+        await runSeedReport({
+          mode: "apply",
+          freeTier: "on",
+          input: freeSeed("free-a"),
+          resultsPath: nodePath.join(dir, "first.jsonl"),
+          openDb: () => db,
+        });
+        const replaced = await runSeedReport({
+          mode: "apply",
+          freeTier: "on",
+          input: freeSeed("free-b"),
+          resultsPath: nodePath.join(dir, "second.jsonl"),
+          openDb: () => db,
+        });
+        expect(replaced.status).toBe("complete");
+        expect(
+          await db
+            .select({
+              policyKey: usagePolicies.policyKey,
+              active: usagePolicies.active,
+            })
+            .from(usagePolicies)
+            .orderBy(usagePolicies.policyKey),
+        ).toEqual([
+          { policyKey: "free-a", active: false },
+          { policyKey: "free-b", active: true },
+        ]);
+      } finally {
+        await db.execute(sql`DROP TABLE pg_temp.usage_policies`);
+        rmSync(dir, { recursive: true });
+      }
+    });
+  });
+
+  test("an empty configuration with the free tier off deactivates the seeded free policy", async () => {
+    if (!databaseUrl) {
+      panic("DATABASE_URL required");
+    }
+    await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+      const { db } = openClient({ max: 1 });
+      const dir = mkdtempSync(nodePath.join(tmpdir(), "policy-postgres-free-"));
+      await db.execute(
+        sql`CREATE TEMP TABLE usage_policies (LIKE public.usage_policies INCLUDING ALL)`,
+      );
+      try {
+        const seeded = await runSeedReport({
+          mode: "apply",
+          freeTier: "on",
+          input: JSON.stringify([
+            {
+              key: "free",
+              displayName: "Free",
+              kind: "free",
+              monthlyUsageUnits: 0,
+              maxMembers: 1,
+              storageBytesPerAssignment: 1024,
+              serviceActionsPerPeriod: 3,
+            },
+          ]),
+          resultsPath: nodePath.join(dir, "seeded.jsonl"),
+          openDb: () => db,
+        });
+        expect(seeded.status).toBe("complete");
+        const emptied = await runSeedReport({
+          mode: "apply",
+          freeTier: "off",
+          input: "[]",
+          resultsPath: nodePath.join(dir, "emptied.jsonl"),
+          openDb: () => db,
+        });
+        expect(emptied.rows).toEqual([
+          { policyKey: "free", mode: "apply", outcome: "deactivated" },
+        ]);
+        expect(
+          await db.select({ active: usagePolicies.active }).from(usagePolicies),
+        ).toEqual([{ active: false }]);
       } finally {
         await db.execute(sql`DROP TABLE pg_temp.usage_policies`);
         rmSync(dir, { recursive: true });

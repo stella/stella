@@ -1,6 +1,16 @@
+import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
-import type { McpRequestContext } from "@/api/mcp/context";
+import type { Transaction } from "@/api/db/root";
+import type { CachedMcpToolDefinition } from "@/api/db/schema";
+import type { AuditRecorder } from "@/api/lib/audit-log";
+import { toSafeId } from "@/api/lib/branded-types";
+import type { BusinessRegistrySlug } from "@/api/lib/business-registries/dispatch";
+import { readPresent } from "@/api/lib/errors/read-outcome";
+import type { LoadedMcpConnection } from "@/api/lib/mcp-upstream/connections";
+import { isSkillToolName } from "@/api/lib/mcp-upstream/namespace";
+import type { McpCredentialType } from "@/api/mcp/auth";
+import type { ExternalGatewayDependencies } from "@/api/mcp/gateway/external-tools";
 import {
   getGatewayMcpToolDefinition,
   listGatewayMcpToolDefinitions,
@@ -8,20 +18,40 @@ import {
 } from "@/api/mcp/gateway/list-tools";
 import { DOCUMENTS_MCP_TOOL_DEFINITIONS } from "@/api/mcp/static-tool-definitions";
 import type { McpToolDefinition } from "@/api/mcp/tool-types";
+import {
+  getMcpToolRequiredScopesHint,
+  handleMcpToolCall,
+} from "@/api/mcp/tools";
+import { hasMcpToolAuthority } from "@/api/mcp/write-tool-authority";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import { enrolledTimeBillingSnapshot } from "@/api/tests/helpers/time-billing-enrolment";
 
-// Only `enabledRegistrySlugs` and `memberRole` drive static visibility here.
+// Only the registry loader and `memberRole` drive static visibility here.
 // `scopes: ["stella:read"]` grants the read-scoped lookup tool while
 // withholding stella:external_mcps / stella:skills, so the dynamic gateway
 // loaders never run and no DB is touched.
 const contextWith = (
-  enabledRegistrySlugs: readonly string[] | undefined,
-  memberRole: McpRequestContext["memberRole"] = "owner",
-): McpRequestContext =>
-  asTestRaw<McpRequestContext>({
-    enabledRegistrySlugs,
+  enabledRegistrySlugs: readonly BusinessRegistrySlug[] | undefined,
+  memberRole: AuthorizedMcpRequestContext["memberRole"] = "owner",
+): AuthorizedMcpRequestContext =>
+  asTestRaw<AuthorizedMcpRequestContext>({
+    ...(enabledRegistrySlugs === undefined
+      ? {}
+      : {
+          loadEnabledRegistrySlugs: async () =>
+            await Promise.resolve(readPresent(enabledRegistrySlugs)),
+        }),
     grantedScopes: [],
     memberRole,
+    // Billing tools are gated by enrolment; this caller is enrolled so role
+    // visibility is what the tests observe.
+    organizationId: "org_test",
+    userId: "user_test",
+    featureAccessSnapshot: enrolledTimeBillingSnapshot({
+      organizationId: "org_test",
+      userId: "user_test",
+    }),
   });
 
 // Snapshot the advertised registry enum into a fresh array. The unresolved and
@@ -41,7 +71,8 @@ const registryEnumOf = (
     "enum" in registry &&
     Array.isArray(registry.enum)
   ) {
-    return [...registry.enum];
+    const values: string[] = registry.enum;
+    return [...values];
   }
   return [];
 };
@@ -51,10 +82,30 @@ const hasLookupTool = (definitions: readonly McpToolDefinition[]): boolean =>
     (definition) => definition.name === "lookup_business_registry",
   );
 
+const tenantlessSkillContext = (): AuthorizedMcpRequestContext => {
+  const builder = {
+    from: () => builder,
+    where: () => builder,
+    orderBy: () => builder,
+    limit: async () => [],
+  };
+  const safeDb: AuthorizedMcpRequestContext["safeDb"] = async (run) =>
+    Result.ok(await run(asTestRaw<Transaction>({ select: () => builder })));
+  return asTestRaw<AuthorizedMcpRequestContext>({
+    grantedScopes: ["stella:skills", "stella:knowledge_write"],
+    memberRole: "owner",
+    organizationId: toSafeId<"organization">("org_no_skills"),
+    recordAuditEvent: asTestRaw<AuditRecorder>(async () => undefined),
+    safeDb,
+    userId: toSafeId<"user">("user_no_skills"),
+  });
+};
+
 const definitionWithSchema = (
   inputSchema: McpToolDefinition["inputSchema"],
 ): McpToolDefinition => ({
   access: "read",
+  permissions: { type: "open-read", reason: "reads only fixture data" },
   readClass: "tenant",
   annotations: {
     title: "Test tool",
@@ -62,12 +113,274 @@ const definitionWithSchema = (
     openWorldHint: false,
     readOnlyHint: true,
   },
+  annotationReasons: {
+    readOnlyHint: "Reads fixture data without modifying it.",
+    destructiveHint: "The fixture changes no existing data.",
+    openWorldHint: "The fixture reads local data only.",
+  },
   anonymized: { exposure: "passthrough" },
   consumesServices: true,
   description: "Test schema conversion",
   inputSchema,
   name: "test_schema_conversion",
   scope: "stella:read",
+});
+
+const externalToolName = "mcp__registry__lookup";
+const externalCachedTool = {
+  exposedName: externalToolName,
+  inputSchema: { type: "object", properties: {} },
+  rawName: "lookup",
+  readOnlyHint: true,
+} satisfies CachedMcpToolDefinition;
+const externalConnection = {
+  responseDisposition: "normal",
+  allowedTools: null,
+  connectorId: toSafeId<"mcpConnector">("connector_1"),
+  description: "Registry connector",
+  displayName: "Registry",
+  slug: "registry",
+  type: "none",
+  url: "https://mcp.example.test",
+  userConnectionId: toSafeId<"mcpUserConnection">("connection_1"),
+} satisfies LoadedMcpConnection;
+const externalGatewayDependencies = {
+  consumeMcpGatewayRateLimit: async () => true,
+  loadActiveMcpConnectionsForUser: async () => [externalConnection],
+  proxyMcpToolCall: async () => ({ content: [] }),
+  refreshCachedMcpToolsForConnection: async () => undefined,
+} satisfies ExternalGatewayDependencies;
+
+const contextWithExternalServer = (
+  grantedScopes: readonly string[],
+): AuthorizedMcpRequestContext => {
+  const builder = {
+    from: () => builder,
+    innerJoin: () => builder,
+    where: () => builder,
+    orderBy: () => builder,
+    limit: async () => [
+      {
+        allowedTools: null,
+        cachedTools: [externalCachedTool],
+        connectorId: externalConnection.connectorId,
+        displayName: externalConnection.displayName,
+        slug: externalConnection.slug,
+        userConnectionId: externalConnection.userConnectionId,
+      },
+    ],
+  };
+  const safeDb: AuthorizedMcpRequestContext["safeDb"] = async (callback) =>
+    Result.ok(
+      await callback(asTestRaw<Transaction>({ select: () => builder })),
+    );
+  return asTestRaw<AuthorizedMcpRequestContext>({
+    ...contextWith(undefined),
+    grantedScopes: [...grantedScopes],
+    safeDb,
+  });
+};
+
+describe("external gateway mode boundary", () => {
+  for (const scopes of [[], ["stella:external_mcps"]] as const) {
+    const scopeLabel = scopes.length === 0 ? "without scope" : "with scope";
+
+    test(`default mode exposes no external gateway tools ${scopeLabel}`, async () => {
+      const context = contextWithExternalServer(scopes);
+      const definitions = await listGatewayMcpToolDefinitions({
+        context,
+        mode: "default",
+        scopes,
+        externalGatewayDependencies,
+      });
+      const exact = await getGatewayMcpToolDefinition({
+        context,
+        mode: "default",
+        toolName: externalToolName,
+        externalGatewayDependencies,
+      });
+
+      expect(definitions.some(({ name }) => name === externalToolName)).toBe(
+        false,
+      );
+      expect(exact).toBeUndefined();
+    });
+
+    test(`advanced mode applies the external gateway scope ${scopeLabel}`, async () => {
+      const context = contextWithExternalServer(scopes);
+      const definitions = await listGatewayMcpToolDefinitions({
+        context,
+        mode: "advanced",
+        scopes,
+        externalGatewayDependencies,
+      });
+      const exact = await getGatewayMcpToolDefinition({
+        context: contextWithExternalServer(scopes),
+        mode: "advanced",
+        toolName: externalToolName,
+        externalGatewayDependencies,
+      });
+      const expected = scopes.length > 0;
+
+      expect(definitions.some(({ name }) => name === externalToolName)).toBe(
+        expected,
+      );
+      expect(exact?.name === externalToolName).toBe(expected);
+    });
+  }
+});
+
+const skillFixtureContext = (
+  sessionCredentialType: McpCredentialType | undefined,
+): AuthorizedMcpRequestContext => {
+  const builder = {
+    from: () => builder,
+    where: () => builder,
+    orderBy: () => builder,
+    limit: async () => [
+      {
+        id: toSafeId<"agentSkill">("skill_alpha"),
+        scope: "private",
+        userId: "user_test",
+        slug: "alpha",
+        name: "Alpha",
+        description: "Fixture skill",
+        version: "1.0.0",
+        license: null,
+        compatibility: null,
+        metadata: {},
+        body: "Fixture body",
+        invocation: "auto",
+        origin: "authored",
+      },
+    ],
+  };
+  const safeDb: AuthorizedMcpRequestContext["safeDb"] = async (callback) =>
+    Result.ok(
+      await callback(asTestRaw<Transaction>({ select: () => builder })),
+    );
+  return asTestRaw<AuthorizedMcpRequestContext>({
+    ...contextWith(undefined),
+    userId: "user_test",
+    grantedScopes: ["stella:skills", "stella:knowledge_write"],
+    safeDb,
+    ...(sessionCredentialType === undefined ? {} : { sessionCredentialType }),
+  });
+};
+
+describe("skill gateway mode boundary", () => {
+  test("a direct default-surface skill call returns unknown_tool", async () => {
+    const result = await handleMcpToolCall({
+      args: {},
+      context: contextWith(undefined),
+      mode: "default",
+      toolName: "skill__alpha",
+    });
+    expect(result.isError).toBe(true);
+    const text = result.content.at(0);
+    expect(text?.type).toBe("text");
+    if (text?.type !== "text") {
+      throw new TypeError("Expected the unknown-tool text envelope");
+    }
+    expect(JSON.parse(text.text)).toMatchObject({
+      error: { code: "unknown_tool" },
+    });
+  });
+
+  for (const mode of ["default", "advanced"] as const) {
+    test(`${mode} skill discovery agrees with exact-name resolution`, async () => {
+      const context = skillFixtureContext(undefined);
+      const definitions = await listGatewayMcpToolDefinitions({
+        context,
+        mode,
+        scopes: ["stella:skills"],
+      });
+      const exact = await getGatewayMcpToolDefinition({
+        context,
+        mode,
+        toolName: "skill__alpha",
+      });
+      expect(definitions.some(({ name }) => name === "skill__alpha")).toBe(
+        mode === "advanced",
+      );
+      expect(exact?.name === "skill__alpha").toBe(mode === "advanced");
+    });
+  }
+
+  // An agent run (a coding agent on the member's computer or in the
+  // sandbox) reaches stella on the default surface and gets its skills
+  // there; any other credential still needs the advanced surface.
+  for (const credential of [
+    "agent_run",
+    "oauth_client",
+    "delegated_user",
+    "personal_api_key",
+  ] as const) {
+    const served = credential === "agent_run";
+    test(`default surface ${served ? "serves" : "withholds"} skill tools for a ${credential} session`, async () => {
+      const context = skillFixtureContext(credential);
+      const definitions = await listGatewayMcpToolDefinitions({
+        context,
+        mode: "default",
+        scopes: ["stella:skills", "stella:knowledge_write"],
+      });
+      const exact = await getGatewayMcpToolDefinition({
+        context,
+        mode: "default",
+        toolName: "skill__alpha",
+      });
+      const names = definitions.map(({ name }) => name);
+
+      expect(names.includes("skill__alpha")).toBe(served);
+      expect(exact?.name === "skill__alpha").toBe(served);
+      // stella's own skills are tools for an agent run only.
+      expect(names.includes("skill__playbook_builder")).toBe(served);
+      // Skills ride on the advanced scope hint only where they are served.
+      expect(
+        getMcpToolRequiredScopesHint("skill__alpha", "default", {
+          sessionCredentialType: credential,
+        }),
+      ).toEqual(served ? ["stella:skills"] : undefined);
+    });
+  }
+
+  test("an agent run on the default surface without the skills scope lists none", async () => {
+    const definitions = await listGatewayMcpToolDefinitions({
+      context: skillFixtureContext("agent_run"),
+      mode: "default",
+      scopes: ["stella:read"],
+    });
+    expect(definitions.some(({ name }) => isSkillToolName(name))).toBe(false);
+  });
+
+  test("an agent run on the default surface still gets no connector tools", async () => {
+    const context = asTestRaw<AuthorizedMcpRequestContext>({
+      ...contextWithExternalServer(["stella:external_mcps", "stella:skills"]),
+      sessionCredentialType: "agent_run",
+    });
+    const definitions = await listGatewayMcpToolDefinitions({
+      context,
+      mode: "default",
+      scopes: ["stella:external_mcps"],
+      externalGatewayDependencies,
+    });
+    const exact = await getGatewayMcpToolDefinition({
+      context,
+      mode: "default",
+      toolName: externalToolName,
+      externalGatewayDependencies,
+    });
+
+    expect(definitions.some(({ name }) => name === externalToolName)).toBe(
+      false,
+    );
+    expect(exact).toBeUndefined();
+    expect(
+      getMcpToolRequiredScopesHint(externalToolName, "default", {
+        sessionCredentialType: "agent_run",
+      }),
+    ).toBeUndefined();
+  });
 });
 
 describe("listGatewayMcpToolDefinitions business-registry narrowing", () => {
@@ -103,6 +416,34 @@ describe("listGatewayMcpToolDefinitions business-registry narrowing", () => {
     expect(registryEnum).toContain("vies");
   });
 
+  test("loads the reachable registries only for a projection that offers the registry tool", async () => {
+    let loads = 0;
+    const context = asTestRaw<AuthorizedMcpRequestContext>({
+      ...contextWith(undefined),
+      loadEnabledRegistrySlugs: async () => {
+        loads += 1;
+        return await Promise.resolve(readPresent(["orsr"]));
+      },
+    });
+
+    // No scope grants the registry tool, and the anonymized projection never
+    // narrows: neither reads the organization's registries.
+    await listGatewayMcpToolDefinitions({
+      context,
+      mode: "default",
+      scopes: [],
+    });
+    await listGatewayMcpToolDefinitions({ context, mode: "anonymized" });
+    expect(loads).toBe(0);
+
+    await listGatewayMcpToolDefinitions({
+      context,
+      mode: "default",
+      scopes: ["stella:read"],
+    });
+    expect(loads).toBe(1);
+  });
+
   test("never narrows the tenant-neutral anonymized projection", async () => {
     // The anonymized tools/list must stay tenant-neutral: even when the context
     // resolved a subset, the anonymized schema keeps the full enum so it cannot
@@ -134,6 +475,20 @@ describe("listGatewayMcpToolDefinitions restricted surfaces", () => {
 
     expect(definitions.map(({ name }) => name)).toEqual(
       DOCUMENTS_MCP_TOOL_DEFINITIONS.map(({ name }) => name),
+    );
+  });
+});
+
+describe("listGatewayMcpToolDefinitions skill guidance", () => {
+  test("does not expose shipped skills as tools", async () => {
+    const definitions = await listGatewayMcpToolDefinitions({
+      context: tenantlessSkillContext(),
+      mode: "default",
+      scopes: ["stella:skills", "stella:knowledge_write"],
+    });
+
+    expect(definitions.some(({ name }) => name.startsWith("skill__"))).toBe(
+      false,
     );
   });
 });
@@ -195,7 +550,7 @@ describe("listGatewayMcpToolDefinitions role visibility", () => {
     );
   });
 
-  test("rejects exact-name resolution when the role cannot read rates", async () => {
+  test("resolves a named rate tool so dispatch can return a typed grant refusal", async () => {
     const ownerDefinition = await getGatewayMcpToolDefinition({
       context: contextWith(undefined, "owner"),
       mode: "default",
@@ -208,7 +563,19 @@ describe("listGatewayMcpToolDefinitions role visibility", () => {
     });
 
     expect(ownerDefinition?.name).toBe("resolve_rate");
-    expect(memberDefinition).toBeUndefined();
+    expect(memberDefinition?.name).toBe("resolve_rate");
+    if (!memberDefinition) {
+      return;
+    }
+    expect(
+      hasMcpToolAuthority(contextWith(undefined, "member"), memberDefinition),
+    ).toBe(false);
+    expect(
+      hasMcpToolAuthority(
+        { ...contextWith(undefined, "member"), billingAccess: true },
+        memberDefinition,
+      ),
+    ).toBe(true);
   });
 
   test("hides time-entry lists from external roles", async () => {
@@ -301,5 +668,20 @@ describe("toMcpTools input schema conversion", () => {
         toMcpTools([definitionWithSchema(inputSchema)]).at(0)?.inputSchema,
       ),
     ).toBe(JSON.stringify(inputSchema));
+  });
+});
+
+describe("MCP app-only discovery", () => {
+  test("host discovery preserves app-only metadata", () => {
+    const definition = {
+      ...definitionWithSchema({ type: "object" }),
+      _meta: { ui: { visibility: ["app"] } },
+    };
+    const wire = toMcpTools([definition]);
+    expect(wire.map(({ name }) => name)).toEqual([definition.name]);
+    expect(wire.at(0)?._meta).toEqual({
+      ...definition._meta,
+      schemaVersion: expect.stringMatching(/^[a-f0-9]{16}$/u),
+    });
   });
 });

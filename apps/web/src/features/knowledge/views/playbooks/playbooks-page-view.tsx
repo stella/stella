@@ -8,16 +8,25 @@ import {
   ClipboardCheckIcon,
   ClipboardListIcon,
   Clock3Icon,
-  LoaderIcon,
   RotateCcwIcon,
+  SparklesIcon,
 } from "@stll/ui/icons";
+import { Loader } from "@stll/ui/loader";
 import { Skeleton } from "@stll/ui/skeleton";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { PlaybookStatusBadge } from "@/components/playbook-status-badge";
 import type {
   KnowledgeActions,
   KnowledgeSource,
 } from "@/features/knowledge/views/knowledge-seam";
+import {
+  PlaybooksLibraryHeading,
+  PlaybooksPageFrame,
+  PlaybooksPageHeader,
+  PlaybooksSectionHeading,
+  PlaybookStarterCardsPending,
+} from "@/features/knowledge/views/playbooks/playbooks-page-shape";
 import type {
   KnowledgePlaybook,
   KnowledgePlaybookStarter,
@@ -37,7 +46,6 @@ type PlaybooksPageViewProps = {
 };
 
 const RECENT_SKELETON_KEYS = ["recent-a", "recent-b", "recent-c"];
-const STARTER_SKELETON_KEYS = ["nda", "dpa", "msa", "saas"];
 
 export const PlaybooksPageView = ({
   source,
@@ -50,18 +58,12 @@ export const PlaybooksPageView = ({
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto">
-      <div className="mx-auto flex w-full max-w-6xl flex-col gap-9 px-5 py-7 sm:px-7 sm:py-9">
-        <header className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight">
-              {t("common.playbooks")}
-            </h1>
-            <p className="text-muted-foreground mt-1 max-w-2xl text-sm">
-              {t("knowledge.playbooks.homeDescription")}
-            </p>
-          </div>
-          {toolbar}
-        </header>
+      <PlaybooksPageFrame>
+        <PlaybooksPageHeader
+          description={t("knowledge.playbooks.homeDescription")}
+          title={t("common.playbooks")}
+          toolbar={toolbar}
+        />
 
         {actions.startFrom && (
           <section aria-labelledby="recommended-playbooks-heading">
@@ -70,6 +72,7 @@ export const PlaybooksPageView = ({
               title={t("knowledge.playbooks.recommended")}
             />
             <PlaybookStarterCards
+              builder={actions.buildWithAi}
               onStart={actions.startFrom}
               starters={source.starters}
             />
@@ -115,24 +118,23 @@ export const PlaybooksPageView = ({
 
         {library && (
           <section aria-labelledby="all-playbooks-heading">
-            <div className="mb-3 flex min-h-11 items-center justify-between gap-3">
-              <h2
-                className="text-base font-semibold"
-                id="all-playbooks-heading"
-              >
-                {t("knowledge.playbooks.all")}
-              </h2>
-              <Button
-                aria-label={t("common.refresh")}
-                className="size-11"
-                onClick={actions.refresh}
-                size="icon"
-                title={t("common.refresh")}
-                variant="ghost"
-              >
-                <RotateCcwIcon />
-              </Button>
-            </div>
+            <PlaybooksLibraryHeading
+              id="all-playbooks-heading"
+              refresh={
+                <Button
+                  aria-label={t("common.refresh")}
+                  className="size-11"
+                  onClick={actions.refresh}
+                  size="icon"
+                  title={t("common.refresh")}
+                  variant="ghost"
+                >
+                  <RotateCcwIcon />
+                </Button>
+              }
+            >
+              {t("knowledge.playbooks.all")}
+            </PlaybooksLibraryHeading>
 
             {library.playbooks.length === 0 && !library.isFetchingNextPage ? (
               <div className="rounded-xl border border-dashed px-5 py-8">
@@ -160,6 +162,7 @@ export const PlaybooksPageView = ({
                 <Button
                   className="min-h-11"
                   disabled={library.isFetchingNextPage}
+                  disabledReason={t("common.loading")}
                   onClick={actions.loadMore}
                   variant="ghost"
                 >
@@ -169,7 +172,7 @@ export const PlaybooksPageView = ({
             )}
           </section>
         )}
-      </div>
+      </PlaybooksPageFrame>
     </div>
   );
 };
@@ -180,32 +183,89 @@ type SectionHeadingProps = {
 };
 
 const SectionHeading = ({ id, title }: SectionHeadingProps) => (
-  <div className="mb-3">
-    <h2 className="text-base font-semibold" id={id}>
-      {title}
-    </h2>
-  </div>
+  <PlaybooksSectionHeading id={id}>{title}</PlaybooksSectionHeading>
 );
+
+// The card is drawn by the content of a plain Button: it lights while the
+// button is pointed at and fades while the button is disabled.
+const STARTER_CARD_CLASS =
+  "border-border bg-card group-hover/plain:border-foreground/25 group-hover/plain:bg-muted/30 group-disabled/plain:opacity-60 flex h-full min-h-44 w-full flex-col rounded-xl border p-4";
+
+const PLAYBOOK_ROW_CLASS =
+  "group-hover/plain:bg-muted/50 flex min-h-16 w-full items-center gap-3 px-4 py-3";
+
+type StarterCardActionProps = {
+  isPending: boolean;
+  label: string;
+};
+
+const StarterCardAction = ({ isPending, label }: StarterCardActionProps) => {
+  const t = useTranslations();
+  return (
+    <span className="text-foreground mt-auto flex items-center gap-1 pt-4 text-sm font-medium">
+      {isPending ? (
+        <Loader className="size-4" label={t("common.loading")} size="sm" />
+      ) : (
+        <>
+          {label}
+          <ArrowRightIcon className="size-4 rtl:rotate-180" />
+        </>
+      )}
+    </span>
+  );
+};
+
+type BuildWithAiCardProps = {
+  onStart: () => void;
+  disabled: boolean;
+};
+
+const BuildWithAiCard = ({ onStart, disabled }: BuildWithAiCardProps) => {
+  const t = useTranslations();
+  return (
+    <li>
+      <Button
+        className="group/plain flex h-full min-h-44 w-full"
+        disabled={disabled}
+        disabledReason={t("knowledge.playbooks.creatingFromStarter")}
+        onClick={onStart}
+        variant="plain"
+      >
+        <div className={STARTER_CARD_CLASS}>
+          <span className="bg-muted flex size-10 items-center justify-center rounded-lg">
+            <SparklesIcon className="text-muted-foreground size-5" />
+          </span>
+          <span className="mt-3 font-medium">
+            {t("knowledge.playbooks.buildWithAi.title")}
+          </span>
+          <TruncatedText
+            className="text-muted-foreground mt-1 text-sm"
+            lines={2}
+          >
+            {t("knowledge.playbooks.buildWithAi.description")}
+          </TruncatedText>
+          <StarterCardAction isPending={false} label={t("common.start")} />
+        </div>
+      </Button>
+    </li>
+  );
+};
 
 type PlaybookStarterCardsProps = {
   starters: PlaybooksSource["starters"];
   onStart: (starter: KnowledgePlaybookStarter) => void;
+  builder: (() => void) | undefined;
 };
 
 const PlaybookStarterCards = ({
   starters,
   onStart,
+  builder,
 }: PlaybookStarterCardsProps) => {
   const t = useTranslations();
 
   if (starters.status === "loading") {
-    return (
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-        {STARTER_SKELETON_KEYS.map((key) => (
-          <Skeleton className="h-44 rounded-xl" key={key} />
-        ))}
-      </div>
-    );
+    return <PlaybookStarterCardsPending />;
   }
 
   if (starters.status === "error") {
@@ -224,46 +284,46 @@ const PlaybookStarterCards = ({
     );
   }
 
+  const anyPending = starters.pendingStarterId !== null;
   return (
     <ul className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+      {builder && <BuildWithAiCard disabled={anyPending} onStart={builder} />}
       {starters.items.map((starter) => {
         const isPending = starters.pendingStarterId === starter.starterId;
         return (
           <li key={starter.starterId}>
-            <button
-              className="border-border bg-card hover:border-foreground/25 hover:bg-muted/30 focus-visible:ring-ring flex h-full min-h-44 w-full flex-col rounded-xl border p-4 text-start focus-visible:ring-2 focus-visible:outline-none disabled:opacity-60"
-              disabled={starters.pendingStarterId !== null}
+            <Button
+              className="group/plain flex h-full min-h-44 w-full"
+              disabled={anyPending}
+              disabledReason={t("knowledge.playbooks.creatingFromStarter")}
               onClick={() => onStart(starter)}
-              type="button"
+              variant="plain"
             >
-              <span className="bg-muted flex size-10 items-center justify-center rounded-lg">
-                <ClipboardListIcon className="text-muted-foreground size-5" />
-              </span>
-              <span className="mt-3 font-medium" dir="auto">
-                {starter.name}
-              </span>
-              <span
-                className="text-muted-foreground mt-1 line-clamp-2 text-sm"
-                dir="auto"
-              >
-                {starter.description}
-              </span>
-              <span className="text-muted-foreground mt-2 text-xs">
-                {t("knowledge.playbooks.starters.positionCount", {
-                  count: starter.positionCount,
-                })}
-              </span>
-              <span className="text-foreground mt-auto flex items-center gap-1 pt-4 text-sm font-medium">
-                {isPending ? (
-                  <LoaderIcon className="size-4 animate-spin" />
-                ) : (
-                  <>
-                    {t("knowledge.playbooks.starters.useStarter")}
-                    <ArrowRightIcon className="size-4 rtl:rotate-180" />
-                  </>
-                )}
-              </span>
-            </button>
+              <div className={STARTER_CARD_CLASS}>
+                <span className="bg-muted flex size-10 items-center justify-center rounded-lg">
+                  <ClipboardListIcon className="text-muted-foreground size-5" />
+                </span>
+                <span className="mt-3 font-medium" dir="auto">
+                  {starter.name}
+                </span>
+                <TruncatedText
+                  className="text-muted-foreground mt-1 text-sm"
+                  dir="auto"
+                  lines={2}
+                >
+                  {starter.description}
+                </TruncatedText>
+                <span className="text-muted-foreground mt-2 text-xs">
+                  {t("knowledge.playbooks.starters.positionCount", {
+                    count: starter.positionCount,
+                  })}
+                </span>
+                <StarterCardAction
+                  isPending={isPending}
+                  label={t("knowledge.playbooks.starters.useStarter")}
+                />
+              </div>
+            </Button>
           </li>
         );
       })}
@@ -282,29 +342,38 @@ const RecentPlaybookRow = ({
   const format = useFormatter();
   return (
     <li>
-      <button
-        className="hover:bg-muted/50 flex min-h-16 w-full items-center gap-3 px-4 py-3 text-start"
+      <Button
+        className="group/plain flex w-full"
         onClick={onSelect}
-        type="button"
+        variant="plain"
       >
-        <div className="bg-muted flex size-9 shrink-0 items-center justify-center rounded-lg">
-          <Clock3Icon className="text-muted-foreground size-4" />
+        <div className={PLAYBOOK_ROW_CLASS}>
+          <div className="bg-muted flex size-9 shrink-0 items-center justify-center rounded-lg">
+            <Clock3Icon className="text-muted-foreground size-4" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <TruncatedText
+              className="text-sm font-medium"
+              dir="auto"
+              render={<p />}
+            >
+              {playbook.name}
+            </TruncatedText>
+            <TruncatedText
+              className="text-muted-foreground mt-0.5 text-xs"
+              render={<p />}
+            >
+              {t("knowledge.playbooks.lastUsed", {
+                date: format.dateTime(
+                  new Date(playbook.lastUsedAt),
+                  MEDIUM_DATE_SHORT_TIME_FORMAT,
+                ),
+              })}
+            </TruncatedText>
+          </div>
+          <PlaybookStatusBadge status={playbook.status} />
         </div>
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-medium" dir="auto">
-            {playbook.name}
-          </p>
-          <p className="text-muted-foreground mt-0.5 truncate text-xs">
-            {t("knowledge.playbooks.lastUsed", {
-              date: format.dateTime(
-                new Date(playbook.lastUsedAt),
-                MEDIUM_DATE_SHORT_TIME_FORMAT,
-              ),
-            })}
-          </p>
-        </div>
-        <PlaybookStatusBadge status={playbook.status} />
-      </button>
+      </Button>
     </li>
   );
 };
@@ -338,68 +407,35 @@ const PlaybookRow = ({
 
   return (
     <li>
-      <button
-        className="hover:bg-muted/50 flex min-h-16 w-full items-center gap-3 px-4 py-3 text-start"
+      <Button
+        className="group/plain flex w-full"
         onClick={onSelect}
-        type="button"
+        variant="plain"
       >
-        <div className="bg-muted flex size-9 shrink-0 items-center justify-center rounded-lg">
-          <ClipboardCheckIcon className="text-muted-foreground size-4" />
+        <div className={PLAYBOOK_ROW_CLASS}>
+          <div className="bg-muted flex size-9 shrink-0 items-center justify-center rounded-lg">
+            <ClipboardCheckIcon className="text-muted-foreground size-4" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <TruncatedText
+              className="text-sm font-medium"
+              dir="auto"
+              render={<p />}
+            >
+              {playbook.name}
+            </TruncatedText>
+            <TruncatedText
+              className="text-muted-foreground mt-0.5 text-xs"
+              dir="auto"
+              render={<p />}
+            >
+              <PlaybookRowDetail playbook={playbook} />
+            </TruncatedText>
+          </div>
+          <PlaybookStatusBadge status={playbook.status} />
+          <span className="sr-only">{t("common.edit")}</span>
         </div>
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-medium" dir="auto">
-            {playbook.name}
-          </p>
-          <p
-            className="text-muted-foreground mt-0.5 truncate text-xs"
-            dir="auto"
-          >
-            <PlaybookRowDetail playbook={playbook} />
-          </p>
-        </div>
-        <PlaybookStatusBadge status={playbook.status} />
-        <span className="sr-only">{t("common.edit")}</span>
-      </button>
+      </Button>
     </li>
   );
 };
-
-const PLAYBOOK_ROW_KEYS = ["a", "b", "c", "d", "e", "f"];
-
-// Mirrors the playbooks page (header, ready-made cards, list rows) so the page
-// keeps its shape while the playbooks load.
-export const PlaybooksPageSkeleton = () => (
-  <div className="min-h-0 flex-1 overflow-y-auto">
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-9 px-5 py-7 sm:px-7 sm:py-9">
-      <div className="flex items-center justify-between gap-4">
-        <div className="space-y-2">
-          <Skeleton className="h-7 w-36" />
-          <Skeleton className="h-4 w-96 max-w-full" />
-        </div>
-        <Skeleton className="h-11 w-36 rounded-md" />
-      </div>
-      <div>
-        <Skeleton className="mb-3 h-5 w-44" />
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-          {["starter-a", "starter-b", "starter-c", "starter-d"].map((key) => (
-            <Skeleton className="h-44 rounded-xl" key={key} />
-          ))}
-        </div>
-      </div>
-      <div>
-        <Skeleton className="mb-3 h-5 w-28" />
-        <ul className="divide-y rounded-xl border">
-          {PLAYBOOK_ROW_KEYS.map((key) => (
-            <li className="flex min-h-16 items-center gap-3 px-4" key={key}>
-              <Skeleton className="size-9 shrink-0 rounded-lg" />
-              <div className="min-w-0 flex-1 space-y-1.5">
-                <Skeleton className="h-4 w-48" />
-                <Skeleton className="h-3 w-32" />
-              </div>
-            </li>
-          ))}
-        </ul>
-      </div>
-    </div>
-  </div>
-);

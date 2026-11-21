@@ -9,8 +9,8 @@ import {
 } from "@/api/mcp/static-tool-definitions";
 import {
   scopeProseToSurface,
-  unlistedToolNames,
   type ToolVocabulary,
+  unlistedToolNames,
 } from "@/api/mcp/tool-mentions";
 import type { InternalToolResult } from "@/api/mcp/tool-types";
 
@@ -34,6 +34,7 @@ const toVocabulary = (
 });
 
 const SURFACE_TOOL_VOCABULARY = {
+  advanced: toVocabulary("advanced"),
   default: toVocabulary("default"),
   documents: toVocabulary("documents"),
   anonymized: toVocabulary("anonymized"),

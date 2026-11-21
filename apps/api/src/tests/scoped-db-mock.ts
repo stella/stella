@@ -1,8 +1,20 @@
 import { panic, Result } from "better-result";
+import { getColumns } from "drizzle-orm";
+import type { SQLWrapper } from "drizzle-orm";
+import { PgDialect } from "drizzle-orm/pg-core";
+import { QueryPromise } from "drizzle-orm/query-promise";
 
+import { member, organization, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb, SafeDbRetryConfig, ScopedDb } from "@/api/db/safe-db";
-import { entities } from "@/api/db/schema";
+import {
+  entities,
+  entityVersions,
+  featureEnrolments,
+  fields,
+  legalHolds,
+} from "@/api/db/schema";
+import { advisoryExecutionRows } from "@/api/tests/fixtures/aggregate-lock-order";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 export const toSafeDbMock =
@@ -17,8 +29,256 @@ export const toSafeDbMock =
     return result;
   };
 
+type DocumentProcessingRunFindFirst =
+  Transaction["query"]["documentProcessingRuns"]["findFirst"];
+
+export const findNoDocumentProcessingRun = async (
+  _input?: Parameters<DocumentProcessingRunFindFirst>[0],
+): Promise<Awaited<ReturnType<DocumentProcessingRunFindFirst>>> =>
+  await Promise.resolve(undefined);
+
+type FeatureAccessMockOptions = {
+  identity: Pick<typeof user.$inferSelect, "email" | "emailVerified"> | null;
+  enrolments?: Pick<
+    typeof featureEnrolments.$inferSelect,
+    "featureId" | "organizationId" | "userId"
+  >[];
+};
+
 type ScopedDbMockOptions = {
-  siblingRows: { name: string; parentId: string | null }[];
+  authorizedWorkspaceIds?: readonly string[];
+  siblingRows?: { name: string; parentId: string | null }[];
+  featureAccess?: FeatureAccessMockOptions;
+  visibleResources?: {
+    entity?: readonly string[];
+    entityVersion?: readonly string[];
+    field?: readonly string[];
+  };
+};
+
+class FixtureQuery<TRow> extends QueryPromise<TRow[]> {
+  private readonly rows: TRow[];
+
+  constructor(rows: TRow[]) {
+    super();
+    this.rows = rows;
+  }
+
+  async execute() {
+    return await Promise.resolve(this.rows);
+  }
+}
+
+// Query fixtures provide the rows matching their select boundary. Keep the
+// awaitable builder shape intact for locking and bounded reads.
+export const createSelectQueryMock = <TRow>(rows: TRow[]) => {
+  let rowOffset = 0;
+  const limit = (count: number) => {
+    const selected = rows.slice(rowOffset, rowOffset + count);
+    return Object.assign(new FixtureQuery(selected), {
+      for: async () => await Promise.resolve(selected),
+    });
+  };
+  const offset = (count: number) => {
+    rowOffset = count;
+    return { limit };
+  };
+  const where = () =>
+    Object.assign(new FixtureQuery(rows), {
+      limit,
+      offset,
+      for: async () => await Promise.resolve(rows),
+      orderBy: () => ({ limit, offset }),
+    });
+  type JoinedQuery = FixtureQuery<TRow> & {
+    where: typeof where;
+    innerJoin: () => JoinedQuery;
+    leftJoin: () => JoinedQuery;
+  };
+  const from = (): JoinedQuery =>
+    Object.assign(new FixtureQuery(rows), {
+      where,
+      innerJoin: from,
+      leftJoin: from,
+    });
+  return { from };
+};
+
+const fixtureSelect =
+  (tx: unknown, options?: ScopedDbMockOptions) => (selection: unknown) => {
+    const columns =
+      typeof selection === "object" && selection !== null
+        ? Object.values(selection)
+        : [];
+    // Feature admission is infrastructure shared by every handler fixture.
+    // Use schema columns, so a resource select with similar keys still delegates.
+    if (
+      columns.some((column) =>
+        Object.values(getColumns(featureEnrolments)).some(
+          (enrolmentColumn) => column === enrolmentColumn,
+        ),
+      )
+    ) {
+      const query = createSelectQueryMock(
+        options?.featureAccess?.enrolments ?? [],
+      );
+      return {
+        from: (table: unknown) => {
+          if (table !== featureEnrolments) {
+            return panic("Enrolment fixture must read feature enrolments");
+          }
+          return query.from();
+        },
+      };
+    }
+    if (
+      options?.featureAccess !== undefined &&
+      columns.some(
+        (column) => column === user.email || column === user.emailVerified,
+      )
+    ) {
+      const { identity, enrolments = [] } = options.featureAccess;
+      const query = createSelectQueryMock(
+        identity === null
+          ? []
+          : [
+              {
+                ...identity,
+                enrolledFeatureIds: enrolments.map(
+                  ({ featureId }) => featureId,
+                ),
+              },
+            ],
+      );
+      return {
+        from: (table: unknown) => {
+          if (table !== member) {
+            return panic("Identity fixture must read membership");
+          }
+          return query.from();
+        },
+      };
+    }
+    if (
+      typeof selection === "object" &&
+      selection !== null &&
+      "id" in selection &&
+      Object.keys(selection).length === 1
+    ) {
+      for (const { table, ids } of [
+        { table: entities, ids: options?.visibleResources?.entity },
+        {
+          table: entityVersions,
+          ids: options?.visibleResources?.entityVersion,
+        },
+        { table: fields, ids: options?.visibleResources?.field },
+      ]) {
+        if (selection.id === table.id && ids !== undefined) {
+          return createSelectQueryMock(ids.map((id) => ({ id })));
+        }
+      }
+    }
+    if (
+      options?.siblingRows !== undefined &&
+      typeof selection === "object" &&
+      selection !== null &&
+      "name" in selection &&
+      selection.name === entities.name &&
+      "parentId" in selection &&
+      selection.parentId === entities.parentId
+    ) {
+      const query = createSelectQueryMock(options.siblingRows);
+      return {
+        from: (table: unknown) => {
+          if (table !== entities) {
+            return panic("Sibling fixture must read entities");
+          }
+          return query.from();
+        },
+      };
+    }
+    if (
+      typeof tx !== "object" ||
+      tx === null ||
+      !("select" in tx) ||
+      typeof tx.select !== "function"
+    ) {
+      // The double holds no legal holds, so a hold check needs no fixture.
+      return {
+        from: (table: unknown) =>
+          table === legalHolds
+            ? createSelectQueryMock([]).from()
+            : panic("Missing fixture select"),
+      };
+    }
+    const result: unknown = Reflect.apply(tx.select, tx, [selection]);
+    if (
+      typeof result === "object" &&
+      result !== null &&
+      "from" in result &&
+      typeof result.from === "function"
+    ) {
+      const from = result.from;
+      return {
+        ...result,
+        from: (table: unknown): unknown => {
+          if (
+            table === legalHolds ||
+            (table === organization &&
+              columns.length === 1 &&
+              columns.at(0) === organization.id)
+          ) {
+            return createSelectQueryMock([]).from();
+          }
+          const query: unknown = Reflect.apply(from, result, [table]);
+          return query;
+        },
+      };
+    }
+    return result;
+  };
+
+const pgDialect = new PgDialect();
+
+// The legal-hold organization fence (see lockLegalHoldOrganizations) takes an
+// advisory lock per organization. The double holds no locks and no holds, so
+// it answers the fence itself; every other statement reaches the test's own
+// execute, which then never needs to know about the fence.
+const LEGAL_HOLD_ORGANIZATION_FENCE =
+  /pg_advisory_xact_lock(?:_shared)?\(\$\d+, hashtext\(ordered\.id\)\)/u;
+
+// A member's new message is admitted in one statement (`admitMemberMessageOnTx`)
+// that reads the thread's waiting turn and queue. The double stores neither,
+// so it answers that the message is admitted.
+const MEMBER_MESSAGE_ADMISSION = /^\s*WITH awaiting AS \(/u;
+
+const executeWithLegalHoldFence = async (
+  tx: unknown,
+  statement: SQLWrapper | string,
+): Promise<unknown> => {
+  const text =
+    typeof statement === "string"
+      ? statement
+      : pgDialect.sqlToQuery(statement.getSQL()).sql;
+  if (LEGAL_HOLD_ORGANIZATION_FENCE.test(text)) {
+    return [];
+  }
+  if (MEMBER_MESSAGE_ADMISSION.test(text)) {
+    return [{ awaiting: false, queued: false, released: false }];
+  }
+  if (
+    typeof tx !== "object" ||
+    tx === null ||
+    !("execute" in tx) ||
+    typeof tx.execute !== "function"
+  ) {
+    // Advisory fences such as the contact capacity lock read no fixture
+    // data, so every handler that takes one acquires it here. Other
+    // statements stay unanswered unless the test supplies `execute`.
+    return advisoryExecutionRows(statement);
+  }
+  const result: unknown = await Reflect.apply(tx.execute, tx, [statement]);
+  return result;
 };
 
 export const createScopedDbMock = (
@@ -32,50 +292,41 @@ export const createScopedDbMock = (
   ) => {
     callCount += 1;
     // Tests provide only the transaction members touched by the handler.
-    const transaction =
-      typeof tx === "object" && tx !== null
-        ? {
-            execute: async () => {
-              await Promise.resolve();
-            },
-            ...tx,
-            ...(options === undefined
-              ? {}
-              : {
-                  select: (selection: unknown) => {
-                    if (
-                      typeof selection === "object" &&
-                      selection !== null &&
-                      "name" in selection &&
-                      selection.name === entities.name &&
-                      "parentId" in selection &&
-                      selection.parentId === entities.parentId
-                    ) {
-                      const query = createSelectQueryMock(options.siblingRows);
-                      return {
-                        from: (table: unknown) => {
-                          if (table !== entities) {
-                            return panic("Sibling fixture must read entities");
-                          }
-                          return query.from();
-                        },
-                      };
-                    }
-                    if (!("select" in tx) || typeof tx.select !== "function") {
-                      return panic("Missing fixture select");
-                    }
-                    const result: unknown = Reflect.apply(tx.select, tx, [
-                      selection,
-                    ]);
-                    return result;
-                  },
-                }),
-          }
+    const providedQuery =
+      typeof tx === "object" &&
+      tx !== null &&
+      "query" in tx &&
+      typeof tx.query === "object" &&
+      tx.query !== null
+        ? tx.query
+        : {};
+    const providedDocumentProcessingRuns =
+      "documentProcessingRuns" in providedQuery &&
+      typeof providedQuery.documentProcessingRuns === "object" &&
+      providedQuery.documentProcessingRuns !== null
+        ? providedQuery.documentProcessingRuns
+        : {};
+    const transaction = {
+      ...(options?.authorizedWorkspaceIds === undefined
+        ? {}
         : {
-            execute: async () => {
-              await Promise.resolve();
-            },
-          };
+            selectDistinct: () =>
+              createSelectQueryMock(
+                options.authorizedWorkspaceIds?.map((id) => ({ id })) ?? [],
+              ),
+          }),
+      ...(typeof tx === "object" && tx !== null ? tx : {}),
+      execute: async (statement: SQLWrapper | string): Promise<unknown> =>
+        await executeWithLegalHoldFence(tx, statement),
+      query: {
+        ...providedQuery,
+        documentProcessingRuns: {
+          findFirst: findNoDocumentProcessingRun,
+          ...providedDocumentProcessingRuns,
+        },
+      },
+      select: fixtureSelect(tx, options),
+    };
     return await callback(asTestRaw<Transaction>(transaction));
   };
 
@@ -83,30 +334,5 @@ export const createScopedDbMock = (
     getCallCount: () => callCount,
     safeDb: toSafeDbMock(scopedDb),
     scopedDb,
-  };
-};
-
-// Query fixtures provide the rows matching their select boundary. Keep the
-// awaitable builder shape intact for locking and bounded reads.
-export const createSelectQueryMock = <TRow>(rows: TRow[]) => {
-  // oxlint-disable-next-line typescript-eslint/promise-function-async -- async would wrap the query promise and discard its for method
-  const limit = (count: number) => {
-    const selected = rows.slice(0, count);
-    return Object.assign(Promise.resolve(selected), {
-      for: async () => await Promise.resolve(selected),
-    });
-  };
-  // oxlint-disable-next-line typescript-eslint/promise-function-async -- async would wrap the query promise and discard its query methods
-  const where = () =>
-    Object.assign(Promise.resolve(rows), {
-      limit,
-      for: async () => await Promise.resolve(rows),
-      orderBy: () => ({ limit }),
-    });
-  return {
-    from: () => ({
-      where,
-      innerJoin: () => ({ where }),
-    }),
   };
 };

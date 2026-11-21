@@ -14,8 +14,8 @@ const OUTPUTS = [
 const generate = () => {
   const result = spawnSync(
     process.execPath,
-    ["--cwd=packages/cli", "run", "codegen:runtime"],
-    { cwd: REPO_ROOT, stdio: "inherit" },
+    ["packages/cli/scripts/codegen.ts", "--runtime-only"],
+    { maxBuffer: 2 ** 30, cwd: REPO_ROOT, stdio: "inherit" },
   );
   if (result.error !== undefined || result.status !== 0) {
     panic(

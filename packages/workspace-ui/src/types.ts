@@ -3,6 +3,21 @@ import type { OptionColor } from "@stll/ui/option-color";
 
 export type { OptionColor } from "@stll/ui/option-color";
 
+/**
+ * Why a document could not be converted. Mirrors the API contract type; the
+ * web app asserts both declarations stay equal.
+ */
+export type FileConversionRefusal =
+  | { kind: "unsupported_encoding"; encoding: string }
+  | {
+      kind: "unsupported_reference";
+      format: string;
+      element: string;
+      attribute: string;
+    }
+  | { kind: "unsupported_field"; fieldType: string }
+  | { kind: "legacy_format"; replacementExtension: ".xlsx" | ".pptx" };
+
 export type FieldContent =
   | {
       type: "error";
@@ -41,6 +56,14 @@ export type FieldContent =
       encrypted: boolean;
       sha256Hex: string;
       pdfFileId: string | null;
+      pdfDerivative?:
+        | { status: "not-required" | "pending" | "ready" }
+        | {
+            status: "failed";
+            reason?: "enqueue" | "processing" | "too-large" | undefined;
+            conversionRefusal?: FileConversionRefusal | undefined;
+          }
+        | undefined;
     }
   | {
       type: "date";
@@ -80,6 +103,58 @@ export type FieldContent =
       citation?: string;
       jurisdiction?: string;
       sourceType?: string;
+    }
+  | {
+      /**
+       * Typed records from a data source or a structured AI answer. The
+       * column's schema names the fields; the cell holds their values.
+       */
+      type: "record";
+      version: 1;
+      schemaVersion: number;
+      state: RecordFieldState;
+    };
+
+export type RecordFieldScalar =
+  string | number | boolean | { amountMinor: number; currency: string } | null;
+
+export type RecordFieldRecord = Record<string, RecordFieldScalar>;
+
+export type RecordFieldProvenance = {
+  url: string;
+  retrievedAt: string;
+  sha256: string;
+  sourceDataAsOf?: string;
+};
+
+export type RecordFieldState =
+  | {
+      /** The tool refused its input; the source was not called. */
+      status: "input-needs-review";
+      input: RecordFieldRecord;
+      issues: {
+        key: string;
+        code: "missing" | "invalid" | "uncertain";
+        message: string;
+      }[];
+    }
+  | {
+      status: "not-found";
+      input: RecordFieldRecord;
+      provenance: RecordFieldProvenance;
+    }
+  | {
+      status: "resolved";
+      input?: RecordFieldRecord;
+      provenance?: RecordFieldProvenance;
+      result:
+        | { kind: "one"; record: RecordFieldRecord }
+        | {
+            /** Ambiguous for `candidates` until a person selects one. */
+            kind: "many" | "candidates";
+            records: RecordFieldRecord[];
+            selected: number | null;
+          };
     };
 
 const fieldContentTypes = [
@@ -95,6 +170,7 @@ const fieldContentTypes = [
   "money",
   "person",
   "clip",
+  "record",
 ] as const;
 
 type CompleteFieldContentTypes<T extends readonly FieldContent["type"][]> =
@@ -106,7 +182,7 @@ export const FIELD_CONTENT_TYPES =
     typeof fieldContentTypes
   >;
 
-export type WorkspaceFieldContent = FieldContent;
+export type WorkspaceFieldContent = FieldContent & { truncated?: true };
 
 /**
  * Minimal structural bound the display layer needs from a property: the cell
@@ -115,7 +191,9 @@ export type WorkspaceFieldContent = FieldContent;
  */
 export type GenericProperty = {
   content:
-    | { type: "file" | "text" | "date" | "int" | "money" | "person" }
+    | {
+        type: "file" | "text" | "date" | "int" | "money" | "person" | "record";
+      }
     | {
         type: "single-select" | "multi-select";
         options: {

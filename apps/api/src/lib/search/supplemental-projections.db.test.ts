@@ -74,9 +74,11 @@ const countingDatabase = ({
   database: ProjectionDatabase;
   /** Every statement issued inside a transaction, per transaction. */
   written: SQL[][];
+  parentLocks: SQL[];
 } => {
   const counts: Counts = { reads: 0, transactions: 0, statements: 0 };
   const written: SQL[][] = [];
+  const parentLocks: SQL[] = [];
   const counted =
     <Args extends unknown[], Result>(run: (...args: Args) => Result) =>
     (...args: Args): Result => {
@@ -111,7 +113,16 @@ const countingDatabase = ({
               ) {
                 throw new Error("injected projection write failure");
               }
-              counts.statements += 1;
+              if (
+                new PgDialect()
+                  .sqlToQuery(query)
+                  .sql.trim()
+                  .startsWith("SELECT")
+              ) {
+                parentLocks.push(query);
+              } else {
+                counts.statements += 1;
+              }
               statements.push(query);
               return (await tx.execute(query)).rows;
             },
@@ -119,7 +130,7 @@ const countingDatabase = ({
       );
     },
   });
-  return { counts, database, written };
+  return { counts, database, written, parentLocks };
 };
 
 const seedOrganization = async (org: number) => {
@@ -182,9 +193,9 @@ beforeEach(async () => {
 });
 
 describe("batched supplemental rebuild", () => {
-  // Per keyset page: one id read, one source read, one transaction of four
-  // statements. Pages here are never exactly full at the end, so there is no
-  // trailing empty page to account for.
+  // Per keyset page: one id read, one source read, four projection
+  // statements plus one organization lock and, for matters, one workspace
+  // lock. Final pages are partial, so there is no trailing empty page.
   const expectedCounts = (pages: number): Counts => ({
     reads: 2 * pages,
     transactions: pages,
@@ -202,6 +213,7 @@ describe("batched supplemental rebuild", () => {
     const small = countingDatabase();
     await rebuildSupplementalSearchDocuments(orgId(1), small.database);
     expect(small.counts).toEqual(expectedCounts(1 + 1));
+    expect(small.parentLocks).toHaveLength(3);
     expect(await projectionCount(1)).toEqual({ contacts: 3, matters: 2 });
 
     // Two hundred more sources cost three more batches, not two hundred
@@ -209,6 +221,7 @@ describe("batched supplemental rebuild", () => {
     const large = countingDatabase();
     await rebuildSupplementalSearchDocuments(orgId(2), large.database);
     expect(large.counts).toEqual(expectedCounts(3 + 2));
+    expect(large.parentLocks).toHaveLength(7);
     expect(await projectionCount(2)).toEqual({
       contacts: 2 * BATCH + 50,
       matters: BATCH + 30,
@@ -256,7 +269,7 @@ describe("batched supplemental rebuild", () => {
     const dialect = new PgDialect();
     const upsertOrder = ordered.written.flatMap((statements) =>
       dialect
-        .sqlToQuery(statements.at(0) ?? sql``)
+        .sqlToQuery(statements.at(2) ?? sql``)
         .params.filter(
           (param): param is string =>
             typeof param === "string" && ids.some((id) => id === param),
@@ -279,7 +292,7 @@ describe("batched supplemental rebuild", () => {
 
     // The second batch throws after its passage delete, before the insert.
     const failing = countingDatabase({
-      failAt: { transaction: 2, statement: 3 },
+      failAt: { transaction: 2, statement: 5 },
     });
     const failure: unknown = await upsertWorkspaceSearchDocuments(
       ids,

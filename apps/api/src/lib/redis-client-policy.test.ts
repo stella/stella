@@ -2,11 +2,13 @@ import { Result } from "better-result";
 import { RedisClient } from "bun";
 import { expect, spyOn, test } from "bun:test";
 
+import { rejectionOf } from "@stll/property-testing/rejection";
 import { StoreUnavailableError } from "@stll/redis-config/store-policy";
 
 import { createFeedbackIntakeGuards } from "@/api/handlers/feedback/intake-guards";
 import { createAuthRateLimitStorage } from "@/api/lib/rate-limit/auth-storage";
 import { RedisRateLimitContext } from "@/api/lib/rate-limit/redis-context";
+import { LimiterStoreUnavailableError } from "@/api/lib/rate-limit/store-unavailable";
 import {
   createBullMqConnection,
   createRedisClient,
@@ -115,13 +117,17 @@ for (const failurePolicy of ["fail_open_local", "fail_closed"] as const) {
         },
       });
       try {
-        const counter = await context.increment("store-policy-test");
-        expect(counter.count).toBe(
-          failurePolicy === "fail_open_local" ? 1 : Number.MAX_SAFE_INTEGER,
-        );
+        const increment = context.increment("store-policy-test");
+        if (failurePolicy === "fail_open_local") {
+          expect((await increment).count).toBe(1);
+        } else {
+          expect(await rejectionOf(increment)).toBeInstanceOf(
+            LimiterStoreUnavailableError,
+          );
+        }
         expect(
           errors.some((error) => error instanceof StoreUnavailableError),
-        ).toBe(true);
+        ).toBe(failurePolicy === "fail_open_local");
         expect(sent).toEqual(["INFO"]);
       } finally {
         context.kill();
@@ -135,10 +141,14 @@ test("auth, gateway and feedback rate limiters keep local fallback on a refused 
     const auth = createAuthRateLimitStorage();
     expect(
       await auth.consume("policy-test", { max: 1, window: 60 }),
-    ).toMatchObject({ allowed: true });
+    ).toMatchObject({
+      allowed: true,
+    });
     expect(
       await auth.consume("policy-test", { max: 1, window: 60 }),
-    ).toMatchObject({ allowed: false });
+    ).toMatchObject({
+      allowed: false,
+    });
     const gateway = createMcpGatewayRateLimiter();
     expect(
       await gateway.consume({

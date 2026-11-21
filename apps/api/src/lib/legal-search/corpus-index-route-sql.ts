@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import { type SQL, type SQLWrapper, sql } from "drizzle-orm";
+import { type SQL, sql, type SQLWrapper } from "drizzle-orm";
 
 import { caseLawIndexIdSql } from "@/api/lib/legal-search/case-law-index-groups";
 import type { CorpusIndexManifest } from "@/api/lib/legal-search/corpus-index-manifest";

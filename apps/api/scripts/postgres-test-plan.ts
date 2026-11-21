@@ -1,0 +1,305 @@
+import { panic } from "better-result";
+import { readFileSync } from "node:fs";
+import path from "node:path";
+
+import { compareCodeUnit } from "@stll/collation";
+
+/**
+ * These suites change committed tables in the common PostgreSQL test database.
+ * They run after every ordinary suite, each in its own test process, so no CRUD
+ * transaction can retain a conflicting table lock while their DDL runs. Each
+ * starts on a fresh clone of the template, so rows the earlier suites left in
+ * shared tables cannot change what it observes. The suites that install the
+ * corpus projection seeding guard on the canonical tables
+ * (`guardPostgresSuiteSeeding`) are among them.
+ */
+export const EXCLUSIVE_SHARED_TABLE_DDL_TEST_PATHS: ReadonlySet<string> =
+  new Set([
+    "src/db/case-law-polarity-kind.postgres.test.ts",
+    "src/db/contacts-rls-maintenance.postgres.test.ts",
+    "src/db/data-export-owner-policy.postgres.test.ts",
+    "src/db/entity-feature-gate-maintenance.postgres.test.ts",
+    "src/db/entity-feature-search-budget.postgres.test.ts",
+    "src/db/online-repairs-beside-writer.postgres.test.ts",
+    "src/handlers/case-law/decisions/coverage-counts.postgres.test.ts",
+    "src/handlers/case-law/ingestion/background-replay-store.postgres.test.ts",
+    "src/handlers/case-law/ingestion/background-replay.postgres.test.ts",
+    "src/handlers/case-law/ingestion/reconciliation-listing-revisions.postgres.test.ts",
+    "src/handlers/case-law/withdraw-document.postgres.test.ts",
+    "src/handlers/entities/versions/list.postgres.test.ts",
+    "src/lib/account-export/store.postgres.test.ts",
+    "src/lib/business-registries/desktop/proof.postgres.test.ts",
+    "src/lib/case-law/sitemap-removal-refresh.postgres.test.ts",
+    "src/lib/email/correspondence/concurrent-filing.postgres.test.ts",
+    "src/lib/email/correspondence/source-race.postgres.test.ts",
+    "src/lib/hosted-usage-provider/replay.postgres.test.ts",
+    "src/lib/legal-search/corpus-index-generation-retire.postgres.test.ts",
+    "src/lib/legal-search/corpus-index-route-proof-runner.postgres.test.ts",
+    "src/lib/lists/sanctions/monitoring-concurrency.postgres.test.ts",
+    "src/lib/lists/sanctions/monitoring-migrations.postgres.test.ts",
+    "src/lib/lists/sanctions/monitoring-roles.postgres.test.ts",
+    "src/lib/scheduler/tasks/registration-retention.postgres.test.ts",
+    "src/scripts/corpus-generation.postgres.test.ts",
+    "src/scripts/eu-completion-tick.postgres.test.ts",
+    "src/tests/query-perf/scheduled-run.postgres.test.ts",
+  ]);
+
+/** Suites that clone the worker runner’s idle, fully migrated source database. */
+export const TEMPLATE_DATABASE_TEST_PATHS: ReadonlySet<string> = new Set([
+  "src/db/online-repairs-beside-writer.postgres.test.ts",
+]);
+
+export const assertTemplateDatabaseTestsAreExclusive = (
+  templatePaths = TEMPLATE_DATABASE_TEST_PATHS,
+  exclusivePaths = EXCLUSIVE_SHARED_TABLE_DDL_TEST_PATHS,
+): void => {
+  const sharedPaths = [...templatePaths].filter(
+    (testPath) => !exclusivePaths.has(testPath),
+  );
+  if (sharedPaths.length === 0) {
+    return;
+  }
+  panic(
+    `PostgreSQL tests that clone the migrated template require an exclusive test process:\n${sharedPaths
+      .map((testPath) => `  ${testPath}`)
+      .join("\n")}\nAdd each path to EXCLUSIVE_SHARED_TABLE_DDL_TEST_PATHS.`,
+  );
+};
+
+export const needsTemplateDatabase = (
+  testPaths: readonly string[],
+  templatePaths = TEMPLATE_DATABASE_TEST_PATHS,
+): boolean => testPaths.some((testPath) => templatePaths.has(testPath));
+
+export const isolateSharedTableDdlTests = (
+  testPaths: readonly string[],
+  isolatedPaths = EXCLUSIVE_SHARED_TABLE_DDL_TEST_PATHS,
+): string[][] => {
+  const shared = testPaths.filter((testPath) => !isolatedPaths.has(testPath));
+  const isolated = testPaths
+    .filter((testPath) => isolatedPaths.has(testPath))
+    .map((testPath) => [testPath]);
+  return shared.length > 0 ? [shared, ...isolated] : isolated;
+};
+
+const TABLE_HEADING = /^## ([a-z][a-z0-9_]*) ·/gmu;
+const TABLE_DDL =
+  /\bALTER\s+TABLE\s+(?:IF\s+EXISTS\s+)?(?:ONLY\s+)?(?:(?:"public"|public)\s*\.\s*)?"?([a-z][a-z0-9_]*)"?/giu;
+// DROP TABLE, TRUNCATE and LOCK (TABLE optional) take comma-separated target
+// lists. The list accepts table names only, so it ends at the first other token
+// and an adjacent statement without a semicolon still gets its own match.
+const LIST_TABLE_NAME = String.raw`(?:ONLY\s+)?(?:(?:"public"|public)\s*\.\s*)?"?(?!(?:alter|create|drop|lock|truncate)\b)[a-z][a-z0-9_]*"?(?:\s*\*)?`;
+const TABLE_LIST_DDL = new RegExp(
+  String.raw`\b(?:DROP\s+TABLE(?:\s+IF\s+EXISTS)?|TRUNCATE(?:\s+TABLE)?|LOCK(?:\s+TABLE)?)\s+(${LIST_TABLE_NAME}(?:\s*,\s*${LIST_TABLE_NAME})*)`,
+  "giu",
+);
+const LIST_ITEM_TABLE =
+  /^(?:ONLY\s+)?(?:(?:"public"|public)\s*\.\s*)?"?([a-z][a-z0-9_]*)"?/iu;
+
+const tableListTargets = (list: string): string[] =>
+  list.split(",").flatMap((item) => {
+    const table = LIST_ITEM_TABLE.exec(item.trim())?.at(1)?.toLowerCase();
+    return table === undefined ? [] : [table];
+  });
+
+// Every statement that names its table after ON: triggers, indexes, rule drops
+// and row-level security policies, in each PostgreSQL spelling.
+const ON_TABLE_DDL =
+  /\b(?:(?:CREATE(?:\s+OR\s+REPLACE)?(?:\s+CONSTRAINT)?|ALTER|DROP)\s+TRIGGER|CREATE\s+(?:UNIQUE\s+)?INDEX|DROP\s+RULE|(?:CREATE|ALTER|DROP)\s+POLICY)\b[^;]*?\bON\s+(?:ONLY\s+)?(?:(?:"public"|public)\s*\.\s*)?"?([a-z][a-z0-9_]*)"?/giu;
+// CREATE RULE names its event after ON and its table after TO.
+const RULE_DDL =
+  /\bCREATE(?:\s+OR\s+REPLACE)?\s+RULE\b[^;]*?\bTO\s+(?:(?:"public"|public)\s*\.\s*)?"?([a-z][a-z0-9_]*)"?/giu;
+
+// The generated schema index is the source of shared table names; CI package
+// scoping treats a change there as an input of this reader.
+export const CI_MARKDOWN_READER_INPUTS = [
+  path.join(import.meta.dirname, "../src/db/schema-index"),
+];
+
+export const readSharedTableNames = (apiRoot: string): ReadonlySet<string> => {
+  const names = new Set<string>();
+  const indexRoot = path.join(apiRoot, "src/db/schema-index");
+  for (const indexPath of new Bun.Glob("*.md").scanSync({
+    cwd: indexRoot,
+    onlyFiles: true,
+  })) {
+    const source = readFileSync(path.join(indexRoot, indexPath), "utf-8");
+    for (const match of source.matchAll(TABLE_HEADING)) {
+      const name = match.at(1);
+      if (name !== undefined) {
+        names.add(name);
+      }
+    }
+  }
+  return names;
+};
+
+export const sharedTableDdlTargets = (
+  source: string,
+  sharedTables: ReadonlySet<string>,
+): string[] => {
+  const targets = new Set<string>();
+  for (const pattern of [TABLE_DDL, ON_TABLE_DDL, RULE_DDL]) {
+    for (const match of source.matchAll(pattern)) {
+      const table = match.at(1)?.toLowerCase();
+      if (table !== undefined && sharedTables.has(table)) {
+        targets.add(table);
+      }
+    }
+  }
+  for (const match of source.matchAll(TABLE_LIST_DDL)) {
+    for (const table of tableListTargets(match.at(1) ?? "")) {
+      if (sharedTables.has(table)) {
+        targets.add(table);
+      }
+    }
+  }
+  return [...targets].toSorted();
+};
+
+type SharedTableDdlViolation = {
+  testPath: string;
+  tables: string[];
+};
+
+type FindSharedTableDdlViolationsOptions = {
+  sources: ReadonlyMap<string, string>;
+  sharedTables: ReadonlySet<string>;
+  isolatedPaths?: ReadonlySet<string>;
+};
+
+/** Enumerate every PostgreSQL suite whose shared-table DDL lacks isolation. */
+export const findSharedTableDdlViolations = ({
+  sources,
+  sharedTables,
+  isolatedPaths = EXCLUSIVE_SHARED_TABLE_DDL_TEST_PATHS,
+}: FindSharedTableDdlViolationsOptions): SharedTableDdlViolation[] =>
+  [...sources]
+    .filter(([testPath]) => /\.postgres\.test\.tsx?$/u.test(testPath))
+    .flatMap(([testPath, source]) => {
+      const tables = sharedTableDdlTargets(source, sharedTables);
+      return tables.length > 0 && !isolatedPaths.has(testPath)
+        ? [{ testPath, tables }]
+        : [];
+    })
+    .toSorted((left, right) => compareCodeUnit(left.testPath, right.testPath));
+
+const isMigrationRunnerModule = (testPath: string, specifier: string) => {
+  if (specifier === "@/api/db/migration-runner") {
+    return true;
+  }
+  return (
+    specifier.startsWith(".") &&
+    path.posix
+      .normalize(path.posix.join(path.posix.dirname(testPath), specifier))
+      .replace(/\.[cm]?[jt]sx?$/u, "") === "src/db/migration-runner"
+  );
+};
+
+// Bun's scan lists the modules a file loads at run time: value imports,
+// `require` calls and dynamic `import()`, never type-only imports.
+const runtimeImports = new Bun.Transpiler({ loader: "ts" });
+
+// Snapshot visibility depends on transactions across the entire cluster.
+const CLUSTER_VISIBILITY_TESTS = new Set([
+  "src/lib/case-law/sitemap-fairness-drain.postgres.test.ts",
+  "src/lib/case-law/sitemap-removal-refresh.postgres.test.ts",
+  "src/lib/case-law/sitemap-shard-refresh.postgres.test.ts",
+  "src/db/case-law-sitemap-packing-enrollment.postgres.test.ts",
+  "src/lib/case-law/sitemap-backlog-drain.postgres.test.ts",
+  "src/lib/case-law/sitemap-visibility-drain.postgres.test.ts",
+]);
+
+// EXPLAIN (ANALYZE, BUFFERS) charges a relation-cache rebuild to the first
+// statement that touches the relation afterwards (an audit insert pays about
+// 240 pages instead of 12). Other workers' DDL overflows the cluster-wide
+// invalidation queue and resets a measuring backend's caches at arbitrary
+// points, so a suite comparing single-sample block counts across corpus sizes
+// needs a cluster no other worker writes to.
+const CLUSTER_CATALOG_CACHE_TESTS = new Set([
+  "src/tests/query-perf/scheduled-run.postgres.test.ts",
+]);
+
+// Backend-local WAL counters exclude other sessions' bytes, but database clones
+// force cluster checkpoints and full-page images in the measuring backend.
+const BACKEND_WAL_MEASUREMENT = /\bpg_stat_get_backend_wal\s*\(/iu;
+
+/**
+ * Migration roles, visibility proofs and block/WAL measurements
+ * require every other cluster worker to finish.
+ */
+export const clusterExclusivePostgresTests = (
+  sources: ReadonlyMap<string, string>,
+): Set<string> => {
+  const paths = new Set<string>();
+  for (const [testPath, source] of sources) {
+    if (
+      CLUSTER_VISIBILITY_TESTS.has(testPath) ||
+      CLUSTER_CATALOG_CACHE_TESTS.has(testPath) ||
+      BACKEND_WAL_MEASUREMENT.test(source) ||
+      runtimeImports
+        .scanImports(source)
+        .some(({ path: specifier }) =>
+          isMigrationRunnerModule(testPath, specifier),
+        )
+    ) {
+      paths.add(testPath);
+    }
+  }
+  return paths;
+};
+
+export const classifyPostgresTestIsolation = async (
+  apiRoot: string,
+  testPaths: readonly string[],
+): Promise<Set<string>> => {
+  const sources = new Map(
+    await Promise.all(
+      testPaths.map(
+        async (testPath) =>
+          [
+            testPath,
+            await Bun.file(path.join(apiRoot, testPath)).text(),
+          ] as const,
+      ),
+    ),
+  );
+  const violations = findSharedTableDdlViolations({
+    sources,
+    sharedTables: readSharedTableNames(apiRoot),
+  });
+  if (violations.length === 0) {
+    return clusterExclusivePostgresTests(sources);
+  }
+  return panic(
+    `PostgreSQL tests that run DDL on shared tables require an exclusive test process:\n${violations
+      .map(({ testPath, tables }) => `  ${testPath}: ${tables.join(", ")}`)
+      .join("\n")}\nAdd each path to EXCLUSIVE_SHARED_TABLE_DDL_TEST_PATHS.`,
+  );
+};
+
+// Importing one of these boots the shared PGlite test database. Without a
+// snapshot, each boot builds the whole schema in-process (drizzle-kit push and
+// every PGlite install) inside the suite's setup hook.
+const PGLITE_TEST_DATABASE_MODULES = [
+  "tests/pglite-test-db",
+  "tests/security/rls-fixture",
+  "tests/security/test-utils",
+] as const;
+
+/** Whether a test file boots the shared PGlite test database. */
+export const bootsPgliteTestDatabase = (source: string): boolean =>
+  PGLITE_TEST_DATABASE_MODULES.some((module) => source.includes(module));
+
+/** Whether any selected Postgres suite also boots the PGlite test database. */
+export const anyBootsPgliteTestDatabase = async (
+  apiRoot: string,
+  testPaths: readonly string[],
+): Promise<boolean> => {
+  const sources = await Promise.all(
+    testPaths.map(
+      async (testPath) => await Bun.file(path.join(apiRoot, testPath)).text(),
+    ),
+  );
+  return sources.some(bootsPgliteTestDatabase);
+};

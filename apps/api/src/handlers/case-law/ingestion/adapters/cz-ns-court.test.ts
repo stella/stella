@@ -11,12 +11,13 @@
 import { afterEach, describe, expect, test } from "bun:test";
 
 import { buildCzNsDecision } from "@/api/handlers/case-law/ingestion/adapters/cz-ns";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
-const originalFetch = globalThis.fetch;
+const testFetchState = createTestFetch();
 
 afterEach(() => {
-  globalThis.fetch = originalFetch;
+  testFetchState.restore();
 });
 
 /** A labelled row of a detail page, in the publisher's own markup. */
@@ -48,19 +49,21 @@ const detailPage = ({ court, ecli }: PageOptions): string =>
 
 /** The court the adapter stores for a decision served with these pages. */
 const builtCourt = async (page: PageOptions): Promise<string> => {
-  globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
-    const url = input instanceof Request ? input.url : String(input);
-    // Only the detail page: the print page is the document's source and the
-    // court is not read off it, so a decision stored without one still has
-    // to be attributed correctly.
-    return await Promise.resolve(
-      url.includes("/WebPrint/")
-        ? new Response("", { status: 404 })
-        : new Response(detailPage(page), {
-            headers: { "Content-Type": "text/html" },
-          }),
-    );
-  });
+  testFetchState.set(
+    asFetchMock(async (input: string | URL | Request) => {
+      const url = input instanceof Request ? input.url : String(input);
+      // Only the detail page: the print page is the document's source and the
+      // court is not read off it, so a decision stored without one still has
+      // to be attributed correctly.
+      return await Promise.resolve(
+        url.includes("/WebPrint/")
+          ? new Response("", { status: 404 })
+          : new Response(detailPage(page), {
+              headers: { "Content-Type": "text/html" },
+            }),
+      );
+    }),
+  );
   const built = await buildCzNsDecision({
     unid: "0000000000000000000000000000000A",
     caseNumber: "75 Co 19/2011",
@@ -74,16 +77,18 @@ const builtCourt = async (page: PageOptions): Promise<string> => {
 
 /** The source fingerprint the refresh check compares a stored row against. */
 const builtRawHash = async (page: PageOptions): Promise<string> => {
-  globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
-    const url = input instanceof Request ? input.url : String(input);
-    return await Promise.resolve(
-      url.includes("/WebPrint/")
-        ? new Response("", { status: 404 })
-        : new Response(detailPage(page), {
-            headers: { "Content-Type": "text/html" },
-          }),
-    );
-  });
+  testFetchState.set(
+    asFetchMock(async (input: string | URL | Request) => {
+      const url = input instanceof Request ? input.url : String(input);
+      return await Promise.resolve(
+        url.includes("/WebPrint/")
+          ? new Response("", { status: 404 })
+          : new Response(detailPage(page), {
+              headers: { "Content-Type": "text/html" },
+            }),
+      );
+    }),
+  );
   const built = await buildCzNsDecision({
     unid: "0000000000000000000000000000000A",
     caseNumber: "75 Co 19/2011",

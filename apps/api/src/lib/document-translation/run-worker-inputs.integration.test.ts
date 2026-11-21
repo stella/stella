@@ -12,6 +12,7 @@ import {
   beforeEach,
   describe,
   expect,
+  mock,
   setDefaultTimeout,
   spyOn,
   test,
@@ -36,12 +37,14 @@ import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import { DEFAULT_MANAGED_AI_RESIDENCY } from "@/api/lib/chat/ai-data-policy";
 import * as translationAI from "@/api/lib/document-translation/ai";
 import { processDocumentTranslationRun } from "@/api/lib/document-translation/run-queue";
+import { authorizeBufferWrite } from "@/api/lib/entities/buffer-write-authority";
 import * as entityWriter from "@/api/lib/entities/create-from-buffer";
 import { createFileKey } from "@/api/lib/files/utils";
 import { createRootRunActor } from "@/api/lib/root-scoped-db";
 import { brandPersistedDocumentTranslationRunId } from "@/api/lib/safe-id-boundaries";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
+import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -106,9 +109,14 @@ const actor = createRootRunActor(
 );
 const outputEntityId = createSafeId<"entity">();
 
-const settingsSpy = spyOn(aiConfigLoader, "loadOrgAISettings");
-const translateSpy = spyOn(translationAI, "translateTaggedSegments");
-const writeSpy = spyOn(entityWriter, "createEntityFromBuffer");
+// Spies typed through spyOn itself, naming each module as a whole: a typed
+// member access here would leave the module's other exports looking unused.
+type SpyOn<T extends object, K extends keyof T> = ReturnType<
+  typeof spyOn<T, K>
+>;
+let settingsSpy: SpyOn<typeof aiConfigLoader, "loadOrgAISettings">;
+let translateSpy: SpyOn<typeof translationAI, "translateTaggedSegments">;
+let writeSpy: SpyOn<typeof entityWriter, "createEntityFromBuffer">;
 
 const readRun = async () =>
   (
@@ -125,6 +133,10 @@ const sourceReads = () =>
   );
 
 beforeEach(async () => {
+  settingsSpy = spyOn(aiConfigLoader, "loadOrgAISettings");
+  translateSpy = spyOn(translationAI, "translateTaggedSegments");
+  writeSpy = spyOn(entityWriter, "createEntityFromBuffer");
+
   settingsSpy.mockReset();
   translateSpy.mockReset();
   writeSpy.mockReset();
@@ -147,7 +159,10 @@ beforeEach(async () => {
       fileName: input.fileName,
       renamed: false,
     };
-    await input.scopedDb(async (tx) => await input.afterCreate?.(tx, created));
+    await input.scopedDb(async (tx) => {
+      await authorizeBufferWrite(input.authority, tx);
+      await input.afterCreate?.(tx, created);
+    });
     return Result.ok(created);
   });
   fakeS3.requests.length = 0;
@@ -171,6 +186,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  mock.restore();
   await testDb
     .delete(documentTranslationUnits)
     .where(eq(documentTranslationUnits.runId, runId));
@@ -181,6 +197,10 @@ afterEach(async () => {
     .insert(member)
     .values(originalOrganizationMember)
     .onConflictDoNothing();
+  await testDb
+    .update(member)
+    .set({ role: originalOrganizationMember.role })
+    .where(eq(member.id, ids.memberA1org));
   await testDb
     .insert(workspaceMembers)
     .values(originalMatterMembers)
@@ -196,11 +216,14 @@ afterAll(async () => {
 });
 
 const expectStoppedBeforeReading = async () => {
-  await processDocumentTranslationRun(actor);
+  await processDocumentTranslationRun(
+    actor,
+    testModelAdmission(actor.organizationId),
+  );
   const run = await readRun();
   expect(run).toMatchObject({
     status: "failed",
-    errorCode: "document_unresolved",
+    errorCode: "internal",
     outputEntityId: null,
   });
   expect(run?.finishedAt).not.toBeNull();
@@ -222,8 +245,19 @@ describe("document translation run", () => {
     await expectStoppedBeforeReading();
   });
 
+  test("a run stops before model work after a permission-losing role downgrade", async () => {
+    await testDb
+      .update(member)
+      .set({ role: "external" })
+      .where(eq(member.id, ids.memberA1org));
+    await expectStoppedBeforeReading();
+  });
+
   test("a run completes while its requester keeps access", async () => {
-    await processDocumentTranslationRun(actor);
+    await processDocumentTranslationRun(
+      actor,
+      testModelAdmission(actor.organizationId),
+    );
     expect(await readRun()).toMatchObject({
       status: "completed",
       errorCode: null,

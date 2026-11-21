@@ -3,7 +3,7 @@
  *
  * Injects a visible footer and invisible custom properties
  * into DOCX files for document provenance tracking. Uses
- * JSZip to manipulate the OOXML package; XML is handled
+ * ZipArchive to manipulate the OOXML package; XML is handled
  * via string operations for simplicity and robustness.
  *
  * Nothing here substitutes text the author wrote. A `{{ ... }}` sequence in a
@@ -17,10 +17,12 @@ import {
   VERIFICATION_CODE_ALPHABET,
   VERIFICATION_CODE_LENGTH,
 } from "@stll/api-contract";
+import { declareFingerprintFields } from "@stll/errors";
 
 import { DESKTOP_EDIT_FILE_TYPE_CONFIG } from "@/api/lib/desktop-edit-file-types";
 import type { DocxArchive } from "@/api/lib/docx-archive";
 import { loadDocxArchive } from "@/api/lib/docx-archive";
+import { firstXmlElement, xmlElements } from "@/api/lib/files/xml-scan";
 import { LIMITS } from "@/api/lib/limits";
 
 const STAMP_BOOKMARK = "stella_dms_ref";
@@ -111,8 +113,12 @@ const STAMP_TEXT_RE = new RegExp(`^\\S(?:.*\\S)? {2}stl:${VCODE_SOURCE}$`, "u");
 
 class DocxStampError extends TaggedError("DocxStampError")<{
   message: string;
-  reason: "too-many-footer-parts";
-}> {}
+  reason: "incomplete-xml" | "too-many-footer-parts";
+}> {
+  static {
+    declareFingerprintFields(this, ["reason"]);
+  }
+}
 
 // ── Public API ──────────────────────────────────────────
 
@@ -267,7 +273,7 @@ const hasDocxMainPartOverride = (contentTypes: string): boolean => {
  */
 const isDocxArchive = async (archive: DocxArchive): Promise<boolean> => {
   const { mainPartPath } = DESKTOP_EDIT_FILE_TYPE_CONFIG.docx;
-  if (archive.zip.file(mainPartPath) === null) {
+  if (!archive.zip.has(mainPartPath)) {
     return false;
   }
 
@@ -308,10 +314,7 @@ export const injectStamp = async (
     return await Promise.reject(footerResult.error);
   }
 
-  return archive.zip.generateAsync({
-    type: "arraybuffer",
-    compression: "DEFLATE",
-  });
+  return archive.zip.generate().then((written) => written.buffer);
 };
 
 /**
@@ -390,10 +393,7 @@ export const stripStamp = async (
     return null;
   }
 
-  return archive.zip.generateAsync({
-    type: "arraybuffer",
-    compression: "DEFLATE",
-  });
+  return archive.zip.generate().then((written) => written.buffer);
 };
 
 // ── Reference Removal ───────────────────────────────────
@@ -483,7 +483,7 @@ const removePartDeclaration = async (
   }
   const stripped = removeSelfClosingElements(xml, tagName, marker);
   if (stripped !== xml) {
-    archive.zip.file(path, stripped);
+    archive.zip.set(path, stripped);
   }
 };
 
@@ -510,11 +510,11 @@ const stripCustomProperties = async (
   }
 
   if (ANY_PROPERTY_RE.test(stripped)) {
-    archive.zip.file(CUSTOM_PROPS_PATH, stripped);
+    archive.zip.set(CUSTOM_PROPS_PATH, stripped);
     return true;
   }
 
-  archive.zip.remove(CUSTOM_PROPS_PATH);
+  archive.zip.delete(CUSTOM_PROPS_PATH);
   await removePartDeclaration(
     archive,
     CONTENT_TYPES_PATH,
@@ -729,9 +729,9 @@ const stripStampParagraphsFromFooter = (footerXml: string): string => {
  * code that would make the stored file resolve back to the source document.
  */
 const stripStampParagraph = async (archive: DocxArchive): Promise<boolean> => {
-  const footerPaths = Object.keys(archive.zip.files).filter((path) =>
-    FOOTER_FILE_RE.test(path),
-  );
+  const footerPaths = archive.zip
+    .paths()
+    .filter((path) => FOOTER_FILE_RE.test(path));
 
   let stripped = false;
   for (const path of footerPaths) {
@@ -744,7 +744,7 @@ const stripStampParagraph = async (archive: DocxArchive): Promise<boolean> => {
       continue;
     }
 
-    archive.zip.file(path, rewrittenFooter);
+    archive.zip.set(path, rewrittenFooter);
     await removePartDeclaration(
       archive,
       footerRelsPathFor(path),
@@ -767,7 +767,7 @@ const injectCustomProperties = async (
   const existingXml = await archive.readEntryString(CUSTOM_PROPS_PATH);
 
   if (existingXml) {
-    archive.zip.file(
+    archive.zip.set(
       CUSTOM_PROPS_PATH,
       updateCustomProperties(existingXml, stamp, verificationCode),
     );
@@ -775,7 +775,7 @@ const injectCustomProperties = async (
   }
 
   // Create new custom.xml
-  archive.zip.file(
+  archive.zip.set(
     CUSTOM_PROPS_PATH,
     buildCustomPropertiesXml(stamp, verificationCode),
   );
@@ -864,7 +864,7 @@ const ensureContentType = async (archive: DocxArchive): Promise<void> => {
   const override =
     `<Override PartName="/${CUSTOM_PROPS_PATH}"` +
     ` ContentType="${CUSTOM_PROPS_CONTENT_TYPE}"/>`;
-  archive.zip.file(
+  archive.zip.set(
     CONTENT_TYPES_PATH,
     ct.replace("</Types>", () => `${override}\n</Types>`),
   );
@@ -877,7 +877,7 @@ const ensureCustomPropsRelationship = async (
   const rels = await archive.readEntryString(relsPath);
 
   if (!rels) {
-    archive.zip.file(
+    archive.zip.set(
       relsPath,
       [
         '<?xml version="1.0" encoding="UTF-8"?>',
@@ -899,7 +899,7 @@ const ensureCustomPropsRelationship = async (
     '"rIdCustomProps"' +
     ` Type="${CUSTOM_PROPS_REL_TYPE}"` +
     ` Target="${CUSTOM_PROPS_PATH}"/>`;
-  archive.zip.file(
+  archive.zip.set(
     relsPath,
     rels.replace(
       "</Relationships>",
@@ -990,12 +990,15 @@ const injectFooter = async (
         ...footerParts.map(({ xml }) => xml),
       ]);
       for (const footer of footerParts) {
-        await updateExistingFooter({
+        const updated = await updateExistingFooter({
           archive,
           footer,
           content,
           bookmarkId: String(bookmarkId),
         });
+        if (updated.isErr()) {
+          return updated;
+        }
         bookmarkId += 1;
       }
       return Result.ok();
@@ -1077,13 +1080,13 @@ const updateExistingFooter = async ({
   footer: LoadedFooterMatch;
   content: StampFooterContent;
   bookmarkId: string;
-}): Promise<void> => {
+}): Promise<Result<void, DocxStampError>> => {
   const footerRels = (await archive.readEntryString(footer.relsPath)) ?? "";
 
   const hyperlinkRId = STAMP_HYPERLINK_REL_ID;
 
   // Ensure hyperlink relationship exists
-  archive.zip.file(
+  archive.zip.set(
     footer.relsPath,
     ensureHyperlinkRel(footerRels, hyperlinkRId, verifyUrl),
   );
@@ -1096,14 +1099,19 @@ const updateExistingFooter = async ({
   );
   if (footer.xml.includes(STAMP_BOOKMARK)) {
     // Replace existing stamp paragraph
-    archive.zip.file(footer.path, replaceStampParagraph(footer.xml, stampPara));
+    const replaced = replaceStampParagraph(footer.xml, stampPara);
+    if (replaced.isErr()) {
+      return replaced;
+    }
+    archive.zip.set(footer.path, replaced.value);
   } else {
     // Append stamp paragraph before </w:ftr>
-    archive.zip.file(
+    archive.zip.set(
       footer.path,
       footer.xml.replace(CLOSING_FTR_RE, () => `${stampPara}\n</w:ftr>`),
     );
   }
+  return Result.ok();
 };
 
 const createNewFooter = async ({
@@ -1140,10 +1148,10 @@ const createNewFooter = async ({
     body,
     "</w:ftr>",
   ].join("\n");
-  archive.zip.file(footerPath, footerXml);
+  archive.zip.set(footerPath, footerXml);
 
   // Create footer rels with hyperlink
-  archive.zip.file(
+  archive.zip.set(
     footerRelsPath,
     [
       '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
@@ -1163,7 +1171,7 @@ const createNewFooter = async ({
     ` Target="${footerFileName}"/>`;
 
   if (docRels) {
-    archive.zip.file(
+    archive.zip.set(
       docRelsPath,
       docRels.replace(
         "</Relationships>",
@@ -1171,7 +1179,7 @@ const createNewFooter = async ({
       ),
     );
   } else {
-    archive.zip.file(
+    archive.zip.set(
       docRelsPath,
       [
         '<?xml version="1.0" encoding="UTF-8"?>',
@@ -1183,7 +1191,7 @@ const createNewFooter = async ({
   }
 
   // Reference footer in document.xml section properties
-  archive.zip.file("word/document.xml", addFooterReference(docXml, footerRId));
+  archive.zip.set("word/document.xml", addFooterReference(docXml, footerRId));
 
   // Ensure Content_Types knows about the footer
   await ensureFooterContentType(archive, footerFileName);
@@ -1193,7 +1201,7 @@ const createNewFooter = async ({
 
 const findAvailableFooterName = (archive: DocxArchive): string => {
   let n = 1;
-  while (archive.zip.file(`word/footer${n}.xml`)) {
+  while (archive.zip.entry(`word/footer${n}.xml`)) {
     n++;
   }
   return `footer${n}.xml`;
@@ -1209,19 +1217,37 @@ const findNextBookmarkId = (xmlParts: Iterable<string>): number => {
   return max + 1;
 };
 
-const replaceStampParagraph = (footerXml: string, newPara: string): string => {
-  // Match the entire paragraph containing the bookmark
-  const re = new RegExp(
-    `<w:p>[\\s\\S]*?w:name="${STAMP_BOOKMARK_NAME_SOURCE}"[\\s\\S]*?</w:p>`,
-    "u",
-  );
-
-  if (re.test(footerXml)) {
-    return footerXml.replace(re, () => newPara);
+const replaceStampParagraph = (
+  footerXml: string,
+  newPara: string,
+): Result<string, DocxStampError> => {
+  const elements = xmlElements(footerXml, "w:p");
+  let replacement: string | null = null;
+  let complete = false;
+  while (true) {
+    const next = elements.next();
+    if (next.done === true) {
+      complete = next.value.status === "complete";
+      break;
+    }
+    const match = next.value;
+    const paragraph = footerXml.slice(match.start, match.end);
+    if (paragraph.includes(`w:name="${STAMP_BOOKMARK}`)) {
+      replacement = `${footerXml.slice(0, match.start)}${newPara}${footerXml.slice(match.end)}`;
+    }
   }
-
-  // Fallback: append
-  return footerXml.replace(CLOSING_FTR_RE, () => `${newPara}\n</w:ftr>`);
+  if (!complete) {
+    return Result.err(
+      new DocxStampError({
+        message: "Footer XML contains an incomplete paragraph",
+        reason: "incomplete-xml",
+      }),
+    );
+  }
+  return Result.ok(
+    replacement ??
+      footerXml.replace(CLOSING_FTR_RE, () => `${newPara}\n</w:ftr>`),
+  );
 };
 
 const ensureHyperlinkRel = (rels: string, rId: string, url: string): string => {
@@ -1286,7 +1312,7 @@ const ensureFooterContentType = async (
   const override =
     `<Override PartName="/word/${footerFileName}"` +
     ` ContentType="${FOOTER_CONTENT_TYPE}"/>`;
-  archive.zip.file(
+  archive.zip.set(
     CONTENT_TYPES_PATH,
     ct.replace("</Types>", () => `${override}\n</Types>`),
   );
@@ -1300,9 +1326,9 @@ const parseFooterStamp = async (
   verificationCode: string | null;
   stamp: string | null;
 }> => {
-  const footerFiles = Object.keys(archive.zip.files).filter((path) =>
-    FOOTER_FILE_RE.test(path),
-  );
+  const footerFiles = archive.zip
+    .paths()
+    .filter((path) => FOOTER_FILE_RE.test(path));
 
   for (const path of footerFiles) {
     const xml = await archive.readEntryString(path);
@@ -1337,17 +1363,21 @@ const extractBookmarkText = (
   verificationCode: string | null;
   stamp: string | null;
 } | null => {
-  const re = new RegExp(
-    `<w:bookmarkStart[^>]*w:name="${STAMP_BOOKMARK_NAME_SOURCE}"` +
-      "[\\s\\S]*?<w:bookmarkEnd[^>]*/>",
-    "u",
+  const start = [...xmlElements(xml, "w:bookmarkStart")].find((match) =>
+    STAMP_BOOKMARK_MARKER_RE.test(match.openTag),
   );
-  const match = re.exec(xml);
-  if (!match) {
+  if (start === undefined) {
+    return null;
+  }
+  const remaining = xml.slice(start.end);
+  const end = firstXmlElement(remaining, "w:bookmarkEnd");
+  if (end.kind === "absent" || end.kind === "incomplete") {
     return null;
   }
 
-  const fullText = collectRunText(match[0]).trim();
+  const fullText = collectRunText(
+    xml.slice(start.start, start.end + end.match.end),
+  ).trim();
   if (!fullText) {
     return null;
   }

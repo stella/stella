@@ -11,12 +11,15 @@ import {
 } from "./query";
 
 const config = {
+  contract: "patch",
   description:
     "Read the organization's audit trail (compliance view). Returns audit " +
     "entries newest first, each with its action, resource type and id, actor " +
-    "user id, matter, timestamp, and change detail. Filter by matterId, " +
-    "action, resourceType (with optional resourceId), userId, and a " +
-    "created-at range (from/to, ISO date-time). Paginate with limit and " +
+    "user id, matter, timestamp, and change detail (null unless " +
+    'changesStatus is "visible"). Filter by matterId, ' +
+    "action, resourceType (with optional resourceId), userId, performer " +
+    "(people or automations), and a created-at range (from/to, ISO " +
+    "date-time). Paginate with limit and " +
     "cursor. Requires organization audit-log access.",
   permissions: { auditLog: ["read"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
@@ -29,7 +32,14 @@ const config = {
 
 const readAuditLogs = createSafeRootHandler(
   config,
-  async function* ({ safeDb, session, recordAuditEvent, query }) {
+  async function* ({
+    safeDb,
+    session,
+    user,
+    featureAccessSnapshot,
+    recordAuditEvent,
+    query,
+  }) {
     const invalid = validateAuditLogFilter(query);
     if (invalid !== null) {
       return Result.err(new HandlerError({ status: 400, message: invalid }));
@@ -38,6 +48,8 @@ const readAuditLogs = createSafeRootHandler(
     return yield* queryAuditLogPage({
       safeDb,
       organizationId: session.activeOrganizationId,
+      userId: user.id,
+      featureAccessSnapshot,
       recordAuditEvent,
       query,
     });

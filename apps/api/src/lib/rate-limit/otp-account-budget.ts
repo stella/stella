@@ -6,22 +6,23 @@ import {
   isAPIError,
 } from "better-auth/api";
 import { panic, Result } from "better-result";
-import { createHash } from "node:crypto";
 
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
-import type { RateLimitContext } from "@/api/lib/rate-limit/rate-limit";
+import { normalizeEmail } from "@/api/lib/email/normalized-email";
+import type { NormalizedEmail } from "@/api/lib/email/normalized-email";
+import { ACCOUNT_ATTEMPT_RATE_LIMITS } from "@/api/lib/rate-limit/budget-config";
+import {
+  type BudgetName,
+  recordBudgetRejection,
+} from "@/api/lib/rate-limit/budget-observability";
+import type { RateLimitContext } from "@/api/lib/rate-limit/contracts";
 import { createRedisRateLimitRequestKey } from "@/api/lib/rate-limit/redis-context";
 import { isRecord } from "@/api/lib/type-guards";
 
-export const OTP_ACCOUNT_BUDGET = {
-  max: 10,
-  durationMs: 15 * 60 * 1000,
-} as const;
-export const DEMO_OTP_ACCOUNT_BUDGET = {
-  max: 5,
-  durationMs: OTP_ACCOUNT_BUDGET.durationMs,
-} as const;
+export const OTP_ACCOUNT_BUDGET = ACCOUNT_ATTEMPT_RATE_LIMITS.otp;
+export const DEMO_OTP_ACCOUNT_BUDGET = ACCOUNT_ATTEMPT_RATE_LIMITS.demoOtp;
 const OTP_VERIFICATION_TYPES = {
   "/sign-in/email-otp": "sign-in",
   "/email-otp/check-verification-otp": "body",
@@ -36,20 +37,31 @@ const isOtpVerificationPath = (
 ): path is keyof typeof OTP_VERIFICATION_TYPES =>
   path !== undefined && Object.hasOwn(OTP_VERIFICATION_TYPES, path);
 
-export const createOtpAccountBudget = (
-  context: Pick<RateLimitContext, "increment" | "decrement">,
-  demoAccountEmail: string | undefined,
+type AccountAttemptBudget = { max: number; durationMs: number };
+
+/**
+ * Counts an account's attempts in a fixed window and refuses once the window
+ * holds more than `max`. A successful attempt gives its slot back, so the
+ * count is the window's failures (plus attempts still in flight).
+ */
+export const createAccountAttemptBudget = (
+  context: Pick<RateLimitContext, "increment" | "decrement" | "complete">,
+  {
+    counterPrefix,
+    budgetFor,
+    nameFor = () => "auth.account",
+  }: {
+    counterPrefix: string;
+    budgetFor: (normalizedEmail: NormalizedEmail) => AccountAttemptBudget;
+    nameFor?: (normalizedEmail: NormalizedEmail) => BudgetName;
+  },
 ) => ({
   reserve: async (email: string) => {
-    const normalizedEmail = email.trim().toLowerCase();
-    const isDemoAccount =
-      normalizedEmail === demoAccountEmail?.trim().toLowerCase();
-    const accountBudget = isDemoAccount
-      ? DEMO_OTP_ACCOUNT_BUDGET
-      : OTP_ACCOUNT_BUDGET;
-    const account = createHash("sha256").update(normalizedEmail).digest("hex");
+    const normalizedEmail = normalizeEmail(email);
+    const accountBudget = budgetFor(normalizedEmail);
+    const account = hashSha256Hex(normalizedEmail);
     const key = createRedisRateLimitRequestKey({
-      counterKey: `otp-account:${account}`,
+      counterKey: `${counterPrefix}:${account}`,
       requestId: Bun.randomUUIDv7(),
     });
     const { count, nextReset } = await context.increment(
@@ -57,6 +69,12 @@ export const createOtpAccountBudget = (
       accountBudget.durationMs,
     );
     if (count > accountBudget.max) {
+      await context.complete(key);
+      recordBudgetRejection({
+        name: nameFor(normalizedEmail),
+        keyKind: "account",
+        windowMs: accountBudget.durationMs,
+      });
       return Result.err(
         new APIError(
           "TOO_MANY_REQUESTS",
@@ -79,15 +97,38 @@ export const createOtpAccountBudget = (
     return Result.ok(key);
   },
   complete: async (key: string, success: boolean) => {
-    if (success) {
-      await context.decrement(key);
+    try {
+      if (success) {
+        await context.decrement(key);
+      }
+    } finally {
+      await context.complete(key);
     }
   },
 });
 
+export const createOtpAccountBudget = (
+  context: Pick<RateLimitContext, "increment" | "decrement" | "complete">,
+  demoAccountEmail: string | undefined,
+) => {
+  const demoAccount =
+    demoAccountEmail === undefined ? null : normalizeEmail(demoAccountEmail);
+  return createAccountAttemptBudget(context, {
+    counterPrefix: "otp-account",
+    nameFor: (normalizedEmail) =>
+      normalizedEmail === demoAccount
+        ? "auth.otp.demo_account"
+        : "auth.otp.account",
+    budgetFor: (normalizedEmail) =>
+      normalizedEmail === demoAccount
+        ? DEMO_OTP_ACCOUNT_BUDGET
+        : OTP_ACCOUNT_BUDGET,
+  });
+};
+
 type OtpAccountLimitPluginOptions = {
   enabled: boolean;
-  context: Pick<RateLimitContext, "increment" | "decrement">;
+  context: Pick<RateLimitContext, "increment" | "decrement" | "complete">;
   demoAccountEmail: string | undefined;
 };
 
@@ -113,13 +154,16 @@ export const createOtpAccountLimitPlugin = ({
               verificationType === "change-email" ||
               verificationType === "current-email";
             const emailFromBody = isRecord(body) ? body["email"] : undefined;
+            const sessionUser = usesSessionEmail
+              ? (await getAuthoritativeSessionFromCtx(ctx))?.user
+              : undefined;
             const email: unknown = usesSessionEmail
-              ? (await getAuthoritativeSessionFromCtx(ctx))?.user.email
+              ? sessionUser?.email
               : emailFromBody;
             if (typeof email !== "string") {
               return undefined;
             }
-            const accountEmail = email.toLowerCase();
+            const accountEmail = normalizeEmail(email);
             let identifier: string;
             switch (verificationType) {
               case "sign-in":
@@ -137,10 +181,12 @@ export const createOtpAccountLimitPlugin = ({
               }
               case "change-email": {
                 const newEmail = isRecord(body) ? body["newEmail"] : undefined;
-                if (typeof newEmail !== "string") {
+                if (typeof newEmail !== "string" || sessionUser === undefined) {
                   return undefined;
                 }
-                identifier = `change-email-otp-${accountEmail}-${newEmail.toLowerCase()}`;
+                // Better Auth binds a pending email change to the account id and
+                // the folded new address (email-otp `changeEmailEmailOTP`).
+                identifier = `change-email-otp-${sessionUser.id}:${normalizeEmail(newEmail)}`;
                 break;
               }
               case "current-email": {

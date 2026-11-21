@@ -3,7 +3,7 @@
  * fields the decision model answers, what one chip shows, how clicking it
  * cycles the user's override, and which values the decide request carries.
  *
- * The response shape is derived from the Eden client so a contract change on
+ * The response shape is derived from the API client so a contract change on
  * `POST /templates/:templateId/decide-conditions` fails to compile here
  * instead of drifting into a stale local copy.
  */
@@ -132,14 +132,14 @@ export const readConditionOverrides = (
   values: Readonly<Record<string, unknown>>,
   conditionPaths: readonly string[],
 ): Record<string, boolean> => {
-  const overrides: Record<string, boolean> = {};
+  const overrides = new Map<string, boolean>();
   for (const path of conditionPaths) {
     const value = values[path];
     if (typeof value === "boolean") {
-      overrides[path] = value;
+      overrides.set(path, value);
     }
   }
-  return overrides;
+  return Object.fromEntries(overrides);
 };
 
 /** Whether the form carries an answer that can inform a decision. */
@@ -195,6 +195,7 @@ export const effectiveConditionValues = (
 type ConditionChipAnswer =
   | { kind: "decided"; value: boolean; probability: number }
   | { kind: "forced"; value: boolean }
+  | { kind: "generative"; value: boolean }
   | { kind: "error" }
   | { kind: "notSettled" }
   | { kind: "onGenerate" };
@@ -205,8 +206,8 @@ export type ConditionChipDescription = {
 };
 
 /**
- * A user-set value reads as theirs, a model answer carries its probability,
- * and anything unanswered says plainly that the fill decides it.
+ * A user-set value reads as theirs; model answers carry their available
+ * confidence, and unresolved answers remain unsettled.
  */
 export const describeConditionChip = (
   state: ConditionChipState,
@@ -230,6 +231,12 @@ export const describeConditionChip = (
             return {
               tone: "highlight",
               answer: { kind: "forced", value: decision.value },
+            };
+          }
+          if (decision.decidedBy === "generative_model") {
+            return {
+              tone: decision.value ? "success" : "neutral",
+              answer: { kind: "generative", value: decision.value },
             };
           }
           return {
@@ -263,12 +270,14 @@ const UNDECIDED_TONE = {
   "below-floor": "warning",
   "no-backend": "neutral",
   failed: "neutral",
+  refusal: "neutral",
 } as const satisfies Record<UndecidedReason, ReviewStatusTone>;
 
 const UNDECIDED_ANSWER = {
   "below-floor": { kind: "notSettled" },
-  "no-backend": { kind: "onGenerate" },
-  failed: { kind: "onGenerate" },
+  "no-backend": { kind: "notSettled" },
+  failed: { kind: "notSettled" },
+  refusal: { kind: "notSettled" },
 } as const satisfies Record<UndecidedReason, ConditionChipAnswer>;
 
 /** Whole percent, so `0.962` reads as `96 %` (or `96%`, per locale). */

@@ -1,13 +1,18 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { expect, test } from "bun:test";
 import fc from "fast-check";
 
 import {
-  propertyConfig,
+  canonicalUsReporterCitation,
+  US_REPORTER_PAGE_LEAD_SOURCE,
+} from "@stll/api-contract/us-reporter-citation";
+import {
+  assertProperty,
   propertySeed,
   propertyTestTimeout,
 } from "@stll/property-testing";
 
+import { US_REPORTER_SPELLINGS } from "../../../../../../packages/api-contract/src/us-reporter-editions.generated";
 import { scanRun, US_CITATION_WORK_LIMIT } from "./us-citation-scanner";
 
 const noise = fc
@@ -34,10 +39,179 @@ const scan = (text: string, limit = US_CITATION_WORK_LIMIT) => {
   return { result, budget };
 };
 
+const FIRST_PAGE_RE = new RegExp(
+  String.raw`${US_REPORTER_PAGE_LEAD_SOURCE}\d{1,5}$`,
+  "u",
+);
+
+test("every unambiguous reporter spelling scans to its parsed identity", () => {
+  const spellings = Object.keys(US_REPORTER_SPELLINGS).filter(
+    (spelling) => canonicalUsReporterCitation(`9137 ${spelling} 9246`) !== null,
+  );
+  const assertIdentity = (text: string) => {
+    const canonical = canonicalUsReporterCitation(text);
+    if (canonical === null) {
+      panic("Generated reporter citation has no canonical identity");
+    }
+    const { result } = scan(text);
+    if (Result.isError(result)) {
+      throw result.error;
+    }
+    expect(
+      result.value.events.flatMap((event) =>
+        event.kind === "token" && event.token.kind === "full"
+          ? [event.token.base?.identifier.value]
+          : [],
+      ),
+    ).toEqual([canonical]);
+    const pageMarker = scan(`${text} p. 9975`).result;
+    if (Result.isError(pageMarker)) {
+      throw pageMarker.error;
+    }
+    expect(
+      pageMarker.value.events.flatMap((event) =>
+        event.kind === "token" && event.token.kind === "full"
+          ? [event.token.base?.identifier.value]
+          : [],
+      ),
+    ).toEqual([canonical]);
+    const placeholder = scan(`9319 U.S., ${text}`).result;
+    if (Result.isError(placeholder)) {
+      throw placeholder.error;
+    }
+    expect(
+      placeholder.value.events.flatMap((event) =>
+        event.kind === "token" && event.token.kind === "full"
+          ? [event.token.base?.identifier.value]
+          : [],
+      ),
+    ).toEqual([canonical]);
+    const parallel = scan(`9319 U.S. 9527, ${text}`).result;
+    if (Result.isError(parallel)) {
+      throw parallel.error;
+    }
+    expect(
+      parallel.value.events.flatMap((event) =>
+        event.kind === "token" && event.token.kind === "full"
+          ? [event.token.base?.identifier.value]
+          : [],
+      ),
+    ).toEqual(["9319 U.S. 9527", canonical]);
+    const short = scan(
+      `9319 U.S. 9527, ${text.replace(FIRST_PAGE_RE, ", at 9891")}`,
+    ).result;
+    if (Result.isError(short)) {
+      throw short.error;
+    }
+    expect(
+      short.value.events.flatMap((event) =>
+        event.kind === "token" ? [event.token.kind] : [],
+      ),
+    ).toEqual(["full", "volume-reporter"]);
+  };
+  for (const spelling of spellings) {
+    assertIdentity(`9137 ${spelling} 9246`);
+    assertIdentity(`9137 ${spelling},9246`);
+    assertIdentity(`9137 ${spelling}, 9246`);
+  }
+  assertProperty(
+    "every unambiguous reporter spelling scans to its parsed identity",
+    fc.property(
+      fc.constantFrom(...spellings),
+      fc.integer({ min: 9001, max: 9999 }),
+      fc.integer({ min: 90_001, max: 99_999 }),
+      fc.constantFrom(" ", "   ", "\r\n  ", "\u00a0\u00a0\u00a0"),
+      fc.constantFrom("", ","),
+      (spelling, volume, page, gap, separator) => {
+        assertIdentity(
+          `${String(volume)}${gap}${spelling}${separator}${gap}${String(page)}`,
+        );
+      },
+    ),
+  );
+});
+
+test("every exact table spelling proves a next-volume boundary", () => {
+  const spellings = Object.keys(US_REPORTER_SPELLINGS);
+  type ReporterBoundaryArgs = {
+    spelling: string;
+    volume: number;
+    page: number;
+  };
+  const assertBoundary = ({ spelling, volume, page }: ReporterBoundaryArgs) => {
+    const text = `${String(volume)} ${spelling} ${String(page)}`;
+    const canonical = canonicalUsReporterCitation(text);
+    const citations = [
+      text,
+      `${String(volume)} ${spelling},${String(page)}`,
+      `${String(volume)} ${spelling} (987 U.S.) ${String(page)}`,
+      `${String(volume)} ${spelling} (987 U.S.),${String(page)}`,
+    ];
+    for (const citation of citations) {
+      for (const prefix of [
+        "9319 U.S., ",
+        "9319 U.S. 9527, ",
+        "9319 U.S. 9527, 9528, ",
+      ]) {
+        const { result } = scan(prefix + citation);
+        if (Result.isError(result)) {
+          throw result.error;
+        }
+        expect(
+          result.value.events.flatMap((event) =>
+            event.kind === "token" && event.token.kind === "full"
+              ? [event.token.base?.identifier.value ?? null]
+              : [],
+          ),
+        ).toEqual(
+          prefix === "9319 U.S., "
+            ? [canonical]
+            : ["9319 U.S. 9527", canonical],
+        );
+      }
+    }
+    for (const lead of [" at ", ", at "]) {
+      const { result } = scan(
+        `9319 U.S. 9527, ${String(volume)} ${spelling}${lead}${String(page)}`,
+      );
+      if (Result.isError(result)) {
+        throw result.error;
+      }
+      expect(
+        result.value.events.flatMap((event) =>
+          event.kind === "token" && event.token.kind === "full"
+            ? [event.token.pin]
+            : [],
+        ),
+      ).toEqual([null]);
+      expect(
+        result.value.events.flatMap((event) =>
+          event.kind === "token" ? [event.token.kind] : [],
+        ),
+      ).toEqual(["full", "volume-reporter"]);
+    }
+  };
+  for (const spelling of spellings) {
+    assertBoundary({ spelling, volume: 9137, page: 9246 });
+  }
+  assertProperty(
+    "every exact table spelling proves a next-volume boundary",
+    fc.property(
+      fc.record({
+        spelling: fc.constantFrom(...spellings),
+        volume: fc.integer({ min: 9001, max: 9999 }),
+        page: fc.integer({ min: 90_001, max: 99_999 }),
+      }),
+      assertBoundary,
+    ),
+  );
+});
+
 test(
   "reporter tokens retain their source spans under a prefix",
   () => {
-    fc.assert(
+    assertProperty(
+      "reporter tokens retain their source spans under a prefix",
       fc.property(
         noise,
         reporter,
@@ -87,7 +261,7 @@ test(
           expect(shiftedTokens).toEqual(tokens);
         },
       ),
-      propertyConfig({ seed: propertySeed() }),
+      { seed: propertySeed() },
     );
   },
   propertyTestTimeout(10_000),
@@ -96,7 +270,8 @@ test(
 test(
   "candidate production stops immediately past its work allowance",
   () => {
-    fc.assert(
+    assertProperty(
+      "candidate production stops immediately past its work allowance",
       fc.property(
         fc.integer({ min: 0, max: 100 }),
         fc.integer({ min: 1, max: 100 }),
@@ -115,7 +290,7 @@ test(
           expect(budget.spent).toBe(limit + 1);
         },
       ),
-      propertyConfig({ seed: propertySeed() }),
+      { seed: propertySeed() },
     );
   },
   propertyTestTimeout(10_000),
@@ -124,7 +299,8 @@ test(
 test(
   "long separator and digit runs stay bounded",
   () => {
-    fc.assert(
+    assertProperty(
+      "long separator and digit runs stay bounded",
       fc.property(
         fc.constantFrom(
           "/",
@@ -138,15 +314,16 @@ test(
         fc.integer({ min: 1000, max: 12_000 }),
         (fragment, count) => {
           const text = `${fragment.repeat(count)}; 410 U.S. 113`;
-          const started = performance.now();
           const { result, budget } = scan(text);
-          expect(performance.now() - started).toBeLessThan(2000);
+          expect(budget.spent).toBeGreaterThan(0);
           expect(budget.spent).toBeLessThanOrEqual(US_CITATION_WORK_LIMIT + 1);
           if (Result.isError(result)) {
             expect(result.error._tag).toBe("UsCitationWorkBudgetError");
-            expect(budget.spent).toBeGreaterThan(US_CITATION_WORK_LIMIT);
+            expect(result.error.limit).toBe(US_CITATION_WORK_LIMIT);
+            expect(budget.spent).toBe(US_CITATION_WORK_LIMIT + 1);
             return;
           }
+          expect(budget.spent).toBeLessThanOrEqual(US_CITATION_WORK_LIMIT);
           expect(
             result.value.events.some(
               (event) =>
@@ -157,7 +334,7 @@ test(
           ).toBe(true);
         },
       ),
-      propertyConfig({ numRuns: 20, seed: propertySeed() }),
+      { numRuns: 20, seed: propertySeed() },
     );
   },
   propertyTestTimeout(15_000),

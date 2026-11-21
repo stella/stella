@@ -1,0 +1,156 @@
+import { expect, test } from "bun:test";
+
+import { parseSource } from "@stll/scripts/src/syntax-tree";
+
+import { APP_FRAME_SCOPE } from "../../src/routes/-app-frame-scope";
+import {
+  declaredAppFrameScope,
+  isServerEndpoint,
+  readDockedChatHosts,
+  renderedImports,
+} from "../helpers/docked-chat-hosts";
+
+test.each(["component", "component: component"])(
+  "follows imported route components declared with %s",
+  (options) => {
+    expect(
+      renderedImports(
+        parseSource(
+          "route.tsx",
+          `import { ChatPage as component } from "./chat-page";
+export const Route = createFileRoute("/chat")({ ${options} });`,
+        ),
+      ),
+    ).toEqual(["./chat-page"]);
+  },
+);
+
+test.each([
+  "handlers",
+  "handlers: {}",
+  "handlers() { return {}; }",
+  "get handlers() { return {}; }",
+])("identifies server endpoints with %s metadata", (handlers) => {
+  expect(
+    isServerEndpoint(
+      parseSource(
+        "endpoint.tsx",
+        `const handlers = {};
+export const Route = createFileRoute("/endpoint")({ server: { ${handlers} } });`,
+      ),
+    ),
+  ).toBe(true);
+});
+
+test.each([
+  "appFrame",
+  "appFrame() { return scope.member; }",
+  "get appFrame() { return scope.member; }",
+])("rejects unreadable %s frame metadata", (metadata) => {
+  expect(() =>
+    declaredAppFrameScope(
+      parseSource(
+        "route.tsx",
+        `import { APP_FRAME_SCOPE as scope } from "@/routes/-app-frame-scope";
+export const Route = createFileRoute("/feature")({ staticData: { ${metadata} } });`,
+      ),
+      "route.tsx",
+    ),
+  ).toThrow("Unsupported appFrame metadata");
+});
+
+test.each(Object.entries(APP_FRAME_SCOPE))(
+  "reads declared %s scope independently of route names",
+  (name, scope) => {
+    const source = parseSource(
+      "renamed-route.tsx",
+      `import { APP_FRAME_SCOPE as scope } from "@/routes/-app-frame-scope";
+export const Route = createFileRoute("/unrelated-name")({ staticData: { appFrame: scope.${name} } });`,
+    );
+    expect(declaredAppFrameScope(source, "renamed-route.tsx")).toBe(scope);
+  },
+);
+
+test("rejects frame metadata with an unknown scope name", () => {
+  const source = parseSource(
+    "route.tsx",
+    `import { APP_FRAME_SCOPE as scope } from "@/routes/-app-frame-scope";
+export const Route = createFileRoute("/feature")({ staticData: { appFrame: scope.toString } });`,
+  );
+  expect(() => declaredAppFrameScope(source, "route.tsx")).toThrow(
+    "Unknown appFrame metadata",
+  );
+});
+
+test("absent metadata inherits while unsupported metadata fails", () => {
+  const scopeOf = (source: string) =>
+    declaredAppFrameScope(parseSource("route.tsx", source), "route.tsx");
+  expect(
+    scopeOf('export const Route = createFileRoute("/_protected")({});'),
+  ).toBeUndefined();
+  expect(() =>
+    scopeOf("const value = { staticData: { appFrame: arbitrary } };"),
+  ).toThrow("Unsupported appFrame metadata");
+});
+
+test("docked chat census includes reader and inspector hosts but excludes non-page endpoints", () => {
+  const { hosts, providerSources } = readDockedChatHosts();
+  expect(providerSources.length).toBeGreaterThan(0);
+  expect(new Set(hosts.map(({ template }) => template)).size).toBe(
+    hosts.length,
+  );
+  expect(hosts.some(({ surfaces }) => surfaces.includes("reader"))).toBe(true);
+  expect(hosts.some(({ surfaces }) => surfaces.includes("template"))).toBe(
+    true,
+  );
+  expect(
+    hosts.some(
+      ({ template, surfaces }) =>
+        template === "/chat" && surfaces.includes("inspector"),
+    ),
+  ).toBe(true);
+  for (const template of [
+    "/law/cases/research",
+    "/law/cases/research/$tableId",
+  ]) {
+    expect(
+      hosts.find((host) => host.template === template)?.surfaces,
+    ).toContain("inspector");
+  }
+  expect(
+    hosts.some(
+      ({ template }) =>
+        template.startsWith("/auth") ||
+        template.includes("sitemap") ||
+        template.endsWith("/download"),
+    ),
+  ).toBe(false);
+});
+
+test("docked chat census follows the frame a route's parent layout selects", () => {
+  const { hosts } = readDockedChatHosts();
+  // Account settings and organization admin share the app frame, and with it
+  // the docked inspector.
+  for (const template of [
+    "/settings/account/profile",
+    "/admin/general",
+    "/admin/members",
+  ]) {
+    expect(
+      hosts.find((host) => host.template === template)?.surfaces,
+    ).toContain("inspector");
+  }
+});
+
+test("a preview-only PDF viewer is not followed into its docked chat reader", () => {
+  const imports = (mode: string) =>
+    renderedImports(
+      parseSource(
+        "preview.tsx",
+        `import { PeekPdfViewer } from "@/components/pdf/peek/peek-pdf-viewer";
+export const Preview = () => <PeekPdfViewer interactionMode="${mode}" />;`,
+      ),
+    );
+  expect(imports("preview-only")).toEqual([]);
+  expect(imports("with-ai")).toEqual(["@/components/pdf/peek/peek-pdf-viewer"]);
+});

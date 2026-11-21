@@ -1,10 +1,11 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import type { ComponentProps } from "react";
 
 import { useForm, useSelector } from "@tanstack/react-form";
 import { useQuery } from "@tanstack/react-query";
 import { Result } from "better-result";
 import { useTranslations } from "use-intl";
+import * as v from "valibot";
 
 import { assignableRoles } from "@stll/permissions";
 import { Button } from "@stll/ui/button";
@@ -21,7 +22,6 @@ import {
 } from "@stll/ui/dialog";
 import { Field, FieldError, FieldLabel } from "@stll/ui/field";
 import { Form } from "@stll/ui/form";
-import { UserPlusIcon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import {
   Select,
@@ -32,6 +32,13 @@ import {
 } from "@stll/ui/select";
 import { stellaToast } from "@stll/ui/toast";
 
+import {
+  INVITE_MEMBER_BUTTON_SIZE,
+  INVITE_MEMBER_BUTTON_VARIANT,
+  InviteMemberTriggerContent,
+} from "@/components/organization/invite-member-trigger.pending";
+import { QueryViewFeedback } from "@/components/query-view-feedback";
+import { useLatestCallback } from "@/hooks/use-latest-callback";
 import type { Role } from "@/lib/auth-client";
 import { roleOptions } from "@/lib/auth-queries";
 import { detached } from "@/lib/detached";
@@ -39,10 +46,13 @@ import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { roleTranslationKeys } from "@/lib/organization/consts";
 import { useInviteMember } from "@/lib/organization/mutations";
 import {
+  defaultInviteRole,
   inviteMemberSchema,
   roleAssignmentOptions,
 } from "@/lib/organization/role-assignment.logic";
+import { queryView } from "@/lib/query-view.logic";
 import { schemaFormOptions, toFormErrors } from "@/lib/schema";
+import { useQueryViewError } from "@/lib/use-query-view";
 
 type InviteMemberDialogProps = {
   buttonLabel?: string;
@@ -51,35 +61,40 @@ type InviteMemberDialogProps = {
   description?: string;
   onInvited?: () => void;
   showIcon?: boolean;
-};
-
-export const useCanInviteMembers = () => {
-  const { data: currentUserRole } = useQuery({
-    ...roleOptions,
-    staleTime: Number.POSITIVE_INFINITY,
-  });
-
-  return currentUserRole ? assignableRoles(currentUserRole).length > 0 : false;
+  /**
+   * Text the dialog opens with in its address field (what the reader typed
+   * into a search), used only when it is an email address.
+   */
+  suggestedEmail?: string | undefined;
 };
 
 export const InviteMemberDialog = (props: InviteMemberDialogProps) => {
-  const { data: currentUserRole } = useQuery({
+  const currentUserRoleQuery = useQuery({
     ...roleOptions,
     staleTime: Number.POSITIVE_INFINITY,
   });
+  const currentUserRoleView = queryView(currentUserRoleQuery);
+  useQueryViewError(currentUserRoleView, "InviteMemberDialog:query");
+  const currentUserRole =
+    currentUserRoleView.type === "items"
+      ? currentUserRoleView.items
+      : undefined;
+  if (currentUserRoleQuery.status !== "success") {
+    return <QueryViewFeedback view={currentUserRoleView} />;
+  }
   const defaultRole =
     currentUserRole === undefined
       ? undefined
-      : assignableRoles(currentUserRole).at(-1);
+      : defaultInviteRole(assignableRoles(currentUserRole));
   if (currentUserRole === undefined || defaultRole === undefined) {
     return null;
   }
   return (
     <InviteMemberForm
+      key={currentUserRole}
       {...props}
       currentUserRole={currentUserRole}
       defaultRole={defaultRole}
-      key={currentUserRole}
     />
   );
 };
@@ -91,25 +106,27 @@ type InviteMemberFormProps = InviteMemberDialogProps & {
 
 const InviteMemberForm = ({
   buttonLabel,
-  buttonSize = "sm",
-  buttonVariant = "outline",
+  buttonSize = INVITE_MEMBER_BUTTON_SIZE,
+  buttonVariant = INVITE_MEMBER_BUTTON_VARIANT,
   description,
   currentUserRole,
   defaultRole,
   onInvited,
   showIcon = true,
+  suggestedEmail,
 }: InviteMemberFormProps) => {
   const t = useTranslations();
   const [isOpen, setIsOpen] = useState(false);
-  const inviteMember = useInviteMember();
-  const schema = useMemo(
-    () => inviteMemberSchema(currentUserRole),
-    [currentUserRole],
+  const isDialogOpen = useLatestCallback(() => isOpen);
+  const inviteMember = useInviteMember(isDialogOpen);
+  const schema = inviteMemberSchema(
+    currentUserRole,
+    t("validation.invalidEmail"),
   );
-  const defaultValues = useMemo(
-    () => ({ email: "", role: defaultRole }),
-    [defaultRole],
-  );
+  // The address the dialog opened with; it is the form's default, so a
+  // prefilled address is not an unsaved change.
+  const [openingEmail, setOpeningEmail] = useState("");
+  const defaultValues = { email: openingEmail, role: defaultRole };
   const roles = roleAssignmentOptions(currentUserRole).map(({ value }) => ({
     description: t(roleTranslationKeys[value].descriptionKey),
     label: t(roleTranslationKeys[value].labelKey),
@@ -145,13 +162,17 @@ const InviteMemberForm = ({
           title: t("success.invitationSent"),
           type: "success",
         });
+        formApi.reset();
         setIsOpen(false);
         onInvited?.();
       },
     }),
   );
 
-  const formErrors = useSelector(form.store, (s) => toFormErrors(s.fieldMeta));
+  const { formErrors, dirty } = useSelector(form.store, (s) => ({
+    formErrors: toFormErrors(s.fieldMeta),
+    dirty: !s.isDefaultValue,
+  }));
 
   return (
     <Dialog
@@ -159,18 +180,27 @@ const InviteMemberForm = ({
         setIsOpen(open);
         if (!open) {
           form.reset();
+          return;
         }
+        const suggested = v.safeParse(schema.entries.email, suggestedEmail);
+        const email = suggested.success ? suggested.output : "";
+        setOpeningEmail(email);
+        form.reset({ email, role: defaultRole });
       }}
       open={isOpen}
     >
       <DialogTrigger
         render={<Button size={buttonSize} variant={buttonVariant} />}
       >
-        {showIcon ? <UserPlusIcon className="size-4" /> : null}
-        {buttonLabel ?? t("common.invite")}
+        <InviteMemberTriggerContent
+          label={buttonLabel ?? t("common.invite")}
+          showIcon={showIcon}
+        />
       </DialogTrigger>
       <DialogPopup>
         <Form
+          dirty={dirty}
+          onDiscard={() => form.reset()}
           className="gap-0"
           errors={formErrors}
           onSubmit={(e) => {

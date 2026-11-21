@@ -1,12 +1,18 @@
-import { t } from "elysia";
+import * as v from "valibot";
+
+import { numberFromString } from "@stll/api-contract/http-input";
 
 import { readReportExportHistory } from "@/api/handlers/reports/export-history";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
-import { tPaginationCursor, workspaceParams } from "@/api/lib/custom-schema";
+import {
+  paginationCursorSchema,
+  workspaceParams,
+} from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
 
 const config = {
+  contract: "patch",
   description:
     "List report exports requested by the current user in a matter, newest first with cursor pagination.",
   permissions: { workspace: ["read"] },
@@ -19,13 +25,17 @@ const config = {
   },
   access: "read",
   params: workspaceParams({}),
-  query: t.Object({
-    cursor: t.Optional(tPaginationCursor()),
-    limit: t.Optional(
-      t.Integer({
-        minimum: 1,
-        maximum: LIMITS.reportExportsPageSizeMax,
-      }),
+  query: v.object({
+    cursor: v.optional(paginationCursorSchema()),
+    limit: v.optional(
+      numberFromString(
+        v.pipe(
+          v.number(),
+          v.integer(),
+          v.minValue(1),
+          v.maxValue(LIMITS.reportExportsPageSizeMax),
+        ),
+      ),
     ),
   }),
 } satisfies WorkspaceHandlerConfig;

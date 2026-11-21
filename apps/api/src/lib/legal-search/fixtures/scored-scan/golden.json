@@ -69,7 +69,6 @@
       "windowStart": 0
     },
     "passageCountById": "fcdc4426505a3996698445b50fc81aff8fd329a2dc65ce3958ccd0d49d45a4f1",
-    "anchorIdById": "896083a057d1b6fb3e0978537479b978973ed63c0e0a887be466f27fe7bddc88",
     "snippetById": "4abbe436634d4879d7d590387caefb66524ceb59e3398e5269daf023566bb4bb",
     "scan": {
       "rounds": 1,
@@ -84,12 +83,15 @@
         "size": 300
       }
     ],
-    "highlightRequests": [
-      {
-        "maxHits": 40,
-        "clauses": 10
-      }
-    ]
+    "highlightRequests": {
+      "count": 1,
+      "shapes": [
+        {
+          "maxHits": 10,
+          "clauses": 10
+        }
+      ]
+    }
   },
   "small:2": {
     "pageRanked": [
@@ -126,7 +128,6 @@
     ],
     "nextCursor": null,
     "passageCountById": "fcdc4426505a3996698445b50fc81aff8fd329a2dc65ce3958ccd0d49d45a4f1",
-    "anchorIdById": "896083a057d1b6fb3e0978537479b978973ed63c0e0a887be466f27fe7bddc88",
     "snippetById": "006289395fd012641e3023c0f94bb370b7dd764bcbc041386b54c551f1547a43",
     "scan": {
       "rounds": 1,
@@ -141,12 +142,15 @@
         "size": 300
       }
     ],
-    "highlightRequests": [
-      {
-        "maxHits": 20,
-        "clauses": 5
-      }
-    ]
+    "highlightRequests": {
+      "count": 1,
+      "shapes": [
+        {
+          "maxHits": 5,
+          "clauses": 5
+        }
+      ]
+    }
   },
   "wide:1": {
     "pageRanked": [
@@ -218,7 +222,6 @@
       "windowStart": 0
     },
     "passageCountById": "615269409b6e48b16d825dc760ae8837397658994c045f6ce2459a47f94920b4",
-    "anchorIdById": "b5c7ad6c74b2701a76f67aa070899ede73551984caf6fe82c587f35bd6f05b5f",
     "snippetById": "aa50d6b7b6edd3b49227c20b410ce64ab44717cc7b64cc9f25ab54108721c0b8",
     "scan": {
       "rounds": 1,
@@ -233,12 +236,15 @@
         "size": 300
       }
     ],
-    "highlightRequests": [
-      {
-        "maxHits": 40,
-        "clauses": 10
-      }
-    ]
+    "highlightRequests": {
+      "count": 1,
+      "shapes": [
+        {
+          "maxHits": 10,
+          "clauses": 10
+        }
+      ]
+    }
   },
   "wide:2": {
     "pageRanked": [
@@ -310,7 +316,6 @@
       "windowStart": 0
     },
     "passageCountById": "615269409b6e48b16d825dc760ae8837397658994c045f6ce2459a47f94920b4",
-    "anchorIdById": "b5c7ad6c74b2701a76f67aa070899ede73551984caf6fe82c587f35bd6f05b5f",
     "snippetById": "1fdcfb8291a872a5e439f95d26e86b0b160c22c476fb29d8746d575bc9ad35bf",
     "scan": {
       "rounds": 1,
@@ -325,12 +330,15 @@
         "size": 300
       }
     ],
-    "highlightRequests": [
-      {
-        "maxHits": 40,
-        "clauses": 10
-      }
-    ]
+    "highlightRequests": {
+      "count": 1,
+      "shapes": [
+        {
+          "maxHits": 10,
+          "clauses": 10
+        }
+      ]
+    }
   },
   "deep-page:1": {
     "pageRanked": [
@@ -942,7 +950,6 @@
       "windowStart": 0
     },
     "passageCountById": "c3268cae39d27204c29097ce2b49dc06ed433f46568920f05d435d4e84b0ca62",
-    "anchorIdById": "59d216b93b711d28bec7c35d79a8216a84f3e6365fc9d23b7a5d5f37bb9e7f7a",
     "snippetById": "ddd7d7ac040dac550bf25d20bd311f84db5b424475e1c1e492b75a3f27c1395f",
     "scan": {
       "rounds": 1,
@@ -957,12 +964,15 @@
         "size": 300
       }
     ],
-    "highlightRequests": [
-      {
-        "maxHits": 400,
-        "clauses": 100
-      }
-    ]
+    "highlightRequests": {
+      "count": 1,
+      "shapes": [
+        {
+          "maxHits": 100,
+          "clauses": 100
+        }
+      ]
+    }
   },
   "deep-page:2": {
     "pageRanked": [
@@ -1574,7 +1584,6 @@
       "windowStart": 0
     },
     "passageCountById": "1e115b561d054c49b4eaab0d221d2366ed1d82fddc43d695942283e68a7b10c9",
-    "anchorIdById": "c868b7c015ae8f7d846bf5d8f80fc0bfa125225532a62cc3120473058c4c9487",
     "snippetById": "2985db1c4c82b2fbea2b6f6ca5ec02bb93a2899b8cea489e41e9b638818de744",
     "scan": {
       "rounds": 3,
@@ -1597,12 +1606,15 @@
         "size": 300
       }
     ],
-    "highlightRequests": [
-      {
-        "maxHits": 400,
-        "clauses": 100
-      }
-    ]
+    "highlightRequests": {
+      "count": 1,
+      "shapes": [
+        {
+          "maxHits": 100,
+          "clauses": 100
+        }
+      ]
+    }
   },
   "flooded:1": {
     "pageRanked": [
@@ -1734,7 +1746,6 @@
       "windowStart": 0
     },
     "passageCountById": "6f58a0b04f6378c42136bf1cd3fd91359c471be43694e9b8f66f46b7c25263c6",
-    "anchorIdById": "85804e5be9f7814cf4a0373f678689209bca4d4762ad83d12aeba9e32ff6931d",
     "snippetById": "8943fda5642cebeb91c833fb76f777f747e494420cf796e8781a8524fea3eccf",
     "scan": {
       "rounds": 1,
@@ -1749,12 +1760,15 @@
         "size": 300
       }
     ],
-    "highlightRequests": [
-      {
-        "maxHits": 80,
-        "clauses": 20
-      }
-    ]
+    "highlightRequests": {
+      "count": 1,
+      "shapes": [
+        {
+          "maxHits": 20,
+          "clauses": 20
+        }
+      ]
+    }
   },
   "flooded:2": {
     "pageRanked": [
@@ -1886,7 +1900,6 @@
       "windowStart": 0
     },
     "passageCountById": "a0558438e06f7e4c71671ffcb74830185d30b9bce0aa966dcbc20b4370c946cc",
-    "anchorIdById": "3d13734be046323a53daae967bab9b2c884c5b3695947fa19a961f268c3fe686",
     "snippetById": "96813b184a4f94e2d8ad7815fd0b690fbe471dd0cd26b32d62a22f2624e75b82",
     "scan": {
       "rounds": 2,
@@ -1905,12 +1918,15 @@
         "size": 300
       }
     ],
-    "highlightRequests": [
-      {
-        "maxHits": 80,
-        "clauses": 20
-      }
-    ]
+    "highlightRequests": {
+      "count": 1,
+      "shapes": [
+        {
+          "maxHits": 20,
+          "clauses": 20
+        }
+      ]
+    }
   },
   "round-cap:1": {
     "pageRanked": [
@@ -2522,7 +2538,6 @@
       "windowStart": 0
     },
     "passageCountById": "acb07d524abe066c173c5b0bce5dcff9a098654cb3d301aa587b9f96de9affe0",
-    "anchorIdById": "c345c7d76400952a77b23c7d09a28b50f74630d3758c9eb8a03db9e7fb67bd66",
     "snippetById": "68eeecd53833fa4b3c4137370f8792ecead56fca791d1ef2b7428e37bbcf2aca",
     "scan": {
       "rounds": 2,
@@ -2541,12 +2556,15 @@
         "size": 300
       }
     ],
-    "highlightRequests": [
-      {
-        "maxHits": 400,
-        "clauses": 100
-      }
-    ]
+    "highlightRequests": {
+      "count": 1,
+      "shapes": [
+        {
+          "maxHits": 100,
+          "clauses": 100
+        }
+      ]
+    }
   },
   "round-cap:2": {
     "pageRanked": [
@@ -3158,7 +3176,6 @@
       "windowStart": 0
     },
     "passageCountById": "efe107175591bd0006dbfd3bbc910189e55acdb1b6b1c9842444da4b572d2ff9",
-    "anchorIdById": "ffec20cc35760e2645bf5d43f538d238d92d9721fc1678a2d2b04e102d4e2542",
     "snippetById": "5c08bf88db48ac813c60081663ff9f9bbd7fc75823dcf6f1cd8dd64421a7605c",
     "scan": {
       "rounds": 3,
@@ -3181,12 +3198,15 @@
         "size": 300
       }
     ],
-    "highlightRequests": [
-      {
-        "maxHits": 400,
-        "clauses": 100
-      }
-    ]
+    "highlightRequests": {
+      "count": 1,
+      "shapes": [
+        {
+          "maxHits": 100,
+          "clauses": 100
+        }
+      ]
+    }
   },
   "monopolised:1": {
     "pageRanked": [
@@ -3205,7 +3225,6 @@
       "excludedGroups": ["q8l9Ic"]
     },
     "passageCountById": "aaa8b014cbc1af96b61e5dd85b7aa3e3859b65caa0761b34dcf9e79b9ac8b5aa",
-    "anchorIdById": "e7f26cc6745ba1da4214fad7c8e3cda06707720e2825c3899278e0e6e412a663",
     "snippetById": "3261e7e00e1bd9c37dba1564c27a3df8af273b2b1185a38c2538d5cfbe947b08",
     "scan": {
       "rounds": 3,
@@ -3228,12 +3247,15 @@
         "size": 300
       }
     ],
-    "highlightRequests": [
-      {
-        "maxHits": 4,
-        "clauses": 1
-      }
-    ]
+    "highlightRequests": {
+      "count": 1,
+      "shapes": [
+        {
+          "maxHits": 1,
+          "clauses": 1
+        }
+      ]
+    }
   },
   "monopolised:2": {
     "pageRanked": [
@@ -3306,7 +3328,6 @@
       "excludedGroups": ["q8l9Ic"]
     },
     "passageCountById": "49a13e81801cb4fc39bced4afb8efe71ff95a125e8a8c8c985d31480739cee03",
-    "anchorIdById": "da1471f5282fe5995643c80a67bd06221fd6feaf6a61d9094a82256aa5176ca8",
     "snippetById": "a2d4a5dc278e1b3f153a0debd77f7c3e45d23138898b988fae7a9618d3a8672d",
     "scan": {
       "rounds": 1,
@@ -3321,12 +3342,15 @@
         "size": 300
       }
     ],
-    "highlightRequests": [
-      {
-        "maxHits": 40,
-        "clauses": 10
-      }
-    ]
+    "highlightRequests": {
+      "count": 1,
+      "shapes": [
+        {
+          "maxHits": 10,
+          "clauses": 10
+        }
+      ]
+    }
   },
   "granular:1": {
     "pageRanked": [
@@ -3488,7 +3512,6 @@
       "windowStart": 0
     },
     "passageCountById": "27fe2fbe40ca41c1fff72100948055d1e804d80913f0daa1c1c836ffcbea4c46",
-    "anchorIdById": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
     "snippetById": "6b6d8ee5d31bda4ec51c0ec66f938f59f15ea05a2c73f85fb31af1fa93513325",
     "scan": {
       "rounds": 1,
@@ -3503,12 +3526,15 @@
         "size": 300
       }
     ],
-    "highlightRequests": [
-      {
-        "maxHits": 100,
-        "clauses": 25
-      }
-    ]
+    "highlightRequests": {
+      "count": 1,
+      "shapes": [
+        {
+          "maxHits": 25,
+          "clauses": 25
+        }
+      ]
+    }
   },
   "granular:2": {
     "pageRanked": [
@@ -3670,7 +3696,6 @@
       "windowStart": 0
     },
     "passageCountById": "27fe2fbe40ca41c1fff72100948055d1e804d80913f0daa1c1c836ffcbea4c46",
-    "anchorIdById": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
     "snippetById": "020729e706627144feb716d1b988b9a468bbbf5a1128f0c8dd7f1be10077d356",
     "scan": {
       "rounds": 1,
@@ -3685,11 +3710,14 @@
         "size": 300
       }
     ],
-    "highlightRequests": [
-      {
-        "maxHits": 100,
-        "clauses": 25
-      }
-    ]
+    "highlightRequests": {
+      "count": 1,
+      "shapes": [
+        {
+          "maxHits": 25,
+          "clauses": 25
+        }
+      ]
+    }
   }
 }

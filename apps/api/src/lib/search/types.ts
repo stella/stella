@@ -2,17 +2,19 @@ import { panic } from "better-result";
 
 import {
   GLOBAL_SEARCH_RESULT_TYPES,
-  isEntityKind,
   type GlobalSearchResultType,
+  isEntityKind,
   type ResourceName,
   type ResourceRef,
 } from "@stll/api-contract";
 import type { CaseLawDecisionLanguageAlternate } from "@stll/api-contract/case-law-decision-route";
+import type { GlobalSearchChatCoverage } from "@stll/api-contract/search";
 import type { DecisionIdentifiers } from "@stll/legal-ast/decision-identifier";
 
-import type { ContactType } from "@/api/db/schema";
+import type { ContactType, DocumentProcessingStatus } from "@/api/db/schema";
 import type { EntityKind, FieldContent } from "@/api/db/schema-validators";
 import type { SafeId } from "@/api/lib/branded-types";
+import { chooseExtractionSource } from "@/api/lib/extraction-runs/extraction-source-owner";
 
 /** Narrow an unknown value to a valid EntityKind. Internal callers read
  *  kinds straight off our own rows, so a miss is a broken invariant, not a
@@ -54,12 +56,7 @@ export const findExtractionFileFieldRow = <
 >(
   fields: readonly T[],
   filePropertyId?: SafeId<"property">,
-): PrimaryFileField<T> | null =>
-  fields.find(
-    (field): field is PrimaryFileField<T> =>
-      field.content.type === "file" &&
-      (filePropertyId === undefined || field.propertyId === filePropertyId),
-  ) ?? null;
+): PrimaryFileField<T> | null => chooseExtractionSource(fields, filePropertyId);
 
 export const findExtractionFileField = (
   fields: readonly {
@@ -128,7 +125,7 @@ export type FacetBucket = {
   count: number;
 };
 
-export type SearchFacets = {
+type SearchFacets = {
   kind: FacetBucket[];
   workspace: FacetBucket[];
 };
@@ -180,17 +177,6 @@ export type SearchMaintenance = {
 export { GLOBAL_SEARCH_RESULT_TYPES };
 export type { GlobalSearchResultType };
 
-export const parseGlobalSearchResultType = (
-  value: unknown,
-): GlobalSearchResultType => {
-  const s = String(value);
-  const match = GLOBAL_SEARCH_RESULT_TYPES.find((v) => v === s);
-  if (!match) {
-    panic(`Invalid global search result type: ${s}`);
-  }
-  return match;
-};
-
 type GlobalSearchHitBase = {
   /** Stable compatibility key for existing v1 search consumers. */
   id: string;
@@ -216,6 +202,7 @@ export type EntityGlobalSearchHit = GlobalSearchHitBase & {
   fileFieldId: string | null;
   filePropertyId: string | null;
   mimeType: string | null;
+  processingStatus?: DocumentProcessingStatus | null;
 };
 
 export type MatterGlobalSearchHit = GlobalSearchHitBase & {
@@ -236,6 +223,7 @@ export type ContactGlobalSearchHit = GlobalSearchHitBase & {
 
 export type CaseLawGlobalSearchHit = GlobalSearchHitBase & {
   type: "case-law";
+  courtAbbreviation: string | null;
   resource: ResourceRef<"case_law_decision">;
   decisionId: string;
   caseNumber: string;
@@ -267,7 +255,7 @@ export type GlobalSearchHit =
   | CaseLawGlobalSearchHit
   | ChatGlobalSearchHit;
 
-export type GlobalSearchFacets = {
+type GlobalSearchFacets = {
   type: FacetBucket[];
   workspace: FacetBucket[];
   editor: FacetBucket[];
@@ -279,4 +267,5 @@ export type GlobalSearchResult = {
   facets: GlobalSearchFacets;
   totalCount: number;
   nextCursor: string | null;
+  chatCoverage: GlobalSearchChatCoverage;
 };

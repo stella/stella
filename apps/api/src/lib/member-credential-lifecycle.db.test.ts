@@ -2,14 +2,22 @@ import { Result } from "better-result";
 import {
   afterAll,
   beforeAll,
+  beforeEach,
   describe,
   expect,
+  type Mock,
+  mock,
   setDefaultTimeout,
-  spyOn,
   test,
 } from "bun:test";
-import { createHash, randomBytes } from "node:crypto";
+import { randomBytes } from "node:crypto";
 import * as v from "valibot";
+
+import {
+  DESKTOP_ACCOUNT_POLICY,
+  DESKTOP_ACCOUNT_PROTOCOL_HEADER,
+} from "@stll/api-contract/desktop-registry";
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/node";
 
 import { apiKeysRoute } from "@/api/handlers/api-keys/routes";
 import { desktopRegistryRoute } from "@/api/handlers/desktop-registry/routes";
@@ -19,6 +27,7 @@ import { authorizeDesktopRegistry } from "@/api/lib/business-registries/desktop/
 import { resolveMachineApiKeySession } from "@/api/mcp/api-key-auth";
 import { authenticateMcpRequest } from "@/api/mcp/auth";
 import { resolveMcpSessionContext } from "@/api/mcp/context";
+import { createDesktopDeviceSigner } from "@/api/tests/helpers/desktop-device-proof";
 import { signInHuman } from "@/api/tests/helpers/human-session";
 import type { HumanBrowser } from "@/api/tests/helpers/human-session";
 import {
@@ -35,6 +44,21 @@ import type {
   OAuthGrant,
   RegisteredOAuthClient,
 } from "@/api/tests/helpers/oauth-grant";
+import { serveRoutesForTest } from "@/api/tests/helpers/serve-routes";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
+import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
+
+const testFetchState = createTestFetch();
+
+const routeServer = serveRoutesForTest([
+  ...apiKeysRoute,
+  ...desktopRegistryRoute,
+]);
+afterAll(async () => {
+  await routeServer.stop();
+  testFetchState.restore();
+  await releaseAgentAuthTestDb();
+});
 
 // One member's whole credential set, minted through the endpoints that issue
 // each kind in production, then checked against the verifier that accepts it
@@ -46,12 +70,13 @@ setDefaultTimeout(120_000);
 // The MCP verifier loads the signing keys over HTTP; serve that one address
 // from the real auth handler so the token path runs unchanged.
 const passThroughFetch = globalThis.fetch;
-const fetchSpy = spyOn(globalThis, "fetch");
+let fetchSpy: Mock<typeof globalThis.fetch>;
+let serveJwks: typeof fetch;
 
 beforeAll(async () => {
   await initAgentAuthTestDb();
   const jwksUrl = getAuthEndpointUrl("jwks");
-  const serveJwks: typeof fetch = Object.assign(
+  serveJwks = Object.assign(
     async (input: string | URL | Request, init?: RequestInit) => {
       const request =
         input instanceof Request
@@ -64,12 +89,6 @@ beforeAll(async () => {
     },
     { preconnect: passThroughFetch.preconnect },
   );
-  fetchSpy.mockImplementation(serveJwks);
-});
-
-afterAll(async () => {
-  fetchSpy.mockRestore();
-  await releaseAgentAuthTestDb();
 });
 
 const BASE = "http://localhost";
@@ -77,12 +96,11 @@ const BASE = "http://localhost";
 const createdKeySchema = v.looseObject({ key: v.string() });
 
 const postJson = async (
-  route: { handle: (request: Request) => Promise<Response> },
   path: string,
   browser: HumanBrowser,
   body: Record<string, unknown>,
 ) =>
-  await route.handle(
+  await routeServer.fetch(
     new Request(`${BASE}${path}`, {
       method: "POST",
       headers: {
@@ -102,37 +120,43 @@ const createDesktopCredential = async (
   browser: HumanBrowser,
   organizationId: string,
 ) => {
+  const device = await createDesktopDeviceSigner();
   const correlationId = Bun.randomUUIDv7();
-  const verifier = randomBytes(32).toString("hex");
-  const grant = await postJson(
-    desktopRegistryRoute,
-    "/desktop-registry/grant",
-    browser,
-    {
-      correlationId,
-      verifierHash: createHash("sha256").update(verifier).digest("hex"),
-    },
-  );
+  const verifier = randomBytes(32).toHex();
+  const grant = await postJson("/desktop-registry/grant", browser, {
+    correlationId,
+    deviceJkt: device.deviceJkt,
+    verifierHash: hashSha256Hex(verifier),
+  });
   expect(grant.status, await grant.clone().text()).toBe(200);
-  const redeemed = await desktopRegistryRoute.handle(
-    new Request(`${BASE}/desktop-registry/redeem-link`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        correlationId,
-        verifier,
-        expectedUserId: browser.userId,
-        expectedOrganizationId: organizationId,
+  const redeemed = await routeServer.fetch(
+    await device.signRequest({
+      request: new Request(`${BASE}/desktop-registry/redeem-link`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          [DESKTOP_ACCOUNT_PROTOCOL_HEADER]: String(
+            DESKTOP_ACCOUNT_POLICY.linkProtocol,
+          ),
+        },
+        body: JSON.stringify({
+          correlationId,
+          deviceJkt: device.deviceJkt,
+          verifier,
+          expectedUserId: browser.userId,
+          expectedOrganizationId: organizationId,
+        }),
       }),
+      nonce: correlationId,
     }),
   );
-  return await readCreatedKey(redeemed);
+  return { key: await readCreatedKey(redeemed), device };
 };
 
 type MemberCredentials = {
   browser: HumanBrowser;
   machineKey: string;
-  desktopKey: string;
+  desktop: Awaited<ReturnType<typeof createDesktopCredential>>;
   oauthClient: RegisteredOAuthClient;
   oauthGrant: OAuthGrant;
 };
@@ -146,7 +170,7 @@ type CredentialCheck = Record<
 const checkCredentials = async ({
   browser,
   machineKey,
-  desktopKey,
+  desktop,
   oauthClient,
   oauthGrant,
 }: MemberCredentials): Promise<CredentialCheck> => {
@@ -157,16 +181,19 @@ const checkCredentials = async ({
   const machine = await Result.tryPromise(
     async () => await resolveMachineApiKeySession(machineKey),
   );
-  const desktop = await authorizeDesktopRegistry(
-    new Request(`${BASE}/desktop-registry/request`, {
-      method: "POST",
-      headers: { authorization: `Bearer ${desktopKey}` },
+  const desktopAuthorization = await authorizeDesktopRegistry(
+    await desktop.device.signRequest({
+      request: new Request(`${BASE}/desktop-registry/request`, {
+        method: "POST",
+        headers: { authorization: `Bearer ${desktop.key}` },
+      }),
+      credential: desktop.key,
     }),
   );
   return {
     session: session !== null,
     machineKey: machine.isOk(),
-    desktopKey: desktop.isOk(),
+    desktopKey: desktopAuthorization.isOk(),
     oauthAccess: await isOAuthTokenActive({
       client: oauthClient,
       token: oauthGrant.accessToken,
@@ -222,7 +249,9 @@ const inviteIntoOrganization = async ({
 
 /** Whether an OAuth access token opens an MCP request context. */
 const opensMcpContext = async (accessToken: string): Promise<boolean> => {
-  const session = await authenticateMcpRequest(accessToken);
+  const session = await authenticateMcpRequest(accessToken, {
+    resolveApiKeySession: resolveMachineApiKeySession,
+  });
   if (session.isErr()) {
     return false;
   }
@@ -234,6 +263,13 @@ const opensMcpContext = async (accessToken: string): Promise<boolean> => {
   );
   return context.isOk();
 };
+
+beforeEach(() => {
+  fetchSpy = Object.assign(mock(serveJwks), {
+    preconnect: globalThis.fetch.preconnect,
+  });
+  testFetchState.set(asFetchMock(fetchSpy));
+});
 
 describe("organization member credential lifecycle", () => {
   test("removing a member ends every credential they hold in that organization, and re-inviting them restores none", async () => {
@@ -260,13 +296,13 @@ describe("organization member credential lifecycle", () => {
     const credentials: MemberCredentials = {
       browser: member,
       machineKey: await readCreatedKey(
-        await postJson(apiKeysRoute, "/api-keys", member, {
+        await postJson("/api-keys", member, {
           name: "CI",
           scopes: ["stella:read"],
           permissions: { workspace: ["read"] },
         }),
       ),
-      desktopKey: await createDesktopCredential(member, organization.id),
+      desktop: await createDesktopCredential(member, organization.id),
       oauthClient,
       oauthGrant: await grantOAuthClient(member, oauthClient),
     };

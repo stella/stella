@@ -2,10 +2,10 @@ import { EventType, maxIterations } from "@tanstack/ai";
 import type { TokenUsage, UIMessage } from "@tanstack/ai";
 import { panic, Result } from "better-result";
 
-import type { ModelRole } from "@stll/ai-catalog";
+import type { ModelTask } from "@stll/ai-catalog";
+import type { AIErrorKind } from "@stll/api-contract";
 
 import type { SafeDb } from "@/api/db/safe-db";
-import { chatRequestOptions } from "@/api/handlers/chat/chat-request";
 import type { ChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
 import {
   deanonymizeFromBoundary,
@@ -16,13 +16,14 @@ import {
 } from "@/api/handlers/chat/third-party-boundary";
 import type { ChatMessage } from "@/api/handlers/chat/types";
 import type { AIRequestServiceTier, OrgAIConfig } from "@/api/lib/ai-config";
-import { getTemperatureForRole, resolveCaching } from "@/api/lib/ai-config";
+import { getTemperatureForTask, resolveCaching } from "@/api/lib/ai-config";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
+import { chatRequestOptions } from "@/api/lib/chat/chat-request";
 import {
-  chatToolMapToArray,
   type ChatToolMap,
+  chatToolMapToArray,
 } from "@/api/lib/chat/chat-tool-types";
 import {
   guardModelMessages,
@@ -30,14 +31,13 @@ import {
   redactModelSystemPrompt,
 } from "@/api/lib/chat/model-ingress-guard";
 import { createStreamMessageCapture } from "@/api/lib/chat/stream-message-capture";
-import {
-  finishReasonOf,
-  streamChatChunks,
-} from "@/api/lib/chat/tanstack-chat-runtime";
+import { finishReasonOf } from "@/api/lib/chat/tanstack-chat-runtime";
 import type { TanStackTextFinishReason } from "@/api/lib/chat/tanstack-chat-runtime";
+import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
 import {
   abortControllerFromSignal,
   resolveTanStackTextModel,
+  streamTanStackChatRun,
 } from "@/api/lib/tanstack-ai-generate";
 import {
   addTokenUsage,
@@ -55,10 +55,12 @@ type RunSubagentMetering = {
 };
 
 export type RunSubagentOptions = {
+  /** The parent turn's admission; a subagent is never admitted again. */
+  admission: ModelDispatchAdmission;
   organizationId: SafeId<"organization">;
   orgAIConfig: OrgAIConfig | null;
   managedAIResidency: ManagedAIResidency;
-  role: ModelRole;
+  task: ModelTask;
   modelId?: string | undefined;
   /**
    * Server-built framing and tool catalog. Sent verbatim, never anonymized,
@@ -92,11 +94,7 @@ export type RunSubagentOptions = {
  * assistant message at all.
  */
 type SubagentFailureReason =
-  | "content_filter"
-  | "empty"
-  | "length"
-  | "run-error"
-  | "tool_calls";
+  "content_filter" | "empty" | "length" | "run-error" | "tool_calls";
 
 /**
  * `usage` is the whole run's, summed over every model step, on both branches:
@@ -110,6 +108,14 @@ export type RunSubagentResult =
       reason: SubagentFailureReason;
       usage: TokenUsage | undefined;
     };
+
+/**
+ * The model-facing text for a run that ended in a provider failure. It names
+ * the classified kind only, so the tool result the parent model, the client
+ * and the stored message receive is drawn from a fixed set.
+ */
+export const subagentRunErrorMessage = (kind: AIErrorKind): string =>
+  `The subagent run failed (${kind}).`;
 
 type SubagentFinalStep =
   | { type: "answered" }
@@ -198,15 +204,19 @@ export const runSubagent = async (
   dependencies: RunSubagentDependencies = defaultRunSubagentDependencies,
 ): Promise<RunSubagentResult> => {
   const model = await dependencies.resolveModel({
+    userId: options.admission.userId,
     dataClass: "customer",
     managedAIResidency: options.managedAIResidency,
     modelId: options.modelId,
     organizationId: options.organizationId,
+    admission: options.admission,
     orgAIConfig: options.orgAIConfig,
-    role: options.role,
+    task: options.task,
   });
 
-  const abortController = abortControllerFromSignal(options.abortSignal);
+  const abortController = abortControllerFromSignal(
+    AbortSignal.any([options.abortSignal, options.admission.signal]),
+  );
 
   const analytics = createTanStackAIAnalyticsCallbacks({
     dataClass: "customer",
@@ -219,8 +229,9 @@ export const runSubagent = async (
       workspaceId: options.metering.workspaceId,
     },
     feature: options.metering.feature,
-    modelRole: options.role,
+    modelTask: options.task,
     orgAIConfig: options.orgAIConfig,
+    modelTier: options.admission.modelTier,
     properties: {
       organization_id: options.organizationId,
       ...(options.metering.workspaceId
@@ -229,7 +240,10 @@ export const runSubagent = async (
     },
     sessionId: options.metering.sessionId,
     traceId: options.metering.traceId,
-  });
+    // Bound to the resolved model: a parent may run a subagent on another
+    // model than the task's default, and metering must rate the model that
+    // served the run.
+  }).forModel(model);
 
   const boundaryTools = prepareToolsForThirdParty({
     boundary: options.thirdPartyBoundary,
@@ -244,7 +258,7 @@ export const runSubagent = async (
   // is left disabled here rather than guessing at a scope.
   const caching = resolveCaching({
     promptCachingEnabled: false,
-    role: options.role,
+    task: options.task,
     scopeKey: null,
   });
 
@@ -294,7 +308,11 @@ export const runSubagent = async (
     workspaceIds: options.tenantWorkspaceIds,
   });
 
-  const stream = streamChatChunks({
+  const stream = streamTanStackChatRun({
+    threadId: Bun.randomUUIDv7(),
+    userId: options.admission.userId,
+    admission: options.admission,
+    model,
     adapter: model.adapter,
     messages: guardedMessages,
     agentLoopStrategy: maxIterations(options.maxSteps),
@@ -306,7 +324,7 @@ export const runSubagent = async (
       modelTools,
       serviceTier: options.metering.serviceTier,
       system: guardedSystem,
-      temperature: getTemperatureForRole(options.role),
+      temperature: getTemperatureForTask(options.task),
     }),
     middleware: [analytics.middleware],
     context: { delegationDepth: options.delegationDepth },
@@ -316,7 +334,7 @@ export const runSubagent = async (
   // call, so the run's usage is the sum and its outcome is the last step's.
   let usage: TokenUsage | undefined;
   let finishReason: TanStackTextFinishReason = null;
-  let runErrorMessage: string | null = null;
+  let runErrorKind: AIErrorKind | null = null;
   for await (const chunk of stream) {
     if (chunk.type === EventType.RUN_FINISHED) {
       usage = addTokenUsage(usage, tokenUsageFromTerminalChunk(chunk));
@@ -324,7 +342,7 @@ export const runSubagent = async (
     }
     if (chunk.type === EventType.RUN_ERROR) {
       usage = addTokenUsage(usage, tokenUsageFromTerminalChunk(chunk));
-      runErrorMessage = chunk.message;
+      runErrorKind = chunk.code;
     }
     processor.processChunk(chunk);
   }
@@ -335,9 +353,9 @@ export const runSubagent = async (
     throw abortError;
   }
 
-  if (runErrorMessage !== null) {
+  if (runErrorKind !== null) {
     return {
-      message: `The subagent run failed: ${runErrorMessage}`,
+      message: subagentRunErrorMessage(runErrorKind),
       outcome: "failed",
       reason: "run-error",
       usage,

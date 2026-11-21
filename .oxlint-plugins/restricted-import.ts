@@ -21,10 +21,13 @@ import type {
   VisitorWithHooks,
 } from "@oxlint/plugins";
 
+import { guardEnforcesLine } from "../scripts/guard-rollouts.ts";
+import { type IconEntry, readIconEntries } from "./icon-ownership.ts";
 import {
   type AstNode,
   canonicalModuleId,
-  dynamicModuleSource,
+  dynamicModuleSourceForEnforcement,
+  filenameForContext,
   getImportedName,
   getPropertyName,
   invokedCallee,
@@ -41,6 +44,8 @@ import {
   patternKeyFor,
   repoRelativeFilename,
   type ResolvedImport,
+  stableInitializer,
+  staticStringValue,
   unwrapExpression,
 } from "./utils.ts";
 
@@ -55,10 +60,15 @@ type TypeOnlyImports =
   (typeof TYPE_ONLY_IMPORTS)[keyof typeof TYPE_ONLY_IMPORTS];
 
 // Whether `import("m")` counts: a lazy boundary is the sanctioned shape for
-// some modules, so only their static imports are restricted.
+// some modules, so only their static imports are restricted. `readableOnly`
+// restricts dynamic imports too and also reports one whose specifier the
+// rule cannot read (a parameter, a call result, a computed string): where a
+// scope must be provably free of a module, an unreadable load cannot be
+// admitted on trust.
 const DYNAMIC_IMPORTS = {
   allowed: "allowed",
   restricted: "restricted",
+  readableOnly: "readable-only",
 } as const;
 type DynamicImports = (typeof DYNAMIC_IMPORTS)[keyof typeof DYNAMIC_IMPORTS];
 
@@ -94,6 +104,33 @@ const packageWithSubpaths =
 const lucideGlyphNames = (glyphs: readonly string[]): ReadonlySet<string> =>
   new Set(glyphs.flatMap((glyph) => [glyph, `${glyph}Icon`, `Lucide${glyph}`]));
 
+// Test support (`asTestRaw` and the other unchecked casts) must not be
+// reachable from production modules.
+const isTestSupportModule = (moduleId: string): boolean =>
+  moduleId.startsWith("apps/api/src/tests/");
+
+// Parser code and the AST it builds, which a retention projection must not
+// reach: the parser directories, the adapters that call them, and the
+// legal-ast package.
+const PARSER_OR_AST_ROOTS = [
+  "apps/api/src/handlers/case-law/ingestion/parsers/",
+  "apps/api/src/handlers/case-law/ingestion/adapters/",
+  "apps/api/src/lib/legal-search/parsers/",
+  "packages/legal-ast/",
+] as const;
+const LEGAL_AST = packageWithSubpaths("@stll/legal-ast");
+const isParserOrAstModule = (moduleId: string): boolean =>
+  LEGAL_AST(moduleId) ||
+  PARSER_OR_AST_ROOTS.some((root) => moduleId.startsWith(root));
+
+const RETENTION_ORACLE_MODULE =
+  "apps/api/src/lib/legal-search/parsers/validate-ast";
+const RETENTION_ORACLE_MODULE_FILE = `${RETENTION_ORACLE_MODULE}.ts`;
+const RETENTION_CHECK_MODULE_FILE =
+  "apps/api/src/handlers/case-law/ingestion/retention/retention-check.ts";
+
+const SETTINGS_ROUTES = "apps/web/src/routes/_protected.settings";
+
 const LUCIDE = packageWithSubpaths("lucide-react");
 // Every icon reaches the app through one module, so a glyph restricted to an
 // owner component is restricted there too.
@@ -127,7 +164,105 @@ const staticDevtoolsPackage = (
   owners,
 });
 
+// One row per icon-module entry that declares `ownedBy:`: the entry is
+// importable only in its owner component (and the icon module). The message
+// names the component, and the other entries drawing the same glyph for
+// call sites that mean something else.
+const ownedIconRestrictions = (
+  entries: readonly IconEntry[],
+): RestrictedImportEntry[] =>
+  entries.flatMap((entry) => {
+    if (entry.owner === null) {
+      return [];
+    }
+    const alternatives = entries
+      .filter((other) => other.owner === null && other.glyph === entry.glyph)
+      .map((other) => other.name);
+    const { component, path } = entry.owner;
+    const otherMeaning =
+      alternatives.length > 0
+        ? `import ${alternatives.join(" or ")}, or add`
+        : "add";
+    return [
+      {
+        messageId: `unownedIcon${entry.name}`,
+        message: [
+          `Do not import '{{name}}' here: only <${component}> (${path})`,
+          "draws it, because the component carries its behaviour.",
+          `Render <${component}> instead. For another meaning ${otherMeaning}`,
+          `a semantic entry in ${ICON_MODULE}.`,
+        ].join(" "),
+        modules: ICON_SOURCES,
+        restriction: {
+          type: "exports",
+          names: new Set([entry.name]),
+          hit: EXPORT_HIT.binding,
+        },
+        // The owner, the module that declares the entry, and its test.
+        owners: [path, ICON_MODULE, "packages/ui/src/icons.test.ts"],
+      },
+    ];
+  });
+
 const RESTRICTED_IMPORT_RULES = {
+  "require-oauth-grant-admission": [
+    {
+      messageId: "requireOwner",
+      message:
+        "Raw OAuth resource verifiers belong to mcp/auth.ts; use verifyOAuthToken from mcp/auth for admitted token results.",
+      modules: ["@better-auth/oauth-provider/resource-client"],
+      restriction: {
+        type: "module",
+        typeOnlyImports: TYPE_ONLY_IMPORTS.restricted,
+        dynamicImports: DYNAMIC_IMPORTS.restricted,
+      },
+      owners: ["apps/api/src/mcp/auth.ts"],
+    },
+    {
+      messageId: "requireAdmittedVerifier",
+      message:
+        "The raw OAuth provider verifier is private to mcp/auth.ts; import verifyOAuthToken, which couples verification with grant admission.",
+      modules: ["apps/api/src/mcp/auth"],
+      restriction: {
+        type: "exports",
+        names: new Set(["getVerifyBearerToken"]),
+        hit: EXPORT_HIT.binding,
+      },
+      owners: [],
+    },
+    {
+      messageId: "requireJwtOwner",
+      message:
+        "OAuth access tokens must use the admitted verifier. Raw JWT verification is confined to the existing identity-assertion owners.",
+      modules: ["jose"],
+      restriction: {
+        type: "exports",
+        names: new Set(["jwtVerify"]),
+        hit: EXPORT_HIT.binding,
+      },
+      owners: [
+        "apps/api/src/agent-auth/id-jag.ts",
+        "apps/api/src/lib/agent-auth-idjag.ts",
+        "apps/api/src/lib/business-registries/desktop/proof.ts",
+        "apps/api/src/scripts/better-auth-microsoft-identity-map.logic.ts",
+      ],
+    },
+  ],
+  "no-raw-property-assert": [
+    {
+      messageId: "rawPropertyAssert",
+      message:
+        "Use assertProperty with a stable test-title id from @stll/property-testing; " +
+        "pass raw run parameters so the shared runner configures them once.",
+      modules: ["fast-check"],
+      restriction: {
+        type: "exports",
+        names: new Set(["assert"]),
+        hit: EXPORT_HIT.binding,
+      },
+      owners: ["packages/property-testing/src/index.ts"],
+    },
+  ],
   // One icon module decides what each glyph means (a skill, an AI action),
   // so a call site cannot pick a lucide glyph that means something else
   // elsewhere. See packages/ui/src/icons.ts for how to add one.
@@ -145,6 +280,79 @@ const RESTRICTED_IMPORT_RULES = {
       },
       // The module, and its drift test, which compares entries against lucide.
       owners: [ICON_MODULE, "packages/ui/src/icons.test.ts"],
+    },
+  ],
+  // Production API modules import nothing under apps/api/src/tests/; the
+  // scope (production versus test files) is set by the rule's override in
+  // oxlint.config.ts.
+  "no-test-support-import": [
+    {
+      messageId: "noTestSupportImport",
+      message:
+        "Production modules must not import from apps/api/src/tests/. " +
+        "Move test-only code under that directory and import it only from " +
+        "tests.",
+      modules: [isTestSupportModule],
+      restriction: {
+        type: "module",
+        typeOnlyImports: TYPE_ONLY_IMPORTS.restricted,
+        dynamicImports: DYNAMIC_IMPORTS.restricted,
+      },
+      owners: [],
+    },
+  ],
+  // Settings and admin pages are composed from one set of pieces (sections
+  // of rows on one list surface) so they cannot drift back into ad-hoc cards
+  // or inventory tables. The scope (the settings and admin route trees) is
+  // set by the rule's override in oxlint.config.ts. `@stll/ui` also
+  // publishes each component under `components/`.
+  "settings-layout-primitives": [
+    {
+      messageId: "settingsLayoutCard",
+      message:
+        "Compose settings and admin pages from '@stll/ui/settings' " +
+        "(SettingsSection, SettingsRow, SettingsPanel), not '{{name}}'.",
+      modules: ["@stll/ui/frame", "@stll/ui/components/frame"],
+      restriction: {
+        type: "module",
+        typeOnlyImports: TYPE_ONLY_IMPORTS.allowed,
+        dynamicImports: DYNAMIC_IMPORTS.restricted,
+      },
+      owners: [],
+    },
+    {
+      messageId: "settingsLayoutTable",
+      message:
+        "List named things on a settings or admin page as '@stll/ui/settings' " +
+        "rows, not with '{{name}}'. A table stays only where people compare " +
+        "values across columns; add its file to this row's owners with that " +
+        "reason.",
+      modules: [
+        "@stll/ui/table",
+        "@stll/ui/components/table",
+        "@stll/ui/table-shell",
+      ],
+      restriction: {
+        type: "module",
+        typeOnlyImports: TYPE_ONLY_IMPORTS.allowed,
+        dynamicImports: DYNAMIC_IMPORTS.restricted,
+      },
+      owners: [
+        // The audit log: time, actor, action and target across columns.
+        `${SETTINGS_ROUTES}/-organization.audit-logs.page.tsx`,
+        `${SETTINGS_ROUTES}/-organization.audit-logs.pending.tsx`,
+        // A change: each field's value before and after.
+        `${SETTINGS_ROUTES}/organization/-components/audit-change-details.tsx`,
+        // Members, sorted by name, role and joining date.
+        `${SETTINGS_ROUTES}/-organization.members.page.tsx`,
+        `${SETTINGS_ROUTES}/-organization.members.pending.tsx`,
+        // Invitations: role, status, invited and expiry dates beside members.
+        `${SETTINGS_ROUTES}/organization/-components/members-invitations.tsx`,
+        `${SETTINGS_ROUTES}/organization/-components/members-invitations.pending.tsx`,
+        // VAT rates, number series and seller profiles: rates, validity
+        // dates and number patterns across columns.
+        `${SETTINGS_ROUTES}/organization/-components/organization/billing-settings-table.pending.tsx`,
+      ],
     },
   ],
   // nanoid is a removed dependency: IDs come from Bun.randomUUIDv7() and
@@ -167,6 +375,18 @@ const RESTRICTED_IMPORT_RULES = {
   // Route code has one approved helper; other exports stay at the boundary.
   "confine-server-reads": [
     {
+      messageId: "confineRequestScenarios",
+      message:
+        "Run server-request scenarios through @/testing/request-test so framework HTTP error handling cannot swallow failures.",
+      modules: [TANSTACK_START_SERVER],
+      restriction: {
+        type: "exports",
+        names: new Set(["requestHandler"]),
+        hit: EXPORT_HIT.binding,
+      },
+      owners: ["apps/web/src/testing/request-test.ts"],
+    },
+    {
       messageId: "confineServerReads",
       message: "Use the approved server request helper for this access.",
       modules: [TANSTACK_START_SERVER],
@@ -181,7 +401,10 @@ const RESTRICTED_IMPORT_RULES = {
         ]),
         hit: EXPORT_HIT.binding,
       },
-      owners: [],
+      owners: [
+        "apps/web/src/lib/account/ssr-api-headers.ts",
+        "apps/web/src/lib/account/presentation-prefs/server.ts",
+      ],
     },
   ],
   // `<MatterIcon>` always resolves a matter colour (or paints the deliberate
@@ -191,7 +414,7 @@ const RESTRICTED_IMPORT_RULES = {
       messageId: "directMatterGlyph",
       message:
         "Do not import '{{name}}' from 'lucide-react' here. Render " +
-        "<MatterIcon> from '@/components/matter-icon' instead so the " +
+        "<MatterIcon> from '@stll/ui/matter-icon' instead so the " +
         "matter colour is always applied (matter={{ id, color }}, or " +
         'variant="none" / variant="all" for non-matter affordances). ' +
         "The raw glyph is only allowed in matter-icon.tsx.",
@@ -201,7 +424,7 @@ const RESTRICTED_IMPORT_RULES = {
         names: lucideGlyphNames(["Layers", "Layers2"]),
         hit: EXPORT_HIT.binding,
       },
-      owners: ["apps/web/src/components/matter-icon.tsx", ICON_MODULE],
+      owners: ["packages/ui/src/components/matter-icon.tsx", ICON_MODULE],
     },
   ],
   // `<EntityKindIcon>` switches exhaustively over the entity kind. Only the
@@ -230,6 +453,10 @@ const RESTRICTED_IMPORT_RULES = {
       ],
     },
   ],
+  // A glyph whose semantic entry declares `ownedBy:` in the icon module is
+  // drawn only by that component (CopyButton confirms a copy in place), so a
+  // call site cannot draw it with different behaviour. Read from icons.ts.
+  "no-unowned-icon": ownedIconRestrictions(readIconEntries()),
   // Devtools packages can schedule browser work while routes are still
   // mounting, so they load only inside lazy islands, and the islands
   // themselves are reached only through `import()`.
@@ -265,6 +492,26 @@ const RESTRICTED_IMPORT_RULES = {
   ],
   // Most effects are unnecessary; external-system sync goes through the
   // named wrappers so intent is explicit. See /conventions-use-effect.
+  // On iOS the native stack's bars, modals and sheets are UIKit views no app
+  // view rises above; one owner draws over every screen in the window layer
+  // above them. The scope (apps/mobile/src) is set by the rule's override in
+  // oxlint.config.ts.
+  "mobile-window-overlay-owner": [
+    {
+      messageId: "requireWindowOverlay",
+      message:
+        "Draw over every screen through WindowOverlay from " +
+        "'@/components/window-overlay', the one owner of the window layer " +
+        "above the native stack.",
+      modules: [packageWithSubpaths("react-native-screens")],
+      restriction: {
+        type: "exports",
+        names: new Set(["FullWindowOverlay"]),
+        hit: EXPORT_HIT.binding,
+      },
+      owners: ["apps/mobile/src/components/window-overlay.tsx"],
+    },
+  ],
   "no-raw-use-effect": [
     {
       messageId: "noRawUseEffect",
@@ -281,6 +528,120 @@ const RESTRICTED_IMPORT_RULES = {
         hit: EXPORT_HIT.call,
       },
       owners: ["apps/web/src/hooks/use-effect.ts"],
+    },
+  ],
+  // A retention projection reads the publisher's stored raw and nothing a
+  // parser produced, so the oracle compares two independent readings. The
+  // scope (the projection modules) is set by the rule's override in
+  // oxlint.config.ts; types stay importable, since a stored envelope's shape
+  // is shared data rather than parsing.
+  "retention-source-independence": [
+    {
+      messageId: "retentionSourceIndependence",
+      message:
+        "A retention projection must not use parser code or AST builders: it " +
+        "reads the stored sourceRaw on its own, so the retention check " +
+        "compares against what the publisher served rather than against the " +
+        "parser's own reading. Select the text from sourceRaw directly, and " +
+        "load modules by a name the rule can read (a literal or a constant).",
+      modules: [isParserOrAstModule],
+      restriction: {
+        type: "module",
+        typeOnlyImports: TYPE_ONLY_IMPORTS.allowed,
+        dynamicImports: DYNAMIC_IMPORTS.readableOnly,
+      },
+      owners: [],
+    },
+  ],
+  // The pipeline checks every parsed decision against its source's retention
+  // projection and is the only place that logs the retention signal: a parser
+  // or adapter logging it would compare against its own intermediate text and
+  // report the same decision twice. The pure measurement, `validateAst`, stays
+  // importable everywhere, because parsers legitimately use its verdict to
+  // choose between two parses.
+  "retention-oracle-owner": [
+    {
+      messageId: "retentionOracleOwner",
+      message:
+        "Only the pipeline's retention check logs the text-retention signal. " +
+        "Declare the source's projection in ingestion/retention/sources and " +
+        "the pipeline checks every parsed decision against it; to choose " +
+        "between parses, call validateAst and use its verdict without logging.",
+      modules: [RETENTION_ORACLE_MODULE],
+      restriction: {
+        type: "exports",
+        names: new Set(["validateAndLog"]),
+        hit: EXPORT_HIT.binding,
+      },
+      owners: [RETENTION_ORACLE_MODULE_FILE, RETENTION_CHECK_MODULE_FILE],
+    },
+  ],
+  "tooltip-provider-owner": [
+    {
+      messageId: "tooltipProviderOwner",
+      message:
+        "Do not mount a nested TooltipProvider. Use the provider owned by the app shell instead.",
+      modules: ["@stll/ui/tooltip", "packages/ui/src/components/tooltip"],
+      restriction: {
+        type: "exports",
+        names: new Set(["TooltipProvider"]),
+        hit: EXPORT_HIT.binding,
+      },
+      owners: [
+        "apps/web/src/app-providers.tsx",
+        "apps/desktop/src/mainview/main.tsx",
+        "packages/mcp-apps/src/case-law-results/app.tsx",
+        "packages/mcp-apps/src/decision-reader/app.tsx",
+      ],
+    },
+  ],
+  // Every Copy goes through one owner, which writes the clipboard, confirms
+  // the Copy when the clipboard holds what it copies, and renders the Copy
+  // and Copied swap. See ./copy-feedback-owner.ts.
+  "copy-feedback-owner": [
+    {
+      messageId: "copyFeedbackOwner",
+      message:
+        "Render a Copy through @/components/copy-control, not with " +
+        "`{{name}}`: CopyControl for a value, useCopyControl with " +
+        "CopyControlButton or CopyControlFeedback for a custom trigger, " +
+        "useSelectionCopyControl for a selection bar. The owner confirms " +
+        "the press and the reader's own copy of the same text.",
+      modules: [
+        "@stll/ui/copy-button",
+        "packages/ui/src/components/copy-button",
+        "@stll/ui",
+        "packages/ui/src/index",
+      ],
+      restriction: {
+        type: "exports",
+        names: new Set([
+          "CopyButton",
+          "CopyFeedback",
+          "useCopiedFeedback",
+          "useCopyConfirmation",
+        ]),
+        hit: EXPORT_HIT.binding,
+      },
+      owners: [
+        "apps/web/src/components/copy-control.tsx",
+        // The package's public barrel re-exports every component.
+        "packages/ui/src/index.ts",
+      ],
+    },
+    {
+      messageId: "clipboardHelperOwner",
+      message:
+        "Write the clipboard through @/components/copy-control (CopyControl, " +
+        "useCopyControl, useSelectionCopyControl), not @stll/clipboard: the " +
+        "owner reports a failed copy and confirms the Copy in place.",
+      modules: ["@stll/clipboard", "packages/clipboard/src/index"],
+      restriction: {
+        type: "module",
+        typeOnlyImports: TYPE_ONLY_IMPORTS.allowed,
+        dynamicImports: DYNAMIC_IMPORTS.restricted,
+      },
+      owners: ["apps/web/src/components/copy-control.tsx"],
     },
   ],
 } as const satisfies Record<string, readonly RestrictedImportEntry[]>;
@@ -313,6 +674,47 @@ const variableAt = (
     scope = scope.upper;
   }
   return null;
+};
+
+// The text of a module specifier: a string literal, a template without
+// expressions, or a binding assigned once from one of those, followed
+// through aliases (`const PARSER = "m"; await import(PARSER)`). Null when
+// the rule cannot read it.
+const specifierText = (
+  context: Context,
+  node: unknown,
+  seen = new Set<unknown>(),
+): string | null => {
+  const literal = staticStringValue(node);
+  if (literal !== null) {
+    return literal;
+  }
+  const expression = unwrapExpression(node);
+  if (!isIdentifierReference(expression) || seen.has(expression)) {
+    return null;
+  }
+  seen.add(expression);
+  const variable = variableAt(context, expression, expression.name);
+  const initializer = variable === null ? null : stableInitializer(variable);
+  return initializer === null
+    ? null
+    : specifierText(context, initializer, seen);
+};
+
+// The module an expression loads: `import(specifier)` with a readable
+// specifier, awaited or not, or a `require` the shared resolver recognizes.
+const loadedModuleSource = (context: Context, node: unknown): string | null => {
+  const expression = unwrapExpression(node);
+  if (!isAstNode(expression)) {
+    return null;
+  }
+  if (expression.type === "AwaitExpression") {
+    return loadedModuleSource(context, expression.argument);
+  }
+  if (expression.type === "ImportExpression") {
+    return specifierText(context, expression.source);
+  }
+  return dynamicModuleSourceForEnforcement(expression, context);
 };
 
 const exportOfVariable = (
@@ -380,7 +782,7 @@ const exportOfExpression = (
     return null;
   }
   seen.add(expression);
-  const loaded = dynamicModuleSource(expression);
+  const loaded = loadedModuleSource(context, expression);
   if (loaded !== null) {
     return { moduleId: canonical(context, loaded), imported: NAMESPACE_IMPORT };
   }
@@ -458,9 +860,16 @@ export const restrictedImportMeta = (ruleName: RestrictedImportRuleName) => ({
   ),
 });
 
+type RestrictedImportOptions = {
+  /** A rule in its first-week rollout reports only the lines a change
+   *  touched; names its file in scripts/guard-rollouts/. */
+  rollout?: string | undefined;
+};
+
 export const restrictedImportVisitors = (
   context: Context,
   ruleName: RestrictedImportRuleName,
+  { rollout }: RestrictedImportOptions = {},
 ): VisitorWithHooks => {
   const entries: readonly RestrictedImportEntry[] =
     RESTRICTED_IMPORT_RULES[ruleName];
@@ -471,6 +880,16 @@ export const restrictedImportVisitors = (
     entry: RestrictedImportEntry,
     name: string,
   ): void => {
+    if (
+      rollout !== undefined &&
+      !guardEnforcesLine({
+        guard: rollout,
+        file: filenameForContext(context),
+        line: context.sourceCode.getLocFromIndex(node.range[0]).line,
+      })
+    ) {
+      return;
+    }
     context.report({ node, messageId: entry.messageId, data: { name } });
   };
 
@@ -509,7 +928,7 @@ export const restrictedImportVisitors = (
         restriction.type === "module" &&
         moduleIn(entry, moduleId) &&
         (loading === MODULE_LOADING.static ||
-          restriction.dynamicImports === DYNAMIC_IMPORTS.restricted)
+          restriction.dynamicImports !== DYNAMIC_IMPORTS.allowed)
       ) {
         report(node, entry, moduleId);
       }
@@ -593,13 +1012,23 @@ export const restrictedImportVisitors = (
       }
     },
     ImportExpression(node) {
-      if (isStringLiteral(node.source)) {
-        reportModuleLoad(node, node.source.value, MODULE_LOADING.dynamic);
+      const source = specifierText(context, node.source);
+      if (source !== null) {
+        reportModuleLoad(node, source, MODULE_LOADING.dynamic);
+        return;
+      }
+      for (const entry of active) {
+        if (
+          entry.restriction.type === "module" &&
+          entry.restriction.dynamicImports === DYNAMIC_IMPORTS.readableOnly
+        ) {
+          report(node, entry, "an unreadable dynamic import");
+        }
       }
     },
     CallExpression(node) {
-      const required = dynamicModuleSource(node);
-      if (required !== null && isIdentifier(node.callee, "require")) {
+      const required = dynamicModuleSourceForEnforcement(node, context);
+      if (required !== null) {
         reportModuleLoad(node, required, MODULE_LOADING.static);
         return;
       }

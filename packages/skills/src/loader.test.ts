@@ -1,16 +1,19 @@
 import { describe, expect, test } from "bun:test";
 
+import { SKILL_NAME_PATTERN, SKILL_PACKAGE_LIMITS } from "./format";
 import {
-  listSkillMetadata,
-  loadSkill,
   parseSkillFile,
   readDocumentedChatReads,
   readExcludedChatTools,
   readSkillDisplayName,
   SkillFileError,
+} from "./frontmatter";
+import {
+  listSkillMetadata,
+  listSkillResources,
+  loadSkill,
+  readSkillResource,
 } from "./loader";
-import { SKILL_NAME_PATTERN, SKILL_PACKAGE_LIMITS } from "./package-limits";
-import { getSkillResourceKind } from "./resource-kinds";
 import { GENERATED_SKILLS } from "./skills.gen";
 
 // Unwraps a parse for assertions; a refused file surfaces as its typed error.
@@ -39,6 +42,7 @@ Follow the process.`);
     expect(parsed.metadata).toEqual({
       compatibility: "Works with SKILL.md-compatible agents",
       description: "Use when reviewing imported skills: validate metadata.",
+      invocation: "auto",
       license: "Apache-2.0",
       metadata: {
         author: "stella",
@@ -239,11 +243,56 @@ Body.`);
     expect(parsed.metadata).toEqual({
       compatibility: null,
       description: "Valid description.",
+      invocation: "auto",
       license: null,
       metadata: {},
       name: "unknown-field",
       version: null,
     });
+  });
+
+  test("reads the invocation from metadata or the portable flag, and refuses a bad one", () => {
+    const invocationOf = (frontmatter: string) =>
+      parseSkillFile(
+        `---\nname: invoked\ndescription: Valid description.\n${frontmatter}\n---\n\nBody.`,
+      );
+
+    for (const [frontmatter, expected] of [
+      ["", "auto"],
+      ["metadata:\n  stella-invocation: manual", "manual"],
+      ["metadata:\n  stella-invocation: AUTO", "auto"],
+      ["disable-model-invocation: true", "manual"],
+      ["disable-model-invocation: false", "auto"],
+      // YAML 1.1 spellings other Agent Skills hosts accept.
+      ["disable-model-invocation: yes", "manual"],
+      ["disable-model-invocation: On", "manual"],
+      ["disable-model-invocation: no", "auto"],
+      [
+        "disable-model-invocation: true\nmetadata:\n  stella-invocation: manual",
+        "manual",
+      ],
+    ] as const) {
+      const parsed = invocationOf(frontmatter);
+      expect(parsed.isOk() && parsed.value.metadata.invocation).toBe(expected);
+    }
+
+    // The key moves to `invocation`; it never stays in `metadata`, so the
+    // package validator does not see an unknown `stella-` key.
+    const moved = invocationOf(
+      "metadata:\n  author: stella\n  stella-invocation: manual",
+    );
+    expect(moved.isOk() && moved.value.metadata.metadata).toEqual({
+      author: "stella",
+    });
+
+    for (const frontmatter of [
+      "metadata:\n  stella-invocation: sometimes",
+      "disable-model-invocation: maybe",
+      "disable-model-invocation: 1",
+      "disable-model-invocation: true\nmetadata:\n  stella-invocation: auto",
+    ]) {
+      expect(invocationOf(frontmatter).isErr()).toBe(true);
+    }
   });
 
   test("rejects malformed YAML and non-mapping documents", () => {
@@ -390,13 +439,6 @@ Body.`);
 
     expect(parsed.metadata.description).toBe(">not a block scalar");
   });
-
-  test("classifies common Agent Skills resource roots", () => {
-    expect(getSkillResourceKind("references/checklist.md")).toBe("reference");
-    expect(getSkillResourceKind("assets/template.txt")).toBe("asset");
-    expect(getSkillResourceKind("scripts/helper.py")).toBe("script");
-    expect(getSkillResourceKind("unknown/file.md")).toBeNull();
-  });
 });
 
 describe("skill file validation errors", () => {
@@ -433,6 +475,21 @@ describe("shipped built-in skills", () => {
       expect(skill.body.length).toBeLessThanOrEqual(
         SKILL_PACKAGE_LIMITS.bodyMaxChars,
       );
+    },
+  );
+
+  // MCP `resources/read` carries no cursor, so it serves a shipped file
+  // whole: each must fit what a model may hold at once.
+  test.each(GENERATED_SKILLS.map(({ id }) => id))(
+    "%s ships resource files a model can read whole",
+    (id) => {
+      for (const { path } of listSkillResources(id)) {
+        const resource = readSkillResource({ resourcePath: path, skillId: id });
+        expect(resource).not.toBeNull();
+        expect(resource?.content.length ?? 0).toBeLessThanOrEqual(
+          SKILL_PACKAGE_LIMITS.resourceModelContextMaxChars,
+        );
+      }
     },
   );
 

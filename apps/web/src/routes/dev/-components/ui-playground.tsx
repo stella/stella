@@ -3,6 +3,9 @@ import type * as React from "react";
 
 import { useTranslations } from "use-intl";
 
+import { BRAND_COLORS } from "@stll/brand";
+import { sleep } from "@stll/concurrency/sleep";
+import { filterBySearchQuery } from "@stll/text-normalize/search-query-matcher";
 import {
   Accordion,
   AccordionItem,
@@ -77,15 +80,15 @@ import {
 import { HexColorPicker } from "@stll/ui/hex-color-picker";
 import {
   AlignJustifyIcon,
-  ArrowRightIcon,
   ArchiveIcon,
+  ArrowRightIcon,
   BellIcon,
   ChevronDownIcon,
   ChevronRightIcon,
   Clock3Icon,
   ClockIcon,
   CogIcon,
-  CopyIcon,
+  CopyFromMenuIcon,
   FileTextIcon,
   FilterIcon,
   LinkIcon,
@@ -174,6 +177,8 @@ import {
   SheetTrigger,
 } from "@stll/ui/sheet";
 import { Skeleton } from "@stll/ui/skeleton";
+import { SplitButton } from "@stll/ui/split-button";
+import { StatusMark } from "@stll/ui/status-mark";
 import {
   Table,
   TableBody,
@@ -190,7 +195,6 @@ import { stellaToast } from "@stll/ui/toast";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
 import { cn } from "@stll/ui/utils";
 
-import { ChatActivityOrb } from "@/components/chat/chat-activity-orb";
 import { ChatApprovalContext } from "@/components/chat/chat-approval-context";
 import { ChatMattersContext } from "@/components/chat/chat-matters-context";
 import { ChatThreadMessages } from "@/components/chat/chat-thread-messages";
@@ -198,18 +202,22 @@ import type {
   ChatToolCallPart,
   PersistedChatMessage,
 } from "@/components/chat/chat-ui-tools";
+import { StreamdownMentionLink } from "@/components/chat/streamdown-mention-link";
 import { ToolCallCard } from "@/components/chat/tool-call-card";
 import { DatePickerPopover } from "@/components/date-picker-popover";
 import { AIKeyRequiredDialog } from "@/components/require-ai-key";
 import { detached } from "@/lib/detached";
-import { notifyUserError } from "@/lib/errors/user-toast";
+import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
 import { ControlSizesPlayground } from "@/routes/dev/-components/control-sizes-playground";
+import { createPlaygroundChatApproval } from "@/routes/dev/-components/playground-chat-approval";
 
 const renderPlaygroundAnchor = ({
   children,
   ...props
 }: React.AnchorHTMLAttributes<HTMLAnchorElement>) => (
-  <a {...props}>{children}</a>
+  <StreamdownMentionLink {...props} interactive={false}>
+    {children}
+  </StreamdownMentionLink>
 );
 
 type ComboboxOption = {
@@ -272,9 +280,7 @@ const TABLE_ROWS = [
 const showPromiseToast = () => {
   const toastId = stellaToast.loading("Saving draft");
   detached(
-    new Promise<string>((resolve) => {
-      setTimeout(() => resolve("complete"), 900);
-    })
+    sleep(900)
       .then(() => {
         stellaToast.update(toastId, { title: "Draft saved", type: "success" });
         return undefined;
@@ -310,20 +316,22 @@ export function UiPlayground() {
   const [otpValue, setOtpValue] = useState("123");
   const [dateValue, setDateValue] = useState<string | null>("2026-04-27");
   const [colorValue, setColorValue] = useState("blue");
-  const [hexColor, setHexColor] = useState("#59A1D4");
+  const [hexColor, setHexColor] = useState(
+    BRAND_COLORS.blueAccent.toUpperCase(),
+  );
   const [byokDialogOpen, setByokDialogOpen] = useState(false);
   const destructiveConfirmation = useDestructiveActionConfirmation(
     "delete this workspace",
   );
 
-  const filteredComboboxOptions = COMBOBOX_OPTIONS.filter((option) =>
-    `${option.label} ${option.detail}`
-      .toLowerCase()
-      .includes(comboboxQuery.toLowerCase()),
-  );
+  const filteredComboboxOptions = filterBySearchQuery({
+    items: COMBOBOX_OPTIONS,
+    query: comboboxQuery,
+    fields: ({ detail, label }) => [`${label} ${detail}`],
+  });
 
   return (
-    <main className="bg-background min-h-0 flex-1 overflow-y-auto">
+    <div className="min-h-0 flex-1">
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-8 px-4 py-6 sm:px-6 lg:px-8">
         <header className="flex flex-col gap-2 border-b pb-6">
           <h1 className="text-2xl font-semibold tracking-normal">
@@ -353,6 +361,46 @@ export function UiPlayground() {
                 title="Button"
               >
                 <div className="flex flex-wrap items-center gap-2">
+                  <SplitButton
+                    size="sm"
+                    primaryContent="icon"
+                    primaryLabel={t("common.download")}
+                    menuLabel={t("workspaces.files.downloadAs")}
+                    onPrimaryClick={() => {
+                      stellaToast.add({
+                        title: t("common.download"),
+                        type: "info",
+                      });
+                    }}
+                    menu={
+                      <MenuPopup>
+                        <MenuItem>{t("workspaces.files.downloadPdf")}</MenuItem>
+                      </MenuPopup>
+                    }
+                  >
+                    <FileTextIcon />
+                  </SplitButton>
+                  <SplitButton
+                    size="md"
+                    primaryContent="icon"
+                    primaryLabel={t("common.download")}
+                    menuLabel={t("workspaces.files.downloadAs")}
+                    onPrimaryClick={() => {
+                      stellaToast.add({
+                        title: t("common.download"),
+                        type: "info",
+                      });
+                    }}
+                    menu={
+                      <MenuPopup>
+                        <MenuItem>{t("workspaces.files.downloadPdf")}</MenuItem>
+                      </MenuPopup>
+                    }
+                  >
+                    <FileTextIcon />
+                  </SplitButton>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
                   {BUTTON_VARIANTS.map((variant) => (
                     <Button key={variant} variant={variant}>
                       {variant}
@@ -366,7 +414,11 @@ export function UiPlayground() {
                     </Button>
                   ))}
                   <Button loading>Saving</Button>
-                  <Button disabled variant="outline">
+                  <Button
+                    disabled
+                    disabledReason={t("common.disabledButtonExample")}
+                    variant="outline"
+                  >
                     Disabled
                   </Button>
                   <Button aria-label="Settings" size="icon" variant="ghost">
@@ -391,7 +443,7 @@ export function UiPlayground() {
                       <MenuShortcut>O</MenuShortcut>
                     </MenuItem>
                     <MenuItem>
-                      <CopyIcon />
+                      <CopyFromMenuIcon />
                       Copy link
                       <MenuShortcut>C</MenuShortcut>
                     </MenuItem>
@@ -645,18 +697,19 @@ export function UiPlayground() {
                     moreLabel={t("common.showMore")}
                     onClear={() => setColorValue("")}
                     onSelect={setColorValue}
+                    trigger={
+                      <Button variant="outline">
+                        Color
+                        <span
+                          className="size-4 rounded-sm border"
+                          style={{
+                            backgroundColor: `var(--option-${colorValue})`,
+                          }}
+                        />
+                      </Button>
+                    }
                     value={colorValue}
-                  >
-                    <Button variant="outline">
-                      Color
-                      <span
-                        className="size-4 rounded border"
-                        style={{
-                          backgroundColor: `var(--option-${colorValue})`,
-                        }}
-                      />
-                    </Button>
-                  </ColorPicker>
+                  />
                 </div>
 
                 <div className="flex flex-col gap-2">
@@ -790,6 +843,9 @@ export function UiPlayground() {
                           render={
                             <Button
                               disabled={!destructiveConfirmation.confirmed}
+                              disabledReason={t(
+                                "common.enterConfirmationPhrase",
+                              )}
                               variant="destructive"
                             />
                           }
@@ -1067,7 +1123,7 @@ export function UiPlayground() {
                   </Button>
                   <Button
                     onClick={() => {
-                      notifyUserError(undefined, "Unable to save", {
+                      notifyUserProblem("Unable to save", {
                         description: "The server rejected the update.",
                       });
                     }}
@@ -1343,7 +1399,7 @@ export function UiPlayground() {
           </TabsPanel>
         </Tabs>
       </div>
-    </main>
+    </div>
   );
 }
 
@@ -1364,9 +1420,7 @@ function DestructiveConfirmDialogPlayground() {
 
   const handleContactConfirm = async () => {
     setContactLoading(true);
-    await new Promise<void>((resolve) => {
-      setTimeout(resolve, 900);
-    });
+    await sleep(900);
     setContactLoading(false);
     stellaToast.success(
       t("workspaces.deletedItem", { name: CONTACT_CONFIRMATION }),
@@ -1626,6 +1680,9 @@ const SHARED_CHAT_RENDERER_MESSAGES = [
 ] satisfies PersistedChatMessage[];
 
 function SharedChatRendererSample() {
+  const [activitySession] = useState(() => ({
+    reportedUnknownActivityTypes: new Set<string>(),
+  }));
   return (
     <div className="bg-popover/40 flex flex-col gap-4 rounded-2xl border p-4">
       <ChatMattersContext
@@ -1634,25 +1691,10 @@ function SharedChatRendererSample() {
         }}
       >
         <ChatApprovalContext
-          value={{
-            activeOrganizationId: "dev-active-organization",
-            alwaysApprovedTools: new Set(),
-            conversationApprovedTools: new Set(),
-            handleAllowInConversation: () => {
-              /* no-op in playground */
-            },
-            handleAlwaysAllow: () => {
-              /* no-op in playground */
-            },
-            handleApprove: () => {
-              /* no-op in playground */
-            },
-            handleDeny: () => {
-              /* no-op in playground */
-            },
-          }}
+          value={createPlaygroundChatApproval("dev-active-organization")}
         >
           <ChatThreadMessages
+            activitySession={activitySession}
             approvalPendingMessageId={null}
             messages={SHARED_CHAT_RENDERER_MESSAGES}
             onAskUserSubmit={() => {
@@ -1690,6 +1732,8 @@ const COMPLETED_TOOL_STEP = {
       {
         messageId: "playground-message-indemnity",
         role: "assistant",
+        revision: 0,
+        edited: false,
         excerpt: "The playbook uses a 36-month survival period.",
         createdAt: "2026-07-21T10:30:00.000Z",
       },
@@ -1738,35 +1782,38 @@ function ToolActivityPlayground() {
     <div className="flex flex-col">
       <div className="bg-muted/25 mb-3 flex flex-wrap gap-x-5 gap-y-2 rounded-lg px-3 py-2.5">
         <div className="text-muted-foreground flex items-center gap-2 text-xs">
-          <ChatActivityOrb state="working" />
+          <StatusMark status="pending" />
+          <span>{t("chat.toolCall.statusWaiting")}</span>
+        </div>
+        <div className="text-muted-foreground flex items-center gap-2 text-xs">
+          <StatusMark status="running" />
           <span>{t("chat.thinking")}</span>
         </div>
         <div className="text-muted-foreground flex items-center gap-2 text-xs">
-          <ChatActivityOrb state="searching" />
-          <span>{t("chat.tool.infosoud_lookup_case")}</span>
+          <StatusMark status="done" />
+          <span>{t("common.done")}</span>
         </div>
         <div className="text-muted-foreground flex items-center gap-2 text-xs">
-          <ChatActivityOrb state="solving" />
-          <span>{t("chat.analyzingSources")}</span>
-        </div>
-        <div className="text-muted-foreground flex items-center gap-2 text-xs">
-          <ChatActivityOrb state="shaping" />
-          <span>{t("chat.tool.suggest_changes")}</span>
+          <StatusMark status="failed" />
+          <span>{t("chat.toolCall.interrupted")}</span>
         </div>
       </div>
       <ToolCallCard
         activeOrganizationId="playground"
+        failureOutcome="terminal"
         durationMs={8000}
         part={COMPLETED_TOOL_STEP}
       />
       <ToolCallCard
         activeOrganizationId="playground"
+        failureOutcome="terminal"
         durationMs={2000}
         part={COMPLETED_CODE_TOOL_STEP}
         showDetails
       />
       <ToolCallCard
         activeOrganizationId="playground"
+        failureOutcome="terminal"
         part={RUNNING_TOOL_STEP}
       />
     </div>

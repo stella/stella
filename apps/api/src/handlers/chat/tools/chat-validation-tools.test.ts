@@ -1,13 +1,21 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import { CHAT_TOOL_EXECUTOR_METADATA_KEY } from "@stll/api-contract/chat";
+import { VISUAL_PREVIEW_TOOL_NAME } from "@stll/api-contract/visual-preview";
+import { rejectionOf } from "@stll/property-testing/rejection";
+
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import type { ActiveChatSkillContext } from "@/api/handlers/chat/active-skill-context";
-import { toChatMessageContent } from "@/api/handlers/chat/chat-message-parts";
+import { toPersistedChatMessageContentV3 } from "@/api/handlers/chat/chat-message-parts";
 import { validateMessage } from "@/api/handlers/chat/chat-schema";
 import type { ChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
 import { resolveToolWorkspaceIds } from "@/api/handlers/chat/tools/authorized-workspace-ids";
 import { createBoeTools } from "@/api/handlers/chat/tools/boe-tools";
+import {
+  createCalendarTools,
+  loadCalendarTools,
+} from "@/api/handlers/chat/tools/calendar-tools";
 import {
   getChatTools,
   getChatValidationTools,
@@ -31,22 +39,30 @@ import {
   WEB_SEARCH_TOOL_NAME,
 } from "@/api/handlers/chat/tools/web-search-tools";
 import type { ChatPart } from "@/api/handlers/chat/types";
+import { createVisualResourceOrigin } from "@/api/handlers/visual-sandbox/resource-origin";
+import { UNBOUND } from "@/api/lib/agent-skills/binding";
 import type { AuditRecorder } from "@/api/lib/audit-log";
-import {
-  createFeatureAccessSnapshot,
-  decideFeatureAccess,
-} from "@/api/lib/auth/feature-access/policy";
 import { toSafeId } from "@/api/lib/branded-types";
 import { BUSINESS_REGISTRY_DISPATCH } from "@/api/lib/business-registries/dispatch";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { createChatToolDefectMemo } from "@/api/lib/chat/tool-defect-memo";
-import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { ChatToolError, HandlerError } from "@/api/lib/errors/tagged-errors";
+import {
+  createFeatureAccessSnapshot,
+  decideFeatureAccess,
+} from "@/api/lib/feature-access/policy";
+import {
+  AI_MEMORY_FEATURE_ID,
+  FEATURE_REGISTRY,
+  GENERATED_VIEWS_FEATURE_ID,
+} from "@/api/lib/feature-access/registry";
 import {
   authorizedMemberRole,
   roleForDisplay,
   SESSION_CREDENTIAL,
 } from "@/api/lib/permission-authorization";
 import type { UrlFetcher, WebSearchProvider } from "@/api/lib/web-search/types";
+import { offeredSkillCatalog } from "@/api/tests/helpers/offered-skills";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 type RunToolsProps = Parameters<typeof getChatTools>[0];
@@ -83,6 +99,7 @@ const urlFetcher: UrlFetcher = {
 };
 
 const editableActiveSkillContext: ActiveChatSkillContext = {
+  binding: UNBOUND,
   body: "# Instructions\nUse the checklist.",
   description: "Review closing files.",
   displayName: "Closing Review",
@@ -92,7 +109,7 @@ const editableActiveSkillContext: ActiveChatSkillContext = {
   id: toSafeId<"agentSkill">("66666666-6666-4666-8666-666666666666"),
   origin: "authored",
   requiredTools: [],
-  resources: [{ kind: "knowledge", path: "knowledge/checklist.md" }],
+  resources: [{ path: "references/checklist.md" }],
   source: "installed",
   toolName: "closing-review",
   version: null,
@@ -108,15 +125,15 @@ const activeDocxFile = {
 } as const;
 
 const SKILL_CATALOGS = {
-  empty: [],
-  installed: [
+  empty: offeredSkillCatalog([]),
+  installed: offeredSkillCatalog([
     {
       description: "Installed workflow.",
       name: "installed-workflow",
       version: "1.0",
     },
-  ],
-} as const;
+  ]),
+};
 
 const DOCX_SURFACES = {
   none: {
@@ -181,6 +198,31 @@ const buildRunScenarios = (): RunToolsProps[] => {
                         editApplyMode,
                         memberRole,
                         memoryEnabled,
+                        featureAccessSnapshot: createFeatureAccessSnapshot({
+                          organizationId,
+                          userId,
+                          decisions: new Map([
+                            [
+                              AI_MEMORY_FEATURE_ID,
+                              decideFeatureAccess({
+                                registry: FEATURE_REGISTRY,
+                                featureId: AI_MEMORY_FEATURE_ID,
+                                organizationId,
+                                userId,
+                                membership: true,
+                                user: {
+                                  email: "member@example.test",
+                                  emailVerified: true,
+                                },
+                                grants: {
+                                  [AI_MEMORY_FEATURE_ID]: [
+                                    { type: "organization", organizationId },
+                                  ],
+                                },
+                              }),
+                            ],
+                          ]),
+                        }),
                         organizationId,
                         orgAIConfig: null,
                         managedAIResidency: "eu" as const,
@@ -252,6 +294,50 @@ const toolNamesMissingFromValidation = (scenario: RunToolsProps) => {
     (name) => !validationNames.has(name),
   );
 };
+
+test("generated views follow general availability and explain deployment withholding in scripts", async () => {
+  const run =
+    buildRunScenarios().at(0) ?? expect.unreachable("No chat scenario");
+  for (const deploymentEnabled of [false, true]) {
+    const decision = decideFeatureAccess({
+      registry: FEATURE_REGISTRY,
+      grants: {},
+      featureId: GENERATED_VIEWS_FEATURE_ID,
+      organizationId,
+      userId,
+      user: { email: "member@example.test", emailVerified: true },
+      membership: true,
+      deploymentEnabled,
+    });
+    const tools = getChatTools({
+      ...run,
+      featureAccessSnapshot: createFeatureAccessSnapshot({
+        organizationId,
+        userId,
+        decisions: new Map([[GENERATED_VIEWS_FEATURE_ID, decision]]),
+      }),
+      visualTools: {
+        origin: createVisualResourceOrigin(),
+        store: async () => expect.unreachable("Visual storage is not invoked"),
+        preview: async () =>
+          expect.unreachable("Visual preview is not invoked"),
+      },
+    });
+    expect(registeredToolNames(tools).includes(VISUAL_PREVIEW_TOOL_NAME)).toBe(
+      deploymentEnabled,
+    );
+    if (deploymentEnabled) {
+      continue;
+    }
+    const execute =
+      tools["execute_typescript"]?.execute ??
+      expect.unreachable("Script tool is absent");
+    const output = await execute({ typescriptCode: "await show_visual({});" });
+    expect(JSON.stringify(output)).toContain(
+      "unavailable for this caller or deployment",
+    );
+  }
+});
 
 describe("chat validation tool set", () => {
   test("contains every tool any run of the same request can expose", () => {
@@ -362,6 +448,7 @@ test("pending feature-bound write approvals use current caller access for valida
     type: "tool-call",
     id: "feature-write-call",
     name: toolName,
+    metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "server" },
     input: canonicalInput,
     arguments: JSON.stringify(canonicalInput),
     state: "approval-requested",
@@ -431,10 +518,11 @@ test("pending feature-bound write approvals use current caller access for valida
       approval: { ...canonicalCall.approval, approved: true },
     } satisfies ChatPart;
     const result = await validateMessage({
+      toolCallOwnership: "cloud",
       message: { id: messageId, role: "assistant", parts: [resumedCall] },
       persistedMessage: {
         role: "assistant",
-        content: toChatMessageContent({ version: 2, data: [canonicalCall] }),
+        content: toPersistedChatMessageContentV3({ data: [canonicalCall] }),
       },
       resume: [
         {
@@ -444,6 +532,7 @@ test("pending feature-bound write approvals use current caller access for valida
         },
       ],
       safeDb: unusedSafeDb,
+      refRegistry: createChatRefRegistry(),
       threadId,
       tools: validationTools,
       userId: callerId,
@@ -466,4 +555,112 @@ test("pending feature-bound write approvals use current caller access for valida
       expect(result.error.cause.message).toBe(`Unknown chat tool: ${toolName}`);
     }
   }
+});
+
+test("revoked calendar reads leave persisted calls valid without advertising or executing them", async () => {
+  const run =
+    buildRunScenarios().at(0) ?? expect.unreachable("No chat scenario");
+  let calendarEnabled = true;
+  const safeDb: SafeDb = async (read) =>
+    Result.ok(
+      await read(
+        asTestRaw({
+          query: {
+            organizationSettings: {
+              findFirst: async () => ({
+                sharepointConnectionEnabled: false,
+                microsoft365CalendarReadEnabled: calendarEnabled,
+              }),
+            },
+            sharepointConnections: {
+              findFirst: async () => ({
+                organizationId,
+                userId,
+                status: "connected",
+                scope: "Calendars.Read",
+              }),
+            },
+          },
+        }),
+      ),
+    );
+  const context = {
+    safeDb,
+    organizationId,
+    userId,
+    recordAuditEvent: noopAuditRecorder,
+    createAbortSignal: () => new AbortController().signal,
+  };
+  const offered = (await loadCalendarTools(context, () => true)).unwrap();
+  expect(
+    registeredToolNames(getChatTools({ ...run, calendarTools: offered })),
+  ).toContain("calendar_list_events");
+
+  calendarEnabled = false;
+  const revoked = (await loadCalendarTools(context, () => true)).unwrap();
+  expect(revoked).toBeUndefined();
+  expect(
+    registeredToolNames(getChatTools({ ...run, calendarTools: revoked })),
+  ).not.toContain("calendar_list_events");
+  const validationTools = validationToolsFor({
+    ...run,
+    calendarTools: createCalendarTools(context),
+  });
+  expect(registeredToolNames(validationTools)).toContain(
+    "calendar_list_events",
+  );
+
+  const input = {
+    start: "2026-10-01T00:00:00Z",
+    end: "2026-10-02T00:00:00Z",
+  };
+  const original = {
+    type: "tool-call",
+    id: "calendar-approval-call",
+    name: "calendar_list_events",
+    metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "server" },
+    input,
+    arguments: JSON.stringify(input),
+    state: "approval-requested",
+    approval: { id: "calendar-approval", needsApproval: true },
+  } satisfies ChatPart;
+  const resumed = {
+    ...original,
+    state: "approval-responded",
+    approval: { ...original.approval, approved: true },
+  } satisfies ChatPart;
+  const validated = await validateMessage({
+    toolCallOwnership: "cloud",
+    message: {
+      id: toSafeId<"chatMessage">("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"),
+      role: "assistant",
+      parts: [resumed],
+    },
+    persistedMessage: {
+      role: "assistant",
+      content: toPersistedChatMessageContentV3({ data: [original] }),
+    },
+    resume: [
+      {
+        interruptId: original.approval.id,
+        payload: { approved: true },
+        status: "resolved",
+      },
+    ],
+    safeDb: unusedSafeDb,
+    refRegistry: createChatRefRegistry(),
+    threadId,
+    tools: validationTools,
+    userId,
+  });
+  expect(Result.isOk(validated)).toBe(true);
+  expect(
+    await rejectionOf(
+      Promise.resolve(
+        validationTools["calendar_list_events"]?.execute?.(input, {
+          toolCallId: "revoked",
+        }),
+      ),
+    ),
+  ).toBeInstanceOf(ChatToolError);
 });

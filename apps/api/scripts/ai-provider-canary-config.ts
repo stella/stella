@@ -2,11 +2,13 @@ import { panic } from "better-result";
 
 import {
   BYOK_MODEL_OPTIONS,
-  DEFAULT_MODELS,
+  getOutputTokenLimit,
   isBYOKModelRoleSupported,
-  MODEL_ROLES,
+  MODEL_TASK_OVERRIDE_GROUP,
+  MODEL_TASKS,
+  resolveDefaultModel,
 } from "@stll/ai-catalog";
-import type { ModelRole } from "@stll/ai-catalog";
+import type { ModelTask } from "@stll/ai-catalog";
 
 import type { TanStackTextProvider } from "@/api/lib/tanstack-ai-models";
 
@@ -75,7 +77,7 @@ export type WeeklyToolShape = (typeof WEEKLY_TOOL_SHAPES)[number];
 
 export type WeeklyCanaryRotation = {
   modelId: string;
-  modelRoles: ModelRole[];
+  modelTasks: ModelTask[];
   rotationIndex: number;
   toolShape: WeeklyToolShape;
 };
@@ -102,82 +104,70 @@ export const weeklyCanaryRotation = ({
     return panic("Weekly canary rotation catalog must not be empty.");
   }
 
-  const supportedRoles = MODEL_ROLES.filter((role) =>
-    isBYOKModelRoleSupported({ modelId, provider, role }),
+  const supportedTasks = MODEL_TASKS.filter((task) =>
+    isBYOKModelRoleSupported({
+      modelId,
+      provider,
+      role: MODEL_TASK_OVERRIDE_GROUP[task],
+    }),
   );
-  if (supportedRoles.length === 0) {
-    return panic(`Weekly canary model ${modelId} has no supported role.`);
+  if (supportedTasks.length === 0) {
+    return panic(`Weekly canary model ${modelId} has no supported task.`);
   }
 
-  const nonDefaultRoles = supportedRoles.filter(
-    (role) => DEFAULT_MODELS[provider][role] !== modelId,
+  const nonDefaultTasks = supportedTasks.filter(
+    (task) =>
+      (resolveDefaultModel({ task, orgProviders: [provider] })?.modelId ??
+        null) !== modelId,
   );
-  const modelRoles =
-    nonDefaultRoles.length > 0 ? nonDefaultRoles : supportedRoles;
+  const modelTasks =
+    nonDefaultTasks.length > 0 ? nonDefaultTasks : supportedTasks;
 
-  return { modelId, modelRoles, rotationIndex, toolShape };
+  return { modelId, modelTasks, rotationIndex, toolShape };
 };
 
-const MODEL_ROLE_MAX_OUTPUT_TOKENS = {
-  fast: 512,
+const MODEL_TASK_MAX_OUTPUT_TOKENS = {
+  "short-text": 512,
+  "search-expand": 512,
+  classify: 512,
+  analysis: 512,
   chat: 512,
   reasoning: 25_000,
   pdf: 512,
-} as const satisfies Record<ModelRole, number>;
+} as const satisfies Record<ModelTask, number>;
 
-// Providers reject a request whose ceiling exceeds the model's output limit
-// before generating anything (Bedrock: "The maximum tokens you requested
-// exceeds the model limit of 10000"). The weekly rotation runs every role
-// probe on every offered Bedrock model, so the map is total over that
-// catalog: adding a model forces a decision here, `null` meaning its limit
-// is above every role budget and the budget is sent as is.
-type BedrockModelId = (typeof BYOK_MODEL_OPTIONS)["bedrock"][number];
-const MODEL_MAX_OUTPUT_TOKENS = {
-  "us.anthropic.claude-sonnet-4-5-20250929-v1:0": null,
-  "us.anthropic.claude-haiku-4-5-20251001-v1:0": null,
-  "us.amazon.nova-pro-v1:0": 10_000,
-  "us.amazon.nova-lite-v1:0": 10_000,
-  "us.amazon.nova-micro-v1:0": 10_000,
-  "openai.gpt-oss-120b-1:0": null,
-  "openai.gpt-oss-20b-1:0": null,
-} as const satisfies Record<BedrockModelId, number | null>;
-
-const isBedrockModelId = (modelId: string): modelId is BedrockModelId =>
-  Object.hasOwn(MODEL_MAX_OUTPUT_TOKENS, modelId);
-
+// Providers reject ceilings above their model's output limit before generating
+// anything. Read the catalog so weekly rotation and probe limits cannot drift.
 const clampToModelOutputLimit = (modelId: string, budget: number) => {
-  if (!isBedrockModelId(modelId)) {
-    return budget;
-  }
-  const limit = MODEL_MAX_OUTPUT_TOKENS[modelId];
-  return limit === null ? budget : Math.min(budget, limit);
+  const limit = getOutputTokenLimit(modelId);
+  return limit === undefined ? budget : Math.min(budget, limit);
 };
 
-type RoleBudgetOptions = {
+type TaskBudgetOptions = {
   modelId: string;
-  role: ModelRole;
+  task: ModelTask;
 };
 
-export const modelRoleMaxOutputTokens = ({
+export const modelTaskMaxOutputTokens = ({
   modelId,
-  role,
-}: RoleBudgetOptions) =>
-  clampToModelOutputLimit(modelId, MODEL_ROLE_MAX_OUTPUT_TOKENS[role]);
+  task,
+}: TaskBudgetOptions) =>
+  clampToModelOutputLimit(modelId, MODEL_TASK_MAX_OUTPUT_TOKENS[task]);
 
 // Anthropic's SDK rejects non-streaming structured-output requests whose
 // ceiling can exceed its ten-minute window. Keep the reasoning probe below
 // the adapter's documented ~21K clamp while leaving streaming probes intact.
-export const structuredOutputModelRoleMaxOutputTokens = ({
+export const structuredOutputModelTaskMaxOutputTokens = ({
   modelId,
-  role,
-}: RoleBudgetOptions) =>
+  task,
+}: TaskBudgetOptions) =>
   clampToModelOutputLimit(
     modelId,
-    role === "reasoning" ? 20_000 : MODEL_ROLE_MAX_OUTPUT_TOKENS[role],
+    task === "reasoning" ? 20_000 : MODEL_TASK_MAX_OUTPUT_TOKENS[task],
   );
 
 // Tool-execution probes may spend thinking tokens before the call, so they
-// get more headroom than a short-reply role, while staying under every
+// get more headroom than a short-reply task, while staying under every
 // per-model output limit above because the weekly rotation runs the same
 // probe on every model.
 export const TOOL_CALL_PROBE_MAX_OUTPUT_TOKENS = 4096;
@@ -185,14 +175,14 @@ export const TOOL_CALL_PROBE_MAX_OUTPUT_TOKENS = 4096;
 // The structured-output-budget-edge probe answers every property in its
 // schema (`null` answer, empty justification), so its output grows with the
 // property count `buildBudgetEdgeSchema` found — up to ~75 properties for a
-// 100 000-byte documented budget. The fixed "fast"-role ceiling above (512
+// 100 000-byte documented budget. The fixed "short-text"-task ceiling above (512
 // tokens, sized for a one-line canary reply) truncates that response well
 // before it finishes; this scales headroom with the schema actually sent.
 const BUDGET_EDGE_PROBE_OUTPUT_TOKENS_BASE = 256;
 const BUDGET_EDGE_PROBE_OUTPUT_TOKENS_PER_PROPERTY = 50;
 
 // The per-property estimate above prices the answer the prompt asks for. The
-// probe runs at the "fast" role, whose default is a provider's smallest
+// probe runs at the "short-text" task, whose default is a provider's smallest
 // model, and a small model fills the fields it was told to leave empty; the
 // object then stops at the ceiling, and a truncated structured object is not
 // a short answer but a failed one. Bedrock rejects the cut-off tool use

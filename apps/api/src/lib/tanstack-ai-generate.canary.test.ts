@@ -1,19 +1,21 @@
 import { EventType, normalizeStreamChunk } from "@tanstack/ai";
-import type { AnyTextAdapter, StreamChunk } from "@tanstack/ai";
+import type { AnyTextAdapter, ChatMiddleware, StreamChunk } from "@tanstack/ai";
 import { createAnthropicChatWithClient } from "@tanstack/ai-anthropic";
 import type { AnthropicMessagesClient } from "@tanstack/ai-anthropic";
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
 import type { CachingDecision } from "@/api/lib/ai-config";
+import type { TanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
+import { NO_ORGANIZATION_MODEL_DISPATCH } from "@/api/lib/rate-limit/model-dispatch-admission";
 import {
-  generateTanStackTextForRole,
-  streamTanStackObjectForRole,
+  generateTanStackTextForTask,
+  streamTanStackObjectForTask,
 } from "@/api/lib/tanstack-ai-generate";
 import type { TanStackTextFinishPolicy } from "@/api/lib/tanstack-ai-generate";
 import type { ResolvedTanStackTextModel } from "@/api/lib/tanstack-ai-models";
 
-// Real `chat()` runtime, no module mocks. `generateTanStackTextForRole`
+// Real `chat()` runtime, no module mocks. `generateTanStackTextForTask`
 // compensates for the chat loop leaving a cancelled provider stream silently
 // (a plain `break`, no terminal event, nothing thrown). That shape belongs to
 // the SDK, so it is exercised here through the SDK itself: a change to its
@@ -44,7 +46,7 @@ const createCancellingAdapter = (
   },
   async *chatStream({ runId, threadId }) {
     const resolvedRunId = runId ?? "run-1";
-    const resolvedThreadId = threadId ?? "thread-1";
+    const resolvedThreadId = threadId;
     const messageId = "provider-message-1";
     yield {
       type: EventType.RUN_STARTED,
@@ -142,31 +144,44 @@ const generateAtOutputCeiling = async ({
 }: {
   finishPolicy: TanStackTextFinishPolicy;
   terminalEvents: string[];
-}) =>
-  await generateTanStackTextForRole({
+}) => {
+  const boundModelIds: string[] = [];
+  const middleware = {
+    onError: () => {
+      terminalEvents.push("error");
+    },
+    onFinish: (_context, { finishReason }) => {
+      terminalEvents.push(`finish:${finishReason ?? "unknown"}`);
+    },
+  } satisfies ChatMiddleware;
+  const forModel: TanStackAIAnalyticsCallbacks["forModel"] = (model) => {
+    boundModelIds.push(model.modelId);
+    return { captureError: () => undefined, forModel, middleware };
+  };
+
+  return await generateTanStackTextForTask({
     dataClass: "public_corpus",
     analytics: {
       captureError: () => undefined,
-      middleware: {
-        onError: () => {
-          terminalEvents.push("error");
-        },
-        onFinish: (_context, { finishReason }) => {
-          terminalEvents.push(`finish:${finishReason ?? "unknown"}`);
-        },
-      },
+      forModel,
+      middleware,
     },
     caching: noCaching,
     finishPolicy,
     maxOutputTokens: TEST_OUTPUT_CEILING_TOKENS,
     organizationId: null,
+    userId: null,
+    admission: NO_ORGANIZATION_MODEL_DISPATCH,
     orgAIConfig: null,
     prompt: "Rewrite it.",
     resolveTextModel: () => outputCeilingModel,
-    role: "chat",
+    task: "chat",
     serviceTier: "standard",
     tenantWorkspaceIds: [],
+  }).finally(() => {
+    expect(boundModelIds).toEqual([outputCeilingModel.modelId]);
   });
+};
 
 const generateWithCancellation = async (cancelAt: CancellationPoint) => {
   const controller = new AbortController();
@@ -181,16 +196,18 @@ const generateWithCancellation = async (cancelAt: CancellationPoint) => {
     provider: "openai",
   } as ResolvedTanStackTextModel;
 
-  return await generateTanStackTextForRole({
+  return await generateTanStackTextForTask({
     dataClass: "public_corpus",
     abortSignal: controller.signal,
     caching: noCaching,
-    finishPolicy: "allow-incomplete",
+    finishPolicy: "require-complete",
     organizationId: null,
+    userId: null,
+    admission: NO_ORGANIZATION_MODEL_DISPATCH,
     orgAIConfig: null,
     prompt: "Rewrite it.",
     resolveTextModel: () => model,
-    role: "chat",
+    task: "chat",
     serviceTier: "standard",
     tenantWorkspaceIds: [],
   });
@@ -231,15 +248,17 @@ describe("TanStack completed-run canary", () => {
     } as ResolvedTanStackTextModel;
 
     expect(
-      await generateTanStackTextForRole({
+      await generateTanStackTextForTask({
         dataClass: "public_corpus",
         caching: noCaching,
         finishPolicy: "require-complete",
         organizationId: null,
+        userId: null,
+        admission: NO_ORGANIZATION_MODEL_DISPATCH,
         orgAIConfig: null,
         prompt: "Rewrite it.",
         resolveTextModel: () => model,
-        role: "chat",
+        task: "chat",
         serviceTier: "standard",
         tenantWorkspaceIds: [],
       }),
@@ -265,19 +284,7 @@ describe("TanStack cancellation canary", () => {
 });
 
 describe("TanStack output-ceiling canary", () => {
-  test("returns partial text through a real chat run and finishes middleware at length", async () => {
-    const terminalEvents: string[] = [];
-
-    expect(
-      await generateAtOutputCeiling({
-        finishPolicy: "allow-incomplete",
-        terminalEvents,
-      }),
-    ).toBe("as far as it got");
-    expect(terminalEvents).toEqual(["finish:length"]);
-  });
-
-  test("returns the same partial text to an output-ceiling caller", async () => {
+  test("returns partial text through a real chat run to an output-ceiling caller and finishes middleware at length", async () => {
     const terminalEvents: string[] = [];
 
     expect(
@@ -306,16 +313,18 @@ describe("TanStack output-ceiling canary", () => {
 
   test("keeps a truncated structured-output run as an error", async () => {
     const drain = async () => {
-      for await (const _event of streamTanStackObjectForRole({
+      for await (const _event of streamTanStackObjectForTask({
         dataClass: "public_corpus",
         caching: noCaching,
         maxOutputTokens: TEST_OUTPUT_CEILING_TOKENS,
         organizationId: null,
+        userId: null,
+        admission: NO_ORGANIZATION_MODEL_DISPATCH,
         orgAIConfig: null,
         outputSchema: v.strictObject({ answer: v.string() }),
         prompt: "Extract the answer.",
         resolveTextModel: () => outputCeilingModel,
-        role: "pdf",
+        task: "pdf",
         serviceTier: "standard",
         tenantWorkspaceIds: [],
       })) {

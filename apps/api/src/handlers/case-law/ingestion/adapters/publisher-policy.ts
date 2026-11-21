@@ -1,3 +1,10 @@
+// parser-output-unchanged: the cz-isir adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
+// parser-output-unchanged: the cz-ns-sbirka adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
+// parser-output-unchanged: the br-tjdft adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
+// parser-output-unchanged: the TST adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
+// parser-output-unchanged: timeout reports carry a static label; parsing and stored output are unchanged.
+// parser-output-unchanged: the UK_FCL publisher mapping is new; existing adapter mappings and shared functions are unchanged, so their parsed output is identical.
+// parser-output-unchanged: the ÚOHS adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
 // parser-output-unchanged: completion admission uses typed Results and job-boundary rejection; parsing and stored output are unchanged.
 // parser-output-unchanged: gate definitions share their owner and immediate request-boundary checks share publisher pacing; response parsing and stored output are unchanged.
 /**
@@ -24,8 +31,8 @@ import { DAY_IN_MS } from "@stll/time";
 
 import {
   createPublisherRequestSlot,
-  PublisherPacingStopped,
   publisherGateReserves,
+  PublisherPacingStopped,
   type PublisherRequestGateDependencies,
 } from "@/api/handlers/case-law/ingestion/adapters/publisher-request-gate";
 import {
@@ -58,6 +65,8 @@ export const ADAPTER_PUBLISHER_GATES = {
   [ADAPTER_KEYS.CZ_NS]: "nsoud-cz",
   [ADAPTER_KEYS.CZ_NSS]: "nssoud-cz",
   [ADAPTER_KEYS.CZ_REGIONAL]: "justice-cz",
+  [ADAPTER_KEYS.CZ_UOHS]: "uohs-cz",
+  [ADAPTER_KEYS.BR_TST]: "tst-jus-br",
   [ADAPTER_KEYS.SK_COURTS]: "justice-sk",
   [ADAPTER_KEYS.SK_US]: "ustavnysud-sk",
   [ADAPTER_KEYS.PL_COURTS]: "saos-pl",
@@ -80,9 +89,13 @@ export const ADAPTER_PUBLISHER_GATES = {
   [ADAPTER_KEYS.AT_FINDOK]: "findok-bmf",
   [ADAPTER_KEYS.EU_ECJ]: "cellar-eu",
   [ADAPTER_KEYS.HU_BHGY]: "birosag-hu",
+  [ADAPTER_KEYS.UK_FCL]: "fcl-uk",
   [ADAPTER_KEYS.PL_KIS]: "eureka-mf",
   [ADAPTER_KEYS.PL_UODO]: "uodo-gov-pl",
   [ADAPTER_KEYS.PL_UOKIK]: "uokik-gov-pl",
+  [ADAPTER_KEYS.BR_TJDFT]: "tjdft-jus-br",
+  [ADAPTER_KEYS.CZ_NS_SBIRKA]: "nsoud-sbirka-cz",
+  [ADAPTER_KEYS.CZ_ISIR]: "isir-justice-cz",
 } as const satisfies Record<AdapterKey, PublisherGateId>;
 
 /** The hosts an adapter's publisher serves from. */
@@ -139,6 +152,7 @@ const createPublisherGateSlotAtInterval = ({
     {
       intervalMs: Math.max(PUBLISHER_GATES[gateId].intervalMs, intervalMs),
       key: gateId,
+      publisherCode: gateId,
       publisher,
       ...(gateId === "cellar-eu" ? { cooldown: "shared" as const } : {}),
     },

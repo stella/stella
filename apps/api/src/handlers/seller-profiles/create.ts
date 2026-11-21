@@ -4,18 +4,27 @@ import { sql } from "drizzle-orm";
 import { normalizeIban } from "@stll/invoicing";
 
 import { sellerProfiles } from "@/api/db/schema";
-import { createSellerProfileBody } from "@/api/handlers/seller-profiles/schema";
+import {
+  createSellerProfileBody,
+  VAT_PAYER_REQUIRES_VAT_ID,
+  vatPayerWithoutVatId,
+} from "@/api/handlers/seller-profiles/schema";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { authorizeOrganizationReplay } from "@/api/lib/idempotency/organization-replay-authorization";
 
 const config = {
+  contract: "patch",
+  idempotency: { type: "replay" },
   description:
     "Create an issuer profile for the active organization. The first active " +
-    "profile becomes the default; later profiles can be made default explicitly.",
+    "profile becomes the default; later profiles can be made default explicitly. " +
+    "vatPayer (default false) says whether invoices from this issuer charge VAT; it requires a vatId.",
   permissions: { organizationSettings: ["update"] },
   accountAccess: ACCOUNT_ACCESS.standard,
+  featureAccess: { featureId: "time-billing", type: "required" },
   mcp: { type: "capability", reason: "billing_admin", consumesServices: false },
   body: createSellerProfileBody,
 } satisfies HandlerConfig;
@@ -23,6 +32,10 @@ const config = {
 export default createSafeRootHandler(
   config,
   async function* ({ body, safeDb, session, recordAuditEvent }) {
+    const vatPayer = body.vatPayer ?? false;
+    if (vatPayerWithoutVatId(vatPayer, body.vatId)) {
+      return Result.err(new HandlerError(VAT_PAYER_REQUIRES_VAT_ID));
+    }
     const iban = body.iban === undefined ? null : normalizeIban(body.iban);
     if (body.iban !== undefined && iban === null) {
       return Result.err(
@@ -49,12 +62,17 @@ export default createSafeRootHandler(
             organizationId: session.activeOrganizationId,
             legalName: body.legalName,
             registrationId: body.registrationId ?? null,
+            taxId: body.taxId ?? null,
+            registerEntry: body.registerEntry ?? null,
+            barRegistration: body.barRegistration ?? null,
             vatId: body.vatId ?? null,
+            vatPayer,
             addressLine1: body.addressLine1 ?? null,
             addressLine2: body.addressLine2 ?? null,
             city: body.city ?? null,
             postalCode: body.postalCode ?? null,
             country: body.country ?? null,
+            email: body.email ?? null,
             iban,
             bic: body.bic?.toUpperCase() ?? null,
             accountNumber: body.accountNumber ?? null,
@@ -79,4 +97,5 @@ export default createSafeRootHandler(
     );
     return Result.ok(created);
   },
+  { authorize: authorizeOrganizationReplay },
 );

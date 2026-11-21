@@ -1,14 +1,26 @@
 import type { PGlite } from "@electric-sql/pglite";
 import { panic } from "better-result";
 import { afterAll, beforeAll, expect, test } from "bun:test";
-import { asc, eq, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 import { drizzle } from "drizzle-orm/pglite";
+import fc from "fast-check";
+
+import { compareCodeUnit } from "@stll/collation";
+import { assertProperty, propertyTestTimeout } from "@stll/property-testing";
 
 import {
+  CORPUS_SCHEMA_LANE_RETRY_MS,
+  CORPUS_SCHEMA_LANE_TRY_SHARED_XACT_SQL,
+  CorpusSchemaLaneUnavailableError,
+} from "@/api/db/corpus-schema-lane";
+import {
   caseLawDecisions,
+  caseLawSitemapChanges,
+  caseLawSitemapCountryGenerations,
   caseLawSitemapShards,
+  caseLawSitemapTouches,
   caseLawSources,
 } from "@/api/db/schema";
 import {
@@ -16,17 +28,35 @@ import {
   listSitemapShardsHandler,
 } from "@/api/handlers/case-law/decisions/sitemap";
 import { createSafeId } from "@/api/lib/branded-types";
+import type { SafeId } from "@/api/lib/branded-types";
 import type {
   CaseLawPublicReadDb,
   CaseLawPublicReadTransaction,
 } from "@/api/lib/case-law-public-read-db";
+import { publishedCaseLawDecisionFor } from "@/api/lib/case-law/published-decisions-sql";
+import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
+import { SITEMAP_RANGE_ROWS } from "@/api/lib/case-law/sitemap-shard-budget";
 import {
+  invalidateCaseLawSitemapShardsTx,
   refreshCaseLawSitemapShards,
-  SITEMAP_SHARD_SPLIT_THRESHOLD,
+  SITEMAP_WHOLE_COUNTRY,
+  sitemapMonthCountSql,
+  sitemapPendingMonthsSql,
   sitemapRefreshBudget,
-  sitemapRefreshPageSql,
 } from "@/api/lib/case-law/sitemap-shard-refresh";
-import type { SitemapRefreshPhase } from "@/api/lib/case-law/sitemap-shard-refresh";
+import {
+  decisionMonthSqlFor,
+  decisionYearSqlFor,
+  SITEMAP_ALL_BUCKET,
+  sitemapRangeBucket,
+} from "@/api/lib/case-law/sitemap-shard-sql";
+import {
+  foldCaseLawSitemapTouches,
+  SITEMAP_TOUCH_FOLD_BATCH_LIMIT,
+  sitemapTouchClaimSql,
+  sitemapTouchFoldSql,
+} from "@/api/lib/case-law/sitemap-touch-fold";
+import { executedRows } from "@/api/lib/db/executed-rows";
 import {
   PARTIAL_OBSERVATION_FIELD,
   PARTIAL_OBSERVATION_KEY,
@@ -37,6 +67,10 @@ import {
   createTestPglite,
   withPublicLawReaderRole,
 } from "@/api/tests/pglite-test-db";
+import {
+  explainRoot,
+  scanOccurrences,
+} from "@/api/tests/query-plans/plan-walker";
 
 /** Same budget as the schema push: an embedded Postgres is not fast. */
 const DB_TEST_TIMEOUT_MS = 120_000;
@@ -46,37 +80,51 @@ type RefreshDb = Parameters<typeof refreshCaseLawSitemapShards>[0];
 const openSourceId = createSafeId<"caseLawSource">();
 const closedSourceId = createSafeId<"caseLawSource">();
 const removableId = createSafeId<"caseLawDecision">();
-/** One month past the split threshold, so the refresh lists it by bucket. */
-const BULK_MONTH_DECISIONS = SITEMAP_SHARD_SPLIT_THRESHOLD + 100;
+/** A natural month several ranges long. */
+const BULK_MONTH_DECISIONS = 6000;
+const BULK_MONTH_RANGES = Math.ceil(BULK_MONTH_DECISIONS / SITEMAP_RANGE_ROWS);
 const NEWEST_UPDATE = new Date("2024-07-02T09:30:00.000Z");
-/** Undated decisions beyond the first, so the undated walk spans pages too. */
 const EXTRA_UNDATED_DECISIONS = 30;
-/** Small enough that both walks, dated and undated, take several pages. */
-const SMALL_PAGE_SIZE = 7;
+const LISTING_ONLY_METADATA = {
+  [PARTIAL_OBSERVATION_KEY]: {
+    [PARTIAL_OBSERVATION_FIELD.CASE_NUMBER_IS_PLACEHOLDER]: false,
+    [PARTIAL_OBSERVATION_FIELD.IS_LISTING_ONLY]: true,
+  },
+};
+const OPEN_DESCRIPTOR = null;
+const CLOSED_DESCRIPTOR = {
+  allowsDerivedAi: false,
+  allowsRedistribution: false,
+  attribution: null,
+  license: "restricted",
+} as const;
 
 let client: PGlite;
 let db: ReturnType<typeof drizzle>;
 let refreshDb: RefreshDb;
 let caseLawDb: CaseLawPublicReadDb;
+let caseNumbers = 0;
 
 const decision = (
-  overrides: Partial<typeof caseLawDecisions.$inferInsert> & {
-    caseNumber: string;
-  },
-): typeof caseLawDecisions.$inferInsert => ({
-  id: createSafeId<"caseLawDecision">(),
-  sourceId: openSourceId,
-  court: "Nejvyšší soud",
-  country: "CZE",
-  language: "cs",
-  decisionDate: null,
-  ...overrides,
-});
+  overrides: Partial<typeof caseLawDecisions.$inferInsert> = {},
+): typeof caseLawDecisions.$inferInsert => {
+  caseNumbers += 1;
+  return {
+    id: createSafeId<"caseLawDecision">(),
+    sourceId: openSourceId,
+    caseNumber: `${caseNumbers} Cdo ${caseNumbers}/2020`,
+    court: "Nejvyšší soud",
+    country: "CZE",
+    language: "cs",
+    decisionDate: null,
+    ...overrides,
+  };
+};
 
 beforeAll(async () => {
   client = await createTestPglite();
   db = drizzle({ client });
-  // SAFETY: the refresh reads and replaces through the root handle's select and
+  // SAFETY: the refresh reads and writes through the root handle's
   // transaction surface, which the PGlite handle provides.
   // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test database stands in for the root pool
   refreshDb = db as unknown as RefreshDb;
@@ -97,65 +145,36 @@ beforeAll(async () => {
     caseLawSourceRow({ adapterKey: "open", id: openSourceId, name: "open" }),
     caseLawSourceRow({
       adapterKey: "closed",
-      descriptor: {
-        allowsDerivedAi: false,
-        allowsRedistribution: false,
-        attribution: null,
-        license: "restricted",
-      },
+      descriptor: CLOSED_DESCRIPTOR,
       id: closedSourceId,
       name: "closed",
     }),
   ]);
 
   await db.insert(caseLawDecisions).values([
-    decision({ caseNumber: "1 Cdo 1/2020", decisionDate: "2020-03-15" }),
-    decision({ caseNumber: "2 Cdo 2/2020", decisionDate: "2020-03-28" }),
-    decision({
-      caseNumber: "3 Cdo 3/2021",
-      decisionDate: "2021-01-10",
-      id: removableId,
-    }),
-    decision({ caseNumber: "4 Cdo 4/undated" }),
-    ...Array.from({ length: EXTRA_UNDATED_DECISIONS }, (_, index) =>
-      decision({ caseNumber: `${index + 1} Nd ${index + 1}/undated` }),
-    ),
+    decision({ decisionDate: "2020-03-15" }),
+    decision({ decisionDate: "2020-03-28" }),
+    decision({ decisionDate: "2021-01-10", id: removableId }),
+    decision(),
+    ...Array.from({ length: EXTRA_UNDATED_DECISIONS }, () => decision()),
     // Not published: the publisher listed it and never served the document.
-    decision({
-      caseNumber: "5 Cdo 5/2019",
-      decisionDate: "2019-07-01",
-      metadata: {
-        [PARTIAL_OBSERVATION_KEY]: {
-          [PARTIAL_OBSERVATION_FIELD.CASE_NUMBER_IS_PLACEHOLDER]: false,
-          [PARTIAL_OBSERVATION_FIELD.IS_LISTING_ONLY]: true,
-        },
-      },
-    }),
+    decision({ decisionDate: "2019-07-01", metadata: LISTING_ONLY_METADATA }),
     // Not redistributable: its source withholds redistribution.
-    decision({
-      caseNumber: "6 Cdo 6/2018",
-      decisionDate: "2018-02-01",
-      sourceId: closedSourceId,
-    }),
-    // Not a public country.
-    decision({
-      caseNumber: "synthetic-hidden",
-      country: "XAA",
-      decisionDate: "2017-05-05",
-      language: "xx",
-    }),
+    decision({ decisionDate: "2018-02-01", sourceId: closedSourceId }),
+    // Not a public country: counted, never listed.
+    decision({ country: "XAA", decisionDate: "2017-05-05", language: "xx" }),
   ]);
-  await db.insert(caseLawDecisions).values(
-    Array.from({ length: BULK_MONTH_DECISIONS }, (_, index) =>
-      decision({
-        caseNumber: `${index + 1} Cdo ${index + 1}/2024`,
-        decisionDate: `2024-06-${String((index % 28) + 1).padStart(2, "0")}`,
-        updatedAt:
-          index === 0 ? NEWEST_UPDATE : new Date("2024-07-01T00:00:00.000Z"),
-      }),
-    ),
-  );
-}, DB_TEST_TIMEOUT_MS);
+  await db.execute(sql`
+    INSERT INTO case_law_decisions
+      (id, source_id, case_number, court, country, language, language_group_key, decision_date, updated_at)
+    SELECT md5('sitemap-bulk-' || i::text)::uuid, ${openSourceId}::uuid,
+      'sitemap-bulk-' || i::text, 'Fixture court', 'CZE', 'cs', 'sitemap-mono-' || i::text,
+      ('2024-06-01'::date + (i % 28)::int),
+      CASE WHEN i = 0 THEN ${NEWEST_UPDATE.toISOString()}::timestamptz ELSE '2024-07-01'::timestamptz END
+    FROM generate_series(0, ${BULK_MONTH_DECISIONS - 1}) AS i
+  `);
+  await client.query("VACUUM ANALYZE case_law_decisions");
+}, propertyTestTimeout(DB_TEST_TIMEOUT_MS)); // timeout: the full schema push runs on an embedded Postgres
 
 afterAll(async () => {
   await client.close();
@@ -169,23 +188,291 @@ const listedShards = async () => {
   return listed.items;
 };
 
+type Shard = {
+  country: string;
+  year: string;
+  month: string;
+  bucket: string;
+  total: number;
+  lastModifiedMs: number;
+  rangeStartDate: string | null;
+  rangeStartId: string | null;
+  rangeEndDate: string | null;
+  rangeEndId: string | null;
+};
+
+const byShardKey = (a: Shard, b: Shard) =>
+  compareCodeUnit(
+    `${a.country}|${a.year}|${a.month}|${a.bucket}`,
+    `${b.country}|${b.year}|${b.month}|${b.bucket}`,
+  );
+
+/** The shard table as the refresh left it. */
+const snapshot = async (): Promise<Shard[]> =>
+  (await db.select().from(caseLawSitemapShards))
+    .map(({ lastModifiedAt, ...shard }) => ({
+      ...shard,
+      lastModifiedMs: lastModifiedAt.getTime(),
+    }))
+    .toSorted(byShardKey);
+
+const publishedRowSchema = (raw: unknown) => {
+  if (
+    !isRecord(raw) ||
+    typeof raw["id"] !== "string" ||
+    typeof raw["country"] !== "string" ||
+    typeof raw["year"] !== "string" ||
+    typeof raw["month"] !== "string" ||
+    typeof raw["key_date"] !== "string" ||
+    (raw["language_group_key"] !== null &&
+      typeof raw["language_group_key"] !== "string") ||
+    typeof raw["redistributable"] !== "boolean" ||
+    typeof raw["last_modified_ms"] !== "number"
+  ) {
+    return panic("Unexpected published decision row");
+  }
+  return {
+    id: raw["id"],
+    country: raw["country"],
+    year: raw["year"],
+    month: raw["month"],
+    keyDate: raw["key_date"],
+    languageGroupKey: raw["language_group_key"],
+    redistributable: raw["redistributable"],
+    lastModifiedMs: raw["last_modified_ms"],
+  };
+};
+
+/**
+ * The shard table a full recount of the whole corpus writes, computed here
+ * from every published decision read plainly and cut in TypeScript,
+ * independently of the change log, of the refresh's month-at-a-time path and
+ * of its SQL: a month's published decisions in date-index order (date, then
+ * id), cut every `SITEMAP_RANGE_ROWS`; each listed decision (redistributable,
+ * the lowest id of its language group) counted in its range.
+ */
+const fullRecount = async (): Promise<Shard[]> => {
+  const rows = executedRows(
+    await db.execute(sql`
+      SELECT
+        ${caseLawDecisions.id}::text AS id,
+        ${caseLawDecisions.country} AS country,
+        ${decisionYearSqlFor(caseLawDecisions)} AS year,
+        ${decisionMonthSqlFor(caseLawDecisions)} AS month,
+        coalesce(${caseLawDecisions.decisionDate}, '-infinity'::date)::text AS key_date,
+        ${caseLawDecisions.languageGroupKey} AS language_group_key,
+        ${redistributableCaseLawSource} AS redistributable,
+        floor(extract(epoch FROM ${caseLawDecisions.updatedAt}) * 1000)::float8 AS last_modified_ms
+      FROM ${caseLawDecisions}
+      INNER JOIN ${caseLawSources} ON ${caseLawSources.id} = ${caseLawDecisions.sourceId}
+      WHERE ${publishedCaseLawDecisionFor(caseLawDecisions)}
+    `),
+  ).map(publishedRowSchema);
+  // The representative of a language group: its lowest listed id.
+  const representatives = new Map<string, string>();
+  for (const row of rows) {
+    if (!row.redistributable || row.languageGroupKey === null) {
+      continue;
+    }
+    const group = `${row.country}|${row.languageGroupKey}`;
+    const held = representatives.get(group);
+    if (held === undefined || compareCodeUnit(row.id, held) < 0) {
+      representatives.set(group, row.id);
+    }
+  }
+  const listed = (row: (typeof rows)[number]) =>
+    row.redistributable &&
+    (row.languageGroupKey === null ||
+      representatives.get(`${row.country}|${row.languageGroupKey}`) === row.id);
+  const months = Map.groupBy(
+    rows,
+    ({ country, year, month }) => `${country}|${year}|${month}`,
+  );
+  return [...months.values()]
+    .flatMap((monthRows): Shard[] => {
+      // `-infinity` is one undated month on its own, so the text order of
+      // the dates is the date order here.
+      const ordered = monthRows.toSorted(
+        (a, b) =>
+          compareCodeUnit(a.keyDate, b.keyDate) || compareCodeUnit(a.id, b.id),
+      );
+      const split = ordered.length > SITEMAP_RANGE_ROWS;
+      const keyAt = (position: number) => ordered.at(position);
+      const ranges = Map.groupBy(
+        ordered.flatMap((row, position) =>
+          listed(row)
+            ? [{ row, range: Math.floor(position / SITEMAP_RANGE_ROWS) }]
+            : [],
+        ),
+        ({ range }) => range,
+      );
+      return [...ranges.entries()].map(([range, members]): Shard => {
+        const first = members[0]?.row ?? panic("A range has no decision");
+        const start =
+          range === 0 ? undefined : keyAt(range * SITEMAP_RANGE_ROWS);
+        const end = keyAt((range + 1) * SITEMAP_RANGE_ROWS);
+        return {
+          country: first.country,
+          year: first.year,
+          month: first.month,
+          bucket: split ? sitemapRangeBucket(range) : SITEMAP_ALL_BUCKET,
+          total: members.length,
+          lastModifiedMs: Math.max(
+            ...members.map(({ row }) => row.lastModifiedMs),
+          ),
+          rangeStartDate: split ? (start?.keyDate ?? null) : null,
+          rangeStartId: split ? (start?.id ?? null) : null,
+          rangeEndDate: split ? (end?.keyDate ?? null) : null,
+          rangeEndId: split ? (end?.id ?? null) : null,
+        };
+      });
+    })
+    .toSorted(byShardKey);
+};
+
+/** Every decision id a crawler reads from the listed files of one month. */
+const servedMonth = async (year: string, month: string) => {
+  const served: string[] = [];
+  for (const shard of (await listedShards()).filter(
+    (listed) => listed.year === year && listed.month === month,
+  )) {
+    // db-await-in-loop: one shard read per listed file, as a crawler would fetch them
+    const page = await listSitemapShardDecisionsHandler(shard, caseLawDb);
+    if (!("items" in page)) {
+      return panic("Expected a listed file to be readable.");
+    }
+    served.push(...page.items.map(({ id }) => id));
+  }
+  return served;
+};
+
+/** One run, and how many log rows it left for the next. */
+const refreshOnce = async (
+  ...args: Parameters<typeof refreshCaseLawSitemapShards>
+) => {
+  const outcome = await refreshCaseLawSitemapShards(...args);
+  const [left] = await db
+    .select({ rows: sql<number>`count(*)::int` })
+    .from(caseLawSitemapChanges);
+  return { outcome, left: left?.rows ?? 0 };
+};
+
+/**
+ * Consecutive runs, as the scheduler's continuations and its next hourly
+ * runs would make them, until one finishes with nothing left logged. A month
+ * a run has already worked waits for the next run if it is logged again
+ * meanwhile (as a whole-country expansion logs it).
+ */
+const refreshUntilDone = async (
+  ...args: Parameters<typeof refreshCaseLawSitemapShards>
+) => {
+  for (let run = 0; run < 1000; run += 1) {
+    // db-await-in-loop: consecutive scheduler runs, each continuing from the rows still logged
+    const { outcome, left } = await refreshOnce(...args);
+    if (outcome.type === "refreshed" && left === 0) {
+      await foldAllTouches();
+      return { outcome, runs: run + 1 };
+    }
+  }
+  return panic("The refresh never finished");
+};
+
+/** One fold batch in its own transaction, as one governed batch runs. */
+const foldOnce = async (limit = SITEMAP_TOUCH_FOLD_BATCH_LIMIT) =>
+  await db.transaction(
+    async (tx) =>
+      // SAFETY: the PGlite transaction offers the execute and savepoint surface the fold uses.
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test transaction stands in for the root one
+      await foldCaseLawSitemapTouches(tx as never, limit),
+  );
+
+/** Fold batches until the queue is empty, as consecutive fold runs would. */
+async function foldAllTouches(limit = SITEMAP_TOUCH_FOLD_BATCH_LIMIT) {
+  for (let batch = 0; batch < 1000; batch += 1) {
+    // db-await-in-loop: consecutive governed batches, each its own transaction
+    const folded = await foldOnce(limit);
+    if (folded.status === "empty") {
+      return;
+    }
+    if (folded.status !== "folded") {
+      panic(`A fold found the fence ${folded.status}`);
+    }
+  }
+  panic("The touch queue never drained");
+}
+
+const expectMatchesFullRecount = async () => {
+  await refreshUntilDone(refreshDb);
+  expect(await snapshot()).toEqual(await fullRecount());
+};
+
+const loggedMonths = async () =>
+  (
+    await db
+      .select({
+        country: caseLawSitemapChanges.country,
+        year: caseLawSitemapChanges.year,
+        month: caseLawSitemapChanges.month,
+      })
+      .from(caseLawSitemapChanges)
+      .orderBy(asc(caseLawSitemapChanges.id))
+  ).map(({ country, year, month }) => `${country}/${year}/${month}`);
+
+/** A clock that has spent any budget by the next reading. */
+const spentClock = () => {
+  let now = 0;
+  return () => {
+    now += Number.MAX_SAFE_INTEGER / 4;
+    return now;
+  };
+};
+
+test("country generation writes log the TypeScript whole-country marker", async () => {
+  const country = "XTG";
+  await db
+    .insert(caseLawSitemapCountryGenerations)
+    .values({ country, generation: 1n });
+  await db
+    .update(caseLawSitemapCountryGenerations)
+    .set({ generation: 2n })
+    .where(eq(caseLawSitemapCountryGenerations.country, country));
+
+  expect(
+    await db
+      .select({
+        year: caseLawSitemapChanges.year,
+        month: caseLawSitemapChanges.month,
+      })
+      .from(caseLawSitemapChanges)
+      .where(eq(caseLawSitemapChanges.country, country))
+      .orderBy(asc(caseLawSitemapChanges.id)),
+  ).toEqual([
+    { year: SITEMAP_WHOLE_COUNTRY, month: SITEMAP_WHOLE_COUNTRY },
+    { year: SITEMAP_WHOLE_COUNTRY, month: SITEMAP_WHOLE_COUNTRY },
+  ]);
+});
+
 test(
-  "the index reads only the snapshot, so it lists nothing until a refresh",
+  "the index reads only the shard table, so it lists nothing before a refresh",
   async () => {
-    // Published decisions are seeded; only the snapshot is empty.
     expect(await listedShards()).toEqual([]);
+    // Every published decision's month is logged once, by its inserting
+    // transaction; the unpublished one is not.
+    expect(await loggedMonths()).not.toContain("CZE/2019/07");
+    expect(await loggedMonths()).toContain("CZE/2024/06");
   },
-  DB_TEST_TIMEOUT_MS,
+  propertyTestTimeout(DB_TEST_TIMEOUT_MS), // timeout: an embedded Postgres runs each statement and the schema push in WASM
 );
 
 test(
   "a refresh lists each published, redistributable month of a public country once",
   async () => {
-    // Three unsplit months, and the split month in its 64 buckets (with this
-    // many decisions, every bucket holds some).
-    expect(await refreshCaseLawSitemapShards(refreshDb)).toMatchObject({
-      shards: 3 + 64,
-    });
+    // A month within one range stays whole; the bulk month is cut into
+    // ranges. XAA is counted, not listed.
+    const { outcome } = await refreshUntilDone(refreshDb);
+    expect(outcome).toMatchObject({ shards: 3 + BULK_MONTH_RANGES });
+    expect(await loggedMonths()).toEqual([]);
+    expect(await snapshot()).toEqual(await fullRecount());
 
     const shards = await listedShards();
     const unsplit = shards.filter((shard) => shard.bucket === "all");
@@ -194,128 +481,804 @@ test(
     ).toEqual(["cze/undated/00", "cze/2021/01", "cze/2020/03"]);
     expect(unsplit.every((shard) => shard.lastmod !== null)).toBe(true);
   },
-  DB_TEST_TIMEOUT_MS,
+  propertyTestTimeout(DB_TEST_TIMEOUT_MS), // timeout: an embedded Postgres runs each statement and the schema push in WASM
 );
 
 test(
-  "a month past the split threshold is listed by bucket, and its buckets hold every decision",
+  "a month several ranges long serves every decision once, from its own range",
   async () => {
-    const buckets = (await listedShards()).filter(
+    const ranges = (await listedShards()).filter(
       (shard) => shard.year === "2024" && shard.month === "06",
     );
-    expect(buckets.length).toBeGreaterThan(1);
-    expect(buckets.every((shard) => /^[0-9]{2}$/u.test(shard.bucket))).toBe(
-      true,
+    expect(ranges.map(({ bucket }) => bucket)).toEqual(
+      Array.from({ length: BULK_MONTH_RANGES }, (_, position) =>
+        sitemapRangeBucket(position),
+      ),
     );
-    expect(buckets.map((shard) => shard.lastmod)).toContain(
-      NEWEST_UPDATE.toISOString().slice(0, 10),
-    );
-
-    // The listing and the shard read must agree: every decision of the month
-    // is served by exactly one listed bucket.
-    const served = new Set<string>();
-    for (const shard of buckets) {
-      // db-await-in-loop: one shard read per listed bucket, as a crawler would fetch them
-      const page = await listSitemapShardDecisionsHandler(shard, caseLawDb);
-      if (!("items" in page)) {
-        panic("Expected a listed bucket to be readable.");
-      }
-      for (const item of page.items) {
-        served.add(item.id);
-      }
-    }
-    expect(served.size).toBe(BULK_MONTH_DECISIONS);
+    // Each range is dated by its own decisions: only the range holding the
+    // newest one carries its date.
+    expect(
+      ranges.filter(
+        ({ lastmod }) => lastmod === NEWEST_UPDATE.toISOString().slice(0, 10),
+      ),
+    ).toHaveLength(1);
+    const served = await servedMonth("2024", "06");
+    expect(served).toHaveLength(BULK_MONTH_DECISIONS);
+    expect(new Set(served).size).toBe(BULK_MONTH_DECISIONS);
+    // The whole month is not a file of its own once it is cut.
+    expect(
+      await listSitemapShardDecisionsHandler(
+        {
+          country: "cze",
+          year: "2024",
+          month: "06",
+          bucket: SITEMAP_ALL_BUCKET,
+        },
+        caseLawDb,
+      ),
+    ).toMatchObject({ code: 404 });
   },
-  DB_TEST_TIMEOUT_MS,
+  propertyTestTimeout(DB_TEST_TIMEOUT_MS), // timeout: an embedded Postgres runs each statement and the schema push in WASM
 );
 
 test(
-  "a refresh replaces the snapshot whole",
+  "moving decisions between months keeps natural-month counts consistent",
+  async () => {
+    const june = and(
+      eq(caseLawDecisions.country, "CZE"),
+      sql`${caseLawDecisions.decisionDate} >= '2024-06-01' AND ${caseLawDecisions.decisionDate} < '2024-07-01'`,
+    );
+    const moved = (
+      await db
+        .select({ id: caseLawDecisions.id })
+        .from(caseLawDecisions)
+        .where(june)
+    )
+      .slice(0, 200)
+      .map(({ id }) => id);
+    await db
+      .update(caseLawDecisions)
+      .set({ decisionDate: "2024-05-31" })
+      .where(inArray(caseLawDecisions.id, moved));
+    await expectMatchesFullRecount();
+    const juneRows = (await snapshot()).filter(
+      (shard) => shard.year === "2024" && shard.month === "06",
+    );
+    expect(juneRows.reduce((sum, { total }) => sum + total, 0)).toBe(
+      BULK_MONTH_DECISIONS - 200,
+    );
+
+    await db
+      .update(caseLawDecisions)
+      .set({ decisionDate: "2024-06-30" })
+      .where(inArray(caseLawDecisions.id, moved));
+    await expectMatchesFullRecount();
+    expect(
+      (await snapshot()).filter(
+        (shard) => shard.year === "2024" && shard.month === "06",
+      ).length,
+    ).toBe(BULK_MONTH_RANGES);
+  },
+  propertyTestTimeout(DB_TEST_TIMEOUT_MS), // timeout: an embedded Postgres runs each statement and the schema push in WASM
+);
+
+test(
+  "a deleted month's rows leave the shard table",
   async () => {
     await db
       .delete(caseLawDecisions)
       .where(eq(caseLawDecisions.id, removableId));
-    await refreshCaseLawSitemapShards(refreshDb);
-
+    expect(await loggedMonths()).toEqual(["CZE/2021/01"]);
+    await expectMatchesFullRecount();
     const shards = await listedShards();
     expect(shards.some((shard) => shard.year === "2021")).toBe(false);
     expect(shards.some((shard) => shard.year === "2020")).toBe(true);
   },
-  DB_TEST_TIMEOUT_MS,
+  propertyTestTimeout(DB_TEST_TIMEOUT_MS), // timeout: an embedded Postgres runs each statement and the schema push in WASM
 );
 
-const planLines = (explained: unknown): string[] => {
-  const rows = isRecord(explained) ? explained["rows"] : explained;
-  if (!Array.isArray(rows)) {
-    return panic("EXPLAIN did not return plan rows");
-  }
-  return rows.map((row: unknown) => {
-    const text = isRecord(row) ? row["QUERY PLAN"] : undefined;
-    return typeof text === "string"
-      ? text
-      : panic("EXPLAIN row has no plan text");
-  });
+const insertOne = async (
+  overrides: Partial<typeof caseLawDecisions.$inferInsert> = {},
+): Promise<SafeId<"caseLawDecision">> => {
+  const row = decision(overrides);
+  await db.insert(caseLawDecisions).values(row);
+  return row.id ?? panic("A test decision has an id");
 };
 
-const snapshot = async () =>
-  await db
-    .select()
-    .from(caseLawSitemapShards)
-    .orderBy(
-      asc(caseLawSitemapShards.country),
-      asc(caseLawSitemapShards.year),
-      asc(caseLawSitemapShards.month),
-      asc(caseLawSitemapShards.bucket),
-    );
+const updateOne = async (
+  id: SafeId<"caseLawDecision">,
+  set: Partial<typeof caseLawDecisions.$inferInsert>,
+) => {
+  await db.update(caseLawDecisions).set(set).where(eq(caseLawDecisions.id, id));
+};
 
 test(
-  "a refresh walked in many small pages writes the same snapshot as one large page",
+  "every write that moves a decision's shard logs the months it touched, and a refresh matches a full recount",
   async () => {
-    const whole = await refreshCaseLawSitemapShards(refreshDb, {
-      pageSize: 1_000_000,
-    });
-    const wholeSnapshot = await snapshot();
+    await refreshUntilDone(refreshDb);
+    const id = await insertOne({ decisionDate: "2022-04-10" });
+    expect(await loggedMonths()).toEqual(["CZE/2022/04"]);
+    await expectMatchesFullRecount();
 
-    const paged = await refreshCaseLawSitemapShards(refreshDb, {
-      pageSize: SMALL_PAGE_SIZE,
-    });
-    // Both walks cross page boundaries: the dated one inside the split month,
-    // the undated one inside its single month.
-    expect(paged.pages).toBeGreaterThan(
-      (BULK_MONTH_DECISIONS + EXTRA_UNDATED_DECISIONS) / SMALL_PAGE_SIZE,
-    );
-    expect(paged).toMatchObject({
-      largestShard: whole.largestShard,
-      shards: whole.shards,
-    });
-    expect(await snapshot()).toEqual(wholeSnapshot);
-    expect(wholeSnapshot.find((shard) => shard.year === "undated")?.total).toBe(
-      1 + EXTRA_UNDATED_DECISIONS,
-    );
+    // Re-dated across months: the month it left and the month it entered.
+    await updateOne(id, { decisionDate: "2022-09-01" });
+    expect(await loggedMonths()).toEqual(["CZE/2022/04", "CZE/2022/09"]);
+    await expectMatchesFullRecount();
+
+    // Redacted, then restored.
+    await updateOne(id, { redactedAt: new Date("2026-01-01T00:00:00.000Z") });
+    expect(await loggedMonths()).toEqual(["CZE/2022/09"]);
+    await expectMatchesFullRecount();
+    await updateOne(id, { redactedAt: null });
+    expect(await loggedMonths()).toEqual(["CZE/2022/09"]);
+    await expectMatchesFullRecount();
+
+    // Listing-only, then served again.
+    await updateOne(id, { metadata: LISTING_ONLY_METADATA });
+    expect(await loggedMonths()).toEqual(["CZE/2022/09"]);
+    await expectMatchesFullRecount();
+    await updateOne(id, { metadata: {} });
+    await expectMatchesFullRecount();
+
+    // Moved to another country.
+    await updateOne(id, { country: "XAA" });
+    expect(await loggedMonths()).toEqual(["CZE/2022/09", "XAA/2022/09"]);
+    await expectMatchesFullRecount();
+
+    // Only its last modification moved: the shard's lastmod follows.
+    await updateOne(id, { updatedAt: new Date("2026-02-03T04:05:06.000Z") });
+    expect(await loggedMonths()).toEqual(["XAA/2022/09"]);
+    await expectMatchesFullRecount();
+
+    // Undated, then deleted.
+    await updateOne(id, { decisionDate: null });
+    expect(await loggedMonths()).toEqual(["XAA/2022/09", "XAA/undated/00"]);
+    await expectMatchesFullRecount();
+    await db.delete(caseLawDecisions).where(eq(caseLawDecisions.id, id));
+    expect(await loggedMonths()).toEqual(["XAA/undated/00"]);
+    await expectMatchesFullRecount();
   },
-  DB_TEST_TIMEOUT_MS,
+  propertyTestTimeout(DB_TEST_TIMEOUT_MS), // timeout: an embedded Postgres runs each statement and the schema push in WASM
 );
 
 test(
-  "an aborted refresh leaves the previous snapshot in place",
+  "writes that leave every shard as it was log nothing",
   async () => {
+    await refreshUntilDone(refreshDb);
+    const published = await insertOne({ decisionDate: "2022-05-05" });
+    const unpublished = await insertOne({
+      decisionDate: "2022-05-06",
+      metadata: LISTING_ONLY_METADATA,
+    });
+    await refreshUntilDone(refreshDb);
+    // Raw statements, so the ORM's updated_at stamp does not move the shard.
+    // A column the shard does not read.
+    await db.execute(
+      sql`UPDATE ${caseLawDecisions} SET court = 'Ústavní soud' WHERE id = ${published}`,
+    );
+    // A decision unpublished before and after.
+    await db.execute(
+      sql`UPDATE ${caseLawDecisions} SET decision_date = '2022-06-06', updated_at = '2026-03-03T00:00:00Z' WHERE id = ${unpublished}`,
+    );
+    // A metadata change that keeps the publication.
+    await db.execute(
+      sql`UPDATE ${caseLawDecisions} SET metadata = '{"note": "kept"}'::jsonb WHERE id = ${published}`,
+    );
+    expect(await loggedMonths()).toEqual([]);
+  },
+  propertyTestTimeout(DB_TEST_TIMEOUT_MS), // timeout: an embedded Postgres runs each statement and the schema push in WASM
+);
+
+const queuedTouches = async () => await db.$count(caseLawSitemapTouches);
+
+test(
+  "a decision written again before its fold stays one queued touch",
+  async () => {
+    await refreshUntilDone(refreshDb);
+    const id = await insertOne({ decisionDate: "1996-06-06" });
+    await refreshUntilDone(refreshDb);
+    for (const second of [1, 2, 3]) {
+      // db-await-in-loop: three separate forward writes of one decision
+      await db.execute(sql`
+        UPDATE ${caseLawDecisions}
+        SET updated_at = ${`2030-01-01T00:00:0${String(second)}Z`}::timestamptz
+        WHERE id = ${id}
+      `);
+    }
+    expect(await queuedTouches()).toBe(1);
+    await foldAllTouches();
+    expect(await snapshot()).toEqual(await fullRecount());
+  },
+  propertyTestTimeout(DB_TEST_TIMEOUT_MS), // timeout: an embedded Postgres runs each statement and the schema push in WASM
+);
+
+test(
+  "a backlog larger than one batch drains over consecutive batches",
+  async () => {
+    await refreshUntilDone(refreshDb);
+    const ids = await Promise.all(
+      Array.from({ length: 5 }, async (_, day) =>
+        insertOne({ decisionDate: `1995-05-1${String(day)}` }),
+      ),
+    );
+    await refreshUntilDone(refreshDb);
+    await db.execute(sql`
+      UPDATE ${caseLawDecisions}
+      SET updated_at = '2030-02-02T00:00:00Z'::timestamptz
+      WHERE id IN (${sql.join(ids, sql`, `)})
+    `);
+    expect(await queuedTouches()).toBe(5);
+    const batches = [];
+    for (let batch = 0; batch < 4; batch += 1) {
+      // db-await-in-loop: consecutive governed batches, each its own transaction
+      batches.push(await foldOnce(2));
+    }
+    expect(batches.map((folded) => folded.status)).toEqual([
+      "folded",
+      "folded",
+      "folded",
+      "empty",
+    ]);
+    expect(
+      batches.flatMap((folded) =>
+        folded.status === "folded" ? [[folded.folded, folded.full]] : [],
+      ),
+    ).toEqual([
+      [2, true],
+      [2, true],
+      [1, false],
+    ]);
+    expect(await queuedTouches()).toBe(0);
+    expect(await snapshot()).toEqual(await fullRecount());
+  },
+  propertyTestTimeout(DB_TEST_TIMEOUT_MS), // timeout: an embedded Postgres runs each statement and the schema push in WASM
+);
+
+test(
+  "a fold after a removal invalidation never lists a retired shard again",
+  async () => {
+    await refreshUntilDone(refreshDb);
+    const id = await insertOne({
+      country: "XRV",
+      decisionDate: "1994-04-04",
+      language: "xx",
+    });
+    await refreshUntilDone(refreshDb);
+    await db.execute(sql`
+      UPDATE ${caseLawDecisions}
+      SET updated_at = '2030-03-03T00:00:00Z'::timestamptz
+      WHERE id = ${id}
+    `);
+    expect(await queuedTouches()).toBe(1);
+    // A removal retires the country's shards while the touch is queued.
+    await db.transaction(async (tx) => {
+      // SAFETY: the PGlite transaction offers the insert and delete surface the invalidation uses.
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test transaction stands in for the root one
+      await invalidateCaseLawSitemapShardsTx(tx as never, "XRV");
+    });
+    const listed = async () =>
+      await db
+        .select({ month: caseLawSitemapShards.month })
+        .from(caseLawSitemapShards)
+        .where(eq(caseLawSitemapShards.country, "XRV"));
+    expect(await listed()).toEqual([]);
+    // The fold only raises listed rows, so it brings back nothing.
+    expect(await foldOnce()).toMatchObject({
+      status: "folded",
+      folded: 1,
+      raised: 0,
+    });
+    expect(await listed()).toEqual([]);
+    // The invalidation's whole-country recount lists it again, current.
+    await expectMatchesFullRecount();
+    expect(await listed()).toEqual([{ month: "04" }]);
+  },
+  propertyTestTimeout(DB_TEST_TIMEOUT_MS), // timeout: an embedded Postgres runs each statement and the schema push in WASM
+);
+
+/** Whether a recorded run sent a month count. */
+const countedAMonth = (transactions: readonly { sql: string }[][]) =>
+  transactions.some((sent) =>
+    sent.some(({ sql: statement }) =>
+      statement.includes("count(*)::int AS total"),
+    ),
+  );
+
+test(
+  "a later updated_at alone is folded into the shard without counting a month",
+  async () => {
+    await refreshUntilDone(refreshDb);
+    const ids = await Promise.all(
+      Array.from({ length: 3 }, async (_, day) =>
+        insertOne({ decisionDate: `1997-11-1${String(day)}` }),
+      ),
+    );
+    await refreshUntilDone(refreshDb);
+    expect(await queuedTouches()).toBe(0);
+
+    // A bookkeeping write that moves only updated_at forward, sub-millisecond
+    // digits included, as an ORM write stamps it.
+    await db.execute(sql`
+      UPDATE ${caseLawDecisions}
+      SET updated_at = '2030-05-05T01:02:03.456789Z'::timestamptz
+      WHERE id IN (${ids[0]}, ${ids[1]})
+    `);
+    expect(await loggedMonths()).toEqual([]);
+    expect(await queuedTouches()).toBe(2);
+
+    // The month refresh has nothing to count; the fold raises the shard.
+    const recorded = recordingRefreshDb();
+    expect(await refreshCaseLawSitemapShards(recorded.db)).toMatchObject({
+      type: "refreshed",
+      months: 0,
+    });
+    expect(countedAMonth(recorded.transactions)).toBe(false);
+    expect(await queuedTouches()).toBe(2);
+    expect(await foldOnce()).toEqual({
+      status: "folded",
+      folded: 2,
+      retained: 0,
+      raised: 1,
+      full: false,
+    });
+    expect(await queuedTouches()).toBe(0);
+    expect(await foldOnce()).toEqual({ status: "empty" });
+    expect(await snapshot()).toEqual(await fullRecount());
+    const [listed] = await db
+      .select({ lastModifiedAt: caseLawSitemapShards.lastModifiedAt })
+      .from(caseLawSitemapShards)
+      .where(
+        and(
+          eq(caseLawSitemapShards.country, "CZE"),
+          eq(caseLawSitemapShards.year, "1997"),
+          eq(caseLawSitemapShards.month, "11"),
+        ),
+      );
+    expect(listed?.lastModifiedAt.toISOString()).toBe(
+      "2030-05-05T01:02:03.456Z",
+    );
+
+    // Folding the same instant again raises nothing.
+    await db.execute(sql`
+      UPDATE ${caseLawDecisions}
+      SET updated_at = '2030-05-05T01:02:03.456999Z'::timestamptz
+      WHERE id = ${ids[2]}
+    `);
+    expect(await queuedTouches()).toBe(1);
     const before = await snapshot();
+    await refreshUntilDone(refreshDb);
+    expect(await snapshot()).toEqual(before);
+    expect(await queuedTouches()).toBe(0);
+
+    // An earlier updated_at can lower the shard's last modification, so it
+    // is logged for a recount instead.
+    await db.execute(sql`
+      UPDATE ${caseLawDecisions}
+      SET updated_at = '2020-01-01T00:00:00Z'::timestamptz
+      WHERE id IN (${ids[0]}, ${ids[1]}, ${ids[2]})
+    `);
+    expect(await loggedMonths()).toEqual(["CZE/1997/11"]);
+    expect(await queuedTouches()).toBe(0);
+    await expectMatchesFullRecount();
+  },
+  propertyTestTimeout(DB_TEST_TIMEOUT_MS), // timeout: an embedded Postgres runs each statement and the schema push in WASM
+);
+
+test(
+  "a touched language version raises only the shard listing its document",
+  async () => {
+    const [listedVersion, alternate] = [
+      createSafeId<"caseLawDecision">(),
+      createSafeId<"caseLawDecision">(),
+    ].toSorted();
+    if (!listedVersion || !alternate) {
+      panic("Expected two language versions");
+    }
+    await refreshUntilDone(refreshDb);
+    await db.insert(caseLawDecisions).values([
+      {
+        ...decision({
+          id: listedVersion,
+          languageGroupKey: "sitemap-touch-group",
+          decisionDate: "1998-03-03",
+        }),
+        sourceDocumentId: listedVersion,
+      },
+      {
+        ...decision({
+          id: alternate,
+          language: "en",
+          languageGroupKey: "sitemap-touch-group",
+          decisionDate: "1998-04-04",
+        }),
+        sourceDocumentId: alternate,
+      },
+    ]);
+    try {
+      await refreshUntilDone(refreshDb);
+      /** The production recount's newest last modification of a month. */
+      const recountedLastModified = async (month: string) =>
+        Math.max(
+          0,
+          ...executedRows(
+            await db.execute(
+              sitemapMonthCountSql({ country: "CZE", year: "1998", month }),
+            ),
+          ).map((row) =>
+            isRecord(row) && typeof row["last_modified_ms"] === "number"
+              ? row["last_modified_ms"]
+              : 0,
+          ),
+        );
+      const listedLastModified = async () =>
+        (await snapshot())
+          .filter(({ year }) => year === "1998")
+          .map(({ month, lastModifiedMs }) => ({ month, lastModifiedMs }));
+      const listedBefore = await listedLastModified();
+      expect(listedBefore).toEqual([
+        { month: "03", lastModifiedMs: await recountedLastModified("03") },
+      ]);
+
+      // The alternate is not the listed version: its shard does not move.
+      await db.execute(sql`
+        UPDATE ${caseLawDecisions} SET updated_at = '2031-01-01T00:00:00Z'::timestamptz
+        WHERE id = ${alternate}
+      `);
+      expect(await loggedMonths()).toEqual([]);
+      expect(await queuedTouches()).toBe(1);
+      await refreshUntilDone(refreshDb);
+      expect(await listedLastModified()).toEqual(listedBefore);
+      expect(await recountedLastModified("04")).toBe(0);
+
+      // The listed version moves its shard to exactly what a recount reads.
+      await db.execute(sql`
+        UPDATE ${caseLawDecisions} SET updated_at = '2032-02-02T00:00:00Z'::timestamptz
+        WHERE id = ${listedVersion}
+      `);
+      await refreshUntilDone(refreshDb);
+      expect(await listedLastModified()).toEqual([
+        {
+          month: "03",
+          lastModifiedMs: Date.parse("2032-02-02T00:00:00Z"),
+        },
+      ]);
+      expect(await recountedLastModified("03")).toBe(
+        Date.parse("2032-02-02T00:00:00Z"),
+      );
+      expect(await queuedTouches()).toBe(0);
+    } finally {
+      await db
+        .delete(caseLawDecisions)
+        .where(inArray(caseLawDecisions.id, [listedVersion, alternate]));
+      await refreshUntilDone(refreshDb);
+    }
+  },
+  propertyTestTimeout(DB_TEST_TIMEOUT_MS), // timeout: an embedded Postgres runs each statement and the schema push in WASM
+);
+
+test(
+  "one transaction logs each month once, however many decisions it writes",
+  async () => {
+    await refreshUntilDone(refreshDb);
+    const ids = await Promise.all(
+      Array.from({ length: 5 }, async () =>
+        insertOne({ decisionDate: "2023-02-02" }),
+      ),
+    );
+    await refreshUntilDone(refreshDb);
+
+    await db.transaction(async (tx) => {
+      // Two statements, every decision of the month in each.
+      await tx
+        .update(caseLawDecisions)
+        .set({ updatedAt: new Date("2026-01-01T00:00:00.000Z") })
+        .where(inArray(caseLawDecisions.id, ids));
+      await tx
+        .update(caseLawDecisions)
+        .set({ updatedAt: new Date("2026-01-02T00:00:00.000Z") })
+        .where(inArray(caseLawDecisions.id, ids));
+    });
+    expect(await loggedMonths()).toEqual(["CZE/2023/02"]);
+    await expectMatchesFullRecount();
+
+    await db.transaction(async (tx) => {
+      await tx
+        .update(caseLawDecisions)
+        .set({ decisionDate: "2023-03-03" })
+        .where(inArray(caseLawDecisions.id, ids));
+    });
+    expect(await loggedMonths()).toEqual(["CZE/2023/02", "CZE/2023/03"]);
+    await expectMatchesFullRecount();
+  },
+  propertyTestTimeout(DB_TEST_TIMEOUT_MS), // timeout: an embedded Postgres runs each statement and the schema push in WASM
+);
+
+test(
+  "a source's redistribution change recounts every country",
+  async () => {
+    await refreshUntilDone(refreshDb);
+    await db
+      .update(caseLawSources)
+      .set({ descriptor: OPEN_DESCRIPTOR })
+      .where(eq(caseLawSources.id, closedSourceId));
+    expect(await loggedMonths()).toEqual([
+      `${SITEMAP_WHOLE_COUNTRY}/${SITEMAP_WHOLE_COUNTRY}/${SITEMAP_WHOLE_COUNTRY}`,
+    ]);
+    await refreshUntilDone(refreshDb);
+    expect(await loggedMonths()).toEqual([]);
+    expect(await snapshot()).toEqual(await fullRecount());
+    expect(
+      (await snapshot()).some(
+        (shard) => shard.year === "2018" && shard.month === "02",
+      ),
+    ).toBe(true);
+
+    // A change that keeps the gate logs nothing.
+    await db
+      .update(caseLawSources)
+      .set({ descriptor: { ...CLOSED_DESCRIPTOR, allowsRedistribution: true } })
+      .where(eq(caseLawSources.id, closedSourceId));
+    expect(await loggedMonths()).toEqual([]);
+
+    await db
+      .update(caseLawSources)
+      .set({ descriptor: CLOSED_DESCRIPTOR })
+      .where(eq(caseLawSources.id, closedSourceId));
+    await expectMatchesFullRecount();
+    expect(
+      (await snapshot()).some(
+        (shard) => shard.year === "2018" && shard.month === "02",
+      ),
+    ).toBe(false);
+  },
+  propertyTestTimeout(DB_TEST_TIMEOUT_MS), // timeout: an embedded Postgres runs each statement and the schema push in WASM
+);
+
+test(
+  "a whole-country row rebuilds that country, dropping months it no longer holds",
+  async () => {
+    await refreshUntilDone(refreshDb);
+    // A stale row for a month the country never held.
+    await db.insert(caseLawSitemapShards).values({
+      bucket: SITEMAP_ALL_BUCKET,
+      country: "CZE",
+      lastModifiedAt: new Date("2000-01-01T00:00:00.000Z"),
+      month: "01",
+      total: 7,
+      year: "1999",
+    });
+    await db.insert(caseLawSitemapChanges).values({
+      country: "CZE",
+      year: SITEMAP_WHOLE_COUNTRY,
+      month: SITEMAP_WHOLE_COUNTRY,
+    });
+    await expectMatchesFullRecount();
+    expect(await loggedMonths()).toEqual([]);
+  },
+  propertyTestTimeout(DB_TEST_TIMEOUT_MS), // timeout: an embedded Postgres runs each statement and the schema push in WASM
+);
+
+test(
+  "a whole-country row larger than one run's budget finishes over successive runs",
+  async () => {
+    await refreshUntilDone(refreshDb);
+    await db.insert(caseLawSitemapChanges).values({
+      country: "CZE",
+      year: SITEMAP_WHOLE_COUNTRY,
+      month: SITEMAP_WHOLE_COUNTRY,
+    });
+    const first = await refreshCaseLawSitemapShards(refreshDb, {
+      clock: spentClock(),
+    });
+    // The expansion is the run's one unit: it logs every month and consumes
+    // the whole-country row in one write, so no later run starts it over.
+    expect(first).toEqual({ type: "pending", months: 0, retry: "immediate" });
+    const logged = await loggedMonths();
+    expect(logged).not.toContain(
+      `CZE/${SITEMAP_WHOLE_COUNTRY}/${SITEMAP_WHOLE_COUNTRY}`,
+    );
+    expect(logged.length).toBeGreaterThan(3);
+    expect(logged.every((month) => month.startsWith("CZE/"))).toBe(true);
+
+    const { runs } = await refreshUntilDone(refreshDb, {
+      clock: spentClock(),
+    });
+    // One month per run.
+    expect(runs).toBe(logged.length);
+    expect(await loggedMonths()).toEqual([]);
+    expect(await snapshot()).toEqual(await fullRecount());
+  },
+  propertyTestTimeout(DB_TEST_TIMEOUT_MS), // timeout: an embedded Postgres runs each statement and the schema push in WASM
+);
+
+test(
+  "a run that spends its budget stops between months, and the next runs finish",
+  async () => {
+    await expectMatchesFullRecount();
+    // Oldest log row first: January, then February, then March.
+    await insertOne({ decisionDate: "2015-01-01" });
+    await insertOne({ decisionDate: "2015-02-01" });
+    await insertOne({ decisionDate: "2015-03-01" });
+    const before = await snapshot();
+
+    const first = await refreshCaseLawSitemapShards(refreshDb, {
+      clock: spentClock(),
+    });
+    expect(first).toEqual({ type: "pending", months: 1, retry: "immediate" });
+    expect(await loggedMonths()).toEqual(["CZE/2015/02", "CZE/2015/03"]);
+    expect((await snapshot()).length).toBe(before.length + 1);
+
+    const { runs } = await refreshUntilDone(refreshDb, {
+      clock: spentClock(),
+    });
+    // Each run recounts one month and stops before the next.
+    expect(runs).toBe(2);
+    expect(await snapshot()).toEqual(await fullRecount());
+  },
+  propertyTestTimeout(DB_TEST_TIMEOUT_MS), // timeout: an embedded Postgres runs each statement and the schema push in WASM
+);
+
+test(
+  "an aborted refresh changes nothing and leaves the log for the next run",
+  async () => {
+    await refreshUntilDone(refreshDb);
+    const before = await snapshot();
+    await insertOne({ decisionDate: "2014-01-01" });
     const aborted = new AbortController();
     aborted.abort();
-    await db
-      .delete(caseLawDecisions)
-      .where(eq(caseLawDecisions.caseNumber, "1 Cdo 1/2020"));
     const failure = await refreshCaseLawSitemapShards(refreshDb, {
       signal: aborted.signal,
     }).then(
       () => null,
       (error: unknown) => error,
     );
-    expect(failure).toBeInstanceOf(Error);
     expect(String(failure)).toContain("SchedulerAborted");
     expect(await snapshot()).toEqual(before);
+    expect(await loggedMonths()).toEqual(["CZE/2014/01"]);
+    await expectMatchesFullRecount();
   },
-  DB_TEST_TIMEOUT_MS,
+  propertyTestTimeout(DB_TEST_TIMEOUT_MS), // timeout: an embedded Postgres runs each statement and the schema push in WASM
+);
+
+/**
+ * The test handle, with every statement each transaction sends through
+ * `execute` recorded, and `onExecute` called before it runs.
+ */
+const recordingRefreshDb = (
+  onExecute: (statement: string) => unknown = () => undefined,
+) => {
+  const dialect = new PgDialect();
+  const transactions: { sql: string; params: unknown[] }[][] = [];
+  const recording = {
+    transaction: async (work: (tx: unknown) => Promise<unknown>) =>
+      await db.transaction(async (tx) => {
+        const sent: { sql: string; params: unknown[] }[] = [];
+        transactions.push(sent);
+        return await work(
+          new Proxy(tx, {
+            get: (target, property, receiver) =>
+              property === "execute"
+                ? async (query: SQL | string) => {
+                    const rendered =
+                      typeof query === "string"
+                        ? { sql: query, params: [] }
+                        : dialect.sqlToQuery(query);
+                    const statement = rendered.sql.trim();
+                    sent.push({ sql: statement, params: rendered.params });
+                    // An answer from `onExecute` stands in for the database's.
+                    return (
+                      onExecute(statement) ?? (await target.execute(query))
+                    );
+                  }
+                : (Reflect.get(target, property, receiver) as unknown),
+          }),
+        );
+      }),
+  };
+  // SAFETY: forwards every call to the PGlite handle, recording the raw
+  // statements each transaction sends through `execute`.
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- recording wrapper around the test handle
+  return { db: recording as unknown as RefreshDb, transactions };
+};
+
+test(
+  "a run aborted while it writes a month rolls that write back",
+  async () => {
+    await refreshUntilDone(refreshDb);
+    const before = await snapshot();
+    await insertOne({ decisionDate: "2013-01-01" });
+    const lease = new AbortController();
+    // The lease is lost once the month is counted, before its write commits.
+    const recorded = recordingRefreshDb((statement) => {
+      if (statement.includes("count(*)::int AS total")) {
+        lease.abort();
+      }
+    });
+    const failure = await refreshCaseLawSitemapShards(recorded.db, {
+      signal: lease.signal,
+    }).then(
+      () => null,
+      (error: unknown) => error,
+    );
+    expect(String(failure)).toContain("SchedulerAborted");
+    expect(await snapshot()).toEqual(before);
+    expect(await loggedMonths()).toEqual(["CZE/2013/01"]);
+    await expectMatchesFullRecount();
+  },
+  propertyTestTimeout(DB_TEST_TIMEOUT_MS), // timeout: an embedded Postgres runs each statement and the schema push in WASM
+);
+
+test(
+  "each transaction sets its budget before it reads or writes",
+  async () => {
+    await insertOne({ decisionDate: "2012-01-01" });
+    const recorded = recordingRefreshDb();
+    await refreshCaseLawSitemapShards(recorded.db, { poolIdleTimeoutS: 20 });
+    expect(recorded.transactions.length).toBeGreaterThan(2);
+    for (const sent of recorded.transactions) {
+      // The lane comes first; its try cannot wait, so it needs no budget.
+      expect(sent.at(0)?.sql).toBe(CORPUS_SCHEMA_LANE_TRY_SHARED_XACT_SQL);
+      const budgetAt = sent.findIndex(({ sql: statement }) =>
+        statement.includes("set_config('statement_timeout'"),
+      );
+      expect(budgetAt).toBeGreaterThanOrEqual(0);
+      expect(sent[budgetAt]?.params).toContain("10000ms");
+      expect(
+        sent
+          .slice(1, budgetAt)
+          .every(
+            ({ sql: statement }) =>
+              statement.startsWith("SET ") ||
+              statement.includes("set_config('lock_timeout'"),
+          ),
+      ).toBe(true);
+    }
+  },
+  propertyTestTimeout(DB_TEST_TIMEOUT_MS), // timeout: an embedded Postgres runs each statement and the schema push in WASM
+);
+
+test(
+  "a refresh yields to a schema upgrade holding the lane and leaves the log for a later run",
+  async () => {
+    await refreshUntilDone(refreshDb);
+    const before = await snapshot();
+    await insertOne({ decisionDate: "2009-01-01" });
+    // An upgrade holds the lane exclusive: every try is refused.
+    const refused = recordingRefreshDb((statement) =>
+      statement === CORPUS_SCHEMA_LANE_TRY_SHARED_XACT_SQL
+        ? [{ granted: false }]
+        : undefined,
+    );
+    const sleeps: number[] = [];
+    const rejection: unknown = await refreshCaseLawSitemapShards(refused.db, {
+      laneSleep: async (ms) => {
+        sleeps.push(ms);
+      },
+    }).then(
+      () => null,
+      (error: unknown) => error,
+    );
+    // Its task reads this refusal as a delayed continuation.
+    expect(CorpusSchemaLaneUnavailableError.is(rejection)).toBe(true);
+    // Each refused try ended its transaction having sent nothing else.
+    expect(refused.transactions.length).toBeGreaterThan(1);
+    expect(
+      refused.transactions.every(
+        (sent) =>
+          sent.length === 1 &&
+          sent[0]?.sql === CORPUS_SCHEMA_LANE_TRY_SHARED_XACT_SQL,
+      ),
+    ).toBe(true);
+    // It paused between tries, outside any transaction, until its budget ran out.
+    expect(sleeps).toHaveLength(refused.transactions.length - 1);
+    expect(sleeps.every((ms) => ms <= CORPUS_SCHEMA_LANE_RETRY_MS)).toBe(true);
+    expect(await snapshot()).toEqual(before);
+    expect(await loggedMonths()).toEqual(["CZE/2009/01"]);
+    // Once the lane is free the next run picks the month up.
+    await refreshUntilDone(refreshDb);
+    await expectMatchesFullRecount();
+  },
+  propertyTestTimeout(DB_TEST_TIMEOUT_MS), // timeout: an embedded Postgres runs each statement and the schema push in WASM
 );
 
 test("every refresh statement is budgeted under the pool's idle timeout", () => {
@@ -333,144 +1296,28 @@ test("every refresh statement is budgeted under the pool's idle timeout", () => 
   expect(sitemapRefreshBudget(0).statementTimeoutMs).toBe(30_000);
 });
 
-/**
- * The test handle, with every statement each transaction sends through
- * `execute` recorded, and `onExecute` called before it runs.
- */
-const recordingRefreshDb = (
-  onExecute: (statement: string) => void = () => {},
-) => {
-  const dialect = new PgDialect();
-  const transactions: { sql: string; params: unknown[] }[][] = [];
-  const recording = {
-    transaction: async (work: (tx: unknown) => Promise<unknown>) =>
-      await db.transaction(async (tx) => {
-        const sent: { sql: string; params: unknown[] }[] = [];
-        transactions.push(sent);
-        return await work(
-          new Proxy(tx, {
-            get: (target, property, receiver) =>
-              property === "execute"
-                ? async (query: SQL) => {
-                    const rendered = dialect.sqlToQuery(query);
-                    const statement = rendered.sql.trim();
-                    sent.push({ sql: statement, params: rendered.params });
-                    onExecute(statement);
-                    return await target.execute(query);
-                  }
-                : Reflect.get(target, property, receiver),
-          }),
-        );
-      }),
-  };
-  // SAFETY: forwards every call to the PGlite handle, recording the raw
-  // statements each transaction sends through `execute`.
-  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- recording wrapper around the test handle
-  return { db: recording as unknown as RefreshDb, transactions };
+const planLines = (explained: unknown): string[] => {
+  const rows = isRecord(explained) ? explained["rows"] : explained;
+  if (!Array.isArray(rows)) {
+    return panic("EXPLAIN did not return plan rows");
+  }
+  return rows.map((row: unknown) => {
+    const text = isRecord(row) ? row["QUERY PLAN"] : undefined;
+    return typeof text === "string"
+      ? text
+      : panic("EXPLAIN row has no plan text");
+  });
 };
 
-test(
-  "the walk reads one snapshot, and each transaction sets its budget before it reads or writes",
-  async () => {
-    const recorded = recordingRefreshDb();
-
-    const outcome = await refreshCaseLawSitemapShards(recorded.db, {
-      pageSize: SMALL_PAGE_SIZE,
-      poolIdleTimeoutS: 20,
-    });
-
-    // Every page in one read-only snapshot, then the swap.
-    expect(outcome.pages).toBeGreaterThan(2);
-    expect(recorded.transactions).toHaveLength(2);
-    expect(recorded.transactions[0]?.[0]?.sql).toBe(
-      "SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY",
-    );
-    for (const sent of recorded.transactions) {
-      const budgetAt = sent.findIndex(({ sql: statement }) =>
-        statement.includes("set_config('statement_timeout'"),
-      );
-      expect(budgetAt).toBeGreaterThanOrEqual(0);
-      expect(sent[budgetAt]?.params).toContain("10000ms");
-      expect(
-        sent
-          .slice(0, budgetAt)
-          .every(
-            ({ sql: statement }) =>
-              statement.startsWith("SET ") ||
-              statement.includes("set_config('lock_timeout'"),
-          ),
-      ).toBe(true);
-    }
-  },
-  DB_TEST_TIMEOUT_MS,
-);
-
-test(
-  "a run aborted while it writes the snapshot rolls the write back",
-  async () => {
-    await refreshCaseLawSitemapShards(refreshDb);
-    const before = await snapshot();
-    await db
-      .delete(caseLawDecisions)
-      .where(eq(caseLawDecisions.caseNumber, "2 Cdo 2/2020"));
-    const lease = new AbortController();
-    // The lease is lost after the new snapshot is inserted, before commit.
-    const recorded = recordingRefreshDb((statement) => {
-      if (statement.startsWith("INSERT INTO")) {
-        lease.abort();
-      }
-    });
-
-    const failure = await refreshCaseLawSitemapShards(recorded.db, {
-      signal: lease.signal,
-    }).then(
-      () => null,
-      (error: unknown) => error,
-    );
-    expect(failure).toBeInstanceOf(Error);
-    expect(String(failure)).toContain("SchedulerAborted");
-    expect(await snapshot()).toEqual(before);
-  },
-  DB_TEST_TIMEOUT_MS,
-);
-
-const pagePlan = async (phase: SitemapRefreshPhase): Promise<string> => {
-  // A resumed page, so the plan covers the row comparison on the index keys.
-  const [resumeFrom] = await db
-    .select({
-      decisionDate: caseLawDecisions.decisionDate,
-      id: caseLawDecisions.id,
-      sourceId: caseLawDecisions.sourceId,
-      updatedAt: sql<string>`${caseLawDecisions.updatedAt}::text`,
-    })
-    .from(caseLawDecisions)
-    .where(
-      phase === "dated"
-        ? sql`${caseLawDecisions.decisionDate} IS NOT NULL`
-        : sql`${caseLawDecisions.decisionDate} IS NULL`,
-    )
-    .limit(1);
-  if (!resumeFrom) {
-    return panic("Expected a decision to resume the page from.");
-  }
+const monthCountPlan = async (
+  target: Parameters<typeof sitemapMonthCountSql>[0],
+): Promise<string> => {
   const { sql: text, params } = new PgDialect().sqlToQuery(
-    sitemapRefreshPageSql({
-      country: "CZE",
-      cursor: resumeFrom,
-      pageSize: SMALL_PAGE_SIZE,
-      phase,
-    }),
+    sitemapMonthCountSql(target),
   );
-
-  // Vacuumed so the visibility map is set, as it is for most of a settled
-  // corpus; the plan then shows whether the index can answer on its own.
   await client.query("VACUUM ANALYZE case_law_decisions");
   return await client.transaction(async (tx) => {
-    // The seeded table is small enough that reading it whole, or through a
-    // narrower index plus the heap, can still win on cost. Scans are off
-    // and every page is priced the same, so the plan is chosen by pages
-    // touched, as it is on a corpus of millions: the covering index alone
-    // wins only if it can answer the page without the decision rows.
+    // Scans are priced by pages touched, as on a corpus of millions.
     await tx.query("SET LOCAL enable_seqscan = off");
     await tx.query("SET LOCAL enable_bitmapscan = off");
     await tx.query("SET LOCAL seq_page_cost = 1000");
@@ -481,25 +1328,556 @@ const pagePlan = async (phase: SitemapRefreshPhase): Promise<string> => {
   });
 };
 
-for (const phase of ["dated", "undated"] as const) {
-  test(
-    `a ${phase} refresh page is a bounded range of the sitemap index alone`,
-    async () => {
-      const plan = await pagePlan(phase);
+// timeout: the plan guard seeds and analyzes the embedded PostgreSQL backlog.
+test(
+  "pending discovery bounds each change-log stream at increasing backlog sizes",
+  async () => {
+    await refreshUntilDone(refreshDb);
+    try {
+      // db-await-in-loop: compare the same bounded production query at two independently seeded backlog sizes
+      for (const size of [1000, 10_000]) {
+        await client.query(
+          `INSERT INTO case_law_sitemap_changes (country, year, month, xact)
+        SELECT 'XBG', '2000', '01', n::text::xid8 FROM generate_series(1, $1) n`,
+          [size],
+        );
+        await client.query("ANALYZE case_law_sitemap_changes");
+        const query = new PgDialect().sqlToQuery(sitemapPendingMonthsSql());
+        const plan = explainRoot(
+          await client.query(
+            `EXPLAIN (ANALYZE, TIMING OFF, FORMAT JSON) ${query.sql}`,
+            query.params,
+          ),
+        );
+        const changeScans = scanOccurrences(plan).filter(
+          ({ relation }) => relation === "case_law_sitemap_changes",
+        );
+        expect(changeScans.length).toBeGreaterThan(0);
+        expect(changeScans.length).toBeLessThanOrEqual(2);
+        for (const scan of changeScans) {
+          expect(scan.nodeType).toMatch(/^Index(?: Only)? Scan$/u);
+          expect(scan.index).toBe("case_law_sitemap_changes_month_xact_key");
+          expect(scan.limitAbove).toBe(true);
+          expect(scan.limitRows).toBe(1);
+          expect(scan.filter).toBeNull();
+        }
+        await db
+          .delete(caseLawSitemapChanges)
+          .where(eq(caseLawSitemapChanges.country, "XBG"));
+      }
+    } finally {
+      await db
+        .delete(caseLawSitemapChanges)
+        .where(eq(caseLawSitemapChanges.country, "XBG"));
+    }
+  },
+  propertyTestTimeout(DB_TEST_TIMEOUT_MS),
+);
 
+for (const target of [
+  { country: "CZE", year: "2020", month: "03" },
+  { country: "CZE", year: "undated", month: "00" },
+]) {
+  test(
+    `a month count for ${target.year}/${target.month} reads one range of the sitemap index`,
+    async () => {
+      const plan = await monthCountPlan(target);
       expect(plan).toMatch(
-        /Index Only Scan using case_law_decisions_sitemap_shard_idx on case_law_decisions/u,
+        /Index (?:Only )?Scan using case_law_decisions_sitemap_month_published_idx on case_law_decisions/u,
       );
-      // The resume point and the country are where the index read starts,
-      // not a filter over everything before it, and the limit stops it: the
-      // index order is the page order, so nothing is sorted first.
-      const scan = plan.slice(plan.indexOf("Index Only Scan"));
-      expect(scan).toMatch(/Index Cond: \(\(country = .*\) AND \(ROW\(/u);
-      expect(plan).toMatch(/Limit/u);
-      expect(plan.slice(0, plan.indexOf("Index Only Scan"))).not.toMatch(
-        /Sort Key: case_law_decisions/u,
+      expect(plan).not.toMatch(/Seq Scan on case_law_decisions/u);
+      const scan = plan.slice(plan.indexOf("case_law_decisions_sitemap_month"));
+      expect(scan).toMatch(
+        target.year === "undated"
+          ? /Index Cond: \(\((?:country|\(country\)::text) = .*\) AND \(decision_date IS NULL\)(?: AND \(source_id = case_law_sources.id\))?\)/u
+          : /Index Cond: \(\((?:country|\(country\)::text) = .*\) AND \(decision_date >= .*\) AND \(decision_date < .*\)\)/u,
       );
     },
-    DB_TEST_TIMEOUT_MS,
+    propertyTestTimeout(DB_TEST_TIMEOUT_MS), // timeout: an embedded Postgres runs each statement and the schema push in WASM
   );
 }
+
+test(
+  "a touch fold reads each touch, decision and shard by key",
+  async () => {
+    const dialect = new PgDialect();
+    const statements = [
+      sitemapTouchClaimSql(SITEMAP_TOUCH_FOLD_BATCH_LIMIT),
+      sitemapTouchFoldSql({
+        touchIds: ["1", "2"],
+        decisionIds: [removableId, createSafeId<"caseLawDecision">()],
+      }),
+    ].map((statement) => dialect.sqlToQuery(statement));
+    const plan = await client.transaction(async (tx) => {
+      // Scans are priced by pages touched, as on a corpus of millions.
+      await tx.query("SET LOCAL enable_seqscan = off");
+      await tx.query("SET LOCAL enable_bitmapscan = off");
+      await tx.query("SET LOCAL seq_page_cost = 1000");
+      await tx.query("SET LOCAL random_page_cost = 1000");
+      const plans: string[] = [];
+      for (const { sql: text, params } of statements) {
+        // db-await-in-loop: one EXPLAIN per fold statement, two in all
+        plans.push(
+          planLines(
+            await tx.query(`EXPLAIN (COSTS OFF) ${text}`, [...params]),
+          ).join("\n"),
+        );
+      }
+      return plans.join("\n");
+    });
+    expect(plan).not.toMatch(/Seq Scan/u);
+    expect(plan).toMatch(
+      /Index Scan using case_law_sitemap_touches_pkey on case_law_sitemap_touches/u,
+    );
+    // Each touched decision is found by its id through an index.
+    expect(plan).toMatch(
+      /Index (?:Only )?Scan using \w+ on case_law_decisions \w+\n\s+Index Cond: [^\n]*\bid = ANY /u,
+    );
+    expect(plan).toMatch(
+      /Index Scan using case_law_sitemap_shards_pkey on case_law_sitemap_shards/u,
+    );
+    expect(plan).toMatch(/Tid Scan on case_law_sitemap_shards/u);
+  },
+  propertyTestTimeout(DB_TEST_TIMEOUT_MS), // timeout: an embedded Postgres plans the statement in WASM
+);
+
+// timeout: one refresh plus the reads of every listed file run on the in-process PGlite engine.
+test(
+  "language versions occupy one document across sitemap months and ranges",
+  async () => {
+    const ids = Array.from({ length: 7 }, () =>
+      createSafeId<"caseLawDecision">(),
+    ).toSorted();
+    const [
+      withheld,
+      listingOnly,
+      redacted,
+      judgment,
+      translation,
+      opinion,
+      opinionTranslation,
+    ] = ids;
+    if (
+      !withheld ||
+      !listingOnly ||
+      !redacted ||
+      !judgment ||
+      !translation ||
+      !opinion ||
+      !opinionTranslation
+    ) {
+      panic("Expected seven document version ids");
+    }
+    const versions = [
+      decision({
+        id: withheld,
+        caseNumber: "1 Cdo 1/2016",
+        languageGroupKey: "sitemap-judgment",
+        sourceId: closedSourceId,
+        decisionDate: "2016-01-01",
+      }),
+      decision({
+        id: listingOnly,
+        caseNumber: "1 Cdo 1/2016",
+        languageGroupKey: "sitemap-judgment",
+        decisionDate: "2016-01-01",
+        metadata: {
+          [PARTIAL_OBSERVATION_KEY]: {
+            [PARTIAL_OBSERVATION_FIELD.IS_LISTING_ONLY]: true,
+          },
+        },
+      }),
+      decision({
+        id: redacted,
+        caseNumber: "1 Cdo 1/2016",
+        languageGroupKey: "sitemap-judgment",
+        decisionDate: "2016-01-01",
+        redactedAt: new Date("2016-03-01"),
+        fulltext: null,
+        documentAst: null,
+        sections: null,
+        contentHash: null,
+      }),
+      decision({
+        id: judgment,
+        caseNumber: "1 Cdo 1/2016",
+        decisionType: "judgment",
+        languageGroupKey: "sitemap-judgment",
+        decisionDate: "2016-01-01",
+      }),
+      decision({
+        id: translation,
+        caseNumber: "1 Cdo 1/2016",
+        decisionType: "judgment",
+        language: "en",
+        languageGroupKey: "sitemap-judgment",
+        decisionDate: "2016-02-01",
+      }),
+      decision({
+        id: opinion,
+        caseNumber: "1 Cdo 1/2016",
+        decisionType: "opinion",
+        languageGroupKey: "sitemap-opinion",
+        decisionDate: "2016-01-01",
+      }),
+      decision({
+        id: opinionTranslation,
+        caseNumber: "1 Cdo 1/2016",
+        decisionType: "opinion",
+        language: "en",
+        languageGroupKey: "sitemap-opinion",
+        decisionDate: "2016-02-01",
+      }),
+    ];
+    // Settle changes an earlier run left logged before these versions are inserted.
+    await refreshUntilDone(refreshDb);
+    await db.insert(caseLawDecisions).values(
+      versions.map((version) => ({
+        ...version,
+        sourceDocumentId: version.id,
+      })),
+    );
+    try {
+      await refreshUntilDone(refreshDb);
+      const shards = (await listedShards()).filter(
+        ({ year }) => year === "2016",
+      );
+      expect(shards.map(({ month }) => month)).toEqual(["01"]);
+      const counts = await db
+        .select({ total: caseLawSitemapShards.total })
+        .from(caseLawSitemapShards)
+        .where(eq(caseLawSitemapShards.year, "2016"));
+      expect(counts).toEqual([{ total: 2 }]);
+      // Every listed file is read, and the month only a translation would
+      // occupy is not listed. Deduplicating after cutting cannot pass this.
+      const served = [
+        ...(await servedMonth("2016", "01")),
+        ...(await servedMonth("2016", "02")),
+      ];
+      expect(served.toSorted()).toEqual([judgment, opinion].toSorted());
+      expect(
+        await listSitemapShardDecisionsHandler(
+          { country: "cze", year: "2016", month: "02", bucket: "all" },
+          caseLawDb,
+        ),
+      ).toMatchObject({ code: 404 });
+      await db
+        .delete(caseLawDecisions)
+        .where(eq(caseLawDecisions.id, judgment));
+      await refreshUntilDone(refreshDb);
+      expect(
+        (await listedShards())
+          .filter(({ year }) => year === "2016")
+          .map(({ month }) => month)
+          .toSorted(),
+      ).toEqual(["01", "02"]);
+    } finally {
+      await db
+        .delete(caseLawDecisions)
+        .where(inArray(caseLawDecisions.id, ids));
+    }
+  },
+  propertyTestTimeout(DB_TEST_TIMEOUT_MS),
+);
+
+// timeout: each mutation and refresh executes on the embedded PostgreSQL engine.
+test(
+  "language representative handoff invalidates earlier and later months",
+  async () => {
+    const ids = [
+      createSafeId<"caseLawDecision">(),
+      createSafeId<"caseLawDecision">(),
+    ].toSorted();
+    const [earlierId, laterId] = ids;
+    if (!earlierId || !laterId) {
+      panic("Expected two language ids");
+    }
+    const group = `handoff-${earlierId}`;
+    await refreshUntilDone(refreshDb);
+    try {
+      await db.insert(caseLawDecisions).values({
+        ...decision({
+          id: laterId,
+          languageGroupKey: group,
+          decisionDate: "2017-02-01",
+        }),
+        sourceDocumentId: laterId,
+      });
+      await refreshUntilDone(refreshDb);
+      await db.insert(caseLawDecisions).values({
+        ...decision({
+          id: earlierId,
+          languageGroupKey: group,
+          decisionDate: "2017-01-01",
+        }),
+        sourceDocumentId: earlierId,
+      });
+      await refreshUntilDone(refreshDb);
+      expect(
+        (await listedShards())
+          .filter(({ year }) => year === "2017")
+          .map(({ month }) => month),
+      ).toEqual(["01"]);
+      await db
+        .update(caseLawDecisions)
+        .set({ decisionDate: "2017-03-01" })
+        .where(eq(caseLawDecisions.id, earlierId));
+      await refreshUntilDone(refreshDb);
+      expect(
+        (await listedShards())
+          .filter(({ year }) => year === "2017")
+          .map(({ month }) => month),
+      ).toEqual(["03"]);
+      await db
+        .delete(caseLawDecisions)
+        .where(eq(caseLawDecisions.id, earlierId));
+      await refreshUntilDone(refreshDb);
+      expect(
+        (await listedShards())
+          .filter(({ year }) => year === "2017")
+          .map(({ month }) => month),
+      ).toEqual(["02"]);
+    } finally {
+      await db
+        .delete(caseLawDecisions)
+        .where(inArray(caseLawDecisions.id, ids));
+    }
+  },
+  propertyTestTimeout(DB_TEST_TIMEOUT_MS),
+);
+
+type Operation =
+  | { kind: "insert"; month: number; dated: boolean; closed: boolean }
+  | { kind: "delete"; pick: number }
+  | { kind: "redate"; pick: number; month: number }
+  | { kind: "redact"; pick: number }
+  | { kind: "listingOnly"; pick: number }
+  | { kind: "touch"; pick: number }
+  | { kind: "advance"; pick: number }
+  | { kind: "country"; pick: number }
+  | { kind: "gate" }
+  | { kind: "refresh" }
+  | { kind: "fold" };
+
+const operation: fc.Arbitrary<Operation> = fc.oneof(
+  fc.record({
+    kind: fc.constant("insert" as const),
+    month: fc.integer({ min: 1, max: 4 }),
+    dated: fc.boolean(),
+    closed: fc.boolean(),
+  }),
+  fc.record({ kind: fc.constant("delete" as const), pick: fc.nat() }),
+  fc.record({
+    kind: fc.constant("redate" as const),
+    pick: fc.nat(),
+    month: fc.integer({ min: 1, max: 4 }),
+  }),
+  fc.record({ kind: fc.constant("redact" as const), pick: fc.nat() }),
+  fc.record({ kind: fc.constant("listingOnly" as const), pick: fc.nat() }),
+  fc.record({ kind: fc.constant("touch" as const), pick: fc.nat() }),
+  fc.record({ kind: fc.constant("advance" as const), pick: fc.nat() }),
+  fc.record({ kind: fc.constant("country" as const), pick: fc.nat() }),
+  fc.record({ kind: fc.constant("gate" as const) }),
+  fc.record({ kind: fc.constant("refresh" as const) }),
+  fc.record({ kind: fc.constant("fold" as const) }),
+);
+
+test(
+  "any sequence of writes interleaved with refreshes ends equal to a full recount",
+  async () => {
+    await refreshUntilDone(refreshDb);
+    const pool: SafeId<"caseLawDecision">[] = [];
+    let stamp = 0;
+    const picked = (pick: number) =>
+      pool.length === 0 ? undefined : pool[pick % pool.length];
+    const flip = async (
+      id: SafeId<"caseLawDecision"> | undefined,
+      column: "redactedAt" | "metadata",
+    ) => {
+      if (id === undefined) {
+        return;
+      }
+      const [row] = await db
+        .select({
+          redactedAt: caseLawDecisions.redactedAt,
+          metadata: caseLawDecisions.metadata,
+        })
+        .from(caseLawDecisions)
+        .where(eq(caseLawDecisions.id, id));
+      if (row === undefined) {
+        return;
+      }
+      await updateOne(
+        id,
+        column === "redactedAt"
+          ? {
+              redactedAt:
+                row.redactedAt === null
+                  ? new Date("2026-01-01T00:00:00.000Z")
+                  : null,
+            }
+          : {
+              metadata:
+                isRecord(row.metadata) &&
+                PARTIAL_OBSERVATION_KEY in row.metadata
+                  ? {}
+                  : LISTING_ONLY_METADATA,
+            },
+      );
+    };
+    const apply = async (step: Operation) => {
+      stamp += 1;
+      switch (step.kind) {
+        case "insert":
+          pool.push(
+            await insertOne({
+              country: "XPR",
+              decisionDate: step.dated ? `2011-0${step.month}-15` : null,
+              language: "xx",
+              sourceId: step.closed ? closedSourceId : openSourceId,
+            }),
+          );
+          return;
+        case "delete": {
+          const id = picked(step.pick);
+          if (id !== undefined) {
+            pool.splice(pool.indexOf(id), 1);
+            await db
+              .delete(caseLawDecisions)
+              .where(eq(caseLawDecisions.id, id));
+          }
+          return;
+        }
+        case "redate": {
+          const id = picked(step.pick);
+          if (id !== undefined) {
+            await updateOne(id, { decisionDate: `2011-0${step.month}-20` });
+          }
+          return;
+        }
+        case "redact":
+          await flip(picked(step.pick), "redactedAt");
+          return;
+        case "listingOnly":
+          await flip(picked(step.pick), "metadata");
+          return;
+        case "touch": {
+          const id = picked(step.pick);
+          if (id !== undefined) {
+            await updateOne(id, {
+              updatedAt: new Date(Date.UTC(2026, 5, 1, 0, 0, stamp)),
+            });
+          }
+          return;
+        }
+        case "advance": {
+          // Only updated_at, and only forward: queued as a touch, not a month.
+          const id = picked(step.pick);
+          if (id !== undefined) {
+            await db.execute(sql`
+              UPDATE ${caseLawDecisions}
+              SET updated_at = updated_at + make_interval(secs => ${stamp} + 0.000321)
+              WHERE id = ${id}
+            `);
+          }
+          return;
+        }
+        case "country": {
+          const id = picked(step.pick);
+          if (id !== undefined) {
+            const [row] = await db
+              .select({ country: caseLawDecisions.country })
+              .from(caseLawDecisions)
+              .where(eq(caseLawDecisions.id, id));
+            await updateOne(id, {
+              country: row?.country === "XPR" ? "XPQ" : "XPR",
+            });
+          }
+          return;
+        }
+        case "gate": {
+          const [source] = await db
+            .select({ descriptor: caseLawSources.descriptor })
+            .from(caseLawSources)
+            .where(eq(caseLawSources.id, closedSourceId));
+          await db
+            .update(caseLawSources)
+            .set({
+              descriptor:
+                source?.descriptor === null
+                  ? CLOSED_DESCRIPTOR
+                  : OPEN_DESCRIPTOR,
+            })
+            .where(eq(caseLawSources.id, closedSourceId));
+          return;
+        }
+        case "fold":
+          // One small governed batch between writes and month refreshes.
+          await foldOnce(1);
+          return;
+        case "refresh":
+          await refreshCaseLawSitemapShards(refreshDb, { clock: spentClock() });
+          return;
+        default:
+          step satisfies never;
+      }
+    };
+    await assertProperty(
+      "any sequence of writes interleaved with refreshes ends equal to a full recount",
+      fc.asyncProperty(
+        fc.array(operation, { minLength: 1, maxLength: 12 }),
+        async (steps) => {
+          for (const step of steps) {
+            // db-await-in-loop: the writes run in the generated order, each its own transaction
+            await apply(step);
+          }
+          await refreshUntilDone(refreshDb);
+          expect(await snapshot()).toEqual(await fullRecount());
+          expect(await loggedMonths()).toEqual([]);
+          expect(await queuedTouches()).toBe(0);
+        },
+      ),
+      { numRuns: 25 },
+    );
+  },
+  propertyTestTimeout(DB_TEST_TIMEOUT_MS * 3), // timeout: 25 generated write sequences, each refreshed and recounted on an embedded Postgres
+);
+
+// timeout: seeds language alternates past one range and reads every range in embedded PostgreSQL.
+test(
+  "language versions count toward the cut as decisions read, and each listed one keeps its alternates",
+  async () => {
+    // Two language versions per document: the month holds more decisions
+    // than one range, though it lists fewer documents than that.
+    const documents = Math.ceil((SITEMAP_RANGE_ROWS + 100) / 2);
+    await db.execute(sql`
+      INSERT INTO case_law_decisions
+        (id, source_id, case_number, court, country, language, language_group_key, decision_date, updated_at)
+      SELECT md5('sitemap-weighted-' || i::text || language)::uuid, ${openSourceId}::uuid,
+        'sitemap-weighted-' || i::text || '-' || language, 'Fixture court', 'CZE', language,
+        'sitemap-weighted-' || i::text, '2025-01-15'::date, '2025-02-01'::timestamptz
+      FROM generate_series(1, ${documents}::int) AS i CROSS JOIN (VALUES ('cs'), ('en')) AS languages(language)
+    `);
+    await refreshUntilDone(refreshDb);
+    expect(await snapshot()).toEqual(await fullRecount());
+    const ranges = (await listedShards()).filter(
+      ({ year, month }) => year === "2025" && month === "01",
+    );
+    expect(ranges.map(({ bucket }) => bucket)).toEqual(["0000", "0001"]);
+    const items: { id: string; languageAlternates: readonly unknown[] }[] = [];
+    for (const shard of ranges) {
+      // db-await-in-loop: one shard read per listed file, as a crawler would fetch them
+      const page = await listSitemapShardDecisionsHandler(shard, caseLawDb);
+      if (!("items" in page)) {
+        panic("Expected every range of the multilingual month to be readable");
+      }
+      items.push(...page.items);
+    }
+    expect(new Set(items.map(({ id }) => id)).size).toBe(documents);
+    expect(items).toHaveLength(documents);
+    expect(
+      items.every(({ languageAlternates }) => languageAlternates.length === 2),
+    ).toBe(true);
+  },
+  propertyTestTimeout(DB_TEST_TIMEOUT_MS),
+);

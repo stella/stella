@@ -11,17 +11,24 @@
 
 import { Result } from "better-result";
 
+import { legalFileFormat } from "@stll/api-contract/document-format";
 import { resolveEmailMimeType } from "@stll/api-contract/email-mime-types";
 import { OFFICE_ARCHIVE_FORMATS } from "@stll/docx-utils/office-formats";
 
 import { captureError } from "@/api/lib/analytics/capture";
 import {
-  extractionWorkerErrorCode,
+  EXTRACTION_WORKER_ERROR_CODE,
   ExtractionWorkerError,
+  extractionWorkerErrorCode,
   SUBPROCESS_TERMINATION_REASON,
 } from "@/api/lib/errors/tagged-errors";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
+import {
+  DOCUMENT_ARCHIVE_MAX_BYTES,
+  isDocumentArchiveMimeType,
+} from "@/api/lib/files/archive-preview-protocol";
 import { LIMITS } from "@/api/lib/limits";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { logger } from "@/api/lib/observability/logger";
 import {
   resolveRuntimeWorkerPath,
@@ -34,7 +41,9 @@ import {
 import {
   ATTACHMENT_EXTRACTION_OUTCOME,
   parseAttachmentIssues,
+  STANDALONE_ATTACHMENT_MODE,
 } from "@/api/lib/search/extraction-worker-attachments";
+import { parseWorkerErrorClass } from "@/api/lib/search/extraction-worker-error";
 import { spawnWorker } from "@/api/lib/subprocess";
 import {
   DOC_MIME_TYPE,
@@ -45,7 +54,7 @@ import {
   XLS_MIME_TYPE,
 } from "@/api/mime-types";
 
-const WORKER_PATH = resolveRuntimeWorkerPath({
+export const EXTRACTION_WORKER_PATH = resolveRuntimeWorkerPath({
   outputFile: RUNTIME_WORKER_FILES.extraction,
   sourceDir: import.meta.dir,
   sourceFile: "extraction-worker.ts",
@@ -89,6 +98,10 @@ export const resolveExtractionMimeType = ({
   fileName: string;
   mimeType: string;
 }): string => {
+  const legal = legalFileFormat(mimeType, fileName);
+  if (legal) {
+    return legal.mimeType;
+  }
   const normalized = normalizeMimeType(mimeType);
   if (canExtractMimeType(normalized)) {
     return normalized;
@@ -130,25 +143,58 @@ const reportAttachmentIssues = (stderr: string, mimeType: string): void => {
 };
 
 type ExtractFileTextResultOptions = {
+  /**
+   * Characters of text the worker keeps; the rest is cut. A caller that must
+   * refuse an over-long text instead of storing it cut short asks for one
+   * character past its own limit and refuses when it gets that many.
+   */
+  maxChars?: number;
+  /** Standalone chat uploads have no separately filed attachment documents. */
+  includeContainerAttachments?: boolean;
   signal?: AbortSignal;
   timeoutMs?: number;
 };
 
 export const extractFileTextResult = async (
-  { bytes: buffer, mimeType }: ScannedFile,
+  { bytes: buffer, mimeType, fileName }: ScannedFile,
   {
+    maxChars = LIMITS.extractedContentMaxChars,
+    includeContainerAttachments = false,
     signal,
     timeoutMs = LIMITS.extractionTimeoutMs,
   }: ExtractFileTextResultOptions = {},
 ): Promise<Result<string | null, ExtractionWorkerError>> => {
-  const normalizedMimeType = normalizeMimeType(mimeType);
+  const normalizedMimeType =
+    legalFileFormat(mimeType, fileName)?.mimeType ??
+    normalizeMimeType(mimeType);
   if (!canExtractMimeType(normalizedMimeType)) {
     return Result.ok(null);
   }
 
+  if (
+    isDocumentArchiveMimeType(normalizedMimeType) &&
+    buffer.byteLength > DOCUMENT_ARCHIVE_MAX_BYTES
+  ) {
+    return Result.err(
+      new ExtractionWorkerError({
+        code: EXTRACTION_WORKER_ERROR_CODE.parser,
+        message: "The document exceeds the archive reading limit",
+        exitCode: null,
+        mimeType: normalizedMimeType,
+        sizeBytes: buffer.byteLength,
+        termination: null,
+        workerErrorClass: null,
+      }),
+    );
+  }
+
   const result = await spawnWorker({
-    workerPath: WORKER_PATH,
-    args: [normalizedMimeType],
+    workerPath: EXTRACTION_WORKER_PATH,
+    args: [
+      normalizedMimeType,
+      String(maxChars),
+      ...(includeContainerAttachments ? [STANDALONE_ATTACHMENT_MODE] : []),
+    ],
     ...(signal ? { signal } : {}),
     stdin: new Blob([buffer]),
     timeoutMs,
@@ -172,6 +218,7 @@ export const extractFileTextResult = async (
       mimeType: normalizedMimeType,
       sizeBytes: buffer.byteLength,
       termination,
+      workerErrorClass: parseWorkerErrorClass(result.error.message),
     });
     return Result.err(error);
   }
@@ -187,8 +234,9 @@ export const extractFileTextResult = async (
 export const extractFileText = async (
   file: ScannedFile,
   context?: Record<string, string>,
+  options: Pick<ExtractFileTextResultOptions, "maxChars"> = {},
 ): Promise<string | null> => {
-  const first = await extractFileTextResult(file);
+  const first = await extractFileTextResult(file, options);
   if (!Result.isError(first)) {
     return first.value;
   }
@@ -198,11 +246,14 @@ export const extractFileText = async (
   // before giving up; there is no queue behind it to requeue into.
   const retryable =
     first.error.termination?.reason === SUBPROCESS_TERMINATION_REASON.external;
-  const result = retryable ? await extractFileTextResult(file) : first;
+  const result = retryable ? await extractFileTextResult(file, options) : first;
   if (!Result.isError(result)) {
     return result.value;
   }
 
-  captureError(result.error, context);
+  captureError(
+    result.error,
+    handlerErrorContext("search.extractFileText.result_error", context),
+  );
   return null;
 };

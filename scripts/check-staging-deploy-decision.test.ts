@@ -1,12 +1,10 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { chmod, mkdtemp, rm } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-// The staging gate decides, per dispatch, whether to deploy or skip.
-// Reading that decision out of the workflow text only proves the words are
-// there, so this runs the real script instead: a dispatch while staging is
-// off must stay green without deploying.
+// Execute workflow scripts against fixture boundaries so an off staging
+// cannot report success and status writes use the selected deploy commit.
 
 const WORKFLOW_URL = new URL(
   "../.github/workflows/deploy-staging.yml",
@@ -16,18 +14,27 @@ const STAGING_SETUP_URL = new URL(
   "../apps/web/e2e/staging/global-setup.ts",
   import.meta.url,
 );
+const RESOLVER_URL = new URL("resolve-staging-deploy-sha.sh", import.meta.url);
+const STATUS_WRITER = path.resolve(
+  import.meta.dirname,
+  "post-staging-verification.sh",
+);
 const TIP_SHA = "a".repeat(40);
 const OTHER_SHA = "b".repeat(40);
 
 const extractDecideScript = (workflow: string) => {
-  const stepStart = workflow.indexOf("      - name: Decide deploy or skip\n");
-  const jobEnd = workflow.indexOf("\n  build-api:\n", stepStart);
+  const stepStart = workflow.indexOf(
+    "      - name: Decide whether staging can deploy\n",
+  );
   const runStart = workflow.indexOf("run: |\n", stepStart);
-  if (stepStart === -1 || jobEnd === -1 || runStart === -1) {
+  // The step is the last of its job: its body ends at the next job-level line.
+  const bodyStart = runStart + "run: |\n".length;
+  const nextJobLine = /^ {0,2}\S/mu.exec(workflow.slice(bodyStart));
+  if (stepStart === -1 || runStart === -1 || nextJobLine === null) {
     throw new Error("deploy-staging.yml no longer exposes the decide step");
   }
 
-  const body = workflow.slice(runStart + "run: |\n".length, jobEnd);
+  const body = workflow.slice(bodyStart, bodyStart + nextJobLine.index);
   const indents = body
     .split("\n")
     .filter((line) => line.trim().length > 0)
@@ -67,31 +74,77 @@ const extractStepScript = (
 
 type DecisionCase = {
   deployWhenUnreachable?: boolean;
+  releaseCandidate?: boolean;
   status: "not_ready" | "ready";
+  script?: string;
+  statusWriteExitCode?: number;
+  statusOwnerRun?: number;
 };
 
-type Decision = { deploy: string; exitCode: number; summary: string };
+type Decision = {
+  deploy: string;
+  wake: string;
+  exitCode: number;
+  summary: string;
+  calls: string;
+};
+
+const statusWrites = (calls: string) =>
+  calls
+    .split("\n")
+    .filter(
+      (line) =>
+        line.includes("repos/stella/stella/statuses/") &&
+        line.includes("--method POST"),
+    );
 
 let workspace = "";
 let scriptPath = "";
 let probeScriptPath = "";
-let currentScriptPath = "";
+let recordScriptPath = "";
+let fixtureRepo = "";
+let baseSha = "";
+let mainSha = "";
+let sideSha = "";
 
 const runDecision = async ({
   deployWhenUnreachable = false,
+  releaseCandidate = false,
   status,
+  script = scriptPath,
+  statusWriteExitCode = 0,
+  statusOwnerRun = 9,
 }: DecisionCase): Promise<Decision> => {
   const outputPath = path.join(workspace, `output-${Bun.randomUUIDv7()}.txt`);
   const summaryPath = path.join(workspace, `summary-${Bun.randomUUIDv7()}.md`);
-  await Promise.all([Bun.write(outputPath, ""), Bun.write(summaryPath, "")]);
+  const callsPath = path.join(
+    workspace,
+    `decision-calls-${Bun.randomUUIDv7()}.txt`,
+  );
+  await Promise.all([
+    Bun.write(outputPath, ""),
+    Bun.write(summaryPath, ""),
+    Bun.write(callsPath, ""),
+  ]);
 
-  const result = Bun.spawnSync(["bash", scriptPath], {
+  const result = Bun.spawnSync(["bash", script], {
     env: {
       ...process.env,
       DEPLOY_WHEN_UNREACHABLE: String(deployWhenUnreachable),
+      RELEASE_CANDIDATE: String(releaseCandidate),
       GITHUB_EVENT_NAME: "workflow_dispatch",
+      GH_TOKEN: "stub",
+      GH_RETRY_SCRIPT: path.resolve(import.meta.dirname, "gh-retry.sh"),
+      STAGING_STATUS_WRITER: STATUS_WRITER,
+      GITHUB_REPOSITORY: "stella/stella",
+      GITHUB_RUN_ID: "9",
+      GITHUB_SERVER_URL: "https://github.com",
+      PATH: `${workspace}:${process.env["PATH"] ?? ""}`,
+      STUB_CALLS_PATH: callsPath,
+      STUB_GH_EXIT_CODE: String(statusWriteExitCode),
+      STUB_STATUS_OWNER_RUN: String(statusOwnerRun),
       GITHUB_OUTPUT: outputPath,
-      GITHUB_SHA: TIP_SHA,
+      DEPLOY_SHA: TIP_SHA,
       GITHUB_STEP_SUMMARY: summaryPath,
       STATUS: status,
     },
@@ -102,10 +155,14 @@ const runDecision = async ({
     .split("\n")
     .findLast((line) => line.startsWith("deploy="));
 
+  const wake = output.split("\n").findLast((line) => line.startsWith("wake="));
+
   return {
     deploy: deploy ?? "",
+    wake: wake ?? "",
     exitCode: result.exitCode,
     summary: await Bun.file(summaryPath).text(),
+    calls: await Bun.file(callsPath).text(),
   };
 };
 
@@ -155,34 +212,80 @@ const runProbe = async ({
   };
 };
 
-const runCurrentCheck = async (currentSha: string) => {
-  const outputPath = path.join(
-    workspace,
-    `current-output-${Bun.randomUUIDv7()}.txt`,
+const git = (...args: string[]) => {
+  const result = Bun.spawnSync(
+    [
+      "git",
+      "-c",
+      "user.name=test",
+      "-c",
+      "user.email=test@example.com",
+      "-c",
+      "commit.gpgsign=false",
+      "-c",
+      "core.hooksPath=/dev/null",
+      ...args,
+    ],
+    { cwd: fixtureRepo },
   );
-  const summaryPath = path.join(
-    workspace,
-    `current-summary-${Bun.randomUUIDv7()}.md`,
+  if (result.exitCode !== 0) {
+    throw new Error(
+      `git ${args.join(" ")} failed: ${result.stderr.toString()}`,
+    );
+  }
+  return result.stdout.toString().trim();
+};
+
+const commit = (message: string) => {
+  git("commit", "--allow-empty", "-qm", message);
+  return git("rev-parse", "HEAD");
+};
+
+const resolve = (requested: string) => {
+  const result = Bun.spawnSync(
+    ["bash", Bun.fileURLToPath(RESOLVER_URL), "--sha", requested],
+    { cwd: fixtureRepo },
   );
-  await Promise.all([Bun.write(outputPath, ""), Bun.write(summaryPath, "")]);
-
-  const result = Bun.spawnSync(["bash", currentScriptPath], {
-    env: {
-      ...process.env,
-      GH_TOKEN: "stub",
-      GITHUB_OUTPUT: outputPath,
-      GITHUB_REPOSITORY: "stella/stella",
-      GITHUB_SHA: TIP_SHA,
-      GITHUB_STEP_SUMMARY: summaryPath,
-      PATH: `${workspace}:${process.env["PATH"] ?? ""}`,
-      STUB_CURRENT_SHA: currentSha,
-    },
-  });
-
   return {
     exitCode: result.exitCode,
-    output: await Bun.file(outputPath).text(),
-    summary: await Bun.file(summaryPath).text(),
+    stderr: result.stderr.toString(),
+    stdout: result.stdout.toString(),
+  };
+};
+
+const runRecord = async (deploySha: string, statusOwnerRun = 9) => {
+  const callsPath = path.join(workspace, `gh-calls-${Bun.randomUUIDv7()}`);
+  await Bun.write(callsPath, "");
+  const result = Bun.spawnSync(["bash", recordScriptPath], {
+    env: {
+      ...process.env,
+      API_SMOKE: "success",
+      DEPLOYMENT_ID: "1",
+      DEPLOY_SHA: deploySha,
+      GH_TOKEN: "stub",
+      GH_RETRY_SCRIPT: path.resolve(import.meta.dirname, "gh-retry.sh"),
+      STAGING_STATUS_WRITER: STATUS_WRITER,
+      GITHUB_REPOSITORY: "stella/stella",
+      GITHUB_RUN_ID: "9",
+      GITHUB_SERVER_URL: "https://github.com",
+      JOB_STATUS: "success",
+      PROOF_READINESS: "ready",
+      PROOF_ENVIRONMENT: "ready",
+      MCP_SMOKE: "success",
+      CORPUS_PREFLIGHT: "success",
+      CORPUS_SEARCH_WAIVED: "false",
+      WAIVE_REASON: "",
+      PATH: `${workspace}:${process.env["PATH"] ?? ""}`,
+      STUB_CALLS_PATH: callsPath,
+      STUB_STATUS_OWNER_RUN: String(statusOwnerRun),
+      WEB_SMOKE: "success",
+      DEPLOYED_JOURNEYS: "success",
+      MOCK_JOURNEYS: "success",
+    },
+  });
+  return {
+    calls: await Bun.file(callsPath).text(),
+    exitCode: result.exitCode,
   };
 };
 
@@ -190,7 +293,7 @@ beforeAll(async () => {
   workspace = await mkdtemp(path.join(tmpdir(), "staging-deploy-decision-"));
   scriptPath = path.join(workspace, "decide.sh");
   probeScriptPath = path.join(workspace, "probe.sh");
-  currentScriptPath = path.join(workspace, "current.sh");
+  recordScriptPath = path.join(workspace, "record.sh");
 
   const workflow = await Bun.file(WORKFLOW_URL).text();
   const script = extractDecideScript(workflow);
@@ -204,28 +307,61 @@ beforeAll(async () => {
       "\n      # Staging that does not answer",
     ),
   );
-  await Bun.write(
-    currentScriptPath,
-    extractStepScript(
-      workflow,
-      "Confirm this SHA is still main",
-      "\n      - name: Check staging deployment target",
-    ),
+  const recordStart = workflow.indexOf(
+    "      - name: Record staging verification\n",
   );
-  // Stands in for the main-tip read the promotion job makes.
-  const stub = path.join(workspace, "gh");
+  const recordRun = workflow.indexOf("run: |\n", recordStart);
+  if (recordStart === -1 || recordRun === -1) {
+    throw new Error(
+      "deploy-staging.yml no longer records staging verification",
+    );
+  }
+  const recordBody = workflow.slice(recordRun + "run: |\n".length);
   await Bun.write(
-    stub,
+    recordScriptPath,
+    recordBody
+      .split("\n")
+      .map((line) => line.slice("          ".length))
+      .join("\n"),
+  );
+  // Records each status or deployment write the verification step makes.
+  const ghStub = path.join(workspace, "gh");
+  await Bun.write(
+    ghStub,
     `#!/usr/bin/env bash
-for arg in "$@"; do
-  case "$arg" in
-    *"/git/ref/heads/main"*) echo "\${STUB_CURRENT_SHA:-${TIP_SHA}}"; exit 0 ;;
-  esac
-done
-exit 0
+set -euo pipefail
+if [[ " $* " == *" --method POST "* ]]; then
+  printf '%s %s\\n' "$*" "$(jq -c .)" >> "$STUB_CALLS_PATH"
+  exit "\${STUB_GH_EXIT_CODE:-0}"
+fi
+printf '%s\\n' "$*" >> "$STUB_CALLS_PATH"
+case "$*" in
+  *actions/workflows/deploy-staging.yml/runs?*)
+    jq -cn --arg sha "$DEPLOY_SHA" '{workflow_runs: [{id: 9, event: "workflow_dispatch", head_sha: $sha,
+      head_branch: "main", path: ".github/workflows/deploy-staging.yml",
+      display_title: ("Deploy main to staging " + $sha), repository: {full_name: "stella/stella"}}]}' ;;
+  *commits/*/statuses?*)
+    jq -cn --arg run "\${STUB_STATUS_OWNER_RUN:-9}" '[[{context: "staging/verified", state: "pending",
+      creator: {login: "github-actions[bot]", type: "Bot"},
+      target_url: ("https://github.com/stella/stella/actions/runs/" + $run)}]]' ;;
+  *) echo "Unexpected fixture GET: $*" >&2; exit 1 ;;
+esac
 `,
   );
-  await chmod(stub, 0o755);
+  await chmod(ghStub, 0o755);
+
+  // Base and tip on main, plus a commit main does not contain.
+  fixtureRepo = path.join(workspace, "repo");
+  await mkdir(fixtureRepo);
+  git("init", "-q", "-b", "main");
+  baseSha = commit("base");
+  mainSha = commit("tip");
+  const origin = path.join(workspace, "origin.git");
+  git("init", "--bare", "-q", "-b", "main", origin);
+  git("remote", "add", "origin", origin);
+  git("push", "-q", "origin", "main");
+  git("checkout", "-q", "-b", "side", baseSha);
+  sideSha = commit("side");
 
   const curlStub = path.join(workspace, "curl");
   await Bun.write(
@@ -259,7 +395,10 @@ printf '%s' "$STUB_HEALTH_STATUS"
   await chmod(curlStub, 0o755);
 
   const sleepStub = path.join(workspace, "sleep");
-  await Bun.write(sleepStub, "#!/usr/bin/env bash\nexit 0\n");
+  await Bun.write(
+    sleepStub,
+    '#!/usr/bin/env bash\nif [[ "$1" -gt 10 ]]; then exec /bin/sleep "$@"; fi\nexit 0\n',
+  );
   await chmod(sleepStub, 0o755);
 });
 
@@ -275,10 +414,13 @@ describe("staging deploy decision", () => {
     });
   });
 
-  test("skips cleanly while staging is off", async () => {
+  test("refuses a green dispatch without deployment and records staging off", async () => {
     const result = await runDecision({ status: "not_ready" });
 
-    expect(result).toMatchObject({ deploy: "deploy=false", exitCode: 0 });
+    expect(result).toMatchObject({ deploy: "deploy=false", exitCode: 1 });
+    expect(statusWrites(result.calls)).toEqual([
+      `api repos/stella/stella/statuses/${TIP_SHA} --method POST --input - {"state":"error","context":"staging/verified","description":"staging off","target_url":"https://github.com/stella/stella/actions/runs/9"}`,
+    ]);
     expect(result.summary).toContain("Staging is off");
     expect(result.summary).toContain(TIP_SHA);
   });
@@ -287,6 +429,121 @@ describe("staging deploy decision", () => {
     expect(
       await runDecision({ deployWhenUnreachable: true, status: "not_ready" }),
     ).toMatchObject({ deploy: "deploy=true", exitCode: 0 });
+  });
+
+  test("a failed status write cannot turn an off dispatch green", async () => {
+    const result = await runDecision({
+      status: "not_ready",
+      statusWriteExitCode: 7,
+    });
+    expect(result.exitCode).toBe(7);
+    expect(result.deploy).toBe("deploy=false");
+    expect(result.calls).toContain(`statuses/${TIP_SHA}`);
+    expect(statusWrites(result.calls)).toHaveLength(1);
+  });
+
+  test("an off dispatch stays refused without overwriting a newer run's status", async () => {
+    const result = await runDecision({
+      status: "not_ready",
+      statusOwnerRun: 10,
+    });
+    expect(result).toMatchObject({ deploy: "deploy=false", exitCode: 1 });
+    expect(statusWrites(result.calls)).toEqual([]);
+    expect(result.calls).toContain(
+      "actions/workflows/deploy-staging.yml/runs?",
+    );
+    expect(result.calls).toContain(`commits/${TIP_SHA}/statuses?`);
+  });
+
+  test("hands an off staging to the wake job for a release candidate only", async () => {
+    const candidate = await runDecision({
+      releaseCandidate: true,
+      status: "not_ready",
+    });
+    expect(candidate).toMatchObject({
+      deploy: "deploy=false",
+      exitCode: 0,
+      wake: "wake=true",
+      calls: "",
+    });
+
+    const ordinary = await runDecision({ status: "not_ready" });
+    expect(ordinary).toMatchObject({
+      deploy: "deploy=false",
+      exitCode: 1,
+      wake: "",
+    });
+    expect(ordinary.calls).toContain('"description":"staging off"');
+
+    for (const decision of [
+      await runDecision({ releaseCandidate: true, status: "ready" }),
+      await runDecision({
+        deployWhenUnreachable: true,
+        releaseCandidate: true,
+        status: "not_ready",
+      }),
+    ]) {
+      expect(decision).toMatchObject({ deploy: "deploy=true", wake: "" });
+    }
+  });
+
+  test("every successful decision selects deployment or the wake", async () => {
+    for (const status of ["ready", "not_ready"] as const) {
+      for (const deployWhenUnreachable of [false, true]) {
+        for (const releaseCandidate of [false, true]) {
+          const result = await runDecision({
+            status,
+            deployWhenUnreachable,
+            releaseCandidate,
+          });
+          expect(
+            statusWrites(result.calls).length === 0,
+            "only a refusal writes a status",
+          ).toBe(result.exitCode === 0);
+          if (result.exitCode !== 0) {
+            expect(result.deploy).toBe("deploy=false");
+            expect(result.exitCode).toBe(1);
+            expect(releaseCandidate).toBe(false);
+          } else if (result.wake === "wake=true") {
+            expect(result.deploy).toBe("deploy=false");
+            expect(releaseCandidate).toBe(true);
+          } else {
+            expect(result.deploy).toBe("deploy=true");
+          }
+        }
+      }
+    }
+  });
+
+  test("restoring the former green skip breaks the decision contract", async () => {
+    const script = await Bun.file(scriptPath).text();
+    const mutated = script.replace(/exit 1\s*$/u, "exit 0\n");
+    expect(mutated).not.toBe(script);
+    const mutationPath = path.join(workspace, "green-skip.sh");
+    await Bun.write(mutationPath, mutated);
+    const assertRefusal = (result: Decision) =>
+      expect(result.exitCode, "staging off must fail").toBe(1);
+    assertRefusal(await runDecision({ status: "not_ready" }));
+    const result = await runDecision({
+      status: "not_ready",
+      script: mutationPath,
+    });
+    expect(() => assertRefusal(result)).toThrow("staging off must fail");
+  });
+
+  test("the off status belongs to the selected source with confined write permission", async () => {
+    const workflow = await Bun.file(WORKFLOW_URL).text();
+    const start = workflow.indexOf("  staging-health:\n");
+    const end = workflow.indexOf("\n  staging-wake:", start);
+    const healthJob = workflow.slice(start, end);
+    expect(healthJob).toContain("if: github.ref == 'refs/heads/main'");
+    expect(healthJob).toContain("      statuses: write");
+    expect(healthJob).toContain(`GH_TOKEN: \${{ github.token }}`);
+    expect(healthJob).toContain(
+      `DEPLOY_SHA: \${{ needs.resolve.outputs.sha }}`,
+    );
+    expect(workflow).toContain("needs.staging-health.outputs.deploy == 'true'");
+    expect(workflow).toContain('"$MCP_SMOKE" == "success"');
   });
 
   test("runs only when dispatched", async () => {
@@ -344,21 +601,107 @@ describe("staging readiness cutover", () => {
   });
 });
 
-describe("private promotion coalescing", () => {
-  test("allows the exact main tip to cross the private boundary", async () => {
-    expect(await runCurrentCheck(TIP_SHA)).toEqual({
+describe("staging deploy commit", () => {
+  test("deploys the main tip when no commit is pinned", () => {
+    expect(resolve("")).toEqual({
       exitCode: 0,
-      output: "promoted=true\n",
-      summary: "",
+      stderr: "",
+      stdout: `sha=${mainSha}\ntip=true\nmain-sha=${mainSha}\n`,
     });
   });
 
-  test("turns an obsolete completed build into a successful no-op", async () => {
-    const result = await runCurrentCheck(OTHER_SHA);
+  test("deploys a pinned first-parent commit after main moved on", () => {
+    expect(resolve(baseSha)).toEqual({
+      exitCode: 0,
+      stderr: "",
+      stdout: `sha=${baseSha}\ntip=false\nmain-sha=${mainSha}\n`,
+    });
+    expect(resolve(mainSha)).toEqual({
+      exitCode: 0,
+      stderr: "",
+      stdout: `sha=${mainSha}\ntip=true\nmain-sha=${mainSha}\n`,
+    });
+  });
+
+  test("refuses a pinned commit that main does not contain", () => {
+    const result = resolve(sideSha);
+
+    expect(result.exitCode).toBe(1);
+    expect(result.stdout).toBe("");
+    expect(result.stderr).toContain("STAGING_SHA_REFUSED");
+    expect(result.stderr).toBe(
+      `::error::STAGING_SHA_REFUSED: ${sideSha} is not on the first-parent history of origin/main (${mainSha})\n`,
+    );
+  });
+
+  test.each([
+    ["an abbreviated SHA", () => baseSha.slice(0, 12)],
+    ["an unknown SHA", () => OTHER_SHA],
+    ["a branch name", () => "main"],
+  ])("refuses %s", (_label, requested) => {
+    const result = resolve(requested());
+
+    expect(result.exitCode).toBe(1);
+    expect(result.stdout).toBe("");
+    expect(result.stderr).toContain("STAGING_SHA_REFUSED");
+  });
+
+  test("records staging/verified on the pinned commit", async () => {
+    const result = await runRecord(baseSha);
 
     expect(result.exitCode).toBe(0);
-    expect(result.output).toBe("promoted=false\n");
-    expect(result.summary).toContain("Skipping private promotion");
-    expect(result.summary).toContain(OTHER_SHA);
+    const writes = statusWrites(result.calls);
+    expect(writes).toHaveLength(1);
+    expect(writes[0]).toContain(`repos/stella/stella/statuses/${baseSha} `);
+    expect(writes[0]).toContain('"context":"staging/verified"');
+    expect(writes[0]).toContain('"state":"success"');
+  });
+
+  test("a completed older staging run leaves the newer verification owner unchanged", async () => {
+    const result = await runRecord(baseSha, 10);
+    expect(result.exitCode).toBe(0);
+    expect(statusWrites(result.calls)).toEqual([]);
+    expect(result.calls).toContain("deployments/1/statuses --method POST");
+  });
+
+  test("builds, promotes and verifies only the resolved commit", async () => {
+    const workflow = await Bun.file(WORKFLOW_URL).text();
+    const resolved = `\${{ needs.resolve.outputs.sha }}`;
+
+    // The run title identifies its input; deployment steps use the resolved SHA.
+    expect(workflow.replace(/^run-name:.*\n/mu, "")).not.toContain(
+      "github.sha",
+    );
+    expect(workflow).not.toContain("GITHUB_SHA");
+    expect(workflow).not.toContain("promoted=false");
+    expect(workflow).toContain(
+      'run: bash scripts/resolve-staging-deploy-sha.sh --sha "$REQUESTED_SHA" >> "$GITHUB_OUTPUT"',
+    );
+    expect(workflow).toContain(`REQUESTED_SHA: \${{ inputs.sha }}`);
+    for (const consumer of [
+      `ref: ${resolved}`,
+      `STELLA_COMMIT_SHA=${resolved}`,
+      `release-sha: ${resolved}`,
+      `git-sha: \${{ inputs.release_ref == '' && needs.resolve.outputs.sha || '' }}`,
+      `EXPECTED_COMMIT: ${resolved}`,
+      `DEPLOY_SHA: ${resolved}`,
+    ]) {
+      expect(workflow).toContain(consumer);
+    }
+    for (const job of [
+      "staging-health",
+      "rc-manifest",
+      "build-api",
+      "build-web",
+    ]) {
+      const start = workflow.indexOf(`\n  ${job}:\n`);
+      expect(start).toBeGreaterThanOrEqual(0);
+      expect(workflow.slice(start, workflow.indexOf("steps:", start))).toMatch(
+        /needs: (resolve|\[resolve, )/u,
+      );
+    }
+    expect(workflow).toContain(
+      "needs:\n      [resolve, staging-health, staging-wake, rc-manifest, build-api, build-web]",
+    );
   });
 });

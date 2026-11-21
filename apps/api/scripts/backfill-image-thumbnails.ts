@@ -1,3 +1,4 @@
+import { panic, Result, TaggedError } from "better-result";
 /**
  * Backfill image thumbnails + blur placeholders for uploads that predate the
  * thumbnail feature. Two independent passes:
@@ -17,29 +18,26 @@
  *   bun apps/api/scripts/backfill-image-thumbnails.ts entities # entity fields only
  *   bun apps/api/scripts/backfill-image-thumbnails.ts chat     # chat files only
  */
-
-import { panic, Result, TaggedError } from "better-result";
 import { and, inArray, isNull, sql } from "drizzle-orm";
+
+import { printError } from "@stll/errors";
 
 import { userFiles } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { openMaintenanceDb } from "@/api/lib/db/maintenance-db";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { enqueueImageThumbnailOrMarkFailed } from "@/api/lib/file-derivative-queue";
+import { createUserFileThumbnailKey } from "@/api/lib/file-key";
+import { deleteOrganizationFilesWithSignal } from "@/api/lib/files/delete-organization-file";
 import {
   generateImageThumbnail,
   THUMBNAIL_MIME_TYPE,
 } from "@/api/lib/files/image-derivative";
 import {
-  removeOrganizationFilesBytes,
+  type CheckedFileWrite,
   writeOrganizationFiles,
 } from "@/api/lib/files/organization-file-usage";
-import { createUserFileKey } from "@/api/lib/files/utils";
-import {
-  deleteS3ObjectWithSignal,
-  readS3ArrayBuffer,
-  writeS3ObjectWithRetry,
-} from "@/api/lib/s3";
+import { readS3ArrayBuffer, writeS3ObjectWithRetry } from "@/api/lib/s3";
 import {
   brandPersistedEntityId,
   brandPersistedFieldId,
@@ -48,6 +46,7 @@ import {
   brandValidatedWorkflowActorKey,
 } from "@/api/lib/safe-id-boundaries";
 import { sqlCaseFragment } from "@/api/lib/sql-case-expression";
+import { LegalHoldActiveError } from "@/api/lib/workspaces/legal-holds/errors";
 
 import { buildChatThumbnailQuery } from "./backfill-image-thumbnails.helpers";
 
@@ -72,27 +71,36 @@ type EntityFieldRow = {
 /** Bounds the cleanup delete; a stuck socket must not stall the backfill. */
 const THUMBNAIL_CLEANUP_TIMEOUT_MS = 15_000;
 
+/**
+ * Delete the batch's orphaned thumbnails in one call. Storage failures and
+ * held keys only warn (the objects stay recorded); a failed usage removal
+ * stops the backfill, since the byte count would drift.
+ */
 const deleteThumbnailsBestEffort = async (thumbnailKeys: string[]) => {
-  const deletedKeys: string[] = [];
-  for (const thumbnailKey of thumbnailKeys) {
-    const cleanup = await Result.tryPromise({
-      try: async () =>
-        await deleteS3ObjectWithSignal(
-          thumbnailKey,
-          AbortSignal.timeout(THUMBNAIL_CLEANUP_TIMEOUT_MS),
-        ),
-      catch: (cause) => cause,
-    });
-    if (Result.isError(cleanup)) {
-      console.warn(`  chat: thumbnail cleanup failed for ${thumbnailKey}`);
-      continue;
-    }
-    deletedKeys.push(thumbnailKey);
+  if (thumbnailKeys.length === 0) {
+    return;
   }
-  const removed = await removeOrganizationFilesBytes(deletedKeys);
-  if (Result.isError(removed)) {
-    throw removed.error;
+  const cleanup = await deleteOrganizationFilesWithSignal(
+    thumbnailKeys,
+    AbortSignal.timeout(THUMBNAIL_CLEANUP_TIMEOUT_MS),
+    { fileUsageDb: db },
+  );
+  if (Result.isOk(cleanup)) {
+    return;
   }
+  if (
+    LegalHoldActiveError.is(cleanup.error) ||
+    cleanup.error.reason === "storage_unavailable"
+  ) {
+    console.warn(
+      `  chat: thumbnail cleanup failed for ${String(thumbnailKeys.length)} key(s)`,
+    );
+    return;
+  }
+  throw new ThumbnailBackfillWriteError({
+    message: "Thumbnail usage removal failed",
+    cause: cleanup.error,
+  });
 };
 
 const backfillEntityFields = async (): Promise<number> => {
@@ -197,20 +205,16 @@ const backfillChatFilePage = async (
       continue;
     }
     const thumbnailFileId = Bun.randomUUIDv7();
-    const thumbnailKey = createUserFileKey({
-      fileId: thumbnailFileId,
-      mimeType: THUMBNAIL_MIME_TYPE,
-      userId: brandPersistedUserId(row.userId),
+    const organizationId = brandPersistedOrganizationId(row.organizationId);
+    const thumbnailKey = createUserFileThumbnailKey({
+      sourceKey: row.s3Key,
+      thumbnailFileId,
+      organizationId,
+      uploaderUserId: brandPersistedUserId(row.userId),
     });
-    let organizationId: SafeId<"organization"> | null = null;
-    if (isDeploymentFeatureEnabled("FEATURE_FILE_USAGE_LIMITS")) {
-      if (
-        !("organizationId" in row) ||
-        typeof row.organizationId !== "string"
-      ) {
-        return panic("Tracked chat thumbnail query omitted organization id");
-      }
-      organizationId = brandPersistedOrganizationId(row.organizationId);
+    if (thumbnailKey === null) {
+      console.warn(`  chat: skip ${row.id} (stored key owner mismatch)`);
+      continue;
     }
     prepared.push({
       rowId: row.id,
@@ -242,7 +246,9 @@ const backfillChatFilePage = async (
             panic("Tracked thumbnail has no organization"),
           objectKey: thumbnail.thumbnailKey,
           sizeBytes: thumbnail.webp.byteLength,
-          write: async () => await write(thumbnail),
+          content: thumbnail,
+          write: async ({ content }: CheckedFileWrite<PreparedThumbnail>) =>
+            await write(content),
         })),
       );
     }
@@ -381,6 +387,6 @@ const main = async () => {
 };
 
 main().catch((error: unknown) => {
-  console.error("Image thumbnail backfill failed:", error);
+  printError("Image thumbnail backfill failed:", error);
   process.exit(1);
 });

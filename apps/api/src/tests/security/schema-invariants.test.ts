@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { is } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
-import { PgDialect, PgTable, getTableConfig } from "drizzle-orm/pg-core";
-import { readFileSync, readdirSync } from "node:fs";
+import { getTableConfig, PgDialect, PgTable } from "drizzle-orm/pg-core";
+import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 import * as agentAuthSchema from "@/api/db/agent-auth-schema";
@@ -10,13 +10,18 @@ import * as authSchema from "@/api/db/auth-schema";
 import * as schema from "@/api/db/schema";
 import { SCOPED_NATIVE_EXTRACTION_ENQUEUE } from "@/api/db/schema";
 import {
+  AI_CITATION_REVIEW_ORIGINS,
+  CITATION_REVIEW_ORIGIN,
+  CITATION_REVIEW_ORIGINS,
   POLARITY,
   REVIEWABLE_POLARITIES,
 } from "@/api/handlers/case-law/polarity/consts";
+import { DOCTRINAL_TREATMENTS } from "@/api/lib/case-law/doctrine";
 import { DOCUMENT_NATIVE_EXTRACTION_PROCESSOR_VERSION } from "@/api/lib/document-processing-contract";
 
 const {
   CASE_LAW_CORPUS_MIRROR_STATUS,
+  caseLawCitationDoctrineReviews,
   caseLawCitationReviews,
   caseLawCitations,
   caseLawDecisions,
@@ -445,6 +450,49 @@ describe("schema invariants", () => {
       "citation_reviews_polarity_values",
     ).toSorted();
     expect(dbValues).toEqual(REVIEWABLE_POLARITIES.toSorted());
+  });
+
+  test("citation_reviews origin CHECK constraints match CITATION_REVIEW_ORIGINS", () => {
+    expect(
+      extractCheckValues(
+        caseLawCitationReviews,
+        "citation_reviews_origin_values",
+      ).toSorted(),
+    ).toEqual(CITATION_REVIEW_ORIGINS.toSorted());
+    const check = getTableConfig(caseLawCitationReviews).checks.find(
+      (candidate) => candidate.name === "citation_reviews_origin_provenance",
+    );
+    if (check === undefined) {
+      throw new Error("citation_reviews_origin_provenance not found");
+    }
+    // Human branch first, then every model origin: together, every origin.
+    expect(
+      inListGroups(renderCheck(check)).map((group) => group.toSorted()),
+    ).toEqual([
+      [CITATION_REVIEW_ORIGIN.HUMAN_REVIEW],
+      AI_CITATION_REVIEW_ORIGINS.toSorted(),
+    ]);
+  });
+
+  test("doctrinal CHECK constraints match DOCTRINAL_TREATMENTS", () => {
+    expect(
+      extractCheckValues(
+        caseLawCitations,
+        "citations_doctrinal_treatment_values",
+      ).toSorted(),
+    ).toEqual(DOCTRINAL_TREATMENTS.toSorted());
+    expect(
+      extractCheckValues(
+        caseLawCitationDoctrineReviews,
+        "citation_doctrine_reviews_treatment_values",
+      ).toSorted(),
+    ).toEqual(DOCTRINAL_TREATMENTS.toSorted());
+    expect(
+      extractCheckValues(
+        caseLawCitationDoctrineReviews,
+        "citation_doctrine_reviews_origin_values",
+      ).toSorted(),
+    ).toEqual(CITATION_REVIEW_ORIGINS.toSorted());
   });
 
   test("corpus mirror CHECK constraint matches its domain type", () => {

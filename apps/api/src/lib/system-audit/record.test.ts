@@ -35,6 +35,7 @@ test("a run that changed something records one row with its actor, run and count
     await recordSystemAudit(db, "system:registration-retention", {
       subject: RUN_ID,
       counts: {
+        handoffs: 0,
         verifications: 2,
         assertions: 0,
         replays: 0,
@@ -53,6 +54,7 @@ test("a run that changed something records one row with its actor, run and count
         actor: "system:registration-retention",
         subject: RUN_ID,
         counts: {
+          handoffs: 0,
           verifications: 2,
           assertions: 0,
           replays: 0,

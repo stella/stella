@@ -1,5 +1,6 @@
-import { isFeatureEnabled } from "@/api/lib/auth/feature-access/policy";
+import { isFeatureEnabled } from "@/api/lib/feature-access/policy";
 import type { McpRequestContext } from "@/api/mcp/context";
+import type { McpToolDefinition } from "@/api/mcp/tool-types";
 
 export type McpFeatureAccessBindings = {
   capabilities: ReadonlyMap<string, string>;
@@ -37,9 +38,12 @@ export const isMcpDescriptorFeatureEnabled = (
   const snapshot =
     args.context?.testDependencies?.featureAccessSnapshot ??
     args.context?.featureAccessSnapshot;
+  if (args.context === undefined) {
+    return false;
+  }
   if (
     snapshot === undefined ||
-    args.context?.organizationId === undefined ||
+    args.context.organizationId === undefined ||
     args.context.userId === undefined
   ) {
     return false;
@@ -48,4 +52,69 @@ export const isMcpDescriptorFeatureEnabled = (
     organizationId: args.context.organizationId,
     userId: args.context.userId,
   });
+};
+
+/**
+ * The unavailable projection depends on the definition alone, so it is built
+ * once per definition: a stable schema object is what lets `tools/list` reuse
+ * its wire conversion instead of rebuilding it on every call.
+ */
+const unavailableFeatureInputProjections = new WeakMap<
+  McpToolDefinition,
+  McpToolDefinition
+>();
+
+/** Mixed tools keep their ordinary operations while projecting unavailable feature inputs. */
+export const projectMcpFeatureInput = (
+  context: McpFeatureAccessContext | undefined,
+  definition: McpToolDefinition,
+): McpToolDefinition => {
+  const input = definition.featureInput;
+  if (
+    input === undefined ||
+    isMcpDescriptorFeatureEnabled({
+      context,
+      kind: "tools",
+      id: definition.name,
+      featureId: input.featureId,
+    })
+  ) {
+    return definition;
+  }
+  const cached = unavailableFeatureInputProjections.get(definition);
+  if (cached !== undefined) {
+    return cached;
+  }
+  const projected = {
+    ...definition,
+    description: input.unavailableDescription,
+    inputSchema: input.projectInputSchema(definition.inputSchema),
+  };
+  unavailableFeatureInputProjections.set(definition, projected);
+  return projected;
+};
+
+type McpFeatureInputAccessOptions = {
+  context: McpFeatureAccessContext | undefined;
+  definition: McpToolDefinition;
+  args: unknown;
+};
+
+/** Admission and discovery share the same conditional feature declaration. */
+export const isMcpFeatureInputEnabled = ({
+  context,
+  definition,
+  args,
+}: McpFeatureInputAccessOptions): boolean => {
+  const input = definition.featureInput;
+  return (
+    input === undefined ||
+    !input.usesFeature(args) ||
+    isMcpDescriptorFeatureEnabled({
+      context,
+      kind: "tools",
+      id: definition.name,
+      featureId: input.featureId,
+    })
+  );
 };

@@ -1,6 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
-import type { DocumentAst } from "@stll/legal-ast/document-ast";
+import { headingPathsByAnchor } from "@stll/legal-ast";
+import type {
+  DecisionDocumentAst,
+  DocumentAst,
+} from "@stll/legal-ast/document-ast";
 import { parseDocumentAst } from "@stll/legal-ast/document-ast";
 import { projectionDigest } from "@stll/legal-ast/projection-digest";
 
@@ -8,10 +12,12 @@ import {
   readServedDecisionAst,
   transientDecisionAstProjection,
 } from "@/api/handlers/case-law/decisions/served-ast";
-import { omitDerivablePlainText } from "@/api/handlers/case-law/document-ast";
 import { createSafeId } from "@/api/lib/branded-types";
+import { runWithQueryCounter } from "@/api/lib/db-query-counter";
+import { currentReadWork } from "@/api/lib/observability/request-work";
+import { decisionOutline } from "@/api/mcp/case-law-decision-outline";
 
-const ast = (text: string): DocumentAst => ({
+const ast = (text: string): DecisionDocumentAst => ({
   version: 1,
   source: {
     system: "test",
@@ -78,6 +84,63 @@ describe("served decision AST projection", () => {
     expect(served.projectionDigest).toBe(await projectionDigest(row));
   });
 
+  test("promotes legacy section titles before serving outlines and paths", async () => {
+    const row = ast("O d ů v o d n ě n í :");
+    row.blocks = [
+      {
+        id: "paragraph-1",
+        anchorId: "p-1",
+        type: "heading",
+        level: 2,
+        inlines: [{ type: "text", text: "O d ů v o d n ě n í :" }],
+        plainText: "O d ů v o d n ě n í :",
+      },
+      {
+        id: "section",
+        anchorId: "section",
+        type: "paragraph",
+        inlines: [{ type: "text", text: "VIII. Vlastní přezkum" }],
+        plainText: "VIII. Vlastní přezkum",
+      },
+      {
+        id: "body",
+        anchorId: "body",
+        type: "paragraph",
+        inlines: [{ type: "text", text: "Text odůvodnění." }],
+        plainText: "Text odůvodnění.",
+      },
+    ];
+    const served = await readServedDecisionAst({
+      astS3Key: null,
+      contentHash: null,
+      pgAst: row,
+      decisionId,
+      corpusReadEnabled: false,
+      readStore: async () => null,
+    });
+    if (served.payload === null || !("blocks" in served.payload)) {
+      throw new Error("Expected a served document AST");
+    }
+
+    expect(served.payload.blocks.map(({ type }) => type)).toEqual([
+      "heading",
+      "heading",
+      "paragraph",
+    ]);
+    expect(
+      decisionOutline({
+        blocks: served.payload.blocks,
+        text: served.payload.blocks
+          .map(({ plainText }) => plainText)
+          .join("\n"),
+      }).entries.map(({ title }) => title),
+    ).toEqual(["O d ů v o d n ě n í :", "VIII. Vlastní přezkum"]);
+    expect(headingPathsByAnchor(served.payload.blocks).get("body")).toEqual([
+      { anchorId: "p-1", title: "O d ů v o d n ě n í :" },
+      { anchorId: "section", title: "VIII. Vlastní přezkum" },
+    ]);
+  });
+
   test("a missing AST has no digest or source", async () => {
     const served = await readServedDecisionAst({
       astS3Key: null,
@@ -125,8 +188,11 @@ describe("served decision AST projection", () => {
     const resolvedAst = ast("newly fetched text");
     const projected = await transientDecisionAstProjection({
       resolvedAst,
-      wireAst: omitDerivablePlainText(resolvedAst),
+      plainText: "omit",
     });
+    if (projected.documentAst === null) {
+      throw new Error("Deferred AST was empty after normalization");
+    }
     const reparsed = parseDocumentAst(JSON.stringify(projected.documentAst));
     if (reparsed === null) {
       throw new Error("Deferred AST failed to parse from the response");
@@ -139,4 +205,30 @@ describe("served decision AST projection", () => {
     expect(projected.projectionDigest).toBe(await projectionDigest(reparsed));
     expect(projected.documentAstSource).toBeNull();
   });
+});
+
+test("reader phases share one normalization and digest per immutable payload", async () => {
+  const stored = ast("canonical body ".repeat(4000));
+  const read = async () =>
+    await readServedDecisionAst({
+      astS3Key: "immutable-key",
+      contentHash: "version",
+      pgAst: null,
+      decisionId,
+      corpusReadEnabled: true,
+      readStore: async () => stored,
+    });
+  const first = await runWithQueryCounter(async () => {
+    const result = await read();
+    expect(currentReadWork()?.astParses).toBe(1);
+    return result;
+  });
+  const second = await runWithQueryCounter(async () => {
+    const result = await read();
+    expect(currentReadWork()?.astParses).toBe(0);
+    expect(currentReadWork()?.cacheHits).toBeGreaterThan(0);
+    return result;
+  });
+  expect(second.payload).toBe(first.payload);
+  expect(second.projectionDigest).toBe(first.projectionDigest);
 });

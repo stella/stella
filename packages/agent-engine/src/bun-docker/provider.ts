@@ -1,6 +1,5 @@
 import {
   createExecBackedGit,
-  UnsupportedCapabilityError,
   type ExecResult,
   type ProcessOptions,
   type SandboxCapabilities,
@@ -9,6 +8,7 @@ import {
   type SandboxProvider,
   type SandboxResumeInput,
   type SpawnHandle,
+  UnsupportedCapabilityError,
 } from "@tanstack/ai-sandbox";
 
 import {
@@ -17,6 +17,7 @@ import {
   decodeFrames,
   demuxExecStream,
   DockerApiError,
+  type DockerConn,
   imageExists,
   inspectContainerRunning,
   inspectExecExitCode,
@@ -25,7 +26,6 @@ import {
   startContainer,
   startExecStream,
   stopContainer,
-  type DockerConn,
   type UserDefinedDockerNetwork,
 } from "./api";
 
@@ -264,7 +264,7 @@ const createBunDockerHandle = (deps: HandleDeps): SandboxHandle => {
         // Non-hijacked exec has no writable stdin; adapters branch on the
         // `writableStdin: false` capability and never call these. Kept sync
         // (they only wrap a resolved/rejected promise).
-        // oxlint-disable-next-line promise-function-async
+        // oxlint-disable-next-line typescript/promise-function-async
         write: () =>
           Promise.reject(
             new DockerApiError({
@@ -272,7 +272,7 @@ const createBunDockerHandle = (deps: HandleDeps): SandboxHandle => {
                 "bun-docker: exec stdin is not writable (writableStdin=false)",
             }),
           ),
-        // oxlint-disable-next-line promise-function-async -- sync no-op; stdin unused when writableStdin=false
+        // oxlint-disable-next-line typescript/promise-function-async -- sync no-op; stdin unused when writableStdin=false
         end: () => Promise.resolve(),
       },
       wait: async () => {
@@ -304,7 +304,7 @@ const createBunDockerHandle = (deps: HandleDeps): SandboxHandle => {
     process: sandboxProcess,
     git: createExecBackedGit(sandboxProcess, workdir),
     env: {
-      // oxlint-disable-next-line promise-function-async -- sync env merge, returns a resolved promise
+      // oxlint-disable-next-line typescript/promise-function-async -- sync env merge, returns a resolved promise
       set: (vars) => {
         Object.assign(envVars, vars);
         return Promise.resolve();
@@ -343,7 +343,7 @@ const createBunDockerHandle = (deps: HandleDeps): SandboxHandle => {
         // The base64 payload rides as a single argv entry, so a write is
         // bounded by the container's ARG_MAX (~128KB–2MB). That covers the
         // harness's config/prompt files. Larger writes are unsupported.
-        const b64 = bytes.toString("base64");
+        const b64 = bytes.toBase64();
         const dir = absPath.replace(/\/[^/]*$/u, "") || "/";
         const r = await exec(
           `mkdir -p ${shellQuote(dir)} && printf %s ${shellQuote(b64)} | base64 -d > ${shellQuote(absPath)}`,

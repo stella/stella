@@ -33,8 +33,5 @@ export type Secret<K extends SecretKind> = v.InferOutput<
 };
 
 export type AccessToken = Secret<"AccessToken">;
-export type ApiKey = Secret<"ApiKey">;
-export type AuthSecret = Secret<"AuthSecret">;
 export type ClientSecret = Secret<"ClientSecret">;
 export type RefreshToken = Secret<"RefreshToken">;
-export type StaticBearerToken = Secret<"StaticBearerToken">;

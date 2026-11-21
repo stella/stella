@@ -11,7 +11,10 @@ import {
 import os from "node:os";
 import path from "node:path";
 
+import { isCanonicalFailureCancellation } from "./ci-cancellation-contract";
+import { isRepositoryCheckoutAction } from "./ci-job-classification/checkout-actions";
 import {
+  NETWORK_DEPTH_METHOD,
   prepareComparisonBaseline,
   validateBaselineFile,
 } from "./network-baseline-scope";
@@ -144,6 +147,60 @@ describe("network baseline scope", () => {
     }
   }, 60_000);
 
+  test.each([undefined, "timing-v1", "round-barrier-v1"])(
+    "validates and preserves the recording depth method (%s)",
+    (depthMethod) => {
+      const directory = mkdtempSync(path.join(os.tmpdir(), "network-method-"));
+      const file = path.join(directory, "baseline.json");
+      const recorded = {
+        "/chat": {
+          ...entry(2),
+          ...(depthMethod === undefined ? {} : { depthMethod }),
+        },
+      };
+      try {
+        writeFileSync(file, JSON.stringify(recorded));
+        const validated = validateBaselineFile(file);
+        expect(validated).toEqual(recorded);
+        expect(
+          prepareComparisonBaseline({
+            base: validated,
+            changedPaths: [],
+            baseRouteTree: routeTree,
+            routeTree,
+            declarations: [],
+          }).baseline,
+        ).toEqual(recorded);
+        // A declaration carries the current method (stamped when absent); a
+        // stale method is refused, covered by the fail-closed cases below.
+        if (depthMethod !== "timing-v1") {
+          expect(
+            prepareComparisonBaseline({
+              base: {},
+              changedPaths: [],
+              baseRouteTree: routeTree,
+              routeTree,
+              declarations: [
+                {
+                  route: "/chat",
+                  reason: "Recorded budget",
+                  budget: recorded["/chat"],
+                },
+              ],
+            }).baseline,
+          ).toEqual({
+            "/chat": {
+              ...recorded["/chat"],
+              depthMethod: NETWORK_DEPTH_METHOD,
+            },
+          });
+        }
+      } finally {
+        rmSync(directory, { recursive: true, force: true });
+      }
+    },
+  );
+
   test("validates schema and rejects oversized files and symlinks", () => {
     const directory = mkdtempSync(path.join(os.tmpdir(), "network-baseline-"));
     const validPath = path.join(directory, "baseline.json");
@@ -235,7 +292,7 @@ describe("network baseline workflows", () => {
     expect(script).not.toMatch(/git\s+show[^\n]*routeTree\.gen\.ts/u);
     expect(script).not.toContain("apps/web/src/routeTree.gen.ts");
     expect(script).toContain(
-      'network-baseline-route-tree.ts "$repository" "$base" "$base_tree"',
+      'network-baseline-route-tree.ts "$repository" "$since" "$base_tree"',
     );
     expect(script).toContain(
       'network-baseline-route-tree.ts "$repository" "$head" "$head_tree"',
@@ -261,18 +318,21 @@ describe("network baseline workflows", () => {
     const source = workflowSource("network-baseline-record.yml");
     const parsed: unknown = Bun.YAML.parse(source);
     expect(isRecord(parsed) && parsed["on"]).toMatchObject({
-      push: { branches: ["main"] },
+      schedule: [{ cron: "17 2 * * *" }],
+      workflow_dispatch: {},
     });
     if (!isRecord(parsed) || !isRecord(parsed["on"])) {
       expect.unreachable("workflow triggers");
     }
     expect(parsed["on"]["pull_request"]).toBeUndefined();
+    expect(parsed["on"]["push"]).toBeUndefined();
     const jobs = readWorkflowJobs("network-baseline-record.yml");
     expect(jobs["build"]?.if).toContain("github.ref == 'refs/heads/main'");
     expect(jobs["record"]?.needs).toBe("build");
     expect(jobs["build"]?.permissions).toEqual({ contents: "read" });
     expect(jobs["record"]?.permissions).toEqual({
       contents: "read",
+      packages: "read",
       actions: "read",
     });
     const record = jobs["record"] ?? expect.unreachable("record job");
@@ -297,10 +357,35 @@ describe("network baseline workflows", () => {
     expect(source).toContain(
       `E2E_NETWORK_BASELINE: ${githubExpression("inputs.mode || 'write'")}`,
     );
-    expect(source).not.toMatch(/\bsecrets\.\w/u);
+    expect(source).not.toMatch(/\bsecrets\.(?!GITHUB_TOKEN\b)\w/u);
+    expect(
+      record.steps.filter((step) =>
+        step.run?.includes("setup-playwright/run-in-image.sh"),
+      ),
+    ).toHaveLength(2);
+    const browserPreparation = record.steps.findIndex(
+      (step) =>
+        step.run?.includes("setup-playwright/run-in-image.sh") &&
+        step.run.endsWith(" --prepare"),
+    );
+    const registryCleanup = record.steps.findIndex(
+      (step) => step.run === "docker logout ghcr.io",
+    );
+    const browserRecording = record.steps.findIndex(
+      (step) =>
+        step.run?.includes("setup-playwright/run-in-image.sh") &&
+        step.run.includes("test:e2e -- route-smoke.spec.ts"),
+    );
+    expect(browserPreparation).toBeGreaterThan(seed);
+    expect(registryCleanup).toBeGreaterThan(browserPreparation);
+    expect(record.steps.at(registryCleanup)?.if).toBe("always()");
+    expect(browserRecording).toBeGreaterThan(registryCleanup);
+    expect(record.steps.at(browserRecording)?.env).toMatchObject({
+      E2E_NETWORK_BASELINE: githubExpression("inputs.mode || 'write'"),
+    });
     for (const job of Object.values(jobs)) {
       for (const step of job.steps) {
-        if (step.uses?.startsWith("actions/checkout@")) {
+        if (isRepositoryCheckoutAction(step.uses)) {
           expect(step.with?.["persist-credentials"]).toBe(false);
           expect(step.with?.["ref"]).toBe(githubExpression("github.sha"));
         }
@@ -313,17 +398,28 @@ describe("network baseline workflows", () => {
     const jobs = readWorkflowJobs("network-baseline-deliver.yml");
     expect(Object.keys(jobs)).toEqual(["deliver"]);
     const deliver = jobs["deliver"] ?? expect.unreachable("delivery job");
+    const parsed: unknown = Bun.YAML.parse(source);
+    expect(isRecord(parsed) && parsed["on"]).toEqual({ workflow_call: null });
+    expect(deliver.if).toContain("github.ref == 'refs/heads/main'");
     expect(deliver.if).toContain(
-      "head_branch == github.event.repository.default_branch",
+      "github.workflow_ref == format('{0}/.github/workflows/network-baseline-record.yml@refs/heads/main', github.repository)",
     );
     expect(deliver.if).toContain(
-      "head_repository.full_name == github.repository",
+      `contains(fromJSON('["schedule", "workflow_dispatch"]'), github.event_name)`,
     );
-    expect(deliver.if).toContain("conclusion == 'success'");
-    // The display name alone does not identify the recorder workflow.
-    expect(deliver.if).toContain(
-      "github.event.workflow_run.path == '.github/workflows/network-baseline-record.yml'",
+    const caller: unknown = Bun.YAML.parse(
+      workflowSource("network-baseline-record.yml"),
     );
+    expect(
+      isRecord(caller) && isRecord(caller["jobs"]) && caller["jobs"]["deliver"],
+    ).toMatchObject({
+      needs: "record",
+      uses: "./.github/workflows/network-baseline-deliver.yml",
+      permissions: { actions: "read", contents: "read" },
+    });
+    expect(source).not.toContain("github.event.workflow_run");
+    expect(source).toContain(`RUN_ID: ${githubExpression("github.run_id")}`);
+    expect(source).toContain(`RECORDED_SHA: ${githubExpression("github.sha")}`);
     expect(deliver.permissions).toEqual({ actions: "read", contents: "read" });
     const validation = deliver.steps.findIndex((step) =>
       step.run?.includes(" validate "),
@@ -331,7 +427,7 @@ describe("network baseline workflows", () => {
     const publication = deliver.steps.findIndex(
       (step) =>
         step.with?.["name"] ===
-        `network-baseline-main-${githubExpression("github.event.workflow_run.head_sha")}`,
+        `network-baseline-main-${githubExpression("github.sha")}`,
     );
     expect(validation).toBeGreaterThan(-1);
     expect(publication).toBeGreaterThan(validation);
@@ -345,7 +441,9 @@ describe("network baseline workflows", () => {
       const job = jobs[name] ?? expect.unreachable(name);
       expect(job.permissions).toMatchObject({
         contents: "read",
-        actions: "read",
+        actions: isCanonicalFailureCancellation(job.steps.at(-1))
+          ? "write"
+          : "read",
       });
       const prepare = job.steps.findIndex(
         (step) => step.uses === "./.github/actions/prepare-network-baseline",
@@ -358,14 +456,13 @@ describe("network baseline workflows", () => {
       // Every event that compares also loads the published budget; an event
       // filter here would compare against the frozen committed JSON instead.
       expect(job.steps[prepare]?.if ?? "", name).not.toContain("event_name");
+      // The planner's comparison base: the PR base, or the target branch for
+      // a merge group, so a group compares every entry it merges.
       expect(job.steps[prepare]?.with?.["base-sha"]).toContain(
-        "github.event.pull_request.base.sha",
-      );
-      expect(job.steps[prepare]?.with?.["base-sha"]).toContain(
-        "github.event.merge_group.base_sha",
+        "needs.ci-plan.outputs.target_base_sha",
       );
       const checkout = job.steps.find((step) =>
-        step.uses?.startsWith("actions/checkout@"),
+        isRepositoryCheckoutAction(step.uses),
       );
       expect(checkout?.with?.["fetch-depth"]).toBe(0);
     }
@@ -396,11 +493,101 @@ describe("reviewed network budgets", () => {
     const result = prepare([
       { route: "/chat", reason: "Additional endpoint", budget: entry(3) },
     ]);
+    // The declared depth is stamped with the current method, so the main
+    // recording keeps it as a floor rather than replacing it with one sample.
     expect(result.baseline).toEqual({
-      "/chat": entry(3),
+      "/chat": {
+        depth: 3,
+        depthMethod: NETWORK_DEPTH_METHOD,
+        requests: ["GET /1", "GET /3"],
+      },
       "/settings": entry(2),
     });
     expect(result.notices).toEqual(["- `/chat`: `Additional endpoint`"]);
+  });
+
+  test("a budget keeps every request and count main recorded after it was written", () => {
+    // stella#6560: a settings budget written before main added
+    // GET /v1/organization-settings to every settings page made that request
+    // read as new on the PR that edited the budget.
+    const result = prepareComparisonBaseline({
+      base: {
+        "/settings": {
+          depth: 2,
+          requests: ["GET /v1/session", "GET /v1/organization-settings"],
+          requestCounts: {
+            "GET /v1/session": 1,
+            "GET /v1/organization-settings": 1,
+          },
+          dbQueries: { "GET /v1/organization-settings": 2 },
+        },
+      },
+      changedPaths: [],
+      baseRouteTree: routeTree,
+      routeTree,
+      declarations: [
+        {
+          route: "/settings",
+          reason: "Connector list",
+          budget: {
+            depth: 3,
+            requests: ["GET /v1/session", "GET /v1/connectors"],
+            requestCounts: { "GET /v1/session": 2, "GET /v1/connectors": 1 },
+          },
+        },
+      ],
+    });
+    expect(result.baseline["/settings"]).toEqual({
+      depth: 3,
+      depthMethod: NETWORK_DEPTH_METHOD,
+      requests: [
+        "GET /v1/session",
+        "GET /v1/organization-settings",
+        "GET /v1/connectors",
+      ],
+      requestCounts: {
+        "GET /v1/session": 2,
+        "GET /v1/organization-settings": 1,
+        "GET /v1/connectors": 1,
+      },
+      dbQueries: { "GET /v1/organization-settings": 2 },
+    });
+  });
+
+  test("a budget written against older main never lowers a recorded value", () => {
+    const result = prepareComparisonBaseline({
+      base: {
+        "/settings": {
+          depth: 4,
+          depthMethod: NETWORK_DEPTH_METHOD,
+          requests: ["GET /v1/session"],
+          requestCounts: { "GET /v1/session": 3 },
+          responseSizes: { "GET /v1/session": 4096 },
+        },
+      },
+      changedPaths: [],
+      baseRouteTree: routeTree,
+      routeTree,
+      declarations: [
+        {
+          route: "/settings",
+          reason: "Older budget",
+          budget: {
+            depth: 3,
+            requests: ["GET /v1/session"],
+            requestCounts: { "GET /v1/session": 2 },
+            responseSizes: { "GET /v1/session": 1024 },
+          },
+        },
+      ],
+    });
+    expect(result.baseline["/settings"]).toEqual({
+      depth: 4,
+      depthMethod: NETWORK_DEPTH_METHOD,
+      requests: ["GET /v1/session"],
+      requestCounts: { "GET /v1/session": 3 },
+      responseSizes: { "GET /v1/session": 4096 },
+    });
   });
 
   test.each([
@@ -408,6 +595,20 @@ describe("reviewed network budgets", () => {
     [{ route: "/chat", reason: " ", budget: entry(1) }],
     [{ route: "chat", reason: "Change", budget: entry(1) }],
     [{ route: "/chat", reason: "Change", budget: { depth: -1, requests: [] } }],
+    [
+      {
+        route: "/chat",
+        reason: "Change",
+        budget: { ...entry(1), depthMethod: 1 },
+      },
+    ],
+    [
+      {
+        route: "/chat",
+        reason: "Change",
+        budget: { ...entry(1), depthMethod: "timing-v1" },
+      },
+    ],
     [
       {
         route: "/chat",
@@ -581,7 +782,8 @@ describe("merge-base preparation integration", () => {
       const gh = path.join(directory, "bin/gh");
       writeFileSync(
         gh,
-        "#!/usr/bin/env bash\nprintf '%s\\n' '{\"artifacts\":[],\"workflow_runs\":[]}'\n",
+        // A paginated (--slurp) request receives its pages as one array.
+        '#!/usr/bin/env bash\nresponse=\'{"total_count":0,"artifacts":[],"workflow_runs":[]}\'\n[[ " $* " != *" --slurp "* ]] || response="[$response]"\nprintf \'%s\\n\' "$response"\n',
       );
       chmodSync(gh, 0o755);
       const summary = path.join(directory, "summary");
@@ -592,6 +794,8 @@ describe("merge-base preparation integration", () => {
       );
       const prepare = (script: string) =>
         run(["bash", script], {
+          GH_RETRY_SCRIPT: path.join(root, "scripts/gh-retry.sh"),
+          NETWORK_RETRY_SCRIPT: path.join(root, "scripts/retry.sh"),
           PATH: `${path.join(directory, "bin")}:${runnerPath}`,
           BASE_SHA: recordedBase,
           GITHUB_EVENT_NAME: "pull_request",
@@ -639,6 +843,15 @@ describe("merge-base preparation integration", () => {
       );
       expect(mutant).not.toBe(script);
       const mutantPath = path.join(directory, "prepare-mutant.sh");
+      writeFileSync(
+        path.join(directory, "select-recording.sh"),
+        readFileSync(
+          path.join(
+            root,
+            ".github/actions/prepare-network-baseline/select-recording.sh",
+          ),
+        ),
+      );
       writeFileSync(mutantPath, mutant);
       const mutation = prepare(mutantPath);
       expect(mutation.exitCode).not.toBe(0);
@@ -646,8 +859,8 @@ describe("merge-base preparation integration", () => {
         "PRs must declare network budget changes instead of editing network-baseline.json",
       );
       const committedTreeMutant = script.replace(
-        'bun apps/web/scripts/network-baseline-route-tree.ts "$repository" "$base" "$base_tree"',
-        'git show "$base:apps/web/src/routeTree.gen.ts" > "$base_tree"',
+        'bun apps/web/scripts/network-baseline-route-tree.ts "$repository" "$since" "$base_tree"',
+        'git show "$since:apps/web/src/routeTree.gen.ts" > "$base_tree"',
       );
       expect(committedTreeMutant).not.toBe(script);
       writeFileSync(mutantPath, committedTreeMutant);
@@ -718,10 +931,11 @@ describe("merge-base preparation integration", () => {
 set -euo pipefail
 if [[ "$TEST_ARTIFACTS" == fail ]]; then exit 42; fi
 case "$*" in
+  *status=*) echo "the API status filter is unreliable; select by conclusion" >&2; exit 1 ;;
   *actions/artifacts/3/zip*) cat "$TEST_ZIP_NEW" ;;
   *actions/artifacts/*/zip*) cat "$TEST_ZIP" ;;
   *actions/artifacts*) printf '%s\\n' "$TEST_ARTIFACTS" ;;
-  *actions/workflows/*) printf '%s\\n' "$TEST_RUNS" ;;
+  *actions/workflows/*) printf '[%s]\\n' "$TEST_RUNS" ;;
   *actions/runs/*) printf '%s\\n' "$TEST_RUN" ;;
   *) exit 1 ;;
 esac
@@ -753,7 +967,7 @@ esac
             REPOSITORY: "fixture/fixture",
             RUNNER_TEMP: directory,
             GITHUB_STEP_SUMMARY: summary,
-            TEST_ARTIFACTS: '{"artifacts":[]}',
+            TEST_ARTIFACTS: '{"total_count":0,"artifacts":[]}',
             TEST_RUNS: '{"workflow_runs":[]}',
             ...artifactEnv,
           },
@@ -807,6 +1021,7 @@ esac
       expect(zip.exitCode).toBe(0);
       const artifactEnv = {
         TEST_ARTIFACTS: JSON.stringify({
+          total_count: 1,
           artifacts: [
             {
               id: 1,
@@ -817,13 +1032,17 @@ esac
           ],
         }),
         TEST_RUNS: JSON.stringify({
-          workflow_runs: [{ event: "push", head_sha: firstBase }],
+          workflow_runs: [
+            { event: "push", head_sha: firstBase, conclusion: "success" },
+          ],
         }),
         TEST_RUN: JSON.stringify({
           path: ".github/workflows/network-baseline-deliver.yml",
           event: "workflow_run",
           conclusion: "success",
           head_branch: "main",
+          head_sha: firstBase,
+          head_repository: { full_name: "fixture/fixture" },
         }),
         TEST_ZIP: path.join(directory, "baseline.zip"),
       };
@@ -839,6 +1058,8 @@ esac
             event: "pull_request",
             conclusion: "success",
             head_branch: "feature",
+            head_sha: firstBase,
+            head_repository: { full_name: "fixture/fixture" },
           }),
         }),
       ).toEqual({ "/chat": entry(1), "/settings": entry(2) });
@@ -853,8 +1074,13 @@ esac
       );
       checked(["git", "add", "apps/web/e2e/network-budgets/change.json"]);
       checked(["git", "commit", "-m", "declare budget"]);
+      // The budget raises main's recorded /chat entry; GET /1 stays known.
       expect(prepare(nextBase)).toEqual({
-        "/chat": entry(9),
+        "/chat": {
+          depth: 9,
+          depthMethod: NETWORK_DEPTH_METHOD,
+          requests: ["GET /1", "GET /9"],
+        },
         "/settings": entry(2),
       });
       const inheritedBase = checked(["git", "rev-parse", "HEAD"]);
@@ -863,16 +1089,29 @@ esac
         "/settings": entry(2),
       });
       // Main must seed declarations even when no request observes them yet.
-      const declared = { "/chat": entry(9), "/settings": entry(2) };
+      // The recording seed keeps the declared depth as a floor (current method)
+      // and, like the recorder, keeps every request main already recorded.
+      const declared = {
+        "/chat": {
+          depth: 9,
+          depthMethod: NETWORK_DEPTH_METHOD,
+          requests: ["GET /1", "GET /9"],
+        },
+        "/settings": entry(2),
+      };
       expect(
         prepare(inheritedBase, { NETWORK_BASELINE_PURPOSE: "recording" }),
       ).toEqual(declared);
+      // Seeded from the published recording, the declaration keeps its GET /8.
       expect(
         prepare(inheritedBase, {
           ...artifactEnv,
           NETWORK_BASELINE_PURPOSE: "recording",
         }),
-      ).toEqual(declared);
+      ).toEqual({
+        ...declared,
+        "/chat": { ...declared["/chat"], requests: ["GET /8", "GET /9"] },
+      });
       // The next publication contains the declaration plus a measured peak.
       const newerPublication = { "/chat": entry(10), "/settings": entry(2) };
       writeFileSync(
@@ -893,6 +1132,7 @@ esac
       const shuffledArtifacts = {
         ...artifactEnv,
         TEST_ARTIFACTS: JSON.stringify({
+          total_count: 2,
           artifacts: [
             {
               id: 1,
@@ -921,6 +1161,7 @@ esac
             workflow_runs: sources.map((head_sha) => ({
               event: "push",
               head_sha,
+              conclusion: "success",
             })),
           }),
         };
@@ -950,7 +1191,226 @@ esac
           TEST_ARTIFACTS: "fail",
         },
       );
-      expect(unavailable.exitCode).toBe(42);
+      expect(unavailable.exitCode).toBe(1);
+      expect(unavailable.stderr.toString()).toContain("ERROR");
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  }, 60_000);
+
+  test("main comparisons exempt routes changed since an inherited recording", () => {
+    const directory = mkdtempSync(path.join(os.tmpdir(), "network-since-"));
+    const root = path.join(import.meta.dirname, "..");
+    const runnerPath = process.env["PATH"];
+    if (typeof runnerPath !== "string") {
+      expect.unreachable("integration fixture requires PATH");
+    }
+    const run = (args: string[], env: Record<string, string> = {}) =>
+      Bun.spawnSync(args, { cwd: directory, env: { ...process.env, ...env } });
+    const checked = (args: string[]) => {
+      const result = run(args);
+      expect(result.exitCode, result.stderr.toString()).toBe(0);
+      return result.stdout.toString().trim();
+    };
+    const read = (file: string) =>
+      readFileSync(path.join(directory, file), "utf-8");
+    const chatRoute = "apps/web/src/routes/_protected.chat/index.tsx";
+    const committed = { "/chat": entry(1), "/settings": entry(2) };
+    const publication = { "/chat": entry(8), "/settings": entry(2) };
+    try {
+      mkdirSync(path.join(directory, "apps/web/e2e"), { recursive: true });
+      mkdirSync(path.join(directory, "apps/web/src/routes/_protected.chat"), {
+        recursive: true,
+      });
+      mkdirSync(path.join(directory, "scripts"));
+      mkdirSync(path.join(directory, "bin"));
+      mkdirSync(path.join(directory, "published"));
+      writeFileSync(
+        path.join(directory, "scripts/network-baseline-scope.ts"),
+        readFileSync(path.join(root, "scripts/network-baseline-scope.ts")),
+      );
+      writeFileSync(
+        path.join(directory, "apps/web/e2e/network-baseline.json"),
+        JSON.stringify(committed),
+      );
+      writeFileSync(
+        path.join(directory, "apps/web/src/fixture-route-tree.txt"),
+        routeTree,
+      );
+      writeFileSync(path.join(directory, chatRoute), "export {};\n");
+      installRouteTreeGeneratorFixture(directory);
+      writeFileSync(
+        path.join(directory, "published/network-baseline.json"),
+        JSON.stringify(publication),
+      );
+      checked([
+        "zip",
+        "-jq",
+        path.join(directory, "baseline.zip"),
+        path.join(directory, "published/network-baseline.json"),
+      ]);
+      checked(["git", "init", "-b", "main"]);
+      checked(["git", "config", "user.name", "Fixture"]);
+      checked(["git", "config", "user.email", "fixture@example.test"]);
+      checked(["git", "config", "commit.gpgsign", "false"]);
+      checked(["git", "add", "apps", "scripts"]);
+      checked(["git", "commit", "-m", "recorded"]);
+      const recorded = checked(["git", "rev-parse", "HEAD"]);
+      checked(["git", "remote", "add", "origin", directory]);
+      // Main's own committed-baseline edit is not a PR edit of shared JSON.
+      writeFileSync(
+        path.join(directory, "apps/web/e2e/network-baseline.json"),
+        JSON.stringify({ ...committed, "/": entry(1) }),
+      );
+      checked(["git", "commit", "-am", "bootstrap edit"]);
+      writeFileSync(path.join(directory, chatRoute), "export const x = 1;\n");
+      checked(["git", "commit", "-am", "route change"]);
+      const head = checked(["git", "rev-parse", "HEAD"]);
+      const gh = path.join(directory, "bin/gh");
+      writeFileSync(
+        gh,
+        `#!/usr/bin/env bash
+set -euo pipefail
+case "$*" in
+  *status=*) echo "the API status filter is unreliable; select by conclusion" >&2; exit 1 ;;
+  *actions/artifacts/*/zip*) cat "$TEST_ZIP" ;;
+  *actions/artifacts*) printf '%s\\n' "$TEST_ARTIFACTS" ;;
+  *actions/workflows/*) printf '[%s]\\n' "$TEST_RUNS" ;;
+  *actions/runs/*) printf '%s\\n' "$TEST_RUN" ;;
+  *) exit 1 ;;
+esac
+`,
+      );
+      chmodSync(gh, 0o755);
+      const summary = path.join(directory, "summary");
+      const prepareRun = (source: string, purpose: string, base = head) => {
+        writeFileSync(summary, "");
+        checked([
+          "git",
+          "checkout",
+          "--",
+          "apps/web/e2e/network-baseline.json",
+        ]);
+        const result = run(
+          [
+            "bash",
+            path.join(
+              root,
+              ".github/actions/prepare-network-baseline/prepare.sh",
+            ),
+          ],
+          {
+            PATH: `${path.join(directory, "bin")}:${runnerPath}`,
+            BASE_SHA: base,
+            GITHUB_EVENT_NAME: "push",
+            NETWORK_BASELINE_PURPOSE: purpose,
+            REPOSITORY: "fixture/fixture",
+            RUNNER_TEMP: directory,
+            GITHUB_STEP_SUMMARY: summary,
+            TEST_ARTIFACTS: JSON.stringify({
+              total_count: 1,
+              artifacts: [
+                {
+                  id: 1,
+                  name: `network-baseline-main-${source}`,
+                  expired: false,
+                  workflow_run: { id: 2 },
+                },
+              ],
+            }),
+            TEST_RUNS: JSON.stringify({
+              workflow_runs: [
+                { event: "push", head_sha: source, conclusion: "success" },
+              ],
+            }),
+            TEST_RUN: JSON.stringify({
+              path: ".github/workflows/network-baseline-deliver.yml",
+              event: "workflow_run",
+              conclusion: "success",
+              head_branch: "main",
+              head_sha: source,
+              head_repository: { full_name: "fixture/fixture" },
+            }),
+            TEST_ZIP: path.join(directory, "baseline.zip"),
+          },
+        );
+        return result;
+      };
+      const prepare = (source: string, purpose: string) => {
+        const result = prepareRun(source, purpose);
+        expect(result.exitCode, result.stderr.toString()).toBe(0);
+        expect(read("summary")).toContain(`recording at ${source}`);
+        return {
+          baseline: JSON.parse(read("apps/web/e2e/network-baseline.json")),
+          changed: read("apps/web/e2e/.network-baseline-changed")
+            .split("\n")
+            .filter(Boolean),
+          context: JSON.parse(
+            read("apps/web/e2e/.network-baseline-context.json"),
+          ),
+          summary: read("summary"),
+        };
+      };
+      const inherited = prepare(recorded, "comparison");
+      expect(inherited.baseline).toEqual(publication);
+      expect(inherited.changed).toEqual([chatRoute]);
+      expect(inherited.context).toEqual(["/chat", "/chat target"]);
+      expect(inherited.summary).toContain(
+        `comparison exempts routes changed since ${recorded}`,
+      );
+      const current = prepare(head, "comparison");
+      expect(current.baseline).toEqual(publication);
+      expect(current.changed).toEqual([]);
+      expect(current.context).toEqual([]);
+      expect(current.summary).toContain(
+        `comparison exempts routes changed since ${head}`,
+      );
+      // Recording seeds the checked-out commit and scopes nothing.
+      const recording = prepare(recorded, "recording");
+      expect(recording.baseline).toEqual(publication);
+      expect(recording.changed).toEqual([]);
+      expect(recording.context).toEqual([]);
+      expect(recording.summary).not.toContain("comparison exempts");
+      // A PR atop an unrecorded main keeps its own changes in scope too.
+      checked(["git", "switch", "-q", "-c", "feature"]);
+      writeFileSync(path.join(directory, "feature.txt"), "feature\n");
+      checked(["git", "add", "feature.txt"]);
+      checked(["git", "commit", "-qm", "feature"]);
+      const pr = prepareRun(recorded, "comparison", head);
+      expect(pr.exitCode, pr.stderr.toString()).toBe(0);
+      expect(
+        read("apps/web/e2e/.network-baseline-changed")
+          .split("\n")
+          .filter(Boolean),
+      ).toEqual([chatRoute, "feature.txt"]);
+      // The PR's own baseline edit is still refused.
+      writeFileSync(
+        path.join(directory, "apps/web/e2e/network-baseline.json"),
+        JSON.stringify({ ...committed, "/pr": entry(1) }),
+      );
+      checked(["git", "commit", "-qam", "pr baseline edit"]);
+      const prEdit = prepareRun(recorded, "comparison", head);
+      expect(prEdit.exitCode).not.toBe(0);
+      expect(prEdit.stderr.toString()).toContain(
+        "PRs must declare network budget changes",
+      );
+      checked(["git", "switch", "-q", "main"]);
+      // A recording far behind the compared commit fails instead of
+      // exempting every route changed since it.
+      writeFileSync(path.join(directory, chatRoute), "export const x = 2;\n");
+      const later = new Date(Date.now() + 40 * 60 * 60 * 1000).toISOString();
+      const lateCommit = run(["git", "commit", "-qam", "late route change"], {
+        GIT_AUTHOR_DATE: later,
+        GIT_COMMITTER_DATE: later,
+      });
+      expect(lateCommit.exitCode, lateCommit.stderr.toString()).toBe(0);
+      const late = checked(["git", "rev-parse", "HEAD"]);
+      const stale = prepareRun(recorded, "comparison", late);
+      expect(stale.exitCode).not.toBe(0);
+      expect(stale.stderr.toString()).toContain(
+        `recording stale since ${recorded}`,
+      );
+      expect(read("summary")).toContain(`recording stale since ${recorded}`);
     } finally {
       rmSync(directory, { recursive: true, force: true });
     }

@@ -12,7 +12,7 @@ import { appUrl, githubUrl } from "../data/site-nav";
 // transparently over the page top (the homepage hero gradient runs to the
 // viewport edge behind it) and solidifies it on first scroll; the default is
 // the always-solid sticky bar used by every other page.
-type Props = { current?: string; overlay?: boolean };
+type Props = { current?: string | undefined; overlay?: boolean };
 const { current, overlay = false } = Astro.props;
 
 const rawLocale = Astro.currentLocale ?? defaultLocale;
@@ -47,11 +47,6 @@ const t = getTranslations(locale);
             class="h-6 dark:invert"
           />
         </a>
-        <span
-          class="border-border text-muted-foreground hidden rounded-sm border px-1.5 py-0.5 text-[0.625rem] font-medium tracking-[0.1em] uppercase sm:inline"
-        >
-          {t("nav.beta")}
-        </span>
         <span
           class="hidden h-4 w-px sm:inline"
           style="background: var(--border)"

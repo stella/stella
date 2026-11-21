@@ -1,12 +1,18 @@
-import { expect } from "@playwright/test";
+import { expect, test } from "@playwright/test";
 import type { Page, Request, Response } from "@playwright/test";
+import { panic, Result } from "better-result";
 import {
+  appendFileSync,
   existsSync,
   readFileSync,
   writeFileSync,
-  appendFileSync,
 } from "node:fs";
 import path from "node:path";
+
+import { sleep as ownerSleep } from "@stll/concurrency/sleep";
+
+import { createNetworkRoundController } from "./network-rounds";
+import { networkBaselineCoverageProblem } from "./smoke-route-coverage";
 
 // Matches apps/web/e2e/playwright.config.ts and helpers/api.ts: the API origin
 // the frontend talks to. Only requests to this origin are guarded; everything
@@ -22,6 +28,7 @@ const TRACKED_RESOURCE_TYPES = new Set(["fetch", "xhr", "eventsource"]);
 // (apps/api/src/lib/db-query-counter.ts). Folding it into the baseline makes
 // an N+1 regression fail per route+endpoint, not just per HTTP fan-out.
 const DB_QUERIES_HEADER = "x-db-queries";
+const DB_TRANSACTIONS_HEADER = "x-db-transactions";
 
 // The API sends real-time channels (chat streaming, workspace events, the
 // autocomplete stream) as `text/event-stream` connections that stay open for
@@ -40,7 +47,18 @@ const BASELINE_RELATIVE = "apps/web/e2e/network-baseline.json";
 const WRITE_HINT =
   "declare an intentional increase in apps/web/e2e/network-budgets/<change>.json; main records the shared baseline";
 
+const NETWORK_ROUND_POLL_MS = 10;
+const NETWORK_BODY_COMPLETION_TIMEOUT_MS = 10_000;
+
 // --- collector -------------------------------------------------------------
+
+export type ResponseSizeOutcome =
+  | { status: "measured"; bytes: number }
+  | { status: "streamed" }
+  | { status: "failed"; error: string; canceled: boolean }
+  | { status: "unreadable"; error: string };
+
+type ResponseSizeFailure = Extract<ResponseSizeOutcome, { error: string }>;
 
 export type NetworkCapture = {
   requests: {
@@ -48,31 +66,32 @@ export type NetworkCapture = {
     pathname: string;
     dbQueries: number | null;
     dbQueryHeaderMissing: boolean;
-    // Response body size in bytes; null for a streamed response (excluded by
-    // content-type, see STREAMED_RESPONSE_CONTENT_TYPE) or one whose body
-    // Playwright never resolved (see responseBytesUnavailable).
-    responseBytes: number | null;
-    // True only when Playwright saw a non-streamed response and reading its
-    // body failed (e.g. aborted/redirected mid-navigation).
-    responseBytesUnavailable: boolean;
+    transactions: number | null;
+    transactionHeaderMissing: boolean;
+    responseSize: ResponseSizeOutcome;
   }[];
-  // Intervals for finite API responses only. Streams and background polls
-  // remain in `requests` so request coverage sees them, but they do not
-  // represent a route-load round: the page waits on neither to settle.
-  // `key` is the same method + normalized path `requests` is keyed by, so a
-  // depth reading can name the chain that produced it.
-  intervals: { start: number; end: number; key: string }[];
+  // Scheduled release rounds; only measurement navigations install the barrier.
+  depthChain: string[][];
+  // Exact resources, independent of the UUID-normalized endpoint budgets.
+  duplicateGetCounts?: Record<string, number>;
 };
 
 export type NetworkCollector = {
-  trackPage: (page: Page) => () => void;
+  trackPage: (page: Page) => Promise<() => Promise<void>>;
+  measureRounds: (page: Page, options?: MeasureRoundsOptions) => Promise<void>;
+  finishRounds: () => void;
   // Waits until tracked API activity has been quiet for the requested window.
   // Long-lived SSE streams do not block this: only their request/response
   // events count as activity, not the open connection itself.
   waitForQuiet: (options: NetworkQuietOptions) => Promise<"idle" | "timeout">;
-  // Async: waits for in-flight response-body reads so response sizes are
-  // populated before the caller summarizes the capture.
+  // Waits for budgeted non-streamed bodies, with a bounded unreadable outcome.
   capture: () => Promise<NetworkCapture>;
+};
+
+export type MeasureRoundsOptions = {
+  // Awaited after a round is scheduled and before any of its requests reaches
+  // the network, so the page state it reads precedes that round's responses.
+  beforeRelease?: () => Promise<void>;
 };
 
 export type NetworkQuietOptions = {
@@ -96,10 +115,7 @@ export const waitForQuietPeriod = async ({
   minimumObservationMs,
   timeoutMs,
   now = Date.now,
-  sleep = async (durationMs) =>
-    new Promise((resolve) => {
-      setTimeout(resolve, durationMs);
-    }),
+  sleep = ownerSleep,
 }: WaitForQuietPeriodOptions): Promise<"idle" | "timeout"> => {
   const startedAt = now();
   const timeoutAt = startedAt + timeoutMs;
@@ -122,101 +138,208 @@ export const waitForQuietPeriod = async ({
 
 type NetworkCollectorOptions = {
   apiOrigin?: string;
-};
-
-// Playwright does not export its resource-timing shape as a named type, so it
-// is derived from the method that produces it.
-type ResourceTiming = ReturnType<Request["timing"]>;
-
-// The browser reports -1 for a value it never recorded (a request that failed
-// before the response, or an engine that does not populate the field).
-const TIMING_UNAVAILABLE = -1;
-
-// Depth is measured from timestamps taken inside the browser's network stack,
-// not from when this process handles the corresponding CDP event. The driver
-// competes with the browser and every other shard on a CI runner, so delayed
-// event delivery used to merge real launch waves on busy runs and expose them
-// again on fast runs. `startTime` is epoch ms; `responseEnd` is relative to it.
-export const browserRequestInterval = (
-  timing: ResourceTiming,
-): { start: number; end: number } | null => {
-  if (timing.startTime <= 0 || timing.responseEnd === TIMING_UNAVAILABLE) {
-    return null;
-  }
-  return {
-    start: timing.startTime,
-    end: timing.startTime + timing.responseEnd,
-  };
+  bodyCompletionTimeoutMs?: number;
+  responseSizeBudgetKeys?: ReadonlySet<string>;
 };
 
 type NetworkRecord = {
   method: string;
   pathname: string;
-  resourceType: string;
-  start: number;
-  end: number | null;
-  streamed: boolean;
-  // Browser-measured interval, present once the request settles and the
-  // network stack times it. Untimed requests retain both driver timestamps,
-  // so an interval is never assembled from two different clocks.
-  browserInterval: { start: number; end: number } | null;
+  url: string;
+  startedAt: number;
   // From the API's dev/test-only `x-db-queries` response header (the
   // per-request Drizzle query counter); null when no response arrived.
   dbQueries: number | null;
-  // True only when Playwright saw a response and that response did not expose
+  // True only when CDP saw a response and that response did not expose
   // the dev/test query-count header.
   dbQueryHeaderMissing: boolean;
-  // Response body length in bytes; null until the async body read resolves,
-  // and permanently null for a streamed (SSE) response.
-  responseBytes: number | null;
-  responseBytesUnavailable: boolean;
+  transactions: number | null;
+  transactionHeaderMissing: boolean;
+  responseSize: ReturnType<typeof createResponseSizeSample>;
 };
 
-// The app-version poll (ApiVersionMismatchReporter) fires from chrome after
-// mount and nothing on the page waits on it, so where it lands in the timeline
-// is pure scheduling: launched in a gap between two real rounds, it read as a
-// level of its own.
 const BACKGROUND_POLL_PATHS = new Set(["/health"]);
 
-/**
- * Streams and background polls are covered as requests, but never form a
- * route-load waterfall.
- */
+type WaterfallRequest = {
+  pathname: string;
+  resourceType: string;
+};
+
+/** Background work remains budgeted, but cannot affect route-load depth. */
 export const countsTowardsWaterfall = ({
   pathname,
   resourceType,
-  streamed,
-}: Pick<NetworkRecord, "pathname" | "resourceType" | "streamed">): boolean =>
-  resourceType !== "eventsource" &&
-  !streamed &&
-  !BACKGROUND_POLL_PATHS.has(pathname);
+}: WaterfallRequest): boolean =>
+  resourceType !== "eventsource" && !BACKGROUND_POLL_PATHS.has(pathname);
 
-const isTrackedApiRequest = (request: Request, apiOrigin: string): boolean => {
-  if (!TRACKED_RESOURCE_TYPES.has(request.resourceType())) {
-    return false;
-  }
-  return new URL(request.url()).origin === apiOrigin;
+const requestDetails = (request: Request): WaterfallRequest => ({
+  pathname: new URL(request.url()).pathname,
+  resourceType: request.resourceType(),
+});
+
+export const isTrackedProtocolRequest = (
+  { type, url }: { type: string | undefined; url: string },
+  apiOrigin: string,
+): boolean =>
+  (type === undefined || TRACKED_RESOURCE_TYPES.has(type.toLowerCase())) &&
+  new URL(url).origin === apiOrigin;
+
+const isTrackedApiRequest = (request: Request, apiOrigin: string): boolean =>
+  isTrackedProtocolRequest(
+    { type: request.resourceType(), url: request.url() },
+    apiOrigin,
+  );
+
+/** Accumulate decoded bytes without retrieving or retaining the response body. */
+export const createResponseSizeSample = (
+  incompleteReason = "CDP loadingFinished was not observed",
+) => {
+  let decodedBytes = 0;
+  const completion = Promise.withResolvers<undefined>();
+  let outcome: ResponseSizeOutcome = {
+    status: "unreadable",
+    error: incompleteReason,
+  };
+  return {
+    completion: completion.promise,
+    markIncomplete: (timeoutMs: number) => {
+      if (outcome.status === "unreadable") {
+        outcome = {
+          status: "unreadable",
+          error: `body incomplete after ${timeoutMs}ms`,
+        };
+      }
+    },
+    receive: (dataLength: number) => {
+      if (outcome.status !== "streamed") {
+        decodedBytes += dataLength;
+      }
+    },
+    complete: () => {
+      if (outcome.status !== "streamed" && outcome.status !== "failed") {
+        outcome = { status: "measured", bytes: decodedBytes };
+      }
+      completion.resolve(undefined);
+    },
+    fail: ({
+      errorText,
+      canceled = false,
+    }: {
+      errorText: string;
+      canceled?: boolean;
+    }) => {
+      outcome = { status: "failed", error: errorText, canceled };
+      completion.resolve(undefined);
+    },
+    stream: () => {
+      outcome = { status: "streamed" };
+      completion.resolve(undefined);
+    },
+    get outcome(): ResponseSizeOutcome {
+      return outcome;
+    },
+  };
 };
 
-const isStreamedResponse = (response: Response): boolean =>
-  (response.headers()["content-type"] ?? "")
-    .toLowerCase()
-    .includes(STREAMED_RESPONSE_CONTENT_TYPE);
-
-// Playwright's body() rejects for a response that never finishes (aborted or
-// redirected mid-navigation); that is a legitimate outcome here, not a bug in
-// the collector, so it is caught and recorded rather than left to reject the
-// whole route walk.
-const readResponseBytes = async (
-  response: Response,
+const recordQueryCount = (
   record: NetworkRecord,
-): Promise<void> => {
-  try {
-    const body = await response.body();
-    record.responseBytes = body.length;
-  } catch {
-    record.responseBytesUnavailable = true;
+  headers: Readonly<Record<string, unknown>>,
+) => {
+  const header = Object.entries(headers).find(
+    ([name]) => name.toLowerCase() === DB_QUERIES_HEADER,
+  )?.[1];
+  record.dbQueryHeaderMissing = header === undefined;
+  record.dbQueries = header === undefined ? null : Number(header);
+  const transactionHeader = Object.entries(headers).find(
+    ([name]) => name.toLowerCase() === DB_TRANSACTIONS_HEADER,
+  )?.[1];
+  record.transactions =
+    transactionHeader === undefined ? null : Number(transactionHeader);
+  record.transactionHeaderMissing = transactionHeader === undefined;
+};
+
+type ReconcileNetworkRecordsOptions = {
+  records: readonly NetworkRecord[];
+  requests: Iterable<Request>;
+};
+
+const reconcileNetworkRecords = ({
+  records,
+  requests,
+}: ReconcileNetworkRecordsOptions) => {
+  // Page request events include OOPIF traffic that the page's CDP target
+  // may not emit. Reconcile occurrence counts so repeated URLs remain
+  // distinct, and expose every unmeasured body to the existing size guard.
+  const remaining = new Map<string, number>();
+  for (const { method, url } of records) {
+    const key = JSON.stringify([method, url]);
+    remaining.set(key, (remaining.get(key) ?? 0) + 1);
   }
+  const capturedRecords = [...records];
+  for (const request of requests) {
+    const key = JSON.stringify([request.method(), request.url()]);
+    const count = remaining.get(key) ?? 0;
+    if (count > 0) {
+      remaining.set(key, count - 1);
+      continue;
+    }
+    capturedRecords.push({
+      method: request.method(),
+      pathname: new URL(request.url()).pathname,
+      url: request.url(),
+      startedAt: request.timing().startTime,
+      dbQueries: null,
+      dbQueryHeaderMissing: false,
+      transactions: null,
+      transactionHeaderMissing: false,
+      responseSize: createResponseSizeSample(
+        "CDP Network events were not observed; the request may belong to an out-of-process iframe",
+      ),
+    });
+  }
+  return capturedRecords;
+};
+
+export type ApiActivityWatcher = {
+  waitForQuiet: (options: NetworkQuietOptions) => Promise<"idle" | "timeout">;
+  detach: () => void;
+};
+
+/**
+ * Tracks API activity from Playwright page events alone, so it works in every
+ * browser engine. The collector's byte measurement needs Chromium's protocol;
+ * suites that only wait for the page to settle use this instead.
+ */
+export const watchApiActivity = (
+  page: Page,
+  apiOrigin = new URL(DEFAULT_API_URL).origin,
+): ApiActivityWatcher => {
+  let lastActivityAt = Date.now();
+  const onRequest = (request: Request) => {
+    if (isTrackedApiRequest(request, apiOrigin)) {
+      lastActivityAt = Date.now();
+    }
+  };
+  const onResponse = (response: Response) => {
+    onRequest(response.request());
+  };
+  page.on("request", onRequest);
+  page.on("response", onResponse);
+  page.on("requestfinished", onRequest);
+  page.on("requestfailed", onRequest);
+  return {
+    waitForQuiet: async (quietOptions) =>
+      await waitForQuietPeriod({
+        ...quietOptions,
+        getLastActivityAt: () => lastActivityAt,
+      }),
+    detach: () => {
+      page.off("request", onRequest);
+      page.off("response", onResponse);
+      page.off("requestfinished", onRequest);
+      page.off("requestfailed", onRequest);
+    },
+  };
 };
 
 export const createNetworkCollector = (
@@ -224,123 +347,332 @@ export const createNetworkCollector = (
 ): NetworkCollector => {
   const apiOrigin =
     collectorOptions.apiOrigin ?? new URL(DEFAULT_API_URL).origin;
+  const bodyCompletionTimeoutMs =
+    collectorOptions.bodyCompletionTimeoutMs ??
+    NETWORK_BODY_COMPLETION_TIMEOUT_MS;
+  const responseSizeBudgetKeys =
+    collectorOptions.responseSizeBudgetKeys ??
+    new Set(
+      Object.values(readNetworkBaseline() ?? {}).flatMap((entry) =>
+        Object.keys(entry.responseSizes ?? {}),
+      ),
+    );
   const records: NetworkRecord[] = [];
-  const byRequest = new Map<Request, NetworkRecord>();
-  // Body reads are async (Playwright must finish downloading the response),
-  // so capture() awaits these before reading responseBytes off the records.
-  const pendingBodyReads: Promise<void>[] = [];
+  const flushSessions = new Set<() => Promise<void>>();
+  const observedRequests = new Set<Request>();
   let lastActivityAt = Date.now();
+  const rounds = createNetworkRoundController<Request>();
+  const released = new Set<Request>();
+  // Set while a scheduled round waits for `beforeRelease`; its tokens are no
+  // longer held, so peers wait here instead of treating them as abandoned.
+  let releasing: Promise<void> | null = null;
+  let releaseFailure: { error: unknown } | null = null;
 
   const markActivity = () => {
     lastActivityAt = Date.now();
   };
 
   return {
-    trackPage: (page) => {
-      const onRequest = (request: Request) => {
-        if (!isTrackedApiRequest(request, apiOrigin)) {
+    measureRounds: async (page, roundOptions = {}) => {
+      const startRelease = (tokens: readonly Request[]) => {
+        releasing = (async () => {
+          try {
+            await roundOptions.beforeRelease?.();
+          } catch (error) {
+            // Held requests must still reach the network; the failure
+            // surfaces from finishRounds instead.
+            releaseFailure ??= { error };
+          } finally {
+            for (const token of tokens) {
+              released.add(token);
+            }
+          }
+        })().finally(() => {
+          releasing = null;
+        });
+      };
+      await page.route(
+        (url) => url.origin === apiOrigin,
+        async (route) => {
+          const request = route.request();
+          if (
+            !isTrackedApiRequest(request, apiOrigin) ||
+            !countsTowardsWaterfall(requestDetails(request)) ||
+            rounds.loaded
+          ) {
+            await route.continue();
+            return;
+          }
+          rounds.arrive({
+            token: request,
+            key: requestKey({
+              method: request.method(),
+              pathname: new URL(request.url()).pathname,
+            }),
+            now: Date.now(),
+          });
+          // finishRounds can mark the controller loaded while this handler
+          // awaits, so read it fresh on every iteration.
+          const loaded = () => rounds.loaded;
+          while (!released.delete(request) && !loaded()) {
+            if (releasing !== null) {
+              await releasing;
+              continue;
+            }
+            const tokens = rounds.release(Date.now());
+            if (tokens.length > 0) {
+              startRelease(tokens);
+              continue;
+            }
+            // The page abandoned the request while it was held: it never
+            // reaches the network, so stop waiting and do not continue it.
+            if (!rounds.holds(request)) {
+              return;
+            }
+            await ownerSleep(NETWORK_ROUND_POLL_MS);
+          }
+          await route.continue();
+        },
+      );
+    },
+    finishRounds: () => {
+      rounds.finish();
+      if (releaseFailure !== null) {
+        throw new Error("A round's beforeRelease hook failed", {
+          cause: releaseFailure.error,
+        });
+      }
+    },
+    trackPage: async (page) => {
+      const session = await page.context().newCDPSession(page);
+      const byRequestId = new Map<string, NetworkRecord>();
+      session.on(
+        "Network.requestWillBeSent",
+        ({ requestId, request, type, wallTime, redirectResponse }) => {
+          if (redirectResponse !== undefined) {
+            const previous = byRequestId.get(requestId);
+            if (previous !== undefined) {
+              recordQueryCount(previous, redirectResponse.headers);
+              previous.responseSize.complete();
+            }
+            byRequestId.delete(requestId);
+          }
+          if (
+            !isTrackedProtocolRequest({ type, url: request.url }, apiOrigin)
+          ) {
+            return;
+          }
+          const record: NetworkRecord = {
+            method: request.method,
+            pathname: new URL(request.url).pathname,
+            url: request.url,
+            startedAt: wallTime * 1000,
+            dbQueries: null,
+            dbQueryHeaderMissing: false,
+            transactions: null,
+            transactionHeaderMissing: false,
+            responseSize: createResponseSizeSample(),
+          };
+          if (type === "EventSource" || request.method === "HEAD") {
+            record.responseSize.stream();
+          }
+          records.push(record);
+          byRequestId.set(requestId, record);
+          markActivity();
+        },
+      );
+      session.on(
+        "Network.responseReceived",
+        ({ requestId, response, type }) => {
+          const record = byRequestId.get(requestId);
+          if (record === undefined) {
+            return;
+          }
+          recordQueryCount(record, response.headers);
+          if (
+            type === "EventSource" ||
+            type === "WebSocket" ||
+            response.status === 204 ||
+            response.status === 205 ||
+            response.status === 304 ||
+            response.mimeType
+              .toLowerCase()
+              .includes(STREAMED_RESPONSE_CONTENT_TYPE) ||
+            Object.entries(response.headers).some(
+              ([name, value]) =>
+                name.toLowerCase() === "content-type" &&
+                value.toLowerCase().includes(STREAMED_RESPONSE_CONTENT_TYPE),
+            )
+          ) {
+            record.responseSize.stream();
+          }
+          markActivity();
+        },
+      );
+      session.on("Network.eventSourceMessageReceived", ({ requestId }) => {
+        byRequestId.get(requestId)?.responseSize.stream();
+      });
+      session.on("Network.webSocketCreated", ({ requestId }) => {
+        byRequestId.get(requestId)?.responseSize.stream();
+      });
+      session.on("Network.dataReceived", ({ requestId, dataLength }) => {
+        const record = byRequestId.get(requestId);
+        if (
+          record === undefined ||
+          record.responseSize.outcome.status === "streamed"
+        ) {
           return;
         }
-        const record: NetworkRecord = {
-          method: request.method(),
-          pathname: new URL(request.url()).pathname,
-          resourceType: request.resourceType(),
-          start: Date.now(),
-          end: null,
-          streamed: request.resourceType() === "eventsource",
-          browserInterval: null,
-          dbQueries: null,
-          dbQueryHeaderMissing: false,
-          responseBytes: null,
-          responseBytesUnavailable: false,
-        };
-        records.push(record);
-        byRequest.set(request, record);
+        record.responseSize.receive(dataLength);
         markActivity();
+      });
+      session.on("Network.loadingFinished", ({ requestId }) => {
+        byRequestId.get(requestId)?.responseSize.complete();
+        if (byRequestId.has(requestId)) {
+          markActivity();
+        }
+      });
+      session.on(
+        "Network.loadingFailed",
+        ({ requestId, errorText, canceled }) => {
+          byRequestId.get(requestId)?.responseSize.fail({
+            errorText,
+            ...(canceled === undefined ? {} : { canceled }),
+          });
+          if (byRequestId.has(requestId)) {
+            markActivity();
+          }
+        },
+      );
+      const enabled = await Result.tryPromise(
+        async () => await session.send("Network.enable"),
+      );
+      if (enabled.isErr()) {
+        const detached = await Result.tryPromise(
+          async () => await session.detach(),
+        );
+        if (detached.isErr()) {
+          throw new AggregateError(
+            [enabled.error.cause, detached.error.cause],
+            "Network collection setup and CDP detach failed",
+          );
+        }
+        throw enabled.error.cause;
+      }
+      const flush = async () => {
+        await session.send("Runtime.evaluate", { expression: "void 0" });
       };
+      flushSessions.add(flush);
 
-      const onSettled = (request: Request) => {
-        const record = byRequest.get(request);
-        if (record) {
-          record.end = Date.now();
-          // `responseEnd` becomes available when the request finishes.
-          record.browserInterval = browserRequestInterval(request.timing());
+      // Playwright request tokens still own the existing release barrier.
+      const onRequest = (request: Request) => {
+        if (isTrackedApiRequest(request, apiOrigin)) {
+          observedRequests.add(request);
           markActivity();
         }
       };
-
-      const onResponse = (response: Response) => {
-        const record = byRequest.get(response.request());
-        if (!record) {
-          return;
+      const onSettled = (request: Request) => {
+        if (countsTowardsWaterfall(requestDetails(request))) {
+          rounds.complete(request, Date.now());
         }
-        markActivity();
-        const header = response.headers()[DB_QUERIES_HEADER];
-        if (header !== undefined) {
-          record.dbQueries = Number(header);
-        } else {
-          record.dbQueryHeaderMissing = true;
+        if (isTrackedApiRequest(request, apiOrigin)) {
+          markActivity();
         }
-
-        if (isStreamedResponse(response)) {
-          record.streamed = true;
-          return;
-        }
-        pendingBodyReads.push(readResponseBytes(response, record));
       };
-
+      const onResponse = (response: Response) => {
+        if (
+          isTrackedApiRequest(response.request(), apiOrigin) &&
+          (response.headers()["content-type"] ?? "")
+            .toLowerCase()
+            .includes(STREAMED_RESPONSE_CONTENT_TYPE) &&
+          countsTowardsWaterfall(requestDetails(response.request()))
+        ) {
+          rounds.complete(response.request(), Date.now());
+        }
+      };
       page.on("request", onRequest);
       page.on("response", onResponse);
       page.on("requestfinished", onSettled);
       page.on("requestfailed", onSettled);
-
-      return () => {
+      return async () => {
+        rounds.finish();
+        released.clear();
         page.off("request", onRequest);
         page.off("response", onResponse);
         page.off("requestfinished", onSettled);
         page.off("requestfailed", onSettled);
+        flushSessions.delete(flush);
+        await session.detach();
       };
     },
 
     waitForQuiet: async (quietOptions) =>
       waitForQuietPeriod({
         ...quietOptions,
-        getLastActivityAt: () => lastActivityAt,
+        getLastActivityAt: () => (rounds.pending ? Date.now() : lastActivityAt),
       }),
 
     capture: async () => {
-      await Promise.all(pendingBodyReads);
-      // A still-pending request can only be the tail of a chain (nothing waited
-      // on its response yet), so closing it at "now" never inflates the depth.
-      const now = Date.now();
+      let timeoutId: ReturnType<typeof setTimeout> | undefined;
+      const timeout = new Promise<"timeout">((resolve) => {
+        timeoutId = setTimeout(
+          () => resolve("timeout"),
+          bodyCompletionTimeoutMs,
+        );
+      });
+      try {
+        let observedCount = -1;
+        while (true) {
+          const flushed = await Promise.race([
+            Promise.all(
+              [...flushSessions].map(async (flush) => await flush()),
+            ).then(() => "complete" as const),
+            timeout,
+          ]);
+          if (flushed === "timeout" || observedCount === records.length) {
+            break;
+          }
+          observedCount = records.length;
+          const result = await Promise.race([
+            Promise.all(
+              records
+                .filter((record) =>
+                  responseSizeBudgetKeys.has(requestKey(record)),
+                )
+                .map(async ({ responseSize }) => await responseSize.completion),
+            ).then(() => "complete" as const),
+            timeout,
+          ]);
+          if (result === "timeout") {
+            break;
+          }
+          // Flush again: completion can start another request before the snapshot.
+        }
+      } finally {
+        clearTimeout(timeoutId);
+      }
+      for (const record of records) {
+        if (responseSizeBudgetKeys.has(requestKey(record))) {
+          record.responseSize.markIncomplete(bodyCompletionTimeoutMs);
+        }
+      }
+      const capturedRecords = reconcileNetworkRecords({
+        records,
+        requests: observedRequests,
+      });
       return {
-        requests: records.map(
-          ({
-            method,
-            pathname,
-            dbQueries,
-            dbQueryHeaderMissing,
-            responseBytes,
-            responseBytesUnavailable,
-          }) => ({
-            method,
-            pathname,
-            dbQueries,
-            dbQueryHeaderMissing,
-            responseBytes,
-            responseBytesUnavailable,
-          }),
-        ),
-        intervals: records
-          .filter(countsTowardsWaterfall)
-          .map(({ browserInterval, start, end, method, pathname }) => {
-            const interval = browserInterval ?? { start, end: end ?? now };
-            return {
-              start: interval.start,
-              end: interval.end,
-              key: requestKey({ method, pathname }),
-            };
-          }),
+        depthChain: rounds.rounds,
+        duplicateGetCounts: countDuplicateGets(capturedRecords),
+        requests: capturedRecords.map((record) => ({
+          method: record.method,
+          pathname: record.pathname,
+          dbQueries: record.dbQueries,
+          dbQueryHeaderMissing: record.dbQueryHeaderMissing,
+          transactions: record.transactions,
+          transactionHeaderMissing:
+            record.transactionHeaderMissing || record.transactions === null,
+          responseSize: record.responseSize.outcome,
+        })),
       };
     },
   };
@@ -351,11 +683,19 @@ export const createNetworkCollector = (
 const UUID_SEGMENT =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu;
 
+// A file-content grant (`fc1.<payload>.<signature>`) is a fresh signed token
+// per read; budgets name the endpoint, not the token.
+const FILE_CONTENT_GRANT_SEGMENT = /^fc1\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/u;
+
+const normalizeSegment = (segment: string): string => {
+  if (UUID_SEGMENT.test(segment)) {
+    return ":id";
+  }
+  return FILE_CONTENT_GRANT_SEGMENT.test(segment) ? ":grant" : segment;
+};
+
 export const normalizeApiPath = (pathname: string): string =>
-  pathname
-    .split("/")
-    .map((segment) => (UUID_SEGMENT.test(segment) ? ":id" : segment))
-    .join("/");
+  pathname.split("/").map(normalizeSegment).join("/");
 
 export const requestKey = ({
   method,
@@ -365,130 +705,61 @@ export const requestKey = ({
   pathname: string;
 }): string => `${method} ${normalizeApiPath(pathname)}`;
 
-// A request launched this long after the previous LAUNCH starts a new
-// observation sequence, not another route-load round: an idle prefetch that
-// fires once the route has settled is not a level the user waits through. The
-// split reads start times only, so how long a response takes can never move an
-// observation boundary.
-//
-// Reading launch times rather than the gap since the previous response ENDED is
-// what buys load-monotonicity, and it costs sensitivity: a dependent request
-// whose parent took longer than this gap opens a new sequence instead of
-// counting a level. The three properties are not simultaneously satisfiable —
-// separating a dependent request from an idle prefetch requires knowing how long
-// the parent ran, and any rule that reads response ends lets a response growing
-// under load close a gap it used to exceed, which is exactly the failure this
-// metric had. Under-counting a slow chain is the safer of the two errors for a
-// guard whose baselines are only ever compared upward.
-const REQUEST_SEQUENCE_GAP_MS = 500;
+const DUPLICATE_GET_WINDOW_MS = 2000;
 
-export type WaterfallInterval = {
-  start: number;
-  end: number;
-  // Request key (method + normalized path). Optional so a caller measuring bare
-  // timings still gets a depth; such intervals contribute no key to their level.
-  key?: string;
+type TimedNetworkRequest = {
+  method: string;
+  url: string;
+  startedAt: number;
 };
 
-// Depth = the most consecutive busy blocks inside any one observation sequence,
-// where a busy block is a maximal run of requests whose intervals overlap. Two
-// requests that were in flight at the same instant are never counted as two
-// levels, so this is a lower bound on true causal depth: a request that depends
-// on a fast response stays hidden behind an unrelated slow one.
-//
-// Load-monotonicity is the property the guard rests on: neither a slower
-// response nor a uniformly stretched timeline can raise the result. The
-// converse does not hold: a FASTER response ends a busy block earlier, so an
-// unrelated request that used to overlap it now launches after it and reads
-// as one more level. A single lucky sample therefore over-reads by one on a
-// route that did not change, which is why the route-smoke suite re-measures a
-// route before treating a deeper reading as a regression
-// (`WATERFALL_DEPTH_RESAMPLES`). Timing alone cannot separate a dependent
-// launch from a coincidentally later one; sampling is the honest fix. Two
-// rules buy the monotonicity that does hold:
-//   1. The sequence split reads LAUNCH times only. Segment boundaries therefore
-//      cannot move when responses take longer, and a uniform slowdown widens
-//      launch gaps, which only splits a sequence further.
-//   2. Coverage (`busyUntil`) is a running max over every end seen so far and is
-//      never rewound at a boundary. A still-in-flight long request keeps masking
-//      the requests that overlap it even across a split, so a split can only
-//      lower the count, never unmask a chain hiding behind that request.
-// The previous formulation broke rule 1: it counted rounds through a counter
-// that reset on a gap measured from the END of the previous round, so a response
-// that grew under load could close that gap, skip the reset, and carry the count
-// forward into a deeper reading with no change to the route at all.
-//
-// Returns the busy blocks of the deepest sequence in launch order, one entry per
-// level, each holding every request key that shared that level's block. Depth is
-// its length, so the number and the chain behind it can never disagree.
-export const deepestWaterfallSequence = (
-  intervals: WaterfallInterval[],
-): string[][] => {
-  const sorted = intervals.toSorted((a, b) => a.start - b.start);
-  const first = sorted.at(0);
-  if (first === undefined) {
-    return [];
-  }
-
-  const keysOf = ({ key }: WaterfallInterval): string[] =>
-    key === undefined ? [] : [key];
-
-  // A sequence split rebinds `blocks` instead of clearing it, so `best` keeps
-  // pointing at the winning sequence while that sequence is still growing;
-  // `bestDepth` then trims it to the prefix that actually counted. Ties keep
-  // the earliest sequence: the first chain to reach the depth is the one the
-  // route loaded through.
-  let currentBlock = keysOf(first);
-  let blocks = [currentBlock];
-  let best = blocks;
-  let bestDepth = 1;
-  let previousStart = first.start;
-  let busyUntil = first.end;
-  const launched: WaterfallInterval[] = [first];
-
-  for (const interval of sorted.slice(1)) {
-    const launchGap = interval.start - previousStart;
-    previousStart = interval.start;
-
-    if (launchGap > REQUEST_SEQUENCE_GAP_MS) {
-      // `busyUntil` carries a still-open request across the gap, and that
-      // request is what keeps the new sequence's first block busy; name it, or
-      // the chain would show its followers as parallel with nothing to wait on.
-      currentBlock = launched
-        .filter(({ end }) => end > interval.start)
-        .flatMap(keysOf)
-        .concat(keysOf(interval));
-      blocks = [currentBlock];
-    } else if (interval.start >= busyUntil) {
-      currentBlock = keysOf(interval);
-      blocks.push(currentBlock);
-      if (blocks.length > bestDepth) {
-        best = blocks;
-        bestDepth = blocks.length;
-      }
-    } else {
-      currentBlock.push(...keysOf(interval));
+/** Count excess reads of the same resource, preserving IDs and query values. */
+export const countDuplicateGets = (
+  requests: readonly TimedNetworkRequest[],
+): Record<string, number> => {
+  const lastStartedAt = new Map<string, number>();
+  const counts = new Map<string, number>();
+  for (const { method, url, startedAt } of requests) {
+    if (method !== "GET") {
+      continue;
     }
-    busyUntil = Math.max(busyUntil, interval.end);
-    launched.push(interval);
+    const normalized = new URL(url);
+    normalized.hash = "";
+    normalized.searchParams.sort();
+    const key = `${method} ${normalized.pathname}${normalized.search}`;
+    const previous = lastStartedAt.get(key);
+    if (
+      previous !== undefined &&
+      startedAt - previous <= DUPLICATE_GET_WINDOW_MS
+    ) {
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+    lastStartedAt.set(key, startedAt);
   }
-  return best.slice(0, bestDepth);
+  return Object.fromEntries(counts);
 };
-
-export const waterfallDepth = (intervals: WaterfallInterval[]): number =>
-  deepestWaterfallSequence(intervals).length;
 
 // --- baseline machinery ----------------------------------------------------
 
 export type RouteNetworkMetrics = {
+  // Diagnostic only: the duplicate budget is always zero, never recorded.
+  duplicateGetCounts?: Record<string, number>;
+  requestCosts: Record<
+    string,
+    {
+      dbQueries: number | null;
+      transactions: number | null;
+      responseBytes: number | null;
+    }[]
+  >;
   // Observed request keys, unique + sorted.
   requests: string[];
   // Per request key, how many times it was observed.
   requestCounts: Record<string, number>;
-  // Depth over ALL observed intervals, including duplicate keys.
+  // Number of nonempty barrier releases, including duplicate request keys.
   depth: number;
   // The request keys behind `depth`, one entry per level in launch order (see
-  // deepestWaterfallSequence). Diagnostic only: never written to the baseline.
+  // round controller). Diagnostic only: never written to the baseline.
   depthChain: string[][];
   // Per request key, the max `x-db-queries` observed this run. Keys whose
   // responses carried no header (auth-mounted endpoints, dropped responses)
@@ -496,15 +767,21 @@ export type RouteNetworkMetrics = {
   dbQueries: Record<string, number>;
   // Per request key, how many completed responses omitted `x-db-queries`.
   missingDbQueryCounts: Record<string, number>;
+  transactions: Record<string, number>;
+  missingTransactionCounts: Record<string, number>;
   // Per request key, the max response body size (bytes) observed this run.
-  // Streamed (SSE) responses and keys whose body never resolved are absent.
+  // Streams and keys without a completed size measurement are absent.
   responseSizes: Record<string, number>;
-  // Per request key, how many non-streamed responses failed to yield a body.
-  missingResponseSizeCounts: Record<string, number>;
+  // Protocol and request failures retain their reasons for route diagnostics.
+  responseSizeFailures: Record<string, ResponseSizeFailure[]>;
 };
+
+export const NETWORK_DEPTH_METHOD = "round-barrier-v1";
 
 export type NetworkBaselineEntry = {
   depth: number;
+  // Missing on recordings made before depth method versioning.
+  depthMethod?: string;
   requests: string[];
   // Optional so baselines written before request multiplicity existed still parse.
   requestCounts?: Record<string, number>;
@@ -521,35 +798,64 @@ export const summarizeCapture = (
   capture: NetworkCapture,
 ): RouteNetworkMetrics => {
   const dbQueries: Record<string, number> = {};
+  const transactions: Record<string, number> = {};
+  const missingTransactionCounts: Record<string, number> = {};
   const missingDbQueryCounts: Record<string, number> = {};
   const responseSizes: Record<string, number> = {};
-  const missingResponseSizeCounts: Record<string, number> = {};
+  const responseSizeFailures: Record<string, ResponseSizeFailure[]> = {};
   const requestCounts: Record<string, number> = {};
-  const depthChain = deepestWaterfallSequence(capture.intervals);
+  const requestCosts: RouteNetworkMetrics["requestCosts"] = {};
+  const depthChain = capture.depthChain;
   for (const request of capture.requests) {
     const key = requestKey(request);
     requestCounts[key] = (requestCounts[key] ?? 0) + 1;
+    (requestCosts[key] ??= []).push({
+      dbQueries: request.dbQueries,
+      transactions: request.transactions,
+      responseBytes:
+        request.responseSize.status === "measured"
+          ? request.responseSize.bytes
+          : null,
+    });
     if (request.dbQueryHeaderMissing) {
       missingDbQueryCounts[key] = (missingDbQueryCounts[key] ?? 0) + 1;
     }
     if (request.dbQueries !== null && !Number.isNaN(request.dbQueries)) {
       dbQueries[key] = Math.max(dbQueries[key] ?? 0, request.dbQueries);
     }
-    if (request.responseBytesUnavailable) {
-      missingResponseSizeCounts[key] =
-        (missingResponseSizeCounts[key] ?? 0) + 1;
+    if (request.transactionHeaderMissing) {
+      missingTransactionCounts[key] = (missingTransactionCounts[key] ?? 0) + 1;
     }
     if (
-      request.responseBytes !== null &&
-      !Number.isNaN(request.responseBytes)
+      request.transactions !== null &&
+      Number.isFinite(request.transactions)
     ) {
-      responseSizes[key] = Math.max(
-        responseSizes[key] ?? 0,
-        request.responseBytes,
+      transactions[key] = Math.max(
+        transactions[key] ?? 0,
+        request.transactions,
       );
+    }
+    const outcome = request.responseSize;
+    switch (outcome.status) {
+      case "measured":
+        responseSizes[key] = Math.max(responseSizes[key] ?? 0, outcome.bytes);
+        break;
+      case "streamed":
+        break;
+      case "failed":
+      case "unreadable":
+        (responseSizeFailures[key] ??= []).push(outcome);
+        break;
+      default:
+        outcome satisfies never;
+        panic("Unhandled response-size outcome");
     }
   }
   return {
+    ...(capture.duplicateGetCounts === undefined
+      ? {}
+      : { duplicateGetCounts: capture.duplicateGetCounts }),
+    requestCosts,
     requests: Object.keys(requestCounts).toSorted(),
     requestCounts: Object.fromEntries(
       Object.entries(requestCounts).toSorted(([a], [b]) => a.localeCompare(b)),
@@ -557,6 +863,8 @@ export const summarizeCapture = (
     depth: depthChain.length,
     depthChain,
     dbQueries,
+    transactions,
+    missingTransactionCounts,
     missingDbQueryCounts: Object.fromEntries(
       Object.entries(missingDbQueryCounts).toSorted(([a], [b]) =>
         a.localeCompare(b),
@@ -565,8 +873,8 @@ export const summarizeCapture = (
     responseSizes: Object.fromEntries(
       Object.entries(responseSizes).toSorted(([a], [b]) => a.localeCompare(b)),
     ),
-    missingResponseSizeCounts: Object.fromEntries(
-      Object.entries(missingResponseSizeCounts).toSorted(([a], [b]) =>
+    responseSizeFailures: Object.fromEntries(
+      Object.entries(responseSizeFailures).toSorted(([a], [b]) =>
         a.localeCompare(b),
       ),
     ),
@@ -610,7 +918,7 @@ const pushNewRequestProblems = ({
 };
 
 // One line per level of the deepest sequence. Several keys on a level means
-// those requests overlapped, so they cost one round between them, not several.
+// those requests launched in the same measured wave.
 const formatDepthChain = (depthChain: string[][]): string => {
   if (!depthChain.some((keys) => keys.length > 0)) {
     return "";
@@ -723,15 +1031,21 @@ const pushResponseSizeProblems = ({
 }) => {
   const baselineSizes = entry.responseSizes ?? {};
   for (const key of Object.keys(baselineSizes)) {
-    if (metrics.missingResponseSizeCounts[key] === undefined) {
+    if (metrics.requestCounts[key] === undefined) {
       continue;
     }
+    const failures = metrics.responseSizeFailures[key] ?? [];
+    const hasFailure = failures.length > 0;
+    if (metrics.responseSizes[key] !== undefined && !hasFailure) {
+      continue;
+    }
+    const details = failures.map(
+      ({ status, error }) => `  ${status}: ${error}`,
+    );
     problems.push(
       `Response size missing on ${route}: ${key}\n` +
-        `  This request has a committed response-size budget, but Playwright\n` +
-        `  could not read the response body (aborted or redirected mid-\n` +
-        `  navigation is the usual cause). Re-run the suite; if it persists,\n` +
-        `  investigate before trusting this route's payload-size budget.`,
+        `  This request has a committed response-size budget, but no readable\n` +
+        `  sample was measured or a request/size measurement failed.\n${details.join("\n")}`,
     );
   }
   for (const [key, observed] of Object.entries(metrics.responseSizes)) {
@@ -770,7 +1084,10 @@ const pushImprovementNotices = ({
         .join("\n")}`,
     );
   }
-  if (metrics.depth >= entry.depth) {
+  if (
+    entry.depthMethod !== NETWORK_DEPTH_METHOD ||
+    metrics.depth >= entry.depth
+  ) {
     return;
   }
   notices.push(
@@ -817,6 +1134,22 @@ const requestCountBudget = (
   return { ...budget, ...entry.requestCounts };
 };
 
+const duplicateGetProblems = (results: Map<string, RouteNetworkMetrics>) => {
+  const problems: string[] = [];
+  for (const [route, metrics] of results) {
+    for (const [key, count] of Object.entries(
+      metrics.duplicateGetCounts ?? {},
+    )) {
+      if (count > 0) {
+        problems.push(
+          `Duplicate API GET on ${route}: ${key} repeated ${count} time(s) within ${DUPLICATE_GET_WINDOW_MS}ms. Share the query owner and consume its fresh cache.`,
+        );
+      }
+    }
+  }
+  return problems;
+};
+
 // The guard is deliberately one-directional: it only fails when a route grows a
 // NEW request or a DEEPER waterfall. A request that disappears or a shallower
 // waterfall is an improvement, never a failure — a late/conditional call that
@@ -830,7 +1163,7 @@ export const diffNetworkBaseline = (
     changedRoutes = [],
   }: DiffNetworkBaselineOptions = {},
 ): NetworkBaselineDiff => {
-  const problems: string[] = [];
+  const problems = duplicateGetProblems(results);
   const notices: string[] = [];
 
   if (baseline === null) {
@@ -859,7 +1192,13 @@ export const diffNetworkBaseline = (
       notices.push(`Changed scoped route ${route}: ${JSON.stringify(metrics)}`);
     }
     pushNewRequestProblems({ route, entry, metrics, problems });
-    pushWaterfallDepthProblems({ route, entry, metrics, problems });
+    if (entry.depthMethod === NETWORK_DEPTH_METHOD) {
+      pushWaterfallDepthProblems({ route, entry, metrics, problems });
+    } else {
+      notices.push(
+        `Waterfall depth method differs on ${route}: ${entry.depthMethod ?? "unversioned"} -> ${NETWORK_DEPTH_METHOD}; observed depth ${metrics.depth} (baseline ${entry.depth}). Depth is informational until main records the current method.`,
+      );
+    }
     pushRequestCountProblems({ route, entry, metrics, problems });
 
     // DB-count budgets only fail on exceed: a lower count is common (cache
@@ -898,64 +1237,6 @@ const readNetworkBaseline = (): NetworkBaseline | null => {
   return parsed;
 };
 
-// How many extra measurements a route gets when its first sample reads deeper
-// than the committed budget. Depth is a timing lower bound that a fast sample
-// can over-read by one (see `waterfallDepth`); a real extra round shows up in
-// every sample, jitter does not. Only suspected regressions pay for the extra
-// navigations.
-export const WATERFALL_DEPTH_RESAMPLES = 2;
-
-/** Committed depth budget for a route, or null when it has no baseline entry. */
-export const baselineWaterfallDepth = (route: string): number | null =>
-  readNetworkBaseline()?.[route]?.depth ?? null;
-
-const maxPerKey = (
-  left: Record<string, number>,
-  right: Record<string, number>,
-): Record<string, number> => {
-  const merged: Record<string, number> = { ...left };
-  for (const [key, value] of Object.entries(right)) {
-    merged[key] = Math.max(merged[key] ?? 0, value);
-  }
-  return Object.fromEntries(
-    Object.entries(merged).toSorted(([a], [b]) => a.localeCompare(b)),
-  );
-};
-
-/**
- * Fold a re-measurement into the metrics of one route. Depth takes the
- * minimum, because only jitter can push a sample above the true depth. Every
- * other dimension takes the union or per-key maximum, so a regression the
- * first sample caught (a new request, an N+1, an oversized body) survives a
- * later sample that happened to read shallower.
- */
-export const mergeResampledMetrics = (
-  current: RouteNetworkMetrics,
-  candidate: RouteNetworkMetrics,
-): RouteNetworkMetrics => {
-  // The chain travels with the depth it explains; a chain from the discarded
-  // sample would name levels the merged reading does not claim.
-  const shallowest = candidate.depth < current.depth ? candidate : current;
-  return {
-    requests: [
-      ...new Set([...current.requests, ...candidate.requests]),
-    ].toSorted(),
-    requestCounts: maxPerKey(current.requestCounts, candidate.requestCounts),
-    depth: shallowest.depth,
-    depthChain: shallowest.depthChain,
-    dbQueries: maxPerKey(current.dbQueries, candidate.dbQueries),
-    missingDbQueryCounts: maxPerKey(
-      current.missingDbQueryCounts,
-      candidate.missingDbQueryCounts,
-    ),
-    responseSizes: maxPerKey(current.responseSizes, candidate.responseSizes),
-    missingResponseSizeCounts: maxPerKey(
-      current.missingResponseSizeCounts,
-      candidate.missingResponseSizeCounts,
-    ),
-  };
-};
-
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
@@ -974,6 +1255,8 @@ const isNetworkBaselineEntry = (
   }
   return (
     typeof value["depth"] === "number" &&
+    (value["depthMethod"] === undefined ||
+      typeof value["depthMethod"] === "string") &&
     isStringArray(value["requests"]) &&
     (value["requestCounts"] === undefined ||
       isNumberRecord(value["requestCounts"])) &&
@@ -991,7 +1274,7 @@ const isNetworkBaseline = (value: unknown): value is NetworkBaseline =>
 // settle). A single-run snapshot would miss them and a later run would then
 // fail the one-directional check as a "new request". `write` therefore MERGES
 // into the existing baseline: requests accumulate as a union and depth takes
-// the max, so repeated write runs converge on the full envelope of observable
+// the max within the same method, so repeated write runs converge on the full envelope of observable
 // behavior. Routes absent from this run (renamed/removed) are dropped — the
 // walk deterministically visits every smoked route.
 export const mergeNetworkBaseline = (
@@ -1031,7 +1314,11 @@ export const mergeNetworkBaseline = (
       }
     }
     merged[route] = {
-      depth: Math.max(metrics.depth, previous?.depth ?? 0),
+      depth: Math.max(
+        metrics.depth,
+        previous?.depthMethod === NETWORK_DEPTH_METHOD ? previous.depth : 0,
+      ),
+      depthMethod: NETWORK_DEPTH_METHOD,
       requests: [
         ...new Set([...metrics.requests, ...previousRequests]),
       ].toSorted(),
@@ -1098,6 +1385,7 @@ export const assertNetworkBaseline = (
   // tighten depths, then re-run `write` a few times to re-accumulate
   // timing-conditional requests.
   if (mode === "write" || mode === "rewrite") {
+    expect(duplicateGetProblems(results), "no duplicate API GETs").toEqual([]);
     const existing = mode === "write" ? readNetworkBaseline() : null;
     const baseline =
       existing === null
@@ -1125,8 +1413,15 @@ export const assertNetworkBaseline = (
       `\n### Network comparison\n\n\`\`\`json\n${JSON.stringify({ problems, notices }).replaceAll("`", "\\u0060")}\n\`\`\`\n`,
     );
   }
-  for (const notice of notices) {
-    console.log(`[network-baseline] ${notice}`);
+  if (notices.length > 0) {
+    test.info().attachments.push({
+      name: "network-comparison.json",
+      contentType: "application/json",
+      body: Buffer.from(JSON.stringify({ problems, notices }, null, 2)),
+    });
+    console.log(
+      `[network-baseline] ${notices.length} informational notice(s); full notes in network-comparison.json in the test artifact.`,
+    );
   }
 
   expect(
@@ -1138,14 +1433,13 @@ export const assertNetworkBaseline = (
 };
 
 export const assertNetworkBaselineCoverage = (expectedRoutes: string[]) => {
-  const baseline = readNetworkBaseline();
-  const changed = new Set(readChangedRoutes());
+  const problem = networkBaselineCoverageProblem({
+    actualKeys: Object.keys(readNetworkBaseline() ?? {}),
+    expectedKeys: expectedRoutes,
+    changedRoutes: readChangedRoutes(),
+  });
   expect(
-    baseline === null
-      ? []
-      : Object.keys(baseline)
-          .filter((route) => !changed.has(route))
-          .toSorted(),
+    problem,
     `network baseline route keys in ${BASELINE_RELATIVE}`,
-  ).toEqual(expectedRoutes.filter((route) => !changed.has(route)).toSorted());
+  ).toBeNull();
 };

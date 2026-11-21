@@ -7,6 +7,7 @@ import {
   Dialog,
   DialogClose,
   DialogFooter,
+  DialogFormState,
   DialogHeader,
   DialogPanel,
   DialogPopup,
@@ -21,7 +22,7 @@ import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
 import { userErrorMessage } from "@/lib/errors/user-safe";
-import { notifyUserError } from "@/lib/errors/user-toast";
+import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
 
 import { getClauseImportPreviewCount } from "./clause-import-dialog.logic";
 
@@ -60,7 +61,13 @@ export const ClauseImportDialog = ({
         return;
       })
       .catch((error: unknown) => {
-        getAnalytics().captureError(error);
+        getAnalytics().captureError(error, {
+          fingerprintKey: "ClauseImportDialog.handleFileChange:failure",
+          scope: {
+            type: "handler",
+            handlerId: "ClauseImportDialog.handleFileChange:failure",
+          },
+        });
         setPreviewCount(null);
       });
   };
@@ -88,7 +95,7 @@ export const ClauseImportDialog = ({
 
     const data = response.data;
     if (data instanceof Response) {
-      notifyUserError(undefined, t("clauses.importFailed"));
+      notifyUserProblem(t("clauses.importFailed"));
       return;
     }
 
@@ -115,6 +122,13 @@ export const ClauseImportDialog = ({
   return (
     <Dialog onOpenChange={handleClose} open={open}>
       <DialogPopup className="sm:max-w-md">
+        <DialogFormState
+          dirty={file !== null && result === null}
+          onDiscard={() => {
+            setFile(null);
+            setPreviewCount(null);
+          }}
+        />
         <DialogHeader>
           <DialogTitle>{t("common.import")}</DialogTitle>
         </DialogHeader>
@@ -160,6 +174,9 @@ export const ClauseImportDialog = ({
           {!result && (
             <Button
               disabled={!file || importing}
+              disabledReason={
+                importing ? t("clauses.importing") : t("common.selectFile")
+              }
               onClick={() => {
                 detached(handleImport(), "clause-import-dialog.import");
               }}

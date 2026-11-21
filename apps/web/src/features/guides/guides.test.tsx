@@ -2,7 +2,8 @@ import { Glob } from "bun";
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import ts from "typescript";
+
+import { parseSource, walk } from "@stll/scripts/src/syntax-tree";
 
 import { guideAnchor } from "@/features/guides/guide-anchor";
 import {
@@ -33,35 +34,30 @@ const anchorIdsInSource = (
   fileName: string,
 ): ReadonlySet<GuideAnchorId> => {
   const ids = new Set<GuideAnchorId>();
-  const sourceFile = ts.createSourceFile(
-    fileName,
-    source,
-    ts.ScriptTarget.Latest,
-    true,
-    fileName.endsWith("x") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
-  );
-  const visit = (node: ts.Node) => {
+  walk(parseSource(fileName, source).program, (node) => {
     if (
-      ts.isCallExpression(node) &&
-      ts.isIdentifier(node.expression) &&
-      node.expression.text === "guideAnchor"
+      node.type !== "CallExpression" ||
+      node.callee.type !== "Identifier" ||
+      node.callee.name !== "guideAnchor"
     ) {
-      const argument = node.arguments.at(0);
-      if (
-        argument &&
-        ts.isPropertyAccessExpression(argument) &&
-        ts.isIdentifier(argument.expression) &&
-        argument.expression.text === "GUIDE_ANCHORS"
-      ) {
-        const id = anchorIdByKey.get(argument.name.text);
-        if (id) {
-          ids.add(id);
-        }
+      return;
+    }
+    const first = node.arguments.at(0);
+    // `GUIDE_ANCHORS?.key` is still a property access of the registry.
+    const argument =
+      first?.type === "ChainExpression" ? first.expression : first;
+    if (
+      argument?.type === "MemberExpression" &&
+      !argument.computed &&
+      argument.object.type === "Identifier" &&
+      argument.object.name === "GUIDE_ANCHORS"
+    ) {
+      const id = anchorIdByKey.get(argument.property.name);
+      if (id) {
+        ids.add(id);
       }
     }
-    ts.forEachChild(node, visit);
-  };
-  visit(sourceFile);
+  });
   return ids;
 };
 

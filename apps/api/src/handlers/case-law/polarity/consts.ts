@@ -1,3 +1,5 @@
+import { Temporal } from "@stll/time";
+
 import type { ConstantMap } from "@/api/lib/constant-map";
 import { includes } from "@/api/lib/type-guards";
 
@@ -26,6 +28,15 @@ export const POLARITY = {
   MIXED: "mixed",
   UNKNOWN: "unknown",
 } as const satisfies ConstantMap<Polarity>;
+
+export const POLARITY_RULE_KINDS = ["stance", "form"] as const;
+
+export type PolarityRuleKind = (typeof POLARITY_RULE_KINDS)[number];
+
+export const POLARITY_RULE_KIND = {
+  STANCE: "stance",
+  FORM: "form",
+} as const satisfies ConstantMap<PolarityRuleKind>;
 
 /**
  * Polarities the pipeline derives, which no single reading may emit.
@@ -83,11 +94,105 @@ export const REVIEWABLE_POLARITIES = POLARITIES.filter(
 );
 
 /**
+ * Who produced a reviewed citation label. The list is the declaration: the
+ * CHECK constraints on `case_law_citation_reviews` derive from it.
+ */
+export const CITATION_REVIEW_ORIGINS = [
+  "human-review",
+  "ai-adjudicated",
+  "ai-annotation",
+] as const;
+
+export type CitationReviewOrigin = (typeof CITATION_REVIEW_ORIGINS)[number];
+
+export const CITATION_REVIEW_ORIGIN = {
+  HUMAN_REVIEW: "human-review",
+  AI_ADJUDICATED: "ai-adjudicated",
+  AI_ANNOTATION: "ai-annotation",
+} as const satisfies ConstantMap<CitationReviewOrigin>;
+
+/** Origins a model produced; these carry model provenance. */
+export type AiCitationReviewOrigin = Exclude<
+  CitationReviewOrigin,
+  typeof CITATION_REVIEW_ORIGIN.HUMAN_REVIEW
+>;
+
+export const AI_CITATION_REVIEW_ORIGINS = CITATION_REVIEW_ORIGINS.filter(
+  (origin): origin is AiCitationReviewOrigin =>
+    origin !== CITATION_REVIEW_ORIGIN.HUMAN_REVIEW,
+);
+
+/**
+ * Rank of each origin when two reviews of one citation compete: lower wins.
+ * A human review is never overwritten by a model, and an adjudication (a
+ * model asked to settle a flagged label) is never overwritten by a bulk
+ * annotation pass.
+ */
+export const CITATION_REVIEW_ORIGIN_PRECEDENCE = {
+  "human-review": 0,
+  "ai-adjudicated": 1,
+  "ai-annotation": 2,
+} as const satisfies Record<CitationReviewOrigin, number>;
+
+/** What decides whether one review of a citation stands over another. */
+export type CitationReviewStanding =
+  | { origin: typeof CITATION_REVIEW_ORIGIN.HUMAN_REVIEW }
+  | { origin: AiCitationReviewOrigin; producedAt: Temporal.Instant };
+
+type CitationReviewStandingPair = {
+  upper: CitationReviewStanding;
+  lower: CitationReviewStanding;
+};
+
+/**
+ * Whether `upper` strictly outranks `lower`: a better origin, or at the same
+ * rank a model label produced later. Two human reviews, or two model labels
+ * produced at the same instant, outrank neither: nothing orders them.
+ */
+export const citationReviewOutranks = ({
+  upper,
+  lower,
+}: CitationReviewStandingPair): boolean => {
+  const upperRank = CITATION_REVIEW_ORIGIN_PRECEDENCE[upper.origin];
+  const lowerRank = CITATION_REVIEW_ORIGIN_PRECEDENCE[lower.origin];
+  if (upperRank !== lowerRank) {
+    return upperRank < lowerRank;
+  }
+  if (
+    upper.origin === CITATION_REVIEW_ORIGIN.HUMAN_REVIEW ||
+    lower.origin === CITATION_REVIEW_ORIGIN.HUMAN_REVIEW
+  ) {
+    return false;
+  }
+  return Temporal.Instant.compare(upper.producedAt, lower.producedAt) > 0;
+};
+
+type CitationReviewReplacement = {
+  stored: CitationReviewStanding;
+  incoming: CitationReviewStanding;
+};
+
+/**
+ * Whether an incoming review may replace a different stored one. A human
+ * review replaces a human review (the reviewer's latest word stands); a model
+ * label must outrank the stored one, so an older run applied late, or another
+ * run at the identical instant, cannot flip a label. The same review replayed
+ * is not a replacement: the caller sees it as unchanged before asking this.
+ */
+export const citationReviewMayReplace = ({
+  stored,
+  incoming,
+}: CitationReviewReplacement): boolean =>
+  citationReviewOutranks({ upper: incoming, lower: stored }) ||
+  (stored.origin === CITATION_REVIEW_ORIGIN.HUMAN_REVIEW &&
+    incoming.origin === CITATION_REVIEW_ORIGIN.HUMAN_REVIEW);
+
+/**
  * Order in which competing readings are resolved: lower wins. It settles
  * which rule match labels a mention, which mention labels a citation, and
  * whether a recheck's verdict is an improvement on the stored one.
  *
- * Severity first. A court that distinguishes or overrules a decision has
+ * Severity first. A court that rejects or overrules a decision has
  * said something stronger than one that also happens to cite it approvingly,
  * so a negative match must never lose to a positive or supportive one.
  * `positive` and `supportive` are deliberately equal: they differ in how
@@ -140,7 +245,7 @@ export const PROMOTION_THRESHOLD = 5;
 /**
  * What each polarity contributes to citation authority.
  *
- * Binary on purpose. A court that overrules or distinguishes a decision is
+ * Binary on purpose. A court that rejects or overrules a decision is
  * not vouching for it, so a negative treatment confers no authority; every
  * other reading does, in full. `mixed` weighs as `negative` does: the citing
  * court departed somewhere, and a departure is not a vouch. That also keeps
@@ -185,3 +290,8 @@ export const phraseToPattern = (phrase: string): string => {
   const escaped = phrase.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
   return escaped.replace(/\s+/gu, "\\s+");
 };
+
+/** Named capture whose span declares a reported party submission. */
+export const REPORTED_PARTY_SUBMISSION_GROUP = "reportedPartySubmission";
+
+export const POLARITY_CLASSIFIER_VERSION = "citation-polarity-v2";

@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import fc from "fast-check";
-import JSZip from "jszip";
 
+import { ZipArchive } from "@stll/docx-core/zip";
 import { assertProperty } from "@stll/property-testing";
 
 import { createArchiveContentScanner } from "./archive";
@@ -46,26 +46,16 @@ const scanner = createArchiveContentScanner({
   guard: { scan: async () => [] },
 });
 const packageOf = async (parts: readonly Buffer[]) => {
-  const zip = new JSZip();
+  const zip = new ZipArchive();
   for (const [index, part] of parts.entries()) {
-    zip.file(
-      index === 0 ? "word/document.xml" : `word/part${index}.xml`,
-      part,
-      { createFolders: false },
-    );
+    zip.set(index === 0 ? "word/document.xml" : `word/part${index}.xml`, part);
   }
-  return await zip.generateAsync({
-    type: "nodebuffer",
-    compression: "DEFLATE",
-  });
+  return Buffer.from(await zip.generate());
 };
 const wrap = async (bytes: Buffer) => {
-  const zip = new JSZip();
-  zip.file("word/altChunk.docx", bytes, { createFolders: false });
-  return await zip.generateAsync({
-    type: "nodebuffer",
-    compression: "DEFLATE",
-  });
+  const zip = new ZipArchive();
+  zip.set("word/altChunk.docx", bytes);
+  return Buffer.from(await zip.generate());
 };
 const matchRules = async (bytes: Buffer) =>
   (await scanner.scan(bytes)).map(({ rule }) => rule);
@@ -184,15 +174,10 @@ test("shares evidence limits between package levels", async () => {
     },
     guard: { scan: async () => [] },
   });
-  const zip = new JSZip();
-  zip.file("word/document.xml", MARKER, { createFolders: false });
-  zip.file("word/altChunk.docx", await packageOf([MARKER]), {
-    createFolders: false,
-  });
-  const bytes = await zip.generateAsync({
-    type: "nodebuffer",
-    compression: "DEFLATE",
-  });
+  const zip = new ZipArchive();
+  zip.set("word/document.xml", MARKER);
+  zip.set("word/altChunk.docx", await packageOf([MARKER]));
+  const bytes = Buffer.from(await zip.generate());
   expect((await limited.scan(bytes)).map(({ rule }) => rule)).toEqual([
     "archive-inspection-budget",
   ]);

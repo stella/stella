@@ -22,16 +22,41 @@
 import * as v from "valibot";
 
 import {
+  MODEL_DEFAULT_REASONING_EFFORTS,
   MODEL_DOCUMENT_INPUT_OPTIONS,
   MODEL_IMAGE_INPUT_CAPABILITIES,
-  MODEL_DEFAULT_REASONING_EFFORTS,
   MODEL_OUTPUT_TOKEN_LIMITS,
   MODEL_REASONING_EFFORTS,
   MODEL_TEMPERATURE_POLICIES,
 } from "./capabilities.gen";
+import {
+  DEFAULT_RATIONALE_BY_GROUP,
+  MODEL_DEFAULTS_LEDGER,
+  MODEL_OVERRIDE_GROUP_TASK,
+  MODEL_TASK_OVERRIDE_GROUP,
+  resolveDefaultModel,
+} from "./model-defaults-ledger";
+import type {
+  ModelDefaultRationale,
+  ModelOverrideGroup,
+  ModelTask,
+} from "./model-defaults-ledger";
 import type { ModelRate } from "./model-rate";
 import type { RETAINED_MODELS_DEV_RATE_ENTRIES } from "./model-rate-policy";
 import { MODEL_RATES } from "./model-rates.gen";
+import { MODEL_REASONING_CAPABILITIES } from "./reasoning-capabilities";
+import type { ModelReasoningCapabilities } from "./reasoning-capabilities";
+
+export {
+  MODEL_TASKS,
+  MODEL_OVERRIDE_GROUPS,
+  MODEL_TASK_OVERRIDE_GROUP,
+  MODEL_OVERRIDE_GROUP_TASK,
+  inheritedOverrideGroup,
+  resolveDefaultModel,
+  resolveDefaultOverrideModels,
+} from "./model-defaults-ledger";
+export type { ModelTask, ModelOverrideGroup } from "./model-defaults-ledger";
 
 export {
   MODEL_RATE_UNITS_PER_USD,
@@ -40,24 +65,12 @@ export {
 } from "./model-rate";
 export type { ModelRate, ModelRateAmounts } from "./model-rate";
 export {
+  MODELS_DEV_RATE_CORRECTIONS,
   MODELS_DEV_RATE_PROVIDER_BY_CATALOG_PROVIDER,
   MODELS_DEV_RATE_SOURCE_ALIASES,
   RETAINED_MODELS_DEV_RATE_ENTRIES,
 } from "./model-rate-policy";
 export type { ModelsDevRateProvider } from "./model-rate-policy";
-
-/**
- * Logical model roles. Call sites declare *what* they need, not
- * *which* model to use.
- *
- * - fast: classification, extraction, short generation
- * - chat: conversational with tool use and streaming
- * - reasoning: complex multi-step legal analysis
- * - pdf: native PDF/image understanding
- */
-export const MODEL_ROLES = ["fast", "chat", "reasoning", "pdf"] as const;
-
-export type ModelRole = (typeof MODEL_ROLES)[number];
 
 export const TEMPERATURE_POLICIES = ["emit", "omit"] as const;
 
@@ -170,11 +183,27 @@ export const FIRST_PARTY_MODEL_PROVIDERS: Exclude<
   : never = FIRST_PARTY_MODEL_PROVIDER_VALUES;
 
 /**
+ * Provider IDs for the GPT-6.2 family, kept in one row per member like GPT-6
+ * below.
+ */
+const GPT_62_MODEL_IDS = {
+  astra: { openai: "gpt-6.2-astra", openrouter: "openai/gpt-6.2-astra" },
+  sol: { openai: "gpt-6.2-sol", openrouter: "openai/gpt-6.2-sol" },
+} as const;
+const GPT_62_OPENAI_MODEL_IDS = Object.values(GPT_62_MODEL_IDS).map(
+  ({ openai }) => openai,
+);
+const GPT_62_OPENROUTER_MODEL_IDS = Object.values(GPT_62_MODEL_IDS).map(
+  ({ openrouter }) => openrouter,
+);
+
+/**
  * Provider IDs for the GPT-6.1 family, kept in one row per member like GPT-6
  * below.
  */
 const GPT_61_MODEL_IDS = {
   sol: { openai: "gpt-6.1-sol", openrouter: "openai/gpt-6.1-sol" },
+  terra: { openai: "gpt-6.1-terra", openrouter: "openai/gpt-6.1-terra" },
 } as const;
 const GPT_61_OPENAI_MODEL_IDS = Object.values(GPT_61_MODEL_IDS).map(
   ({ openai }) => openai,
@@ -217,77 +246,88 @@ const GPT_56_OPENROUTER_MODEL_IDS = Object.values(GPT_56_MODEL_IDS).map(
   ({ openrouter }) => openrouter,
 );
 
-/**
- * Per-role default model IDs for the BYOK-capable cloud providers.
- * Shared between the instance default table (`DEFAULT_MODELS`) and the
- * settings-UI default selection, so a default is defined exactly once.
- */
-export const BYOK_DEFAULT_MODELS = {
-  google: {
-    fast: "gemini-3.8-flash",
-    chat: "gemini-3.8-flash",
-    reasoning: "gemini-3.8-flash",
-    pdf: "gemini-3.8-flash",
-  },
-  openrouter: {
-    fast: GPT_6_MODEL_IDS.luna.openrouter,
-    chat: GPT_6_MODEL_IDS.sol.openrouter,
-    reasoning: GPT_6_MODEL_IDS.sol.openrouter,
-    pdf: GPT_6_MODEL_IDS.sol.openrouter,
-  },
-  openai: {
-    fast: GPT_6_MODEL_IDS.luna.openai,
-    chat: GPT_6_MODEL_IDS.sol.openai,
-    reasoning: GPT_6_MODEL_IDS.sol.openai,
-    pdf: GPT_6_MODEL_IDS.sol.openai,
-  },
-  anthropic: {
-    fast: "claude-opus-5-5",
-    chat: "claude-opus-5-5",
-    reasoning: "claude-opus-5-5",
-    pdf: "claude-opus-5-5",
-  },
-  bedrock: {
-    fast: "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
-    chat: "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
-    reasoning: "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
-    pdf: "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
-  },
-  mistral: {
-    fast: "mistral-small-latest",
-    chat: "mistral-medium-latest",
-    reasoning: "mistral-medium-latest",
-    pdf: "mistral-large-latest",
-  },
-} as const satisfies Record<TanStackAIProvider, Record<ModelRole, string>>;
+type BYOKRoleDefault =
+  | {
+      kind: "default";
+      modelId: string;
+      rationaleKey: `organization.aiConfig.defaultRationale.${ModelOverrideGroup}`;
+    }
+  | { kind: "unsupported" };
+
+const defaultPresentation = <TModelId extends string>(entry: {
+  candidate: { modelId: TModelId };
+  rationale: ModelDefaultRationale;
+}) => ({
+  kind: "default" as const,
+  modelId: entry.candidate.modelId,
+  rationaleKey: entry.rationale.rationaleKey,
+});
 
 /**
- * Instance-level default model IDs per provider. Extends the BYOK
- * defaults with the providers that only the instance path uses
- * (custom deployments and OpenAI-compatible endpoints).
+ * A role without defaults of its own shows the default of the task it
+ * inherits (`MODEL_OVERRIDE_GROUP_TASK`), explained in its own words.
  */
-export const DEFAULT_MODELS = {
-  ...BYOK_DEFAULT_MODELS,
-  // Azure AI Foundry does not list GPT-6 Sol or Luna yet.
-  azure_foundry: {
-    fast: GPT_56_MODEL_IDS.luna.openai,
-    chat: GPT_56_MODEL_IDS.terra.openai,
-    reasoning: GPT_56_MODEL_IDS.terra.openai,
-    pdf: GPT_56_MODEL_IDS.terra.openai,
+const inheritedRolePresentation = <TModelId extends string>(
+  group: ModelOverrideGroup,
+  inherited: {
+    candidate: { modelId: TModelId };
+    rationale: ModelDefaultRationale;
   },
-  openai_compatible: {
-    fast: "default",
-    chat: "default",
-    reasoning: "default",
-    pdf: "default",
+) => ({
+  ...defaultPresentation(inherited),
+  rationaleKey: DEFAULT_RATIONALE_BY_GROUP[group].rationaleKey,
+});
+
+const BROWSE_DEFAULTS = MODEL_DEFAULTS_LEDGER[MODEL_OVERRIDE_GROUP_TASK.browse];
+
+/** Default labels in the override editor derive from the task ledger. */
+export const BYOK_DEFAULT_MODELS = {
+  google: {
+    fast: defaultPresentation(MODEL_DEFAULTS_LEDGER["short-text"].google),
+    chat: defaultPresentation(MODEL_DEFAULTS_LEDGER.chat.google),
+    reasoning: defaultPresentation(MODEL_DEFAULTS_LEDGER.reasoning.google),
+    pdf: defaultPresentation(MODEL_DEFAULTS_LEDGER.pdf.google),
+    browse: inheritedRolePresentation("browse", BROWSE_DEFAULTS.google),
   },
-  huggingface: {
-    fast: "speakleash/Bielik-1.5B-v3.0-Instruct",
-    chat: "speakleash/Bielik-11B-v2.3-Instruct",
-    reasoning: "speakleash/Bielik-11B-v2.3-Instruct",
-    pdf: "speakleash/Bielik-11B-v2.3-Instruct",
+  openrouter: {
+    fast: defaultPresentation(MODEL_DEFAULTS_LEDGER["short-text"].openrouter),
+    chat: defaultPresentation(MODEL_DEFAULTS_LEDGER.chat.openrouter),
+    reasoning: defaultPresentation(MODEL_DEFAULTS_LEDGER.reasoning.openrouter),
+    pdf: defaultPresentation(MODEL_DEFAULTS_LEDGER.pdf.openrouter),
+    browse: inheritedRolePresentation("browse", BROWSE_DEFAULTS.openrouter),
   },
-} as const satisfies Record<AIProvider, Record<ModelRole, string>>;
+  openai: {
+    fast: defaultPresentation(MODEL_DEFAULTS_LEDGER["short-text"].openai),
+    chat: defaultPresentation(MODEL_DEFAULTS_LEDGER.chat.openai),
+    reasoning: defaultPresentation(MODEL_DEFAULTS_LEDGER.reasoning.openai),
+    pdf: defaultPresentation(MODEL_DEFAULTS_LEDGER.pdf.openai),
+    browse: inheritedRolePresentation("browse", BROWSE_DEFAULTS.openai),
+  },
+  anthropic: {
+    fast: defaultPresentation(MODEL_DEFAULTS_LEDGER["short-text"].anthropic),
+    chat: defaultPresentation(MODEL_DEFAULTS_LEDGER.chat.anthropic),
+    reasoning: defaultPresentation(MODEL_DEFAULTS_LEDGER.reasoning.anthropic),
+    pdf: defaultPresentation(MODEL_DEFAULTS_LEDGER.pdf.anthropic),
+    browse: inheritedRolePresentation("browse", BROWSE_DEFAULTS.anthropic),
+  },
+  bedrock: {
+    fast: defaultPresentation(MODEL_DEFAULTS_LEDGER["short-text"].bedrock),
+    chat: defaultPresentation(MODEL_DEFAULTS_LEDGER.chat.bedrock),
+    reasoning: defaultPresentation(MODEL_DEFAULTS_LEDGER.reasoning.bedrock),
+    pdf: defaultPresentation(MODEL_DEFAULTS_LEDGER.pdf.bedrock),
+    browse: inheritedRolePresentation("browse", BROWSE_DEFAULTS.bedrock),
+  },
+  mistral: {
+    fast: defaultPresentation(MODEL_DEFAULTS_LEDGER["short-text"].mistral),
+    chat: defaultPresentation(MODEL_DEFAULTS_LEDGER.chat.mistral),
+    reasoning: defaultPresentation(MODEL_DEFAULTS_LEDGER.reasoning.mistral),
+    pdf: { kind: MODEL_DEFAULTS_LEDGER.pdf.mistral.kind },
+    browse: inheritedRolePresentation("browse", BROWSE_DEFAULTS.mistral),
+  },
+} as const satisfies Record<
+  TanStackAIProvider,
+  Record<ModelOverrideGroup, BYOKRoleDefault>
+>;
 
 /**
  * BYOK-offered model IDs per provider — the curated catalog users pick
@@ -301,6 +341,10 @@ export const DEFAULT_MODELS = {
  */
 export const BYOK_MODEL_OPTIONS = {
   google: [
+    "gemini-4-neon",
+    "gemini-4-hydrogen",
+    "gemini-4-carbon",
+    "gemini-4-argon",
     "gemini-3.8-flash",
     "gemini-3.7-flash",
     "gemini-3.6-flash",
@@ -312,6 +356,7 @@ export const BYOK_MODEL_OPTIONS = {
   anthropic: [
     "claude-sonnet-5-5",
     "claude-sonnet-5",
+    "claude-fable-5-2",
     "claude-fable-5-1",
     "claude-fable-5",
     "claude-opus-5-5",
@@ -320,9 +365,11 @@ export const BYOK_MODEL_OPTIONS = {
     "claude-opus-4-7",
     "claude-sonnet-4-6",
     "claude-opus-4-6",
+    "claude-haiku-5-5",
     "claude-haiku-4-5-20251001",
   ],
   openai: [
+    ...GPT_62_OPENAI_MODEL_IDS,
     ...GPT_61_OPENAI_MODEL_IDS,
     ...GPT_6_OPENAI_MODEL_IDS,
     ...GPT_56_OPENAI_MODEL_IDS,
@@ -333,9 +380,14 @@ export const BYOK_MODEL_OPTIONS = {
     "gpt-5.2",
   ],
   openrouter: [
+    ...GPT_62_OPENROUTER_MODEL_IDS,
     ...GPT_61_OPENROUTER_MODEL_IDS,
     ...GPT_6_OPENROUTER_MODEL_IDS,
     ...GPT_56_OPENROUTER_MODEL_IDS,
+    "google/gemini-4-neon",
+    "google/gemini-4-hydrogen",
+    "google/gemini-4-carbon",
+    "google/gemini-4-argon",
     "google/gemini-3.8-flash",
     "google/gemini-3.7-flash",
     "google/gemini-3.6-flash",
@@ -343,6 +395,7 @@ export const BYOK_MODEL_OPTIONS = {
     "google/gemini-3.1-pro-preview",
     "google/gemini-3.5-flash",
     "google/gemini-3.1-flash-lite",
+    "anthropic/claude-haiku-5.5",
     "anthropic/claude-sonnet-5.5",
     "anthropic/claude-sonnet-5",
     "anthropic/claude-opus-5",
@@ -353,6 +406,7 @@ export const BYOK_MODEL_OPTIONS = {
   ],
   bedrock: [
     "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
+    "us.anthropic.claude-haiku-5-5",
     "us.anthropic.claude-haiku-4-5-20251001-v1:0",
     "us.amazon.nova-pro-v1:0",
     "us.amazon.nova-lite-v1:0",
@@ -361,6 +415,7 @@ export const BYOK_MODEL_OPTIONS = {
     "openai.gpt-oss-20b-1:0",
   ],
   mistral: [
+    "mistral-large-4",
     "mistral-large-latest",
     "mistral-medium-latest",
     "mistral-small-latest",
@@ -392,7 +447,26 @@ export type ModelDisplayMetadata = {
   displayName: string;
   /** Brand mark to show. This may differ from the routing provider. */
   iconProvider: BYOKProvider;
+  /**
+   * A newer model of the same line, preferably on the same route. A superseded
+   * model stays selectable but is never recommended.
+   */
+  supersededBy?: string;
 };
+
+/**
+ * The chat model picker's Recommended section: a reviewed, curated list of
+ * the latest generation per maker. Benchmarks inform ordering and hints but
+ * never pick these. Every route to a listed model qualifies; a listed model
+ * must not be superseded (model-lineage.test.ts).
+ */
+export const RECOMMENDED_CHAT_MODELS = [
+  "claude-opus-5-5",
+  GPT_62_MODEL_IDS.sol.openai,
+  // GPT-6.1 has no fast tier yet; GPT-6 Luna is the newest one.
+  GPT_6_MODEL_IDS.luna.openai,
+  "gemini-4-hydrogen",
+] as const satisfies readonly OfferedBYOKModelId[];
 
 /**
  * Presentation metadata for every offered model. Keeping this exhaustive beside
@@ -401,6 +475,22 @@ export type ModelDisplayMetadata = {
  * creator's icon while their routing provider remains available separately.
  */
 export const MODEL_DISPLAY_METADATA = {
+  "gemini-4-neon": {
+    displayName: "Gemini 4 Neon",
+    iconProvider: "google",
+  },
+  "gemini-4-hydrogen": {
+    displayName: "Gemini 4 Hydrogen",
+    iconProvider: "google",
+  },
+  "gemini-4-carbon": {
+    displayName: "Gemini 4 Carbon",
+    iconProvider: "google",
+  },
+  "gemini-4-argon": {
+    displayName: "Gemini 4 Argon",
+    iconProvider: "google",
+  },
   "gemini-3.8-flash": {
     displayName: "Gemini 3.8 Flash",
     iconProvider: "google",
@@ -408,10 +498,12 @@ export const MODEL_DISPLAY_METADATA = {
   "gemini-3.7-flash": {
     displayName: "Gemini 3.7 Flash",
     iconProvider: "google",
+    supersededBy: "gemini-3.8-flash",
   },
   "gemini-3.6-flash": {
     displayName: "Gemini 3.6 Flash",
     iconProvider: "google",
+    supersededBy: "gemini-3.8-flash",
   },
   "gemini-3.5-flash-lite": {
     displayName: "Gemini 3.5 Flash Lite",
@@ -424,10 +516,12 @@ export const MODEL_DISPLAY_METADATA = {
   "gemini-3.5-flash": {
     displayName: "Gemini 3.5 Flash",
     iconProvider: "google",
+    supersededBy: "gemini-3.8-flash",
   },
   "gemini-3.1-flash-lite": {
     displayName: "Gemini 3.1 Flash Lite",
     iconProvider: "google",
+    supersededBy: "gemini-3.5-flash-lite",
   },
   "claude-sonnet-5-5": {
     displayName: "Claude Sonnet 5.5",
@@ -436,14 +530,21 @@ export const MODEL_DISPLAY_METADATA = {
   "claude-sonnet-5": {
     displayName: "Claude Sonnet 5",
     iconProvider: "anthropic",
+    supersededBy: "claude-sonnet-5-5",
+  },
+  "claude-fable-5-2": {
+    displayName: "Claude Fable 5.2",
+    iconProvider: "anthropic",
   },
   "claude-fable-5-1": {
     displayName: "Claude Fable 5.1",
     iconProvider: "anthropic",
+    supersededBy: "claude-fable-5-2",
   },
   "claude-fable-5": {
     displayName: "Claude Fable 5",
     iconProvider: "anthropic",
+    supersededBy: "claude-fable-5-2",
   },
   "claude-opus-5-5": {
     displayName: "Claude Opus 5.5",
@@ -452,38 +553,63 @@ export const MODEL_DISPLAY_METADATA = {
   "claude-opus-5": {
     displayName: "Claude Opus 5",
     iconProvider: "anthropic",
+    supersededBy: "claude-opus-5-5",
   },
   "claude-opus-4-8": {
     displayName: "Claude Opus 4.8",
     iconProvider: "anthropic",
+    supersededBy: "claude-opus-5-5",
   },
   "claude-opus-4-7": {
     displayName: "Claude Opus 4.7",
     iconProvider: "anthropic",
+    supersededBy: "claude-opus-5-5",
   },
   "claude-sonnet-4-6": {
     displayName: "Claude Sonnet 4.6",
     iconProvider: "anthropic",
+    supersededBy: "claude-sonnet-5-5",
   },
   "claude-opus-4-6": {
     displayName: "Claude Opus 4.6",
+    iconProvider: "anthropic",
+    supersededBy: "claude-opus-5-5",
+  },
+  "claude-haiku-5-5": {
+    displayName: "Claude Haiku 5.5",
     iconProvider: "anthropic",
   },
   "claude-haiku-4-5-20251001": {
     displayName: "Claude Haiku 4.5",
     iconProvider: "anthropic",
+    supersededBy: "claude-haiku-5-5",
+  },
+  [GPT_62_MODEL_IDS.astra.openai]: {
+    displayName: "GPT-6.2 Astra",
+    iconProvider: "openai",
+  },
+  [GPT_62_MODEL_IDS.sol.openai]: {
+    displayName: "GPT-6.2 Sol",
+    iconProvider: "openai",
   },
   [GPT_61_MODEL_IDS.sol.openai]: {
     displayName: "GPT-6.1 Sol",
+    iconProvider: "openai",
+    supersededBy: GPT_62_MODEL_IDS.sol.openai,
+  },
+  [GPT_61_MODEL_IDS.terra.openai]: {
+    displayName: "GPT-6.1 Terra",
     iconProvider: "openai",
   },
   [GPT_6_MODEL_IDS.astra.openai]: {
     displayName: "GPT-6 Astra",
     iconProvider: "openai",
+    supersededBy: GPT_62_MODEL_IDS.astra.openai,
   },
   [GPT_6_MODEL_IDS.sol.openai]: {
     displayName: "GPT-6 Sol",
     iconProvider: "openai",
+    supersededBy: GPT_62_MODEL_IDS.sol.openai,
   },
   [GPT_6_MODEL_IDS.luna.openai]: {
     displayName: "GPT-6 Luna",
@@ -494,17 +620,24 @@ export const MODEL_DISPLAY_METADATA = {
   [GPT_56_MODEL_IDS.sol.openai]: {
     displayName: "GPT-5.6 Sol",
     iconProvider: "openai",
+    supersededBy: GPT_62_MODEL_IDS.sol.openai,
   },
   [GPT_56_MODEL_IDS.terra.openai]: {
     displayName: "GPT-5.6 Terra",
     iconProvider: "openai",
+    supersededBy: GPT_61_MODEL_IDS.terra.openai,
   },
   [GPT_56_MODEL_IDS.luna.openai]: {
     displayName: "GPT-5.6 Luna",
     iconProvider: "openai",
+    supersededBy: GPT_6_MODEL_IDS.luna.openai,
   },
   "gpt-5.5": { displayName: "GPT-5.5", iconProvider: "openai" },
-  "gpt-5.4": { displayName: "GPT-5.4", iconProvider: "openai" },
+  "gpt-5.4": {
+    displayName: "GPT-5.4",
+    iconProvider: "openai",
+    supersededBy: "gpt-5.5",
+  },
   "gpt-5.4-mini": {
     displayName: "GPT-5.4 Mini",
     iconProvider: "openai",
@@ -513,18 +646,37 @@ export const MODEL_DISPLAY_METADATA = {
     displayName: "GPT-5.4 Nano",
     iconProvider: "openai",
   },
-  "gpt-5.2": { displayName: "GPT-5.2", iconProvider: "openai" },
+  "gpt-5.2": {
+    displayName: "GPT-5.2",
+    iconProvider: "openai",
+    supersededBy: "gpt-5.5",
+  },
+  [GPT_62_MODEL_IDS.astra.openrouter]: {
+    displayName: "GPT-6.2 Astra",
+    iconProvider: "openai",
+  },
+  [GPT_62_MODEL_IDS.sol.openrouter]: {
+    displayName: "GPT-6.2 Sol",
+    iconProvider: "openai",
+  },
   [GPT_61_MODEL_IDS.sol.openrouter]: {
     displayName: "GPT-6.1 Sol",
+    iconProvider: "openai",
+    supersededBy: GPT_62_MODEL_IDS.sol.openrouter,
+  },
+  [GPT_61_MODEL_IDS.terra.openrouter]: {
+    displayName: "GPT-6.1 Terra",
     iconProvider: "openai",
   },
   [GPT_6_MODEL_IDS.astra.openrouter]: {
     displayName: "GPT-6 Astra",
     iconProvider: "openai",
+    supersededBy: GPT_62_MODEL_IDS.astra.openrouter,
   },
   [GPT_6_MODEL_IDS.sol.openrouter]: {
     displayName: "GPT-6 Sol",
     iconProvider: "openai",
+    supersededBy: GPT_62_MODEL_IDS.sol.openrouter,
   },
   [GPT_6_MODEL_IDS.luna.openrouter]: {
     displayName: "GPT-6 Luna",
@@ -533,14 +685,33 @@ export const MODEL_DISPLAY_METADATA = {
   [GPT_56_MODEL_IDS.sol.openrouter]: {
     displayName: "GPT-5.6 Sol",
     iconProvider: "openai",
+    supersededBy: GPT_62_MODEL_IDS.sol.openrouter,
   },
   [GPT_56_MODEL_IDS.luna.openrouter]: {
     displayName: "GPT-5.6 Luna",
     iconProvider: "openai",
+    supersededBy: GPT_6_MODEL_IDS.luna.openrouter,
   },
   [GPT_56_MODEL_IDS.terra.openrouter]: {
     displayName: "GPT-5.6 Terra",
     iconProvider: "openai",
+    supersededBy: GPT_61_MODEL_IDS.terra.openrouter,
+  },
+  "google/gemini-4-neon": {
+    displayName: "Gemini 4 Neon",
+    iconProvider: "google",
+  },
+  "google/gemini-4-hydrogen": {
+    displayName: "Gemini 4 Hydrogen",
+    iconProvider: "google",
+  },
+  "google/gemini-4-carbon": {
+    displayName: "Gemini 4 Carbon",
+    iconProvider: "google",
+  },
+  "google/gemini-4-argon": {
+    displayName: "Gemini 4 Argon",
+    iconProvider: "google",
   },
   "google/gemini-3.8-flash": {
     displayName: "Gemini 3.8 Flash",
@@ -549,10 +720,12 @@ export const MODEL_DISPLAY_METADATA = {
   "google/gemini-3.7-flash": {
     displayName: "Gemini 3.7 Flash",
     iconProvider: "google",
+    supersededBy: "google/gemini-3.8-flash",
   },
   "google/gemini-3.6-flash": {
     displayName: "Gemini 3.6 Flash",
     iconProvider: "google",
+    supersededBy: "google/gemini-3.8-flash",
   },
   "google/gemini-3.5-flash-lite": {
     displayName: "Gemini 3.5 Flash Lite",
@@ -565,10 +738,16 @@ export const MODEL_DISPLAY_METADATA = {
   "google/gemini-3.5-flash": {
     displayName: "Gemini 3.5 Flash",
     iconProvider: "google",
+    supersededBy: "google/gemini-3.8-flash",
   },
   "google/gemini-3.1-flash-lite": {
     displayName: "Gemini 3.1 Flash Lite",
     iconProvider: "google",
+    supersededBy: "google/gemini-3.5-flash-lite",
+  },
+  "anthropic/claude-haiku-5.5": {
+    displayName: "Claude Haiku 5.5",
+    iconProvider: "anthropic",
   },
   "anthropic/claude-sonnet-5.5": {
     displayName: "Claude Sonnet 5.5",
@@ -577,18 +756,22 @@ export const MODEL_DISPLAY_METADATA = {
   "anthropic/claude-sonnet-5": {
     displayName: "Claude Sonnet 5",
     iconProvider: "anthropic",
+    supersededBy: "anthropic/claude-sonnet-5.5",
   },
   "anthropic/claude-opus-5": {
     displayName: "Claude Opus 5",
     iconProvider: "anthropic",
+    supersededBy: "claude-opus-5-5",
   },
   "anthropic/claude-opus-4.8": {
     displayName: "Claude Opus 4.8",
     iconProvider: "anthropic",
+    supersededBy: "claude-opus-5-5",
   },
   "anthropic/claude-sonnet-4.6": {
     displayName: "Claude Sonnet 4.6",
     iconProvider: "anthropic",
+    supersededBy: "anthropic/claude-sonnet-5.5",
   },
   "openai/gpt-5.5": { displayName: "GPT-5.5", iconProvider: "openai" },
   "openai/gpt-5.4-mini": {
@@ -598,10 +781,16 @@ export const MODEL_DISPLAY_METADATA = {
   "us.anthropic.claude-sonnet-4-5-20250929-v1:0": {
     displayName: "Claude Sonnet 4.5",
     iconProvider: "anthropic",
+    supersededBy: "claude-sonnet-5-5",
+  },
+  "us.anthropic.claude-haiku-5-5": {
+    displayName: "Claude Haiku 5.5",
+    iconProvider: "anthropic",
   },
   "us.anthropic.claude-haiku-4-5-20251001-v1:0": {
     displayName: "Claude Haiku 4.5",
     iconProvider: "anthropic",
+    supersededBy: "us.anthropic.claude-haiku-5-5",
   },
   "us.amazon.nova-pro-v1:0": {
     displayName: "Amazon Nova Pro",
@@ -622,6 +811,10 @@ export const MODEL_DISPLAY_METADATA = {
   "openai.gpt-oss-20b-1:0": {
     displayName: "GPT OSS 20B",
     iconProvider: "openai",
+  },
+  "mistral-large-4": {
+    displayName: "Mistral Large 4",
+    iconProvider: "mistral",
   },
   "mistral-large-latest": {
     displayName: "Mistral Large",
@@ -680,7 +873,7 @@ export const isBYOKProviderRoleSupported = ({
   role,
 }: {
   provider: BYOKProvider;
-  role: ModelRole;
+  role: ModelOverrideGroup;
 }): boolean =>
   role !== "pdf" || BYOK_DOCUMENT_INPUT_MODEL_OPTIONS[provider].length > 0;
 
@@ -691,7 +884,7 @@ export const isBYOKModelRoleSupported = ({
 }: {
   provider: BYOKProvider;
   modelId: string;
-  role: ModelRole;
+  role: ModelOverrideGroup;
 }): boolean => {
   if (role !== "pdf") {
     return true;
@@ -748,7 +941,7 @@ const isOfferedBYOKModelForRole = ({
 }: {
   provider: BYOKProvider;
   modelId: string;
-  role: ModelRole;
+  role: ModelOverrideGroup;
 }): boolean => {
   const offered: readonly string[] = BYOK_MODEL_OPTIONS[provider];
   return (
@@ -757,56 +950,30 @@ const isOfferedBYOKModelForRole = ({
   );
 };
 
-/**
- * Resolve a model id that will actually work for this provider+role,
- * keeping the SAME provider. Returns the caller's model unchanged when
- * it is still offered; otherwise falls back to the provider's per-role
- * default (`BYOK_DEFAULT_MODELS`). Returns `null` only when the
- * provider has no valid model for the role at all — the sole case
- * today is `mistral` + `pdf`, because the TanStack Mistral adapter
- * exposes no `document` input modality, so no Mistral model (not even
- * the default) can serve the PDF role.
- *
- * Used to auto-heal org AI configs whose pinned model was removed by a
- * catalog bump, so generation resolves to a supported model instead of
- * 400-ing (or forwarding a retired id to the provider).
- */
-export const resolveWorkingBYOKModelForRole = ({
+/** Keep a supported override, otherwise use that provider's task default. */
+export const resolveWorkingBYOKModelForTask = ({
   provider,
   modelId,
-  role,
+  task,
 }: {
   provider: BYOKProvider;
   modelId: string;
-  role: ModelRole;
+  task: ModelTask;
 }): string | null => {
+  const role = MODEL_TASK_OVERRIDE_GROUP[task];
   if (isOfferedBYOKModelForRole({ provider, modelId, role })) {
     return modelId;
   }
-  const fallback = BYOK_DEFAULT_MODELS[provider][role];
-  return isOfferedBYOKModelForRole({ provider, modelId: fallback, role })
-    ? fallback
-    : null;
+  const fallback = resolveDefaultModel({ task, orgProviders: [provider] });
+  return fallback?.modelId ?? null;
 };
 
-/**
- * Anthropic models that use the adaptive-thinking request shape
- * (`thinking: { type: "adaptive" }`). Newer Claude models reject the
- * legacy budget-based form, so every Opus 4.6+/Sonnet 4.6/Fable entry
- * offered above must appear here or it will 400 on the reasoning role.
- */
-export const ANTHROPIC_ADAPTIVE_THINKING_MODELS = [
-  "claude-sonnet-5-5",
-  "claude-sonnet-5",
-  "claude-opus-5",
-  "claude-sonnet-4-6",
-  "claude-opus-4-6",
-  "claude-opus-4-7",
-  "claude-opus-4-8",
-  "claude-fable-5",
-  "claude-fable-5-1",
-  "claude-opus-5-5",
-] as const;
+/** Native Anthropic adaptive-thinking models, derived from replay capabilities. */
+export const ANTHROPIC_ADAPTIVE_THINKING_MODELS =
+  BYOK_MODEL_OPTIONS.anthropic.filter(
+    (model) =>
+      MODEL_REASONING_CAPABILITIES[model].anthropicThinking === "adaptive",
+  );
 
 /**
  * Canonical reasoning-effort ladder, ordered weakest to strongest.
@@ -908,25 +1075,6 @@ type RequiredModelRateId =
   | keyof typeof RETAINED_MODELS_DEV_RATE_ENTRIES;
 
 /**
- * Per-provider model served when a user's included budget is exhausted
- * and no explicit selection overrides it. Falls back to each
- * provider's fast-role default; providers without a first-class
- * adapter path cannot serve the lane. Total over providers so a new
- * provider lands with an explicit decision.
- */
-export const FALLBACK_CHAT_MODEL_BY_PROVIDER = {
-  google: DEFAULT_MODELS.google.fast,
-  openrouter: DEFAULT_MODELS.openrouter.fast,
-  openai: DEFAULT_MODELS.openai.fast,
-  anthropic: DEFAULT_MODELS.anthropic.fast,
-  bedrock: DEFAULT_MODELS.bedrock.fast,
-  mistral: DEFAULT_MODELS.mistral.fast,
-  azure_foundry: null,
-  openai_compatible: null,
-  huggingface: null,
-} as const satisfies Record<AIProvider, string | null>;
-
-/**
  * Provider-native IDs that are exact aliases of an offered catalog ID.
  * Every metadata lookup normalizes here, so instance/dev overrides cannot
  * bypass rates or capabilities and duplicated alias rows cannot drift apart.
@@ -936,6 +1084,7 @@ export const MODEL_CATALOG_ID_ALIASES = {
   // Aggregator listings use the dotted marketing forms; the catalog's
   // canonical ids are the dashed API forms.
   "claude-opus-4.8": "claude-opus-4-8",
+  "claude-haiku-5.5": "claude-haiku-5-5",
   "claude-sonnet-5.5": "claude-sonnet-5-5",
   "claude-sonnet-4.6": "claude-sonnet-4-6",
 } as const satisfies Readonly<Record<string, OfferedFirstPartyModelId>>;
@@ -989,6 +1138,13 @@ export const getOutputTokenLimit = (modelId: string): number | undefined =>
  * Consumers must go through `supportsStreamingToolUse`.
  */
 export const MODEL_STREAMING_TOOL_USE = {
+  "anthropic/claude-haiku-5.5": "supported",
+  "us.anthropic.claude-haiku-5-5": "supported",
+  "claude-haiku-5-5": "supported",
+  "gemini-4-neon": "supported",
+  "gemini-4-hydrogen": "supported",
+  "gemini-4-carbon": "supported",
+  "gemini-4-argon": "supported",
   "gemini-3.8-flash": "supported",
   "gemini-3.7-flash": "supported",
   "gemini-3.6-flash": "supported",
@@ -996,13 +1152,20 @@ export const MODEL_STREAMING_TOOL_USE = {
   "gemini-3.1-pro-preview": "supported",
   "gemini-3.5-flash": "supported",
   "gemini-3.1-flash-lite": "supported",
+  "openai/gpt-6.2-astra": "supported",
+  "openai/gpt-6.2-sol": "supported",
   "openai/gpt-6.1-sol": "supported",
+  "openai/gpt-6.1-terra": "supported",
   "openai/gpt-6-astra": "supported",
   "openai/gpt-6-sol": "supported",
   "openai/gpt-6-luna": "supported",
   "openai/gpt-5.6-sol": "supported",
   "openai/gpt-5.6-terra": "supported",
   "openai/gpt-5.6-luna": "supported",
+  "google/gemini-4-neon": "supported",
+  "google/gemini-4-hydrogen": "supported",
+  "google/gemini-4-carbon": "supported",
+  "google/gemini-4-argon": "supported",
   "google/gemini-3.8-flash": "supported",
   "google/gemini-3.7-flash": "supported",
   "google/gemini-3.6-flash": "supported",
@@ -1017,7 +1180,10 @@ export const MODEL_STREAMING_TOOL_USE = {
   "anthropic/claude-sonnet-4.6": "supported",
   "openai/gpt-5.5": "supported",
   "openai/gpt-5.4-mini": "supported",
+  "gpt-6.2-astra": "supported",
+  "gpt-6.2-sol": "supported",
   "gpt-6.1-sol": "supported",
+  "gpt-6.1-terra": "supported",
   "gpt-6-astra": "supported",
   "gpt-6-sol": "supported",
   "gpt-6-luna": "supported",
@@ -1031,6 +1197,7 @@ export const MODEL_STREAMING_TOOL_USE = {
   "gpt-5.2": "supported",
   "claude-sonnet-5-5": "supported",
   "claude-sonnet-5": "supported",
+  "claude-fable-5-2": "supported",
   "claude-fable-5-1": "supported",
   "claude-fable-5": "supported",
   "claude-opus-5-5": "supported",
@@ -1047,6 +1214,7 @@ export const MODEL_STREAMING_TOOL_USE = {
   "us.amazon.nova-micro-v1:0": "supported",
   "openai.gpt-oss-120b-1:0": "supported",
   "openai.gpt-oss-20b-1:0": "supported",
+  "mistral-large-4": "supported",
   "mistral-large-latest": "supported",
   "mistral-medium-latest": "supported",
   "mistral-small-latest": "supported",
@@ -1199,7 +1367,7 @@ export const getModelRate = (modelId: string): ModelRate | undefined => {
  *
  * Keys are the canonical model IDs stella resolves for the provider
  * adapters (the same forms used in `MODEL_RATES`, `BYOK_MODEL_OPTIONS`,
- * and `DEFAULT_MODELS`, including OpenRouter provider-prefixed slugs and
+ * and the task defaults ledger, including OpenRouter provider-prefixed slugs and
  * AWS Bedrock IDs). Values are the providers' publicly documented input
  * windows; where a provider offers a larger beta window we intentionally
  * take the conservative default (e.g. Claude's standard 200K rather than
@@ -1212,6 +1380,9 @@ export const getModelRate = (modelId: string): ModelRate | undefined => {
  * default rather than failing CI.
  */
 export const CONTEXT_WINDOW_TOKENS = {
+  "anthropic/claude-haiku-5.5": 1_000_000,
+  "us.anthropic.claude-haiku-5-5": 1_000_000,
+  "claude-haiku-5-5": 1_000_000,
   // Google Gemini: 1M-token input window across the current lineup.
   "gemini-2.5-flash": 1_048_576,
   "gemini-2.5-pro": 1_048_576,
@@ -1221,6 +1392,10 @@ export const CONTEXT_WINDOW_TOKENS = {
   "gemini-3.6-flash": 1_048_576,
   "gemini-3.7-flash": 1_048_576,
   "gemini-3.8-flash": 1_048_576,
+  "gemini-4-neon": 1_048_576,
+  "gemini-4-hydrogen": 1_048_576,
+  "gemini-4-carbon": 1_048_576,
+  "gemini-4-argon": 1_048_576,
   "gemini-3.1-pro-preview": 1_048_576,
   // OpenAI: GPT-4o family 128K; GPT-5 varies by generation.
   "gpt-4o-mini": 128_000,
@@ -1230,7 +1405,10 @@ export const CONTEXT_WINDOW_TOKENS = {
   "gpt-5.4-mini": 400_000,
   "gpt-5.4": 400_000,
   "gpt-5.5": 400_000,
+  "gpt-6.2-astra": 922_000,
+  "gpt-6.2-sol": 922_000,
   "gpt-6.1-sol": 922_000,
+  "gpt-6.1-terra": 922_000,
   "gpt-6-astra": 922_000,
   "gpt-6-sol": 922_000,
   "gpt-6-luna": 922_000,
@@ -1238,7 +1416,7 @@ export const CONTEXT_WINDOW_TOKENS = {
   "gpt-5.6-luna": 922_000,
   "gpt-5.6-terra": 922_000,
   // Anthropic Claude: 200K through Claude 4; Sonnet 5, Sonnet 5.5, Opus 5,
-  // Opus 5.5, and Fable 5.1 expose 1M.
+  // Opus 5.5, Fable 5.1, and Fable 5.2 expose 1M.
   "claude-haiku-4-5-20251001": 200_000,
   "claude-sonnet-4-6": 200_000,
   "claude-sonnet-5": 1_000_000,
@@ -1250,13 +1428,19 @@ export const CONTEXT_WINDOW_TOKENS = {
   "claude-opus-5-5": 1_000_000,
   "claude-fable-5": 200_000,
   "claude-fable-5-1": 1_000_000,
-  // Mistral: 128K across the offered text/vision models.
+  "claude-fable-5-2": 1_000_000,
+  // Mistral: 128K across the offered text/vision models; Large 4 is 512K.
   "mistral-small-latest": 128_000,
+  "mistral-large-4": 524_288,
   "mistral-large-latest": 128_000,
   "mistral-medium-latest": 128_000,
   "mistral-medium-3-5": 128_000,
   "magistral-small-latest": 128_000,
   // OpenRouter provider-prefixed slugs mirror their upstream windows.
+  "google/gemini-4-neon": 1_048_576,
+  "google/gemini-4-hydrogen": 1_048_576,
+  "google/gemini-4-carbon": 1_048_576,
+  "google/gemini-4-argon": 1_048_576,
   "google/gemini-3.8-flash": 1_048_576,
   "google/gemini-3.7-flash": 1_048_576,
   "google/gemini-3.6-flash": 1_048_576,
@@ -1269,7 +1453,10 @@ export const CONTEXT_WINDOW_TOKENS = {
   "anthropic/claude-opus-5": 1_000_000,
   "anthropic/claude-opus-4.8": 200_000,
   "anthropic/claude-sonnet-4.6": 200_000,
+  "openai/gpt-6.2-astra": 922_000,
+  "openai/gpt-6.2-sol": 922_000,
   "openai/gpt-6.1-sol": 922_000,
+  "openai/gpt-6.1-terra": 922_000,
   "openai/gpt-6-astra": 922_000,
   "openai/gpt-6-sol": 922_000,
   "openai/gpt-6-luna": 922_000,
@@ -1315,3 +1502,34 @@ export const DEFAULT_CONTEXT_WINDOW_TOKENS = 128_000;
 export const getContextWindowTokens = (modelId: string): number =>
   CONTEXT_WINDOW_TOKENS_BY_ID[normalizeModelCatalogId(modelId)] ??
   DEFAULT_CONTEXT_WINDOW_TOKENS;
+export const DECISION_MODEL_PROVIDERS = ["typesafe", "openai"] as const;
+export type DecisionModelProvider = (typeof DECISION_MODEL_PROVIDERS)[number];
+
+export const DECISION_MODEL_CATALOG = {
+  typesafe: { label: "TypeSafe", defaultModelId: "jev-latest" },
+  openai: { label: "OpenAI", defaultModelId: "gpt-6-luna" },
+} as const satisfies Record<
+  DecisionModelProvider,
+  { label: string; defaultModelId: string }
+>;
+
+export {
+  MODEL_REASONING_CAPABILITIES,
+  REASONING_REPLAY_FORMATS,
+} from "./reasoning-capabilities";
+export type {
+  ModelReasoningCapabilities,
+  ReasoningProvenance,
+  ReasoningReplayFormat,
+} from "./reasoning-capabilities";
+
+const MODEL_REASONING_CAPABILITIES_BY_ID: Readonly<
+  Record<string, ModelReasoningCapabilities>
+> = MODEL_REASONING_CAPABILITIES;
+
+export const getModelReasoningCapabilities = (modelId: string) => {
+  const normalized = normalizeModelCatalogId(modelId);
+  return Object.hasOwn(MODEL_REASONING_CAPABILITIES_BY_ID, normalized)
+    ? (MODEL_REASONING_CAPABILITIES_BY_ID[normalized] ?? null)
+    : null;
+};

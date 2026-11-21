@@ -7,6 +7,7 @@
  * for is failed. Driven against a real (PGlite) database with a stubbed queue.
  */
 
+import { Result } from "better-result";
 import { afterAll, beforeEach, describe, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 
@@ -85,11 +86,17 @@ const statusOf = async (exportId: SafeId<"reportExport">) => {
   return row;
 };
 
-const recover = async (queue: StuckExportJobQueue) =>
-  await recoverStuckReportExports({
+const recover = async (queue: StuckExportJobQueue) => {
+  const outcome = await recoverStuckReportExports({
     db: asTestRaw<typeof rootDb>(testDb),
     queue,
   });
+  if (Result.isError(outcome)) {
+    throw outcome.error;
+  }
+  expect(outcome.value.failed).toBe(0);
+  return outcome.value.recovered;
+};
 
 describe("stuck report export recovery", () => {
   beforeEach(async () => {

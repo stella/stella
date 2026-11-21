@@ -11,7 +11,13 @@
  *    section of the app), add a semantic entry: a name for the concept, the
  *    lucide glyph behind it, and a one-line comment saying why that glyph. Two
  *    semantic entries may share a glyph only with a `sharedOnPurpose:` line
- *    naming the other entry and the reason (`icons.test.ts` checks this).
+ *    naming the other entry and the reason (`icons.test.ts` checks this). A
+ *    glyph that only one component may draw (because the component carries
+ *    behaviour, such as `CopyButton` confirming in place) adds an
+ *    `ownedBy: <Component> (<repo path>)` line; `no-unowned-icon` then
+ *    rejects every import of the entry outside that file. A glyph with a
+ *    semantic entry is never re-exported under its plain lucide name, so a
+ *    call site has to pick the meaning it draws.
  * 3. Otherwise the icon is a plain re-export under its lucide name. Import it
  *    from here and run `bun scripts/codemod-icons.ts`, which rewrites any
  *    direct `lucide-react` import and regenerates the list at the bottom.
@@ -19,6 +25,9 @@
  * Only ESM named re-exports live here, and the package marks nothing but its
  * CSS as having side effects, so a bundler keeps just the glyphs a page uses.
  */
+
+import { createLucideIcon } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 
 // --- Semantic entries ------------------------------------------------------
 
@@ -34,14 +43,85 @@ export { BookOpenIcon as CaseLawIcon } from "lucide-react";
 // Starting a new AI chat: a chat bubble with a plus, the same glyph on every
 // new-chat button, menu item and rail action.
 export { MessageSquarePlusIcon as NewChatIcon } from "lucide-react";
+// stella operating the user's own browser through the extension: a browser
+// window, kept apart from the globe of web search and page fetches.
+export { AppWindowMacIcon as BrowserControlIcon } from "lucide-react";
 // Commenting on a document passage: a quoted bubble, so it never reads as
 // starting a new AI chat.
 export { MessageSquareQuoteIcon as AddCommentIcon } from "lucide-react";
+
+// Copying to the clipboard from a button. The button confirms in place (the
+// glyph turns into a check), so the glyph is drawn only by that button.
+// ownedBy: CopyButton (packages/ui/src/components/copy-button.tsx)
+export { CopyIcon as CopyToClipboardIcon } from "lucide-react";
+// A copy action inside a menu or popover that closes on click, so the copy is
+// confirmed with a toast instead of in place.
+// sharedOnPurpose: CopyToClipboardIcon, the same action where an in-place check cannot be seen.
+export { CopyIcon as CopyFromMenuIcon } from "lucide-react";
+// Duplicating an item (a row, page, view, position): it makes a second item,
+// not a clipboard copy.
+// sharedOnPurpose: CopyToClipboardIcon, lucide's two-sheet glyph is the common duplicate mark.
+// sharedOnPurpose: CopyFromMenuIcon, as above.
+export { CopyIcon as DuplicateIcon } from "lucide-react";
+
+// Dictating a message: speech that becomes text in the message box. The
+// mobile composer's round button shows it while there is nothing to send.
+export { MicIcon as DictateIcon } from "lucide-react";
+
+// A suggested next question under an answer: an arrow turning down from the
+// answer into what comes after it. Draw it through DirectionalIcon so it
+// turns the other way under RTL.
+export { CornerDownRightIcon as FollowUpIcon } from "lucide-react";
+
+// Opening a document's pages to reorder, rotate, crop or delete them: a stack
+// of pages with no pen, so it never reads as signing the document.
+export { FileStackIcon as EditPagesIcon } from "lucide-react";
+
+// Sending a view into the side panel (move the main view to the side, open a
+// reference or fork a chat there): the panel with a chevron pointing into it,
+// so it never reads as the plain panel that shows or hides the side panel.
+// Draw it through DirectionalIcon so it mirrors with the panel under RTL.
+// Lucide has no glyph with the side panel shaded as the target, so this one is
+// drawn here: lucide's panel-right frame, the panel tinted, and the chevron of
+// panel-right-close pointing into it.
+export const MoveToSideIcon: LucideIcon = /* @__PURE__ */ createLucideIcon(
+  "move-to-side",
+  [
+    [
+      "path",
+      {
+        d: "M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4z",
+        fill: "currentColor",
+        fillOpacity: "0.25",
+        stroke: "none",
+        key: "move-to-side-panel",
+      },
+    ],
+    [
+      "rect",
+      {
+        width: "18",
+        height: "18",
+        x: "3",
+        y: "3",
+        rx: "2",
+        key: "move-to-side-frame",
+      },
+    ],
+    ["path", { d: "M15 3v18", key: "move-to-side-divider" }],
+    ["path", { d: "m8 9 3 3-3 3", key: "move-to-side-chevron" }],
+  ],
+);
+
+// Published glyphs remain available to package consumers even when no
+// repository component imports them.
+export { DollarSignIcon, ScissorsIcon } from "lucide-react";
 
 // --- Plain re-exports ------------------------------------------------------
 // @generated-start by scripts/codemod-icons.ts: edit by importing a lucide name and rerunning it
 export type { LucideIcon } from "lucide-react";
 export {
+  AccessibilityIcon,
   ActivityIcon,
   AlarmClockIcon,
   AlertCircleIcon,
@@ -65,7 +145,6 @@ export {
   BookTextIcon,
   BookmarkIcon,
   BookmarkPlusIcon,
-  BotIcon,
   BracesIcon,
   BrainIcon,
   Building2Icon,
@@ -73,6 +152,11 @@ export {
   CableIcon,
   CalendarClockIcon,
   CalendarIcon,
+  ChartColumnIcon,
+  ChartLineIcon,
+  ChartNoAxesColumnIcon,
+  ChartPieIcon,
+  ChartScatterIcon,
   CheckCheckIcon,
   CheckCircle2Icon,
   CheckIcon,
@@ -93,22 +177,19 @@ export {
   ClipboardCopyIcon,
   ClipboardIcon,
   ClipboardListIcon,
-  ClipboardPasteIcon,
   Clock3Icon,
   ClockIcon,
+  CloudIcon,
   CogIcon,
   Columns2Icon,
   Columns3Icon,
-  ColumnsIcon,
   CommandIcon,
   CompassIcon,
-  CopyIcon,
   CopyPlusIcon,
   CornerDownLeftIcon,
   CpuIcon,
   CropIcon,
   DatabaseIcon,
-  DollarSignIcon,
   DownloadIcon,
   EditIcon,
   EllipsisIcon,
@@ -126,7 +207,6 @@ export {
   FileIcon,
   FileImageIcon,
   FileOutputIcon,
-  FilePenLineIcon,
   FilePlus2Icon,
   FilePlusIcon,
   FileQuestionIcon,
@@ -188,9 +268,7 @@ export {
   ListTodoIcon,
   ListTreeIcon,
   ListXIcon,
-  Loader2Icon,
   LoaderCircleIcon,
-  LoaderIcon,
   LockIcon,
   LockKeyholeIcon,
   LockOpenIcon,
@@ -208,7 +286,6 @@ export {
   MonitorIcon,
   MoonIcon,
   MoreHorizontalIcon,
-  NetworkIcon,
   PackageIcon,
   PaletteIcon,
   PanelLeftIcon,
@@ -226,7 +303,6 @@ export {
   PlugIcon,
   PlusIcon,
   PowerIcon,
-  PresentationIcon,
   PrinterIcon,
   QuoteIcon,
   Redo2Icon,
@@ -241,7 +317,6 @@ export {
   SaveIcon,
   ScanSearchIcon,
   ScanTextIcon,
-  ScissorsIcon,
   ScrollTextIcon,
   SearchIcon,
   SearchXIcon,
@@ -256,6 +331,7 @@ export {
   SignatureIcon,
   SlashIcon,
   SlidersHorizontalIcon,
+  SmartphoneIcon,
   SparklesIcon,
   SplitIcon,
   SquareCheckIcon,
@@ -268,6 +344,7 @@ export {
   StrikethroughIcon,
   SunIcon,
   TableIcon,
+  TabletIcon,
   TagIcon,
   TagsIcon,
   TerminalIcon,

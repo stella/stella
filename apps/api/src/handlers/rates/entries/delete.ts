@@ -1,30 +1,37 @@
 import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { rateEntries } from "@/api/db/schema";
 import { loadRateEntry } from "@/api/handlers/rates/existing-rate-entry";
 import { rateRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
-import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
+import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
 
-const deleteRateEntryBodySchema = t.Object({
-  id: tSafeId("rateEntry"),
+import {
+  lockLegacyRateEntryTable,
+  lockRateTableWorkspace,
+} from "../rate-table-lock";
+
+const deleteRateEntryBodySchema = v.object({
+  id: resourceIdSchema("rateEntry"),
 });
 
 const rateEntryParamsSchema = workspaceParams({
-  rateTableId: tSafeId("rateTable"),
+  rateTableId: resourceIdSchema("rateTable"),
 });
 
 const deleteRateEntry = createSafeHandler(
   {
+    contract: "patch",
     description:
       "Delete one person, role, or table-default rate line (hourly rate and effective dates) from " +
       "a rate table, leaving the table and its other lines in place. Use " +
       "rates.delete to remove the whole table instead.",
     permissions: { rate: ["delete"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
+    featureAccess: { featureId: "time-billing", type: "required" },
     realtime: rateRealtimeUpdates,
     mcp: {
       type: "capability",
@@ -46,6 +53,8 @@ const deleteRateEntry = createSafeHandler(
 
     yield* Result.await(
       safeDb(async (tx) => {
+        await lockRateTableWorkspace(tx, workspaceId);
+        await lockLegacyRateEntryTable(tx, params.rateTableId);
         await tx
           .delete(rateEntries)
           .where(

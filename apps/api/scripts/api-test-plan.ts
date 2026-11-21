@@ -1,11 +1,11 @@
 import { panic } from "better-result";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 import {
   batchModuleMockTests,
-  readModuleMockMetadata,
   type ModuleMockTest,
+  readModuleMockMetadata,
 } from "../src/tests/module-mock-batching";
 import {
   classifyTestBatch,
@@ -13,6 +13,7 @@ import {
   dbTestBatchSize,
   hasModuleScopeProcessEnvMutation,
   isDbTest,
+  measuredTestRssTable,
   SOLO_TEST_PATHS,
   splitMemoryBoundedBatches,
   splitSoloTests,
@@ -31,7 +32,7 @@ const TEST_FILE_GLOB = `{${TEST_ROOTS.join(",")}}/**/*.test.{ts,tsx}`;
 // Non-test helper modules live here; some install a module mock at import.
 const TEST_HELPER_GLOB = "src/tests/**/*.ts";
 const MODULE_MOCK_PATTERN = /\bmock\.module\s*\(/u;
-const PROPERTY_TEST_MARKERS = ["fc.assert", "assertProperty"];
+export const PROPERTY_TEST_MARKERS = ["fc.assert", "assertProperty"];
 // Keep headroom as the legal-list suite grows: larger batches cross the 2 GiB
 // guard once the additional handler and schema modules share one process.
 const REGULAR_TEST_BATCH_SIZE = 10;
@@ -53,6 +54,11 @@ const MODULE_MOCK_TEST_BATCH_SIZE = 3;
 // db via context, and module-level singletons are lazy per the side-effect
 // conventions). The path fallback catches integration suites that reach the
 // db through their own local setup.
+// Declare this comment at the start of a line in DB tests that retain a
+// full-size corpus. Keeping the decision beside the fixture avoids a second,
+// path-based inventory.
+const HEAVY_DB_TEST_BATCH_SIZE = 1;
+const HEAVY_DB_SOURCE_MARKERS = [/^\/\/ @api-test-heavy-db\b/mu];
 // Some protocol conformance tests intentionally load an independent client
 // implementation alongside the API server graph, while sandbox tests exercise
 // hard memory limits. Keep both classes in fresh processes so their retained
@@ -61,13 +67,17 @@ const HEAVY_LOGIC_TEST_BATCH_SIZE = 1;
 const HEAVY_LOGIC_SOURCE_MARKERS = ["@modelcontextprotocol/client"] as const;
 const HEAVY_LOGIC_PATH_MARKERS = [
   "handlers/chat/tools/execute/sandbox/",
+  // Loads the API route graph and builds the whole capability catalog in
+  // process; alone it peaks near the ordinary logic ceiling, and a shared
+  // ten-file batch with it reached 2284 MB on Linux.
+  "scripts/deployment-feature-guard.test.ts",
 ] as const;
 // Hard per-batch peak-RSS budgets. A batch that outgrows its budget fails
 // the run even when every test passes, so memory growth surfaces here as a
 // readable error instead of an opaque exit-137 kill when the hosted
 // runner's memory runs out. Raising one is a reviewed product decision
 // (like the typecheck and network baselines), not a mechanical way to make
-// CI green. Two budgets, because the batch kinds have different floors:
+// CI green. The ordinary batch kinds have different floors:
 // DB-touching batches boot PGlite from the prebuilt snapshot (see below),
 // logic batches never connect at all. Measured on a full macOS run,
 // 2026-08-05: worst DB batch 2072 MB (3 snapshot-booted files; each file
@@ -81,7 +91,13 @@ const MAX_LOGIC_BATCH_PEAK_RSS_MB = 2048;
 // The sandbox's deliberate exponential-allocation test expands QuickJS/WASM
 // before the 1 MB guest limit aborts it. Its dedicated process may peak above
 // the ordinary logic ceiling, but remains bounded below the hosted 4 GB limit.
-export const MAX_HEAVY_LOGIC_BATCH_PEAK_RSS_MB = 3072;
+const MAX_HEAVY_LOGIC_BATCH_PEAK_RSS_MB = 3072;
+// Full-size corpus tests retain both PGlite WASM and the corpus/index graphs.
+// The Linux API runner's peak-RSS measurement reported 2583 MB when the
+// 20,000-entry refresh-event-loop suite shared a process with monitoring-drain.
+// Run corpus files alone with headroom above that observed peak, while keeping
+// this explicit ceiling below the hosted 4 GB limit and ordinary DBs at 2560 MB.
+const MAX_HEAVY_DB_BATCH_PEAK_RSS_MB = 3072;
 
 /** Every test file the runner executes, in its stable order. */
 export const listApiTestPaths = (apiRoot: string): string[] =>
@@ -132,6 +148,7 @@ const readModuleMockHelpers = (apiRoot: string) =>
 
 /** One execution class's batches, before labelling and path selection. */
 export type ComposedTestBatches = {
+  dbTestPaths: ReadonlySet<string>;
   isolate: boolean;
   kind: TestBatchKind;
   maxPeakRssMb: number;
@@ -145,77 +162,153 @@ type PlanApiTestBatchesOptions = {
   testPaths: readonly string[];
 };
 
-/** Classify every test file and compose the batches the runner executes. */
-export const planApiTestBatches = async ({
-  executionMode = "batched",
-  apiRoot,
-  propertyOnly,
-  testPaths,
-}: PlanApiTestBatchesOptions): Promise<ComposedTestBatches[]> => {
-  const moduleMockHelpers = readModuleMockHelpers(apiRoot);
-  const installsModuleMock = (source: string): boolean =>
+type ApiTestSourceFacts = {
+  dbBacked: boolean;
+  hasPropertyTest: boolean;
+  hasUnknownImport: boolean;
+  hasUnknownMock: boolean;
+  heavyDb: boolean;
+  heavyLogic: boolean;
+  importedModules: readonly string[];
+  installsModuleMock: boolean;
+  mockedModules: readonly string[];
+};
+
+export type ApiTestSourceIndex = Readonly<{
+  testPaths: readonly string[];
+  tests: Readonly<Record<string, Readonly<ApiTestSourceFacts>>>;
+}>;
+
+type ReadApiTestSourceIndexOptions = {
+  discovery?: "all" | "additional-only";
+};
+
+const indexTestSource = (
+  testPath: string,
+  source: string,
+  moduleMockHelpers: ReturnType<typeof readModuleMockHelpers>,
+): Readonly<ApiTestSourceFacts> => {
+  const installsModuleMock =
     MODULE_MOCK_PATTERN.test(source) ||
     moduleMockHelpers.some(({ suffix }) => source.includes(suffix));
-  const readTestModuleMockMetadata = (source: string, testPath: string) => {
-    const directMetadata = readModuleMockMetadata(source, testPath);
-    const metadata = {
-      hasUnknownImport: directMetadata.hasUnknownImport,
-      hasUnknownMock: directMetadata.hasUnknownMock,
-      importedModules: new Set(directMetadata.importedModules),
-      mockedModules: new Set(directMetadata.mockedModules),
-    };
-    for (const helper of moduleMockHelpers) {
-      if (!source.includes(helper.suffix)) {
-        continue;
-      }
-      metadata.hasUnknownImport ||= helper.hasUnknownImport;
-      metadata.hasUnknownMock ||= helper.hasUnknownMock;
-      // The helper's own imports arrive in the process along with it, so they
-      // are exposed to the batch's mocks exactly like the test file's imports.
-      for (const importedModule of helper.importedModules) {
-        metadata.importedModules.add(importedModule);
-      }
-      for (const mockedModule of helper.mockedModules) {
-        metadata.mockedModules.add(mockedModule);
-      }
+  const directMetadata = readModuleMockMetadata(source, testPath);
+  const importedModules = new Set(directMetadata.importedModules);
+  const mockedModules = new Set(directMetadata.mockedModules);
+  let hasUnknownImport = directMetadata.hasUnknownImport;
+  let hasUnknownMock = directMetadata.hasUnknownMock;
+  for (const helper of moduleMockHelpers) {
+    if (!source.includes(helper.suffix)) {
+      continue;
     }
-    return metadata;
-  };
+    hasUnknownImport ||= helper.hasUnknownImport;
+    hasUnknownMock ||= helper.hasUnknownMock;
+    for (const importedModule of helper.importedModules) {
+      importedModules.add(importedModule);
+    }
+    for (const mockedModule of helper.mockedModules) {
+      mockedModules.add(mockedModule);
+    }
+  }
+  const dbBacked = isDbTest(testPath, source);
+  return Object.freeze({
+    dbBacked,
+    hasPropertyTest: PROPERTY_TEST_MARKERS.some((marker) =>
+      source.includes(marker),
+    ),
+    hasUnknownImport,
+    hasUnknownMock,
+    heavyDb: HEAVY_DB_SOURCE_MARKERS.some((marker) => marker.test(source)),
+    heavyLogic:
+      HEAVY_LOGIC_SOURCE_MARKERS.some((marker) => source.includes(marker)) ||
+      HEAVY_LOGIC_PATH_MARKERS.some((marker) => testPath.includes(marker)) ||
+      hasModuleScopeProcessEnvMutation(testPath, source),
+    importedModules: Object.freeze([...importedModules]),
+    installsModuleMock,
+    mockedModules: Object.freeze([...mockedModules]),
+  });
+};
 
-  const classifiedTests = await Promise.all(
-    testPaths.map(async (testPath) => ({
-      source: await Bun.file(path.join(apiRoot, testPath)).text(),
-      testPath,
-    })),
+/** Read and classify the repository's test sources once for repeated planning. */
+export const readApiTestSourceIndex = async (
+  apiRoot: string,
+  additionalTestPaths: readonly string[] = [],
+  { discovery = "all" }: ReadApiTestSourceIndexOptions = {},
+): Promise<ApiTestSourceIndex> => {
+  const moduleMockHelpers = readModuleMockHelpers(apiRoot);
+  const testPaths = [
+    ...new Set([
+      ...(discovery === "all" ? listApiTestPaths(apiRoot) : []),
+      ...additionalTestPaths,
+    ]),
+  ].toSorted();
+  const entries = await Promise.all(
+    testPaths.map(
+      async (testPath) =>
+        [
+          testPath,
+          indexTestSource(
+            testPath,
+            await Bun.file(path.join(apiRoot, testPath)).text(),
+            moduleMockHelpers,
+          ),
+        ] as const,
+    ),
   );
+  return Object.freeze({
+    testPaths: Object.freeze(testPaths),
+    tests: Object.freeze(Object.fromEntries(entries)),
+  });
+};
 
+type PlanApiTestBatchesFromSourceIndexOptions = Omit<
+  PlanApiTestBatchesOptions,
+  "apiRoot"
+> & { sourceIndex: ApiTestSourceIndex };
+
+/** Compose batches without reading or reclassifying repository sources. */
+export const planApiTestBatchesFromSourceIndex = ({
+  executionMode = "batched",
+  propertyOnly,
+  sourceIndex,
+  testPaths,
+}: PlanApiTestBatchesFromSourceIndexOptions): ComposedTestBatches[] => {
   const regularTests: string[] = [];
   const heavyLogicTests: string[] = [];
   const dbTests: string[] = [];
+  const heavyDbTests: string[] = [];
   const moduleMockTests: ModuleMockTest[] = [];
-  for (const { source, testPath } of classifiedTests) {
-    if (
-      propertyOnly &&
-      !PROPERTY_TEST_MARKERS.some((marker) => source.includes(marker))
-    ) {
+  const dbTestPaths = new Set<string>();
+  for (const testPath of testPaths) {
+    const facts = sourceIndex.tests[testPath];
+    if (facts === undefined) {
+      panic(`API test source index does not contain ${testPath}`);
+    }
+    // Record the class before any skip: memory estimates use every file's class.
+    if (facts.dbBacked) {
+      dbTestPaths.add(testPath);
+    }
+    if (propertyOnly && !facts.hasPropertyTest) {
       continue;
     }
-
     const batchKind = classifyTestBatch({
-      dbBacked: isDbTest(testPath, source),
-      heavyLogic:
-        HEAVY_LOGIC_SOURCE_MARKERS.some((marker) => source.includes(marker)) ||
-        HEAVY_LOGIC_PATH_MARKERS.some((marker) => testPath.includes(marker)) ||
-        hasModuleScopeProcessEnvMutation(testPath, source),
-      installsModuleMock: installsModuleMock(source),
+      dbBacked: facts.dbBacked,
+      heavyDb: facts.heavyDb,
+      heavyLogic: facts.heavyLogic,
+      installsModuleMock: facts.installsModuleMock,
       propertyOnly,
     });
     switch (batchKind) {
       case TEST_BATCH_KIND.moduleMock:
         moduleMockTests.push({
-          ...readTestModuleMockMetadata(source, testPath),
+          hasUnknownImport: facts.hasUnknownImport,
+          hasUnknownMock: facts.hasUnknownMock,
+          importedModules: new Set(facts.importedModules),
+          mockedModules: new Set(facts.mockedModules),
           testPath,
         });
+        break;
+      case TEST_BATCH_KIND.heavyDb:
+        heavyDbTests.push(testPath);
         break;
       case TEST_BATCH_KIND.db:
         dbTests.push(testPath);
@@ -229,6 +322,16 @@ export const planApiTestBatches = async ({
       default:
         batchKind satisfies never;
         panic(`Unhandled batch kind: ${String(batchKind)}`);
+    }
+  }
+
+  // Unmeasured files are estimated from the whole profile split by class, so
+  // every measured file needs its class, not only the files this run plans (a
+  // shard, a subset or property-only mode would otherwise count measured db
+  // files as ordinary and skew both estimates).
+  for (const file of Object.keys(measuredTestRssTable().files)) {
+    if (sourceIndex.tests[file]?.dbBacked === true) {
+      dbTestPaths.add(file);
     }
   }
 
@@ -248,6 +351,7 @@ export const planApiTestBatches = async ({
   );
   const composed: ComposedTestBatches[] = [
     {
+      dbTestPaths,
       isolate: false,
       kind: TEST_BATCH_KIND.regular,
       maxPeakRssMb: MAX_LOGIC_BATCH_PEAK_RSS_MB,
@@ -257,6 +361,7 @@ export const planApiTestBatches = async ({
       ],
     },
     {
+      dbTestPaths,
       isolate: false,
       kind: TEST_BATCH_KIND.heavyLogic,
       maxPeakRssMb: MAX_HEAVY_LOGIC_BATCH_PEAK_RSS_MB,
@@ -266,12 +371,21 @@ export const planApiTestBatches = async ({
       ),
     },
     {
+      dbTestPaths,
+      isolate: false,
+      kind: TEST_BATCH_KIND.heavyDb,
+      maxPeakRssMb: MAX_HEAVY_DB_BATCH_PEAK_RSS_MB,
+      testBatches: composeTestBatches(heavyDbTests, HEAVY_DB_TEST_BATCH_SIZE),
+    },
+    {
+      dbTestPaths,
       isolate: false,
       kind: TEST_BATCH_KIND.db,
       maxPeakRssMb: MAX_DB_BATCH_PEAK_RSS_MB,
       testBatches: composeTestBatches(dbTests, dbTestBatchSize(propertyOnly)),
     },
     {
+      dbTestPaths,
       isolate: true,
       kind: TEST_BATCH_KIND.moduleMock,
       maxPeakRssMb: MAX_DB_BATCH_PEAK_RSS_MB,
@@ -292,7 +406,28 @@ export const planApiTestBatches = async ({
         : splitMemoryBoundedBatches({
             batches: splitSoloTests(group.testBatches, SOLO_TEST_PATHS),
             budgetMb: group.maxPeakRssMb,
+            dbTestPaths,
           });
   }
   return composed;
 };
+
+/** Build a fresh source index and plan batches for production callers. */
+export const planApiTestBatches = async (
+  options: PlanApiTestBatchesOptions,
+): Promise<ComposedTestBatches[]> =>
+  planApiTestBatchesFromSourceIndex({
+    executionMode: options.executionMode ?? "batched",
+    propertyOnly: options.propertyOnly,
+    sourceIndex: await readApiTestSourceIndex(
+      options.apiRoot,
+      [
+        ...options.testPaths,
+        ...Object.keys(measuredTestRssTable().files).filter((file) =>
+          existsSync(path.join(options.apiRoot, file)),
+        ),
+      ],
+      { discovery: "additional-only" },
+    ),
+    testPaths: options.testPaths,
+  });

@@ -1,5 +1,24 @@
 # @stll/calculations
 
+## 0.1.5
+
+### Patch Changes
+
+- [#8537](https://github.com/stella/stella/pull/8537) [`001c640`](https://github.com/stella/stella/commit/001c640e64cb00e3948bdf68a18a40347c65a40f) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Build declarations through the native tsrs API supported by tsdown 0.23.7, resolving the compiler from each package.
+
+## 0.1.4
+
+### Patch Changes
+
+- Updated dependencies [[`3978f45`](https://github.com/stella/stella/commit/3978f45cea7b4a37d42882f1be9075ea933d2f39), [`ad81543`](https://github.com/stella/stella/commit/ad81543e9c85c79cc921caa5b72d7ee39cde94c3)]:
+  - @stll/money@0.4.0
+
+## 0.1.3
+
+### Patch Changes
+
+- [#6544](https://github.com/stella/stella/pull/6544) [`ebc823d`](https://github.com/stella/stella/commit/ebc823d679dce14f1f408ff24014a1459dab3c79) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Column calculations now report non-finite inputs and overflowing reductions as unsupported instead of returning non-finite results.
+
 ## 0.1.2
 
 ### Patch Changes

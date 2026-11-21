@@ -1,6 +1,5 @@
 import { expect, test } from "bun:test";
 import fc from "fast-check";
-import path from "node:path";
 
 import { assertProperty } from "@stll/property-testing";
 
@@ -98,6 +97,10 @@ test("a diagnostic code maps to its tracked rule for both plugin kinds", () => {
       "no-raw-overflow-scroll/no-raw-overflow-scroll",
     ],
     [
+      "no-raw-context-menu(no-raw-context-menu)",
+      "no-raw-context-menu/no-raw-context-menu",
+    ],
+    [
       "no-imported-class-constant(no-imported-class-constant)",
       "no-imported-class-constant/no-imported-class-constant",
     ],
@@ -114,24 +117,60 @@ test("a diagnostic code maps to its tracked rule for both plugin kinds", () => {
       "no-computed-key-record-assignment/no-computed-key-record-assignment",
     ],
     [
+      "exhaustive-union-map(exhaustive-union-map)",
+      "exhaustive-union-map/exhaustive-union-map",
+    ],
+    [
       "no-direct-status-set(no-direct-status-set)",
       "no-direct-status-set/no-direct-status-set",
     ],
+    [
+      "require-polite-publisher-fetch(require-polite-publisher-fetch)",
+      "require-polite-publisher-fetch/require-polite-publisher-fetch",
+    ],
+    ["no-native-ui(no-native-accordion)", "no-native-ui/no-native-accordion"],
+    ["no-native-ui(no-native-button)", "no-native-ui/no-native-button"],
+    ["no-native-ui(no-native-checkbox)", "no-native-ui/no-native-checkbox"],
+    [
+      "no-native-ui(no-native-details-grid)",
+      "no-native-ui/no-native-details-grid",
+    ],
+    ["no-native-ui(no-native-dialog)", "no-native-ui/no-native-dialog"],
+    ["no-native-ui(no-native-form)", "no-native-ui/no-native-form"],
+    ["no-native-ui(no-native-input)", "no-native-ui/no-native-input"],
+    ["no-native-ui(no-native-label)", "no-native-ui/no-native-label"],
+    ["no-native-ui(no-native-menu)", "no-native-ui/no-native-menu"],
+    [
+      "no-native-ui(no-native-number-input)",
+      "no-native-ui/no-native-number-input",
+    ],
+    [
+      "no-native-ui(no-native-secret-input)",
+      "no-native-ui/no-native-secret-input",
+    ],
+    ["no-native-ui(no-native-select)", "no-native-ui/no-native-select"],
+    ["no-native-ui(no-native-separator)", "no-native-ui/no-native-separator"],
+    ["no-native-ui(no-native-table)", "no-native-ui/no-native-table"],
+    ["no-native-ui(no-native-textarea)", "no-native-ui/no-native-textarea"],
+    ["no-native-ui(no-native-tooltip)", "no-native-ui/no-native-tooltip"],
     ["eslint(complexity)", "eslint/complexity"],
     ["eslint(max-lines-per-function)", "eslint/max-lines-per-function"],
     ["eslint(max-params)", "eslint/max-params"],
     ["react(no-children-prop)", "react/no-children-prop"],
     ["eslint(no-unexpected-multiline)", "eslint/no-unexpected-multiline"],
-    ["eslint(no-use-before-define)", "eslint/no-use-before-define"],
   ]);
   expect([...DESIGN_LINT_TRACKED_PLUGINS]).toEqual([
     "shadcn",
     "no-raw-overflow-scroll",
+    "no-raw-context-menu",
     "no-imported-class-constant",
     "require-bounded-request-schema",
     "no-unbounded-response-body",
     "no-computed-key-record-assignment",
+    "exhaustive-union-map",
     "no-direct-status-set",
+    "require-polite-publisher-fetch",
+    "no-native-ui",
     "eslint",
     "react",
   ]);
@@ -160,8 +199,6 @@ test("a backlog file drops a size limit to its ceiling, other rules to off", () 
   ]);
 });
 
-const REPOSITORY_ROOT = path.resolve(import.meta.dir, "..");
-
 const DIAGNOSTICS = [
   { code: "shadcn(no-restyle)", filename: "apps/web/src/z.tsx" },
   { code: "shadcn(no-restyle)", filename: "apps/web/src/Z.tsx" },
@@ -172,12 +209,6 @@ const DIAGNOSTICS = [
   { code: "shadcn(no-restyle)", filename: "apps/web/src/hooks.tsx" },
   { code: "shadcn(no-restyle)", filename: "apps/web/src/hooks.tsx" },
   { code: "eslint(max-params)", filename: "apps/api/src/b.ts" },
-  { code: "eslint(no-use-before-define)", filename: "apps/api/src/b.ts" },
-  { code: "eslint(no-use-before-define)", filename: "./apps/api/src/b.ts" },
-  {
-    code: "eslint(no-use-before-define)",
-    filename: path.join(REPOSITORY_ROOT, "apps/api/src/b.ts"),
-  },
   { code: "unicorn(no-null)", filename: "apps/api/src/b.ts" },
 ];
 
@@ -224,7 +255,6 @@ test("the serialized baseline is byte-identical in any report order", () => {
       "apps/web/src/z.tsx": 1,
     },
     "eslint/max-params": { "apps/api/src/b.ts": 1 },
-    "eslint/no-use-before-define": { "apps/api/src/b.ts": 3 },
   });
   expect(Object.keys(parsed)).toEqual([...DESIGN_LINT_BACKLOG_RULES]);
   expect(Object.keys(parsed["shadcn/no-restyle"])).toEqual([

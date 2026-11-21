@@ -9,6 +9,8 @@ import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+import { requireComputedColumnInputs } from "@/api/lib/properties/computed-column-input";
+import { computedColumnInputHandlerError } from "@/api/lib/properties/computed-column-input-handler-error";
 import {
   buildPropertyParts,
   createPropertyBodySchema,
@@ -16,17 +18,23 @@ import {
 } from "@/api/lib/properties/create-schema";
 import { propertyKindsForTool } from "@/api/lib/properties/property-kinds";
 import { lockWorkspacePropertyWrites } from "@/api/lib/properties/property-lock";
+import { CREATE_PROPERTY_TABLE_ANALYSIS_ACCESS } from "@/api/lib/properties/table-analysis-access";
 
 const config = {
+  contract: "patch",
   description:
     "Add one property (a column) to a matter: its name, value type, and " +
     "either an AI prompt tool, optionally depending on other columns, or a " +
-    "manual-input tool. An AI column is created stale, so its values are " +
+    "manual-input tool. A money column takes manual input unless toolType " +
+    "is ai-model, when the model reads the amount and the currency the " +
+    "source states, falling back to the column's currency. An AI column is " +
+    "created stale, so its values are " +
     "produced by the next run rather than immediately. Refused when the " +
     "matter is at its property limit, when a dependency is not a property of " +
     "this matter, or when the matter already has a document-type classifier " +
     "column.",
   permissions: { property: ["create"] },
+  featureAccess: CREATE_PROPERTY_TABLE_ANALYSIS_ACCESS,
   accountAccess: ACCOUNT_ACCESS.sandbox,
   realtime: propertyRealtimeUpdates,
   mcp: {
@@ -46,7 +54,7 @@ const createProperty = createSafeHandler(
         new HandlerError({ status: built.status, message: built.message }),
       );
     }
-    const { content, tool, dependencies, role } = built;
+    const { content, tool, dependencies: requestedDependencies, role } = built;
 
     const txResult = yield* Result.await(
       abortableTx(safeDb, async (tx) => {
@@ -84,6 +92,18 @@ const createProperty = createSafeHandler(
             status: 422,
             message: "Document type classifier already exists",
           });
+        }
+
+        let dependencies = requestedDependencies;
+        if (tool.type === "ai-model") {
+          const resolved = requireComputedColumnInputs({
+            candidates: existingRows,
+            inputs: requestedDependencies,
+          });
+          if (Result.isError(resolved)) {
+            return Result.err(computedColumnInputHandlerError(resolved.error));
+          }
+          dependencies = [...resolved.value];
         }
 
         if (dependencies.length > 0) {
@@ -164,6 +184,9 @@ const createProperty = createSafeHandler(
       }),
     );
 
+    if ("status" in txResult) {
+      return txResult;
+    }
     return Result.ok({ id: txResult.id });
   },
 );

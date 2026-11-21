@@ -1,4 +1,5 @@
 import type { ModelMessage } from "@tanstack/ai";
+import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import { CHAT_ORACLE } from "@/api/tests/helpers/chat-oracles";
@@ -312,7 +313,7 @@ describe("signed thinking keeps its place", () => {
     ).toEqual(["a thinking block has no signature"]);
   });
 
-  test("a Gemini call replayed without the signature it was produced with is a finding", () => {
+  describe("Gemini thought signatures", () => {
     const answer = `data: ${JSON.stringify({
       candidates: [
         {
@@ -328,10 +329,16 @@ describe("signed thinking keeps its place", () => {
         },
       ],
     })}\r\n\r\n`;
-    const signedCalls = new Map(signedGeminiCallsOf(answer));
-    expect([...signedCalls]).toEqual([["a", "EoYCCoMC"]]);
-
-    const replayed = (part: Record<string, unknown>): ProviderRequest => ({
+    const signedCalls = new Map(
+      signedGeminiCallsOf(answer).map(([id, signature]) => [
+        id,
+        { signature, model: "gemini-4-carbon" },
+      ]),
+    );
+    const replayed = (
+      part: Record<string, unknown>,
+      model: string,
+    ): ProviderRequest => ({
       body: {
         contents: [
           { parts: [{ text: "Delete the draft" }], role: "user" },
@@ -350,12 +357,36 @@ describe("signed thinking keeps its place", () => {
         ],
       },
       format: "gemini",
+      model,
       signedCalls,
     });
-    expect(problemsOf(replayed({ thoughtSignature: "EoYCCoMC" }))).toEqual([]);
-    expect(problemsOf(replayed({}))).toEqual([
-      "a replayed tool call lost the thinking produced with it",
-    ]);
+
+    test("an answer's signed calls are read with their signatures", () => {
+      expect(signedGeminiCallsOf(answer)).toEqual([["a", "EoYCCoMC"]]);
+    });
+
+    test("a call replayed to the same model without its signature is a finding", () => {
+      expect(
+        problemsOf(
+          replayed({ thoughtSignature: "EoYCCoMC" }, "gemini-4-carbon"),
+        ),
+      ).toEqual([]);
+      expect(problemsOf(replayed({}, "gemini-4-carbon"))).toEqual([
+        "a replayed tool call lost the thinking produced with it",
+      ]);
+      expect(
+        problemsOf(replayed({ thoughtSignature: "other" }, "gemini-4-carbon")),
+      ).toEqual(["a replayed tool call lost the thinking produced with it"]);
+    });
+
+    test("a call replayed to another Gemini model may drop the previous model's signature", () => {
+      expect(problemsOf(replayed({}, "gemini-4-hydrogen"))).toEqual([]);
+      expect(
+        problemsOf(
+          replayed({ thoughtSignature: "EoYCCoMC" }, "gemini-4-hydrogen"),
+        ),
+      ).toEqual([]);
+    });
   });
 
   test("Bedrock reasoning without its signature is a finding", () => {
@@ -507,6 +538,82 @@ describe("the engine's messages", () => {
       },
     ]);
   });
+});
+
+describe("a call's arguments are a JSON object", () => {
+  // What a call cut off while its input streamed holds: nothing yet, or the
+  // start of an object.
+  const CUT_OFF = ["", '{"name": '] as const;
+  const withArguments = (
+    format: "model-messages" | "openai-chat" | "openai-responses",
+    text: string,
+  ): ProviderRequest => {
+    const call = { arguments: text, name: "mcp__external__delete" };
+    const result = '{"error":"This call never returned a result"}';
+    switch (format) {
+      case "model-messages":
+        return {
+          earlierSteps: [],
+          format,
+          messages: [
+            { content: "Delete the draft", role: "user" },
+            {
+              content: null,
+              role: "assistant",
+              toolCalls: [{ function: call, id: "a", type: "function" }],
+            },
+            { content: result, role: "tool", toolCallId: "a" },
+          ],
+        };
+      case "openai-chat":
+        return {
+          body: {
+            messages: [
+              { content: "Delete the draft", role: "user" },
+              {
+                content: null,
+                role: "assistant",
+                tool_calls: [{ function: call, id: "a", type: "function" }],
+              },
+              { content: result, role: "tool", tool_call_id: "a" },
+            ],
+          },
+          format,
+        };
+      case "openai-responses":
+        return {
+          body: {
+            input: [
+              { content: "Delete the draft", role: "user", type: "message" },
+              { ...call, call_id: "a", type: "function_call" },
+              { call_id: "a", output: result, type: "function_call_output" },
+            ],
+          },
+          format,
+        };
+      default:
+        format satisfies never;
+        return panic("Unhandled request format");
+    }
+  };
+
+  for (const format of [
+    "model-messages",
+    "openai-chat",
+    "openai-responses",
+  ] as const) {
+    test(`${format}: a call whose input is an object passes`, () => {
+      expect(problemsOf(withArguments(format, '{"name":"draft"}'))).toEqual([]);
+    });
+
+    for (const text of CUT_OFF) {
+      test(`${format}: a call with arguments ${JSON.stringify(text)} is a finding`, () => {
+        expect(problemsOf(withArguments(format, text))).toEqual([
+          "a tool call's arguments are not a JSON object",
+        ]);
+      });
+    }
+  }
 });
 
 describe("the wire format of a provider request", () => {

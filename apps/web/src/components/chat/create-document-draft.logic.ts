@@ -19,8 +19,6 @@ type CreateDocumentMatterOutput = Extract<
 >;
 
 export const CREATE_DOCUMENT_DRAFT_VIEW = "create-document-draft";
-export const createDocumentDraftReviewId = (toolCallId: string): string =>
-  `draft:${toolCallId}`;
 const CREATE_DOCUMENT_DRAFT_THREAD_NAMESPACE =
   "58cd2ab8-5b47-4c60-8ccc-edbbabf7fc69";
 
@@ -297,10 +295,6 @@ export const isSameCreateDocumentDraftPayload = (
       left.fieldId === right.fieldId &&
       left.fileName === right.fileName));
 
-const DOWNLOAD_EXTENSION = ".docx";
-const MAX_DOWNLOAD_FILENAME_LENGTH = 255;
-const UNSAFE_DOWNLOAD_FILENAME_CHARACTERS = '"/\\<>\r\n\0|*?:';
-
 export type CreateDocumentDraft = {
   messageId: string;
   toolCallId: string;
@@ -477,33 +471,6 @@ export const terminalizeUnsettledCreateDocumentDraft = (
       ? { ...message, parts }
       : message;
   });
-
-export const buildCreateDocumentDownloadFileName = (name: string): string => {
-  let sanitized = "";
-  for (const character of name) {
-    sanitized += UNSAFE_DOWNLOAD_FILENAME_CHARACTERS.includes(character)
-      ? "_"
-      : character;
-  }
-  sanitized = sanitized.split("..").join("__");
-  let firstNonDot = 0;
-  while (sanitized.at(firstNonDot) === ".") {
-    firstNonDot += 1;
-  }
-  let lastNonDot = sanitized.length;
-  while (lastNonDot > firstNonDot && sanitized.at(lastNonDot - 1) === ".") {
-    lastNonDot -= 1;
-  }
-  const safeBase =
-    `${firstNonDot > 0 ? "_" : ""}${sanitized.slice(
-      firstNonDot,
-      lastNonDot,
-    )}${lastNonDot < sanitized.length ? "_" : ""}` || "document";
-  return `${safeBase.slice(
-    0,
-    MAX_DOWNLOAD_FILENAME_LENGTH - DOWNLOAD_EXTENSION.length,
-  )}${DOWNLOAD_EXTENSION}`;
-};
 
 export const normalizeCreateDocumentInput = (
   input: unknown,

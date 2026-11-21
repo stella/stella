@@ -1,13 +1,19 @@
 import { Result } from "better-result";
-import { and, eq, sql } from "drizzle-orm";
-import { t } from "elysia";
+import { and, eq } from "drizzle-orm";
+import * as v from "valibot";
 
 import { abortableTx } from "@/api/db/safe-db";
 import { workspaceViewTemplates } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
-import { tDefaultVarchar } from "@/api/lib/custom-schema";
+import {
+  AVT_LAYOUT_FEATURE_ACCESS,
+  avtViewAccessStatus,
+} from "@/api/lib/auth/feature-access/view-eligibility";
+import { displayNameSchema } from "@/api/lib/custom-schema";
+import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
+import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import {
@@ -23,15 +29,14 @@ import {
   portableLayout,
 } from "@/api/lib/views/utils";
 
-const createViewTemplateBodySchema = t.Object(
-  {
-    name: tDefaultVarchar,
-    layout: tViewLayoutSchema,
-  },
-  { additionalProperties: false },
-);
+const createViewTemplateBodySchema = v.strictObject({
+  name: displayNameSchema(),
+  layout: tViewLayoutSchema,
+});
 
 const config = {
+  contract: "patch",
+  idempotency: { type: "replay" },
   description:
     "Save a view layout as a personal view template, the blueprint used to " +
     "create views in other matters. Duplicate sorts and multiple kind " +
@@ -39,6 +44,7 @@ const config = {
     "dropped, and the columns the layout needs are captured so they can be " +
     "recreated wherever the template is applied. Names are unique per user, " +
     "so a repeat name is a 409, and the per-user template limit applies.",
+  featureAccess: AVT_LAYOUT_FEATURE_ACCESS,
   permissions: { view: ["create"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
@@ -58,8 +64,20 @@ const createViewTemplate = createSafeHandler(
     user,
     body,
     recordAuditEvent,
+    featureAccessSnapshot,
   }) {
+    const avtAccessStatus = avtViewAccessStatus({
+      snapshot: featureAccessSnapshot,
+      organizationId: session.activeOrganizationId,
+      userId: user.id,
+    });
     const layout = portableLayout(parseViewLayout(body.layout));
+
+    if (layout.type === "avt" && avtAccessStatus !== "available") {
+      return Result.err(
+        new HandlerError({ status: 404, message: "Not found" }),
+      );
+    }
 
     if (hasDuplicateSorts(layout.sorts)) {
       return Result.err(
@@ -75,9 +93,11 @@ const createViewTemplate = createSafeHandler(
 
     const insertResult = yield* Result.await(
       abortableTx(safeDb, async (tx) => {
-        await tx.execute(
-          sql`SELECT pg_advisory_xact_lock(hashtext(${session.activeOrganizationId}), hashtext(${user.id}))`,
-        );
+        await withAggregateLock({
+          aggregate: "personalCatalog",
+          id: { organizationId: session.activeOrganizationId, userId: user.id },
+          tx,
+        });
 
         const existingCount = await tx.$count(
           workspaceViewTemplates,
@@ -185,5 +205,10 @@ const createViewTemplate = createSafeHandler(
     return Result.ok({ id: insertResult.id });
   },
 );
+
+declareAggregateMutation(createViewTemplate, {
+  type: "aggregate",
+  aggregates: ["personalCatalog"],
+});
 
 export default createViewTemplate;

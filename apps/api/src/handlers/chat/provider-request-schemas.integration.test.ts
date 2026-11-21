@@ -1,6 +1,6 @@
 import { toolDefinition } from "@tanstack/ai";
 import { panic, Result } from "better-result";
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { afterAll, describe, expect, test } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
 import fc from "fast-check";
 import * as v from "valibot";
@@ -16,7 +16,8 @@ import {
   MCP_CHAT_TOOL_POLICY_KINDS,
 } from "@stll/api-contract";
 import type { ChatToolPolicyKind } from "@stll/api-contract";
-import { propertyConfig, propertyTestTimeout } from "@stll/property-testing";
+import { assertProperty, propertyTestTimeout } from "@stll/property-testing";
+import { createTestState } from "@stll/test-state";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import {
@@ -48,11 +49,13 @@ import {
   pendingApprovalCallOf,
 } from "@/api/tests/helpers/chat-approval-harness";
 import { composerAttachmentPart } from "@/api/tests/helpers/chat-attachment-parts";
+import { createChatHarnessProfile } from "@/api/tests/helpers/chat-harness-profile";
 import { CHAT_ORACLE } from "@/api/tests/helpers/chat-oracles";
 import type { OracleViolation } from "@/api/tests/helpers/chat-oracles";
 import { createPromptPrefixLedger } from "@/api/tests/helpers/chat-prompt-prefix";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
+import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
 import {
   ATTACHMENTS,
   cassetteForModel,
@@ -96,7 +99,7 @@ import {
   wireOrgAIConfig,
   wireSideModel,
 } from "@/api/tests/helpers/provider-wire-contract";
-import { installProviderWireReplay } from "@/api/tests/helpers/provider-wire-replay";
+import { registerProviderWireReplay } from "@/api/tests/helpers/provider-wire-replay";
 import type {
   ProviderWireReplay,
   ReplayedRequest,
@@ -114,7 +117,10 @@ import {
   releaseRlsFixture,
 } from "@/api/tests/security/rls-fixture";
 import type { TestIds } from "@/api/tests/security/rls-helpers";
+import { withQueryLogger } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
+
+const testState = createTestState({ file: import.meta.path, config: env });
 
 // Every chat request the send path sends a provider, held to what the
 // provider accepts. A conversation goes through the real send handler and
@@ -138,8 +144,10 @@ import type { TestDatabase } from "@/api/tests/security/test-utils";
 //   fallback answers, whether it is anonymized, and whether it runs as a chat
 //   turn or an agent run (whose request the sandbox's harness builds, so it
 //   is excluded by that predicate). Pull requests run an all-pairs cover of
-//   them; every night runs the all-triples cover, and a rotation of rounds
-//   runs every combination (`nightly-property-test.yml`).
+//   them, plus each provider's own model continuing the reasoning it
+//   returned, whatever the cover picks from the catalog; every night runs
+//   the all-triples cover, and a rotation of rounds runs every combination
+//   (`nightly-property-test.yml`).
 // - Every request those conversations send (the chat turns, the thread
 //   compactor's summary and the side calls) holds to the request schema the
 //   provider publishes (`scripts/provider-request-schemas.ts`) and to the
@@ -150,7 +158,8 @@ import type { TestDatabase } from "@/api/tests/security/test-utils";
 //   right after it, with no orphan result.
 // - The typed coverage records below give every provider, request option,
 //   message part kind and tool kind one of two states, each checked at run
-//   time; the paths the all-pairs requests carry are a committed inventory.
+//   time; the paths the pull-request run's requests carry are a committed
+//   inventory.
 // - Free-form user text is sampled with fast-check (a fixed seed on pull
 //   requests, fresh seeds nightly), not exhausted.
 //
@@ -190,7 +199,6 @@ const REQUEST_OPTION_COVERAGE = {
   adapter: { covered: "The organization's adapter, from the model factory." },
   agentLoopStrategy: { neverSent: "Bounds the engine's loop." },
   context: { neverSent: NOT_SET_BY_CHAT },
-  conversationId: { neverSent: NOT_SET_BY_CHAT },
   debug: { neverSent: NOT_SET_BY_CHAT },
   interrupts: { neverSent: NOT_SET_BY_CHAT },
   lazyToolsConfig: { neverSent: NOT_SET_BY_CHAT },
@@ -204,20 +212,30 @@ const REQUEST_OPTION_COVERAGE = {
     covered: "The chat role's generation options, with every effort.",
   },
   parentRunId: { covered: "The continuation after the approval." },
+  parentSubagentRunId: { neverSent: NOT_SET_BY_CHAT },
+  reasoning: {
+    neverSent: "Stella's capability owner sets native modelOptions instead.",
+  },
+  repairToolInput: { neverSent: NOT_SET_BY_CHAT },
+  retry: { neverSent: NOT_SET_BY_CHAT },
   resume: { covered: "The continuation after the approval." },
   runId: { neverSent: "The engine's own run identity." },
   state: { neverSent: NOT_SET_BY_CHAT },
+  subagentName: { neverSent: NOT_SET_BY_CHAT },
   subagentRunId: { neverSent: NOT_SET_BY_CHAT },
   subagents: { neverSent: NOT_SET_BY_CHAT },
   systemPrompts: { covered: "The chat system prompt on every request." },
   threadId: { neverSent: "The engine's own thread identity." },
+  toolChoice: { neverSent: NOT_SET_BY_CHAT },
   tools: { covered: "Every tool kind the tool tables give (below)." },
+  wrapFetch: { neverSent: NOT_SET_BY_CHAT },
 } as const satisfies Record<keyof StreamChatChunksOptions, Coverage>;
 
 const UI_ONLY = "Its part policy keeps it off the provider (`ui-only`).";
 
 /** Every kind of stored message part. */
 const PART_KIND_COVERAGE = {
+  activity: { neverSent: UI_ONLY },
   audio: { neverSent: UI_ONLY },
   document: { covered: "A PDF, text or office attachment." },
   image: { covered: "An image attachment." },
@@ -294,13 +312,39 @@ const baselineOf = (provider: TanStackAIProvider): ChatCombination => ({
   tools: "default",
 });
 
+/**
+ * Each provider's own model continuing its own history with the reasoning
+ * that model returned before the call: the replay of a provider's signed
+ * reasoning (OpenAI's encrypted reasoning and its summary, Anthropic's signed
+ * thinking, Gemini's thought signatures) runs in every mode, so it never
+ * depends on which combinations the all-pairs cover picks from the catalog.
+ */
+const reasoningContinuationOf = (
+  provider: TanStackAIProvider,
+): ChatCombination => ({ ...baselineOf(provider), history: "reasoning" });
+
+/** Where each provider that signs its reasoning carries it back to the
+ *  model that produced it. */
+const REASONING_REPLAY_PATHS: Partial<
+  Record<TanStackAIProvider, readonly string[]>
+> = {
+  anthropic: [
+    "messages[].content[].signature",
+    "messages[].content[].thinking",
+  ],
+  google: ["contents[].parts[].thought", "contents[].parts[].thoughtSignature"],
+  openai: ["input[].encrypted_content", "input[].summary"],
+};
+
 const selectedCombinations: readonly ChatCombination[] = (() => {
   const keys = new Set(runPlan.runs.map(combinationKey));
+  const pinned = TANSTACK_AI_PROVIDERS.flatMap((provider) => [
+    baselineOf(provider),
+    reasoningContinuationOf(provider),
+  ]);
   return [
     ...runPlan.runs,
-    ...TANSTACK_AI_PROVIDERS.map(baselineOf).filter(
-      (baseline) => !keys.has(combinationKey(baseline)),
-    ),
+    ...pinned.filter((combination) => !keys.has(combinationKey(combination))),
   ];
 })();
 
@@ -344,52 +388,69 @@ const webSources = {
   },
 } as const;
 
+const profile = createChatHarnessProfile(
+  "provider-request-schemas.integration.test.ts",
+);
+
 let testDb: TestDatabase;
 let ids: TestIds;
 let safeDb: SafeDb;
 let scopedDb: ScopedDb;
 let replay: ProviderWireReplay;
 let fakeS3: FakeS3;
-let previousMockAI: typeof env.USE_MOCK_AI;
-let previousBedrockEndpoint: string | undefined;
+
 const seededThreadIds: SafeId<"chatThread">[] = [];
 
-beforeAll(async () => {
-  const fixture = await getRlsFixture();
-  testDb = fixture.testDb;
-  ids = fixture.ids;
-  scopedDb = asTestRaw<ScopedDb>(
-    createScopedDb(testDb, [ids.wsA1, ids.wsA2], ids.orgA, ids.userA1),
-  );
-  safeDb = toSafeDbMock(scopedDb);
-  previousMockAI = env.USE_MOCK_AI;
-  env.USE_MOCK_AI = false;
-  previousBedrockEndpoint = process.env["AWS_ENDPOINT_URL_BEDROCK_RUNTIME"];
-  process.env["AWS_ENDPOINT_URL_BEDROCK_RUNTIME"] =
-    "https://bedrock-runtime.us-east-1.amazonaws.com.cassette.invalid";
-  fakeS3 = startFakeS3();
-  replay = installProviderWireReplay({ passThroughOrigins: [fakeS3.endpoint] });
+registerProviderWireReplay({
+  onInstall: (active) => {
+    replay = active;
+  },
+  options: () => ({
+    passThroughOrigins: [fakeS3.endpoint],
+    profile,
+  }),
 });
 
+testState.beforeAll(
+  async () =>
+    await profile.measure("fixture", async () => {
+      const fixture = await getRlsFixture();
+      testDb = withQueryLogger(fixture.testDb, profile.logger);
+      ids = fixture.ids;
+      scopedDb = asTestRaw<ScopedDb>(
+        createScopedDb(testDb, [ids.wsA1, ids.wsA2], ids.orgA, ids.userA1),
+      );
+      safeDb = toSafeDbMock(scopedDb);
+
+      testState.setConfig("USE_MOCK_AI", false);
+
+      testState.setEnv(
+        "AWS_ENDPOINT_URL_BEDROCK_RUNTIME",
+        "https://bedrock-runtime.us-east-1.amazonaws.com.cassette.invalid",
+      );
+      fakeS3 = startFakeS3();
+    }),
+);
+
 afterAll(async () => {
-  replay.restore();
-  fakeS3.stop();
-  env.USE_MOCK_AI = previousMockAI;
-  if (previousBedrockEndpoint === undefined) {
-    delete process.env["AWS_ENDPOINT_URL_BEDROCK_RUNTIME"];
-  } else {
-    process.env["AWS_ENDPOINT_URL_BEDROCK_RUNTIME"] = previousBedrockEndpoint;
+  try {
+    await profile.measure("close", async () => {
+      fakeS3.stop();
+
+      if (seededThreadIds.length > 0) {
+        // Uploaded attachments belong to their thread.
+        await testDb
+          .delete(userFiles)
+          .where(inArray(userFiles.threadId, seededThreadIds));
+        await testDb
+          .delete(chatThreads)
+          .where(inArray(chatThreads.id, seededThreadIds));
+      }
+      await releaseRlsFixture();
+    });
+  } finally {
+    profile.report();
   }
-  if (seededThreadIds.length > 0) {
-    // Uploaded attachments belong to their thread.
-    await testDb
-      .delete(userFiles)
-      .where(inArray(userFiles.threadId, seededThreadIds));
-    await testDb
-      .delete(chatThreads)
-      .where(inArray(chatThreads.id, seededThreadIds));
-  }
-  await releaseRlsFixture();
 });
 
 /** The organization whose chat model is `endpoint`'s, with the provider's
@@ -430,6 +491,7 @@ const openSession = async ({
     replay,
   });
   const harness = createApprovalHarness({
+    profile,
     ids,
     model: seam,
     organizationAIConfig: orgConfigOf(endpoint, model),
@@ -508,169 +570,181 @@ const STORED_STRUCTURED_OUTPUT = {
  * combination's attachment and tool surface, rebuilds its request from the
  * stored thread.
  */
-const converse = async (
-  combination: ChatCombination,
-): Promise<Conversation> => {
-  const {
-    attempt,
-    attachment,
-    caching,
-    compaction,
-    effort,
-    history,
-    origin,
-    selection,
-    sendMode,
-    stored,
-    target,
-    tools,
-  } = combination;
-  const threadId = toSafeId<"chatThread">(Bun.randomUUIDv7());
-  seededThreadIds.push(threadId);
-  replay.forgetSignedCalls();
-  const first = await openSession({
-    caching,
-    endpoint: origin,
-    threadId,
-    tools: "default",
-  });
-  let originRequests: readonly ReplayedRequest[];
-  try {
-    replay.serve(
-      cassetteForModel(
-        toolCallAnswerFor({
-          cassette: cassetteFor(cassettes, origin.provider, "tool-call"),
-          history,
-          provider: origin.provider,
-        }),
-        first.model,
-      ),
-    );
-    await first.client.sendUserMessage(Bun.randomUUIDv7(), "Delete the draft");
-    await first.harness.expectSoundWebClient({
-      client: first.client,
-      threadId,
-    });
-    const call = pendingApprovalCallOf(
-      (await first.harness.lastAssistant(threadId)).parts,
-    );
-    replay.enqueue(first.answer);
-    await first.client.approve(call.id, true);
-    await first.harness.expectSoundWebClient({
-      client: first.client,
-      threadId,
-    });
-    originRequests = [...first.seam.sentRequests()];
-  } finally {
-    await first.close();
-  }
-
-  if (stored === "structured-output") {
-    await testDb.insert(chatMessages).values({
-      content: toPersistedChatMessageContentV3({
-        data: [STORED_STRUCTURED_OUTPUT],
-      }),
-      id: toSafeId<"chatMessage">(Bun.randomUUIDv7()),
-      role: "assistant",
-      threadId,
-      userId: ids.userA1,
-      workspaceId: null,
-    });
-  }
-
-  let compactionRequests: ReplayedRequest[] = [];
-  if (compaction === "compacted") {
-    const originModel = modelOf(cassettes, origin);
-    compactionRequests = await requestsOf(
-      cassetteForModel(
-        cassetteFor(cassettes, origin.provider, "text"),
-        originModel,
-      ),
-      async () => {
-        const outcome = await runChatThreadCompaction({
-          abortSignal: AbortSignal.timeout(CONVERSATION_TIMEOUT_MS),
-          dataWorkspaceIds: [],
-          orgAIConfig: orgConfigOf(origin),
-          managedAIResidency: "eu",
-          organizationId: ids.orgA,
-          preserveTokens: 1,
-          safeDb,
-          threadId,
-          triggerTokens: 1,
-        });
-        expect(
-          Result.isOk(outcome) ? outcome.value.type : outcome.error.message,
-        ).toBe("advanced");
-      },
-    );
-  }
-
-  const targetModel = modelOf(cassettes, target);
-  await testDb
-    .update(chatThreads)
-    .set({
-      // What the model picker writes (`update-thread-model.ts`).
-      chatModel:
-        selection === "thread-pick"
-          ? encodeChatModelSelection({
-              modelId: targetModel,
-              provider: target.provider,
-            })
-          : null,
-      chatReasoningEffort: effort === "default" ? null : effort,
-      webSearchEnabled: tools === "extended",
-    })
-    .where(eq(chatThreads.id, threadId));
-
-  const second = await openSession({
-    caching,
-    endpoint: target,
-    threadId,
-    tools,
-  });
-  try {
-    replay.serve(
-      attempt === "fallback"
-        ? silentAnswerOf(target.provider, second.answer)
-        : second.answer,
-    );
-    const attached = ATTACHMENTS[attachment];
-    if (attached === undefined) {
-      await second.client.sendUserMessage(Bun.randomUUIDv7(), "Thanks", {
-        sendMode,
+const converse = async (combination: ChatCombination): Promise<Conversation> =>
+  await profile.measure("action", async () => {
+    const {
+      attempt,
+      attachment,
+      caching,
+      compaction,
+      effort,
+      history,
+      origin,
+      selection,
+      sendMode,
+      stored,
+      target,
+      tools,
+    } = combination;
+    const threadId = toSafeId<"chatThread">(Bun.randomUUIDv7());
+    seededThreadIds.push(threadId);
+    replay.forgetSignedCalls();
+    const prepared = await profile.measure("prepare", async () => {
+      const first = await openSession({
+        caching,
+        endpoint: origin,
+        threadId,
+        tools: "default",
       });
-    } else {
-      await second.client.sendUserContent(
-        Bun.randomUUIDv7(),
-        [
-          { type: "text", content: "Read this." },
-          await composerAttachmentPart(attached),
-        ],
-        { sendMode },
-      );
-    }
-    await second.harness.expectSoundWebClient({
-      client: second.client,
-      threadId,
+      let originRequests: readonly ReplayedRequest[];
+      try {
+        replay.serve(
+          cassetteForModel(
+            toolCallAnswerFor({
+              cassette: cassetteFor(cassettes, origin.provider, "tool-call"),
+              history,
+              provider: origin.provider,
+            }),
+            first.model,
+          ),
+        );
+        await first.client.sendUserMessage(
+          Bun.randomUUIDv7(),
+          "Delete the draft",
+        );
+        await first.harness.expectSoundWebClient({
+          client: first.client,
+          threadId,
+        });
+        const call = pendingApprovalCallOf(
+          (await first.harness.lastAssistant(threadId)).parts,
+        );
+        replay.enqueue(first.answer);
+        await first.client.approve(call.id, true);
+        await first.harness.expectSoundWebClient({
+          client: first.client,
+          threadId,
+        });
+        originRequests = [...first.seam.sentRequests()];
+      } finally {
+        await first.close();
+      }
+
+      if (stored === "structured-output") {
+        await testDb.insert(chatMessages).values({
+          content: toPersistedChatMessageContentV3({
+            data: [STORED_STRUCTURED_OUTPUT],
+          }),
+          id: toSafeId<"chatMessage">(Bun.randomUUIDv7()),
+          role: "assistant",
+          threadId,
+          userId: ids.userA1,
+          workspaceId: null,
+        });
+      }
+
+      let compactionRequests: ReplayedRequest[] = [];
+      if (compaction === "compacted") {
+        const originModel = modelOf(cassettes, origin);
+        compactionRequests = await requestsOf(
+          cassetteForModel(
+            cassetteFor(cassettes, origin.provider, "text"),
+            originModel,
+          ),
+          async () => {
+            const outcome = await runChatThreadCompaction({
+              abortSignal: AbortSignal.timeout(CONVERSATION_TIMEOUT_MS),
+              orgAIConfig: orgConfigOf(origin),
+              managedAIResidency: "eu",
+              organizationId: ids.orgA,
+              admission: testModelAdmission(ids.orgA),
+              preserveTokens: 1,
+              safeDb,
+              threadId,
+              triggerTokens: 1,
+              userId: ids.userA1,
+              withStoredContentEgress: async ({ work }) => await work(),
+            });
+            expect(
+              Result.isOk(outcome) ? outcome.value.type : outcome.error.message,
+            ).toBe("advanced");
+          },
+        );
+      }
+
+      const targetModel = modelOf(cassettes, target);
+      await testDb
+        .update(chatThreads)
+        .set({
+          // What the model picker writes (`update-thread-model.ts`).
+          chatModel:
+            selection === "thread-pick"
+              ? encodeChatModelSelection({
+                  modelId: targetModel,
+                  provider: target.provider,
+                })
+              : null,
+          chatReasoningEffort: effort === "default" ? null : effort,
+          webSearchEnabled: tools === "extended",
+        })
+        .where(eq(chatThreads.id, threadId));
+
+      return { originRequests, compactionRequests };
     });
-    const storedMessages = await second.harness.readThreadMessages(threadId);
-    const targetRequests = [...second.seam.sentRequests()];
-    const checkpoints = await testDb
-      .select({ id: chatThreadCompactions.id })
-      .from(chatThreadCompactions)
-      .where(eq(chatThreadCompactions.threadId, threadId));
-    return {
-      compacted: checkpoints.length > 0,
-      partKinds: new Set<string>(
-        storedMessages.flatMap(({ parts }) => parts.map(({ type }) => type)),
-      ),
-      sent: [...originRequests, ...compactionRequests, ...targetRequests],
-      targetRequests,
-    };
-  } finally {
-    await second.close();
-  }
-};
+
+    const second = await openSession({
+      caching,
+      endpoint: target,
+      threadId,
+      tools,
+    });
+    try {
+      replay.serve(
+        attempt === "fallback"
+          ? silentAnswerOf(target.provider, second.answer)
+          : second.answer,
+      );
+      const attached = ATTACHMENTS[attachment];
+      if (attached === undefined) {
+        await second.client.sendUserMessage(Bun.randomUUIDv7(), "Thanks", {
+          sendMode,
+        });
+      } else {
+        await second.client.sendUserContent(
+          Bun.randomUUIDv7(),
+          [
+            { type: "text", content: "Read this." },
+            await composerAttachmentPart(attached),
+          ],
+          { sendMode },
+        );
+      }
+      await second.harness.expectSoundWebClient({
+        client: second.client,
+        threadId,
+      });
+      const storedMessages = await second.harness.readThreadMessages(threadId);
+      const targetRequests = [...second.seam.sentRequests()];
+      const checkpoints = await testDb
+        .select({ id: chatThreadCompactions.id })
+        .from(chatThreadCompactions)
+        .where(eq(chatThreadCompactions.threadId, threadId));
+      return {
+        compacted: checkpoints.length > 0,
+        partKinds: new Set<string>(
+          storedMessages.flatMap(({ parts }) => parts.map(({ type }) => type)),
+        ),
+        sent: [
+          ...prepared.originRequests,
+          ...prepared.compactionRequests,
+          ...targetRequests,
+        ],
+        targetRequests,
+      };
+    } finally {
+      await second.close();
+    }
+  });
 
 const conversations = new Map<string, Promise<Conversation>>();
 /** A combination's conversation, run once for every test that reads it. */
@@ -1204,28 +1278,59 @@ describe(`chat requests: ${String(combinations.included.length)} combinations th
       propertyTestTimeout(CONVERSATION_TIMEOUT_MS),
     );
 
+    describe(provider, () => {
+      test(
+        "a turn with any user text holds to the provider's rules",
+        async () => {
+          await assertProperty(
+            "a turn with any user text holds to the provider's rules",
+            fc.asyncProperty(
+              fc
+                .string({ minLength: 1, maxLength: 400, unit: "grapheme" })
+                .filter((text) => text.trim() !== ""),
+              async (text) => {
+                expect(
+                  await turnViolations({ provider, slot: "recorded" }, text),
+                ).toEqual([]);
+              },
+            ),
+            { numRuns: 2 },
+          );
+        },
+        propertyTestTimeout(CONVERSATION_TIMEOUT_MS),
+      );
+    });
+  }
+
+  // Each provider that signs its reasoning gets it back on the same model:
+  // the pinned continuation sends the signed reasoning in every mode.
+  for (const provider of TANSTACK_AI_PROVIDERS) {
+    const replayPaths = REASONING_REPLAY_PATHS[provider];
+    if (replayPaths === undefined) {
+      continue;
+    }
     test(
-      `${provider}: a turn with any user text holds to the provider's rules`,
+      `${provider}: continuing its own reasoning sends the signed reasoning back`,
       async () => {
-        await fc.assert(
-          fc.asyncProperty(
-            fc
-              .string({ minLength: 1, maxLength: 400, unit: "grapheme" })
-              .filter((text) => text.trim() !== ""),
-            async (text) => {
-              expect(
-                await turnViolations({ provider, slot: "recorded" }, text),
-              ).toEqual([]);
-            },
-          ),
-          propertyConfig({ numRuns: 2 }),
+        const { targetRequests } = await conversationOf(
+          reasoningContinuationOf(provider),
         );
+        const paths = new Set(
+          targetRequests.flatMap((request) => [
+            ...requestPathsOf(
+              parsedBody(request),
+              OPAQUE_REQUEST_PATHS[provider],
+            ),
+          ]),
+        );
+        expect(replayPaths.filter((entry) => !paths.has(entry))).toEqual([]);
       },
       propertyTestTimeout(CONVERSATION_TIMEOUT_MS),
     );
   }
 
-  // The inventory is the paths the all-pairs run sends, by target provider.
+  // The inventory is the paths the pull-request run (the all-pairs cover and
+  // the pinned conversations) sends, by target provider.
   if (runPlan.mode === "all-pairs") {
     for (const provider of TANSTACK_AI_PROVIDERS) {
       test(

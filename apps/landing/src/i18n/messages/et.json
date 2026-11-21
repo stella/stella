@@ -15,32 +15,6 @@
     "getCli": "Laadi CLI alla",
     "startFree": "Alusta tasuta"
   },
-  "demo": {
-    "addView": "Lisa vaade",
-    "askStella": "Küsi rakenduselt stella",
-    "close": "Sulge",
-    "documentType": "Dokumendi tüüp",
-    "documents": "Dokumendid",
-    "dueDate": "Tähtaeg",
-    "files": "Failid",
-    "filter": "Filtreeri",
-    "matters": "Toimikud",
-    "notes": "Märkused",
-    "overview": "Ülevaade",
-    "sectionBody": "Jäädvustatud otse töötavast tootest. Seda, mida siin näed, sa ka kasutad.",
-    "sectionLabel": "Tegelik toode",
-    "sectionTitle": "stella sellisena, nagu see on.",
-    "sort": "Sorteeri",
-    "source": "Allikas",
-    "sources": "Allikad",
-    "status": "Olek",
-    "statusActive": "Aktiivne",
-    "statusClosed": "Suletud",
-    "statusInReview": "Ülevaatamisel",
-    "statusOnHold": "Ootel",
-    "table": "Tabel",
-    "todos": "Ülesanded"
-  },
   "footer": {
     "agent": "Tehisintellekti agent",
     "anonymization": "Anonüümimine",
@@ -56,8 +30,8 @@
     "privacy": "Privaatsus",
     "publicData": "Avalikud andmed",
     "resources": "Ressursid",
-    "sourceCode": "Lähtekood",
     "status": "Olek",
+    "support": "Tugi",
     "tabularReview": "Tabelülevaatus",
     "tagline": "Avatud õigustööruum olulise töö jaoks.",
     "templates": "Mallid",
@@ -89,12 +63,23 @@
   },
   "nav": {
     "aiFactSheet": "Tehisintellekti teabeleht",
-    "aiFactSheetBlurb": "stella masinloetaval kujul.",
-    "beta": "Beeta",
     "blog": "Blogi",
     "changelog": "Muudatuste logi",
     "chooseLanguage": "Vali keel",
     "docxEditor": "Eraldiseisev DOCX-redaktor",
+    "featurePreviews": {
+      "documents": {
+        "comments": "Kommentaarid"
+      },
+      "matters": {
+        "done": "Valmis",
+        "inProgress": "Töös",
+        "open": "Avatud"
+      },
+      "research": {
+        "caseLaw": "Kohtupraktika"
+      }
+    },
     "github": "stella GitHubis",
     "openMenu": "Ava navigatsioon",
     "pillars": {
@@ -112,7 +97,7 @@
         "title": "Tehisintellekti agent, mis töötab su toimikute, failide ja tööriistadega."
       },
       "anonymization": {
-        "blurb": "Eemalda nimed, üksused ja tuvastavad andmed enne, kui materjal jõuab tehisintellektini, otse vestlusest ja dokumentide ülevaatusest, ning kontrolli anonüümitud tulemust, enne kui miski edasi liigub.",
+        "blurb": "Eemalda nimed, organisatsioonid ja tuvastavad andmed enne, kui materjal jõuab tehisintellektini, otse vestlusest ja dokumentide ülevaatusest, ning kontrolli anonüümitud tulemust, enne kui miski edasi liigub.",
         "discover": "Avasta Anonüümimine",
         "eyebrow": "Anonüümimine",
         "title": "Valmista materjal tehisintellekti jaoks ette, tuvastavaid andmeid paljastamata."
@@ -356,7 +341,7 @@
       },
       "capabilities": {
         "0": {
-          "body": "Eemaldab nimed, üksused ja tuvastavad andmed enne, kui materjal jõuab tehisintellekti sammuni.",
+          "body": "Eemaldab nimed, organisatsioonid ja tuvastavad andmed enne, kui materjal jõuab tehisintellekti sammuni.",
           "title": "Tuvastavad andmed jäävad välja"
         },
         "1": {
@@ -381,20 +366,20 @@
           "question": "Kas anonüümimine on juba saadaval?"
         },
         "1": {
-          "answer": "Materjali ettevalmistamisel tehisintellekti töövoogude jaoks, nimesid, üksusi või tuvastavaid andmeid paljastamata, nii et anonüümitud tulemus jääb ülevaatamiseks alles.",
+          "answer": "Materjali ettevalmistamisel tehisintellekti töövoogude jaoks, nimesid, organisatsioone või tuvastavaid andmeid paljastamata, nii et anonüümitud tulemus jääb ülevaatamiseks alles.",
           "question": "Millega see aitab?"
         }
       },
-      "metaDescription": "Eemalda nimed, üksused ja tuvastavad andmed enne, kui materjal jõuab tehisintellektini, otse vestlusest ja ülevaatusest, ning kontrolli tulemust.",
+      "metaDescription": "Eemalda nimed, organisatsioonid ja tuvastavad andmed enne, kui materjal jõuab tehisintellektini, otse vestlusest ja ülevaatusest, ning kontrolli tulemust.",
       "metaTitle": "Dokumentide anonüümimine tehisintellekti jaoks | stella",
       "quickAnswer": {
-        "answer": "See eemaldab nimed, üksused ja tuvastavad andmed enne, kui materjal siseneb tehisintellekti töövoogu, ja näitab sulle anonüümitud tulemust, et saaksid kinnitada, mis toimikust välja läheb. See on lõimitud otse vestlusesse ja dokumentide ülevaatusesse.",
+        "answer": "See eemaldab nimed, organisatsioonid ja tuvastavad andmed enne, kui materjal siseneb tehisintellekti töövoogu, ja näitab sulle anonüümitud tulemust, et saaksid kinnitada, mis toimikust välja läheb. See on lõimitud otse vestlusesse ja dokumentide ülevaatusesse.",
         "question": "Mis on anonüümimine rakenduses stella?"
       },
       "sections": {
         "0": {
           "bullets": {
-            "0": "Hoiab nimed, üksused ja tuvastavad andmed tehisintellekti sammudest eemal",
+            "0": "Hoiab nimed, organisatsioonid ja tuvastavad andmed tehisintellekti sammudest eemal",
             "1": "Loodud õigusvaldkonna tehisintellekti töövoogudele, mitte üldiseks dokumentide maskimiseks",
             "2": "Jätab enne järgmist sammu alles ülevaadatava anonüümitud dokumendi"
           },
@@ -660,7 +645,7 @@
           "question": "Kust andmed pärinevad?"
         },
         "1": {
-          "answer": "Kaks loendit, mõlemad kasvavad. Ühendatud registrid hõlmavad juba ARES-t (Tšehhi), Companies House’i (Ühendkuningriik), SEC EDGAR-i (USA), KRS-i (Poola), PRH-d (Soome) ja VIES-t (ELi käibemaks). Lisaks registritele lisanduvad ametlikud allikad jurisdiktsioonide kaupa; näiteks Tšehhil, Hispaanial ja Taiwanil on need juba olemas, ning kohtupraktika lugemisvaates saad jurisdiktsiooni kaupa sirvida ja filtreerida, kui ametlikke allikaid lisandub.",
+          "answer": "Avaliku kohtupraktika lugejas on praegu Tšehhi kohtulahendid. Ühendatud ettevõtteregistrid on ARES (Tšehhi), Companies House (Ühendkuningriik), SEC EDGAR (USA), KRS (Poola), PRH (Soome) ja VIES (ELi käibemaks).",
           "question": "Millised jurisdiktsioonid ja registrid on kaetud?"
         },
         "2": {
@@ -884,6 +869,7 @@
       }
     },
     "ui": {
+      "browseLaw": "Sirvi avalikku õigusandmebaasi",
       "capabilities": "Võimalused",
       "exploreMore": "Avasta veel",
       "faq": "KKK",
@@ -923,8 +909,8 @@
           "title": "Vestlus ja teadmustööriistad"
         },
         "4": {
-          "body": "Töölauarakendus toimib kohaliku sillana Office’i dokumentide muutmiseks rakendusest stella.",
-          "title": "Töölauasild"
+          "body": "Avab Office’i dokumendid rakendusest stella sinu arvuti rakendustes ja salvestab muudatused tagasi rakendusse stella. Hoiab ka lõikelaua ajalugu, mis jääb sinu seadmesse.",
+          "title": "Töölauarakendus"
         },
         "5": {
           "body": "Salvestatud muudatustest ja üleslaadimistest saavad dokumendi versioonid, nii et praegune fail ja selle ajalugu püsivad koos.",
@@ -983,9 +969,11 @@
     "bringWorkspaceToFront": "Too rakenduse stella tööruum esiplaanile",
     "controlBody": "stella on <gh>avatud lähtekoodiga</gh> õigustarkvara, mida saad ise majutada: uuri koodi, käita seda oma moodi ja ekspordi kõik standardvormingutes.",
     "controlTitle": "Hoia taristu enda kontrolli all.",
-    "dataBody": "Kohtupraktika ja ettevõtete registrid otse toimikus, igas jurisdiktsioonis, kus töötad. Anonüümimine hoiab tuvastavad andmed tehisintellektist eemal.",
+    "dataBody": "Loe Tšehhi kohtupraktikat koos AI märkustega õigusküsimuste kohta, esiletõstude, allajoonimiste, juristi kommentaaride ja viidetega vastustega. Otsi ettevõtteid ühendatud ametlikest registritest ja viita toimikus allikatele.",
+    "dataConstitutionalAlt": "Tšehhi konstitutsioonikohtu lahend IV.ÚS 1394/24 nummerdatud lõikude, AI märkusega õigusküsimuse kohta, esiletõstu, allajoonimise, juristi kommentaari ja vestlusega, milles on kaks küsimust ning viidetega vastused.",
     "dataEyebrow": "Õigusandmed",
-    "dataMainAlt": "Kohtu ametlik lahend, avatud rakenduses stella",
+    "dataMainAlt": "Tšehhi ülemkohtu lahend 27 Cdo 59/2022 nummerdatud lõikude, AI märkusega õigusküsimuse kohta, esiletõstu, allajoonimise, juristi kommentaari ja vestlusega, milles on kaks küsimust ning viidetega vastused.",
+    "dataSupremeAlt": "Tšehhi ülemkohtu lahend 27 Cdo 1525/2025 nummerdatud lõikude, AI märkusega õigusküsimuse kohta, esiletõstu, allajoonimise, juristi kommentaari ja vestlusega, milles on kaks küsimust ning viidetega vastused.",
     "dataTitle": "Kohtupraktika ja registrid käepärast.",
     "exploreAgent": "Tutvu tehisintellekti agendiga",
     "exploreAnonymization": "Tutvu anonüümimisega",

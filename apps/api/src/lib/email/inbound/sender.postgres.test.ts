@@ -2,6 +2,8 @@ import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 
+import { waitForExternalState } from "@stll/property-testing/external-state";
+
 import { member, organization, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import {
@@ -10,6 +12,7 @@ import {
   matterInboundAddresses,
   workspaces,
 } from "@/api/db/schema";
+import { createScopedDb, markRlsDatabase } from "@/api/db/scoped";
 import { createBackgroundAuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import { createCorrespondence } from "@/api/lib/email/correspondence/create";
@@ -26,6 +29,7 @@ import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -48,9 +52,15 @@ if (!databaseUrl || !runPostgresTests) {
         const adminId = mintAuthProviderId<"user">();
         const firstWorkspaceId = createSafeId<"workspace">();
         const secondWorkspaceId = createSafeId<"workspace">();
+        const fixtureScoped = createScopedDb(
+          markRlsDatabase(setupDb),
+          [firstWorkspaceId, secondWorkspaceId],
+          organizationId,
+          adminId,
+        );
         const allowedSenderId = createSafeId<"correspondenceAllowedSender">();
-        const firstToken = generateInboundAddressToken();
-        const secondToken = generateInboundAddressToken();
+        const firstToken = generateInboundAddressToken({ userId: null });
+        const secondToken = generateInboundAddressToken({ userId: null });
         const sender = "office@example.test";
         const approverEmail = `approver-${Bun.randomUUIDv7()}@example.test`;
         const receivedAt = "2026-09-26T12:00:00.000Z";
@@ -80,6 +90,7 @@ if (!databaseUrl || !runPostgresTests) {
           message: {
             direction: "out",
             channel: "email",
+            dataBox: null,
             messageId: `<${Bun.randomUUIDv7()}@example.test>`,
             contentHash: "a".repeat(64),
             from: { address: sender, name: null },
@@ -142,31 +153,37 @@ if (!databaseUrl || !runPostgresTests) {
               reference: "LOCK-2",
             },
           ]);
-          await setupDb.insert(matterInboundAddresses).values([
-            {
-              organizationId,
-              workspaceId: firstWorkspaceId,
-              token: firstToken,
-            },
-            {
-              organizationId,
-              workspaceId: secondWorkspaceId,
-              token: secondToken,
-            },
-          ]);
-          await setupDb.insert(correspondenceAllowedSenders).values({
-            id: allowedSenderId,
-            organizationId,
-            address: sender,
-            kind: "shared_mailbox",
-            scope: "organization",
-            approvedBy: adminId,
-            approvedByDisplay: {
-              status: "active",
-              name: "Mailbox approver",
-              email: approverEmail,
-            },
-          });
+          await fixtureScoped(
+            async (tx) =>
+              await tx.insert(matterInboundAddresses).values([
+                {
+                  organizationId,
+                  workspaceId: firstWorkspaceId,
+                  token: firstToken,
+                },
+                {
+                  organizationId,
+                  workspaceId: secondWorkspaceId,
+                  token: secondToken,
+                },
+              ]),
+          );
+          await fixtureScoped(
+            async (tx) =>
+              await tx.insert(correspondenceAllowedSenders).values({
+                id: allowedSenderId,
+                organizationId,
+                address: sender,
+                kind: "shared_mailbox",
+                scope: "organization",
+                approvedBy: adminId,
+                approvedByDisplay: {
+                  status: "active",
+                  name: "Mailbox approver",
+                  email: approverEmail,
+                },
+              }),
+          );
 
           const fileCandidate = async ({
             tx,
@@ -176,7 +193,15 @@ if (!databaseUrl || !runPostgresTests) {
           }: FileInboundCandidateOptions<Transaction>) => {
             const result = await createCorrespondence({
               safeDb: async (work) =>
-                await Result.tryPromise(async () => await work(tx)),
+                await Result.tryPromise(
+                  async () =>
+                    await createScopedDb(
+                      markRlsDatabase(tx),
+                      [workspaceId],
+                      organizationId,
+                      adminId,
+                    )(work),
+                ),
               organizationId,
               workspaceId,
               filer,
@@ -266,22 +291,25 @@ if (!databaseUrl || !runPostgresTests) {
           }).then((result) => result.unwrap());
           activeDeliveries.push(second);
           const secondPid = await secondTransactionStarted.promise;
-          let secondBlocked = false;
+          // The second delivery either reaches its candidate here or waits on
+          // the first one's lock, which only the server's lock graph shows.
           let secondReachedCandidate = false;
-          for (let attempt = 0; attempt < 100; attempt += 1) {
-            const [wait] = await observerDb.execute<{ blocked: boolean }>(sql`
-              SELECT cardinality(pg_blocking_pids(${secondPid})) > 0 AS blocked
-            `);
-            secondBlocked = wait?.blocked ?? false;
-            secondReachedCandidate = await Promise.race([
-              secondAtCandidate.promise.then(() => true),
-              Bun.sleep(20).then(() => false),
-            ]);
-            if (secondBlocked || secondReachedCandidate) {
-              break;
-            }
-          }
-          expect(secondBlocked || secondReachedCandidate).toBe(true);
+          void secondAtCandidate.promise.then(() => {
+            secondReachedCandidate = true;
+            return undefined;
+          });
+          await waitForExternalState({
+            description:
+              "the second delivery waits on a lock or reaches its candidate",
+            intervalMs: 20,
+            read: async () =>
+              secondReachedCandidate ||
+              (
+                await observerDb.execute<{ blocked: boolean }>(sql`
+                  SELECT cardinality(pg_blocking_pids(${secondPid})) > 0 AS blocked
+                `)
+              ).at(0)?.blocked === true,
+          });
           releaseCandidates.resolve(undefined);
           const outcomes = await Promise.allSettled([first, second]);
           expect(
@@ -295,19 +323,20 @@ if (!databaseUrl || !runPostgresTests) {
             { status: "fulfilled", value: { status: "filed" } },
             { status: "fulfilled", value: { status: "filed" } },
           ]);
-          const rows = await setupDb
-            .select({ workspaceId: correspondence.workspaceId })
-            .from(correspondence)
-            .where(eq(correspondence.organizationId, organizationId));
+          const rows = await fixtureScoped(
+            async (tx) =>
+              await tx
+                .select({ workspaceId: correspondence.workspaceId })
+                .from(correspondence)
+                .where(eq(correspondence.organizationId, organizationId)),
+          );
           expect(rows.map(({ workspaceId }) => workspaceId).toSorted()).toEqual(
             [firstWorkspaceId, secondWorkspaceId].toSorted(),
           );
         } finally {
           releaseCandidates.resolve(undefined);
           await Promise.allSettled(activeDeliveries);
-          await setupDb
-            .delete(organization)
-            .where(eq(organization.id, organizationId));
+          await deleteOrganizationsForTest(setupDb, [organizationId]);
           await setupDb.delete(user).where(eq(user.id, adminId));
         }
       });

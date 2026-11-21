@@ -8,44 +8,51 @@
  */
 
 import {
-  recordDocumentPacingOutcome,
   type OnDemandDocumentDeps,
+  recordDocumentPacingOutcome,
 } from "@/api/handlers/case-law/decisions/document-on-demand";
+import { DEFERRED_DOCUMENT_READERS } from "@/api/handlers/case-law/ingestion/adapters/deferred-document-processors";
 import { withImmediatePublisherSlot } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
-import { skCourtsDocumentFetch } from "@/api/handlers/case-law/ingestion/adapters/sk-courts";
 import { getCaseLawIngestionDb } from "@/api/lib/case-law-ingestion-db";
-import type { DeferredDocumentAdapterKey } from "@/api/lib/legal-search/adapter-manifest";
-import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
-import type { SkDocumentFetch } from "@/api/lib/legal-search/sk-document-backfill";
-import {
-  DOCUMENT_FETCH_BUDGET_MS,
-  fetchDecisionDocument,
-  recordDocumentFetchRequest,
-} from "@/api/lib/legal-search/sk-document-backfill";
+import { startDocumentFetchBudget } from "@/api/lib/legal-search/document-fetch-budget";
+import { withPublicReadIo } from "@/api/lib/legal-search/public-read-timeout-context";
+import { recordDocumentFetchRequest } from "@/api/lib/legal-search/sk-document-backfill";
 import { withTimeout } from "@/api/lib/with-timeout";
 
-const deferredDocumentFetchers = {
-  [ADAPTER_KEYS.SK_COURTS]: skCourtsDocumentFetch,
-} as const satisfies Record<DeferredDocumentAdapterKey, SkDocumentFetch>;
-
 export const onDemandDocumentDeps: OnDemandDocumentDeps = {
-  recordRequest: async (decisionId) =>
+  recordRequest: async (request) =>
     // Bounded on its own: the read budget abandons rather than cancels,
     // and an abandoned recording must not sit on a stalled pool forever.
     await withTimeout(
       async () =>
-        await recordDocumentFetchRequest(decisionId, getCaseLawIngestionDb()),
+        await withPublicReadIo(
+          "hydration",
+          async () =>
+            await recordDocumentFetchRequest({
+              ...request,
+              scopedDb: getCaseLawIngestionDb(),
+            }),
+        ),
       { label: "caseLaw.recordDocumentFetchRequest", timeoutMs: 15_000 },
     ),
   recordPacingOutcome: recordDocumentPacingOutcome,
   withFetchBudget: async (adapterKey, operation) =>
     await withImmediatePublisherSlot({ adapterKey, operation }),
-  fetchDocument: async (decision, adapterKey) =>
-    await fetchDecisionDocument({
-      decisionId: decision.id,
-      fetchDocument: deferredDocumentFetchers[adapterKey],
-      scopedDb: getCaseLawIngestionDb(),
-      // The unit races its own wall-clock budget; the signal aborts the download.
-      signal: AbortSignal.timeout(DOCUMENT_FETCH_BUDGET_MS),
-    }),
+  fetchDocument: async (decision, adapterKey) => {
+    const document = await withPublicReadIo(
+      "hydration",
+      async (io) =>
+        await DEFERRED_DOCUMENT_READERS[adapterKey]({
+          decision,
+          // The unit races its own wall-clock budget; the signal aborts the download.
+          signal: AbortSignal.any([
+            startDocumentFetchBudget(),
+            ...(io.signal === undefined ? [] : [io.signal]),
+          ]),
+        }),
+    );
+    return document === null
+      ? { status: "unavailable" }
+      : { status: "filled", document };
+  },
 };

@@ -12,6 +12,8 @@ import {
   beforeEach,
   describe,
   expect,
+  type Mock,
+  mock,
   setDefaultTimeout,
   spyOn,
   test,
@@ -36,12 +38,14 @@ import * as bilingualAI from "@/api/lib/bilingual/ai";
 import { processBilingualRun } from "@/api/lib/bilingual/run-queue";
 import { createSafeId } from "@/api/lib/branded-types";
 import { DEFAULT_MANAGED_AI_RESIDENCY } from "@/api/lib/chat/ai-data-policy";
+import { authorizeBufferWrite } from "@/api/lib/entities/buffer-write-authority";
 import * as versionWriter from "@/api/lib/entity-versions/create-entity-version-from-buffer";
 import { createFileKey } from "@/api/lib/files/utils";
 import { createRootRunActor } from "@/api/lib/root-scoped-db";
 import { brandPersistedBilingualTranslationRunId } from "@/api/lib/safe-id-boundaries";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
+import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -106,9 +110,9 @@ const actor = createRootRunActor(
 );
 const outputVersionId = createSafeId<"entityVersion">();
 
-const settingsSpy = spyOn(aiConfigLoader, "loadOrgAISettings");
-const translateSpy = spyOn(bilingualAI, "translateBatch");
-const writeSpy = spyOn(versionWriter, "createEntityVersionFromBuffer");
+let settingsSpy: Mock<typeof aiConfigLoader.loadOrgAISettings>;
+let translateSpy: Mock<typeof bilingualAI.translateBatch>;
+let writeSpy: Mock<typeof versionWriter.createEntityVersionFromBuffer>;
 
 const readRun = async () =>
   (
@@ -124,7 +128,15 @@ const sourceReads = () =>
     (request) => request.method === "GET" && request.key === sourceKey,
   );
 
+// Set by a test that changes the requester's role after model dispatch.
+let downgradeBeforePublication = false;
+
 beforeEach(async () => {
+  downgradeBeforePublication = false;
+  settingsSpy = spyOn(aiConfigLoader, "loadOrgAISettings");
+  translateSpy = spyOn(bilingualAI, "translateBatch");
+  writeSpy = spyOn(versionWriter, "createEntityVersionFromBuffer");
+
   settingsSpy.mockReset();
   translateSpy.mockReset();
   writeSpy.mockReset();
@@ -139,15 +151,36 @@ beforeEach(async () => {
     async ({ batch }) =>
       new Map(batch.map((row) => [row.ordinal, `[target] ${row.sourceText}`])),
   );
-  writeSpy.mockImplementation(async (input) =>
-    Result.ok({
+  writeSpy.mockImplementation(async (input) => {
+    const fieldId = createSafeId<"field">();
+    if (downgradeBeforePublication) {
+      await testDb
+        .update(member)
+        .set({ role: "external" })
+        .where(eq(member.id, ids.memberA1org));
+    }
+    const callback = await input.safeDb(async (tx) => {
+      // The real writer runs this first, before its document and matter locks.
+      await authorizeBufferWrite(input.authority, tx);
+      await input.afterWrite?.(tx, {
+        status: "ok",
+        entityVersionId: outputVersionId,
+        fieldId,
+        filePropertyId: createSafeId<"property">(),
+        versionNumber: 2,
+      });
+    });
+    if (Result.isError(callback)) {
+      throw callback.error;
+    }
+    return Result.ok({
       entityId: input.entityId,
       entityVersionId: outputVersionId,
-      fieldId: createSafeId<"field">(),
+      fieldId,
       fileName: input.fileName,
       versionNumber: 2,
-    }),
-  );
+    });
+  });
   fakeS3.requests.length = 0;
   await testDb.insert(bilingualTranslationRuns).values({
     id: runId,
@@ -179,6 +212,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  mock.restore();
   await testDb
     .delete(bilingualTranslationRows)
     .where(eq(bilingualTranslationRows.runId, runId));
@@ -189,6 +223,10 @@ afterEach(async () => {
     .insert(member)
     .values(originalOrganizationMember)
     .onConflictDoNothing();
+  await testDb
+    .update(member)
+    .set({ role: originalOrganizationMember.role })
+    .where(eq(member.id, ids.memberA1org));
   await testDb
     .insert(workspaceMembers)
     .values(originalMatterMembers)
@@ -204,11 +242,11 @@ afterAll(async () => {
 });
 
 const expectStoppedBeforeReading = async () => {
-  await processBilingualRun(actor);
+  await processBilingualRun(actor, testModelAdmission(actor.organizationId));
   const run = await readRun();
   expect(run).toMatchObject({
     status: "failed",
-    errorCode: "document_unresolved",
+    errorCode: "internal",
     outputEntityVersionId: null,
   });
   expect(run?.finishedAt).not.toBeNull();
@@ -230,8 +268,16 @@ describe("bilingual run", () => {
     await expectStoppedBeforeReading();
   });
 
+  test("a run stops before model work after a permission-losing role downgrade", async () => {
+    await testDb
+      .update(member)
+      .set({ role: "external" })
+      .where(eq(member.id, ids.memberA1org));
+    await expectStoppedBeforeReading();
+  });
+
   test("a run completes while its requester keeps access", async () => {
-    await processBilingualRun(actor);
+    await processBilingualRun(actor, testModelAdmission(actor.organizationId));
     expect(await readRun()).toMatchObject({
       status: "completed",
       errorCode: null,
@@ -240,5 +286,16 @@ describe("bilingual run", () => {
     expect(sourceReads()).toHaveLength(1);
     expect(translateSpy).toHaveBeenCalledTimes(1);
     expect(writeSpy).toHaveBeenCalledTimes(1);
+    expect(writeSpy.mock.calls.at(0)?.[0].authority.type).toBe(
+      "current-member",
+    );
+  });
+
+  test("a run whose requester loses access after model dispatch publishes nothing", async () => {
+    downgradeBeforePublication = true;
+    await processBilingualRun(actor, testModelAdmission(actor.organizationId));
+    const run = await readRun();
+    expect(run?.status).not.toBe("completed");
+    expect(run?.outputEntityVersionId).toBeNull();
   });
 });

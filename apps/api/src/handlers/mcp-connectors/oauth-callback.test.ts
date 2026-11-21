@@ -5,11 +5,13 @@ import mcpOAuthCallback, {
   buildCallbackRedirectUrl,
   createMcpOAuthCallbackHandler,
 } from "@/api/handlers/mcp-connectors/oauth-callback";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   getRequestId,
-  initRequestContext,
+  openRequestContext,
+  runWithRequestIdScope,
 } from "@/api/lib/observability/request-context";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import {
@@ -42,6 +44,18 @@ describe("buildCallbackRedirectUrl", () => {
 
     expect(url).toBe(
       "https://my.stll.app/mcp/oauth-callback?status=error&reason=expired-state",
+    );
+  });
+
+  test("names the connector on a failure once the state identified it", () => {
+    const url = buildCallbackRedirectUrl("https://my.stll.app", {
+      status: "error",
+      reason: "token-exchange",
+      slug: "linear",
+    });
+
+    expect(url).toBe(
+      "https://my.stll.app/mcp/oauth-callback?status=error&reason=token-exchange&slug=linear",
     );
   });
 
@@ -98,6 +112,8 @@ const callbackContext = (
   },
 ): CallbackCtx =>
   asTestRaw<CallbackCtx>({
+    request: new Request("https://api.example.com/v1/mcp/oauth/callback"),
+    route: "/v1/mcp/oauth/callback" satisfies ApiRoutePath,
     query: { code: "auth-code", state: "state-token" },
     safeDb: asTestRaw<CallbackCtx["safeDb"]>(
       async (operation: (tx: unknown) => unknown) => {
@@ -127,13 +143,20 @@ const callbackContext = (
 
 const reasonOf = (result: unknown): string | null => {
   if (!(result instanceof Response)) {
-    throw new Error(`expected a 302 Response, got ${JSON.stringify(result)}`);
+    throw new TypeError(
+      `expected a 302 Response, got ${JSON.stringify(result)}`,
+    );
   }
   expect(result.status).toBe(302);
   const location = result.headers.get("Location");
   expect(location).not.toBeNull();
   return new URL(location ?? "").searchParams.get("reason");
 };
+
+const slugOf = (result: unknown): string | null =>
+  result instanceof Response
+    ? new URL(result.headers.get("Location") ?? "").searchParams.get("slug")
+    : null;
 
 describe("mcpOAuthCallback identity binding", () => {
   test("preserves current organization approval when a pending connection is outdated", async () => {
@@ -239,6 +262,8 @@ describe("mcpOAuthCallback identity binding", () => {
         callbackContext(stateRow({ resourceUrl }), counter),
       );
       expect(reasonOf(result)).toBe("approval-required");
+      // The member may connect this connector, so the page can try again.
+      expect(slugOf(result)).toBe("acme");
       expect(counter.calls).toBe(2);
     }
   });
@@ -298,6 +323,8 @@ describe("mcpOAuthCallback identity binding", () => {
     );
 
     expect(reasonOf(result)).toBe("user-mismatch");
+    // Another member's connector is never named back.
+    expect(slugOf(result)).toBeNull();
     // Only the state lookup ran: no token exchange or connection insert.
     expect(counter.calls).toBe(1);
   });
@@ -353,17 +380,12 @@ describe("mcpOAuthCallback identity binding", () => {
   });
 });
 
-const scopedRequest = (): Request => {
-  const request = new Request("https://api.test/mcp/oauth/callback");
-  initRequestContext(request);
-  return request;
-};
-
 const failingLookupContext = (
   error: unknown,
-  request: Request = scopedRequest(),
+  request: Request = new Request("https://api.test/mcp/oauth/callback"),
 ): CallbackCtx =>
   asTestRaw<CallbackCtx>({
+    route: "/v1/mcp/oauth/callback" satisfies ApiRoutePath,
     query: { code: "auth-code", state: "state-token" },
     request,
     safeDb: asTestRaw<CallbackCtx["safeDb"]>(async () => Result.err(error)),
@@ -421,17 +443,18 @@ describe("mcpOAuthCallback failure reporting", () => {
   });
 
   test("logs the failure with the request id", async () => {
-    const request = scopedRequest();
-    await mcpOAuthCallback.handler(
-      failingLookupContext(
-        new HandlerError({ status: 500, message: "db down" }),
-        request,
-      ),
-    );
+    await runWithRequestIdScope(async () => {
+      openRequestContext();
+      await mcpOAuthCallback.handler(
+        failingLookupContext(
+          new HandlerError({ status: 500, message: "db down" }),
+        ),
+      );
 
-    expect(failureRecords().map((record) => record.attributes)).toMatchObject([
-      { "request.id": getRequestId(request), operation: "mcp_oauth_callback" },
-    ]);
+      expect(failureRecords().map((record) => record.attributes)).toMatchObject(
+        [{ "request.id": getRequestId(), operation: "mcp_oauth_callback" }],
+      );
+    });
   });
 
   test("logs a transient network failure as a warning without reporting it", async () => {

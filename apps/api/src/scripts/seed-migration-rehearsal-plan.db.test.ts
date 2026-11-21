@@ -3,6 +3,7 @@ import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
 import { isRecord } from "@/api/lib/type-guards";
+import { optOutOfCorpusProjectionSeedingGuard } from "@/api/tests/helpers/corpus-projection-seeding-guard";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
 import { HIGH_VOLUME_TABLES } from "../db/high-volume-tables";
@@ -14,6 +15,9 @@ import {
   rehearsalSeedSteps,
   rehearsalVacuumStatement,
 } from "./seed-migration-rehearsal-plan";
+
+// This integration fixture is also selected by the STELLA_RUN_POSTGRES_TESTS
+// proof runner, which supplies the repository's database test environment.
 
 /**
  * The seeders run against a real PostgreSQL with the current schema: a
@@ -86,6 +90,10 @@ test("the run ends with one vacuum of exactly the tables it seeds", () => {
 
 test("every seeder satisfies the schema and writes its promised rows", async () => {
   const client = await createTestPglite();
+  await optOutOfCorpusProjectionSeedingGuard(client, {
+    reason:
+      "The rehearsal seeders bulk-write synthetic canonical rows as the state a migration rehearsal starts from, not through a desired writer; the writer suites keep the guard.",
+  });
   const db = drizzle({ client });
 
   await applySteps(db, rehearsalSeedSteps(DECISIONS));
@@ -104,6 +112,13 @@ test("every seeder satisfies the schema and writes its promised rows", async () 
       ]),
     ),
   );
+
+  // Synthetic projection buckets exercise migration volume without claiming a recount.
+  const exactStates = resultRows(
+    await db.execute(sql`SELECT count(*)::integer AS count
+      FROM case_law_decision_citation_stats_state WHERE status = 'exact'`),
+  ).at(0);
+  expect(exactStates).toEqual({ count: 0 });
 
   // Rerunnable on a database that already holds the fixtures.
   await applySteps(db, rehearsalSeedSteps(DECISIONS).slice(0, 2));

@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 /**
  * What every case-law backfill script does around its own pass.
  *
@@ -11,18 +12,18 @@
  * The script keeps what is its own — what the pass is, what it reports — and
  * asks for the rest here.
  */
-
-import { Result } from "better-result";
 import { eq } from "drizzle-orm";
+
+import { printError, sanitizeErrorForOutput } from "@stll/errors";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawSources } from "@/api/db/schema";
-import type { StoredRawReader } from "@/api/handlers/case-law/ingestion/adapter";
 import type { SafeId } from "@/api/lib/branded-types";
 import { enterCaseLawMaintenanceLane } from "@/api/lib/case-law/maintenance-lane";
-import { acquireCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
+import { withCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import type { CaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import type { AdapterKey } from "@/api/lib/legal-search/ingestion-constants";
+import type { StoredRawReader } from "@/api/lib/legal-search/ingestion-types";
 import { readS3ObjectIfPresent, refreshS3 } from "@/api/lib/s3";
 
 const BUDGET_PREFIX = "--budget=";
@@ -111,45 +112,38 @@ export const runCaseLawSourceBackfill = async <
     process.exit(1);
   }
 
-  const sourceLease = await acquireCaseLawSourceIngestionLease({
-    scopedDb: ingestionDb,
-    sourceId: source.id,
-  });
-  if (sourceLease === null) {
+  const outcome = await withCaseLawSourceIngestionLease(
+    { scopedDb: ingestionDb, sourceId: source.id },
+    async (sourceLease) =>
+      await run({
+        scopedDb: ingestionDb,
+        sourceId: source.id,
+        sourceLease,
+        readStoredRaw: async (key) => {
+          const bytes = await readS3ObjectIfPresent(
+            key,
+            AbortSignal.timeout(STORED_RAW_READ_TIMEOUT_MS),
+          );
+          return bytes === null ? null : new Uint8Array(bytes);
+        },
+        requestBudget,
+      }),
+  );
+  if (outcome === null) {
     console.error(
       `Source ${adapterKey} is being ingested right now (lease held). Retry later.`,
     );
     process.exit(1);
   }
 
-  let outcome: Result<TReport, TError>;
-  try {
-    outcome = await run({
-      scopedDb: ingestionDb,
-      sourceId: source.id,
-      sourceLease,
-      readStoredRaw: async (key) => {
-        const bytes = await readS3ObjectIfPresent(
-          key,
-          AbortSignal.timeout(STORED_RAW_READ_TIMEOUT_MS),
-        );
-        return bytes === null ? null : new Uint8Array(bytes);
-      },
-      requestBudget,
-    });
-  } finally {
-    // Released on every path, including a rejection the pass does not turn
-    // into a `Result`: a failed pass must not leave the source locked against
-    // the crawl until the lease expires.
-    await sourceLease.release();
-  }
-
   if (Result.isError(outcome)) {
-    console.error(outcome.error.message);
+    printError(outcome.error);
     // The rows this pass did commit, where it carries them, so a failure at
     // the end of a long run does not read like a failure at its start.
     if (outcome.error.report !== undefined) {
-      console.error(JSON.stringify(outcome.error.report, null, 2));
+      console.error(
+        JSON.stringify(sanitizeErrorForOutput(outcome.error.report), null, 2),
+      );
     }
     process.exit(1);
   }

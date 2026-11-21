@@ -1,3 +1,4 @@
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 /**
  * The parse the scripts analyse, read from object storage.
  *
@@ -16,15 +17,7 @@
  * a type, which is erased, or dynamic.
  */
 
-import {
-  afterAll,
-  afterEach,
-  beforeAll,
-  beforeEach,
-  describe,
-  expect,
-  test,
-} from "bun:test";
+import { createTestState } from "@stll/test-state";
 
 import { toSafeId } from "@/api/lib/branded-types";
 import type { CorpusTombstoneReader } from "@/api/lib/legal-search/corpus-tombstones";
@@ -34,13 +27,13 @@ import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
 import type * as AstModule from "./decision-analysis.ast";
 import type { DecisionAnalysisRow } from "./decision-analysis.logic";
 
-const previousMode = process.env["CORPUS_STORAGE_MODE"];
-process.env["CORPUS_STORAGE_MODE"] = "dual-write";
+const testState = createTestState({ file: import.meta.path, config: {} });
+
+testState.setEnv("CORPUS_STORAGE_MODE", "dual-write");
 
 const DECISION_ID = toSafeId<"caseLawDecision">(
   "00000000-0000-0000-0000-0000000000d1",
 );
-const AST_KEY = "cze/cz-ns/decision-d1.ast.zst";
 
 const noTombstones: CorpusTombstoneReader = async () =>
   await Promise.resolve(new Set());
@@ -67,6 +60,7 @@ describe("readRowAst", () => {
   let bucket: string;
   let compress: (bytes: Uint8Array) => Promise<Uint8Array>;
   let fake: FakeS3;
+  let astKey: string;
 
   const rowWith = (
     overrides: Partial<DecisionAnalysisRow> = {},
@@ -77,7 +71,7 @@ describe("readRowAst", () => {
     country: "CZE",
     decisionType: "rozsudek",
     documentAst: null,
-    astS3Key: AST_KEY,
+    astS3Key: astKey,
     contentHash: "c".repeat(64),
     analysis: null,
     redactedAt: null,
@@ -85,7 +79,7 @@ describe("readRowAst", () => {
     ...overrides,
   });
 
-  beforeAll(async () => {
+  testState.beforeAll(async () => {
     ({ readRowAst } = await import("./decision-analysis.ast"));
     ({ startFakeS3 } = await import("@/api/tests/helpers/fake-s3"));
     const { envBase } = await import("@/api/env-base");
@@ -94,19 +88,12 @@ describe("readRowAst", () => {
     compress = zstdCompressAsync;
   });
 
-  afterAll(() => {
-    if (previousMode === undefined) {
-      delete process.env["CORPUS_STORAGE_MODE"];
-      return;
-    }
-    process.env["CORPUS_STORAGE_MODE"] = previousMode;
-  });
-
   beforeEach(async () => {
+    astKey = `cze/cz-ns/${Bun.randomUUIDv7()}.ast.zst`;
     fake = startFakeS3();
     fake.put(
       bucket,
-      AST_KEY,
+      astKey,
       await compress(new TextEncoder().encode(JSON.stringify(storedAst))),
       "application/zstd",
     );

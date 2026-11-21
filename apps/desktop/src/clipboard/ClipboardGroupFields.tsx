@@ -1,7 +1,11 @@
+import { useState } from "react";
+
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { ColorPickerContent } from "@stll/ui/color-picker";
+import { DialogFormState } from "@stll/ui/dialog";
+import { Field, FieldLabel } from "@stll/ui/field";
 import { Input } from "@stll/ui/input";
 
 import {
@@ -31,13 +35,22 @@ export const ClipboardGroupFields = ({
   onChange,
 }: ClipboardGroupFieldsProps) => {
   const t = useTranslations("clipboard");
+  const [initialDraft] = useState({ color, name });
   return (
     <>
-      <label className="block">
-        <span className="text-muted-foreground text-sm">{t("groupName")}</span>
+      <DialogFormState
+        dirty={color !== initialDraft.color || name !== initialDraft.name}
+      />
+      <Field>
+        {/* The muted caption of the colour legend below, for one look. */}
+        <FieldLabel>
+          <span className="text-muted-foreground text-sm font-normal">
+            {t("groupName")}
+          </span>
+        </FieldLabel>
         <Input
           autoFocus={autoFocus}
-          className="mt-2 h-11 rounded-2xl text-base sm:text-base **:[input]:h-full **:[input]:px-4"
+          className="h-11 w-full rounded-2xl text-base sm:text-base **:[input]:h-full **:[input]:px-4"
           onChange={(event) => {
             if (
               Array.from(event.target.value).length > MAX_GROUP_NAME_CHARACTERS
@@ -48,7 +61,7 @@ export const ClipboardGroupFields = ({
           }}
           value={name}
         />
-      </label>
+      </Field>
       <fieldset className="mt-4">
         <legend className="text-muted-foreground text-sm">
           {t("groupColor")}

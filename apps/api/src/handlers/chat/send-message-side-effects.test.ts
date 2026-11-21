@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
-import { sql, type SQL } from "drizzle-orm";
+import { type SQL, sql } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 
 import { envBase } from "@/api/env-base";
@@ -12,7 +12,10 @@ import { toSafeId } from "@/api/lib/branded-types";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
 import { testFileKey } from "@/api/tests/helpers/file-key";
-import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
+import {
+  createScopedDbMock,
+  createSelectQueryMock,
+} from "@/api/tests/scoped-db-mock";
 
 import { rollbackUnpersistedChatSideEffects } from "./send-message-side-effects";
 
@@ -21,11 +24,13 @@ let fake: FakeS3;
 
 const threadId = toSafeId<"chatThread">("00000000-0000-0000-0000-000000000001");
 const userId = toSafeId<"user">("00000000-0000-0000-0000-000000000002");
+const organizationId = toSafeId<"organization">("organization_test");
 const workspaceId = toSafeId<"workspace">(
   "00000000-0000-0000-0000-000000000003",
 );
 const rollbackToken = "rollback-token";
 const pgDialect = new PgDialect();
+const allowDeletion = async () => Result.ok();
 
 const selectNoChatMessages = () => ({
   from: () => ({
@@ -36,11 +41,20 @@ const selectNoChatMessages = () => ({
 const threadData: ChatThreadState["data"] = {
   chatModel: null,
   chatReasoningEffort: null,
+  chatLocalRunTarget: null,
   contextMatterIds: [],
   dataWorkspaceIds: [workspaceId],
+  firstSend: true,
   historySnapshot: EMPTY_CHAT_HISTORY_SNAPSHOT,
   id: threadId,
   messages: [],
+  sendFields: {
+    activeSkill: null,
+    contextMatterIds: [],
+    dataWorkspaceIds: [workspaceId],
+    subjectDecisionId: null,
+  },
+  title: "New thread",
   webSearchEnabled: false,
   workspaceId,
 };
@@ -72,6 +86,8 @@ describe("send-message side-effect rollback", () => {
     });
 
     const result = await rollbackUnpersistedChatSideEffects({
+      organizationId,
+      checkHold: allowDeletion,
       recordAuditEvent,
       safeDb,
       threadId,
@@ -104,6 +120,8 @@ describe("send-message side-effect rollback", () => {
     });
 
     const result = await rollbackUnpersistedChatSideEffects({
+      organizationId,
+      checkHold: allowDeletion,
       recordAuditEvent,
       safeDb,
       threadId,
@@ -123,10 +141,11 @@ describe("send-message side-effect rollback", () => {
     const { safeDb } = createScopedDbMock({ delete: deleteThread });
 
     const result = await rollbackUnpersistedChatSideEffects({
+      organizationId,
       recordAuditEvent,
       safeDb,
       threadId,
-      threadState: { type: "existing", data: threadData },
+      threadState: { type: "existing", adoption: null, data: threadData },
       uploadedFiles: [],
       userId,
     });
@@ -140,7 +159,19 @@ describe("send-message side-effect rollback", () => {
     const deleteRowsWhere = mock(async () => undefined);
     const deleteRows = mock(() => ({ where: deleteRowsWhere }));
     const recordAuditEvent = mock(async () => undefined);
-    const { safeDb } = createScopedDbMock({ delete: deleteRows });
+    const recordCleanup = mock(async () => undefined);
+    const { safeDb } = createScopedDbMock({
+      delete: deleteRows,
+      insert: () => ({ values: recordCleanup }),
+      query: {
+        chatThreads: {
+          findFirst: async () => ({
+            organizationId,
+          }),
+        },
+      },
+      select: () => createSelectQueryMock([]),
+    });
     const uploadedFile: UploadedChatFile = {
       id: toSafeId<"userFile">("00000000-0000-0000-0000-000000000004"),
       s3Key: testFileKey("chat/thread/attachment.txt"),
@@ -149,20 +180,23 @@ describe("send-message side-effect rollback", () => {
     fake.put(bucket, uploadedFile.s3Key, "attachment body");
 
     const result = await rollbackUnpersistedChatSideEffects({
+      organizationId,
       recordAuditEvent,
       safeDb,
       threadId,
-      threadState: { type: "existing", data: threadData },
+      threadState: { type: "existing", adoption: null, data: threadData },
       uploadedFiles: [uploadedFile],
       userId,
     });
 
     expect(Result.isOk(result)).toBe(true);
-    // The attachment is gone from the store, under the key the row named.
-    expect(fake.objects.size).toBe(0);
-    expect(
-      fake.requests.filter(({ method }) => method === "DELETE"),
-    ).toMatchObject([{ bucket, key: uploadedFile.s3Key }]);
+    expect(fake.objects.size).toBe(1);
+    expect(fake.requests.filter(({ method }) => method === "DELETE")).toEqual(
+      [],
+    );
+    expect(recordCleanup).toHaveBeenCalledWith(
+      expect.objectContaining({ s3Keys: [uploadedFile.s3Key] }),
+    );
     expect(deleteRows).toHaveBeenCalledTimes(1);
     expect(deleteRowsWhere).toHaveBeenCalledTimes(1);
     expect(recordAuditEvent).toHaveBeenCalledWith(expect.anything(), [

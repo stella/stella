@@ -5,6 +5,8 @@ import * as v from "valibot";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 
+import { isRepositoryCheckoutAction } from "./ci-job-classification/checkout-actions";
+
 const workflow = v.parse(
   v.looseObject({
     on: v.record(v.string(), v.object({ types: v.array(v.string()) })),
@@ -43,8 +45,29 @@ const script = new Script(`(async () => { ${source} })()`);
 const trusted = { login: "autofix-ci[bot]", id: 114_827_586, type: "Bot" };
 const armed = { enabledAt: "2026-10-04T12:00:00Z" };
 const pushedAt = "2026-10-04T12:01:00Z";
+const releaseApp = {
+  login: "stella-release-deployer[bot]",
+  id: 281_031_312,
+  type: "Bot",
+};
 const senders = [
   { name: "trusted sender", sender: trusted, disarm: false },
+  { name: "release App sender", sender: releaseApp, disarm: false },
+  {
+    name: "release App login with the autofix ID",
+    sender: { ...releaseApp, id: trusted.id },
+    disarm: true,
+  },
+  {
+    name: "autofix login with the release App ID",
+    sender: { ...trusted, id: releaseApp.id },
+    disarm: true,
+  },
+  {
+    name: "release App login as a user",
+    sender: { ...releaseApp, type: "User" },
+    disarm: true,
+  },
   {
     name: "human sender",
     sender: { login: "contributor", id: 12, type: "User" },
@@ -213,21 +236,57 @@ test("invalid arm ordering surfaces through the workflow script", async () => {
   ).toContain("Cannot establish auto-merge and push ordering");
 });
 
-for (const { headRepository, actor, runs } of [
-  { headRepository: "owner/repository", actor: "contributor", runs: true },
-  { headRepository: "fork/repository", actor: "contributor", runs: false },
-  { headRepository: "owner/repository", actor: "dependabot[bot]", runs: false },
-  { headRepository: "fork/repository", actor: "dependabot[bot]", runs: false },
-  { headRepository: "owner/repository", actor: trusted.login, runs: true },
+const armedAtPush = { enabled_at: "2026-01-01T00:00:00Z" };
+for (const { headRepository, actor, autoMerge, runs } of [
+  {
+    headRepository: "owner/repository",
+    actor: "contributor",
+    autoMerge: armedAtPush,
+    runs: true,
+  },
+  {
+    headRepository: "fork/repository",
+    actor: "contributor",
+    autoMerge: armedAtPush,
+    runs: false,
+  },
+  {
+    headRepository: "owner/repository",
+    actor: "dependabot[bot]",
+    autoMerge: armedAtPush,
+    runs: false,
+  },
+  {
+    headRepository: "fork/repository",
+    actor: "dependabot[bot]",
+    autoMerge: armedAtPush,
+    runs: false,
+  },
+  {
+    headRepository: "owner/repository",
+    actor: trusted.login,
+    autoMerge: armedAtPush,
+    runs: true,
+  },
+  // A push to a pull request that was not armed has nothing to disarm.
+  {
+    headRepository: "owner/repository",
+    actor: "contributor",
+    autoMerge: null,
+    runs: false,
+  },
 ]) {
-  test(`job token eligibility: ${headRepository}/${actor}`, () => {
+  test(`job token eligibility: ${headRepository}/${actor}/${autoMerge === null ? "unarmed" : "armed"}`, () => {
     expect(
       jobCondition.runInNewContext({
         github: {
           repository: "owner/repository",
           actor,
           event: {
-            pull_request: { head: { repo: { full_name: headRepository } } },
+            pull_request: {
+              head: { repo: { full_name: headRepository } },
+              auto_merge: autoMerge,
+            },
           },
         },
       }),
@@ -263,7 +322,7 @@ test("workflow limits its trigger, token and executable code", () => {
   });
   expect(
     workflow.jobs.disarm.steps.some(({ uses }) =>
-      uses.startsWith("actions/checkout@"),
+      isRepositoryCheckoutAction(uses),
     ),
   ).toBe(false);
   expect(workflow.concurrency).toEqual({

@@ -1,16 +1,21 @@
+import { Result } from "better-result";
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { and, eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
+
+import { rejectionOf } from "@stll/property-testing/rejection";
 
 import type { Transaction } from "@/api/db/root";
 import { corpusIndexGenerations } from "@/api/db/schema";
 import { CORPUS_FAMILIES } from "@/api/lib/legal-search/corpus-generation-contract";
 import {
+  beginCorpusIndexGenerationRebuildTx,
+  completeCorpusIndexGenerationRebuildTx,
   type CorpusIndexGenerationTarget,
+  CorpusServingGenerationAbsentError,
   lockCorpusIndexGenerationActivationTx,
   readServingCorpusIndexGenerationTx,
   registerCorpusIndexGenerationTx,
-  resumeRetiringCorpusIndexGenerationTx,
   setServingCorpusIndexGenerationTx,
 } from "@/api/lib/legal-search/corpus-index-generation-store";
 import {
@@ -143,6 +148,52 @@ test("generation registration fails closed on a drifted binding", async () => {
     );
 });
 
+test("a family nothing has been promoted in reads as absent, not as a defect", async () => {
+  for (const family of CORPUS_FAMILIES) {
+    const read = await readServingCorpusIndexGenerationTx(
+      asTestRaw<Transaction>(db),
+      family,
+    );
+    expect(Result.isError(read) ? read.error : null).toBeInstanceOf(
+      CorpusServingGenerationAbsentError,
+    );
+  }
+});
+
+test("two serving generations of one family break the activation invariant", async () => {
+  // The serving index admits one row per family, so the broken state is
+  // reachable only with it dropped; the panic rolls the drop back.
+  const rejection: unknown = await db
+    .transaction(async (tx) => {
+      await registerCorpusIndexGenerationTx(
+        asTestRaw<Transaction>(tx),
+        CASE_LAW_TARGET,
+      );
+      await registerCorpusIndexGenerationTx(
+        asTestRaw<Transaction>(tx),
+        CASE_LAW_PREVIOUS_TARGET,
+      );
+      await tx.execute(
+        sql`DROP INDEX corpus_index_generations_serving_family_uidx`,
+      );
+      await tx
+        .update(corpusIndexGenerations)
+        .set({ status: "serving" })
+        .where(eq(corpusIndexGenerations.family, "case_law"));
+      return await readServingCorpusIndexGenerationTx(
+        asTestRaw<Transaction>(tx),
+        "case_law",
+      );
+    })
+    .then(
+      () => null,
+      (error: unknown) => error,
+    );
+  expect(rejection).toMatchObject({
+    message: "Expected one serving corpus generation: case_law",
+  });
+});
+
 test("serving generation reads and flips are family-independent", async () => {
   await register(CASE_LAW_TARGET);
   await register(CASE_LAW_PREVIOUS_TARGET);
@@ -155,34 +206,55 @@ test("serving generation reads and flips are family-independent", async () => {
       asTestRaw<Transaction>(db),
       "case_law",
     ),
-  ).toEqual({
-    ...CASE_LAW_PREVIOUS_TARGET,
-    cluster: "q09",
-  });
+  ).toEqual(
+    Result.ok({
+      ...CASE_LAW_PREVIOUS_TARGET,
+      cluster: "q09",
+    }),
+  );
 
   expect(await setServing(CASE_LAW_TARGET)).toEqual({
     ...CASE_LAW_TARGET,
     cluster: "q09",
   });
-  const immediateRollbackRejection: unknown = await setServing(
-    CASE_LAW_PREVIOUS_TARGET,
-  ).then(
-    () => null,
-    (error: unknown) => error,
-  );
-  expect(immediateRollbackRejection).toMatchObject({
-    message: `Corpus serving target is not reconciled: case_law/${CASE_LAW_PREVIOUS_TARGET.generation}`,
-  });
-
-  await db.transaction(
-    async (tx) =>
-      await resumeRetiringCorpusIndexGenerationTx(
-        asTestRaw<Transaction>(tx),
-        CASE_LAW_PREVIOUS_TARGET,
-      ),
-  );
+  // The generation it replaced stays building, so it takes every change and
+  // can serve again at once: a flip is reversible.
+  const statusOf = async (generation: string) =>
+    (
+      await db
+        .select({ status: corpusIndexGenerations.status })
+        .from(corpusIndexGenerations)
+        .where(eq(corpusIndexGenerations.generation, generation))
+    ).at(0)?.status;
+  expect(await statusOf(CASE_LAW_PREVIOUS_TARGET.generation)).toBe("building");
   expect(await setServing(CASE_LAW_PREVIOUS_TARGET)).toEqual({
     ...CASE_LAW_PREVIOUS_TARGET,
+    cluster: "q09",
+  });
+  expect(await statusOf(CASE_LAW_TARGET.generation)).toBe("building");
+
+  // A generation in a rebuild serves only once the rebuild registered it
+  // again as building.
+  await db.transaction(
+    async (tx) =>
+      await beginCorpusIndexGenerationRebuildTx(
+        asTestRaw<Transaction>(tx),
+        CASE_LAW_TARGET,
+      ),
+  );
+  expect(await statusOf(CASE_LAW_TARGET.generation)).toBe("retiring");
+  expect(await rejectionOf(setServing(CASE_LAW_TARGET))).toMatchObject({
+    message: expect.stringContaining("Corpus serving target is not reconciled"),
+  });
+  await db.transaction(
+    async (tx) =>
+      await completeCorpusIndexGenerationRebuildTx(
+        asTestRaw<Transaction>(tx),
+        CASE_LAW_TARGET,
+      ),
+  );
+  expect(await setServing(CASE_LAW_TARGET)).toEqual({
+    ...CASE_LAW_TARGET,
     cluster: "q09",
   });
   expect(
@@ -190,8 +262,10 @@ test("serving generation reads and flips are family-independent", async () => {
       asTestRaw<Transaction>(db),
       "legislation",
     ),
-  ).toEqual({
-    ...LEGISLATION_TARGET,
-    cluster: "q09",
-  });
+  ).toEqual(
+    Result.ok({
+      ...LEGISLATION_TARGET,
+      cluster: "q09",
+    }),
+  );
 });

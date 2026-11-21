@@ -5,7 +5,6 @@ import * as v from "valibot";
 import { QUERY_EXPANSION_MODES } from "../apps/api/src/lib/legal-search/query-expansion-mode";
 import { SECRET_EXAMPLES } from "../packages/runtime-mode/src/secret-examples.generated";
 import {
-  DEPLOYMENT_FLAG_PAIRS,
   ENV_CATALOG,
   ENV_CREDENTIAL_CLASSIFICATION,
   ENV_CREDENTIAL_KIND,
@@ -16,7 +15,6 @@ import {
   WEB_ENV_SCHEMA,
 } from "./env-catalog";
 import {
-  deploymentFlagPairingIssues,
   doctorEnvFileNames,
   findEnvUsages,
   findWebBuildArgGaps,
@@ -29,8 +27,8 @@ import {
   parseEnvText,
   parseWebBuildContract,
   renderApiEnvExample,
-  renderSecretExamples,
   renderCollabEnvExample,
+  renderSecretExamples,
   renderWebBuildContract,
   renderWebEnvExample,
   resolveDoctorMode,
@@ -89,14 +87,14 @@ describe("generated environment examples", () => {
     ).toBe(renderSecretExamples());
   });
 
-  test("contain every documented schema entry exactly once", () => {
+  test("contain every schema entry exactly once", () => {
     const examples = {
       api: renderApiEnvExample(),
       collab: renderCollabEnvExample(),
       web: renderWebEnvExample(),
     };
 
-    for (const entry of ENV_CATALOG.filter(({ documented }) => documented)) {
+    for (const entry of ENV_CATALOG) {
       let example = examples.api;
       if (entry.owner === ENV_OWNER.web) {
         example = examples.web;
@@ -575,53 +573,26 @@ describe("environment doctor output", () => {
     }
   });
 
-  test("keeps v0.7.22 and public-law credentials distinct during rollout", () => {
-    const legacyUrl =
-      "postgres://case_law_reader:password@db.example.com:5432/stella?sslmode=require";
-    const currentUrl =
+  test("accepts a public-law database in local development", () => {
+    const url =
       "postgres://public_law_reader:password@db.example.com:5432/stella?sslmode=require";
     const result = validateDoctorEnvironment({
       app: "api",
       input: {
         ...validApiInput(),
-        CASE_LAW_DATABASE_POOL_MAX: "3",
-        CASE_LAW_DATABASE_URL: legacyUrl,
         CORPUS_INDEX_Q09_SEARCH_ENDPOINT:
           "http://corpus-index-v09-search.internal.local:7280",
         LEGAL_SEARCH_PROVIDER: "corpus-index",
         PUBLIC_LAW_DATABASE_POOL_MAX: "4",
-        PUBLIC_LAW_DATABASE_URL: currentUrl,
+        PUBLIC_LAW_DATABASE_URL: url,
       },
       mode: "development",
     });
 
     expect(result.status).toBe("valid");
     if (result.status === "valid") {
-      expect(result.values["CASE_LAW_DATABASE_POOL_MAX"]).toBe(3);
-      expect(result.values["CASE_LAW_DATABASE_URL"]).toBe(legacyUrl);
       expect(result.values["PUBLIC_LAW_DATABASE_POOL_MAX"]).toBe(4);
-      expect(result.values["PUBLIC_LAW_DATABASE_URL"]).toBe(currentUrl);
-    }
-  });
-
-  test("rejects a legacy-only shared-corpus configuration", () => {
-    const result = validateDoctorEnvironment({
-      app: "api",
-      input: {
-        ...validApiInput(),
-        CASE_LAW_DATABASE_URL:
-          "postgres://case_law_reader:password@db.example.com:5432/stella?sslmode=require",
-        CORPUS_INDEX_Q09_SEARCH_ENDPOINT:
-          "http://corpus-index-v09-search.internal.local:7280",
-        LEGAL_SEARCH_PROVIDER: "corpus-index",
-      },
-    });
-
-    expect(result.status).toBe("invalid");
-    if (result.status === "invalid") {
-      expect(result.issues).toContain(
-        "CASE_LAW_DATABASE_URL is a v0.7.22 rollback input; configure PUBLIC_LAW_DATABASE_URL for the current release.",
-      );
+      expect(result.values["PUBLIC_LAW_DATABASE_URL"]).toBe(url);
     }
   });
 
@@ -888,59 +859,6 @@ describe("environment doctor output", () => {
       expect(result.issues).toContain(
         "VITE_PUBLIC_LAW_INDEXING_ENABLED requires VITE_PUBLIC_LAW_ENABLED.",
       );
-    }
-  });
-});
-
-describe("deployment flag pairing", () => {
-  test("refuses the time billing web flag without the API flag", () => {
-    for (const api of [
-      {},
-      { FEATURE_TIME_BILLING: "false" },
-      { FEATURE_TIME_BILLING: "" },
-    ]) {
-      expect(
-        deploymentFlagPairingIssues({
-          api,
-          web: { VITE_FEATURE_TIME_BILLING: "true" },
-        }),
-      ).toEqual([
-        "VITE_FEATURE_TIME_BILLING=true needs FEATURE_TIME_BILLING=true on the API: the web build would offer a feature the API does not serve.",
-      ]);
-    }
-  });
-
-  test("accepts every other time billing combination", () => {
-    for (const [web, api] of [
-      ["true", "true"],
-      ["false", "false"],
-      [undefined, undefined],
-      ["false", "true"],
-      [undefined, "true"],
-    ] as const) {
-      expect(
-        deploymentFlagPairingIssues({
-          api: { FEATURE_TIME_BILLING: api },
-          web: { VITE_FEATURE_TIME_BILLING: web },
-        }),
-      ).toEqual([]);
-    }
-  });
-
-  test("reads every pair through both apps' flag schemas", () => {
-    expect(DEPLOYMENT_FLAG_PAIRS.length).toBeGreaterThan(0);
-    for (const pair of DEPLOYMENT_FLAG_PAIRS) {
-      const issues = (web: string, api: string) =>
-        deploymentFlagPairingIssues({
-          api: { [pair.api]: api },
-          web: { [pair.web]: web },
-        });
-      expect(issues("true", "false")).toHaveLength(1);
-      expect(issues("true", "false").at(0)).toContain(pair.web);
-      expect(issues("true", "false").at(0)).toContain(pair.api);
-      expect(issues("true", "true")).toEqual([]);
-      expect(issues("false", "true")).toEqual([]);
-      expect(issues("false", "false")).toEqual([]);
     }
   });
 });
@@ -1267,3 +1185,30 @@ describe("web container build arguments", () => {
     ).toThrow("no longer runs");
   });
 });
+
+for (const name of [
+  "__proto__",
+  "constructor",
+  "toString",
+  "hasOwnProperty",
+  "ENV_VALUE",
+  "1",
+]) {
+  test(`environment normalization retains the own variable ${name}`, () => {
+    for (const value of ["configured", "", undefined]) {
+      const result = normalizeEmptyEnvironment({ [name]: value });
+      expect(Object.hasOwn(result, name)).toBe(true);
+      expect(result[name]).toBe(value === "" ? undefined : value);
+    }
+  });
+}
+
+for (const name of ["__proto__", "constructor", "ENV_VALUE"]) {
+  test(`ambient variable ${name} reaches Bun dotenv expansion`, () => {
+    expect(
+      parseEnvText(`FORWARDED=$${name}`, { [name]: "configured" }),
+    ).toEqual({
+      FORWARDED: "configured",
+    });
+  });
+}

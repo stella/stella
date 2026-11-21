@@ -1,0 +1,11 @@
+{
+  "type": "parser",
+  "name": "CZ_US",
+  "key": "cz-us",
+  "parserVersion": 46,
+  "sourceFingerprintVersion": 0,
+  "scope": {
+    "type": "all",
+    "reason": "Recompute procedural review links from the stored opening and holding text; parsed document output is otherwise unchanged."
+  }
+}

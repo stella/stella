@@ -4,8 +4,8 @@ import type { Transaction } from "@/api/db/root";
 import {
   AUDIT_ACTION,
   AUDIT_RESOURCE_TYPE,
-  createBackgroundAuditRecorder,
   createAuditRecorder,
+  createBackgroundAuditRecorder,
   recordAuditGroups,
 } from "@/api/lib/audit-log";
 import type { AuditEvent } from "@/api/lib/audit-log";

@@ -1,84 +1,29 @@
-/** Adapter keys for all supported court data sources. */
-export const ADAPTER_KEYS = {
-  CZ_REGIONAL: "cz-regional",
-  CZ_NS: "cz-ns",
-  CZ_NSS: "cz-nss",
-  CZ_US: "cz-us",
-  SK_COURTS: "sk-courts",
-  SK_US: "sk-us",
-  PL_COURTS: "pl-courts",
-  PL_SN: "pl-sn",
-  PL_KIO: "pl-kio",
-  PL_TK: "pl-tk",
-  PL_NSA: "pl-nsa",
-  PL_NCOURT: "pl-ncourt",
-  AT_COURTS: "at-courts",
-  AT_VFGH: "at-vfgh",
-  AT_VWGH: "at-vwgh",
-  AT_BVWG: "at-bvwg",
-  AT_LVWG: "at-lvwg",
-  AT_ASYLGH: "at-asylgh",
-  AT_UBAS: "at-ubas",
-  AT_UVS: "at-uvs",
-  AT_VERG: "at-verg",
-  AT_UMSE: "at-umse",
-  AT_BKS: "at-bks",
-  AT_FINDOK: "at-findok",
-  EU_ECJ: "eu-ecj",
-  HU_BHGY: "hu-bhgy",
-  PL_KIS: "pl-kis",
-  PL_UODO: "pl-uodo",
-  PL_UOKIK: "pl-uokik",
-} as const;
-
-export type AdapterKey = (typeof ADAPTER_KEYS)[keyof typeof ADAPTER_KEYS];
-
-/** Import discovery is owned by callers, never the crawl scheduler. */
-export const IMPORT_SOURCE_KEYS = {
-  COURTLISTENER: "us-courtlistener",
-} as const;
-export type ImportSourceKey =
-  (typeof IMPORT_SOURCE_KEYS)[keyof typeof IMPORT_SOURCE_KEYS];
+// parser-output-unchanged: the cz-ns-sbirka adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
+// parser-output-unchanged: the TST adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
+// parser-output-unchanged: source declarations move to independent entries; values are unchanged.
+export {
+  ADAPTER_KEYS,
+  type AdapterKey,
+  IMPORT_SOURCE_KEYS,
+  type ImportSourceKey,
+  PARSER_VERSIONS,
+  SOURCE_FINGERPRINT_VERSIONS,
+} from "./parser-registry.gen";
 
 /**
- * Parser output version for each source.
- *
- * A parser change must only make that source's rows eligible for replay. The
- * total map makes a version decision mandatory whenever an adapter is added;
- * a single global number would turn one publisher's markup fix into a replay
- * of every court corpus.
+ * The TST reconciliation slice of its súmulas, OJs and precedentes
+ * normativos, listed whole by number: some carry no publication date, so no
+ * day slice holds them. It sorts before every day, first in walk order.
  */
-export const PARSER_VERSIONS = {
-  [ADAPTER_KEYS.CZ_REGIONAL]: 9,
-  [ADAPTER_KEYS.CZ_NS]: 14,
-  [ADAPTER_KEYS.CZ_NSS]: 15,
-  [ADAPTER_KEYS.CZ_US]: 13,
-  [ADAPTER_KEYS.SK_COURTS]: 12,
-  [ADAPTER_KEYS.SK_US]: 8,
-  [ADAPTER_KEYS.PL_COURTS]: 11,
-  [ADAPTER_KEYS.PL_SN]: 4,
-  [ADAPTER_KEYS.PL_KIO]: 4,
-  [ADAPTER_KEYS.PL_TK]: 5,
-  [ADAPTER_KEYS.PL_NSA]: 6,
-  [ADAPTER_KEYS.PL_NCOURT]: 10,
-  [ADAPTER_KEYS.AT_COURTS]: 6,
-  [ADAPTER_KEYS.AT_VFGH]: 6,
-  [ADAPTER_KEYS.AT_VWGH]: 6,
-  [ADAPTER_KEYS.AT_BVWG]: 6,
-  [ADAPTER_KEYS.AT_LVWG]: 6,
-  [ADAPTER_KEYS.AT_ASYLGH]: 6,
-  [ADAPTER_KEYS.AT_UBAS]: 6,
-  [ADAPTER_KEYS.AT_UVS]: 6,
-  [ADAPTER_KEYS.AT_VERG]: 6,
-  [ADAPTER_KEYS.AT_UMSE]: 6,
-  [ADAPTER_KEYS.AT_BKS]: 6,
-  [ADAPTER_KEYS.AT_FINDOK]: 7,
-  [ADAPTER_KEYS.EU_ECJ]: 13,
-  [ADAPTER_KEYS.HU_BHGY]: 7,
-  [ADAPTER_KEYS.PL_KIS]: 6,
-  [ADAPTER_KEYS.PL_UODO]: 10,
-  [ADAPTER_KEYS.PL_UOKIK]: 7,
-} as const satisfies Record<AdapterKey, number>;
+export const BR_TST_PRECEDENTS_SLICE = "0-precedentes";
+
+/**
+ * The Supreme Court collection's reconciliation slice of its Vážný volumes:
+ * the interwar Supreme Court's decisions, which the archive lists under one
+ * term of their own rather than under a collection year. It sorts before
+ * every year, first in walk order.
+ */
+export const CZ_NS_SBIRKA_VAZNY_SLICE = "0-vazny";
 
 /**
  * Capacity bound for a complete `case_law_sources` read, and nothing more.

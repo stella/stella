@@ -92,19 +92,6 @@ export const normalizeSuggestedFileName = (
   return truncateFilename(sanitizePathSegment(fallbackName));
 };
 
-export const getSuggestedFolderOptions = (
-  suggestions: readonly FileNameSuggestion[],
-): string[] => {
-  const options = new Set<string>();
-  for (const suggestion of suggestions) {
-    const folderPath = normalizeFolderPath(suggestion.folderPath);
-    if (folderPath.length > 0) {
-      options.add(folderPath);
-    }
-  }
-  return [...options];
-};
-
 const cleanFileName = (fileName: string): string => {
   const extension = getExtension(fileName);
   const baseName = stripExtension(fileName);

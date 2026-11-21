@@ -1,7 +1,9 @@
 import type { ReactNode } from "react";
 
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import { afterAll, afterEach, expect, test, spyOn } from "bun:test";
+import { afterAll, afterEach, expect, spyOn, test } from "bun:test";
+
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import englishMessages from "@/i18n/langs/en.json";
 import type { WorkspaceEntity } from "@/lib/types";
@@ -62,6 +64,7 @@ const { toSafeId } = await import("@/lib/safe-id");
 const { rootKeys } = await import("@/lib/auth-queries");
 const { propertiesKeys } = await import("@/lib/workspaces/queries/properties");
 const { fileMetadataOptions } = await import("@/lib/files/file-metadata-query");
+const { fileOptions, textFileOptions } = await import("@/lib/files/queries");
 
 const entity = (id: string) =>
   ({
@@ -125,6 +128,28 @@ const mount = async (Component: () => ReactNode) => {
       mimeType: "text/markdown",
       originalMimeType: "text/markdown",
     },
+  );
+  const downloadedA = {
+    fileId: "file-A",
+    fileName: "A.md",
+    mimeType: "text/markdown",
+    originalMimeType: "text/markdown",
+  };
+  client.setQueryData(
+    fileOptions({ workspaceId: "matter", fieldId: "field-A" }).queryKey,
+    { ...downloadedA, buffer: new ArrayBuffer(0) },
+  );
+  client.setQueryData(
+    fileOptions({
+      workspaceId: "matter",
+      fieldId: "field-A",
+      purpose: "native-display",
+    }).queryKey,
+    { ...downloadedA, buffer: new ArrayBuffer(0) },
+  );
+  client.setQueryData(
+    textFileOptions({ workspaceId: "matter", fieldId: "field-A" }).queryKey,
+    { ...downloadedA, text: "# A" },
   );
   const root = createRootRoute({
     component: () => (
@@ -214,6 +239,10 @@ const confirm = (index: number) => {
     }),
   );
 };
+const abort = (index: number) =>
+  requests
+    .at(index)
+    ?.answer.reject(new DOMException("Cancelled", "AbortError"));
 afterEach(async () => {
   await act(async () => cleanup());
   requests.length = 0;
@@ -224,7 +253,7 @@ afterAll(async () => {
   await new Promise<void>((resolve) => {
     setImmediate(resolve);
   });
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 const edit = (scope: HTMLElement, name: string) => {
   const input = within(scope).getByRole("textbox");
@@ -236,7 +265,7 @@ const openMenuRename = async (scope: HTMLElement) => {
     within(scope).getByRole("button", { name: englishMessages.common.actions }),
   );
   await waitFor(() =>
-    expect(document.querySelector('[role="menuitem"]')).not.toBeNull(),
+    expect(document.querySelector('[role="menuitem"]') === null).toBe(false),
   );
   fireEvent.click(
     within(document.body).getByRole("menuitem", {
@@ -302,7 +331,7 @@ test("tree row completions clear each pending rename independently of refetch", 
   };
   const view = await mount(Rows);
   const refresh = Promise.withResolvers<undefined>();
-  const invalidate = spyOn(view.client, "invalidateQueries").mockReturnValue(
+  const refetch = spyOn(view.client, "refetchQueries").mockReturnValue(
     refresh.promise,
   );
   try {
@@ -326,8 +355,53 @@ test("tree row completions clear each pending rename independently of refetch", 
     );
   } finally {
     refresh.resolve(undefined);
-    invalidate.mockRestore();
+    refetch.mockRestore();
   }
+});
+
+test("an aborted rename leaves the form's entered value in place", async () => {
+  const Row = () => {
+    const rename = useRenameEntity();
+    const node = entity("A");
+    return (
+      <FilesystemRow
+        node={{ ...node, children: [] }}
+        depth={0}
+        workspaceId="matter"
+        extraColumns={[]}
+        folderStatistics={undefined}
+        gridTemplate="1fr 2rem"
+        isFiltered={false}
+        ancestorIds={new Set()}
+        expandedIds={new Set()}
+        selectedIds={new Set()}
+        editingEntityId="A"
+        currentFolderId={undefined}
+        onToggleFolder={() => undefined}
+        onNavigateToFolder={() => undefined}
+        onStartEditing={() => undefined}
+        onRename={(entityId, name, completion) =>
+          rename.mutate({ workspaceId: "matter", entityId, name }, completion)
+        }
+        onClearSelection={() => undefined}
+        onSelect={() => undefined}
+        onSubfolderCreated={() => undefined}
+        getSelectedDragItems={() => []}
+        getSelectedEntities={() => []}
+        getAncestorIds={() => []}
+      />
+    );
+  };
+  const view = await mount(Row);
+  const input = view.getByRole("textbox");
+
+  fireEvent.change(input, { target: { value: "new-A" } });
+  fireEvent.keyDown(input, { key: "Enter" });
+  await waitFor(() => expect(requests).toHaveLength(1));
+  await act(async () => abort(0));
+
+  await waitFor(() => expect(view.client.isMutating()).toBe(0));
+  expect(input).toHaveProperty("value", "new-A");
 });
 
 test("breadcrumb pending label settles before file metadata refetch and refusal restores its editor", async () => {
@@ -337,7 +411,7 @@ test("breadcrumb pending label settles before file metadata refetch and refusal 
     </ol>
   ));
   const refresh = Promise.withResolvers<undefined>();
-  const invalidate = spyOn(view.client, "invalidateQueries").mockReturnValue(
+  const refetch = spyOn(view.client, "refetchQueries").mockReturnValue(
     refresh.promise,
   );
   try {
@@ -345,10 +419,30 @@ test("breadcrumb pending label settles before file metadata refetch and refusal 
     edit(view.container, "new-A");
     await waitFor(() => expect(requests).toHaveLength(1));
     await waitFor(() =>
-      expect(view.queryByRole("link", { name: "A.md" })).toBeNull(),
+      expect(view.queryByRole("link", { name: "A.md" }) === null).toBe(true),
     );
     expect(view.container.textContent).toContain("new-A.md");
     await act(async () => confirm(0));
+    // Every cached copy of the bytes the previews read carries the new name.
+    expect(
+      view.client.getQueryData(
+        fileOptions({ workspaceId: "matter", fieldId: "field-A" }).queryKey,
+      ),
+    ).toMatchObject({ fileName: "new-A.md" });
+    expect(
+      view.client.getQueryData(
+        fileOptions({
+          workspaceId: "matter",
+          fieldId: "field-A",
+          purpose: "native-display",
+        }).queryKey,
+      ),
+    ).toMatchObject({ fileName: "new-A.md" });
+    expect(
+      view.client.getQueryData(
+        textFileOptions({ workspaceId: "matter", fieldId: "field-A" }).queryKey,
+      ),
+    ).toMatchObject({ fileName: "new-A.md", text: "# A" });
     await waitFor(() =>
       expect(view.getByRole("link", { name: "A.md" })).toBeDefined(),
     );
@@ -359,10 +453,10 @@ test("breadcrumb pending label settles before file metadata refetch and refusal 
     await waitFor(() =>
       expect(view.getByRole("link", { name: "A.md" })).toBeDefined(),
     );
-    expect(invalidate).toHaveBeenCalledTimes(4);
+    expect(refetch).toHaveBeenCalledTimes(1);
   } finally {
     refresh.resolve(undefined);
-    invalidate.mockRestore();
+    refetch.mockRestore();
   }
 });
 

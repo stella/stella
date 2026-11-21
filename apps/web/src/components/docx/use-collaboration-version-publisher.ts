@@ -1,18 +1,20 @@
-import { useCallback, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import type { RefObject } from "react";
 
 import { useQueryClient } from "@tanstack/react-query";
 import { Result } from "better-result";
-import { useFormatter, useTranslations } from "use-intl";
+import { useTranslations } from "use-intl";
 
 import { stellaToast } from "@stll/ui/toast";
 
+import { useFormatter } from "@/i18n/formatting-context";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors/api";
-import { notifyUserError } from "@/lib/errors/user-toast";
+import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
 import { openIsolatedWindow } from "@/lib/open-isolated-window";
 import { toSafeId } from "@/lib/safe-id";
+import { createUuid } from "@/lib/uuid";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities";
 
 import { shouldReuseCollaborationPublication } from "./docx-browser-editor.logic";
@@ -47,24 +49,43 @@ const prepareCollaborationPublication = async ({
     async () => await room.flushSnapshot(),
   );
   if (Result.isError(flushResult)) {
-    getAnalytics().captureError(flushResult.error);
+    getAnalytics().captureError(flushResult.error, {
+      fingerprintKey: "prepareCollaborationPublication:failure",
+      scope: {
+        type: "handler",
+        handlerId: "prepareCollaborationPublication:failure",
+      },
+    });
     return null;
   }
-  const checkpointResult = await Result.tryPromise(async () =>
-    api
-      .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
-      ["folio-collab-rooms"].checkpoint.post({
-        expectedGeneration: room.generation,
-        expectedSnapshotRevision: flushResult.value.snapshotRevision,
-        roomId: toSafeId<"folioCollabRoom">(room.roomId),
-      }),
-  );
+  const checkpointResult = await Result.tryPromise(async () => {
+    const entitiesApi = api.entities({
+      workspaceId: toSafeId<"workspace">(workspaceId),
+    });
+    return entitiesApi["folio-collab-rooms"].checkpoint.post({
+      expectedGeneration: room.generation,
+      expectedSnapshotRevision: flushResult.value.snapshotRevision,
+      roomId: toSafeId<"folioCollabRoom">(room.roomId),
+    });
+  });
   if (Result.isError(checkpointResult)) {
-    getAnalytics().captureError(checkpointResult.error);
+    getAnalytics().captureError(checkpointResult.error, {
+      fingerprintKey: "prepareCollaborationPublication:failure-2",
+      scope: {
+        type: "handler",
+        handlerId: "prepareCollaborationPublication:failure-2",
+      },
+    });
     return null;
   }
   if (checkpointResult.value.error) {
-    getAnalytics().captureError(toAPIError(checkpointResult.value.error));
+    getAnalytics().captureError(toAPIError(checkpointResult.value.error), {
+      fingerprintKey: "prepareCollaborationPublication:failure-3",
+      scope: {
+        type: "handler",
+        handlerId: "prepareCollaborationPublication:failure-3",
+      },
+    });
     return null;
   }
 
@@ -73,7 +94,7 @@ const prepareCollaborationPublication = async ({
     documentMutationRevision: flushResult.value.documentMutationRevision,
     downloadUrl: checkpoint.downloadUrl,
     generation: checkpoint.generation,
-    idempotencyKey: crypto.randomUUID(),
+    idempotencyKey: createUuid(),
     roomId: room.roomId,
     sha256Hex: checkpoint.sha256Hex,
   };
@@ -108,7 +129,7 @@ export const useCollaborationVersionPublisher = ({
     setIsPublishingCollaborationVersion,
   ] = useState(false);
 
-  const publishCollaborationVersion = useCallback(async () => {
+  const publishCollaborationVersion = async () => {
     if (
       collaborationSession === null ||
       collaborationStatus !== "synced" ||
@@ -147,26 +168,33 @@ export const useCollaborationVersionPublisher = ({
       });
       if (pendingPublication === null) {
         finishPublishing();
-        notifyUserError(undefined, t("folio.createVersionFailedTitle"), {
+        notifyUserProblem(t("folio.createVersionFailedTitle"), {
           description: t("folio.createVersionFailedDescription"),
         });
         return false;
       }
       pendingCollaborationPublicationRef.current = pendingPublication;
     }
-    const publishResult = await Result.tryPromise(async () =>
-      api
-        .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
-        ["folio-collab-rooms"]["publish-version"].post({
-          expectedGeneration: pendingPublication.generation,
-          expectedSha256Hex: pendingPublication.sha256Hex,
-          idempotencyKey: pendingPublication.idempotencyKey,
-          roomId: toSafeId<"folioCollabRoom">(pendingPublication.roomId),
-        }),
-    );
+    const publishResult = await Result.tryPromise(async () => {
+      const entitiesApi = api.entities({
+        workspaceId: toSafeId<"workspace">(workspaceId),
+      });
+      return entitiesApi["folio-collab-rooms"]["publish-version"].post({
+        expectedGeneration: pendingPublication.generation,
+        expectedSha256Hex: pendingPublication.sha256Hex,
+        idempotencyKey: pendingPublication.idempotencyKey,
+        roomId: toSafeId<"folioCollabRoom">(pendingPublication.roomId),
+      });
+    });
     finishPublishing();
     if (Result.isError(publishResult)) {
-      getAnalytics().captureError(publishResult.error);
+      getAnalytics().captureError(publishResult.error, {
+        fingerprintKey: "useCollaborationVersionPublisher:failure",
+        scope: {
+          type: "handler",
+          handlerId: "useCollaborationVersionPublisher:failure",
+        },
+      });
       notifyUserError(
         publishResult.error,
         t("folio.createVersionFailedTitle"),
@@ -176,7 +204,13 @@ export const useCollaborationVersionPublisher = ({
     }
     if (publishResult.value.error) {
       const apiError = toAPIError(publishResult.value.error);
-      getAnalytics().captureError(apiError);
+      getAnalytics().captureError(apiError, {
+        fingerprintKey: "useCollaborationVersionPublisher:apiError",
+        scope: {
+          type: "handler",
+          handlerId: "useCollaborationVersionPublisher:apiError",
+        },
+      });
       if (apiError.code === "folio_collab_base_version_changed") {
         pendingCollaborationPublicationRef.current = null;
         stellaToast.add({
@@ -219,20 +253,11 @@ export const useCollaborationVersionPublisher = ({
       type: "success",
     });
     return true;
-  }, [
-    collaborationSession,
-    collaborationStatus,
-    format,
-    hasSessionChangesRef,
-    isPublishingCollaborationVersion,
-    queryClient,
-    t,
-    workspaceId,
-  ]);
+  };
 
-  const discardPendingPublication = useCallback(() => {
+  const discardPendingPublication = () => {
     pendingCollaborationPublicationRef.current = null;
-  }, []);
+  };
 
   return {
     canPublishCollaborationVersion:

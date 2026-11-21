@@ -12,6 +12,7 @@ import path from "node:path";
 import {
   diffNetworkBaseline,
   mergeNetworkBaseline,
+  NETWORK_DEPTH_METHOD,
 } from "../apps/web/e2e/helpers/network";
 import { generateRevisionRouteTree } from "../apps/web/scripts/network-baseline-route-tree";
 import { prepareComparisonBaseline } from "./network-baseline-scope";
@@ -24,7 +25,9 @@ const routeTree = await (async () => {
   const revision = Bun.spawnSync(["git", "rev-parse", "HEAD"], {
     cwd: repository,
   });
-  expect(revision.exitCode).toBe(0);
+  if (revision.exitCode !== 0) {
+    throw new Error(`git rev-parse HEAD failed: ${revision.stderr.toString()}`);
+  }
   const output = path.join(directory, "route-tree.ts");
   try {
     await generateRevisionRouteTree({
@@ -51,6 +54,7 @@ test("successive write recordings retain declarations and timing-conditional pea
         reason: "Additional endpoint",
         budget: {
           depth: 4,
+          depthMethod: NETWORK_DEPTH_METHOD,
           requests,
           requestCounts: { "GET /conditional": 3, "GET /observed": 2 },
           dbQueries: { "GET /conditional": 8, "GET /observed": 4 },
@@ -84,10 +88,20 @@ test("successive write recordings retain declarations and timing-conditional pea
               observedRequests.map((key) => [key, 1]),
             ),
             missingDbQueryCounts: {},
+            transactions: Object.fromEntries(
+              observedRequests.map((key) => [key, 1]),
+            ),
+            missingTransactionCounts: {},
             responseSizes: Object.fromEntries(
               observedRequests.map((key) => [key, 1024]),
             ),
-            missingResponseSizeCounts: {},
+            responseSizeFailures: {},
+            requestCosts: Object.fromEntries(
+              observedRequests.map((key) => [
+                key,
+                [{ dbQueries: 1, transactions: 1, responseBytes: 1024 }],
+              ]),
+            ),
           },
         ],
       ]),
@@ -113,8 +127,13 @@ test("only a validated declaration permits measured growth", () => {
         depthChain: [],
         dbQueries: { "GET /old": 2 },
         missingDbQueryCounts: {},
+        transactions: { "GET /old": 1 },
+        missingTransactionCounts: {},
         responseSizes: { "GET /old": 1024 },
-        missingResponseSizeCounts: {},
+        responseSizeFailures: {},
+        requestCosts: {
+          "GET /old": [{ dbQueries: 2, transactions: 1, responseBytes: 1024 }],
+        },
       },
     ],
   ]);
@@ -173,8 +192,11 @@ test("mutation proof: scoped-route growth still fails its budget assertion", () 
       depthChain: [],
       dbQueries: {},
       missingDbQueryCounts: {},
+      transactions: {},
+      missingTransactionCounts: {},
       responseSizes: {},
-      missingResponseSizeCounts: {},
+      responseSizeFailures: {},
+      requestCosts: {},
     },
   };
   expect(
@@ -191,7 +213,19 @@ test("mutation proof: scoped-route growth still fails its budget assertion", () 
       "dir",
     );
     const file = path.join(directory, "network.ts");
-    writeFileSync(file, mutant);
+    // The relocated module must retain the shared coverage owner's import.
+    const relocated = mutant
+      .replace('"./smoke-route-coverage"', () =>
+        JSON.stringify(
+          path.join(root, "apps/web/e2e/helpers/smoke-route-coverage.ts"),
+        ),
+      )
+      .replace('"./network-rounds"', () =>
+        JSON.stringify(
+          path.join(root, "apps/web/e2e/helpers/network-rounds.ts"),
+        ),
+      );
+    writeFileSync(file, relocated);
     const result = Bun.spawnSync([
       "bun",
       "-e",

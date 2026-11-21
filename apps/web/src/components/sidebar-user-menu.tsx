@@ -1,7 +1,11 @@
-import { useMutation } from "@tanstack/react-query";
+import { useState } from "react";
+
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
+import { useStore } from "zustand";
 
+import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 import { BidiText } from "@stll/ui/bidi-text";
 import {
   BuildingIcon,
@@ -11,6 +15,7 @@ import {
   LogOutIcon,
   MonitorIcon,
   MoonIcon,
+  PlusIcon,
   SunIcon,
 } from "@stll/ui/icons";
 import {
@@ -27,9 +32,12 @@ import {
   MenuSubTrigger,
   MenuTrigger,
 } from "@stll/ui/menu";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
+import { CreateOrganizationDialog } from "@/components/create-organization-dialog";
 import { DevSidebarGroup } from "@/components/dev-sidebar-group";
+import { QueryViewFeedback } from "@/components/query-view-feedback";
 import {
   sidebarIdentityTriggerClassName,
   SidebarMenuItem,
@@ -37,10 +45,11 @@ import {
 } from "@/components/sidebar";
 import { PALETTES, THEMES, useTheme } from "@/components/theme-provider";
 import Tooltip from "@/components/tooltip";
-import { UserIdentityAvatar } from "@/components/user-avatar";
+import { UserIdentity, UserIdentityAvatar } from "@/components/user-avatar";
 import { useChromeQuery } from "@/hooks/use-chrome-query";
 import { useInvalidateSession } from "@/hooks/use-invalidate-session";
 import { useSignOut } from "@/hooks/use-sign-out";
+import { setLang } from "@/i18n/client-document-locale";
 import {
   LANG_ENDONYMS,
   supportedLanguages,
@@ -54,8 +63,15 @@ import { detached } from "@/lib/detached";
 import { toAuthClientError } from "@/lib/errors/auth";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { getDisplayName } from "@/lib/get-display-name";
+import { roleTranslationKeys } from "@/lib/organization/consts";
+import {
+  getOrganizationCreationOwner,
+  organizationCreationView,
+} from "@/lib/organization/creation-state";
 import { organizationListOptions } from "@/lib/organization/queries";
-import { sanitizeHref } from "@/lib/sanitize-href";
+import { queryView } from "@/lib/query-view.logic";
+import { toSafeId } from "@/lib/safe-id";
+import { useQueryViewError } from "@/lib/use-query-view";
 
 const CHANGELOG_URL = "https://stll.app/changelog";
 const isDev = import.meta.env.DEV;
@@ -75,14 +91,25 @@ type SidebarUserMenuProps = {
  * stays identical on both surfaces. */
 export const SidebarUserMenu = ({ user }: SidebarUserMenuProps) => {
   const t = useTranslations();
+  const [createOpen, setCreateOpen] = useState(false);
+  const queryClient = useQueryClient();
+  const creationOwner = getOrganizationCreationOwner(
+    queryClient,
+    toSafeId(user.id),
+  );
+  const creationState = useStore(creationOwner.state);
+  const createdOrganization =
+    organizationCreationView(creationState).organization;
   const navigate = useNavigate();
   const signOut = useSignOut();
   const sidebarLayout = useSidebarLayout();
   const isCollapsed = sidebarLayout === "rail";
   const { theme, setTheme, palette, setPalette } = useTheme();
   const lang = useI18nStore((s) => s.lang);
-  const setLang = useI18nStore((s) => s.setLang);
-  const { data: role } = useChromeQuery(roleOptions);
+  const roleQuery = useChromeQuery(roleOptions);
+  const roleView = queryView(roleQuery);
+  useQueryViewError(roleView, "SidebarUserMenu:query");
+  const role = roleView.type === "items" ? roleView.items : undefined;
 
   const displayName = getDisplayName(user.name, user.email) ?? t("common.user");
 
@@ -113,40 +140,43 @@ export const SidebarUserMenu = ({ user }: SidebarUserMenuProps) => {
                 {user.name ? (
                   <>
                     <div className="flex min-w-0 items-center gap-1.5">
-                      <BidiText
-                        as="span"
-                        className="min-w-0 truncate text-sm font-medium"
+                      <TruncatedText
+                        className="text-sm font-medium"
+                        render={<BidiText as="span" />}
                       >
                         {user.name}
-                      </BidiText>
+                      </TruncatedText>
                       {role && (
                         <span className="bg-muted text-muted-foreground text-3xs inline-flex shrink-0 items-center rounded-md px-1.5 py-0.5 font-medium select-none">
-                          {t(`organization.roles.${role}`)}
+                          {t(roleTranslationKeys[role].labelKey)}
                         </span>
                       )}
                     </div>
                     {user.email && (
-                      <BidiText
-                        as="span"
-                        className="text-muted-foreground truncate text-xs"
-                        direction="ltr"
+                      <TruncatedText
+                        className="text-muted-foreground text-xs"
+                        render={<BidiText as="span" direction="ltr" />}
                       >
                         {user.email}
-                      </BidiText>
+                      </TruncatedText>
                     )}
                   </>
                 ) : (
                   <div className="flex min-w-0 items-center gap-1.5">
-                    <BidiText
-                      as="span"
-                      className="min-w-0 truncate text-sm font-medium"
-                      direction={user.email ? "ltr" : "auto"}
+                    <TruncatedText
+                      className="text-sm font-medium"
+                      render={
+                        <BidiText
+                          as="span"
+                          direction={user.email ? "ltr" : "auto"}
+                        />
+                      }
                     >
                       {user.email || t("common.user")}
-                    </BidiText>
+                    </TruncatedText>
                     {role && (
                       <span className="bg-muted text-muted-foreground text-3xs inline-flex shrink-0 items-center rounded-md px-1.5 py-0.5 font-medium select-none">
-                        {t(`organization.roles.${role}`)}
+                        {t(roleTranslationKeys[role].labelKey)}
                       </span>
                     )}
                   </div>
@@ -158,10 +188,18 @@ export const SidebarUserMenu = ({ user }: SidebarUserMenuProps) => {
         </Tooltip>
         <MenuPopup align="end" className="w-56" side="top" sideOffset={8}>
           <OrganizationMenuSection
+            onCreate={() => setCreateOpen(true)}
             activeOrganizationId={user.activeOrganizationId}
             role={role}
             userId={user.id}
           />
+          {createdOrganization !== null && (
+            <MenuItem onClick={() => setCreateOpen(true)}>
+              <BuildingIcon />
+              {t("organization.switchOrganization")}
+              <BidiText as="span">{createdOrganization.name}</BidiText>
+            </MenuItem>
+          )}
           <MenuItem
             onClick={() => {
               detached(
@@ -233,7 +271,10 @@ export const SidebarUserMenu = ({ user }: SidebarUserMenuProps) => {
                   <MenuRadioItem
                     key={langCode}
                     onClick={() =>
-                      detached(setLang(langCode), "sidebar-user-menu.set-lang")
+                      detached(
+                        setLang(queryClient, langCode),
+                        "sidebar-user-menu.set-lang",
+                      )
                     }
                     value={langCode}
                   >
@@ -270,23 +311,33 @@ export const SidebarUserMenu = ({ user }: SidebarUserMenuProps) => {
           </MenuItem>
         </MenuPopup>
       </Menu>
+      {createOpen && (
+        <CreateOrganizationDialog
+          open
+          onOpenChange={setCreateOpen}
+          userId={user.id}
+        />
+      )}
     </SidebarMenuItem>
   );
 };
 
 type OrganizationMenuSectionProps = {
+  onCreate: () => void;
   activeOrganizationId: string;
   role: Role | undefined;
   userId: string;
 };
 
-/** Active organization block at the top of the user menu: a plain label for
- * single-organization users, a switcher sub-menu for everyone else.
+/** Organization block at the top of the user menu: every organization the user
+ * belongs to in one list, the active one checked, then the create action. One
+ * shape for one organization or many, so the list never reads as a header.
  *
  * Owns the organization list query rather than taking it as a prop so the
  * sidebar reads the active organization and the switchable ones from one cache
  * entry, and therefore one `organization/list` request per route. */
 const OrganizationMenuSection = ({
+  onCreate,
   activeOrganizationId,
   role,
   userId,
@@ -295,9 +346,11 @@ const OrganizationMenuSection = ({
   const navigate = useNavigate();
   const analytics = useAnalytics();
   const invalidateSession = useInvalidateSession();
-  const { data: organizations } = useChromeQuery(
-    organizationListOptions(userId),
-  );
+  const organizationsQuery = useChromeQuery(organizationListOptions(userId));
+  const organizationsView = queryView(organizationsQuery);
+  useQueryViewError(organizationsView, "OrganizationMenuSection:query");
+  const organizations =
+    organizationsView.type === "items" ? organizationsView.items : undefined;
 
   const { isPending: isSwitchPending, mutate: switchOrganization } =
     useMutation({
@@ -315,7 +368,13 @@ const OrganizationMenuSection = ({
       },
       onError: (error) => {
         notifyUserError(error, t("errors.actionFailed"));
-        analytics.captureError(error);
+        analytics.captureError(error, {
+          fingerprintKey: "OrganizationMenuSection:failure",
+          scope: {
+            type: "handler",
+            handlerId: "OrganizationMenuSection:failure",
+          },
+        });
       },
     });
 
@@ -327,58 +386,44 @@ const OrganizationMenuSection = ({
     return null;
   }
 
-  if (organizations.length < 2) {
-    return (
-      <>
-        <MenuGroup>
-          <MenuGroupLabel className="flex min-w-0 items-center gap-1.5 text-sm">
-            <BidiText as="span" className="min-w-0 truncate">
-              {activeOrganization.name}
-            </BidiText>
-            <OrganizationRoleBadge role={role} />
-          </MenuGroupLabel>
-        </MenuGroup>
-        <MenuSeparator />
-      </>
-    );
-  }
-
   return (
     <>
-      <MenuSub>
-        <MenuSubTrigger>
-          <BuildingIcon />
-          <BidiText as="span" className="min-w-0 truncate">
-            {activeOrganization.name}
-          </BidiText>
-          <OrganizationRoleBadge role={role} />
-        </MenuSubTrigger>
-        <MenuSubPopup>
-          <MenuGroup>
-            <MenuGroupLabel>
-              {t("organization.switchOrganization")}
-            </MenuGroupLabel>
-            <MenuRadioGroup value={activeOrganizationId}>
-              {organizations.map((organization) => (
-                <MenuRadioItem
-                  key={organization.id}
-                  disabled={isSwitchPending}
-                  onClick={() => {
-                    if (organization.id !== activeOrganizationId) {
-                      switchOrganization(organization.id);
-                    }
-                  }}
-                  value={organization.id}
-                >
-                  <BidiText as="span" className="min-w-0 truncate">
-                    {organization.name}
-                  </BidiText>
-                </MenuRadioItem>
-              ))}
-            </MenuRadioGroup>
-          </MenuGroup>
-        </MenuSubPopup>
-      </MenuSub>
+      <QueryViewFeedback view={organizationsView} />
+      <MenuGroup>
+        <MenuGroupLabel>{t("common.organizations")}</MenuGroupLabel>
+        <MenuRadioGroup value={activeOrganizationId}>
+          {organizations.map((organization) => (
+            <MenuRadioItem
+              key={organization.id}
+              disabled={isSwitchPending}
+              onClick={() => {
+                if (organization.id !== activeOrganizationId) {
+                  switchOrganization(organization.id);
+                }
+              }}
+              value={organization.id}
+            >
+              <span className="flex min-w-0 items-center gap-1.5">
+                <UserIdentity
+                  as="span"
+                  avatarClassName="size-5"
+                  className="min-w-0"
+                  image={organization.logo}
+                  name={organization.name}
+                  nameClassName="text-base font-normal sm:text-sm"
+                />
+                {organization.id === activeOrganization.id && (
+                  <OrganizationRoleBadge role={role} />
+                )}
+              </span>
+            </MenuRadioItem>
+          ))}
+        </MenuRadioGroup>
+      </MenuGroup>
+      <MenuItem onClick={onCreate}>
+        <PlusIcon />
+        {t("organization.newOrganization")}
+      </MenuItem>
       <MenuSeparator />
     </>
   );
@@ -394,7 +439,7 @@ const OrganizationRoleBadge = ({ role }: { role: Role | undefined }) => {
 
   return (
     <span className="bg-muted text-muted-foreground text-2xs inline-flex shrink-0 items-center rounded-md px-1.5 py-0.5 font-medium select-none">
-      {t(`organization.roles.${role}`)}
+      {t(roleTranslationKeys[role].labelKey)}
     </span>
   );
 };

@@ -1,12 +1,12 @@
 import { panic, Result } from "better-result";
-import { open, readFile, rename, type FileHandle } from "node:fs/promises";
+import { type FileHandle, open, readFile, rename } from "node:fs/promises";
 import * as v from "valibot";
 
 import type { SafeId } from "@/api/lib/branded-types";
 import { brandPersistedCaseLawDecisionId } from "@/api/lib/safe-id-boundaries";
 import {
-  SK_US_RAW_OUTCOMES,
   SK_US_RAW_OUTCOME_DISPOSITIONS,
+  SK_US_RAW_OUTCOMES,
 } from "@/api/scripts/complete-sk-us-raw-plan";
 import type {
   SkUsRawCursor,
@@ -49,13 +49,11 @@ export const readSkUsRawCheckpoint = async ({
       id: brandPersistedCaseLawDecisionId(state.cursor.id),
       createdAt: state.cursor.createdAt,
     };
-  } else if (
-    !(
-      checkpointRead.error instanceof Error &&
-      "code" in checkpointRead.error &&
-      checkpointRead.error.code === "ENOENT"
-    )
-  ) {
+  } else if (!(
+    checkpointRead.error instanceof Error &&
+    "code" in checkpointRead.error &&
+    checkpointRead.error.code === "ENOENT"
+  )) {
     throw checkpointRead.error;
   }
 

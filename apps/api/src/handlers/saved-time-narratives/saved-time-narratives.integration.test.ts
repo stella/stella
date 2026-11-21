@@ -1,8 +1,10 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { and, eq, inArray } from "drizzle-orm";
 
-import { savedTimeNarratives } from "@/api/db/schema";
+import { user as authUser } from "@/api/db/auth-schema";
+import { featureEnrolments, savedTimeNarratives } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import type { AuditEvent } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -36,6 +38,31 @@ beforeAll(async () => {
   const fixture = await getRlsFixture();
   testDb = fixture.testDb;
   ids = fixture.ids;
+
+  await testDb
+    .update(authUser)
+    .set({ emailVerified: true })
+    .where(inArray(authUser.id, [ids.userA1, ids.userA2]));
+  await testDb
+    .insert(featureEnrolments)
+    .values([
+      {
+        organizationId: ids.orgA,
+        userId: ids.userA1,
+        featureId: "time-billing",
+      },
+      {
+        organizationId: ids.orgA,
+        userId: ids.userA2,
+        featureId: "time-billing",
+      },
+      {
+        organizationId: ids.orgB,
+        userId: ids.userA1,
+        featureId: "time-billing",
+      },
+    ])
+    .onConflictDoNothing();
 });
 
 afterAll(async () => {
@@ -63,7 +90,7 @@ const context = (
     auditEvents.push(...(Array.isArray(event) ? event : [event]));
   },
   request: new Request("https://example.test/saved-time-narratives"),
-  route: "/test/saved-time-narratives",
+  route: "/v1/saved-time-narratives" satisfies ApiRoutePath,
 });
 
 test("saved narrative CRUD stays personal and scoped to the active organization", async () => {

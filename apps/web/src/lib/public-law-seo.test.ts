@@ -17,6 +17,7 @@ Object.assign(import.meta.env, {
   VITE_PUBLIC_APP_URL: "http://localhost:3000",
 });
 
+const { isPublicLawPathIndexable } = await import("@/public-crawl-policy");
 const {
   createLegalCollectionJsonLd,
   createCaseLawDecisionJsonLd,
@@ -26,6 +27,23 @@ const {
 } = await import("@/lib/public-law-seo");
 
 describe("public law SEO", () => {
+  test("a path robots.txt disallows is noindex even when law crawling is on", () => {
+    const robotsOf = (path: `/${string}`) =>
+      createPublicLawHead({
+        crawlAllowed: isPublicLawPathIndexable(path, true),
+        path,
+        title: "t",
+        type: "website",
+      }).meta.find((entry) => "name" in entry && entry.name === "robots");
+
+    expect(robotsOf("/law/coverage")).toMatchObject({
+      content: "noindex,nofollow",
+    });
+    expect(robotsOf("/law")).toMatchObject({
+      content: expect.stringContaining("index,follow"),
+    });
+  });
+
   test("textless pages explicitly emit noindex without changing the default head", () => {
     const input = {
       crawlAllowed: true,
@@ -140,12 +158,12 @@ describe("public law SEO", () => {
       },
       {
         rel: "alternate",
-        hreflang: "en",
+        hrefLang: "en",
         href: "http://localhost:3000/law/guidelines/wp29/dpia/v/wp-248-rev-01/lang/en",
       },
       {
         rel: "alternate",
-        hreflang: "fr",
+        hrefLang: "fr",
         href: "http://localhost:3000/law/guidelines/wp29/dpia/v/wp-248-rev-01/lang/fr",
       },
     ]);
@@ -389,7 +407,7 @@ describe("public law metadata language", () => {
     const initialLocale = useI18nStore.getState().loadedLang;
     try {
       for (const locale of supportedLanguages) {
-        await useI18nStore.getState().setLang(locale);
+        await useI18nStore.getState().loadMessages(locale);
         const interfaceTranslator = getTranslator();
         for (const language of ["it", "fi", "nl", "it-IT"]) {
           const decision = await createCaseLawDecisionJsonLd({
@@ -412,7 +430,7 @@ describe("public law metadata language", () => {
         }
       }
     } finally {
-      await useI18nStore.getState().setLang(initialLocale);
+      await useI18nStore.getState().loadMessages(initialLocale);
     }
   });
 

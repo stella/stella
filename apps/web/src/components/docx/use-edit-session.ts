@@ -32,7 +32,10 @@ import {
   resolveEditSessionFailure,
   resolveTakenOverSession,
 } from "./use-edit-session.logic";
-import type { EditSessionState } from "./use-edit-session.logic";
+import type {
+  CheckpointOutcome,
+  EditSessionState,
+} from "./use-edit-session.logic";
 
 type FinalizeEditSessionResult =
   | {
@@ -59,13 +62,6 @@ type UseEditSessionOptions = {
 
 const CHECKPOINT_DEBOUNCE_MS = 5000;
 
-/**
- * What a checkpoint did with the bytes it was handed. `released` is not a
- * failure to report: the lock moved to another tab mid-save, and the released
- * session already tells the user so.
- */
-type CheckpointOutcome = "failed" | "released" | "saved";
-
 type EditSessionReleaseContext = {
   workspaceId: string;
   entityId: string;
@@ -82,12 +78,14 @@ const releaseEditSession = async ({
   propertyId,
 }: EditSessionReleaseContext) => {
   const result = await Result.tryPromise(async () => {
-    const response = await api
-      .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
-      ["desktop-edit-sessions"].release.post({
-        entityId: toSafeId<"entity">(entityId),
-        propertyId: toSafeId<"property">(propertyId),
-      });
+    const entitiesApi = api.entities({
+      workspaceId: toSafeId<"workspace">(workspaceId),
+    });
+
+    const response = await entitiesApi["desktop-edit-sessions"].release.post({
+      entityId: toSafeId<"entity">(entityId),
+      propertyId: toSafeId<"property">(propertyId),
+    });
     if (response.error) {
       return { status: "error" as const, error: toAPIError(response.error) };
     }
@@ -95,11 +93,17 @@ const releaseEditSession = async ({
   });
 
   if (Result.isError(result)) {
-    getAnalytics().captureError(result.error);
+    getAnalytics().captureError(result.error, {
+      fingerprintKey: "releaseEditSession:failure",
+      scope: { type: "handler", handlerId: "releaseEditSession:failure" },
+    });
     return false;
   }
   if (result.value.status === "error") {
-    getAnalytics().captureError(result.value.error);
+    getAnalytics().captureError(result.value.error, {
+      fingerprintKey: "releaseEditSession:failure-2",
+      scope: { type: "handler", handlerId: "releaseEditSession:failure-2" },
+    });
     return false;
   }
   return true;
@@ -137,14 +141,15 @@ export const useEditSession = ({
       propertyId,
     };
     setState({ status: "opening" });
+    const entitiesApi = api.entities({
+      workspaceId: toSafeId<"workspace">(workspaceId),
+    });
 
-    const response = await api
-      .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
-      ["desktop-edit-sessions"].open.post({
-        entityId: toSafeId<"entity">(entityId),
-        propertyId: toSafeId<"property">(propertyId),
-        ...(force && { force }),
-      });
+    const response = await entitiesApi["desktop-edit-sessions"].open.post({
+      entityId: toSafeId<"entity">(entityId),
+      propertyId: toSafeId<"property">(propertyId),
+      ...(force && { force }),
+    });
 
     if (response.error) {
       if (!isMounted()) {
@@ -172,7 +177,10 @@ export const useEditSession = ({
     const fileResponse = await fetchWithTimeout(downloadUrl, {
       timeoutMs: 30_000,
     }).catch((error: unknown) => {
-      getAnalytics().captureError(error);
+      getAnalytics().captureError(error, {
+        fingerprintKey: "useEditSession.open:failure",
+        scope: { type: "handler", handlerId: "useEditSession.open:failure" },
+      });
       return null;
     });
     if (!fileResponse?.ok) {
@@ -223,19 +231,29 @@ export const useEditSession = ({
   ): Promise<CheckpointOutcome> => {
     const session = sessionRef.current;
     if (!session) {
-      return "failed";
+      return { type: "noSession" };
     }
 
     const file = new File([docxBuffer], session.fileName, {
       type: DOCX_MIME,
     });
 
-    const response = await api["desktop-edit-sessions"]({
-      sessionId: session.sessionId,
-    }).checkpoint.post({
-      file,
-      sessionToken: session.sessionToken,
+    // A request that never gets an answer still has a cause to report.
+    const sent = await Result.tryPromise(async () => {
+      const answered = await api["desktop-edit-sessions"]({
+        sessionId: session.sessionId,
+      }).checkpoint.post({
+        file,
+        sessionToken: session.sessionToken,
+      });
+      return answered.error
+        ? ({ error: answered.error, data: null } as const)
+        : ({ error: null, data: answered.data } as const);
     });
+    if (Result.isError(sent)) {
+      return { type: "unreachable", error: sent.error };
+    }
+    const response = sent.value;
 
     if (response.error) {
       // The checkpoint that lost the race holds the only copy of the user's
@@ -247,13 +265,13 @@ export const useEditSession = ({
         status: response.error.status,
       });
       if (takenOver === null) {
-        return "failed";
+        return { type: "refused", error: toAPIError(response.error) };
       }
 
       sessionRef.current = null;
       setIsDirty(false);
       setState(takenOver);
-      return "released";
+      return { type: "released" };
     }
 
     if (response.data.rotatedSessionToken) {
@@ -264,7 +282,7 @@ export const useEditSession = ({
       };
     }
     setIsDirty(false);
-    return "saved";
+    return { type: "saved" };
   };
 
   const saveCheckpoint = async (docxBuffer: ArrayBuffer) => {

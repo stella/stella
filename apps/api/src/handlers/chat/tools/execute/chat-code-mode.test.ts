@@ -1,4 +1,13 @@
-import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
+import { Result } from "better-result";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  mock,
+  spyOn,
+  test,
+} from "bun:test";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { resolveToolWorkspaceIds } from "@/api/handlers/chat/tools/authorized-workspace-ids";
@@ -6,7 +15,9 @@ import { registerSandboxTestHygiene } from "@/api/handlers/chat/tools/execute/sa
 import { toSafeId } from "@/api/lib/branded-types";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { createChatToolDefectMemo } from "@/api/lib/chat/tool-defect-memo";
+import { createFeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
+import { getStaticMcpToolDefinition } from "@/api/mcp/static-tool-definitions";
 import {
   installRecordingAnalytics,
   installRecordingLogger,
@@ -15,6 +26,7 @@ import type {
   RecordingAnalytics,
   RecordingLogger,
 } from "@/api/tests/helpers/recording-telemetry";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 
@@ -22,9 +34,12 @@ import {
   buildChatCodeMode,
   chatScriptCallCatalog,
   chatScriptReadToolNames,
+  createChatCodeModeSurface,
 } from "./chat-code-mode";
 import { CHAT_READ_SCRIPT_POLICY } from "./chat-read-script-policy";
 import { classifyScriptName } from "./script-call-guide";
+
+const testFetchState = createTestFetch();
 
 // Drives the real QuickJS sandbox through execute_typescript: share the sandbox
 // suite's 15s ceiling and drain the process-global admission state after each
@@ -51,6 +66,9 @@ const selectScopedDb = (
 ): ScopedDb =>
   asTestRaw<ScopedDb>(async (run: (tx: unknown) => unknown) => {
     const builder = {
+      query: {
+        organizationSettings: { findFirst: async () => null },
+      },
       select: () => {
         onSelect?.();
         return builder;
@@ -79,6 +97,7 @@ const buildProps = (scopedDb: ScopedDb) => {
       accessibleWorkspaceIds: [toSafeId<"workspace">(WS_UUID)],
       pinnedIds: [],
     }),
+    workspaceStatusById: new Map([[WS_UUID, "active" as const]]),
     userId: toSafeId<"user">(`user_${userCounter}`),
     userEmail: `user_${userCounter}@example.test`,
     scriptCallTools: () => ({
@@ -87,6 +106,28 @@ const buildProps = (scopedDb: ScopedDb) => {
     }),
   };
 };
+
+test("advertises discovery exactly when the executable surface has lazy reads", () => {
+  for (const documentedReads of [[], chatScriptReadToolNames()]) {
+    const surface = createChatCodeModeSurface({
+      concurrencyKey: "discovery-prompt-test",
+      documentedReads,
+      runReadTool: async () => Result.ok({}),
+    });
+    const hasDiscovery = surface.discoveryTool !== null;
+    expect(hasDiscovery).toBe(documentedReads.length === 0);
+    expect(surface.systemPrompt.includes("discover_tools")).toBe(hasDiscovery);
+    expect(surface.systemPrompt.includes("### Discoverable APIs")).toBe(
+      hasDiscovery,
+    );
+    expect(surface.tools.some(({ name }) => name === "discover_tools")).toBe(
+      hasDiscovery,
+    );
+    expect(surface.systemPrompt).toContain(
+      "declare function external_list_matters",
+    );
+  }
+});
 
 describe("buildChatCodeMode", () => {
   test("emits an execute_typescript tool, a discover_tools companion, and a system prompt", () => {
@@ -172,6 +213,52 @@ describe("buildChatCodeMode", () => {
     expect(serialized).not.toContain(WS_UUID);
   });
 
+  test("uses current matter authority for a delayed projected read", async () => {
+    const staleRows = [
+      {
+        id: WS_UUID,
+        name: "Revoked matter",
+        reference: "STALE-1",
+        status: "active",
+        lastActivityAt: new Date("2026-01-01T00:00:00.000Z"),
+        createdAt: new Date("2026-01-01T00:00:00.000Z"),
+      },
+    ];
+    const props = buildProps(selectScopedDb(staleRows));
+    const currentScopedDb = selectScopedDb([]);
+    const codeMode = buildChatCodeMode({
+      ...props,
+      resolveCurrentExecutionContext: async () =>
+        await Promise.resolve(
+          Result.ok({
+            billingAccess: false,
+            accessibleWorkspaces: [],
+            featureAccessSnapshot: createFeatureAccessSnapshot({
+              organizationId: props.organizationId,
+              userId: props.userId,
+              decisions: new Map(),
+            }),
+            pinServerValidatedWorkspaceId: () => false,
+            role: "owner",
+            safeDb: toSafeDbMock(currentScopedDb),
+            scopedDb: currentScopedDb,
+            userEmail: props.userEmail,
+          }),
+        ),
+    });
+    const execute = codeMode.tool.execute;
+    if (execute === undefined) {
+      throw new Error("execute_typescript tool has no server execute");
+    }
+
+    const output = await execute({
+      typescriptCode: `const r = await external_list_matters({}); return r.matters;`,
+    });
+
+    expect(output).toMatchObject({ success: true });
+    expect(JSON.stringify(output)).not.toContain("Revoked matter");
+  });
+
   test("surfaces a projected tool's ChatToolError as an execution failure", async () => {
     const codeMode = buildChatCodeMode(buildProps(selectScopedDb([])));
     const execute = codeMode.tool.execute ?? undefined;
@@ -189,14 +276,14 @@ describe("buildChatCodeMode", () => {
   });
 
   test("refuses to re-execute a call that already failed with a server defect", async () => {
-    // Doctored row: `reference` holds a raw UUID the ref map never mediates,
-    // so the projection's UUID backstop fails the call as a server defect
-    // (same trip wire as run-registry-tool.test.ts's fail-closed case).
+    // Doctored row: the declared `reference` string is null, so the
+    // projection's strict parse fails the call as a server defect (same trip
+    // wire as run-registry-tool.test.ts's fail-closed case).
     const rows = [
       {
         id: WS_UUID,
         name: "Acme",
-        reference: "4e919658-a448-5354-8e3a-e99911214d2c",
+        reference: null,
         status: "active",
         lastActivityAt: new Date("2026-01-01T00:00:00.000Z"),
         createdAt: new Date("2026-01-01T00:00:00.000Z"),
@@ -230,16 +317,15 @@ describe("buildChatCodeMode", () => {
 
     // The defect is reported once, by the run that actually executed; the
     // memoized refusal reports nothing new.
-    expect(
-      analytics.exceptions().map((event) => event.properties),
-    ).toMatchObject([
+    const exceptions = analytics.exceptions().map((event) => event.properties);
+    expect(exceptions).toMatchObject([
       {
         "error.class": "ChatToolError",
-        path: "matters[].reference",
         source: "run-registry-tool",
         toolName: "list_matters",
       },
     ]);
+    expect(JSON.stringify(exceptions)).toContain("matters[].reference");
   });
 
   test("does not memoize non-defect failures: a corrected call still runs", async () => {
@@ -492,8 +578,13 @@ describe("the chat read script policy", () => {
   );
 
   test("the script catalog follows each read's declared policy", () => {
+    // Without a caller, enrolment-gated reads stay hidden.
     const scriptReads = Object.entries(CHAT_READ_SCRIPT_POLICY).flatMap(
-      ([name, policy]) => (policy === "script" ? [name] : []),
+      ([name, policy]) =>
+        policy === "script" &&
+        getStaticMcpToolDefinition(name)?.featureId === undefined
+          ? [name]
+          : [],
     );
     expect(directOnly).toEqual([
       "search_boe_legislation",
@@ -523,7 +614,10 @@ describe("the chat read script policy", () => {
   ])(
     "a script calling the direct-only read %s fails before any request",
     async (name, args) => {
-      const fetchSpy = spyOn(globalThis, "fetch");
+      const fetchSpy = Object.assign(mock(globalThis.fetch), {
+        preconnect: globalThis.fetch.preconnect,
+      });
+      testFetchState.set(fetchSpy);
       try {
         const execute =
           buildChatCodeMode(buildProps(selectScopedDb([]))).tool.execute ??
@@ -534,7 +628,7 @@ describe("the chat read script policy", () => {
         expect(output).toMatchObject({ success: false });
         expect(fetchSpy).not.toHaveBeenCalled();
       } finally {
-        fetchSpy.mockRestore();
+        testFetchState.restore();
       }
     },
   );

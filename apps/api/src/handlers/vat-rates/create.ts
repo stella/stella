@@ -9,12 +9,16 @@ import {
   checkVatRateOverlap,
   lockVatRateOrganization,
 } from "@/api/lib/billing/vat-rates";
+import { authorizeOrganizationReplay } from "@/api/lib/idempotency/organization-replay-authorization";
 
 const config = {
+  contract: "patch",
+  idempotency: { type: "replay" },
   description:
     "Create a VAT rate validity period in the active organization. validFrom is inclusive; validTo is exclusive.",
   permissions: { organizationSettings: ["update"] },
   accountAccess: ACCOUNT_ACCESS.standard,
+  featureAccess: { featureId: "time-billing", type: "required" },
   mcp: { type: "capability", reason: "billing_admin", consumesServices: false },
   body: createVatRateBody,
 } satisfies HandlerConfig;
@@ -31,7 +35,7 @@ export default createSafeRootHandler(
           endDate: body.validTo ?? null,
         });
         if (Result.isError(overlap)) {
-          return overlap;
+          return Result.err(overlap.error);
         }
         const rows = await tx
           .insert(vatRates)
@@ -54,4 +58,5 @@ export default createSafeRootHandler(
     );
     return result;
   },
+  { authorize: authorizeOrganizationReplay },
 );

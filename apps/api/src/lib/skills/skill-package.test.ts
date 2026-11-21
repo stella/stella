@@ -1,10 +1,20 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
-import JSZip from "jszip";
+
+import { SKILL_PACKAGE_REFUSAL_CODE } from "@stll/api-contract";
+import { ZipArchive } from "@stll/docx-core/zip";
+import {
+  buildSkillPackage,
+  SKILL_PACKAGE_MANIFEST_PATH,
+  type SkillArchiveEntry,
+} from "@stll/skills/package";
 
 import { hashSkillPackageContent } from "@/api/lib/agent-skills/content-hash";
+import type { safeOutboundFetchBytes } from "@/api/lib/auth/authorized-outbound-fetch";
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+import type { SafeOutboundFetchResponse } from "@/api/lib/safe-outbound-fetch";
 import { testScannedFile } from "@/api/tests/helpers/scanned-file";
 
 import {
@@ -21,7 +31,9 @@ import {
   resolveGithubRefAndPath,
   verifySkillPackageIntegrity,
 } from "./skill-package";
-import type { SkillFile } from "./skill-package";
+import type { GithubSkillFiles, SkillFile } from "./skill-package";
+
+const permit = grantThirdPartyOutboundPermit();
 
 const parseUpload = async (file: File) =>
   await parseUploadedSkillPackage(
@@ -32,7 +44,266 @@ const parseUpload = async (file: File) =>
     }),
   );
 
+const PACKAGE_SKILL_MD = `---
+name: "contract-review"
+description: "Review a contract against the checklist."
+---
+
+Read \`references/checklist.md\` first.
+`;
+
+const packageArchive = async (
+  edit: (entries: SkillArchiveEntry[]) => SkillArchiveEntry[] = (entries) =>
+    entries,
+) => {
+  const zip = new ZipArchive();
+  for (const entry of edit(
+    buildSkillPackage({
+      command: "review",
+      displayName: "Contract review",
+      resources: [
+        {
+          bytes: new TextEncoder().encode("- parties\n"),
+          path: "references/checklist.md",
+        },
+      ],
+      skillMd: PACKAGE_SKILL_MD,
+      slug: "contract-review",
+    }),
+  )) {
+    zip.set(entry.path, entry.bytes);
+  }
+  return (await zip.generate()).buffer;
+};
+
+describe("skill packages", () => {
+  test.each([
+    { name: "contract-review.zip", type: "application/zip" },
+    { name: "contract-review.skill", type: "application/zip" },
+    // A .skill export renamed to .zip, and one with no extension or type.
+    { name: "renamed-export.zip", type: "application/octet-stream" },
+    { name: "contract-review", type: "" },
+  ])(
+    "imports the same skill from $name, read by its bytes",
+    async ({ name, type }) => {
+      const result = await parseUpload(
+        new File([await packageArchive()], name, { type }),
+      );
+
+      if (Result.isError(result)) {
+        throw result.error;
+      }
+      expect(result.value).toMatchObject({
+        body: "Read `references/checklist.md` first.",
+        description: "Review a contract against the checklist.",
+        identity: {
+          command: "review",
+          displayName: "Contract review",
+          slug: "contract-review",
+        },
+        name: "contract-review",
+        resources: [
+          { content: "- parties\n", path: "references/checklist.md" },
+        ],
+        skippedFiles: [],
+      });
+    },
+  );
+
+  test("a plain skill folder without a manifest imports without an identity", async () => {
+    const result = await parseUpload(
+      new File(
+        [
+          await packageArchive((entries) =>
+            entries.filter(
+              ({ path }) => !path.endsWith(SKILL_PACKAGE_MANIFEST_PATH),
+            ),
+          ),
+        ],
+        "plain.zip",
+      ),
+    );
+
+    expect(Result.isOk(result) && result.value.identity).toBeNull();
+  });
+
+  test.each([
+    {
+      code: SKILL_PACKAGE_REFUSAL_CODE.fileChanged,
+      edit: (entries: SkillArchiveEntry[]) =>
+        entries.map((entry) =>
+          entry.path.endsWith("checklist.md")
+            ? { ...entry, bytes: new TextEncoder().encode("- edited\n") }
+            : entry,
+        ),
+      refusal: "a file changed after export",
+    },
+    {
+      code: SKILL_PACKAGE_REFUSAL_CODE.fileMissing,
+      edit: (entries: SkillArchiveEntry[]) =>
+        entries.filter(({ path }) => !path.endsWith("checklist.md")),
+      refusal: "a listed file that is missing",
+    },
+    {
+      code: SKILL_PACKAGE_REFUSAL_CODE.formatUnsupported,
+      edit: (entries: SkillArchiveEntry[]) =>
+        entries.map((entry) => {
+          if (!entry.path.endsWith(SKILL_PACKAGE_MANIFEST_PATH)) {
+            return entry;
+          }
+          const manifest: unknown = JSON.parse(
+            new TextDecoder().decode(entry.bytes),
+          );
+          return {
+            ...entry,
+            bytes: new TextEncoder().encode(
+              JSON.stringify({
+                ...(typeof manifest === "object" ? manifest : {}),
+                formatVersion: 2,
+              }),
+            ),
+          };
+        }),
+      refusal: "a newer format",
+    },
+  ])("refuses a package with $refusal", async ({ code, edit }) => {
+    const result = await parseUpload(
+      new File([await packageArchive(edit)], "edited.skill"),
+    );
+
+    expect(Result.isError(result) && result.error).toMatchObject({
+      code,
+      status: 400,
+    });
+  });
+
+  test("never keeps a file in the reserved folder", async () => {
+    const result = await parseUpload(
+      new File(
+        [
+          await packageArchive((entries) => [
+            ...entries,
+            {
+              bytes: new TextEncoder().encode("not a skill file"),
+              path: "contract-review/.stella/notes.md",
+            },
+          ]),
+        ],
+        "extra.zip",
+      ),
+    );
+
+    expect(
+      Result.isOk(result) && result.value.resources.map(({ path }) => path),
+    ).toEqual(["references/checklist.md"]);
+  });
+});
+
 describe("agent skill package imports", () => {
+  test("installs an unchanged discovered GitHub package by entrypoint integrity", async () => {
+    const commitSha = "c".repeat(40);
+    const directorySha = "d".repeat(40);
+    const sourceUrl = `https://github.com/example/skills/tree/${commitSha}/review`;
+    let skillSource = `---
+name: review
+description: Review agreements.
+---
+
+Use references/check.md.`;
+    let resourceSource = "# Check";
+    const response = (body: string): Result<SafeOutboundFetchResponse, never> =>
+      Result.ok({
+        body: new TextEncoder().encode(body).buffer,
+        headers: new Headers(),
+        ok: true,
+        status: 200,
+      });
+    const fetchBytes: typeof safeOutboundFetchBytes = async ({ url }) => {
+      const requestUrl = typeof url === "string" ? new URL(url) : url;
+      if (requestUrl.hostname === "raw.githubusercontent.com") {
+        return response(
+          requestUrl.pathname.endsWith("/references/check.md")
+            ? resourceSource
+            : skillSource,
+        );
+      }
+      if (requestUrl.pathname.endsWith(`/git/trees/${commitSha}`)) {
+        return response(
+          JSON.stringify({
+            tree: [{ path: "review", sha: directorySha, type: "tree" }],
+          }),
+        );
+      }
+      return response(
+        JSON.stringify({
+          tree: [
+            { path: "SKILL.md", type: "blob" },
+            { path: "references/check.md", type: "blob" },
+          ],
+        }),
+      );
+    };
+
+    const discovery = await discoverSkillPackagesFromUrl({
+      fetchBytes,
+      permit,
+      rawUrl: sourceUrl,
+    });
+    expect(discovery.isOk()).toBe(true);
+    if (discovery.isErr()) {
+      throw discovery.error;
+    }
+    const discovered = discovery.value.skills.at(0);
+    if (discovered === undefined) {
+      throw new TypeError("Expected one discovered skill");
+    }
+    const install = async () => {
+      const fetched = await fetchSkillPackageFromUrl(
+        sourceUrl,
+        createSkillPackageFetchContext({ fetchBytes, permit }),
+      );
+      if (fetched.isErr()) {
+        throw fetched.error;
+      }
+      return fetched.value;
+    };
+
+    const unchanged = await install();
+    expect(
+      verifySkillPackageIntegrity({
+        integrity: discovered.integrity,
+        parsed: unchanged,
+        sourceUrl,
+      }).isOk(),
+    ).toBe(true);
+
+    const originalEntrypointHash = unchanged.entrypointHash;
+    resourceSource = "# Changed check";
+    const resourceChanged = await install();
+    expect(resourceChanged.entrypointHash).toBe(originalEntrypointHash);
+    expect(
+      verifySkillPackageIntegrity({
+        integrity: discovered.integrity,
+        parsed: resourceChanged,
+        sourceUrl,
+      }).isOk(),
+    ).toBe(true);
+
+    skillSource = skillSource.replace(
+      "Review agreements.",
+      "Review contracts.",
+    );
+    const entrypointChanged = await install();
+    expect(entrypointChanged.entrypointHash).not.toBe(originalEntrypointHash);
+    expect(
+      verifySkillPackageIntegrity({
+        integrity: discovered.integrity,
+        parsed: entrypointChanged,
+        sourceUrl,
+      }).isErr(),
+    ).toBe(true);
+  });
+
   test("parses a single SKILL.md upload", async () => {
     const result = await parseUpload(
       new File(
@@ -139,27 +410,27 @@ Follow the checklist.`,
     ).toBe(true);
   });
 
-  test("imports a zip around files it cannot keep and lists each one with the reason", async () => {
-    const zip = new JSZip();
-    zip.file(
+  test("imports a zip keeping its binary files as bytes and listing what lies outside the skill", async () => {
+    const zip = new ZipArchive();
+    zip.set(
       "skill/SKILL.md",
       `---
 name: mixed-pack
 description: A pack with files the importer does not keep.
 ---
 
-Use the references.`,
+Use \`assets/logo.png\` and the references.`,
     );
-    zip.file("skill/references/guide.md", "# Guide");
+    zip.set("skill/references/guide.md", "# Guide");
     // Latin-1 "Müller": a supported path whose bytes are not UTF-8 text.
-    zip.file(
+    zip.set(
       "skill/references/latin1.txt",
       new Uint8Array([0x4d, 0xfc, 0x6c, 0x6c, 0x65, 0x72]),
     );
-    zip.file("skill/assets/logo.png", new Uint8Array([0x89, 0x50, 0xff, 0xfe]));
-    zip.file("skill/notes/todo.md", "Not a resource folder");
-    zip.file("README.md", "Outside the skill folder");
-    const buffer = await zip.generateAsync({ type: "arraybuffer" });
+    zip.set("skill/assets/logo.png", new Uint8Array([0x89, 0x50, 0xff, 0xfe]));
+    zip.set("skill/notes/todo.md", "Any folder is kept");
+    zip.set("README.md", "Outside the skill folder");
+    const buffer = (await zip.generate({ compression: "store" })).buffer;
 
     const result = await parseUpload(
       new File([buffer], "mixed-pack.zip", { type: "application/zip" }),
@@ -169,22 +440,26 @@ Use the references.`,
       throw result.error;
     }
     expect(result.value.resources.map((resource) => resource.path)).toEqual([
+      "notes/todo.md",
       "references/guide.md",
     ]);
     expect(
       result.value.skippedFiles.toSorted((a, b) => (a.path < b.path ? -1 : 1)),
+    ).toEqual([{ path: "README.md", reason: "outside-skill-folder" }]);
+    expect(
+      result.value.binaryFiles
+        .map(({ mediaType, path }) => ({ mediaType, path }))
+        .toSorted((a, b) => (a.path < b.path ? -1 : 1)),
     ).toEqual([
-      { path: "README.md", reason: "outside-skill-folder" },
-      { path: "skill/assets/logo.png", reason: "unsupported-extension" },
-      { path: "skill/notes/todo.md", reason: "unsupported-folder" },
-      { path: "skill/references/latin1.txt", reason: "not-utf8-text" },
+      { mediaType: "image/png", path: "assets/logo.png" },
+      { mediaType: "text/plain", path: "references/latin1.txt" },
     ]);
   });
 
   test("a SKILL.md that is not UTF-8 text still fails the import", async () => {
-    const zip = new JSZip();
-    zip.file("SKILL.md", new Uint8Array([0x2d, 0x2d, 0x2d, 0x0a, 0xff, 0xfe]));
-    const buffer = await zip.generateAsync({ type: "arraybuffer" });
+    const zip = new ZipArchive();
+    zip.set("SKILL.md", new Uint8Array([0x2d, 0x2d, 0x2d, 0x0a, 0xff, 0xfe]));
+    const buffer = (await zip.generate({ compression: "store" })).buffer;
 
     const result = await parseUpload(
       new File([buffer], "broken.zip", { type: "application/zip" }),
@@ -194,8 +469,8 @@ Use the references.`,
   });
 
   test("parses zipped skill folders with read-only resources", async () => {
-    const zip = new JSZip();
-    zip.file(
+    const zip = new ZipArchive();
+    zip.set(
       "skill/SKILL.md",
       `---
 name: nda-review
@@ -204,10 +479,10 @@ description: Review NDAs.
 
 Use the references.`,
     );
-    zip.file("skill/references/checklist.md", "# Checklist");
-    zip.file("skill/assets/example.txt", "Example");
-    zip.file("skill/private/ignore.md", "Ignored");
-    const buffer = await zip.generateAsync({ type: "arraybuffer" });
+    zip.set("skill/references/checklist.md", "# Checklist");
+    zip.set("skill/assets/example.txt", "Example");
+    zip.set("skill/private/notes.md", "Kept: any folder belongs to the skill");
+    const buffer = (await zip.generate({ compression: "store" })).buffer;
 
     const result = await parseUpload(
       new File([buffer], "nda-review.zip", { type: "application/zip" }),
@@ -219,6 +494,7 @@ Use the references.`,
     }
     expect(result.value.resources.map((resource) => resource.path)).toEqual([
       "assets/example.txt",
+      "private/notes.md",
       "references/checklist.md",
     ]);
     expect(hashSkillPackageContent(result.value)).not.toBe(
@@ -249,20 +525,21 @@ description: Verify canonical package hashing.
 ---
 
 Instructions.`;
-    const combined = new JSZip();
-    combined.file("skill/SKILL.md", source);
-    combined.file(
-      "skill/references/a.md",
-      "prefix\0references/b.md\0malicious",
-    );
-    const split = new JSZip();
-    split.file("skill/SKILL.md", source);
-    split.file("skill/references/a.md", "prefix");
-    split.file("skill/references/b.md", "malicious");
+    const combined = new ZipArchive();
+    combined.set("skill/SKILL.md", source);
+    combined.set("skill/references/a.md", "prefix\0references/b.md\0malicious");
+    const split = new ZipArchive();
+    split.set("skill/SKILL.md", source);
+    split.set("skill/references/a.md", "prefix");
+    split.set("skill/references/b.md", "malicious");
 
     const [combinedBuffer, splitBuffer] = await Promise.all([
-      combined.generateAsync({ type: "arraybuffer" }),
-      split.generateAsync({ type: "arraybuffer" }),
+      combined
+        .generate({ compression: "store" })
+        .then((archive) => archive.buffer),
+      split
+        .generate({ compression: "store" })
+        .then((archive) => archive.buffer),
     ]);
     const [combinedResult, splitResult] = await Promise.all([
       parseUpload(
@@ -468,8 +745,8 @@ Instructions.`,
   });
 
   test("rejects zip uploads with too many files", async () => {
-    const zip = new JSZip();
-    zip.file(
+    const zip = new ZipArchive();
+    zip.set(
       "skill/SKILL.md",
       `---
 name: crowded-skill
@@ -479,9 +756,9 @@ description: Too many files.
 Instructions.`,
     );
     for (let index = 0; index < LIMITS.agentSkillArchiveFilesMax; index++) {
-      zip.file(`skill/references/${index}.md`, "Reference");
+      zip.set(`skill/references/${index}.md`, "Reference");
     }
-    const buffer = await zip.generateAsync({ type: "arraybuffer" });
+    const buffer = (await zip.generate({ compression: "store" })).buffer;
 
     const result = await parseUpload(
       new File([buffer], "crowded-skill.zip", { type: "application/zip" }),
@@ -491,8 +768,8 @@ Instructions.`,
   });
 
   test("rejects zip uploads with excessive uncompressed content", async () => {
-    const zip = new JSZip();
-    zip.file(
+    const zip = new ZipArchive();
+    zip.set(
       "skill/SKILL.md",
       `---
 name: huge-skill
@@ -501,11 +778,11 @@ description: Huge uncompressed content.
 
 Instructions.`,
     );
-    zip.file(
+    zip.set(
       "skill/references/huge.md",
       "x".repeat(LIMITS.agentSkillArchiveUncompressedMaxBytes + 1),
     );
-    const buffer = await zip.generateAsync({ type: "arraybuffer" });
+    const buffer = (await zip.generate({ compression: "store" })).buffer;
 
     const result = await parseUpload(
       new File([buffer], "huge-skill.zip", { type: "application/zip" }),
@@ -523,9 +800,15 @@ Instructions.`,
     ];
 
     for (const url of unsafeUrls) {
-      const result = await fetchSkillPackageFromUrl(url);
+      const result = await fetchSkillPackageFromUrl(
+        url,
+        createSkillPackageFetchContext({ permit }),
+      );
       expect(Result.isError(result)).toBe(true);
-      const discovery = await discoverSkillPackagesFromUrl(url);
+      const discovery = await discoverSkillPackagesFromUrl({
+        permit,
+        rawUrl: url,
+      });
       expect(Result.isError(discovery)).toBe(true);
     }
   });
@@ -537,7 +820,10 @@ Instructions.`,
     ];
 
     for (const url of malformedUrls) {
-      const result = await discoverSkillPackagesFromUrl(url);
+      const result = await discoverSkillPackagesFromUrl({
+        permit,
+        rawUrl: url,
+      });
       expect(Result.isError(result)).toBe(true);
     }
   });
@@ -566,7 +852,9 @@ Instructions.`,
   });
 
   test("shares one GitHub tree request across a repository import batch", async () => {
-    const context = createSkillPackageFetchContext();
+    const context = createSkillPackageFetchContext({
+      permit: grantThirdPartyOutboundPermit(),
+    });
     let loadCount = 0;
     const load = async () => {
       loadCount += 1;
@@ -634,9 +922,10 @@ Instructions.`,
       selectedSkillPath: null,
     };
     const fetchCatalogue = async (
-      fetchFiles: () => Promise<Result<SkillFile[], HandlerError>>,
+      fetchFiles: () => Promise<Result<GithubSkillFiles, HandlerError>>,
     ) =>
       await fetchGithubCatalogueSkillPackage({
+        permit,
         fetchFiles,
         sourceUrl: "https://github.com/example/skills/tree/main?token=secret",
         target,
@@ -648,21 +937,33 @@ Instructions.`,
     });
 
     const valid = await fetchCatalogue(async () =>
-      Result.ok([
-        skillFile("---\nname: review\ndescription: Review.\n---\n\nBody."),
-      ]),
+      Result.ok({
+        files: [
+          skillFile("---\nname: review\ndescription: Review.\n---\n\nBody."),
+        ],
+        skippedFiles: [],
+      }),
     );
     expect(valid.unwrap().sourceUrl).toBe(
       "https://github.com/example/skills/tree/main",
     );
 
     const invalid = await fetchCatalogue(async () =>
-      Result.ok([
-        skillFile("---\nname: Not Valid\ndescription: Review.\n---\n\nBody."),
-      ]),
+      Result.ok({
+        files: [
+          skillFile("---\nname: Not Valid\ndescription: Review.\n---\n\nBody."),
+        ],
+        skippedFiles: [],
+      }),
     );
     const unavailable = await fetchCatalogue(async () =>
-      Result.err(new HandlerError({ status: 503, message: "Upstream busy" })),
+      Result.err(
+        new HandlerError({
+          status: 503,
+          code: "internal_error",
+          message: "Upstream busy",
+        }),
+      ),
     );
     const crashed = await fetchCatalogue(
       async () => await Promise.reject(new Error("socket closed")),
@@ -690,8 +991,8 @@ Instructions.`,
   });
 
   test("detects zip package URLs before query strings", async () => {
-    const zip = new JSZip();
-    zip.file(
+    const zip = new ZipArchive();
+    zip.set(
       "skill/SKILL.md",
       `---
 name: signed-zip
@@ -700,16 +1001,12 @@ description: Imported from a signed URL.
 
 Instructions.`,
     );
-    const buffer = await zip.generateAsync({ type: "arraybuffer" });
-    const url = new URL("https://example.com/skill.zip?X-Amz-Signature=secret");
+    const buffer = (await zip.generate({ compression: "store" })).buffer;
 
-    expect(
-      isZipSkillSource({
-        buffer,
-        contentType: "application/octet-stream",
-        path: url.pathname,
-      }),
-    ).toBe(true);
+    expect(isZipSkillSource(buffer)).toBe(true);
+    expect(isZipSkillSource(new TextEncoder().encode("---\nname: a\n"))).toBe(
+      false,
+    );
   });
 
   test("resolves GitHub skill paths with multi-segment refs", async () => {

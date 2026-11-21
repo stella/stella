@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import {
   disableMachineApiKey,
@@ -8,14 +8,17 @@ import {
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { API_KEY_KIND } from "@/api/lib/machine-api-key-config";
 
-const revokeApiKeyBody = t.Object({
-  keyId: t.String({ minLength: 1, maxLength: 128 }),
+const revokeApiKeyBody = v.object({
+  keyId: v.pipe(v.string(), v.minLength(1), v.maxLength(128)),
 });
 
 const config = {
+  contract: "patch",
   permissions: { organizationSettings: ["update"] },
-  accountAccess: ACCOUNT_ACCESS.standard,
+  accountAccess: ACCOUNT_ACCESS.accountControl,
   mcp: { type: "internal", reason: "provider_secret" },
   body: revokeApiKeyBody,
 } satisfies HandlerConfig;
@@ -37,6 +40,12 @@ const revokeMachineApiKey = createSafeRootHandler(
         organizationId: session.activeOrganizationId,
       }),
     );
+
+    if (existing.kind !== API_KEY_KIND.machine) {
+      return Result.err(
+        new HandlerError({ status: 404, message: "API key not found" }),
+      );
+    }
 
     // Idempotent: revoking an already-revoked key is a no-op rather than an
     // error, so a retried request cannot fail, and it records no second audit

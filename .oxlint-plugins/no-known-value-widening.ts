@@ -1,8 +1,8 @@
 // Same-file evidence only: API calls, mutable values, and public contracts are
 // boundaries, not proof that a broad type is redundant.
 import {
-  eslintCompatPlugin,
   type Context,
+  eslintCompatPlugin,
   type ESTree,
   type Variable,
 } from "@oxlint/plugins";

@@ -1,0 +1,13 @@
+diff --git a/lib/dom/DOMStringMap.js b/lib/dom/DOMStringMap.js
+index 2b85034e8ec29d6a334533a427220411dd4b65e9..f92c68eed99301793eede410eb6be40c572e1cb1 100644
+--- a/lib/dom/DOMStringMap.js
++++ b/lib/dom/DOMStringMap.js
+@@ -58,7 +58,7 @@ export default class DOMStringMap {
+             },
+             getOwnPropertyDescriptor(_target, property) {
+                 const attribute = element.getAttribute('data-' + DOMStringMapUtility.camelCaseToKebab(property));
+-                if (!attribute) {
++                if (attribute === null) {
+                     return;
+                 }
+                 return {

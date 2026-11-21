@@ -1,6 +1,7 @@
 import { panic, Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { inArray } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
+import * as v from "valibot";
 
 import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
 
@@ -17,8 +18,12 @@ import {
   toPersistedChatMessageContentV3,
 } from "@/api/handlers/chat/chat-message-parts";
 import type { ChatMention } from "@/api/handlers/chat/types";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
+import type { AccessibleWorkspace } from "@/api/lib/auth/accessible-workspace";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { WithdrawnCopyProjection } from "@/api/lib/case-law/withdrawn-copy-projection";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { createUserFileKey } from "@/api/lib/files/utils";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { toUserFileUrl } from "@/api/lib/user-files/types";
@@ -31,7 +36,7 @@ import {
 import type { TestIds } from "@/api/tests/security/rls-helpers";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
-import getThreads from "./list";
+import getThreads, { createGetThreads } from "./list";
 import {
   CHAT_THREAD_CONTEXT_MATTER_SCAN_LIMIT,
   CHAT_THREAD_CONTEXT_PREVIEW_LIMIT,
@@ -116,7 +121,7 @@ const insertUpload = async ({
     s3Key: createUserFileKey({
       fileId,
       mimeType: PDF_MIME_TYPE,
-      userId: ids.userA1,
+      organizationId: ids.orgA,
     }),
     sha256Hex: "b".repeat(64),
     sizeBytes: 12,
@@ -130,9 +135,9 @@ const seedThread = async ({
   attachmentNames = [],
   contextMatterIds = [],
   dataWorkspaceIds = [],
-  legacyMentions = [],
   mentions = [],
   orphanUploadNames = [],
+  subjectDecisionId = null,
   title,
   workspaceId = null,
 }: {
@@ -140,11 +145,10 @@ const seedThread = async ({
   attachmentNames?: string[];
   contextMatterIds?: SafeId<"workspace">[];
   dataWorkspaceIds?: SafeId<"workspace">[];
-  /** Mentions stored the version-1 way, as a data-stella-mentions part. */
-  legacyMentions?: ChatMention[];
   mentions?: ChatMention[];
   /** Uploads whose message no longer exists (edited away or truncated). */
   orphanUploadNames?: string[];
+  subjectDecisionId?: SafeId<"caseLawDecision"> | null;
   title: string;
   workspaceId?: SafeId<"workspace"> | null;
 }): Promise<SafeId<"chatThread">> => {
@@ -155,6 +159,7 @@ const seedThread = async ({
     dataWorkspaceIds,
     id: threadId,
     organizationId: ids.orgA,
+    subjectDecisionId,
     title,
     titleSource: "user",
     userId: ids.userA1,
@@ -191,19 +196,6 @@ const seedThread = async ({
     });
   }
 
-  if (legacyMentions.length > 0) {
-    await testDb.insert(chatMessages).values({
-      ...message(attachmentNames.length),
-      content: asTestRaw<typeof chatMessages.$inferInsert.content>({
-        data: [
-          { text: "Compare these.", type: "text" },
-          { data: { mentions: legacyMentions }, type: "data-stella-mentions" },
-        ],
-        version: 1,
-      }),
-    });
-  }
-
   await testDb.insert(chatMessages).values({
     ...message(attachmentNames.length + 1),
     content: toPersistedChatMessageContentV3({
@@ -217,12 +209,14 @@ const seedThread = async ({
 const listThreads = async (
   search?: string,
   workspaceIds: SafeId<"workspace">[] = [ids.wsA1, ids.wsA2],
+  handler: typeof getThreads = getThreads,
 ) => {
-  const listed = await getThreads.handler(
+  const listed = await handler.handler(
     asTestRaw<ThreadsCtx>({
       memberRole: sessionMemberRole("owner"),
       query: { limit: 100, ...(search === undefined ? {} : { search }) },
       request: new Request("http://localhost/v1/chat/threads"),
+      route: "/v1/chat/threads" satisfies ApiRoutePath,
       safeDb: scopedTo(workspaceIds),
       session: { activeOrganizationId: ids.orgA },
       user: { id: ids.userA1 },
@@ -345,25 +339,6 @@ describe("chat thread list context", () => {
 
     expect(findThread(listed, threadId)).toBeDefined();
     expect(findThread(listed, unrelatedId)).toBeUndefined();
-  });
-
-  test("reads mentions stored by version-1 messages", async () => {
-    const threadId = await seedThread({
-      legacyMentions: [
-        entityMention(ids.entityA2, ids.wsA2),
-        matterMention(ids.wsA2),
-      ],
-      title: "Context: legacy mentions",
-    });
-
-    const thread = findThread(await listThreads(), threadId);
-
-    expect(thread?.context.matters.map((matter) => matter.id)).toEqual([
-      ids.wsA2,
-    ]);
-    expect(thread?.context.files.map((file) => file.id)).toEqual([
-      ids.entityA2,
-    ]);
   });
 
   test("leaves out uploads no surviving message attaches", async () => {
@@ -523,6 +498,174 @@ describe("chat thread list context", () => {
   });
 });
 
+// The history page's matter filter: applied in SQL before the page is cut, so
+// every page of a filtered walk holds only that matter's threads.
+describe("chat thread list matter filter", () => {
+  /** The raw handler result: a page, or the error response it returned. */
+  const requestPage = async ({
+    cursor,
+    limit,
+    workspaceId,
+    workspaceIds,
+  }: {
+    cursor?: string | undefined;
+    limit: number;
+    workspaceId: SafeId<"workspace">;
+    /** The matters the caller can open, for both the access check and RLS. */
+    workspaceIds: SafeId<"workspace">[];
+  }) =>
+    await getThreads.handler(
+      asTestRaw<ThreadsCtx>({
+        getWorkspaceAccess: async (
+          id: SafeId<"workspace">,
+        ): Promise<AccessibleWorkspace | null> =>
+          workspaceIds.includes(id) ? { id, status: "active" } : null,
+        memberRole: sessionMemberRole("owner"),
+        query: {
+          limit,
+          workspaceId,
+          ...(cursor === undefined ? {} : { cursor }),
+        },
+        request: new Request("http://localhost/v1/chat/threads"),
+        route: "/v1/chat/threads" satisfies ApiRoutePath,
+        safeDb: scopedTo(workspaceIds),
+        session: { activeOrganizationId: ids.orgA },
+        user: { id: ids.userA1 },
+      }),
+    );
+
+  const listPage = async (options: Parameters<typeof requestPage>[0]) => {
+    const listed = await requestPage(options);
+    if ("code" in listed) {
+      throw new TypeError(`get-threads failed: ${JSON.stringify(listed)}`);
+    }
+    return listed;
+  };
+
+  const listedIds = (listed: Awaited<ReturnType<typeof listPage>>) => [
+    ...listed.global.map((thread) => thread.id),
+    ...listed.workspaces.flatMap((group) =>
+      group.threads.map((thread) => thread.id),
+    ),
+  ];
+
+  /** A thread with one message, owned by someone other than the caller. */
+  const seedForeignThread = async ({
+    organizationId,
+    userId,
+    workspaceId,
+  }: {
+    organizationId: TestIds["orgA"];
+    userId: TestIds["userA1"];
+    workspaceId: SafeId<"workspace">;
+  }) => {
+    const threadId = toSafeId<"chatThread">(Bun.randomUUIDv7());
+    seededThreadIds.push(threadId);
+    await testDb.insert(chatThreads).values({
+      id: threadId,
+      organizationId,
+      title: "Someone else's chat",
+      titleSource: "user",
+      userId,
+      workspaceId,
+    });
+    await testDb.insert(chatMessages).values({
+      content: toPersistedChatMessageContentV3({
+        data: [{ content: "Not yours.", type: "text" }],
+      }),
+      id: toSafeId<"chatMessage">(Bun.randomUUIDv7()),
+      role: "user",
+      threadId,
+      userId,
+      workspaceId,
+    });
+    return threadId;
+  };
+
+  test("walks only the chosen matter's threads, page by page, newest first", async () => {
+    const matterId = toSafeId<"workspace">(Bun.randomUUIDv7());
+    seededWorkspaceIds.push(matterId);
+    await testDb.insert(workspaces).values({
+      clientId: ids.contactA,
+      id: matterId,
+      name: "Filter matter",
+      organizationId: ids.orgA,
+      reference: `FILTER-${matterId}`,
+    });
+    const visible = [ids.wsA1, ids.wsA2, matterId];
+    // Seeded oldest first, interleaved with threads the filter must skip, so
+    // a filter applied after the page is cut would leave gaps.
+    const oldest = await seedThread({
+      title: "Filter: oldest",
+      workspaceId: matterId,
+    });
+    await seedThread({ title: "Filter: other matter", workspaceId: ids.wsA1 });
+    const middle = await seedThread({
+      title: "Filter: middle",
+      workspaceId: matterId,
+    });
+    await seedThread({
+      contextMatterIds: [matterId],
+      title: "Filter: global thread pinning the matter",
+    });
+    await seedForeignThread({
+      organizationId: ids.orgA,
+      userId: ids.userA2,
+      workspaceId: matterId,
+    });
+    const newest = await seedThread({
+      title: "Filter: newest",
+      workspaceId: matterId,
+    });
+
+    const first = await listPage({
+      limit: 2,
+      workspaceId: matterId,
+      workspaceIds: visible,
+    });
+    expect(first.global).toEqual([]);
+    expect(first.workspaces.map((group) => group.workspaceId)).toEqual([
+      matterId,
+    ]);
+    expect(listedIds(first)).toEqual([newest, middle]);
+    expect(first.nextCursor).not.toBeNull();
+
+    const second = await listPage({
+      cursor: first.nextCursor ?? panic("expected a next page"),
+      limit: 2,
+      workspaceId: matterId,
+      workspaceIds: visible,
+    });
+    expect(listedIds(second)).toEqual([oldest]);
+    expect(second.nextCursor).toBeNull();
+  });
+
+  test("a matter the caller cannot open is not found, not an empty list", async () => {
+    const hiddenId = await seedThread({
+      title: "Filter: matter the caller lost",
+      workspaceId: ids.wsA2,
+    });
+
+    const listed = await requestPage({
+      limit: 100,
+      workspaceId: ids.wsA2,
+      workspaceIds: [ids.wsA1],
+    });
+
+    expect(listed).toMatchObject({
+      code: 404,
+      response: { message: "Workspace not found" },
+    });
+    expect(JSON.stringify(listed)).not.toContain(hiddenId);
+  });
+
+  test("rejects a matter id that is not a safe identifier at the query boundary", () => {
+    const querySchema = getThreads.config.query;
+    expect(v.is(querySchema, { workspaceId: ids.wsA1 })).toBe(true);
+    expect(v.is(querySchema, { workspaceId: "not-a-matter-id" })).toBe(false);
+  });
+});
+
 // The open thread's header lists every file the thread attached, by the same
 // definition as the history row, past the list's preview cap.
 describe("open chat thread attached files", () => {
@@ -579,5 +722,146 @@ describe("open chat thread attached files", () => {
 
     expect(attached.files.map((file) => file.id)).toEqual([ids.entityA1]);
     expect(attached.fileCount).toBe(1);
+  });
+});
+
+describe("chat thread list decision badges", () => {
+  test("a failed badge read keeps the history and marks only decision chats", async () => {
+    const decisionThreadId = await seedThread({
+      subjectDecisionId: toSafeId<"caseLawDecision">(Bun.randomUUIDv7()),
+      title: "Decision chat",
+    });
+    const plainThreadId = await seedThread({ title: "Plain chat" });
+    const failingBadges = createGetThreads({
+      readCopies: async () =>
+        new WithdrawnCopyProjection([], "Withdrawn by publisher"),
+      readDecisionBadges: async () =>
+        Result.err(
+          new HandlerError({ status: 500, message: "corpus unavailable" }),
+        ),
+    });
+
+    const listed = await listThreads(undefined, undefined, failingBadges);
+
+    expect(findThread(listed, decisionThreadId)?.decision).toEqual({
+      type: "unavailable",
+    });
+    expect(findThread(listed, plainThreadId)?.decision).toBeNull();
+  });
+});
+
+// A generated title whose captured source was withdrawn is listed masked, so
+// its stored text is not what a search can match.
+describe("chat thread list search over withdrawn titles", () => {
+  const withdrawnDecisionId = Bun.randomUUIDv7();
+  const marker = "Withdrawn by publisher";
+  const withWithdrawnTitles = createGetThreads({
+    readCopies: async () =>
+      new WithdrawnCopyProjection([withdrawnDecisionId], marker),
+    readDecisionBadges: async () => Result.ok(new Map()),
+  });
+
+  const seedWithdrawnTitle = async (
+    options: Parameters<typeof seedThread>[0],
+  ) => {
+    const threadId = await seedThread(options);
+    await testDb
+      .update(chatThreads)
+      .set({
+        titleSource: "ai",
+        generationProvenance: {
+          version: 1,
+          slots: {
+            title: {
+              type: "generated",
+              generator: "apps/api/src/handlers/chat/generate-thread-title.ts",
+              decisionIds: [withdrawnDecisionId],
+              coverage: "complete",
+            },
+          },
+        },
+      })
+      .where(eq(chatThreads.id, threadId));
+    return threadId;
+  };
+
+  const listPage = async ({
+    cursor,
+    limit,
+    search,
+    workspaceIds,
+  }: {
+    cursor?: string | undefined;
+    limit: number;
+    search: string;
+    workspaceIds: SafeId<"workspace">[];
+  }) => {
+    const listed = await withWithdrawnTitles.handler(
+      asTestRaw<ThreadsCtx>({
+        memberRole: sessionMemberRole("owner"),
+        query: { limit, search, ...(cursor === undefined ? {} : { cursor }) },
+        request: new Request("http://localhost/v1/chat/threads"),
+        route: "/v1/chat/threads" satisfies ApiRoutePath,
+        safeDb: scopedTo(workspaceIds),
+        session: { activeOrganizationId: ids.orgA },
+        user: { id: ids.userA1 },
+      }),
+    );
+    if ("code" in listed) {
+      throw new TypeError(`get-threads failed: ${JSON.stringify(listed)}`);
+    }
+    return listed;
+  };
+
+  test("matches the listed title, keeps matter-name matches and pages past skipped threads", async () => {
+    const matterId = toSafeId<"workspace">(Bun.randomUUIDv7());
+    seededWorkspaceIds.push(matterId);
+    await testDb.insert(workspaces).values({
+      clientId: ids.contactA,
+      id: matterId,
+      name: "Quillmark matter",
+      organizationId: ids.orgA,
+      reference: `QUILL-${matterId}`,
+    });
+    const workspaceIds = [ids.wsA1, ids.wsA2, matterId];
+    // Seeded oldest first: the walk has to read past the newest threads, which
+    // matched only by a withdrawn title, to reach the others.
+    const visible = await seedThread({ title: "Quillmark visible" });
+    const inMatter = await seedWithdrawnTitle({
+      title: "Quillmark matter memo",
+      workspaceId: matterId,
+    });
+    await seedWithdrawnTitle({ title: "Quillmark hidden one" });
+    await seedWithdrawnTitle({ title: "Quillmark hidden two" });
+
+    const walked: string[] = [];
+    const pages: Awaited<ReturnType<typeof listPage>>[] = [];
+    let cursor: string | undefined;
+    do {
+      const page = await listPage({
+        cursor,
+        limit: 1,
+        search: "quillmark",
+        workspaceIds,
+      });
+      pages.push(page);
+      walked.push(
+        ...page.global.map((thread) => thread.id),
+        ...page.workspaces.flatMap((group) =>
+          group.threads.map((thread) => thread.id),
+        ),
+      );
+      cursor = page.nextCursor ?? undefined;
+    } while (cursor !== undefined && pages.length < 10);
+
+    expect(walked).toEqual([inMatter, visible]);
+    expect(JSON.stringify(pages)).not.toContain("Quillmark hidden");
+    expect(JSON.stringify(pages)).not.toContain("Quillmark matter memo");
+    expect(
+      pages
+        .flatMap((page) => page.workspaces)
+        .flatMap((group) => group.threads)
+        .map((thread) => thread.title),
+    ).toEqual([marker]);
   });
 });

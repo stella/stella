@@ -1,24 +1,29 @@
 import { Result } from "better-result";
 import { and, asc, eq } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { agentSkillResources, agentSkills } from "@/api/db/schema";
+import { toAgentSkillResponse } from "@/api/handlers/skills/response";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 
-const getSkillParamsSchema = t.Object({
-  skillId: tSafeId("agentSkill"),
+const getSkillParamsSchema = v.object({
+  skillId: resourceIdSchema("agentSkill"),
 });
 
 const config = {
+  contract: "patch",
   description:
     "Read one agent skill in full: its instruction body, scope, origin, " +
-    "version, license, compatibility, source URL, slash command, and every " +
+    "version, license, compatibility, source URL, slash command, invocation " +
+    "(`auto` or `manual`: whether the assistant may use it on its own), the " +
+    "matter (`boundWorkspaceId`) or client (`boundClientId`) it is bound to, and every " +
     "resource file with its content. A team skill is readable by every " +
-    "member of the organization; a private one only by its author.",
+    "member of the organization, a bound one only by members who reach its " +
+    "matter or client; a private one only by its author.",
   permissions: { chat: ["create"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "read",
@@ -51,6 +56,9 @@ const getSkill = createSafeRootHandler(
             sourceUrl: agentSkills.sourceUrl,
             contentHash: agentSkills.contentHash,
             enabled: agentSkills.enabled,
+            invocation: agentSkills.invocation,
+            boundWorkspaceId: agentSkills.boundWorkspaceId,
+            boundClientId: agentSkills.boundClientId,
             body: agentSkills.body,
             command: agentSkills.command,
             createdAt: agentSkills.createdAt,
@@ -87,7 +95,6 @@ const getSkill = createSafeRootHandler(
           .select({
             id: agentSkillResources.id,
             path: agentSkillResources.path,
-            kind: agentSkillResources.kind,
             sizeBytes: agentSkillResources.sizeBytes,
             content: agentSkillResources.content,
           })
@@ -98,7 +105,7 @@ const getSkill = createSafeRootHandler(
       ),
     );
 
-    return Result.ok({ ...skill, resources });
+    return Result.ok(toAgentSkillResponse(skill, resources));
   },
 );
 

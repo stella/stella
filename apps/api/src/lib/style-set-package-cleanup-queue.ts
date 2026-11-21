@@ -1,15 +1,14 @@
-import { Result } from "better-result";
-import { Worker } from "bullmq";
-import { and, asc, eq, isNotNull, lt } from "drizzle-orm";
+import { Result, TaggedError } from "better-result";
+import { and, asc, eq, isNotNull, isNull, lt, lte, or, sql } from "drizzle-orm";
 
+import { backoffDelay } from "@stll/concurrency/backoff-delay";
 import { Temporal } from "@stll/time";
 
 import type { rootDb } from "@/api/db/root";
 import { styleSets } from "@/api/db/schema";
-import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createBullMqJobId } from "@/api/lib/bullmq-job-id";
-import { createLazyBullMqQueue } from "@/api/lib/bullmq-queue";
+import { BullMqWorker, createLazyBullMqQueue } from "@/api/lib/bullmq-queue";
 import type { BullMqWorkerContext } from "@/api/lib/bullmq-queue";
 import {
   QUEUE_REQUEUE_OUTCOME,
@@ -22,10 +21,7 @@ import type {
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { errorTag } from "@/api/lib/errors/utils";
-import {
-  deleteOrganizationFileWithSignal,
-  deleteOrganizationFilesWithSignal,
-} from "@/api/lib/files/delete-organization-file";
+import { deleteOrganizationFileWithSignal } from "@/api/lib/files/delete-organization-file";
 import { logger } from "@/api/lib/observability/logger";
 import {
   RECONCILE_SCAN_PAGE_SIZE,
@@ -130,6 +126,16 @@ const RECONCILE_SETTLE_MS = 5 * 60 * 1000;
  * other queue handoffs use.
  */
 const QUEUE_HANDOFF_TIMEOUT_MS = 2000;
+const DELETED_STYLE_SET_CLEANUP_BATCH_SIZE = 32;
+const DELETED_STYLE_SET_CLEANUP_CONCURRENCY = 4;
+const DELETED_STYLE_SET_RETRY_BASE_SECONDS = 60;
+const DELETED_STYLE_SET_RETRY_MAX_SECONDS = 24 * 60 * 60;
+const PACKAGE_CLEANUP_OUTCOME = {
+  removed: "removed",
+  liveReference: "live-reference",
+} as const;
+type PackageCleanupOutcome =
+  (typeof PACKAGE_CLEANUP_OUTCOME)[keyof typeof PACKAGE_CLEANUP_OUTCOME];
 
 /** The (timestamp, id) keyset this sweep's walk pages on. */
 const styleSetCleanupCursorCodec = createTimestampIdCursorCodec({
@@ -148,6 +154,32 @@ type ReconcilePendingStyleSetPackageCleanupsOptions = {
   cleanupQueue?: StyleSetPackageCleanupQueue;
   db: Pick<typeof rootDb, "select">;
 };
+
+type StyleSetPackageCleanupReconcileResult = ReconcileScanResult & {
+  failed: number;
+};
+
+export class StyleSetPackageCleanupRequeueError extends TaggedError(
+  "StyleSetPackageCleanupRequeueError",
+)<{
+  cause: unknown;
+  message: string;
+  summary: StyleSetPackageCleanupReconcileResult;
+}> {}
+
+type DeletedStyleSetCleanupResult = {
+  cleaned: number;
+  failed: number;
+  scanned: number;
+};
+
+export class DeletedStyleSetCleanupError extends TaggedError(
+  "DeletedStyleSetCleanupError",
+)<{
+  cause: unknown;
+  message: string;
+  summary: DeletedStyleSetCleanupResult;
+}> {}
 
 /**
  * Re-drive package cleanups a row still owes.
@@ -168,7 +200,15 @@ type ReconcilePendingStyleSetPackageCleanupsOptions = {
 export const reconcilePendingStyleSetPackageCleanups = async ({
   cleanupQueue = getQueue(),
   db,
-}: ReconcilePendingStyleSetPackageCleanupsOptions): Promise<ReconcileScanResult> => {
+}: ReconcilePendingStyleSetPackageCleanupsOptions): Promise<
+  Result<
+    StyleSetPackageCleanupReconcileResult,
+    StyleSetPackageCleanupRequeueError
+  >
+> => {
+  let failure: { cause: unknown; count: number } | undefined;
+  // The scan's concurrent handlers update this state across an await.
+  const readFailure = () => failure;
   const settledBefore = new Date(
     Temporal.Now.instant().epochMilliseconds - RECONCILE_SETTLE_MS,
   );
@@ -199,6 +239,7 @@ export const reconcilePendingStyleSetPackageCleanups = async ({
       .where(
         and(
           isNotNull(styleSets.cleanupS3Key),
+          isNull(styleSets.deletedAt),
           lt(styleSets.updatedAt, settledBefore),
           after(cursor),
         ),
@@ -241,7 +282,15 @@ export const reconcilePendingStyleSetPackageCleanups = async ({
       catch: (cause) => cause,
     });
     if (Result.isError(outcome)) {
-      captureError(outcome.error, { styleSetId: id });
+      failure = {
+        cause: failure === undefined ? outcome.error : failure.cause,
+        count: (failure?.count ?? 0) + 1,
+      };
+      // The scheduler runner captures the aggregate failure once per tick.
+      logger.warn("style_set.package_cleanup_requeue_failed", {
+        stage: "requeue",
+        styleSetId: id,
+      });
       return false;
     }
     // Only a job this sweep actually added spends budget. A key the queue
@@ -252,32 +301,19 @@ export const reconcilePendingStyleSetPackageCleanups = async ({
     return outcome.value === QUEUE_REQUEUE_OUTCOME.REQUEUED;
   };
 
-  return await scanPendingRows({ handle, readPage });
-};
-
-export const deleteQueuedStyleSetPackages = async (
-  styleSetId: string,
-): Promise<void> => {
-  // BullMQ 6 dropped the separate `paused` state: a paused queue's jobs are
-  // reported as `waiting`, which this list already covers.
-  const jobs = await getQueue().getJobs([
-    "active",
-    "delayed",
-    "failed",
-    "prioritized",
-    "waiting",
-    "waiting-children",
-  ]);
-  const s3Keys = jobs
-    .filter((job) => job.data.styleSetId === styleSetId)
-    .map((job) => job.data.s3Key);
-  const deleted = await deleteOrganizationFilesWithSignal(
-    s3Keys,
-    AbortSignal.timeout(10_000),
-  );
-  deleted.unwrap(
-    "Queued style set package deletion must succeed before cleanup completes",
-  );
+  const scan = await scanPendingRows({ handle, readPage });
+  const queueFailure = readFailure();
+  const summary = { ...scan, failed: queueFailure?.count ?? 0 };
+  if (queueFailure !== undefined) {
+    return Result.err(
+      new StyleSetPackageCleanupRequeueError({
+        cause: queueFailure.cause,
+        message: "Requeueing style set package cleanups did not complete",
+        summary,
+      }),
+    );
+  }
+  return Result.ok(summary);
 };
 
 /**
@@ -295,17 +331,17 @@ export const deleteQueuedStyleSetPackages = async (
 export const deleteUnreferencedStyleSetPackage = async (
   s3Key: string,
   db: Pick<typeof rootDb, "select" | "update">,
-): Promise<void> => {
+): Promise<PackageCleanupOutcome> => {
   const [serving] = await db
     .select({ id: styleSets.id })
     .from(styleSets)
-    .where(eq(styleSets.s3Key, s3Key))
+    .where(and(eq(styleSets.s3Key, s3Key), isNull(styleSets.deletedAt)))
     .limit(1);
   if (serving) {
     logger.debug("style_set_package_cleanup.still_referenced", {
       styleSetId: serving.id,
     });
-    return;
+    return PACKAGE_CLEANUP_OUTCOME.liveReference;
   }
   if (isDeploymentFeatureEnabled("FEATURE_FILE_USAGE_LIMITS")) {
     const deleted = await deleteOrganizationFileWithSignal(
@@ -323,6 +359,184 @@ export const deleteUnreferencedStyleSetPackage = async (
     .update(styleSets)
     .set({ cleanupS3Key: null })
     .where(eq(styleSets.cleanupS3Key, s3Key));
+  return PACKAGE_CLEANUP_OUTCOME.removed;
+};
+
+type ReconcileDeletedStyleSetPackagesOptions = {
+  db: Pick<typeof rootDb, "delete" | "select" | "update">;
+  deletePackage?: typeof deleteUnreferencedStyleSetPackage;
+  /** Tombstones per run; the next scheduler run takes the rest. */
+  limit?: number;
+};
+
+const getDeletedStyleSetCleanupRetryAt = ({
+  attemptCount,
+  now,
+}: {
+  attemptCount: number;
+  now: Date;
+}): Date => {
+  const exponent = Math.min(Math.max(attemptCount - 1, 0), 30);
+  const delaySeconds = backoffDelay(exponent, {
+    baseMs: DELETED_STYLE_SET_RETRY_BASE_SECONDS,
+    maxMs: DELETED_STYLE_SET_RETRY_MAX_SECONDS,
+  });
+  return new Date(now.getTime() + delaySeconds * 1000);
+};
+
+/**
+ * Consume committed style-set deletion tombstones.
+ *
+ * The deleting transaction leaves the exact current and superseded object
+ * keys on the soft-deleted row. That row is the outbox: it survives request
+ * interruption and storage failure, and is removed only after every key is
+ * erased or another live style set owns it. Replacement and deletion take the
+ * same advisory fence before publishing the tombstone, so these keys cannot
+ * change underneath the cleanup. Storage deletes and accounting removal are
+ * replay safe, so overlapping scheduler runs converge on the same row delete.
+ */
+export const reconcileDeletedStyleSetPackages = async ({
+  db,
+  deletePackage = deleteUnreferencedStyleSetPackage,
+  limit = DELETED_STYLE_SET_CLEANUP_BATCH_SIZE,
+}: ReconcileDeletedStyleSetPackagesOptions): Promise<
+  Result<DeletedStyleSetCleanupResult, DeletedStyleSetCleanupError>
+> => {
+  const now = new Date();
+  const rows = await db
+    .select({
+      attemptCount: styleSets.deletionCleanupAttemptCount,
+      cleanupS3Key: styleSets.cleanupS3Key,
+      id: styleSets.id,
+      s3Key: styleSets.s3Key,
+    })
+    .from(styleSets)
+    .where(
+      and(
+        isNotNull(styleSets.deletedAt),
+        or(
+          isNull(styleSets.deletionCleanupNextAttemptAt),
+          lte(styleSets.deletionCleanupNextAttemptAt, now),
+        ),
+      ),
+    )
+    .orderBy(
+      asc(styleSets.deletionCleanupAttemptCount),
+      asc(styleSets.deletedAt),
+      asc(styleSets.id),
+    )
+    .limit(limit);
+
+  let cleaned = 0;
+  let failed = 0;
+  let firstCause: unknown;
+  let next = 0;
+
+  const cleanNext = async (): Promise<void> => {
+    const row = rows.at(next);
+    next += 1;
+    if (row === undefined) {
+      return;
+    }
+
+    const scheduleRetry = async (): Promise<void> => {
+      const retryAt = getDeletedStyleSetCleanupRetryAt({
+        attemptCount: row.attemptCount + 1,
+        now: new Date(),
+      });
+      const recorded = await Result.tryPromise({
+        try: async () => {
+          // audit: skip - retry metadata for an already audited deletion tombstone
+          const updated = await db
+            .update(styleSets)
+            .set({
+              deletionCleanupAttemptCount: sql`${styleSets.deletionCleanupAttemptCount} + 1`,
+              deletionCleanupNextAttemptAt: retryAt,
+            })
+            .where(
+              and(
+                eq(styleSets.id, row.id),
+                eq(styleSets.deletionCleanupAttemptCount, row.attemptCount),
+                isNotNull(styleSets.deletedAt),
+              ),
+            );
+          return updated;
+        },
+        catch: (cause) => cause,
+      });
+      if (Result.isError(recorded)) {
+        firstCause ??= recorded.error;
+        logger.warn("style_set.deletion_cleanup_retry_write_failed", {
+          stage: "retry-state",
+          styleSetId: row.id,
+        });
+      }
+    };
+
+    const outcome = await Result.tryPromise({
+      try: async () => {
+        const keys =
+          row.cleanupS3Key === null
+            ? [row.s3Key]
+            : [row.s3Key, row.cleanupS3Key];
+        // db-await-in-loop: at most two packages per claimed row, in a bounded claim batch.
+        await Promise.all(
+          keys.map(async (s3Key) => await deletePackage(s3Key, db)),
+        );
+
+        // audit: skip — consumes storage cleanup for the already-audited
+        // style-set deletion.
+        await db
+          .delete(styleSets)
+          .where(
+            and(
+              eq(styleSets.id, row.id),
+              eq(styleSets.s3Key, row.s3Key),
+              isNotNull(styleSets.deletedAt),
+            ),
+          );
+      },
+      catch: (cause) => cause,
+    });
+
+    if (Result.isError(outcome)) {
+      firstCause ??= outcome.error;
+      failed += 1;
+      await scheduleRetry();
+      logger.warn("style_set.deletion_cleanup_failed", {
+        stage: "storage",
+        styleSetId: row.id,
+      });
+    } else {
+      cleaned += 1;
+    }
+    await cleanNext();
+  };
+
+  await Promise.all(
+    Array.from(
+      {
+        length: Math.min(DELETED_STYLE_SET_CLEANUP_CONCURRENCY, rows.length),
+      },
+      cleanNext,
+    ),
+  );
+
+  const summary = {
+    cleaned,
+    failed,
+    scanned: rows.length,
+  };
+  if (firstCause !== undefined) {
+    return Result.err(
+      new DeletedStyleSetCleanupError({
+        cause: firstCause,
+        message: "Deleting style set packages did not complete",
+        summary,
+      }),
+    );
+  }
+  return Result.ok(summary);
 };
 
 export const initStyleSetPackageCleanupWorker = ({
@@ -331,7 +545,7 @@ export const initStyleSetPackageCleanupWorker = ({
   const workerConnection = createBullMqConnection({
     storeClass: "durable-coordination",
   });
-  const worker = new Worker<StyleSetPackageCleanupJobData>(
+  const worker = new BullMqWorker<StyleSetPackageCleanupJobData>(
     QUEUE_NAME,
     async (job) => {
       await deleteUnreferencedStyleSetPackage(job.data.s3Key, db);

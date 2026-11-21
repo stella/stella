@@ -1,0 +1,522 @@
+import { Result } from "better-result";
+import { describe, expect, test } from "bun:test";
+
+import { SEARCH_PAGE_END } from "@stll/api-contract/search";
+import { readFailureBrand } from "@stll/errors";
+
+import { toSafeId } from "@/api/lib/branded-types";
+import { TimeoutError } from "@/api/lib/errors/tagged-errors";
+import {
+  corpusIndexBudgetExpiry,
+  CorpusIndexError,
+} from "@/api/lib/legal-search/corpus-index-client";
+import { PUBLIC_READ_TIMEOUT_CODE } from "@/api/lib/legal-search/public-read-timeout";
+import type { RankedHit } from "@/api/lib/legal-search/rerank";
+import {
+  isSearchIndexUnavailable,
+  SEARCH_INDEX_UNAVAILABLE_CODE,
+} from "@/api/lib/legal-search/search-index-unavailable";
+import { LIMITS } from "@/api/lib/limits";
+import { runWithinRequestLatencyBudget } from "@/api/lib/load/request-latency-budget";
+
+import {
+  allTermsHeld,
+  copiesShownSinceRead,
+  distinctRequiredTerms,
+  fewDecisionsHoldEveryWord,
+  hitTermsFromCoverage,
+  mergeWordsRead,
+  rankByTermCoverage,
+  readTermCoverage,
+  readTermDecisionCounts,
+  relaxedFetchLimit,
+  relaxedTopUpOutcome,
+  shouldRelaxCaseLawSearch,
+  wordsHeldAt,
+} from "./search-relaxed";
+
+/** `count` distinct words, as a query's terms. */
+const wordsOf = (count: number) =>
+  Array.from({ length: count }, (_, index) => ({
+    type: "term",
+    value: `slovo${String(index)}`,
+  }));
+
+const ELIGIBLE = {
+  body: {},
+  intentType: "text",
+  isFirstPage: true,
+  requiredTerms: wordsOf(3),
+  sort: "relevance",
+  strictHitCount: 2,
+  limit: 10,
+  strictEnd: SEARCH_PAGE_END.COMPLETE,
+} as const;
+
+describe("when a short strict page is topped up", () => {
+  test("a short, exhausted, first relevance page with several terms is", () => {
+    expect(shouldRelaxCaseLawSearch(ELIGIBLE)).toBe(true);
+    expect(shouldRelaxCaseLawSearch({ ...ELIGIBLE, strictHitCount: 0 })).toBe(
+      true,
+    );
+  });
+
+  test.each([
+    ["strict: true", { body: { strict: true } }],
+    ["a cursor or offset page", { isFirstPage: false }],
+    ["sort newest", { sort: "newest" }],
+    ["a full strict page", { strictHitCount: 10 }],
+    ["an identifier lookup", { intentType: "identifier" }],
+    ["a single required term", { requiredTerms: wordsOf(1) }],
+    [
+      "one word repeated",
+      {
+        requiredTerms: [
+          { type: "term", value: "škoda" },
+          { type: "term", value: "škoda" },
+        ],
+      },
+    ],
+    [
+      "more words than the phase checks one by one",
+      { requiredTerms: wordsOf(LIMITS.caseLawSearchTermCountsMax + 1) },
+    ],
+    ["a continuation", { strictEnd: SEARCH_PAGE_END.MORE }],
+    ["a scan stopped by a budget", { strictEnd: SEARCH_PAGE_END.STOPPED }],
+  ] as const)("%s is not", (_name, override) => {
+    expect(shouldRelaxCaseLawSearch({ ...ELIGIBLE, ...override })).toBe(false);
+  });
+
+  test("the word bound counts a repeated word once", () => {
+    // More occurrences than the bound, two distinct words: the queries built
+    // from them hold two words, so the pass is due.
+    const repeated = [
+      ...Array.from({ length: LIMITS.caseLawSearchTermCountsMax + 1 }, () => ({
+        type: "term",
+        value: "škoda",
+      })),
+      { type: "term", value: "nárok" },
+    ];
+    expect(
+      shouldRelaxCaseLawSearch({ ...ELIGIBLE, requiredTerms: repeated }),
+    ).toBe(true);
+  });
+
+  test("strict: false still relaxes", () => {
+    expect(
+      shouldRelaxCaseLawSearch({ ...ELIGIBLE, body: { strict: false } }),
+    ).toBe(true);
+  });
+});
+
+describe("matched and missing words", () => {
+  const terms = [
+    { type: "term", value: "loajalita" },
+    { type: "phrase", value: "ušlý zisk" },
+    { type: "term", value: "loajalita" },
+    { type: "term", value: "škoda" },
+  ] as const;
+
+  test("every distinct word is checked, in the query's order", () => {
+    // Nothing is dropped for length: a word left out of the check would be
+    // reported as neither matched nor missing.
+    expect(distinctRequiredTerms(terms).map(({ value }) => value)).toEqual([
+      "loajalita",
+      "ušlý zisk",
+      "škoda",
+    ]);
+  });
+
+  test("a hit holds the words its coverage found and lacks the rest", () => {
+    expect(hitTermsFromCoverage(terms, new Set([0, 2]))).toEqual({
+      matchedTerms: ["loajalita", "škoda"],
+      missingTerms: ['"ušlý zisk"'],
+    });
+  });
+
+  test("matched and missing partition the distinct words for every subset", () => {
+    const distinct = distinctRequiredTerms(terms);
+    // Every subset of the word indexes, built by doubling.
+    const subsets: number[][] = [[]];
+    for (const index of distinct.keys()) {
+      for (const set of subsets.slice()) {
+        subsets.push([...set, index]);
+      }
+    }
+    expect(subsets).toHaveLength(2 ** distinct.length);
+    for (const subset of subsets) {
+      const held = new Set(subset);
+      const { matchedTerms, missingTerms } = hitTermsFromCoverage(terms, held);
+      expect(matchedTerms).toHaveLength(held.size);
+      expect(new Set([...matchedTerms, ...missingTerms])).toEqual(
+        new Set(allTermsHeld(terms).matchedTerms),
+      );
+      expect(matchedTerms.length + missingTerms.length).toBe(distinct.length);
+    }
+  });
+});
+
+describe("when the words are counted one by one", () => {
+  const SHORT = {
+    intentType: "text",
+    isFirstPage: true,
+    requiredTerms: wordsOf(3),
+    strictHitCount: 2,
+    limit: 10,
+    strictEnd: SEARCH_PAGE_END.COMPLETE,
+  } as const;
+
+  test("a short, exhausted first page is", () => {
+    expect(fewDecisionsHoldEveryWord(SHORT)).toBe(true);
+  });
+
+  test.each([
+    ["a full page", { strictHitCount: 10 }],
+    ["a continuation page", { isFirstPage: false }],
+    ["a scan stopped by a budget", { strictEnd: SEARCH_PAGE_END.STOPPED }],
+    ["an identifier", { intentType: "identifier" }],
+    ["one word", { requiredTerms: wordsOf(1) }],
+  ] as const)("%s is not", (_name, override) => {
+    expect(fewDecisionsHoldEveryWord({ ...SHORT, ...override })).toBe(false);
+  });
+
+  test("each word gets its own distinct decision count", async () => {
+    const asked: unknown[] = [];
+    const counts = await readTermDecisionCounts({
+      observer: "unobserved",
+      indexId: "fixture-index",
+      filter: "jurisdiction:CZE",
+      decisionCountField: "document_id",
+      queries: ["text:a", "text:b"],
+      aggregate: async ({ query, filter, aggs }) => {
+        asked.push({ query, filter, aggs });
+        return Result.ok({
+          decisions: { value: query === "text:a" ? 12.0000001 : 3 },
+        });
+      },
+    });
+    expect(counts.unwrap()).toEqual([12, 3]);
+    expect(asked).toContainEqual({
+      query: "text:b",
+      filter: "jurisdiction:CZE",
+      aggs: { decisions: { cardinality: { field: "document_id" } } },
+    });
+  });
+
+  test("an unreadable count fails rather than reading as zero", async () => {
+    const counts = await readTermDecisionCounts({
+      observer: "unobserved",
+      indexId: "fixture-index",
+      filter: undefined,
+      decisionCountField: "document_id",
+      queries: ["text:a"],
+      aggregate: async () => Result.ok({ decisions: {} }),
+    });
+    expect(Result.isError(counts)).toBe(true);
+  });
+});
+
+describe("relaxedTopUpOutcome", () => {
+  const failure = new TimeoutError({
+    message: "over",
+    label: "case-law-relaxed-top-up",
+    timeoutMs: 1, // timeout: an error fixture, nothing waits on it
+  });
+
+  test("reads the hits of a finished step", () => {
+    expect(
+      relaxedTopUpOutcome({ status: "complete", value: Result.ok(["hit"]) }),
+    ).toEqual({ type: "read", value: ["hit"] });
+  });
+
+  test("a step its budget cut is degraded, carrying no error to observe", () => {
+    expect(
+      relaxedTopUpOutcome({
+        status: "degraded",
+        reason: "budget_exhausted",
+        budgetMs: 4000,
+        error: failure,
+      }),
+    ).toEqual({ type: "degraded", reason: "budget_exhausted" });
+  });
+
+  test.each([
+    { status: "complete", value: Result.err(failure) },
+    { status: "failed", error: failure },
+  ] as const)("a step that failed is skipped with its error %#", (step) => {
+    expect(relaxedTopUpOutcome(step)).toEqual({
+      type: "skipped",
+      error: failure,
+    });
+  });
+});
+
+test("the relaxed scan reads more than the slots to fill, within the page cap", () => {
+  expect(relaxedFetchLimit(2)).toBe(6);
+  expect(relaxedFetchLimit(LIMITS.caseLawSearchPageSizeMax)).toBe(
+    LIMITS.caseLawSearchPageSizeMax,
+  );
+});
+
+const hit = (id: string, score: number): RankedHit => ({
+  id,
+  score,
+  lexicalScore: score,
+  citationAuthority: 0,
+});
+
+const MEMBERSHIP = new Map([
+  ["term-a", ["four", "two"]],
+  ["term-b", ["four", "two"]],
+  ["term-c", ["four"]],
+  ["term-d", ["four"]],
+]);
+
+test.each(["complete", "truncated", "missing"] as const)(
+  "engine coverage ranks four terms above two with %s excerpts",
+  async (presentation) => {
+    // Presentation is deliberately misleading or absent; it never enters the
+    // coverage API. Membership in the index is the independent ranking oracle.
+    let fourSnippet: string | undefined;
+    switch (presentation) {
+      case "missing":
+        fourSnippet = undefined;
+        break;
+      case "truncated":
+        fourSnippet = "term-a";
+        break;
+      case "complete":
+        fourSnippet = "term-a term-b term-c term-d";
+        break;
+    }
+    const candidates = [
+      { ...hit("two", 9), snippet: "term-a term-b" },
+      { ...hit("four", 1), snippet: fourSnippet },
+    ];
+    const queries: string[] = [];
+    const coverage = await readTermCoverage({
+      ids: candidates.map(({ id }) => id),
+      queries: [...MEMBERSHIP.keys()],
+      observer: "unobserved",
+      indexId: "fixture-index",
+      aggregate: async ({ query, aggs }) => {
+        queries.push(query);
+        expect(query).toContain('document_id: IN ["two" "four"]');
+        expect(aggs).toMatchObject({
+          term_coverage: {
+            terms: { size: 2, shard_size: 2, order: { _key: "asc" } },
+          },
+        });
+        const term = [...MEMBERSHIP.keys()].find((key) => query.includes(key));
+        const ids = term === undefined ? [] : (MEMBERSHIP.get(term) ?? []);
+        return Result.ok({
+          term_coverage: {
+            buckets: ids.map((key) => ({ key, doc_count: 20 })),
+            sum_other_doc_count: 0,
+            doc_count_error_upper_bound: 0,
+          },
+        });
+      },
+    });
+    const coverageById = coverage.unwrap();
+    expect(queries).toHaveLength(4);
+    expect(
+      [...coverageById].map(([id, held]) => [
+        id,
+        [...held].toSorted((left, right) => left - right),
+      ]),
+    ).toEqual([
+      ["two", [0, 1]],
+      ["four", [0, 1, 2, 3]],
+    ]);
+    expect(
+      rankByTermCoverage({ ranked: candidates, coverageById }).map(
+        ({ id }) => id,
+      ),
+    ).toEqual(["four", "two"]);
+  },
+);
+
+test("equal engine coverage keeps the blended order", () => {
+  expect(
+    rankByTermCoverage({
+      ranked: [hit("a", 3), hit("b", 2)],
+      coverageById: new Map([
+        ["a", new Set([0, 1])],
+        ["b", new Set([1, 2])],
+      ]),
+    }).map(({ id }) => id),
+  ).toEqual(["a", "b"]);
+});
+
+test.each([
+  { buckets: [], sum_other_doc_count: 1, doc_count_error_upper_bound: 0 },
+  { buckets: [], sum_other_doc_count: 0, doc_count_error_upper_bound: 1 },
+])(
+  "incomplete engine membership cannot silently supply coverage: %j",
+  async (term_coverage) => {
+    const result = await readTermCoverage({
+      ids: ["a"],
+      queries: ["term"],
+      observer: "unobserved",
+      indexId: "fixture-index",
+      aggregate: async () => Result.ok({ term_coverage }),
+    });
+    if (Result.isOk(result)) {
+      expect.unreachable("Incomplete coverage must fail");
+    }
+    expect(result.error).toMatchObject({
+      message: "Search term coverage is incomplete",
+    });
+    expect(readFailureBrand(result.error)).toEqual({
+      reason: "response_invalid",
+      source: "instance",
+    });
+  },
+);
+
+test("a candidate without measured coverage is an invariant failure", () => {
+  expect(() =>
+    rankByTermCoverage({ ranked: [hit("a", 1)], coverageById: new Map() }),
+  ).toThrow("Missing candidate term coverage");
+});
+
+test("an unavailable coverage read returns its tagged failure", async () => {
+  const cause = new CorpusIndexError({
+    message: "Coverage provider unavailable",
+  });
+  const result = await readTermCoverage({
+    ids: ["a"],
+    queries: ["term"],
+    observer: "unobserved",
+    indexId: "fixture-index",
+    aggregate: async () => Result.err(cause),
+  });
+  if (Result.isOk(result)) {
+    expect.unreachable("Unavailable coverage must fail");
+  }
+  expect(result.error).toMatchObject({
+    _tag: "HandlerError",
+    status: 503,
+    code: "upstream_unavailable",
+    message: "Search term coverage is temporarily unavailable",
+    cause,
+  });
+});
+
+const coverageFailure = async (cause: CorpusIndexError) => {
+  const result = await readTermCoverage({
+    ids: ["a"],
+    queries: ["term"],
+    observer: "unobserved",
+    indexId: "fixture-index",
+    aggregate: async () => Result.err(cause),
+  });
+  return Result.isOk(result)
+    ? expect.unreachable("A failed coverage read must fail")
+    : result.error;
+};
+
+test.each(["unreachable", "index_missing"] as const)(
+  "an %s index answers coverage with the index refusal",
+  async (reach) => {
+    const error = await coverageFailure(
+      new CorpusIndexError({ message: "index gone", reach }),
+    );
+
+    expect(error).toMatchObject({
+      status: 503,
+      code: SEARCH_INDEX_UNAVAILABLE_CODE,
+    });
+  },
+);
+
+test("a coverage read the request's budget ended is a public read timeout", async () => {
+  const error = await runWithinRequestLatencyBudget(
+    { label: "search_case_law", budgetMs: 0 },
+    async () =>
+      await coverageFailure(
+        corpusIndexBudgetExpiry({
+          label: "POST /coverage",
+          cause: new DOMException("The operation timed out.", "TimeoutError"),
+        }) ?? expect.unreachable("A budget expiry needs a request scope"),
+      ),
+  );
+
+  expect(error).toMatchObject({ status: 503, code: PUBLIC_READ_TIMEOUT_CODE });
+  expect(isSearchIndexUnavailable(error)).toBe(false);
+});
+
+test.each([
+  { buckets: [{ key: "outside-candidates", doc_count: 1 }] },
+  {
+    buckets: [
+      { key: "a", doc_count: 1 },
+      { key: "a", doc_count: 1 },
+    ],
+  },
+  { buckets: [{ key: "a", doc_count: 0 }] },
+  { buckets: [{ key: "a", doc_count: 1.5 }] },
+  { buckets: [{ key: 1, doc_count: 1 }] },
+  { buckets: [null] },
+])("invalid membership returns a tagged failure: %j", async ({ buckets }) => {
+  const result = await readTermCoverage({
+    ids: ["a"],
+    queries: ["term"],
+    observer: "unobserved",
+    indexId: "fixture-index",
+    aggregate: async () =>
+      Result.ok({
+        term_coverage: {
+          buckets,
+          sum_other_doc_count: 0,
+          doc_count_error_upper_bound: 0,
+        },
+      }),
+  });
+  if (Result.isOk(result)) {
+    expect.unreachable("Invalid coverage must fail");
+  }
+  expect(result.error).toMatchObject({
+    _tag: "HandlerError",
+    status: 502,
+    message: "Search term coverage is invalid",
+  });
+  expect(readFailureBrand(result.error)).toEqual({
+    reason: "response_invalid",
+    source: "instance",
+  });
+});
+
+describe("the words a hit shows are read off the copy it shows", () => {
+  const older = toSafeId<"corpusIndexProjectionIntent">(
+    "0198e331-e578-7000-8000-0000000000b1",
+  );
+  const newer = toSafeId<"corpusIndexProjectionIntent">(
+    "0198e331-e578-7000-8000-0000000000b2",
+  );
+  const read = new Map([
+    ["kept", { revision: older, held: new Set([0, 1]) }],
+    ["refreshed", { revision: older, held: new Set([0, 1]) }],
+  ]);
+
+  test("a decision shown from a newer copy is named for a second read", () => {
+    expect(
+      copiesShownSinceRead(read, (id) => (id === "refreshed" ? newer : older)),
+    ).toEqual([{ id: "refreshed", revision: newer }]);
+  });
+
+  test("words read off another copy never reach a hit", () => {
+    expect(wordsHeldAt(read, "kept", older)).toEqual(new Set([0, 1]));
+    expect(() => wordsHeldAt(read, "refreshed", newer)).toThrow("another copy");
+    expect(() => wordsHeldAt(read, "kept", null)).toThrow("another copy");
+  });
+
+  test("a second read answers for the copy it re-read", () => {
+    const merged = mergeWordsRead(
+      read,
+      new Map([["refreshed", { revision: newer, held: new Set([0]) }]]),
+    );
+    expect(wordsHeldAt(merged, "refreshed", newer)).toEqual(new Set([0]));
+  });
+});

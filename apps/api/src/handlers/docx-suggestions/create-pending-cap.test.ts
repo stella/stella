@@ -19,6 +19,7 @@ import { docxSuggestions, entities } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import createDocxSuggestions from "@/api/handlers/docx-suggestions/create";
 import revertDocxSuggestion from "@/api/handlers/docx-suggestions/revert";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
@@ -103,12 +104,12 @@ afterAll(async () => {
   await releaseTestDb();
 });
 
-const handlerContext = () => {
+const handlerContext = (route: ApiRoutePath) => {
   const activeWorkspaceIds = [ids.wsA1];
   return {
     memberRole: sessionMemberRole("owner"),
     request: new Request(`https://example.test/docx-suggestions/${ids.wsA1}`),
-    route: "/docx-suggestions/pending-cap",
+    route,
     recordAuditEvent: async () => {},
     safeDb: createSafeDb(testDb, activeWorkspaceIds, ids.orgA, ids.userA1),
     scopedDb: createScopedDb(testDb, activeWorkspaceIds, ids.orgA, ids.userA1),
@@ -123,7 +124,7 @@ const createIn = async (
   refs: readonly string[],
 ) => {
   const context = {
-    ...handlerContext(),
+    ...handlerContext("/v1/docx-suggestions/:workspaceId/entity/:entityId"),
     params: { workspaceId: ids.wsA1, entityId },
     body: {
       suggestions: refs.map((ref) => ({
@@ -147,7 +148,9 @@ const revertIn = async (
   suggestionId: SafeId<"docxSuggestion">,
 ) => {
   const context = {
-    ...handlerContext(),
+    ...handlerContext(
+      "/v1/docx-suggestions/:workspaceId/entity/:entityId/suggestion/:suggestionId/revert",
+    ),
     params: { workspaceId: ids.wsA1, entityId, suggestionId },
   };
   const result: unknown = await revertDocxSuggestion

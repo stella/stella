@@ -1,7 +1,8 @@
 import { useState } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useFormatter, useTranslations } from "use-intl";
+import { useRouter } from "@tanstack/react-router";
+import { useTranslations } from "use-intl";
 
 import { Temporal } from "@stll/time";
 import {
@@ -18,12 +19,13 @@ import { ArrowLeftIcon, FileTextIcon } from "@stll/ui/icons";
 import { Label } from "@stll/ui/label";
 import { Textarea } from "@stll/ui/textarea";
 import { stellaToast } from "@stll/ui/toast";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { MessageResponse } from "@/components/ai-elements/message";
 import { openEntityInInspector } from "@/components/chat/entity-open";
 import {
-  FlowStepStatusBadge,
   FlowStatusBadge,
+  FlowStepStatusBadge,
 } from "@/components/flows/flow-badges";
 import {
   FLOW_STEP_KIND_ICONS,
@@ -31,6 +33,7 @@ import {
   isTerminalFlowRunStatus,
 } from "@/components/flows/flow-meta";
 import { usePermissions } from "@/hooks/use-permissions";
+import { useFormatter } from "@/i18n/formatting-context";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
@@ -41,10 +44,13 @@ import {
   flowRunDetailOptions,
   flowRunsKeys,
 } from "@/lib/workspaces/queries/flow-runs";
+import { getCurrentWorkspaceDocument } from "@/lib/workspaces/use-workspace-view-params";
 import type {
   FlowRunDetail as FlowRunDetailData,
   FlowRunStepRun,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/flows/flow-run-types";
+
+import { RunDetailBody, RunDetailSkeleton } from "./run-detail.pending";
 
 type RunDetailProps = {
   workspaceId: string;
@@ -60,14 +66,10 @@ export const RunDetail = ({ workspaceId, runId, onBack }: RunDetailProps) => {
   const query = useQuery(flowRunDetailOptions(workspaceId, runId));
 
   if (query.isPending) {
-    return (
-      <div className="flex flex-1 items-center justify-center p-8">
-        <p className="text-muted-foreground text-sm">{t("common.loading")}</p>
-      </div>
-    );
+    return <RunDetailSkeleton back={<BackButton onBack={onBack} />} />;
   }
 
-  // The Eden response type for this endpoint can also resolve to a raw
+  // The API client's response type for this endpoint can also resolve to a raw
   // `Response` (see flow-run-types.ts); guard it the same way sibling flow
   // queries do so `query.data` narrows to `FlowRunDetailData` below. Success
   // data is always defined here (isPending/isError already handled), so no
@@ -158,7 +160,7 @@ const RunDetailContent = ({
   };
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 p-6">
+    <RunDetailBody>
       <div className="flex items-center justify-between gap-2">
         <BackButton onBack={onBack} />
         {isActive && canRun && (
@@ -184,6 +186,7 @@ const RunDetailContent = ({
                 </AlertDialogClose>
                 <Button
                   disabled={cancelling}
+                  disabledReason={t("common.cancelling")}
                   onClick={() => {
                     detached(handleCancel(), "run-detail.cancel");
                   }}
@@ -235,7 +238,7 @@ const RunDetailContent = ({
           />
         ))}
       </ol>
-    </div>
+    </RunDetailBody>
   );
 };
 
@@ -261,9 +264,9 @@ const StepRunCard = ({
             {format.number(stepRun.index + 1)}
           </span>
           <Icon className="text-muted-foreground size-4 shrink-0" />
-          <span className="truncate text-sm font-medium" dir="auto">
+          <TruncatedText className="text-sm font-medium" dir="auto">
             {definitionStep?.name || t(FLOW_STEP_KIND_LABEL_KEYS[stepRun.kind])}
-          </span>
+          </TruncatedText>
         </div>
         <div className="flex items-center gap-2">
           {stepRun.finishedAt && (
@@ -295,6 +298,7 @@ const StepRunOutput = ({
   workspaceId: string;
 }) => {
   const t = useTranslations();
+  const router = useRouter();
 
   if (!output) {
     return null;
@@ -313,11 +317,14 @@ const StepRunOutput = ({
       <Button
         onClick={() => {
           detached(
-            openEntityInInspector(
-              output.entityId,
-              t("flows.runs.createdDocument"),
+            openEntityInInspector({
+              documentOnScreen: getCurrentWorkspaceDocument(
+                router.state.matches,
+              ),
+              entityId: output.entityId,
+              label: t("flows.runs.createdDocument"),
               workspaceId,
-            ),
+            }),
             "run-detail.open-entity-in-inspector",
           );
         }}
@@ -340,7 +347,7 @@ const StepRunOutput = ({
       {output.decision === "approved"
         ? t("flows.runs.review.approved")
         : t("flows.runs.review.rejected")}
-      {output.note ? ` — ${output.note}` : ""}
+      {output.note ? `: ${output.note}` : ""}
     </p>
   );
 };
@@ -443,6 +450,9 @@ const ReviewGateCard = ({
       <div className="flex justify-end gap-2">
         <Button
           disabled={!canReview || submitting}
+          disabledReason={
+            submitting ? t("common.saving") : t("errors.api.forbidden")
+          }
           onClick={() => {
             detached(submit("rejected"), "run-detail.submit");
           }}
@@ -453,6 +463,9 @@ const ReviewGateCard = ({
         </Button>
         <Button
           disabled={!canReview || submitting}
+          disabledReason={
+            submitting ? t("common.saving") : t("errors.api.forbidden")
+          }
           loading={submitting}
           onClick={() => {
             detached(submit("approved"), "run-detail.submit");

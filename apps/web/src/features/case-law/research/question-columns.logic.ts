@@ -10,6 +10,7 @@ import type {
   CaseLawResearchAnswerState,
   CaseLawResearchAnswerType,
 } from "@stll/api-contract";
+import { chunk as chunkItems } from "@stll/concurrency/chunk";
 import type { PermissionInput } from "@stll/permissions";
 
 import type { Decision } from "@/features/case-law/components/decision-cells";
@@ -83,7 +84,8 @@ type QuestionAnswerRun = {
 export type QuestionAnswer = {
   columnId: string;
   decisionId: string;
-  state: CaseLawResearchAnswerState;
+  state: CaseLawResearchAnswerState | "withdrawn";
+  withdrawnMarker?: string | null;
   /** A pending cell whose run went quiet; the server decides, on its clock. */
   stale: boolean;
   answer: WorkspaceFieldContent | null;
@@ -109,11 +111,13 @@ const needsRun = (
   answer: QuestionAnswer | undefined,
   force: boolean,
 ): boolean =>
-  answerNeedsRun(
-    answer === undefined
-      ? { state: null, stale: false, force }
-      : { state: answer.state, stale: answer.stale, force },
-  );
+  answer?.state === "withdrawn"
+    ? false
+    : answerNeedsRun(
+        answer === undefined
+          ? { state: null, stale: false, force }
+          : { state: answer.state, stale: answer.stale, force },
+      );
 
 type RunSetInput = {
   columns: readonly QuestionColumn[];
@@ -133,6 +137,56 @@ export type QuestionRunSet = {
   decisionIds: string[];
   /** Cells the run would produce: what the reader is asked to confirm. */
   cells: number;
+};
+
+export type QuestionColumnRunOptions = {
+  type: "remaining" | "rerun";
+  scope: "page" | "selection";
+};
+
+type QueuedAnswerKeysOptions = {
+  answersByKey: ReadonlyMap<string, QuestionAnswer>;
+  force: boolean;
+  runSet: QuestionRunSet;
+};
+
+export const questionQueuedAnswerKeys = ({
+  answersByKey,
+  force,
+  runSet,
+}: QueuedAnswerKeysOptions): ReadonlySet<string> => {
+  const keys = new Set<string>();
+  for (const decisionId of runSet.decisionIds) {
+    for (const columnId of runSet.columnIds) {
+      const key = answerKey(columnId, decisionId);
+      if (needsRun(answersByKey.get(key), force)) {
+        keys.add(key);
+      }
+    }
+  }
+  return keys;
+};
+
+type RefusedAnswerKeysOptions = {
+  answersByKey: ReadonlyMap<string, QuestionAnswer>;
+  runSet: QuestionRunSet;
+};
+
+/** A refused request leaves existing answers intact, including forced reruns. */
+export const questionRefusedAnswerKeys = ({
+  answersByKey,
+  runSet,
+}: RefusedAnswerKeysOptions): ReadonlySet<string> => {
+  const keys = new Set<string>();
+  for (const decisionId of runSet.decisionIds) {
+    for (const columnId of runSet.columnIds) {
+      const key = answerKey(columnId, decisionId);
+      if (!answersByKey.has(key)) {
+        keys.add(key);
+      }
+    }
+  }
+  return keys;
 };
 
 /**
@@ -193,19 +247,8 @@ export const questionRunSet = ({
  */
 export const researchRunBatches = (
   decisionIds: readonly string[],
-): readonly string[][] => {
-  const batches: string[][] = [];
-  for (
-    let start = 0;
-    start < decisionIds.length;
-    start += CASE_LAW_RESEARCH_RUN_DECISIONS_MAX
-  ) {
-    batches.push(
-      decisionIds.slice(start, start + CASE_LAW_RESEARCH_RUN_DECISIONS_MAX),
-    );
-  }
-  return batches;
-};
+): readonly string[][] =>
+  chunkItems(decisionIds, CASE_LAW_RESEARCH_RUN_DECISIONS_MAX);
 
 /**
  * One content document as a string that depends on nothing but its values.
@@ -415,6 +458,15 @@ export type AvailableQuestionColumns = {
    */
   addedIds: ReadonlySet<string>;
   answersByKey: ReadonlyMap<string, QuestionAnswer>;
+  pageDecisionIds: readonly string[];
+  selectedDecisionIds: readonly string[];
+  queuedAnswerKeys: ReadonlySet<string>;
+  refusedAnswerKeys: ReadonlySet<string>;
+  onRunColumn: (
+    column: QuestionColumn,
+    options: QuestionColumnRunOptions,
+  ) => void;
+  onRunSelectedRows: () => void;
   onColumnAction: (
     column: QuestionColumn,
     action: QuestionColumnAction,

@@ -18,6 +18,7 @@ const toInfoSoudCourtsError = (error: unknown): HandlerError => {
   if (error instanceof InfoSoudAPIError) {
     return new HandlerError({
       status: 502,
+      code: error.status >= 500 ? "upstream_unavailable" : "internal_error",
       message: "InfoSoud returned an error while loading courts",
       cause: error,
     });
@@ -26,6 +27,7 @@ const toInfoSoudCourtsError = (error: unknown): HandlerError => {
   if (error instanceof InfoSoudParseError) {
     return new HandlerError({
       status: 502,
+      code: "internal_error",
       message: "InfoSoud returned an invalid courts response",
       cause: error,
     });
@@ -34,6 +36,7 @@ const toInfoSoudCourtsError = (error: unknown): HandlerError => {
   if (error instanceof InfoSoudRequestError) {
     return new HandlerError({
       status: 502,
+      code: "upstream_unavailable",
       message: "InfoSoud courts request failed",
       cause: error,
     });
@@ -47,6 +50,7 @@ const toInfoSoudCourtsError = (error: unknown): HandlerError => {
 };
 
 const config = {
+  contract: "patch",
   permissions: { workspace: ["read"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "native_tool_ui" },

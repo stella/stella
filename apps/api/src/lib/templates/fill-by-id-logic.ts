@@ -1,17 +1,18 @@
 import { Result } from "better-result";
+
+import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 /**
  * `templates.fills.download`'s fill logic, factored out of the endpoint module
  * (`handlers/templates/fills/download.ts`) so that module can keep to one default
  * `{ config, handler }` export while this generator stays directly testable.
  */
-
-import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { AUDIT_ACTION } from "@/api/lib/audit-log";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ClauseBody } from "@/api/lib/clauses/types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { scanErrorForHandler } from "@/api/lib/file-scan/scan-upload-handler";
 import { convertToPdf } from "@/api/lib/files/gotenberg";
 import { DOCX_EXT_RE, sanitizeFilename } from "@/api/lib/sanitize-filename";
 import type { SecureDocumentResponseOptions } from "@/api/lib/secure-document-response";
@@ -161,16 +162,25 @@ export const fillByIdLogic = async function* ({
       buffer: new Uint8Array(result.file.bytes),
       fileName: baseName,
     });
-    if (scannedOutput === null) {
+    if (Result.isError(scannedOutput)) {
+      return Result.err(
+        scanErrorForHandler(
+          scannedOutput.error,
+          "Retry the template PDF export.",
+        ),
+      );
+    }
+    if (scannedOutput.value === null) {
       return Result.err(
         new HandlerError({ status: 422, message: "Template output invalid" }),
       );
     }
-    const pdfResult = await convertToPdf(scannedOutput);
+    const pdfResult = await convertToPdf(scannedOutput.value);
     if (Result.isError(pdfResult)) {
       return Result.err(
         new HandlerError({
           status: 502,
+          code: "internal_error",
           message: "PDF conversion failed",
         }),
       );
@@ -197,9 +207,8 @@ export const fillByIdLogic = async function* ({
   return Result.ok({
     additionalHeaders,
     body: new Uint8Array(result.file.bytes),
-    // Octet-stream, not the DOCX mime type: the Eden treaty client
-    // text-decodes unrecognized content types, which corrupts the ZIP
-    // container (Word then reports unreadable content).
+    // Octet-stream, not the DOCX mime type: the API client decodes
+    // octet-stream as an `ArrayBuffer`; the DOCX type travels in the filename.
     contentType: OCTET_STREAM_MIME_TYPE,
     disposition: "attachment",
     fileName: sanitizeFilename(baseName),

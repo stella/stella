@@ -1,5 +1,9 @@
 name: Landing canary
 
+defaults:
+  run:
+    shell: bash
+
 # Proves stll.app serves whole between deploys: the homepage, a few routes,
 # and every hashed asset the served homepage references. The same check the
 # landing deploy runs after publishing; here it runs on a schedule, so a page
@@ -19,7 +23,7 @@ permissions: {}
 jobs:
   served:
     name: stll.app serves whole
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
       contents: read
@@ -33,6 +37,7 @@ jobs:
           persist-credentials: false
 
       - name: Check the served site
+        timeout-minutes: 4
         env:
           LANDING_SITE: https://stll.app
         run: bash scripts/check-landing-served.sh

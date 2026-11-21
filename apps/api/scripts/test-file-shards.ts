@@ -1,79 +1,52 @@
 import { panic } from "better-result";
 
-export const API_TEST_SHARD_ENV = "API_TEST_SHARD";
+import {
+  API_TEST_FILES_ENCODED_ENV,
+  API_TEST_SHARD_ENV,
+  parseApiTestShard as parseApiTestShardResult,
+  partitionTestFiles as partitionTestFilesResult,
+  type TestShardPlanningResult,
+} from "@stll/scripts/src/test-shard-planning";
 
-type PartitionTestFilesOptions = {
+import { decodePlanFileList } from "../../../scripts/plan-output-codec";
+
+export { API_TEST_FILES_ENCODED_ENV, API_TEST_SHARD_ENV };
+
+const unwrapPlanningResult = <T>(result: TestShardPlanningResult<T>): T =>
+  result.status === "ok" ? result.value : panic(result.message);
+
+export const parseApiTestShard = (value: string | undefined) =>
+  unwrapPlanningResult(parseApiTestShardResult(value));
+
+export const partitionTestFiles = (options: {
   files: readonly string[];
   durations: Readonly<Record<string, number>>;
   count: number;
-};
+}) => unwrapPlanningResult(partitionTestFilesResult(options));
 
-/** Longest-first scheduling; missing measurements use the live files' median. */
-export const partitionTestFiles = ({
-  files,
-  durations,
-  count,
-}: PartitionTestFilesOptions): string[][] => {
-  if (!Number.isSafeInteger(count) || count < 1) {
-    panic("Test shard count must be a positive integer");
+/** Resolve the explicit selection before duration bins partition it. */
+export const restrictApiTestFiles = (
+  files: readonly string[],
+  selection: string | undefined,
+): readonly string[] => {
+  if (selection === undefined || selection === "") {
+    return files;
   }
-  if (new Set(files).size !== files.length) {
-    panic("Test paths must be unique");
+  const selected = decodePlanFileList(selection);
+  if (selected.length === 0) {
+    panic("API_TEST_FILES_ENCODED selected zero test files");
   }
-  const measured = files
-    .flatMap((file) => {
-      const duration = durations[file];
-      if (duration === undefined) {
-        return [];
-      }
-      if (!Number.isFinite(duration) || duration < 0) {
-        panic(`Invalid duration for ${file}`);
-      }
-      return [duration];
-    })
-    .toSorted((a, b) => a - b);
-  const fallback = measured.at(Math.floor(measured.length / 2)) ?? 1;
-  if (count === 1) {
-    return [[...files]];
-  }
-  const weight = (file: string) => durations[file] ?? fallback;
-  const bins = Array.from({ length: count }, () => ({
-    files: new Set<string>(),
-    seconds: 0,
-  }));
-  for (const file of files.toSorted(
-    (a, b) => weight(b) - weight(a) || (a < b ? -1 : Number(a > b)),
-  )) {
-    let bin = bins.at(0);
-    if (bin === undefined) {
-      panic("Test shard bins must exist");
+  const known = new Set(files);
+  for (const file of selected) {
+    if (!known.has(file)) {
+      panic(`Unknown API_TEST_FILES_ENCODED path: ${file}`);
     }
-    for (const candidate of bins) {
-      if (candidate.seconds < bin.seconds) {
-        bin = candidate;
-      }
-    }
-    bin.files.add(file);
-    bin.seconds += weight(file);
   }
-  return bins.map((bin) => files.filter((file) => bin.files.has(file)));
-};
-
-export const parseApiTestShard = (value: string | undefined) => {
-  if (value === undefined || value === "") {
-    return null;
+  if (new Set(selected).size !== selected.length) {
+    panic("API_TEST_FILES_ENCODED paths must be unique");
   }
-  const match = /^(?<index>[1-9]\d*)\/(?<count>[1-9]\d*)$/u.exec(value);
-  const index = Number(match?.groups?.["index"]);
-  const count = Number(match?.groups?.["count"]);
-  if (
-    !Number.isSafeInteger(index) ||
-    !Number.isSafeInteger(count) ||
-    index > count
-  ) {
-    panic(`Invalid ${API_TEST_SHARD_ENV}: expected i/n with 1 <= i <= n`);
-  }
-  return { index, count };
+  const wanted = new Set(selected);
+  return files.filter((file) => wanted.has(file));
 };
 
 type SelectApiTestFilesOptions = {

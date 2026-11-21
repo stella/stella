@@ -2,9 +2,9 @@ import { describe, expect, test } from "bun:test";
 
 import {
   parseStagingState,
-  StagingStateError,
   stagingCheckDisposition,
   stagingFailureDisposition,
+  StagingStateError,
 } from "../helpers/staging-state";
 
 describe("staging state", () => {
@@ -95,6 +95,7 @@ describe("staging state", () => {
       '"on"',
       '{"unknown":"on"}',
       '{"corpus_index":"pending"}',
+      '{"corpus_reads":"off"}',
       '{"rollout":"off"}',
       '{"corpus_index":null}',
       '{"rollout":3}',

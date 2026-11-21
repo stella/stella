@@ -1,6 +1,10 @@
 import { panic, Result } from "better-result";
 
+import { backoffDelay } from "@stll/concurrency/backoff-delay";
 import { Temporal } from "@stll/time";
+
+// JSON so that tooling outside TypeScript (the journey canary) reads the same windows.
+import defaultBusyWindows from "./default-busy-windows.json" with { type: "json" };
 
 export type VerdictKind = "normal" | "degraded" | "stop" | "unknown";
 export type HealthSignalKind = VerdictKind | "not_configured";
@@ -10,12 +14,35 @@ export type Signal = {
     | "ebs_balance"
     | "long_transaction"
     | "autovacuum_on_target"
-    | "busy_window";
+    | "busy_window"
+    | "population_backlog";
   kind: HealthSignalKind;
   value: number | null;
   threshold: number | null;
   observedAt: string | null;
   reason: string;
+};
+
+/**
+ * Readings are stamped by another clock (Postgres, CloudWatch), so a fresh
+ * reading can look slightly in the future. Tolerate small skew; reject
+ * anything further ahead as a broken clock.
+ */
+export const MAX_CLOCK_SKEW_MS = 5000;
+export const isFreshReading = (
+  observedAt: string,
+  now: number,
+  maxStalenessMs: number,
+) => {
+  const age = Result.try(
+    () => now - Temporal.Instant.from(observedAt).epochMilliseconds,
+  );
+  return (
+    Result.isOk(age) &&
+    Number.isFinite(age.value) &&
+    age.value >= -MAX_CLOCK_SKEW_MS &&
+    age.value <= maxStalenessMs
+  );
 };
 export type Verdict = { kind: VerdictKind; signals: Signal[] };
 export type BusyWindow = { start: string; end: string; timeZone: string };
@@ -39,13 +66,18 @@ export type HealthConfig = {
   holdBackoffCapMs: number;
   maxHeldMs: number;
 };
+/**
+ * The defaults a deployment's settings start from. Every load decision takes
+ * its config explicitly, so the deployment's settings, not these defaults,
+ * govern each gate.
+ */
 export const defaultConfig = {
   startFloor: 70,
   hardFloor: 40,
   maxStalenessMs: 15 * 60_000,
   readTimeoutMs: 5000,
   longTxMaxAgeMs: 5 * 60_000,
-  busyWindows: [{ start: "06:30", end: "08:00", timeZone: "Europe/Prague" }],
+  busyWindows: defaultBusyWindows,
   targetDurationMs: 1000,
   batchStatementTimeoutMs: 60_000,
   batchLockTimeoutMs: 1000,
@@ -74,15 +106,13 @@ export const validateConfig = (config: HealthConfig) => {
   if (positiveFields.some((value) => !Number.isFinite(value) || value <= 0)) {
     panic("Health durations must be finite and positive");
   }
-  if (
-    !(
-      Number.isFinite(config.startFloor) &&
-      Number.isFinite(config.hardFloor) &&
-      config.hardFloor >= 0 &&
-      config.startFloor <= 100 &&
-      config.hardFloor <= config.startFloor
-    )
-  ) {
+  if (!(
+    Number.isFinite(config.startFloor) &&
+    Number.isFinite(config.hardFloor) &&
+    config.hardFloor >= 0 &&
+    config.startFloor <= 100 &&
+    config.hardFloor <= config.startFloor
+  )) {
     panic("Health floors must be ordered percentages");
   }
   if (
@@ -93,32 +123,26 @@ export const validateConfig = (config: HealthConfig) => {
   ) {
     panic("Resume floor must lie between hard and start floors");
   }
-  if (
-    !(
-      Number.isSafeInteger(config.minSize) &&
-      Number.isSafeInteger(config.maxSize) &&
-      config.minSize > 0 &&
-      config.maxSize >= config.minSize
-    )
-  ) {
+  if (!(
+    Number.isSafeInteger(config.minSize) &&
+    Number.isSafeInteger(config.maxSize) &&
+    config.minSize > 0 &&
+    config.maxSize >= config.minSize
+  )) {
     panic("Batch size bounds must be positive and ordered");
   }
-  if (
-    !(
-      Number.isFinite(config.minSleepMs) &&
-      Number.isFinite(config.maxSleepMs) &&
-      config.minSleepMs >= 0 &&
-      config.maxSleepMs >= config.minSleepMs
-    )
-  ) {
+  if (!(
+    Number.isFinite(config.minSleepMs) &&
+    Number.isFinite(config.maxSleepMs) &&
+    config.minSleepMs >= 0 &&
+    config.maxSleepMs >= config.minSleepMs
+  )) {
     panic("Batch sleep bounds must be finite and ordered");
   }
-  if (
-    !(
-      Number.isSafeInteger(config.stableBatchesBeforeGrow) &&
-      config.stableBatchesBeforeGrow >= 1
-    )
-  ) {
+  if (!(
+    Number.isSafeInteger(config.stableBatchesBeforeGrow) &&
+    config.stableBatchesBeforeGrow >= 1
+  )) {
     panic("Stable batch count must be a positive integer");
   }
   if (config.holdBackoffCapMs < config.holdBackoffMs) {
@@ -165,7 +189,7 @@ export const combine = (signals: Signal[]): Verdict => {
 export const decideStart = (
   verdict: Verdict,
   kind: WorkKind,
-  config: HealthConfig = defaultConfig,
+  config: HealthConfig,
 ) => {
   validateConfig(config);
   return {
@@ -187,7 +211,7 @@ export type BuildProgress = {
 };
 export const decideWhileRunning = (
   history: Signal[],
-  config: HealthConfig = defaultConfig,
+  config: HealthConfig,
   progress?: BuildProgress,
 ) => {
   validateConfig(config);
@@ -225,7 +249,7 @@ export type NextBatchOptions = {
   state: BatchState;
   verdict: Verdict;
   lastDurationMs: number | null;
-  config?: HealthConfig;
+  config: HealthConfig;
   clock: () => number;
   outcome?: BatchOutcome;
 };
@@ -283,11 +307,7 @@ const isAwaitingLoadResume = ({
       ) {
         return false;
       }
-      const observedAt = signal.observedAt;
-      const age = Result.try(
-        () => now - Temporal.Instant.from(observedAt).epochMilliseconds,
-      );
-      return age.isOk() && age.value >= 0 && age.value <= config.maxStalenessMs;
+      return isFreshReading(signal.observedAt, now, config.maxStalenessMs);
     })
   );
 };
@@ -296,27 +316,25 @@ export const nextBatch = ({
   state,
   verdict,
   lastDurationMs,
-  config = defaultConfig,
+  config,
   clock,
   outcome = "success",
 }: NextBatchOptions) => {
   validateConfig(config);
-  if (
-    !(
-      Number.isSafeInteger(state.size) &&
-      state.size >= config.minSize &&
-      state.size <= config.maxSize
-    )
-  ) {
+  if (!(
+    Number.isSafeInteger(state.size) &&
+    state.size >= config.minSize &&
+    state.size <= config.maxSize
+  )) {
     panic("Batch size must be an integer within configured bounds");
   }
   const now = clock();
   const awaitingResume = isAwaitingLoadResume({ state, verdict, config, now });
   if (verdict.kind === "stop" || verdict.kind === "unknown" || awaitingResume) {
-    const backoff = Math.min(
-      config.holdBackoffCapMs,
-      config.holdBackoffMs * 2 ** Math.min(state.holdCount, 52),
-    );
+    const backoff = backoffDelay(Math.min(state.holdCount, 52), {
+      baseMs: config.holdBackoffMs,
+      maxMs: config.holdBackoffCapMs,
+    });
     const nextState: BatchState = {
       size: state.size,
       sleepMs: state.sleepMs,
@@ -412,7 +430,7 @@ export const nextBatch = ({
 export const isHeldTooLong = (
   state: Pick<BatchState, "heldSince">,
   now: number,
-  config: HealthConfig = defaultConfig,
+  config: HealthConfig,
 ) => {
   validateConfig(config);
   if (state.heldSince === null || now <= state.heldSince) {
@@ -466,7 +484,7 @@ type BackfillHeartbeatOptions = {
   previousHeldSince: number | null;
   verdict: Verdict;
   now: number;
-  config?: HealthConfig;
+  config: HealthConfig;
 };
 
 /** Emit once per minute, including while no batch can run. */
@@ -476,7 +494,7 @@ export const backfillHeartbeat = ({
   previousHeldSince,
   verdict,
   now,
-  config = defaultConfig,
+  config,
 }: BackfillHeartbeatOptions) => {
   const yielded = state.heldSince !== null;
   const event = (() => {

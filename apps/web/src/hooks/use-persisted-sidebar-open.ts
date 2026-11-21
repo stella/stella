@@ -1,44 +1,22 @@
-import { useState, useSyncExternalStore } from "react";
+import { useState } from "react";
 
-const SIDEBAR_STORAGE_KEY = "sidebar_state";
+import { usePresentationPrefs } from "@/lib/account/presentation-prefs/provider";
 
-export const parsePersistedSidebarOpen = (
-  storedState: string | null,
-): boolean | null => {
-  if (storedState === null) {
-    return null;
-  }
-  return storedState === "expanded";
+type PersistedSidebarOpenOptions = {
+  defaultOpen: boolean;
+  usePreference: boolean;
 };
-
-const noopSubscribe = (_onStoreChange: () => void) => () => undefined;
 
 export const usePersistedSidebarOpen = ({
   defaultOpen,
-  hydrateFromStorage,
-}: {
-  defaultOpen: boolean;
-  hydrateFromStorage: boolean;
-}) => {
-  const storedOpen = useSyncExternalStore(
-    noopSubscribe,
-    () =>
-      hydrateFromStorage
-        ? (parsePersistedSidebarOpen(
-            localStorage.getItem(SIDEBAR_STORAGE_KEY),
-          ) ?? defaultOpen)
-        : defaultOpen,
-    () => defaultOpen,
-  );
+  usePreference,
+}: PersistedSidebarOpenOptions) => {
+  const { prefs, setPrefs } = usePresentationPrefs();
   const [openOverride, setOpenOverride] = useState<boolean | null>(null);
-  const open = openOverride ?? storedOpen;
-
-  const persistOpen = (nextOpen: boolean) => {
-    localStorage.setItem(
-      SIDEBAR_STORAGE_KEY,
-      nextOpen ? "expanded" : "collapsed",
-    );
-  };
-
+  const open = usePreference
+    ? prefs.sidebarOpen
+    : (openOverride ?? defaultOpen);
+  const persistOpen = (nextOpen: boolean) =>
+    setPrefs(() => ({ sidebarOpen: nextOpen }));
   return { open, persistOpen, setOpen: setOpenOverride };
 };

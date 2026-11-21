@@ -1,0 +1,1187 @@
+import type { ComponentProps } from "react";
+import { useState } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+
+import { panic, Result } from "better-result";
+import { expect, test } from "bun:test";
+
+import {
+  TEXT_ABSENCE_REASON,
+  TEXT_FIELD_TYPE,
+} from "@stll/api-contract/case-law-text-field";
+import type { DocumentAst } from "@stll/legal-ast/document-ast";
+import { PUBLISHER_SUMMARY_ROLES } from "@stll/legal-ast/document-ast";
+import { E_SBIRKA_ANCHORS } from "@stll/legal-ast/statute-anchor-scheme";
+import {
+  euProvisionSourceUrl,
+  locateEuProvisionCitations,
+} from "@stll/legal-atlas/eu-provision-citations";
+
+import {
+  fakeReaderAdapters,
+  renderReaderFixture,
+} from "../tests/reader-adapters";
+import { CitedProvisionExpansion, CitedProvisionPeek } from "./cited-provision";
+import type { FullProvisionRead } from "./cited-provision";
+import {
+  DecisionText,
+  prepareDecisionProvisionCards,
+  prepareDecisionTextPlacements,
+} from "./decision-text";
+import { BlockRenderer } from "./document-ast-text";
+import {
+  DecisionReaderProvider,
+  ReaderPresentationProvider,
+} from "./reader-adapters";
+import type { DecisionReaderAdapters } from "./reader-adapters";
+import type {
+  CitedProvisionTarget,
+  DecisionProvisionAnchor,
+  ProvisionPreviewData,
+  ReaderDecision,
+} from "./reader-types";
+
+const text = "Soud odkázal na rozhodnutí 1 As 1/2026 a § 90.";
+const ast = {
+  blocks: [
+    {
+      type: "heading",
+      id: "heading",
+      anchorId: "h-1",
+      level: 1,
+      inlines: [{ type: "text", text: "Odůvodnění" }],
+      plainText: "Odůvodnění",
+    },
+    {
+      type: "paragraph",
+      id: "paragraph",
+      anchorId: "p-7",
+      number: 48,
+      inlines: [{ type: "text", text }],
+      plainText: text,
+    },
+  ],
+  metadata: {
+    caseNumber: "2 As 2/2026",
+    court: "Nejvyšší správní soud",
+    decisionDate: null,
+    decisionType: null,
+    ecli: null,
+    keywords: [],
+    statutes: [],
+  },
+  source: {
+    system: "fixture",
+    documentId: "decision",
+    webUrl: "https://court.example/decision",
+    printUrl: "",
+  },
+  version: 1,
+} satisfies DocumentAst;
+const absent = {
+  type: TEXT_FIELD_TYPE.ABSENT,
+  reason: TEXT_ABSENCE_REASON.NOT_PUBLISHED,
+} as const;
+const decision = {
+  caseNumber: "2 As 2/2026",
+  caseNumberType: "case-number",
+  country: "CZE",
+  court: "Nejvyšší správní soud",
+  courtAbbreviation: null,
+  courtTier: "supreme",
+  documentAst: ast,
+  documentPending: false,
+  documentReadFailed: false,
+  documentUnavailable: false,
+  fulltext: null,
+  id: "fixture-decision",
+  judges: [],
+  language: "cs",
+  sourceAttributionUrl: "https://court.example/decision",
+  textFields: {
+    abstract: absent,
+    headnote: absent,
+    legalSentence: absent,
+    summary: absent,
+  },
+} satisfies ReaderDecision;
+
+test("publisher headings and caption information share one translated disclosure across analysis sections", async () => {
+  const { GlobalRegistrator } = await import("@happy-dom/global-registrator");
+  GlobalRegistrator.register();
+  try {
+    for (const label of ["Case information", "معلومات القضية"]) {
+      for (const count of [1, 2, 10, 100]) {
+        const blocks = Array.from({ length: count }, (_, index) => [
+          {
+            type: "heading",
+            id: `publisher-heading-${index}`,
+            anchorId: `publisher-heading-${index}`,
+            role: "publisher-heading",
+            level: 2,
+            inlines: [{ type: "text", text: `Publisher heading ${index}.` }],
+            plainText: `Publisher heading ${index}.`,
+          } satisfies DocumentAst["blocks"][number],
+          {
+            type: "paragraph",
+            id: `summary-${index}`,
+            anchorId: `summary-${index}`,
+            role: index % 2 === 0 ? "syllabus" : "summary",
+            inlines: [{ type: "text", text: `Published summary ${index}.` }],
+            plainText: `Published summary ${index}.`,
+          } satisfies DocumentAst["blocks"][number],
+          {
+            type: "paragraph",
+            id: `caption-${index}`,
+            anchorId: `caption-${index}`,
+            role: "apparatus",
+            inlines: [
+              { type: "text", text: `Publisher information ${index}.` },
+            ],
+            plainText: `Publisher information ${index}.`,
+          } satisfies DocumentAst["blocks"][number],
+        ]).flat();
+        const sectionMap = new Map(
+          blocks.map((block) => [
+            block.anchorId,
+            { cssVar: "--muted", headingId: block.id },
+          ]),
+        );
+        const adapters = {
+          ...fakeReaderAdapters,
+          messages: {
+            ...fakeReaderAdapters.messages,
+            "caseLaw.reader.headMatter": label,
+          },
+        } satisfies DecisionReaderAdapters;
+        const markup = renderToStaticMarkup(
+          <DecisionReaderProvider adapters={adapters}>
+            <DecisionText
+              decision={{
+                ...decision,
+                documentAst: { ...ast, blocks: [...blocks, ...ast.blocks] },
+              }}
+              decisionId={decision.id}
+              placements={{
+                anchorsByPieceId: {},
+                provisionsByAnchorId: new Map(),
+                failures: [],
+              }}
+              sectionMap={sectionMap}
+            />
+          </DecisionReaderProvider>,
+        );
+        const document = new DOMParser().parseFromString(markup, "text/html");
+        const disclosures = document.querySelectorAll(".reader-apparatus");
+        expect(disclosures).toHaveLength(1);
+        // The court's separate top-matter disclosure remains independent.
+        expect(
+          document.querySelectorAll(
+            '[data-slot="headnote-block"] [data-slot="collapsible"]',
+          ),
+        ).toHaveLength(1);
+        expect(document.querySelectorAll("details")).toHaveLength(0);
+        const disclosure = disclosures[0];
+        expect(
+          disclosure?.querySelector('[data-slot="collapsible-trigger"]')
+            ?.textContent,
+        ).toBe(label);
+        expect(
+          disclosure
+            ?.querySelector('[data-slot="collapsible-trigger"]')
+            ?.getAttribute("aria-expanded"),
+        ).toBe("false");
+        const body = disclosure?.querySelector(
+          '[data-slot="collapsible-panel"]',
+        );
+        expect(body?.hasAttribute("hidden")).toBe(true);
+        const disclosureText = body?.textContent ?? "";
+        for (const block of blocks) {
+          if (block.type === "heading" || block.role === "apparatus") {
+            expect(disclosureText).toContain(block.plainText);
+          } else {
+            expect(disclosureText).not.toContain(block.plainText);
+          }
+          expect(markup.split(block.plainText)).toHaveLength(2);
+        }
+      }
+    }
+  } finally {
+    await GlobalRegistrator.unregister();
+  }
+});
+
+test("publisher-summary roles leave footnotes after the decision body", () => {
+  for (const role of PUBLISHER_SUMMARY_ROLES) {
+    const footnote = {
+      type: "paragraph",
+      id: "publisher-footnote",
+      anchorId: "publisher-footnote",
+      role,
+      note: { type: "footnote", label: "1" },
+      inlines: [{ type: "text", text: "Published footnote." }],
+      plainText: "Published footnote.",
+    } satisfies DocumentAst["blocks"][number];
+    const markup = renderReaderFixture(
+      <DecisionText
+        decision={{
+          ...decision,
+          documentAst: { ...ast, blocks: [...ast.blocks, footnote] },
+        }}
+        decisionId={decision.id}
+        placements={{
+          anchorsByPieceId: {},
+          provisionsByAnchorId: new Map(),
+          failures: [],
+        }}
+      />,
+    );
+    expect(markup).toContain(text);
+    expect(markup).toContain(footnote.plainText);
+    expect(markup.indexOf(footnote.plainText)).toBeGreaterThan(
+      markup.indexOf(text),
+    );
+  }
+});
+
+test("parties and their representatives remain visible together in the caption", () => {
+  const captionBlocks = (
+    ["parties", "counsel", "parties", "counsel"] as const
+  ).map((role, index) => ({
+    type: "paragraph",
+    id: `participant-${index}`,
+    anchorId: `participant-${index}`,
+    role,
+    inlines: [{ type: "text", text: `Participant ${index}.` }],
+    plainText: `Participant ${index}.`,
+  }));
+  const markup = renderReaderFixture(
+    <DecisionText
+      decision={{
+        ...decision,
+        documentAst: { ...ast, blocks: [...captionBlocks, ...ast.blocks] },
+      }}
+      decisionId={decision.id}
+      placements={{
+        anchorsByPieceId: {},
+        provisionsByAnchorId: new Map(),
+        failures: [],
+      }}
+    />,
+  );
+  expect(markup).not.toContain("reader-apparatus");
+  for (const block of captionBlocks) {
+    expect(markup).toContain(block.plainText);
+  }
+});
+
+test("a decision renders numbered anchored text and resolved marks without reading data", () => {
+  const renderedCitations: string[] = [];
+  const adapters = {
+    ...fakeReaderAdapters,
+    renderDecisionLink: ({ citation, ...props }) => {
+      renderedCitations.push(citation.id);
+      expect(citation.decision).toBe(props.decision);
+      expect(citation.treatment).toBe(props.treatment);
+      expect(props.blockId).toBe("paragraph");
+      return fakeReaderAdapters.renderDecisionLink({ citation, ...props });
+    },
+  } satisfies DecisionReaderAdapters;
+  const placements = prepareDecisionTextPlacements({
+    adapters,
+    blocks: ast.blocks,
+    annotationAnchors: [],
+    statuteCitationAnchors: [],
+    unresolvedCitationAnchors: [],
+    citationAnchors: [
+      {
+        id: "citation",
+        citationText: "1 As 1/2026",
+        treatment: "positive",
+        decision: {
+          id: "cited",
+          caseNumberType: "case-number",
+          ecli: null,
+          caseNumber: "1 As 1/2026",
+          court: "Nejvyšší správní soud",
+          country: "CZE",
+          language: "cs",
+          slug: null,
+          languageAlternates: [],
+          decisionDate: null,
+        },
+      },
+    ],
+    provisionAnchors: [
+      {
+        id: "provision",
+        sentenceText: text,
+        spanStart: 0,
+        reference: {
+          section: 90,
+          sectionSuffix: null,
+          subsection: null,
+          letter: null,
+          unit: "section",
+        },
+        target: {
+          document: {
+            country: "CZE",
+            id: "act",
+            eli: "eli/act",
+            slug: null,
+            versionValidFrom: null,
+          },
+          preview: null,
+          payload: {
+            documentId: "act",
+            eli: "eli/act",
+            jurisdiction: "CZE",
+            anchorId: "par_90",
+            provisionLabel: "§ 90",
+            statuteTitle: "Zákon",
+            versionValidFrom: null,
+            versionCount: 1,
+          },
+        },
+      },
+    ],
+  });
+  const markup = renderToStaticMarkup(
+    <DecisionReaderProvider adapters={adapters}>
+      <DecisionText
+        decision={decision}
+        decisionId={decision.id}
+        isHydrated
+        placements={placements}
+      />
+    </DecisionReaderProvider>,
+  );
+  expect(markup).toContain('id="p-7"');
+  expect(markup).toContain('data-anchor="p-7"');
+  expect(markup).toContain("48");
+  expect(markup).toContain("Odůvodnění");
+  expect(markup).toContain('href="#decision-cited"');
+  expect(markup).toContain('href="#par_90"');
+  expect(markup).toContain('href="https://court.example/decision"');
+  expect(placements.failures).toEqual([]);
+  expect(renderedCitations).toEqual(["citation"]);
+});
+
+test("a citation the corpus could not resolve is marked in the text, not linked", () => {
+  const unresolvedText =
+    "Soud odkázal na rozhodnutí 9 Afs 3/2019 jiného soudu.";
+  const unresolvedAst = {
+    ...ast,
+    blocks: [
+      {
+        type: "paragraph",
+        id: "unresolved",
+        anchorId: "p-1",
+        inlines: [{ type: "text", text: unresolvedText }],
+        plainText: unresolvedText,
+      },
+    ],
+  } satisfies DocumentAst;
+  const placements = prepareDecisionTextPlacements({
+    adapters: fakeReaderAdapters,
+    blocks: unresolvedAst.blocks,
+    annotationAnchors: [],
+    statuteCitationAnchors: [],
+    citationAnchors: [],
+    unresolvedCitationAnchors: [
+      { id: "unresolved-citation", citationText: "9 Afs 3/2019" },
+    ],
+    provisionAnchors: [],
+  });
+  const markup = renderToStaticMarkup(
+    <DecisionReaderProvider adapters={fakeReaderAdapters}>
+      <DecisionText
+        decision={{ ...decision, documentAst: unresolvedAst }}
+        decisionId={decision.id}
+        isHydrated
+        placements={placements}
+      />
+    </DecisionReaderProvider>,
+  );
+  const mark =
+    /<span[^>]*data-unresolved-citation="unresolved-citation"[^>]*>([^<]*)<\/span>/u.exec(
+      markup,
+    ) ?? panic("The unresolved citation was not marked");
+  expect(mark[1]).toBe("9 Afs 3/2019");
+  // Marked text with button semantics, never a link to nowhere.
+  expect(mark[0]).toContain('role="button"');
+  expect(mark[0]).not.toContain("href=");
+});
+
+test("a resolved decision link keeps words an unresolved citation also covers", () => {
+  const overlapText =
+    "Soud odkázal na usnesení 4 Tdo 1323/2020-906 téhož senátu.";
+  const overlapAst = {
+    ...ast,
+    blocks: [
+      {
+        type: "paragraph",
+        id: "overlap",
+        anchorId: "p-1",
+        inlines: [{ type: "text", text: overlapText }],
+        plainText: overlapText,
+      },
+    ],
+  } satisfies DocumentAst;
+  const placements = prepareDecisionTextPlacements({
+    adapters: fakeReaderAdapters,
+    blocks: overlapAst.blocks,
+    annotationAnchors: [],
+    statuteCitationAnchors: [],
+    citationAnchors: [
+      {
+        id: "resolved",
+        citationText: "4 Tdo 1323/2020",
+        treatment: "positive",
+        decision: {
+          id: "cited",
+          caseNumberType: "case-number",
+          ecli: null,
+          caseNumber: "4 Tdo 1323/2020",
+          court: "Nejvyšší soud",
+          country: "CZE",
+          language: "cs",
+          slug: null,
+          languageAlternates: [],
+          decisionDate: null,
+        },
+      },
+    ],
+    unresolvedCitationAnchors: [
+      { id: "unresolved-longer", citationText: "4 Tdo 1323/2020-906" },
+    ],
+    provisionAnchors: [],
+  });
+  const markup = renderToStaticMarkup(
+    <DecisionReaderProvider adapters={fakeReaderAdapters}>
+      <DecisionText
+        decision={{ ...decision, documentAst: overlapAst }}
+        decisionId={decision.id}
+        isHydrated
+        placements={placements}
+      />
+    </DecisionReaderProvider>,
+  );
+  expect(markup).toContain('href="#decision-cited"');
+  expect(markup).not.toContain('data-unresolved-citation="unresolved-longer"');
+});
+
+test("an unresolved CJEU citation keeps its official CURIA link", () => {
+  const cjeuText = "Soudní dvůr ve věci C-106/89 rozhodl jinak.";
+  const cjeuAst = {
+    ...ast,
+    blocks: [
+      {
+        type: "paragraph",
+        id: "cjeu",
+        anchorId: "p-1",
+        inlines: [{ type: "text", text: cjeuText }],
+        plainText: cjeuText,
+      },
+    ],
+  } satisfies DocumentAst;
+  const placements = prepareDecisionTextPlacements({
+    adapters: fakeReaderAdapters,
+    blocks: cjeuAst.blocks,
+    annotationAnchors: [],
+    statuteCitationAnchors: [],
+    citationAnchors: [],
+    unresolvedCitationAnchors: [
+      { id: "unresolved-cjeu", citationText: "C-106/89" },
+    ],
+    provisionAnchors: [],
+  });
+  const markup = renderToStaticMarkup(
+    <DecisionReaderProvider adapters={fakeReaderAdapters}>
+      <DecisionText
+        decision={{ ...decision, documentAst: cjeuAst }}
+        decisionId={decision.id}
+        isHydrated
+        placements={placements}
+      />
+    </DecisionReaderProvider>,
+  );
+  expect(markup).not.toContain('data-unresolved-citation="unresolved-cjeu"');
+  expect(markup).toMatch(/href="https:\/\/curia\.europa\.eu[^"]*"/u);
+});
+
+const PERMALINK_CORPORA = {
+  "case-law": { variant: "case-law" },
+  statute: { statuteAnchors: E_SBIRKA_ANCHORS, variant: "statute" },
+} as const;
+
+const permalinkFixture = (variant: keyof typeof PERMALINK_CORPORA) =>
+  ast.blocks.map((block) => (
+    <BlockRenderer
+      activeMatchIndex={-1}
+      block={block}
+      key={block.id}
+      rangesByPieceId={{}}
+      {...PERMALINK_CORPORA[variant]}
+    />
+  ));
+
+test("readers without a copy adapter expose no permalink control", () => {
+  for (const variant of ["case-law", "statute"] as const) {
+    const markup = renderToStaticMarkup(
+      <ReaderPresentationProvider
+        adapters={{ messages: fakeReaderAdapters.messages }}
+      >
+        {permalinkFixture(variant)}
+      </ReaderPresentationProvider>,
+    );
+    expect(markup).toContain('data-anchor="h-1"');
+    expect(markup).toContain('data-anchor="p-7"');
+    expect(markup).toContain("Odůvodnění");
+    expect(markup).not.toContain('aria-label="Copy link"');
+    expect(markup).not.toContain('href="#h-1"');
+    expect(markup).not.toContain('href="#p-7"');
+    expect(markup).not.toContain("¶");
+  }
+});
+
+test("a supplied copy adapter preserves existing permalink markup", () => {
+  // Serialized copy controls before the optional adapter: placement and browser href stay exact.
+  const anchorClass =
+    "text-foreground-disabled hover:text-foreground focus-visible:ring-ring rounded-sm px-1 leading-[inherit] no-underline focus-visible:ring-2 focus-visible:outline-none print:hidden opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100";
+  const previousControls = [
+    `<a aria-label="Copy link" class="${anchorClass} ms-1" data-reader-chrome="" href="#h-1">¶</a>`,
+    `<a aria-label="Copy link" class="${anchorClass} absolute end-full top-0 me-1" data-reader-chrome="" href="#p-7">¶</a>`,
+  ];
+  for (const variant of ["case-law", "statute"] as const) {
+    const markup = renderReaderFixture(permalinkFixture(variant));
+    expect(
+      Array.from(markup.match(/<a aria-label="Copy link"[^>]*>¶<\/a>/gu) ?? []),
+    ).toEqual(previousControls);
+  }
+});
+
+/** A card's quoted runs: whether each is marked cited, and its paragraphs. */
+const quotedRuns = (markup: string) =>
+  Array.from(
+    markup.matchAll(
+      /<div(?: class="[^"]*")?( data-cited="")? data-slot="provision-card-quote">(.*?)<\/div>/gu,
+    ),
+    ([, cited, body = ""]) => ({
+      cited: cited !== undefined,
+      texts: Array.from(
+        body.matchAll(/<p[^>]*>(.*?)<\/p>/gu),
+        ([, paragraph]) => paragraph,
+      ),
+    }),
+  );
+
+test("a provision card identifies unavailable parts until its full wording recovers them", () => {
+  const provision = (part: string) =>
+    ({
+      document: {
+        country: "CZE",
+        eli: "/eli/cz/sb/2012/89",
+        id: "act",
+        slug: null,
+        versionValidFrom: null,
+      },
+      payload: {
+        anchorId: "par_5",
+        documentId: "act",
+        eli: "/eli/cz/sb/2012/89",
+        highlightAnchorId: `par_5-odst_${part}`,
+        jurisdiction: "CZE",
+        provisionLabel: `§ 5 odst. ${part}`,
+        statuteTitle: "Občanský zákoník",
+        versionCount: 1,
+        versionValidFrom: null,
+      },
+      preview: null,
+    }) satisfies CitedProvisionTarget;
+  const available = provision("1");
+  const missing = provision("2");
+  const wording = {
+    anchorId: "par_5",
+    blocks: [
+      {
+        anchorId: "par_5-odst_1",
+        id: "part-1",
+        text: "Odborná péče se posuzuje podle povolání.",
+      },
+    ],
+    citedAnchorId: "par_5-odst_1",
+    documentId: "act",
+    heading: null,
+    headings: [],
+    language: "cs",
+  };
+  type RenderProvisionOptions = {
+    availableWording: typeof wording | null;
+    missingWording: typeof wording | null;
+    full?: ComponentProps<typeof CitedProvisionExpansion>["full"];
+    showsFull?: boolean;
+  };
+  const render = ({
+    availableWording,
+    missingWording,
+    full = { isPending: false, whole: null },
+    showsFull = false,
+  }: RenderProvisionOptions) =>
+    renderReaderFixture(
+      <CitedProvisionExpansion
+        citations={[available, missing]}
+        full={full}
+        onToggleFull={() => undefined}
+        showsFull={showsFull}
+        wordings={[
+          { target: available, wording: availableWording },
+          { target: missing, wording: missingWording },
+        ]}
+      />,
+    );
+  for (const missingWording of [null, { ...wording, blocks: [] }]) {
+    const markup = render({ availableWording: wording, missingWording });
+    expect(markup).toContain("Odborná péče se posuzuje podle povolání.");
+    expect(markup).toMatch(
+      /data-slot="provision-card-unavailable-part"[^>]*><bdi[^>]*>Text of § 5 odst\. 2 is not available<\/bdi>/u,
+    );
+    expect(markup.indexOf("Odborná péče")).toBeLessThan(
+      markup.indexOf("Text of § 5 odst. 2"),
+    );
+    expect(markup).not.toContain('data-slot="provision-card-unavailable"');
+  }
+  for (const whole of [null, { ...wording, blocks: [] }]) {
+    const markup = render({
+      availableWording: wording,
+      missingWording: null,
+      showsFull: true,
+      full: { isPending: false, whole },
+    });
+    expect(markup).toContain("Odborná péče se posuzuje podle povolání.");
+    expect(markup).toContain("Text of § 5 odst. 2 is not available");
+    expect(markup).toMatch(
+      /data-slot="provision-card-full-unavailable"[^>]*>Text not available<\/span>/u,
+    );
+    expect(markup).toContain('aria-expanded="false"');
+    expect(markup).toContain("Show full provision");
+    expect(markup).not.toContain("Show cited part only");
+  }
+  const fullAvailableBlock = {
+    anchorId: "par_5-odst_1",
+    id: "full-part-1",
+    text: "Odborná péče se posuzuje podle povolání.",
+  };
+  const fullMissingBlock = {
+    anchorId: "par_5-odst_2",
+    id: "full-part-2",
+    text: "Doplněné znění druhého odstavce.",
+  };
+  const fullMissingChildBlock = {
+    anchorId: "par_5-odst_2-pism_a",
+    id: "full-part-2-letter-a",
+    text: "Písmeno citovaného druhého odstavce.",
+  };
+  const uncitedFullBlock = {
+    anchorId: "par_5-odst_3",
+    id: "full-part-3",
+    text: "Necitované znění třetího odstavce.",
+  };
+  for (const missingWording of [null, { ...wording, blocks: [] }]) {
+    const unresolved = render({
+      availableWording: wording,
+      missingWording,
+      showsFull: true,
+      full: {
+        isPending: false,
+        whole: {
+          ...wording,
+          citedAnchorId: null,
+          blocks: [fullAvailableBlock, uncitedFullBlock],
+        },
+      },
+    });
+    expect(unresolved).toContain('aria-expanded="true"');
+    expect(unresolved).toContain("Show cited part only");
+    expect(unresolved).not.toContain(
+      'data-slot="provision-card-full-unavailable"',
+    );
+    expect(unresolved).toContain("Odborná péče se posuzuje podle povolání.");
+    expect(unresolved).toContain("Text of § 5 odst. 2 is not available");
+    expect(unresolved).toContain('data-slot="provision-card-unavailable-part"');
+    expect(quotedRuns(unresolved)).toEqual([
+      { cited: true, texts: [fullAvailableBlock.text] },
+      { cited: false, texts: [uncitedFullBlock.text] },
+    ]);
+    const recovered = render({
+      availableWording: wording,
+      missingWording,
+      showsFull: true,
+      full: {
+        isPending: false,
+        whole: {
+          ...wording,
+          citedAnchorId: null,
+          blocks: [
+            fullAvailableBlock,
+            fullMissingBlock,
+            fullMissingChildBlock,
+            uncitedFullBlock,
+          ],
+        },
+      },
+    });
+    expect(recovered).not.toContain(
+      'data-slot="provision-card-unavailable-part"',
+    );
+    expect(recovered).not.toContain("Text of § 5 odst. 2 is not available");
+    expect(quotedRuns(recovered)).toEqual([
+      {
+        cited: true,
+        texts: [
+          fullAvailableBlock.text,
+          fullMissingBlock.text,
+          fullMissingChildBlock.text,
+        ],
+      },
+      { cited: false, texts: [uncitedFullBlock.text] },
+    ]);
+  }
+  const allUnavailable = render({
+    availableWording: null,
+    missingWording: { ...wording, blocks: [] },
+  });
+  expect(allUnavailable).toContain('data-slot="provision-card-unavailable"');
+  expect(allUnavailable).not.toContain(
+    'data-slot="provision-card-unavailable-part"',
+  );
+});
+
+for (const response of ["error", "null", "empty"] as const) {
+  test(`an unavailable full provision (${response}) can fold back and retry`, async () => {
+    const { GlobalRegistrator } = await import("@happy-dom/global-registrator");
+    GlobalRegistrator.register();
+    const previousActEnvironment = Reflect.get(
+      globalThis,
+      "IS_REACT_ACT_ENVIRONMENT",
+    );
+    Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", true);
+    const { createRoot } = await import("react-dom/client");
+    const { act } = await import("react");
+    const container = document.createElement("div");
+    document.body.append(container);
+    const root = createRoot(container);
+    const citation = {
+      document: {
+        country: "CZE",
+        eli: "/eli/cz/sb/2012/89",
+        id: "act",
+        slug: null,
+        versionValidFrom: null,
+      },
+      payload: {
+        anchorId: "par_5",
+        documentId: "act",
+        eli: "/eli/cz/sb/2012/89",
+        highlightAnchorId: "par_5-odst_1",
+        jurisdiction: "CZE",
+        provisionLabel: "§ 5 odst. 1",
+        statuteTitle: "Občanský zákoník",
+        versionCount: 1,
+        versionValidFrom: null,
+      },
+      preview: null,
+    } satisfies CitedProvisionTarget;
+    const wording = {
+      anchorId: "par_5",
+      blocks: [
+        { anchorId: "par_5-odst_1", id: "part-1", text: "Cited wording." },
+      ],
+      citedAnchorId: "par_5-odst_1",
+      documentId: "act",
+      heading: null,
+      headings: [],
+      language: "cs",
+    } satisfies ProvisionPreviewData;
+    const requests: ReturnType<
+      typeof Promise.withResolvers<ProvisionPreviewData | null>
+    >[] = [];
+    const readFull = async () => {
+      const request = Promise.withResolvers<ProvisionPreviewData | null>();
+      requests.push(request);
+      return request.promise;
+    };
+    const toggles: Promise<void>[] = [];
+    const Card = () => {
+      const [shown, setShown] = useState<"cited" | "full">("cited");
+      const [full, setFull] = useState<FullProvisionRead>({
+        isPending: false,
+        whole: null,
+      });
+      const toggleFull = async () => {
+        if (shown === "full") {
+          setShown("cited");
+          return;
+        }
+        setShown("full");
+        setFull({ isPending: true, whole: null });
+        const result = await Result.tryPromise(readFull);
+        setFull({
+          isPending: false,
+          whole: result.isOk() ? result.value : null,
+        });
+      };
+      // The click handler is synchronous; keep each toggle observable.
+      const onToggleFull = () => {
+        toggles.push(toggleFull());
+      };
+      return (
+        <DecisionReaderProvider adapters={fakeReaderAdapters}>
+          <CitedProvisionExpansion
+            citations={[citation]}
+            full={full}
+            onToggleFull={onToggleFull}
+            showsFull={shown === "full"}
+            wordings={[{ target: citation, wording }]}
+          />
+        </DecisionReaderProvider>
+      );
+    };
+    try {
+      await act(async () => {
+        root.render(<Card />);
+      });
+      const disclosure =
+        [...container.querySelectorAll("button")].find(
+          (button) =>
+            button.getAttribute("aria-label") ===
+            citation.payload.provisionLabel,
+        ) ?? panic("Missing provision disclosure");
+      await act(async () => {
+        disclosure.click();
+      });
+      expect(disclosure.getAttribute("aria-expanded")).toBe("true");
+      const toggle =
+        [...container.querySelectorAll("button")].find(
+          (button) => button.textContent === "Show full provision",
+        ) ?? panic("Missing full provision toggle");
+      await act(async () => {
+        toggle.click();
+      });
+      expect(requests).toHaveLength(1);
+      expect(toggle.getAttribute("aria-disabled")).toBe("true");
+      expect(toggle.getAttribute("aria-expanded")).toBe("false");
+      expect(container.textContent).toContain("Cited wording.");
+      await act(async () => {
+        const request = requests.at(0) ?? panic("Missing full provision read");
+        switch (response) {
+          case "error":
+            request.reject(new DOMException("Read failed", "NetworkError"));
+            break;
+          case "null":
+            request.resolve(null);
+            break;
+          case "empty":
+            request.resolve({ ...wording, blocks: [] });
+            break;
+          default:
+            response satisfies never;
+        }
+      });
+      expect(toggle.hasAttribute("aria-disabled")).toBe(false);
+      expect(toggle.textContent).toBe("Show full provision");
+      expect(toggle.getAttribute("aria-expanded")).toBe("false");
+      expect(
+        container.querySelector('[data-slot="provision-card-full-unavailable"]')
+          ?.textContent,
+      ).toBe("Text not available");
+      await act(async () => {
+        toggle.click();
+      });
+      expect(
+        container.querySelector(
+          '[data-slot="provision-card-full-unavailable"]',
+        ),
+      ).toBeNull();
+      expect(container.textContent).toContain("Cited wording.");
+      expect(toggle.hasAttribute("aria-disabled")).toBe(false);
+      expect(requests).toHaveLength(1);
+      await act(async () => {
+        toggle.click();
+      });
+      expect(requests).toHaveLength(2);
+      expect(toggle.getAttribute("aria-disabled")).toBe("true");
+      await act(async () => {
+        const retry = requests.at(1) ?? panic("Missing retry read");
+        retry.resolve({
+          ...wording,
+          blocks: [
+            ...wording.blocks,
+            {
+              anchorId: "par_5-odst_2",
+              id: "part-2",
+              text: "Rest of provision.",
+            },
+          ],
+        });
+      });
+      expect(toggle.hasAttribute("aria-disabled")).toBe(false);
+      expect(toggle.textContent).toBe("Show cited part only");
+      expect(toggle.getAttribute("aria-expanded")).toBe("true");
+      expect(container.textContent).toContain("Rest of provision.");
+      await Promise.all(toggles);
+    } finally {
+      await act(async () => {
+        root.unmount();
+      });
+      container.remove();
+      if (previousActEnvironment === undefined) {
+        Reflect.deleteProperty(globalThis, "IS_REACT_ACT_ENVIRONMENT");
+      } else {
+        Reflect.set(
+          globalThis,
+          "IS_REACT_ACT_ENVIRONMENT",
+          previousActEnvironment,
+        );
+      }
+      await GlobalRegistrator.unregister();
+    }
+  });
+}
+
+test("a hover preview scrolls a long provision inside a viewport-bound cap, inline cards keep growing and a margin card shows a note-sized glimpse", async () => {
+  const provision = {
+    document: {
+      country: "CZE",
+      eli: "/eli/cz/sb/2012/89",
+      id: "act",
+      slug: null,
+      versionValidFrom: null,
+    },
+    payload: {
+      anchorId: "par_5",
+      documentId: "act",
+      eli: "/eli/cz/sb/2012/89",
+      highlightAnchorId: "par_5",
+      jurisdiction: "CZE",
+      provisionLabel: "§ 5",
+      statuteTitle: "Občanský zákoník",
+      versionCount: 1,
+      versionValidFrom: null,
+    },
+    preview: null,
+  } satisfies CitedProvisionTarget;
+  const lastBlockText = "Poslední odstavec dlouhého ustanovení.";
+  const wording = {
+    anchorId: "par_5",
+    blocks: [
+      ...Array.from({ length: 40 }, (_, index) => ({
+        anchorId: `par_5-odst_${index + 1}`,
+        id: `part-${index + 1}`,
+        text: `Odstavec ${index + 1}. ${"Dlouhé znění, které se do náhledu nevejde. ".repeat(12)}`,
+      })),
+      { anchorId: "par_5-odst_41", id: "part-41", text: lastBlockText },
+    ],
+    citedAnchorId: null,
+    documentId: "act",
+    heading: null,
+    headings: [],
+    language: "cs",
+  } satisfies ProvisionPreviewData;
+  const wordings = [{ target: provision, wording }];
+  const previewMarkup = renderReaderFixture(
+    <CitedProvisionPeek provision={provision} wordings={wordings} />,
+  );
+  const inlineMarkup = renderReaderFixture(
+    <CitedProvisionExpansion
+      citations={[provision]}
+      full={{ isPending: false, whole: null }}
+      onToggleFull={() => undefined}
+      showsFull={false}
+      wordings={wordings}
+    />,
+  );
+  const gutterMarkup = renderReaderFixture(
+    <CitedProvisionExpansion
+      citations={[provision]}
+      full={{ isPending: false, whole: null }}
+      onToggleFull={() => undefined}
+      placement="gutter"
+      showsFull={false}
+      wordings={wordings}
+    />,
+  );
+  const { GlobalRegistrator } = await import("@happy-dom/global-registrator");
+  GlobalRegistrator.register();
+  try {
+    // The peek's body draws the whole wording and leaves bounding it to the
+    // peek shell, which scrolls every kind's body inside one cap.
+    const preview = new DOMParser().parseFromString(previewMarkup, "text/html");
+    const previewWording =
+      preview.querySelector('[data-slot="provision-card-wording"]') ??
+      panic("Missing preview wording");
+    expect(previewWording.textContent).toContain(lastBlockText);
+    expect(
+      preview.querySelector('[data-slot="scroll-area-viewport"]'),
+    ).toBeNull();
+
+    const inline = new DOMParser().parseFromString(inlineMarkup, "text/html");
+    const inlineWording =
+      inline.querySelector('[data-slot="provision-card-wording"]') ??
+      panic("Missing inline wording");
+    expect(inlineWording.textContent).toContain(lastBlockText);
+    expect(
+      inlineWording.closest('[data-slot="scroll-area-viewport"]'),
+    ).toBeNull();
+    expect(
+      inline.querySelector('[data-slot="scroll-area-viewport"]'),
+    ).toBeNull();
+    expect(inlineWording.classList).toContain("reader-body");
+
+    // The margin is shared by every note on the page, so a folded margin
+    // card holds two lines of wording, typeset like the notes beside it.
+    const gutter = new DOMParser().parseFromString(gutterMarkup, "text/html");
+    const glimpse =
+      gutter.querySelector('[data-slot="provision-card-glimpse"]') ??
+      panic("Missing folded margin glimpse");
+    expect(glimpse.classList).toContain("max-h-[2lh]");
+    expect(glimpse.classList).toContain("overflow-hidden");
+    const gutterWording =
+      glimpse.querySelector('[data-slot="provision-card-wording"]') ??
+      panic("Missing margin wording");
+    expect(gutterWording.classList).toContain("reader-chrome");
+    expect(gutterWording.classList).not.toContain("reader-body");
+    expect(gutterWording.classList).toContain(
+      "text-[calc(0.75rem*var(--reader-text-scale))]",
+    );
+  } finally {
+    await GlobalRegistrator.unregister();
+  }
+});
+
+test("EU provisions link to EUR-Lex in every supported citation language without hosted cards", () => {
+  const citations = [
+    "Article 6(1)(a) of Regulation (EU) 2016/679",
+    "čl. 6 odst. 1 písm. a) nařízení (EU) 2016/679",
+    "čl. 6 ods. 1 písm. a) nariadenia (EÚ) 2016/679",
+    "art. 6 ust. 1 lit. a) rozporządzenia 2016/679",
+    "6. cikk (1) bekezdés a) pont 2016/679/EU rendelet",
+    "Artikel 6 Abs. 1 Buchst. a) der Verordnung (EU) 2016/679",
+    "Article 6 paragraphe 1 lettre a) du règlement (UE) 2016/679",
+  ];
+  for (const sentenceText of citations) {
+    const citation = locateEuProvisionCitations(sentenceText).at(0);
+    expect(citation).toBeDefined();
+    if (citation === undefined) {
+      throw new TypeError("EU citation fixture was not recognized");
+    }
+    const href = euProvisionSourceUrl(citation.act.celex, citation.reference);
+    expect(href).not.toBeNull();
+    if (href === null) {
+      throw new TypeError("EU citation fixture has no publisher URL");
+    }
+    const placements = prepareDecisionTextPlacements({
+      adapters: fakeReaderAdapters,
+      blocks: [
+        {
+          id: "eu",
+          anchorId: "eu",
+          type: "paragraph",
+          plainText: sentenceText,
+          inlines: [{ type: "text", text: sentenceText }],
+        },
+      ],
+      annotationAnchors: [],
+      statuteCitationAnchors: [],
+      citationAnchors: [],
+      unresolvedCitationAnchors: [],
+      provisionAnchors: [],
+      externalProvisionAnchors: [
+        {
+          id: "eu-reference",
+          sentenceText,
+          spanStart: citation.start,
+          reference: citation.reference,
+          target: { href },
+        },
+      ],
+    });
+    expect(placements.failures).toEqual([]);
+    const anchor = placements.anchorsByPieceId["eu"]?.at(0);
+    expect(anchor).toBeDefined();
+    if (anchor === undefined) {
+      throw new TypeError("EU citation fixture was not placed");
+    }
+    const markup = renderToStaticMarkup(
+      anchor.render(sentenceText.slice(anchor.start, anchor.end), {
+        isRangeStart: true,
+      }),
+    );
+    expect(markup).toContain(`href="${href.replaceAll("&", "&amp;")}"`);
+    expect(markup).toContain('target="_blank"');
+    expect(placements.provisionsByAnchorId.size).toBe(0);
+  }
+});
+
+test("a margin card's ranges are the cited words of its paragraph", () => {
+  const sentence = "Podle § 90 a § 91 rozhodl soud.";
+  const provision = (section: number) =>
+    ({
+      id: `provision-${String(section)}`,
+      sentenceText: sentence,
+      spanStart: 0,
+      reference: {
+        section,
+        sectionSuffix: null,
+        subsection: null,
+        letter: null,
+        unit: "section",
+      },
+      target: {
+        document: {
+          country: "CZE",
+          id: "act",
+          eli: "eli/act",
+          slug: null,
+          versionValidFrom: null,
+        },
+        preview: null,
+        payload: {
+          documentId: "act",
+          eli: "eli/act",
+          jurisdiction: "CZE",
+          anchorId: `par_${String(section)}`,
+          provisionLabel: `§ ${String(section)}`,
+          statuteTitle: "Zákon",
+          versionValidFrom: null,
+          versionCount: 1,
+        },
+      },
+    }) satisfies DecisionProvisionAnchor;
+  const cards = prepareDecisionProvisionCards({
+    blocks: [
+      {
+        type: "paragraph",
+        id: "cited",
+        anchorId: "p-9",
+        number: 9,
+        inlines: [{ type: "text", text: sentence }],
+        plainText: sentence,
+      },
+    ],
+    provisionAnchors: [provision(90), provision(91)],
+  });
+  expect(
+    cards.map(({ ranges, startAnchorId }) => [
+      startAnchorId,
+      ranges.map(({ citationId, end, start }) => [
+        citationId,
+        sentence.slice(start, end),
+      ]),
+    ]),
+  ).toEqual([
+    ["p-9", [["provision-90", "§ 90"]]],
+    ["p-9", [["provision-91", "§ 91"]]],
+  ]);
+});

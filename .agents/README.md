@@ -9,7 +9,7 @@ See [AGENTS.md](../AGENTS.md) for project guidelines.
 
 ```
 .agents/
-├── plans/           # Timestamped implementation plans
+├── plans/           # Timestamped implementation plans (gitignored)
 ├── justifications/  # Decision rationale (why we chose X over Y)
 ├── reports/         # Local investigation reports (gitignored)
 └── scratch/         # Temporary notes, drafts, work-in-progress

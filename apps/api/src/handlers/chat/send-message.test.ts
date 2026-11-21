@@ -4,19 +4,36 @@ import { SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
-import { CHAT_TURN_INTENT } from "@stll/api-contract";
+import {
+  CHAT_INPUT_REFUSAL_CODE,
+  CHAT_MESSAGE_EMPTY_ERROR_CODE,
+  CHAT_TURN_INTENT,
+} from "@stll/api-contract";
+import { CHAT_SEND_QUEUES_INSTEAD_CODE } from "@stll/api-contract/chat-queue";
+import {
+  LEGAL_HOLD_ACTIVE,
+  LEGAL_HOLD_REASON_ISSUE_CODE,
+} from "@stll/api-contract/legal-holds";
+import { roles } from "@stll/permissions";
+import { createTestState } from "@stll/test-state";
 
+import { member } from "@/api/db/auth-schema";
 import type { SafeDb } from "@/api/db/safe-db";
 import {
   chatMessages,
+  chatQueueHolds,
+  chatRunLogEntries,
   chatRunLogs,
   chatThreadNames,
   chatThreads,
+  chatToolGrants,
   chatTurns,
 } from "@/api/db/schema";
+import { env } from "@/api/env";
 import { toPersistableChatMessage } from "@/api/handlers/chat/chat-message-parts";
 import { CHAT_RUN_MODE } from "@/api/handlers/chat/chat-schema";
-import { processChatTurnOwnership } from "@/api/handlers/chat/chat-turn-run";
+import { ChatTurnOwnership } from "@/api/handlers/chat/chat-turn-run";
+import { CHAT_TURN_PERMISSIONS } from "@/api/handlers/chat/chat-turn-state";
 import {
   ChatSendLifecycle,
   createSendMessage,
@@ -26,21 +43,34 @@ import { compactMessagesForContext } from "@/api/handlers/chat/send-message-comp
 import * as chatSideEffectsModule from "@/api/handlers/chat/send-message-side-effects";
 import { streamChat } from "@/api/handlers/chat/stream-chat";
 import * as externalMcpToolsModule from "@/api/handlers/chat/tools/external-mcp-tools";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
+import { AI_CONFIG_UNREADABLE_ERROR_CODE } from "@/api/lib/ai-config-response";
 import { toSafeId } from "@/api/lib/branded-types";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { CHAT_THREAD_NAME_KIND } from "@/api/lib/chat/thread-name-kinds";
-import { HandlerError, DatabaseError } from "@/api/lib/errors/tagged-errors";
-import { sessionMemberRole } from "@/api/lib/permission-authorization";
+import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
+import { isMemberRole } from "@/api/lib/member-roles";
 import {
+  hasMemberPermission,
+  sessionMemberRole,
+} from "@/api/lib/permission-authorization";
+import {
+  ActionAdmissionError,
   actionAdmissionRefusal,
-  type ActionAdmissionError,
 } from "@/api/lib/rate-limit/action-admission";
 import type { AdmittedActionIdentity } from "@/api/lib/rate-limit/action-kinds";
+import { getTanStackTextModelInfoForTask } from "@/api/lib/tanstack-ai-models";
+import { MANAGED_MODEL_TIER } from "@/api/lib/usage/managed-model-tier";
+import {
+  LegalHoldActiveError,
+  LegalHoldRecord,
+} from "@/api/lib/workspaces/legal-holds/errors";
 import { actionAdmissionErrorFor } from "@/api/tests/helpers/action-admission-error";
 import { CHAT_ORACLE, violationsOf } from "@/api/tests/helpers/chat-oracles";
 import { testFileKey } from "@/api/tests/helpers/file-key";
+import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -51,6 +81,24 @@ import type {
   PersistableTerminalAssistantMessage,
 } from "./types";
 import type { UploadedChatFile } from "./upload-files";
+
+/**
+ * Whether a mocked turn lookup is acceptance's check for a live turn (a
+ * running one, or one handed over and not yet adopted), which these threads
+ * never hold.
+ */
+const asksForLiveTurn = (status: unknown): boolean => {
+  if (typeof status !== "object" || status === null) {
+    return false;
+  }
+  const eq: unknown = Reflect.get(status, "eq");
+  const among: unknown = Reflect.get(status, "in");
+  return (
+    eq === "running" || (Array.isArray(among) && among.includes("running"))
+  );
+};
+
+const testState = createTestState({ file: import.meta.path, config: env });
 
 let webSearchProviderLoadHook: (() => void) | undefined;
 const loadWebSearchProvidersForOrgMock = mock(async () => {
@@ -82,24 +130,26 @@ const loadExternalMcpToolsForUserMock = mock(async () => {
 });
 const realRollbackUnpersistedChatSideEffects =
   chatSideEffectsModule.rollbackUnpersistedChatSideEffects;
+const uploadMessageFilesWithRollbackDefault = async ({
+  message,
+}: {
+  message: PersistableChatMessage;
+}): Promise<
+  Result<
+    { message: PersistableChatMessage; uploadedFiles: UploadedChatFile[] },
+    LegalHoldActiveError
+  >
+> => Result.ok({ message, uploadedFiles: [] });
 const uploadMessageFilesWithRollbackMock = mock(
-  async ({
-    message,
-  }: {
-    message: PersistableChatMessage;
-  }): Promise<
-    Result<
-      { message: PersistableChatMessage; uploadedFiles: UploadedChatFile[] },
-      never
-    >
-  > => Result.ok({ message, uploadedFiles: [] }),
+  uploadMessageFilesWithRollbackDefault,
 );
+const rollbackUnpersistedChatSideEffectsDefault = async (
+  options: Parameters<
+    typeof chatSideEffectsModule.rollbackUnpersistedChatSideEffects
+  >[0],
+) => await realRollbackUnpersistedChatSideEffects(options);
 const rollbackUnpersistedChatSideEffectsMock = mock(
-  async (
-    options: Parameters<
-      typeof chatSideEffectsModule.rollbackUnpersistedChatSideEffects
-    >[0],
-  ) => await realRollbackUnpersistedChatSideEffects(options),
+  rollbackUnpersistedChatSideEffectsDefault,
 );
 const compactMessagesForContextMock = mock(compactMessagesForContext);
 const sendMessage = createSendMessage({
@@ -118,6 +168,18 @@ const sendMessage = createSendMessage({
 let analytics: RecordingAnalytics;
 
 beforeEach(() => {
+  compactMessagesForContextMock.mockClear();
+  loadExternalMcpToolsForUserMock.mockClear();
+  loadWebSearchProvidersForOrgMock.mockClear();
+  rollbackUnpersistedChatSideEffectsMock.mockReset();
+  rollbackUnpersistedChatSideEffectsMock.mockImplementation(
+    rollbackUnpersistedChatSideEffectsDefault,
+  );
+  uploadMessageFilesWithRollbackMock.mockReset();
+  uploadMessageFilesWithRollbackMock.mockImplementation(
+    uploadMessageFilesWithRollbackDefault,
+  );
+  upsertChatThreadSearchDocumentMock.mockClear();
   analytics = installRecordingAnalytics();
 });
 
@@ -127,6 +189,15 @@ afterEach(() => {
 
 type SendMessageCtx = Parameters<typeof sendMessage.handler>[0];
 type SendMessageInput = SendMessageCtx["body"]["forwardedProps"];
+type ReadySendMessageCtx = Extract<
+  SendMessageCtx,
+  {
+    orgAIConfigStatus: Exclude<
+      SendMessageCtx["orgAIConfigStatus"],
+      "unreadable"
+    >;
+  }
+>;
 
 const organizationId = toSafeId<"organization">(
   "00000000-0000-0000-0000-000000000001",
@@ -163,24 +234,49 @@ const startedThreadNames = [
   { kind: CHAT_THREAD_NAME_KIND.ledgerStart, name: "", target: null },
 ];
 
+// Feature access resolves the caller through the member join; no identity
+// means no enrolment, so chat sends run without enrolment-gated tools.
+const noMemberIdentity = {
+  innerJoin: () => ({ where: () => ({ limit: async () => [] }) }),
+};
+
+const fromSharedReads = (table: unknown, otherwise: () => unknown) => {
+  if (table === member) {
+    return noMemberIdentity;
+  }
+  if (table === chatThreadNames) {
+    return { where: async () => startedThreadNames };
+  }
+  // The turn loads the user's stored approval grants; these users have none.
+  if (table === chatToolGrants) {
+    return { leftJoin: () => ({ where: () => ({ limit: async () => [] }) }) };
+  }
+  return otherwise();
+};
+
 const selectChatMessages = () => ({
   from: (table: unknown) =>
-    table === chatThreadNames
-      ? { where: async () => startedThreadNames }
-      : {
-          where: () => ({
-            for: async () => [],
-            limit: async () => [],
-            orderBy: emptyOrderedRows,
-          }),
-        },
+    fromSharedReads(table, () => ({
+      where: () => ({
+        for: async () => [],
+        limit: async () => [],
+        orderBy: emptyOrderedRows,
+      }),
+    })),
 });
 
+/**
+ * A turn that fails holds its thread's queue in its settlement; these
+ * threads queue nothing, so the hold's statement is not a run-id lookup.
+ */
+const withoutQueueHolds =
+  (execute: (statement: SQL) => Promise<unknown>) => async (statement: SQL) =>
+    new PgDialect().sqlToQuery(statement).sql.includes("chat_queue_holds")
+      ? { rows: [] }
+      : await execute(statement);
+
 const withThreadNameReads = (select: () => { from: () => unknown }) => () => ({
-  from: (table: unknown) =>
-    table === chatThreadNames
-      ? { where: async () => startedThreadNames }
-      : select().from(),
+  from: (table: unknown) => fromSharedReads(table, () => select().from()),
 });
 
 // Settlement closes the turn's run log in the transaction that ends the turn.
@@ -192,7 +288,7 @@ const withRunLogInsert =
 
 const withRunLogUpdate =
   (update: (table: unknown) => unknown) => (table: unknown) =>
-    table === chatRunLogs
+    table === chatRunLogs || table === chatRunLogEntries
       ? { set: () => ({ where: async () => undefined }) }
       : update(table);
 
@@ -202,18 +298,34 @@ const withRegistryCredentialQuery = (transaction: unknown): unknown => {
   }
   const query = "query" in transaction ? transaction.query : undefined;
   return {
+    // A member's send releases the thread's queue in its acceptance.
+    delete: (table: unknown) => {
+      if (table !== chatQueueHolds) {
+        throw new Error("Unexpected delete in chat send test");
+      }
+      return { where: async () => await Promise.resolve([]) };
+    },
     execute: async (statement: SQL) => {
-      if (
-        !new PgDialect()
-          .sqlToQuery(statement)
-          .sql.includes("chat_turn_run_id_taken")
-      ) {
+      const text = new PgDialect().sqlToQuery(statement).sql;
+      // A turn that fails holds its thread's queue; these threads have none.
+      if (text.includes("chat_queue_holds")) {
+        return await Promise.resolve({ rows: [] });
+      }
+      if (!text.includes("chat_turn_run_id_taken")) {
         throw new Error("Unexpected SQL execution in chat send test");
       }
       return { rows: [{ taken: false }] };
     },
-    select: selectChatMessages,
     ...transaction,
+    select: (selection: unknown) => {
+      if ("select" in transaction && typeof transaction.select === "function") {
+        const result: unknown = Reflect.apply(transaction.select, transaction, [
+          selection,
+        ]);
+        return result;
+      }
+      return selectChatMessages();
+    },
     query: {
       businessRegistryCredentials: { findMany: async () => [] },
       ...(typeof query === "object" && query !== null ? query : {}),
@@ -228,7 +340,7 @@ const createContext = ({
     role: "user",
     parts: [{ type: "text", content: "Summarize the selected matters" }],
   },
-  request = new Request("http://localhost/v1/chat/send"),
+  request = new Request("http://localhost/v1/chat"),
   onSafeDbTransaction,
   runMode,
   truncateAfterMessageId,
@@ -249,9 +361,14 @@ const createContext = ({
   truncateAfterMessageId?: SendMessageInput["truncateAfterMessageId"];
   turnIntent?: SendMessageInput["turnIntent"];
   transaction?: unknown;
-}): SendMessageCtx => {
+}): ReadySendMessageCtx => {
   const { safeDb, scopedDb } = createScopedDbMock(
     withRegistryCredentialQuery(transaction),
+    {
+      featureAccess: {
+        identity: { email: "member@example.test", emailVerified: true },
+      },
+    },
   );
   const observedSafeDb: SafeDb = async (operation, retry) => {
     onSafeDbTransaction?.();
@@ -269,7 +386,7 @@ const createContext = ({
     ...(runMode === undefined ? {} : { runMode }),
   };
 
-  return asTestRaw<SendMessageCtx>({
+  return asTestRaw<ReadySendMessageCtx>({
     body: {
       threadId,
       runId: "run-test",
@@ -295,13 +412,135 @@ const createContext = ({
     promptCachingEnabled: false,
     recordAuditEvent: async () => {},
     request,
-    route: "/v1/chat/send",
+    route: "/v1/chat" satisfies ApiRoutePath,
+    headers: {},
     safeDb: observedSafeDb,
     scopedDb,
+    set: { headers: {}, status: 200 },
     session: { activeOrganizationId: organizationId },
     user: { id: userId },
   });
 };
+
+test("unreadable settings reject a chat turn before provider work", async () => {
+  const streamResponse = mock(
+    async () =>
+      ({
+        type: "streaming",
+        response: new Response("", {
+          headers: { "content-type": "text/event-stream" },
+        }),
+      }) as const,
+  );
+  const send = createSendMessage({
+    compactMessagesForContext: compactMessagesForContextMock,
+    createRefRegistry: createChatRefRegistry,
+    indexThread: upsertChatThreadSearchDocumentMock,
+    loadExternalMcpTools: loadExternalMcpToolsForUserMock,
+    loadWebSearchProviders: loadWebSearchProvidersForOrgMock,
+    rollbackSideEffects: rollbackUnpersistedChatSideEffectsMock,
+    streamResponse,
+    uploadMessageFiles: uploadMessageFilesWithRollbackMock,
+  });
+  let transactions = 0;
+  const context = createContext({
+    contextMatterIds: [],
+    onSafeDbTransaction: () => {
+      transactions += 1;
+    },
+  });
+  const result = await send.handler({
+    ...context,
+    orgAIConfig: null,
+    orgAIConfigStatus: ORG_AI_CONFIG_STATUS.unreadable,
+    promptCachingEnabled: null,
+    managedAIResidency: null,
+  });
+  expect(result).toMatchObject({
+    code: 503,
+    response: { code: AI_CONFIG_UNREADABLE_ERROR_CODE },
+  });
+  expect(streamResponse).not.toHaveBeenCalled();
+  expect(transactions).toBe(0);
+});
+
+describe("user messages with nothing to read", () => {
+  const sendWith = async (content: string) => {
+    const streamResponse = mock(
+      async () =>
+        ({
+          type: "streaming",
+          response: new Response("", {
+            headers: { "content-type": "text/event-stream" },
+          }),
+        }) as const,
+    );
+    const insertValues = mock(async () => undefined);
+    const send = createSendMessage({
+      compactMessagesForContext: compactMessagesForContextMock,
+      createRefRegistry: createChatRefRegistry,
+      indexThread: upsertChatThreadSearchDocumentMock,
+      loadExternalMcpTools: loadExternalMcpToolsForUserMock,
+      loadWebSearchProviders: loadWebSearchProvidersForOrgMock,
+      rollbackSideEffects: rollbackUnpersistedChatSideEffectsMock,
+      streamResponse,
+      uploadMessageFiles: uploadMessageFilesWithRollbackMock,
+    });
+    // A message that passes the check goes on into turn work this fake
+    // database does not model; only how far it got matters here.
+    const result = await Result.tryPromise(
+      async () =>
+        await send.handler(
+          createContext({
+            contextMatterIds: [],
+            message: {
+              id: messageId,
+              role: "user",
+              parts: [{ type: "text", content }],
+            },
+            transaction: {
+              delete: () => ({
+                where: () => ({ returning: async () => [{ id: threadId }] }),
+              }),
+              insert: () => ({ values: insertValues }),
+              query: {
+                chatMessages: { findFirst: async () => null },
+                chatThreadCompactions: { findFirst: async () => null },
+                chatThreads: { findFirst: async () => undefined },
+                organizationSettings: { findFirst: async () => null },
+              },
+              select: selectChatMessages,
+            },
+          }),
+        ),
+    );
+    return { insertValues, result, streamResponse };
+  };
+
+  test.each(["<p> </p>", "<p><br></p>", "<p>&nbsp;</p>"])(
+    "refuses %s with a typed 422 before creating the thread or calling a provider",
+    async (html) => {
+      const { insertValues, result, streamResponse } = await sendWith(html);
+      expect(Result.isOk(result)).toBe(true);
+      expect(Result.isOk(result) ? result.value : undefined).toMatchObject({
+        code: 422,
+        response: { code: CHAT_MESSAGE_EMPTY_ERROR_CODE },
+      });
+      expect(insertValues).not.toHaveBeenCalled();
+      expect(streamResponse).not.toHaveBeenCalled();
+    },
+  );
+
+  test("a message with text passes the check and goes on to create its thread", async () => {
+    const { insertValues, result } = await sendWith(
+      "<p>Summarize the lease</p>",
+    );
+    expect(insertValues).toHaveBeenCalled();
+    expect(Result.isOk(result) ? result.value : undefined).not.toMatchObject({
+      response: { code: CHAT_MESSAGE_EMPTY_ERROR_CODE },
+    });
+  });
+});
 
 describe("send message context-matter authorization", () => {
   test("rejects a requested matter outside the caller's accessible set", async () => {
@@ -355,6 +594,7 @@ describe("agent sandbox preflight", () => {
     expect(result).toEqual({
       code: 422,
       response: {
+        code: CHAT_INPUT_REFUSAL_CODE.agentRunsDisabled,
         message: "Agent sandbox runs are not enabled for this deployment.",
       },
     });
@@ -412,6 +652,17 @@ describe("agent connector isolation", () => {
 describe("send message disconnect handling", () => {
   test("tracks a preflight claim until settlement and rollback finish", async () => {
     for (const settlementFails of [false, true]) {
+      const ownership = new ChatTurnOwnership();
+      const releaseClaim = mock(() => undefined);
+      const holdClaim = ownership.holdClaim.bind(ownership);
+      ownership.holdClaim = (claim) => {
+        const release = holdClaim(claim);
+        return () => {
+          releaseClaim();
+          release();
+        };
+      };
+      const leaseShortened = Promise.withResolvers<undefined>();
       const settlementStarted = Promise.withResolvers<undefined>();
       const finishSettlement =
         Promise.withResolvers<Result<boolean, DatabaseError>>();
@@ -424,9 +675,12 @@ describe("send message disconnect handling", () => {
           settlementStarted.resolve(undefined);
           return await finishSettlement.promise;
         }
+        leaseShortened.resolve(undefined);
         return Result.ok("owned");
       });
       const lifecycle = new ChatSendLifecycle({
+        organizationId,
+        ownership,
         mode: "raw",
         indexThread: upsertChatThreadSearchDocumentMock,
         externalMcpToolsLoader:
@@ -454,25 +708,24 @@ describe("send message disconnect handling", () => {
       );
       const cleanup = lifecycle.cleanup();
       await settlementStarted.promise;
-      const relinquishing = processChatTurnOwnership.relinquish();
-      const finishedEarly = await Promise.race([
-        relinquishing.then(() => true),
-        Bun.sleep(20).then(() => false),
-      ]);
-      expect(finishedEarly).toBe(false);
+      const relinquishing = ownership.relinquish({ type: "end" });
+      expect(
+        await Promise.race([
+          leaseShortened.promise.then(() => true),
+          relinquishing.then(() => false),
+        ]),
+      ).toBe(true);
+      expect(releaseClaim).not.toHaveBeenCalled();
       finishSettlement.resolve(
         settlementFails
           ? Result.err(new DatabaseError({ message: "settlement failed" }))
           : Result.ok(true),
       );
       await rollbackStarted.promise;
-      const finishedDuringRollback = await Promise.race([
-        relinquishing.then(() => true),
-        Bun.sleep(20).then(() => false),
-      ]);
-      expect(finishedDuringRollback).toBe(false);
+      expect(releaseClaim).not.toHaveBeenCalled();
       finishRollback.resolve(undefined);
       await cleanup;
+      expect(releaseClaim).toHaveBeenCalledTimes(1);
       expect(await relinquishing).toBe("stored");
     }
   });
@@ -480,7 +733,9 @@ describe("send message disconnect handling", () => {
   test("treats every thread mutation as rollback ownership adoption", () => {
     const adoptionUpdate = chatThreads.rollbackToken.onUpdateFn?.();
     if (!(adoptionUpdate instanceof SQL)) {
-      throw new Error("Expected rollback ownership to have a SQL update hook");
+      throw new TypeError(
+        "Expected rollback ownership to have a SQL update hook",
+      );
     }
 
     expect(new PgDialect().sqlToQuery(adoptionUpdate).sql).toBe("null");
@@ -494,7 +749,7 @@ describe("send message disconnect handling", () => {
     const result = await sendMessage.handler(
       createContext({
         contextMatterIds: [],
-        request: new Request("http://localhost/v1/chat/send", {
+        request: new Request("http://localhost/v1/chat", {
           signal: abortController.signal,
         }),
         transaction: { insert },
@@ -525,7 +780,7 @@ describe("send message disconnect handling", () => {
           role: "assistant",
           parts: [{ type: "tool-call", name: "mcp__test__lookup" }],
         },
-        request: new Request("http://localhost/v1/chat/send", {
+        request: new Request("http://localhost/v1/chat", {
           signal: abortController.signal,
         }),
         transaction: {
@@ -562,7 +817,7 @@ describe("send message disconnect handling", () => {
           role: "assistant",
           parts: [{ type: "tool-call", name: "mcp__test__lookup" }],
         },
-        request: new Request("http://localhost/v1/chat/send", {
+        request: new Request("http://localhost/v1/chat", {
           signal: abortController.signal,
         }),
         transaction: {
@@ -599,7 +854,7 @@ describe("send message disconnect handling", () => {
           role: "assistant",
           parts: [{ type: "tool-call", name: "mcp__test__lookup" }],
         },
-        request: new Request("http://localhost/v1/chat/send", {
+        request: new Request("http://localhost/v1/chat", {
           signal: abortController.signal,
         }),
         transaction: {
@@ -630,7 +885,7 @@ describe("send message disconnect handling", () => {
     const result = await sendMessage.handler(
       createContext({
         contextMatterIds: [],
-        request: new Request("http://localhost/v1/chat/send", {
+        request: new Request("http://localhost/v1/chat", {
           signal: abortController.signal,
         }),
         transaction: {
@@ -665,7 +920,7 @@ describe("send message disconnect handling", () => {
     const result = await sendMessage.handler(
       createContext({
         contextMatterIds: [],
-        request: new Request("http://localhost/v1/chat/send", {
+        request: new Request("http://localhost/v1/chat", {
           signal: abortController.signal,
         }),
         transaction: {
@@ -704,7 +959,7 @@ describe("send message disconnect handling", () => {
     const result = await sendMessage.handler(
       createContext({
         contextMatterIds: [],
-        request: new Request("http://localhost/v1/chat/send", {
+        request: new Request("http://localhost/v1/chat", {
           signal: abortController.signal,
         }),
         transaction: {
@@ -766,7 +1021,7 @@ describe("send message disconnect handling", () => {
     const result = await sendMessage.handler(
       createContext({
         contextMatterIds: [activeWorkspaceId],
-        request: new Request("http://localhost/v1/chat/send", {
+        request: new Request("http://localhost/v1/chat", {
           signal: abortController.signal,
         }),
         transaction: {
@@ -802,7 +1057,7 @@ describe("send message disconnect handling", () => {
     expect(update).not.toHaveBeenCalled();
   });
 
-  test("terminalizes the claimed turn when compaction preflight disconnects", async () => {
+  test("keeps an accepted turn running through a compaction preflight disconnect", async () => {
     const abortController = new AbortController();
     const turnUpdates: unknown[] = [];
     let turnClaimed = false;
@@ -822,7 +1077,12 @@ describe("send message disconnect handling", () => {
           ? {
               onConflictDoNothing: () => ({
                 returning: async () => [
-                  { id: turnId, cancelRequestedAt: null },
+                  {
+                    id: turnId,
+                    cancelRequestedAt: null,
+                    organizationId,
+                    userId,
+                  },
                 ],
               }),
             }
@@ -842,7 +1102,9 @@ describe("send message disconnect handling", () => {
           }
           return {
             where: () => ({
-              returning: async () => [{ id: turnId, cancelRequestedAt: null }],
+              returning: async () => [
+                { id: turnId, cancelRequestedAt: null, organizationId, userId },
+              ],
             }),
           };
         }
@@ -853,7 +1115,7 @@ describe("send message disconnect handling", () => {
     const result = await sendMessage.handler(
       createContext({
         contextMatterIds: [],
-        request: new Request("http://localhost/v1/chat/send", {
+        request: new Request("http://localhost/v1/chat", {
           signal: abortController.signal,
         }),
         transaction: {
@@ -885,12 +1147,8 @@ describe("send message disconnect handling", () => {
               }),
             },
             chatTurns: {
-              findFirst: async ({
-                where,
-              }: {
-                where?: { status?: { eq?: string } };
-              }) =>
-                where?.status?.eq === "running" ? undefined : { id: turnId },
+              findFirst: async ({ where }: { where?: { status?: unknown } }) =>
+                asksForLiveTurn(where?.status) ? undefined : { id: turnId },
             },
             organizationSettings: { findFirst: async () => null },
           },
@@ -901,18 +1159,18 @@ describe("send message disconnect handling", () => {
     );
 
     expect(result).toEqual({
-      code: 400,
-      response: { message: "Client disconnected before AI work started" },
+      code: 500,
+      response: { message: "Failed to discover chat connectors" },
     });
     expect(turnUpdates).toContainEqual(
       expect.objectContaining({
-        interruptionReason: "client-disconnected",
-        status: "interrupted",
+        failureCode: "connector-discovery",
+        status: "failed",
       }),
     );
   });
 
-  test("terminalizes the claimed turn when context preparation disconnects", async () => {
+  test("keeps an accepted turn running through a context preparation disconnect", async () => {
     const abortController = new AbortController();
     let safeDbTransaction = 0;
     let acceptanceTransaction: number | null = null;
@@ -944,7 +1202,9 @@ describe("send message disconnect handling", () => {
         acceptanceTransaction = safeDbTransaction;
         return {
           onConflictDoNothing: () => ({
-            returning: async () => [{ id: turnId, cancelRequestedAt: null }],
+            returning: async () => [
+              { id: turnId, cancelRequestedAt: null, organizationId, userId },
+            ],
           }),
         };
       },
@@ -963,7 +1223,9 @@ describe("send message disconnect handling", () => {
           }
           return {
             where: () => ({
-              returning: async () => [{ id: turnId, cancelRequestedAt: null }],
+              returning: async () => [
+                { id: turnId, cancelRequestedAt: null, organizationId, userId },
+              ],
             }),
           };
         }
@@ -977,7 +1239,7 @@ describe("send message disconnect handling", () => {
         onSafeDbTransaction: () => {
           safeDbTransaction += 1;
         },
-        request: new Request("http://localhost/v1/chat/send", {
+        request: new Request("http://localhost/v1/chat", {
           signal: abortController.signal,
         }),
         transaction: {
@@ -999,12 +1261,8 @@ describe("send message disconnect handling", () => {
               }),
             },
             chatTurns: {
-              findFirst: async ({
-                where,
-              }: {
-                where?: { status?: { eq?: string } };
-              }) =>
-                where?.status?.eq === "running" ? undefined : { id: turnId },
+              findFirst: async ({ where }: { where?: { status?: unknown } }) =>
+                asksForLiveTurn(where?.status) ? undefined : { id: turnId },
             },
             organizationSettings: { findFirst: findOrganizationSettings },
           },
@@ -1015,16 +1273,16 @@ describe("send message disconnect handling", () => {
     );
 
     expect(result).toEqual({
-      code: 400,
-      response: { message: "Client disconnected before AI work started" },
+      code: 500,
+      response: { message: "Failed to discover chat connectors" },
     });
     expect(findOrganizationSettings).toHaveBeenCalledTimes(2);
     expect(acceptanceTransaction).not.toBeNull();
     expect(claimTransaction).toBe(acceptanceTransaction);
     expect(turnUpdates).toContainEqual(
       expect.objectContaining({
-        interruptionReason: "client-disconnected",
-        status: "interrupted",
+        failureCode: "connector-discovery",
+        status: "failed",
       }),
     );
   });
@@ -1047,7 +1305,9 @@ describe("send message disconnect handling", () => {
         if (table === chatTurns) {
           return {
             onConflictDoNothing: () => ({
-              returning: async () => [{ id: turnId, cancelRequestedAt: null }],
+              returning: async () => [
+                { id: turnId, cancelRequestedAt: null, organizationId, userId },
+              ],
             }),
           };
         }
@@ -1061,7 +1321,9 @@ describe("send message disconnect handling", () => {
           turnUpdates.push(values);
           return {
             where: () => ({
-              returning: async () => [{ id: turnId, cancelRequestedAt: null }],
+              returning: async () => [
+                { id: turnId, cancelRequestedAt: null, organizationId, userId },
+              ],
             }),
           };
         }
@@ -1091,12 +1353,8 @@ describe("send message disconnect handling", () => {
               }),
             },
             chatTurns: {
-              findFirst: async ({
-                where,
-              }: {
-                where?: { status?: { eq?: string } };
-              }) =>
-                where?.status?.eq === "running" ? undefined : { id: turnId },
+              findFirst: async ({ where }: { where?: { status?: unknown } }) =>
+                asksForLiveTurn(where?.status) ? undefined : { id: turnId },
             },
             organizationSettings: { findFirst: async () => null },
           },
@@ -1135,7 +1393,7 @@ describe("send message disconnect handling", () => {
       {
         "error.cause.class": "Error",
         "error.class": "HandlerError",
-        route: "/v1/chat/send",
+        route: "/v1/chat" satisfies ApiRoutePath,
       },
     ]);
   });
@@ -1158,7 +1416,12 @@ describe("send message disconnect handling", () => {
           ? {
               onConflictDoNothing: () => ({
                 returning: async () => [
-                  { id: turnId, cancelRequestedAt: null },
+                  {
+                    id: turnId,
+                    cancelRequestedAt: null,
+                    organizationId,
+                    userId,
+                  },
                 ],
               }),
             }
@@ -1170,7 +1433,9 @@ describe("send message disconnect handling", () => {
           turnUpdates.push(values);
           return {
             where: () => ({
-              returning: async () => [{ id: turnId, cancelRequestedAt: null }],
+              returning: async () => [
+                { id: turnId, cancelRequestedAt: null, organizationId, userId },
+              ],
             }),
           };
         }
@@ -1190,7 +1455,7 @@ describe("send message disconnect handling", () => {
       createContext({
         contextMatterIds: [],
         transaction: {
-          execute: lookup,
+          execute: withoutQueueHolds(lookup),
           insert: withRunLogInsert(insert),
           query: {
             chatMessages: { findFirst: async () => null },
@@ -1209,12 +1474,8 @@ describe("send message disconnect handling", () => {
               }),
             },
             chatTurns: {
-              findFirst: async ({
-                where,
-              }: {
-                where?: { status?: { eq?: string } };
-              }) =>
-                where?.status?.eq === "running" ? undefined : { id: turnId },
+              findFirst: async ({ where }: { where?: { status?: unknown } }) =>
+                asksForLiveTurn(where?.status) ? undefined : { id: turnId },
             },
             organizationSettings: { findFirst: async () => null },
           },
@@ -1245,17 +1506,27 @@ describe("send message disconnect handling", () => {
     period_exhausted: "period_exhausted",
     daily_exhausted: "daily_exhausted",
     not_enabled: "not_enabled",
-    unavailable: "unavailable",
+    not_on_plan: "not_on_plan",
+    store_unavailable: "store_unavailable",
+    configuration_incomplete: "configuration_incomplete",
+    organization_state_unreadable: "organization_state_unreadable",
+    lease_lost: "lease_lost",
+    feature_disabled: "feature_disabled",
   } as const satisfies { [Reason in ActionAdmissionError["reason"]]: Reason };
   for (const reason of Object.values(refusalReasons)) {
     for (const phase of ["period", "context", "dispatch"] as const) {
       test(`${reason} ${phase} phase persists its canonical outcome before any provider work`, async () => {
-        const refusal = actionAdmissionRefusal(
-          actionAdmissionErrorFor(reason, "Admission refused"),
-        );
+        const refusalError =
+          reason === "busy"
+            ? new ActionAdmissionError({
+                reason,
+                message: "Admission refused",
+                retryAfterMs: 1250,
+              })
+            : actionAdmissionErrorFor(reason, "Admission refused");
+        const refusal = actionAdmissionRefusal(refusalError);
         const admission = new AbortController();
-        const loseAdmission = () =>
-          admission.abort(actionAdmissionErrorFor(reason, "Admission refused"));
+        const loseAdmission = () => admission.abort(refusalError);
         const turnUpdates: unknown[] = [];
         const selectWithThreadLock = () => ({
           from: () => ({
@@ -1273,7 +1544,12 @@ describe("send message disconnect handling", () => {
               ? {
                   onConflictDoNothing: () => ({
                     returning: async () => [
-                      { id: turnId, cancelRequestedAt: null },
+                      {
+                        id: turnId,
+                        cancelRequestedAt: null,
+                        organizationId,
+                        userId,
+                      },
                     ],
                   }),
                 }
@@ -1295,7 +1571,12 @@ describe("send message disconnect handling", () => {
               return {
                 where: () => ({
                   returning: async () => [
-                    { id: turnId, cancelRequestedAt: null },
+                    {
+                      id: turnId,
+                      cancelRequestedAt: null,
+                      organizationId,
+                      userId,
+                    },
                   ],
                 }),
               };
@@ -1330,6 +1611,7 @@ describe("send message disconnect handling", () => {
             tools: {},
           };
         });
+        const streamResponse = mock(streamChat);
         const refusedSend = createSendMessage({
           compactMessagesForContext: compactMessagesForContextMock,
           createRefRegistry: createChatRefRegistry,
@@ -1337,7 +1619,7 @@ describe("send message disconnect handling", () => {
           loadExternalMcpTools: loadTools,
           loadWebSearchProviders: loadWebSearchProvidersForOrgMock,
           rollbackSideEffects: rollbackUnpersistedChatSideEffectsMock,
-          streamResponse: streamChat,
+          streamResponse,
           uploadMessageFiles: uploadMessageFilesWithRollbackMock,
           startAdmission: async (options) => {
             expect(options.mode).toBe("concurrency-only");
@@ -1347,6 +1629,7 @@ describe("send message disconnect handling", () => {
               release: async () => {
                 releases += 1;
               },
+              modelAdmission: testModelAdmission(options.organizationId),
               reservePeriod: async (identity: AdmittedActionIdentity) => {
                 expect(turnUpdates).toContainEqual({ runId: "run-test" });
                 expect(identity).toEqual({
@@ -1369,7 +1652,7 @@ describe("send message disconnect handling", () => {
           createContext({
             contextMatterIds: [],
             transaction: {
-              execute: lookup,
+              execute: withoutQueueHolds(lookup),
               insert: withRunLogInsert((table) => {
                 const original = insert(table);
                 return {
@@ -1401,11 +1684,9 @@ describe("send message disconnect handling", () => {
                   findFirst: async ({
                     where,
                   }: {
-                    where?: { status?: { eq?: string } };
+                    where?: { status?: unknown };
                   }) =>
-                    where?.status?.eq === "running"
-                      ? undefined
-                      : { id: turnId },
+                    asksForLiveTurn(where?.status) ? undefined : { id: turnId },
                 },
                 organizationSettings: { findFirst: async () => null },
               },
@@ -1422,11 +1703,15 @@ describe("send message disconnect handling", () => {
             code: refusal.code,
             retryable: refusal.retryable,
             hint: refusal.hint,
+            ...(refusal.retryAfterMs === undefined
+              ? {}
+              : { retryAfterMs: refusal.retryAfterMs }),
             ...(refusal.contactUrl === undefined
               ? {}
               : { contactUrl: refusal.contactUrl }),
           },
         });
+        expect(streamResponse).not.toHaveBeenCalled();
         expect(acquisitions).toBe(1);
         expect(releases).toBe(1);
         expect(insertedMessages).toHaveLength(2);
@@ -1454,11 +1739,13 @@ describe("send message disconnect handling", () => {
     }
   }
 
-  test("stops before connector discovery when the client disconnects during persistence", async () => {
+  test("an accepted detached turn reaches connector discovery and surfaces its failure", async () => {
     const abortController = new AbortController();
     const insertValues = mock(() => ({
       onConflictDoNothing: () => ({
-        returning: async () => [{ id: turnId, cancelRequestedAt: null }],
+        returning: async () => [
+          { id: turnId, cancelRequestedAt: null, organizationId, userId },
+        ],
       }),
     }));
     const updateWhere = mock(async () => {
@@ -1480,7 +1767,7 @@ describe("send message disconnect handling", () => {
     const result = await sendMessage.handler(
       createContext({
         contextMatterIds: [],
-        request: new Request("http://localhost/v1/chat/send", {
+        request: new Request("http://localhost/v1/chat", {
           signal: abortController.signal,
         }),
         transaction: {
@@ -1489,20 +1776,8 @@ describe("send message disconnect handling", () => {
             chatMessages: { findFirst: async () => null },
             chatThreadCompactions: { findFirst: async () => null },
             chatTurns: {
-              findFirst: async ({
-                where,
-              }: {
-                where?: { status?: unknown };
-              }) => {
-                const status = where?.status;
-                const queriedStatus =
-                  typeof status === "object" &&
-                  status !== null &&
-                  "eq" in status
-                    ? status.eq
-                    : undefined;
-                return queriedStatus === "running" ? undefined : { id: turnId };
-              },
+              findFirst: async ({ where }: { where?: { status?: unknown } }) =>
+                asksForLiveTurn(where?.status) ? undefined : { id: turnId },
             },
             chatThreads: {
               findFirst: async () => ({
@@ -1529,7 +1804,12 @@ describe("send message disconnect handling", () => {
                 set: () => ({
                   where: () => ({
                     returning: async () => [
-                      { id: turnId, cancelRequestedAt: null },
+                      {
+                        id: turnId,
+                        cancelRequestedAt: null,
+                        organizationId,
+                        userId,
+                      },
                     ],
                   }),
                 }),
@@ -1542,20 +1822,89 @@ describe("send message disconnect handling", () => {
     );
 
     expect(result).toEqual({
-      code: 400,
-      response: { message: "Client disconnected before stream started" },
+      code: 500,
+      response: { message: "Failed to discover chat connectors" },
     });
-    // Turn acceptance, the user message, and the terminal interrupted
+    // Turn acceptance, the user message, and the terminal failed
     // assistant message each persist their own row; the user-message
-    // persist and the interrupt persist each touch the thread row once.
+    // persist and the failure persist each touch the thread row once.
     expect(insertValues).toHaveBeenCalledTimes(3);
     expect(updateWhere).toHaveBeenCalledTimes(2);
     expect(upsertChatThreadSearchDocumentMock).toHaveBeenCalledWith(threadId);
-    expect(loadExternalMcpToolsForUserMock).not.toHaveBeenCalled();
+    expect(loadExternalMcpToolsForUserMock).toHaveBeenCalledTimes(1);
   });
 });
 
 describe("send message turn persistence", () => {
+  test("preserves legal-hold details when attachment rollback is refused", async () => {
+    const holdId = toSafeId<"legalHold">(
+      "00000000-0000-0000-0000-000000000010",
+    );
+    uploadMessageFilesWithRollbackMock.mockImplementationOnce(async () =>
+      Result.err(
+        new LegalHoldActiveError({
+          code: LEGAL_HOLD_ACTIVE,
+          message: "An active legal hold prevents attachment rollback.",
+          holds: [
+            new LegalHoldRecord({
+              id: holdId,
+              placedAt: new Date("2026-01-01T00:00:00Z"),
+              placedBy: "another-member",
+              reason: "Preserve the supplier dispute record",
+              scope: "matter",
+              workspaceId: activeWorkspaceId,
+              entityId: null,
+            }),
+          ],
+        }),
+      ),
+    );
+
+    const result = await sendMessage.handler(
+      createContext({
+        contextMatterIds: [],
+        transaction: {
+          query: {
+            chatThreadCompactions: { findFirst: async () => null },
+            chatThreads: {
+              findFirst: async () => ({
+                chatModel: null,
+                chatReasoningEffort: null,
+                contextMatterIds: [],
+                dataWorkspaceIds: [],
+                id: threadId,
+                messages: [],
+                rollbackToken: null,
+                title: "Existing thread",
+                webSearchEnabled: false,
+                workspaceId: null,
+              }),
+            },
+            organizationSettings: { findFirst: async () => null },
+          },
+          select: selectChatMessages,
+        },
+      }),
+    );
+
+    expect(result).toMatchObject({
+      code: 409,
+      response: {
+        code: LEGAL_HOLD_ACTIVE,
+        // The requesting owner reads the reason; see projection.test.ts for
+        // the members who do not.
+        issues: [
+          { path: holdId, code: "matter" },
+          {
+            path: `${holdId}.reason`,
+            code: LEGAL_HOLD_REASON_ISSUE_CODE,
+            message: "Preserve the supplier dispute record",
+          },
+        ],
+      },
+    });
+  });
+
   test("rolls back an uploaded attachment before rejecting an invalid replay", async () => {
     const uploadedFile = {
       id: toSafeId<"userFile">("00000000-0000-0000-0000-000000000009"),
@@ -1686,7 +2035,10 @@ describe("send message turn persistence", () => {
 
     expect(result).toEqual({
       code: 409,
-      response: { message: "A chat turn is already running" },
+      response: {
+        code: CHAT_SEND_QUEUES_INSTEAD_CODE.turnRunning,
+        message: "A chat turn is already running",
+      },
     });
     expect(compactionCheckpointReads).toBe(HISTORY_WINDOW_CHECKPOINT_READS);
     expect(rollbackUnpersistedChatSideEffectsMock).toHaveBeenCalledWith(
@@ -1732,14 +2084,40 @@ describe("assistant turn settlement", () => {
   const startStreamingTurn = async ({
     failAssistantInsertOnce = false,
     onSafeDbTransaction,
+    connectableCount = 0,
+    memberRole = sessionMemberRole("owner"),
+    providerConfig = orgAIConfig,
   }: {
+    connectableCount?: number;
+    memberRole?: SendMessageCtx["memberRole"];
+    providerConfig?: OrgAIConfig | null;
     failAssistantInsertOnce?: boolean;
     onSafeDbTransaction?: (() => void) | undefined;
   } = {}) => {
     let onFinish: StreamChatProps["onFinish"] | undefined;
+    let providerPrompt: unknown;
+    const connectorRows = Array.from(
+      { length: connectableCount },
+      (_, index) => ({
+        slug: `source-${String(index).padStart(2, "0")}`,
+        displayName: `Source ${index}`,
+      }),
+    );
+    const connectorQuery = {
+      from: () => connectorQuery,
+      leftJoin: () => connectorQuery,
+      where: () => connectorQuery,
+      orderBy: () => connectorQuery,
+      limit: async (limit: number) => connectorRows.slice(0, limit),
+    };
     const turnUpdates: unknown[] = [];
     const streamResponse = mock(async (props: StreamChatProps) => {
       onFinish = props.onFinish;
+      providerPrompt = props.systemUntrusted;
+      if (connectableCount > 0) {
+        expect(props.tools).toHaveProperty("connect_connector");
+        expect(props.tools).toHaveProperty("list_connectable_connectors");
+      }
       return {
         type: "streaming",
         response: new Response("", {
@@ -1774,7 +2152,9 @@ describe("assistant turn settlement", () => {
         if (table === chatTurns) {
           return {
             onConflictDoNothing: () => ({
-              returning: async () => [{ id: turnId, cancelRequestedAt: null }],
+              returning: async () => [
+                { id: turnId, cancelRequestedAt: null, organizationId, userId },
+              ],
             }),
           };
         }
@@ -1796,7 +2176,9 @@ describe("assistant turn settlement", () => {
           turnUpdates.push(values);
           return {
             where: () => ({
-              returning: async () => [{ cancelRequestedAt: null, id: turnId }],
+              returning: async () => [
+                { cancelRequestedAt: null, id: turnId, organizationId, userId },
+              ],
             }),
           };
         }
@@ -1804,51 +2186,116 @@ describe("assistant turn settlement", () => {
       },
     });
 
-    const result = await send.handler(
-      createContext({
-        contextMatterIds: [],
-        onSafeDbTransaction,
-        transaction: {
-          insert: withRunLogInsert(insert),
-          query: {
-            chatMessages: { findFirst: async () => null },
-            chatThreadCompactions: { findFirst: async () => null },
-            chatThreads: {
-              findFirst: async () => ({
-                chatModel: null,
-                contextMatterIds: [],
-                dataWorkspaceIds: [],
-                id: threadId,
-                messages: [],
-                rollbackToken: null,
-                title: "Existing thread",
-                webSearchEnabled: false,
-                workspaceId: null,
-              }),
-            },
-            chatTurns: {
-              findFirst: async ({
-                where,
-              }: {
-                where?: { status?: { eq?: string } };
-              }) =>
-                where?.status?.eq === "running" ? undefined : { id: turnId },
-            },
-            organizationSettings: { findFirst: async () => null },
+    const context = createContext({
+      contextMatterIds: [],
+      onSafeDbTransaction,
+      transaction: {
+        selectDistinctOn: () => connectorQuery,
+        insert: withRunLogInsert(insert),
+        query: {
+          chatMessages: { findFirst: async () => null },
+          chatThreadCompactions: { findFirst: async () => null },
+          chatThreads: {
+            findFirst: async () => ({
+              chatModel: null,
+              contextMatterIds: [],
+              dataWorkspaceIds: [],
+              id: threadId,
+              messages: [],
+              rollbackToken: null,
+              title: "Existing thread",
+              webSearchEnabled: false,
+              workspaceId: null,
+            }),
           },
-          select: withThreadNameReads(selectWithThreadLock),
-          update: withRunLogUpdate(update),
+          chatTurns: {
+            findFirst: async ({ where }: { where?: { status?: unknown } }) =>
+              asksForLiveTurn(where?.status) ? undefined : { id: turnId },
+          },
+          organizationSettings: { findFirst: async () => null },
         },
-      }),
-    );
+        select: withThreadNameReads(selectWithThreadLock),
+        update: withRunLogUpdate(update),
+      },
+    });
+    const result = await send.handler({
+      ...context,
+      memberRole,
+      orgAIConfig: providerConfig,
+    });
     expect(streamResponse).toHaveBeenCalledTimes(1);
     if (onFinish === undefined) {
       throw new Error(
         `the send did not reach streaming: ${JSON.stringify(result)}`,
       );
     }
-    return { onFinish, turnUpdates };
+    return { onFinish, turnUpdates, providerPrompt, streamResponse };
   };
+
+  test("an unrelated send proceeds with 21 connectable connectors and a bounded deterministic hint", async () => {
+    const first = await startStreamingTurn({ connectableCount: 21 });
+    const second = await startStreamingTurn({ connectableCount: 21 });
+    expect(first.providerPrompt).toEqual(second.providerPrompt);
+    const hint = JSON.stringify(first.providerPrompt);
+    expect(hint).toContain("source-00");
+    expect(hint).toContain("source-19");
+    expect(hint).not.toContain("source-20");
+    expect(hint).toContain("list_connectable_connectors");
+    expect(first.turnUpdates).not.toContainEqual(
+      expect.objectContaining({ status: "failed" }),
+    );
+  });
+
+  test.each(
+    Object.keys(roles)
+      .filter(isMemberRole)
+      .filter(
+        (role) =>
+          hasMemberPermission(sessionMemberRole(role), CHAT_TURN_PERMISSIONS) &&
+          !hasMemberPermission(sessionMemberRole(role), {
+            organizationSettings: ["update"],
+          }),
+      ),
+  )(
+    "a %s chat turn uses the default provider without settings access",
+    async (role) => {
+      testState.patchConfig({
+        AI_PROVIDER: "openrouter",
+        OPENROUTER_API_KEY: "test-instance-key",
+        REQUIRE_PERSONAL_AI_KEY: false,
+      });
+      const memberRole = sessionMemberRole(role);
+      expect(
+        hasMemberPermission(memberRole, { organizationSettings: ["update"] }),
+      ).toBe(false);
+      const { onFinish, turnUpdates, streamResponse } =
+        await startStreamingTurn({
+          memberRole,
+          providerConfig: null,
+        });
+      const dispatched = streamResponse.mock.calls.at(0)?.at(0);
+      if (dispatched === undefined) {
+        throw new Error("The chat turn did not dispatch a provider request");
+      }
+      expect(dispatched.orgAIConfig).toBeNull();
+      expect(
+        getTanStackTextModelInfoForTask("chat", dispatched.orgAIConfig, {
+          dataClass: "customer",
+          organizationId,
+          modelTier: MANAGED_MODEL_TIER.standard,
+        }),
+      ).toMatchObject({ provider: "openrouter", keySource: "instance" });
+      await onFinish({
+        outcome: { type: "completed" },
+        responseMessage: completedMessage([
+          { type: "text", content: "Completed response" },
+        ]),
+      });
+      expect(turnUpdates).toContainEqual(
+        expect.objectContaining({ status: "completed" }),
+      );
+    },
+  );
 
   /** The rejection `onFinish` reports to the stream, captured as a value. */
   const settlementFailure = async (
@@ -1866,7 +2313,7 @@ describe("assistant turn settlement", () => {
       failureCode,
       failureRetryable: true,
       status: "failed",
-    });
+    }) as unknown;
 
   test("fails the turn when the generated tool parts do not validate", async () => {
     const { onFinish, turnUpdates } = await startStreamingTurn();
@@ -1990,14 +2437,17 @@ describe("assistant turn settlement", () => {
     // The fixture reached the fault: the follow-up's write threw.
     expect(followUpFailures).toBe(1);
     // The stored completion stays the turn's outcome.
+    // The stored update holds SQL expressions, which do not serialize; the
+    // status it wrote is the finding.
     const violations = violationsOf(
       CHAT_ORACLE.persistedTurnOutcome,
-      turnUpdates.filter(
-        (update) =>
-          typeof update === "object" &&
-          update !== null &&
-          "status" in update &&
-          update.status === "failed",
+      turnUpdates.flatMap((update) =>
+        typeof update === "object" &&
+        update !== null &&
+        "status" in update &&
+        update.status === "failed"
+          ? [{ status: update.status }]
+          : [],
       ),
     );
     if (violations.length > 0) {

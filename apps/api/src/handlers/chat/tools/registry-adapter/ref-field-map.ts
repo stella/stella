@@ -1,12 +1,23 @@
 import type { GenericSchema, InferInput } from "valibot";
 
+import { MCP_CAPABILITY_EXECUTORS } from "@stll/api-contract/mcp-capability-executors";
+
+import {
+  LEGAL_RESOLVE_PROJECTION,
+  VERIFY_QUOTE_PROJECTION,
+} from "@/api/lib/chat/legal-verification-projections";
 import type {
   ChatProjectionSchema,
   RegistryRefKind,
 } from "@/api/lib/chat/projection-schema";
 import {
-  DELETED_TRUE_PROJECTION,
+  ADD_MATTER_MEMBER_PROJECTION,
+  CASE_LAW_COVERAGE_PROJECTION,
+  CONFIGURE_TEMPLATE_FIELDS_PROJECTION,
+  CREATE_READER_ANNOTATION_PROJECTION,
+  CREATE_TEMPLATE_PROJECTION,
   DELETE_TIME_ENTRY_PROJECTION,
+  DELETED_TRUE_PROJECTION,
   GET_USAGE_PROJECTION,
   LINK_MATTER_CONTACT_PROJECTION,
   LIST_CLAUSES_PROJECTION,
@@ -15,42 +26,46 @@ import {
   LIST_INVOICES_PROJECTION,
   LIST_MATTERS_PROJECTION,
   LIST_PLAYBOOKS_PROJECTION,
-  LIST_READER_ANNOTATIONS_PROJECTION,
-  CREATE_READER_ANNOTATION_PROJECTION,
-  UPDATE_READER_ANNOTATION_PROJECTION,
   LIST_PROPERTIES_PROJECTION,
+  LIST_READER_ANNOTATIONS_PROJECTION,
   LIST_TASKS_PROJECTION,
   LIST_TEMPLATES_PROJECTION,
   LIST_TIME_ENTRIES_PROJECTION,
   LOOKUP_BUSINESS_REGISTRY_PROJECTION,
-  MANAGE_ORGANIZATION_PROJECTION,
   READ_CASE_LAW_CITATIONS_PROJECTION,
-  LOOKUP_CASE_LAW_PROJECTION,
   READ_CASE_LAW_DECISION_PROJECTION,
-  READ_PROVISION_HISTORY_PROJECTION,
-  READ_STATUTE_PROJECTION,
-  READ_STATUTE_PROVISIONS_PROJECTION,
   READ_CONTACT_PROJECTION,
   READ_CONTENT_ACROSS_MATTERS_PROJECTION,
   READ_DOCUMENT_PROJECTION,
+  READ_PROVISION_HISTORY_PROJECTION,
+  READ_STATUTE_PROJECTION,
+  READ_STATUTE_PROVISIONS_PROJECTION,
+  REMOVE_MATTER_MEMBER_PROJECTION,
   RUN_PLAYBOOK_PROJECTION,
   SAVE_CLAUSE_PROJECTION,
-  SAVE_PLAYBOOK_PROJECTION,
   SAVE_CONTACT_PROJECTION,
   SAVE_DOCUMENT_PROJECTION,
   SAVE_MATTER_PROJECTION,
-  CONFIGURE_TEMPLATE_FIELDS_PROJECTION,
-  CREATE_TEMPLATE_PROJECTION,
+  SAVE_PLAYBOOK_PROJECTION,
   SAVE_TASK_PROJECTION,
   SAVE_TIME_ENTRY_PROJECTION,
   SEARCH_ACROSS_MATTERS_PROJECTION,
-  SEARCH_CASE_LAW_PROJECTION,
   SEARCH_BOE_LEGISLATION_PROJECTION,
+  SEARCH_CASE_LAW_PROJECTION,
   SEARCH_LEGISLATION_PROJECTION,
   SET_FIELD_VALUE_PROJECTION,
   SET_PRACTICE_JURISDICTIONS_PROJECTION,
+  UPDATE_ORGANIZATION_SETTINGS_PROJECTION,
+  UPDATE_READER_ANNOTATION_PROJECTION,
 } from "@/api/lib/chat/projections";
-import type { DEFAULT_MCP_TOOL_DEFINITIONS } from "@/api/mcp/static-tool-definitions";
+import {
+  READ_GUIDANCE_PROJECTION,
+  SEARCH_GUIDANCE_PROJECTION,
+} from "@/api/lib/chat/soft-law-result-projections";
+import type {
+  DEFAULT_MCP_TOOL_DEFINITIONS,
+  MODEL_VISIBLE_MCP_TOOL_DEFINITIONS,
+} from "@/api/mcp/static-tool-definitions";
 import { TEMPLATE_MARKER_REFERENCE_URI } from "@/api/mcp/template-marker-reference";
 
 /**
@@ -70,16 +85,13 @@ type ReadToolDefinition = Extract<
 export type RegistryReadToolName = ReadToolDefinition["name"];
 
 /**
- * The write slice of the MCP registry, derived structurally the same way the
- * read slice is: filtering the single-source `as const` registry array by
- * `{ access: "write" }` yields exactly the write-tool name union. A newly added
- * write tool widens this union, which makes the `satisfies` on
- * `WRITE_TOOL_REF_FIELD_MAP` below fail typecheck until an explicit ref decision
- * is recorded for it, so a future write tool cannot be silently missed from the
- * chat projection.
+ * The model-visible write slice excludes app-only tools through the canonical
+ * visibility owner. A new model-visible write widens this union, which makes
+ * the `satisfies` on `WRITE_TOOL_REF_FIELD_MAP` fail until an explicit ref
+ * decision is recorded for it.
  */
 type WriteToolDefinition = Extract<
-  (typeof DEFAULT_MCP_TOOL_DEFINITIONS)[number],
+  (typeof MODEL_VISIBLE_MCP_TOOL_DEFINITIONS)[number],
   { access: "write" }
 >;
 
@@ -124,8 +136,7 @@ export type RefMediationEntry = {
  * contract, so a projectable entry without a projection schema cannot compile.
  */
 export type RegistryRefFieldMapEntry =
-  | { chatProjectable: false }
-  | ({ chatProjectable: true } & RefMediationEntry);
+  { chatProjectable: false } | ({ chatProjectable: true } & RefMediationEntry);
 
 export type ChatProjectableToolName<TMap> = {
   [TName in keyof TMap]: TMap[TName] extends { chatProjectable: true }
@@ -158,6 +169,11 @@ export type ProjectionDataByName<TMap, TNames extends keyof TMap> = {
  * exhaustive by construction: a read tool with no entry here cannot compile.
  */
 export const READ_TOOL_REF_FIELD_MAP = {
+  // Host reader navigation and widget data are served by MCP; chat uses its decision text read.
+  open_case_law_decision: { chatProjectable: false },
+  read_case_law_decision_blocks: { chatProjectable: false },
+  preview_cited_provision: { chatProjectable: false },
+  list_case_law_courts: { chatProjectable: false },
   // --- OpenAI-compat shims: not projected to chat ---------------------------
   // `fetch`/`search` duplicate read_content_across_matters /
   // search_across_matters and additionally emit `url` (and `metadata`) fields
@@ -278,15 +294,30 @@ export const READ_TOOL_REF_FIELD_MAP = {
   },
 
   // --- Public corpora: public ids, no tenant refs ---------------------------
+  case_law_coverage: {
+    chatProjectable: true,
+    inputRefs: [],
+    projection: CASE_LAW_COVERAGE_PROJECTION,
+  },
   search_case_law: {
     chatProjectable: true,
     inputRefs: [],
     projection: SEARCH_CASE_LAW_PROJECTION,
   },
-  lookup_case_law: {
+  resolve_case_law_decision: {
     chatProjectable: true,
     inputRefs: [],
-    projection: LOOKUP_CASE_LAW_PROJECTION,
+    projection: LEGAL_RESOLVE_PROJECTION,
+  },
+  resolve_law_citation: {
+    chatProjectable: true,
+    inputRefs: [],
+    projection: LEGAL_RESOLVE_PROJECTION,
+  },
+  verify_quote: {
+    chatProjectable: true,
+    inputRefs: [],
+    projection: VERIFY_QUOTE_PROJECTION,
   },
   read_case_law_decision: {
     chatProjectable: true,
@@ -325,6 +356,16 @@ export const READ_TOOL_REF_FIELD_MAP = {
     inputRefs: [],
     projection: READ_PROVISION_HISTORY_PROJECTION,
   },
+  search_guidance: {
+    chatProjectable: true,
+    inputRefs: [],
+    projection: SEARCH_GUIDANCE_PROJECTION,
+  },
+  read_guidance: {
+    chatProjectable: true,
+    inputRefs: [],
+    projection: READ_GUIDANCE_PROJECTION,
+  },
   lookup_business_registry: {
     chatProjectable: true,
     inputRefs: [],
@@ -362,6 +403,7 @@ export const READ_TOOL_REF_FIELD_MAP = {
   // the generic path cannot prove per-capability ref safety.
   list_capabilities: { chatProjectable: false },
   describe_capability: { chatProjectable: false },
+  [MCP_CAPABILITY_EXECUTORS.read]: { chatProjectable: false },
 } as const satisfies Record<RegistryReadToolName, RegistryRefFieldMapEntry>;
 
 /**
@@ -400,7 +442,7 @@ export const WRITE_TOOL_REF_FIELD_MAP = {
   save_task: {
     chatProjectable: true,
     // `task_id` and `link_entity_id` are entity refs; `matter_id` a matter ref.
-    // `add_assignee_user_id`/`remove_assignee_user_id` are user handles and
+    // `assignee`/`remove_assignee_user_id` are user handles and
     // `unlink_link_id` is an entity-link handle: none carry a chat ref kind, so
     // they pass through as-is.
     inputRefs: [
@@ -536,13 +578,20 @@ export const WRITE_TOOL_REF_FIELD_MAP = {
   },
 
   // --- Organization ---------------------------------------------------------
-  manage_organization: {
+  add_matter_member: {
     chatProjectable: true,
-    // `user_id` is a workspace-member (user) handle, not a chat ref: passes
-    // through. `matter_id` is a matter ref (used by the add/remove member
-    // actions that scope to a matter).
     inputRefs: [{ kind: "matter", param: "matter_id" }],
-    projection: MANAGE_ORGANIZATION_PROJECTION,
+    projection: ADD_MATTER_MEMBER_PROJECTION,
+  },
+  remove_matter_member: {
+    chatProjectable: true,
+    inputRefs: [{ kind: "matter", param: "matter_id" }],
+    projection: REMOVE_MATTER_MEMBER_PROJECTION,
+  },
+  update_organization_settings: {
+    chatProjectable: true,
+    inputRefs: [],
+    projection: UPDATE_ORGANIZATION_SETTINGS_PROJECTION,
   },
 
   // --- Practice profile -----------------------------------------------------
@@ -589,12 +638,14 @@ export const WRITE_TOOL_REF_FIELD_MAP = {
   },
 
   // --- Capability meta-tool: not projected to chat --------------------------
-  // `invoke_capability` runs an arbitrary catalog capability over the MCP/CLI
+  // `write_capability` runs an arbitrary catalog capability over the MCP/CLI
   // transport; its authority is enforced per capability inside the handler, and
   // it is never dispatched from chat.
-  invoke_capability: { chatProjectable: false },
+  [MCP_CAPABILITY_EXECUTORS.write]: { chatProjectable: false },
 
   // Sends a report out of the workspace after a human approves it. The in-app
   // chat has its own feedback UI, so the tool stays off that surface.
   submit_feedback: { chatProjectable: false },
+  // Organization creation authority is independent of the current chat matter.
+  create_organization: { chatProjectable: false },
 } as const satisfies Record<RegistryWriteToolName, RegistryRefFieldMapEntry>;

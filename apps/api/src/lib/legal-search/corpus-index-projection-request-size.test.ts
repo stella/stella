@@ -9,16 +9,25 @@
  *
  * The other reason a tail flushes, the lease start margin, is a property of
  * the clock rather than the tail, and the cycle stops on it; that behaviour is
- * driven end to end in corpus-index-projection-margin-stop.db.test.ts.
+ * covered in corpus-index-projection-executor.test.ts, and the cycle's lease
+ * keeps it from applying before a request fills
+ * (corpus-index-projection-long-commit-window.db.test.ts).
  */
 
 import { describe, expect, test } from "bun:test";
 
 import { streamWithConcurrency } from "@stll/concurrency";
 
+import { CORPUS_INDEX_MANIFESTS } from "@/api/lib/legal-search/corpus-index-manifest";
 import { CORPUS_PROJECTION_APPEND_MAX_REQUEST_BYTES } from "@/api/lib/legal-search/corpus-index-projection-engine";
-import { advanceCorpusProjectionAppendTails } from "@/api/lib/legal-search/corpus-index-projection-executor";
+import {
+  advanceCorpusProjectionAppendTails,
+  corpusProjectionAppendStartMarginMs,
+} from "@/api/lib/legal-search/corpus-index-projection-executor";
 
+const V5_APPEND_START_MARGIN_MS = corpusProjectionAppendStartMarginMs(
+  CORPUS_INDEX_MANIFESTS.case_law_v5,
+);
 const REVISIONS = 512;
 const READ_CONCURRENCY = 32;
 const INDEX_ID = "case_law_v5_cs_sk";
@@ -79,6 +88,7 @@ const runCycle = async ({
       entries: [entry],
       mode: "buffer",
       nowMs: Date.now(),
+      appendStartMarginMs: V5_APPEND_START_MARGIN_MS,
     });
     tails = advanced.tails;
     if (advanced.flush.length === 0) {
@@ -98,6 +108,7 @@ const runCycle = async ({
     entries: [],
     mode: "flush-all",
     nowMs: Date.now(),
+    appendStartMarginMs: V5_APPEND_START_MARGIN_MS,
   }).flush) {
     sizes.push(tail.entries.length);
   }

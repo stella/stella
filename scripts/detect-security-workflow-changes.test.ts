@@ -1,10 +1,17 @@
 import { panic } from "better-result";
 import { expect, test } from "bun:test";
-import { createHash } from "node:crypto";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import * as v from "valibot";
+
+import { createSha256 } from "@stll/sha256/node";
 
 const script = path.join(
   import.meta.dirname,
@@ -27,7 +34,7 @@ const readWorkflow = (name: string) =>
     ),
   );
 const codeql = readWorkflow("codeql");
-const migrations = readWorkflow("db-migrations");
+const migrations = readWorkflow("ci");
 const analyze = v.parse(
   v.looseObject({
     strategy: v.looseObject({
@@ -102,7 +109,7 @@ const expectLanguageCoverage = (language: string, detector = script) => {
 };
 
 test("the documented extension baseline is the unchanged pinned upstream table", () => {
-  expect(createHash("sha256").update(documentation).digest("hex")).toBe(
+  expect(createSha256().update(documentation).digest("hex")).toBe(
     "6d76b52b5f1f1f571ec586326299d606f75a4b42cdc5a9d6ff1edca17e017fdc",
   );
 });
@@ -198,29 +205,48 @@ test("CodeQL selects code, workflow configuration and dependency inputs", () => 
   expect(detect("codeql", ["README.md", "source.ts"])).toBe("true");
 });
 
-test("migration coverage preserves every prior dependency and excludes unrelated code", () => {
+test("migration coverage includes schema, runtime and check inputs and excludes unrelated code", () => {
+  const config = readFileSync(
+    new URL("../apps/api/drizzle.config.ts", import.meta.url),
+    "utf-8",
+  );
+  const schemaSources = [...config.matchAll(/"(\.\/src\/db\/[^"\n]+)"/gu)].map(
+    (match) => match[1],
+  );
+  expect(schemaSources.length).toBeGreaterThan(0);
+  for (const source of schemaSources) {
+    if (source === undefined) {
+      panic("Schema source did not match");
+    }
+    expect(detect("migrations", [`apps/api/${source.slice(2)}`]), source).toBe(
+      "true",
+    );
+  }
   for (const file of [
     "apps/api/drizzle/20261001/migration.sql",
     "apps/api/src/db/schema/tables.ts",
-    "apps/api/src/lib/db/client.ts",
-    "apps/api/src/server.ts",
     "apps/api/drizzle.config.ts",
-    "scripts/check-migration-safety.ts",
-    "scripts/check-migration-index-builds.test.ts",
-    "scripts/migration-index-findings.json",
-    "scripts/fixtures/migration-index-builds/create-index/good.sql",
-    "scripts/check-migrations.sh",
-    "scripts/rehearse-better-auth-constraint-retry.sh",
-    ".squawk.toml",
-    ".github/workflows/db-migrations.yml",
-    ".github/workflows/release.yml",
+    "apps/api/src/db/migrate.ts",
+    "apps/api/src/db/shared-pool-timeouts.ts",
+    "apps/api/src/db/adaptive-backfill.test.ts",
+    "apps/api/src/lib/db/client.ts",
+    ".github/workflows/ci.yml",
     "scripts/detect-security-workflow-changes.sh",
+    "scripts/rehearse-better-auth-constraint-retry.sh",
+    "scripts/fixtures/migration-example/input.sql",
+    ...readdirSync(import.meta.dirname)
+      .filter((entry) => entry.includes("migrat"))
+      .map((entry) => `scripts/${entry}`),
   ]) {
     expect(detect("migrations", [file]), file).toBe("true");
   }
-  expect(detect("migrations", ["apps/web/src/view.ts", "README.md"])).toBe(
-    "false",
-  );
+  expect(
+    detect("migrations", [
+      "apps/web/src/view.ts",
+      "README.md",
+      "apps/api/src/server.ts",
+    ]),
+  ).toBe("false");
 });
 
 test("unknown PR bases, diff failures and non-PR events run the checks", () => {
@@ -302,39 +328,83 @@ test("a complete Git diff selects changed code and deletion paths, including ren
   }
 });
 
-test("both workflows gate every expensive job and run on detector failure", () => {
-  for (const workflow of [codeql, migrations]) {
-    const scope = v.parse(
-      v.looseObject({
-        outputs: v.object({ required: v.string() }),
-        steps: v.array(v.looseObject({ run: v.optional(v.string()) })),
-      }),
-      workflow.jobs["scope"],
+test("migration jobs use the CI plan selector and fail open on detector errors", () => {
+  const plan = v.parse(
+    v.looseObject({
+      outputs: v.record(v.string(), v.string()),
+      steps: v.array(
+        v.looseObject({
+          id: v.optional(v.string()),
+          run: v.optional(v.string()),
+          env: v.optional(v.record(v.string(), v.string())),
+        }),
+      ),
+    }),
+    migrations.jobs["ci-plan"],
+  );
+  // The plan combines the selector's answer with the schema import answers.
+  expect(plan.outputs["database_migrations_required"]).toBe(
+    `\${{ steps.migration-scope.outputs.database_migrations_required }}`,
+  );
+  expect(
+    plan.steps.find(({ id }) => id === "migration-scope")?.env?.[
+      "MIGRATION_PATHS"
+    ],
+  ).toBe(`\${{ steps.changed-files.outputs.database_migrations_required }}`);
+  const selector = plan.steps.find(({ id }) => id === "changed-files")?.run;
+  expect(selector).toBe("bun scripts/ci-plan-scope.ts");
+  // The scope module runs the same detector and widens on its failure.
+  const scope = readFileSync(
+    new URL("ci-plan-scope.ts", import.meta.url),
+    "utf-8",
+  );
+  expect(scope).toContain('"scripts/detect-security-workflow-changes.sh"');
+  expect(scope).toContain('"migrations"');
+  expect(scope).toContain('failClosedDetector("migration change"');
+  expect(scope).toContain("database_migrations_required: TRUE");
+  for (const id of [
+    "database-migrations-check",
+    "database-migrations-apply-fresh",
+  ]) {
+    const job = v.parse(
+      v.looseObject({ needs: v.literal("ci-plan"), if: v.string() }),
+      migrations.jobs[id],
     );
-    expect(scope.outputs.required).toContain("steps.changes.outputs.required");
-    const detector = scope.steps.find(({ run }) =>
-      run?.includes("detect-security-workflow-changes.sh"),
+    expect(job.if).toContain(
+      "needs.ci-plan.outputs.database_migrations_required == 'true'",
     );
-    expect(detector?.run).toContain("required=true");
-    expect(detector?.run).toContain("skipped: no");
-    for (const [id, value] of Object.entries(workflow.jobs)) {
-      if (id === "scope") {
-        continue;
-      }
-      const job = v.parse(
-        v.looseObject({ needs: v.literal("scope"), if: v.string() }),
-        value,
-      );
-      expect(job.if).toContain("always()");
-      expect(job.if).toContain("needs.scope.result != 'success'");
-      expect(job.if).toContain("needs.scope.outputs.required != 'false'");
-    }
   }
   expect(migrations.on.pull_request.paths).toBeUndefined();
-  const triggers = v.parse(
+});
+
+test("CodeQL gates every expensive job and runs on detector failure", () => {
+  const scope = v.parse(
     v.looseObject({
-      schedule: v.array(v.object({ cron: v.string() })),
+      outputs: v.object({ required: v.string() }),
+      steps: v.array(v.looseObject({ run: v.optional(v.string()) })),
     }),
+    codeql.jobs["scope"],
+  );
+  expect(scope.outputs.required).toContain("steps.changes.outputs.required");
+  const detector = scope.steps.find(({ run }) =>
+    run?.includes("detect-security-workflow-changes.sh"),
+  );
+  expect(detector?.run).toContain("required=true");
+  expect(detector?.run).toContain("skipped: no");
+  for (const [id, value] of Object.entries(codeql.jobs)) {
+    if (id === "scope") {
+      continue;
+    }
+    const job = v.parse(
+      v.looseObject({ needs: v.literal("scope"), if: v.string() }),
+      value,
+    );
+    expect(job.if).toContain("always()");
+    expect(job.if).toContain("needs.scope.result != 'success'");
+    expect(job.if).toContain("needs.scope.outputs.required != 'false'");
+  }
+  const triggers = v.parse(
+    v.looseObject({ schedule: v.array(v.object({ cron: v.string() })) }),
     codeql.on,
   );
   expect(triggers.schedule).toHaveLength(1);

@@ -18,7 +18,7 @@ export const TEMPLATE_FILL_COMPLETION_MODES = [
 export type TemplateFillCompletionMode =
   (typeof TEMPLATE_FILL_COMPLETION_MODES)[number];
 
-export const DEFAULT_TEMPLATE_FILL_COMPLETION_MODE =
+const DEFAULT_TEMPLATE_FILL_COMPLETION_MODE =
   "require_complete" satisfies TemplateFillCompletionMode;
 
 /**

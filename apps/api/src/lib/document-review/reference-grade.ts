@@ -22,8 +22,8 @@ import * as v from "valibot";
 import type { AIRequestServiceTier, OrgAIConfig } from "@/api/lib/ai-config";
 import { resolveCaching } from "@/api/lib/ai-config";
 import {
-  createTanStackAIAnalyticsCallbacks,
   type AIUsageMetering,
+  createTanStackAIAnalyticsCallbacks,
 } from "@/api/lib/analytics/tanstack-ai";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
@@ -56,6 +56,7 @@ import type {
 } from "@/api/lib/document-review/review-delta";
 import {
   buildReviewDocumentParts,
+  fitReviewDocuments,
   reviewDocumentsScopeKey,
 } from "@/api/lib/document-review/review-document-messages";
 import type { DocxFolioCitation } from "@/api/lib/document-review/review-extract";
@@ -64,15 +65,17 @@ import type { ReviewTargetLanguage } from "@/api/lib/document-review/target-lang
 import { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
 import { buildGroundedReviewFix } from "@/api/lib/grounded-review-fix";
 import type { GroundedReviewFix } from "@/api/lib/grounded-review-fix";
+import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
 import { brandPersistedFieldId } from "@/api/lib/safe-id-boundaries";
-import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
+import { generateTanStackObjectForTask } from "@/api/lib/tanstack-ai-generate";
 import type { PreparedDocxFile } from "@/api/lib/workflow/generate-batch";
 import type { PositionTermKind } from "@/api/lib/workflow/playbook-positions";
+import { requestBudgetBytesForTask } from "@/api/lib/workflow/request-budget";
 import type { VerdictTier } from "@/api/lib/workflow/verdict-tiers";
 
 const REFERENCE_GRADE_TIMEOUT_MS = 120_000;
-/** The role every grading call dispatches on, and the one a run records. */
-export const REFERENCE_GRADE_ROLE = "pdf" as const;
+/** The task every grading call dispatches on, and the one a run records. */
+export const REFERENCE_GRADE_TASK = "pdf";
 const MAX_VERIFIED_CITATIONS_PER_FINDING = 8;
 /** Positions per model call. The target document dominates the prompt and is
  *  cached, so several term-level positions per call amortise it without
@@ -172,8 +175,7 @@ export type ReferenceGrading = {
   consensus: ReferenceConsensus;
   impact: ReferenceImpact;
   explanation:
-    | { type: "comparison"; text: string }
-    | { type: "insufficient-evidence" };
+    { type: "comparison"; text: string } | { type: "insufficient-evidence" };
   recommendation: string | null;
   citations: DocxFolioCitation[];
   referenceCitations: {
@@ -489,7 +491,7 @@ const normalizeConsensus = (
 /** The position's own passages, grouped by the document they came from. This
  *  is the standard by construction, so it does not depend on what the model
  *  chose to cite back. */
-const passageCitations = (
+export const referencePassageCitations = (
   passages: readonly PinnedReferencePassage[],
 ): ReferenceGrading["referenceCitations"] => {
   const byFileFieldId = new Map<string, { id: string; blockId: string }[]>();
@@ -508,9 +510,10 @@ const passageCitations = (
   }));
 };
 
-/** The judgment a position falls back to when the model said nothing about
- *  it: flagged for a human rather than silently passed. */
-export const ungradedReferenceGrading = (
+/** The judgment for a position the model answered without grounding: its
+ *  conclusion cites nothing in the target, so the documents gave it nothing to
+ *  compare. A failed or skipped grading is not this; the caller flags it. */
+export const insufficientEvidenceGrading = (
   position: ReferenceStandardPosition,
 ): ReferenceGrading => ({
   verdict: ASSESSMENT_VERDICTS["not-comparable"],
@@ -523,7 +526,7 @@ export const ungradedReferenceGrading = (
   explanation: { type: "insufficient-evidence" },
   recommendation: null,
   citations: [],
-  referenceCitations: passageCitations(position.passages),
+  referenceCitations: referencePassageCitations(position.passages),
   fix: null,
 });
 
@@ -592,7 +595,7 @@ export const normalizeReferenceGrading = ({
   );
   const grounded = isGrounded(raw.assessment, citations.length > 0);
   if (!grounded) {
-    return ungradedReferenceGrading(position);
+    return insufficientEvidenceGrading(position);
   }
 
   const standardBlocks = new Map(
@@ -627,7 +630,7 @@ export const normalizeReferenceGrading = ({
     explanation: { type: "comparison", text: rationaleProse.text },
     recommendation: recommendation.length > 0 ? recommendation : null,
     citations,
-    referenceCitations: passageCitations(position.passages),
+    referenceCitations: referencePassageCitations(position.passages),
     fix,
   };
 };
@@ -710,6 +713,7 @@ export type GradeReferencePositionsArgs = {
   targetEntityVersionId: SafeId<"entityVersion">;
   referenceEntityVersionIds: readonly SafeId<"entityVersion">[];
   organizationId: SafeId<"organization">;
+  admission: ModelDispatchAdmission;
   workspaceId: SafeId<"workspace">;
   orgAIConfig: OrgAIConfig | null;
   managedAIResidency: ManagedAIResidency;
@@ -718,7 +722,7 @@ export type GradeReferencePositionsArgs = {
   usageMetering: AIUsageMetering;
   abortSignal: AbortSignal;
   /** External model-dispatch boundary; supplied by focused integration tests. */
-  generateObjectForRole?: typeof generateTanStackObjectForRole | undefined;
+  generateObjectForTask?: typeof generateTanStackObjectForTask | undefined;
 };
 
 /** Grade one batch of reference-standard positions. Keyed by `sourceId`; a
@@ -732,6 +736,7 @@ export const gradeReferencePositions = async ({
   targetEntityVersionId,
   referenceEntityVersionIds,
   organizationId,
+  admission,
   workspaceId,
   orgAIConfig,
   managedAIResidency,
@@ -739,13 +744,26 @@ export const gradeReferencePositions = async ({
   serviceTier,
   usageMetering,
   abortSignal,
-  generateObjectForRole = generateTanStackObjectForRole,
+  generateObjectForTask = generateTanStackObjectForTask,
 }: GradeReferencePositionsArgs): Promise<
   Result<Map<string, ReferenceGrading>, WorkflowIntegrationError>
 > => {
+  const fitted = fitReviewDocuments({
+    target,
+    references: [],
+    budgetBytes: requestBudgetBytesForTask(REFERENCE_GRADE_TASK, orgAIConfig, {
+      dataClass: "customer",
+      organizationId,
+      modelTier: admission.modelTier,
+    }),
+  });
+  if (Result.isError(fitted)) {
+    return Result.err(fitted.error);
+  }
+
   const caching = resolveCaching({
     promptCachingEnabled,
-    role: REFERENCE_GRADE_ROLE,
+    task: REFERENCE_GRADE_TASK,
     scopeKey: reviewDocumentsScopeKey(
       targetEntityVersionId,
       referenceEntityVersionIds,
@@ -754,8 +772,9 @@ export const gradeReferencePositions = async ({
   const aiAnalytics = createTanStackAIAnalyticsCallbacks({
     dataClass: "customer",
     feature: "document-review.references",
-    modelRole: REFERENCE_GRADE_ROLE,
+    modelTask: REFERENCE_GRADE_TASK,
     orgAIConfig,
+    modelTier: admission.modelTier,
     properties: {
       file_count: 1,
       organization_id: organizationId,
@@ -768,7 +787,11 @@ export const gradeReferencePositions = async ({
   const request: ModelMessage = {
     role: "user",
     content: [
-      ...buildReviewDocumentParts({ target, references: [], caching }),
+      ...buildReviewDocumentParts({
+        target: fitted.value.target,
+        references: [],
+        caching,
+      }),
       {
         type: "text",
         content: buildPositionsPart({ positions, perspective, targetLanguage }),
@@ -776,22 +799,22 @@ export const gradeReferencePositions = async ({
     ],
   };
   const generate = async (messages: ModelMessage[]) =>
-    await generateObjectForRole({
+    await generateObjectForTask({
+      userId: admission.userId,
       dataClass: "customer",
-      role: REFERENCE_GRADE_ROLE,
+      task: REFERENCE_GRADE_TASK,
       orgAIConfig,
       managedAIResidency,
       organizationId,
+      admission,
       analytics: aiAnalytics,
       caching,
       serviceTier,
       tenantWorkspaceIds: [workspaceId],
       system: SYSTEM_PROMPT,
       messages,
-      abortSignal: AbortSignal.any([
-        abortSignal,
-        AbortSignal.timeout(REFERENCE_GRADE_TIMEOUT_MS),
-      ]),
+      abortSignal,
+      deadlineMs: REFERENCE_GRADE_TIMEOUT_MS,
       outputSchema: referenceGradeSchema,
     });
 

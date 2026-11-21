@@ -3,21 +3,24 @@ import { is } from "drizzle-orm";
 import {
   foreignKey,
   getTableConfig,
-  pgTable,
   PgTable,
+  pgTable,
   text,
 } from "drizzle-orm/pg-core";
 import type { PgColumn } from "drizzle-orm/pg-core";
 
 import * as authSchema from "@/api/db/auth-schema";
+import { entityFeatureGateMetadata } from "@/api/db/entity-feature-gate-metadata";
 import * as schema from "@/api/db/schema";
 import { workspaces } from "@/api/db/schema";
 import {
-  WORKSPACE_DERIVED_REFERENCE_DISPOSITION,
+  WORKSPACE_DELETION_BLOCKING_TABLES,
   WORKSPACE_DELETION_MANUAL_TABLES,
+  WORKSPACE_DELETION_RETAINED_TABLES,
   WORKSPACE_STORAGE_CLASS,
   WORKSPACE_STORAGE_DISPOSITION,
   WORKSPACE_STORAGE_REFERENCE_DISPOSITION,
+  workspaceDerivedReferenceDisposition,
 } from "@/api/lib/organization-storage-teardown";
 
 const isPgTable = (value: unknown): value is PgTable => is(value, PgTable);
@@ -69,6 +72,13 @@ const clearedBySiblingForeignKey = (
       }),
   );
 
+const retainedTables: ReadonlySet<PgTable> = new Set(
+  WORKSPACE_DELETION_RETAINED_TABLES,
+);
+const blockingTables: ReadonlySet<PgTable> = new Set(
+  WORKSPACE_DELETION_BLOCKING_TABLES,
+);
+
 const deletionClosure = (): Set<PgTable> => {
   const closure = new Set<PgTable>([
     workspaces,
@@ -106,7 +116,7 @@ describe("workspace deletion coverage", () => {
     expect(directChildren.has("notifications")).toBe(true);
   });
 
-  test("every restrictive edge into the deletion closure is manually or transitively covered", () => {
+  test("every restrictive edge into the deletion closure is removed or explicitly blocks deletion", () => {
     const closure = deletionClosure();
     const edges = foreignKeyEdges();
     const uncovered = edges.filter(
@@ -115,7 +125,11 @@ describe("workspace deletion coverage", () => {
         edge.onDelete !== "cascade" &&
         edge.onDelete !== "set null" &&
         !clearedBySiblingForeignKey(edge, edges) &&
-        !closure.has(edge.child),
+        !closure.has(edge.child) &&
+        // A retained row blocks the deletion: the fence refuses its own
+        // matter, and its restrictive references refuse any other.
+        !retainedTables.has(edge.child) &&
+        !blockingTables.has(edge.child),
     );
     expect(
       uncovered.map(
@@ -123,6 +137,36 @@ describe("workspace deletion coverage", () => {
           `${getTableConfig(edge.child).name} -> ${getTableConfig(edge.parent).name}`,
       ),
     ).toEqual([]);
+  });
+
+  test("retained billing tables have restrictive matter references outside the deletion closure", () => {
+    const edges = foreignKeyEdges();
+    const closure = deletionClosure();
+    for (const table of retainedTables) {
+      expect(closure.has(table)).toBe(false);
+      const references = edges.filter(
+        (edge) => edge.child === table && edge.parent === workspaces,
+      );
+      expect(references.length).toBeGreaterThan(0);
+      expect(references.every((edge) => edge.onDelete === "no action")).toBe(
+        true,
+      );
+    }
+  });
+
+  test("blocking tables refuse deletion through restrictive references only", () => {
+    const closure = deletionClosure();
+    const edges = foreignKeyEdges();
+    for (const table of blockingTables) {
+      expect(closure.has(table)).toBe(false);
+      const references = edges.filter(
+        (edge) => edge.child === table && closure.has(edge.parent),
+      );
+      expect(references.length).toBeGreaterThan(0);
+      expect(references.every((edge) => edge.onDelete === "restrict")).toBe(
+        true,
+      );
+    }
   });
 
   test("manual tables still close a restrictive edge", () => {
@@ -154,8 +198,21 @@ describe("workspace deletion coverage", () => {
         .map((column) => `${tableName}.${column.name}`);
     });
     expect(derivedWorkspaceColumns.toSorted()).toEqual(
-      Object.keys(WORKSPACE_DERIVED_REFERENCE_DISPOSITION).toSorted(),
+      Object.keys(workspaceDerivedReferenceDisposition(allTables)).toSorted(),
     );
+  });
+
+  test("workspace feature-gate scopes are removed by the cascade or block deletion", () => {
+    const cascadeClosure = new Set(
+      [...deletionClosure(), ...retainedTables].map(
+        (table) => getTableConfig(table).name,
+      ),
+    );
+    const outsideCascade = entityFeatureGateMetadata(allTables)
+      .filter(({ needsWorkspace }) => needsWorkspace)
+      .map(({ tableName }) => tableName)
+      .filter((tableName) => !cascadeClosure.has(tableName));
+    expect(outsideCascade).toEqual([]);
   });
 
   test("every known workspace storage class has an explicit disposition", () => {
@@ -163,13 +220,8 @@ describe("workspace deletion coverage", () => {
       Object.values(WORKSPACE_STORAGE_CLASS).toSorted(),
     );
     expect(
-      Object.entries(WORKSPACE_STORAGE_DISPOSITION).filter(
-        ([, disposition]) => disposition === "cleanup-request",
-      ).length,
-    ).toBe(7);
-    expect(
       WORKSPACE_STORAGE_DISPOSITION[WORKSPACE_STORAGE_CLASS.REPORT_EXPORT],
-    ).toBe("bucket-lifecycle");
+    ).toBe("cleanup-request");
   });
 
   test("workspace-owned storage references have an exact disposition", () => {

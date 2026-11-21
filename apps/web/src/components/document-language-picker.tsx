@@ -3,14 +3,8 @@
  * and the typeahead match key live in the sibling `.logic.ts`.
  */
 
-import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
-import {
-  DOCUMENT_TRANSLATION_SOURCE_LANGUAGES,
-  isDocumentTranslationSourceLanguageCode,
-  type DocumentTranslationSourceLanguageCode,
-} from "@stll/api-contract/document-translation";
 import { compareByLocale } from "@stll/collation";
 import {
   Combobox,
@@ -20,9 +14,10 @@ import {
   ComboboxList,
   ComboboxPopup,
 } from "@stll/ui/combobox";
+import { Label } from "@stll/ui/label";
 
 import { matchesLanguageQuery } from "@/components/document-language-picker.logic";
-import { useLocale } from "@/i18n/formatting-context";
+import { useFormattingLocale } from "@/i18n/formatting-context";
 import {
   DEEPL_TARGET_LANGUAGES,
   type DeepLTargetLanguageCode,
@@ -46,7 +41,7 @@ const LanguagePicker = ({
   disabled = false,
 }: LanguagePickerProps) => {
   const t = useTranslations();
-  const locale = useLocale();
+  const locale = useFormattingLocale();
 
   const options: LanguageOption[] = (() => {
     const items = languages.map((lang) => ({
@@ -61,9 +56,7 @@ const LanguagePicker = ({
 
   return (
     <div className="flex flex-col gap-2">
-      <label className="text-sm font-medium" htmlFor={id}>
-        {label}
-      </label>
+      <Label htmlFor={id}>{label}</Label>
       <Combobox<LanguageOption>
         autoHighlight
         disabled={disabled}
@@ -108,27 +101,4 @@ type DocumentLanguagePickerProps = Omit<LanguagePickerProps, "languages">;
 
 export const DocumentLanguagePicker = (props: DocumentLanguagePickerProps) => (
   <LanguagePicker {...props} languages={DEEPL_TARGET_LANGUAGES} />
-);
-
-type DocumentSourceLanguagePickerProps = {
-  id: string;
-  label: string;
-  value: DocumentTranslationSourceLanguageCode | null;
-  onChange: (code: DocumentTranslationSourceLanguageCode) => void;
-  disabled?: boolean | undefined;
-};
-
-export const DocumentSourceLanguagePicker = ({
-  onChange,
-  ...props
-}: DocumentSourceLanguagePickerProps) => (
-  <LanguagePicker
-    {...props}
-    languages={DOCUMENT_TRANSLATION_SOURCE_LANGUAGES}
-    onChange={(code) =>
-      isDocumentTranslationSourceLanguageCode(code)
-        ? onChange(code)
-        : panic("Source-language picker returned a target-only language")
-    }
-  />
 );

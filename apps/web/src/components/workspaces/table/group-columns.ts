@@ -10,18 +10,8 @@ import type { PropertyDependency, WorkspaceProperty } from "@/lib/types";
 // yet tagged with the role.
 const DOCUMENT_TYPE_CLASSIFIER_NAME = "document type";
 
-export const isDocumentTypeClassifier = (
-  property: WorkspaceProperty,
-): boolean =>
-  (property.role === "document-type-classifier" &&
-    property.content.type === "single-select" &&
-    property.tool.type === "ai-model") ||
-  (property.content.type === "single-select" &&
-    property.tool.type === "ai-model" &&
-    property.name.trim().toLowerCase() === DOCUMENT_TYPE_CLASSIFIER_NAME);
-
 export const resolveDocumentTypeClassifier = (
-  properties: WorkspaceProperty[],
+  properties: readonly WorkspaceProperty[],
 ): WorkspaceProperty | null => {
   const byRole = properties.find(
     (property) =>
@@ -95,7 +85,7 @@ export const buildDocTypeGateLabels = ({
   properties,
   classifierPropertyId,
 }: {
-  properties: WorkspaceProperty[];
+  properties: readonly WorkspaceProperty[];
   classifierPropertyId: string;
 }): Map<string, Set<string>> => {
   const gateLabelsByPropertyId = new Map<string, Set<string>>();

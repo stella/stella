@@ -3,10 +3,10 @@ import {
   ACTION_ADMISSION_REFUSALS,
   isActionAdmissionCode,
 } from "@stll/api-contract/action-admission";
+import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 
 import { APIError } from "@/lib/errors/api";
 import { ACTION_ADMISSION_ERROR_KEYS } from "@/lib/errors/localization";
-import { sanitizeHref } from "@/lib/sanitize-href";
 
 export const actionAdmissionOutcome = (error: unknown) => {
   const seen = new Set<unknown>();
@@ -47,11 +47,19 @@ export const actionAdmissionOutcome = (error: unknown) => {
           new URL(href).protocol === "http:")
           ? href
           : undefined;
+      const retryAfterMs =
+        typeof details === "object" &&
+        details !== null &&
+        "retryAfterMs" in details &&
+        typeof details.retryAfterMs === "number"
+          ? details.retryAfterMs
+          : undefined;
       return {
         code,
         contactUrl,
         messageKey: ACTION_ADMISSION_ERROR_KEYS[code],
         retryable: ACTION_ADMISSION_REFUSALS[code].retryable,
+        ...(retryAfterMs === undefined ? {} : { retryAfterMs }),
       };
     }
     current = current.cause;

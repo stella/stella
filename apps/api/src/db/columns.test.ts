@@ -1,10 +1,10 @@
 import { PGlite } from "@electric-sql/pglite";
 import { describe, expect, test } from "bun:test";
-import { SQL, is, sql } from "drizzle-orm";
+import { is, SQL, sql } from "drizzle-orm";
 import {
-  PgDialect,
-  jsonb as stockJsonb,
   integer,
+  jsonb as stockJsonb,
+  PgDialect,
   pgTable,
 } from "drizzle-orm/pg-core";
 import { drizzle } from "drizzle-orm/pglite";

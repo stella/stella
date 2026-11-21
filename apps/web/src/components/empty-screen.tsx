@@ -2,13 +2,14 @@ import type { ComponentProps, ReactNode } from "react";
 
 import { useTranslations } from "use-intl";
 
+import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 import { Button, buttonVariants } from "@stll/ui/button";
 import { CircleHelpIcon, ExternalLinkIcon } from "@stll/ui/icons";
 import type { LucideIcon } from "@stll/ui/icons";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import type { GuideAnchorProps } from "@/features/guides/guide-anchor";
-import { sanitizeHref } from "@/lib/sanitize-href";
 
 const DEFAULT_SUPPORT_EMAIL = "hello@stll.app";
 
@@ -17,7 +18,7 @@ type EmptyScreenMediaPlacement = "side" | "bottom";
 type EmptyScreenAction = GuideAnchorProps & {
   label: string;
   icon?: LucideIcon;
-  onClick?: () => void;
+  onClick?: ComponentProps<typeof Button>["onClick"];
   href?: string;
   disabled?: boolean;
 };
@@ -188,9 +189,9 @@ const EmptyScreenMedia = ({ preview }: EmptyScreenMediaProps) => {
   return (
     <div className="border-border/80 bg-card/80 relative overflow-hidden rounded-xl border shadow-xs">
       <div className="border-border/70 bg-muted/40 flex h-8 items-center gap-1.5 border-b px-3">
-        <span className="text-muted-foreground truncate text-xs">
+        <TruncatedText className="text-muted-foreground text-xs">
           {tCommon("preview")}
-        </span>
+        </TruncatedText>
       </div>
       <div className="bg-muted/40 relative aspect-video">
         {preview ?? <DefaultEmptyPreview />}
@@ -207,7 +208,7 @@ const DefaultEmptyPreview = () => (
       <div className="border-border/60 bg-background/80 flex flex-col gap-2 rounded-md border p-3">
         {Array.from({ length: 5 }, (_, index) => (
           <div
-            className="bg-muted h-6 rounded"
+            className="bg-muted h-6 rounded-sm"
             key={`empty-preview-row-${index}`}
           />
         ))}
@@ -221,6 +222,7 @@ type EmptyScreenActionButtonProps = {
 };
 
 const EmptyScreenActionButton = ({ action }: EmptyScreenActionButtonProps) => {
+  const t = useTranslations();
   const Icon = action.icon;
   const guideAnchorId = action["data-guide-anchor"];
   const children = (
@@ -255,6 +257,7 @@ const EmptyScreenActionButton = ({ action }: EmptyScreenActionButtonProps) => {
     <Button
       data-guide-anchor={guideAnchorId}
       disabled={action.disabled}
+      disabledReason={t("workspaces.files.uploading")}
       onClick={action.onClick}
     >
       {children}

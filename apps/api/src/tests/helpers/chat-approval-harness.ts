@@ -1,4 +1,3 @@
-import { Value } from "@sinclair/typebox/value";
 import { toolDefinition } from "@tanstack/ai";
 import type { UIMessage } from "@tanstack/ai-client";
 import { panic, Result, TaggedError } from "better-result";
@@ -7,18 +6,25 @@ import * as v from "valibot";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import { CHAT_TURN_ID_HEADER, CHAT_TURN_INTENT } from "@stll/api-contract";
+import { CHAT_COMMAND_ERROR_CODE } from "@stll/api-contract/chat-command";
+import type { ChatTurnBudget } from "@stll/chat-limits";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { chatMessages, chatTurns } from "@/api/db/schema";
-import { startChatExecutionAdmission } from "@/api/handlers/chat/chat-execution-admission";
+import {
+  createMembershipSafeDb,
+  createMembershipScopedDb,
+} from "@/api/db/scoped";
 import { chatMessageFromPersisted } from "@/api/handlers/chat/chat-message-parts";
 import { agUiSendMessageBodySchema } from "@/api/handlers/chat/chat-schema";
 import type {
   ChatSendRequest,
+  IncomingActiveFile,
   IncomingUserContext,
 } from "@/api/handlers/chat/chat-schema";
 import { reapOwnerlessChatTurnOnTx } from "@/api/handlers/chat/chat-turn-persistence";
 import { relinquishChatTurnRuns } from "@/api/handlers/chat/chat-turn-run";
+import type { LocalChatRun } from "@/api/handlers/chat/local-run-chunks";
 import {
   decodeMessagePageCursor,
   loadChatMessagePage,
@@ -36,10 +42,16 @@ import type { StreamChatFinishEvent } from "@/api/handlers/chat/stream-chat";
 import { createStellaMcpToolSource } from "@/api/handlers/chat/tools/external-mcp-tools";
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 import cancelTurn from "@/api/handlers/chat/turns/cancel";
+import { joinChatTurn, probeChatTurn } from "@/api/handlers/chat/turns/resume";
 import type { ChatPart } from "@/api/handlers/chat/types";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
+import { applyResponseHeaders, type ResponseHeaders } from "@/api/http/context";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
-import { resolveMemberAuthorization } from "@/api/lib/auth";
+import {
+  featureAccessSnapshotFromAuthorization,
+  resolveMemberAuthorization,
+} from "@/api/lib/auth";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -48,9 +60,15 @@ import {
 } from "@/api/lib/chat/ref-registry";
 import { readChatThreadNames } from "@/api/lib/chat/thread-names";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
+import { startExecutionAdmission } from "@/api/lib/rate-limit/execution-admission";
 import { createReapOwnerlessChatTurnsTask } from "@/api/lib/scheduler/tasks/chat-turn-reaper";
 import type { SchedulerTaskContext } from "@/api/lib/scheduler/types";
+import { readAuthorizedWorkspaces } from "@/api/lib/workspaces/authorized-workspace-ids";
 import type { anonymizeTextFields } from "@/api/mcp/anonymization";
+import type {
+  ChatHarnessPhase,
+  ChatHarnessProfile,
+} from "@/api/tests/helpers/chat-harness-profile";
 import {
   findLiveViewViolations,
   findUnservedSnapshotMessages,
@@ -77,9 +95,11 @@ import { drainResponse } from "@/api/tests/helpers/chat-round-trip";
 import { installScriptedProvider } from "@/api/tests/helpers/chat-scripted-provider";
 import type { ScriptedRun } from "@/api/tests/helpers/chat-scripted-provider";
 import {
-  findOfferedInteractions,
-  findThreadInvariantViolations,
+  offeredInteractionsOf,
+  readThreadInvariantSnapshot,
+  threadInvariantViolationsOf,
 } from "@/api/tests/helpers/chat-thread-invariants";
+import type { ThreadInvariantSnapshot } from "@/api/tests/helpers/chat-thread-invariants";
 import {
   findLiveOutcomeViolations,
   findTurnOutcomeViolations,
@@ -93,10 +113,12 @@ import type {
   WebChatContext,
 } from "@/api/tests/helpers/chat-web-client";
 import { findTranscriptViolations } from "@/api/tests/helpers/provider-request-transcript";
+import { installTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import type { TestIds } from "@/api/tests/security/rls-helpers";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 import { rootPoolConnectionCount } from "@/api/tests/test-database-environment";
+import { API_TEST_TIMEOUT_MS } from "@/api/tests/test-timeouts";
 
 // A real chat round trip: the production `send-message` handler and
 // `streamChat` pipeline, with a scripted model behind the adapter seam, one
@@ -169,7 +191,7 @@ export type RecordedExchange = {
   /** The JSON body the page posted. */
   request: unknown;
   /** The SSE body the page read, or the route's refusal. */
-  response: { body: string; status: number };
+  response: { body: string; status: number; turnId: string | null };
 };
 
 const CHAT_ROUTE_PATH = "/v1/chat";
@@ -177,7 +199,6 @@ const CHAT_ROUTE_PATH = "/v1/chat";
 const CHAT_TURN_CANCEL_PATH =
   /^\/v1\/chat\/threads\/(?<threadId>[^/]+)\/turns\/(?<turnId>[^/]+)\/cancel$/u;
 const LIVE_TURN_STATUSES = ["accepted", "running"] as const;
-const MAX_BARRIER_POLLS = 2000;
 /** The checks a hand-built send answers for: the stored thread's, the
  *  requests the provider was handed, and the run's independence from its
  *  request. */
@@ -198,6 +219,11 @@ const CUT_SHORT_REASONS: ReadonlySet<string> = new Set([
   "user-stop",
 ]);
 
+/** The approval-gated tool's run failing (`failingApprovalNames`). */
+class ApprovalToolFailure extends TaggedError("ApprovalToolFailure")<{
+  message: string;
+}> {}
+
 /** The page's connection dropping because the process serving it died. */
 class ChatConnectionLostError extends TaggedError("ChatConnectionLostError")<{
   message: string;
@@ -205,7 +231,15 @@ class ChatConnectionLostError extends TaggedError("ChatConnectionLostError")<{
 
 /** The HTTP answer a route's status response makes (a refusal, or a Stop's
  *  answer), as the browser sees it. */
-const statusResponse = (answer: unknown): Response => {
+/**
+ * The route's answer as the page receives it: a refusal carries the headers
+ * the handler set, as the router's response does (a replayed command names
+ * its turn there).
+ */
+const statusResponse = (
+  answer: unknown,
+  set: ResponseHeaders = {},
+): Response => {
   if (answer instanceof Response) {
     return answer;
   }
@@ -217,8 +251,10 @@ const statusResponse = (answer: unknown): Response => {
     typeof answer === "object" && answer !== null
       ? Reflect.get(answer, "response")
       : undefined;
+  const headers = new Headers({ "Content-Type": "application/json" });
+  applyResponseHeaders(headers, set, { overwrite: false });
   return new Response(JSON.stringify(body ?? { message: "Refused" }), {
-    headers: { "Content-Type": "application/json" },
+    headers,
     status: typeof status === "number" ? status : 500,
   });
 };
@@ -240,19 +276,34 @@ export type HarnessModel = Pick<
 >;
 
 export const createApprovalHarness = ({
+  compactMessages = compactMessagesForContext,
   beforeTurnSettles,
   boundaryAnonymizer,
+  failingApprovalNames = [],
+  grantableApprovalConnectorId,
   ids,
+  localRunOf,
   model,
   organizationAIConfig = orgAIConfig,
   promptCachingEnabled = false,
+  profile,
   safeDb,
   scopedDb,
   sources = {},
   testDb,
+  textAdapterFactory,
   user,
   withDirectRefTool = false,
+  workspaceId: homeWorkspaceId,
 }: {
+  /** Observe or control the real send's pre-model compaction boundary. */
+  compactMessages?: typeof compactMessagesForContext | undefined;
+  /**
+   * The run on the member's computer a thread's next turn answers through, as
+   * the send's routing would hand it over. `undefined` is a cloud turn.
+   */
+  localRunOf?:
+    ((threadId: SafeId<"chatThread">) => LocalChatRun | undefined) | undefined;
   /**
    * Replaces the anonymizer an anonymized turn's provider boundary calls, so a
    * test can make it fail. The real pipeline by default.
@@ -269,6 +320,18 @@ export const createApprovalHarness = ({
         threadId: SafeId<"chatThread">;
       }) => Promise<void>)
     | undefined;
+  /**
+   * Names the approval-gated tool fails on once approved: its run throws,
+   * as a write that the far side rejects does. It still counts in
+   * `executions`. None by default.
+   */
+  failingApprovalNames?: readonly string[] | undefined;
+  /**
+   * Serves `APPROVAL_TOOL_NAME` from this installed connector, so a stored
+   * grant on the connector covers it, as it covers a real connector's tools.
+   * None by default: no grant covers the tool.
+   */
+  grantableApprovalConnectorId?: SafeId<"mcpConnector"> | undefined;
   ids: TestIds;
   /**
    * Who sends, and the profile their page sends with each message
@@ -297,36 +360,74 @@ export const createApprovalHarness = ({
   promptCachingEnabled?: boolean | undefined;
   /** Registers `DIRECT_REF_TOOL_NAME` too. */
   withDirectRefTool?: boolean | undefined;
+  /** Home matter supplied by the route's authorized workspace boundary. */
+  workspaceId?: SafeId<"workspace"> | undefined;
+  /** Uses a local adapter through the same resolution seam as scripted replies. */
+  textAdapterFactory?: NonNullable<
+    Parameters<typeof installScriptedProvider>[0]
+  >["textAdapterFactory"];
   /** Defaults to the scripted provider. */
   model?: HarnessModel | undefined;
   /** The organization's model selection; defaults to the harness's own. */
   organizationAIConfig?: OrgAIConfig | undefined;
+  profile?: ChatHarnessProfile | undefined;
   safeDb: SafeDb;
   scopedDb: ScopedDb;
   testDb: TestDatabase;
 }) => {
+  const measure = async <T>(
+    phase: ChatHarnessPhase,
+    operation: () => Promise<T>,
+  ): Promise<T> =>
+    profile === undefined
+      ? await operation()
+      : await profile.measure(phase, operation);
   const userId = user?.id ?? ids.userA1;
+  const turnSettlementListeners = new Set<{
+    threadId: string;
+    notify: () => void;
+  }>();
+  const turnSettlementFailures = new Map<string, unknown>();
+  /** Per thread: the narrower budget its turns run under. */
+  const turnBudgets = new Map<string, ChatTurnBudget>();
+  /** Every run started on a thread, by its terminal promise. */
+  const runSettlements = new Map<string, Promise<unknown>[]>();
+  const notifyTurnSettlement = (threadId: string) => {
+    for (const listener of turnSettlementListeners) {
+      if (listener.threadId === threadId) {
+        listener.notify();
+      }
+    }
+  };
   // Every database access of a turn goes to the test database; one that
   // reaches the shared pools escaped it, and fails the test at `close`.
   const rootPoolConnectionsAtStart = rootPoolConnectionCount();
-  const provider = model ?? installScriptedProvider();
+  const provider = model ?? installScriptedProvider({ textAdapterFactory });
   const executions: string[] = [];
-  const approvalTool = toolDefinition({
-    name: APPROVAL_TOOL_NAME,
-    description: "Server tool behind an approval",
-    // The optional field is what strict provider schemas send as null, and
-    // what a route that fills every field sends as "" (a note is never empty).
-    inputSchema: toTanStackToolSchema(
-      v.object({
-        name: v.string(),
-        note: v.optional(v.pipe(v.string(), v.minLength(1))),
-      }),
-    ),
-    needsApproval: true,
-  }).server(async ({ name }) => {
-    executions.push(name);
-    return await Promise.resolve({ deleted: name });
-  });
+  // Built for each request, as a connector's tools are: a grant ungates the
+  // request's own tool object.
+  const createApprovalTool = () =>
+    toolDefinition({
+      name: APPROVAL_TOOL_NAME,
+      description: "Server tool behind an approval",
+      // The optional field is what strict provider schemas send as null, and
+      // what a route that fills every field sends as "" (a note is never empty).
+      inputSchema: toTanStackToolSchema(
+        v.object({
+          name: v.string(),
+          note: v.optional(v.pipe(v.string(), v.minLength(1))),
+        }),
+      ),
+      needsApproval: true,
+    }).server(async ({ name }) => {
+      executions.push(name);
+      if (failingApprovalNames.includes(name)) {
+        throw new ApprovalToolFailure({
+          message: `The external service could not delete ${name}`,
+        });
+      }
+      return await Promise.resolve({ deleted: name });
+    });
   const refLedger = createRefStabilityLedger();
   /** The registry the newest request built: the one a running tool uses. */
   let requestRegistry: ChatRefRegistry | undefined;
@@ -358,24 +459,83 @@ export const createApprovalHarness = ({
       const race = nextAcceptanceRace;
       nextAcceptanceRace = undefined;
       await race?.();
-      return await startChatExecutionAdmission(options);
+      return await startExecutionAdmission(options);
     },
     indexThread: async () => await Promise.resolve(undefined),
-    // An approved write reads the member's role again when it runs; read it
-    // from this test's database, not the shared pools.
-    resolveCurrentMembership: async (lookup) =>
-      await resolveMemberAuthorization(lookup, testDb),
+    // Delayed tools rebuild live authority from this test's database, not the
+    // shared pools.
+    resolveCurrentExecutionContext: async ({
+      organizationId,
+      userId: executionUserId,
+    }) => {
+      const authorization = await resolveMemberAuthorization(
+        {
+          organizationId,
+          userId: executionUserId,
+          authentication: { kind: "credential" },
+        },
+        testDb,
+      );
+      if (authorization === null) {
+        return Result.ok(null);
+      }
+      const databaseIdentity = {
+        organizationId,
+        serverValidatedWorkspaceIds: [],
+        userId: executionUserId,
+      };
+      const executionScopedDb = asTestRaw<ScopedDb>(
+        createMembershipScopedDb(testDb, databaseIdentity),
+      );
+      const workspaces = await executionScopedDb(
+        async (tx) => await readAuthorizedWorkspaces(tx, { organizationId }),
+      );
+      if (workspaces.isErr()) {
+        return workspaces;
+      }
+      const accessibleWorkspaces = workspaces.value.workspaces;
+      const accessibleIds = new Set(accessibleWorkspaces.map(({ id }) => id));
+      return Result.ok({
+        accessibleWorkspaces,
+        featureAccessSnapshot: featureAccessSnapshotFromAuthorization({
+          organizationId,
+          userId: executionUserId,
+          authorization,
+        }),
+        pinServerValidatedWorkspaceId: (workspaceId) =>
+          accessibleIds.has(workspaceId),
+        role: authorization.role,
+        billingAccess: authorization.billingAccess,
+        safeDb: asTestRaw<SafeDb>(
+          createMembershipSafeDb(testDb, databaseIdentity),
+        ),
+        scopedDb: executionScopedDb,
+        userEmail: authorization.email,
+      });
+    },
     loadExternalMcpTools: async () => {
       const close = async () => await Promise.resolve(undefined);
       return await Promise.resolve({
         close,
-        connectors: [],
+        connectors:
+          grantableApprovalConnectorId === undefined
+            ? []
+            : [
+                {
+                  connectorId: grantableApprovalConnectorId,
+                  description: "The harness's external service",
+                  displayName: "External",
+                  slug: "external",
+                  toolNames: ["delete"],
+                  exposedToolNames: [APPROVAL_TOOL_NAME],
+                },
+              ],
         source: createStellaMcpToolSource({
           closeClients: close,
           sourceTools: sources.lazyExternalTools ?? {},
         }),
         tools: {
-          [APPROVAL_TOOL_NAME]: approvalTool,
+          [APPROVAL_TOOL_NAME]: createApprovalTool(),
           ...(withDirectRefTool
             ? { [DIRECT_REF_TOOL_NAME]: directRefTool }
             : {}),
@@ -387,33 +547,45 @@ export const createApprovalHarness = ({
         sources.web ?? { urlFetcher: null, webSearchProvider: null },
       ),
     rollbackSideEffects: rollbackUnpersistedChatSideEffects,
-    compactMessagesForContext,
-    streamResponse:
-      boundaryAnonymizer === undefined && beforeTurnSettles === undefined
-        ? streamChat
-        : async (props) =>
-            await streamChat({
-              ...props,
-              ...(beforeTurnSettles === undefined
-                ? {}
-                : {
-                    onFinish: async (event) => {
-                      await beforeTurnSettles({
-                        outcome: event.outcome,
-                        threadId: props.threadId,
-                      });
-                      return await props.onFinish(event);
-                    },
-                  }),
-              thirdPartyBoundary:
-                boundaryAnonymizer !== undefined &&
-                props.thirdPartyBoundary.type === "anonymized"
-                  ? {
-                      ...props.thirdPartyBoundary,
-                      anonymizeFields: boundaryAnonymizer,
-                    }
-                  : props.thirdPartyBoundary,
-            }),
+    compactMessagesForContext: compactMessages,
+    streamResponse: async (props) => {
+      // The run owns every terminal path, including checkpoint restoration and
+      // failures that produce no onFinish event. Its notification only wakes
+      // the persisted-row oracle; it does not replace that oracle.
+      const settlements = runSettlements.get(props.threadId) ?? [];
+      settlements.push(props.run.settled);
+      runSettlements.set(props.threadId, settlements);
+      void props.run.settled.then(
+        () => notifyTurnSettlement(props.threadId),
+        (error: unknown) => {
+          turnSettlementFailures.set(props.threadId, error);
+          notifyTurnSettlement(props.threadId);
+        },
+      );
+      const turnBudget = turnBudgets.get(props.threadId);
+      return await streamChat({
+        ...props,
+        ...(turnBudget === undefined ? {} : { turnBudget }),
+        ...(localRunOf === undefined
+          ? {}
+          : { localRun: localRunOf(props.threadId) }),
+        onFinish: async (event) => {
+          await beforeTurnSettles?.({
+            outcome: event.outcome,
+            threadId: props.threadId,
+          });
+          return await props.onFinish(event);
+        },
+        thirdPartyBoundary:
+          boundaryAnonymizer !== undefined &&
+          props.thirdPartyBoundary.type === "anonymized"
+            ? {
+                ...props.thirdPartyBoundary,
+                anonymizeFields: boundaryAnonymizer,
+              }
+            : props.thirdPartyBoundary,
+      });
+    },
     uploadMessageFiles: uploadMessageFilesWithRollback,
   } satisfies Omit<SendMessageDependencies, "createRefRegistry">;
   /** Per thread: the send handler, recording each request's ref registry. */
@@ -444,23 +616,27 @@ export const createApprovalHarness = ({
   const contextFromBody = (
     body: SendBody,
     signal?: AbortSignal,
+    headers?: RequestInit["headers"],
   ): SendMessageCtx => {
     const request = createTornDownRequest({
+      headers,
       signal,
-      url: "http://localhost/v1/chat/send",
+      url: "http://localhost/v1/chat",
     });
     if (sources.contextMatterIds !== undefined) {
       // The matters the page's context names, as its composer sends them
-      // (TanStack mirrors the forwarded props as `data`).
+      // (older TanStack clients also mirror forwarded props as `data`).
       const contextMatterIds = [...sources.contextMatterIds];
       Object.assign(body.forwardedProps, { contextMatterIds });
-      Object.assign(body.data, { contextMatterIds });
+      if (body.data !== undefined) {
+        Object.assign(body.data, { contextMatterIds });
+      }
     }
     if (user?.context !== undefined) {
       // The profile the page sends with every message.
       const userContext = { ...user.context };
       Object.assign(body.forwardedProps, { userContext });
-      if (typeof body.data === "object") {
+      if (body.data !== undefined) {
         Object.assign(body.data, { userContext });
       }
     }
@@ -478,7 +654,10 @@ export const createApprovalHarness = ({
         ]),
       getActiveWorkspaceIds: async () =>
         await Promise.resolve([ids.wsA1, ids.wsA2]),
-      getWorkspaceAccess: async () => await Promise.resolve(null),
+      getWorkspaceAccess: async (workspaceId: SafeId<"workspace">) =>
+        workspaceId === homeWorkspaceId
+          ? { id: workspaceId, status: "active" }
+          : null,
       memberRole: sessionMemberRole("owner"),
       orgAIConfig: organizationAIConfig,
       orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
@@ -487,9 +666,12 @@ export const createApprovalHarness = ({
       promptCachingEnabled,
       recordAuditEvent: async () => await Promise.resolve(),
       request: request.request,
-      route: "/v1/chat/send",
+      // The lower-cased request headers the router hands every handler.
+      headers: Object.fromEntries(request.request.headers),
+      route: "/v1/chat" satisfies ApiRoutePath,
       safeDb,
       scopedDb,
+      set: { headers: {}, status: 200 },
       session: { activeOrganizationId: ids.orgA },
       user: { id: userId },
     });
@@ -506,14 +688,16 @@ export const createApprovalHarness = ({
    * The route's answer to `ctx`. Once the handler hands its response back,
    * the request is over: it is torn down before anything reads the response.
    */
-  const handle = async (ctx: SendMessageCtx) => {
-    const body =
-      bodyByContext.get(ctx) ??
-      panic("Send contexts come from this harness's contextFromBody");
-    const result = await sendMessageOf(body.threadId).handler(ctx);
-    requestOf(ctx).tearDown();
-    return result;
-  };
+  const handle = async (ctx: SendMessageCtx) =>
+    await measure("action", async () => {
+      const body =
+        bodyByContext.get(ctx) ??
+        panic("Send contexts come from this harness's contextFromBody");
+      const result = await sendMessageOf(body.threadId).handler(ctx);
+      requestOf(ctx).tearDown();
+      notifyTurnSettlement(body.threadId);
+      return result;
+    });
 
   /**
    * `chat.run.outlives-request`: reads of the request after its response,
@@ -522,28 +706,22 @@ export const createApprovalHarness = ({
    * `chat.persisted.run-identity`: the turn the response names holds the run
    * id its request posted.
    */
-  const findRunViolations = async ({
+  const findRunViolations = ({
     ctx,
     ended,
+    snapshot,
     turnId,
   }: {
     ctx: SendMessageCtx;
     ended: RecordedExchange["ended"];
+    snapshot: ThreadInvariantSnapshot;
     turnId: string | null;
-  }): Promise<OracleViolation[]> => {
+  }): OracleViolation[] => {
     const reads = requestOf(ctx).readsAfterResponse();
     const turn =
       turnId === null
         ? undefined
-        : await testDb.query.chatTurns.findFirst({
-            columns: {
-              cancellationReason: true,
-              interruptionReason: true,
-              runId: true,
-              status: true,
-            },
-            where: { id: { eq: toSafeId<"chatTurn">(turnId) } },
-          });
+        : snapshot.turns.find(({ id }) => id === turnId);
     const reason =
       ended === "complete"
         ? (turn?.interruptionReason ?? turn?.cancellationReason)
@@ -569,11 +747,13 @@ export const createApprovalHarness = ({
 
   /** A request built by hand rather than by a web client. */
   const sendContext = ({
+    activeFile,
     message,
     resume,
     runId,
     threadId,
   }: {
+    activeFile?: IncomingActiveFile | undefined;
     message: ChatSendRequest["message"];
     /** A continuation names the interrupted run it resumes. */
     resume?: { interruptedRunId: string; items: InterruptResume } | undefined;
@@ -585,6 +765,8 @@ export const createApprovalHarness = ({
         ? {}
         : { parentRunId: resume.interruptedRunId, resume: resume.items };
     const forwardedProps = {
+      activeFile,
+      workspaceId: homeWorkspaceId,
       contextMatterIds: [],
       message,
       runId,
@@ -594,6 +776,8 @@ export const createApprovalHarness = ({
     };
     return contextFromBody(
       asTestRaw<SendBody>({
+        activeFile,
+        workspaceId: homeWorkspaceId,
         threadId,
         runId: forwardedProps.runId,
         state: {},
@@ -609,36 +793,66 @@ export const createApprovalHarness = ({
 
   /**
    * Barrier: resolves once no turn on `threadId` is still accepted or
-   * running, polled on the turn rows rather than on a clock. A turn that
+   * running. Completion notifications wake a fresh persisted-state read;
+   * the notification itself is never evidence that the row settled. A turn that
    * never gets there is the `chat.persisted.turn-settles` finding.
    */
   const awaitSettledTurns = async (
     threadId: SafeId<"chatThread">,
-  ): Promise<OracleViolation[]> => {
-    let live: { id: string; status: string }[] = [];
-    for (let poll = 0; poll < MAX_BARRIER_POLLS; poll += 1) {
-      live = await testDb
-        .select({ id: chatTurns.id, status: chatTurns.status })
-        .from(chatTurns)
-        .where(
-          and(
-            eq(chatTurns.threadId, threadId),
-            inArray(chatTurns.status, [...LIVE_TURN_STATUSES]),
-          ),
+  ): Promise<OracleViolation[]> =>
+    await measure("settlement", async () => {
+      const deadline = performance.now() + API_TEST_TIMEOUT_MS;
+      while (true) {
+        // Subscribe before reading: settlement can finish during the query.
+        const changed = Promise.withResolvers();
+        const listener = { threadId, notify: () => changed.resolve(undefined) };
+        turnSettlementListeners.add(listener);
+        const timeout = setTimeout(
+          listener.notify,
+          Math.max(0, deadline - performance.now()),
         );
-      if (live.length === 0) {
-        return [];
+        try {
+          profile?.recordCounter("turnBarrierReads");
+          const live = await testDb
+            .select({ id: chatTurns.id, status: chatTurns.status })
+            .from(chatTurns)
+            .where(
+              and(
+                eq(chatTurns.threadId, threadId),
+                inArray(chatTurns.status, [...LIVE_TURN_STATUSES]),
+              ),
+            );
+          if (turnSettlementFailures.has(threadId)) {
+            return panic(
+              "The chat turn run failed to release its ownership",
+              turnSettlementFailures.get(threadId),
+            );
+          }
+          if (live.length === 0) {
+            return [];
+          }
+          if (performance.now() >= deadline) {
+            return violationsOf(CHAT_ORACLE.persistedTurnSettles, live);
+          }
+          profile?.recordCounter("turnBarrierWaits");
+          await changed.promise;
+        } finally {
+          clearTimeout(timeout);
+          turnSettlementListeners.delete(listener);
+        }
       }
-      // Yield to the work settling the turn before looking again.
-      await Bun.sleep(1);
-    }
-    return violationsOf(CHAT_ORACLE.persistedTurnSettles, live);
-  };
+    });
 
   const reloadView = async (threadId: SafeId<"chatThread">) =>
-    await loadReloadView({ safeDb, threadId, userId });
+    await measure(
+      "oracle",
+      async () => await loadReloadView({ safeDb, threadId, userId }),
+    );
   const reloadPage = async (threadId: SafeId<"chatThread">) =>
-    await loadReloadPage({ safeDb, threadId, userId });
+    await measure(
+      "oracle",
+      async () => await loadReloadPage({ safeDb, threadId, userId }),
+    );
 
   type CancelTurnCtx = Parameters<typeof cancelTurn.handler>[0];
 
@@ -663,7 +877,8 @@ export const createApprovalHarness = ({
           `http://localhost/v1/chat/threads/${threadId}/turns/${turnId}/cancel`,
           { method: "POST" },
         ),
-        route: "/v1/chat/threads/:threadId/turns/:turnId/cancel",
+        route:
+          "/v1/chat/threads/:threadId/turns/:turnId/cancel" satisfies ApiRoutePath,
         safeDb,
         session: { activeOrganizationId: ids.orgA },
         set,
@@ -677,14 +892,20 @@ export const createApprovalHarness = ({
       : statusResponse(answer);
   };
 
-  const findPersistedViolations = async (
-    threadId: SafeId<"chatThread">,
-  ): Promise<OracleViolation[]> => {
+  const readSnapshot = async (threadId: SafeId<"chatThread">) =>
+    await measure(
+      "oracle",
+      async () => await readThreadInvariantSnapshot({ db: testDb, threadId }),
+    );
+
+  const persistedViolationsOf = (
+    snapshot: ThreadInvariantSnapshot,
+  ): OracleViolation[] => {
     const {
       turnOutcomeMismatches,
       unownedPendingInteractions,
       unsettledToolCalls,
-    } = await findThreadInvariantViolations({ db: testDb, threadId });
+    } = threadInvariantViolationsOf(snapshot);
     return [
       ...violationsOf(
         CHAT_ORACLE.persistedPendingOwned,
@@ -696,21 +917,24 @@ export const createApprovalHarness = ({
   };
 
   const readThreadMessages = async (threadId: SafeId<"chatThread">) =>
-    (
-      await testDb
-        .select({
-          content: chatMessages.content,
-          id: chatMessages.id,
-          role: chatMessages.role,
-        })
-        .from(chatMessages)
-        .where(eq(chatMessages.threadId, threadId))
-        .orderBy(asc(chatMessages.createdAt), asc(chatMessages.id))
-    ).map(chatMessageFromPersisted);
+    await measure("oracle", async () =>
+      (
+        await testDb
+          .select({
+            content: chatMessages.content,
+            id: chatMessages.id,
+            role: chatMessages.role,
+          })
+          .from(chatMessages)
+          .where(eq(chatMessages.threadId, threadId))
+          .orderBy(asc(chatMessages.createdAt), asc(chatMessages.id))
+      ).map(chatMessageFromPersisted),
+    );
 
   /** Refs whose target moved, checked once a request of `threadId` settled. */
   const findUnstableRefs = async (
     threadId: SafeId<"chatThread">,
+    snapshot: ThreadInvariantSnapshot,
   ): Promise<OracleViolation[]> => {
     // As the next request reads them: under the thread owner's row scope.
     const names = await safeDb(
@@ -725,7 +949,7 @@ export const createApprovalHarness = ({
         refs: new Set(held?.refBindings.map(({ ref }) => ref)),
         toolCallIds: new Set(held?.toolCallIds),
       },
-      stored: await readThreadMessages(threadId),
+      stored: snapshot.messages,
       threadId,
     });
   };
@@ -740,63 +964,56 @@ export const createApprovalHarness = ({
     before,
     chunks,
     ended,
+    snapshot,
+    reload,
     threadId,
     turnId,
   }: {
     before: readonly { id: string; parts: readonly ChatPart[] }[];
     chunks: Parameters<typeof findTurnOutcomeViolations>[0]["chunks"];
     ended: RecordedExchange["ended"];
+    snapshot: ThreadInvariantSnapshot;
+    reload: Awaited<ReturnType<typeof reloadView>>;
     threadId: SafeId<"chatThread">;
     turnId: string | null;
-  }): Promise<OracleViolation[]> => {
-    // A streamed response names the turn it runs, and that turn is stored:
-    // without it none of the checks below could run.
-    if (turnId === null) {
-      return violationsOf(CHAT_ORACLE.persistedRunIdentity, [
-        { missingTurnHeader: CHAT_TURN_ID_HEADER, threadId },
-      ]);
-    }
-    const turn = await testDb.query.chatTurns.findFirst({
-      columns: {
-        assistantMessageId: true,
-        failureCode: true,
-        failureRetryable: true,
-        id: true,
-        status: true,
-      },
-      where: { id: { eq: toSafeId<"chatTurn">(turnId) } },
+  }): Promise<OracleViolation[]> =>
+    await measure("oracle", async () => {
+      // A streamed response names the turn it runs, and that turn is stored:
+      // without it none of the checks below could run.
+      if (turnId === null) {
+        return violationsOf(CHAT_ORACLE.persistedRunIdentity, [
+          { missingTurnHeader: CHAT_TURN_ID_HEADER, threadId },
+        ]);
+      }
+      const turn = snapshot.turns.find(({ id }) => id === turnId);
+      if (turn === undefined) {
+        return violationsOf(CHAT_ORACLE.persistedRunIdentity, [
+          { unstoredTurnId: turnId, threadId },
+        ]);
+      }
+      const messageId = turn.assistantMessageId;
+      const stored = snapshot.messages;
+      const web = await loadWebChat();
+      const message =
+        messageId === null
+          ? undefined
+          : stored.find(({ id }) => id === messageId);
+      const reloaded =
+        messageId === null
+          ? undefined
+          : reload.find(({ id }) => id === messageId);
+      return findTurnOutcomeViolations({
+        after: message?.parts ?? null,
+        before: before.find(({ id }) => id === messageId)?.parts ?? [],
+        chunks,
+        ended,
+        reloadShowsError:
+          reloaded !== undefined &&
+          web.getChatAssistantTurnError(reloaded) !== undefined,
+        storedOutcome: message?.metadata?.turnOutcome,
+        turn,
+      });
     });
-    if (turn === undefined) {
-      return violationsOf(CHAT_ORACLE.persistedRunIdentity, [
-        { unstoredTurnId: turnId, threadId },
-      ]);
-    }
-    const messageId = turn.assistantMessageId;
-    const [stored, reload, web] = await Promise.all([
-      readThreadMessages(threadId),
-      reloadView(threadId),
-      loadWebChat(),
-    ]);
-    const message =
-      messageId === null
-        ? undefined
-        : stored.find(({ id }) => id === messageId);
-    const reloaded =
-      messageId === null
-        ? undefined
-        : reload.find(({ id }) => id === messageId);
-    return findTurnOutcomeViolations({
-      after: message?.parts ?? null,
-      before: before.find(({ id }) => id === messageId)?.parts ?? [],
-      chunks,
-      ended,
-      reloadShowsError:
-        reloaded !== undefined &&
-        web.getChatAssistantTurnError(reloaded) !== undefined,
-      storedOutcome: message?.metadata?.turnOutcome,
-      turn,
-    });
-  };
 
   /**
    * Sends `ctx` and reads the response to its end, so its terminal
@@ -806,62 +1023,70 @@ export const createApprovalHarness = ({
   const sendAndCheck = async (
     ctx: SendMessageCtx,
     { readAfterSettling = false }: { readAfterSettling?: boolean } = {},
-  ) => {
-    const body =
-      bodyByContext.get(ctx) ??
-      panic("Send contexts come from this harness's sendContext");
-    const threadId = body.threadId;
-    const before = await readThreadMessages(threadId);
-    const result = await handle(ctx);
-    if (!(result instanceof Response && result.ok)) {
-      return { rejection: result, status: "rejected" } as const;
-    }
-    // Unread, the run still ends on its own: nothing it does waits on the page.
-    const settledUnread = readAfterSettling
-      ? await awaitSettledTurns(threadId)
-      : [];
-    const text = await drainResponse(result);
-    const chunks = await readClientStreamChunks({
-      response: new Response(text, { headers: result.headers }),
-      runId: body.runId,
-      threadId,
+  ) =>
+    await measure("action", async () => {
+      const body =
+        bodyByContext.get(ctx) ??
+        panic("Send contexts come from this harness's sendContext");
+      const threadId = body.threadId;
+      const before = await readThreadMessages(threadId);
+      const result = await handle(ctx);
+      if (!(result instanceof Response && result.ok)) {
+        return { rejection: result, status: "rejected" } as const;
+      }
+      // Unread, the run still ends on its own: nothing it does waits on the page.
+      const settledUnread = readAfterSettling
+        ? await awaitSettledTurns(threadId)
+        : [];
+      const text = await drainResponse(result);
+      const chunks = await readClientStreamChunks({
+        response: new Response(text, { headers: result.headers }),
+        runId: body.runId,
+        threadId,
+      });
+      const unsettled = await awaitSettledTurns(threadId);
+      const [snapshot, reload] = await Promise.all([
+        readSnapshot(threadId),
+        reloadView(threadId),
+      ]);
+      return {
+        chunks,
+        headers: result.headers,
+        status: "streamed",
+        text,
+        violations: await measure("oracle", async () => [
+          ...settledUnread,
+          ...unsettled,
+          ...findRunViolations({
+            ctx,
+            ended: "complete",
+            snapshot,
+            turnId: result.headers.get(CHAT_TURN_ID_HEADER),
+          }),
+          ...findWireIdentityViolations(chunks),
+          ...findUnstoredWireResults({
+            chunks,
+            stored: reload,
+          }),
+          ...findUnservedSnapshotMessages({
+            chunks,
+            served: await readAllMessages(threadId),
+          }),
+          ...persistedViolationsOf(snapshot),
+          ...(await findSettledTurnViolations({
+            before,
+            chunks,
+            ended: "complete",
+            snapshot,
+            reload,
+            threadId,
+            turnId: result.headers.get(CHAT_TURN_ID_HEADER),
+          })),
+          ...(await findUnstableRefs(threadId, snapshot)),
+          ...findTranscriptViolations(provider.takeRequests(threadId)),
+        ]),
+      } as const;
     });
-    const unsettled = await awaitSettledTurns(threadId);
-    return {
-      chunks,
-      headers: result.headers,
-      status: "streamed",
-      text,
-      violations: [
-        ...settledUnread,
-        ...unsettled,
-        ...(await findRunViolations({
-          ctx,
-          ended: "complete",
-          turnId: result.headers.get(CHAT_TURN_ID_HEADER),
-        })),
-        ...findWireIdentityViolations(chunks),
-        ...findUnstoredWireResults({
-          chunks,
-          stored: await reloadView(threadId),
-        }),
-        ...findUnservedSnapshotMessages({
-          chunks,
-          served: await readAllMessages(threadId),
-        }),
-        ...(await findPersistedViolations(threadId)),
-        ...(await findSettledTurnViolations({
-          before,
-          chunks,
-          ended: "complete",
-          threadId,
-          turnId: result.headers.get(CHAT_TURN_ID_HEADER),
-        })),
-        ...(await findUnstableRefs(threadId)),
-        ...findTranscriptViolations(provider.takeRequests(threadId)),
-      ],
-    } as const;
-  };
 
   /**
    * A send from a hand-built context, the server's own request path: a
@@ -906,11 +1131,33 @@ export const createApprovalHarness = ({
    *  stop. */
   const stoppingThreads = new Set<string>();
   let inFlight = 0;
+  const inFlightListeners = new Set<() => void>();
+  const notifyInFlight = () => {
+    for (const listener of inFlightListeners) {
+      listener();
+    }
+  };
 
   /** Threads whose next web request is served by a process that then dies. */
   const crashingThreads = new Set<string>();
+  /** The execution each crashed request left running, before the reaper
+   *  settles its turn and clears the turn's execution id. */
+  const crashedExecutions = new Map<string, string>();
   /** Reads of the responses a dying process left behind, still running. */
   const abandonedReads = new Set<Promise<string>>();
+
+  const reapOwnerlessTurns = async () => {
+    await createReapOwnerlessChatTurnsTask(reapOwnerlessChatTurnOnTx)(
+      asTestRaw<SchedulerTaskContext>({
+        db: testDb,
+        logger: { info: () => undefined },
+        signal: new AbortController().signal,
+      }),
+    );
+    for (const listener of turnSettlementListeners) {
+      listener.notify();
+    }
+  };
 
   /**
    * Serves `body` until the run reaches a stalling model call, then lets the
@@ -918,7 +1165,10 @@ export const createApprovalHarness = ({
    * connection drops, and the run never persists what it did after its last
    * write. The turn's lease is then expired, as a dead owner's would be.
    */
-  const crashDuring = async (body: SendBody): Promise<Response> => {
+  const crashDuring = async (
+    body: SendBody,
+    headers: RequestInit["headers"],
+  ): Promise<Response> => {
     const threadId = body.threadId;
     const stalled = provider.stalled(threadId);
     // What the dying process sent the model and never stored is gone: the
@@ -926,9 +1176,10 @@ export const createApprovalHarness = ({
     const prompts = provider.promptLedgerOf(threadId);
     const beforeCrash = prompts.mark();
     // The dying process never sees the page go away, so no signal reaches it.
-    const result = await handle(contextFromBody(body));
+    const ctx = contextFromBody(body, undefined, headers);
+    const result = await handle(ctx);
     if (!(result instanceof Response && result.ok)) {
-      return statusResponse(result);
+      return statusResponse(result, ctx.set.headers);
     }
     // Reading the stream is what runs the turn; it stops at the stall. In
     // this process the run lives on, stalled, until `close` ends it.
@@ -936,14 +1187,22 @@ export const createApprovalHarness = ({
     await stalled;
     prompts.loseSince(beforeCrash);
     // The earliest lease the row allows: just after the turn was created.
-    await testDb
+    const expired = await testDb
       .update(chatTurns)
       .set({
         leaseExpiresAt: sql`${chatTurns.createdAt} + interval '1 millisecond'`,
       })
       .where(
         and(eq(chatTurns.threadId, threadId), eq(chatTurns.status, "running")),
-      );
+      )
+      .returning({ executionId: chatTurns.executionId });
+    const crashedExecution = expired.at(0)?.executionId;
+    if (crashedExecution !== undefined && crashedExecution !== null) {
+      crashedExecutions.set(threadId, crashedExecution);
+    }
+    // Durable clients keep joining until the dead owner's turn settles. Run
+    // the scheduler tick explicitly instead of waiting on its wall clock.
+    await reapOwnerlessTurns();
     throw new ChatConnectionLostError({ message: "Failed to fetch" });
   };
 
@@ -1019,37 +1278,50 @@ export const createApprovalHarness = ({
     raw: SendBody;
     text: string;
     turnId: string | null;
-  }) => {
-    const chunks = await readClientStreamChunks({
-      response: new Response(text),
-      runId: raw.runId,
-      threadId: raw.threadId,
-    });
-    clientFindings.push(
-      ...(await awaitSettledTurns(raw.threadId)),
-      ...(await findRunViolations({ ctx, ended, turnId })),
-      ...findWireIdentityViolations(chunks),
-      ...findUnstoredWireResults({
-        chunks,
-        stored: await reloadView(raw.threadId),
-      }),
-      ...findUnservedSnapshotMessages({
-        chunks,
-        served: await readAllMessages(raw.threadId),
-      }),
-      ...(await findPersistedViolations(raw.threadId)),
-      ...(await findSettledTurnViolations({
-        before,
-        chunks,
-        ended,
+  }) =>
+    await measure("oracle", async () => {
+      // This parses the captured delivery, not a live connection. A partial
+      // capture has no server to replay from; its SSE offsets must not trigger
+      // the SDK reconnect engine while checking the chunks already received.
+      const captured =
+        ended === "complete" ? text : text.replace(/^id:.*\n/gmu, "");
+      const chunks = await readClientStreamChunks({
+        response: new Response(captured),
+        runId: raw.runId,
         threadId: raw.threadId,
-        turnId,
-      })),
-      ...(await findUnstableRefs(raw.threadId)),
-    );
-    delivered.set(raw.threadId, deliveredInterrupts(chunks));
-    await endRecord({ ended, response: { body: text, status: 200 } });
-  };
+      });
+      const unsettled = await awaitSettledTurns(raw.threadId);
+      const [snapshot, reload] = await Promise.all([
+        readSnapshot(raw.threadId),
+        reloadView(raw.threadId),
+      ]);
+      clientFindings.push(
+        ...unsettled,
+        ...findRunViolations({ ctx, ended, snapshot, turnId }),
+        ...findWireIdentityViolations(chunks),
+        ...findUnstoredWireResults({
+          chunks,
+          stored: reload,
+        }),
+        ...findUnservedSnapshotMessages({
+          chunks,
+          served: await readAllMessages(raw.threadId),
+        }),
+        ...persistedViolationsOf(snapshot),
+        ...(await findSettledTurnViolations({
+          before,
+          chunks,
+          ended,
+          snapshot,
+          reload,
+          threadId: raw.threadId,
+          turnId,
+        })),
+        ...(await findUnstableRefs(raw.threadId, snapshot)),
+      );
+      delivered.set(raw.threadId, deliveredInterrupts(chunks));
+      await endRecord({ ended, response: { body: text, status: 200, turnId } });
+    });
 
   /**
    * A response handed to the page while the server is still writing it. It
@@ -1105,19 +1377,30 @@ export const createApprovalHarness = ({
     };
   };
 
-  /** The route's refusal, reported and recorded. */
-  const refuse = async (endRecord: RecordEnd, rejection: unknown) => {
-    clientFindings.push(
-      ...violationsOf(CHAT_ORACLE.clientRequestsAccepted, [
-        { refused: Bun.inspect(rejection) },
-      ]),
-    );
-    const response = statusResponse(rejection);
+  /**
+   * The route's refusal, reported and recorded. A replayed command is not
+   * one: the page's retry is answered with the turn its first attempt took.
+   */
+  const refuse = async (
+    endRecord: RecordEnd,
+    rejection: unknown,
+    set: ResponseHeaders,
+  ) => {
+    const response = statusResponse(rejection, set);
+    const refusal = await response.clone().text();
+    if (!refusal.includes(`"${CHAT_COMMAND_ERROR_CODE.replayed}"`)) {
+      clientFindings.push(
+        ...violationsOf(CHAT_ORACLE.clientRequestsAccepted, [
+          { refused: Bun.inspect(rejection) },
+        ]),
+      );
+    }
     await endRecord({
       ended: "complete",
       response: {
         body: await response.clone().text(),
         status: response.status,
+        turnId: response.headers.get(CHAT_TURN_ID_HEADER),
       },
     });
     return response;
@@ -1130,13 +1413,16 @@ export const createApprovalHarness = ({
    * has ended and been checked.
    */
   const postChatBody = async (
-    raw: unknown,
+    posted: unknown,
     signal: AbortSignal | undefined,
+    headers: RequestInit["headers"],
   ): Promise<{ done: Promise<void>; response: Response }> => {
-    if (!Value.Check(agUiSendMessageBodySchema, raw)) {
-      const errors = [...Value.Errors(agUiSendMessageBodySchema, raw)]
+    // Decoded exactly as the route decodes it: unknown keys are dropped.
+    const decoded = v.safeParse(agUiSendMessageBodySchema, posted);
+    if (!decoded.success) {
+      const errors = decoded.issues
         .slice(0, 3)
-        .map(({ message, path }) => `${path}: ${message}`);
+        .map((issue) => `${v.getDotPath(issue) ?? "$"}: ${issue.message}`);
       clientFindings.push(
         ...violationsOf(CHAT_ORACLE.clientRequestsAccepted, [
           { invalidBody: errors },
@@ -1149,18 +1435,20 @@ export const createApprovalHarness = ({
         }),
       };
     }
+    const raw = decoded.output;
     const endRecord = beginRecord(raw);
     if (raw.forwardedProps.turnIntent === CHAT_TURN_INTENT.regenerate) {
       provider.promptLedgerOf(raw.threadId).replacesTail();
     }
     if (crashingThreads.delete(raw.threadId)) {
       try {
-        const refused = await crashDuring(raw);
+        const refused = await crashDuring(raw, headers);
         await endRecord({
           ended: "complete",
           response: {
             body: await refused.clone().text(),
             status: refused.status,
+            turnId: refused.headers.get(CHAT_TURN_ID_HEADER),
           },
         });
         return { done: Promise.resolve(), response: refused };
@@ -1168,13 +1456,13 @@ export const createApprovalHarness = ({
         // The page reads no response: its request fails as a lost connection.
         await endRecord({
           ended: "connection-lost",
-          response: { body: "", status: 0 },
+          response: { body: "", status: 0, turnId: null },
         });
         throw error;
       }
     }
     if (liveThreads.has(raw.threadId)) {
-      const ctx = contextFromBody(raw, signal);
+      const ctx = contextFromBody(raw, signal, headers);
       const before = await readThreadMessages(raw.threadId);
       const result = await handle(ctx);
       if (result instanceof Response && result.ok) {
@@ -1189,21 +1477,26 @@ export const createApprovalHarness = ({
       }
       return {
         done: Promise.resolve(),
-        response: await refuse(endRecord, result),
+        response: await refuse(endRecord, result, ctx.set.headers),
       };
     }
-    const outcome = await sendAndCheck(contextFromBody(raw, signal));
+    const ctx = contextFromBody(raw, signal, headers);
+    const outcome = await sendAndCheck(ctx);
     if (outcome.status === "rejected") {
       return {
         done: Promise.resolve(),
-        response: await refuse(endRecord, outcome.rejection),
+        response: await refuse(endRecord, outcome.rejection, ctx.set.headers),
       };
     }
     clientFindings.push(...outcome.violations);
     delivered.set(raw.threadId, deliveredInterrupts(outcome.chunks));
     await endRecord({
       ended: "complete",
-      response: { body: outcome.text, status: 200 },
+      response: {
+        body: outcome.text,
+        status: 200,
+        turnId: outcome.headers.get(CHAT_TURN_ID_HEADER),
+      },
     });
     return {
       done: Promise.resolve(),
@@ -1217,6 +1510,45 @@ export const createApprovalHarness = ({
     init?: RequestInit,
   ): Promise<Response> => {
     const url = new URL(input instanceof Request ? input.url : input);
+    const resume =
+      /^\/v1\/chat\/threads\/(?<threadId>[^/]+)\/turns\/(?<turnId>[^/]+)\/(?<delivery>resume|join)$/u.exec(
+        url.pathname,
+      )?.groups;
+    if (
+      resume?.["threadId"] !== undefined &&
+      resume["turnId"] !== undefined &&
+      (init?.method ?? "GET") === "GET"
+    ) {
+      const delivery = resume["delivery"] === "join" ? "join" : "resume";
+      const handler = delivery === "join" ? joinChatTurn : probeChatTurn;
+      const set = { headers: {}, status: 200 };
+      const answer: unknown = await handler.handler(
+        asTestRaw<Parameters<typeof handler.handler>[0]>({
+          memberRole: sessionMemberRole("owner"),
+          getWorkspaceAccess: async () => await Promise.resolve(null),
+          params: {
+            threadId: toSafeId<"chatThread">(resume["threadId"]),
+            turnId: toSafeId<"chatTurn">(resume["turnId"]),
+          },
+          query: Object.fromEntries(url.searchParams),
+          request: new Request(url.toString(), init),
+          route:
+            `/v1/chat/threads/:threadId/turns/:turnId/${delivery}` satisfies ApiRoutePath,
+          safeDb,
+          scopedDb,
+          session: { activeOrganizationId: ids.orgA },
+          set,
+          user: { id: userId },
+        }),
+      );
+      if (answer instanceof Response) {
+        return answer;
+      }
+      if (typeof answer === "object" && answer !== null && "type" in answer) {
+        return Response.json(answer, { status: set.status });
+      }
+      return statusResponse(answer);
+    }
     const cancel = CHAT_TURN_CANCEL_PATH.exec(url.pathname)?.groups;
     if (
       cancel?.["threadId"] !== undefined &&
@@ -1230,6 +1562,7 @@ export const createApprovalHarness = ({
         stoppingThreads.add(cancel["threadId"]);
       }
       inFlight += 1;
+      notifyInFlight();
       try {
         const answer = await postCancelTurn({
           threadId: cancel["threadId"],
@@ -1241,6 +1574,8 @@ export const createApprovalHarness = ({
         return answer;
       } finally {
         inFlight -= 1;
+        notifyInFlight();
+        notifyTurnSettlement(cancel["threadId"]);
       }
     }
     if (url.pathname !== CHAT_ROUTE_PATH || init?.method !== "POST") {
@@ -1251,37 +1586,53 @@ export const createApprovalHarness = ({
       return panic("The web chat client posted a non-JSON body");
     }
     inFlight += 1;
+    notifyInFlight();
     let done: Promise<void> = Promise.resolve();
     try {
       const parsed: unknown = JSON.parse(raw);
-      const posted = await postChatBody(parsed, init.signal ?? undefined);
+      const posted = await postChatBody(
+        parsed,
+        init.signal ?? undefined,
+        init.headers,
+      );
       done = posted.done;
       return posted.response;
     } finally {
       void done.finally(() => {
         inFlight -= 1;
+        notifyInFlight();
       });
     }
   };
-  globalThis.fetch = Object.assign(routedFetch, {
-    preconnect: originalFetch.preconnect,
-  });
+  const fetchInstallation = installTestFetch(
+    Object.assign(routedFetch, {
+      preconnect: originalFetch.preconnect,
+    }),
+  );
 
   /** A browser tab that loads `threadId` now, as a page load does. */
   const openWebClient = async (
     threadId: SafeId<"chatThread">,
     { context }: { context?: WebChatContext | undefined } = {},
-  ): Promise<WebChatClient> => {
-    provider.script(threadId);
-    delivered.delete(threadId);
-    return await createWebChatClient({
-      context,
-      inFlight: () => inFlight,
-      page: await reloadPage(threadId),
-      reload: async () => await reloadPage(threadId),
-      threadId,
+  ): Promise<WebChatClient> =>
+    await measure("clientSetup", async () => {
+      provider.script(threadId);
+      delivered.delete(threadId);
+      return await createWebChatClient({
+        context,
+        profile,
+        inFlight: () => inFlight,
+        subscribeInFlight: (listener) => {
+          inFlightListeners.add(listener);
+          return () => {
+            inFlightListeners.delete(listener);
+          };
+        },
+        page: await reloadPage(threadId),
+        reload: async () => await reloadPage(threadId),
+        threadId,
+      });
     });
-  };
 
   /**
    * Every oracle for a web client's page: each request it made since the last
@@ -1301,73 +1652,76 @@ export const createApprovalHarness = ({
      */
     expected?: { refusal?: boolean; runFailure?: boolean };
     threadId: SafeId<"chatThread">;
-  }): Promise<OracleViolation[]> => {
-    const unsettled = await awaitSettledTurns(threadId);
-    const [offered, reload, persisted] = await Promise.all([
-      findOfferedInteractions({ db: testDb, threadId }),
-      reloadView(threadId),
-      findPersistedViolations(threadId),
-    ]);
-    const { changedToolResults, unconsumedScripts, unscriptedCalls } =
-      provider.takeFindings(threadId);
-    const requests = clientFindings.splice(0);
-    const refusals = requests.filter(
-      ({ oracle }) => oracle === CHAT_ORACLE.clientRequestsAccepted,
-    );
-    const errors = client.takeErrors().map((error) => Bun.inspect(error));
-    const expectsError =
-      expected.runFailure === true || expected.refusal === true;
-    const web = await loadWebChat();
-    const lastAnswer = (messages: readonly UIMessage[]) =>
-      messages.findLast(({ role }) => role === "assistant") ?? null;
-    const shown = findLiveOutcomeViolations({
-      live: {
-        error:
-          client.runtimeState().hasError ||
-          web.getChatAssistantTurnError(lastAnswer(client.messages())) !==
-            undefined,
-      },
-      reload: {
-        error: web.getChatAssistantTurnError(lastAnswer(reload)) !== undefined,
-      },
-    });
-    return [
-      ...(expected.refusal === true
-        ? requests.filter((finding) => !refusals.includes(finding))
-        : requests),
-      ...(expected.refusal === true && refusals.length === 0
-        ? violationsOf(CHAT_ORACLE.clientRequestsAccepted, [
-            { expectedRefusal: "the route accepted every request" },
-          ])
-        : []),
-      ...unsettled,
-      ...persisted,
-      ...violationsOf(CHAT_ORACLE.providerScriptsConsumed, [
-        ...unconsumedScripts.map((script) => ({ unconsumed: script })),
-        ...unscriptedCalls.map((call) => ({ unscripted: call })),
-      ]),
-      ...violationsOf(
-        CHAT_ORACLE.providerPrefixStable,
-        provider.promptLedgerOf(threadId).takeBreaks(),
-      ),
-      ...findTranscriptViolations(provider.takeRequests(threadId)),
-      ...violationsOf(CHAT_ORACLE.providerResultsStable, changedToolResults),
-      ...violationsOf(CHAT_ORACLE.clientNoErrors, [
-        ...(expectsError ? [] : errors),
-        ...(expectsError && errors.length === 0
-          ? [{ expectedError: "the runtime reported none" }]
+  }): Promise<OracleViolation[]> =>
+    await measure("oracle", async () => {
+      const unsettled = await awaitSettledTurns(threadId);
+      const [snapshot, reload] = await Promise.all([
+        readSnapshot(threadId),
+        reloadView(threadId),
+      ]);
+      const offered = offeredInteractionsOf(snapshot);
+      const persisted = persistedViolationsOf(snapshot);
+      const { changedToolResults, unconsumedScripts, unscriptedCalls } =
+        provider.takeFindings(threadId);
+      const requests = clientFindings.splice(0);
+      const refusals = requests.filter(
+        ({ oracle }) => oracle === CHAT_ORACLE.clientRequestsAccepted,
+      );
+      const errors = client.takeErrors().map((error) => Bun.inspect(error));
+      const expectsError =
+        expected.runFailure === true || expected.refusal === true;
+      const web = await loadWebChat();
+      const lastAnswer = (messages: readonly UIMessage[]) =>
+        messages.findLast(({ role }) => role === "assistant") ?? null;
+      const shown = findLiveOutcomeViolations({
+        live: {
+          error:
+            client.runtimeState().hasError ||
+            web.getChatAssistantTurnError(lastAnswer(client.messages())) !==
+              undefined,
+        },
+        reload: {
+          error:
+            web.getChatAssistantTurnError(lastAnswer(reload)) !== undefined,
+        },
+      });
+      return [
+        ...(expected.refusal === true
+          ? requests.filter((finding) => !refusals.includes(finding))
+          : requests),
+        ...(expected.refusal === true && refusals.length === 0
+          ? violationsOf(CHAT_ORACLE.clientRequestsAccepted, [
+              { expectedRefusal: "the route accepted every request" },
+            ])
           : []),
-      ]),
-      ...findLiveViewViolations({
-        delivered: delivered.get(threadId) ?? null,
-        live: client.messages(),
-        offered,
-        reload,
-      }),
-      // A refused request's error is the request's, not a turn's.
-      ...(expected.refusal === true ? [] : shown),
-    ];
-  };
+        ...unsettled,
+        ...persisted,
+        ...violationsOf(CHAT_ORACLE.providerScriptsConsumed, [
+          ...unconsumedScripts.map((script) => ({ unconsumed: script })),
+          ...unscriptedCalls.map((call) => ({ unscripted: call })),
+        ]),
+        ...violationsOf(
+          CHAT_ORACLE.providerPrefixStable,
+          provider.promptLedgerOf(threadId).takeBreaks(),
+        ),
+        ...findTranscriptViolations(provider.takeRequests(threadId)),
+        ...violationsOf(CHAT_ORACLE.providerResultsStable, changedToolResults),
+        ...violationsOf(CHAT_ORACLE.clientNoErrors, [
+          ...(expectsError ? [] : errors),
+          ...(expectsError && errors.length === 0
+            ? [{ expectedError: "the runtime reported none" }]
+            : []),
+        ]),
+        ...findLiveViewViolations({
+          delivered: delivered.get(threadId) ?? null,
+          live: client.messages(),
+          offered,
+          reload,
+        }),
+        // A refused request's error is the request's, not a turn's.
+        ...(expected.refusal === true ? [] : shown),
+      ];
+    });
 
   /** Fails on any violation `checkWebClient` finds. */
   const expectSoundWebClient = async (options: {
@@ -1452,8 +1806,17 @@ export const createApprovalHarness = ({
       threadId,
     });
 
+  /** Resolves once every run started on `threadId` has finished, including
+   *  the work it does after its turn settles. */
+  const awaitRunsSettled = async (threadId: SafeId<"chatThread">) => {
+    await Promise.allSettled(runSettlements.get(threadId) ?? []);
+  };
+
   return {
     approveContext,
+    awaitRunsSettled,
+    /** Resolves once no turn on the thread is still accepted or running. */
+    awaitSettledTurns,
     checkWebClient,
     /**
      * Makes `threadId`'s next web request die mid-run: the process serving
@@ -1463,37 +1826,39 @@ export const createApprovalHarness = ({
     crashDuringNextRequest: (threadId: SafeId<"chatThread">) => {
       crashingThreads.add(threadId);
     },
+    /** The execution `threadId`'s crashed request left running, if any. */
+    crashedExecutionOf: (threadId: SafeId<"chatThread">) =>
+      crashedExecutions.get(threadId),
     /** Runs the scheduler's reaper once, as its minute tick does. */
-    reapOwnerlessTurns: async () => {
-      await createReapOwnerlessChatTurnsTask(reapOwnerlessChatTurnOnTx)(
-        asTestRaw<SchedulerTaskContext>({
-          db: testDb,
-          logger: { info: () => undefined },
-          signal: new AbortController().signal,
-        }),
-      );
-    },
+    reapOwnerlessTurns,
     /**
      * Ends what the test left running, then restores the model seam and
      * `fetch`; call once the test is done, before its database closes. A run
      * a simulated crash left stalled would otherwise keep beating on its
      * turn after that database is gone.
      */
-    close: async () => {
-      try {
-        await relinquishChatTurnRuns();
-        await Promise.all(abandonedReads);
-      } finally {
-        globalThis.fetch = originalFetch;
-        provider.restore();
-      }
-      const rootPoolConnections = rootPoolConnectionCount();
-      if (rootPoolConnections !== rootPoolConnectionsAtStart) {
-        panic(
-          "A chat turn connected to the shared database pools instead of the test database; inject that side path (as `indexThread` is) so it uses the test's database",
-        );
-      }
-    },
+    close: async () =>
+      await measure("close", async () => {
+        try {
+          await relinquishChatTurnRuns({ type: "end" });
+          await Promise.all(abandonedReads);
+        } finally {
+          fetchInstallation.restore();
+          provider.restore();
+        }
+        if (turnSettlementFailures.size > 0) {
+          panic(
+            "A chat turn run failed to release its ownership",
+            turnSettlementFailures.values().next().value,
+          );
+        }
+        const rootPoolConnections = rootPoolConnectionCount();
+        if (rootPoolConnections !== rootPoolConnectionsAtStart) {
+          panic(
+            "A chat turn connected to the shared database pools instead of the test database; inject that side path (as `indexThread` is) so it uses the test's database",
+          );
+        }
+      }),
     /** Drops the connection of `threadId`'s response still streaming. */
     dropConnection: (threadId: SafeId<"chatThread">) => {
       (
@@ -1526,6 +1891,16 @@ export const createApprovalHarness = ({
       liveThreads.delete(threadId);
     },
     /**
+     * From now on, `threadId`'s turns run under `budget` instead of
+     * `CHAT_TURN_BUDGET`, so a scripted turn reaches a cap in a few steps.
+     */
+    limitTurnBudget: (
+      threadId: SafeId<"chatThread">,
+      budget: ChatTurnBudget,
+    ) => {
+      turnBudgets.set(threadId, budget);
+    },
+    /**
      * Runs `race` once, when the next send has read its thread and is about
      * to accept its turn: what `race` does to the thread there (another
      * request, run to its end) lands between that send's read and its claim.
@@ -1549,6 +1924,14 @@ export const createApprovalHarness = ({
     },
     send,
     sendContext,
+    /**
+     * The send route's answer to `ctx`, with nothing read around it: no
+     * oracle, no barrier. What a measurement of the route's own work drives;
+     * the caller reads the response and waits for its turn to settle.
+     */
+    sendUnchecked: handle,
+    /** The Stop route, as a web client's Stop button reaches it. */
+    stopTurn: postCancelTurn,
   };
 };
 

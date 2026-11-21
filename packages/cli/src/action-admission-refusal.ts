@@ -14,6 +14,7 @@ export type CliActionAdmissionRefusal = {
   message: string;
   hint: string;
   retryable: boolean;
+  retryAfterMs?: number;
   contactUrl?: string;
 };
 
@@ -44,6 +45,11 @@ export const readCliActionAdmissionRefusal = (
       typeof body["retryable"] === "boolean"
         ? body["retryable"]
         : metadata.retryable,
+    ...(typeof body["retryAfterMs"] === "number" &&
+    Number.isFinite(body["retryAfterMs"]) &&
+    body["retryAfterMs"] >= 0
+      ? { retryAfterMs: body["retryAfterMs"] }
+      : {}),
     ...(typeof body["contactUrl"] === "string"
       ? { contactUrl: body["contactUrl"] }
       : {}),
@@ -68,6 +74,9 @@ export const actionAdmissionRefusalLines = (
   `code: ${refusal.code}`,
   `retryable: ${refusal.retryable}`,
   `hint: ${refusal.hint}`,
+  ...(refusal.retryAfterMs === undefined
+    ? []
+    : [`retry-after-ms: ${refusal.retryAfterMs}`]),
   ...(refusal.contactUrl === undefined
     ? []
     : [`contact: ${refusal.contactUrl}`]),

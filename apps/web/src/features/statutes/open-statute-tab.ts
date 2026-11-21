@@ -1,3 +1,4 @@
+import type { MouseEvent } from "react";
 /**
  * The one action that opens a listed statute beside the results, the way a
  * listed decision opens: the row, its Enter and its title link all go through
@@ -5,10 +6,9 @@
  * below `md`), the act's own page opens instead.
  */
 
-import type { MouseEvent } from "react";
-
 import { useNavigate } from "@tanstack/react-router";
 
+import { statuteDisplayLabel } from "@stll/api-contract/statute-display-label";
 import { createStatuteRouteParams } from "@stll/api-contract/statute-route";
 import { useIsMobile } from "@stll/ui/use-mobile";
 
@@ -18,8 +18,19 @@ import type { StatuteListItem } from "@/features/statutes/queries/statutes";
 import { createStatuteViewTab } from "@/features/statutes/statute-inspector.logic";
 import { detached } from "@/lib/detached";
 
+type StatuteOpenTarget = Pick<
+  StatuteListItem,
+  | "country"
+  | "id"
+  | "eli"
+  | "slug"
+  | "title"
+  | "documentType"
+  | "versionValidFrom"
+>;
+
 /** The page a listed statute opens on: the act's canonical address. */
-export const statuteListLinkTarget = (statute: StatuteListItem) => {
+export const statuteListLinkTarget = (statute: StatuteOpenTarget) => {
   const { country, slug } = createStatuteRouteParams({
     country: statute.country,
     documentId: statute.id,
@@ -33,19 +44,20 @@ export const statuteListLinkTarget = (statute: StatuteListItem) => {
   } as const;
 };
 
-export const useOpenStatuteTab = () => {
+export const useOpenStatuteTab = (searchQuery?: string) => {
   const { open: openView } = useInspectorView();
   const navigate = useNavigate();
   const inspectorAvailable = !useIsMobile();
 
-  const openInInspector = (statute: StatuteListItem) => {
+  const openInInspector = (statute: StatuteOpenTarget) => {
     openView(
       createStatuteViewTab({
+        searchQuery,
         country: statute.country,
         documentId: statute.id,
         eli: statute.eli,
         slug: statute.slug,
-        statuteTitle: statute.title,
+        statuteTitle: statuteDisplayLabel(statute).text,
         versionValidFrom: statute.versionValidFrom,
       }),
     );
@@ -53,13 +65,16 @@ export const useOpenStatuteTab = () => {
 
   return {
     /** The row's own gesture: a click or Enter, with no href to fall back to. */
-    open: (statute: StatuteListItem) => {
+    open: (statute: StatuteOpenTarget) => {
       if (inspectorAvailable) {
         openInInspector(statute);
         return;
       }
       detached(
-        navigate(statuteListLinkTarget(statute)),
+        navigate({
+          ...statuteListLinkTarget(statute),
+          search: { q: searchQuery },
+        }),
         "statutes.open-statute-page",
       );
     },
@@ -69,7 +84,8 @@ export const useOpenStatuteTab = () => {
      * left alone and follows the href to the act's page.
      */
     onLinkClick:
-      (statute: StatuteListItem) => (event: MouseEvent<HTMLAnchorElement>) => {
+      (statute: StatuteOpenTarget) =>
+      (event: MouseEvent<HTMLAnchorElement>) => {
         if (!opensCitationInInspector(event, inspectorAvailable)) {
           return;
         }

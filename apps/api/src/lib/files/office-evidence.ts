@@ -3,19 +3,19 @@ import { and, desc, eq, isNull, lte } from "drizzle-orm";
 import * as v from "valibot";
 
 import type { Transaction } from "@/api/db/root";
-import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
+import type { SafeDb, SafeDbError, ScopedDb } from "@/api/db/safe-db";
 import {
   entities,
   entityVersions,
   fields,
   officeFileEvidence,
 } from "@/api/db/schema";
+import { envBase } from "@/api/env-base";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { decryptContent, encryptContent } from "@/api/lib/content-encryption";
 import { TelemetryError } from "@/api/lib/errors/tagged-errors";
 import { extractOfficeEvidence } from "@/api/lib/files/extract-office-evidence";
-import { createOfficeEvidenceAdmission } from "@/api/lib/files/office-evidence-admission";
 import {
   OFFICE_EVIDENCE_LIMITS,
   OFFICE_EVIDENCE_STATUS,
@@ -24,13 +24,22 @@ import {
 import {
   OFFICE_EVIDENCE_FORMAT,
   OFFICE_EVIDENCE_PARSER_VERSION,
-  officeEvidencePayloadSchema,
   type OfficeEvidenceBlock,
   type OfficeEvidenceFormat,
   type OfficeEvidencePayload,
+  officeEvidencePayloadSchema,
 } from "@/api/lib/files/office-evidence-types";
 import { createFileKey } from "@/api/lib/files/utils";
-import { OBJECT_READ_TIMEOUT_MS, readS3ArrayBuffer } from "@/api/lib/s3";
+import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
+import {
+  admitWork,
+  type WorkAdmission,
+  WorkRefusal,
+} from "@/api/lib/load/work-admission";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
+import { OBJECT_READ_TIMEOUT_MS, readS3ObjectBounded } from "@/api/lib/s3";
 import { normalizeMimeType } from "@/api/lib/search/extractable-mime-types";
 import { PPTX_MIME_TYPE, XLSX_MIME_TYPE } from "@/api/mime-types";
 
@@ -43,6 +52,11 @@ type OfficeEvidenceSource = {
   mimeType: string;
   sha256Hex: string;
 };
+
+const OFFICE_EVIDENCE_ADMISSION_FAILURE = failureSink({
+  event: "office_evidence.admission_failed",
+  expected: [],
+});
 
 type OfficeEvidenceScope = {
   organizationId: SafeId<"organization">;
@@ -65,7 +79,6 @@ const OFFICE_EVIDENCE_CLAIM_MS =
   OBJECT_READ_TIMEOUT_MS +
   OFFICE_EVIDENCE_LIMITS.workerTimeoutMs +
   OFFICE_EVIDENCE_FINALIZATION_GRACE_MS;
-const officeEvidenceAdmission = createOfficeEvidenceAdmission(1);
 
 const evidenceRowSelection = {
   blockCount: officeFileEvidence.blockCount,
@@ -140,17 +153,34 @@ const selectEvidenceVersionRows = async (
 
 const parseJson = (value: string): unknown => JSON.parse(value);
 
+type OfficeEvidenceDecodeFailure = {
+  operation:
+    | "office-evidence-decrypt"
+    | "office-evidence-json"
+    | "office-evidence-validate";
+  cause: unknown;
+};
+
+type OfficeEvidenceLoadFailure =
+  | OfficeEvidenceDecodeFailure
+  | {
+      operation: "office-evidence-claim";
+      cause: SafeDbError;
+    };
+
 const decodeEvidenceRow = async (
   row: PersistedEvidenceRow,
   organizationId: SafeId<"organization">,
-): Promise<OfficeEvidencePayload | null> => {
+): Promise<
+  Result<OfficeEvidencePayload | null, OfficeEvidenceDecodeFailure>
+> => {
   const { payloadCiphertext, payloadIv } = row;
   if (
     row.status !== OFFICE_EVIDENCE_STATUS.available ||
     !payloadCiphertext ||
     !payloadIv
   ) {
-    return null;
+    return Result.ok(null);
   }
 
   const decryptResult = await Result.tryPromise({
@@ -159,16 +189,32 @@ const decodeEvidenceRow = async (
     catch: (cause) => cause,
   });
   if (Result.isError(decryptResult)) {
-    captureError(decryptResult.error, { operation: "office-evidence-decrypt" });
-    return null;
+    captureError(
+      decryptResult.error,
+      handlerErrorContext("files.decodeEvidenceRow.decryptResult_error", {
+        operation: "office-evidence-decrypt",
+      }),
+    );
+    return Result.err({
+      operation: "office-evidence-decrypt",
+      cause: decryptResult.error,
+    });
   }
   const jsonResult = Result.try({
     try: () => parseJson(decryptResult.value),
     catch: (cause) => cause,
   });
   if (Result.isError(jsonResult)) {
-    captureError(jsonResult.error, { operation: "office-evidence-json" });
-    return null;
+    captureError(
+      jsonResult.error,
+      handlerErrorContext("files.decodeEvidenceRow.jsonResult_error", {
+        operation: "office-evidence-json",
+      }),
+    );
+    return Result.err({
+      operation: "office-evidence-json",
+      cause: jsonResult.error,
+    });
   }
   const parsed = v.safeParse(officeEvidencePayloadSchema, jsonResult.value);
   if (
@@ -176,45 +222,48 @@ const decodeEvidenceRow = async (
     parsed.output.blocks.length !== row.blockCount ||
     parsed.output.format !== row.format
   ) {
+    const cause = new TelemetryError({
+      message: "Persisted Office evidence failed validation",
+    });
     captureError(
-      new TelemetryError({
-        message: "Persisted Office evidence failed validation",
+      cause,
+      handlerErrorContext("files.decodeEvidenceRow", {
+        operation: "office-evidence-validate",
       }),
-      { operation: "office-evidence-validate" },
     );
-    return null;
+    return Result.err({ operation: "office-evidence-validate", cause });
   }
-  return parsed.output;
+  return Result.ok(parsed.output);
 };
 
 type FindEvidenceBlockOptions = {
   blockId: string;
   evidenceRows: readonly PersistedEvidenceRow[];
-  index?: number;
   organizationId: SafeId<"organization">;
 };
 
 const findEvidenceBlock = async ({
   blockId,
   evidenceRows,
-  index = 0,
   organizationId,
-}: FindEvidenceBlockOptions): Promise<OfficeEvidenceBlock | null> => {
-  const evidenceRow = evidenceRows.at(index);
-  if (!evidenceRow) {
-    return null;
+}: FindEvidenceBlockOptions): Promise<
+  Result<OfficeEvidenceBlock | null, OfficeEvidenceDecodeFailure>
+> => {
+  let firstFailure: OfficeEvidenceDecodeFailure | undefined;
+  for (const evidenceRow of evidenceRows) {
+    const payload = await decodeEvidenceRow(evidenceRow, organizationId);
+    if (Result.isError(payload)) {
+      firstFailure ??= payload.error;
+      continue;
+    }
+    const block = payload.value?.blocks.find(({ id }) => id === blockId);
+    if (block) {
+      return Result.ok(block);
+    }
   }
-  const payload = await decodeEvidenceRow(evidenceRow, organizationId);
-  const block = payload?.blocks.find(({ id }) => id === blockId);
-  return (
-    block ??
-    findEvidenceBlock({
-      blockId,
-      evidenceRows,
-      index: index + 1,
-      organizationId,
-    })
-  );
+  return firstFailure === undefined
+    ? Result.ok(null)
+    : Result.err(firstFailure);
 };
 
 const isCurrentSource = async (
@@ -374,7 +423,11 @@ const abandonOfficeEvidenceClaim = async ({
 type CaptureAndAbandonOfficeEvidenceOptions =
   AbandonOfficeEvidenceClaimOptions & {
     error: unknown;
-    operation: string;
+    operation:
+      | "office-evidence-file-read"
+      | "office-evidence-extract"
+      | "office-evidence-encrypt"
+      | "office-evidence-persist";
   };
 
 const captureAndAbandonOfficeEvidence = async ({
@@ -382,26 +435,35 @@ const captureAndAbandonOfficeEvidence = async ({
   operation,
   ...claim
 }: CaptureAndAbandonOfficeEvidenceOptions): Promise<null> => {
-  captureError(error, { operation });
+  captureError(error, handlerErrorContext(`files.${operation}`, { operation }));
   const abandoned = await abandonOfficeEvidenceClaim(claim);
   if (Result.isError(abandoned)) {
-    captureError(abandoned.error, { operation: "office-evidence-abandon" });
+    captureError(
+      abandoned.error,
+      handlerErrorContext(`files.${operation}.abandon`, {
+        operation: "office-evidence-abandon",
+      }),
+    );
   }
   return null;
 };
 
 type CreateClaimedOfficeEvidenceOptions = ClaimOfficeEvidenceOptions & {
+  admission: WorkAdmission;
   claimToken: string;
 };
 
 const createClaimedOfficeEvidence = async ({
+  admission,
   claimToken,
   format,
   organizationId,
   safeDb,
   source,
   workspaceId,
-}: CreateClaimedOfficeEvidenceOptions): Promise<OfficeEvidencePayload | null> => {
+}: CreateClaimedOfficeEvidenceOptions): Promise<
+  Result<OfficeEvidencePayload | null, OfficeEvidenceDecodeFailure>
+> => {
   const claim = {
     claimToken,
     organizationId,
@@ -411,31 +473,52 @@ const createClaimedOfficeEvidence = async ({
   };
   const readResult = await Result.tryPromise({
     try: async () =>
-      await readS3ArrayBuffer(
-        createFileKey({
+      await readS3ObjectBounded({
+        bucket: envBase.S3_BUCKET,
+        key: createFileKey({
           fileId: source.fileId,
           mimeType: source.mimeType,
           organizationId,
           workspaceId,
         }),
-      ),
+        maxBytes: FILE_SIZE_LIMIT_BYTES.document,
+        signal: AbortSignal.any([
+          admission.signal,
+          AbortSignal.timeout(OBJECT_READ_TIMEOUT_MS),
+        ]),
+      }),
     catch: (cause) => cause,
   });
   if (Result.isError(readResult)) {
-    return await captureAndAbandonOfficeEvidence({
-      ...claim,
-      error: readResult.error,
-      operation: "office-evidence-file-read",
-    });
+    return Result.ok(
+      await captureAndAbandonOfficeEvidence({
+        ...claim,
+        error: readResult.error,
+        operation: "office-evidence-file-read",
+      }),
+    );
   }
 
-  const extraction = await extractOfficeEvidence(readResult.value, format);
+  const bytes = readResult.value;
+  const buffer =
+    bytes.buffer instanceof ArrayBuffer &&
+    bytes.byteOffset === 0 &&
+    bytes.byteLength === bytes.buffer.byteLength
+      ? bytes.buffer
+      : bytes.slice().buffer;
+  const extraction = await extractOfficeEvidence(
+    buffer,
+    format,
+    admission.signal,
+  );
   if (Result.isError(extraction)) {
-    return await captureAndAbandonOfficeEvidence({
-      ...claim,
-      error: extraction.error,
-      operation: "office-evidence-extract",
-    });
+    return Result.ok(
+      await captureAndAbandonOfficeEvidence({
+        ...claim,
+        error: extraction.error,
+        operation: "office-evidence-extract",
+      }),
+    );
   }
 
   const extractionValue = extraction.value;
@@ -451,11 +534,13 @@ const createClaimedOfficeEvidence = async ({
         })
       : Result.ok(null);
   if (Result.isError(encryptedResult)) {
-    return await captureAndAbandonOfficeEvidence({
-      ...claim,
-      error: encryptedResult.error,
-      operation: "office-evidence-encrypt",
-    });
+    return Result.ok(
+      await captureAndAbandonOfficeEvidence({
+        ...claim,
+        error: encryptedResult.error,
+        operation: "office-evidence-encrypt",
+      }),
+    );
   }
   const scope = { organizationId, workspaceId };
   const persistResult = await safeDb(async (tx) => {
@@ -512,15 +597,17 @@ const createClaimedOfficeEvidence = async ({
     return updated.at(0) ?? null;
   });
   if (Result.isError(persistResult)) {
-    return await captureAndAbandonOfficeEvidence({
-      ...claim,
-      error: persistResult.error,
-      operation: "office-evidence-persist",
-    });
+    return Result.ok(
+      await captureAndAbandonOfficeEvidence({
+        ...claim,
+        error: persistResult.error,
+        operation: "office-evidence-persist",
+      }),
+    );
   }
   return persistResult.value
     ? await decodeEvidenceRow(persistResult.value, organizationId)
-    : null;
+    : Result.ok(null);
 };
 
 /**
@@ -532,10 +619,12 @@ export const loadOfficeEvidence = async ({
   safeDb,
   source,
   workspaceId,
-}: LoadOfficeEvidenceOptions): Promise<OfficeEvidencePayload | null> => {
+}: LoadOfficeEvidenceOptions): Promise<
+  Result<OfficeEvidencePayload | null, OfficeEvidenceLoadFailure>
+> => {
   const format = resolveOfficeEvidenceFormat(source.mimeType);
   if (!format) {
-    return null;
+    return Result.ok(null);
   }
   const claimResult = await claimOfficeEvidence({
     format,
@@ -545,39 +634,72 @@ export const loadOfficeEvidence = async ({
     workspaceId,
   });
   if (Result.isError(claimResult)) {
-    captureError(claimResult.error, { operation: "office-evidence-claim" });
-    return null;
+    captureError(
+      claimResult.error,
+      handlerErrorContext("files.loadOfficeEvidence.claimResult_error", {
+        operation: "office-evidence-claim",
+      }),
+    );
+    return Result.err({
+      operation: "office-evidence-claim",
+      cause: claimResult.error,
+    });
   }
   const claim = claimResult.value;
   if (claim.type === "cached") {
     return await decodeEvidenceRow(claim.row, organizationId);
   }
   if (claim.type === "pending") {
-    return null;
+    return Result.ok(null);
   }
 
-  const releaseAdmission = officeEvidenceAdmission.tryAcquire();
-  if (!releaseAdmission) {
-    const abandoned = await abandonOfficeEvidenceClaim({
-      claimToken: claim.claimToken,
-      organizationId,
-      safeDb,
-      source,
-      workspaceId,
-    });
-    if (Result.isError(abandoned)) {
-      captureError(abandoned.error, { operation: "office-evidence-abandon" });
+  const admitted = await admitWork({
+    pool: "heavy-sidecar",
+    kind: "office-evidence",
+    run: async (admission) =>
+      await createClaimedOfficeEvidence({
+        admission,
+        claimToken: claim.claimToken,
+        format,
+        organizationId,
+        safeDb,
+        source,
+        workspaceId,
+      }),
+  });
+  if (Result.isError(admitted)) {
+    if (!WorkRefusal.is(admitted.error)) {
+      observeFailure(admitted.error, {
+        sink: OFFICE_EVIDENCE_ADMISSION_FAILURE,
+        ctx: { operation: "office-evidence-admission" },
+      });
     }
-    return null;
+    return Result.ok(
+      await abandonRefusedOfficeEvidence({
+        claimToken: claim.claimToken,
+        organizationId,
+        safeDb,
+        source,
+        workspaceId,
+      }),
+    );
   }
-  return await createClaimedOfficeEvidence({
-    claimToken: claim.claimToken,
-    format,
-    organizationId,
-    safeDb,
-    source,
-    workspaceId,
-  }).finally(releaseAdmission);
+  return admitted.value;
+};
+
+const abandonRefusedOfficeEvidence = async (
+  scope: AbandonOfficeEvidenceClaimOptions,
+): Promise<null> => {
+  const abandoned = await abandonOfficeEvidenceClaim(scope);
+  if (Result.isError(abandoned)) {
+    captureError(
+      abandoned.error,
+      handlerErrorContext("files.loadOfficeEvidence.abandoned_error", {
+        operation: "office-evidence-abandon",
+      }),
+    );
+  }
+  return null;
 };
 
 type FindOfficeEvidenceBlockOptions = OfficeEvidenceScope & {
@@ -594,18 +716,23 @@ export const findOfficeEvidenceBlock = async ({
   organizationId,
   scopedDb,
   workspaceId,
-}: FindOfficeEvidenceBlockOptions): Promise<{
-  block: OfficeEvidenceBlock;
-  source: {
-    entityId: SafeId<"entity">;
-    entityName: string;
-    fieldId: SafeId<"field">;
-    fileName: string;
-    mimeType: string;
-    pdfFileId: string | null;
-    propertyId: SafeId<"property">;
-  };
-} | null> => {
+}: FindOfficeEvidenceBlockOptions): Promise<
+  Result<
+    {
+      block: OfficeEvidenceBlock;
+      source: {
+        entityId: SafeId<"entity">;
+        entityName: string;
+        fieldId: SafeId<"field">;
+        fileName: string;
+        mimeType: string;
+        pdfFileId: string | null;
+        propertyId: SafeId<"property">;
+      };
+    } | null,
+    OfficeEvidenceDecodeFailure
+  >
+> => {
   const resolved = await scopedDb(async (tx) => {
     const rows = await tx
       .select({
@@ -670,7 +797,7 @@ export const findOfficeEvidenceBlock = async ({
       : null;
   });
   if (!resolved) {
-    return null;
+    return Result.ok(null);
   }
   const { evidenceRows, source } = resolved;
   const block = await findEvidenceBlock({
@@ -678,5 +805,5 @@ export const findOfficeEvidenceBlock = async ({
     evidenceRows,
     organizationId,
   });
-  return block ? { block, source } : null;
+  return block.map((value) => (value ? { block: value, source } : null));
 };

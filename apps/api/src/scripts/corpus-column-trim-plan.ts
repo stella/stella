@@ -1,10 +1,8 @@
 import * as v from "valibot";
 
-import {
-  namesEmptyCorpusPayload,
-  payloadCarriesDocument,
-} from "@/api/lib/case-law/stored-payload";
+import { namesEmptyCorpusPayload } from "@/api/lib/case-law/stored-payload";
 import type { CorpusStorageMode } from "@/api/lib/corpus-storage-mode";
+import { payloadCarriesDocument } from "@/api/lib/legal-search/corpus-content-hash";
 import type { CorpusPayload } from "@/api/lib/legal-search/corpus-storage";
 
 /**
@@ -57,8 +55,7 @@ export const corpusObjectState = ({
 };
 
 export type ColumnTrimDecision =
-  | { type: "trim" }
-  | { type: "skip"; reason: string };
+  { type: "trim" } | { type: "skip"; reason: string };
 
 type ColumnTrimInput = {
   text: CorpusObjectState;
@@ -150,8 +147,7 @@ export const planColumnTrim = ({
 };
 
 export type ColumnTrimGate =
-  | { type: "allowed" }
-  | { type: "refused"; reason: string };
+  { type: "allowed" } | { type: "refused"; reason: string };
 
 type ColumnTrimGateInput = {
   mode: CorpusStorageMode;

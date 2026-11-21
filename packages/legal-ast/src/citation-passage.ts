@@ -9,14 +9,16 @@
  * quoted from another.
  */
 
-import { escapeRegExp } from "@stll/text-normalize";
+import { panic } from "better-result";
+
+import { escapeRegExp, normalizeUnicode } from "@stll/text-normalize";
 
 import {
   CITATION_PREFIX_SOURCE,
   stripCitationPrefix,
 } from "./citation-prefix.js";
 import { hasBlockInlines, plainTextOf } from "./document-ast.js";
-import type { Block } from "./document-ast.js";
+import type { Block, DocumentAst } from "./document-ast.js";
 import { dropOverlappingSpans } from "./text-spans.js";
 
 /** What locating needs of a citation: the text the decision printed. */
@@ -49,8 +51,8 @@ const MIN_ANCHOR_TEXT_LENGTH = 5;
  * carries both spellings and the text is left exactly as it is.
  */
 const eitherNormalization = (literal: string): string =>
-  Array.from(literal.normalize("NFC"), (character) => {
-    const decomposed = character.normalize("NFD");
+  Array.from(normalizeUnicode(literal, "NFC"), (character) => {
+    const decomposed = normalizeUnicode(character, "NFD");
     return decomposed === character
       ? escapeRegExp(character)
       : `(?:${escapeRegExp(character)}|${escapeRegExp(decomposed)})`;
@@ -73,7 +75,7 @@ const patternFor = (citationText: string): RegExp | null => {
   // Composed for the length test, so the same number does not clear the
   // threshold in one normalization form and fail it in the other.
   const bare = stripCitationPrefix(citationText);
-  if (bare.normalize("NFC").length < MIN_ANCHOR_TEXT_LENGTH) {
+  if (normalizeUnicode(bare, "NFC").length < MIN_ANCHOR_TEXT_LENGTH) {
     return null;
   }
   const source = bare.split(/\s+/u).map(eitherNormalization).join("\\s+");
@@ -112,7 +114,7 @@ export const locateCitationSpans = <Source extends CitationSource>({
     return {};
   }
 
-  const result: Record<string, CitationSpan<Source>[]> = {};
+  const result = new Map<string, CitationSpan<Source>[]>();
   for (const block of blocks) {
     if (!hasBlockInlines(block)) {
       continue;
@@ -143,10 +145,10 @@ export const locateCitationSpans = <Source extends CitationSource>({
       continue;
     }
 
-    result[block.id] = dropOverlappingSpans(hits);
+    result.set(block.id, dropOverlappingSpans(hits));
   }
 
-  return result;
+  return Object.fromEntries(result);
 };
 
 /**
@@ -185,12 +187,8 @@ export type CitationPassageMatch = {
 export type FindCitationPassageOptions = {
   blocks: readonly Block[];
   citationText: string;
-  /**
-   * The text of the section the citation row was extracted from, when the
-   * decision still carries its segmentation. Absent, the last mention stands
-   * in and `mention` says so.
-   */
-  sectionText: string | undefined;
+  /** Block membership from the section projection, without repeating its text. */
+  classifiedBlockIds?: readonly string[] | undefined;
 };
 
 /**
@@ -204,7 +202,7 @@ export type FindCitationPassageOptions = {
 export const findCitationPassage = ({
   blocks,
   citationText,
-  sectionText,
+  classifiedBlockIds,
 }: FindCitationPassageOptions): CitationPassageMatch | null => {
   const spans = locateCitationSpans({
     blocks,
@@ -232,9 +230,8 @@ export const findCitationPassage = ({
     };
     if (
       classified === null &&
-      sectionText !== undefined &&
       text.length > 0 &&
-      sectionText.includes(text)
+      classifiedBlockIds?.includes(block.id) === true
     ) {
       classified = { ...latest, mention: "classified_section" };
     }
@@ -244,4 +241,26 @@ export const findCitationPassage = ({
     return null;
   }
   return carryingBlocks === 1 ? { ...chosen, mention: "sole" } : chosen;
+};
+
+/** Resolve compact section references against the exact AST that supplied them. */
+export const classifiedCitationBlockIds = (
+  ast: DocumentAst | null,
+  indices: readonly number[] | undefined,
+): string[] | undefined => {
+  if (indices === undefined) {
+    return undefined;
+  }
+  if (ast === null) {
+    return panic("Section references require a document AST");
+  }
+  return indices.map((index) => {
+    if (!Number.isSafeInteger(index) || index < 0) {
+      return panic("Section references an invalid document block index");
+    }
+    return (
+      ast.blocks.at(index)?.id ??
+      panic("Section references a missing document block")
+    );
+  });
 };

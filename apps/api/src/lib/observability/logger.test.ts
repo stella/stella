@@ -4,6 +4,7 @@ import { DrizzleQueryError } from "drizzle-orm";
 
 import { errorFingerprint } from "@/api/lib/errors/utils";
 import { logger, sanitizeLogAttributes } from "@/api/lib/observability/logger";
+import { APP_VERSION } from "@/api/lib/version";
 import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 
 const originalStderrWrite = process.stderr.write;
@@ -15,6 +16,40 @@ afterEach(() => {
 });
 
 describe("logger attributes", () => {
+  test.each([
+    "__proto__",
+    "constructor",
+    "prototype",
+    "toString",
+    "valueOf",
+    "hasOwnProperty",
+  ])("keeps accepted %s attributes as own data fields", (key) => {
+    const recording = installRecordingLogger();
+    const cases = [
+      { input: "entry", output: "entry" },
+      { input: 17, output: 17 },
+      { input: true, output: true },
+      { input: ["entry"], output: ["entry"] },
+      { input: [17], output: [17] },
+      { input: [true], output: [true] },
+      { input: { count: 17 }, output: '{"count":17}' },
+    ];
+    try {
+      for (const { input, output } of cases) {
+        const attributes = Object.fromEntries([[key, input]]);
+        const sanitized = sanitizeLogAttributes(attributes);
+        expect(sanitized).toEqual(Object.fromEntries([[key, output]]));
+        expect(Object.hasOwn(sanitized ?? {}, key)).toBe(true);
+        expect(Object.getPrototypeOf(sanitized)).toBe(Object.prototype);
+        logger.info("test.attribute", attributes);
+        expect(recording.records.at(-1)?.attributes).toEqual(sanitized);
+      }
+      expect(recording.records).toHaveLength(cases.length);
+    } finally {
+      recording.restore();
+    }
+  });
+
   test("drops sensitive attribute keys before emission", () => {
     expect(
       sanitizeLogAttributes({
@@ -23,12 +58,13 @@ describe("logger attributes", () => {
         "error.type": "TaggedError",
         fileName: "strategy.pdf",
         "http.status_code": 500,
+        "x-stella-synthetic-key": "stl_syn_43-example",
         title: "Matter title",
       }),
     ).toEqual({
       "error.type": "TaggedError",
       "http.status_code": 500,
-      "log.attributes_dropped": 4,
+      "log.attributes_dropped": 5,
     });
   });
 
@@ -75,6 +111,60 @@ describe("logger attributes", () => {
     expect(output).not.toContain('"body"');
   });
 
+  test("direct and nested bigint attributes emit as strings", () => {
+    const attributes = {
+      count: 123n,
+      diagnostic: { count: 456n, values: [789n] },
+      attempts: 1,
+    };
+    const expected = {
+      count: "123",
+      diagnostic: '{"count":"456","values":["789"]}',
+      attempts: 1,
+    };
+    expect(sanitizeLogAttributes(attributes)).toEqual(expected);
+    const recording = installRecordingLogger();
+    try {
+      logger.error("test.failed", attributes);
+      expect(recording.records).toEqual([
+        { severityText: "ERROR", message: "test.failed", attributes: expected },
+      ]);
+    } finally {
+      recording.restore();
+    }
+    const chunks: string[] = [];
+    process.stderr.write = (chunk: string | Uint8Array): boolean => {
+      chunks.push(typeof chunk === "string" ? chunk : chunk.toString());
+      return true;
+    };
+    logger.error("test.failed", attributes);
+    expect(chunks).toHaveLength(1);
+    expect(JSON.parse(chunks.join(""))).toEqual({
+      severity: "ERROR",
+      message: "test.failed",
+      ...expected,
+      "service.version": APP_VERSION,
+    });
+  });
+
+  test("error attributes use projected fields during JSON serialization", () => {
+    const value = "fixture-query-value";
+    const diagnostic = Object.assign(new Error("Diagnostic unavailable"), {
+      operation: "fetch",
+      toJSON: () => ({ params: [value] }),
+    });
+    const recording = installRecordingLogger();
+    try {
+      logger.error("test.failed", { diagnostic });
+      const serialized = recording.records.at(0)?.attributes?.["diagnostic"];
+      expect(serialized).toContain('"operation":"fetch"');
+      expect(serialized).not.toContain(value);
+      expect(serialized).not.toContain('"params"');
+    } finally {
+      recording.restore();
+    }
+  });
+
   test("streams operational info while keeping debug off the backstop", () => {
     const chunks: string[] = [];
     process.stderr.write = (chunk: string | Uint8Array): boolean => {
@@ -119,6 +209,7 @@ describe("logger attributes", () => {
     expect(JSON.parse(output)).toEqual({
       severity: "INFO",
       message: "request.completed",
+      "service.version": APP_VERSION,
       "error.type": "TaggedError",
       "error.class": "TaggedError",
       "error.code": "DATABASE_UNAVAILABLE",

@@ -4,17 +4,17 @@ import { mergeProps } from "@base-ui/react/merge-props";
 import { useRender } from "@base-ui/react/use-render";
 
 import { cn } from "../lib/utils";
+import { LABEL_VARIANT_CLASS_NAME, type LabelVariant } from "./label-classes";
 
+/** A caption for a control; the variants are described in ./label-classes.ts. */
 function Label({
   className,
   render,
+  variant = "default",
   ...props
-}: useRender.ComponentProps<"label">) {
+}: useRender.ComponentProps<"label"> & { variant?: LabelVariant }) {
   const defaultProps = {
-    className: cn(
-      "text-foreground inline-flex items-center gap-2 text-base/4.5 font-medium sm:text-sm/4",
-      className,
-    ),
+    className: cn(LABEL_VARIANT_CLASS_NAME[variant], className),
     "data-slot": "label",
   };
 
@@ -25,4 +25,4 @@ function Label({
   });
 }
 
-export { Label };
+export { Label, type LabelVariant };

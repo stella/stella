@@ -1,3 +1,4 @@
+import { normalizeUnicode } from "@stll/text-normalize";
 // parser-output-unchanged: Declares query compatibility stemmers; projection stemming is unchanged.
 /**
  * Morphological stemming for legal-corpus terms.
@@ -299,7 +300,7 @@ export const stemLegalTerm = (
   // already a live string keeps the hash the engine cached for it rather than
   // rehashing a freshly built one on every lookup.
   stemMemo.get(`${language}${term}`, () => {
-    const normalized = term.normalize("NFC").toLowerCase();
+    const normalized = normalizeUnicode(term, "NFC").toLowerCase();
     const stem = STEMMERS[language].stem(normalized);
     return stem === "" ? normalized : stem;
   });

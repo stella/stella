@@ -1,20 +1,17 @@
-import {
-  Body,
-  Button,
-  Container,
-  Head,
-  Heading,
-  Hr,
-  Html,
-  Img,
-  Preview,
-  Section,
-  Text,
-} from "@react-email/components";
-
+import { Body } from "../components/body";
+import { Button } from "../components/button";
+import { Container } from "../components/container";
+import { Head } from "../components/head";
+import { Heading } from "../components/heading";
+import { Hr } from "../components/hr";
+import { Html } from "../components/html";
+import { Preview } from "../components/preview";
+import { Section } from "../components/section";
+import { Text } from "../components/text";
 import { getEmailDirection, getTranslator } from "../i18n/translate";
 import type { SupportedLang } from "../i18n/translate";
-import { BRAND_FOOTER_TEXT, ICON_URL, brand, sharedStyles } from "./_shared";
+import { brand, BRAND_FOOTER_TEXT, sharedStyles } from "./_shared";
+import { Wordmark } from "./_wordmark";
 
 export type ReportExportEmailStatus = "completed" | "failed";
 
@@ -34,15 +31,7 @@ export const Email = ({ appUrl, lang, status }: Props) => {
       <Preview>{t(keys.preview)}</Preview>
       <Body style={sharedStyles.body}>
         <Container style={sharedStyles.container}>
-          <Section style={sharedStyles.wordmarkSection}>
-            <Img
-              alt="stella"
-              height="40"
-              src={ICON_URL}
-              style={{ margin: "0 auto", display: "block" }}
-              width="40"
-            />
-          </Section>
+          <Wordmark />
           <Heading style={sharedStyles.heading}>{t(keys.heading)}</Heading>
           <Text style={sharedStyles.text}>{t(keys.body)}</Text>
           <Section style={styles.buttonSection}>
@@ -60,12 +49,6 @@ export const Email = ({ appUrl, lang, status }: Props) => {
     </Html>
   );
 };
-
-Email.PreviewProps = {
-  appUrl: "http://localhost:3000/workspaces",
-  lang: "en",
-  status: "completed",
-} satisfies Props;
 
 const STATUS_KEYS = {
   completed: {
@@ -88,7 +71,7 @@ const styles = {
   button: {
     backgroundColor: brand.blue,
     borderRadius: "8px",
-    color: "#ffffff",
+    color: brand.foregroundOnAccent,
     fontSize: "16px",
     fontWeight: "600",
     padding: "12px 24px",

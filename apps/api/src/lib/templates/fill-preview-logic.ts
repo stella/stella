@@ -66,7 +66,7 @@ export const fillPreviewLogic = async ({
 }: FillPreviewLogicProps): Promise<
   ResultType<
     FillPreviewResult,
-    HandlerError<400 | 402 | 403 | 404 | 422 | 500 | 503>
+    HandlerError<400 | 402 | 403 | 404 | 422 | 429 | 500 | 503>
   >
 > => {
   if (Object.values(parsed).some(containsNull)) {

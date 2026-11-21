@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import type { HocuspocusProvider } from "@hocuspocus/provider";
 import type * as HocuspocusProviderModule from "@hocuspocus/provider";
@@ -9,11 +9,14 @@ import type * as YProseMirror from "y-prosemirror";
 import type * as Yjs from "yjs";
 
 import {
-  FOLIO_COLLAB_GENERATION_RETRY_CLOSE_CODE,
   FOLIO_COLLAB_FLUSH_REQUEST_TYPE,
   FOLIO_COLLAB_FLUSH_RESPONSE_TYPE,
+  FOLIO_COLLAB_GENERATION_RETRY_CLOSE_CODE,
   FOLIO_COLLAB_REDIS_RETRY_CLOSE_CODE,
+  FOLIO_COLLAB_SEED_PREPARING_CODE,
 } from "@stll/api-contract/folio-collab";
+import { backoffDelay } from "@stll/concurrency/backoff-delay";
+import { sleep } from "@stll/concurrency/sleep";
 import { FetchBoundaryError } from "@stll/errors";
 import { fetchWithTimeout } from "@stll/fetch";
 import type { DocxEditorCollaboration } from "@stll/folio-react";
@@ -23,15 +26,20 @@ import { env } from "@/env";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { getAnalytics } from "@/lib/analytics/provider";
-import {
-  getApiRequestHeaders,
-  waitForSimulatedApiDelay,
-} from "@/lib/api-request-context";
-import { apiUrl } from "@/lib/api-url";
+import { api } from "@/lib/api";
+import { invokeAppOnlyWrite } from "@/lib/capabilities/capability-request";
 import { detached } from "@/lib/detached";
+import { APIError, unwrapApiResponse } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
+import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
+import { createUuid } from "@/lib/uuid";
 
 import { advanceFolioCollaborationMutationRevision } from "./folio-collaboration-mutations";
+import {
+  completeFolioSeedReceipt,
+  FolioCollaborationSeedPreparingError,
+  waitForFolioCollaborationSeed,
+} from "./folio-collaboration-seed-receipt";
 
 type ConnectedDocxEditorCollaboration = DocxEditorCollaboration & {
   awareness: NonNullable<DocxEditorCollaboration["awareness"]>;
@@ -47,7 +55,7 @@ export type FolioCollaborationRoom = {
   seedDocumentBuffer: ArrayBuffer;
 };
 
-export type FolioCollaborationFlush = {
+type FolioCollaborationFlush = {
   documentMutationRevision: number;
   localMutationRevision: number;
   snapshotRevision: number;
@@ -79,6 +87,7 @@ type UseFolioCollaborationRoomOptions = {
 const FOLIO_COLLAB_TOKEN_REFRESH_LEEWAY_MS = 5 * 60 * 1000;
 const SEED_DOCUMENT_DOWNLOAD_TIMEOUT_MS = 10_000;
 const COLLAB_FLUSH_TIMEOUT_MS = 10_000;
+const COLLAB_API_TIMEOUT_MS = 10_000;
 const GENERATION_REJOIN_RETRY_DELAY_MS = 1000;
 const GENERATION_REJOIN_MAX_RETRY_DELAY_MS = 10_000;
 // Peers receive the server-derived color; the local cursor is never rendered.
@@ -98,9 +107,12 @@ const joinResponseSchema = v.object({
   roomName: v.string(),
   seedDownloadUrl: v.string(),
   shouldSeed: v.boolean(),
+  snapshotRecovery: v.picklist(["none", "unsaved-changes-discarded"]),
   token: v.string(),
   tokenExpiresAt: v.string(),
 });
+type JoinedFolioCollaborationRoom = v.InferOutput<typeof joinResponseSchema>;
+
 const refreshResponseSchema = v.object({
   canEdit: v.boolean(),
   generation: v.pipe(v.number(), v.integer(), v.minValue(0)),
@@ -108,46 +120,93 @@ const refreshResponseSchema = v.object({
   tokenExpiresAt: v.string(),
 });
 
-type PostFolioCollabJsonOptions = {
-  body: Record<string, string>;
-  path: `/${string}`;
-};
-
-const postFolioCollabJson = async ({
-  body,
-  path,
-}: PostFolioCollabJsonOptions) => {
-  await waitForSimulatedApiDelay();
-  const response = await fetchWithTimeout(apiUrl(path), {
-    body: JSON.stringify(body),
-    credentials: "include",
-    headers: {
-      ...getApiRequestHeaders(),
-      "Content-Type": "application/json",
-    },
-    method: "POST",
-    timeoutMs: COLLAB_FLUSH_TIMEOUT_MS,
-  });
-  if (!response.ok) {
-    throw new FetchBoundaryError({
-      message: "Collaboration API request failed.",
-      status: response.status,
-      statusText: response.statusText,
-      url: response.url,
-    });
-  }
-  const data: unknown = await response.json();
-  return data;
-};
-
-const waitForAbortableDelay = async (signal: AbortSignal, delayMs: number) => {
-  const retrySignal = AbortSignal.any([signal, AbortSignal.timeout(delayMs)]);
-  if (retrySignal.aborted) {
+const throwIfCollaborationSeedIsPreparing = (
+  error: {
+    status: number;
+    value: unknown;
+  } | null,
+) => {
+  if (error?.status !== 409) {
     return;
   }
-  await new Promise<void>((resolve) => {
-    retrySignal.addEventListener("abort", () => resolve(), { once: true });
-  });
+  const preparing = v.safeParse(
+    v.object({ code: v.literal(FOLIO_COLLAB_SEED_PREPARING_CODE) }),
+    error.value,
+  );
+  if (preparing.success) {
+    throw new FolioCollaborationSeedPreparingError({
+      message: "Collaborative editing room is still preparing.",
+    });
+  }
+};
+
+const joinFolioCollaborationRoom = async ({
+  entityId,
+  propertyId,
+  workspaceId,
+  signal,
+}: {
+  entityId: string;
+  propertyId: string;
+  workspaceId: string;
+  signal?: AbortSignal;
+}) => {
+  const entitiesRoute = api.entities({ workspaceId });
+  const response = await invokeAppOnlyWrite(
+    "folio-collaboration.join",
+    async () => {
+      const result = await entitiesRoute["folio-collab-rooms"].join.post(
+        { entityId, propertyId },
+        {
+          fetch: {
+            ...(signal === undefined ? {} : { signal }),
+            timeoutMs: COLLAB_API_TIMEOUT_MS,
+          },
+        },
+      );
+      throwIfCollaborationSeedIsPreparing(result.error);
+      return unwrapApiResponse(result);
+    },
+  );
+  return response;
+};
+
+const refreshFolioCollaborationToken = async (body: {
+  roomId: string;
+  token: string;
+}) => {
+  const response = await invokeAppOnlyWrite(
+    "folio-collaboration.refresh-token",
+    async () => {
+      const result = await api["folio-collab-rooms"]["refresh-token"].post(
+        body,
+        {
+          fetch: { timeoutMs: COLLAB_API_TIMEOUT_MS },
+        },
+      );
+      throwIfCollaborationSeedIsPreparing(result.error);
+      return unwrapApiResponse(result);
+    },
+  );
+  return response;
+};
+
+const acknowledgeFolioCollaborationSeed = async (body: {
+  roomId: string;
+  token: string;
+  snapshotSha256Hex: string;
+}) => {
+  const response = await invokeAppOnlyWrite(
+    "folio-collaboration.seed.acknowledge",
+    async () => {
+      const result = await api["folio-collab-rooms"].snapshot.seed.post(body, {
+        fetch: { timeoutMs: COLLAB_API_TIMEOUT_MS },
+      });
+      throwIfCollaborationSeedIsPreparing(result.error);
+      return unwrapApiResponse(result);
+    },
+  );
+  return response;
 };
 
 class CollaborationFlushError extends TaggedError("CollaborationFlushError")<{
@@ -189,6 +248,13 @@ const loadCollaborationRuntimeModules =
 
     return await collaborationRuntimeModulesPromise;
   };
+
+// Seed downloads fail as FetchBoundaryError, typed API calls as APIError;
+// rejoin and read-only recovery branch on the HTTP status of either.
+const httpFailureStatus = (error: unknown): number | null =>
+  error instanceof FetchBoundaryError || APIError.is(error)
+    ? (error.status ?? null)
+    : null;
 
 const fetchSeedDocumentBuffer = async (seedDownloadUrl: string) => {
   const response = await fetchWithTimeout(seedDownloadUrl, {
@@ -240,6 +306,20 @@ export const useFolioCollaborationRoom = ({
   const getEditPermissionDeniedMessage = useLatestCallback(() =>
     t("folio.editPermissionDenied"),
   );
+  const getSnapshotRecoveryMessage = useLatestCallback(() =>
+    t("folio.collaborationSnapshotRecovered"),
+  );
+  const [connectionAttempt, setConnectionAttempt] = useState(0);
+  const pendingGenerationJoin = useRef<{
+    targetKey: string;
+    response: JoinedFolioCollaborationRoom;
+  } | null>(null);
+  const targetKey = JSON.stringify([
+    workspaceId,
+    entityId,
+    propertyId,
+    user?.id,
+  ]);
   const [state, setState] = useState<FolioCollaborationRoomState>({
     status: "unavailable",
     room: null,
@@ -273,10 +353,13 @@ export const useFolioCollaborationRoom = ({
     let disposed = false;
     let hasConnected = false;
     let hasSynchronized = false;
+    let seedReceipt: "pending" | "acknowledged" = "pending";
     let provider: HocuspocusProvider | null = null;
+    let collaborationDocument: Yjs.Doc | null = null;
     let activeRoom: FolioCollaborationRoom | null = null;
     let generationRejoinPromise: Promise<void> | null = null;
     const generationRejoinAbortController = new AbortController();
+    const seedReceiptAbortController = new AbortController();
     const pendingFlushes = new Map<
       string,
       {
@@ -298,6 +381,10 @@ export const useFolioCollaborationRoom = ({
         setState({ status: "connecting", room: null });
         return;
       }
+      if (seedReceipt === "pending") {
+        setState(connectedState("readOnly", activeRoom));
+        return;
+      }
       setState(
         connectedState(
           status === "connecting" ? "reconnecting" : status,
@@ -309,19 +396,34 @@ export const useFolioCollaborationRoom = ({
 
     detached(
       (async () => {
-        const joinPath =
-          `/entities/${encodeURIComponent(workspaceId)}/folio-collab-rooms/join` satisfies `/${string}`;
-        const data = v.parse(
-          joinResponseSchema,
-          await postFolioCollabJson({
-            body: { entityId, propertyId },
-            path: joinPath,
-          }),
-        );
+        const cachedJoin = pendingGenerationJoin.current;
+        pendingGenerationJoin.current = null;
+        const data =
+          cachedJoin?.targetKey === targetKey
+            ? cachedJoin.response
+            : (
+                await waitForFolioCollaborationSeed({
+                  join: async () =>
+                    v.parse(
+                      joinResponseSchema,
+                      await joinFolioCollaborationRoom({
+                        entityId,
+                        propertyId,
+                        signal: generationRejoinAbortController.signal,
+                        workspaceId,
+                      }),
+                    ),
+                  signal: generationRejoinAbortController.signal,
+                })
+              ).unwrap("Collaborative room preparation failed");
         if (isDisposed()) {
           return;
         }
+        if (data.snapshotRecovery === "unsaved-changes-discarded") {
+          notifyUserProblem(getSnapshotRecoveryMessage());
+        }
 
+        seedReceipt = data.shouldSeed ? "pending" : "acknowledged";
         const roomId = data.roomId;
         let token = data.token;
         let tokenExpiresAtMs = new Date(data.tokenExpiresAt).getTime();
@@ -349,10 +451,7 @@ export const useFolioCollaborationRoom = ({
           }
           const refreshed = v.parse(
             refreshResponseSchema,
-            await postFolioCollabJson({
-              body: { roomId, token },
-              path: "/folio-collab-rooms/refresh-token",
-            }),
+            await refreshFolioCollaborationToken({ roomId, token }),
           );
           token = refreshed.token;
           tokenExpiresAtMs = new Date(refreshed.tokenExpiresAt).getTime();
@@ -381,14 +480,27 @@ export const useFolioCollaborationRoom = ({
             let reportedFailure = false;
             let retryDelayMs = GENERATION_REJOIN_RETRY_DELAY_MS;
             const waitForRetry = async () => {
-              await waitForAbortableDelay(
-                generationRejoinAbortController.signal,
-                retryDelayMs,
-              );
-              retryDelayMs = Math.min(
-                retryDelayMs * 2,
-                GENERATION_REJOIN_MAX_RETRY_DELAY_MS,
-              );
+              const waited = await Result.tryPromise({
+                try: async () =>
+                  await sleep(retryDelayMs, {
+                    signal: generationRejoinAbortController.signal,
+                  }),
+                catch: (cause) => cause,
+              });
+              if (Result.isError(waited)) {
+                const { signal } = generationRejoinAbortController;
+                if (
+                  !signal.aborted ||
+                  !Object.is(waited.error, signal.reason)
+                ) {
+                  return waited;
+                }
+              }
+              retryDelayMs = backoffDelay(1, {
+                baseMs: retryDelayMs,
+                maxMs: GENERATION_REJOIN_MAX_RETRY_DELAY_MS,
+              });
+              return Result.ok(undefined);
             };
             const runAttempt = () => {
               const attempt = (async () => {
@@ -396,9 +508,11 @@ export const useFolioCollaborationRoom = ({
                   try: async () =>
                     v.parse(
                       joinResponseSchema,
-                      await postFolioCollabJson({
-                        body: { entityId, propertyId },
-                        path: joinPath,
+                      await joinFolioCollaborationRoom({
+                        entityId,
+                        propertyId,
+                        signal: generationRejoinAbortController.signal,
+                        workspaceId,
                       }),
                     ),
                   catch: (cause) => cause,
@@ -408,20 +522,34 @@ export const useFolioCollaborationRoom = ({
                   return;
                 }
                 if (Result.isError(rejoinResult)) {
-                  const status =
-                    rejoinResult.error instanceof FetchBoundaryError
-                      ? rejoinResult.error.status
-                      : null;
+                  const status = httpFailureStatus(rejoinResult.error);
                   if (!reportedFailure) {
                     reportedFailure = true;
-                    getAnalytics().captureError(rejoinResult.error);
+                    getAnalytics().captureError(rejoinResult.error, {
+                      fingerprintKey:
+                        "useFolioCollaborationRoom.startGenerationRejoin.runAttempt:failure",
+                      scope: {
+                        type: "handler",
+                        handlerId:
+                          "useFolioCollaborationRoom.startGenerationRejoin.runAttempt:failure",
+                      },
+                    });
                   }
                   if (status === 403) {
                     setConnectedState("readOnly");
                     resolve();
                     return;
                   }
-                  await waitForRetry();
+                  const waited = await waitForRetry();
+                  if (Result.isError(waited)) {
+                    reject(
+                      new CollaborationGenerationRejoinError({
+                        cause: waited.error,
+                        message: "Collaboration generation retry failed.",
+                      }),
+                    );
+                    return;
+                  }
                   if (isDisposed()) {
                     resolve();
                   } else {
@@ -438,15 +566,26 @@ export const useFolioCollaborationRoom = ({
                   panic("Collaboration room identity changed during rejoin.");
                 }
 
+                if (rejoined.generation !== currentRoom.generation) {
+                  seedReceiptAbortController.abort();
+                  pendingGenerationJoin.current = {
+                    targetKey,
+                    response: rejoined,
+                  };
+                  setConnectionAttempt(
+                    (previousAttempt) => previousAttempt + 1,
+                  );
+                  resolve();
+                  return;
+                }
+
+                if (!rejoined.shouldSeed) {
+                  seedReceipt = "acknowledged";
+                }
                 token = rejoined.token;
                 tokenExpiresAtMs = new Date(rejoined.tokenExpiresAt).getTime();
                 activeRoom = {
-                  collaboration: {
-                    awareness: currentRoom.collaboration.awareness,
-                    plugins: currentRoom.collaboration.plugins,
-                    shouldSeed: false,
-                    yXmlFragment: currentRoom.collaboration.yXmlFragment,
-                  },
+                  collaboration: currentRoom.collaboration,
                   flushSnapshot: currentRoom.flushSnapshot,
                   generation: rejoined.generation,
                   getDocumentMutationRevision:
@@ -481,7 +620,15 @@ export const useFolioCollaborationRoom = ({
               if (disposed) {
                 return;
               }
-              getAnalytics().captureError(error);
+              getAnalytics().captureError(error, {
+                fingerprintKey:
+                  "useFolioCollaborationRoom.startGenerationRejoin:failure",
+                scope: {
+                  type: "handler",
+                  handlerId:
+                    "useFolioCollaborationRoom.startGenerationRejoin:failure",
+                },
+              });
               setConnectedState("reconnecting");
             })
             .finally(() => {
@@ -494,6 +641,7 @@ export const useFolioCollaborationRoom = ({
         };
 
         const ydoc = new yjs.Doc();
+        collaborationDocument = ydoc;
         const yXmlFragment = ydoc.get("prosemirror", yjs.XmlFragment);
         provider = new hocuspocus.HocuspocusProvider({
           document: ydoc,
@@ -596,8 +744,92 @@ export const useFolioCollaborationRoom = ({
           });
         });
 
+        const acknowledgeSeed = (seedBytes: Uint8Array) => {
+          const isCurrentReceipt = () =>
+            !disposed &&
+            !seedReceiptAbortController.signal.aborted &&
+            provider === connectedProvider &&
+            activeRoom?.generation === data.generation;
+          let reportedFailure = false;
+          const reportFailure = (error: unknown) => {
+            if (reportedFailure || !isCurrentReceipt()) {
+              return;
+            }
+            reportedFailure = true;
+            getAnalytics().captureError(error, {
+              fingerprintKey:
+                "useFolioCollaborationRoom.acknowledgeSeed:failure",
+              scope: {
+                type: "handler",
+                handlerId: "useFolioCollaborationRoom.acknowledgeSeed:failure",
+              },
+            });
+            notifyUserError(error, getEditOpenFailedMessage());
+          };
+          detached(
+            completeFolioSeedReceipt({
+              snapshotBytes: seedBytes,
+              acknowledge: async (snapshotSha256Hex) => {
+                await refreshTokenIfNeeded();
+                if (!isCurrentReceipt()) {
+                  return;
+                }
+                await acknowledgeFolioCollaborationSeed({
+                  roomId,
+                  token,
+                  snapshotSha256Hex,
+                });
+              },
+              flushSnapshot,
+              isCurrent: isCurrentReceipt,
+              onRetry: reportFailure,
+              signal: seedReceiptAbortController.signal,
+            })
+              .then((receipt) => {
+                if (!isCurrentReceipt()) {
+                  return undefined;
+                }
+                switch (receipt.status) {
+                  case "acknowledged":
+                    seedReceipt = "acknowledged";
+                    setConnectedState(
+                      connectedProvider.isSynced
+                        ? synchronizedStatus
+                        : "connecting",
+                    );
+                    return undefined;
+                  case "superseded":
+                    return undefined;
+                  case "failed":
+                    if (httpFailureStatus(receipt.error) === 409) {
+                      startGenerationRejoin();
+                      return undefined;
+                    }
+                    reportFailure(receipt.error);
+                    if (httpFailureStatus(receipt.error) === 403) {
+                      return undefined;
+                    }
+                    connectedProvider.disconnect();
+                    setState({
+                      status: "unavailable",
+                      room: null,
+                      message: getEditOpenFailedMessage(),
+                    });
+                    return undefined;
+                  default:
+                    receipt satisfies never;
+                    return panic("Unhandled seed receipt outcome");
+                }
+              })
+              .catch(reportFailure),
+            "use-folio-collaboration-room.seed-receipt",
+          );
+        };
+
         const collaboration = {
           awareness,
+          // Capture before the first editable view or another participant can mutate the seed.
+          onSeeded: () => acknowledgeSeed(yjs.encodeStateAsUpdate(ydoc)),
           plugins: [
             yProseMirror.ySyncPlugin(yXmlFragment),
             yProseMirror.yCursorPlugin(awareness),
@@ -610,7 +842,7 @@ export const useFolioCollaborationRoom = ({
           connectedProvider.flushPendingUpdates();
           const documentMutationRevisionAtRequest = mutationRevision.document;
           const localMutationRevisionAtRequest = mutationRevision.local;
-          const requestId = crypto.randomUUID();
+          const requestId = createUuid();
           const snapshotRevision = await new Promise<number>(
             (resolve, reject) => {
               const timer = setTimeout(() => {
@@ -668,6 +900,7 @@ export const useFolioCollaborationRoom = ({
     return () => {
       disposed = true;
       generationRejoinAbortController.abort();
+      seedReceiptAbortController.abort();
       for (const pending of pendingFlushes.values()) {
         clearTimeout(pending.timer);
         pending.reject(
@@ -678,15 +911,19 @@ export const useFolioCollaborationRoom = ({
       }
       pendingFlushes.clear();
       provider?.destroy();
+      collaborationDocument?.destroy();
     };
   }, [
     canConnect,
     collabUrl,
+    connectionAttempt,
+    targetKey,
     entityId,
     getActionFailedMessage,
     getAwarenessUser,
     getEditOpenFailedMessage,
     getEditPermissionDeniedMessage,
+    getSnapshotRecoveryMessage,
     propertyId,
     workspaceId,
   ]);

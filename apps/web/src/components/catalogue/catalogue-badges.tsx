@@ -65,6 +65,61 @@ export const LicenseBadge = ({ license }: { license: string }) => (
 );
 
 /**
+ * Neutral chip on a skill the assistant only uses when the user invokes it
+ * (slash command, skill chip, or the thread's active skill).
+ */
+export const ManualInvocationBadge = () => {
+  const t = useTranslations();
+  return (
+    <Tooltip
+      content={t("knowledge.agentSkills.invocationManualHelp")}
+      render={
+        <span className="border-border text-muted-foreground inline-flex items-center rounded-md border px-1.5 py-0.5 text-xs font-medium">
+          {t("flows.trigger.manual")}
+        </span>
+      }
+    />
+  );
+};
+
+type SkillBinding = "matter" | "client";
+
+const SKILL_BINDING_LABEL_KEY = {
+  matter: "common.matter",
+  client: "workspaces.parties.client",
+} as const satisfies Record<SkillBinding, TranslationKey>;
+
+const SKILL_BINDING_HELP_KEY = {
+  matter: "knowledge.agentSkills.availabilityMatterBadgeHelp",
+  client: "knowledge.agentSkills.availabilityClientBadgeHelp",
+} as const satisfies Record<SkillBinding, TranslationKey>;
+
+/**
+ * Neutral chip on a skill bound to one matter or one client: it is visible
+ * and usable only there. Unbound skills show nothing.
+ */
+export const SkillBindingBadge = ({
+  binding,
+}: {
+  binding: SkillBinding | null;
+}) => {
+  const t = useTranslations();
+  if (binding === null) {
+    return null;
+  }
+  return (
+    <Tooltip
+      content={t(SKILL_BINDING_HELP_KEY[binding])}
+      render={
+        <span className="border-border text-muted-foreground inline-flex items-center rounded-md border px-1.5 py-0.5 text-xs font-medium">
+          {t(SKILL_BINDING_LABEL_KEY[binding])}
+        </span>
+      }
+    />
+  );
+};
+
+/**
  * First-party mark — the Stella brand glyph next to the title.
  * Used on the settings catalogue browser; onboarding still uses the
  * pill-shaped FirstPartyBadge below so its row can mirror the third-
@@ -85,14 +140,5 @@ export const FirstPartyMark = () => {
         </span>
       }
     />
-  );
-};
-
-export const FirstPartyBadge = () => {
-  const t = useTranslations();
-  return (
-    <span className="bg-foreground text-background inline-flex items-center rounded-md px-1.5 py-0.5 text-xs font-medium">
-      {t("catalogue.firstParty")}
-    </span>
   );
 };

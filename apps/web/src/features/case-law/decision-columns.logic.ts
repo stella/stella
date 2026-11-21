@@ -1,10 +1,21 @@
 import type { ReactElement } from "react";
 
+import type {
+  DecisionColumnId,
+  TableContentMode,
+} from "@stll/api-contract/public-law-table";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
+import type { TruncatedTextLines } from "@stll/ui/truncated-text";
+import type { ColumnSortKind } from "@stll/workspace-ui/column-sort";
 
 import type { Decision } from "@/features/case-law/components/decision-cells";
 import type { TranslationKey } from "@/i18n/types";
-import type { TableContentMode } from "@/lib/workspaces/table-store.logic";
+
+export {
+  DECISION_COLUMN_IDS,
+  DEFAULT_HIDDEN_DECISION_COLUMN_IDS,
+} from "@stll/api-contract/public-law-table";
+export type { DecisionColumnId } from "@stll/api-contract/public-law-table";
 
 /**
  * The decision column model as data: which columns exist, what they are
@@ -15,26 +26,18 @@ import type { TableContentMode } from "@/lib/workspaces/table-store.logic";
  * renderer, and so the identity line cannot drift from the visible column set
  * it is derived from.
  */
-export const DECISION_COLUMN_IDS = [
-  "caseNumber",
-  "summary",
-  "court",
-  "country",
-  "date",
-  "type",
-  "headnote",
-  "citedBy",
-  "language",
-] as const;
-
-export type DecisionColumnId = (typeof DECISION_COLUMN_IDS)[number];
-
 type DecisionColumnModel = {
   /** The width the column starts at, before a stored resize. */
   size: number;
   /** Whether the reader may hide it. */
   hide: boolean;
   emphasis: "content" | "metadata";
+  /**
+   * What the results are ordered by through this column's header, or null
+   * for a column they are never ordered by: the search and the listing order
+   * by relevance or by date, and by no other value a column holds.
+   */
+  sortKind: ColumnSortKind | null;
 };
 
 /**
@@ -45,15 +48,15 @@ type DecisionColumnModel = {
  * column set stays testable without drawing one.
  */
 export const DECISION_COLUMN_MODEL = {
-  caseNumber: { size: 320, hide: false, emphasis: "content" },
-  summary: { size: 460, hide: true, emphasis: "content" },
-  court: { size: 220, hide: true, emphasis: "metadata" },
-  country: { size: 90, hide: true, emphasis: "metadata" },
-  date: { size: 130, hide: true, emphasis: "metadata" },
-  type: { size: 120, hide: true, emphasis: "metadata" },
-  headnote: { size: 420, hide: true, emphasis: "content" },
-  citedBy: { size: 96, hide: true, emphasis: "metadata" },
-  language: { size: 120, hide: true, emphasis: "metadata" },
+  caseNumber: { size: 320, hide: false, emphasis: "content", sortKind: null },
+  summary: { size: 460, hide: true, emphasis: "content", sortKind: null },
+  court: { size: 220, hide: true, emphasis: "metadata", sortKind: null },
+  country: { size: 90, hide: true, emphasis: "metadata", sortKind: null },
+  date: { size: 130, hide: true, emphasis: "metadata", sortKind: "date" },
+  type: { size: 120, hide: true, emphasis: "metadata", sortKind: null },
+  headnote: { size: 420, hide: true, emphasis: "content", sortKind: null },
+  citedBy: { size: 96, hide: true, emphasis: "metadata", sortKind: null },
+  language: { size: 120, hide: true, emphasis: "metadata", sortKind: null },
 } as const satisfies Record<DecisionColumnId, DecisionColumnModel>;
 
 /** The narrowest a decision column may be dragged. */
@@ -147,18 +150,6 @@ export const decisionColumnLabelKey = (
     : DECISION_COLUMN_LABEL_KEYS[column];
 
 /**
- * What a reader sees before choosing: identity, the hook, and the three
- * signals that place a decision. The headnote column is hidden because the
- * summary column already shows it; the country is implied by the jurisdiction
- * pill, and the language by the case-number cell's language menu.
- */
-export const DEFAULT_HIDDEN_DECISION_COLUMN_IDS = [
-  "country",
-  "headnote",
-  "language",
-] as const satisfies readonly DecisionColumnId[];
-
-/**
  * How much of the row's width a column may take.
  *
  * A table whose every column sizes to its own content is as wide as the
@@ -216,14 +207,15 @@ export const decisionColumnWidthClassNames = (
  */
 export type DecisionContentMode = TableContentMode;
 
-const DECISION_CLAMP_CLASS_NAMES = {
-  tight: "line-clamp-2",
-  "fit-content": "",
-} as const satisfies Record<DecisionContentMode, string>;
+const DECISION_CLAMP_LINES = {
+  tight: 2,
+  "fit-content": "none",
+} as const satisfies Record<DecisionContentMode, TruncatedTextLines>;
 
-/** The clamp a prose cell carries in this mode; empty when it carries none. */
-export const decisionClampClassName = (mode: DecisionContentMode): string =>
-  DECISION_CLAMP_CLASS_NAMES[mode];
+/** The lines a prose cell is cut to in this mode; `"none"` when it is not cut. */
+export const decisionClampLines = (
+  mode: DecisionContentMode,
+): TruncatedTextLines => DECISION_CLAMP_LINES[mode];
 
 /**
  * Facts the case-number cell repeats under the case number when, and only

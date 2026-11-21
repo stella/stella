@@ -1,0 +1,7 @@
+# Authorizing stored object writes
+
+Generated from `scripts/ownership/file-reservation-evidence.ts`. See [Module ownership](../module-ownership.md).
+
+| Capability                                                     | Owner                                                                                                                                                      | Enforcement                                                                                                              | Summary                                                                                                        |
+| -------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------- |
+| `file-reservation-evidence` — Authorizing stored object writes | `apps/api/src/lib/files/organization-file-usage.ts`, `apps/api/src/lib/files/copy-organization-files.ts`, `apps/api/src/lib/uploads/promote-tmp-object.ts` | import `authorizeOrganizationFileWrite`, `authorizeOrganizationFileBatch` from `@/api/lib/files/organization-file-usage` | Stored object writers execute through an authorization carrying their complete input and reservation identity. |

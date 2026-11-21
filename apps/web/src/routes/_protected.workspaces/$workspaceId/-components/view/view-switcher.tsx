@@ -9,6 +9,7 @@ import {
   isSingleViewLayout,
   type RequiredViewLayoutType,
 } from "@stll/api-contract";
+import { DEFAULT_VARCHAR_MAX_LENGTH } from "@stll/api-contract/limits";
 import {
   AlertDialog,
   AlertDialogClose,
@@ -22,17 +23,9 @@ import { Button } from "@stll/ui/button";
 import {
   BookmarkIcon,
   BookmarkPlusIcon,
-  CalendarIcon,
-  CopyIcon,
-  FileCheckIcon,
-  FolderTreeIcon,
-  GanttChartIcon,
-  KanbanIcon,
-  LayoutDashboardIcon,
-  MailIcon,
+  DuplicateIcon,
   PencilIcon,
   PlusIcon,
-  TableIcon,
   Trash2Icon,
 } from "@stll/ui/icons";
 import {
@@ -54,13 +47,17 @@ import {
 } from "@/components/drag-and-drop-live-region.logic";
 import { InlineEdit } from "@/components/inline-edit";
 import { useAnchoredMenu } from "@/components/inspector/use-anchored-menu";
-import { useAvtPreviewEnabled } from "@/hooks/use-avt-preview";
+import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { usePermissions } from "@/hooks/use-permissions";
 import { getLangDir, useI18nStore } from "@/i18n/i18n-store";
 import type { TranslationKey } from "@/i18n/types";
 import type { ViewLayout, ViewLayoutType } from "@/lib/api-contract";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { useCallerFeatureEnabled } from "@/lib/organization/feature-access/access";
+import { CALLER_FEATURE } from "@/lib/organization/feature-access/surfaces";
+import { queryView } from "@/lib/query-view.logic";
 import type { WorkspaceView } from "@/lib/types";
+import { createUuid } from "@/lib/uuid";
 import {
   useConvertView,
   useCreateView,
@@ -72,19 +69,10 @@ import { viewsOptions } from "@/lib/workspaces/queries/views";
 import { EMPTY_AVT_LAYOUT, switcherViews } from "@/lib/workspaces/view-layout";
 import { SaveAsTemplateDialog } from "@/routes/_protected.workspaces/$workspaceId/-components/view/save-as-template-dialog";
 import { TemplatePickerDialog } from "@/routes/_protected.workspaces/$workspaceId/-components/view/template-picker-dialog";
+import { VIEW_LAYOUT_ICONS } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-layout-icons.logic";
+import { unavailableViewLayouts } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-layout-options.logic";
 import type { ViewLayoutPreviewKind } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-layout-preview";
 import { ViewLayoutPreview } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-layout-preview";
-
-const layoutIcons = {
-  overview: LayoutDashboardIcon,
-  table: TableIcon,
-  filesystem: FolderTreeIcon,
-  kanban: KanbanIcon,
-  calendar: CalendarIcon,
-  timeline: GanttChartIcon,
-  avt: FileCheckIcon,
-  correspondence: MailIcon,
-} as const satisfies Record<ViewLayoutType, React.ElementType>;
 
 const LAYOUT_LABEL_KEYS = {
   overview: "workspaces.views.layouts.overview",
@@ -168,8 +156,10 @@ export const ViewSwitcher = ({
   const canCreateView = usePermissions({ view: ["create"] });
   const canUpdateView = usePermissions({ view: ["update"] });
   const direction = useI18nStore((state) => getLangDir(state.lang));
-  const avtEnabled = useAvtPreviewEnabled();
-  const { data: allViews = [] } = useQuery(viewsOptions(workspaceId));
+  const avtEnabled = useCallerFeatureEnabled(CALLER_FEATURE.verification);
+  const allViewsQuery = useQuery(viewsOptions(workspaceId));
+  const allViewsView = queryView(allViewsQuery);
+  const allViews = allViewsView.type === "items" ? allViewsView.items : [];
   const views = switcherViews(allViews, avtEnabled);
   const createView = useCreateView(workspaceId);
   const reorderViews = useReorderViews(workspaceId);
@@ -186,13 +176,13 @@ export const ViewSwitcher = ({
       .map((view) => view.layout.type)
       .filter((layoutType) => isSingleViewLayout(layoutType)),
   );
+  const disallowedTemplateLayouts = unavailableViewLayouts({
+    heldSingleLayouts,
+    avtEnabled,
+  });
   const createLayoutOptions = LAYOUT_OPTIONS.filter(
-    (layoutType) => !heldSingleLayouts.has(layoutType),
+    (layoutType) => !disallowedTemplateLayouts.has(layoutType),
   );
-  const disallowedTemplateLayouts = new Set<ViewLayoutType>([
-    ...heldSingleLayouts,
-    ...(avtEnabled ? [] : ["avt" as const]),
-  ]);
   // Views hidden from the switcher keep their place after the shown ones:
   // the server takes a reorder only when it names every view.
   const hiddenViewIds = allViews
@@ -216,6 +206,7 @@ export const ViewSwitcher = ({
         render={
           <Button
             disabled={createView.isPending}
+            disabledReason={t("common.creating")}
             size="icon-xs"
             variant="ghost"
           />
@@ -228,13 +219,12 @@ export const ViewSwitcher = ({
           options={[
             ...createLayoutOptions.map((layoutType) => ({
               kind: layoutType,
-              icon: layoutIcons[layoutType],
+              icon: VIEW_LAYOUT_ICONS[layoutType],
               label: t(LAYOUT_LABEL_KEYS[layoutType]),
               onSelect: () => {
-                const viewId = crypto.randomUUID();
                 createView.mutate(
                   {
-                    id: viewId,
+                    id: createUuid(),
                     // A layout a matter holds once comes back under its
                     // default name, which the API re-localizes per reader.
                     // Others get "New {layout}": `layoutType` lets each
@@ -249,8 +239,8 @@ export const ViewSwitcher = ({
                     layout: defaultLayouts[layoutType],
                   },
                   {
-                    onSuccess: () => {
-                      onViewChange(viewId);
+                    onSuccess: (view) => {
+                      onViewChange(view.id);
                     },
                     onError: (error) => {
                       notifyUserError(error, t("errors.failedToCreateView"));
@@ -273,8 +263,13 @@ export const ViewSwitcher = ({
     </Menu>
   ) : null;
 
+  if (allViewsView.type === "pending" || allViewsView.type === "error") {
+    return <QueryViewFeedback view={allViewsView} />;
+  }
+
   return (
     <>
+      <QueryViewFeedback view={allViewsView} />
       <WorkspaceViewSwitcher
         activeViewId={activeViewId}
         addControl={addControl}
@@ -350,7 +345,7 @@ export const ViewSwitcher = ({
           },
         }}
         renderIcon={(view) => {
-          const Icon = layoutIcons[view.layout.type];
+          const Icon = VIEW_LAYOUT_ICONS[view.layout.type];
           return <Icon className="size-3.5 shrink-0" />;
         }}
         reorder={
@@ -468,7 +463,7 @@ const ViewRenameEditor = ({
 
   return (
     <InlineEdit
-      inputClassName="w-24"
+      maxLength={DEFAULT_VARCHAR_MAX_LENGTH}
       onCancel={() => {
         onStop();
         setRenameValue(name);
@@ -518,10 +513,9 @@ const useViewActionsMenu = ({
   const hasActions = canUpdateView || canCreateView || canDeleteView;
 
   const handleDuplicate = (view: WorkspaceView) => {
-    const newId = crypto.randomUUID();
     createView.mutate(
       {
-        id: newId,
+        id: createUuid(),
         name: t("workspaces.views.copySuffix", {
           name: view.name,
         }),
@@ -551,7 +545,7 @@ const useViewActionsMenu = ({
       return null;
     }
     const { id, layout } = view;
-    const Icon = layoutIcons[layout.type];
+    const Icon = VIEW_LAYOUT_ICONS[layout.type];
     return (
       <>
         {canUpdateView && (
@@ -562,7 +556,7 @@ const useViewActionsMenu = ({
         )}
         {canCreateView && !isSingleViewLayout(layout.type) && (
           <MenuItem onClick={() => handleDuplicate(view)}>
-            <CopyIcon />
+            <DuplicateIcon />
             {t("common.duplicate")}
           </MenuItem>
         )}
@@ -581,8 +575,11 @@ const useViewActionsMenu = ({
             <MenuSubPopup>
               <ViewLayoutMenuContent
                 options={LAYOUT_OPTIONS.flatMap((layoutType) => {
+                  // An AVT view checks documents against a list; no other
+                  // layout's records carry over into one.
                   if (
                     layoutType === layout.type ||
+                    layoutType === "avt" ||
                     isSingleViewLayout(layoutType)
                   ) {
                     return [];
@@ -590,7 +587,7 @@ const useViewActionsMenu = ({
                   return [
                     {
                       kind: layoutType,
-                      icon: layoutIcons[layoutType],
+                      icon: VIEW_LAYOUT_ICONS[layoutType],
                       label: t(LAYOUT_LABEL_KEYS[layoutType]),
                       onSelect: () => {
                         convertView.mutate(

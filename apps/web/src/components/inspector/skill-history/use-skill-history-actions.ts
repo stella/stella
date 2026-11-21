@@ -8,6 +8,7 @@ import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
 import { knowledgeKeys } from "@/lib/knowledge/queries";
 import { toSafeId } from "@/lib/safe-id";
 
@@ -55,6 +56,7 @@ export const useSkillHistoryActions = ({
   const t = useTranslations();
   const queryClient = useQueryClient();
 
+  const submitIntent = useIdempotentSubmit();
   const skill = api.skills({ skillId: toSafeId<"agentSkill">(skillId) });
 
   const invalidate = (queryKey: readonly unknown[]) => {
@@ -84,11 +86,15 @@ export const useSkillHistoryActions = ({
     end,
     body,
   }: AddCommentInput) => {
-    const response = await skill.comments.post({
-      revisionId: toSafeId<"agentSkillRevision">(revisionId),
-      rangeStart: start,
-      rangeEnd: end,
-      body,
+    const response = await submitIntent.run({
+      operation: `skills.comments:${skillId}`,
+      body: {
+        revisionId: toSafeId<"agentSkillRevision">(revisionId),
+        rangeStart: start,
+        rangeEnd: end,
+        body,
+      },
+      send: async (creationPayload) => skill.comments.post(creationPayload),
     });
     if (response.error) {
       report(response.error);
@@ -121,7 +127,11 @@ export const useSkillHistoryActions = ({
 
   /** Opens a draft branched from the current revision. Returns its id. */
   const createProposal = async (): Promise<string | null> => {
-    const response = await skill.proposals.post({});
+    const response = await submitIntent.run({
+      operation: `skills.proposals:${skillId}`,
+      body: {},
+      send: async (creationPayload) => skill.proposals.post(creationPayload),
+    });
     if (response.error) {
       report(response.error);
       return null;

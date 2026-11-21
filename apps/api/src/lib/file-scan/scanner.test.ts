@@ -1,7 +1,32 @@
 import { describe, expect, test } from "bun:test";
 
 import { createArchiveContentScanner } from "@/api/lib/file-scan/archive";
-import { createZipBombGuard } from "@/api/lib/file-scan/scanner";
+import {
+  composeScanners,
+  createZipBombGuard,
+} from "@/api/lib/file-scan/scanner";
+
+test("shares input while keeping only one scanner working set active", async () => {
+  const buffer = new Uint8Array([1, 2, 3]);
+  let active = 0;
+  let peakActive = 0;
+  const scanner = {
+    scan: async (bytes: Uint8Array) => {
+      expect(bytes).toBe(buffer);
+      active++;
+      peakActive = Math.max(peakActive, active);
+      await Promise.resolve();
+      active--;
+      return [{ rule: "shared-rule" }];
+    },
+  };
+  const result = await composeScanners(scanner, scanner)(buffer, {
+    filename: "sample.txt",
+    mimeType: "text/plain",
+  });
+  expect(peakActive).toBe(1);
+  expect(result).toEqual([{ rule: "shared-rule" }]);
+});
 
 const BYTE_MODULUS = 256;
 const byteAt = (n: number, byteIndex: number): number =>

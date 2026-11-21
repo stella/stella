@@ -653,18 +653,13 @@ export const scenariosToRecord = (
   );
 };
 
-/** The repository's formatter, so a written cassette's diff is only what
- *  changed in it. */
-const FORMATTER = path.resolve(
-  import.meta.dir,
-  "../../../scripts/run-oxfmt.ts",
-);
-
 const formatCassettes = (files: readonly string[]): void => {
   if (files.length === 0) {
     return;
   }
-  const { exitCode } = Bun.spawnSync([process.execPath, FORMATTER, ...files], {
+  // The repository's formatter, so a written cassette's diff is only what
+  // changed in it.
+  const { exitCode } = Bun.spawnSync([process.execPath, "fmt", ...files], {
     stderr: "inherit",
     stdout: "ignore",
   });

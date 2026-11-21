@@ -1,18 +1,19 @@
 import { expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
 import {
   CASE_LAW_INDEX_GROUP_NAMES,
   CASE_LAW_INDEX_GROUP_OF,
   CASE_LAW_INDEX_GROUPING_FROM_GENERATION,
   CASE_LAW_INDEX_GROUPS,
+  caseLawIndexGroupAt,
 } from "@/api/lib/legal-search/case-law-index-groups";
 import {
+  caseLawCorpusGenerationOrder,
   CORPUS_INDEX_GENERATION_MAX_LENGTH,
   CORPUS_INDEX_ID_MAX_LENGTH,
-  caseLawCorpusGenerationOrder,
   corpusIndexGeneration,
   corpusIndexId,
   corpusIndexIdsFor,
@@ -32,8 +33,11 @@ test("case-law ids are per index group from the grouping generation on", () => {
   expect(CASE_LAW_INDEX_GROUPING_FROM_GENERATION).toBe(3);
   for (const [country, group] of Object.entries(CASE_LAW_INDEX_GROUP_OF)) {
     expect(corpusIndexId("case_law_v3", country)).toBe(`case_law_v3_${group}`);
-    expect(corpusIndexId("case_law_v12", country.toLowerCase())).toBe(
-      `case_law_v12_${group}`,
+    // A rehomed jurisdiction keeps its group in every generation before the
+    // rehome and takes the new one from it on.
+    expect(corpusIndexId("case_law_v8", country)).toBe(`case_law_v8_${group}`);
+    expect(corpusIndexId("case_law_v12", country)).toBe(
+      `case_law_v12_${caseLawIndexGroupAt(12, country)}`,
     );
     // Grouping is a rule about the case-law family's generations only.
     expect(corpusIndexId("case_law_v2", country)).toBe(
@@ -47,6 +51,14 @@ test("case-law ids are per index group from the grouping generation on", () => {
   // any one member's code.
   expect(corpusIndexId("case_law_v3", "CZE")).toBe("case_law_v3_cs_sk");
   expect(corpusIndexId("case_law_v3", "SVK")).toBe("case_law_v3_cs_sk");
+  expect(corpusIndexId("case_law_v8", "CZE")).toBe("case_law_v8_cs_sk");
+  // From v9 Czech decisions have an index of their own and Slovak ones keep
+  // the shared name.
+  expect(corpusIndexId("case_law_v9", "CZE")).toBe("case_law_v9_cze");
+  expect(corpusIndexId("case_law_v9", "SVK")).toBe("case_law_v9_cs_sk");
+  expect(corpusIndexId("case_law_v10", "CZE")).toBe("case_law_v10_cze");
+  expect(corpusIndexId("case_law_v10", "SVK")).toBe("case_law_v10_cs_sk");
+  expect(corpusIndexId("case_law_v2", "CZE")).toBe("case_law_v2_cze");
   // A country outside every group is its own group.
   expect(corpusIndexId("case_law_v3", "ROU")).toBe("case_law_v3_rou");
 });
@@ -62,8 +74,9 @@ test("a country outside the declaration never lands in a declared group", () => 
     const selfNamed = members.some((member) => member.toLowerCase() === group);
     expect([group, selfNamed || group.includes("_")]).toEqual([group, true]);
   }
-  fc.assert(
-    fc.property(fc.stringMatching(/^[A-Za-z]{2,8}$/u), (code) => {
+  assertProperty(
+    "a country outside the declaration never lands in a declared group",
+    fc.property(fc.stringMatching(/^[A-Z]{2,8}$/u), (code) => {
       const indexId = corpusIndexId("case_law_v3", code);
       const declared = Object.hasOwn(
         CASE_LAW_INDEX_GROUP_OF,
@@ -78,7 +91,7 @@ test("a country outside the declaration never lands in a declared group", () => 
         ]);
       }
     }),
-    propertyConfig({ numRuns: 300 }),
+    { numRuns: 300 },
   );
   // The concrete near-miss: a two-letter code equal to a language tag.
   expect(corpusIndexId("case_law_v3", "PL")).toBe("case_law_v3_pl");
@@ -92,13 +105,14 @@ test("the jurisdictions of an index are the inverse of its derivation", () => {
     `^[a-z][a-z0-9_]{0,${CORPUS_INDEX_GENERATION_MAX_LENGTH - 1}}$`,
     "u",
   );
-  fc.assert(
+  assertProperty(
+    "the jurisdictions of an index are the inverse of its derivation",
     fc.property(
       fc.oneof(
         fc.constantFrom("case_law_v2", "case_law_v3", "legislation_v1"),
         fc.stringMatching(generationPattern),
       ),
-      fc.stringMatching(/^[A-Za-z]{2,8}$/u),
+      fc.stringMatching(/^[A-Z]{2,8}$/u),
       (generation, jurisdiction) => {
         const indexId = corpusIndexId(generation, jurisdiction);
         const held = corpusIndexJurisdictions(generation, indexId);
@@ -110,11 +124,17 @@ test("the jurisdictions of an index are the inverse of its derivation", () => {
         }
       },
     ),
-    propertyConfig({ numRuns: 300 }),
+    { numRuns: 300 },
   );
   expect(corpusIndexJurisdictions("case_law_v3", "case_law_v3_cs_sk")).toEqual([
     "CZE",
     "SVK",
+  ]);
+  expect(corpusIndexJurisdictions("case_law_v9", "case_law_v9_cs_sk")).toEqual([
+    "SVK",
+  ]);
+  expect(corpusIndexJurisdictions("case_law_v9", "case_law_v9_cze")).toEqual([
+    "CZE",
   ]);
   expect(corpusIndexJurisdictions("case_law_v2", "case_law_v2_cze")).toEqual([
     "CZE",
@@ -169,13 +189,14 @@ test("rejects generations outside the shared storage contract", () => {
 });
 
 test("case-law generation order is canonical and total over its domain", () => {
-  fc.assert(
+  assertProperty(
+    "case-law generation order is canonical and total over its domain",
     fc.property(fc.integer({ min: 1, max: 2_147_483_647 }), (order) => {
       const generation = `case_law_v${order}`;
       expect(isCaseLawCorpusGeneration(generation)).toBe(true);
       expect(caseLawCorpusGenerationOrder(generation)).toBe(order);
     }),
-    propertyConfig({ numRuns: 200 }),
+    { numRuns: 200 },
   );
   for (const invalid of [
     "case_law_v0",
@@ -194,7 +215,8 @@ test("generation extraction is the inverse of index construction", () => {
     `^[a-z][a-z0-9_]{0,${CORPUS_INDEX_GENERATION_MAX_LENGTH - 1}}$`,
     "u",
   );
-  fc.assert(
+  assertProperty(
+    "generation extraction is the inverse of index construction",
     fc.property(
       fc.stringMatching(generationPattern),
       fc.stringMatching(/^[a-z]{2,8}$/u),
@@ -204,7 +226,7 @@ test("generation extraction is the inverse of index construction", () => {
         expect(corpusIndexGeneration(indexId)).toBe(generation);
       },
     ),
-    propertyConfig({ numRuns: 200 }),
+    { numRuns: 200 },
   );
 });
 

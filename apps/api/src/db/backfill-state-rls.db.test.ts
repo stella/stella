@@ -36,6 +36,9 @@ describe.skipIf(!enabled)("maintenance checkpoint row security", () => {
         await client.unsafe(
           `CREATE ROLE ${reader} NOLOGIN NOSUPERUSER NOBYPASSRLS`,
         );
+        await client.unsafe(
+          `GRANT ${owner}, ${reader} TO CURRENT_USER WITH INHERIT TRUE, SET TRUE`,
+        );
         await client.unsafe(`SET LOCAL search_path TO ${schema}, public`);
         for (const statement of migration
           .replaceAll(
@@ -52,10 +55,10 @@ describe.skipIf(!enabled)("maintenance checkpoint row security", () => {
         );
         expect(posture.at(0)).toEqual({ enabled: true, forced: true });
         await client.unsafe(
-          `ALTER TABLE database_backfill_states OWNER TO ${owner}`,
+          `GRANT USAGE ON SCHEMA ${schema} TO ${owner}, ${reader}; GRANT CREATE ON SCHEMA ${schema} TO ${owner}`,
         );
         await client.unsafe(
-          `GRANT USAGE ON SCHEMA ${schema} TO ${owner}, ${reader}`,
+          `ALTER TABLE database_backfill_states OWNER TO ${owner}`,
         );
         await client.unsafe(
           `GRANT SELECT, INSERT, UPDATE, DELETE ON database_backfill_states TO ${reader}`,
@@ -67,7 +70,7 @@ describe.skipIf(!enabled)("maintenance checkpoint row security", () => {
         const updated = await client.unsafe<{ cursor: string }[]>(
           "UPDATE database_backfill_states SET cursor = '20' WHERE name = 'repair' RETURNING cursor",
         );
-        expect(updated).toEqual([{ cursor: "20" }]);
+        expect([...updated]).toEqual([{ cursor: "20" }]);
         await client.unsafe(`SET LOCAL ROLE ${reader}`);
         expect(
           await client.unsafe<{ name: string }[]>(
@@ -99,16 +102,16 @@ describe.skipIf(!enabled)("maintenance checkpoint row security", () => {
         ).toMatch(/row-level security/u);
         await client.unsafe("ROLLBACK TO SAVEPOINT denied_insert");
         await client.unsafe(`SET LOCAL ROLE ${owner}`);
-        expect(
-          await client.unsafe<{ name: string; cursor: string }[]>(
+        expect([
+          ...(await client.unsafe<{ name: string; cursor: string }[]>(
             "SELECT name, cursor FROM database_backfill_states",
-          ),
-        ).toEqual([{ name: "repair", cursor: "20" }]);
-        expect(
-          await client.unsafe<{ name: string }[]>(
+          )),
+        ]).toEqual([{ name: "repair", cursor: "20" }]);
+        expect([
+          ...(await client.unsafe<{ name: string }[]>(
             "DELETE FROM database_backfill_states RETURNING name",
-          ),
-        ).toEqual([{ name: "repair" }]);
+          )),
+        ]).toEqual([{ name: "repair" }]);
       } finally {
         await client.unsafe("ROLLBACK");
       }

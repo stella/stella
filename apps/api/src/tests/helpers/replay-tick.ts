@@ -1,5 +1,5 @@
 import "bun:test";
-import { getReplayTickFixtureRunner } from "@/api/scripts/replay-tick";
+import { getReplayTickFixtureRunner } from "@/api/scripts/replay-tick-command";
 
 type ReplayTickFixtureOptions = Parameters<
   ReturnType<typeof getReplayTickFixtureRunner>

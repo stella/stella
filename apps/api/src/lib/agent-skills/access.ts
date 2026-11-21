@@ -1,9 +1,11 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
 import { agentSkills } from "@/api/db/schema";
 import type { AgentSkillOrigin, AgentSkillScope } from "@/api/db/schema";
+import type { SkillBinding } from "@/api/lib/agent-skills/binding";
+import { requireEditableSkillOrigin } from "@/api/lib/agent-skills/origin";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
@@ -20,6 +22,8 @@ type LoadVisibleSkillOptions = {
 };
 
 type VisibleSkill = {
+  boundClientId: SafeId<"contact"> | null;
+  boundWorkspaceId: SafeId<"workspace"> | null;
   id: SafeId<"agentSkill">;
   scope: AgentSkillScope;
   userId: string;
@@ -46,6 +50,8 @@ export const loadVisibleSkill = async (
 ): Promise<VisibleSkill> => {
   const query = tx
     .select({
+      boundClientId: agentSkills.boundClientId,
+      boundWorkspaceId: agentSkills.boundWorkspaceId,
       id: agentSkills.id,
       scope: agentSkills.scope,
       userId: agentSkills.userId,
@@ -76,7 +82,10 @@ export const loadVisibleSkill = async (
 };
 
 type CanManageSkillOptions = {
-  skill: Pick<VisibleSkill, "scope" | "userId">;
+  skill: Pick<
+    VisibleSkill,
+    "scope" | "userId" | "boundClientId" | "boundWorkspaceId"
+  >;
   memberRole: AuthorizedMemberRole;
   userId: SafeId<"user">;
   /** The skill permission the write spends: `delete` removes the skill,
@@ -86,10 +95,12 @@ type CanManageSkillOptions = {
 
 /**
  * Who may write to a skill directly (edit it, accept a proposal against it,
- * remove someone else's proposal or comment, delete it): admins and owners for
- * team skills, the author for private ones, each spending the permission the
- * write needs. Everyone else who can see the skill proposes and comments
- * instead.
+ * remove someone else's proposal or comment, delete it), each spending the
+ * permission the write needs:
+ * - team skills: admins and owners, or the author of one bound to a matter;
+ * - private skills: the author, and a client-bound one only as a manager.
+ * Everyone else who can see the skill proposes and comments instead. Row
+ * security adds the binding's reach; this mirrors `agentSkillWriteRule`.
  */
 export const canManageSkill = ({
   skill,
@@ -98,16 +109,85 @@ export const canManageSkill = ({
   spends,
 }: CanManageSkillOptions): boolean => {
   const permission = { agentSkill: [spends] };
+  const isAuthor =
+    skill.userId === userId && hasMemberPermission(memberRole, permission);
   switch (skill.scope) {
     case "team":
-      return hasManagementPermission(memberRole, permission);
+      return (
+        hasManagementPermission(memberRole, permission) ||
+        (skill.boundWorkspaceId !== null && isAuthor)
+      );
     case "private":
       return (
-        skill.userId === userId && hasMemberPermission(memberRole, permission)
+        isAuthor &&
+        (skill.boundClientId === null ||
+          hasManagementPermission(memberRole, permission))
       );
     default: {
       skill.scope satisfies never;
       return panic(`Unhandled scope: ${String(skill.scope)}`);
     }
   }
+};
+
+type ActiveSkillAccessOptions = SkillBinding & {
+  memberRole: AuthorizedMemberRole;
+  origin: AgentSkillOrigin;
+  scope: "private" | "team";
+  skillUserId: string;
+  userId: SafeId<"user">;
+};
+
+export const canEditActiveSkill = ({
+  boundClientId,
+  boundWorkspaceId,
+  memberRole,
+  origin,
+  scope,
+  skillUserId,
+  userId,
+}: ActiveSkillAccessOptions): boolean => {
+  if (
+    !canManageSkill({
+      memberRole,
+      skill: { boundClientId, boundWorkspaceId, scope, userId: skillUserId },
+      userId,
+      spends: "update",
+    })
+  ) {
+    return false;
+  }
+
+  return !Result.isError(requireEditableSkillOrigin(origin));
+};
+
+export const canReadActiveSkillBody = ({
+  boundClientId,
+  boundWorkspaceId,
+  enabled,
+  memberRole,
+  origin,
+  scope,
+  skillUserId,
+  userId,
+}: ActiveSkillAccessOptions & {
+  enabled: boolean;
+}): boolean => {
+  if (scope === "private") {
+    return skillUserId === userId;
+  }
+
+  if (enabled) {
+    return true;
+  }
+
+  return canEditActiveSkill({
+    boundClientId,
+    boundWorkspaceId,
+    memberRole,
+    origin,
+    scope,
+    skillUserId,
+    userId,
+  });
 };

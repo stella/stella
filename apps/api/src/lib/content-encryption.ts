@@ -10,26 +10,20 @@
  * requires the key unless local development access is open, so this
  * fallback only fires in local development and tests.
  */
-
 import { Result } from "better-result";
 import { hkdf } from "node:crypto";
 
-import { envDocumentProcessingWorker } from "@/api/env-document-processing-worker";
+import { sha256Hex } from "@stll/sha256/bun";
+
+import { getContentEncryptionMasterKey as getMasterKey } from "@/api/env-content-encryption";
 import type { SafeId } from "@/api/lib/branded-types";
 import { ConfigurationError } from "@/api/lib/errors/tagged-errors";
+import { recordReadWork } from "@/api/lib/observability/request-work";
 
 const AES_KEY_BYTES = 32;
 const IV_BYTES = 12;
 const AUTH_TAG_BYTES = 16;
 const ALGORITHM = "AES-GCM";
-
-const getMasterKey = (): Buffer | null => {
-  const hex = envDocumentProcessingWorker.CONTENT_ENCRYPTION_KEY;
-  if (!hex) {
-    return null;
-  }
-  return Buffer.from(hex, "hex");
-};
 
 /**
  * Derive a 256-bit key using HKDF-SHA256. The scope is the
@@ -112,16 +106,14 @@ const decryptScopedContent = async (
   ciphertext: Buffer,
   iv: Buffer,
 ): Promise<string> => {
+  const masterKey = getMasterKey();
   // All-zero IV means the content was stored as plaintext
-  // (no-op envelope). Return UTF-8 regardless of whether
-  // the master key is currently set, so plaintext rows
-  // survive key rotation without silent data loss.
+  // (no-op envelope). Local development can read it without a key,
+  // while strict deployments still require their configured key.
   const isPlaintext = iv.every((b) => b === 0);
   if (isPlaintext) {
     return ciphertext.toString("utf-8");
   }
-
-  const masterKey = getMasterKey();
 
   if (!masterKey) {
     throw new ConfigurationError({
@@ -150,6 +142,7 @@ const decryptScopedContent = async (
     new Uint8Array(ciphertext),
   );
 
+  recordReadWork("decryptedBytes", decrypted.byteLength);
   return new TextDecoder().decode(decrypted);
 };
 
@@ -165,6 +158,47 @@ export const decryptContent = async (
   iv: Buffer,
 ): Promise<string> =>
   await decryptScopedContent(organizationId, ciphertext, iv);
+
+const LOOKUP_KEY_SCOPE = "stella:content-lookup:v1:";
+
+/**
+ * A stable keyed hash (HMAC-SHA256, hex) of `value` for finding an equal
+ * encrypted value without decrypting: AES-GCM ciphertexts of one plaintext
+ * differ, so equality is matched on this instead. The key is derived from
+ * the content key per organization, so one firm's hashes match nothing in
+ * another's. Without the content key (local development and tests, as for
+ * the no-op envelope) it is an unkeyed SHA-256 of the same input.
+ */
+export const contentLookupKey = async (
+  organizationId: SafeId<"organization">,
+  value: string,
+): Promise<string> => {
+  const masterKey = getMasterKey();
+  if (!masterKey) {
+    return sha256Hex(`${organizationId}\u0000${value}`);
+  }
+  const scopeKey = await deriveScopeKey(
+    masterKey,
+    `${LOOKUP_KEY_SCOPE}${organizationId}`,
+  );
+  return new Bun.CryptoHasher("sha256", scopeKey).update(value).digest("hex");
+};
+
+/** Keyed identifiers never fall back to a guessable plaintext digest. */
+export const keyedContentLookupKey = async (
+  organizationId: SafeId<"organization">,
+  value: string,
+): Promise<Result<string, ConfigurationError>> => {
+  const masterKey = getMasterKey();
+  if (!masterKey) {
+    return Result.err(
+      new ConfigurationError({
+        message: "Keyed content identifiers require CONTENT_ENCRYPTION_KEY",
+      }),
+    );
+  }
+  return Result.ok(await contentLookupKey(organizationId, value));
+};
 
 const APP_CONTENT_SCOPE = "stella:app-content:v1";
 

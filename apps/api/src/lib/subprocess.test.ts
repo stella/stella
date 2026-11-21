@@ -5,8 +5,8 @@ import path from "node:path";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import {
-  SubprocessError,
   SUBPROCESS_TERMINATION_REASON,
+  SubprocessError,
 } from "@/api/lib/errors/tagged-errors";
 import {
   classifySubprocessTermination,
@@ -69,7 +69,7 @@ describe("spawnWorker", () => {
     const result = await spawnWorker({
       workerPath: SLEEP_WORKER,
       stdin: new Blob([""]),
-      timeoutMs: 500,
+      timeoutMs: 500, // timeout under test
     });
 
     expect(Result.isError(result)).toBe(true);
@@ -108,6 +108,19 @@ describe("spawnWorker", () => {
       }),
     ).toBe(SUBPROCESS_TERMINATION_REASON.crashed);
   });
+
+  test.each([34, 35, 64])(
+    "classifies unnamed signal %i as external",
+    (signalCode) => {
+      expect(
+        classifySubprocessTermination({
+          callerAbort: false,
+          signalCode,
+          timeoutAbort: false,
+        }),
+      ).toBe(SUBPROCESS_TERMINATION_REASON.external);
+    },
+  );
 
   // The class this pins: a caller abort must kill the subprocess, not
   // leave it burning CPU until the hard timeout expires. The fixture
@@ -160,7 +173,7 @@ describe("spawnBinaryWorker", () => {
     const result = await spawnBinaryWorker({
       workerPath: SLEEP_WORKER,
       stdin: new Blob([""]),
-      timeoutMs: 500,
+      timeoutMs: 500, // timeout under test
       maxOutputBytes: 1024,
     });
 

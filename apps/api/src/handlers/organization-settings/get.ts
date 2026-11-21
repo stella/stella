@@ -1,7 +1,9 @@
 import { Result } from "better-result";
 
+import type { ChatLocalRunApprovalCeiling } from "@stll/api-contract/chat-run-target";
 import type { TimeZoneId } from "@stll/time";
 
+import { ORGANIZATION_AI_INSTRUCTIONS_MAX_LENGTH } from "@/api/db/organization-settings-constants";
 import type {
   DocumentProcessingMode,
   PracticeJurisdiction,
@@ -16,13 +18,17 @@ import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { arrayOrEmpty } from "@/api/lib/array";
 import { loadFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context";
+import { DEFAULT_MANAGED_AI_RESIDENCY } from "@/api/lib/chat/ai-data-policy";
+import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
+import { localRunApprovalCeilingOf } from "@/api/lib/chat/local-run-approval-ceiling";
+import type { DeploymentFeatureFlag } from "@/api/lib/deployment-feature";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import {
   isFeatureAccessSnapshotForPrincipal,
   isFeatureEnabled,
-} from "@/api/lib/auth/feature-access/policy";
-import type { FeatureAccessSnapshot } from "@/api/lib/auth/feature-access/policy";
-import { DEFAULT_MANAGED_AI_RESIDENCY } from "@/api/lib/chat/ai-data-policy";
-import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
+} from "@/api/lib/feature-access/policy";
+import type { FeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
+import { LIST_VERIFICATION_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import {
   DEFAULT_MATTER_NUMBER_PADDING,
   DEFAULT_MATTER_NUMBER_PATTERN,
@@ -32,14 +38,39 @@ import {
   ORGANIZATION_TIME_ZONE_SOURCE,
 } from "@/api/lib/organization-time-zone";
 
+/** The deployment features web callers read from organization settings. */
+type WebDeploymentFeature = "legalLists" | "invoiceLinks";
+
+/** The deployment availability contract shared by web callers and discovery. */
+export const WEB_DEPLOYMENT_FEATURES = {
+  legalLists: "FEATURE_LEGAL_LISTS",
+  invoiceLinks: "FEATURE_INVOICE_LINKS",
+} as const satisfies Record<WebDeploymentFeature, DeploymentFeatureFlag>;
+
+// The annotated return type makes a missing registry key a compile error.
+const readWebDeploymentFeatures = (): {
+  [Key in keyof typeof WEB_DEPLOYMENT_FEATURES]: boolean;
+} => ({
+  legalLists: isDeploymentFeatureEnabled(WEB_DEPLOYMENT_FEATURES.legalLists),
+  invoiceLinks: isDeploymentFeatureEnabled(
+    WEB_DEPLOYMENT_FEATURES.invoiceLinks,
+  ),
+});
+
 const config = {
+  contract: "patch",
   description:
     "Read the organization's general settings: document processing mode, " +
-    "matter-number pattern and padding, practice jurisdictions, prompt " +
-    "caching, memory extraction, time policy, and the time zone whose calendar " +
-    "decides the organization's day. timeZoneSource says whether the zone was " +
+    "matter-number pattern, padding, and whether titles show that number, practice jurisdictions, prompt " +
+    "caching, organization AI instructions, memory extraction, time policy, the time zone whose calendar " +
+    "decides the organization's day, and localRunMaxApprovalMode, the most a " +
+    "chat turn run on a member's computer may do without asking. declaredFeatureIds identifies policies in force; " +
+    "capabilities contains caller decisions; deploymentFeatures supplies legalLists and invoiceLinks deployment availability. " +
+    "timeZoneSource says whether the zone was " +
     "chosen or derived from the primary practice jurisdiction (Europe/Prague " +
-    "for CZ and SK, UTC otherwise). An organization that has never saved " +
+    "for CZ and SK, UTC otherwise). primaryJurisdictionTimeZone is the " +
+    "zone the primary jurisdiction implies, regardless of an organization " +
+    "override. An organization that has never saved " +
     "settings gets the defaults rather than an error.",
   permissions: { workspace: ["read"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
@@ -54,12 +85,15 @@ const config = {
 
 type OrganizationSettingsRow = {
   documentProcessingMode: DocumentProcessingMode;
+  matterNumberingEnabled: boolean;
   matterNumberPadding: number;
   matterNumberPattern: string;
   practiceJurisdictions: PracticeJurisdiction[];
   promptCachingEnabled: boolean;
+  aiInstructions: string;
   managedAIResidency: ManagedAIResidency;
   memoryExtractionEnabled: boolean;
+  localRunMaxApprovalMode: ChatLocalRunApprovalCeiling;
   timeMinimumUnitMinutes: number;
   timeEditWindowDays: number;
   timeLockedThroughMonth: string | null;
@@ -67,49 +101,85 @@ type OrganizationSettingsRow = {
   timeZone: TimeZoneId | null;
 };
 
-export const projectOrganizationSettingsRow = (
-  row: OrganizationSettingsRow | null | undefined,
-  snapshot: FeatureAccessSnapshot,
-) => ({
-  capabilities: Object.fromEntries(
-    Array.from(
-      snapshot.decisions,
-      ([featureId]) =>
-        [
-          featureId,
-          {
-            status: isFeatureEnabled(snapshot, featureId, snapshot)
-              ? ("enabled" as const)
-              : ("hidden" as const),
-          },
-        ] as const,
+const projectFeatureAccess = (snapshot: FeatureAccessSnapshot) => {
+  const visibleDecisions = Array.from(snapshot.decisions).filter(
+    ([featureId]) =>
+      featureId !== LIST_VERIFICATION_FEATURE_ID ||
+      isFeatureEnabled(snapshot, featureId, snapshot),
+  );
+  return {
+    declaredFeatureIds: visibleDecisions.map(([featureId]) => featureId),
+    deploymentFeatures: readWebDeploymentFeatures(),
+    capabilities: Object.fromEntries(
+      visibleDecisions.map(
+        ([featureId]) =>
+          [
+            featureId,
+            {
+              status: isFeatureEnabled(snapshot, featureId, snapshot)
+                ? ("enabled" as const)
+                : ("hidden" as const),
+            },
+          ] as const,
+      ),
     ),
-  ),
-  documentProcessingMode:
-    row?.documentProcessingMode ?? DEFAULT_DOCUMENT_PROCESSING_MODE,
-  matterNumberPattern:
-    row?.matterNumberPattern ?? DEFAULT_MATTER_NUMBER_PATTERN,
-  matterNumberPadding:
-    row?.matterNumberPadding ?? DEFAULT_MATTER_NUMBER_PADDING,
-  practiceJurisdictions: arrayOrEmpty(row?.practiceJurisdictions),
-  promptCachingEnabled: row?.promptCachingEnabled ?? true,
-  managedAIResidency: row?.managedAIResidency ?? DEFAULT_MANAGED_AI_RESIDENCY,
-  memoryExtractionEnabled: row?.memoryExtractionEnabled ?? false,
+  };
+};
+
+const projectTimePolicy = (
+  row: OrganizationSettingsRow | null | undefined,
+) => ({
   timeMinimumUnitMinutes:
     row?.timeMinimumUnitMinutes ?? DEFAULT_TIME_MINIMUM_UNIT_MINUTES,
   timeEditWindowDays: row?.timeEditWindowDays ?? DEFAULT_TIME_EDIT_WINDOW_DAYS,
   timeLockedThroughMonth: row?.timeLockedThroughMonth ?? null,
   timeNarrativeRequired:
     row?.timeNarrativeRequired ?? DEFAULT_TIME_NARRATIVE_REQUIRED,
+});
+
+const projectTimeZone = (
+  row: OrganizationSettingsRow | null | undefined,
+  practiceJurisdictions: PracticeJurisdiction[],
+) => ({
   timeZone: effectiveOrganizationTimeZone({
     timeZone: row?.timeZone ?? null,
-    practiceJurisdictions: arrayOrEmpty(row?.practiceJurisdictions),
+    practiceJurisdictions,
+  }),
+  primaryJurisdictionTimeZone: effectiveOrganizationTimeZone({
+    timeZone: null,
+    practiceJurisdictions,
   }),
   timeZoneSource:
     (row?.timeZone ?? null) === null
       ? ORGANIZATION_TIME_ZONE_SOURCE.PRACTICE_JURISDICTION
       : ORGANIZATION_TIME_ZONE_SOURCE.ORGANIZATION,
 });
+
+export const projectOrganizationSettingsRow = (
+  row: OrganizationSettingsRow | null | undefined,
+  snapshot: FeatureAccessSnapshot,
+) => {
+  const practiceJurisdictions = arrayOrEmpty(row?.practiceJurisdictions);
+  return {
+    ...projectFeatureAccess(snapshot),
+    documentProcessingMode:
+      row?.documentProcessingMode ?? DEFAULT_DOCUMENT_PROCESSING_MODE,
+    matterNumberPattern:
+      row?.matterNumberPattern ?? DEFAULT_MATTER_NUMBER_PATTERN,
+    matterNumberPadding:
+      row?.matterNumberPadding ?? DEFAULT_MATTER_NUMBER_PADDING,
+    matterNumberingEnabled: row?.matterNumberingEnabled ?? false,
+    practiceJurisdictions,
+    promptCachingEnabled: row?.promptCachingEnabled ?? true,
+    aiInstructions: row?.aiInstructions ?? "",
+    aiInstructionsMaxLength: ORGANIZATION_AI_INSTRUCTIONS_MAX_LENGTH,
+    managedAIResidency: row?.managedAIResidency ?? DEFAULT_MANAGED_AI_RESIDENCY,
+    memoryExtractionEnabled: row?.memoryExtractionEnabled ?? false,
+    localRunMaxApprovalMode: localRunApprovalCeilingOf(row),
+    ...projectTimePolicy(row),
+    ...projectTimeZone(row, practiceJurisdictions),
+  };
+};
 
 const readOrganizationSettings = createSafeRootHandler(
   config,
@@ -122,10 +192,13 @@ const readOrganizationSettings = createSafeRootHandler(
             documentProcessingMode: true,
             matterNumberPattern: true,
             matterNumberPadding: true,
+            matterNumberingEnabled: true,
             practiceJurisdictions: true,
             promptCachingEnabled: true,
+            aiInstructions: true,
             managedAIResidency: true,
             memoryExtractionEnabled: true,
+            localRunMaxApprovalMode: true,
             timeMinimumUnitMinutes: true,
             timeEditWindowDays: true,
             timeLockedThroughMonth: true,

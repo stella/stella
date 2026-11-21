@@ -5,8 +5,8 @@ import * as v from "valibot";
 
 import { PUBLIC_CASE_LAW_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
 import { PUBLIC_LEGISLATION_COUNTRIES } from "@stll/api-contract/legislation-publication";
+import { GLOBAL_SEARCH_RESULT_LIMIT } from "@stll/api-contract/search";
 
-import { encodeDecisionCitationCursor } from "@/api/handlers/case-law/decisions/get";
 import { CONTACT_DISPLAY_NAME_MAX_LENGTH } from "@/api/handlers/contacts/list-query";
 import { encodeVersionCursor } from "@/api/handlers/entities/version-cursor";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
@@ -14,9 +14,9 @@ import { CORPUS_INDEX_RANKING_MODES } from "@/api/lib/legal-search/corpus-rankin
 import {
   CORPUS_CURSOR_GROUP_TOKEN_CHARS,
   CORPUS_READ_TARGET_IDENTITY_LENGTH,
+  type CorpusSearchCursor,
   decodeCorpusSearchCursor,
   encodeCorpusSearchCursor,
-  type CorpusSearchCursor,
 } from "@/api/lib/legal-search/corpus-search-cursor";
 import { SEARCH_SORTS } from "@/api/lib/legal-search/corpus-search-order";
 import { CORPUS_INDEX_GENERATION_MAX_LENGTH } from "@/api/lib/legal-search/index-naming";
@@ -24,19 +24,25 @@ import { LIMITS } from "@/api/lib/limits";
 import { encodePaginationCursor } from "@/api/lib/pagination";
 import { brandPersistedEntityVersionId } from "@/api/lib/safe-id-boundaries";
 import { encodeCursor } from "@/api/lib/search/cursor";
-import {
-  encodeGlobalSearchCursor,
-  GLOBAL_SEARCH_RESULT_LIMIT,
-} from "@/api/lib/search/pagination";
+import { encodeGlobalSearchCursor } from "@/api/lib/search/pagination";
 import { isRecord } from "@/api/lib/type-guards";
+import {
+  isBoundTextCursor,
+  windowBoundText,
+} from "@/api/mcp/bound-text-window";
+import { encodeCourtCursor } from "@/api/mcp/case-law-court-catalog-tool";
 import { LAW_COMPAT_TOOL_SET } from "@/api/mcp/compat-law-tools";
 import { encodeCompatSearchCursor } from "@/api/mcp/compat-shared";
+import {
+  encodeReaderCursor,
+  readerVersion,
+} from "@/api/mcp/decision-reader.logic";
 import capabilityCatalog from "@/api/mcp/generated/capability-catalog";
+import { cursorInput } from "@/api/mcp/input-schemas";
 import {
   ALL_MCP_TOOL_DEFINITIONS,
   getStaticMcpToolOutputContract,
 } from "@/api/mcp/static-tool-definitions";
-import { cursorInput } from "@/api/mcp/tool-utils";
 
 const UUID = "ffffffff-ffff-4fff-8fff-ffffffffffff";
 const TIMESTAMP = "9999-12-31T23:59:59.999999Z";
@@ -93,65 +99,97 @@ const timestampCursor = createTimestampIdCursorCodec({
 }).encode(TIMESTAMP, UUID);
 const idCursor = encodePaginationCursor([UUID]);
 const offsetCursor = encodePaginationCursor([Number.MAX_SAFE_INTEGER]);
-const citationsCursor = encodeDecisionCitationCursor({
-  from: { status: "continue", after: idCursor },
-  to: { status: "continue", after: idCursor },
+
+const readerCursor = encodeReaderCursor({
+  decisionId: UUID,
+  version: readerVersion([]),
+  phase: "provisions",
+  offset: Number.MAX_SAFE_INTEGER,
+  blockOffset: Number.MAX_SAFE_INTEGER,
+  referenceCursor: encodePaginationCursor([
+    "9223372036854775807",
+    2_147_483_647,
+    "a".repeat(LIMITS.decisionReaderProvisionAnchorMaxChars),
+  ]),
+  batchDigest: readerVersion([]),
 });
 
 // These use the same encoders as the handlers: tuple shapes come from the
 // owning cursorForItem call, while nested envelopes pass through their codec.
 // A registry addition has no fixture by default and fails the census below.
+const provisionCursorWindow = windowBoundText({
+  limit: 1,
+  subject: JSON.stringify([
+    "https://www.e-sbirka.cz/eli/cz/sb/2012/89",
+    "par_1729",
+    UUID,
+  ]),
+  text: "ab",
+});
+const provisionTextCursor =
+  provisionCursorWindow.type === "window"
+    ? (provisionCursorWindow.nextTextCursor ??
+      panic("Missing provision cursor"))
+    : panic("Invalid provision fixture");
+
 const cursorFixtures: Readonly<Record<string, string>> = {
-  "default.search.nextCursor": encodeCompatSearchCursor({
+  "advanced.read_statute_provisions.items[].nextTextCursor":
+    provisionTextCursor,
+  "advanced.read_provision_history.items[].nextTextCursor": provisionTextCursor,
+  "advanced.search.nextCursor": encodeCompatSearchCursor({
     corpus,
     matter: encodeCursor(SCORE, UUID),
   }),
   "law.search.nextCursor": encodeCompatSearchCursor({ corpus, matter: null }),
-  "default.fetch.nextCursor": offsetCursor,
+  "advanced.fetch.nextCursor": offsetCursor,
   "law.fetch.nextCursor": offsetCursor,
-  "default.list_matters.nextCursor": idCursor,
-  "default.search_across_matters.nextCursor": encodeGlobalSearchCursor({
+  "advanced.list_matters.nextCursor": idCursor,
+  "advanced.search_across_matters.nextCursor": encodeGlobalSearchCursor({
+    tier: 2,
     score: SCORE,
     id: `case-law:${UUID}`,
     seen: GLOBAL_SEARCH_RESULT_LIMIT - 1,
   }),
-  "default.search_case_law.nextCursor": encodePaginationCursor(
+  "advanced.search_case_law.nextCursor": encodePaginationCursor(
     Array.from(
       { length: LIMITS.caseLawSearchQueriesMax },
       () => decisionCursor,
     ),
   ),
-  "default.read_content_across_matters.nextCursor": offsetCursor,
-  "default.read_case_law_decision.items[].nextCursor": encodePaginationCursor([
-    Number.MAX_SAFE_INTEGER,
-    citationsCursor,
-  ]),
-  "default.read_case_law_citations.nextCursor": idCursor,
-  "default.search_legislation.nextCursor": statuteCursor,
-  "default.read_statute.nextCursor": offsetCursor,
-  "default.read_provision_history.nextCursor": encodePaginationCursor([
+  "advanced.read_content_across_matters.nextCursor": offsetCursor,
+  "advanced.read_case_law_citations.nextCursor": idCursor,
+  // The longest stored court name, every character escaped by JSON.
+  "advanced.list_case_law_courts.nextCursor": encodeCourtCursor(
+    "\u0001".repeat(512),
+  ),
+  "advanced.read_case_law_decision_blocks.content.nextCursor": readerCursor,
+  "advanced.search_legislation.nextCursor": statuteCursor,
+  "advanced.read_statute.nextCursor": offsetCursor,
+  "advanced.search_guidance.nextCursor": offsetCursor,
+  "advanced.read_guidance.nextCursor": offsetCursor,
+  "advanced.read_provision_history.nextCursor": encodePaginationCursor([
     DATE,
     UUID,
   ]),
-  "default.list_templates.nextCursor": idCursor,
-  "default.list_documents.nextCursor": timestampCursor,
-  "default.read_document.versionsNextCursor": encodeVersionCursor({
+  "advanced.list_templates.nextCursor": idCursor,
+  "advanced.list_documents.nextCursor": timestampCursor,
+  "advanced.read_document.versionsNextCursor": encodeVersionCursor({
     versionNumber: 2_147_483_647,
     id: brandPersistedEntityVersionId(UUID),
   }),
-  "default.list_properties.nextCursor": timestampCursor,
-  "default.list_contacts.nextCursor": encodePaginationCursor([
+  "advanced.list_properties.nextCursor": timestampCursor,
+  "advanced.list_contacts.nextCursor": encodePaginationCursor([
     "\u0001".repeat(CONTACT_DISPLAY_NAME_MAX_LENGTH),
     UUID,
   ]),
-  "default.list_tasks.nextCursor": encodePaginationCursor([DATE, UUID]),
-  "default.list_clauses.nextCursor": timestampCursor,
-  "default.list_playbooks.nextCursor": idCursor,
-  "default.list_reader_annotations.nextCursor": timestampCursor,
-  "default.list_time_entries.nextCursor": encodePaginationCursor([DATE, UUID]),
-  "default.list_invoices.nextCursor": timestampCursor,
-  "default.list_audit_log.nextCursor": timestampCursor,
-  "default.list_capabilities.nextCursor": encodePaginationCursor([
+  "advanced.list_tasks.nextCursor": encodePaginationCursor([DATE, UUID]),
+  "advanced.list_clauses.nextCursor": timestampCursor,
+  "advanced.list_playbooks.nextCursor": idCursor,
+  "advanced.list_reader_annotations.nextCursor": timestampCursor,
+  "advanced.list_time_entries.nextCursor": encodePaginationCursor([DATE, UUID]),
+  "advanced.list_invoices.nextCursor": timestampCursor,
+  "advanced.list_audit_log.nextCursor": timestampCursor,
+  "advanced.list_capabilities.nextCursor": encodePaginationCursor([
     longestString(capabilityCatalog.map((entry) => entry.id)),
   ]),
 };
@@ -198,13 +236,34 @@ const acceptsCursor = ({
   property,
   cursor,
 }: CursorAcceptanceOptions): boolean => {
-  const result = v.safeParse(schema, { [property]: cursor });
+  const nested = property.startsWith("items[].");
+  const input = nested
+    ? {
+        items: [
+          {
+            eli: "https://www.e-sbirka.cz/eli/cz/sb/2012/89",
+            anchor: "par_1729",
+            text_cursor: cursor,
+          },
+        ],
+      }
+    : { [property]: cursor };
+  const result = v.safeParse(schema, input);
+  const output =
+    isRecord(result.output) && nested && Array.isArray(result.output["items"])
+      ? result.output["items"].at(0)
+      : result.output;
   return (
-    !result.issues?.some(
-      (issue) => v.getDotPath(issue)?.split(".").at(0) === property,
-    ) &&
-    isRecord(result.output) &&
-    result.output[property] === cursor
+    !result.issues?.some((issue) => {
+      const issuePath = v.getDotPath(issue);
+      return nested
+        ? issuePath === "items" ||
+            issuePath === "items.0" ||
+            issuePath === "items.0.text_cursor"
+        : issuePath?.split(".").at(0) === property;
+    }) &&
+    isRecord(output) &&
+    output[nested ? "text_cursor" : property] === cursor
   );
 };
 
@@ -217,7 +276,7 @@ describe("every registered pagination envelope fits its own next-call input", ()
         (lawDefinition) => lawDefinition === definition,
       )
         ? "law"
-        : "default";
+        : "advanced";
       const output = getStaticMcpToolOutputContract(definition.name, mode);
       if (output === undefined) {
         failures.push(`${mode}.${definition.name}: missing output contract`);
@@ -231,8 +290,15 @@ describe("every registered pagination envelope fits its own next-call input", ()
           failures.push(`${site}: missing real producer fixture`);
           continue;
         }
-        const property =
-          path === "versionsNextCursor" ? "versions_cursor" : "cursor";
+        let property = "cursor";
+        if (path.endsWith("nextTextCursor")) {
+          property =
+            definition.name === "read_statute_provisions"
+              ? "items[].text_cursor"
+              : "text_cursor";
+        } else if (path === "versionsNextCursor") {
+          property = "versions_cursor";
+        }
         if (
           !("inputSchemaSource" in definition) ||
           !acceptsCursor({
@@ -256,7 +322,28 @@ describe("every registered pagination envelope fits its own next-call input", ()
   test("the longest optional corpus segments survive the real encoder", () => {
     expect(decodeCorpusSearchCursor(decisionCursor)).toEqual(corpusPosition);
     expect(decodeCorpusSearchCursor(statuteCursor)).toEqual(statutePosition);
-    expect(citationsCursor).not.toBeNull();
+  });
+
+  test("an undersized nested text cursor fails the same acceptance guard", () => {
+    for (const maxLength of [1, provisionTextCursor.length]) {
+      expect(
+        acceptsCursor({
+          schema: v.object({
+            items: v.array(
+              v.object({
+                text_cursor: cursorInput({
+                  description: "Provision fixture cursor",
+                  issuedBy: isBoundTextCursor,
+                  maxLength,
+                }),
+              }),
+            ),
+          }),
+          property: "items[].text_cursor",
+          cursor: provisionTextCursor,
+        }),
+      ).toBe(maxLength === provisionTextCursor.length);
+    }
   });
 
   test("an undersized fixture input fails the same acceptance guard", () => {

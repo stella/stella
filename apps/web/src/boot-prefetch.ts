@@ -1,14 +1,14 @@
-import { AUTH_SESSION_STARTUP_HEADER } from "@stll/auth-model";
 import { Temporal } from "@stll/time";
 /**
  * Boot-time auth prefetch.
  *
- * Loaded from index.html as its own module script, BEFORE the main
- * application graph. Its import graph is deliberately tiny (env resolution
- * only), so the two auth requests every protected route blocks on —
- * `GET /get-session` and `GET /organization/get-active-member-role` — leave
- * the browser while the multi-megabyte route graph is still downloading,
- * instead of after the router has booted (measured ~850ms later in prod).
+ * Started by `boot-prefetch-entry.ts`, which index.html loads as its own
+ * module script BEFORE the main application graph. Its import graph is
+ * deliberately tiny (env resolution only), so the two auth requests every
+ * protected route blocks on — `GET /get-session` and
+ * `GET /organization/get-active-member-role` — leave the browser while the
+ * multi-megabyte route graph is still downloading, instead of after the
+ * router has booted (measured ~850ms later in prod).
  *
  * The auth client does not fetch these itself when a prefetch is pending:
  * its `customFetchImpl` (see `lib/auth.ts`) calls `takeBootPrefetch` and
@@ -32,7 +32,7 @@ import { Temporal } from "@stll/time";
 
 import { browserAuthBaseUrl } from "@/lib/api-origins";
 
-export const BOOT_PREFETCH_PATHS = [
+const BOOT_PREFETCH_PATHS = [
   "/get-session",
   "/organization/get-active-member-role",
 ] as const;
@@ -55,9 +55,9 @@ const BOOT_PREFETCH_TTL_MS = 30_000;
 const BOOT_PREFETCH_TIMEOUT_MS = 8000;
 
 // One slot per boot path: the key set is closed, so the store cannot grow.
-const slots: Record<BootPrefetchPath, PrefetchSlot | undefined> = {
-  "/get-session": undefined,
-  "/organization/get-active-member-role": undefined,
+const slots: Record<BootPrefetchPath, { current: PrefetchSlot | undefined }> = {
+  "/get-session": { current: undefined },
+  "/organization/get-active-member-role": { current: undefined },
 };
 let prefetchGeneration = 0;
 
@@ -76,11 +76,11 @@ export const takeBootPrefetch = async (
   if (path === undefined) {
     return null;
   }
-  const slot = slots[path];
+  const slot = slots[path].current;
   if (slot === undefined) {
     return null;
   }
-  slots[path] = undefined;
+  slots[path].current = undefined;
   if (
     Temporal.Now.instant().epochMilliseconds - slot.startedAt >
     BOOT_PREFETCH_TTL_MS
@@ -102,8 +102,8 @@ export const takeBootPrefetch = async (
 export const discardBootPrefetch = (): void => {
   prefetchGeneration += 1;
   for (const path of BOOT_PREFETCH_PATHS) {
-    slots[path]?.controller.abort();
-    slots[path] = undefined;
+    slots[path].current?.controller.abort();
+    slots[path].current = undefined;
   }
 };
 
@@ -126,29 +126,36 @@ export const resolveRequestMethod = (
 /** Structural fetch subset so the unit test can pass a plain function
  *  without casting to the full (Bun-extended) fetch type. */
 type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
-type ReportPrefetchError = (error: unknown) => Promise<void>;
+type ReportPrefetchError = (
+  error: unknown,
+  path: BootPrefetchPath,
+) => Promise<void>;
 
-const reportPrefetchError: ReportPrefetchError = async (error) => {
+const reportPrefetchError: ReportPrefetchError = async (error, path) => {
   const { getAnalytics } = await import("@/lib/analytics/provider");
-  getAnalytics().captureError(error);
+  getAnalytics().captureError(error, {
+    fingerprintKey: "reportPrefetchError:failure",
+    scope: {
+      type: "request",
+      method: "GET",
+      routeTemplate: `/api/auth${path}`,
+    },
+  });
 };
 
 type StartBootPrefetchOptions = {
   fetchImpl?: FetchLike;
   now?: () => number;
   reportError?: ReportPrefetchError;
-  wasDiscarded?: boolean;
 };
 
-/** Exported for the unit test only; the module fires it at evaluation time
- *  in the browser (guard below). */
+/** Fired once by `boot-prefetch-entry.ts`. Evaluating this module has no
+ *  side effect: the auth client imports it for `takeBootPrefetch`, and every
+ *  importer of the auth client (tests, SSR) would otherwise send requests. */
 export const startBootPrefetch = ({
   fetchImpl = fetch,
   now = () => Temporal.Now.instant().epochMilliseconds,
   reportError = reportPrefetchError,
-  wasDiscarded = typeof document !== "undefined" &&
-    "wasDiscarded" in document &&
-    document.wasDiscarded === true,
 }: StartBootPrefetchOptions = {}): void => {
   // A second boot attempt supersedes, cancels, and invalidates every response
   // from the first one. This also keeps test and bfcache re-entry behavior
@@ -163,12 +170,15 @@ export const startBootPrefetch = ({
   // analytics graph never rides in this deliberately tiny boot chunk; it
   // only loads on the failure path. Reporting stays best-effort: a telemetry
   // failure must never prevent the normal bounded auth request fallback.
-  const reportAndDrop = async (error: unknown): Promise<null> => {
+  const reportAndDrop = async (
+    error: unknown,
+    path: BootPrefetchPath,
+  ): Promise<null> => {
     if (controller.signal.aborted) {
       return null;
     }
     try {
-      await reportError(error);
+      await reportError(error, path);
     } catch {
       // The reporting path itself failed; the auth client must still perform
       // its normal fallback request instead of inheriting telemetry failure.
@@ -186,12 +196,11 @@ export const startBootPrefetch = ({
       credentials: "include",
       headers: {
         accept: "application/json",
-        ...(!wasDiscarded ? { [AUTH_SESSION_STARTUP_HEADER]: "1" } : {}),
       },
       signal: requestSignal(),
     },
-  ).catch(reportAndDrop);
-  slots["/get-session"] = {
+  ).catch(async (error: unknown) => await reportAndDrop(error, "/get-session"));
+  slots["/get-session"].current = {
     controller,
     generation,
     startedAt: now(),
@@ -202,7 +211,7 @@ export const startBootPrefetch = ({
   // console errors on every public-page boot. Reading the session response
   // first costs one round trip of latency only for signed-in users, and both
   // requests still finish while the route graph is downloading.
-  slots["/organization/get-active-member-role"] = {
+  slots["/organization/get-active-member-role"].current = {
     startedAt: now(),
     controller,
     generation,
@@ -234,13 +243,9 @@ export const startBootPrefetch = ({
           signal: requestSignal(),
         });
       })
-      .catch(reportAndDrop),
+      .catch(
+        async (error: unknown) =>
+          await reportAndDrop(error, "/organization/get-active-member-role"),
+      ),
   };
 };
-
-// Module scripts never execute during SSR, but the main graph also imports
-// this module for `takeBootPrefetch`; the guard keeps a server evaluation
-// from firing browser fetches.
-if (typeof document !== "undefined") {
-  startBootPrefetch();
-}

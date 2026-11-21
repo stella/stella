@@ -1,3 +1,4 @@
+import { and, eq, sql } from "drizzle-orm";
 /**
  * The significance layer: what later courts made of a decision.
  *
@@ -12,29 +13,37 @@
  * citing decisions' text, so it cannot invent a treatment the graph does
  * not record, and the layer is therefore in-app only: an external producer
  * of a document analysis has not seen the corpus and is never asked to
- * guess at it (`case-law.analysis.update` rejects the layer).
+ * guess at it (`src/scripts/decision-analysis-save.ts` rejects the layer).
  */
-
-import { and, eq } from "drizzle-orm";
 import * as v from "valibot";
 
 import type { AnalysisGraphFingerprint } from "@stll/legal-ast/analysis";
 import { ANALYSIS_SIGNIFICANCE_MAX_LENGTH } from "@stll/legal-ast/analysis";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
+// parser-output-unchanged: SHA-256 ownership changes preserve input bytes, serialization and update order, so stored hashes and parser output remain identical.
+import { createSha256 } from "@stll/sha256/bun";
 
 import {
   caseLawCitations,
   caseLawDecisionIdentifiers,
-  caseLawDecisions,
+  publishedCaseLawDecisions,
 } from "@/api/db/schema";
 import { CITATION_KIND } from "@/api/handlers/case-law/citation-kind";
-import { treatmentOf } from "@/api/handlers/case-law/decisions/citation-graph";
+import {
+  CITATION_SUMMARY_SCAN_LIMIT,
+  treatmentOf,
+} from "@/api/handlers/case-law/decisions/citation-graph";
 import { POLARITY } from "@/api/handlers/case-law/polarity/consts";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
 import { CITATION_TREATMENTS } from "@/api/lib/case-law/citation-vocabulary";
 import type { CitationTreatment } from "@/api/lib/case-law/citation-vocabulary";
 import { decisionCourtWeight } from "@/api/lib/case-law/court-weights";
+import {
+  isSingleManifestationWork,
+  readDecisionWork,
+  workCitationStream,
+} from "@/api/lib/case-law/decision-work";
 import { loadPublicCourtWeightsWithin } from "@/api/lib/case-law/public-case-law-config";
 
 /**
@@ -103,34 +112,46 @@ export const readCitationGraphFacts = async ({
   decisionId: SafeId<"caseLawDecision">;
   tx: CaseLawPublicReadTransaction;
 }): Promise<CitationGraphFacts | null> => {
-  const subject = await tx.query.caseLawDecisions.findFirst({
-    where: { id: { eq: decisionId } },
-    columns: { id: true, decisionDate: true },
-  });
+  const [subject] = await tx
+    .select({
+      id: publishedCaseLawDecisions.id,
+      decisionDate: publishedCaseLawDecisions.decisionDate,
+    })
+    .from(publishedCaseLawDecisions)
+    .where(eq(publishedCaseLawDecisions.id, decisionId))
+    .limit(1);
   if (!subject) {
     return null;
   }
 
+  // The judgment's cited-by neighbourhood, whichever language version each
+  // citation landed on, each citation once. A work of several versions reads
+  // the bounded window the citation summary counts.
+  const work = await readDecisionWork(tx, decisionId);
+  const cited = workCitationStream({
+    tx,
+    work,
+    direction: "incoming",
+    where: eq(caseLawCitations.kind, CITATION_KIND.PRECEDENT),
+    limit: isSingleManifestationWork(work)
+      ? undefined
+      : CITATION_SUMMARY_SCAN_LIMIT,
+  });
   const rows = await tx
     .select({
-      citingId: caseLawCitations.citingDecisionId,
-      polarity: caseLawCitations.polarity,
-      court: caseLawDecisions.court,
-      country: caseLawDecisions.country,
-      courtId: caseLawDecisions.courtId,
-      decisionDate: caseLawDecisions.decisionDate,
+      citingId: publishedCaseLawDecisions.id,
+      polarity: cited.polarity,
+      court: publishedCaseLawDecisions.court,
+      country: publishedCaseLawDecisions.country,
+      courtId: publishedCaseLawDecisions.courtId,
+      decisionDate: publishedCaseLawDecisions.decisionDate,
     })
-    .from(caseLawCitations)
+    .from(cited)
     .innerJoin(
-      caseLawDecisions,
-      eq(caseLawDecisions.id, caseLawCitations.citingDecisionId),
+      publishedCaseLawDecisions,
+      eq(publishedCaseLawDecisions.id, cited.relatedId),
     )
-    .where(
-      and(
-        eq(caseLawCitations.citedDecisionId, decisionId),
-        eq(caseLawCitations.kind, CITATION_KIND.PRECEDENT),
-      ),
-    );
+    .where(sql`${cited.canonical}`);
 
   const reporter = await tx
     .select({ decisionId: caseLawDecisionIdentifiers.decisionId })
@@ -205,7 +226,7 @@ export const graphFingerprintOf = (
     | "treatmentCounts"
   >,
 ): AnalysisGraphFingerprint => {
-  const hasher = new Bun.CryptoHasher("sha256");
+  const hasher = createSha256();
   hasher.update(facts.reportedInCollection ? "reported" : "unreported");
   hasher.update(`\nlater-negative=${String(facts.laterNegativeCount)}`);
   // The corpus's own vocabulary, in its own order: a fixed list rather than

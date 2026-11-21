@@ -5,6 +5,8 @@ import {
   getModelImageInputCapability,
   type TanStackAIProvider,
 } from "@stll/ai-catalog";
+import { CHAT_INPUT_REFUSAL_CODE } from "@stll/api-contract";
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
 import { runError } from "@/api/lib/chat/provider-stream-contract";
 import { validateDataUrl } from "@/api/lib/data-url";
@@ -15,8 +17,9 @@ import { withTimeout } from "@/api/lib/with-timeout";
 
 // Converse limits each decoded image to 3.75 MB (independent of the upload cap).
 export const BEDROCK_IMAGE_MAX_BYTES = 3_750_000;
-export const IMAGE_INPUT_UNSUPPORTED_CODE = "image_input_unsupported";
-const BEDROCK_IMAGE_INVALID_CODE = "bedrock_image_invalid";
+export const IMAGE_INPUT_UNSUPPORTED_CODE =
+  CHAT_INPUT_REFUSAL_CODE.imageUnsupported;
+const BEDROCK_IMAGE_INVALID_CODE = CHAT_INPUT_REFUSAL_CODE.imageInvalid;
 const BEDROCK_IMAGE_MAX_EDGE = 8000;
 const REENCODE_MAX_EDGE = 2048;
 const REENCODE_WEBP_QUALITY = 85;
@@ -76,7 +79,7 @@ const prepareBedrockImage = async (
   const cacheKey =
     preparedImages === undefined
       ? undefined
-      : `${BEDROCK_IMAGE_MAX_BYTES}:${BEDROCK_IMAGE_MAX_EDGE}:${REENCODE_MAX_EDGE}:${REENCODE_WEBP_QUALITY}:${payload.length}:${new Bun.CryptoHasher("sha256").update(payload).digest("hex")}`;
+      : `${BEDROCK_IMAGE_MAX_BYTES}:${BEDROCK_IMAGE_MAX_EDGE}:${REENCODE_MAX_EDGE}:${REENCODE_WEBP_QUALITY}:${payload.length}:${hashSha256Hex(payload)}`;
   const cached =
     cacheKey === undefined ? undefined : preparedImages?.sources.get(cacheKey);
   if (
@@ -124,7 +127,7 @@ const prepareBedrockImage = async (
             ...part,
             source: {
               type: "data",
-              value: Buffer.from(bytes).toString("base64"),
+              value: Buffer.from(bytes).toBase64(),
               mimeType: "image/webp",
             },
           } satisfies ImagePart);

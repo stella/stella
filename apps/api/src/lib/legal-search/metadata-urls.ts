@@ -4,8 +4,8 @@ import { panic } from "better-result";
 import {
   METADATA_URL_DEFECT_REASONS,
   MetadataUrlDefect,
-  toMetadataUrl,
   type SafeHref,
+  toMetadataUrl,
 } from "@/api/lib/sanitize-url";
 import { includes, isRecord } from "@/api/lib/type-guards";
 
@@ -64,9 +64,7 @@ export type MetadataUrlSchema<Value> = unknown extends Value
         ? NonNullable<Value> extends readonly (infer Item)[]
           ? [NonNullable<Item>] extends [never]
             ? { readonly items: unknown }
-            : [NonNullable<Item>] extends [ConstructedUrl]
-              ? never
-              : { readonly items: MetadataUrlSchema<Item> }
+            : { readonly items: MetadataUrlSchema<Item> }
           : [Extract<NonNullable<Value>, object>] extends [never]
             ? never
             : [Extract<NonNullable<Value>, string>] extends [never]
@@ -265,9 +263,8 @@ const project = ({
     });
   }
   if (Object.hasOwn(schema, "items")) {
-    if (schema["items"] === "url") {
-      return panic("Scalar URL arrays have no metadata schema contract");
-    }
+    // A defective entry keeps its position as null, as in object lists, and
+    // its diagnostic names the index.
     if (!Array.isArray(value)) {
       recordDefect(diagnostics, { address, reason: "unsupported-url-value" });
       return undefined;

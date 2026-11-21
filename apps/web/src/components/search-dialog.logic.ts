@@ -1,4 +1,6 @@
-import { resourceRef, RESOURCE_TYPE, toResourceName } from "@stll/api-contract";
+import { panic } from "better-result";
+
+import { RESOURCE_TYPE, resourceRef, toResourceName } from "@stll/api-contract";
 import { createCaseLawDecisionRouteParams } from "@stll/api-contract/case-law-decision-route";
 
 import type { SearchScope } from "@/components/search-scope";
@@ -9,8 +11,10 @@ import type {
 import { chatThreadRoute } from "@/lib/chat-thread-ref";
 import type { ChatThreadRoute } from "@/lib/chat-thread-ref";
 import { toSafeId } from "@/lib/safe-id";
-import type { RecentFile } from "@/lib/search-recents";
+import type { RecentFileWithIdentity } from "@/lib/search-recents";
 import { getFirstSearchHighlightText } from "@/lib/search.logic";
+import { resolveWorkspaceViewParams } from "@/lib/workspaces/view-params.logic";
+import type { WorkspaceViewParams } from "@/lib/workspaces/view-params.logic";
 
 type CaseLawGlobalSearchHit = Extract<GlobalSearchHit, { type: "case-law" }>;
 type ChatGlobalSearchHit = Extract<GlobalSearchHit, { type: "chat" }>;
@@ -36,6 +40,30 @@ type EagerSearchTypesOptions = {
   scope: SearchScope;
   types: GlobalSearchResultType[];
 };
+
+/** Case law is an external source: only All and Case law scopes reach it. */
+export const isSearchTypeInScope = (
+  type: GlobalSearchResultType,
+  scope: SearchScope,
+): boolean => {
+  switch (scope) {
+    case "all":
+    case "registries":
+      return true;
+    case "matters":
+      return type !== "case-law" && type !== "contact";
+    case "case-law":
+      return type === "case-law";
+    default:
+      return panic(`Unhandled search scope: ${String(scope)}`);
+  }
+};
+
+/** Turning public law off while its scope is picked falls back to All. */
+export const resolveSearchScope = (
+  scope: SearchScope,
+  caseLawEnabled: boolean,
+): SearchScope => (scope === "case-law" && !caseLawEnabled ? "all" : scope);
 
 export const resolveEagerSearchTypes = ({
   mode,
@@ -94,17 +122,19 @@ export const getCompanySearchQuery = ({
 export type EntityNavigationRoute =
   | {
       to: "/workspaces/$workspaceId/$viewId/document";
-      params: { workspaceId: string; viewId: "all" };
+      params: WorkspaceViewParams;
       search: { entity: string; field: string };
     }
   | {
       to: "/workspaces/$workspaceId/$viewId";
-      params: { workspaceId: string; viewId: "all" };
+      params: WorkspaceViewParams;
     };
 
 /** What a caller must know to open an entity: search hits satisfy it, and so
- *  does any other resolution of an entity to its current file field. */
+ *  does any other resolution of an entity to its current file field. The
+ *  view on screen, if any, is kept when the entity is in its matter. */
 type EntityDocumentRouteInput = {
+  currentView: WorkspaceViewParams | undefined;
   entityId: string;
   fileFieldId: string | null;
   workspaceId: string;
@@ -113,37 +143,38 @@ type EntityDocumentRouteInput = {
 /** Where an entity opens: its document view when a file field carries the
  *  document, otherwise the matter it lives in. */
 export const getEntityDocumentRoute = ({
+  currentView,
   entityId,
   fileFieldId,
   workspaceId,
 }: EntityDocumentRouteInput): EntityNavigationRoute => {
+  const params = resolveWorkspaceViewParams(workspaceId, currentView);
   if (fileFieldId === null) {
-    return {
-      to: "/workspaces/$workspaceId/$viewId",
-      params: { workspaceId, viewId: "all" },
-    };
+    return { to: "/workspaces/$workspaceId/$viewId", params };
   }
 
   return {
     to: "/workspaces/$workspaceId/$viewId/document",
-    params: { workspaceId, viewId: "all" },
+    params,
     search: { entity: entityId, field: fileFieldId },
   };
 };
 
 type ResolveEntityDocumentRouteOptions = {
+  currentView: WorkspaceViewParams | undefined;
   hit: Pick<EntityGlobalSearchHit, "entityId" | "fileFieldId" | "workspaceId">;
   resolveCurrentFileFieldId: () => Promise<string | null>;
 };
 
 export const resolveEntityDocumentRoute = async ({
+  currentView,
   hit,
   resolveCurrentFileFieldId,
 }: ResolveEntityDocumentRouteOptions) => {
   const fileFieldId = await resolveCurrentFileFieldId();
   return {
     fileFieldId,
-    route: getEntityDocumentRoute({ ...hit, fileFieldId }),
+    route: getEntityDocumentRoute({ ...hit, currentView, fileFieldId }),
   };
 };
 
@@ -201,7 +232,10 @@ export const getEntityHitLocation = (
 export const getRecentFileLocation = ({
   entityId,
   workspaceId,
-}: Pick<RecentFile, "entityId" | "workspaceId">): EntityLocation => ({
+}: Pick<
+  RecentFileWithIdentity,
+  "entityId" | "workspaceId"
+>): EntityLocation => ({
   type: "tree",
   workspaceId,
   entityId,
@@ -209,20 +243,21 @@ export const getRecentFileLocation = ({
 });
 
 export const getRecentFileRoute = ({
+  currentView,
   entityId,
   fileFieldId,
   workspaceId,
-}: Pick<RecentFile, "entityId" | "workspaceId"> & {
+}: Pick<RecentFileWithIdentity, "entityId" | "workspaceId"> & {
+  currentView: WorkspaceViewParams | undefined;
   fileFieldId: string;
 }): EntityNavigationRoute => ({
   to: "/workspaces/$workspaceId/$viewId/document",
-  params: { workspaceId, viewId: "all" },
+  params: resolveWorkspaceViewParams(workspaceId, currentView),
   search: { entity: entityId, field: fileFieldId },
 });
 
 type DialogCloseActionState =
-  | { status: "idle" }
-  | { status: "pending"; run: () => void };
+  { status: "idle" } | { status: "pending"; run: () => void };
 
 export const createDialogCloseActionQueue = () => {
   let state: DialogCloseActionState = { status: "idle" };
@@ -254,7 +289,7 @@ export const createDialogCloseActionQueue = () => {
 };
 
 export const getRecentFilePreviewHit = (
-  file: RecentFile,
+  file: RecentFileWithIdentity,
   resolvedFileFieldId?: string | null,
 ) => {
   const resource = resourceRef({
@@ -285,7 +320,7 @@ export const getRecentFilePreviewHit = (
 };
 
 export const getRecentFilePreviewDateVisibility = (
-  file: RecentFile,
+  file: RecentFileWithIdentity,
 ): "hide" | "show" => (file.updatedAt ? "show" : "hide");
 
 export const getChatHitRoute = (hit: ChatGlobalSearchHit): ChatThreadRoute =>
@@ -368,16 +403,14 @@ export const rememberSelectedFacetLabels = (
   selected: readonly string[],
   labelsByValue: ReadonlyMap<string, string>,
 ): Record<string, string> => {
-  let next = current;
+  let next: Map<string, string> | undefined;
   for (const value of selected) {
     const label = labelsByValue.get(value);
     if (label === undefined || current[value] === label) {
       continue;
     }
-    if (next === current) {
-      next = { ...current };
-    }
-    next[value] = label;
+    next ??= new Map(Object.entries(current));
+    next.set(value, label);
   }
-  return next;
+  return next === undefined ? current : Object.fromEntries(next);
 };

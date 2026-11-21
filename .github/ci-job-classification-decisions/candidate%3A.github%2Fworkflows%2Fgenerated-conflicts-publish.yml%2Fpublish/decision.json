@@ -1,0 +1,4 @@
+{
+  "kind": "priority",
+  "qualifier": "Publishes generated-only conflict resolutions to pull-request branches."
+}

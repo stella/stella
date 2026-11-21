@@ -1,7 +1,8 @@
 import { QueryClient } from "@tanstack/react-query";
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterEach, describe, expect } from "bun:test";
 
 import type { DecisionAnalysis } from "@stll/legal-ast/analysis";
+import { requestTest as test } from "@stll/start-runtime/test-request";
 
 import { decisionAnalysisOptions } from "@/features/case-law/queries/decision-analysis";
 import {
@@ -34,6 +35,10 @@ const analysis = {
 
 const GENERATING = { status: "generating" } as const;
 const DONE = { status: "done", analysis } as const;
+const GENERATING_WITH_SECTION = {
+  status: "generating",
+  partialTree: analysis.tree,
+} as const;
 
 afterEach(() => {
   globalThis.fetch = previousFetch;
@@ -106,6 +111,22 @@ const refetchDecision = async (queryClient: QueryClient) => {
 };
 
 describe("decision analysis query", () => {
+  test("returns completed sections while generation continues", async () => {
+    const reads = mockReads({
+      analysisAnswers: [GENERATING_WITH_SECTION],
+      decisionVersions: [VERSION_1],
+    });
+    const queryClient = newQueryClient();
+
+    expect(
+      await queryClient.query(await analysisOfReadDecision(queryClient)),
+    ).toEqual({
+      kind: "generating",
+      tree: analysis.tree,
+    });
+    expect(reads.analysisReads()).toBe(1);
+  });
+
   test("a decision refetch at the same version keeps the finished analysis without asking again", async () => {
     const reads = mockReads({
       analysisAnswers: [DONE],

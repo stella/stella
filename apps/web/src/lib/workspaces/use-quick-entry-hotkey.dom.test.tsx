@@ -1,6 +1,8 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, describe, expect, test } from "bun:test";
 
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
+
 GlobalRegistrator.register({ url: "http://localhost:3000/time" });
 
 const { act, cleanup, renderHook } = await import("@testing-library/react");
@@ -14,10 +16,11 @@ const { useQuickEntryHotkey } =
 afterEach(() => {
   cleanup();
   useQuickEntryStore.getState().closeDialog();
+  useQuickEntryStore.getState().finishClosing();
 });
 
 afterAll(async () => {
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 // Happy DOM aliases AltGraph to Alt; this fixture represents plain Alt.
@@ -72,6 +75,7 @@ describe("global log-time shortcut", () => {
       ...scope,
     });
     useQuickEntryStore.getState().closeDialog();
+    useQuickEntryStore.getState().finishClosing();
 
     const nextScope = { userId: "user-b", organizationId: "organization-b" };
     hook.rerender({ scope: nextScope });
@@ -103,6 +107,7 @@ describe("global log-time shortcut", () => {
       ...scope,
     });
     useQuickEntryStore.getState().closeDialog();
+    useQuickEntryStore.getState().finishClosing();
     hook.rerender({ enabled: false });
     pressLogTime();
     expect(useQuickEntryStore.getState().dialog).toEqual({ status: "closed" });

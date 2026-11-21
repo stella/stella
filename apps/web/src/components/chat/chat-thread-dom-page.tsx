@@ -1,5 +1,5 @@
-import { Profiler, Suspense } from "react";
-import type { ProfilerOnRenderCallback } from "react";
+import { Profiler, StrictMode, Suspense } from "react";
+import type { ProfilerOnRenderCallback, ReactNode } from "react";
 
 import {
   QueryClient,
@@ -12,11 +12,18 @@ import { IntlProvider } from "use-intl";
 
 import { ChatEditorProvider } from "@/components/chat-editor-provider";
 import { ChatApprovalContext } from "@/components/chat/chat-approval-context";
+import { ChatLocalRunQuestionContext } from "@/components/chat/chat-local-run-question-context";
 import { ChatMattersContext } from "@/components/chat/chat-matters-context";
 import { ChatThreadMessages } from "@/components/chat/chat-thread-messages";
+import { useUserMessageEditActions } from "@/components/chat/user-message-edit";
+import type { ChatRouteHandoffMessage } from "@/features/chat/chat-runtime";
+import { acquireChatRuntime } from "@/features/chat/chat-runtime-registry";
+import { chatToolGrantsOptions } from "@/features/chat/chat-tool-grants";
+import type { ChatToolGrantsResponse } from "@/features/chat/chat-tool-grants";
 import { useChatSession } from "@/features/chat/hooks/use-chat-session";
 import { useChatThreadRuntime } from "@/features/chat/hooks/use-chat-thread-runtime";
 import { chatThreadOptions } from "@/features/chat/queries";
+import { FormattingProvider } from "@/i18n/formatting-context";
 import messages from "@/i18n/langs/en.json";
 import { AuthenticatedUserProvider } from "@/lib/authenticated-user-context";
 import { toChatThreadId } from "@/lib/chat-thread-ref";
@@ -47,6 +54,8 @@ export const isThreadPageSuspended = (container: HTMLElement) =>
 
 const CHAT_THREAD_CONTEXT = { allowMissingThread: true } as const;
 
+const aiAvailable = async () => await Promise.resolve(true);
+
 const threadRefOf = (threadId: string) =>
   ({ scope: "global", threadId: toChatThreadId(threadId) }) as const;
 
@@ -58,13 +67,48 @@ const threadQueryOptions = (organizationId: string, threadId: string) =>
     key: threadRefOf(threadId),
   });
 
+/**
+ * Sends `message` as the new-chat route does (`routes/_protected.chat/
+ * index.tsx`): the thread query read once, the runtime acquired under the
+ * context the thread page acquires it with, the stream started before the
+ * page exists.
+ */
+const startRouteHandoff = async ({
+  message,
+  organizationId,
+  queryClient,
+  threadId,
+}: {
+  message: ChatRouteHandoffMessage;
+  organizationId: string;
+  queryClient: QueryClient;
+  threadId: string;
+}) => {
+  const data = await queryClient.query({
+    ...threadQueryOptions(organizationId, threadId),
+    staleTime: "static",
+  });
+  const chat = acquireChatRuntime({
+    activeOrganizationId: organizationId,
+    context: CHAT_THREAD_CONTEXT,
+    data,
+    key: threadRefOf(threadId),
+    queryClient,
+  });
+  await chat.startRouteHandoffMessage(message, {
+    timingSurface: "chat-thread",
+  });
+};
+
 /** The thread page's chat, wired as `ChatThreadPage` wires it. */
 const ChatThreadDomPage = ({
   onSession,
+  renderComposer,
   organizationId,
   threadId,
 }: {
   onSession: (session: ChatThreadDomSession) => void;
+  renderComposer?: ((session: ChatThreadDomSession) => ReactNode) | undefined;
   organizationId: string;
   threadId: string;
 }) => {
@@ -79,12 +123,24 @@ const ChatThreadDomPage = ({
     key: threadRef,
   });
   const session = useChatSession({
+    exceptionScope: { type: "handler", handlerId: "chat-session.dom-page" },
     chat,
+    timingSurface: "chat-thread",
     conversationId: threadId,
     initialOlderCursor: data.olderCursor,
+    playbookPane: "on-request",
     threadRef,
   });
   onSession(session);
+  // Wired as the thread page wires it, with its AI check always passing.
+  const userMessageEdit = useUserMessageEditActions({
+    editUserMessage: session.editUserMessage,
+    ensureAIAvailable: aiAvailable,
+    holdQueueForMessageEdit: session.holdQueueForMessageEdit,
+    messages: session.messages,
+    startUserMessageEdit: session.startUserMessageEdit,
+    threadRef,
+  });
   return (
     <ChatMattersContext
       value={{
@@ -94,18 +150,32 @@ const ChatThreadDomPage = ({
       <ChatApprovalContext
         value={{
           activeOrganizationId: organizationId,
+          approvalIdsAwaitedAtOpen: session.approvalIdsAwaitedAtOpen,
           alwaysApprovedTools: session.alwaysApprovedTools,
           conversationApprovedTools: session.conversationApprovedTools,
+          confirmStoredApprovalGrant: session.confirmStoredApprovalGrant,
           handleAllowInConversation: session.handleAllowInConversation,
           handleAlwaysAllow: session.handleAlwaysAllow,
           handleApprove: session.handleApprove,
           handleDeny: session.handleDeny,
+          handleRequestSecret: session.handleRequestSecret,
+          continueRequestSecret: session.continueRequestSecret,
+          handleConnectConnector: session.handleConnectConnector,
+          continueConnectConnector: session.continueConnectConnector,
+          resolveSecretTarget: session.resolveSecretTarget,
+          secretAvailabilityKey: session.secretAvailabilityKey,
         }}
       >
-        {/* The selection bar quotes into the composer through the editor
-            manager, as on the real page. */}
-        <ChatEditorProvider>
+        <ChatLocalRunQuestionContext
+          value={{
+            pause: session.localRunQuestion,
+            answer: session.answerLocalRunQuestion,
+            threadRef,
+          }}
+        >
+          {renderComposer?.(session)}
           <ChatThreadMessages
+            activitySession={session.activitySession}
             approvalPendingMessageId={session.approvalPendingMessageId}
             error={session.error}
             hasOlderMessages={session.olderCursor !== null}
@@ -119,14 +189,15 @@ const ChatThreadDomPage = ({
             onLoadOlder={session.loadOlder}
             onOpenCreateDocumentDraft={session.handleOpenCreateDocumentDraft}
             onOpenCreatedDocument={session.handleOpenCreatedDocument}
-            onRemoveQueuedMessage={session.removeQueuedMessage}
+            onOpenPlaybook={session.handleOpenPlaybook}
+            onContinuePausedTurn={session.continuePausedTurn}
             onResend={session.resendLatestMessage}
-            queuedMessages={session.queuedMessages}
-            showThinkingIndicator
+            queue={session.queue}
             streamdownComponents={session.streamdownComponents}
             threadRef={threadRef}
+            userMessageEdit={userMessageEdit}
           />
-        </ChatEditorProvider>
+        </ChatLocalRunQuestionContext>
       </ChatApprovalContext>
     </ChatMattersContext>
   );
@@ -139,15 +210,28 @@ const ChatThreadDomPage = ({
 export const openChatThreadDomPage = async ({
   onRender,
   organizationId,
+  routeHandoff,
   threadId,
+  toolGrants = [],
+  renderComposer,
 }: {
+  renderComposer?: ((session: ChatThreadDomSession) => ReactNode) | undefined;
   onRender?: ProfilerOnRenderCallback | undefined;
   organizationId: string;
+  /**
+   * A first message sent the way the new-chat route sends it: through the
+   * runtime registry, before the page mounts, so the page adopts a runtime
+   * whose turn is already streaming.
+   */
+  routeHandoff?: ChatRouteHandoffMessage | undefined;
   threadId: string;
+  /** Stored tool approvals the API holds for this conversation. */
+  toolGrants?: ChatToolGrantsResponse["grants"];
 }) => {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
+  const userId = "00000000-0000-7000-8000-00000000fffe";
   // Lists the chat reads beside the thread, answered as empty.
   queryClient.setQueryData(mcpConnectorsOptions(organizationId).queryKey, {
     canManageCustomConnectors: false,
@@ -155,9 +239,25 @@ export const openChatThreadDomPage = async ({
     nativeTools: [],
   });
   queryClient.setQueryData(
-    workspacesNavigationOptions(organizationId).queryKey,
-    { workspaces: [] },
+    chatToolGrantsOptions({
+      activeOrganizationId: organizationId,
+      threadId,
+      userId,
+    }).queryKey,
+    { grants: toolGrants },
   );
+  queryClient.setQueryData(
+    workspacesNavigationOptions({ organizationId, userId }).queryKey,
+    { workspaces: [], features: { timeBilling: false } },
+  );
+  if (routeHandoff !== undefined) {
+    await startRouteHandoff({
+      message: routeHandoff,
+      organizationId,
+      queryClient,
+      threadId,
+    });
+  }
   // The thread route's loader fills a cold thread query before the page
   // mounts, so the page renders its messages on first paint instead of
   // suspending on them.
@@ -166,40 +266,52 @@ export const openChatThreadDomPage = async ({
     threadQueryOptions(organizationId, threadId),
   );
   let session: ChatThreadDomSession | undefined;
+  // StrictMode as in `client.tsx`: the dev app mounts every effect twice,
+  // so the page's runtime subscription drops to no viewer once on mount.
   const view = render(
-    <Profiler
-      id="chat-thread-dom-page"
-      onRender={onRender ?? (() => undefined)}
-    >
-      <ChatThreadTestRouter>
-        <QueryClientProvider client={queryClient}>
-          <IntlProvider locale="en" messages={messages} timeZone="UTC">
-            <AuthenticatedUserProvider
-              user={{
-                activeOrganizationId: organizationId,
-                email: "user@example.com",
-                id: "00000000-0000-7000-8000-00000000fffe",
-                image: null,
-                name: "User",
-                preferredName: null,
-                timezoneId: "UTC",
-                wordEditShortcut: null,
-              }}
-            >
-              <Suspense fallback={<p>{SUSPENDED}</p>}>
-                <ChatThreadDomPage
-                  onSession={(next) => {
-                    session = next;
+    <StrictMode>
+      <Profiler
+        id="chat-thread-dom-page"
+        onRender={onRender ?? (() => undefined)}
+      >
+        <ChatThreadTestRouter>
+          <QueryClientProvider client={queryClient}>
+            <IntlProvider locale="en" messages={messages} timeZone="UTC">
+              <FormattingProvider locale="en" timeZone="UTC">
+                <AuthenticatedUserProvider
+                  user={{
+                    activeOrganizationId: organizationId,
+                    email: "user@example.com",
+                    id: userId,
+                    image: null,
+                    name: "User",
+                    preferredName: null,
+                    timezoneId: "UTC",
+                    wordEditShortcut: null,
                   }}
-                  organizationId={organizationId}
-                  threadId={threadId}
-                />
-              </Suspense>
-            </AuthenticatedUserProvider>
-          </IntlProvider>
-        </QueryClientProvider>
-      </ChatThreadTestRouter>
-    </Profiler>,
+                >
+                  <Suspense fallback={<p>{SUSPENDED}</p>}>
+                    {/* Above the page, as the app mounts it: the selection bar
+                        quotes into the composer, and an edit hands its draft
+                        back to it, through the editor manager. */}
+                    <ChatEditorProvider>
+                      <ChatThreadDomPage
+                        renderComposer={renderComposer}
+                        onSession={(next) => {
+                          session = next;
+                        }}
+                        organizationId={organizationId}
+                        threadId={threadId}
+                      />
+                    </ChatEditorProvider>
+                  </Suspense>
+                </AuthenticatedUserProvider>
+              </FormattingProvider>
+            </IntlProvider>
+          </QueryClientProvider>
+        </ChatThreadTestRouter>
+      </Profiler>
+    </StrictMode>,
   );
   await waitFor(() => {
     if (session === undefined || isThreadPageSuspended(view.container)) {
@@ -207,6 +319,8 @@ export const openChatThreadDomPage = async ({
     }
   });
   return {
+    /** The page's query cache, for a test that refreshes what it reads. */
+    queryClient,
     session: (): ChatThreadDomSession =>
       session ?? panic("The page is not rendered"),
     view,

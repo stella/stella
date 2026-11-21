@@ -1,18 +1,29 @@
 import { Result } from "better-result";
-import { describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
+import { createOrganizationScopedTestDb } from "@/api/tests/helpers/handler-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import { withTimeBillingEnrolment } from "@/api/tests/helpers/time-billing-enrolment";
+import {
+  getRlsFixture,
+  releaseRlsFixture,
+} from "@/api/tests/security/rls-fixture";
 
 import createSellerProfile from "./create";
 
 type CreateContext = Parameters<typeof createSellerProfile.handler>[0];
 
-const organizationId = toSafeId<"organization">("org_test");
+let fixture: Awaited<ReturnType<typeof getRlsFixture>>;
+beforeAll(async () => {
+  fixture = await getRlsFixture();
+});
+afterAll(releaseRlsFixture);
 
 const createContext = ({
   body,
@@ -23,18 +34,24 @@ const createContext = ({
   safeDb: SafeDb;
   recordAuditEvent?: AuditRecorder;
 }): CreateContext =>
-  asTestRaw<CreateContext>({
-    body,
-    request: new Request("https://example.test/v1/seller-profiles", {
-      method: "POST",
+  withTimeBillingEnrolment(
+    asTestRaw<CreateContext>({
+      body,
+      request: new Request("https://example.test/v1/seller-profiles", {
+        method: "POST",
+      }),
+      route: "/v1/seller-profiles" satisfies ApiRoutePath,
+      safeDb,
+      scopedDb: createOrganizationScopedTestDb(fixture.testDb, {
+        organizationId: fixture.ids.orgA,
+        userId: fixture.ids.userA1,
+      }),
+      session: { activeOrganizationId: fixture.ids.orgA },
+      memberRole: sessionMemberRole("owner"),
+      user: { id: fixture.ids.userA1 },
+      recordAuditEvent,
     }),
-    route: "/v1/seller-profiles",
-    safeDb,
-    session: { activeOrganizationId: organizationId },
-    memberRole: sessionMemberRole("owner"),
-    user: { id: toSafeId<"user">("user_test") },
-    recordAuditEvent,
-  });
+  );
 
 describe("seller profile creation", () => {
   test("rejects an invalid IBAN before opening a database transaction", async () => {
@@ -62,6 +79,32 @@ describe("seller profile creation", () => {
     expect(transactionCount).toBe(0);
   });
 
+  test("refuses a VAT payer without a VAT ID before opening a transaction", async () => {
+    let transactionCount = 0;
+    const safeDb = asTestRaw<SafeDb>(async () => {
+      transactionCount += 1;
+      return Result.ok(undefined);
+    });
+
+    const result = await createSellerProfile.handler(
+      createContext({
+        body: {
+          legalName: "Example Legal s.r.o.",
+          defaultCurrency: "CZK",
+          vatPayer: true,
+          vatId: "  ",
+        },
+        safeDb,
+      }),
+    );
+
+    expect(result).toMatchObject({
+      code: 400,
+      response: { code: "vat_payer_requires_vat_id" },
+    });
+    expect(transactionCount).toBe(0);
+  });
+
   test("makes the first profile default and audits in the same transaction without bank details", async () => {
     const profileId = toSafeId<"sellerProfile">("seller_profile_test");
     const tx = asTestRaw<Transaction>({
@@ -74,6 +117,9 @@ describe("seller profile creation", () => {
           expect(values["isDefault"]).toBe(true);
           expect(values["iban"]).toBe("GB82WEST12345698765432");
           expect(values["accountNumber"]).toBe("sensitive-account-number");
+          expect(values["taxId"]).toBe("2120123456");
+          expect(values["registerEntry"]).toBe("Oddiel Sro, vložka 12345/B");
+          expect(values["barRegistration"]).toBe("SAK 0000");
           return {
             returning: async () => [{ id: profileId, isDefault: true }],
           };
@@ -97,6 +143,9 @@ describe("seller profile creation", () => {
           defaultCurrency: "EUR",
           iban: "GB82 WEST 1234 5698 7654 32",
           accountNumber: "sensitive-account-number",
+          taxId: "2120123456",
+          registerEntry: "Oddiel Sro, vložka 12345/B",
+          barRegistration: "SAK 0000",
         },
         safeDb,
         recordAuditEvent,

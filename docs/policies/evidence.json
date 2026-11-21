@@ -8,8 +8,8 @@
         {
           "path": "apps/api/src/lib/auth.ts",
           "contains": [
-            "export const authMacro",
-            "export const workspaceAccessMacro"
+            "export const authenticateSession",
+            "export const authorizeWorkspace"
           ]
         },
         {
@@ -65,11 +65,7 @@
         },
         {
           "path": ".github/dependabot.yml",
-          "contains": [
-            "package-ecosystem: \"bun\"",
-            "cronjob: \"0 3 * * *\"",
-            "default-days: 5"
-          ]
+          "contains": ["package-ecosystem: \"bun\"", "default-days: 5"]
         }
       ]
     },
@@ -81,19 +77,41 @@
           "path": ".github/workflows/ci.yml",
           "contains": [
             "name: CI Checks",
-            "name: Policy evidence",
-            "name: Format",
             "name: Code quality",
-            "name: Test"
+            "name: Test",
+            "CI_CHECK_POOL_NEEDS_FILE=\"$needs_file\" exec bun scripts/ci-check-pool.ts run ci-checks-policy",
+            "CI_CHECK_POOL_NEEDS_FILE=\"$needs_file\" exec bun scripts/ci-check-pool.ts run ci-checks-rest",
+            "bun run code-check:affected -- --leg",
+            "bun run test -- --concurrency=2 --output-logs=full"
           ]
         },
         {
+          "path": ".github/ci-checks/ci-checks-policy.yml",
+          "contains": ["name: Format", "run: bun fmt --check"]
+        },
+        {
+          "path": ".github/ci-checks/ci-checks-rest.yml",
+          "contains": ["name: Policy evidence", "run: bun run policies:check"]
+        },
+        {
           "path": "scripts/verify.sh",
+          "contains": ["exec bun \"$script_dir/verify.ts\" \"${args[@]}\""]
+        },
+        {
+          "path": "scripts/verify-workflow.ts",
           "contains": [
-            "run_step \"Policy evidence\"",
-            "run_step \"Format\"",
-            "run_step \"Code quality\"",
-            "run_step \"Test\""
+            "const VERIFY_MARKER = \"STELLA_VERIFY\"",
+            "const phase = phaseFromMarker(environment[marker], mode, label)",
+            "const run = staticString(step[\"run\"],",
+            "mode === \"verify\" ? \"ci.yml\" : \"autofix.yml\""
+          ]
+        },
+        {
+          "path": "scripts/verify.ts",
+          "contains": [
+            "readVerifyWorkflow({ root: repo, mode: \"verify\" })",
+            "const status = run(step)",
+            "[\"bash\", \"-euo\", \"pipefail\", \"-c\", step.run]"
           ]
         }
       ]
@@ -103,18 +121,22 @@
       "policy": "docs/policies/change-management.md",
       "evidence": [
         {
-          "path": ".github/workflows/db-migrations.yml",
+          "path": ".github/workflows/ci.yml",
           "contains": [
-            "name: Database Migrations",
             "Apply all migrations to fresh Postgres",
             "Verify schema parity with schema.ts"
           ]
         },
         {
           "path": "scripts/check-migrations.sh",
+          "contains": ["check-migration-schema.ts", "check-migration-safety.ts"]
+        },
+        {
+          "path": "scripts/check-migration-schema.ts",
           "contains": [
             "Database schema changed without a migration file",
-            "check-migration-safety.ts"
+            "prepareBaseDependencies(root, baseRoot)",
+            "migration\\.sql$"
           ]
         }
       ]
@@ -166,7 +188,10 @@
         },
         {
           "path": "apps/api/src/lib/workspace-deletion.ts",
-          "contains": ["status: \"deleting\"", "completeWorkspaceDeletion"]
+          "contains": [
+            "status: WORKSPACE_STATUS.deleting",
+            "completeWorkspaceDeletion"
+          ]
         },
         {
           "path": "apps/api/src/lib/organization-storage-teardown.ts",
@@ -181,7 +206,7 @@
         {
           "path": "apps/api/src/lib/tanstack-ai-models.ts",
           "contains": [
-            "export const requireTanStackAIAvailableForRole",
+            "export const requireTanStackAIAvailableForTask",
             "switch (config.provider)"
           ]
         },
@@ -200,7 +225,7 @@
       "policy": "docs/policies/vendor-management.md",
       "evidence": [
         {
-          "path": ".github/workflows/dependency-review.yml",
+          "path": ".github/workflows/ci.yml",
           "contains": ["fail-on-severity: high", "allow-licenses: >-"]
         },
         {

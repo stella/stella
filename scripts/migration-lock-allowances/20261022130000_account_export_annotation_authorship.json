@@ -1,0 +1,3 @@
+{
+  "create-policy": "The account export owner policy adds catalog metadata to reader notes without reading rows, with DDL lock acquisition bounded by 1s and the statement by 5s."
+}

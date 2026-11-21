@@ -9,19 +9,35 @@ import {
 } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
 
+import { user as authUser } from "@/api/db/auth-schema";
 import {
+  auditLogs,
+  BILLING_STATUS,
   billingArrangements,
+  featureEnrolments,
   INVOICE_ATTACHMENT,
   invoiceLines,
   invoices,
   timeEntries,
 } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
+import type { SafeHandlerLogContext } from "@/api/lib/api-handlers";
+import type { AuditEvent } from "@/api/lib/audit-log";
+import {
+  AUDIT_ACTION,
+  AUDIT_RESOURCE_TYPE,
+  createAuditRecorder,
+} from "@/api/lib/audit-log";
 import { UNPRICED_TIME_ENTRY_CURRENCY } from "@/api/lib/billing-constants";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { cents } from "@/api/lib/money";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
+import {
+  removeIssuingSeller,
+  seedIssuingSeller,
+} from "@/api/tests/helpers/issuing-seller";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -45,11 +61,29 @@ let db: TestDatabase;
 let ids: TestIds;
 const entryIds: SafeId<"timeEntry">[] = [];
 const invoiceIds: SafeId<"invoice">[] = [];
+const auditEvents: AuditEvent[] = [];
+let issuingSellerId: SafeId<"sellerProfile">;
 
 beforeAll(async () => {
   const fixture = await getRlsFixture();
   db = fixture.testDb;
   ids = fixture.ids;
+
+  await db
+    .update(authUser)
+    .set({ emailVerified: true })
+    .where(inArray(authUser.id, [ids.userA1]));
+  await db
+    .insert(featureEnrolments)
+    .values([
+      {
+        organizationId: ids.orgA,
+        userId: ids.userA1,
+        featureId: "time-billing",
+      },
+    ])
+    .onConflictDoNothing();
+  issuingSellerId = await seedIssuingSeller(db, ids.orgA);
 });
 afterEach(async () => {
   if (invoiceIds.length) {
@@ -63,10 +97,55 @@ afterEach(async () => {
     .where(eq(billingArrangements.workspaceId, ids.wsA2));
   entryIds.length = 0;
   invoiceIds.length = 0;
+  auditEvents.length = 0;
 });
-afterAll(releaseRlsFixture);
+afterAll(async () => {
+  try {
+    await removeIssuingSeller(db, issuingSellerId);
+  } finally {
+    await releaseRlsFixture();
+  }
+});
 
-const context = <TContext>(
+const recordAuditEvent = async (
+  _tx: unknown,
+  events: AuditEvent | AuditEvent[],
+) => {
+  auditEvents.push(...(Array.isArray(events) ? events : [events]));
+};
+
+const invoiceRouteForHandler = (handler: unknown): ApiRoutePath => {
+  if (handler === createInvoice.handler) {
+    return "/v1/invoices/:workspaceId";
+  }
+  if (handler === deleteInvoice.handler) {
+    return "/v1/invoices/:workspaceId/:invoiceId";
+  }
+  if (handler === addEntries.handler) {
+    return "/v1/invoices/:workspaceId/:invoiceId/entries";
+  }
+  if (handler === removeEntries.handler) {
+    return "/v1/invoices/:workspaceId/:invoiceId/entries";
+  }
+  if (handler === createLine.handler) {
+    return "/v1/invoices/:workspaceId/:invoiceId/lines";
+  }
+  if (handler === deleteLine.handler) {
+    return "/v1/invoices/:workspaceId/:invoiceId/lines/:lineId";
+  }
+  if (handler === updateLine.handler) {
+    return "/v1/invoices/:workspaceId/:invoiceId/lines/:lineId";
+  }
+  if (handler === getInvoice.handler) {
+    return "/v1/invoices/:workspaceId/:invoiceId";
+  }
+  if (handler === transitionInvoice.handler) {
+    return "/v1/invoices/:workspaceId/:invoiceId/transition";
+  }
+  return panic("Invoice test context received an unregistered handler");
+};
+
+const context = <TContext extends SafeHandlerLogContext>(
   _handler: (context: TContext) => unknown,
   body: unknown,
   params: Record<string, unknown> = {},
@@ -81,13 +160,13 @@ const context = <TContext>(
     session: { activeOrganizationId: ids.orgA },
     user: { id: ids.userA1 },
     request: new Request("https://example.test/invoices", { method: "POST" }),
-    route: "/test/billing-modes",
+    route: invoiceRouteForHandler(_handler),
     memberRole: sessionMemberRole("owner"),
     getWorkspaceAccess: async () => ({ id: ids.wsA2, status: "active" }),
     getActiveWorkspaceIds: async () => [ids.wsA2],
     getAccessibleWorkspaces: async () => [{ id: ids.wsA2, status: "active" }],
-    recordAuditEvent: async () => {},
-    createAuditRecorder: () => async () => {},
+    recordAuditEvent,
+    createAuditRecorder: () => recordAuditEvent,
     orgAIConfig: null,
     orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
     promptCachingEnabled: false,
@@ -252,6 +331,7 @@ test("a canonical flat fee cannot accept extra lines, attachments, price edits, 
   if (!line) {
     panic("Flat fee line missing");
   }
+  expect(line.unit).not.toBe("hours");
   const entry = await seedEntry();
   const attempts = [
     await createLine.handler(
@@ -277,6 +357,13 @@ test("a canonical flat fee cannot accept extra lines, attachments, price edits, 
       context(
         updateLine.handler,
         { unitPriceMinor: 999 },
+        { invoiceId, lineId: line.id },
+      ),
+    ),
+    await updateLine.handler(
+      context(
+        updateLine.handler,
+        { unit: "hours" },
         { invoiceId, lineId: line.id },
       ),
     ),
@@ -329,6 +416,119 @@ test("hourly draft reservations consume the cap; refused claims roll back and de
   expect(await draft([second])).toHaveProperty("id");
 });
 
+test("a refused invoice line restores its time claim, line and transactional audit", async () => {
+  await setArrangement("hourly", 1000);
+  const first = await seedEntry();
+  const invoiceId = invoiceIdFrom(await draft([first]));
+  const second = await seedEntry();
+  const beforeEntry =
+    (await db.query.timeEntries.findFirst({
+      where: { id: { eq: second } },
+    })) ?? panic("The approved invoice entry fixture is missing");
+  expect(beforeEntry.status).toBe(BILLING_STATUS.APPROVED);
+  expect(beforeEntry.invoiceId).toBeNull();
+  const beforeLines = await timeLines(invoiceId);
+  expect(beforeLines).toHaveLength(1);
+  const beforeInvoice = await invoiceRow(invoiceId);
+  const resources = [invoiceId, second];
+  const beforeAudits = await db
+    .select()
+    .from(auditLogs)
+    .where(inArray(auditLogs.resourceId, resources));
+  const handlerContext = context(
+    createLine.handler,
+    {
+      source: { type: "time_entry", timeEntryId: second },
+      vatRateBps: 0,
+      vatTreatment: "domestic_vat",
+    },
+    { invoiceId },
+  );
+  const recorder = createAuditRecorder({
+    organizationId: ids.orgA,
+    workspaceId: ids.wsA2,
+    userId: ids.userA1,
+    request: handlerContext.request,
+    server: null,
+  });
+  const attemptedAudits: AuditEvent[] = [];
+  const result = await createLine.handler({
+    ...handlerContext,
+    recordAuditEvent: async (tx, events) => {
+      attemptedAudits.push(...(Array.isArray(events) ? events : [events]));
+      await recorder(tx, events);
+    },
+  });
+  expect(result).toMatchObject({
+    code: 409,
+    response: { code: "billing_cap_exceeded" },
+  });
+  expect(attemptedAudits).toEqual([
+    expect.objectContaining({
+      resourceId: invoiceId,
+      changes: {
+        linesAdded: {
+          old: null,
+          new: [expect.objectContaining({ source: "time_entry" })],
+        },
+      },
+    }),
+  ]);
+  expect(
+    await db.query.timeEntries.findFirst({ where: { id: { eq: second } } }),
+  ).toEqual(beforeEntry);
+  expect(await timeLines(invoiceId)).toEqual(beforeLines);
+  expect(await invoiceRow(invoiceId)).toEqual(beforeInvoice);
+  expect(
+    await db
+      .select()
+      .from(auditLogs)
+      .where(inArray(auditLogs.resourceId, resources)),
+  ).toEqual(beforeAudits);
+});
+
+test.each([40, 41])(
+  "finalizing %i candidate minutes beside 60 reserved minutes enforces a 100-minute cap",
+  async (candidateMinutes) => {
+    const reserved = await seedEntry();
+    invoiceIdFrom(await draft([reserved]));
+    const candidate = await seedEntry();
+    await db
+      .update(timeEntries)
+      .set({
+        durationMinutes: candidateMinutes,
+        billedMinutes: candidateMinutes,
+      })
+      .where(eq(timeEntries.id, candidate));
+    const invoiceId = invoiceIdFrom(await draft([candidate]));
+    await db.insert(billingArrangements).values({
+      organizationId: ids.orgA,
+      workspaceId: ids.wsA2,
+      mode: "hourly",
+      currency: "USD",
+      capMinutes: 100,
+      alertThresholdBps: 8000,
+    });
+
+    const result = await transitionInvoice.handler(
+      context(transitionInvoice.handler, { action: "finalize" }, { invoiceId }),
+    );
+    if (candidateMinutes === 40) {
+      expect(result).toHaveProperty("id", invoiceId);
+    } else {
+      expect(result).toMatchObject({
+        code: 409,
+        response: { code: "billing_cap_exceeded" },
+      });
+    }
+    expect(
+      await db.query.invoices.findFirst({ where: { id: { eq: invoiceId } } }),
+    ).toMatchObject({
+      status: candidateMinutes === 40 ? "finalized" : "draft",
+    });
+  },
+);
+
 test("finalize rechecks a lowered cap atomically and void releases covered markers", async () => {
   const entry = await seedEntry();
   const invoiceId = invoiceIdFrom(await draft([entry]));
@@ -355,6 +555,7 @@ test("finalize rechecks a lowered cap atomically and void releases covered marke
       ),
     ),
   ).toHaveProperty("id", flatId);
+  const beforeVoidAudit = auditEvents.length;
   expect(
     await transitionInvoice.handler(
       context(
@@ -364,6 +565,24 @@ test("finalize rechecks a lowered cap atomically and void releases covered marke
       ),
     ),
   ).toHaveProperty("id", flatId);
+  expect(
+    auditEvents
+      .slice(beforeVoidAudit)
+      .filter((event) => event.resourceId === entry),
+  ).toEqual([
+    {
+      action: AUDIT_ACTION.UPDATE,
+      resourceType: AUDIT_RESOURCE_TYPE.TIME_ENTRY,
+      resourceId: entry,
+      changes: {
+        status: {
+          old: BILLING_STATUS.BILLED,
+          new: BILLING_STATUS.APPROVED,
+        },
+        invoiceId: { old: flatId, new: null },
+      },
+    },
+  ]);
   expect(
     await db.query.timeEntries.findFirst({ where: { id: { eq: entry } } }),
   ).toMatchObject({

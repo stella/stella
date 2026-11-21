@@ -11,6 +11,7 @@ import {
   readBusinessRegistryCredentials,
   saveBusinessRegistryCredential,
 } from "@/api/handlers/organization-settings/business-registry-credentials";
+import { auditRecorderDouble } from "@/api/tests/helpers/audit-recorder-double";
 import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
@@ -114,6 +115,7 @@ describe("business registry credential organization isolation", () => {
         createTestHandlerContext<
           Parameters<typeof readBusinessRegistryCredentials.handler>[0]
         >({
+          audit: auditRecorderDouble(),
           scopedDb,
           safeDb: toSafeDbMock(scopedDb),
           session: { activeOrganizationId: organizationId },
@@ -145,12 +147,8 @@ describe("business registry credential organization isolation", () => {
       }
       expect(JSON.stringify(result)).not.toContain(ciphertextA.toString());
       expect(JSON.stringify(result)).not.toContain(ciphertextB.toString());
-      expect(JSON.stringify(result)).not.toContain(
-        ciphertextA.toString("base64"),
-      );
-      expect(JSON.stringify(result)).not.toContain(
-        ciphertextB.toString("base64"),
-      );
+      expect(JSON.stringify(result)).not.toContain(ciphertextA.toBase64());
+      expect(JSON.stringify(result)).not.toContain(ciphertextB.toBase64());
     }
   });
 

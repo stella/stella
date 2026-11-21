@@ -3,7 +3,7 @@ import {
   CLIENT_INFO_META_KEY,
   PROTOCOL_VERSION_META_KEY,
 } from "@modelcontextprotocol/server";
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { describe, expect, mock, test } from "bun:test";
 
 import { resolveToolWorkspaceIds } from "@/api/handlers/chat/tools/authorized-workspace-ids";
@@ -15,14 +15,21 @@ import { CHAT_READ_SCRIPT_POLICY } from "@/api/handlers/chat/tools/execute/chat-
 import { runRegistryReadTool } from "@/api/handlers/chat/tools/registry-adapter/run-registry-tool";
 import { runRegistryWriteTool } from "@/api/handlers/chat/tools/registry-adapter/run-registry-write-tool";
 import { buildChatWriteTools } from "@/api/handlers/chat/tools/registry-write-tools";
+import { toSafeId } from "@/api/lib/branded-types";
+import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
+import { createChatToolDefectMemo } from "@/api/lib/chat/tool-defect-memo";
 import {
   createFeatureAccessSnapshot,
   decideFeatureAccess,
-} from "@/api/lib/auth/feature-access/policy";
-import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
-import { createChatToolDefectMemo } from "@/api/lib/chat/tool-defect-memo";
+} from "@/api/lib/feature-access/policy";
+import {
+  FEATURE_REGISTRY,
+  LEGAL_LISTS_FEATURE_ID,
+  LIST_VERIFICATION_FEATURE_ID,
+} from "@/api/lib/feature-access/registry";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
-import type { McpRequestContext } from "@/api/mcp/context";
+import { disabledFeatureCapabilityIds } from "@/api/mcp/capability-tools";
+import { isMcpFeatureInputEnabled } from "@/api/mcp/feature-access";
 import {
   getGatewayMcpToolDefinition,
   listGatewayMcpToolDefinitions,
@@ -30,18 +37,24 @@ import {
 import { getMcpInstructions } from "@/api/mcp/instructions";
 import { listMcpResources, readMcpResource } from "@/api/mcp/resources";
 import { createMcpHttpRequestHandler } from "@/api/mcp/server-core";
+import { getStaticMcpToolDefinition } from "@/api/mcp/static-tool-definitions";
 import { scopeHintToSurface } from "@/api/mcp/surface-tool-mentions";
 import {
   getMcpToolDefinition,
   getMcpToolRequiredScopesHint,
-  listMcpTools,
   handleMcpToolCall,
+  listMcpTools,
 } from "@/api/mcp/tools";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import {
+  createScopedDbMock,
+  createSelectQueryMock,
+} from "@/api/tests/scoped-db-mock";
 
 const featureId = "fixture-feature";
-const organizationId = "org_fixture";
-const userId = "user_fixture";
+const organizationId = toSafeId<"organization">("org_fixture");
+const userId = toSafeId<"user">("user_fixture");
 const decision = decideFeatureAccess({
   registry: { [featureId]: { enrolment: "invitation" } },
   grants: {
@@ -79,7 +92,7 @@ const contextFor = (
     | "ordinary",
 ) => {
   const scopedDb = mock(async () => []);
-  const context = asTestRaw<McpRequestContext>({
+  const context = asTestRaw<AuthorizedMcpRequestContext>({
     organizationId:
       kind === "other-organization" ? "org_other" : organizationId,
     userId: kind === "colleague" ? "user_other" : userId,
@@ -140,6 +153,8 @@ describe("feature descriptor discovery and admission", () => {
       const expected = Object.entries(CHAT_READ_SCRIPT_POLICY).flatMap(
         ([name, policy]) =>
           policy === "script" &&
+          // No fixture caller is enrolled in a registered feature.
+          getStaticMcpToolDefinition(name)?.featureId === undefined &&
           (name !== "list_matters" || kind === "ordinary" || kind === "enabled")
             ? [name]
             : [],
@@ -196,7 +211,7 @@ describe("feature descriptor discovery and admission", () => {
       expect(writeResult.isErr() && writeResult.error.kind).toBe("unavailable");
       expect(scopedDb).not.toHaveBeenCalled();
       expect(
-        listMcpResources("default", context).some(
+        (await listMcpResources("default", { context })).some(
           (resource) => resource.uri === "stella://about",
         ),
       ).toBe(false);
@@ -209,10 +224,10 @@ describe("feature descriptor discovery and admission", () => {
         status: "error",
         error: { message: expect.stringContaining("Unknown resource") },
       });
-      expect(getMcpInstructions("default", context)).not.toContain(
-        "stella://about",
+      expect(await getMcpInstructions("default", context)).not.toContain(
+        "stella-product-identity",
       );
-      expect(getMcpInstructions("default", context)).not.toContain(
+      expect(await getMcpInstructions("default", context)).not.toContain(
         "prepare_feedback",
       );
       expect(chatScriptReadToolNames(context)).not.toContain("list_matters");
@@ -244,7 +259,7 @@ describe("feature descriptor discovery and admission", () => {
         }),
       ).toBeDefined();
       expect(
-        listMcpResources("default", context).some(
+        (await listMcpResources("default", { context })).some(
           (resource) => resource.uri === "stella://about",
         ),
       ).toBe(true);
@@ -252,8 +267,8 @@ describe("feature descriptor discovery and admission", () => {
         (await readMcpResource("stella://about", "default", context)).contents
           .length,
       ).toBeGreaterThan(0);
-      expect(getMcpInstructions("default", context)).toContain(
-        "stella://about",
+      expect(await getMcpInstructions("default", context)).toContain(
+        "stella-product-identity",
       );
       expect(chatScriptReadToolNames(context)).toContain("list_matters");
       expect(chatCodeModeSystemPrompt([], context)).toContain("list_matters");
@@ -357,14 +372,168 @@ for (const kind of [
       const deniedText = await deniedCall.text();
       expect(deniedText).toContain("unknown_tool");
       expect(deniedText).not.toContain("missing_scope");
-      expect(toolsText).not.toContain("list_matters");
-      expect(toolsText).not.toContain("prepare_feedback");
-      expect(toolsText).not.toContain("time-entries.create");
+      expect(toolsText).not.toContain('"name":"list_matters"');
+      expect(toolsText).not.toContain('"name":"prepare_feedback"');
+
       expect(resourceText).not.toContain("stella://about");
       expect(toolsText).toContain(
-        '"featureAccess":{"capabilities":[],"tools":[]}',
+        '"featureAccess":{"capabilities":[],"disabled":',
       );
+      const disabled = toolsText.split('"disabled":').at(1);
+      expect(disabled).toContain('"list_matters"');
+      expect(disabled).toContain('"prepare_feedback"');
+      expect(disabled).toContain('"save_matter"');
+      expect(disabled).toContain('"time-entries.create"');
     }
     expect(scopedDb).not.toHaveBeenCalled();
   });
 }
+
+test("disabled capability evidence excludes conditional operations and ignores scopes", async () => {
+  const { context } = contextFor("hidden");
+  const disabled = await disabledFeatureCapabilityIds({
+    ...context,
+    grantedScopes: [],
+    testDependencies: {
+      ...context.testDependencies,
+      featureAccessBindings: {
+        ...bindings,
+        capabilities: new Map([
+          ...bindings.capabilities,
+          ["tasks.create", featureId],
+        ]),
+      },
+    },
+  });
+  expect(disabled).toContain("time-entries.create");
+  expect(disabled).not.toContain("tasks.create");
+  const enabled = await disabledFeatureCapabilityIds(
+    contextFor("enabled").context,
+  );
+  expect(enabled).not.toContain("time-entries.create");
+});
+
+describe("mixed native task inputs", () => {
+  test("denied list input stops before workspace lookup on MCP and chat", async () => {
+    const { context, scopedDb } = contextFor("ordinary");
+    const writable = {
+      ...context,
+      grantedScopes: ["stella:read", "stella:matters_write"],
+    } satisfies AuthorizedMcpRequestContext;
+    const result = await handleMcpToolCall({
+      context: writable,
+      toolName: "save_task",
+      args: {
+        matter_id: "00000000-0000-4000-8000-000000000001",
+        name: "Item",
+        item_type: "fact",
+      },
+    });
+    expect(result.content).toContainEqual({
+      type: "text",
+      text: JSON.stringify({
+        error: { code: "not_found", message: "Not found" },
+      }),
+    });
+    expect(scopedDb).not.toHaveBeenCalled();
+    const chat = await runRegistryWriteTool({
+      context: writable,
+      toolName: "save_task",
+      args: { name: "Item", item_type: "fact" },
+      refRegistry: createChatRefRegistry(),
+    });
+    expect(chat.isErr() && chat.error.kind).toBe("not-found");
+    expect(scopedDb).not.toHaveBeenCalled();
+  });
+
+  for (const featureIds of [
+    [],
+    [LEGAL_LISTS_FEATURE_ID],
+    [LEGAL_LISTS_FEATURE_ID, LIST_VERIFICATION_FEATURE_ID],
+  ]) {
+    test(`ordinary inputs and list inputs with ${featureIds.length} grants`, () => {
+      const definition = getStaticMcpToolDefinition("save_task", "default");
+      expect(definition).toBeDefined();
+      if (definition === undefined) {
+        panic("save_task declaration required");
+      }
+      const grants = Object.fromEntries(
+        featureIds.map((id) => [
+          id,
+          [{ type: "organization" as const, organizationId }],
+        ]),
+      );
+      const decisions = new Map(
+        Object.keys(FEATURE_REGISTRY).map((id) => [
+          id,
+          decideFeatureAccess({
+            registry: FEATURE_REGISTRY,
+            grants,
+            featureId: id,
+            organizationId,
+            userId,
+            user: { email: "member@example.test", emailVerified: true },
+            membership: true,
+          }),
+        ]),
+      );
+      const context = {
+        organizationId,
+        userId,
+        featureAccessSnapshot: createFeatureAccessSnapshot({
+          organizationId,
+          userId,
+          decisions,
+        }),
+      };
+      expect(
+        isMcpFeatureInputEnabled({
+          context,
+          definition,
+          args: { item_type: "task" },
+        }),
+      ).toBe(true);
+      expect(
+        isMcpFeatureInputEnabled({
+          context,
+          definition,
+          args: { item_type: null },
+        }),
+      ).toBe(true);
+      for (const args of [
+        { item_type: "fact" },
+        { list_id: "list" },
+        { description: "Description" },
+        { description: null },
+      ]) {
+        expect(isMcpFeatureInputEnabled({ context, definition, args })).toBe(
+          featureIds.includes(LEGAL_LISTS_FEATURE_ID),
+        );
+      }
+    });
+  }
+});
+
+test("unavailable native task returns missing before destructive confirmation", async () => {
+  const { context } = contextFor("ordinary");
+  const database = createScopedDbMock({
+    select: () => createSelectQueryMock([]),
+  });
+  const response = await handleMcpToolCall({
+    context: {
+      ...context,
+      scopedDb: database.scopedDb,
+      grantedScopes: ["stella:read", "stella:matters_write"],
+    },
+    toolName: "delete_task",
+    args: { task_id: "00000000-0000-4000-8000-000000000001" },
+  });
+  expect(response.content).toContainEqual({
+    type: "text",
+    text: JSON.stringify({
+      error: { code: "not_found", message: "Not found" },
+    }),
+  });
+  expect(JSON.stringify(response)).not.toContain("confirmation_required");
+  expect(database.getCallCount()).toBe(1);
+});

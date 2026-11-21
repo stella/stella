@@ -1,15 +1,15 @@
-import { Result } from "better-result";
-// Runtime registry fetches validate caller listings for this invocation only.
-// resolveCommandTree consumes a current response or the baked-in baseline;
-// refreshRegistryCache persists deployment omissions and version metadata.
+import { panic, Result } from "better-result";
+// Runtime and disk-backed caller listings cross the same registry trust boundary.
+// Short-lived projections are bound to the server, organization, CLI version and
+// credential generation; deployment metadata has a separate origin cache.
 // Both paths share the build-time route generator and annotation table.
 import { access, readFile } from "node:fs/promises";
 import { Temporal } from "temporal-polyfill/full";
 
 import type { CliActionAdmissionRefusal } from "./action-admission-refusal.js";
 import { loadBakedCapabilityCatalog } from "./capability-catalog-load.js";
-import { fetchLatestCliVersion } from "./cli-release-channel.js";
 import { buildVersionNudge } from "./cli-version-nudge.js";
+import { projectDeploymentCommands } from "./deployment-command-projection.js";
 import {
   hasFeatureCommands,
   projectFeatureCommands,
@@ -17,6 +17,7 @@ import {
 import type { CallerFeatureAccess } from "./feature-command-projection.js";
 import type { CapabilityCatalogEntry } from "./generate-capability-tree.js";
 import { buildCliRouteTree } from "./generate-capability-tree.js";
+import { CLI_SUPPORTED_API_PROTOCOLS } from "./generated/api-contract.js";
 import { CLI_VERSION } from "./generated/cli-version.js";
 import { generatedRouteMap } from "./generated/route-map.js";
 import { generatedToolAnnotations as TOOL_ANNOTATIONS } from "./generated/tool-annotations.js";
@@ -27,29 +28,37 @@ import {
 } from "./mcp-client.js";
 import {
   CACHE_SCHEMA_VERSION,
+  type CacheEnv,
   cachePathFor,
   computeDelta,
   DEFAULT_TTL_SECONDS,
   isCacheStale,
   isDeltaEmpty,
   readCacheFile,
-  writeCacheFile,
-  type CacheEnv,
   type RegistryCacheFile,
   type RegistryDelta,
+  writeCacheFile,
 } from "./registry-cache.js";
-import { validateFetchedToolsList } from "./registry-trust.js";
 import {
-  type DisabledCommands,
-  NO_DISABLED_COMMANDS,
-  type RegistryToolListing,
-  type RouteNode,
-  type ToolAnnotation,
+  projectionCachePath,
+  readProjectionCache,
+  writeProjectionCache,
+} from "./registry-projection-cache.js";
+import {
+  type TrustResult,
+  validateFetchedToolsList,
+} from "./registry-trust.js";
+import type {
+  RegistryToolListing,
+  RouteNode,
+  ToolAnnotation,
 } from "./route-types.js";
+import { runtimeAssetUrl } from "./runtime-asset-url.js";
+import type { CommandUnavailableCause } from "./unavailable-command.js";
 
-const SNAPSHOT_URL = new URL(
-  "generated/registry-snapshot.json",
-  import.meta.url,
+const SNAPSHOT_URL = runtimeAssetUrl(
+  new URL("generated/registry-snapshot.json", import.meta.url),
+  "registry-snapshot.json",
 );
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -110,29 +119,23 @@ const isCompoundTool = (name: string): boolean => {
 /**
  * A `tools/list` response is a projection, not proof that a baked tool was
  * removed from the server. Restore a baked listing the response attested it
- * omitted, so the command stays in the tree and the server answers the call:
- * - `feature`: gated off in this deployment, so invoking it returns the
- *   server's `feature_disabled` with its real message instead of the CLI
- *   claiming the command does not exist.
- * - `scope`: only compound tools, whose local all-scopes preflight must stay
- *   reachable. Single-scope tools follow the live projection.
+ * omitted for scope, so compound tools' local all-scopes preflight stays
+ * reachable. Single-scope tools follow the live projection.
  *
  * Attestation is required: grants alone are insufficient, because an older
  * server may lack the tool entirely while echoing the same limited grants.
  * Unknown live tools survive either way.
  */
-const retainAttestedOmittedListings = ({
+const retainAttestedScopeListings = ({
   fetched,
   baked,
-  featureOmittedTools,
   scopeOmittedTools,
 }: {
   fetched: readonly RegistryToolListing[];
   baked: readonly RegistryToolListing[];
-  featureOmittedTools: readonly string[] | undefined;
   scopeOmittedTools: readonly string[] | undefined;
 }): readonly RegistryToolListing[] => {
-  const retainable = new Set(featureOmittedTools);
+  const retainable = new Set<string>();
   for (const name of scopeOmittedTools ?? []) {
     if (isCompoundTool(name)) {
       retainable.add(name);
@@ -152,7 +155,7 @@ export const requiresFeatureAccessRefresh = (
   tree: RouteNode = generatedRouteMap,
 ): boolean => hasFeatureCommands(tree);
 
-/** Validated caller projection held only during its authenticated invocation. */
+/** Validated caller projection fetched now or restored from its bounded cache. */
 export type CurrentRegistry = {
   serverOrigin: string;
   listings: readonly RegistryToolListing[];
@@ -172,15 +175,15 @@ export type ResolvedCommandTree = {
    * so it states the fact and leaves who-hears-about-it to the shell.
    */
   drift?: RegistryDelta;
-  /** Commands the server attested are gated off in this deployment. */
-  disabled: DisabledCommands;
 };
 
 /**
  * Resolve this invocation without network. A current same-origin response can
  * rebuild and prune the tree by caller scope; disk supplies deployment metadata
- * only. Missing or invalid live data uses the baked-in baseline with feature
- * commands hidden.
+ * only. Caller feature admission projects the resolved tree using only the
+ * current response; missing or invalid live data hides caller-feature commands.
+ * Deployment features require current same-origin omission evidence or a
+ * same-origin cache still within its TTL. Each projection can hide a command.
  */
 export const resolveCommandTree = async ({
   serverOrigin,
@@ -190,6 +193,7 @@ export const resolveCommandTree = async ({
   bakedTree = generatedRouteMap,
   loadCatalog = loadBakedCapabilityCatalog,
   annotations = TOOL_ANNOTATIONS,
+  now = Temporal.Now.instant().epochMilliseconds,
 }: {
   serverOrigin: string | undefined;
   env: CacheEnv;
@@ -201,35 +205,33 @@ export const resolveCommandTree = async ({
     | null
     | Promise<readonly CapabilityCatalogEntry[] | null>;
   annotations?: Readonly<Record<string, ToolAnnotation>>;
+  now?: number;
 }): Promise<ResolvedCommandTree> => {
   const file =
     serverOrigin !== undefined && registry?.serverOrigin === serverOrigin
       ? registry
       : undefined;
   const currentAccess = file === undefined ? undefined : featureAccess;
+  const cached =
+    file === undefined && serverOrigin !== undefined
+      ? await readCacheFile(cachePathFor(serverOrigin, env))
+      : undefined;
+  const deployment =
+    file ??
+    (cached !== undefined &&
+    cached.serverOrigin === serverOrigin &&
+    !isCacheStale(cached, now)
+      ? cached
+      : undefined);
   const project = (tree: RouteNode) =>
-    projectFeatureCommands({ tree, featureAccess: currentAccess });
-  if (serverOrigin === undefined) {
-    return { tree: project(bakedTree), disabled: NO_DISABLED_COMMANDS };
-  }
-  const cached = await readCacheFile(cachePathFor(serverOrigin, env));
-  const deployment = cached?.serverOrigin === serverOrigin ? cached : undefined;
+    projectDeploymentCommands({
+      tree: projectFeatureCommands({ tree, featureAccess: currentAccess }),
+      featureOmittedTools: deployment?.featureOmittedTools,
+      featureOmittedCapabilities: deployment?.featureOmittedCapabilities,
+    });
   if (file === undefined) {
-    return {
-      tree: project(bakedTree),
-      disabled: {
-        tools: deployment?.featureOmittedTools ?? [],
-        capabilities: deployment?.featureOmittedCapabilities ?? [],
-      },
-    };
+    return { tree: project(bakedTree) };
   }
-  // Tools and capabilities the server attested it omits because a deployment
-  // feature is off. They stay in the tree (the server answers a call with its
-  // own feature_disabled), and help/tools list mark them so nobody has to try.
-  const disabled: DisabledCommands = {
-    tools: file.featureOmittedTools ?? [],
-    capabilities: file.featureOmittedCapabilities ?? [],
-  };
   const prunedByScope = (file.scopeOmittedTools ?? []).some(
     (name) => !isCompoundTool(name),
   );
@@ -255,7 +257,7 @@ export const resolveCommandTree = async ({
     changed: file.delta.changed.filter((name) => !hiddenTools.has(name)),
   };
   if (isDeltaEmpty(file.delta) && !prunedByScope && !featureListings) {
-    return { tree: project(bakedTree), disabled };
+    return { tree: project(bakedTree) };
   }
   // Rebuild through the SAME shared builder codegen uses (curated tools from
   // the current listings + the baked capability merge), so a diverged registry
@@ -263,12 +265,11 @@ export const resolveCommandTree = async ({
   // a tree that fails to build falls back to the baked-in tree (rule 6).
   const entries = await loadCatalog();
   if (entries === null) {
-    return { tree: project(bakedTree), disabled };
+    return { tree: project(bakedTree) };
   }
-  const listings = retainAttestedOmittedListings({
+  const listings = retainAttestedScopeListings({
     fetched: file.listings,
     baked: await loadBakedListings(),
-    featureOmittedTools: file.featureOmittedTools,
     scopeOmittedTools: file.scopeOmittedTools,
   });
   const built = Result.try(
@@ -280,28 +281,44 @@ export const resolveCommandTree = async ({
       }).tree,
   );
   if (Result.isError(built)) {
-    return { tree: project(bakedTree), disabled };
+    return { tree: project(bakedTree) };
   }
   return isDeltaEmpty(delta)
-    ? { tree: project(built.value), disabled }
-    : { tree: project(built.value), drift: delta, disabled };
+    ? { tree: project(built.value) }
+    : {
+        tree: project(built.value),
+        drift: delta,
+      };
 };
 
 /** The outcome of a cache-refresh attempt (spec S5.3/S5.5 + addendum nudge). */
 export type RefreshOutcome =
+  | {
+      status: "incompatible";
+      cause: Extract<
+        CommandUnavailableCause,
+        { type: "protocol-incompatible" }
+      >;
+    }
   | { status: "skipped"; reason: "no-cache" | "fresh" }
   | { status: "failed"; warning: string }
   | { status: "admission-refused"; refusal: CliActionAdmissionRefusal }
   | {
       status: "refreshed";
       deltaEmpty: boolean;
+      cacheWarning?: string;
       nudge?: string;
+      unsupported?: boolean;
       featureAccess?: CallerFeatureAccess;
       registry: CurrentRegistry;
     };
 
 type FetchRaw = () => Promise<Result<RawToolsList, McpClientError>>;
-type FetchLatestVersion = () => Promise<string | undefined>;
+
+const cachedVersionPolicy = (raw: RawToolsList) => ({
+  ...(raw.cliMinimum === undefined ? {} : { cliMinimum: raw.cliMinimum }),
+  ...(raw.cliLatest === undefined ? {} : { cliLatest: raw.cliLatest }),
+});
 
 /**
  * Refresh the per-origin cache (spec S5.3). Force-refreshes on `auth login`;
@@ -317,25 +334,27 @@ export const refreshRegistryCache = async ({
   force = false,
   ttlSeconds = DEFAULT_TTL_SECONDS,
   currentVersion = CLI_VERSION,
+  updateCommand,
   fetchRaw,
-  fetchLatestVersion,
   bakedListings,
+  configDir,
 }: {
   serverOrigin: string;
   token: string;
+  configDir?: string;
   env: CacheEnv;
   now?: number;
   force?: boolean;
   ttlSeconds?: number;
   currentVersion?: string;
+  updateCommand?: string;
   fetchRaw?: FetchRaw;
-  fetchLatestVersion?: FetchLatestVersion;
   bakedListings?: readonly RegistryToolListing[];
 }): Promise<RefreshOutcome> => {
   const filePath = cachePathFor(serverOrigin, env);
   const existing = await readCacheFile(filePath);
 
-  if (!force) {
+  if (!force && configDir === undefined) {
     if (existing === undefined) {
       // Only a genuinely absent cache stays offline-instant (seeded at login).
       // A file that exists but no longer validates (an older schema version
@@ -353,13 +372,30 @@ export const refreshRegistryCache = async ({
   const fetcher: FetchRaw =
     fetchRaw ??
     (async () => await fetchToolsListRaw({ serverUrl: serverOrigin, token }));
-  const latestFetcher = fetchLatestVersion ?? fetchLatestCliVersion;
-  const [raw, latestVersion] = await Promise.all([
-    fetcher(),
-    Result.tryPromise(async () => await latestFetcher()).then((result) =>
-      Result.isOk(result) ? result.value : undefined,
-    ),
-  ]);
+  const projectionPath =
+    configDir === undefined
+      ? undefined
+      : projectionCachePath({ configDir, serverOrigin, token, currentVersion });
+  const cachedProjection =
+    projectionPath === undefined || force
+      ? { status: "miss" as const }
+      : await readProjectionCache(projectionPath, now);
+  const { raw, projectionSource } = await (async () => {
+    switch (cachedProjection.status) {
+      case "hit":
+        return {
+          raw: Result.ok(cachedProjection.raw),
+          projectionSource: "cache" as const,
+        };
+      case "miss":
+      case "invalid":
+      case "unreadable":
+        return { raw: await fetcher(), projectionSource: "server" as const };
+      default:
+        cachedProjection satisfies never;
+        return panic("Unexpected registry cache read outcome");
+    }
+  })();
   if (Result.isError(raw)) {
     if (raw.error.admission !== undefined) {
       return { status: "admission-refused", refusal: raw.error.admission };
@@ -367,6 +403,22 @@ export const refreshRegistryCache = async ({
     return {
       status: "failed",
       warning: `registry refresh skipped: ${raw.error.message}`,
+    };
+  }
+
+  const apiProtocol = raw.value.apiProtocol;
+  if (
+    apiProtocol !== undefined &&
+    !CLI_SUPPORTED_API_PROTOCOLS.some(
+      (supported) => String(supported) === apiProtocol,
+    )
+  ) {
+    return {
+      status: "incompatible",
+      cause: {
+        type: "protocol-incompatible",
+        message: `Server API protocol ${apiProtocol} is incompatible; this CLI supports ${CLI_SUPPORTED_API_PROTOCOLS.join(", ")}.`,
+      },
     };
   }
 
@@ -378,6 +430,52 @@ export const refreshRegistryCache = async ({
     };
   }
 
+  return await persistTrustedRegistry({
+    filePath,
+    existing,
+    serverOrigin,
+    raw: raw.value,
+    trust,
+    bakedListings,
+    now,
+    ttlSeconds,
+    currentVersion,
+    updateCommand,
+    projectionPath,
+    projectionSource,
+  });
+};
+
+type PersistTrustedRegistryOptions = {
+  filePath: string;
+  existing: RegistryCacheFile | undefined;
+  serverOrigin: string;
+  raw: RawToolsList;
+  trust: Extract<TrustResult, { ok: true }>;
+  bakedListings: readonly RegistryToolListing[] | undefined;
+  now: number;
+  ttlSeconds: number;
+  currentVersion: string;
+  updateCommand: string | undefined;
+  projectionPath: string | undefined;
+  projectionSource: "cache" | "server";
+};
+
+/** Persist only trusted caller data and the independently reusable deployment metadata. */
+const persistTrustedRegistry = async ({
+  filePath,
+  existing,
+  serverOrigin,
+  raw,
+  trust,
+  bakedListings,
+  now,
+  ttlSeconds,
+  currentVersion,
+  updateCommand,
+  projectionPath,
+  projectionSource,
+}: PersistTrustedRegistryOptions): Promise<RefreshOutcome> => {
   const baked = bakedListings ?? (await loadBakedListings());
   // Every omission the server attested, whatever the reason. Diffing against a
   // projection without them counts a tool the server still owns as removed, and
@@ -386,17 +484,16 @@ export const refreshRegistryCache = async ({
     baked,
     fetched: trust.listings,
     omittedTools: [
-      ...(raw.value.scopeOmittedTools ?? []),
-      ...(raw.value.featureOmittedTools ?? []),
+      ...(raw.scopeOmittedTools ?? []),
+      ...(raw.featureOmittedTools ?? []),
     ],
   });
 
-  // Resolve the update channel from npm, the publication source of truth. The
-  // server still supplies only its independently-owned minimum-version policy.
   const nudge = buildVersionNudge({
     current: currentVersion,
-    latest: latestVersion,
-    minimum: raw.value.cliMinimum,
+    updateCommand,
+    latest: raw.cliLatest,
+    minimum: raw.cliMinimum,
     lastNudged: existing?.lastNudgedVersion,
   });
   const lastNudgedVersion = nudge.nudgeVersion ?? existing?.lastNudgedVersion;
@@ -406,42 +503,62 @@ export const refreshRegistryCache = async ({
     toolsListHash: trust.toolsListHash,
     listings: trust.listings,
     delta,
-    ...(raw.value.grantedScopes === undefined
+    ...(raw.grantedScopes === undefined
       ? {}
-      : { grantedScopes: raw.value.grantedScopes }),
-    ...(raw.value.scopeOmittedTools === undefined
+      : { grantedScopes: raw.grantedScopes }),
+    ...(raw.scopeOmittedTools === undefined
       ? {}
-      : { scopeOmittedTools: raw.value.scopeOmittedTools }),
-    ...(raw.value.featureOmittedTools === undefined
+      : { scopeOmittedTools: raw.scopeOmittedTools }),
+    ...(raw.featureOmittedTools === undefined
       ? {}
-      : { featureOmittedTools: raw.value.featureOmittedTools }),
-    ...(raw.value.featureOmittedCapabilities === undefined
+      : { featureOmittedTools: raw.featureOmittedTools }),
+    ...(raw.featureOmittedCapabilities === undefined
       ? {}
-      : { featureOmittedCapabilities: raw.value.featureOmittedCapabilities }),
+      : { featureOmittedCapabilities: raw.featureOmittedCapabilities }),
   };
   const file: RegistryCacheFile = {
+    compatibility: existing?.compatibility,
     version: CACHE_SCHEMA_VERSION,
     serverOrigin,
     fetchedAt: Temporal.Instant.fromEpochMilliseconds(now).toString({
       fractionalSecondDigits: 3,
     }),
     ttlSeconds,
-    ...(raw.value.featureOmittedTools === undefined
+    ...(raw.featureOmittedTools === undefined
       ? {}
-      : { featureOmittedTools: raw.value.featureOmittedTools }),
-    ...(raw.value.featureOmittedCapabilities === undefined
+      : { featureOmittedTools: raw.featureOmittedTools }),
+    ...(raw.featureOmittedCapabilities === undefined
       ? {}
-      : { featureOmittedCapabilities: raw.value.featureOmittedCapabilities }),
+      : { featureOmittedCapabilities: raw.featureOmittedCapabilities }),
     ...(lastNudgedVersion === undefined ? {} : { lastNudgedVersion }),
+    ...cachedVersionPolicy(raw),
   };
-  await writeCacheFile(filePath, file);
+  const savedMetadata = await Result.tryPromise(
+    async () => await writeCacheFile(filePath, file),
+  );
+  const savedProjection =
+    projectionPath !== undefined && projectionSource === "server"
+      ? await writeProjectionCache({
+          filePath: projectionPath,
+          raw,
+          now,
+        })
+      : Result.ok(undefined);
+  const cacheWarning =
+    savedMetadata.isErr() || savedProjection.isErr()
+      ? "Registry cache could not be saved; a later command may fetch it again."
+      : undefined;
   return {
     status: "refreshed",
     registry,
+    ...(cacheWarning === undefined ? {} : { cacheWarning }),
     deltaEmpty: isDeltaEmpty(delta),
     ...(trust.featureAccess === undefined
       ? {}
       : { featureAccess: trust.featureAccess }),
     ...(nudge.line === undefined ? {} : { nudge: nudge.line }),
+    ...(nudge.unsupported === undefined
+      ? {}
+      : { unsupported: nudge.unsupported }),
   };
 };

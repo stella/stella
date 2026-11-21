@@ -34,6 +34,7 @@ import path from "node:path";
 import { compareCodeUnit } from "@stll/collation";
 
 import { BASELINE_PATHS } from "./baseline-paths";
+import { validateKnipGeneratedEntries } from "./knip-generated-entries";
 
 const REPO_ROOT = path.resolve(import.meta.dir, "..");
 const BASELINE_REL = BASELINE_PATHS.knipExports;
@@ -118,38 +119,57 @@ const parseKnipReport = (report: unknown): readonly KnipFileReport[] => {
   return rows;
 };
 
-const sortedSummary = (summary: Summary): Summary => {
-  const sorted: Summary = {};
-  for (const workspace of Object.keys(summary).toSorted()) {
-    const snapshot =
-      summary[workspace] ?? panic(`workspace ${workspace} vanished`);
-    const files: Record<string, number> = {};
-    for (const file of Object.keys(snapshot.files).toSorted()) {
-      files[file] = snapshot.files[file] ?? panic(`file ${file} vanished`);
-    }
-    sorted[workspace] = { count: snapshot.count, files };
-  }
-  return sorted;
-};
+const sortedSummary = (summary: Summary): Summary =>
+  Object.fromEntries(
+    Object.keys(summary)
+      .toSorted()
+      .map((workspace) => {
+        const snapshot =
+          summary[workspace] ?? panic(`workspace ${workspace} vanished`);
+        const files = Object.fromEntries(
+          Object.keys(snapshot.files)
+            .toSorted()
+            .map(
+              (file) =>
+                [
+                  file,
+                  snapshot.files[file] ?? panic(`file ${file} vanished`),
+                ] as const,
+            ),
+        );
+        return [workspace, { count: snapshot.count, files }] as const;
+      }),
+  );
 
 // The knip json reporter emits `{ issues: [{ file, exports, types, ... }] }`,
 // one entry per file, each issue type an array of symbols.
 export const summarizeKnipReport = (report: unknown): Summary => {
-  const summary: Record<
+  const summary = new Map<
     string,
-    { count: number; files: Record<string, number> }
-  > = {};
+    { count: number; files: Map<string, number> }
+  >();
   for (const { file, issues } of parseKnipReport(report)) {
     if (issues.length === 0) {
       continue;
     }
     const workspace = workspaceOf(file);
-    const snapshot = summary[workspace] ?? { count: 0, files: {} };
+    const snapshot = summary.get(workspace) ?? {
+      count: 0,
+      files: new Map<string, number>(),
+    };
     snapshot.count += issues.length;
-    snapshot.files[file] = (snapshot.files[file] ?? 0) + issues.length;
-    summary[workspace] = snapshot;
+    snapshot.files.set(file, (snapshot.files.get(file) ?? 0) + issues.length);
+    summary.set(workspace, snapshot);
   }
-  return sortedSummary(summary);
+  return sortedSummary(
+    Object.fromEntries(
+      Array.from(
+        summary,
+        ([workspace, { count, files }]) =>
+          [workspace, { count, files: Object.fromEntries(files) }] as const,
+      ),
+    ),
+  );
 };
 
 // Symbol names per file, so a failing gate names what to delete rather than
@@ -157,32 +177,40 @@ export const summarizeKnipReport = (report: unknown): Summary => {
 export const collectIssueSymbols = (
   report: unknown,
 ): Record<string, readonly string[]> => {
-  const symbols: Record<string, string[]> = {};
+  const symbols = new Map<string, string[]>();
   for (const { file, issues } of parseKnipReport(report)) {
     for (const { type, name } of issues) {
-      const named = symbols[file] ?? [];
+      const named = symbols.get(file) ?? [];
       named.push(`${name} (${type})`);
-      symbols[file] = named;
+      symbols.set(file, named);
     }
   }
-  return symbols;
+  return Object.fromEntries(symbols);
 };
 
 // --- Diffing ----------------------------------------------------------------
 
 type WorkspaceStatus = "ok" | "regressed" | "dropped";
 
+type FileDelta = {
+  readonly file: string;
+  readonly from: number;
+  readonly to: number;
+};
+
 export type WorkspaceDiff = {
   readonly workspace: string;
   readonly status: WorkspaceStatus;
   readonly current: number;
   readonly baseline: number;
-  readonly regressedFiles: readonly {
-    readonly file: string;
-    readonly from: number;
-    readonly to: number;
-  }[];
+  readonly changedFiles: readonly FileDelta[];
+  readonly regressedFiles: readonly FileDelta[];
 };
+
+export const formatFileDeltas = (deltas: readonly FileDelta[]): string =>
+  deltas
+    .map(({ file, from, to }) => `      ${file}: ${from} -> ${to}`)
+    .join("\n");
 
 const workspaceStatus = (
   current: number,
@@ -201,17 +229,27 @@ export const diffSummaries = (
   current: Summary,
   baseline: Summary,
 ): readonly WorkspaceDiff[] => {
+  const currentByWorkspace = new Map(Object.entries(current));
+  const baselineByWorkspace = new Map(Object.entries(baseline));
   const workspaces = [
-    ...new Set([...Object.keys(current), ...Object.keys(baseline)]),
+    ...new Set([...currentByWorkspace.keys(), ...baselineByWorkspace.keys()]),
   ].toSorted();
 
   return workspaces.map((workspace) => {
-    const now = current[workspace] ?? { count: 0, files: {} };
-    const before = baseline[workspace] ?? { count: 0, files: {} };
-    const regressedFiles = Object.entries(now.files)
-      .flatMap(([file, to]) => {
-        const from = before.files[file] ?? 0;
-        return to > from ? [{ file, from, to }] : [];
+    const now = currentByWorkspace.get(workspace) ?? { count: 0, files: {} };
+    const before = baselineByWorkspace.get(workspace) ?? {
+      count: 0,
+      files: {},
+    };
+    const currentFiles = new Map(Object.entries(now.files));
+    const baselineFiles = new Map(Object.entries(before.files));
+    const changedFiles = [
+      ...new Set([...baselineFiles.keys(), ...currentFiles.keys()]),
+    ]
+      .flatMap((file) => {
+        const from = baselineFiles.get(file) ?? 0;
+        const to = currentFiles.get(file) ?? 0;
+        return to !== from ? [{ file, from, to }] : [];
       })
       .toSorted((a, b) => compareCodeUnit(a.file, b.file));
 
@@ -220,12 +258,27 @@ export const diffSummaries = (
       status: workspaceStatus(now.count, before.count),
       current: now.count,
       baseline: before.count,
-      regressedFiles,
+      changedFiles,
+      regressedFiles: changedFiles.filter(({ from, to }) => to > from),
     };
   });
 };
 
-// The workspaces `--write` may not record without an explicit flag.
+// `--check` fails on any file that rose, not only on a workspace total that
+// rose. A total leaves slack wherever other files dropped without a `--write`,
+// so a new unused export can pass against the branch's baseline yet fail once
+// main has locked that drop in. Per-file counts carry no such slack.
+export const checkRegressions = (
+  current: Summary,
+  baseline: Summary,
+): readonly WorkspaceDiff[] =>
+  diffSummaries(current, baseline).filter(
+    ({ status, regressedFiles }) =>
+      status === "regressed" || regressedFiles.length > 0,
+  );
+
+// The workspaces `--write` may not record without an explicit flag. Moves
+// between files keep the total, so they record without one.
 export const increasedWorkspaces = (
   current: Summary,
   baseline: Summary,
@@ -247,13 +300,13 @@ const readBaseline = (): Summary => {
     panic(`${BASELINE_REL} must be a JSON object`);
   }
 
-  const baseline: Summary = {};
+  const baseline = new Map<string, WorkspaceSnapshot>();
   for (const [workspace, snapshot] of Object.entries(parsed.value)) {
     const reportedFiles = isRecord(snapshot) ? snapshot["files"] : undefined;
     if (!isRecord(snapshot) || !isRecord(reportedFiles)) {
       panic(`${BASELINE_REL} entry ${workspace} must carry count and files`);
     }
-    const files: Record<string, number> = {};
+    const files = new Map<string, number>();
     let total = 0;
     for (const [file, value] of Object.entries(reportedFiles)) {
       if (
@@ -265,7 +318,7 @@ const readBaseline = (): Summary => {
           `${BASELINE_REL} entry ${workspace} has an invalid count for ${file}`,
         );
       }
-      files[file] = value;
+      files.set(file, value);
       total += value;
     }
     const declared = snapshot["count"];
@@ -274,9 +327,9 @@ const readBaseline = (): Summary => {
         `${BASELINE_REL} entry ${workspace} count ${String(declared)} does not equal its per-file total ${total}`,
       );
     }
-    baseline[workspace] = { count: total, files };
+    baseline.set(workspace, { count: total, files: Object.fromEntries(files) });
   }
-  return baseline;
+  return Object.fromEntries(baseline);
 };
 
 // --- knip -------------------------------------------------------------------
@@ -305,7 +358,13 @@ const runKnip = (): unknown => {
   // knip exits non-zero whenever it reports issues, which is the normal case
   // for a budget: only unparsable output is a failure.
   const stdout = knip.stdout.toString();
-  const parsed = Result.try((): unknown => JSON.parse(stdout));
+  // The generation preflight may report a cache hit before knip writes JSON.
+  // Anchor on the reporter's top-level shape rather than accepting arbitrary
+  // trailing output as a report.
+  const reportStart = stdout.indexOf('{"issues":');
+  const parsed = Result.try((): unknown =>
+    JSON.parse(reportStart === -1 ? stdout : stdout.slice(reportStart)),
+  );
   if (Result.isError(parsed)) {
     panic(
       `knip did not produce JSON output:\n${knip.stderr.toString().trim() || stdout.trim()}`,
@@ -376,29 +435,35 @@ const runWrite = (): number => {
 const runCheck = (): number => {
   const report = runKnip();
   const current = summarizeKnipReport(report);
-  const diffs = diffSummaries(current, readBaseline());
+  const baseline = readBaseline();
+  const diffs = diffSummaries(current, baseline);
   const symbols = collectIssueSymbols(report);
 
-  for (const diff of diffs.filter(({ status }) => status === "dropped")) {
+  // A workspace whose total dropped while one of its files rose is a
+  // regression, not an improvement: `--write` would record that file's rise.
+  for (const diff of diffs.filter(
+    ({ status, regressedFiles }) =>
+      status === "dropped" && regressedFiles.length === 0,
+  )) {
     console.log(
-      `knip dead exports: ${diff.workspace} dropped ${diff.baseline} -> ${diff.current}. Nice — run \`${WRITE_HINT}\` and commit ${BASELINE_REL} to lock it in.`,
+      `knip dead exports: ${diff.workspace} dropped ${diff.baseline} -> ${diff.current}. Nice — run \`${WRITE_HINT}\` and commit ${BASELINE_REL} to lock it in.\n${formatFileDeltas(diff.changedFiles)}`,
     );
   }
 
-  const regressions = diffs.filter(({ status }) => status === "regressed");
+  const regressions = checkRegressions(current, baseline);
   if (regressions.length === 0) {
     console.log(
-      `knip dead exports --check: OK. ${diffs.length} workspace(s) at or below baseline.`,
+      `knip dead exports --check: OK. ${diffs.length} workspace(s) at or below baseline, no file above its count.`,
     );
     return 0;
   }
 
   console.error(
-    "\nknip dead exports --check: workspace(s) rose above baseline:\n",
+    "\nknip dead exports --check: file(s) rose above their baseline count:\n",
   );
   for (const diff of regressions) {
     console.error(
-      `  ${diff.workspace}: ${diff.baseline} -> ${diff.current} (+${diff.current - diff.baseline})`,
+      `  ${diff.workspace}: ${diff.baseline} -> ${diff.current} (${formatDelta(diff.current - diff.baseline)} in total)`,
     );
     for (const { file, from, to } of diff.regressedFiles) {
       console.error(`      ${file}: ${from} -> ${to}`);
@@ -409,16 +474,50 @@ const runCheck = (): number => {
   }
   console.error(
     "\nDelete the unused export, or reference it from a real runtime or test\n" +
-      `path. If the increase is genuinely justified, run\n` +
+      `path. If exports only moved between files, run \`${WRITE_HINT}\`.\n` +
+      `If the increase is genuinely justified, run\n` +
       `\`${WRITE_HINT} ${ALLOW_INCREASE_FLAG}\` and commit ${BASELINE_REL} with a\n` +
       "rationale in your pull request.",
   );
   return 1;
 };
 
-if (import.meta.main) {
-  if (process.argv.includes("--write")) {
-    process.exit(runWrite());
+type RatchetRunners = {
+  readonly report: () => number;
+  readonly write: () => number;
+  readonly check: () => number;
+};
+
+type RunKnipExportsRatchetOptions = {
+  readonly args: readonly string[];
+  readonly repoRoot?: string;
+  readonly fileExists?: (file: string) => boolean;
+  readonly runners?: RatchetRunners;
+  readonly reportError?: (message: string) => void;
+};
+
+export const runKnipExportsRatchet = ({
+  args,
+  repoRoot = REPO_ROOT,
+  fileExists = existsSync,
+  runners = {
+    report: runReport,
+    write: runWrite,
+    check: runCheck,
+  },
+  reportError = console.error,
+}: RunKnipExportsRatchetOptions): number => {
+  const error = validateKnipGeneratedEntries(repoRoot, fileExists);
+  if (error !== undefined) {
+    reportError(`${error._tag}: ${error.message}`);
+    return 1;
   }
-  process.exit(process.argv.includes("--check") ? runCheck() : runReport());
+  if (args.includes("--write")) {
+    return runners.write();
+  }
+  return args.includes("--check") ? runners.check() : runners.report();
+};
+
+if (import.meta.main) {
+  process.exit(runKnipExportsRatchet({ args: process.argv }));
 }

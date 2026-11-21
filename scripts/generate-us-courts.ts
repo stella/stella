@@ -31,15 +31,17 @@
  * A manual tool outside the build; `us-courts-generator.test.ts` holds the
  * committed directory to what the committed inputs generate.
  */
-
 import { panic } from "better-result";
-import { createHash } from "node:crypto";
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import * as v from "valibot";
 
+import { createSha256 } from "@stll/sha256/node";
+import { normalizeUnicode } from "@stll/text-normalize";
+
 import {
   isUsCourtRegion,
+  US_ABBREVIATED_COURT_ID_LIST,
   US_ACCEPTED_COURT_FIELDS,
   US_COURT_CLASSIFICATIONS,
   US_COURT_DIRECTORY_FIELD_SEPARATOR,
@@ -52,7 +54,6 @@ import {
   US_SCOPE_REGIONS,
   US_STATE_REGIONS,
   US_TERRITORY_REGIONS,
-  US_ABBREVIATED_COURT_ID_LIST,
   usCourtPartitionLabel,
 } from "../packages/api-contract/src/us-court-vocabulary";
 import type {
@@ -69,9 +70,10 @@ import {
   formattedLikeRepository,
   writeOrCheckArtifacts,
 } from "./generated-artifacts";
+import { hashGeneratedSource } from "./generated-source-hash";
 
 /** Bumped when the rendering or the resolution rules change. */
-const GENERATOR_VERSION = 3;
+const GENERATOR_VERSION = 4;
 
 const REPO_ROOT = path.join(import.meta.dir, "..");
 const DATA_DIR = path.join(REPO_ROOT, "packages/api-contract/data/us-courts");
@@ -453,9 +455,9 @@ type RejectedEntry = UsRejectedCourtRow;
 type DirectoryEntry = UsCourtDirectoryRow;
 
 /** The partition a court id falls in; see `US_COURT_PARTITION_KEY_PREFIX`. */
-const usCourtPartitionOf = (courtId: string): UsCourtPartition => {
-  const digest = createHash("sha256")
-    .update(`${US_COURT_PARTITION_KEY_PREFIX}${courtId}`, "utf-8")
+export const usCourtPartitionOf = (courtId: string): UsCourtPartition => {
+  const digest = createSha256()
+    .update(`${US_COURT_PARTITION_KEY_PREFIX}${courtId}`)
     .digest();
   return usCourtPartitionLabel((digest[0] ?? 0) % US_COURT_PARTITION_COUNT);
 };
@@ -792,7 +794,8 @@ const resolveRegions = (
   return regions;
 };
 
-const normalizedName = (name: string): string => name.normalize("NFC").trim();
+const normalizedName = (name: string): string =>
+  normalizeUnicode(name, "NFC").trim();
 
 /** An override distinguishes a shared source name, on evidence that holds. */
 const checkNameOverride = (
@@ -886,11 +889,17 @@ const acceptedEntry = (
   if (source.in_use !== "t" && source.in_use !== "f") {
     problems.push(`${source.id}: in_use is ${JSON.stringify(source.in_use)}`);
   }
+  const shortCode =
+    source.id === "scotus" ? "SCOTUS" : normalizedName(source.short_name);
+  if (shortCode.length === 0) {
+    problems.push(`${source.id}: source short_name is empty`);
+  }
   return {
     status: "accepted",
     id: source.id,
     sourceName: source.full_name,
     canonicalName,
+    shortCode,
     rawJurisdiction: source.jurisdiction,
     classification,
     system,
@@ -984,13 +993,12 @@ export const buildUsCourtDirectory = ({
 
 // -- Rendering ---------------------------------------------------------------
 
-const sha256 = (data: string | Uint8Array): string =>
-  createHash("sha256").update(data).digest("hex");
+const sha256 = hashGeneratedSource;
 
 const literal = (value: string | boolean | null): string =>
   typeof value === "string" ? JSON.stringify(value) : String(value);
 
-/** One string property of a formatted object literal, wrapped as oxfmt wraps it. */
+/** One string property of a formatted object literal, wrapped as the formatter wraps it. */
 const property = (key: string, value: string): string => {
   const line = `  ${key}: ${literal(value)},`;
   return line.length <= 80 ? line : `  ${key}:\n    ${literal(value)},`;
@@ -1075,7 +1083,7 @@ export const renderDirectory = (
     " * checker reads one string instead of thousands of object literals;",
     " * `us-courts.ts` reads it into checked rows once.",
     " */",
-    "// oxfmt-ignore",
+    "// prettier-ignore",
     `export const US_COURT_DIRECTORY_TEXT: string = \`${entries.map(renderEntry).join("\n")}\`;`,
     "",
   ].join("\n");
@@ -1106,7 +1114,7 @@ export const renderAbbreviatedCourts = (
     "};",
     "",
     "/** Each abbreviated court and the canonical name its decisions are under. */",
-    "// oxfmt-ignore",
+    "// prettier-ignore",
     "export const US_ABBREVIATED_COURTS: readonly UsAbbreviatedCourt[] = [",
     ...US_ABBREVIATED_COURT_ID_LIST.map((id) => {
       const court =
@@ -1289,7 +1297,7 @@ const main = async (): Promise<number> => {
   // the renderers have to produce the formatted text themselves.
   for (const rendered of [directory, abbreviatedCourts]) {
     if ((await formattedLikeRepository(rendered, "ts")) !== rendered) {
-      return panic("oxfmt changes a generated file; fix its renderer");
+      return panic("bun fmt changes a generated file; fix its renderer");
     }
   }
   const artifacts = [

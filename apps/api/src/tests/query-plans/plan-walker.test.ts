@@ -1,14 +1,217 @@
 import { panic } from "better-result";
 import { expect, test } from "bun:test";
+import fc from "fast-check";
+
+import { assertProperty } from "@stll/property-testing";
 
 import {
   accessPathViolations,
   explainRoot,
   heapFetchRiskViolations,
+  indexedAccessPaths,
+  orderedIndexAccess,
   scanOccurrences,
   withoutAuthorizationSubplans,
 } from "@/api/tests/query-plans/plan-walker";
 import workspaceRlsPlan from "@/api/tests/query-plans/workspace-rls-plan.fixture.json" with { type: "json" };
+
+test("equivalent index and bitmap plans preserve indexed access bounds", () => {
+  assertProperty(
+    "equivalent index and bitmap plans preserve indexed access bounds",
+    fc.property(
+      fc.string({ minLength: 1, maxLength: 20 }),
+      fc.string({ minLength: 1, maxLength: 20 }),
+      fc.integer({ min: 0, max: 100 }),
+      fc.integer({ min: 0, max: 100 }),
+      fc.boolean(),
+      (indexName, column, loops, rows, bitmapAnd) => {
+        const relation = "bounded_relation";
+        const condition = `(${column} = 1)`;
+        const direct = (nodeType: "Index Scan" | "Index Only Scan") => ({
+          "Node Type": nodeType,
+          "Relation Name": relation,
+          "Index Name": indexName,
+          "Index Cond": condition,
+          "Actual Loops": loops,
+          "Actual Rows": rows,
+        });
+        const bitmapIndex = {
+          "Node Type": "Bitmap Index Scan",
+          "Index Name": indexName,
+          "Index Cond": condition,
+        };
+        const bitmap = {
+          "Node Type": "Bitmap Heap Scan",
+          "Relation Name": relation,
+          "Recheck Cond": condition,
+          "Actual Loops": loops,
+          "Actual Rows": rows,
+          Plans: bitmapAnd
+            ? [{ "Node Type": "BitmapAnd", Plans: [bitmapIndex] }]
+            : [bitmapIndex],
+        };
+        const projection = (root: Record<string, unknown>) =>
+          indexedAccessPaths(root, relation).map(
+            ({ branches, actualLoops, actualRows }) => ({
+              branches,
+              actualLoops,
+              actualRows,
+            }),
+          );
+        expect(projection(direct("Index Scan"))).toEqual(projection(bitmap));
+        expect(projection(direct("Index Only Scan"))).toEqual(
+          projection(bitmap),
+        );
+        expect(
+          indexedAccessPaths(
+            { "Node Type": "Seq Scan", "Relation Name": relation },
+            relation,
+          ),
+        ).toEqual([]);
+      },
+    ),
+  );
+});
+
+const isCoveragePlanProbe = (
+  path: ReturnType<typeof indexedAccessPaths>[number],
+): boolean =>
+  path.combinator !== "or" &&
+  path.branches.every(
+    ({ indexName, indexCondition }) =>
+      indexName === "coverage_idx" &&
+      indexCondition?.includes("source_id") === true &&
+      indexCondition.includes("court"),
+  );
+
+test("a bitmap-or cannot borrow another branch's coverage bounds", () => {
+  const root = {
+    "Node Type": "Bitmap Heap Scan",
+    "Relation Name": "coverage",
+    Plans: [
+      {
+        "Node Type": "BitmapOr",
+        Plans: [
+          {
+            "Node Type": "Bitmap Index Scan",
+            "Index Name": "coverage_idx",
+            "Index Cond": "(source_id = 1 AND court = 'x')",
+          },
+          {
+            "Node Type": "Bitmap Index Scan",
+            "Index Name": "unrelated_idx",
+            "Index Cond": null,
+          },
+        ],
+      },
+    ],
+  };
+  const path =
+    indexedAccessPaths(root, "coverage").at(0) ??
+    panic("Missing synthetic bitmap access path");
+
+  expect(path.combinator).toBe("or");
+  expect(isCoveragePlanProbe(path)).toBe(false);
+});
+
+test("a bitmap-and preserves its branch bounds and combinator", () => {
+  const root = {
+    "Node Type": "Bitmap Heap Scan",
+    "Relation Name": "coverage",
+    Plans: [
+      {
+        "Node Type": "BitmapAnd",
+        Plans: [
+          {
+            "Node Type": "Bitmap Index Scan",
+            "Index Name": "source_idx",
+            "Index Cond": "(source_id = 1)",
+          },
+          {
+            "Node Type": "Bitmap Index Scan",
+            "Index Name": "court_idx",
+            "Index Cond": "(court = 'x')",
+          },
+        ],
+      },
+    ],
+  };
+
+  expect(indexedAccessPaths(root, "coverage").at(0)).toMatchObject({
+    combinator: "and",
+    branches: [
+      { indexName: "source_idx", indexCondition: "(source_id = 1)" },
+      { indexName: "court_idx", indexCondition: "(court = 'x')" },
+    ],
+  });
+});
+
+test("ordered index access accepts index and index-only scans but never a bitmap path", () => {
+  const scan = (nodeType: string) => ({
+    "Node Type": "Limit",
+    Plans: [
+      {
+        "Node Type": nodeType,
+        "Relation Name": "decisions",
+        "Index Name": "decisions_pkey",
+        "Index Cond": "(id > $1)",
+      },
+    ],
+  });
+  expect(
+    orderedIndexAccess(scan("Index Scan"), "decisions", "decisions_pkey"),
+  ).toBe(true);
+  expect(
+    orderedIndexAccess(scan("Index Only Scan"), "decisions", "decisions_pkey"),
+  ).toBe(true);
+  const bounded = {
+    "Node Type": "Limit",
+    Plans: [
+      {
+        "Node Type": "Bitmap Heap Scan",
+        "Relation Name": "decisions",
+        "Recheck Cond": "(id > $1)",
+        Plans: [
+          {
+            "Node Type": "Bitmap Index Scan",
+            "Index Name": "decisions_pkey",
+            "Index Cond": "(id > $1)",
+          },
+        ],
+      },
+    ],
+  };
+  expect(orderedIndexAccess(bounded, "decisions", "decisions_pkey")).toBe(
+    false,
+  );
+  expect(orderedIndexAccess(scan("Index Scan"), "decisions", "other_idx")).toBe(
+    false,
+  );
+});
+
+test("an index-only filter returns only the covering scan of an index scanned twice", () => {
+  const covering = {
+    "Node Type": "Index Only Scan",
+    "Relation Name": "links",
+    "Index Name": "links_subtree_idx",
+  };
+  const heapReading = {
+    "Node Type": "Index Scan",
+    "Relation Name": "links",
+    "Index Name": "links_subtree_idx",
+  };
+  const root = { "Node Type": "Append", Plans: [covering, heapReading] };
+
+  expect(
+    indexedAccessPaths(root, "links", { accessKind: "index-only" }).map(
+      ({ node }) => node,
+    ),
+  ).toEqual([covering]);
+  expect(indexedAccessPaths(root, "links").map(({ node }) => node)).toEqual([
+    covering,
+    heapReading,
+  ]);
+});
 
 test("keeps repeated relation scans distinct by structural position", () => {
   const root = explainRoot([
@@ -112,7 +315,7 @@ test("keeps repeated relation scans distinct by structural position", () => {
 const coveringScan = (extra: Record<string, unknown> = {}) => ({
   "Node Type": "Index Only Scan",
   "Relation Name": "case_law_decisions",
-  "Index Name": "case_law_decisions_sitemap_shard_idx",
+  "Index Name": "case_law_decisions_sitemap_shard_published_idx",
   ...extra,
 });
 
@@ -284,14 +487,16 @@ test("a pinned heap-fetch exception covers only its scan until it expires", () =
       position: "root/0/0/0",
       relation: "case_law_decisions",
       nodeType: "Index Only Scan",
-      index: "case_law_decisions_sitemap_shard_idx",
+      index: "case_law_decisions_sitemap_shard_published_idx",
     },
     reason: "per-row lookup under an aggregate",
     rework: "bound the query",
     expiresOn: "2026-10-13",
   };
   const onDay = (day: string) => new Date(`${day}T12:00:00Z`);
-  const onlyPinned = aggregatePlan("case_law_decisions_sitemap_shard_idx");
+  const onlyPinned = aggregatePlan(
+    "case_law_decisions_sitemap_shard_published_idx",
+  );
   const pinnedScan = onlyPinned.filter(
     ({ position }) => position === "root/0/0/0",
   );
@@ -332,7 +537,7 @@ test("a pinned heap-fetch exception covers only its scan until it expires", () =
   ]);
   // Stale: the plan changed, so the exception must be removed.
   const stale =
-    "heap-fetch exception for root/0/0/0 on case_law_decisions is stale: the plan has no such risky Index Only Scan/case_law_decisions_sitemap_shard_idx; remove it";
+    "heap-fetch exception for root/0/0/0 on case_law_decisions is stale: the plan has no such risky Index Only Scan/case_law_decisions_sitemap_shard_published_idx; remove it";
   expect(
     heapFetchRiskViolations(
       aggregatePlan("case_law_decisions_changed_idx").filter(
@@ -382,7 +587,7 @@ test("flags an unbounded covering scan but leaves an Index Scan alone", () => {
       {
         "Node Type": "Index Only Scan",
         "Relation Name": "case_law_decisions",
-        "Index Name": "case_law_decisions_sitemap_shard_idx",
+        "Index Name": "case_law_decisions_sitemap_shard_published_idx",
       },
       {
         "Node Type": "Index Scan",
@@ -501,7 +706,7 @@ test("does not merge separate OR and subplan predicates", () => {
     "Node Type": "Index Scan",
     "Relation Name": "case_law_decisions",
     Alias: "case_law_decisions",
-    "Index Name": "case_law_decisions_country_date_idx",
+    "Index Name": "case_law_decisions_country_date_published_idx",
     "Index Cond": "(country = 'CZE')",
     Filter: "(((language = 'cs') OR (language = 'en')) AND (hashed SubPlan 1))",
   });
@@ -513,7 +718,7 @@ test("does not merge separate OR and subplan predicates", () => {
           alias: "case_law_decisions",
           relation: "case_law_decisions",
           nodeType: "Index Scan",
-          index: "case_law_decisions_country_date_idx",
+          index: "case_law_decisions_country_date_published_idx",
         },
       ],
       "page",
@@ -524,16 +729,22 @@ test("does not merge separate OR and subplan predicates", () => {
 
 test("excludes only the real workspace authorization subplan", () => {
   const scan = scanOccurrences(workspaceRlsPlan).at(0);
-  expect(scan?.relation).toBe("entities");
-  expect(scan?.filter).toContain("SubPlan 3");
-  expect(scan?.subplans[0]?.relations).toContain("aw");
   if (scan === undefined) {
     panic("Workspace RLS fixture has no scan");
   }
-  expect(withoutAuthorizationSubplans(scan)).not.toContain("SubPlan 3");
+  const authorization = scan.subplans.find(({ relations }) =>
+    relations.includes("aw"),
+  );
+  if (authorization?.name === undefined || authorization.name === null) {
+    panic("Workspace RLS fixture has no authorization subplan");
+  }
+  expect(scan.relation).toBe("entities");
+  expect(scan.filter).toContain(authorization.name);
+  expect(withoutAuthorizationSubplans(scan)).not.toContain(authorization.name);
+  const otherName = `${authorization.name}0`;
   const otherSubplan = {
     ...scan,
-    filter: `${scan.filter ?? ""} AND (hashed SubPlan 30)`,
+    filter: `${scan.filter ?? ""} AND (hashed ${otherName})`,
   };
-  expect(withoutAuthorizationSubplans(otherSubplan)).toContain("SubPlan 30");
+  expect(withoutAuthorizationSubplans(otherSubplan)).toContain(otherName);
 });

@@ -6,11 +6,13 @@ import {
   DECISION_IDENTIFIER_TYPES,
 } from "@stll/legal-ast/decision-identifier";
 import type {
-  DecisionIdentifierType,
   DecisionIdentifiers,
+  DecisionIdentifierType,
 } from "@stll/legal-ast/decision-identifier";
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
+import { normalizeUnicode } from "@stll/text-normalize";
 
+import { czUohsDecisionIdentifiers } from "@/api/handlers/case-law/ingestion/adapters/cz-uohs";
 import {
   normalizeHuBhgyRow,
   readHuBhgySearch,
@@ -18,10 +20,10 @@ import {
 import { plUokikDecisionIdentifiers } from "@/api/handlers/case-law/ingestion/adapters/pl-uokik";
 import {
   bareCitationKey,
+  citationKeyOf,
   decisionCitationKeyOf,
   decisionIdentifiersFromMetadata,
   decisionIdentifiersFromStoredMetadata,
-  citationKeyOf,
   extractCitations,
   hungarianCitationForm,
   isSelfCitation,
@@ -29,9 +31,103 @@ import {
   normalizeDecisionIdentifierValue,
   normalizeDecisionIdentifierValueIn,
 } from "@/api/handlers/case-law/ingestion/citation-extractor";
+import { CITATION_STORAGE_WIDTHS } from "@/api/lib/case-law/citation-storage-bounds";
 import { storeDecisionIdentifiersInMetadata } from "@/api/lib/legal-search/decision-identifier-metadata";
 
 describe("extractCitations", () => {
+  test("an ÚOHS citation keys as the adapter's emitted identifier", () => {
+    const [citation] = extractCitations([
+      { index: 0, text: "ÚOHS ÚOHS-R0901/2026/VZ" },
+    ]);
+    const emitted = czUohsDecisionIdentifiers({
+      spisová_značka: "R0901/2026/VZ",
+      číslo_jednací: "90001/2026/163",
+    });
+    expect(
+      normalizeDecisionIdentifierValue(
+        citation!.identifierType,
+        citation!.citationText,
+      ),
+    ).toBe(normalizeDecisionIdentifierValue(emitted[0].type, emitted[0].value));
+  });
+  test.each([
+    ["ÚOHS ÚOHS-S123/2024/VZ", "ÚOHS-S123/2024/VZ"],
+    ["OHS ÚOHS-R456/2025/VZ", "ÚOHS-R456/2025/VZ"],
+    [
+      "Úřad pro ochranu hospodářské soutěže ÚOHS-12345/2024/500",
+      "ÚOHS-12345/2024/500",
+    ],
+    ["rozhodnutí předsedy ÚOHS-54321/2025/500/ABC", "ÚOHS-54321/2025/500/ABC"],
+    [
+      "ÚOHS ÚOHS-S123/2024/VZ-12345/2024/500/JNe",
+      "ÚOHS-S123/2024/VZ-12345/2024/500/JNe",
+    ],
+    [
+      "ÚOHS ÚOHS-R456/2025/VZ-54321/2025/310",
+      "ÚOHS-R456/2025/VZ-54321/2025/310",
+    ],
+    ["ÚOOÚ UOOU-12345/17-12", "UOOU-12345/17-12"],
+    ["Úřad pro ochranu osobních údajů UOOU-123417-12", "UOOU-123417-12"],
+  ])("extracts Czech authority decision shape %s", (text, number) => {
+    const citations = extractCitations([{ index: 0, text }]);
+    expect(citations).toContainEqual(
+      expect.objectContaining({
+        citationText: number,
+        identifierType: DECISION_IDENTIFIER_TYPES.AUTHORITY_DECISION_NUMBER,
+      }),
+    );
+  });
+
+  test.each(["ÚOHS ÚOHS-S123/2024/VZ-abc", "ÚOHS ÚOHS-S123/2024/VZ-12345"])(
+    "never cuts an unsupported continuation of %s to the proceeding number",
+    (text) => {
+      expect(
+        extractCitations([{ index: 0, text }]).map(
+          ({ citationText }) => citationText,
+        ),
+      ).not.toContain("ÚOHS-S123/2024/VZ");
+    },
+  );
+
+  test("a neighbouring number's prefix is not a Czech authority cue", () => {
+    expect(
+      extractCitations([
+        { index: 0, text: "ÚOOÚ ÚOHS-S1/2024/VZ a ÚOHS-S2/2024/VZ" },
+      ]).map(({ citationText }) => citationText),
+    ).toEqual([]);
+    expect(
+      extractCitations([
+        { index: 0, text: "UOOU-12345/17-12 a UOOU-54321/18-3" },
+      ]).map(({ citationText }) => citationText),
+    ).toEqual([]);
+  });
+
+  test("Polish authority citations carry the type their adapter stores", () => {
+    const [citation] = extractCitations([
+      { index: 0, text: "decyzja Prezesa UOKiK nr DOK-1/2020" },
+    ]);
+    const stored = plUokikDecisionIdentifiers("DOK-1/2020").at(0);
+    expect(citation?.citationText).toBe("DOK-1/2020");
+    expect(citation?.identifierType).toBe(stored?.type);
+    expect(
+      extractCitations([{ index: 0, text: "znak sprawy DKN.5131.6.2024" }]).at(
+        0,
+      )?.identifierType,
+    ).toBe(DECISION_IDENTIFIER_TYPES.CASE_NUMBER);
+  });
+
+  test("rejects Czech authority numbers without their own cue", () => {
+    expect(
+      extractCitations([{ index: 0, text: "ÚOHS-S123/2024/VZ" }]),
+    ).toHaveLength(0);
+    expect(
+      extractCitations([{ index: 0, text: "ÚOOÚ ÚOHS-S123/2024/VZ" }]),
+    ).toHaveLength(0);
+    expect(
+      extractCitations([{ index: 0, text: "ÚOHS UOOU-12345/17-12" }]),
+    ).toHaveLength(0);
+  });
+
   test("deduplicates sp. zn. and č. j. for the same case number", () => {
     const text = "Viz sp. zn. 21 Cdo 1234/2020 a také č. j. 21 Cdo 1234/2020";
     const citations = extractCitations([{ index: 0, text }]);
@@ -96,6 +192,36 @@ describe("extractCitations", () => {
     expect(citations[0]?.citationText).toBe("sen. zn. 29 NSČR 55/2013");
   });
 
+  test.each([
+    ["sen. zn. 29 NSČR 112/2013", "29 NSCR 112/2013"],
+    ["29 NSČR 112/2013", "29 NSCR 112/2013"],
+    ["29NSČR/112/2013", "29 NSCR 112/2013"],
+    ["sen. zn. 29 nsčr 112/2013", "29 NSCR 112/2013"],
+  ])(
+    "keys the printed insolvency register %p as the stored case number %p",
+    (printed, stored) => {
+      // Judgments print "NSČR"; the Supreme Court's database and ECLI
+      // (`29.NSCR.112.2013`) spell it "NSCR", and so does the stored case
+      // number. Both spellings must share one key, or the citation and the
+      // docket lookup never reach the decision.
+      expect(citationKeyOf(printed)).toBe("29nscr/112/2013");
+      expect(citationKeyOf(printed)).toBe(citationKeyOf(stored));
+    },
+  );
+
+  test("keys a consolidated NSČR docket as the stored NSCR one", () => {
+    expect(citationKeyOf("29 NSČR 112,113/2013")).toBe("29nscr/112,113/2013");
+    expect(citationKeyOf("29 NSČR 112,113/2013")).toBe(
+      citationKeyOf("29 NSCR 112,113/2013"),
+    );
+  });
+
+  test("keeps the diacritic of a register stored with it", () => {
+    // The Slovak administrative register "Sžo" is stored as printed, so its
+    // key keeps the diacritic and stays equal to the stored rows' keys.
+    expect(citationKeyOf("8 Sžo 12/2010")).toBe("8sžo/12/2010");
+  });
+
   test("extracts Constitutional Court citations in senate and plenum form", () => {
     const text =
       "nález Ústavního soudu sp. zn. IV. ÚS 23/05 a stanovisko Pl. ÚS 12/94";
@@ -111,16 +237,18 @@ describe("extractCitations", () => {
     // normalizes a decision on the way in, and a `[ÚU]S` class reads the
     // decomposed spelling as a bare "U" followed by a mark: every
     // Constitutional Court citation in that paragraph went missing.
-    const text =
-      "současně založit kolizi se zásadami vyjádřenými v hlavě páté Listiny (nález Ústavního soudu sp. zn. I. ÚS 1135/17, ze dne 1. 11. 2017).".normalize(
-        "NFD",
-      );
-    expect(text).not.toBe(text.normalize("NFC"));
+    const text = normalizeUnicode(
+      "současně založit kolizi se zásadami vyjádřenými v hlavě páté Listiny (nález Ústavního soudu sp. zn. I. ÚS 1135/17, ze dne 1. 11. 2017).",
+      "NFD",
+    );
+    expect(text).not.toBe(normalizeUnicode(text, "NFC"));
 
     const citations = extractCitations([{ index: 0, text }]);
 
     expect(citations).toHaveLength(1);
-    expect(citations[0]?.citationText).toBe("I. ÚS 1135/17".normalize("NFD"));
+    expect(citations[0]?.citationText).toBe(
+      normalizeUnicode("I. ÚS 1135/17", "NFD"),
+    );
     // Either normalization form reaches the resolver as one key, so the
     // decomposed spelling still joins the composed corpus row.
     expect(bareCitationKey(citations[0]?.citationText ?? "")).toBe(
@@ -600,16 +728,57 @@ describe("extractCitations", () => {
       "Nejvyššího správního soudu citovaná v tomto rozsudku jsou " +
       "publikována na www.nssoud.cz)";
     // The docket and the collection number name one decision, so they are
-    // one citation: the entry anchors on the docket and resolves by the
-    // collection number.
+    // one citation: the entry anchors on the docket, which names the sheet
+    // and so resolves by itself.
     const citations = extractCitations([{ index: 0, text }]);
     expect(citations).toHaveLength(1);
     expect(citations[0]).toMatchObject({
       citationText: "č.j. 3 Ads 110/2009",
       citedSheetNumber: "49",
-      identifierType: DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
-      identifierValue: "č. 2018/2010 Sb. NSS",
+      identifierType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
     });
+  });
+
+  describe("a docket printed beside its collection number", () => {
+    const collections = [
+      "č. 933/2006 Sb. NSS",
+      "č. 58/2011 Sb. NS",
+      "č. 12/2015 Sb. rozh. tr.",
+    ];
+    const dockets = [
+      { printed: "č. j. 1 Azs 13/2006 ‑ 39", sheet: "39" },
+      { printed: "č. j. 9 Afs 59/2007-56", sheet: "56" },
+      { printed: "č. j. 2 As 196/2016‑123", sheet: "123" },
+      { printed: "sp. zn. 29 Cdo 1234/2013", sheet: null },
+      { printed: "sp. zn. 6 Tdo 512/2014", sheet: null },
+    ];
+
+    test.each(
+      dockets.flatMap((docket) =>
+        collections.map((collection) => ({ ...docket, collection })),
+      ),
+    )(
+      "$printed, $collection: one citation, keyed by the docket exactly when it names the sheet",
+      ({ printed, sheet, collection }) => {
+        const text = `viz rozsudek ${printed}, ${collection}, a dále`;
+        const citations = extractCitations([{ index: 0, text }]);
+
+        expect(citations).toHaveLength(1);
+        const [citation] = citations;
+        expect(citation?.citedSheetNumber ?? null).toBe(sheet);
+        if (sheet === null) {
+          expect(citation).toMatchObject({
+            identifierType: DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
+            identifierValue: collection,
+          });
+        } else {
+          expect(citation?.identifierType).toBe(
+            DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+          );
+          expect(citation?.identifierValue).toBe(citation?.citationText);
+        }
+      },
+    );
   });
 
   test("extracts a bare Cpjn plenary-opinion citation without sp. zn.", () => {
@@ -805,6 +974,73 @@ describe("extractCitations", () => {
     const citations = extractCitations([{ index: 0, text }]);
     expect(citations).toHaveLength(1);
     expect(citations[0]?.citationText).toBe("sp. zn. 2 M Obdo 1/2008");
+  });
+
+  test("extracts Slovak compound registers printed as separate words", () => {
+    // The register's second word ("V", "Pr") stands apart from the ordinary
+    // register, with or without the panel's leading "M". The dockets are
+    // illustrative of each shape, including the slash and joined-digit forms.
+    for (const docket of [
+      "1 M Obdo V 13/2005",
+      "1 M Obdo V 2/2006",
+      "1 Tdo V 14/2007",
+      "2 Cdo Pr 3/2016",
+      "1 M Obdo V/13/2005",
+      "1M Obdo V 13/2005",
+      "1 Tdo V/14/2007",
+    ]) {
+      const citations = extractCitations([
+        { index: 0, text: `uznesenie sp. zn. ${docket} z 29. marca 2006` },
+      ]);
+      expect(citations.map(({ citationText }) => citationText)).toEqual([
+        `sp. zn. ${docket}`,
+      ]);
+    }
+  });
+
+  test("folds a spaced Slovak compound register onto the glued docket's key", () => {
+    const spellings = [
+      ["4mcdo/15/2010", ["4 M Cdo 15/2010", "4 MCdo 15/2010", "4MCdo/15/2010"]],
+      [
+        "1mobdov/13/2005",
+        [
+          "sp. zn. 1 M Obdo V 13/2005",
+          "1 M ObdoV 13/2005",
+          "1 MObdo V 13/2005",
+          "1 MObdoV 13/2005",
+          "1MObdoV/13/2005",
+          "1 M Obdo V/13/2005",
+        ],
+      ],
+      ["1tdov/14/2007", ["1 Tdo V 14/2007", "1 TdoV 14/2007", "1TdoV/14/2007"]],
+      ["2cdopr/3/2016", ["2 Cdo Pr 3/2016", "2 CdoPr 3/2016", "2CdoPr/3/2016"]],
+      [
+        "1mobdopr/3/2016",
+        ["1 M Obdo Pr 3/2016", "1 MObdo Pr 3/2016", "1 MObdoPr 3/2016"],
+      ],
+    ] as const;
+    for (const [key, variants] of spellings) {
+      for (const variant of variants) {
+        expect(bareCitationKey(variant)).toBe(key);
+      }
+    }
+    // The fold is idempotent over a key an earlier pass already lowercased.
+    expect(bareCitationKey("4 m cdo 15/2010")).toBe("4mcdo/15/2010");
+  });
+
+  test("keeps a compound register apart from its ordinary register", () => {
+    expect(bareCitationKey("1 Tdo V 14/2007")).not.toBe(
+      bareCitationKey("1 Tdo 14/2007"),
+    );
+    expect(bareCitationKey("4 M Cdo 15/2010")).not.toBe(
+      bareCitationKey("4 Cdo 15/2010"),
+    );
+    expect(bareCitationKey("2 Cdo Pr 3/2016")).not.toBe(
+      bareCitationKey("2 Cdo 3/2016"),
+    );
+    // A register that merely is the letter stays the single word it is.
+    expect(bareCitationKey("1 M 13/2005")).toBe("1m/13/2005");
+    expect(bareCitationKey("1 V 13/2005")).toBe("1v/13/2005");
   });
 
   test("extracts a Slovak case number with a courthouse workplace-code prefix", () => {
@@ -1364,6 +1600,20 @@ describe("extractCitations", () => {
     ).toBe("sygn. akt IA Ca 835/97");
   });
 
+  test("extracts a Polish case number whose division code carries a trailing dot", () => {
+    const single = "w wyroku z 3 maja 2001 r. (sygn. akt II P. 123/01) sąd";
+    const twoWord = "postanowieniem sygn. akt III A Ua. 45/10 oddalono";
+    const citations = extractCitations([{ index: 0, text: single }]);
+    expect(citations).toHaveLength(1);
+    expect(citations[0]?.citationText).toBe("sygn. akt II P. 123/01");
+    expect(bareCitationKey(citations[0]?.citationText ?? "")).toBe(
+      bareCitationKey("sygn. akt II P 123/01"),
+    );
+    expect(
+      extractCitations([{ index: 0, text: twoWord }])[0]?.citationText,
+    ).toBe("sygn. akt III A Ua. 45/10");
+  });
+
   test("dedupes a Polish case number cited both glued and spaced", () => {
     // The same civil-division case is cited once with the roman numeral
     // glued to the registry letter ("IC 1523/96") and once spaced ("I C
@@ -1675,6 +1925,48 @@ describe("extractCitations", () => {
     ]) {
       expect(extractCitations([{ index: 0, text }])).toEqual([]);
     }
+  });
+
+  test("extracts the dotted spelling of a seated administrative register", () => {
+    const cases: [text: string, expected: string[]][] = [
+      [
+        "wyrok NSA z 2002 r., sygn. akt II S.A./Po 1234/01, dalej",
+        ["sygn. akt II S.A./Po 1234/01"],
+      ],
+      [
+        "wyrok WSA, sygn. akt. I S.A./Wr 123/2003.",
+        ["sygn. akt. I S.A./Wr 123/2003"],
+      ],
+      [
+        "por. S.A./Kr 55/99 oraz III S. A. / Gd 7/02",
+        ["S.A./Kr 55/99", "III S. A. / Gd 7/02"],
+      ],
+      // No administrative court sits at `Xy`, and none has a ninth division.
+      ["sprawa S.A./Xy 12/20", []],
+      ["sprawa IX S.A./Wa 1/05", []],
+    ];
+    for (const [text, expected] of cases) {
+      expect(
+        extractCitations([{ index: 0, text }]).map((c) => c.citationText),
+      ).toEqual(expected);
+    }
+  });
+
+  test("keys a dotted administrative register as its undotted spelling", () => {
+    expect(bareCitationKey("sygn. akt II S.A./Po 1234/01")).toBe(
+      bareCitationKey("II SA/Po 1234/01"),
+    );
+    expect(bareCitationKey("III S. A. / Gd 7/02")).toBe(
+      bareCitationKey("III SA/Gd 7/02"),
+    );
+    expect(
+      extractCitations([
+        {
+          index: 0,
+          text: "sygn. akt II S.A./Po 1234/01 oraz II SA/Po 1234/01",
+        },
+      ]),
+    ).toHaveLength(1);
   });
 
   test("keys a non-ASCII seat the way it keys an ASCII one", () => {
@@ -2090,6 +2382,25 @@ describe("extractCitations", () => {
     );
   });
 
+  test("reads a KIO docket list too long for one key docket by docket", () => {
+    const dockets = Array.from(
+      { length: 12 },
+      (_, index) => `KIO ${1000 + index}/21`,
+    );
+    const citations = extractCitations([
+      { index: 0, text: `por. wyroki ${dockets.join(", ")} oraz KIO 7/22.` },
+    ]);
+    expect(citations.map((c) => c.citationText)).toEqual([
+      ...dockets,
+      "KIO 7/22",
+    ]);
+    for (const citation of citations) {
+      expect(bareCitationKey(citation.citationText).length).toBeLessThanOrEqual(
+        128,
+      );
+    }
+  });
+
   test("never reads the tail of a divided docket as a Tribunal one", () => {
     // Every whitespace run between a Roman division and a Tribunal-shaped
     // symbol, including the ones too wide for the docket to read whole.
@@ -2257,7 +2568,8 @@ describe("extractCitations", () => {
     const divisions = fc.option(fc.constantFrom("II", "III", "1", "2"), {
       nil: undefined,
     });
-    fc.assert(
+    assertProperty(
+      "a cited competition authority decision keys like the identifiers its row stores",
       fc.property(
         units,
         divisions,
@@ -2277,7 +2589,7 @@ describe("extractCitations", () => {
           expect(held).toContain(bareCitationKey(citation?.citationText ?? ""));
         },
       ),
-      propertyConfig(),
+      {},
     );
   });
 
@@ -2413,6 +2725,46 @@ describe("stored decision identifier projection", () => {
     }
     // The reporter citation would otherwise canonicalize to a docket key.
     expect(citationKeyOf("347 U.S. 483")).not.toBeNull();
+  });
+
+  test("gives a decision no key its citation_key column cannot hold", () => {
+    const caseNumber = `ABC123/${"x".repeat(140)}.pdf`;
+    expect(Array.from(bareCitationKey(caseNumber)).length).toBeGreaterThan(
+      CITATION_STORAGE_WIDTHS.key,
+    );
+    expect(citationKeyOf(caseNumber)).toBeNull();
+    expect(
+      decisionCitationKeyOf({
+        caseNumber,
+        caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+      }),
+    ).toBeNull();
+    const fits = `ABC123/${"x".repeat(100)}`;
+    expect(
+      decisionCitationKeyOf({
+        caseNumber: fits,
+        caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+      }),
+    ).toBe(citationKeyOf(fits));
+  });
+
+  test("citation and decision keys share exact Unicode storage boundaries", () => {
+    const width = CITATION_STORAGE_WIDTHS.key;
+    for (const token of ["x", "é", "𐐀"]) {
+      for (const length of [width - 1, width, width + 1]) {
+        const reference = token.repeat(length);
+        const exact = bareCitationKey(reference);
+        expect(Array.from(exact)).toHaveLength(length);
+        const expected = length <= width ? exact : null;
+        expect(citationKeyOf(reference)).toBe(expected);
+        expect(
+          decisionCitationKeyOf({
+            caseNumber: reference,
+            caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+          }),
+        ).toBe(expected);
+      }
+    }
   });
 
   test("recovers publisher case-number aliases from stored metadata", () => {
@@ -3547,4 +3899,61 @@ describe("identifier keys by jurisdiction", () => {
       ),
     );
   });
+});
+
+describe("European Commission competition case numbers", () => {
+  test.each([
+    ["Case AT.99991", "AT.99991"],
+    ["Sache COMP/99.991", "COMP/99.991"],
+    ["věc M.99991", "M.99991"],
+    ["affaire SA.99991", "SA.99991"],
+    ["asunto C 99/2099", "C 99/2099"],
+    ["caso N 991/2099", "N 991/2099"],
+    ["zaak NN 99/2099", "NN 99/2099"],
+  ])("reads %s as a Commission identifier", (text, value) => {
+    expect(extractCitations([{ index: 0, text }])).toEqual([
+      expect.objectContaining({
+        citationText: value,
+        identifierType: DECISION_IDENTIFIER_TYPES.COMMISSION_CASE_NUMBER,
+        identifierValue: value,
+      }),
+    ]);
+  });
+
+  test.each([
+    "AT.99991",
+    "COMP/99.991",
+    "M.99991",
+    "SA.99991",
+    "C 99/2099",
+    "N 991/2099",
+    "NN 99/2099",
+    "The initials M. 99991 appeared in the heading",
+    "Case law was discussed before unrelated text padding M.99991",
+  ])("does not read an uncued or remote number: %s", (text) => {
+    expect(extractCitations([{ index: 0, text }])).toEqual([]);
+  });
+
+  test.each([
+    "case no. 21 C 123/2020",
+    "case no. sp. zn. 21 C 123/2020",
+    "vec sp. zn.: 4 C 309/2020",
+    "sprawa sygn. akt IV C 123/2020",
+    "sprawa sygn. akt iv C 123/2020",
+    "sprawa sygn. akt Iv  C 123/2020",
+    "case no. 21    C 123/2020",
+    "case no. 21\n\t C 123/2020",
+    "sprawa sygn. akt IV      C 123/2020",
+    "sprawa sygn. akt IV\nC 123/2020",
+  ])(
+    "does not read a national docket tail as a Commission identifier: %s",
+    (text) => {
+      expect(
+        extractCitations([{ index: 0, text }]).filter(
+          ({ identifierType }) =>
+            identifierType === DECISION_IDENTIFIER_TYPES.COMMISSION_CASE_NUMBER,
+        ),
+      ).toEqual([]);
+    },
+  );
 });

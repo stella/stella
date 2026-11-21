@@ -1,5 +1,3 @@
-import { useMemo } from "react";
-
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
@@ -16,7 +14,7 @@ const NO_PROPERTIES: readonly WorkspaceProperty[] = [];
 export const useEntityViewGroupingSchema = (rows: readonly EntityViewRow[]) => {
   const t = useTranslations();
   const baseSchema = useWorkspaceKanbanSchema(NO_PROPERTIES);
-  return useMemo(() => {
+  return (() => {
     const matters = new Map<string, KanbanGroupOption>();
     const assignees = new Map<string, KanbanGroupOption>();
     const authors = new Map<string, KanbanGroupOption>();
@@ -98,5 +96,5 @@ export const useEntityViewGroupingSchema = (rows: readonly EntityViewRow[]) => {
         },
       ],
     };
-  }, [baseSchema, rows, t]);
+  })();
 };

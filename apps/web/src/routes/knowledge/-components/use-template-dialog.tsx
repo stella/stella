@@ -63,7 +63,7 @@ const UseTemplateDialogBody = ({
         <DialogTitle>{templateName}</DialogTitle>
         <DialogDescription>{t("templates.useTemplateHint")}</DialogDescription>
       </DialogHeader>
-      <DialogPanel className="flex max-h-[70vh] min-h-48 flex-col overflow-hidden p-0">
+      <DialogPanel className="flex max-h-[70dvh] min-h-48 flex-col overflow-hidden p-0">
         {fill.state === "loading" && (
           <p className="text-muted-foreground p-6 text-sm">
             {t("common.loading")}

@@ -2,18 +2,20 @@ import { EventType, StreamProcessor } from "@tanstack/ai";
 import type { AdapterYieldChunk, Tool, UIMessage } from "@tanstack/ai";
 import { createOpenaiChat } from "@tanstack/ai-openai";
 import { resolveDebugOption } from "@tanstack/ai/adapter-internals";
+import { panic } from "better-result";
 import { expect, test } from "bun:test";
 
-// `patches/@tanstack%2Fai@0.61.0.patch` makes `StreamProcessor` write
-// `TOOL_CALL_END.input` into the tool-call part's `arguments` even when
-// argument deltas were streamed. Unpatched, the part keeps the raw wire
-// string next to the normalized `input`, so a strict-mode OpenAI call
-// persists with the widened `null`s the persistence validator rejects.
-// Both tests go red when a version bump drops the patch; delete them with it.
+import { CHAT_ORACLE, violationsOf } from "@/api/tests/helpers/chat-oracles";
+
+// The v1 stream processor writes normalized TOOL_CALL_END input back into
+// both persisted arguments and input, even after raw argument deltas. Keep
+// this boundary explicit: OpenAI strict-mode placeholders must not survive
+// beside the normalized input after an SDK upgrade.
 
 const TOOL_NAME = "spawn";
 const WIDENED_ARGUMENTS = '{"task":"list matters","context":null}';
 const NORMALIZED_INPUT = { task: "list matters" };
+const FIXTURE_TIMESTAMP = Date.parse("2026-01-01T00:00:00.000Z");
 
 type ToolCallPart = Extract<UIMessage["parts"][number], { type: "tool-call" }>;
 
@@ -46,7 +48,7 @@ const persistToolCallPart = (
 test("the persisted tool-call arguments carry TOOL_CALL_END.input, not the streamed wire string", () => {
   // The fixture must differ, or the assertion below is vacuous.
   expect(JSON.parse(WIDENED_ARGUMENTS)).not.toEqual(NORMALIZED_INPUT);
-  const timestamp = Date.now();
+  const timestamp = FIXTURE_TIMESTAMP;
   const model = "fixture";
 
   const part = persistToolCallPart([
@@ -97,7 +99,7 @@ test("the persisted tool-call arguments carry TOOL_CALL_END.input, not the strea
 // completes every open call). The canonical input still replaces the
 // arguments, and the part keeps the state it already reached.
 test("TOOL_CALL_END.input replaces the arguments of a call that was already completed", () => {
-  const timestamp = Date.now();
+  const timestamp = FIXTURE_TIMESTAMP;
   const model = "fixture";
 
   const part = persistToolCallPart([
@@ -152,7 +154,7 @@ test.each([
 ])(
   "keeps the streamed arguments and input when TOOL_CALL_END.input %s",
   (_case, input) => {
-    const timestamp = Date.now();
+    const timestamp = FIXTURE_TIMESTAMP;
     const model = "fixture";
 
     const part = persistToolCallPart([
@@ -263,6 +265,7 @@ test("an OpenAI strict-mode null on an optional field never reaches the persiste
 
   const chunks: AdapterYieldChunk[] = [];
   for await (const chunk of adapter.chatStream({
+    threadId: "thread-1",
     logger: resolveDebugOption(false),
     messages: [{ role: "user", content: "List my matters." }],
     model: adapter.model,
@@ -278,6 +281,19 @@ test("an OpenAI strict-mode null on an optional field never reaches the persiste
   expect(streamedArguments).toBe(WIDENED_ARGUMENTS);
 
   const part = persistToolCallPart(chunks);
+  // Name the processor boundary before other assertions: v1 derives input
+  // from these finalized arguments, so the same fault can break both.
+  // The chat pipeline also re-derives arguments from validated input.
+  const violations = violationsOf(
+    CHAT_ORACLE.providerWireToolArguments,
+    Bun.deepEquals(JSON.parse(part.arguments), NORMALIZED_INPUT)
+      ? []
+      : [{ arguments: part.arguments, expected: NORMALIZED_INPUT }],
+  );
+  if (violations.length > 0) {
+    panic(
+      `The persisted arguments keep the wire string: ${JSON.stringify(violations)}`,
+    );
+  }
   expect(part.input).toEqual(NORMALIZED_INPUT);
-  expect(JSON.parse(part.arguments)).toEqual(NORMALIZED_INPUT);
 });

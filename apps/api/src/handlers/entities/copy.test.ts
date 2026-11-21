@@ -1,6 +1,9 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
+import type { SQL } from "drizzle-orm";
+import { PgDialect } from "drizzle-orm/pg-core";
 
+import type { Transaction } from "@/api/db/root";
 import {
   documentCounters,
   entities,
@@ -9,11 +12,14 @@ import {
 } from "@/api/db/schema";
 import type { FieldContent, PropertyContent } from "@/api/db/schema-validators";
 import { envBase } from "@/api/env-base";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { createAuditRecorder } from "@/api/lib/audit-log";
-import type { AccessibleWorkspace } from "@/api/lib/auth";
+import type { AccessibleWorkspace } from "@/api/lib/auth/accessible-workspace";
 import type { SafeId } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { createFileKey } from "@/api/lib/file-key";
+import { deleteOrganizationFilesWithSignal } from "@/api/lib/files/delete-organization-file";
+import { allocateFileObject } from "@/api/lib/files/file-object-ids";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { DOCUMENT_TYPE_CLASSIFIER_ROLE } from "@/api/lib/properties/create-schema";
 import { isRecord } from "@/api/lib/type-guards";
@@ -23,9 +29,13 @@ import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
-import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
+import {
+  createScopedDbMock,
+  createSelectQueryMock,
+} from "@/api/tests/scoped-db-mock";
 
 import { createCopyToWorkspace } from "./copy";
+import type { copyFileObjects, FileMapping } from "./copy-utils";
 
 // Every copy is a real server-side copy inside a real store, so the keys the
 // copy wrote and the keys a rollback returned are read back from it.
@@ -52,7 +62,53 @@ const syncWorkspaceSearchActivityMock = mock(async () => {});
 const enqueueImageThumbnailOrMarkFailedMock = mock(async () => undefined);
 const enqueuePdfDerivativeOrMarkFailedMock = mock(async () => undefined);
 
+const copyFileObjectsMock = mock(
+  async ({
+    copiedS3Keys,
+    organizationId,
+    sources,
+    targetWorkspaceId,
+  }: Parameters<typeof copyFileObjects>[0]) => {
+    const { copyObject } = await import("@/api/lib/s3-presign");
+    const mappings: FileMapping[] = [];
+    for (const source of sources) {
+      const newFileId = allocateFileObject();
+      const targetKey = createFileKey({
+        fileId: newFileId,
+        mimeType: source.mimeType,
+        organizationId,
+        workspaceId: targetWorkspaceId,
+      });
+      copiedS3Keys.push(targetKey);
+      const copied = await copyObject(source.sourceKey, targetKey);
+      if (Result.isError(copied)) {
+        panic("Seeded source object copy failed", copied.error);
+      }
+      mappings.push({
+        ...source,
+        cleanupIntentIds: [],
+        newFileId,
+        targetKey,
+      });
+    }
+    return Result.ok(mappings);
+  },
+);
+
+const createFileDeletionTx = () =>
+  asTestRaw<Transaction>({
+    select: () => createSelectQueryMock([]),
+    selectDistinct: () => createSelectQueryMock([]),
+  });
 const copyToWorkspace = createCopyToWorkspace({
+  copyFileObjects: copyFileObjectsMock,
+  deleteCopiedObjects: async (keys, signal) =>
+    await deleteOrganizationFilesWithSignal(keys, signal, {
+      fileUsageDb: {
+        transaction: async <T>(callback: (tx: Transaction) => Promise<T>) =>
+          await callback(createFileDeletionTx()),
+      },
+    }),
   enqueueDocumentProcessingRun: enqueueDocumentProcessingRunMock,
   enqueueEntitySearchRepairs: enqueueEntitySearchRepairsMock,
   enqueueImageThumbnailOrMarkFailed: enqueueImageThumbnailOrMarkFailedMock,
@@ -202,6 +258,14 @@ afterEach(() => {
 });
 
 beforeEach(() => {
+  copyFileObjectsMock.mockClear();
+  enqueueDocumentProcessingRunMock.mockClear();
+  enqueueEntitySearchRepairsMock.mockClear();
+  enqueueImageThumbnailOrMarkFailedMock.mockClear();
+  enqueuePdfDerivativeOrMarkFailedMock.mockClear();
+  flushEntitySearchRepairsMock.mockClear();
+  requestNativeExtractionRunsMock.mockClear();
+  syncWorkspaceSearchActivityMock.mockClear();
   analytics = installRecordingAnalytics();
   fake = startFakeS3();
   seedSourceObject(sourceFileId, sourceFileMimeType);
@@ -239,7 +303,9 @@ const createContext = ({
     organizationId,
     workspaceId: sourceWorkspaceId,
     userId,
-    request: new Request("https://example.test/v1/entities/copy-to-workspace"),
+    request: new Request(
+      `https://example.test/v1/entities/${sourceWorkspaceId}/copy-to-workspace`,
+    ),
     server: null,
   };
   const createBoundAuditRecorder: CopyToWorkspaceContext["createAuditRecorder"] =
@@ -265,7 +331,7 @@ const createContext = ({
       sourceFieldId,
     },
     request: sourceRecorderBindings.request,
-    route: "/v1/workspaces/:workspaceId/entities/copy-to-workspace",
+    route: "/v1/entities/:workspaceId/copy-to-workspace" satisfies ApiRoutePath,
     getWorkspaceAccess: async (workspaceId: SafeId<"workspace">) =>
       workspaceId === targetWorkspaceIdArg ? resolvedTargetWorkspace : null,
     safeDb,
@@ -333,6 +399,8 @@ describe("copy-to-workspace", () => {
     ];
 
     const tx = {
+      execute: async (query: SQL) =>
+        new PgDialect().sqlToQuery(query).params.map((id) => ({ id })),
       query: {
         entities: {
           findFirst: async (opts: {
@@ -412,7 +480,12 @@ describe("copy-to-workspace", () => {
       }),
     };
 
-    const { safeDb } = createScopedDbMock(tx);
+    const { safeDb } = createScopedDbMock(tx, {
+      visibleResources: {
+        entity: [documentId, folderId, childDocId],
+        field: [toSafeId<"field">("source_file_field")],
+      },
+    });
     const result = await copyToWorkspace.handler(
       createContext({
         safeDb,
@@ -470,8 +543,8 @@ describe("copy-to-workspace", () => {
     // The bytes never travel through the API task.
     expect(requestKeys("GET")).toEqual([]);
 
-    // The extraction run that reads the copied PDF indexes it, so the copy
-    // carries no mark of its own; marking it too would index it twice.
+    // The copy is marked for immediate name indexing while extraction adds
+    // content independently to the same source-fenced projection.
     if (!copiedEntity) {
       throw new Error("Expected the copy to be inserted");
     }
@@ -479,7 +552,9 @@ describe("copy-to-workspace", () => {
     expect(enqueueDocumentProcessingRunMock.mock.calls).toEqual([
       [toSafeId<"documentProcessingRun">("run_0")],
     ]);
-    expect(enqueueEntitySearchRepairsMock.mock.calls.at(0)?.at(1)).toEqual([]);
+    expect(enqueueEntitySearchRepairsMock.mock.calls.at(0)?.at(1)).toEqual([
+      copiedEntity.id,
+    ]);
   });
 
   test("maps document type classifier fields by role before name fallback", async () => {
@@ -527,6 +602,8 @@ describe("copy-to-workspace", () => {
       },
     ];
     const tx = {
+      execute: async (query: SQL) =>
+        new PgDialect().sqlToQuery(query).params.map((id) => ({ id })),
       query: {
         entities: {
           findFirst: async () => sourceEntity,
@@ -587,7 +664,12 @@ describe("copy-to-workspace", () => {
       }),
     };
 
-    const { safeDb } = createScopedDbMock(tx);
+    const { safeDb } = createScopedDbMock(tx, {
+      visibleResources: {
+        entity: [documentId, folderId, childDocId],
+        field: [toSafeId<"field">("source_file_field")],
+      },
+    });
     const result = await copyToWorkspace.handler(
       createContext({ safeDb, entityId: documentId }),
     );
@@ -656,6 +738,8 @@ describe("copy-to-workspace", () => {
       },
     ];
     const tx = {
+      execute: async (query: SQL) =>
+        new PgDialect().sqlToQuery(query).params.map((id) => ({ id })),
       query: {
         entities: {
           findFirst: async () => sourceEntity,
@@ -716,7 +800,12 @@ describe("copy-to-workspace", () => {
       }),
     };
 
-    const { safeDb } = createScopedDbMock(tx);
+    const { safeDb } = createScopedDbMock(tx, {
+      visibleResources: {
+        entity: [documentId, folderId, childDocId],
+        field: [toSafeId<"field">("source_file_field")],
+      },
+    });
     const result = await copyToWorkspace.handler(
       createContext({ safeDb, entityId: documentId }),
     );
@@ -784,6 +873,8 @@ describe("copy-to-workspace", () => {
       },
     ];
     const tx = {
+      execute: async (query: SQL) =>
+        new PgDialect().sqlToQuery(query).params.map((id) => ({ id })),
       query: {
         entities: {
           findFirst: async () => sourceEntity,
@@ -844,7 +935,12 @@ describe("copy-to-workspace", () => {
       }),
     };
 
-    const { safeDb } = createScopedDbMock(tx);
+    const { safeDb } = createScopedDbMock(tx, {
+      visibleResources: {
+        entity: [documentId, folderId, childDocId],
+        field: [toSafeId<"field">("source_file_field")],
+      },
+    });
     const result = await copyToWorkspace.handler(
       createContext({ safeDb, entityId: documentId }),
     );
@@ -918,6 +1014,8 @@ describe("copy-to-workspace", () => {
       },
     ];
     const tx = {
+      execute: async (query: SQL) =>
+        new PgDialect().sqlToQuery(query).params.map((id) => ({ id })),
       query: {
         entities: {
           findFirst: async () => sourceEntity,
@@ -978,7 +1076,12 @@ describe("copy-to-workspace", () => {
       }),
     };
 
-    const { safeDb } = createScopedDbMock(tx);
+    const { safeDb } = createScopedDbMock(tx, {
+      visibleResources: {
+        entity: [documentId, folderId, childDocId],
+        field: [toSafeId<"field">("source_file_field")],
+      },
+    });
     const result = await copyToWorkspace.handler(
       createContext({ safeDb, entityId: documentId }),
     );
@@ -1044,6 +1147,8 @@ describe("copy-to-workspace", () => {
       },
     ];
     const tx = {
+      execute: async (query: SQL) =>
+        new PgDialect().sqlToQuery(query).params.map((id) => ({ id })),
       query: {
         entities: {
           findFirst: async () => sourceEntity,
@@ -1104,7 +1209,12 @@ describe("copy-to-workspace", () => {
       }),
     };
 
-    const { safeDb } = createScopedDbMock(tx);
+    const { safeDb } = createScopedDbMock(tx, {
+      visibleResources: {
+        entity: [documentId, folderId, childDocId],
+        field: [toSafeId<"field">("source_file_field")],
+      },
+    });
     const result = await copyToWorkspace.handler(
       createContext({ safeDb, entityId: documentId }),
     );
@@ -1134,6 +1244,8 @@ describe("copy-to-workspace", () => {
     };
 
     const tx = {
+      execute: async (query: SQL) =>
+        new PgDialect().sqlToQuery(query).params.map((id) => ({ id })),
       query: {
         entities: {
           findFirst: async () => sourceEntity,
@@ -1147,13 +1259,20 @@ describe("copy-to-workspace", () => {
               return [
                 {
                   id: sourceFilePropertyId,
-                  name: "Source File",
+                  name: "Attachment",
                   content: filePropertyContent,
-                  system: true,
+                  system: false,
                 },
               ];
             }
-            return [];
+            return [
+              {
+                id: targetFilePropertyId,
+                name: "Documents",
+                content: filePropertyContent,
+                system: true,
+              },
+            ];
           },
         },
         workspaces: {
@@ -1200,11 +1319,21 @@ describe("copy-to-workspace", () => {
       }),
     };
 
-    const { safeDb } = createScopedDbMock(tx);
-    await copyToWorkspace.handler(
+    const { safeDb } = createScopedDbMock(tx, {
+      visibleResources: {
+        entity: [documentId, folderId, childDocId],
+        field: [toSafeId<"field">("source_file_field")],
+      },
+    });
+    const result = await copyToWorkspace.handler(
       createContext({ safeDb, entityId: documentId }),
     );
 
+    expect(result).toEqual({
+      entityId: expect.any(String),
+      entityIds: expect.any(Array),
+      field: null,
+    });
     expect(insertedFields).toHaveLength(0);
     expect(requestKeys("GET")).toEqual([]);
     expect(requestKeys("COPY")).toEqual([]);
@@ -1248,6 +1377,8 @@ describe("copy-to-workspace", () => {
     };
 
     const tx = {
+      execute: async (query: SQL) =>
+        new PgDialect().sqlToQuery(query).params.map((id) => ({ id })),
       query: {
         entities: {
           findFirst: async () => sourceEntity,
@@ -1283,6 +1414,13 @@ describe("copy-to-workspace", () => {
       },
       $count: async () => 0,
       select: (selection: unknown) => {
+        // The cell companions a move carries: none in this source.
+        if (
+          isRecord(selection) &&
+          ("metadata" in selection || "fileFieldIds" in selection)
+        ) {
+          return { from: () => ({ where: async () => [] }) };
+        }
         if (
           isRecord(selection) &&
           ("entityId" in selection || "entityVersionId" in selection)
@@ -1322,11 +1460,10 @@ describe("copy-to-workspace", () => {
             },
           };
         }
-        selectCallCount += 1;
-
         return {
-          from: (table: unknown) =>
-            table === entityVersions
+          from: (table: unknown) => {
+            selectCallCount += 1;
+            return table === entityVersions
               ? {
                   // The code carry reads the source rows FOR UPDATE.
                   where: () => ({
@@ -1350,7 +1487,8 @@ describe("copy-to-workspace", () => {
                     }
                     throw new Error("unexpected lookup");
                   },
-                },
+                };
+          },
         };
       },
       insert: (table: unknown) => ({
@@ -1406,6 +1544,10 @@ describe("copy-to-workspace", () => {
     });
     const { safeDb } = createScopedDbMock(transactionFixture, {
       siblingRows: [],
+      visibleResources: {
+        entity: [documentId, folderId, childDocId],
+        field: [toSafeId<"field">("source_file_field")],
+      },
     });
     const result = await copyToWorkspace.handler(
       createContext({
@@ -1473,6 +1615,8 @@ describe("copy-to-workspace", () => {
     const allEntities = [folderEntity, childEntity];
 
     const tx = {
+      execute: async (query: SQL) =>
+        new PgDialect().sqlToQuery(query).params.map((id) => ({ id })),
       query: {
         entities: {
           findFirst: async () => folderEntity,
@@ -1521,7 +1665,12 @@ describe("copy-to-workspace", () => {
       }),
     };
 
-    const { safeDb } = createScopedDbMock(tx);
+    const { safeDb } = createScopedDbMock(tx, {
+      visibleResources: {
+        entity: [documentId, folderId, childDocId],
+        field: [toSafeId<"field">("source_file_field")],
+      },
+    });
     const result = await copyToWorkspace.handler(
       createContext({ safeDb, entityId: folderId }),
     );
@@ -1590,6 +1739,8 @@ describe("copy-to-workspace", () => {
     };
 
     const tx = {
+      execute: async (query: SQL) =>
+        new PgDialect().sqlToQuery(query).params.map((id) => ({ id })),
       query: {
         entities: {
           findFirst: async () => sourceEntity,
@@ -1663,7 +1814,12 @@ describe("copy-to-workspace", () => {
       }),
     };
 
-    const { safeDb } = createScopedDbMock(tx);
+    const { safeDb } = createScopedDbMock(tx, {
+      visibleResources: {
+        entity: [documentId, folderId, childDocId],
+        field: [toSafeId<"field">("source_file_field")],
+      },
+    });
     await copyToWorkspace.handler(
       createContext({ safeDb, entityId: documentId }),
     );
@@ -1704,6 +1860,8 @@ describe("copy-to-workspace", () => {
     // parent, which turns out to be a document rather than a folder.
     let entityReadCount = 0;
     const tx = {
+      execute: async (query: SQL) =>
+        new PgDialect().sqlToQuery(query).params.map((id) => ({ id })),
       query: {
         entities: {
           findFirst: async () => {
@@ -1747,7 +1905,12 @@ describe("copy-to-workspace", () => {
       update: () => ({ set: () => ({ where: async () => {} }) }),
     };
 
-    const { safeDb } = createScopedDbMock(tx);
+    const { safeDb } = createScopedDbMock(tx, {
+      visibleResources: {
+        entity: [documentId, folderId, childDocId],
+        field: [toSafeId<"field">("source_file_field")],
+      },
+    });
     const result = await copyToWorkspace.handler(
       createContext({
         safeDb,
@@ -1782,12 +1945,19 @@ describe("copy-to-workspace", () => {
 
   test("rejects copy to same workspace", async () => {
     const tx = {
+      execute: async (query: SQL) =>
+        new PgDialect().sqlToQuery(query).params.map((id) => ({ id })),
       query: {
         entities: { findFirst: async () => undefined },
       },
     };
 
-    const { safeDb } = createScopedDbMock(tx);
+    const { safeDb } = createScopedDbMock(tx, {
+      visibleResources: {
+        entity: [documentId, folderId, childDocId],
+        field: [toSafeId<"field">("source_file_field")],
+      },
+    });
 
     const context = createContext({
       safeDb,

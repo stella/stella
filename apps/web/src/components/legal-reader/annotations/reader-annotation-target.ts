@@ -1,25 +1,31 @@
 import { panic } from "better-result";
 
-import type { ReaderAnnotationTargetType } from "@stll/api-contract/legal-reader-annotations";
+import type { ReaderDocumentTargetType } from "@stll/api-contract/legal-reader-annotations";
 import type { DecisionPrimaryReferenceType } from "@stll/legal-ast/decision-identifier";
 
-import { activeLegalFromReaderTarget } from "@/components/ai-suggestions/active-legal-document";
 import {
+  activeLegalDocumentRef,
+  activeLegalFromReaderTarget,
+} from "@/components/ai-suggestions/active-legal-document";
+import {
+  decisionPassageChip,
   decisionPassageContent,
+  decisionPassageMention,
   writeDecisionPassage,
 } from "@/components/chat-decision-passage";
+import { useOptionalChatEditorManager } from "@/components/chat-editor-provider";
+import { INSPECTOR_FOCUS_INTENT } from "@/components/inspector/inspector-store-types";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import type { SelectionAnchor } from "@/components/legal-reader/annotations/selection-anchor";
 import { openPublicLawChat } from "@/components/public-law-ask";
-import { formatDecisionCitation } from "@/features/case-law/citation-format";
 import { decisionChatKey } from "@/features/chat/legal-document-chat-key";
 import { ensureLegalDocumentChatThread } from "@/features/chat/legal-document-chat-threads";
-import { formatStatuteCitation } from "@/features/statutes/statute-format";
 import {
   createChatDraftState,
   useChatDraftStore,
 } from "@/lib/chat-draft-store";
 import { getChatThreadKey } from "@/lib/chat-thread-ref";
+import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 
 /**
  * The document a reader is marking, in the terms a citation and a chat
@@ -58,7 +64,7 @@ export type ReaderAnnotationTarget =
 /** How the annotation store and the API address the document. */
 export const readerAnnotationTargetKey = (
   target: ReaderAnnotationTarget,
-): { targetId: string; targetType: ReaderAnnotationTargetType } => ({
+): { targetId: string; targetType: ReaderDocumentTargetType } => ({
   targetId: target.id,
   targetType: target.type,
 });
@@ -126,43 +132,6 @@ export const readerSelectionLocator = ({
   return last;
 };
 
-/** The citation a copied quotation carries. */
-export const readerTargetCitation = ({
-  locator,
-  target,
-}: {
-  locator: string | null;
-  target: ReaderAnnotationTarget;
-}): string => {
-  switch (target.type) {
-    case "decision": {
-      return formatDecisionCitation({
-        caseNumber: target.caseNumber,
-        caseNumberType: target.caseNumberType,
-        country: target.country,
-        court: target.court,
-        decisionDate: target.decisionDate,
-        decisionType: target.decisionType,
-        ecli: target.ecli,
-        name: target.name,
-        pincite: locator,
-      });
-    }
-    case "statute": {
-      return formatStatuteCitation({
-        eli: target.eli,
-        provision: locator,
-        title: target.title,
-        versionValidFrom: target.versionValidFrom,
-      });
-    }
-    default: {
-      target satisfies never;
-      return panic(`Unhandled reader target: ${String(target)}`);
-    }
-  }
-};
-
 /**
  * Opens the document's inspector chat on the selected passage. A decision is a
  * resource the corpus tools can be handed, so the passage lands as chips with
@@ -212,6 +181,7 @@ export const askAboutReaderPassage = ({
         activeLegalKey: documentKey,
         id: threadId,
         label: target.caseNumber,
+        focus: INSPECTOR_FOCUS_INTENT.claim,
       });
       return;
     }
@@ -228,6 +198,75 @@ export const askAboutReaderPassage = ({
       return panic(`Unhandled reader target: ${String(target)}`);
     }
   }
+};
+
+type AskAboutReaderPassageOptions = {
+  /** The question as prose, naming the passage by its full citation. */
+  prompt: string;
+  quote: string;
+  /** The passage's provision or page, which names the chip. */
+  locator: string | null;
+  target: ReaderAnnotationTarget;
+};
+
+/**
+ * "Ask AI" on a selected passage. The passage lands as a pasted-text chip in
+ * the composer floating over the document, the one bound to the document's
+ * conversation, and nothing else opens: the reader asks beside the text they
+ * are reading. A decision brings its mention too, the reference the corpus
+ * tools read it by; a consolidation has none, so its chip carries the full
+ * citation for the model while showing only the provision. Where no composer
+ * of that conversation is on screen, the chat opens in the inspector instead.
+ */
+export const useAskAboutReaderPassage = () => {
+  const manager = useOptionalChatEditorManager();
+
+  return ({ locator, prompt, quote, target }: AskAboutReaderPassageOptions) => {
+    const documentKey =
+      target.type === "decision"
+        ? decisionChatKey(target.id)
+        : activeLegalDocumentRef(activeLegalFromReaderTarget(target)).key;
+    const threadRef: ChatThreadRef = {
+      scope: "global",
+      threadId: ensureLegalDocumentChatThread({ documentKey }),
+    };
+    if (manager === null || !manager.hasLiveComposer(threadRef)) {
+      askAboutReaderPassage({ prompt, quote, target });
+      return;
+    }
+    switch (target.type) {
+      case "decision": {
+        const passage = {
+          caseNumber: target.caseNumber,
+          court: target.court,
+          decisionId: target.id,
+          quote,
+        };
+        manager.insertPastedTextIntoThread(
+          threadRef,
+          decisionPassageChip(passage),
+        );
+        manager.insertMentionIntoThread(
+          threadRef,
+          decisionPassageMention(passage),
+        );
+        break;
+      }
+      case "statute": {
+        manager.insertPastedTextIntoThread(threadRef, {
+          label: locator ?? target.title,
+          source: "paste",
+          text: prompt.trim(),
+        });
+        break;
+      }
+      default: {
+        target satisfies never;
+        panic(`Unhandled reader target: ${String(target)}`);
+      }
+    }
+    manager.focusThread(threadRef);
+  };
 };
 
 /**

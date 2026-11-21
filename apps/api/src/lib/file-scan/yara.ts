@@ -17,6 +17,9 @@ const ruleFiles = [...new Bun.Glob("*.yar").scanSync(YARA_DIR)];
 // missing rules deployment would pass silently. Exported for the image smoke
 // probe (scripts/image-smoke.ts), which asserts the count is non-zero.
 export const yaraRuleFileCount = ruleFiles.length;
+if (yaraRuleFileCount === 0) {
+  panic("File scanner has no YARA rules");
+}
 
 const ruleSource = ruleFiles
   .map((f) => readFileSync(path.join(YARA_DIR, f), "utf-8"))
@@ -54,10 +57,14 @@ const toMatch = (m: RuleMatch): Match => {
   return match;
 };
 
+// YARA-X only reads its input. Buffer views preserve offsets without copying
+// the upload, archive window, or collected evidence.
 export const yaraScanner: Scanner = {
   async scan(bytes) {
     return await Promise.resolve(
-      compiled.scan(Buffer.from(bytes)).map(toMatch),
+      compiled
+        .scan(Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength))
+        .map(toMatch),
     );
   },
 };
@@ -128,17 +135,21 @@ export const yaraWindowedRules: WindowedRuleSet = {
     ),
   ),
   occurrences: (window) =>
-    occurrenceRules.scan(Buffer.from(window)).flatMap((m: RuleMatch) =>
-      m.matches.map(({ identifier, offset, length }: MatchData) => ({
-        rule: m.ruleIdentifier,
-        pattern: identifier,
-        offset,
-        length,
-      })),
-    ),
+    occurrenceRules
+      .scan(Buffer.from(window.buffer, window.byteOffset, window.byteLength))
+      .flatMap((m: RuleMatch) =>
+        m.matches.map(({ identifier, offset, length }: MatchData) => ({
+          rule: m.ruleIdentifier,
+          pattern: identifier,
+          offset,
+          length,
+        })),
+      ),
   evaluate: (rule, evidence) => {
     const match = compiled
-      .scan(Buffer.from(evidence))
+      .scan(
+        Buffer.from(evidence.buffer, evidence.byteOffset, evidence.byteLength),
+      )
       .find((m: RuleMatch) => m.ruleIdentifier === rule);
     return match === undefined ? null : toMatch(match);
   },

@@ -1,7 +1,8 @@
 use objc2::runtime::{AnyClass, AnyObject, Bool, NSObjectProtocol};
 use objc2::{ClassType, MainThreadMarker, MainThreadOnly, define_class, msg_send, sel};
 use objc2_app_kit::{
-  NSApplication, NSPanel, NSWindow, NSWindowCollectionBehavior, NSWindowStyleMask,
+  NSApplication, NSPanel, NSStatusWindowLevel, NSWindow, NSWindowCollectionBehavior,
+  NSWindowStyleMask,
 };
 use tauri::{Runtime, WebviewWindow};
 
@@ -123,6 +124,22 @@ fn configure_transient_overlay(ns_window: &NSWindow) {
   ns_window.setHidesOnDeactivate(false);
 }
 
+/// Orders a window in front of every app and on every Space without making
+/// it key or activating the app, so the app the user works in keeps its
+/// caret and stays frontmost; clicks pass through to whatever is underneath.
+/// Returns false when there is no window handle or the call is not on the
+/// main thread.
+pub fn present_passive_overlay<R: Runtime>(window: &WebviewWindow<R>) -> bool {
+  let Some((_, ns_window)) = ns_window(window) else {
+    return false;
+  };
+  configure_transient_overlay(ns_window);
+  ns_window.setIgnoresMouseEvents(true);
+  ns_window.setLevel(NSStatusWindowLevel);
+  ns_window.orderFrontRegardless();
+  true
+}
+
 /// Prepares a disposable overlay without the persistent clipboard panel's
 /// class conversion. The caller uses Tauri's ordinary show/focus lifecycle.
 pub fn prepare_transient_overlay<R: Runtime>(window: &WebviewWindow<R>) {
@@ -159,6 +176,22 @@ pub fn present_key_panel<R: Runtime>(window: &WebviewWindow<R>) -> bool {
   true
 }
 
+/// Shows an ordinary window as the key window and requests activation for the
+/// app, for windows the user edits in. Unlike `present_key_panel`, the window
+/// keeps its runtime class. Returns false when there is no window handle or
+/// the call is not on the main thread; the caller then falls back to an
+/// activating show.
+pub fn present_activating_window<R: Runtime>(window: &WebviewWindow<R>) -> bool {
+  let Some((main_thread, ns_window)) = ns_window(window) else {
+    return false;
+  };
+  crate::activation::activate_with_key_window(
+    &NSApplication::sharedApplication(main_thread),
+    ns_window,
+  );
+  true
+}
+
 /// Restores a parked panel and makes it key, with the webview still its first
 /// responder: a key panel whose first responder is the panel itself swallows
 /// every keystroke until a mouse event over the webview hands them back.
@@ -179,6 +212,10 @@ fn present_panel(ns_window: &NSWindow) {
     content.setHidden(false);
   }
   ns_window.makeFirstResponder(first_responder.as_deref());
+  // Above the modal-panel level: the panel never activates, so the app it
+  // pastes into stays active, and that app's modal dialogs (sign-in, save)
+  // sit at the modal level, which covers a floating window.
+  ns_window.setLevel(NSStatusWindowLevel);
   ns_window.makeKeyAndOrderFront(None);
 }
 
@@ -221,6 +258,10 @@ pub fn is_panel_presented<R: Runtime>(window: &WebviewWindow<R>) -> bool {
 /// rendering and defeat the parking. Private WebKit setter, hence the
 /// `respondsToSelector` guard; a WebKit without it keeps the default.
 pub fn disable_occlusion_detection<R: Runtime>(window: &WebviewWindow<R>) {
+  #[expect(
+    clippy::let_underscore_must_use,
+    reason = "a webview that is already gone has no occlusion to track"
+  )]
   let _ = window.with_webview(|webview| {
     // SAFETY: `inner` returns a valid WKWebView pointer for the lifetime of
     // the closure, which Tauri runs on the main thread. The selector is only

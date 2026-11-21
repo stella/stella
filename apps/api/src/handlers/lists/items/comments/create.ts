@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { NOTIFICATION_KIND } from "@stll/api-contract/notifications";
 
@@ -10,20 +10,23 @@ import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { LEGAL_LISTS_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import {
   fanOutCrossUserNotifications,
   resolveMentionTargets,
 } from "@/api/lib/notifications";
 import type { NewNotification } from "@/api/lib/notifications";
 
-const bodySchema = t.Object({
-  listId: tSafeId("legalList"),
-  itemEntityId: tSafeId("entity"),
-  body: t.String({ minLength: 1, maxLength: 10_000 }),
+const bodySchema = v.object({
+  listId: resourceIdSchema("legalList"),
+  itemEntityId: resourceIdSchema("entity"),
+  body: v.pipe(v.string(), v.minLength(1), v.maxLength(10_000)),
 });
 const config = {
+  contract: "patch",
+  featureAccess: { type: "required", featureId: LEGAL_LISTS_FEATURE_ID },
   description:
     "Add a comment to one list item. The comment is stored against the item " +
     "and shows up in its activity trail.",
@@ -117,7 +120,7 @@ const createItemComment = createSafeHandler(
       // must not see the write fail over a colleague's badge — the rejection
       // still reaches error capture rather than being swallowed.
       detached(
-        fanOutCrossUserNotifications(rows),
+        async () => fanOutCrossUserNotifications(rows),
         "notifications.list-item-mention",
       );
     }

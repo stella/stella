@@ -1,54 +1,99 @@
-import type { DocumentAst } from "@stll/legal-ast/document-ast";
-import { parseUsableDocumentAst } from "@stll/legal-ast/document-ast";
+import { eq } from "drizzle-orm";
 
+import type { DocumentAst } from "@stll/legal-ast/document-ast";
+
+import { caseLawSources, publishedCaseLawDecisions } from "@/api/db/schema";
 import { corpusStorageMode } from "@/api/env-base";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
+import { readCachedDecisionAst } from "@/api/lib/case-law/decision-ast-cache";
+import { parseCachedDecisionAst } from "@/api/lib/case-law/decision-ast-normalization";
 import {
-  readCorpusAst,
+  type DecisionPayloadRead,
+  readDecisionVersionedPayload,
+} from "@/api/lib/case-law/decision-versioned-payload";
+import { pgTimestampCursorValue } from "@/api/lib/db-pagination";
+import {
+  parsePersistedCorpusAst,
+  readCorpusForRecovery,
   readCorpusPayloadOrFallback,
 } from "@/api/lib/legal-search/corpus-storage";
 import type { CorpusTombstoneReader } from "@/api/lib/legal-search/corpus-tombstones";
+import type { EmptyAst } from "@/api/lib/legal-search/document-types";
 import {
   definePublicLawSharedQuery,
   PUBLIC_LAW_SHARED_QUERY,
 } from "@/api/lib/public-law-shared-query";
 
 const decisionAnalysisColumns = {
-  id: true,
-  language: true,
-  court: true,
-  country: true,
-  decisionType: true,
-  documentAst: true,
-  analysis: true,
+  id: publishedCaseLawDecisions.id,
+  language: publishedCaseLawDecisions.language,
+  court: publishedCaseLawDecisions.court,
+  country: publishedCaseLawDecisions.country,
+  decisionType: publishedCaseLawDecisions.decisionType,
+  updatedAt: publishedCaseLawDecisions.updatedAt,
+  versionTimestamp: pgTimestampCursorValue(publishedCaseLawDecisions.updatedAt),
+  analysis: publishedCaseLawDecisions.analysis,
   // Object-storage pointers: under canonical corpus storage the row's own
   // `documentAst` is trimmed and the object is the document.
-  astS3Key: true,
-  contentHash: true,
+  astS3Key: publishedCaseLawDecisions.astS3Key,
+  contentHash: publishedCaseLawDecisions.contentHash,
   // The rest identifies the document to its publisher, for the
   // development-only re-parse on read (`decisions/dev-reparse.ts`).
-  caseNumber: true,
-  ecli: true,
-  decisionDate: true,
-  documentUrl: true,
-  metadata: true,
-} as const;
+  caseNumber: publishedCaseLawDecisions.caseNumber,
+  ecli: publishedCaseLawDecisions.ecli,
+  decisionDate: publishedCaseLawDecisions.decisionDate,
+  documentUrl: publishedCaseLawDecisions.documentUrl,
+  metadata: publishedCaseLawDecisions.metadata,
+};
 
 export const readDecisionAnalysis = definePublicLawSharedQuery(
   PUBLIC_LAW_SHARED_QUERY.caseLawAnalysis,
   async (
     tx: CaseLawPublicReadTransaction,
     decisionId: SafeId<"caseLawDecision">,
-  ) =>
-    await tx.query.caseLawDecisions.findFirst({
-      where: { id: { eq: decisionId } },
-      columns: decisionAnalysisColumns,
-      // `descriptor` carries the source's reuse terms and is read only to
-      // decide whether the text may be fed to a model; it is never returned.
-      with: { source: { columns: { adapterKey: true, descriptor: true } } },
-    }),
+  ) => {
+    const [row] = await tx
+      .select({
+        ...decisionAnalysisColumns,
+        // The join key keeps a matched source from reading back as no source
+        // when its other columns are NULL; consumers ignore it.
+        source: {
+          id: caseLawSources.id,
+          adapterKey: caseLawSources.adapterKey,
+          descriptor: caseLawSources.descriptor,
+        },
+      })
+      .from(publishedCaseLawDecisions)
+      .leftJoin(
+        caseLawSources,
+        eq(caseLawSources.id, publishedCaseLawDecisions.sourceId),
+      )
+      .where(eq(publishedCaseLawDecisions.id, decisionId))
+      .limit(1);
+    return row;
+  },
 );
+
+type DecisionAnalysisAstVersion = {
+  decisionId: SafeId<"caseLawDecision">;
+  versionTimestamp: string;
+  contentHash: string | null;
+  astS3Key: string | null;
+};
+
+export type DecisionAnalysisAstColumnRead = DecisionPayloadRead<"documentAst">;
+
+/** Lazy fallback: metadata reads do not transfer an AST served by storage. */
+export const readDecisionAnalysisAstColumn = async (
+  tx: CaseLawPublicReadTransaction,
+  { decisionId, ...version }: DecisionAnalysisAstVersion,
+): Promise<DecisionAnalysisAstColumnRead> =>
+  await readDecisionVersionedPayload(
+    tx,
+    { id: decisionId, ...version },
+    "documentAst",
+  );
 
 type DecisionAstPointers = {
   id: SafeId<"caseLawDecision">;
@@ -72,20 +117,32 @@ type DecisionAstPointers = {
 export const readDecisionAnalysisAst = async (
   { astS3Key, contentHash, documentAst, id }: DecisionAstPointers,
   readTombstones: CorpusTombstoneReader,
+  readPgAst?: () => Promise<DocumentAst | EmptyAst | null>,
 ): Promise<DocumentAst | null> => {
-  if (
-    corpusStorageMode === "off" ||
-    astS3Key === null ||
-    contentHash === null
-  ) {
-    return parseUsableDocumentAst(documentAst);
-  }
-  const stored = await readCorpusPayloadOrFallback({
+  const recovered = await readCorpusForRecovery({
     documentId: id,
-    key: astS3Key,
-    step: "analysis.readDecisionAst",
-    read: async () => await readCorpusAst(astS3Key, { readTombstones }),
-    fallback: async () => await Promise.resolve(documentAst),
+    read: async () => {
+      const readRowAst = async () =>
+        readPgAst === undefined
+          ? parsePersistedCorpusAst(documentAst, id)
+          : await readPgAst();
+      if (
+        corpusStorageMode === "off" ||
+        astS3Key === null ||
+        contentHash === null
+      ) {
+        return parseCachedDecisionAst(await readRowAst());
+      }
+      const stored = await readCorpusPayloadOrFallback({
+        documentId: id,
+        key: astS3Key,
+        step: "analysis.readDecisionAst",
+        read: async () =>
+          await readCachedDecisionAst(astS3Key, readTombstones, id),
+        fallback: readRowAst,
+      });
+      return parseCachedDecisionAst(stored);
+    },
   });
-  return parseUsableDocumentAst(stored);
+  return recovered.match({ ok: (ast) => ast, err: () => null });
 };

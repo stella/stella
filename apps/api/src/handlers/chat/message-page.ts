@@ -7,6 +7,7 @@ import { withScopedTx } from "@/api/db/safe-db";
 import { chatMessages, chatTurns } from "@/api/db/schema";
 import {
   chatMessageFromPersisted,
+  clientVisibleChatPart,
   getChatAttachmentUrl,
   isChatAttachmentPart,
   normalizePersistedChatMessageContent,
@@ -16,9 +17,13 @@ import type {
   ChatMessageMetadata,
   ChatMessageRole,
   ChatPart,
+  ChatTurnTiming,
   PersistedChatMessageContent,
 } from "@/api/handlers/chat/types";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { WithdrawnCopyProjection } from "@/api/lib/case-law/withdrawn-copy-projection";
+import { messageTurnTiming } from "@/api/lib/chat/turn-timing";
+import { readChatCopyProjection } from "@/api/lib/chat/withdrawn-copies";
 import { LIMITS } from "@/api/lib/limits";
 import {
   decodePaginationCursor,
@@ -31,9 +36,11 @@ import { parseUserFileId } from "@/api/lib/user-files/types";
 
 export type ClientMessage = {
   createdAt: string;
+  edited: boolean;
   id: SafeId<"chatMessage">;
   metadata?: ChatMessageMetadata;
   role: ChatMessageRole;
+  revision: number;
   parts: ChatPart[];
 };
 
@@ -118,12 +125,33 @@ const loadChatMessagePageOnTx = async ({
 }: LoadChatMessagePageOnTxArgs): Promise<ChatMessagePage> => {
   const pageSize = normalizeTenantPageLimit(LIMITS.chatMessagesPageSizeDefault);
 
+  // The thread's unsettled turn is read in the same statement as its
+  // messages, so both come from one snapshot. Read apart, a turn accepted (its
+  // message and its row commit together) or settled between the two reads
+  // pairs a running turn with a page missing its message, or a page missing
+  // its answer with no running turn.
+  const activeTurnId = tx
+    .select({ id: chatTurns.id })
+    .from(chatTurns)
+    .where(
+      and(
+        eq(chatTurns.threadId, threadId),
+        inArray(chatTurns.status, [...ACTIVE_CHAT_TURN_STATUSES]),
+      ),
+    )
+    .limit(1);
   const rows = await tx
     .select({
+      activeTurnId: sql<SafeId<"chatTurn"> | null>`(${activeTurnId})`,
       id: chatMessages.id,
       role: chatMessages.role,
       content: chatMessages.content,
+      revision: chatMessages.revision,
       createdAt: chatMessages.createdAt,
+      turnTiming: messageTurnTiming({
+        messageId: chatMessages.id,
+        threadId: chatMessages.threadId,
+      }),
     })
     .from(chatMessages)
     .where(
@@ -150,22 +178,15 @@ const loadChatMessagePageOnTx = async ({
 
   const lastActivityAt = pageAscending.at(-1)?.createdAt.toISOString() ?? null;
 
-  const activeTurn = (
-    await tx
-      .select({ id: chatTurns.id })
-      .from(chatTurns)
-      .where(
-        and(
-          eq(chatTurns.threadId, threadId),
-          inArray(chatTurns.status, [...ACTIVE_CHAT_TURN_STATUSES]),
-        ),
-      )
-      .limit(1)
-  ).at(0);
-
   return {
-    activeTurnId: activeTurn?.id ?? null,
-    messages: await projectPageRowsOnTx({ rows: pageAscending, tx, userId }),
+    // No message, no turn: a turn's row commits with its message.
+    activeTurnId: rows.at(0)?.activeTurnId ?? null,
+    messages: await projectPageRowsOnTx({
+      rows: pageAscending,
+      tx,
+      userId,
+      threadId,
+    }),
     olderCursor,
     lastActivityAt,
   };
@@ -176,17 +197,42 @@ const loadChatMessagePageOnTx = async ({
  * timestamp, its attachments carrying the placeholders of the files they
  * reference.
  */
-const projectPageRowsOnTx = async ({
+export const projectPageRowsOnTx = async ({
   rows,
   tx,
   userId,
+  threadId,
+  withdrawal,
 }: {
+  threadId: SafeId<"chatThread">;
+  withdrawal?: WithdrawnCopyProjection;
   rows: readonly ChatMessagePageRow[];
   tx: Transaction;
   userId: SafeId<"user">;
 }): Promise<ClientMessage[]> => {
-  const placeholderById = await loadPlaceholdersOnTx({ rows, tx, userId });
-  return rows.map((row) => clientMessageFromPageRow(row, placeholderById));
+  const read =
+    withdrawal === undefined
+      ? await readChatCopyProjection({
+          tx,
+          threadIds: [threadId],
+          values: rows,
+        })
+      : {
+          projection: withdrawal,
+          subjectByThread: new Map<
+            SafeId<"chatThread">,
+            SafeId<"caseLawDecision"> | null
+          >(),
+        };
+  const masked = rows.map((row) =>
+    read.projection.chat(row, read.subjectByThread.get(threadId)),
+  );
+  const placeholderById = await loadPlaceholdersOnTx({
+    rows: masked,
+    tx,
+    userId,
+  });
+  return masked.map((row) => clientMessageFromPageRow(row, placeholderById));
 };
 
 /**
@@ -230,7 +276,12 @@ export const loadClientMessages = async ({
         id: chatMessages.id,
         role: chatMessages.role,
         content: chatMessages.content,
+        revision: chatMessages.revision,
         createdAt: chatMessages.createdAt,
+        turnTiming: messageTurnTiming({
+          messageId: chatMessages.id,
+          threadId: chatMessages.threadId,
+        }),
       })
       .from(chatMessages)
       .where(
@@ -241,7 +292,7 @@ export const loadClientMessages = async ({
       )
       .orderBy(asc(chatMessages.createdAt), asc(chatMessages.id))
       .limit(messageIds.length);
-    return await projectPageRowsOnTx({ rows, tx, userId });
+    return await projectPageRowsOnTx({ rows, tx, userId, threadId });
   });
 };
 
@@ -250,6 +301,8 @@ type ChatMessagePageRow = {
   createdAt: Date;
   id: SafeId<"chatMessage">;
   role: ChatMessageRole;
+  turnTiming?: ChatTurnTiming | null;
+  revision: number;
 };
 
 export const clientMessageFromPageRow = (
@@ -257,12 +310,23 @@ export const clientMessageFromPageRow = (
   placeholderById: Map<string, string>,
 ): ClientMessage => {
   const message = chatMessageFromPersisted(row);
+  let metadata = message.metadata;
+  if (
+    row.turnTiming !== undefined &&
+    (row.turnTiming !== null || metadata !== undefined)
+  ) {
+    metadata = { ...metadata, turnTiming: row.turnTiming ?? undefined };
+  }
   return {
     createdAt: row.createdAt.toISOString(),
+    edited: row.revision > 0,
     id: message.id,
-    ...(message.metadata === undefined ? {} : { metadata: message.metadata }),
+    ...(metadata === undefined ? {} : { metadata }),
     role: message.role,
-    parts: attachPlaceholders(message.parts, placeholderById),
+    revision: row.revision,
+    parts: attachPlaceholders(message.parts, placeholderById).map(
+      clientVisibleChatPart,
+    ),
   };
 };
 

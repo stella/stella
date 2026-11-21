@@ -1,44 +1,67 @@
-import type { HookEndpointContext } from "better-auth";
+import type { BetterAuthPlugin, HookEndpointContext } from "better-auth";
 import { Result } from "better-result";
 import {
   afterAll,
-  beforeAll,
   describe,
   expect,
   setDefaultTimeout,
   spyOn,
   test,
 } from "bun:test";
+import { inArray } from "drizzle-orm";
 
 import { RUNTIME_MODE } from "@stll/runtime-mode";
+import { createTestClock } from "@stll/test-kit";
+import { createTestState } from "@stll/test-state";
 
-import { member, organization, user } from "@/api/db/auth-schema";
-import { contacts, workspaceMembers, workspaces } from "@/api/db/schema";
+import { member, organization, session, user } from "@/api/db/auth-schema";
+import {
+  contacts,
+  featureEnrolments,
+  workspaceMembers,
+  workspaces,
+} from "@/api/db/schema";
+import { createScopedDb } from "@/api/db/scoped";
+import { env } from "@/api/env";
 import { getServerAnalytics } from "@/api/lib/analytics/client";
 import {
   AUTHORITATIVE_SESSION_PATHS,
   checkNewAccountEmailAllowedForCreation,
   ensureDisplayName,
-  getEmailOtpMinimumResponseDuration,
   getAuth,
+  getEmailOtpMinimumResponseDuration,
   getNewAccountEmailOtpAction,
   isSessionCreatingAuthPath,
   isSixDigitOtpBody,
   isTwoFactorRedirectResponse,
   NEW_ACCOUNT_OTP_RATE_LIMIT_MODE,
-  runEmailOtpRequestOnResponseSchedule,
-  resolveMemberAuthorization,
+  OAUTH_PROVIDER_SESSION_PATHS,
   resolveAuthoritativeSessionForSensitiveAuthPath,
+  resolveMemberAuthorization,
+  resolveUserRealtimeAuthorization,
+  resolveWorkspaceMemberAccess,
   resolveWorkspaceRealtimeAudience,
+  runEmailOtpRequestOnResponseSchedule,
   SESSION_COOKIE_CACHE_MAX_AGE_SECONDS,
   TWO_FACTOR_MANAGE_PATHS,
+  TWO_FACTOR_SESSION_PATHS,
   withStellaTwoFactorSignInGate,
 } from "@/api/lib/auth";
+import { getAuthEndpointUrl } from "@/api/lib/auth/auth-paths";
 import { toSafeId } from "@/api/lib/branded-types";
+import { SESSION_ABSOLUTE_AGE_MS } from "@/api/lib/db/session-liveness";
 import { AUTH_RATE_LIMITS } from "@/api/lib/limits";
 import { OAUTH_CLIENT_REGISTRATION_PATH } from "@/api/lib/oauth-loopback-registration";
+import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
+import { setRuntimeModeForTesting } from "@/api/runtime-mode";
+import { CREDENTIAL_AUTHENTICATION } from "@/api/tests/helpers/member-authorization";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
+
+const testClock = createTestClock();
+
+const testState = createTestState({ file: import.meta.path, config: env });
 
 setDefaultTimeout(120_000);
 
@@ -67,8 +90,12 @@ const strangerUser = userId();
 const clientContactId = toSafeId<"contact">(tid());
 const clientWorkspaceId = workspaceId();
 const memberPersonalWorkspaceId = workspaceId();
+const liveOwnerSessionId = tid();
+const expiredOwnerSessionId = tid();
+const cappedOwnerSessionId = tid();
+const liveMemberSessionId = tid();
 
-beforeAll(async () => {
+testState.beforeAll(async () => {
   testDb = await getTestDb();
 
   await testDb.insert(user).values(
@@ -100,6 +127,12 @@ beforeAll(async () => {
       createdAt: new Date(),
     },
   ]);
+  for (const organizationId of [orgFull, orgEmpty]) {
+    await recordNewOrganizationAccessState(testDb, {
+      organizationId,
+      now: new Date(),
+    });
+  }
 
   await testDb.insert(member).values([
     {
@@ -139,6 +172,34 @@ beforeAll(async () => {
     },
   ]);
 
+  await testDb.insert(session).values([
+    {
+      id: liveOwnerSessionId,
+      token: tid(),
+      userId: ownerInFull,
+      expiresAt: new Date("2100-01-01T00:00:00.000Z"),
+    },
+    {
+      id: cappedOwnerSessionId,
+      token: tid(),
+      userId: ownerInFull,
+      createdAt: new Date(Date.now() - SESSION_ABSOLUTE_AGE_MS - 1),
+      expiresAt: new Date("2100-01-01T00:00:00.000Z"),
+    },
+    {
+      id: expiredOwnerSessionId,
+      token: tid(),
+      userId: ownerInFull,
+      expiresAt: new Date("2000-01-01T00:00:00.000Z"),
+    },
+    {
+      id: liveMemberSessionId,
+      token: tid(),
+      userId: memberInFull,
+      expiresAt: new Date("2100-01-01T00:00:00.000Z"),
+    },
+  ]);
+
   await testDb.insert(contacts).values({
     id: clientContactId,
     organizationId: orgFull,
@@ -175,34 +236,125 @@ afterAll(async () => {
 describe("resolveMemberAuthorization", () => {
   test("resolves an owner without loading workspaces", async () => {
     const authorization = await resolveMemberAuthorization(
-      { organizationId: orgFull, userId: ownerInFull },
+      {
+        authentication: CREDENTIAL_AUTHENTICATION,
+        organizationId: orgFull,
+        userId: ownerInFull,
+      },
       testDb,
     );
 
     expect(authorization).toEqual({
+      billingAccess: false,
       memberId: expect.any(String),
       email: `${ownerInFull}@test.local`,
       role: "owner",
       workspace: null,
+      emailVerified: expect.any(Boolean),
+      userDeleted: false,
+      enrolledFeatureIds: [],
+      professionalUse: { status: "required" },
+      ssoAccess: { status: "not_required" },
     });
   });
 
   test("a member belonging to the org but to no workspace still resolves", async () => {
     const authorization = await resolveMemberAuthorization(
-      { organizationId: orgFull, userId: loneMemberInFull },
+      {
+        authentication: CREDENTIAL_AUTHENTICATION,
+        organizationId: orgFull,
+        userId: loneMemberInFull,
+      },
       testDb,
     );
     expect(authorization).toEqual({
+      billingAccess: false,
       memberId: expect.any(String),
       email: `${loneMemberInFull}@test.local`,
       role: "member",
       workspace: null,
+      emailVerified: expect.any(Boolean),
+      userDeleted: false,
+      enrolledFeatureIds: [],
+      professionalUse: { status: "required" },
+      ssoAccess: { status: "not_required" },
     });
+  });
+
+  test("reads the caller's own feature enrolments in the same lookup, never another member's", async () => {
+    const restoreMode = setRuntimeModeForTesting({ mode: RUNTIME_MODE.strict });
+    await testDb.insert(featureEnrolments).values([
+      {
+        organizationId: orgFull,
+        userId: memberInFull,
+        featureId: "time-billing",
+      },
+      // Same user, another organization: must never surface in orgFull.
+      {
+        organizationId: orgEmpty,
+        userId: loneMemberInFull,
+        featureId: "time-billing",
+      },
+    ]);
+    try {
+      for (const deployed of [false, true]) {
+        testState.setConfig("FEATURE_TIME_BILLING", deployed);
+        const enrolled = await resolveMemberAuthorization(
+          {
+            authentication: CREDENTIAL_AUTHENTICATION,
+            organizationId: orgFull,
+            userId: memberInFull,
+          },
+          testDb,
+        );
+        const enrolledWithWorkspace = await resolveMemberAuthorization(
+          {
+            authentication: CREDENTIAL_AUTHENTICATION,
+            organizationId: orgFull,
+            userId: memberInFull,
+            workspaceId: memberPersonalWorkspaceId,
+          },
+          testDb,
+        );
+        const other = await resolveMemberAuthorization(
+          {
+            authentication: CREDENTIAL_AUTHENTICATION,
+            organizationId: orgFull,
+            userId: ownerInFull,
+          },
+          testDb,
+        );
+        expect(enrolled?.enrolledFeatureIds).toEqual(
+          deployed ? ["time-billing"] : [],
+        );
+        expect(enrolledWithWorkspace?.enrolledFeatureIds).toEqual(
+          deployed ? ["time-billing"] : [],
+        );
+        expect(other?.enrolledFeatureIds).toEqual([]);
+        const otherOrganization = await resolveMemberAuthorization(
+          {
+            authentication: CREDENTIAL_AUTHENTICATION,
+            organizationId: orgFull,
+            userId: loneMemberInFull,
+          },
+          testDb,
+        );
+        expect(otherOrganization?.enrolledFeatureIds).toEqual([]);
+      }
+    } finally {
+      restoreMode();
+      await testDb
+        .delete(featureEnrolments)
+        .where(
+          inArray(featureEnrolments.userId, [memberInFull, loneMemberInFull]),
+        );
+    }
   });
 
   test("optionally resolves one target workspace without expanding the access set", async () => {
     const ownerClient = await resolveMemberAuthorization(
       {
+        authentication: CREDENTIAL_AUTHENTICATION,
         organizationId: orgFull,
         userId: ownerInFull,
         workspaceId: clientWorkspaceId,
@@ -211,6 +363,7 @@ describe("resolveMemberAuthorization", () => {
     );
     const ownerPersonal = await resolveMemberAuthorization(
       {
+        authentication: CREDENTIAL_AUTHENTICATION,
         organizationId: orgFull,
         userId: ownerInFull,
         workspaceId: memberPersonalWorkspaceId,
@@ -219,6 +372,7 @@ describe("resolveMemberAuthorization", () => {
     );
     const memberPersonal = await resolveMemberAuthorization(
       {
+        authentication: CREDENTIAL_AUTHENTICATION,
         organizationId: orgFull,
         userId: memberInFull,
         workspaceId: memberPersonalWorkspaceId,
@@ -227,6 +381,7 @@ describe("resolveMemberAuthorization", () => {
     );
     const memberClient = await resolveMemberAuthorization(
       {
+        authentication: CREDENTIAL_AUTHENTICATION,
         organizationId: orgFull,
         userId: memberInFull,
         workspaceId: clientWorkspaceId,
@@ -240,13 +395,57 @@ describe("resolveMemberAuthorization", () => {
     expect(memberClient?.workspace).toBeNull();
   });
 
+  test.each([
+    {
+      actor: ownerInFull,
+      target: clientWorkspaceId,
+      expected: clientWorkspaceId,
+    },
+    { actor: ownerInFull, target: memberPersonalWorkspaceId, expected: null },
+    {
+      actor: memberInFull,
+      target: memberPersonalWorkspaceId,
+      expected: memberPersonalWorkspaceId,
+    },
+    { actor: memberInFull, target: clientWorkspaceId, expected: null },
+  ])(
+    "worker membership uses the session access rule under RLS: %p",
+    async ({ actor, target, expected }) => {
+      const lookup = {
+        organizationId: orgFull,
+        userId: actor,
+        workspaceId: target,
+      };
+      const authorization = await resolveMemberAuthorization(
+        { ...lookup, authentication: CREDENTIAL_AUTHENTICATION },
+        testDb,
+      );
+      const workspace = await createScopedDb(
+        testDb,
+        [target],
+        orgFull,
+        actor,
+      )(async (tx) => await resolveWorkspaceMemberAccess(lookup, tx));
+      expect(workspace?.id ?? null).toBe(expected);
+      expect(workspace).toEqual(authorization?.workspace ?? null);
+    },
+  );
+
   test("organization members with zero workspaces keep their roles", async () => {
     const ownerAuthorization = await resolveMemberAuthorization(
-      { organizationId: orgEmpty, userId: ownerInEmpty },
+      {
+        authentication: CREDENTIAL_AUTHENTICATION,
+        organizationId: orgEmpty,
+        userId: ownerInEmpty,
+      },
       testDb,
     );
     const memberAuthorization = await resolveMemberAuthorization(
-      { organizationId: orgEmpty, userId: memberInEmpty },
+      {
+        authentication: CREDENTIAL_AUTHENTICATION,
+        organizationId: orgEmpty,
+        userId: memberInEmpty,
+      },
       testDb,
     );
     expect(ownerAuthorization?.role).toBe("owner");
@@ -255,7 +454,11 @@ describe("resolveMemberAuthorization", () => {
 
   test("a user with no membership row in the organization resolves to null", async () => {
     const result = await resolveMemberAuthorization(
-      { organizationId: orgFull, userId: strangerUser },
+      {
+        authentication: CREDENTIAL_AUTHENTICATION,
+        organizationId: orgFull,
+        userId: strangerUser,
+      },
       testDb,
     );
 
@@ -264,7 +467,11 @@ describe("resolveMemberAuthorization", () => {
 
   test("membership in one organization does not leak workspace access when queried against another organization", async () => {
     const result = await resolveMemberAuthorization(
-      { organizationId: orgEmpty, userId: ownerInFull },
+      {
+        authentication: CREDENTIAL_AUTHENTICATION,
+        organizationId: orgEmpty,
+        userId: ownerInFull,
+      },
       testDb,
     );
 
@@ -273,31 +480,81 @@ describe("resolveMemberAuthorization", () => {
 });
 
 describe("resolveWorkspaceRealtimeAudience", () => {
-  test("returns only users with current access to the target workspace", async () => {
+  test("returns only live sessions whose users currently access the target workspace", async () => {
     const candidates = [
-      ownerInFull,
-      memberInFull,
-      loneMemberInFull,
-      ownerInEmpty,
-      strangerUser,
+      liveOwnerSessionId,
+      expiredOwnerSessionId,
+      cappedOwnerSessionId,
+      liveMemberSessionId,
     ];
 
     const clientMatterAudience = await resolveWorkspaceRealtimeAudience(
-      { userIds: candidates, workspaceId: clientWorkspaceId },
+      { sessionIds: candidates, workspaceId: clientWorkspaceId },
       testDb,
     );
     const personalMatterAudience = await resolveWorkspaceRealtimeAudience(
-      { userIds: candidates, workspaceId: memberPersonalWorkspaceId },
+      { sessionIds: candidates, workspaceId: memberPersonalWorkspaceId },
       testDb,
     );
 
-    expect(clientMatterAudience).toEqual(new Set([ownerInFull]));
-    expect(personalMatterAudience).toEqual(new Set([memberInFull]));
+    expect(clientMatterAudience).toEqual(new Set([liveOwnerSessionId]));
+    expect(personalMatterAudience).toEqual(new Set([liveMemberSessionId]));
   });
 });
 
-// oxlint-disable-next-line typescript/no-unsafe-type-assertion -- the matcher under test only reads `ctx.path`; the other HookEndpointContext members (context, headers, ...) are irrelevant here and a full instance is heavy to construct for a pure-function unit test.
-const fakeCtx = (path: string) => ({ path }) as HookEndpointContext;
+describe("resolveUserRealtimeAuthorization", () => {
+  test("returns the membership and only the live sessions of a current member", async () => {
+    const authorized = await resolveUserRealtimeAuthorization(
+      {
+        organizationId: orgFull,
+        sessionIds: [
+          liveOwnerSessionId,
+          expiredOwnerSessionId,
+          cappedOwnerSessionId,
+        ],
+        userId: ownerInFull,
+      },
+      testDb,
+    );
+
+    expect(authorized).toEqual({
+      member: true,
+      liveSessionIds: new Set([liveOwnerSessionId]),
+    });
+  });
+
+  test("refuses live sessions after their organization membership is removed", async () => {
+    const authorized = await resolveUserRealtimeAuthorization(
+      {
+        organizationId: orgEmpty,
+        sessionIds: [liveMemberSessionId],
+        userId: memberInFull,
+      },
+      testDb,
+    );
+
+    expect(authorized).toEqual({ member: false, liveSessionIds: new Set() });
+  });
+
+  test("answers membership for a stream no browser session holds", async () => {
+    for (const sessionIds of [[], [expiredOwnerSessionId]]) {
+      expect(
+        await resolveUserRealtimeAuthorization(
+          { organizationId: orgFull, sessionIds, userId: ownerInFull },
+          testDb,
+        ),
+      ).toEqual({ member: true, liveSessionIds: new Set() });
+    }
+    expect(
+      await resolveUserRealtimeAuthorization(
+        { organizationId: orgEmpty, sessionIds: [], userId: memberInFull },
+        testDb,
+      ),
+    ).toEqual({ member: false, liveSessionIds: new Set() });
+  });
+});
+
+const fakeCtx = (path: string) => asTestRaw<HookEndpointContext>({ path });
 
 describe("withStellaTwoFactorSignInGate", () => {
   test("keeps the after-hook (and its original handler) instead of dropping it", () => {
@@ -411,23 +668,25 @@ describe("isTwoFactorRedirectResponse", () => {
 });
 
 describe("isSessionCreatingAuthPath", () => {
-  test("covers every sign-in surface that establishes a session", () => {
+  test("covers auth surfaces that set a session", () => {
     // The hosted flow is passwordless email OTP; social providers all land on
     // the shared callback; the credential path serves the self-host bootstrap
     // admin, and first verification signs the new account in.
+    expect(isSessionCreatingAuthPath("/mcp-handoff/redeem")).toBe(true);
     expect(isSessionCreatingAuthPath("/sign-in/email-otp")).toBe(true);
     expect(isSessionCreatingAuthPath("/callback/google")).toBe(true);
     expect(isSessionCreatingAuthPath("/callback/microsoft")).toBe(true);
     expect(isSessionCreatingAuthPath("/sign-in/email")).toBe(true);
     expect(isSessionCreatingAuthPath("/email-otp/verify-email")).toBe(true);
+    expect(isSessionCreatingAuthPath("/sign-up/email")).toBe(true);
   });
 
   test("ignores paths that establish no session", () => {
+    expect(isSessionCreatingAuthPath("/get-session")).toBe(false);
     expect(isSessionCreatingAuthPath("/email-otp/send-verification-otp")).toBe(
       false,
     );
     expect(isSessionCreatingAuthPath("/oauth2/authorize")).toBe(false);
-    expect(isSessionCreatingAuthPath("/get-session")).toBe(false);
     expect(isSessionCreatingAuthPath(undefined)).toBe(false);
   });
 });
@@ -452,27 +711,74 @@ describe("TWO_FACTOR_MANAGE_PATHS", () => {
 });
 
 describe("resolveAuthoritativeSessionForSensitiveAuthPath", () => {
-  const sensitiveCtx = (path: string) => ({
-    path,
-    request: new Request(`http://localhost/api/auth${path}`),
-  });
+  const sensitiveCtx = (path: string) => {
+    const headers = new Headers({
+      cookie: "session-token=token; preference=compact; session-data=snapshot",
+    });
+    return {
+      context: {
+        authCookies: {
+          sessionData: { name: "session-data" },
+          sessionToken: { name: "session-token" },
+        },
+      },
+      headers,
+      path,
+      request: new Request(`http://localhost/api/auth${path}`, { headers }),
+    };
+  };
 
   test("loads storage-backed session state before OAuth authorization can mint a durable token", async () => {
     const resolvedPaths: string[] = [];
 
+    const ctx = sensitiveCtx("/oauth2/authorize");
     const handled = await resolveAuthoritativeSessionForSensitiveAuthPath({
-      ctx: sensitiveCtx("/oauth2/authorize"),
-      resolveSession: async (ctx) => {
-        resolvedPaths.push(ctx.path);
+      ctx,
+      resolveSession: async (sessionContext) => {
+        resolvedPaths.push(sessionContext.path);
         return null;
       },
     });
 
-    expect(Result.isOk(handled) && handled.value).toBe(true);
+    expect(Result.isOk(handled) && handled.value).toBeUndefined();
     expect(resolvedPaths).toEqual(["/oauth2/authorize"]);
+    expect(ctx.headers.get("cookie")).toBe("preference=compact");
   });
 
-  test("uses the same authoritative session boundary before two-factor rotation", async () => {
+  test("treats a server-side OAuth call carrying a revoked session's cookies as signed out", async () => {
+    const resolvedPaths: string[] = [];
+    const { request: _request, ...serverCall } =
+      sensitiveCtx("/oauth2/consent");
+
+    const handled = await resolveAuthoritativeSessionForSensitiveAuthPath({
+      ctx: serverCall,
+      resolveSession: async (sessionContext) => {
+        resolvedPaths.push(sessionContext.path);
+        return null;
+      },
+    });
+
+    expect(Result.isOk(handled) && handled.value).toBeUndefined();
+    expect(resolvedPaths).toEqual(["/oauth2/consent"]);
+    expect(serverCall.headers.get("cookie")).toBe("preference=compact");
+  });
+
+  test("reads no session for an OAuth call without cookies", async () => {
+    let resolved = false;
+
+    const handled = await resolveAuthoritativeSessionForSensitiveAuthPath({
+      ctx: { path: "/oauth2/consent", headers: new Headers() },
+      resolveSession: async () => {
+        resolved = true;
+        return null;
+      },
+    });
+
+    expect(Result.isOk(handled) && handled.value).toBeUndefined();
+    expect(resolved).toBe(false);
+  });
+
+  test("refuses two-factor management when storage holds no session", async () => {
     const resolvedPaths: string[] = [];
 
     const handled = await resolveAuthoritativeSessionForSensitiveAuthPath({
@@ -483,8 +789,21 @@ describe("resolveAuthoritativeSessionForSensitiveAuthPath", () => {
       },
     });
 
-    expect(Result.isOk(handled) && handled.value).toBe(true);
+    expect(Result.isError(handled) && handled.error.status).toBe(
+      "UNAUTHORIZED",
+    );
     expect(resolvedPaths).toEqual(["/two-factor/enable"]);
+  });
+
+  test("pins a two-factor challenge endpoint's own session read to storage", async () => {
+    const handled = await resolveAuthoritativeSessionForSensitiveAuthPath({
+      ctx: { ...sensitiveCtx("/two-factor/verify-totp"), query: { a: "1" } },
+      resolveSession: async () => null,
+    });
+
+    expect(Result.isOk(handled) && handled.value).toEqual({
+      context: { query: { a: "1", disableCookieCache: true } },
+    });
   });
 
   test("keeps ordinary endpoints on the cookie-cache fast path", async () => {
@@ -497,16 +816,17 @@ describe("resolveAuthoritativeSessionForSensitiveAuthPath", () => {
         return null;
       },
     });
-    expect(Result.isOk(handled) && handled.value).toBe(false);
+    expect(Result.isOk(handled) && handled.value).toBeUndefined();
     expect(resolved).toBe(false);
   });
 
-  test("declares both OAuth code-flow endpoints as authoritative", () => {
+  test("declares every session-reading sensitive endpoint as authoritative", () => {
     expect(AUTHORITATIVE_SESSION_PATHS).toEqual(
       new Set([
-        ...TWO_FACTOR_MANAGE_PATHS,
-        "/oauth2/authorize",
-        "/oauth2/consent",
+        ...Object.keys(TWO_FACTOR_SESSION_PATHS),
+        ...Object.entries(OAUTH_PROVIDER_SESSION_PATHS).flatMap(
+          ([path, use]) => (use === "browser-session" ? [path] : []),
+        ),
       ]),
     );
   });
@@ -610,11 +930,17 @@ describe("new-account email policy", () => {
             body: { email: "blocked@mailinator.com", type: "sign-in" },
             path: "/email-otp/send-verification-otp",
           },
-          { accountExists: async () => accountExists },
+          {
+            accountExists: async () => accountExists,
+            rateLimitMode: NEW_ACCOUNT_OTP_RATE_LIMIT_MODE.bypassed,
+          },
         ),
       ),
     );
-    expect(actions).toEqual([{ type: "continue" }, { type: "continue" }]);
+    expect(actions).toEqual([
+      { type: "continue", audience: "any_address" },
+      { type: "continue", audience: "any_address" },
+    ]);
   });
 
   test("rejects a disposable address when creating its account", async () => {
@@ -667,6 +993,34 @@ describe("new-account email policy", () => {
     expect(action).toEqual({ type: "suppress_otp" });
   });
 
+  test("marks a code for an account sent while new addresses get none", async () => {
+    const limited = async (accountExists: boolean) =>
+      await getNewAccountEmailOtpAction(
+        {
+          body: { email: "member@example.com", type: "sign-in" },
+          path: "/email-otp/send-verification-otp",
+        },
+        {
+          accountExists: async () => accountExists,
+          rateLimitContext: {
+            increment: async () => ({
+              count: 4,
+              nextReset: new Date(testClock.now() + 60_000),
+              start: testClock.now(),
+            }),
+          },
+        },
+      );
+
+    // Only the account's code goes out, so whatever becomes of that mail must
+    // not be reported back: its audience is accounts only.
+    expect(await limited(true)).toEqual({
+      type: "continue",
+      audience: "accounts_only",
+    });
+    expect(await limited(false)).toEqual({ type: "suppress_otp" });
+  });
+
   test("bypasses the signup limiter with the E2E auth-rate-limit mode", async () => {
     let accountLookupCount = 0;
     let incrementCount = 0;
@@ -694,7 +1048,7 @@ describe("new-account email policy", () => {
       },
     );
 
-    expect(action).toEqual({ type: "continue" });
+    expect(action).toEqual({ type: "continue", audience: "any_address" });
     expect(accountLookupCount).toBe(0);
     expect(incrementCount).toBe(0);
   });
@@ -845,12 +1199,17 @@ describe("session freshness", () => {
     expect(getAuth().options.session.freshAge).toBe(0);
   });
 
-  test("the other freshness-gated endpoint (unlink-account) stays disabled", () => {
-    // `freshAge: 0` is only safe because the one other freshness-gated endpoint
-    // Better Auth mounts, `/unlink-account`, is not a Stella feature and is
-    // disabled. If it were re-exposed, relaxing freshAge would let an old
-    // session unlink a provider. Keep these two decisions coupled.
-    expect(getAuth().options.disabledPaths).toContain("/unlink-account");
+  test("account unlinking is available through its confirmation gate", () => {
+    expect(getAuth().options.disabledPaths).not.toContain("/unlink-account");
+  });
+
+  test("sign-in method confirmation requires a signed-in account", async () => {
+    const response = await getAuth().handler(
+      new Request(getAuthEndpointUrl("sign-in-methods/send-otp"), {
+        method: "POST",
+      }),
+    );
+    expect(response.status).toBe(401);
   });
 
   test("session cookie cache stays enabled with its pinned revocation window", () => {
@@ -865,7 +1224,7 @@ describe("session freshness", () => {
       enabled: true,
       maxAge: SESSION_COOKIE_CACHE_MAX_AGE_SECONDS,
     });
-    expect(typeof getAuth().options.session.cookieCache.version).toBe("string");
+    expect(getAuth().options.session.cookieCache.version).toBeFunction();
     expect(SESSION_COOKIE_CACHE_MAX_AGE_SECONDS).toBe(60);
   });
 });
@@ -875,7 +1234,12 @@ describe("OAuth resource provisioning", () => {
     const oauthPlugin = getAuth().options.plugins.find(
       (plugin) => plugin.id === "oauth-provider",
     );
-    if (!oauthPlugin || !("options" in oauthPlugin)) {
+    if (
+      !oauthPlugin ||
+      !("options" in oauthPlugin) ||
+      !oauthPlugin.options ||
+      !("resourceSeedMode" in oauthPlugin.options)
+    ) {
       throw new Error("OAuth provider plugin missing from auth config");
     }
 
@@ -890,7 +1254,7 @@ describe("OAuth resource provisioning", () => {
     const oauthPlugin = getAuth().options.plugins.find(
       (plugin) => plugin.id === "oauth-provider",
     );
-    if (!oauthPlugin?.rateLimit) {
+    if (!oauthPlugin || !("rateLimit" in oauthPlugin)) {
       throw new Error("OAuth provider plugin declares no rate-limit rules");
     }
 
@@ -919,6 +1283,38 @@ describe("OAuth resource provisioning", () => {
   });
 });
 
+describe("session token responses", () => {
+  test("every auth endpoint answer passes the session token redaction", () => {
+    const plugins = getAuth().options.plugins;
+    const pluginIds = plugins.map((plugin) => plugin.id);
+    // Read through the public plugin contract: the census checks what any
+    // endpoint matcher receives, not this plugin's literal type.
+    const redaction: BetterAuthPlugin | undefined = plugins.find(
+      (plugin) => plugin.id === "stella-session-token-redaction",
+    );
+    const after = redaction?.hooks?.after ?? [];
+    expect(after).toHaveLength(1);
+    // The matcher accepts every endpoint, so no auth response escapes it.
+    expect(
+      after.every(({ matcher }) =>
+        [
+          "/list-sessions",
+          "/get-session",
+          "/organization/list",
+          "/oauth2/token",
+          "/oauth2/userinfo",
+          "/mcp-handoff/sessions",
+          "/x",
+        ].every((path) => matcher(fakeCtx(path))),
+      ),
+    ).toBe(true);
+    // Only the refusal log, which records the final answer, runs after it.
+    expect(
+      pluginIds.slice(pluginIds.indexOf("stella-session-token-redaction") + 1),
+    ).toEqual(["stella-auth-refusal-log"]);
+  });
+});
+
 describe("organization lifecycle hook wiring", () => {
   test("the organization plugin runs the lifecycle hooks against the live analytics sink", async () => {
     // Pins the `...organizationLifecycleHooks` spread inside the plugin
@@ -928,10 +1324,24 @@ describe("organization lifecycle hook wiring", () => {
     const orgPlugin = getAuth().options.plugins.find(
       (plugin) => plugin.id === "organization",
     );
-    if (!orgPlugin || !("options" in orgPlugin)) {
+    if (
+      !orgPlugin ||
+      !("options" in orgPlugin) ||
+      !orgPlugin.options ||
+      !("organizationHooks" in orgPlugin.options)
+    ) {
       throw new Error("organization plugin missing from auth config");
     }
     const hooks = orgPlugin.options.organizationHooks;
+    if (
+      typeof hooks !== "object" ||
+      !("afterCreateOrganization" in hooks) ||
+      typeof hooks.afterCreateOrganization !== "function" ||
+      !("afterUpdateOrganization" in hooks) ||
+      typeof hooks.afterUpdateOrganization !== "function"
+    ) {
+      throw new Error("organization lifecycle hooks missing from auth config");
+    }
     expect(hooks.afterCreateOrganization).toBeFunction();
     const afterUpdateOrganization = hooks.afterUpdateOrganization;
     expect(afterUpdateOrganization).toBeFunction();

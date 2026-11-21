@@ -9,12 +9,15 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { DESKTOP_REGISTRY_KEY_CONFIG } from "@/api/lib/business-registries/desktop/config";
 import { desktopRegistryKeyOrganizationScope } from "@/api/lib/business-registries/desktop/scope";
+import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
+import { releaseRevokedRunners } from "@/api/lib/desktop-runner/store";
 
 type RevokeDesktopRegistryCredentialOptions = {
   keyId: string;
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
   recordAuditEvent: AuditRecorder;
+  expectedKeyHash?: string;
   db?: Pick<typeof rootDb, "transaction">;
 };
 
@@ -26,9 +29,10 @@ export const revokeDesktopRegistryCredential = async ({
   organizationId,
   userId,
   recordAuditEvent,
+  expectedKeyHash,
   db = rootDb,
 }: RevokeDesktopRegistryCredentialOptions) =>
-  await db.transaction(async (tx) => {
+  await withAggregateTransaction(db, async (tx) => {
     const revoked = await tx
       .update(apikey)
       .set({
@@ -40,13 +44,24 @@ export const revokeDesktopRegistryCredential = async ({
           eq(apikey.id, keyId),
           eq(apikey.referenceId, userId),
           eq(apikey.enabled, true),
+          expectedKeyHash === undefined
+            ? undefined
+            : eq(apikey.key, expectedKeyHash),
           desktopRegistryKeyOrganizationScope(organizationId),
         ),
       )
       .returning({ id: apikey.id });
-    if (revoked.length === 0) {
+    const [key] = revoked;
+    if (key === undefined) {
       return;
     }
+    // Only the runners this credential opened; another credential of the
+    // account, even on the same device key, keeps its sockets.
+    await releaseRevokedRunners(tx, {
+      userId,
+      organizationId,
+      keyId: key.id,
+    });
     await recordAuditEvent(tx, {
       action: AUDIT_ACTION.UPDATE,
       resourceType: AUDIT_RESOURCE_TYPE.MACHINE_API_KEY,

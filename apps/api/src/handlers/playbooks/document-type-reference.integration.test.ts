@@ -10,7 +10,7 @@ import {
 import { and, eq } from "drizzle-orm";
 import fc from "fast-check";
 
-import { assertProperty } from "@stll/property-testing";
+import { assertProperty, propertyConfig } from "@stll/property-testing";
 
 import { organization } from "@/api/db/auth-schema";
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -27,6 +27,7 @@ import createPlaybookDefinition from "@/api/handlers/playbooks/create";
 import createPlaybookFromStarter from "@/api/handlers/playbooks/from-starter/create";
 import updatePlaybookDefinition from "@/api/handlers/playbooks/update";
 import restorePlaybookVersion from "@/api/handlers/playbooks/versions/restore";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import {
   AUDIT_ACTION,
   AUDIT_RESOURCE_TYPE,
@@ -44,7 +45,11 @@ import { isRecord } from "@/api/lib/type-guards";
 import type { PlaybookScope } from "@/api/lib/workflow/playbook-positions";
 import { STARTER_PLAYBOOKS } from "@/api/lib/workflow/starter-playbooks";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
-import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
+import {
+  createTestHandlerContext,
+  NO_DB,
+} from "@/api/tests/helpers/handler-context";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 import {
@@ -74,14 +79,14 @@ const orgContext = (organizationId = ids.orgA) => {
     server: null,
   };
   return createTestHandlerContext({
-    createAuditRecorder: () => createAuditRecorder(bindings),
+    scopedDb: NO_DB,
     getActiveWorkspaceIds: async () => [],
     getAccessibleWorkspaces: async () => [],
     getWorkspaceAccess: async () => null,
     pinServerValidatedWorkspaceId: () => false,
-    recordAuditEvent: createAuditRecorder(bindings),
+    audit: createAuditRecorder(bindings),
     request: bindings.request,
-    route: "/playbooks",
+    route: "/v1/playbooks" satisfies ApiRoutePath,
     safeDb: toSafeDbMock(
       asTestRaw<ScopedDb>(
         createScopedDb(testDb, [], organizationId, ids.userA1),
@@ -380,6 +385,7 @@ describe("playbook document type references", () => {
           ]);
         },
       ),
+      propertyConfig({ numRuns: 20 }),
     );
   });
 
@@ -511,7 +517,7 @@ describe("playbook document type references", () => {
           }
         },
       ),
-      { numRuns: 8 },
+      propertyConfig({ numRuns: 8 }),
     );
   });
 
@@ -686,9 +692,7 @@ describe("playbook document type references", () => {
       scope: { documentTypeKey: "teardown" },
       positions: { version: 3, items: [] },
     });
-    await testDb
-      .delete(organization)
-      .where(eq(organization.id, organizationId));
+    await deleteOrganizationsForTest(testDb, [organizationId]);
     expect(
       await testDb
         .select({ id: organization.id })

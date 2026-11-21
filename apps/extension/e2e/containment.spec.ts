@@ -2,11 +2,12 @@ import { expect, type Page, test } from "@playwright/test";
 
 import { BROWSER_CONTROL_ERROR_CODE } from "@stll/api-contract/browser-control";
 
+import { BROWSER_CONTAINED_TABS_STORAGE_KEY } from "../src/lib/storage-keys";
 import {
   createCommandSender,
-  openInNewControlledTab,
   elementNamed,
   launchExtensionHarness,
+  openInNewControlledTab,
   successful,
   targetOf,
 } from "./fixtures/harness";
@@ -23,24 +24,27 @@ import {
 } from "./fixtures/pages";
 
 const CONTROLLER_ID = "controller-containment";
-const SLOW_RESPONSE_MS = 20_000;
 
 type Harness = Awaited<ReturnType<typeof launchExtensionHarness>>;
 
 /** Serves the fixtures, a never-quick page and a binary, and records intranet traffic. */
-const routeFixtures = async ({ context }: Harness) => {
+const routeFixtures = async (
+  { context }: Harness,
+  waitForSlowResponse?: () => Promise<void>,
+) => {
   const intranetRequests: string[] = [];
   const serve = async (
     route: Parameters<Parameters<typeof context.route>[1]>[0],
   ) => {
     const { pathname } = new URL(route.request().url());
     if (pathname === "/slow.html") {
-      await new Promise((resolve) => {
-        setTimeout(resolve, SLOW_RESPONSE_MS);
-      });
+      if (waitForSlowResponse === undefined) {
+        throw new TypeError("Slow fixture requires an explicit response gate");
+      }
+      await waitForSlowResponse();
       await route
         .fulfill({ body: "<p>Slow page</p>", contentType: "text/html" })
-        // swallow-ok: delayed response races deliberate navigation cancellation in the containment stop test
+        // swallow-ok: releasing the response races deliberate navigation cancellation in the containment stop test
         .catch(() => undefined);
       return;
     }
@@ -117,6 +121,13 @@ const saveFromScript = async (page: Page, href: "blob" | "data") => {
  * Each download's source (the creating origin of a `blob:` URL, the scheme
  * of a `data:` URL, or the URL) and whether it finished.
  */
+/**
+ * The toolbar icon's count. The worker writes it after it has recorded a
+ * download, one record at a time, so a count is awaited, not read once.
+ */
+const badgeText = async ({ worker }: Harness) =>
+  await worker.evaluate(async () => await chrome.action.getBadgeText({}));
+
 const downloads = async ({ worker }: Harness) =>
   await worker.evaluate(async () => {
     const items = await chrome.downloads.search({});
@@ -135,14 +146,61 @@ const downloads = async ({ worker }: Harness) =>
         }
         return { saved: state === "complete" && exists, source };
       })
-      .toSorted((left, right) => left.source.localeCompare(right.source));
+      .toSorted(
+        (left, right) =>
+          left.source.localeCompare(right.source) ||
+          Number(left.saved) - Number(right.saved),
+      );
   });
 
 const latestPong = async (stella: Page): Promise<unknown> =>
   await stella.evaluate(() => {
     const pongs: unknown = Reflect.get(window, "__pongs");
-    return Array.isArray(pongs) ? pongs.at(-1) : null;
+    if (!Array.isArray(pongs)) {
+      return null;
+    }
+    const received: unknown[] = pongs;
+    return received.at(-1);
   });
+
+/**
+ * Opens a tab as the user does. It is confined like any other until Chrome
+ * reports a navigation only the browser starts and the extension records
+ * the tab as the user's.
+ */
+const openUserTab = async (harness: Harness): Promise<Page> => {
+  const tab = await harness.context.newPage();
+  await expect
+    .poll(
+      async () =>
+        await harness.worker.evaluate(async (key) => {
+          // Chrome numbers tabs in the order it creates them.
+          const newest = Math.max(
+            ...(await chrome.tabs.query({})).map(({ id }) => id ?? -1),
+          );
+          const contained: unknown = (await chrome.storage.session.get(key))[
+            key
+          ];
+          const userTabIds: unknown =
+            typeof contained === "object" && contained !== null
+              ? Reflect.get(contained, "userTabIds")
+              : undefined;
+          return Array.isArray(userTabIds) && userTabIds.includes(newest);
+        }, BROWSER_CONTAINED_TABS_STORAGE_KEY),
+    )
+    .toBe(true);
+  return tab;
+};
+
+/**
+ * Blocks this process, and with it Playwright, which holds every new window
+ * at start until it has attached to it, as DevTools set to open for popups
+ * does. Chrome meanwhile reports the window to the extension.
+ */
+const holdNewWindowsAtStart = (): void => {
+  // real-time: the hold stands in for a debugger; nothing in Chrome ends it.
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 1000);
+};
 
 /** Opens the containment fixture; the first load of a new tab can miss routing. */
 const openContainmentPage = async (
@@ -160,7 +218,12 @@ const openContainmentPage = async (
 test("stop and popup changes end a running command at once", async () => {
   test.setTimeout(120_000);
   const harness = await launchExtensionHarness();
-  await routeFixtures(harness);
+  const releaseSlowResponses = Promise.withResolvers<undefined>();
+  let slowResponsesReleased = 0;
+  await routeFixtures(harness, async () => {
+    await releaseSlowResponses.promise;
+    slowResponsesReleased += 1;
+  });
   try {
     // Pairing through the worker proves the stella tab's URL is readable
     // without the activeTab permission.
@@ -208,34 +271,40 @@ test("stop and popup changes end a running command at once", async () => {
 
     // Chat Stop: the extension answers right away instead of waiting out
     // the navigation, and cannot claim the page did not change.
-    const started = Date.now();
+    const slowRequest = harness.context.waitForEvent("request", {
+      predicate: (request) => request.url() === `${FIXTURE_ORIGIN}/slow.html`,
+    });
     const stopped = await sender.post({
       action: "open",
       url: `${FIXTURE_ORIGIN}/slow.html`,
     });
-    await harness.stella.waitForTimeout(500);
+    await slowRequest;
     await sender.cancel();
     expect(await sender.result(stopped)).toMatchObject({
       code: BROWSER_CONTROL_ERROR_CODE.outcomeUnknown,
     });
-    expect(Date.now() - started).toBeLessThan(8000);
+    expect(slowResponsesReleased).toBe(0);
 
     // The session still works after a stop.
     await openContainmentPage(harness, sender.send);
 
     // Disconnecting from the popup stops a running command the same way,
     // and nothing runs under the old pairing afterwards.
+    const interruptedRequest = harness.context.waitForEvent("request", {
+      predicate: (request) => request.url() === `${FIXTURE_ORIGIN}/slow.html`,
+    });
     const interrupted = await sender.post({
       action: "open",
       url: `${FIXTURE_ORIGIN}/slow.html`,
     });
-    await harness.stella.waitForTimeout(500);
+    await interruptedRequest;
     expect(await popup.request({ type: "disconnect" })).toEqual({
       status: "done",
     });
     expect(await sender.result(interrupted)).toMatchObject({
       code: BROWSER_CONTROL_ERROR_CODE.outcomeUnknown,
     });
+    expect(slowResponsesReleased).toBe(0);
     expect(await latestPong(harness.stella)).toMatchObject({
       controlledTabId: null,
       controllerId: null,
@@ -244,6 +313,7 @@ test("stop and popup changes end a running command at once", async () => {
       code: BROWSER_CONTROL_ERROR_CODE.staleController,
     });
   } finally {
+    releaseSlowResponses.resolve(undefined);
     await harness.close();
   }
 });
@@ -254,9 +324,39 @@ test("pages cannot escape the controlled tab or read what they hide", async () =
   const intranetRequests = await routeFixtures(harness);
   try {
     await harness.pair(CONTROLLER_ID);
-    const { send } = createCommandSender(harness.stella, CONTROLLER_ID);
+    const { post, result, send } = createCommandSender(
+      harness.stella,
+      CONTROLLER_ID,
+    );
     let snapshot = await openContainmentPage(harness, send);
     const page = () => ({ revision: snapshot.revision, url: snapshot.url });
+
+    // The popup names the tab stella keeps contained, so the user can find
+    // it among their tabs and disconnect; the connected address is in the
+    // status tooltip and read out to screen readers.
+    const popupPage = await harness.context.newPage();
+    await popupPage.goto(new URL("/popup.html", harness.worker.url()).href);
+    await expect(popupPage.locator("#contained-tabs-label")).toHaveText(
+      "Using:",
+    );
+    await expect(popupPage.locator(".tab-name")).toHaveText(["Containment"]);
+    await expect(popupPage.locator(".tab-host")).toHaveText([
+      new URL(FIXTURE_ORIGIN).host,
+    ]);
+    const status = popupPage.locator("#status");
+    await expect(status).toHaveAttribute("role", "status");
+    await expect(status).toHaveAttribute("title", harness.stellaOrigin);
+    await expect(popupPage.locator("#status-text")).toHaveText("Connected");
+    await expect(popupPage.locator("#status-origin")).toHaveText(
+      harness.stellaOrigin,
+    );
+    await expect(popupPage.locator("#purpose")).toBeHidden();
+    await expect(popupPage.getByRole("button")).toHaveText([
+      "Disconnect",
+      "Remove access",
+      "Use with stella desktop",
+    ]);
+    await popupPage.close();
 
     // While stella controls a tab, the user's own downloads elsewhere go
     // through; the stella tab stands in for any tab the user browses in.
@@ -348,7 +448,9 @@ test("pages cannot escape the controlled tab or read what they hide", async () =
 
     // Tabs a page opens are confined from their very first request, whether
     // the page keeps a handle on them or not and whichever frame opens them:
-    // none reaches the intranet host, and each is closed.
+    // none reaches the intranet host, and each is closed. Each is held at
+    // start while the extension hears of it, and is closed only once it
+    // loads, so the page that opened it keeps working.
     const popupOpeners = [
       "Open intranet window",
       "Open intranet window without opener",
@@ -357,13 +459,13 @@ test("pages cannot escape the controlled tab or read what they hide", async () =
     ];
     for (const name of popupOpeners) {
       const popup = harness.context.waitForEvent("page");
-      snapshot = successful(
-        await send({
-          action: "click",
-          page: page(),
-          target: targetOf(elementNamed(snapshot.elements, name)),
-        }),
-      );
+      const click = await post({
+        action: "click",
+        page: page(),
+        target: targetOf(elementNamed(snapshot.elements, name)),
+      });
+      holdNewWindowsAtStart();
+      snapshot = successful(await result(click));
       const opened = await popup;
       await expect.poll(() => opened.isClosed()).toBe(true);
     }
@@ -382,10 +484,9 @@ test("pages cannot escape the controlled tab or read what they hide", async () =
     expect(intranetRequests).toEqual([]);
     await beaconPage.close();
 
-    // A tab no page opened is the user's once Chrome has had the moment it
-    // takes to name an opener: it reaches the intranet host.
-    const userTab = await harness.context.newPage();
-    await harness.stella.waitForTimeout(1500);
+    // A tab no page opened is the user's once Chrome reports a navigation
+    // only the browser starts: it reaches the intranet host.
+    const userTab = await openUserTab(harness);
     await userTab.goto(`${INTRANET_ORIGIN}/user-tab`);
     expect(intranetRequests).toEqual([`${INTRANET_ORIGIN}/user-tab`]);
     intranetRequests.length = 0;
@@ -417,7 +518,10 @@ test("pages cannot escape the controlled tab or read what they hide", async () =
     expect(snapshot.url).toBe(`${FIXTURE_ORIGIN}/containment.html`);
 
     // A page saving a file from script (blob: and data: URLs, no network
-    // request) is cancelled before the file is written.
+    // request) is cancelled before the file is written, and so is one a
+    // cross-origin frame inside the controlled tab saves: only the
+    // controlled tab has that origin open, and a `data:` URL saved from an
+    // https page carries no referrer to trace.
     const controlledPage = harness.context
       .pages()
       .find((candidate) => candidate.url() === snapshot.url);
@@ -426,13 +530,6 @@ test("pages cannot escape the controlled tab or read what they hide", async () =
     }
     await saveFromScript(controlledPage, "blob");
     await saveFromScript(controlledPage, "data");
-    // A small file a cross-origin frame inside the controlled tab saves is
-    // stopped before it is written, and so is one the user saves from their
-    // own tab on that same site: either could have started it, so it is
-    // stopped while it runs but never deleted.
-    const userSiteTab = await harness.context.newPage();
-    await harness.stella.waitForTimeout(500);
-    await userSiteTab.goto(`${ELSEWHERE_ORIGIN}/landing.html`);
     await controlledPage
       .frameLocator("iframe[title='Tools frame']")
       .locator("body")
@@ -445,29 +542,36 @@ test("pages cannot escape the controlled tab or read what they hide", async () =
         document.body.append(link);
         link.click();
       });
-    await saveFromScript(userSiteTab, "blob");
     await expect
       .poll(async () => await downloads(harness))
       .toEqual([
         { saved: false, source: "data:" },
         { saved: true, source: harness.stellaOrigin },
         { saved: false, source: ELSEWHERE_ORIGIN },
-        { saved: false, source: ELSEWHERE_ORIGIN },
         { saved: false, source: FIXTURE_ORIGIN },
       ]);
-    expect(
-      await harness.worker.evaluate(async () =>
-        (await chrome.downloads.search({}))
-          .filter(({ url }) => url.includes("elsewhere"))
-          .map(({ state }) => state),
-      ),
-    ).toEqual(["interrupted", "interrupted"]);
+    // A file the user saves from their own tab goes through, even on a site
+    // the controlled tab also has open: the user may have started it, and
+    // stopping it would leave them no way to get it. A `data:` URL the user
+    // saves from an https page carries no referrer, so nothing can tell it
+    // from one a confined page saved: it is stopped while stella controls a
+    // tab.
+    const userSiteTab = await openUserTab(harness);
+    await userSiteTab.goto(`${ELSEWHERE_ORIGIN}/landing.html`);
+    await saveFromScript(userSiteTab, "blob");
+    await saveFromScript(userSiteTab, "data");
+    await expect
+      .poll(async () => await downloads(harness))
+      .toEqual([
+        { saved: false, source: "data:" },
+        { saved: false, source: "data:" },
+        { saved: true, source: harness.stellaOrigin },
+        { saved: false, source: ELSEWHERE_ORIGIN },
+        { saved: true, source: ELSEWHERE_ORIGIN },
+        { saved: false, source: FIXTURE_ORIGIN },
+      ]);
     // The toolbar icon counts the stopped downloads.
-    expect(
-      await harness.worker.evaluate(
-        async () => await chrome.action.getBadgeText({}),
-      ),
-    ).toBe("4");
+    await expect.poll(async () => await badgeText(harness)).toBe("4");
 
     // A document served without an attachment header that Chrome would
     // save instead of render leaves no file either. (The tab's rules block
@@ -489,21 +593,194 @@ test("pages cannot escape the controlled tab or read what they hide", async () =
   }
 });
 
+/** Hosts for files a navigation turns into downloads. */
+const PAYLOAD_ORIGIN = "https://payload.stella-test.example";
+const USER_SITE_ORIGIN = "https://files.stella-test.example";
+const USER_FRAME_ORIGIN = "https://viewer.stella-test.example";
+const USER_CONTENT_ORIGIN = "https://content.stella-test.example";
+
+/** Bytes Chrome sniffs as binary, so a page response becomes a download. */
+const BINARY_BODY = Buffer.from([0, 1, 2, 3, 4, 5, 6, 7, 8, 255, 254, 0]);
+
+/**
+ * Responses the tab's network rules let through but Chrome still saves:
+ * `text/plain` with a binary body, and no `Content-Type` at all. One more
+ * reaches the first through a server redirect. The user's site serves a
+ * page whose frame on another host loads a file from a third host, sent as
+ * an attachment with no referrer, as file viewers do.
+ */
+const routeNavigationDownloads = async ({ context }: Harness) => {
+  await context.route(`${PAYLOAD_ORIGIN}/**`, async (route) => {
+    const { pathname, search } = new URL(route.request().url());
+    if (pathname === "/redirect") {
+      await route.fulfill({
+        headers: { location: `${PAYLOAD_ORIGIN}/plain.bin?via=redirect` },
+        status: 302,
+      });
+      return;
+    }
+    await (pathname === "/untyped.bin"
+      ? route.fulfill({ body: BINARY_BODY })
+      : route.fulfill({
+          body: BINARY_BODY,
+          contentType: "text/plain",
+          headers: { "x-variant": search },
+        }));
+  });
+  await context.route(`${USER_SITE_ORIGIN}/**`, async (route) => {
+    await route.fulfill({
+      body: `<!doctype html><html><head><title>Files</title></head><body>
+<iframe src="${USER_FRAME_ORIGIN}/viewer.html" title="Viewer"></iframe>
+</body></html>`,
+      contentType: "text/html",
+    });
+  });
+  await context.route(`${USER_FRAME_ORIGIN}/**`, async (route) => {
+    await route.fulfill({
+      body: `<!doctype html><html><head><meta name="referrer" content="no-referrer"></head><body>Viewer</body></html>`,
+      contentType: "text/html",
+    });
+  });
+  await context.route(`${USER_CONTENT_ORIGIN}/**`, async (route) => {
+    await route.fulfill({
+      body: BINARY_BODY,
+      contentType: "application/pdf",
+      headers: { "content-disposition": 'attachment; filename="report.pdf"' },
+    });
+  });
+};
+
+/** Clicks a link to `url` that sends no referrer, from inside `scope`. */
+const followWithoutReferrer = async (
+  scope: Page | ReturnType<Page["frameLocator"]>,
+  url: string,
+  target: "_blank" | "_self" = "_self",
+) => {
+  await scope.locator("body").evaluate(
+    (body, { href, opens }) => {
+      const link = document.createElement("a");
+      link.href = href;
+      link.referrerPolicy = "no-referrer";
+      link.rel = "noopener noreferrer";
+      link.target = opens;
+      body.append(link);
+      link.click();
+    },
+    { href: url, opens: target },
+  );
+};
+
+/** Every settled download's address, final address and whether it was saved. */
+const downloadsByUrl = async ({ worker }: Harness) =>
+  await worker.evaluate(async () => {
+    const items = await chrome.downloads.search({});
+    if (items.some(({ state }) => state === "in_progress")) {
+      return null;
+    }
+    return items
+      .map(({ exists, finalUrl, state, url }) => ({
+        finalUrl,
+        saved: state === "complete" && exists,
+        url: url.startsWith("data:") ? "data:" : url,
+      }))
+      .toSorted((left, right) => left.url.localeCompare(right.url));
+  });
+
+test("downloads are traced to the tab that navigated to them", async () => {
+  // timeout: it launches Chrome with the extension and lets four downloads settle.
+  test.setTimeout(120_000);
+  const harness = await launchExtensionHarness();
+  await routeFixtures(harness);
+  await routeNavigationDownloads(harness);
+  try {
+    await harness.pair(CONTROLLER_ID);
+    const { send } = createCommandSender(harness.stella, CONTROLLER_ID);
+    const snapshot = await openContainmentPage(harness, send);
+    const controlledPage = harness.context
+      .pages()
+      .find((candidate) => candidate.url() === snapshot.url);
+    if (!controlledPage) {
+      throw new TypeError("Controlled tab not found");
+    }
+
+    // The controlled tab, a frame in it and a tab it opens each load a
+    // file the network rules let through, sending no referrer: each is
+    // traced to the confined tab that navigated and stopped.
+    await followWithoutReferrer(controlledPage, `${PAYLOAD_ORIGIN}/plain.bin`);
+    await followWithoutReferrer(
+      controlledPage.frameLocator("iframe[title='Tools frame']"),
+      `${PAYLOAD_ORIGIN}/untyped.bin`,
+    );
+    await followWithoutReferrer(
+      controlledPage,
+      `${PAYLOAD_ORIGIN}/redirect`,
+      "_blank",
+    );
+    await expect
+      .poll(async () => await downloadsByUrl(harness))
+      .toEqual([
+        {
+          finalUrl: `${PAYLOAD_ORIGIN}/plain.bin`,
+          saved: false,
+          url: `${PAYLOAD_ORIGIN}/plain.bin`,
+        },
+        // A server redirect keeps the address the navigation started at.
+        {
+          finalUrl: `${PAYLOAD_ORIGIN}/plain.bin?via=redirect`,
+          saved: false,
+          url: `${PAYLOAD_ORIGIN}/redirect`,
+        },
+        {
+          finalUrl: `${PAYLOAD_ORIGIN}/untyped.bin`,
+          saved: false,
+          url: `${PAYLOAD_ORIGIN}/untyped.bin`,
+        },
+      ]);
+    await expect.poll(async () => await badgeText(harness)).toBe("3");
+
+    // In the user's own tab, a frame on another host loads a file from a
+    // third host with no referrer: it is traced to the user's tab and saved,
+    // and nothing is noted.
+    const userTab = await openUserTab(harness);
+    await userTab.goto(`${USER_SITE_ORIGIN}/files.html`);
+    await followWithoutReferrer(
+      userTab.frameLocator("iframe[title='Viewer']"),
+      `${USER_CONTENT_ORIGIN}/download?id=1`,
+    );
+    await expect
+      .poll(async () =>
+        (await downloadsByUrl(harness))?.filter(({ url }) =>
+          url.startsWith(USER_CONTENT_ORIGIN),
+        ),
+      )
+      .toEqual([
+        {
+          finalUrl: `${USER_CONTENT_ORIGIN}/download?id=1`,
+          saved: true,
+          url: `${USER_CONTENT_ORIGIN}/download?id=1`,
+        },
+      ]);
+    await expect.poll(async () => await badgeText(harness)).toBe("3");
+  } finally {
+    await harness.close();
+  }
+});
+
 test("the popup names downloads stopped and files kept", async () => {
   const harness = await launchExtensionHarness();
   try {
     const cases = [
       {
         notices: { kept: 2, stopped: 1 },
-        text: "While stella controlled a tab: downloads stopped: 1. Downloads that finished and were kept (check where they came from before opening them): 2.",
+        text: "Downloads stopped: 1 · kept: 2, check before opening",
       },
       {
         notices: { kept: 1, stopped: 0 },
-        text: "Downloads that finished while stella controlled a tab and were kept: 1. Check where they came from before opening them.",
+        text: "Downloads kept: 1, check before opening",
       },
       {
         notices: { kept: 0, stopped: 4 },
-        text: "Downloads stella stopped while it controlled a tab: 4.",
+        text: "Downloads stopped: 4",
       },
     ];
     for (const { notices, text } of cases) {
@@ -515,7 +792,7 @@ test("the popup names downloads stopped and files kept", async () => {
       }, notices);
       const popup = await harness.context.newPage();
       await popup.goto(new URL("/popup.html", harness.worker.url()).href);
-      await expect(popup.locator("#status")).toHaveText(text);
+      await expect(popup.locator("#notice")).toHaveText(text);
       // Shown once: the notice and the badge are cleared.
       expect(
         await harness.worker.evaluate(async () => [

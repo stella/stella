@@ -1,5 +1,3 @@
-import { useMemo } from "react";
-
 import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
@@ -12,6 +10,8 @@ import type {
 } from "@/components/inspector/inspector-store-types";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { DOCX_MIME, isEmailFile } from "@/lib/consts";
+import { queryView } from "@/lib/query-view.logic";
+import { useQueryViewError } from "@/lib/use-query-view";
 import { entityVersionsOptions } from "@/lib/workspaces/queries/entity-versions";
 
 export type Facet = FileFacet;
@@ -81,20 +81,16 @@ export const TabFacetBar = ({
   baseFacets,
 }: TabFacetBarProps) => {
   const t = useTranslations();
-  const { data } = useQuery(entityVersionsOptions({ workspaceId, entityId }));
+  const dataQuery = useQuery(entityVersionsOptions({ workspaceId, entityId }));
+  const dataView = queryView(dataQuery);
+  useQueryViewError(dataView, "TabFacetBar:query");
+  const data = dataView.type === "items" ? dataView.items : undefined;
   const version = data?.versions.find((v) => v.file?.fieldId === fieldId);
   const activeBadge = version ? `v${String(version.versionNumber)}` : undefined;
   const isDocx = mimeType === DOCX_MIME;
   const isEmail = isEmailFile({ fileName, mimeType });
-  const facets = useMemo(
-    () =>
-      // Document review operates on DOCX structure, so its chip is absent on
-      // every other file type. Review stays enabled before a run because it
-      // also launches the review.
-      baseFacets.filter(
-        (f) => (isDocx || f !== "playbook") && (isEmail || f !== "attachments"),
-      ),
-    [baseFacets, isDocx, isEmail],
+  const facets = baseFacets.filter(
+    (f) => (isDocx || f !== "playbook") && (isEmail || f !== "attachments"),
   );
 
   const labels: Record<Facet, string> = {

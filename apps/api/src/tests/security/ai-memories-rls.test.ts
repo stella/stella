@@ -1,6 +1,8 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/node";
+
 import { aiMemories, workspaces } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -20,8 +22,7 @@ let ids: TestIds;
 let scopedQuery: Awaited<ReturnType<typeof getRlsFixture>>["scopedQuery"];
 
 const memId = () => toSafeId<"aiMemory">(Bun.randomUUIDv7());
-const dedupKey = () =>
-  new Bun.CryptoHasher("sha256").update(Bun.randomUUIDv7()).digest("hex");
+const dedupKey = () => hashSha256Hex(Bun.randomUUIDv7());
 
 // Memory rows seeded once via the privileged (owner) connection, which
 // bypasses RLS — the scoped reads below are what exercise the policies.
@@ -240,8 +241,8 @@ describe("ai_memories source-data gating", () => {
   });
 });
 
-describe("ai_memories archive-only", () => {
-  test("direct DELETE affects zero rows and leaves the memory intact", async () => {
+describe("ai_memories lifecycle", () => {
+  test("direct DELETE removes a visible memory", async () => {
     const deleted = await scopedQuery(
       [ids.wsA1],
       ids.orgA,
@@ -252,7 +253,7 @@ describe("ai_memories archive-only", () => {
           .returning({ id: aiMemories.id }),
       ids.userA1,
     );
-    expect(deleted).toHaveLength(0);
+    expect(deleted).toEqual([{ id: mem.wsA1 }]);
 
     const stillThere = await countMemory(
       [ids.wsA1],
@@ -260,7 +261,7 @@ describe("ai_memories archive-only", () => {
       ids.userA1,
       mem.wsA1,
     );
-    expect(stillThere).toBe(1);
+    expect(stillThere).toBe(0);
   });
 
   test("archived rows remain deduplication tombstones", async () => {

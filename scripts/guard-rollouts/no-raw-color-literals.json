@@ -1,0 +1,25 @@
+{
+  "id": "no-raw-color-literals",
+  "rules": [
+    "no-raw-color-literals/no-raw-color-literals",
+    "no-raw-color-literals/no-raw-pdf-color-operators"
+  ],
+  "type": "changed-lines",
+  "expiresAt": "2026-11-07T00:00:00.000Z",
+  "check": [
+    "bun",
+    "--bun",
+    "oxlint",
+    "-c",
+    "oxlint.config.ts",
+    "--allow",
+    "all",
+    "--deny",
+    "no-raw-color-literals/no-raw-color-literals",
+    "--deny",
+    "no-raw-color-literals/no-raw-pdf-color-operators",
+    "apps",
+    "packages",
+    "scripts"
+  ]
+}

@@ -3,14 +3,16 @@ import { useTranslations } from "use-intl";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { PencilIcon, TrashIcon } from "@stll/ui/icons";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { formatCurrencyAmount } from "@/components/billing/format-currency";
 import { usePermissions } from "@/hooks/use-permissions";
 
+import { ExpenseRowFrame } from "./expense-row.pending";
+
 type Expense = {
   id: string;
-  matterId: string;
   dateIncurred: string;
   amount: number;
   currency: string;
@@ -47,13 +49,48 @@ export const ExpenseRow = ({
   const canDeleteExpense = usePermissions({ expense: ["delete"] });
 
   return (
-    <div className="group hover:bg-muted/50 flex items-center gap-3 rounded-md border px-3 py-2">
+    <ExpenseRowFrame
+      trailingValue={
+        <span className="shrink-0 text-sm tabular-nums">
+          {formatCurrencyAmount(expense.amount, expense.currency)}
+        </span>
+      }
+      actions={
+        <div className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100 pointer-coarse:opacity-100">
+          {expense.status === "draft" && canUpdateExpense && (
+            <Button
+              aria-label={t("common.edit")}
+              className="size-7"
+              onClick={() => onEdit(expense.id)}
+              size="icon"
+              variant="ghost"
+            >
+              <PencilIcon className="size-3.5" />
+            </Button>
+          )}
+          {expense.status === "draft" && canDeleteExpense && (
+            <Button
+              aria-label={t("common.delete")}
+              className="size-7"
+              onClick={() => onDelete(expense.id)}
+              size="icon"
+              variant="destructive-ghost"
+            >
+              <TrashIcon className="size-3.5" />
+            </Button>
+          )}
+        </div>
+      }
+    >
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
         <div className="flex items-center gap-2">
-          <BidiText as="span" className="truncate text-sm font-medium">
+          <TruncatedText
+            className="text-sm font-medium"
+            render={<BidiText as="span" />}
+          >
             {matterName}
-          </BidiText>
-          <span className="bg-muted text-muted-foreground text-3xs shrink-0 rounded px-1.5 py-0.5">
+          </TruncatedText>
+          <span className="bg-muted text-muted-foreground text-3xs shrink-0 rounded-sm px-1.5 py-0.5">
             {
               {
                 filing_fee: t("billing.expenses.categories.filing_fee"),
@@ -66,13 +103,13 @@ export const ExpenseRow = ({
             }
           </span>
           {!expense.billable && (
-            <span className="bg-muted text-muted-foreground text-3xs shrink-0 rounded px-1.5 py-0.5">
+            <span className="bg-muted text-muted-foreground text-3xs shrink-0 rounded-sm px-1.5 py-0.5">
               {t("billing.nonBillable")}
             </span>
           )}
           <span
             className={cn(
-              "text-3xs shrink-0 rounded px-1.5 py-0.5",
+              "text-3xs shrink-0 rounded-sm px-1.5 py-0.5",
               STATUS_STYLES[expense.status] ?? STATUS_STYLES["draft"],
             )}
           >
@@ -87,40 +124,14 @@ export const ExpenseRow = ({
           </span>
         </div>
         {expense.description && (
-          <p className="text-muted-foreground truncate text-xs">
+          <TruncatedText
+            className="text-muted-foreground text-xs"
+            render={<p />}
+          >
             {expense.description}
-          </p>
+          </TruncatedText>
         )}
       </div>
-
-      <span className="shrink-0 text-sm tabular-nums">
-        {formatCurrencyAmount(expense.amount, expense.currency)}
-      </span>
-
-      <div className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-        {expense.status === "draft" && canUpdateExpense && (
-          <Button
-            aria-label={t("common.edit")}
-            className="size-7"
-            onClick={() => onEdit(expense.id)}
-            size="icon"
-            variant="ghost"
-          >
-            <PencilIcon className="size-3.5" />
-          </Button>
-        )}
-        {expense.status === "draft" && canDeleteExpense && (
-          <Button
-            aria-label={t("common.delete")}
-            className="size-7"
-            onClick={() => onDelete(expense.id)}
-            size="icon"
-            variant="destructive-ghost"
-          >
-            <TrashIcon className="size-3.5" />
-          </Button>
-        )}
-      </div>
-    </div>
+    </ExpenseRowFrame>
   );
 };

@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 /**
  * The two-step feedback contract: `prepare_feedback` sanitizes a draft and
  * hands it back for a human to read, `submit_feedback` files the same object
@@ -11,8 +12,6 @@
  * refuses any report the token does not cover, so the approved bytes and the
  * submitted bytes are the same bytes.
  */
-
-import { Result } from "better-result";
 import * as v from "valibot";
 
 import {
@@ -32,15 +31,16 @@ import { feedbackIntakeGuards } from "@/api/handlers/feedback/intake-guards";
 import { sanitizeFeedbackReport } from "@/api/handlers/feedback/sanitize-report";
 import type { SanitizableFeedbackField } from "@/api/handlers/feedback/sanitize-report";
 import { submitFeedbackReport } from "@/api/handlers/feedback/submit";
+import { projectionPayload } from "@/api/lib/projection-totality";
 import {
   checkFeedbackApproval,
   createFeedbackApproval,
 } from "@/api/mcp/feedback-approval";
+import { nullAsAbsent } from "@/api/mcp/input-schemas";
 import type { McpToolDefinition, McpToolHandler } from "@/api/mcp/tool-types";
 import { defineMcpToolSet } from "@/api/mcp/tool-types";
 import {
   internalFailureResult,
-  nullAsAbsent,
   structuredErrorResult,
   toolDataResult,
   validationErrorResult,
@@ -49,6 +49,7 @@ import {
   defineMcpToolOutput,
   defineValibotMcpTool,
 } from "@/api/mcp/valibot-tool-definition";
+import { openMcpRead } from "@/api/mcp/write-tool-authority";
 
 /** Per-organization delivery budget: feedback is a trickle, not a stream. */
 export const SUBMIT_RATE_LIMIT_MAX_PER_ORG = 20;
@@ -337,6 +338,9 @@ export const FEEDBACK_TOOL_DEFINITIONS = [
       readOnlyHint: true,
     },
     access: "read",
+    permissions: openMcpRead(
+      "builds a feedback preview from caller-supplied data",
+    ),
     readClass: "tenant",
     anonymized: { exposure: "excluded", reason: "dynamic_tenant_payload" },
     name: "prepare_feedback",
@@ -361,7 +365,7 @@ export const FEEDBACK_TOOL_DEFINITIONS = [
     },
     annotations: {
       title: "Submit feedback",
-      destructiveHint: false,
+      destructiveHint: true,
       idempotentHint: true,
       openWorldHint: true,
       readOnlyHint: false,
@@ -401,23 +405,25 @@ const handlePrepareFeedbackTool: McpToolHandler<
     toReportInput(parsed.output),
   );
 
-  return toolDataResult({
-    report: toWireReport(report),
-    approval_token: createFeedbackApproval({
-      now: Temporal.Now.instant().epochMilliseconds,
-      organizationId: context.organizationId,
-      report,
-      secret: env.BETTER_AUTH_SECRET,
-      userId: context.userId,
+  return toolDataResult(
+    projectionPayload(PREPARE_FEEDBACK_OUTPUT_SCHEMA, {
+      report: toWireReport(report),
+      approval_token: createFeedbackApproval({
+        now: Temporal.Now.instant().epochMilliseconds,
+        organizationId: context.organizationId,
+        report,
+        secret: env.BETTER_AUTH_SECRET,
+        userId: context.userId,
+      }),
+      redactions,
+      redacted_fields: redactedFields.map((field) => MCP_FIELD_NAME[field]),
+      next_step:
+        "Show this report to the human verbatim and ask whether to send it. " +
+        "Only once they approve, call submit_feedback with exactly this " +
+        "report, this approval_token, and confirm: true. Nothing has been " +
+        "sent or stored yet.",
     }),
-    redactions,
-    redacted_fields: redactedFields.map((field) => MCP_FIELD_NAME[field]),
-    next_step:
-      "Show this report to the human verbatim and ask whether to send it. " +
-      "Only once they approve, call submit_feedback with exactly this " +
-      "report, this approval_token, and confirm: true. Nothing has been " +
-      "sent or stored yet.",
-  });
+  );
 };
 
 const handleSubmitFeedbackTool: McpToolHandler<
@@ -476,22 +482,27 @@ const handleSubmitFeedbackTool: McpToolHandler<
     },
   });
   if (Result.isError(submitted)) {
-    return internalFailureResult(submitted.error);
+    return internalFailureResult(
+      submitted.error,
+      "mcp.handleSubmitFeedbackTool.submitted_error",
+    );
   }
 
   const { deduplicated, deliveries, receipt, redactions, warning } =
     submitted.value;
-  return toolDataResult({
-    receipt,
-    redactions,
-    deduplicated,
-    deliveries,
-    stored: true,
-    ...(warning === undefined ? {} : { warning }),
-    next_step: deduplicated
-      ? `Tell the human this report was already filed as ${receipt}; nothing was sent again.`
-      : `Tell the human the report is filed as ${receipt} and give them that receipt.`,
-  });
+  return toolDataResult(
+    projectionPayload(SUBMIT_FEEDBACK_OUTPUT_SCHEMA, {
+      receipt,
+      redactions,
+      deduplicated,
+      deliveries,
+      stored: true,
+      ...(warning === undefined ? {} : { warning }),
+      next_step: deduplicated
+        ? `Tell the human this report was already filed as ${receipt}; nothing was sent again.`
+        : `Tell the human the report is filed as ${receipt} and give them that receipt.`,
+    }),
+  );
 };
 
 export const FEEDBACK_TOOL_HANDLERS = {

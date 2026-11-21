@@ -4,52 +4,54 @@
  * so the record still says, per claim, who accepted it and that it was bulk.
  */
 
-import { Result, panic } from "better-result";
-import { and, asc, eq, inArray } from "drizzle-orm";
-import { t } from "elysia";
+import { panic, Result } from "better-result";
+import * as v from "valibot";
 
-import {
-  legalListClaimReviewEvents,
-  legalListClaims,
-  legalListVerificationRuns,
-} from "@/api/db/schema";
+import { legalListClaimReviewEvents } from "@/api/db/schema";
+import { legalListVerificationRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema, uniqueItems } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { LIST_VERIFICATION_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import { VERIFICATION_LIMITS } from "@/api/lib/lists/verification/contract";
 import type { ClaimReviewEventPayload } from "@/api/lib/lists/verification/contract";
 import {
+  claimNeedsAttention,
   readClaimReviews,
+  readClaimsForBulkReview,
+  readRunAttentionInputs,
   serializeClaimReview,
 } from "@/api/lib/lists/verification/read-run";
-import {
-  EMPTY_CLAIM_REVIEW,
-  contestedFactIds,
-  needsAttention,
-  reviewedView,
-} from "@/api/lib/lists/verification/review-fold";
 
-const bodySchema = t.Object({
-  runId: tSafeId("legalListVerificationRun"),
-  claimIds: t.Array(tSafeId("legalListClaim"), {
-    minItems: 1,
-    maxItems: VERIFICATION_LIMITS.BULK_CLAIMS_MAX,
-    uniqueItems: true,
-  }),
+const bodySchema = v.object({
+  runId: resourceIdSchema("legalListVerificationRun"),
+  claimIds: v.pipe(
+    v.array(resourceIdSchema("legalListClaim")),
+    v.minLength(1),
+    v.maxLength(VERIFICATION_LIMITS.BULK_CLAIMS_MAX),
+    uniqueItems(),
+  ),
 });
 
 const config = {
+  contract: "patch",
+  idempotency: { type: "replay" },
+  featureAccess: { featureId: LIST_VERIFICATION_FEATURE_ID, type: "required" },
   description:
     "Mark the routine claims among `claimIds` reviewed in one action. A claim " +
-    "is routine when its verdict is not a conflict and no fact it rests on " +
-    "has a contested meaning; those need an individual decision and are " +
-    "refused. Claims that already have a status are left as they are. Returns " +
-    "the review of every claim that was marked.",
+    "is routine when its verdict is not a conflict, no fact it rests on has " +
+    "a contested meaning, and it carries no qualifier that asks for " +
+    "judgement (a cited fact of a different scope, or one now held out of " +
+    "scoring); those need an individual decision and are " +
+    "refused. Claims that already have a status (reviewed, disputed, or " +
+    "needs-evidence) are left as they are. Returns the review of every " +
+    "claim that was marked.",
   permissions: { entity: ["update"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
+  realtime: legalListVerificationRealtimeUpdates,
   mcp: {
     type: "capability",
     reason: "document_processing",
@@ -71,41 +73,20 @@ const createBulkClaimReviews = createSafeHandler(
 
     const result = yield* Result.await(
       safeDb(async (tx) => {
-        const run = (
-          await tx
-            .select({ evidence: legalListVerificationRuns.evidence })
-            .from(legalListVerificationRuns)
-            .where(
-              and(
-                eq(legalListVerificationRuns.id, runId),
-                eq(legalListVerificationRuns.workspaceId, workspaceId),
-              ),
-            )
-            .limit(1)
-        ).at(0);
-        if (run === undefined) {
+        const inputs = await readRunAttentionInputs({
+          tx,
+          workspaceId,
+          runId,
+        });
+        if (inputs === null) {
           return { type: "not-found" } as const;
         }
-        // Id order is the lock order every caller shares, so two overlapping
-        // bulk accepts cannot deadlock.
-        const claims = await tx
-          .select({
-            id: legalListClaims.id,
-            state: legalListClaims.state,
-            refs: legalListClaims.refs,
-            recordConflict: legalListClaims.recordConflict,
-          })
-          .from(legalListClaims)
-          .where(
-            and(
-              eq(legalListClaims.workspaceId, workspaceId),
-              eq(legalListClaims.runId, runId),
-              inArray(legalListClaims.id, claimIds),
-            ),
-          )
-          .orderBy(asc(legalListClaims.id))
-          .limit(claimIds.length)
-          .for("update");
+        const claims = await readClaimsForBulkReview({
+          tx,
+          workspaceId,
+          runId,
+          claimIds,
+        });
         if (claims.length !== claimIds.length) {
           return { type: "not-found" } as const;
         }
@@ -116,9 +97,10 @@ const createBulkClaimReviews = createSafeHandler(
           runId,
           claimIds,
         });
-        // Claims already decided are left as they are, so only the rest are
+        // Claims with a status are left as they are, so only the rest are
         // held to the routine rule: a conflict someone settled by hand must
-        // not block accepting the routine claims around it.
+        // not block accepting the routine claims around it, and a claim
+        // marked as needing evidence stays open for whoever marked it.
         const toMark = claims.filter((claim) => {
           const record = before.get(claim.id);
           return (
@@ -127,14 +109,12 @@ const createBulkClaimReviews = createSafeHandler(
               VERIFICATION_LIMITS.REVIEW_EVENTS_PER_CLAIM_MAX
           );
         });
-        const contested = contestedFactIds(run.evidence);
+        // The same reading the run read serves on each claim.
         const attention = toMark.filter((claim) =>
-          needsAttention(
-            reviewedView(
-              claim,
-              before.get(claim.id)?.review ?? EMPTY_CLAIM_REVIEW,
-            ),
-            contested,
+          claimNeedsAttention(
+            claim,
+            before.get(claim.id)?.review ?? null,
+            inputs,
           ),
         );
         if (attention.length > 0) {
@@ -176,8 +156,7 @@ const createBulkClaimReviews = createSafeHandler(
           reviews: markedIds.map((claimId) => ({
             claimId,
             review: serializeClaimReview(
-              after.get(claimId)?.review ??
-                panic("A marked claim has no review"),
+              after.get(claimId) ?? panic("A marked claim has no review"),
             ),
           })),
         } as const;

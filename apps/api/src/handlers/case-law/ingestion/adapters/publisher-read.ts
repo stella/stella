@@ -1,4 +1,6 @@
-// parser-output-unchanged: a publisher behind its own gate reads through the same typed outcome, and an unread outcome names its refusal; a successful read returns the same response.
+// parser-output-unchanged: the byte ceiling moved to its own module; a decoded body over it maps to the existing too-large outcome.
+// parser-output-unchanged: readGatedResponse export removed; its implementation and internal calls are unchanged.
+// parser-output-unchanged: Typed gate refusals retain their scope and retry metadata; successful response bodies and decision parsing are unchanged.
 /**
  * The typed way a case-law adapter reads its publisher.
  *
@@ -36,27 +38,32 @@
 
 import { panic, Result } from "better-result";
 
+import { BodyByteLimitError } from "@stll/fetch/body-reader";
 import { INGESTION_STOP_KIND } from "@stll/legal-atlas/ingestion-cycle";
 import { readCappedBytes } from "@stll/skills/streaming";
 
 import {
+  type AbsenceEvidence,
+  isReadRefusal,
   readAbsent,
+  type ReadOutcome,
   readOutcomeOfStatus,
   readPresent,
+  type ReadRefusalScope,
   readRefused,
   readUnavailable,
-  type AbsenceEvidence,
-  type ReadOutcome,
-  type ReadRefusalScope,
   type ReadUnavailableCause,
 } from "@/api/lib/errors/read-outcome";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 
+import { PUBLISHER_BODY_MAX_BYTES } from "./publisher-response-limit";
 import {
   fetchPublisher,
-  rethrowCycleStop,
   type PublisherFetchInit,
+  rethrowCycleStop,
 } from "./retry";
+
+export { PUBLISHER_BODY_MAX_BYTES } from "./publisher-response-limit";
 
 /**
  * Run one step of a read: its value, or the failure as `unavailable`. Errors
@@ -75,6 +82,13 @@ const readStep = async <T>(
   }
   const { error } = result;
   rethrowCycleStop(error, signal);
+  if (
+    error instanceof AdapterFetchError &&
+    isReadRefusal(error.cause) &&
+    error.cause.scope !== "source"
+  ) {
+    return Result.err(error.cause);
+  }
   return Result.err(readUnavailable({ kind: "thrown", error }));
 };
 
@@ -103,7 +117,7 @@ type GatedReadOptions = {
  * established. {@link readPublisher} is this read over the shared gate; an
  * adapter whose publisher has a gate of its own passes that gate's request.
  */
-export const readGatedResponse = async ({
+const readGatedResponse = async ({
   request,
   signal,
   refusalScope,
@@ -146,8 +160,6 @@ export const readGatedResponse = async ({
  * payload verification ceiling, so anything larger could not be stored and
  * verified as a raw source payload anyway.
  */
-export const PUBLISHER_BODY_MAX_BYTES = 64 * 1024 * 1024;
-
 /**
  * The body of a present read, whole, up to {@link PUBLISHER_BODY_MAX_BYTES}.
  * A body over the ceiling stops the read at the ceiling and is `too-large`; a
@@ -171,6 +183,16 @@ const readBodyBytes = async (
     signal,
   );
   if (Result.isError(bytes)) {
+    if (
+      bytes.error.type === "unavailable" &&
+      bytes.error.cause.kind === "thrown" &&
+      BodyByteLimitError.is(bytes.error.cause.error)
+    ) {
+      return readUnavailable({
+        kind: "too-large",
+        maxBytes: bytes.error.cause.error.limit,
+      });
+    }
     return bytes.error;
   }
   if (bytes.value === null) {

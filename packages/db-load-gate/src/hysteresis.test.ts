@@ -8,6 +8,7 @@ import {
   combine,
   defaultConfig,
   initialBatchState,
+  MAX_CLOCK_SKEW_MS,
   nextBatch,
   validateConfig,
 } from "./health";
@@ -73,7 +74,8 @@ test("resume requires a real fresh reading, including the exact fifteen minute b
   for (const [age, expected] of [
     [900_000, "run"],
     [900_001, "hold"],
-    [-1, "hold"],
+    [-MAX_CLOCK_SKEW_MS, "run"],
+    [-MAX_CLOCK_SKEW_MS - 1, "hold"],
   ] as const) {
     expect(step(held, await read(75, age)).action).toBe(expected);
   }
@@ -244,7 +246,11 @@ test("repeated holds preserve the original timestamp as time advances", async ()
   expect(subsequent.state.holdCount).toBe(2);
 });
 
-for (const observedAt of [null, "invalid", new Date(now + 1).toISOString()]) {
+for (const observedAt of [
+  null,
+  "invalid",
+  new Date(now + MAX_CLOCK_SKEW_MS + 1).toISOString(),
+]) {
   test(`held work rejects a purported healthy reading with timestamp ${String(observedAt)}`, async () => {
     const held = step(initialBatchState(config), await read(64)).state;
     expect(
@@ -264,6 +270,12 @@ for (const observedAt of [null, "invalid", new Date(now + 1).toISOString()]) {
     ).toBe("hold");
   });
 }
+
+test("held work resumes on a healthy reading stamped slightly ahead of the local clock", async () => {
+  const held = step(initialBatchState(config), await read(64)).state;
+  expect(step(held, await read(80, -26)).action).toBe("run");
+  expect(step(held, await read(80, -MAX_CLOCK_SKEW_MS)).action).toBe("run");
+});
 
 test("other holds override a healthy resume reading", async () => {
   const held = step(initialBatchState(config), await read(64)).state;

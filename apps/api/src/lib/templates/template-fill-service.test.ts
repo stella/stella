@@ -1,16 +1,20 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
-import Elysia from "elysia";
 import fc from "fast-check";
-import JSZip from "jszip";
 
 import { compareCodeUnit } from "@stll/collation";
+import { ZipArchive } from "@stll/docx-core/zip";
 import { assertProperty } from "@stll/property-testing";
+import { rejectionOf } from "@stll/property-testing/rejection";
 import { filtersFromFieldConfig } from "@stll/template-conditions";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import type { discoverHandler } from "@/api/handlers/templates/discover";
 import discoverEndpoint from "@/api/handlers/templates/discover";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
+import { createHttpApp } from "@/api/http/app";
+import { decodeRequestInput } from "@/api/http/input";
+import { routes } from "@/api/http/route";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { toSafeId } from "@/api/lib/branded-types";
 import { clauseBodyToRichPatch } from "@/api/lib/clauses/clause-to-patch";
@@ -20,29 +24,63 @@ import { CONDITION_RAW_VALUES } from "@/api/lib/docx/block-directives";
 import { fillTemplate } from "@/api/lib/docx/patch-template";
 import type { AiConditionDecider } from "@/api/lib/docx/resolve-ai-conditions";
 import { partParagraphTexts } from "@/api/lib/docx/rich-patch";
-import type { TemplateData, FieldMeta } from "@/api/lib/docx/types";
+import type { FieldMeta, TemplateData } from "@/api/lib/docx/types";
 import { writeFieldFilters } from "@/api/lib/docx/write-field-filters";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
+import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
+import type { ModelActionAdmitter } from "@/api/lib/rate-limit/model-action-admission";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
-import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
+import {
+  createTestHandlerContext,
+  NO_AUDIT,
+  NO_DB,
+} from "@/api/tests/helpers/handler-context";
+import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
 import { testDocxFile } from "@/api/tests/helpers/scanned-file";
+import { serveForTest } from "@/api/tests/helpers/test-server";
 import { readTestJson } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
+import { buildTemplateS3Key } from "./storage-keys";
 import {
   decideTemplateFillCompletion,
   fillDiagnosticsOf,
   templateFillStatus,
 } from "./template-fill-completion";
 import {
+  type AiFillAdmission,
+  type AiFillCollaborators,
+  clauseDirectiveRecoveryHint,
   describeStoredTemplate,
+  discoverTemplateSource,
   fillStoredTemplateDocx,
   fillTemplateDocx,
   fillTemplateDocxStrict,
-  discoverTemplateSource,
-  clauseDirectiveRecoveryHint,
 } from "./template-fill-service";
+import { runAdmittedAiFill } from "./template-fill-usage";
+
+/** An AI admission that admits every fill and builds its collaborators on
+ *  entry, as a caller already holding an admitted action does. */
+const admittedAiFill =
+  (
+    collaborators: () => AiFillCollaborators | Promise<AiFillCollaborators>,
+  ): AiFillAdmission<never> =>
+  async (fill) => ({
+    type: "admitted",
+    value: await fill(await collaborators()),
+  });
+
+/** {@link admittedAiFill}, recording each admission before it runs. */
+const countedAiFill =
+  (
+    onAdmission: () => void,
+    collaborators: () => AiFillCollaborators | Promise<AiFillCollaborators>,
+  ): AiFillAdmission<never> =>
+  async (fill) => {
+    onAdmission();
+    return await admittedAiFill(collaborators)(fill);
+  };
 
 // ── DOCX fixture helpers (mirrors patch-template.test.ts / templates.test.ts:
 // no shared fixture module exists yet, so every suite builds its own) ──────
@@ -56,9 +94,9 @@ const WRAP = (body: string) =>
 const P = (text: string) => `<w:p><w:r><w:t>${text}</w:t></w:r></w:p>`;
 
 const makeDocx = async (documentXml: string): Promise<ScannedFile> => {
-  const zip = new JSZip();
-  zip.file("word/document.xml", documentXml);
-  zip.file(
+  const zip = new ZipArchive();
+  zip.set("word/document.xml", documentXml);
+  zip.set(
     "[Content_Types].xml",
     [
       '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
@@ -71,15 +109,15 @@ const makeDocx = async (documentXml: string): Promise<ScannedFile> => {
       "</Types>",
     ].join(""),
   );
-  return testDocxFile(await zip.generateAsync({ type: "uint8array" }));
+  return testDocxFile(await zip.generate({ compression: "store" }));
 };
 
 const extractTexts = async (file: ScannedFile): Promise<string[]> => {
-  const zip = await JSZip.loadAsync(file.bytes);
+  const zip = await ZipArchive.read(file.bytes);
   const documentXmlFile =
-    zip.file("word/document.xml") ??
+    zip.entry("word/document.xml") ??
     panic("fixture DOCX is missing word/document.xml");
-  const xml = await documentXmlFile.async("string");
+  const xml = await documentXmlFile.text();
   return [...xml.matchAll(/<w:t[^>]*>([^<]*)<\/w:t>/gu)].map(
     (match) => match[1] ?? "",
   );
@@ -140,8 +178,8 @@ const stubScopedDb = (
   };
   // SAFETY: the fill service reads registry credentials and, for a stored
   // source, the pinned clause links and version rows modeled above.
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test double; see SAFETY above
   return (async (fn: (tx: unknown) => Promise<unknown>) =>
-    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test double; see SAFETY above
     fn(fakeTx)) as unknown as ScopedDb;
 };
 
@@ -209,6 +247,104 @@ const makeConfiguredDocx = async (fields: FieldMeta[]): Promise<ScannedFile> =>
     await makeDocx(WRAP(P("Governed by {{governing_law}} law."))),
     fields,
   );
+
+describe("AI fill admission lifetime", () => {
+  const aiField = {
+    path: "governing_law",
+    label: "Governing law",
+    inputType: "text",
+    aiPrompt: "The governing law most likely intended by the parties.",
+  } satisfies FieldMeta;
+
+  // An admitter whose slot is observable: held exactly while its run is
+  // pending, as the action-admission lease is.
+  const observedAdmitter = () => {
+    const slot: { status: "free" | "held" } = { status: "free" };
+    const admitModelAction: ModelActionAdmitter = async (run) => {
+      slot.status = "held";
+      const outcome = await Result.tryPromise({
+        try: async () =>
+          await run({
+            signal: new AbortController().signal,
+            admission: testModelAdmission(organizationId, "templates.fill"),
+          }),
+        catch: (cause: unknown) => cause,
+      });
+      slot.status = "free";
+      return outcome;
+    };
+    return { slot, admitModelAction };
+  };
+
+  const fillAdmitted = async ({
+    admitModelAction,
+    collaborators,
+  }: {
+    admitModelAction: ModelActionAdmitter;
+    collaborators: () => AiFillCollaborators;
+  }) =>
+    await fillTemplateDocx({
+      source: {
+        name: "NDA",
+        fileName: "nda.docx",
+        file: await makeConfiguredDocx([aiField]),
+      },
+      values: {},
+      scopedDb: stubScopedDb(),
+      organizationId,
+      thirdPartyOutboundPermit: undefined,
+      requiredFields: "enforce",
+      aiFill: async (fill) =>
+        await runAdmittedAiFill({
+          admitModelAction,
+          preflight: async () => await Promise.resolve(null),
+          collaborators,
+          fill,
+        }),
+    });
+
+  test("holds the admitted action until a blocked generation settles", async () => {
+    const { slot, admitModelAction } = observedAdmitter();
+    const generationStarted = Promise.withResolvers<undefined>();
+    const generation = Promise.withResolvers<undefined>();
+    const filling = fillAdmitted({
+      admitModelAction,
+      collaborators: () => ({
+        generateAiValue: async () => {
+          generationStarted.resolve(undefined);
+          await generation.promise;
+          return { type: "drafted", value: "Slovak" };
+        },
+      }),
+    });
+
+    await generationStarted.promise;
+    expect(slot.status).toBe("held");
+    generation.resolve(undefined);
+    const result = await filling;
+    expect(slot.status).toBe("free");
+    if (!("file" in result)) {
+      throw new Error("expected a filled document");
+    }
+    expect((await extractTexts(result.file)).join("")).toContain(
+      "Governed by Slovak law.",
+    );
+  });
+
+  test("a failure inside the admitted fill propagates as the fill's own", async () => {
+    const { admitModelAction } = observedAdmitter();
+    expect(
+      await rejectionOf(
+        fillAdmitted({
+          admitModelAction,
+          collaborators: () => {
+            throw new TypeError("collaborators unavailable");
+          },
+        }),
+      ),
+    ).toMatchObject({ message: "collaborators unavailable" });
+  });
+});
 
 describe("fillTemplateDocx required-field rejection", () => {
   test("rejects a fill omitting a required, non-AI-fillable field", async () => {
@@ -370,9 +506,9 @@ describe("fillTemplateDocx required-field rejection", () => {
       organizationId,
       thirdPartyOutboundPermit: undefined,
       requiredFields: "enforce",
-      aiCollaborators: async () => ({
+      aiFill: admittedAiFill(async () => ({
         generateAiValue: async () => ({ type: "drafted", value: "Slovak" }),
-      }),
+      })),
     });
 
     expect("requiredFieldsRejection" in result).toBe(false);
@@ -402,13 +538,13 @@ describe("fillTemplateDocx required-field rejection", () => {
       organizationId,
       thirdPartyOutboundPermit: undefined,
       requiredFields: "enforce",
-      aiCollaborators: async () => ({
+      aiFill: admittedAiFill(async () => ({
         generateAiValue: async () => ({
           type: "failed",
           reason: "truncated",
           message: "The model reached its output limit before finishing.",
         }),
-      }),
+      })),
     });
 
     if (!("file" in result)) {
@@ -444,7 +580,9 @@ describe("fillTemplateDocx required-field rejection", () => {
       organizationId,
       thirdPartyOutboundPermit: undefined,
       requiredFields: "enforce",
-      aiCollaborators: async () => ({ adaptAiValue: async () => undefined }),
+      aiFill: admittedAiFill(async () => ({
+        adaptAiValue: async () => undefined,
+      })),
     });
 
     if (!("file" in result)) {
@@ -505,8 +643,9 @@ describe("fillTemplateDocx required-field rejection", () => {
       organizationId,
       thirdPartyOutboundPermit: undefined,
       requiredFields: "enforce",
-      aiCollaborators: () =>
+      aiFill: admittedAiFill(() =>
         panic("deterministic fill resolved the AI collaborators"),
+      ),
     });
 
     if (!("file" in result)) {
@@ -540,7 +679,7 @@ describe("fillTemplateDocx required-field rejection", () => {
 
 describe("fillStoredTemplateDocx use recording", () => {
   const usedTemplateId = toSafeId<"template">("tmpl_use");
-  const storedS3Key = "fake-key-use-recording";
+  const storedS3Key = buildTemplateS3Key(organizationId, usedTemplateId);
   const storedRow = {
     name: "NDA",
     fileName: "nda.docx",
@@ -587,8 +726,8 @@ describe("fillStoredTemplateDocx use recording", () => {
     };
     // SAFETY: test stub; this fill touches the template row, registry
     // credential configuration, and the use-counter update counted above.
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test double; see SAFETY above
     const scopedDb = (async (fn: (tx: unknown) => Promise<unknown>) =>
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test double; see SAFETY above
       fn(fakeTx)) as unknown as ScopedDb;
     return { scopedDb, updates: () => updates };
   };
@@ -695,7 +834,7 @@ describe("fillTemplateDocx condition decisions", () => {
       organizationId,
       thirdPartyOutboundPermit: undefined,
       requiredFields: "enforce",
-      aiCollaborators: async () => ({ decideAiCondition: decide }),
+      aiFill: admittedAiFill(async () => ({ decideAiCondition: decide })),
     });
     if (!("file" in result)) {
       throw new Error("expected a filled document");
@@ -823,8 +962,9 @@ describe("fillTemplateDocx undecided AI conditions grade the fill", () => {
       organizationId,
       thirdPartyOutboundPermit: undefined,
       requiredFields: "enforce",
-      aiCollaborators: async () =>
+      aiFill: admittedAiFill(async () =>
         decideAiCondition === undefined ? {} : { decideAiCondition },
+      ),
     });
     if (!("file" in result)) {
       throw new Error("expected a filled document");
@@ -889,7 +1029,7 @@ describe("fillTemplateDocx undecided AI conditions grade the fill", () => {
 
 describe("describeStoredTemplate gated blocks", () => {
   const templateId = toSafeId<"template">("tmpl_2");
-  const s3Key = "fake-key-conditions";
+  const s3Key = buildTemplateS3Key(organizationId, templateId);
 
   const stubDescribeScopedDb = (): ScopedDb => {
     const fakeTx = {
@@ -906,8 +1046,8 @@ describe("describeStoredTemplate gated blocks", () => {
     };
     // SAFETY: test stub; describeStoredTemplate only reads the templates row
     // through this scopedDb (the DOCX comes from the fake S3 below).
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test double; see SAFETY above
     return (async (fn: (tx: unknown) => Promise<unknown>) =>
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test double; see SAFETY above
       fn(fakeTx)) as unknown as ScopedDb;
   };
 
@@ -983,7 +1123,7 @@ describe("describeStoredTemplate gated blocks", () => {
 describe("describeStoredTemplate array shape", () => {
   const templateId = toSafeId<"template">("tmpl_1");
 
-  const s3Key = "fake-key-unused-because-loadTemplate-is-bypassed";
+  const s3Key = buildTemplateS3Key(organizationId, templateId);
 
   const stubDescribeScopedDb = (): ScopedDb => {
     const fakeTx = {
@@ -1000,8 +1140,8 @@ describe("describeStoredTemplate array shape", () => {
     };
     // SAFETY: test stub; describeStoredTemplate only reads the templates row
     // through this scopedDb (S3 is exercised separately below via fake-s3).
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test double; see SAFETY above
     return (async (fn: (tx: unknown) => Promise<unknown>) =>
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test double; see SAFETY above
       fn(fakeTx)) as unknown as ScopedDb;
   };
 
@@ -1198,9 +1338,9 @@ const filledTexts = async (
   if (!("file" in result)) {
     panic(`clause fill rejected: ${JSON.stringify(result)}`);
   }
-  const zip = await JSZip.loadAsync(result.file.bytes);
+  const zip = await ZipArchive.read(result.file.bytes);
   const xml =
-    (await zip.file("word/document.xml")?.async("string")) ??
+    (await zip.entry("word/document.xml")?.text()) ??
     panic("filled document has no body");
   return partParagraphTexts(xml);
 };
@@ -1291,7 +1431,7 @@ describe("clause and template directive parity", () => {
         text: "{{ loop.index }}: {{ term.value }}",
         runs: [{ text: "{{ loop.index }}: {{ term.value }}", italic: true }],
         listKind: "ordered",
-        listLevel: 1,
+        numbering: { kind: "levelOnly", ilvl: 1 },
       },
       clauseDirective("{% endfor %}"),
       clauseDirective("{% endif %}"),
@@ -1314,8 +1454,8 @@ describe("clause and template directive parity", () => {
     if (!("file" in result)) {
       panic("expected filled clause");
     }
-    const zip = await JSZip.loadAsync(result.file.bytes);
-    const xml = await zip.file("word/document.xml")?.async("string");
+    const zip = await ZipArchive.read(result.file.bytes);
+    const xml = await zip.entry("word/document.xml")?.text();
     expect(xml).toContain("<w:b");
     expect(xml).toContain("<w:i");
     expect(xml).not.toContain("__each_");
@@ -1378,16 +1518,16 @@ describe("clause and template directive parity", () => {
     if (!("file" in result)) {
       panic("expected filled clause");
     }
-    const actualZip = await JSZip.loadAsync(result.file.bytes);
-    const expectedZip = await JSZip.loadAsync(direct.file.bytes);
-    expect(Object.keys(actualZip.files).toSorted()).toEqual(
-      Object.keys(expectedZip.files).toSorted(),
+    const actualZip = await ZipArchive.read(result.file.bytes);
+    const expectedZip = await ZipArchive.read(direct.file.bytes);
+    expect(actualZip.paths().toSorted()).toEqual(
+      expectedZip.paths().toSorted(),
     );
-    for (const path of Object.keys(expectedZip.files).filter((partName) =>
-      partName.endsWith(".xml"),
-    )) {
-      expect(await actualZip.file(path)?.async("string")).toBe(
-        await expectedZip.file(path)?.async("string"),
+    for (const path of expectedZip
+      .paths()
+      .filter((partName) => partName.endsWith(".xml"))) {
+      expect(await actualZip.entry(path)?.text()).toBe(
+        await expectedZip.entry(path)?.text(),
       );
     }
   });
@@ -1556,9 +1696,9 @@ test("filled clause directive trees match template body rendering", async () => 
         );
         const bodyResult = await fillTemplate(templateFile, values);
         expect(bodyResult.structureErrors).toEqual([]);
-        const bodyZip = await JSZip.loadAsync(bodyResult.file.bytes);
+        const bodyZip = await ZipArchive.read(bodyResult.file.bytes);
         const bodyXml =
-          (await bodyZip.file("word/document.xml")?.async("string")) ??
+          (await bodyZip.entry("word/document.xml")?.text()) ??
           panic("missing body XML");
         expect(texts).toEqual(partParagraphTexts(bodyXml));
         expect(texts.join("")).not.toContain("{%");
@@ -1782,12 +1922,13 @@ test("template discovery and condition preview include clause-only declarations"
     }),
   });
   const preview = await templateDecideConditionsLogic({
+    runDecisions: async () => {
+      throw new Error("Deterministic preview must not enter AI gates");
+    },
     scopedDb: previewDb.scopedDb,
     organizationId,
     templateId: source.templateId,
     body: { values: { included: false } },
-    orgAIConfig: null,
-    client: null,
     abortSignal: new AbortController().signal,
   });
   expect(preview.unwrap().conditions).toEqual([
@@ -1833,8 +1974,8 @@ test("empty clause results remove only the numbered slot paragraph", async () =>
   if (!("file" in result)) {
     panic("expected a filled file");
   }
-  const zip = await JSZip.loadAsync(result.file.bytes);
-  const xml = await zip.file("word/document.xml")?.async("string");
+  const zip = await ZipArchive.read(result.file.bytes);
+  const xml = await zip.entry("word/document.xml")?.text();
   expect(xml?.match(/<w:numPr>/gu)).toHaveLength(2);
 });
 
@@ -1880,25 +2021,40 @@ test("stored web discovery, description and effective fill declarations agree fo
   const templateId = toSafeId<"template">(
     "00000000-0000-4000-8000-000000000001",
   );
+  const s3Key = buildTemplateS3Key(organizationId, templateId);
   const fakeS3 = startFakeS3();
   try {
-    fakeS3.put("stella", "clause-web-discovery", new Uint8Array(file.bytes));
-    const scopedDb = stubScopedDb(clauseBody, "clause-web-discovery");
-    const app = new Elysia().post(
-      "/templates/discover",
-      async ({ body, request }) =>
-        await discoverEndpoint.handler(
-          createTestHandlerContext<
-            Parameters<typeof discoverEndpoint.handler>[0]
-          >({
-            scopedDb,
-            session: { activeOrganizationId: organizationId },
-            body,
-            request,
-            route: "/templates/discover",
-          }),
-        ),
-      { body: discoverEndpoint.config.body },
+    fakeS3.put("stella", s3Key, new Uint8Array(file.bytes));
+    const scopedDb = stubScopedDb(clauseBody, s3Key);
+    await using server = serveForTest(
+      createHttpApp({
+        middleware: [errorBoundary],
+        routes: routes({
+          "/templates/discover": {
+            POST: {
+              access: "public",
+              config: { body: discoverEndpoint.config.body },
+              run: async ({ ctx, readBody }) =>
+                await discoverEndpoint.handler(
+                  createTestHandlerContext<
+                    Parameters<typeof discoverEndpoint.handler>[0]
+                  >({
+                    audit: NO_AUDIT,
+                    safeDb: NO_DB,
+                    scopedDb,
+                    session: { activeOrganizationId: organizationId },
+                    body: await decodeRequestInput(
+                      discoverEndpoint.config.body,
+                      await readBody(),
+                    ),
+                    request: ctx.request,
+                    route: "/v1/templates/discover" satisfies ApiRoutePath,
+                  }),
+                ),
+            },
+          },
+        }),
+      }),
     );
     const form = new FormData();
     form.set(
@@ -1908,12 +2064,10 @@ test("stored web discovery, description and effective fill declarations agree fo
       }),
     );
     form.set("templateId", templateId);
-    const response = await app.handle(
-      new Request("http://localhost/templates/discover", {
-        method: "POST",
-        body: form,
-      }),
-    );
+    const response = await server.fetch("http://localhost/templates/discover", {
+      method: "POST",
+      body: form,
+    });
     expect(response.status).toBe(200);
     const web =
       await readTestJson<
@@ -2018,22 +2172,23 @@ test("clause AI declarations run usage admission and include linked content in g
     scopedDb: stubScopedDb(body),
     requiredFields: "enforce",
     useRecording: "caller",
-    assertUsageAvailable: async () => {
-      admissions++;
-      return null;
-    },
-    aiCollaborators: async () => ({
-      generateAiValue: async ({ documentText, values }) => {
-        expect(documentText).toContain("Payment is due within thirty days.");
-        expect(documentText).not.toContain("Inactive payment");
-        expect(documentText).not.toContain("{% if");
-        expect(documentText).not.toContain("{{ summary");
-        expect(values["@clause:Terms"]).toContain(
-          "Payment is due within thirty days.",
-        );
-        return { type: "drafted", value: "Thirty days" };
+    aiFill: countedAiFill(
+      () => {
+        admissions++;
       },
-    }),
+      async () => ({
+        generateAiValue: async ({ documentText, values }) => {
+          expect(documentText).toContain("Payment is due within thirty days.");
+          expect(documentText).not.toContain("Inactive payment");
+          expect(documentText).not.toContain("{% if");
+          expect(documentText).not.toContain("{{ summary");
+          expect(values["@clause:Terms"]).toContain(
+            "Payment is due within thirty days.",
+          );
+          return { type: "drafted", value: "Thirty days" };
+        },
+      }),
+    ),
   });
   expect(admissions).toBe(1);
   if ("usageRejection" in result) {
@@ -2094,14 +2249,15 @@ describe("clause fill boundaries", () => {
       clauseOverrides: {
         "@clause:Terms": [clauseDirective("{% if enabled %}")],
       },
-      assertUsageAvailable: async () => {
-        usageCalls++;
-        return null;
-      },
-      aiCollaborators: async () => {
-        collaboratorCalls++;
-        return {};
-      },
+      aiFill: countedAiFill(
+        () => {
+          usageCalls++;
+        },
+        async () => {
+          collaboratorCalls++;
+          return {};
+        },
+      ),
     });
     expect(result).toMatchObject({
       storedTemplateError: { status: 422, code: "clause_directives_invalid" },
@@ -2444,7 +2600,7 @@ describe("clause slot requiredness follows rendering", () => {
       requiredFields: "enforce",
       useRecording: "caller",
       values: { persons: [{ name: "Ann" }, { name: "Bob", included: false }] },
-      aiCollaborators: async () => ({
+      aiFill: admittedAiFill(async () => ({
         generateAiValue: async ({ values }) => {
           const name = values["name"];
           if (typeof name !== "string") {
@@ -2461,7 +2617,7 @@ describe("clause slot requiredness follows rendering", () => {
           decisions.push(name);
           return { decidedBy: "generative_model", value: true };
         },
-      }),
+      })),
     });
     expect(result).toHaveProperty("file");
     expect(drafts).toEqual(["Ann", "Bob"]);
@@ -2619,7 +2775,7 @@ describe("clause slot requiredness follows rendering", () => {
         thirdPartyOutboundPermit: undefined,
         requiredFields: "enforce",
         useRecording: "caller",
-        aiCollaborators: async () => ({
+        aiFill: admittedAiFill(async () => ({
           generateAiValue: async ({ values }) => {
             const name = values["name"];
             if (typeof name !== "string") {
@@ -2628,7 +2784,7 @@ describe("clause slot requiredness follows rendering", () => {
             names.push(name);
             return { type: "drafted", value: `For ${name}` };
           },
-        }),
+        })),
       });
       expect(names).toEqual(["Ann", "Bob"]);
       const text = (await filledTexts(result)).join("");
@@ -2720,10 +2876,8 @@ describe("clause slot requiredness follows rendering", () => {
       if (!("file" in result)) {
         panic("expected filled document");
       }
-      const zip = await JSZip.loadAsync(result.file.bytes);
-      expect(await zip.file("word/document.xml")?.async("string")).toContain(
-        "<w:b",
-      );
+      const zip = await ZipArchive.read(result.file.bytes);
+      expect(await zip.entry("word/document.xml")?.text()).toContain("<w:b");
       expect(result.unmatchedPlaceholders).toEqual([]);
     },
   );
@@ -2802,12 +2956,12 @@ describe("clause slot requiredness follows rendering", () => {
       thirdPartyOutboundPermit: undefined,
       requiredFields: "enforce",
       useRecording: "caller",
-      aiCollaborators: async () => ({
+      aiFill: admittedAiFill(async () => ({
         decideAiCondition: async () => ({
           decidedBy: "generative_model",
           value: decided,
         }),
-      }),
+      })),
     });
   };
 
@@ -2856,10 +3010,10 @@ describe("clause slot requiredness follows rendering", () => {
       thirdPartyOutboundPermit: undefined,
       requiredFields: "enforce",
       useRecording: "caller",
-      aiCollaborators: async () => {
+      aiFill: admittedAiFill(async () => {
         collaboratorCalls += 1;
         return {};
-      },
+      }),
     });
     expect(result).toEqual(nameRejection("name"));
     expect(collaboratorCalls).toBe(0);
@@ -3117,8 +3271,8 @@ describe("template fields are required where they render", () => {
 
   test("header markers are required where the header renders them", async () => {
     const fillWithHeader = async (header: string, values: TemplateData) => {
-      const zip = await JSZip.loadAsync((await makeDocx(WRAP(branch))).bytes);
-      zip.file(
+      const zip = await ZipArchive.read((await makeDocx(WRAP(branch))).bytes);
+      zip.set(
         "word/header1.xml",
         `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:hdr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">${header}</w:hdr>`,
       );
@@ -3126,7 +3280,7 @@ describe("template fields are required where they render", () => {
         source: {
           name: "Terms",
           fileName: "terms.docx",
-          file: testDocxFile(await zip.generateAsync({ type: "uint8array" })),
+          file: testDocxFile(await zip.generate({ compression: "store" })),
         },
         values,
         scopedDb: stubScopedDb(),
@@ -3314,7 +3468,7 @@ describe("template fields are required where they render", () => {
       thirdPartyOutboundPermit: undefined,
       requiredFields: "enforce",
       useRecording: "caller",
-      aiCollaborators: async () => {
+      aiFill: admittedAiFill(async () => {
         collaboratorCalls += 1;
         return {
           decideAiCondition: async () => ({
@@ -3322,7 +3476,7 @@ describe("template fields are required where they render", () => {
             value: decided,
           }),
         };
-      },
+      }),
     });
     return { result, collaboratorCalls };
   };
@@ -3375,10 +3529,10 @@ describe("template fields are required where they render", () => {
       thirdPartyOutboundPermit: undefined,
       requiredFields: "enforce",
       useRecording: "caller",
-      aiCollaborators: async () => {
+      aiFill: admittedAiFill(async () => {
         collaboratorCalls += 1;
         return {};
-      },
+      }),
     });
     expect(result).toEqual(rejection("name"));
     expect(collaboratorCalls).toBe(0);
@@ -3512,12 +3666,12 @@ describe("clause slots the fill prunes", () => {
       requiredFields: "enforce",
       useRecording: "caller",
       clauseOverrides: { "@clause:Terms": malformed },
-      aiCollaborators: async () => ({
+      aiFill: admittedAiFill(async () => ({
         decideAiCondition: async () => ({
           decidedBy: "generative_model",
           value: decided,
         }),
-      }),
+      })),
     });
 
   test("an invalid override behind an AI decision is judged by the decision", async () => {
@@ -3674,4 +3828,50 @@ test("template fills surface malformed paragraph markers as a typed refusal", as
   expect(result.storedTemplateError).toBeInstanceOf(HandlerError);
   expect(result.storedTemplateError.status).toBe(422);
   expect(result.storedTemplateError.retryable).toBe(false);
+});
+
+test("pending template admission retains nested execution values", async () => {
+  const entered = Promise.withResolvers<undefined>();
+  const proceed = Promise.withResolvers<undefined>();
+  const values = { person: { name: "Authorized" } };
+  const file = await makeDocx(WRAP(P('{{ summary | ai("Summarize") }}')));
+  const filling = fillTemplateDocx({
+    source: { name: "Summary", fileName: "summary.docx", file },
+    values,
+    organizationId,
+    thirdPartyOutboundPermit: undefined,
+    scopedDb: stubScopedDb(),
+    requiredFields: "enforce",
+    useRecording: "caller",
+    aiFill: async (fill) =>
+      await runAdmittedAiFill({
+        admitModelAction: async (run) =>
+          Result.ok(
+            await run({
+              signal: new AbortController().signal,
+              admission: testModelAdmission(organizationId, "templates.fill"),
+            }),
+          ),
+        collaborators: async () => ({
+          generateAiValue: async ({ values: checkedValues }) => {
+            expect(checkedValues["person"]).toEqual({ name: "Authorized" });
+            return { type: "drafted", value: "Authorized summary" };
+          },
+        }),
+        preflight: async () => {
+          entered.resolve(undefined);
+          await proceed.promise;
+          return null;
+        },
+        fill,
+      }),
+  });
+  await entered.promise;
+  values.person.name = "Changed";
+  proceed.resolve(undefined);
+  const filled = await filling;
+  if ("usageRejection" in filled) {
+    throw new TypeError("Expected admitted template fixture");
+  }
+  expect(await filledTexts(filled)).toEqual(["Authorized summary"]);
 });

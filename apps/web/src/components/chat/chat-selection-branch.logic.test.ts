@@ -4,7 +4,6 @@ import {
   CHAT_SELECTION_ACTION,
   chatQuoteChip,
   chatSelectionActions,
-  isRectWithinBounds,
   normalizeChatSelectionText,
 } from "@/components/chat/chat-selection-branch.logic";
 import type { ChatBranchSource } from "@/components/chat/chat-selection-branch.logic";
@@ -83,22 +82,5 @@ describe("chatSelectionActions", () => {
 
   test("an empty selection offers nothing", () => {
     expect(chatSelectionActions({ quote: "", source })).toEqual([]);
-  });
-});
-
-describe("isRectWithinBounds", () => {
-  const bounds = { bottom: 500, top: 100 };
-
-  test("words inside the transcript are visible", () => {
-    expect(isRectWithinBounds({ bottom: 220, top: 200 }, bounds)).toBe(true);
-  });
-
-  test("words partly scrolled under the top edge still count", () => {
-    expect(isRectWithinBounds({ bottom: 110, top: 90 }, bounds)).toBe(true);
-  });
-
-  test("words scrolled out above or below do not", () => {
-    expect(isRectWithinBounds({ bottom: 100, top: 80 }, bounds)).toBe(false);
-    expect(isRectWithinBounds({ bottom: 520, top: 500 }, bounds)).toBe(false);
   });
 });

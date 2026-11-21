@@ -1,20 +1,67 @@
-import { Result } from "better-result";
-import { expect, mock, test } from "bun:test";
+import { panic, Result } from "better-result";
+import {
+  afterAll,
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  mock,
+  test,
+} from "bun:test";
+import { eq, inArray } from "drizzle-orm";
 
+import { dbClock } from "@stll/test-kit/db";
+
+import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
-import { systemAuditRuns } from "@/api/db/schema";
+import {
+  fileComparisonUploads,
+  schedulerJobRuns,
+  schedulerJobs,
+  systemAuditRuns,
+} from "@/api/db/schema";
+import { createSafeId } from "@/api/lib/branded-types";
+import { DeleteOrganizationFileError } from "@/api/lib/files/delete-organization-file";
+import { OrganizationFileUsageError } from "@/api/lib/files/organization-file-usage";
+import { runJob } from "@/api/lib/scheduler/runner";
 import type {
   SchedulerDb,
   SchedulerTaskContext,
 } from "@/api/lib/scheduler/types";
-import { FILE_COMPARISON_SWEEP_LIMIT } from "@/api/lib/uploads/file-comparison/sweep";
+import {
+  FILE_COMPARISON_SWEEP_LIMIT,
+  FileComparisonSweepError,
+  sweepExpiredFileComparisonUploads,
+} from "@/api/lib/uploads/file-comparison/sweep";
+import {
+  installRecordingAnalytics,
+  installRecordingLogger,
+} from "@/api/tests/helpers/recording-telemetry";
+import type {
+  RecordingAnalytics,
+  RecordingLogger,
+} from "@/api/tests/helpers/recording-telemetry";
+import { heldSchedulerLease } from "@/api/tests/helpers/scheduler-lease";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import {
+  getRlsFixture,
+  releaseRlsFixture,
+} from "@/api/tests/security/rls-fixture";
 
-const sweepMock = mock(async () => 0);
-const { createSweepFileComparisonUploadsTask } =
-  await import("@/api/lib/scheduler/tasks/file-comparison-sweep");
+beforeEach(() => {
+  sweepMock.mockReset();
+  sweepMock.mockImplementation(sweepDefault);
+});
 
-const recordingDb = () => {
+const sweepDefault = async () =>
+  Result.ok({ scanned: 0, sweptUploads: 0, failed: 0 });
+const sweepMock = mock(sweepDefault);
+const {
+  createSweepFileComparisonUploadsTask,
+  SWEEP_FILE_COMPARISON_UPLOADS_TASK,
+} = await import("@/api/lib/scheduler/tasks/file-comparison-sweep");
+
+const recordingDb = (cause?: Error) => {
   const rows: unknown[] = [];
   const tables: unknown[] = [];
   const db = asTestRaw<SchedulerDb>({
@@ -22,6 +69,9 @@ const recordingDb = () => {
       tables.push(table);
       return {
         values: async (row: unknown) => {
+          if (cause) {
+            throw cause;
+          }
           rows.push(row);
         },
       };
@@ -33,7 +83,9 @@ const recordingDb = () => {
 const RUN_ID = "0192f1d2-0000-7000-8000-000000000001";
 
 test("schedules one bounded global sweep of expired comparison staging", async () => {
-  sweepMock.mockResolvedValue(3);
+  sweepMock.mockResolvedValue(
+    Result.ok({ scanned: 3, sweptUploads: 3, failed: 0 }),
+  );
   const info = mock();
   const signal = new AbortController().signal;
   const { db, rows, tables } = recordingDb();
@@ -57,6 +109,8 @@ test("schedules one bounded global sweep of expired comparison staging", async (
   });
   expect(info).toHaveBeenCalledWith("scheduler.file_comparison_uploads_swept", {
     "fileComparisonUploads.swept": 3,
+    "fileComparisonUploads.scanned": 3,
+    "fileComparisonUploads.failed": 0,
   });
   expect(tables).toEqual([systemAuditRuns]);
   expect(rows).toEqual([
@@ -69,8 +123,78 @@ test("schedules one bounded global sweep of expired comparison staging", async (
   ]);
 });
 
+test("drains full pages until the sweep reaches a short page", async () => {
+  const pages = [
+    { scanned: 50, sweptUploads: 50, failed: 0 },
+    { scanned: 50, sweptUploads: 49, failed: 0 },
+    { scanned: 2, sweptUploads: 2, failed: 0 },
+  ];
+  const sweep = mock(async () =>
+    Result.ok(pages.shift() ?? { scanned: 0, sweptUploads: 0, failed: 0 }),
+  );
+  const { db, rows } = recordingDb();
+
+  await createSweepFileComparisonUploadsTask({ sweep })(
+    asTestRaw<SchedulerTaskContext>({
+      db,
+      logger: { info: mock() },
+      runId: RUN_ID,
+      signal: new AbortController().signal,
+    }),
+  );
+
+  expect(sweep).toHaveBeenCalledTimes(3);
+  expect(rows).toEqual([
+    expect.objectContaining({ counts: { sweptUploads: 101 } }),
+  ]);
+});
+
+test("bounds catch-up by batch count and wall-clock budget", async () => {
+  const fullPage = {
+    scanned: FILE_COMPARISON_SWEEP_LIMIT,
+    sweptUploads: FILE_COMPARISON_SWEEP_LIMIT,
+    failed: 0,
+  };
+  const byBatch = mock(async () => Result.ok(fullPage));
+  const byTime = mock(async () => Result.ok(fullPage));
+  const batchDb = recordingDb().db;
+  const timeDb = recordingDb().db;
+
+  await createSweepFileComparisonUploadsTask({
+    maxBatches: 2,
+    sweep: byBatch,
+  })(
+    asTestRaw<SchedulerTaskContext>({
+      db: batchDb,
+      logger: { info: mock() },
+      runId: RUN_ID,
+      signal: new AbortController().signal,
+    }),
+  );
+  await createSweepFileComparisonUploadsTask({
+    maxDurationMs: 1,
+    now: (() => {
+      let tick = 0;
+      return () => tick++;
+    })(),
+    sweep: byTime,
+  })(
+    asTestRaw<SchedulerTaskContext>({
+      db: timeDb,
+      logger: { info: mock() },
+      runId: RUN_ID,
+      signal: new AbortController().signal,
+    }),
+  );
+
+  expect(byBatch).toHaveBeenCalledTimes(2);
+  expect(byTime).toHaveBeenCalledTimes(1);
+});
+
 test("a sweep that removed nothing records no audit run", async () => {
-  sweepMock.mockResolvedValue(0);
+  sweepMock.mockResolvedValue(
+    Result.ok({ scanned: 0, sweptUploads: 0, failed: 0 }),
+  );
   const { db, rows } = recordingDb();
 
   await createSweepFileComparisonUploadsTask({
@@ -86,4 +210,315 @@ test("a sweep that removed nothing records no audit run", async () => {
   );
 
   expect(rows).toEqual([]);
+});
+
+test.each(["healthy", "partial"] as const)(
+  "%s sweep propagates audit failure without replacing the first cause",
+  async (mode) => {
+    const auditCause = new TypeError("Audit insert failed");
+    const sweepCause = new FileComparisonSweepError({
+      message: "Object deletion failed",
+      cause: new TypeError("Object failed"),
+      summary: { scanned: 2, sweptUploads: 1, failed: 1 },
+    });
+    const { db } = recordingDb(auditCause);
+    const warn = mock();
+    const outcome = await createSweepFileComparisonUploadsTask({
+      sweep: async () =>
+        mode === "partial"
+          ? Result.err(sweepCause)
+          : Result.ok({ scanned: 1, sweptUploads: 1, failed: 0 }),
+    })(
+      asTestRaw<SchedulerTaskContext>({
+        db,
+        logger: { info: mock(), warn },
+        runId: RUN_ID,
+        signal: new AbortController().signal,
+      }),
+    );
+    if (!outcome || Result.isOk(outcome)) {
+      throw new Error("Expected task failure");
+    }
+    expect(outcome.error.cause).toBe(
+      mode === "partial" ? sweepCause : auditCause,
+    );
+    expect(warn).toHaveBeenCalledTimes(mode === "partial" ? 1 : 0);
+  },
+);
+
+const { testDb, ids } = await getRlsFixture();
+const JOB_ID = "test.comparisonSweep.reporting";
+const uploadIds = Array.from({ length: 3 }, () =>
+  createSafeId<"fileComparisonUpload">(),
+);
+const safeDb: SafeDb = async (run) =>
+  await Result.tryPromise(
+    async () =>
+      await testDb.transaction(
+        async (tx) => await run(asTestRaw<Transaction>(tx)),
+      ),
+  );
+
+const runInRunner = async (
+  task: ReturnType<typeof createSweepFileComparisonUploadsTask>,
+) => {
+  const job = await testDb.query.schedulerJobs.findFirst({
+    where: { id: { eq: JOB_ID } },
+  });
+  if (!job) {
+    panic("Expected comparison sweep job");
+  }
+  return await runJob({
+    db: asTestRaw<SchedulerDb>(testDb),
+    heartbeatIntervalMs: 60_000,
+    job,
+    leaseMs: 120_000,
+    maxRuntimeMs: 30_000,
+    registry: new Map([[SWEEP_FILE_COMPARISON_UPLOADS_TASK, task]]),
+    runnerId: "test-comparison-sweep-runner",
+    signal: undefined,
+  });
+};
+
+const remainingIds = async () =>
+  (
+    await testDb
+      .select({ id: fileComparisonUploads.id })
+      .from(fileComparisonUploads)
+      .where(inArray(fileComparisonUploads.id, uploadIds))
+      .orderBy(fileComparisonUploads.id)
+  ).map(({ id }) => id);
+
+describe("comparison sweep replay and runner capture", () => {
+  let analytics: RecordingAnalytics;
+  let logs: RecordingLogger;
+  beforeEach(async () => {
+    analytics = installRecordingAnalytics();
+    logs = installRecordingLogger();
+    await testDb.insert(fileComparisonUploads).values(
+      uploadIds.map((id) => ({
+        id,
+        organizationId: ids.orgA,
+        userId: ids.userA1,
+        kind: "input" as const,
+        declaredName: "Draft.docx",
+        declaredSize: 1,
+        declaredSha256: "a".repeat(64),
+        expiresAt: new Date(Date.now() - 60_000),
+      })),
+    );
+    await testDb
+      .insert(schedulerJobs)
+      .values({
+        id: JOB_ID,
+        task: SWEEP_FILE_COMPARISON_UPLOADS_TASK,
+        schedule: { type: "interval", everyMs: 300_000 },
+        nextRunAt: new Date(),
+        ...heldSchedulerLease("test-lease"),
+        payload: { cursor: null },
+      })
+      .onConflictDoUpdate({
+        target: schedulerJobs.id,
+        set: heldSchedulerLease("test-lease"),
+      });
+  });
+  afterEach(async () => {
+    analytics.restore();
+    logs.restore();
+    await testDb
+      .delete(fileComparisonUploads)
+      .where(inArray(fileComparisonUploads.id, uploadIds));
+    await testDb
+      .delete(schedulerJobRuns)
+      .where(eq(schedulerJobRuns.jobId, JOB_ID));
+    await testDb
+      .delete(systemAuditRuns)
+      .where(eq(systemAuditRuns.actor, "system:file-comparison-sweep"));
+  });
+  afterAll(async () => {
+    await testDb.delete(schedulerJobs).where(eq(schedulerJobs.id, JOB_ID));
+    await releaseRlsFixture();
+  });
+
+  test.each(
+    ["read", "remove", "objects", "ledger"].flatMap((stage) => [
+      {
+        stage,
+        grade: "defect",
+        reason: "tagged_failure",
+        cause: new TypeError("Sweep dependency failed"),
+      },
+      {
+        stage,
+        grade: "transient",
+        reason: "network_reset",
+        cause: Object.assign(new Error("Connection reset"), {
+          code: "ECONNRESET",
+        }),
+      },
+    ]),
+  )(
+    "$stage: a $grade failure, retained rows and replay",
+    async ({ stage, cause, grade, reason }) => {
+      let calls = 0;
+      const rootSafeDb: SafeDb = async (run) => {
+        calls += 1;
+        if (
+          (stage === "read" && calls === 1) ||
+          (stage === "remove" && calls === 2)
+        ) {
+          return await Result.tryPromise(async () => {
+            throw cause;
+          });
+        }
+        return await safeDb(run);
+      };
+      // The first and last uploads fail; the middle one stays healthy.
+      const failedIds = uploadIds.filter((_, index) => index !== 1);
+      const task = createSweepFileComparisonUploadsTask({
+        rootSafeDb,
+        sweep: async (options) =>
+          await sweepExpiredFileComparisonUploads({
+            ...options,
+            deleteObject: async (key) => {
+              if (
+                (stage === "objects" || stage === "ledger") &&
+                failedIds.some((id) => key.endsWith(id))
+              ) {
+                if (stage === "ledger") {
+                  return Result.err(
+                    new DeleteOrganizationFileError({
+                      message: "Ledger unavailable",
+                      stage: "usage_removal",
+                      cause: new OrganizationFileUsageError({
+                        message: "Ledger unavailable",
+                        reason: "storage_unavailable",
+                        cause,
+                      }),
+                    }),
+                  );
+                }
+                throw cause;
+              }
+              return Result.ok(undefined);
+            },
+          }),
+      });
+      expect(await runInRunner(task)).toBe("failed");
+      expect(analytics.exceptions()).toHaveLength(grade === "defect" ? 1 : 0);
+      if (grade === "defect") {
+        expect(analytics.exceptions().at(0)?.properties).toMatchObject({
+          "error.class": "FileComparisonSweepError",
+          "failure.grade": grade,
+          "failure.reason": reason,
+        });
+      }
+      expect(
+        logs.records.find(({ message }) => message === "scheduler.job_failed")
+          ?.attributes,
+      ).toMatchObject({
+        "failure.shadow_grade": grade,
+        "failure.shadow_reason": reason,
+      });
+      expect(
+        logs.records.filter(
+          ({ message }) => message === "scheduler.job_failed",
+        ),
+      ).toHaveLength(1);
+      const rowWarnings = logs.records.filter(
+        ({ message, attributes }) =>
+          message === "file_comparison.sweep_delete_failed" &&
+          attributes?.["sweep.stage"] === "object",
+      );
+      expect(rowWarnings).toHaveLength(
+        stage === "objects" || stage === "ledger" ? 2 : 0,
+      );
+      expect(
+        rowWarnings.every(({ severityText }) => severityText === "WARN"),
+      ).toBe(true);
+      const retained =
+        stage === "objects" || stage === "ledger" ? failedIds : uploadIds;
+      expect(await remainingIds()).toEqual(retained.toSorted());
+      expect(
+        await testDb
+          .select({ status: schedulerJobRuns.status })
+          .from(schedulerJobRuns)
+          .where(eq(schedulerJobRuns.jobId, JOB_ID)),
+      ).toEqual([{ status: "failed" }]);
+      const replay = await sweepExpiredFileComparisonUploads({
+        safeDb,
+        deleteObject: async () => Result.ok(undefined),
+      });
+      expect(replay).toEqual(
+        Result.ok({
+          scanned: retained.length,
+          sweptUploads: retained.length,
+          failed: 0,
+        }),
+      );
+      expect(await remainingIds()).toEqual([]);
+      expect(
+        await sweepExpiredFileComparisonUploads({
+          safeDb,
+          deleteObject: async () => Result.ok(undefined),
+        }),
+      ).toEqual(Result.ok({ scanned: 0, sweptUploads: 0, failed: 0 }));
+      expect(analytics.exceptions()).toHaveLength(grade === "defect" ? 1 : 0);
+    },
+  );
+
+  test("counts only rows still expired at the removal fence", async () => {
+    const renewedId = uploadIds.at(0) ?? panic("Expected a renewed upload");
+    const outcome = await sweepExpiredFileComparisonUploads({
+      safeDb,
+      deleteObject: async (key) => {
+        if (key.endsWith(renewedId)) {
+          await testDb
+            .update(fileComparisonUploads)
+            .set({ expiresAt: new Date(Date.now() + 60_000) })
+            .where(eq(fileComparisonUploads.id, renewedId));
+        }
+        return Result.ok(undefined);
+      },
+    });
+    expect(outcome).toEqual(
+      Result.ok({ scanned: 3, sweptUploads: 2, failed: 0 }),
+    );
+    expect(await remainingIds()).toEqual([renewedId]);
+    expect(analytics.exceptions()).toHaveLength(0);
+  });
+
+  test("keeps an active comparison claim and sweeps it after the lease expires", async () => {
+    const claimedId = uploadIds.at(0) ?? panic("Expected a claimed upload");
+    await testDb
+      .update(fileComparisonUploads)
+      .set({
+        claimId: Bun.randomUUIDv7(),
+        claimExpiresAt: dbClock.fromNow(60_000),
+        status: "processing",
+      })
+      .where(eq(fileComparisonUploads.id, claimedId));
+
+    expect(
+      await sweepExpiredFileComparisonUploads({
+        safeDb,
+        deleteObject: async () => Result.ok(undefined),
+      }),
+    ).toEqual(
+      Result.ok({ scanned: uploadIds.length - 1, sweptUploads: 2, failed: 0 }),
+    );
+    expect(await remainingIds()).toEqual([claimedId]);
+
+    await testDb
+      .update(fileComparisonUploads)
+      .set({ claimExpiresAt: dbClock.ago(1) })
+      .where(eq(fileComparisonUploads.id, claimedId));
+    expect(
+      await sweepExpiredFileComparisonUploads({
+        safeDb,
+        deleteObject: async () => Result.ok(undefined),
+      }),
+    ).toEqual(Result.ok({ scanned: 1, sweptUploads: 1, failed: 0 }));
+    expect(await remainingIds()).toEqual([]);
+  });
 });

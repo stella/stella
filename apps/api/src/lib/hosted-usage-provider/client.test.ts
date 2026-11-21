@@ -1,15 +1,23 @@
 import { Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
+import { createTestState } from "@stll/test-state";
+
 import { env } from "@/api/env";
 import {
   createHostedManagementSession,
   createHostedSetupSession,
   createPolarManagementSession,
   createPolarSetupSession,
+  eraseHostedCustomer,
   HostedUsageProviderApiError,
 } from "@/api/lib/hosted-usage-provider/client";
 import { POLAR_API_VERSIONS } from "@/api/lib/hosted-usage-provider/polar/contract";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
+
+const testState = createTestState({ file: import.meta.path, config: env });
+
+const testFetchState = createTestFetch();
 
 const credentials = {
   apiKey: "provider_test_apikey",
@@ -61,15 +69,60 @@ const installFetch = (handler: FetchHandler): void => {
   const nextFetch: typeof globalThis.fetch = Object.assign(handler, {
     preconnect: originalFetch.preconnect,
   });
-  globalThis.fetch = nextFetch;
+  testFetchState.set(nextFetch);
 };
 
 beforeEach(() => {
   originalFetch = globalThis.fetch;
 });
 
+describe("eraseHostedCustomer", () => {
+  for (const status of [204, 404]) {
+    test(`treats ${status} as erased without reading the response body`, async () => {
+      let calledUrl: string | URL | Request | undefined;
+      let calledInit: RequestInit | undefined;
+      installFetch(async (url, init) => {
+        calledUrl = url;
+        calledInit = init;
+        return new Response(null, { status });
+      });
+
+      const result = await eraseHostedCustomer({
+        credentials,
+        externalCustomerRef: "stella_org_org/test",
+      });
+
+      expect(Result.isOk(result)).toBe(true);
+      expect(urlToString(calledUrl)).toBe(
+        "https://sandbox.provider.test/v1/customers/external/stella_org_org%2Ftest?anonymize=true",
+      );
+      expect(calledInit?.method).toBe("DELETE");
+      expect(new Headers(calledInit?.headers).get("authorization")).toBe(
+        "Bearer provider_test_apikey",
+      );
+    });
+  }
+
+  test("returns only a short status error for provider failures", async () => {
+    installFetch(
+      async () => new Response("sensitive provider body", { status: 500 }),
+    );
+    const result = await eraseHostedCustomer({
+      credentials,
+      externalCustomerRef: "stella_org_org_test",
+    });
+    expect(Result.isError(result)).toBe(true);
+    if (Result.isError(result)) {
+      expect(result.error.message).toBe("Hosted customer erasure returned 500");
+      expect(JSON.stringify(result.error)).not.toContain(
+        "sensitive provider body",
+      );
+    }
+  });
+});
+
 afterEach(() => {
-  globalThis.fetch = originalFetch;
+  testFetchState.restore();
 });
 
 describe("createHostedSetupSession", () => {
@@ -92,7 +145,7 @@ describe("createHostedSetupSession", () => {
       policyRef: "provider_policy_pro",
       externalAccountRef: "stella_org_org_test_001",
       successUrl: "https://app.stella.test/settings",
-      returnUrl: "https://app.stella.test/settings/organization/usage",
+      returnUrl: "https://app.stella.test/admin/usage",
       metadata: {
         organization_id: "org_test_001",
         usage_policy_id: "plan_test_001",
@@ -104,6 +157,7 @@ describe("createHostedSetupSession", () => {
     if (Result.isOk(result)) {
       expect(result.value.id).toBe("provider_setup_abc");
       expect(result.value.url).toBe("https://setup.provider.test/abc");
+      expect(result.value.expiresAt).toBeNull();
     }
     expect(callCount).toBe(1);
     expect(urlToString(calledUrl)).toBe(
@@ -115,9 +169,7 @@ describe("createHostedSetupSession", () => {
     const body = readJsonRequestBody(calledInit?.body);
     expect(body["policy_refs"]).toEqual(["provider_policy_pro"]);
     expect(body["success_url"]).toBe("https://app.stella.test/settings");
-    expect(body["return_url"]).toBe(
-      "https://app.stella.test/settings/organization/usage",
-    );
+    expect(body["return_url"]).toBe("https://app.stella.test/admin/usage");
     expect(body["external_account_ref"]).toBe("stella_org_org_test_001");
     expect("account_ref" in body).toBe(false);
     const metadata = body["metadata"];
@@ -218,7 +270,7 @@ describe("createHostedManagementSession", () => {
     const result = await createHostedManagementSession({
       credentials,
       accountRef: "acct_test_xxx",
-      returnUrl: "https://app.stella.test/settings/organization/usage",
+      returnUrl: "https://app.stella.test/admin/usage",
     });
 
     expect(Result.isOk(result)).toBe(true);
@@ -233,9 +285,7 @@ describe("createHostedManagementSession", () => {
     );
     const body = readJsonRequestBody(calledInit?.body);
     expect(body["account_ref"]).toBe("acct_test_xxx");
-    expect(body["return_url"]).toBe(
-      "https://app.stella.test/settings/organization/usage",
-    );
+    expect(body["return_url"]).toBe("https://app.stella.test/admin/usage");
   });
 
   test("404 from provider surfaces as HostedUsageProviderApiError", async () => {
@@ -254,6 +304,36 @@ describe("createHostedManagementSession", () => {
 });
 
 describe("createPolarSetupSession", () => {
+  test.each([{ expires_at: "not a timestamp" }, { expires_at: 1_780_000_000 }])(
+    "refuses a session with an unreadable expiry ($expires_at)",
+    async ({ expires_at }) => {
+      installFetch(async () =>
+        okResponse({
+          id: "checkout_bad_expiry",
+          url: "https://buy.polar.test/bad",
+          expires_at,
+        }),
+      );
+
+      const result = await createPolarSetupSession({
+        credentials,
+        policyRef: "prod_pro",
+        externalAccountRef: "stella_org_org_test_001",
+        successUrl: "https://app.stella.test/settings",
+        metadata: {
+          organization_id: "org_test_001",
+          usage_policy_id: "plan_test_001",
+        },
+      });
+
+      expect(Result.isError(result)).toBe(true);
+      if (Result.isError(result)) {
+        expect(HostedUsageProviderApiError.is(result.error)).toBe(true);
+        expect(result.error.message).toBe("Hosted setup session failed");
+      }
+    },
+  );
+
   test("POSTs to /v1/checkouts/ with products array and external_customer_id", async () => {
     let calledUrl: string | URL | Request | undefined;
     let calledInit: RequestInit | undefined;
@@ -264,6 +344,7 @@ describe("createPolarSetupSession", () => {
         id: "checkout_abc",
         url: "https://buy.polar.test/abc",
         client_secret: "cs_x",
+        expires_at: "2026-06-01T01:00:00Z",
       });
     });
 
@@ -272,7 +353,7 @@ describe("createPolarSetupSession", () => {
       policyRef: "prod_pro",
       externalAccountRef: "stella_org_org_test_001",
       successUrl: "https://app.stella.test/settings",
-      returnUrl: "https://app.stella.test/settings/organization/usage",
+      returnUrl: "https://app.stella.test/admin/usage",
       metadata: {
         organization_id: "org_test_001",
         usage_policy_id: "plan_test_001",
@@ -283,6 +364,7 @@ describe("createPolarSetupSession", () => {
     if (Result.isOk(result)) {
       expect(result.value.id).toBe("checkout_abc");
       expect(result.value.url).toBe("https://buy.polar.test/abc");
+      expect(result.value.expiresAt).toEqual(new Date("2026-06-01T01:00:00Z"));
     }
     expect(urlToString(calledUrl)).toBe(
       "https://sandbox.provider.test/v1/checkouts/",
@@ -294,6 +376,10 @@ describe("createPolarSetupSession", () => {
     // The Polar request body must not leak the neutral contract's field names.
     expect("policy_refs" in body).toBe(false);
     expect("account_ref" in body).toBe(false);
+    // Every checkout is a business purchase; Polar's form collects the tax
+    // id, so none is preset.
+    expect(body["is_business_customer"]).toBe(true);
+    expect("customer_tax_id" in body).toBe(false);
   });
 
   test("surfaces non-2xx as HostedUsageProviderApiError", async () => {
@@ -330,7 +416,7 @@ describe("createPolarManagementSession", () => {
     const result = await createPolarManagementSession({
       credentials,
       accountRef: "cus_abc",
-      returnUrl: "https://app.stella.test/settings/organization/usage",
+      returnUrl: "https://app.stella.test/admin/usage",
     });
 
     expect(Result.isOk(result)).toBe(true);
@@ -342,17 +428,14 @@ describe("createPolarManagementSession", () => {
     );
     const body = readJsonRequestBody(calledInit?.body);
     expect(body["customer_id"]).toBe("cus_abc");
-    expect(body["return_url"]).toBe(
-      "https://app.stella.test/settings/organization/usage",
-    );
+    expect(body["return_url"]).toBe("https://app.stella.test/admin/usage");
   });
 });
 
 describe("outbound version contract", () => {
   for (const version of POLAR_API_VERSIONS) {
     test(`every endpoint carries configured version ${version}`, async () => {
-      const previousVersion = env.HOSTED_USAGE_PROVIDER_API_VERSION;
-      env.HOSTED_USAGE_PROVIDER_API_VERSION = version;
+      testState.setConfig("HOSTED_USAGE_PROVIDER_API_VERSION", version);
       const observed: (string | null)[] = [];
       installFetch(async (_url, init) => {
         const headers = new Headers(init?.headers);
@@ -364,29 +447,26 @@ describe("outbound version contract", () => {
           customer_portal_url: "https://provider.test/session",
         });
       });
-      try {
-        const setup = {
-          credentials,
-          policyRef: "policy_ref",
-          successUrl: "https://app.test/return",
-          metadata: {
-            organization_id: "org_fixture",
-            usage_policy_id: "policy_fixture",
-          },
-        };
-        const management = { credentials, accountRef: "account_ref" };
-        for (const result of [
-          await createHostedSetupSession(setup),
-          await createPolarSetupSession(setup),
-          await createHostedManagementSession(management),
-          await createPolarManagementSession(management),
-        ]) {
-          expect(Result.isOk(result)).toBe(true);
-        }
-        expect(observed).toEqual([version, version, version, version]);
-      } finally {
-        env.HOSTED_USAGE_PROVIDER_API_VERSION = previousVersion;
+
+      const setup = {
+        credentials,
+        policyRef: "policy_ref",
+        successUrl: "https://app.test/return",
+        metadata: {
+          organization_id: "org_fixture",
+          usage_policy_id: "policy_fixture",
+        },
+      };
+      const management = { credentials, accountRef: "account_ref" };
+      for (const result of [
+        await createHostedSetupSession(setup),
+        await createPolarSetupSession(setup),
+        await createHostedManagementSession(management),
+        await createPolarManagementSession(management),
+      ]) {
+        expect(Result.isOk(result)).toBe(true);
       }
+      expect(observed).toEqual([version, version, version, version]);
     });
   }
 });

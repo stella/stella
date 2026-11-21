@@ -20,9 +20,6 @@ export const pillars = [
   },
 ] as const;
 
-export type Pillar = (typeof pillars)[number];
-export type PillarId = Pillar["id"];
-
 /**
  * Slug of a product page, as listed by the pillars. Menu copy is keyed on it
  * (`nav.products.<slug>.*`), so adding a pillar slug without its catalog

@@ -7,20 +7,59 @@
  * (ciphertext + IV) in organizationSettings.
  */
 
+import { Result, TaggedError } from "better-result";
 import * as v from "valibot";
 
 import { TANSTACK_AI_PROVIDERS } from "@stll/ai-catalog";
+import type { ModelOverrideGroup } from "@stll/ai-catalog";
+import { declareFingerprintFields } from "@stll/errors";
 
-import {
-  DECISION_MODEL_PROVIDERS,
-  normalizeOrgAIConfig,
-  type OrgAIConfig,
-} from "@/api/lib/ai-config";
+import { normalizeOrgAIConfig, type OrgAIConfig } from "@/api/lib/ai-config";
 import type { SafeId } from "@/api/lib/branded-types";
 import { decryptContent, encryptContent } from "@/api/lib/content-encryption";
 import type { EncryptedContent } from "@/api/lib/content-encryption";
+import { ConfigurationError } from "@/api/lib/errors/tagged-errors";
+import { logger } from "@/api/lib/observability/logger";
 
-const standardProviderSchema = v.picklist(TANSTACK_AI_PROVIDERS);
+export type OrgAIConfigReadFailure =
+  | "missing-key"
+  | "decryption-failed"
+  | "incomplete-envelope"
+  | "invalid-json"
+  | "invalid-schema";
+
+/** A content-free description of an unreadable decrypted configuration. */
+export class OrgAIConfigReadError extends TaggedError("OrgAIConfigReadError")<{
+  message: string;
+  reason: OrgAIConfigReadFailure;
+}> {
+  static {
+    declareFingerprintFields(this, ["reason"]);
+  }
+}
+
+export const unreadableOrgAIConfig = (
+  organizationId: SafeId<"organization">,
+  reason: OrgAIConfigReadFailure,
+): OrgAIConfigReadError => {
+  // This is deliberately independent from exception capture. The failure is
+  // anticipated (and capture policy suppresses it), but operators still need
+  // to distinguish a missing key from corrupt stored bytes.
+  logger.warn("organization_ai_config.read_failed", {
+    action: "decrypt",
+    organizationId,
+    reason,
+    source: "organization_ai_config",
+  });
+  return new OrgAIConfigReadError({
+    message: "Decrypted organization AI configuration is unreadable",
+    reason,
+  });
+};
+
+const standardProviderSchema = v.picklist(
+  TANSTACK_AI_PROVIDERS.filter((provider) => provider !== "anthropic"),
+);
 
 const modelSelectionProviderValues = [
   ...TANSTACK_AI_PROVIDERS,
@@ -34,6 +73,14 @@ const modelSelectionSchema = v.strictObject({
 });
 
 const providerSchema = v.variant("provider", [
+  v.strictObject({
+    provider: v.literal("anthropic"),
+    apiKey: v.pipe(v.string(), v.minLength(1)),
+    anthropicWorkspaceId: v.optional(
+      v.pipe(v.string(), v.minLength(1), v.maxLength(256)),
+    ),
+    region: v.optional(v.picklist(["eu", "global", "ch"])),
+  }),
   v.strictObject({
     provider: standardProviderSchema,
     apiKey: v.pipe(v.string(), v.minLength(1)),
@@ -52,21 +99,37 @@ const providerSchema = v.variant("provider", [
   }),
 ]);
 
-const decisionModelSchema = v.strictObject({
-  provider: v.picklist(DECISION_MODEL_PROVIDERS),
-  apiKey: v.pipe(v.string(), v.minLength(1)),
-  modelId: v.pipe(v.string(), v.minLength(1)),
-});
+const decisionModelSchema = v.variant("provider", [
+  v.strictObject({
+    provider: v.literal("typesafe"),
+    apiKey: v.pipe(v.string(), v.minLength(1)),
+    modelId: v.pipe(v.string(), v.minLength(1)),
+  }),
+  v.strictObject({
+    provider: v.literal("openai"),
+    apiKey: v.optional(v.pipe(v.string(), v.minLength(1))),
+    region: v.picklist(["eu", "global"]),
+    modelId: v.pipe(v.string(), v.minLength(1)),
+  }),
+]);
+
+// One entry per role, checked against the role list: the stored blob is read
+// strictly, so a role saved but missing here made the whole config unreadable.
+const overrideModelsSchemaEntries = {
+  fast: v.optional(modelSelectionSchema),
+  chat: v.optional(modelSelectionSchema),
+  reasoning: v.optional(modelSelectionSchema),
+  pdf: v.optional(modelSelectionSchema),
+  browse: v.optional(modelSelectionSchema),
+} satisfies Record<
+  ModelOverrideGroup,
+  v.OptionalSchema<typeof modelSelectionSchema, undefined>
+>;
 
 /** Validate the decrypted JSON matches OrgAIConfig shape. */
 const orgAIConfigSchema = v.strictObject({
   providers: v.pipe(v.array(providerSchema), v.minLength(1)),
-  overrideModels: v.strictObject({
-    fast: modelSelectionSchema,
-    chat: modelSelectionSchema,
-    reasoning: modelSelectionSchema,
-    pdf: modelSelectionSchema,
-  }),
+  overrideModels: v.nullable(v.strictObject(overrideModelsSchemaEntries)),
   // A blob written before the decision model existed has no key for it and
   // reads as "none", the same state clearing the setting writes.
   decision: v.optional(v.nullable(decisionModelSchema), null),
@@ -96,23 +159,53 @@ export const encryptAIConfig = async (
  */
 export const decryptAIConfig = async (
   organizationId: SafeId<"organization">,
-  ciphertext: Buffer,
-  iv: Buffer,
-): Promise<OrgAIConfig> => {
-  const json = await decryptContent(organizationId, ciphertext, iv);
-  const parsed: unknown = JSON.parse(json);
-  return normalizeOrgAIConfig(v.parse(orgAIConfigSchema, parsed));
+  ciphertext: Buffer | null | undefined,
+  iv: Buffer | null | undefined,
+  decrypt: typeof decryptContent = decryptContent,
+): Promise<Result<OrgAIConfig, OrgAIConfigReadError>> => {
+  if (!ciphertext || !iv) {
+    return Result.err(
+      unreadableOrgAIConfig(organizationId, "incomplete-envelope"),
+    );
+  }
+
+  const decrypted = await Result.tryPromise({
+    try: async () => await decrypt(organizationId, ciphertext, iv),
+    catch: (error: unknown) =>
+      error instanceof ConfigurationError
+        ? unreadableOrgAIConfig(organizationId, "missing-key")
+        : unreadableOrgAIConfig(organizationId, "decryption-failed"),
+  });
+  if (decrypted.isErr()) {
+    return Result.err(decrypted.error);
+  }
+  const json = decrypted.value;
+  const decoded = Result.try({
+    try: (): unknown => JSON.parse(json),
+    catch: () => unreadableOrgAIConfig(organizationId, "invalid-json"),
+  });
+  if (Result.isError(decoded)) {
+    return Result.err(decoded.error);
+  }
+  const parsed = v.safeParse(orgAIConfigSchema, decoded.value);
+  if (!parsed.success) {
+    return Result.err(unreadableOrgAIConfig(organizationId, "invalid-schema"));
+  }
+  return Result.ok(normalizeOrgAIConfig(parsed.output));
 };
 
 /**
- * Mask an API key for safe display. Reveals a prefix of at most 8 chars
- * (enough to identify which key a long, real credential is) but never more
- * than a quarter of the key's length, so a short or misconfigured key can
- * never expose a meaningful portion of the secret. A genuine 32+ char key
- * shows its 8-char prefix; a 16-char key shows only 4 (a quarter, not the
- * half the earlier `floor(length / 2)` rule would have leaked).
+ * Reveal only a recognized provider prefix and the final four characters.
+ * The length threshold applies to the secret after the prefix, so a short
+ * secret behind a long prefix is never shown in full.
  */
 export const maskApiKey = (key: string): string => {
-  const visibleChars = Math.min(8, Math.floor(key.length / 4));
-  return `${key.slice(0, visibleChars)}${"*".repeat(16)}`;
+  const prefix =
+    /^(sk-ant-(?:api\d+|usr)-|sk-or-v1-|sk-proj-|sk-svcacct-|sk-|AIza|ABSK|hf_)/u
+      .exec(key)
+      ?.at(0) ?? "";
+  if (key.length - prefix.length < 16) {
+    return "****";
+  }
+  return `${prefix}****${key.slice(-4)}`;
 };

@@ -1,16 +1,22 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
+
+import { chunk as chunkItems } from "@stll/concurrency/chunk";
 
 import type { JustificationContent } from "@/api/db/schema";
 import { env } from "@/api/env";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import {
+  AVT_LAYOUT_FEATURE_ACCESS,
+  avtViewAccessStatus,
+  isAvtLayoutVisible,
+} from "@/api/lib/auth/feature-access/view-eligibility";
 // oxlint-disable-next-line no-restricted-imports -- export boundary: brands field ids returned by queryEntities (server-validated, workspace-scoped) to re-hydrate their justifications from Postgres
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { chunked } from "@/api/lib/chunked";
-import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
+import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
 import { queryEntities } from "@/api/lib/entities/query-entities";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
@@ -34,12 +40,14 @@ import { DOCX_MIME_TYPE, XLSX_MIME_TYPE } from "@/api/mime-types";
 const JUSTIFICATION_FIELD_ID_BATCH = 1000;
 
 const config = {
+  contract: "patch",
   accountAccess: ACCOUNT_ACCESS.standard,
   contentDelivery: { type: "audited" },
   description:
     "Export one view's rows as a file in CSV, XLSX, or DOCX, using the " +
     "columns, filters, and ordering the view defines. Returns the file " +
     "bytes; views.list describes a view but never its rows.",
+  featureAccess: AVT_LAYOUT_FEATURE_ACCESS,
   permissions: { workspace: ["read"] },
   mcp: {
     type: "capability",
@@ -59,10 +67,8 @@ const config = {
         "no capability returns a view's rendered row set; views.list describes the view, not its rows",
     },
   },
-  params: workspaceParams({ viewId: tSafeId("workspaceView") }),
-  query: t.Object({
-    format: t.Union([t.Literal("csv"), t.Literal("xlsx"), t.Literal("docx")]),
-  }),
+  params: workspaceParams({ viewId: resourceIdSchema("workspaceView") }),
+  query: v.object({ format: v.picklist(["csv", "xlsx", "docx"]) }),
 } satisfies WorkspaceHandlerConfig;
 
 const exportTableView = createSafeHandler(
@@ -74,9 +80,15 @@ const exportTableView = createSafeHandler(
     session,
     request,
     recordAuditEvent,
+    featureAccessSnapshot,
     params: { viewId },
     query,
   }) {
+    const avtAccessStatus = avtViewAccessStatus({
+      snapshot: featureAccessSnapshot,
+      organizationId: session.activeOrganizationId,
+      userId: user.id,
+    });
     const view = yield* Result.await(
       safeDb((tx) =>
         tx.query.workspaceViews.findFirst({
@@ -96,6 +108,12 @@ const exportTableView = createSafeHandler(
     if (!view) {
       return Result.err(
         new HandlerError({ status: 404, message: "View not found" }),
+      );
+    }
+
+    if (!isAvtLayoutVisible(view.layout, avtAccessStatus)) {
+      return Result.err(
+        new HandlerError({ status: 404, message: "Not found" }),
       );
     }
 
@@ -155,6 +173,7 @@ const exportTableView = createSafeHandler(
     // widths or content wrapping does not affect cell values.
     const queryResult = yield* Result.await(
       queryEntities({
+        textMode: "full",
         safeDb,
         scope: { type: "matter", workspaceId },
         currentUserId: user.id,
@@ -193,7 +212,7 @@ const exportTableView = createSafeHandler(
       const justificationRows = yield* Result.await(
         safeDb(async (tx) => {
           const rows: { fieldId: string; content: JustificationContent }[] = [];
-          for (const fieldIdBatch of chunked(
+          for (const fieldIdBatch of chunkItems(
             commentFieldIds,
             JUSTIFICATION_FIELD_ID_BATCH,
           )) {

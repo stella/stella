@@ -2,7 +2,8 @@ import { Result } from "better-result";
 import { expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { propertyConfig, propertyTestTimeout } from "@stll/property-testing";
+import { CHAT_TOOL_EXECUTOR_METADATA_KEY } from "@stll/api-contract/chat";
+import { assertProperty, propertyTestTimeout } from "@stll/property-testing";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import {
@@ -12,6 +13,7 @@ import {
 import { validateMessage } from "@/api/handlers/chat/chat-schema";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { ChatToolMap } from "@/api/lib/chat/chat-tool-types";
+import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { isRecord } from "@/api/lib/type-guards";
 
 const CALL_ID = "call_property_continuation";
@@ -108,6 +110,7 @@ const continuationOutcome = async ({
       role: "assistant",
       parts: [
         {
+          metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
           type: "tool-call",
           id: HISTORICAL_CALL_ID,
           name: historicalToolName,
@@ -123,6 +126,7 @@ const continuationOutcome = async ({
           state: "complete",
         },
         {
+          metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
           type: "tool-call",
           id: CALL_ID,
           name: TOOL_NAME,
@@ -134,11 +138,13 @@ const continuationOutcome = async ({
     }),
   );
   const result = await validateMessage({
+    toolCallOwnership: "cloud",
     message: {
       id,
       role: "assistant",
       parts: [
         {
+          metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
           type: "tool-call",
           id: CALL_ID,
           name: TOOL_NAME,
@@ -164,6 +170,7 @@ const continuationOutcome = async ({
       },
     ],
     safeDb: noDbReads,
+    refRegistry: createChatRefRegistry(),
     threadId: toSafeId<"chatThread">("thread_property_continuation"),
     tools,
     userId: toSafeId<"user">("user_property_continuation"),
@@ -174,7 +181,8 @@ const continuationOutcome = async ({
 test(
   "a continuation is judged only by the awaited call, not historical snapshot shape",
   async () => {
-    await fc.assert(
+    await assertProperty(
+      "a continuation is judged only by the awaited call, not historical snapshot shape",
       fc.asyncProperty(inputArbitrary, async (canonicalInput) => {
         const echoedInput = nullWidenedRecord(canonicalInput);
         expect(await continuationOutcome({ canonicalInput, echoedInput })).toBe(
@@ -203,7 +211,7 @@ test(
           ).toBe(REJECTED);
         }
       }),
-      propertyConfig({ numRuns: 60 }),
+      { numRuns: 60 },
     );
   },
   propertyTestTimeout(15_000),
@@ -222,7 +230,8 @@ const unregisteredToolNameArbitrary = fc
 test(
   "a settled historical call is accepted whatever tools this request registers",
   async () => {
-    await fc.assert(
+    await assertProperty(
+      "a settled historical call is accepted whatever tools this request registers",
       fc.asyncProperty(
         inputArbitrary,
         unregisteredToolNameArbitrary,
@@ -236,7 +245,7 @@ test(
           ).toBe(ACCEPTED);
         },
       ),
-      propertyConfig({ numRuns: 60 }),
+      { numRuns: 60 },
     );
   },
   propertyTestTimeout(15_000),

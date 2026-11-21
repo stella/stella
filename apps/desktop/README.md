@@ -1,6 +1,6 @@
 ## stella desktop
 
-Tauri 2 companion app for managed Office file editing from stella.
+Tauri 2 companion app that opens Office documents from stella in your local apps and saves edits back, and keeps a clipboard history that stays on your device.
 
 ### Local development
 
@@ -115,6 +115,10 @@ Example:
 export STELLA_DESKTOP_RELEASE_BASE_URL="https://downloads.stll.app/desktop/prod"
 bun run --cwd apps/desktop build
 ```
+
+Organizations can turn off in-app updates and the activity timeline, and
+pre-approve their self-hosted server, through a configuration profile or
+Group Policy: see [Managed deployment](docs/managed-deployment.md).
 
 ### Notes
 

@@ -1,32 +1,39 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import { CHAT_PROMPT_IMPROVEMENT_STRATEGIES } from "@stll/api-contract/chat";
 
 import { buildPromptImprovementModelInput } from "@/api/handlers/chat/improve-prompt-instructions";
 import { resolveCaching } from "@/api/lib/ai-config";
+import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
+import { storedAIConfigUnreadableError } from "@/api/lib/ai-config-response";
 import { aiHandlerError } from "@/api/lib/ai-error";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
-import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
+import {
+  ACCOUNT_ACCESS,
+  configuredModelAdmission,
+  createSafeRootHandler,
+} from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { generateTanStackTextForRole } from "@/api/lib/tanstack-ai-generate";
+import { generateTanStackTextForTask } from "@/api/lib/tanstack-ai-generate";
 
 const config = {
+  contract: "patch",
   actionAdmission: { type: "handler", actionKind: "chat.improve-prompt" },
   permissions: { chat: ["create"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "assistant_chat" },
-  body: t.Object({
-    prompt: t.String({ minLength: 1, maxLength: 12_000 }),
-    strategy: t.UnionEnum(CHAT_PROMPT_IMPROVEMENT_STRATEGIES),
-    sendMode: t.Union([
-      t.Literal(CHAT_SEND_MODE.anonymized),
-      t.Literal(CHAT_SEND_MODE.rawOverride),
+  body: v.object({
+    prompt: v.pipe(v.string(), v.minLength(1), v.maxLength(12_000)),
+    strategy: v.picklist(CHAT_PROMPT_IMPROVEMENT_STRATEGIES),
+    sendMode: v.union([
+      v.literal(CHAT_SEND_MODE.anonymized),
+      v.literal(CHAT_SEND_MODE.rawOverride),
     ]),
   }),
-  requiresUsage: { actionType: "chat", modelRole: "fast" },
+  requiresUsage: { actionType: "chat", modelTask: "short-text" },
 } satisfies HandlerConfig;
 
 const IMPROVE_PROMPT_TIMEOUT_MS = 20_000;
@@ -35,16 +42,22 @@ const IMPROVE_PROMPT_MAX_OUTPUT_TOKENS = 4096;
 const improvePrompt = createSafeRootHandler(
   config,
   async function* ({
+    orgAIConfigStatus,
     actionSignal,
     body,
     orgAIConfig,
     managedAIResidency,
+    modelAdmission,
     promptCachingEnabled,
     request,
     safeDb,
     session,
     user,
   }) {
+    if (orgAIConfigStatus === ORG_AI_CONFIG_STATUS.unreadable) {
+      return Result.err(storedAIConfigUnreadableError());
+    }
+
     if (body.sendMode === CHAT_SEND_MODE.anonymized) {
       return Result.err(
         new HandlerError({
@@ -75,8 +88,9 @@ const improvePrompt = createSafeRootHandler(
         workspaceId: null,
       },
       feature: "chat.improve_prompt",
-      modelRole: "fast",
+      modelTask: "short-text",
       orgAIConfig,
+      modelTier: configuredModelAdmission({ modelAdmission }).modelTier,
       properties: { organization_id: session.activeOrganizationId },
       traceId: Bun.randomUUIDv7(),
     });
@@ -88,25 +102,25 @@ const improvePrompt = createSafeRootHandler(
             prompt,
             body.strategy,
           );
-          return await generateTanStackTextForRole({
+          return await generateTanStackTextForTask({
+            userId: user.id,
             dataClass: "customer",
-            abortSignal: AbortSignal.any([
-              actionSignal ?? request.signal,
-              AbortSignal.timeout(IMPROVE_PROMPT_TIMEOUT_MS),
-            ]),
+            abortSignal: actionSignal ?? request.signal,
+            deadlineMs: IMPROVE_PROMPT_TIMEOUT_MS,
             analytics: aiAnalytics,
             caching: resolveCaching({
               promptCachingEnabled,
-              role: "fast",
+              task: "short-text",
               scopeKey: null,
             }),
             finishPolicy: "require-complete",
             messages: modelInput.messages,
             maxOutputTokens: IMPROVE_PROMPT_MAX_OUTPUT_TOKENS,
             organizationId: session.activeOrganizationId,
+            admission: configuredModelAdmission({ modelAdmission }),
             orgAIConfig,
             managedAIResidency,
-            role: "fast",
+            task: "short-text",
             serviceTier: "standard",
             system: modelInput.system,
             systemPromptOrigin: "server-built",
@@ -128,7 +142,11 @@ const improvePrompt = createSafeRootHandler(
     )).trim();
     if (improvedPrompt.length === 0) {
       return Result.err(
-        new HandlerError({ status: 502, message: "Empty improved prompt" }),
+        new HandlerError({
+          status: 502,
+          code: "internal_error",
+          message: "Empty improved prompt",
+        }),
       );
     }
 

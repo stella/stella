@@ -3,6 +3,7 @@ import { sql } from "drizzle-orm";
 import nodePath from "node:path";
 
 import { rootDb } from "@/api/db/root";
+import { assertDatabaseLoginPosture } from "@/api/lib/db/assert-database-login-posture";
 import {
   type AppliedMigration,
   assertMigrationHistory,
@@ -10,14 +11,15 @@ import {
 import {
   type ApplicationRlsRolePosture,
   applicationRlsRolePostureViolation,
-  type DatabaseLoginPosture,
-  databaseLoginPostureNotes,
   type IngestionRolePosture,
   ingestionRolePostureViolation,
 } from "@/api/lib/db/rls-role-posture";
 import { logger } from "@/api/lib/observability/logger";
 
-import { assertOnlineMigrationsApplied } from "../../db/online-migrations";
+import {
+  ONLINE_MIGRATION_REPAIRS,
+  reportOnlineMigrations,
+} from "../../db/online-migrations";
 import {
   APPLICATION_RLS_ROLE_NAME,
   INGESTION_ROLE_NAME,
@@ -26,8 +28,10 @@ import {
 const MIGRATIONS_DIR = nodePath.resolve(process.cwd(), "drizzle");
 const ESCAPE_HATCH_ENV = "SKIP_MIGRATION_CHECK";
 
-export const assertApplicationRlsRolePosture = async (): Promise<void> => {
-  const result = await rootDb.execute<ApplicationRlsRolePosture>(sql`
+export const assertApplicationRlsRolePosture = async (
+  database: typeof rootDb,
+): Promise<void> => {
+  const result = await database.execute<ApplicationRlsRolePosture>(sql`
     SELECT
       app_role.rolbypassrls AS "bypassesRls",
       pg_has_role(CURRENT_USER, app_role.oid, 'SET') AS "canAssumeRole",
@@ -61,39 +65,6 @@ const assertIngestionRolePosture = async (): Promise<void> => {
   }
 };
 
-/** Reads the connecting login's role attributes and logs the notable ones. */
-export const reportDatabaseLoginPosture = async (): Promise<
-  DatabaseLoginPosture | undefined
-> => {
-  const result = await rootDb.execute<DatabaseLoginPosture>(sql`
-    SELECT
-      login.rolname AS "loginName",
-      login.rolbypassrls AS "bypassesRls",
-      login.rolsuper AS "isSuperuser",
-      (
-        SELECT count(*)::int
-        FROM pg_catalog.pg_class relation
-        WHERE relation.relowner = login.oid
-          AND relation.relkind IN ('r', 'p')
-          AND relation.relrowsecurity
-      ) AS "ownedPolicyTables"
-    FROM pg_catalog.pg_roles login
-    WHERE login.rolname = CURRENT_USER
-  `);
-  const posture = result.at(0);
-  if (posture === undefined) {
-    return undefined;
-  }
-  const notes = databaseLoginPostureNotes(posture);
-  if (notes.length > 0) {
-    logger.warn("startup.database_login_posture", {
-      login: posture.loginName,
-      notes: notes.join("; "),
-    });
-  }
-  return posture;
-};
-
 const queryAppliedRows = async (): Promise<readonly AppliedMigration[]> => {
   const result = await rootDb.execute<AppliedMigration>(
     sql`SELECT name, hash FROM drizzle.__drizzle_migrations`,
@@ -102,9 +73,9 @@ const queryAppliedRows = async (): Promise<readonly AppliedMigration[]> => {
 };
 
 export const assertMigrationsApplied = async (): Promise<void> => {
-  await assertApplicationRlsRolePosture();
+  await assertDatabaseLoginPosture(rootDb);
+  await assertApplicationRlsRolePosture(rootDb);
   await assertIngestionRolePosture();
-  await reportDatabaseLoginPosture();
   if (process.env[ESCAPE_HATCH_ENV] === "true") {
     logger.warn("startup.migration_check_disabled", {
       escape_hatch_env: ESCAPE_HATCH_ENV,
@@ -120,17 +91,46 @@ export const assertMigrationsApplied = async (): Promise<void> => {
       `Run \`bun run db:migrate\` against this database, or set ${ESCAPE_HATCH_ENV}=true ` +
       "to bypass the check (emergency only).",
   });
-  await assertOnlineMigrationsApplied({
-    reserve: async () => {
-      const connection = await rootDb.$client.reserve();
-      return {
-        execute: async (query, params = []) => {
-          await connection.unsafe(query, [...params]);
-        },
-        query: async (query, params = []) =>
-          await connection.unsafe(query, [...params]),
-        release: () => connection.release(),
-      };
+  const onlineReport = await reportOnlineMigrations(
+    {
+      reserve: async () => {
+        const connection = await rootDb.$client.reserve();
+        return {
+          execute: async (query, params = []) => {
+            await connection.unsafe(query, [...params]);
+          },
+          query: async (query, params = []) =>
+            await connection.unsafe(query, [...params]),
+          release: async () => {
+            await connection.release();
+          },
+        };
+      },
     },
-  });
+    { repairs: ONLINE_MIGRATION_REPAIRS },
+  );
+  switch (onlineReport.type) {
+    case "migrator_active":
+      logger.warn("startup.online_validation_left_to_migrator");
+      return;
+    case "validated":
+      // Boots anyway (see `reportPendingRepair`), but an operator must know:
+      // the next migrate run repairs it, and a writer may be breaking it.
+      if (onlineReport.report.regressed.length > 0) {
+        logger.error("startup.online_repair_regressed", {
+          newestAppliedMigration: onlineReport.report.newestAppliedMigration,
+          repairs: onlineReport.report.regressed,
+        });
+      }
+      if (onlineReport.report.pending.length > 0) {
+        logger.warn("startup.online_migrations_pending", {
+          newestAppliedMigration: onlineReport.report.newestAppliedMigration,
+          steps: onlineReport.report.pending,
+        });
+      }
+      return;
+    default:
+      onlineReport satisfies never;
+      return panic("Unknown online validation outcome");
+  }
 };

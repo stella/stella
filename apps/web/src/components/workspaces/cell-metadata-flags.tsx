@@ -1,4 +1,4 @@
-import { useLayoutEffect, useMemo, useRef } from "react";
+import { useLayoutEffect, useRef } from "react";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useDebouncedCallback } from "use-debounce";
@@ -7,6 +7,7 @@ import { useTranslations } from "use-intl";
 import { isReviewFlag, REVIEW_FLAG } from "@stll/api-contract";
 import type { ReviewFlag } from "@stll/api-contract";
 import { BidiText } from "@stll/ui/bidi-text";
+import { Button } from "@stll/ui/button";
 import {
   CheckCircle2Icon,
   LockIcon,
@@ -19,7 +20,9 @@ import {
   MenuItem,
   MenuSeparator,
 } from "@stll/ui/menu";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { useLatest } from "@stll/ui/use-latest";
+import { cn } from "@stll/ui/utils";
 
 import {
   REVIEW_FLAG_PRESENTATION,
@@ -35,7 +38,7 @@ import {
 import { useMountEffect } from "@/hooks/use-effect";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { formatRelativeTime } from "@/lib/relative-time";
@@ -61,6 +64,16 @@ const cellFlagDefinition = (id: CellFlagId): CellFlagDefinition => ({
 });
 
 const VERIFIED_CELL_FLAG = cellFlagDefinition(VERIFIED_FLAG_ID);
+
+// The 12px corner badges sit 2px from the cell edge and end 14px down: inside
+// the cell's 8px padding and the space above a value's first line (a `py-1`
+// control, or a shorter item centred on that line), so they never cover text.
+// Their backing is a plain tint: every cell draws two of them, and a backdrop
+// filter would make each its own compositing layer.
+const CELL_CORNER_CLASS = {
+  start: "absolute start-0.5 top-0.5 z-20",
+  end: "absolute end-0.5 top-0.5 z-20",
+} as const;
 
 export const getCellFlagById = (
   flagId: string,
@@ -162,19 +175,26 @@ export const CellMetadataFlags = ({
         <Tooltip
           content={t("workspaces.table.lock.lock")}
           render={
-            <button
+            <Button
               aria-label={t("workspaces.table.lock.lock")}
-              className="bg-background/55 text-foreground-ghost focus-visible:ring-ring absolute start-1 top-1 z-20 flex size-3 items-center justify-center rounded-full opacity-0 backdrop-blur-[2px] transition-opacity outline-none group-hover/cell-content:opacity-100 focus-visible:ring-1"
+              className={cn(
+                CELL_CORNER_CLASS.start,
+                "flex opacity-0 transition-opacity group-hover/cell-content:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100",
+              )}
               data-row-expansion-ignore
               onClick={(event) => {
                 event.stopPropagation();
                 setLocked(true);
               }}
-              type="button"
+              focusRing="inside"
+              shape="round"
+              variant="plain"
             />
           }
         >
-          <LockOpenIcon className="size-2.5" strokeWidth={2.5} />
+          <span className="text-foreground-ghost bg-background/85 flex size-3 items-center justify-center rounded-full">
+            <LockOpenIcon className="size-2.5" strokeWidth={2.5} />
+          </span>
         </Tooltip>
       )}
       {hasActiveFlag ? (
@@ -193,18 +213,25 @@ export const CellMetadataFlags = ({
             />
           }
           render={
-            <button
+            <Button
               aria-label={getFlagLabel(VERIFIED_FLAG_ID)}
-              className="bg-background/55 text-foreground-ghost focus-visible:ring-ring absolute end-1 top-1 z-20 flex size-3 items-center justify-center rounded-full opacity-0 backdrop-blur-[2px] transition-opacity outline-none group-hover/cell-content:opacity-100 focus-visible:ring-1"
+              className={cn(
+                CELL_CORNER_CLASS.end,
+                "flex opacity-0 transition-opacity group-hover/cell-content:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100",
+              )}
               onClick={(event) => {
                 event.stopPropagation();
                 toggleFlag(VERIFIED_FLAG_ID);
               }}
-              type="button"
+              focusRing="inside"
+              shape="round"
+              variant="plain"
             />
           }
         >
-          <CheckCircle2Icon className="size-2.5" strokeWidth={2.5} />
+          <span className="text-foreground-ghost bg-background/85 flex size-3 items-center justify-center rounded-full">
+            <CheckCircle2Icon className="size-2.5" strokeWidth={2.5} />
+          </span>
         </Tooltip>
       )}
     </>
@@ -225,7 +252,7 @@ const CellCornerFlag = ({ flags, metadata, onDrop }: CellCornerFlagProps) => {
 
   return (
     <div
-      className="absolute end-1 top-1 z-20 flex items-center gap-1"
+      className={cn(CELL_CORNER_CLASS.end, "flex items-center gap-1")}
       data-row-expansion-ignore
     >
       {flags.map((flag) => {
@@ -239,20 +266,26 @@ const CellCornerFlag = ({ flags, metadata, onDrop }: CellCornerFlagProps) => {
             }
             key={flag.id}
             render={
-              <button
+              <Button
                 aria-label={getFlagLabel(flag.id)}
-                className="bg-background/55 focus-visible:ring-ring flex size-3 items-center justify-center rounded-full opacity-100 backdrop-blur-[2px] outline-none focus-visible:ring-1"
+                className="flex"
                 data-row-expansion-ignore
                 onClick={(event) => {
                   event.stopPropagation();
                   onDrop(flag.id);
                 }}
-                style={{ color: flag.color }}
-                type="button"
+                focusRing="inside"
+                shape="round"
+                variant="plain"
               />
             }
           >
-            <Icon className="size-2.5" strokeWidth={2.5} />
+            <span
+              className="bg-background/85 flex size-3 items-center justify-center rounded-full"
+              style={{ color: flag.color }}
+            >
+              <Icon className="size-2.5" strokeWidth={2.5} />
+            </span>
           </Tooltip>
         );
       })}
@@ -280,10 +313,10 @@ const CellLockBadge = ({ provenance, onUnlock }: CellLockBadgeProps) => {
         name={displayName}
       />
       <span className="min-w-0">
-        <span className="block truncate font-medium">
+        <TruncatedText className="font-medium" hint={false}>
           {t("workspaces.table.lock.locked")}
-        </span>
-        <span className="text-muted-foreground block truncate text-xs">
+        </TruncatedText>
+        <TruncatedText className="text-muted-foreground text-xs" hint={false}>
           {displayName ? (
             <>
               <BidiText>{displayName}</BidiText>
@@ -293,7 +326,7 @@ const CellLockBadge = ({ provenance, onUnlock }: CellLockBadgeProps) => {
           ) : (
             relativeTime
           )}
-        </span>
+        </TruncatedText>
       </span>
     </span>
   ) : (
@@ -305,18 +338,22 @@ const CellLockBadge = ({ provenance, onUnlock }: CellLockBadgeProps) => {
       className="max-w-72 text-wrap"
       content={tooltipContent}
       render={
-        <button
+        <Button
           aria-label={t("workspaces.table.lock.unlock")}
-          className="bg-background/55 text-foreground focus-visible:ring-ring animate-in fade-in-0 zoom-in-75 absolute start-1 top-1 z-20 flex size-3 items-center justify-center rounded-full backdrop-blur-[2px] duration-150 outline-none focus-visible:ring-1 motion-reduce:animate-none"
+          className={cn(CELL_CORNER_CLASS.start, "flex")}
           data-row-expansion-ignore
           onClick={(event) => {
             event.stopPropagation();
             onUnlock();
           }}
-          type="button"
+          focusRing="inside"
+          shape="round"
+          variant="plain"
         >
-          <LockIcon className="size-2.5" strokeWidth={2.5} />
-        </button>
+          <span className="text-foreground animate-in fade-in-0 zoom-in-75 bg-background/85 flex size-3 items-center justify-center rounded-full duration-150 motion-reduce:animate-none">
+            <LockIcon className="size-2.5" strokeWidth={2.5} />
+          </span>
+        </Button>
       }
     />
   );
@@ -348,8 +385,10 @@ const FlagProvenanceTooltip = ({
         name={displayName}
       />
       <span className="min-w-0">
-        <span className="block truncate font-medium">{label}</span>
-        <span className="text-muted-foreground block truncate text-xs">
+        <TruncatedText className="font-medium" hint={false}>
+          {label}
+        </TruncatedText>
+        <TruncatedText className="text-muted-foreground text-xs" hint={false}>
           {displayName ? (
             <>
               <BidiText>{displayName}</BidiText>
@@ -359,7 +398,7 @@ const FlagProvenanceTooltip = ({
           ) : (
             relativeTime
           )}
-        </span>
+        </TruncatedText>
       </span>
     </span>
   );
@@ -417,9 +456,9 @@ export const CellMetadataMenuSection = ({
           <MenuSeparator />
           <MenuItem className="min-h-7 py-0.5 text-sm" onClick={clearFlags}>
             <XIcon className="size-3.5 shrink-0 opacity-75" />
-            <span className="min-w-0 flex-1 truncate">
+            <TruncatedText className="flex-1">
               {t("workspaces.table.clearFlags")}
-            </span>
+            </TruncatedText>
           </MenuItem>
         </>
       )}
@@ -447,9 +486,8 @@ export const useCellMetadataFlags = ({
   );
 
   const serverManualFlags = metadata?.manualFlags;
-  const metadataManualFlags = useMemo(
-    () => normalizeManualFlags(serverManualFlags ?? NO_MANUAL_FLAGS),
-    [serverManualFlags],
+  const metadataManualFlags = normalizeManualFlags(
+    serverManualFlags ?? NO_MANUAL_FLAGS,
   );
   const serverLocked = metadata?.locked === true;
 
@@ -474,26 +512,19 @@ export const useCellMetadataFlags = ({
     }
   }, [key, metadataManualFlags, override, serverLocked]);
 
-  const activeFlags = useMemo(
-    () =>
-      currentManualFlags.flatMap((flagId) => {
-        const flag = getCellFlagById(flagId);
-        return flag === undefined ? [] : [flag];
-      }),
-    [currentManualFlags],
-  );
+  const activeFlags = currentManualFlags.flatMap((flagId) => {
+    const flag = getCellFlagById(flagId);
+    return flag === undefined ? [] : [flag];
+  });
   const hasVerifiedFlag = currentManualFlags.includes(VERIFIED_FLAG_ID);
-  const tintFlag = useMemo(
-    () =>
-      TINT_PRIORITY.flatMap((flagId) => {
-        if (!currentManualFlags.includes(flagId)) {
-          return [];
-        }
-        const flag = getCellFlagById(flagId);
-        return flag === undefined ? [] : [flag];
-      }).at(0) ?? null,
-    [currentManualFlags],
-  );
+  const tintFlag =
+    TINT_PRIORITY.flatMap((flagId) => {
+      if (!currentManualFlags.includes(flagId)) {
+        return [];
+      }
+      const flag = getCellFlagById(flagId);
+      return flag === undefined ? [] : [flag];
+    }).at(0) ?? null;
 
   // Refs let the debounced flush read the latest server snapshot
   // without re-creating the callback on every prop change.
@@ -532,7 +563,7 @@ export const useCellMetadataFlags = ({
           ...(locked !== undefined && { locked }),
         });
 
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     scope: { id: `cell-metadata:${workspaceId}:${entityId}:${propertyId}` },
     onSuccess: () => {

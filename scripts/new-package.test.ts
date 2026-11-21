@@ -83,6 +83,7 @@ test("scaffolds the package files and registers the knip workspace", () => {
     files: [
       "packages/matter-dates/package.json",
       "packages/matter-dates/tsconfig.json",
+      "packages/matter-dates/bunfig.toml",
       "packages/matter-dates/src/index.ts",
       "packages/matter-dates/README.md",
       "knip.json",
@@ -100,8 +101,9 @@ test("scaffolds the package files and registers the knip workspace", () => {
     exports: { ".": "./src/index.ts" },
     scripts: {
       test: "bun test src",
-      typecheck: "bun ../../packages/scripts/src/tsc-native.ts --noEmit",
-      format: "bun ../../scripts/run-oxfmt.ts .",
+      typecheck: "bun check --no-pretty --all --project=tsconfig.json",
+      lint: "cd ../.. && bun scripts/lint.ts packages/matter-dates",
+      "lint:fix": "cd ../.. && bun scripts/lint.ts --fix packages/matter-dates",
     },
     devDependencies: {
       "@stll/typescript-config": "workspace:*",
@@ -139,7 +141,7 @@ test("scaffolds the package files and registers the knip workspace", () => {
   });
 });
 
-// The scaffold's own output is the fixture, and oxfmt is the oracle: no
+// The scaffold's own output is the fixture, and bun fmt is the oracle: no
 // hand-written expectation can drift away from what the formatter does.
 test("scaffolded files need no formatting pass", () => {
   const root = createRoot();
@@ -152,24 +154,29 @@ test("scaffolded files need no formatting pass", () => {
     throw new Error(`scaffold rejected: ${result.message}`);
   }
 
-  const scaffolded = result.files.filter((rel) => rel !== "knip.json");
+  // The formatter has no TOML parser.
+  const scaffolded = result.files.filter(
+    (rel) => rel !== "knip.json" && !rel.endsWith(".toml"),
+  );
   const before = scaffolded.map((rel) => read(root, rel));
 
-  const formatter = Bun.spawnSync(
-    [
-      process.execPath,
-      "--bun",
-      "oxfmt",
-      "-c",
-      path.join(REPO_ROOT, ".oxfmtrc.json"),
-      ...scaffolded.map((rel) => path.join(root, rel)),
-    ],
-    { cwd: REPO_ROOT, stderr: "pipe", stdout: "pipe" },
-  );
-  expect(formatter.stderr.toString()).toBe("");
-  expect(formatter.exitCode).toBe(0);
+  // Each file is formatted at its repository path, under the root bunfig.toml.
+  const formatted = scaffolded.map((rel, index) => {
+    const formatter = Bun.spawnSync(
+      [process.execPath, "fmt", "--stdin-filepath", rel],
+      {
+        cwd: REPO_ROOT,
+        stdin: Buffer.from(before[index] ?? ""),
+        stderr: "pipe",
+        stdout: "pipe",
+      },
+    );
+    expect(formatter.stderr.toString()).toBe("");
+    expect(formatter.exitCode).toBe(0);
+    return formatter.stdout.toString();
+  });
 
-  expect(scaffolded.map((rel) => read(root, rel))).toEqual(before);
+  expect(formatted).toEqual(before);
 });
 
 test("appends after the last packages entry when the name sorts last", () => {

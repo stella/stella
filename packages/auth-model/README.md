@@ -20,13 +20,14 @@ product permissions. Every additional field, index, or plugin model must be
 declared explicitly when comparing the normalized host schema.
 
 ```ts
+import { createAccessControl } from "better-auth/plugins/access";
+
 import {
   BETTER_AUTH_ADAPTER_OPTIONS,
   BETTER_AUTH_ORGANIZATION_OPTIONS,
   BETTER_AUTH_ORGANIZATION_ROLE_GRANTS,
   BETTER_AUTH_ORGANIZATION_STATEMENTS,
 } from "@stll/auth-model";
-import { createAccessControl } from "better-auth/plugins/access";
 
 const statements = {
   ...BETTER_AUTH_ORGANIZATION_STATEMENTS,

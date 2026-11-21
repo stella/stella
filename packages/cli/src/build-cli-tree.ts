@@ -20,17 +20,22 @@ import type {
   Command,
   CommandBuilderArguments,
   RouteMap,
+  TypedFlagParameter,
 } from "@stricli/core";
-import { panic } from "better-result";
 
 import packageJson from "../package.json" with { type: "json" };
+import { bulkIdsFlag } from "./batch/bulk.js";
 import { determineCommandExitCode } from "./cli-exit-code.js";
 import { authRoute } from "./commands/auth.js";
+import { buildBatchCommand } from "./commands/batch.js";
 import { compatibilityRoute } from "./commands/compatibility.js";
+import { doctorCommand } from "./commands/doctor.js";
+import { updateCommand } from "./commands/update.js";
 import { uploadCommand } from "./commands/upload.js";
 import type { Context } from "./context.js";
 import { expandSchemaDefs } from "./expand-schema-defs.js";
 import { flagBrief } from "./flag-help.js";
+import { MCP_CAPABILITY_EXECUTORS } from "./generated/mcp-contract.js";
 import { generatedResourceTree } from "./generated/resource-tree.js";
 import {
   buildInputContractHelp,
@@ -43,14 +48,13 @@ import {
 } from "./local-file-flag.js";
 import { exitCodeEntries } from "./mcp-constants.js";
 import { buildCommonFlags, buildServerFlag } from "./output-flags.js";
+import type { CommonFlagValues } from "./output-flags.js";
 import type { ResourceLeafSpec, ResourceNode } from "./resource-types.js";
-import {
-  type CapabilityLeafSpec,
-  type DisabledCommands,
-  type FlagSpec,
-  type LeafCommandSpec,
-  NO_DISABLED_COMMANDS,
-  type RouteNode,
+import type {
+  CapabilityLeafSpec,
+  FlagSpec,
+  LeafCommandSpec,
+  RouteNode,
 } from "./route-types.js";
 import { runCapabilityCommand } from "./run-capability-command.js";
 import {
@@ -75,7 +79,11 @@ const identity = (value: string): string => value;
  * exactly the bug that made optional array flags (e.g. `--assignee-ids`)
  * unusable when left off.
  */
-type OptionalStricliFlag = { readonly optional: true };
+type OptionalStricliFlag = (
+  | TypedFlagParameter<string | undefined, Context>
+  | TypedFlagParameter<boolean | undefined, Context>
+  | TypedFlagParameter<readonly string[] | undefined, Context>
+) & { readonly optional: true };
 
 const parsedStringFlag = (brief: string) =>
   ({ brief, kind: "parsed", optional: true, parse: identity }) as const;
@@ -131,59 +139,76 @@ const hasLimitProp = (spec: LeafCommandSpec): boolean => {
   return "limit" in properties;
 };
 
-const buildLeafFlags = (spec: LeafCommandSpec): Record<string, unknown> => {
-  const flags: Record<string, unknown> = buildCommonFlags();
+const buildLeafFlags = (
+  spec: LeafCommandSpec,
+): Record<string, OptionalStricliFlag> => {
+  const flags = new Map<string, OptionalStricliFlag>(
+    Object.entries(buildCommonFlags()),
+  );
 
   for (const flagSpec of spec.flags) {
-    flags[flagKey(flagSpec)] = buildFlag(flagSpec);
+    flags.set(flagKey(flagSpec), buildFlag(flagSpec));
   }
 
   // Reserved global flags every command carries (spec S1/S3).
-  flags[RESERVED_FLAG_KEYS.input] = parsedStringFlag(
-    "Full tool-args JSON ('<json>' | - stdin | @file); explicit value flags override matching paths in the JSON",
+  flags.set(
+    RESERVED_FLAG_KEYS.input,
+    parsedStringFlag(
+      "Full tool-args JSON ('<json>' | - stdin | @file); explicit value flags override matching paths in the JSON",
+    ),
   );
-  flags[RESERVED_FLAG_KEYS.noInput] = booleanFlag(
-    "Never prompt; fail closed (exit 7) where a confirmation is required",
-    false,
+  flags.set(
+    RESERVED_FLAG_KEYS.noInput,
+    booleanFlag(
+      "Never prompt; fail closed (exit 7) where a confirmation is required",
+      false,
+    ),
   );
-  flags[RESERVED_FLAG_KEYS.schema] = booleanFlag(
-    "Print this command's input JSON schema and exit",
-    false,
+  flags.set(
+    RESERVED_FLAG_KEYS.schema,
+    booleanFlag("Print this command's input JSON schema and exit", false),
   );
   if (spec.localFileBase64Prop !== undefined) {
-    flags[LOCAL_FILE_FLAG_KEY] = parsedStringFlag(
-      localFileFlagBrief(spec.localFileBase64Prop, spec.inputSchema),
+    flags.set(
+      LOCAL_FILE_FLAG_KEY,
+      parsedStringFlag(
+        localFileFlagBrief(spec.localFileBase64Prop, spec.inputSchema),
+      ),
     );
   }
 
   if (spec.paginated) {
-    flags[RESERVED_FLAG_KEYS.cursor] = parsedStringFlag(
-      "Opaque pagination cursor from a previous page",
+    flags.set(
+      RESERVED_FLAG_KEYS.cursor,
+      parsedStringFlag("Opaque pagination cursor from a previous page"),
     );
     // A per-entry cursor has no single page to follow, so the leaf that
     // carries one does not offer `--all`; see `LeafCommandSpec.followable`.
     if (spec.followable) {
-      flags[RESERVED_FLAG_KEYS.all] = booleanFlag(
-        "Follow cursors and return every page (bounded)",
-        false,
+      flags.set(
+        RESERVED_FLAG_KEYS.all,
+        booleanFlag("Follow cursors and return every page (bounded)", false),
       );
     }
     if (hasLimitProp(spec)) {
-      flags[RESERVED_FLAG_KEYS.limit] = parsedStringFlag("Max items per page");
+      flags.set(
+        RESERVED_FLAG_KEYS.limit,
+        parsedStringFlag("Max items per page"),
+      );
     }
   }
 
   // A destructive leaf gets --yes for its upfront prompt; a confirm-passthrough
-  // leaf (per-target destructiveness, e.g. `capability invoke`) gets it so the
+  // leaf (per-target destructiveness, e.g. `capability write`) gets it so the
   // caller can pre-approve the server's confirmation_required gate.
   if (spec.destructive || spec.confirmPassthrough === true) {
-    flags[RESERVED_FLAG_KEYS.yes] = booleanFlag(
-      "Skip the destructive-op confirmation prompt",
-      false,
+    flags.set(
+      RESERVED_FLAG_KEYS.yes,
+      booleanFlag("Skip the destructive-op confirmation prompt", false),
     );
   }
 
-  return flags;
+  return Object.fromEntries(flags);
 };
 
 const leafBrief = (spec: LeafCommandSpec): string => {
@@ -273,51 +298,9 @@ const fullDescription = ({
   return lines.join("\n");
 };
 
-const DISABLED_PHRASE = "disabled on this server";
-
-/** The suffix a gated-off command's brief carries in --help and tools list. */
-export const DISABLED_MARKER: string = `[${DISABLED_PHRASE}]`;
-
-/** `DisabledCommands` as lookup sets, built once per app. */
-type DisabledLookup = {
-  tools: ReadonlySet<string>;
-  capabilities: ReadonlySet<string>;
-};
-
-/**
- * Whether the server attested a node as gated off: a leaf it named, or a group
- * whose every command it named. The one predicate behind every marker (leaf
- * and group --help briefs, root --help, tools list).
- */
-const isDisabled = (node: RouteNode, disabled: DisabledLookup): boolean => {
-  switch (node.kind) {
-    case "leaf":
-      return disabled.tools.has(node.spec.toolName);
-    case "capability-leaf":
-      return disabled.capabilities.has(node.spec.capabilityId);
-    case "route": {
-      const children = Object.values(node.children);
-      return (
-        children.length > 0 &&
-        children.every((child) => isDisabled(child, disabled))
-      );
-    }
-    default: {
-      node satisfies never;
-      return panic(`Unhandled route node: ${String(node)}`);
-    }
-  }
-};
-
-const withDisabledMarker = (brief: string, marked: boolean): string =>
-  marked ? `${brief} ${DISABLED_MARKER}` : brief;
-
-const buildLeafCommand = (
-  spec: LeafCommandSpec,
-  disabled: boolean,
-): RoutingTarget => {
+const buildLeafCommand = (spec: LeafCommandSpec): RoutingTarget => {
   const flags = buildLeafFlags(spec);
-  const brief = withDisabledMarker(leafBrief(spec), disabled);
+  const brief = leafBrief(spec);
   const description = fullDescription({
     brief,
     discriminatorInject: spec.discriminatorInject,
@@ -341,12 +324,10 @@ const buildLeafCommand = (
       await runLeafCommand({ context: this, flags: parsedFlags, spec });
     },
   };
-  // SAFETY: flags is assembled from FlagSpecs at build time, so the concrete
-  // FLAGS generic cannot be spelled out; every entry is a valid stricli flag
-  // parameter and the executor reads flags by name.
+  // SAFETY: each dynamic flag is checked above; stricli cannot express mixed flag kinds under one string index signature.
   const typedArgs: CommandBuilderArguments<BaseFlags, [], Context> =
-    // oxlint-disable-next-line no-unsafe-type-assertion -- see SAFETY comment above
-    builderArgs as unknown as CommandBuilderArguments<BaseFlags, [], Context>;
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- see SAFETY comment above
+    builderArgs as CommandBuilderArguments<BaseFlags, [], Context>;
   return buildCommand(typedArgs);
 };
 
@@ -367,9 +348,9 @@ const capabilityInputHint = (spec: CapabilityLeafSpec): string => {
 /**
  * The command's `--help` brief. The catalog's authored description is the whole
  * point of the single-registry design, so it wins outright; the id-derived line
- * survives only as the fallback for a capability that has not been given a
- * description yet (a shrinking set, listed by id in
- * apps/api/capability-description-ledger.json).
+ * survives only as the fallback for a catalog entry without one, which
+ * apps/api/scripts/capability-description-guard.ts rejects in the committed
+ * catalog.
  */
 const capabilityLeafBrief = (spec: CapabilityLeafSpec): string => {
   const hint = capabilityInputHint(spec);
@@ -381,39 +362,57 @@ const capabilityLeafBrief = (spec: CapabilityLeafSpec): string => {
 
 const buildCapabilityLeafFlags = (
   spec: CapabilityLeafSpec,
-): Record<string, unknown> => {
-  const flags: Record<string, unknown> = buildCommonFlags();
+): Record<string, OptionalStricliFlag> => {
+  const flags = new Map<string, OptionalStricliFlag>(
+    Object.entries(buildCommonFlags()),
+  );
 
   for (const flagSpec of spec.flags) {
-    flags[flagKey(flagSpec)] = buildFlag(flagSpec);
+    flags.set(flagKey(flagSpec), buildFlag(flagSpec));
   }
 
-  flags[RESERVED_FLAG_KEYS.input] = parsedStringFlag(
-    "Full capability input JSON ({ body?, params?, query? }: '<json>' | - stdin | @file); explicit value flags override matching paths in the JSON",
+  flags.set(
+    RESERVED_FLAG_KEYS.input,
+    parsedStringFlag(
+      "Full capability input JSON ({ body?, params?, query? }: '<json>' | - stdin | @file); explicit value flags override matching paths in the JSON",
+    ),
   );
-  flags[RESERVED_FLAG_KEYS.noInput] = booleanFlag(
-    "Never prompt; fail closed (exit 7) where a confirmation is required",
-    false,
+  flags.set(
+    RESERVED_FLAG_KEYS.noInput,
+    booleanFlag(
+      "Never prompt; fail closed (exit 7) where a confirmation is required",
+      false,
+    ),
   );
-  flags[RESERVED_FLAG_KEYS.schema] = booleanFlag(
-    "Print this command's input JSON schema and exit",
-    false,
+  flags.set(
+    RESERVED_FLAG_KEYS.schema,
+    booleanFlag("Print this command's input JSON schema and exit", false),
+  );
+  flags.set(
+    RESERVED_FLAG_KEYS.save,
+    parsedStringFlag(
+      "Write the file the result's downloadUrl points to at this path (-o); for commands that return a download link",
+    ),
   );
   if (spec.access === "write") {
-    flags[RESERVED_FLAG_KEYS.dryRun] = booleanFlag(
-      "Validate the input server-side and return without executing (validate_only)",
-      false,
+    flags.set(
+      RESERVED_FLAG_KEYS.dryRun,
+      booleanFlag(
+        "Validate the input server-side and return without executing (validate_only)",
+        false,
+      ),
     );
   }
 
   if (spec.paginated) {
-    flags[RESERVED_FLAG_KEYS.cursor] = parsedStringFlag(
-      "Opaque pagination cursor from a previous page",
+    flags.set(
+      RESERVED_FLAG_KEYS.cursor,
+      parsedStringFlag("Opaque pagination cursor from a previous page"),
     );
-    flags[RESERVED_FLAG_KEYS.limit] = parsedStringFlag("Max items per page");
-    flags[RESERVED_FLAG_KEYS.all] = booleanFlag(
-      "Follow cursors and return every page (bounded)",
-      false,
+    flags.set(RESERVED_FLAG_KEYS.limit, parsedStringFlag("Max items per page"));
+    flags.set(
+      RESERVED_FLAG_KEYS.all,
+      booleanFlag("Follow cursors and return every page (bounded)", false),
     );
   }
 
@@ -421,21 +420,26 @@ const buildCapabilityLeafFlags = (
   // accepts --yes (pre-approve) alongside the TTY prompt/retry flow; a read has
   // nothing to confirm.
   if (spec.access === "write") {
-    flags[RESERVED_FLAG_KEYS.yes] = booleanFlag(
-      "Skip the destructive-op confirmation prompt",
-      false,
+    flags.set(
+      RESERVED_FLAG_KEYS.yes,
+      booleanFlag("Skip the destructive-op confirmation prompt", false),
     );
   }
 
-  return flags;
+  return Object.fromEntries(flags);
 };
 
 const buildCapabilityLeafCommand = (
   spec: CapabilityLeafSpec,
-  disabled: boolean,
 ): RoutingTarget => {
   const flags = buildCapabilityLeafFlags(spec);
-  const brief = withDisabledMarker(capabilityLeafBrief(spec), disabled);
+  const ids = bulkIdsFlag(spec);
+  if (ids !== undefined && flagKey(ids) !== "ids") {
+    flags["ids"] = variadicFlag(
+      "IDs as a comma-separated list or @file (one ID per line)",
+    );
+  }
+  const brief = capabilityLeafBrief(spec);
   const description = fullDescription({
     brief,
     // Help must read the same shape `--input` validates against. The baked
@@ -455,7 +459,7 @@ const buildCapabilityLeafCommand = (
       brief,
       ...(description === undefined ? {} : { fullDescription: description }),
     },
-    parameters: { flags },
+    parameters: { aliases: { o: RESERVED_FLAG_KEYS.save }, flags },
     func: async function func(
       this: Context,
       parsedFlags: Record<string, unknown>,
@@ -463,56 +467,37 @@ const buildCapabilityLeafCommand = (
       await runCapabilityCommand({ context: this, flags: parsedFlags, spec });
     },
   };
+  // SAFETY: each dynamic flag is checked above; stricli cannot express mixed flag kinds under one string index signature.
   const typedArgs: CommandBuilderArguments<BaseFlags, [], Context> =
-    // oxlint-disable-next-line no-unsafe-type-assertion -- see SAFETY comment on buildLeafCommand
-    builderArgs as unknown as CommandBuilderArguments<BaseFlags, [], Context>;
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- see SAFETY comment above
+    builderArgs as CommandBuilderArguments<BaseFlags, [], Context>;
   return buildCommand(typedArgs);
 };
 
-const buildRouteNode = (
-  node: RouteNode,
-  brief: string,
-  disabled: DisabledLookup,
-): RoutingTarget => {
+const buildRouteNode = (node: RouteNode, brief: string): RoutingTarget => {
   if (node.kind === "leaf") {
-    return buildLeafCommand(node.spec, isDisabled(node, disabled));
+    return buildLeafCommand(node.spec);
   }
   if (node.kind === "capability-leaf") {
-    return buildCapabilityLeafCommand(node.spec, isDisabled(node, disabled));
+    return buildCapabilityLeafCommand(node.spec);
   }
   return buildRouteMap({
     docs: { brief },
-    routes: buildGeneratedRoutes(node, disabled),
+    routes: buildGeneratedRoutes(node),
   });
 };
 
-/**
- * A group's brief marks what the server gated off: the plain marker when every
- * command under it is, otherwise the gated-off children by name, so a parent
- * listing (root --help included) shows it without opening the group.
- */
 const routeBrief = ({
   name,
   node,
-  disabled,
 }: {
   name: string;
   node: RouteNode;
-  disabled: DisabledLookup;
 }): string => {
   if (node.kind !== "route") {
     return name;
   }
-  const brief = groupBrief(name, node.children);
-  if (isDisabled(node, disabled)) {
-    return `${brief} ${DISABLED_MARKER}`;
-  }
-  const gatedOff = Object.entries(node.children)
-    .filter(([, child]) => isDisabled(child, disabled))
-    .map(([childName]) => childName);
-  return gatedOff.length === 0
-    ? brief
-    : `${brief} [${DISABLED_PHRASE}: ${gatedOff.join(", ")}]`;
+  return groupBrief(name, node.children);
 };
 
 /**
@@ -521,19 +506,16 @@ const routeBrief = ({
  */
 const buildGeneratedRoutes = (
   node: RouteNode,
-  disabled: DisabledLookup,
 ): Record<string, RoutingTarget> => {
   if (node.kind !== "route") {
     return {};
   }
-  const routes: Record<string, RoutingTarget> = {};
-  for (const [name, child] of Object.entries(node.children)) {
-    routes[name] = buildRouteNode(
-      child,
-      routeBrief({ name, node: child, disabled }),
-      disabled,
-    );
-  }
+  const routes = Object.fromEntries(
+    Object.entries(node.children).map(([name, child]) => [
+      name,
+      buildRouteNode(child, routeBrief({ name, node: child })),
+    ]),
+  );
   return routes;
 };
 
@@ -548,15 +530,12 @@ const buildResourceLeaf = (spec: ResourceLeafSpec): RoutingTarget => {
     parameters: { flags: buildCommonFlags() },
     func: async function func(
       this: Context,
-      parsedFlags: Record<string, unknown>,
+      parsedFlags: CommonFlagValues,
     ): Promise<void> {
       await runResourceCommand({ context: this, flags: parsedFlags, spec });
     },
   };
-  const typedArgs: CommandBuilderArguments<BaseFlags, [], Context> =
-    // oxlint-disable-next-line no-unsafe-type-assertion -- see SAFETY comment on buildLeafCommand
-    builderArgs as unknown as CommandBuilderArguments<BaseFlags, [], Context>;
-  return buildCommand(typedArgs);
+  return buildCommand(builderArgs);
 };
 
 const buildResourceNode = (
@@ -566,10 +545,12 @@ const buildResourceNode = (
   if (node.kind === "leaf") {
     return buildResourceLeaf(node.spec);
   }
-  const routes: Record<string, RoutingTarget> = {};
-  for (const [name, child] of Object.entries(node.children)) {
-    routes[name] = buildResourceNode(child, resourceBrief(name, child));
-  }
+  const routes = Object.fromEntries(
+    Object.entries(node.children).map(([name, child]) => [
+      name,
+      buildResourceNode(child, resourceBrief(name, child)),
+    ]),
+  );
   return buildRouteMap({ docs: { brief }, routes });
 };
 
@@ -581,12 +562,14 @@ const resourceBrief = (name: string, node: ResourceNode): string =>
  * `RouteMap` for the reserved `reference` top-level command (spec S5.4).
  */
 const buildResourceRoutes = (node: ResourceNode): RouteMap<Context> => {
-  const routes: Record<string, RoutingTarget> = {};
-  if (node.kind === "route") {
-    for (const [name, child] of Object.entries(node.children)) {
-      routes[name] = buildResourceNode(child, resourceBrief(name, child));
-    }
-  }
+  const routes = Object.fromEntries(
+    node.kind === "route"
+      ? Object.entries(node.children).map(([name, child]) => [
+          name,
+          buildResourceNode(child, resourceBrief(name, child)),
+        ])
+      : [],
+  );
   return buildRouteMap({
     docs: { brief: "Read the server's static reference resources" },
     routes,
@@ -599,28 +582,19 @@ const collectLeafPaths = (
   node: RouteNode,
   path: readonly string[],
   lines: string[],
-  disabled: DisabledLookup,
 ): void => {
   if (node.kind === "leaf") {
-    lines.push(
-      withDisabledMarker(
-        `${path.join(" ")}\t(${node.spec.toolName})`,
-        isDisabled(node, disabled),
-      ),
-    );
+    lines.push(`${path.join(" ")}\t(${node.spec.toolName})`);
     return;
   }
   if (node.kind === "capability-leaf") {
     lines.push(
-      withDisabledMarker(
-        `${path.join(" ")}\t(invoke_capability: ${node.spec.capabilityId})`,
-        isDisabled(node, disabled),
-      ),
+      `${path.join(" ")}\t(${MCP_CAPABILITY_EXECUTORS[node.spec.access]}: ${node.spec.capabilityId})`,
     );
     return;
   }
   for (const [name, child] of Object.entries(node.children)) {
-    collectLeafPaths(child, [...path, name], lines, disabled);
+    collectLeafPaths(child, [...path, name], lines);
   }
 };
 
@@ -641,10 +615,7 @@ const HELP_FORMATTING = {
   caseStyle: "convert-camel-to-kebab",
 } as const;
 
-const buildRootRoute = (
-  tree: RouteNode,
-  disabled: DisabledLookup,
-): RouteMap<Context> => {
+const buildRootRoute = (tree: RouteNode): RouteMap<Context> => {
   const toolsListCommand = buildCommand<
     { readonly server: string | undefined },
     [],
@@ -658,7 +629,7 @@ const buildRootRoute = (
       const lines: string[] = [];
       // Reflect the ACTIVE tree (the cached-listings tree when the server
       // registry has diverged), not the baked-in one.
-      collectLeafPaths(tree, [], lines, disabled);
+      collectLeafPaths(tree, [], lines);
       this.process.stdout.write(`${lines.toSorted().join("\n")}\n`);
     },
     parameters: { flags: buildServerFlag() },
@@ -676,11 +647,14 @@ const buildRootRoute = (
     },
     routes: {
       auth: authRoute,
+      batch: buildBatchCommand(tree),
       compatibility: compatibilityRoute,
+      doctor: doctorCommand,
+      update: updateCommand,
       upload: uploadCommand,
       tools: toolsRoute,
       reference: buildResourceRoutes(generatedResourceTree),
-      ...buildGeneratedRoutes(tree, disabled),
+      ...buildGeneratedRoutes(tree),
     },
   });
 };
@@ -690,15 +664,9 @@ const buildRootRoute = (
  * lives here rather than in `cli.ts` so tests can walk the real route tree the
  * CLI dispatches against instead of a re-wired copy of it.
  */
-export const buildApp = (
-  tree: RouteNode,
-  disabled: DisabledCommands = NO_DISABLED_COMMANDS,
-): Application<Context> =>
+export const buildApp = (tree: RouteNode): Application<Context> =>
   buildApplication(
-    buildRootRoute(tree, {
-      tools: new Set(disabled.tools),
-      capabilities: new Set(disabled.capabilities),
-    }),
+    buildRootRoute(tree),
     {
       name: "stella",
       // A hand-written command's returned `CliCommandError` carries its exit

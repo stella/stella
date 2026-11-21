@@ -4,17 +4,21 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, test } from "bun:test";
 import { IntlProvider } from "use-intl";
 
-import type { Block } from "@stll/legal-ast/document-ast";
-import { SEARCH_HIT_MARK, textMarkClass } from "@stll/ui/text-mark";
-
 import {
   HEADING_CLASS,
   InlineContent,
-} from "@/components/legal-reader/document-ast-text";
+} from "@stll/decision-reader/document-ast-text";
+import type { Block } from "@stll/legal-ast/document-ast";
+import { E_SBIRKA_ANCHORS } from "@stll/legal-ast/statute-anchor-scheme";
+import { compareStatuteBlocks } from "@stll/legal-ast/statute-compare";
+import { compareText, markSide } from "@stll/legal-ast/statute-diff-marks";
+import type { StatuteCompareSide } from "@stll/legal-ast/statute-diff-marks";
+import { SEARCH_HIT_MARK, textMarkClass } from "@stll/ui/text-mark";
+
+import { WebReaderPresentationProvider } from "@/components/legal-reader/web-reader-presentation";
 import { StatuteBlock } from "@/features/statutes/components/statute-text";
-import { compareStatuteBlocks } from "@/features/statutes/statute-compare";
-import { compareText, markSide } from "@/features/statutes/statute-diff-marks";
-import type { StatuteCompareSide } from "@/features/statutes/statute-diff-marks";
+import { statuteComparisonAdapter } from "@/features/statutes/statute-comparison-adapter";
+import { FormattingProvider } from "@/i18n/formatting-context";
 import messages from "@/i18n/langs/en.json";
 
 // The comparison sets each cell through the reader's own block renderer, so
@@ -25,7 +29,11 @@ import messages from "@/i18n/langs/en.json";
 const renderWithIntl = (children: ReactNode) =>
   renderToStaticMarkup(
     <IntlProvider locale="en" messages={messages} timeZone="UTC">
-      {children}
+      <FormattingProvider locale="en" timeZone="UTC">
+        <WebReaderPresentationProvider>
+          {children}
+        </WebReaderPresentationProvider>
+      </FormattingProvider>
     </IntlProvider>,
   );
 
@@ -38,6 +46,7 @@ const renderSide = (side: StatuteCompareSide) =>
           block={block}
           key={block.id}
           rangesByPieceId={rangesByPieceId}
+          statuteAnchors={E_SBIRKA_ANCHORS}
         />
       ))}
     </>,
@@ -114,7 +123,11 @@ describe("compared blocks render as the reader renders them", () => {
     provisionHeading("Price of sold goods"),
     letter("a) the agreed purchase price,"),
   ];
-  const compared = compareStatuteBlocks({ newer, older });
+  const compared = compareStatuteBlocks({
+    newer,
+    older,
+    adapter: statuteComparisonAdapter,
+  });
   if (compared.isErr()) {
     throw compared.error;
   }
@@ -126,6 +139,7 @@ describe("compared blocks render as the reader renders them", () => {
         anchorPresentation="document"
         block={newer[0] ?? provisionHeading("")}
         rangesByPieceId={{}}
+        statuteAnchors={E_SBIRKA_ANCHORS}
       />,
     );
     const cell = renderSide(headingRow?.after ?? { blocks: [], segments: [] });

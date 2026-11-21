@@ -1,6 +1,11 @@
 import { describe, expect, test } from "bun:test";
 
-import { accountPresentation } from "../src/mainview/account-presentation";
+import {
+  accountDisplay,
+  accountPresentation,
+  accountStatusTone,
+  serverHost,
+} from "../src/mainview/account-presentation";
 import type { LinkedAccountSnapshot } from "../src/shared/rpc";
 
 const LINKED_ACCOUNT = {
@@ -8,42 +13,110 @@ const LINKED_ACCOUNT = {
   name: "Example User",
   verifiedAt: "2026-09-12T20:00:00Z",
 } satisfies LinkedAccountSnapshot;
+const SERVER = "https://my.stll.app";
 
 describe("desktop account presentation", () => {
-  test("a saved account presents web access instead of another connection prompt", () => {
+  test("a saved account names its server and offers disconnecting", () => {
     expect(
       accountPresentation({
         status: "connected",
         identity: { userId: "user_fixture", organizationId: "org_fixture" },
         account: LINKED_ACCOUNT,
         expiresAt: "2026-09-19T20:00:00Z",
+        server: SERVER,
       }),
     ).toEqual({
-      actionKey: "disconnectAccount",
+      actionKey: "disconnect",
+      actionVariant: "ghost",
+      descriptionKey: null,
+      host: "my.stll.app",
       status: "linked",
       statusKey: "accountLinked",
-      webDescriptionKey: "stellaWebAccountDescription",
-      webTitleKey: "stellaWebAccount",
     });
   });
 
-  test("a missing account presents the initial connection action", () => {
-    expect(accountPresentation({ status: "disconnected" })).toEqual({
-      actionKey: "connectToStella",
+  test("a missing account offers connecting to the named server", () => {
+    expect(
+      accountPresentation({ status: "disconnected", server: SERVER }),
+    ).toEqual({
+      actionKey: "connectToHost",
+      actionVariant: "default",
+      descriptionKey: "connectToHostDescription",
+      host: "my.stll.app",
       status: "not-linked",
       statusKey: "notConnected",
-      webDescriptionKey: "connectToStellaDescription",
-      webTitleKey: "connectToStella",
+    });
+  });
+
+  test("an expired account asks for attention and offers reconnecting", () => {
+    expect(accountPresentation({ status: "expired", server: SERVER })).toEqual({
+      actionKey: "reconnect",
+      actionVariant: "default",
+      descriptionKey: "reconnectHostDescription",
+      host: "my.stll.app",
+      status: "attention",
+      statusKey: "connectionExpired",
+    });
+  });
+
+  test("an unavailable device key asks for attention, not a lookup retry", () => {
+    expect(
+      accountPresentation({ status: "reconnectRequired", server: SERVER }),
+    ).toEqual({
+      actionKey: "reconnect",
+      actionVariant: "default",
+      descriptionKey: "reconnectHostDescription",
+      host: "my.stll.app",
+      status: "attention",
+      statusKey: "reconnectNeeded",
     });
   });
 
   test("an account read failure never presents the account as disconnected", () => {
     expect(accountPresentation({ status: "unavailable" })).toEqual({
       actionKey: "tryAgain",
+      actionVariant: "outline",
+      descriptionKey: "errorReadAccount",
+      host: null,
       status: "unavailable",
       statusKey: "notAvailableYet",
-      webDescriptionKey: "errorReadAccount",
-      webTitleKey: "stellaWebAccount",
     });
+  });
+
+  test("a linked account shows its name and initials, or its email without a name", () => {
+    const connected = {
+      status: "connected",
+      identity: { userId: "user_fixture", organizationId: "org_fixture" },
+      account: LINKED_ACCOUNT,
+      expiresAt: "2026-09-19T20:00:00Z",
+      server: SERVER,
+    } as const;
+    expect(accountDisplay(connected)).toMatchObject({
+      email: "user@example.com",
+      initials: "EU",
+      name: "Example User",
+    });
+    expect(
+      accountDisplay({
+        ...connected,
+        account: { ...LINKED_ACCOUNT, name: "  " },
+      }),
+    ).toMatchObject({ initials: "US", name: "user@example.com" });
+    expect(
+      accountDisplay({ status: "disconnected", server: SERVER }),
+    ).toMatchObject({ email: null, initials: null, name: null });
+  });
+
+  test("the status dot says nothing until the account is read", () => {
+    expect(accountStatusTone("linked")).toBe("success");
+    expect(accountStatusTone("attention")).toBe("warning");
+    expect(accountStatusTone("not-linked")).toBe("neutral");
+    expect(accountStatusTone("unavailable")).toBe("neutral");
+    expect(accountStatusTone("loading")).toBeNull();
+  });
+
+  test("the server reads as the host a person recognises", () => {
+    expect(serverHost("http://localhost:3332")).toBe("localhost:3332");
+    expect(serverHost("not a url")).toBe("not a url");
   });
 });

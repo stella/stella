@@ -3,7 +3,10 @@ import { describe, expect, test } from "bun:test";
 import type { ProvisionReference } from "@stll/legal-ast/provision-reference";
 
 import type { RenderProvisionPart } from "@/features/case-law/provision-label";
-import { formatProvisionReference } from "@/features/case-law/provision-label";
+import {
+  formatProvisionLabel,
+  formatProvisionReference,
+} from "@/features/case-law/provision-label";
 
 // Stands in for the catalog, in the Czech wording the example citation uses.
 const render: RenderProvisionPart = (key, value) => {
@@ -86,5 +89,41 @@ describe("formatProvisionReference", () => {
         render,
       ),
     ).toBe("§ 265");
+  });
+});
+
+describe("formatProvisionLabel", () => {
+  test("a code that prints its own citations reads as it prints them", () => {
+    expect(
+      formatProvisionLabel(
+        "USA",
+        reference({
+          section: 1026,
+          sectionSuffix: ".18",
+          subsection: "(c)(1)",
+        }),
+        render,
+      ),
+    ).toBe("§ 1026.18(c)(1)");
+    expect(
+      formatProvisionLabel(
+        "USA",
+        reference({ section: 1983, openEnded: true }),
+        render,
+      ),
+    ).toBe("§ 1983 et seq.");
+  });
+
+  test("every other jurisdiction is assembled from the catalog's words", () => {
+    const czech = reference({
+      letter: "g",
+      sectionSuffix: "b",
+      subsection: "1",
+    });
+    for (const jurisdiction of ["CZE", "SVK", "XXX"]) {
+      expect(formatProvisionLabel(jurisdiction, czech, render)).toBe(
+        formatProvisionReference(czech, render),
+      );
+    }
   });
 });

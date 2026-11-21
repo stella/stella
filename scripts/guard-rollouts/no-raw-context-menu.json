@@ -1,0 +1,18 @@
+{
+  "id": "no-raw-context-menu",
+  "rules": ["no-raw-context-menu/no-raw-context-menu"],
+  "type": "full",
+  "check": [
+    "bun",
+    "--bun",
+    "oxlint",
+    "-c",
+    "oxlint.config.ts",
+    "--allow",
+    "all",
+    "--deny",
+    "no-raw-context-menu/no-raw-context-menu",
+    "apps/web/src",
+    "apps/desktop/src"
+  ]
+}

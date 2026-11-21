@@ -1,8 +1,12 @@
+import { panic } from "better-result";
+
 import type { McpDefaultResourceScope } from "@stll/api-contract";
+import { MCP_CAPABILITY_EXECUTORS } from "@stll/api-contract/mcp-capability-executors";
 
 import { unreachable } from "@/api/lib/errors/tagged-errors";
 import { BILLING_TOOL_SET } from "@/api/mcp/billing-tools";
 import { CAPABILITY_TOOL_SET } from "@/api/mcp/capability-tools";
+import { CASE_LAW_COURT_CATALOG_TOOL_SET } from "@/api/mcp/case-law-court-catalog-tool";
 import { LAW_COMPAT_TOOL_SET } from "@/api/mcp/compat-law-tools";
 import { COMPAT_TOOL_SET } from "@/api/mcp/compat-tools";
 import {
@@ -10,13 +14,18 @@ import {
   MCP_DEFAULT_RESOURCE_SCOPES,
 } from "@/api/mcp/constants";
 import type { McpMode } from "@/api/mcp/constants";
+import { DECISION_READER_TOOL_SET } from "@/api/mcp/decision-reader-tools";
 import { DOCUMENT_TOOL_SET } from "@/api/mcp/document-tools";
 import { FEEDBACK_TOOL_SET } from "@/api/mcp/feedback-tools";
 import { KNOWLEDGE_TOOL_SET } from "@/api/mcp/knowledge-tools";
+import { LEGAL_RESOLVE_TOOL_SET } from "@/api/mcp/legal-resolve-tools";
 import { LEGISLATION_TOOL_SET } from "@/api/mcp/legislation-tools";
 import { MATTER_TOOL_SET } from "@/api/mcp/matter-tools";
 import { READER_ANNOTATION_TOOL_SET } from "@/api/mcp/reader-annotation-tools";
 import { RESEARCH_ADMIN_TOOL_SET } from "@/api/mcp/research-admin-tools";
+import { SOFT_LAW_TOOL_SET } from "@/api/mcp/soft-law-tools";
+import { MCP_STATIC_TOOL_NAMES } from "@/api/mcp/static-tool-names";
+import type { McpToolName } from "@/api/mcp/static-tool-names";
 import { STELLA_TOOL_SET } from "@/api/mcp/stella-tools";
 import { TEMPLATE_TOOL_SET } from "@/api/mcp/template-tools";
 import {
@@ -26,15 +35,51 @@ import {
 import type {
   McpToolDefinition,
   McpToolHandler,
-  RuntimeMcpToolOutputContract,
   McpToolSet,
+  RuntimeMcpToolOutputContract,
   ToolScope,
 } from "@/api/mcp/tool-types";
+import {
+  isMcpToolVisibleTo,
+  type McpToolVisibleTo,
+} from "@/api/mcp/tool-visibility";
+import { VERIFY_QUOTE_TOOL_SET } from "@/api/mcp/verify-quote-tools";
+import { WEB_HANDOFF_TOOL_SET } from "@/api/mcp/web-handoff-links";
+import { advertisedMcpOutputSchema } from "@/api/mcp/write-result-omission";
+import type { PublicCorpusClass } from "@/api/public-corpus-policy";
 
-export const DEFAULT_MCP_TOOL_SETS = [
+export { MCP_STATIC_TOOL_NAMES };
+
+type DefaultMcpToolSets = readonly [
+  typeof COMPAT_TOOL_SET,
+  typeof STELLA_TOOL_SET,
+  typeof VERIFY_QUOTE_TOOL_SET,
+  typeof DECISION_READER_TOOL_SET,
+  typeof CASE_LAW_COURT_CATALOG_TOOL_SET,
+  typeof LEGISLATION_TOOL_SET,
+  typeof SOFT_LAW_TOOL_SET,
+  typeof LEGAL_RESOLVE_TOOL_SET,
+  typeof TEMPLATE_TOOL_SET,
+  typeof DOCUMENT_TOOL_SET,
+  typeof MATTER_TOOL_SET,
+  typeof KNOWLEDGE_TOOL_SET,
+  typeof READER_ANNOTATION_TOOL_SET,
+  typeof BILLING_TOOL_SET,
+  typeof RESEARCH_ADMIN_TOOL_SET,
+  typeof FEEDBACK_TOOL_SET,
+  typeof CAPABILITY_TOOL_SET,
+  typeof WEB_HANDOFF_TOOL_SET,
+];
+
+export const DEFAULT_MCP_TOOL_SETS: DefaultMcpToolSets = [
   COMPAT_TOOL_SET,
   STELLA_TOOL_SET,
+  VERIFY_QUOTE_TOOL_SET,
+  DECISION_READER_TOOL_SET,
+  CASE_LAW_COURT_CATALOG_TOOL_SET,
   LEGISLATION_TOOL_SET,
+  SOFT_LAW_TOOL_SET,
+  LEGAL_RESOLVE_TOOL_SET,
   TEMPLATE_TOOL_SET,
   DOCUMENT_TOOL_SET,
   MATTER_TOOL_SET,
@@ -44,46 +89,76 @@ export const DEFAULT_MCP_TOOL_SETS = [
   RESEARCH_ADMIN_TOOL_SET,
   FEEDBACK_TOOL_SET,
   CAPABILITY_TOOL_SET,
-] as const satisfies readonly McpToolSet<readonly McpToolDefinition[]>[];
+  WEB_HANDOFF_TOOL_SET,
+];
 
 // Keep this schema-sensitive projection as a literal tuple: flattening the
 // heterogeneous sets with Array.flatMap widens their definition types and
 // destroys the exact tool-name union used throughout chat. The bidirectional
 // compile check below makes the explicit projection unable to drift from the
 // canonical tool-set registry.
-export const DEFAULT_MCP_TOOL_DEFINITIONS = [
-  ...COMPAT_TOOL_SET.definitions,
-  ...STELLA_TOOL_SET.definitions,
-  ...LEGISLATION_TOOL_SET.definitions,
-  ...TEMPLATE_TOOL_SET.definitions,
-  ...DOCUMENT_TOOL_SET.definitions,
-  ...MATTER_TOOL_SET.definitions,
-  ...KNOWLEDGE_TOOL_SET.definitions,
-  ...READER_ANNOTATION_TOOL_SET.definitions,
-  ...BILLING_TOOL_SET.definitions,
-  ...RESEARCH_ADMIN_TOOL_SET.definitions,
-  ...FEEDBACK_TOOL_SET.definitions,
-  ...CAPABILITY_TOOL_SET.definitions,
-] as const satisfies readonly McpToolDefinition[];
+type RegisteredMcpToolDefinition =
+  (typeof DEFAULT_MCP_TOOL_SETS)[number]["definitions"][number];
+
+export const DEFAULT_MCP_TOOL_DEFINITIONS: readonly RegisteredMcpToolDefinition[] =
+  [
+    ...COMPAT_TOOL_SET.definitions,
+    ...STELLA_TOOL_SET.definitions,
+    ...VERIFY_QUOTE_TOOL_SET.definitions,
+    ...DECISION_READER_TOOL_SET.definitions,
+    ...CASE_LAW_COURT_CATALOG_TOOL_SET.definitions,
+    ...LEGISLATION_TOOL_SET.definitions,
+    ...SOFT_LAW_TOOL_SET.definitions,
+    ...LEGAL_RESOLVE_TOOL_SET.definitions,
+    ...TEMPLATE_TOOL_SET.definitions,
+    ...DOCUMENT_TOOL_SET.definitions,
+    ...MATTER_TOOL_SET.definitions,
+    ...KNOWLEDGE_TOOL_SET.definitions,
+    ...READER_ANNOTATION_TOOL_SET.definitions,
+    ...BILLING_TOOL_SET.definitions,
+    ...RESEARCH_ADMIN_TOOL_SET.definitions,
+    ...FEEDBACK_TOOL_SET.definitions,
+    ...CAPABILITY_TOOL_SET.definitions,
+    ...WEB_HANDOFF_TOOL_SET.definitions,
+  ];
+
+type ModelVisibleMcpToolDefinition = McpToolVisibleTo<
+  (typeof DEFAULT_MCP_TOOL_DEFINITIONS)[number],
+  "model"
+>;
+
+/** Static definitions visible to the model; app-only tools cannot enter chat registries. */
+export const MODEL_VISIBLE_MCP_TOOL_DEFINITIONS =
+  DEFAULT_MCP_TOOL_DEFINITIONS.filter(
+    (tool): tool is ModelVisibleMcpToolDefinition =>
+      isMcpToolVisibleTo(tool, "model"),
+  );
+
+const PURPOSE_BUILT_MCP_TOOL_DEFINITIONS = DEFAULT_MCP_TOOL_DEFINITIONS.filter(
+  ({ name, scope }) =>
+    MCP_DEFAULT_RESOURCE_SCOPES.some((candidate) => candidate === scope) &&
+    name !== "list_capabilities" &&
+    name !== "describe_capability" &&
+    name !== MCP_CAPABILITY_EXECUTORS.read &&
+    name !== MCP_CAPABILITY_EXECUTORS.write,
+);
 
 export type AnonymizingMcpToolName = Extract<
-  (typeof DEFAULT_MCP_TOOL_DEFINITIONS)[number],
+  (typeof DEFAULT_MCP_TOOL_SETS)[number]["definitions"][number],
   { anonymized: { exposure: "anonymize" } }
 >["name"];
 
 type RegisteredMcpToolName =
   (typeof DEFAULT_MCP_TOOL_SETS)[number]["definitions"][number]["name"];
-type FlattenedMcpToolName =
-  (typeof DEFAULT_MCP_TOOL_DEFINITIONS)[number]["name"];
-type MissingMcpToolName = Exclude<RegisteredMcpToolName, FlattenedMcpToolName>;
-type ExtraMcpToolName = Exclude<FlattenedMcpToolName, RegisteredMcpToolName>;
+type MissingMcpToolName = Exclude<McpToolName, RegisteredMcpToolName>;
+type ExtraMcpToolName = Exclude<RegisteredMcpToolName, McpToolName>;
 
 true satisfies [MissingMcpToolName, ExtraMcpToolName] extends [never, never]
   ? true
   : never;
 
 type ValibotInputToolName = Extract<
-  (typeof DEFAULT_MCP_TOOL_DEFINITIONS)[number],
+  (typeof DEFAULT_MCP_TOOL_SETS)[number]["definitions"][number],
   { inputSchemaSource: unknown }
 >["name"];
 type LegacyManualInputToolName = Exclude<
@@ -93,19 +168,6 @@ type LegacyManualInputToolName = Exclude<
 
 // Every native tool must use defineValibotMcpTool, so no hand-written input schema mirrors a validator.
 true satisfies [LegacyManualInputToolName] extends [never] ? true : never;
-
-/**
- * The closed set of curated static MCP tool names, derived from the single
- * default registry. Source of truth for the `McpToolName` type
- * (`apps/api/src/lib/api-handlers.ts`, type-only import to avoid a runtime
- * cycle) and for the runtime coverage guard
- * (`apps/api/scripts/mcp-coverage-guard.ts`). Because the registry is
- * declared `as const`, `.map` preserves the literal name union, so
- * `(typeof MCP_STATIC_TOOL_NAMES)[number]` is the exact tool-name union.
- */
-export const MCP_STATIC_TOOL_NAMES = DEFAULT_MCP_TOOL_DEFINITIONS.map(
-  (tool) => tool.name,
-);
 
 /**
  * Every advertised tool name, the law audience's own `search`/`fetch`
@@ -245,11 +307,13 @@ export const ANONYMIZED_MCP_TOOL_DEFINITIONS = scopeDefinitionsToSurface(
   }),
 ) satisfies readonly McpToolDefinition[];
 
-const invokeCapabilityDefinition = CAPABILITY_TOOL_SET.definitions.find(
-  ({ name }) => name === "invoke_capability",
+const writeCapabilityDefinition = CAPABILITY_TOOL_SET.definitions.find(
+  ({ name }) => name === MCP_CAPABILITY_EXECUTORS.write,
 );
-if (invokeCapabilityDefinition === undefined) {
-  unreachable("The documents MCP surface requires invoke_capability");
+if (writeCapabilityDefinition === undefined) {
+  unreachable(
+    `The documents MCP surface requires ${MCP_CAPABILITY_EXECUTORS.write}`,
+  );
 }
 const DOCUMENT_MCP_TOOL_DEFINITION_SET: ReadonlySet<McpToolDefinition> =
   new Set(DOCUMENT_TOOL_SET.definitions);
@@ -262,7 +326,7 @@ export const DOCUMENTS_MCP_TOOL_DEFINITIONS = scopeDefinitionsToSurface(
       // The upload MCP App drives the canonical presign/PUT/finalize pipeline
       // through this existing capability seam. tools.ts applies a mode-specific
       // capability allowlist, so guessed non-upload capability IDs fail closed.
-      tool === invokeCapabilityDefinition,
+      tool === writeCapabilityDefinition,
   ),
 ) satisfies readonly McpToolDefinition[];
 
@@ -318,19 +382,67 @@ export const LAW_MCP_TOOL_DISPOSITION = {
   search: "corpus",
   fetch: "corpus",
   search_case_law: "corpus",
-  lookup_case_law: "corpus",
+  resolve_case_law_decision: "corpus",
+  resolve_law_citation: "corpus",
+  case_law_coverage: "corpus",
   read_case_law_decision: "corpus",
+  verify_quote: "corpus",
+  open_case_law_decision: "corpus",
+  read_case_law_decision_blocks: "corpus",
+  preview_cited_provision: "corpus",
+  list_case_law_courts: "corpus",
   read_case_law_citations: "corpus",
   search_legislation: "corpus",
   read_statute: "corpus",
   read_statute_provisions: "corpus",
   read_provision_history: "corpus",
+  search_guidance: "corpus",
+  read_guidance: "corpus",
   // Excluded deliberately: this one queries a live upstream publisher rather
   // than the stella corpus, so its availability, latency and coverage are not
   // properties of this surface. An agent told "these tools are the corpus"
   // would read an upstream outage as the corpus being down.
   search_boe_legislation: "upstream_connector",
 } as const satisfies Record<PublicLawToolName, "corpus" | "upstream_connector">;
+
+type CorpusMcpToolName = {
+  [
+    Name in keyof typeof LAW_MCP_TOOL_DISPOSITION
+  ]: (typeof LAW_MCP_TOOL_DISPOSITION)[Name] extends "corpus" ? Name : never;
+}[keyof typeof LAW_MCP_TOOL_DISPOSITION];
+
+type CorpusReadingAnnotationToolName = Extract<
+  (typeof ALL_MCP_TOOL_DEFINITIONS)[number]["name"],
+  "create_reader_annotation" | "list_reader_annotations"
+>;
+
+/** Corpus tools and the annotation tools that read their public document target. */
+export const MCP_PUBLIC_CORPUS_CLASS = {
+  search: "search",
+  fetch: "browse",
+  search_case_law: "search",
+  resolve_case_law_decision: "browse",
+  resolve_law_citation: "browse",
+  case_law_coverage: "browse",
+  read_case_law_decision: "browse",
+  verify_quote: "browse",
+  open_case_law_decision: "browse",
+  read_case_law_decision_blocks: "browse",
+  preview_cited_provision: "browse",
+  list_case_law_courts: "browse",
+  read_case_law_citations: "browse",
+  search_legislation: "search",
+  read_statute: "browse",
+  read_statute_provisions: "browse",
+  read_provision_history: "browse",
+  search_guidance: "search",
+  read_guidance: "browse",
+  create_reader_annotation: "browse",
+  list_reader_annotations: "browse",
+} as const satisfies Record<
+  CorpusMcpToolName | CorpusReadingAnnotationToolName,
+  PublicCorpusClass
+>;
 
 type MissingLawMcpToolDisposition = Exclude<
   PublicLawToolName,
@@ -364,7 +476,8 @@ export const LAW_MCP_TOOL_DEFINITIONS = scopeDefinitionsToSurface([
  * one's by falling through a conditional.
  */
 const MCP_TOOL_DEFINITIONS_BY_MODE = {
-  default: DEFAULT_MCP_TOOL_DEFINITIONS,
+  advanced: DEFAULT_MCP_TOOL_DEFINITIONS,
+  default: PURPOSE_BUILT_MCP_TOOL_DEFINITIONS,
   anonymized: ANONYMIZED_MCP_TOOL_DEFINITIONS,
   documents: DOCUMENTS_MCP_TOOL_DEFINITIONS,
   law: LAW_MCP_TOOL_DEFINITIONS,
@@ -376,17 +489,44 @@ const toToolDefinitionMap = (definitions: readonly McpToolDefinition[]) =>
   );
 
 const MCP_TOOL_DEFINITION_MAPS = {
+  advanced: toToolDefinitionMap(MCP_TOOL_DEFINITIONS_BY_MODE.advanced),
   default: toToolDefinitionMap(MCP_TOOL_DEFINITIONS_BY_MODE.default),
   anonymized: toToolDefinitionMap(MCP_TOOL_DEFINITIONS_BY_MODE.anonymized),
   documents: toToolDefinitionMap(MCP_TOOL_DEFINITIONS_BY_MODE.documents),
   law: toToolDefinitionMap(MCP_TOOL_DEFINITIONS_BY_MODE.law),
 } satisfies Record<McpMode, Map<string, McpToolDefinition>>;
 
+/**
+ * Each tool's runtime contract, with the schema it advertises: a write tool's
+ * also accepts the omitted result the transport answers when the action ran
+ * but its result exceeds the response byte limit. `outputSchemaSource` stays
+ * the handler's own contract, which the omission never passes through.
+ */
 const toOutputContractMap = (
   toolSets: readonly McpToolSet<readonly McpToolDefinition[]>[],
 ) =>
   new Map<string, RuntimeMcpToolOutputContract>(
-    toolSets.flatMap((toolSet) => Object.entries(toolSet.outputs)),
+    toolSets.flatMap((toolSet) =>
+      toolSet.definitions.map((definition) => {
+        const contract: RuntimeMcpToolOutputContract | undefined =
+          toolSet.outputs[definition.name];
+        if (contract === undefined) {
+          return panic(
+            `Static MCP tool is missing its output contract: ${definition.name}`,
+          );
+        }
+        return [
+          definition.name,
+          {
+            ...contract,
+            outputSchema: advertisedMcpOutputSchema({
+              contract,
+              access: definition.access,
+            }),
+          },
+        ] as const;
+      }),
+    ),
   );
 
 const toHandlerMap = (

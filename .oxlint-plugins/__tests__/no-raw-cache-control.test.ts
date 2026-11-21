@@ -1,8 +1,6 @@
-import { describe, expect, setDefaultTimeout, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 
 import { lintSingleRule } from "./lint-single-rule.ts";
-
-setDefaultTimeout(20_000);
 
 const lint = async (
   source: string,
@@ -37,8 +35,6 @@ describe("no-raw-cache-control", () => {
 
   test("leaves the canonical policy module to own its literals", async () => {
     const source = 'const policy = "private, no-store";';
-    expect(await lint(source, "apps/api/src/lib/security-headers.ts")).toEqual(
-      [],
-    );
+    expect(await lint(source, "apps/api/src/http/cache.ts")).toEqual([]);
   });
 });

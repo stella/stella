@@ -56,13 +56,13 @@ type DocxFolioCitation =
 type DecisionPassageCitation = {
   kind: "decision-passage";
   anchorId: string;
+  /** The number the court printed on the cited block; null when none. */
+  courtParagraphNumber: number | null;
   excerpt: string;
 };
 
 export type Citation =
-  | PdfBatesCitation
-  | DocxFolioCitation
-  | DecisionPassageCitation;
+  PdfBatesCitation | DocxFolioCitation | DecisionPassageCitation;
 
 /**
  * The workspace file a citation points into, or null when it points at
@@ -110,6 +110,7 @@ export const iterateJustificationCitations = function* (
         yield {
           kind: "decision-passage",
           anchorId: block.anchorId,
+          courtParagraphNumber: block.courtParagraphNumber,
           excerpt: block.excerpt,
         };
         break;

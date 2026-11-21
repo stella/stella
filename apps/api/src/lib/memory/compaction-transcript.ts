@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 /**
  * Renders the message range a compaction summarized back into a bounded,
  * untrusted transcript for memory extraction.
@@ -13,16 +14,16 @@
  * Everything here is untrusted tenant content. It is flattened and hard-capped
  * before the prompt constructor escapes it at the trust boundary.
  */
-
 import { and, asc, eq, sql } from "drizzle-orm";
 
-import type { rootDb } from "@/api/db/root";
+import type { Transaction } from "@/api/db/root";
 import { chatMessages } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
+import { readChatCopyProjection } from "@/api/lib/chat/withdrawn-copies";
 
 // One background extraction must not turn into an unbounded prompt on the
 // tenant's own provider key: cap both the rows read and the rendered text.
-export const TRANSCRIPT_MAX_MESSAGES = 60;
+const TRANSCRIPT_MAX_MESSAGES = 60;
 export const TRANSCRIPT_MAX_CHARS = 12_000;
 // Per-message ceiling so one pasted contract cannot consume the whole budget
 // and crowd out every other message in the range.
@@ -30,7 +31,7 @@ const TRANSCRIPT_MESSAGE_MAX_CHARS = 2000;
 
 type LoadCompactionTranscriptOptions = {
   /** The caller's handle; the extractor passes the scheduler's. */
-  db: Pick<typeof rootDb, "select">;
+  db: Transaction;
   threadId: SafeId<"chatThread">;
   firstSummarizedMessageId: SafeId<"chatMessage">;
   lastSummarizedMessageId: SafeId<"chatMessage">;
@@ -80,7 +81,14 @@ export const loadCompactionTranscript = async ({
     .orderBy(asc(chatMessages.createdAt), asc(chatMessages.id))
     .limit(TRANSCRIPT_MAX_MESSAGES);
 
-  return renderTranscript(rows);
+  const { projection, subjectByThread } = await readChatCopyProjection({
+    tx: db,
+    threadIds: [threadId],
+    values: rows,
+  });
+  return renderTranscript(
+    rows.map((row) => projection.chat(row, subjectByThread.get(threadId))),
+  );
 };
 
 type TranscriptRow = {
@@ -113,6 +121,9 @@ export const renderTranscript = (rows: readonly TranscriptRow[]): string => {
 };
 
 const messageText = (content: TranscriptRow["content"]): string => {
+  if (!Array.isArray(content.data)) {
+    panic("Stored v3 chat content has invalid data");
+  }
   const parts: string[] = [];
   for (const part of content.data) {
     const text = persistedTextPartContent(part);
@@ -135,9 +146,6 @@ const persistedTextPartContent = (part: unknown): string | null => {
   }
   if ("content" in part && typeof part.content === "string") {
     return part.content;
-  }
-  if ("text" in part && typeof part.text === "string") {
-    return part.text;
   }
   return null;
 };

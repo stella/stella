@@ -34,7 +34,12 @@ export const RENDER_STORM_THRESHOLD_COMMITS_PER_SECOND = 80;
  * specs that hold a surface to a commit budget tighter than the storm
  * threshold (`e2e/specs/chat-stream-commit-budget.spec.ts`).
  */
-export const RENDER_COMMIT_COUNT_GLOBAL = "__stellaRenderCommitCount";
+declare global {
+  var __stellaRenderCommitCount: number | undefined;
+}
+
+export const RENDER_COMMIT_COUNT_GLOBAL =
+  "__stellaRenderCommitCount" satisfies keyof typeof globalThis;
 
 // Window length the commit counter buckets into. Windows are commit-driven
 // (closed by the next commit once this much time has elapsed since the
@@ -91,17 +96,13 @@ export type RenderStormDetails = {
   regionCounts: readonly (readonly [region: string, commits: number])[];
 };
 
-type RenderStormOnRender = (
-  id: string,
-  phase: RenderStormPhase,
-  actualDuration: number,
-  baseDuration: number,
-  startTime: number,
-  commitTime: number,
-) => void;
+type RenderStormCommit = {
+  phase: RenderStormPhase;
+  commitTime: number;
+};
 
 export type RenderStormMonitor = {
-  onRender: RenderStormOnRender;
+  onCommit: (commit: RenderStormCommit) => void;
   /**
    * Attribute the current commit to a named region. Called by the nested
    * `RenderStormRegion` profilers, which commit in the same React pass as
@@ -163,14 +164,7 @@ export const createRenderStormMonitor = (
     windowStart = now;
   };
 
-  const onRender: RenderStormOnRender = (
-    _id,
-    phase,
-    _actualDuration,
-    _baseDuration,
-    _startTime,
-    commitTime,
-  ) => {
+  const onCommit = ({ phase, commitTime }: RenderStormCommit) => {
     if (windowStart === undefined) {
       windowStart = commitTime;
     } else if (commitTime - windowStart >= RENDER_STORM_WINDOW_MS) {
@@ -188,5 +182,5 @@ export const createRenderStormMonitor = (
     );
   };
 
-  return { onRegionRender, onRender };
+  return { onRegionRender, onCommit };
 };

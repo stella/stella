@@ -1,13 +1,19 @@
+import type { AIErrorKind } from "@stll/api-contract";
 import type {
   FeedbackArea,
   FeedbackKind,
   FeedbackVia,
 } from "@stll/api-contract/feedback";
 
+import type { CustomerDistinctId } from "@/api/lib/auth/principal-audience";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { ReleaseFailureEventProperties } from "@/api/lib/observability/release-failure-contract";
+import { RELEASE_FAILURE_EVENT } from "@/api/lib/observability/release-failure-contract";
 import type { ResolvedTanStackTextModelInfo } from "@/api/lib/tanstack-ai-models";
 import type { McpCredentialType } from "@/api/mcp/auth";
 import type { McpMode } from "@/api/mcp/constants";
+import type { McpErrorCode } from "@/api/mcp/error-codes";
+import type { McpTransport } from "@/api/mcp/request-metrics";
 
 export const SERVER_ANALYTICS_EVENTS = {
   aiGeneration: "$ai_generation",
@@ -16,6 +22,8 @@ export const SERVER_ANALYTICS_EVENTS = {
   exception: "$exception",
   feedbackReportSubmitted: "feedback_report_submitted",
   mcpSessionInitialized: "mcp_session_initialized",
+  mcpToolCalled: "mcp_tool_called",
+  releaseFailureWindow: RELEASE_FAILURE_EVENT,
 } as const;
 
 export type AnalyticsPrimitive = boolean | number | string;
@@ -23,9 +31,7 @@ export type AnalyticsPrimitive = boolean | number | string;
 export type TokenBucket = "0_1k" | "1k_5k" | "5k_20k" | "20k_plus";
 export type LatencyBucket = "0_2s" | "2_10s" | "10_30s" | "30s_plus";
 export type CountBucket = "0" | "1" | "2_3" | "4_plus";
-export type ModelKeySource =
-  | ResolvedTanStackTextModelInfo["keySource"]
-  | "unknown";
+type ModelKeySource = ResolvedTanStackTextModelInfo["keySource"] | "unknown";
 export type AIFailureReason =
   | "auth"
   | "byok_quota"
@@ -60,7 +66,7 @@ type AIModelTelemetryProperties = {
   region?: string;
 };
 
-export type AIGenerationCompletedProperties = AIModelTelemetryProperties &
+type AIGenerationCompletedProperties = AIModelTelemetryProperties &
   SafeAIAnalyticsMetadata & {
     input_tokens_bucket: TokenBucket;
     latency_bucket: LatencyBucket;
@@ -69,11 +75,19 @@ export type AIGenerationCompletedProperties = AIModelTelemetryProperties &
     total_tokens_bucket: TokenBucket;
   };
 
-export type AIGenerationFailedProperties = SafeAIAnalyticsMetadata & {
+type AIGenerationFailedProperties = SafeAIAnalyticsMetadata & {
   error_message?: string;
   error_message_kind?: "non_standard";
   error_type: string;
   failure_reason: AIFailureReason;
+  /**
+   * The classified kind (`classifyAIError`): what the failure was, where
+   * `failure_reason` only says which side it came from. Typed, so it survives
+   * the message sanitizer that drops provider text.
+   */
+  failure_kind: AIErrorKind;
+  /** The provider's HTTP status, when the failure carried one. */
+  provider_status?: string;
   feature: string;
   latency_bucket?: LatencyBucket;
   model?: string;
@@ -92,9 +106,29 @@ export type AIGenerationFailedProperties = SafeAIAnalyticsMetadata & {
 export type McpSessionInitializedProperties = {
   client_name: string;
   client_version?: string;
+  ui_apps_supported: boolean;
+  ui_apps_mime_types: string[];
   credential_type: McpCredentialType | "unspecified";
   mode: McpMode;
 };
+
+type McpToolCalledBaseProperties = {
+  tool: string;
+  mode: McpMode;
+  duration_ms: number;
+  credential_type: McpCredentialType | "unspecified";
+  transport: McpTransport;
+};
+
+export type McpInternalErrorClass = "timeout" | "upstream" | "unknown";
+
+/** Metadata-only contract for a single observed MCP tool invocation. */
+export type McpToolCalledProperties = McpToolCalledBaseProperties &
+  (
+    | { outcome: "ok" | "tool_error" }
+    | { outcome: "refused"; error_code: McpErrorCode | "unknown" }
+    | { outcome: "internal_error"; error_class: McpInternalErrorClass }
+  );
 
 /**
  * What happened to one delivery channel for one report. Not a boolean: a
@@ -103,10 +137,7 @@ export type McpSessionInitializedProperties = {
  * are three different facts.
  */
 export type FeedbackDeliveryOutcome =
-  | "delivered"
-  | "failed"
-  | "not_configured"
-  | "skipped_duplicate";
+  "delivered" | "failed" | "not_configured" | "skipped_duplicate";
 
 /**
  * One filed report, as telemetry. Content never appears here: the event says
@@ -123,7 +154,7 @@ export type FeedbackReportSubmittedProperties = {
   github_delivery: FeedbackDeliveryOutcome;
 };
 
-export type ExceptionListEntry = {
+type ExceptionListEntry = {
   mechanism: { handled: boolean; synthetic: boolean; type: string };
   type: string;
   value: string;
@@ -143,7 +174,7 @@ type DebugAIProperties = Record<string, unknown>;
 // PostHog group attachment. `organization` is the only group type; it must
 // match the browser adapter's `posthog.group` call so client and server
 // events aggregate under the same group.
-export type ServerAnalyticsGroups = {
+type ServerAnalyticsGroups = {
   organization: string;
 };
 
@@ -175,8 +206,20 @@ export type ServerAnalyticsCaptureParams = ServerAnalyticsCaptureBase &
         properties: FeedbackReportSubmittedProperties;
       }
     | {
+        // Product usage: only a principal classified as a customer may send
+        // it (`principal-audience.ts`).
+        distinctId: CustomerDistinctId;
         event: typeof SERVER_ANALYTICS_EVENTS.mcpSessionInitialized;
         properties: McpSessionInitializedProperties;
+      }
+    | {
+        distinctId: CustomerDistinctId;
+        event: typeof SERVER_ANALYTICS_EVENTS.mcpToolCalled;
+        properties: McpToolCalledProperties;
+      }
+    | {
+        event: typeof SERVER_ANALYTICS_EVENTS.releaseFailureWindow;
+        properties: ReleaseFailureEventProperties;
       }
   );
 
@@ -184,7 +227,7 @@ export type ServerAnalyticsCaptureParams = ServerAnalyticsCaptureBase &
 // code path that owns the state it mirrors (creation/rename for `name`,
 // settings for jurisdictions). `groupIdentify` merges properties into the
 // existing profile, so a caller sends only the keys it owns.
-export type OrganizationGroupProperties = {
+type OrganizationGroupProperties = {
   name: string;
   practice_jurisdictions: string[];
   primary_jurisdiction: string | null;
@@ -199,6 +242,9 @@ export type ServerAnalytics = {
   capture: (params: ServerAnalyticsCaptureParams) => void;
   /** Upsert the organization group profile in PostHog. */
   identifyOrganizationGroup: (params: OrganizationGroupIdentifyParams) => void;
-  /** Flush queued events. No-op for providers without a queue. */
+  /**
+   * Flush queued events. Never rejects: a provider reports its own failed
+   * deliveries. No-op for providers without a queue.
+   */
   flush: () => Promise<void>;
 };

@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import {
   correspondenceAllowedSenderMatters,
@@ -9,19 +9,20 @@ import {
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
-const bodySchema = t.Object({ matterId: tSafeId("workspace") });
-const paramsSchema = t.Object({
-  senderId: tSafeId("correspondenceAllowedSender"),
+const bodySchema = v.object({ matterId: resourceIdSchema("workspace") });
+const paramsSchema = v.object({
+  senderId: resourceIdSchema("correspondenceAllowedSender"),
 });
 const MAX_MATTER_SCOPE_SIZE = 200;
 const config = {
+  contract: "patch",
   description:
     "Allow an approved shared mailbox to file correspondence for one matter.",
   permissions: { organizationSettings: ["update"] },
-  accountAccess: ACCOUNT_ACCESS.standard,
+  accountAccess: ACCOUNT_ACCESS.accountControl,
   mcp: {
     type: "capability",
     reason: "correspondence",

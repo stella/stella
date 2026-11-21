@@ -2,8 +2,8 @@ import { QueryClient } from "@tanstack/react-query";
 import { describe, expect, test } from "bun:test";
 
 import {
-  buildCreateDocumentDraftPayload,
   bindCreateDocumentDraftChatThread,
+  buildCreateDocumentDraftPayload,
   CREATE_DOCUMENT_DRAFT_VIEW,
   createDocumentDraftTabId,
   isCreateDocumentDraftPayload,
@@ -15,9 +15,9 @@ import type {
 import { toChatThreadId } from "@/lib/chat-thread-ref";
 
 import {
-  invalidateCreatedDocumentQueries,
   bindCreateDocumentDraftInspectorChatThread,
   getBoundCreateDocumentDraftInspectorChatThreadId,
+  invalidateCreatedDocumentQueries,
   promoteCreateDocumentDraftInspectorTab,
   resetFailedCreateDocumentDraftInspectorTab,
   resolveBoundCreateDocumentDraftChatThreadId,

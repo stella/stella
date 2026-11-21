@@ -30,6 +30,7 @@ The production Compose contract contains exactly these services:
 
 - `api`: HTTP API and the authoritative scheduled-job loop; readiness `/ready`.
 - `document-processing-worker`: Durable document-processing queue consumer; readiness `api-ready`.
+- `file-derivative-worker`: Durable file-derivative queue consumer; readiness `api-ready`.
 - `gotenberg`: Private authenticated document-conversion sidecar; readiness `/health`.
 
 Its generated environment template is `deploy/selfhost/.env.example`.
@@ -43,6 +44,32 @@ cp apps/web/.env.example apps/web/.env
 
 bun install
 ```
+
+## Feature grants
+
+Promote the image that registers a feature before setting its
+`API_FEATURE_ACCESS_GRANTS`; before rolling back, set grants to `{}`.
+Unknown feature IDs are dropped at startup and emit the count-only ERROR event
+`feature_access.unknown_grant`. Invalid JSON or malformed grant shapes remain
+fatal configuration errors.
+
+Organization invitation grants use the same parameter as `activity-timeline`:
+
+```json
+{ "invoice-links": [{ "type": "organization", "organizationId": "org-id" }] }
+```
+
+Invoice links require this organization grant and `FEATURE_INVOICE_LINKS=true`.
+`FEATURE_TIME_BILLING` must also be enabled, and sending requires the caller's time-billing enrolment.
+History and revocation require normal invoice access and time-billing availability,
+without an invoice-links grant or personal enrolment. Member grants for invoice-links
+are rejected as invalid configuration. Removing the organization grant prevents delivery and makes existing links
+unavailable without deleting data. Public recipients need no account. Grant
+changes take effect when the configured parameter refresh is applied.
+
+The optional layout preview for generated views is available only in stella's
+cloud; on a self-hosted instance the assistant is told the preview is
+unavailable and the view is still published.
 
 ## Frontend (web app)
 
@@ -170,9 +197,9 @@ before contacting any service:
 bun run selfhost:doctor
 ```
 
-The doctor also reads the web build variables in `apps/web/.env` and fails
-when a web feature flag is on without its API flag, such as
-`VITE_FEATURE_TIME_BILLING="true"` without `FEATURE_TIME_BILLING="true"`.
+Time billing requires the API deployment flag `FEATURE_TIME_BILLING="true"`
+and each user's enrolment in Settings > Account > Beta. The web follows that server
+response; a web build variable cannot enable it.
 
 The stock profile enables local email/password authentication and requires the
 setup token when the first account is created. The web sign-up form prompts for
@@ -211,9 +238,99 @@ standalone scheduler service to omit accidentally. OCR uses the CPU ONNX models
 bundled in the API image. AnyDoc first inspects each PDF and queues OCR only
 when the document has no usable text layer. Set
 `DOCUMENT_PROCESSING_IDLE_EXIT_MINUTES` on batch workers that should exit after
-the queue stays empty.
+the queue stays empty. Manual OCR requests are accepted while a worker is
+running or has run within the last two batch intervals; otherwise the action
+reports OCR as unavailable.
 The original PDF remains unchanged: stella stores and indexes only the derived
 searchable text.
+
+### Request budgets
+
+Auth, API, account-attempt, and MCP quotas are configured through the validated
+API environment. Omitted variables retain the defaults below; invalid values
+refuse startup. Set request maxima from 1 to 1,000,000, concurrency from 1 to
+10,000, windows in seconds from 1 to 604,800, and durations in milliseconds from
+1,000 to 604,800,000. Changes take effect when the API restarts.
+
+The variables change quota sizes and windows, while each limiter keeps its
+identity and storage policy: authenticated users and credentials retain their
+own budgets; anonymous traffic uses the applicable client or address budget.
+Account-attempt limits count failures and attempts in flight; successful attempts
+return their reserved slot. OTP delivery limits count requests for delivery.
+
+The shared-address default of 1,200/minute admits concurrent sign-ins and token
+exchanges from many users behind one assistant egress. Token requests reserve a slot atomically
+before grant lookup and return it after successful exchanges; failed exchanges
+retain their charge. Recognized grants also use the 20/minute user-and-client
+budget. Anonymous registration allows 300/minute per callback set and 3,000/minute
+per address, so a hosted callback can register clients for many users.
+
+MCP allows 600/minute per bearer. Its 3,000/minute address budget counts only
+failed authentication and attempts in flight. Each request reserves a slot
+before verification; successful requests and verification exceptions return it. Once exhausted,
+admission rejects requests at that address before credential verification until
+a slot is returned or the window resets. Source-fetch work has its own 10/minute
+user budget.
+
+Every quota rejection emits a `rate_limit.rejected` structured log with `budget`,
+`budget.keyKind`, and `budget.windowMs`, plus a `RateLimitRejected` counter labelled
+by `budgetName`. These observations contain no caller identifiers or addresses.
+
+| Environment variables                                                                                                            |       Default maximum |                                               Default window |
+| -------------------------------------------------------------------------------------------------------------------------------- | --------------------: | -----------------------------------------------------------: |
+| `RATE_LIMIT_AUTH_DEFAULT_SENSITIVE_MAX` / `RATE_LIMIT_AUTH_DEFAULT_SENSITIVE_WINDOW_SECONDS`                                     |                     3 |                                                         10 s |
+| `RATE_LIMIT_AUTH_DEFAULT_EMAIL_MAX` / `RATE_LIMIT_AUTH_DEFAULT_EMAIL_WINDOW_SECONDS`                                             |                     3 |                                                         60 s |
+| `RATE_LIMIT_AUTH_TWO_FACTOR_MAX` / `RATE_LIMIT_AUTH_TWO_FACTOR_WINDOW_SECONDS`                                                   |                     3 |                                                         10 s |
+| `RATE_LIMIT_AUTH_GLOBAL_MAX` / `RATE_LIMIT_AUTH_GLOBAL_WINDOW_SECONDS`                                                           |                   100 |                                                         60 s |
+| `RATE_LIMIT_AUTH_SIGN_IN_MAX` / `RATE_LIMIT_AUTH_SIGN_IN_WINDOW_SECONDS`                                                         |                     5 |                                                         60 s |
+| `RATE_LIMIT_AUTH_SIGN_UP_MAX` / `RATE_LIMIT_AUTH_SIGN_UP_WINDOW_SECONDS`                                                         |                     3 |                                                         60 s |
+| `RATE_LIMIT_AUTH_SEND_OTP_MAX` / `RATE_LIMIT_AUTH_SEND_OTP_WINDOW_SECONDS`                                                       |                     5 |                                                         60 s |
+| `RATE_LIMIT_AUTH_VERIFY_OTP_MAX` / `RATE_LIMIT_AUTH_VERIFY_OTP_WINDOW_SECONDS`                                                   |                     5 |                                                         60 s |
+| `RATE_LIMIT_AUTH_FORGET_PASSWORD_MAX` / `RATE_LIMIT_AUTH_FORGET_PASSWORD_WINDOW_SECONDS`                                         |                     3 |                                                         60 s |
+| `RATE_LIMIT_AUTH_RESET_PASSWORD_MAX` / `RATE_LIMIT_AUTH_RESET_PASSWORD_WINDOW_SECONDS`                                           |                     5 |                                                         60 s |
+| `RATE_LIMIT_AUTH_OAUTH_TOKEN_MAX` / `RATE_LIMIT_AUTH_OAUTH_TOKEN_WINDOW_SECONDS`                                                 |                    20 |                                                         60 s |
+| `RATE_LIMIT_AUTH_OAUTH_AUTHORIZATION_MAX` / `RATE_LIMIT_AUTH_OAUTH_AUTHORIZATION_WINDOW_SECONDS`                                 |                    30 |                                                         60 s |
+| `RATE_LIMIT_AUTH_OAUTH_CLIENT_REGISTRATION_MAX` / `RATE_LIMIT_AUTH_OAUTH_CLIENT_REGISTRATION_WINDOW_SECONDS`                     |                    30 |                                                         60 s |
+| `RATE_LIMIT_AUTH_AUTH_SHARED_ADDRESS_MAX` / `RATE_LIMIT_AUTH_AUTH_SHARED_ADDRESS_WINDOW_SECONDS`                                 |                 1,200 |                                                         60 s |
+| `RATE_LIMIT_AUTH_OAUTH_ANONYMOUS_CLIENT_REGISTRATION_MAX` / `RATE_LIMIT_AUTH_OAUTH_ANONYMOUS_CLIENT_REGISTRATION_WINDOW_SECONDS` |                   300 |                                                         60 s |
+| `RATE_LIMIT_AUTH_OAUTH_ANONYMOUS_ADDRESS_MAX` / `RATE_LIMIT_AUTH_OAUTH_ANONYMOUS_ADDRESS_WINDOW_SECONDS`                         |                 3,000 |                                                         60 s |
+| `RATE_LIMIT_API_API_MAX` / `RATE_LIMIT_API_API_DURATION_MS`                                                                      |                 1,000 |                                                    60,000 ms |
+| `RATE_LIMIT_API_LEGAL_RESOLVE_MAX` / `RATE_LIMIT_API_LEGAL_RESOLVE_DURATION_MS`                                                  |                   120 |                                                    60,000 ms |
+| `RATE_LIMIT_API_PUBLIC_SANCTIONS_SEARCH_MAX` / `RATE_LIMIT_API_PUBLIC_SANCTIONS_SEARCH_DURATION_MS`                              |                    20 |                                                    60,000 ms |
+| `RATE_LIMIT_API_PUBLIC_SANCTIONS_SEARCH_MAX_CONCURRENT`                                                                          | 2 concurrent requests |                        Public sanctions search window above. |
+| `RATE_LIMIT_API_SKILL_SOURCE_MAX` / `RATE_LIMIT_API_SKILL_SOURCE_DURATION_MS`                                                    |                    10 |                                                    60,000 ms |
+| `RATE_LIMIT_API_UPLOAD_MAX` / `RATE_LIMIT_API_UPLOAD_DURATION_MS`                                                                |                   500 |                                                    60,000 ms |
+| `RATE_LIMIT_API_MCP_TRANSPORT_MAX` / `RATE_LIMIT_API_MCP_TRANSPORT_DURATION_MS`                                                  |                   600 |                                                    60,000 ms |
+| `RATE_LIMIT_API_MCP_TRANSPORT_ADDRESS_MAX` / `RATE_LIMIT_API_MCP_TRANSPORT_ADDRESS_DURATION_MS`                                  |                 3,000 |                                                    60,000 ms |
+| `RATE_LIMIT_API_FOLIO_COLLAB_MAX` / `RATE_LIMIT_API_FOLIO_COLLAB_DURATION_MS`                                                    |                    30 |                                                    60,000 ms |
+| `RATE_LIMIT_API_AGENT_AUTH_MAX` / `RATE_LIMIT_API_AGENT_AUTH_DURATION_MS`                                                        |                    60 |                                                    60,000 ms |
+| `RATE_LIMIT_API_TRANSLATE_MAX` / `RATE_LIMIT_API_TRANSLATE_DURATION_MS`                                                          |                    30 |                                                    60,000 ms |
+| `RATE_LIMIT_API_INVOICE_LINK_MAX` / `RATE_LIMIT_API_INVOICE_LINK_DURATION_MS`                                                    |                    30 |                                                    60,000 ms |
+| `RATE_LIMIT_API_HOSTED_USAGE_WEBHOOK_MAX` / `RATE_LIMIT_API_HOSTED_USAGE_WEBHOOK_DURATION_MS`                                    |                   300 |                                                    60,000 ms |
+| `RATE_LIMIT_API_DELETE_ACCOUNT_OTP_MAX` / `RATE_LIMIT_API_DELETE_ACCOUNT_OTP_DURATION_MS`                                        |                     5 |                                                    60,000 ms |
+| `RATE_LIMIT_API_TWO_FACTOR_MANAGE_OTP_MAX` / `RATE_LIMIT_API_TWO_FACTOR_MANAGE_OTP_DURATION_MS`                                  |                     5 |                                                    60,000 ms |
+| `RATE_LIMIT_ACCOUNT_OTP_MAX` / `RATE_LIMIT_ACCOUNT_OTP_DURATION_MS`                                                              |                    10 |                                                   900,000 ms |
+| `RATE_LIMIT_ACCOUNT_DEMO_OTP_MAX` / `RATE_LIMIT_ACCOUNT_DEMO_OTP_DURATION_MS`                                                    |                     5 |                                                   900,000 ms |
+| `RATE_LIMIT_ACCOUNT_PASSWORD_MAX` / `RATE_LIMIT_ACCOUNT_PASSWORD_DURATION_MS`                                                    |                    10 |                                                 3,600,000 ms |
+| `RATE_LIMIT_MCP_CAPABILITY_MAX` / `RATE_LIMIT_MCP_CAPABILITY_WINDOW_MS`                                                          |                    60 |                                                    60,000 ms |
+| `RATE_LIMIT_MCP_GATEWAY_MAX` / `RATE_LIMIT_MCP_GATEWAY_WINDOW_MS`                                                                |                    60 |                                                    60,000 ms |
+| `RATE_LIMIT_DEMO_ACTION_MAX` / `RATE_LIMIT_DEMO_ACTION_DURATION_MS`                                                              |                   200 |                                                86,400,000 ms |
+| `RATE_LIMIT_API_KEY_MACHINE_MAX` / `RATE_LIMIT_API_KEY_MACHINE_WINDOW_MS`                                                        |                   600 |                                                    60,000 ms |
+| `RATE_LIMIT_API_KEY_DESKTOP_MAX` / `RATE_LIMIT_API_KEY_DESKTOP_WINDOW_MS`                                                        |                    60 |                                                    60,000 ms |
+| `RATE_LIMIT_OTP_DELIVERY_NEW_ACCOUNT_EMAIL_MAX` / `RATE_LIMIT_OTP_DELIVERY_NEW_ACCOUNT_EMAIL_DURATION_MS`                        |                     3 |                                                 3,600,000 ms |
+| `RATE_LIMIT_OTP_DELIVERY_NEW_ACCOUNT_ADDRESS_MAX` / `RATE_LIMIT_OTP_DELIVERY_NEW_ACCOUNT_ADDRESS_DURATION_MS`                    |                    25 |                                                10,800,000 ms |
+| `RATE_LIMIT_OTP_DELIVERY_EXISTING_ACCOUNT_EMAIL_MAX`                                                                             |                    10 | Existing-account delivery uses the new-account email window. |
+
+For example, `RATE_LIMIT_API_MCP_TRANSPORT_MAX="1200"` and
+`RATE_LIMIT_API_MCP_TRANSPORT_DURATION_MS="60000"` admit up to 1,200 MCP
+transport requests per credential per minute. Keep the account-failure limits
+separate from broad shared-address limits when tuning a deployment.
+
+The demo action budget resets at epoch-aligned multiples of its configured
+duration; its default is one UTC day.
+
+API-key settings configure defaults for newly minted credentials. Existing keys
+retain the request ceiling and window stored with each key.
 
 ## Desktop editing
 
@@ -221,6 +338,16 @@ Self-hosted installs can use the signed stella desktop app without rebuilding
 it and without configuration. Users install stella desktop, open **Settings → Account → Desktop** in the self-hosted web
 app, and click **Connect**. The desktop app shows a local approval prompt and
 stores the exact trusted web/API origin before accepting Office file handoffs.
+
+Each release refuses desktop builds below its desktop support floor (see
+[Desktop Support](./releases.md#desktop-support)). On a self-hosted server the
+floor moves only when the server is upgraded, and it never exceeds the newest
+published desktop build. A desktop that updates itself is therefore accepted
+after every upgrade: its updater reads the public download feed, not this
+server. A server older than the desktop app accepts it. Where in-app updates are
+turned off or the download feed is unreachable, deploy a desktop build at or
+above the new release's floor before upgrading the server. No server setting
+lowers or disables the floor.
 
 ## Database migrations
 
@@ -236,6 +363,42 @@ docker compose --env-file deploy/selfhost/.env \
   bun /app/apps/api/src/db/migrate.js
 ```
 
+Before this chat content upgrade, stop and drain all API instances running the
+old release, including any workers that write chat history. Run the migration
+with the new release image, and restart the API only after migration succeeds.
+The database rejects legacy chat content writes as soon as this migration starts.
+
+Chat content upgrades run automatically through the migration entrypoint. The
+version 3 repair converts stored version 1 and 2 messages and revision snapshots
+in adaptive keyset batches of 1 to 50 rows, with durable progress. Every processed row
+has an owner-only receipt in `chat_content_v3_backfill_receipts`: source, row and
+message identifiers, prior version, outcome, fixed reason, and timestamp. Receipts
+contain no message content and retain repair history after message deletion; an
+organization foreign key removes its receipts when the organization is deleted. If a
+parent message is deleted during a batch, its row receives a `deleted-concurrently`
+outcome with the fixed reason `parent-deleted`; message and revision repair both
+continue without referencing a deleted parent through a foreign key. Existing
+converted receipts retain their original conversion provenance. A row holding a
+number beyond double precision is never rewritten with a rounded value: it fails
+with the reason `lossy-json-number`.
+
+From a source checkout, preview the repair without writes:
+
+```bash
+bun --filter @stll/api db:backfill-chat-content-v3 --dry-run
+```
+
+The preview reports counts by stored version. The migration must finish the
+repair and verify that no legacy content remains before the upgrade proceeds;
+unfinished or failed rows block deployment. After an interruption, rerun the
+migration command above (or `bun --filter @stll/api db:migrate` from source).
+If a receipt records a failed row, repair its stored data, then run
+`bun --filter @stll/api db:backfill-chat-content-v3 --apply --retry-failed` and rerun
+the migration command. Successful rows are not converted again. When the
+database is too busy to validate the content constraints, the backfill exits
+with code 75 and names the step it stopped at; rerun it after the delay it
+prints.
+
 After migrations, run the usage policy seed explicitly inside the API image with `STELLA_USAGE_POLICY_SEEDS` set to the deployment's JSON configuration; it never runs on API startup.
 
 <!-- usage-policy-seed-command -->
@@ -248,7 +411,7 @@ docker compose --env-file deploy/selfhost/.env \
 
 The results file stays inside the one-off API container and is removed with it by `--rm`; capture stdout to retain the printed results.
 
-The seed writes JSON Lines containing each policy key, its `mode` (`apply` or `dry_run`), and its `inserted`, `updated`, `unchanged`, `hidden`, or `failed` outcome (with a redacted failure reason), even when its transaction rolls back; failures exit non-zero. Add `--dry-run` to preview a configuration: the seed performs the same writes inside a transaction it then rolls back, so it reports the outcomes and exit code a real run would produce and changes nothing. Omit `--results` for a timestamped path in `/tmp`; an existing results file is never overwritten. The command prints the path and the same rows in a fenced JSON Lines block, so operators can retrieve one-off ECS task results from its CloudWatch stdout logs after the container exits.
+The seed writes JSON Lines containing each policy key, its `mode` (`apply` or `dry_run`), and its `inserted`, `updated`, `unchanged`, `hidden`, `deactivated`, or `failed` outcome (with a redacted failure reason), even when its transaction rolls back; failures exit non-zero. A free policy absent from the configuration is deactivated, including when the configuration is empty (`[]`); an empty configuration hides no other policy. Add `--dry-run` to preview a configuration: the seed performs the same writes inside a transaction it then rolls back, so it reports the outcomes and exit code a real run would produce and changes nothing. Omit `--results` for a timestamped path in `/tmp`; an existing results file is never overwritten. The command prints the path and the same rows in a fenced JSON Lines block, so operators can retrieve one-off ECS task results from its CloudWatch stdout logs after the container exits.
 
 ## Container images
 
@@ -267,7 +430,7 @@ must build `apps/web/Dockerfile` with their own public URLs, or run
 ## Run With Docker Compose
 
 From the repository root, validate the production profile, inspect the resolved
-Compose model, migrate, then start the three declared services. Run the web SSR
+Compose model, migrate, then start the declared services. Run the web SSR
 server separately as described above.
 
 <!-- BEGIN GENERATED SELF-HOST RUN COMMANDS -->
@@ -331,6 +494,39 @@ Compose uses `/ready` for the API. The worker healthcheck runs only while the
 worker process is alive and also requires API readiness. Queue latency and
 worker error logs remain the authoritative signals that work is draining; the
 healthcheck does not claim to execute a synthetic document job.
+
+## OAuth refusal counts
+
+The API emits one `auth.request_refused` event per refused auth request.
+For `/oauth2/token` refresh and authorization-code grants, `oauth.refusal_reason`
+records the provider decision, alongside `oauth.client_id`, `oauth.grant_type`,
+`http.status_code` and the ambient `request.id` when present.
+`oauth.grant_family` is SHA-256 of
+`stella:oauth:grant-family:v1:` followed by the stored authorization-code
+identifier (also carried into each rotated refresh row). It correlates a
+family across rotations without exposing credentials or database identifiers.
+It is `"none"` when the refresh row or its authorization-code identifier is absent.
+An unavailable public client id is also recorded as `"none"`.
+
+`unknown_token` includes refresh rows deleted by consent revocation or member
+removal; those actions have separate audit records. `code_invalid` combines
+absent, expired and already consumed codes because atomic consumption returns
+the same result for each. No tombstones or additional retention are introduced.
+`revoked` applies only when a revoked refresh row remains available, and
+`rotated_outside_replay` applies to a rotated row past its replay interval.
+`rotation_replay_mismatch` records a rotated row whose replay response cannot
+be returned inside that interval. `oauth.refusal_unclassified = true` identifies
+a refusal requiring a provider-mapping review.
+
+For CloudWatch Logs Insights, select the API log group and desired time range,
+then count refusals by day, reason and public client id (no additional metrics):
+
+```text
+filter message = "auth.request_refused" and `auth.path` = "/oauth2/token"
+| filter ispresent(`oauth.refusal_reason`)
+| stats count(*) as refusals by bin(1d), `oauth.refusal_reason`, `oauth.client_id`
+| sort refusals desc
+```
 
 ## Requirements
 

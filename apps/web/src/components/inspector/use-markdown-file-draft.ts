@@ -13,7 +13,7 @@ import type { MarkdownHybridEditorHandle } from "@/components/markdown/markdown-
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { MARKDOWN_MIME } from "@/lib/consts";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { filesKeys, textFileOptions } from "@/lib/files/queries";
@@ -90,14 +90,16 @@ export const useMarkdownFileDraft = ({
       // This path serializes editor text into a fixed Markdown file; it cannot
       // carry user-supplied DOCX bytes that require attached-template preflight.
       const file = new File([nextText], fileName, { type: MARKDOWN_MIME });
-      const response = await api
-        .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
-        ["upload-version"].post({
-          entityId: toSafeId<"entity">(entityId),
-          file,
-        });
+      const entitiesApi = api.entities({
+        workspaceId: toSafeId<"workspace">(workspaceId),
+      });
 
-      return unwrapEden(response);
+      const response = await entitiesApi["upload-version"].post({
+        entityId: toSafeId<"entity">(entityId),
+        file,
+      });
+
+      return unwrapApiResponse(response);
     },
     onSuccess: async (response, variables) => {
       replaceFileFieldId(variables.fieldId, {
@@ -118,12 +120,16 @@ export const useMarkdownFileDraft = ({
       ]);
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useMarkdownFileDraft:failure",
+        scope: { type: "handler", handlerId: "useMarkdownFileDraft:failure" },
+      });
       notifyUserError(error, t("workspaces.files.versionUploadFailed"), {
         description: userErrorFromThrown(error, t("errors.actionFailed")),
       });
     },
   });
+  const { isPending: isSaving, mutate: saveDraft } = saveMutation;
 
   const syncInput = {
     fieldId: tab.id,
@@ -148,14 +154,14 @@ export const useMarkdownFileDraft = ({
   }
 
   const discard = () => {
-    if (saveMutation.isPending) {
+    if (isSaving) {
       return;
     }
     editorRef.current?.resetMarkdown(text);
     setDraft(text);
   };
   const save = () => {
-    if (saveMutation.isPending) {
+    if (isSaving) {
       return;
     }
     const currentTab = useInspectorTabsStore
@@ -169,7 +175,7 @@ export const useMarkdownFileDraft = ({
     if (currentTab?.type !== "pdf") {
       panic("Markdown publication requires a mounted file tab");
     }
-    saveMutation.mutate({
+    saveDraft({
       entityId: tab.entityId,
       fieldId: tab.id,
       fileName: currentTab.fileName,
@@ -181,16 +187,21 @@ export const useMarkdownFileDraft = ({
       workspaceId: tab.workspaceId,
     });
   };
+  const textQueryState = {
+    error: textQuery.error,
+    isPending: textQuery.isPending,
+    refetch: textQuery.refetch,
+  };
 
   return {
     discard,
     editorRef,
     isDirty,
-    isSaving: saveMutation.isPending,
+    isSaving,
     save,
     setDraft,
     text,
-    textQuery,
+    textQuery: textQueryState,
   };
 };
 

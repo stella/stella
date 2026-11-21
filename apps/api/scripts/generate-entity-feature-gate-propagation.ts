@@ -1,0 +1,33 @@
+import { fileURLToPath } from "node:url";
+
+import { entityFeatureGateMetadata } from "../src/db/entity-feature-gate-metadata";
+import { readEffectiveEntityFeatureGateDefinitions } from "../src/db/entity-feature-gate-migrations";
+import * as schema from "../src/db/schema";
+import { schemaTables } from "../src/db/schema-tables";
+import { entityFeatureGateTableSql } from "./entity-feature-gate-ddl";
+
+const tables = schemaTables(schema);
+const descriptors = entityFeatureGateMetadata(tables);
+const effective = await readEffectiveEntityFeatureGateDefinitions();
+const changed = entityFeatureGateTableSql(tables, descriptors, effective);
+
+if (changed.length > 0) {
+  const drizzle = new URL("../drizzle/", import.meta.url);
+  const newest = (
+    await Array.fromAsync(
+      new Bun.Glob("*/migration.sql").scan({ cwd: fileURLToPath(drizzle) }),
+    )
+  )
+    .map((path) => path.split("/").at(0) ?? "")
+    .toSorted()
+    .at(-1);
+  const stamp = String(
+    Number.parseInt(newest?.slice(0, 14) ?? "0", 10) + 1,
+  ).padStart(14, "0");
+  const folder = new URL(`${stamp}_entity_feature_gate_registry/`, drizzle);
+  await Bun.write(
+    new URL("migration.sql", folder),
+    `SET lock_timeout = '2s';\nSET statement_timeout = '5min';\n--> statement-breakpoint\n${changed.join("\n--> statement-breakpoint\n")}\n`,
+  );
+  console.log(fileURLToPath(folder));
+}

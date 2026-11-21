@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 /**
  * Seed a test user with a valid session for local development.
  *
@@ -17,17 +18,25 @@
  * The script is idempotent: running it again refreshes the
  * session expiry without duplicating data.
  */
-
-import { panic } from "better-result";
-import { and, eq, inArray, or } from "drizzle-orm";
+import { and, eq, inArray, or, sql } from "drizzle-orm";
 import { chmodSync, mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
+import { printError } from "@stll/errors";
+import {
+  MARKETING_LOCALE_ACCOUNTS,
+  marketingLocaleForOrganization,
+  PRIMARY_MARKETING_LOCALE,
+} from "@stll/playwright-tools/marketing-locales";
+
 import { member, organization, session, user } from "@/api/db/auth-schema";
+import { featureEnrolments } from "@/api/db/schema";
 import { env } from "@/api/env";
 import { seedDefaultSkills } from "@/api/lib/agent-skills/default-skills";
 import { sessionCookieName } from "@/api/lib/auth/auth-cookie-name";
+import { acceptProfessionalUse } from "@/api/lib/auth/professional-use";
 import { toSafeId } from "@/api/lib/branded-types";
+import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import { assertConfiguredBetterAuthOAuthPolicy } from "@/api/lib/db/assert-better-auth-oauth-policy";
 import { openMaintenanceDb } from "@/api/lib/db/maintenance-db";
 import { ensureDefaultDocumentTypes } from "@/api/lib/document-types/defaults";
@@ -40,9 +49,13 @@ import {
   DEFAULT_TEST_USER_COLLEAGUE_COUNT,
   DEFAULT_USER_ID,
   getSeedColleagues,
+  seedMemberId,
 } from "./seed-utils";
+import type { SeedColleague } from "./seed-utils";
 
 const db = openMaintenanceDb({ readOnly: false });
+
+const PRIMARY_ACCOUNT = MARKETING_LOCALE_ACCOUNTS[PRIMARY_MARKETING_LOCALE];
 
 // Display names belong to the same fictional world as the rest of the dev
 // seed (Novák & Partners, Česká Energie, Meridian Capital Partners in
@@ -52,16 +65,16 @@ const db = openMaintenanceDb({ readOnly: false });
 // storage state, and the e2e sign-in all join on.
 const TEST_USER = {
   id: DEFAULT_USER_ID,
-  name: "Petra Harbrook",
-  email: "test@stella.dev",
+  name: PRIMARY_ACCOUNT.userName,
+  email: PRIMARY_ACCOUNT.email,
 } as const;
 
 const COLLEAGUES = getSeedColleagues(DEFAULT_TEST_USER_COLLEAGUE_COUNT);
 
 const TEST_ORG = {
   id: DEFAULT_ORG_ID,
-  name: "Harbrook & Partners",
-  slug: "harbrook-partners",
+  name: PRIMARY_ACCOUNT.organizationName,
+  slug: PRIMARY_ACCOUNT.organizationSlug,
 } as const;
 
 // Token that Playwright will send as a cookie.
@@ -79,9 +92,24 @@ const OWNER_MEMBER_ROLE = "owner" as const;
 
 const AUTH_COOKIE_NAME = sessionCookieName();
 
+/** The seed's own organizations: the English test firm and the per-locale marketing firms. */
+const seedOwnedOrganizationIdentity = (organizationId: string) => {
+  const locale = marketingLocaleForOrganization(organizationId);
+  if (locale === undefined) {
+    return undefined;
+  }
+  const account = MARKETING_LOCALE_ACCOUNTS[locale];
+  return {
+    id: account.organizationId,
+    name: account.organizationName,
+    slug: account.organizationSlug,
+  };
+};
+
 const getSeedOrganizationIdentity = (organizationId: string) => {
-  if (organizationId === TEST_ORG.id) {
-    return TEST_ORG;
+  const seedOwned = seedOwnedOrganizationIdentity(organizationId);
+  if (seedOwned !== undefined) {
+    return seedOwned;
   }
 
   return {
@@ -91,17 +119,13 @@ const getSeedOrganizationIdentity = (organizationId: string) => {
   };
 };
 
-const buildMemberId = (organizationId: string, userId: string): string => {
-  const hash = new Bun.CryptoHasher("sha256")
-    .update(`${organizationId}:${userId}`)
-    .digest("hex");
-  return `seed-member-${hash.slice(0, 24)}`;
-};
+const buildMemberId = (organizationId: string, userId: string): string =>
+  seedMemberId({ organizationId, userId });
 
 // Better Auth may create the local test email before this seed runs, using its
 // own generated user id. Resolve by either unique identity so the seed
 // converges on that row instead of colliding on the email constraint.
-const ensureUserExists = async ({
+export const ensureUserExists = async ({
   id,
   name,
   email,
@@ -112,7 +136,7 @@ const ensureUserExists = async ({
   email: string;
   image?: string;
 }) =>
-  db.transaction(async (transaction) => {
+  withAggregateTransaction(db, async (transaction) => {
     await transaction
       .insert(user)
       .values({
@@ -146,6 +170,14 @@ const ensureUserExists = async ({
       .set({ email, emailVerified: true, image, name, updatedAt: now })
       .where(eq(user.id, resolvedId));
 
+    // A seeded account stands for one that registered, which accepted the
+    // professional-use statement there; without it every seeded session would
+    // stop at the acceptance prompt.
+    await acceptProfessionalUse({
+      tx: transaction,
+      userId: toSafeId<"user">(resolvedId),
+    });
+
     return resolvedId;
   });
 
@@ -162,10 +194,10 @@ export const ensureOrganizationExists = async (organizationId: string) => {
     )
   ) {
     // Reconcile the display name in place so a re-seed renames an existing
-    // row (see ensureUserExists). Scoped to the seed's own deterministic org:
+    // row (see ensureUserExists). Scoped to the seed's own deterministic orgs:
     // an operator-supplied STELLA_SEED_ORG_ID points at a real organization
     // whose name and slug are not this script's to rewrite.
-    if (organizationId === TEST_ORG.id) {
+    if (seedOwnedOrganizationIdentity(organizationId) !== undefined) {
       await db.transaction(
         async (tx) =>
           await tx
@@ -260,12 +292,15 @@ export async function ensureSeedColleagueUsers({
 
 export async function ensureSeedColleaguesInOrganization({
   organizationId,
-  colleagueCount = 3,
+  colleagues,
 }: {
   organizationId: string;
-  colleagueCount?: number;
+  colleagues: readonly SeedColleague[];
 }) {
-  const userIds = await ensureSeedColleagueUsers({ colleagueCount });
+  const userIds: string[] = [];
+  for (const colleague of colleagues) {
+    userIds.push(await ensureUserExists(colleague));
+  }
 
   for (const userId of userIds) {
     await ensureMembershipExists({
@@ -315,6 +350,25 @@ export async function ensurePrimarySeedUserInOrganization({
  * Called by `seed-dev.ts` so "Clean + Seed" from the dev menu
  * never hits FK violations on `entities.created_by`.
  */
+/** Opt a seeded owner into the time and billing pages. */
+export const enrolInTimeBilling = async ({
+  organizationId,
+  userId,
+}: {
+  organizationId: string;
+  userId: string;
+}) =>
+  db.transaction(async (tx) => {
+    await tx
+      .insert(featureEnrolments)
+      .values({
+        organizationId: toSafeId<"organization">(organizationId),
+        userId: toSafeId<"user">(userId),
+        featureId: "time-billing",
+      })
+      .onConflictDoNothing();
+  });
+
 export async function ensureTestUsers(organizationId: string = TEST_ORG.id) {
   // Test fixtures must establish the same OAuth resource policy as API
   // startup before creating the first identity. This keeps fresh E2E databases
@@ -328,6 +382,8 @@ export async function ensureTestUsers(organizationId: string = TEST_ORG.id) {
     userId: testUserId,
     role: OWNER_MEMBER_ROLE,
   });
+  // The owner fixture exercises billing pages; other principals retain opt-in access.
+  await enrolInTimeBilling({ organizationId, userId: testUserId });
   const colleagueUserIds = await ensureSeedColleagueUsers();
 
   for (const userId of colleagueUserIds) {
@@ -449,6 +505,10 @@ async function seed() {
     );
     console.log("Created test session");
   }
+  // The stored dev token is reused across runs, so the session never rotates.
+  await db.execute(
+    sql`UPDATE ${session} SET "token" = ${SESSION_TOKEN}, "refresh_mode" = 'fixed' WHERE "id" = ${SESSION_ID}`,
+  );
 
   // --- Playwright storage-state ---
   // better-auth uses signed cookies: the cookie value is
@@ -496,7 +556,7 @@ async function seed() {
 
 if (import.meta.main) {
   seed().catch((error: unknown) => {
-    console.error("Seed failed:", error);
+    printError("Seed failed:", error);
     process.exit(1);
   });
 }

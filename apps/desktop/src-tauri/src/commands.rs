@@ -1,5 +1,6 @@
+use crate::logging::best_effort;
 use std::sync::Arc;
-use tauri::State;
+use tauri::{Manager, State};
 use tauri_plugin_opener::OpenerExt;
 use tokio::sync::Mutex;
 
@@ -8,19 +9,104 @@ use crate::types::{AppSnapshot, DesktopNotificationPreferences};
 
 pub type AppState = Arc<Mutex<SessionManager>>;
 
-const STELLA_DESKTOP_ACCOUNT_URL: &str = "https://my.stll.app/settings/account/desktop";
-
 fn stella_account_url(linked_self_host_origin: Option<&str>) -> String {
-  linked_self_host_origin.map_or_else(
-    || STELLA_DESKTOP_ACCOUNT_URL.to_string(),
-    |origin| format!("{origin}/settings/account/desktop"),
+  let default_web_origin = crate::config::default_connect_target().1;
+  format!(
+    "{}/settings/account/desktop",
+    linked_self_host_origin.unwrap_or(&default_web_origin)
   )
 }
 
+/// The API and web origin a new browser connection goes to: the selected
+/// self-hosted server, else the build's own server. A remembered self-hosted
+/// link without a selected server has no API to connect to yet.
+fn browser_connect_target_from(
+  selected: Option<&crate::types::TrustedSelfHostConnection>,
+  remembered_self_host: bool,
+) -> Result<(String, String), String> {
+  match selected {
+    Some(connection) => Ok((
+      connection.api_base_url.clone(),
+      connection.web_origin.clone(),
+    )),
+    None if remembered_self_host => {
+      Err("Reconnect the self-hosted desktop server to select its API".into())
+    }
+    None => Ok(crate::config::default_connect_target()),
+  }
+}
+
+pub(crate) fn browser_connect_target(
+  manager: &SessionManager,
+) -> Result<(String, String), String> {
+  browser_connect_target_from(
+    manager.selected_self_host_connection(),
+    manager.linked_self_host_origin().is_some(),
+  )
+}
+
+/// The server the account card names for a new connection. It is always the
+/// server `open_stella_account` would open, or the remembered self-hosted one
+/// that has to be reconnected first.
+pub(crate) fn browser_connect_server(manager: &SessionManager) -> String {
+  match browser_connect_target(manager) {
+    Ok((_, web_origin)) => web_origin,
+    Err(_) => manager
+      .linked_self_host_origin()
+      .map_or_else(|| crate::config::default_connect_target().1, str::to_owned),
+  }
+}
+
 #[tauri::command]
-pub async fn get_state(state: State<'_, AppState>) -> Result<AppSnapshot, String> {
+pub async fn get_state(
+  state: State<'_, AppState>,
+  account: State<'_, crate::account::AccountState>,
+) -> Result<AppSnapshot, String> {
+  let crate::account::SessionAccountRead {
+    manager: mut mgr,
+    current,
+    lease: _lease,
+  } = crate::account::read_session_account(&account, &state).await;
+  let current = current?;
+  mgr
+    .set_account_owner(
+      current
+        .as_ref()
+        .map(crate::document_sessions::AccountOwner::for_account),
+    )
+    .await?;
+  drop(mgr);
+  SessionManager::attach_pending_listeners(state.inner()).await;
   let mgr = state.lock().await;
   Ok(mgr.get_snapshot())
+}
+
+#[tauri::command]
+pub async fn open_recovery_folder(
+  target: crate::types::RecoveryTarget,
+  window: tauri::WebviewWindow,
+  state: State<'_, AppState>,
+  account: State<'_, crate::account::AccountState>,
+) -> Result<(), String> {
+  if window.label() != "main" {
+    return Err("document recovery is unavailable in this window".into());
+  }
+  let crate::account::SessionAccountRead {
+    mut manager,
+    current,
+    lease: _lease,
+  } = crate::account::read_session_account(&account, &state).await;
+  let current = current?;
+  manager
+    .set_account_owner(
+      current
+        .as_ref()
+        .map(crate::document_sessions::AccountOwner::for_account),
+    )
+    .await?;
+  drop(manager);
+  SessionManager::attach_pending_listeners(state.inner()).await;
+  state.lock().await.open_recovery_folder(target)
 }
 
 #[tauri::command]
@@ -30,27 +116,18 @@ pub async fn open_stella_account(
   account: State<'_, crate::account::AccountState>,
 ) -> Result<(), String> {
   let linked = crate::account::current(&account).await?;
-  let (selected_self_host, remembered_self_host) = {
-    let manager = state.lock().await;
-    (
-      manager.selected_self_host_connection().cloned(),
-      manager.linked_self_host_origin().is_some(),
-    )
-  };
   if linked.is_none() {
-    if selected_self_host.is_none() && remembered_self_host {
-      return Err("Reconnect the self-hosted desktop server to select its API".into());
-    }
-    let (api_base_url, origin) = selected_self_host.as_ref().map_or(
-      ("https://api.stll.app", "https://my.stll.app"),
-      |connection| {
-        (
-          connection.api_base_url.as_str(),
-          connection.web_origin.as_str(),
-        )
-      },
-    );
-    return crate::account::open_browser_connection(&app, api_base_url, origin);
+    let (api_base_url, origin) = browser_connect_target(&*state.lock().await)?;
+    return crate::account::open_browser_connection(
+      &app,
+      &api_base_url,
+      &origin,
+      crate::account::LinkIntent::Connect,
+    )
+    .await
+      .inspect_err(|error| {
+        tracing::warn!(error = %error, web_origin = %origin, "stella web connection did not open");
+      });
   }
   let web_origin = linked.as_ref().map(|account| account.web_origin.as_str());
   app
@@ -73,7 +150,7 @@ pub async fn open_session_file(
   session_id: String,
   state: State<'_, AppState>,
 ) -> Result<bool, String> {
-  let mgr = state.lock().await;
+  let mut mgr = state.lock().await;
   Ok(mgr.open_session_file(&session_id))
 }
 
@@ -95,7 +172,10 @@ pub async fn finish_session(
   let result = mgr.finish_session(&session_id);
   if result {
     mgr.persist_sessions_public().await;
-    mgr.retry_session(&session_id).await;
+  }
+  drop(mgr);
+  if result {
+    crate::session_manager::retry_session(Arc::clone(state.inner()), &session_id).await;
   }
   Ok(result)
 }
@@ -109,7 +189,10 @@ pub async fn retry_session(
   let result = mgr.retry_session_now(&session_id);
   if result {
     mgr.persist_sessions_public().await;
-    mgr.retry_session(&session_id).await;
+  }
+  drop(mgr);
+  if result {
+    crate::session_manager::retry_session(Arc::clone(state.inner()), &session_id).await;
   }
   Ok(result)
 }
@@ -121,8 +204,46 @@ pub async fn takeover_dialog_respond(
 ) -> Result<(), String> {
   let label = window.label().to_string();
   crate::session_manager::set_takeover_response(&label, approved);
-  let _ = window.close();
+  best_effort(window.close(), "dialog window could not be closed");
   Ok(())
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StaticDialogBounds {
+  max_width: f64,
+  max_height: f64,
+}
+
+#[tauri::command]
+pub async fn fit_static_dialog(
+  window: tauri::WebviewWindow,
+  width: f64,
+  height: f64,
+) -> Result<StaticDialogBounds, String> {
+  if !matches!(
+    window.label(),
+    "selfhost-connect-dialog" | "pdf-sign-dialog"
+  ) {
+    return Err("Only static approval dialogs can request content sizing".into());
+  }
+  if !width.is_finite() || !height.is_finite() || width <= 0.0 || height <= 0.0 {
+    return Err("Invalid dialog content size".into());
+  }
+  let area = crate::window_placement::target_work_area(window.app_handle());
+  let max_width = area.map_or(720.0, |area| (area.width - 64.0).min(720.0));
+  let max_height = area.map_or(960.0, |area| (area.height - 64.0).min(960.0));
+  let size = tauri::LogicalSize::new(width.min(max_width), height.min(max_height));
+  window.set_size(size).map_err(|error| error.to_string())?;
+  if let Some(area) = area {
+    window
+      .set_position(crate::window_placement::centered_origin(area, size))
+      .map_err(|error| error.to_string())?;
+  }
+  Ok(StaticDialogBounds {
+    max_width,
+    max_height,
+  })
 }
 
 #[tauri::command]
@@ -131,7 +252,7 @@ pub async fn self_host_connect_dialog_respond(
   window: tauri::WebviewWindow,
 ) -> Result<(), String> {
   crate::deep_link::set_self_host_connect_response(approved);
-  let _ = window.close();
+  best_effort(window.close(), "dialog window could not be closed");
   Ok(())
 }
 
@@ -147,7 +268,9 @@ pub async fn pdf_sign_respond(
   use crate::pdf_signing::{DialogChoice, PdfSignDialogResponse, PdfSignResult};
 
   let choice = match response {
-    PdfSignDialogResponse::Sign { identity_id } => DialogChoice::Sign { identity_id },
+    PdfSignDialogResponse::Sign { identity_id, pin } => {
+      DialogChoice::Sign { identity_id, pin }
+    }
     PdfSignDialogResponse::Retry => DialogChoice::Retry,
     PdfSignDialogResponse::Cancel => DialogChoice::Cancel,
   };
@@ -156,10 +279,56 @@ pub async fn pdf_sign_respond(
   match waiting {
     Some(outcome) => Ok(outcome.await.unwrap_or(PdfSignResult::Cancelled)),
     None => {
-      let _ = window.close();
+      best_effort(window.close(), "dialog window could not be closed");
       Ok(PdfSignResult::Cancelled)
     }
   }
+}
+
+/// Opens the download page of a smart card driver the signing dialog says
+/// is missing or needs an update. The page names the driver; the address comes from the
+/// desktop's own driver list, never from the page.
+#[tauri::command]
+pub fn pdf_sign_open_driver_download(
+  driver_id: String,
+  app: tauri::AppHandle,
+) -> Result<(), String> {
+  use tauri_plugin_opener::OpenerExt;
+
+  let driver = stella_desktop_pkcs11::drivers::known_driver(&driver_id)
+    .ok_or_else(|| format!("no known smart card driver is named {driver_id}"))?;
+  app
+    .opener()
+    .open_url(driver.download_url, None::<&str>)
+    .map_err(crate::logging::with_cause_logged(
+      "the driver's download page could not be opened",
+    ))
+}
+
+/// The PDF signing dialog re-reads the certificates it offers while it waits
+/// for a choice, so a smart card inserted or removed meanwhile shows up.
+/// Listing reads certificates only and never prompts.
+#[tauri::command]
+pub async fn pdf_sign_identities(
+  window: tauri::WebviewWindow,
+) -> Result<crate::pdf_signing::DialogListing, String> {
+  if window.label() != crate::pdf_signing::DIALOG_LABEL {
+    return Err("Only the PDF signing dialog lists signing certificates".into());
+  }
+  Ok(crate::pdf_signing::dialog_listing().await)
+}
+
+/// The PDF signing dialog's Rescan button: the smart cards are scanned
+/// again, which starts the PKCS #11 helper. The dialog's own refresh never
+/// does; it re-reads only the platform store.
+#[tauri::command]
+pub async fn pdf_sign_rescan_cards(
+  window: tauri::WebviewWindow,
+) -> Result<crate::pdf_signing::DialogListing, String> {
+  if window.label() != crate::pdf_signing::DIALOG_LABEL {
+    return Err("Only the PDF signing dialog scans for smart cards".into());
+  }
+  Ok(crate::pdf_signing::rescan_dialog_listing().await)
 }
 
 #[tauri::command]
@@ -168,8 +337,14 @@ pub async fn respond_to_takeover(
   approved: bool,
   state: State<'_, AppState>,
 ) -> Result<bool, String> {
-  let mgr = state.lock().await;
-  Ok(mgr.respond_to_takeover(&session_id, approved).await)
+  Ok(
+    crate::session_manager::respond_to_takeover(
+      Arc::clone(state.inner()),
+      &session_id,
+      approved,
+    )
+    .await,
+  )
 }
 
 #[tauri::command]
@@ -181,6 +356,29 @@ pub async fn copy_diagnostics(state: State<'_, AppState>) -> Result<bool, String
 #[tauri::command]
 pub async fn email_support() -> Result<bool, String> {
   Ok(SessionManager::email_support())
+}
+
+/// Settings → About: whether a newer version exists. Installs nothing.
+#[tauri::command]
+pub async fn check_for_updates(
+  app: tauri::AppHandle,
+) -> Result<crate::updater::SettingsCheck, String> {
+  crate::updater::check_from_settings(&app).await
+}
+
+/// Settings → About: installs through the check the tray and the
+/// background schedule run, so active desktop edits defer it the same way.
+#[tauri::command]
+pub async fn install_update(
+  app: tauri::AppHandle,
+  state: State<'_, AppState>,
+) -> Result<crate::updater::SettingsCheck, String> {
+  let sessions = state.inner().as_ref();
+  let active_edit_sessions =
+    move || async move { sessions.lock().await.has_active_edit_sessions() };
+  crate::updater::settings_outcome(
+    crate::updater::run_check(&app, active_edit_sessions).await,
+  )
 }
 
 #[tauri::command]
@@ -204,19 +402,22 @@ pub async fn is_autostart_enabled(app: tauri::AppHandle) -> Result<bool, String>
     .map_err(|e| format!("autostart check failed: {e}"))
 }
 
+/// Whether the Settings window shows its Activity tab: the feature decision
+/// only, never activity data.
+#[tauri::command]
+pub fn is_activity_enabled(app: tauri::AppHandle) -> bool {
+  crate::activity::is_enabled(&app)
+}
+
 #[tauri::command]
 pub async fn set_autostart(
   enabled: bool,
   app: tauri::AppHandle,
 ) -> Result<bool, String> {
-  use tauri_plugin_autostart::ManagerExt;
   if enabled {
     crate::autostart::enable(&app)?;
   } else {
-    app
-      .autolaunch()
-      .disable()
-      .map_err(|e| format!("autostart disable failed: {e}"))?;
+    crate::local_store::disable_autostart(&app)?;
   }
   Ok(enabled)
 }
@@ -226,11 +427,37 @@ mod tests {
   use super::*;
 
   #[test]
+  fn browser_connect_target_follows_the_selected_server() {
+    let selected = crate::types::TrustedSelfHostConnection {
+      api_base_url: "https://api.stella.example".into(),
+      trusted_at: "2026-10-15T00:00:00Z".into(),
+      web_origin: "https://stella.example".into(),
+    };
+    for remembered in [true, false] {
+      assert_eq!(
+        browser_connect_target_from(Some(&selected), remembered).unwrap(),
+        (
+          "https://api.stella.example".to_owned(),
+          "https://stella.example".to_owned()
+        )
+      );
+    }
+    assert_eq!(
+      browser_connect_target_from(None, false).unwrap(),
+      crate::config::default_connect_target()
+    );
+    assert!(browser_connect_target_from(None, true).is_err());
+  }
+
+  #[test]
   fn account_settings_url_uses_the_linked_self_host_origin() {
     assert_eq!(
       stella_account_url(Some("https://stella.example")),
       "https://stella.example/settings/account/desktop"
     );
-    assert_eq!(stella_account_url(None), STELLA_DESKTOP_ACCOUNT_URL);
+    assert_eq!(
+      stella_account_url(None),
+      "https://my.stll.app/settings/account/desktop"
+    );
   }
 }

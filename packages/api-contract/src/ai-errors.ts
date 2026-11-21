@@ -5,9 +5,96 @@ export const AI_ERROR_KINDS = [
   "model_unavailable",
   "provider_unavailable",
   "provider_stream_incomplete",
+  "output_incomplete",
+  "output_moderated",
+  "output_invalid",
+  "deadline_exceeded",
   "loop_detected",
   "empty_completion",
+  // A chat turn whose own output grew past what one delivered run may hold.
+  "turn_too_large",
+  // A chat turn run by a harness on the member's own computer.
+  "local_runner_needs_login",
+  "local_runner_limit_reached",
+  "local_runner_unavailable",
+  "local_runner_turn_too_large",
+  "local_runner_not_reached",
+  "local_runner_relinked",
+  "local_runner_restoring",
+  "local_runner_folder_unavailable",
+  "local_runner_no_computer",
+  "local_runner_harness_unavailable",
+  "local_runner_model_unavailable",
+  "local_runner_reasoning_effort_unavailable",
+  "local_runner_approvals_unavailable",
+  "local_runner_folder_not_approved",
   "unknown",
 ] as const;
 
 export type AIErrorKind = (typeof AI_ERROR_KINDS)[number];
+
+/**
+ * Failures the member fixes at a coding agent's sign-in or install in stella
+ * desktop's Settings; every client that shows one says how to get there.
+ */
+const AI_ERROR_KINDS_FIXED_IN_DESKTOP_SETTINGS = [
+  "local_runner_needs_login",
+  "local_runner_harness_unavailable",
+] as const satisfies readonly AIErrorKind[];
+
+export const isFixedInDesktopSettings = (kind: AIErrorKind) =>
+  AI_ERROR_KINDS_FIXED_IN_DESKTOP_SETTINGS.some((fixed) => fixed === kind);
+
+/** Stable REST error codes for failures at an AI boundary. */
+export const AI_FAILURE_CODES = {
+  quota_exhausted: "ai_quota_exhausted",
+  provider_billing: "ai_provider_billing",
+  provider_credentials_rejected: "ai_provider_credentials_rejected",
+  model_unavailable: "ai_model_unavailable",
+  provider_unavailable: "ai_provider_unavailable",
+  provider_stream_incomplete: "ai_provider_stream_incomplete",
+  output_incomplete: "ai_output_incomplete",
+  output_moderated: "ai_output_moderated",
+  output_invalid: "ai_output_invalid",
+  deadline_exceeded: "ai_deadline_exceeded",
+  loop_detected: "ai_loop_detected",
+  empty_completion: "ai_empty_completion",
+  turn_too_large: "ai_turn_too_large",
+  local_runner_needs_login: "ai_local_runner_needs_login",
+  local_runner_limit_reached: "ai_local_runner_limit_reached",
+  local_runner_unavailable: "ai_local_runner_unavailable",
+  local_runner_turn_too_large: "ai_local_runner_turn_too_large",
+  local_runner_not_reached: "ai_local_runner_not_reached",
+  local_runner_relinked: "ai_local_runner_relinked",
+  local_runner_restoring: "ai_local_runner_restoring",
+  local_runner_folder_unavailable: "ai_local_runner_folder_unavailable",
+  local_runner_no_computer: "ai_local_runner_no_computer",
+  local_runner_harness_unavailable: "ai_local_runner_harness_unavailable",
+  local_runner_model_unavailable: "ai_local_runner_model_unavailable",
+  local_runner_reasoning_effort_unavailable:
+    "ai_local_runner_reasoning_effort_unavailable",
+  local_runner_approvals_unavailable: "ai_local_runner_approvals_unavailable",
+  local_runner_folder_not_approved: "ai_local_runner_folder_not_approved",
+  unknown: "ai_unknown",
+  role_not_configured: "ai_role_not_configured",
+  own_key_required: "ai_own_key_required",
+  provider_task_unsupported: "ai_provider_task_unsupported",
+  managed_provider_unavailable: "ai_managed_provider_unavailable",
+} as const satisfies Record<AIErrorKind | AIFailureConfigurationKind, string>;
+
+type AIFailureConfigurationKind =
+  | "role_not_configured"
+  | "own_key_required"
+  | "provider_task_unsupported"
+  | "managed_provider_unavailable";
+
+export type AIFailureCode =
+  (typeof AI_FAILURE_CODES)[keyof typeof AI_FAILURE_CODES];
+
+const AI_FAILURE_CODE_SET: ReadonlySet<string> = new Set(
+  Object.values(AI_FAILURE_CODES),
+);
+
+/** Whether a handler's code is one of the AI failure codes. */
+export const isAIFailureCode = (value: unknown): value is AIFailureCode =>
+  typeof value === "string" && AI_FAILURE_CODE_SET.has(value);

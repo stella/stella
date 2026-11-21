@@ -95,6 +95,8 @@ const searchPastChatsOutputSchema = v.strictObject({
       matterRef: v.nullable(v.string()),
       messageId: v.string(),
       role: v.string(),
+      revision: v.pipe(v.number(), v.integer(), v.minValue(0)),
+      edited: v.boolean(),
       excerpt: v.string(),
       createdAt: v.string(),
     }),
@@ -107,6 +109,7 @@ type PastChatSearchRow = {
   excerpt: string;
   messageId: SafeId<"chatMessage">;
   role: ChatMessageRole;
+  revision: number;
   threadId: SafeId<"chatThread">;
   threadTitle: string;
   workspaceId: SafeId<"workspace"> | null;
@@ -192,6 +195,7 @@ export const createPastChatTools = ({
           t.workspace_id AS "workspaceId",
           t.data_workspace_ids AS "dataWorkspaceIds",
           d.role,
+          m.revision,
           ts_headline(
             'simple',
             left(d.searchable_text, 2000),
@@ -201,6 +205,7 @@ export const createPastChatTools = ({
           d.created_at AS "createdAt"
         FROM chat_message_search_documents d
         JOIN chat_threads t ON t.id = d.thread_id
+        JOIN chat_messages m ON m.id = d.message_id
         WHERE d.tsv @@ ${tsQuery}
           AND d.thread_id <> ${threadId}
           AND t.user_id = ${userId}
@@ -232,6 +237,8 @@ export const createPastChatTools = ({
               : refRegistry.toMatterRef(row.workspaceId),
           messageId: row.messageId,
           role: row.role,
+          revision: row.revision,
+          edited: row.revision > 0,
           // Another chat's raw refs name nothing here; its excerpt shows them
           // neutrally (expand-chat-history spells them as this chat's refs).
           excerpt: refRegistry.hydrateAssistantTextRefs(

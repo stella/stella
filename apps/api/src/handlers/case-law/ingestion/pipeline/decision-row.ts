@@ -1,20 +1,36 @@
-import { Result, panic } from "better-result";
-import { and, eq, isNotNull, isNull, sql } from "drizzle-orm";
+import { panic, Result } from "better-result";
+import { and, eq, inArray, isNotNull } from "drizzle-orm";
 
 import { createCaseLawDecisionSlug } from "@stll/api-contract/case-law-decision-route";
 
+import {
+  CASE_LAW_DECISIONS_SLUG_UIDX,
+  CASE_LAW_DECISIONS_SOURCE_DOCUMENT_IDX,
+  FALLBACK_DECISION_UNIQUE_INDEXES,
+  onlineUniqueIndexTarget,
+} from "@/api/db/online-unique-indexes";
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
-import { caseLawDecisionIdentifiers, caseLawDecisions } from "@/api/db/schema";
-import { lockCitationGraph } from "@/api/handlers/case-law/citation-resolution";
+import {
+  caseLawDecisionFallbackIdentities,
+  caseLawDecisionIdentifiers,
+  caseLawDecisions,
+} from "@/api/db/schema";
+import { runCitationGraphTransaction } from "@/api/handlers/case-law/citation-graph-transaction";
+import type { CitationGraphTransaction } from "@/api/handlers/case-law/citation-graph-transaction";
+import { settleReopenedCitations } from "@/api/handlers/case-law/citation-resolution";
+import { refreshHostDecisionIdentifiersTx } from "@/api/handlers/case-law/decision-identifier-claims-persistence";
 import {
   CASE_LAW_DECISION_SLUG_ALLOCATION_ATTEMPTS,
   createCaseLawDecisionSlugCandidate,
 } from "@/api/handlers/case-law/decisions/slug";
 import { writeDecisionCitations } from "@/api/handlers/case-law/ingestion/pipeline/citations";
+import { findFallbackDecisionTx } from "@/api/handlers/case-law/ingestion/pipeline/decision-identity";
+import { writeDecisionReviews } from "@/api/handlers/case-law/ingestion/pipeline/decision-reviews";
 import {
   announceDecisionIdentifiers,
   reconcileStableProjection,
+  recordParsedGenerationTx,
   writeDecisionJudges,
 } from "@/api/handlers/case-law/ingestion/pipeline/decision-row-context";
 import type { DecisionRowWrite } from "@/api/handlers/case-law/ingestion/pipeline/decision-row-context";
@@ -24,6 +40,10 @@ import {
   lostRowWriteStatus,
   readDocumentlessPayloadStateTx,
 } from "@/api/handlers/case-law/ingestion/pipeline/decision-row-update";
+import {
+  matchHostDecisionsTx,
+  persistOwnCollectionPartTx,
+} from "@/api/handlers/case-law/ingestion/pipeline/held-decision-attachment";
 import { DECISION_ROW_WRITE_STATUS } from "@/api/handlers/case-law/ingestion/pipeline/types";
 import type { DecisionRowWriteStatus } from "@/api/handlers/case-law/ingestion/pipeline/types";
 import {
@@ -34,6 +54,15 @@ import {
   selectComposableSupplements,
 } from "@/api/handlers/case-law/ingestion/supplement-composition";
 import type { SafeId } from "@/api/lib/branded-types";
+import { canonicalDecisionIdSql } from "@/api/lib/case-law/decision-alias";
+import { DECISION_IDENTIFIER_CLAIM } from "@/api/lib/case-law/decision-identifier-claims";
+import { runDecisionWriteExtension } from "@/api/lib/case-law/decision-write-extension";
+import {
+  decisionFallbackState,
+  decisionStorageLockKeys,
+} from "@/api/lib/case-law/fallback-decision-identity";
+import { lockCaseLawFallbackIdentities } from "@/api/lib/db/aggregate-lock";
+import { corpusContentHash } from "@/api/lib/legal-search/corpus-content-hash";
 import type { ActiveCorpusProjectionSourceLock } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import { lockActiveCorpusProjectionSourceByIdTx } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import { markListingOnly } from "@/api/lib/legal-search/ingestion-normalization";
@@ -48,8 +77,10 @@ const insertedRowValues = (
     result,
     persistedSourceDocumentId,
     persistedDecisionDate,
+    storageIdentity,
     observedAt,
     observationOrder,
+    sourceFingerprintVersion,
     shape: { storesUnpublishedWithoutDocument },
     plan: { docketColumns, languageGroupKey, payloadColumns, preparedMetadata },
     rawArtifact: { sourceRawS3Key, sourceRawContentType },
@@ -60,6 +91,10 @@ const insertedRowValues = (
   sourceId,
   ...docketColumns,
   sourceDocumentId: persistedSourceDocumentId,
+  ...decisionFallbackState({
+    storage: storageIdentity,
+    persistedSourceDocumentId,
+  }).columns,
   sheetNumber: result.sheetNumber,
   slug,
   ecli: result.ecli,
@@ -81,6 +116,7 @@ const insertedRowValues = (
   sourceRawS3Key,
   sourceRawContentType,
   sourceHash: result.rawHash,
+  sourceHashVersion: sourceFingerprintVersion,
   sourceObservedAt: observedAt,
   sourceObservationOrder: observationOrder,
   sourceObservationHash: result.rawHash,
@@ -105,7 +141,7 @@ type DecisionSlugLadder = (attempt: SlugAllocationAttempt) => string;
  * violation, as it did when each candidate was a transaction of its own.
  */
 const insertDecisionRowTx = async (
-  tx: Transaction,
+  tx: CitationGraphTransaction<Transaction>,
   write: DecisionRowWrite,
   slugLadder: DecisionSlugLadder,
 ): Promise<SafeId<"caseLawDecision">> => {
@@ -124,7 +160,10 @@ const insertDecisionRowTx = async (
       // The slug index is `(slug) WHERE slug IS NOT NULL`; the predicate
       // lets Postgres infer it as the only arbiter.
       .onConflictDoNothing({
-        target: caseLawDecisions.slug,
+        target: onlineUniqueIndexTarget(
+          CASE_LAW_DECISIONS_SLUG_UIDX,
+          caseLawDecisions,
+        ),
         where: isNotNull(caseLawDecisions.slug),
       })
       .returning({ id: caseLawDecisions.id });
@@ -148,7 +187,7 @@ const insertDecisionRowTx = async (
  * the citation graph, and its citations.
  */
 const finishInsertedRowTx = async (
-  tx: Transaction,
+  tx: CitationGraphTransaction<Transaction>,
   write: DecisionRowWrite,
   insertedId: SafeId<"caseLawDecision">,
   projectionLock: ActiveCorpusProjectionSourceLock | null,
@@ -157,9 +196,20 @@ const finishInsertedRowTx = async (
     observedAt,
     plan: { citations, identifierRows },
   } = write;
+  await writeDecisionReviews(tx, {
+    decisionId: insertedId,
+    country: write.result.country,
+    previousIdentity: null,
+    reviews: write.plan.reviews,
+  });
+
   await writeDecisionJudges(tx, write, insertedId);
 
-  await announceDecisionIdentifiers(tx, write, insertedId, identifierRows);
+  // The row and its identifiers are stored, so the citations that were
+  // waiting for this decision are answered here rather than by the walk.
+  await settleReopenedCitations(tx, [
+    await announceDecisionIdentifiers(tx, write, insertedId, identifierRows),
+  ]);
 
   switch (citations.disposition) {
     case "annotation-only":
@@ -170,7 +220,6 @@ const finishInsertedRowTx = async (
         // One indexed lookup per citation against the fetch and parse this
         // page already paid for; without it every new citation waits for the
         // standing walk to come round, and the citator trails the crawl.
-        await lockCitationGraph(tx);
         await writeDecisionCitations(tx, {
           decisionId: insertedId,
           citations,
@@ -183,8 +232,105 @@ const finishInsertedRowTx = async (
       citations satisfies never;
       panic("Unhandled citation disposition");
   }
+  await runDecisionWriteExtension(tx, insertedId, {
+    payload: {
+      ...write.plan.corpusPayload,
+      contentHash: corpusContentHash(write.plan.corpusPayload),
+    },
+    ...(write.signal === undefined ? {} : { signal: write.signal }),
+  });
   await reconcileStableProjection(tx, write, insertedId, projectionLock);
+  await recordParsedGenerationTx(tx, { write, phase: "row" });
   return DECISION_ROW_WRITE_STATUS.APPLIED;
+};
+
+/** The fallback identity aliases a write reserves for its decision. */
+const fallbackAliasRows = (
+  write: DecisionRowWrite,
+  decisionId: SafeId<"caseLawDecision">,
+  previous?: DecisionRowWrite["existing"],
+) =>
+  decisionFallbackState({
+    storage: write.storageIdentity,
+    previous,
+    persistedSourceDocumentId: write.persistedSourceDocumentId,
+  }).aliases.map((identityKey) => ({
+    sourceId: write.sourceId,
+    identityKey,
+    decisionId,
+  }));
+
+/** Every reserved alias must name the decision that reserved it. */
+const confirmFallbackAliasOwnersTx = async (
+  tx: Transaction,
+  rows: ReturnType<typeof fallbackAliasRows>,
+) => {
+  const [first] = rows;
+  if (first === undefined) {
+    return;
+  }
+  const owners = await tx
+    .select({
+      id: canonicalDecisionIdSql(caseLawDecisionFallbackIdentities.decisionId),
+    })
+    .from(caseLawDecisionFallbackIdentities)
+    .where(
+      and(
+        eq(caseLawDecisionFallbackIdentities.sourceId, first.sourceId),
+        inArray(
+          caseLawDecisionFallbackIdentities.identityKey,
+          rows.map(({ identityKey }) => identityKey),
+        ),
+      ),
+    )
+    .limit(rows.length);
+  if (
+    owners.length !== rows.length ||
+    owners.some(({ id }) => id !== first.decisionId)
+  ) {
+    panic("Fallback alias reservation conflicts with its decision owner");
+  }
+};
+
+/**
+ * Lock the write's fallback identity keys in a fixed order and read the
+ * decision that holds them now: the existing row a content or strong identity
+ * resolves to, or `IDENTITY_MOVED` when another decision took it since the
+ * plan read it.
+ */
+const lockFallbackWinnerTx = async (
+  tx: Transaction,
+  write: DecisionRowWrite,
+): Promise<
+  | { type: "moved" }
+  | { type: "settled"; existing: DecisionRowWrite["existing"] }
+> => {
+  const { sourceId, decisionId, existing } = write;
+  // Sorted strong aliases and weak evidence locks prevent inverse-order deadlocks.
+  await lockCaseLawFallbackIdentities({
+    tx,
+    sourceId,
+    identityKeys: decisionStorageLockKeys(write.storageIdentity),
+  });
+  if (
+    write.storageIdentity.type !== "content" &&
+    write.storageIdentity.type !== "strong"
+  ) {
+    return { type: "settled", existing };
+  }
+  const winner = await findFallbackDecisionTx(tx, write);
+  // A re-parse writes its own row, whose identity the new document may move.
+  if (write.inputProvenance.type !== "observation" && winner === undefined) {
+    return { type: "settled", existing };
+  }
+  if (
+    existing !== undefined
+      ? winner?.id !== existing.id
+      : winner !== undefined && winner.id !== decisionId
+  ) {
+    return { type: "moved" };
+  }
+  return { type: "settled", existing: winner };
 };
 
 /**
@@ -197,16 +343,32 @@ const writeDecisionRow = async (
   write: DecisionRowWrite,
   slugLadder?: DecisionSlugLadder,
 ): Promise<DecisionRowWriteStatus> =>
-  await scopedDb(async (tx) => {
+  await runCitationGraphTransaction(scopedDb, async (tx) => {
     const {
       sourceId,
       decisionId,
-      existing,
       composition,
       composedSupplements,
       shape: { preservesExistingDetail },
-      plan: { payloadColumns, storedPayloadUnchanged },
+      plan: { payloadColumns, replacedBlockAnchors, storedPayloadUnchanged },
+      inputProvenance,
     } = write;
+    const fallbackWinner = await lockFallbackWinnerTx(tx, write);
+    if (fallbackWinner.type === "moved") {
+      return DECISION_ROW_WRITE_STATUS.IDENTITY_MOVED;
+    }
+    const { existing } = fallbackWinner;
+    if (existing === undefined && write.heldDecisionCheck !== undefined) {
+      // The graph admission precedes every canonical row insert. Recheck
+      // after admission so concurrent publisher posts cannot both create a row.
+      const candidate = await matchHostDecisionsTx(tx, {
+        ...write.heldDecisionCheck,
+        sourceId,
+      });
+      if (candidate.type !== "none") {
+        return DECISION_ROW_WRITE_STATUS.IDENTITY_MOVED;
+      }
+    }
     // audit: skip — background case-law ingestion pipeline; public case-law data, not user actions
     const projectionLock = await lockActiveCorpusProjectionSourceByIdTx(tx, {
       family: "case_law",
@@ -262,8 +424,20 @@ const writeDecisionRow = async (
         // payload fence: another write replaced what the plan compared
         // against.
         return await lostRowWriteStatus(tx, write, existing.id, {
-          payloadFenced: storedPayloadUnchanged,
+          payloadFenced:
+            storedPayloadUnchanged ||
+            replacedBlockAnchors !== null ||
+            inputProvenance.type !== "observation",
         });
+      }
+
+      const refreshedAliases = fallbackAliasRows(write, existing.id, existing);
+      if (refreshedAliases.length > 0) {
+        await tx
+          .insert(caseLawDecisionFallbackIdentities)
+          .values(refreshedAliases)
+          .onConflictDoNothing();
+        await confirmFallbackAliasOwnersTx(tx, refreshedAliases);
       }
 
       if (payloadNeedsGuard) {
@@ -277,6 +451,14 @@ const writeDecisionRow = async (
           existing,
         );
         if (payloadState === undefined || payloadState.holdsDocument) {
+          // The description update above commits with this status, and its
+          // columns (the country among them) are projection inputs.
+          await reconcileStableProjection(
+            tx,
+            write,
+            existing.id,
+            projectionLock,
+          );
           return await lostRowWriteStatus(tx, write, existing.id, {
             payloadFenced: false,
           });
@@ -290,44 +472,25 @@ const writeDecisionRow = async (
       }
 
       if (!preservesExistingDetail) {
-        // Observed identifiers are re-derived; declared aliases stay, and an
-        // observed identifier equal to one is already held by it.
-        await tx
-          .delete(caseLawDecisionIdentifiers)
-          .where(
-            and(
-              eq(caseLawDecisionIdentifiers.decisionId, existing.id),
-              isNull(caseLawDecisionIdentifiers.declaredAt),
-            ),
-          );
-        await tx
-          .insert(caseLawDecisionIdentifiers)
-          .values(
-            write.plan.identifierRows.map((identifier) => ({
-              decisionId: existing.id,
-              ...identifier,
-            })),
-          )
-          // A declared alias the observation also derives takes the
-          // observed spelling and stays declared.
-          .onConflictDoUpdate({
-            target: [
-              caseLawDecisionIdentifiers.decisionId,
-              caseLawDecisionIdentifiers.type,
-              caseLawDecisionIdentifiers.normalizedValue,
-            ],
-            set: { value: sql`excluded.value` },
-          });
+        await refreshHostDecisionIdentifiersTx(tx, {
+          decisionId: existing.id,
+          identifiers: write.plan.identifierRows,
+        });
         await writeDecisionJudges(tx, write, existing.id);
       }
 
-      return await finishRefreshedRowTx(
+      return await finishRefreshedRowTx({
         tx,
         write,
         existing,
         replacedState,
         projectionLock,
-      );
+      });
+    }
+
+    if (inputProvenance.type !== "observation") {
+      // A reparse must never recreate a removed decision under a new identity.
+      return DECISION_ROW_WRITE_STATUS.STALE_PAYLOAD;
     }
 
     if (slugLadder === undefined) {
@@ -335,6 +498,14 @@ const writeDecisionRow = async (
     }
 
     const insertedId = await insertDecisionRowTx(tx, write, slugLadder);
+    const insertedAliases = fallbackAliasRows(write, insertedId);
+    if (insertedAliases.length > 0) {
+      await tx
+        .insert(caseLawDecisionFallbackIdentities)
+        .values(insertedAliases)
+        .onConflictDoNothing();
+      await confirmFallbackAliasOwnersTx(tx, insertedAliases);
+    }
     if (composedSupplements.length > 0) {
       await markSupplementsMerged(tx, {
         sourceId,
@@ -347,8 +518,10 @@ const writeDecisionRow = async (
       write.plan.identifierRows.map((identifier) => ({
         decisionId: insertedId,
         ...identifier,
+        independentClaims: [DECISION_IDENTIFIER_CLAIM.HOST],
       })),
     );
+    await persistOwnCollectionPartTx(tx, write, scopedDb);
     return await finishInsertedRowTx(tx, write, insertedId, projectionLock);
   });
 
@@ -364,10 +537,16 @@ export const writeDecisionRowWithSlug = async (
   scopedDb: ScopedDb,
   write: DecisionRowWrite,
 ): Promise<Result<DecisionRowWriteStatus, unknown>> => {
-  const { sourceId, existing, persistedSourceDocumentId, result } = write;
+  const {
+    sourceId,
+    existing,
+    persistedSourceDocumentId,
+    storageIdentity,
+    result,
+  } = write;
   const slugIdentity = persistedSourceDocumentId
     ? `${sourceId}\u0000document\u0000${persistedSourceDocumentId}`
-    : `${sourceId}\u0000case\u0000${result.caseNumber}\u0000${result.language}`;
+    : `${sourceId}\u0000case\u0000${JSON.stringify(decisionFallbackState({ storage: storageIdentity }).columns)}`;
   const baseSlug = createCaseLawDecisionSlug(result.caseNumber);
   const slugLadder: DecisionSlugLadder = (attempt) =>
     attempt === 0
@@ -392,7 +571,7 @@ export const writeDecisionRowWithSlug = async (
     isPgConstraintError(
       rowWrite.error,
       PG_ERROR.UNIQUE_VIOLATION,
-      "case_law_decisions_slug_uidx",
+      CASE_LAW_DECISIONS_SLUG_UIDX,
     )
   ) {
     // Only the ladder's last candidate can raise on the slug index.
@@ -405,20 +584,16 @@ export const writeDecisionRowWithSlug = async (
   return rowWrite;
 };
 
-/** Whether a row write lost a race to insert the same publisher identity. */
+/**
+ * Whether a row write lost a race to insert the same publisher identity,
+ * fallback identity or fallback content. The contract release relies on the
+ * fallback unique indexes the expansion validated online.
+ */
 export const isConcurrentIdentityInsert = (error: unknown): boolean =>
-  isPgConstraintError(
-    error,
-    PG_ERROR.UNIQUE_VIOLATION,
-    "case_law_decisions_source_document_idx",
-  ) ||
-  isPgConstraintError(
-    error,
-    PG_ERROR.UNIQUE_VIOLATION,
-    "case_law_decisions_source_case_lang_null_idx",
-  ) ||
-  isPgConstraintError(
-    error,
-    PG_ERROR.UNIQUE_VIOLATION,
+  [
+    CASE_LAW_DECISIONS_SOURCE_DOCUMENT_IDX,
     "case_law_decisions_pkey",
+    ...FALLBACK_DECISION_UNIQUE_INDEXES.map(({ name }) => name),
+  ].some((constraint) =>
+    isPgConstraintError(error, PG_ERROR.UNIQUE_VIOLATION, constraint),
   );

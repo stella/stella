@@ -48,6 +48,16 @@ import { writeFile } from "node:fs/promises";
 import path from "node:path";
 import * as v from "valibot";
 
+import {
+  exactDecisionMatches,
+  parseDecisionQuery,
+} from "@stll/api-contract/decision-query-intent";
+import { MCP_CAPABILITY_EXECUTORS } from "@stll/api-contract/mcp-capability-executors";
+
+import {
+  decisionConstraints,
+  readDecisionCitation,
+} from "@/api/handlers/legal-resolve/decision-constraints";
 import type { AvailableChatSkill } from "@/api/lib/agent-skills/skills";
 import { resolveCaching } from "@/api/lib/ai-config";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -55,6 +65,8 @@ import {
   streamChatChunks,
   toolCallEndInputOf,
 } from "@/api/lib/chat/tanstack-chat-runtime";
+import { decisionDocketGrammarForCountry } from "@/api/lib/legal-search/adapter-manifest";
+import { NO_ORGANIZATION_MODEL_DISPATCH } from "@/api/lib/rate-limit/model-dispatch-admission";
 import {
   mergeGenerationOptions,
   systemPromptsPatch,
@@ -71,7 +83,6 @@ import type {
 } from "@/api/mcp/tool-types";
 
 import { RESERVED_FLAGS } from "../../../packages/cli/src/annotations";
-import { readCapabilityCatalog } from "../../../packages/cli/src/capability-catalog-data";
 import { parseCapabilityCatalog } from "../../../packages/cli/src/capability-catalog-load";
 import { uploadCommand } from "../../../packages/cli/src/commands/upload";
 import { buildCliRouteTree } from "../../../packages/cli/src/generate-capability-tree";
@@ -81,7 +92,9 @@ import type {
   RegistryToolListing,
   RouteNode,
 } from "../../../packages/cli/src/route-types";
+import { buildCapabilityCatalog } from "../scripts/export-capability-catalog";
 import { sameCliFlagValue } from "./lib/cli-flag-score";
+import { composeCliToolInput } from "./lib/cli-tool-input";
 import { runEvalModelTurn } from "./lib/model-turn";
 
 // A bare id resolves through whichever configured provider rates it (GPT
@@ -151,8 +164,8 @@ const parseRegistryListings = (raw: unknown): RegistryToolListing[] => {
   return listings;
 };
 
-const loadCapabilityCatalog = () => {
-  const catalogRaw = readCapabilityCatalog();
+const loadCapabilityCatalog = async () => {
+  const catalogRaw = await buildCapabilityCatalog();
   const entries = parseCapabilityCatalog(catalogRaw);
   if (entries === null) {
     return panic(
@@ -162,7 +175,7 @@ const loadCapabilityCatalog = () => {
   return entries;
 };
 
-const CAPABILITY_CATALOG = loadCapabilityCatalog();
+const CAPABILITY_CATALOG = await loadCapabilityCatalog();
 
 const buildCliSchemaTree = (): RouteNode => {
   const listings = parseRegistryListings(
@@ -236,7 +249,7 @@ const CLI_INSTRUCTION =
   "do this, do not invent one: reply with one short sentence explaining " +
   "why, and no code block.";
 
-const MCP_SYSTEM_PROMPT = getMcpInstructions("default");
+const MCP_SYSTEM_PROMPT = await getMcpInstructions("default");
 
 // --- arg checking -----------------------------------------------------------
 
@@ -391,8 +404,7 @@ type McpTaskSpec = {
    * model is asked to read.
    */
   preflight?:
-    | { type: "capability-described" }
-    | { type: "compat-search-returned" };
+    { type: "capability-described" } | { type: "compat-search-returned" };
   /**
    * The tool names this task exposes, for a task about a client that carries
    * fewer tools than the surface has. Absent exposes the whole default
@@ -421,6 +433,60 @@ const field = (
     : [
         `${key}: expected ${JSON.stringify(expected)}, got ${JSON.stringify(args[key])}`,
       ];
+
+/**
+ * Whether an identifier carries the docket and the court the brief cited,
+ * read the way the resolver reads it: a model may spell the court as it
+ * likes (`Obvodní soud pro Prahu 6`, `OS Praha 6`, before or after the
+ * docket), but dropping it leaves the docket unconstrained, and a court the
+ * resolver cannot read constrains it to nothing.
+ */
+const citedCourtIssues = (
+  args: Record<string, unknown>,
+  { docket, court }: { docket: string; court: string },
+): string[] => {
+  const identifier = args["identifier"];
+  if (typeof identifier !== "string") {
+    return [`identifier: expected a string, got ${JSON.stringify(identifier)}`];
+  }
+  const grammar = decisionDocketGrammarForCountry("CZE");
+  const parsed = parseDecisionQuery(identifier, { grammar });
+  if (parsed.type !== "identifier") {
+    return [`identifier: ${JSON.stringify(identifier)} names no docket`];
+  }
+  const { intent, courtText } = readDecisionCitation({
+    country: "CZE",
+    identifier,
+    intent: parsed,
+    grammar,
+    reporters: null,
+  });
+  const { courts } = decisionConstraints({
+    country: "CZE",
+    intent,
+    reporters: null,
+    courtText,
+    holders: [],
+  });
+  const expectedCourt = `CZE:${court}`;
+  return [
+    // A sheet the brief did not cite would constrain the decision too.
+    ...(exactDecisionMatches(intent, [{ caseNumber: docket, ecli: null }])
+      .length === 1 &&
+    intent.kind === "docket" &&
+    intent.selector.kind === "none"
+      ? []
+      : [`identifier: expected docket ${docket}, read ${intent.value}`]),
+    ...(courts.length === 1 &&
+    courts[0]?.type === "court" &&
+    courts[0].courts.length === 1 &&
+    courts[0].courts[0] === expectedCourt
+      ? []
+      : [
+          `identifier: expected the court ${court}, read ${JSON.stringify(courts)} from ${JSON.stringify(identifier)}`,
+        ]),
+  ];
+};
 
 const nested = (
   args: Record<string, unknown>,
@@ -526,6 +592,7 @@ const skillFixtureRow = ({
   description,
   displayName: name,
   id: toSafeId<"agentSkill">(`skill_${slug}`),
+  invocation: "auto",
   license: null,
   metadata: {},
   name: slug,
@@ -579,6 +646,9 @@ const CASE_LAW_SECOND_DECISION_ID = "b2b2b2b2-0000-4000-8000-000000000032";
 // A published Czech docket, the way a brief cites one. Not UUID-shaped and not
 // guessable, so the task carries it the way a citation in a document would.
 const CASE_LAW_DOCKET = "Pl. ÚS 33/97";
+// A district-court docket shape: one docket number that several district
+// courts hold, so only the court the citation names singles the decision out.
+const CASE_LAW_DISTRICT_DOCKET = "8 C 123/2024";
 // A legislation work is addressed by its ELI, and its provisions by the
 // publisher's own anchors; neither is UUID-shaped, and neither is guessable,
 // so the tasks carry them the way a previous call would have returned them.
@@ -591,6 +661,21 @@ const STATUTE_SECOND_ANCHOR = "par_2079";
 const SANCTIONS_COMPANY_ID = "26863154";
 
 const TASKS: readonly Task[] = [
+  {
+    id: "describe-invoice-export",
+    request:
+      "Describe invoices.export before exporting a matter's invoices for the accountant. Check which formats it accepts and its permissions without invoking it.",
+    mcp: {
+      toolName: "describe_capability",
+      exampleArgs: { capability: "invoices.export" },
+      checkArgs: (args) => field(args, "capability", "invoices.export"),
+    },
+    cli: {
+      kind: "command",
+      path: ["capability", "describe"],
+      flags: { capability: "invoices.export" },
+    },
+  },
   {
     id: "describe-invoice-pdf",
     request:
@@ -670,37 +755,108 @@ const TASKS: readonly Task[] = [
     },
   },
   {
-    id: "lookup-case-law",
+    id: "resolve-case-law",
     request: `A brief cites ${CASE_LAW_DOCKET}. Find that decision in the Czech corpus so I can open it.`,
     mcp: {
-      toolName: "lookup_case_law",
-      exampleArgs: { country: "CZE", identifiers: [CASE_LAW_DOCKET] },
-      checkArgs: (args) => {
-        const identifiers = args["identifiers"];
-        if (!Array.isArray(identifiers)) {
-          return ["identifiers: expected an array"];
-        }
-        return [
-          // The docket is the whole point: a paraphrase is a text search, and
-          // search_case_law is the tool for that.
-          ...(identifiers.length === 1 && identifiers.at(0) === CASE_LAW_DOCKET
-            ? []
-            : [
-                `identifiers: expected [${JSON.stringify(CASE_LAW_DOCKET)}], got ${JSON.stringify(identifiers)}`,
-              ]),
-          ...(typeof args["country"] === "string" &&
-          args["country"].toUpperCase() === "CZE"
-            ? []
-            : [
-                `country: expected CZE, got ${JSON.stringify(args["country"])}`,
-              ]),
-        ];
-      },
+      toolName: "resolve_case_law_decision",
+      exampleArgs: { country: "CZE", identifier: CASE_LAW_DOCKET },
+      checkArgs: (args) => [
+        ...(args["identifier"] === CASE_LAW_DOCKET
+          ? []
+          : [
+              `identifier: expected ${JSON.stringify(CASE_LAW_DOCKET)}, got ${JSON.stringify(args["identifier"])}`,
+            ]),
+        ...(typeof args["country"] === "string" &&
+        args["country"].toUpperCase() === "CZE"
+          ? []
+          : [`country: expected CZE, got ${JSON.stringify(args["country"])}`]),
+      ],
     },
     cli: {
       kind: "command",
-      path: ["case-law", "lookup"],
-      flags: { country: "CZE", identifiers: CASE_LAW_DOCKET },
+      path: ["case-law", "resolve"],
+      flags: { country: "CZE", identifier: CASE_LAW_DOCKET },
+    },
+  },
+  // A district-court docket a brief cites with its court. The same docket is
+  // held by other courts, so the court belongs in the identifier, where the
+  // resolver reads it as a constraint; the short form is what briefs write.
+  ...(
+    [
+      {
+        id: "resolve-case-law-district-court",
+        court: "Obvodní soud pro Prahu 6",
+        cited: "Obvodní soud pro Prahu 6",
+      },
+      {
+        id: "resolve-case-law-district-court-short-form",
+        court: "Obvodní soud pro Prahu 6",
+        cited: "OS Praha 6",
+      },
+    ] as const
+  ).map(({ id, court, cited }): Task => ({
+    id,
+    request: `A brief cites the judgment ${CASE_LAW_DISTRICT_DOCKET} of ${cited}. The same docket number exists at other courts. Find that decision in the Czech corpus so I can open it.`,
+    cliRequest: `Resolve the Czech decision with identifier "${CASE_LAW_DISTRICT_DOCKET} ${cited}" in country CZE.`,
+    mcp: {
+      toolName: "resolve_case_law_decision",
+      exampleArgs: {
+        country: "CZE",
+        identifier: `${CASE_LAW_DISTRICT_DOCKET} ${cited}`,
+      },
+      checkArgs: (args) => [
+        ...citedCourtIssues(args, {
+          docket: CASE_LAW_DISTRICT_DOCKET,
+          court,
+        }),
+        ...(typeof args["country"] === "string" &&
+        args["country"].toUpperCase() === "CZE"
+          ? []
+          : [`country: expected CZE, got ${JSON.stringify(args["country"])}`]),
+      ],
+    },
+    cli: {
+      kind: "command",
+      path: ["case-law", "resolve"],
+      flags: {
+        country: "CZE",
+        identifier: `${CASE_LAW_DISTRICT_DOCKET} ${cited}`,
+      },
+    },
+  })),
+  {
+    id: "resolve-law-citation",
+    request:
+      "Resolve section 1729 of the Czech statute cited as zákon č. 89/2012 Sb., in its expression on 2020-01-01.",
+    cliRequest:
+      "Resolve section 1729 of zákon č. 89/2012 Sb. in country CZE on 2020-01-01. Carry the citation source in inline --input JSON.",
+    mcp: {
+      toolName: "resolve_law_citation",
+      exampleArgs: {
+        country: "CZE",
+        source: { type: "citation", citation: "zákon č. 89/2012 Sb." },
+        section: "1729",
+        as_of: "2020-01-01",
+      },
+      checkArgs: (args) => [
+        ...field(args, "country", "CZE"),
+        ...nestedField(args, ["source", "type"], "citation"),
+        ...nestedField(args, ["source", "citation"], "zákon č. 89/2012 Sb."),
+        ...field(args, "section", "1729"),
+        ...field(args, "as_of", "2020-01-01"),
+      ],
+    },
+    cli: {
+      kind: "command",
+      path: ["legislation", "resolve"],
+      flags: {
+        country: "CZE",
+        section: "1729",
+        "as-of": "2020-01-01",
+        input: JSON.stringify({
+          source: { type: "citation", citation: "zákon č. 89/2012 Sb." },
+        }),
+      },
     },
   },
   {
@@ -1228,7 +1384,7 @@ const TASKS: readonly Task[] = [
     request:
       "Set my daily time target to 480 minutes in the active organization through time-entries.me.daily-target.update.",
     mcp: {
-      toolName: "invoke_capability",
+      toolName: MCP_CAPABILITY_EXECUTORS.write,
       exampleArgs: {
         capability: "time-entries.me.daily-target.update",
         input: { body: { minutes: 480 } },
@@ -1250,7 +1406,7 @@ const TASKS: readonly Task[] = [
       `Start a DeepL translation to German through the document-translations.runs.create capability: document ${TRANSLATION_ENTITY_ID}, ` +
       `file field ${TRANSLATION_FIELD_ID}, in matter ${ACME_MATTER_ID}.`,
     mcp: {
-      toolName: "invoke_capability",
+      toolName: MCP_CAPABILITY_EXECUTORS.write,
       exampleArgs: {
         capability: "document-translations.runs.create",
         input: {
@@ -1514,7 +1670,7 @@ const TASKS: readonly Task[] = [
     id: "start-workflow-extraction",
     request: `Start the extraction workflow in matter ${ACME_MATTER_ID} through the matters.workflow.start capability.`,
     mcp: {
-      toolName: "invoke_capability",
+      toolName: MCP_CAPABILITY_EXECUTORS.write,
       exampleArgs: {
         capability: "matters.workflow.start",
         input: { params: { matterId: ACME_MATTER_ID } },
@@ -1755,7 +1911,7 @@ const runModelTurn = async ({
 }): Promise<ModelTurn> => {
   const caching = resolveCaching({
     promptCachingEnabled: false,
-    role: "chat",
+    task: "chat",
     scopeKey: null,
   });
   let finalText = "";
@@ -1766,6 +1922,7 @@ const runModelTurn = async ({
     timeoutMs: MODEL_REQUEST_TIMEOUT_MS,
     chat: (abortController) =>
       streamChatChunks({
+        threadId: Bun.randomUUIDv7(),
         abortController,
         adapter: model.adapter,
         messages: [{ role: "user", content: request }],
@@ -1832,6 +1989,12 @@ const runModelTurn = async ({
         case EventType.RUN_FINISHED: {
           break;
         }
+        case "ACTIVITY_SNAPSHOT":
+        case "ACTIVITY_DELTA": {
+          // Activity parts remain UI-only; progress payloads must not become
+          // conversational text or executable tool input in this score.
+          break;
+        }
         // Every other chunk type carries nothing this eval scores on: only
         // the first tool call's name/args/input and the final text/usage/error
         // matter here. Listed explicitly (not folded into an implicit
@@ -1853,8 +2016,6 @@ const runModelTurn = async ({
         case EventType.REASONING_ENCRYPTED_VALUE:
         case EventType.REASONING_END:
         case EventType.REASONING_MESSAGE_CHUNK:
-        case EventType.ACTIVITY_SNAPSHOT:
-        case EventType.ACTIVITY_DELTA:
         case EventType.RAW:
         case EventType.SUBAGENT_STARTED:
         case EventType.SUBAGENT_FINISHED:
@@ -2255,13 +2416,36 @@ const scoreMcpRun = ({
   };
 };
 
-const scoreCliRun = ({
+const composedCliInputIssues = async (
+  commandPath: readonly string[],
+  parsed: ParsedCliCommand,
+): Promise<string[]> => {
+  const node = walkRouteNode(CLI_SCHEMA_TREE, commandPath);
+  if (node?.kind !== "leaf") {
+    return [];
+  }
+  const composed = await composeCliToolInput({
+    spec: node.spec,
+    flags: parsed.flags,
+    repeatedFlags: parsed.repeatedFlags,
+  });
+  if (!composed.ok) {
+    return [composed.message];
+  }
+  const definition = mcpDefinitionsByName.get(node.spec.toolName);
+  if (definition === undefined) {
+    panic(`CLI tool ${node.spec.toolName} has no MCP definition`);
+  }
+  return schemaCheck(definition, composed.args).issues;
+};
+
+const scoreCliRun = async ({
   task,
   turn,
 }: {
   task: Task;
   turn: ModelTurn;
-}): { outcome: Outcome; toolOrCommand: string; issues: string[] } => {
+}): Promise<{ outcome: Outcome; toolOrCommand: string; issues: string[] }> => {
   if (turn.error !== null) {
     return { outcome: "error", toolOrCommand: "-", issues: [turn.error] };
   }
@@ -2328,6 +2512,7 @@ const scoreCliRun = ({
       }
     }
   }
+  issues.push(...(await composedCliInputIssues(expected.path, parsed)));
   for (const [flagName, minimum] of Object.entries(
     expected.repeatedAtLeast ?? {},
   )) {
@@ -2415,7 +2600,7 @@ const mcpPreflightContext = (task: Task): string => {
     );
   }
   return [
-    "Eval scope: post-discovery first-call authoring. A read-only describe_capability call has already returned this canonical capability. Do not call describe_capability; make the one invoke_capability call that would perform the requested action. This eval captures the call but never executes it.",
+    `Eval scope: post-discovery first-call authoring. A read-only describe_capability call has already returned this canonical capability. Do not call describe_capability; make the one ${MCP_CAPABILITY_EXECUTORS[capability.access]} call that would perform the requested action. This eval captures the call but never executes it.`,
     JSON.stringify({
       id: capability.id,
       description: capability.description,
@@ -2484,7 +2669,7 @@ const runCliTask = async ({
     request: task.cliRequest ?? task.request,
     tools: [],
   });
-  const score = scoreCliRun({ task, turn });
+  const score = await scoreCliRun({ task, turn });
   return {
     modelId,
     taskId: task.id,
@@ -2572,12 +2757,14 @@ const resolveModels = async (
     modelIds.map(async (id) => ({
       id,
       model: await resolveTanStackTextModel({
+        userId: null,
         modelId: id,
         orgAIConfig: null,
         dataClass: "customer",
         managedAIResidency: "eu",
-        role: "chat",
+        task: "chat",
         organizationId: null,
+        admission: NO_ORGANIZATION_MODEL_DISPATCH,
       }),
     })),
   );
@@ -2633,3 +2820,5 @@ const main = async () => {
 };
 
 await main();
+
+process.exit(0);

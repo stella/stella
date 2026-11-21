@@ -3,8 +3,6 @@ import { describe, expect, test } from "bun:test";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { CASE_LAW_CORPUS_MIRROR_STATUS } from "@/api/db/schema";
-import { EMPTY_AST } from "@/api/handlers/case-law/ingestion/adapter";
-import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import {
   classifyObservation,
   resolveExistingDecisionPolicy,
@@ -13,12 +11,16 @@ import type { ExistingDecision } from "@/api/handlers/case-law/ingestion/pipelin
 import { DECISION_REFRESH } from "@/api/handlers/case-law/ingestion/pipeline/types";
 import { createSafeId } from "@/api/lib/branded-types";
 import {
-  TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
+  TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
 import { parsePrimaryReferenceType } from "@/api/lib/legal-search/decision-primary-reference";
 import { sanitizeResult } from "@/api/lib/legal-search/ingestion-normalization";
-import { DOCUMENT_DELIVERY } from "@/api/lib/legal-search/ingestion-types";
+import {
+  DOCUMENT_DELIVERY,
+  EMPTY_AST,
+} from "@/api/lib/legal-search/ingestion-types";
+import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 
 // A source fingerprint that leaves the record out hashes a listing-only
@@ -47,7 +49,7 @@ const observation = (overrides: ObservationOverrides): IngestionResult =>
       documentDelivery: DOCUMENT_DELIVERY.DEFERRED,
       ...overrides,
     }),
-  );
+  ).unwrap();
 
 const stored = (result: IngestionResult): ExistingDecision => ({
   id: createSafeId<"caseLawDecision">(),
@@ -56,15 +58,26 @@ const stored = (result: IngestionResult): ExistingDecision => ({
   citationKey: null,
   country: result.country,
   decisionDate: result.decisionDate ?? null,
+  decisionType: result.decisionType ?? null,
   sourceDocumentId: result.sourceDocumentId ?? null,
   ecli: result.ecli ?? null,
+  sheetNumber: result.sheetNumber ?? null,
   metadata: result.metadata,
   sourceHash: result.rawHash,
+  sourceHashVersion: 0,
   sourceObservedAt: new Date("2026-10-01T00:00:00Z"),
   sourceObservationHash: result.rawHash,
   redactedAt: null,
   corpusMirrorStatus: CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED,
+  fulltext: result.fulltext ?? null,
+  sections: result.sections ?? null,
+  documentAst: result.documentAst,
   contentHash: null,
+  fallbackContentHash: null,
+  fallbackIdentityKey: null,
+  fallbackCohortKey: null,
+  fallbackPublicationHash: null,
+  fallbackDocumentHash: null,
   textS3Key: null,
   normalizedS3Key: null,
   astS3Key: null,
@@ -97,6 +110,8 @@ describe("an observation that completes a listing-only row", () => {
         observedAt: new Date("2026-10-02T00:00:00Z"),
         observationOrder: 2n,
         refresh: DECISION_REFRESH.WHEN_SOURCE_CHANGED,
+        sourceFingerprintVersion: 0,
+        sourceFingerprintFromStoredRaw: async () => complete.rawHash,
       }),
     ).toBeNull();
   });

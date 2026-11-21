@@ -4,13 +4,26 @@ import { resolveUsCourt } from "@stll/api-contract/us-courts";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
 import { toSafeId } from "@/api/lib/branded-types";
-import { UNDATED_DECISION_TIMESTAMP } from "@/api/lib/legal-search/corpus-index-config";
+import {
+  PROVISION_KEY_MAX_BYTES,
+  PROVISION_KEYS_MAX_COUNT,
+  PROVISION_KEYS_MAX_SERIALIZED_BYTES,
+} from "@/api/lib/case-law/provision-keys";
+import {
+  PROJECTION_GENERATION_FIELD,
+  UNDATED_DECISION_TIMESTAMP,
+} from "@/api/lib/legal-search/corpus-index-config";
 import {
   corpusIndexGroupConfig,
   corpusIndexGroupContractForJurisdiction,
 } from "@/api/lib/legal-search/corpus-index-group-contract";
-import { CORPUS_INDEX_MANIFESTS } from "@/api/lib/legal-search/corpus-index-manifest";
 import {
+  CORPUS_INDEX_MANIFESTS,
+  corpusIndexDecisionTerms,
+  corpusIndexGenerationField,
+} from "@/api/lib/legal-search/corpus-index-manifest";
+import {
+  buildCaseLawProjection,
   buildCaseLawProjectionDocuments,
   buildCorpusProjectionDocuments,
   buildLegislationV2ProjectionDocuments,
@@ -20,9 +33,14 @@ import type {
   CaseLawProjectionInput,
   LegislationV2ProjectionInput,
 } from "@/api/lib/legal-search/corpus-index-projection-descriptor";
-import { CORPUS_PROJECTION_APPEND_MAX_REVISION_BYTES } from "@/api/lib/legal-search/corpus-index-projection-engine";
+import {
+  CORPUS_PROJECTION_APPEND_MAX_REVISION_BYTES,
+  CORPUS_PROJECTION_APPEND_MAX_SINGLE_REVISION_BYTES,
+  planCorpusProjectionAppendRequests,
+} from "@/api/lib/legal-search/corpus-index-projection-engine";
 import { corpusTokens } from "@/api/lib/legal-search/corpus-tokens";
 import { EFFECTIVE_CONSOLIDATION } from "@/api/lib/legal-search/legislation-expression-classification";
+import { CaseLawDocumentLanguageUndeclaredError } from "@/api/lib/legal-search/morphology/corpus-language";
 import { LIMITS } from "@/api/lib/limits";
 
 const REVISION = toSafeId<"corpusIndexProjectionIntent">(
@@ -39,6 +57,13 @@ const CASE_LAW_INPUT = {
   redistributionEligible: true,
   redacted: false,
   listingOnly: false,
+  provisionKeys: [],
+  rankingSignals: {
+    citationAuthorityBucket: 0,
+    languageGroupKey: null,
+    languageGroupShared: false,
+  },
+  vacatedFrom: null,
   caseNumber: "4 As 3/2008",
   identifiers: [
     { type: "source", value: "NSS-4-AS-3-2008" },
@@ -419,6 +444,88 @@ const SUMMARY_AST = {
   ],
 } as const satisfies DocumentAst;
 
+test("every generation emits stable unique passage identities exactly when its mapping supports them", () => {
+  const texts = [
+    "první ".repeat(250),
+    "druhý ".repeat(250),
+    "třetí ".repeat(250),
+  ];
+  const text = texts.join("\n\n");
+  const ast = {
+    ...SUMMARY_AST,
+    blocks: texts.map((plainText, index) => ({
+      id: `p${index}`,
+      anchorId: `p${index}`,
+      type: "paragraph",
+      role: "argumentation",
+      plainText,
+      inlines: [{ type: "text", text: plainText }],
+    })),
+  } satisfies DocumentAst;
+  const nextRevision = toSafeId<"corpusIndexProjectionIntent">(
+    "0198e331-e578-7000-8000-000000000007",
+  );
+  expect(nextRevision).not.toBe(REVISION);
+  for (const manifest of Object.values(CORPUS_INDEX_MANIFESTS)) {
+    if (manifest.family !== "case_law") {
+      continue;
+    }
+    const mapping = manifest.engine.indexConfig.doc_mapping.field_mappings.find(
+      ({ name }) => name === "chunk_id",
+    );
+    for (const payload of [
+      { text, ast: null },
+      { text, ast },
+    ]) {
+      const documents = buildCaseLawProjectionDocuments({
+        manifest,
+        input: CASE_LAW_INPUT,
+        payload,
+        revision: REVISION,
+      });
+      expect(documents).toHaveLength(texts.length);
+      if (mapping === undefined) {
+        expect(documents.every((document) => !("chunk_id" in document))).toBe(
+          true,
+        );
+        continue;
+      }
+      expect(mapping).toMatchObject({
+        indexed: true,
+        stored: true,
+        tokenizer: "raw",
+      });
+      const expected = documents.map(
+        (_, seq) => `${CASE_LAW_INPUT.documentId}:${seq}`,
+      );
+      const identities = documents.map(({ chunk_id }) => chunk_id);
+      expect(identities).toEqual(expected);
+      expect(new Set(identities).size).toBe(documents.length);
+      const replay = buildCaseLawProjectionDocuments({
+        manifest,
+        input: CASE_LAW_INPUT,
+        payload,
+        revision: nextRevision,
+      });
+      expect(replay.map(({ chunk_id }) => chunk_id)).toEqual(identities);
+      const otherId = "0198e331-e578-7000-8000-000000000008";
+      expect(otherId).not.toBe(CASE_LAW_INPUT.documentId);
+      const other = buildCaseLawProjectionDocuments({
+        manifest,
+        input: { ...CASE_LAW_INPUT, documentId: otherId },
+        payload,
+        revision: REVISION,
+      });
+      expect(other.map(({ chunk_id }) => chunk_id)).toEqual(
+        other.map((_, seq) => `${otherId}:${seq}`),
+      );
+      expect(
+        new Set([...identities, ...other.map(({ chunk_id }) => chunk_id)]).size,
+      ).toBe(documents.length + other.length);
+    }
+  }
+});
+
 test("v6 writes the publisher summary on the opening passage only", () => {
   const documents = buildCaseLawProjectionDocuments({
     manifest: CORPUS_INDEX_MANIFESTS.case_law_v6,
@@ -575,12 +682,56 @@ test("v6 writes a stem beside each field a reader's words reach", () => {
   ).toBe(true);
 });
 
+test("literal provision indices share surface and stem boundaries without rewriting source text", () => {
+  const text = "art. 23¹ p.p.s.a.";
+  const ast = {
+    version: 1,
+    source: SUMMARY_AST.source,
+    metadata: SUMMARY_AST.metadata,
+    blocks: [
+      {
+        id: "p-1",
+        anchorId: "p-1",
+        type: "paragraph",
+        plainText: text,
+        inlines: [{ type: "text", text }],
+      },
+    ],
+  } satisfies DocumentAst;
+  const original = structuredClone(ast);
+  expect(corpusTokens(text)).toContain("23¹");
+
+  for (const payload of [
+    { text, ast },
+    { text, ast: null },
+  ]) {
+    const documents = buildCaseLawProjectionDocuments({
+      manifest: CORPUS_INDEX_MANIFESTS.case_law_v6,
+      input: { ...CASE_LAW_INPUT, jurisdiction: "POL", language: "pl" },
+      payload,
+      revision: REVISION,
+    });
+
+    expect(documents).toHaveLength(1);
+    expect(documents.at(0)?.text).toBe("art. 23^1 p.p.s.a.");
+    const stems = corpusTokens(documents.at(0)?.text_stem ?? "");
+    expect(stems.filter((token) => /^\d+$/u.test(token))).toEqual(["23", "1"]);
+    expect(stems).toHaveLength(
+      corpusTokens(documents.at(0)?.text ?? "").length,
+    );
+    expect(payload.text).toBe(text);
+  }
+  expect(ast).toEqual(original);
+});
+
 test("a language with no stemmer writes no stem field at all", () => {
   const documents = buildCaseLawProjectionDocuments({
     manifest: CORPUS_INDEX_MANIFESTS.case_law_v6,
     input: {
       ...CASE_LAW_INPUT,
-      // Snowball ships no Bulgarian algorithm, so its text goes unstemmed.
+      // Snowball ships no Bulgarian algorithm, so a Bulgarian judgment of the
+      // European index goes unstemmed.
+      jurisdiction: "eu",
       language: "bg",
       metadata: { legalSentence: "Договорът за наем." },
     },
@@ -634,6 +785,47 @@ test("a European decision stems with the language it is written in", () => {
   expect(
     openingTextStem("eu", "de", "Die Verträge der Gerichte wurden gekündigt."),
   ).toBe("die vertrag der gericht wurd gekundigt");
+});
+
+test("a language its jurisdiction does not declare is refused, not indexed unreachable", () => {
+  // The read side asks a Czech index for Czech and English stems only, so
+  // German stems written there would be stems no query asks for.
+  expect(() =>
+    openingTextStem("cze", "de", "Die Verträge waren nichtig."),
+  ).toThrow("Case-law document of CZE in an undeclared language: de");
+  // A decision with no recorded language declares none either.
+  for (const language of ["", "und"]) {
+    expect(() => openingTextStem("svk", language, "Zmluva.")).toThrow(
+      `Case-law document of SVK in an undeclared language: ${language}`,
+    );
+  }
+  // An undeclared jurisdiction has no index group to be routed to at all.
+  expect(() => openingTextStem("xxx", "cs", "Smlouva.")).toThrow(
+    "Undeclared case-law index group: xxx",
+  );
+  // Declared, with or without a stemmer, including a Slovak decision written
+  // in Czech before 1993.
+  expect(openingTextStem("eu", "mt", "Il-kuntratt.")).toBeUndefined();
+  expect(openingTextStem("gbr", "en", "The contracts were void.")).toBe(
+    "the contract were void",
+  );
+  expect(openingTextStem("svk", "cs", "Smlouvy byly neplatné.")).toBe(
+    openingTextStem("cze", "cs", "Smlouvy byly neplatné."),
+  );
+});
+
+test("the public builder answers an undeclared language as its typed error, for the revision build to block", () => {
+  const built = buildCorpusProjectionDocuments({
+    family: "case_law",
+    manifest: CORPUS_INDEX_MANIFESTS.case_law_v11,
+    input: { ...CASE_LAW_INPUT, jurisdiction: "pol", language: "cs" },
+    payload: { text: "Umowa jest nieważna.", ast: null },
+    revision: REVISION,
+  });
+  expect(built.isErr()).toBe(true);
+  const error = built.isErr() ? built.error : null;
+  expect(CaseLawDocumentLanguageUndeclaredError.is(error)).toBe(true);
+  expect(error).toMatchObject({ jurisdiction: "POL", language: "cs" });
 });
 
 test("the summary stem is written to the opening passage only", () => {
@@ -791,4 +983,534 @@ test("a group under its manifest's contract writes the documents it wrote before
       expect("court_partition" in document).toBe(false);
     }
   }
+});
+
+const PROVISION_KEYS = [
+  "262/2006 Sb.|par_316",
+  "262/2006 Sb.|par_316-odst_2",
+  "262/2006 Sb.|par_316-odst_2-pism_a",
+];
+
+test("a Czech decision in the building generation carries its provision keys on every passage", () => {
+  const manifest = CORPUS_INDEX_MANIFESTS.case_law_v9;
+  const documents = buildCaseLawProjectionDocuments({
+    manifest,
+    input: {
+      ...DATED_CASE_LAW_INPUT,
+      provisionKeys: PROVISION_KEYS.toReversed(),
+    },
+    payload: {
+      text: `${"first ".repeat(400)}\n\n${"second ".repeat(400)}`,
+      ast: null,
+    },
+    revision: REVISION,
+  });
+  expect(documents.length).toBeGreaterThan(1);
+  // Every passage, not only the opening one: a provision filter is one exact
+  // term, and any passage a query reaches has to answer it. Sorted, so the
+  // same links write the same bytes.
+  expect(documents.map((document) => document.provision_keys)).toEqual(
+    documents.map(() => PROVISION_KEYS),
+  );
+  // Strict mapping: every emitted field is one the group's effective contract
+  // maps.
+  const mapped = new Set(
+    corpusIndexGroupConfig(
+      corpusIndexGroupContractForJurisdiction(manifest, "CZE"),
+    ).doc_mapping.field_mappings.map(({ name }) => name),
+  );
+  for (const document of documents) {
+    expect(Object.keys(document).filter((key) => !mapped.has(key))).toEqual([]);
+  }
+});
+
+test("a Czech decision with no recorded link writes no provision keys field", () => {
+  const documents = buildCaseLawProjectionDocuments({
+    manifest: CORPUS_INDEX_MANIFESTS.case_law_v9,
+    input: DATED_CASE_LAW_INPUT,
+    payload: { text: "Právní věta", ast: null },
+    revision: REVISION,
+  });
+  expect(documents.length).toBeGreaterThan(0);
+  for (const document of documents) {
+    expect("provision_keys" in document).toBe(false);
+  }
+});
+
+test("the serving generations write the documents they wrote before, whatever keys the input holds", () => {
+  // The same Czech decision is projected into v8 beside v9; its v8 copy is
+  // byte for byte what it was, and no other group ever carries the field.
+  for (const manifest of [
+    CORPUS_INDEX_MANIFESTS.case_law_v5,
+    CORPUS_INDEX_MANIFESTS.case_law_v7,
+    CORPUS_INDEX_MANIFESTS.case_law_v8,
+  ]) {
+    for (const input of [
+      DATED_CASE_LAW_INPUT,
+      { ...DATED_CASE_LAW_INPUT, jurisdiction: "POL", language: "pl" },
+    ]) {
+      const documents = buildCaseLawProjectionDocuments({
+        manifest,
+        input: { ...input, provisionKeys: PROVISION_KEYS },
+        payload: { text: "Právní věta", ast: null },
+        revision: REVISION,
+      });
+      const plain = buildCaseLawProjectionDocuments({
+        manifest,
+        input,
+        payload: { text: "Právní věta", ast: null },
+        revision: REVISION,
+      });
+      expect(documents).toEqual(plain);
+      for (const document of documents) {
+        expect("provision_keys" in document).toBe(false);
+        expect(PROJECTION_GENERATION_FIELD in document).toBe(false);
+        expect("court_partition" in document).toBe(false);
+      }
+    }
+  }
+});
+
+test("a key set at the cap fits a passage and one past it is refused", () => {
+  const atCap = Array.from(
+    { length: PROVISION_KEYS_MAX_COUNT },
+    (_, index) =>
+      `${"x".repeat(PROVISION_KEY_MAX_BYTES - 2 - 8)}${String(index).padStart(8, "0")}`,
+  );
+  const [document] = buildCaseLawProjectionDocuments({
+    manifest: CORPUS_INDEX_MANIFESTS.case_law_v9,
+    input: { ...DATED_CASE_LAW_INPUT, provisionKeys: atCap },
+    payload: { text: "Právní věta", ast: null },
+    revision: REVISION,
+  });
+  expect(document?.provision_keys).toHaveLength(PROVISION_KEYS_MAX_COUNT);
+  // The field as the projection sends it fits the budget the cap is derived
+  // from, and that budget is a small part of the single-document ceiling a
+  // request is split against.
+  expect(
+    Buffer.byteLength(JSON.stringify(document?.provision_keys), "utf-8"),
+  ).toBeLessThanOrEqual(PROVISION_KEYS_MAX_SERIALIZED_BYTES);
+  expect(PROVISION_KEYS_MAX_SERIALIZED_BYTES).toBeLessThanOrEqual(
+    CORPUS_PROJECTION_APPEND_MAX_SINGLE_REVISION_BYTES / 8,
+  );
+  expect(Buffer.byteLength(JSON.stringify(document), "utf-8") + 1).toBeLessThan(
+    CORPUS_PROJECTION_APPEND_MAX_SINGLE_REVISION_BYTES / 8,
+  );
+  expect(() =>
+    buildCaseLawProjectionDocuments({
+      manifest: CORPUS_INDEX_MANIFESTS.case_law_v9,
+      input: {
+        ...DATED_CASE_LAW_INPUT,
+        provisionKeys: [...atCap, "one past the cap"],
+      },
+      payload: { text: "Právní věta", ast: null },
+      revision: REVISION,
+    }),
+  ).toThrow("Provision keys exceed");
+});
+
+test("every passage carries its generation origin exactly when its mapping supports it", () => {
+  for (const manifest of Object.values(CORPUS_INDEX_MANIFESTS)) {
+    if (manifest.family !== "case_law") {
+      continue;
+    }
+    const documents = buildCaseLawProjectionDocuments({
+      manifest,
+      input: DATED_CASE_LAW_INPUT,
+      payload: {
+        text: `${"first ".repeat(400)}\n\n${"second ".repeat(400)}`,
+        ast: null,
+      },
+      revision: REVISION,
+    });
+    expect(documents.length).toBeGreaterThan(1);
+    const field = corpusIndexGenerationField(manifest);
+    for (const document of documents) {
+      expect(PROJECTION_GENERATION_FIELD in document).toBe(field !== null);
+      if (field !== null) {
+        expect(document[field]).toBe(manifest.generation);
+      }
+    }
+  }
+});
+
+const RANKED_CASE_LAW_INPUT = {
+  ...DATED_CASE_LAW_INPUT,
+  jurisdiction: "svk",
+  courtId: "sk-court-7",
+  rankingSignals: {
+    citationAuthorityBucket: 17,
+    languageGroupKey: "ECLI:SK:NSSR:2008:1",
+    languageGroupShared: true,
+  },
+} as const satisfies CaseLawProjectionInput;
+
+const TWO_PASSAGES = {
+  text: `${"first ".repeat(400)}\n\n${"second ".repeat(400)}`,
+  ast: null,
+};
+
+test("case_law_v10 writes the ranking signals on every passage, and its mapping holds each one", () => {
+  const manifest = CORPUS_INDEX_MANIFESTS.case_law_v10;
+  const documents = buildCaseLawProjectionDocuments({
+    manifest,
+    input: RANKED_CASE_LAW_INPUT,
+    payload: TWO_PASSAGES,
+    revision: REVISION,
+  });
+  expect(documents.length).toBeGreaterThan(1);
+  // Every passage, not only the opening one: the scan ranks a decision by the
+  // passage it reached, and reads that passage's fields alone.
+  for (const document of documents) {
+    expect(document).toMatchObject({
+      court: RANKED_CASE_LAW_INPUT.court,
+      jurisdiction: "SVK",
+      citation_authority_bucket: 17,
+      court_id: "sk-court-7",
+      language_group_key: "ECLI:SK:NSSR:2008:1",
+      language_group_shared: true,
+      passage_count: documents.length,
+    });
+  }
+  // Strict mapping: every emitted field is one the generation maps.
+  const mapped = manifestFields("case_law_v10");
+  for (const document of documents) {
+    expect(Object.keys(document).filter((key) => !mapped.has(key))).toEqual([]);
+  }
+});
+
+test("case_law_v10 writes no field for an absent court id or language group", () => {
+  const [document, ...rest] = buildCaseLawProjectionDocuments({
+    manifest: CORPUS_INDEX_MANIFESTS.case_law_v10,
+    input: DATED_CASE_LAW_INPUT,
+    payload: { text: "Právní věta", ast: null },
+    revision: REVISION,
+  });
+  expect(rest).toEqual([]);
+  expect(document).toMatchObject({
+    citation_authority_bucket: 0,
+    language_group_shared: false,
+    passage_count: 1,
+  });
+  expect(document !== undefined && "court_id" in document).toBe(false);
+  expect(document !== undefined && "language_group_key" in document).toBe(
+    false,
+  );
+});
+
+test("a generation without ranking signals writes the documents it wrote before", () => {
+  for (const generation of [
+    "case_law_v5",
+    "case_law_v6",
+    "case_law_v7",
+    "case_law_v8",
+    "case_law_v9",
+  ] as const) {
+    const manifest = CORPUS_INDEX_MANIFESTS[generation];
+    const signalled = buildCaseLawProjectionDocuments({
+      manifest,
+      input: RANKED_CASE_LAW_INPUT,
+      payload: TWO_PASSAGES,
+      revision: REVISION,
+    });
+    const unsignalled = buildCaseLawProjectionDocuments({
+      manifest,
+      input: {
+        ...RANKED_CASE_LAW_INPUT,
+        rankingSignals: CASE_LAW_INPUT.rankingSignals,
+      },
+      payload: TWO_PASSAGES,
+      revision: REVISION,
+    });
+    // The fixture reaches the fault: v10 writes these signals.
+    expect(signalled.length).toBeGreaterThan(1);
+    expect([generation, signalled]).toEqual([generation, unsignalled]);
+    for (const document of signalled) {
+      for (const field of [
+        "citation_authority_bucket",
+        "court_id",
+        "language_group_key",
+        "language_group_shared",
+        "passage_count",
+      ]) {
+        expect([generation, field in document]).toEqual([generation, false]);
+      }
+    }
+  }
+});
+
+const DECISION_TERMS_TEXT = [
+  "Nejvyšší soud zamítl dovolání žalobce ve věci náhrady škody.",
+  "Jednatel společnosti porušil povinnost loajality a odklonil obchody.",
+  "Soudy obou stupňů správně posoudily ušlý zisk i skutečnou škodu.",
+]
+  .map((sentence) => `${sentence} `.repeat(30))
+  .join("\n\n");
+
+/**
+ * The language classes a decision can arrive in, with what its terms must be.
+ * Written out rather than read from the morphology module: the point is that
+ * a language without a stemmer still gets a field.
+ */
+const DECISION_TERMS_FORM_BY_LANGUAGE = {
+  cs: "stems",
+  sk: "stems",
+  de: "stems",
+  bg: "surface",
+  hr: "surface",
+  lv: "surface",
+  mt: "surface",
+  sl: "surface",
+} as const;
+
+/** A jurisdiction whose documents are declared to be written in `language`. */
+const declaringJurisdiction = (language: string): string =>
+  language === "sk" || language === "cs" ? "svk" : "eu";
+
+test("v11 writes the decision's terms on the opening passage in every language", () => {
+  const mapped = manifestFields("case_law_v11");
+  for (const [language, form] of Object.entries(
+    DECISION_TERMS_FORM_BY_LANGUAGE,
+  )) {
+    const { documents, decisionTerms } = buildCaseLawProjection({
+      manifest: CORPUS_INDEX_MANIFESTS.case_law_v11,
+      input: {
+        ...RANKED_CASE_LAW_INPUT,
+        jurisdiction: declaringJurisdiction(language),
+        language,
+      },
+      payload: { text: DECISION_TERMS_TEXT, ast: null },
+      revision: REVISION,
+    });
+    // The fixture reaches the boundary: more than one passage.
+    expect(documents.length).toBeGreaterThan(1);
+    const [opening, ...rest] = documents;
+    const terms = opening?.decision_terms;
+    expect([language, typeof terms, terms === ""]).toEqual([
+      language,
+      "string",
+      false,
+    ]);
+    for (const document of rest) {
+      expect([language, "decision_terms" in document]).toEqual([
+        language,
+        false,
+      ]);
+    }
+    for (const document of documents) {
+      expect([language, "decision_terms_partial" in document]).toEqual([
+        language,
+        false,
+      ]);
+      expect(Object.keys(document).filter((key) => !mapped.has(key))).toEqual(
+        [],
+      );
+    }
+    expect([language, decisionTerms]).toEqual([
+      language,
+      {
+        kind: "whole",
+        form,
+        bytes: Buffer.byteLength(terms ?? "", "utf-8"),
+      },
+    ]);
+    // The whole decision: every passage's stems where there is a stemmer, and
+    // its surface tokens, which the field's tokenizer folds, where there is not.
+    const expected =
+      form === "stems"
+        ? documents.map(({ text_stem }) => text_stem ?? "").join(" ")
+        : corpusTokens(documents.map(({ text }) => text).join(" ")).join(" ");
+    expect([language, terms]).toEqual([language, expected]);
+    expect([language, documents.some((d) => "text_stem" in d)]).toEqual([
+      language,
+      form === "stems",
+    ]);
+  }
+});
+
+test("v11 writes exactly v10's documents plus the decision's terms", () => {
+  for (const language of Object.keys(DECISION_TERMS_FORM_BY_LANGUAGE)) {
+    const options = {
+      input: {
+        ...RANKED_CASE_LAW_INPUT,
+        jurisdiction: declaringJurisdiction(language),
+        language,
+      },
+      payload: { text: DECISION_TERMS_TEXT, ast: null },
+      revision: REVISION,
+    };
+    const v10 = buildCaseLawProjection({
+      ...options,
+      manifest: CORPUS_INDEX_MANIFESTS.case_law_v10,
+    });
+    const v11 = buildCaseLawProjection({
+      ...options,
+      manifest: CORPUS_INDEX_MANIFESTS.case_law_v11,
+    });
+    expect(v10.decisionTerms).toEqual({ kind: "not_mapped" });
+    expect(
+      v11.documents.map(({ decision_terms: _terms, ...document }) => document),
+    ).toEqual(v10.documents);
+  }
+});
+
+test("no generation before v11 writes the decision's terms", () => {
+  for (const manifest of Object.values(CORPUS_INDEX_MANIFESTS)) {
+    if (
+      manifest.family !== "case_law" ||
+      corpusIndexDecisionTerms(manifest) !== null
+    ) {
+      continue;
+    }
+    const { documents, decisionTerms } = buildCaseLawProjection({
+      manifest,
+      input: RANKED_CASE_LAW_INPUT,
+      payload: { text: DECISION_TERMS_TEXT, ast: null },
+      revision: REVISION,
+    });
+    expect([manifest.generation, decisionTerms]).toEqual([
+      manifest.generation,
+      { kind: "not_mapped" },
+    ]);
+    for (const document of documents) {
+      expect([
+        manifest.generation,
+        "decision_terms" in document,
+        "decision_terms_partial" in document,
+      ]).toEqual([manifest.generation, false, false]);
+    }
+  }
+});
+
+test("terms past the document ceiling are written as a marked prefix, and every passage keeps its words", () => {
+  // Slovene has no stemmer, so the field holds surface tokens and the fixture
+  // pays no stemming. About 10.5 MiB of text, past the 9.5 MiB ceiling.
+  const paragraph = `${"slovo ".repeat(250)}\n\n`;
+  const text = paragraph.repeat(
+    Math.ceil(
+      (CORPUS_PROJECTION_APPEND_MAX_SINGLE_REVISION_BYTES + 1024 * 1024) /
+        paragraph.length,
+    ),
+  );
+  const input = {
+    ...RANKED_CASE_LAW_INPUT,
+    jurisdiction: "eu",
+    language: "sl",
+  };
+  const { documents, decisionTerms } = buildCaseLawProjection({
+    manifest: CORPUS_INDEX_MANIFESTS.case_law_v11,
+    input,
+    payload: { text, ast: null },
+    revision: REVISION,
+  });
+  const whole = corpusTokens(documents.map((d) => d.text).join(" ")).join(" ");
+  // The fixture reaches the fault: the whole terms alone exceed the ceiling.
+  expect(Buffer.byteLength(whole, "utf-8")).toBeGreaterThan(
+    CORPUS_PROJECTION_APPEND_MAX_SINGLE_REVISION_BYTES,
+  );
+  const [opening, ...rest] = documents;
+  const prefix = opening?.decision_terms ?? "";
+  expect(decisionTerms).toEqual({
+    kind: "prefix",
+    form: "surface",
+    bytes: Buffer.byteLength(whole, "utf-8"),
+    writtenBytes: Buffer.byteLength(prefix, "utf-8"),
+    ceiling: "document",
+  });
+  expect(opening?.decision_terms_partial).toBe(true);
+  // A prefix cut at a term boundary, as long as the ceiling allows.
+  expect(prefix.length).toBeGreaterThan(0);
+  expect(whole.startsWith(prefix)).toBe(true);
+  expect(whole.at(prefix.length)).toBe(" ");
+  const openingBytes = Buffer.byteLength(JSON.stringify(opening), "utf-8");
+  expect(openingBytes).toBeLessThanOrEqual(
+    CORPUS_PROJECTION_APPEND_MAX_SINGLE_REVISION_BYTES,
+  );
+  expect(openingBytes + Buffer.byteLength(" slovo", "utf-8")).toBeGreaterThan(
+    CORPUS_PROJECTION_APPEND_MAX_SINGLE_REVISION_BYTES,
+  );
+  for (const document of rest) {
+    expect("decision_terms" in document).toBe(false);
+    expect("decision_terms_partial" in document).toBe(false);
+  }
+  // The append planner, the gate every writer passes, takes the revision.
+  expect(
+    planCorpusProjectionAppendRequests([
+      { revision: REVISION, documents },
+    ]).isOk(),
+  ).toBe(true);
+  // Nothing is lost from the passages: they still hold every word.
+  expect(corpusTokens(documents.map((d) => d.text).join(" ")).length).toBe(
+    corpusTokens(text).length,
+  );
+  // The public builder answers the same documents.
+  const built = buildCorpusProjectionDocuments({
+    family: "case_law",
+    manifest: CORPUS_INDEX_MANIFESTS.case_law_v11,
+    input,
+    payload: { text, ast: null },
+    revision: REVISION,
+  });
+  expect(built.isOk() ? built.value.length : -1).toBe(documents.length);
+});
+
+test("the comparison twin writes v11's documents, marked with their generation", () => {
+  const options = {
+    input: { ...RANKED_CASE_LAW_INPUT, jurisdiction: "cze", language: "cs" },
+    payload: { text: DECISION_TERMS_TEXT, ast: null },
+    revision: REVISION,
+  };
+  const v11 = buildCaseLawProjection({
+    ...options,
+    manifest: CORPUS_INDEX_MANIFESTS.case_law_v11,
+  });
+  const v12 = buildCaseLawProjection({
+    ...options,
+    manifest: CORPUS_INDEX_MANIFESTS.case_law_v12,
+  });
+  expect(v12.decisionTerms).toEqual(v11.decisionTerms);
+  expect(v12.documents).toEqual(
+    v11.documents.map((document) => ({
+      ...document,
+      [PROJECTION_GENERATION_FIELD]: "case_law_v12",
+    })),
+  );
+});
+
+test("an opening passage over the ceiling on its own is refused as too large, not a panic", () => {
+  // One block the chunker keeps whole, past the 9.5 MiB document ceiling.
+  const text = "slovo ".repeat(
+    Math.ceil(
+      (CORPUS_PROJECTION_APPEND_MAX_SINGLE_REVISION_BYTES + 512 * 1024) / 6,
+    ),
+  );
+  const options = {
+    family: "case_law",
+    input: { ...RANKED_CASE_LAW_INPUT, jurisdiction: "eu", language: "sl" },
+    payload: { text, ast: null },
+    revision: REVISION,
+  } as const;
+  // The fixture reaches the boundary: v10 builds one opening passage that is
+  // already over the ceiling, which only the append planner would refuse.
+  const [v10Opening] = buildCaseLawProjectionDocuments({
+    ...options,
+    manifest: CORPUS_INDEX_MANIFESTS.case_law_v10,
+  });
+  expect(
+    Buffer.byteLength(JSON.stringify(v10Opening), "utf-8"),
+  ).toBeGreaterThan(CORPUS_PROJECTION_APPEND_MAX_SINGLE_REVISION_BYTES);
+  const { documents, decisionTerms } = buildCaseLawProjection({
+    ...options,
+    manifest: CORPUS_INDEX_MANIFESTS.case_law_v11,
+  });
+  expect(decisionTerms.kind).toBe("opening_over_ceiling");
+  expect(documents.some((d) => "decision_terms" in d)).toBe(false);
+  // The append planner refuses it the way it refuses v10's, which blocks the
+  // revision alone.
+  const planned = planCorpusProjectionAppendRequests([
+    { revision: REVISION, documents },
+  ]);
+  expect(planned.isErr() ? planned.error.code : "ok").toBe(
+    "revision_too_large",
+  );
 });

@@ -1,9 +1,10 @@
 import type { ReactNode } from "react";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useRef, useState } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
+import { DEFAULT_VARCHAR_MAX_LENGTH } from "@stll/api-contract/limits";
 import type { DirectiveRange } from "@stll/folio-react";
 import { isClauseSlotName } from "@stll/template-conditions";
 import { Button } from "@stll/ui/button";
@@ -12,6 +13,7 @@ import {
   Dialog,
   DialogClose,
   DialogFooter,
+  DialogFormState,
   DialogHeader,
   DialogPanel,
   DialogPopup,
@@ -19,6 +21,7 @@ import {
 } from "@stll/ui/dialog";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import {
+  AiActionIcon,
   AlertTriangleIcon,
   ArrowLeftIcon,
   BookmarkPlusIcon,
@@ -26,26 +29,26 @@ import {
   ChevronLeftIcon,
   ChevronRightIcon,
   LandmarkIcon,
-  Loader2Icon,
   PencilIcon,
-  PlusIcon,
   PlayIcon,
-  RepeatIcon,
+  PlusIcon,
   RefreshCwIcon,
+  RepeatIcon,
+  SigmaIcon,
   SlashIcon,
   SplitIcon,
-  SigmaIcon,
   TextQuoteIcon,
   Trash2Icon,
   UserIcon,
-  AiActionIcon,
 } from "@stll/ui/icons";
+import { InlineRenameInput } from "@stll/ui/inline-rename";
 import { Input } from "@stll/ui/input";
 import { Label } from "@stll/ui/label";
+import { Loader } from "@stll/ui/loader";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "@stll/ui/menu";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { stellaToast } from "@stll/ui/toast";
-import { cn } from "@stll/ui/utils";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { AIPromptInput } from "@/components/ai-prompt-input/ai-prompt-input";
 import { SKILL_CHIP_CATALOG } from "@/components/chat-editor-slash-items";
@@ -60,11 +63,12 @@ import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
 import { userErrorMessage } from "@/lib/errors/user-safe";
-import { notifyUserError } from "@/lib/errors/user-toast";
+import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
+import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
 import {
+  invalidateTemplateClauseSources,
   knowledgeKeys,
   templateClausesOptions,
-  invalidateTemplateClauseSources,
 } from "@/lib/knowledge/queries";
 import { toSafeId } from "@/lib/safe-id";
 import { inputTypeValueKind, VALUE_TYPE_META } from "@/lib/value-types";
@@ -85,8 +89,8 @@ import {
   fieldHasLoopBounds,
   findEnclosingForGroup,
   findEnclosingIfGroup,
-  sanitizeFieldPath,
   type OutlineGroup,
+  sanitizeFieldPath,
 } from "@/routes/knowledge/-components/template-studio-model";
 import {
   dedupeOutlineFields,
@@ -95,9 +99,9 @@ import {
   outlineFieldPaths,
 } from "@/routes/knowledge/-components/template-studio-outline";
 import {
-  useTemplateStudioStore,
   type OutlineNode,
   type StudioField,
+  useTemplateStudioStore,
 } from "@/routes/knowledge/-components/template-studio-store";
 import { FieldConfigEditor } from "@/routes/knowledge/-components/template-wizard";
 
@@ -374,13 +378,18 @@ const SlotSyncButton = ({
   return (
     <Button
       disabled={syncing}
+      disabledReason={t("common.loading")}
       onClick={() => {
         detached(handleSync(), "template-studio-fields.sync");
       }}
       size="sm"
       variant="ghost"
     >
-      <RefreshCwIcon className={cn("size-3.5", syncing && "animate-spin")} />
+      {syncing ? (
+        <Loader className="size-3.5" label={t("common.loading")} size="sm" />
+      ) : (
+        <RefreshCwIcon className="size-3.5" />
+      )}
       {t("clauses.syncVersion")}
     </Button>
   );
@@ -433,19 +442,21 @@ export const FieldNavigator = ({
       </ul>
       {unplaced.length > 0 && (
         <div className="mt-1">
-          <button
+          <Button
             aria-expanded={showUnused}
-            className="hover:bg-muted text-muted-foreground flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-start text-xs font-medium"
+            className="w-full"
             onClick={() => setShowUnused((visible) => !visible)}
-            type="button"
+            variant="plain"
           >
-            {showUnused ? (
-              <ChevronDownIcon className="size-3.5" />
-            ) : (
-              <DirectionalIcon className="size-3.5" icon={ChevronRightIcon} />
-            )}
-            {t("templates.unusedFields", { count: unplaced.length })}
-          </button>
+            <span className="hover:bg-muted text-muted-foreground flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium">
+              {showUnused ? (
+                <ChevronDownIcon className="size-3.5" />
+              ) : (
+                <DirectionalIcon className="size-3.5" icon={ChevronRightIcon} />
+              )}
+              {t("templates.unusedFields", { count: unplaced.length })}
+            </span>
+          </Button>
           {showUnused && (
             <ul className="flex flex-col">
               {unplaced.map((f) => (
@@ -466,7 +477,7 @@ export const FieldNavigator = ({
 /** Shown in the overview when the template has no fields, conditions, or clause
  *  slots yet: three plain-language steps pointing at the selection popover, the
  *  `/` menu, and the Fill tab. Disappears as soon as the first marker exists. */
-export const StudioGettingStarted = () => {
+const StudioGettingStarted = () => {
   const t = useTranslations();
   return (
     <div className="flex flex-col gap-3 px-4 py-4">
@@ -511,7 +522,7 @@ const InsertAtCaretButton = ({
   const t = useTranslations();
   const formats = optionalArray(field.lookup?.formats);
   const className =
-    "absolute end-1.5 top-1/2 -translate-y-1/2 opacity-0 transition-opacity group-hover/row:opacity-100";
+    "absolute end-1.5 top-1/2 -translate-y-1/2 opacity-0 transition-opacity group-hover/row:opacity-100 pointer-coarse:opacity-100";
   if (formats.length <= 1) {
     return (
       <Button
@@ -598,31 +609,29 @@ const OutlineRow = ({
         <Tooltip
           content={node.path}
           render={
-            <button
-              className="hover:bg-muted group flex w-full items-center gap-2.5 rounded-md px-2 py-2 pe-10 text-start text-sm"
-              onClick={jump}
-              type="button"
-            />
+            <Button className="group w-full" onClick={jump} variant="plain" />
           }
         >
-          <span className="bg-muted text-muted-foreground flex size-7 shrink-0 items-center justify-center rounded-md">
-            <Icon className="size-4" />
-          </span>
-          <FieldRowLabel label={field?.label ?? ""} path={node.path} />
-          {field === undefined ? null : (
-            <span className="text-muted-foreground ms-auto flex shrink-0 items-center gap-1.5">
-              {count > 1 ? (
-                <span className="text-muted-foreground text-3xs tabular-nums">
-                  {format.number(count)}×
-                </span>
-              ) : null}
-              <FieldCapabilityIcons field={field} />
-              <DirectionalIcon
-                className="size-3.5 opacity-0 transition-opacity group-hover:opacity-100"
-                icon={ChevronRightIcon}
-              />
+          <span className="hover:bg-muted flex w-full items-center gap-2.5 rounded-md px-2 py-2 pe-10 text-sm">
+            <span className="bg-muted text-muted-foreground flex size-7 shrink-0 items-center justify-center rounded-md">
+              <Icon className="size-4" />
             </span>
-          )}
+            <FieldRowLabel label={field?.label ?? ""} path={node.path} />
+            {field === undefined ? null : (
+              <span className="text-muted-foreground ms-auto flex shrink-0 items-center gap-1.5">
+                {count > 1 ? (
+                  <span className="text-muted-foreground text-3xs tabular-nums">
+                    {format.number(count)}×
+                  </span>
+                ) : null}
+                <FieldCapabilityIcons field={field} />
+                <DirectionalIcon
+                  className="size-3.5 opacity-0 transition-opacity group-hover:opacity-100"
+                  icon={ChevronRightIcon}
+                />
+              </span>
+            )}
+          </span>
         </Tooltip>
         {field === undefined ? null : (
           <InsertAtCaretButton
@@ -641,24 +650,18 @@ const OutlineRow = ({
       <li className="group/row relative">
         <Tooltip
           content={t("templates.studio.scopeClause")}
-          render={
-            <button
-              className="hover:bg-muted flex w-full items-center gap-2.5 rounded-md px-2 py-2 pe-10 text-start text-sm"
-              onClick={jump}
-              type="button"
-            />
-          }
+          render={<Button className="w-full" onClick={jump} variant="plain" />}
         >
-          <span className="bg-muted text-muted-foreground flex size-7 shrink-0 items-center justify-center rounded-md">
-            <TextQuoteIcon className="size-4" />
-          </span>
-          <span className="truncate" dir="auto">
-            {node.name}
+          <span className="hover:bg-muted flex w-full items-center gap-2.5 rounded-md px-2 py-2 pe-10 text-sm">
+            <span className="bg-muted text-muted-foreground flex size-7 shrink-0 items-center justify-center rounded-md">
+              <TextQuoteIcon className="size-4" />
+            </span>
+            <TruncatedText dir="auto">{node.name}</TruncatedText>
           </span>
         </Tooltip>
         <Button
           aria-label={t("templates.studio.insertAtCaret")}
-          className="absolute end-1.5 top-1/2 -translate-y-1/2 opacity-0 transition-opacity group-hover/row:opacity-100"
+          className="absolute end-1.5 top-1/2 -translate-y-1/2 opacity-0 transition-opacity group-hover/row:opacity-100 pointer-coarse:opacity-100"
           onClick={(e) => {
             e.stopPropagation();
             actions?.insertClauseSlot(node.name);
@@ -693,29 +696,31 @@ const OutlineRow = ({
                 : loopSource(node.expr, node.alias)
             }
             render={
-              <button
-                className="hover:bg-muted group flex w-full items-center gap-2.5 rounded-md px-2 py-2 pe-10 text-start text-sm"
+              <Button
+                className="group w-full"
                 onClick={() => actions?.focusPosition(onlyChild.from)}
-                type="button"
+                variant="plain"
               />
             }
           >
-            <span className="bg-muted text-muted-foreground flex size-7 shrink-0 items-center justify-center rounded-md">
-              <LoopIcon className="size-4" />
-            </span>
-            <FieldRowLabel
-              label={loopField?.label ?? ""}
-              path={onlyChild.path}
-            />
-            <span className="text-muted-foreground ms-auto flex shrink-0 items-center gap-1.5">
-              <RepeatIcon className="size-3.5" />
-              {loopField === undefined ? null : (
-                <FieldCapabilityIcons field={loopField} />
-              )}
-              <DirectionalIcon
-                className="size-3.5 opacity-0 transition-opacity group-hover:opacity-100"
-                icon={ChevronRightIcon}
+            <span className="hover:bg-muted flex w-full items-center gap-2.5 rounded-md px-2 py-2 pe-10 text-sm">
+              <span className="bg-muted text-muted-foreground flex size-7 shrink-0 items-center justify-center rounded-md">
+                <LoopIcon className="size-4" />
+              </span>
+              <FieldRowLabel
+                label={loopField?.label ?? ""}
+                path={onlyChild.path}
               />
+              <span className="text-muted-foreground ms-auto flex shrink-0 items-center gap-1.5">
+                <RepeatIcon className="size-3.5" />
+                {loopField === undefined ? null : (
+                  <FieldCapabilityIcons field={loopField} />
+                )}
+                <DirectionalIcon
+                  className="size-3.5 opacity-0 transition-opacity group-hover:opacity-100"
+                  icon={ChevronRightIcon}
+                />
+              </span>
             </span>
           </Tooltip>
         </li>
@@ -782,40 +787,43 @@ const OutlineGroupRow = ({
             node.expr === "" ? groupTitle : loopSource(node.expr, node.alias)
           }
           render={
-            <button
-              className="hover:bg-muted group flex min-w-0 flex-1 items-center gap-2.5 rounded-md px-2 py-2 text-start text-sm"
+            <Button
+              className="group min-w-0 flex-1"
               onClick={jump}
-              type="button"
+              variant="plain"
             />
           }
         >
-          <span className="bg-muted text-muted-foreground flex size-7 shrink-0 items-center justify-center rounded-md">
-            <GroupIcon className="size-4" />
-          </span>
-          <span className="truncate">{groupLabel}</span>
-          {conditionField === undefined ? null : (
-            <span className="text-muted-foreground ms-auto flex shrink-0 items-center gap-1.5">
-              {fieldHasLoopBounds(conditionField) ? (
-                <RepeatIcon className="size-3.5" />
-              ) : null}
-              <FieldCapabilityIcons field={conditionField} />
+          <span className="hover:bg-muted flex w-full items-center gap-2.5 rounded-md px-2 py-2 text-sm">
+            <span className="bg-muted text-muted-foreground flex size-7 shrink-0 items-center justify-center rounded-md">
+              <GroupIcon className="size-4" />
             </span>
-          )}
+            <TruncatedText>{groupLabel}</TruncatedText>
+            {conditionField === undefined ? null : (
+              <span className="text-muted-foreground ms-auto flex shrink-0 items-center gap-1.5">
+                {fieldHasLoopBounds(conditionField) ? (
+                  <RepeatIcon className="size-3.5" />
+                ) : null}
+                <FieldCapabilityIcons field={conditionField} />
+              </span>
+            )}
+          </span>
         </Tooltip>
         {hasChildren ? (
-          <button
+          <Button
             aria-expanded={open}
             aria-label={groupTitle}
-            className="hover:bg-muted text-muted-foreground me-1 shrink-0 rounded p-0.5"
+            className="me-1"
             onClick={() => setOpen((isOpen) => !isOpen)}
-            type="button"
+            size="icon-xs"
+            variant="muted"
           >
             {open ? (
               <ChevronDownIcon className="size-3.5" />
             ) : (
               <DirectionalIcon className="size-3.5" icon={ChevronRightIcon} />
             )}
-          </button>
+          </Button>
         ) : null}
       </div>
       {hasChildren && open ? (
@@ -842,22 +850,25 @@ const FieldRowLabel = ({ label, path }: { label: string; path: string }) => {
   if (label === "") {
     return (
       <>
-        <code className="truncate">{path}</code>
+        <TruncatedText render={<code />}>{path}</TruncatedText>
         <PencilIcon className="text-muted-foreground size-3 shrink-0 opacity-0 transition-opacity group-hover:opacity-100" />
       </>
     );
   }
   return (
     <>
-      <span className="text-foreground min-w-0 truncate font-medium">
+      <TruncatedText className="text-foreground font-medium">
         {label}
-      </span>
+      </TruncatedText>
       {/* The field code only enters the layout on hover, so the label gets
           the full width and truncates solely when the code is actually
           shown — not pre-shrunk to reserve space for a hidden element. */}
-      <code className="text-muted-foreground text-3xs hidden min-w-0 truncate group-hover:block">
+      <TruncatedText
+        className="text-muted-foreground text-3xs hidden group-hover:block"
+        render={<code />}
+      >
         {path}
-      </code>
+      </TruncatedText>
     </>
   );
 };
@@ -1067,8 +1078,7 @@ const fieldRepeatState = (
  *  marker (otherwise removing the `if` would expose the block's other
  *  content unconditionally). */
 type FieldConditionState =
-  | { kind: "none" }
-  | { kind: "conditional"; expr: string; canRemove: boolean };
+  { kind: "none" } | { kind: "conditional"; expr: string; canRemove: boolean };
 
 const fieldConditionState = (
   field: StudioField,
@@ -1112,7 +1122,7 @@ const FieldConditionSection = ({
           className="self-start"
           onClick={() => {
             if (actions?.wrapFieldInCondition(field.path) !== true) {
-              notifyUserError(undefined, t("errors.actionFailed"));
+              notifyUserProblem(t("errors.actionFailed"));
             }
           }}
           size="sm"
@@ -1146,17 +1156,13 @@ const FieldConditionSection = ({
       <Button
         className="self-start"
         disabled={!condition.canRemove}
+        disabledReason={t("templates.studio.removeConditionBlocked")}
         onClick={() => {
           if (actions?.unwrapFieldCondition(field.path) !== true) {
-            notifyUserError(undefined, t("errors.actionFailed"));
+            notifyUserProblem(t("errors.actionFailed"));
           }
         }}
         size="sm"
-        title={
-          condition.canRemove
-            ? undefined
-            : t("templates.studio.removeConditionBlocked")
-        }
         variant="muted"
       >
         <Trash2Icon className="size-3.5" />
@@ -1194,7 +1200,7 @@ export const FieldFace = ({
   // `@`-mention source for the AI-instruction inputs: every other field's
   // path/label, so an author can reference a sibling field. The mention node
   // serializes back to `{{path}}` in the stored `aiPrompt` string.
-  const fieldMention = useMemo(() => {
+  const fieldMention = (() => {
     const mentionFields: { id: string; label: string }[] = [];
     for (const f of fields) {
       if (f.path !== field.path) {
@@ -1202,17 +1208,17 @@ export const FieldFace = ({
       }
     }
     return createTemplateFieldMention(mentionFields);
-  }, [fields, field.path]);
+  })();
   const [recipeDialogOpen, setRecipeDialogOpen] = useState(false);
   const viewportRef = useRef<HTMLDivElement | null>(null);
   // Restore the captured scroll position when the remounted viewport mounts.
-  const setViewport = useCallback((el: HTMLDivElement | null) => {
+  const setViewport = (el: HTMLDivElement | null) => {
     viewportRef.current = el;
     if (el !== null && pendingFieldFaceScrollTop !== null) {
       el.scrollTop = pendingFieldFaceScrollTop;
       pendingFieldFaceScrollTop = null;
     }
-  }, []);
+  };
 
   // Clear the in-document preview when the face leaves or switches fields
   // (cancelling any pending lookup preview so it cannot re-set it).
@@ -1238,7 +1244,7 @@ export const FieldFace = ({
     const applied = actions?.setFieldRepeatable(field.path, next) ?? false;
     if (!applied) {
       pendingFieldFaceScrollTop = null;
-      notifyUserError(undefined, t("errors.actionFailed"));
+      notifyUserProblem(t("errors.actionFailed"));
     }
   };
 
@@ -1270,6 +1276,7 @@ export const FieldFace = ({
               <Button
                 aria-label={t("common.previous")}
                 disabled={fieldCount < 2}
+                disabledReason={t("templates.studio.addFieldsToNavigate")}
                 onClick={() => actions?.focusAdjacentField(-1)}
                 size="icon-sm"
                 variant="ghost"
@@ -1279,6 +1286,7 @@ export const FieldFace = ({
               <Button
                 aria-label={t("common.next")}
                 disabled={fieldCount < 2}
+                disabledReason={t("templates.studio.addFieldsToNavigate")}
                 onClick={() => actions?.focusAdjacentField(1)}
                 size="icon-sm"
                 variant="ghost"
@@ -1376,35 +1384,25 @@ export const FieldFace = ({
               <AiActionIcon className="size-3.5" />
               {t("templates.studio.draftedByAi")}
             </Button>
-            {/* A disabled button gets `pointer-events-none`, which suppresses
-                its native title tooltip; the wrapper keeps pointer events so
-                the "why disabled" hint still shows. */}
-            <span
-              title={
-                canUseFormula
-                  ? undefined
-                  : t("templates.studio.formulaNoFields")
+            <Button
+              className="w-full justify-start"
+              disabled={!canUseFormula}
+              disabledReason={t("templates.studio.formulaNoFields")}
+              onClick={() =>
+                onUpdate({
+                  formula: field.formula ?? "",
+                  aiPrompt: undefined,
+                  aiAdapt: false,
+                  aiSeesDocument: false,
+                  lookup: undefined,
+                })
               }
+              size="sm"
+              variant={valueSource === "formula" ? "default" : "outline"}
             >
-              <Button
-                className="w-full justify-start"
-                disabled={!canUseFormula}
-                onClick={() =>
-                  onUpdate({
-                    formula: field.formula ?? "",
-                    aiPrompt: undefined,
-                    aiAdapt: false,
-                    aiSeesDocument: false,
-                    lookup: undefined,
-                  })
-                }
-                size="sm"
-                variant={valueSource === "formula" ? "default" : "outline"}
-              >
-                <SigmaIcon className="size-3.5" />
-                {t("common.formula")}
-              </Button>
-            </span>
+              <SigmaIcon className="size-3.5" />
+              {t("common.formula")}
+            </Button>
           </div>
           {valueSource === "textAi" ? (
             <>
@@ -1440,7 +1438,7 @@ export const FieldFace = ({
               <p className="text-muted-foreground text-xs leading-relaxed">
                 {t("templates.studio.aiPromptContextHint")}
               </p>
-              <label className="text-muted-foreground flex w-fit cursor-pointer items-center gap-1.5 text-xs">
+              <Label className="w-fit" variant="muted">
                 <Checkbox
                   checked={field.aiSeesDocument}
                   onCheckedChange={(checked) =>
@@ -1448,7 +1446,7 @@ export const FieldFace = ({
                   }
                 />
                 {t("templates.studio.aiSeesDocument")}
-              </label>
+              </Label>
             </>
           ) : null}
           {valueSource === "formula" ? (
@@ -1464,7 +1462,7 @@ export const FieldFace = ({
             />
           ) : null}
           {valueSource === "person" || valueSource === "textAi" ? (
-            <label className="text-muted-foreground flex w-fit cursor-pointer items-center gap-1.5 text-xs">
+            <Label className="w-fit" variant="muted">
               <Checkbox
                 checked={field.required}
                 onCheckedChange={(checked) => onUpdate({ required: checked })}
@@ -1473,7 +1471,7 @@ export const FieldFace = ({
               <span aria-hidden className="text-destructive">
                 *
               </span>
-            </label>
+            </Label>
           ) : null}
         </div>
         <FieldConfigEditor
@@ -1524,11 +1522,11 @@ export const FieldFace = ({
               aria-pressed={repeat.kind === "on"}
               className="self-start"
               disabled={repeat.disabledKey !== null}
-              onClick={() => toggleRepeatable(repeat.kind !== "on")}
-              size="sm"
-              title={
+              disabledReason={
                 repeat.disabledKey === null ? undefined : t(repeat.disabledKey)
               }
+              onClick={() => toggleRepeatable(repeat.kind !== "on")}
+              size="sm"
               variant={repeat.kind === "on" ? "secondary" : "outline"}
             >
               <RepeatIcon className="size-3.5" />
@@ -1576,6 +1574,7 @@ const SaveRecipeDialog = ({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) => {
+  const idempotentSubmit = useIdempotentSubmit();
   const t = useTranslations();
   const queryClient = useQueryClient();
   const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
@@ -1592,9 +1591,10 @@ const SaveRecipeDialog = ({
       return;
     }
     setSaving(true);
-    const response = await api["template-recipes"].put({
-      name: trimmed,
-      definition,
+    const response = await idempotentSubmit.run({
+      operation: "template-recipes.create",
+      body: { name: trimmed, definition },
+      send: async (body, request) => api["template-recipes"].put(body, request),
     });
     setSaving(false);
     if (response.error) {
@@ -1621,6 +1621,12 @@ const SaveRecipeDialog = ({
   return (
     <Dialog onOpenChange={onOpenChange} open={open}>
       <DialogPopup className="sm:max-w-sm">
+        <DialogFormState
+          dirty={name !== ""}
+          onDiscard={() => {
+            setName("");
+          }}
+        />
         <DialogHeader>
           <DialogTitle>{t("templates.studio.saveAsRecipe")}</DialogTitle>
         </DialogHeader>
@@ -1641,6 +1647,7 @@ const SaveRecipeDialog = ({
             <Input
               autoFocus
               id="recipe-name"
+              maxLength={DEFAULT_VARCHAR_MAX_LENGTH}
               onChange={(e) => setName(e.currentTarget.value)}
               onKeyDown={(e) => {
                 if (e.key === "Enter") {
@@ -1657,10 +1664,11 @@ const SaveRecipeDialog = ({
           </DialogClose>
           <Button
             disabled={name.trim() === "" || saving}
+            disabledReason={saving ? t("common.saving") : t("common.enterName")}
             onClick={() => detached(save(), "template-studio-fields.save")}
           >
             {saving ? (
-              <Loader2Icon className="animate-spin" />
+              <Loader label={t("common.loading")} size="sm" />
             ) : (
               <BookmarkPlusIcon />
             )}
@@ -1697,9 +1705,13 @@ const ClauseSlotEditor = ({
     // Non-interactive presentation: same slot-name display, no edit affordance.
     return (
       <div className="text-muted-foreground -ms-1 flex w-full min-w-0 items-center gap-1.5 px-1 py-0.5">
-        <code className="truncate text-xs" dir="auto" title={slotName}>
+        <TruncatedText
+          className="text-xs whitespace-pre"
+          dir="auto"
+          render={<code />}
+        >
           {slotName}
-        </code>
+        </TruncatedText>
       </div>
     );
   }
@@ -1713,45 +1725,52 @@ const ClauseSlotEditor = ({
       setEditing(false);
       return;
     }
-    notifyUserError(undefined, t("clauses.renameSlotInvalid"));
+    notifyUserProblem(t("clauses.renameSlotInvalid"));
   };
 
   if (!editing) {
     return (
       <Tooltip
-        content={t("clauses.renameSlot")}
+        content={
+          <span className="flex flex-col gap-0.5">
+            {t("clauses.renameSlot")}
+            <code dir="auto">{slotName}</code>
+          </span>
+        }
         render={
-          <button
-            className="hover:bg-muted/60 group text-muted-foreground -ms-1 flex w-full min-w-0 items-center gap-1.5 rounded px-1 py-0.5"
+          <Button
+            className="group -ms-1 w-full min-w-0"
             onClick={() => setEditing(true)}
-            type="button"
+            variant="plain"
           />
         }
       >
-        <code className="truncate text-xs" dir="auto" title={slotName}>
-          {slotName}
-        </code>
-        <PencilIcon className="size-3 opacity-0 transition-opacity group-hover:opacity-100" />
+        <span className="hover:bg-muted/60 text-muted-foreground flex w-full items-center gap-1.5 rounded-sm px-1 py-0.5">
+          <TruncatedText
+            className="text-xs whitespace-pre"
+            dir="auto"
+            hint={false}
+            render={<code />}
+          >
+            {slotName}
+          </TruncatedText>
+          <PencilIcon className="size-3 opacity-0 transition-opacity group-hover:opacity-100" />
+        </span>
       </Tooltip>
     );
   }
   return (
-    <Input
-      autoFocus
-      className="h-7 font-mono text-xs"
-      onBlur={() => detached(commit(), "template-studio-fields.commit")}
-      onChange={(e) => setValue(e.currentTarget.value)}
-      onKeyDown={(e) => {
-        if (e.key === "Enter") {
-          detached(commit(), "template-studio-fields.commit");
-        }
-        if (e.key === "Escape") {
+    <span className="text-muted-foreground -ms-1 block min-w-0 px-1 py-0.5 font-mono text-xs">
+      <InlineRenameInput
+        onCommit={() => detached(commit(), "template-studio-fields.commit")}
+        onValueChange={setValue}
+        onCancel={() => {
           setValue(slotName);
           setEditing(false);
-        }
-      }}
-      value={value}
-    />
+        }}
+        value={value}
+      />
+    </span>
   );
 };
 
@@ -1776,44 +1795,50 @@ const FieldPathEditor = ({
       setEditing(false);
       return;
     }
-    notifyUserError(undefined, t("templates.studio.renameFieldInvalid"));
+    notifyUserProblem(t("templates.studio.renameFieldInvalid"));
   };
 
   if (!editing) {
     return (
       <Tooltip
-        content={t("templates.studio.renameField")}
+        content={
+          <span className="flex flex-col gap-0.5">
+            {t("templates.studio.renameField")}
+            <code>{path}</code>
+          </span>
+        }
         render={
-          <button
-            className="hover:bg-muted/60 group text-muted-foreground -ms-1 flex w-full min-w-0 items-center gap-1.5 rounded px-1 py-0.5"
+          <Button
+            className="group -ms-1 w-full min-w-0"
             onClick={() => setEditing(true)}
-            type="button"
+            variant="plain"
           />
         }
       >
-        <code className="truncate text-xs" title={path}>
-          {path}
-        </code>
-        <PencilIcon className="size-3 opacity-0 transition-opacity group-hover:opacity-100" />
+        <span className="hover:bg-muted/60 text-muted-foreground flex w-full items-center gap-1.5 rounded-sm px-1 py-0.5">
+          <TruncatedText
+            className="text-xs whitespace-pre"
+            hint={false}
+            render={<code />}
+          >
+            {path}
+          </TruncatedText>
+          <PencilIcon className="size-3 opacity-0 transition-opacity group-hover:opacity-100" />
+        </span>
       </Tooltip>
     );
   }
   return (
-    <Input
-      autoFocus
-      className="h-7 font-mono text-xs"
-      onBlur={commit}
-      onChange={(e) => setValue(e.currentTarget.value)}
-      onKeyDown={(e) => {
-        if (e.key === "Enter") {
-          commit();
-        }
-        if (e.key === "Escape") {
+    <span className="text-muted-foreground -ms-1 block min-w-0 px-1 py-0.5 font-mono text-xs">
+      <InlineRenameInput
+        onCommit={commit}
+        onValueChange={setValue}
+        onCancel={() => {
           setValue(path);
           setEditing(false);
-        }
-      }}
-      value={value}
-    />
+        }}
+        value={value}
+      />
+    </span>
   );
 };

@@ -6,13 +6,13 @@ import type { ReviewStatusTone } from "@stll/ui/review-status-badge";
 import { cn } from "@stll/ui/utils";
 
 import { ineligibleExpressionLabelKey } from "@/features/statutes/statute-expression";
-import { formatValidityRange } from "@/features/statutes/statute-format";
 import {
   resolveStatuteDisplayStatus,
   STATUTE_STATUS_LABEL_KEYS,
   type StatuteDisplayStatus,
 } from "@/features/statutes/statute-status";
 import { useFormatter } from "@/i18n/formatting-context";
+import { formatValidityRange } from "@/lib/statutes/statute-format";
 
 const STATUS_TONE = {
   current: "success",
@@ -20,6 +20,7 @@ const STATUS_TONE = {
   future: "neutral",
   historical: "warning",
   repealed: "warning",
+  unknown: "neutral",
 } as const satisfies Record<StatuteDisplayStatus, ReviewStatusTone>;
 
 const STATUS_DOT_CLASS = {
@@ -28,6 +29,7 @@ const STATUS_DOT_CLASS = {
   future: "bg-info",
   historical: undefined,
   repealed: undefined,
+  unknown: undefined,
 } as const satisfies Record<StatuteDisplayStatus, string | undefined>;
 
 type StatuteValidityIndicatorProps = {

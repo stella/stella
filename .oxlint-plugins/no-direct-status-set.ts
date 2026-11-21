@@ -1,8 +1,8 @@
 import { eslintCompatPlugin, type Node } from "@oxlint/plugins";
 
 import {
-  statusWriteCalls,
   type StatusColumns,
+  statusWriteCalls,
 } from "../scripts/status-write-shapes.ts";
 import { filenameForContext } from "./utils.ts";
 
@@ -33,10 +33,10 @@ export default eslintCompatPlugin({
           {
             type: "object",
             properties: {
-              owner: { type: "string" },
+              owners: { type: "array", items: { type: "string" } },
               columns: { type: "object" },
             },
-            required: ["owner", "columns"],
+            required: ["owners", "columns"],
             additionalProperties: false,
           },
         ],
@@ -56,8 +56,13 @@ export default eslintCompatPlugin({
             if (typeof options !== "object" || options === null) {
               return false;
             }
-            owner = Reflect.get(options, "owner");
-            return !filenameForContext(context).endsWith(owner);
+            const owners: unknown = Reflect.get(options, "owners");
+            const files = Array.isArray(owners)
+              ? owners.filter((file) => typeof file === "string")
+              : [];
+            owner = files.join(" or ");
+            const filename = filenameForContext(context);
+            return !files.some((file) => filename.endsWith(file));
           },
           Program() {
             const options = context.options[0];
@@ -70,7 +75,7 @@ export default eslintCompatPlugin({
               columns: columnsFrom(Reflect.get(options, "columns")),
             });
             ranges = new Set(
-              matches.map((match) => `${match.getStart()}:${match.getEnd()}`),
+              matches.map((match) => `${match.start}:${match.end}`),
             );
           },
           CallExpression(node) {

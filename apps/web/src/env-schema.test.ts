@@ -1,8 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
+import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
+
 import { browserApiInvariantViolation, envWebClientSchema } from "@/env-schema";
-import { sanitizeHref } from "@/lib/sanitize-href";
 
 describe("desktop release URL boundary", () => {
   test("accepts only absolute HTTP(S) URLs supported by anchor sanitization", () => {

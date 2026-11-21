@@ -1,4 +1,3 @@
-import { Value } from "@sinclair/typebox/value";
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
@@ -133,7 +132,7 @@ describe("flowDefinitionInputSchema normalization", () => {
   });
 });
 
-// The route contract (TypeBox) and the authoritative parse (valibot) are two
+// The route contract and the authoritative parse are two
 // layers over the same body. They agree only because both read the bounds from
 // `flow-types.ts`; a literal restated in either layer would make the effective
 // bound the lower of the two, reported by whichever layer runs first.
@@ -145,7 +144,7 @@ describe("flow definition bounds are shared across both layers", () => {
       name: nameOf(FLOW_DEFINITION_NAME_MAX_CHARS),
     });
 
-    expect(Value.Check(flowDefinitionBodySchema, definition)).toBe(true);
+    expect(v.is(flowDefinitionBodySchema, definition)).toBe(true);
     expect(parse(definition).success).toBe(true);
   });
 
@@ -154,7 +153,7 @@ describe("flow definition bounds are shared across both layers", () => {
       name: nameOf(FLOW_DEFINITION_NAME_MAX_CHARS + 1),
     });
 
-    expect(Value.Check(flowDefinitionBodySchema, definition)).toBe(false);
+    expect(v.is(flowDefinitionBodySchema, definition)).toBe(false);
     expect(parse(definition).success).toBe(false);
   });
 });

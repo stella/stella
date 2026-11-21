@@ -4,11 +4,17 @@ import { existsSync, statSync } from "node:fs";
 
 import { envDocumentProcessingWorker } from "@/api/env-document-processing-worker";
 import {
+  bindDeploymentFlagReader,
+  envFeatureAccess,
+} from "@/api/env-feature-access";
+import { envKillSwitches } from "@/api/env-kill-switches";
+import {
   envApiInvariantViolation,
   envApiServerSchema,
   resolveEmailProvider,
 } from "@/api/env-schema";
 import { resolveConfigurationPlaceholders } from "@/api/lib/configuration-placeholders";
+import { bindRateLimitBudgetReader } from "@/api/lib/rate-limit/budget-config";
 import {
   isLocalDevOpen,
   runtimeMode,
@@ -60,7 +66,23 @@ const validatedEnv = {
   ...envDocumentProcessingWorker,
   ...envApi,
   EMAIL_PROVIDER: emailProvider,
+  get API_FEATURE_ACCESS_GRANTS() {
+    return envFeatureAccess.API_FEATURE_ACCESS_GRANTS;
+  },
+  set API_FEATURE_ACCESS_GRANTS(grants) {
+    envFeatureAccess.API_FEATURE_ACCESS_GRANTS = grants;
+  },
+  get KILL_SWITCHES() {
+    return envKillSwitches.KILL_SWITCHES;
+  },
+  set KILL_SWITCHES(overrides) {
+    envKillSwitches.KILL_SWITCHES = overrides;
+  },
 };
+
+// Read per call: local tests switch flags on the open-mode object.
+bindDeploymentFlagReader((flag) => validatedEnv[flag]);
+bindRateLimitBudgetReader(() => validatedEnv);
 
 // Bun owns process.env and may expose it through a runtime proxy. Freeze the
 // validated application boundary instead of mutating the runtime object.

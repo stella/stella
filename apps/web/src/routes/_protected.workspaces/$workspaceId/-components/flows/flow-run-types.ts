@@ -1,6 +1,6 @@
 import type { api } from "@/lib/api";
 
-// Workflow-run (internal: "flow run") shapes inferred from the Eden surface so
+// Workflow-run (internal: "flow run") shapes inferred from the API client so
 // the UI stays in lockstep with the workspace-scoped run handlers under
 // `/workspaces/:workspaceId/flows/runs`. Never hand-redefine these.
 

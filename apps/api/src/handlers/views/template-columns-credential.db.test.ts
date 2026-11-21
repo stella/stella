@@ -3,9 +3,8 @@ import { and, eq, inArray } from "drizzle-orm";
 
 import type { PermissionInput } from "@stll/permissions";
 
-import type { SafeDb } from "@/api/db/safe-db";
 import { properties, workspaceViews } from "@/api/db/schema";
-import { createSafeDb } from "@/api/db/scoped";
+import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import createView from "@/api/handlers/views/create";
 import updateView from "@/api/handlers/views/update";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -16,8 +15,8 @@ import {
 } from "@/api/lib/permission-authorization";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 import type { ViewLayout, ViewTemplateProperty } from "@/api/lib/views-schema";
+import { auditRecorderDouble } from "@/api/tests/helpers/audit-recorder-double";
 import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
-import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
   releaseRlsFixture,
@@ -97,8 +96,8 @@ const tableLayout = (column: ViewTemplateProperty): ViewLayout => ({
   sorts: [],
 });
 
-const ownerSafeDb = (): SafeDb =>
-  asTestRaw<SafeDb>(createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userAdmin));
+const ownerSafeDb = () =>
+  createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userAdmin);
 
 const createViewAs = async (
   memberRole: AuthorizedMemberRole,
@@ -108,11 +107,13 @@ const createViewAs = async (
   createdViewIds.push(viewId);
   const result = await createView.handler(
     createTestHandlerContext<Parameters<typeof createView.handler>[0]>({
+      audit: auditRecorderDouble(),
       memberRole,
       workspaceId: ids.wsA1,
       session: { activeOrganizationId: ids.orgA },
       user: { id: ids.userAdmin },
       safeDb: ownerSafeDb(),
+      scopedDb: createScopedDb(testDb, [ids.wsA1], ids.orgA, ids.userAdmin),
       body: {
         id: viewId,
         name: `Credential view ${viewId}`,
@@ -187,11 +188,13 @@ describe("template columns on a view", () => {
     const update = async (memberRole: AuthorizedMemberRole) =>
       await updateView.handler(
         createTestHandlerContext<Parameters<typeof updateView.handler>[0]>({
+          audit: auditRecorderDouble(),
           memberRole,
           workspaceId: ids.wsA1,
           session: { activeOrganizationId: ids.orgA },
           user: { id: ids.userAdmin },
           safeDb: ownerSafeDb(),
+          scopedDb: createScopedDb(testDb, [ids.wsA1], ids.orgA, ids.userAdmin),
           params: { workspaceId: ids.wsA1, viewId },
           body: { layout: tableLayout(column), templateProperties: [column] },
         }),

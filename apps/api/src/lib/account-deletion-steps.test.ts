@@ -4,6 +4,7 @@ import type { Transaction } from "@/api/db/root";
 import {
   deleteDesktopEditSessionsAndHandoffs,
   deletePendingUploads,
+  recordAccountDeletionRequest,
 } from "@/api/lib/account-deletion-steps";
 import { toSafeId } from "@/api/lib/branded-types";
 import { pendingUploadS3KeysForDeletion } from "@/api/lib/pending-upload-keys";
@@ -119,6 +120,7 @@ describe("pendingUploadS3KeysForDeletion", () => {
 
     await deletePendingUploads({
       tx,
+      retainedWorkspaceIds: [],
       currentUserId: "user-1",
       s3KeysToDelete,
     });
@@ -203,6 +205,7 @@ describe("desktop edit session deletion", () => {
 
     await deleteDesktopEditSessionsAndHandoffs({
       tx,
+      retainedWorkspaceIds: [],
       currentUserId: "user-1",
       s3KeysToDelete,
     });
@@ -213,4 +216,47 @@ describe("desktop edit session deletion", () => {
       `${organizationId}/${workspaceId}/0198fa3d-fc8d-7000-8000-000000000014.pptx`,
     ]);
   });
+});
+
+test("storage cleanup keeps its publication deadline on the parent request", async () => {
+  const stored: unknown[] = [];
+  const tx = asTestRaw<Transaction>({
+    insert: () => ({
+      values: async (values: unknown) => {
+        stored.push(values);
+      },
+    }),
+  });
+  const notBefore = new Date("2026-10-10T12:15:30.000Z");
+  await recordAccountDeletionRequest({
+    tx,
+    retainedWorkspaceIds: [],
+    deletionRequestId: toSafeId<"accountDeletionRequest">(
+      "0198fa3d-fc8d-7000-8000-000000000020",
+    ),
+    currentUserId: "user-1",
+    organizationIds: [],
+    workspaceIds: [],
+    taskReassignmentCount: 0,
+    s3KeysToDelete: ["account-exports/user-1/export/attempt.zip"],
+    storageCleanupNotBefore: notBefore,
+  });
+  expect(stored).toEqual([
+    expect.objectContaining({
+      storageCleanup: {
+        s3Keys: ["account-exports/user-1/export/attempt.zip"],
+        notBefore: notBefore.toISOString(),
+      },
+    }),
+    [
+      expect.objectContaining({
+        s3Keys: ["account-exports/user-1/export/attempt.zip"],
+      }),
+    ],
+  ]);
+  // First attempts read the deadline from the parent; chunks keep the shared
+  // retry-state invariant, where only failed chunks carry a retry time.
+  expect(stored.at(1)).toEqual([
+    expect.not.objectContaining({ nextAttemptAt: expect.anything() }),
+  ]);
 });

@@ -1,7 +1,8 @@
 import { describe, expect, setDefaultTimeout, test } from "bun:test";
-import JSZip from "jszip";
+import { fileURLToPath } from "node:url";
 import * as slimdom from "slimdom";
 
+import { ZipArchive } from "@stll/docx-core/zip";
 import { filtersFromFieldConfig } from "@stll/template-conditions";
 
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
@@ -39,10 +40,9 @@ const authorFieldMarkers = async (
 // SPA fixture is ~177KB; template filling needs time.
 setDefaultTimeout(15_000);
 
-const SPA_FIXTURE = new URL(
-  "fixtures/spa-template-with-placeholders.docx",
-  import.meta.url,
-).pathname;
+const SPA_FIXTURE = fileURLToPath(
+  new URL("fixtures/spa-template-with-placeholders.docx", import.meta.url),
+);
 
 const spaFixture = async (): Promise<ScannedFile> =>
   testDocxFile(await Bun.file(SPA_FIXTURE).arrayBuffer());
@@ -66,8 +66,8 @@ describe("fillTemplate", () => {
     expect(file.bytes).toBeInstanceOf(ArrayBuffer);
     expect(file.bytes.byteLength).toBeGreaterThan(0);
 
-    const zip = await JSZip.loadAsync(file.bytes);
-    const docXml = await zip.file("word/document.xml")?.async("string");
+    const zip = await ZipArchive.read(file.bytes);
+    const docXml = await zip.entry("word/document.xml")?.text();
     expect(docXml).toContain("1 250 000");
     expect(docXml).toContain("Stella Legal a.s.");
     expect(unmatchedPlaceholders).toEqual([]);
@@ -137,8 +137,8 @@ describe("fillTemplate", () => {
     });
 
     expect(file.bytes).toBeInstanceOf(ArrayBuffer);
-    const zip = await JSZip.loadAsync(file.bytes);
-    const docXml = await zip.file("word/document.xml")?.async("string");
+    const zip = await ZipArchive.read(file.bytes);
+    const docXml = await zip.entry("word/document.xml")?.text();
     // Bold run should produce <w:b/> in run properties
     expect(docXml).toContain("Novák ");
     expect(docXml).toContain("Holdings s.r.o.");
@@ -148,9 +148,9 @@ describe("fillTemplate", () => {
 // ── Block directive e2e tests ────────────────────────────
 
 const makeDocx = async (documentXml: string): Promise<ScannedFile> => {
-  const zip = new JSZip();
-  zip.file("word/document.xml", documentXml);
-  zip.file(
+  const zip = new ZipArchive();
+  zip.set("word/document.xml", documentXml);
+  zip.set(
     "[Content_Types].xml",
     `<?xml version="1.0" encoding="UTF-8"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
@@ -158,7 +158,7 @@ const makeDocx = async (documentXml: string): Promise<ScannedFile> => {
   <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
 </Types>`,
   );
-  return testDocxFile(await zip.generateAsync({ type: "uint8array" }));
+  return testDocxFile(await zip.generate({ compression: "store" }));
 };
 
 const WRAP = (body: string) =>
@@ -169,8 +169,8 @@ const WRAP = (body: string) =>
 const P = (text: string) => `<w:p><w:r><w:t>${text}</w:t></w:r></w:p>`;
 
 const extractTexts = async (file: ScannedFile): Promise<string[]> => {
-  const zip = await JSZip.loadAsync(file.bytes);
-  const xml = (await zip.file("word/document.xml")?.async("string")) ?? "";
+  const zip = await ZipArchive.read(file.bytes);
+  const xml = (await zip.entry("word/document.xml")?.text()) ?? "";
   // Simple extraction: find all w:t content
   const texts: string[] = [];
   for (const match of xml.matchAll(/<w:t[^>]*>(?<text>.*?)<\/w:t>/gu)) {
@@ -527,10 +527,10 @@ const makeStructuralFixture = async (): Promise<ScannedFile> => {
     ].join(""),
   );
 
-  const zip = new JSZip();
-  zip.file("word/document.xml", xml);
-  zip.file("word/numbering.xml", NUMBERING_XML);
-  zip.file(
+  const zip = new ZipArchive();
+  zip.set("word/document.xml", xml);
+  zip.set("word/numbering.xml", NUMBERING_XML);
+  zip.set(
     "[Content_Types].xml",
     `<?xml version="1.0" encoding="UTF-8"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
@@ -538,7 +538,7 @@ const makeStructuralFixture = async (): Promise<ScannedFile> => {
   <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
 </Types>`,
   );
-  return testDocxFile(await zip.generateAsync({ type: "uint8array" }));
+  return testDocxFile(await zip.generate({ compression: "store" }));
 };
 
 describe("fillTemplate — output stays well-formed in every part", () => {
@@ -559,17 +559,14 @@ describe("fillTemplate — output stays well-formed in every part", () => {
     expect(structureErrors).toEqual([]);
     expect(unmatchedPlaceholders).toEqual([]);
 
-    const inZip = await JSZip.loadAsync(fixture.bytes);
-    const outZip = await JSZip.loadAsync(file.bytes);
-    const partNames = (zip: JSZip) =>
-      Object.keys(zip.files)
-        .filter((name) => !zip.files[name]?.dir)
-        .toSorted();
+    const inZip = await ZipArchive.read(fixture.bytes);
+    const outZip = await ZipArchive.read(file.bytes);
+    const partNames = (zip: ZipArchive) => zip.paths().toSorted();
     // Package integrity: no part may be lost or invented by the fill.
     expect(partNames(outZip)).toEqual(partNames(inZip));
 
     for (const name of partNames(outZip)) {
-      const xml = await outZip.files[name]?.async("string");
+      const xml = await outZip.entry(name)?.text();
       if (xml === undefined) {
         throw new Error(`part ${name} unreadable`);
       }

@@ -1,21 +1,11 @@
 import { Result } from "better-result";
-import type { InferSelectModel } from "drizzle-orm";
 
-import type { flowDefinitions } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
+import type { AggregateIdentities } from "@/api/lib/db/aggregate-lock-entries/identities.gen";
 import { errorTag } from "@/api/lib/errors/utils";
-import { flowScheduleToSchedulerSchedule } from "@/api/lib/flows/flow-trigger-logic";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { logger } from "@/api/lib/observability/logger";
-import {
-  ensureSchedulerJob,
-  removeSchedulerJob,
-} from "@/api/lib/scheduler/jobs";
-import {
-  FLOW_RUN_TASK,
-  flowScheduleJobId,
-} from "@/api/lib/scheduler/tasks/flow-run";
-
-type FlowDefinitionRow = InferSelectModel<typeof flowDefinitions>;
+import { reconcileCommittedFlowSchedule } from "@/api/lib/scheduler/jobs";
 
 /**
  * Reconcile the scheduler row for a definition's `schedule` trigger. Called
@@ -26,38 +16,31 @@ type FlowDefinitionRow = InferSelectModel<typeof flowDefinitions>;
  * - enabled + `schedule` trigger -> upsert the row (idempotent).
  * - disabled, deleted, or trigger changed away from `schedule` -> remove it.
  *
- * A post-commit background reconcile: it never throws (a failure would only
- * mean the schedule row is briefly stale until the next write); errors are
- * captured through the structured logger, not surfaced to the caller.
+ * Each reconciliation reads current committed state under the scheduler-owned
+ * per-definition fence. Once successful reconcilers settle, the job matches the
+ * definition. This remains post-commit best effort: errors are captured, and a
+ * failed reconcile needs a later write to repair it.
  */
 export const syncFlowScheduleTrigger = async ({
   id,
-  trigger,
-  enabled,
-}: Pick<FlowDefinitionRow, "id" | "trigger" | "enabled">): Promise<void> => {
+  organizationId,
+}: AggregateIdentities["definition"]): Promise<void> => {
   const result = await Result.tryPromise({
-    try: async () => {
-      if (enabled && trigger.type === "schedule") {
-        await ensureSchedulerJob({
-          id: flowScheduleJobId(id),
-          task: FLOW_RUN_TASK,
-          description: `Scheduled flow run for definition ${id}`,
-          schedule: flowScheduleToSchedulerSchedule(trigger.schedule),
-          payload: { definitionId: id },
-        });
-        return;
-      }
-      await removeSchedulerJob(flowScheduleJobId(id));
-    },
+    try: async () =>
+      await reconcileCommittedFlowSchedule({ id, organizationId }),
     catch: (cause) => cause,
   });
 
   if (Result.isError(result)) {
-    captureError(result.error, { definitionId: id });
+    captureError(
+      result.error,
+      handlerErrorContext("flows.syncFlowScheduleTrigger.result_error", {
+        definitionId: id,
+      }),
+    );
     logger.error("flow.schedule_sync_failed", {
       definitionId: id,
-      triggerType: trigger.type,
-      enabled,
+      organizationId,
       "error.type": errorTag(result.error),
     });
   }

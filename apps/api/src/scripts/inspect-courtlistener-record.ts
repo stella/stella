@@ -25,7 +25,6 @@ import {
   COURTLISTENER_SOURCE_FIELD_INVENTORY,
   COURTLISTENER_SOURCE_SURFACES,
 } from "@/api/handlers/case-law/ingestion/adapters/courtlistener/inventory";
-import { classifyCourtListenerDecision } from "@/api/handlers/case-law/ingestion/adapters/courtlistener/order-classification";
 import {
   type CourtListenerDecisionPlan,
   planCourtListenerRecord,
@@ -36,7 +35,7 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/courtlistener/raw";
 import { admitCourtListenerRecord } from "@/api/handlers/case-law/ingestion/adapters/courtlistener/record";
 import {
-  hasVisibleText,
+  CLUSTER_COLUMNS,
   isCsvRow,
   OPINION_COLUMNS,
 } from "@/api/handlers/case-law/ingestion/adapters/courtlistener/snapshot-columns";
@@ -49,6 +48,7 @@ import { decodeSourceRawEnvelope } from "@/api/lib/legal-search/ingestion-types"
 import { isRecord } from "@/api/lib/type-guards";
 
 const isOpinionRow = isCsvRow(OPINION_COLUMNS);
+const isClusterRow = isCsvRow(CLUSTER_COLUMNS);
 
 const USAGE =
   "Usage: bun run src/scripts/inspect-courtlistener-record.ts <records.ndjson[.gz]> [--limit <n>] [--summary-only]";
@@ -113,32 +113,19 @@ const textOpinionsOf = (input: unknown): CourtListenerTextOpinion[] | null => {
   return opinions.length > 0 ? opinions : null;
 };
 
-const scdbPresentIn = (input: unknown): boolean => {
-  const cluster = isRecord(input) ? input["cluster"] : null;
-  const scdbId = isRecord(cluster) ? cluster["scdb_id"] : null;
-  return typeof scdbId === "string" && hasVisibleText(scdbId);
-};
-
 /** What the text parsers make of the record, with no source text in it. */
 const inspectText = (input: unknown) => {
   const opinions = textOpinionsOf(input);
   if (opinions === null) {
     return null;
   }
-  const outcome = composeCourtListenerText(opinions);
-  const principal =
-    outcome.status === "parsed"
-      ? outcome.principal
-      : ({ status: "unavailable" } as const);
-  const classification = classifyCourtListenerDecision({
-    opinionTypes: opinions.map(({ type }) => type),
-    scdbPresent: scdbPresentIn(input),
-    principal,
-  });
+  const cluster =
+    isRecord(input) && isClusterRow(input["cluster"]) ? input["cluster"] : {};
+  const outcome = composeCourtListenerText(opinions, cluster);
   return {
-    principal,
     report: {
       status: outcome.status,
+      sourceDefects: outcome.status === "parsed" ? outcome.sourceDefects : [],
       reason: outcome.status === "held" ? outcome.reason : null,
       blocks: outcome.status === "parsed" ? outcome.blocks.length : null,
       scopes:
@@ -154,6 +141,7 @@ const inspectText = (input: unknown) => {
           scopes,
           selection,
           structure,
+          sourceDefects,
           type,
         }) => ({
           opinionId,
@@ -161,6 +149,7 @@ const inspectText = (input: unknown) => {
           selection,
           format,
           structure,
+          sourceDefects,
           coverage,
           scopes,
           classConflicts,
@@ -171,12 +160,14 @@ const inspectText = (input: unknown) => {
           ),
         }),
       ),
-      classification: {
-        kind: classification.kind,
-        rule: classification.rule,
-        principalLength: classification.evidence.principalLength,
-        matchedPatterns: classification.evidence.matchedPatterns,
-      },
+      structure:
+        outcome.status === "parsed"
+          ? {
+              principalLength: outcome.principal.length,
+              bodyParagraphCount: outcome.principal.bodyParagraphCount,
+              inBodyCitationCount: outcome.principal.inBodyCitationCount,
+            }
+          : null,
     },
   };
 };
@@ -204,11 +195,6 @@ const inspect = (line: string) => {
     };
   }
   const plan = planned.value;
-  const classification = classifyCourtListenerDecision({
-    opinionTypes: plan.opinions.map(({ type }) => type),
-    scdbPresent: plan.scdbPresent,
-    principal: text?.principal ?? { status: "unavailable" },
-  });
   return {
     text: text?.report ?? null,
     outcome: "planned" as const,
@@ -222,7 +208,7 @@ const inspect = (line: string) => {
     opinions: plan.opinions.map(
       ({ opinionId, type }) => `${opinionId}:${type}`,
     ),
-    classification: classification.kind,
+    decisionType: { status: "not-stated" },
     diagnostics: plan.diagnostics.map(({ code }) => code),
     ...rawReadBack(plan),
   };
@@ -240,7 +226,6 @@ const lines = createInterface({
 
 const outcomes = new Map<string, number>();
 const rejections = new Map<string, number>();
-const classifications = new Map<string, number>();
 const diagnosticCodes = new Map<string, number>();
 const undeclared = new Set<string>();
 const textCounts = {
@@ -251,8 +236,6 @@ const textCounts = {
   unusable: new Map<string, number>(),
   requiresAssets: new Map<string, number>(),
   coverage: new Map<string, number>(),
-  classifications: new Map<string, number>(),
-  classificationRules: new Map<string, number>(),
   unknownConstructs: new Map<string, number>(),
 };
 let unstableRaw = 0;
@@ -265,11 +248,6 @@ const countText = (
   if (report.reason !== null) {
     increment(textCounts.heldReasons, report.reason);
   }
-  increment(textCounts.classifications, report.classification.kind);
-  increment(
-    textCounts.classificationRules,
-    `${report.classification.kind}:${report.classification.rule}`,
-  );
   for (const opinion of report.opinions) {
     increment(textCounts.opinionOutcomes, opinion.selection);
     for (const attempt of opinion.attempts) {
@@ -314,7 +292,6 @@ for await (const line of lines) {
     increment(rejections, report.reason);
   }
   if (report.outcome === "planned") {
-    increment(classifications, report.classification);
     for (const code of report.diagnostics) {
       increment(diagnosticCodes, code);
     }
@@ -334,7 +311,6 @@ console.log(
       records: read,
       outcomes: Object.fromEntries(outcomes),
       rejections: Object.fromEntries(rejections),
-      classifications: Object.fromEntries(classifications),
       diagnostics: Object.fromEntries(diagnosticCodes),
       undeclaredFields: [...undeclared],
       unstableRaw,

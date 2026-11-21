@@ -33,13 +33,14 @@
  *   bun run eval:playbook-authoring -- --tier behavior --task discovery --surface chat
  */
 
-import { Value } from "@sinclair/typebox/value";
 import { EventType, maxIterations, toolDefinition } from "@tanstack/ai";
 import type { AnyServerTool, ModelMessage, TokenUsage } from "@tanstack/ai";
 import { panic, Result } from "better-result";
 import { writeFile } from "node:fs/promises";
+import * as v from "valibot";
 
-import { DEFAULT_MODELS } from "@stll/ai-catalog";
+import { MODEL_DEFAULTS_LEDGER } from "@stll/ai-catalog/model-defaults-ledger";
+import { ASK_USER_SELECTION } from "@stll/api-contract/chat-ask-user";
 
 import { resolveActiveChatSkillContext } from "@/api/handlers/chat/active-skill-context";
 import type { ActiveChatSkillContext } from "@/api/handlers/chat/active-skill-context";
@@ -79,6 +80,7 @@ import {
 } from "@/api/lib/chat/tanstack-chat-runtime";
 import type { PublicStreamChunk } from "@/api/lib/chat/tanstack-chat-runtime";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
+import { NO_ORGANIZATION_MODEL_DISPATCH } from "@/api/lib/rate-limit/model-dispatch-admission";
 import {
   mergeGenerationOptions,
   systemPromptsPatch,
@@ -99,6 +101,7 @@ import { serializeToolResult } from "@/api/mcp/tool-utils";
 import { handleMcpToolCall } from "@/api/mcp/tools";
 
 import { runEvalModelTurn } from "./lib/model-turn";
+import { resolveModelTargets } from "./lib/org-model-targets";
 import {
   PLAYBOOK_STEP_NAMES,
   scorePlaybookRun,
@@ -111,15 +114,15 @@ import type {
 } from "./lib/playbook-authoring-score";
 import {
   ACCESSIBLE_MATTER_IDS,
+  answerMatterTool,
   BUILDER_SCENARIOS,
   BUILDER_SURFACES,
   DISCOVER_TOOLS,
   EXECUTE_TYPESCRIPT,
+  isMatterToolName,
   MATTER_TOOL_NAMES,
   READABLE_DOCUMENTS,
   SAVE_PLAYBOOK,
-  answerMatterTool,
-  isMatterToolName,
   scoreScenario,
 } from "./lib/playbook-builder-scenarios";
 import type {
@@ -143,7 +146,7 @@ const DEFAULT_EVAL_MODELS = [
   "anthropic::claude-haiku-4-5-20251001",
   "gpt-5.4-mini",
   "gpt-5.6-luna",
-  DEFAULT_MODELS.openai.chat,
+  MODEL_DEFAULTS_LEDGER.chat.openai.candidate.modelId,
 ];
 const DEFAULT_RUNS = 1;
 // Every run is a paid request; keep a typo from turning into a bill.
@@ -658,7 +661,7 @@ const runModelTurn = async ({
 }: ModelTurnOptions): Promise<ModelTurn> => {
   const caching = resolveCaching({
     promptCachingEnabled: false,
-    role: "fast",
+    task: "short-text",
     scopeKey: null,
   });
   const rawCalls: ToolTrace[] = [];
@@ -668,6 +671,7 @@ const runModelTurn = async ({
     timeoutMs,
     chat: (abortController) =>
       streamChatChunks({
+        threadId: Bun.randomUUIDv7(),
         abortController,
         adapter: model.adapter,
         messages,
@@ -776,7 +780,7 @@ const runTask = async ({
   // What the tool stored must be what the HTTP route would have accepted.
   if (
     playbook !== undefined &&
-    !Value.Check(playbookPositionsSchema, playbook.positions)
+    !v.is(playbookPositionsSchema, playbook.positions)
   ) {
     score.defects.push("the stored positions do not parse as positionSchema");
     score.steps.saved = false;
@@ -873,6 +877,10 @@ const askedQuestionsOf = (input: unknown): AskedQuestion[] => {
       question: text(question["question"]),
       reason: text(question["reason"]),
       options: Array.isArray(options) ? options.map(text) : [],
+      selection:
+        question["selection"] === ASK_USER_SELECTION.multiple
+          ? ASK_USER_SELECTION.multiple
+          : ASK_USER_SELECTION.single,
       default: typeof preset === "string" ? preset : undefined,
     };
   });
@@ -1292,10 +1300,12 @@ const createBehaviorTools = ({
     written(input);
     answers += 1;
     return {
-      answers: questions.map((question) => ({
-        question: question.question,
-        answer: scenario.answer(question, events),
-      })),
+      answers: questions.map((question) => {
+        const answer = scenario.answer(question, events);
+        return typeof answer === "string"
+          ? { question: question.question, answer }
+          : { question: question.question, selected: [...answer] };
+      }),
     };
   });
 
@@ -1420,9 +1430,7 @@ const runScenario = async ({
   });
   // What the tool stored must be what the HTTP route would have accepted.
   if (
-    playbooks.some(
-      ({ positions }) => !Value.Check(playbookPositionsSchema, positions),
-    )
+    playbooks.some(({ positions }) => !v.is(playbookPositionsSchema, positions))
   ) {
     defects.push("the stored positions do not parse as positionSchema");
   }
@@ -1585,28 +1593,30 @@ const renderContractReport = (runs: readonly EvalRun[]): string => {
   return lines.join("\n");
 };
 
+// The eval sends customer-class data, which the instance credential may not
+// carry, so each model runs on the `.env` key as an organization's own key.
 const resolveModels = async (modelIds: readonly string[]) => {
   const { resolveTanStackTextModel } =
     await import("@/api/lib/tanstack-ai-generate");
-  const { hasTanStackInstanceProvider } =
-    await import("@/api/lib/tanstack-ai-models");
-  if (!hasTanStackInstanceProvider()) {
-    return panic(
-      "No instance AI provider is configured; set a provider key in .env",
-    );
-  }
   return await Promise.all(
-    modelIds.map(async (id) => ({
-      id,
-      model: await resolveTanStackTextModel({
-        modelId: id,
-        orgAIConfig: null,
-        dataClass: "customer",
-        managedAIResidency: "eu",
-        role: "fast",
-        organizationId: null,
-      }),
-    })),
+    resolveModelTargets(modelIds).map(async (target) => {
+      if (target.type === "resolution-error") {
+        return panic(`${target.id}: ${target.message}`);
+      }
+      return {
+        id: target.id,
+        model: await resolveTanStackTextModel({
+          userId: null,
+          modelId: target.modelId,
+          orgAIConfig: target.orgAIConfig,
+          dataClass: "customer",
+          managedAIResidency: "eu",
+          task: "short-text",
+          organizationId: null,
+          admission: NO_ORGANIZATION_MODEL_DISPATCH,
+        }),
+      };
+    }),
   );
 };
 

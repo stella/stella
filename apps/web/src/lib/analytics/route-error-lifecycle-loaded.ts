@@ -1,4 +1,5 @@
 import { fingerprintTelemetryError } from "@/lib/analytics/error-fingerprint";
+import { routeExceptionFingerprintKey } from "@/lib/analytics/exception-fingerprint";
 import type {
   RouteErrorAnalytics,
   RouteErrorIncident,
@@ -55,7 +56,10 @@ export const createLoadedRouteErrorLifecycleController = (
     const routeTemplate =
       state.type === "caught" ? state.routeTemplate : currentRouteTemplate;
     const incident: RouteErrorIncident = {
-      errorFingerprint: fingerprintTelemetryError(error),
+      errorFingerprint: fingerprintTelemetryError(error, {
+        key: routeExceptionFingerprintKey(routeTemplate),
+        scope: { type: "request", method: "GET", routeTemplate },
+      }),
       incidentReference: priorIncident?.incidentReference ?? reference,
       inspectorState:
         state.type === "caught" ? state.inspectorState : inspectorState,

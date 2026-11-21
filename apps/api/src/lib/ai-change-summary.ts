@@ -4,7 +4,7 @@ import * as v from "valibot";
  * the template Studio history and the entity (.docx file) version
  * panel; both resolve version content server-side and pass only the
  * computed diff text here. Uses the same structured-output plumbing
- * as `suggest-template-fields` (generateTanStackObjectForRole).
+ * as `suggest-template-fields` (generateTanStackObjectForTask).
  */
 
 import type { OrgAIConfig } from "@/api/lib/ai-config";
@@ -12,13 +12,15 @@ import { resolveCaching } from "@/api/lib/ai-config";
 import type { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
-import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
+import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
+import { generateTanStackObjectForTask } from "@/api/lib/tanstack-ai-generate";
 
 const SUMMARY_TIMEOUT_MS = 30_000;
 
 // strictObject (not object): OpenAI strict structured output rejects
 // schema objects without `additionalProperties: false`.
-const changeSummarySchema = v.strictObject({
+/** Read by the structured-output role contract test. @public */
+export const changeSummarySchema = v.strictObject({
   summary: v.string(),
 });
 
@@ -32,6 +34,7 @@ type SummarizeVersionDiffOptions = {
   orgAIConfig: OrgAIConfig | null;
   managedAIResidency: ManagedAIResidency;
   organizationId: SafeId<"organization">;
+  admission: ModelDispatchAdmission;
   aiAnalytics: ReturnType<typeof createTanStackAIAnalyticsCallbacks>;
 };
 
@@ -41,28 +44,31 @@ export const summarizeVersionDiff = async ({
   orgAIConfig,
   managedAIResidency,
   organizationId,
+  admission,
   aiAnalytics,
 }: SummarizeVersionDiffOptions): Promise<string> => {
-  const { summary } = await generateTanStackObjectForRole({
+  const { summary } = await generateTanStackObjectForTask({
     dataClass: "customer",
-    role: "fast",
+    task: "short-text",
     orgAIConfig,
     managedAIResidency,
     organizationId,
+    admission,
+    userId: admission.userId,
     // Shared by root-scoped and workspace-scoped callers; no workspace id is
     // threaded through this helper's options.
     tenantWorkspaceIds: [],
     analytics: aiAnalytics,
     caching: resolveCaching({
       promptCachingEnabled: false,
-      role: "fast",
+      task: "short-text",
       scopeKey: organizationId,
     }),
     system: SYSTEM_PROMPT,
     prompt: `Diff between the previous and the new version ("+ " added, "- " removed, "@@" unchanged lines elided):\n\n${diffText}`,
     outputSchema: changeSummarySchema,
     serviceTier: "standard",
-    abortSignal: AbortSignal.timeout(SUMMARY_TIMEOUT_MS),
+    deadlineMs: SUMMARY_TIMEOUT_MS,
   });
 
   return summary;

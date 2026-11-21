@@ -1,10 +1,10 @@
-import { frameAccents, productCtaLabels, type Product } from "./types";
+import { frameAccents, type Product, productCtaLabels } from "./types";
 
 export const anonymization = {
   slug: "anonymization",
   hero: {
     type: "live-anonymize",
-    alt: "stella · Anonymization — live demo",
+    alt: "stella · Anonymization: live demo",
     aspect: "16 / 10",
   },
   heroFrameVariant: "ripple",

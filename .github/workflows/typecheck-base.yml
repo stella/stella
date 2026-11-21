@@ -1,0 +1,57 @@
+name: Publish typecheck base
+
+defaults:
+  run:
+    shell: bash
+
+on:
+  push:
+    branches: [main]
+
+# A running recording finishes; a newer push replaces only a queued one.
+# SHAs without a recording use the exact-base fallback.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  record:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          submodules: true
+      - name: Setup Bun
+        uses: stella/.github/actions/setup-bun-cached@2664e46f02aea7164ba71bcdd485a686166993a4
+        with:
+          save: ${{ github.ref == 'refs/heads/main' }}
+      - name: Install dependencies
+        timeout-minutes: 5
+        run: bash scripts/retry.sh bun ci --ignore-scripts
+        env:
+          NPM_TOKEN: ""
+      - name: Generate types
+        run: |
+          bun --cwd=packages/cli run codegen:runtime
+          bun --filter @stll/api generate:capability-runtime
+          bun run generate
+          bun run typegen
+      - name: Record compiler cost and review files
+        run: |
+          mkdir -p "$RUNNER_TEMP/typecheck-recording"
+          bun scripts/typecheck-baseline.ts --measure "$GITHUB_WORKSPACE" "$RUNNER_TEMP/typecheck-recording/typecheck-base.json"
+          git rev-parse HEAD > "$RUNNER_TEMP/typecheck-recording/sha"
+          cp apps/web/src/generated/api-routes.gen.ts apps/web/src/routeTree.gen.ts apps/web/src/route-templates.gen.ts "$RUNNER_TEMP/typecheck-recording/"
+      - name: Publish recording
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: typecheck-base-v1-${{ github.sha }}
+          path: ${{ runner.temp }}/typecheck-recording/
+          retention-days: 30
+          if-no-files-found: error

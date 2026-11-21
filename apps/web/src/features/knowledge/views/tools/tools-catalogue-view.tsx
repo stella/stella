@@ -5,6 +5,7 @@ import { useTranslations } from "use-intl";
 
 import { EU_MEMBER_STATES } from "@stll/catalogue";
 import { compareByLocale } from "@stll/collation";
+import { filterBySearchQuery } from "@stll/text-normalize/search-query-matcher";
 import { Button } from "@stll/ui/button";
 import {
   CheckIcon,
@@ -19,19 +20,25 @@ import {
   InputGroupInput,
 } from "@stll/ui/input-group";
 import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
-
-import { nativeToolLabelKey } from "@/components/catalogue/native-tool-label";
-import { McpIcon } from "@/components/mcp-icon";
 import {
   ResponsiveActionToolbar,
   ResponsiveActionToolbarItem,
-} from "@/components/responsive-action-toolbar";
+} from "@stll/workspace-ui/responsive-action-toolbar";
+
+import {
+  nativeToolDescriptionKey,
+  nativeToolLabelKey,
+} from "@/components/catalogue/native-tool-label";
+import { McpIcon } from "@/components/mcp-icon";
+import { TOOLS_CATALOGUE_KIND_LABEL_KEYS } from "@/features/knowledge/views/tools/tools-catalogue-kinds.logic";
+import { filterToolsCatalogueEntries } from "@/features/knowledge/views/tools/tools-catalogue-search.logic";
 import type {
   KnowledgeTool,
   ToolsSource,
 } from "@/features/knowledge/views/tools/tools-seam";
-import { useLocale } from "@/i18n/formatting-context";
+import { useFormattingLocale } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
 import type { PracticeJurisdiction } from "@/lib/jurisdictions";
 
@@ -39,11 +46,10 @@ const FILTERS = ["all", "skill", "mcp"] as const;
 
 export type ToolsCatalogueKind = (typeof FILTERS)[number];
 
-const KIND_LABEL_KEY = {
-  all: "common.all",
-  skill: "catalogue.filter.skills",
-  mcp: "catalogue.filter.mcps",
-} as const satisfies Record<ToolsCatalogueKind, TranslationKey>;
+const KIND_LABEL_KEY = TOOLS_CATALOGUE_KIND_LABEL_KEYS satisfies Record<
+  ToolsCatalogueKind,
+  TranslationKey
+>;
 
 type ToolsCatalogueViewProps<TTool extends KnowledgeTool> = {
   source: ToolsSource<TTool>;
@@ -100,7 +106,7 @@ export const ToolsCatalogueView = <TTool extends KnowledgeTool>({
   children,
 }: ToolsCatalogueViewProps<TTool>) => {
   const t = useTranslations();
-  const locale = useLocale();
+  const locale = useFormattingLocale();
   const [filter, setFilter] = useState<ToolsCatalogueKind>(
     initialKind ?? "all",
   );
@@ -112,41 +118,26 @@ export const ToolsCatalogueView = <TTool extends KnowledgeTool>({
 
   const entries = source.entries;
 
-  const filtered = (() => {
-    const normalised = query.trim().toLowerCase();
-    const localizedName = (entry: TTool) => {
-      const key = nativeToolLabelKey({ slug: entry.slug, kind: entry.kind });
-      return key ? t(key) : entry.displayName;
-    };
-    const subset = entries.filter((entry) => {
-      if (filter !== "all" && entry.kind !== filter) {
-        return false;
-      }
-      if (
-        jurisdictionFilter.size > 0 &&
-        entry.jurisdictions.length > 0 &&
-        !entry.jurisdictions.some((code) => jurisdictionFilter.has(code))
-      ) {
-        return false;
-      }
-      if (normalised === "") {
-        return true;
-      }
-      return (
-        entry.displayName.toLowerCase().includes(normalised) ||
-        localizedName(entry).toLowerCase().includes(normalised) ||
-        entry.description.toLowerCase().includes(normalised) ||
-        entry.tags.some((tag) => tag.toLowerCase().includes(normalised))
-      );
+  const localizedName = (entry: TTool) => {
+    const key = nativeToolLabelKey({ slug: entry.slug, kind: entry.kind });
+    return key ? t(key) : entry.displayName;
+  };
+  const localizedDescription = (entry: TTool) => {
+    const key = nativeToolDescriptionKey({
+      slug: entry.slug,
+      kind: entry.kind,
     });
-    const compareName = compareByLocale(locale);
-    return [...subset].toSorted((left, right) => {
-      if (left.isRecommendedForOrg !== right.isRecommendedForOrg) {
-        return left.isRecommendedForOrg ? -1 : 1;
-      }
-      return compareName(localizedName(left), localizedName(right));
-    });
-  })();
+    return key ? t(key) : entry.description;
+  };
+  const filtered = filterToolsCatalogueEntries({
+    compareName: compareByLocale(locale),
+    entries,
+    filter,
+    jurisdictionFilter,
+    localizedDescription,
+    localizedName,
+    query,
+  });
 
   const allJurisdictionCodes = (() => {
     const set = new Set<string>();
@@ -190,7 +181,7 @@ export const ToolsCatalogueView = <TTool extends KnowledgeTool>({
             {query.length > 0 && (
               <InputGroupAddon align="inline-end">
                 <Button
-                  aria-label={t("onboarding.catalogueClearSearch")}
+                  aria-label={t("common.clearSearch")}
                   onClick={() => setQuery("")}
                   size="icon-xs"
                   type="button"
@@ -215,11 +206,11 @@ export const ToolsCatalogueView = <TTool extends KnowledgeTool>({
               }
             >
               <GlobeIcon className="size-3.5" />
-              <span className="min-w-0 truncate">
+              <TruncatedText>
                 {jurisdictionFilter.size === 0
                   ? t("common.all")
                   : [...jurisdictionFilter].toSorted().join(", ")}
-              </span>
+              </TruncatedText>
               <ChevronDownIcon className="size-3.5" />
             </PopoverTrigger>
             <PopoverPopup align="end" className="w-60" side="bottom">
@@ -240,11 +231,11 @@ export const ToolsCatalogueView = <TTool extends KnowledgeTool>({
               <div className="flex max-h-[260px] flex-col overflow-y-auto p-1">
                 {jurisdictionQuery.trim() === "" && (
                   <>
-                    <button
+                    <Button
                       aria-pressed={jurisdictionFilter.size === 0}
-                      className="hover:bg-muted flex items-center gap-2 rounded-sm px-2 py-1.5 text-sm"
                       onClick={() => setJurisdictionFilter(new Set())}
-                      type="button"
+                      size="row"
+                      variant="ghost"
                     >
                       <span
                         className={cn(
@@ -260,16 +251,16 @@ export const ToolsCatalogueView = <TTool extends KnowledgeTool>({
                       <span className="text-foreground font-medium">
                         {t("common.all")}
                       </span>
-                    </button>
+                    </Button>
                     <div className="bg-border my-1 h-px" />
                   </>
                 )}
                 {(() => {
-                  const matches = allJurisdictionCodes.filter((code) =>
-                    code
-                      .toLowerCase()
-                      .includes(jurisdictionQuery.trim().toLowerCase()),
-                  );
+                  const matches = filterBySearchQuery({
+                    items: allJurisdictionCodes,
+                    query: jurisdictionQuery,
+                    fields: (code) => [code],
+                  });
                   if (matches.length === 0) {
                     return (
                       <p className="text-muted-foreground px-2 py-3 text-center text-xs">
@@ -280,9 +271,8 @@ export const ToolsCatalogueView = <TTool extends KnowledgeTool>({
                   return matches.map((code) => {
                     const active = jurisdictionFilter.has(code);
                     return (
-                      <button
+                      <Button
                         aria-pressed={active}
-                        className="hover:bg-muted flex items-center gap-2 rounded-sm px-2 py-1.5 text-sm"
                         key={code}
                         onClick={() =>
                           setJurisdictionFilter((prev) => {
@@ -295,7 +285,8 @@ export const ToolsCatalogueView = <TTool extends KnowledgeTool>({
                             return next;
                           })
                         }
-                        type="button"
+                        size="row"
+                        variant="ghost"
                       >
                         <span
                           className={cn(
@@ -308,7 +299,7 @@ export const ToolsCatalogueView = <TTool extends KnowledgeTool>({
                           )}
                         </span>
                         <span className="text-foreground">{code}</span>
-                      </button>
+                      </Button>
                     );
                   });
                 })()}
@@ -318,10 +309,7 @@ export const ToolsCatalogueView = <TTool extends KnowledgeTool>({
         </ResponsiveActionToolbarItem>
 
         {addAction !== undefined && (
-          <ResponsiveActionToolbarItem
-            className="ms-auto sm:ms-0"
-            slot="action"
-          >
+          <ResponsiveActionToolbarItem slot="action">
             {addAction}
           </ResponsiveActionToolbarItem>
         )}
@@ -332,31 +320,30 @@ export const ToolsCatalogueView = <TTool extends KnowledgeTool>({
           {t("catalogue.filterHint", {
             codes: [...jurisdictionFilter].toSorted().join(", "),
           })}{" "}
-          <button
-            className="hover:text-foreground underline underline-offset-2"
+          <Button
+            className="group/plain"
             onClick={() => setJurisdictionFilter(new Set())}
-            type="button"
+            variant="plain"
           >
-            {t("common.showAll")}
-          </button>
+            <span className="group-hover/plain:text-foreground underline underline-offset-2">
+              {t("common.showAll")}
+            </span>
+          </Button>
         </p>
       )}
 
       <div className="flex items-center gap-1.5">
         {FILTERS.map((option) => (
-          <button
-            className={cn(
-              "rounded-md px-2.5 py-1 text-xs font-medium",
-              filter === option
-                ? "bg-foreground text-background"
-                : "text-muted-foreground hover:bg-muted",
-            )}
+          <Button
+            aria-pressed={filter === option}
             key={option}
             onClick={() => setFilter(option)}
-            type="button"
+            selected={filter === option}
+            size="xs"
+            variant="muted"
           >
             {t(KIND_LABEL_KEY[option])}
-          </button>
+          </Button>
         ))}
       </div>
 

@@ -4,13 +4,22 @@ updates:
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
-      interval: "cron"
-      cronjob: "0 3 * * *"
+      interval: "weekly"
+      day: "monday"
+      time: "03:00"
       timezone: "Europe/Prague"
     # Match minimumReleaseAge (5 days) in bunfig.toml
     cooldown:
       default-days: 5
     groups:
+      stella-shared:
+        # Reusable workflows are named stella/.github/.github/workflows/<file>,
+        # so they need their own pattern to land in this one grouped update.
+        # These are pinned by commit SHA, so an update has no semver type and
+        # an update-types filter would leave every one of them ungrouped.
+        patterns:
+          - "stella/.github/*"
+          - "stella/.github/.github/workflows/*"
       minor-and-patch:
         patterns:
           - "*"
@@ -28,8 +37,9 @@ updates:
   - package-ecosystem: "docker"
     directory: "/apps/api"
     schedule:
-      interval: "cron"
-      cronjob: "0 3 * * *"
+      interval: "weekly"
+      day: "monday"
+      time: "03:00"
       timezone: "Europe/Prague"
     cooldown:
       default-days: 5
@@ -50,8 +60,9 @@ updates:
   - package-ecosystem: "docker"
     directory: "/apps/web"
     schedule:
-      interval: "cron"
-      cronjob: "0 3 * * *"
+      interval: "weekly"
+      day: "monday"
+      time: "03:00"
       timezone: "Europe/Prague"
     cooldown:
       default-days: 5
@@ -72,8 +83,9 @@ updates:
   - package-ecosystem: "docker"
     directory: "/apps/legal-atlas-runner"
     schedule:
-      interval: "cron"
-      cronjob: "0 3 * * *"
+      interval: "weekly"
+      day: "monday"
+      time: "03:00"
       timezone: "Europe/Prague"
     cooldown:
       default-days: 5
@@ -94,8 +106,9 @@ updates:
   - package-ecosystem: "docker"
     directory: "/packages/agent-engine/docker"
     schedule:
-      interval: "cron"
-      cronjob: "0 3 * * *"
+      interval: "weekly"
+      day: "monday"
+      time: "03:00"
       timezone: "Europe/Prague"
     cooldown:
       default-days: 5
@@ -116,8 +129,9 @@ updates:
   - package-ecosystem: "docker"
     directory: "/"
     schedule:
-      interval: "cron"
-      cronjob: "0 3 * * *"
+      interval: "weekly"
+      day: "monday"
+      time: "03:00"
       timezone: "Europe/Prague"
     cooldown:
       default-days: 5
@@ -138,17 +152,23 @@ updates:
   - package-ecosystem: "cargo"
     directory: "/apps/desktop/src-tauri"
     schedule:
-      interval: "cron"
-      cronjob: "0 3 * * *"
+      interval: "weekly"
+      day: "monday"
+      time: "03:00"
       timezone: "Europe/Prague"
     # Match minimumReleaseAge (5 days) in bunfig.toml
     cooldown:
       default-days: 5
     open-pull-requests-limit: 10
     groups:
+      # Tauri crates release with the npm @tauri-apps packages, so they share
+      # the Bun entry's tauri group shape instead of riding minor-and-patch.
       minor-and-patch:
         patterns:
           - "*"
+        exclude-patterns:
+          - "tauri"
+          - "tauri-*"
         update-types:
           - "minor"
           - "patch"
@@ -158,6 +178,8 @@ updates:
           - "tauri-*"
         update-types:
           - "major"
+          - "minor"
+          - "patch"
       async-runtime:
         patterns:
           - "tokio"
@@ -195,8 +217,9 @@ updates:
     labels:
       - "📦 dependencies"
     schedule:
-      interval: "cron"
-      cronjob: "0 3 * * *"
+      interval: "weekly"
+      day: "monday"
+      time: "03:00"
       timezone: "Europe/Prague"
     # Match minimumReleaseAge (5 days) in bunfig.toml
     cooldown:
@@ -310,19 +333,6 @@ updates:
           - "drizzle-kit"
         update-types:
           - "major"
-      elysia:
-        patterns:
-          - "elysia"
-          - "@elysia/*"
-          - "@elysiajs/*"
-        update-types:
-          - "major"
-      react-email:
-        patterns:
-          - "react-email"
-          - "@react-email/*"
-        update-types:
-          - "major"
       rivetkit:
         patterns:
           - "rivetkit"
@@ -346,15 +356,10 @@ updates:
       - dependency-name: "katex"
         versions:
           - ">=0.17"
-      # Remove when intl-messageformat moves past 3.5.16.
+      # Remove when intl-messageformat moves past 3.5.18.
       - dependency-name: "@formatjs/icu-messageformat-parser"
         versions:
-          - ">3.5.16"
-      # v5 requires Elysia 2. Remove this guard when Elysia 2 reaches stable and
-      # the API migrates rate-limit scoping from `scoped` to `plugin`.
-      - dependency-name: "elysia-rate-limit"
-        update-types:
-          - "version-update:semver-major"
+          - ">3.5.18"
       # Expo packages ship as one SDK-coordinated major. Upgrade the complete
       # SDK intentionally instead of mixing majors through partial PRs.
       - dependency-name: "expo"
@@ -366,16 +371,58 @@ updates:
       - dependency-name: "@expo/*"
         update-types:
           - "version-update:semver-major"
-      # Expo SDK 57 requires react-native-screens ~4.26.0. Remove this guard
-      # when Expo's supported range advances to 4.27 or newer.
+      # Expo SDK 58 requires react-native-screens ~4.30.0. Remove this guard
+      # when Expo's supported range advances to 4.31 or newer.
       - dependency-name: "react-native-screens"
         update-types:
           - "version-update:semver-minor"
-      # Expo SDK 57 requires react-native 0.86.x (`expo doctor` fails on
-      # 0.87). Remove this guard when the SDK upgrade moves react-native.
+      # Expo SDK 58 requires react-native 0.88.x (`expo doctor` fails on
+      # 0.89). Remove this guard when the SDK upgrade moves react-native.
       - dependency-name: "react-native"
         update-types:
           - "version-update:semver-minor"
+      # Expo SDK 58 requires react-native-svg 15.16.0 exactly (`expo doctor`
+      # fails on 15.16.1). Remove this guard when the SDK upgrade moves it.
+      - dependency-name: "react-native-svg"
+        versions:
+          - ">15.16.0"
+      # lucide-static feeds the mobile bar glyphs, which are native assets: a
+      # bump rewrites them and changes the native fingerprint, so it needs a
+      # TestFlight build. Remove this when the next store build bumps it.
+      - dependency-name: "lucide-static"
+        versions:
+          - ">1.70.0"
+      # oxlint 1.93 makes the root-script type-aware lint in
+      # scripts/code-check-affected.test.ts about 3x slower (7-11 s to 28-30 s
+      # on CI). oxlint, @oxlint/plugins and oxlint-tsgolint stay on the
+      # versions that pair with oxlint 1.90 until that is fixed.
+      - dependency-name: "oxlint"
+        versions:
+          - ">1.90.0"
+      - dependency-name: "@oxlint/plugins"
+        versions:
+          - ">1.90.0"
+      - dependency-name: "oxlint-tsgolint"
+        versions:
+          - ">7.0.2005"
+      # prosemirror-inputrules 1.6.0 imports prosemirror-model without
+      # declaring it, which the isolated linker cannot resolve. Remove this
+      # when a release declares the dependency.
+      - dependency-name: "prosemirror-inputrules"
+        versions:
+          - "1.6.0"
+      # @tanstack/react-hotkeys 0.25 deprecates the formatForDisplay re-export
+      # that apps/web/src/lib/hotkeys.ts calls with the hydration-safe
+      # platform. Remove this with the change that migrates the formatter.
+      - dependency-name: "@tanstack/react-hotkeys"
+        versions:
+          - ">0.23.1"
+      # turbo 2.11.11 re-runs cached API typecheck tasks whose inputs did not
+      # change (packages/scripts/src/api-typecheck-cache.test.ts). Remove this
+      # when a release keeps those cache hits.
+      - dependency-name: "turbo"
+        versions:
+          - ">2.11.10"
     commit-message:
       prefix: "chore"
     reviewers:

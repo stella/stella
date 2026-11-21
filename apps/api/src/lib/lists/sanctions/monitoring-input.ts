@@ -1,7 +1,7 @@
 import { panic } from "better-result";
-import { createHash } from "node:crypto";
 
 import { isCountryCode } from "@stll/country-codes";
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 import { stableStringify } from "@stll/stable-stringify";
 
 import type { contacts } from "@/api/db/schema";
@@ -68,11 +68,9 @@ export const monitoringSubject = (
 };
 
 export const monitoringFingerprint = (contact: SanctionsMonitoringContact) =>
-  createHash("sha256")
-    .update(
-      stableStringify({
-        subject: monitoringSubject(contact),
-        mode: contact.sanctionsMonitoringMode,
-      }),
-    )
-    .digest("hex");
+  hashSha256Hex(
+    stableStringify({
+      subject: monitoringSubject(contact),
+      mode: contact.sanctionsMonitoringMode,
+    }),
+  );

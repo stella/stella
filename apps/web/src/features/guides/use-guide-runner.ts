@@ -5,6 +5,7 @@ import { useNavigate, useRouter } from "@tanstack/react-router";
 import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
 
+import { sleep } from "@stll/concurrency/sleep";
 import { Temporal } from "@stll/time";
 import { stellaToast } from "@stll/ui/toast";
 
@@ -19,9 +20,9 @@ import {
 import type { GuideEngine } from "@/features/guides/guide-engine";
 import { resolveGuideWorkspaceViewId } from "@/features/guides/guide-route";
 import type {
-  GuideSeed,
   GuideInteraction,
   GuideRoute,
+  GuideSeed,
   GuideStep,
   GuideTour,
   GuideTourId,
@@ -46,26 +47,21 @@ const ROUTE_RENDER_TIMEOUT_MS = 45_000;
 const isPendingAnchor = (anchorId: GuideAnchorId): boolean =>
   PENDING_GUIDE_ANCHOR_IDS.includes(anchorId);
 
-const delay = async (ms: number, signal: AbortSignal): Promise<boolean> =>
-  await new Promise<boolean>((resolve) => {
-    let settled = false;
-    const settle = (elapsedNormally: boolean) => {
-      if (settled) {
-        return;
+const delay = async (ms: number, signal: AbortSignal): Promise<boolean> => {
+  if (signal.aborted) {
+    await sleep(ms);
+    return true;
+  }
+  return await sleep(ms, { signal }).then(
+    () => true,
+    (error: unknown) => {
+      if (signal.aborted && Object.is(error, signal.reason)) {
+        return false;
       }
-      settled = true;
-      signal.removeEventListener("abort", handleAbort);
-      resolve(elapsedNormally);
-    };
-    const handleAbort = () => {
-      clearTimeout(timeout);
-      settle(false);
-    };
-    const timeout = setTimeout(() => {
-      settle(true);
-    }, ms);
-    signal.addEventListener("abort", handleAbort, { once: true });
-  });
+      return panic("Sleep rejected without caller cancellation", error);
+    },
+  );
+};
 
 // Races this consumer's await against the run's abort signal. The query
 // itself is left alone: `viewsOptions` is shared with `useQuery` readers, so
@@ -120,8 +116,7 @@ const REVEALED_SURFACE_SELECTOR =
   '[role="menu"],[role="listbox"],[role="dialog"]';
 
 type GuideRunnerState =
-  | { status: "idle" }
-  | { status: "running"; tourId: GuideTourId };
+  { status: "idle" } | { status: "running"; tourId: GuideTourId };
 
 // Which way the run is walking the tour. A walk only ever moves one way until
 // the user clicks again; see `resolveFrom`.
@@ -288,7 +283,13 @@ export const useGuideRunner = ({
       }
     });
     if (Result.isError(result)) {
-      analytics.captureError(result.error);
+      analytics.captureError(result.error, {
+        fingerprintKey: "useGuideRunner.navigateToGuideRoute:failure",
+        scope: {
+          type: "handler",
+          handlerId: "useGuideRunner.navigateToGuideRoute:failure",
+        },
+      });
       return false;
     }
     return result.value;

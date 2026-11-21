@@ -47,14 +47,16 @@ export const MarkdownFileViewer = ({
   // Workspace .md edits use the same hybrid editor as skills. Edits feed
   // the draft; the existing Save button uploads a new file version.
   return (
-    <MarkdownHybridEditor
-      imagePolicy="data-only"
-      key={tabId}
-      markdown={text}
-      onMarkdownChange={setDraft}
-      readOnly={readOnly || isSaving}
-      ref={editorRef}
-    />
+    <div className="contents" data-print-root="">
+      <MarkdownHybridEditor
+        imagePolicy="data-only"
+        key={tabId}
+        markdown={text}
+        onMarkdownChange={setDraft}
+        readOnly={readOnly || isSaving}
+        ref={editorRef}
+      />
+    </div>
   );
 };
 
@@ -70,11 +72,22 @@ export const MarkdownDraftActions = ({
   }
   return (
     <>
-      <Button disabled={isSaving} onClick={discard} size="xs" variant="ghost">
+      <Button
+        disabled={isSaving}
+        disabledReason={t("common.saving")}
+        onClick={discard}
+        size="xs"
+        variant="ghost"
+      >
         <XIcon className="size-3.5" />
         {t("common.cancel")}
       </Button>
-      <Button disabled={isSaving} onClick={save} size="xs">
+      <Button
+        disabled={isSaving}
+        disabledReason={t("common.saving")}
+        onClick={save}
+        size="xs"
+      >
         <CheckIcon className="size-3.5" />
         {t("common.save")}
       </Button>

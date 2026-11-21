@@ -1,7 +1,11 @@
 [
   {
-    "id": "invoke_capability::delegated",
-    "reason": "The target capability is chosen per call; its endpoint permissions and purpose requirements are checked before dispatch to it."
+    "id": "create_organization::delegated",
+    "reason": "The organizations.create session capability checks its declared account OAuth scope; organization creation has no existing organization member permission."
+  },
+  {
+    "id": "mint_web_handoff::delegated",
+    "reason": "The mint operation verifies current OAuth consent and its live user grant, rather than a workspace mutation permission."
   },
   {
     "id": "save_document::any",
@@ -10,5 +14,9 @@
   {
     "id": "save_filled_template::any",
     "reason": "action selects entity:create (new document) or entity:update (new version), each with template:use; the per-operation grant stays aligned with the document-write authorization owner."
+  },
+  {
+    "id": "write_capability::delegated",
+    "reason": "The target capability is chosen per call; its endpoint permissions and purpose requirements are checked before dispatch to it."
   }
 ]

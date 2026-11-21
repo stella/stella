@@ -1,5 +1,7 @@
 import { Result } from "better-result";
 
+import { errorOutputLogger } from "@stll/errors";
+
 import {
   ACCOUNT_ACCESS,
   createSafeSessionHandler,
@@ -8,15 +10,17 @@ import type { SessionHandlerConfig } from "@/api/lib/api-handlers";
 import { createConfirmationOtp } from "@/api/lib/confirmation-otp";
 import {
   checkUserOrganizationOwnership,
-  ORGANIZATION_OWNERSHIP,
   getUserEmail,
+  ORGANIZATION_OWNERSHIP,
 } from "@/api/lib/delete-account";
+import { stashDevOtp } from "@/api/lib/dev-otp-store";
 import { sendOTPEmail } from "@/api/lib/email/email";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { extractLangFromRequest } from "@/api/lib/locale";
 import { isLocalDevOpen } from "@/api/runtime-mode";
 
 const config = {
+  contract: "patch",
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "account_lifecycle" },
 } satisfies SessionHandlerConfig;
@@ -64,17 +68,17 @@ const deleteAccountSendOtp = createSafeSessionHandler(
     });
 
     if (isLocalDevOpen()) {
+      stashDevOtp(emailStr, otp);
       // oxlint-disable-next-line no-console -- Local dev fallback prints OTPs when SMTP is unavailable.
       console.log(
         `\n\x1b[33m[DEV] OTP for ${emailStr}: ${otp} (type: delete-account)\x1b[0m\n`,
       );
       if (emailResult.isErr()) {
-        const message =
-          emailResult.error instanceof Error
-            ? emailResult.error.message
-            : String(emailResult.error);
-        // oxlint-disable-next-line no-console -- Local dev fallback should expose SMTP delivery failures.
-        console.warn(`[DEV] Failed to send email via SMTP: ${message}`);
+        errorOutputLogger.log(
+          "warn",
+          "[DEV] Failed to send email via SMTP:",
+          emailResult.error,
+        );
       }
     } else if (emailResult.isErr()) {
       return Result.err(

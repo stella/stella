@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 
 import { useInfiniteQuery } from "@tanstack/react-query";
 import {
@@ -11,13 +11,13 @@ import {
 import { useTranslations } from "use-intl";
 
 import type { CorrespondenceDrop } from "@stll/api-contract/correspondence";
-import {
-  Accordion,
-  AccordionItem,
-  AccordionPanel,
-  AccordionTrigger,
-} from "@stll/ui/accordion";
 import { Button } from "@stll/ui/button";
+import {
+  Collapsible,
+  CollapsiblePanel,
+  CollapsibleTrigger,
+} from "@stll/ui/collapsible";
+import { ChevronDownIcon } from "@stll/ui/icons";
 import {
   Table,
   TableBody,
@@ -26,8 +26,9 @@ import {
   TableHeader,
   TableRow,
 } from "@stll/ui/table";
+import { TableSkeletonRows } from "@stll/workspace-ui/table-skeleton-rows";
 
-import { TableSkeletonRows } from "@/components/table-skeleton-rows";
+import { ContactReadError } from "@/components/contact-read-error";
 import { useFormatter } from "@/i18n/formatting-context";
 import { detached } from "@/lib/detached";
 import { MEDIUM_DATE_SHORT_TIME_FORMAT } from "@/lib/relative-time";
@@ -51,16 +52,26 @@ export const CorrespondenceDrops = ({
   const t = useTranslations();
   const [expanded, setExpanded] = useState(false);
   return (
-    <Accordion onValueChange={(value) => setExpanded(value.length > 0)}>
-      <AccordionItem value="drops">
-        <AccordionTrigger className="min-h-11">
+    // One disclosure, so a Collapsible. The table mounts only once opened:
+    // it pages its own query, which a closed panel must not start.
+    <Collapsible onOpenChange={setExpanded} open={expanded}>
+      <CollapsibleTrigger
+        render={<Button className="w-full" variant="plain" />}
+      >
+        <span className="flex min-h-11 w-full items-center justify-between gap-4 py-4 text-sm font-medium">
           {t("correspondence.drops.title")}
-        </AccordionTrigger>
-        <AccordionPanel>
+          <ChevronDownIcon
+            aria-hidden
+            className="size-4 shrink-0 opacity-80 transition-transform duration-200 ease-in-out in-data-panel-open:rotate-180"
+          />
+        </span>
+      </CollapsibleTrigger>
+      <CollapsiblePanel>
+        <div className="pb-4 text-sm">
           {expanded && <CorrespondenceDropsTable workspaceId={workspaceId} />}
-        </AccordionPanel>
-      </AccordionItem>
-    </Accordion>
+        </div>
+      </CollapsiblePanel>
+    </Collapsible>
   );
 };
 
@@ -69,6 +80,7 @@ const CorrespondenceDropsTable = ({ workspaceId }: { workspaceId: string }) => {
   const format = useFormatter();
   const {
     data,
+    error,
     isPending,
     isError,
     isFetchNextPageError,
@@ -77,47 +89,36 @@ const CorrespondenceDropsTable = ({ workspaceId }: { workspaceId: string }) => {
     hasNextPage,
     isFetching,
   } = useInfiniteQuery(correspondenceDropsOptions(workspaceId));
-  const columns = useMemo(
-    () =>
-      columnHelper.columns([
-        columnHelper.accessor("sender", {
-          header: t("emailViewer.from"),
-          cell: ({ getValue }) => <bdi dir="ltr">{getValue()}</bdi>,
-        }),
-        columnHelper.accessor("receivedAt", {
-          header: t("correspondence.receivedAt"),
-          cell: ({ getValue }) => (
-            <time className="tabular-nums" dateTime={getValue()}>
-              {format.dateTime(
-                new Date(getValue()),
-                MEDIUM_DATE_SHORT_TIME_FORMAT,
-              )}
-            </time>
-          ),
-        }),
-        columnHelper.accessor("reason", {
-          header: t("common.reason"),
-          cell: ({ getValue, row }) => (
-            <div className="space-y-1 whitespace-normal">
-              <p>{t(CORRESPONDENCE_DROP_REASON_LABELS[getValue()])}</p>
-              {row.original.setupHint !== null && (
-                <p className="text-muted-foreground text-xs">
-                  {t.rich(
-                    CORRESPONDENCE_DROP_HINT_LABELS[row.original.setupHint],
-                    { protocol: (chunks) => <bdi dir="ltr">{chunks}</bdi> },
-                  )}
-                </p>
-              )}
-            </div>
-          ),
-        }),
-      ]),
-    [format, t],
-  );
-  const items = useMemo(
-    () => (data ? data.pages.flatMap((page) => page.items) : []),
-    [data],
-  );
+  const columns = columnHelper.columns([
+    columnHelper.accessor("sender", {
+      header: t("emailViewer.from"),
+      cell: ({ getValue }) => <bdi dir="ltr">{getValue()}</bdi>,
+    }),
+    columnHelper.accessor("receivedAt", {
+      header: t("correspondence.receivedAt"),
+      cell: ({ getValue }) => (
+        <time className="tabular-nums" dateTime={getValue()}>
+          {format.dateTime(new Date(getValue()), MEDIUM_DATE_SHORT_TIME_FORMAT)}
+        </time>
+      ),
+    }),
+    columnHelper.accessor("reason", {
+      header: t("common.reason"),
+      cell: ({ getValue, row }) => (
+        <div className="space-y-1 whitespace-normal">
+          <p>{t(CORRESPONDENCE_DROP_REASON_LABELS[getValue()])}</p>
+          {row.original.setupHint !== null && (
+            <p className="text-muted-foreground text-xs">
+              {t.rich(CORRESPONDENCE_DROP_HINT_LABELS[row.original.setupHint], {
+                protocol: (chunks) => <bdi dir="ltr">{chunks}</bdi>,
+              })}
+            </p>
+          )}
+        </div>
+      ),
+    }),
+  ]);
+  const items = data ? data.pages.flatMap((page) => page.items) : [];
   const table = useTable({
     features: dropTableFeatures,
     data: items,
@@ -130,6 +131,7 @@ const CorrespondenceDropsTable = ({ workspaceId }: { workspaceId: string }) => {
         <Button
           className="min-h-11"
           disabled={isFetching}
+          disabledReason={t("common.loading")}
           onClick={() => detached(refetch(), "correspondence.refresh-drops")}
           size="sm"
           variant="ghost"
@@ -181,23 +183,17 @@ const CorrespondenceDropsTable = ({ workspaceId }: { workspaceId: string }) => {
         </TableBody>
       </Table>
       {isError && (
-        <div role="alert" className="flex items-center gap-2 text-sm">
-          <span>{t("common.error")}</span>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="min-h-11"
-            disabled={isFetching}
-            onClick={() =>
-              detached(
-                isFetchNextPageError ? fetchNextPage() : refetch(),
-                "correspondence.retry-drops",
-              )
-            }
-          >
-            {t("common.retry")}
-          </Button>
-        </div>
+        <ContactReadError
+          error={error}
+          fallbackKey="common.loadFailed"
+          retryDisabled={isFetching}
+          onRetry={() =>
+            detached(
+              isFetchNextPageError ? fetchNextPage() : refetch(),
+              "correspondence.retry-drops",
+            )
+          }
+        />
       )}
       {hasNextPage && !isError && (
         <Button
@@ -205,6 +201,7 @@ const CorrespondenceDropsTable = ({ workspaceId }: { workspaceId: string }) => {
           size="sm"
           className="min-h-11"
           disabled={isFetching}
+          disabledReason={t("common.loading")}
           onClick={() =>
             detached(fetchNextPage(), "correspondence.fetch-next-drops")
           }

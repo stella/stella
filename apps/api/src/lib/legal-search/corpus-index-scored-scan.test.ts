@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
+
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { CorpusIndexHit } from "@/api/lib/legal-search/corpus-index-client";
 import {
@@ -21,6 +23,14 @@ import {
   stableBlendUpperBound,
 } from "@/api/lib/legal-search/rerank";
 import { LIMITS } from "@/api/lib/limits";
+import {
+  testAppliedProjectionsFor,
+  testRevisionOf,
+  testRevisionsFor,
+} from "@/api/tests/helpers/corpus-projection-revisions";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
+
+const testFetchState = createTestFetch();
 
 /**
  * The candidate scan through both engine transports.
@@ -216,14 +226,15 @@ const projected = (
   fields: readonly string[],
 ): Record<string, unknown> =>
   Object.fromEntries(
-    Object.entries(passage).filter(
-      ([key]) => key !== "score" && fields.includes(key),
-    ),
+    Object.entries({
+      ...passage,
+      projection_revision: testRevisionOf(passage.document_id),
+    }).filter(([key]) => key !== "score" && fields.includes(key)),
   );
 
 const stored = (passage: FixturePassage): Record<string, unknown> => {
   const { score: _score, ...rest } = passage;
-  return rest;
+  return { ...rest, projection_revision: testRevisionOf(passage.document_id) };
 };
 
 const json = (value: unknown): Response =>
@@ -270,8 +281,10 @@ beforeEach(() => {
         clauses: wanted.size,
       });
       const hits = passages
-        .filter((passage) =>
-          wanted.has(passage.chunk_id ?? passage.document_id),
+        .filter(
+          (passage) =>
+            wanted.has(passage.document_id) ||
+            wanted.has(passage.chunk_id ?? ""),
         )
         .slice(0, Number(body["max_hits"]));
       return json({
@@ -290,21 +303,22 @@ beforeEach(() => {
       snippets: [],
     });
   };
-  globalThis.fetch = Object.assign(stub, {
-    preconnect: originalFetch.preconnect,
-  });
+  testFetchState.set(
+    Object.assign(stub, {
+      preconnect: originalFetch.preconnect,
+    }),
+  );
 });
 
 afterEach(() => {
-  globalThis.fetch = originalFetch;
+  testFetchState.restore();
 });
 
 const BLEND_WEIGHT = DEFAULT_AUTHORITY_WEIGHT + DEFAULT_COURT_TIER_WEIGHT;
 
-const SCORED: CorpusIndexScanTransport = {
+const SCORED = {
   type: "scored",
-  fields: ["document_id"],
-};
+} as const satisfies CorpusIndexScanTransport;
 
 const readFixturePage = async (
   fixture: FixtureCase,
@@ -323,6 +337,7 @@ const readFixturePage = async (
     parsedCursor,
     scanTransport,
     snippetFields: ["text"],
+    projectionRevisionField: "projection_revision",
     extractId: (hit: CorpusIndexHit) =>
       typeof hit["document_id"] === "string" ? hit["document_id"] : null,
     extractSnippet: (snippet) => {
@@ -330,22 +345,29 @@ const readFixturePage = async (
       return Array.isArray(text) ? String(text.at(0)) : null;
     },
     unseenScoreUpperBound: (next) => stableBlendUpperBound(next, BLEND_WEIGHT),
-    rankCandidates: async (candidates) => ({
-      context: null,
-      groups: candidates.map((candidate) =>
-        corpusSearchGroupToken(candidate.id),
-      ),
-      ranked: blendStableCitationAuthority({
-        candidates: candidates.filter(
-          (candidate) =>
-            !parsedCursor?.excludedGroups?.includes(
-              corpusSearchGroupToken(candidate.id),
-            ),
+    rankCandidates: async (probes, { selectAppliedCandidates }) => {
+      const revisionById = testRevisionsFor(probes);
+      const candidates = selectAppliedCandidates(
+        testAppliedProjectionsFor(probes),
+      );
+      return {
+        context: null,
+        groups: candidates.map((candidate) =>
+          corpusSearchGroupToken(candidate.id),
         ),
-        authorityById: fixture.authorityById,
-        signals: [courtTierSignal(fixture.tierById)],
-      }),
-    }),
+        ranked: blendStableCitationAuthority({
+          candidates: candidates.filter(
+            (candidate) =>
+              !parsedCursor?.excludedGroups?.includes(
+                corpusSearchGroupToken(candidate.id),
+              ),
+          ),
+          authorityById: fixture.authorityById,
+          signals: [courtTierSignal(fixture.tierById)],
+        }),
+        revisionById,
+      };
+    },
   });
 };
 
@@ -363,18 +385,25 @@ const observable = (page: PageRead) => {
     return a < b ? -1 : 1;
   };
   const digest = <V>(map: ReadonlyMap<string, V>) =>
-    new Bun.CryptoHasher("sha256")
-      .update(JSON.stringify([...map].toSorted(byKey)))
-      .digest("hex");
+    hashSha256Hex(JSON.stringify([...map].toSorted(byKey)));
   return {
     pageRanked: page.pageRanked,
     nextCursor: page.nextCursor,
     passageCountById: digest(page.passageCountById),
-    anchorIdById: digest(page.anchorIdById),
     snippetById: digest(page.snippetById),
     scan,
     scanRequests: scanRequests.map(({ from, size }) => ({ from, size })),
-    highlightRequests,
+    highlightRequests: {
+      count: highlightRequests.length,
+      shapes: [
+        ...new Map(
+          highlightRequests.map((request) => [
+            JSON.stringify(request),
+            request,
+          ]),
+        ).values(),
+      ],
+    },
   };
 };
 
@@ -413,7 +442,7 @@ const readGolden = async (): Promise<unknown> =>
 describe("the candidate scan pages exactly as the recorded ranking does", () => {
   /**
    * `golden.json` was recorded from the scan before it could read scores:
-   * pages, cursors, per-document breadth, anchors and snippets, the scan's own
+   * pages, cursors, per-document breadth and snippets, the scan's own
    * report, and the exact rounds it asked the engine for. Both transports must
    * reproduce it, given the engine returns the same order through both.
    */
@@ -474,7 +503,7 @@ describe("the scored transport", () => {
         "/api/v1/_elastic/case_law_v5_cs_sk/_search",
       );
       expect(request.url.searchParams.get("_source_includes")).toBe(
-        "document_id,chunk_id,anchor_id",
+        "document_id,chunk_id,anchor_id,projection_revision",
       );
       expect(request.body).toEqual({
         query: {
@@ -486,8 +515,7 @@ describe("the scored transport", () => {
         track_total_hits: true,
       });
     }
-    // The page's snippets still come from the native highlight round, the
-    // only request that reads passage text.
+    // Only the native passage batch and missing-passage fallbacks read text.
     const highlight = engineRequests.filter(
       (request) => request.body["snippet_fields"] !== undefined,
     );

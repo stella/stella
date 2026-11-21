@@ -2,6 +2,8 @@ import { expect, test } from "bun:test";
 
 import {
   caseLawCorpusQueryFields,
+  caseLawIndexGroupReadContract,
+  caseLawJurisdictionReadContract,
   corpusIndexReadContract,
   CorpusIndexReadContractError,
   requireCaseLawDecisionCountField,
@@ -15,6 +17,7 @@ test("case-law reads use their generation's declared schema", () => {
     openingPassageQuery: "is_opening:true",
     yearFacetField: "decision_year",
     stemFields: null,
+    positionalFields: new Set(["title", "text"]),
     searchableFields: [],
     keywordFields: [],
   });
@@ -26,6 +29,13 @@ test("case-law reads use their generation's declared schema", () => {
     openingPassageQuery: "is_opening:true",
     yearFacetField: "decision_year",
     stemFields: { text: "text_stem", publisherSummary: "headnote_stem" },
+    positionalFields: new Set([
+      "title",
+      "text",
+      "headnote",
+      "text_stem",
+      "headnote_stem",
+    ]),
     searchableFields: ["headnote"],
     keywordFields: [],
   });
@@ -37,8 +47,33 @@ test("case-law reads use their generation's declared schema", () => {
     openingPassageQuery: "is_opening:true",
     yearFacetField: "decision_year",
     stemFields: { text: "text_stem", publisherSummary: "headnote_stem" },
+    positionalFields: new Set([
+      "title",
+      "text",
+      "headnote",
+      "text_stem",
+      "headnote_stem",
+      "keywords",
+    ]),
     searchableFields: ["headnote"],
     // Its own list, because the leaf budget pays for it last.
+    keywordFields: ["keywords"],
+  });
+  // v8 records the text stem without positions, so it can no longer answer a
+  // phrase; every other field keeps what v7 has.
+  expect(corpusIndexReadContract("case_law", "case_law_v8")).toEqual({
+    family: "case_law",
+    openingPassageQuery: "is_opening:true",
+    yearFacetField: "decision_year",
+    stemFields: { text: "text_stem", publisherSummary: "headnote_stem" },
+    positionalFields: new Set([
+      "title",
+      "text",
+      "headnote",
+      "headnote_stem",
+      "keywords",
+    ]),
+    searchableFields: ["headnote"],
     keywordFields: ["keywords"],
   });
 });
@@ -61,7 +96,16 @@ test("extra fields and stemming both need a generation that maps them", () => {
     surfaceFields: ["headnote"],
     keywordFields: [],
     functionWords: FUNCTION_WORDS.cs,
-    stemming: { language: "cs", fields: ["text_stem", "headnote_stem"] },
+    documentStems: {
+      languages: ["cs", "en"],
+      headnoteField: "headnote_stem",
+      textField: "text_stem",
+    },
+    stemming: {
+      language: "cs",
+      fields: ["text_stem", "headnote_stem"],
+      positionlessFields: [],
+    },
   });
   expect(
     caseLawCorpusQueryFields({
@@ -73,7 +117,16 @@ test("extra fields and stemming both need a generation that maps them", () => {
     surfaceFields: ["headnote"],
     keywordFields: ["keywords"],
     functionWords: FUNCTION_WORDS.cs,
-    stemming: { language: "cs", fields: ["text_stem", "headnote_stem"] },
+    documentStems: {
+      languages: ["cs", "en"],
+      headnoteField: "headnote_stem",
+      textField: "text_stem",
+    },
+    stemming: {
+      language: "cs",
+      fields: ["text_stem", "headnote_stem"],
+      positionlessFields: [],
+    },
   });
   // Slovak has a stemmer but no published expansion dictionary; the two are
   // separate questions and only the dictionary one is answered elsewhere.
@@ -83,7 +136,24 @@ test("extra fields and stemming both need a generation that maps them", () => {
       jurisdiction: "SVK",
       language: undefined,
     }).stemming,
-  ).toEqual({ language: "sk", fields: ["text_stem", "headnote_stem"] });
+  ).toEqual({
+    language: "sk",
+    fields: ["text_stem", "headnote_stem"],
+    positionlessFields: [],
+  });
+  // v8 stems into the same fields, and names the one a stemmed phrase may not
+  // reach.
+  expect(
+    caseLawCorpusQueryFields({
+      generation: "case_law_v8",
+      jurisdiction: "CZE",
+      language: undefined,
+    }).stemming,
+  ).toEqual({
+    language: "cs",
+    fields: ["text_stem", "headnote_stem"],
+    positionlessFields: ["text_stem"],
+  });
   // A generation whose indexes never mapped the fields: naming one would be
   // an invalid query against a strict mapping, not a narrower one.
   expect(
@@ -98,6 +168,7 @@ test("extra fields and stemming both need a generation that maps them", () => {
     surfaceFields: [],
     keywordFields: [],
     functionWords: FUNCTION_WORDS.cs,
+    documentStems: null,
     stemming: null,
   });
   // The European index carries 24 languages under one jurisdiction, so the
@@ -120,6 +191,44 @@ test("extra fields and stemming both need a generation that maps them", () => {
   ).toBeNull();
 });
 
+test("the documents' stemmers answer for every read, with or without a language", () => {
+  const stemsOf = (
+    jurisdiction: string | undefined,
+    language: string | undefined,
+    generation = "case_law_v11",
+  ) =>
+    caseLawCorpusQueryFields({ generation, jurisdiction, language })
+      .documentStems;
+
+  expect(stemsOf("CZE", undefined)).toEqual({
+    languages: ["cs", "en"],
+    headnoteField: "headnote_stem",
+    textField: "text_stem",
+  });
+  // The European index holds a document per language, each stemmed under its
+  // own: every EU language a stemmer covers, and none it does not.
+  const eu: readonly string[] = stemsOf("EU", undefined)?.languages ?? [];
+  expect(eu).toContain("en");
+  expect(eu).toContain("cs");
+  expect(eu).toContain("fr");
+  expect(eu).not.toContain("bg");
+  // Unscoped: every jurisdiction the generation holds, hence the European
+  // languages and every single-language corpus.
+  const unscoped: readonly string[] =
+    stemsOf(undefined, undefined)?.languages ?? [];
+  for (const language of ["cs", "sk", "pl", "hu", "en", "de", "pt"]) {
+    expect(unscoped).toContain(language);
+  }
+  expect(unscoped).toEqual(unscoped.toSorted());
+  // A language filter names the documents' language and answers alone.
+  expect(stemsOf("EU", "cs")?.languages).toEqual(["cs"]);
+  expect(stemsOf(undefined, "en")?.languages).toEqual(["en"]);
+  // A filtered language no stemmer covers: its documents hold surface terms.
+  expect(stemsOf("EU", "bg")).toBeNull();
+  // A generation that writes no stems asks for none.
+  expect(stemsOf(undefined, undefined, "case_law_v5")).toBeNull();
+});
+
 test("the language filter, not the jurisdiction, decides how words stem", () => {
   const stemmingOf = (
     jurisdiction: string | undefined,
@@ -136,6 +245,7 @@ test("the language filter, not the jurisdiction, decides how words stem", () => 
   expect(stemmingOf(undefined, "cs")).toEqual({
     language: "cs",
     fields: ["text_stem", "headnote_stem"],
+    positionlessFields: [],
   });
   // Agreeing: the same answer either way.
   expect(stemmingOf("CZE", "cs")).toEqual(stemmingOf("CZE", undefined));
@@ -144,6 +254,7 @@ test("the language filter, not the jurisdiction, decides how words stem", () => 
   expect(stemmingOf("EU", "cs")).toEqual({
     language: "cs",
     fields: ["text_stem", "headnote_stem"],
+    positionlessFields: [],
   });
   expect(stemmingOf("CZE", "pl")?.language).toBe("pl");
   // Austria publishes in German, so an unfiltered Austrian search stems the
@@ -275,4 +386,56 @@ test("the panic carries the tagged contract error as its cause", () => {
       CorpusIndexReadContractError,
     );
   }
+});
+
+test("only the Czech group of the partial generation maps the provision keys field", () => {
+  expect(caseLawIndexGroupReadContract("case_law_v9", "cze")).toEqual({
+    provisionKeysField: "provision_keys",
+  });
+  for (const generation of [
+    "case_law_v5",
+    "case_law_v6",
+    "case_law_v7",
+    "case_law_v8",
+  ]) {
+    // The serving generations hold no Czech group, and no group of theirs
+    // maps the field.
+    for (const group of ["cze", "aut", "cs_sk", "eu", "hun", "pol", "usa"]) {
+      expect([
+        generation,
+        group,
+        caseLawIndexGroupReadContract(generation, group),
+      ]).toEqual([generation, group, { provisionKeysField: null }]);
+    }
+  }
+  // A name no group declares maps nothing.
+  expect(caseLawIndexGroupReadContract("case_law_v9", "xxx")).toEqual({
+    provisionKeysField: null,
+  });
+});
+
+test("the target serving a jurisdiction answers whether it has provision keys", () => {
+  expect(caseLawJurisdictionReadContract("case_law_v9", "CZE")).toEqual({
+    provisionKeysField: "provision_keys",
+  });
+  expect(caseLawJurisdictionReadContract("case_law_v9", "cze")).toEqual({
+    provisionKeysField: null,
+  });
+  // Until the flip Czech decisions are read through v8, whose group has none.
+  expect(caseLawJurisdictionReadContract("case_law_v8", "CZE")).toEqual({
+    provisionKeysField: null,
+  });
+  for (const jurisdiction of ["SVK", "POL", "AUT", "HUN", "EU", "USA"]) {
+    expect(
+      caseLawJurisdictionReadContract("case_law_v8", jurisdiction),
+    ).toEqual({ provisionKeysField: null });
+    // v9 holds none of them.
+    expect(
+      caseLawJurisdictionReadContract("case_law_v9", jurisdiction),
+    ).toEqual({ provisionKeysField: null });
+  }
+  // A read spanning groups reaches indexes that do not map the field.
+  expect(caseLawJurisdictionReadContract("case_law_v9", undefined)).toEqual({
+    provisionKeysField: null,
+  });
 });

@@ -8,14 +8,17 @@ import type {
   DocumentCompareResponse,
 } from "@/api/handlers/documents/compare";
 import { toSafeId } from "@/api/lib/branded-types";
-import type { McpRequestContext } from "@/api/mcp/context";
-import { handleCompareDocumentsTool } from "@/api/mcp/document-compare-tool";
+import {
+  COMPARE_DOCUMENTS_TOOL_DEFINITION,
+  handleCompareDocumentsTool,
+} from "@/api/mcp/document-compare-tool";
 import type { CompareDocumentsDependencies } from "@/api/mcp/document-compare-tool";
 import type {
   FileComparisonRunOptions,
   FileComparisonRunOutcome,
 } from "@/api/mcp/file-comparison-run";
 import { notFoundResult } from "@/api/mcp/tool-utils";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
@@ -79,7 +82,7 @@ const createHarness = ({
     select: builder.select,
   });
 
-  const context = asTestRaw<McpRequestContext>({
+  const context = asTestRaw<AuthorizedMcpRequestContext>({
     accessibleWorkspaceIds: [toSafeId<"workspace">(WORKSPACE_ID)],
     accessibleWorkspaceIdSet: new Set([WORKSPACE_ID]),
     accessibleWorkspaceStatusById: new Map([[WORKSPACE_ID, "active"]]),
@@ -172,6 +175,9 @@ describe("compare_documents", () => {
     const result = await harness.run(versionsArgs());
 
     expect(dataOf(result)).toEqual({ results: [] });
+    expect(COMPARE_DOCUMENTS_TOOL_DEFINITION.annotations.destructiveHint).toBe(
+      false,
+    );
     expect(harness.comparedWith).toHaveLength(1);
     expect(harness.comparedWith.at(0)?.body).toMatchObject({
       filePropertyId: AGREEMENT_PROPERTY_ID,

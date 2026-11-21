@@ -20,9 +20,9 @@ export type CalendarWeekRow = {
   days: CalendarDay[];
 };
 
-export const MONTH_WINDOW_SIZE = 9;
+const MONTH_WINDOW_SIZE = 9;
 export const MONTH_WINDOW_SHIFT = 3;
-export const MONTH_WINDOW_CENTER = Math.floor(MONTH_WINDOW_SIZE / 2);
+const MONTH_WINDOW_CENTER = Math.floor(MONTH_WINDOW_SIZE / 2);
 
 export const startOfUTCMonth = (date: Temporal.PlainDate): Temporal.PlainDate =>
   date.with({ day: 1 });
@@ -39,7 +39,7 @@ export const getCenteredMonthWindowStart = (
   date: Temporal.PlainDate,
 ): Temporal.PlainDate => addUTCMonths(date, -MONTH_WINDOW_CENTER);
 
-export const getMonthDistance = (
+const getMonthDistance = (
   from: Temporal.PlainDate,
   to: Temporal.PlainDate,
 ): number => (to.year - from.year) * 12 + (to.month - from.month);

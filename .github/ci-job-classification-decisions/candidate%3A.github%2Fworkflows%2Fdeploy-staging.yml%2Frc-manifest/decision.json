@@ -1,0 +1,4 @@
+{
+  "kind": "priority",
+  "qualifier": "Reads the release candidate's draft manifest for staging promotion; contents write only makes the draft visible and nothing is published."
+}

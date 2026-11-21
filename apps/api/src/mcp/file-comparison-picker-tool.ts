@@ -12,22 +12,18 @@ import { FILE_COMPARISON_TRANSPORT } from "@stll/api-contract";
 
 import { hasEffectiveAuthority } from "@/api/mcp/effective-authority";
 import { fileComparisonPermissionDenied } from "@/api/mcp/file-comparison-prepare-tool";
+import { nullAsAbsent } from "@/api/mcp/input-schemas";
 import type {
   TypedMcpToolHandler,
   TypedMcpToolResponse,
 } from "@/api/mcp/tool-types";
-import {
-  nullAsAbsent,
-  toolDataResult,
-  validationErrorResult,
-} from "@/api/mcp/tool-utils";
+import { toolDataResult, validationErrorResult } from "@/api/mcp/tool-utils";
 import {
   defineMcpToolOutput,
   defineValibotMcpTool,
 } from "@/api/mcp/valibot-tool-definition";
 
-export const FILE_COMPARISON_APP_RESOURCE_URI =
-  FILE_COMPARISON_TRANSPORT.resourceUri;
+const FILE_COMPARISON_APP_RESOURCE_URI = FILE_COMPARISON_TRANSPORT.resourceUri;
 
 const OPEN_FILE_COMPARISON_INPUT_SCHEMA = nullAsAbsent(v.strictObject({}));
 
@@ -63,6 +59,8 @@ export const OPEN_FILE_COMPARISON_TOOL_DEFINITION = defineValibotMcpTool({
   inputSchema: OPEN_FILE_COMPARISON_INPUT_SCHEMA,
   access: "write",
   accountAccess: "sandbox",
+  nonDestructiveReason:
+    "Returns file-comparison panel metadata without uploading files or modifying stored documents.",
   permissions: { type: "all", permissions: { entity: ["update"] } },
   anonymized: { exposure: "excluded", reason: "write" },
   name: FILE_COMPARISON_TRANSPORT.pickerToolName,

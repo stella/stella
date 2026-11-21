@@ -1,10 +1,10 @@
 import { afterEach, expect, test } from "bun:test";
 import {
   existsSync,
-  mkdtempSync,
   mkdirSync,
-  readFileSync,
+  mkdtempSync,
   readdirSync,
+  readFileSync,
   rmSync,
   symlinkSync,
   utimesSync,
@@ -13,12 +13,18 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { repoRelativePath } from "@stll/portable-path";
+import { deferred } from "@stll/test-kit";
+
+import { HAPPY_PATH_TIMEOUT_MS } from "@/api/tests/test-timeouts";
+
 import {
   acquireCachedSnapshot,
   acquireCurrentSnapshot,
+  SnapshotBuildError,
+  snapshotDigest,
   snapshotInputPaths,
   snapshotKey,
-  SnapshotBuildError,
 } from "./test-db-snapshot-cache";
 
 const temporaryRoots: string[] = [];
@@ -119,7 +125,7 @@ test("installed dependency version invalidates the key with identical source and
     );
     writeFileSync(path.join(packageDir, "index.js"), "export const value = 1;");
     symlinkSync(
-      path.relative(path.join(root, "node_modules"), packageDir),
+      repoRelativePath(path.join(root, "node_modules"), packageDir),
       path.join(root, "node_modules/example"),
     );
     return root;
@@ -140,26 +146,52 @@ test("installed dependency version invalidates the key with identical source and
 test("concurrent acquirers build once and both receive the final snapshot", async () => {
   const root = fixture();
   const cacheDir = path.join(root, "cache");
+  const key = "a".repeat(64);
+  const building = deferred();
+  const publish = deferred();
+  const waiting = deferred();
+  const retry = deferred();
   let builds = 0;
   const acquire = async () =>
     acquireCachedSnapshot({
       cacheDir,
-      key: "a".repeat(64),
+      key,
       build: async (filePath) => {
         builds += 1;
-        await Bun.sleep(100);
+        building.resolve();
+        await publish.promise;
         writeFileSync(filePath, "valid");
       },
       validate: async (filePath) => readFileSync(filePath, "utf-8") === "valid",
+      waitForLock: async () => {
+        waiting.resolve();
+        await retry.promise;
+      },
     });
-  const [first, second] = await Promise.all([acquire(), acquire()]);
-  expect(builds).toBe(1);
-  expect(first.status).toBe("hit");
-  expect(second.status).toBe("hit");
-  if (first.status === "hit" && second.status === "hit") {
-    expect(first.snapshot.path).toBe(second.snapshot.path);
-    first.snapshot.release();
-    second.snapshot.release();
+  const owner = acquire();
+  const contender = acquire();
+  try {
+    await Promise.all([building.promise, waiting.promise]);
+    expect(builds).toBe(1);
+    expect(existsSync(path.join(cacheDir, `${key}.lock`, "owner"))).toBe(true);
+    expect(existsSync(path.join(cacheDir, `${key}.tar`))).toBe(false);
+    publish.resolve();
+    const first = await owner;
+    retry.resolve();
+    const second = await contender;
+    expect(builds).toBe(1);
+    expect(first.status).toBe("hit");
+    expect(second.status).toBe("hit");
+    if (first.status === "hit" && second.status === "hit") {
+      expect(first.snapshot.path).toBe(second.snapshot.path);
+      expect(readFileSync(first.snapshot.path, "utf-8")).toBe("valid");
+      first.snapshot.release();
+      second.snapshot.release();
+    }
+  } finally {
+    publish.resolve();
+    retry.resolve();
+    await Promise.allSettled([owner, contender]);
   }
 });
 
@@ -204,30 +236,33 @@ test("a changed key while waiting does not accept the old snapshot", async () =>
   );
   writeFileSync(path.join(cacheDir, `${oldKey}.tar`), "old");
   let currentKey = oldKey;
-  const change = setTimeout(() => {
-    currentKey = newKey;
-    rmSync(lockDir, { recursive: true, force: true });
-  }, 20);
+  const waiting = deferred();
+  const release = deferred();
   let builds = 0;
-  try {
-    const result = await acquireCurrentSnapshot({
-      cacheDir,
-      key: () => currentKey,
-      build: async (filePath) => {
-        builds += 1;
-        writeFileSync(filePath, "new");
-      },
-      validate: async () => true,
-    });
-    expect(result.status).toBe("hit");
-    if (result.status === "hit") {
-      expect(result.snapshot.path).toBe(path.join(cacheDir, `${newKey}.tar`));
-      result.snapshot.release();
-    }
-    expect(builds).toBe(1);
-  } finally {
-    clearTimeout(change);
+  const acquisition = acquireCurrentSnapshot({
+    cacheDir,
+    key: () => currentKey,
+    build: async (filePath) => {
+      builds += 1;
+      writeFileSync(filePath, "new");
+    },
+    validate: async () => true,
+    waitForLock: async () => {
+      waiting.resolve();
+      await release.promise;
+    },
+  });
+  await waiting.promise;
+  currentKey = newKey;
+  rmSync(lockDir, { recursive: true, force: true });
+  release.resolve();
+  const result = await acquisition;
+  expect(result.status).toBe("hit");
+  if (result.status === "hit") {
+    expect(result.snapshot.path).toBe(path.join(cacheDir, `${newKey}.tar`));
+    result.snapshot.release();
   }
+  expect(builds).toBe(1);
 });
 
 test("abort stops a cache-lock wait promptly", async () => {
@@ -269,6 +304,78 @@ test("abort stops a cache-lock wait promptly", async () => {
   }
 });
 
+test("abort during cached validation preserves the archive and digest", async () => {
+  const root = fixture();
+  const cacheDir = path.join(root, "cache");
+  mkdirSync(cacheDir);
+  for (const behavior of ["false", "throws"] as const) {
+    const key = behavior === "false" ? "a".repeat(64) : "c".repeat(64);
+    const finalPath = path.join(cacheDir, `${key}.tar`);
+    const digestPath = path.join(cacheDir, `${key}.sha256`);
+    writeFileSync(finalPath, `valid cached snapshot ${behavior}`);
+    const digest = await snapshotDigest(finalPath);
+    writeFileSync(digestPath, digest);
+    const controller = new AbortController();
+    const rejection = await acquireCachedSnapshot({
+      cacheDir,
+      key,
+      build: async () => {
+        throw new Error("A cached snapshot must not be rebuilt");
+      },
+      validate: async () => {
+        controller.abort();
+        if (behavior === "throws") {
+          throw new Error("snapshot validation interrupted");
+        }
+        return false;
+      },
+      signal: controller.signal,
+    }).then(
+      () => {
+        throw new Error("Expected snapshot acquisition to reject");
+      },
+      (error: unknown) => error,
+    );
+
+    expect(rejection).toBeInstanceOf(SnapshotBuildError);
+    expect(readFileSync(finalPath, "utf-8")).toBe(
+      `valid cached snapshot ${behavior}`,
+    );
+    expect(readFileSync(digestPath, "utf-8")).toBe(digest);
+  }
+});
+
+test("abort during built snapshot validation propagates for false and throws", async () => {
+  const root = fixture();
+  const cacheDir = path.join(root, "cache");
+  for (const behavior of ["false", "throws"] as const) {
+    const key = behavior === "false" ? "b".repeat(64) : "d".repeat(64);
+    const controller = new AbortController();
+    const rejection = await acquireCachedSnapshot({
+      cacheDir,
+      key,
+      build: async (filePath) => {
+        writeFileSync(filePath, `new snapshot ${behavior}`);
+      },
+      validate: async () => {
+        controller.abort();
+        if (behavior === "throws") {
+          throw new Error("snapshot validation interrupted");
+        }
+        return false;
+      },
+      signal: controller.signal,
+    }).then(
+      () => {
+        throw new Error("Expected snapshot acquisition to reject");
+      },
+      (error: unknown) => error,
+    );
+
+    expect(rejection).toBeInstanceOf(SnapshotBuildError);
+  }
+});
+
 test("dead-owner lock is taken over", async () => {
   const root = fixture();
   const cacheDir = path.join(root, "cache");
@@ -286,7 +393,7 @@ test("dead-owner lock is taken over", async () => {
       writeFileSync(filePath, "valid");
     },
     validate: async () => true,
-    timeoutMs: 2000,
+    timeoutMs: HAPPY_PATH_TIMEOUT_MS,
   });
   expect(result.status).toBe("hit");
   if (result.status === "hit") {
@@ -304,6 +411,10 @@ test("competing stale-lock takers still build once", async () => {
     path.join(lockDir, "owner"),
     JSON.stringify({ pid: 99_999_999, started: 0, token: "dead" }),
   );
+  const building = deferred();
+  const publish = deferred();
+  const waiting = deferred();
+  const retry = deferred();
   let builds = 0;
   const acquire = async () =>
     acquireCachedSnapshot({
@@ -311,18 +422,43 @@ test("competing stale-lock takers still build once", async () => {
       key,
       build: async (filePath) => {
         builds += 1;
-        await Bun.sleep(100);
+        building.resolve();
+        await publish.promise;
         writeFileSync(filePath, "valid");
       },
-      validate: async () => true,
+      validate: async (filePath) => readFileSync(filePath, "utf-8") === "valid",
+      waitForLock: async () => {
+        waiting.resolve();
+        await retry.promise;
+      },
     });
-  const results = await Promise.all([acquire(), acquire()]);
-  expect(builds).toBe(1);
-  for (const result of results) {
-    expect(result.status).toBe("hit");
-    if (result.status === "hit") {
-      result.snapshot.release();
+  const owner = acquire();
+  const contender = acquire();
+  try {
+    await Promise.all([building.promise, waiting.promise]);
+    expect(builds).toBe(1);
+    expect(readFileSync(path.join(lockDir, "owner"), "utf-8")).not.toContain(
+      '"token":"dead"',
+    );
+    expect(existsSync(`${lockDir}.takeover`)).toBe(false);
+    expect(existsSync(path.join(cacheDir, `${key}.tar`))).toBe(false);
+    publish.resolve();
+    const first = await owner;
+    retry.resolve();
+    const second = await contender;
+    expect(builds).toBe(1);
+    expect(first.status).toBe("hit");
+    expect(second.status).toBe("hit");
+    if (first.status === "hit" && second.status === "hit") {
+      expect(first.snapshot.path).toBe(second.snapshot.path);
+      expect(readFileSync(first.snapshot.path, "utf-8")).toBe("valid");
+      first.snapshot.release();
+      second.snapshot.release();
     }
+  } finally {
+    publish.resolve();
+    retry.resolve();
+    await Promise.allSettled([owner, contender]);
   }
 });
 
@@ -345,7 +481,7 @@ test("old lock is taken over even when its pid is live", async () => {
       writeFileSync(filePath, "valid");
     },
     validate: async () => true,
-    timeoutMs: 2000,
+    timeoutMs: HAPPY_PATH_TIMEOUT_MS,
   });
   expect(result.status).toBe("hit");
   if (result.status === "hit") {
@@ -449,7 +585,7 @@ test("old takeover directory is removed before stale-lock takeover", async () =>
       writeFileSync(filePath, "valid");
     },
     validate: async () => true,
-    timeoutMs: 2000,
+    timeoutMs: HAPPY_PATH_TIMEOUT_MS,
   });
   expect(result.status).toBe("hit");
   if (result.status === "hit") {
@@ -507,4 +643,46 @@ test("pruning preserves a snapshot leased by another test run", async () => {
     sixth.snapshot.release();
   }
   expect(existsSync(path.join(cacheDir, `${firstKey}.tar`))).toBe(false);
+});
+
+test("snapshot failure exits with sanitized stdout and stderr", async () => {
+  const secretValues = [
+    "fixture-snapshot-password-hash",
+    "fixture-snapshot-token",
+  ];
+  const modulePath = path.join(import.meta.dir, "test-db-snapshot-cache.ts");
+  const child = Bun.spawn(
+    [
+      process.execPath,
+      "-e",
+      `import { SnapshotBuildError, exitAfterSnapshotFailure } from ${JSON.stringify(modulePath)};
+const params = ${JSON.stringify(secretValues)};
+const cause = Object.assign(new Error(\`Failed query: insert into account values ($1, $2)\nparams: \${params.join(",")}\`), {
+  name: "DrizzleQueryError",
+  query: "insert into account values ($1, $2)",
+  params,
+  cause: Object.assign(new Error("Constraint failure"), {
+    name: "PostgresError", code: "23505", constraint: "account_token_unique",
+  }),
+});
+exitAfterSnapshotFailure(Object.assign(new SnapshotBuildError({
+  message: \`Snapshot failed: \${params.join(",")}\`, exitCode: 7,
+}), { cause }));`,
+    ],
+    { stdout: "pipe", stderr: "pipe" },
+  );
+  const [exitCode, stdout, stderr] = await Promise.all([
+    child.exited,
+    new Response(child.stdout).text(),
+    new Response(child.stderr).text(),
+  ]);
+  for (const output of [stdout, stderr]) {
+    for (const secret of secretValues) {
+      expect(output).not.toContain(secret);
+    }
+  }
+  expect(exitCode).toBe(7);
+  expect(stderr).toContain("account_token_unique");
+  expect(stderr).toContain("23505");
+  expect(stderr).toContain("insert into ? values ( $1 , $2 )");
 });

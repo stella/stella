@@ -11,8 +11,8 @@ import {
   compareBetterAuthSchema,
 } from "./contract";
 import type {
-  BetterAuthFieldDefault,
   BetterAuthFieldContract,
+  BetterAuthFieldDefault,
   BetterAuthFieldReference,
   BetterAuthFieldType,
   BetterAuthModelContract,

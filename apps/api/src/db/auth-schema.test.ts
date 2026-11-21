@@ -7,6 +7,7 @@ import type { AnyPgTable } from "drizzle-orm/pg-core";
 
 import {
   BETTER_AUTH_CORE_SCHEMA,
+  BILLING_ACCESS_MEMBER_FIELDS,
   compareBetterAuthSchema,
 } from "@stll/auth-model";
 import type {
@@ -18,9 +19,9 @@ import type {
 } from "@stll/auth-model";
 
 import {
+  account,
   AUTH_USER_STELLA_SELECT_COLUMN_NAMES,
   AUTH_USER_STELLA_SELECT_COLUMNS,
-  account,
   authSchema,
   invitation,
   jwks,
@@ -37,8 +38,12 @@ import {
   AUTH_SESSION_STORAGE_OPTIONS,
   AUTH_VERIFICATION_STORAGE_OPTIONS,
 } from "@/api/lib/auth-adapter-options";
-import { AUTH_USER_ADDITIONAL_FIELDS } from "@/api/lib/auth-user-additional-fields";
 import { SESSION_LIFETIME_FIELDS } from "@/api/lib/auth/session-lifetime";
+import {
+  SSO_ACCOUNT_FIELDS,
+  SSO_SESSION_FIELDS,
+} from "@/api/lib/auth/sso-sign-in";
+import { AUTH_USER_ADDITIONAL_FIELDS } from "@/api/lib/auth/user-additional-fields";
 
 const PRODUCT_AUTH_MODEL_NAMES = [
   "twoFactor",
@@ -51,13 +56,14 @@ const PRODUCT_AUTH_MODEL_NAMES = [
   "oauthRefreshToken",
   "oauthResource",
   "oauthConsent",
+  "ssoProvider",
 ] as const;
 
 const OAUTH_PROVIDER_MODEL_TABLES = [
   [
     "oauthClient",
     authSchema.oauthClient,
-    ["public", "type", "registrationOrigin"],
+    ["public", "type", "registrationOrigin", "metadataValidatedAt"],
   ],
   ["oauthResource", authSchema.oauthResource, []],
   ["oauthClientResource", authSchema.oauthClientResource, []],
@@ -114,6 +120,7 @@ const databaseColumnType = (
 type HostFieldOptions = {
   databaseDefault?: BetterAuthFieldContract["database"]["default"];
   databaseNotNull?: boolean;
+  databaseReference?: BetterAuthFieldReference;
   default?: BetterAuthFieldContract["logical"]["default"];
   input?: BetterAuthFieldContract["logical"]["input"];
   required?: boolean;
@@ -122,7 +129,7 @@ type HostFieldOptions = {
 
 type HostFieldDatabaseOptions = Pick<
   HostFieldOptions,
-  "databaseDefault" | "databaseNotNull"
+  "databaseDefault" | "databaseNotNull" | "databaseReference"
 >;
 
 const hostField = (
@@ -131,6 +138,7 @@ const hostField = (
   {
     databaseDefault = { kind: "none" },
     databaseNotNull = false,
+    databaseReference,
     default: fieldDefault = { kind: "none" },
     input = "allowed",
     required = false,
@@ -147,7 +155,7 @@ const hostField = (
     notNull: databaseNotNull,
     onUpdate: false,
     precision: null,
-    reference: null,
+    reference: databaseReference ?? null,
     storage: type === "date" ? "timestamp-with-time-zone" : null,
     unique: false,
   },
@@ -274,19 +282,47 @@ const HOST_USER_FIELDS = {
     input: "server-managed",
     returned: false,
   }),
+  emailUndeliverableAddress: hostField("emailUndeliverableAddress", "string", {
+    input: "server-managed",
+    returned: false,
+  }),
+  emailUndeliverableReason: hostField("emailUndeliverableReason", "string", {
+    input: "server-managed",
+    returned: false,
+  }),
+  emailUndeliverableAt: hostField("emailUndeliverableAt", "date", {
+    input: "server-managed",
+    returned: false,
+  }),
 };
 
-const HOST_SESSION_FIELDS = normalizeRuntimeFields(SESSION_LIFETIME_FIELDS, {
-  refreshMode: {
-    databaseDefault: {
-      kind: "literal",
-      value: SESSION_LIFETIME_FIELDS.refreshMode.defaultValue,
+const HOST_SESSION_FIELDS = normalizeRuntimeFields(
+  { ...SESSION_LIFETIME_FIELDS, ...SSO_SESSION_FIELDS },
+  {
+    originConsentId: {
+      databaseReference: {
+        field: "id",
+        model: "oauthConsent",
+        onDelete: "cascade",
+      },
     },
-    databaseNotNull: true,
+    refreshMode: {
+      databaseDefault: {
+        kind: "literal",
+        value: SESSION_LIFETIME_FIELDS.refreshMode.defaultValue,
+      },
+      databaseNotNull: true,
+    },
   },
-});
+);
 
 const HOST_MEMBER_FIELDS = {
+  ...normalizeRuntimeFields(BILLING_ACCESS_MEMBER_FIELDS, {
+    billingAccess: {
+      databaseDefault: { kind: "literal", value: false },
+      databaseNotNull: true,
+    },
+  }),
   lastActiveWorkspaceId: hostField("lastActiveWorkspaceId", "string", {
     input: "server-managed",
     returned: false,
@@ -301,9 +337,13 @@ const HOST_ACCOUNT_FIELDS = {
     input: "server-managed",
     returned: false,
   }),
-} as const;
+  ...normalizeRuntimeFields(SSO_ACCOUNT_FIELDS),
+};
 
 const referenceTo = (tableName: string): BetterAuthFieldReference => {
+  if (tableName === "oauth_consent") {
+    return { field: "id", model: "oauthConsent", onDelete: "cascade" };
+  }
   if (tableName === "organization" || tableName === "user") {
     return { field: "id", model: tableName, onDelete: "cascade" };
   }
@@ -545,6 +585,7 @@ describe("auth schema", () => {
         indexes: {
           session: [
             { fields: ["priorTokenHash"], predicate: null, unique: true },
+            { fields: ["originConsentId"], predicate: null, unique: false },
           ],
           account: [
             {

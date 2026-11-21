@@ -1,12 +1,12 @@
 import { describe, expect, test } from "bun:test";
 
 import {
-  CHAT_TURN_STATUSES,
   type ChatTurnState,
   type ChatTurnTransition,
   planChatTurnTransition,
 } from "@/api/handlers/chat/chat-turn-state";
 import { toSafeId } from "@/api/lib/branded-types";
+import { CHAT_TURN_STATUSES } from "@/api/lib/chat/turn-status";
 
 const id = toSafeId<"chatTurn">("11111111-1111-4111-8111-111111111111");
 const threadId = toSafeId<"chatThread">("22222222-2222-4222-8222-222222222222");
@@ -18,6 +18,7 @@ const assistantMessageId = toSafeId<"chatMessage">(
 );
 const now = new Date("2026-08-03T10:00:00.000Z");
 const leaseExpiresAt = new Date("2026-08-03T10:10:00.000Z");
+const adoptBy = new Date("2026-08-03T10:11:30.000Z");
 
 const runningState = {
   executionId: "55555555-5555-4555-8555-555555555555",
@@ -42,6 +43,14 @@ const states = {
     id,
     interaction: { toolCallId: "ask-1", type: "ask-user" },
     status: "awaiting-user",
+    threadId,
+    userMessageId,
+  },
+  "handed-over": {
+    adoptBy,
+    assistantMessageId,
+    id,
+    status: "handed-over",
     threadId,
     userMessageId,
   },
@@ -102,6 +111,7 @@ const transitions = {
     type: "start",
   },
   "await-user": awaitUserTransition,
+  "hand-over": { adoptBy, assistantMessageId, type: "hand-over" },
   complete: { assistantMessageId, completedAt: now, type: "complete" },
   fail: {
     assistantMessageId,
@@ -122,6 +132,7 @@ const allowedTransitions = {
   accepted: {
     start: true,
     "await-user": false,
+    "hand-over": false,
     complete: false,
     fail: true,
     cancel: true,
@@ -131,6 +142,7 @@ const allowedTransitions = {
   running: {
     start: false,
     "await-user": true,
+    "hand-over": true,
     complete: true,
     fail: true,
     cancel: true,
@@ -140,15 +152,27 @@ const allowedTransitions = {
   "awaiting-user": {
     start: false,
     "await-user": false,
+    "hand-over": false,
     complete: false,
     fail: false,
     cancel: true,
     interrupt: false,
     resume: true,
   },
+  "handed-over": {
+    start: false,
+    "await-user": false,
+    "hand-over": false,
+    complete: false,
+    fail: false,
+    cancel: true,
+    interrupt: true,
+    resume: true,
+  },
   completed: {
     start: false,
     "await-user": false,
+    "hand-over": false,
     complete: false,
     fail: false,
     cancel: false,
@@ -158,6 +182,7 @@ const allowedTransitions = {
   failed: {
     start: false,
     "await-user": false,
+    "hand-over": false,
     complete: false,
     fail: false,
     cancel: false,
@@ -167,6 +192,7 @@ const allowedTransitions = {
   cancelled: {
     start: false,
     "await-user": false,
+    "hand-over": false,
     complete: false,
     fail: false,
     cancel: false,
@@ -176,6 +202,7 @@ const allowedTransitions = {
   interrupted: {
     start: false,
     "await-user": false,
+    "hand-over": false,
     complete: false,
     fail: false,
     cancel: false,
@@ -221,6 +248,26 @@ describe("chat turn lifecycle", () => {
         status: "running",
         threadId,
         userMessageId,
+      },
+      type: "applied",
+    });
+  });
+
+  test("a released turn has no owner until another task adopts it", () => {
+    const released = planChatTurnTransition(
+      runningState,
+      transitions["hand-over"],
+    );
+    expect(released).toEqual({ state: states["handed-over"], type: "applied" });
+
+    const adopted = planChatTurnTransition(
+      states["handed-over"],
+      transitions.resume,
+    );
+    expect(adopted).toEqual({
+      state: {
+        ...runningState,
+        executionId: transitions.resume.executionId,
       },
       type: "applied",
     });

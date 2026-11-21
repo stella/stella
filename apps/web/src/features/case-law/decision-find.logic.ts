@@ -102,6 +102,7 @@ const answerFindText = (content: WorkspaceFieldContent | null): string => {
     case "money":
     case "pending":
     case "person":
+    case "record":
     case "unsupported":
       return "";
     default:

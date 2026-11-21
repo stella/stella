@@ -1,0 +1,2695 @@
+import { panic, Result } from "better-result";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { builtinModules } from "node:module";
+import path from "node:path";
+import * as v from "valibot";
+
+import {
+  type ParsedSource,
+  parseSource,
+  walk as walkSyntax,
+} from "../packages/scripts/src/syntax-tree";
+import { type Generator, GENERATORS } from "./generated-files";
+import { specifierCandidates } from "./generated-imports";
+import { lexShell } from "./install-free-ci";
+
+// Reads module sources, Dockerfiles, ignore rules, package/lock and tsconfig
+// files. Generator metadata may mention Markdown, but its contents are not read.
+export const CI_MARKDOWN_READER_INPUTS_DOCKER_SOURCE_CLOSURE = [];
+
+// Container paths map to checkout paths. Resolution never falls back from
+// this inventory to the checkout.
+export type SourceTree = Map<string, string>;
+const modulePattern = /\.(?:[cm]?[jt]sx?)$/u;
+const absolute = (cwd: string, file: string) => path.posix.resolve(cwd, file);
+const sourceCache = new Map<string, string>();
+const text = (root: string, file: string) => {
+  const key = path.join(root, file);
+  let source = sourceCache.get(key);
+  if (source === undefined) {
+    source = readFileSync(key, "utf-8");
+    sourceCache.set(key, source);
+  }
+  return source;
+};
+
+export const dockerInstructions = (source: string): string[] => {
+  if (
+    source.split(/\r?\n/u).some((line) => {
+      const trimmed = line.trimStart();
+      return (
+        (/^(?:RUN|COPY)\s/iu.test(trimmed) && trimmed.includes("<<")) ||
+        /^#\s*escape=/iu.test(trimmed)
+      );
+    })
+  ) {
+    panic("Unsupported Docker heredoc or escape directive");
+  }
+  return source
+    .split(/\r?\n/u)
+    .filter((line) => line.trim() !== "" && !/^\s*#/u.test(line))
+    .join("\n")
+    .replace(/\\[ \t]*\n/gu, " ")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line !== "" && !line.startsWith("#"))
+    .map((line) => line.replace(/^\w+/u, (keyword) => keyword.toUpperCase()));
+};
+
+type IgnoreRules = {
+  rules: { include: boolean; glob: Bun.Glob }[];
+  files: Map<string, boolean>;
+};
+const ignoreCache = new Map<string, IgnoreRules>();
+export const inDockerContext = (file: string, source: string): boolean => {
+  let parsed = ignoreCache.get(source);
+  if (parsed === undefined) {
+    const rules: IgnoreRules["rules"] = [];
+    for (let pattern of source.split(/\r?\n/u)) {
+      pattern = pattern.trim();
+      if (pattern === "" || pattern.startsWith("#")) {
+        continue;
+      }
+      const include = pattern.startsWith("!");
+      if (include) {
+        pattern = pattern.slice(1);
+      }
+      let end = pattern.length;
+      while (pattern.at(end - 1) === "/" && end > 0) {
+        end -= 1;
+      }
+      pattern = pattern.slice(0, end).replace(/^\/+/u, "");
+      if (pattern !== ".") {
+        rules.push({ include, glob: new Bun.Glob(pattern) });
+      }
+    }
+    parsed = { rules, files: new Map() };
+    ignoreCache.set(source, parsed);
+  }
+  const cached = parsed.files.get(file);
+  if (cached !== undefined) {
+    return cached;
+  }
+  const segments = file.split("/");
+  const ancestors = segments.map((_, index) =>
+    segments.slice(0, index + 1).join("/"),
+  );
+  let included = true;
+  for (const { include, glob } of parsed.rules) {
+    if (ancestors.some((ancestor) => glob.match(ancestor))) {
+      included = include;
+    }
+  }
+  parsed.files.set(file, included);
+  return included;
+};
+
+const filesBelow = (directory: string): string[] => {
+  const files: string[] = [];
+  const walk = (relative: string) => {
+    for (const entry of readdirSync(path.join(directory, relative), {
+      withFileTypes: true,
+    })) {
+      const file = path.posix.join(relative, entry.name);
+      if (entry.isDirectory()) {
+        walk(file);
+      } else if (entry.isFile()) {
+        files.push(file);
+      } else {
+        panic(`Unsupported source symlink: ${file}`);
+      }
+    }
+  };
+  walk("");
+  return files;
+};
+
+const hasDirectory = (files: SourceTree, directory: string) => {
+  const prefix = `${directory.replace(/\/$/u, "")}/`;
+  for (const file of files.keys()) {
+    if (file.startsWith(prefix)) {
+      return true;
+    }
+  }
+  return false;
+};
+
+export const copySource = (
+  source: SourceTree,
+  destination: SourceTree,
+  from: string,
+  to: string,
+) => {
+  const exact = source.get(from);
+  if (exact !== undefined) {
+    destination.set(
+      to.endsWith("/") || hasDirectory(destination, to)
+        ? path.posix.join(to, path.posix.basename(from))
+        : to,
+      exact,
+    );
+    return;
+  }
+  const prefix = `${from.replace(/\/$/u, "")}/`;
+  const matches = [...source].filter(([file]) => file.startsWith(prefix));
+  if (matches.length === 0) {
+    panic(`COPY source is unavailable: ${from}`);
+  }
+  for (const [file, origin] of matches) {
+    destination.set(path.posix.join(to, file.slice(prefix.length)), origin);
+  }
+};
+
+const importCache = new Map<
+  string,
+  { source: string; imports: string[]; unresolved: string[] }
+>();
+
+// A runtime edge in source order; a nonliteral specifier stays unknown.
+type RuntimeEdge = { start: number; specifier: string | undefined };
+
+const treeRuntimeEdges = (parsed: ParsedSource): RuntimeEdge[] => {
+  const edges: RuntimeEdge[] = [];
+  walkSyntax(parsed.program, (node) => {
+    if (node.type === "ImportDeclaration") {
+      if (
+        node.importKind === "type" ||
+        (node.specifiers.length > 0 &&
+          node.specifiers.every(
+            (specifier) =>
+              specifier.type === "ImportSpecifier" &&
+              specifier.importKind === "type",
+          ))
+      ) {
+        return;
+      }
+      edges.push({ start: node.start, specifier: node.source.value });
+      return;
+    }
+    if (node.type === "ExportNamedDeclaration" && node.source !== null) {
+      if (
+        node.exportKind === "type" ||
+        (node.specifiers.length > 0 &&
+          node.specifiers.every((specifier) => specifier.exportKind === "type"))
+      ) {
+        return;
+      }
+      edges.push({ start: node.start, specifier: node.source.value });
+      return;
+    }
+    if (node.type === "ExportAllDeclaration") {
+      if (node.exportKind !== "type") {
+        edges.push({ start: node.start, specifier: node.source.value });
+      }
+      return;
+    }
+    const isRequire =
+      node.type === "CallExpression" &&
+      node.callee.type === "Identifier" &&
+      node.callee.name === "require";
+    if (node.type !== "ImportExpression" && !isRequire) {
+      return;
+    }
+    const argument =
+      node.type === "ImportExpression" ? node.source : node.arguments.at(0);
+    let specifier: string | undefined;
+    if (argument?.type === "Literal" && typeof argument.value === "string") {
+      specifier = argument.value;
+    } else if (
+      argument?.type === "TemplateLiteral" &&
+      argument.expressions.length === 0
+    ) {
+      specifier = argument.quasis.at(0)?.value.cooked ?? undefined;
+    }
+    edges.push({ start: node.start, specifier });
+  });
+  return edges;
+};
+
+// oxc's module record lists static imports, re-exports and dynamic imports
+// without building the syntax tree. It returns undefined when the record
+// cannot decide an edge: a possible `require` call, an `export {} from` (the
+// record omits it), a statement with no bindings that may be type-only, or
+// an escaped dynamic specifier.
+const recordedRuntimeEdges = ({
+  module,
+  sourceText,
+}: ParsedSource): RuntimeEdge[] | undefined => {
+  if (
+    /\brequire\b/u.test(sourceText) ||
+    /\bexport\s*(?:type\s+)?\{(?:\s|\/\*[^]*?\*\/|\/\/[^\n]*\n)*\}\s*from\b/u.test(
+      sourceText,
+    )
+  ) {
+    return undefined;
+  }
+  const edges: RuntimeEdge[] = [];
+  for (const statement of module.staticImports) {
+    const { entries, moduleRequest } = statement;
+    if (entries.length === 0) {
+      // `import "x"` runs x; `import {} from` and `import type {} from` vary.
+      if (
+        !/^import\s*$/u.test(
+          sourceText.slice(statement.start, moduleRequest.start),
+        )
+      ) {
+        return undefined;
+      }
+    } else if (entries.every((entry) => entry.isType)) {
+      continue;
+    }
+    edges.push({ start: statement.start, specifier: moduleRequest.value });
+  }
+  for (const statement of module.staticExports) {
+    const [first] = statement.entries;
+    if (first === undefined) {
+      return undefined;
+    }
+    // The record also lists `export { x }` of an imported `x` under that
+    // import statement; only an `export … from` statement is an edge.
+    if (
+      first.moduleRequest !== null &&
+      sourceText.startsWith("export", statement.start) &&
+      !statement.entries.every((entry) => entry.isType)
+    ) {
+      edges.push({
+        start: statement.start,
+        specifier: first.moduleRequest.value,
+      });
+    }
+  }
+  // oxc records an import inside a parenthesized destructuring assignment
+  // (`({ x } = await import("y"))`) twice; one expression has one start.
+  const dynamicStarts = new Set<number>();
+  for (const expression of module.dynamicImports) {
+    if (dynamicStarts.has(expression.start)) {
+      continue;
+    }
+    dynamicStarts.add(expression.start);
+    const argument = sourceText.slice(
+      expression.moduleRequest.start,
+      expression.moduleRequest.end,
+    );
+    const literal = /^(?:"[^"\\\r\n]*"|'[^'\\\r\n]*'|`[^`\\$]*`)$/u.test(
+      argument,
+    );
+    if (!literal && /^["'`]/u.test(argument)) {
+      return undefined;
+    }
+    edges.push({
+      start: expression.start,
+      specifier: literal ? argument.slice(1, -1) : undefined,
+    });
+  }
+  return edges.toSorted((left, right) => left.start - right.start);
+};
+
+const readRuntimeImports = (file: string, source: string) => {
+  const cached = importCache.get(file);
+  if (cached?.source === source) {
+    return cached;
+  }
+  const parsed = parseSource(file, source);
+  const imports: string[] = [];
+  const unresolved: string[] = [];
+  for (const { start, specifier } of recordedRuntimeEdges(parsed) ??
+    treeRuntimeEdges(parsed)) {
+    if (specifier === undefined) {
+      unresolved.push(
+        `${file}:${parsed.locate(start).line}: nonliteral runtime import`,
+      );
+    } else {
+      imports.push(specifier);
+    }
+  }
+  // Literal edges depend on file content; their resolution still uses each stage.
+  const result = { source, imports, unresolved };
+  importCache.set(file, result);
+  return result;
+};
+
+const runtimeImports = (file: string, source: string): string[] =>
+  readRuntimeImports(file, source).imports;
+
+export const unresolvedRuntimeImports = (
+  file: string,
+  source: string,
+): readonly string[] => readRuntimeImports(file, source).unresolved;
+
+const configurationPaths = (
+  root: string,
+  tree: SourceTree,
+  physical: (file: string) => string,
+) => {
+  const pathCache = new Map<string, Record<string, string[]>>();
+  const configCache = new Map<string, Record<string, string[]>>();
+  const configPaths = (
+    file: string,
+    active = new Set<string>(),
+  ): Record<string, string[]> => {
+    const key = physical(file);
+    const cached = configCache.get(key);
+    if (cached !== undefined) {
+      return cached;
+    }
+    if (active.has(key)) {
+      panic(`Recursive tsconfig: ${key}`);
+    }
+    active.add(key);
+    const origin = tree.get(key);
+    if (origin === undefined) {
+      // Bun runtime and bundling tolerate missing inherited configuration.
+      active.delete(key);
+      return {};
+    }
+    const parsed = Result.try(() => Bun.JSONC.parse(text(root, origin)));
+    if (parsed.isErr()) {
+      panic(`Invalid tsconfig: ${origin}`);
+    }
+    const directory = path.posix.dirname(key);
+    const config = v.parse(
+      v.looseObject({
+        extends: v.optional(v.string()),
+        compilerOptions: v.optional(
+          v.looseObject({
+            baseUrl: v.optional(v.string()),
+            paths: v.optional(v.record(v.string(), v.array(v.string()))),
+          }),
+        ),
+      }),
+      parsed.value,
+    );
+    const parent = config.extends;
+    const inherited =
+      parent === undefined
+        ? {}
+        : configPaths(
+            parent.startsWith(".")
+              ? absolute(directory, parent)
+              : `/app/node_modules/${parent}`,
+            active,
+          );
+    const options = config.compilerOptions ?? {};
+    const paths: Record<string, string[]> =
+      options.paths === undefined
+        ? inherited
+        : Object.fromEntries(
+            Object.entries(options.paths).map(([pattern, targets]) => [
+              pattern,
+              targets.map((target) =>
+                absolute(absolute(directory, options.baseUrl ?? "."), target),
+              ),
+            ]),
+          );
+    active.delete(key);
+    configCache.set(key, paths);
+    return paths;
+  };
+  // The nearest tsconfig.json declares a file's path aliases.
+  const pathsFor = (file: string): Record<string, string[]> => {
+    const cached = pathCache.get(path.posix.dirname(file));
+    if (cached !== undefined) {
+      return cached;
+    }
+    let directory = path.posix.dirname(file);
+    let result: Record<string, string[]> = {};
+    while (directory !== "/") {
+      if (tree.has(`${directory}/tsconfig.json`)) {
+        result = configPaths(`${directory}/tsconfig.json`);
+        break;
+      }
+      directory = path.posix.dirname(directory);
+    }
+    pathCache.set(path.posix.dirname(file), result);
+    return result;
+  };
+  return pathsFor;
+};
+
+// TypeScript's bundler resolution (allowJs, resolveJsonModule, the `bun` and
+// `source` conditions) over a stage inventory. It probes every location with
+// TypeScript extensions before it retries with JavaScript and JSON.
+// Declaration files never count as sources, so no declaration form is probed.
+type ResolutionPass = "typescript" | "javascript";
+const RESOLUTION_PASSES: readonly ResolutionPass[] = [
+  "typescript",
+  "javascript",
+];
+const EXPORT_CONDITIONS = new Set([
+  "import",
+  "types",
+  "bun",
+  "source",
+  "default",
+]);
+// Extensions TypeScript strips before it substitutes another, longest first.
+const REPLACEABLE_EXTENSIONS = [
+  ".d.ts",
+  ".d.mts",
+  ".d.cts",
+  ".mjs",
+  ".mts",
+  ".cjs",
+  ".cts",
+  ".ts",
+  ".js",
+  ".tsx",
+  ".jsx",
+  ".json",
+];
+const TYPESCRIPT_EXTENSIONS = [".ts", ".tsx", ".mts", ".cts"];
+
+// The forms TypeScript probes for `stem` written with `extension`.
+const extensionForms = (
+  stem: string,
+  extension: string,
+  pass: ResolutionPass,
+): string[] => {
+  const typescript = pass === "typescript";
+  switch (extension) {
+    case ".mjs":
+    case ".mts":
+    case ".d.mts":
+      return [typescript ? `${stem}.mts` : `${stem}.mjs`];
+    case ".cjs":
+    case ".cts":
+    case ".d.cts":
+      return [typescript ? `${stem}.cts` : `${stem}.cjs`];
+    case ".json":
+      return typescript ? [] : [`${stem}.json`];
+    case ".tsx":
+    case ".jsx":
+      return typescript
+        ? [`${stem}.tsx`, `${stem}.ts`]
+        : [`${stem}.jsx`, `${stem}.js`];
+    case ".ts":
+    case ".d.ts":
+    case ".js":
+    case "":
+      return typescript
+        ? [`${stem}.ts`, `${stem}.tsx`]
+        : [`${stem}.js`, `${stem}.jsx`];
+    default:
+      return [];
+  }
+};
+
+const replaceableExtension = (file: string) =>
+  REPLACEABLE_EXTENSIONS.find(
+    (extension) => file.length > extension.length && file.endsWith(extension),
+  );
+
+// A written extension is replaced (`x.js` → `x.ts`); a dotted basename
+// without a known extension (`x.logic`) is replaced from its last dot.
+const replacedExtensionForms = (file: string, pass: ResolutionPass) => {
+  const base = path.posix.basename(file);
+  if (!base.includes(".")) {
+    return [];
+  }
+  const extension =
+    replaceableExtension(file) ?? base.slice(base.lastIndexOf("."));
+  return extensionForms(
+    file.slice(0, file.length - extension.length),
+    extension,
+    pass,
+  );
+};
+
+type ManifestFields = {
+  name: unknown;
+  exports: unknown;
+  hasExports: boolean;
+  main: unknown;
+  types: unknown;
+};
+
+// One resolution pass over one stage: which files count as sources and
+// what each package.json declares.
+type ModuleProbe = {
+  pass: ResolutionPass;
+  available: (file: string) => boolean;
+  manifest: (directory: string) => ManifestFields | undefined;
+};
+
+const firstAvailable = (probe: ModuleProbe, candidates: readonly string[]) =>
+  candidates.find(probe.available);
+
+const fromFile = (probe: ModuleProbe, candidate: string) =>
+  firstAvailable(probe, [
+    ...replacedExtensionForms(candidate, probe.pass),
+    ...extensionForms(candidate, "", probe.pass),
+  ]);
+
+// A package.json `main`, `types` or `exports` target names its file.
+const fromManifestField = (probe: ModuleProbe, candidate: string) =>
+  probe.pass === "typescript" &&
+  TYPESCRIPT_EXTENSIONS.some((extension) => candidate.endsWith(extension))
+    ? firstAvailable(probe, [candidate])
+    : firstAvailable(probe, replacedExtensionForms(candidate, probe.pass));
+
+const fromDirectory = (
+  probe: ModuleProbe,
+  directory: string,
+  fields: ManifestFields | undefined,
+) => {
+  const field =
+    probe.pass === "typescript" && typeof fields?.types === "string"
+      ? fields.types
+      : fields?.main;
+  if (typeof field === "string") {
+    const target = path.posix.join(directory, field);
+    const found =
+      fromManifestField(probe, target) ??
+      fromFile(probe, target) ??
+      fromFile(probe, path.posix.join(target, "index"));
+    if (found !== undefined) {
+      return found;
+    }
+  }
+  return fromFile(probe, path.posix.join(directory, "index"));
+};
+
+const fromRelative = (probe: ModuleProbe, candidate: string) =>
+  fromFile(probe, candidate) ??
+  fromDirectory(probe, candidate, probe.manifest(candidate));
+
+type ExportScope = { directory: string; subpath: string; pattern: boolean };
+const fromExportTarget = (
+  probe: ModuleProbe,
+  scope: ExportScope,
+  target: unknown,
+): string | undefined => {
+  const { directory, subpath, pattern } = scope;
+  if (typeof target === "string") {
+    const unsafe = (parts: string[]) =>
+      parts.some((part) => [".", "..", "node_modules"].includes(part));
+    if (
+      (!pattern && subpath.length > 0 && !target.endsWith("/")) ||
+      !target.startsWith("./") ||
+      unsafe(target.split("/").slice(1)) ||
+      unsafe(subpath.split("/"))
+    ) {
+      return undefined;
+    }
+    const resolved = path.posix.join(directory, target);
+    return fromManifestField(
+      probe,
+      pattern
+        ? resolved.replaceAll("*", () => subpath)
+        : `${resolved}${subpath}`,
+    );
+  }
+  if (typeof target !== "object" || target === null) {
+    return undefined;
+  }
+  // Array items and conditions (in manifest order) fall through when unmet.
+  const alternatives = Array.isArray(target)
+    ? target
+    : Object.entries(target)
+        .filter(([condition]) => EXPORT_CONDITIONS.has(condition))
+        .map(([, value]) => value);
+  for (const alternative of alternatives) {
+    const found = fromExportTarget(probe, scope, alternative);
+    if (found !== undefined) {
+      return found;
+    }
+  }
+  return undefined;
+};
+
+// TypeScript's order: the longer base first, then the pattern, then length.
+const patternKeyOrder = (left: string, right: string) => {
+  const leftStar = left.indexOf("*");
+  const rightStar = right.indexOf("*");
+  const leftBase = leftStar === -1 ? left.length : leftStar + 1;
+  const rightBase = rightStar === -1 ? right.length : rightStar + 1;
+  return (
+    rightBase - leftBase ||
+    (leftStar === -1 ? 1 : 0) - (rightStar === -1 ? 1 : 0) ||
+    right.length - left.length
+  );
+};
+
+const fromExports = (
+  probe: ModuleProbe,
+  directory: string,
+  exports: unknown,
+  subpath: string,
+) => {
+  const exact = (target: unknown) =>
+    fromExportTarget(probe, { directory, subpath: "", pattern: false }, target);
+  const table =
+    typeof exports === "object" && exports !== null && !Array.isArray(exports)
+      ? Object.entries(exports)
+      : undefined;
+  if (table === undefined || table.every(([key]) => !key.startsWith("."))) {
+    return subpath === "." ? exact(exports) : undefined;
+  }
+  const lookup = new Map(table);
+  if (subpath === "." && lookup.has(".")) {
+    return exact(lookup.get("."));
+  }
+  if (!table.every(([key]) => key.startsWith("."))) {
+    return undefined;
+  }
+  if (!subpath.endsWith("/") && !subpath.includes("*") && lookup.has(subpath)) {
+    return exact(lookup.get(subpath));
+  }
+  const expanding = [...lookup.keys()]
+    .filter((key) => key.endsWith("/") || key.split("*").length === 2)
+    .toSorted(patternKeyOrder);
+  // The first matching key decides.
+  for (const key of expanding) {
+    const star = key.indexOf("*");
+    const prefix = key.slice(0, star);
+    const suffix = key.slice(star + 1);
+    if (star !== -1 && subpath.startsWith(prefix) && subpath.endsWith(suffix)) {
+      return fromExportTarget(
+        probe,
+        {
+          directory,
+          subpath: subpath.slice(prefix.length, subpath.length - suffix.length),
+          pattern: true,
+        },
+        lookup.get(key),
+      );
+    }
+    if (subpath.startsWith(key)) {
+      return fromExportTarget(
+        probe,
+        { directory, subpath: subpath.slice(key.length), pattern: false },
+        lookup.get(key),
+      );
+    }
+  }
+  return undefined;
+};
+
+// A package importing its own name reads its own exports first.
+const fromSelfName = (probe: ModuleProbe, specifier: string, from: string) => {
+  for (let directory = from; ; directory = path.posix.dirname(directory)) {
+    const fields = probe.manifest(directory);
+    if (fields !== undefined) {
+      const { name } = fields;
+      if (
+        !fields.exports ||
+        typeof name !== "string" ||
+        (specifier !== name && !specifier.startsWith(`${name}/`))
+      ) {
+        return undefined;
+      }
+      const rest = specifier.slice(name.length + 1);
+      return fromExports(
+        probe,
+        directory,
+        fields.exports,
+        rest === "" ? "." : `./${rest}`,
+      );
+    }
+    if (directory === "/") {
+      return undefined;
+    }
+  }
+};
+
+const fromPackage = (
+  probe: ModuleProbe,
+  packageDirectory: string,
+  rest: string,
+) => {
+  const candidate = path.posix.join(packageDirectory, rest);
+  const fields = probe.manifest(packageDirectory);
+  const nested = rest === "" ? undefined : probe.manifest(candidate);
+  // A nested package.json applies only when the root declares no exports.
+  if (nested !== undefined && fields?.hasExports !== true) {
+    return (
+      fromFile(probe, candidate) ?? fromDirectory(probe, candidate, nested)
+    );
+  }
+  if (fields?.exports) {
+    return fromExports(
+      probe,
+      packageDirectory,
+      fields.exports,
+      rest === "" ? "." : `./${rest}`,
+    );
+  }
+  return fromFile(probe, candidate) ?? fromDirectory(probe, candidate, fields);
+};
+
+const fromNodeModules = (
+  probe: ModuleProbe,
+  specifier: string,
+  from: string,
+) => {
+  const parts = specifier.split("/");
+  const length = specifier.startsWith("@") ? 2 : 1;
+  const name = parts.slice(0, length).join("/");
+  const rest = parts.slice(length).join("/");
+  for (let directory = from; ; directory = path.posix.dirname(directory)) {
+    if (path.posix.basename(directory) !== "node_modules") {
+      const found = fromPackage(
+        probe,
+        path.posix.join(directory, "node_modules", name),
+        rest,
+      );
+      if (found !== undefined) {
+        return found;
+      }
+    }
+    if (directory === "/") {
+      return undefined;
+    }
+  }
+};
+
+type SourceTreeModulesOptions = {
+  root: string;
+  tree: SourceTree;
+  physical: (file: string) => string;
+  sourceAvailable: (file: string) => boolean;
+};
+const sourceTreeModules = ({
+  root,
+  tree,
+  physical,
+  sourceAvailable,
+}: SourceTreeModulesOptions) => {
+  const manifestCache = new Map<string, ManifestFields | undefined>();
+  const manifest = (directory: string) => {
+    const file = physical(path.posix.join(directory, "package.json"));
+    if (manifestCache.has(file)) {
+      return manifestCache.get(file);
+    }
+    const origin = tree.get(file);
+    let fields: ManifestFields | undefined;
+    if (origin !== undefined) {
+      const parsed = Result.try(() =>
+        v.parse(
+          v.record(v.string(), v.unknown()),
+          JSON.parse(text(root, origin)),
+        ),
+      );
+      if (parsed.isErr()) {
+        panic(`Invalid package manifest: ${origin}`);
+      }
+      const { exports, main, name, types, typings } = parsed.value;
+      fields = {
+        name,
+        exports,
+        hasExports: Object.hasOwn(parsed.value, "exports"),
+        main,
+        types: typeof typings === "string" ? typings : types,
+      };
+    }
+    manifestCache.set(file, fields);
+    return fields;
+  };
+  const probes = RESOLUTION_PASSES.map((pass): ModuleProbe => ({
+    pass,
+    available: sourceAvailable,
+    manifest,
+  }));
+  // `aliases` are the substituted targets of the best-matching tsconfig path.
+  return (
+    specifier: string,
+    file: string,
+    aliases: readonly string[],
+  ): string | undefined => {
+    const from = path.posix.dirname(file);
+    for (const probe of probes) {
+      const found = specifier.startsWith("/")
+        ? fromRelative(probe, specifier)
+        : (aliases
+            .values()
+            .map(
+              (target) =>
+                (replaceableExtension(target) === undefined
+                  ? undefined
+                  : firstAvailable(probe, [target])) ??
+                fromRelative(probe, target),
+            )
+            .find((target) => target !== undefined) ??
+          fromSelfName(probe, specifier, from) ??
+          fromNodeModules(probe, specifier, from));
+      if (found !== undefined) {
+        return found;
+      }
+    }
+    return undefined;
+  };
+};
+
+// Follow literal runtime imports (type-only imports vanish). Aliases and
+// workspace exports resolve against the stage inventory only.
+const sourceClosureChecker = (root: string, tree: SourceTree) => {
+  const manifests = [...tree].filter(([file]) =>
+    /^\/app\/(?:apps|packages)\/[^/]+\/package\.json$/u.test(file),
+  );
+  const workspaces = new Map(
+    manifests.map(([file, origin]) => {
+      const manifest = v.parse(
+        v.object({ name: v.string() }),
+        JSON.parse(text(root, origin)),
+      );
+      return [manifest.name, path.posix.dirname(file)];
+    }),
+  );
+  const lockfile = tree.get("/app/bun.lock");
+  if (typeof lockfile === "string") {
+    const parsed = Result.try(() =>
+      v.parse(
+        v.object({
+          packages: v.optional(v.record(v.string(), v.unknown())),
+        }),
+        Bun.JSONC.parse(text(root, lockfile)),
+      ),
+    );
+    if (parsed.isErr()) {
+      panic("Invalid Bun lockfile");
+    }
+    workspaces.clear();
+    for (const [name, entry] of Object.entries(parsed.value.packages ?? {})) {
+      if (!Array.isArray(entry) || typeof entry[0] !== "string") {
+        panic(`Invalid lock resolution: ${name}`);
+      }
+      const marker = entry[0].indexOf("@workspace:");
+      if (
+        marker !== -1 &&
+        name.startsWith("@stll/") &&
+        name.split("/").length === 2
+      ) {
+        workspaces.set(
+          name,
+          `/app/${entry[0].slice(marker + "@workspace:".length)}`,
+        );
+      }
+    }
+  }
+  const physical = (file: string) => {
+    const prefix = "/app/node_modules/";
+    if (!file.startsWith(prefix)) {
+      return file;
+    }
+    const suffix = file.slice(prefix.length);
+    const parts = suffix.split("/");
+    const name = parts.at(0)?.startsWith("@")
+      ? parts.slice(0, 2).join("/")
+      : parts.at(0);
+    const workspace = workspaces.get(name ?? "");
+    return workspace === undefined
+      ? file
+      : workspace + suffix.slice(name?.length ?? 0);
+  };
+  const sourceAvailable = (file: string) =>
+    !/\.d\.[cm]?ts$/u.test(file) && tree.has(physical(file));
+  const pathsFor = configurationPaths(root, tree, physical);
+  const resolveModule = sourceTreeModules({
+    root,
+    tree,
+    physical,
+    sourceAvailable,
+  });
+  // TypeScript resolves module extensions only, so a workspace export naming
+  // an asset (`@stll/x/reader.css`) is read from the stage's own manifest.
+  const workspaceAsset = (specifier: string, name: string) => {
+    const directory = workspaces.get(name);
+    const manifest =
+      directory === undefined
+        ? undefined
+        : tree.get(`${directory}/package.json`);
+    if (directory === undefined || manifest === undefined) {
+      return undefined;
+    }
+    const { exports } = v.parse(
+      v.object({ exports: v.optional(v.unknown()) }),
+      JSON.parse(text(root, manifest)),
+    );
+    const target =
+      typeof exports === "object" && exports !== null
+        ? Reflect.get(exports, `.${specifier.slice(name.length)}`)
+        : undefined;
+    if (typeof target !== "string" || modulePattern.test(target)) {
+      return undefined;
+    }
+    const file = path.posix.join(directory, target);
+    return sourceAvailable(file) ? file : undefined;
+  };
+  const check = (
+    entries: readonly string[],
+    seen = new Set<string>(),
+  ): string[] => {
+    const problems: string[] = [];
+    const pending = [...entries];
+    while (pending.length > 0) {
+      const file = pending.pop();
+      if (file === undefined || seen.has(file)) {
+        continue;
+      }
+      seen.add(file);
+      const origin = tree.get(file);
+      if (!tree.has(file)) {
+        problems.push(`Entry is unavailable: ${file}`);
+        continue;
+      }
+      if (origin === undefined || !modulePattern.test(file)) {
+        continue;
+      }
+      const imports = runtimeImports(file, text(root, origin));
+      for (const specifier of imports) {
+        const clean = specifier.replace(
+          /\?(?:raw|url|worker|sharedworker)(?:&(?:raw|url|worker|sharedworker))*$/u,
+          "",
+        );
+        if (clean.startsWith(".")) {
+          const resolved = specifierCandidates(file, clean).find(
+            sourceAvailable,
+          );
+          if (resolved === undefined) {
+            problems.push(
+              `${origin} imports ${specifier}, unavailable in Docker stage`,
+            );
+          } else {
+            pending.push(resolved);
+          }
+          continue;
+        }
+        const paths = pathsFor(file);
+        const aliases = Object.entries(paths).filter(([pattern]) => {
+          const [prefix = "", suffix = ""] = pattern.split("*");
+          return pattern.includes("*")
+            ? clean.length >= prefix.length + suffix.length &&
+                clean.startsWith(prefix) &&
+                clean.endsWith(suffix)
+            : clean === pattern;
+        });
+        // TypeScript gives exact keys priority, then the longest wildcard prefix.
+        aliases.sort(
+          ([left], [right]) =>
+            Number(left.includes("*")) - Number(right.includes("*")) ||
+            right.indexOf("*") - left.indexOf("*"),
+        );
+        const aliasPaths = aliases.slice(0, 1).flatMap(([pattern, targets]) => {
+          const [prefix, suffix] = pattern.split("*");
+          const wildcard = pattern.includes("*");
+          const middle = wildcard
+            ? clean.slice(
+                (prefix ?? "").length,
+                suffix === "" || suffix === undefined
+                  ? undefined
+                  : -suffix.length,
+              )
+            : "";
+          return targets.map((target) =>
+            absolute(
+              "/app",
+              target.replace("*", () => middle),
+            ),
+          );
+        });
+        const aliasTargets = aliasPaths.flatMap((target) =>
+          specifierCandidates("/entry.ts", target),
+        );
+        // Match every declared alias before excluding installed dependencies:
+        // an omitted alias target must still fail the source closure.
+        const name = specifier.startsWith("@")
+          ? specifier.split("/").slice(0, 2).join("/")
+          : specifier.split("/")[0];
+        const local =
+          specifier.startsWith(".") ||
+          specifier.startsWith("/") ||
+          specifier.startsWith("@/") ||
+          workspaces.has(name ?? "") ||
+          aliases.length > 0;
+        if (!local) {
+          continue;
+        }
+        const aliased = aliasTargets.find(sourceAvailable);
+        const moduleFile =
+          aliased === undefined
+            ? resolveModule(clean, file, aliasPaths)
+            : undefined;
+        const resolved =
+          aliased ?? moduleFile ?? workspaceAsset(clean, name ?? "");
+        if (resolved === undefined) {
+          problems.push(
+            `${origin} imports ${specifier}, unavailable in Docker stage`,
+          );
+        } else {
+          pending.push(physical(resolved));
+        }
+      }
+    }
+    return problems;
+  };
+  return check;
+};
+
+export const sourceClosureProblems = (
+  root: string,
+  tree: SourceTree,
+  entries: readonly string[],
+  seen = new Set<string>(),
+): string[] => sourceClosureChecker(root, tree)(entries, seen);
+
+type InstallToolingCopiesOptions = {
+  root: string;
+  files: SourceTree;
+  entry: string;
+};
+
+export const installToolingCopies = ({
+  root,
+  files,
+  entry,
+}: InstallToolingCopiesOptions): string => {
+  const seen = new Set<string>();
+  const problems = sourceClosureProblems(root, files, [entry], seen);
+  for (const file of seen) {
+    const origin = files.get(file);
+    if (origin === undefined) {
+      continue;
+    }
+    const source = text(root, origin);
+    problems.push(...unresolvedRuntimeImports(file, source));
+    for (const specifier of runtimeImports(file, source)) {
+      if (
+        !specifier.startsWith(".") &&
+        specifier !== "bun" &&
+        !builtinModules.includes(specifier.replace(/^node:/u, ""))
+      ) {
+        problems.push(
+          `${origin}: install tooling requires a relative import or builtin: ${specifier}`,
+        );
+      }
+    }
+  }
+  if (problems.length > 0) {
+    panic(problems.join("\n"));
+  }
+  return [...seen]
+    .toSorted()
+    .map((file) => {
+      const origin = files.get(file);
+      if (origin === undefined || !/^[\w./-]+$/u.test(origin)) {
+        panic(`Invalid install tooling COPY source: ${file}`);
+      }
+      return `COPY ${origin} ${origin}`;
+    })
+    .join("\n");
+};
+
+const INSTALL_TOOLING_GENERATOR = "api-image-install-tooling";
+
+export const updateInstallToolingCopies = (root: string, write: boolean) => {
+  const generator = GENERATORS.find(
+    ({ id }) => id === INSTALL_TOOLING_GENERATOR,
+  );
+  const block = generator?.blocks?.at(0);
+  if (generator === undefined || block === undefined) {
+    panic("Missing API install tooling generator block");
+  }
+  const tracked = Bun.spawnSync(["git", "ls-files", "-z"], { cwd: root });
+  if (tracked.exitCode !== 0) {
+    panic("Cannot enumerate install tooling sources");
+  }
+  const files = new Map(
+    tracked.stdout
+      .toString()
+      .split("\0")
+      .filter(Boolean)
+      .map((file) => [`/app/${file}`, file]),
+  );
+  const copies = installToolingCopies({
+    root,
+    files,
+    entry: "/app/scripts/ci-install.ts",
+  });
+  const undeclared = copies
+    .split("\n")
+    .map((line) => line.split(" ")[1])
+    .filter(
+      (origin): origin is string =>
+        origin !== undefined && !generator.inputs.includes(origin),
+    );
+  if (undeclared.length > 0) {
+    panic(
+      `API install tooling closure files missing from ${INSTALL_TOOLING_GENERATOR} inputs: ${undeclared.join(", ")}`,
+    );
+  }
+  const file = path.join(root, block.path);
+  const source = readFileSync(file, "utf-8");
+  const begin = source.indexOf(block.begin);
+  const end = source.indexOf(block.end, begin + block.begin.length);
+  if (begin === -1 || end === -1) {
+    panic("Missing API install tooling COPY block");
+  }
+  const generated = `${source.slice(0, begin)}${block.begin}\n${copies}\n${source.slice(end)}`;
+  if (write) {
+    writeFileSync(file, generated);
+    return;
+  }
+  if (source !== generated) {
+    panic(
+      "API install tooling COPY closure drifted; run bun scripts/docker-source-closure.ts --write-install-tooling",
+    );
+  }
+};
+
+type EnvironmentValue = { type: "known"; value: string } | { type: "unknown" };
+
+type Stage = {
+  files: SourceTree;
+  /** Destinations of opaque COPYs from build stages and external images. */
+  packaged: Set<string>;
+  cwd: string;
+  seen: Set<string>;
+  checker?: ReturnType<typeof sourceClosureChecker>;
+  hazards: Set<string>;
+  environment: Map<string, EnvironmentValue>;
+};
+
+type StageClosureOptions = {
+  root: string;
+  stage: Stage;
+  entries: readonly string[];
+};
+const stageClosureProblems = ({
+  root,
+  stage,
+  entries,
+}: StageClosureOptions) => {
+  stage.checker ??= sourceClosureChecker(root, stage.files);
+  return stage.checker(entries, stage.seen);
+};
+
+export const dockerPruneScopes = (source: string): string[][] =>
+  dockerInstructions(source)
+    .filter((line) => line.startsWith("RUN "))
+    .flatMap((line) =>
+      lexShell(line.slice(4)).flatMap((event) => {
+        if (
+          event.type !== "command" ||
+          event.words[0] !== "turbo" ||
+          event.words[1] !== "prune"
+        ) {
+          return [];
+        }
+        const scopes = event.words
+          .slice(2)
+          .filter((word) => !word.startsWith("--"));
+        if (
+          event.words.at(-1) !== "--docker" ||
+          scopes.length === 0 ||
+          scopes.some((scope) => !scope.startsWith("@stll/"))
+        ) {
+          panic("Unsupported Turbo prune command");
+        }
+        return [scopes];
+      }),
+    );
+
+// Expand the package script actually named by a Docker RUN. Shell branching
+// visits both sides conservatively; cd changes the path within that RUN only.
+type SourceCommandEntry = {
+  file: string;
+  args: readonly string[];
+  mode: "run" | "build" | "preload";
+};
+
+type ShellSourceCommand = {
+  program: string | undefined;
+  words: readonly string[];
+  cwd: string;
+  production: "guaranteed" | "conditional";
+};
+
+type CommandContext = {
+  root: string;
+  tree: SourceTree;
+  active: Set<string>;
+  production?: "guaranteed" | "conditional";
+  environment?: Map<string, EnvironmentValue>;
+  consume?: (
+    entry: SourceCommandEntry,
+    production: "guaranteed" | "conditional",
+  ) => void;
+  command?: (options: ShellSourceCommand) => void;
+};
+type SourceCommandOptions = {
+  command: string;
+  words: string[];
+  cwd: string;
+  expand: (command: string, cwd: string) => SourceCommandEntry[];
+};
+type BunFlagPolicy =
+  | "value"
+  | "switch"
+  | "optional-value"
+  | "preload"
+  | "cwd"
+  | "workspace"
+  | "unsupported";
+
+// Bun 1.4.3 CLI help owns this census; tests reject new undocumented decisions.
+const runtimeBunFlags = {
+  "--silent": "switch",
+  "--elide-lines": "value",
+  "-F": "workspace",
+  "--filter": "workspace",
+  "-b": "switch",
+  "--bun": "switch",
+  "--no-orphans": "switch",
+  "--shell": "value",
+  "--workspaces": "unsupported",
+  "--parallel": "switch",
+  "--sequential": "switch",
+  "--no-exit-on-error": "switch",
+  "--watch": "switch",
+  "--watch-kill-signal": "value",
+  "--hot": "switch",
+  "--no-clear-screen": "switch",
+  "--check": "unsupported",
+  "--smol": "switch",
+  "--interactive": "switch",
+  "-r": "preload",
+  "--preload": "preload",
+  "--require": "preload",
+  "--import": "preload",
+  "--inspect": "optional-value",
+  "--inspect-wait": "optional-value",
+  "--inspect-brk": "optional-value",
+  "--cpu-prof": "switch",
+  "--cpu-prof-name": "value",
+  "--cpu-prof-dir": "value",
+  "--cpu-prof-md": "switch",
+  "--cpu-prof-interval": "value",
+  "--heap-prof": "switch",
+  "--heap-prof-name": "value",
+  "--heap-prof-dir": "value",
+  "--heap-prof-md": "switch",
+  "--heap-prof-interval": "value",
+  "--if-present": "switch",
+  "--no-install": "switch",
+  "--install": "value",
+  "-i": "switch",
+  "-e": "unsupported",
+  "--eval": "unsupported",
+  "-p": "unsupported",
+  "--print": "unsupported",
+  "--prefer-offline": "switch",
+  "--prefer-latest": "switch",
+  "--port": "value",
+  "-C": "unsupported",
+  "--conditions": "unsupported",
+  "--fetch-preconnect": "value",
+  "--experimental-http2-fetch": "switch",
+  "--experimental-http3-fetch": "switch",
+  "--max-http-header-size": "value",
+  "--insecure-http-parser": "switch",
+  "--dns-result-order": "value",
+  "--experimental-stream-iter": "switch",
+  "--expose-gc": "switch",
+  "--no-deprecation": "switch",
+  "--throw-deprecation": "switch",
+  "--no-warnings": "switch",
+  "--trace-warnings": "switch",
+  "--trace-deprecation": "switch",
+  "--pending-deprecation": "switch",
+  "--redirect-warnings": "value",
+  "--disable-warning": "value",
+  "--title": "value",
+  "--zero-fill-buffers": "switch",
+  "--use-system-ca": "switch",
+  "--use-openssl-ca": "switch",
+  "--use-bundled-ca": "switch",
+  "--tls-min-v1.0": "switch",
+  "--tls-min-v1.1": "switch",
+  "--tls-min-v1.2": "switch",
+  "--tls-min-v1.3": "switch",
+  "--tls-max-v1.2": "switch",
+  "--tls-max-v1.3": "switch",
+  "--redis-preconnect": "switch",
+  "--sql-preconnect": "switch",
+  "--no-addons": "switch",
+  "--no-ffi-cc": "switch",
+  "--unhandled-rejections": "value",
+  "--console-depth": "value",
+  "--user-agent": "value",
+  "--cron-title": "value",
+  "--cron-period": "value",
+  "--main-fields": "value",
+  "--preserve-symlinks": "switch",
+  "--preserve-symlinks-main": "switch",
+  "--extension-order": "value",
+  "--tsconfig-override": "unsupported",
+  "-d": "value",
+  "--define": "value",
+  "--drop": "value",
+  "--feature": "value",
+  "-l": "value",
+  "--loader": "value",
+  "--no-macros": "switch",
+  "--jsx-factory": "value",
+  "--jsx-fragment": "value",
+  "--jsx-import-source": "value",
+  "--jsx-runtime": "value",
+  "--jsx-side-effects": "switch",
+  "--ignore-dce-annotations": "switch",
+  "--env-file": "value",
+  "--no-env-file": "switch",
+  "--cwd": "cwd",
+  "-c": "unsupported",
+  "--config": "unsupported",
+  "-h": "unsupported",
+  "--help": "unsupported",
+} as const satisfies Record<string, BunFlagPolicy>;
+
+export const BUN_FLAGS = {
+  run: runtimeBunFlags,
+  build: {
+    ...runtimeBunFlags,
+    "--production": "switch",
+    "--compile": "switch",
+    "--compile-exec-argv": "value",
+    "--bytecode-order": "unsupported",
+    "--compile-jit-policy": "value",
+    "--compile-autoload-dotenv": "switch",
+    "--no-compile-autoload-dotenv": "switch",
+    "--compile-autoload-bunfig": "switch",
+    "--no-compile-autoload-bunfig": "switch",
+    "--compile-autoload-tsconfig": "switch",
+    "--no-compile-autoload-tsconfig": "switch",
+    "--compile-autoload-package-json": "switch",
+    "--no-compile-autoload-package-json": "switch",
+    "--compile-executable-path": "unsupported",
+    "--asset": "unsupported",
+    "--bytecode": "switch",
+    "--bytecode-depth": "value",
+    "--no-optimize-bytecode": "switch",
+    "--watch": "switch",
+    "--no-clear-screen": "switch",
+    "--target": "value",
+    "--outdir": "value",
+    "--outfile": "value",
+    "--metafile": "value",
+    "--metafile-md": "value",
+    "--sourcemap": "optional-value",
+    "--banner": "value",
+    "--footer": "value",
+    "--format": "value",
+    "--root": "value",
+    "--splitting": "switch",
+    "--no-split-require": "switch",
+    "--no-module-preload": "switch",
+    "--min-chunk-size": "value",
+    "--public-path": "value",
+    "-e": "value",
+    "--external": "value",
+    "--allow-unresolved": "value",
+    "--reject-unresolved": "switch",
+    "--packages": "value",
+    "--entry-naming": "value",
+    "--chunk-naming": "value",
+    "--asset-naming": "value",
+    "--react-fast-refresh": "switch",
+    "--react-compiler": "switch",
+    "--no-bundle": "switch",
+    "--emit-dce-annotations": "switch",
+    "--no-deprecated-namespace-object-setters": "switch",
+    "--minify": "switch",
+    "--minify-syntax": "switch",
+    "--minify-whitespace": "switch",
+    "--minify-identifiers": "switch",
+    "--keep-names": "switch",
+    "--css-chunking": "switch",
+    "--conditions": "unsupported",
+    "--app": "switch",
+    "--server-components": "switch",
+    "--env": "value",
+    "--windows-hide-console": "switch",
+    "--windows-icon": "value",
+    "--windows-title": "value",
+    "--windows-publisher": "value",
+    "--windows-version": "value",
+    "--windows-description": "value",
+    "--windows-copyright": "value",
+  },
+} as const satisfies Record<"run" | "build", Record<string, BunFlagPolicy>>;
+
+type BunFlagOptions = {
+  words: readonly string[];
+  index: number;
+  flags: ReadonlyMap<string, BunFlagPolicy>;
+};
+const readBunFlag = ({ words, index, flags }: BunFlagOptions) => {
+  const word = words[index] ?? "";
+  const equals = word.indexOf("=");
+  const name = equals === -1 ? word : word.slice(0, equals);
+  const policy = flags.get(name);
+  if (policy === undefined) {
+    panic(`Unsupported Bun flag: ${word}`);
+  }
+  if (policy === "unsupported") {
+    panic(`Unsupported Bun flag semantics: ${name}`);
+  }
+  if (policy === "switch" && equals !== -1) {
+    panic(`Bun switch does not accept a value: ${word}`);
+  }
+  if (policy === "switch" || policy === "optional-value") {
+    return { policy: "ignored", nextIndex: index } as const;
+  }
+  const nextIndex = equals === -1 ? index + 1 : index;
+  const value = equals === -1 ? words[nextIndex] : word.slice(equals + 1);
+  if (value === undefined || value.length === 0 || value.startsWith("-")) {
+    panic(`Missing Bun flag value: ${name}`);
+  }
+  return { policy, value, nextIndex } as const;
+};
+
+type PackageScriptOptions = {
+  name: string;
+  cwd: string;
+  expand: SourceCommandOptions["expand"];
+};
+const packageScripts = (context: CommandContext, cwd: string) => {
+  const owner = context.tree.get(`${cwd}/package.json`);
+  return typeof owner === "string"
+    ? (JSON.parse(text(context.root, owner)).scripts ?? {})
+    : {};
+};
+
+const packageScriptEntries = (
+  context: CommandContext,
+  options: PackageScriptOptions,
+) => {
+  const scripts = packageScripts(context, options.cwd);
+  if (!Object.hasOwn(scripts, options.name)) {
+    return undefined;
+  }
+  const key = `${options.cwd}#${options.name}`;
+  if (context.active.has(key)) {
+    panic(`Recursive build script: ${key}`);
+  }
+  context.active.add(key);
+  const entries = options.expand(scripts[options.name], options.cwd);
+  context.active.delete(key);
+  return entries;
+};
+
+const workspaceCwd = (context: CommandContext, name: string) => {
+  const owner = [...context.tree].find(
+    ([file, origin]) =>
+      file.endsWith("/package.json") &&
+      typeof origin === "string" &&
+      JSON.parse(text(context.root, origin)).name === name,
+  );
+  if (owner === undefined) {
+    panic(`Filtered workspace is unavailable: ${name}`);
+  }
+  return path.posix.dirname(owner[0]);
+};
+
+const consumeSourceEntry = (
+  context: CommandContext,
+  entry: SourceCommandEntry,
+) => context.consume?.(entry, context.production ?? "conditional");
+
+const sourceCommandEntries = (
+  context: CommandContext,
+  options: SourceCommandOptions,
+): SourceCommandEntry[] => {
+  const { command } = options;
+  const entries: SourceCommandEntry[] = [];
+  let commandCwd = options.cwd;
+  const words = options.words;
+  let packageScript = words[0] === "run";
+  if (words[0] === "run") {
+    words.shift();
+  }
+  let mode: "build" | "run" =
+    words[0] === "build" && !packageScript ? "build" : "run";
+  if (mode === "build") {
+    words.shift();
+  }
+  let flags = new Map(Object.entries(BUN_FLAGS[mode]));
+  let found = false;
+  for (let index = 0; index < words.length; index += 1) {
+    const word = words[index] ?? "";
+    if (word.startsWith("-")) {
+      const flag = readBunFlag({ words, index, flags });
+      index = flag.nextIndex;
+      if (flag.policy === "ignored") {
+        continue;
+      }
+      const { policy, value } = flag;
+      if (policy === "cwd") {
+        if (entries.length > 0) {
+          panic("Unsupported Bun cwd after a source entry");
+        }
+        commandCwd = absolute(commandCwd, value);
+      } else if (policy === "workspace") {
+        if (entries.length > 0) {
+          panic("Unsupported Bun workspace after a source entry");
+        }
+        commandCwd = workspaceCwd(context, value);
+        packageScript = true;
+      } else if (policy === "preload") {
+        if (!modulePattern.test(value)) {
+          panic(`Unresolved Bun preload: ${value}`);
+        }
+        const preload = {
+          file: absolute(commandCwd, value),
+          args: [],
+          mode: "preload",
+        } satisfies SourceCommandEntry;
+        entries.push(preload);
+        context.consume?.(preload, context.production ?? "conditional");
+      }
+      continue;
+    }
+    if (!found && word === "run") {
+      packageScript = true;
+      continue;
+    }
+    if (!found && word === "build" && !packageScript) {
+      mode = "build";
+      flags = new Map(Object.entries(BUN_FLAGS.build));
+      continue;
+    }
+    if (!found && (word !== "build" || packageScript)) {
+      const expanded = packageScriptEntries(context, {
+        name: word,
+        cwd: commandCwd,
+        expand: options.expand,
+      });
+      if (expanded !== undefined) {
+        entries.push(...expanded);
+        return entries;
+      }
+    }
+    if (!modulePattern.test(word)) {
+      if (!found) {
+        panic(`Unsupported Bun source command: ${command}`);
+      }
+      break;
+    }
+    const entry = {
+      file: absolute(commandCwd, word),
+      args: words.slice(index + 1),
+      mode,
+    } satisfies SourceCommandEntry;
+    entries.push(entry);
+    consumeSourceEntry(context, entry);
+    found = true;
+    if (mode === "run") {
+      break;
+    }
+  }
+  if (!found) {
+    panic(`No source entry in Bun command: ${command}`);
+  }
+  return entries;
+};
+
+type BunMetadataOptions = {
+  words: readonly string[];
+  tree: SourceTree;
+  cwd: string;
+};
+const checkBunMetadata = ({ words, tree, cwd }: BunMetadataOptions) => {
+  // The bootstrap prints a version from its copied manifest. Other inline
+  // programs remain unresolved reads rather than bypassing the source model.
+  if (
+    words.length !== 2 ||
+    !["-p", "--print"].includes(words[0] ?? "") ||
+    !/^require\((?:"\.\/package\.json"|'\.\/package\.json')\)\.devDependencies\.turbo$/u.test(
+      words[1] ?? "",
+    )
+  ) {
+    return false;
+  }
+  if (!tree.has(absolute(cwd, "package.json"))) {
+    panic("Bun metadata input is unavailable: package.json");
+  }
+  return true;
+};
+
+const isSourceFreeNpmCommand = (words: readonly string[]) =>
+  words[0] === "install" ||
+  (words.length === 3 &&
+    words[0] === "cache" &&
+    words[1] === "clean" &&
+    words[2] === "--force");
+
+// Only a straight success chain establishes produced files. Every branch is
+// still visited for reads, but separators and compound scopes certify no writes.
+const staticTestCondition = String.raw`(?:\[\s*-[nz]\s+"\$[A-Za-z_]\w*"\s*\]|test\s+-[nz]\s+"\$[A-Za-z_]\w*")`;
+const groupedStaticTest = new RegExp(
+  String.raw`^\s*\(\s*(${staticTestCondition})\s*(\|\||&&)\s*([^()\n;|&]+)\)`,
+  "u",
+);
+const directStaticTest = new RegExp(
+  String.raw`^\s*(${staticTestCondition})\s*(\|\||&&)\s*`,
+  "u",
+);
+
+const resolveStaticProduction = (
+  command: string,
+  environment?: Map<string, EnvironmentValue>,
+) => {
+  if (environment === undefined) {
+    return command;
+  }
+  const match =
+    groupedStaticTest.exec(command) ?? directStaticTest.exec(command);
+  if (match === null) {
+    return command;
+  }
+  const condition = match[1] ?? "";
+  const variable = /"\$([A-Za-z_]\w*)"/u.exec(condition)?.[1];
+  if (variable === undefined) {
+    return command;
+  }
+  const known = environment.get(variable) ?? { type: "known", value: "" };
+  if (known.type === "unknown") {
+    return command;
+  }
+  const testPassed = condition.includes("-n")
+    ? known.value.length > 0
+    : known.value.length === 0;
+  const producerRuns = match[2] === "&&" ? testPassed : !testPassed;
+  if (!producerRuns) {
+    return command;
+  }
+  return (match[3] ?? "") + command.slice(match[0].length);
+};
+
+const declareEnvironment = (
+  stage: Stage,
+  operation: "ENV" | "ARG",
+  body: string,
+) => {
+  const event = lexShell(`declaration ${body}`).find(
+    (item) => item.type === "command",
+  );
+  if (event?.type !== "command") {
+    panic(`Unresolved Docker environment declaration: ${body}`);
+  }
+  const words = event.words.slice(1);
+  const assignments =
+    words.at(0)?.includes("=") || operation === "ARG"
+      ? words
+      : [`${words.at(0) ?? ""}=${words.slice(1).join(" ")}`];
+  for (const assignment of assignments) {
+    const split = assignment.indexOf("=");
+    const key = split === -1 ? assignment : assignment.slice(0, split);
+    if (!/^[A-Za-z_]\w*$/u.test(key)) {
+      panic(`Unresolved Docker environment declaration: ${body}`);
+    }
+    const value = split === -1 ? "" : assignment.slice(split + 1);
+    stage.environment.set(
+      key,
+      operation === "ARG" || /[$`]/u.test(value)
+        ? { type: "unknown" }
+        : { type: "known", value },
+    );
+  }
+};
+
+const guaranteedProduction = (
+  source: string,
+  environment?: Map<string, EnvironmentValue>,
+) => {
+  const command = resolveStaticProduction(source, environment);
+  const operators = command
+    .replace(/'[^']*'|"(?:\\.|[^"\\])*"/gu, "")
+    .replaceAll("&&", "");
+  return (
+    !/[;\n|&(){}<>]/u.test(operators) &&
+    !/(?:^|\s)(?:if|elif|else|fi|case|esac|for|while|until|do|done|!)(?:\s|$)/u.test(
+      operators,
+    ) &&
+    lexShell(command).every(
+      (event) => event.type === "command" || event.type === "control-flow",
+    )
+  );
+};
+
+const commandScope = (context: CommandContext, command: string) =>
+  ({
+    ...context,
+    ...(context.environment === undefined
+      ? {}
+      : { environment: new Map(context.environment) }),
+    production:
+      context.production !== "conditional" &&
+      guaranteedProduction(command, context.environment)
+        ? "guaranteed"
+        : "conditional",
+  }) satisfies CommandContext;
+
+const shellProgramWords = (
+  source: readonly string[],
+  environment?: Map<string, EnvironmentValue>,
+) => {
+  const words = [...source];
+  while (
+    /^\w+=/u.test(words[0] ?? "") ||
+    (words[0] ?? "").startsWith("--mount=")
+  ) {
+    const assignment = words.shift() ?? "";
+    const variable = /^(\w+)=/u.exec(assignment)?.[1];
+    if (variable !== undefined) {
+      environment?.set(variable, { type: "unknown" });
+    }
+  }
+  return words;
+};
+
+// Preserve lexer tokens: rejoining them would turn quoted arguments into commands.
+const unwrapSourceCommand = (
+  source: readonly string[],
+  environment?: Map<string, EnvironmentValue>,
+): string[] => {
+  let words = shellProgramWords(source, environment);
+  for (;;) {
+    const wrapper = words.at(0);
+    if (wrapper === "env" || wrapper === "exec") {
+      words.shift();
+      if (words.at(0) === "--") {
+        words.shift();
+      }
+      if (words.at(0)?.startsWith("-")) {
+        panic(`Unsupported source wrapper flags: ${wrapper}`);
+      }
+      words = shellProgramWords(words, environment);
+      continue;
+    }
+    if (wrapper === "timeout") {
+      words.shift();
+      const duration = words.shift();
+      if (!/^(?:\d+(?:\.\d*)?|\.\d+)[smhd]?$/u.test(duration ?? "")) {
+        panic("Unsupported source wrapper: timeout needs a literal duration");
+      }
+      continue;
+    }
+    if (wrapper === "nice") {
+      words.shift();
+      if (words.at(0) === "-n" || words.at(0) === "--adjustment") {
+        words.shift();
+        if (!/^-?\d+$/u.test(words.shift() ?? "")) {
+          panic("Unsupported source wrapper: nice needs a literal adjustment");
+        }
+      } else if (/^(?:-\d+|--adjustment=-?\d+)$/u.test(words.at(0) ?? "")) {
+        words.shift();
+      }
+      if (words.at(0)?.startsWith("-")) {
+        panic("Unsupported source wrapper: nice");
+      }
+      continue;
+    }
+    return words;
+  }
+};
+
+const BUN_RUNTIME_SWITCHES = new Set(["--bun", "-b"]);
+const BUN_SUBCOMMANDS = new Set(["build", "run", "test", "x"]);
+
+/**
+ * `bun --bun <executable>` starts a package executable on Bun instead of the
+ * Node its shebang names, so it reads what the bare executable reads.
+ */
+const withoutBunRuntimeSwitch = (
+  context: CommandContext,
+  words: string[],
+  cwd: string,
+): string[] => {
+  const [program, flag, executable] = words;
+  return program === "bun" &&
+    BUN_RUNTIME_SWITCHES.has(flag ?? "") &&
+    executable !== undefined &&
+    /^[\w@][\w.@-]*$/u.test(executable) &&
+    !modulePattern.test(executable) &&
+    !BUN_SUBCOMMANDS.has(executable) &&
+    !Object.hasOwn(packageScripts(context, cwd), executable)
+    ? words.slice(2)
+    : words;
+};
+
+const walkCommand = (
+  context: CommandContext,
+  command: string,
+  initialCwd: string,
+): SourceCommandEntry[] => {
+  const { tree } = context;
+  const runContext = commandScope(context, command);
+  let cwd = initialCwd;
+  const entries: SourceCommandEntry[] = [];
+  const directories: string[] = [];
+  for (const event of lexShell(command)) {
+    if (event.type === "unparsed") {
+      panic(event.reason);
+    }
+    if (event.type === "subshell-start") {
+      directories.push(cwd);
+      continue;
+    }
+    if (event.type === "subshell-end") {
+      cwd = directories.pop() ?? initialCwd;
+      continue;
+    }
+    if (event.type !== "command") {
+      continue;
+    }
+    const words = withoutBunRuntimeSwitch(
+      runContext,
+      unwrapSourceCommand(event.words, runContext.environment),
+      cwd,
+    );
+    const program = words.shift();
+    if (program === "sh" || program === "bash") {
+      const script = words.at(1);
+      if (words.at(0) !== "-c" || script === undefined || words.length !== 2) {
+        panic(`Unsupported source wrapper: ${program}`);
+      }
+      entries.push(...walkCommand(runContext, script, cwd));
+      continue;
+    }
+    runContext.command?.({
+      program,
+      words,
+      cwd,
+      production: runContext.production,
+    });
+    if (program === "cd") {
+      cwd = absolute(cwd, words[0] ?? ".");
+      continue;
+    }
+    if (program === "vite") {
+      const directory = cwd;
+      const config = ["vite.config.ts", "vite.config.js"]
+        .map((file) => absolute(directory, file))
+        .find((file) => tree.has(file));
+      if (config === undefined) {
+        panic(`Vite config is unavailable: ${cwd}`);
+      }
+      const viteEntries: SourceCommandEntry[] = [
+        { file: config, args: [], mode: "build" },
+        // Vite discovers route modules rather than importing them from config.
+        ...[...tree.keys()]
+          .filter(
+            (file) =>
+              file.startsWith(`${directory}/src/`) && modulePattern.test(file),
+          )
+          .map((file) => ({ file, args: [], mode: "build" as const })),
+      ];
+      entries.push(...viteEntries);
+      for (const entry of viteEntries) {
+        consumeSourceEntry(runContext, entry);
+      }
+      continue;
+    }
+    if (["npm", "yarn", "pnpm", "npx", "bunx", "tsc"].includes(program ?? "")) {
+      if (program === "npm" && isSourceFreeNpmCommand(words)) {
+        continue;
+      }
+      panic(`Unsupported source runner: ${String(program)}`);
+    }
+    if (program !== "bun" && program !== "node") {
+      if (
+        words.some((word) =>
+          /(?:^|\s)(?:bun|bunx|node|vite|npm|yarn|pnpm|npx|tsc)(?:\s|$)/u.test(
+            word,
+          ),
+        )
+      ) {
+        panic(`Unsupported source wrapper: ${String(program)}`);
+      }
+      continue;
+    }
+    if (program === "bun" && checkBunMetadata({ words, tree, cwd })) {
+      continue;
+    }
+    if (["install", "i", "add"].includes(words[0] ?? "")) {
+      continue;
+    }
+    entries.push(
+      ...sourceCommandEntries(runContext, {
+        command,
+        words,
+        cwd,
+        expand: (source, directory) =>
+          walkCommand(runContext, source, directory),
+      }),
+    );
+  }
+  return entries;
+};
+
+export const commandEntries = (
+  root: string,
+  tree: SourceTree,
+  command: string,
+  cwd: string,
+): string[] =>
+  walkCommand({ root, tree, active: new Set() }, command, cwd).map(
+    ({ file }) => file,
+  );
+
+const generatorEntries = (
+  root: string,
+  context: SourceTree,
+  generator: Generator,
+): readonly SourceCommandEntry[] => {
+  const inventory: SourceTree = new Map(
+    [...context].map(([file, origin]) => [`/app${file}`, origin]),
+  );
+  const result: SourceCommandEntry[] = [];
+  for (const command of [
+    generator.write,
+    ...(generator.prepare === undefined ? [] : [generator.prepare]),
+  ]) {
+    const words = [...command];
+    let cwd = "/app";
+    const directory = words.find((word) => word.startsWith("--cwd="));
+    if (directory !== undefined) {
+      cwd = absolute(cwd, directory.slice("--cwd=".length));
+      words.splice(words.indexOf(directory), 1);
+      if (!inventory.has(`${cwd}/package.json`)) {
+        continue;
+      }
+    }
+    const filter = words.indexOf("--filter");
+    // A generator only runs in an image that holds its package and the package
+    // script it invokes; without either, the image cannot produce the output.
+    if (
+      filter !== -1 &&
+      ![...inventory].some(([file, origin]) => {
+        if (!file.endsWith("/package.json")) {
+          return false;
+        }
+        const manifest: unknown = JSON.parse(text(root, origin));
+        if (
+          typeof manifest !== "object" ||
+          manifest === null ||
+          !("name" in manifest) ||
+          manifest.name !== words.at(filter + 1)
+        ) {
+          return false;
+        }
+        const script = words.at(filter + 2);
+        return (
+          script === undefined ||
+          ("scripts" in manifest &&
+            typeof manifest.scripts === "object" &&
+            manifest.scripts !== null &&
+            Object.hasOwn(manifest.scripts, script))
+        );
+      })
+    ) {
+      continue;
+    }
+    result.push(
+      ...walkCommand(
+        { root, tree: inventory, active: new Set() },
+        words.join(" "),
+        cwd,
+      ),
+    );
+  }
+  return result;
+};
+
+type CopyInstructionOptions = {
+  stages: Map<string, Stage>;
+  stage: Stage;
+  context: SourceTree;
+  body: string;
+  operation: "COPY" | "ADD";
+};
+
+const copyInstruction = ({
+  stages,
+  stage,
+  context,
+  body,
+  operation,
+}: CopyInstructionOptions) => {
+  const words = body.split(/\s+/u);
+  for (const word of words.filter((candidate) => candidate.startsWith("--"))) {
+    if (
+      !/^--(?:from|chown|chmod)=/u.test(word) ||
+      (operation === "ADD" && word.startsWith("--from="))
+    ) {
+      panic(`Unsupported ${operation} flag: ${word}`);
+    }
+  }
+  const from = words.find((word) => word.startsWith("--from="))?.slice(7);
+  // External images and runtime stages provide opaque packaged assets.
+  if (from !== undefined && !["pruner", "install-inputs"].includes(from)) {
+    const destination = words.findLast((word) => !word.startsWith("--"));
+    if (destination !== undefined) {
+      stage.packaged.add(absolute(stage.cwd, destination));
+    }
+    return;
+  }
+  const paths = words.filter((word) => !word.startsWith("--"));
+  const destination = paths.pop();
+  if (destination === undefined) {
+    panic(`Unsupported ${operation}: ${body}`);
+  }
+  const targetPath = absolute(stage.cwd, destination.replaceAll("\\$", "$"));
+  const directoryTarget =
+    destination.endsWith("/") ||
+    stage.cwd === targetPath ||
+    stage.cwd.startsWith(`${targetPath}/`) ||
+    hasDirectory(stage.files, targetPath);
+  if (paths.length > 1 && !directoryTarget) {
+    panic(`Multiple ${operation} sources require a directory destination`);
+  }
+  const sourceTree = from === undefined ? context : stages.get(from)?.files;
+  if (sourceTree === undefined) {
+    panic(`Unknown COPY stage: ${String(from)}`);
+  }
+  if (body.startsWith("[") || /(?<!\\)\$/u.test(body)) {
+    panic(`Unsupported ${operation}: ${body}`);
+  }
+  stage.seen.clear();
+  delete stage.checker;
+  for (const file of paths) {
+    const sourcePath = absolute(from === undefined ? "/" : "/app", file);
+    const target = targetPath + (directoryTarget ? "/" : "");
+    copySource(sourceTree, stage.files, sourcePath, target);
+  }
+};
+
+type SourceMutationOptions = ShellSourceCommand & { stage: Stage };
+
+const inventoryMatches = (files: SourceTree, target: string) => {
+  const glob = new Bun.Glob(target);
+  return [...files.keys()].filter(
+    (file) =>
+      file === target || file.startsWith(`${target}/`) || glob.match(file),
+  );
+};
+
+const copyMutation = ({
+  stage,
+  words,
+  cwd,
+  production,
+}: SourceMutationOptions) => {
+  if (
+    words.some(
+      (word) =>
+        /[$\\*?[\]]/u.test(word) ||
+        (word.startsWith("-") && !/^(?:--|-[rRap]+)$/u.test(word)),
+    )
+  ) {
+    return false;
+  }
+  const paths = words.filter((word) => !word.startsWith("-"));
+  const target = paths.pop();
+  if (target === undefined || paths.length === 0) {
+    return false;
+  }
+  const targetPath = absolute(cwd, target);
+  const directory =
+    target.endsWith("/") ||
+    targetPath === cwd ||
+    hasDirectory(stage.files, targetPath);
+  if (paths.length > 1 && !directory) {
+    panic("Multiple cp sources require a directory destination");
+  }
+  const snapshot = new Map(stage.files);
+  for (const input of paths) {
+    const source = absolute(cwd, input);
+    const origin = snapshot.get(source);
+    const sourceDirectory = hasDirectory(snapshot, source);
+    if (origin === undefined && !sourceDirectory) {
+      if (modulePattern.test(source) || !source.includes("/node_modules/")) {
+        panic(`cp source is unavailable: ${source}`);
+      }
+      const destination = directory
+        ? path.posix.join(targetPath, path.posix.basename(source))
+        : targetPath;
+      stage.files.delete(destination);
+      continue;
+    }
+    if (sourceDirectory && !words.some((word) => /^-[rRa]/u.test(word))) {
+      panic(`cp directory requires a recursive flag: ${source}`);
+    }
+    const destination = directory
+      ? path.posix.join(targetPath, path.posix.basename(source))
+      : targetPath;
+    const writes: SourceTree = new Map();
+    copySource(snapshot, writes, source, destination);
+    for (const [file, copied] of writes) {
+      stage.files.delete(file);
+      if (production === "guaranteed") {
+        stage.files.set(file, copied);
+      }
+    }
+  }
+  stage.seen.clear();
+  delete stage.checker;
+  return true;
+};
+
+const sourceMutation = ({
+  stage,
+  program,
+  words,
+  cwd,
+  production,
+}: SourceMutationOptions) => {
+  // These commands are classified by their source runner or by the Docker model.
+  if (["bun", "node", "vite", "cd", "turbo", "npm"].includes(program ?? "")) {
+    return;
+  }
+  if (
+    program === "cp" &&
+    copyMutation({ stage, program, words, cwd, production })
+  ) {
+    return;
+  }
+  const inputs = words.filter((word) => !word.startsWith("-"));
+  if (["rm", "rmdir", "mv"].includes(program ?? "")) {
+    if (
+      words.some(
+        (word) => word.startsWith("-") && !/^(?:--|-[rfv]+)$/u.test(word),
+      )
+    ) {
+      panic(`Unsupported source mutation flags: ${String(program)}`);
+    }
+    if (inputs.some((word) => /[$\\]/u.test(word))) {
+      panic(`Unresolved source mutation: ${String(program)}`);
+    }
+    const destinations = program === "mv" ? inputs.slice(-1) : [];
+    const sources = program === "mv" ? inputs.slice(0, -1) : inputs;
+    const snapshot = new Map(stage.files);
+    const target = destinations.at(0);
+    if (
+      program === "mv" &&
+      (target === undefined ||
+        sources.length !== 1 ||
+        inputs.some((input) => /[*?[\]]/u.test(input)))
+    ) {
+      panic(
+        "Unsupported source mutation: mv needs one literal source and destination",
+      );
+    }
+    for (const input of sources) {
+      const source = absolute(cwd, input);
+      const matches = inventoryMatches(snapshot, source);
+      for (const file of matches) {
+        stage.files.delete(file);
+      }
+      if (
+        program === "mv" &&
+        target !== undefined &&
+        matches.length > 0 &&
+        production === "guaranteed"
+      ) {
+        let destination = absolute(cwd, target);
+        if (
+          !snapshot.has(source) &&
+          (target.endsWith("/") || hasDirectory(snapshot, destination))
+        ) {
+          destination = path.posix.join(
+            destination,
+            path.posix.basename(source),
+          );
+        }
+        copySource(
+          snapshot,
+          stage.files,
+          source,
+          destination +
+            (target.endsWith("/") && snapshot.has(source) ? "/" : ""),
+        );
+      }
+    }
+    stage.seen.clear();
+    delete stage.checker;
+    return;
+  }
+  for (const word of inputs) {
+    const target = absolute(cwd, word);
+    if (inventoryMatches(stage.files, target).length > 0) {
+      stage.hazards.add(
+        `Unsupported source mutation: ${String(program)} touches ${target}`,
+      );
+    }
+  }
+};
+
+// A packaged build output has no source closure to check; the RUN that
+// executes it fails the build when the artifact is missing.
+const isPackagedArtifact = (stage: Stage, file: string) =>
+  !stage.files.has(file) &&
+  [...stage.packaged].some(
+    (destination) =>
+      file === destination ||
+      file.startsWith(
+        destination.endsWith("/") ? destination : `${destination}/`,
+      ),
+  );
+
+const createStage = (parent?: Stage) =>
+  ({
+    cwd: parent?.cwd ?? "/",
+    files: new Map(parent?.files),
+    packaged: new Set(parent?.packaged),
+    seen: new Set<string>(),
+    hazards: new Set(parent?.hazards),
+    environment: new Map(parent?.environment),
+  }) satisfies Stage;
+
+const sourceProducers = (root: string, context: SourceTree) =>
+  GENERATORS.filter(({ outputKind }) => outputKind === "derived").map(
+    (generator) => ({
+      generator,
+      entries: generatorEntries(root, context, generator),
+      inputGlobs: generator.inputs.map((input) => new Bun.Glob(input)),
+      outputGlobs: generator.outputs.map((output) => new Bun.Glob(output)),
+    }),
+  );
+
+type HydrateStageSourcesOptions = {
+  root: string;
+  stage: Stage;
+  context: SourceTree;
+  entry: SourceCommandEntry;
+  production: "guaranteed" | "conditional";
+  producers: ReturnType<typeof sourceProducers>;
+};
+/**
+ * A producer may import the outputs it derives: it seeds a static import
+ * target before loading it and reads the rest lazily. Its own outputs are
+ * therefore never prerequisites of the RUN that executes it.
+ */
+const producerOwnOutputs = (
+  root: string,
+  entry: SourceCommandEntry,
+  producers: ReturnType<typeof sourceProducers>,
+): SourceTree =>
+  new Map(
+    producers
+      .filter(({ entries }) =>
+        entries.some(
+          (producer) =>
+            producer.file === entry.file &&
+            JSON.stringify(producer.args) === JSON.stringify(entry.args),
+        ),
+      )
+      .flatMap(({ generator }) =>
+        generator.outputs.flatMap((pattern) => [
+          ...new Bun.Glob(pattern).scanSync({ cwd: root, onlyFiles: true }),
+        ]),
+      )
+      .map((output) => [absolute("/app", output), output] as const),
+  );
+
+const hydrateStageSources = ({
+  root,
+  stage,
+  context,
+  entry,
+  production,
+  producers,
+}: HydrateStageSourcesOptions) => {
+  const problems: string[] = [];
+  // A Docker RUN can create declared sources after validating its own
+  // source closure. Only hydrated outputs of that exact producer enter
+  // the stage; later imports still resolve against this inventory.
+  for (const {
+    generator,
+    entries: producerEntries,
+    inputGlobs,
+    outputGlobs,
+  } of producers) {
+    if (
+      production !== "guaranteed" ||
+      entry.mode !== "run" ||
+      !producerEntries.some(
+        (producer) =>
+          producer.file === entry.file &&
+          JSON.stringify(producer.args) === JSON.stringify(entry.args),
+      )
+    ) {
+      continue;
+    }
+    const missingInputs = [...context].filter(([file]) => {
+      const relative = file.replace(/^\//u, "");
+      return (
+        generator.prepare !== undefined &&
+        inputGlobs.some((input) => input.match(relative)) &&
+        !outputGlobs.some((output) => output.match(relative)) &&
+        !stage.files.has(absolute("/app", relative))
+      );
+    });
+    if (missingInputs.length > 0) {
+      problems.push(
+        ...missingInputs.map(
+          ([file]) => `Generator input is unavailable: ${generator.id}/${file}`,
+        ),
+      );
+      continue;
+    }
+    for (const pattern of generator.outputs) {
+      const outputs = [
+        ...new Bun.Glob(pattern).scanSync({
+          cwd: root,
+          onlyFiles: true,
+        }),
+      ];
+      if (outputs.length === 0) {
+        problems.push(
+          `Generated output is unavailable: ${generator.id}/${pattern}`,
+        );
+      }
+      for (const output of outputs) {
+        stage.files.set(absolute("/app", output), output);
+      }
+    }
+    stage.seen.clear();
+    delete stage.checker;
+  }
+  return problems;
+};
+
+export const checkDockerSource = (
+  root: string,
+  source: string,
+  context: SourceTree,
+  pruned: SourceTree,
+): string[] => {
+  const producers = sourceProducers(root, context);
+  const stages = new Map<string, Stage>();
+  let stage: Stage = createStage();
+  const problems: string[] = [];
+  let index = 0;
+  for (const instruction of dockerInstructions(source)) {
+    const split = instruction.indexOf(" ");
+    const operation = instruction.slice(0, split);
+    const body = instruction.slice(split + 1);
+    if (operation === "FROM") {
+      const words = body.split(/\s+/u).filter((word) => !word.startsWith("--"));
+      const parent = stages.get(words[0] ?? "");
+      stage = createStage(parent);
+      stages.set(words[2] ?? `stage-${index++}`, stage);
+    } else if (operation === "ENV" || operation === "ARG") {
+      declareEnvironment(stage, operation, body);
+    } else if (operation === "WORKDIR") {
+      stage.cwd = absolute(stage.cwd, body);
+    } else if (operation === "ADD") {
+      const words = body.split(/\s+/u);
+      const inputs = words.filter((word) => !word.startsWith("--"));
+      const archive = /\.(?:tar(?:\.(?:gz|xz|bz2))?|tgz|zip)$/iu;
+      const [url, target] = inputs;
+      if (url !== undefined && !/^https?:\/\//u.test(url)) {
+        if (inputs.some((input) => archive.test(input))) {
+          panic(`Unsupported source instruction: ${instruction}`);
+        }
+        copyInstruction({ stages, stage, context, body, operation: "ADD" });
+        continue;
+      }
+      const targetPath =
+        target === undefined ? "" : absolute(stage.cwd, target);
+      const directoryTarget =
+        target?.endsWith("/") ||
+        stage.cwd === targetPath ||
+        stage.cwd.startsWith(`${targetPath}/`) ||
+        hasDirectory(stage.files, targetPath);
+      if (
+        words.some(
+          (word) =>
+            word.startsWith("--") &&
+            !/^--checksum=sha256:[a-f0-9]{64}$/u.test(word),
+        ) ||
+        inputs.length !== 2 ||
+        url === undefined ||
+        target === undefined ||
+        !/^https?:\/\//u.test(url) ||
+        !archive.test(url) ||
+        (!archive.test(target) && !directoryTarget) ||
+        /[$\\]/u.test(body)
+      ) {
+        panic(`Unsupported source instruction: ${instruction}`);
+      }
+      // Remote archives stay opaque: neither ADD nor a later native unpack
+      // declares repository modules available to a Bun source runner.
+    } else if (operation === "COPY") {
+      copyInstruction({ stages, stage, context, body, operation: "COPY" });
+    } else if (operation === "RUN") {
+      const runStage = stage;
+      walkCommand(
+        {
+          root,
+          tree: runStage.files,
+          active: new Set(),
+          environment: runStage.environment,
+          command: ({ program, words, cwd, production }) => {
+            if (program === "turbo" && words.at(0) === "prune") {
+              if (production !== "guaranteed") {
+                return;
+              }
+              runStage.seen.clear();
+              delete runStage.checker;
+              for (const [file, origin] of pruned) {
+                runStage.files.set(`/app/out/full${file.slice(4)}`, origin);
+                if (file.endsWith("/package.json")) {
+                  runStage.files.set(`/app/out/json${file.slice(4)}`, origin);
+                }
+              }
+            } else if (
+              program === "find" &&
+              words.at(0) === "apps" &&
+              words.at(1) === "packages" &&
+              words.some((word) => word.includes("/json/"))
+            ) {
+              runStage.seen.clear();
+              delete runStage.checker;
+              for (const [file, origin] of [...runStage.files]) {
+                if (
+                  file === "/app/package.json" ||
+                  file === "/app/bun.lock" ||
+                  file.endsWith("/package.json") ||
+                  /^\/app\/(?:bunfig\.toml|\.npmrc|patches\/)/u.test(file)
+                ) {
+                  runStage.files.set(`/json/${file.slice(5)}`, origin);
+                }
+              }
+            } else {
+              sourceMutation({
+                stage: runStage,
+                program,
+                words,
+                cwd,
+                production,
+              });
+            }
+          },
+          consume: (entry, production) => {
+            if (runStage.hazards.size > 0) {
+              panic([...runStage.hazards].join("\n"));
+            }
+            if (entry.file.includes("/dist/")) {
+              return;
+            }
+            if (isPackagedArtifact(runStage, entry.file)) {
+              return;
+            }
+            const ownOutputs = producerOwnOutputs(root, entry, producers);
+            const closure =
+              ownOutputs.size === 0
+                ? stageClosureProblems({
+                    root,
+                    stage: runStage,
+                    entries: [entry.file],
+                  })
+                : stageClosureProblems({
+                    root,
+                    stage: {
+                      ...createStage(runStage),
+                      files: new Map([...runStage.files, ...ownOutputs]),
+                    },
+                    entries: [entry.file],
+                  });
+            problems.push(...closure);
+            if (closure.length > 0) {
+              return;
+            }
+            problems.push(
+              ...hydrateStageSources({
+                root,
+                stage: runStage,
+                context,
+                entry,
+                production,
+                producers,
+              }),
+            );
+          },
+        },
+        body,
+        runStage.cwd,
+      );
+    }
+  }
+  return [...new Set(problems)];
+};
+
+type TurboPrune = {
+  directory: string;
+  child: Bun.Subprocess<"ignore", "ignore", "pipe">;
+  stderr: Promise<string>;
+};
+
+// Each prune writes thousands of files. All of them start before the first
+// check, so they overlap each other and the checks of earlier Dockerfiles.
+// Invalid prune scopes still fail at their own Dockerfile, in order.
+const startTurboPrunes = (
+  root: string,
+  dockerfiles: readonly string[],
+  scratch: string,
+  prunes: Map<string, TurboPrune>,
+) => {
+  for (const [index, file] of dockerfiles.entries()) {
+    const scopes = Result.try(() => dockerPruneScopes(text(root, file)));
+    const scope = scopes.isOk() ? scopes.value : [];
+    if (scope.length !== 1) {
+      continue;
+    }
+    const directory = path.join(
+      scratch,
+      String(index),
+      file.replaceAll("/", "-"),
+    );
+    const child = Bun.spawn(
+      [
+        path.join(root, "node_modules/.bin/turbo"),
+        "prune",
+        ...(scope[0] ?? []),
+        "--docker",
+        `--out-dir=${directory}`,
+      ],
+      {
+        cwd: root,
+        env: { ...process.env, TURBO_TELEMETRY_DISABLED: "1" },
+        stdin: "ignore",
+        stdout: "ignore",
+        stderr: "pipe",
+      },
+    );
+    prunes.set(file, {
+      directory,
+      child,
+      stderr: new Response(child.stderr).text(),
+    });
+  }
+};
+
+export const checkRepositoryDockerSources = async (
+  root: string,
+): Promise<string[]> => {
+  const tracked = Bun.spawnSync(["git", "ls-files", "-z"], { cwd: root });
+  if (tracked.exitCode !== 0) {
+    panic("Cannot enumerate Docker sources");
+  }
+  const files = tracked.stdout.toString().split("\0").filter(Boolean);
+  const dockerfiles = files.filter((file) =>
+    /(?:^|\/)(?:Dockerfile|[^/]+\.Dockerfile)$/u.test(file),
+  );
+  const problems: string[] = [];
+  const scratchParent = path.join(root, ".cache");
+  mkdirSync(scratchParent, { recursive: true });
+  const scratch = mkdtempSync(
+    path.join(scratchParent, "docker-source-closure-"),
+  );
+  const prunes = new Map<string, TurboPrune>();
+  try {
+    startTurboPrunes(root, dockerfiles, scratch, prunes);
+    for (const file of dockerfiles) {
+      const specificIgnore = `${file}.dockerignore`;
+      const ignore = text(
+        root,
+        existsSync(path.join(root, specificIgnore))
+          ? specificIgnore
+          : ".dockerignore",
+      );
+      const context: SourceTree = new Map(
+        files
+          .filter((entry) => inDockerContext(entry, ignore))
+          .map((entry) => [`/${entry}`, entry]),
+      );
+      const source = text(root, file);
+      const scopes = dockerPruneScopes(source);
+      if (scopes.length > 1) {
+        panic(`Multiple prune graphs are unsupported: ${file}`);
+      }
+      const pruned: SourceTree = new Map();
+      if (scopes.length === 1) {
+        const prune = prunes.get(file);
+        if (prune === undefined) {
+          panic(`Turbo prune was not started for ${file}`);
+        }
+        if ((await prune.child.exited) !== 0) {
+          panic(`Turbo prune failed for ${file}: ${await prune.stderr}`);
+        }
+        for (const entry of filesBelow(path.join(prune.directory, "full"))) {
+          if (inDockerContext(entry, ignore)) {
+            pruned.set(`/app/${entry}`, entry);
+          }
+        }
+      }
+      problems.push(
+        ...checkDockerSource(root, source, context, pruned).map(
+          (problem) => `${file}: ${problem}`,
+        ),
+      );
+    }
+  } finally {
+    // A failed check stops the prunes still writing before their removal.
+    for (const { child } of prunes.values()) {
+      child.kill();
+      await child.exited;
+    }
+    rmSync(scratch, { recursive: true, force: true });
+  }
+  return problems;
+};
+
+if (import.meta.main) {
+  const mode = process.argv.at(2);
+  if (
+    mode === "--write-install-tooling" ||
+    mode === "--check-install-tooling"
+  ) {
+    updateInstallToolingCopies(
+      path.resolve(import.meta.dir, ".."),
+      mode === "--write-install-tooling",
+    );
+    process.exit(0);
+  }
+  const start = performance.now();
+  const problems = await checkRepositoryDockerSources(
+    path.resolve(import.meta.dir, ".."),
+  );
+  if (problems.length > 0) {
+    panic(problems.join("\n"));
+  }
+  console.log(
+    `Docker source closure checked in ${((performance.now() - start) / 1000).toFixed(2)}s`,
+  );
+}

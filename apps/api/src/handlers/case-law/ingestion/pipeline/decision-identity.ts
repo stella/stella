@@ -1,14 +1,17 @@
 import { panic, Result } from "better-result";
 import { and, eq, inArray, isNotNull, notInArray, sql } from "drizzle-orm";
 
+import { isPrintedCourtJurisdiction } from "@stll/api-contract/court-identity";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 
 import type { Transaction } from "@/api/db/root";
 import {
-  caseLawDecisionSourceIdentities,
+  caseLawDecisionAliases,
+  caseLawDecisionFallbackIdentities,
+  caseLawDecisionJudges,
   caseLawDecisions,
+  caseLawDecisionSourceIdentities,
 } from "@/api/db/schema";
-import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import { normalizeDecisionIdentifier } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import {
   DECISION_DATE_OUT_OF_BOUNDS,
@@ -16,25 +19,45 @@ import {
   DECISION_ECLI_IDENTITY_AMBIGUOUS,
   DECISION_REKEYED_BY_ECLI,
   ECLI_IDENTITY_ADOPTABLE_ROWS,
-  MAX_LOGGED_DECISION_DATE_LENGTH,
   MAX_LEGACY_DOCKET_CANDIDATES,
+  MAX_LOGGED_DECISION_DATE_LENGTH,
   MAX_LOGGED_DOCKET_LENGTH,
   MAX_SOURCE_IDENTITY_CANDIDATES,
 } from "@/api/handlers/case-law/ingestion/pipeline/types";
 import { planSupplementComposition } from "@/api/handlers/case-law/ingestion/supplement-composition";
 import type { SafeId } from "@/api/lib/branded-types";
 import { canonicalDecisionIdSql } from "@/api/lib/case-law/decision-alias";
-import { resolveDecisionCourtId } from "@/api/lib/case-law/decision-court-identity";
+import {
+  type DecisionCourtIdentityError,
+  DecisionCourtUnrecognizedError,
+  resolveDecisionCourt,
+} from "@/api/lib/case-law/decision-court-identity";
+import {
+  decisionContentEvidenceCompatible,
+  decisionPublicationCompatible,
+  decisionStorageEnrichmentMatch,
+  decisionStorageIdentity,
+  decisionStorageIdentityMatch,
+  decisionStoredDocumentMatches,
+  fallbackDecisionCourtMatch,
+  fallbackEcliComparisonKey,
+} from "@/api/lib/case-law/fallback-decision-identity";
+import type { DecisionStorageIdentity } from "@/api/lib/case-law/fallback-decision-identity";
+import type { PlainTextError } from "@/api/lib/case-law/plain-text";
+import { toPlainText } from "@/api/lib/case-law/plain-text";
 import { rowHoldsDocumentFor } from "@/api/lib/case-law/stored-payload";
+import type { StoredCorpusValidationError } from "@/api/lib/errors/tagged-errors";
 import {
   STATED_ECLI_IDENTITY,
   type StatedEcliIdentity,
 } from "@/api/lib/legal-search/adapter-manifest";
 import { DANGEROUS_CHARS } from "@/api/lib/legal-search/corpus-sanitize";
+import type { HeldDecisionAttachment } from "@/api/lib/legal-search/held-decision-attachment";
 import {
   observedDocketOf,
   sanitizeResult,
 } from "@/api/lib/legal-search/ingestion-normalization";
+import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { logger } from "@/api/lib/observability/logger";
 
 /** An ECLI's lookup spelling, or undefined when nothing searchable remains. */
@@ -44,29 +67,6 @@ const ecliComparisonKey = (ecli: string): string | undefined =>
     value: ecli,
   }) || undefined;
 
-type CaseLawDecisionIdentityOptions = Pick<
-  IngestionResult,
-  "caseNumber" | "language" | "sourceDocumentId"
-> & { sourceId: SafeId<"caseLawSource"> };
-
-const NULL_SOURCE_DOCUMENT_ID_FILTER = { isNull: true } as const;
-
-/** Match exactly the two partial unique indexes that define source identity. */
-const caseLawDecisionIdentityWhere = ({
-  caseNumber,
-  language,
-  sourceDocumentId,
-  sourceId,
-}: CaseLawDecisionIdentityOptions) =>
-  sourceDocumentId
-    ? { sourceId: { eq: sourceId }, sourceDocumentId }
-    : {
-        sourceId: { eq: sourceId },
-        caseNumber,
-        language,
-        sourceDocumentId: NULL_SOURCE_DOCUMENT_ID_FILTER,
-      };
-
 /** The adapter's observation, sanitized, and the publisher identities it names. */
 export type ObservedDecision = {
   observed: IngestionResult;
@@ -75,13 +75,15 @@ export type ObservedDecision = {
    * a stated date was unusable, undefined when none was stated.
    */
   persistedDecisionDate: string | null | undefined;
+  storageIdentity: DecisionStorageIdentity;
   exactSourceIdentityCandidates: string[];
   repairSourceIdentityCandidates: string[];
   sourceIdentityCandidates: string[];
   /**
    * The dockets a legacy null-id row of this document may be stored under:
-   * the observed docket, and the publisher's spelling where ingestion cut a
-   * tail from it, since an older release stored that spelling as it came.
+   * the observed docket, the publisher's spelling where ingestion cut a tail
+   * from it, since an older release stored that spelling as it came, and the
+   * docket an older adapter version derived (`legacyCaseNumber`).
    */
   legacyCaseNumbers: string[];
 };
@@ -90,6 +92,7 @@ type ObserveDecisionOptions = {
   metadataUrlSchema?: unknown;
   input: IngestionResult;
   sourceId: SafeId<"caseLawSource">;
+  heldDecisionAttachment?: HeldDecisionAttachment<string> | null;
 };
 
 /**
@@ -100,8 +103,65 @@ export const observeDecision = ({
   metadataUrlSchema,
   input,
   sourceId,
-}: ObserveDecisionOptions): ObservedDecision => {
-  const observed = sanitizeResult(input, metadataUrlSchema);
+  heldDecisionAttachment,
+}: ObserveDecisionOptions): Result<
+  ObservedDecision,
+  | StoredCorpusValidationError
+  | DecisionCourtIdentityError
+  | DecisionCourtUnrecognizedError
+  | PlainTextError
+> => {
+  const sanitized = sanitizeResult(input, metadataUrlSchema);
+  if (sanitized.isErr()) {
+    return sanitized;
+  }
+  if (sanitized.value.plainTextOutcome.type === "item_build_failed") {
+    return Result.err(sanitized.value.plainTextOutcome.error);
+  }
+  // A directory jurisdiction's adapter maps its source's court id and rejects
+  // what the directory does not admit before a result gets here; one that
+  // reaches the write path unresolved is an adapter defect, and writing it
+  // would store a court the index cannot partition, so the run stops on it.
+  // A printed-name jurisdiction's court is read onto its directory court
+  // here, for every adapter at once; a name the directory cannot place is
+  // this decision's rejection, recorded with the batch's other failures, and
+  // never a new court.
+  const court = resolveDecisionCourt(sanitized.value);
+  if (Result.isError(court)) {
+    if (
+      heldDecisionAttachment !== undefined &&
+      heldDecisionAttachment !== null
+    ) {
+      return Result.err(
+        new DecisionCourtUnrecognizedError({
+          message: `Attaching record's court is not recognized (${court.error.reason})`,
+          cause: court.error,
+        }),
+      );
+    }
+    return isPrintedCourtJurisdiction(sanitized.value.country)
+      ? court
+      : panic(court.error.message, court.error);
+  }
+  // The name the adapter stated stays beside the one the row is stored
+  // under: in the metadata's `court`, where an adapter that prints a court
+  // keeps it, and where this puts it for one that does not.
+  const printed = sanitized.value.court;
+  const keepsPrinted =
+    court.value.court === printed ||
+    typeof sanitized.value.metadata["court"] === "string";
+  const official = toPlainText(court.value.court);
+  const officialCourt = Result.isError(official)
+    ? panic(`A directory court name is not plain text: ${court.value.court}`)
+    : official.value;
+  const observed: IngestionResult = {
+    ...sanitized.value,
+    court: officialCourt,
+    ...(court.value.courtId === null ? {} : { courtId: court.value.courtId }),
+    ...(keepsPrinted
+      ? {}
+      : { metadata: { ...sanitized.value.metadata, court: printed } }),
+  };
   const docket = observedDocketOf(input);
   if (docket.type !== "kept") {
     // The row is written either way; the event is the flag an operator
@@ -116,18 +176,17 @@ export const observeDecision = ({
         : { canonical: docket.caseNumber.slice(0, MAX_LOGGED_DOCKET_LENGTH) }),
     });
   }
-  const legacyCaseNumbers =
-    docket.type === "trimmed"
-      ? [observed.caseNumber, input.caseNumber.replace(DANGEROUS_CHARS, "")]
-      : [observed.caseNumber];
-  // An adapter maps its source's court to a directory id and rejects what the
-  // directory does not admit before a result gets here. One that reaches the
-  // write path unresolved is an adapter defect, and writing it would store a
-  // court the index cannot partition, so the run stops on it.
-  const courtId = resolveDecisionCourtId(observed);
-  if (Result.isError(courtId)) {
-    return panic(courtId.error.message, courtId.error);
-  }
+  const legacyCaseNumbers = [
+    ...new Set([
+      observed.caseNumber,
+      ...(docket.type === "trimmed"
+        ? [input.caseNumber.replace(DANGEROUS_CHARS, "")]
+        : []),
+      ...(input.legacyCaseNumber === undefined
+        ? []
+        : [input.legacyCaseNumber.replace(DANGEROUS_CHARS, "")]),
+    ]),
+  ];
   const rejectedDecisionDate =
     observed.decisionDate === undefined ? input.decisionDate : undefined;
   if (rejectedDecisionDate !== undefined) {
@@ -174,14 +233,22 @@ export const observeDecision = ({
   if (sourceIdentityCandidates.length > MAX_SOURCE_IDENTITY_CANDIDATES) {
     panic("Too many publisher identities for one decision");
   }
-  return {
+  const storageIdentity = decisionStorageIdentity({
+    ...observed,
+    decisionDate: persistedDecisionDate ?? undefined,
+  });
+  if (storageIdentity.isErr()) {
+    return storageIdentity;
+  }
+  return Result.ok({
     observed,
+    storageIdentity: storageIdentity.value,
     persistedDecisionDate,
     exactSourceIdentityCandidates,
     repairSourceIdentityCandidates,
     sourceIdentityCandidates,
     legacyCaseNumbers,
-  };
+  });
 };
 
 const IDENTITY_COLUMNS = {
@@ -196,17 +263,28 @@ const IDENTITY_COLUMNS = {
   citationKey: true,
   country: true,
   decisionDate: true,
+  decisionType: true,
   sourceDocumentId: true,
   ecli: true,
+  sheetNumber: true,
   metadata: true,
   sourceHash: true,
+  sourceHashVersion: true,
   sourceObservedAt: true,
   sourceObservationHash: true,
   redactedAt: true,
   corpusMirrorStatus: true,
+  fulltext: true,
+  sections: true,
+  documentAst: true,
   // The write the row records for its canonical payload, so the corpus
   // upload can refuse re-PUTting objects a settled row already proved.
   contentHash: true,
+  fallbackContentHash: true,
+  fallbackIdentityKey: true,
+  fallbackCohortKey: true,
+  fallbackPublicationHash: true,
+  fallbackDocumentHash: true,
   textS3Key: true,
   normalizedS3Key: true,
   astS3Key: true,
@@ -223,7 +301,7 @@ const IDENTITY_EXTRAS = {
  * What the source's stated ECLI said about an observation no publisher id
  * resolved. `adopted` names the id the matched row was stored under.
  */
-export type EcliIdentityMatch =
+type EcliIdentityMatch =
   | { type: "not-applicable" }
   | { type: "unmatched" }
   | {
@@ -386,6 +464,7 @@ type FindExistingDecisionOptions = Pick<
   | "legacyCaseNumbers"
   | "observed"
   | "repairSourceIdentityCandidates"
+  | "storageIdentity"
 > & {
   sourceId: SafeId<"caseLawSource">;
   statedEcliIdentity: StatedEcliIdentity;
@@ -393,6 +472,183 @@ type FindExistingDecisionOptions = Pick<
   exactClaimedDecisionId: SafeId<"caseLawDecision"> | undefined;
   /** The one decision the repair-only identities are reserved for, if any. */
   repairClaimedDecisionId: SafeId<"caseLawDecision"> | undefined;
+  /** The stored decision a re-parse writes; its row is the decision. */
+  storedDecisionId: SafeId<"caseLawDecision"> | undefined;
+};
+
+type StrongFallbackOptions = {
+  sourceId: SafeId<"caseLawSource">;
+  storageIdentity: Extract<DecisionStorageIdentity, { type: "strong" }>;
+};
+
+const findStrongFallbackDecisionTx = async (
+  tx: Transaction,
+  { sourceId, storageIdentity }: StrongFallbackOptions,
+) => {
+  const keys = storageIdentity.aliases.map(({ key }) => key);
+  const aliases = await tx
+    .select({
+      id: canonicalDecisionIdSql(caseLawDecisionFallbackIdentities.decisionId),
+    })
+    .from(caseLawDecisionFallbackIdentities)
+    .where(
+      and(
+        eq(caseLawDecisionFallbackIdentities.sourceId, sourceId),
+        inArray(caseLawDecisionFallbackIdentities.identityKey, keys),
+      ),
+    )
+    .limit(keys.length);
+  const keyed = await tx.query.caseLawDecisions.findMany({
+    where: {
+      sourceId: { eq: sourceId },
+      ...decisionStorageIdentityMatch(storageIdentity),
+    },
+    columns: IDENTITY_COLUMNS,
+    extras: IDENTITY_EXTRAS,
+    limit: keys.length + 1,
+  });
+  const legacy =
+    storageIdentity.identity.evidence.type !== "ecli"
+      ? []
+      : await tx.query.caseLawDecisions.findMany({
+          where: {
+            sourceId: { eq: sourceId },
+            sourceDocumentId: { isNull: true },
+            fallbackIdentityKey: { isNull: true },
+            fallbackCohortKey: { isNull: true },
+            caseNumber: storageIdentity.identity.caseNumber,
+            language: storageIdentity.identity.language,
+            ...fallbackDecisionCourtMatch(storageIdentity.identity),
+            ecli: { isNotNull: true },
+          },
+          columns: IDENTITY_COLUMNS,
+          extras: IDENTITY_EXTRAS,
+          limit: MAX_LEGACY_DOCKET_CANDIDATES + 1,
+        });
+  if (legacy.length > MAX_LEGACY_DOCKET_CANDIDATES) {
+    return panic(
+      "Legacy fallback ECLI candidates exceed the bounded identity scan",
+    );
+  }
+  const ecliKey =
+    storageIdentity.identity.evidence.type === "ecli"
+      ? storageIdentity.identity.evidence.value
+      : null;
+  const normalized = legacy.filter(
+    ({ ecli }) => ecli !== null && fallbackEcliComparisonKey(ecli) === ecliKey,
+  );
+  const ids = [
+    ...new Set([...aliases, ...keyed, ...normalized].map(({ id }) => id)),
+  ];
+  if (ids.length > 1) {
+    return panic("Exact fallback identities have conflicting decision owners");
+  }
+  const id = ids.at(0);
+  return id === undefined ? undefined : await findIdentityRowTx(tx, id);
+};
+
+type FindFallbackDecisionOptions = Pick<
+  FindExistingDecisionOptions,
+  "sourceId" | "storageIdentity"
+>;
+
+export const findFallbackDecisionTx = async (
+  tx: Transaction,
+  { sourceId, storageIdentity }: FindFallbackDecisionOptions,
+) => {
+  let exact: IdentityRow | undefined;
+  switch (storageIdentity.type) {
+    case "strong":
+      exact = await findStrongFallbackDecisionTx(tx, {
+        sourceId,
+        storageIdentity,
+      });
+      break;
+    case "content": {
+      const rows = await tx.query.caseLawDecisions.findMany({
+        where: {
+          sourceId: { eq: sourceId },
+          ...decisionStorageIdentityMatch(storageIdentity),
+        },
+        columns: IDENTITY_COLUMNS,
+        extras: IDENTITY_EXTRAS,
+        limit: MAX_LEGACY_DOCKET_CANDIDATES + 1,
+      });
+      const compatible = rows.filter((row) =>
+        decisionContentEvidenceCompatible(storageIdentity, row),
+      );
+      exact =
+        rows.length <= MAX_LEGACY_DOCKET_CANDIDATES && compatible.length === 1
+          ? compatible.at(0)
+          : undefined;
+      break;
+    }
+    case "document":
+      exact = await tx.query.caseLawDecisions.findFirst({
+        where: {
+          sourceId: { eq: sourceId },
+          ...decisionStorageIdentityMatch(storageIdentity),
+        },
+        columns: IDENTITY_COLUMNS,
+        extras: IDENTITY_EXTRAS,
+      });
+      break;
+    case "unkeyable":
+      return panic("An unkeyable fallback cannot select a decision");
+    default:
+      storageIdentity satisfies never;
+      return panic("Unhandled exact fallback identity");
+  }
+  if (exact !== undefined) {
+    return exact;
+  }
+  const enrichmentMatch = decisionStorageEnrichmentMatch(storageIdentity);
+  if (enrichmentMatch === null) {
+    return undefined;
+  }
+  const publications = await tx.query.caseLawDecisions.findMany({
+    where: { sourceId: { eq: sourceId }, ...enrichmentMatch },
+    columns: {
+      id: true,
+      fulltext: true,
+      sections: true,
+      documentAst: true,
+      contentHash: true,
+      fallbackDocumentHash: true,
+      decisionDate: true,
+      ecli: true,
+      sheetNumber: true,
+      decisionType: true,
+      sourceUrl: true,
+      documentUrl: true,
+      metadata: true,
+    },
+    extras: {
+      ...IDENTITY_EXTRAS,
+      judges: (table) =>
+        sql<
+          unknown[]
+        >`(SELECT coalesce(jsonb_agg(jsonb_build_object('nameAsPrinted', ${caseLawDecisionJudges.nameAsPrinted}, 'role', ${caseLawDecisionJudges.role}) ORDER BY ${caseLawDecisionJudges.position}), '[]'::jsonb) FROM ${caseLawDecisionJudges} WHERE ${caseLawDecisionJudges.decisionId} = ${table.id})`,
+    },
+    limit: MAX_LEGACY_DOCKET_CANDIDATES + 1,
+  });
+  // Overflow and multiple compatible publications cannot establish a unique owner.
+  if (publications.length > MAX_LEGACY_DOCKET_CANDIDATES) {
+    return undefined;
+  }
+  const compatible = publications.filter((row) =>
+    (storageIdentity.type === "strong" ||
+      (storageIdentity.type === "content" &&
+        storageIdentity.documentState === "document")) &&
+    row.hasStoredDocument
+      ? decisionStoredDocumentMatches(storageIdentity, row) &&
+        decisionContentEvidenceCompatible(storageIdentity, row)
+      : decisionPublicationCompatible(storageIdentity, row),
+  );
+  const candidate = compatible.length === 1 ? compatible.at(0) : undefined;
+  return candidate === undefined
+    ? undefined
+    : await findIdentityRowTx(tx, candidate.id);
 };
 
 /**
@@ -405,29 +661,27 @@ const findExistingDecisionTx = async (
     exactSourceIdentityCandidates,
     legacyCaseNumbers,
     observed,
+    storageIdentity,
     repairSourceIdentityCandidates,
     sourceId,
     statedEcliIdentity,
     exactClaimedDecisionId: reservedExactClaimedDecisionId,
     repairClaimedDecisionId,
+    storedDecisionId,
   }: FindExistingDecisionOptions,
 ) => {
   let exactClaimedDecisionId = reservedExactClaimedDecisionId;
+  // A re-parse names its row: a document it restructures cannot move it.
   let provisionalClaimedDecisionId =
-    exactClaimedDecisionId ?? repairClaimedDecisionId;
-  let provisionalIdentified = await tx.query.caseLawDecisions.findFirst({
-    where:
-      provisionalClaimedDecisionId === undefined
-        ? caseLawDecisionIdentityWhere({
-            caseNumber: observed.caseNumber,
-            language: observed.language,
-            sourceDocumentId: observed.sourceDocumentId,
-            sourceId,
-          })
-        : { id: { eq: provisionalClaimedDecisionId } },
-    columns: IDENTITY_COLUMNS,
-    extras: IDENTITY_EXTRAS,
-  });
+    exactClaimedDecisionId ?? repairClaimedDecisionId ?? storedDecisionId;
+  let provisionalIdentified =
+    provisionalClaimedDecisionId === undefined
+      ? await findFallbackDecisionTx(tx, { sourceId, storageIdentity })
+      : await tx.query.caseLawDecisions.findFirst({
+          where: { id: { eq: provisionalClaimedDecisionId } },
+          columns: IDENTITY_COLUMNS,
+          extras: IDENTITY_EXTRAS,
+        });
   if (
     exactClaimedDecisionId !== undefined &&
     provisionalIdentified === undefined
@@ -478,8 +732,8 @@ const findExistingDecisionTx = async (
   const repairClaimIsCurrent =
     exactClaimedDecisionId !== undefined ||
     repairClaimedDecisionId === undefined ||
-    (provisionalIdentified?.sourceDocumentId !== null &&
-      provisionalIdentified?.sourceDocumentId !== undefined &&
+    (provisionalIdentified !== undefined &&
+      provisionalIdentified.sourceDocumentId !== null &&
       repairSourceIdentityCandidates.includes(
         provisionalIdentified.sourceDocumentId,
       ));
@@ -489,16 +743,7 @@ const findExistingDecisionTx = async (
   const exactIdentified =
     claimedDecisionId === provisionalClaimedDecisionId
       ? provisionalIdentified
-      : await tx.query.caseLawDecisions.findFirst({
-          where: caseLawDecisionIdentityWhere({
-            caseNumber: observed.caseNumber,
-            language: observed.language,
-            sourceDocumentId: observed.sourceDocumentId,
-            sourceId,
-          }),
-          columns: IDENTITY_COLUMNS,
-          extras: IDENTITY_EXTRAS,
-        });
+      : await findFallbackDecisionTx(tx, { sourceId, storageIdentity });
   const identified =
     exactIdentified ??
     (claimedDecisionId === undefined && exactSourceIdentityCandidates.length > 1
@@ -557,10 +802,9 @@ const findExistingDecisionTx = async (
           orderBy: { id: "asc" },
           limit: MAX_LEGACY_DOCKET_CANDIDATES,
         });
-  // ECLIs compare the way identifiers are looked up: an adapter release
-  // may spell the same identifier with different case or separators.
-  // Every legacy candidate is already pinned to this document's docket;
-  // each one is proved on its own, since siblings share that docket.
+  // ECLIs compare as identifiers do, case and separators aside. Each legacy
+  // candidate is proved alone: siblings share the docket that found them, and
+  // only a URL holding the document id overrides a contradicting ECLI.
   const incomingEcliKeys = [observed.ecli, observed.legacyEcli].flatMap(
     (ecli) => {
       const key = ecli === undefined ? undefined : ecliComparisonKey(ecli);
@@ -577,7 +821,8 @@ const findExistingDecisionTx = async (
       incomingEcliKeys.length > 0 &&
       !ecliMatches;
     const sourceUrlMatches =
-      !legacyEcliContradicts &&
+      (!legacyEcliContradicts ||
+        legacy.sourceUrl?.includes(observed.sourceDocumentId ?? "") === true) &&
       legacy.sourceUrl !== null &&
       observed.legacySourceUrls?.includes(legacy.sourceUrl) === true;
     return ecliMatches || sourceUrlMatches;
@@ -594,11 +839,33 @@ const findExistingDecisionTx = async (
   return { claimedDecisionId, existing, ecliIdentity };
 };
 
+/**
+ * Take the transaction-scoped locks on a record's publisher identities: every
+ * writer that decides what those identities name (a decision of their own,
+ * or a held decision they enrich) holds them while it decides.
+ */
+export const lockSourceIdentitiesTx = async (
+  tx: Transaction,
+  sourceId: SafeId<"caseLawSource">,
+  sortedIdentities: readonly string[],
+): Promise<void> => {
+  for (const identity of sortedIdentities) {
+    // SAFETY: candidates are hard-capped by `observeDecision`; sorted
+    // sequential acquisition prevents deadlocks between overlapping sets.
+    // db-await-in-loop: bounded identity lock set must be sequential
+    await tx.execute(
+      sql`SELECT pg_advisory_xact_lock(hashtext('case_law_source_identity'), hashtext(${`${sourceId}:${identity}`}))`,
+    );
+  }
+};
+
 type ResolveDecisionIdentityOptions = ObservedDecision & {
   sourceId: SafeId<"caseLawSource">;
   statedEcliIdentity: StatedEcliIdentity;
   /** The id a decision nothing stored yet is inserted under. */
   proposedDecisionId: SafeId<"caseLawDecision">;
+  /** The stored decision a re-parse writes, when the input is one. */
+  storedDecisionId?: SafeId<"caseLawDecision"> | undefined;
 };
 
 /**
@@ -614,6 +881,7 @@ export const resolveDecisionIdentityTx = async (
   tx: Transaction,
   {
     observed,
+    storageIdentity,
     exactSourceIdentityCandidates,
     legacyCaseNumbers,
     repairSourceIdentityCandidates,
@@ -621,16 +889,10 @@ export const resolveDecisionIdentityTx = async (
     sourceId,
     statedEcliIdentity,
     proposedDecisionId,
+    storedDecisionId,
   }: ResolveDecisionIdentityOptions,
 ) => {
-  for (const identity of sourceIdentityCandidates) {
-    // SAFETY: candidates are hard-capped above; sorted sequential
-    // acquisition prevents deadlocks between overlapping identity sets.
-    // db-await-in-loop: bounded identity lock set must be sequential
-    await tx.execute(
-      sql`SELECT pg_advisory_xact_lock(hashtext('case_law_source_identity'), hashtext(${`${sourceId}:${identity}`}))`,
-    );
-  }
+  await lockSourceIdentitiesTx(tx, sourceId, sourceIdentityCandidates);
 
   const claims =
     sourceIdentityCandidates.length === 0
@@ -684,11 +946,13 @@ export const resolveDecisionIdentityTx = async (
       exactSourceIdentityCandidates,
       legacyCaseNumbers,
       observed,
+      storageIdentity,
       repairSourceIdentityCandidates,
       sourceId,
       statedEcliIdentity,
       exactClaimedDecisionId,
       repairClaimedDecisionId,
+      storedDecisionId,
     });
   const decisionId = claimedDecisionId ?? existing?.id ?? proposedDecisionId;
   const existingIdentity = existing?.sourceDocumentId ?? undefined;
@@ -799,3 +1063,35 @@ export type DecisionIdentity = Awaited<
 
 /** The stored row identity resolution matched, as it read it. */
 export type ExistingDecision = NonNullable<DecisionIdentity["existing"]>;
+
+/** Release only provisional claims with no physical or approved canonical owner. */
+export const clearUnbackedSourceIdentitiesTx = async (
+  tx: Transaction,
+  {
+    sourceId,
+    sourceDocumentIds,
+  }: {
+    sourceId: SafeId<"caseLawSource">;
+    sourceDocumentIds: readonly string[];
+  },
+): Promise<void> => {
+  if (sourceDocumentIds.length === 0) {
+    return;
+  }
+  // audit: skip — provisional publisher-identity reconciliation; public data
+  await tx.delete(caseLawDecisionSourceIdentities).where(
+    and(
+      eq(caseLawDecisionSourceIdentities.sourceId, sourceId),
+      inArray(caseLawDecisionSourceIdentities.sourceDocumentId, [
+        ...sourceDocumentIds,
+      ]),
+      sql`NOT EXISTS (SELECT 1 FROM ${caseLawDecisions}
+      WHERE ${caseLawDecisions.id} = ${canonicalDecisionIdSql(caseLawDecisionSourceIdentities.decisionId)}
+        OR ${caseLawDecisions.id} = ${caseLawDecisionSourceIdentities.decisionId}
+        OR (${caseLawDecisions.sourceId} = ${caseLawDecisionSourceIdentities.sourceId}
+          AND ${caseLawDecisions.sourceDocumentId} = ${caseLawDecisionSourceIdentities.sourceDocumentId}))`,
+      sql`NOT EXISTS (SELECT 1 FROM ${caseLawDecisionAliases}
+        WHERE ${caseLawDecisionAliases.retiredDecisionId} = ${caseLawDecisionSourceIdentities.decisionId})`,
+    ),
+  );
+};

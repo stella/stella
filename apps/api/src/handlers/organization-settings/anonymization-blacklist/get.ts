@@ -8,6 +8,7 @@ import { boundedAll } from "@/api/lib/db/bounded-all";
 import { LIMITS } from "@/api/lib/limits";
 
 const config = {
+  contract: "patch",
   description:
     "Read the organization-wide always-mask terms: each entry's canonical " +
     "form, label, spelling variants, and enabled flag. Matter-scoped terms " +

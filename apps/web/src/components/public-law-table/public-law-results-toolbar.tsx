@@ -1,10 +1,11 @@
-import type { ComponentType, ReactNode } from "react";
+import type { ReactNode } from "react";
 
 import { useTranslations } from "use-intl";
 
+import type { TableContentMode } from "@stll/api-contract/public-law-table";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
-import { AlignJustifyIcon, WrapTextIcon, XIcon } from "@stll/ui/icons";
+import { XIcon } from "@stll/ui/icons";
 import { SegmentedIconToggle } from "@stll/ui/segmented-icon-toggle";
 import {
   Select,
@@ -13,12 +14,19 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@stll/ui/select";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
-import type { PublicLawTableLayout } from "@/components/public-law-table/public-law-table-layout.logic";
+import {
+  PublicLawResultsToolbarFace,
+  PublicLawToolbarSelectLabel,
+  TABLE_CONTENT_MODE_OPTIONS,
+} from "@/components/public-law-table/public-law-results-toolbar.pending";
+import type {
+  PublicLawTableLayout,
+  PublicLawTableLayoutUpdate,
+} from "@/components/public-law-table/public-law-table-layout.logic";
 import { ColumnToggle } from "@/components/workspaces/table/column-toggle";
 import type { ColumnToggleGroup } from "@/components/workspaces/table/column-toggle";
-import type { TranslationKey } from "@/i18n/types";
-import type { TableContentMode } from "@/lib/workspaces/table-store.logic";
 
 type PublicLawResultsToolbarProps<TLayout extends PublicLawTableLayout> = {
   /**
@@ -45,7 +53,7 @@ type PublicLawResultsToolbarProps<TLayout extends PublicLawTableLayout> = {
   /** Find-in-table: the shared bar, in the place a matter's toolbar keeps it. */
   find: ReactNode;
   layout: TLayout;
-  onLayoutChange: (layout: TLayout) => void;
+  onLayoutChange: (update: PublicLawTableLayoutUpdate<TLayout>) => void;
   /** The order control, or nothing where no order is the reader's to choose. */
   sort?: ReactNode | undefined;
   /** What the list is: a count, or what the query matched. */
@@ -53,11 +61,8 @@ type PublicLawResultsToolbarProps<TLayout extends PublicLawTableLayout> = {
 };
 
 /**
- * What the reader does to a public-law result set: read how large it is,
- * narrow it, order it, and choose what each row shows. The reading controls
- * scroll as one row, so a narrow viewport drops none of them; the actions wrap
- * beside it instead, because a write affordance that scrolls out of a
- * scrollbar-less row is one the reader cannot find.
+ * The results toolbar with its controls: the frame the pending view shares,
+ * holding the density toggle and the column chooser that act on the layout.
  */
 export const PublicLawResultsToolbar = <TLayout extends PublicLawTableLayout>({
   actions,
@@ -69,57 +74,56 @@ export const PublicLawResultsToolbar = <TLayout extends PublicLawTableLayout>({
   onLayoutChange,
   sort,
   summary,
-}: PublicLawResultsToolbarProps<TLayout>) => {
-  const t = useTranslations();
+}: PublicLawResultsToolbarProps<TLayout>) => (
+  <PublicLawResultsToolbarFace
+    actions={actions}
+    columns={
+      <ColumnToggle
+        groups={columnGroups}
+        hidden={layout.hidden}
+        onChange={(hidden) =>
+          onLayoutChange((latest) => ({ ...latest, hidden }))
+        }
+      />
+    }
+    contentMode={
+      <PublicLawContentModeToggle
+        onChange={(contentMode) =>
+          onLayoutChange((latest) => ({ ...latest, contentMode }))
+        }
+        value={layout.contentMode}
+      />
+    }
+    controls={controls}
+    filters={filters}
+    find={find}
+    sort={sort}
+    summary={summary}
+  />
+);
 
+const PublicLawContentModeToggle = ({
+  onChange,
+  value,
+}: {
+  onChange: (contentMode: TableContentMode) => void;
+  value: TableContentMode;
+}) => {
+  const t = useTranslations();
   return (
-    <div className="flex min-w-0 flex-wrap items-center gap-1">
-      {filters}
-      <div className="text-muted-foreground min-w-0 flex-1 text-xs">
-        {summary}
-      </div>
-      <div className="flex max-w-full min-w-0 shrink-0 [scrollbar-width:none] items-center gap-1 overflow-x-auto [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
-        {find}
-        {sort !== undefined && (
-          <>
-            <ToolbarDivider />
-            {sort}
-          </>
-        )}
-        <ToolbarDivider />
-        <SegmentedIconToggle
-          onChange={(contentMode) => onLayoutChange({ ...layout, contentMode })}
-          options={TABLE_CONTENT_MODE_OPTIONS.map((option) => ({
-            value: option.mode,
-            icon: option.icon,
-            label: t(option.labelKey),
-          }))}
-          value={layout.contentMode}
-        />
-        {controls !== undefined && (
-          <>
-            <ToolbarDivider />
-            {controls}
-          </>
-        )}
-        <ColumnToggle
-          groups={columnGroups}
-          hidden={layout.hidden}
-          onChange={(hidden) => onLayoutChange({ ...layout, hidden })}
-        />
-      </div>
-      {actions !== undefined && (
-        <div className="flex shrink-0 items-center gap-1">
-          <ToolbarDivider />
-          {actions}
-        </div>
+    <SegmentedIconToggle
+      onChange={onChange}
+      options={TABLE_CONTENT_MODE_OPTIONS.map(
+        ({ icon, labelKey, value: mode }) => ({
+          icon,
+          label: t(labelKey),
+          value: mode,
+        }),
       )}
-    </div>
+      value={value}
+    />
   );
 };
-
-/** The hairline between two groups of controls. */
-const ToolbarDivider = () => <span className="bg-border mx-1 h-4 w-px" />;
 
 type ToolbarSelectProps<TValue extends string> = {
   /** Already translated; drawn beside the control from `sm` up. */
@@ -141,9 +145,7 @@ export const ToolbarSelect = <TValue extends string>({
   value,
 }: ToolbarSelectProps<TValue>) => (
   <>
-    <span className="text-muted-foreground hidden shrink-0 text-xs sm:inline">
-      {label}
-    </span>
+    <PublicLawToolbarSelectLabel>{label}</PublicLawToolbarSelectLabel>
     <Select
       onValueChange={(next: string | null) => {
         const chosen = options.find((option) => option.value === next);
@@ -172,33 +174,6 @@ export const ToolbarSelect = <TValue extends string>({
     </Select>
   </>
 );
-
-/**
- * How much of a prose cell a row shows. The same two modes, icons and words as
- * the workspace table's own density control; the state is the page's, because
- * a public results table has no view to hang it on.
- */
-const TABLE_CONTENT_MODE_OPTIONS = [
-  {
-    mode: "tight",
-    icon: AlignJustifyIcon,
-    labelKey: "workspaces.table.tightContent",
-  },
-  {
-    mode: "fit-content",
-    icon: WrapTextIcon,
-    labelKey: "workspaces.table.wrapContent",
-  },
-] as const satisfies readonly {
-  mode: TableContentMode;
-  icon: ComponentType<{ className?: string }>;
-  labelKey: TranslationKey;
-}[];
-
-// Every mode is offered, always: a control that silently dropped one would be
-// a mode the reader cannot get back to.
-type OfferedContentMode = (typeof TABLE_CONTENT_MODE_OPTIONS)[number]["mode"];
-true satisfies TableContentMode extends OfferedContentMode ? true : never;
 
 export type PublicLawFilterChip = {
   /** Stable within the row, so removing one does not remount the rest. */
@@ -238,9 +213,9 @@ export const PublicLawFilterChips = ({
           {chip.kind !== undefined && (
             <span className="text-muted-foreground shrink-0">{chip.kind}</span>
           )}
-          <BidiText as="span" className="min-w-0 truncate">
+          <TruncatedText render={<BidiText as="span" />}>
             {chip.value}
-          </BidiText>
+          </TruncatedText>
           <Button
             aria-label={t("caseLaw.filters.remove", { filter: chip.value })}
             className="text-muted-foreground hover:text-foreground size-5 min-h-0 shrink-0 p-0"
@@ -260,7 +235,7 @@ export const PublicLawFilterChips = ({
         type="button"
         variant="ghost"
       >
-        {t("workspaces.views.clearFilters")}
+        {t("common.clearFilters")}
       </Button>
     </div>
   );

@@ -1,31 +1,76 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
+import type { SQL } from "drizzle-orm";
+import { PgDialect, QueryBuilder } from "drizzle-orm/pg-core";
+import type { PgTable, SelectedFields } from "drizzle-orm/pg-core";
 
+import { ACCOUNT_EXPORT_SCOPES } from "@stll/api-contract";
 import { ACTION_ADMISSION_REFUSALS } from "@stll/api-contract/action-admission";
+import { MCP_CAPABILITY_EXECUTORS } from "@stll/api-contract/mcp-capability-executors";
+import { MODEL_RUN_CAP_CODES } from "@stll/api-contract/model-run-caps";
 import { FILE_PROPERTY_TYPE_IMMUTABLE_CODE } from "@stll/api-contract/property-policy";
+import { createTestState } from "@stll/test-state";
 
+import { member } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
+import type { workspaceViews } from "@/api/db/schema";
+import {
+  auditLogs,
+  legalReaderAnnotations,
+  searchHistoryEntries,
+  searchHistoryOwners,
+  searchHistoryTombstones,
+} from "@/api/db/schema";
+import { env } from "@/api/env";
+import {
+  READ_TOOL_REF_FIELD_MAP,
+  WRITE_TOOL_REF_FIELD_MAP,
+} from "@/api/handlers/chat/tools/registry-adapter/ref-field-map";
 import exportTimeEntriesCsv from "@/api/handlers/time-entries/csv/export";
+import { HttpStatusResponse } from "@/api/http/status";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
+import { toSafeId } from "@/api/lib/branded-types";
+import { PLAYBOOK_RUN_FAILURE_CODE } from "@/api/lib/document-review/playbook-run-refusal";
 import {
   createFeatureAccessSnapshot,
   decideFeatureAccess,
-} from "@/api/lib/auth/feature-access/policy";
-import { toSafeId } from "@/api/lib/branded-types";
-import { PLAYBOOK_RUN_FAILURE_CODE } from "@/api/lib/document-review/playbook-run-refusal";
+  isFeatureEnabled,
+} from "@/api/lib/feature-access/policy";
+import { featurePrerequisiteClosure } from "@/api/lib/feature-access/prerequisites";
+import {
+  FEATURE_REGISTRY,
+  LEGAL_LISTS_FEATURE_ID,
+  LIST_VERIFICATION_FEATURE_ID,
+} from "@/api/lib/feature-access/registry";
 import { runWithRequestId } from "@/api/lib/observability/request-context";
 import { encodePaginationCursor } from "@/api/lib/pagination";
+import {
+  ACTION_KINDS,
+  ACTION_SERVICE_CREDENTIALS,
+} from "@/api/lib/rate-limit/action-kinds";
 import { isRecord } from "@/api/lib/type-guards";
 import type { AdvertisedSchemas } from "@/api/mcp/advertised-schema";
 import { MCP_OAUTH_SCOPES } from "@/api/mcp/constants";
-import type { McpRequestContext } from "@/api/mcp/context";
 import { MCP_ERROR_CODES, projectMcpRefusal } from "@/api/mcp/error-codes";
 import { TOOL_CONFIRMATION } from "@/api/mcp/tool-confirmation";
+import type { InternalToolStructuredError } from "@/api/mcp/tool-types";
 import { MAX_LIST_LIMIT } from "@/api/mcp/tool-utils";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
+import { aggregateExecutionRows } from "@/api/tests/fixtures/aggregate-lock-order";
+import { admittedOAuthCredentialForTest } from "@/api/tests/helpers/admitted-oauth-credential";
+import { authorizedMcpContextForTest } from "@/api/tests/helpers/authorized-mcp-context";
 import { modelViewOf } from "@/api/tests/helpers/mcp-model-view";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
+import { repositoryCapabilityCatalog } from "@/api/tests/helpers/repository-capability-catalog";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
-import { createScopedDbMock, toSafeDbMock } from "@/api/tests/scoped-db-mock";
+import {
+  createScopedDbMock,
+  createSelectQueryMock,
+  toSafeDbMock,
+} from "@/api/tests/scoped-db-mock";
+
+const testState = createTestState({ file: import.meta.path, config: env });
 
 const loadOrgSettingsMock = mock(async () => ({
   orgAIConfig: null,
@@ -50,29 +95,40 @@ const consumeRateLimitMock = mock(async () => ({
 // env, so the deployment-gate tests toggle flags through this set instead
 // (cleared in beforeEach). Default (empty set) behaves like everything-enabled.
 const disabledFeatures = new Set<string>();
-const { handleMcpToolCall } = await import("@/api/mcp/tools");
-const { featureOmittedCapabilityIds, mapHandlerResult } =
-  await import("@/api/mcp/capability-tools");
+const { handleMcpToolCall, listMcpTools } = await import("@/api/mcp/tools");
+const {
+  featureOmittedCapabilityIds,
+  mapHandlerResult,
+  loadCapabilityEndpoint,
+} = await import("@/api/mcp/capability-tools");
 const { UPLOAD_PURPOSE_GATE_BY_CAPABILITY } =
   await import("@/api/mcp/upload-purpose-gate");
-const { synthesizeCapabilityContext } =
+const { capabilityHandlerContext } =
   await import("@/api/mcp/capability-context");
-const { ElysiaCustomStatusResponse } = await import("elysia");
-const { readCapabilityCatalog } =
-  await import("@stll/cli/capability-catalog-data");
+const { listStaticMcpToolDefinitions } =
+  await import("@/api/mcp/static-tool-definitions");
+const { listMcpResources, readMcpResource } =
+  await import("@/api/mcp/resources");
 const { parseCatalog } = await import("@/api/mcp/capability-tools");
-const capabilityCatalog = parseCatalog(readCapabilityCatalog());
+const capabilityCatalog = parseCatalog(repositoryCapabilityCatalog);
+
+const requiresVerificationGrant = (entry: (typeof capabilityCatalog)[number]) =>
+  "featureId" in entry &&
+  entry.featureId === LIST_VERIFICATION_FEATURE_ID &&
+  "featureAccess" in entry &&
+  entry.featureAccess === "required";
 
 // --- Helpers -----------------------------------------------------------------
 
 type ToolCallResult = Awaited<ReturnType<typeof handleMcpToolCall>>;
 
+const admittedClientCredential = await admittedOAuthCredentialForTest("client");
+
 /**
- * The tool's payload as a client reads it: invoke_capability's `{ result }`
+ * The tool's payload as a client reads it: capability executor's `{ result }`
  * envelope is unwrapped, as the CLI and the MCP apps do.
  */
-// oxlint-disable-next-line typescript/no-unnecessary-type-parameters -- the type parameter IS the API: callers pin the parsed shape per assertion
-const parseToolPayload = <T = unknown>(result: ToolCallResult): T => {
+const parseToolPayload = (result: ToolCallResult) => {
   const item = result.content.at(0);
   if (!item || item.type !== "text") {
     throw new Error("Expected a text MCP response");
@@ -83,22 +139,15 @@ const parseToolPayload = <T = unknown>(result: ToolCallResult): T => {
     isRecord(envelope) &&
     Object.keys(envelope).length === 1 &&
     Object.hasOwn(envelope, "result");
-  return asTestRaw<T>(
-    isCapabilityEnvelope &&
-      typeof parsed === "object" &&
-      parsed !== null &&
-      "result" in parsed
-      ? parsed.result
-      : parsed,
-  );
+  return isCapabilityEnvelope &&
+    typeof parsed === "object" &&
+    parsed !== null &&
+    "result" in parsed
+    ? parsed.result
+    : parsed;
 };
 
-type ErrorEnvelope = {
-  code: string;
-  message: string;
-  hint?: string;
-  issues?: unknown;
-};
+type ErrorEnvelope = Omit<InternalToolStructuredError, "type">;
 
 const errorEnvelope = (result: ToolCallResult): ErrorEnvelope => {
   const payload = parseToolPayload(result);
@@ -116,7 +165,28 @@ const errorEnvelope = (result: ToolCallResult): ErrorEnvelope => {
 
 const noopRecorder = asTestRaw<AuditRecorder>(mock(async () => undefined));
 
-const emptyScopedDb = asTestRaw<McpRequestContext["scopedDb"]>(
+const visibleReferenceDatabase = (ids: readonly string[]) =>
+  createScopedDbMock({
+    select: () => {
+      const query = {
+        from: () => query,
+        where: (condition: SQL) => ({
+          limit: async (count: number) =>
+            new PgDialect()
+              .sqlToQuery(condition)
+              .params.filter(
+                (id): id is string =>
+                  typeof id === "string" && ids.includes(id),
+              )
+              .slice(0, count)
+              .map((id) => ({ id })),
+        }),
+      };
+      return query;
+    },
+  });
+
+const emptyScopedDb = asTestRaw<AuthorizedMcpRequestContext["scopedDb"]>(
   async (run: (tx: unknown) => unknown) => {
     const builder = {
       select: () => builder,
@@ -130,6 +200,7 @@ const emptyScopedDb = asTestRaw<McpRequestContext["scopedDb"]>(
 );
 
 const createContext = ({
+  credential,
   credentialPermissions,
   grantedScopes = [
     "stella:read",
@@ -146,19 +217,21 @@ const createContext = ({
   workspaceIds = ["ws_1"],
   toolConfirmation,
 }: {
-  createOperationDatabaseScope?: McpRequestContext["createOperationDatabaseScope"];
-  credentialPermissions?: McpRequestContext["credentialPermissions"];
+  credential?: AuthorizedMcpRequestContext["credential"];
+  createOperationDatabaseScope?: AuthorizedMcpRequestContext["createOperationDatabaseScope"];
+  credentialPermissions?: AuthorizedMcpRequestContext["credentialPermissions"];
   grantedScopes?: readonly string[];
-  memberRole?: McpRequestContext["memberRole"];
-  pinServerValidatedWorkspaceId?: McpRequestContext["pinServerValidatedWorkspaceId"];
-  scopedDb?: McpRequestContext["scopedDb"];
-  safeDb?: McpRequestContext["safeDb"];
+  memberRole?: AuthorizedMcpRequestContext["memberRole"];
+  pinServerValidatedWorkspaceId?: AuthorizedMcpRequestContext["pinServerValidatedWorkspaceId"];
+  scopedDb?: AuthorizedMcpRequestContext["scopedDb"];
+  safeDb?: AuthorizedMcpRequestContext["safeDb"];
   archivedWorkspaceIds?: string[];
   workspaceIds?: string[];
-  toolConfirmation?: McpRequestContext["toolConfirmation"];
-} = {}): McpRequestContext => {
+  toolConfirmation?: AuthorizedMcpRequestContext["toolConfirmation"];
+} = {}): AuthorizedMcpRequestContext => {
   const accessibleWorkspaceIdSet = new Set(workspaceIds);
-  return {
+  return authorizedMcpContextForTest({
+    ...(credential === undefined ? {} : { credential }),
     testDependencies: {
       loadOrgSettingsForAuth: loadOrgSettingsMock,
       consumeInvokeCapabilityRateLimit: consumeRateLimitMock,
@@ -166,6 +239,28 @@ const createContext = ({
         feature === undefined || !disabledFeatures.has(feature),
       contextFidelityWaivers,
     },
+    featureAccessSnapshot: createFeatureAccessSnapshot({
+      organizationId: "org_1",
+      userId: "user_1",
+      decisions: new Map(
+        Object.entries(FEATURE_REGISTRY).map(([featureId, definition]) => [
+          featureId,
+          decideFeatureAccess({
+            registry: FEATURE_REGISTRY,
+            grants: {},
+            featureId,
+            organizationId: "org_1",
+            userId: "user_1",
+            membership: true,
+            user: { email: "standard@example.test", emailVerified: true },
+            enrolments:
+              definition.enrolment === "self-serve"
+                ? [{ featureId, organizationId: "org_1", userId: "user_1" }]
+                : [],
+          }),
+        ]),
+      ),
+    }),
     accessibleWorkspaceIds: workspaceIds.map((id) => toSafeId<"workspace">(id)),
     accessibleWorkspaceIdSet,
     accessibleWorkspaceStatusById: new Map(
@@ -198,24 +293,941 @@ const createContext = ({
     ...(toolConfirmation === undefined ? {} : { toolConfirmation }),
     userId: toSafeId<"user">("user_1"),
     userEmail: "standard@example.test",
-  };
+  });
 };
 
 const call = async (toolName: string, args: Record<string, unknown>) =>
-  await handleMcpToolCall({ args, context: createContext(), toolName });
+  await handleMcpToolCall({
+    mode: "advanced",
+    args,
+    context: createContext(),
+    toolName,
+  });
+
+const capabilityExecutorFor = (args: Record<string, unknown>) => {
+  const entry = capabilityCatalog.find(
+    (candidate) => candidate.id === args["capability"],
+  );
+  // Invalid and unknown ids exercise the write executor's argument/error boundary.
+  return entry === undefined
+    ? MCP_CAPABILITY_EXECUTORS.write
+    : MCP_CAPABILITY_EXECUTORS[entry.access];
+};
+const handleCapabilityCall = async (
+  options: Omit<Parameters<typeof handleMcpToolCall>[0], "toolName">,
+) =>
+  await handleMcpToolCall({
+    mode: "advanced",
+    ...options,
+    toolName: capabilityExecutorFor(options.args),
+  });
+const callCapability = async (args: Record<string, unknown>) =>
+  await call(capabilityExecutorFor(args), args);
 
 let analytics: RecordingAnalytics;
 
 beforeEach(() => {
+  consumeRateLimitMock.mockReset();
+  loadOrgSettingsMock.mockClear();
   analytics = installRecordingAnalytics();
   loadOrgSettingsMock.mockClear();
-  consumeRateLimitMock.mockClear();
+  consumeRateLimitMock.mockReset();
   consumeRateLimitMock.mockResolvedValue({ ok: true, retryAfterSeconds: 60 });
   disabledFeatures.clear();
 });
 
 afterEach(() => {
   analytics.restore();
+});
+
+describe("list verification access grants across MCP tools", () => {
+  const matterId = "a1111111-1111-4111-8111-111111111111";
+  const resourceId = "a2222222-2222-4222-8222-222222222222";
+  const params = { matterId };
+  const inputs = {
+    "lists.fact-extractions.create": {
+      params,
+      body: { listId: resourceId, entityIds: [resourceId] },
+    },
+    "lists.verifications.create": {
+      params,
+      body: {
+        listId: resourceId,
+        entityId: resourceId,
+        fileFieldId: resourceId,
+      },
+    },
+    "lists.verifications.list": {
+      params,
+      query: { entityId: resourceId, fileFieldId: resourceId },
+    },
+    "lists.verifications.get": { params: { ...params, runId: resourceId } },
+    "lists.verifications.graph.get": {
+      params,
+      query: { listId: resourceId },
+    },
+    "lists.graph.nodes.list": { params, query: { text: "delivery" } },
+    "lists.graph.neighbours.list": {
+      params,
+      query: { nodeKind: "fact", nodeId: resourceId },
+    },
+    "lists.graph.paths.list": {
+      params,
+      query: { nodeKind: "claim", nodeId: resourceId, depth: 2 },
+    },
+    "lists.verifications.latest.list": {
+      params,
+      body: { documents: [{ entityId: resourceId, fileFieldId: resourceId }] },
+    },
+    "lists.verifications.claim-reviews.create": {
+      params,
+      body: {
+        runId: resourceId,
+        claimId: resourceId,
+        event: { kind: "note", note: "Synthetic review" },
+      },
+    },
+    "lists.verifications.claim-reviews.bulk.create": {
+      params,
+      body: { runId: resourceId, claimIds: [resourceId] },
+    },
+    "lists.verifications.claim-reviews.list": {
+      params,
+      query: { runId: resourceId, claimId: resourceId },
+    },
+    "lists.verifications.claim-rechecks.create": {
+      params,
+      body: {
+        runId: resourceId,
+        claimId: resourceId,
+        requestKey: "synthetic-recheck",
+      },
+    },
+    "lists.verifications.claim-rechecks.bulk.create": {
+      params,
+      body: {
+        runId: resourceId,
+        claims: [{ claimId: resourceId, requestKey: "synthetic-recheck" }],
+      },
+    },
+    "lists.verifications.claim-comments.create": {
+      params,
+      body: { runId: resourceId, claimId: resourceId, body: "Synthetic note" },
+    },
+    "lists.verifications.claim-comments.list": {
+      params,
+      query: { runId: resourceId, claimId: resourceId },
+    },
+    "lists.verifications.claim-comments.update": {
+      params: { ...params, annotationId: resourceId },
+      body: { change: "body", body: "Synthetic note" },
+    },
+    "lists.verifications.claim-comments.delete": {
+      params: { ...params, annotationId: resourceId },
+    },
+    "lists.items.fact-details.update": {
+      params,
+      body: {
+        listId: resourceId,
+        itemEntityId: resourceId,
+        occurredOn: null,
+        evidenceKind: null,
+        medium: null,
+        confidence: "high",
+        interpretationNote: null,
+        scoring: "included",
+      },
+    },
+    "lists.items.sources.verification.update": {
+      params,
+      body: {
+        id: resourceId,
+        listId: resourceId,
+        itemEntityId: resourceId,
+        status: "verified",
+      },
+    },
+    "lists.sample-case.create": {
+      params,
+      body: { filePropertyName: "Documents" },
+    },
+    "lists.source-documents.list": {
+      params,
+      body: { listId: resourceId, documentEntityIds: [resourceId] },
+    },
+    "lists.source-documents.update": {
+      params,
+      body: {
+        listId: resourceId,
+        documentEntityId: resourceId,
+        sourceKind: "testimony",
+      },
+    },
+  } as const;
+  // Irreversible capabilities only run, or validate, once the human confirmed.
+  const confirmation = (capability: string) =>
+    capability === "lists.verifications.claim-comments.delete"
+      ? { confirm: true }
+      : {};
+
+  beforeEach(() => {
+    testState.setConfig("API_FEATURE_ACCESS_GRANTS", {});
+    testState.setConfig("FEATURE_LEGAL_LISTS", true);
+  });
+
+  const grantCurrentMember = () => {
+    testState.setConfig(
+      "API_FEATURE_ACCESS_GRANTS",
+      Object.fromEntries(
+        [
+          ...featurePrerequisiteClosure(
+            FEATURE_REGISTRY,
+            LIST_VERIFICATION_FEATURE_ID,
+          ),
+        ].map((id) => [
+          id,
+          [
+            {
+              type: "member" as const,
+              organizationId: "org_1",
+              email: "standard@example.test",
+            },
+          ],
+        ]),
+      ),
+    );
+  };
+
+  type VerificationContextOptions = {
+    email?: string;
+    emailVerified?: boolean;
+    membership?: "current" | "departed";
+    organizationId?: string;
+    userId?: string;
+    viewRows?: (typeof workspaceViews.$inferSelect)[];
+  };
+
+  const verificationContext = ({
+    email = "standard@example.test",
+    emailVerified = true,
+    membership = "current",
+    organizationId = "org_1",
+    userId = "user_1",
+    viewRows = [],
+  }: VerificationContextOptions = {}) => {
+    let resourceLookups = 0;
+    let mutations = 0;
+    const tx = {
+      select: (projection?: Record<string, unknown>) => {
+        const identity =
+          projection !== undefined && "emailVerified" in projection;
+        if (!identity) {
+          resourceLookups += 1;
+        }
+        const identityRows =
+          membership === "current"
+            ? [
+                {
+                  email,
+                  emailVerified,
+                  role: "owner",
+                  workspaceId: matterId,
+                  workspaceStatus: "active",
+                  clientId: null,
+                  workspaceMemberId: resourceId,
+                },
+              ]
+            : [];
+        const referenceProbe =
+          projection !== undefined &&
+          Object.keys(projection).length === 1 &&
+          "id" in projection;
+        const selectedRows = () => {
+          if (identity) {
+            return identityRows;
+          }
+          if (referenceProbe) {
+            return [{ id: resourceId }];
+          }
+          return viewRows;
+        };
+        const rows = selectedRows();
+        const query = [...rows];
+        const builder = Object.assign(query, {
+          from: () => query,
+          innerJoin: () => query,
+          leftJoin: () => query,
+          where: () => query,
+          groupBy: () => query,
+          orderBy: () => query,
+          limit: () => query,
+          for: () => query,
+        });
+        return builder;
+      },
+      query: {
+        properties: { findMany: async () => [] },
+        entities: {
+          findFirst: async () => {
+            resourceLookups += 1;
+            return undefined;
+          },
+        },
+        legalLists: {
+          findFirst: async () => {
+            resourceLookups += 1;
+            return undefined;
+          },
+        },
+      },
+      // The review history names its run's reviewers; none here.
+      selectDistinct: () => {
+        resourceLookups += 1;
+        const query: unknown[] = [];
+        return Object.assign(query, {
+          from: () => query,
+          innerJoin: () => query,
+          where: () => query,
+          orderBy: () => query,
+          limit: () => query,
+        });
+      },
+      selectDistinctOn: () => {
+        resourceLookups += 1;
+        const query: unknown[] = [];
+        return Object.assign(query, {
+          from: () => query,
+          where: () => query,
+          orderBy: () => query,
+          limit: () => query,
+        });
+      },
+      // Row locks (the sample loader's matter lock) read no rows here.
+      execute: async (statement: SQL) => {
+        resourceLookups += 1;
+        return aggregateExecutionRows(statement, false);
+      },
+      // Writes land nowhere: a history append, and a document's source kind
+      // upserted on its list, which counts as the write it is.
+      insert: () => ({
+        values: () => ({
+          onConflictDoNothing: async () => [],
+          onConflictDoUpdate: async () => {
+            mutations += 1;
+            return [];
+          },
+        }),
+      }),
+      // A reader comment is written through its own guarded predicate; no
+      // stored comment has the synthetic id, so the write reaches no row.
+      delete: () => {
+        resourceLookups += 1;
+        return { where: () => ({ returning: async () => [] }) };
+      },
+      update: (table: unknown) => {
+        if (table === legalReaderAnnotations) {
+          resourceLookups += 1;
+          return {
+            set: () => ({ where: () => ({ returning: async () => [] }) }),
+          };
+        }
+        mutations += 1;
+        return {
+          set: () => ({
+            where: () => ({ returning: async () => [{ id: resourceId }] }),
+          }),
+        };
+      },
+    };
+    const database = createScopedDbMock(tx, {
+      featureAccess: {
+        identity: membership === "current" ? { email, emailVerified } : null,
+      },
+    });
+    const context = createContext({
+      scopedDb: database.scopedDb,
+      safeDb: database.safeDb,
+      workspaceIds: [matterId],
+      // The sample loader stores a document, so it needs the documents scope.
+      grantedScopes: [
+        "stella:read",
+        "stella:billing_write",
+        "stella:knowledge_write",
+        "stella:matters_write",
+        "stella:documents_write",
+      ],
+    });
+    context.organizationId = toSafeId<"organization">(organizationId);
+    context.userId = toSafeId<"user">(userId);
+    context.userEmail = email;
+    context.featureAccessSnapshot = createFeatureAccessSnapshot({
+      organizationId,
+      userId: context.userId,
+      decisions: new Map(
+        Object.keys(FEATURE_REGISTRY).map((featureId) => [
+          featureId,
+          decideFeatureAccess({
+            registry: FEATURE_REGISTRY,
+            grants: env.API_FEATURE_ACCESS_GRANTS,
+            featureId,
+            organizationId,
+            userId: context.userId,
+            user: { email, emailVerified },
+            membership: membership === "current",
+          }),
+        ]),
+      ),
+    });
+    return {
+      context,
+      resourceLookups: () => resourceLookups,
+      mutations: () => mutations,
+    };
+  };
+
+  test("the transport matrix covers every dedicated verification capability", () => {
+    const declared = capabilityCatalog
+      .filter(requiresVerificationGrant)
+      .map(({ id }) => id);
+    expect(Object.keys(inputs).toSorted()).toEqual(declared.toSorted());
+  });
+
+  test("every list mutation retains matter consent alongside other write consents", () => {
+    const mutations = capabilityCatalog.filter(
+      ({ id, access }) => id.startsWith("lists.") && access === "write",
+    );
+    expect(mutations.length).toBeGreaterThan(0);
+    for (const entry of mutations) {
+      expect(
+        [entry.scope, ...(entry.additionalScopes ?? [])],
+        entry.id,
+      ).toContain("stella:matters_write");
+    }
+  });
+
+  test("document consent alone refuses sample loading before mutation", async () => {
+    grantCurrentMember();
+    const fixture = verificationContext();
+    fixture.context.grantedScopes = ["stella:documents_write"];
+    const result = await handleMcpToolCall({
+      mode: "advanced",
+      toolName: "write_capability",
+      context: fixture.context,
+      args: {
+        capability: "lists.sample-case.create",
+        input: inputs["lists.sample-case.create"],
+      },
+    });
+    expect(errorEnvelope(result)).toMatchObject({
+      code: "missing_scope",
+      message: expect.stringContaining("stella:matters_write"),
+    });
+    expect(fixture.mutations()).toBe(0);
+    expect(fixture.resourceLookups()).toBe(0);
+  });
+
+  test("empty grants omit dedicated verification capabilities from discovery", async () => {
+    const { context } = verificationContext();
+    const listed: string[] = [];
+    for (const domain of ["lists"]) {
+      const result = await handleMcpToolCall({
+        mode: "advanced",
+        toolName: "list_capabilities",
+        context,
+        args: { domain, limit: MAX_LIST_LIMIT },
+      });
+      listed.push(
+        ...asTestRaw<{ items: { id: string }[] }>(
+          parseToolPayload(result),
+        ).items.map(({ id }) => id),
+      );
+    }
+    for (const capability of Object.keys(inputs)) {
+      expect(listed).not.toContain(capability);
+      const described = await handleMcpToolCall({
+        mode: "advanced",
+        toolName: "describe_capability",
+        context,
+        args: { capability },
+      });
+      expect(errorEnvelope(described)).toMatchObject({
+        code: "not_found",
+        message: `No capability with id "${capability}"`,
+        hint: expect.any(String),
+      });
+    }
+    expect(loadOrgSettingsMock).not.toHaveBeenCalled();
+  });
+
+  test("real native and resource discovery preserves shared surfaces for another member", async () => {
+    grantCurrentMember();
+    const granted = verificationContext().context;
+    const denied = verificationContext({
+      userId: "user_2",
+      email: "another-member@example.test",
+    }).context;
+    const featureCapabilities = capabilityCatalog
+      .filter(requiresVerificationGrant)
+      .map(({ id }) => id);
+    expect(featureCapabilities).toHaveLength(Object.keys(inputs).length);
+    const enabledTools = await listMcpTools(
+      granted,
+      "default",
+      granted.grantedScopes,
+    );
+    const hiddenTools = await listMcpTools(
+      denied,
+      "default",
+      denied.grantedScopes,
+    );
+    expect(enabledTools.length).toBeGreaterThan(0);
+    const featureTools = listStaticMcpToolDefinitions().filter(
+      (tool) => tool.featureId === LIST_VERIFICATION_FEATURE_ID,
+    );
+    for (const { name } of featureTools) {
+      expect(enabledTools.map((tool) => tool.name)).toContain(name);
+    }
+    const featureToolNames = new Set(featureTools.map(({ name }) => name));
+    expect(hiddenTools.map(({ name }) => name).toSorted()).toEqual(
+      enabledTools
+        .filter(({ name }) => !featureToolNames.has(name))
+        .map(({ name }) => name)
+        .toSorted(),
+    );
+    const hiddenNativeSurface = JSON.stringify(hiddenTools);
+    for (const id of featureCapabilities) {
+      expect(hiddenNativeSurface).not.toContain(id);
+    }
+    let projectedLayouts = 0;
+    for (const { id } of capabilityCatalog.filter(
+      (entry) =>
+        "featureId" in entry &&
+        entry.featureId === LIST_VERIFICATION_FEATURE_ID &&
+        "featureAccess" in entry &&
+        entry.featureAccess === "conditional",
+    )) {
+      const enabled = await handleMcpToolCall({
+        mode: "advanced",
+        toolName: "describe_capability",
+        context: granted,
+        args: { capability: id },
+      });
+      const hidden = await handleMcpToolCall({
+        mode: "advanced",
+        toolName: "describe_capability",
+        context: denied,
+        args: { capability: id },
+      });
+      const fullSchema = JSON.stringify(parseToolPayload(enabled));
+      const hiddenSchema = JSON.stringify(parseToolPayload(hidden));
+      if (fullSchema.includes('"avt"')) {
+        projectedLayouts += 1;
+      }
+      expect(hiddenSchema).not.toContain('"avt"');
+      expect(hidden.isError).not.toBe(true);
+    }
+    expect(projectedLayouts).toBeGreaterThan(0);
+    const enabledResources = await listMcpResources("default", {
+      context: granted,
+    });
+    const hiddenResources = await listMcpResources("default", {
+      context: denied,
+    });
+    expect(enabledResources.length).toBeGreaterThan(0);
+    // The production feature declares capability endpoints; its shared static
+    // references remain available and contain no dedicated capability names.
+    expect(hiddenResources.map(({ uri }) => uri).toSorted()).toEqual(
+      enabledResources.map(({ uri }) => uri).toSorted(),
+    );
+    for (const { uri } of hiddenResources) {
+      const resource = await readMcpResource(uri, "default", denied);
+      const text = JSON.stringify(resource);
+      for (const id of featureCapabilities) {
+        expect(text).not.toContain(id);
+      }
+    }
+  });
+
+  test("the real views list transport retains unavailable identities without layout details", async () => {
+    grantCurrentMember();
+    const view = {
+      id: toSafeId<"workspaceView">(resourceId),
+      workspaceId: toSafeId<"workspace">(matterId),
+      name: "Verification view",
+      position: 0,
+      createdAt: new Date("2026-10-02T10:00:00Z"),
+      layout: {
+        type: "avt",
+        version: 1,
+        listId: null,
+        filters: [],
+        sorts: [],
+        hiddenProperties: [],
+        calculations: [],
+      },
+    } satisfies typeof workspaceViews.$inferSelect;
+    const listedCapability = capabilityCatalog.find(
+      ({ id }) => id === "views.list",
+    );
+    expect(listedCapability).toMatchObject({
+      featureId: LIST_VERIFICATION_FEATURE_ID,
+      featureAccess: "conditional",
+    });
+    for (const caller of [
+      {},
+      { userId: "user_2", email: "another-member@example.test" },
+    ]) {
+      const fixture = verificationContext({ ...caller, viewRows: [view] });
+      const result = await handleCapabilityCall({
+        context: fixture.context,
+        args: { capability: "views.list", input: { params: { matterId } } },
+      });
+      expect(result.isError).not.toBe(true);
+      const payload = asTestRaw<unknown[]>(parseToolPayload(result));
+      expect(payload).toEqual(
+        caller.userId === undefined
+          ? [
+              {
+                version: 1,
+                id: view.id,
+                name: view.name,
+                position: view.position,
+                createdAt: view.createdAt.toISOString(),
+                layout: view.layout,
+              },
+            ]
+          : [
+              {
+                id: view.id,
+                eligibility: "unavailable",
+              },
+            ],
+      );
+    }
+    testState.setConfig("API_FEATURE_ACCESS_GRANTS", {});
+    const denied = await handleCapabilityCall({
+      context: verificationContext({ viewRows: [view] }).context,
+      args: { capability: "views.list", input: { params: { matterId } } },
+    });
+    expect(denied.isError).not.toBe(true);
+    expect(asTestRaw<unknown[]>(parseToolPayload(denied))).toEqual([
+      { id: view.id, eligibility: "unavailable" },
+    ]);
+  });
+
+  test("empty grants deny invoke and validate-only before resource lookup or mutation", async () => {
+    const fixture = verificationContext();
+    for (const [capability, input] of Object.entries(inputs)) {
+      for (const validate_only of [false, true]) {
+        const result = await handleCapabilityCall({
+          context: fixture.context,
+          args: { capability, input, validate_only },
+        });
+        expect(errorEnvelope(result)).toMatchObject({
+          code: "not_found",
+          message: `No capability with id "${capability}"`,
+          hint: expect.any(String),
+        });
+      }
+    }
+    expect(fixture.resourceLookups()).toBe(0);
+    expect(fixture.mutations()).toBe(0);
+    expect(loadOrgSettingsMock).not.toHaveBeenCalled();
+    expect(consumeRateLimitMock).not.toHaveBeenCalled();
+  });
+
+  test("member grants advertise and validate every dedicated verification capability", async () => {
+    grantCurrentMember();
+    const fixture = verificationContext();
+    const listed: string[] = [];
+    for (const domain of ["lists"]) {
+      const result = await handleMcpToolCall({
+        mode: "advanced",
+        toolName: "list_capabilities",
+        context: fixture.context,
+        args: { domain, limit: MAX_LIST_LIMIT },
+      });
+      listed.push(
+        ...asTestRaw<{ items: { id: string }[] }>(
+          parseToolPayload(result),
+        ).items.map(({ id }) => id),
+      );
+    }
+    for (const [capability, input] of Object.entries(inputs)) {
+      expect(listed).toContain(capability);
+      const described = await handleMcpToolCall({
+        mode: "advanced",
+        toolName: "describe_capability",
+        context: fixture.context,
+        args: { capability },
+      });
+      expect(described.isError).not.toBe(true);
+      const result = await handleCapabilityCall({
+        context: fixture.context,
+        args: {
+          capability,
+          input,
+          validate_only: true,
+          ...confirmation(capability),
+        },
+      });
+      expect(
+        asTestRaw<{ valid: boolean; capability: string }>(
+          parseToolPayload(result),
+        ),
+      ).toEqual({ valid: true, capability });
+    }
+    expect(fixture.resourceLookups()).toBeGreaterThan(0);
+    expect(fixture.mutations()).toBe(0);
+    expect(loadOrgSettingsMock).not.toHaveBeenCalled();
+  });
+
+  test("MCP resolves current verified identity, membership, and organization for each grant", async () => {
+    grantCurrentMember();
+    for (const options of [
+      { email: "changed@example.test" },
+      { userId: "user_2", email: "another-member@example.test" },
+      { emailVerified: false },
+      { membership: "departed" },
+      { organizationId: "org_2" },
+    ] as const satisfies readonly VerificationContextOptions[]) {
+      const fixture = verificationContext(options);
+      const listed = await handleMcpToolCall({
+        mode: "advanced",
+        toolName: "list_capabilities",
+        context: fixture.context,
+        args: { domain: "lists", limit: MAX_LIST_LIMIT },
+      });
+      const ids = asTestRaw<{ items: { id: string }[] }>(
+        parseToolPayload(listed),
+      ).items.map(({ id }) => id);
+      for (const [capability, input] of Object.entries(inputs)) {
+        expect(ids).not.toContain(capability);
+        const described = await handleMcpToolCall({
+          mode: "advanced",
+          toolName: "describe_capability",
+          context: fixture.context,
+          args: { capability },
+        });
+        expect(errorEnvelope(described)).toMatchObject({
+          code: "not_found",
+          message: `No capability with id "${capability}"`,
+          hint: expect.any(String),
+        });
+        for (const validate_only of [false, true]) {
+          const invoked = await handleCapabilityCall({
+            context: fixture.context,
+            args: { capability, input, validate_only },
+          });
+          expect(errorEnvelope(invoked)).toMatchObject({
+            code: "not_found",
+            message: `No capability with id "${capability}"`,
+            hint: expect.any(String),
+          });
+        }
+      }
+      expect(fixture.resourceLookups()).toBe(0);
+      expect(fixture.mutations()).toBe(0);
+    }
+    expect(loadOrgSettingsMock).not.toHaveBeenCalled();
+    expect(consumeRateLimitMock).not.toHaveBeenCalled();
+  });
+
+  test("granted invocations reach their resource operations without model dispatch", async () => {
+    grantCurrentMember();
+    for (const [capability, input] of Object.entries(inputs)) {
+      const fixture = verificationContext();
+      const result = await handleCapabilityCall({
+        context: fixture.context,
+        args: { capability, input, ...confirmation(capability) },
+      });
+      if (capability === "lists.items.sources.verification.update") {
+        expect(result.isError).not.toBe(true);
+        expect(asTestRaw<{ id: string }>(parseToolPayload(result))).toEqual({
+          id: resourceId,
+        });
+        expect(fixture.mutations()).toBe(1);
+        continue;
+      }
+      // The fixture holds the list and document every id probe asks for,
+      // and no classified document, so the document reads as a record.
+      if (capability === "lists.source-documents.update") {
+        expect(result.isError).not.toBe(true);
+        expect(parseToolPayload(result)).toEqual({
+          listId: resourceId,
+          documentEntityId: resourceId,
+          sourceKind: "testimony",
+        });
+        expect(fixture.mutations()).toBe(1);
+        continue;
+      }
+      expect(fixture.resourceLookups()).toBeGreaterThan(0);
+      expect(fixture.mutations()).toBe(0);
+      if (
+        capability === "lists.verifications.list" ||
+        capability === "lists.verifications.claim-comments.list" ||
+        capability === "lists.verifications.claim-reviews.list"
+      ) {
+        expect(result.isError).not.toBe(true);
+        expect(
+          asTestRaw<{ items: unknown[] }>(parseToolPayload(result)),
+        ).toMatchObject({
+          items: [],
+        });
+      } else if (capability === "lists.source-documents.list") {
+        expect(result.isError).not.toBe(true);
+        expect(parseToolPayload(result)).toEqual({
+          documents: [{ documentEntityId: resourceId, sourceKind: "document" }],
+        });
+      } else if (capability === "lists.graph.nodes.list") {
+        // Nothing in the fixture's matter matches.
+        expect(result.isError).not.toBe(true);
+        expect(parseToolPayload(result)).toEqual({
+          nodes: [],
+          nextCursor: null,
+        });
+      } else if (capability === "lists.verifications.latest.list") {
+        expect(result.isError).not.toBe(true);
+        expect(
+          asTestRaw<{ runs: unknown[] }>(parseToolPayload(result)),
+        ).toEqual({
+          runs: [],
+        });
+      } else if (capability === "lists.verifications.graph.get") {
+        // The fixture's list holds nothing verified yet.
+        expect(result.isError).not.toBe(true);
+        expect(parseToolPayload(result)).toMatchObject({
+          listId: resourceId,
+          statements: [],
+          claims: [],
+          nextCursor: null,
+        });
+      } else {
+        expect(errorEnvelope(result).code).toBe("not_found");
+        expect(errorEnvelope(result).message).toContain("not found");
+        expect(errorEnvelope(result).message).not.toBe("Not found");
+      }
+    }
+  });
+});
+
+describe("account export capability authority", () => {
+  const entries = capabilityCatalog.filter((entry) =>
+    entry.id.startsWith("account-exports."),
+  );
+  const oauthCredential = admittedClientCredential;
+
+  const listedAccountIds = async (context: AuthorizedMcpRequestContext) => {
+    const result = await handleMcpToolCall({
+      mode: "advanced",
+      toolName: "list_capabilities",
+      args: { domain: "account-exports", limit: 50 },
+      context,
+    });
+    return asTestRaw<{ items: { id: string }[] }>(
+      parseToolPayload(result),
+    ).items.map(({ id }) => id);
+  };
+
+  test("catalog binds session capabilities to explicit account grants", () => {
+    const accountEntries = capabilityCatalog.filter(
+      (entry) => entry.accountScope !== undefined,
+    );
+    expect(accountEntries.map(({ id }) => id).toSorted()).toEqual(
+      capabilityCatalog
+        .filter((entry) => entry.handlerKind === "session")
+        .map(({ id }) => id)
+        .toSorted(),
+    );
+    expect(
+      accountEntries.find(({ id }) => id === "organizations.create")
+        ?.accountScope,
+    ).toBe("stella:organization_create");
+    for (const entry of accountEntries) {
+      expect(entry.accountScope).toBe(entry.scope);
+    }
+    expect(
+      entries.filter(({ access }) => access === "write").map(({ id }) => id),
+    ).toEqual(["account-exports.create"]);
+    for (const entry of entries) {
+      expect(entry.handlerKind).toBe("session");
+      expect(entry.scope).toBe(ACCOUNT_EXPORT_SCOPES[entry.access]);
+    }
+  });
+
+  test("account exports require a credential", async () => {
+    const context = createContext({
+      grantedScopes: ["stella:read", ...Object.values(ACCOUNT_EXPORT_SCOPES)],
+    });
+    expect(await listedAccountIds(context)).toEqual([]);
+    for (const entry of entries) {
+      const described = await handleMcpToolCall({
+        mode: "advanced",
+        toolName: "describe_capability",
+        args: { capability: entry.id },
+        context,
+      });
+      expect(errorEnvelope(described).code).toBe("not_found");
+      const invoked = await handleCapabilityCall({
+        args: { capability: entry.id, validate_only: true },
+        context,
+      });
+      expect(errorEnvelope(invoked).code).toBe("not_found");
+    }
+    expect(loadOrgSettingsMock).not.toHaveBeenCalled();
+    expect(consumeRateLimitMock).not.toHaveBeenCalled();
+  });
+
+  test("read-only OAuth consent discovers reads and refuses requests", async () => {
+    const context = createContext({
+      credential: oauthCredential,
+      grantedScopes: ["stella:read", ACCOUNT_EXPORT_SCOPES.read],
+    });
+    expect((await listedAccountIds(context)).toSorted()).toEqual(
+      entries
+        .filter(({ access }) => access === "read")
+        .map(({ id }) => id)
+        .toSorted(),
+    );
+    for (const entry of entries.filter(({ access }) => access === "write")) {
+      const result = await handleCapabilityCall({
+        args: { capability: entry.id, validate_only: true },
+        context,
+      });
+      expect(errorEnvelope(result).code).toBe("not_found");
+    }
+  });
+
+  test("consented OAuth subject validates both access classes without building an export", async () => {
+    const context = createContext({
+      credential: oauthCredential,
+      grantedScopes: ["stella:read", ...Object.values(ACCOUNT_EXPORT_SCOPES)],
+    });
+    expect((await listedAccountIds(context)).toSorted()).toEqual(
+      entries.map(({ id }) => id).toSorted(),
+    );
+    for (const entry of entries) {
+      const result = await handleCapabilityCall({
+        args: {
+          capability: entry.id,
+          validate_only: true,
+          input:
+            entry.inputSchema?.params === undefined
+              ? {}
+              : {
+                  params: { exportId: "00000000-0000-4000-8000-000000000001" },
+                },
+        },
+        context,
+      });
+      expect(
+        asTestRaw<{ valid: boolean }>(parseToolPayload(result)).valid,
+        entry.id,
+      ).toBe(true);
+    }
+    expect(loadOrgSettingsMock).not.toHaveBeenCalled();
+    expect(consumeRateLimitMock).not.toHaveBeenCalled();
+  });
 });
 
 describe("generated capability catalog", () => {
@@ -296,8 +1308,7 @@ describe("capability handler refusal metadata", () => {
         writes += 1;
       },
     });
-    const result = await handleMcpToolCall({
-      toolName: "invoke_capability",
+    const result = await handleCapabilityCall({
       context: createContext({ safeDb, scopedDb, workspaceIds: [matterId] }),
       args: {
         capability: "properties.update",
@@ -332,8 +1343,7 @@ describe("capability handler refusal metadata", () => {
   });
 
   test("time-entries.me.list forwards its invalid cursor corrective action", async () => {
-    const result = await handleMcpToolCall({
-      toolName: "invoke_capability",
+    const result = await handleCapabilityCall({
       context: createContext(),
       args: {
         capability: "time-entries.me.list",
@@ -361,8 +1371,7 @@ describe("capability handler refusal metadata", () => {
           mappedError(
             mapHandlerResult({
               id: "properties.update",
-              access: "write",
-              result: new ElysiaCustomStatusResponse(status, {
+              result: new HttpStatusResponse(status, {
                 code: "handler_specific_code",
                 message: "A corrective action is required",
                 hint: "Correct the matter and invoke the capability again.",
@@ -401,8 +1410,7 @@ describe("capability handler refusal metadata", () => {
     const error = mappedError(
       mapHandlerResult({
         id: "properties.update",
-        access: "write",
-        result: new ElysiaCustomStatusResponse(422, {
+        result: new HttpStatusResponse(422, {
           message: "Invalid input",
           hint: { raw: "private details" },
           retryable: "false",
@@ -423,7 +1431,7 @@ describe("documents.compare capability contract", () => {
   const TARGET_VERSION_ID = "44444444-4444-4444-8444-444444444444";
 
   const invokeValidation = async (selection: Record<string, unknown>) =>
-    await handleMcpToolCall({
+    await handleCapabilityCall({
       args: {
         capability: "documents.compare",
         input: {
@@ -442,9 +1450,14 @@ describe("documents.compare capability contract", () => {
       },
       context: createContext({
         grantedScopes: ["stella:documents_write"],
+        scopedDb: visibleReferenceDatabase([
+          DOCUMENT_ID,
+          "55555555-5555-4555-8555-555555555555",
+          BASE_VERSION_ID,
+          TARGET_VERSION_ID,
+        ]).scopedDb,
         workspaceIds: [MATTER_ID],
       }),
-      toolName: "invoke_capability",
     });
 
   test("list, describe, and invoke share its scope and selection union", async () => {
@@ -452,9 +1465,9 @@ describe("documents.compare capability contract", () => {
       domain: "documents",
       limit: 50,
     });
-    const listedPayload = parseToolPayload<{
+    const listedPayload = asTestRaw<{
       items: { id: string; scope: string; access: string }[];
-    }>(listed);
+    }>(parseToolPayload(listed));
     expect(listedPayload.items).toContainEqual(
       expect.objectContaining({
         id: "documents.compare",
@@ -466,7 +1479,7 @@ describe("documents.compare capability contract", () => {
     const described = await call("describe_capability", {
       capability: "documents.compare",
     });
-    const describedPayload = parseToolPayload<{
+    const describedPayload = asTestRaw<{
       id: string;
       scope: string;
       handlerKind: string;
@@ -479,7 +1492,7 @@ describe("documents.compare capability contract", () => {
           };
         };
       };
-    }>(described);
+    }>(parseToolPayload(described));
     // The endpoint now backs the curated compare_documents tool. It stays in
     // the catalog and stays generically invocable, the way every other
     // tool-backed capability does; the disposition is what tells an agent that
@@ -546,9 +1559,46 @@ describe("documents.compare capability contract", () => {
     ]);
     for (const result of results) {
       expect(
-        parseToolPayload<{ valid: boolean; capability: string }>(result),
+        asTestRaw<{ valid: boolean; capability: string }>(
+          parseToolPayload(result),
+        ),
       ).toEqual({ valid: true, capability: "documents.compare" });
     }
+  });
+
+  test("a credential without the config grant is refused before any reference read", async () => {
+    const database = visibleReferenceDatabase([
+      DOCUMENT_ID,
+      "55555555-5555-4555-8555-555555555555",
+      TARGET_VERSION_ID,
+    ]);
+    const result = await handleCapabilityCall({
+      args: {
+        capability: "documents.compare",
+        input: {
+          params: { matterId: MATTER_ID, documentId: DOCUMENT_ID },
+          body: {
+            filePropertyId: "55555555-5555-4555-8555-555555555555",
+            selection: { type: "previous", targetVersionId: TARGET_VERSION_ID },
+            mode: "strict",
+            granularity: "word",
+            baseTrackedChanges: "keep",
+            targetTrackedChanges: "accept",
+            output: { type: "version" },
+          },
+        },
+        validate_only: true,
+      },
+      context: createContext({
+        credentialPermissions: { searchHistory: ["read"] },
+        grantedScopes: ["stella:documents_write"],
+        scopedDb: database.scopedDb,
+        workspaceIds: [MATTER_ID],
+      }),
+    });
+
+    expect(errorEnvelope(result).code).toBe("permission_denied");
+    expect(database.getCallCount()).toBe(0);
   });
 
   test("rejects a one-to-many selection above the advertised target bound", async () => {
@@ -576,7 +1626,7 @@ describe("documents.compare capability contract", () => {
 describe("list_capabilities", () => {
   test("returns id/summary/scope items and paginates by cursor", async () => {
     const first = await call("list_capabilities", { limit: 5 });
-    const payload = parseToolPayload<{
+    const payload = asTestRaw<{
       items: {
         id: string;
         summary: string;
@@ -588,7 +1638,7 @@ describe("list_capabilities", () => {
       }[];
       nextCursor: string | null;
       limit: number;
-    }>(first);
+    }>(parseToolPayload(first));
     expect(payload.items).toHaveLength(5);
     expect(payload.limit).toBe(5);
     expect(payload.nextCursor).not.toBeNull();
@@ -609,7 +1659,9 @@ describe("list_capabilities", () => {
       limit: 5,
       cursor: payload.nextCursor,
     });
-    const secondPayload = parseToolPayload<{ items: { id: string }[] }>(second);
+    const secondPayload = asTestRaw<{ items: { id: string }[] }>(
+      parseToolPayload(second),
+    );
     // Keyset by id: page two starts strictly after page one's last id.
     const lastOfFirst = payload.items.at(-1)?.id ?? "";
     expect(
@@ -623,7 +1675,9 @@ describe("list_capabilities", () => {
       domain: "time-entries",
       limit: 50,
     });
-    const payload = parseToolPayload<{ items: { id: string }[] }>(result);
+    const payload = asTestRaw<{ items: { id: string }[] }>(
+      parseToolPayload(result),
+    );
     expect(payload.items.length).toBeGreaterThan(0);
     for (const item of payload.items) {
       expect(item.id.startsWith("time-entries.")).toBe(true);
@@ -635,14 +1689,154 @@ describe("list_capabilities", () => {
       access: "write",
       limit: 50,
     });
-    const payload = parseToolPayload<{
+    const payload = asTestRaw<{
       items: { id: string; summary: string }[];
-    }>(result);
+    }>(parseToolPayload(result));
     const ids = new Set(payload.items.map((i) => i.id));
     const catalogById = new Map(capabilityCatalog.map((e) => [e.id, e]));
     for (const id of ids) {
       expect(catalogById.get(id)?.access).toBe("write");
     }
+  });
+
+  test.each(["", " ", "  ", "\t\n", "\u00a0\u2003"])(
+    "blank query %j preserves id-order pages and cursor binding",
+    async (query) => {
+      const first = asTestRaw<{ nextCursor: string | null }>(
+        parseToolPayload(await call("list_capabilities", { limit: 1 })),
+      );
+      const cursor = first.nextCursor ?? expect.unreachable("Need two pages");
+      for (const args of [{ limit: 1 }, { limit: 1, cursor }]) {
+        expect(await call("list_capabilities", { ...args, query })).toEqual(
+          await call("list_capabilities", args),
+        );
+      }
+    },
+  );
+
+  test("surrounding query whitespace preserves relevance cursor binding", async () => {
+    const first = asTestRaw<{ nextCursor: string | null }>(
+      parseToolPayload(
+        await call("list_capabilities", { query: "time entries", limit: 1 }),
+      ),
+    );
+    const cursor = first.nextCursor ?? expect.unreachable("Need two pages");
+    expect(
+      await call("list_capabilities", { query: "  time entries ", cursor }),
+    ).toEqual(
+      await call("list_capabilities", { query: "time entries", cursor }),
+    );
+  });
+
+  test("ranks suggestion capabilities by id before description-only matches", async () => {
+    const result = await call("list_capabilities", {
+      query: "suggestion",
+      limit: 20,
+    });
+    const payload = asTestRaw<{ items: { id: string }[] }>(
+      parseToolPayload(result),
+    );
+    const ids = payload.items.map(({ id }) => id);
+    const idMatches = ids.filter((id) => id.includes("suggestion"));
+
+    expect(idMatches).toEqual(
+      expect.arrayContaining([
+        "time-entries.suggestions.decisions.create",
+        "time-entries.suggestions.list",
+      ]),
+    );
+    expect(ids.slice(0, idMatches.length)).toEqual(idMatches);
+    expect(ids).toContain("templates.fields.suggest");
+    expect(ids.indexOf("templates.fields.suggest")).toBeGreaterThanOrEqual(
+      idMatches.length,
+    );
+  });
+
+  test("pages a query in relevance order without repeats", async () => {
+    const all = asTestRaw<{ items: { id: string }[] }>(
+      parseToolPayload(
+        await call("list_capabilities", { query: "time entries", limit: 100 }),
+      ),
+    ).items.map(({ id }) => id);
+    expect(all.length).toBeGreaterThan(3);
+
+    type CapabilityPage = {
+      items: { id: string }[];
+      nextCursor: string | null;
+    };
+    const paged: string[] = [];
+    let cursor: string | null = null;
+    do {
+      const page: CapabilityPage = asTestRaw<CapabilityPage>(
+        parseToolPayload(
+          await call("list_capabilities", {
+            query: "time entries",
+            limit: 2,
+            ...(cursor === null ? {} : { cursor }),
+          }),
+        ),
+      );
+      paged.push(...page.items.map(({ id }) => id));
+      cursor = page.nextCursor;
+    } while (cursor !== null);
+    expect(paged).toEqual(all);
+  });
+
+  test("a query cursor must name an entry of that ranking", async () => {
+    const result = await call("list_capabilities", {
+      query: "suggestion",
+      cursor: encodePaginationCursor(["invoices.list"]),
+    });
+    expect(result.isError).toBe(true);
+  });
+
+  test("a cursor resumes only the query that issued it", async () => {
+    const first = asTestRaw<{
+      items: { id: string }[];
+      nextCursor: string | null;
+    }>(
+      parseToolPayload(
+        await call("list_capabilities", { query: "time entries", limit: 1 }),
+      ),
+    );
+    const issued = first.nextCursor ?? expect.unreachable("Need a second page");
+    const sameId = first.items[0]?.id ?? expect.unreachable("Need an item");
+
+    // Reusing it under another query, or without one, is refused even though
+    // its id also appears in those listings.
+    for (const args of [
+      { query: "time", cursor: issued },
+      { cursor: issued },
+      { query: "time entries", cursor: encodePaginationCursor([sameId]) },
+    ]) {
+      const result = await call("list_capabilities", args);
+      expect(result.isError).toBe(true);
+    }
+    const resumed = await call("list_capabilities", {
+      query: "time entries",
+      cursor: issued,
+    });
+    expect(resumed.isError).not.toBe(true);
+  });
+
+  test("without a query a cursor for a hidden entry resumes after its id", async () => {
+    const first = asTestRaw<{ items: { id: string }[] }>(
+      parseToolPayload(
+        await call("list_capabilities", { domain: "time-entries", limit: 50 }),
+      ),
+    ).items.map(({ id }) => id);
+    const anchor = first[1] ?? expect.unreachable("Need two time-entries");
+    const resumed = asTestRaw<{ items: { id: string }[] }>(
+      parseToolPayload(
+        await call("list_capabilities", {
+          domain: "time-entries",
+          limit: 50,
+          // A cursor id that sorts just after the anchor but names no entry.
+          cursor: encodePaginationCursor([`${anchor}~`]),
+        }),
+      ),
+    ).items.map(({ id }) => id);
+    expect(resumed).toEqual(first.filter((id) => id > `${anchor}~`));
   });
 });
 
@@ -653,13 +1847,13 @@ describe("describe_capability", () => {
     const result = await call("describe_capability", {
       capability: "time-entries.create",
     });
-    const payload = parseToolPayload<{
+    const payload = asTestRaw<{
       id: string;
       access: string;
       handlerKind: string;
       scope: string;
       inputSchema: { body?: unknown };
-    }>(result);
+    }>(parseToolPayload(result));
     expect(payload.id).toBe("time-entries.create");
     expect(payload.access).toBe("write");
     expect(payload.handlerKind).toBe("workspace");
@@ -674,10 +1868,63 @@ describe("describe_capability", () => {
     const result = await call("describe_capability", {
       capability: "views.create",
     });
-    const payload = parseToolPayload<{ inputSchema: { body?: unknown } }>(
-      result,
+    const payload = asTestRaw<{ inputSchema: { body?: unknown } }>(
+      parseToolPayload(result),
     );
     expect(payload.inputSchema.body).toBeDefined();
+  });
+
+  test("advertises every capability's input exactly as the catalog does", async () => {
+    // The executors read `matterId` and refuse `workspaceId`, so a described
+    // schema naming the internal field would send an agent into a refusal.
+    // The catalog (and the CLI generated from it) is the reference spelling.
+    const { expandSchemaDefs } =
+      await import("../../../../packages/cli/src/expand-schema-defs.ts");
+    // The default context leaves conditional features off, the state the
+    // catalog is exported in; a capability its caller may not reach is hidden
+    // by describe, and only a feature-required one may be.
+    const baseContext = createContext();
+    const context = {
+      ...baseContext,
+      credential: await admittedOAuthCredentialForTest("catalog-schema-probe"),
+      grantedScopes: [
+        ...baseContext.grantedScopes,
+        ...capabilityCatalog.flatMap((entry) =>
+          entry.accountScope === undefined ? [] : [entry.accountScope],
+        ),
+      ],
+    } satisfies AuthorizedMcpRequestContext;
+    const drift: string[] = [];
+    for (const entry of capabilityCatalog) {
+      if (entry.inputSchema === undefined) {
+        continue;
+      }
+      const described = asTestRaw<{ inputSchema?: unknown }>(
+        parseToolPayload(
+          await handleMcpToolCall({
+            mode: "advanced",
+            toolName: "describe_capability",
+            args: { capability: entry.id },
+            context,
+          }),
+        ),
+      );
+      if (described.inputSchema === undefined) {
+        if (!("featureAccess" in entry) || entry.featureAccess !== "required") {
+          drift.push(entry.id);
+        }
+        continue;
+      }
+      if (
+        !Bun.deepEquals(
+          described.inputSchema,
+          expandSchemaDefs(entry.inputSchema),
+        )
+      ) {
+        drift.push(entry.id);
+      }
+    }
+    expect(drift).toEqual([]);
   });
 
   test("unknown id -> not_found with a suggestion hint", async () => {
@@ -690,11 +1937,11 @@ describe("describe_capability", () => {
   });
 });
 
-// --- invoke_capability: gates -----------------------------------------------
+// --- capability executor: gates -----------------------------------------------
 
-describe("invoke_capability gates", () => {
+describe("capability executor gates", () => {
   test("unknown id -> not_found with closest-id hint", async () => {
-    const result = await call("invoke_capability", {
+    const result = await callCapability({
       capability: "time-entries.creat",
     });
     const error = errorEnvelope(result);
@@ -706,17 +1953,15 @@ describe("invoke_capability gates", () => {
   });
 
   test("token/public capabilities are not invokable", async () => {
-    // No token/public capability exists in the catalog today; assert the guard
-    // by confirming the catalog holds only workspace/root kinds (defensive).
     const kinds = new Set(capabilityCatalog.map((e) => e.handlerKind));
-    expect([...kinds].toSorted()).toEqual(["root", "workspace"]);
+    expect(kinds.has("token")).toBe(false);
+    expect(kinds.has("public")).toBe(false);
   });
 
   test("waived capability -> feature_disabled", async () => {
-    const result = await handleMcpToolCall({
+    const result = await handleCapabilityCall({
       args: { capability: "billing-codes.create", input: { body: {} } },
       context: createContext(),
-      toolName: "invoke_capability",
     });
     const error = errorEnvelope(result);
     expect(error.code).toBe("feature_disabled");
@@ -724,13 +1969,12 @@ describe("invoke_capability gates", () => {
   });
 
   test("missing scope -> missing_scope", async () => {
-    const result = await handleMcpToolCall({
+    const result = await handleCapabilityCall({
       args: {
         capability: "clauses.categories.create",
         input: { body: { name: "X" } },
       },
       context: createContext({ grantedScopes: ["stella:read"] }),
-      toolName: "invoke_capability",
     });
     const error = errorEnvelope(result);
     expect(error.code).toBe("missing_scope");
@@ -739,12 +1983,11 @@ describe("invoke_capability gates", () => {
   });
 
   test("compound capability scope rejects a document-only grant", async () => {
-    const result = await handleMcpToolCall({
+    const result = await handleCapabilityCall({
       args: { capability: "templates.fills.create", input: {} },
       context: createContext({
         grantedScopes: ["stella:read", "stella:documents_write"],
       }),
-      toolName: "invoke_capability",
     });
     const error = errorEnvelope(result);
     expect(error.code).toBe("missing_scope");
@@ -755,7 +1998,7 @@ describe("invoke_capability gates", () => {
   });
 
   test("documents mode reaches the canonical entity-version reservation with its advertised scopes", async () => {
-    const result = await handleMcpToolCall({
+    const result = await handleCapabilityCall({
       args: {
         capability: "uploads.create",
         input: {
@@ -773,6 +2016,9 @@ describe("invoke_capability gates", () => {
         validate_only: true,
       },
       context: createContext({
+        scopedDb: visibleReferenceDatabase([
+          "00000000-0000-4000-8000-000000000001",
+        ]).scopedDb,
         grantedScopes: [
           "stella:read",
           "stella:documents_write",
@@ -780,11 +2026,12 @@ describe("invoke_capability gates", () => {
         ],
       }),
       mode: "documents",
-      toolName: "invoke_capability",
     });
 
     expect(
-      parseToolPayload<{ valid: boolean; capability: string }>(result),
+      asTestRaw<{ valid: boolean; capability: string }>(
+        parseToolPayload(result),
+      ),
     ).toEqual({
       valid: true,
       capability: "uploads.create",
@@ -800,10 +2047,9 @@ describe("invoke_capability gates", () => {
     capability: string,
     grantedScopes: readonly string[],
   ): Promise<string> => {
-    const result = await handleMcpToolCall({
+    const result = await handleCapabilityCall({
       args: { capability, input: {}, validate_only: true },
       context: createContext({ grantedScopes }),
-      toolName: "invoke_capability",
     });
     const payload = parseToolPayload(result);
     if (typeof payload === "object" && payload !== null && "error" in payload) {
@@ -836,8 +2082,9 @@ describe("invoke_capability gates", () => {
   });
 
   test("destructive capability without confirm -> confirmation_required", async () => {
-    const result = await call("invoke_capability", {
+    const result = await callCapability({
       capability: "clauses.categories.delete",
+      input: { params: { categoryId: "a1111111-1111-4111-8111-111111111111" } },
     });
     const error = errorEnvelope(result);
     expect(error.code).toBe("confirmation_required");
@@ -845,24 +2092,37 @@ describe("invoke_capability gates", () => {
 
   describe("sessions without a person to confirm (agent runs)", () => {
     const agentRunCall = async (args: Record<string, unknown>) =>
-      await handleMcpToolCall({
+      await handleCapabilityCall({
         args,
         context: createContext({
           grantedScopes: MCP_OAUTH_SCOPES,
           toolConfirmation: TOOL_CONFIRMATION.unavailable,
         }),
-        toolName: "invoke_capability",
       });
 
-    test("every destructive capability is unavailable, even with confirm", async () => {
+    test("every confirmation-gated capability is unavailable, even with confirm", async () => {
       // Derived from the catalog, not a list: a capability that later becomes
       // destructive is covered without touching this test.
       const destructiveIds = capabilityCatalog
-        .filter((entry) => entry.destructive)
+        .filter(
+          (entry) =>
+            (entry.destructive || entry.confirmation === "required") &&
+            !requiresVerificationGrant(entry),
+        )
         .map((entry) => entry.id);
       expect(destructiveIds.length).toBeGreaterThan(0);
 
       for (const capability of destructiveIds) {
+        const described = await handleMcpToolCall({
+          mode: "advanced",
+          toolName: "describe_capability",
+          args: { capability },
+          context: createContext({ grantedScopes: MCP_OAUTH_SCOPES }),
+        });
+        if (described.isError) {
+          expect(errorEnvelope(described).code).toBe("not_found");
+          continue;
+        }
         const result = await agentRunCall({
           capability,
           input: {},
@@ -883,18 +2143,21 @@ describe("invoke_capability gates", () => {
       const listed: CapabilityPage["items"] = [];
       let cursor: string | null = null;
       do {
-        const page: CapabilityPage = parseToolPayload<CapabilityPage>(
-          await handleMcpToolCall({
-            args: {
-              limit: MAX_LIST_LIMIT,
-              ...(cursor === null ? {} : { cursor }),
-            },
-            context: createContext({
-              grantedScopes: MCP_OAUTH_SCOPES,
-              toolConfirmation: TOOL_CONFIRMATION.unavailable,
+        const page: CapabilityPage = asTestRaw<CapabilityPage>(
+          parseToolPayload(
+            await handleMcpToolCall({
+              mode: "advanced",
+              args: {
+                limit: MAX_LIST_LIMIT,
+                ...(cursor === null ? {} : { cursor }),
+              },
+              context: createContext({
+                grantedScopes: MCP_OAUTH_SCOPES,
+                toolConfirmation: TOOL_CONFIRMATION.unavailable,
+              }),
+              toolName: "list_capabilities",
             }),
-            toolName: "list_capabilities",
-          }),
+          ),
         );
         listed.push(...page.items);
         cursor = page.nextCursor;
@@ -902,6 +2165,12 @@ describe("invoke_capability gates", () => {
 
       expect(listed.length).toBeGreaterThan(0);
       expect(listed.filter(({ destructive }) => destructive)).toEqual([]);
+      const approvalRequired = new Set(
+        capabilityCatalog
+          .filter((entry) => entry.confirmation === "required")
+          .map(({ id }) => id),
+      );
+      expect(listed.filter(({ id }) => approvalRequired.has(id))).toEqual([]);
     });
 
     test("a capability that needs no confirmation is unaffected", async () => {
@@ -920,13 +2189,12 @@ describe("invoke_capability gates", () => {
   });
 
   test("invalid input -> validation_error with dot-path issues", async () => {
-    const result = await handleMcpToolCall({
+    const result = await handleCapabilityCall({
       args: {
         capability: "time-entries.csv.export",
         input: { params: { matterId: "ws_1" }, query: { status: "bogus" } },
       },
       context: createContext(),
-      toolName: "invoke_capability",
     });
     const error = errorEnvelope(result);
     expect(error.code).toBe("validation_error");
@@ -935,14 +2203,13 @@ describe("invoke_capability gates", () => {
   });
 
   test("validate_only returns without executing", async () => {
-    const result = await handleMcpToolCall({
+    const result = await handleCapabilityCall({
       args: {
         capability: "clauses.categories.create",
         input: { body: { name: "Draft category" } },
         validate_only: true,
       },
       context: createContext(),
-      toolName: "invoke_capability",
     });
     // Text and structuredContent are one `{ result }` envelope.
     expect(modelViewOf(result)).toEqual({
@@ -953,20 +2220,19 @@ describe("invoke_capability gates", () => {
   });
 });
 
-// --- invoke_capability: the container's public name --------------------------
+// --- capability executor: the container's public name --------------------------
 
 // The rename is a clean cutover: `matterId` is the only spelling the wire
 // accepts, and every issue an agent reads back names the field it was shown.
-describe("invoke_capability names the container matterId", () => {
+describe("capability executor names the container matterId", () => {
   const UUID = "44444444-4444-4444-8444-444444444444";
 
   const invokeIssues = async (
     args: Record<string, unknown>,
   ): Promise<{ path: string; message: string }[]> => {
-    const result = await handleMcpToolCall({
+    const result = await handleCapabilityCall({
       args,
       context: createContext(),
-      toolName: "invoke_capability",
     });
     const error = errorEnvelope(result);
     expect(error.code).toBe("validation_error");
@@ -1034,7 +2300,7 @@ describe("invoke_capability names the container matterId", () => {
   });
 });
 
-// --- invoke_capability: discriminated-union input errors --------------------
+// --- capability executor: discriminated-union input errors --------------------
 
 // Guards the "path-less union error" class: a failed discriminated union must
 // name its discriminator field (and, once the discriminator matches a variant,
@@ -1045,13 +2311,12 @@ describe("discriminated-union input validation names the field", () => {
   const uploadIssues = async (
     body: unknown,
   ): Promise<{ path: string; message: string }[]> => {
-    const result = await handleMcpToolCall({
+    const result = await handleCapabilityCall({
       args: {
         capability: "uploads.create",
         input: { params: { matterId: "ws_1" }, body },
       },
       context: createContext(),
-      toolName: "invoke_capability",
     });
     const error = errorEnvelope(result);
     expect(error.code).toBe("validation_error");
@@ -1099,17 +2364,16 @@ describe("discriminated-union input validation names the field", () => {
   });
 });
 
-// --- invoke_capability: workspace resolution --------------------------------
+// --- capability executor: workspace resolution --------------------------------
 
-describe("invoke_capability workspace resolution", () => {
+describe("capability executor workspace resolution", () => {
   test("inaccessible workspace -> not_found", async () => {
-    const result = await handleMcpToolCall({
+    const result = await handleCapabilityCall({
       args: {
         capability: "time-entries.csv.export",
         input: { params: { matterId: "ws_nope" } },
       },
       context: createContext(),
-      toolName: "invoke_capability",
     });
     expect(errorEnvelope(result).code).toBe("not_found");
   });
@@ -1118,7 +2382,7 @@ describe("invoke_capability workspace resolution", () => {
     // validateWorkspaceAccess (lib/auth.ts) 404s ANY non-active workspace,
     // reads included; the generic path must be no weaker.
     const pinnedWorkspaceIds: string[] = [];
-    const result = await handleMcpToolCall({
+    const result = await handleCapabilityCall({
       args: {
         capability: "time-entries.csv.export",
         input: { params: { matterId: "ws_arch" } },
@@ -1131,7 +2395,6 @@ describe("invoke_capability workspace resolution", () => {
           return true;
         },
       }),
-      toolName: "invoke_capability",
     });
     expect(errorEnvelope(result).code).toBe("not_found");
     expect(loadOrgSettingsMock).not.toHaveBeenCalled();
@@ -1139,7 +2402,7 @@ describe("invoke_capability workspace resolution", () => {
   });
 
   test("archived workspace on a write capability -> not_found", async () => {
-    const result = await handleMcpToolCall({
+    const result = await handleCapabilityCall({
       args: {
         capability: "case-law.matter-links.create",
         input: {
@@ -1151,14 +2414,13 @@ describe("invoke_capability workspace resolution", () => {
         workspaceIds: ["ws_arch"],
         archivedWorkspaceIds: ["ws_arch"],
       }),
-      toolName: "invoke_capability",
     });
     expect(errorEnvelope(result).code).toBe("not_found");
   });
 
   test("pins an active workspace only after capability access validation", async () => {
     const pinnedWorkspaceIds: string[] = [];
-    const result = await handleMcpToolCall({
+    const result = await handleCapabilityCall({
       args: {
         capability: "case-law.matter-links.create",
         input: {
@@ -1173,15 +2435,144 @@ describe("invoke_capability workspace resolution", () => {
           return true;
         },
       }),
-      toolName: "invoke_capability",
     });
 
-    expect(parseToolPayload<{ valid: boolean }>(result).valid).toBe(true);
+    expect(asTestRaw<{ valid: boolean }>(parseToolPayload(result)).valid).toBe(
+      true,
+    );
     expect(pinnedWorkspaceIds).toEqual(["ws_1"]);
   });
 });
 
-describe("synthesized capability authorization lifetime", () => {
+describe("handlerCtx capability authorization lifetime", () => {
+  test("non-replay capabilities discard submission keys after the RPC body is consumed", async () => {
+    const request = new Request("http://localhost/mcp", {
+      method: "POST",
+      body: JSON.stringify({ method: "tools/call" }),
+      headers: {
+        "Idempotency-Key": "rpc-submission",
+        "X-Request-Id": "rpc-request",
+      },
+    });
+    expect(await request.json()).toEqual({ method: "tools/call" });
+    const handlerCtx = await capabilityHandlerContext({
+      capabilityId: "playbooks.list",
+      context: createContext(),
+      input: { body: {}, params: {}, query: {} },
+      request,
+      workspaceId: undefined,
+    });
+    expect(handlerCtx.request.headers.get("Idempotency-Key")).toBeNull();
+    expect(handlerCtx.request.headers.get("X-Request-Id")).toBe("rpc-request");
+    expect(request.headers.get("Idempotency-Key")).toBe("rpc-submission");
+  });
+
+  test("every replay-capable create preserves its retry key through the MCP context", async () => {
+    const replayCapabilities: string[] = [];
+    for (const entry of capabilityCatalog.filter(({ id }) =>
+      id.endsWith(".create"),
+    )) {
+      const endpoint = await loadCapabilityEndpoint(entry.id);
+      expect(endpoint).not.toBeNull();
+      if (endpoint === null) {
+        continue;
+      }
+      const request = new Request("http://localhost/mcp", {
+        method: "POST",
+        headers: { "Idempotency-Key": "same-submission" },
+      });
+      const handlerCtx = await capabilityHandlerContext({
+        capabilityId: entry.id,
+        ...(endpoint.config.idempotency === undefined
+          ? {}
+          : { idempotency: endpoint.config.idempotency }),
+        context: createContext(),
+        input: { body: {}, params: {}, query: {} },
+        request,
+        workspaceId: undefined,
+      });
+      if (endpoint.config.idempotency?.type === "replay") {
+        replayCapabilities.push(entry.id);
+        expect(handlerCtx.request.headers.get("Idempotency-Key")).toBe(
+          "same-submission",
+        );
+      } else {
+        expect(handlerCtx.request.headers.get("Idempotency-Key")).toBeNull();
+      }
+      expect(request.headers.get("Idempotency-Key")).toBe("same-submission");
+    }
+    expect(replayCapabilities.length).toBeGreaterThan(1);
+    expect(replayCapabilities).toContain("organizations.create");
+  });
+
+  test("replay-enabled handlers receive the per-call transport key after the RPC body is consumed", async () => {
+    const request = new Request("http://localhost/mcp", {
+      method: "POST",
+      body: JSON.stringify({ method: "tools/call" }),
+      headers: { "Idempotency-Key": "batch-item-key" },
+    });
+    await request.json();
+    const handlerCtx = await capabilityHandlerContext({
+      capabilityId: "saved-time-narratives.create",
+      idempotency: { type: "replay" },
+      context: createContext(),
+      input: { body: { name: "Narrative" }, params: {}, query: {} },
+      request,
+      workspaceId: undefined,
+    });
+    expect(handlerCtx.request.headers.get("Idempotency-Key")).toBe(
+      "batch-item-key",
+    );
+    expect(handlerCtx.body).toEqual({ name: "Narrative" });
+  });
+
+  test("catalog replay support matches every live handler declaration", async () => {
+    for (const entry of capabilityCatalog) {
+      const endpoint = await loadCapabilityEndpoint(entry.id);
+      expect(endpoint).not.toBeNull();
+      expect(entry.idempotency).toEqual(endpoint?.config.idempotency);
+    }
+  });
+
+  test("a declared receipt replay returns the original structured capability result", async () => {
+    const endpoint = await loadCapabilityEndpoint(
+      "saved-time-narratives.create",
+    );
+    expect(endpoint).not.toBeNull();
+    if (endpoint === null) {
+      return;
+    }
+    expect(endpoint.config.idempotency).toEqual({ type: "replay" });
+    const context = createContext();
+    context.request = new Request("http://localhost/mcp", {
+      method: "POST",
+      headers: { "Idempotency-Key": "batch-item-key" },
+    });
+    context.testDependencies = {
+      ...context.testDependencies,
+      loadCapabilityEndpoint: async () => ({
+        ...endpoint,
+        handler: async () =>
+          Response.json(
+            { id: "retained-narrative", name: "Narrative" },
+            { headers: { "Idempotency-Replayed": "true" } },
+          ),
+      }),
+    };
+    const result = await handleCapabilityCall({
+      args: {
+        capability: "saved-time-narratives.create",
+        input: { body: { name: "Narrative", narrative: "Review documents" } },
+      },
+      context,
+    });
+    expect(result.isError).not.toBe(true);
+    expect(parseToolPayload(result)).toEqual({
+      id: "retained-narrative",
+      name: "Narrative",
+    });
+  });
+
   test("preserves MCP provenance in recorders rebound to another workspace", async () => {
     let inserted: Record<string, unknown>[] = [];
     const context = createContext({ workspaceIds: ["ws_1", "ws_2"] });
@@ -1193,7 +2584,7 @@ describe("synthesized capability authorization lifetime", () => {
         type: "credential",
       },
     };
-    const synthesized = await synthesizeCapabilityContext({
+    const handlerCtx = await capabilityHandlerContext({
       capabilityId: "entities.copy",
       context,
       input: { body: {}, params: {}, query: {} },
@@ -1208,7 +2599,7 @@ describe("synthesized capability authorization lifetime", () => {
       }),
     });
 
-    await synthesized.createAuditRecorder({
+    await handlerCtx.createAuditRecorder({
       workspaceId: toSafeId<"workspace">("ws_2"),
     })(tx, {
       action: "create",
@@ -1240,7 +2631,7 @@ describe("synthesized capability authorization lifetime", () => {
         scopedDb: emptyScopedDb,
       }),
     });
-    const synthesized = await synthesizeCapabilityContext({
+    const handlerCtx = await capabilityHandlerContext({
       capabilityId: "entities.copy",
       context,
       input: { body: {}, params: {}, query: {} },
@@ -1249,12 +2640,12 @@ describe("synthesized capability authorization lifetime", () => {
     });
 
     expect(pinnedWorkspaceIds).toEqual(["ws_1"]);
-    await synthesized.getWorkspaceAccess(toSafeId<"workspace">("ws_2"));
-    await synthesized.getWorkspaceAccess(toSafeId<"workspace">("ws_2"));
+    await handlerCtx.getWorkspaceAccess(toSafeId<"workspace">("ws_2"));
+    await handlerCtx.getWorkspaceAccess(toSafeId<"workspace">("ws_2"));
     expect(pinnedWorkspaceIds).toEqual(["ws_1", "ws_2"]);
 
     expect(
-      await synthesized.getWorkspaceAccess(
+      await handlerCtx.getWorkspaceAccess(
         toSafeId<"workspace">("ws_inaccessible"),
       ),
     ).toBeNull();
@@ -1267,7 +2658,7 @@ describe("synthesized capability authorization lifetime", () => {
 
     // bun-types declares `.rejects.toThrow` as void, so awaiting it trips
     // type-aware lint; capture the rejection explicitly instead.
-    const rejection = await synthesizeCapabilityContext({
+    const rejection = await capabilityHandlerContext({
       capabilityId: "entities.copy",
       context,
       input: { body: {}, params: {}, query: {} },
@@ -1284,19 +2675,18 @@ describe("synthesized capability authorization lifetime", () => {
   });
 });
 
-// --- invoke_capability: end-to-end execution --------------------------------
+// --- capability executor: end-to-end execution --------------------------------
 
-describe("invoke_capability execution", () => {
+describe("capability executor execution", () => {
   test("runs a read capability end-to-end (workspace-resolved)", async () => {
-    const result = await handleMcpToolCall({
+    const result = await handleCapabilityCall({
       args: {
         capability: "time-entries.csv.export",
         input: { params: { matterId: "ws_1" } },
       },
       context: createContext(),
-      toolName: "invoke_capability",
     });
-    const payload = parseToolPayload<string>(result);
+    const payload = asTestRaw<string>(parseToolPayload(result));
     expect(typeof payload).toBe("string");
     expect(payload).toContain("Date,");
     expect(loadOrgSettingsMock).toHaveBeenCalled();
@@ -1321,36 +2711,82 @@ describe("invoke_capability execution", () => {
       }),
     };
     const { safeDb, scopedDb } = createScopedDbMock(insertTx);
-    const result = await handleMcpToolCall({
+    const result = await handleCapabilityCall({
       args: {
         capability: "clauses.categories.create",
         input: { body: { name: "Test Category" } },
       },
       context: createContext({ safeDb, scopedDb }),
-      toolName: "invoke_capability",
     });
     expect(
-      parseToolPayload<{ id: string; name: string }>(result),
+      asTestRaw<{ id: string; name: string }>(parseToolPayload(result)),
     ).toMatchObject({
       id: "cc_1",
       name: "Test Category",
     });
   });
 
+  test("destructive write dispatch requires confirmation", async () => {
+    const categoryId = "a1111111-1111-4111-8111-111111111111";
+    const deleteRow = mock(async () => undefined);
+    const updateRow = mock(async () => undefined);
+    const auditRows = mock(async () => undefined);
+    const findCategory = mock(async () => ({
+      id: categoryId,
+      name: "Synthetic Category",
+      parentId: null,
+    }));
+    const { safeDb, scopedDb } = createScopedDbMock({
+      query: { clauseCategories: { findFirst: findCategory } },
+      update: () => ({ set: () => ({ where: updateRow }) }),
+      delete: () => ({ where: deleteRow }),
+      insert: () => ({ values: auditRows }),
+    });
+    const context = createContext({ safeDb, scopedDb });
+    const args = {
+      capability: "clauses.categories.delete",
+      input: { params: { categoryId } },
+    };
+    const unconfirmed = await handleMcpToolCall({
+      mode: "advanced",
+      toolName: MCP_CAPABILITY_EXECUTORS.write,
+      args,
+      context,
+    });
+    expect(errorEnvelope(unconfirmed).code).toBe("confirmation_required");
+    expect(findCategory).not.toHaveBeenCalled();
+    expect(deleteRow).not.toHaveBeenCalled();
+    expect(auditRows).not.toHaveBeenCalled();
+
+    const confirmed = await handleMcpToolCall({
+      mode: "advanced",
+      toolName: MCP_CAPABILITY_EXECUTORS.write,
+      args: { ...args, confirm: true },
+      context,
+    });
+    expect(confirmed.isError).not.toBe(true);
+    const payload = parseToolPayload(confirmed);
+    expect(payload).toEqual({});
+    expect(findCategory).toHaveBeenCalledTimes(1);
+    expect(updateRow).toHaveBeenCalledTimes(1);
+    expect(deleteRow).toHaveBeenCalledTimes(1);
+    expect(auditRows).toHaveBeenCalledTimes(1);
+    expect(analytics.exceptions()).toEqual([]);
+  });
+
   test("a role without permission -> permission_denied", async () => {
-    const result = await handleMcpToolCall({
+    const result = await handleCapabilityCall({
       args: {
         capability: "clauses.categories.create",
         input: { body: { name: "X" } },
       },
       context: createContext({ memberRole: "intern" }),
-      toolName: "invoke_capability",
     });
     expect(errorEnvelope(result).code).toBe("permission_denied");
   });
 });
 
-describe("invoke_capability upload purpose gate", () => {
+describe("capability executor upload purpose gate", () => {
   const skillPackBody = {
     purpose: "agent_skill",
     scope: "team",
@@ -1374,7 +2810,7 @@ describe("invoke_capability upload purpose gate", () => {
 
   // A pending upload the finalize gate reads its purpose from.
   const storedPurposeDb = (purpose: string) =>
-    asTestRaw<McpRequestContext["scopedDb"]>(
+    asTestRaw<AuthorizedMcpRequestContext["scopedDb"]>(
       async (run: (tx: unknown) => unknown) => {
         const builder = {
           select: () => builder,
@@ -1388,14 +2824,13 @@ describe("invoke_capability upload purpose gate", () => {
     );
 
   test("a skill-pack upload needs the skills consent, not the domain scope alone", async () => {
-    const result = await handleMcpToolCall({
+    const result = await handleCapabilityCall({
       args: {
         capability: "uploads.create",
         input: { body: skillPackBody, params: { matterId: "ws_1" } },
         validate_only: true,
       },
       context: createContext({ grantedScopes: ["stella:matters_write"] }),
-      toolName: "invoke_capability",
     });
     const envelope = errorEnvelope(result);
     expect(envelope.code).toBe("missing_scope");
@@ -1403,7 +2838,7 @@ describe("invoke_capability upload purpose gate", () => {
   });
 
   test("the skills consent admits the same call", async () => {
-    const result = await handleMcpToolCall({
+    const result = await handleCapabilityCall({
       args: {
         capability: "uploads.create",
         input: { body: skillPackBody, params: { matterId: "ws_1" } },
@@ -1412,37 +2847,79 @@ describe("invoke_capability upload purpose gate", () => {
       context: createContext({
         grantedScopes: ["stella:matters_write", "stella:skills"],
       }),
-      toolName: "invoke_capability",
     });
-    expect(parseToolPayload<{ valid: boolean }>(result).valid).toBe(true);
+    expect(asTestRaw<{ valid: boolean }>(parseToolPayload(result)).valid).toBe(
+      true,
+    );
   });
 
   test("a document upload needs the documents consent, not the domain scope alone", async () => {
     const invoke = async (grantedScopes: string[]) =>
-      await handleMcpToolCall({
+      await handleCapabilityCall({
         args: {
           capability: "uploads.create",
           input: { body: documentBody, params: { matterId: "ws_1" } },
           validate_only: true,
         },
         context: createContext({ grantedScopes }),
-        toolName: "invoke_capability",
       });
 
     const refused = errorEnvelope(await invoke(["stella:matters_write"]));
     expect(refused.code).toBe("missing_scope");
     expect(refused.message).toContain("stella:documents_write");
     expect(
-      parseToolPayload<{ valid: boolean }>(
-        await invoke(["stella:matters_write", "stella:documents_write"]),
+      asTestRaw<{ valid: boolean }>(
+        parseToolPayload(
+          await invoke(["stella:matters_write", "stella:documents_write"]),
+        ),
       ).valid,
     ).toBe(true);
+  });
+
+  // The executor refuses an uncovered purpose before dispatch; the handler
+  // checks the same consent against the scopes the MCP session carries.
+  test("the upload handler holds an MCP call to its purpose's consent too", async () => {
+    const reserved: unknown[] = [];
+    const reservationDb = asTestRaw<AuthorizedMcpRequestContext["scopedDb"]>(
+      async (run: (tx: unknown) => unknown) =>
+        await run({
+          insert: () => ({
+            values: async (row: unknown) => {
+              reserved.push(row);
+            },
+          }),
+        }),
+    );
+    const endpoint = await loadCapabilityEndpoint("uploads.create");
+    const invoke = async (grantedScopes: string[]) =>
+      await endpoint?.handler(
+        await capabilityHandlerContext({
+          capabilityId: "uploads.create",
+          context: createContext({
+            grantedScopes,
+            safeDb: toSafeDbMock(reservationDb),
+          }),
+          input: { body: skillPackBody, params: {}, query: {} },
+          request: new Request("http://localhost/mcp", { method: "POST" }),
+          workspaceId: toSafeId<"workspace">("ws_1"),
+        }),
+      );
+
+    expect(await invoke(["stella:matters_write"])).toMatchObject({
+      code: 403,
+      response: { message: "This upload needs the stella:skills scope" },
+    });
+    expect(reserved).toEqual([]);
+    expect(
+      await invoke(["stella:matters_write", "stella:skills"]),
+    ).toMatchObject({ uploadId: expect.any(String) });
+    expect(reserved).toMatchObject([{ purpose: "agent_skill" }]);
   });
 
   test("finalize takes the purpose from the stored upload, not from the caller", async () => {
     // The finalize call names only an upload id, so the consent it must hold is
     // the one its recorded purpose spends.
-    const result = await handleMcpToolCall({
+    const result = await handleCapabilityCall({
       args: {
         capability: "uploads.update",
         input: { params: { matterId: WORKSPACE_ID, uploadId: UPLOAD_ID } },
@@ -1453,7 +2930,6 @@ describe("invoke_capability upload purpose gate", () => {
         workspaceIds: [WORKSPACE_ID],
         scopedDb: storedPurposeDb("agent_skill"),
       }),
-      toolName: "invoke_capability",
     });
     const envelope = errorEnvelope(result);
     expect(envelope.code).toBe("missing_scope");
@@ -1462,7 +2938,7 @@ describe("invoke_capability upload purpose gate", () => {
 
   test("finalizing a document upload needs the documents consent", async () => {
     const invoke = async (grantedScopes: string[]) =>
-      await handleMcpToolCall({
+      await handleCapabilityCall({
         args: {
           capability: "uploads.update",
           input: { params: { matterId: WORKSPACE_ID, uploadId: UPLOAD_ID } },
@@ -1473,15 +2949,16 @@ describe("invoke_capability upload purpose gate", () => {
           workspaceIds: [WORKSPACE_ID],
           scopedDb: storedPurposeDb("entity_create"),
         }),
-        toolName: "invoke_capability",
       });
 
     const refused = errorEnvelope(await invoke(["stella:matters_write"]));
     expect(refused.code).toBe("missing_scope");
     expect(refused.message).toContain("stella:documents_write");
     expect(
-      parseToolPayload<{ valid: boolean }>(
-        await invoke(["stella:matters_write", "stella:documents_write"]),
+      asTestRaw<{ valid: boolean }>(
+        parseToolPayload(
+          await invoke(["stella:matters_write", "stella:documents_write"]),
+        ),
       ).valid,
     ).toBe(true);
   });
@@ -1491,7 +2968,7 @@ describe("invoke_capability upload purpose gate", () => {
   // its purpose is; the handler re-derives that grant from the member role, so
   // the dispatch path is where a credential's own set is ANDed into it.
   test("a purpose the role does not grant -> permission_denied", async () => {
-    const result = await handleMcpToolCall({
+    const result = await handleCapabilityCall({
       args: {
         capability: "uploads.create",
         input: { body: skillPackBody, params: { matterId: "ws_1" } },
@@ -1502,13 +2979,12 @@ describe("invoke_capability upload purpose gate", () => {
         grantedScopes: ["stella:matters_write", "stella:skills"],
         memberRole: "intern",
       }),
-      toolName: "invoke_capability",
     });
     expect(errorEnvelope(result).code).toBe("permission_denied");
   });
 
   test("a purpose the credential set does not cover -> permission_denied", async () => {
-    const result = await handleMcpToolCall({
+    const result = await handleCapabilityCall({
       args: {
         capability: "uploads.create",
         input: { body: skillPackBody, params: { matterId: "ws_1" } },
@@ -1518,13 +2994,12 @@ describe("invoke_capability upload purpose gate", () => {
         credentialPermissions: { workspace: ["read"] },
         grantedScopes: ["stella:matters_write", "stella:skills"],
       }),
-      toolName: "invoke_capability",
     });
     expect(errorEnvelope(result).code).toBe("permission_denied");
   });
 
   test("a credential set covering the purpose admits the same call", async () => {
-    const result = await handleMcpToolCall({
+    const result = await handleCapabilityCall({
       args: {
         capability: "uploads.create",
         input: { body: skillPackBody, params: { matterId: "ws_1" } },
@@ -1537,13 +3012,14 @@ describe("invoke_capability upload purpose gate", () => {
         },
         grantedScopes: ["stella:matters_write", "stella:skills"],
       }),
-      toolName: "invoke_capability",
     });
-    expect(parseToolPayload<{ valid: boolean }>(result).valid).toBe(true);
+    expect(asTestRaw<{ valid: boolean }>(parseToolPayload(result)).valid).toBe(
+      true,
+    );
   });
 
   test("finalize spends the stored purpose's permission", async () => {
-    const result = await handleMcpToolCall({
+    const result = await handleCapabilityCall({
       args: {
         capability: "uploads.update",
         input: { params: { matterId: WORKSPACE_ID, uploadId: UPLOAD_ID } },
@@ -1555,13 +3031,12 @@ describe("invoke_capability upload purpose gate", () => {
         workspaceIds: [WORKSPACE_ID],
         scopedDb: storedPurposeDb("agent_skill"),
       }),
-      toolName: "invoke_capability",
     });
     expect(errorEnvelope(result).code).toBe("permission_denied");
   });
 
   test("abort spends it too, though it stays on the domain scope", async () => {
-    const result = await handleMcpToolCall({
+    const result = await handleCapabilityCall({
       args: {
         capability: "uploads.delete",
         confirm: true,
@@ -1574,7 +3049,6 @@ describe("invoke_capability upload purpose gate", () => {
         workspaceIds: [WORKSPACE_ID],
         scopedDb: storedPurposeDb("entity_create"),
       }),
-      toolName: "invoke_capability",
     });
     expect(errorEnvelope(result).code).toBe("permission_denied");
   });
@@ -1593,11 +3067,11 @@ describe("invoke_capability upload purpose gate", () => {
   });
 });
 
-describe("invoke_capability credential permission set", () => {
+describe("capability executor credential permission set", () => {
   test("a credential set that does not cover the capability -> permission_denied", async () => {
     // The role is owner, so the role half passes; the credential's own set does
     // not name `clause`, and authority is the AND of the two.
-    const result = await handleMcpToolCall({
+    const result = await handleCapabilityCall({
       args: {
         capability: "clauses.categories.create",
         input: { body: { name: "X" } },
@@ -1605,13 +3079,12 @@ describe("invoke_capability credential permission set", () => {
       context: createContext({
         credentialPermissions: { workspace: ["read"] },
       }),
-      toolName: "invoke_capability",
     });
     expect(errorEnvelope(result).code).toBe("permission_denied");
   });
 
   test("an action the credential set omits on a resource it names -> permission_denied", async () => {
-    const result = await handleMcpToolCall({
+    const result = await handleCapabilityCall({
       args: {
         capability: "clauses.categories.create",
         input: { body: { name: "X" } },
@@ -1619,13 +3092,12 @@ describe("invoke_capability credential permission set", () => {
       context: createContext({
         credentialPermissions: { clause: ["delete"] },
       }),
-      toolName: "invoke_capability",
     });
     expect(errorEnvelope(result).code).toBe("permission_denied");
   });
 
   test("validate_only reports the same refusal as execution would", async () => {
-    const result = await handleMcpToolCall({
+    const result = await handleCapabilityCall({
       args: {
         capability: "clauses.categories.create",
         input: { body: { name: "X" } },
@@ -1634,7 +3106,6 @@ describe("invoke_capability credential permission set", () => {
       context: createContext({
         credentialPermissions: { workspace: ["read"] },
       }),
-      toolName: "invoke_capability",
     });
     expect(errorEnvelope(result).code).toBe("permission_denied");
   });
@@ -1643,13 +3114,12 @@ describe("invoke_capability credential permission set", () => {
     // The budget bounds work that runs. Charging it before the authority check
     // would let a caller who may not perform the capability spend their window
     // on refusals.
-    await handleMcpToolCall({
+    await handleCapabilityCall({
       args: {
         capability: "clauses.categories.create",
         input: { body: { name: "X" } },
       },
       context: createContext({ memberRole: "intern" }),
-      toolName: "invoke_capability",
     });
     expect(consumeRateLimitMock).not.toHaveBeenCalled();
   });
@@ -1659,13 +3129,12 @@ describe("invoke_capability credential permission set", () => {
 
 describe("case-law ingestion status admin gate (fix-2)", () => {
   test("a non-admin member -> permission_denied (gate now in the handler)", async () => {
-    // The admin/owner gate moved from a route onBeforeHandle into the handler
+    // The admin/owner gate moved from a route-level hook into the handler
     // config (auditLog: ["read"], held only by owner/admin), so the generic
     // invoke path enforces it too.
-    const result = await handleMcpToolCall({
+    const result = await handleCapabilityCall({
       args: { capability: "case-law.ingestion.get" },
       context: createContext({ memberRole: "member" }),
-      toolName: "invoke_capability",
     });
     expect(errorEnvelope(result).code).toBe("permission_denied");
   });
@@ -1673,15 +3142,14 @@ describe("case-law ingestion status admin gate (fix-2)", () => {
 
 // --- validate_only enforces member permissions --------------------------------
 
-describe("invoke_capability validate_only permission preflight", () => {
+describe("capability executor validate_only permission preflight", () => {
   test("a role lacking the permission -> permission_denied from validate_only", async () => {
     // case-law.ingestion.get is root-kind with auditLog:["read"] (owner/
     // admin only); validate_only must mirror the wrapper's gate, not report
     // valid: true for a call that would 403 at execution.
-    const result = await handleMcpToolCall({
+    const result = await handleCapabilityCall({
       args: { capability: "case-law.ingestion.get", validate_only: true },
       context: createContext({ memberRole: "member" }),
-      toolName: "invoke_capability",
     });
     expect(errorEnvelope(result).code).toBe("permission_denied");
     // Preflight only: the handler never executed.
@@ -1689,13 +3157,14 @@ describe("invoke_capability validate_only permission preflight", () => {
   });
 
   test("a sufficient role still gets valid: true without executing", async () => {
-    const result = await handleMcpToolCall({
+    const result = await handleCapabilityCall({
       args: { capability: "case-law.ingestion.get", validate_only: true },
       context: createContext({ memberRole: "owner" }),
-      toolName: "invoke_capability",
     });
     expect(
-      parseToolPayload<{ valid: boolean; capability: string }>(result),
+      asTestRaw<{ valid: boolean; capability: string }>(
+        parseToolPayload(result),
+      ),
     ).toEqual({ valid: true, capability: "case-law.ingestion.get" });
     expect(loadOrgSettingsMock).not.toHaveBeenCalled();
   });
@@ -1703,35 +3172,102 @@ describe("invoke_capability validate_only permission preflight", () => {
 
 // --- fix-3: gateway rate limit ----------------------------------------------
 
-describe("invoke_capability rate limit (fix-3)", () => {
+describe("public-law capability service classification", () => {
+  test("public content capabilities never consume organization service budgets", () => {
+    const contentCapabilities = capabilityCatalog.filter(
+      (entry) =>
+        entry.access === "read" &&
+        entry.readClass === "public" &&
+        // Operator ingestion health is not a corpus content read.
+        entry.id !== "case-law.ingestion.get",
+    );
+    expect(contentCapabilities.map(({ id }) => id)).toContain(
+      "legislation.get",
+    );
+    for (const entry of contentCapabilities) {
+      expect(entry.consumesServices, entry.id).toBe(false);
+    }
+  });
+
+  test("model actions and public-law AI capabilities retain service classification", () => {
+    const modelActions = Object.entries(ACTION_KINDS).filter(
+      ([, definition]) =>
+        definition.serviceCredentials ===
+        ACTION_SERVICE_CREDENTIALS.organizationModel,
+    );
+    expect(modelActions.map(([kind]) => kind)).toEqual(
+      expect.arrayContaining([
+        "case-law.analysis",
+        "case-law.search-refine",
+        "case-law.search-expand",
+        "case-law.research-answers",
+      ]),
+    );
+    for (const [kind, definition] of modelActions) {
+      expect(definition.consumesServices, kind).toBe(true);
+    }
+    const aiCapabilities = capabilityCatalog.filter(
+      (entry) =>
+        entry.feature === "FEATURE_PUBLIC_LAW" &&
+        modelActions.some(([kind]) => entry.id.startsWith(`${kind}.`)),
+    );
+    expect(aiCapabilities.map(({ id }) => id)).toContain(
+      "case-law.analysis.generate",
+    );
+    for (const entry of aiCapabilities) {
+      expect(entry.consumesServices, entry.id).toBe(true);
+    }
+  });
+});
+
+describe("capability executor rate limit (fix-3)", () => {
   test("an exhausted budget -> rate_limited with a retry hint", async () => {
     consumeRateLimitMock.mockResolvedValueOnce({
       ok: false,
       retryAfterSeconds: 60,
     });
-    const result = await handleMcpToolCall({
+    const result = await handleCapabilityCall({
       args: {
         capability: "time-entries.csv.export",
         input: { params: { matterId: "ws_1" } },
       },
       context: createContext(),
-      toolName: "invoke_capability",
     });
     const error = errorEnvelope(result);
     expect(error.code).toBe("rate_limited");
     expect(error.hint).toContain("60 seconds");
+    expect(error.retryAfterMs).toBe(60_000);
     // Refused before the handler ran: the org-settings loader was not consulted.
     expect(loadOrgSettingsMock).not.toHaveBeenCalled();
   });
 
+  test("public-law content still exhausts the MCP gateway rate limit", async () => {
+    consumeRateLimitMock.mockResolvedValueOnce({
+      ok: false,
+      retryAfterSeconds: 60,
+    });
+    const result = await handleCapabilityCall({
+      args: {
+        capability: "legislation.get",
+        input: {
+          params: { documentId: "00000000-0000-4000-8000-000000000001" },
+        },
+      },
+      context: createContext(),
+    });
+    expect(errorEnvelope(result)).toMatchObject({ code: "rate_limited" });
+    expect(consumeRateLimitMock).toHaveBeenCalledWith(
+      expect.objectContaining({ capabilityId: "legislation.get" }),
+    );
+  });
+
   test("the limiter is consulted per (organization, capability)", async () => {
-    await handleMcpToolCall({
+    await handleCapabilityCall({
       args: {
         capability: "time-entries.csv.export",
         input: { params: { matterId: "ws_1" } },
       },
       context: createContext(),
-      toolName: "invoke_capability",
     });
     expect(consumeRateLimitMock).toHaveBeenCalledWith(
       expect.objectContaining({ capabilityId: "time-entries.csv.export" }),
@@ -1741,7 +3277,7 @@ describe("invoke_capability rate limit (fix-3)", () => {
 
 // --- fix-4: archived-workspace gate allows unarchive-shaped invokes ---------
 
-describe("invoke_capability archived-workspace gate (fix-4)", () => {
+describe("capability executor archived-workspace gate (fix-4)", () => {
   const archivedCtx = () =>
     createContext({
       workspaceIds: ["ws_arch"],
@@ -1751,17 +3287,18 @@ describe("invoke_capability archived-workspace gate (fix-4)", () => {
   test("an allowsArchivedWorkspace write passes the gate on an archived workspace", async () => {
     // validate_only reaches (and clears) the workspace gate without executing, so
     // this asserts the gate result independent of the unarchive DB work.
-    const result = await handleMcpToolCall({
+    const result = await handleCapabilityCall({
       args: {
         capability: "matters.unarchive",
         input: { params: { matterId: "ws_arch" } },
         validate_only: true,
       },
       context: archivedCtx(),
-      toolName: "invoke_capability",
     });
     expect(
-      parseToolPayload<{ valid: boolean; capability: string }>(result),
+      asTestRaw<{ valid: boolean; capability: string }>(
+        parseToolPayload(result),
+      ),
     ).toEqual({
       valid: true,
       capability: "matters.unarchive",
@@ -1772,7 +3309,7 @@ describe("invoke_capability archived-workspace gate (fix-4)", () => {
     // case-law.matter-links.create is a workspace write without the
     // allowsArchivedWorkspace flag, and its only body field is a UUID (so input
     // validation passes and the archived-workspace gate is what refuses it).
-    const result = await handleMcpToolCall({
+    const result = await handleCapabilityCall({
       args: {
         capability: "case-law.matter-links.create",
         input: {
@@ -1782,7 +3319,6 @@ describe("invoke_capability archived-workspace gate (fix-4)", () => {
         validate_only: true,
       },
       context: archivedCtx(),
-      toolName: "invoke_capability",
     });
     expect(errorEnvelope(result).code).toBe("not_found");
   });
@@ -1790,19 +3326,18 @@ describe("invoke_capability archived-workspace gate (fix-4)", () => {
 
 // --- fix-5: validate_only runs workspace resolution first ---------------------
 
-describe("invoke_capability validate_only ordering (fix-5)", () => {
+describe("capability executor validate_only ordering (fix-5)", () => {
   test("validate_only on a workspace capability fails when the workspace is missing", async () => {
     // time-entries.csv.export declares no params schema, so pre-fix validate_only
     // returned { valid: true } before any workspace check. Now resolution runs
     // first, so a missing workspaceId surfaces as it would on a real invoke.
-    const result = await handleMcpToolCall({
+    const result = await handleCapabilityCall({
       args: {
         capability: "time-entries.csv.export",
         input: {},
         validate_only: true,
       },
       context: createContext(),
-      toolName: "invoke_capability",
     });
     const error = errorEnvelope(result);
     expect(error.code).toBe("validation_error");
@@ -1810,17 +3345,18 @@ describe("invoke_capability validate_only ordering (fix-5)", () => {
   });
 
   test("validate_only succeeds once the workspace resolves, still without executing", async () => {
-    const result = await handleMcpToolCall({
+    const result = await handleCapabilityCall({
       args: {
         capability: "time-entries.csv.export",
         input: { params: { matterId: "ws_1" } },
         validate_only: true,
       },
       context: createContext(),
-      toolName: "invoke_capability",
     });
     expect(
-      parseToolPayload<{ valid: boolean; capability: string }>(result),
+      asTestRaw<{ valid: boolean; capability: string }>(
+        parseToolPayload(result),
+      ),
     ).toEqual({
       valid: true,
       capability: "time-entries.csv.export",
@@ -1831,12 +3367,11 @@ describe("invoke_capability validate_only ordering (fix-5)", () => {
 
 // --- fix-6: file/stream capabilities refused --------------------------------
 
-describe("invoke_capability file-response gate (fix-6)", () => {
+describe("capability executor file-response gate (fix-6)", () => {
   test("(layer a) a file-returning capability is refused pre-execution", async () => {
-    const result = await handleMcpToolCall({
+    const result = await handleCapabilityCall({
       args: { capability: "clauses.export" },
       context: createContext(),
-      toolName: "invoke_capability",
     });
     const error = errorEnvelope(result);
     expect(error.code).toBe("feature_disabled");
@@ -1848,13 +3383,12 @@ describe("invoke_capability file-response gate (fix-6)", () => {
   test("(layer a) a helper-built binary capability is refused pre-execution", async () => {
     // time-entries.pdf.export returns a Uint8Array (not a Response) via a
     // helper; the flag refuses it before dispatch.
-    const result = await handleMcpToolCall({
+    const result = await handleCapabilityCall({
       args: {
         capability: "time-entries.pdf.export",
         input: { params: { matterId: "ws_1" } },
       },
       context: createContext(),
-      toolName: "invoke_capability",
     });
     const error = errorEnvelope(result);
     expect(error.code).toBe("feature_disabled");
@@ -1866,7 +3400,6 @@ describe("invoke_capability file-response gate (fix-6)", () => {
     const mapped = mapHandlerResult({
       id: "x.y",
       result: new Response("file bytes"),
-      access: "read",
     });
     expect(mappedError(mapped).code).toBe("feature_disabled");
   });
@@ -1883,7 +3416,6 @@ describe("invoke_capability file-response gate (fix-6)", () => {
       const mapped = mapHandlerResult({
         id: "x.y",
         result: value,
-        access: "read",
       });
       expect(mappedError(mapped).code, label).toBe("feature_disabled");
     }
@@ -1893,7 +3425,6 @@ describe("invoke_capability file-response gate (fix-6)", () => {
     const mapped = mapHandlerResult({
       id: "x.y",
       result: { ok: true },
-      access: "read",
     });
     expect(mapped).toEqual({
       egress: "structured",
@@ -1902,26 +3433,48 @@ describe("invoke_capability file-response gate (fix-6)", () => {
     });
   });
 
-  test("(layer b) a WRITE success payload carries the request receipt under meta", () => {
-    const mapped = runWithRequestId("req_invoke", () =>
-      mapHandlerResult({ id: "x.y", result: { ok: true }, access: "write" }),
-    );
-    expect(mapped).toEqual({
-      egress: "structured",
-      payload: { ok: true, meta: { requestId: "req_invoke" } },
-      textFields: [],
-    });
+  test("successful capability projections exclude request receipts", () => {
+    for (const payload of [
+      { ok: true },
+      { items: [{ id: "entity_1" }], nextCursor: "next_page" },
+      { meta: { revision: 3 }, value: "rendered text" },
+      ["one", "two"],
+      "rendered text",
+      null,
+    ]) {
+      const mapped = runWithRequestId("req_invoke", () =>
+        mapHandlerResult({ id: "x.y", result: payload }),
+      );
+      expect(mapped).toEqual({
+        egress: "structured",
+        payload,
+        textFields: [],
+      });
+      expect(JSON.stringify(mapped)).not.toContain('"requestId"');
+    }
   });
 
-  test("(layer b) a READ success payload carries NO receipt (deterministic for caching)", () => {
-    const mapped = runWithRequestId("req_invoke", () =>
-      mapHandlerResult({ id: "x.y", result: { ok: true }, access: "read" }),
-    );
-    expect(mapped).toEqual({
-      egress: "structured",
-      payload: { ok: true },
-      textFields: [],
-    });
+  test("verification limit refusals preserve codes, recovery metadata and receipts", () => {
+    for (const code of Object.values(MODEL_RUN_CAP_CODES)) {
+      for (const retryable of [true, false]) {
+        const refusal = {
+          code,
+          message: "Verification run limit reached",
+          hint: "Check verification runs before starting another run.",
+          retryable,
+        };
+        const result = runWithRequestId("req_refusal", () =>
+          mapHandlerResult({
+            id: "documents.verifications.start",
+            result: new HttpStatusResponse(429, refusal),
+          }),
+        );
+        expect(mappedError(result)).toMatchObject({
+          ...refusal,
+          requestId: "req_refusal",
+        });
+      }
+    }
   });
 
   test("admission refusals preserve the shared contract and request receipt", () => {
@@ -1930,11 +3483,13 @@ describe("invoke_capability file-response gate (fix-6)", () => {
       const result = runWithRequestId("req_refusal", () =>
         mapHandlerResult({
           id: "x.y",
-          access: "write",
-          result: new ElysiaCustomStatusResponse(refusal.status, {
+          result: new HttpStatusResponse(refusal.status, {
             code,
             message: refusal.message,
             hint,
+            ...(code === "action_concurrency_busy"
+              ? { retryAfterMs: 1250 }
+              : {}),
           }),
         }),
       );
@@ -1944,6 +3499,7 @@ describe("invoke_capability file-response gate (fix-6)", () => {
           message: refusal.message,
           hint,
           retryable: refusal.retryable,
+          ...(code === "action_concurrency_busy" ? { retryAfterMs: 1250 } : {}),
           requestId: "req_refusal",
         }),
       );
@@ -1953,24 +3509,22 @@ describe("invoke_capability file-response gate (fix-6)", () => {
   test("(layer b) mapHandlerResult maps a status response onto the envelope", () => {
     const mapped = mapHandlerResult({
       id: "x.y",
-      result: new ElysiaCustomStatusResponse(404, { message: "Gone" }),
-      access: "read",
+      result: new HttpStatusResponse(404, { message: "Gone" }),
     });
     expect(mappedError(mapped).code).toBe("not_found");
   });
 });
 
-// --- file-input capabilities refused (t.File over JSON) ----------------------
+// --- file-input capabilities refused (file fields over JSON) -----------------
 
-describe("invoke_capability file-input gate", () => {
+describe("capability executor file-input gate", () => {
   test("template upload recovery names the dedicated MCP tool instead of the rejected capability", async () => {
-    const result = await handleMcpToolCall({
+    const result = await handleCapabilityCall({
       args: {
         capability: "templates.create",
         input: { body: { file: "bytes", name: "Template" } },
       },
       context: createContext(),
-      toolName: "invoke_capability",
     });
     const error = errorEnvelope(result);
     expect(error.code).toBe("feature_disabled");
@@ -1979,11 +3533,11 @@ describe("invoke_capability file-input gate", () => {
   });
 
   test("a required-file capability is refused pre-execution, naming its alternative", async () => {
-    // entities.upload's body carries a required t.File(); JSON cannot deliver a
+    // entities.upload's body carries a required file field; JSON cannot deliver a
     // File, so the gate refuses before validation/dispatch — and the hint
     // carries the presigned flow's real capability ids from the catalog, so the
     // agent gets a next call instead of a dead end.
-    const result = await handleMcpToolCall({
+    const result = await handleCapabilityCall({
       args: {
         capability: "entities.upload",
         input: {
@@ -1992,7 +3546,6 @@ describe("invoke_capability file-input gate", () => {
         },
       },
       context: createContext(),
-      toolName: "invoke_capability",
     });
     const error = errorEnvelope(result);
     expect(error.code).toBe("feature_disabled");
@@ -2003,7 +3556,7 @@ describe("invoke_capability file-input gate", () => {
   });
 
   test("validate_only is refused too (a string would falsely validate as a File)", async () => {
-    const result = await handleMcpToolCall({
+    const result = await handleCapabilityCall({
       args: {
         capability: "entities.upload",
         input: {
@@ -2013,7 +3566,6 @@ describe("invoke_capability file-input gate", () => {
         validate_only: true,
       },
       context: createContext(),
-      toolName: "invoke_capability",
     });
     expect(errorEnvelope(result).code).toBe("feature_disabled");
   });
@@ -2023,7 +3575,7 @@ describe("invoke_capability file-input gate", () => {
     // sources; only the first needs bytes. The old boolean dropped the whole
     // capability from every client — this asserts the JSON modes now reach
     // dispatch (the handler runs; whatever it returns is beyond this gate).
-    const result = await handleMcpToolCall({
+    const result = await handleCapabilityCall({
       args: {
         capability: "templates.prefill",
         input: {
@@ -2033,18 +3585,19 @@ describe("invoke_capability file-input gate", () => {
         validate_only: true,
       },
       context: createContext({ grantedScopes: ["stella:templates"] }),
-      toolName: "invoke_capability",
     });
     // Reached validation: the input is accepted, not refused by a transport
     // gate. The old boolean returned `feature_disabled` here.
-    expect(parseToolPayload<{ valid: boolean }>(result).valid).toBe(true);
+    expect(asTestRaw<{ valid: boolean }>(parseToolPayload(result)).valid).toBe(
+      true,
+    );
   });
 
   test("the withheld file field is refused, not silently dropped", async () => {
     // A caller who sent bytes-as-a-string must not get a success computed from
     // the other sources: the string would pass `format: "binary"` validation
     // and reach a handler expecting a `File`.
-    const result = await handleMcpToolCall({
+    const result = await handleCapabilityCall({
       args: {
         capability: "templates.prefill",
         input: {
@@ -2053,7 +3606,6 @@ describe("invoke_capability file-input gate", () => {
         },
       },
       context: createContext({ grantedScopes: ["stella:templates"] }),
-      toolName: "invoke_capability",
     });
     const error = errorEnvelope(result);
     expect(error.code).toBe("validation_error");
@@ -2066,9 +3618,9 @@ describe("invoke_capability file-input gate", () => {
       capability: "entities.upload",
     });
     expect(
-      parseToolPayload<{
+      asTestRaw<{
         transport: { type: string; invocable: boolean; fileField: string };
-      }>(flagged).transport,
+      }>(parseToolPayload(flagged)).transport,
     ).toMatchObject({
       type: "file-input",
       invocable: false,
@@ -2079,13 +3631,13 @@ describe("invoke_capability file-input gate", () => {
       capability: "templates.prefill",
     });
     expect(
-      parseToolPayload<{
+      asTestRaw<{
         transport: {
           invocable: boolean;
           fileField: string;
           fileFieldRequired: boolean;
         };
-      }>(fileless).transport,
+      }>(parseToolPayload(fileless)).transport,
     ).toMatchObject({
       invocable: true,
       fileField: "file",
@@ -2096,8 +3648,9 @@ describe("invoke_capability file-input gate", () => {
       capability: "time-entries.create",
     });
     expect(
-      parseToolPayload<{ transport: { type: string; fileField: null } }>(plain)
-        .transport,
+      asTestRaw<{ transport: { type: string; fileField: null } }>(
+        parseToolPayload(plain),
+      ).transport,
     ).toMatchObject({ type: "json", fileField: null });
   });
 
@@ -2115,7 +3668,7 @@ describe("invoke_capability file-input gate", () => {
         )
         .map((e) => e.id),
     );
-    // The snapshot is compact JSON, so a `t.File()` field is literally
+    // The snapshot is compact JSON, so a file field is literally
     // `"format":"binary"`. Entries whose schema exceeded the byte cap carry no
     // schema here; the exporter checks those against the LIVE schema, which is
     // why that check cannot live only in this test.
@@ -2156,18 +3709,17 @@ const mappedError = (
 
 // --- meta-tool argument shape validation (fail-closed dry runs) ---------------
 
-describe("invoke_capability argument shape validation", () => {
+describe("capability executor argument shape validation", () => {
   test('validate_only: "true" (string) -> validation_error, capability NOT executed', async () => {
     // The transport does not enforce the advertised JSON Schema; a mistyped
     // dry-run flag silently read as false would EXECUTE the capability.
-    const result = await handleMcpToolCall({
+    const result = await handleCapabilityCall({
       args: {
         capability: "clauses.categories.create",
         input: { body: { name: "Dry run intended" } },
         validate_only: "true",
       },
       context: createContext(),
-      toolName: "invoke_capability",
     });
     const error = errorEnvelope(result);
     expect(error.code).toBe("validation_error");
@@ -2178,10 +3730,9 @@ describe("invoke_capability argument shape validation", () => {
   });
 
   test('confirm: "yes" (string) -> validation_error, not confirmation_required', async () => {
-    const result = await handleMcpToolCall({
+    const result = await handleCapabilityCall({
       args: { capability: "clauses.categories.delete", confirm: "yes" },
       context: createContext(),
-      toolName: "invoke_capability",
     });
     const error = errorEnvelope(result);
     expect(error.code).toBe("validation_error");
@@ -2190,10 +3741,9 @@ describe("invoke_capability argument shape validation", () => {
   });
 
   test("non-object input -> validation_error", async () => {
-    const result = await handleMcpToolCall({
+    const result = await handleCapabilityCall({
       args: { capability: "clauses.categories.create", input: "not-an-object" },
       context: createContext(),
-      toolName: "invoke_capability",
     });
     const error = errorEnvelope(result);
     expect(error.code).toBe("validation_error");
@@ -2202,13 +3752,12 @@ describe("invoke_capability argument shape validation", () => {
   });
 
   test("non-object input parts -> validation_error naming each part", async () => {
-    const result = await handleMcpToolCall({
+    const result = await handleCapabilityCall({
       args: {
         capability: "clauses.categories.create",
         input: { body: "text body", params: 7 },
       },
       context: createContext(),
-      toolName: "invoke_capability",
     });
     const error = errorEnvelope(result);
     expect(error.code).toBe("validation_error");
@@ -2220,7 +3769,7 @@ describe("invoke_capability argument shape validation", () => {
   test("sibling meta-tools normalize declared numbers but not ordinary strings", async () => {
     // list_capabilities shares the declared numeric normalization boundary.
     const list = await call("list_capabilities", { limit: "5" });
-    expect(parseToolPayload<{ limit: number }>(list).limit).toBe(5);
+    expect(asTestRaw<{ limit: number }>(parseToolPayload(list)).limit).toBe(5);
     // Ordinary strings remain untouched: a numeric capability id is invalid.
     const described = await call("describe_capability", { capability: 42 });
     expect(errorEnvelope(described).code).toBe("validation_error");
@@ -2229,10 +3778,9 @@ describe("invoke_capability argument shape validation", () => {
   test("an input part sent at the top level -> validation_error naming it", async () => {
     // Ignoring a misplaced `query` ran the capability with NO input: an agent
     // asking for one audit entry got the whole default page.
-    const result = await handleMcpToolCall({
+    const result = await handleCapabilityCall({
       args: { capability: "audit-logs.list", query: { limit: 1 } },
       context: createContext(),
-      toolName: "invoke_capability",
     });
     const error = errorEnvelope(result);
     expect(error.code).toBe("validation_error");
@@ -2248,10 +3796,9 @@ describe("invoke_capability argument shape validation", () => {
   test("an unknown key inside input -> validation_error naming it", async () => {
     // `readInvokeInput` keeps only body/params/query; a misspelt part would
     // otherwise run the capability without the filter the agent asked for.
-    const result = await handleMcpToolCall({
+    const result = await handleCapabilityCall({
       args: { capability: "audit-logs.list", input: { queries: { limit: 1 } } },
       context: createContext(),
-      toolName: "invoke_capability",
     });
     const error = errorEnvelope(result);
     expect(error.code).toBe("validation_error");
@@ -2263,7 +3810,7 @@ describe("invoke_capability argument shape validation", () => {
   });
 
   test("every unknown top-level argument is named (no silent drop)", async () => {
-    const result = await handleMcpToolCall({
+    const result = await handleCapabilityCall({
       args: {
         capability: "contacts.list",
         body: { q: "acme" },
@@ -2271,7 +3818,6 @@ describe("invoke_capability argument shape validation", () => {
         validateOnly: true,
       },
       context: createContext(),
-      toolName: "invoke_capability",
     });
     const error = errorEnvelope(result);
     expect(error.code).toBe("validation_error");
@@ -2289,7 +3835,7 @@ describe("invoke_capability argument shape validation", () => {
 
 // --- advertised schema == enforced schema ------------------------------------
 
-describe("invoke_capability enforces the advertised input schema", () => {
+describe("capability executor enforces the advertised input schema", () => {
   // contacts.list advertises a bounded `query.limit`; describe_capability and
   // the invoke gate render it from the same projection, so the bound an agent
   // reads is the bound it hits.
@@ -2299,9 +3845,9 @@ describe("invoke_capability enforces the advertised input schema", () => {
     const described = await call("describe_capability", {
       capability: CAPABILITY,
     });
-    const payload = parseToolPayload<{
+    const payload = asTestRaw<{
       inputSchema: { query?: { properties?: Record<string, unknown> } };
-    }>(described);
+    }>(parseToolPayload(described));
     const limit = payload.inputSchema.query?.properties?.["limit"];
     if (typeof limit !== "object" || limit === null) {
       throw new Error("Expected contacts.list to advertise query.limit");
@@ -2309,9 +3855,10 @@ describe("invoke_capability enforces the advertised input schema", () => {
     return asTestRaw<Record<string, unknown>>(limit);
   };
 
-  test("describe renders a bounded integer, not a coercion union", async () => {
-    // Elysia's t.Integer compiles to a string|integer union with the bounds
-    // hoisted above it; that shape is unreadable and unenforceable.
+  test("describe renders the bounded integer a query string carries", async () => {
+    // The route reads the limit from a query string (`numberFromString`); an
+    // agent is shown the number that string carries, with its bounds, never the
+    // decimal-string pattern the wire schema checks.
     expect(await advertisedLimit()).toEqual({
       type: "integer",
       minimum: 1,
@@ -2321,14 +3868,13 @@ describe("invoke_capability enforces the advertised input schema", () => {
 
   test("a value above the advertised maximum is refused, naming the path", async () => {
     const maximum = (await advertisedLimit())["maximum"];
-    const result = await handleMcpToolCall({
+    const result = await handleCapabilityCall({
       args: {
         capability: CAPABILITY,
         input: { query: { limit: Number(maximum) + 1 } },
         validate_only: true,
       },
       context: createContext(),
-      toolName: "invoke_capability",
     });
     const error = errorEnvelope(result);
     expect(error.code).toBe("validation_error");
@@ -2338,25 +3884,26 @@ describe("invoke_capability enforces the advertised input schema", () => {
 
   test("the advertised maximum itself validates, string form included", async () => {
     const maximum = Number((await advertisedLimit())["maximum"]);
-    // The string form is what a REST caller sends; flattening the coercion
-    // union must not cost the conversion the union was there for.
+    // The string form is what a REST caller sends; a number an agent sends is
+    // written as that same string before the route's own schema reads it.
     const results = await Promise.all(
       [maximum, String(maximum)].map(
         async (limit) =>
-          await handleMcpToolCall({
+          await handleCapabilityCall({
             args: {
               capability: CAPABILITY,
               input: { query: { limit } },
               validate_only: true,
             },
             context: createContext(),
-            toolName: "invoke_capability",
           }),
       ),
     );
     for (const result of results) {
       expect(
-        parseToolPayload<{ valid: boolean; capability: string }>(result),
+        asTestRaw<{ valid: boolean; capability: string }>(
+          parseToolPayload(result),
+        ),
       ).toEqual({ valid: true, capability: CAPABILITY });
     }
   });
@@ -2364,9 +3911,9 @@ describe("invoke_capability enforces the advertised input schema", () => {
 
 // --- Shared agent-boundary input normalization --------------------------------
 
-describe("invoke_capability input normalization", () => {
-  test("unknown keys removed by the REST cleaner are rejected for agents", async () => {
-    const result = await handleMcpToolCall({
+describe("capability executor input normalization", () => {
+  test("unknown keys the route schema drops are rejected for agents", async () => {
+    const result = await handleCapabilityCall({
       args: {
         capability: "templates.lookup-formats.create",
         input: {
@@ -2374,13 +3921,12 @@ describe("invoke_capability input normalization", () => {
             registry: "ares",
             name: "Company number",
             format: "{value}",
-            unknownExtra: "would fail additionalProperties:false without Clean",
+            unknownExtra: "dropped by the route schema at REST",
           },
         },
         validate_only: true,
       },
       context: createContext({ grantedScopes: ["stella:templates"] }),
-      toolName: "invoke_capability",
     });
     expect(errorEnvelope(result)).toMatchObject({
       code: "validation_error",
@@ -2394,17 +3940,18 @@ describe("invoke_capability input normalization", () => {
   });
 
   test("normalizes a declared date before strict capability validation", async () => {
-    const result = await handleMcpToolCall({
+    const result = await handleCapabilityCall({
       args: {
         capability: "work-obligations.queues.list",
         input: { query: { asOf: "1. 10. 2026" } },
         validate_only: true,
       },
       context: createContext(),
-      toolName: "invoke_capability",
     });
     expect(
-      parseToolPayload<{ valid: boolean; capability: string }>(result),
+      asTestRaw<{ valid: boolean; capability: string }>(
+        parseToolPayload(result),
+      ),
     ).toEqual({
       valid: true,
       capability: "work-obligations.queues.list",
@@ -2412,14 +3959,13 @@ describe("invoke_capability input normalization", () => {
   });
 
   test("returns a field-level clarification for an ambiguous date", async () => {
-    const result = await handleMcpToolCall({
+    const result = await handleCapabilityCall({
       args: {
         capability: "work-obligations.queues.list",
         input: { query: { asOf: "01/02/2026" } },
         validate_only: true,
       },
       context: createContext(),
-      toolName: "invoke_capability",
     });
     expect(errorEnvelope(result)).toMatchObject({
       code: "validation_error",
@@ -2434,32 +3980,31 @@ describe("invoke_capability input normalization", () => {
   });
 
   test("workspaceId still resolves when the config params schema omits it", async () => {
-    // The route macro owns workspaceId at REST; Clean must not break the
-    // resolution for configs that do not declare it (raw-params read).
-    const result = await handleMcpToolCall({
+    // A workspace route reads workspaceId from its path before its params
+    // schema runs; reporting undeclared params must not break the resolution
+    // for configs that do not declare it (raw-params read).
+    const result = await handleCapabilityCall({
       args: {
         capability: "time-entries.csv.export",
         input: { params: { matterId: "ws_1" } },
       },
       context: createContext(),
-      toolName: "invoke_capability",
     });
-    expect(parseToolPayload<string>(result)).toContain("Date,");
+    expect(asTestRaw<string>(parseToolPayload(result))).toContain("Date,");
   });
 });
 
 // --- deployment feature gates -------------------------------------------------
 
-describe("invoke_capability deployment feature gate", () => {
+describe("capability executor deployment feature gate", () => {
   test("a gated-off capability is refused on invoke with feature_disabled", async () => {
     disabledFeatures.add("FEATURE_TIME_BILLING");
-    const result = await handleMcpToolCall({
+    const result = await handleCapabilityCall({
       args: {
         capability: "time-entries.csv.export",
         input: { params: { matterId: "ws_1" } },
       },
       context: createContext(),
-      toolName: "invoke_capability",
     });
     const error = errorEnvelope(result);
     expect(error.code).toBe("feature_disabled");
@@ -2469,14 +4014,13 @@ describe("invoke_capability deployment feature gate", () => {
 
   test("validate_only is refused too (the gate runs before everything)", async () => {
     disabledFeatures.add("FEATURE_TIME_BILLING");
-    const result = await handleMcpToolCall({
+    const result = await handleCapabilityCall({
       args: {
         capability: "time-entries.csv.export",
         input: { params: { matterId: "ws_1" } },
         validate_only: true,
       },
       context: createContext(),
-      toolName: "invoke_capability",
     });
     expect(errorEnvelope(result).code).toBe("feature_disabled");
   });
@@ -2495,23 +4039,24 @@ describe("invoke_capability deployment feature gate", () => {
       domain: "time-entries",
       limit: 50,
     });
-    const payload = parseToolPayload<{ items: { id: string }[] }>(result);
+    const payload = asTestRaw<{ items: { id: string }[] }>(
+      parseToolPayload(result),
+    );
     expect(payload.items).toHaveLength(0);
   });
 
   test("the same capability works again once the flag is on", async () => {
-    const result = await handleMcpToolCall({
+    const result = await handleCapabilityCall({
       args: {
         capability: "time-entries.csv.export",
         input: { params: { matterId: "ws_1" } },
       },
       context: createContext(),
-      toolName: "invoke_capability",
     });
-    expect(parseToolPayload<string>(result)).toContain("Date,");
+    expect(asTestRaw<string>(parseToolPayload(result))).toContain("Date,");
   });
 
-  test("the attested omission is exactly the set list_capabilities hides", async () => {
+  test("discovery omits deployment-disabled and ungranted verification capabilities", async () => {
     disabledFeatures.add("FEATURE_TIME_BILLING");
     disabledFeatures.add("FEATURE_USAGE");
     const listed = new Set<string>();
@@ -2521,11 +4066,13 @@ describe("invoke_capability deployment feature gate", () => {
     };
     let cursor: string | null = null;
     do {
-      const page: CapabilityPage = parseToolPayload(
-        await call("list_capabilities", {
-          limit: 50,
-          ...(cursor === null ? {} : { cursor }),
-        }),
+      const page: CapabilityPage = asTestRaw<CapabilityPage>(
+        parseToolPayload(
+          await call("list_capabilities", {
+            limit: 50,
+            ...(cursor === null ? {} : { cursor }),
+          }),
+        ),
       );
       for (const item of page.items) {
         listed.add(item.id);
@@ -2538,10 +4085,30 @@ describe("invoke_capability deployment feature gate", () => {
       .filter((id) => !listed.has(id))
       .toSorted();
     expect(hidden).toContain("usage.entitlement.get");
+    const context = createContext();
+    const disabledIds = await featureOmittedCapabilityIds(
+      (feature) => feature === undefined || !disabledFeatures.has(feature),
+      context,
+    );
+    const snapshot = context.featureAccessSnapshot;
+    if (snapshot === undefined) {
+      throw new Error("Expected caller feature admission fixture");
+    }
+    const ungrantedIds = capabilityCatalog
+      .filter(
+        (entry) =>
+          entry.featureAccess === "required" &&
+          !isFeatureEnabled(snapshot, entry.featureId, context),
+      )
+      .map(({ id }) => id);
+    // Account capabilities require their declared consent, which this caller lacks.
+    const accountConsentIds = capabilityCatalog
+      .filter((entry) => entry.accountScope !== undefined)
+      .map(({ id }) => id);
     expect(
-      await featureOmittedCapabilityIds(
-        (feature) => feature === undefined || !disabledFeatures.has(feature),
-      ),
+      [
+        ...new Set([...disabledIds, ...ungrantedIds, ...accountConsentIds]),
+      ].toSorted(),
     ).toEqual(hidden);
   });
 
@@ -2549,7 +4116,9 @@ describe("invoke_capability deployment feature gate", () => {
     const result = await call("describe_capability", {
       capability: "time-entries.csv.export",
     });
-    const payload = parseToolPayload<{ feature: string | null }>(result);
+    const payload = asTestRaw<{ feature: string | null }>(
+      parseToolPayload(result),
+    );
     expect(payload.feature).toBe("FEATURE_TIME_BILLING");
   });
 });
@@ -2560,10 +4129,9 @@ describe("status-to-envelope mapping", () => {
   test("a handler 409 maps to conflict, preserving the handler's message", () => {
     const mapped = mapHandlerResult({
       id: "case-law.matter-links.create",
-      result: new ElysiaCustomStatusResponse(409, {
+      result: new HttpStatusResponse(409, {
         message: "Decision already linked to this matter",
       }),
-      access: "write",
     });
     const error = mappedError(mapped);
     expect(error.code).toBe("conflict");
@@ -2573,10 +4141,9 @@ describe("status-to-envelope mapping", () => {
   test("a handler 422 maps to validation_error, preserving the message", () => {
     const mapped = mapHandlerResult({
       id: "x.y",
-      result: new ElysiaCustomStatusResponse(422, {
+      result: new HttpStatusResponse(422, {
         message: "dateFrom must precede dateTo",
       }),
-      access: "read",
     });
     const error = mappedError(mapped);
     expect(error.code).toBe("validation_error");
@@ -2586,8 +4153,7 @@ describe("status-to-envelope mapping", () => {
   test("a handler 401 maps to permission_denied", () => {
     const mapped = mapHandlerResult({
       id: "x.y",
-      result: new ElysiaCustomStatusResponse(401, { message: "Unauthorized" }),
-      access: "read",
+      result: new HttpStatusResponse(401, { message: "Unauthorized" }),
     });
     expect(mappedError(mapped).code).toBe("permission_denied");
   });
@@ -2595,10 +4161,9 @@ describe("status-to-envelope mapping", () => {
   test("a 5xx stays internal_error with a generic message (no leak)", () => {
     const mapped = mapHandlerResult({
       id: "x.y",
-      result: new ElysiaCustomStatusResponse(502, {
+      result: new HttpStatusResponse(502, {
         message: "upstream gotenberg at 10.0.3.7 refused",
       }),
-      access: "read",
     });
     const error = mappedError(mapped);
     expect(error.code).toBe("internal_error");
@@ -2664,22 +4229,27 @@ describe("feature access discovery guard: real capability catalog", () => {
     async (userId, organizationId) => {
       const context = fixtureContext(userId, organizationId);
       const list = await handleMcpToolCall({
+        mode: "advanced",
         toolName: "list_capabilities",
         args: { limit: 50 },
         context,
       });
-      expect(parseToolPayload<{ items: unknown[] }>(list).items).toHaveLength(
-        0,
-      );
-      for (const { id } of capabilityCatalog) {
+      const listedIds = asTestRaw<{ items: { id: string }[] }>(
+        parseToolPayload(list),
+      ).items.map((item) => item.id);
+      for (const { id, featureAccess } of capabilityCatalog) {
+        if (featureAccess === "conditional") {
+          continue;
+        }
+        expect(listedIds).not.toContain(id);
         const described = await handleMcpToolCall({
+          mode: "advanced",
           toolName: "describe_capability",
           args: { capability: id },
           context,
         });
         expect(errorEnvelope(described).code, id).toBe("not_found");
-        const invoked = await handleMcpToolCall({
-          toolName: "invoke_capability",
+        const invoked = await handleCapabilityCall({
           args: { capability: id, validate_only: true },
           context,
         });
@@ -2687,6 +4257,7 @@ describe("feature access discovery guard: real capability catalog", () => {
       }
       expect(loadOrgSettingsMock).not.toHaveBeenCalled();
       const typo = await handleMcpToolCall({
+        mode: "advanced",
         toolName: "describe_capability",
         args: { capability: "time-entries.creat" },
         context,
@@ -2697,19 +4268,21 @@ describe("feature access discovery guard: real capability catalog", () => {
   test("caller grant permits real catalog and live schema discovery", async () => {
     const context = fixtureContext("user_1", "org_1");
     const list = await handleMcpToolCall({
+      mode: "advanced",
       toolName: "list_capabilities",
       args: { limit: 50 },
       context,
     });
     expect(
-      parseToolPayload<{ items: unknown[] }>(list).items.length,
+      asTestRaw<{ items: unknown[] }>(parseToolPayload(list)).items.length,
     ).toBeGreaterThan(0);
     const described = await handleMcpToolCall({
+      mode: "advanced",
       toolName: "describe_capability",
       args: { capability: "time-entries.create" },
       context,
     });
-    expect(parseToolPayload<{ id: string }>(described).id).toBe(
+    expect(asTestRaw<{ id: string }>(parseToolPayload(described)).id).toBe(
       "time-entries.create",
     );
   });
@@ -2740,6 +4313,19 @@ test.each(["default-deny", "granted", "colleague"] as const)(
       organizationId,
       userId,
       decisions: new Map([
+        [
+          "time-billing",
+          decideFeatureAccess({
+            registry: FEATURE_REGISTRY,
+            grants: {},
+            featureId: "time-billing",
+            organizationId,
+            userId,
+            membership: true,
+            user: { email: "standard@example.test", emailVerified: true },
+            enrolments: [{ featureId: "time-billing", organizationId, userId }],
+          }),
+        ],
         [
           featureId,
           decideFeatureAccess({
@@ -2779,6 +4365,7 @@ test.each(["default-deny", "granted", "colleague"] as const)(
       configurable: true,
       value: {
         type: "conditional",
+        decision: "when-used",
         featureId,
         usesFeature: async ({ query }: { query: unknown }) => {
           checkedQueries.push(query);
@@ -2789,8 +4376,7 @@ test.each(["default-deny", "granted", "colleague"] as const)(
     });
     try {
       for (const validate_only of [true, false]) {
-        const result = await handleMcpToolCall({
-          toolName: "invoke_capability",
+        const result = await handleCapabilityCall({
           context,
           args: {
             capability: "time-entries.csv.export",
@@ -2805,7 +4391,9 @@ test.each(["default-deny", "granted", "colleague"] as const)(
           expect(result.isError).not.toBe(true);
           if (validate_only) {
             expect(
-              parseToolPayload<{ valid: boolean; capability: string }>(result),
+              asTestRaw<{ valid: boolean; capability: string }>(
+                parseToolPayload(result),
+              ),
             ).toEqual({
               valid: true,
               capability: "time-entries.csv.export",
@@ -2830,8 +4418,7 @@ test.each(["default-deny", "granted", "colleague"] as const)(
               { dateFrom: "2026-10-02", status: "approved" },
             ],
       );
-      const ordinary = await handleMcpToolCall({
-        toolName: "invoke_capability",
+      const ordinary = await handleCapabilityCall({
         context,
         args: {
           capability: "time-entries.csv.export",
@@ -2858,3 +4445,596 @@ test.each(["default-deny", "granted", "colleague"] as const)(
     }
   },
 );
+
+for (const grants of [
+  [],
+  [LEGAL_LISTS_FEATURE_ID],
+  [LEGAL_LISTS_FEATURE_ID, LIST_VERIFICATION_FEATURE_ID],
+]) {
+  test(`real list catalogue discovery with ${grants.length} grants`, async () => {
+    const context = createContext();
+    const grantMap = Object.fromEntries(
+      grants.map((id) => [
+        id,
+        [{ type: "organization" as const, organizationId: "org_1" }],
+      ]),
+    );
+    context.featureAccessSnapshot = createFeatureAccessSnapshot({
+      organizationId: "org_1",
+      userId: "user_1",
+      decisions: new Map(
+        Object.keys(FEATURE_REGISTRY).map((featureId) => [
+          featureId,
+          decideFeatureAccess({
+            registry: FEATURE_REGISTRY,
+            grants: grantMap,
+            featureId,
+            organizationId: "org_1",
+            userId: "user_1",
+            membership: true,
+            user: { email: "standard@example.test", emailVerified: true },
+          }),
+        ]),
+      ),
+    });
+    const entries = capabilityCatalog.filter((entry) =>
+      entry.id.startsWith("lists."),
+    );
+    expect(entries.length).toBeGreaterThan(0);
+    const list = await handleMcpToolCall({
+      mode: "advanced",
+      toolName: "list_capabilities",
+      args: { domain: "lists", limit: MAX_LIST_LIMIT },
+      context,
+    });
+    const listed = asTestRaw<{ items: { id: string }[] }>(
+      parseToolPayload(list),
+    ).items.map((item) => item.id);
+    for (const entry of entries) {
+      expect(entry.featureAccess).toBe("required");
+      expect(entry.featureId).toBeDefined();
+      const enabled =
+        entry.featureId === LEGAL_LISTS_FEATURE_ID
+          ? grants.length > 0
+          : grants.length === 2;
+      expect(listed.includes(entry.id)).toBe(enabled);
+      const schema = await handleMcpToolCall({
+        mode: "advanced",
+        toolName: "describe_capability",
+        args: { capability: entry.id },
+        context,
+      });
+      if (enabled) {
+        expect(asTestRaw<{ id: string }>(parseToolPayload(schema)).id).toBe(
+          entry.id,
+        );
+        continue;
+      }
+      // A hidden capability answers exactly like an unknown id, and its hint
+      // never names another hidden capability.
+      const hidden = entries
+        .filter((candidate) => !listed.includes(candidate.id))
+        .map((candidate) => candidate.id);
+      const expectUnknownId = (result: ToolCallResult) => {
+        const envelope = errorEnvelope(result);
+        expect(envelope).toMatchObject({
+          code: "not_found",
+          message: `No capability with id "${entry.id}"`,
+        });
+        for (const id of hidden) {
+          expect(JSON.stringify(envelope)).not.toContain(`\`${id}\``);
+        }
+      };
+      expectUnknownId(schema);
+      for (const toolName of Object.values(MCP_CAPABILITY_EXECUTORS)) {
+        for (const validate_only of [false, true]) {
+          expectUnknownId(
+            await handleMcpToolCall({
+              mode: "advanced",
+              toolName,
+              args: { capability: entry.id, validate_only },
+              context,
+            }),
+          );
+        }
+      }
+    }
+  });
+}
+
+describe("capability executor access isolation", () => {
+  const credential = admittedClientCredential;
+  const enabledContext = () => {
+    const context = createContext({
+      credential,
+      grantedScopes: [...MCP_OAUTH_SCOPES],
+    });
+    const grants = Object.fromEntries(
+      Object.keys(FEATURE_REGISTRY).map((featureId) => [
+        featureId,
+        [
+          {
+            type: "organization" as const,
+            organizationId: context.organizationId,
+          },
+        ],
+      ]),
+    );
+    const enrolments = Object.keys(FEATURE_REGISTRY).map((featureId) => ({
+      featureId,
+      organizationId: context.organizationId,
+      userId: context.userId,
+    }));
+    const enabled = {
+      ...context,
+      featureAccessSnapshot: createFeatureAccessSnapshot({
+        organizationId: context.organizationId,
+        userId: context.userId,
+        decisions: new Map(
+          Object.keys(FEATURE_REGISTRY).map((featureId) => [
+            featureId,
+            decideFeatureAccess({
+              registry: FEATURE_REGISTRY,
+              grants,
+              featureId,
+              organizationId: context.organizationId,
+              userId: context.userId,
+              user: { email: "standard@example.test", emailVerified: true },
+              membership: true,
+              enrolments,
+            }),
+          ]),
+        ),
+      }),
+    };
+    for (const featureId of Object.keys(FEATURE_REGISTRY)) {
+      expect(
+        isFeatureEnabled(enabled.featureAccessSnapshot, featureId, enabled),
+        featureId,
+      ).toBe(true);
+    }
+    return enabled;
+  };
+
+  test("every catalog capability is refused by the opposite executor before dispatch", async () => {
+    const context = enabledContext();
+    const classes = new Set<string>();
+    for (const entry of capabilityCatalog) {
+      classes.add(entry.access);
+      const toolName =
+        entry.access === "read"
+          ? MCP_CAPABILITY_EXECUTORS.write
+          : MCP_CAPABILITY_EXECUTORS.read;
+      const result = await handleMcpToolCall({
+        mode: "advanced",
+        args: { capability: entry.id, validate_only: true, input: {} },
+        context,
+        toolName,
+      });
+      const error = errorEnvelope(result);
+      expect(error.code, entry.id).toBe("validation_error");
+      expect(error.hint, entry.id).toContain(
+        MCP_CAPABILITY_EXECUTORS[entry.access],
+      );
+    }
+    expect([...classes].toSorted()).toEqual(["read", "write"]);
+    expect(consumeRateLimitMock).not.toHaveBeenCalled();
+    expect(analytics.exceptions()).toEqual([]);
+  });
+
+  test("the retired mixed executor is absent from every exposed audience", async () => {
+    for (const mode of [
+      "advanced",
+      "default",
+      "documents",
+      "anonymized",
+      "law",
+    ] as const) {
+      const definitions = listStaticMcpToolDefinitions(mode);
+      expect(definitions.some(({ name }) => name === "invoke_capability")).toBe(
+        false,
+      );
+      for (const definition of definitions) {
+        if (definition.access === "write") {
+          expect(definition.readClass, definition.name).toBeUndefined();
+        }
+      }
+    }
+    const result = await call("invoke_capability", {
+      capability: "matters.list",
+    });
+    expect(errorEnvelope(result).code).toBe("unknown_tool");
+  });
+
+  test("read executor rejects write-only confirmation arguments", async () => {
+    const result = await call(MCP_CAPABILITY_EXECUTORS.read, {
+      capability: "matters.list",
+      confirm: true,
+    });
+    expect(errorEnvelope(result).code).toBe("validation_error");
+  });
+});
+
+describe("personal search history capabilities", () => {
+  test("keeps personal history discovery and invocation out of AI chat", () => {
+    for (const tool of [
+      "list_capabilities",
+      "describe_capability",
+      MCP_CAPABILITY_EXECUTORS.read,
+    ] as const) {
+      expect(READ_TOOL_REF_FIELD_MAP[tool].chatProjectable).toBe(false);
+    }
+    expect(
+      WRITE_TOOL_REF_FIELD_MAP[MCP_CAPABILITY_EXECUTORS.write].chatProjectable,
+    ).toBe(false);
+  });
+  test("describes caller-owned history and required mutation scope preconditions", async () => {
+    for (const capability of [
+      "search-history.list",
+      "search-history.delete",
+      "search-history.clear",
+    ]) {
+      const result = await call("describe_capability", { capability });
+      const payload = asTestRaw<{
+        id: string;
+        handlerKind: string;
+        inputSchema: unknown;
+      }>(parseToolPayload(result));
+      expect(payload.id).toBe(capability);
+      expect(payload.handlerKind).toBe("root");
+      if (capability === "search-history.list") {
+        expect(payload.inputSchema).toHaveProperty("query.properties.kind");
+        expect(payload.inputSchema).not.toHaveProperty(
+          "query.properties.kind.default",
+        );
+      }
+      for (const part of ["query", "params", "body"]) {
+        expect(payload.inputSchema).not.toHaveProperty(
+          `${part}.properties.organizationId`,
+        );
+        expect(payload.inputSchema).not.toHaveProperty(
+          `${part}.properties.userId`,
+        );
+      }
+      if (capability !== "search-history.list") {
+        expect(payload.inputSchema).toHaveProperty(
+          "query.properties.expectedOrganizationId",
+        );
+        expect(payload.inputSchema).toHaveProperty(
+          "query.properties.expectedUserId",
+        );
+        expect(payload.inputSchema).toHaveProperty("query.required", [
+          "expectedOrganizationId",
+          "expectedUserId",
+        ]);
+      }
+    }
+  });
+
+  test("lists own history without a kind filter when kind is omitted", async () => {
+    const queries: ReturnType<PgDialect["sqlToQuery"]>[] = [];
+    const database = createScopedDbMock({
+      select: (projection: SelectedFields) => ({
+        from: (table: PgTable) => {
+          const query = new QueryBuilder().select(projection).from(table);
+          return {
+            where: (condition: SQL) => {
+              const scopedQuery = query.where(condition);
+              return Object.assign(scopedQuery, {
+                orderBy: () => ({
+                  limit: async () => {
+                    queries.push(scopedQuery.toSQL());
+                    return [];
+                  },
+                }),
+              });
+            },
+          };
+        },
+      }),
+    });
+    const result = await handleCapabilityCall({
+      args: {
+        capability: "search-history.list",
+        input: { query: { limit: 20 } },
+      },
+      context: createContext(database),
+    });
+    const payload = parseToolPayload(result);
+    expect(payload).toMatchObject({
+      items: [],
+      nextCursor: null,
+      scope: { organizationId: "org_1", userId: "user_1" },
+    });
+    expect(queries).toHaveLength(1);
+    expect(queries.at(0)?.sql).not.toMatch(/"kind"\s*=\s*\$/u);
+    expect(queries.at(0)?.sql).toContain('"organization_id"');
+    expect(queries.at(0)?.sql).toContain('"user_id"');
+    expect(queries.at(0)?.params).toEqual(["org_1", "user_1"]);
+  });
+
+  test("deletes and clears own history through the shared handlers", async () => {
+    const entryId = "a1111111-1111-4111-8111-111111111111";
+    for (const capability of [
+      "search-history.delete",
+      "search-history.clear",
+    ]) {
+      const recordedEvents: (typeof auditLogs.$inferInsert)[] = [];
+      const ownerRows: (typeof searchHistoryOwners.$inferInsert)[] = [];
+      const tombstoneRows: (typeof searchHistoryTombstones.$inferInsert)[] = [];
+      const ownerUpdates: Partial<typeof searchHistoryOwners.$inferInsert>[] =
+        [];
+      let clearedTombstones = false;
+      const lookupKey = "a".repeat(64);
+      const database = createScopedDbMock({
+        insert: (table: unknown) => {
+          if (table === searchHistoryOwners) {
+            return {
+              values: (row: typeof searchHistoryOwners.$inferInsert) => ({
+                onConflictDoNothing: async () => {
+                  ownerRows.push(row);
+                },
+              }),
+            };
+          }
+          if (table === searchHistoryTombstones) {
+            return {
+              values: (row: typeof searchHistoryTombstones.$inferInsert) => ({
+                onConflictDoUpdate: async () => {
+                  tombstoneRows.push(row);
+                },
+              }),
+            };
+          }
+          expect(table).toBe(auditLogs);
+          return {
+            values: async (
+              rows: readonly (typeof auditLogs.$inferInsert)[],
+            ) => {
+              recordedEvents.push(...rows);
+            },
+          };
+        },
+        select: (projection: SelectedFields) => ({
+          from: (table: PgTable) => {
+            if (table === searchHistoryTombstones) {
+              return createSelectQueryMock(
+                tombstoneRows.map(() => ({
+                  deletedAt: new Date("2026-01-02T00:00:00Z"),
+                })),
+              ).from();
+            }
+            expect(table === member || table === searchHistoryOwners).toBe(
+              true,
+            );
+            const query = new QueryBuilder().select(projection).from(table);
+            return {
+              toSQL: () => query.toSQL(),
+              as: (alias: string) => query.as(alias),
+              where: (condition: SQL) => {
+                const scopedQuery = query.where(condition);
+                return {
+                  toSQL: () => scopedQuery.toSQL(),
+                  as: (alias: string) => scopedQuery.as(alias),
+                  for: async () =>
+                    table === member
+                      ? [
+                          {
+                            organizationId: "org_1",
+                            userId: "user_1",
+                            createdAt: new Date("2000-01-01T00:00:00Z"),
+                          },
+                        ]
+                      : ownerRows.map((owner) => ({
+                          ...owner,
+                          clearedAt: null,
+                          tombstoneCutoffAt: null,
+                        })),
+                };
+              },
+            };
+          },
+        }),
+        update: (table: unknown) => {
+          expect(table).toBe(searchHistoryOwners);
+          return {
+            set: (row: Partial<typeof searchHistoryOwners.$inferInsert>) => ({
+              where: async () => {
+                ownerUpdates.push(row);
+              },
+            }),
+          };
+        },
+        delete: (table: unknown) => {
+          if (table === searchHistoryTombstones) {
+            return {
+              where: async () => {
+                clearedTombstones = true;
+              },
+            };
+          }
+          expect(table).toBe(searchHistoryEntries);
+          return {
+            where: () => ({
+              returning: async () => [
+                {
+                  id: entryId,
+                  kind: "search",
+                  lookupKey,
+                  baseLookupKey: null,
+                  country: "CZE",
+                },
+              ],
+            }),
+          };
+        },
+        $with: () => ({ as: () => ({ kind: "search" }) }),
+        with: () => ({
+          select: () => ({
+            from: () => ({
+              groupBy: async () => [{ kind: "search", deleted: 1 }],
+            }),
+          }),
+        }),
+      });
+      const context = createContext(database);
+      const result = await handleCapabilityCall({
+        args: {
+          capability,
+          input: {
+            ...(capability === "search-history.delete"
+              ? { params: { entryId } }
+              : {}),
+            query: {
+              expectedOrganizationId: context.organizationId,
+              expectedUserId: context.userId,
+            },
+          },
+          confirm: true,
+        },
+        context,
+      });
+      const payload = parseToolPayload(result);
+      if (capability === "search-history.delete") {
+        expect(payload).toEqual({ id: entryId });
+      } else {
+        expect(payload).toEqual({ deleted: 1 });
+      }
+      expect(ownerRows).toMatchObject([
+        { organizationId: context.organizationId, userId: context.userId },
+      ]);
+      if (capability === "search-history.delete") {
+        expect(tombstoneRows).toMatchObject([
+          {
+            organizationId: context.organizationId,
+            userId: context.userId,
+            kind: "search",
+            lookupKey,
+          },
+        ]);
+        expect(ownerUpdates).toEqual([]);
+        expect(clearedTombstones).toBe(false);
+      } else {
+        expect(tombstoneRows).toEqual([]);
+        expect(ownerUpdates).toHaveLength(1);
+        expect(ownerUpdates.at(0)?.clearedAt).toBeDefined();
+        expect(clearedTombstones).toBe(true);
+      }
+      expect(recordedEvents).toMatchObject([
+        {
+          userId: context.userId,
+          organizationId: context.organizationId,
+          action: AUDIT_ACTION.DELETE,
+          resourceType: AUDIT_RESOURCE_TYPE.SEARCH_HISTORY,
+          resourceId:
+            capability === "search-history.delete" ? entryId : context.userId,
+          metadata: {
+            operation:
+              capability === "search-history.delete" ? "delete" : "clear",
+            entryCount: 1,
+            kinds: [],
+          },
+        },
+      ]);
+    }
+  });
+
+  test.each([
+    {
+      changed: "organization",
+      query: { expectedOrganizationId: "other_org", expectedUserId: "user_1" },
+    },
+    {
+      changed: "user",
+      query: { expectedOrganizationId: "org_1", expectedUserId: "other_user" },
+    },
+  ])(
+    "mutation scope preconditions reject changed $changed before accessing history",
+    async ({ query }) => {
+      for (const capability of [
+        "search-history.clear",
+        "search-history.delete",
+      ]) {
+        const database = createScopedDbMock({});
+        const result = await handleCapabilityCall({
+          args: {
+            capability,
+            input: {
+              ...(capability === "search-history.delete"
+                ? {
+                    params: { entryId: "a3333333-3333-4333-8333-333333333333" },
+                  }
+                : {}),
+              query,
+            },
+            confirm: true,
+          },
+          context: createContext(database),
+        });
+        expect(errorEnvelope(result).code).toBe("conflict");
+        expect(database.getCallCount()).toBe(0);
+      }
+    },
+  );
+
+  test("mutations require both scope preconditions before accessing history", async () => {
+    for (const capability of [
+      "search-history.clear",
+      "search-history.delete",
+    ]) {
+      const database = createScopedDbMock({});
+      const result = await handleCapabilityCall({
+        args: {
+          capability,
+          input: {
+            ...(capability === "search-history.delete"
+              ? { params: { entryId: "a3333333-3333-4333-8333-333333333333" } }
+              : {}),
+            query: {},
+          },
+          confirm: true,
+        },
+        context: createContext(database),
+      });
+      expect(errorEnvelope(result).code).toBe("validation_error");
+      expect(database.getCallCount()).toBe(0);
+    }
+  });
+
+  test("deleting history requires write consent and explicit confirmation", async () => {
+    for (const capability of [
+      "search-history.delete",
+      "search-history.clear",
+    ]) {
+      const input = {
+        ...(capability === "search-history.delete"
+          ? { params: { entryId: "a1111111-1111-4111-8111-111111111111" } }
+          : {}),
+        query: {
+          expectedOrganizationId: "org_1",
+          expectedUserId: "user_1",
+        },
+      };
+      const readOnlyResult = await handleCapabilityCall({
+        args: { capability, input, confirm: true },
+        context: createContext({ grantedScopes: ["stella:read"] }),
+      });
+      expect(errorEnvelope(readOnlyResult).code).toBe("missing_scope");
+      expect(
+        errorEnvelope(await callCapability({ capability, input })).code,
+      ).toBe("confirmation_required");
+    }
+  });
+
+  test("delete validates ids before invoking the database", async () => {
+    const result = await callCapability({
+      capability: "search-history.delete",
+      input: {
+        params: { entryId: "invalid-history-id" },
+        query: { expectedOrganizationId: "org_1", expectedUserId: "user_1" },
+      },
+      confirm: true,
+    });
+    expect(errorEnvelope(result).code).toBe("validation_error");
+  });
+});

@@ -10,28 +10,31 @@
  * statutes are column definitions and a row host over this.
  */
 
-import { useMemo } from "react";
 import type { ReactNode } from "react";
 
 import { useTable } from "@tanstack/react-table";
 import type { RowSelectionState } from "@tanstack/react-table";
 import { useTranslations } from "use-intl";
 
-import { cn } from "@stll/ui/utils";
-
-import type { PublicLawTableLayout } from "@/components/public-law-table/public-law-table-layout.logic";
+import { applyPublicLawSizingChange } from "@/components/public-law-table/public-law-table-layout.logic";
+import type {
+  PublicLawTableLayout,
+  PublicLawTableLayoutUpdate,
+} from "@/components/public-law-table/public-law-table-layout.logic";
+import { PublicLawTableFrame } from "@/components/public-law-table/public-law-table.pending";
 import { FindHighlightScope } from "@/components/workspaces/table/find-highlight";
 import type { TableFindHighlight } from "@/components/workspaces/table/find-highlight";
-import { MobileTableOrientationGate } from "@/components/workspaces/table/mobile-table-orientation-gate";
 import type { TableRowHost } from "@/components/workspaces/table/row-host";
 import { workspaceTableFeatures } from "@/components/workspaces/table/table-features";
 import { DEFAULT_TABLE_COLUMN_MIN_SIZE } from "@/components/workspaces/table/table-schema";
+import { TableSelectionToolbar } from "@/components/workspaces/table/table-selection-toolbar";
 import type {
   DecisionRowData,
   StatuteRowData,
   TableColumnDef,
 } from "@/components/workspaces/table/types";
 import { useTableState } from "@/components/workspaces/table/use-table-state";
+import type { TableSortingLayout } from "@/components/workspaces/table/use-table-state";
 import { tableSkeletonRowCount } from "@/components/workspaces/table/workspace-table/skeleton-rows.logic";
 import { WorkspaceTable } from "@/components/workspaces/table/workspace-table/workspace-table";
 
@@ -42,8 +45,13 @@ export type PublicLawRowData = DecisionRowData | StatuteRowData;
  * Which rows the reader picked, for a table whose page acts on a selection.
  * A table with nothing to do with picked rows omits it and draws no checkbox.
  */
-type PublicLawTableSelection = {
+type PublicLawTableSelection<TRow extends PublicLawRowData> = {
+  actions: ReactNode;
+  clearLabel: string;
+  getRowLabel: (row: TRow) => string;
+  label: string;
   selectedIds: readonly string[];
+  selectAllLabel: string;
   onSelectedIdsChange: (ids: string[]) => void;
 };
 
@@ -75,10 +83,16 @@ type PublicLawTableProps<
    */
   isRefreshing?: boolean | undefined;
   layout: TLayout;
-  onLayoutChange: (layout: TLayout) => void;
+  onLayoutChange: (update: PublicLawTableLayoutUpdate<TLayout>) => void;
   rowHost: TableRowHost<TRow>;
   rows: TRow[];
-  selection?: PublicLawTableSelection | undefined;
+  selection?: PublicLawTableSelection<TRow> | undefined;
+  /**
+   * The order the answer was read in, as a header states it, and how a header
+   * asks for another one. Null where no column states the order: the rows
+   * arrive ordered and the headers offer no order to choose.
+   */
+  sorting: TableSortingLayout | null;
 };
 
 const NO_SELECTION: RowSelectionState = {};
@@ -100,10 +114,15 @@ export const PublicLawTable = <
   rowHost,
   rows,
   selection,
+  sorting,
 }: PublicLawTableProps<TRow, TLayout>) => {
   const t = useTranslations();
+  // "No results" is an answer, so only a settled search may give it. Rows
+  // held from the previous search that hold nothing (or that the find hid)
+  // say nothing about the search in flight: that table waits instead.
+  const isWaiting = isLoading || (isRefreshing && rows.length === 0);
   const selectedIds = selection?.selectedIds;
-  const rowSelection: RowSelectionState = useMemo(() => {
+  const rowSelection: RowSelectionState = (() => {
     if (selectedIds === undefined) {
       return NO_SELECTION;
     }
@@ -112,7 +131,7 @@ export const PublicLawTable = <
       picked[id] = true;
     }
     return picked;
-  }, [selectedIds]);
+  })();
 
   const tableState = useTableState({
     columnLayout: {
@@ -120,17 +139,25 @@ export const PublicLawTable = <
       order: layout.order,
       pinned: layout.pinned,
       onChange: ({ hidden, order, pinned }) => {
-        onLayoutChange({
-          ...layout,
+        onLayoutChange((latest) => ({
+          ...latest,
           ...(hidden === undefined ? {} : { hidden }),
           ...(order === undefined ? {} : { order }),
           ...(pinned === undefined ? {} : { pinned }),
-        });
+        }));
       },
     },
     columnSizing: {
       sizing: layout.sizing,
-      onChange: (sizing) => onLayoutChange({ ...layout, sizing }),
+      onChange: (sizing) =>
+        onLayoutChange((latest) => ({
+          ...latest,
+          sizing: applyPublicLawSizingChange({
+            previous: layout.sizing,
+            next: sizing,
+            latest: latest.sizing,
+          }),
+        })),
     },
     rowSelection: {
       selection: rowSelection,
@@ -144,13 +171,14 @@ export const PublicLawTable = <
         selection.onSelectedIdsChange(Object.keys(next));
       },
     },
-    // The search decides the order; no column of this table does.
-    sorting: null,
+    sorting,
   });
 
   const table = useTable({
     features: workspaceTableFeatures,
     columnResizeMode: "onChange",
+    // The endpoint orders the rows; a header only asks it for another order.
+    manualSorting: true,
     data: rows,
     columns,
     defaultColumn: { minSize: DEFAULT_TABLE_COLUMN_MIN_SIZE },
@@ -163,41 +191,41 @@ export const PublicLawTable = <
   });
 
   return (
-    <MobileTableOrientationGate>
-      <div
-        aria-busy={isRefreshing}
-        className={cn(
-          // The table owns its scroll: it claims the height the page gives it
-          // rather than growing to its rows. Without a bounded box the
-          // virtualizer's scroll element never scrolls, so every row is drawn
-          // and the frozen header has nothing to freeze against.
-          "border-border/45 bg-background/60 flex min-h-64 flex-1 flex-col overflow-hidden rounded-md border transition-opacity duration-200",
-          isRefreshing && "opacity-56",
-        )}
-      >
-        <FindHighlightScope highlight={findHighlight}>
-          <WorkspaceTable
-            contentMode={layout.contentMode}
-            // A results list is as tall as its results. The end filler has
-            // nothing to fill here and nothing to add at the end of, so it
-            // would draw as one empty bordered row under the last result.
-            fillHeight={false}
-            firstRowNumber={firstRowNumber}
-            rowHost={rowHost}
-            skeletonRowCount={
-              isLoading ? tableSkeletonRowCount(expectedRowCount) : 0
-            }
-            table={table}
+    <PublicLawTableFrame isRefreshing={isRefreshing}>
+      <FindHighlightScope highlight={findHighlight}>
+        {selection !== undefined && selection.selectedIds.length > 0 && (
+          <TableSelectionToolbar
+            actions={selection.actions}
+            clearLabel={selection.clearLabel}
+            label={selection.label}
+            onClear={() => selection.onSelectedIdsChange([])}
           />
-        </FindHighlightScope>
-        {rows.length === 0 &&
-          !isLoading &&
-          (emptyState ?? (
-            <div className="text-muted-foreground p-4 text-sm">
-              {t("common.noResults")}
-            </div>
-          ))}
-      </div>
-    </MobileTableOrientationGate>
+        )}
+        <WorkspaceTable
+          contentMode={layout.contentMode}
+          // Nothing matched: what to do next stands right under the
+          // headers, where the first result would have been.
+          emptyState={
+            emptyState ?? (
+              <p className="text-muted-foreground text-center text-sm">
+                {t("common.noResults")}
+              </p>
+            )
+          }
+          // A results list is as tall as its results. The end filler has
+          // nothing to fill here and nothing to add at the end of, so it
+          // would draw as one empty bordered row under the last result.
+          fillHeight={false}
+          firstRowNumber={firstRowNumber}
+          getRowSelectionLabel={selection?.getRowLabel}
+          rowHost={rowHost}
+          selectAllLabel={selection?.selectAllLabel}
+          skeletonRowCount={
+            isWaiting ? tableSkeletonRowCount(expectedRowCount) : 0
+          }
+          table={table}
+        />
+      </FindHighlightScope>
+    </PublicLawTableFrame>
   );
 };

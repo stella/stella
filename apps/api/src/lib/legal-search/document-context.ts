@@ -1,13 +1,20 @@
+import { eq } from "drizzle-orm";
+
+import { publishedCaseLawDecisions } from "@/api/db/schema";
 import { corpusStorageMode } from "@/api/env-base";
 import type { SafeId } from "@/api/lib/branded-types";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
-import { publishedCaseLawDecisionFor } from "@/api/lib/case-law/published-decisions";
+import { parseCachedDecisionAst } from "@/api/lib/case-law/decision-ast-normalization";
 import {
   readCorpusAst,
   readCorpusText,
 } from "@/api/lib/legal-search/corpus-reads";
-import { readCorpusPayloadOrFallback } from "@/api/lib/legal-search/corpus-storage";
+import {
+  parsePersistedCorpusAst,
+  readCorpusForRecovery,
+  readCorpusPayloadOrFallback,
+} from "@/api/lib/legal-search/corpus-storage";
 import type { LegalDocumentContext } from "@/api/lib/legal-search/types";
 import {
   definePublicLawSharedQuery,
@@ -19,22 +26,22 @@ export const readDocumentContextDecision = definePublicLawSharedQuery(
   async (
     tx: CaseLawPublicReadTransaction,
     decisionId: SafeId<"caseLawDecision">,
-  ) =>
-    await tx.query.caseLawDecisions.findFirst({
-      where: {
-        id: { eq: decisionId },
-        RAW: (table) => publishedCaseLawDecisionFor(table.metadata),
-      },
-      columns: {
-        id: true,
-        caseNumber: true,
-        court: true,
-        documentAst: true,
-        fulltext: true,
-        astS3Key: true,
-        textS3Key: true,
-      },
-    }),
+  ) => {
+    const [row] = await tx
+      .select({
+        id: publishedCaseLawDecisions.id,
+        caseNumber: publishedCaseLawDecisions.caseNumber,
+        court: publishedCaseLawDecisions.court,
+        documentAst: publishedCaseLawDecisions.documentAst,
+        fulltext: publishedCaseLawDecisions.fulltext,
+        astS3Key: publishedCaseLawDecisions.astS3Key,
+        textS3Key: publishedCaseLawDecisions.textS3Key,
+      })
+      .from(publishedCaseLawDecisions)
+      .where(eq(publishedCaseLawDecisions.id, decisionId))
+      .limit(1);
+    return row;
+  },
 );
 
 /**
@@ -59,16 +66,24 @@ export const loadDocumentContext = async (
   const corpus = corpusStorageMode !== "off";
   const { astS3Key, textS3Key } = decision;
 
-  const documentAst =
-    corpus && astS3Key !== null
-      ? await readCorpusPayloadOrFallback({
-          documentId: decisionId,
-          key: astS3Key,
-          step: "documentContext.corpusAst",
-          read: async () => await readCorpusAst(astS3Key),
-          fallback: () => decision.documentAst,
-        })
-      : decision.documentAst;
+  const documentAst = (
+    await readCorpusForRecovery({
+      documentId: decisionId,
+      read: async () =>
+        corpus && astS3Key !== null
+          ? await readCorpusPayloadOrFallback({
+              documentId: decisionId,
+              key: astS3Key,
+              step: "documentContext.corpusAst",
+              read: async () =>
+                await readCorpusAst(astS3Key, {
+                  report: { documentId: decisionId },
+                }),
+              fallback: () => parsePersistedCorpusAst(decision.documentAst),
+            })
+          : parsePersistedCorpusAst(decision.documentAst),
+    })
+  ).unwrapOr(null);
 
   const fulltext =
     corpus && textS3Key !== null
@@ -86,6 +101,6 @@ export const loadDocumentContext = async (
     caseNumber: decision.caseNumber,
     court: decision.court,
     fulltext,
-    documentAst,
+    documentAst: parseCachedDecisionAst(documentAst),
   };
 };

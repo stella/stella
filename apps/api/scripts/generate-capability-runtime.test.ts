@@ -4,11 +4,17 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 
-import { generateCapabilityRuntime } from "./generate-capability-runtime";
+import { createProgram } from "@stll/scripts/src/typescript-program";
+
+import apiPackage from "../package.json";
+import {
+  generateCapabilityCatalogRuntime,
+  generateCapabilityRuntime,
+} from "./generate-capability-runtime";
 import { serializeDispatchModule } from "./lib/capability-catalog";
 
 test.each(["fixture-feature", undefined])(
-  "derived API imports deterministically bundle complete shard data and lazy handlers with feature %s",
+  "derived API imports deterministically bundle in-memory contract data without shards and lazy handlers with feature %s",
   async (featureId) => {
     const directory = await mkdtemp(path.join(tmpdir(), "capability-runtime-"));
     const root = pathToFileURL(`${directory}/`);
@@ -21,16 +27,11 @@ test.each(["fixture-feature", undefined])(
     };
     try {
       for (const child of [
-        "packages/cli/capabilities",
         `${generated}/capability-dispatch`,
         "apps/api/src/handlers/widgets",
       ]) {
         await mkdir(path.join(directory, child), { recursive: true });
       }
-      await writeFile(
-        new URL("packages/cli/capabilities/widgets.list.json", root),
-        JSON.stringify(catalog),
-      );
       await writeFile(
         new URL("apps/api/src/handlers/widgets/list.ts", root),
         'export default { value: "handler reached" };\n',
@@ -51,16 +52,17 @@ test.each(["fixture-feature", undefined])(
           compilerOptions: { paths: { "@/api/*": ["./apps/api/src/*"] } },
         }),
       );
-      await generateCapabilityRuntime(root);
+      await generateCapabilityCatalogRuntime(root, [catalog]);
       const first = await readFile(
         new URL(`${generated}/capability-catalog.ts`, root),
         "utf-8",
       );
+      await generateCapabilityRuntime(root, [catalog]);
       const firstDispatch = await readFile(
         new URL(`${generated}/capability-dispatch.ts`, root),
         "utf-8",
       );
-      await generateCapabilityRuntime(root);
+      await generateCapabilityRuntime(root, [catalog]);
       expect(
         await readFile(
           new URL(`${generated}/capability-catalog.ts`, root),
@@ -89,7 +91,6 @@ process.stdout.write(JSON.stringify({ features: [...CAPABILITY_FEATURE_BINDINGS]
       expect(build.success, build.logs.map(String).join("\n")).toBe(true);
       // Remove all inputs before running the bundle: runtime directory reads fail here.
       await rm(path.join(directory, "apps"), { recursive: true });
-      await rm(path.join(directory, "packages"), { recursive: true });
       const result = Bun.spawnSync(
         [process.execPath, path.join(directory, "bundle/entry.js")],
         { stdout: "pipe", stderr: "pipe" },
@@ -105,3 +106,95 @@ process.stdout.write(JSON.stringify({ features: [...CAPABILITY_FEATURE_BINDINGS]
     }
   },
 );
+
+test("capability registry declarations retain ids without importing handler types", async () => {
+  const directory = await mkdtemp(
+    path.join(tmpdir(), "capability-declarations-"),
+  );
+  try {
+    const dispatch = path.join(directory, "dispatch.ts");
+    await writeFile(
+      path.join(directory, "handler.ts"),
+      'export default { config: { path: "/fixture" } };',
+    );
+    await writeFile(
+      dispatch,
+      serializeDispatchModule([
+        {
+          id: "widgets.list",
+          importPath: "@/api/handler",
+          exportName: undefined,
+        },
+      ]),
+    );
+    const opened = await createProgram({
+      rootNames: [dispatch],
+      compilerOptions: {
+        declaration: true,
+        emitDeclarationOnly: true,
+        noCheck: true,
+        types: [],
+        paths: { "@/api/*": [path.join(directory, "*")] },
+      },
+    });
+    try {
+      const emitted = await opened.program.getDeclarationEmit([dispatch]);
+      expect(emitted.diagnostics).toEqual([]);
+      const declaration = [...emitted.outputFiles.values()]
+        .map(({ text }) => text)
+        .join("\n");
+      expect(declaration).toContain('"widgets.list"');
+      expect(declaration).toContain("Promise<Record<string, unknown>>");
+      expect(declaration).not.toContain("handler");
+    } finally {
+      await opened.close();
+    }
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("direct API runtime preparation builds MCP bundles before importing their consumers", async () => {
+  const directory = await mkdtemp(
+    path.join(tmpdir(), "capability-runtime-order-"),
+  );
+  try {
+    await mkdir(path.join(directory, "apps/api/scripts"), { recursive: true });
+    await mkdir(path.join(directory, "scripts"), { recursive: true });
+    await writeFile(
+      path.join(directory, "apps/api/package.json"),
+      JSON.stringify({
+        name: "@stll/api",
+        scripts: {
+          "generate:capability-runtime":
+            apiPackage.scripts["generate:capability-runtime"],
+        },
+      }),
+    );
+    await writeFile(
+      path.join(directory, "scripts/prepare-mcp-apps.ts"),
+      `await Bun.write(new URL("../packages/mcp-apps/src/generated/bundles.ts", import.meta.url), 'export const BUNDLES = ["prepared MCP source"];');`,
+    );
+    await writeFile(
+      path.join(directory, "apps/api/scripts/generate-capability-runtime.ts"),
+      `import { BUNDLES } from "../../../packages/mcp-apps/src/generated/bundles";
+await Bun.write(new URL("../runtime.json", import.meta.url), JSON.stringify(BUNDLES));`,
+    );
+    const result = Bun.spawnSync(
+      [process.execPath, "run", "generate:capability-runtime"],
+      {
+        cwd: path.join(directory, "apps/api"),
+        stdout: "pipe",
+        stderr: "pipe",
+      },
+    );
+    expect(result.exitCode, result.stderr.toString()).toBe(0);
+    expect(
+      JSON.parse(
+        await readFile(path.join(directory, "apps/api/runtime.json"), "utf-8"),
+      ),
+    ).toEqual(["prepared MCP source"]);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});

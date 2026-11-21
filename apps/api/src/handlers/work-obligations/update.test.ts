@@ -8,6 +8,7 @@ import {
   workObligations,
   workspaceMembers,
 } from "@/api/db/schema";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -39,50 +40,54 @@ describe("updateWorkObligation", () => {
     );
     const lockOrder: unknown[] = [];
 
-    const { safeDb, scopedDb } = createScopedDbMock({
-      select: () => ({
-        from: (table: unknown) => ({
-          where: () => ({
-            limit: () => ({
-              for: async () => {
-                lockOrder.push(table);
-                if (table === workspaceMembers) {
-                  return [{ userId: nextOwnerUserId }];
-                }
-                return [
-                  {
-                    entityId,
-                    workspaceId,
-                    ownerUserId: previousOwnerUserId,
-                    status: WORK_OBLIGATION_STATUS.ACTIVE,
-                    acknowledgedAt: new Date(),
-                    acknowledgedByUserId: previousOwnerUserId,
-                    type: "task",
-                    workingTargetDate: null,
-                    hardDeadlineDate: null,
-                    sourceType: "manual",
-                    sourceEntityId: null,
-                    sourceDescription: null,
-                  },
-                ];
-              },
+    const { safeDb, scopedDb } = createScopedDbMock(
+      {
+        execute: async () => [{ id: workspaceId }],
+        select: () => ({
+          from: (table: unknown) => ({
+            where: () => ({
+              limit: () => ({
+                for: async () => {
+                  lockOrder.push(table);
+                  if (table === workspaceMembers) {
+                    return [{ userId: nextOwnerUserId }];
+                  }
+                  return [
+                    {
+                      entityId,
+                      workspaceId,
+                      ownerUserId: previousOwnerUserId,
+                      status: WORK_OBLIGATION_STATUS.ACTIVE,
+                      acknowledgedAt: new Date(),
+                      acknowledgedByUserId: previousOwnerUserId,
+                      type: "task",
+                      workingTargetDate: null,
+                      hardDeadlineDate: null,
+                      sourceType: "manual",
+                      sourceEntityId: null,
+                      sourceDescription: null,
+                    },
+                  ];
+                },
+              }),
             }),
           }),
         }),
-      }),
-      update: () => ({
-        set: () => ({
-          where: () => ({ returning: async () => [{ entityId }] }),
+        update: () => ({
+          set: () => ({
+            where: () => ({ returning: async () => [{ entityId }] }),
+          }),
         }),
-      }),
-      insert: (table: unknown) => ({
-        values: async () => {
-          if (table === auditLogs) {
-            return;
-          }
-        },
-      }),
-    });
+        insert: (table: unknown) => ({
+          values: async () => {
+            if (table === auditLogs) {
+              return;
+            }
+          },
+        }),
+      },
+      { visibleResources: { entity: [entityId] } },
+    );
     const request = new Request("https://api.example.test/work-obligations");
     const recordAuditEvent = createAuditRecorder({
       organizationId: toSafeId<"organization">(
@@ -105,6 +110,8 @@ describe("updateWorkObligation", () => {
         params: { workspaceId, entityId },
         recordAuditEvent,
         request,
+        route:
+          "/v1/work-obligations/:workspaceId/:entityId" satisfies ApiRoutePath,
         safeDb,
         scopedDb,
         session: {
@@ -133,85 +140,89 @@ describe("updateWorkObligation", () => {
     let obligationReadCount = 0;
     let insertedLegacyObligation = false;
 
-    const { safeDb, scopedDb } = createScopedDbMock({
-      select: () => ({
-        from: (table: unknown) => {
-          if (table === taskAssignees) {
+    const { safeDb, scopedDb } = createScopedDbMock(
+      {
+        execute: async () => [{ id: workspaceId }],
+        select: () => ({
+          from: (table: unknown) => {
+            if (table === taskAssignees) {
+              return {
+                innerJoin: () => ({
+                  where: () => ({
+                    limit: () => ({ for: async () => [] }),
+                  }),
+                }),
+              };
+            }
             return {
-              innerJoin: () => ({
-                where: () => ({
-                  limit: () => ({ for: async () => [] }),
+              where: () => ({
+                limit: () => ({
+                  for: async () => {
+                    if (table === entities) {
+                      return [
+                        {
+                          id: entityId,
+                          workspaceId,
+                          agendaKind: "task",
+                          agendaSource: null,
+                          listItemType: null,
+                          status: "open",
+                          dueDate: null,
+                          createdBy: actorUserId,
+                          createdAt,
+                          updatedAt: null,
+                        },
+                      ];
+                    }
+                    obligationReadCount += 1;
+                    if (obligationReadCount === 1) {
+                      return [];
+                    }
+                    return [
+                      {
+                        entityId,
+                        workspaceId,
+                        ownerUserId: null,
+                        status: WORK_OBLIGATION_STATUS.UNASSIGNED,
+                        acknowledgedAt: null,
+                        acknowledgedByUserId: null,
+                        type: "task",
+                        workingTargetDate: null,
+                        hardDeadlineDate: null,
+                        sourceType: "manual",
+                        sourceEntityId: null,
+                        sourceDescription: null,
+                      },
+                    ];
+                  },
                 }),
               }),
             };
-          }
-          return {
-            where: () => ({
-              limit: () => ({
-                for: async () => {
-                  if (table === entities) {
-                    return [
-                      {
-                        id: entityId,
-                        workspaceId,
-                        agendaKind: "task",
-                        agendaSource: null,
-                        listItemType: null,
-                        status: "open",
-                        dueDate: null,
-                        createdBy: actorUserId,
-                        createdAt,
-                        updatedAt: null,
-                      },
-                    ];
-                  }
-                  obligationReadCount += 1;
-                  if (obligationReadCount === 1) {
-                    return [];
-                  }
-                  return [
-                    {
-                      entityId,
-                      workspaceId,
-                      ownerUserId: null,
-                      status: WORK_OBLIGATION_STATUS.UNASSIGNED,
-                      acknowledgedAt: null,
-                      acknowledgedByUserId: null,
-                      type: "task",
-                      workingTargetDate: null,
-                      hardDeadlineDate: null,
-                      sourceType: "manual",
-                      sourceEntityId: null,
-                      sourceDescription: null,
-                    },
-                  ];
-                },
-              }),
-            }),
-          };
-        },
-      }),
-      update: () => ({
-        set: () => ({
-          where: () => ({ returning: async () => [{ entityId }] }),
+          },
         }),
-      }),
-      insert: (table: unknown) => ({
-        values: () => {
-          if (table === workObligations) {
-            insertedLegacyObligation = true;
-          }
-          return {
-            onConflictDoNothing: () => ({
-              returning: async () =>
-                table === workObligations
-                  ? [{ entityId, workspaceId, createdByUserId: actorUserId }]
-                  : [],
-            }),
-          };
-        },
-      }),
-    });
+        update: () => ({
+          set: () => ({
+            where: () => ({ returning: async () => [{ entityId }] }),
+          }),
+        }),
+        insert: (table: unknown) => ({
+          values: () => {
+            if (table === workObligations) {
+              insertedLegacyObligation = true;
+            }
+            return {
+              onConflictDoNothing: () => ({
+                returning: async () =>
+                  table === workObligations
+                    ? [{ entityId, workspaceId, createdByUserId: actorUserId }]
+                    : [],
+              }),
+            };
+          },
+        }),
+      },
+      { visibleResources: { entity: [entityId] } },
+    );
     const request = new Request("https://api.example.test/work-obligations");
     const recordAuditEvent = createAuditRecorder({
       organizationId: toSafeId<"organization">(
@@ -234,6 +245,8 @@ describe("updateWorkObligation", () => {
         params: { workspaceId, entityId },
         recordAuditEvent,
         request,
+        route:
+          "/v1/work-obligations/:workspaceId/:entityId" satisfies ApiRoutePath,
         safeDb,
         scopedDb,
         session: {
@@ -297,43 +310,47 @@ describe("updateWorkObligation", () => {
         "0198fa3d-fc8d-7000-8000-000000000024",
       );
 
-      const { safeDb, scopedDb } = createScopedDbMock({
-        select: () => ({
-          from: (table: unknown) => ({
-            where: () => ({
-              limit: () => ({
-                for: async () => {
-                  if (table === workspaceMembers) {
-                    return [{ userId: actorUserId }];
-                  }
-                  return [
-                    {
-                      entityId,
-                      workspaceId,
-                      ownerUserId: previousOwnerUserId,
-                      status: WORK_OBLIGATION_STATUS.ACTIVE,
-                      acknowledgedAt: new Date(),
-                      acknowledgedByUserId: previousOwnerUserId,
-                      type: "task",
-                      workingTargetDate: null,
-                      hardDeadlineDate: null,
-                      sourceType: "manual",
-                      sourceEntityId: null,
-                      sourceDescription: null,
-                    },
-                  ];
-                },
+      const { safeDb, scopedDb } = createScopedDbMock(
+        {
+          execute: async () => [{ id: workspaceId }],
+          select: () => ({
+            from: (table: unknown) => ({
+              where: () => ({
+                limit: () => ({
+                  for: async () => {
+                    if (table === workspaceMembers) {
+                      return [{ userId: actorUserId }];
+                    }
+                    return [
+                      {
+                        entityId,
+                        workspaceId,
+                        ownerUserId: previousOwnerUserId,
+                        status: WORK_OBLIGATION_STATUS.ACTIVE,
+                        acknowledgedAt: new Date(),
+                        acknowledgedByUserId: previousOwnerUserId,
+                        type: "task",
+                        workingTargetDate: null,
+                        hardDeadlineDate: null,
+                        sourceType: "manual",
+                        sourceEntityId: null,
+                        sourceDescription: null,
+                      },
+                    ];
+                  },
+                }),
               }),
             }),
           }),
-        }),
-        update: () => ({
-          set: () => ({
-            where: () => ({ returning: async () => [{ entityId }] }),
+          update: () => ({
+            set: () => ({
+              where: () => ({ returning: async () => [{ entityId }] }),
+            }),
           }),
-        }),
-        insert: () => ({ values: async () => undefined }),
-      });
+          insert: () => ({ values: async () => undefined }),
+        },
+        { visibleResources: { entity: [entityId] } },
+      );
       const request = new Request("https://api.example.test/work-obligations");
       const recordAuditEvent = createAuditRecorder({
         organizationId: toSafeId<"organization">(
@@ -356,6 +373,8 @@ describe("updateWorkObligation", () => {
           params: { workspaceId, entityId },
           recordAuditEvent,
           request,
+          route:
+            "/v1/work-obligations/:workspaceId/:entityId" satisfies ApiRoutePath,
           safeDb,
           scopedDb,
           session: {

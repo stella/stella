@@ -7,9 +7,9 @@ import type { AIErrorKind } from "@stll/api-contract";
 import type {
   ChatTurnFailureCode,
   ChatTurnInteractionType,
-  ChatTurnStatus,
 } from "@/api/handlers/chat/chat-turn-state";
 import type { TanStackTextFinishReason } from "@/api/lib/chat/tanstack-chat-runtime";
+import type { ChatTurnStatus } from "@/api/lib/chat/turn-status";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 import { PLAIN_TOOL_NAME } from "@/api/tests/helpers/chat-approval-harness";
 import {
@@ -151,6 +151,11 @@ const REFUSED_BEFORE_OUTPUT: NotAShape = {
     "A request the provider refuses before any output (`fails-before-output`); the kind is the refusal's classification.",
 };
 
+const LOCAL_RUNNER_REPORTED: NotAShape = {
+  notAShape:
+    "Reported by the computer a local turn runs on (`local-run-chunks.ts`), not read from a model response.",
+};
+
 /** Every error a failed run is classified as. */
 export const AI_ERROR_KIND_SHAPES = {
   quota_exhausted: REFUSED_BEFORE_OUTPUT,
@@ -159,11 +164,45 @@ export const AI_ERROR_KIND_SHAPES = {
   model_unavailable: ["fails-before-output"],
   provider_unavailable: REFUSED_BEFORE_OUTPUT,
   provider_stream_incomplete: ["early-eof", "unusable-stop"],
+  output_incomplete: {
+    notAShape:
+      "A structured answer cut off or unparseable (`generateTanStackObjectForTask`); a chat turn keeps a `length` answer.",
+  },
+  output_invalid: {
+    notAShape:
+      "A structured answer its schema rejects (`generateTanStackObjectForTask`); a chat turn carries no schema.",
+  },
+  output_moderated: {
+    notAShape:
+      "A text generation the provider filtered (`generateTanStackTextForTask`); a chat turn keeps a `content_filter` answer.",
+  },
+  deadline_exceeded: {
+    notAShape:
+      "A caller's own deadline on an awaited generation (`deadlineMs`); a chat turn is bounded by its lease instead.",
+  },
   loop_detected: {
     notAShape:
       "Read across several runs of a turn, not from one answer (`detectModelLoop`).",
   },
   empty_completion: ["empty", "whitespace", "reasoning-only"],
+  local_runner_needs_login: LOCAL_RUNNER_REPORTED,
+  local_runner_limit_reached: LOCAL_RUNNER_REPORTED,
+  local_runner_unavailable: LOCAL_RUNNER_REPORTED,
+  local_runner_turn_too_large: LOCAL_RUNNER_REPORTED,
+  turn_too_large: {
+    notAShape:
+      "The turn's delivery log refusing its output for size (`createChatRunLog`), not read from a model response.",
+  },
+  local_runner_not_reached: LOCAL_RUNNER_REPORTED,
+  local_runner_relinked: LOCAL_RUNNER_REPORTED,
+  local_runner_restoring: LOCAL_RUNNER_REPORTED,
+  local_runner_folder_unavailable: LOCAL_RUNNER_REPORTED,
+  local_runner_no_computer: LOCAL_RUNNER_REPORTED,
+  local_runner_harness_unavailable: LOCAL_RUNNER_REPORTED,
+  local_runner_model_unavailable: LOCAL_RUNNER_REPORTED,
+  local_runner_reasoning_effort_unavailable: LOCAL_RUNNER_REPORTED,
+  local_runner_approvals_unavailable: LOCAL_RUNNER_REPORTED,
+  local_runner_folder_not_approved: LOCAL_RUNNER_REPORTED,
   unknown: ["mid-stream-error"],
 } as const satisfies Record<AIErrorKind, NotAShape | readonly ResponseShape[]>;
 
@@ -194,12 +233,22 @@ const TURN_POSITION_NAMES = Object.keys(TURN_POSITIONS).filter(
   (position): position is TurnPosition => position in TURN_POSITIONS,
 );
 
+/** An interaction whose answer no model response continues. */
+type NotAPosition = { notAPosition: string };
+
 /** Every interaction a turn can wait on, by the position that answers it. */
 export const INTERACTION_POSITIONS = {
   "ask-user": ["after-ask-user"],
   approval: ["after-approval", "after-denial"],
   "client-tool": ["after-client-tool"],
-} as const satisfies Record<ChatTurnInteractionType, readonly TurnPosition[]>;
+  "harness-question": {
+    notAPosition:
+      "Answered on the computer a local turn runs on: the continuation reads the harness's run (`local-run-chunks.ts`, covered by `gateway.db.test.ts`), not a model response.",
+  },
+} as const satisfies Record<
+  ChatTurnInteractionType,
+  NotAPosition | readonly TurnPosition[]
+>;
 
 // --- Surfaces -----------------------------------------------------------------
 

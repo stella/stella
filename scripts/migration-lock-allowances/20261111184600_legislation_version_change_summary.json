@@ -1,0 +1,3 @@
+{
+  "add-column": "Adding the nullable JSONB summary without a default rewrites no rows; ACCESS EXCLUSIVE lock acquisition is bounded by 1s and the statement by 10s."
+}

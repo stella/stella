@@ -3,9 +3,9 @@ import type * as slimdom from "slimdom";
 
 import { CLAUSE_DIRECTIVES_INVALID_CODE } from "@stll/api-contract";
 import {
-  scanMarkers,
-  type NamedCondition,
   type LoopProperty,
+  type NamedCondition,
+  scanMarkers,
 } from "@stll/template-conditions";
 
 import {
@@ -34,9 +34,9 @@ import {
 import type {
   ClauseProvenance,
   EnclosingScope,
-  TemplateData,
-  RichRun,
   RichPatchValue,
+  RichRun,
+  TemplateData,
 } from "@/api/lib/docx/types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
@@ -45,7 +45,7 @@ import {
   clauseDirectiveContainer,
   validateClauseBodyDirectives,
 } from "./clause-directives";
-import type { ClauseListKind, ClauseParagraph, ClauseBody } from "./types";
+import type { ClauseBody, ClauseListKind, ClauseParagraph } from "./types";
 
 const NESTED_INDENT = "    ";
 
@@ -131,7 +131,7 @@ const resolvedBodyToRichPatch = (body: ClauseBody): RichPatchValue => {
       continue;
     }
 
-    const level = Math.max(0, p.listLevel ?? 0);
+    const level = Math.max(0, p.numbering?.ilvl ?? 0);
     // Leaving a deeper level invalidates its counter for a fresh restart.
     for (const key of counters.keys()) {
       if (key > level) {
@@ -407,9 +407,9 @@ export const clauseBodyToRichPatch = (
       ...(origin.style === undefined ? {} : { style: origin.style }),
       ...(origin.level === undefined ? {} : { level: origin.level }),
       ...(origin.listKind === undefined ? {} : { listKind: origin.listKind }),
-      ...(origin.listLevel === undefined
+      ...(origin.numbering === undefined
         ? {}
-        : { listLevel: origin.listLevel }),
+        : { numbering: origin.numbering }),
     });
   }
   return Result.ok(resolvedBodyToRichPatch(resolved));

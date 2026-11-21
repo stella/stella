@@ -1,12 +1,14 @@
 import { queryOptions } from "@tanstack/react-query";
 
+import { chunk as chunkItems } from "@stll/concurrency/chunk";
+
 import {
   questionSuggestionBody,
   researchRunBatches,
 } from "@/features/case-law/research/question-columns.logic";
 import type { QuestionColumnInput } from "@/features/case-law/research/question-columns.logic";
 import { api } from "@/lib/api";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
 
@@ -24,14 +26,6 @@ const ANSWERS_POLL_INTERVAL_MS = 2500;
 
 /** Decisions per lookup request; the server caps the same way. */
 const ANSWERS_LOOKUP_CHUNK = 200;
-
-const chunk = <T>(items: readonly T[], size: number): T[][] => {
-  const chunks: T[][] = [];
-  for (let start = 0; start < items.length; start += size) {
-    chunks.push(items.slice(start, start + size));
-  }
-  return chunks;
-};
 
 type QuestionColumnsKey = { activeOrganizationId: string };
 
@@ -59,7 +53,7 @@ export const questionColumnKeys = {
 };
 
 const listQuestionColumns = async (signal: AbortSignal) =>
-  unwrapEden(await api.case.research.columns.get({ fetch: { signal } }));
+  unwrapApiResponse(await api.case.research.columns.get({ fetch: { signal } }));
 
 /** Every question the organization asks, in the order the server keeps them. */
 export const questionColumnsOptions = (key: QuestionColumnsKey) =>
@@ -73,7 +67,7 @@ const lookupAnswers = async (
   decisionIds: readonly string[],
   signal: AbortSignal,
 ) =>
-  unwrapEden(
+  unwrapApiResponse(
     await api.case.research.answers.lookup.post(
       {
         decisionIds: decisionIds.map((decisionId) =>
@@ -93,7 +87,7 @@ export const questionAnswersOptions = (key: QuestionAnswersKey) =>
     queryKey: questionColumnKeys.answersFor(key),
     queryFn: async ({ signal }) => {
       const pages = await Promise.all(
-        chunk(key.decisionIds, ANSWERS_LOOKUP_CHUNK).map(
+        chunkItems(key.decisionIds, ANSWERS_LOOKUP_CHUNK).map(
           async (decisionIds) => await lookupAnswers(decisionIds, signal),
         ),
       );
@@ -121,13 +115,13 @@ const toColumnBody = ({ content, question }: QuestionColumnInput) => ({
 });
 
 export const createQuestionColumn = async (input: QuestionColumnInput) =>
-  unwrapEden(await api.case.research.columns.post(toColumnBody(input)));
+  unwrapApiResponse(await api.case.research.columns.post(toColumnBody(input)));
 
 export const updateQuestionColumn = async ({
   columnId,
   ...input
 }: QuestionColumnInput & { columnId: string }) =>
-  unwrapEden(
+  unwrapApiResponse(
     await api.case.research
       .columns({ columnId: toSafeId<"caseLawResearchColumn">(columnId) })
       .patch(toColumnBody(input)),
@@ -142,7 +136,7 @@ export const suggestQuestionPrompt = async (
   input: Parameters<typeof questionSuggestionBody>[0],
 ) => {
   const { decisionIds, ...body } = questionSuggestionBody(input);
-  return unwrapEden(
+  return unwrapApiResponse(
     await api.case.research.columns["suggest-prompt"].post({
       ...body,
       decisionIds: decisionIds.map((decisionId) =>
@@ -153,7 +147,7 @@ export const suggestQuestionPrompt = async (
 };
 
 export const deleteQuestionColumn = async (columnId: string) =>
-  unwrapEden(
+  unwrapApiResponse(
     await api.case.research
       .columns({ columnId: toSafeId<"caseLawResearchColumn">(columnId) })
       .delete(),
@@ -183,7 +177,7 @@ export const runAnswers = async ({
   const results = await Promise.all(
     researchRunBatches(decisionIds).map(
       async (batch) =>
-        unwrapEden(
+        unwrapApiResponse(
           await api.case.research.answers.run.post({
             decisionIds: batch.map((decisionId) =>
               toSafeId<"caseLawDecision">(decisionId),

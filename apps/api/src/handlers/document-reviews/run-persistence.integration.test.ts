@@ -20,15 +20,21 @@ import {
 import { and, eq, inArray } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
-import { documentReviewFindings, documentReviewRuns } from "@/api/db/schema";
+import {
+  documentReviewFindingDecisions,
+  documentReviewFindings,
+  documentReviewRuns,
+  entities,
+} from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { carryOverDecisions } from "@/api/lib/document-review/decision-carry-over";
 import {
   buildDocumentReviewFindingRow,
   recountDocumentReviewFindingProgress,
-  upsertDocumentReviewFindings,
+  writeReviewFindingBatch,
 } from "@/api/lib/document-review/finding-write";
+import { DOCUMENT_REVIEW_RUN_EXECUTOR } from "@/api/lib/document-review/run-contract";
 import type {
   DocumentReviewDecision,
   DocumentReviewFindingPayload,
@@ -37,7 +43,7 @@ import type {
 } from "@/api/lib/document-review/run-contract";
 import { recordDocumentReviewRunModel } from "@/api/lib/document-review/run-queue";
 import { formatModelRef } from "@/api/lib/tanstack-ai-models";
-import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import { memberScopedDb } from "@/api/tests/helpers/application-role-db";
 import {
   getRlsFixture,
   releaseRlsFixture,
@@ -51,25 +57,43 @@ let testDb: TestDatabase;
 let ids: TestIds;
 
 const seededRunIds: SafeId<"documentReviewRun">[] = [];
+const seededTargetEntityIds: SafeId<"entity">[] = [];
+
+/** Runs the code under test as the member, on the application role. */
+const asMember = async <T>(fn: (tx: Transaction) => Promise<T>): Promise<T> =>
+  await memberScopedDb(testDb, {
+    organizationId: ids.orgA,
+    workspaceIds: [ids.wsA1],
+    userId: ids.userA1,
+  })(fn);
 
 const REFERENCE_POSITION_ID = "44444444-4444-4444-8444-444444444444";
 const POSITION_ID = "11111111-1111-4111-8111-111111111111";
 const REFERENCE_PASSAGE_ID = "66666666-6666-4666-8666-666666666666";
 const CONTENT_SHA256 = "a".repeat(64);
 
-/** The reviewed document a case owns. Runs pin these by value (no foreign
- *  keys), so each case can claim its own document without seeding entities. */
+/** Give each persistence case its own real target entity. */
 type ReviewTarget = {
   entityId: SafeId<"entity">;
   fileFieldId: SafeId<"field">;
   entityVersionId: SafeId<"entityVersion">;
 };
 
-const reviewTarget = (): ReviewTarget => ({
-  entityId: toSafeId<"entity">(Bun.randomUUIDv7()),
-  fileFieldId: toSafeId<"field">(Bun.randomUUIDv7()),
-  entityVersionId: toSafeId<"entityVersion">(Bun.randomUUIDv7()),
-});
+const reviewTarget = async (): Promise<ReviewTarget> => {
+  const entityId = toSafeId<"entity">(Bun.randomUUIDv7());
+  seededTargetEntityIds.push(entityId);
+  await testDb.insert(entities).values({
+    id: entityId,
+    workspaceId: ids.wsA1,
+    name: `review-target-${entityId}`,
+    createdBy: ids.userA1,
+  });
+  return {
+    entityId,
+    fileFieldId: toSafeId<"field">(Bun.randomUUIDv7()),
+    entityVersionId: toSafeId<"entityVersion">(Bun.randomUUIDv7()),
+  };
+};
 
 /** The pinned reference document every fixture finding cites. */
 const REFERENCE_FILE_FIELD_ID = toSafeId<"field">(Bun.randomUUIDv7());
@@ -109,6 +133,7 @@ const referenceBasis: DocumentReviewRunBasis = {
           },
         ],
       },
+      scope: null,
     },
   },
   perspective: { type: "party", role: "Buyer", name: null },
@@ -242,7 +267,9 @@ const seedRun = async ({
     status,
     total,
     requestedBy: ids.userA1,
-    ...(status === "running" ? { startedAt: new Date() } : {}),
+    ...(status === "running"
+      ? { startedAt: new Date("2026-04-30T09:00:00.000Z") }
+      : {}),
   });
 };
 
@@ -284,6 +311,21 @@ const decisionsOf = async (runId: SafeId<"documentReviewRun">) =>
     .from(documentReviewFindings)
     .where(eq(documentReviewFindings.runId, runId));
 
+/** The decision history of one run's findings, as stored. */
+const historyOf = async (runId: SafeId<"documentReviewRun">) =>
+  await testDb
+    .select({
+      decision: documentReviewFindingDecisions.decision,
+      actorId: documentReviewFindingDecisions.actorId,
+      createdAt: documentReviewFindingDecisions.createdAt,
+    })
+    .from(documentReviewFindingDecisions)
+    .innerJoin(
+      documentReviewFindings,
+      eq(documentReviewFindings.id, documentReviewFindingDecisions.findingId),
+    )
+    .where(eq(documentReviewFindings.runId, runId));
+
 beforeAll(async () => {
   const fixture = await getRlsFixture();
   testDb = fixture.testDb;
@@ -297,6 +339,11 @@ afterAll(async () => {
         .delete(documentReviewRuns)
         .where(inArray(documentReviewRuns.id, seededRunIds));
     }
+    if (seededTargetEntityIds.length > 0) {
+      await testDb
+        .delete(entities)
+        .where(inArray(entities.id, seededTargetEntityIds));
+    }
   } finally {
     await releaseRlsFixture();
   }
@@ -304,7 +351,7 @@ afterAll(async () => {
 
 describe("document review run persistence", () => {
   test("refuses a second unfinished run for the same document", async () => {
-    const target = reviewTarget();
+    const target = await reviewTarget();
     const first = toSafeId<"documentReviewRun">(Bun.randomUUIDv7());
     await seedRun({ runId: first, status: "queued", target });
 
@@ -319,7 +366,10 @@ describe("document review run persistence", () => {
     // active window, not just the queued moment.
     await testDb
       .update(documentReviewRuns)
-      .set({ status: "running", startedAt: new Date() })
+      .set({
+        status: "running",
+        startedAt: new Date("2026-04-30T09:00:00.000Z"),
+      })
       .where(eq(documentReviewRuns.id, first));
     const third = toSafeId<"documentReviewRun">(Bun.randomUUIDv7());
     expect(
@@ -330,12 +380,15 @@ describe("document review run persistence", () => {
   });
 
   test("allows a new run once the previous one is terminal", async () => {
-    const target = reviewTarget();
+    const target = await reviewTarget();
     const previous = toSafeId<"documentReviewRun">(Bun.randomUUIDv7());
     await seedRun({ runId: previous, status: "queued", target });
     await testDb
       .update(documentReviewRuns)
-      .set({ status: "completed", finishedAt: new Date() })
+      .set({
+        status: "completed",
+        finishedAt: new Date("2026-04-30T09:10:00.000Z"),
+      })
       .where(eq(documentReviewRuns.id, previous));
 
     const next = toSafeId<"documentReviewRun">(Bun.randomUUIDv7());
@@ -356,7 +409,7 @@ describe("document review run persistence", () => {
   });
 
   test("converges on one finding per position when a job replays", async () => {
-    const target = reviewTarget();
+    const target = await reviewTarget();
     const runId = toSafeId<"documentReviewRun">(Bun.randomUUIDv7());
     await seedRun({ runId, status: "running", target });
 
@@ -377,7 +430,7 @@ describe("document review run persistence", () => {
   });
 
   test("recounts durable progress after interleaved pass commits", async () => {
-    const target = reviewTarget();
+    const target = await reviewTarget();
     const runId = toSafeId<"documentReviewRun">(Bun.randomUUIDv7());
     await seedRun({ runId, status: "running", target, total: 2 });
     const positionIds = [
@@ -400,11 +453,15 @@ describe("document review run persistence", () => {
 
     await Promise.all(
       rows.map(async (row) => {
-        await testDb.transaction(
+        await asMember(
           async (tx) =>
-            await upsertDocumentReviewFindings(asTestRaw<Transaction>(tx), [
-              row,
-            ]),
+            await writeReviewFindingBatch({
+              tx,
+              workspaceId: ids.wsA1,
+              rows: [row],
+              executor: DOCUMENT_REVIEW_RUN_EXECUTOR.WORKER,
+              runId,
+            }),
         );
         // Deterministically model the lost-count result: each overlapping
         // pass observed only its own row when it wrote intermediate progress.
@@ -426,10 +483,10 @@ describe("document review run persistence", () => {
     expect(committed).toHaveLength(2);
     expect(beforeRecount.at(0)?.completed).toBe(1);
 
-    await testDb.transaction(
+    await asMember(
       async (tx) =>
         await recountDocumentReviewFindingProgress({
-          tx: asTestRaw<Transaction>(tx),
+          tx,
           workspaceId: ids.wsA1,
           runId,
         }),
@@ -443,7 +500,7 @@ describe("document review run persistence", () => {
   });
 
   test("refuses an outcome outside the one vocabulary", async () => {
-    const target = reviewTarget();
+    const target = await reviewTarget();
     const runId = toSafeId<"documentReviewRun">(Bun.randomUUIDv7());
     await seedRun({ runId, status: "running", target });
 
@@ -477,7 +534,7 @@ describe("document review run persistence", () => {
   });
 
   test("keeps a decision and its moment inseparable", async () => {
-    const target = reviewTarget();
+    const target = await reviewTarget();
     const runId = toSafeId<"documentReviewRun">(Bun.randomUUIDv7());
     await seedRun({ runId, status: "running", target });
 
@@ -519,16 +576,22 @@ describe("document review run persistence", () => {
     expect(
       violationText(
         await rejectionOf(
-          insertDecision({ decision: "open", decidedAt: new Date() }),
+          insertDecision({
+            decision: "open",
+            decidedAt: new Date("2026-04-30T09:05:00.000Z"),
+          }),
         ),
       ),
     ).toContain(DECISION_TIMING_CHECK);
 
-    await insertDecision({ decision: "dismissed", decidedAt: new Date() });
+    await insertDecision({
+      decision: "dismissed",
+      decidedAt: new Date("2026-04-30T09:05:00.000Z"),
+    });
   });
 
   test("keeps an applied edit and its moment inseparable", async () => {
-    const target = reviewTarget();
+    const target = await reviewTarget();
     const runId = toSafeId<"documentReviewRun">(Bun.randomUUIDv7());
     await seedRun({ runId, status: "running", target });
 
@@ -575,7 +638,7 @@ describe("document review run persistence", () => {
         await rejectionOf(
           insertApplication({
             applicationStatus: "pending",
-            appliedAt: new Date(),
+            appliedAt: new Date("2026-04-30T09:06:00.000Z"),
           }),
         ),
       ),
@@ -583,7 +646,7 @@ describe("document review run persistence", () => {
 
     await insertApplication({
       applicationStatus: "applied",
-      appliedAt: new Date(),
+      appliedAt: new Date("2026-04-30T09:06:00.000Z"),
     });
   });
 
@@ -593,8 +656,8 @@ describe("document review run persistence", () => {
    * that it copies the right rows and leaves the rest alone.
    */
   test("carries a decision onto a re-run that repeats the finding", async () => {
-    const target = reviewTarget();
-    const decidedAt = new Date();
+    const target = await reviewTarget();
+    const decidedAt = new Date("2026-04-30T09:05:00.000Z");
 
     const firstRun = toSafeId<"documentReviewRun">(Bun.randomUUIDv7());
     await seedRun({ runId: firstRun, status: "running", target });
@@ -605,48 +668,75 @@ describe("document review run persistence", () => {
       .where(eq(documentReviewFindings.runId, firstRun));
     await testDb
       .update(documentReviewRuns)
-      .set({ status: "completed", finishedAt: new Date() })
+      .set({
+        status: "completed",
+        finishedAt: new Date("2026-04-30T09:10:00.000Z"),
+      })
       .where(eq(documentReviewRuns.id, firstRun));
 
     const repeatRun = toSafeId<"documentReviewRun">(Bun.randomUUIDv7());
     await seedRun({ runId: repeatRun, status: "running", target });
     await upsertReferenceFinding(repeatRun, target, "Original passage");
-    const carried = await carryOverDecisions({
-      tx: asTestRaw<Transaction>(testDb),
-      workspaceId: ids.wsA1,
-      runId: repeatRun,
-      entityId: target.entityId,
-      fileFieldId: target.fileFieldId,
-    });
-    expect(carried).toBe(1);
+    const carried = await asMember(
+      async (tx) =>
+        await carryOverDecisions({
+          tx,
+          workspaceId: ids.wsA1,
+          runId: repeatRun,
+          entityId: target.entityId,
+          fileFieldId: target.fileFieldId,
+        }),
+    );
+    expect(carried.carried).toBe(1);
     expect(await decisionsOf(repeatRun)).toEqual([
       { decision: "accepted", decidedBy: ids.userA1, decidedAt },
+    ]);
+    // The inherited decision arrives with its history: one event, with the
+    // original decider and moment, written by the database whichever path
+    // decides. A decided finding without one is what the online repair reads
+    // as pending.
+    expect(await historyOf(repeatRun)).toEqual([
+      {
+        decision: "accepted",
+        actorId: ids.userA1,
+        createdAt: decidedAt,
+      },
     ]);
 
     // A run whose finding quotes different text inherits nothing: that is the
     // one a reviewer has to read again.
     await testDb
       .update(documentReviewRuns)
-      .set({ status: "completed", finishedAt: new Date() })
+      .set({
+        status: "completed",
+        finishedAt: new Date("2026-04-30T09:10:00.000Z"),
+      })
       .where(eq(documentReviewRuns.id, repeatRun));
     const changedRun = toSafeId<"documentReviewRun">(Bun.randomUUIDv7());
     await seedRun({ runId: changedRun, status: "running", target });
     await upsertReferenceFinding(changedRun, target, "Renegotiated passage");
-    const carriedAfterChange = await carryOverDecisions({
-      tx: asTestRaw<Transaction>(testDb),
-      workspaceId: ids.wsA1,
-      runId: changedRun,
-      entityId: target.entityId,
-      fileFieldId: target.fileFieldId,
-    });
-    expect(carriedAfterChange).toBe(0);
+    const carriedAfterChange = await asMember(
+      async (tx) =>
+        await carryOverDecisions({
+          tx,
+          workspaceId: ids.wsA1,
+          runId: changedRun,
+          entityId: target.entityId,
+          fileFieldId: target.fileFieldId,
+        }),
+    );
+    expect(carriedAfterChange.carried).toBe(0);
+    // Same conclusion over other words: the reading stays behind as
+    // text-changed.
+    expect([...carriedAfterChange.outcomes.values()]).toEqual(["text-changed"]);
     expect(await decisionsOf(changedRun)).toEqual([
       { decision: "open", decidedBy: null, decidedAt: null },
     ]);
+    expect(await historyOf(changedRun)).toEqual([]);
   });
 
   test("defaults a committed finding to undecided", async () => {
-    const target = reviewTarget();
+    const target = await reviewTarget();
     const runId = toSafeId<"documentReviewRun">(Bun.randomUUIDv7());
     await seedRun({ runId, status: "running", target });
     await upsertReferenceFinding(runId, target, "Undecided by default");
@@ -666,7 +756,7 @@ describe("document review run persistence", () => {
   });
 
   test("records the model the run grades with, provider included", async () => {
-    const target = reviewTarget();
+    const target = await reviewTarget();
     const runId = toSafeId<"documentReviewRun">(Bun.randomUUIDv7());
     await seedRun({ runId, status: "running", target });
 
@@ -681,15 +771,18 @@ describe("document review run persistence", () => {
     // A run carries no model until grading resolves one.
     expect(await modelRefOf()).toBeNull();
 
-    await recordDocumentReviewRunModel({
-      tx: asTestRaw<Transaction>(testDb),
-      workspaceId: ids.wsA1,
-      runId,
-      modelRef: formatModelRef({
-        provider: "anthropic",
-        modelId: "claude-sonnet-4-5",
-      }),
-    });
+    await asMember(
+      async (tx) =>
+        await recordDocumentReviewRunModel({
+          tx,
+          workspaceId: ids.wsA1,
+          runId,
+          modelRef: formatModelRef({
+            provider: "anthropic",
+            modelId: "claude-sonnet-4-5",
+          }),
+        }),
+    );
 
     expect(await modelRefOf()).toBe("anthropic/claude-sonnet-4-5");
   });

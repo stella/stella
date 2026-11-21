@@ -2,16 +2,20 @@ import { panic } from "better-result";
 import { expect, test } from "bun:test";
 import fc from "fast-check";
 
+import { flattenInlineText, type Inline } from "@stll/legal-ast/inline";
 import { PROVISION_CITATION_PROFILES } from "@stll/legal-atlas/provision-citation-profiles";
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
+import { normalizeUnicode } from "@stll/text-normalize";
 
 import { caseLawCorpusQueryFields } from "@/api/lib/legal-search/corpus-index-read-contract";
 import {
-  CORPUS_QUERY_LEAF_BUDGET,
   caseLawCorpusQuery,
-  type CorpusStemming,
-  type CorpusFreeTextOptions,
+  CORPUS_QUERY_LEAF_BUDGET,
+  corpusDecisionTypeClause,
   corpusFreeTextClause,
+  type CorpusFreeTextOptions,
+  type CorpusQueryToken,
+  type CorpusStemming,
   type CorpusTermExpander,
   partitionCorpusQueryTokens,
   quoteCorpusValue,
@@ -22,6 +26,7 @@ import {
   CORPUS_QUERY_VARIANT_POLICY,
   type CorpusIndexQueryVariant,
 } from "@/api/lib/legal-search/corpus-query-variant-policy";
+import { corpusTokens } from "@/api/lib/legal-search/corpus-tokens";
 import { functionWordsFor } from "@/api/lib/legal-search/morphology/function-words";
 import {
   LEGACY_STEMMERS,
@@ -237,12 +242,105 @@ test("the assembler ANDs filter clauses onto the free-text clause", () => {
   ).toBe(
     '("náhrada škody")' +
       ' AND jurisdiction:"CZE"' +
-      ' AND document_type:"rozsudek"' +
+      ` AND ${corpusDecisionTypeClause("rozsudek")}` +
       ' AND source:"7449df27-2067-4827-b22f-3091f564ae50"' +
       ' AND language:"cs"' +
       ' AND court:"Nejvyšší soud"' +
       " AND decision_date:[2020-01-01 TO 2024-12-31]",
   );
+});
+
+test("the assembler ORs the words under match any and leaves the filters ANDed", () => {
+  const filters = { jurisdiction: "CZE", language: "cs" };
+  const strict = caseLawCorpusQuery({
+    jurisdiction: undefined,
+    text: "promlčení náhrada škody",
+    filters,
+  });
+  const relaxed = caseLawCorpusQuery({
+    jurisdiction: undefined,
+    text: "promlčení náhrada škody",
+    filters,
+    match: "any",
+  });
+  expect(relaxed).toBe(
+    '("promlčení" OR "náhrada" OR "škody")' +
+      ' AND jurisdiction:"CZE"' +
+      ' AND language:"cs"',
+  );
+  // Asking for "all" explicitly is the default, byte for byte.
+  expect(
+    caseLawCorpusQuery({
+      jurisdiction: undefined,
+      text: "promlčení náhrada škody",
+      filters,
+      match: "all",
+    }),
+  ).toBe(strict);
+  expect(strict).toBe(
+    '("promlčení" AND "náhrada" AND "škody")' +
+      ' AND jurisdiction:"CZE"' +
+      ' AND language:"cs"',
+  );
+});
+
+test("a decision id set is a quoted term-set filter on the decision id", () => {
+  expect(
+    caseLawCorpusQuery({
+      jurisdiction: undefined,
+      text: "kamera",
+      filters: {
+        jurisdiction: "CZE",
+        decisionIds: [
+          "019dd643-82d9-7000-abc3-fe06dac868ee",
+          "e979ebe3-2f3c-471c-89f7-e769457e3a09",
+        ],
+      },
+    }),
+  ).toBe(
+    '("kamera")' +
+      ' AND jurisdiction:"CZE"' +
+      ' AND document_id: IN ["019dd643-82d9-7000-abc3-fe06dac868ee" "e979ebe3-2f3c-471c-89f7-e769457e3a09"]',
+  );
+});
+
+test("an empty decision id set admits nothing, so no query is sent", () => {
+  expect(
+    caseLawCorpusQuery({
+      jurisdiction: undefined,
+      text: "kamera",
+      filters: { decisionIds: [] },
+    }),
+  ).toBeNull();
+});
+
+test("a type filter names every stored spelling of its kind, so an abbreviation is not missed", () => {
+  const order = corpusDecisionTypeClause("order");
+  expect(corpusDecisionTypeClause("usnesení")).toBe(order);
+  expect(corpusDecisionTypeClause("Usn.")).toBe(order);
+  for (const spelling of ["usnesení", "usn.", "uznesenie", "postanowienie"]) {
+    expect(order).toContain(`document_type:${quoteCorpusValue(spelling)}`);
+  }
+  expect(order).not.toContain(quoteCorpusValue("rozsudek"));
+  expect(order).toMatch(
+    /^\(document_type:"[^"]+"( OR document_type:"[^"]+")+\)$/u,
+  );
+
+  // The raw field is exact, so every stored casing and joined list is named.
+  for (const stored of ["Uznesenie", "uznesenie,uznesenie"]) {
+    expect(order).toContain(`document_type:${quoteCorpusValue(stored)}`);
+  }
+
+  // The catch-all is a stated type none of the kinds' spellings is: what is
+  // read as `other` (a docket, `jinak`) stays out of the exclusion.
+  const other = corpusDecisionTypeClause("other");
+  expect(other.startsWith("(document_type:* AND NOT (")).toBe(true);
+  expect(other).toContain(`document_type:${quoteCorpusValue("usn.")}`);
+  expect(other).not.toContain(quoteCorpusValue("jinak"));
+  expect(other).not.toContain(quoteCorpusValue("63 az 17/2026 - 28"));
+
+  // A value no kind claims is matched as stated.
+  expect(corpusDecisionTypeClause("jiné")).toBe('document_type:"jiné"');
 });
 
 test("a court filter carries its partitions beside the exact court clause, never alone", () => {
@@ -344,6 +442,7 @@ test("filter values cannot close their clause", () => {
 const CS_STEMMING = {
   language: "cs",
   fields: ["text_stem", "headnote_stem"],
+  positionlessFields: [],
 } as const satisfies CorpusStemming;
 
 test("a term carries a stem alternative beside the word as typed", () => {
@@ -408,6 +507,42 @@ test("a phrase carries a stemmed phrase, word for word", () => {
     corpusFreeTextClause('"nájemního bytu"', { stemming: CS_STEMMING }),
   ).toBe(
     '(("nájemního bytu" OR text_stem:"nájemn byt" OR headnote_stem:"nájemn byt"))',
+  );
+});
+
+/**
+ * A field indexed without positions cannot answer a phrase, and the engine
+ * rejects one sent to it. A stemmed phrase therefore reaches only the stem
+ * fields that keep positions, while a one-word stem still reaches every field.
+ */
+test("a stemmed phrase never reaches a field indexed without positions", () => {
+  const stemming = {
+    ...CS_STEMMING,
+    positionlessFields: ["text_stem"],
+  } as const satisfies CorpusStemming;
+
+  expect(corpusFreeTextClause('"nájemního bytu"', { stemming })).toBe(
+    '(("nájemního bytu" OR headnote_stem:"nájemn byt"))',
+  );
+  expect(corpusFreeTextClause("nájemního", { stemming })).toBe(
+    '(("nájemního" OR text_stem:"nájemn" OR headnote_stem:"nájemn"))',
+  );
+  assertProperty(
+    "a stemmed phrase never reaches a field indexed without positions",
+    fc.property(
+      fc.array(fc.constantFrom("nájemního", "bytu", "smlouvy", "výpovědi"), {
+        minLength: 1,
+        maxLength: 4,
+      }),
+      fc.boolean(),
+      (words, quoted) => {
+        const text = quoted ? `"${words.join(" ")}"` : words.join(" ");
+        const clause = corpusFreeTextClause(text, { stemming }) ?? "";
+        for (const [, value] of clause.matchAll(/text_stem:"([^"]*)"/gu)) {
+          expect(value).not.toContain(" ");
+        }
+      },
+    ),
   );
 });
 
@@ -591,9 +726,14 @@ const queryArbitrary = fc.record({
  * one stem leaf per word per stem field.
  */
 test("every word keeps its stem leaves while the stem pass fits", () => {
-  fc.assert(
+  assertProperty(
+    "every word keeps its stem leaves while the stem pass fits",
     fc.property(queryArbitrary, ({ fields, words }) => {
-      const stemming: CorpusStemming = { fields, language: "cs" };
+      const stemming: CorpusStemming = {
+        fields,
+        language: "cs",
+        positionlessFields: [],
+      };
       const forms = new Map(
         words.map(({ extras, word }) => [
           word,
@@ -627,7 +767,7 @@ test("every word keeps its stem leaves while the stem pass fits", () => {
         }
       }
     }),
-    propertyConfig(),
+    {},
   );
 });
 
@@ -655,6 +795,7 @@ test("court lists are exact OR terms intersected with a singular court", () => {
 const SK_STEMMING = {
   language: "sk",
   fields: STEM_FIELDS,
+  positionlessFields: [],
 } as const satisfies CorpusStemming;
 
 /** Compare candidate free text with the unchanged baseline allocator. */
@@ -695,7 +836,7 @@ test("Slovak terms OR faithful stems beside extended stems in declared fields", 
 
 test("Slovak compatibility preserves NFC normalization and quoted term boundaries", () => {
   const composed = 'premlčanie "premlčanie škodu" škodu';
-  const decomposed = composed.normalize("NFD");
+  const decomposed = normalizeUnicode(composed, "NFD");
   expect(decomposed).not.toBe(composed);
   const candidate = svkFreeText(composed, { stemming: SK_STEMMING });
   expect(svkFreeText(decomposed, { stemming: SK_STEMMING })).toBe(candidate);
@@ -719,6 +860,7 @@ test("only manifest-declared text and headnote stem fields gain faithful alterna
     const stemming = {
       language: "sk",
       fields,
+      positionlessFields: [],
     } as const satisfies CorpusStemming;
     const candidate = svkFreeText("premlčanie", { stemming }) ?? "";
     const baseline = corpusFreeTextClause("premlčanie", { stemming }) ?? "";
@@ -751,7 +893,8 @@ test("faithful groups spend headroom whole and never displace a baseline grant",
 });
 
 test("non-SVK queries stay byte-identical for every morphology language", () => {
-  fc.assert(
+  assertProperty(
+    "non-SVK queries stay byte-identical for every morphology language",
     fc.property(
       fc.constantFrom(...MORPHOLOGY_LANGUAGES),
       fc.array(
@@ -766,7 +909,11 @@ test("non-SVK queries stay byte-identical for every morphology language", () => 
       ),
       (language, words) => {
         const text = words.join(" ");
-        const stemming = { language, fields: STEM_FIELDS };
+        const stemming = {
+          language,
+          fields: STEM_FIELDS,
+          positionlessFields: [],
+        };
         const baseline = corpusFreeTextClause(text, { stemming });
         if (baseline === null) {
           panic("Searchable test terms must produce a baseline clause");
@@ -789,12 +936,13 @@ test("non-SVK queries stay byte-identical for every morphology language", () => 
         }
       },
     ),
-    propertyConfig(),
+    {},
   );
 });
 
 test("Slovak compatibility preserves all baseline leaves and the actual leaf ceiling", () => {
-  fc.assert(
+  assertProperty(
+    "Slovak compatibility preserves all baseline leaves and the actual leaf ceiling",
     fc.property(
       fc.array(
         fc.constantFrom(
@@ -814,6 +962,7 @@ test("Slovak compatibility preserves all baseline leaves and the actual leaf cei
           stemming: {
             language: "sk",
             fields,
+            positionlessFields: [],
           } as const satisfies CorpusStemming,
           expand: () =>
             Array.from(
@@ -858,7 +1007,7 @@ test("Slovak compatibility preserves all baseline leaves and the actual leaf cei
         }
       },
     ),
-    propertyConfig(),
+    {},
   );
   expect(svkFreeText("premlčanie", { stemming: null })).toBe(
     corpusFreeTextClause("premlčanie"),
@@ -1098,4 +1247,116 @@ test("provision spans read the registry's profile for exactly the jurisdictions 
       expect(partitionFor(queryVariant, jurisdiction)).toBeNull();
     }
   }
+});
+
+test("numeric provision indices use the same search terms in every printed form", () => {
+  for (const index of ["505⁹", "505^9", "505(9)"]) {
+    expect(corpusFreeTextClause(`art. ${index} k.p.c.`)).toBe(
+      '("art" AND "505" AND "9" AND "k" AND "p" AND "c")',
+    );
+    expect(corpusFreeTextClause(`"art. ${index}"`)).toBe('("art 505 9")');
+  }
+  for (const index of ["398¹²³", "398^123", "398(123)"]) {
+    expect(tokenizeCorpusFreeText(`art. ${index} § 1`)).toEqual([
+      { type: "term", value: "art" },
+      { type: "term", value: "398" },
+      { type: "term", value: "123" },
+      { type: "term", value: "1" },
+    ]);
+  }
+  expect(corpusFreeTextClause("art. 5059 k.p.c.")).toBe(
+    '("art" AND "5059" AND "k" AND "p" AND "c")',
+  );
+});
+
+const INDEX_DIGIT = fc.constantFrom(
+  { plain: "0", superscript: "⁰" },
+  { plain: "1", superscript: "¹" },
+  { plain: "2", superscript: "²" },
+  { plain: "3", superscript: "³" },
+  { plain: "4", superscript: "⁴" },
+  { plain: "5", superscript: "⁵" },
+  { plain: "6", superscript: "⁶" },
+  { plain: "7", superscript: "⁷" },
+  { plain: "8", superscript: "⁸" },
+  { plain: "9", superscript: "⁹" },
+);
+
+test("corpus-query/numeric-superscript-index-roundtrip", () => {
+  assertProperty(
+    "corpus-query/numeric-superscript-index-roundtrip",
+    fc.property(
+      fc.nat({ max: Number.MAX_SAFE_INTEGER }).map(String),
+      fc.array(INDEX_DIGIT, { minLength: 1, maxLength: 16 }),
+      fc.constantFrom("", " ", "\t", "\n"),
+      fc.constantFrom("none", "bold", "italic", "underline", "link"),
+      (number, digits, trailingWhitespace, wrapper) => {
+        const index = digits.map(({ plain }) => plain).join("");
+        const superscript = digits.map((digit) => digit.superscript).join("");
+        const mark = {
+          type: "superscript",
+          children: [
+            {
+              type: "bold",
+              children: [
+                { type: "text", text: `${index}${trailingWhitespace}` },
+              ],
+            },
+          ],
+        } satisfies Inline;
+        const wrapped = (() => {
+          switch (wrapper) {
+            case "none":
+              return mark;
+            case "link":
+              return {
+                type: "link",
+                href: "#index",
+                children: [mark],
+              } satisfies Inline;
+            case "bold":
+            case "italic":
+            case "underline":
+              return { type: wrapper, children: [mark] } satisfies Inline;
+            default:
+              wrapper satisfies never;
+              return panic("Unknown index wrapper");
+          }
+        })();
+        const projected = flattenInlineText([
+          { type: "text", text: number },
+          wrapped,
+        ]);
+        const concatenated = flattenInlineText([
+          { type: "text", text: `${number}${index}` },
+        ]);
+        expect(projected).not.toBe(concatenated);
+        const expected = [
+          { type: "term", value: number },
+          { type: "term", value: index },
+        ] satisfies CorpusQueryToken[];
+        for (const printed of [
+          projected,
+          `${number}${superscript}`,
+          `${number}(${index})`,
+        ]) {
+          expect(tokenizeCorpusFreeText(printed)).toEqual(expected);
+        }
+        for (const inlines of [
+          [{ type: "text", text: `${number}${superscript}` }],
+          [
+            { type: "text", text: number },
+            { type: "bold", children: [{ type: "text", text: superscript }] },
+          ],
+        ] satisfies Inline[][]) {
+          expect(corpusTokens(flattenInlineText(inlines))).toEqual([
+            number,
+            index,
+          ]);
+        }
+        expect(corpusTokens(projected)).toEqual([number, index]);
+        expect(tokenizeCorpusFreeText(concatenated)).not.toEqual(expected);
+      },
+    ),
+  );
 });

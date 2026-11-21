@@ -1,15 +1,22 @@
 import { toolDefinition } from "@tanstack/ai";
 import { panic } from "better-result";
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { eq, inArray } from "drizzle-orm";
+import { afterAll, describe, expect, test } from "bun:test";
+import { and, eq, inArray } from "drizzle-orm";
 import * as v from "valibot";
 
 import { TANSTACK_AI_PROVIDERS } from "@stll/ai-catalog";
 import type { TanStackAIProvider } from "@stll/ai-catalog";
 import { propertyTestTimeout } from "@stll/property-testing";
+import { createTestState } from "@stll/test-state";
 
+import { user as authUser } from "@/api/db/auth-schema";
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
-import { chatThreads, organizationSettings, userFiles } from "@/api/db/schema";
+import {
+  chatThreads,
+  featureEnrolments,
+  organizationSettings,
+  userFiles,
+} from "@/api/db/schema";
 import type { PracticeJurisdiction } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
 import { env } from "@/api/env";
@@ -19,8 +26,8 @@ import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-sc
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
-  PROVIDER_PROMPT_CACHING,
   promptCachingUsesBreakpoints,
+  PROVIDER_PROMPT_CACHING,
 } from "@/api/lib/tanstack-ai-caching";
 import type { ProviderPromptCaching } from "@/api/lib/tanstack-ai-caching";
 import { isRecord } from "@/api/lib/type-guards";
@@ -64,7 +71,7 @@ import {
   wireOrgAIConfig,
   wireSideModel,
 } from "@/api/tests/helpers/provider-wire-contract";
-import { installProviderWireReplay } from "@/api/tests/helpers/provider-wire-replay";
+import { registerProviderWireReplay } from "@/api/tests/helpers/provider-wire-replay";
 import type {
   ProviderWireReplay,
   ReplayedRequest,
@@ -74,6 +81,7 @@ import {
   WIRE_PROMPT_SECTIONS,
 } from "@/api/tests/helpers/replayed-harness-model";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import { enrolTimeBilling } from "@/api/tests/helpers/time-billing-enrolment";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 import {
   getRlsFixture,
@@ -81,6 +89,8 @@ import {
 } from "@/api/tests/security/rls-fixture";
 import type { TestIds } from "@/api/tests/security/rls-helpers";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
+
+const testState = createTestState({ file: import.meta.path, config: env });
 
 // What the chat request builder (`chat-request.ts`) promises each provider's
 // prompt cache, held on the request bodies the provider SDKs write. A
@@ -126,9 +136,15 @@ let safeDb: SafeDb;
 let scopedDb: ScopedDb;
 let replay: ProviderWireReplay;
 let fakeS3: FakeS3;
-let previousMockAI: typeof env.USE_MOCK_AI;
-let previousBedrockEndpoint: string | undefined;
+
 const seededThreadIds: SafeId<"chatThread">[] = [];
+
+registerProviderWireReplay({
+  onInstall: (active) => {
+    replay = active;
+  },
+  options: () => ({ passThroughOrigins: [fakeS3.endpoint] }),
+});
 
 /** A member of the organization, as the send path sees them. */
 type Member = {
@@ -158,7 +174,7 @@ const memberOf = (
   };
 };
 
-beforeAll(async () => {
+testState.beforeAll(async () => {
   const fixture = await getRlsFixture();
   testDb = fixture.testDb;
   ids = fixture.ids;
@@ -168,24 +184,19 @@ beforeAll(async () => {
   safeDb = toSafeDbMock(scopedDb);
   firstMember = { id: ids.userA1, safeDb, scopedDb };
   secondMember = memberOf(ids.userA2);
-  previousMockAI = env.USE_MOCK_AI;
-  env.USE_MOCK_AI = false;
-  previousBedrockEndpoint = process.env["AWS_ENDPOINT_URL_BEDROCK_RUNTIME"];
-  process.env["AWS_ENDPOINT_URL_BEDROCK_RUNTIME"] =
-    "https://bedrock-runtime.us-east-1.amazonaws.com.cassette.invalid";
+
+  testState.setConfig("USE_MOCK_AI", false);
+
+  testState.setEnv(
+    "AWS_ENDPOINT_URL_BEDROCK_RUNTIME",
+    "https://bedrock-runtime.us-east-1.amazonaws.com.cassette.invalid",
+  );
   fakeS3 = startFakeS3();
-  replay = installProviderWireReplay({ passThroughOrigins: [fakeS3.endpoint] });
 });
 
 afterAll(async () => {
-  replay.restore();
   fakeS3.stop();
-  env.USE_MOCK_AI = previousMockAI;
-  if (previousBedrockEndpoint === undefined) {
-    delete process.env["AWS_ENDPOINT_URL_BEDROCK_RUNTIME"];
-  } else {
-    process.env["AWS_ENDPOINT_URL_BEDROCK_RUNTIME"] = previousBedrockEndpoint;
-  }
+
   if (seededThreadIds.length > 0) {
     // Uploaded attachments belong to their thread.
     await testDb
@@ -350,12 +361,14 @@ const cacheableSystemTextOf = (system: string): string => {
   return system.slice(0, at + PRACTICE_JURISDICTION_LINE.length);
 };
 
-/** A fresh thread's first turn, as `member` sends it with caching on. */
+/** A fresh thread's first turn with the organization's caching choice. */
 const firstTurnBody = async ({
+  caching = "on",
   endpoint,
   member,
   tools,
 }: {
+  caching?: CachingSetting;
   endpoint: CacheEndpoint;
   member: Member;
   tools: ToolSurface;
@@ -364,7 +377,7 @@ const firstTurnBody = async ({
   seededThreadIds.push(threadId);
   replay.forgetSignedCalls();
   const session = await openSession({
-    caching: "on",
+    caching,
     chatModel: endpoint.chatModel,
     endpoint: { provider: endpoint.provider, slot: "recorded" },
     member,
@@ -385,6 +398,18 @@ const firstTurnBody = async ({
   } finally {
     await session.close();
   }
+};
+
+const expectDisabledCacheRequest = async (endpoint: CacheEndpoint) => {
+  const body = await firstTurnBody({
+    caching: "off",
+    endpoint,
+    member: firstMember,
+    tools: "default",
+  });
+  expect(cacheMarkersOf(body)).toEqual([]);
+  expect(body).not.toHaveProperty("prompt_cache_key");
+  expect(body).not.toHaveProperty("prompt_cache_retention");
 };
 
 /**
@@ -475,9 +500,7 @@ const messageTextsOf = (
 
 /** The stable-prefix size each surface measured, for the ratchet test. */
 const measuredStablePrefixes = new Map<string, number>();
-/** The first member's extended-surface Anthropic request, for the per-tool
- *  budget. */
-let budgetedToolsBody: Record<string, unknown> | undefined;
+const BILLING_BUDGET_FEATURE_ID = "time-billing";
 
 /** Two members of the organization send `endpoint` the same tools and system
  *  prompt through its organization layer, marked where the provider caches at
@@ -540,15 +563,12 @@ const expectMembersShareThePrefix = async (
     estimatedWireTokens(toolsSectionOf(provider, a)) +
       estimatedTokens({ prose: cacheable }),
   );
-  if (endpoint.key === "anthropic" && tools === "extended") {
-    budgetedToolsBody = a;
-  }
 };
 
 describe("chat requests: the cached prefix", () => {
   let previousJurisdictions: PracticeJurisdiction[] = [];
 
-  beforeAll(async () => {
+  testState.beforeAll(async () => {
     const [row] = await testDb
       .select({
         practiceJurisdictions: organizationSettings.practiceJurisdictions,
@@ -585,6 +605,14 @@ describe("chat requests: the cached prefix", () => {
   });
 
   for (const endpoint of CACHE_ENDPOINTS) {
+    test(
+      `${endpoint.key}: disabled caching emits no automatic markers or key`,
+      async () => {
+        await expectDisabledCacheRequest(endpoint);
+      },
+      propertyTestTimeout(CONVERSATION_TIMEOUT_MS),
+    );
+
     test(
       `${endpoint.key}: history and every tool-loop iteration reuse the cached prefix`,
       async () => {
@@ -661,33 +689,69 @@ describe("chat requests: the cached prefix", () => {
     ]).toEqual([]);
   });
 
-  test("every tool fits its size budget or says why it does not", () => {
-    const body =
-      budgetedToolsBody ?? panic("The extended Anthropic surface was measured");
-    const { toolTokenBudget, toolsOverBudget } = readChatPromptBaseline();
-    const sizes = new Map(
-      anthropicToolEntriesOf(body).map(({ name, wire }) => [
-        name,
-        estimatedWireTokens(wire),
-      ]),
-    );
-    expect(sizes.size).toBeGreaterThan(0);
-    expect([
-      ...[...sizes]
-        .filter(
-          ([name, tokens]) =>
-            tokens > toolTokenBudget && toolsOverBudget[name] === undefined,
-        )
-        .map(
-          ([name, tokens]) =>
-            `${name}: ${String(tokens)} estimated tokens, over the ${String(toolTokenBudget)} budget; trim it or add a written reason to toolsOverBudget`,
-        ),
-      ...Object.keys(toolsOverBudget)
-        .filter((name) => (sizes.get(name) ?? 0) <= toolTokenBudget)
-        .map(
-          (name) =>
-            `${name}: listed over budget but ${String(sizes.get(name) ?? 0)} estimated tokens fit it; remove the entry`,
-        ),
-    ]).toEqual([]);
-  });
+  test(
+    "every tool fits its size budget or says why it does not",
+    async () => {
+      const identity =
+        (
+          await testDb
+            .select({ emailVerified: authUser.emailVerified })
+            .from(authUser)
+            .where(eq(authUser.id, firstMember.id))
+            .limit(1)
+        ).at(0) ?? panic("The budget caller exists");
+      // The shared-prefix fixtures stay unenrolled; budget the billing tools
+      // through a separate admitted request using the production policy.
+      try {
+        await enrolTimeBilling(testDb, [
+          { organizationId: ids.orgA, userId: firstMember.id },
+        ]);
+        const body = await firstTurnBody({
+          endpoint: { key: "anthropic", provider: "anthropic" },
+          member: { ...firstMember, matterId: ids.wsA2 },
+          tools: "extended",
+        });
+        const { toolTokenBudget, toolsOverBudget } = readChatPromptBaseline();
+        const sizes = new Map(
+          anthropicToolEntriesOf(body).map(({ name, wire }) => [
+            name,
+            estimatedWireTokens(wire),
+          ]),
+        );
+        expect(sizes.size).toBeGreaterThan(0);
+        expect([
+          ...[...sizes]
+            .filter(
+              ([name, tokens]) =>
+                tokens > toolTokenBudget && toolsOverBudget[name] === undefined,
+            )
+            .map(
+              ([name, tokens]) =>
+                `${name}: ${String(tokens)} estimated tokens, over the ${String(toolTokenBudget)} budget; trim it or add a written reason to toolsOverBudget`,
+            ),
+          ...Object.keys(toolsOverBudget)
+            .filter((name) => (sizes.get(name) ?? 0) <= toolTokenBudget)
+            .map(
+              (name) =>
+                `${name}: listed over budget but ${String(sizes.get(name) ?? 0)} estimated tokens fit it; remove the entry`,
+            ),
+        ]).toEqual([]);
+      } finally {
+        await testDb
+          .delete(featureEnrolments)
+          .where(
+            and(
+              eq(featureEnrolments.organizationId, ids.orgA),
+              eq(featureEnrolments.userId, firstMember.id),
+              eq(featureEnrolments.featureId, BILLING_BUDGET_FEATURE_ID),
+            ),
+          );
+        await testDb
+          .update(authUser)
+          .set({ emailVerified: identity.emailVerified })
+          .where(eq(authUser.id, firstMember.id));
+      }
+    },
+    propertyTestTimeout(CONVERSATION_TIMEOUT_MS),
+  );
 });

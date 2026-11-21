@@ -1,7 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
 import { member } from "@/api/db/auth-schema";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { toSafeId } from "@/api/lib/branded-types";
+import { createFeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
@@ -24,9 +26,14 @@ const createContext = ({
     request: new Request("https://example.test/v1/workspaces", {
       method: "PUT",
     }),
-    route: "/v1/workspaces",
+    route: "/v1/workspaces" satisfies ApiRoutePath,
     safeDb,
     scopedDb,
+    featureAccessSnapshot: createFeatureAccessSnapshot({
+      organizationId: "org_test123",
+      userId: "user_test123",
+      decisions: new Map(),
+    }),
     memberRole: sessionMemberRole("owner"),
     orgAIConfig: null,
     session: {

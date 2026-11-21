@@ -1,15 +1,20 @@
-import { useFormatter, useTranslations } from "use-intl";
+import { useTranslations } from "use-intl";
 
 import { Temporal } from "@stll/time";
+import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { ChevronRightIcon } from "@stll/ui/icons";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import {
   FlowStatusBadge,
   FlowTriggerBadge,
 } from "@/components/flows/flow-badges";
+import { useFormatter } from "@/i18n/formatting-context";
 import { MEDIUM_DATE_SHORT_TIME_FORMAT } from "@/lib/relative-time";
 import type { FlowRunListItem } from "@/routes/_protected.workspaces/$workspaceId/-components/flows/flow-run-types";
+
+import { RunRowFrame, RunsListFrame } from "./runs-list.pending";
 
 type RunsListProps = {
   runs: FlowRunListItem[];
@@ -31,11 +36,11 @@ export const RunsList = ({ runs, onSelect }: RunsListProps) => {
   }
 
   return (
-    <ul className="divide-y rounded-lg border">
+    <RunsListFrame>
       {runs.map((run) => (
         <RunRow key={run.id} onSelect={() => onSelect(run.id)} run={run} />
       ))}
-    </ul>
+    </RunsListFrame>
   );
 };
 
@@ -53,39 +58,41 @@ const RunRow = ({
 
   return (
     <li>
-      <button
-        className="hover:bg-muted/50 flex w-full items-center gap-3 px-4 py-3 text-start"
-        onClick={onSelect}
-        type="button"
-      >
-        <FlowStatusBadge status={run.status} />
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-medium" dir="auto">
-            {run.name}
-          </p>
-          <div className="text-muted-foreground mt-0.5 flex items-center gap-2 text-xs">
-            <FlowTriggerBadge triggerType={run.triggerType} />
-            <span className="tabular-nums">
-              {format.dateTime(
-                Temporal.Instant.from(timestamp).epochMilliseconds,
-                MEDIUM_DATE_SHORT_TIME_FORMAT,
-              )}
+      <Button className="block w-full" onClick={onSelect} variant="plain">
+        <RunRowFrame>
+          <FlowStatusBadge status={run.status} />
+          <span className="min-w-0 flex-1">
+            <TruncatedText
+              className="block text-sm font-medium"
+              dir="auto"
+              render={<span />}
+            >
+              {run.name}
+            </TruncatedText>
+            <span className="text-muted-foreground mt-0.5 flex items-center gap-2 text-xs">
+              <FlowTriggerBadge triggerType={run.triggerType} />
+              <span className="tabular-nums">
+                {format.dateTime(
+                  Temporal.Instant.from(timestamp).epochMilliseconds,
+                  MEDIUM_DATE_SHORT_TIME_FORMAT,
+                )}
+              </span>
+              <span className="tabular-nums">
+                {t("flows.runs.stepProgress", {
+                  current: format.number(
+                    Math.min(run.currentStepIndex + 1, run.stepCount),
+                  ),
+                  total: format.number(run.stepCount),
+                })}
+              </span>
             </span>
-            <span className="tabular-nums">
-              {t("flows.runs.stepProgress", {
-                current: format.number(
-                  Math.min(run.currentStepIndex + 1, run.stepCount),
-                ),
-                total: format.number(run.stepCount),
-              })}
-            </span>
-          </div>
-        </div>
-        <DirectionalIcon
-          className="text-muted-foreground size-4 shrink-0"
-          icon={ChevronRightIcon}
-        />
-      </button>
+          </span>
+          <DirectionalIcon
+            className="text-muted-foreground size-4 shrink-0"
+            icon={ChevronRightIcon}
+          />
+        </RunRowFrame>
+      </Button>
     </li>
   );
 };

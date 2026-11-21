@@ -1,26 +1,24 @@
 import { Result } from "better-result";
 import { and, asc, desc, eq, gt, or, sql } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
-import {
-  listSkillMetadata,
-  listSkillResources,
-  readSkillDisplayName,
-} from "@stll/skills";
+import { numberFromString } from "@stll/api-contract/http-input";
+import { listSkillMetadata, listSkillResources } from "@stll/skills";
+import { readSkillDisplayName } from "@stll/skills/frontmatter";
 
 import { member, user } from "@/api/db/auth-schema";
 import {
-  agentSkillRevisions,
-  agentSkills,
   AGENT_SKILL_SCOPES,
   type AgentSkillOrigin,
+  agentSkillRevisions,
+  agentSkills,
   type AgentSkillScope,
 } from "@/api/db/schema";
 import { DEFAULT_SKILL_BODY_BY_SLUG } from "@/api/lib/agent-skills/default-skills";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tPaginationCursor } from "@/api/lib/custom-schema";
+import { paginationCursorSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import {
@@ -34,17 +32,22 @@ import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limit
 import { brandPersistedAgentSkillId } from "@/api/lib/safe-id-boundaries";
 import { sqlCaseFragment } from "@/api/lib/sql-case-expression";
 
-const listSkillsQuerySchema = t.Object({
-  limit: t.Optional(
-    t.Integer({
-      minimum: 1,
-      maximum: LIMITS.agentSkillsPageSizeMax,
-    }),
+const listSkillsQuerySchema = v.object({
+  limit: v.optional(
+    numberFromString(
+      v.pipe(
+        v.number(),
+        v.integer(),
+        v.minValue(1),
+        v.maxValue(LIMITS.agentSkillsPageSizeMax),
+      ),
+    ),
   ),
-  cursor: t.Optional(tPaginationCursor()),
+  cursor: v.optional(paginationCursorSchema()),
 });
 
 const config = {
+  contract: "patch",
   description:
     "List the agent skills visible to you, the organization's team skills " +
     "plus your own private ones, enabled first and then by scope and name, " +
@@ -53,7 +56,11 @@ const config = {
     "command; read one skill in full with skills.get. Each installed skill " +
     "carries `lastEdit`: who wrote its newest revision and when, or " +
     "`stella` for an unedited stella starter skill, `unattributed` for other system " +
-    "writes and former members. Also reports " +
+    "writes and former members. Every skill carries `invocation`: `auto` when " +
+    "the assistant may use it on its own, `manual` when it runs only on the " +
+    "user's request. An installed skill bound to one matter or client carries " +
+    "`boundWorkspaceId` or `boundClientId`, and is listed only to members who " +
+    "reach it. Also reports " +
     "whether you may manage team skills.",
   permissions: { chat: ["create"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
@@ -261,6 +268,9 @@ const listSkills = createSafeRootHandler(
             sourceUrl: agentSkills.sourceUrl,
             contentHash: agentSkills.contentHash,
             enabled: agentSkills.enabled,
+            invocation: agentSkills.invocation,
+            boundWorkspaceId: agentSkills.boundWorkspaceId,
+            boundClientId: agentSkills.boundClientId,
             command: agentSkills.command,
             body: sql<string | null>`
               case
@@ -319,6 +329,7 @@ const listSkills = createSafeRootHandler(
         license: skill.license ?? null,
         compatibility: skill.compatibility ?? null,
         enabled: true,
+        invocation: skill.invocation,
         resourceCount: listSkillResources(skill.name).length,
       })),
       installed: installedPage.items.map(

@@ -6,18 +6,27 @@ import { assertProperty } from "@stll/property-testing";
 
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import type { PendingDocument } from "@/api/lib/legal-search/sk-document-backfill";
+import type {
+  DecisionDocumentOutcome,
+  PendingDocument,
+} from "@/api/lib/legal-search/sk-document-backfill";
+import { runWithinRequestLatencyBudget } from "@/api/lib/load/request-latency-budget";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
+import { HAPPY_PATH_TIMEOUT_MS } from "@/api/tests/test-timeouts";
 
 import {
-  withImmediatePublisherSlot,
   reservePublisherSlot,
+  withImmediatePublisherSlot,
 } from "../ingestion/adapters/publisher-policy";
 import { fetchPublisher } from "../ingestion/adapters/retry";
 import {
-  readThroughDeferredDocument,
   type OnDemandDocumentDeps,
+  readThroughDeferredDocument,
 } from "./document-on-demand";
+
+const TEXT_ELIGIBILITY_FINGERPRINT = "synthetic-text-eligibility";
+const testFetchState = createTestFetch();
 
 const decision = (): PendingDocument => ({
   id: createSafeId<"caseLawDecision">(),
@@ -81,6 +90,8 @@ test("a read consumes one shared source reservation", async () => {
   const pending = decision();
   expect(
     await readThroughDeferredDocument({
+      textEligibilityFingerprint: TEXT_ELIGIBILITY_FINGERPRINT,
+      textRevisionFingerprint: TEXT_ELIGIBILITY_FINGERPRINT,
       decision: pending,
       adapterKey: "sk-courts",
       deps,
@@ -91,12 +102,50 @@ test("a read consumes one shared source reservation", async () => {
   expect(reservations()).toBe(1);
 });
 
+test("a deferred read returns metadata when its request budget is spent", async () => {
+  const { deps } = pacedDeps({ tokens: 1 });
+  const fetch = Promise.withResolvers<DecisionDocumentOutcome>();
+  deps.fetchDocument = async () => await fetch.promise;
+  jest.useFakeTimers();
+  let resolved = false;
+  const read = runWithinRequestLatencyBudget(
+    { label: "fetch", budgetMs: 0 },
+    async () =>
+      await readThroughDeferredDocument({
+        decision: decision(),
+        adapterKey: "sk-courts",
+        deps,
+        recordDemand: false,
+        textEligibilityFingerprint: TEXT_ELIGIBILITY_FINGERPRINT,
+        textRevisionFingerprint: TEXT_ELIGIBILITY_FINGERPRINT,
+      }),
+  ).then((result) => {
+    resolved = true;
+    return result;
+  });
+  try {
+    jest.advanceTimersByTime(1);
+    for (let turn = 0; turn < 40; turn += 1) {
+      await Promise.resolve();
+    }
+    expect(resolved).toBe(true);
+    expect(await read).toBeNull();
+  } finally {
+    fetch.resolve({ status: "claimed" });
+    jest.runAllTimers();
+    await read;
+    jest.useRealTimers();
+  }
+});
+
 for (const state of [{ tokens: 0 }, { tokens: 1, backoff: true }]) {
   test(`source pacing returns metadata and records deferral with ${state.backoff ? "backoff" : "no slot"}`, async () => {
     const { deps, fetched, deferred } = pacedDeps(state);
     const pending = decision();
     expect(
       await readThroughDeferredDocument({
+        textEligibilityFingerprint: TEXT_ELIGIBILITY_FINGERPRINT,
+        textRevisionFingerprint: TEXT_ELIGIBILITY_FINGERPRINT,
         decision: pending,
         adapterKey: "sk-courts",
         deps,
@@ -112,6 +161,8 @@ test("an inline source does not reserve or fetch a document", async () => {
   const { deps, fetched, reservations } = pacedDeps({ tokens: 1 });
   expect(
     await readThroughDeferredDocument({
+      textEligibilityFingerprint: TEXT_ELIGIBILITY_FINGERPRINT,
+      textRevisionFingerprint: TEXT_ELIGIBILITY_FINGERPRINT,
       decision: decision(),
       adapterKey: "cz-ns",
       deps,
@@ -136,6 +187,8 @@ test("concurrent reads resolve within the shared source budget", async () => {
               await Promise.resolve();
             }
             return await readThroughDeferredDocument({
+              textEligibilityFingerprint: TEXT_ELIGIBILITY_FINGERPRINT,
+              textRevisionFingerprint: TEXT_ELIGIBILITY_FINGERPRINT,
               decision: decision(),
               adapterKey: "sk-courts",
               deps,
@@ -159,12 +212,14 @@ for (const mode of ["throws", "rejects", "pending", "connecting"] as const) {
     let gateCalls = 0;
     let resolved = false;
     const recorded: string[] = [];
-    const originalFetch = globalThis.fetch;
-    globalThis.fetch = asFetchMock(
-      mock(async () => {
-        requests += 1;
-        return new Response("document");
-      }),
+
+    testFetchState.set(
+      asFetchMock(
+        mock(async () => {
+          requests += 1;
+          return new Response("document");
+        }),
+      ),
     );
     const deps: OnDemandDocumentDeps = {
       recordRequest: async () => {},
@@ -204,13 +259,15 @@ for (const mode of ["throws", "rejects", "pending", "connecting"] as const) {
         await fetchPublisher("https://obcan.justice.sk/document.pdf", {
           adapterKey,
           fetchStage: "document",
-          timeoutMs: 1000,
+          timeoutMs: HAPPY_PATH_TIMEOUT_MS,
         });
         return { status: "claimed" };
       },
     };
     try {
       const read = readThroughDeferredDocument({
+        textEligibilityFingerprint: TEXT_ELIGIBILITY_FINGERPRINT,
+        textRevisionFingerprint: TEXT_ELIGIBILITY_FINGERPRINT,
         decision: decision(),
         adapterKey: "sk-courts",
         deps,
@@ -238,7 +295,7 @@ for (const mode of ["throws", "rejects", "pending", "connecting"] as const) {
       jest.advanceTimersByTime(6000);
       expect(requests).toBe(0);
     } finally {
-      globalThis.fetch = originalFetch;
+      testFetchState.restore();
       jest.useRealTimers();
     }
   });
@@ -251,6 +308,8 @@ test("a pacing capture failure still resolves the read", async () => {
   };
   expect(
     await readThroughDeferredDocument({
+      textEligibilityFingerprint: TEXT_ELIGIBILITY_FINGERPRINT,
+      textRevisionFingerprint: TEXT_ELIGIBILITY_FINGERPRINT,
       decision: decision(),
       adapterKey: "sk-courts",
       deps,

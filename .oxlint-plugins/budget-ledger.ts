@@ -7,12 +7,14 @@
 import { panic } from "better-result";
 import path from "node:path";
 
+import { repoRelativePath } from "@stll/portable-path";
+
 import {
+  type AstNode,
   isAstNode,
   isIdentifier,
   memberPropertyName,
   unwrapExpression,
-  type AstNode,
 } from "./utils.ts";
 
 type LedgerRow = { id: string; count: number; reason: string };
@@ -149,7 +151,7 @@ export const createBudgetLedger = (
           // oxlint runs from the repository root, so the ledger key of a file
           // without a budget is its path relative to the working directory.
           file = path.isAbsolute(filename)
-            ? path.relative(process.cwd(), filename).replaceAll("\\", "/")
+            ? repoRelativePath(process.cwd(), filename)
             : filename;
         }
       },

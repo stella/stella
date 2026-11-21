@@ -1,4 +1,5 @@
 import { Result } from "better-result";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 // The per-origin XDG registry cache (spec 051 S5.3). One file per server origin
 // under `$XDG_CACHE_HOME/stella/registry/<origin-hash>.json` (`~/.cache/...`
 // fallback). Only deployment omissions and version-nudge metadata persist.
@@ -7,21 +8,20 @@ import { Result } from "better-result";
 // This module is I/O-bounded (reads/writes the cache file); pure helpers
 // (`computeDelta`, `isCacheStale`, `isDeltaEmpty`) are exported for the runtime
 // path and its tests. It stores no secrets: only deployment and version metadata.
-import { createHash } from "node:crypto";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { Temporal } from "temporal-polyfill/full";
 
 import {
-  type StableStringifyInput,
   stableStringify,
+  type StableStringifyInput,
 } from "@stll/stable-stringify";
 
 import type { JsonSchema, RegistryToolListing } from "./route-types.js";
+import { sha256Hex as hashSha256Hex } from "./sha256.js";
 
 // Version 5 accepts only deployment metadata; caller listings and credential
 // identities from earlier files cannot participate in command resolution.
-export const CACHE_SCHEMA_VERSION = 5;
+export const CACHE_SCHEMA_VERSION = 6;
 /** Default time-to-live before deployment metadata is refreshed (spec S5.3). */
 export const DEFAULT_TTL_SECONDS = 86_400;
 
@@ -34,6 +34,7 @@ export type RegistryDelta = {
 
 /** The on-disk cache file shape (spec S5.3). */
 export type RegistryCacheFile = {
+  compatibility?: { checkedAt: number; metadata: unknown } | undefined;
   version: number;
   serverOrigin: string;
   fetchedAt: string;
@@ -44,6 +45,8 @@ export type RegistryCacheFile = {
   featureOmittedCapabilities?: readonly string[];
   /** The latest CLI version we last nudged about (update-nudge anti-nag key). */
   lastNudgedVersion?: string;
+  cliMinimum?: string;
+  cliLatest?: string;
 };
 
 /** The environment slice the cache directory resolution needs. */
@@ -66,7 +69,7 @@ export const cacheDir = (env: CacheEnv): string => {
 
 /** A stable sha256 hex of the server origin, used as the cache filename. */
 export const originHash = (serverOrigin: string): string =>
-  createHash("sha256").update(serverOrigin).digest("hex");
+  hashSha256Hex(serverOrigin);
 
 /** The cache file path for a given origin (one file per origin; spec S5.5 rule 5). */
 export const cachePathFor = (serverOrigin: string, env: CacheEnv): string =>
@@ -247,7 +250,18 @@ export const readCacheFile = async (
     return undefined;
   }
   const lastNudgedVersion = value["lastNudgedVersion"];
+  const cliMinimum = value["cliMinimum"];
+  const cliLatest = value["cliLatest"];
   return {
+    ...(isRecord(value["compatibility"]) &&
+    typeof value["compatibility"]["checkedAt"] === "number"
+      ? {
+          compatibility: {
+            checkedAt: value["compatibility"]["checkedAt"],
+            metadata: value["compatibility"]["metadata"],
+          },
+        }
+      : {}),
     version: CACHE_SCHEMA_VERSION,
     serverOrigin,
     fetchedAt,
@@ -259,6 +273,8 @@ export const readCacheFile = async (
       ? { featureOmittedCapabilities: featureOmittedCapabilities.names }
       : {}),
     ...(typeof lastNudgedVersion === "string" ? { lastNudgedVersion } : {}),
+    ...(typeof cliMinimum === "string" ? { cliMinimum } : {}),
+    ...(typeof cliLatest === "string" ? { cliLatest } : {}),
   };
 };
 
@@ -271,6 +287,9 @@ export const writeCacheFile = async (
   // `writeFile` does not, so mkdir the origin cache dir first (spec S5.3).
   await mkdir(path.dirname(filePath), { recursive: true });
   const metadata = {
+    ...(file.compatibility === undefined
+      ? {}
+      : { compatibility: file.compatibility }),
     version: file.version,
     serverOrigin: file.serverOrigin,
     fetchedAt: file.fetchedAt,
@@ -284,6 +303,8 @@ export const writeCacheFile = async (
     ...(file.lastNudgedVersion === undefined
       ? {}
       : { lastNudgedVersion: file.lastNudgedVersion }),
+    ...(file.cliMinimum === undefined ? {} : { cliMinimum: file.cliMinimum }),
+    ...(file.cliLatest === undefined ? {} : { cliLatest: file.cliLatest }),
   };
   await writeFile(filePath, `${JSON.stringify(metadata, null, 2)}\n`);
 };

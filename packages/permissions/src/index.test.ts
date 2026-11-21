@@ -83,6 +83,16 @@ describe("organization management roles", () => {
 });
 
 describe("role grant boundaries", () => {
+  test("only owner and admin can place or release legal holds", () => {
+    for (const role of ROLE_NAMES) {
+      for (const action of statements.legalHold) {
+        expect(roles[role].authorize({ legalHold: [action] }).success).toBe(
+          role === "owner" || role === "admin",
+        );
+      }
+    }
+  });
+
   // Pins the security-critical boundaries between roles so a future grant
   // edit cannot silently widen a low-privilege role.
   test("only owner and admin hold org-admin powers", () => {
@@ -203,6 +213,22 @@ describe("role grant boundaries", () => {
     }
   });
 
+  test("only owner and admin can start or read organisation data exports", () => {
+    for (const role of ["owner", "admin"] as const) {
+      expect(
+        roles[role].authorize({ dataExport: ["create", "read"] }).success,
+      ).toBe(true);
+    }
+    for (const role of ["member", "intern", "external"] as const) {
+      expect(roles[role].authorize({ dataExport: ["create"] }).success).toBe(
+        false,
+      );
+      expect(roles[role].authorize({ dataExport: ["read"] }).success).toBe(
+        false,
+      );
+    }
+  });
+
   test("every role can read its workspace", () => {
     for (const role of ROLE_NAMES) {
       expect(roles[role].authorize({ workspace: ["read"] }).success).toBe(true);
@@ -251,6 +277,31 @@ describe("role grant boundaries", () => {
     }
   });
 
+  test("staff run conflict checks; only management reviews them", () => {
+    for (const role of ["owner", "admin", "member"] as const) {
+      expect(roles[role].authorize({ conflictCheck: ["run"] }).success).toBe(
+        true,
+      );
+    }
+    for (const role of ["owner", "admin"] as const) {
+      expect(roles[role].authorize({ conflictCheck: ["review"] }).success).toBe(
+        true,
+      );
+    }
+    expect(roles.member.authorize({ conflictCheck: ["review"] }).success).toBe(
+      false,
+    );
+    // A check searches matters beyond the runner's own, so the roles confined
+    // to their assigned matters hold neither half.
+    for (const role of ["intern", "external"] as const) {
+      for (const action of ["run", "review"] as const) {
+        expect(roles[role].authorize({ conflictCheck: [action] }).success).toBe(
+          false,
+        );
+      }
+    }
+  });
+
   test("everyone but an external collaborator keeps their own work", () => {
     // Annotations, stored searches and account links are the caller's own
     // work, so they follow the time entry / expense / chat line rather than
@@ -286,6 +337,25 @@ describe("role grant boundaries", () => {
         resource,
         granted: roles.external.authorize(permissions).success,
       }).toEqual({ resource, granted: false });
+    }
+  });
+
+  test("every role keeps and erases its own search history", () => {
+    // History is a private trace of the caller's own reading, so no role,
+    // an external collaborator included, is refused recording or deleting it.
+    for (const role of [
+      "owner",
+      "admin",
+      "member",
+      "intern",
+      "external",
+    ] as const) {
+      expect({
+        role,
+        granted: roles[role].authorize({
+          searchHistory: ["read", "create", "delete"],
+        }).success,
+      }).toEqual({ role, granted: true });
     }
   });
 

@@ -78,7 +78,7 @@ describe("non-evicting admission coordination", () => {
       }),
     ).toMatchObject({
       _tag: "ActionAdmissionError",
-      reason: "unavailable",
+      reason: "configuration_incomplete",
       message: expect.stringContaining("maxmemory-policy noeviction"),
     });
     expect(f.stats().commands).toBe(0);

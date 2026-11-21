@@ -5,6 +5,7 @@
   copy. "workspace" is the internal identifier for the same thing (DB schema,
   TypeScript, HTTP routes) and the product-category word ("an open-source legal
   workspace"). Where the two meet, rename at the boundary, once.
+  [test: apps/api/src/mcp/input-vocabulary.test.ts]
 
 ## Project Overview
 
@@ -17,49 +18,60 @@ publishable code lives in `packages/`. Use Glob/Grep to explore.
 Before changing a convention-governed domain, read and apply the matching
 `.agents/skills/conventions-*/SKILL.md`. This includes AI, databases, i18n and
 user-facing strings, ingestion, MCP tools and CLI capabilities (agent-facing
-schemas, errors, and reference resources), performance guard failures and hot
-paths, architecture and scale, auth and data access, files and external APIs,
+schemas, errors, and reference resources), performance measurement for routes,
+screens, endpoints, MCP tools, mutations, live events, background jobs and polling
+loops, architecture and scale, auth and data access, files and external APIs,
 tests, `apps/web` React effects, and user-facing UI. The skills own the detailed
 rules.
 
 ## Implementation Quality
 
-- Comments explain a non-obvious invariant, trade-off, safety constraint, or why
-  the code exists. Do not narrate the next statement, add empty documentation
-  blocks, or label closing braces.
+Every new guard or lint ships with an autofix or codemod registered in the PR
+Autofix job, or enforces only lines changed against the merge base for its first
+week. Register the dated scope in `scripts/guard-rollouts/<id>.json` so the existing
+dated-waiver inventory and healing checks enforce its seven-day deadline.
+
+- Dead-export checks (knip) enforce the no-placeholder rule where a package is
+  enrolled; enroll new packages. [check: check:knip-exports]
 - Search before you write. Before adding a helper, module, schema, or validation
   step, check `docs/module-ownership.md` and `packages/*` for the capability.
   Extend the owner; if a second implementation is right, say why in the PR.
-- Make abstractions earn their keep. Avoid pass-through wrappers, single-use
-  helpers, and interfaces with one implementation unless they establish a real
-  ownership boundary, contract, or test seam.
-- Prefer deleting concepts, branches, and layers over moving complexity around.
-  Keep feature-specific behavior at its canonical owner; do not scatter flags and
-  special cases through shared flows.
-- Defensive code belongs at real trust and failure boundaries. Do not add null
-  checks, silent fallbacks, or catch-and-log blocks for states already excluded by
-  types, validation, or framework guarantees.
-- No forward-compatibility placeholders: never ship a flag, option, field, or
-  export that is accepted but has no effect "for later" (a `--keychain` that
-  always falls back, a `setDefault` helper nothing calls). Add it in the PR that
-  wires it end to end. Dead-export checks (knip) enforce this where a package is
-  enrolled; enroll new packages.
+  [review]
 
 ## Workspace Layout
 
-- `apps/*` contains runnable applications only.
-- `packages/*` contains shared or publishable packages only.
-- Every direct child of `apps/` and `packages/` must be a workspace package named
-  `@stll/<directory>`.
-- Use scoped workspace filters in commands, for example
-  `bun --filter @stll/web dev`.
+`apps/*` holds runnable applications and `packages/*` shared or publishable
+code. Commands use scoped workspace filters, for example
+`bun --filter @stll/web dev`.
+
 - Create a package with `bun run new-package <name> --description "…"`; copying a
   helper between apps is not an option when a package can own it.
+  [check: ratchet:cross-app-lib-path-copies]
+
+## Finding Things
+
+- Stored data: `rg <word> apps/api/src/db/schema-index`, generated from the
+  schema with one line per column (`file:line` and comment included).
+- Owners: `bun scripts/ownership.ts --print` lists the module that owns each
+  capability; extend it rather than adding a second one.
+- Custom lint rules: the catalogue in `.oxlint-plugins/README.md`, one line per
+  rule. Read the rules for the area before writing code in it.
 
 ## Commands
 
 `bun run dev` | `dev:web` (3000) | `dev:api` (3001) |
 `build` | `lint` | `format` | `typecheck` | `test`
+
+`bun run typecheck` uses Bun’s native checker through the workspace
+tasks. Direct project checks use
+`bun check --no-pretty --all --project=<tsconfig path>`; add `--build` for
+solution configs with project references. Manual checks dispatch offers
+`typecheck-probe` to verify seeded-error rejection; it runs only on explicit
+dispatch. Every PR retains Bun checks.
+Editors keep the TypeScript language service because Bun provides no LSP.
+`typescript6` stays only for the compiler-API tools that still import it, and
+`apps/landing` keeps `typescript` because `astro check` needs it. Package
+declarations come from Oxc (`dts: { generator: "oxc" }`) or tsrs.
 
 To see a change working, `bun run agent:up` starts this checkout's own
 seeded, signed-in stack; `agent:cli` and `agent:drive` exercise it and
@@ -76,6 +88,10 @@ files must be formatted locally. Fork pull requests get no autofix: run
 `bun run autofix` (the same generators, lint fixes and formatting, against the
 canonical repository's main) before pushing.
 
+Network fetches in CI go through `scripts/retry.sh` (`scripts/gh-retry.sh` for
+the GitHub API) or a cache-first action, in a step with its own
+`timeout-minutes`; `scripts/check-ci-network-steps.ts` enforces both.
+
 `bun run verify` runs the local package checks from `ci-checks` in
 `.github/workflows/ci.yml`; use it before pushing code changes instead of
 hand-picking individual checks. For changes confined to documentation or skill
@@ -84,9 +100,7 @@ instead. Passing does not certify `ci-result`: a pull request runs the core
 checks, the web and landing builds, and the path-scoped image smokes (the API
 image on arm64 only), while browser and e2e suites, service-backed suites, the
 other release architectures, and the mobile, Windows, and desktop Rust checks
-run only in the merge queue; land through `bun scripts/merge-bar.ts <pr>`
-(see Merging), which also refuses a head whose CI plan, and with it
-`ci-checks`, was skipped.
+run only in the merge queue.
 `--all` checks every package instead of only those affected vs `origin/main`.
 
 The scoped test run is filtered by `scripts/test-scope.ts`, not `--affected`: a
@@ -98,36 +112,9 @@ and on a declared input no test reads any more.
 
 ## Merging
 
-Merges go through `bun scripts/merge-bar.ts <pr>`: it re-reads PR state,
-mergeability, the required checks on the exact head SHA, unresolved review
-threads, and migration identity (no merged migration renamed or deleted) in
-one invocation, then
-arms "merge when ready" with `expectedHeadOid` checked at arm time. The
-`disarm-auto-merge.yml` synchronize workflow disables arms at or before the
-push event's PR update time, preserving newer arms and CI autofix pushes.
-It skips fork and Dependabot runs with read-only tokens. HOLD means
-`bun scripts/merge-bar.ts --disarm <pr>`: disable auto-merge and dequeue.
-Release pull requests queue
-normally; only an explicit `--jump` enqueues a pull request at the front.
-Main has a merge queue: GitHub
-builds main plus the pull request, runs CI on that commit, and merges only if
-it passes, so nothing needs a rebase to land and nothing lands past a red
-check. Run the bar once the PR is ready and the user has authorized merging;
-an authorization given earlier in the conversation stands, do not ask again.
-Raw `gh pr merge` asserts nothing and reads an empty check list as green.
-A jump needs every required check green first: while checks run, the bar arms
-nothing and exits non-zero (`NOT JUMPED`). After enqueueing, one fresh queue
-read determines the result: exit 0 verifies the pull request is first. When
-the queue lists the pull request, that entry takes precedence over the enqueue
-response. A recorded jump at position greater than 1 exits 2 with `JUMP PENDING`,
-the position and state, and a follow-up: wait once for the pull request to
-merge, close or fail checks, and do not jump again.
-If the queue does not list a newly enqueued pull request yet, a recorded jump
-in the enqueue response also exits 2 with the same follow-up and says the
-queue read did not list it yet. If first place is not verified, exit 1
-reports `JUMP DROPPED` when the jump flag is false or missing, the queue entry
-conflicts, or the pull request is absent and there is no enqueue response
-(for an already queued pull request).
+Main has a merge queue: GitHub builds main plus the pull request, runs CI on that
+commit, and merges only if it passes. Add ready pull requests directly to the
+merge queue. `ci-result` remains the required aggregate check.
 
 ## Documentation Access
 
@@ -137,7 +124,7 @@ then pass a selected URL to `fetch_doc_chunks`. Use `list_doc_sources` to select
 narrow libraries; reserve `fetch_docs` for a small, known Markdown or plain-text
 index or page.
 
-**Not covered (no `llms.txt`):** Tailwind CSS, oxfmt. For these, use `WebFetch` or
+**Not covered (no `llms.txt`):** Tailwind CSS. For it, use `WebFetch` or
 `WebSearch` directly.
 
 **Setup:** run `bun run setup:mcp` once after cloning.

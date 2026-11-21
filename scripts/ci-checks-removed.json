@@ -1,5 +1,9 @@
 [
   {
+    "name": "Release CLI changeset hold",
+    "reason": "Release versions are bound to their version commits; later CLI changesets cannot enter an existing release."
+  },
+  {
     "name": "ci-checks-generated: Install Safe Chain",
     "reason": "Safe Chain moved to the dedicated lockfile-change dependency-malware gate (and the nightly)"
   },
@@ -38,5 +42,97 @@
   {
     "name": "Model catalog snapshot drift guard",
     "reason": "Renamed to Model catalog snapshot drift check; it now runs with the package checks, after the dependency install"
+  },
+  {
+    "name": "MCP App bundle guard",
+    "reason": "Replaced by MCP App bundle and shared assets guard: regenerates the existing HTML bundles and also checks their shared generated messages, schemas and stylesheet."
+  },
+  {
+    "name": "Release marketing staleness warning",
+    "reason": "Replaced by Release marketing provenance warning: CI checks source provenance without invoking rendered screenshots; rendered freshness remains covered by the marketing screenshot job."
+  },
+  {
+    "name": "API test duration weights",
+    "reason": "Replaced by main-run duration aggregation and cached weights consumed by API test shards."
+  },
+  {
+    "name": "Test autofix decision boundaries",
+    "reason": "Replaced by Test autofix protected paths; API duration weights are no longer repository files managed by autofix."
+  },
+  {
+    "name": "Test migration identity and merge gate logic",
+    "reason": "Renamed to Test migration identity logic after removing the repository merge CLI."
+  },
+  {
+    "name": "Test merge bar freshness, arm guard and disarm",
+    "reason": "Removed with the repository merge CLI; pull requests now enter the merge queue directly."
+  },
+  {
+    "name": "Test merge queue jump-reset recovery",
+    "reason": "Removed with the repository merge CLI and its queue-position recovery behavior."
+  },
+  {
+    "name": "MCP App bundle and shared assets guard",
+    "reason": "Replaced by MCP app package bundles and shared assets guard: builds the frontend package, regenerates its API-derived contracts, checks all committed bundle assets, and enforces per-app bundle budgets."
+  },
+  {
+    "name": "Select typecheck parity coverage",
+    "reason": "Compiler parity and seeded compiler probes run only through explicit Manual checks dispatch."
+  },
+  {
+    "name": "Typecheck parity (all checked projects)",
+    "reason": "Compiler parity and seeded compiler probes run only through explicit Manual checks dispatch."
+  },
+  {
+    "name": "Record typecheck parity report",
+    "reason": "Compiler parity and seeded compiler probes run only through explicit Manual checks dispatch."
+  },
+  {
+    "name": "Upload typecheck parity report",
+    "reason": "Compiler parity and seeded compiler probes run only through explicit Manual checks dispatch."
+  },
+  {
+    "name": "Typecheck command rejects errors",
+    "reason": "Compiler parity and seeded compiler probes run only through explicit Manual checks dispatch."
+  },
+  {
+    "name": "Dependabot group guard",
+    "reason": "Reads installed manifests, so it moved to ci-checks-policy after the install as 'Dependabot group guard (installed packages)'."
+  },
+  {
+    "name": "MCP app package bundles and shared assets guard",
+    "reason": "Its outputs are derived before use and no longer committed, so it became 'MCP app derived outputs guard': it builds them, checks the bundle budgets, and fails when an output is missing, empty, or tracked again."
+  },
+  {
+    "name": "Published export map guard",
+    "reason": "Renamed to Workspace package export map guard; @stll/time is published from stella/tooling now, so its export check left the workspace list with the package"
+  },
+  {
+    "name": "Check workflow job classifications",
+    "reason": "Moved to ci-quick-checks unchanged in substance (same tooling checkout at the workflow revision and the same command), so it fails a pull request before the heavy suites start."
+  },
+  {
+    "name": "Test merge-group ancestor check",
+    "reason": "The merge queue now requires every entry's own group to pass before it merges (ALLGREEN), so the polling step it tested and the step's script were removed."
+  },
+  {
+    "name": "Instruction references",
+    "reason": "Replaced by Instruction policy, which retains the reference checks and adds enforcement-tag validation."
+  },
+  {
+    "name": "exactMirror route guard",
+    "reason": "Elysia's exactMirror response normalization is gone with Elysia; the HTTP core parses every response through its route schema, which the response schema tests cover."
+  },
+  {
+    "name": "MCP kit published export map guard",
+    "reason": "Folded unchanged into the standalone package published export map guard, which runs the same command for packages/mcp-kit under the same condition; one step per package pushed the workflow past its size limit."
+  },
+  {
+    "name": "Fetch and scan engine published export map guard",
+    "reason": "Folded unchanged into the standalone package published export map guard, which runs the same commands for packages/fetch and packages/scan-engine under the same condition; one step per package pushed the workflow past its size limit."
+  },
+  {
+    "name": "Startup bundle ledger",
+    "reason": "The startup bundle ledger it guarded is deleted: page code at startup and extra cold-load hops now fail the web-build startup gates outright, so no exception list is left to keep from growing."
   }
 ]

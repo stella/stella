@@ -1,26 +1,48 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { Elysia, t } from "elysia";
+import * as v from "valibot";
 
-import { createSafeRootHandler, ACCOUNT_ACCESS } from "@/api/lib/api-handlers";
+import { createHttpApp } from "@/api/http/app";
+import { decodeRequestInput } from "@/api/http/input";
+import { routes } from "@/api/http/route";
+import type { RouteRequest } from "@/api/http/route";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
+import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { toSafeId } from "@/api/lib/branded-types";
+import { DatabaseError } from "@/api/lib/errors/tagged-errors";
 import {
   createFeatureAccessSnapshot,
   decideFeatureAccess,
-} from "@/api/lib/auth/feature-access/policy";
-import { toSafeId } from "@/api/lib/branded-types";
-import { DatabaseError } from "@/api/lib/errors/tagged-errors";
+} from "@/api/lib/feature-access/policy";
 import type { FeatureId } from "@/api/lib/feature-access/registry";
+import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { isRecord } from "@/api/lib/type-guards";
-import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
+import {
+  createTestHandlerContext,
+  NO_AUDIT,
+  NO_DB,
+} from "@/api/tests/helpers/handler-context";
+import { serveForTest } from "@/api/tests/helpers/test-server";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 const featureId = "fixture-access";
-// The fixture features are not registered (FeatureId is `never` while the
-// registry is empty), so handler configs name them through the test-only cast.
+// The fixture features are not registered, so handler configs name them
+// through the test-only cast.
 const requiredFeatureId = asTestRaw<FeatureId>(featureId);
 const registry = { [featureId]: { enrolment: "invitation" } } as const;
+// Recomputing against the production registry resolves the caller's identity
+// and enrolments; neither grants a fixture feature.
+const unenrolledDatabase = () =>
+  createScopedDbMock(
+    {},
+    {
+      featureAccess: {
+        identity: { email: "colleague@example.test", emailVerified: true },
+      },
+    },
+  );
 const snapshot = (userId: string, organizationId: string, invited: boolean) =>
   createFeatureAccessSnapshot({
     organizationId,
@@ -52,12 +74,105 @@ const snapshot = (userId: string, organizationId: string, invited: boolean) =>
     ]),
   });
 
+/** Serve one GET route behind the production error boundary. */
+const serveGet = (
+  path: string,
+  answer: (request: RouteRequest) => Promise<unknown>,
+) =>
+  serveForTest(
+    createHttpApp({
+      middleware: [errorBoundary],
+      routes: routes({
+        [path]: { GET: { access: "public", config: {}, run: answer } },
+      }),
+    }),
+  );
+
 describe("feature access safe-handler admission", () => {
-  test("required features are hidden without a supplied snapshot before handler reads or execution", async () => {
-    let executions = 0;
-    let identityQueries = 0;
+  test.each(["always", "when-used"] as const)(
+    "conditional decision hydration follows %s before discovery",
+    async (decision) => {
+      let identityQueries = 0;
+      const database = createScopedDbMock({
+        select: () => {
+          identityQueries += 1;
+          return {
+            from: () => ({
+              innerJoin: () => ({ where: () => ({ limit: async () => [] }) }),
+            }),
+          };
+        },
+      });
+      const endpoint = createSafeRootHandler(
+        {
+          contract: "patch",
+          accountAccess: ACCOUNT_ACCESS.sandbox,
+          permissions: { workspace: ["read"] },
+          mcp: { type: "internal", reason: "health_infra" },
+          featureAccess: {
+            type: "conditional",
+            decision,
+            featureId: requiredFeatureId,
+            usesFeature: () => false,
+            projectInputSchema: (schemas) => schemas,
+          },
+        } satisfies HandlerConfig,
+        async function* ({ featureAccessSnapshot }) {
+          return Result.ok({
+            snapshot:
+              featureAccessSnapshot === undefined ? "absent" : "resolved",
+          });
+        },
+      );
+      const result = await endpoint.handler(
+        createTestHandlerContext<Parameters<typeof endpoint.handler>[0]>({
+          audit: NO_AUDIT,
+          safeDb: database.safeDb,
+          scopedDb: database.scopedDb,
+        }),
+      );
+      expect(result).toEqual({
+        snapshot: decision === "always" ? "resolved" : "absent",
+      });
+      expect(identityQueries).toBe(decision === "always" ? 1 : 0);
+    },
+  );
+
+  test("ordinary conditional requests need no feature identity read", async () => {
     const endpoint = createSafeRootHandler(
       {
+        contract: "patch",
+        accountAccess: ACCOUNT_ACCESS.sandbox,
+        permissions: { workspace: ["read"] },
+        mcp: { type: "internal", reason: "health_infra" },
+        featureAccess: {
+          type: "conditional",
+          decision: "when-used",
+          featureId: requiredFeatureId,
+          usesFeature: async () => false,
+          projectInputSchema: (schemas) => schemas,
+        },
+      } as const satisfies Parameters<typeof createSafeRootHandler>[0],
+      async function* ({ featureAccessProof }) {
+        expect(featureAccessProof).toBeUndefined();
+        return Result.ok({ ok: true });
+      },
+    );
+    const result = await endpoint.handler(
+      createTestHandlerContext<Parameters<typeof endpoint.handler>[0]>({
+        audit: NO_AUDIT,
+        safeDb: NO_DB,
+        scopedDb: NO_DB,
+      }),
+    );
+    expect(result).toEqual({ ok: true });
+  });
+
+  test("required features are hidden without a supplied snapshot before handler reads or execution", async () => {
+    let executions = 0;
+    const endpoint = createSafeRootHandler(
+      {
+        contract: "patch",
         accountAccess: ACCOUNT_ACCESS.sandbox,
         permissions: { workspace: ["read"] },
         mcp: { type: "internal", reason: "health_infra" },
@@ -68,13 +183,13 @@ describe("feature access safe-handler admission", () => {
         return Result.ok({ ok: true });
       },
     );
-    const database = createScopedDbMock({
-      select: () => {
-        identityQueries += 1;
-      },
-    });
+    const database = createScopedDbMock(
+      {},
+      { featureAccess: { identity: null } },
+    );
     const result = await endpoint.handler(
       createTestHandlerContext<Parameters<typeof endpoint.handler>[0]>({
+        audit: NO_AUDIT,
         safeDb: database.safeDb,
         scopedDb: database.scopedDb,
       }),
@@ -84,7 +199,6 @@ describe("feature access safe-handler admission", () => {
       response: { message: "Not found" },
     });
     expect(executions).toBe(0);
-    expect(identityQueries).toBe(0);
     expect(database.getCallCount()).toBe(1);
   });
 
@@ -97,6 +211,7 @@ describe("feature access safe-handler admission", () => {
       let executions = 0;
       const endpoint = createSafeRootHandler(
         {
+          contract: "patch",
           accountAccess: ACCOUNT_ACCESS.sandbox,
           permissions: { workspace: ["read"] },
           mcp: { type: "internal", reason: "health_infra" },
@@ -107,9 +222,10 @@ describe("feature access safe-handler admission", () => {
           return Result.ok({ ok: true });
         },
       );
-      const database = createScopedDbMock({});
+      const database = unenrolledDatabase();
       const result = await endpoint.handler(
         createTestHandlerContext<Parameters<typeof endpoint.handler>[0]>({
+          audit: NO_AUDIT,
           safeDb: database.safeDb,
           scopedDb: database.scopedDb,
           featureAccessSnapshot: supplied,
@@ -144,11 +260,13 @@ describe("feature access safe-handler admission", () => {
     let executions = 0;
     const endpoint = createSafeRootHandler(
       {
+        contract: "patch",
         accountAccess: ACCOUNT_ACCESS.sandbox,
         permissions: { workspace: ["read"] },
         mcp: { type: "internal", reason: "health_infra" },
         featureAccess: {
           type: "conditional",
+          decision: "when-used",
           featureId: asTestRaw<FeatureId>(otherFeature),
           usesFeature: async () => false,
           projectInputSchema: (schemas) => schemas,
@@ -163,6 +281,7 @@ describe("feature access safe-handler admission", () => {
     const database = createScopedDbMock({});
     const result = await endpoint.handler(
       createTestHandlerContext<Parameters<typeof endpoint.handler>[0]>({
+        audit: NO_AUDIT,
         safeDb: database.safeDb,
         scopedDb: database.scopedDb,
         featureAccessSnapshot: mismatchedSnapshot,
@@ -178,15 +297,19 @@ describe("feature access safe-handler admission", () => {
 
   test("conditional metadata failures use the shared handler error response", async () => {
     let executions = 0;
+    let observedUserId: unknown;
     const endpoint = createSafeRootHandler(
       {
+        contract: "patch",
         accountAccess: ACCOUNT_ACCESS.sandbox,
         permissions: { workspace: ["read"] },
         mcp: { type: "internal", reason: "health_infra" },
         featureAccess: {
           type: "conditional",
+          decision: "when-used",
           featureId: requiredFeatureId,
-          usesFeature: async () => {
+          usesFeature: async ({ userId }) => {
+            observedUserId = userId;
             throw new DatabaseError({ message: "Fixture metadata failure" });
           },
           projectInputSchema: (schemas) => schemas,
@@ -199,6 +322,9 @@ describe("feature access safe-handler admission", () => {
     );
     const result = await endpoint.handler(
       createTestHandlerContext<Parameters<typeof endpoint.handler>[0]>({
+        audit: NO_AUDIT,
+        safeDb: NO_DB,
+        scopedDb: NO_DB,
         featureAccessSnapshot: snapshot("user_1", "org_1", false),
         user: { id: toSafeId<"user">("user_1") },
         session: { activeOrganizationId: toSafeId<"organization">("org_1") },
@@ -208,6 +334,7 @@ describe("feature access safe-handler admission", () => {
       code: 500,
       response: { message: "Internal server error" },
     });
+    expect(observedUserId).toBe("user_1");
     expect(executions).toBe(0);
   });
 
@@ -221,6 +348,7 @@ describe("feature access safe-handler admission", () => {
     const database = createScopedDbMock({});
     const endpoint = createSafeRootHandler(
       {
+        contract: "patch",
         accountAccess: ACCOUNT_ACCESS.sandbox,
         permissions: { workspace: ["read"] },
         mcp: { type: "internal", reason: "health_infra" },
@@ -231,23 +359,30 @@ describe("feature access safe-handler admission", () => {
         return Result.ok({ ok: true });
       },
     );
-    const app = new Elysia().get("/fixture", async ({ request, set }) =>
-      endpoint.handler(
-        createTestHandlerContext<Parameters<typeof endpoint.handler>[0]>({
-          set,
-          request,
-          route: "/fixture",
-          user: { id: toSafeId<"user">(userId), email: "invited@example.test" },
-          session: {
-            activeOrganizationId: toSafeId<"organization">(organizationId),
-          },
-          memberRole: sessionMemberRole("owner"),
-          featureAccessSnapshot: snapshot(userId, organizationId, invited),
-          safeDb: database.safeDb,
-        }),
-      ),
+    await using server = serveGet(
+      "/fixture",
+      async ({ ctx }) =>
+        await endpoint.handler(
+          createTestHandlerContext<Parameters<typeof endpoint.handler>[0]>({
+            audit: NO_AUDIT,
+            scopedDb: NO_DB,
+            set: ctx.set,
+            request: ctx.request,
+            route: "/fixture",
+            user: {
+              id: toSafeId<"user">(userId),
+              email: "invited@example.test",
+            },
+            session: {
+              activeOrganizationId: toSafeId<"organization">(organizationId),
+            },
+            memberRole: sessionMemberRole("owner"),
+            featureAccessSnapshot: snapshot(userId, organizationId, invited),
+            safeDb: database.safeDb,
+          }),
+        ),
     );
-    const response = await app.handle(new Request("http://localhost/fixture"));
+    const response = await server.fetch("http://localhost/fixture");
     const enabled =
       userId === "user_1" && organizationId === "org_1" && invited;
     expect(response.status).toBe(enabled ? 200 : 404);
@@ -259,8 +394,8 @@ describe("feature access safe-handler admission", () => {
   });
 });
 
-const conditionalQuerySchema = t.Object({
-  mode: t.Union([t.Literal("ordinary"), t.Literal("feature")]),
+const conditionalQuerySchema = v.object({
+  mode: v.picklist(["ordinary", "feature"]),
 });
 
 test.each([
@@ -275,12 +410,14 @@ test.each([
     const database = createScopedDbMock({});
     const endpoint = createSafeRootHandler(
       {
+        contract: "patch",
         query: conditionalQuerySchema,
         accountAccess: ACCOUNT_ACCESS.sandbox,
         permissions: { workspace: ["read"] },
         mcp: { type: "internal", reason: "health_infra" },
         featureAccess: {
           type: "conditional",
+          decision: "when-used",
           featureId: requiredFeatureId,
           usesFeature: async ({ query }) => {
             checkedQueries.push(query);
@@ -299,14 +436,15 @@ test.each([
         return Result.ok(output);
       },
     );
-    const app = new Elysia().get(
+    await using server = serveGet(
       "/query-fixture",
-      async ({ query, request, set }) =>
-        endpoint.handler(
+      async ({ ctx }) =>
+        await endpoint.handler(
           createTestHandlerContext<Parameters<typeof endpoint.handler>[0]>({
-            query,
-            request,
-            set,
+            audit: NO_AUDIT,
+            query: await decodeRequestInput(conditionalQuerySchema, ctx.query),
+            request: ctx.request,
+            set: ctx.set,
             user: {
               id: toSafeId<"user">(userId),
               email: "invited@example.test",
@@ -319,10 +457,9 @@ test.each([
             scopedDb: database.scopedDb,
           }),
         ),
-      { query: conditionalQuerySchema },
     );
-    const selected = await app.handle(
-      new Request("http://localhost/query-fixture?mode=feature"),
+    const selected = await server.fetch(
+      "http://localhost/query-fixture?mode=feature",
     );
     expect(selected.status).toBe(granted ? 200 : 404);
     expect(resourceOperations).toBe(granted ? 1 : 0);
@@ -331,14 +468,14 @@ test.each([
     if (!granted) {
       expect(await selected.json()).toEqual({ message: "Not found" });
     }
-    const ordinary = await app.handle(
-      new Request("http://localhost/query-fixture?mode=ordinary"),
+    const ordinary = await server.fetch(
+      "http://localhost/query-fixture?mode=ordinary",
     );
     expect(ordinary.status).toBe(200);
     expect(await ordinary.json()).toEqual({ query: { mode: "ordinary" } });
     expect(resourceOperations).toBe(granted ? 2 : 1);
-    const invalid = await app.handle(
-      new Request("http://localhost/query-fixture?mode=invalid"),
+    const invalid = await server.fetch(
+      "http://localhost/query-fixture?mode=invalid",
     );
     expect(invalid.status).toBe(422);
     expect(resourceOperations).toBe(granted ? 2 : 1);

@@ -17,6 +17,7 @@ import type {
   FeedbackReportContext,
   FeedbackReportInput,
 } from "@stll/api-contract/feedback";
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
 import { sanitizeFeedbackText } from "@/api/mcp/feedback-sanitize";
 
@@ -46,8 +47,7 @@ type ContextTextField = (typeof CONTEXT_TEXT_FIELDS)[number];
 
 /** Dotted paths the redaction passes can touch; `redactedFields` holds these. */
 export type SanitizableFeedbackField =
-  | TextField
-  | `context.${ContextTextField}`;
+  TextField | `context.${ContextTextField}`;
 
 export type SanitizedFeedbackReport = {
   report: FeedbackReportInput;
@@ -115,14 +115,15 @@ export const sanitizeFeedbackReport = (
       input.whatHappened,
       CAP_BY_TEXT_FIELD.whatHappened,
     ),
+    ...Object.fromEntries(
+      (["expected", "steps", "evidence"] as const).flatMap((field) => {
+        const value = input[field];
+        return value !== undefined && value.length > 0
+          ? [[field, runPass(field, value, CAP_BY_TEXT_FIELD[field])] as const]
+          : [];
+      }),
+    ),
   };
-
-  for (const field of ["expected", "steps", "evidence"] as const) {
-    const value = input[field];
-    if (value !== undefined && value.length > 0) {
-      report[field] = runPass(field, value, CAP_BY_TEXT_FIELD[field]);
-    }
-  }
 
   const context = sanitizeContext(input.context, runPass);
   if (context !== undefined) {
@@ -144,28 +145,27 @@ const sanitizeContext = (
     return undefined;
   }
 
-  const sanitized: FeedbackReportContext = {};
-  if (context.client !== undefined) {
-    sanitized.client = context.client;
-  }
   const requestId = context.requestId?.trim();
-  if (requestId !== undefined && FEEDBACK_REQUEST_ID_PATTERN.test(requestId)) {
-    sanitized.requestId = requestId;
-  }
-  for (const field of CONTEXT_TEXT_FIELDS) {
-    const value = context[field];
-    if (value === undefined || value.length === 0) {
-      continue;
-    }
-    const cleaned = runPass(
-      `context.${field}`,
-      value,
-      FEEDBACK_LIMITS.contextField,
-    );
-    if (cleaned.length > 0) {
-      sanitized[field] = cleaned;
-    }
-  }
+  const sanitized: FeedbackReportContext = {
+    ...(context.client === undefined ? {} : { client: context.client }),
+    ...(requestId !== undefined && FEEDBACK_REQUEST_ID_PATTERN.test(requestId)
+      ? { requestId }
+      : {}),
+    ...Object.fromEntries(
+      CONTEXT_TEXT_FIELDS.flatMap((field) => {
+        const value = context[field];
+        if (value === undefined || value.length === 0) {
+          return [];
+        }
+        const cleaned = runPass(
+          `context.${field}`,
+          value,
+          FEEDBACK_LIMITS.contextField,
+        );
+        return cleaned.length > 0 ? [[field, cleaned] as const] : [];
+      }),
+    ),
+  };
 
   return Object.keys(sanitized).length === 0 ? undefined : sanitized;
 };
@@ -174,7 +174,4 @@ const sanitizeContext = (
 export const feedbackFingerprint = (
   report: FeedbackReportInput,
   instance: string | undefined,
-): string =>
-  new Bun.CryptoHasher("sha256")
-    .update(JSON.stringify([report, instance ?? null]))
-    .digest("hex");
+): string => hashSha256Hex(JSON.stringify([report, instance ?? null]));

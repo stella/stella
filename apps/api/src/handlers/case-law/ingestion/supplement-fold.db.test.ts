@@ -15,16 +15,12 @@ import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
   caseLawCitations,
-  caseLawDecisionSupplements,
   caseLawDecisions,
+  caseLawDecisionSupplements,
   caseLawSources,
   relations,
 } from "@/api/db/schema";
 import { envBase } from "@/api/env-base";
-import type {
-  IngestionResult,
-  StoredRawResultReader,
-} from "@/api/handlers/case-law/ingestion/adapter";
 import {
   buildPlItem,
   normalizeSaosDumpItem,
@@ -42,9 +38,13 @@ import {
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { ABSORBED_INTO_METADATA_KEY } from "@/api/lib/case-law/decision-absorption";
-import { publishedCaseLawDecision } from "@/api/lib/case-law/published-decisions";
+import { publishedCaseLawDecisionFor } from "@/api/lib/case-law/published-decisions-sql";
 import { acquireCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
+import type {
+  IngestionResult,
+  StoredRawResultReader,
+} from "@/api/lib/legal-search/ingestion-types";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
@@ -305,17 +305,19 @@ test("the fold merges every reasons row into the ruling it explains and keeps th
     ...RULINGS.map(rulingInput),
     ...LEGACY_REASONS.map(legacyReasonsInput),
   ]) {
-    const seeded = await processDecision({
-      input,
-      sourceId,
-      scopedDb,
-      observedAt: new Date("2026-09-01T00:00:00.000Z"),
-      observationOrder: await allocateSourceObservationOrder({
-        leaseToken: sourceLease.leaseToken,
-        scopedDb,
+    const seeded = (
+      await processDecision({
+        input,
         sourceId,
-      }),
-    });
+        scopedDb,
+        observedAt: new Date("2026-09-01T00:00:00.000Z"),
+        observationOrder: await allocateSourceObservationOrder({
+          leaseToken: sourceLease.leaseToken,
+          scopedDb,
+          sourceId,
+        }),
+      })
+    ).unwrap();
     expect(seeded.status).toBe(PROCESS_DECISION_STATUS.COMPLETE);
   }
 
@@ -408,7 +410,10 @@ test("the fold merges every reasons row into the ruling it explains and keeps th
       .select({ sourceDocumentId: caseLawDecisions.sourceDocumentId })
       .from(caseLawDecisions)
       .where(
-        and(eq(caseLawDecisions.sourceId, sourceId), publishedCaseLawDecision),
+        and(
+          eq(caseLawDecisions.sourceId, sourceId),
+          publishedCaseLawDecisionFor(caseLawDecisions),
+        ),
       )
   )
     .map(({ sourceDocumentId }) => sourceDocumentId ?? "")

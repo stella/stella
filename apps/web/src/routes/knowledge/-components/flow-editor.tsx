@@ -1,9 +1,11 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
+import type { SetStateAction } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { panic } from "better-result";
-import { useFormatter, useTranslations } from "use-intl";
+import { panic, Result } from "better-result";
+import { useTranslations } from "use-intl";
 
+import { API_VERSION_CONFLICT_ERROR_CODE } from "@stll/api-contract";
 import { Temporal } from "@stll/time";
 import {
   AlertDialog,
@@ -33,8 +35,10 @@ import {
   SelectValue,
 } from "@stll/ui/select";
 import { Skeleton } from "@stll/ui/skeleton";
+import { Switch } from "@stll/ui/switch";
 import { Textarea } from "@stll/ui/textarea";
 import { stellaToast } from "@stll/ui/toast";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import {
   FLOW_SCHEDULE_FREQUENCIES,
@@ -48,19 +52,32 @@ import {
   type FlowStepKind,
   type FlowTriggerType,
 } from "@/components/flows/flow-meta";
-import { FlowSwitch } from "@/components/flows/flow-switch";
+import { MatterOptionLabel } from "@/components/matter-option-label";
 import { guideAnchor } from "@/features/guides/guide-anchor";
 import { GUIDE_ANCHORS } from "@/features/guides/guide-anchors";
+import { useMountEffect } from "@/hooks/use-effect";
 import { usePermissions } from "@/hooks/use-permissions";
+import { useFormatter } from "@/i18n/formatting-context";
 import { getFormattingLocale } from "@/i18n/i18n-store";
+import type { TranslationKey } from "@/i18n/types";
+import {
+  captureSessionQueryOwner,
+  isCurrentSessionQueryOwner,
+  isObservedSessionQueryOwner,
+} from "@/lib/account/auth-query-owner";
 import { api } from "@/lib/api";
+import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
-import { toAPIError } from "@/lib/errors/api";
-import { userErrorMessage } from "@/lib/errors/user-safe";
-import { notifyUserError } from "@/lib/errors/user-toast";
+import { APIError, unwrapApiResponse } from "@/lib/errors/api";
+import { userErrorFromThrown } from "@/lib/errors/user-safe";
+import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
+import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
 import { flowDetailOptions, knowledgeKeys } from "@/lib/knowledge/queries";
+import { queryView } from "@/lib/query-view.logic";
 import { WEEKDAY_NAME_FORMAT } from "@/lib/relative-time";
 import { toSafeId } from "@/lib/safe-id";
+import { useQueryViewError } from "@/lib/use-query-view";
+import { createUuid } from "@/lib/uuid";
 import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
 import {
   buildFlowExample,
@@ -69,6 +86,8 @@ import {
 import { FlowExtensionInput } from "@/routes/knowledge/-components/flow-extension-input";
 import type {
   FlowDefinitionBody,
+  FlowDefinitionDetail,
+  FlowDefinitionUpdateBody,
   FlowStep,
   FlowTrigger,
 } from "@/routes/knowledge/-components/flow-types";
@@ -96,21 +115,25 @@ export const FlowEditor = ({
   // that namespace instead of the full message union (which overflows the
   // native compiler's union-representation limit — TS2590).
   const tExamples = useTranslations("flows.examples");
+  const { id: userId } = useAuthenticatedUser();
+  const ownerKey = JSON.stringify([organizationId, userId, flowId]);
 
   if (flowId === null) {
     const preset = example ? buildFlowExample(example, tExamples) : null;
     return (
       <FlowEditorForm
+        key={ownerKey}
         flowId={null}
-        initialDescription={preset?.description ?? ""}
-        initialEnabled={true}
-        initialSteps={
-          preset?.steps ?? [
+        initialSnapshot={{
+          name: preset?.name ?? "",
+          description: preset?.description ?? "",
+          enabled: true,
+          steps: preset?.steps ?? [
             { kind: "ai", name: "", prompt: "", includeDocuments: true },
-          ]
-        }
-        initialTrigger={{ type: "manual" }}
-        initialName={preset?.name ?? ""}
+          ],
+          trigger: { type: "manual" },
+          updatedAt: null,
+        }}
         onBack={onBack}
         onSaved={onSaved}
         organizationId={organizationId}
@@ -120,6 +143,7 @@ export const FlowEditor = ({
 
   return (
     <FlowEditorLoader
+      key={ownerKey}
       flowId={flowId}
       onBack={onBack}
       onSaved={onSaved}
@@ -141,37 +165,39 @@ const FlowEditorLoader = ({
 }) => {
   const t = useTranslations();
   const detailQuery = useQuery(flowDetailOptions(organizationId, flowId));
+  const detailView = queryView(detailQuery);
+  useQueryViewError(detailView, "FlowEditorLoader:detail");
 
-  if (detailQuery.isPending) {
-    return (
-      <div className="flex flex-1 items-center justify-center p-8">
-        <p className="text-muted-foreground text-sm">{t("flows.loading")}</p>
-      </div>
-    );
+  switch (detailView.type) {
+    case "pending":
+      return (
+        <div className="flex flex-1 items-center justify-center p-8">
+          <p className="text-muted-foreground text-sm">{t("flows.loading")}</p>
+        </div>
+      );
+    case "empty":
+    case "error":
+      return (
+        <div className="flex flex-1 items-center justify-center p-8">
+          <p className="text-muted-foreground text-sm">
+            {t("flows.loadFailed")}
+          </p>
+        </div>
+      );
+    case "items":
+      return (
+        <FlowEditorForm
+          flowId={flowId}
+          initialSnapshot={detailView.items}
+          onBack={onBack}
+          onSaved={onSaved}
+          organizationId={organizationId}
+        />
+      );
+    default:
+      detailView satisfies never;
+      return panic("Unhandled workflow detail state");
   }
-
-  const detail = detailQuery.data;
-  if (detailQuery.isError || !detail || !("steps" in detail)) {
-    return (
-      <div className="flex flex-1 items-center justify-center p-8">
-        <p className="text-muted-foreground text-sm">{t("flows.loadFailed")}</p>
-      </div>
-    );
-  }
-
-  return (
-    <FlowEditorForm
-      flowId={flowId}
-      initialDescription={detail.description ?? ""}
-      initialEnabled={detail.enabled}
-      initialSteps={detail.steps}
-      initialTrigger={detail.trigger}
-      initialName={detail.name}
-      onBack={onBack}
-      onSaved={onSaved}
-      organizationId={organizationId}
-    />
-  );
 };
 
 // ── Trigger draft (keeps both sub-configs so switching type is lossless) ──
@@ -285,200 +311,92 @@ type EditableStep = FlowStep & { _id: string };
 
 const withStepId = (step: FlowStep): EditableStep => ({
   ...step,
-  _id: crypto.randomUUID(),
+  _id: createUuid(),
 });
 
 // ── Editor form ───────────────────────────────────────
 
+type FlowEditorSnapshot = Pick<
+  FlowDefinitionDetail,
+  "name" | "description" | "enabled" | "steps" | "trigger"
+> & { updatedAt: FlowDefinitionDetail["updatedAt"] | null };
+
 type FlowEditorFormProps = {
   organizationId: string;
   flowId: string | null;
-  initialName: string;
-  initialDescription: string;
-  initialEnabled: boolean;
-  initialTrigger: FlowTrigger;
-  initialSteps: FlowStep[];
+  initialSnapshot: FlowEditorSnapshot;
   onBack: () => void;
   onSaved: () => void;
 };
 
-const FlowEditorForm = ({
-  organizationId,
-  flowId,
-  initialName,
-  initialDescription,
-  initialEnabled,
-  initialTrigger,
-  initialSteps,
-  onBack,
-  onSaved,
-}: FlowEditorFormProps) => {
+type FlowEditorDraft = {
+  name: string;
+  description: string;
+  enabled: boolean;
+  trigger: TriggerDraft;
+  steps: EditableStep[];
+  expectedUpdatedAt: FlowDefinitionDetail["updatedAt"] | null;
+};
+
+const FlowEditorForm = (props: FlowEditorFormProps) => {
   const t = useTranslations();
-  const queryClient = useQueryClient();
-  const isEdit = flowId !== null;
-  const canSave = usePermissions(
-    isEdit ? { flow: ["update"] } : { flow: ["create"] },
+  const { id: userId } = useAuthenticatedUser();
+  const organizationId = props.organizationId;
+  const workspacesQuery = useQuery(
+    workspacesNavigationOptions({ organizationId, userId }),
   );
-  const canDelete = usePermissions({ flow: ["delete"] });
-
-  const [name, setName] = useState(initialName);
-  const [description, setDescription] = useState(initialDescription);
-  const [enabled, setEnabled] = useState(initialEnabled);
-  const [trigger, setTrigger] = useState<TriggerDraft>(() =>
-    deriveTriggerDraft(initialTrigger),
-  );
-  const [steps, setSteps] = useState<EditableStep[]>(() =>
-    initialSteps.map(withStepId),
-  );
-  const [saving, setSaving] = useState(false);
-  const [deleteOpen, setDeleteOpen] = useState(false);
-
-  const workspacesQuery = useQuery(workspacesNavigationOptions(organizationId));
   const workspaces = toWorkspaceOptions(workspacesQuery);
-
-  const updateStep = (index: number, next: FlowStep) => {
-    setSteps((prev) =>
-      prev.map((step, i) => (i === index ? { ...next, _id: step._id } : step)),
-    );
-  };
-
-  const removeStep = (index: number) => {
-    setSteps((prev) => prev.filter((_, i) => i !== index));
-  };
-
-  const moveStep = (index: number, direction: "up" | "down") => {
-    const target = direction === "up" ? index - 1 : index + 1;
-    setSteps((prev) => {
-      if (target < 0 || target >= prev.length) {
-        return prev;
-      }
-      const next = [...prev];
-      const current = next[index];
-      const swap = next[target];
-      if (!current || !swap) {
-        return prev;
-      }
-      next[index] = swap;
-      next[target] = current;
-      return next;
-    });
-  };
-
-  const addStep = (kind: FlowStepKind) => {
-    setSteps((prev) =>
-      prev.length >= MAX_FLOW_STEPS
-        ? prev
-        : [...prev, withStepId(newStep(kind))],
-    );
-  };
-
-  const handleSave = async () => {
-    const trimmedName = name.trim();
-    if (trimmedName === "") {
-      notifyUserError(undefined, t("flows.nameRequired"));
-      return;
+  const {
+    isEdit,
+    canDelete,
+    deleteOpen,
+    setDeleteOpen,
+    saving,
+    handleDelete,
+    canSave,
+    reloadState,
+    setReloadState,
+    conflict,
+    draft,
+    baseline,
+    reload,
+    name,
+    setName,
+    description,
+    setDescription,
+    enabled,
+    setEnabled,
+    trigger,
+    setTrigger,
+    steps,
+    updateStep,
+    removeStep,
+    moveStep,
+    addStep,
+    handleSave,
+  } = useFlowEditorDraft(props);
+  const resolveWorkflowSaveDisabledReason = () => {
+    if (saving) {
+      return t("common.saving");
     }
-    if (steps.length === 0) {
-      notifyUserError(undefined, t("flows.steps.required"));
-      return;
+    if (reloadState === "loading") {
+      return t("common.loading");
     }
-    for (const step of steps) {
-      if (step.name.trim() === "") {
-        notifyUserError(undefined, t("flows.steps.nameRequired"));
-        return;
-      }
-      if (step.kind === "ai" && step.prompt.trim() === "") {
-        notifyUserError(undefined, t("flows.steps.promptRequired"));
-        return;
-      }
-      if (step.kind === "create-document" && step.documentTitle.trim() === "") {
-        notifyUserError(undefined, t("flows.steps.documentTitleRequired"));
-        return;
-      }
+    if (!canSave) {
+      return t("errors.api.forbidden");
     }
-    if (trigger.type === "schedule" && trigger.schedule.workspaceId === "") {
-      notifyUserError(undefined, t("flows.schedule.workspaceRequired"));
-      return;
-    }
-
-    const trimmedDescription = description.trim();
-    const body: FlowDefinitionBody = {
-      name: trimmedName,
-      description: trimmedDescription === "" ? null : trimmedDescription,
-      steps: steps.map(({ _id, ...step }) => step),
-      trigger: buildTrigger(trigger),
-      enabled,
-    };
-
-    setSaving(true);
-    const response =
-      flowId === null
-        ? await api.flows.post(body)
-        : await api
-            .flows({ flowId: toSafeId<"flowDefinition">(flowId) })
-            .put(body);
-    setSaving(false);
-
-    if (response.error) {
-      notifyUserError(toAPIError(response.error), t("flows.saveFailed"), {
-        description: userErrorMessage(
-          response.error,
-          t("common.unexpectedError"),
-        ),
-      });
-      return;
-    }
-
-    stellaToast.add({
-      type: "success",
-      title: isEdit ? t("flows.updated") : t("flows.created"),
-    });
-    detached(
-      queryClient.invalidateQueries({
-        queryKey: knowledgeKeys.flows.all(organizationId),
-      }),
-      "flow-editor.invalidate",
-    );
-    onSaved();
-  };
-
-  const handleDelete = async () => {
-    if (flowId === null) {
-      return;
-    }
-    setSaving(true);
-    const response = await api
-      .flows({ flowId: toSafeId<"flowDefinition">(flowId) })
-      .delete();
-    setSaving(false);
-
-    if (response.error) {
-      notifyUserError(toAPIError(response.error), t("flows.deleteFailed"), {
-        description: userErrorMessage(
-          response.error,
-          t("common.unexpectedError"),
-        ),
-      });
-      return;
-    }
-
-    stellaToast.add({ type: "success", title: t("flows.deleted") });
-    setDeleteOpen(false);
-    detached(
-      queryClient.invalidateQueries({
-        queryKey: knowledgeKeys.flows.all(organizationId),
-      }),
-      "flow-editor.invalidate",
-    );
-    onSaved();
+    return t("flows.reloadToSave");
   };
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+    <fieldset
+      disabled={saving}
+      className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto"
+    >
       <div className="mx-auto w-full max-w-3xl space-y-6 p-6">
         <div className="flex items-center justify-between gap-2">
           <Button
-            onClick={onBack}
+            onClick={props.onBack}
             size="sm"
             type="button"
             variant="ghost"
@@ -514,6 +432,7 @@ const FlowEditorForm = ({
                     </AlertDialogClose>
                     <Button
                       disabled={saving}
+                      disabledReason={t("common.saving")}
                       onClick={() => {
                         detached(handleDelete(), "flow-editor.delete");
                       }}
@@ -526,7 +445,13 @@ const FlowEditorForm = ({
               </AlertDialog>
             )}
             <Button
-              disabled={!canSave || saving}
+              disabled={
+                !canSave ||
+                saving ||
+                reloadState === "loading" ||
+                conflict === "version"
+              }
+              disabledReason={resolveWorkflowSaveDisabledReason()}
               loading={saving}
               onClick={() => {
                 detached(handleSave(), "flow-editor.save");
@@ -537,6 +462,56 @@ const FlowEditorForm = ({
             </Button>
           </div>
         </div>
+
+        {conflict === "version" && (
+          <div role="alert" className="space-y-2 text-sm">
+            <p>{t("errors.apiCodes.versionConflict")}</p>
+            <Button
+              disabled={reloadState === "loading"}
+              disabledReason={t("common.loading")}
+              loading={reloadState === "loading"}
+              variant="outline"
+              onClick={() => {
+                if (draft !== baseline) {
+                  setReloadState("confirm");
+                } else {
+                  detached(reload(), "flow-editor.reload");
+                }
+              }}
+            >
+              {t("common.reload")}
+            </Button>
+          </div>
+        )}
+        <AlertDialog
+          open={reloadState === "confirm"}
+          onOpenChange={(open) => {
+            if (!open) {
+              setReloadState("idle");
+            }
+          }}
+        >
+          <AlertDialogPopup>
+            <AlertDialogHeader>
+              <AlertDialogTitle>{t("common.unsavedChanges")}</AlertDialogTitle>
+              <AlertDialogDescription>
+                {t("common.reloadDiscardChanges")}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogClose render={<Button variant="ghost" />}>
+                {t("common.cancel")}
+              </AlertDialogClose>
+              <Button
+                onClick={() => {
+                  detached(reload(), "flow-editor.reload");
+                }}
+              >
+                {t("common.reload")}
+              </Button>
+            </AlertDialogFooter>
+          </AlertDialogPopup>
+        </AlertDialog>
 
         {!isEdit && (
           <p className="text-muted-foreground text-sm">
@@ -572,7 +547,7 @@ const FlowEditorForm = ({
               {t("flows.enabledDescription")}
             </p>
           </div>
-          <FlowSwitch
+          <Switch
             aria-label={
               enabled ? t("flows.disableFlow") : t("flows.enableFlow")
             }
@@ -595,13 +570,401 @@ const FlowEditorForm = ({
           steps={steps}
         />
       </div>
-    </div>
+    </fieldset>
   );
+};
+
+const useFlowEditorDraft = ({
+  organizationId,
+  flowId,
+  initialSnapshot,
+  onSaved,
+}: FlowEditorFormProps) => {
+  const idempotentSubmit = useIdempotentSubmit();
+  const t = useTranslations();
+  const queryClient = useQueryClient();
+  const isEdit = flowId !== null;
+  const canSave = usePermissions(
+    isEdit ? { flow: ["update"] } : { flow: ["create"] },
+  );
+  const canDelete = usePermissions({ flow: ["delete"] });
+
+  const [editor, setEditor] = useState<{
+    draft: FlowEditorDraft;
+    baseline: FlowEditorDraft;
+    conflict: "none" | "version";
+  }>(() => {
+    const draft = createFlowEditorDraft(initialSnapshot);
+    return { draft, baseline: draft, conflict: "none" };
+  });
+  const { draft, baseline, conflict } = editor;
+  const setDraft = (value: SetStateAction<FlowEditorDraft>) =>
+    setEditor((current) => ({
+      ...current,
+      draft: typeof value === "function" ? value(current.draft) : value,
+    }));
+  const setConflict = (value: "none" | "version") =>
+    setEditor((current) => ({ ...current, conflict: value }));
+  const { name, description, enabled, trigger, steps } = draft;
+  const setName = (value: string) =>
+    setDraft((current) => ({ ...current, name: value }));
+  const setDescription = (value: string) =>
+    setDraft((current) => ({ ...current, description: value }));
+  const setEnabled = (value: boolean) =>
+    setDraft((current) => ({ ...current, enabled: value }));
+  const setTrigger = (value: TriggerDraft) =>
+    setDraft((current) => ({ ...current, trigger: value }));
+  const setSteps = (value: SetStateAction<EditableStep[]>) =>
+    setDraft((current) => ({
+      ...current,
+      steps: typeof value === "function" ? value(current.steps) : value,
+    }));
+  const [reloadState, setReloadState] = useState<
+    "idle" | "confirm" | "loading"
+  >("idle");
+  const lifetime = useRef<AbortController | null>(null);
+  useMountEffect(() => {
+    const controller = new AbortController();
+    lifetime.current = controller;
+    return () => {
+      controller.abort();
+      if (lifetime.current === controller) {
+        lifetime.current = null;
+      }
+    };
+  });
+  const [saving, setSaving] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+
+  const { id: userId } = useAuthenticatedUser();
+
+  const updateStep = (index: number, next: FlowStep) => {
+    setSteps((prev) =>
+      prev.map((step, i) => (i === index ? { ...next, _id: step._id } : step)),
+    );
+  };
+
+  const removeStep = (index: number) => {
+    setSteps((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const moveStep = (index: number, direction: "up" | "down") => {
+    setSteps((previous) =>
+      reorderFlowStep({
+        steps: previous,
+        index,
+        target: direction === "up" ? index - 1 : index + 1,
+      }),
+    );
+  };
+
+  const addStep = (kind: FlowStepKind) => {
+    setSteps((prev) =>
+      prev.length >= MAX_FLOW_STEPS
+        ? prev
+        : [...prev, withStepId(newStep(kind))],
+    );
+  };
+
+  const reload = async () => {
+    if (flowId === null || saving || reloadState === "loading") {
+      return;
+    }
+    const request = lifetime.current;
+    const owner = captureSessionQueryOwner(queryClient);
+    if (
+      !owner ||
+      owner.userId !== userId ||
+      owner.organizationId !== organizationId ||
+      !request
+    ) {
+      return;
+    }
+    const requestedDraft = draft;
+    setReloadState("loading");
+    const result = await Result.tryPromise(async () =>
+      unwrapApiResponse(
+        await api
+          .flows({ flowId: toSafeId<"flowDefinition">(flowId) })
+          .get({ fetch: { signal: request.signal, cache: "no-store" } }),
+      ),
+    );
+    if (
+      lifetime.current !== request ||
+      !isObservedSessionQueryOwner(queryClient, owner)
+    ) {
+      return;
+    }
+    setReloadState("idle");
+    if (!isCurrentSessionQueryOwner(queryClient, owner)) {
+      return;
+    }
+    if (result.isErr()) {
+      notifyUserError(result.error.cause, t("flows.loadFailed"));
+      return;
+    }
+    const next = createFlowEditorDraft(result.value);
+    setEditor((current) =>
+      current.draft === requestedDraft
+        ? { draft: next, baseline: next, conflict: "none" }
+        : current,
+    );
+  };
+
+  const handleSave = async () => {
+    if (conflict === "version" || saving || reloadState === "loading") {
+      return;
+    }
+    const request = lifetime.current;
+    const owner = captureSessionQueryOwner(queryClient);
+    if (
+      !owner ||
+      owner.userId !== userId ||
+      owner.organizationId !== organizationId ||
+      !request
+    ) {
+      return;
+    }
+    const problem = flowDraftProblem(draft);
+    if (problem !== null) {
+      notifyUserProblem(t(problem));
+      return;
+    }
+
+    const body = flowDraftBody(draft);
+
+    setSaving(true);
+    const outcome = await Result.tryPromise(async () =>
+      unwrapApiResponse(
+        flowId === null
+          ? await idempotentSubmit.run({
+              operation: "api.flows",
+              body,
+              send: async (input) => api.flows.post(input),
+            })
+          : await api
+              .flows({ flowId: toSafeId<"flowDefinition">(flowId) })
+              .put({
+                ...body,
+                expectedUpdatedAt:
+                  draft.expectedUpdatedAt ??
+                  panic("An existing workflow requires its loaded version"),
+              } satisfies FlowDefinitionUpdateBody),
+      ),
+    );
+    if (outcome.isOk()) {
+      detached(
+        queryClient.invalidateQueries({
+          queryKey: knowledgeKeys.flows.all(organizationId),
+        }),
+        "flow-editor.invalidate",
+      );
+    }
+    if (
+      lifetime.current !== request ||
+      !isObservedSessionQueryOwner(queryClient, owner)
+    ) {
+      return;
+    }
+    setSaving(false);
+    if (!isCurrentSessionQueryOwner(queryClient, owner)) {
+      return;
+    }
+    if (outcome.isErr()) {
+      const error = outcome.error.cause;
+      if (
+        APIError.is(error) &&
+        error.code === API_VERSION_CONFLICT_ERROR_CODE
+      ) {
+        setConflict("version");
+      }
+      notifyUserError(error, t("flows.saveFailed"), {
+        description: userErrorFromThrown(
+          outcome.error,
+          t("common.unexpectedError"),
+        ),
+      });
+      return;
+    }
+
+    stellaToast.add({
+      type: "success",
+      title: isEdit ? t("flows.updated") : t("flows.created"),
+    });
+    onSaved();
+  };
+
+  const handleDelete = async () => {
+    if (flowId === null) {
+      return;
+    }
+    const request = lifetime.current;
+    const owner = captureSessionQueryOwner(queryClient);
+    if (
+      !request ||
+      !owner ||
+      owner.userId !== userId ||
+      owner.organizationId !== organizationId
+    ) {
+      return;
+    }
+    setSaving(true);
+    const outcome = await Result.tryPromise(async () =>
+      unwrapApiResponse(
+        await api
+          .flows({ flowId: toSafeId<"flowDefinition">(flowId) })
+          .delete(),
+      ),
+    );
+    if (outcome.isOk()) {
+      detached(
+        queryClient.invalidateQueries({
+          queryKey: knowledgeKeys.flows.all(organizationId),
+        }),
+        "flow-editor.invalidate",
+      );
+    }
+    if (
+      lifetime.current !== request ||
+      !isObservedSessionQueryOwner(queryClient, owner)
+    ) {
+      return;
+    }
+    setSaving(false);
+    if (!isCurrentSessionQueryOwner(queryClient, owner)) {
+      return;
+    }
+    if (outcome.isErr()) {
+      notifyUserError(outcome.error.cause, t("flows.deleteFailed"), {
+        description: userErrorFromThrown(
+          outcome.error,
+          t("common.unexpectedError"),
+        ),
+      });
+      return;
+    }
+
+    stellaToast.add({ type: "success", title: t("flows.deleted") });
+    setDeleteOpen(false);
+    onSaved();
+  };
+
+  return {
+    isEdit,
+    canDelete,
+    deleteOpen,
+    setDeleteOpen,
+    saving,
+    handleDelete,
+    canSave,
+    reloadState,
+    setReloadState,
+    conflict,
+    draft,
+    baseline,
+    reload,
+    name,
+    setName,
+    description,
+    setDescription,
+    enabled,
+    setEnabled,
+    trigger,
+    setTrigger,
+    steps,
+    updateStep,
+    removeStep,
+    moveStep,
+    addStep,
+    handleSave,
+  };
+};
+
+const createFlowEditorDraft = (snapshot: FlowEditorSnapshot) =>
+  ({
+    name: snapshot.name,
+    description: snapshot.description ?? "",
+    enabled: snapshot.enabled,
+    trigger: deriveTriggerDraft(snapshot.trigger),
+    steps: snapshot.steps.map(withStepId),
+    expectedUpdatedAt: snapshot.updatedAt,
+  }) satisfies FlowEditorDraft;
+
+const reorderFlowStep = ({
+  steps,
+  index,
+  target,
+}: {
+  steps: EditableStep[];
+  index: number;
+  target: number;
+}) => {
+  if (target < 0 || target >= steps.length) {
+    return steps;
+  }
+  const next = [...steps];
+  const current = next[index];
+  const swap = next[target];
+  if (!current || !swap) {
+    return steps;
+  }
+  next[index] = swap;
+  next[target] = current;
+  return next;
+};
+
+const flowDraftBody = (draft: FlowEditorDraft) => {
+  const description = draft.description.trim();
+  return {
+    name: draft.name.trim(),
+    description: description === "" ? null : description,
+    steps: draft.steps.map(({ _id, ...step }) => step),
+    trigger: buildTrigger(draft.trigger),
+    enabled: draft.enabled,
+  } satisfies FlowDefinitionBody;
+};
+
+const flowDraftProblem = (draft: FlowEditorDraft) => {
+  if (draft.name.trim() === "") {
+    return "flows.nameRequired" satisfies TranslationKey;
+  }
+  if (draft.steps.length === 0) {
+    return "flows.steps.required" satisfies TranslationKey;
+  }
+  for (const step of draft.steps) {
+    if (step.name.trim() === "") {
+      return "flows.steps.nameRequired" satisfies TranslationKey;
+    }
+    switch (step.kind) {
+      case "ai":
+        if (step.prompt.trim() === "") {
+          return "flows.steps.promptRequired" satisfies TranslationKey;
+        }
+        break;
+      case "review-gate":
+        break;
+      case "create-document":
+        if (step.documentTitle.trim() === "") {
+          return "flows.steps.documentTitleRequired" satisfies TranslationKey;
+        }
+        break;
+      default:
+        step satisfies never;
+        return panic("Unhandled workflow step kind");
+    }
+  }
+  if (
+    draft.trigger.type === "schedule" &&
+    draft.trigger.schedule.workspaceId === ""
+  ) {
+    return "flows.schedule.workspaceRequired" satisfies TranslationKey;
+  }
+  return null;
 };
 
 // ── Trigger section ───────────────────────────────────
 
-type WorkspaceOption = { id: string; name: string };
+type WorkspaceOption = { color: string | null; id: string; name: string };
 
 type WorkspaceOptions =
   | { status: "loading" }
@@ -646,7 +1009,9 @@ const WorkspaceOptionsNotice = ({
     case "failed":
       return (
         <div className="flex items-center gap-2 p-2 text-xs">
-          <span className="text-muted-foreground">{t("common.error")}</span>
+          <span className="text-muted-foreground">
+            {t("common.loadFailed")}
+          </span>
           <Button onClick={workspaces.retry} size="sm" variant="ghost">
             {t("common.retry")}
           </Button>
@@ -774,7 +1139,7 @@ const ScheduleConfig = ({
             {workspaces.status === "ready" &&
               workspaces.items.map((workspace) => (
                 <SelectItem key={workspace.id} value={workspace.id}>
-                  {workspace.name}
+                  <MatterOptionLabel matter={workspace} />
                 </SelectItem>
               ))}
           </SelectPopup>
@@ -967,32 +1332,32 @@ const FileUploadConfig = ({
     <div className="grid gap-3 rounded-lg border p-3">
       <div className="grid gap-1.5">
         <Label>{t("common.matters")}</Label>
-        <label className="flex items-center gap-2 text-sm">
+        <Label className="flex">
           <Checkbox
             checked={fileUpload.workspaceScope.type === "all"}
             onCheckedChange={toggleAllWorkspaces}
           />
-          {t("flows.fileUpload.allWorkspaces")}
-        </label>
+          <span className="font-normal">
+            {t("flows.fileUpload.allWorkspaces")}
+          </span>
+        </Label>
         {fileUpload.workspaceScope.type === "selected" && (
           <div className="mt-1 grid max-h-48 gap-1 overflow-y-auto rounded-md border p-2">
             <WorkspaceOptionsNotice workspaces={workspaces} />
             {workspaces.status === "ready" &&
               workspaces.items.map((workspace) => (
-                <label
-                  className="flex items-center gap-2 text-sm"
-                  key={workspace.id}
-                >
+                // Dense rows: the picker scrolls inside a short box.
+                <Label className="flex" key={workspace.id}>
                   <Checkbox
                     checked={isWorkspaceSelected(workspace.id)}
                     onCheckedChange={(checked) =>
                       toggleWorkspace(workspace.id, checked)
                     }
                   />
-                  <span className="truncate" dir="auto">
+                  <TruncatedText className="font-normal" dir="auto">
                     {workspace.name}
-                  </span>
-                </label>
+                  </TruncatedText>
+                </Label>
               ))}
           </div>
         )}
@@ -1000,13 +1365,15 @@ const FileUploadConfig = ({
 
       <div className="grid gap-1.5">
         <Label>{t("flows.fileUpload.extensions")}</Label>
-        <label className="flex items-center gap-2 text-sm">
+        <Label className="flex">
           <Checkbox
             checked={fileUpload.extensionScope.type === "any"}
             onCheckedChange={toggleAnyExtension}
           />
-          {t("flows.fileUpload.anyExtension")}
-        </label>
+          <span className="font-normal">
+            {t("flows.fileUpload.anyExtension")}
+          </span>
+        </Label>
         {fileUpload.extensionScope.type === "selected" && (
           <FlowExtensionInput
             extensions={fileUpload.extensionScope.extensions}
@@ -1039,6 +1406,7 @@ const StepsSection = ({
   onAdd: (kind: FlowStepKind) => void;
 }) => {
   const t = useTranslations();
+  const format = useFormatter();
   const atLimit = steps.length >= MAX_FLOW_STEPS;
 
   return (
@@ -1080,6 +1448,9 @@ const StepsSection = ({
           return (
             <Button
               disabled={atLimit}
+              disabledReason={t("flows.validation.tooManySteps", {
+                max: format.number(MAX_FLOW_STEPS),
+              })}
               key={kind}
               onClick={() => onAdd(kind)}
               size="sm"
@@ -1138,6 +1509,7 @@ const FlowStepEditor = ({
           <Button
             aria-label={t("common.moveUp")}
             disabled={index === 0}
+            disabledReason={t("common.alreadyFirst")}
             onClick={onMoveUp}
             size="icon-sm"
             type="button"
@@ -1148,6 +1520,7 @@ const FlowStepEditor = ({
           <Button
             aria-label={t("common.moveDown")}
             disabled={index === total - 1}
+            disabledReason={t("common.alreadyLast")}
             onClick={onMoveDown}
             size="icon-sm"
             type="button"
@@ -1195,15 +1568,17 @@ const FlowStepEditor = ({
               value={step.prompt}
             />
           </div>
-          <label className="flex items-center gap-2 text-sm">
+          <Label className="flex">
             <Checkbox
               checked={step.includeDocuments}
               onCheckedChange={(checked) =>
                 onUpdate({ ...step, includeDocuments: checked })
               }
             />
-            {t("flows.steps.includeDocuments")}
-          </label>
+            <span className="font-normal">
+              {t("flows.steps.includeDocuments")}
+            </span>
+          </Label>
         </>
       )}
 

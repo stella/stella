@@ -24,10 +24,12 @@ const EDITABLE_FIELDS = [
 ] as const;
 
 const config = {
+  contract: "patch",
   description:
     "Update an active number series. Pattern and padding lock after first allocation.",
   permissions: { organizationSettings: ["update"] },
   accountAccess: ACCOUNT_ACCESS.standard,
+  featureAccess: { featureId: "time-billing", type: "required" },
   mcp: { type: "capability", reason: "billing_admin", consumesServices: false },
   params: numberSeriesParams,
   body: updateNumberSeriesBody,

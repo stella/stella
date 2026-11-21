@@ -1,13 +1,43 @@
-import { convertSchemaToJsonSchema } from "@tanstack/ai";
+import {
+  chat,
+  convertSchemaToJsonSchema,
+  EventType,
+  memoryStream,
+  toServerSentEventsResponse,
+} from "@tanstack/ai";
+import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
-import { mockStructuredData } from "@/api/dev/register-mock-ai";
+import { apiDateSchema } from "@stll/api-contract/api-date";
+import { locateQuote } from "@stll/legal-ast/quote-locate";
+import { rejectionOf } from "@stll/property-testing/rejection";
+import { createTestState } from "@stll/test-state";
+
+import {
+  MOCK_AI_CANCELLATION_MARKER,
+  MOCK_AI_CANCELLATION_REPLY_TAIL,
+  MOCK_AI_CONTINUOUS_MARKER,
+} from "@/api/dev/mock-ai-cancellation";
+import {
+  createMockTextAdapter,
+  mockStructuredData,
+  registerMockAI,
+} from "@/api/dev/register-mock-ai";
+import { env } from "@/api/env";
+import { factExtractionSchema } from "@/api/lib/lists/generation/fact-extract";
+import { extractionSchema as claimExtractionSchema } from "@/api/lib/lists/verification/claim-extract";
+import { gradingSchema as claimGradingSchema } from "@/api/lib/lists/verification/claim-grade";
 import { providerSafeJsonSchemaOptionsForTanStackProvider } from "@/api/lib/provider-safe-json-schema";
+import { createTanStackTextAdapterFactory } from "@/api/lib/tanstack-ai-models";
 import { toTanStackValibotSchema } from "@/api/lib/tanstack-ai-schema";
+import { withTimeout } from "@/api/lib/with-timeout";
+import { HAPPY_PATH_TIMEOUT_MS } from "@/api/tests/test-timeouts";
+
+const testState = createTestState({ file: import.meta.path, config: env });
 
 // Runs a Valibot schema through the exact pipeline
-// `generateTanStackObjectForRole` / `streamTanStackObjectForRole`
+// `generateTanStackObjectForTask` / `streamTanStackObjectForTask`
 // (apps/api/src/lib/tanstack-ai-generate.ts) apply before any adapter's
 // `structuredOutput` sees `outputSchema`: Valibot -> TanStack's Standard JSON
 // Schema wrapper -> provider-safe projection -> TanStack's own
@@ -86,11 +116,11 @@ const novelSchema = v.strictObject({
 });
 
 // A required-nullable ISO-date leaf: the `"mock"` string primitive fails
-// `v.isoDate()`, so only synthesizing `null` for a nullable field keeps this
+// `v.isoDate(), API_CALENDAR_DATE_CHECK`, so only synthesizing `null` for a nullable field keeps this
 // parseable. Under the Google projection the field arrives as
 // `nullable: true` rather than an `anyOf` null branch.
 const nullableIsoDateSchema = v.strictObject({
-  when: v.nullable(v.pipe(v.string(), v.isoDate())),
+  when: v.nullable(apiDateSchema),
 });
 
 // A genuinely optional (not nullable) field: valid to omit, invalid as null.
@@ -168,6 +198,156 @@ describe("mockStructuredData", () => {
     expect(parsed.required).toBe("mock");
   });
 
+  // The worker drops any fact whose quote is not in the block it names, so
+  // the local fixture must quote the blocks of the request it answers.
+  for (const provider of PROVIDERS) {
+    test(`answers fact extraction with quotes of the asked blocks (${provider})`, () => {
+      const blocks = new Map([
+        [
+          "b1",
+          "On 9 March 2021 the board approved the policy. It was later circulated.",
+        ],
+        ["b2", "The ward manager said the policy was final."],
+        ["b3", "Ok."],
+        // Prose no rule recognises: proposing a fact here would cite a
+        // passage that does not support it.
+        ["b4", "The schedule below lists the addresses of both parties."],
+      ]);
+      const request = `Document blocks:\n${[...blocks]
+        .map(([id, text]) => `[${id}] ${text}`)
+        .join("\n")}\n\nList the facts in these blocks only: b1, b2, b3, b4`;
+      const data = mockStructuredData(
+        structuredOutputSchemaFor(factExtractionSchema, provider),
+        [{ role: "user", content: [{ type: "text", content: request }] }],
+      );
+      const { facts } = v.parse(factExtractionSchema, data);
+      expect(
+        facts.map(({ blockId, quote, fact, occurredOn, contestedMeaning }) => ({
+          blockId,
+          located: locateQuote(blocks.get(blockId) ?? "", quote) !== null,
+          // A fact restates the passage; it is not the passage again.
+          restated: fact !== quote,
+          // The date comes from the passage the fact cites, or is absent.
+          occurredOn,
+          held: contestedMeaning !== null,
+        })),
+      ).toEqual([
+        {
+          blockId: "b1",
+          located: true,
+          restated: true,
+          occurredOn: "2021-03-09",
+          held: false,
+        },
+        {
+          blockId: "b2",
+          located: true,
+          restated: true,
+          occurredOn: null,
+          held: true,
+        },
+      ]);
+    });
+  }
+
+  // A local verification run has to show every qualifier the grader can
+  // give, from claims quoted out of the document it was asked about.
+  for (const provider of PROVIDERS) {
+    test(`answers claim extraction and grading from the request (${provider})`, () => {
+      const blocks = new Map([
+        [
+          "b1",
+          "6. I was on annual leave for the whole of August 2021. I was abroad with my family.",
+        ],
+        [
+          "b2",
+          "7. Had it been raised at board level, I would have expected to see it minuted.",
+        ],
+        ["b3", "8. I signed the engagement letter on 14 June 2021."],
+      ]);
+      const extraction = mockStructuredData(
+        structuredOutputSchemaFor(claimExtractionSchema, provider),
+        [
+          {
+            role: "user",
+            content: `Document blocks:\n${[...blocks]
+              .map(([id, text]) => `[${id}] ${text}`)
+              .join("\n")}\n\nList the claims in these blocks only: b1, b2, b3`,
+          },
+        ],
+      );
+      const { claims } = v.parse(claimExtractionSchema, extraction);
+      expect(
+        claims.every(
+          ({ blockId, quote }) =>
+            locateQuote(blocks.get(blockId) ?? "", quote) !== null,
+        ),
+      ).toBe(true);
+
+      const request = [
+        "Facts:",
+        '- F1: Calendar "Annual leave" blocked across 2–20 August 2021.',
+        "- F2: Engagement letter signed by E. Whitfield on 14 June 2021.",
+        `Claims:\n${claims
+          .map(({ quote }, index) => `- C${String(index + 1)}: ${quote}`)
+          .join("\n")}`,
+      ].join("\n");
+      const grading = mockStructuredData(
+        structuredOutputSchemaFor(claimGradingSchema, provider),
+        [{ role: "user", content: request }],
+      );
+      const { grades } = v.parse(claimGradingSchema, grading);
+      expect(grades.map(({ claimId }) => claimId)).toEqual(
+        claims.map((_, index) => `C${String(index + 1)}`),
+      );
+      expect(
+        grades.flatMap(({ verdict, qualifiers }) =>
+          qualifiers.map(({ kind }) => `${verdict}:${kind}`),
+        ),
+      ).toEqual(["tension:scope-mismatch", "nocover:record-silent"]);
+      expect(
+        grades.find(({ verdict }) => verdict === "supported")?.refs,
+      ).toEqual([{ factId: "F2", rel: "supports" }]);
+    });
+  }
+
+  // The sample statement's disclosure date is recorded twice, differently;
+  // a local run withholds that claim between the two records.
+  test("withholds a dated claim between two records that date its point differently", () => {
+    const request = [
+      "Facts:",
+      "- F1: Email from E. Whitfield to Compliance disclosing the arrangement, header timestamp 10 Aug 2021.",
+      "  date=2021-08-10 (day); kind=Email",
+      "- F2: Compliance case-management log records the same disclosure as received on 17 Aug 2021.",
+      "  date=2021-08-17 (day); kind=System log",
+      "- F3: Engagement letter bearing E. Whitfield's signature, dated 14 June 2021.",
+      "  date=2021-06-14 (day); kind=Document",
+      "Claims:",
+      "- C1: I notified compliance of the arrangement on 10 August 2021.",
+      "- C2: I signed the engagement letter on 14 June 2021.",
+    ].join("\n");
+    const grading = mockStructuredData(
+      structuredOutputSchemaFor(claimGradingSchema, "openai"),
+      [{ role: "user", content: request }],
+    );
+    const { grades } = v.parse(claimGradingSchema, grading);
+    expect(
+      grades.map(({ verdict, conflict }) => ({
+        verdict,
+        factIds: conflict?.factIds ?? null,
+        values: conflict?.values ?? null,
+      })),
+    ).toEqual([
+      {
+        verdict: "recordconflict",
+        factIds: ["F1", "F2"],
+        values: ["2021-08-10", "2021-08-17"],
+      },
+      // One record dates the signing, so nothing conflicts.
+      { verdict: "supported", factIds: null, values: null },
+    ]);
+  });
+
   test("keeps the curated templates/prefill fixture", () => {
     const data = mockStructuredData(
       structuredOutputSchemaFor(prefillOutputSchema, "openai"),
@@ -224,3 +404,162 @@ describe("mockStructuredData", () => {
     ).toThrow("mock AI adapter cannot synthesise structured output");
   });
 });
+
+test("the real SDK stops the cancellation fixture through its adapter signal", async () => {
+  const run = new AbortController();
+  const firstDelta = Promise.withResolvers<undefined>();
+  const deltas: string[] = [];
+  const stream = chat({
+    threadId: "test-thread",
+    adapter: createMockTextAdapter("mock-cancellation"),
+    messages: [{ role: "user", content: "Stream until stopped please" }],
+    abortController: run,
+  });
+  const consume = async () => {
+    for await (const chunk of stream) {
+      if (chunk.type === EventType.TEXT_MESSAGE_CONTENT) {
+        deltas.push(chunk.delta);
+        firstDelta.resolve(undefined);
+      }
+    }
+  };
+  const failure = rejectionOf(consume());
+  await firstDelta.promise;
+  const reason = new DOMException("Stopped", "AbortError");
+  run.abort(reason);
+  expect(await failure).toBe(reason);
+  expect(deltas).toEqual(["This mock reply streams back"]);
+});
+
+// TEXT_MESSAGE_START and 31 text deltas fill the SDK's default batch of 32.
+const FIRST_BATCH_TEXT_DELTAS = 31;
+
+for (const marker of [MOCK_AI_CANCELLATION_MARKER, MOCK_AI_CONTINUOUS_MARKER]) {
+  test(`the registered ${marker} fixture delivers durable batches and survives repeated rejoins`, async () => {
+    testState.setConfig("USE_MOCK_AI", "force");
+    registerMockAI();
+    const adapter = createTanStackTextAdapterFactory({
+      provider: "google",
+      dataClass: "customer",
+      managedAIResidency: "eu",
+    })("gemini-2.5-flash");
+    const run = new AbortController();
+    const stream = chat({
+      threadId: "test-thread",
+      adapter,
+      abortController: run,
+      systemPrompts: ["Answer questions about the supplied documents."],
+      messages: [
+        { role: "user", content: "Summarize the notice provisions" },
+        { role: "assistant", content: "The notice period is thirty days." },
+        {
+          role: "user",
+          content: [{ type: "text", content: marker }],
+        },
+      ],
+    });
+    const runId = Bun.randomUUIDv7();
+    const durability = memoryStream({ runId });
+    const response = toServerSentEventsResponse(stream, {
+      abortController: run,
+      durability: { adapter: durability },
+    });
+    let reader = (
+      response.body ?? panic("SSE response requires a body")
+    ).getReader();
+    const readBatch = async () =>
+      await withTimeout(
+        async () => {
+          const decoder = new TextDecoder();
+          let text = "";
+          while (
+            (text.match(/"type":"TEXT_MESSAGE_CONTENT"/gu)?.length ?? 0) <
+            FIRST_BATCH_TEXT_DELTAS
+          ) {
+            const { done, value } = await reader.read();
+            if (done) {
+              panic("SSE ended before a live answer batch was delivered");
+            }
+            text += decoder.decode(value, { stream: true });
+          }
+          return text;
+        },
+        {
+          label: "registered live answer batch delivery",
+          timeoutMs: HAPPY_PATH_TIMEOUT_MS,
+        },
+      );
+    try {
+      const received = await readBatch();
+      expect(received).not.toContain('"type":"RUN_ERROR"');
+      expect(run.signal.aborted).toBe(false);
+      const persisted = await durability.snapshot();
+      expect(
+        persisted.filter(
+          ({ chunk }) => chunk.type === EventType.TEXT_MESSAGE_CONTENT,
+        ).length,
+      ).toBeGreaterThanOrEqual(FIRST_BATCH_TEXT_DELTAS);
+      expect(
+        persisted.some(
+          ({ chunk }) =>
+            chunk.type === EventType.RUN_FINISHED ||
+            chunk.type === EventType.RUN_ERROR,
+        ),
+      ).toBe(false);
+      if (marker === MOCK_AI_CANCELLATION_MARKER) {
+        expect(
+          persisted
+            .flatMap(({ chunk }) =>
+              chunk.type === EventType.TEXT_MESSAGE_CONTENT
+                ? [chunk.delta]
+                : [],
+            )
+            .join(""),
+        ).toBe(
+          `This mock reply streams back${MOCK_AI_CANCELLATION_REPLY_TAIL}`,
+        );
+      }
+      // Reload detaches only the viewer. Replay the same bytes and offsets twice
+      // without invoking the provider again or ending the run.
+      for (let reload = 0; reload < 2; reload += 1) {
+        await reader.cancel();
+        expect(run.signal.aborted).toBe(false);
+        const replay = toServerSentEventsResponse((async function* () {})(), {
+          durability: { adapter: memoryStream({ runId, offset: "-1" }) },
+          abortController: new AbortController(),
+        });
+        reader = (
+          replay.body ?? panic("Replay requires an SSE body")
+        ).getReader();
+        expect(await readBatch()).toBe(received);
+        expect(run.signal.aborted).toBe(false);
+      }
+      if (marker === MOCK_AI_CONTINUOUS_MARKER) {
+        // Drain beyond one whole reply: a finite paced fixture must fail here,
+        // even if both rejoins happened before its terminal event.
+        await readBatch();
+        await readBatch();
+      }
+      run.abort(new DOMException("Stopped", "AbortError"));
+      await withTimeout(
+        async () => {
+          while (!(await reader.read()).done) {
+            // The replay viewer drains the producer's cancellation terminal.
+          }
+        },
+        {
+          label: "registered live stream cancellation",
+          timeoutMs: HAPPY_PATH_TIMEOUT_MS,
+        },
+      );
+      expect(
+        (await durability.snapshot()).filter(
+          ({ chunk }) => chunk.type === EventType.RUN_ERROR,
+        ),
+      ).toHaveLength(1);
+    } finally {
+      run.abort(new DOMException("Stopped", "AbortError"));
+      await reader.cancel();
+    }
+  });
+}

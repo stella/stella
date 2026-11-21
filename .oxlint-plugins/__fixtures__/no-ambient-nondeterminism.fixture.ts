@@ -170,12 +170,12 @@ export const localWebcryptoIdentifier =
   localWebcryptoModule.webcrypto.randomUUID();
 
 const importedCryptoServices = {
-  crypto: nodeCryptoNamespace,
+  crypto: { randomUUID: nodeCryptoNamespace.randomUUID },
   webcrypto: bareCryptoDefault.webcrypto,
 };
 
 export const containedCryptoIdentifier =
-  // oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: local containers retain imported crypto namespace provenance
+  // oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: local containers retain imported crypto method provenance
   importedCryptoServices.crypto.randomUUID();
 
 export const containedWebcryptoBytes =
@@ -184,7 +184,7 @@ export const containedWebcryptoBytes =
 
 const replacedCryptoServices: {
   crypto: { randomUUID: () => string };
-} = { crypto: nodeCryptoNamespace };
+} = { crypto: { randomUUID: nodeCryptoNamespace.randomUUID } };
 
 export const identifierBeforeCryptoReplacement =
   // oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: later container writes cannot alter provenance at an earlier call
@@ -197,7 +197,7 @@ export const identifierAfterCryptoReplacement =
 const installedCryptoServices = { crypto: localCryptoModule };
 export const identifierBeforeCryptoInstallation =
   installedCryptoServices.crypto.randomUUID();
-installedCryptoServices.crypto = nodeCryptoNamespace;
+installedCryptoServices.crypto = { randomUUID: nodeCryptoNamespace.randomUUID };
 
 export const identifierAfterCryptoInstallation =
   // oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: imported crypto provenance begins at the preceding container write

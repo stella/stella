@@ -9,8 +9,6 @@
  * request rather than twenty.
  */
 
-import { useMemo } from "react";
-
 import {
   keepPreviousData,
   queryOptions,
@@ -18,9 +16,10 @@ import {
 } from "@tanstack/react-query";
 
 import { DOCUMENT_REVIEW_LIMITS } from "@stll/api-contract";
+import { chunk as chunkItems } from "@stll/concurrency/chunk";
 
 import { api } from "@/lib/api";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
 
 /** The endpoint's cap on one body. A surface holding more ids than this is
@@ -42,10 +41,10 @@ export type ReferencePassageTexts = {
 
 /** The ids as the cache reads them: deduplicated and ordered, so two surfaces
  *  quoting the same passages in different orders share one entry. */
-export const passageTextIds = (ids: readonly string[]): string[] =>
+const passageTextIds = (ids: readonly string[]): string[] =>
   [...new Set(ids)].toSorted();
 
-export const documentReviewPassageTextKeys = {
+const documentReviewPassageTextKeys = {
   all: ["document-review-passage-texts"] as const,
   list: (ids: readonly string[]) =>
     [...documentReviewPassageTextKeys.all, ids] as const,
@@ -55,13 +54,10 @@ const fetchPassageTexts = async (
   ids: readonly string[],
   signal: AbortSignal,
 ) => {
-  const batches: string[][] = [];
-  for (let start = 0; start < ids.length; start += PASSAGE_READ_BATCH) {
-    batches.push(ids.slice(start, start + PASSAGE_READ_BATCH));
-  }
+  const batches = chunkItems(ids, PASSAGE_READ_BATCH);
   const pages = await Promise.all(
     batches.map(async (batch) =>
-      unwrapEden(
+      unwrapApiResponse(
         await api["document-reviews"].passages.post(
           {
             ids: batch.map((id) =>
@@ -88,7 +84,7 @@ const textByIdOf = (
  * that list is the question: a proposal that has streamed twelve positions is
  * asking something the answer for eleven does not contain.
  */
-export const documentReviewPassageTextsOptions = (ids: readonly string[]) => {
+const documentReviewPassageTextsOptions = (ids: readonly string[]) => {
   const keyIds = passageTextIds(ids);
   return queryOptions({
     queryKey: documentReviewPassageTextKeys.list(keyIds),
@@ -140,7 +136,7 @@ export const useReferencePassageTexts = (
   const { data, isError } = useQuery(documentReviewPassageTextsOptions(ids));
   // One stable empty map per hook instance: a fresh Map each render would hand
   // every consumer a new identity while nothing has loaded.
-  const empty = useMemo(() => new Map<string, string>(), []);
+  const empty = new Map<string, string>();
   return {
     // A failed read is a settled one: the words are not on screen, and saying
     // so is better than a column that never resolves.

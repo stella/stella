@@ -1,3 +1,4 @@
+import { printError } from "@stll/errors";
 /**
  * Classify citation polarity from local text (no database).
  *
@@ -21,6 +22,7 @@
 
 import { isValidPolarity } from "@/api/handlers/case-law/polarity/consts";
 import type { Polarity } from "@/api/handlers/case-law/polarity/consts";
+import { POLARITY_READINGS } from "@/api/handlers/case-law/polarity/model-readings";
 import { SEED_RULES } from "@/api/handlers/case-law/polarity/seed-rules";
 
 type Args = {
@@ -250,8 +252,8 @@ const main = async () => {
 
       if (args.llm) {
         console.log("Calling LLM classifier...");
-        const { classifyWithLLM } =
-          await import("@/api/handlers/case-law/polarity/llm-classifier");
+        const { classifyWithSystemOne } =
+          await import("@/api/handlers/case-law/polarity/system-one-classifier");
 
         const idx = text.indexOf(args.citation);
         if (idx === -1) {
@@ -264,21 +266,23 @@ const main = async () => {
         const end = Math.min(text.length, idx + args.citation.length + 200);
         const context = text.slice(start, end);
 
-        const result = await classifyWithLLM({
+        const result = await classifyWithSystemOne({
+          client: null,
           context,
           citationText: args.citation,
           language: args.language,
         });
 
-        if (result.isErr()) {
+        if (result.state === "undecided") {
           console.log("LLM classification failed.");
         } else {
-          const color = POLARITY_COLORS[result.value.polarity];
+          const color =
+            POLARITY_COLORS[POLARITY_READINGS[result.answer.choice].polarity];
           console.log(
-            `\n${color}${result.value.polarity.toUpperCase()}${RESET}` +
-              ` (confidence: ${result.value.confidence})`,
+            `\n${color}${result.answer.choice.toUpperCase()}${RESET}` +
+              ` (confidence: ${result.confidence})`,
           );
-          console.log(`Key phrase: "${result.value.keyPhrase}"`);
+          console.log(`Key phrase: "${result.evidence ?? ""}"`);
         }
       }
     }
@@ -329,6 +333,6 @@ const main = async () => {
 };
 
 main().catch((error: unknown) => {
-  console.error("Classification failed:", error);
+  printError("Classification failed:", error);
   process.exit(1);
 });

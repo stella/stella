@@ -1,8 +1,11 @@
+import { panic, Result } from "better-result";
 /**
- * Seed the database with real decisions pulled from production for
- * local testing of the Case Law feature.
+ * Seed the database with case-law decisions for local testing of the Case
+ * Law feature. The default profile adds the synthetic decisions of
+ * `seed-case-law-synthetic.ts`, which give the public browser enough rows to
+ * page, wrap and facet. The recorded profile is reserved for public captures.
  *
- * Data lives in `__fixtures__/case-law/<adapterKey>.json.gz` — one file per
+ * Recorded data lives in `__fixtures__/case-law/<adapterKey>.json.gz` — one file per
  * source (cz-ns, cz-nss, cz-regional, cz-us, eu-ecj, pl-courts,
  * sk-courts, sk-us). Each fixture holds the source row plus the three
  * most recent decisions, taken verbatim from prod RDS so the dev DB
@@ -15,50 +18,66 @@
  * Usage:
  *   bun apps/api/scripts/seed-case-law.ts
  */
-
-import { panic, Result } from "better-result";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import { readdir } from "node:fs/promises";
 import path from "node:path";
 import * as v from "valibot";
 
 import { compareCodeUnit } from "@stll/collation";
+import { logErrorOutput, printError } from "@stll/errors";
 import type { PersistedDecisionAnalysis } from "@stll/legal-ast/analysis";
+import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
+import { withLongRunningConnection } from "@/api/db/long-running-connection";
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
 import { backfillCaseLawSlugs } from "@/api/handlers/case-law/decisions/slug-backfill";
+import { decisionDocketColumns } from "@/api/handlers/case-law/ingestion/pipeline/decision-docket-columns";
+import type { SafeId } from "@/api/lib/branded-types";
 import { enterCaseLawMaintenanceLane } from "@/api/lib/case-law/maintenance-lane";
 import type { CaseLawWriteHandles } from "@/api/lib/case-law/maintenance-lane";
 import { canonicalDecisionDate } from "@/api/lib/dates";
+import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import { readGzipJson } from "@/api/lib/gzip-json";
+import { FIXTURE_SOURCE_KEYS } from "@/api/lib/legal-search/adapter-manifest";
 import { indexDecision } from "@/api/lib/legal-search/case-law-search-index";
+import { corpusContentHash } from "@/api/lib/legal-search/corpus-content-hash";
+import type { CorpusSourceDescriptor } from "@/api/lib/legal-search/corpus-source";
 import type {
   DecisionSection,
   EmptyAst,
 } from "@/api/lib/legal-search/document-types";
 import { requireLocalDevOpen } from "@/api/runtime-mode";
 
-import { seedId } from "./seed-utils";
+import { planet49CaseLawFixture } from "./seed-case-law-planet49";
+import {
+  readSyntheticSeedDecision,
+  reservedBackfillSession,
+  seedSyntheticProvisionLinks,
+} from "./seed-case-law-provisions";
+import type { SeededDecision } from "./seed-case-law-provisions";
+import { syntheticCaseLawFixtures } from "./seed-case-law-synthetic";
+import { globalSeedId } from "./seed-utils";
 
 const FIXTURES_DIR = path.join(import.meta.dir, "__fixtures__", "case-law");
+/** The scheduler's budgets for the provision state backfill's session. */
+const PROVISION_BACKFILL_STATEMENT_TIMEOUT_MS = 60_000;
+const PROVISION_BACKFILL_LOCK_TIMEOUT_MS = 30_000;
 
-const sourceIdFor = (adapterKey: string) =>
-  seedId(`case-law-source-${adapterKey}`);
-const decisionIdFor = (
-  adapterKey: string,
-  caseNumber: string,
-  language: string,
-) => seedId(`case-law-dec-${adapterKey}-${caseNumber}-${language}`);
+// The corpus is global, so its ids are the same from every organization's run.
+export const sourceIdFor = (adapterKey: string) =>
+  globalSeedId(`case-law-source-${adapterKey}`);
 
 type FixtureSource = {
   adapter_key: string;
   name: string;
   enabled: boolean;
   config: Record<string, unknown> | null;
+  /** Absent on the recorded sources, which predate descriptors. */
+  descriptor?: CorpusSourceDescriptor;
 };
 
-type FixtureDecision = {
+export type FixtureDecision = {
   case_number: string;
   slug: string | null;
   ecli: string | null;
@@ -82,9 +101,44 @@ type FixtureDecision = {
   source_hash: string | null;
 };
 
-type CaseLawFixture = {
+export type CaseLawFixture = {
   source: FixtureSource;
   decisions: FixtureDecision[];
+};
+
+/** A document's language version, independent of its shared docket number. */
+const fixtureSourceDocumentId = (decision: FixtureDecision) => {
+  if (decision.ecli) {
+    return `ecli:${decision.ecli}:${decision.language}`;
+  }
+  if (decision.source_hash) {
+    return `hash:${decision.source_hash}:${decision.language}`;
+  }
+  return null;
+};
+
+/** Reject fixtures that cannot distinguish two documents before any writes. */
+export const validateFixtureDecisionIdentities = (
+  fixtures: CaseLawFixture[],
+) => {
+  const keys = new Set<string>();
+  for (const { source, decisions } of fixtures) {
+    for (const decision of decisions) {
+      const key = JSON.stringify([
+        source.adapter_key,
+        fixtureSourceDocumentId(decision) ?? [
+          decision.case_number,
+          decision.language,
+        ],
+      ]);
+      if (keys.has(key)) {
+        panic(
+          `Ambiguous fixture decision identity: ${source.adapter_key} ${decision.case_number} ${decision.language}`,
+        );
+      }
+      keys.add(key);
+    }
+  }
 };
 
 // Minimal structural schema so a malformed fixture (missing source,
@@ -106,7 +160,7 @@ const fixtureSchema = v.looseObject({
   ),
 });
 
-const loadFixtures = async (): Promise<CaseLawFixture[]> => {
+const loadRecordedFixtures = async (): Promise<CaseLawFixture[]> => {
   const entries = await readdir(FIXTURES_DIR);
   const fixtures: CaseLawFixture[] = [];
   for (const entry of entries) {
@@ -118,7 +172,7 @@ const loadFixtures = async (): Promise<CaseLawFixture[]> => {
     // SAFETY: structural fields validated by fixtureSchema; deep JSON
     // (sections, document_ast, analysis) is checked into the repo
     // and matches the prod schema by construction.
-    // oxlint-disable-next-line typescript-eslint/no-unsafe-type-assertion -- narrows validated fixture; deep JSON is repo-checked, not untrusted input
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- narrows validated fixture; deep JSON is repo-checked, not untrusted input
     fixtures.push(raw as CaseLawFixture);
   }
   fixtures.sort((a, b) =>
@@ -158,18 +212,110 @@ const ensureSearchPreviewConfig = async (
   `);
 };
 
+/** The `case_law_sources` row a fixture's source seeds. */
+export const fixtureSourceRow = (source: FixtureSource) => ({
+  id: sourceIdFor(source.adapter_key),
+  adapterKey: source.adapter_key,
+  name: source.name,
+  enabled: source.enabled,
+  lastSyncAt: new Date(),
+  config: source.config ?? {},
+  descriptor: source.descriptor ?? null,
+});
+
+type FixtureDecisionRowOptions = {
+  adapterKey: string;
+  sourceId: SafeId<"caseLawSource">;
+  decision: FixtureDecision;
+};
+
+/** The `case_law_decisions` row a fixture decision seeds. */
+export const fixtureDecisionRow = ({
+  adapterKey,
+  sourceId,
+  decision: d,
+}: FixtureDecisionRowOptions) => {
+  const fulltext =
+    d.fulltext ?? d.sections?.map((s) => s.text).join("\n\n") ?? "";
+  return {
+    id: globalSeedId(
+      JSON.stringify([
+        "case-law-dec",
+        adapterKey,
+        fixtureSourceDocumentId(d) ?? [d.case_number, d.language],
+      ]),
+    ),
+    sourceId,
+    sourceDocumentId: fixtureSourceDocumentId(d),
+    ...decisionDocketColumns({
+      caseNumber: d.case_number,
+      caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+      country: d.country,
+    }),
+    slug: d.slug,
+    ecli: d.ecli,
+    court: d.court,
+    country: d.country,
+    language: d.language,
+    languageGroupKey: d.language_group_key,
+    // Fixtures are verbatim rows, some of them older than the write-path
+    // guard; the same guard runs here so the table's bounds CHECK sees what
+    // the ingest would have stored.
+    decisionDate:
+      d.decision_date === null
+        ? null
+        : canonicalDecisionDate(d.decision_date, d.country),
+    decisionType: d.decision_type,
+    fulltext,
+    sections: d.sections,
+    documentAst: d.document_ast,
+    // The payload hash an ingested decision carries. Provision linking reads
+    // it as part of the extraction input, and without it every decision in
+    // a linked scope reads as one whose citations cannot be placed.
+    contentHash: corpusContentHash({
+      text: fulltext,
+      sections: d.sections,
+      ast: d.document_ast,
+    }),
+    analysis: d.analysis,
+    parserVersion: d.parser_version ?? 0,
+    sourceRaw: d.source_raw,
+    sourceRawS3Key: d.source_raw_s3_key,
+    sourceRawContentType: d.source_raw_content_type,
+    sourceUrl: d.source_url,
+    documentUrl: d.document_url,
+    metadata: d.metadata ?? {},
+    sourceHash: d.source_hash,
+  };
+};
+
 // Index + slug writes target the global `case_law_*` tables, which only
 // the `stella_ingestion` role may write under RLS. The decision rows below
 // go in via the lane's `rootDb` (table owner), but `indexDecision` and the
 // slug backfill run their writes through its ingestion-scoped handle.
-const seedFixtures = async ({ rootDb, ingestionDb }: CaseLawWriteHandles) => {
+export type CaseLawSeedProfile = "development" | "recorded";
+
+type SeedFixturesOptions = {
+  handles: CaseLawWriteHandles;
+  profile: CaseLawSeedProfile;
+};
+
+const seedFixtures = async ({
+  handles: { rootDb, ingestionDb },
+  profile,
+}: SeedFixturesOptions) => {
   await ensureSearchPreviewConfig(rootDb);
 
-  const fixtures = await loadFixtures();
+  const fixtures = await loadRecordedFixtures();
+  if (profile === "development") {
+    fixtures.push(...syntheticCaseLawFixtures(), planet49CaseLawFixture());
+  }
+  validateFixtureDecisionIdentities(fixtures);
   console.log(`Found ${fixtures.length} fixtures.`);
 
   let totalDecisions = 0;
   let totalInserted = 0;
+  const syntheticCzech: SeededDecision[] = [];
 
   for (const { source, decisions } of fixtures) {
     const adapterKey = source.adapter_key;
@@ -190,14 +336,7 @@ const seedFixtures = async ({ rootDb, ingestionDb }: CaseLawWriteHandles) => {
         async (tx) =>
           await tx
             .insert(caseLawSources)
-            .values({
-              id: sourceIdFor(adapterKey),
-              adapterKey,
-              name: source.name,
-              enabled: source.enabled,
-              lastSyncAt: new Date(),
-              config: source.config ?? {},
-            })
+            .values(fixtureSourceRow(source))
             .onConflictDoNothing()
             .returning({ id: caseLawSources.id }),
       );
@@ -214,45 +353,12 @@ const seedFixtures = async ({ rootDb, ingestionDb }: CaseLawWriteHandles) => {
 
     let inserted = 0;
     for (const d of decisions) {
-      const id = decisionIdFor(adapterKey, d.case_number, d.language);
-      const fulltext =
-        d.fulltext ?? d.sections?.map((s) => s.text).join("\n\n") ?? "";
-
+      const sourceDocumentId = fixtureSourceDocumentId(d);
       const result = await rootDb.transaction(
         async (tx) =>
           await tx
             .insert(caseLawDecisions)
-            .values({
-              id,
-              sourceId,
-              caseNumber: d.case_number,
-              slug: d.slug,
-              ecli: d.ecli,
-              court: d.court,
-              country: d.country,
-              language: d.language,
-              languageGroupKey: d.language_group_key,
-              // Fixtures are verbatim rows, some of them older than the
-              // write-path guard; the same guard runs here so the table's
-              // bounds CHECK sees what the ingest would have stored.
-              decisionDate:
-                d.decision_date === null
-                  ? null
-                  : canonicalDecisionDate(d.decision_date, d.country),
-              decisionType: d.decision_type,
-              fulltext,
-              sections: d.sections,
-              documentAst: d.document_ast,
-              analysis: d.analysis,
-              parserVersion: d.parser_version ?? 0,
-              sourceRaw: d.source_raw,
-              sourceRawS3Key: d.source_raw_s3_key,
-              sourceRawContentType: d.source_raw_content_type,
-              sourceUrl: d.source_url,
-              documentUrl: d.document_url,
-              metadata: d.metadata ?? {},
-              sourceHash: d.source_hash,
-            })
+            .values(fixtureDecisionRow({ adapterKey, sourceId, decision: d }))
             .onConflictDoNothing()
             .returning({ id: caseLawDecisions.id }),
       );
@@ -263,7 +369,8 @@ const seedFixtures = async ({ rootDb, ingestionDb }: CaseLawWriteHandles) => {
       // the actual row.
       let decisionId = result.at(0)?.id;
       if (!decisionId) {
-        const existing = await rootDb.transaction(
+        const existing = await withAggregateTransaction(
+          rootDb,
           async (tx) =>
             await tx
               .select({ id: caseLawDecisions.id })
@@ -271,8 +378,13 @@ const seedFixtures = async ({ rootDb, ingestionDb }: CaseLawWriteHandles) => {
               .where(
                 and(
                   eq(caseLawDecisions.sourceId, sourceId),
-                  eq(caseLawDecisions.caseNumber, d.case_number),
-                  eq(caseLawDecisions.language, d.language),
+                  sourceDocumentId === null
+                    ? and(
+                        isNull(caseLawDecisions.sourceDocumentId),
+                        eq(caseLawDecisions.caseNumber, d.case_number),
+                        eq(caseLawDecisions.language, d.language),
+                      )
+                    : eq(caseLawDecisions.sourceDocumentId, sourceDocumentId),
                 ),
               )
               .limit(1),
@@ -283,6 +395,13 @@ const seedFixtures = async ({ rootDb, ingestionDb }: CaseLawWriteHandles) => {
         panic(
           `Could not resolve decision id for ${adapterKey} ${d.case_number} ${d.language}`,
         );
+      }
+
+      if (adapterKey === FIXTURE_SOURCE_KEYS.SYNTHETIC_CZ) {
+        const stored = await readSyntheticSeedDecision(rootDb, decisionId);
+        if (stored !== null) {
+          syntheticCzech.push(stored);
+        }
       }
 
       // Search-index projection is non-essential for the public read path
@@ -296,9 +415,13 @@ const seedFixtures = async ({ rootDb, ingestionDb }: CaseLawWriteHandles) => {
       ).andThen((indexResult) => indexResult);
       if (Result.isError(indexed)) {
         const indexError = indexed.error;
-        console.warn(
-          `  search-index skipped for ${adapterKey} ${d.case_number} (${d.language}): ${indexError instanceof Error ? indexError.message : String(indexError)}`,
-        );
+        logErrorOutput({
+          level: "warn",
+          values: [
+            `  search-index skipped for ${adapterKey} ${d.case_number} (${d.language}):`,
+            indexError,
+          ],
+        });
       }
 
       if (result.length > 0) {
@@ -327,17 +450,36 @@ const seedFixtures = async ({ rootDb, ingestionDb }: CaseLawWriteHandles) => {
     `Slugs: ${slugResult.written} assigned, ${slugResult.failed} failed.`,
   );
 
+  // The provision state backfill gets a dedicated session, as the scheduler
+  // gives it.
+  const linked = await withLongRunningConnection(
+    {
+      statementTimeout: PROVISION_BACKFILL_STATEMENT_TIMEOUT_MS,
+      lockTimeout: PROVISION_BACKFILL_LOCK_TIMEOUT_MS,
+      signal: new AbortController().signal,
+    },
+    async (handle) =>
+      await seedSyntheticProvisionLinks({
+        rootDb,
+        backfill: reservedBackfillSession(handle),
+        decisions: syntheticCzech,
+      }),
+  );
+  console.log(
+    `Provision links: ${linked.citations} citations in ${linked.decisions} synthetic decisions.`,
+  );
+
   console.log("Done. Case law data seeded successfully.");
 };
 
-export async function seedCaseLaw() {
+export async function seedCaseLaw(profile: CaseLawSeedProfile = "development") {
   requireLocalDevOpen("Seeding");
 
   // The dev seed route runs this inside the API process, so the lane is
   // released here rather than left to the process exit.
   const lane = await enterCaseLawMaintenanceLane();
   try {
-    await seedFixtures(lane);
+    await seedFixtures({ handles: lane, profile });
   } finally {
     await lane.release();
   }
@@ -347,7 +489,7 @@ if (import.meta.main) {
   seedCaseLaw()
     .then(() => process.exit(0))
     .catch((error: unknown) => {
-      console.error("Seed failed:", error);
+      printError("Seed failed:", error);
       process.exit(1);
     });
 }

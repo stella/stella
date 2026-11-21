@@ -5,7 +5,7 @@ import { RUNTIME_MODE, type RuntimeMode } from "@stll/runtime-mode";
 
 const LOOPBACK_HOSTNAMES = new Set(["localhost", "127.0.0.1", "[::1]"]);
 
-export const COLLAB_MODES = ["redis", "single-process"] as const;
+const COLLAB_MODES = ["redis", "single-process"] as const;
 
 export const isSecureStellaApiUrl = (value: string) => {
   if (!URL.canParse(value)) {

@@ -1,8 +1,14 @@
 import { Result, TaggedError } from "better-result";
+// parser-output-unchanged: [us-courtlistener] stored citation scopes stop being refused when head matter follows the body; every row the previous version stored passed the order check, so its scopes and their hash are unchanged.
 
-import type { Block, DocumentAst } from "@/api/lib/case-law/document-ast";
-import { isDocumentAst } from "@/api/lib/case-law/document-ast";
-import type { CitationOpinionScope } from "@/api/lib/legal-search/ingestion-types";
+// parser-output-unchanged: imports the document AST from its package owner
+import type { Block, DocumentAst } from "@stll/legal-ast/document-ast";
+import { isDocumentAstInAnyBlockOrder } from "@stll/legal-ast/document-ast";
+// parser-output-unchanged: SHA-256 ownership changes preserve input bytes, serialization and update order, so stored hashes and parser output remain identical.
+import { createSha256 } from "@stll/sha256/bun";
+
+// parser-output-unchanged: imports the unchanged citation scope shape from its pure owner.
+import type { CitationOpinionScope } from "@/api/lib/legal-search/citation-opinion-scope";
 import { sortDeep } from "@/api/lib/sort-deep";
 import { isRecord } from "@/api/lib/type-guards";
 
@@ -54,9 +60,9 @@ export type CitationScopeEnvelope = {
   opinions: readonly CitationOpinionScope[];
 };
 
-/** Hash the JSON shape that both jsonb and the corpus payload actually keep. */
-export const citationScopeAstHash = (ast: DocumentAst): string =>
-  new Bun.CryptoHasher("sha256")
+/** Hash the stored JSON representation, including fields the reader schema omits. */
+export const citationScopeAstHash = (ast: Record<string, unknown>): string =>
+  createSha256()
     .update(JSON.stringify(sortDeep(ast)))
     .digest("hex");
 
@@ -68,6 +74,14 @@ export const citationScopeEnvelope = (
   astHash: citationScopeAstHash(ast),
   opinions,
 });
+
+/**
+ * The blocks a writer computed scopes against: the stored blocks as written,
+ * since the persisted reader re-keys repeated identities. Head matter may
+ * follow the body; any other break of the writer contract has no scopes.
+ */
+const scopedBlocks = (ast: unknown): readonly Block[] | undefined =>
+  isDocumentAstInAnyBlockOrder(ast) ? ast.blocks : undefined;
 
 /** Metadata is persisted JSON and must be checked again before reuse. */
 export const validatedCitationScopes = (
@@ -81,7 +95,8 @@ export const validatedCitationScopes = (
   if (value === undefined) {
     return Result.ok(undefined);
   }
-  if (!isDocumentAst(ast)) {
+  const blocks = scopedBlocks(ast);
+  if (blocks === undefined || !isRecord(ast)) {
     return rejected(CITATION_SCOPE_DEFECTS.INVALID_ENVELOPE, "");
   }
   if (
@@ -116,7 +131,7 @@ export const validatedCitationScopes = (
   if (opinions.length !== value["opinions"].length) {
     return rejected(CITATION_SCOPE_DEFECTS.INVALID_ENVELOPE, "");
   }
-  const indexed = indexCitationScopes(ast.blocks, opinions);
+  const indexed = indexCitationScopes(blocks, opinions);
   return Result.isError(indexed)
     ? Result.err(indexed.error)
     : Result.ok(opinions);

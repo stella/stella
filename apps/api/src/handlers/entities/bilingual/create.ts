@@ -10,19 +10,20 @@
  */
 
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { entityFileRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { captureError } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { BILINGUAL_TABLE_LAYOUT } from "@/api/lib/bilingual/contract";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { buildBilingualFileName } from "@/api/lib/document-translation/output";
 import {
-  DocumentWriteRefusedError,
   documentWriteRefusalHandlerError,
+  DocumentWriteRefusedError,
 } from "@/api/lib/entities/authorize-document-write";
+import { CALLER_AUTHORIZED } from "@/api/lib/entities/buffer-write-authority";
 import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
 import { loadEntityVersionDocxBuffer } from "@/api/lib/entity-versions/load-entity-version-file-buffer";
 import { validateDocxBuffer } from "@/api/lib/entity-versions/validate-docx-buffer";
@@ -31,6 +32,7 @@ import { createBilingualDocxFromScanned } from "@/api/lib/file-scan/document-par
 import { scanFile } from "@/api/lib/file-scan/scan";
 import { getScanWarnings } from "@/api/lib/file-scan/warnings";
 import { serverBuiltFileEncryption } from "@/api/lib/files/detect-file-encryption";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { withTimeout } from "@/api/lib/with-timeout";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
@@ -39,21 +41,23 @@ const CONVERSION_TIMEOUT_MS = 60_000;
 /** IETF-style language tag; doubles as the cloned style suffix in folio. */
 const LANGUAGE_TAG_PATTERN = "^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})*$";
 
-const languageTag = t.String({
-  minLength: 2,
-  maxLength: 16,
-  pattern: LANGUAGE_TAG_PATTERN,
-});
+const languageTag = v.pipe(
+  v.string(),
+  v.minLength(2),
+  v.maxLength(16),
+  v.regex(new RegExp(LANGUAGE_TAG_PATTERN, "u")),
+);
 
-const createBilingualBody = t.Object({
-  entityId: tSafeId("entity"),
-  fieldId: tSafeId("field"),
+const createBilingualBody = v.object({
+  entityId: resourceIdSchema("entity"),
+  fieldId: resourceIdSchema("field"),
   sourceLang: languageTag,
   targetLang: languageTag,
-  borders: t.Optional(t.Union([t.Literal("none"), t.Literal("grid")])),
+  borders: v.optional(v.picklist(["none", "grid"])),
 });
 
 const config = {
+  contract: "patch",
   contentDelivery: {
     type: "none",
     reason:
@@ -141,7 +145,13 @@ export const createBilingualEntityHandler = (
       });
 
       if (conversion.isErr()) {
-        captureError(conversion.error, { source: "bilingual-document" });
+        captureError(
+          conversion.error,
+          handlerErrorContext(
+            "bilingual.createBilingualEntityHandler.conversion_error",
+            { source: "bilingual-document" },
+          ),
+        );
         return Result.err(
           new HandlerError({
             status: 422,
@@ -160,9 +170,12 @@ export const createBilingualEntityHandler = (
 
       const validation = await validateDocxBuffer(buffer);
       if (!validation.valid) {
-        captureError(new Error(validation.error), {
-          source: "bilingual-document",
-        });
+        captureError(
+          new Error(validation.error),
+          handlerErrorContext("bilingual.createBilingualEntityHandler", {
+            source: "bilingual-document",
+          }),
+        );
         return Result.err(
           new HandlerError({
             status: 422,
@@ -177,7 +190,13 @@ export const createBilingualEntityHandler = (
         fileName,
       });
       if (Result.isError(scanResult)) {
-        captureError(scanResult.error, { source: "bilingual-document" });
+        captureError(
+          scanResult.error,
+          handlerErrorContext(
+            "bilingual.createBilingualEntityHandler.scanResult_error",
+            { source: "bilingual-document" },
+          ),
+        );
         return Result.err(
           new HandlerError({
             status: 422,
@@ -198,6 +217,7 @@ export const createBilingualEntityHandler = (
       }
 
       const created = await dependencies.createEntityFromBuffer({
+        authority: CALLER_AUTHORIZED,
         scopedDb,
         organizationId: session.activeOrganizationId,
         workspaceId,

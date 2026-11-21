@@ -1,0 +1,176 @@
+<main style="margin: 0; line-height: 1.5">
+  <header
+    style="
+      display: flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      column-gap: 12px;
+      margin-block: 0 8px;
+    "
+  >
+    <h1 id="title" style="font-size: 20px; margin: 0"></h1>
+    <p id="scope" class="stella-muted" style="font-size: 13px; margin: 0"></p>
+  </header>
+  <dl
+    id="stats"
+    style="
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+      margin-block: 0 8px;
+      padding-block: 8px;
+      border-width: 1px 0;
+      border-style: solid;
+      border-color: var(--border);
+    "
+  ></dl>
+  <div
+    id="split"
+    role="img"
+    style="display: flex; gap: 2px; height: 6px; margin-block: 0 8px"
+  ></div>
+  <table id="matrix" class="stella-table" style="font-size: 13px">
+    <thead>
+      <tr id="matrix-head"></tr>
+    </thead>
+    <tbody id="matrix-body"></tbody>
+  </table>
+</main>
+<script>
+  (() => {
+    const {
+      formattingLocale,
+      currency,
+      labels,
+      positions,
+      risks,
+      counterparties,
+    } = stella.data;
+    const money = new Intl.NumberFormat(formattingLocale, {
+      style: "currency",
+      currency,
+      notation: "compact",
+      maximumFractionDigits: 1,
+    });
+    const count = new Intl.NumberFormat(formattingLocale);
+    const share = new Intl.NumberFormat(formattingLocale, {
+      style: "percent",
+      maximumFractionDigits: 0,
+    });
+    const tone = {
+      consent: "var(--destructive)",
+      confirm: "var(--chart-3)",
+      notice: "var(--chart-2)",
+    };
+    const text = (id, value) => {
+      document.getElementById(id).textContent = value;
+    };
+    const element = (tag, value, cssText) => {
+      const node = document.createElement(tag);
+      if (value !== undefined) node.textContent = value;
+      if (cssText) node.style.cssText = cssText;
+      return node;
+    };
+    const dot = (position) =>
+      element(
+        "span",
+        undefined,
+        `display:inline-block;flex:none;width:8px;height:8px;border-radius:50%;background-color:${tone[position]}`,
+      );
+    const total = (rows, field) =>
+      rows.reduce((sum, row) => sum + row[field], 0);
+    document.documentElement.lang = formattingLocale;
+    text("title", labels.title);
+    text("scope", labels.scope);
+
+    const allValue = total(counterparties, "value");
+    const split = document.getElementById("split");
+    split.setAttribute("aria-label", labels.splitLabel);
+    for (const position of positions) {
+      const rows = counterparties.filter((row) => row.position === position);
+      const value = total(rows, "value");
+      const group = element("div", undefined, "flex:1;min-width:180px");
+      const name = element(
+        "dt",
+        undefined,
+        "display:flex;align-items:center;gap:6px;font-size:12px",
+      );
+      name.className = "stella-muted";
+      name.append(dot(position), element("span", labels.positions[position]));
+      const amount = element(
+        "dd",
+        money.format(value),
+        "margin:0;font-size:20px;line-height:1.3;font-weight:600;font-variant-numeric:tabular-nums",
+      );
+      const detail = element(
+        "dd",
+        labels.statDetail
+          .replace("{counterparties}", count.format(rows.length))
+          .replace(
+            "{share}",
+            share.format(allValue === 0 ? 0 : value / allValue),
+          ),
+        "margin:0;font-size:12px",
+      );
+      detail.className = "stella-muted";
+      group.append(name, amount, detail);
+      document.getElementById("stats").append(group);
+      split.append(
+        element(
+          "div",
+          undefined,
+          `flex:${value} 1 0;min-width:4px;border-radius:4px;background-color:${tone[position]}`,
+        ),
+      );
+    }
+
+    // One line per counterparty at a chat column's width: cells never wrap,
+    // and the position is the row's dot, named by the totals above.
+    const compact = "padding:3px 8px;white-space:nowrap";
+    for (const [index, column] of labels.columns.entries()) {
+      const cell = element(
+        "th",
+        column,
+        index === 2 || index === 3 ? `${compact};text-align:end` : compact,
+      );
+      cell.scope = "col";
+      document.getElementById("matrix-head").append(cell);
+    }
+    // Within each change-of-control group, the most severe risk leads, then
+    // the largest contract value. `risks` lists severities most severe first.
+    const ordered = [...counterparties].sort(
+      (a, b) =>
+        positions.indexOf(a.position) - positions.indexOf(b.position) ||
+        risks.indexOf(a.risk) - risks.indexOf(b.risk) ||
+        b.value - a.value,
+    );
+    for (const row of ordered) {
+      const line = document.createElement("tr");
+      const marker = dot(row.position);
+      marker.setAttribute("role", "img");
+      marker.setAttribute("aria-label", labels.positions[row.position]);
+      marker.setAttribute("title", labels.positions[row.position]);
+      const named = element(
+        "span",
+        undefined,
+        "display:inline-flex;align-items:center;gap:8px;font-weight:500",
+      );
+      named.append(marker, element("span", row.name));
+      const counterparty = element("td", undefined, compact);
+      counterparty.append(named);
+      const badge = element("span", row.risk);
+      badge.className = "stella-badge";
+      const risk = element("td", undefined, compact);
+      risk.append(badge);
+      line.append(
+        counterparty,
+        element("td", row.agreement, compact),
+        element("td", count.format(row.documents), `${compact};text-align:end`),
+        element("td", money.format(row.value), `${compact};text-align:end`),
+        risk,
+      );
+      document.getElementById("matrix-body").append(line);
+    }
+    stella.ready();
+  })();
+</script>

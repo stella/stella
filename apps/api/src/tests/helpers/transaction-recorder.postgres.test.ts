@@ -1,4 +1,4 @@
-import { panic, Panic, Result } from "better-result";
+import { Panic, panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { DrizzleQueryError, eq, sql } from "drizzle-orm";
 import { integer, pgTable } from "drizzle-orm/pg-core";
@@ -12,12 +12,14 @@ import { createSafeDb, markRlsDatabase } from "@/api/db/scoped";
 import { createSafeId } from "@/api/lib/branded-types";
 import { DatabaseError } from "@/api/lib/errors/tagged-errors";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 
 import { mintAuthProviderId } from "./auth-provider-id";
 import { withInterleaving } from "./transaction-interleaving";
 import {
   assertLockRanks,
   createTransactionRecorder,
+  NO_ADVISORY_LOCKS,
 } from "./transaction-recorder";
 import type { TransactionTrace } from "./transaction-recorder";
 
@@ -34,7 +36,10 @@ if (!databaseUrl || !runPostgresTests) {
     test("records alias UPDATE writes against the real table", async () => {
       await withGatedTestClients(databaseUrl, async ({ openClient }) => {
         const { db } = openClient();
+        // @ts-expect-error Every transaction recorder must choose its advisory-lock collaborator.
+        createTransactionRecorder({});
         const recorder = createTransactionRecorder({
+          resolveAdvisory: NO_ADVISORY_LOCKS,
           tables: { recorder_entities: "entity" },
         });
         await db.transaction(async (tx) => {
@@ -76,6 +81,7 @@ if (!databaseUrl || !runPostgresTests) {
       await withGatedTestClients(databaseUrl, async ({ openClient }) => {
         const { db } = openClient();
         const recorder = createTransactionRecorder({
+          resolveAdvisory: NO_ADVISORY_LOCKS,
           tables: {
             recorder_workspaces: "workspace",
             recorder_entities: "entity",
@@ -101,7 +107,7 @@ if (!databaseUrl || !runPostgresTests) {
               sql`SELECT * FROM recorder_workspaces w WHERE id IN (SELECT id FROM recorder_entities) FOR UPDATE OF w`,
             ]) {
               trace.events.length = 0;
-              const rows = await tx.execute(statement);
+              const rows = await tx.execute(statement, "objects");
               expect(rows).toHaveLength(1);
               expect(
                 trace.events.map((event) => [
@@ -122,6 +128,7 @@ if (!databaseUrl || !runPostgresTests) {
       await withGatedTestClients(databaseUrl, async ({ openClient }) => {
         const { db } = openClient();
         const recorder = createTransactionRecorder({
+          resolveAdvisory: NO_ADVISORY_LOCKS,
           tables: { recorder_rows: "workspace" },
         });
         await recorder.wrap(db.transaction.bind(db))(async (tx) => {
@@ -173,7 +180,10 @@ if (!databaseUrl || !runPostgresTests) {
         const holder = openClient();
         const contender = openClient();
         const pid = (
-          await holder.db.execute(sql`SELECT pg_backend_pid() AS pid`)
+          await holder.db.execute(
+            sql`SELECT pg_backend_pid() AS pid`,
+            "objects",
+          )
         ).at(0)?.["pid"];
         if (typeof pid !== "number") {
           panic("Missing fixture backend pid");
@@ -242,6 +252,7 @@ if (!databaseUrl || !runPostgresTests) {
       await withGatedTestClients(databaseUrl, async ({ openClient }) => {
         const { db } = openClient();
         const recorder = createTransactionRecorder({
+          resolveAdvisory: NO_ADVISORY_LOCKS,
           tables: {
             recorder_entities: "entity",
             recorder_workspaces: "workspace",
@@ -279,6 +290,7 @@ if (!databaseUrl || !runPostgresTests) {
         await withGatedTestClients(databaseUrl, async ({ openClient }) => {
           const { db } = openClient();
           const recorder = createTransactionRecorder({
+            resolveAdvisory: NO_ADVISORY_LOCKS,
             tables: {
               recorder_entities: "entity",
               recorder_workspaces: "workspace",
@@ -498,7 +510,7 @@ if (!databaseUrl || !runPostgresTests) {
           }
         } finally {
           await owner.db.execute(sql`DROP TABLE IF EXISTS ${rows}`);
-          await owner.db.delete(organization).where(eq(organization.id, orgId));
+          await deleteOrganizationsForTest(owner.db, [orgId]);
           await owner.db.delete(user).where(eq(user.id, userId));
         }
       });
@@ -516,6 +528,7 @@ if (!databaseUrl || !runPostgresTests) {
         await db.execute(sql`INSERT INTO recorder_workspaces VALUES (1)`);
         await db.execute(sql`INSERT INTO recorder_entities VALUES (1)`);
         const recorder = createTransactionRecorder({
+          resolveAdvisory: NO_ADVISORY_LOCKS,
           tables: {
             recorder_workspaces: "workspace",
             recorder_entities: "entity",

@@ -1,5 +1,6 @@
 import type { PGlite } from "@electric-sql/pglite";
-import { afterAll, beforeAll, expect, test } from "bun:test";
+import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
+import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
 import {
@@ -9,17 +10,33 @@ import {
   legislationDocuments,
   legislationSources,
 } from "@/api/db/schema";
-import { rehydrateLegislationCandidates } from "@/api/handlers/legislation/search";
+import {
+  legislationCandidateRowsStatement,
+  readLegislationCandidateRows,
+  rehydrateLegislationCandidates,
+} from "@/api/handlers/legislation/search";
 import { createSafeId } from "@/api/lib/branded-types";
+import { createCorpusHitDispositionCounter } from "@/api/lib/legal-search/corpus-hit-telemetry";
 import {
   CORPUS_INDEX_MANIFESTS,
   corpusIndexManifestDigest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
+import {
+  corpusIndexLexicalScore,
+  NATIVE_SCAN_TRANSPORT,
+  readCorpusIndexSearchPage,
+} from "@/api/lib/legal-search/corpus-index-pagination";
+import { CORPUS_BM25_RATIO_POWER } from "@/api/lib/legal-search/corpus-ranking-policy";
+import { RELEVANCE_ORDER } from "@/api/lib/legal-search/corpus-search-order";
 import { corpusIndexId } from "@/api/lib/legal-search/index-naming";
 import type {
   LegislationReadDb,
   LegislationReadTransaction,
 } from "@/api/lib/legislation-public-read-db";
+import {
+  installCorpusDispositionScan,
+  installCorpusRevisionScan,
+} from "@/api/tests/helpers/corpus-disposition-scan";
 import {
   createTestPglite,
   withPublicLawReaderRole,
@@ -40,6 +57,8 @@ const DESIRED_FINGERPRINT = "b".repeat(64);
 
 const sourceId = createSafeId<"legislationSource">();
 const unheldId = createSafeId<"legislationDocument">();
+const secondProjectedId = createSafeId<"legislationDocument">();
+const secondProjectedIntentId = createSafeId<"corpusIndexProjectionIntent">();
 const projectedId = createSafeId<"legislationDocument">();
 const queuedId = createSafeId<"legislationDocument">();
 const movedId = createSafeId<"legislationDocument">();
@@ -54,6 +73,10 @@ const DB_TEST_TIMEOUT_MS = 120_000;
 
 let client: PGlite;
 let legislationDb: LegislationReadDb;
+let reads = 0;
+beforeEach(() => {
+  reads = 0;
+});
 
 const candidatesOf = (...ids: string[]) => ids.map((id) => ({ id, score: 1 }));
 
@@ -63,13 +86,15 @@ beforeAll(
     const db = drizzle({ client });
     legislationDb = async <T>(
       fn: (tx: LegislationReadTransaction) => Promise<T>,
-    ) =>
-      await withPublicLawReaderRole(db, async (roleTx) => {
+    ) => {
+      reads += 1;
+      return await withPublicLawReaderRole(db, async (roleTx) => {
         // SAFETY: the role transaction supplies the select surface the reads use.
         // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test handle stands in for a transaction
         const tx = roleTx as unknown as LegislationReadTransaction;
         return await fn(tx);
       });
+    };
 
     await db
       .insert(legislationSources)
@@ -80,15 +105,17 @@ beforeAll(
     // The document carries nothing that says what an index holds; that is
     // stated by its projection state alone.
     await db.insert(legislationDocuments).values(
-      [projectedId, queuedId, movedId, unheldId].map((id, index) => ({
-        id,
-        sourceId,
-        eli: `CZ/2020/${index + 1}`,
-        title: `Projected act ${index + 1}`,
-        country: "CZE",
-        language: "cs",
-        contentHash: `hash-${index}`,
-      })),
+      [projectedId, queuedId, movedId, unheldId, secondProjectedId].map(
+        (id, index) => ({
+          id,
+          sourceId,
+          eli: `CZ/2020/${id === secondProjectedId ? 6 : index + 1}`,
+          title: `Projected act ${index + 1}`,
+          country: "CZE",
+          language: "cs",
+          contentHash: `hash-${index}`,
+        }),
+      ),
     );
     // Withdrawn by its publisher; nothing has erased it from the index yet.
     await db.insert(legislationDocuments).values({
@@ -115,6 +142,11 @@ beforeAll(
 
     await db.insert(corpusIndexProjectionIntents).values(
       [
+        {
+          id: secondProjectedIntentId,
+          entityId: secondProjectedId,
+          indexId: PROJECTED_INDEX_ID,
+        },
         {
           id: projectedIntentId,
           entityId: projectedId,
@@ -155,6 +187,21 @@ beforeAll(
         appliedAction: "upsert",
         appliedEpoch: 1n,
         appliedRevision: projectedIntentId,
+        appliedFingerprint: APPLIED_FINGERPRINT,
+        appliedIndexId: PROJECTED_INDEX_ID,
+        appliedAt: new Date(),
+      },
+      {
+        family: "legislation",
+        generation: PROJECTED_GENERATION,
+        entityId: secondProjectedId,
+        desiredAction: "upsert",
+        desiredEpoch: 1n,
+        desiredFingerprint: APPLIED_FINGERPRINT,
+        desiredIndexId: PROJECTED_INDEX_ID,
+        appliedAction: "upsert",
+        appliedEpoch: 1n,
+        appliedRevision: secondProjectedIntentId,
         appliedFingerprint: APPLIED_FINGERPRINT,
         appliedIndexId: PROJECTED_INDEX_ID,
         appliedAt: new Date(),
@@ -260,3 +307,205 @@ test("a withdrawn version is dropped while its erase is still pending", async ()
   expect(result.ranked.map((hit) => hit.id)).toEqual([projectedId]);
   expect([...result.context.byId.keys()]).toEqual([projectedId]);
 });
+
+test("rehydration accounts for exclusions and absent canonical rows in one read", async () => {
+  const hitDispositions = createCorpusHitDispositionCounter();
+  const missingId = createSafeId<"legislationDocument">();
+  const result = await rehydrateLegislationCandidates({
+    body: { query: "smlouva" },
+    legislationDb,
+    hitDispositions,
+    generation: PROJECTED_GENERATION,
+    candidates: candidatesOf(
+      projectedId,
+      queuedId,
+      movedId,
+      unheldId,
+      withdrawnId,
+      missingId,
+    ),
+  });
+  expect(result.ranked.map((hit) => hit.id)).toEqual([projectedId]);
+  expect([...result.context.byId.keys()]).toEqual([projectedId]);
+  expect(hitDispositions.snapshot()).toEqual({
+    malformed: 0,
+    excluded: 4,
+    drift: 1,
+  });
+  expect(reads).toBe(1);
+});
+
+test("the legislation read separates eligible content from id-only dispositions", async () => {
+  const missingId = createSafeId<"legislationDocument">();
+  await legislationDb(async (tx) => {
+    const options = {
+      body: { query: "smlouva" },
+      generation: PROJECTED_GENERATION,
+      ids: [projectedId, withdrawnId, queuedId, missingId],
+    };
+    const read = await readLegislationCandidateRows(tx, options);
+    expect(read.rows.map((row) => row.id)).toEqual([projectedId]);
+    expect(read.dispositions).toEqual(
+      expect.arrayContaining([
+        { id: withdrawnId, type: "excluded" },
+        { id: queuedId, type: "excluded" },
+        { id: missingId, type: "drift" },
+      ]),
+    );
+    expect(read.dispositions).toHaveLength(3);
+    expect(JSON.stringify(read)).not.toContain("Withdrawn act");
+    const records = await legislationCandidateRowsStatement(tx, {
+      ...options,
+      ids: [withdrawnId, queuedId],
+    });
+    expect(records).toHaveLength(2);
+    expect(records).toEqual(
+      expect.arrayContaining([
+        { id: withdrawnId, row: null },
+        { id: queuedId, row: null },
+      ]),
+    );
+    await tx.execute(sql`SET LOCAL enable_seqscan = off`);
+    const statement = legislationCandidateRowsStatement(tx, options);
+    const plan = JSON.stringify(
+      await tx.execute(sql`EXPLAIN (COSTS OFF) ${statement.getSQL()}`),
+    );
+    expect(plan).toMatch(
+      /Index(?: Only)? Scan using legislation_documents_pkey|Bitmap Index Scan on legislation_documents_pkey/u,
+    );
+  });
+});
+
+test("legislation scan counts retained omissions once as eligible candidates grow", async () => {
+  const hitDispositions = createCorpusHitDispositionCounter();
+  const missingId = createSafeId<"legislationDocument">();
+  const restoreFetch = installCorpusDispositionScan([
+    { id: withdrawnId, revision: withdrawnIntentId },
+    { id: missingId, revision: createSafeId<"corpusIndexProjectionIntent">() },
+    { id: projectedId, revision: projectedIntentId },
+    { id: secondProjectedId, revision: secondProjectedIntentId },
+  ]);
+  const candidateCounts: number[] = [];
+  const eligibleCounts: number[] = [];
+  try {
+    const page = await readCorpusIndexSearchPage({
+      scanTransport: NATIVE_SCAN_TRANSPORT,
+      observer: "unobserved",
+      cluster: "q09",
+      indexId: PROJECTED_INDEX_ID,
+      query: "text:fixture",
+      limit: 40,
+      order: RELEVANCE_ORDER,
+      parsedCursor: null,
+      hitDispositions,
+      rankingMode: "off",
+      snippetFields: ["text"],
+      projectionRevisionField: "projection_revision",
+      extractId: (hit) =>
+        typeof hit["document_id"] === "string" ? hit["document_id"] : null,
+      extractSnippet: () => null,
+      unseenScoreUpperBound: () => 0,
+      rankCandidates: async (candidates, { selectAppliedCandidates }) => {
+        candidateCounts.push(candidates.length);
+        const result = await rehydrateLegislationCandidates({
+          body: { query: "smlouva" },
+          generation: PROJECTED_GENERATION,
+          legislationDb,
+          hitDispositions,
+          candidates,
+          namedWorks: [],
+          selectAppliedCandidates,
+        });
+        eligibleCounts.push(result.ranked.length);
+        return result;
+      },
+    });
+    expect(page.scan.rounds).toBe(3);
+    expect(candidateCounts).toEqual([2, 3, 4]);
+    expect(eligibleCounts).toEqual([0, 1, 2]);
+    expect(hitDispositions.snapshot()).toEqual({
+      malformed: 0,
+      excluded: 1,
+      drift: 1,
+    });
+    expect(reads).toBe(3);
+  } finally {
+    restoreFetch();
+  }
+});
+
+test.each(["off", "bm25-ratio"] as const)(
+  "applied revision alone supplies query matches and candidate scores in %s scans",
+  async (rankingMode) => {
+    const oldRevision = createSafeId<"corpusIndexProjectionIntent">();
+    const oldText = "obsolete common common common common";
+    const currentText = "current common";
+    expect(oldRevision).not.toBe(projectedIntentId);
+    expect(oldText).not.toBe(currentText);
+    expect(currentText).not.toContain("obsolete");
+    const restoreFetch = installCorpusRevisionScan([
+      { id: projectedId, revision: oldRevision, text: oldText },
+      { id: projectedId, revision: projectedIntentId, text: currentText },
+      {
+        id: secondProjectedId,
+        revision: secondProjectedIntentId,
+        text: "common common",
+      },
+    ]);
+    try {
+      const search = async (query: string) =>
+        await readCorpusIndexSearchPage({
+          observer: "unobserved",
+          cluster: "q09",
+          indexId: PROJECTED_INDEX_ID,
+          query: `text:${query}`,
+          limit: 40,
+          order: RELEVANCE_ORDER,
+          parsedCursor: null,
+          rankingMode,
+          scanTransport:
+            rankingMode === "bm25-ratio"
+              ? { type: "scored" }
+              : { type: "native" },
+          snippetFields: ["text"],
+          projectionRevisionField: "projection_revision",
+          extractId: (hit) =>
+            typeof hit["document_id"] === "string" ? hit["document_id"] : null,
+          extractSnippet: () => null,
+          unseenScoreUpperBound: () => 0,
+          rankCandidates: async (candidates, scope) =>
+            await rehydrateLegislationCandidates({
+              body: { query },
+              legislationDb,
+              generation: PROJECTED_GENERATION,
+              candidates,
+              ranking: "lexical",
+              namedWorks: [],
+              selectAppliedCandidates: scope.selectAppliedCandidates,
+            }),
+        });
+      const obsolete = await search("obsolete");
+      expect(obsolete.scan.passagesScanned).toBe(1);
+      expect(reads).toBe(1);
+      expect(obsolete.pageRanked).toEqual([]);
+      const common = await search("common");
+      expect(common.scan.passagesScanned).toBe(3);
+      expect(reads).toBe(2);
+      expect(common.pageRanked.map(({ id }) => id)).toEqual([
+        secondProjectedId,
+        projectedId,
+      ]);
+      const applied = common.pageRanked.find(({ id }) => id === projectedId);
+      expect(applied?.lexicalScore).toBeCloseTo(
+        rankingMode === "off"
+          ? corpusIndexLexicalScore(2)
+          : (1 / 4) ** CORPUS_BM25_RATIO_POWER,
+        10,
+      );
+      expect(common.passageCountById.get(projectedId)).toBe(1);
+      expect(common.passageClauseById.get(projectedId)).toContain("passage-1");
+    } finally {
+      restoreFetch();
+    }
+  },
+);

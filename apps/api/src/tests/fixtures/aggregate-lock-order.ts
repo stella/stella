@@ -1,0 +1,415 @@
+import { panic } from "better-result";
+import { is, SQL } from "drizzle-orm";
+import { PgDialect } from "drizzle-orm/pg-core";
+
+import { createSafeId } from "@/api/lib/branded-types";
+import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
+import type { AggregateName } from "@/api/lib/db/aggregate-lock";
+import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+
+type Options = Parameters<typeof withAggregateLock>[0];
+type FenceFixtures = {
+  [Name in AggregateName]: Omit<Extract<Options, { aggregate: Name }>, "tx">;
+};
+
+export const aggregateFences = () => {
+  const organizationId = mintAuthProviderId<"organization">();
+  const workspaceId = createSafeId<"workspace">();
+  const definitionId = createSafeId<"flowDefinition">();
+  const threadId = createSafeId<"chatThread">();
+  const userId = mintAuthProviderId<"user">();
+  const answerId = createSafeId<"legalReaderAnswer">();
+  return {
+    requestReceipt: {
+      aggregate: "requestReceipt",
+      id: {
+        id: createSafeId<"requestIdempotencyReceipt">(),
+        organizationId,
+        userId,
+      },
+      mode: "update",
+    },
+    account: { aggregate: "account", id: userId, mode: "no key update" },
+    accountExport: {
+      aggregate: "accountExport",
+      id: { id: Bun.randomUUIDv7(), userId },
+      mode: "share",
+    },
+    accountDeletionRequest: {
+      aggregate: "accountDeletionRequest",
+      id: createSafeId<"accountDeletionRequest">(),
+      mode: "update",
+    },
+    folioCollabRoom: {
+      aggregate: "folioCollabRoom",
+      id: { id: createSafeId<"folioCollabRoom">(), workspaceId },
+      mode: "update",
+    },
+    signingSession: {
+      aggregate: "signingSession",
+      id: {
+        id: createSafeId<"pdfSigningSession">(),
+        workspaceId,
+        organizationId,
+      },
+      mode: "update",
+    },
+    organization: {
+      aggregate: "organization",
+      id: organizationId,
+      mode: "update",
+    },
+    sharepointConnection: {
+      aggregate: "sharepointConnection",
+      id: { id: createSafeId<"sharepointConnection">(), organizationId },
+      mode: "share",
+    },
+    organizationDataBoxes: {
+      aggregate: "organizationDataBoxes",
+      id: { organizationId },
+    },
+    organizationSettings: {
+      aggregate: "organizationSettings",
+      id: organizationId,
+      mode: "update",
+    },
+    organizationObjectIntent: {
+      aggregate: "organizationObjectIntent",
+      id: organizationId,
+    },
+    professionalUseAcceptance: {
+      aggregate: "professionalUseAcceptance",
+      id: { userId: mintAuthProviderId<"user">() },
+    },
+    orgFeatureAdmission: {
+      aggregate: "orgFeatureAdmission",
+      id: { organizationId, featureId: "flows" },
+    },
+    schedulerClaim: {
+      aggregate: "schedulerClaim",
+      id: { id: "scheduler-claim" },
+      mode: "update",
+    },
+    definitionCap: { aggregate: "definitionCap", id: { definitionId } },
+    definition: {
+      aggregate: "definition",
+      id: { id: definitionId, organizationId },
+      mode: "update",
+    },
+    caseLawRepublication: {
+      aggregate: "caseLawRepublication",
+      id: "global",
+    },
+    corpusProjectionOfflineRequest: {
+      aggregate: "corpusProjectionOfflineRequest",
+      id: "0198e331-e578-7000-8000-0000000000b7",
+    },
+    caseLawSitemapMonth: {
+      aggregate: "caseLawSitemapMonth",
+      id: { country: "CZE", year: "2020", month: "03" },
+    },
+    legislationAmendmentWork: {
+      aggregate: "legislationAmendmentWork",
+      id: {
+        sourceId: createSafeId<"legislationSource">(),
+        eli: "eli/cz/sb/2012/89",
+        language: "cs",
+      },
+    },
+    scoutCensus: {
+      aggregate: "scoutCensus",
+      id: { type: "run", id: createSafeId<"scoutRun">(), organizationId },
+      mode: "update",
+    },
+    desktopMembership: {
+      aggregate: "desktopMembership",
+      id: { organizationId, userId: mintAuthProviderId<"user">() },
+      mode: "update",
+    },
+    desktopCredential: {
+      aggregate: "desktopCredential",
+      id: { id: "desktop-credential", userId: mintAuthProviderId<"user">() },
+      mode: "update",
+    },
+    desktopBatch: {
+      aggregate: "desktopBatch",
+      id: {
+        organizationId,
+        userId: mintAuthProviderId<"user">(),
+        idempotencyKey: "review",
+      },
+    },
+    workspace: {
+      aggregate: "workspace",
+      id: { id: workspaceId, organizationId },
+      mode: "update",
+    },
+    memberCleanup: {
+      aggregate: "memberCleanup",
+      id: { type: "organization-member", id: "member-claim", organizationId },
+      mode: "update",
+    },
+    chatOwnerStoredContentEgress: {
+      aggregate: "chatOwnerStoredContentEgress",
+      id: { organizationId, userId },
+    },
+    chatStoredContentEgress: {
+      aggregate: "chatStoredContentEgress",
+      id: threadId,
+    },
+    chatThread: {
+      aggregate: "chatThread",
+      id: { id: threadId, organizationId, userId },
+      mode: "update",
+    },
+    readerAnswer: {
+      aggregate: "readerAnswer",
+      id: { id: answerId, organizationId, userId },
+      mode: "update",
+    },
+    readerAnnotation: {
+      aggregate: "readerAnnotation",
+      id: {
+        id: createSafeId<"legalReaderAnnotation">(),
+        organizationId,
+        userId,
+      },
+    },
+    readerAnswerMessage: {
+      aggregate: "readerAnswerMessage",
+      id: { id: createSafeId<"legalReaderAnswerMessage">(), answerId },
+      mode: "update",
+    },
+    chatTurn: {
+      aggregate: "chatTurn",
+      id: { threadId, organizationId, userId, toolCallId: "test-call" },
+      mode: "update",
+    },
+    chatSecret: {
+      aggregate: "chatSecret",
+      id: { id: Bun.randomUUIDv7(), threadId, organizationId, userId },
+      mode: "update",
+    },
+    run: {
+      aggregate: "run",
+      id: { id: createSafeId<"flowRun">(), workspaceId },
+      mode: "update",
+    },
+    currentStep: {
+      aggregate: "currentStep",
+      id: { id: createSafeId<"flowRunStep">(), workspaceId },
+      mode: "update",
+    },
+    obligation: {
+      aggregate: "obligation",
+      id: { id: createSafeId<"entity">(), workspaceId },
+      mode: "update",
+    },
+    entity: {
+      aggregate: "entity",
+      id: { id: createSafeId<"entity">(), workspaceId },
+      mode: "update",
+    },
+    correspondence: {
+      aggregate: "correspondence",
+      id: { id: createSafeId<"correspondence">(), workspaceId },
+      mode: "update",
+    },
+    entityVersion: {
+      aggregate: "entityVersion",
+      id: { id: createSafeId<"entityVersion">(), workspaceId },
+      mode: "update",
+    },
+    field: {
+      aggregate: "field",
+      id: { id: createSafeId<"field">(), workspaceId },
+      mode: "update",
+    },
+    memory: {
+      aggregate: "memory",
+      id: { id: createSafeId<"aiMemory">(), organizationId },
+      mode: "update",
+    },
+    contact: {
+      aggregate: "contact",
+      id: { id: createSafeId<"contact">(), organizationId },
+      mode: "key share",
+    },
+    searchProjectionRepair: {
+      aggregate: "searchProjectionRepair",
+      id: {
+        kind: "entity",
+        revision: Bun.randomUUIDv7(),
+        sourceId: Bun.randomUUIDv7(),
+      },
+      mode: "update",
+    },
+    signal: {
+      aggregate: "signal",
+      id: { id: createSafeId<"signal">(), organizationId },
+      mode: "update",
+    },
+    automatedFlowRunCap: {
+      aggregate: "automatedFlowRunCap",
+      id: createSafeId<"flowDefinition">(),
+    },
+    processingClaim: {
+      aggregate: "processingClaim",
+      id: { id: createSafeId<"documentProcessingRun">(), workspaceId },
+      mode: "update",
+    },
+    invoiceSendCapacity: {
+      aggregate: "invoiceSendCapacity",
+      id: { organizationId },
+    },
+    contactCapacity: { aggregate: "contactCapacity", id: { organizationId } },
+    billingDraftSettings: {
+      aggregate: "billingDraftSettings",
+      id: { organizationId },
+    },
+    desktopRunnerCapacity: {
+      aggregate: "desktopRunnerCapacity",
+      id: { organizationId, userId: mintAuthProviderId<"user">() },
+    },
+    fileComparisonCapacity: {
+      aggregate: "fileComparisonCapacity",
+      id: { organizationId },
+    },
+    billingCodeCapacity: {
+      aggregate: "billingCodeCapacity",
+      id: { workspaceId },
+    },
+    expenseCapacity: {
+      aggregate: "expenseCapacity",
+      id: { workspaceId },
+    },
+    rateTableWorkspace: {
+      aggregate: "rateTableWorkspace",
+      id: { workspaceId },
+    },
+    mcpOAuthState: {
+      aggregate: "mcpOAuthState",
+      id: {
+        connectorId: createSafeId<"mcpConnector">(),
+        organizationId,
+        userId,
+      },
+    },
+    sampleCase: { aggregate: "sampleCase", id: { workspaceId } },
+    chatToolGrants: {
+      aggregate: "chatToolGrants",
+      id: { organizationId, userId },
+    },
+    outboundAction: {
+      aggregate: "outboundAction",
+      id: { id: createSafeId<"outboundAction">(), organizationId, userId },
+      mode: "update",
+    },
+    personalCatalog: {
+      aggregate: "personalCatalog",
+      id: { organizationId, userId: mintAuthProviderId<"user">() },
+    },
+    searchHistory: {
+      aggregate: "searchHistory",
+      id: { organizationId, userId: mintAuthProviderId<"user">() },
+      mode: "update",
+    },
+    chatMessage: {
+      aggregate: "chatMessage",
+      id: { id: createSafeId<"chatMessage">(), threadId },
+      mode: "update",
+    },
+    savedSearch: {
+      aggregate: "savedSearch",
+      id: { id: createSafeId<"savedSearch">(), organizationId, userId },
+      mode: "update",
+    },
+  } as const satisfies FenceFixtures;
+};
+
+const hashFixture = (value: unknown) => {
+  const text = String(value);
+  let hash = 0;
+  for (const character of text) {
+    hash =
+      (hash * 31 +
+        (character.codePointAt(0) ?? panic("Missing fixture hash character"))) %
+      2_147_483_647;
+  }
+  return hash;
+};
+
+/** Stable physical keys distinguish namespaces and principals; this is not a PostgreSQL hash oracle. */
+export const aggregateExecutionRows = (statement: SQL, found = true) => {
+  const query = new PgDialect().sqlToQuery(statement);
+  if (!query.sql.includes("AS key1")) {
+    return found ? [{ id: "locked" }] : [];
+  }
+  const first = query.params.at(0);
+  const namespace = /hashtext\('([^']+)'\)/u.exec(query.sql)?.at(1);
+  let key1 = hashFixture(first);
+  if (namespace !== undefined) {
+    key1 = hashFixture(namespace);
+  } else if (typeof first === "number") {
+    key1 = first;
+  }
+  return [
+    {
+      key1,
+      key2: hashFixture(query.params.at(namespace === undefined ? 1 : 0)),
+      acquired: true,
+    },
+  ];
+};
+
+/**
+ * Rows for an advisory fence acquisition, or `undefined` for any other
+ * statement. An advisory fence reads no fixture data, so a unit double can
+ * always answer it; row locks and queries need rows only the test knows.
+ */
+export const advisoryExecutionRows = (statement: unknown) =>
+  is(statement, SQL) &&
+  new PgDialect().sqlToQuery(statement).sql.includes("AS key1")
+    ? aggregateExecutionRows(statement)
+    : undefined;
+
+export const aggregateRecorder = () => {
+  const statements: ReturnType<PgDialect["sqlToQuery"]>[] = [];
+  const tx = {
+    execute: async (statement: SQL) => {
+      await Promise.resolve();
+      statements.push(new PgDialect().sqlToQuery(statement));
+      return aggregateExecutionRows(statement);
+    },
+  };
+  return { tx, statements };
+};
+
+export const plantedDescendingBlockingAcquisition = async (
+  tx: Parameters<typeof withAggregateLock>[0]["tx"],
+) => {
+  const fixture = aggregateFences();
+  await withAggregateLock({ ...fixture.workspace, tx });
+  return await withAggregateLock({
+    ...fixture.orgFeatureAdmission,
+    wait: "block",
+    tx,
+  });
+};
+
+export const plantedWeakerHeldModeReuse = async (
+  tx: Parameters<typeof withAggregateLock>[0]["tx"],
+) => {
+  const fixture = aggregateFences();
+  await withAggregateLock({ ...fixture.workspace, mode: "key share", tx });
+  await withAggregateLock({ ...fixture.entity, tx });
+  return await withAggregateLock({ ...fixture.workspace, mode: "update", tx });
+};
+
+export const plantedBlockingUpgradeAtHighWater = async (
+  tx: Parameters<typeof withAggregateLock>[0]["tx"],
+) => {
+  const fixture = aggregateFences();
+  await withAggregateLock({ ...fixture.workspace, mode: "key share", tx });
+  return await withAggregateLock({ ...fixture.workspace, mode: "update", tx });
+};

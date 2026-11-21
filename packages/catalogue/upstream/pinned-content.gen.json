@@ -1,0 +1,152 @@
+{
+  "entries": [
+    {
+      "directories": [
+        {
+          "itemCount": 3,
+          "items": [
+            {
+              "path": "skills/playbook-reviewer-anthropic/LICENSE.txt",
+              "size": 11358,
+              "type": "file"
+            },
+            {
+              "path": "skills/playbook-reviewer-anthropic/README.md",
+              "size": 277,
+              "type": "file"
+            },
+            {
+              "path": "skills/playbook-reviewer-anthropic/SKILL.md",
+              "size": 10943,
+              "type": "file"
+            }
+          ],
+          "path": "skills/playbook-reviewer-anthropic"
+        }
+      ],
+      "resources": [
+        {
+          "byteLength": 11358,
+          "path": "skills/playbook-reviewer-anthropic/LICENSE.txt",
+          "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+          "utf16Length": 11358
+        },
+        {
+          "byteLength": 277,
+          "path": "skills/playbook-reviewer-anthropic/README.md",
+          "sha256": "3ece30cc4a7bc83d465cbd9a4fbc2d2654cab4dea01464e8af90069c1e8bd927",
+          "utf16Length": 277
+        }
+      ],
+      "skill": {
+        "bodyUtf16Length": 10536,
+        "byteLength": 10943,
+        "frontmatter": {
+          "compatibilityUtf16Length": 0,
+          "descriptionUtf16Length": 277,
+          "license": "Apache-2.0",
+          "licenseUtf16Length": 10,
+          "metadata": [
+            {
+              "keyUtf16Length": 6,
+              "type": "other",
+              "valueUtf16Length": 9
+            },
+            {
+              "keyUtf16Length": 7,
+              "type": "other",
+              "valueUtf16Length": 10
+            },
+            {
+              "keyUtf16Length": 7,
+              "type": "other",
+              "valueUtf16Length": 10
+            }
+          ],
+          "name": "contract-review-anthropic",
+          "versionUtf16Length": 10
+        },
+        "referencedResourcePaths": [],
+        "sha256": "5bfa080462dfc0d471b4c0afcfc042006e5707359a9f88f77d2a210da5cc5e91",
+        "utf16Length": 10943
+      },
+      "target": {
+        "directory": "skills/playbook-reviewer-anthropic",
+        "license": "Apache-2.0",
+        "repo": "lawve-ai/awesome-legal-skills",
+        "rev": "6f4f454728fac240c3688092bf4acda0b0f14dd6",
+        "slug": "contract-review-anthropic"
+      }
+    },
+    {
+      "directories": [
+        {
+          "itemCount": 2,
+          "items": [
+            {
+              "path": "skills/argentine-supreme-court-analysis-adrian-lerer/README.md",
+              "size": 247,
+              "type": "file"
+            },
+            {
+              "path": "skills/argentine-supreme-court-analysis-adrian-lerer/SKILL.md",
+              "size": 5694,
+              "type": "file"
+            }
+          ],
+          "path": "skills/argentine-supreme-court-analysis-adrian-lerer"
+        }
+      ],
+      "resources": [
+        {
+          "byteLength": 247,
+          "path": "skills/argentine-supreme-court-analysis-adrian-lerer/README.md",
+          "sha256": "aed6783bf055a163834f243d7a7047ae7ab96fda9763100532c5e92548808962",
+          "utf16Length": 247
+        }
+      ],
+      "skill": {
+        "bodyUtf16Length": 4542,
+        "byteLength": 5694,
+        "frontmatter": {
+          "compatibilityUtf16Length": 0,
+          "descriptionUtf16Length": 526,
+          "license": "cc-by-4.0",
+          "licenseUtf16Length": 9,
+          "metadata": [
+            {
+              "keyUtf16Length": 6,
+              "type": "other",
+              "valueUtf16Length": 12
+            },
+            {
+              "keyUtf16Length": 7,
+              "type": "other",
+              "valueUtf16Length": 9
+            },
+            {
+              "keyUtf16Length": 7,
+              "type": "other",
+              "valueUtf16Length": 10
+            }
+          ],
+          "name": "jurisrank",
+          "versionUtf16Length": 10
+        },
+        "referencedResourcePaths": [],
+        "sha256": "37f20400b61235377f376d15fdcfd8b43204ca91aee17162bfd845eb2784e172",
+        "utf16Length": 5651
+      },
+      "target": {
+        "directory": "skills/argentine-supreme-court-analysis-adrian-lerer",
+        "license": "CC-BY-4.0",
+        "repo": "lawve-ai/awesome-legal-skills",
+        "rev": "6f4f454728fac240c3688092bf4acda0b0f14dd6",
+        "slug": "jurisrank"
+      }
+    }
+  ],
+  "factsSha256": "28d4946a9f3a5656496c3c01db2c8a1199312edca3d6f68a6c3dc1b4d5244d03",
+  "parserFingerprint": "2cf9f0b54aa9e893b3017fd691a26b1be265cba2737ced049e6134ed6f3613d1",
+  "version": 2
+}

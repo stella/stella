@@ -10,8 +10,8 @@
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
 import {
-  type ImportedFromOptions,
   getPropertyName,
+  type ImportedFromOptions,
   invokedCallee,
   isAstNode,
   isFileIn,

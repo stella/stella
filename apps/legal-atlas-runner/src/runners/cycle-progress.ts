@@ -9,18 +9,12 @@
 import { panic } from "better-result";
 
 import {
+  CYCLE_OUTCOME,
   INGESTION_STOP_KIND,
+  type IngestionCycleTermination,
   type IngestionStopKind,
 } from "@stll/legal-atlas/ingestion-cycle";
 import { DAY_IN_MS } from "@stll/time";
-
-export const CYCLE_OUTCOME = {
-  COMPLETED: "completed",
-  FAILED: "failed",
-  TIMEOUT: "timeout",
-} as const;
-
-export type CycleOutcome = (typeof CYCLE_OUTCOME)[keyof typeof CYCLE_OUTCOME];
 
 type CycleCounts = {
   /** Decisions written: inserts and updates both. */
@@ -39,14 +33,7 @@ type CycleCounts = {
   cursorAdvanced: boolean;
 };
 
-export type CycleResult = CycleCounts &
-  (
-    | { outcome: typeof CYCLE_OUTCOME.COMPLETED; stopKind?: never }
-    | {
-        outcome: typeof CYCLE_OUTCOME.FAILED | typeof CYCLE_OUTCOME.TIMEOUT;
-        stopKind: IngestionStopKind;
-      }
-  );
+export type CycleResult = CycleCounts & IngestionCycleTermination;
 
 /**
  * Forward progress is durable movement through the source, not how the cycle
@@ -123,10 +110,8 @@ export type CycleProductivity =
  * unchanged, or failed), so the sum separates "fetched decisions and wrote
  * none" from "found nothing to fetch".
  */
-export const cycleDecisionsProcessed = ({
-  inserted,
-  skipped,
-}: CycleResult): number => inserted + skipped;
+const cycleDecisionsProcessed = ({ inserted, skipped }: CycleResult): number =>
+  inserted + skipped;
 
 export const classifyCycleProductivity = (
   cycle: CycleResult,
@@ -250,7 +235,7 @@ const cadenceForStreaks = ({
 };
 
 /** Telemetry payload for a re-scan that has crossed the threshold. */
-export type UnproductiveRescanSignal = {
+type UnproductiveRescanSignal = {
   unproductiveCycles: number;
   decisionsProcessed: number;
   decisionsWritten: number;
@@ -362,7 +347,7 @@ type UpdateStalledAdapterOptions = {
   stopKind: IngestionStopKind;
 };
 
-export const updateStalledAdapter = (
+const updateStalledAdapter = (
   stalledAdapters: Map<string, IngestionStopKind>,
   { adapterKey, stallAlert, stopKind }: UpdateStalledAdapterOptions,
 ): void => {
@@ -373,7 +358,9 @@ export const updateStalledAdapter = (
   stalledAdapters.set(adapterKey, stopKind);
 };
 
-export const cycleStopKind = (cycle: CycleResult): IngestionStopKind => {
+export const cycleStopKind = (
+  cycle: Exclude<CycleResult, { outcome: typeof CYCLE_OUTCOME.PAUSED }>,
+): IngestionStopKind => {
   switch (cycle.outcome) {
     case CYCLE_OUTCOME.COMPLETED:
       return INGESTION_STOP_KIND.INTERNAL_ERROR;
@@ -403,6 +390,14 @@ export const stepAdapterCycleHealth = ({
   threshold,
 }: StepAdapterCycleHealthOptions) => {
   const madeProgress = cycleMadeProgress(cycle);
+  if (cycle.outcome === CYCLE_OUTCOME.PAUSED) {
+    stalledAdapters.delete(adapterKey);
+    return {
+      madeProgress,
+      stopKind: null,
+      stall: { state: INITIAL_STALL_ALERT, sustained: null, capture: false },
+    };
+  }
   const stopKind = cycleStopKind(cycle);
   const stall = stepStallAlert(stallAlert, madeProgress, threshold);
   updateStalledAdapter(stalledAdapters, {

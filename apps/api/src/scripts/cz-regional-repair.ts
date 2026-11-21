@@ -1,6 +1,8 @@
 import { panic } from "better-result";
 import { and, eq, inArray, isNull } from "drizzle-orm";
 
+import { chunk as chunkItems } from "@stll/concurrency/chunk";
+import { printError } from "@stll/errors";
 import { Temporal } from "@stll/time";
 
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
@@ -17,7 +19,7 @@ import {
   enterCaseLawMaintenanceLane,
   openCaseLawReadOnlySession,
 } from "@/api/lib/case-law/maintenance-lane";
-import { acquireCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
+import { holdCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import type { CaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import { refreshCorpusS3, refreshS3 } from "@/api/lib/s3";
@@ -28,9 +30,9 @@ import type {
   CzRegionalRepairReport,
 } from "@/api/scripts/cz-regional-repair-plan";
 import {
+  checkRepairRange,
   CZ_REGIONAL_FEED_START,
   CZ_REGIONAL_LANGUAGE,
-  checkRepairRange,
   czRegionalListingKeys,
   diffCzRegionalListing,
   enumerateUtcDays,
@@ -321,10 +323,8 @@ const heldIdentitiesChunked = async (
 ): Promise<CzRegionalHeldIdentities> => {
   const documentIds = new Set<string>();
   const caseNumbers = new Set<string>();
-  for (let index = 0; index < items.length; index += HELD_LOOKUP_CHUNK) {
-    const held = await heldIdentities(
-      items.slice(index, index + HELD_LOOKUP_CHUNK),
-    );
+  for (const itemBatch of chunkItems(items, HELD_LOOKUP_CHUNK)) {
+    const held = await heldIdentities(itemBatch);
     for (const value of held.documentIds) {
       documentIds.add(value);
     }
@@ -373,20 +373,25 @@ const ingestItem = async (
       scopedDb: ingestionDb,
       sourceId,
     });
-    const processed = await processDecision({
+    const written = await processDecision({
       input: decision,
       sourceId,
       scopedDb: ingestionDb,
       observedAt: new Date(),
       observationOrder,
     });
+    if (written.isErr()) {
+      printError(`${docket}: failed`, written.error);
+      return INGEST_OUTCOMES.FAILED;
+    }
+    const processed = written.value;
     if (processed.status === PROCESS_DECISION_STATUS.RETRYABLE) {
       console.error(`${decision.caseNumber}: retryable — ${processed.reason}`);
       return INGEST_OUTCOMES.RETRYABLE;
     }
     return INGEST_OUTCOMES.WRITTEN;
   } catch (error) {
-    console.error(`${docket}: failed —`, error);
+    printError(`${docket}: failed`, error);
     return INGEST_OUTCOMES.FAILED;
   }
 };
@@ -402,12 +407,10 @@ if (apply) {
   await refreshCorpusS3();
 }
 
-const sourceLease = apply
-  ? await acquireCaseLawSourceIngestionLease({
-      scopedDb: ingestionDb,
-      sourceId,
-    })
+const heldSourceLease = apply
+  ? await holdCaseLawSourceIngestionLease({ scopedDb: ingestionDb, sourceId })
   : null;
+const sourceLease = heldSourceLease?.lease ?? null;
 if (apply && sourceLease === null) {
   console.error(
     "Source cz-regional is being ingested right now (lease held). Retry later.",
@@ -535,7 +538,7 @@ try {
           // The day is left unwalked rather than half-walked: advancing the
           // resume boundary past it would turn a transient listing failure
           // into a permanent gap.
-          console.error(`${date} page ${page}: listing failed —`, error);
+          printError(`${date} page ${page}: listing failed`, error);
           halt = { reason: `listing failed on ${date}`, failure: true };
           dayComplete = false;
           break;
@@ -611,9 +614,7 @@ try {
     }
   }
 } finally {
-  if (sourceLease !== null) {
-    await sourceLease.release();
-  }
+  await heldSourceLease?.release();
 }
 
 if (suppliedItems === null) {

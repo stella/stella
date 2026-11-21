@@ -1,6 +1,21 @@
-import { defineConfig, devices } from "@playwright/test";
+import { defineConfig } from "@playwright/test";
+
+import { devices } from "@stll/playwright-tools/devices";
 
 export default defineConfig({
+  reporter: process.env["CI"]
+    ? [
+        ["dot"],
+        [
+          "json",
+          {
+            outputFile:
+              process.env["PLAYWRIGHT_JSON_OUTPUT_FILE"] ??
+              ".cache/playwright-timings.json",
+          },
+        ],
+      ]
+    : [["list"]],
   testDir: "./src",
   testMatch: "**/*.playwright.spec.ts",
   fullyParallel: true,
@@ -16,7 +31,7 @@ export default defineConfig({
     baseURL: "http://127.0.0.1:4174",
   },
   webServer: {
-    command: "vite --host 127.0.0.1 --port 4174",
+    command: "bun --bun vite --host 127.0.0.1 --port 4174",
     port: 4174,
     reuseExistingServer: !process.env["CI"],
   },

@@ -1,9 +1,11 @@
 import { describe, expect, test } from "bun:test";
 
+import { sleep } from "@stll/concurrency/sleep";
+
 import {
+  type IngestRequest,
   settleBoth,
   splitIngestRequests,
-  type IngestRequest,
 } from "@/api/lib/corpus-index/core";
 
 /**
@@ -83,10 +85,13 @@ describe("splitIngestRequests", () => {
     expect(requests.length).toBeGreaterThan(2);
     for (const { entries, ndjson } of requests) {
       expect(utf8Bytes(ndjson)).toBeLessThanOrEqual(500);
-      const ndjsonDocs = ndjson.split("\n").map((line) => JSON.parse(line));
+      const ndjsonDocs = ndjson.split("\n").map((line) => {
+        const doc: Record<string, unknown> = JSON.parse(line);
+        return doc;
+      });
       expect(entries.flatMap(({ docs }) => docs)).toEqual(ndjsonDocs);
       expect(entries.map(({ row }) => row.id)).toContain(
-        ndjsonDocs[0]?.document_id,
+        String(ndjsonDocs[0]?.["document_id"]),
       );
     }
     expect(ingestedIds(requests)).toEqual([
@@ -149,11 +154,9 @@ describe("splitIngestRequests", () => {
 describe("settleBoth", () => {
   test("a fast failure waits for its sibling before surfacing", async () => {
     let siblingFinished = false;
-    const sibling = new Promise<string>((resolve) => {
-      setTimeout(() => {
-        siblingFinished = true;
-        resolve("loaded");
-      }, 25);
+    const sibling = sleep(25).then(() => {
+      siblingFinished = true;
+      return "loaded";
     });
 
     const caught = await settleBoth(

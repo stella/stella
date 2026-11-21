@@ -2,12 +2,15 @@ import type { CallToolResult } from "@modelcontextprotocol/server";
 import { panic } from "better-result";
 
 import type { AgentInputPlaceholderPolicy } from "@stll/agent-input";
-import { normalizeAgentInput } from "@stll/agent-input";
+import {
+  normalizeAgentInput,
+  withNullOptionalsOmitted,
+} from "@stll/agent-input";
+import { MCP_AGENT_INPUT_READERS } from "@stll/legal-atlas/agent-input-readers";
 
-import { withNullOptionalsOmitted } from "@/api/lib/json-schema/null-optionals";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
-import { MCP_AGENT_INPUT_READERS } from "@/api/mcp/agent-input-readers";
 import type { McpValidationIssue } from "@/api/mcp/error-codes";
+import { MCP_NOTE_AUDIENCE } from "@/api/mcp/tool-note-audience";
 import type { InternalToolErrorResult } from "@/api/mcp/tool-types";
 import { structuredErrorResult } from "@/api/mcp/tool-utils";
 
@@ -206,7 +209,17 @@ export const withInputNotes = (
     ...result,
     content: [
       ...result.content,
-      { type: "text", text: `Input read: ${distinct.join(" ")}` },
+      {
+        type: "text",
+        text: `Input read: ${distinct.join(" ")}`,
+        annotations: {
+          audience: [
+            ({ agent: "assistant", user: "user" } as const)[
+              MCP_NOTE_AUDIENCE.input_read
+            ],
+          ],
+        },
+      },
     ],
   };
 };

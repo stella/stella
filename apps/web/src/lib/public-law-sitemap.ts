@@ -5,9 +5,21 @@ import {
   createCaseLawDecisionRouteParams,
 } from "@stll/api-contract/case-law-decision-route";
 import type { CaseLawDecisionLanguageAlternate } from "@stll/api-contract/case-law-decision-route";
+import { isPublicLegislationPageCountry } from "@stll/api-contract/legislation-publication";
+import {
+  PUBLIC_ROBOTS_DENIED_USER_AGENTS,
+  ROBOTS_DISALLOWED_PATHS,
+} from "@stll/api-contract/public-crawl-rules";
+import { SITEMAP_FILE_FETCH_TIMEOUT_MS } from "@stll/api-contract/public-sitemap-budget";
+import { STATUTE_QUERY_CAPABILITIES } from "@stll/api-contract/statute-query-capability";
 
 import { env } from "@/env";
-import { publicCaseLawCountryFromParam } from "@/features/case-law/case-law-jurisdiction";
+import { createCaseLawJurisdictionHubPath } from "@/features/case-law/browse-hub-path";
+import {
+  PUBLIC_CASE_LAW_PAGE_COUNTRIES,
+  publicCaseLawPageCountryFromParam,
+  toCaseLawCountryParam,
+} from "@/features/case-law/case-law-jurisdiction";
 import {
   createStatuteSitemapShardPath,
   type StatuteSitemapShard,
@@ -27,6 +39,7 @@ import {
 import { createPublicLawCanonicalUrl } from "@/lib/public-law-seo";
 import {
   assertSitemapXmlWithinProtocolLimits,
+  createSitemapUpstreamBusyError,
   escapeSitemapXml,
   SITEMAP_XML_RESPONSE_HEADERS,
   TOOLS_SITEMAP_PATH,
@@ -35,10 +48,36 @@ import {
   isPublicToolsCrawlAllowed,
   isPublicToolsSitemapEnabled,
 } from "@/lib/public-tools-launch";
-import { isPublicStatuteCountry } from "@/lib/statute-route";
-import { createPublicCrawlRules } from "@/public-crawl-policy";
+import { isPublicStatutePageCountry } from "@/lib/statutes/statute-route";
+import {
+  createPublicCrawlRules,
+  isPublicLawUrlIndexable,
+  publicCrawlRobotsLines,
+} from "@/public-crawl-policy";
 
 const LAW_SITEMAP_PATH = "/sitemaps/law.xml";
+
+/**
+ * The law sitemap's static entries: each public jurisdiction's hub and its
+ * statute hub. A path is listed only when the crawl policy makes it
+ * indexable, so the sitemap cannot list what robots.txt or the page's head
+ * refuses.
+ */
+const publicLawHubSitemapPaths = (): readonly `/law/${string}`[] =>
+  [
+    ...PUBLIC_CASE_LAW_PAGE_COUNTRIES.map((country) =>
+      createCaseLawJurisdictionHubPath(toCaseLawCountryParam(country)),
+    ),
+    // Jurisdictions with a statute browser whose statute pages are public.
+    ...Object.entries(STATUTE_QUERY_CAPABILITIES)
+      .filter(
+        ([country, capability]) =>
+          capability.type === "supported" &&
+          isPublicLegislationPageCountry(country.toUpperCase()),
+      )
+      .map(([country]) => country)
+      .map((country): `/law/${string}` => `/law/${country}/statutes`),
+  ].filter((path) => isPublicLawUrlIndexable(path, true));
 const LAW_CASES_SITEMAP_BASE_PATH = "/sitemaps/law-cases";
 
 type FetchLike = (
@@ -169,14 +208,19 @@ const createCaseLawShardPath = ({
 
 export const fetchPublicSitemapShards = async ({
   fetchImpl = fetch,
-  signal = AbortSignal.timeout(10_000),
+  signal = AbortSignal.timeout(SITEMAP_FILE_FETCH_TIMEOUT_MS),
 }: FetchSitemapShardsOptions = {}): Promise<SitemapShard[]> => {
   const response = await fetchImpl(apiUrl("/case/sitemap/shards"), { signal });
   if (!response.ok) {
-    throw new ClientOperationError({
-      action: "fetchPublicCaseLawSitemapShards",
-      message: `Failed to fetch public case-law sitemap shards: ${response.status}`,
-    });
+    throw response.status === 429 || response.status === 503
+      ? createSitemapUpstreamBusyError({
+          action: "fetchPublicCaseLawSitemapShards",
+          response,
+        })
+      : new ClientOperationError({
+          action: "fetchPublicCaseLawSitemapShards",
+          message: `Failed to fetch public case-law sitemap shards: ${response.status}`,
+        });
   }
 
   const parseResult = v.safeParse(
@@ -192,14 +236,14 @@ export const fetchPublicSitemapShards = async ({
   }
 
   return parseResult.output.items.filter(
-    ({ country }) => publicCaseLawCountryFromParam(country) !== null,
+    ({ country }) => publicCaseLawPageCountryFromParam(country) !== null,
   );
 };
 
 export const fetchPublicSitemapDecisions = async ({
   fetchImpl = fetch,
   shard,
-  signal = AbortSignal.timeout(10_000),
+  signal = AbortSignal.timeout(SITEMAP_FILE_FETCH_TIMEOUT_MS),
 }: FetchSitemapDecisionsOptions): Promise<SitemapDecision[]> => {
   const url = new URL(apiUrl("/case/sitemap/decisions/shard"));
   url.searchParams.set("country", shard.country);
@@ -208,17 +252,22 @@ export const fetchPublicSitemapDecisions = async ({
   url.searchParams.set("bucket", shard.bucket);
 
   const response =
-    publicCaseLawCountryFromParam(shard.country) === null
+    publicCaseLawPageCountryFromParam(shard.country) === null
       ? null
       : await fetchImpl(url, { signal });
   if (response === null || !response.ok) {
-    throw new ClientOperationError({
-      action: "fetchPublicCaseLawSitemap",
-      message:
-        response === null
-          ? "The case-law sitemap shard is not published."
-          : `Failed to fetch public case-law sitemap data: ${response.status}`,
-    });
+    throw response?.status === 429 || response?.status === 503
+      ? createSitemapUpstreamBusyError({
+          action: "fetchPublicCaseLawSitemap",
+          response,
+        })
+      : new ClientOperationError({
+          action: "fetchPublicCaseLawSitemap",
+          message:
+            response === null
+              ? "The case-law sitemap shard is not published."
+              : `Failed to fetch public case-law sitemap data: ${response.status}`,
+        });
   }
 
   const parseResult = v.safeParse(
@@ -250,16 +299,17 @@ export const createPublicLawSitemapIndexXml = (
   } = resolvedOptions;
 
   const publicShards = shards.filter(
-    ({ country }) => publicCaseLawCountryFromParam(country) !== null,
+    ({ country }) => publicCaseLawPageCountryFromParam(country) !== null,
   );
   const publicStatuteShards = statuteShards.filter(({ country }) =>
-    isPublicStatuteCountry(country),
+    isPublicStatutePageCountry(country),
   );
   const lawEntries = publicLawIndexingEnabled
     ? [
         {
           loc: createPublicLawCanonicalUrl(LAW_SITEMAP_PATH),
-          lastmod: publicShards.at(0)?.lastmod ?? null,
+          // Corpus updates do not change the static /law sitemap's URLs.
+          lastmod: null,
         },
         ...publicShards.map((shard) => ({
           loc: createPublicLawCanonicalUrl(createCaseLawShardPath(shard)),
@@ -314,11 +364,10 @@ export const createPublicLawStaticSitemapXml = ({
 `;
   }
 
-  // The home is the entry point, and the coverage page is what the corpus
-  // says about itself. The results screen is not listed: an unfiltered request
-  // redirects to the home, and every decision has its own entry in the
-  // per-country sitemaps.
-  const entries = (["/law", "/law/coverage"] as const).map((path) =>
+  // The jurisdiction hubs are the entry points; each links down its browse
+  // tree to every decision. The search home (`/law`) is not listed: it
+  // redirects to a search URL. See `publicLawHubSitemapPaths`.
+  const entries = publicLawHubSitemapPaths().map((path) =>
     createPublicLawCanonicalUrl(path),
   );
 
@@ -381,6 +430,12 @@ type RobotsTxtOptions = {
   seoIndexable?: boolean;
 };
 
+const createDeniedCrawlerRules = () =>
+  PUBLIC_ROBOTS_DENIED_USER_AGENTS.flatMap((userAgent) => [
+    `User-agent: ${userAgent}`,
+    "Disallow: /",
+  ]);
+
 export const createRobotsTxt = ({
   publicKnowledgeCrawlAllowed = isPublicKnowledgeCrawlAllowed(),
   publicLawCrawlAllowed = isPublicLawCrawlAllowed(),
@@ -391,9 +446,11 @@ export const createRobotsTxt = ({
   // Sitemap line, so crawlers stay out even when sitemaps are served for
   // verification.
   if (!seoIndexable) {
-    return `User-agent: *
-Disallow: /
-`;
+    return `${[
+      "User-agent: *",
+      "Disallow: /",
+      ...createDeniedCrawlerRules(),
+    ].join("\n")}\n`;
   }
 
   const sitemapUrl = new URL(
@@ -401,17 +458,22 @@ Disallow: /
     env.VITE_PUBLIC_APP_URL,
   ).toString();
 
-  const allowLines = createPublicCrawlRules({
-    publicKnowledgeCrawlAllowed,
-    publicLawCrawlAllowed,
-    publicToolsCrawlAllowed,
-    toolsBasePath: publicToolsBasePath(),
-  }).flatMap(({ path, scope }) =>
-    scope === "exact"
-      ? [`Allow: ${path}$`]
-      : [`Allow: ${path}/`, `Allow: ${path}$`],
+  const allowLines = publicCrawlRobotsLines(
+    createPublicCrawlRules({
+      publicKnowledgeCrawlAllowed,
+      publicLawCrawlAllowed,
+      publicToolsCrawlAllowed,
+      toolsBasePath: publicToolsBasePath(),
+    }),
   );
 
-  return `${["User-agent: *", ...allowLines, "Disallow: /", `Sitemap: ${sitemapUrl}`].join("\n")}
+  return `${[
+    "User-agent: *",
+    ...ROBOTS_DISALLOWED_PATHS.map((path) => `Disallow: ${path}`),
+    ...allowLines,
+    "Disallow: /",
+    `Sitemap: ${sitemapUrl}`,
+    ...createDeniedCrawlerRules(),
+  ].join("\n")}
 `;
 };

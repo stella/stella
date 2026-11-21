@@ -3,8 +3,10 @@ import { useTranslations } from "use-intl";
 import { NewChatIcon } from "@stll/ui/icons";
 import { MenuItem } from "@stll/ui/menu";
 
+import { INSPECTOR_FOCUS_INTENT } from "@/components/inspector/inspector-store-types";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import type { ChatTab } from "@/components/inspector/inspector-tabs-store";
+import { newChatMatterScope } from "@/components/inspector/new-chat-scope";
 import { useAnchoredMenu } from "@/components/inspector/use-anchored-menu";
 
 /**
@@ -27,15 +29,11 @@ export const useRailContextMenu = ({
     children: (
       <MenuItem
         onClick={() =>
-          openChat(
-            workspaceId === undefined
-              ? { ...(activeSkill ? { activeSkill } : {}) }
-              : {
-                  ...(activeSkill ? { activeSkill } : {}),
-                  workspaceId,
-                  contextMatterIds: [workspaceId],
-                },
-          )
+          openChat({
+            ...(activeSkill ? { activeSkill } : {}),
+            ...newChatMatterScope(workspaceId),
+            focus: INSPECTOR_FOCUS_INTENT.claim,
+          })
         }
       >
         <NewChatIcon />

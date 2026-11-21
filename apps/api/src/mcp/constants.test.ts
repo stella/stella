@@ -38,6 +38,7 @@ describe("MCP OAuth scope surface", () => {
     expect(getMcpResourceScopes("law")).toEqual([
       "stella:search",
       "stella:read",
+      "stella:law_read",
     ]);
   });
 });

@@ -1,13 +1,18 @@
 import { describe, expect, test } from "bun:test";
 
+import type { WorkspaceActivity } from "@/components/app-sidebar.logic";
 import {
+  getMatterBillingLinks,
+  MATTER_BILLING_LINK_KINDS,
   matterActivityIsKnownEmpty,
-  resolveEntityActivityDestination,
+  matterActivityItemVisible,
   resolveAutomaticExpandedMatterId,
+  resolveEntityActivityDestination,
   resolveMatterNavigationTarget,
   resolveSidebarWorkspaceId,
   selectRecentWorkspaces,
 } from "@/components/app-sidebar.logic";
+import { LIST_ITEM_TYPES } from "@/components/workspaces/tasks/task-detail-constants";
 
 describe("sidebar matter context", () => {
   test("opens a matter at its default view without an intermediate redirect", () => {
@@ -162,6 +167,49 @@ describe("sidebar matter context", () => {
   });
 });
 
+describe("sidebar matter billing links", () => {
+  const TIMESHEETS = { kind: MATTER_BILLING_LINK_KINDS.timesheets };
+  const INVOICES = { kind: MATTER_BILLING_LINK_KINDS.invoices };
+  const cases = [
+    [false, false, false, []],
+    [false, false, true, []],
+    [false, true, false, []],
+    [false, true, true, []],
+    [true, false, false, []],
+    [true, false, true, [INVOICES]],
+    [true, true, false, [TIMESHEETS]],
+    [true, true, true, [TIMESHEETS, INVOICES]],
+  ] as const;
+
+  test.each(cases)(
+    "preview=%s, time-entry-read=%s, invoice-read=%s",
+    (
+      timeBillingPreviewEnabled,
+      canReadTimeEntries,
+      canReadInvoices,
+      expected,
+    ) => {
+      expect(
+        getMatterBillingLinks({
+          canReadInvoices,
+          canReadTimeEntries,
+          timeBillingPreviewEnabled,
+        }),
+      ).toEqual([...expected]);
+    },
+  );
+
+  test("the preview flag hides every billing link", () => {
+    expect(
+      getMatterBillingLinks({
+        canReadInvoices: true,
+        canReadTimeEntries: true,
+        timeBillingPreviewEnabled: false,
+      }),
+    ).toEqual([]);
+  });
+});
+
 describe("sidebar matter activity disclosure", () => {
   const knownEmptyInput = (
     pages: { items: readonly unknown[]; nextCursor: string | null }[],
@@ -247,5 +295,59 @@ describe("sidebar entity activity navigation", () => {
     expect(resolveEntityActivityDestination("link")).toEqual({
       type: "all-view",
     });
+  });
+});
+
+describe("sidebar list item admission", () => {
+  const entity = {
+    activityAt: "2026-07-01T12:00:00.000Z",
+    entityKind: "task",
+    fieldId: null,
+    fileName: null,
+    hasThumbnail: false,
+    id: "entity-a",
+    listItemType: null,
+    mimeType: null,
+    status: "open",
+    title: "Review contract",
+    type: "entity",
+  } as const satisfies WorkspaceActivity;
+  for (const listItemType of [null, ...LIST_ITEM_TYPES]) {
+    test(`only task list items appear as sidebar tasks: ${listItemType ?? "none"}`, () => {
+      const item = {
+        ...entity,
+        listItemType,
+      } as const satisfies WorkspaceActivity;
+      const visible = matterActivityItemVisible(item);
+      expect(visible).toBe(listItemType === null || listItemType === "task");
+      expect(
+        matterActivityIsKnownEmpty({
+          isInvalidated: false,
+          status: "success",
+          pages: [
+            {
+              items: [item].filter(matterActivityItemVisible),
+              nextCursor: null,
+            },
+          ],
+        }),
+      ).toBe(!visible);
+    });
+  }
+  test("documents and threads remain visible", () => {
+    expect(
+      matterActivityItemVisible({
+        type: "thread",
+        id: "thread-a",
+        title: "Review notes",
+        activityAt: entity.activityAt,
+      } satisfies WorkspaceActivity),
+    ).toBe(true);
+    expect(
+      matterActivityItemVisible({
+        ...entity,
+        entityKind: "document",
+      } satisfies WorkspaceActivity),
+    ).toBe(true);
   });
 });

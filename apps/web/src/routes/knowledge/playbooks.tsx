@@ -1,35 +1,30 @@
-import { lazy, Suspense } from "react";
-
 import { createFileRoute } from "@tanstack/react-router";
 
-import { PlaybooksPageSkeleton } from "@/features/knowledge/views/playbooks/playbooks-page-view";
 import { playbooksIntentSearchSchema } from "@/lib/knowledge/catalogue-intent";
-import { KnowledgeAudienceGate } from "@/routes/knowledge/-knowledge-audience-gate";
-import { PublicPlaybooksCatalogue } from "@/routes/knowledge/-public/public-playbooks-catalogue";
+import { KNOWLEDGE_CATALOGUE_PATHS } from "@/lib/knowledge/knowledge-catalogues";
+import { pageTitle } from "@/lib/page-title";
+import { routePresentation } from "@/routes/-route-presentation";
+import { turnAwaySignedOutVisitor } from "@/routes/knowledge/-knowledge-member-route";
+import { PlaybooksPage } from "@/routes/knowledge/-member/playbooks.page";
+import { PlaybooksPending } from "@/routes/knowledge/-member/playbooks.pending";
 
-// The organization's playbooks load only for a member, after the session is
-// known; the page reads them itself, so nothing is fetched before that.
-const LazyMemberPlaybooksPage = lazy(async () => {
-  const module =
-    await import("@/routes/knowledge/-member/member-playbooks-page");
-  return { default: module.MemberPlaybooksPage };
-});
-
+// The organization's playbooks; the ready-made ones every visitor reads live
+// at `/knowledge/playbooks/catalogue`.
 export const Route = createFileRoute("/knowledge/playbooks")({
   validateSearch: playbooksIntentSearchSchema,
-  component: PlaybooksSection,
+  staticData: {
+    presentation: routePresentation({
+      type: "knowledge-detail",
+      detail: "playbooks",
+    }),
+  },
+  beforeLoad: async ({ context: { queryClient } }) => {
+    await turnAwaySignedOutVisitor({
+      queryClient,
+      visitor: { kind: "catalogue", to: KNOWLEDGE_CATALOGUE_PATHS.playbooks },
+    });
+  },
+  head: () => ({ meta: [{ title: pageTitle("common.playbooks") }] }),
+  component: PlaybooksPage,
+  pendingComponent: PlaybooksPending,
 });
-
-function PlaybooksSection() {
-  return (
-    <KnowledgeAudienceGate
-      anonymous={() => <PublicPlaybooksCatalogue />}
-      checking={<PlaybooksPageSkeleton />}
-      member={(organizationId) => (
-        <Suspense fallback={<PlaybooksPageSkeleton />}>
-          <LazyMemberPlaybooksPage organizationId={organizationId} />
-        </Suspense>
-      )}
-    />
-  );
-}

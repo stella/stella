@@ -2,12 +2,15 @@ import { Result } from "better-result";
 import { DelayedError } from "bullmq";
 import { describe, expect, test } from "bun:test";
 
+import { createTestState } from "@stll/test-state";
+
 import { env } from "@/api/env";
 import { toSafeId } from "@/api/lib/branded-types";
 import {
   BACKGROUND_ACTION_KIND,
   QUEUED_ACTION_KIND,
 } from "@/api/lib/rate-limit/action-kinds";
+import { testOrganizationStateDb } from "@/api/tests/helpers/model-dispatch-admission";
 
 import { ActionAdmissionError, withActionAdmission } from "./action-admission";
 import {
@@ -15,6 +18,8 @@ import {
   runBackgroundJob,
   runQueuedKickoff,
 } from "./queued-action-admission";
+
+const testState = createTestState({ file: import.meta.path, config: env });
 
 const organizationId = toSafeId<"organization">("queued_org");
 const userId = toSafeId<"user">("queued_user");
@@ -27,7 +32,12 @@ const periodPolicy = { periodMs: 86_400_000, limit: 10 };
 
 describe("queued action admission", () => {
   test("defers a busy or unavailable background job without running it even after repeated starts", async () => {
-    for (const reason of ["busy", "unavailable"] as const) {
+    for (const reason of [
+      "busy",
+      "store_unavailable",
+      "organization_state_unreadable",
+      "lease_lost",
+    ] as const) {
       for (const attemptsStarted of [1, 7, 21]) {
         let ran = false;
         const delays: { timestamp: number; token: string | undefined }[] = [];
@@ -41,6 +51,7 @@ describe("queued action admission", () => {
         const controller = new AbortController();
 
         const operation = runBackgroundJob({
+          organizationStateDb: testOrganizationStateDb,
           actionKind: BACKGROUND_ACTION_KIND.flow,
           organizationId,
           userId,
@@ -77,6 +88,7 @@ describe("queued action admission", () => {
       let ran = false;
       const delays: number[] = [];
       const operation = runBackgroundJob({
+        organizationStateDb: testOrganizationStateDb,
         actionKind: BACKGROUND_ACTION_KIND.extraction,
         organizationId,
         userId,
@@ -140,6 +152,7 @@ describe("queued action admission", () => {
         },
       });
     const operation = runBackgroundJob({
+      organizationStateDb: testOrganizationStateDb,
       actionKind: BACKGROUND_ACTION_KIND.flow,
       organizationId,
       userId,
@@ -190,6 +203,7 @@ describe("queued action admission", () => {
       };
 
       const result = await runBackgroundJob({
+        organizationStateDb: testOrganizationStateDb,
         actionKind: BACKGROUND_ACTION_KIND.flow,
         organizationId,
         userId,
@@ -211,22 +225,55 @@ describe("queued action admission", () => {
     }
   });
 
+  test("a job body that discards its run signal still dispatches under the lease", async () => {
+    const lease = new AbortController();
+    const admission: typeof withActionAdmission = async ({ run }) =>
+      await Result.tryPromise({
+        try: async () =>
+          await run(lease.signal, {
+            reservePeriod: async () => Result.ok(undefined),
+          }),
+        catch: (error: unknown) => error,
+      });
+    const modelCall = Promise.withResolvers<undefined>();
+    const started = Promise.withResolvers<AbortSignal>();
+
+    const job = runBackgroundJob({
+      actionKind: "document-reviews.background",
+      organizationId,
+      userId,
+      organizationStateDb: testOrganizationStateDb,
+      job: { moveToDelayed: async () => undefined },
+      signal: new AbortController().signal,
+      admission,
+      run: async (_signal, modelAdmission): Promise<unknown> => {
+        started.resolve(modelAdmission.signal);
+        await modelCall.promise;
+        return modelAdmission.signal.reason;
+      },
+    });
+
+    const dispatchSignal = await started.promise;
+    expect(dispatchSignal.aborted).toBe(false);
+    const leaseLost = new Error("lease lost");
+    lease.abort(leaseLost);
+    expect(dispatchSignal.aborted).toBe(true);
+    modelCall.resolve(undefined);
+    expect(await job).toBe(leaseLost);
+  });
+
   test("feature flag off runs a queued kickoff without opening admission storage", async () => {
-    const previous = env.FEATURE_ACTION_ADMISSION;
-    env.FEATURE_ACTION_ADMISSION = false;
-    try {
-      expect(
-        await runQueuedKickoff({
-          organizationId,
-          userId,
-          actionKind: QUEUED_ACTION_KIND.flow,
-          logicalPhaseId: "manual-run:request-1",
-          run: async () => "completed",
-        }),
-      ).toBe("completed");
-    } finally {
-      env.FEATURE_ACTION_ADMISSION = previous;
-    }
+    testState.setConfig("FEATURE_ACTION_ADMISSION", false);
+
+    expect(
+      await runQueuedKickoff({
+        organizationId,
+        userId,
+        actionKind: QUEUED_ACTION_KIND.flow,
+        logicalPhaseId: "manual-run:request-1",
+        run: async () => "completed",
+      }),
+    ).toBe("completed");
   });
 
   test("queued kickoff sends its stable phase identity to admission", async () => {
@@ -264,8 +311,7 @@ describe("queued action admission", () => {
   });
 
   test("a deferred period refusal rejects kickoff before enqueue", async () => {
-    const previous = env.FEATURE_ACTION_ADMISSION;
-    env.FEATURE_ACTION_ADMISSION = true;
+    testState.setConfig("FEATURE_ACTION_ADMISSION", true);
     let enqueued = false;
     const admission: typeof withActionAdmission = async (options) =>
       await withActionAdmission({
@@ -283,25 +329,22 @@ describe("queued action admission", () => {
           },
         },
       });
-    try {
-      expect(
-        await runQueuedKickoff({
-          organizationId,
-          userId,
-          actionKind: QUEUED_ACTION_KIND.flow,
-          logicalPhaseId: "refused-run",
-          periodReservation: "on-acceptance",
-          admission,
-          run: async (_signal, reservePeriod) => {
-            await reservePeriod();
-            enqueued = true;
-          },
-        }).catch((error: unknown) => error),
-      ).toBeInstanceOf(ActionAdmissionError);
-      expect(enqueued).toBe(false);
-    } finally {
-      env.FEATURE_ACTION_ADMISSION = previous;
-    }
+
+    expect(
+      await runQueuedKickoff({
+        organizationId,
+        userId,
+        actionKind: QUEUED_ACTION_KIND.flow,
+        logicalPhaseId: "refused-run",
+        periodReservation: "on-acceptance",
+        admission,
+        run: async (_signal, reservePeriod) => {
+          await reservePeriod();
+          enqueued = true;
+        },
+      }).catch((error: unknown) => error),
+    ).toBeInstanceOf(ActionAdmissionError);
+    expect(enqueued).toBe(false);
   });
 
   test("holds the admission lease until planning and enqueue work settles", async () => {
@@ -359,7 +402,7 @@ describe("queued action admission", () => {
       send: async (_command: string, args: string[]) => {
         if (args.at(0)?.includes("ZREMRANGEBYSCORE")) {
           if (active === 1) {
-            return 0;
+            return [0, 1000];
           }
           active += 1;
           return 1;
@@ -382,6 +425,7 @@ describe("queued action admission", () => {
         },
       });
     const owner = runBackgroundJob({
+      organizationStateDb: testOrganizationStateDb,
       actionKind: BACKGROUND_ACTION_KIND.flow,
       organizationId,
       userId,
@@ -397,6 +441,7 @@ describe("queued action admission", () => {
     const deferred: { index: number; at: number }[] = [];
     const contender = async (index: number) =>
       await runBackgroundJob({
+        organizationStateDb: testOrganizationStateDb,
         actionKind: BACKGROUND_ACTION_KIND.flow,
         organizationId,
         userId,

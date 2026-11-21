@@ -5,32 +5,35 @@
   "license": "Apache-2.0",
   "type": "module",
   "scripts": {
-    "build": "wxt build -b chrome && bun scripts/assert-manifest.ts",
-    "build:dev": "wxt build -b chrome --mode development",
+    "build": "bun --bun wxt build -b chrome && bun scripts/assert-manifest.ts",
+    "build:dev": "bun --bun wxt build -b chrome --mode development",
+    "build:staging": "bun --bun wxt build -b chrome --mode staging && bun scripts/assert-manifest.ts staging",
     "clean": "git clean -xdf .output .wxt .cache .turbo node_modules",
-    "dev": "wxt -b chrome",
-    "format": "bun ../../scripts/run-oxfmt.ts .",
-    "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --deny-warnings --type-aware --type-check apps/extension",
-    "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix apps/extension",
-    "postinstall": "wxt prepare",
+    "dev": "bun --bun wxt -b chrome",
+    "lint": "cd ../.. && bun scripts/lint.ts --deny-warnings apps/extension",
+    "lint:fix": "cd ../.. && bun scripts/lint.ts --fix apps/extension",
+    "postinstall": "bun --bun wxt prepare",
     "test": "bun run test:unit",
-    "test:e2e": "bun run build && wxt build -b chrome --mode e2e && bun scripts/assert-manifest.ts e2e && playwright test -c playwright.config.ts",
+    "test:e2e": "bun run build && bun --bun wxt build -b chrome --mode e2e && bun scripts/assert-manifest.ts e2e && bun --bun playwright test -c playwright.config.ts",
     "test:unit": "bun test src scripts",
-    "typecheck": "wxt prepare && bun ../../packages/scripts/src/tsc-native.ts --noEmit",
-    "zip": "wxt zip -b chrome && bun scripts/assert-manifest.ts"
+    "typecheck": "bun --bun wxt prepare && bun check --no-pretty --all --project=tsconfig.json",
+    "zip": "bun --bun wxt zip -b chrome && bun scripts/assert-manifest.ts"
   },
   "dependencies": {
     "@stll/api-contract": "workspace:*",
+    "@stll/browser-page": "workspace:*",
+    "@stll/concurrency": "workspace:*",
     "better-result": "catalog:",
     "valibot": "catalog:"
   },
   "devDependencies": {
-    "@playwright/test": "^1.63.0",
+    "@playwright/test": "^1.65.1",
+    "@stll/property-testing": "workspace:*",
     "@stll/typescript-config": "workspace:*",
-    "@types/chrome": "0.3.4",
+    "@types/chrome": "0.3.7",
     "bun-types": "catalog:",
     "vite": "catalog:",
-    "wxt": "0.21.4"
+    "wxt": "0.21.5"
   },
   "crawlPosture": "unserved"
 }

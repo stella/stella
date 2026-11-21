@@ -32,6 +32,13 @@ the default provider chain (see `getTanStackTextModelById`).
 
 ## Evals
 
+- `graph-tools.ts`: can a model answer a matter question through the graph's
+  query tools (`lists.graph.nodes.list`, `lists.graph.neighbours.list`,
+  `lists.graph.paths.list`) from their schemas and descriptions alone? Calls
+  are parsed by the handlers' own schemas and answered by the handlers over a
+  synthetic case in an in-process database; scores looking up first,
+  navigating by returned ids only, the direct filter, and quoting the exact
+  text. Runs only with an explicit `--models` list.
 - `create-document-drafting.ts`: can a model write legal source the
   docx-core compiler accepts, how much does the compiler normalize, and does
   literal markdown leak into the document?
@@ -57,7 +64,8 @@ the default provider chain (see `getTanStackTextModelById`).
   answers `ask-user` from a script: does the model ask side, governing law,
   and language before drafting, search only matters the user named, read only
   the contracts the user confirmed, ask only where the contracts disagree,
-  set `scope.perspective` only for a side that maps to one, and never resend
+  set `scope.perspective` only for a side that maps to one, save one
+  position first and later ones in groups of at most five, and never resend
   an unchanged position? A scenario's follow-up messages run as later turns
   over the conversation so far, so a user who declines contracts and asks for
   their matters mid-flow is scored too. Each scenario runs on two surfaces
@@ -86,6 +94,143 @@ the default provider chain (see `getTanStackTextModelById`).
 - `extraction.ts`: does the structured-extraction path (`generateWorkflowData`)
   match ground truth across text, date, int, and select fields, and does it
   answer a question the source never states?
+- `playbook-clause-extraction.ts`: from a position's rules to its question, to
+  the extraction, to the verdict, does a model-graded position get the expected
+  verdict from an answer that covers every term of its rules, does a term the
+  contract never states come back empty rather than as prose, and does a
+  constraint position still read a number? Scored on `gpt-5.6-luna` and
+  `gpt-6-sol`.
+- `e2e/playbook-journey.ts`: the same path end to end, through the HTTP API of a
+  running stack. It saves a playbook with a position per check kind, runs it
+  from the table and from the review panel on two fixture contracts (a long
+  clause, and a precedent in another matter as reference), and checks that
+  every run completes, progress counts every finding, no verdict is `missing`
+  or unfinished, tiers match the fixture, panel deviations carry a fix and the
+  table's verdict cells hold known tiers. Unlike the others it runs weekly in
+  CI (`.github/workflows/playbook-journey.yml`) on one model. It saves the
+  organization's own Anthropic key first, so the stack itself can stay on the
+  mock; locally, start the dev stack, seed the test user, then
+  `bun run eval:playbook-journey -- --model claude-sonnet-5-5` with
+  `ANTHROPIC_API_KEY` set.
+- `avt-verification.ts`: does the verification engine reach the verdict a
+  careful reviewer would? It runs the production readers, paragraph range,
+  claim extraction and grading against the anchor facts, with no database,
+  over labelled sets (`lib/avt-verification-set.ts`): a document, its facts,
+  and each claim's expected verdict, accepted alternatives, the facts it
+  should rest on and its qualifiers. `grade` mode grades the labelled claims
+  as a run grades them; `pipeline` mode extracts claims from the document and
+  scores the claim covering each label, so a claim extraction misses counts
+  as wrong. It reports accuracy, a confusion matrix over the six verdicts,
+  recall and precision per verdict, citation and record-conflict pair
+  correctness, the false "No coverage" rate, qualifiers, accuracy per tag,
+  cost (priced from each call's tokens with the production rates) and
+  latency. Labels marked uncertain are reported, never scored. `--models` is
+  required, `--max-usd` stops a run before its next call once reached, and
+  `--seed` fixes the claim order:
+  `bun run eval:avt-verification run evals/fixtures/avt-verification-sample.json --models anthropic::claude-sonnet-5-5 --mode both --max-usd 1 --out /absolute/path`.
+  `check` validates a set and locates every quote; `text` prints the text a
+  run reads, to copy quotes from. The sample set is synthetic; keep sets
+  built from real material, and every result, outside the repository.
 - `agent-orientation.ts`: given stella's MCP tool list or CLI skill, does a
   model pick the right tool or command and arguments for a natural-language
   task, scored without executing anything?
+
+## Explain citations through local harnesses
+
+`reader-explain-local.ts` covers ten public decision selections with cited and
+citing precedent. The recorded Schrems II fixture establishes the source
+paragraphs and the publisher paragraph numbers it cites in Schrems I. Actual
+corpus ids, AST paragraph ids, excerpts and citator edges must be captured from
+the admitted case-law reader before running these cases. No paragraph ids are
+inferred from publisher paragraph numbers. The Schrems I capture is not in the
+recorded seed; missing or ambiguous capture data fails before evaluation.
+
+Keep captures, prompts and results outside the repository. A capture contains
+`decisions: [{decisionId, ecli, paragraphs: [{paragraphId, publisherParagraph,
+text}]}]` and `edges: [{citingDecisionId, citedDecisionId}]`; use actual corpus
+reads for both. `paragraphId` is the reader’s stable `block.anchorId`, not the
+internal `block.id`; `publisherParagraph` is the court’s printed paragraph
+number and only locates the captured anchor. From `apps/api`:
+
+```sh
+bun run eval:reader-explain prompts /absolute/path/corpus-capture.json > /absolute/path/prompts.jsonl
+bun run eval:reader-explain score /absolute/path/corpus-capture.json /absolute/path/local-results.jsonl <tracePath-from-prompts>
+```
+
+Run each emitted prompt through a local coding-agent harness, making the
+emitted `fetch_related_decision_excerpts.command` available as a local shell
+operation. The `tool` mode replays at most eight captured related paragraphs;
+prompts include bounded context from the selected decision.
+Each prompt invocation creates a unique `runId` and an empty trace at the emitted
+`tracePath`; all prompts in that invocation share them. Record each result as
+JSONL with that `runId`, `caseId`, `harness` (a nonempty local run label), `answer`,
+`citations: [{decisionId, paragraphId}]`. The tool command appends its actual
+returned citations to a local trace; scoring reads this trace separately from
+model output and accepts only entries matching the result's run and case.
+The tool preserves each excerpt's cited or citing direction and prioritizes the
+case direction and expected paragraph before applying its bound.
+The runner never imports a provider or calls a model API; it emits local
+harness inputs and scores captured outputs. It requires exactly one result per
+case and rejects invented or unreturned citations. The content and the expected
+legal distinction are emitted together for separate review; citation success
+alone does not certify the explanation. These evaluations are operator runs,
+not CI model calls.
+
+## Generated-view selection through local harnesses
+
+`generated-views-local.ts` emits the production `show_visual` description and
+schema alongside English, Czech, Slovak, and Polish visualization requests,
+including the existing court/year treemap request. It never calls a provider.
+From `apps/api`:
+
+```sh
+bun run eval:generated-views prompts > /absolute/path/generated-view-prompts.jsonl
+bun run eval:generated-views score /absolute/path/local-results.jsonl
+```
+
+Give each emitted prompt to a local coding-agent harness and capture its actual
+choice as JSONL: `{caseId, harness, answer, toolCalls: [{name}]}`. Keep prompts
+and results outside the repository. The scorer requires each fixture exactly
+once, a `show_visual` call, and no fenced HTML answer. These are selection
+checks; they do not execute generated HTML or certify visual quality, citations,
+or treemap semantics. The scorer unit tests use explicitly synthetic records
+and prove scoring only. Production model selection and visual quality remain
+NOT COVERED until separately exercised against a live model.
+
+## Dictation cleanup through local harnesses
+
+`dictation-cleanup-local.ts` emits the production dictation cleanup
+instructions, the transcript message and the structured output schema for
+synthetic Czech, Slovak and English dictations: spoken punctuation, line and
+paragraph breaks, bold, a self-correction, a question that must stay a
+question, an instruction that must stay dictated text, one dictation written
+for an email and for a chat, and a window title and text before the cursor
+that must not reach the answer. It never calls a provider. From `apps/api`:
+
+```sh
+bun run eval:dictation-cleanup prompts > /absolute/path/dictation-prompts.jsonl
+bun run eval:dictation-cleanup score /absolute/path/local-results.jsonl
+```
+
+Give each emitted prompt to a local harness and record its answer as JSONL:
+`{caseId, harness, output}`, where `output` is the structured answer. The
+scorer runs each answer through the server's own acceptance (an answer that
+adds content is refused) and compares the rendered text with the case's
+expectation. The scorer unit tests use synthetic answers and prove scoring
+only; model quality stays NOT COVERED until exercised against a live model.
+
+## Recording cleanup
+
+`recording-cleanup.ts` sends the production recording cleanup prompt (one part
+of a recording's transcript in, Markdown and instructions out) to the models
+given with `--models` and prints each answer, what the server's acceptance
+check makes of it, and the sample's expected answer. It scores nothing; a
+person reads the output. The committed samples in
+`fixtures/recording-cleanup-samples.json` are synthetic. Real transcripts stay
+in a local file outside the repository, in the same shape, passed with
+`--samples`. From `apps/api`:
+
+```sh
+bun run eval:recording-cleanup -- --models claude-opus-5-5
+bun run eval:recording-cleanup -- --models claude-opus-5-5 --samples /absolute/path/private-samples.json --json /absolute/path/out.json
+```

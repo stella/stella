@@ -7,7 +7,7 @@ import {
 import type { CaseDecisionViewPayload } from "@/components/inspector/case-decision-view";
 import { registerInspectorView } from "@/components/inspector/view-registry";
 import type { InspectorViewRenderProps } from "@/components/inspector/view-registry";
-import { CaseDecisionRailIcon } from "@/features/case-law/components/case-decision-rail-icon";
+import { CaseDecisionRailIcon } from "@/features/case-law/components/case-decision-rail-icon-lazy";
 
 const LazyCaseDecisionInspectorView = lazy(async () => {
   const module =
@@ -19,7 +19,10 @@ const CaseDecisionView = (
   props: InspectorViewRenderProps<CaseDecisionViewPayload>,
 ) => (
   <Suspense fallback={<div className="bg-background flex-1" />}>
-    <LazyCaseDecisionInspectorView {...props} />
+    <LazyCaseDecisionInspectorView
+      key={`${props.tab.id}:${props.tab.payload.findSessionId ?? props.tab.payload.searchQuery ?? ""}`}
+      {...props}
+    />
   </Suspense>
 );
 
@@ -27,8 +30,8 @@ registerInspectorView<CaseDecisionViewPayload>({
   type: CASE_DECISION_VIEW,
   render: CaseDecisionView,
   railIcon: CaseDecisionRailIcon,
-  // The rail icon is the court's abbreviation, two or three capitals at chip
-  // size: the inactive fade would take them under the contrast floor.
+  // The rail icon is the case number in small type, like a statute's: the
+  // inactive fade would take it under the contrast floor.
   railIconInactive: "legible",
   validate: isCaseDecisionViewPayload,
   ariaLabel: (tab) => tab.label,

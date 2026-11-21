@@ -1,21 +1,29 @@
+import { slugify } from "@stll/text-normalize";
+
 // A skill is invoked in chat via /its-command; suggest the skill's name as that
 // command by default (lowercase, hyphenated) so the field reads as /skill-name.
-// Diacritics are decomposed and stripped first so a name like "Česká dovednost"
-// suggests "ceska-dovednost" rather than dropping the accented letters.
+// slugify transliterates, so "Česká dovednost" suggests "ceska-dovednost"
+// rather than dropping the accented letters. 49 characters is the API's
+// command limit.
+const COMMAND_MAX_LENGTH = 49;
+
 const slugifyCommand = (name: string): string =>
-  name
-    .normalize("NFD")
-    .replaceAll(/[\u0300-\u036f]/gu, "")
-    .toLowerCase()
-    .replaceAll(/[^a-z0-9]+/gu, "-")
-    .replace(/^-/u, "")
-    .replace(/-$/u, "");
+  slugify(name, {
+    charset: "ascii",
+    fallback: "",
+    maxLength: COMMAND_MAX_LENGTH,
+    separator: "-",
+  });
+
+/** Whether the assistant may pick the skill by itself or waits to be asked. */
+export type SkillInvocation = "auto" | "manual";
 
 type SkillMetadataSnapshot = {
   command: string | null;
   description: string;
   enabled: boolean;
   id: string;
+  invocation: SkillInvocation;
   name: string;
 };
 
@@ -24,6 +32,7 @@ export type SkillMetadataDraft = {
   command: string;
   description: string;
   enabled: boolean;
+  invocation: SkillInvocation;
   name: string;
 };
 
@@ -34,6 +43,7 @@ export const skillMetadataDraft = (
   command: snapshot.command ?? slugifyCommand(snapshot.name),
   description: snapshot.description,
   enabled: snapshot.enabled,
+  invocation: snapshot.invocation,
   name: snapshot.name,
 });
 
@@ -67,6 +77,10 @@ export const rebaseSkillMetadataDraft = ({
         ? incoming.description
         : draft.description,
     enabled: draft.enabled === shown.enabled ? incoming.enabled : draft.enabled,
+    invocation:
+      draft.invocation === shown.invocation
+        ? incoming.invocation
+        : draft.invocation,
     name: draft.name === shown.name ? incoming.name : draft.name,
   };
 };

@@ -4,11 +4,12 @@ import { useTranslations } from "use-intl";
 
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
-import { Loader2Icon, AiActionIcon } from "@stll/ui/icons";
+import { AiActionIcon } from "@stll/ui/icons";
+import { Loader } from "@stll/ui/loader";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { InlineEdit } from "@/components/inline-edit";
-import Tooltip from "@/components/tooltip";
 import { useRenameChatThread } from "@/features/chat/hooks/use-rename-chat-thread";
 import { useSuggestChatThreadTitle } from "@/features/chat/hooks/use-suggest-chat-thread-title";
 import { useChatRenameCommandStore } from "@/features/chat/lib/chat-rename-command-store";
@@ -36,7 +37,7 @@ type ChatTitleSuggestButtonProps = {
 
 /**
  * The magic-wand "suggest a title" trigger, shared by every rename surface
- * (rename editors, the inspector tab header, threads-sheet rows) so the
+ * (rename editors, the inspector tab header, chat history rows) so the
  * icon, pending spinner, and disabled explanations stay identical.
  */
 export const ChatTitleSuggestButton = ({
@@ -64,6 +65,7 @@ export const ChatTitleSuggestButton = ({
       aria-label={label}
       className={cn("shrink-0", className)}
       disabled={usedAnonymization || !hasMessages || isPending}
+      disabledReason={label}
       onClick={onTrigger}
       onMouseDown={(event) => {
         event.preventDefault();
@@ -74,7 +76,7 @@ export const ChatTitleSuggestButton = ({
       variant="muted"
     >
       {isPending ? (
-        <Loader2Icon aria-hidden="true" className="size-3.5 animate-spin" />
+        <Loader className="size-3.5" label={t("common.loading")} size="sm" />
       ) : (
         <AiActionIcon aria-hidden="true" className="size-3.5" />
       )}
@@ -114,15 +116,15 @@ type ChatTitleRenameProps = {
   ownsRenameCommand: boolean;
   /**
    * Surface-specific view-mode content. Defaults to the click-to-edit title
-   * button the breadcrumb established. The threads sheet substitutes its
+   * button the breadcrumb established. The chat history page substitutes its
    * navigation row and triggers editing from its own wand.
    */
   renderView?:
-    | ((view: ChatTitleRenameViewProps) => React.JSX.Element)
-    | undefined;
+    ((view: ChatTitleRenameViewProps) => React.JSX.Element) | undefined;
   inputClassName?: string | undefined;
   /** Class for the `InlineEdit` wrapper (e.g. to fill a list row). */
   editClassName?: string | undefined;
+  editDescription?: React.ReactNode;
 };
 
 /**
@@ -153,6 +155,7 @@ const ChatTitleRenameSession = ({
   renderView,
   inputClassName,
   editClassName,
+  editDescription,
 }: ChatTitleRenameProps) => {
   const t = useTranslations();
   const rename = useRenameChatThread(threadRef);
@@ -239,38 +242,48 @@ const ChatTitleRenameSession = ({
 
   if (inlineRename.state.mode === "edit") {
     return (
-      <InlineEdit
-        action={
-          <ChatTitleSuggestButton
-            hasMessages={hasMessages}
-            isPending={isSuggesting}
-            onTrigger={() => {
-              detached(
-                suggestIntoDraft(),
-                "chat-title-rename.suggest-into-draft",
-              );
-            }}
-            usedAnonymization={usedAnonymization}
-          />
-        }
-        className={editClassName}
-        inputClassName={inputClassName}
-        onCancel={() => {
-          sessionRef.current += 1;
-          draftRef.current = null;
-          inlineRename.cancel();
-        }}
-        onChange={(value) => {
-          draftRef.current = value;
-          inlineRename.setDraft(value);
-        }}
-        onCommit={() => {
-          sessionRef.current += 1;
-          draftRef.current = null;
-          detached(inlineRename.commit(), "chat-title-rename.commit");
-        }}
-        value={inlineRename.state.draft}
-      />
+      <span
+        className={cn(
+          "flex max-w-full min-w-0 flex-col",
+          editDescription !== undefined ? editClassName : "py-0.5",
+        )}
+      >
+        <InlineEdit
+          action={
+            <ChatTitleSuggestButton
+              hasMessages={hasMessages}
+              isPending={isSuggesting}
+              onTrigger={() => {
+                detached(
+                  suggestIntoDraft(),
+                  "chat-title-rename.suggest-into-draft",
+                );
+              }}
+              usedAnonymization={usedAnonymization}
+            />
+          }
+          className={cn(
+            editDescription !== undefined ? undefined : editClassName,
+          )}
+          inputClassName={inputClassName}
+          onCancel={() => {
+            sessionRef.current += 1;
+            draftRef.current = null;
+            inlineRename.cancel();
+          }}
+          onChange={(value) => {
+            draftRef.current = value;
+            inlineRename.setDraft(value);
+          }}
+          onCommit={() => {
+            sessionRef.current += 1;
+            draftRef.current = null;
+            detached(inlineRename.commit(), "chat-title-rename.commit");
+          }}
+          value={inlineRename.state.draft}
+        />
+        {editDescription}
+      </span>
     );
   }
 
@@ -287,19 +300,20 @@ const ChatTitleRenameSession = ({
   }
 
   return (
-    <Tooltip
-      content={t("chat.renameThread")}
-      render={
-        <button
-          className="hover:bg-accent hover:text-accent-foreground -mx-1 flex min-w-0 items-center rounded-sm px-1 py-0.5"
-          onClick={startEditing}
-          type="button"
+    <Button
+      className="group/plain -mx-1 flex min-w-6"
+      onClick={startEditing}
+      tooltip={t("chat.renameThread")}
+      variant="plain"
+    >
+      <span className="group-hover/plain:bg-accent group-hover/plain:text-accent-foreground flex min-w-0 items-center rounded-sm px-1 py-0.5">
+        <TruncatedText
+          className="whitespace-pre"
+          render={<BidiText as="span" />}
         >
-          <BidiText as="span" className="max-w-64 truncate">
-            {displayTitle}
-          </BidiText>
-        </button>
-      }
-    />
+          {displayTitle}
+        </TruncatedText>
+      </span>
+    </Button>
   );
 };

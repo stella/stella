@@ -1,27 +1,14 @@
-import {
-  lazy,
-  Suspense,
-  useCallback,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { lazy, Suspense, useCallback, useLayoutEffect, useRef } from "react";
 import type { ReactNode, RefObject } from "react";
 
 import { useQuery } from "@tanstack/react-query";
+import type { Plugin } from "@tiptap/pm/state";
 import { useTranslations } from "use-intl";
 
 import { resolveFindMatchRange } from "@stll/folio-core/prosemirror/findReplaceSelection";
 import type { DocxEditorRef } from "@stll/folio-react";
 import { Button } from "@stll/ui/button";
-import {
-  AlertTriangleIcon,
-  MonitorIcon,
-  MoonIcon,
-  PrinterIcon,
-  SunIcon,
-} from "@stll/ui/icons";
+import { AlertTriangleIcon } from "@stll/ui/icons";
 import {
   Menu,
   MenuPopup,
@@ -43,31 +30,45 @@ import {
 } from "@/components/docx-preview-zoom";
 import { useDocxBlockScroll } from "@/components/docx/use-docx-block-scroll";
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
+import { FilePreviewUnavailable } from "@/components/inspector/inspector-pdf-error-fallback";
+import {
+  PdfSignPlacementBar,
+  PdfSignPlacementLayer,
+} from "@/components/inspector/pdf-sign-placement-viewer";
 import { ZoomControls } from "@/components/inspector/zoom-controls";
 import type { ZoomDirection } from "@/components/inspector/zoom-controls";
+import { DocumentMarkPageLayer } from "@/components/pdf/annotations/document-marks-layer";
 import { PageAnonymization } from "@/components/pdf/page-anonymization";
 import { PageCitation } from "@/components/pdf/page-citation";
+import { PdfSelectionActions } from "@/components/pdf/pdf-selection-actions";
+import { PDF_SELECTION_CHAT } from "@/components/pdf/pdf-selection-toolbar";
+import {
+  PDF_COLOR_MODE_ICONS,
+  PdfColorModeIcon,
+} from "@/components/pdf/pdf-viewer.pending";
 import { resolvePendingPdfCitationPageId } from "@/components/pdf/peek/pdf-citation-navigation.logic";
 import {
   fetchPrintPdf,
   printPdfBuffer,
 } from "@/components/pdf/peek/peek-pdf-print";
 import { QuerySuspenseBoundary } from "@/components/query-suspense-boundary";
-import { StellaMark } from "@/components/stella-mark";
+import { DefaultPendingComponent } from "@/components/route-components";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { DOCX_MIME } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { findDocumentSearchResult } from "@/lib/document-search";
 import type { DocumentSearchResult } from "@/lib/document-search";
+import { isPreviewUnavailableError } from "@/lib/errors/api";
 import { fileOptions } from "@/lib/files/queries";
 import {
   PDF_COLOR_MODES,
-  resolvePDFInvertColors,
   type PDFColorMode,
+  resolvePDFInvertColors,
 } from "@/lib/pdf/pdf-color-mode";
 import { usePDFStore } from "@/lib/pdf/pdf-context";
 import { PDFPage } from "@/lib/pdf/pdf-page";
+import type { PDFPageSource } from "@/lib/pdf/pdf-page-source";
 import { PDFViewport } from "@/lib/pdf/pdf-viewport";
 import type { SearchMatchSummary } from "@/lib/search-match-navigation";
 import { MAX_SEARCH_PREVIEW_MATCHES } from "@/lib/search-match-navigation";
@@ -126,8 +127,7 @@ type PeekPdfViewerProps = {
   searchText?: SearchTextQuery | undefined;
   activeSearchMatchIndex?: number | undefined;
   onSearchMatchSummaryChange?:
-    | ((summary: SearchMatchSummary) => void)
-    | undefined;
+    ((summary: SearchMatchSummary) => void) | undefined;
   /** Called when navigating from peek to fullscreen PDF (e.g. inspector close). */
   onPeekNavigate?: (() => void) | undefined;
   docxPrintActionsRef?: RefObject<Map<string, () => void>> | undefined;
@@ -139,8 +139,23 @@ type PeekPdfViewerProps = {
    * page inside the panel so narrow previews never scroll horizontally.
    */
   docxFitMode?: "text-area" | "page" | undefined;
+  /**
+   * Host ProseMirror plugins for a DOCX, handed to Folio as they are. Folio
+   * keeps them across document replacement, so the array must keep its
+   * identity for as long as the viewer is mounted.
+   */
+  docxPlugins?: readonly Plugin[] | undefined;
+  /**
+   * Extra marks over each rendered PDF page, after the viewer's own
+   * overlays, positioned against the page box like any `PDFPage` overlay.
+   */
+  pdfPageOverlay?: ((pageId: string) => ReactNode) | undefined;
+  /** Which pages a PDF shows: its own, or the PDFs a portfolio attaches. */
+  pdfPageSource: PDFPageSource;
   errorFallback?: ((props: { reset: () => void }) => ReactNode) | undefined;
   onError?: ((error: Error) => void) | undefined;
+  /** Offered when the file has no preview; without it the state is text only. */
+  onDownload?: (() => void) | undefined;
   colorMode?: PDFColorMode | undefined;
 };
 
@@ -187,6 +202,10 @@ const PeekPdfViewerContent = ({
   onDocxScrollTopChange,
   onWheelZoom,
   docxFitMode = "text-area",
+  docxPlugins,
+  pdfPageOverlay,
+  pdfPageSource,
+  onDownload,
   colorMode = "system",
 }: PeekPdfViewerProps) => {
   const isImageOrigin = mimeType?.startsWith("image/") ?? false;
@@ -202,8 +221,8 @@ const PeekPdfViewerContent = ({
   );
   const file = fileQuery.data;
 
-  const renderPageOverlay = useCallback(
-    (pageId: string) => (
+  const renderPageOverlay = (pageId: string) => (
+    <>
       <PeekPageOverlays
         activePropertyId={activePropertyId}
         entityId={entityId}
@@ -213,11 +232,17 @@ const PeekPdfViewerContent = ({
         viewId={viewId}
         workspaceId={workspaceId}
       />
-    ),
-    [activePropertyId, entityId, fieldId, onPeekNavigate, viewId, workspaceId],
+      {pdfPageOverlay?.(pageId)}
+      {interactionMode === "preview-only" ? null : (
+        <PdfSignPlacementLayer pageId={pageId} />
+      )}
+    </>
   );
 
   if (fileQuery.isError) {
+    if (isPreviewUnavailableError(fileQuery.error)) {
+      return <FilePreviewUnavailable onDownload={onDownload} />;
+    }
     throw fileQuery.error;
   }
   if (!file) {
@@ -229,9 +254,11 @@ const PeekPdfViewerContent = ({
       <Suspense fallback={<PeekSuspenseFallback />}>
         <PeekDocxViewer
           buffer={file.buffer}
+          fileName={file.fileName}
           activeSearchMatchIndex={activeSearchMatchIndex}
           fieldId={fieldId}
           fitMode={docxFitMode}
+          plugins={docxPlugins}
           printActionsRef={docxPrintActionsRef}
           onScrollTopChange={onDocxScrollTopChange}
           onSearchMatchSummaryChange={onSearchMatchSummaryChange}
@@ -257,6 +284,7 @@ const PeekPdfViewerContent = ({
         className="document-preview-surface h-full"
         contentClassName="relative space-y-2 px-2 pt-2"
         fileId={fieldId}
+        pageSource={pdfPageSource}
         invertColors={resolvePDFInvertColors({
           colorMode,
           isImageOrigin,
@@ -282,7 +310,17 @@ const PeekPdfViewerContent = ({
       activeFile={{ entityId, fileFieldId: fieldId, fileName: file.fileName }}
       workspaceId={workspaceId}
     >
-      {viewport}
+      <PdfSignPlacementBar fieldId={fieldId} key={fieldId} />
+      <PdfSelectionActions
+        chat={PDF_SELECTION_CHAT.fileChat}
+        entityId={entityId}
+        file={file}
+        fileFieldId={fieldId}
+        fileName={file.fileName}
+        workspaceId={workspaceId}
+      >
+        {viewport}
+      </PdfSelectionActions>
     </FileViewerWithAI>
   );
 };
@@ -323,11 +361,7 @@ const defaultPeekViewerErrorFallback = ({ reset }: { reset: () => void }) => (
   <PeekViewerErrorFallback onRetry={reset} />
 );
 
-export const PeekSuspenseFallback = () => (
-  <div className="flex h-full w-full items-center justify-center">
-    <StellaMark className="text-muted-foreground size-8 animate-pulse" />
-  </div>
-);
+export const PeekSuspenseFallback = DefaultPendingComponent;
 
 const PeekViewerErrorFallback = ({ onRetry }: { onRetry: () => void }) => {
   const t = useTranslations();
@@ -344,12 +378,6 @@ const PeekViewerErrorFallback = ({ onRetry }: { onRetry: () => void }) => {
     </div>
   );
 };
-
-const PDF_COLOR_MODE_ICONS = {
-  light: SunIcon,
-  dark: MoonIcon,
-  system: MonitorIcon,
-} as const satisfies Record<PDFColorMode, typeof SunIcon>;
 
 type PeekPdfColorControl = {
   colorMode: PDFColorMode;
@@ -370,7 +398,6 @@ const PDFColorModeControl = ({
   onColorModeChange,
 }: PeekPdfColorControl) => {
   const t = useTranslations();
-  const PDFColorModeIcon = PDF_COLOR_MODE_ICONS[colorMode];
 
   return (
     <Menu>
@@ -379,7 +406,7 @@ const PDFColorModeControl = ({
         render={<Button size="icon-xs" variant="ghost" />}
         title={t("workspaces.pdf.adjustForDarkMode")}
       >
-        <PDFColorModeIcon className="size-3.5" />
+        <PdfColorModeIcon colorMode={colorMode} />
       </MenuTrigger>
       <MenuPopup className="w-auto" align="end">
         <MenuRadioGroup className="flex" value={colorMode}>
@@ -431,130 +458,17 @@ export const PeekPdfControls = ({
   </>
 );
 
-export const PeekPrintButton = () => {
-  const t = useTranslations();
-  const analytics = useAnalytics();
-  const pdfDocument = usePDFStore((s) => s.document);
-  const [isPrinting, setIsPrinting] = useState(false);
-  const abortControllerRef = useRef<AbortController | null>(null);
-
-  useMountEffect(() => () => {
-    abortControllerRef.current?.abort();
-  });
-
-  const handlePrint = useCallback(async () => {
-    if (!pdfDocument) {
-      return;
-    }
-
-    abortControllerRef.current?.abort();
-    const controller = new AbortController();
-    abortControllerRef.current = controller;
-
-    setIsPrinting(true);
-    try {
-      const data = await pdfDocument.document.getData();
-      if (controller.signal.aborted) {
-        return;
-      }
-      printPdfBuffer(data.slice().buffer);
-    } catch (error: unknown) {
-      if (controller.signal.aborted) {
-        return;
-      }
-      analytics.captureError(error);
-    } finally {
-      if (!controller.signal.aborted) {
-        setIsPrinting(false);
-      }
-    }
-  }, [analytics, pdfDocument]);
-
-  return (
-    <Button
-      disabled={!pdfDocument || isPrinting}
-      onClick={() => {
-        detached(handlePrint(), "peek-pdf-viewer.print");
-      }}
-      size="icon-xs"
-      tooltip={t("common.print")}
-      variant="ghost"
-    >
-      <PrinterIcon className="size-3.5" />
-    </Button>
-  );
-};
-
-export const PreparedPdfPrintButton = ({
-  disabled = false,
-  fieldId,
-  workspaceId,
-}: {
-  disabled?: boolean | undefined;
-  fieldId: string;
-  workspaceId: string;
-}) => {
-  const t = useTranslations();
-  const analytics = useAnalytics();
-  const [isPrinting, setIsPrinting] = useState(false);
-  const abortControllerRef = useRef<AbortController | null>(null);
-
-  useMountEffect(() => () => {
-    abortControllerRef.current?.abort();
-  });
-
-  const handlePrint = useCallback(async () => {
-    abortControllerRef.current?.abort();
-    const controller = new AbortController();
-    abortControllerRef.current = controller;
-
-    setIsPrinting(true);
-    try {
-      const data = await fetchPrintPdf({
-        workspaceId,
-        fieldId,
-        signal: controller.signal,
-      });
-      if (controller.signal.aborted) {
-        return;
-      }
-      printPdfBuffer(data);
-    } catch (error: unknown) {
-      if (controller.signal.aborted) {
-        return;
-      }
-      analytics.captureError(error);
-    } finally {
-      if (!controller.signal.aborted) {
-        setIsPrinting(false);
-      }
-    }
-  }, [analytics, fieldId, workspaceId]);
-
-  return (
-    <Button
-      disabled={disabled || isPrinting || fieldId.length === 0}
-      onClick={() => {
-        detached(handlePrint(), "peek-pdf-viewer.print");
-      }}
-      size="icon-xs"
-      tooltip={t("common.print")}
-      variant="ghost"
-    >
-      <PrinterIcon className="size-3.5" />
-    </Button>
-  );
-};
-
 // ── DOCX peek viewer with zoom wiring ──────────────────
 
 const PeekDocxViewer = ({
   activeSearchMatchIndex,
   buffer,
   fieldId,
+  fileName,
   fitMode,
   onScrollTopChange,
   onSearchMatchSummaryChange,
+  plugins,
   printActionsRef,
   scaleOffset,
   searchText,
@@ -563,11 +477,12 @@ const PeekDocxViewer = ({
   activeSearchMatchIndex: number;
   buffer: ArrayBuffer;
   fieldId: string;
+  fileName: string;
   fitMode: "text-area" | "page";
+  plugins: readonly Plugin[] | undefined;
   onScrollTopChange?: ((scrollTop: number) => void) | undefined;
   onSearchMatchSummaryChange?:
-    | ((summary: SearchMatchSummary) => void)
-    | undefined;
+    ((summary: SearchMatchSummary) => void) | undefined;
   printActionsRef?: RefObject<Map<string, () => void>> | undefined;
   scaleOffset: number;
   searchText: SearchTextQuery | undefined;
@@ -579,22 +494,20 @@ const PeekDocxViewer = ({
   const searchHighlightFrameRef = useRef<number | null>(null);
   const searchResultCacheRef = useRef<DocxSearchResultCache | null>(null);
   const { containerRef: fitZoomRef, fitZoom: targetZoom } = useDocxFitZoom({
+    fit:
+      fitMode === "page"
+        ? { type: "width", fitWidth: DOCX_PAGE_FIT_WIDTH, maxAutoZoom: 1 }
+        : { type: "width" },
     scaleOffset,
-    ...(fitMode === "page" && {
-      fitWidth: DOCX_PAGE_FIT_WIDTH,
-      maxAutoZoom: 1,
-    }),
   });
   // Stable ref callback so React doesn't detach/re-attach the fit-zoom
   // ResizeObserver every render.
-  const composedContainerRef = useMemo(
-    () => composeRefs(containerRef, fitZoomRef),
-    [fitZoomRef],
-  );
+  const composedContainerRef = composeRefs(containerRef, fitZoomRef);
   useDocxBlockScroll({ editorRef, fieldId });
   const searchTextKey =
     searchText === undefined ? undefined : searchTextQueryKey(searchText);
 
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- react/exhaustive-deps cannot see compiler memoization, and this value is an effect dependency
   const highlightSearchResult = useCallback(() => {
     if (searchText === undefined) {
       return true;
@@ -657,6 +570,7 @@ const PeekDocxViewer = ({
     searchTextKey,
   ]);
 
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- react/exhaustive-deps cannot see compiler memoization, and this value is an effect dependency
   const scheduleSearchHighlight = useCallback(() => {
     if (searchHighlightFrameRef.current !== null) {
       cancelAnimationFrame(searchHighlightFrameRef.current);
@@ -680,15 +594,20 @@ const PeekDocxViewer = ({
     scheduleSearchHighlight();
   }, [scheduleSearchHighlight]);
 
-  const handleDocumentReady = useCallback(() => {
+  const handleDocumentReady = () => {
     searchResultCacheRef.current = null;
+    // Folio paints a read-only document before it builds the editor view, and
+    // host plugins only see the document through that view.
+    if (plugins !== undefined) {
+      editorRef.current?.ensureEditorView({ focus: false });
+    }
     scheduleSearchHighlight();
-  }, [scheduleSearchHighlight]);
+  };
 
-  const handleEditorViewReady = useCallback(() => {
+  const handleEditorViewReady = () => {
     searchResultCacheRef.current = null;
     scheduleSearchHighlight();
-  }, [scheduleSearchHighlight]);
+  };
 
   // Sync scaleOffset from inspector +/- buttons to Folio zoom
   useLayoutEffect(() => {
@@ -707,7 +626,13 @@ const PeekDocxViewer = ({
         fetchPrintPdf({ workspaceId, fieldId })
           .then(printPdfBuffer)
           .catch((error: unknown) => {
-            analytics.captureError(error);
+            analytics.captureError(error, {
+              fingerprintKey: "PeekDocxViewer.print:failure",
+              scope: {
+                type: "handler",
+                handlerId: "PeekDocxViewer.print:failure",
+              },
+            });
           }),
         "peek-pdf-viewer.fetch-print-pdf",
       );
@@ -725,6 +650,7 @@ const PeekDocxViewer = ({
     <div ref={composedContainerRef} className="h-full overflow-auto">
       <DocxEditor
         ref={editorRef}
+        accessibleName={fileName}
         autoOpenReviewSidebar={false}
         className="folio-docx-preview folio-peek h-full"
         documentBuffer={buffer}
@@ -732,6 +658,7 @@ const PeekDocxViewer = ({
         loadingIndicator={null}
         onCompatibilityChange={handleDocumentReady}
         onEditorViewReady={handleEditorViewReady}
+        plugins={plugins}
         readOnly
         showToolbar={false}
         showZoomControl={false}
@@ -791,6 +718,7 @@ const PeekPageOverlays = ({
         pageNumber={page.proxy.pageNumber}
         scale={page.viewport.scale}
       />
+      <DocumentMarkPageLayer pageId={pageId} />
     </>
   );
 };

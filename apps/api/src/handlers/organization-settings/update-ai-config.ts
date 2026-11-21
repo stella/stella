@@ -1,16 +1,21 @@
 import { panic, Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
-import { TANSTACK_AI_PROVIDERS } from "@stll/ai-catalog";
+import {
+  MODEL_OVERRIDE_GROUP_TASK,
+  MODEL_OVERRIDE_GROUPS,
+  TANSTACK_AI_PROVIDERS,
+} from "@stll/ai-catalog";
+import type { BYOKProvider, ModelOverrideGroup } from "@stll/ai-catalog";
 
 import { organizationSettings } from "@/api/db/schema";
 import {
-  DECISION_MODEL_PROVIDERS,
-  supportsRegion,
   type DataRegion,
+  type DecisionModelProvider,
   type OrgAIConfig,
   type OrgAIModelSelection,
   type OrgAIProviderConfig,
+  supportsRegion,
 } from "@/api/lib/ai-config";
 import {
   decryptAIConfig,
@@ -18,60 +23,94 @@ import {
   maskApiKey,
 } from "@/api/lib/ai-config-crypto";
 import {
+  decisionModelResponse,
   providerResponseExtras,
   providerResponseRegion,
   storedAIConfigUnreadableError,
 } from "@/api/lib/ai-config-response";
 import { probeProvider } from "@/api/lib/ai-provider-probe";
 import type { ProviderProbeResult } from "@/api/lib/ai-provider-probe";
-import { captureError } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
+import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { createSafeId } from "@/api/lib/branded-types";
+import { OPTIONAL_ANTHROPIC_WORKSPACE_ID_PATTERN } from "@/api/lib/chat/anthropic-config";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { isAllowedBYOKModelForRole } from "@/api/lib/tanstack-ai-models";
-import type { BYOKProvider, ModelRole } from "@/api/lib/tanstack-ai-models";
+import { isAllowedBYOKModelForTask } from "@/api/lib/tanstack-ai-models";
 import { probeDecisionModel } from "@/api/lib/workflow/decisions/decision-model";
 
 import { resolveDecisionConfig } from "./ai-config-decision";
+import { resolveAIConfigDefaults } from "./ai-config-defaults";
 
 const BYOK_PROVIDER_VALUES = TANSTACK_AI_PROVIDERS;
 
-const providerBody = t.Object({
-  provider: t.UnionEnum(BYOK_PROVIDER_VALUES),
-  apiKey: t.Optional(t.String({ minLength: 1 })),
-  region: t.Optional(
-    t.Union([t.Literal("global"), t.Literal("eu"), t.Literal("ch")]),
+const providerBody = v.object({
+  provider: v.picklist(BYOK_PROVIDER_VALUES),
+  apiKey: v.optional(v.pipe(v.string(), v.minLength(1))),
+  anthropicWorkspaceId: v.optional(
+    v.pipe(
+      v.string(),
+      v.maxLength(256),
+      v.regex(new RegExp(OPTIONAL_ANTHROPIC_WORKSPACE_ID_PATTERN, "u")),
+    ),
   ),
+  region: v.optional(v.picklist(["global", "eu", "ch"])),
 });
 
-const modelSelectionBody = t.Object({
-  provider: t.UnionEnum(BYOK_PROVIDER_VALUES),
-  modelId: t.String({ minLength: 1, maxLength: 256 }),
+const modelSelectionBody = v.object({
+  provider: v.picklist(BYOK_PROVIDER_VALUES),
+  modelId: v.pipe(v.string(), v.minLength(1), v.maxLength(256)),
 });
 
 // Absent keeps the stored decision model, null clears it, an object sets it.
-const decisionBody = t.Object({
-  provider: t.UnionEnum(DECISION_MODEL_PROVIDERS),
-  apiKey: t.Optional(t.String({ minLength: 1 })),
-  modelId: t.String({ minLength: 1, maxLength: 256 }),
-});
-
-const updateAIConfigBody = t.Object({
-  providers: t.Array(providerBody, { minItems: 1 }),
-  overrideModels: t.Object({
-    fast: modelSelectionBody,
-    chat: modelSelectionBody,
-    reasoning: modelSelectionBody,
-    pdf: modelSelectionBody,
+const decisionBodyByProvider = {
+  typesafe: v.object({
+    provider: v.literal("typesafe"),
+    apiKey: v.optional(v.pipe(v.string(), v.minLength(1))),
+    modelId: v.pipe(v.string(), v.minLength(1), v.maxLength(256)),
   }),
-  decision: t.Optional(t.Nullable(decisionBody)),
+  openai: v.object({
+    provider: v.literal("openai"),
+    apiKey: v.optional(v.nullable(v.pipe(v.string(), v.minLength(1)))),
+    region: v.optional(v.picklist(["eu", "global"])),
+    modelId: v.pipe(v.string(), v.minLength(1), v.maxLength(256)),
+  }),
+} satisfies Record<DecisionModelProvider, unknown>;
+const decisionBody = v.union([
+  decisionBodyByProvider.typesafe,
+  decisionBodyByProvider.openai,
+]);
+
+// One entry per role, checked against the role list: an object schema drops
+// keys it does not list, so a role missing here was discarded on save.
+const overrideModelsBodyEntries = {
+  fast: v.optional(modelSelectionBody),
+  chat: v.optional(modelSelectionBody),
+  reasoning: v.optional(modelSelectionBody),
+  pdf: v.optional(modelSelectionBody),
+  browse: v.optional(modelSelectionBody),
+} satisfies Record<
+  ModelOverrideGroup,
+  v.OptionalSchema<typeof modelSelectionBody, undefined>
+>;
+
+const updateAIConfigBody = v.object({
+  providers: v.pipe(v.array(providerBody), v.minLength(1)),
+  overrideModels: v.optional(v.nullable(v.object(overrideModelsBodyEntries))),
+  decision: v.optional(v.nullable(decisionBody)),
 });
 
-const config = {
+export const updateAIConfigConfig = {
+  contract: "replace",
+  precondition: {
+    type: "deferred",
+    baselineId:
+      "apps/api/src/handlers/organization-settings/update-ai-config.ts",
+  },
   permissions: { organizationSettings: ["update"] },
-  accountAccess: ACCOUNT_ACCESS.standard,
+  accountAccess: ACCOUNT_ACCESS.accountControl,
   mcp: { type: "internal", reason: "provider_secret" },
   body: updateAIConfigBody,
 } satisfies HandlerConfig;
@@ -91,7 +130,7 @@ const AI_CONFIG_ERROR_CODE = {
  * encrypts the config, and stores it.
  */
 const updateAIConfig = createSafeRootHandler(
-  config,
+  updateAIConfigConfig,
   async function* ({ safeDb, session, body, recordAuditEvent }) {
     let existingConfig: OrgAIConfig | undefined;
     const row = yield* Result.await(
@@ -112,18 +151,17 @@ const updateAIConfig = createSafeRootHandler(
 
     const ciphertext = row?.aiConfigEncrypted;
     const iv = row?.aiConfigIv;
-    if (ciphertext && iv) {
-      const decryptResult = await Result.tryPromise({
-        try: async () =>
-          await decryptAIConfig(session.activeOrganizationId, ciphertext, iv),
-        catch: (error: unknown) => error,
-      });
+    if (ciphertext || iv) {
+      const decryptResult = await decryptAIConfig(
+        session.activeOrganizationId,
+        ciphertext,
+        iv,
+      );
 
       if (decryptResult.isErr()) {
-        captureError(decryptResult.error);
         // The stored config is the merge base for a partial update, so an
         // unreadable one cannot be treated as "no providers configured".
-        return Result.err(storedAIConfigUnreadableError(decryptResult.error));
+        return Result.err(storedAIConfigUnreadableError());
       }
       existingConfig = decryptResult.value;
     }
@@ -145,6 +183,7 @@ const updateAIConfig = createSafeRootHandler(
     const modelResult = normalizeOverrideModels(
       body.overrideModels,
       providerResult.providers,
+      existingConfig?.overrideModels ?? null,
     );
     if (!modelResult.valid) {
       return Result.err(
@@ -156,10 +195,12 @@ const updateAIConfig = createSafeRootHandler(
       );
     }
 
-    const decisionResult = resolveDecisionConfig(
-      body.decision,
-      existingConfig?.decision,
-    );
+    const decisionResult = resolveDecisionConfig({
+      input: body.decision,
+      existing: existingConfig?.decision,
+      providers: providerResult.providers,
+      existingProviders: existingConfig ? existingConfig.providers : [],
+    });
     if (!decisionResult.valid) {
       return Result.err(
         new HandlerError({
@@ -170,12 +211,7 @@ const updateAIConfig = createSafeRootHandler(
       );
     }
 
-    const newKeyProviders = new Set<BYOKProvider>();
-    for (const provider of body.providers) {
-      if (provider.apiKey) {
-        newKeyProviders.add(provider.provider);
-      }
-    }
+    const newKeyProviders = changedProviderKeys(body.providers, existingConfig);
 
     const providersToValidate = providerResult.providers.filter(
       (providerConfig) =>
@@ -187,7 +223,11 @@ const updateAIConfig = createSafeRootHandler(
 
     const validationResults = await Promise.all(
       providersToValidate.map(
-        async (providerConfig) => await validateProviderKey(providerConfig),
+        async (providerConfig) =>
+          await validateProviderKey(
+            providerConfig,
+            grantThirdPartyOutboundPermit(),
+          ),
       ),
     );
 
@@ -201,10 +241,17 @@ const updateAIConfig = createSafeRootHandler(
       return [`${providerConfig.provider}: ${result.error}`];
     });
 
+    const failedResults = validationResults.filter((result) => !result.valid);
+    const firstErrorCode = failedResults.at(0)?.code;
+    const setupErrorCode = failedResults.every(
+      (result) => result.code === firstErrorCode,
+    )
+      ? firstErrorCode
+      : undefined;
     if (failures.length > 0) {
       return Result.err(
         new HandlerError({
-          code: AI_CONFIG_ERROR_CODE.providerValidationFailed,
+          code: setupErrorCode ?? AI_CONFIG_ERROR_CODE.providerValidationFailed,
           status: 400,
           message: failures.join("; "),
         }),
@@ -213,10 +260,10 @@ const updateAIConfig = createSafeRootHandler(
 
     const decision = decisionResult.decision;
     if (decision !== null && decisionResult.needsProbe) {
-      const probe = await probeDecisionModel(
-        decision,
-        SETTINGS_PROBE_TIMEOUT_MS,
-      );
+      const probe = await probeDecisionModel({
+        config: decisionResult.probeConfig,
+        timeoutMs: SETTINGS_PROBE_TIMEOUT_MS,
+      });
       if (!probe.valid) {
         return Result.err(
           new HandlerError({
@@ -280,15 +327,11 @@ const updateAIConfig = createSafeRootHandler(
         region: providerResponseRegion(providerConfig),
         ...providerResponseExtras(providerConfig),
       })),
+      ...resolveAIConfigDefaults(
+        orgConfig.providers.map(({ provider }) => provider),
+      ),
       overrideModels: orgConfig.overrideModels,
-      decision:
-        orgConfig.decision === null
-          ? null
-          : {
-              provider: orgConfig.decision.provider,
-              apiKeyMasked: maskApiKey(orgConfig.decision.apiKey),
-              modelId: orgConfig.decision.modelId,
-            },
+      decision: decisionModelResponse(orgConfig.decision),
     });
   },
 );
@@ -298,7 +341,32 @@ type ValidationResult = ProviderProbeResult;
 type ProviderConfigInput = {
   provider: BYOKProvider;
   apiKey?: string | undefined;
+  anthropicWorkspaceId?: string | undefined;
   region?: DataRegion | undefined;
+};
+
+const changedProviderKeys = (
+  providers: readonly ProviderConfigInput[],
+  existingConfig: OrgAIConfig | undefined,
+) => {
+  const newKeyProviders = new Set<BYOKProvider>();
+  for (const provider of providers) {
+    const existingProvider = existingConfig?.providers.find(
+      (candidate) => candidate.provider === provider.provider,
+    );
+    const existingAnthropicWorkspaceId =
+      existingProvider?.provider === "anthropic"
+        ? existingProvider.anthropicWorkspaceId
+        : undefined;
+    const workspaceIdChanged =
+      provider.anthropicWorkspaceId !== undefined &&
+      (provider.anthropicWorkspaceId.trim() || undefined) !==
+        existingAnthropicWorkspaceId;
+    if (provider.apiKey || workspaceIdChanged) {
+      newKeyProviders.add(provider.provider);
+    }
+  }
+  return newKeyProviders;
 };
 
 type TanStackBYOKProviderConfig = OrgAIProviderConfig & {
@@ -364,6 +432,32 @@ const resolveProviderConfigs = (
       };
     }
 
+    if (providerInput.provider === "anthropic") {
+      const existingAnthropicWorkspaceId =
+        existingProvider?.provider === "anthropic"
+          ? existingProvider.anthropicWorkspaceId
+          : undefined;
+      let anthropicWorkspaceId = providerInput.apiKey
+        ? undefined
+        : existingAnthropicWorkspaceId;
+      if (providerInput.anthropicWorkspaceId !== undefined) {
+        anthropicWorkspaceId =
+          providerInput.anthropicWorkspaceId.trim() || undefined;
+      }
+      resolvedProviders.push({
+        provider: "anthropic",
+        apiKey,
+        region,
+        anthropicWorkspaceId,
+      });
+      continue;
+    }
+    if (providerInput.anthropicWorkspaceId !== undefined) {
+      return {
+        valid: false,
+        error: "Workspace ID is supported only for Anthropic",
+      };
+    }
     resolvedProviders.push({
       provider: providerInput.provider,
       apiKey,
@@ -379,20 +473,21 @@ type OverrideModelSelectionInput = {
   modelId: string;
 };
 
-type OverrideModelsInput = Record<ModelRole, OverrideModelSelectionInput>;
+type OverrideModelsInput = Partial<
+  Record<ModelOverrideGroup, OverrideModelSelectionInput | undefined>
+>;
 
 type OverrideModelsResult =
-  | { valid: true; overrideModels: Record<ModelRole, OrgAIModelSelection> }
+  | { valid: true; overrideModels: OrgAIConfig["overrideModels"] }
   | { valid: false; error: string };
 
 const normalizeRoleSelection = (
-  role: ModelRole,
-  overrideModels: OverrideModelsInput,
+  role: ModelOverrideGroup,
+  selection: OverrideModelSelectionInput,
   configuredProviders: ReadonlySet<BYOKProvider>,
 ):
   | { valid: true; selection: OrgAIModelSelection }
   | { valid: false; error: string } => {
-  const selection = overrideModels[role];
   const modelId = selection.modelId.trim();
 
   if (!modelId) {
@@ -407,10 +502,10 @@ const normalizeRoleSelection = (
   }
 
   if (
-    !isAllowedBYOKModelForRole({
+    !isAllowedBYOKModelForTask({
       provider: selection.provider,
       modelId,
-      role,
+      task: MODEL_OVERRIDE_GROUP_TASK[role],
     })
   ) {
     return {
@@ -428,54 +523,51 @@ const normalizeRoleSelection = (
 };
 
 const normalizeOverrideModels = (
-  overrideModels: OverrideModelsInput,
+  overrideModels: OverrideModelsInput | null | undefined,
   providers: readonly TanStackBYOKProviderConfig[],
+  existing: OrgAIConfig["overrideModels"],
 ): OverrideModelsResult => {
   const configuredProviders = new Set(
-    providers.map((providerConfig) => providerConfig.provider),
+    providers.map(({ provider }) => provider),
   );
-
-  const chat = normalizeRoleSelection(
-    "chat",
-    overrideModels,
-    configuredProviders,
-  );
-  if (!chat.valid) {
-    return chat;
+  const selections = overrideModels === undefined ? existing : overrideModels;
+  if (selections === null) {
+    return { valid: true, overrideModels: null };
   }
-  const fast = normalizeRoleSelection(
-    "fast",
-    overrideModels,
-    configuredProviders,
-  );
-  if (!fast.valid) {
-    return fast;
+  const selectionsByRole: [ModelOverrideGroup, OrgAIModelSelection][] = [];
+  for (const role of MODEL_OVERRIDE_GROUPS) {
+    const selection = selections[role];
+    if (selection === undefined) {
+      continue;
+    }
+    const provider = TANSTACK_AI_PROVIDERS.find(
+      (candidate) => candidate === selection.provider,
+    );
+    if (provider === undefined || !configuredProviders.has(provider)) {
+      if (overrideModels === undefined) {
+        continue;
+      }
+      return {
+        valid: false,
+        error: `Model selection for ${role} uses an unconfigured provider`,
+      };
+    }
+    const result = normalizeRoleSelection(
+      role,
+      { provider, modelId: selection.modelId },
+      configuredProviders,
+    );
+    if (!result.valid) {
+      return result;
+    }
+    selectionsByRole.push([role, result.selection]);
   }
-  const reasoning = normalizeRoleSelection(
-    "reasoning",
-    overrideModels,
-    configuredProviders,
-  );
-  if (!reasoning.valid) {
-    return reasoning;
-  }
-  const pdf = normalizeRoleSelection(
-    "pdf",
-    overrideModels,
-    configuredProviders,
-  );
-  if (!pdf.valid) {
-    return pdf;
-  }
-
   return {
     valid: true,
-    overrideModels: {
-      chat: chat.selection,
-      fast: fast.selection,
-      reasoning: reasoning.selection,
-      pdf: pdf.selection,
-    },
+    overrideModels:
+      selectionsByRole.length === 0
+        ? null
+        : Object.fromEntries(selectionsByRole),
   };
 };
 
@@ -507,10 +599,18 @@ const SETTINGS_PROBE_TIMEOUT_MS = 20_000;
  */
 const validateProviderKey = async (
   providerConfig: TanStackBYOKProviderConfig,
+  permit: ThirdPartyOutboundPermit,
 ): Promise<ValidationResult> => {
   const result = await Result.tryPromise({
     try: async () =>
-      await probeProvider(providerConfig.provider, providerConfig.apiKey, {
+      await probeProvider({
+        apiKey: providerConfig.apiKey,
+        anthropicWorkspaceId:
+          providerConfig.provider === "anthropic"
+            ? providerConfig.anthropicWorkspaceId
+            : undefined,
+        permit,
+        provider: providerConfig.provider,
         timeoutMs: SETTINGS_PROBE_TIMEOUT_MS,
       }),
     catch: (error: unknown) =>

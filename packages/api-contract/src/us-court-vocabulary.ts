@@ -219,6 +219,8 @@ export type UsAcceptedCourtRow = {
    * source name. Unique across the directory regardless of case.
    */
   readonly canonicalName: string;
+  /** Publisher short name, or the established abbreviation for a cited court. */
+  readonly shortCode: string;
   /** The source's jurisdiction code, even where an override replaced it. */
   readonly rawJurisdiction: string;
   readonly classification: UsCourtClassification;
@@ -290,6 +292,7 @@ export const US_ACCEPTED_COURT_FIELDS = everyRowField<UsAcceptedCourtRow>()([
   "id",
   "sourceName",
   "canonicalName",
+  "shortCode",
   "rawJurisdiction",
   "classification",
   "system",

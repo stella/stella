@@ -1,12 +1,20 @@
 import { panic } from "better-result";
 
+import { AI_FAILURE_CODES } from "@stll/api-contract";
+
 import { normalizeProviderRegion } from "@/api/lib/ai-config";
-import type { DataRegion, OrgAIProviderConfig } from "@/api/lib/ai-config";
+import type {
+  DataRegion,
+  OrgAIProviderConfig,
+  OrgDecisionModelConfig,
+} from "@/api/lib/ai-config";
+import { maskApiKey } from "@/api/lib/ai-config-crypto";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import type { OrgAIConfigStatus } from "@/api/lib/ai-config-loader-core";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 export type ProviderResponseExtras = {
+  anthropicWorkspaceId?: string;
   endpoint?: string;
   apiVersion?: string;
 };
@@ -20,16 +28,16 @@ export const AI_CONFIG_UNREADABLE_ERROR_CODE = "ai_config_stored_unreadable";
  * look like "nothing configured" and prompts for re-entry, and merging an
  * update onto an empty base would drop the providers the request body omits.
  */
-export const storedAIConfigUnreadableError = (cause: unknown) =>
+export const storedAIConfigUnreadableError = () =>
   new HandlerError({
     code: AI_CONFIG_UNREADABLE_ERROR_CODE,
     status: 503,
     message: "Stored AI configuration could not be read",
-    cause,
   });
 
 export const ownAIKeyRequiredError = () =>
   new HandlerError({
+    code: AI_FAILURE_CODES.own_key_required,
     status: 403,
     message:
       "AI is not available for this organization without its own key. " +
@@ -73,7 +81,7 @@ export const orgAIConfigStatusError = (
     case ORG_AI_CONFIG_STATUS.ok:
       return null;
     case ORG_AI_CONFIG_STATUS.unreadable:
-      return storedAIConfigUnreadableError(undefined);
+      return storedAIConfigUnreadableError();
     case ORG_AI_CONFIG_STATUS.ownKeyRequired:
       return ownAIKeyRequiredError();
     case ORG_AI_CONFIG_STATUS.memberAssignmentRequired:
@@ -123,15 +131,48 @@ export const providerResponseExtras = (
       };
     case "huggingface":
       return { endpoint: providerConfig.baseURL };
+    case "anthropic":
+      return providerConfig.anthropicWorkspaceId === undefined
+        ? {}
+        : { anthropicWorkspaceId: providerConfig.anthropicWorkspaceId };
     case "google":
     case "openrouter":
     case "openai":
-    case "anthropic":
     case "bedrock":
     case "mistral":
     case "openai_compatible":
       return {};
     default:
       return panic("Unsupported AI provider configuration");
+  }
+};
+
+/** The shared read/save projection preserves each provider's configuration. */
+export const decisionModelResponse = (
+  decision: OrgDecisionModelConfig | null,
+) => {
+  if (decision === null) {
+    return null;
+  }
+  switch (decision.provider) {
+    case "typesafe":
+      return {
+        provider: decision.provider,
+        apiKeyMasked: maskApiKey(decision.apiKey),
+        modelId: decision.modelId,
+      };
+    case "openai":
+      return {
+        provider: decision.provider,
+        apiKeyMasked:
+          decision.apiKey === undefined
+            ? undefined
+            : maskApiKey(decision.apiKey),
+        region: decision.region,
+        modelId: decision.modelId,
+      };
+    default:
+      decision satisfies never;
+      return panic("Unhandled decision response provider");
   }
 };

@@ -261,6 +261,11 @@ for (const groupSize of [2, 3]) {
           "rehearse-exact-base-upgrade.sh",
         );
         writeFileSync(fixtureScript, readFileSync(script));
+        // The base install runs through the repository retry helper.
+        writeFileSync(
+          path.join(scripts, "retry.sh"),
+          readFileSync(path.join(import.meta.dir, "retry.sh")),
+        );
         for (const { name, contents } of [
           { name: "git", contents: fakeGit },
           { name: "bun", contents: fakeBun },

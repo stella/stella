@@ -1,7 +1,6 @@
 import { lazy, Suspense } from "react";
 
-import { ScrollTextIcon } from "@stll/ui/icons";
-import { cn } from "@stll/ui/utils";
+import { DocumentIdentityBadge } from "@stll/ui/document-identity-badge";
 
 import { registerInspectorView } from "@/components/inspector/view-registry";
 import type {
@@ -13,6 +12,7 @@ import {
   STATUTE_VIEW,
 } from "@/features/statutes/statute-inspector.logic";
 import type { StatuteViewPayload } from "@/features/statutes/statute-inspector.logic";
+import { statuteDocumentIdentity } from "@/lib/legal/statute-act-number";
 
 // The reader registers the kind on load so a tab can be opened (and a synced
 // tab recognised) immediately, while the view itself pulls the whole statute
@@ -24,14 +24,17 @@ const LazyStatuteInspectorView = lazy(async () => {
 });
 
 const StatuteRailIcon = ({
-  active,
+  tab,
 }: InspectorRailIconProps<StatuteViewPayload>) => (
-  <ScrollTextIcon className={cn("size-3.5", !active && "opacity-70")} />
+  <DocumentIdentityBadge identity={statuteDocumentIdentity(tab.payload.eli)} />
 );
 
 const StatuteView = (props: InspectorViewRenderProps<StatuteViewPayload>) => (
   <Suspense fallback={<div className="bg-background flex-1" />}>
-    <LazyStatuteInspectorView {...props} />
+    <LazyStatuteInspectorView
+      {...props}
+      key={`${props.tab.id}:${props.tab.payload.findSessionId ?? props.tab.payload.searchQuery ?? ""}`}
+    />
   </Suspense>
 );
 
@@ -41,6 +44,7 @@ registerInspectorView<StatuteViewPayload>({
   type: STATUTE_VIEW,
   render: StatuteView,
   railIcon: StatuteRailIcon,
+  railIconInactive: "legible",
   validate: isStatuteViewPayload,
   ariaLabel: (tab) => tab.label,
 });

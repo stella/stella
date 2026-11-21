@@ -8,6 +8,7 @@ import { panic } from "better-result";
 import { and, asc, desc, eq, gt, isNotNull, ne } from "drizzle-orm";
 
 import { EML_MIME_TYPE } from "@stll/api-contract/email-mime-types";
+import { runScriptWithErrorOutput } from "@stll/errors/script-error";
 
 import {
   member as authMember,
@@ -20,20 +21,21 @@ import {
   fields,
   properties,
   workspaceMembers,
-  workspaceViews,
   workspaces,
+  workspaceViews,
 } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
 import { toSafeId } from "@/api/lib/branded-types";
 import { openMaintenanceDb } from "@/api/lib/db/maintenance-db";
-import { parseEmail, parsedEmailToText } from "@/api/lib/files/email-to-html";
+import { parsedEmailToText, parseEmail } from "@/api/lib/files/email-to-html";
 import { writeS3ObjectWithRetry } from "@/api/lib/s3";
 import { upsertSearchDocument } from "@/api/lib/search/index-entity";
 import { buildDefaultViewRows } from "@/api/lib/views";
 import { requireLocalDevOpen } from "@/api/runtime-mode";
 
-import { createSeedEmail, SEED_EMAIL_FILE_NAMES } from "./seed-dev";
-import { seedId } from "./seed-utils";
+import { EN_SEED_CONTENT, SEED_EMAIL_FILE_NAMES } from "./seed-content/en";
+import { createSeedEmail } from "./seed-dev";
+import { seedFileIdentity, seedId } from "./seed-utils";
 
 const EMAIL_QA_MATTER_NAME = "Email Viewer QA";
 const EMAIL_QA_MATTER_REFERENCE = "DEV/EMAIL";
@@ -234,10 +236,8 @@ const seedEmailViewerDemo = async () => {
     const fileId = seedId<"userFile">(
       `email-viewer-demo-${target.workspaceId}-${fileName}-file`,
     );
-    const content = createSeedEmail(fileName);
-    const sha256Hex = new Bun.CryptoHasher("sha256")
-      .update(content)
-      .digest("hex");
+    const content = createSeedEmail(fileName, EN_SEED_CONTENT.emails[fileName]);
+    const { sha256Hex, sizeBytes } = seedFileIdentity(content);
     const createdAt = new Date(Date.UTC(2026, 6, 14 + index, 9, index * 7));
 
     await db.transaction(
@@ -297,7 +297,7 @@ const seedEmailViewerDemo = async () => {
       id: fileId,
       fileName,
       mimeType: EML_MIME_TYPE,
-      sizeBytes: content.length,
+      sizeBytes,
       encrypted: false,
       sha256Hex,
       pdfFileId: null,
@@ -375,4 +375,4 @@ const seedEmailViewerDemo = async () => {
   );
 };
 
-await seedEmailViewerDemo();
+await runScriptWithErrorOutput(seedEmailViewerDemo);

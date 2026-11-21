@@ -1,17 +1,94 @@
 #!/usr/bin/env bun
+import { Result } from "better-result";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
+import { repoRelativePath } from "@stll/portable-path";
+
+import {
+  missingPreparedApiTypecheckConfigs,
+  validateApiTypecheckProjects,
+} from "./api-typecheck-projects";
+import { childExitStatus } from "./child-exit-status";
+import { INSTALL_OWNED_IGNORED_GENERATED_OUTPUTS } from "./generated-files";
 import { validateWorkspaceAppBoundaries } from "./workspace-app-boundaries";
 import type { AppBoundaryOptions } from "./workspace-app-boundaries";
 
 export const WORKSPACE_PARENT_DIRS = ["apps", "packages"] as const;
+// Computed filesystem reads retain these repository Markdown inputs.
+export const CI_MARKDOWN_READER_INPUTS = [
+  "apps/**/*.md",
+  "packages/**/*.md",
+  "scripts/**/*.md",
+  "docs/**/*.md",
+];
+export const CI_MARKDOWN_READER_COMMAND =
+  "bun packages/scripts/src/workspace-hygiene.ts";
+
 const DEPENDENCY_FIELDS = [
   "dependencies",
   "devDependencies",
   "peerDependencies",
   "optionalDependencies",
 ] as const;
+const DENIED_NPM_DEPENDENCIES = new Set([
+  "fuse.js",
+  "flexsearch",
+  "minisearch",
+  "lunr",
+  "fast-levenshtein",
+  "fastest-levenshtein",
+  "leven",
+  "js-levenshtein",
+  "string-similarity",
+  "ahocorasick",
+  "natural",
+  "match-sorter",
+  "cmdk",
+  "fuzzysort",
+  "@leeoniya/ufuzzy",
+  "fuzzball",
+  "rapidfuzz",
+  "fuzzywuzzy",
+]);
+const DENIED_TEST_RUNNER_DEPENDENCIES = new Set([
+  "jest",
+  "vitest",
+  "mocha",
+  "@types/jest",
+  "@types/vitest",
+  "@types/mocha",
+]);
+// Packages the API replaced with its own small fetch clients. Each entry names
+// the replacement, so the failure says where the behaviour lives now.
+const POSTHOG_CLIENT = "apps/api/src/lib/analytics/posthog-client.ts";
+const OTLP_LOG_EXPORTER = "apps/api/src/lib/observability/otlp-log-exporter.ts";
+const REPLACED_NPM_DEPENDENCIES: ReadonlyMap<string, string> = new Map([
+  ["posthog-node", `replaced by the fetch client in ${POSTHOG_CLIENT}`],
+  ["@opentelemetry/api", `replaced by the log types in ${OTLP_LOG_EXPORTER}`],
+  ["@opentelemetry/api-logs", `replaced by ${OTLP_LOG_EXPORTER}`],
+  [
+    "@opentelemetry/exporter-logs-otlp-http",
+    `replaced by the fetch client in ${OTLP_LOG_EXPORTER}`,
+  ],
+  ["@opentelemetry/resources", `replaced by ${OTLP_LOG_EXPORTER}`],
+  ["@opentelemetry/sdk-logs", `replaced by ${OTLP_LOG_EXPORTER}`],
+]);
+const DENIED_CARGO_DEPENDENCIES = new Set([
+  "strsim",
+  "levenshtein",
+  "edit-distance",
+  "fuzzy-matcher",
+  "triple_accel",
+  "rapidfuzz",
+]);
+const CARGO_DEPENDENCY_FIELDS = [
+  "dependencies",
+  "dev-dependencies",
+  "build-dependencies",
+] as const;
+// The docs MCP is installed independently outside the apps/packages workspaces.
+const STANDALONE_NPM_PACKAGE_JSON_PATHS = [".claude/mcp/package.json"] as const;
 const SKIPPED_SCAN_DIRS = new Set([
   ".cache",
   ".turbo",
@@ -39,24 +116,43 @@ const EXACT_PACKAGE_VERSION_PATTERN =
 const BABEL_TOOLCHAINS = [
   { expectedMajor: 7, packagePath: "apps/mobile/package.json" },
 ] as const;
-const TYPESCRIPT_TOOLCHAIN = {
-  native: "npm:typescript@7.0.2",
-  oxlint: "1.83.0",
-  oxlintConfig: "0.7.0",
-  tsgolint: "7.0.2002",
-  typescript6Compatibility: "6.0.3",
-} as const;
+// `bun check` embeds the TypeScript 7 checker, so no workspace installs a
+// `typescript` package for it. Tools that need the TypeScript 7 compiler API
+// use `tsrs`; tools not yet ported import TypeScript 6 through the
+// `typescript6` alias, and Astro's checker, which supports only TypeScript 5
+// and 6, gets its own pinned copy.
+/**
+ * The toolchain's versions live in the root package.json alone, so an update
+ * edits one manifest. Hygiene holds each to an exact pin and to the oldest
+ * major the repository is written against: oxlint.config.ts imports the API
+ * of major 4 of the shared Oxlint config, and major 7 of oxlint-tsgolint is
+ * the Go port that replaced the deprecated 0.x line.
+ */
+const TYPESCRIPT_TOOLCHAIN_PINS = [
+  { field: "devDependencies", dependency: "@stll/oxlint-config", major: 4 },
+  { field: "devDependencies", dependency: "oxlint-tsgolint", major: 7 },
+  { field: "catalog", dependency: "oxlint", major: 1 },
+] as const;
+// tsrs serves the TypeScript 7 compiler API, so its build names TypeScript 7.
+const TSRS_TYPESCRIPT7_PATTERN = /-ts7\.\d+\.\d+/u;
+const TYPESCRIPT6_ALIAS_PATTERN = /^npm:typescript@(?<version>6\.\d+\.\d+)$/u;
 const TYPESCRIPT6_COMPATIBILITY = {
   astro: {
+    dependency: "typescript",
+    packagePath: "apps/landing/package.json",
+    script: "bun --bun astro check",
+    specifier: "catalog:ts6",
+  },
+  astroCheck: {
     dependency: "@astrojs/check",
     packagePath: "apps/landing/package.json",
-    script:
-      "bun --cwd=../../packages/cli run codegen:runtime && bun --bun astro check",
-    specifier: "^0.9.9",
+    specifier: "^0.9.12",
   },
+  // Only root scripts still import the TypeScript 6 compiler API; every
+  // workspace reads syntax with oxc and programs with tsrs.
   compilerApi: {
-    dependency: "typescript",
-    packagePath: "packages/scripts/package.json",
+    dependency: "typescript6",
+    packagePath: "package.json",
     specifier: "catalog:",
   },
 } as const;
@@ -66,6 +162,34 @@ export type WorkspaceParentDir = (typeof WORKSPACE_PARENT_DIRS)[number];
 export type WorkspaceIssue = {
   message: string;
   path: string;
+};
+
+export const regenerateInstallOwnedIgnoredGeneratedOutputs = (
+  rootDir: string,
+  runCommand: (command: readonly string[], cwd: string) => number = (
+    command,
+    cwd,
+  ) =>
+    childExitStatus(
+      Bun.spawnSync([...command], {
+        cwd,
+        // Output streams straight to the install log; the limit only binds piped output.
+        maxBuffer: 2 ** 30,
+        stderr: "inherit",
+        stdout: "inherit",
+      }),
+    ),
+) => {
+  for (const { command, outputs } of INSTALL_OWNED_IGNORED_GENERATED_OUTPUTS) {
+    if (outputs.some((output) => !existsSync(path.join(rootDir, output)))) {
+      continue;
+    }
+    const status = runCommand(command, rootDir);
+    if (status !== 0) {
+      return status;
+    }
+  }
+  return 0;
 };
 
 type WorkspacePackageReadResult =
@@ -130,9 +254,118 @@ const readDependencyNames = (packageJson: Record<string, unknown>) => {
   return dependencyNames;
 };
 
+const validateDeniedNpmDependencies = (
+  packageJsonPath: string,
+  packageJson: Record<string, unknown> | null,
+): WorkspaceIssue[] => {
+  const issues: WorkspaceIssue[] = [];
+  for (const field of DEPENDENCY_FIELDS) {
+    const dependencies = packageJson?.[field];
+    if (!isRecord(dependencies)) {
+      continue;
+    }
+    for (const [name, specifier] of Object.entries(dependencies)) {
+      const npmAlias =
+        typeof specifier === "string"
+          ? /^npm:(?<name>@[^/]+\/[^@]+|[^@/]+)(?:@|$)/u.exec(specifier)
+              ?.groups?.["name"]
+          : undefined;
+      const actualName = npmAlias ?? name;
+      if (DENIED_TEST_RUNNER_DEPENDENCIES.has(actualName)) {
+        issues.push({
+          message: `${actualName} is blocked; tests run on bun test`,
+          path: packageJsonPath,
+        });
+        continue;
+      }
+      const replacement = REPLACED_NPM_DEPENDENCIES.get(actualName);
+      if (replacement !== undefined) {
+        issues.push({
+          message: `${actualName} is blocked; ${replacement}`,
+          path: packageJsonPath,
+        });
+        continue;
+      }
+      const deniedName = DENIED_NPM_DEPENDENCIES.has(actualName)
+        ? actualName
+        : undefined;
+      if (deniedName === undefined) {
+        continue;
+      }
+      issues.push({
+        message: `${deniedName} is blocked; use @stll/text-search for search functionality`,
+        path: packageJsonPath,
+      });
+    }
+  }
+  return issues;
+};
+
+const cargoDependencyEntries = (
+  manifest: Record<string, unknown>,
+): readonly (readonly [string, unknown])[] => {
+  const tables = [
+    manifest,
+    isRecord(manifest["workspace"]) ? manifest["workspace"] : {},
+    ...(isRecord(manifest["target"])
+      ? Object.values(manifest["target"]).filter(isRecord)
+      : []),
+  ];
+  return tables.flatMap((table) =>
+    CARGO_DEPENDENCY_FIELDS.flatMap((field) => {
+      const dependencies = table[field];
+      return isRecord(dependencies) ? Object.entries(dependencies) : [];
+    }),
+  );
+};
+
+const validateDeniedCargoDependencies = (rootDir: string): WorkspaceIssue[] =>
+  findFiles(
+    rootDir,
+    (filePath) => path.basename(filePath) === "Cargo.toml",
+  ).flatMap((manifestPath) => {
+    const parsed = Result.try((): unknown =>
+      Bun.TOML.parse(readFileSync(manifestPath, "utf-8")),
+    );
+    if (Result.isError(parsed)) {
+      return [
+        {
+          message: "Cargo.toml must contain valid TOML for dependency policy",
+          path: repoRelativePath(rootDir, manifestPath),
+        },
+      ];
+    }
+    const manifest = parsed.value;
+    if (!isRecord(manifest)) {
+      return [];
+    }
+    return cargoDependencyEntries(manifest).flatMap(([name, specifier]) => {
+      const packageName = isRecord(specifier)
+        ? specifier["package"]
+        : undefined;
+      const actualName = typeof packageName === "string" ? packageName : name;
+      if (!DENIED_CARGO_DEPENDENCIES.has(actualName)) {
+        return [];
+      }
+      return [
+        {
+          message: `${actualName} is blocked; use @stll/text-search for search functionality`,
+          path: repoRelativePath(rootDir, manifestPath),
+        },
+      ];
+    });
+  });
+
+/** The compiler under its own key, or aliased to any name as `npm:typescript@6`. */
+const declaresTypescript6Compiler = (packageJsonPath: string): boolean =>
+  readDependencySpecifier(packageJsonPath, "typescript6") !== null ||
+  readDependencySpecifier(packageJsonPath, (specifier) =>
+    /^npm:typescript@[~^]?6(?:\.|$)/u.test(specifier),
+  ) !== null;
+
 const readDependencySpecifier = (
   packageJsonPath: string,
-  dependencyName: string,
+  dependency: string | ((specifier: string) => boolean),
 ): string | null => {
   let packageJson: unknown;
   try {
@@ -151,7 +384,12 @@ const readDependencySpecifier = (
       continue;
     }
 
-    const specifier = dependencies[dependencyName];
+    const specifier =
+      typeof dependency === "string"
+        ? dependencies[dependency]
+        : Object.values(dependencies).find(
+            (value) => typeof value === "string" && dependency(value),
+          );
     if (typeof specifier === "string") {
       return specifier;
     }
@@ -298,53 +536,84 @@ const validateInstalledCatalogVersions = (
   return issues;
 };
 
+/** Messages for root toolchain pins that leave the policy above. */
+const rootToolchainIssues = (
+  rootPackage: ReturnType<typeof readPackageJson>,
+): string[] => {
+  const messages: string[] = [];
+  const report = (message: string) => messages.push(message);
+  for (const dependency of ["typescript6", "tsrs"] as const) {
+    const actual = readStringProperty(
+      rootPackage,
+      "devDependencies",
+      dependency,
+    );
+    if (actual !== "catalog:") {
+      report(
+        `devDependencies.${dependency} must be catalog:; found ${actual ?? "missing"}`,
+      );
+    }
+  }
+
+  for (const { field, dependency, major } of TYPESCRIPT_TOOLCHAIN_PINS) {
+    const actual = readStringProperty(rootPackage, field, dependency);
+    if (
+      actual === null ||
+      !EXACT_PACKAGE_VERSION_PATTERN.test(actual) ||
+      Number(actual.split(".")[0]) < major
+    ) {
+      report(
+        `${field}.${dependency} must be an exact version of major ${major} or later; found ${actual ?? "missing"}`,
+      );
+    }
+  }
+
+  const tsrs = readStringProperty(rootPackage, "catalog", "tsrs");
+  if (
+    tsrs === null ||
+    !EXACT_PACKAGE_VERSION_PATTERN.test(tsrs) ||
+    !TSRS_TYPESCRIPT7_PATTERN.test(tsrs)
+  ) {
+    report(
+      `catalog.tsrs must be an exact tsrs build of TypeScript 7; found ${tsrs ?? "missing"}`,
+    );
+  }
+
+  const typescript6 = readStringProperty(rootPackage, "catalog", "typescript6");
+  const typescript6Version =
+    typescript6 === null
+      ? undefined
+      : TYPESCRIPT6_ALIAS_PATTERN.exec(typescript6)?.groups?.["version"];
+  if (typescript6Version === undefined) {
+    report(
+      `catalog.typescript6 must be npm:typescript@<exact 6.x version>; found ${typescript6 ?? "missing"}`,
+    );
+  }
+
+  // Astro's checker and the root scripts' compiler API are one TypeScript 6.
+  const catalogs = rootPackage?.["catalogs"];
+  const astroTypeScript = readStringProperty(
+    isRecord(catalogs) ? catalogs : null,
+    "ts6",
+    "typescript",
+  );
+  if (
+    typescript6Version !== undefined &&
+    astroTypeScript !== typescript6Version
+  ) {
+    report(
+      `catalogs.ts6.typescript must match catalog.typescript6 (${typescript6Version}); found ${astroTypeScript ?? "missing"}`,
+    );
+  }
+  return messages;
+};
+
 const validateTypeScriptToolchain = (rootDir: string): WorkspaceIssue[] => {
   const issues: WorkspaceIssue[] = [];
   const rootPackagePath = path.resolve(rootDir, "package.json");
   const rootPackage = readPackageJson(rootPackagePath);
-  const expectedRootValues = [
-    {
-      dependency: "@stll/oxlint-config",
-      field: "devDependencies",
-      specifier: TYPESCRIPT_TOOLCHAIN.oxlintConfig,
-    },
-    {
-      dependency: "@typescript/native",
-      field: "devDependencies",
-      specifier: TYPESCRIPT_TOOLCHAIN.native,
-    },
-    {
-      dependency: "oxlint-tsgolint",
-      field: "devDependencies",
-      specifier: TYPESCRIPT_TOOLCHAIN.tsgolint,
-    },
-    {
-      dependency: "typescript",
-      field: "devDependencies",
-      specifier: "catalog:",
-    },
-    {
-      dependency: "oxlint",
-      field: "catalog",
-      specifier: TYPESCRIPT_TOOLCHAIN.oxlint,
-    },
-    {
-      dependency: "typescript",
-      field: "catalog",
-      specifier: TYPESCRIPT_TOOLCHAIN.typescript6Compatibility,
-    },
-  ] as const;
-
-  for (const { dependency, field, specifier } of expectedRootValues) {
-    const actual = readStringProperty(rootPackage, field, dependency);
-    if (actual === specifier) {
-      continue;
-    }
-
-    issues.push({
-      message: `${field}.${dependency} must be ${specifier}; found ${actual ?? "missing"}`,
-      path: "package.json",
-    });
+  for (const message of rootToolchainIssues(rootPackage)) {
+    issues.push({ message, path: "package.json" });
   }
 
   for (const exception of Object.values(TYPESCRIPT6_COMPATIBILITY)) {
@@ -398,31 +667,48 @@ const validateTypeScriptToolchain = (rootDir: string): WorkspaceIssue[] => {
       if (
         typecheck !== null &&
         relativePackagePath !== TYPESCRIPT6_COMPATIBILITY.astro.packagePath &&
-        !typecheck.includes("tsc-native.ts")
+        !(
+          relativePackagePath === "apps/api/package.json" &&
+          typecheck === "bun ../../packages/scripts/src/api-typecheck.ts"
+        ) &&
+        !typecheck
+          .split("&&")
+          .some((command) =>
+            command.trim().startsWith("bun check --no-pretty --all --project="),
+          )
       ) {
         issues.push({
-          message: `scripts.typecheck must use the TypeScript 7 native wrapper; found ${typecheck}`,
+          message: `scripts.typecheck must use bun check --no-pretty --all --project=<tsconfig>; found ${typecheck}`,
           path: relativePackagePath,
         });
       }
 
-      const typescript = readDependencySpecifier(packageJsonPath, "typescript");
       if (
-        typescript !== null &&
-        relativePackagePath !==
-          TYPESCRIPT6_COMPATIBILITY.compilerApi.packagePath
+        typecheck !== null &&
+        readStringProperty(packageJson, "scripts", "check") !== null
       ) {
         issues.push({
           message:
-            "TypeScript 6 is compatibility-only and may only be declared by packages/scripts for the compiler API",
+            "scripts.check shadows Bun's native checker; rename the script",
           path: relativePackagePath,
         });
       }
 
-      if (readDependencySpecifier(packageJsonPath, "@typescript/native")) {
+      if (
+        readDependencySpecifier(packageJsonPath, "typescript") !== null &&
+        relativePackagePath !== TYPESCRIPT6_COMPATIBILITY.astro.packagePath
+      ) {
         issues.push({
           message:
-            "@typescript/native is a root-owned TypeScript 7 compiler dependency",
+            "typescript is not a workspace dependency: bun check embeds TypeScript 7 and tsrs serves its compiler API; only apps/landing pins its own TypeScript 6 for Astro's checker",
+          path: relativePackagePath,
+        });
+      }
+
+      if (declaresTypescript6Compiler(packageJsonPath)) {
+        issues.push({
+          message:
+            "The TypeScript 6 compiler API is compatibility-only and may only be declared by the root",
           path: relativePackagePath,
         });
       }
@@ -628,7 +914,7 @@ const validateBunTypeOwnership = (
     )
     .map((filePath) => ({
       message: `${BUN_TYPES_DEPENDENCY} is named by this TypeScript project but is not declared in the workspace package.json`,
-      path: `${relativeWorkspacePath}/${path.relative(workspacePath, filePath)}`,
+      path: `${relativeWorkspacePath}/${repoRelativePath(workspacePath, filePath)}`,
     }));
 };
 
@@ -662,7 +948,7 @@ const validateTurboInstallPins = (rootDir: string): WorkspaceIssue[] => {
       const installVersion = match[0].slice(match[0].lastIndexOf("@") + 1);
       issues.push({
         message: `turbo install version must derive from root package.json; found mirrored pin ${installVersion}`,
-        path: `${path.relative(rootDir, filePath)}:${lineNumberForIndex(content, match.index)}`,
+        path: `${repoRelativePath(rootDir, filePath)}:${lineNumberForIndex(content, match.index)}`,
       });
     }
   }
@@ -692,6 +978,52 @@ const findBunCommandFiles = (rootDir: string) => [
   ),
 ];
 
+// scripts/lint.ts owns the linter binary, the configs and the shared flags,
+// so a change of linter is an edit to that one file. A package script names
+// only what it lints: `cd ../.. && bun scripts/lint.ts <paths>` for `lint`,
+// with `--fix` for `lint:fix`.
+const LINT_ENTRY_COMMAND = "bun scripts/lint.ts";
+// The linter as a command word: bare, through `bunx`/`bun --bun`, or by its
+// path under node_modules. `oxlint.config.ts`, `@stll/oxlint-config` and
+// `.oxlint-plugins` are not commands.
+const DIRECT_LINTER_PATTERN = /(?:^|[\s;&|(/])oxlint(?=$|[\s;&|)])/u;
+const LINT_SCRIPT_FORMS = [
+  { name: "lint", entry: LINT_ENTRY_COMMAND },
+  { name: "lint:fix", entry: `${LINT_ENTRY_COMMAND} --fix` },
+] as const;
+
+const validateLintScripts = (
+  packagePath: string,
+  packageJson: Record<string, unknown> | null,
+): WorkspaceIssue[] => {
+  const scripts = packageJson?.["scripts"];
+  if (!isRecord(scripts)) {
+    return [];
+  }
+  const issues: WorkspaceIssue[] = [];
+  for (const [name, command] of Object.entries(scripts)) {
+    if (typeof command === "string" && DIRECT_LINTER_PATTERN.test(command)) {
+      issues.push({
+        message: `scripts.${name} runs oxlint directly; lint through \`${LINT_ENTRY_COMMAND} <paths>\` from the repository root`,
+        path: packagePath,
+      });
+    }
+  }
+  if (packagePath === "package.json") {
+    return issues;
+  }
+  for (const { name, entry } of LINT_SCRIPT_FORMS) {
+    const command = readStringProperty(packageJson, "scripts", name);
+    if (command !== null && !command.includes(entry)) {
+      issues.push({
+        message: `scripts.${name} must lint through \`${entry} <paths>\`; found ${command}`,
+        path: packagePath,
+      });
+    }
+  }
+  return issues;
+};
+
 const validateBunCwdRunForm = (rootDir: string): WorkspaceIssue[] =>
   findBunCommandFiles(rootDir)
     .filter((filePath) => existsSync(filePath))
@@ -700,20 +1032,43 @@ const validateBunCwdRunForm = (rootDir: string): WorkspaceIssue[] =>
       return [...content.matchAll(BUN_SPACED_CWD_RUN_PATTERN)].map((match) => ({
         message:
           "`bun --cwd <dir> run <script>` exits 0 without running the script; use `bun run --cwd <dir> <script>`",
-        path: `${path.relative(rootDir, filePath)}:${lineNumberForIndex(content, match.index)}`,
+        path: `${repoRelativePath(rootDir, filePath)}:${lineNumberForIndex(content, match.index)}`,
       }));
     });
 
-export const validateWorkspaceRoot = (
+export const validateWorkspaceRoot = async (
   rootDir: string,
   appBoundaryOptions: AppBoundaryOptions = {},
-): WorkspaceIssue[] => {
+  {
+    requirePreparedApiTypecheck = false,
+  }: {
+    requirePreparedApiTypecheck?: boolean;
+  } = {},
+): Promise<WorkspaceIssue[]> => {
   const issues: WorkspaceIssue[] = [
-    ...validateWorkspaceAppBoundaries(rootDir, appBoundaryOptions),
+    ...(await validateApiTypecheckProjects(rootDir, {
+      requirePrepared: requirePreparedApiTypecheck,
+    })),
+    ...(await validateWorkspaceAppBoundaries(rootDir, appBoundaryOptions)),
     ...validateTurboInstallPins(rootDir),
     ...validateBunCwdRunForm(rootDir),
     ...validateBabelToolchains(rootDir),
     ...validateTypeScriptToolchain(rootDir),
+    ...validateDeniedNpmDependencies(
+      "package.json",
+      readPackageJson(path.resolve(rootDir, "package.json")),
+    ),
+    ...STANDALONE_NPM_PACKAGE_JSON_PATHS.flatMap((relativePath) =>
+      validateDeniedNpmDependencies(
+        relativePath,
+        readPackageJson(path.resolve(rootDir, relativePath)),
+      ),
+    ),
+    ...validateDeniedCargoDependencies(rootDir),
+    ...validateLintScripts(
+      "package.json",
+      readPackageJson(path.resolve(rootDir, "package.json")),
+    ),
   ];
 
   for (const parentDir of WORKSPACE_PARENT_DIRS) {
@@ -769,6 +1124,10 @@ export const validateWorkspaceRoot = (
       }
 
       issues.push(
+        ...validateDeniedNpmDependencies(
+          `${relativePath}/package.json`,
+          readPackageJson(packageJsonPath),
+        ),
         ...validateBunTypeOwnership(
           path.resolve(parentPath, entry.name),
           relativePath,
@@ -785,6 +1144,10 @@ export const validateWorkspaceRoot = (
           `${relativePath}/package.json`,
           readPackageJson(packageJsonPath),
         ),
+        ...validateLintScripts(
+          `${relativePath}/package.json`,
+          readPackageJson(packageJsonPath),
+        ),
       );
     }
   }
@@ -793,7 +1156,30 @@ export const validateWorkspaceRoot = (
 };
 
 if (import.meta.main) {
-  const issues = validateWorkspaceRoot(process.cwd());
+  // CI runs this as a verification step (STELLA_VERIFY=check) after it has
+  // generated the API typecheck configs; the install-time postinstall has not.
+  const requirePreparedApiTypecheck = process.env["STELLA_VERIFY"] === "check";
+  if (!requirePreparedApiTypecheck) {
+    const regenerationStatus = regenerateInstallOwnedIgnoredGeneratedOutputs(
+      process.cwd(),
+    );
+    if (regenerationStatus !== 0) {
+      process.exit(regenerationStatus);
+    }
+  }
+  const unprepared = missingPreparedApiTypecheckConfigs(process.cwd());
+  if (unprepared.length > 0 && !requirePreparedApiTypecheck) {
+    console.log(
+      `Skipping API typecheck ownership: prepared configs are not generated yet (${unprepared.join(", ")}).`,
+    );
+  }
+  const issues = await validateWorkspaceRoot(
+    process.cwd(),
+    {},
+    {
+      requirePreparedApiTypecheck,
+    },
+  );
 
   if (issues.length === 0) {
     console.log("Workspace layout OK.");

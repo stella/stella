@@ -1,3 +1,4 @@
+import type { PGlite } from "@electric-sql/pglite";
 /**
  * Each page of the expression id backfill must read a bounded, index-backed
  * slice of `legislation_documents`, however large the table grows: the page's
@@ -14,13 +15,13 @@
  * the table scaled to the synthetic profile's size, and the same statements
  * run against the fixture so the index path is also the correct answer.
  */
-
-import type { PGlite } from "@electric-sql/pglite";
 import { panic } from "better-result";
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { inArray, sql } from "drizzle-orm";
 import type { SQLWrapper } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
+
+import { chunk as chunkItems } from "@stll/concurrency/chunk";
 
 import type { Transaction } from "@/api/db/root";
 import { legislationDocuments, legislationSources } from "@/api/db/schema";
@@ -35,6 +36,7 @@ import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 import {
   explainRoot,
+  indexedAccessPaths,
   scanOccurrences,
 } from "@/api/tests/query-plans/plan-walker";
 import type { ScanOccurrence } from "@/api/tests/query-plans/plan-walker";
@@ -50,11 +52,6 @@ const PRIMARY_KEY = "legislation_documents_pkey";
 const WORK_INDEXES: readonly string[] = [
   "legislation_documents_eli_idx",
   "legislation_documents_eli_lang_valid_from_idx",
-];
-const INDEX_SCANS: readonly string[] = [
-  "Index Scan",
-  "Index Only Scan",
-  "Bitmap Heap Scan",
 ];
 /** A probe's seek key: the outer row's work identifier. */
 const WORK_SEEK = `((eli)::text = (${TABLE}.eli)::text)`;
@@ -232,9 +229,9 @@ beforeAll(
         expressionNamespace: namespace,
       })),
     );
-    for (let start = 0; start < rows.length; start += INSERT_BATCH) {
+    for (const itemBatch of chunkItems(rows, INSERT_BATCH)) {
       await db.insert(legislationDocuments).values(
-        rows.slice(start, start + INSERT_BATCH).map((row) => ({
+        itemBatch.map((row) => ({
           id: row.id,
           sourceId: row.sourceId,
           eli: row.eli,
@@ -301,6 +298,7 @@ const documentScans = (root: PlanNode): Map<string | null, ScanOccurrence> => {
   );
   const byAlias = new Map(scans.map((scan) => [scan.alias, scan]));
   expect(byAlias.size).toBe(scans.length);
+  expect(indexedAccessPaths(root, TABLE)).toHaveLength(scans.length);
   return byAlias;
 };
 
@@ -310,7 +308,6 @@ const expectSeek = (
   indexes: readonly string[],
   keys: readonly string[],
 ) => {
-  expect(INDEX_SCANS).toContain(scan?.nodeType ?? "missing");
   expect(indexes).toContain(scan?.index ?? "missing");
   for (const key of keys) {
     expect(scan?.indexCond ?? "").toContain(key);
@@ -354,9 +351,6 @@ const expectPagePlan = async (cursorAt: number | null) => {
     scans.get(TABLE),
     [PRIMARY_KEY],
     cursor === null ? [] : [afterKey(cursor)],
-  );
-  expect(["Index Scan", "Index Only Scan"]).toContain(
-    scans.get(TABLE)?.nodeType ?? "missing",
   );
 };
 

@@ -1,5 +1,6 @@
 import type { SchemaClient } from "@better-auth/oauth-provider";
 import { afterAll, beforeAll, describe, expect, mock, test } from "bun:test";
+import { eq, sql } from "drizzle-orm";
 import * as v from "valibot";
 
 /**
@@ -18,6 +19,7 @@ const REDIRECT_URI = "https://client.example.com/oauth/callback";
 const FOREIGN_REDIRECT_URI = "https://attacker.example.net/oauth/callback";
 
 const documentsByUrl = new Map<string, unknown>();
+const headersByUrl = new Map<string, Record<string, string>>();
 const requestedUrls: string[] = [];
 
 const metadataDocument = (overrides: Record<string, unknown> = {}) => ({
@@ -39,7 +41,7 @@ await mock.module("@better-auth/cimd/node", () => ({
       return new Response("not found", { status: 404 });
     }
     return new Response(JSON.stringify(document), {
-      headers: { "content-type": "application/json" },
+      headers: { "content-type": "application/json", ...headersByUrl.get(url) },
       status: 200,
     });
   },
@@ -50,6 +52,8 @@ const { getAuthEndpointUrl, getAuthIssuerUrl } =
   await import("@/api/lib/auth/auth-paths");
 const { initAgentAuthTestDb, releaseAgentAuthTestDb } =
   await import("@/api/tests/helpers/mock-agent-auth-db");
+const { rootDb } = await import("@/api/db/root");
+const { oauthClient } = await import("@/api/db/auth-schema");
 
 beforeAll(async () => {
   await initAgentAuthTestDb();
@@ -98,8 +102,12 @@ const refusalFrom = async (response: Response): Promise<string> => {
   const location = response.headers.get("location");
   if (location === null) {
     expect(response.status).toBeGreaterThanOrEqual(400);
-    const body: unknown = await response.json();
-    expect(body).toMatchObject({ error: expect.any(String) });
+    // Parsed rather than matched: Bun's toMatchObject writes an asymmetric
+    // matcher into the object it checks, so the text would lose the code.
+    const body = v.parse(
+      v.looseObject({ error: v.string() }),
+      await response.json(),
+    );
     return JSON.stringify(body);
   }
 
@@ -207,6 +215,105 @@ describe("OAuth client ID metadata documents", () => {
     expect(requestedUrls).toEqual([DOCUMENT_URL]);
   });
 
+  // Native clients list a portless loopback callback on one or two loopback
+  // hosts, then bind whichever host and port is free (RFC 8252 7.3, 8.3).
+  const nativeDocument = (
+    documentUrl: string,
+    overrides: Record<string, unknown> = {},
+  ) => {
+    documentsByUrl.set(
+      documentUrl,
+      metadataDocument({
+        client_id: documentUrl,
+        redirect_uris: [
+          "http://localhost/callback",
+          "http://127.0.0.1/callback",
+        ],
+        ...overrides,
+      }),
+    );
+  };
+  const NATIVE_DOCUMENT_URL =
+    "https://native.example.com/oauth/client-metadata.json";
+
+  /** The redirect the sign-in hand-off will complete to, exactly as sent. */
+  const handedOffRedirect = (response: Response): string | null => {
+    expect(response.status).toBe(302);
+    const location = new URL(
+      v.parse(v.string(), response.headers.get("location")),
+      getAuthIssuerUrl(),
+    );
+    const oauthQuery =
+      location.searchParams.get("oauth_query") ??
+      new URLSearchParams(location.hash.slice(1)).get("oauth_query");
+    return new URLSearchParams(oauthQuery ?? "").get("redirect_uri");
+  };
+
+  test.each([
+    "http://localhost:49152/callback",
+    "http://127.0.0.1:49152/callback",
+    "http://[::1]:49152/callback",
+    "http://[::1]/callback",
+  ])(
+    "accepts a listed loopback host, or the other IP literal, on any port: %s",
+    async (redirectUri) => {
+      nativeDocument(NATIVE_DOCUMENT_URL);
+
+      const response = await authorize(NATIVE_DOCUMENT_URL, redirectUri);
+
+      expect(handedOffRedirect(response)).toBe(redirectUri);
+    },
+  );
+
+  test("an IPv4 literal listing admits IPv6 loopback but not localhost", async () => {
+    const documentUrl = "https://native-app.example.com/oauth/client.json";
+    nativeDocument(documentUrl, {
+      application_type: "native",
+      redirect_uris: ["http://127.0.0.1/callback"],
+    });
+
+    expect(
+      handedOffRedirect(
+        await authorize(documentUrl, "http://[::1]:49152/callback"),
+      ),
+    ).toBe("http://[::1]:49152/callback");
+    expect(
+      await refusalFrom(
+        await authorize(documentUrl, "http://localhost:49152/callback"),
+      ),
+    ).toMatch(/invalid_re/u);
+  });
+
+  test("a localhost-only listing keeps port-only matching", async () => {
+    const documentUrl =
+      "https://native-localhost.example.com/oauth/client.json";
+    nativeDocument(documentUrl, {
+      redirect_uris: ["http://localhost/callback"],
+    });
+
+    expect(
+      await refusalFrom(
+        await authorize(documentUrl, "http://[::1]:49152/callback"),
+      ),
+    ).toMatch(/invalid_re/u);
+  });
+
+  test.each([
+    "http://[::1]:49152/other",
+    "http://127.0.0.2:49152/callback",
+    "https://[::1]:49152/callback",
+    "http://[::1]:49152/callback?extra=1",
+  ])(
+    "refuses a loopback callback that differs beyond host and port: %s",
+    async (redirectUri) => {
+      nativeDocument(NATIVE_DOCUMENT_URL);
+
+      const response = await authorize(NATIVE_DOCUMENT_URL, redirectUri);
+
+      expect(await refusalFrom(response)).toMatch(/invalid_re/u);
+    },
+  );
+
   test("refuses a request whose redirect_uri the document does not list", async () => {
     documentsByUrl.set(DOCUMENT_URL, metadataDocument());
 
@@ -298,5 +405,64 @@ describe("OAuth client ID metadata documents", () => {
     expect(response.headers.get("location")).toContain("oauth_query=");
     // An opaque client_id is not a URL, so no discovery runs for it.
     expect(requestedUrls).toEqual([]);
+  });
+
+  test("keeps a registered client resolving for the grace window while its document is unavailable", async () => {
+    const clientId = "https://intermittent.example.com/oauth/client.json";
+    const redirectUri = "https://intermittent.example.com/oauth/callback";
+    const readValidatedAt = async () =>
+      (
+        await rootDb
+          .select({ validatedAt: oauthClient.metadataValidatedAt })
+          .from(oauthClient)
+          .where(eq(oauthClient.clientId, clientId))
+      ).at(0)?.validatedAt;
+    documentsByUrl.set(
+      clientId,
+      metadataDocument({ client_id: clientId, redirect_uris: [redirectUri] }),
+    );
+    // Uncacheable, so every resolution revalidates the document upstream.
+    headersByUrl.set(clientId, { "cache-control": "no-store" });
+
+    const discovered = await authorize(clientId, redirectUri);
+    expect(discovered.status).toBe(302);
+    expect(discovered.headers.get("location")).toContain("oauth_query=");
+    const validatedAt = await readValidatedAt();
+    expect(validatedAt).toBeInstanceOf(Date);
+
+    documentsByUrl.delete(clientId);
+    requestedUrls.length = 0;
+    const stale = await authorize(clientId, redirectUri);
+    expect(requestedUrls).toEqual([clientId]);
+    expect(stale.status).toBe(302);
+    expect(stale.headers.get("location")).toContain("oauth_query=");
+    // A stale answer records no validation, so it cannot extend its window.
+    expect(await readValidatedAt()).toEqual(validatedAt);
+
+    await rootDb
+      .update(oauthClient)
+      .set({
+        metadataValidatedAt: sql`now() - interval '6 hours 1 second'`,
+      })
+      .where(eq(oauthClient.clientId, clientId));
+    // The retry lands inside the discovery's failed-fetch interval or fetches
+    // the missing document again; past the window either one is refused.
+    expect(await refusalFrom(await authorize(clientId, redirectUri))).toMatch(
+      /invalid_client|temporarily_unavailable/u,
+    );
+  });
+
+  test("never creates a client from an unavailable document", async () => {
+    const clientId = "https://unpublished.example.com/oauth/client.json";
+    const refusal = await refusalFrom(
+      await authorize(clientId, "https://unpublished.example.com/oauth/cb"),
+    );
+    expect(refusal).toContain("invalid_client");
+    expect(
+      await rootDb
+        .select({ clientId: oauthClient.clientId })
+        .from(oauthClient)
+        .where(eq(oauthClient.clientId, clientId)),
+    ).toEqual([]);
   });
 });

@@ -1,4 +1,4 @@
-import type { Editor } from "@tiptap/core";
+import type { SingleCommands, Storage } from "@tiptap/core";
 import { Decoration, Extension } from "@tiptap/core";
 import type { Node as ProseMirrorNode } from "@tiptap/pm/model";
 
@@ -13,7 +13,7 @@ import type { ChatAnonPair } from "@stll/anonymize-chat";
  *
  * The extension doesn't run the wasm pipeline. It receives pairs
  * via `setChatAnonDecorationPairs` — the live-preview hook in
- * `chat-thread-page.tsx` is responsible for pushing them.
+ * `chat-thread.page.tsx` is responsible for pushing them.
  *
  * `update: "manual"` means the decoration manager only rebuilds
  * when `setChatAnonDecorationPairs` forces it; between rebuilds it
@@ -28,14 +28,14 @@ import type { ChatAnonPair } from "@stll/anonymize-chat";
 const REGEX_SPECIALS = /[\\^$.*+?()[\]{}|]/gu;
 const escapeRegex = (value: string) => value.replaceAll(REGEX_SPECIALS, "\\$&");
 
-export const CHAT_ANON_DECORATIONS_NAME = "stllAnonDecorations";
+const CHAT_ANON_DECORATIONS_NAME = "stllAnonDecorations";
 
 type ChatAnonDecorationsStorage = {
   pairs: readonly ChatAnonPair[];
 };
 
 declare module "@tiptap/core" {
-  // oxlint-disable-next-line consistent-type-definitions -- module augmentation requires interface for declaration merging
+  // oxlint-disable-next-line typescript/consistent-type-definitions -- module augmentation requires interface for declaration merging
   interface Storage {
     [CHAT_ANON_DECORATIONS_NAME]: ChatAnonDecorationsStorage;
   }
@@ -103,10 +103,20 @@ export const ChatAnonDecorations = Extension.create<
   },
 });
 
+// The fields this write touches; a destroyed editor's accessors can throw.
+type ChatAnonDecorationTarget = {
+  readonly isDestroyed: boolean;
+  readonly storage: Pick<Storage, typeof CHAT_ANON_DECORATIONS_NAME>;
+  readonly commands: Pick<SingleCommands, "updateDecorations">;
+};
+
 export const setChatAnonDecorationPairs = (
-  editor: Editor,
+  editor: ChatAnonDecorationTarget,
   pairs: readonly ChatAnonPair[],
 ): void => {
+  if (editor.isDestroyed) {
+    return;
+  }
   editor.storage[CHAT_ANON_DECORATIONS_NAME].pairs = pairs;
   editor.commands.updateDecorations(CHAT_ANON_DECORATIONS_NAME);
 };

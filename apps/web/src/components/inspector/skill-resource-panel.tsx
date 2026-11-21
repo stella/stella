@@ -7,6 +7,7 @@ import { PencilIcon, SaveIcon, XIcon } from "@stll/ui/icons";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { Textarea } from "@stll/ui/textarea";
 import { stellaToast } from "@stll/ui/toast";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { MarkdownPreview } from "@/components/markdown-preview";
 import { MarkdownHybridEditor } from "@/components/markdown/markdown-hybrid-editor";
@@ -16,18 +17,26 @@ import {
   toStoredMarkdown,
 } from "@/components/skill-body-markdown";
 import Tooltip from "@/components/tooltip";
+import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { api } from "@/lib/api";
-import { PDF_MIME, isMarkdownFile } from "@/lib/consts";
+import { isMarkdownFile, PDF_MIME } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { useSkillLabel } from "@/lib/knowledge/built-in-skills";
+import { AVAILABLE_EVERYWHERE } from "@/lib/platform/requirements.logic";
 import { toSafeId } from "@/lib/safe-id";
 
-import { BUILT_IN_SKILL_ORIGIN, skillLabel } from "./inspector-store-types";
+import { skillResourceTabSkill } from "./inspector-active-skill";
+import { BUILT_IN_SKILL_ORIGIN } from "./inspector-store-types";
 import type { InstalledSkillResourceTab } from "./inspector-store-types";
 import { InspectorTabHeader } from "./inspector-tab-header";
 import type { SkillResourceTab } from "./inspector-tabs-store";
 import { useInspectorTabsStore } from "./inspector-tabs-store";
+import {
+  createSerializedSaver,
+  type SerializedSaveContext,
+} from "./skill-history/serialized-save";
 import { SkillBodyWorkspace } from "./skill-history/skill-body-workspace";
 import { useSkillEditAccess } from "./skill-history/use-skill-edit-access";
 
@@ -72,16 +81,21 @@ type SkillResourceTabMatterProps = {
 };
 
 /** The skill's title; the tooltip keeps its slug and the resource path. */
-const SkillResourceTabMatter = ({ tab }: SkillResourceTabMatterProps) => (
-  <Tooltip
-    content={`${tab.skillName} · ${tab.resourcePath}`}
-    render={
-      <span className="text-muted-foreground text-3xs truncate">
-        {skillLabel(tab)}
-      </span>
-    }
-  />
-);
+const SkillResourceTabMatter = ({ tab }: SkillResourceTabMatterProps) => {
+  const skillLabel = useSkillLabel();
+  return (
+    <Tooltip
+      content={`${tab.skillName} · ${tab.resourcePath}`}
+      render={
+        <span className="text-muted-foreground text-3xs min-w-0">
+          <TruncatedText>
+            {skillLabel(skillResourceTabSkill(tab))}
+          </TruncatedText>
+        </span>
+      }
+    />
+  );
+};
 
 /** A built-in skill ships with Stella and has no row, so it is read-only. */
 const BuiltInSkillResourcePanel = ({
@@ -103,6 +117,14 @@ const BuiltInSkillResourcePanel = ({
       />
     </div>
   );
+};
+
+type SkillResourceSave = {
+  tab: Pick<
+    InstalledSkillResourceTab,
+    "content" | "resourcePath" | "target" | "skillId"
+  >;
+  markdown: string;
 };
 
 type InstalledSkillResourcePanelProps = {
@@ -186,35 +208,16 @@ const InstalledSkillResourcePanel = ({
     setEditing(false);
   };
 
-  // Autosave path for the hybrid editor. The editor emits debounced markdown
-  // with the skill frontmatter stripped; re-prepend it before persisting. Saves are serialized: one PATCH in flight at a time, the
-  // newest markdown coalesced behind it. Concurrent PATCHes could be applied by
-  // the server out of order, silently persisting stale content even when the
-  // client discards the stale response. Queues are keyed per tab — the panel
-  // is not remounted on tab switch, so a single queue would let an in-flight
-  // save for one file consume markdown queued for another.
-  const [saveQueues] = useState(
-    () => new Map<string, { inFlight: boolean; pending: string | null }>(),
-  );
-  const saveQueueFor = (tabId: string) => {
-    const existing = saveQueues.get(tabId);
-    if (existing) {
-      return existing;
-    }
-    const fresh = { inFlight: false, pending: null };
-    saveQueues.set(tabId, fresh);
-    return fresh;
-  };
-  const runSaveLoop = async (editorMarkdown: string) => {
-    // Snapshot the tab now: the loop may outlive a tab switch, and `tab` would
-    // then point at a different file.
-    const { content, id: tabId, resourcePath, target } = tab;
-    const skill = api.skills({ skillId: toSafeId<"agentSkill">(tab.skillId) });
-    const queue = saveQueueFor(tabId);
-    queue.inFlight = true;
-    let next: string | null = editorMarkdown;
-    while (next !== null) {
-      const stored = toStoredMarkdown(next, content);
+  // Keep the tab snapshot for the whole batch: a save can outlive a tab switch.
+  const writeMarkdown = useLatestCallback(
+    async (
+      tabId: InstalledSkillResourceTab["id"],
+      { markdown }: SkillResourceSave,
+      { initialValue, hasPending }: SerializedSaveContext<SkillResourceSave>,
+    ) => {
+      const { content, resourcePath, target, skillId } = initialValue.tab;
+      const skill = api.skills({ skillId: toSafeId<"agentSkill">(skillId) });
+      const stored = toStoredMarkdown(markdown, content);
       const response =
         target === "body"
           ? await skill.patch({ body: stored })
@@ -222,30 +225,30 @@ const InstalledSkillResourcePanel = ({
               path: resourcePath,
               content: stored,
             });
-      next = queue.pending;
-      queue.pending = null;
       if (response.error) {
-        // Superseded by newer markdown: retry with that instead of toasting.
-        if (next !== null) {
-          continue;
+        if (hasPending()) {
+          return;
         }
         const error = toAPIError(response.error);
         notifyUserError(error, t("common.unexpectedError"), {
           description: error.message,
         });
-        break;
+        return;
       }
       updateSkillResourceTabContent(tabId, stored);
-    }
-    queue.inFlight = false;
-  };
-  const persistMarkdown = (editorMarkdown: string) => {
-    const queue = saveQueueFor(tab.id);
-    if (queue.inFlight) {
-      queue.pending = editorMarkdown;
-      return;
-    }
-    detached(runSaveLoop(editorMarkdown), "skill-resource-panel.run-save-loop");
+    },
+  );
+  const [saveMarkdown] = useState(() => createSerializedSaver(writeMarkdown));
+  const persistMarkdown = (markdown: string) => {
+    saveMarkdown(tab.id, {
+      tab: {
+        content: tab.content,
+        resourcePath: tab.resourcePath,
+        target: tab.target,
+        skillId: tab.skillId,
+      },
+      markdown,
+    });
   };
 
   // The body was replaced wholesale by something other than the editor (an
@@ -305,48 +308,62 @@ const InstalledSkillResourcePanel = ({
     <div className="bg-background flex h-full min-h-0 min-w-0 flex-1 flex-col">
       <InspectorTabHeader
         actions={
-          isEditable && !useHybridEditor ? (
-            <div className="flex items-center gap-1">
-              {editing ? (
-                <>
-                  <Button
-                    aria-label={t("common.cancel")}
-                    disabled={saving}
-                    onClick={cancelEdit}
-                    size="xs"
-                    variant="ghost"
-                  >
-                    <XIcon className="size-3.5" />
-                    {t("common.cancel")}
-                  </Button>
-                  <Button
-                    aria-label={t("common.save")}
-                    disabled={saving || draft === tab.content}
-                    onClick={() => {
-                      detached(save(), "skill-resource-panel.save");
-                    }}
-                    size="xs"
-                  >
-                    <SaveIcon className="size-3.5" />
-                    {t("common.save")}
-                  </Button>
-                </>
-              ) : (
-                <Button
-                  aria-label={t("common.edit")}
-                  onClick={() => {
-                    setDraft(tab.content);
-                    setEditing(true);
-                  }}
-                  size="xs"
-                  variant="ghost"
-                >
-                  <PencilIcon className="size-3.5" />
-                  {t("common.edit")}
-                </Button>
-              )}
-            </div>
-          ) : null
+          isEditable && !useHybridEditor
+            ? [
+                {
+                  id: "edit",
+                  requires: AVAILABLE_EVERYWHERE,
+                  render: () => (
+                    <div className="flex items-center gap-1">
+                      {editing ? (
+                        <>
+                          <Button
+                            aria-label={t("common.cancel")}
+                            disabled={saving}
+                            disabledReason={t("common.saving")}
+                            onClick={cancelEdit}
+                            size="xs"
+                            variant="ghost"
+                          >
+                            <XIcon className="size-3.5" />
+                            {t("common.cancel")}
+                          </Button>
+                          <Button
+                            aria-label={t("common.save")}
+                            disabled={saving || draft === tab.content}
+                            disabledReason={
+                              saving
+                                ? t("common.saving")
+                                : t("common.noChangesToSave")
+                            }
+                            onClick={() => {
+                              detached(save(), "skill-resource-panel.save");
+                            }}
+                            size="xs"
+                          >
+                            <SaveIcon className="size-3.5" />
+                            {t("common.save")}
+                          </Button>
+                        </>
+                      ) : (
+                        <Button
+                          aria-label={t("common.edit")}
+                          onClick={() => {
+                            setDraft(tab.content);
+                            setEditing(true);
+                          }}
+                          size="xs"
+                          variant="ghost"
+                        >
+                          <PencilIcon className="size-3.5" />
+                          {t("common.edit")}
+                        </Button>
+                      )}
+                    </div>
+                  ),
+                },
+              ]
+            : []
         }
         label={basenameOf(tab.resourcePath)}
         matter={<SkillResourceTabMatter tab={tab} />}

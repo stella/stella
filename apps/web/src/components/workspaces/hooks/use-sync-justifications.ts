@@ -1,10 +1,15 @@
 import { useCallback, useMemo, useRef } from "react";
 
 import { useQueries, useQuery } from "@tanstack/react-query";
+import type { UseQueryResult } from "@tanstack/react-query";
 import { panic } from "better-result";
 
+import { chunk as chunkItems } from "@stll/concurrency/chunk";
+
 import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { queryView } from "@/lib/query-view.logic";
 import type { WorkspaceJustification } from "@/lib/types";
+import { useQueryViewError, useQueryViewErrors } from "@/lib/use-query-view";
 import { justificationsOptions } from "@/lib/workspaces/queries/workspace";
 import { useWorkspaceStore } from "@/lib/workspaces/store";
 
@@ -17,22 +22,7 @@ export const chunkJustificationEntityIds = (
   entityIds: readonly string[],
 ): string[][] => {
   const normalizedEntityIds = normalizeEntityIds(entityIds);
-  const chunks: string[][] = [];
-
-  for (
-    let startIndex = 0;
-    startIndex < normalizedEntityIds.length;
-    startIndex += JUSTIFICATION_ENTITY_IDS_CHUNK_SIZE
-  ) {
-    chunks.push(
-      normalizedEntityIds.slice(
-        startIndex,
-        startIndex + JUSTIFICATION_ENTITY_IDS_CHUNK_SIZE,
-      ),
-    );
-  }
-
-  return chunks;
+  return chunkItems(normalizedEntityIds, JUSTIFICATION_ENTITY_IDS_CHUNK_SIZE);
 };
 
 type UseSyncJustificationsInput = {
@@ -49,13 +39,16 @@ export const useSyncJustifications = (
   );
   const normalizedEntityIds = normalizeEntityIds(entityIds);
 
-  const { data } = useQuery({
+  const dataQuery = useQuery({
     ...justificationsOptions({
       workspaceId,
       entityIds: normalizedEntityIds,
     }),
     enabled: enabled && normalizedEntityIds.length > 0,
   });
+  const dataView = queryView(dataQuery);
+  useQueryViewError(dataView, "useSyncJustifications:query");
+  const data = dataView.type === "items" ? dataView.items : undefined;
 
   useExternalSyncEffect(() => {
     if (!data) {
@@ -103,19 +96,14 @@ export const useSyncJustificationChunks = (
   // a fresh function each render makes `syncedResults` a new array every
   // render, which would re-fire the store-sync effect below in a loop.
   const combineResults = useCallback(
-    (
-      results: {
-        data: WorkspaceJustification[] | undefined;
-        dataUpdatedAt: number;
-      }[],
-    ) =>
+    (results: UseQueryResult<WorkspaceJustification[]>[]) =>
       results.map((result, index) => {
         const entityIds = normalizedChunks.at(index);
         if (!entityIds) {
           panic(`Missing justification chunk at index ${index}`);
         }
         return {
-          data: result.data,
+          view: queryView(result),
           dataUpdatedAt: result.dataUpdatedAt,
           entityIds,
         };
@@ -127,6 +115,10 @@ export const useSyncJustificationChunks = (
     queries,
     combine: combineResults,
   });
+  useQueryViewErrors(
+    syncedResults.map(({ view }) => view),
+    "useSyncJustificationChunks:query",
+  );
 
   useExternalSyncEffect(() => {
     const syncedKeys = syncedResultsRef.current;
@@ -135,7 +127,7 @@ export const useSyncJustificationChunks = (
     }
 
     for (const result of syncedResults) {
-      if (!result.data || result.entityIds.length === 0) {
+      if (result.view.type !== "items" || result.entityIds.length === 0) {
         continue;
       }
 
@@ -149,7 +141,7 @@ export const useSyncJustificationChunks = (
       }
 
       syncedKeys.add(syncKey);
-      syncJustifications(result.data);
+      syncJustifications(result.view.items);
     }
   }, [syncJustifications, syncedResults, workspaceId]);
 };

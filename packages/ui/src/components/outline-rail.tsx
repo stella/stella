@@ -1,10 +1,9 @@
 /**
- * Outline rail — the shared right-edge navigation rail.
+ * Outline navigation: an embedded panel, a host-owned rail, or a disclosure.
  *
- * Always-visible thin column of ticks (width tapering by nesting level).
- * Hovering reveals a single popover panel with the outline as a collapsible
- * tree; the entry currently in view is emphasised. Click a tick or a row to
- * jump.
+ * Embedded presentations fill their host track. The standalone disclosure
+ * owns a thin column of ticks; hovering, focusing, or tapping the column
+ * reveals the collapsible tree. Click a tick or a row to jump.
  *
  * Generic over the position source: callers supply `resolvePct` (vertical % for
  * a tick) and `onJump`. Active tracking is derived from `resolvePct` by default,
@@ -15,6 +14,7 @@
 "use client";
 
 import {
+  memo,
   type ReactNode,
   type RefObject,
   useCallback,
@@ -29,9 +29,17 @@ import {
 import { Temporal } from "temporal-polyfill/full";
 
 import { ChevronRightIcon as ChevronRight } from "../icons";
+import { DOCUMENT_PANEL_SAFE_BOTTOM } from "../lib/panel-inset";
 import { cn } from "../lib/utils";
+import { ReviewAuthorAvatar } from "../review/review-author-avatar";
 import { DirectionalIcon } from "./directional-icon";
+import {
+  reconcileOutlineItems,
+  retainOutlineIdSet,
+} from "./outline-rail.logic";
+import { ScrollArea } from "./scroll-area";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "./tooltip";
+import { TruncatedText } from "./truncated-text";
 
 /**
  * How prominently an entry reads next to the entries around it. A caller
@@ -62,6 +70,18 @@ export type OutlineItem = {
   color?: string;
   /** How prominently the row reads. Defaults to `primary`. */
   emphasis?: OutlineEmphasis;
+  /** The people the entry is about. Its tick stays a tick and shows them on
+   *  hover or focus; an entry with people stays on the rail however dense the
+   *  outline gets. */
+  portraits?: readonly OutlinePortrait[];
+  /** Where the portraits come from, said under them in the tick's card. */
+  portraitCredit?: string;
+};
+
+/** A person an entry is about; `image` null draws their initials. */
+export type OutlinePortrait = {
+  image: string | null;
+  name: string;
 };
 
 export type OutlineRailProps = {
@@ -78,11 +98,17 @@ export type OutlineRailProps = {
    *  filter that narrows the tree to nothing cannot take its own control
    *  away; the caller decides whether the document has an outline at all. */
   header?: ReactNode;
+  /** Name a trailing annotation for assistive technology and its tooltip. */
+  formatMetaLabel?: (meta: string) => string;
   /** Depth from which entries start collapsed. Their ancestors still open on
    *  their own while one of their descendants is active, so a deep outline
    *  reads as the chain down to where the reader is rather than as every
    *  branch at once. Omitted: everything starts expanded. */
   collapsedFromLevel?: number;
+  /** `panel` and `rail` fill a host-owned track; `popover` owns its disclosure. */
+  presentation?: "panel" | "rail" | "popover";
+  /** A host that already reserves docked chrome passes zero. */
+  bottomInset?: number;
   topOffset?: number;
   panelWidth?: number;
   ariaLabel?: string;
@@ -90,12 +116,11 @@ export type OutlineRailProps = {
 
 type TreeNode = { item: OutlineItem; index: number; children: TreeNode[] };
 
-const RAIL_WIDTH = 20;
+export const OUTLINE_CONTROL_MIN_SIZE = 32;
+const OUTLINE_CONTROL_TARGET_CLASS =
+  "relative pointer-coarse:after:absolute pointer-coarse:after:size-full pointer-coarse:after:min-h-11 pointer-coarse:after:min-w-11";
+const RAIL_WIDTH = OUTLINE_CONTROL_MIN_SIZE;
 const PANEL_GAP = 6;
-// Popover row height (~29.9px). Parent rows stick at multiples of this so the
-// ancestor chain stacks at the top; set a hair UNDER the real height so stacked
-// headers slightly overlap (opaque) rather than leave a sub-pixel gap.
-const ROW_H = 29;
 const TICK_BASE_WIDTH = 6;
 const TICK_LEVEL_STEP = 2;
 const TICK_MAX_LEVEL = 5;
@@ -105,6 +130,11 @@ const RAIL_MAX_TICKS = 40;
 // fractional scrollHeight would otherwise leave a wheel stuck at an edge that
 // reads as one pixel short of its own end.
 const WHEEL_EDGE_TOLERANCE = 1;
+// How long the pointer rests on the tick strip before the panel opens. A
+// pointer crossing the strip on its way elsewhere (the scrollbar, a control
+// beside it) passes in less, so only a reader who stops there opens it.
+// Focus and a click open it at once.
+const HOVER_OPEN_DWELL_MS = 150;
 // Marks the active row for the reveal below: the rows are rendered by a
 // recursive walk, so the one to scroll to is found in the committed DOM
 // rather than held in a ref the walk would have to thread through.
@@ -113,6 +143,73 @@ const ACTIVE_ROW_ATTRIBUTE = "data-outline-active";
 /** The entry as one line of text: label, then its title when it has one. */
 export const outlineEntryText = (item: OutlineItem): string =>
   item.title === undefined ? item.label : `${item.label} ${item.title}`;
+
+// A bench can write separately together. A panel row is one line, so it stands
+// for them with a few faces; its text and the tick's card name everyone.
+const MAX_ROW_PORTRAITS = 3;
+// A portrait is published head and shoulders or fuller, so a small circle of
+// its centre is clothing. Frame the top of the image, zoomed to the head.
+const HEAD_FRAME_CLASS =
+  "[&_img]:origin-[50%_26%] [&_img]:scale-200 [&_img]:object-top";
+
+/** A row's faces, decorative: the row's text carries the names. */
+const OutlineRowPortraits = ({
+  portraits,
+}: {
+  portraits: readonly OutlinePortrait[];
+}) => (
+  <span
+    aria-hidden
+    className="me-1.5 flex shrink-0 -space-x-1.5 rtl:space-x-reverse"
+  >
+    {portraits.slice(0, MAX_ROW_PORTRAITS).map((portrait) => (
+      <ReviewAuthorAvatar
+        className={cn("ring-background size-6 ring-2", HEAD_FRAME_CLASS)}
+        fallbackClassName="text-[10px]"
+        image={portrait.image}
+        key={portrait.name}
+        name={portrait.name}
+      />
+    ))}
+  </span>
+);
+
+/** What a tick with people opens: each of them, face and name. The tick's
+ *  accessible name already says all this, so the card adds only the faces. */
+const OutlinePeopleCard = ({
+  credit,
+  portraits,
+  title,
+}: {
+  credit: string | undefined;
+  portraits: readonly OutlinePortrait[];
+  title: string | undefined;
+}) => (
+  <span className="flex max-w-64 flex-col gap-2 py-1">
+    {title !== undefined && (
+      <span className="text-muted-foreground">{title}</span>
+    )}
+    <span className="flex flex-col gap-2">
+      {portraits.map((portrait) => (
+        <span
+          className="flex items-center gap-2 font-medium"
+          key={portrait.name}
+        >
+          <ReviewAuthorAvatar
+            aria-hidden
+            className={cn("size-10", HEAD_FRAME_CLASS)}
+            image={portrait.image}
+            name={portrait.name}
+          />
+          {portrait.name}
+        </span>
+      ))}
+    </span>
+    {credit !== undefined && (
+      <span className="text-muted-foreground text-2xs">{credit}</span>
+    )}
+  </span>
+);
 
 const tickWidth = (level: number): number => {
   const clamped = Math.min(Math.max(level, 0), TICK_MAX_LEVEL);
@@ -188,38 +285,245 @@ const Chevron = ({ open }: { open: boolean }) => (
   />
 );
 
+type OutlineRowProps = {
+  item: OutlineItem;
+  hasChildren: boolean;
+  isCollapsed: boolean;
+  isActive: boolean;
+  isHovered: boolean;
+  indent: number;
+  /** The formatted meta label, so a caller's inline formatter cannot defeat
+   *  the row's memo; absent, the meta renders as plain text. */
+  metaLabel: string | undefined;
+  onJump: (id: string) => void;
+  onToggle: (id: string, rowEl: HTMLElement | null) => void;
+  onHover: (id: string | null) => void;
+};
+
+const OutlineRowView = ({
+  item,
+  hasChildren,
+  isCollapsed,
+  isActive,
+  isHovered,
+  indent,
+  metaLabel,
+  onJump,
+  onToggle,
+  onHover,
+}: OutlineRowProps) => (
+  <div
+    className={cn(
+      "flex items-center rounded-md pe-2.5",
+      (isActive || isHovered) && "bg-accent",
+    )}
+    {...(isActive ? { [ACTIVE_ROW_ATTRIBUTE]: "" } : {})}
+    onMouseEnter={() => onHover(item.id)}
+    onMouseLeave={() => onHover(null)}
+  >
+    {hasChildren ? (
+      <button
+        aria-expanded={!isCollapsed}
+        aria-label={isCollapsed ? "Expand" : "Collapse"}
+        className={cn(
+          "text-muted-foreground hover:text-foreground flex shrink-0 items-center justify-center",
+          OUTLINE_CONTROL_TARGET_CLASS,
+        )}
+        style={{
+          minWidth: OUTLINE_CONTROL_MIN_SIZE,
+          minHeight: OUTLINE_CONTROL_MIN_SIZE,
+          marginInlineStart: indent - 4,
+        }}
+        onClick={(event) =>
+          onToggle(item.id, event.currentTarget.parentElement)
+        }
+        type="button"
+      >
+        <Chevron open={!isCollapsed} />
+      </button>
+    ) : (
+      <span aria-hidden className="shrink-0" style={{ width: indent + 4 }} />
+    )}
+    {item.color && (
+      <span
+        aria-hidden
+        className="me-1.5 size-1.5 shrink-0 rounded-full"
+        style={{ background: `var(${item.color})` }}
+      />
+    )}
+    {item.portraits !== undefined && (
+      <OutlineRowPortraits portraits={item.portraits} />
+    )}
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <button
+            aria-current={isActive ? "true" : undefined}
+            className={cn(
+              "flex min-w-0 flex-1 items-baseline gap-1.5 py-1.5 text-start text-[13px] leading-snug",
+              rowTextClass(isActive, item.emphasis ?? OUTLINE_EMPHASIS.primary),
+            )}
+            onClick={() => onJump(item.id)}
+            type="button"
+          />
+        }
+      >
+        {item.title === undefined ? (
+          <TruncatedText hint={false}>{item.label}</TruncatedText>
+        ) : (
+          <>
+            <span className="shrink-0 font-medium">{item.label}</span>
+            <TruncatedText className="font-normal" hint={false}>
+              {item.title}
+            </TruncatedText>
+          </>
+        )}
+      </TooltipTrigger>
+      <TooltipPopup>{outlineEntryText(item)}</TooltipPopup>
+    </Tooltip>
+    {item.meta !== undefined &&
+      (metaLabel !== undefined ? (
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <button
+                aria-label={metaLabel}
+                className={cn(
+                  "text-foreground-placeholder text-2xs shrink-0 tabular-nums",
+                  OUTLINE_CONTROL_TARGET_CLASS,
+                )}
+                style={{
+                  minWidth: OUTLINE_CONTROL_MIN_SIZE,
+                  minHeight: OUTLINE_CONTROL_MIN_SIZE,
+                }}
+                onClick={() => onJump(item.id)}
+                type="button"
+              />
+            }
+          >
+            {item.meta}
+          </TooltipTrigger>
+          <TooltipPopup>{metaLabel}</TooltipPopup>
+        </Tooltip>
+      ) : (
+        <span className="text-foreground-placeholder text-2xs shrink-0 ps-2 tabular-nums">
+          {item.meta}
+        </span>
+      ))}
+  </div>
+);
+
+// One row of the panel tree, memoized on its own props: a change to one entry
+// (its page number, the active or hovered entry) re-renders that row alone,
+// while the tree around it is plain markup and stays cheap to rebuild.
+const OutlineRow = memo(OutlineRowView);
+
+type OutlineTreeProps = {
+  tree: TreeNode[];
+  collapsed: ReadonlySet<string>;
+  toggled: ReadonlySet<string>;
+  activeAncestorIds: ReadonlySet<string>;
+  activeId: string | null;
+  hoveredId: string | null;
+  maxLevel: number;
+  formatMetaLabel: ((meta: string) => string) | undefined;
+  onJump: (id: string) => void;
+  onToggle: (id: string, rowEl: HTMLElement | null) => void;
+  onHover: (id: string | null) => void;
+};
+
+const OutlineTreeView = ({
+  tree,
+  collapsed,
+  toggled,
+  activeAncestorIds,
+  activeId,
+  hoveredId,
+  maxLevel,
+  formatMetaLabel,
+  onJump,
+  onToggle,
+  onHover,
+}: OutlineTreeProps) => {
+  const renderNode = (node: TreeNode): ReactNode => {
+    const hasChildren = node.children.length > 0;
+    const isCollapsed =
+      collapsed.has(node.item.id) &&
+      !(activeAncestorIds.has(node.item.id) && !toggled.has(node.item.id));
+    return (
+      <li key={`${node.item.id}-${node.index}`}>
+        <OutlineRow
+          hasChildren={hasChildren}
+          indent={8 + Math.min(node.item.level, maxLevel) * 12}
+          isActive={activeId === node.item.id}
+          isCollapsed={isCollapsed}
+          isHovered={hoveredId === node.item.id}
+          item={node.item}
+          metaLabel={
+            node.item.meta === undefined
+              ? undefined
+              : formatMetaLabel?.(node.item.meta)
+          }
+          onHover={onHover}
+          onJump={onJump}
+          onToggle={onToggle}
+        />
+        {hasChildren && !isCollapsed && (
+          <ul className="m-0 list-none p-0">{node.children.map(renderNode)}</ul>
+        )}
+      </li>
+    );
+  };
+  return <ul className="m-0 list-none p-0 pb-2">{tree.map(renderNode)}</ul>;
+};
+
+// The panel tree, memoized apart from the rail: the rail also re-renders when
+// its host does and when tick positions move, none of which the tree shows.
+const OutlineTree = memo(OutlineTreeView);
+
 export const OutlineRail = ({
-  items,
+  items: itemsProp,
   scrollContainerRef,
   resolvePct,
   onJump,
   activeId,
   header,
+  formatMetaLabel,
   collapsedFromLevel,
+  presentation = "popover",
+  bottomInset,
   topOffset = 0,
   panelWidth = 300,
   ariaLabel = "Outline",
 }: OutlineRailProps) => {
+  // Callers rebuild their items on every change (an editor re-collects its
+  // headings after each edit). Entries whose content is unchanged keep their
+  // identity, so an update re-renders only the rows that changed, and one
+  // that changed nothing renders no row at all.
+  const [stableItems, setStableItems] = useState(itemsProp);
+  const items = reconcileOutlineItems(stableItems, itemsProp);
+  if (items !== stableItems) {
+    setStableItems(items);
+  }
   const [pctById, setPctById] = useState<ReadonlyMap<string, number>>(
     new Map(),
   );
   const [derivedActive, setDerivedActive] = useState<string | null>(null);
   const [hovered, setHovered] = useState(false);
-  // Held open by keyboard. The pointer path reveals the panel on hover, which
-  // a keyboard has no equivalent of, and an `inert` panel cannot take focus to
-  // open itself — so the way in is a control outside it that latches this.
-  const [pinned, setPinned] = useState(false);
+  const [focusWithin, setFocusWithin] = useState(false);
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
   // Rows the reader has opened or closed by hand. Their state is theirs: the
   // active-chain auto-expand below must not reopen a branch they just shut.
   const [toggled, setToggled] = useState<ReadonlySet<string>>(new Set());
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const panelId = useId();
-  const triggerId = useId();
-  const panelOpen = hovered || pinned;
+  const panelOpen = presentation === "panel" || hovered || focusWithin;
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const openTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const manualLockUntil = useRef(0);
-  const panelRef = useRef<HTMLElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const railRef = useRef<HTMLDivElement>(null);
+  const focusedTickRef = useRef<HTMLButtonElement>(null);
   // Hold onJump and the scroll-time resolver in refs so the active-tracking
   // scroll listener reads the latest without re-subscribing. recalc instead
   // depends on resolvePct directly, so ticks recompute when the resolver's
@@ -230,21 +534,31 @@ export const OutlineRail = ({
 
   const tree = useMemo(() => buildTree(items), [items]);
 
-  // Seed the default-collapsed set from the items, and reset it when the
-  // items change (a different document). Adjusting state during render rather
-  // than in an effect keeps the first paint correct.
-  const [seededItems, setSeededItems] = useState<OutlineItem[] | null>(null);
+  // Seed the default-collapsed state for entries seen for the first time and
+  // keep the reader's state for entries that stay: a page number moving under
+  // an unchanged heading must not reopen the branch they closed. A different
+  // document brings different ids, so it starts from the defaults. Adjusting
+  // state during render rather than in an effect keeps the first paint correct.
+  const [seededItems, setSeededItems] = useState<OutlineItem[]>([]);
   if (seededItems !== items) {
+    const knownIds = new Set(seededItems.map((item) => item.id));
     setSeededItems(items);
-    setToggled(new Set());
-    setCollapsed(
-      collapsedFromLevel === undefined
-        ? new Set()
-        : new Set(
-            items
-              .filter((item) => item.level >= collapsedFromLevel)
-              .map((item) => item.id),
-          ),
+    setToggled((previous) =>
+      retainOutlineIdSet({
+        ids: previous,
+        knownIds,
+        seed: () => false,
+        items,
+      }),
+    );
+    setCollapsed((previous) =>
+      retainOutlineIdSet({
+        ids: previous,
+        knownIds,
+        seed: (item) =>
+          collapsedFromLevel !== undefined && item.level >= collapsedFromLevel,
+        items,
+      }),
     );
   }
 
@@ -385,20 +699,23 @@ export const OutlineRail = ({
     return ancestors;
   }, [active, items]);
 
+  // Keyed on whether the active id is controlled, not on its value: every row
+  // holds this handler, and a new one per active change would re-render all.
+  const activeControlled = activeId !== undefined;
   const jumpTo = useCallback(
     (id: string) => {
       const container = scrollContainerRef.current;
       if (!container) {
         return;
       }
-      if (activeId === undefined) {
+      if (!activeControlled) {
         setDerivedActive(id);
         manualLockUntil.current =
           Temporal.Now.instant().epochMilliseconds + 900;
       }
       onJumpRef.current(id, container);
     },
-    [activeId, scrollContainerRef],
+    [activeControlled, scrollContainerRef],
   );
 
   const toggleCollapse = useCallback(
@@ -445,18 +762,44 @@ export const OutlineRail = ({
     if (activeIndex === -1 || !panelOpen) {
       return;
     }
-    panelRef.current
-      ?.querySelector(`[${ACTIVE_ROW_ATTRIBUTE}]`)
-      ?.scrollIntoView({ block: "nearest" });
+    const panel = panelRef.current;
+    const row = panel?.querySelector(`[${ACTIVE_ROW_ATTRIBUTE}]`);
+    if (!panel || !(row instanceof HTMLElement)) {
+      return;
+    }
+    const panelBox = panel.getBoundingClientRect();
+    const rowBox = row.getBoundingClientRect();
+    if (rowBox.top < panelBox.top) {
+      panel.scrollTop += rowBox.top - panelBox.top;
+    } else if (rowBox.bottom > panelBox.bottom) {
+      panel.scrollTop += rowBox.bottom - panelBox.bottom;
+    }
   }, [activeIndex, panelOpen]);
 
+  const cancelOpen = useCallback(() => {
+    if (openTimer.current !== null) {
+      clearTimeout(openTimer.current);
+      openTimer.current = null;
+    }
+  }, []);
+
   const openPanel = useCallback(() => {
+    cancelOpen();
     if (closeTimer.current !== null) {
       clearTimeout(closeTimer.current);
       closeTimer.current = null;
     }
     setHovered(true);
-  }, []);
+  }, [cancelOpen]);
+
+  const scheduleOpen = useCallback(() => {
+    if (closeTimer.current !== null) {
+      clearTimeout(closeTimer.current);
+      closeTimer.current = null;
+    }
+    cancelOpen();
+    openTimer.current = setTimeout(openPanel, HOVER_OPEN_DWELL_MS);
+  }, [cancelOpen, openPanel]);
 
   const scheduleClose = useCallback(() => {
     if (closeTimer.current !== null) {
@@ -465,21 +808,13 @@ export const OutlineRail = ({
     closeTimer.current = setTimeout(() => setHovered(false), 120);
   }, []);
 
-  // Opening by keyboard has to land the reader in the panel; it is `inert`
-  // until this render commits, so the move cannot happen in the click.
-  useEffect(() => {
-    if (pinned) {
-      panelRef.current?.focus();
-    }
-  }, [pinned]);
-
   const closePanel = useCallback(() => {
     if (closeTimer.current !== null) {
       clearTimeout(closeTimer.current);
       closeTimer.current = null;
     }
     setHovered(false);
-    setPinned(false);
+    setFocusWithin(false);
   }, []);
 
   useEffect(
@@ -487,121 +822,17 @@ export const OutlineRail = ({
       if (closeTimer.current !== null) {
         clearTimeout(closeTimer.current);
       }
+      if (openTimer.current !== null) {
+        clearTimeout(openTimer.current);
+      }
     },
     [],
   );
 
-  const renderNode = (node: TreeNode): ReactNode => {
-    const hasChildren = node.children.length > 0;
-    const isCollapsed =
-      collapsed.has(node.item.id) &&
-      !(activeAncestorIds.has(node.item.id) && !toggled.has(node.item.id));
-    const isActive = active === node.item.id;
-    const isHovered = hoveredId === node.item.id;
-    const highlighted = isActive || isHovered;
-    const indent = 8 + Math.min(node.item.level, maxLevel) * 12;
-    return (
-      <li key={`${node.item.id}-${node.index}`}>
-        <div
-          className={cn(
-            "flex items-center rounded-md pe-2.5",
-            // Leaf rows highlight over the panel's own bg (no occlusion needed).
-            !hasChildren && highlighted && "bg-accent",
-          )}
-          {...(isActive ? { [ACTIVE_ROW_ATTRIBUTE]: "" } : {})}
-          onMouseEnter={() => setHoveredId(node.item.id)}
-          onMouseLeave={() => setHoveredId(null)}
-          style={
-            hasChildren
-              ? {
-                  position: "sticky",
-                  top: node.item.level * ROW_H,
-                  zIndex: 40 - node.item.level,
-                  // Sticky parents must be fully opaque so scrolled content can't
-                  // bleed through; layer the (possibly translucent) accent over a
-                  // solid popover fill when highlighted.
-                  background: highlighted
-                    ? "linear-gradient(var(--color-accent), var(--color-accent)), var(--color-popover)"
-                    : "var(--color-popover)",
-                }
-              : undefined
-          }
-        >
-          {hasChildren ? (
-            <button
-              aria-expanded={!isCollapsed}
-              aria-label={isCollapsed ? "Expand" : "Collapse"}
-              className="text-muted-foreground hover:text-foreground flex size-5 shrink-0 items-center justify-center"
-              onClick={(event) =>
-                toggleCollapse(node.item.id, event.currentTarget.parentElement)
-              }
-              style={{ marginInlineStart: indent - 4 }}
-              type="button"
-            >
-              <Chevron open={!isCollapsed} />
-            </button>
-          ) : (
-            <span
-              aria-hidden
-              className="shrink-0"
-              style={{ width: indent + 4 }}
-            />
-          )}
-          {node.item.color && (
-            <span
-              aria-hidden
-              className="me-1.5 size-1.5 shrink-0 rounded-full"
-              style={{ background: `var(${node.item.color})` }}
-            />
-          )}
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <button
-                  aria-current={isActive ? "true" : undefined}
-                  className={cn(
-                    "flex min-w-0 flex-1 items-baseline gap-1.5 py-1.5 text-start text-[13px] leading-snug",
-                    rowTextClass(
-                      isActive,
-                      node.item.emphasis ?? OUTLINE_EMPHASIS.primary,
-                    ),
-                  )}
-                  onClick={() => jumpTo(node.item.id)}
-                  type="button"
-                />
-              }
-            >
-              {node.item.title === undefined ? (
-                <span className="min-w-0 truncate">{node.item.label}</span>
-              ) : (
-                <>
-                  <span className="shrink-0 font-medium">
-                    {node.item.label}
-                  </span>
-                  <span className="min-w-0 truncate font-normal">
-                    {node.item.title}
-                  </span>
-                </>
-              )}
-            </TooltipTrigger>
-            <TooltipPopup>{outlineEntryText(node.item)}</TooltipPopup>
-          </Tooltip>
-          {node.item.meta !== undefined && (
-            <span className="text-foreground-placeholder text-2xs shrink-0 ps-2 tabular-nums">
-              {node.item.meta}
-            </span>
-          )}
-        </div>
-        {hasChildren && !isCollapsed && (
-          <ul className="m-0 list-none p-0">{node.children.map(renderNode)}</ul>
-        )}
-      </li>
-    );
-  };
-
   const visibleTicks = items.flatMap((item) => {
     const pct = pctById.get(item.id);
-    return pct !== undefined && item.level <= railLevelCap
+    return pct !== undefined &&
+      (item.portraits !== undefined || item.level <= railLevelCap)
       ? [{ item, pct }]
       : [];
   });
@@ -610,8 +841,11 @@ export const OutlineRail = ({
   // outline with one shallow heading and many deeper ones leaves <2 ticks but
   // still has a full, navigable popover, so only hide when there is no outline.
   // A header keeps the panel: `items` is then the caller's filtered view, and
-  // a filter matching nothing must still leave the field that set it.
-  if (items.length < 2 && header === undefined) {
+  // a filter matching nothing must still leave the field that set it. An entry
+  // with people is worth a tick on its own: it says whose text is further down,
+  // and its card says all a list of one would.
+  const hasPanel = items.length >= 2 || header !== undefined;
+  if (!hasPanel && !items.some((item) => item.portraits !== undefined)) {
     return null;
   }
 
@@ -630,170 +864,269 @@ export const OutlineRail = ({
   return (
     <div
       aria-label={ariaLabel}
-      className="absolute end-0 z-20 max-lg:hidden"
+      className={OUTLINE_PRESENTATION_CLASS[presentation]}
+      ref={railRef}
       role="group"
-      style={{ top: topOffset, bottom: 0, width: RAIL_WIDTH }}
+      style={{
+        marginBlockEnd: bottomInset ?? DOCUMENT_PANEL_SAFE_BOTTOM,
+        ...(presentation === "popover"
+          ? { top: topOffset, bottom: 0, width: RAIL_WIDTH }
+          : {}),
+      }}
     >
-      {/* The panel is revealed by hover, which a keyboard cannot perform, and
-          it is `inert` until then, so no control inside it can be the way in.
-          This one sits outside the panel and stays out of the layout until it
-          takes focus, leaving the rail as drawn for pointer readers. */}
-      <button
-        aria-controls={panelId}
-        aria-expanded={panelOpen}
-        className="focus-visible:ring-ring bg-popover text-popover-foreground sr-only end-0 top-2 z-30 -translate-x-6 text-xs focus:not-sr-only focus:absolute focus:w-max focus:rounded-md focus:border focus:px-2 focus:py-1 focus-visible:ring-2 focus-visible:outline-none"
-        id={triggerId}
-        onClick={() => {
-          if (pinned) {
+      {presentation !== "panel" && (
+        <div
+          className="relative min-h-0 flex-1"
+          data-outline-ticks
+          onMouseEnter={scheduleOpen}
+          onMouseLeave={() => {
+            cancelOpen();
+            scheduleClose();
+          }}
+          onWheel={(event) => {
+            scrollContainerRef.current?.scrollBy(0, event.deltaY);
+          }}
+        >
+          {visibleTicks.map(({ item, pct }) => {
+            const isActive = active === item.id;
+            const isHovered = hoveredId === item.id;
+            const portraits = item.portraits;
+            const tickLabel =
+              portraits === undefined ? item.label : outlineEntryText(item);
+            return (
+              <Tooltip key={item.id}>
+                <TooltipTrigger
+                  render={
+                    <button
+                      {...(presentation === "popover" && hasPanel
+                        ? {
+                            "aria-controls": panelId,
+                            "aria-expanded": panelOpen,
+                          }
+                        : {})}
+                      aria-current={isActive ? "true" : undefined}
+                      aria-label={tickLabel}
+                      className={cn(
+                        "absolute end-0 rounded-full transition-[width,height,opacity] duration-150",
+                        isHovered || isActive
+                          ? "opacity-100"
+                          : "opacity-45 hover:opacity-90",
+                        // Its card is reached by resting on the tick, so the
+                        // tick is a target a pointer can stop on, not 2px.
+                        portraits !== undefined &&
+                          "focus-visible:outline-ring z-10 after:absolute after:-inset-x-2 after:-inset-y-2.5 focus-visible:outline-2 focus-visible:outline-offset-2 pointer-coarse:after:-inset-x-3.5 pointer-coarse:after:-inset-y-5",
+                      )}
+                      onBlur={(event) => {
+                        // Focus moving to another tick or into the panel keeps
+                        // the outline open; leaving the rail closes it.
+                        if (!railRef.current?.contains(event.relatedTarget)) {
+                          closePanel();
+                        }
+                      }}
+                      onClick={() => jumpTo(item.id)}
+                      onFocus={(event) => {
+                        focusedTickRef.current = event.currentTarget;
+                        setFocusWithin(true);
+                      }}
+                      onKeyDown={(event) => {
+                        if (
+                          event.key === "Escape" &&
+                          presentation === "popover"
+                        ) {
+                          closePanel();
+                        }
+                      }}
+                      onMouseEnter={() => setHoveredId(item.id)}
+                      onMouseLeave={() => setHoveredId(null)}
+                      style={{
+                        top: `clamp(2px, ${pct}%, calc(100% - 2px))`,
+                        transform: "translateY(-50%)",
+                        width: isHovered
+                          ? tickWidth(item.level) + 8
+                          : tickWidth(item.level),
+                        height: tickHeight(isHovered, isActive),
+                        background: tickBackground(item.color, isHovered),
+                      }}
+                      type="button"
+                    />
+                  }
+                />
+                {portraits === undefined ? (
+                  <TooltipPopup>{item.label}</TooltipPopup>
+                ) : (
+                  <TooltipPopup
+                    side="inline-start"
+                    // The panel opens with the card, and its rows are what the
+                    // reader came to the rail for: the card stands beside them.
+                    sideOffset={
+                      presentation === "popover" && hasPanel
+                        ? RAIL_WIDTH +
+                          PANEL_GAP * 2 +
+                          panelWidth -
+                          tickWidth(item.level)
+                        : undefined
+                    }
+                  >
+                    <OutlinePeopleCard
+                      credit={item.portraitCredit}
+                      portraits={portraits}
+                      title={item.title}
+                    />
+                  </TooltipPopup>
+                )}
+              </Tooltip>
+            );
+          })}
+          {ghostItem && ghostPct !== undefined && (
+            <span
+              aria-hidden
+              className="absolute end-0 rounded-full opacity-100"
+              style={{
+                top: `clamp(2px, ${ghostPct}%, calc(100% - 2px))`,
+                transform: "translateY(-50%)",
+                width: tickWidth(ghostItem.level) + 8,
+                height: 4,
+                background: ghostItem.color
+                  ? `var(${ghostItem.color})`
+                  : "var(--option-blue)",
+              }}
+            />
+          )}
+        </div>
+      )}
+
+      {presentation !== "rail" && hasPanel && (
+        // oxlint-disable-next-line jsx-a11y/no-noninteractive-element-interactions -- hover-reveal disclosure on a nav landmark; panel visibility gated by inert/aria-hidden
+        <nav
+          aria-label={ariaLabel}
+          aria-hidden={!panelOpen}
+          id={panelId}
+          inert={panelOpen ? undefined : true}
+          tabIndex={-1}
+          className={cn(
+            "bg-popover text-popover-foreground flex min-h-0 flex-col",
+            presentation === "popover" &&
+              "border-border absolute rounded-xl border shadow-lg transition-[opacity,transform] duration-150",
+            outlinePanelVisibilityClass(presentation, panelOpen),
+          )}
+          // A control in the header is reachable by keyboard once the panel is
+          // open, and typing in it moves the pointer nowhere: hold the panel
+          // open for as long as focus is inside it, or `inert` would take the
+          // focused control away mid-keystroke.
+          onBlurCapture={(event) => {
+            // Focus leaving the rail from inside the panel closes it the same
+            // way leaving from a tick does; moving within the rail keeps it.
+            if (!railRef.current?.contains(event.relatedTarget)) {
+              closePanel();
+              return;
+            }
+            scheduleClose();
+          }}
+          onFocusCapture={() => {
+            // Focus that entered by pointer, with no tick focused first, holds
+            // the panel open too: a hover alone would lapse on mouse-out.
+            openPanel();
+            setFocusWithin(true);
+          }}
+          onKeyDown={(event) => {
+            // Escape hands focus back to the tick the reader came from, or to
+            // the current tick when the panel was opened by pointer.
+            if (event.key !== "Escape" || presentation !== "popover") {
+              return;
+            }
+            const tickSelector = `button[aria-controls="${CSS.escape(panelId)}"]`;
+            const returnTick =
+              focusedTickRef.current ??
+              railRef.current?.querySelector<HTMLButtonElement>(
+                `${tickSelector}[aria-current="true"]`,
+              ) ??
+              railRef.current?.querySelector<HTMLButtonElement>(tickSelector);
+            returnTick?.focus();
             closePanel();
-            return;
-          }
-          setPinned(true);
-          openPanel();
-        }}
-        type="button"
-      >
-        {ariaLabel}
-      </button>
-      <div
-        className="relative h-full"
-        onMouseEnter={openPanel}
-        onMouseLeave={scheduleClose}
-        onWheel={(event) => {
-          scrollContainerRef.current?.scrollBy(0, event.deltaY);
-        }}
-      >
-        {visibleTicks.map(({ item, pct }) => {
-          const isActive = active === item.id;
-          const isHovered = hoveredId === item.id;
-          return (
-            <Tooltip key={item.id}>
-              <TooltipTrigger
-                render={
-                  <button
-                    aria-current={isActive ? "true" : undefined}
-                    aria-label={item.label}
-                    className={cn(
-                      "absolute end-0 rounded-full transition-[width,height,opacity] duration-150",
-                      isHovered || isActive
-                        ? "opacity-100"
-                        : "opacity-45 hover:opacity-90",
-                    )}
-                    onClick={() => jumpTo(item.id)}
-                    onMouseEnter={() => setHoveredId(item.id)}
-                    onMouseLeave={() => setHoveredId(null)}
-                    style={{
-                      top: `${pct}%`,
-                      transform: "translateY(-50%)",
-                      width: isHovered
-                        ? tickWidth(item.level) + 8
-                        : tickWidth(item.level),
-                      height: tickHeight(isHovered, isActive),
-                      background: tickBackground(item.color, isHovered),
-                    }}
-                    type="button"
-                  />
+          }}
+          onMouseEnter={openPanel}
+          onMouseLeave={scheduleClose}
+          onWheel={(event) => {
+            // The panel is a lens over the document, not a modal: a wheel it
+            // cannot use must still scroll the text behind it. A short outline
+            // has no overflow to consume at all, and a long one stops consuming
+            // at its own ends — and the document's scroller is a sibling, not an
+            // ancestor, so the browser's own scroll chaining never reaches it.
+            const panel = panelRef.current;
+            if (!panel) {
+              return;
+            }
+            const room = panel.scrollHeight - panel.clientHeight;
+            const consumes =
+              room > WHEEL_EDGE_TOLERANCE &&
+              (event.deltaY < 0
+                ? panel.scrollTop > WHEEL_EDGE_TOLERANCE
+                : panel.scrollTop < room - WHEEL_EDGE_TOLERANCE);
+
+            if (consumes) {
+              return;
+            }
+
+            scrollContainerRef.current?.scrollBy(0, event.deltaY);
+          }}
+          style={
+            presentation === "popover"
+              ? {
+                  top: 0,
+                  insetInlineEnd: RAIL_WIDTH + PANEL_GAP,
+                  width: `min(${panelWidth}px, calc(100vw - ${RAIL_WIDTH + PANEL_GAP + 16}px))`,
+                  height: "calc(100% - 24px)",
                 }
-              />
-              <TooltipPopup>{item.label}</TooltipPopup>
-            </Tooltip>
-          );
-        })}
-        {ghostItem && ghostPct !== undefined && (
-          <span
-            aria-hidden
-            className="absolute end-0 rounded-full opacity-100"
-            style={{
-              top: `${ghostPct}%`,
-              transform: "translateY(-50%)",
-              width: tickWidth(ghostItem.level) + 8,
-              height: 4,
-              background: ghostItem.color
-                ? `var(${ghostItem.color})`
-                : "var(--option-blue)",
-            }}
-          />
-        )}
-      </div>
-
-      {/* oxlint-disable-next-line jsx-a11y/no-noninteractive-element-interactions -- hover-reveal disclosure on a nav landmark; onMouseEnter/Leave drive a supplementary pointer affordance, panel visibility gated by inert/aria-hidden */}
-      <nav
-        aria-hidden={!panelOpen}
-        id={panelId}
-        inert={panelOpen ? undefined : true}
-        tabIndex={-1}
-        className={cn(
-          "border-border bg-popover text-popover-foreground absolute overflow-y-auto rounded-xl border pb-2 shadow-lg transition-[opacity,transform] duration-150",
-          panelOpen
-            ? "translate-x-0 opacity-100"
-            : "pointer-events-none translate-x-2 opacity-0",
-        )}
-        // A control in the header is reachable by keyboard once the panel is
-        // open, and typing in it moves the pointer nowhere: hold the panel
-        // open for as long as focus is inside it, or `inert` would take the
-        // focused control away mid-keystroke.
-        onBlurCapture={(event) => {
-          // A panel latched open by keyboard releases when focus leaves it;
-          // the hover path keeps its grace period so a click inside the panel
-          // (blur, then focus) does not flicker it shut.
-          if (pinned && !event.currentTarget.contains(event.relatedTarget)) {
-            closePanel();
-            return;
+              : undefined
           }
-          scheduleClose();
-        }}
-        onFocusCapture={openPanel}
-        onKeyDown={(event) => {
-          if (event.key !== "Escape") {
-            return;
-          }
-          // Closing makes this panel inert, which would leave focus nowhere.
-          // Hand it back to the control that opened it, before that happens.
-          const trigger = event.currentTarget.ownerDocument.querySelector(
-            `#${CSS.escape(triggerId)}`,
-          );
-          if (trigger instanceof HTMLElement) {
-            trigger.focus();
-          }
-          closePanel();
-        }}
-        onMouseEnter={openPanel}
-        onMouseLeave={scheduleClose}
-        onWheel={(event) => {
-          // The panel is a lens over the document, not a modal: a wheel it
-          // cannot use must still scroll the text behind it. A short outline
-          // has no overflow to consume at all, and a long one stops consuming
-          // at its own ends — and the document's scroller is a sibling, not an
-          // ancestor, so the browser's own scroll chaining never reaches it.
-          const panel = event.currentTarget;
-          const room = panel.scrollHeight - panel.clientHeight;
-          const consumes =
-            room > WHEEL_EDGE_TOLERANCE &&
-            (event.deltaY < 0
-              ? panel.scrollTop > WHEEL_EDGE_TOLERANCE
-              : panel.scrollTop < room - WHEEL_EDGE_TOLERANCE);
-
-          if (consumes) {
-            return;
-          }
-
-          scrollContainerRef.current?.scrollBy(0, event.deltaY);
-        }}
-        ref={panelRef}
-        style={{
-          top: 0,
-          insetInlineEnd: RAIL_WIDTH + PANEL_GAP,
-          width: panelWidth,
-          maxHeight: "calc(100% - 24px)",
-        }}
-      >
-        {header !== undefined && (
-          <div className="bg-popover sticky top-0 z-50 border-b p-2">
-            {header}
-          </div>
-        )}
-        <ul className="m-0 list-none p-0">{tree.map(renderNode)}</ul>
-      </nav>
+        >
+          {header !== undefined && (
+            <div className="bg-popover z-50 shrink-0 border-b p-2">
+              {header}
+            </div>
+          )}
+          <ScrollArea
+            axis="vertical"
+            className="min-h-0 flex-1"
+            viewportRef={panelRef}
+          >
+            <OutlineTree
+              activeAncestorIds={activeAncestorIds}
+              activeId={active}
+              collapsed={collapsed}
+              formatMetaLabel={formatMetaLabel}
+              hoveredId={hoveredId}
+              maxLevel={maxLevel}
+              onHover={setHoveredId}
+              onJump={jumpTo}
+              onToggle={toggleCollapse}
+              toggled={toggled}
+              tree={tree}
+            />
+          </ScrollArea>
+        </nav>
+      )}
     </div>
   );
 };
+
+const OUTLINE_PRESENTATION_CLASS = {
+  popover: "absolute end-0 z-20 flex flex-col pointer-coarse:min-w-11",
+  panel: "relative flex min-h-0 w-full flex-1 flex-col",
+  rail: "relative flex min-h-0 w-full flex-1 flex-col",
+} as const satisfies Record<
+  NonNullable<OutlineRailProps["presentation"]>,
+  string
+>;
+
+function outlinePanelVisibilityClass(
+  presentation: NonNullable<OutlineRailProps["presentation"]>,
+  open: boolean,
+): string {
+  if (presentation === "panel") {
+    return "flex-1";
+  }
+  return open
+    ? "translate-x-0 opacity-100"
+    : "pointer-events-none translate-x-2 opacity-0";
+}

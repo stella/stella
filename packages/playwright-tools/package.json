@@ -1,0 +1,30 @@
+{
+  "name": "@stll/playwright-tools",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Playwright configuration and report tooling",
+  "license": "Apache-2.0",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    "./marketing-case-law": "./src/marketing-case-law.ts",
+    "./marketing-config": "./src/marketing-config.ts",
+    "./marketing-locales": "./src/marketing-locales.ts",
+    "./marketing-case-law.json": "./src/marketing-case-law.json",
+    "./app-marketing-config": "./src/app-marketing-config.ts",
+    "./landing-marketing-config": "./src/landing-marketing-config.ts",
+    "./devices": "./src/devices.ts"
+  },
+  "scripts": {
+    "clean": "git clean -xdf .cache .turbo node_modules",
+    "typecheck": "bun check --no-pretty --all --project=tsconfig.json",
+    "lint": "cd ../.. && bun scripts/lint.ts packages/playwright-tools",
+    "lint:fix": "cd ../.. && bun scripts/lint.ts --fix packages/playwright-tools",
+    "report": "PLAYWRIGHT_HTML_OUTPUT_DIR=../../apps/web/playwright-report bun --bun playwright merge-reports --reporter html ../../apps/web/all-blob-reports"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.65.1",
+    "@stll/typescript-config": "workspace:*",
+    "bun-types": "catalog:"
+  }
+}

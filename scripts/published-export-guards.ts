@@ -1,25 +1,13 @@
 import { Result } from "better-result";
 import path from "node:path";
 
+import { isPathStrictlyInside } from "@stll/portable-path";
+
 const testArtifactPattern =
   /(?:^|\/)(?:fixtures\/|[^/]+\.(?:test|spec)\.(?:[cm]?[jt]sx?|d\.ts)$|[^/]+\.playwright\.[cm]?[jt]sx?$|playwright\.config\.[cm]?[jt]sx?$)/u;
 
 export const isPublishedTestArtifact = (file: string) =>
   testArtifactPattern.test(file);
-
-/**
- * Containment by path segment, not by string prefix: `dist-cache` starts with
- * `dist` but is a different directory.
- */
-const isInsideDirectory = (candidate: string, directory: string): boolean => {
-  const relative = path.relative(directory, path.resolve(candidate));
-  return (
-    relative !== "" &&
-    relative !== ".." &&
-    !relative.startsWith(`..${path.sep}`) &&
-    !path.isAbsolute(relative)
-  );
-};
 
 /**
  * Whether a Node load failure is the tarball's own defect.
@@ -50,10 +38,56 @@ export const isOwnDistLoadFailure = ({
     target
       ?.split(/["'\s]+/u)
       .some(
-        (token) => path.isAbsolute(token) && isInsideDirectory(token, distDir),
+        (token) =>
+          path.isAbsolute(token) && isPathStrictlyInside(distDir, token),
       ) === true
   );
 };
+
+// A string literal resolved against the module's own URL: worker entries and
+// binary assets a built module loads at runtime rather than imports.
+const IMPORT_META_URL_TARGET =
+  /new\s+URL\(\s*(?<quote>["'`])(?<target>[^"'`$\\]+)\k<quote>\s*,\s*import\.meta\.url\s*\)/gu;
+const URL_SCHEME = /^[a-z][a-z\d+.-]*:/iu;
+
+/**
+ * Package-relative paths a built module reaches through
+ * `new URL("<relative>", import.meta.url)`. Nothing imports these, so neither
+ * the export map nor a Node load proves they ship: a worker spawned this way
+ * fails only when the consumer first starts it. Absolute and scheme URLs are
+ * not package files and are skipped; a target ending in `/` names a directory.
+ */
+export const importMetaUrlTargets = ({
+  file,
+  contents,
+}: {
+  readonly file: string;
+  readonly contents: string;
+}): string[] =>
+  [...contents.matchAll(IMPORT_META_URL_TARGET)].flatMap((match) => {
+    const target = match.groups?.["target"];
+    if (
+      target === undefined ||
+      target.startsWith("/") ||
+      URL_SCHEME.test(target)
+    ) {
+      return [];
+    }
+    // posix.join keeps a trailing slash, so a directory target stays one.
+    return [path.posix.join(path.posix.dirname(file), target)];
+  });
+
+/** Whether a package-relative URL target ships in the tarball's file list. */
+export const isShippedUrlTarget = ({
+  target,
+  packed,
+}: {
+  readonly target: string;
+  readonly packed: ReadonlySet<string>;
+}): boolean =>
+  target.endsWith("/")
+    ? [...packed].some((file) => file.startsWith(target))
+    : packed.has(target);
 
 type PublishedExportEntry = string | { readonly import: string };
 
@@ -70,7 +104,7 @@ export const isExpectedPublishedExportResolution = ({
     return path.resolve(resolved) === path.resolve(packageDir, entry);
   }
 
-  return isInsideDirectory(resolved, path.resolve(packageDir, "dist"));
+  return isPathStrictlyInside(path.resolve(packageDir, "dist"), resolved);
 };
 
 type ResolvePublishedExportOptions = {

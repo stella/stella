@@ -10,6 +10,7 @@ import {
   errorTag,
   isErrorInstance,
 } from "@/api/lib/errors/error-tag";
+import { sanitizeDiagnosticErrorForOutput } from "@/api/lib/errors/handoff-diagnostics";
 import { ExtractionWorkerError } from "@/api/lib/errors/tagged-errors";
 import {
   identityFields,
@@ -61,7 +62,9 @@ export const connectionErrorFields = (
 ): Record<string, string> => {
   const fields = errorSystemFields(error);
   if (isErrorInstance(error)) {
-    const message = safeErrorMessage(error);
+    const safeError = sanitizeDiagnosticErrorForOutput(error);
+    const message =
+      safeError instanceof Error ? safeErrorMessage(safeError) : undefined;
     if (message !== undefined) {
       fields["error.msg"] = message;
     }
@@ -90,6 +93,13 @@ export const safeErrorTelemetryFields = (
       ...fields,
       signalCode: error.termination.signalCode,
       terminationReason: error.termination.reason,
+    };
+  }
+  if (error.workerErrorClass !== null) {
+    return {
+      ...fields,
+      exitCode: String(error.exitCode),
+      workerErrorClass: error.workerErrorClass,
     };
   }
   return { ...fields, exitCode: String(error.exitCode) };
@@ -145,11 +155,14 @@ export const unredactedErrorFields = (
     return fields;
   }
 
-  const message = safeErrorMessage(error);
+  const safeError = sanitizeDiagnosticErrorForOutput(error);
+  const message =
+    safeError instanceof Error ? safeErrorMessage(safeError) : undefined;
   if (message !== undefined) {
     fields["error.msg"] = message;
   }
-  const stack = safeErrorStack(error);
+  const stack =
+    safeError instanceof Error ? safeErrorStack(safeError) : undefined;
   if (stack !== undefined) {
     fields["error.stack"] = stack;
   }
@@ -233,6 +246,31 @@ const MAX_BYTES = 5 * 1024 * 1024;
 // cannot route through the error-capture channel, which logs back through
 // here), so the chain never rejects either.
 let devLogWrites: Promise<void> = Promise.resolve();
+let observeDevErrorRecord: ((record: unknown) => void) | null = null;
+
+type DevErrorJsonlObserver = {
+  drain: () => Promise<void>;
+  restore: () => void;
+};
+
+/**
+ * In-memory test sink attached at the final JSONL record boundary. Writes
+ * queued before installation settle first, so only later records reach it.
+ */
+export const installDevErrorJsonlObserverForTest = async (
+  observer: (record: unknown) => void,
+): Promise<DevErrorJsonlObserver> => {
+  await devLogWrites;
+  observeDevErrorRecord = observer;
+  return {
+    drain: async () => {
+      await devLogWrites;
+    },
+    restore: () => {
+      observeDevErrorRecord = null;
+    },
+  };
+};
 
 let dirReady: Promise<void> | null = null;
 const ensureLogDir = async (): Promise<void> => {
@@ -250,21 +288,27 @@ type SerializedError = {
   cause?: unknown;
 };
 
-const serializeError = (error: unknown): unknown => {
+const serializeSafeError = (error: unknown): unknown => {
   if (error instanceof Error) {
     const stack = safeErrorStack(error);
     const cause = safeErrorCause(error);
     const out: SerializedError = {
+      ...Object.fromEntries(Object.entries(error)),
       name: errorClassName(error),
+      ...errorSystemFields(error),
       message: safeErrorMessage(error) ?? "",
       ...(stack !== undefined && { stack }),
       ...(isTaggedError(error) && { tag: error._tag }),
-      ...(cause !== undefined && { cause: serializeError(cause) }),
+      ...(cause !== undefined && { cause: serializeSafeError(cause) }),
     };
     return out;
   }
   return error;
 };
+
+/** The JSONL sink and its contract tests share this serialization boundary. */
+export const serializeDevError = (error: unknown): unknown =>
+  serializeSafeError(sanitizeDiagnosticErrorForOutput(error));
 
 type AppendDevErrorJsonlInput = {
   error: unknown;
@@ -294,8 +338,10 @@ const appendDevErrorJsonl = async ({
       when: Temporal.Now.instant().toString({ fractionalSecondDigits: 3 }),
       tag: errorTag(error),
       ...(context && Object.keys(context).length > 0 ? { context } : {}),
-      error: serializeError(error),
+      error: serializeDevError(error),
     };
+
+    observeDevErrorRecord?.(record);
 
     await appendFile(DEV_LOG_PATH, `${JSON.stringify(record)}\n`);
   } catch {

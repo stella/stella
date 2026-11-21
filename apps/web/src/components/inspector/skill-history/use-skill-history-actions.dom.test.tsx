@@ -1,6 +1,7 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, spyOn, test } from "bun:test";
 
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 import { stellaToast } from "@stll/ui/toast";
 
 import messages from "@/i18n/langs/en.json";
@@ -22,7 +23,7 @@ afterEach(async () => {
   clients.length = 0;
 });
 afterAll(async () => {
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 test.each([403, 404, 409, 500])(

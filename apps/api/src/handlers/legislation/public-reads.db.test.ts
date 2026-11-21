@@ -9,20 +9,25 @@ import {
   publicCountryUnavailable,
 } from "@stll/api-contract/public-country-capability";
 import type { Block, DocumentAst } from "@stll/legal-ast/document-ast";
-import { propertyConfig, propertyTestTimeout } from "@stll/property-testing";
-import { foldToAscii } from "@stll/text-normalize";
+import { assertProperty, propertyTestTimeout } from "@stll/property-testing";
+import { foldToAscii, normalizeUnicode } from "@stll/text-normalize";
 
 import {
   LEGISLATION_TITLE_SORT_KEY_CHARS,
   legislationDocuments,
+  legislationFacetCounts,
+  legislationFacetRefreshes,
   legislationSources,
 } from "@/api/db/schema";
+import { createStatuteCitationCountRepair } from "@/api/handlers/case-law/provisions/citation-count-repair";
 import {
   readStatuteByEliHandler,
   resolveStatuteWorkVersion,
 } from "@/api/handlers/legislation/by-eli";
 import {
-  readLegislationFacets,
+  buildLegislationFacetsQuery,
+  LEGISLATION_FACET_STALE_AFTER_MS,
+  readLegislationFacets as readLegislationFacetsResult,
   readLegislationFacetsHandler,
 } from "@/api/handlers/legislation/facets";
 import { readPublicLegislationHandler } from "@/api/handlers/legislation/get";
@@ -40,6 +45,9 @@ import { listStatuteVersionsHandler } from "@/api/handlers/legislation/versions"
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { PAGINATION_CURSOR_MAX_CHARS } from "@/api/lib/custom-schema";
+import { EMPTY_AST } from "@/api/lib/legal-search/document-types";
+import type { EmptyAst } from "@/api/lib/legal-search/document-types";
+import { refreshLegislationFacetCounts } from "@/api/lib/legal-search/legislation-facet-refresh";
 import type {
   LegislationReadDb,
   LegislationReadTransaction,
@@ -49,10 +57,16 @@ import {
   decodePaginationCursor,
   encodePaginationCursor,
 } from "@/api/lib/pagination";
+import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 import {
   createTestPglite,
   withPublicLawReaderRole,
 } from "@/api/tests/pglite-test-db";
+
+/** The facets read, failing the test on an error result. */
+const readLegislationFacets = async (
+  ...args: Parameters<typeof readLegislationFacetsResult>
+) => (await readLegislationFacetsResult(...args)).unwrap();
 
 // Public statute reads over a fixture whose current version is neither the
 // newest row nor the newest window: one superseded version, one in force and
@@ -66,7 +80,7 @@ let historyDb: LegislationReadDb;
 let historyClient: Awaited<ReturnType<typeof createTestPglite>> | undefined;
 let ownerDb: LegislationReadDb;
 
-const unpublishedStatutes = ["SVK", "POL", "DEU"].map((country) => ({
+const unpublishedStatutes = ["POL", "DEU"].map((country) => ({
   country,
   id: createSafeId<"legislationDocument">(),
   eli: `${country}/2020/123`,
@@ -74,6 +88,8 @@ const unpublishedStatutes = ["SVK", "POL", "DEU"].map((country) => ({
 
 const openSourceId = createSafeId<"legislationSource">();
 const closedSourceId = createSafeId<"legislationSource">();
+const lateSourceId = createSafeId<"legislationSource">();
+const lateAct = createSafeId<"legislationDocument">();
 
 const civilCodeSuperseded = createSafeId<"legislationDocument">();
 const civilCodeOpenOlder = createSafeId<"legislationDocument">();
@@ -142,7 +158,7 @@ type DocumentSeed = {
   country?: string;
   language?: string;
   metadata?: Record<string, unknown>;
-  documentAst?: DocumentAst;
+  documentAst?: DocumentAst | EmptyAst;
   fulltext?: string;
   versionValidFrom: string | null;
   versionValidTo: string | null;
@@ -247,6 +263,26 @@ const HISTORY_WINDOWS = [
   { validFrom: "2017-01-01", validTo: "2019-12-31" },
   { validFrom: "2020-01-01", validTo: null },
 ] as const;
+
+/**
+ * A Work whose provision keeps its words through a reprint that changed only
+ * the spacing, with one consolidation whose structure cannot be read in
+ * between, oldest first as `HISTORY_WINDOWS` orders them.
+ */
+const WORDING_WORK_ELI = "CZ/2002/1";
+const WORDING_WORK_TEXTS = [
+  "The seller shall deliver within thirty days.",
+  // A no-break space and a doubled space: the same words, typeset anew.
+  "The seller shall\u00a0deliver  within thirty days.",
+  null,
+  "The seller shall deliver within thirty days.",
+] as const;
+const WORDING_WORK = HISTORY_WINDOWS.map(({ validFrom, validTo }, index) => ({
+  id: createSafeId<"legislationDocument">(),
+  validFrom,
+  validTo,
+  wording: WORDING_WORK_TEXTS[index] ?? null,
+}));
 
 /**
  * Every pattern of which of a Work's four consecutive versions carry the
@@ -440,6 +476,13 @@ beforeAll(
       }),
     ]);
 
+    const repairCitationCounts = createStatuteCitationCountRepair(db);
+    let repair = await repairCitationCounts();
+    if (repair.status === "advanced") {
+      repair = await repairCitationCounts();
+    }
+    expect(repair).toEqual({ status: "ready", decisions: 0 });
+
     ownerDb = async (read) =>
       await db.transaction(
         async (tx) =>
@@ -609,6 +652,20 @@ beforeAll(
         ),
       ),
     );
+    await historyOwner.insert(legislationDocuments).values(
+      WORDING_WORK.map(({ id, validFrom, validTo, wording }) =>
+        seedDocument({
+          id,
+          sourceId: openSourceId,
+          eli: WORDING_WORK_ELI,
+          title: `History walk ${WORDING_WORK_ELI}`,
+          // A source without a parser stores no structure at all.
+          documentAst: wording === null ? EMPTY_AST : statuteAst(wording),
+          versionValidFrom: validFrom,
+          versionValidTo: validTo,
+        }),
+      ),
+    );
     historyDb = readDb(historyOwner);
   },
   { timeout: propertyTestTimeout(30_000) },
@@ -732,15 +789,50 @@ const expectPage = (result: unknown): StatutePage => {
   return result as StatutePage;
 };
 
-type ProvisionHistoryPage = {
-  items: {
-    allowsDerivedAi: boolean;
-    documentId: string;
-    versionValidFrom: string | null;
-    versionValidTo: string | null;
-    text: string;
-  }[];
-  nextCursor: string | null;
+type ProvisionHistoryPage = Extract<
+  Awaited<ReturnType<typeof readProvisionHistoryHandler>>,
+  { items: unknown[] }
+>;
+
+const foundText = (item: ProvisionHistoryPage["items"][number]) =>
+  item.status === "found" ? item.text : null;
+
+/** What each item of a walk says about its wording, page after page. */
+const walkWordingChanges = async ({
+  anchor,
+  documentId,
+  limit,
+  db,
+}: {
+  anchor: string;
+  documentId: SafeId<"legislationDocument">;
+  limit: number;
+  db: LegislationReadDb;
+}) => {
+  const seen: [string, string][] = [];
+  let cursor: string | null = null;
+  let requests = 0;
+  do {
+    requests += 1;
+    const page: ProvisionHistoryPage = expectHistoryPage(
+      // db-await-in-loop: a cursor walk, each page names the next
+      await readProvisionHistoryHandler({
+        documentId,
+        anchor,
+        query: { limit, ...(cursor === null ? {} : { cursor }) },
+        legislationDb: db,
+        surface: "pages",
+      }),
+    );
+    seen.push(
+      ...page.items.map((item): [string, string] => [
+        item.documentId,
+        item.status === "found" ? item.wordingChange : item.status,
+      ]),
+    );
+    cursor = page.nextCursor;
+  } while (cursor !== null && requests <= 20);
+  return { cursor, seen };
 };
 
 const expectHistoryPage = (result: unknown): ProvisionHistoryPage => {
@@ -960,7 +1052,9 @@ describe("public statute list", () => {
   test("matches a title typed without diacritics or case", async () => {
     // The fixture differs from the query before folding, so the match below
     // is the fold's doing and not a coincidence of the seed.
-    expect("občanský zákoník".normalize("NFC")).not.toBe("OBCANSKY zakonik");
+    expect(normalizeUnicode("občanský zákoník", "NFC")).not.toBe(
+      "OBCANSKY zakonik",
+    );
     const page = expectPage(
       await listStatutesHandler(
         { country: "CZE", query: "OBCANSKY zakonik" },
@@ -1167,7 +1261,8 @@ describe("public statute list", () => {
       ),
       maxLength: 40,
     });
-    await fc.assert(
+    await assertProperty(
+      "the title fold agrees with the client-side fold",
       fc.asyncProperty(latinText, async (text) => {
         const folded = await legislationDb(async (tx) => {
           const [row] = await tx
@@ -1179,7 +1274,7 @@ describe("public statute list", () => {
 
         expect(folded).toBe(foldToAscii(text).toLowerCase());
       }),
-      propertyConfig({ numRuns: 40 }),
+      { numRuns: 40 },
     );
   });
 });
@@ -1196,6 +1291,216 @@ describe("statute facets", () => {
         { value: "code", count: 1 },
       ],
     });
+  });
+
+  test("the refreshed snapshot answers exactly what the live aggregate answers", async () => {
+    if (client === undefined) {
+      throw new Error("the fixture database is not open");
+    }
+    const owner = drizzle({ client });
+    const live = await readLegislationFacets(legislationDb, "CZE");
+    try {
+      // SAFETY: the PGlite handle implements the root select and transaction
+      // surface the scheduled refresh uses.
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- embedded test database stands in for the root pool
+      const refreshDb = owner as unknown as Parameters<
+        typeof refreshLegislationFacetCounts
+      >[0];
+      const { buckets } = await refreshLegislationFacetCounts(refreshDb);
+      expect(buckets).toBeGreaterThan(0);
+
+      // The owner counts the withheld source too; the public read drops it.
+      const stored = await owner
+        .select({ sourceId: legislationFacetCounts.sourceId })
+        .from(legislationFacetCounts);
+      expect(stored.map(({ sourceId }) => sourceId)).toContain(closedSourceId);
+
+      expect(await readLegislationFacets(legislationDb, "CZE")).toEqual(live);
+      // A refresh replaces the snapshot rather than adding to it.
+      expect(await refreshLegislationFacetCounts(refreshDb)).toEqual({
+        buckets,
+        overflowing: [],
+      });
+      expect(await readLegislationFacets(legislationDb, "CZE")).toEqual(live);
+
+      // Policy is read live: revoking the open source empties the answer at
+      // once, before any refresh runs.
+      await owner
+        .update(legislationSources)
+        .set({
+          descriptor: {
+            license: "restricted",
+            attribution: "Publisher",
+            allowsRedistribution: false,
+            allowsDerivedAi: false,
+          },
+        })
+        .where(eq(legislationSources.id, openSourceId));
+      expect(await readLegislationFacets(legislationDb, "CZE")).toEqual({
+        documentType: [],
+      });
+
+      // Every stored bucket is now invisible to the reader, and that is still
+      // a refreshed snapshot, not a fresh install: the live aggregation must
+      // not run. A publishable act added after the refresh is what the live
+      // count would report and the snapshot cannot, so its absence proves it.
+      await owner.insert(legislationSources).values({
+        id: lateSourceId,
+        adapterKey: "statutes-late",
+        name: "Source added after the refresh",
+      });
+      await owner.insert(legislationDocuments).values(
+        seedDocument({
+          id: lateAct,
+          documentType: "decree",
+          sourceId: lateSourceId,
+          eli: "CZ/2026/901",
+          title: "Act Added After The Refresh",
+          versionValidFrom: "2001-01-01",
+          versionValidTo: null,
+        }),
+      );
+      expect(
+        (
+          await ownerDb(
+            async (tx) => await buildLegislationFacetsQuery(tx, "CZE"),
+          )
+        ).map(({ value }) => value),
+      ).toContain("decree");
+      expect(await readLegislationFacets(legislationDb, "CZE")).toEqual({
+        documentType: [],
+      });
+    } finally {
+      await owner
+        .delete(legislationDocuments)
+        .where(eq(legislationDocuments.id, lateAct));
+      await owner
+        .delete(legislationSources)
+        .where(eq(legislationSources.id, lateSourceId));
+      await owner
+        .update(legislationSources)
+        .set({ descriptor: null })
+        .where(eq(legislationSources.id, openSourceId));
+      await owner.delete(legislationFacetCounts).where(sql`true`);
+      await owner.delete(legislationFacetRefreshes).where(sql`true`);
+    }
+    // With no refresh on record the live aggregation answers again.
+    expect(await readLegislationFacets(legislationDb, "CZE")).toEqual(live);
+  });
+
+  test("an aged snapshot is still served and reported stale", async () => {
+    if (client === undefined) {
+      throw new Error("the fixture database is not open");
+    }
+    const owner = drizzle({ client });
+    // SAFETY: the PGlite handle implements the transaction surface the
+    // scheduled refresh uses.
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- embedded test database stands in for the root pool
+    const refreshDb = owner as unknown as Parameters<
+      typeof refreshLegislationFacetCounts
+    >[0];
+    const logs = installRecordingLogger();
+    try {
+      await refreshLegislationFacetCounts(refreshDb);
+      const [marker] = await owner
+        .select({ refreshedAt: legislationFacetRefreshes.refreshedAt })
+        .from(legislationFacetRefreshes);
+      const refreshedAt =
+        marker?.refreshedAt ?? panic("the refresh wrote no marker");
+      const fresh = await readLegislationFacets(
+        legislationDb,
+        "CZE",
+        refreshedAt,
+      );
+      expect(
+        logs
+          .at("WARN")
+          .filter(
+            ({ message }) => message === "legislation.facets.snapshot_stale",
+          ),
+      ).toEqual([]);
+
+      // One millisecond past the stale window: served unchanged, and said so.
+      const aged = new Date(
+        refreshedAt.getTime() + LEGISLATION_FACET_STALE_AFTER_MS + 1,
+      );
+      expect(await readLegislationFacets(legislationDb, "CZE", aged)).toEqual(
+        fresh,
+      );
+      expect(
+        logs
+          .at("WARN")
+          .filter(
+            ({ message }) => message === "legislation.facets.snapshot_stale",
+          ),
+      ).toMatchObject([
+        {
+          attributes: {
+            country: "CZE",
+            "snapshot.ageMs": LEGISLATION_FACET_STALE_AFTER_MS + 1,
+          },
+        },
+      ]);
+    } finally {
+      logs.restore();
+      await owner.delete(legislationFacetCounts).where(sql`true`);
+      await owner.delete(legislationFacetRefreshes).where(sql`true`);
+    }
+  });
+
+  test("a jurisdiction past the bucket cap is reported once, by the refresh", async () => {
+    if (client === undefined) {
+      throw new Error("the fixture database is not open");
+    }
+    const owner = drizzle({ client });
+    // SAFETY: the PGlite handle implements the transaction surface the
+    // scheduled refresh uses.
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- embedded test database stands in for the root pool
+    const refreshDb = owner as unknown as Parameters<
+      typeof refreshLegislationFacetCounts
+    >[0];
+    const logs = installRecordingLogger();
+    try {
+      // The fixture holds two kinds of act in CZE; a cap of one overflows it.
+      const outcome = await refreshLegislationFacetCounts(refreshDb, {
+        bucketCap: 1,
+      });
+      expect(outcome.overflowing).toEqual(["CZE"]);
+      expect(
+        logs
+          .at("WARN")
+          .filter(
+            ({ message }) => message === "legislation.facets.bucket_overflow",
+          ),
+      ).toMatchObject([{ attributes: { country: "CZE", kinds: 2, cap: 1 } }]);
+
+      // The read reports nothing and stays bounded: it serves the most common
+      // kinds up to the response's own cap.
+      const before = logs.records.length;
+      const facets = await readLegislationFacets(legislationDb, "CZE");
+      expect(facets.documentType.map(({ value }) => value)).toEqual([
+        "act",
+        "code",
+      ]);
+      expect(logs.records.slice(before)).toEqual([]);
+    } finally {
+      logs.restore();
+      await owner.delete(legislationFacetCounts).where(sql`true`);
+      await owner.delete(legislationFacetRefreshes).where(sql`true`);
+    }
+  });
+
+  test("before any refresh the live aggregation is cached, not rerun per request", async () => {
+    let reads = 0;
+    const countingDb: LegislationReadDb = async (read) => {
+      reads += 1;
+      return await legislationDb(read);
+    };
+    const first = await readLegislationFacets(countingDb, "CZE");
+    const afterFirst = reads;
+    expect(await readLegislationFacets(countingDb, "CZE")).toEqual(first);
+    // The second request reads only the refresh marker and the source policy.
+    expect(reads - afterFirst).toBe(1);
   });
 
   test("each kind of act offered lists exactly as many works as it counts", async () => {
@@ -1242,6 +1547,7 @@ describe("public statute versions", () => {
         documentId: civilCodeCurrent,
         query: {},
         legislationDb,
+        surface: "pages",
       }),
     );
 
@@ -1258,6 +1564,7 @@ describe("public statute versions", () => {
       documentId: civilCodeFuture,
       query: {},
       legislationDb,
+      surface: "pages",
     });
     if (!("items" in page)) {
       throw new Error(`expected a page, got ${JSON.stringify(page)}`);
@@ -1280,6 +1587,7 @@ describe("public statute versions", () => {
           documentId: civilCodeSuperseded,
           query: { limit: 1, ...(cursor === null ? {} : { cursor }) },
           legislationDb,
+          surface: "pages",
         }),
       );
 
@@ -1305,6 +1613,7 @@ describe("public statute versions", () => {
       documentId: withheldAct,
       query: {},
       legislationDb,
+      surface: "pages",
     });
 
     expect(result).not.toHaveProperty("items");
@@ -1332,6 +1641,7 @@ describe("public statute read", () => {
     const publicRead = await readPublicLegislationHandler(
       civilCodeCurrent,
       legislationDb,
+      "pages",
     );
 
     // The fixture must actually carry metadata, or the omission proves nothing.
@@ -1347,10 +1657,12 @@ describe("public statute read", () => {
     const structuredPublicRead = await readPublicLegislationHandler(
       civilCodeCurrent,
       legislationDb,
+      "pages",
     );
     const plainPublicRead = await readPublicLegislationHandler(
       civilCodeEnglish,
       legislationDb,
+      "pages",
     );
 
     // The structured version stores text too, so the null is the fallback.
@@ -1368,6 +1680,7 @@ describe("public statute read", () => {
     const result = await readPublicLegislationHandler(
       withheldAct,
       legislationDb,
+      "pages",
     );
 
     expect(result).toMatchObject({
@@ -1527,8 +1840,8 @@ describe("batched point-in-time statute resolve", () => {
           { country: "CZE", eli: "CZ/1999/111", asOf: "2021-01-01" },
           // A jurisdiction this surface holds no law for.
           { country: "Freedonia", eli: civilCode, asOf: "2021-01-01" },
-          // A jurisdiction the corpus holds rows for but does not publish.
-          { country: "SVK", eli: "SVK/2020/123", asOf: "2021-01-01" },
+          // A jurisdiction not yet launched.
+          { country: "AUT", eli: "AUT/2020/123", asOf: "2021-01-01" },
         ],
       },
       legislationDb,
@@ -1544,7 +1857,7 @@ describe("batched point-in-time statute resolve", () => {
       unresolvedReason: "pending_public",
       availability: {
         status: "unavailable",
-        country: "SVK",
+        country: "AUT",
         reason: "pending_public",
       },
     });
@@ -1679,7 +1992,11 @@ describe("statute work resolution", () => {
     // The Sunset Act's validity window closed today, so no consolidation of
     // it applies: a history read must still reach it.
     expect(
-      await resolveStatuteWorkVersion({ eli: "CZ/1998/222" }, legislationDb),
+      await resolveStatuteWorkVersion(
+        { eli: "CZ/1998/222" },
+        legislationDb,
+        "pages",
+      ),
     ).toEqual({ type: "expression", id: sunsetAct });
     expect(
       await readStatuteByEliHandler({ eli: "CZ/1998/222" }, legislationDb),
@@ -1693,19 +2010,28 @@ describe("statute work resolution", () => {
       await resolveStatuteWorkVersion(
         { eli: "CZ/2012/89", language: "cs" },
         legislationDb,
+        "pages",
       ),
     ).toEqual({ type: "expression", id: civilCodeFuture });
   });
 
   test("reads as unknown for an ELI the corpus does not hold", async () => {
     expect(
-      await resolveStatuteWorkVersion({ eli: "CZ/1900/1" }, legislationDb),
+      await resolveStatuteWorkVersion(
+        { eli: "CZ/1900/1" },
+        legislationDb,
+        "pages",
+      ),
     ).toEqual({ type: "unknown-work" });
   });
 
   test("reads as unknown for a source not cleared for redistribution", async () => {
     expect(
-      await resolveStatuteWorkVersion({ eli: "CZ/1999/111" }, legislationDb),
+      await resolveStatuteWorkVersion(
+        { eli: "CZ/1999/111" },
+        legislationDb,
+        "pages",
+      ),
     ).toEqual({ type: "unknown-work" });
   });
 });
@@ -1718,6 +2044,7 @@ describe("provision history", () => {
         anchor: DELIVERY_ANCHOR,
         query: {},
         legislationDb,
+        surface: "pages",
       }),
     );
 
@@ -1727,7 +2054,7 @@ describe("provision history", () => {
       civilCodeSuperseded,
     ]);
     // The neighbouring section is a sibling heading, so it ends the provision.
-    expect(page.items.map((item) => item.text)).toEqual([
+    expect(page.items.map(foundText)).toEqual([
       `${SECTION_SIGN} 2079\nThe seller shall deliver within fourteen days.`,
       `${SECTION_SIGN} 2079\nThe seller shall deliver within thirty days.`,
       `${SECTION_SIGN} 2079\nThe seller shall deliver within thirty days.`,
@@ -1741,6 +2068,7 @@ describe("provision history", () => {
         anchor: DELIVERY_ANCHOR,
         query: {},
         legislationDb,
+        surface: "pages",
       }),
     );
 
@@ -1757,6 +2085,7 @@ describe("provision history", () => {
       anchor: UNKNOWN_ANCHOR,
       query: {},
       legislationDb,
+      surface: "pages",
     });
 
     expect(result).toMatchObject({
@@ -1775,6 +2104,7 @@ describe("provision history", () => {
         anchor: DELIVERY_ANCHOR,
         query: {},
         legislationDb,
+        surface: "pages",
       }),
     );
 
@@ -1792,6 +2122,7 @@ describe("provision history", () => {
         anchor: DELIVERY_ANCHOR,
         query: {},
         legislationDb,
+        surface: "pages",
       }),
     );
 
@@ -1810,6 +2141,7 @@ describe("provision history", () => {
       anchor: DELIVERY_ANCHOR,
       query: {},
       legislationDb,
+      surface: "pages",
     });
 
     expect(result).toMatchObject({
@@ -1829,6 +2161,7 @@ describe("provision history", () => {
           anchor: DELIVERY_ANCHOR,
           query: { limit: 1, ...(cursor === null ? {} : { cursor }) },
           legislationDb,
+          surface: "pages",
         }),
       );
 
@@ -1847,6 +2180,72 @@ describe("provision history", () => {
       civilCodeSuperseded,
     ]);
   });
+
+  test("marks where the provision's wording changed and where the act was only consolidated again", async () => {
+    const { seen } = await walkWordingChanges({
+      anchor: DELIVERY_ANCHOR,
+      documentId: civilCodeCurrent,
+      limit: LIMITS.legislationProvisionHistoryPageSizeMax,
+      db: legislationDb,
+    });
+
+    expect(seen).toEqual([
+      [civilCodeCurrent, "changed"],
+      [civilCodeOpenOlder, "unchanged"],
+      [civilCodeSuperseded, "earliest"],
+    ]);
+  });
+
+  // The neighbouring section keeps its words in all four consolidations, the
+  // one that repeals the delivery rule included, on every page size.
+  test.each([1, 2, 3, 4, LIMITS.legislationProvisionHistoryPageSizeMax])(
+    "reads a provision no consolidation rewrote as unchanged through every version (limit %i)",
+    async (limit) => {
+      expect(
+        await walkWordingChanges({
+          anchor: "sec-2080",
+          documentId: civilCodeCurrent,
+          limit,
+          db: legislationDb,
+        }),
+      ).toEqual({
+        cursor: null,
+        seen: [
+          [civilCodeFuture, "unchanged"],
+          [civilCodeCurrent, "unchanged"],
+          [civilCodeOpenOlder, "unchanged"],
+          [civilCodeSuperseded, "earliest"],
+        ],
+      });
+    },
+  );
+
+  test.each([1, 2, 3, 4])(
+    "claims nothing across a version it cannot read and ignores a reprint's spacing (limit %i)",
+    async (limit) => {
+      const idAt = (index: number) =>
+        WORDING_WORK[index]?.id ?? panic("wording fixture has four versions");
+
+      expect(
+        await walkWordingChanges({
+          anchor: DELIVERY_ANCHOR,
+          documentId: idAt(3),
+          limit,
+          db: historyDb,
+        }),
+      ).toEqual({
+        cursor: null,
+        seen: [
+          // The wording equals the oldest one, yet the version between them
+          // cannot be read, so nothing says it held all along.
+          [idAt(3), "unknown"],
+          [idAt(2), "unavailable"],
+          [idAt(1), "unchanged"],
+          [idAt(0), "earliest"],
+        ],
+      });
+    },
+  );
 
   // A walk that returned the provision must end in an ordinary last page,
   // whichever page the versions without the anchor land on. Not found is an
@@ -1869,6 +2268,7 @@ describe("provision history", () => {
               anchor: DELIVERY_ANCHOR,
               query: { limit },
               legislationDb: historyDb,
+              surface: "pages",
             }),
           ).toMatchObject({
             code: 404,
@@ -1888,6 +2288,7 @@ describe("provision history", () => {
               anchor: DELIVERY_ANCHOR,
               query: { limit, ...(cursor === null ? {} : { cursor }) },
               legislationDb: historyDb,
+              surface: "pages",
             }),
           );
           seen.push(...page.items.map((item) => item.documentId));
@@ -1899,6 +2300,31 @@ describe("provision history", () => {
           cursor: null,
           seen: carrying,
         });
+
+        // Each version words the provision its own way, so a carrying
+        // version after another one changed it, one after a gap added it,
+        // and the oldest starts the record, whichever page it lands on.
+        const expected = versions
+          .flatMap(({ carries, id }, index): [string, string][] => {
+            if (!carries) {
+              return [];
+            }
+            const older = versions[index - 1];
+            if (older === undefined) {
+              return [[id, "earliest"]];
+            }
+            return [[id, older.carries ? "changed" : "added"]];
+          })
+          .toReversed();
+        expect(
+          // db-await-in-loop: one walk per page size under test
+          await walkWordingChanges({
+            anchor: DELIVERY_ANCHOR,
+            documentId: newest.id,
+            limit,
+            db: historyDb,
+          }),
+        ).toEqual({ cursor: null, seen: expected });
       }
     },
   );
@@ -1908,7 +2334,10 @@ describe("statute country publication", () => {
   test.each(unpublishedStatutes)(
     "$country cannot be enumerated or reached through a document or work identifier",
     async ({ id, country, eli }) => {
-      const unavailable = publicCountryUnavailable(country);
+      const unavailable = publicCountryUnavailable(country, {
+        domain: "legislation",
+        surface: "search",
+      });
       const listed = await listStatutesHandler({ country }, legislationDb);
       if (unavailable === null) {
         const page = expectPage(listed);
@@ -1921,10 +2350,12 @@ describe("statute country publication", () => {
         });
       }
       expect(
-        await readPublicLegislationHandler(id, legislationDb),
+        await readPublicLegislationHandler(id, legislationDb, "pages"),
       ).toMatchObject({ code: 404 });
       // The publication filter holds even without the public-law role.
-      expect(await readPublicLegislationHandler(id, ownerDb)).toMatchObject({
+      expect(
+        await readPublicLegislationHandler(id, ownerDb, "pages"),
+      ).toMatchObject({
         code: 404,
       });
       expect(
@@ -1935,6 +2366,7 @@ describe("statute country publication", () => {
           documentId: id,
           query: {},
           legislationDb,
+          surface: "pages",
         }),
       ).toMatchObject({ code: 404 });
       expect(
@@ -1943,6 +2375,7 @@ describe("statute country publication", () => {
           anchor: DELIVERY_ANCHOR,
           query: {},
           legislationDb,
+          surface: "pages",
         }),
       ).toMatchObject({ code: 404 });
     },

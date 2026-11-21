@@ -1,16 +1,22 @@
 import { Result } from "better-result";
 import { describe, expect, mock, test } from "bun:test";
 
+import { CHAT_THREAD_PLACEHOLDER_TITLE } from "@stll/api-contract";
+
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
+import type { chatThreads } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { DatabaseError } from "@/api/lib/errors/tagged-errors";
 import { PG_ERROR } from "@/api/lib/pg-error";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
-import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
+import {
+  createScopedDbMock,
+  createSelectQueryMock,
+} from "@/api/tests/scoped-db-mock";
 
-import { loadThread } from "./send-message-thread";
+import { adoptEmptyThread, loadThread } from "./send-message-thread";
 
 const organizationId = toSafeId<"organization">(
   "00000000-0000-0000-0000-000000000001",
@@ -53,6 +59,7 @@ describe("send-message thread loading", () => {
       organizationId,
       recordAuditEvent: async () => undefined,
       safeDb,
+      subjectDecisionId: null,
       threadId,
       title: "Incoming title",
       userId,
@@ -144,6 +151,7 @@ describe("send-message thread loading", () => {
       organizationId,
       recordAuditEvent: async () => undefined,
       safeDb,
+      subjectDecisionId: null,
       threadId,
       title: "New thread",
       userId,
@@ -187,6 +195,7 @@ describe("send-message thread loading", () => {
       organizationId,
       recordAuditEvent,
       safeDb,
+      subjectDecisionId: null,
       threadId,
       title: "New thread",
       userId,
@@ -223,6 +232,7 @@ const expectCreatedThreadDataScope = async (
     organizationId,
     recordAuditEvent,
     safeDb,
+    subjectDecisionId: null,
     threadId,
     title: "New thread",
     userId,
@@ -253,3 +263,140 @@ const expectCreatedThreadDataScope = async (
   ]);
   expect(recordAuditEvent).toHaveBeenCalledTimes(1);
 };
+
+describe("the decision a thread is about", () => {
+  const decisionId = toSafeId<"caseLawDecision">(
+    "00000000-0000-0000-0000-000000000006",
+  );
+
+  test("a send that creates the thread records its decision", async () => {
+    const insertedRows: unknown[] = [];
+    const { safeDb } = createScopedDbMock({
+      insert: () => ({
+        values: async (values: unknown) => {
+          insertedRows.push(values);
+        },
+      }),
+      query: { chatThreads: { findFirst: async () => null } },
+    });
+
+    const result = await loadThread({
+      initialDataWorkspaceIds: [],
+      initialContextMatterIds: [],
+      organizationId,
+      recordAuditEvent: async () => undefined,
+      safeDb,
+      subjectDecisionId: decisionId,
+      threadId,
+      title: "New thread",
+      userId,
+      workspaceId: null,
+    });
+
+    expect(Result.isOk(result)).toBe(true);
+    expect(insertedRows).toEqual([
+      expect.objectContaining({ subjectDecisionId: decisionId }),
+    ]);
+  });
+
+  test("the first send into a row a setting stored records its decision", async () => {
+    // What a composer setting chosen before the first message stores.
+    const existingThread = {
+      id: threadId,
+      title: CHAT_THREAD_PLACEHOLDER_TITLE,
+      workspaceId: null,
+      activeSkill: null,
+      contextMatterIds: [],
+      dataWorkspaceIds: [],
+      webSearchEnabled: false,
+      chatModel: "openai::gpt-5.4",
+      chatReasoningEffort: null,
+      chatLocalRunTarget: null,
+      rollbackToken: null,
+      subjectDecisionId: null,
+    } satisfies Partial<typeof chatThreads.$inferSelect>;
+    const insert = mock(() => ({
+      values: async () => await Promise.resolve(),
+    }));
+    const audits: unknown[] = [];
+    const { safeDb } = createScopedDbMock({
+      insert,
+      query: {
+        chatThreads: {
+          findFirst: async () => await Promise.resolve(existingThread),
+        },
+        chatThreadCompactions: {
+          findFirst: async () => await Promise.resolve(null),
+        },
+      },
+      select: () => createSelectQueryMock([]),
+      update: () => ({
+        set: (values: Partial<typeof chatThreads.$inferInsert>) => ({
+          where: () => ({
+            returning: async () => {
+              Object.assign(existingThread, values);
+              return await Promise.resolve([{ id: threadId }]);
+            },
+          }),
+        }),
+      }),
+    });
+
+    const recordAuditEvent = async (_tx: unknown, event: unknown) => {
+      audits.push(event);
+      await Promise.resolve();
+    };
+    const result = await loadThread({
+      initialActiveSkill: { skillName: "review" },
+      initialDataWorkspaceIds: [],
+      initialContextMatterIds: undefined,
+      organizationId,
+      recordAuditEvent,
+      safeDb,
+      subjectDecisionId: decisionId,
+      threadId,
+      title: "Incoming title",
+      userId,
+      workspaceId: null,
+    });
+
+    if (Result.isError(result)) {
+      throw result.error;
+    }
+    expect(result.value).toMatchObject({
+      type: "existing",
+      data: { firstSend: true },
+    });
+    // Loading the thread plans the adoption and writes nothing: the send
+    // stores it only once it knows its client is still connected.
+    expect(existingThread).toMatchObject({
+      activeSkill: null,
+      subjectDecisionId: null,
+      title: CHAT_THREAD_PLACEHOLDER_TITLE,
+    });
+    expect(audits).toEqual([]);
+
+    const adopted = await adoptEmptyThread({
+      organizationId,
+      recordAuditEvent,
+      safeDb,
+      thread: result.value,
+      userId,
+      workspaceId: null,
+    });
+
+    expect(Result.isOk(adopted)).toBe(true);
+    expect(existingThread).toMatchObject({
+      activeSkill: { skillName: "review" },
+      chatModel: "openai::gpt-5.4",
+      subjectDecisionId: decisionId,
+      title: "Incoming title",
+    });
+    expect(audits).toEqual([
+      expect.objectContaining({
+        changes: { titleChanged: { old: false, new: true } },
+      }),
+    ]);
+    expect(insert).not.toHaveBeenCalled();
+  });
+});

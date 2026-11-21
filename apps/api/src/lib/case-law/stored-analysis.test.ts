@@ -2,6 +2,8 @@ import { describe, expect, test } from "bun:test";
 
 import type { DecisionAnalysis } from "@stll/legal-ast/analysis";
 
+import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
+
 import {
   analysisSentinel,
   SENTINEL_STALE_MS,
@@ -38,6 +40,31 @@ describe("storedAnalysisState", () => {
     ).toEqual({ kind: "none" });
   });
 
+  test("a stale cached analysis followed by successful regeneration is not incomplete", () => {
+    const recording = installRecordingLogger();
+    try {
+      expect(
+        storedAnalysisState({
+          stored: analysisOver(PREVIOUS),
+          fingerprint: CURRENT,
+          now: NOW,
+        }),
+      ).toEqual({ kind: "none" });
+
+      const regenerated = analysisOver(CURRENT);
+      expect(
+        storedAnalysisState({
+          stored: regenerated,
+          fingerprint: CURRENT,
+          now: NOW,
+        }),
+      ).toEqual({ kind: "done", analysis: regenerated });
+      expect(recording.records).toEqual([]);
+    } finally {
+      recording.restore();
+    }
+  });
+
   test("a fresh sentinel over the current input is a run in flight", () => {
     const stored = analysisSentinel(
       CURRENT,
@@ -45,7 +72,7 @@ describe("storedAnalysisState", () => {
     );
     expect(
       storedAnalysisState({ stored, fingerprint: CURRENT, now: NOW }),
-    ).toEqual({ kind: "generating" });
+    ).toEqual({ kind: "generating", partialTree: [] });
   });
 
   test("a sentinel that outlived its run is nothing", () => {

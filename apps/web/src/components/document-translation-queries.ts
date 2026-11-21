@@ -3,7 +3,7 @@ import type { QueryClient } from "@tanstack/react-query";
 import { panic } from "better-result";
 
 import { api } from "@/lib/api";
-import { shouldRetryAPIRequest, unwrapEden } from "@/lib/errors/api";
+import { shouldRetryAPIRequest, unwrapApiResponse } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities";
 
@@ -16,7 +16,7 @@ type DocumentTranslationPreparationRef = {
   entityVersionKey: number | string;
 };
 
-export const documentTranslationPreparationKeys = {
+const documentTranslationPreparationKeys = {
   all: (workspaceId: string) =>
     ["document-translation-preparations", workspaceId] as const,
   detail: ({
@@ -36,22 +36,20 @@ export const documentTranslationPreparationKeys = {
 const fetchDocumentTranslationPreparation = async (
   { workspaceId, entityId, fieldId }: DocumentTranslationPreparationRef,
   signal: AbortSignal,
-) =>
-  unwrapEden(
-    await api
-      .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
-      ["document-translations"].prepare.post(
-        {
-          entityId: toSafeId<"entity">(entityId),
-          fieldId: toSafeId<"field">(fieldId),
-        },
-        { fetch: { signal } },
-      ),
+) => {
+  const workspaceApi = api.workspaces({
+    workspaceId: toSafeId<"workspace">(workspaceId),
+  });
+  return unwrapApiResponse(
+    await workspaceApi["document-translations"].prepare.post(
+      {
+        entityId: toSafeId<"entity">(entityId),
+        fieldId: toSafeId<"field">(fieldId),
+      },
+      { fetch: { signal } },
+    ),
   );
-
-export type DocumentTranslationPreparation = Awaited<
-  ReturnType<typeof fetchDocumentTranslationPreparation>
->;
+};
 
 export const documentTranslationPreparationOptions = (
   ref: DocumentTranslationPreparationRef,
@@ -69,7 +67,7 @@ type DocumentTranslationRunRef = {
   runId: string;
 };
 
-export const documentTranslationRunKeys = {
+const documentTranslationRunKeys = {
   all: (workspaceId: string) =>
     ["document-translation-runs", workspaceId] as const,
   detail: ({ workspaceId, runId }: DocumentTranslationRunRef) =>
@@ -79,17 +77,20 @@ export const documentTranslationRunKeys = {
 const fetchDocumentTranslationRun = async (
   { workspaceId, runId }: DocumentTranslationRunRef,
   signal?: AbortSignal,
-) =>
-  unwrapEden(
-    await api
-      .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
-      ["document-translations"].runs({
+) => {
+  const workspaceApi = api.workspaces({
+    workspaceId: toSafeId<"workspace">(workspaceId),
+  });
+  return unwrapApiResponse(
+    await workspaceApi["document-translations"]
+      .runs({
         runId: toSafeId<"documentTranslationRun">(runId),
       })
       .get({ ...(signal === undefined ? {} : { fetch: { signal } }) }),
   );
+};
 
-export type DocumentTranslationRunDetail = Awaited<
+type DocumentTranslationRunDetail = Awaited<
   ReturnType<typeof fetchDocumentTranslationRun>
 >;
 export type DocumentTranslationRun = DocumentTranslationRunDetail["run"];

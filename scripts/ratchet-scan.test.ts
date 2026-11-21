@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import {
+  assessMeasurements,
   openSourceTree,
   RATCHET_METRICS,
   type RatchetMetric,
@@ -29,6 +30,63 @@ const ownSelection = (
 };
 
 describe("shared ratchet scan", () => {
+  test("a constructor-named metric cannot inherit a missing snapshot", () => {
+    const metric = {
+      id: "constructor",
+      scope: "repo",
+      perFile: true,
+      description: "fixture",
+      count: () => ({ count: 1, files: { "a.ts": 1 } }),
+    } satisfies RatchetMetric;
+    expect(
+      assessMeasurements({
+        current: { [metric.id]: metric.count() },
+        baseline: {},
+        metrics: [metric],
+      }).allowed,
+    ).toBe(false);
+    expect(() =>
+      assessMeasurements({ current: {}, baseline: {}, metrics: [metric] }),
+    ).toThrow("ratchet metric constructor is missing from the snapshot");
+  });
+
+  for (const file of [
+    "__proto__",
+    "constructor",
+    "toString",
+    "hasOwnProperty",
+    "1",
+    "žluťoučký.ts",
+  ]) {
+    test(`a repository measurement retains the own file ${file}`, () => {
+      const measurement = { count: 2, files: { [file]: 2 } };
+      const metric = {
+        id: "own-files",
+        scope: "repo",
+        perFile: true,
+        description: "fixture",
+        count: () => measurement,
+      } satisfies RatchetMetric;
+      const result = scanTree({
+        tree: openSourceTree(ROOT),
+        metrics: [metric],
+      });
+      expect(result.snapshot[metric.id]).toEqual(measurement);
+      const assessment = assessMeasurements({
+        current: result.snapshot,
+        baseline: { [metric.id]: { count: 2, files: { "previous.ts": 2 } } },
+        metrics: [metric],
+      });
+      expect(assessment.allowed).toBe(false);
+      expect(assessment.diffs[0]?.regressedFiles).toEqual([
+        { file, from: 0, to: 2 },
+      ]);
+      expect(Object.hasOwn(result.snapshot[metric.id]?.files ?? {}, file)).toBe(
+        true,
+      );
+    });
+  }
+
   test("every file metric scans exactly the files its own globs select", () => {
     const tree = openSourceTree(ROOT);
     for (const metric of RATCHET_METRICS) {
@@ -41,6 +99,83 @@ describe("shared ratchet scan", () => {
       }).toEqual({ id: metric.id, files: ownSelection(metric) });
     }
   }, 30_000);
+
+  test("indirect exception budgets reject new and relocated owners", () => {
+    const root = mkdtempSync(path.join(tmpdir(), "ratchet-indirect-"));
+    const metric =
+      RATCHET_METRICS.find(
+        ({ id }) => id === "outbound-indirect-access-exceptions",
+      ) ?? panic("Indirect exception metric is missing");
+    const owner = "apps/web/src/runtime.ts";
+    const written = new Set<string>();
+    const measure = (owners: readonly string[]) => {
+      for (const file of written) {
+        rmSync(path.join(root, file));
+      }
+      written.clear();
+      for (const file of owners) {
+        mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
+        writeFileSync(path.join(root, file), "void import(mod);");
+        written.add(file);
+      }
+      return scanTree({ tree: openSourceTree(root), metrics: [metric] })
+        .snapshot;
+    };
+    try {
+      expect(metric.growth).toBe("shrink-only");
+      expect(metric.perFile).toBe(true);
+      const baseline = measure([owner]);
+      expect(baseline[metric.id]).toEqual({ count: 1, files: { [owner]: 1 } });
+      const assess = (owners: readonly string[]) =>
+        assessMeasurements({
+          current: measure(owners),
+          baseline,
+          metrics: [metric],
+        });
+      expect(assess([owner]).allowed).toBe(true);
+      expect(assess([]).allowed).toBe(true);
+      expect(assess(["apps/web/src/other.ts"]).allowed).toBe(false);
+      expect(assess([owner, "apps/web/src/other.ts"]).allowed).toBe(false);
+      expect(measure(["apps/web/src/fixture.test.ts"])[metric.id]).toEqual({
+        count: 0,
+        files: {},
+      });
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  test("the unclassified handler failure census counts only ungraded 5xx constructions", () => {
+    const root = mkdtempSync(path.join(tmpdir(), "ratchet-unclassified-"));
+    const file = "apps/api/src/handlers/fixture.ts";
+    const metric =
+      RATCHET_METRICS.find(
+        ({ id }) => id === "unclassified-handler-failures",
+      ) ?? panic("Unclassified handler failure metric is missing");
+    try {
+      mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
+      writeFileSync(
+        path.join(root, file),
+        [
+          'new HandlerError({ status: 500, message: "a" });',
+          'new HandlerError({ status: ok ? 404 : 503, message: "b" });',
+          'new HandlerError({ status: 502, code: "unknown", message: "c" });',
+          'new HandlerError({ status: 503, code: "upstream_unavailable", message: "d" });',
+          'classifyFailure(new HandlerError({ status: 500, message: "e" }), "rls_denied");',
+          'new HandlerError({ status: 404, message: "f" });',
+          'new HandlerError({ status, message: "g" });',
+        ].join("\n"),
+      );
+      expect(
+        scanTree({ tree: openSourceTree(root), metrics: [metric] }).snapshot[
+          metric.id
+        ],
+      ).toEqual({ count: 3, files: { [file]: 3 } });
+      expect(metric.perFile).toBe(true);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
 
   test("counters parse through the shared per-file memo", async () => {
     const counters = await Bun.file(
@@ -69,6 +204,35 @@ describe("shared ratchet scan", () => {
           "audit-skip-directives"
         ]?.files,
       ).toEqual({ [file]: 1 });
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  test("a quote inside a comment cannot hide the code after it", () => {
+    const root = mkdtempSync(path.join(tmpdir(), "ratchet-comment-quote-"));
+    const file = "apps/api/src/handlers/comment-quote.ts";
+    try {
+      mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
+      writeFileSync(
+        path.join(root, file),
+        [
+          "// the model's reply",
+          "const a = input ?? [];",
+          "/** Pass `items once. */",
+          "const b = items ?? [];",
+          "const url = 'http://x/?? []'; const c = more ?? []; // it's done",
+          "/* a ` b */ const d = rest ?? [];",
+        ].join("\n"),
+      );
+      const metrics = RATCHET_METRICS.filter(
+        ({ id }) => id === "nullish-array-fallback",
+      );
+      expect(
+        scanTree({ tree: openSourceTree(root), metrics }).snapshot[
+          "nullish-array-fallback"
+        ]?.files,
+      ).toEqual({ [file]: 4 });
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
@@ -213,4 +377,42 @@ describe("shared ratchet scan", () => {
       rmSync(root, { recursive: true, force: true });
     }
   });
+});
+
+test("outbound transport identities only shrink within each owner", () => {
+  const root = mkdtempSync(path.join(tmpdir(), "ratchet-outbound-owner-"));
+  const file = "apps/api/src/handlers/transport-owner.ts";
+  const metrics = RATCHET_METRICS.filter(
+    ({ id }) => id === "api-legacy-outbound-transports",
+  );
+  try {
+    mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
+    const measure = (source: string) => {
+      writeFileSync(path.join(root, file), source);
+      return scanTree({ tree: openSourceTree(root), metrics }).snapshot;
+    };
+    const baseline = measure("void fetch(url);");
+    expect(
+      assessMeasurements({
+        current: measure("void fetch(url);"),
+        baseline,
+        metrics,
+      }).allowed,
+    ).toBe(true);
+    expect(
+      assessMeasurements({
+        current: measure("export const ready = true;"),
+        baseline,
+        metrics,
+      }).allowed,
+    ).toBe(true);
+    for (const module of ["undici", "node:http", "node:https"]) {
+      const current = measure(`import * as transport from "${module}";`);
+      expect(assessMeasurements({ current, baseline, metrics }).allowed).toBe(
+        false,
+      );
+    }
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });

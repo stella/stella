@@ -3,9 +3,16 @@
 import { existsSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 
+import { cachedForRepository } from "./ci-repository-cache";
+
 const REPO_ROOT = path.resolve(import.meta.dirname, "..");
+export const ROUTE_SMOKE_SPEC_PATH = "apps/web/e2e/specs/route-smoke.spec.ts";
 const ENTRY_POINTS = [
-  "apps/web/e2e/specs/route-smoke.spec.ts",
+  ROUTE_SMOKE_SPEC_PATH,
+  // The phone layout walk runs in the route-smoke job too.
+  "apps/web/e2e/phone/phone-layout.spec.ts",
+  "apps/web/e2e/phone/phone-layout-rules.spec.ts",
+  "apps/web/e2e/playwright.phone.config.ts",
   "apps/web/e2e/playwright.config.ts",
   // Playwright loads this by configuration string, rather than an import.
   "apps/web/e2e/global-teardown.ts",
@@ -26,6 +33,7 @@ const isSourceExtension = (extension: string): extension is SourceExtension =>
   Object.hasOwn(LOADERS, extension);
 const RUNTIME_FILES = new Set([
   ".github/workflows/ci.yml",
+  "scripts/ci-repository-cache.ts",
   "scripts/detect-route-smoke-changes.ts",
   "scripts/detect-route-smoke-changes.test.ts",
   "bun.lock",
@@ -49,6 +57,9 @@ const RUNTIME_PREFIXES = [
   // Helpers read these from disk (e.g. the uploaded document), so the import
   // graph cannot see them.
   "apps/web/e2e/fixtures/",
+  // Every spec here runs in the route-smoke job's phone suite, including a
+  // new one no entry point imports yet.
+  "apps/web/e2e/phone/",
   "apps/web/e2e/network-budgets/",
   ".github/actions/prepare-network-baseline/",
   ".github/actions/setup-e2e-stack/",
@@ -96,11 +107,12 @@ const importCandidates = (importer: string, specifier: string): string[] => {
   return candidates;
 };
 
-export const routeSmokeImportClosure = (
-  root = REPO_ROOT,
+export const sourceImportClosure = (
+  entryPoints: readonly string[],
+  root: string,
 ): ReadonlySet<string> => {
   const visited = new Set<string>();
-  const pending: string[] = [...ENTRY_POINTS];
+  const pending = [...entryPoints];
   // Bun is already installed by ci-plan; no repository install is needed to
   // parse imports, re-exports and literal dynamic imports without regex drift.
   const parsers = new Map<SourceExtension, Bun.Transpiler>();
@@ -127,14 +139,20 @@ export const routeSmokeImportClosure = (
     ) {
       continue;
     }
+    // scanImports rejects a script's leading shebang line.
     for (const imported of parserFor(extension).scanImports(
-      readFileSync(absolute, "utf-8"),
+      readFileSync(absolute, "utf-8").replace(/^#![^\n]*/u, ""),
     )) {
       pending.push(...importCandidates(file, imported.path));
     }
   }
   return visited;
 };
+
+export const routeSmokeImportClosure = (root = REPO_ROOT) =>
+  sourceImportClosure(ENTRY_POINTS, root);
+
+const routeSmokeClosures = new Map<string, ReadonlySet<string>>();
 
 export const routeSmokeAffected = (
   changedFiles: readonly string[],
@@ -144,7 +162,11 @@ export const routeSmokeAffected = (
   if (files.some(runtimePath)) {
     return true;
   }
-  const imports = routeSmokeImportClosure(root);
+  const imports = cachedForRepository(
+    routeSmokeClosures,
+    { root, key: root },
+    () => routeSmokeImportClosure(root),
+  );
   return files.some((file) => imports.has(file));
 };
 

@@ -1,14 +1,14 @@
 import type { PGlite } from "@electric-sql/pglite";
-import { Value } from "@sinclair/typebox/value";
 import { panic } from "better-result";
 import { afterAll, beforeAll, describe, expect, spyOn, test } from "bun:test";
 import { drizzle } from "drizzle-orm/pglite";
-import Elysia from "elysia";
-import { createHash } from "node:crypto";
 import * as v from "valibot";
 
 import { normalizeEli } from "@stll/agent-input";
 import { readStatuteQueryReferences } from "@stll/api-contract/statute-query-intent";
+import { treeBaseRevision } from "@stll/scripts/src/tree-base-revision";
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/node";
+import { normalizeUnicode } from "@stll/text-normalize";
 
 import {
   corpusIndexGenerations,
@@ -20,11 +20,12 @@ import {
 import { createPublicStatuteSearch } from "@/api/handlers/legislation/public-search";
 import { searchLegislationHandler } from "@/api/handlers/legislation/search";
 import { searchLegislationSuccessResponseSchema } from "@/api/handlers/legislation/search-schema";
+import { createHttpApp } from "@/api/http/app";
+import { routes } from "@/api/http/route";
 import { toSafeId } from "@/api/lib/branded-types";
 import { getCorpusIndexClient } from "@/api/lib/legal-search/corpus-index-client";
 import {
   CORPUS_INDEX_MANIFESTS,
-  corpusIndexConfigFromManifest,
   corpusIndexManifestDigest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
 import { buildLegislationV2ProjectionDocuments } from "@/api/lib/legal-search/corpus-index-projection-builder";
@@ -36,6 +37,9 @@ import type {
   LegislationReadDb,
   LegislationReadTransaction,
 } from "@/api/lib/legislation-public-read-db";
+import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
+import { corpusFixtureIndexConfig } from "@/api/tests/helpers/corpus-fixture-index";
+import { serveForTest } from "@/api/tests/helpers/test-server";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   createTestPglite,
@@ -84,10 +88,10 @@ const baselineSchema = v.strictObject({
   ),
 });
 const baseline = v.parse(baselineSchema, fixtureBaseline);
-export const STATUTE_RECALL_TOP5_FLOOR = baseline.top5Floor;
-const fixtureFingerprint = createHash("sha256")
-  .update(JSON.stringify([fixtureQueries, fixtureDocuments]))
-  .digest("hex");
+const STATUTE_RECALL_TOP5_FLOOR = baseline.top5Floor;
+const fixtureFingerprint = hashSha256Hex(
+  JSON.stringify([fixtureQueries, fixtureDocuments]),
+);
 const PROTECTED_RELAXED_QUERY_ID = "land-register-good-faith";
 const protectedRelaxedQuery =
   fixtureQueries.find(({ id }) => id === PROTECTED_RELAXED_QUERY_ID) ??
@@ -107,14 +111,14 @@ const VERSIONS = v
   .parse(v.array(documentSchema), fixtureDocuments)
   .map((document) => {
     // Stable identities keep document-ID tie breaking reproducible across CI runs.
-    const documentIdentity = createHash("sha256")
-      .update(`document:${document.id}`)
-      .digest("hex")
-      .slice(0, 12);
-    const revisionIdentity = createHash("sha256")
-      .update(`revision:${document.id}`)
-      .digest("hex")
-      .slice(0, 12);
+    const documentIdentity = hashSha256Hex(`document:${document.id}`).slice(
+      0,
+      12,
+    );
+    const revisionIdentity = hashSha256Hex(`revision:${document.id}`).slice(
+      0,
+      12,
+    );
     return {
       eli: document.eli,
       title: document.title,
@@ -131,6 +135,17 @@ const VERSIONS = v
       ),
     };
   });
+
+/** The public statute search route, served the way users reach it. */
+const serveStatuteSearch = (
+  definition: ReturnType<typeof createPublicStatuteSearch>,
+) =>
+  serveForTest(
+    createHttpApp({
+      routes: routes({ "/law/statutes/search": { GET: definition } }),
+      middleware: [errorBoundary],
+    }),
+  );
 
 const canonicalWorkEli = (eli: string) => {
   const normalized = normalizeEli(eli, {
@@ -216,7 +231,7 @@ test("the committed statute recall floor and nonempty coverage only increase", (
   // and names it; a local checkout resolves it from origin/main.
   const base =
     process.env["STATUTE_RECALL_BASE_REF"] ??
-    git(["merge-base", "origin/main", "HEAD"]);
+    treeBaseRevision({ repoRoot: process.cwd() });
   const previousPath = git([
     "ls-tree",
     "--full-tree",
@@ -256,7 +271,7 @@ describe.skipIf(!runEngineTests)(
     let legislationDb: LegislationReadDb;
     let restoreSearch: (() => void) | undefined;
     let fixtureIndexCreated = false;
-    const nativeReads: { query: string; documentIds: unknown[] }[] = [];
+    const engineReads: { query: string; documentIds: unknown[] }[] = [];
     beforeAll(async () => {
       databaseClient = await createTestPglite();
       const db = drizzle({ client: databaseClient });
@@ -329,7 +344,7 @@ describe.skipIf(!runEngineTests)(
       );
 
       const created = await corpusClient.createIndex(
-        corpusIndexConfigFromManifest(MANIFEST, INDEX_ID),
+        corpusFixtureIndexConfig(MANIFEST, INDEX_ID),
         "unobserved",
       );
       if (created.isErr()) {
@@ -364,11 +379,13 @@ describe.skipIf(!runEngineTests)(
         }
         return built.value;
       });
-      const ingested = await corpusClient.ingestCommittedBatch(
-        INDEX_ID,
-        `${documents.map((document) => JSON.stringify(document)).join("\n")}\n`,
-        "unobserved",
-      );
+      const ingested = await corpusClient.ingestCommittedBatch({
+        indexId: INDEX_ID,
+        ndjson: `${documents.map((document) => JSON.stringify(document)).join("\n")}\n`,
+        observer: "unobserved",
+        commitTimeoutSecs:
+          MANIFEST.engine.indexConfig.indexing_settings.commit_timeout_secs,
+      });
       if (ingested.isErr()) {
         throw ingested.error;
       }
@@ -381,7 +398,7 @@ describe.skipIf(!runEngineTests)(
             indexId: INDEX_ID,
           });
           if (result.isOk()) {
-            nativeReads.push({
+            engineReads.push({
               query: options.query,
               documentIds: result.value.hits.map((hit) => hit["document_id"]),
             });
@@ -389,7 +406,32 @@ describe.skipIf(!runEngineTests)(
           return result;
         },
       );
-      restoreSearch = () => searchSpy.mockRestore();
+      const originalScoredSearch = corpusClient.scoredSearch.bind(corpusClient);
+      const scoredSearchSpy = spyOn(
+        corpusClient,
+        "scoredSearch",
+      ).mockImplementation(async (options) => {
+        const result = await originalScoredSearch({
+          ...options,
+          indexId: INDEX_ID,
+        });
+        if (result.isOk()) {
+          engineReads.push({
+            query:
+              typeof options.query === "string"
+                ? options.query
+                : JSON.stringify(options.query.query),
+            documentIds: result.value.hits.map(
+              (hit) => hit.fields["document_id"],
+            ),
+          });
+        }
+        return result;
+      });
+      restoreSearch = () => {
+        searchSpy.mockRestore();
+        scoredSearchSpy.mockRestore();
+      };
     }, ENGINE_TIMEOUT_MS);
 
     afterAll(async () => {
@@ -425,26 +467,19 @@ describe.skipIf(!runEngineTests)(
               loadSearchConfigs: async () => [],
             }),
         );
-        const app = new Elysia().get(
-          "/law/statutes/search",
-          definition.handler,
-          {
-            query: definition.config.query,
-            response: definition.config.response,
-          },
-        );
+        await using app = serveStatuteSearch(definition);
         const url = new URL("http://localhost/law/statutes/search");
         url.searchParams.set("query", protectedRelaxedQuery.query);
         url.searchParams.set("country", "CZE");
         url.searchParams.set("limit", "10");
-        const firstRead = nativeReads.length;
-        const response = await app.handle(new Request(url.href));
+        const firstRead = engineReads.length;
+        const response = await app.fetch(new Request(url.href));
         expect(response.status).toBe(200);
         const body: unknown = await response.json();
-        if (!Value.Check(searchLegislationSuccessResponseSchema, body)) {
+        if (!v.is(searchLegislationSuccessResponseSchema, body)) {
           panic("Protected public statute query returned an invalid response");
         }
-        const reads = nativeReads.slice(firstRead);
+        const reads = engineReads.slice(firstRead);
         const strictClause = corpusFreeTextClause(protectedRelaxedQuery.query);
         expect(strictClause).not.toBeNull();
         if (strictClause === null) {
@@ -469,8 +504,11 @@ describe.skipIf(!runEngineTests)(
         }
         expect(hit.match.type).toBe("relaxed");
         expect(hit.headline).not.toBeNull();
+        if (hit.headline === null) {
+          panic("Protected official passage has no headline");
+        }
         expect(
-          hit.headline?.replace(/<\/?mark>/gu, "").normalize("NFC"),
+          normalizeUnicode(hit.headline.replace(/<\/?mark>/gu, ""), "NFC"),
         ).toMatch(/dobr[éeá] (?:víře|víra)/u);
       },
       ENGINE_TIMEOUT_MS,
@@ -486,24 +524,17 @@ describe.skipIf(!runEngineTests)(
               loadSearchConfigs: async () => [],
             }),
         );
-        const app = new Elysia().get(
-          "/law/statutes/search",
-          definition.handler,
-          {
-            query: definition.config.query,
-            response: definition.config.response,
-          },
-        );
+        await using app = serveStatuteSearch(definition);
         const rows = [];
         for (const fixture of fixtureQueries) {
           const url = new URL("http://localhost/law/statutes/search");
           url.searchParams.set("query", fixture.query);
           url.searchParams.set("country", "CZE");
           url.searchParams.set("limit", "10");
-          const response = await app.handle(new Request(url.href));
+          const response = await app.fetch(new Request(url.href));
           expect(response.status, fixture.id).toBe(200);
           const body: unknown = await response.json();
-          if (!Value.Check(searchLegislationSuccessResponseSchema, body)) {
+          if (!v.is(searchLegislationSuccessResponseSchema, body)) {
             panic("Public statute eval returned an invalid search response");
           }
           const expected = new Set(

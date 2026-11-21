@@ -32,32 +32,55 @@
  *   object, and the WHERE clause skips it.
  */
 
+import { panic } from "better-result";
 import { sql } from "drizzle-orm";
 
+import { runScriptWithErrorOutput } from "@stll/errors/script-error";
+
+import type { Transaction } from "@/api/db/root";
 import { setSharedStatementTimeout } from "@/api/db/shared-pool-timeouts";
+import type { SafeId } from "@/api/lib/branded-types";
+import { runDecisionWriteExtension } from "@/api/lib/case-law/decision-write-extension";
 import { enterCaseLawMaintenanceLane } from "@/api/lib/case-law/maintenance-lane";
+import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
+import { brandPersistedCaseLawDecisionId } from "@/api/lib/safe-id-boundaries";
 
-// Hold the maintenance lane before the first statement: operator passes over
-// the case-law tables serialize here instead of deadlocking on row locks.
-const { rootDb } = await enterCaseLawMaintenanceLane();
+await runScriptWithErrorOutput(async () => {
+  // Hold the maintenance lane before the first statement: operator passes over
+  // the case-law tables serialize here instead of deadlocking on row locks.
+  const { rootDb } = await enterCaseLawMaintenanceLane();
 
-const BATCH_SIZE = 2000;
-const STATEMENT_TIMEOUT_MS = 100_000;
+  const BATCH_SIZE = 2000;
+  const STATEMENT_TIMEOUT_MS = 100_000;
 
-type BatchResult = {
-  next_cursor: string | null;
-  scanned: number;
-  updated: number;
-};
+  const extendRepairedAt = async (
+    tx: Transaction,
+    ids: readonly SafeId<"caseLawDecision">[],
+    offset = 0,
+  ): Promise<void> => {
+    const id = ids.at(offset);
+    if (id === undefined) {
+      return;
+    }
+    await runDecisionWriteExtension(tx, id);
+    await extendRepairedAt(tx, ids, offset + 1);
+  };
 
-const repairBatch = async (
-  cursorId: string | null,
-): Promise<BatchResult | null> => {
-  const cursorClause = cursorId ? sql`WHERE id > ${cursorId}::uuid` : sql``;
+  type BatchResult = {
+    next_cursor: string | null;
+    scanned: number;
+    updated: number;
+  };
 
-  const rows = await rootDb.transaction(async (tx) => {
-    await setSharedStatementTimeout(tx, STATEMENT_TIMEOUT_MS);
-    return await tx.execute(sql`
+  const repairBatch = async (
+    cursorId: string | null,
+  ): Promise<BatchResult | null> => {
+    const cursorClause = cursorId ? sql`WHERE id > ${cursorId}::uuid` : sql``;
+
+    const rows = await withAggregateTransaction(rootDb, async (tx) => {
+      await setSharedStatementTimeout(tx, STATEMENT_TIMEOUT_MS);
+      const repaired = await tx.execute(
+        sql`
     WITH batch AS (
       SELECT id
       FROM case_law_decisions
@@ -109,81 +132,96 @@ const repairBatch = async (
     SELECT
       (SELECT id::text FROM batch ORDER BY id DESC LIMIT 1) AS next_cursor,
       (SELECT count(*)::int FROM batch) AS scanned,
-      (SELECT count(*)::int FROM updated) AS updated
-    `);
-  });
+      (SELECT count(*)::int FROM updated) AS updated,
+      ARRAY(SELECT id::text FROM updated) AS updated_ids
+    `,
+        "objects",
+      );
+      const ids = repaired.at(0)?.["updated_ids"];
+      if (!Array.isArray(ids)) {
+        panic("Decision JSONB repair did not return its written IDs");
+      }
+      await extendRepairedAt(
+        tx,
+        ids.map((id: unknown) => {
+          if (typeof id !== "string") {
+            return panic("Decision JSONB repair returned an invalid ID");
+          }
+          return brandPersistedCaseLawDecisionId(id);
+        }),
+      );
+      return repaired;
+    });
 
-  const row = rows.at(0);
-  if (!row) {
-    return null;
-  }
-  return {
-    next_cursor:
-      typeof row["next_cursor"] === "string" ? row["next_cursor"] : null,
-    scanned: Number(row["scanned"] ?? 0),
-    updated: Number(row["updated"] ?? 0),
-  };
-};
-
-const formatDuration = (ms: number): string => {
-  const s = Math.floor(ms / 1000);
-  const h = Math.floor(s / 3600);
-  const m = Math.floor((s % 3600) / 60);
-  const sec = s % 60;
-  return `${h}h${m.toString().padStart(2, "0")}m${sec.toString().padStart(2, "0")}s`;
-};
-
-const main = async () => {
-  console.log("Starting case_law_decisions JSONB repair");
-  console.log(
-    `Batch size: ${BATCH_SIZE}, statement timeout: ${STATEMENT_TIMEOUT_MS}ms`,
-  );
-
-  let cursor: string | null = null;
-  let totalScanned = 0;
-  let totalUpdated = 0;
-  let batchCount = 0;
-  const startedAt = performance.now();
-
-  while (true) {
-    const batchStart = performance.now();
-    // db-await-in-loop: keyset batch per iteration; each batch is one set-based repair statement
-    const result = await repairBatch(cursor);
-
-    if (!result || result.scanned === 0) {
-      break;
+    const row = rows.at(0);
+    if (!row) {
+      return null;
     }
+    return {
+      next_cursor:
+        typeof row["next_cursor"] === "string" ? row["next_cursor"] : null,
+      scanned: Number(row["scanned"] ?? 0),
+      updated: Number(row["updated"] ?? 0),
+    };
+  };
 
-    totalScanned += result.scanned;
-    totalUpdated += result.updated;
-    batchCount++;
+  const formatDuration = (ms: number): string => {
+    const s = Math.floor(ms / 1000);
+    const h = Math.floor(s / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    const sec = s % 60;
+    return `${h}h${m.toString().padStart(2, "0")}m${sec.toString().padStart(2, "0")}s`;
+  };
 
-    const batchMs = Math.round(performance.now() - batchStart);
+  const main = async () => {
+    console.log("Starting case_law_decisions JSONB repair");
     console.log(
-      `[batch ${batchCount}] scanned=${result.scanned} ` +
-        `updated=${result.updated} ` +
-        `total_scanned=${totalScanned} ` +
-        `total_updated=${totalUpdated} ` +
-        `took=${batchMs}ms ` +
-        `cursor=${result.next_cursor ?? "<end>"}`,
+      `Batch size: ${BATCH_SIZE}, statement timeout: ${STATEMENT_TIMEOUT_MS}ms`,
     );
 
-    if (!result.next_cursor) {
-      break;
+    let cursor: string | null = null;
+    let totalScanned = 0;
+    let totalUpdated = 0;
+    let batchCount = 0;
+    const startedAt = performance.now();
+
+    while (true) {
+      const batchStart = performance.now();
+      // db-await-in-loop: keyset batch per iteration; each batch is one set-based repair statement
+      const result = await repairBatch(cursor);
+
+      if (!result || result.scanned === 0) {
+        break;
+      }
+
+      totalScanned += result.scanned;
+      totalUpdated += result.updated;
+      batchCount++;
+
+      const batchMs = Math.round(performance.now() - batchStart);
+      console.log(
+        `[batch ${batchCount}] scanned=${result.scanned} ` +
+          `updated=${result.updated} ` +
+          `total_scanned=${totalScanned} ` +
+          `total_updated=${totalUpdated} ` +
+          `took=${batchMs}ms ` +
+          `cursor=${result.next_cursor ?? "<end>"}`,
+      );
+
+      if (!result.next_cursor) {
+        break;
+      }
+      cursor = result.next_cursor;
     }
-    cursor = result.next_cursor;
-  }
 
-  const elapsed = performance.now() - startedAt;
-  console.log(
-    `\nDone. Scanned ${totalScanned} rows, updated ${totalUpdated}. ` +
-      `Elapsed ${formatDuration(elapsed)}.`,
-  );
+    const elapsed = performance.now() - startedAt;
+    console.log(
+      `\nDone. Scanned ${totalScanned} rows, updated ${totalUpdated}. ` +
+        `Elapsed ${formatDuration(elapsed)}.`,
+    );
 
-  process.exit(0);
-};
+    process.exit(0);
+  };
 
-main().catch((error: unknown) => {
-  console.error("Fatal:", error);
-  process.exit(1);
+  await main();
 });

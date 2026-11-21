@@ -1,6 +1,7 @@
 import { lazy, Suspense, useState } from "react";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import type { LoadedCatalogueEntry } from "@stll/catalogue";
@@ -18,6 +19,7 @@ import { PlusIcon } from "@stll/ui/icons";
 import { stellaToast } from "@stll/ui/toast";
 
 import { resolveAddToStellaState } from "@/features/knowledge/public/tools/add-to-stella.logic";
+import type { AddToStellaState } from "@/features/knowledge/public/tools/add-to-stella.logic";
 import { useClientAuthStatus } from "@/hooks/use-client-auth-status";
 import type { TranslationKey } from "@/i18n/types";
 import { SIGNED_OUT_QUERY_OWNER } from "@/lib/account/queries";
@@ -31,15 +33,57 @@ import {
   catalogueKeys,
   catalogueOptions,
 } from "@/lib/knowledge/queries/catalogue";
+import { queryView } from "@/lib/query-view.logic";
 import {
   agentSkillsQueryRoot,
   mcpQueryRoot,
 } from "@/lib/resource-query-roots.logic";
+import { resourceMutation } from "@/lib/workspace-realtime";
 
 const SignInDialog = lazy(async () => {
   const module = await import("@/components/auth/sign-in-dialog");
   return { default: module.SignInDialog };
 });
+
+type InstallDisabledReasonOptions = {
+  state: AddToStellaState;
+  installing: boolean;
+  checkingRole: boolean;
+};
+
+const installDisabledReasonKey = ({
+  state,
+  installing,
+  checkingRole,
+}: InstallDisabledReasonOptions) => {
+  if (installing) {
+    return "common.installing";
+  }
+  if (checkingRole) {
+    return "common.loading";
+  }
+  switch (state.type) {
+    case "checking":
+      return "common.loading";
+    case "catalogue-error":
+      return "knowledge.catalogue.unavailable";
+    case "forbidden":
+      return "errors.api.forbidden";
+    case "installed":
+      return "publicTools.alreadyInstalled";
+    case "missing-entry":
+      return "publicTools.missingFromCatalogue";
+    case "unavailable":
+      return "publicTools.installUnavailable";
+    case "install":
+    case "role-error":
+    case "sign-in":
+      return undefined;
+    default:
+      state satisfies never;
+      return panic("Unhandled catalogue install state");
+  }
+};
 
 type AddToStellaProps = {
   entry: LoadedCatalogueEntry;
@@ -86,14 +130,11 @@ export const AddToStella = ({
     isError: roleQuery.isError,
     role: roleQuery.data,
   });
-  const organizationEntries = catalogueQuery.isError
-    ? []
-    : catalogueQuery.data?.entries;
   const state = resolveAddToStellaState({
     authStatus: authStatus.status,
     canInstall,
     entry,
-    organizationEntries,
+    catalogue: queryView(catalogueQuery),
   });
   let buttonLabelKey: TranslationKey = "publicTools.addToStella";
   if (state.type === "forbidden") {
@@ -102,12 +143,21 @@ export const AddToStella = ({
     buttonLabelKey = "common.retry";
   } else if (state.type === "installed") {
     buttonLabelKey = "catalogue.installedShort";
-  } else if (state.type === "unavailable") {
+  } else if (
+    state.type === "unavailable" ||
+    state.type === "catalogue-error" ||
+    state.type === "missing-entry"
+  ) {
     buttonLabelKey = "catalogue.unavailable";
   }
 
   const mutation = useMutation({
-    mutationFn: async () => await installCatalogueEntry(entry),
+    mutationFn: resourceMutation({
+      mutation: "installCatalogueEntry",
+      queryClient,
+      scope: { type: "organization" },
+      mutationFn: async () => await installCatalogueEntry(entry),
+    }),
     onSuccess: async () => {
       await Promise.all([
         queryClient.invalidateQueries({
@@ -132,6 +182,12 @@ export const AddToStella = ({
     }
     mutation.mutate();
   };
+
+  const disabledReasonKey = installDisabledReasonKey({
+    state,
+    installing: mutation.isPending,
+    checkingRole: roleQuery.isFetching,
+  });
 
   const handleClick = () => {
     if (state.type === "role-error") {
@@ -158,12 +214,9 @@ export const AddToStella = ({
   return (
     <>
       <Button
-        disabled={
-          mutation.isPending ||
-          roleQuery.isFetching ||
-          (state.type !== "install" &&
-            state.type !== "sign-in" &&
-            state.type !== "role-error")
+        disabled={disabledReasonKey !== undefined}
+        disabledReason={
+          disabledReasonKey === undefined ? undefined : t(disabledReasonKey)
         }
         onClick={handleClick}
         type="button"
@@ -266,7 +319,12 @@ const InstallConfirmDialog = ({
           <AlertDialogClose render={<Button variant="ghost" />}>
             {t("common.cancel")}
           </AlertDialogClose>
-          <Button disabled={isPending} onClick={onConfirm} type="button">
+          <Button
+            disabled={isPending}
+            disabledReason={t("common.installing")}
+            onClick={onConfirm}
+            type="button"
+          >
             {t("publicTools.addToStella")}
           </Button>
         </AlertDialogFooter>

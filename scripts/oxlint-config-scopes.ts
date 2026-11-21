@@ -120,18 +120,21 @@ type BaseOffNoOpsOptions = {
   presetState: ReadonlyMap<string, boolean>;
   canonical: (key: string) => string;
   offEntries: readonly BaseOffEntry[];
+  builtinIds: ReadonlySet<string>;
 };
 
 /**
  * Base entries whose `off` switches nothing off. Restating a preset's `off`
- * is a decision only when its reason sits beside it; a bare restatement, or an
- * `off` for a rule no preset names, is dead configuration.
+ * is a decision only when its reason sits beside it. A new built-in rule may
+ * default to off without appearing in a preset; its reasoned decision is live.
+ * Unknown rules and unexplained restatements remain dead configuration.
  */
 export const baseOffNoOps = ({
   baseRules,
   presetState,
   canonical,
   offEntries,
+  builtinIds,
 }: BaseOffNoOpsOptions): string[] => {
   const reasoned = new Set(
     offEntries.filter((entry) => entry.reasoned).map((entry) => entry.rule),
@@ -141,8 +144,11 @@ export const baseOffNoOps = ({
       if (!ruleIsOff(value)) {
         return false;
       }
-      const enabled = presetState.get(canonical(key));
-      return enabled !== true && !(enabled === false && reasoned.has(key));
+      const id = canonical(key);
+      const enabled = presetState.get(id);
+      const decidedOff =
+        reasoned.has(key) && (enabled === false || builtinIds.has(id));
+      return enabled !== true && !decidedOff;
     })
     .map(([key]) => key);
 };

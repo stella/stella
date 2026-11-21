@@ -3,8 +3,15 @@ import { describe, expect, test } from "bun:test";
 import {
   CASE_LAW_REFINE_MAX_TERMS,
   caseLawRefineOutputSchema,
+  isIncompleteCaseLawRefineGeneration,
   normalizeCaseLawRefinedQuery,
 } from "@/api/handlers/case-law/decisions/search-refine-query";
+import { TRUNCATED_AT_OUTPUT_CEILING_CODE } from "@/api/lib/chat/provider-stream-contract";
+import {
+  ModelRunError,
+  ProviderCallError,
+} from "@/api/lib/errors/provider-call-error";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { toJsonSchema } from "@/api/lib/json-schema/valibot-to-json-schema";
 import {
   corpusFreeTextClause,
@@ -89,4 +96,45 @@ describe("normalizeCaseLawRefinedQuery", () => {
 
 test("the output schema converts to JSON Schema for structured output", () => {
   expect(() => toJsonSchema(caseLawRefineOutputSchema)).not.toThrow();
+});
+
+describe("isIncompleteCaseLawRefineGeneration", () => {
+  const model = { provider: "openai", keySource: "instance" } as const;
+
+  test.each([
+    new ModelRunError({ model }),
+    new ProviderCallError({
+      model,
+      status: 502,
+      code: TRUNCATED_AT_OUTPUT_CEILING_CODE,
+      kind: "unknown",
+    }),
+    new ProviderCallError({
+      model,
+      status: 502,
+      kind: "provider_stream_incomplete",
+    }),
+  ])("retries an answer that was cut off or could not be read: %#", (error) => {
+    expect(isIncompleteCaseLawRefineGeneration(error)).toBe(true);
+  });
+
+  test.each([
+    ...(
+      [
+        "provider_credentials_rejected",
+        "provider_billing",
+        "quota_exhausted",
+        "model_unavailable",
+        "provider_unavailable",
+        "unknown",
+      ] as const
+    ).map((kind) => new ProviderCallError({ model, status: 502, kind })),
+    new HandlerError({
+      status: 502,
+      code: "internal_error",
+      message: "AI generation was cancelled",
+    }),
+  ])("keeps a provider answer or a cancelled run final: %#", (error) => {
+    expect(isIncompleteCaseLawRefineGeneration(error)).toBe(false);
+  });
 });

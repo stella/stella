@@ -17,6 +17,7 @@ import {
   uploadMessageFilesWithRollback,
 } from "@/api/handlers/chat/send-message-side-effects";
 import * as externalMcpToolsModule from "@/api/handlers/chat/tools/external-mcp-tools";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import type { AuditEvent } from "@/api/lib/audit-log";
@@ -144,10 +145,15 @@ afterAll(async () => {
   await releaseRlsFixture();
 });
 
-const seedThread = async (): Promise<SafeId<"chatThread">> => {
+// An existing thread runs the skill it stored when it was created; a
+// request's `activeSkill` names the skill only for a new thread.
+const seedThread = async (
+  activeSkill?: ChatSendRequest["activeSkill"],
+): Promise<SafeId<"chatThread">> => {
   const threadId = toSafeId<"chatThread">(Bun.randomUUIDv7());
   seededThreadIds.push(threadId);
   await testDb.insert(chatThreads).values({
+    activeSkill: activeSkill ?? null,
     id: threadId,
     organizationId: ids.orgA,
     title: "Skill reference test",
@@ -204,10 +210,12 @@ const createContext = ({
     pinServerValidatedWorkspaceId: () => false,
     promptCachingEnabled: false,
     recordAuditEvent: async () => {},
-    request: new Request("http://localhost/v1/chat/send"),
-    route: "/v1/chat/send",
+    request: new Request("http://localhost/v1/chat"),
+    route: "/v1/chat" satisfies ApiRoutePath,
+    headers: {},
     safeDb,
     scopedDb,
+    set: { headers: {}, status: 200 },
     session: { activeOrganizationId: ids.orgA },
     user: { id: ids.userA1 },
   });
@@ -310,12 +318,16 @@ describe("explicit skill references in a user message", () => {
   });
 
   test("an active skill this chat cannot run keeps its context but is not runnable", async () => {
-    const threadId = await seedThread();
+    const activeSkill = {
+      skillId: needsToolSkillId,
+      skillName: NEEDS_TOOL_SLUG,
+    };
+    const threadId = await seedThread(activeSkill);
     streamChatMock.mockClear();
 
     const result = await sendMessage.handler(
       createContext({
-        activeSkill: { skillId: needsToolSkillId, skillName: NEEDS_TOOL_SLUG },
+        activeSkill,
         auditEvents: [],
         message: {
           id: toSafeId<"chatMessage">(Bun.randomUUIDv7()),

@@ -1,6 +1,9 @@
 import { stripCitationPrefix } from "@stll/legal-ast/citation-prefix";
 
 import {
+  canonicalDecisionIdentifierKey,
+  CZE_SHEET_NUMBER_SOURCE,
+  CZE_ZERO_SENATE_PREFIX_SPELLINGS,
   DECISION_DOCKET_GRAMMARS,
   decisionDocketGrammarForJurisdiction,
   foldDecisionIdentifierInput,
@@ -39,8 +42,10 @@ type ParseDecisionDocketOptions = {
  */
 export const DECISION_DOCKETS_STORED_WITH_SHEETS = {
   AUT: false,
+  BRA: false,
   CZE: true,
   EU: false,
+  GBR: false,
   HUN: false,
   POL: false,
   SVK: true,
@@ -104,13 +109,54 @@ export const trimDecisionReferenceEdges = (
     (REFERENCE_EDGE_CHARACTERS.has(character) ||
       extra.includes(character) ||
       /^\s$/u.test(character));
+  // Balanced delimiters inside the reference carry identity: a neutral
+  // citation starts with [year], and a division ends with (KB). Only a pair
+  // surrounding the entire remaining reference is edge punctuation.
+  const closingByOpening = new Map([
+    ["(", ")"],
+    ["[", "]"],
+    ["{", "}"],
+    ["<", ">"],
+  ]);
+  const openings = [];
+  const partnerByIndex = new Map<number, number>();
+  for (const [index, character] of characters.entries()) {
+    const closing = closingByOpening.get(character);
+    if (closing !== undefined) {
+      openings.push({ index, closing });
+      continue;
+    }
+    const opening = openings.at(-1);
+    if (opening?.closing !== character) {
+      continue;
+    }
+    openings.pop();
+    partnerByIndex.set(opening.index, index);
+    partnerByIndex.set(index, opening.index);
+  }
   let start = 0;
   let end = characters.length;
-  while (start < end && isEdge(characters[start])) {
-    start += 1;
-  }
-  while (end > start && isEdge(characters[end - 1])) {
-    end -= 1;
+  while (start < end) {
+    if (isEdge(characters[start])) {
+      const partner = partnerByIndex.get(start);
+      if (partner === undefined || partner >= end || partner < start) {
+        start += 1;
+        continue;
+      }
+      if (partner === end - 1) {
+        start += 1;
+        end -= 1;
+        continue;
+      }
+    }
+    if (isEdge(characters[end - 1])) {
+      const partner = partnerByIndex.get(end - 1);
+      if (partner === undefined || partner < start || partner >= end) {
+        end -= 1;
+        continue;
+      }
+    }
+    break;
   }
   return characters.slice(start, end).join("");
 };
@@ -132,7 +178,10 @@ const DOCKET_REFERENCE_MAX_LENGTH = 200;
 const DOCKET_REFERENCE_TAIL_MAX_LENGTH = 16;
 
 /** A trailing number after a dash, once spacing around the dash is gone. */
-const SHEET_TAIL_RE = /^(?<docket>.*\d)-(?<sheet>\d{1,4})$/u;
+const SHEET_TAIL_RE = new RegExp(
+  String.raw`^(?<docket>.*\d)-(?<sheet>${CZE_SHEET_NUMBER_SOURCE})$`,
+  "u",
+);
 
 /** Roman part numerals one to thirty-nine, the range the tail grammar reads. */
 const ROMAN_PART_NUMERALS: readonly string[] = Array.from(
@@ -343,6 +392,72 @@ export const docketFamilyKeyOf = (
     readDecisionDocketReference(caseNumber, { grammar })?.family.canonical ??
     null
   );
+};
+
+/** Equivalent printed family spellings, including the Czech absent-senate zero. */
+export const decisionDocketFamilySpellings = (
+  caseNumber: string,
+  jurisdiction: string | undefined,
+): string[] => {
+  const grammar =
+    jurisdiction === undefined
+      ? null
+      : decisionDocketGrammarForJurisdiction(jurisdiction);
+  if (grammar === null) {
+    return [caseNumber];
+  }
+  const reference = readDecisionDocketReference(caseNumber, { grammar });
+  if (reference === null) {
+    return [caseNumber];
+  }
+  const { formatted, canonical } = reference.family;
+  if (jurisdiction !== "CZE") {
+    return [formatted];
+  }
+  let bare = formatted.replace(/^0+(?:\s+0+)*\s*(?=\p{L})/u, "");
+  if (grammar.parse(bare) === null) {
+    bare = bare.replace(
+      /^\p{L}{1,7}(?=\.?\s)/u,
+      (registry) =>
+        `${registry.slice(0, 1).toLocaleUpperCase("und")}${registry.slice(1).toLocaleLowerCase("und")}`,
+    );
+  }
+  const spellings = [
+    formatted,
+    ...CZE_ZERO_SENATE_PREFIX_SPELLINGS.flatMap((prefix) =>
+      prefix === "" ? [bare] : [`${prefix} ${bare}`, `${prefix}${bare}`],
+    ),
+  ];
+  return [
+    ...new Set(
+      spellings.filter(
+        (spelling) => grammar.parse(spelling)?.canonical === canonical,
+      ),
+    ),
+  ];
+};
+
+/** Indexed family keys include pre-canonicalization Czech zero-senate rows. */
+export const docketFamilyKeysToRead = (
+  caseNumber: string,
+  jurisdiction: string,
+): string[] => {
+  const canonical = docketFamilyKeyOf(caseNumber, jurisdiction);
+  if (canonical === null) {
+    return [];
+  }
+  if (jurisdiction !== "CZE") {
+    return [canonical];
+  }
+  return [
+    ...new Set([
+      canonical,
+      ...decisionDocketFamilySpellings(caseNumber, jurisdiction).map(
+        (spelling) =>
+          canonicalDecisionIdentifierKey(spelling).replaceAll(".", ""),
+      ),
+    ]),
+  ].toSorted((left, right) => left.length - right.length);
 };
 
 /**

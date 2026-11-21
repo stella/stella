@@ -1,13 +1,31 @@
+import { API_KEY_TABLE_NAME, defaultKeyHasher } from "@better-auth/api-key";
+import type { ApiKey } from "@better-auth/api-key/types";
+import { safeJSONParse } from "@better-auth/core/utils/json";
+import type { AuthContext } from "better-auth";
 import * as v from "valibot";
 
+import { DAY_IN_MS, Temporal } from "@stll/time";
+
 import { getAuth, resolveCredentialMemberAuthorization } from "@/api/lib/auth";
+import type { VerifyApiKey } from "@/api/lib/auth/api-key-endpoints";
 import {
+  API_KEY_REFUSAL_REASON,
+  type ApiKeyRefusalReason,
+  apiKeyVerificationRefusalReason,
+  logApiKeyRefusal,
+} from "@/api/lib/auth/api-key-refusal-log";
+import type { ResolveCredentialMemberAuthorization } from "@/api/lib/auth/member-authorization";
+import {
+  API_KEY_KIND,
+  API_KEY_POLICY,
   isMachineApiKeyAudienceAllowed,
   MACHINE_API_KEY_CONFIG_ID,
   machineApiKeyMetadataSchema,
   machineApiKeyPermissionsSchema,
   parseMachineApiKeyPermissions,
 } from "@/api/lib/machine-api-key-config";
+import { personalApiKeyPermissionsAllowed } from "@/api/lib/machine-api-keys/personal-policy";
+import { readPersonalApiKeyPolicy } from "@/api/lib/machine-api-keys/personal-policy-reader";
 import { isMemberRole } from "@/api/lib/member-roles";
 import {
   hasMemberPermission,
@@ -15,18 +33,8 @@ import {
 } from "@/api/lib/permission-authorization";
 import { brandActorSessionIdentity } from "@/api/lib/safe-id-boundaries";
 import type { McpSession } from "@/api/mcp/auth";
-import type { McpMode } from "@/api/mcp/constants";
+import { getMcpResourceModeConfig, type McpMode } from "@/api/mcp/constants";
 import { McpAuthenticationError } from "@/api/mcp/errors";
-
-/**
- * Every rejection reports the same thing. Whether a credential was unknown,
- * expired, disabled, pointed at a former member, or carried permissions its
- * owner's role no longer grants is exactly the information an attacker probing
- * with a stolen or guessed key wants back, and none of it helps a legitimate
- * caller more than "this credential is not usable" does.
- */
-const rejectCredential = (): McpAuthenticationError =>
-  new McpAuthenticationError({ message: "Invalid or expired API key" });
 
 /**
  * Resolve a machine API key into the same authorization identity the JWT
@@ -55,31 +63,129 @@ const rejectCredential = (): McpAuthenticationError =>
  * with no audience in its metadata predates the binding and stays usable
  * anywhere, which is what it could already do.
  */
-export const resolveMachineApiKeySession = async (
+type MachineApiKeyCredential = { session: McpSession; expiresAt: Date | null };
+
+/**
+ * Where a key is presented to read its own expiry rather than to reach a
+ * resource. An audience binding limits what a key can reach; it never hides
+ * the key's own lifetime from its holder, so every audience is accepted here.
+ * Only `resolveOwnMachineApiKeyCredential` presents a key this way; no MCP
+ * transport mode can.
+ */
+const KEY_SELF_INSPECTION = "self_inspection";
+
+type MachineApiKeyDependencies = {
+  verifyApiKey?: VerifyApiKey;
+  resolveAuthorization?: ResolveCredentialMemberAuthorization;
+  resolvePersonalPolicy?: typeof readPersonalApiKeyPolicy;
+};
+
+type ReadMachineApiKeyDependencies = {
+  clock?: Pick<typeof Temporal.Now, "instant"> | undefined;
+  getAuthContext?:
+    | (() => Promise<{ adapter: Pick<AuthContext["adapter"], "findOne"> }>)
+    | undefined;
+};
+
+/** Read the plugin's stored digest without consuming or refilling any budget. */
+const readMachineApiKey = async (
   credential: string,
   {
-    mode = "default",
-    verifyApiKey = getAuth().api.verifyApiKey,
-    resolveAuthorization = resolveCredentialMemberAuthorization,
-  }: {
-    mode?: McpMode | undefined;
-    verifyApiKey?: (
-      ...args: Parameters<ReturnType<typeof getAuth>["api"]["verifyApiKey"]>
-    ) => ReturnType<ReturnType<typeof getAuth>["api"]["verifyApiKey"]>;
-    resolveAuthorization?: typeof resolveCredentialMemberAuthorization;
-  } = {},
-): Promise<McpSession> => {
-  const verification = await verifyApiKey({
-    body: {
-      // Scoping to this configuration means a key minted under any other
-      // configuration fails here rather than being accepted as a machine key.
-      configId: MACHINE_API_KEY_CONFIG_ID,
-      key: credential,
-    },
+    getAuthContext = async () => getAuth().$context,
+    clock = Temporal.Now,
+  }: ReadMachineApiKeyDependencies,
+) => {
+  const { adapter } = await getAuthContext();
+  const key = await adapter.findOne<
+    Omit<ApiKey, "permissions"> & { permissions: string | null }
+  >({
+    model: API_KEY_TABLE_NAME,
+    where: [
+      { field: "key", value: await defaultKeyHasher(credential) },
+      { field: "configId", value: MACHINE_API_KEY_CONFIG_ID },
+    ],
   });
+  if (
+    key === null ||
+    (key.expiresAt !== null &&
+      key.expiresAt.getTime() < clock.instant().epochMilliseconds)
+  ) {
+    return null;
+  }
+  return {
+    ...key,
+    permissions:
+      key.permissions === null ? null : safeJSONParse(key.permissions),
+    metadata:
+      typeof key.metadata === "string"
+        ? safeJSONParse(key.metadata)
+        : key.metadata,
+  };
+};
+
+type PresentedMachineApiKeyOptions = MachineApiKeyDependencies &
+  ReadMachineApiKeyDependencies & {
+    mode: McpMode | typeof KEY_SELF_INSPECTION;
+    metering: "metered" | "read_only";
+  };
+
+const resolvePresentedMachineApiKey = async (
+  credential: string,
+  {
+    mode,
+    metering,
+    verifyApiKey,
+    getAuthContext,
+    clock,
+    resolveAuthorization = resolveCredentialMemberAuthorization,
+    resolvePersonalPolicy = readPersonalApiKeyPolicy,
+  }: PresentedMachineApiKeyOptions,
+): Promise<MachineApiKeyCredential> => {
+  const verification =
+    metering === "metered"
+      ? await (verifyApiKey ?? getAuth().api.verifyApiKey)({
+          body: {
+            // Scoping to this configuration means a key minted under any other
+            // configuration fails here rather than being accepted as a machine key.
+            configId: MACHINE_API_KEY_CONFIG_ID,
+            key: credential,
+          },
+        })
+      : {
+          valid: true,
+          error: null,
+          key: await readMachineApiKey(credential, { getAuthContext, clock }),
+        };
+
+  const metadata = v.safeParse(
+    machineApiKeyMetadataSchema,
+    verification.key?.metadata,
+  );
+  const rejectCredential = (
+    reason: ApiKeyRefusalReason,
+    error = new McpAuthenticationError({
+      message: "Invalid or expired API key",
+    }),
+  ): McpAuthenticationError => {
+    logApiKeyRefusal({
+      reason,
+      mode,
+      ...(verification.key
+        ? {
+            key: {
+              start: verification.key.start,
+              ...(metadata.success ? { kind: metadata.output.kind } : {}),
+            },
+          }
+        : {}),
+    });
+    return error;
+  };
 
   if (!verification.valid || !verification.key) {
-    throw rejectCredential();
+    throw rejectCredential(
+      apiKeyVerificationRefusalReason(verification.error?.code),
+    );
   }
 
   const { key } = verification;
@@ -87,23 +193,29 @@ export const resolveMachineApiKeySession = async (
   // `enabled` is surfaced separately from validity by the plugin; a revoked key
   // is disabled rather than deleted so its audit trail survives.
   if (!key.enabled) {
-    throw rejectCredential();
+    throw rejectCredential(API_KEY_REFUSAL_REASON.disabled);
   }
 
-  // Two independent reasons to refuse, sharing one branch because they share
-  // one answer: metadata this code path did not write, and a key bound to a
-  // different audience than the one it was presented on. Both are decided
-  // before the owner is looked up, so a mismatched key cannot be used to probe
-  // whether its owner is still a member.
-  const metadata = v.safeParse(machineApiKeyMetadataSchema, key.metadata);
+  // Both metadata validity and audience binding are decided before the owner
+  // lookup. A mismatch names only the binding already carried by the presented
+  // credential and cannot probe whether its owner is still a member.
+  if (!metadata.success) {
+    throw rejectCredential(API_KEY_REFUSAL_REASON.invalidMetadata);
+  }
   if (
-    !metadata.success ||
+    mode !== KEY_SELF_INSPECTION &&
     !isMachineApiKeyAudienceAllowed({
       audience: metadata.output.audience,
       mode,
     })
   ) {
-    throw rejectCredential();
+    const audience = metadata.output.audience ?? mode;
+    throw rejectCredential(
+      API_KEY_REFUSAL_REASON.audienceMismatch,
+      new McpAuthenticationError({
+        message: `This API key is bound to the ${audience} audience. Use ${getMcpResourceModeConfig(audience).httpPath}.`,
+      }),
+    );
   }
 
   const storedPermissions = v.safeParse(
@@ -111,18 +223,31 @@ export const resolveMachineApiKeySession = async (
     key.permissions,
   );
   if (!storedPermissions.success) {
-    throw rejectCredential();
+    throw rejectCredential(API_KEY_REFUSAL_REASON.invalidPermissions);
   }
 
   const parsedPermissions = parseMachineApiKeyPermissions(
     storedPermissions.output,
   );
   if (parsedPermissions.type !== "valid") {
-    throw rejectCredential();
+    throw rejectCredential(API_KEY_REFUSAL_REASON.invalidPermissions);
   }
 
   const { organizationId, scopes } = metadata.output;
   const userId = key.referenceId;
+  const identity = brandActorSessionIdentity({ organizationId, userId });
+  const personalPolicy =
+    metadata.output.kind === API_KEY_KIND.personal &&
+    (!personalApiKeyPermissionsAllowed(
+      storedPermissions.output,
+      metadata.output.scopes,
+    ) ||
+      key.expiresAt === null ||
+      key.expiresAt.getTime() - key.createdAt.getTime() >
+        API_KEY_POLICY.personal.maxDays * DAY_IN_MS ||
+      (await resolvePersonalPolicy(identity.organizationId)) !== "enabled")
+      ? "denied"
+      : "allowed";
 
   // The live membership check. `resolveMcpSessionContext` runs this again for
   // the session it builds; doing it here as well is what lets the permission
@@ -132,12 +257,18 @@ export const resolveMachineApiKeySession = async (
   // Branding happens here, at the same boundary `resolveMcpSessionContext` uses:
   // these two ids arrive as plain strings (one parsed out of a metadata column,
   // one read off the key row) and only become ownership ids once they cross it.
-  const authorization = await resolveAuthorization(
-    brandActorSessionIdentity({ organizationId, userId }),
-  );
+  const authorization = await resolveAuthorization(identity);
 
-  if (!authorization || !isMemberRole(authorization.role)) {
-    throw rejectCredential();
+  if (
+    personalPolicy === "denied" ||
+    !authorization ||
+    !isMemberRole(authorization.role)
+  ) {
+    throw rejectCredential(
+      personalPolicy === "denied"
+        ? API_KEY_REFUSAL_REASON.personalPolicy
+        : API_KEY_REFUSAL_REASON.inactiveMember,
+    );
   }
 
   // The escalation guard, evaluated against the role the owner holds *now*
@@ -146,25 +277,77 @@ export const resolveMachineApiKeySession = async (
   // as a session would.
   if (
     !hasMemberPermission(
-      sessionMemberRole(authorization.role),
+      sessionMemberRole(authorization.role, authorization.billingAccess),
       parsedPermissions.permissions,
     )
   ) {
-    throw rejectCredential();
+    throw rejectCredential(API_KEY_REFUSAL_REASON.rolePermissions);
   }
 
   return {
-    credential: {
-      type: "machine_api_key",
-      id: key.id,
-      name: key.name ?? "Machine API key",
-      // The set the check above proved the owner's role can grant. It travels
-      // with the session so authorization can hold the key to it, rather than
-      // to the whole role the owner happens to have.
-      permissions: parsedPermissions.permissions,
+    expiresAt: key.expiresAt,
+    session: {
+      credential: {
+        type:
+          metadata.output.kind === API_KEY_KIND.personal
+            ? "personal_api_key"
+            : "machine_api_key",
+        id: key.id,
+        name: key.name ?? "Machine API key",
+        // The set the check above proved the owner's role can grant. It travels
+        // with the session so authorization can hold the key to it, rather than
+        // to the whole role the owner happens to have.
+        permissions: parsedPermissions.permissions,
+      },
+      organizationId,
+      scopes: [...scopes],
+      userId,
     },
-    organizationId,
-    scopes: [...scopes],
-    userId,
   };
 };
+
+export const resolveMachineApiKeyCredential = async (
+  credential: string,
+  {
+    mode = "default",
+    ...dependencies
+  }: MachineApiKeyDependencies & { mode?: McpMode | undefined } = {},
+): Promise<MachineApiKeyCredential> =>
+  await resolvePresentedMachineApiKey(credential, {
+    ...dependencies,
+    mode,
+    metering: "metered",
+  });
+
+/** The key's own record, for its holder; any audience binding is accepted. */
+export const resolveOwnMachineApiKeyCredential = async (
+  credential: string,
+  dependencies: MachineApiKeyDependencies = {},
+): Promise<MachineApiKeyCredential> =>
+  await resolvePresentedMachineApiKey(credential, {
+    ...dependencies,
+    mode: KEY_SELF_INSPECTION,
+    metering: "metered",
+  });
+
+/** MCP consumers need only the session; lifecycle observers also need expiry. */
+export const resolveMachineApiKeySession = async (
+  ...args: Parameters<typeof resolveMachineApiKeyCredential>
+) => (await resolveMachineApiKeyCredential(...args)).session;
+
+/** Recheck live credential authority without recording another API request. */
+export const revalidateMachineApiKeySession = async (
+  credential: string,
+  {
+    mode = "default",
+    ...dependencies
+  }: Omit<MachineApiKeyDependencies, "verifyApiKey"> &
+    ReadMachineApiKeyDependencies & { mode?: McpMode | undefined } = {},
+): Promise<McpSession> =>
+  (
+    await resolvePresentedMachineApiKey(credential, {
+      ...dependencies,
+      mode,
+      metering: "read_only",
+    })
+  ).session;

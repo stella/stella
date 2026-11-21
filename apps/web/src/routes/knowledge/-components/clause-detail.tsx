@@ -5,6 +5,7 @@ import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
 
 import { CLAUSE_DIRECTIVES_INVALID_CODE } from "@stll/api-contract";
+import { DEFAULT_VARCHAR_MAX_LENGTH } from "@stll/api-contract/limits";
 import { compareByLocale } from "@stll/collation";
 import { displayLanguageName, LANGUAGES, toLanguageCode } from "@stll/locales";
 import {
@@ -29,6 +30,7 @@ import {
   Dialog,
   DialogClose,
   DialogFooter,
+  DialogFormState,
   DialogHeader,
   DialogPanel,
   DialogPopup,
@@ -37,7 +39,6 @@ import {
 import {
   ChevronDownIcon,
   ChevronUpIcon,
-  Loader2Icon,
   MoreHorizontalIcon,
   PencilIcon,
   PlusIcon,
@@ -46,6 +47,8 @@ import {
   Trash2Icon,
 } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
+import { Label } from "@stll/ui/label";
+import { Loader } from "@stll/ui/loader";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -62,8 +65,9 @@ import {
 import { Tabs, TabsList, TabsPanel, TabsTab } from "@stll/ui/tabs";
 import { Textarea } from "@stll/ui/textarea";
 import { stellaToast } from "@stll/ui/toast";
-import { cn } from "@stll/ui/utils";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
+import { matchesComboboxItem } from "@/components/combobox-filter.logic";
 import { InlineEdit } from "@/components/inline-edit";
 import type { ClauseParagraph } from "@/components/templates/clause-editor-types";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
@@ -73,13 +77,14 @@ import { useI18nStore } from "@/i18n/i18n-store";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
-import { APIError, toAPIError, unwrapEden } from "@/lib/errors/api";
+import { APIError, toAPIError, unwrapApiResponse } from "@/lib/errors/api";
 import { userErrorFromThrown, userErrorMessage } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
 import {
   clauseDetailOptions,
-  knowledgeKeys,
   invalidateTemplateClauseSources,
+  knowledgeKeys,
 } from "@/lib/knowledge/queries";
 import { MEDIUM_DATE_SHORT_TIME_FORMAT } from "@/lib/relative-time";
 import { toSafeId } from "@/lib/safe-id";
@@ -274,12 +279,15 @@ export const DetailContent = ({
     transport ??
     ({
       save: async (write: ClauseBodyWrite) => {
-        const saved = unwrapEden(await api.clauses({ clauseId }).post(write));
+        const saved = unwrapApiResponse(
+          await api.clauses({ clauseId }).post(write),
+        );
         return { ...saved, body: write.body };
       },
-      read: async () => unwrapEden(await api.clauses({ clauseId }).get()).body,
+      read: async () =>
+        unwrapApiResponse(await api.clauses({ clauseId }).get()).body,
       restore: async (versionId: string, expectedBody: ClauseParagraph[]) =>
-        unwrapEden(
+        unwrapApiResponse(
           await api
             .clauses({ clauseId })
             .versions({ versionId })
@@ -289,7 +297,7 @@ export const DetailContent = ({
         body: ClauseParagraph[],
         expectedBody: ClauseParagraph[],
       ) => {
-        const saved = unwrapEden(
+        const saved = unwrapApiResponse(
           await api
             .clauses({ clauseId })
             .post({ body, expectedBody, snapshotVersion: true }),
@@ -318,7 +326,13 @@ export const DetailContent = ({
       setDirectiveRefusal(true);
       return;
     }
-    getAnalytics().captureError(error);
+    getAnalytics().captureError(error, {
+      fingerprintKey: "DetailContent.reportBodyError:failure",
+      scope: {
+        type: "handler",
+        handlerId: "DetailContent.reportBodyError:failure",
+      },
+    });
     notifyUserError(error, t("clauses.saveFailed"), {
       description: userErrorFromThrown(error, t("common.unexpectedError")),
     });
@@ -555,12 +569,16 @@ const ClauseLeaveDialog = ({
               }}
               variant="ghost"
               disabled={savingVersion}
+              disabledReason={t("common.saving")}
             >
               {t("clauses.leaveWithoutVersion")}
             </Button>
           )}
           <Button
             disabled={savingVersion || reviewStatus !== "resolved"}
+            disabledReason={
+              savingVersion ? t("common.saving") : t("common.finishReview")
+            }
             onClick={() => {
               detached(
                 saveVersionAndLeave(),
@@ -576,7 +594,42 @@ const ClauseLeaveDialog = ({
   );
 };
 
-export const ClauseHeader = ({
+// The clause title opens its rename in place for an editor; a reader sees the
+// title as plain text rather than a dimmed, disabled control.
+const ClauseTitleText = ({
+  canEdit,
+  onEdit,
+  title,
+}: {
+  canEdit: boolean;
+  onEdit: () => void;
+  title: string;
+}) => {
+  const text = (
+    <TruncatedText className="text-lg font-semibold whitespace-pre">
+      {title}
+    </TruncatedText>
+  );
+  if (!canEdit) {
+    return (
+      <span className="flex min-w-0 flex-1" dir="auto">
+        {text}
+      </span>
+    );
+  }
+  return (
+    <Button
+      className="min-w-0 flex-1 shrink"
+      dir="auto"
+      onClick={onEdit}
+      variant="plain"
+    >
+      {text}
+    </Button>
+  );
+};
+
+const ClauseHeader = ({
   detail,
   clauseId,
   categories,
@@ -613,7 +666,7 @@ export const ClauseHeader = ({
   const setNavName = useClauseNavStore((s) => s.setName);
   const clearNav = useClauseNavStore((s) => s.clear);
 
-  const saveVersion = useCallback(async () => {
+  const saveVersion = async () => {
     if (reviewStatus !== "resolved") {
       return false;
     }
@@ -621,18 +674,19 @@ export const ClauseHeader = ({
     const clean = await onSaveVersion();
     setSavingVersion(false);
     return clean;
-  }, [reviewStatus, onSaveVersion]);
+  };
 
-  const saveVersionAndLeave = useCallback(async () => {
+  const saveVersionAndLeave = async () => {
     const ok = await saveVersion();
     if (ok) {
       onBack();
       return;
     }
     setLeaveDialog("failed");
-  }, [saveVersion, onBack]);
+  };
 
   // Offer a version snapshot for edits made since the last publication.
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- react/exhaustive-deps cannot see compiler memoization, and this value is an effect dependency
   const handleBack = useCallback(() => {
     if (reviewStatus !== "resolved") {
       setLeaveDialog("review");
@@ -645,7 +699,7 @@ export const ClauseHeader = ({
     onBack();
   }, [dirtySinceVersion, reviewStatus, onBack]);
 
-  const leaveWithoutVersion = useCallback(async () => {
+  const leaveWithoutVersion = async () => {
     if (reviewStatus === "pending") {
       setLeaveDialog("review");
       return;
@@ -655,7 +709,7 @@ export const ClauseHeader = ({
       return;
     }
     setLeaveDialog("failed");
-  }, [reviewStatus, onBack, onFlushBody]);
+  };
 
   // Publish the open clause to the breadcrumb (Knowledge › Vzorová ustanovení ›
   // Name) and wire its list crumb back through the same unsaved-version guard
@@ -665,7 +719,7 @@ export const ClauseHeader = ({
     return () => clearNav();
   }, [clauseId, detail.title, handleBack, setNavOpen, clearNav]);
 
-  const saveTitle = useCallback(async () => {
+  const saveTitle = async () => {
     const trimmed = titleDraft.trim();
     setEditingTitle(false);
     if (trimmed === "" || trimmed === detail.title) {
@@ -689,33 +743,30 @@ export const ClauseHeader = ({
     // Reflect the rename in the breadcrumb instantly, ahead of the refetch.
     setNavName(clauseId, trimmed);
     onRefresh();
-  }, [clauseId, detail.title, titleDraft, t, onRefresh, setNavName]);
+  };
 
-  const saveCategory = useCallback(
-    async (value: string) => {
-      const response = await api.clauses({ clauseId }).post({
-        categoryId: value === "" ? null : toSafeId<"clauseCategory">(value),
+  const saveCategory = async (value: string) => {
+    const response = await api.clauses({ clauseId }).post({
+      categoryId: value === "" ? null : toSafeId<"clauseCategory">(value),
+    });
+
+    if (response.error) {
+      notifyUserError(toAPIError(response.error), t("clauses.saveFailed"), {
+        description: userErrorMessage(
+          response.error,
+          t("common.unexpectedError"),
+        ),
       });
+      return;
+    }
 
-      if (response.error) {
-        notifyUserError(toAPIError(response.error), t("clauses.saveFailed"), {
-          description: userErrorMessage(
-            response.error,
-            t("common.unexpectedError"),
-          ),
-        });
-        return;
-      }
-
-      onRefresh();
-    },
-    [clauseId, t, onRefresh],
-  );
+    onRefresh();
+  };
 
   const deleteClause = useMutation({
     mutationFn: async () => {
       const response = await api.clauses({ clauseId }).delete();
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onSuccess: () => {
       stellaToast.add({
@@ -732,12 +783,22 @@ export const ClauseHeader = ({
     },
   });
 
+  const resolveClauseVersionSaveDisabledReason = () => {
+    if (savingVersion) {
+      return t("common.saving");
+    }
+    if (reviewStatus !== "resolved") {
+      return t("common.finishReview");
+    }
+    return t("common.noChangesToSave");
+  };
+
   return (
     <div className="flex items-center gap-2">
       {editingTitle && canEdit ? (
         <InlineEdit
-          className="flex-1"
-          inputClassName="flex-1 text-base"
+          className="min-w-0 flex-1 text-lg font-semibold"
+          maxLength={DEFAULT_VARCHAR_MAX_LENGTH}
           onCancel={() => {
             setTitleDraft(detail.title);
             setEditingTitle(false);
@@ -749,18 +810,14 @@ export const ClauseHeader = ({
           value={titleDraft}
         />
       ) : (
-        <button
-          className="flex-1 truncate text-start text-lg font-semibold disabled:cursor-default"
-          dir="auto"
-          disabled={!canEdit}
-          onClick={() => {
+        <ClauseTitleText
+          canEdit={canEdit}
+          onEdit={() => {
             setTitleDraft(detail.title);
             setEditingTitle(true);
           }}
-          type="button"
-        >
-          {detail.title}
-        </button>
+          title={detail.title}
+        />
       )}
 
       {canEdit && (
@@ -790,6 +847,7 @@ export const ClauseHeader = ({
           disabled={
             !dirtySinceVersion || savingVersion || reviewStatus !== "resolved"
           }
+          disabledReason={resolveClauseVersionSaveDisabledReason()}
           onClick={() => {
             detached(saveVersion(), "clause-detail.save-version");
           }}
@@ -823,6 +881,7 @@ export const ClauseHeader = ({
               </AlertDialogClose>
               <Button
                 disabled={deleteClause.isPending}
+                disabledReason={t("common.deleting")}
                 onClick={() => {
                   deleteClause.mutate();
                 }}
@@ -939,9 +998,7 @@ const ClauseInlineTextField = ({
 
   return (
     <div className="grid gap-1.5">
-      <label className="text-sm font-medium" htmlFor={`clause-${field}`}>
-        {label}
-      </label>
+      <Label htmlFor={`clause-${field}`}>{label}</Label>
       <Input
         id={`clause-${field}`}
         onBlur={() => {
@@ -997,24 +1054,21 @@ const ClauseLanguageField = ({
           label: displayLanguageName(value, { displayLocale: lang }),
         });
 
-  const save = useCallback(
-    async (next: string | null) => {
-      const response = await api.clauses({ clauseId }).post({ language: next });
+  const save = async (next: string | null) => {
+    const response = await api.clauses({ clauseId }).post({ language: next });
 
-      if (response.error) {
-        notifyUserError(toAPIError(response.error), t("clauses.saveFailed"), {
-          description: userErrorMessage(
-            response.error,
-            t("common.unexpectedError"),
-          ),
-        });
-        return;
-      }
+    if (response.error) {
+      notifyUserError(toAPIError(response.error), t("clauses.saveFailed"), {
+        description: userErrorMessage(
+          response.error,
+          t("common.unexpectedError"),
+        ),
+      });
+      return;
+    }
 
-      onRefresh();
-    },
-    [clauseId, t, onRefresh],
-  );
+    onRefresh();
+  };
 
   const handleChange = (pick: LanguagePick | null) => {
     const next = pick === null ? null : (toLanguageCode(pick.code) ?? null);
@@ -1040,11 +1094,10 @@ const ClauseLanguageField = ({
 
   return (
     <div className="grid gap-1.5">
-      <label className="text-sm font-medium" htmlFor="clause-language">
-        {t("common.language")}
-      </label>
+      <Label htmlFor="clause-language">{t("common.language")}</Label>
       <Combobox<LanguagePick>
         autoHighlight
+        filter={matchesComboboxItem}
         isItemEqualToValue={(a, b) => a.code === b.code}
         items={options}
         itemToStringLabel={(item) => item.label}
@@ -1124,9 +1177,7 @@ const ClauseUsageNotesField = ({
 
   return (
     <div className="mt-3 grid gap-1.5">
-      <label className="text-sm font-medium" htmlFor="clause-usage-notes">
-        {t("clauses.usageNotes")}
-      </label>
+      <Label htmlFor="clause-usage-notes">{t("clauses.usageNotes")}</Label>
       <Textarea
         className="min-h-[60px]"
         id="clause-usage-notes"
@@ -1263,7 +1314,7 @@ const VariantRow = ({
     onChanged();
   };
 
-  const handlePromote = useCallback(async () => {
+  const handlePromote = async () => {
     const body = isClauseParagraphs(variant.body) ? variant.body : [];
     if (body.length === 0) {
       return;
@@ -1282,44 +1333,41 @@ const VariantRow = ({
     });
     setPromoteOpen(false);
     onChanged();
-  }, [variant.body, t, onChanged, onPromote]);
+  };
 
-  const handleReorder = useCallback(
-    async (direction: "up" | "down") => {
-      const neighborIndex = direction === "up" ? index - 1 : index + 1;
-      const neighbor = variants.at(neighborIndex);
-      if (!neighbor) {
-        return;
-      }
+  const handleReorder = async (direction: "up" | "down") => {
+    const neighborIndex = direction === "up" ? index - 1 : index + 1;
+    const neighbor = variants.at(neighborIndex);
+    if (!neighbor) {
+      return;
+    }
 
-      setReordering(true);
-      // Swap sortOrder with the neighbor; the list query orders by
-      // sortOrder asc so the rows visually exchange places.
-      const [first, second] = await Promise.all([
-        api
-          .clauses({ clauseId })
-          .variants({ variantId: variant.id })
-          .post({ sortOrder: neighbor.sortOrder }),
-        api
-          .clauses({ clauseId })
-          .variants({ variantId: neighbor.id })
-          .post({ sortOrder: variant.sortOrder }),
-      ]);
+    setReordering(true);
+    // Swap sortOrder with the neighbor; the list query orders by
+    // sortOrder asc so the rows visually exchange places.
+    const [first, second] = await Promise.all([
+      api
+        .clauses({ clauseId })
+        .variants({ variantId: variant.id })
+        .post({ sortOrder: neighbor.sortOrder }),
+      api
+        .clauses({ clauseId })
+        .variants({ variantId: neighbor.id })
+        .post({ sortOrder: variant.sortOrder }),
+    ]);
 
-      setReordering(false);
+    setReordering(false);
 
-      const failure = first.error ?? second.error;
-      if (failure) {
-        notifyUserError(toAPIError(failure), t("clauses.saveFailed"), {
-          description: userErrorMessage(failure, t("common.unexpectedError")),
-        });
-        return;
-      }
+    const failure = first.error ?? second.error;
+    if (failure) {
+      notifyUserError(toAPIError(failure), t("clauses.saveFailed"), {
+        description: userErrorMessage(failure, t("common.unexpectedError")),
+      });
+      return;
+    }
 
-      onChanged();
-    },
-    [clauseId, index, variant.id, variant.sortOrder, variants, t, onChanged],
-  );
+    onChanged();
+  };
 
   const body = isClauseParagraphs(variant.body) ? variant.body : [];
   const canMoveUp = index > 0;
@@ -1333,6 +1381,9 @@ const VariantRow = ({
           <Button
             aria-label={t("common.moveUp")}
             disabled={!canMoveUp || reordering}
+            disabledReason={
+              reordering ? t("common.saving") : t("common.alreadyFirst")
+            }
             onClick={() => {
               detached(handleReorder("up"), "clause-detail.reorder");
             }}
@@ -1344,6 +1395,9 @@ const VariantRow = ({
           <Button
             aria-label={t("common.moveDown")}
             disabled={!canMoveDown || reordering}
+            disabledReason={
+              reordering ? t("common.saving") : t("common.alreadyLast")
+            }
             onClick={() => {
               detached(handleReorder("down"), "clause-detail.reorder");
             }}
@@ -1379,7 +1433,7 @@ const VariantRow = ({
         </div>
       </div>
       {body.length > 0 && (
-        <div className="bg-muted/30 mt-2 rounded border p-3">
+        <div className="bg-muted/30 mt-2 rounded-sm border p-3">
           <ClauseBody paragraphs={body} />
         </div>
       )}
@@ -1400,6 +1454,7 @@ const VariantRow = ({
             </AlertDialogClose>
             <Button
               disabled={deleting}
+              disabledReason={t("common.deleting")}
               onClick={() => {
                 detached(handleDelete(), "clause-detail.delete");
               }}
@@ -1425,6 +1480,7 @@ const VariantRow = ({
             </AlertDialogClose>
             <Button
               disabled={promoting}
+              disabledReason={t("common.saving")}
               onClick={() => {
                 detached(handlePromote(), "clause-detail.promote");
               }}
@@ -1487,6 +1543,7 @@ const VariantFormDialogBody = ({
   onSaved: () => void;
   variant: VariantItem | undefined;
 }) => {
+  const idempotentSubmit = useIdempotentSubmit();
   const t = useTranslations();
   const isEdit = !!variant;
   const [label, setLabel] = useState(() => variant?.label ?? "");
@@ -1511,7 +1568,12 @@ const VariantFormDialogBody = ({
             .clauses({ clauseId })
             .variants({ variantId: variant.id })
             .post(payload)
-        : await api.clauses({ clauseId }).variants.put(payload);
+        : await idempotentSubmit.run({
+            operation: `clauses.${clauseId}.variants.create`,
+            body: payload,
+            send: async (creationPayload) =>
+              api.clauses({ clauseId }).variants.put(creationPayload),
+          });
 
     setSaving(false);
 
@@ -1536,6 +1598,16 @@ const VariantFormDialogBody = ({
 
   return (
     <DialogPopup className="sm:max-w-md">
+      <DialogFormState
+        dirty={
+          label !== (variant?.label ?? "") ||
+          bodyText !== (variant ? variantBodyToText(variant.body) : "")
+        }
+        onDiscard={() => {
+          setLabel(variant?.label ?? "");
+          setBodyText(variant ? variantBodyToText(variant.body) : "");
+        }}
+      />
       <DialogHeader>
         <DialogTitle>
           {isEdit ? t("clauses.editVariant") : t("clauses.addVariant")}
@@ -1543,20 +1615,17 @@ const VariantFormDialogBody = ({
       </DialogHeader>
       <DialogPanel className="grid gap-4">
         <div className="grid gap-1.5">
-          <label className="text-sm font-medium" htmlFor="variant-label">
-            {t("clauses.variantLabel")}
-          </label>
+          <Label htmlFor="variant-label">{t("clauses.variantLabel")}</Label>
           <Input
             id="variant-label"
+            maxLength={DEFAULT_VARCHAR_MAX_LENGTH}
             onChange={(e) => setLabel(e.target.value)}
             placeholder={t("clauses.variantLabelPlaceholder")}
             value={label}
           />
         </div>
         <div className="grid gap-1.5">
-          <label className="text-sm font-medium" htmlFor="variant-body">
-            {t("clauses.body")}
-          </label>
+          <Label htmlFor="variant-body">{t("clauses.body")}</Label>
           <Textarea
             className="min-h-[100px]"
             id="variant-body"
@@ -1571,6 +1640,7 @@ const VariantFormDialogBody = ({
         </DialogClose>
         <Button
           disabled={saving || !label.trim()}
+          disabledReason={saving ? t("common.saving") : t("common.enterName")}
           onClick={() => {
             detached(handleSave(), "clause-detail.save");
           }}
@@ -1584,7 +1654,7 @@ const VariantFormDialogBody = ({
 
 // ── History Tab ──────────────────────────────────────
 
-export const HistoryTab = ({
+const HistoryTab = ({
   clauseId,
   currentBody,
   versions,
@@ -1683,7 +1753,7 @@ export const HistoryTab = ({
 
       {loading && (
         <div className="flex items-center justify-center py-4">
-          <Loader2Icon className="text-muted-foreground size-4 animate-spin" />
+          <Loader className="size-4" label={t("common.loading")} size="sm" />
         </div>
       )}
 
@@ -1721,7 +1791,7 @@ const VersionRow = ({
   const [restoreOpen, setRestoreOpen] = useState(false);
   const [restoring, setRestoring] = useState(false);
 
-  const handleRestore = useCallback(async () => {
+  const handleRestore = async () => {
     setRestoring(true);
     const restored = await onRestore(version.id);
     setRestoring(false);
@@ -1734,19 +1804,17 @@ const VersionRow = ({
       title: t("clauses.versionRestored"),
     });
     setRestoreOpen(false);
-  }, [version.id, t, onRestore]);
+  };
 
   return (
     <li className="flex items-center gap-2 px-2">
-      <button
-        className={cn(
-          "flex flex-1 items-center justify-between",
-          "px-2 py-3 text-sm",
-          "hover:bg-muted/50 rounded",
-          isSelected && "bg-muted",
-        )}
+      <Button
+        aria-pressed={isSelected}
+        className="flex-1 justify-between"
+        selected={isSelected}
         onClick={onToggleDiff}
-        type="button"
+        size="row"
+        variant="ghost"
       >
         <span className="font-medium">
           {t("common.versionLabel", {
@@ -1759,7 +1827,7 @@ const VersionRow = ({
             MEDIUM_DATE_SHORT_TIME_FORMAT,
           )}
         </span>
-      </button>
+      </Button>
       <AlertDialog onOpenChange={setRestoreOpen} open={restoreOpen}>
         <Button
           aria-label={t("clauses.restoreVersion")}
@@ -1782,6 +1850,7 @@ const VersionRow = ({
             </AlertDialogClose>
             <Button
               disabled={restoring}
+              disabledReason={t("common.restoring")}
               onClick={() => {
                 detached(handleRestore(), "clause-detail.restore");
               }}

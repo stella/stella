@@ -21,8 +21,7 @@ const MAX_GITHUB_SKILL_BYTES = 512 * 1024;
  * decides "render markdown" vs "degrade to metadata + external link".
  */
 export type GithubSkillContentResult =
-  | { status: "ok"; markdown: string }
-  | { status: "error" };
+  { status: "ok"; markdown: string } | { status: "error" };
 
 // The RPC input is a catalogue slug, not a repo/rev pair: the server
 // resolves the pin from the static bundle, so this endpoint can only
@@ -210,7 +209,7 @@ export const resolveGithubSkillContent = async (
  * timeout, a byte cap, in-flight dedup, and TTL negative caching. Runs
  * server-side during SSR and via RPC on client navigation.
  */
-export const fetchGithubSkillContent = createServerFn({ method: "GET" })
+const fetchGithubSkillContent = createServerFn({ method: "GET" })
   .validator((input: v.InferInput<typeof inputSchema>) =>
     v.parse(inputSchema, input),
   )

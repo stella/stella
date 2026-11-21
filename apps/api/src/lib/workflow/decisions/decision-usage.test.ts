@@ -5,10 +5,12 @@ import { toSafeId } from "@/api/lib/branded-types";
 import { decisionUsageUnitsFromTokens } from "@/api/lib/usage/unit-model";
 import { decideMany } from "@/api/lib/workflow/decisions/decide";
 import type { DecisionModel } from "@/api/lib/workflow/decisions/decision-model";
+import { createOpenAIDecisionsClient } from "@/api/lib/workflow/decisions/openai-decisions";
 import {
   createSystemOneClient,
   noul,
 } from "@/api/lib/workflow/decisions/system-one";
+import { failingDecisionGenerator } from "@/api/tests/helpers/decision-generator";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
@@ -73,6 +75,7 @@ describe("decision usage accounting", () => {
     async (keySource) => {
       const { client, rows, usageMetering } = setup(keySource);
       const result = await decideMany({
+        generator: failingDecisionGenerator,
         id: "test.usage",
         dataClass: "public_corpus",
         orgAIConfig: null,
@@ -98,6 +101,7 @@ describe("decision usage accounting", () => {
   test("keeps the normal action floor for tiny platform calls", () => {
     expect(
       decisionUsageUnitsFromTokens({
+        provider: "typesafe",
         inputTokens: 1,
         actionType: "case_law",
         isByok: false,
@@ -105,6 +109,7 @@ describe("decision usage accounting", () => {
     ).toEqual({ rawUsageMicroUnits: 1, unitsConsumed: 12 });
     expect(
       decisionUsageUnitsFromTokens({
+        provider: "typesafe",
         inputTokens: 1,
         actionType: "case_law",
         isByok: true,
@@ -115,6 +120,7 @@ describe("decision usage accounting", () => {
   test("does not spend instance funds behind a generative BYOK preflight", async () => {
     const { client, rows, usageMetering, calls } = setup("instance");
     const result = await decideMany({
+      generator: failingDecisionGenerator,
       id: "test.byok-preflight",
       dataClass: "public_corpus",
       orgAIConfig: {
@@ -134,7 +140,8 @@ describe("decision usage accounting", () => {
     });
     expect(result.decisions.eligible).toMatchObject({
       state: "undecided",
-      reason: "no-backend",
+      reason: "failed",
+      source: "generative",
     });
     expect(calls()).toBe(0);
     expect(rows).toEqual([]);
@@ -150,6 +157,7 @@ describe("decision usage accounting", () => {
         },
       });
       const result = await decideMany({
+        generator: failingDecisionGenerator,
         id: "test.ledger-failure",
         dataClass: "public_corpus",
         orgAIConfig: null,
@@ -165,3 +173,44 @@ describe("decision usage accounting", () => {
     }
   });
 });
+
+test.each(["eu", "global"] as const)(
+  "meters refused OpenAI decisions in %s as BYOK decision usage",
+  async (region) => {
+    const { rows, usageMetering } = setup("byok");
+    const client = createOpenAIDecisionsClient({
+      apiKey: "fixture",
+      region,
+      fetcher: async () =>
+        Response.json({
+          model: "gpt-6-luna",
+          answers: [{ type: "refusal", name: "eligible" }],
+          usage: { input_tokens: 1_000_000, output_tokens: 0 },
+        }),
+    });
+    const result = await decideMany({
+      generator: failingDecisionGenerator,
+      id: "test.refused-usage",
+      dataClass: "customer",
+      orgAIConfig: null,
+      state: "eligible",
+      questions,
+      client: { ...client, keySource: "byok" },
+      usageMetering,
+    });
+    expect(result.decisions.eligible).toEqual({
+      state: "undecided",
+      reason: "failed",
+      confidence: null,
+      source: "generative",
+      model: null,
+    });
+    expect(rows).toHaveLength(1);
+    expect(rows.at(0)).toMatchObject({
+      modelRole: "decision",
+      rawUsageMicroUnits: region === "eu" ? 11_000 : 10_000,
+      unitsConsumed: 0,
+      isByok: true,
+    });
+  },
+);

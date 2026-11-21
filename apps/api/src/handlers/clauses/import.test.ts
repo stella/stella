@@ -6,9 +6,9 @@ import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { auditLogs, clauseCategories, clauses } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
 import {
-  createAuditRecorder,
   AUDIT_ACTION,
   AUDIT_RESOURCE_TYPE,
+  createAuditRecorder,
 } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -195,7 +195,10 @@ describe("JSON and CSV Export/Import Integration", () => {
       });
 
       const jsonText = await response.text();
-      const payload = JSON.parse(jsonText);
+      const payload: {
+        version: unknown;
+        clauses: [{ title: unknown }];
+      } = JSON.parse(jsonText);
       expect(payload.version).toBe(1);
       expect(payload.clauses[0].title).toBe("Test Export Clause JSON");
     }

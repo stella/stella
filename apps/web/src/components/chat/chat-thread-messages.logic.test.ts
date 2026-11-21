@@ -5,6 +5,7 @@ import {
   collectAnonRestorations,
   decodeBase64DataUrl,
   getFollowingAssistantRestorations,
+  sentinelIsAboveRoot,
   userMessageFallbackText,
 } from "@/components/chat/chat-thread-messages.logic";
 import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
@@ -221,5 +222,30 @@ describe("getFollowingAssistantRestorations", () => {
     const messages = [userMessage("u1")];
 
     expect(getFollowingAssistantRestorations(messages, 5)).toEqual([]);
+  });
+});
+
+describe("sentinelIsAboveRoot", () => {
+  const entry = (isIntersecting: boolean, top: number) => ({
+    boundingClientRect: { top },
+    isIntersecting,
+    rootBounds: { top: 48 },
+  });
+
+  test("decides from the latest record when a delivery queues several", () => {
+    expect(sentinelIsAboveRoot([entry(true, 60), entry(false, -20)])).toBe(
+      true,
+    );
+    expect(sentinelIsAboveRoot([entry(false, -20), entry(true, 60)])).toBe(
+      false,
+    );
+  });
+
+  test("a sentinel below the root is not stuck", () => {
+    expect(sentinelIsAboveRoot([entry(false, 500)])).toBe(false);
+  });
+
+  test("an empty delivery decides nothing", () => {
+    expect(sentinelIsAboveRoot([])).toBeUndefined();
   });
 });

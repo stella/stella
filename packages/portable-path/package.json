@@ -1,0 +1,22 @@
+{
+  "name": "@stll/portable-path",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Repository-relative path strings that are identical on every platform",
+  "license": "Apache-2.0",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "clean": "git clean -xdf .cache .turbo node_modules",
+    "test": "bun test src",
+    "typecheck": "bun check --no-pretty --all --project=tsconfig.json",
+    "lint": "cd ../.. && bun scripts/lint.ts packages/portable-path",
+    "lint:fix": "cd ../.. && bun scripts/lint.ts --fix packages/portable-path"
+  },
+  "devDependencies": {
+    "@stll/typescript-config": "workspace:*"
+  }
+}

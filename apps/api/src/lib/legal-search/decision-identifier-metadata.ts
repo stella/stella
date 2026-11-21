@@ -1,7 +1,7 @@
 import {
-  isDecisionIdentifier,
   type DecisionIdentifier,
   type DecisionIdentifiers,
+  isDecisionIdentifier,
 } from "@stll/legal-ast/decision-identifier";
 
 const STORED_DECISION_IDENTIFIERS_METADATA_KEY = "_stellaDecisionIdentifiers";

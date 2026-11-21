@@ -1,9 +1,7 @@
-import { describe, expect, setDefaultTimeout, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import path from "node:path";
 
 import { lintSingleRule } from "./lint-single-rule.ts";
-
-setDefaultTimeout(30_000);
 
 const REPOSITORY_ROOT = path.resolve(import.meta.dir, "../..");
 

@@ -7,29 +7,47 @@ import { useTranslations } from "use-intl";
 
 import { isTaskStatus } from "@stll/api-contract";
 import { Temporal } from "@stll/time";
+import { Button } from "@stll/ui/button";
 import { CalendarIcon } from "@stll/ui/icons";
 import { stellaToast } from "@stll/ui/toast";
 
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
+import {
+  QueryViewFeedback,
+  SettledQueryViewFeedback,
+} from "@/components/query-view-feedback";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
-import { useLocale } from "@/i18n/formatting-context";
+import { useFormattingLocale } from "@/i18n/formatting-context";
 import { getFirstWeekday, getWeekendDays } from "@/i18n/week";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
+import type { WebApiRoutes } from "@/lib/api";
 import { normalizeOptionalArray } from "@/lib/arrays";
+import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
-import { toAPIError, unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { useIdempotentMutation } from "@/lib/idempotency/use-idempotent-mutation";
+import type { IdempotentRequest } from "@/lib/idempotency/use-idempotent-submit";
 import { appToday } from "@/lib/local-iso-date";
+import { queryView } from "@/lib/query-view.logic";
 import { toSafeId } from "@/lib/safe-id";
 import { captureInvalidTaskOption } from "@/lib/task-option-telemetry";
 import type { EntityKind, WorkspaceView } from "@/lib/types";
+import { resourceMutation } from "@/lib/workspace-realtime";
 import { useUpsertField } from "@/lib/workspaces/mutations/entities";
 import {
   calendarTasksKeys,
   calendarTasksOptions,
 } from "@/lib/workspaces/queries/calendar-tasks";
+import {
+  CALENDAR_MONTH_LABEL_ROW_CLASS,
+  CALENDAR_MONTH_SCROLL_CLASS,
+  CALENDAR_MONTH_WEEK_CLASS,
+  CALENDAR_VIEW_CLASS,
+  CALENDAR_WEEK_ROW_CLASS,
+} from "@/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-view.pending";
 import { EmptyState } from "@/routes/_protected.workspaces/$workspaceId/-components/empty-state";
 
 import { CalendarDayCell } from "./calendar-day-cell";
@@ -41,14 +59,14 @@ import {
   getMonthWeekRows,
   getMonthWindowStartContaining,
   getUTCMonthKey,
-  startOfUTCMonth,
   MONTH_WINDOW_SHIFT,
+  startOfUTCMonth,
 } from "./calendar-scroll.logic";
 import type { MonthAnchor } from "./calendar-scroll.logic";
 import {
   formatMonthYearLabel,
-  getWeekDays,
   getWeekdayLabels,
+  getWeekDays,
   isInternalDateProperty,
   isTaskDateProperty,
   TASK_DATE_IDS,
@@ -74,27 +92,45 @@ type HandleDropParams = {
   kind: string;
 };
 
-export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
+export const useCalendarCreateTask = ({
+  workspaceId,
+  datePropertyId,
+}: {
+  workspaceId: string;
+  datePropertyId: string | undefined;
+}) => {
   const t = useTranslations();
-  const locale = useLocale();
-  const firstWeekday = getFirstWeekday(locale);
-  const weekend = getWeekendDays(locale);
   const queryClient = useQueryClient();
-  const weekdayLabels = getWeekdayLabels(locale);
-  const { filters, sorts } = view.layout;
-  const { datePropertyId, endDatePropertyId, additionalDatePropertyIds, mode } =
-    view.layout;
+  const createTask = useIdempotentMutation({
+    mutationFn: resourceMutation({
+      mutation: "createTask",
+      queryClient,
+      mutationFn: async (
+        {
+          workspaceId: mutationWorkspaceId,
+          body,
+        }: {
+          workspaceId: string;
+          body: WebApiRoutes["tasks"][":workspaceId"]["put"]["body"];
+        },
+        request: IdempotentRequest,
+      ) =>
+        unwrapApiResponse(
+          await api
+            .tasks({ workspaceId: mutationWorkspaceId })
+            .put(body, request),
+        ),
+    }),
+  });
   const upsertField = useUpsertField();
+  const isEditable =
+    !!datePropertyId && !isInternalDateProperty(datePropertyId);
   const invalidateCalendarTasks = async () => {
     await queryClient.invalidateQueries({
       queryKey: calendarTasksKeys.all(workspaceId),
     });
   };
-
-  const isEditable =
-    !!datePropertyId && !isInternalDateProperty(datePropertyId);
-
-  const handleCreate = async (date: string, kind: EntityKind) => {
+  return async (date: string, kind: EntityKind) => {
     if (!isEditable || kind !== "task") {
       return;
     }
@@ -107,22 +143,22 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
       datePropertyId === TASK_DATE_IDS[1]
         ? toDayStartDateTime(date)
         : undefined;
-    const { data: taskData, error: taskError } = await api
-      .tasks({ workspaceId })
-      .put({
-        name: t("tasks.untitled"),
-        ...(dueDate && { dueDate }),
-        ...(startAt && { allDay: true, startAt }),
-      });
-
-    const entityId = taskData?.entityId;
-    if (taskError || !entityId) {
-      notifyUserError(
-        taskError ? toAPIError(taskError) : undefined,
-        t("errors.actionFailed"),
-      );
+    const created = await Result.tryPromise(
+      async () =>
+        await createTask.mutateAsync({
+          workspaceId,
+          body: {
+            name: t("tasks.untitled"),
+            ...(dueDate && { dueDate }),
+            ...(startAt && { allDay: true, startAt }),
+          },
+        }),
+    );
+    if (Result.isError(created)) {
+      notifyUserError(created.error, t("errors.actionFailed"));
       return;
     }
+    const entityId = created.value.entityId;
 
     // Set custom date property if not using built-in due date
     if (!isTaskDateProperty(datePropertyId)) {
@@ -154,6 +190,29 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
       .getState()
       .openTask({ taskId: entityId, workspaceId, isNew: true });
   };
+};
+
+export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
+  const t = useTranslations();
+  const locale = useFormattingLocale();
+  const firstWeekday = getFirstWeekday(locale);
+  const weekend = getWeekendDays(locale);
+  const queryClient = useQueryClient();
+  const weekdayLabels = getWeekdayLabels(locale);
+  const { filters, sorts } = view.layout;
+  const { datePropertyId, endDatePropertyId, additionalDatePropertyIds, mode } =
+    view.layout;
+  const upsertField = useUpsertField();
+  const invalidateCalendarTasks = async () => {
+    await queryClient.invalidateQueries({
+      queryKey: calendarTasksKeys.all(workspaceId),
+    });
+  };
+
+  const isEditable =
+    !!datePropertyId && !isInternalDateProperty(datePropertyId);
+
+  const handleCreate = useCalendarCreateTask({ workspaceId, datePropertyId });
 
   // Current viewport date (month/week navigation state)
   const [viewDate, setViewDate] = useState(appToday);
@@ -219,18 +278,24 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
     });
   })();
 
-  const { data: calendarTasks = [] } = useQuery({
-    ...calendarTasksOptions({
-      workspaceId,
-      filters,
-      sorts,
-      dateFrom: queryRange.dateFrom,
-      dateTo: queryRange.dateTo,
-      datePropertyIds: visibleDatePropertyIds,
-      endDatePropertyId,
-    }),
-    throwOnError: true,
+  const organizationId = useAuthenticatedUser().activeOrganizationId;
+  const calendarTasksQuery = useQuery({
+    ...calendarTasksOptions(
+      {
+        workspaceId,
+        filters,
+        sorts,
+        dateFrom: queryRange.dateFrom,
+        dateTo: queryRange.dateTo,
+        datePropertyIds: visibleDatePropertyIds,
+        endDatePropertyId,
+      },
+      organizationId,
+    ),
   });
+  const calendarTasksView = queryView(calendarTasksQuery);
+  const calendarTasks =
+    calendarTasksView.type === "items" ? calendarTasksView.items : [];
 
   const hasInvalidYearTaskStatus =
     mode === "year" && calendarTasks.some((task) => !isTaskStatus(task.status));
@@ -438,7 +503,7 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
       detached(
         (async () => {
           const requested = await Result.tryPromise(async () =>
-            unwrapEden(
+            unwrapApiResponse(
               await api
                 .tasks({ workspaceId: toSafeId<"workspace">(workspaceId) })
                 .patch({
@@ -448,7 +513,13 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
             ),
           );
           if (Result.isError(requested)) {
-            getAnalytics().captureError(requested.error);
+            getAnalytics().captureError(requested.error, {
+              fingerprintKey: "CalendarView.handleDrop:failure",
+              scope: {
+                type: "handler",
+                handlerId: "CalendarView.handleDrop:failure",
+              },
+            });
             notifyUserError(requested.error, t("errors.actionFailed"));
           }
           detached(
@@ -462,7 +533,7 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
       detached(
         (async () => {
           const requested = await Result.tryPromise(async () =>
-            unwrapEden(
+            unwrapApiResponse(
               await api
                 .tasks({ workspaceId: toSafeId<"workspace">(workspaceId) })
                 .patch({
@@ -473,7 +544,13 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
             ),
           );
           if (Result.isError(requested)) {
-            getAnalytics().captureError(requested.error);
+            getAnalytics().captureError(requested.error, {
+              fingerprintKey: "CalendarView.handleDrop:failure-2",
+              scope: {
+                type: "handler",
+                handlerId: "CalendarView.handleDrop:failure-2",
+              },
+            });
             notifyUserError(requested.error, t("errors.actionFailed"));
           }
           detached(
@@ -545,6 +622,12 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
     );
   }
 
+  // While the period's entries load, the calendar is already the calendar:
+  // its header, weekdays and days stand, and the entries land in their days.
+  if (calendarTasksView.type === "error") {
+    return <QueryViewFeedback view={calendarTasksView} />;
+  }
+
   const monthLabel = formatMonthYearLabel(locale, year, month);
 
   const headerLabel = (() => {
@@ -563,7 +646,11 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
   })();
 
   return (
-    <div className="flex h-full min-w-0 flex-col">
+    <div
+      aria-busy={calendarTasksView.type === "pending"}
+      className={CALENDAR_VIEW_CLASS}
+    >
+      <SettledQueryViewFeedback view={calendarTasksView} />
       <CalendarHeader
         headerLabel={headerLabel}
         month={month}
@@ -608,18 +695,18 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
               />
 
               <div
-                className="relative flex-1 overflow-y-auto overscroll-contain"
+                className={CALENDAR_MONTH_SCROLL_CLASS}
                 onScroll={handleMonthScroll}
                 ref={monthScrollRef}
               >
-                <div className="bg-background/95 supports-[backdrop-filter]:bg-background/80 sticky top-0 z-20 border-b px-4 py-1.5 backdrop-blur">
-                  <button
-                    className="text-muted-foreground hover:text-foreground rounded text-xs font-medium"
+                <div className={CALENDAR_MONTH_LABEL_ROW_CLASS}>
+                  <Button
                     onClick={() => scrollToMonth(viewDate)}
-                    type="button"
+                    size="inline"
+                    variant="muted"
                   >
-                    {monthLabel}
-                  </button>
+                    <span className="text-xs font-medium">{monthLabel}</span>
+                  </Button>
                 </div>
 
                 {monthWeeks.map((week) => (
@@ -646,7 +733,7 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
                         </div>
                       </div>
                     ))}
-                    <div className="grid min-h-[calc((100%_-_1.75rem)/6)] grid-cols-7">
+                    <div className={CALENDAR_MONTH_WEEK_CLASS}>
                       {week.days.map((day) => (
                         <CalendarDayCell
                           day={day}
@@ -681,7 +768,7 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
               weekend={weekend}
             />
 
-            <div className="grid flex-1 grid-cols-7 grid-rows-1">
+            <div className={CALENDAR_WEEK_ROW_CLASS}>
               {days.map((day) => (
                 <CalendarDayCell
                   day={day}

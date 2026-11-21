@@ -1,7 +1,6 @@
 import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
-import { t } from "elysia";
-import type { Static } from "elysia";
+import * as v from "valibot";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { BILLING_STATUS, timeEntries } from "@/api/db/schema";
@@ -17,13 +16,15 @@ import {
 } from "@/api/lib/billing/time-entry-authorization";
 import { guardRunningTimeEntries } from "@/api/lib/billing/time-entry-running";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
+import { TRANSITIONS } from "@/api/lib/db/transition-specs";
+import { transitionBatch } from "@/api/lib/db/transitions";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 import { formatTodayInTimeZone } from "@/api/lib/timezone";
 
-const deleteTimeEntryBodySchema = t.Object({
-  id: tSafeId("timeEntry", {
+const deleteTimeEntryBodySchema = v.object({
+  id: resourceIdSchema("timeEntry", {
     description: "Time entry ID to delete or write off",
   }),
 });
@@ -36,7 +37,7 @@ export type DeleteTimeEntryHandlerProps = {
     memberRole: AuthorizedMemberRole;
   };
   recordAuditEvent: AuditRecorder;
-  body: Static<typeof deleteTimeEntryBodySchema>;
+  body: v.InferOutput<typeof deleteTimeEntryBodySchema>;
 };
 
 // Shared time-entry deletion logic reused by the HTTP handler and the
@@ -209,36 +210,33 @@ export const deleteTimeEntryHandler = async function* ({
       if (runningError) {
         return runningError;
       }
-      const rows = await tx
-        .update(timeEntries)
-        .set({
-          status: BILLING_STATUS.WRITTEN_OFF,
-          updatedAt: new Date(),
-        })
-        .where(
-          and(
-            eq(timeEntries.id, body.id),
-            eq(timeEntries.workspaceId, workspaceId),
-            eq(timeEntries.status, existing.status),
-          ),
-        )
-        .returning({ id: timeEntries.id });
-
+      const rows = await transitionBatch({
+        tx,
+        spec: TRANSITIONS.timeEntries,
+        ids: [body.id],
+        options: {
+          from: [existing.status],
+          to: BILLING_STATUS.WRITTEN_OFF,
+          set: { updatedAt: new Date() },
+          guard: eq(timeEntries.workspaceId, workspaceId),
+        },
+        recordTransitionAuditEvent: async (auditTx) => {
+          await recordAuditEvent(auditTx, {
+            action: AUDIT_ACTION.UPDATE,
+            resourceType: AUDIT_RESOURCE_TYPE.TIME_ENTRY,
+            resourceId: body.id,
+            changes: {
+              status: {
+                old: existing.status,
+                new: BILLING_STATUS.WRITTEN_OFF,
+              },
+            },
+          });
+        },
+      });
       if (!rows.at(0)) {
         return false;
       }
-
-      await recordAuditEvent(tx, {
-        action: AUDIT_ACTION.UPDATE,
-        resourceType: AUDIT_RESOURCE_TYPE.TIME_ENTRY,
-        resourceId: body.id,
-        changes: {
-          status: {
-            old: existing.status,
-            new: BILLING_STATUS.WRITTEN_OFF,
-          },
-        },
-      });
       await recordBillingCapCrossings(tx, { workspaceId, recordAuditEvent });
       return true;
     }),
@@ -261,6 +259,7 @@ export const deleteTimeEntryHandler = async function* ({
 
 const deleteTimeEntryById = createSafeHandler(
   {
+    contract: "patch",
     description:
       "Delete a time entry. A draft entry is permanently deleted; an " +
       "approved entry is written off instead (kept for the audit trail, " +
@@ -268,6 +267,7 @@ const deleteTimeEntryById = createSafeHandler(
       "invoice is reverted. Returns whether the entry was hard-deleted.",
     permissions: { timeEntry: ["delete"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
+    featureAccess: { featureId: "time-billing", type: "required" },
     realtime: timeEntryRealtimeUpdates,
     mcp: { type: "tool", name: "delete_time_entry" },
     body: deleteTimeEntryBodySchema,

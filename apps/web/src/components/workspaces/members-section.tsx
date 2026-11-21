@@ -1,5 +1,4 @@
 import { useState } from "react";
-import type { ComponentProps } from "react";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { panic } from "better-result";
@@ -12,7 +11,6 @@ import {
   DialogDescription,
   DialogFooter,
   DialogHeader,
-  DialogPanel,
   DialogPopup,
   DialogTitle,
   DialogTrigger,
@@ -23,27 +21,19 @@ import { cn } from "@stll/ui/utils";
 
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { UserIdentity } from "@/components/user-avatar";
-import {
-  AddableMemberSelect,
-  useAddableMembers,
-} from "@/components/workspaces/addable-member-select";
+import { AddMemberDialog } from "@/components/workspaces/add-member-dialog";
 import { MATTER_INFO_ICON_SLOT_CLASS } from "@/components/workspaces/matter-info-layout";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
-import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import type { QueryView } from "@/lib/query-view.logic";
+import { queryView } from "@/lib/query-view.logic";
 import { toSafeId } from "@/lib/safe-id";
-import { useQueryView } from "@/lib/use-query-view";
-import { useAddWorkspaceMember } from "@/lib/workspaces/mutations/workspace-members";
-import { workspacesKeys } from "@/lib/workspaces/queries";
-import {
-  workspaceMembersKeys,
-  workspaceMembersOptions,
-} from "@/lib/workspaces/queries/workspace-members";
+import { resourceMutation } from "@/lib/workspace-realtime";
+import { workspaceMembersOptions } from "@/lib/workspaces/queries/workspace-members";
 
 type MembersSectionProps = {
   workspaceId: string;
@@ -104,7 +94,7 @@ export const MembersList = ({
 
 export const MembersSection = ({ workspaceId }: MembersSectionProps) => {
   const t = useTranslations();
-  const view = useQueryView(useQuery(workspaceMembersOptions(workspaceId)));
+  const view = queryView(useQuery(workspaceMembersOptions(workspaceId)));
   const canUpdate = usePermissions({ workspace: ["update"] });
 
   return (
@@ -118,14 +108,7 @@ export const MembersSection = ({ workspaceId }: MembersSectionProps) => {
         <h3 className="text-muted-foreground text-sm font-medium">
           {t("common.members")}
         </h3>
-        {canUpdate && (
-          <AddMemberDialog
-            showTriggerLabel={false}
-            triggerSize="icon-xs"
-            triggerVariant="ghost"
-            workspaceId={workspaceId}
-          />
-        )}
+        {canUpdate && <AddMemberButton workspaceId={workspaceId} />}
       </div>
       <MembersList
         view={view}
@@ -153,18 +136,25 @@ const MemberRow = ({
   const queryClient = useQueryClient();
   const analytics = useAnalytics();
   const removeMember = useMutation({
-    mutationFn: async (vars: { workspaceId: string; userId: string }) => {
-      const response = await api
-        .workspaces({ workspaceId: toSafeId<"workspace">(vars.workspaceId) })
-        .members({ userId: toSafeId<"user">(vars.userId) })
-        .delete({});
+    mutationFn: resourceMutation({
+      mutation: "removeWorkspaceMember",
+      queryClient,
+      mutationFn: async (vars: { workspaceId: string; userId: string }) => {
+        const response = await api
+          .workspaces({ workspaceId: toSafeId<"workspace">(vars.workspaceId) })
+          .members({ userId: toSafeId<"user">(vars.userId) })
+          .delete({});
 
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-    },
+        if (response.error) {
+          throw toAPIError(response.error);
+        }
+      },
+    }),
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "MemberRow:failure",
+        scope: { type: "handler", handlerId: "MemberRow:failure" },
+      });
     },
   });
 
@@ -177,16 +167,6 @@ const MemberRow = ({
             title: t("success.memberRemoved"),
             type: "success",
           });
-          detached(
-            queryClient.invalidateQueries({
-              queryKey: workspaceMembersKeys.all(workspaceId),
-            }),
-            "members-section.invalidate",
-          );
-          detached(
-            queryClient.invalidateQueries({ queryKey: workspacesKeys.all }),
-            "members-section.invalidate",
-          );
         },
         onError: (error) => {
           notifyUserError(error, t("errors.actionFailed"));
@@ -233,6 +213,7 @@ const MemberRow = ({
               </DialogClose>
               <Button
                 disabled={removeMember.isPending}
+                disabledReason={t("common.removing")}
                 onClick={handleRemove}
                 variant="destructive"
               >
@@ -246,112 +227,27 @@ const MemberRow = ({
   );
 };
 
-type AddMemberDialogProps = {
-  workspaceId: string;
-  triggerClassName?: string | undefined;
-  triggerSize?: ComponentProps<typeof Button>["size"] | undefined;
-  triggerVariant?: ComponentProps<typeof Button>["variant"] | undefined;
-  showTriggerLabel?: boolean | undefined;
-};
-
-export const AddMemberDialog = ({
-  workspaceId,
-  triggerClassName,
-  triggerSize = "sm",
-  triggerVariant = "outline",
-  showTriggerLabel = true,
-}: AddMemberDialogProps) => {
+const AddMemberButton = ({ workspaceId }: { workspaceId: string }) => {
   const t = useTranslations();
-  const queryClient = useQueryClient();
-  const addMember = useAddWorkspaceMember();
-  const memberQuery = useAddableMembers(workspaceId);
-  const [isOpen, setIsOpen] = useState(false);
-  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
-
-  const selectedMember =
-    memberQuery.view.type === "items"
-      ? memberQuery.view.items.find((item) => item.value === selectedUserId)
-      : undefined;
-
-  const handleSubmit = () => {
-    if (!selectedMember) {
-      return;
-    }
-
-    addMember.mutate(
-      { workspaceId, userId: selectedMember.value },
-      {
-        onSuccess: () => {
-          stellaToast.add({
-            title: t("success.memberAdded"),
-            type: "success",
-          });
-          detached(
-            queryClient.invalidateQueries({
-              queryKey: workspaceMembersKeys.all(workspaceId),
-            }),
-            "members-section.invalidate",
-          );
-          setIsOpen(false);
-          setSelectedUserId(null);
-        },
-        onError: (error) => {
-          notifyUserError(error, t("errors.actionFailed"));
-        },
-      },
-    );
-  };
-
+  const [open, setOpen] = useState(false);
   return (
-    <Dialog
-      onOpenChange={(open) => {
-        setIsOpen(open);
-        if (!open) {
-          setSelectedUserId(null);
-        }
-      }}
-      open={isOpen}
+    <AddMemberDialog
+      onOpenChange={setOpen}
+      open={open}
+      workspaceId={workspaceId}
     >
       <DialogTrigger
         render={
           <Button
             aria-label={t("workspaces.members.addMember")}
-            className={triggerClassName}
-            size={triggerSize}
+            size="icon-xs"
             title={t("workspaces.members.addMember")}
-            variant={triggerVariant}
+            variant="ghost"
           />
         }
       >
         <PlusIcon className="size-3.5" />
-        {showTriggerLabel ? t("workspaces.members.addMember") : null}
       </DialogTrigger>
-      <DialogPopup>
-        <DialogHeader>
-          <DialogTitle>{t("workspaces.members.addMember")}</DialogTitle>
-          <DialogDescription>
-            {t("workspaces.members.addMemberDescription")}
-          </DialogDescription>
-        </DialogHeader>
-        <DialogPanel className="flex flex-col gap-4">
-          <AddableMemberSelect
-            query={memberQuery}
-            onValueChange={setSelectedUserId}
-            value={selectedUserId}
-          />
-        </DialogPanel>
-        <DialogFooter>
-          <DialogClose render={<Button variant="outline" />}>
-            {t("common.cancel")}
-          </DialogClose>
-          <Button
-            disabled={selectedMember === undefined || addMember.isPending}
-            onClick={handleSubmit}
-          >
-            {t("workspaces.members.addMember")}
-          </Button>
-        </DialogFooter>
-      </DialogPopup>
-    </Dialog>
+    </AddMemberDialog>
   );
 };

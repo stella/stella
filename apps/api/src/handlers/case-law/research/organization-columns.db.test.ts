@@ -1,6 +1,6 @@
-import { Value } from "@sinclair/typebox/value";
 import {
   afterAll,
+  afterEach,
   beforeAll,
   beforeEach,
   describe,
@@ -9,13 +9,19 @@ import {
   test,
 } from "bun:test";
 import { eq, sql } from "drizzle-orm";
+import * as v from "valibot";
+
+import type { Fetcher } from "@stll/fetch";
+import { createTestClock } from "@stll/test-kit";
 
 import {
+  caseLawDecisions,
   caseLawResearchAnswers,
   caseLawResearchColumns,
+  caseLawSources,
 } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
-import lookupResearchAnswers from "@/api/handlers/case-law/research/answers-lookup";
+import { createLookupResearchAnswers } from "@/api/handlers/case-law/research/answers-lookup";
 import { readNamedResearchColumns } from "@/api/handlers/case-law/research/column-access";
 import createResearchColumn from "@/api/handlers/case-law/research/columns-create";
 import deleteResearchColumn from "@/api/handlers/case-law/research/columns-delete";
@@ -23,6 +29,8 @@ import listResearchColumns from "@/api/handlers/case-law/research/columns-list";
 import reorderResearchColumns from "@/api/handlers/case-law/research/columns-reorder";
 import updateResearchColumn from "@/api/handlers/case-law/research/columns-update";
 import { runResearchAnswersBodySchema } from "@/api/handlers/case-law/research/schema";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
+import { HttpStatusResponse } from "@/api/http/status";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
@@ -30,10 +38,23 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { queueResearchAnswerCells } from "@/api/lib/case-law/research-answer-queue";
 import type { ResearchAnswerClaim } from "@/api/lib/case-law/research-answer-queue";
 import { runResearchAnswers } from "@/api/lib/case-law/research-answer-runner";
-import type { CaseLawResearchColumnContent } from "@/api/lib/case-law/research-answers";
+import { buildAnswerJustification } from "@/api/lib/case-law/research-answers";
+import type {
+  CaseLawResearchAnswerRun,
+  CaseLawResearchColumnContent,
+} from "@/api/lib/case-law/research-answers";
 import { LIMITS } from "@/api/lib/limits";
+import {
+  CASE_LAW_RESEARCH_CELLS_EVENT,
+  resetMetricLineSinkForTesting,
+  setMetricLineSinkForTesting,
+} from "@/api/lib/observability/request-metrics";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
+import type { DecisionModel } from "@/api/lib/workflow/decisions/decision-model";
+import { createSystemOneClient } from "@/api/lib/workflow/decisions/system-one";
+import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import { createTestWithdrawalCopyReader } from "@/api/tests/helpers/withdrawn-copy-reader";
 import {
   createTestIds,
   setupRlsTestData,
@@ -53,6 +74,9 @@ setDefaultTimeout(120_000);
 
 let testDb: TestDatabase;
 let ids: TestIds;
+const lookupResearchAnswers = createLookupResearchAnswers({
+  readCopies: createTestWithdrawalCopyReader(() => testDb),
+});
 
 const noopAuditRecorder: AuditRecorder = async () => undefined;
 
@@ -71,7 +95,7 @@ const contextFor = (
   promptCachingEnabled: false,
   recordAuditEvent: noopAuditRecorder,
   request: new Request("https://example.test/case/research/columns"),
-  route: "/case/research/columns",
+  route: "/v1/case/research/columns" satisfies ApiRoutePath,
   safeDb: createSafeDb(testDb, [], organizationId, userId),
   scopedDb: createScopedDb(testDb, [], organizationId, userId),
   session: { activeOrganizationId: organizationId },
@@ -95,14 +119,14 @@ const call = async (
   }
 };
 
-/** A refusal arrives as Elysia's status response: `{ code, response }`. */
-const statusOf = (result: unknown): number | null =>
-  typeof result === "object" &&
-  result !== null &&
-  "code" in result &&
-  typeof result.code === "number"
-    ? result.code
-    : null;
+/** A refusal arrives as a status response carrying its code. */
+const statusOf = (result: unknown): number | null => {
+  if (!(result instanceof HttpStatusResponse)) {
+    return null;
+  }
+  const response: HttpStatusResponse = result;
+  return response.code;
+};
 
 /** The yes/no column the product used to have, as the property model spells it. */
 const YES_NO_OPTIONS = [
@@ -148,6 +172,10 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await releaseTestDb();
+});
+
+afterEach(() => {
+  resetMetricLineSinkForTesting();
 });
 
 beforeEach(async () => {
@@ -221,7 +249,7 @@ describe("the column cap counts per organization", () => {
         position: index + 1,
         question: `Question ${index}`,
         content: YES_NO_CONTENT,
-        tool: { version: 1 as const, role: "fast" as const },
+        tool: { version: 1 as const, task: "short-text" as const },
       })),
     );
 
@@ -265,7 +293,7 @@ describe("an organization holding more columns than it may add", () => {
         position: index + 1,
         question: `Grandfathered ${index}`,
         content: YES_NO_CONTENT,
-        tool: { version: 1 as const, role: "fast" as const },
+        tool: { version: 1 as const, task: "short-text" as const },
       })),
     );
     return columnIds;
@@ -285,7 +313,7 @@ describe("an organization holding more columns than it may add", () => {
     });
     expect(named).toHaveLength(HELD);
     expect(
-      Value.Check(runResearchAnswersBodySchema, {
+      v.is(runResearchAnswersBodySchema, {
         columnIds,
         decisionIds: [decisionId],
       }),
@@ -451,9 +479,24 @@ describe("a run answers only the cells that need it", () => {
     const columns = [
       { columnId, question: "Stale claim?", content: YES_NO_CONTENT },
     ];
+    // Settled cells are counted for the failure alarm only where the write
+    // landed, so the run that lost its claim reports nothing.
+    const metricLines: unknown[] = [];
+    setMetricLineSinkForTesting((line) => {
+      const record: unknown = JSON.parse(line);
+      if (
+        typeof record === "object" &&
+        record !== null &&
+        "event" in record &&
+        record.event === CASE_LAW_RESEARCH_CELLS_EVENT
+      ) {
+        metricLines.push(record);
+      }
+    });
 
     await runResearchAnswers(
       asTestRaw({
+        admission: testModelAdmission(ids.orgA),
         organizationId: ids.orgA,
         userId: ids.userA1,
         columns,
@@ -471,11 +514,13 @@ describe("a run answers only the cells that need it", () => {
     expect(afterStalled.every((cell) => cell.claimId === newer.claimId)).toBe(
       true,
     );
+    expect(metricLines).toEqual([]);
 
     // The run that does hold the claim writes, so the no-op above is the
     // claim check rather than the write path being broken.
     await runResearchAnswers(
       asTestRaw({
+        admission: testModelAdmission(ids.orgA),
         organizationId: ids.orgA,
         userId: ids.userA1,
         columns,
@@ -491,6 +536,16 @@ describe("a run answers only the cells that need it", () => {
       .where(eq(caseLawResearchAnswers.columnId, columnId));
     expect(afterNewer.every((cell) => cell.state === "failed")).toBe(true);
     expect(afterNewer.every((cell) => cell.claimId === null)).toBe(true);
+    resetMetricLineSinkForTesting();
+    // One line per decision write: each decision's one cell failed unreadable.
+    expect(metricLines).toEqual(
+      newer.cells.map(() => ({
+        event: CASE_LAW_RESEARCH_CELLS_EVENT,
+        state: "failed",
+        failureReason: "decision_unavailable",
+        CaseLawResearchAnswerCells: 1,
+      })),
+    );
   });
 
   test("a run request is bounded by the page size, and oversize is refused", () => {
@@ -498,11 +553,9 @@ describe("a run answers only the cells that need it", () => {
       { length: LIMITS.caseLawResearchRunDecisionsMax },
       () => createSafeId<"caseLawDecision">(),
     );
-    expect(Value.Check(runResearchAnswersBodySchema, { decisionIds })).toBe(
-      true,
-    );
+    expect(v.is(runResearchAnswersBodySchema, { decisionIds })).toBe(true);
     expect(
-      Value.Check(runResearchAnswersBodySchema, {
+      v.is(runResearchAnswersBodySchema, {
         decisionIds: [...decisionIds, createSafeId<"caseLawDecision">()],
       }),
     ).toBe(false);
@@ -611,6 +664,52 @@ describe("a run answers only the cells that need it", () => {
     expect(looked).toMatchObject({ items: [{ columnId: columnA }] });
   });
 
+  test("a cited passage keeps the court's paragraph number through storage and lookup", async () => {
+    const columnId = await addColumn(ids.orgA, ids.userA1, "Numbered?");
+    const run = {
+      version: 1,
+      model: "test-model",
+      completedAt: "2026-10-12T10:00:00.000Z",
+      retrieved: false,
+      rationale: "As held.",
+      justification: buildAnswerJustification(
+        ["p-8", "p-3"],
+        new Map([
+          ["p-8", "The appeal is dismissed."],
+          ["p-3", "Facts."],
+        ]),
+        new Map([["p-8", 6]]),
+      ),
+    } satisfies CaseLawResearchAnswerRun;
+    await testDb.insert(caseLawResearchAnswers).values({
+      columnId,
+      organizationId: ids.orgA,
+      decisionId: decisionOne,
+      state: "answered",
+      answer: { version: 1, type: "text", value: "Dismissed." },
+      run,
+    });
+
+    const looked = await call(lookupResearchAnswers, ids.orgA, ids.userA1, {
+      body: { decisionIds: [decisionOne] },
+    });
+    expect(looked).toMatchObject({
+      items: [
+        {
+          columnId,
+          run: {
+            justification: {
+              blocks: [
+                { anchorId: "p-8", courtParagraphNumber: 6 },
+                { anchorId: "p-3", courtParagraphNumber: null },
+              ],
+            },
+          },
+        },
+      ],
+    });
+  });
+
   test("an answer that is not field content is refused by the table", async () => {
     const columnId = await addColumn(ids.orgA, ids.userA1, "Refused?");
     // Everything but the answer is the same valid row each time, so the
@@ -636,5 +735,159 @@ describe("a run answers only the cells that need it", () => {
     expect(await storeAnswer(`{"version":1,"type":"text","value":"ano"}`)).toBe(
       "stored",
     );
+  });
+});
+
+/**
+ * A decision model over a fake wire that picks, for every question, the first
+ * option that is not a sentinel, so a run that reaches the model settles its
+ * cells `answered` without a network call.
+ */
+const answeringDecisionModel = (): {
+  decisionModel: DecisionModel;
+  requests: unknown[];
+} => {
+  const requests: unknown[] = [];
+  const fetcher: Fetcher = async (_input, init) => {
+    const body: unknown =
+      typeof init?.body === "string" ? JSON.parse(init.body) : null;
+    requests.push(body);
+    const questions =
+      typeof body === "object" &&
+      body !== null &&
+      "questions" in body &&
+      typeof body.questions === "object" &&
+      body.questions !== null
+        ? Object.entries(body.questions)
+        : [];
+    const answers = Object.fromEntries(
+      questions.map(([key, question]: [string, unknown]) => {
+        const criteria =
+          typeof question === "object" &&
+          question !== null &&
+          "criteria" in question &&
+          typeof question.criteria === "object" &&
+          question.criteria !== null
+            ? Object.keys(question.criteria)
+            : [];
+        const choice =
+          criteria.find((option) => !option.startsWith("__")) ?? "";
+        return [
+          key,
+          {
+            type: "choice",
+            choice,
+            probabilities: Object.fromEntries(
+              criteria.map((option) => [option, option === choice ? 1 : 0]),
+            ),
+            confidence: 1,
+          },
+        ];
+      }),
+    );
+    return await Promise.resolve(
+      Response.json({
+        model: "test-decision-model",
+        answers,
+        usage: { input_tokens: 10, output_tokens: 1 },
+      }),
+    );
+  };
+  return {
+    decisionModel: {
+      ...createSystemOneClient({ apiKey: "key-test", fetcher }),
+      keySource: "byok",
+    },
+    requests,
+  };
+};
+
+const researchClock = createTestClock();
+
+describe("a source without reuse terms", () => {
+  // Most sources state no reuse restrictions, which the corpus stores as a
+  // NULL descriptor. The research read once nested that column under the
+  // left-joined source, and Drizzle read an all-NULL nested object back as no
+  // source at all, so every such decision failed `decision_unavailable`.
+  test("is researched like any other published decision", async () => {
+    const sourceId = createSafeId<"caseLawSource">();
+    const decisionId = createSafeId<"caseLawDecision">();
+    await testDb.insert(caseLawSources).values({
+      id: sourceId,
+      adapterKey: "research-unrestricted",
+      name: "Unrestricted test source",
+    });
+    // The fixture has to reach the fault: the source row exists and its
+    // descriptor, the only column the read takes from it, is NULL.
+    expect(
+      await testDb
+        .select({ descriptor: caseLawSources.descriptor })
+        .from(caseLawSources)
+        .where(eq(caseLawSources.id, sourceId)),
+    ).toEqual([{ descriptor: null }]);
+    await testDb.insert(caseLawDecisions).values({
+      id: decisionId,
+      sourceId,
+      caseNumber: "7 Research 1/2026",
+      citationKey: "7research/1/2026",
+      court: "Test court",
+      country: "CZE",
+      language: "en",
+      decisionDate: "2026-01-15",
+      slug: `research-unrestricted-${decisionId}`,
+      languageGroupKey: `research-unrestricted-${decisionId}`,
+      fulltext:
+        "The court held that the purchase agreement was valid and binding.",
+    });
+
+    const columnId = await addColumn(ids.orgA, ids.userA1, "Valid?");
+    const claim = await testDb.transaction(
+      async (tx) =>
+        await queueResearchAnswerCells({
+          tx: asTestRaw(tx),
+          organizationId: ids.orgA,
+          columnIds: [columnId],
+          decisionIds: [decisionId],
+          force: false,
+          now: new Date(researchClock.now()),
+        }),
+    );
+    expect(claim.cells).toEqual([{ columnId, decisionId }]);
+
+    const { decisionModel, requests } = answeringDecisionModel();
+    await runResearchAnswers(
+      asTestRaw({
+        admission: testModelAdmission(ids.orgA),
+        organizationId: ids.orgA,
+        userId: ids.userA1,
+        columns: [{ columnId, question: "Valid?", content: YES_NO_CONTENT }],
+        claim,
+        orgAIConfig: null,
+        managedAIResidency: "eu",
+        promptCachingEnabled: false,
+      }),
+      asTestRaw({
+        safeDb: createSafeDb(testDb, [], ids.orgA, ids.userA1),
+        caseLawDb: async (fn: (tx: unknown) => Promise<unknown>) =>
+          await testDb.transaction(async (tx) => await fn(tx)),
+        decisionModel,
+      }),
+    );
+
+    const [cell] = await testDb
+      .select({
+        state: caseLawResearchAnswers.state,
+        failureReason: caseLawResearchAnswers.failureReason,
+        answer: caseLawResearchAnswers.answer,
+      })
+      .from(caseLawResearchAnswers)
+      .where(eq(caseLawResearchAnswers.decisionId, decisionId));
+    expect(cell).toEqual({
+      state: "answered",
+      failureReason: null,
+      answer: { version: 1, type: "single-select", value: "yes" },
+    });
+    // The decision text reached the model: the cell was not settled before it.
+    expect(JSON.stringify(requests)).toContain("purchase agreement was valid");
   });
 });

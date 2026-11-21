@@ -1,4 +1,4 @@
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { CONTACT_TYPES, type ContactType } from "@stll/api-contract";
 
@@ -14,13 +14,12 @@ type MissingContactTypeSchemaValue = Exclude<
 
 true satisfies MissingContactTypeSchemaValue extends never ? true : never;
 
-// Keep the literal union: `t.Optional(t.UnionEnum(...))` coerces an absent
-// query value to the enum's first member in the current Elysia version.
-export const contactTypeSchema = t.Union([
-  t.Literal(CONTACT_TYPE_SCHEMA_VALUES[0]),
-  t.Literal(CONTACT_TYPE_SCHEMA_VALUES[1]),
+export const contactTypeSchema = v.union([
+  v.literal(CONTACT_TYPE_SCHEMA_VALUES[0]),
+  v.literal(CONTACT_TYPE_SCHEMA_VALUES[1]),
 ]);
 
-export const createContactTypeSchema = t.UnionEnum(CONTACT_TYPE_SCHEMA_VALUES, {
-  description: "Contact kind; required when creating",
-});
+export const createContactTypeSchema = v.pipe(
+  v.picklist(CONTACT_TYPE_SCHEMA_VALUES),
+  v.description("Contact kind; required when creating"),
+);

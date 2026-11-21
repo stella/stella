@@ -19,7 +19,7 @@ const ACCESS_TOKEN_KEY = "access_token";
 const ID_TOKEN_KEY = "id_token";
 const SET_ITEM_METHOD = "setItem";
 const TOKEN_SUFFIX = "Token";
-// oxlint-disable-next-line eslint/prefer-template -- fixture: static concatenation through a const alias is the syntax under test
+// oxlint-disable-next-line prefer-template -- fixture: static concatenation through a const alias is the syntax under test
 const CONCATENATED_TOKEN_KEY = "access" + TOKEN_SUFFIX;
 let mutableTokenKey = "access_token";
 let mutableSuffix = "Token";
@@ -55,7 +55,7 @@ localStorage.setItem("accessToken", credential);
 
 // MUST flag: direct, statically known string concatenation is one credential
 // key even though the source is split across literals.
-// oxlint-disable-next-line no-auth-token-in-web-storage/no-auth-token-in-web-storage, eslint/no-useless-concat -- fixture: literal concatenation cannot hide an access token key
+// oxlint-disable-next-line no-auth-token-in-web-storage/no-auth-token-in-web-storage, no-useless-concat -- fixture: literal concatenation cannot hide an access token key
 localStorage.setItem("access" + "Token", credential);
 
 // MUST flag: sessionStorage reached through window.
@@ -101,7 +101,7 @@ localStorage[SET_ITEM_METHOD]("accessToken", credential);
 
 // MUST flag: storage and method names can also be split across statically
 // known computed member names.
-// oxlint-disable-next-line no-auth-token-in-web-storage/no-auth-token-in-web-storage, eslint/no-useless-concat -- fixture: concatenated storage and method names remain static
+// oxlint-disable-next-line no-auth-token-in-web-storage/no-auth-token-in-web-storage, no-useless-concat -- fixture: concatenated storage and method names remain static
 globalThis["local" + "Storage"]["set" + "Item"]("jwt", credential);
 
 // MUST flag: an imported key resolves to the string literal its module
@@ -162,14 +162,14 @@ localStorage.designTokens = credential;
 
 // Allowed: a dynamic key is not statically known to be credential storage.
 localStorage.setItem(dynamicKey, credential);
-// oxlint-disable-next-line eslint/prefer-template -- fixture: dynamic concatenation must remain opaque to the security rule
+// oxlint-disable-next-line prefer-template -- fixture: dynamic concatenation must remain opaque to the security rule
 localStorage.setItem("access" + dynamicKey, credential);
 
 // Allowed: a mutable operand is not a stable static string.
-// oxlint-disable-next-line eslint/prefer-template -- fixture: mutable concatenation must not be folded
+// oxlint-disable-next-line prefer-template -- fixture: mutable concatenation must not be folded
 localStorage.setItem("access" + mutableSuffix, credential);
 mutableSuffix = dynamicKey;
-// oxlint-disable-next-line eslint/prefer-template -- fixture: reassigned mutable concatenation remains opaque
+// oxlint-disable-next-line prefer-template -- fixture: reassigned mutable concatenation remains opaque
 localStorage.setItem("access" + mutableSuffix, credential);
 
 // Allowed: function parameters are runtime values even when their names look

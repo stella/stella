@@ -3,47 +3,325 @@
  *
  * Returns the stored analysis when it was computed over the document as
  * it reads today. Otherwise kicks off background generation and returns
- * 202. The frontend polls until the analysis is ready.
+ * 202. The frontend polls until the analysis is ready, or until the run's
+ * failure record tells it why there is none.
  */
 
 import { panic, Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import type {
+  CaseLawAnalysisFailureCode as AnalysisFailureCode,
+  CaseLawAnalysisProgressResponse,
+  CaseLawAnalysisUnavailableCode,
+} from "@stll/api-contract";
+import { aiDisclosure } from "@stll/api-contract/ai-disclosure";
+import type { AiDisclosure } from "@stll/api-contract/ai-disclosure";
+import type { CaseLawIncompleteReason } from "@stll/api-contract/case-law-answer-completeness";
+import { booleanFromString } from "@stll/api-contract/http-input";
+import type {
   AnalysisGenerating,
-  PersistedDecisionAnalysis,
+  DecisionAnalysis,
 } from "@stll/legal-ast/analysis";
+import { analysisHeadingInputSchema } from "@stll/legal-ast/analysis";
 
 import type { ScopedDb } from "@/api/db/safe-db";
-import { resolveCaching, type OrgAIConfig } from "@/api/lib/ai-config";
+import {
+  type OrgAIConfig,
+  resolveCaching,
+  resolveOrgAIModelForTask,
+} from "@/api/lib/ai-config";
 import type { OrgAIConfigStatus } from "@/api/lib/ai-config-loader-core";
+import { storedAIConfigUnreadableError } from "@/api/lib/ai-config-response";
+import {
+  type AIErrorKind,
+  classifyAIError,
+  isUnanticipatedAIFailure,
+} from "@/api/lib/ai-error";
 import { captureError, detached } from "@/api/lib/analytics/capture";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  analysisFailureKeyTag,
+  type AnalysisFailureRecord,
+  analysisFailureRecord,
+  type AnalysisReaderKey,
+  type AnalysisRequestKind,
+  failureClaimGuard,
+  failureRetryPending,
+  failureStillHolds,
+} from "@/api/lib/case-law/analysis-failure";
 import type { AnalysisInput } from "@/api/lib/case-law/analysis-prompt";
 import {
+  type AnalysisStore,
   analysisStore,
-  storesAnalyses,
+  writesDerivedAnalyses,
 } from "@/api/lib/case-law/analysis-store";
+import { reportCaseLawIncompleteAnswer } from "@/api/lib/case-law/incomplete-answer-telemetry";
 import { storedAnalysisState } from "@/api/lib/case-law/stored-analysis";
-import { tSafeId } from "@/api/lib/custom-schema";
-import type { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
+import { ActionAdmissionError } from "@/api/lib/errors/action-admission-error";
+import { ProviderCallError } from "@/api/lib/errors/provider-call-error";
 import {
-  getTanStackTextModelInfoForRole,
-  requireTanStackAIAvailableForRole,
+  type RedactedProviderDiagnostic,
+  redactedProviderDiagnostic,
+} from "@/api/lib/errors/redacted-provider-diagnostic";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
+import {
+  createDetachedModelActionStarter,
+  createModelActionAdmitter,
+  type DetachedModelActionStarter,
+  type ModelActionAdmitter,
+} from "@/api/lib/rate-limit/model-action-admission";
+import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
+import {
+  generateTanStackObjectForTask,
+  streamTanStackObjectForTask,
+  type TanStackStructuredOutputEvent,
+  withGenerationDeadline,
+} from "@/api/lib/tanstack-ai-generate";
+import {
+  getTanStackTextModelInfoForTask,
+  requireTanStackAIAvailableForTask,
+  type ResolvedTanStackTextModel,
 } from "@/api/lib/tanstack-ai-models";
+import { isRecord } from "@/api/lib/type-guards";
 
-import { resolveAnalysisInput } from "./analysis-input";
-import { analysisOutputSchema, buildDecisionAnalysis } from "./analysis-output";
+import {
+  type AnalysisInputResolution,
+  resolveAnalysisInput,
+} from "./analysis-input";
+import {
+  type AnalysisOutput,
+  analysisOutputSchema,
+  buildDecisionAnalysis,
+  buildPartialAnalysisTree,
+} from "./analysis-output";
+import { persistGeneratedAnalysis } from "./analysis-persistence";
 import { allowsDerivedAiAnalysis } from "./analysis-update";
 import { refreshSignificance } from "./significance-run";
 
 /**
- * Run the AI generation in the background. Updates the DB
- * when done; clears the sentinel on failure.
+ * How long one analysis run may take before it fails as timed out. An
+ * analysis is about 2.6k output tokens; a fast-role model writes that in well
+ * under half a minute, so 45 s leaves room for a slow provider without
+ * holding the reader on a spinner for the two minutes a stuck run took.
+ * Far inside the sentinel's own hold (`SENTINEL_STALE_MS`), so a run always
+ * settles its sentinel before another request may take the row over.
+ */
+export const ANALYSIS_GENERATION_DEADLINE_MS = 45_000;
+
+/** At most one partial-section write per this interval while a run streams. */
+const PARTIAL_PUBLISH_INTERVAL_MS = 1000;
+
+/**
+ * The output an analysis needs, in tokens: about six times the ~2.6k a full
+ * analysis takes, so the visible answer fits beside whatever reasoning the
+ * model spends inside the same allowance. Bounded per model by the catalog's
+ * output limit at dispatch (`outputTokensWithinModelLimit`), and kept below
+ * the size a non-streaming provider call refuses outright.
+ */
+export const ANALYSIS_OUTPUT_TOKEN_BUDGET = 16_384;
+
+/**
+ * What a failed run tells the reader, by how the model call failed. Total
+ * over the kinds, so a new kind is a decision here rather than a silent
+ * "failed".
+ */
+export const ANALYSIS_FAILURE_CODE_BY_KIND = {
+  output_incomplete: "answer_incomplete",
+  output_invalid: "answer_incomplete",
+  output_moderated: "provider_refused",
+  provider_stream_incomplete: "answer_incomplete",
+  empty_completion: "answer_incomplete",
+  loop_detected: "answer_incomplete",
+  deadline_exceeded: "timed_out",
+  quota_exhausted: "provider_refused",
+  provider_billing: "provider_refused",
+  provider_credentials_rejected: "provider_refused",
+  model_unavailable: "provider_refused",
+  provider_unavailable: "provider_unavailable",
+  // Analysis never runs on a computer; read as the provider reasons they are.
+  local_runner_needs_login: "provider_refused",
+  local_runner_limit_reached: "provider_refused",
+  local_runner_unavailable: "provider_unavailable",
+  local_runner_turn_too_large: "provider_refused",
+  // Output grown past what one delivered run holds is an incomplete answer.
+  turn_too_large: "answer_incomplete",
+  local_runner_not_reached: "provider_unavailable",
+  local_runner_relinked: "provider_unavailable",
+  local_runner_restoring: "provider_unavailable",
+  local_runner_folder_unavailable: "provider_unavailable",
+  local_runner_no_computer: "provider_unavailable",
+  local_runner_harness_unavailable: "provider_unavailable",
+  local_runner_model_unavailable: "provider_unavailable",
+  local_runner_reasoning_effort_unavailable: "provider_unavailable",
+  local_runner_approvals_unavailable: "provider_unavailable",
+  local_runner_folder_not_approved: "provider_unavailable",
+  unknown: "failed",
+} as const satisfies Record<AIErrorKind, AnalysisFailureCode>;
+
+/** Which incomplete-answer reason an AI failure counts as, if any. */
+const ANALYSIS_INCOMPLETE_REASON_BY_KIND = {
+  output_incomplete: "incomplete_output",
+  output_invalid: "invalid_output",
+  output_moderated: null,
+  provider_stream_incomplete: "incomplete_output",
+  empty_completion: "incomplete_output",
+  loop_detected: "incomplete_output",
+  deadline_exceeded: "deadline",
+  quota_exhausted: null,
+  provider_billing: null,
+  provider_credentials_rejected: null,
+  model_unavailable: null,
+  provider_unavailable: null,
+  local_runner_needs_login: null,
+  local_runner_limit_reached: null,
+  local_runner_unavailable: null,
+  local_runner_turn_too_large: null,
+  turn_too_large: "incomplete_output",
+  local_runner_not_reached: null,
+  local_runner_relinked: null,
+  local_runner_restoring: null,
+  local_runner_folder_unavailable: null,
+  local_runner_no_computer: null,
+  local_runner_harness_unavailable: null,
+  local_runner_model_unavailable: null,
+  local_runner_reasoning_effort_unavailable: null,
+  local_runner_approvals_unavailable: null,
+  local_runner_folder_not_approved: null,
+  unknown: null,
+} as const satisfies Record<
+  AIErrorKind,
+  CaseLawIncompleteReason<"analysis"> | null
+>;
+
+const ANALYSIS_FAILURE_MESSAGE = {
+  answer_incomplete: "The AI model returned an incomplete answer",
+  timed_out: "The AI model did not answer in time",
+  provider_refused: "The AI provider refused the request",
+  provider_unavailable: "The AI provider was unavailable",
+  failed: "The analysis could not be generated",
+} as const satisfies Record<AnalysisFailureCode, string>;
+
+/** Why there is no analysis to show and none will be started. */
+type AnalysisUnavailableCode = CaseLawAnalysisUnavailableCode;
+
+/** Whose key a failed run used, as a reader may be told. */
+type AnalysisFailureKeyView =
+  { source: "organization"; provider: string } | { source: "platform" };
+
+export type GenerateAnalysisResponse =
+  | {
+      status: "done";
+      analysis: DecisionAnalysis;
+      /**
+       * What the reader is told about the analysis, carried beside it: the
+       * same disclosure the reader's AI mark opens on the web.
+       */
+      aiDisclosure: AiDisclosure;
+    }
+  | CaseLawAnalysisProgressResponse
+  | { status: "error"; code: AnalysisUnavailableCode; error: string }
+  | {
+      status: "error";
+      code: AnalysisFailureCode;
+      error: string;
+      key: AnalysisFailureKeyView;
+      providerDiagnostic?: RedactedProviderDiagnostic | undefined;
+      /**
+       * ISO time before which no new run starts, poll or retry, when the
+       * provider named one that is still ahead.
+       */
+      retryAt?: string | undefined;
+    };
+
+const failureResponse = (
+  failure: AnalysisFailureRecord,
+  now: Date,
+): GenerateAnalysisResponse => {
+  const view: AnalysisFailureKeyView =
+    failure.keySource === "organization" && failure.provider !== null
+      ? { source: "organization", provider: failure.provider }
+      : { source: "platform" };
+  const base = ANALYSIS_FAILURE_MESSAGE[failure.code];
+  return {
+    status: "error",
+    code: failure.code,
+    error:
+      view.source === "organization"
+        ? `${base} using your organization's ${view.provider} key`
+        : base,
+    key: view,
+    ...(view.source === "organization" &&
+    failure.providerDiagnostic !== undefined
+      ? {
+          providerDiagnostic: redactedProviderDiagnostic(
+            failure.providerDiagnostic,
+          ),
+        }
+      : {}),
+    ...(failure.retryAfter !== undefined && failureRetryPending(failure, now)
+      ? { retryAt: failure.retryAfter.toISOString() }
+      : {}),
+  };
+};
+
+/**
+ * The retry delay a provider named for the run's failure, from the first
+ * `ProviderCallError` along the error's `cause` chain.
+ */
+const providerRetryAfterMs = (error: unknown): number | undefined => {
+  const seen = new Set<unknown>();
+  let current = error;
+  while (isRecord(current) && !seen.has(current)) {
+    if (current instanceof ProviderCallError) {
+      return current.retryAfterMs;
+    }
+    seen.add(current);
+    current = current["cause"];
+  }
+  return undefined;
+};
+
+const unavailable = (
+  code: AnalysisUnavailableCode,
+  error: string,
+): GenerateAnalysisResponse => ({ status: "error", code, error });
+
+/**
+ * The key a reader's run would call the provider with: the organization's
+ * own fast-role provider when it configured one, the platform's otherwise.
+ * The same rule `getTanStackTextModelInfoForTask` dispatches by. Intended
+ * policy: the first reader's key pays for the analysis that every
+ * organization then reads.
+ */
+const readerKeyOf = ({
+  orgAIConfig,
+  organizationId,
+}: {
+  orgAIConfig: OrgAIConfig | null;
+  organizationId: SafeId<"organization">;
+}): AnalysisReaderKey | null => {
+  if (orgAIConfig === null) {
+    return { source: "platform" };
+  }
+  const selection = resolveOrgAIModelForTask(orgAIConfig, "short-text");
+  return selection === null
+    ? null
+    : {
+        source: "organization",
+        organizationId,
+        provider: selection.provider,
+      };
+};
+
+/**
+ * Run the AI generation in the background. Updates the DB when done; on
+ * failure files the failure under the reader's key and releases the sentinel.
  *
  * `orgAIConfig` is captured from the request scope and threaded
  * through here so BYOK orgs route this fire-and-forget call to
@@ -62,28 +340,62 @@ type RunGenerationOptions = {
   /** The sentinel the claim wrote; cleanup releases exactly this one. */
   sentinel: AnalysisGenerating;
   organizationId: SafeId<"organization">;
+  admission: ModelDispatchAdmission;
   orgAIConfig: OrgAIConfig | null;
   promptCachingEnabled: boolean;
+  reader: AnalysisReaderKey;
+  store: AnalysisStore;
+  resolveTextModel: AnalysisModelResolver | undefined;
+  resolveModelInfo: AnalysisModelInfoResolver | undefined;
+  streamAnalysis: AnalysisStreamer | undefined;
+  generateAnalysisObject: AnalysisGenerator | undefined;
+  nowMs: () => number;
+  deadlineMs: number;
 };
 
-const runGeneration = async ({
+/** External model-resolution boundary; supplied by focused tests only. */
+type AnalysisModelResolver = () =>
+  ResolvedTanStackTextModel | Promise<ResolvedTanStackTextModel>;
+
+type AnalysisModelInfoResolver = () => { modelId: string };
+
+/** Focused seams for driving the streaming state machine without a provider. */
+type AnalysisStreamer = (options: {
+  abortSignal: AbortSignal | undefined;
+}) => AsyncIterable<TanStackStructuredOutputEvent<AnalysisOutput>>;
+
+type AnalysisGenerator = (options: {
+  deadlineMs: number;
+}) => Promise<AnalysisOutput>;
+
+export const runGeneration = async ({
+  admission,
   anchorIds,
   contentHash,
   country,
+  deadlineMs,
   decisionId,
   input,
   orgAIConfig,
   organizationId,
   promptCachingEnabled,
+  reader,
+  resolveTextModel,
+  resolveModelInfo,
+  streamAnalysis,
+  generateAnalysisObject,
+  nowMs,
   sentinel,
+  store,
 }: RunGenerationOptions) => {
   // audit: skip — background AI analysis output
   const aiAnalytics = createTanStackAIAnalyticsCallbacks({
     dataClass: "public_corpus",
     feature: "case-law.analysis",
-    modelRole: "fast",
+    modelTask: "short-text",
     organizationId,
     orgAIConfig,
+    modelTier: admission.modelTier,
     properties: {
       decision_id: decisionId,
       jurisdiction: country,
@@ -94,32 +406,138 @@ const runGeneration = async ({
     traceId: Bun.randomUUIDv7(),
   });
 
+  let analysis: DecisionAnalysis;
   try {
-    const { modelId } = getTanStackTextModelInfoForRole("fast", orgAIConfig, {
+    const { modelId } =
+      resolveModelInfo?.() ??
+      getTanStackTextModelInfoForTask("short-text", orgAIConfig, {
+        dataClass: "public_corpus",
+        organizationId,
+        modelTier: admission.modelTier,
+      });
+    const generationOptions = {
+      userId: admission.userId,
       dataClass: "public_corpus",
-      organizationId,
-    });
-    const result = await generateTanStackObjectForRole({
-      dataClass: "public_corpus",
-      role: "fast",
+      task: "short-text",
       serviceTier: "standard",
       orgAIConfig,
       organizationId,
+      admission,
       // Case-law analysis is global, not workspace-scoped (see the store).
       tenantWorkspaceIds: [],
       analytics: aiAnalytics,
       caching: resolveCaching({
         promptCachingEnabled,
-        role: "fast",
+        task: "short-text",
         scopeKey: decisionId,
       }),
       system: input.systemPrompt,
       prompt: input.userMessage,
       outputSchema: analysisOutputSchema,
-      abortSignal: AbortSignal.timeout(120_000),
-    });
+      outputTokenBudget: ANALYSIS_OUTPUT_TOKEN_BUDGET,
+      deadlineMs,
+      ...(resolveTextModel === undefined ? {} : { resolveTextModel }),
+    } as const;
 
-    const analysis = buildDecisionAnalysis({
+    let result: AnalysisOutput | undefined;
+    let processedCount = 0;
+    const partialTree: DecisionAnalysis["tree"] = [];
+    let lastPublishedAt = Number.NEGATIVE_INFINITY;
+    // Sections completed since the last write. A section that lands inside
+    // the throttle window waits for the next event past it, not for the end.
+    let unpublished = false;
+    const publishIfDue = async () => {
+      const now = nowMs();
+      if (!unpublished || now - lastPublishedAt < PARTIAL_PUBLISH_INTERVAL_MS) {
+        return;
+      }
+      // Attempts are paced too: a superseded run's refused writes must not
+      // turn into a write per streamed token.
+      lastPublishedAt = now;
+      if (await store.savePartial({ decisionId, partialTree, sentinel })) {
+        unpublished = false;
+      }
+    };
+    // One deadline for the whole run: a fallback after an invalid stream gets
+    // what is left of it, never a fresh one.
+    const runStartedAt = nowMs();
+    const streamed = await Result.tryPromise({
+      try: async () =>
+        await withGenerationDeadline(generationOptions, async (abortSignal) => {
+          const events =
+            streamAnalysis === undefined
+              ? streamTanStackObjectForTask({
+                  ...generationOptions,
+                  abortSignal,
+                })
+              : streamAnalysis({ abortSignal });
+          for await (const event of events) {
+            switch (event.type) {
+              case "complete":
+                return event.object;
+              case "delta":
+                continue;
+              case "partial":
+                break;
+              default:
+                event satisfies never;
+                return panic("Unknown structured analysis event");
+            }
+            const headings = event.partial.headings;
+            if (!Array.isArray(headings)) {
+              continue;
+            }
+            // The last array member is still being written. A following member
+            // proves every member before it is complete.
+            const completeCount = Math.max(0, headings.length - 1);
+            for (const heading of headings.slice(
+              processedCount,
+              completeCount,
+            )) {
+              const parsed = v.safeParse(analysisHeadingInputSchema, heading);
+              if (parsed.success) {
+                partialTree.push(
+                  ...buildPartialAnalysisTree({
+                    headings: [parsed.output],
+                    language: input.language,
+                  }),
+                );
+                unpublished = true;
+              }
+            }
+            processedCount = Math.max(processedCount, completeCount);
+            await publishIfDue();
+          }
+          return undefined;
+        }),
+      catch: (error) => error,
+    });
+    if (Result.isOk(streamed)) {
+      result = streamed.value;
+    } else {
+      const streamError = streamed.error;
+      // Preserve the existing strict repair and fallback ladder. The streamed
+      // sections remain on the sentinel while that ladder settles.
+      if (classifyAIError(streamError) !== "output_invalid") {
+        throw streamError;
+      }
+      const remainingDeadlineMs = Math.max(
+        1,
+        Math.floor(deadlineMs - (nowMs() - runStartedAt)),
+      );
+      result =
+        generateAnalysisObject === undefined
+          ? await generateTanStackObjectForTask({
+              ...generationOptions,
+              deadlineMs: remainingDeadlineMs,
+            })
+          : await generateAnalysisObject({ deadlineMs: remainingDeadlineMs });
+    }
+    if (result === undefined) {
+      panic("Structured analysis stream ended without a result");
+    }
+
+    analysis = buildDecisionAnalysis({
       anchorIds,
       output: result,
       language: input.language,
@@ -127,62 +545,255 @@ const runGeneration = async ({
       inputFingerprint: input.fingerprint,
       generatedAt: new Date(),
     });
-
-    await analysisStore().save({ analysis, contentHash, decisionId });
   } catch (error) {
-    captureError(error, {
-      source: "case-law-analysis",
-      decisionId,
-    });
-    aiAnalytics.captureError(error);
-    await analysisStore()
-      .clear({ decisionId, sentinel })
-      .catch((cleanupError: unknown) => {
-        // Best-effort sentinel cleanup. Capture rather than swallow: a
-        // failure here leaves the decision pinned in the generating state,
-        // which is a distinct fault from the one the outer catch reported.
-        captureError(cleanupError, {
-          source: "case-law-analysis-sentinel-cleanup",
-          decisionId,
-        });
+    // A model answer that arrived incomplete, invalid or too late is an
+    // incomplete case-law answer; storage and provider failures are not.
+    const incompleteReason =
+      ANALYSIS_INCOMPLETE_REASON_BY_KIND[classifyAIError(error)];
+    if (incompleteReason !== null) {
+      reportCaseLawIncompleteAnswer({
+        surface: "analysis",
+        reason: incompleteReason,
+        count: 1,
       });
+    }
+    await handleGenerationFailure({
+      aiAnalytics,
+      decisionId,
+      error,
+      reader,
+      sentinel,
+      store,
+    });
+    return;
   }
+
+  await persistGeneratedAnalysis({
+    analysis,
+    contentHash,
+    decisionId,
+    persistence: store,
+    sentinel,
+    onFailure: async (error) =>
+      await handleGenerationFailure({
+        aiAnalytics,
+        decisionId,
+        error,
+        reader,
+        sentinel,
+        store,
+      }),
+  });
 };
 
-type GenerateAnalysisResponse = {
-  status: "done" | "error" | "generating";
-  analysis?: PersistedDecisionAnalysis;
-  error?: string;
+type GenerationFailureOptions = {
+  aiAnalytics: ReturnType<typeof createTanStackAIAnalyticsCallbacks>;
+  decisionId: SafeId<"caseLawDecision">;
+  error: unknown;
+  reader: AnalysisReaderKey;
+  sentinel: AnalysisGenerating;
+  store: AnalysisStore;
 };
 
-export const generateAnalysis = async (
-  decisionId: SafeId<"caseLawDecision">,
-  scopedDb: ScopedDb,
-  organizationId: SafeId<"organization">,
-  orgAIConfig: OrgAIConfig | null,
-  orgAIConfigStatus: OrgAIConfigStatus,
-  promptCachingEnabled: boolean,
-): Promise<Result<GenerateAnalysisResponse, HandlerError>> => {
-  // audit: skip — background AI analysis output
-  const resolution = await resolveAnalysisInput({ decisionId, scopedDb });
+const handleGenerationFailure = async ({
+  aiAnalytics,
+  decisionId,
+  error,
+  reader,
+  sentinel,
+  store,
+}: GenerationFailureOptions) => {
+  // Named outcomes (an incomplete answer, a deadline, a provider refusal)
+  // are recorded by the analytics callbacks and told to the reader; only
+  // an unanticipated shape is an exception worth capturing.
+  if (isUnanticipatedAIFailure(error)) {
+    captureError(
+      error,
+      handlerErrorContext("analysis.handleGenerationFailure", {
+        source: "case-law-analysis",
+        decisionId,
+      }),
+    );
+  }
+  aiAnalytics.captureError(error);
+  const failure = analysisFailureRecord({
+    code: ANALYSIS_FAILURE_CODE_BY_KIND[classifyAIError(error)],
+    fingerprint: sentinel.inputFingerprint,
+    now: new Date(),
+    reader,
+    retryAfterMs: providerRetryAfterMs(error),
+    ...(reader.source === "organization" &&
+    error instanceof ProviderCallError &&
+    error.providerDiagnostic !== undefined
+      ? { providerDiagnostic: error.providerDiagnostic }
+      : {}),
+  });
+  await recordFailedRun({
+    decisionId,
+    failure,
+    keyTag: analysisFailureKeyTag(reader, decisionId),
+    sentinel,
+    store,
+  });
+};
+
+/**
+ * Files the run's failure under its reader key and releases its sentinel.
+ * When the record cannot be written, releases the sentinel anyway rather than
+ * leave the decision pinned in the generating state, and captures what went
+ * wrong: neither is the fault the run itself failed on.
+ */
+const recordFailedRun = async ({
+  decisionId,
+  failure,
+  keyTag,
+  sentinel,
+  store,
+}: {
+  decisionId: SafeId<"caseLawDecision">;
+  failure: AnalysisFailureRecord;
+  keyTag: string;
+  sentinel: AnalysisGenerating;
+  store: AnalysisStore;
+}): Promise<void> => {
+  const recorded = await Result.tryPromise(
+    async () => await store.fail({ decisionId, failure, keyTag, sentinel }),
+  );
+  if (Result.isOk(recorded)) {
+    return;
+  }
+  const released = await Result.tryPromise(
+    async () => await store.clear({ decisionId, sentinel }),
+  );
+  captureError(
+    Result.isOk(released)
+      ? recorded.error
+      : new AggregateError(
+          [recorded.error, released.error],
+          "The failed run's record could not be written nor its sentinel released",
+        ),
+    handlerErrorContext("analysis.recordFailedRun", {
+      source: "case-law-analysis-failure-record",
+      decisionId,
+    }),
+  );
+};
+
+type GenerateAnalysisOptions = {
+  /** Admits a background significance refresh. */
+  admitModelAction: ModelActionAdmitter;
+  /** Admits a new generation, held until it settles after the response. */
+  startModelAction: DetachedModelActionStarter;
+  decisionId: SafeId<"caseLawDecision">;
+  scopedDb: ScopedDb;
+  organizationId: SafeId<"organization">;
+  orgAIConfig: OrgAIConfig | null;
+  orgAIConfigStatus: OrgAIConfigStatus;
+  promptCachingEnabled: boolean | null;
+  /**
+   * The reader asked to run again after a failure. Without it, a failure
+   * record over this document answers for its hold, so polling never starts
+   * the run that just failed a second time.
+   */
+  retry: boolean;
+  /** Where the analysis lives; the application's store unless a test says. */
+  store?: AnalysisStore | undefined;
+  /**
+   * Whether a model may be asked for this decision's derived layers;
+   * `CASE_LAW_DERIVED_AI` unless a test says. Off, a stored analysis is
+   * served as it is and a missing one is reported unavailable.
+   */
+  derivedAi?: boolean | undefined;
+  /** External model-resolution boundary; supplied by focused tests only. */
+  resolveTextModel?: AnalysisModelResolver | undefined;
+  /** The run's deadline; `ANALYSIS_GENERATION_DEADLINE_MS` unless a test says. */
+  deadlineMs?: number | undefined;
+  /**
+   * Test seam: runs between the read and the claim, so a test can settle
+   * another request's run in that window. Never set outside tests.
+   */
+  beforeClaim?: (() => Promise<void>) | undefined;
+};
+
+const generatingResponse = (
+  partialTree: DecisionAnalysis["tree"],
+): CaseLawAnalysisProgressResponse => ({
+  status: "generating",
+  ...(partialTree.length === 0 ? {} : { partialTree }),
+});
+
+const analysisStartFailure = (cause: unknown) =>
+  new HandlerError({
+    status: 503,
+    code: "internal_error",
+    message: "Analysis generation could not start",
+    cause,
+  });
+
+type UnavailableAnalysisInput = Exclude<
+  AnalysisInputResolution,
+  { kind: "resolved" }
+>;
+
+const unavailableAnalysisInputResponse = (
+  resolution: UnavailableAnalysisInput,
+) => {
   switch (resolution.kind) {
     case "decision-not-found":
-      return Result.ok({ status: "error", error: "Decision not found" });
+      return unavailable("decision_not_found", "Decision not found");
     case "unparseable-document":
-      return Result.ok({
-        status: "error",
-        error: "Decision has no parseable AST",
-      });
-    case "resolved":
-      break;
-    default: {
+      return unavailable(
+        "document_unparseable",
+        "Decision has no parseable AST",
+      );
+    case "unsupported-language":
+      return unavailable(
+        "language_unsupported",
+        `Analysis is not available for decisions in language "${resolution.language}"`,
+      );
+    default:
       resolution satisfies never;
       return panic(`Unhandled resolution: ${String(resolution)}`);
-    }
+  }
+};
+
+export const generateAnalysis = async ({
+  admitModelAction,
+  startModelAction,
+  decisionId,
+  scopedDb,
+  organizationId,
+  orgAIConfig,
+  orgAIConfigStatus,
+  promptCachingEnabled,
+  retry,
+  store = analysisStore(),
+  derivedAi = writesDerivedAnalyses(),
+  resolveTextModel,
+  deadlineMs = ANALYSIS_GENERATION_DEADLINE_MS,
+  beforeClaim,
+}: GenerateAnalysisOptions): Promise<
+  Result<GenerateAnalysisResponse, ActionAdmissionError | HandlerError>
+> => {
+  // audit: skip — background AI analysis output
+  const resolved = await resolveAnalysisInput({ decisionId, scopedDb });
+  if (Result.isError(resolved)) {
+    return Result.err(
+      new HandlerError({
+        status: 409,
+        message: resolved.error.message,
+        cause: resolved.error,
+      }),
+    );
+  }
+  const resolution = resolved.value;
+  if (resolution.kind !== "resolved") {
+    return Result.ok(unavailableAnalysisInputResponse(resolution));
   }
   const { anchorIds, decision, input } = resolution;
+  const reader = readerKeyOf({ orgAIConfig, organizationId });
 
-  const observed = analysisStore().peek(decisionId) ?? decision.analysis;
+  const observed = store.peek(decisionId) ?? decision.analysis;
   const stored = storedAnalysisState({
     stored: observed,
     fingerprint: input.fingerprint,
@@ -194,23 +805,30 @@ export const generateAnalysis = async (
       // on the citation graph and written in the background, so a reader
       // never waits for it and a decision whose neighbourhood has not
       // moved costs one indexed query.
-      if (storesAnalyses()) {
+      if (derivedAi && promptCachingEnabled !== null) {
         detached(
-          refreshSignificance({
-            analysis: stored.analysis,
-            contentHash: decision.contentHash,
-            decisionId,
-            orgAIConfig,
-            orgAIConfigStatus,
-            organizationId,
-            promptCachingEnabled,
-          }),
+          async () =>
+            refreshSignificance({
+              admitModelAction,
+              analysis: stored.analysis,
+              contentHash: decision.contentHash,
+              derivedAi,
+              decisionId,
+              orgAIConfig,
+              orgAIConfigStatus,
+              organizationId,
+              promptCachingEnabled,
+            }),
           "analysis-generate.refresh-significance",
         );
       }
-      return Result.ok({ status: "done", analysis: stored.analysis });
+      return Result.ok({
+        status: "done",
+        analysis: stored.analysis,
+        aiDisclosure: aiDisclosure("caseLaw"),
+      });
     case "generating":
-      return Result.ok({ status: "generating" });
+      return Result.ok(generatingResponse(stored.partialTree));
     case "none":
       break;
     default: {
@@ -219,11 +837,48 @@ export const generateAnalysis = async (
     }
   }
 
-  if (!storesAnalyses()) {
-    return Result.ok({
-      status: "error",
-      error: "Analysis is unavailable for this decision",
+  // A deployment that may not ask a model for derived layers serves what is
+  // stored and generates nothing: a seeded or local stack never reaches a
+  // model by opening a decision. Decided before any recorded failure, so a
+  // reader is never offered a retry that this deployment cannot run.
+  if (!derivedAi) {
+    return Result.ok(
+      unavailable(
+        "analysis_disabled",
+        "Analysis generation is disabled on this deployment",
+      ),
+    );
+  }
+
+  // Before a run starts: when the run this reader's key made last failed,
+  // say so until the reader asks again, and even then until the provider's
+  // retry time when it named one. The record is filed under this reader's
+  // key alone, so another reader's run on the shared row neither replaces
+  // nor clears it, and this reader never re-runs unasked.
+  const request: AnalysisRequestKind = retry ? "retry" : "poll";
+  const answerFailure = async (): Promise<GenerateAnalysisResponse | null> => {
+    if (reader === null) {
+      return null;
+    }
+    const failure = await store.readFailure({
+      decisionId,
+      keyTag: analysisFailureKeyTag(reader, decisionId),
     });
+    const now = new Date();
+    return failure !== null &&
+      failureStillHolds({
+        failure,
+        fingerprint: input.fingerprint,
+        now,
+        reader,
+        request,
+      })
+      ? failureResponse(failure, now)
+      : null;
+  };
+  const heldFailure = await answerFailure();
+  if (heldFailure !== null) {
+    return Result.ok(heldFailure);
   }
 
   // Sources carry different reuse terms. One whose terms withhold derived AI
@@ -231,63 +886,128 @@ export const generateAnalysis = async (
   // before AI availability because it is a property of the decision, not of
   // how this deployment is configured.
   if (!allowsDerivedAiAnalysis(decision)) {
-    return Result.ok({
-      status: "error",
-      error: "Analysis is unavailable for this decision",
-    });
+    return Result.ok(
+      unavailable(
+        "source_restricted",
+        "The source does not permit AI analysis",
+      ),
+    );
   }
 
   // AI availability is checked only on the path that actually invokes the
   // model: the stored and in-flight reads above must stay accessible when
   // the fast role is unavailable (a pre-existing bug ran this check before
   // them, locking finished analyses behind AI configuration).
-  const available = requireTanStackAIAvailableForRole({
+  const available = requireTanStackAIAvailableForTask({
     dataClass: "public_corpus",
     configStatus: orgAIConfigStatus,
     orgConfig: orgAIConfig,
-    role: "fast",
+    task: "short-text",
   });
   if (Result.isError(available)) {
     return Result.err(available.error);
   }
-
-  // Another request won the race: return generating.
-  const sentinel = await analysisStore().claim({
-    decisionId,
-    fingerprint: input.fingerprint,
-    observed,
-  });
-  if (sentinel === null) {
-    return Result.ok({ status: "generating" });
+  if (promptCachingEnabled === null) {
+    return Result.err(storedAIConfigUnreadableError());
+  }
+  if (reader === null) {
+    return panic("An available analysis role must resolve a reader key");
   }
 
-  // Fire-and-forget generation
-  detached(
-    runGeneration({
-      anchorIds,
-      contentHash: decision.contentHash,
-      country: decision.country,
-      decisionId,
-      input,
-      orgAIConfig,
-      organizationId,
-      promptCachingEnabled,
-      sentinel,
-    }),
-    "analysis-generate.run-generation",
-  );
+  await beforeClaim?.();
 
+  // The generation draws one action when it starts and holds it until the
+  // background run settles, after this request has answered.
+  const started = await startModelAction({
+    label: "analysis-generate.run-generation",
+    // Another request won the race when the claim returns null. The claim
+    // also refuses, in its own transaction, while this reader's key has an
+    // applicable failure: one filed after the read above, by a run that
+    // started and failed meanwhile, still stops it. An explicit retry claims
+    // over such a failure unless its provider's retry time is still ahead.
+    start: async (): ReturnType<AnalysisStore["claimUnlessFailed"]> =>
+      await store.claimUnlessFailed({
+        decisionId,
+        fingerprint: input.fingerprint,
+        observed,
+        unlessFailed: failureClaimGuard({
+          decisionId,
+          now: new Date(),
+          reader,
+          request,
+        }),
+      }),
+    // The proof aborts the generation's model call if the lease is lost.
+    background: async ({ admission }, claimed) => {
+      if (claimed.isErr() || claimed.value === null) {
+        return;
+      }
+      const sentinel = claimed.value;
+      await runGeneration({
+        admission,
+        anchorIds,
+        contentHash: decision.contentHash,
+        country: decision.country,
+        deadlineMs,
+        decisionId,
+        input,
+        orgAIConfig,
+        organizationId,
+        promptCachingEnabled,
+        reader,
+        resolveTextModel,
+        resolveModelInfo: undefined,
+        streamAnalysis: undefined,
+        generateAnalysisObject: undefined,
+        nowMs: () => performance.now(),
+        sentinel,
+        store,
+      });
+    },
+  });
+
+  if (Result.isError(started)) {
+    return Result.err(
+      ActionAdmissionError.is(started.error)
+        ? started.error
+        : analysisStartFailure(started.error),
+    );
+  }
+  const claimed = started.value;
+  if (claimed.isErr()) {
+    return Result.err(analysisStartFailure(claimed.error));
+  }
+
+  // A claim lost to a failure filed since the read answers that failure;
+  // one lost to another run answers that run in flight.
+  if (claimed.value === null) {
+    const failure = await answerFailure();
+    if (failure !== null) {
+      return Result.ok(failure);
+    }
+  }
   return Result.ok({ status: "generating" });
 };
 
 const config = {
+  contract: "patch",
   description:
     "Read the structural analysis of one court decision, starting generation " +
-    "when there is none yet. Returns status done with the stored analysis, " +
+    "when there is none yet. The analysis is generated by stella, not by the " +
+    "court: show its aiDisclosure text to the user beside anything taken " +
+    "from it. Returns status done with the stored analysis and aiDisclosure, " +
     "generating while a run is in flight (poll until it is done), or error " +
-    "when the decision is unknown or its text could not be parsed. " +
-    "Generation runs in the background and a call made while one is already " +
-    "running does not start a second.",
+    "with a code: decision_not_found, document_unparseable, " +
+    "language_unsupported, analysis_disabled or source_restricted when no analysis can be " +
+    "made; answer_incomplete, timed_out, provider_refused, " +
+    "provider_unavailable or failed when the last run failed, with key " +
+    "naming whose AI key it used (the organization's own, or the platform's). " +
+    "A failed run answers callers using the same key for 15 minutes; within " +
+    "that window a call passing retry=true starts a new run, and after it the " +
+    "next call starts one on its own. When the provider named a later time " +
+    "to retry, the failure carries it as retryAt (ISO 8601) and answers every " +
+    "call, retry=true included, until then. Generation runs in the background and a call made while one " +
+    "is already running does not start a second.",
   permissions: { workspace: ["read"], chat: ["create"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
@@ -298,18 +1018,21 @@ const config = {
   // Writes a "generating" sentinel and kicks off background AI generation
   // that updates the decision row.
   access: "write",
-  params: t.Object({ decisionId: tSafeId("caseLawDecision") }),
+  params: v.object({ decisionId: resourceIdSchema("caseLawDecision") }),
+  query: v.object({ retry: v.optional(booleanFromString()) }),
 } satisfies HandlerConfig;
 
 const generateDecisionAnalysis = createSafeRootHandler(
   config,
   async function* ({
     params: { decisionId },
+    query,
     session,
     scopedDb,
     orgAIConfig,
     orgAIConfigStatus,
     promptCachingEnabled,
+    user,
   }) {
     // AI availability is enforced inside generateAnalysis, after its stored
     // and in-flight branches, so finished analyses stay readable when the
@@ -317,14 +1040,29 @@ const generateDecisionAnalysis = createSafeRootHandler(
     const response = yield* Result.await(
       Result.tryPromise(
         async () =>
-          await generateAnalysis(
+          await generateAnalysis({
+            // Both runs continue after the response, outside its admission.
+            admitModelAction: createModelActionAdmitter({
+              organizationId: session.activeOrganizationId,
+              userId: user.id,
+              organizationStateDb: scopedDb,
+              actionKind: "case-law.analysis",
+              scope: "independent",
+            }),
+            startModelAction: createDetachedModelActionStarter({
+              organizationId: session.activeOrganizationId,
+              userId: user.id,
+              organizationStateDb: scopedDb,
+              actionKind: "case-law.analysis",
+            }),
             decisionId,
             scopedDb,
-            session.activeOrganizationId,
+            organizationId: session.activeOrganizationId,
             orgAIConfig,
             orgAIConfigStatus,
             promptCachingEnabled,
-          ),
+            retry: query.retry === true,
+          }),
       ),
     );
 

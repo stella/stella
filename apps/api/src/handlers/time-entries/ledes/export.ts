@@ -2,12 +2,13 @@ import { Result } from "better-result";
 import { and, eq, ne } from "drizzle-orm";
 
 import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
-import { timeEntryAmount, MoneyTotals } from "@stll/money";
+import { moneyExportSchema } from "@stll/api-contract/billing-money";
+import { MoneyTotals, timeEntryAmount } from "@stll/money";
 import type { CentsAmount } from "@stll/money";
+import { withBillingRead } from "@stll/permissions";
 import { Temporal, todayFor } from "@stll/time";
 
 import { BILLING_STATUS, timeEntries } from "@/api/db/schema";
-import { exportAmountText } from "@/api/handlers/time-entries/export-amount";
 import {
   loadTimekeeperNames,
   timeEntryExportConditions,
@@ -17,6 +18,7 @@ import type { TimeEntryExportHandlerProps } from "@/api/handlers/time-entries/ex
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { UNPRICED_TIME_ENTRY_CURRENCY } from "@/api/lib/billing-constants";
+import { exportAmountText } from "@/api/lib/billing/export-amount";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
@@ -243,14 +245,17 @@ export const exportLedesHandler = async ({
 };
 
 const config = {
+  moneyResponse: moneyExportSchema,
+  contract: "patch",
   accountAccess: ACCOUNT_ACCESS.standard,
+  featureAccess: { featureId: "time-billing", type: "required" },
   description:
     "Export a matter's client time entries as a LEDES 1998B e-billing file. Only " +
     "billable, charged, not-written-off entries are included, so the " +
     "selection is narrower than the CSV export of the same filters. Refused " +
     "when an included entry has no effective rate, or when the selection " +
     "spans more than one currency, which the format cannot represent.",
-  permissions: { timeEntry: ["approve"] },
+  permissions: withBillingRead({ timeEntry: ["approve"] }),
   mcp: {
     type: "capability",
     readClass: "tenant",

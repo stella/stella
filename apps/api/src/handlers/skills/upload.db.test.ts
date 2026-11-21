@@ -1,15 +1,20 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { and, eq } from "drizzle-orm";
-import JSZip from "jszip";
 
 import { API_FILE_SECURITY_REJECTED_ERROR_CODE } from "@stll/api-contract";
+import { ZipArchive } from "@stll/docx-core/zip";
 import { SKILL_REQUIRED_TOOLS_METADATA_KEY } from "@stll/skills";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { agentSkills } from "@/api/db/schema";
 import { createSafeDb } from "@/api/db/scoped";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
-import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
+import { S3_OBJECT_WRITE_CERTAINTY } from "@/api/lib/s3";
+import { auditRecorderDouble } from "@/api/tests/helpers/audit-recorder-double";
+import {
+  createTestHandlerContext,
+  NO_DB,
+} from "@/api/tests/helpers/handler-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -18,7 +23,14 @@ import {
 import type { TestIds } from "@/api/tests/security/rls-helpers";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
-import uploadSkill from "./upload";
+import { createUploadSkill } from "./upload";
+
+// Object storage standing in for the bucket: key to bytes.
+const storedObjects = new Map<string, Uint8Array | string>();
+const uploadSkill = createUploadSkill(async ({ data, key }) => {
+  storedObjects.set(key, data);
+  return S3_OBJECT_WRITE_CERTAINTY.CONFIRMED;
+});
 
 /**
  * A skill pack sent as a multipart body passes the same file scan as one
@@ -44,6 +56,8 @@ const memberSafeDb = (): SafeDb =>
 const upload = async (file: File) =>
   await uploadSkill.handler(
     createTestHandlerContext<Parameters<typeof uploadSkill.handler>[0]>({
+      scopedDb: NO_DB,
+      audit: auditRecorderDouble(),
       memberRole: sessionMemberRole("member"),
       session: { activeOrganizationId: ids.orgA },
       user: { id: ids.userA1 },
@@ -89,16 +103,16 @@ test("a pack the file scan rejects is refused and nothing is installed", async (
   expect(await installedCount(name)).toBe(0);
 });
 
-test("a pack with a binary asset is installed and the response lists the file left out", async () => {
+test("a pack with a binary asset is installed and keeps the asset's bytes", async () => {
   const name = `binary-asset-${Bun.randomUUIDv7().slice(-8)}`;
-  const zip = new JSZip();
-  zip.file(
+  const zip = new ZipArchive();
+  zip.set(
     "SKILL.md",
     `---\nname: ${name}\ndescription: Upload scan test.\n---\n\nUse the logo.\n`,
   );
-  zip.file("references/brand.md", "# Brand");
-  zip.file("assets/logo.png", new Uint8Array([0x89, 0x50, 0xff, 0xfe]));
-  const bytes = await zip.generateAsync({ type: "arraybuffer" });
+  zip.set("references/brand.md", "# Brand");
+  zip.set("assets/logo.png", new Uint8Array([0x89, 0x50, 0xff, 0xfe]));
+  const bytes = (await zip.generate({ compression: "store" })).buffer;
 
   const result = await upload(
     new File([bytes], `${name}.zip`, { type: "application/zip" }),
@@ -107,9 +121,11 @@ test("a pack with a binary asset is installed and the response lists the file le
   if ("code" in result) {
     throw new TypeError("expected the pack to be installed");
   }
-  expect(result.skippedFiles).toEqual([
-    { path: "assets/logo.png", reason: "unsupported-extension" },
-  ]);
+  expect(result.name).toBe(name);
+  expect(result.skippedFiles).toEqual([]);
+  expect([...storedObjects.values()]).toContainEqual(
+    new Uint8Array([0x89, 0x50, 0xff, 0xfe]),
+  );
   expect(await installedCount(name)).toBe(1);
 });
 

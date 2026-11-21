@@ -1,22 +1,28 @@
 import { Result } from "better-result";
-import { v7 as uuidv7 } from "uuid";
-import * as v from "valibot";
 import type { StoreApi } from "zustand";
 
 import { isTaskStatus } from "@stll/api-contract";
 import { Temporal } from "@stll/time";
 
+import { isActiveSkillContext } from "@/components/inspector/inspector-active-skill";
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
 import { normalizeInspectorGroupAssignments } from "@/components/inspector/inspector-groups.logic";
-import "@/components/inspector/inspector-persistence-references";
 import {
-  FILE_FACETS,
-  parseSkillResourceSource,
+  inspectorMinimizedEntry,
+  inspectorRestorePendingEntry,
+  inspectorStateEntry,
+  isInspectorRestorePending,
+  isPersistedInspectorPaneOpen,
+  startInspectorPageLoad,
+} from "@/components/inspector/inspector-storage-keys";
+import {
   type ChatTab,
+  FILE_FACETS,
   type FileTab,
   type InspectorTab,
   type InspectorTabGroup,
   type InspectorTabsStore,
+  parseSkillResourceSource,
   type TaskTab,
 } from "@/components/inspector/inspector-store-types";
 import {
@@ -27,6 +33,8 @@ import {
   getInspectorPersistenceReference,
   getInspectorView,
 } from "@/components/inspector/view-registry";
+import { scheduleIdle } from "@/lib/platform/schedule-idle";
+import "@/components/inspector/inspector-persistence-references";
 import {
   decisionChatKey,
   isOptionalLegalDocumentChatKey,
@@ -34,9 +42,19 @@ import {
 import { adoptRestoredLegalDocumentChatThreads } from "@/features/chat/legal-document-chat-threads";
 import type { RestoredLegalDocumentChatThread } from "@/features/chat/legal-document-chat-threads";
 import { getTranslator } from "@/i18n/i18n-store";
+import {
+  isCurrentStorageOwner,
+  onStorageOwnerChange,
+  storageOwner,
+} from "@/lib/account/user-scoped-storage";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { notifyUserError } from "@/lib/errors/user-toast";
-import { readStoredJson } from "@/lib/stored-json";
+import {
+  readPersistedState,
+  removePersistedState,
+  writePersistedState,
+} from "@/lib/persisted-state/registry";
+import { createUuid } from "@/lib/uuid";
 
 export type InspectorBroadcastScope = {
   userId: string;
@@ -77,8 +95,7 @@ type InspectorBroadcastTab =
   | LegacyDecisionChatTab;
 
 type InspectorBroadcastMessage =
-  | InspectorTabsRequestMessage
-  | InspectorTabsSyncMessage;
+  InspectorTabsRequestMessage | InspectorTabsSyncMessage;
 
 type InspectorBroadcastSession = {
   dispose: () => void;
@@ -93,59 +110,156 @@ type InspectorBroadcastClock = {
 };
 
 const INSPECTOR_TABS_CHANNEL_PREFIX = "stella:inspector-tabs:v1";
-const INSPECTOR_MINIMIZED_STORAGE_PREFIX = "stella:inspector-minimized:v1";
-const INSPECTOR_STATE_STORAGE_PREFIX = "stella:inspector-state:v1";
 const noopInspectorBroadcastCleanup = () => undefined;
 
-const getInspectorMinimizedStorageKey = ({
-  userId,
-  organizationId,
-}: InspectorBroadcastScope) =>
-  `${INSPECTOR_MINIMIZED_STORAGE_PREFIX}:${organizationId}:${userId}`;
-
-const getInspectorStateStorageKey = ({
-  userId,
-  organizationId,
-}: InspectorBroadcastScope) =>
-  `${INSPECTOR_STATE_STORAGE_PREFIX}:${organizationId}:${userId}`;
-
-const readPersistedMinimized = (scope: InspectorBroadcastScope): boolean => {
-  if (typeof window === "undefined") {
-    return false;
-  }
-  try {
-    return (
-      window.localStorage.getItem(getInspectorMinimizedStorageKey(scope)) ===
-      "1"
-    );
-  } catch {
-    return false;
-  }
-};
+const readPersistedMinimized = (scope: InspectorBroadcastScope): boolean =>
+  readPersistedState(inspectorMinimizedEntry, scope);
 
 const writePersistedMinimized = (
   scope: InspectorBroadcastScope,
   minimized: boolean,
 ): void => {
-  if (typeof window === "undefined") {
+  // Best effort like every layout preference: blocked storage keeps the
+  // in-memory state and the next start opens at the default.
+  writePersistedState(inspectorMinimizedEntry, scope, minimized).unwrapOr(
+    undefined,
+  );
+};
+
+// Restored tabs mount the docked viewer at load. If a restore keeps the page
+// from ever settling, every reload would restore the same tabs again; a
+// session flag set before the restore and cleared once the page has settled
+// tells the next start to restore minimized instead.
+const RESTORE_SETTLE_DELAY_MS = 2000;
+
+// Everything one page load owns. In the browser a reload starts the module
+// again; tests model one by replacing the whole record, so nothing an earlier
+// page held (a pending settle, an unreleased viewer hold, a store attachment)
+// carries into the next.
+type PageLoad = {
+  // The flag records which page load set it. Another start in the same page (a
+  // shell that attaches the store after a client navigation) sees this page's
+  // own unsettled restore, which is not a stalled earlier load.
+  readonly id: string;
+  // Viewers the restore mounted that have not loaded their document yet. The
+  // flag stays until every one has loaded and the page then stays responsive:
+  // a document that arrives after the delay could still stall the page.
+  restoreHolds: number;
+  settlingScope: InspectorBroadcastScope | null;
+  settleTimer: ReturnType<typeof setTimeout> | null;
+  readonly scopeOwnership: WeakMap<StoreApi<InspectorTabsStore>, string>;
+};
+
+const createPageLoad = (): PageLoad => ({
+  id: startInspectorPageLoad(),
+  restoreHolds: 0,
+  settlingScope: null,
+  settleTimer: null,
+  scopeOwnership: new WeakMap(),
+});
+
+let pageLoad = createPageLoad();
+
+const writeRestorePending = (
+  scope: InspectorBroadcastScope,
+  pending: boolean,
+): void => {
+  if (pending) {
+    writePersistedState(
+      inspectorRestorePendingEntry,
+      scope,
+      pageLoad.id,
+    ).unwrapOr(undefined);
     return;
   }
-  try {
-    window.localStorage.setItem(
-      getInspectorMinimizedStorageKey(scope),
-      minimized ? "1" : "0",
-    );
-  } catch {
-    // The in-memory store remains usable when storage is unavailable.
+  removePersistedState(inspectorRestorePendingEntry, scope).unwrapOr(undefined);
+};
+
+/** Only the current page load settles its restore: a callback an earlier load
+ *  left queued must not clear the flag a later load set. */
+const settleRestore = (
+  load: PageLoad,
+  scope: InspectorBroadcastScope,
+): void => {
+  if (load === pageLoad && load.settlingScope === scope) {
+    writeRestorePending(scope, false);
+    load.settlingScope = null;
   }
+};
+
+/** Clears the flag once nothing restored is still loading and the page has
+ *  stayed responsive for a moment: a busy main thread runs neither the timer
+ *  nor the idle callback. */
+const scheduleRestoreSettle = (load: PageLoad): void => {
+  const scope = load.settlingScope;
+  if (load !== pageLoad || scope === null || load.restoreHolds > 0) {
+    return;
+  }
+  if (load.settleTimer !== null) {
+    clearTimeout(load.settleTimer);
+  }
+  load.settleTimer = setTimeout(() => {
+    load.settleTimer = null;
+    const clear = () => {
+      if (load.restoreHolds === 0) {
+        settleRestore(load, scope);
+      }
+    };
+    scheduleIdle(clear);
+  }, RESTORE_SETTLE_DELAY_MS);
+};
+
+const clearRestorePendingWhenSettled = (
+  scope: InspectorBroadcastScope,
+): void => {
+  const load = pageLoad;
+  load.settlingScope = scope;
+  scheduleRestoreSettle(load);
+  // A page that can run its pagehide handler is not stuck, so leaving it
+  // (a reload, a navigation) settles the restore even inside the delay.
+  if (typeof globalThis.addEventListener === "function") {
+    globalThis.addEventListener("pagehide", () => settleRestore(load, scope), {
+      once: true,
+    });
+  }
+};
+
+/**
+ * Held by a restored viewer from mount until its document has loaded (or
+ * failed), so the restore counts as settled only after the viewer is ready.
+ * The returned release is idempotent and counts only against the page load
+ * that took the hold.
+ */
+export const holdInspectorRestoreSettle = (): (() => void) => {
+  const load = pageLoad;
+  load.restoreHolds += 1;
+  if (load.settleTimer !== null) {
+    clearTimeout(load.settleTimer);
+    load.settleTimer = null;
+  }
+  let released = false;
+  return () => {
+    if (released) {
+      return;
+    }
+    released = true;
+    load.restoreHolds -= 1;
+    scheduleRestoreSettle(load);
+  };
 };
 
 let inspectorBroadcastSession: InspectorBroadcastSession | null = null;
 let failedPersistenceScope: string | null = null;
-const inspectorScopeOwnership = new WeakMap<
-  StoreApi<InspectorTabsStore>,
-  string
->();
+let persistenceFailureOccurrence = 0;
+
+/** Tests model a reload by starting again in a new page load. */
+export const startNewPageLoadForTest = (): void => {
+  if (pageLoad.settleTimer !== null) {
+    clearTimeout(pageLoad.settleTimer);
+    pageLoad.settleTimer = null;
+  }
+  pageLoad = createPageLoad();
+};
 
 /* oxlint-disable unicorn/require-post-message-target-origin -- BroadcastChannel.postMessage does not accept targetOrigin. */
 const postInspectorBroadcastMessage = (
@@ -263,20 +377,6 @@ export const isFileFacet = (
 const isMetadataLane = (value: unknown): value is FileTab["metadataLane"] =>
   value === undefined || value === "closed" || value === "expanded";
 
-const isActiveSkillContext = (
-  value: unknown,
-): value is ChatTab["activeSkill"] => {
-  if (value === undefined) {
-    return true;
-  }
-  return (
-    isRecord(value) &&
-    typeof value["skillName"] === "string" &&
-    isOptionalString(value["skillId"]) &&
-    isOptionalString(value["skillDisplayName"])
-  );
-};
-
 const isInspectorTab = (value: unknown): value is InspectorBroadcastTab => {
   if (!isRecord(value)) {
     return false;
@@ -330,8 +430,10 @@ const isInspectorChatTab = (value: Record<string, unknown>, label: unknown) =>
   isOptionalString(value["workspaceId"]) &&
   isStringArray(value["contextMatterIds"]) &&
   isOptionalLegalDocumentChatKey(value["activeLegalKey"]) &&
+  (value["started"] === undefined || value["started"] === true) &&
   isOptionalString(value["activeDecisionId"]) &&
-  isActiveSkillContext(value["activeSkill"]);
+  (value["activeSkill"] === undefined ||
+    isActiveSkillContext(value["activeSkill"]));
 
 const isInspectorExternalTab = (
   value: Record<string, unknown>,
@@ -439,16 +541,16 @@ const isInspectorBroadcastMessage = (
     return false;
   }
   const tabs = value["tabs"];
+  const groups = value["groups"];
+  const groupAssignments = value["groupAssignments"];
   return (
     isOptionalString(value["recipientId"]) &&
     typeof value["updatedAt"] === "number" &&
     Array.isArray(tabs) &&
     tabs.every(isInspectorTab) &&
-    (value["groups"] === undefined ||
-      (Array.isArray(value["groups"]) &&
-        value["groups"].every(isInspectorTabGroup))) &&
-    (value["groupAssignments"] === undefined ||
-      isGroupAssignments(value["groupAssignments"]))
+    (groups === undefined ||
+      (Array.isArray(groups) && groups.every(isInspectorTabGroup))) &&
+    (groupAssignments === undefined || isGroupAssignments(groupAssignments))
   );
 };
 
@@ -477,6 +579,15 @@ type PersistedInspectorState = {
 };
 
 const toPersistedInspectorTab = (tab: InspectorTab): InspectorTab | null => {
+  // A document's chat that never got a message is not worth a reload: the
+  // document finds its conversation on the server when it opens.
+  if (
+    tab.type === "chat" &&
+    tab.activeLegalKey !== undefined &&
+    tab.started !== true
+  ) {
+    return null;
+  }
   if (tab.type === "skill-resource") {
     return null;
   }
@@ -519,30 +630,15 @@ const readPersistedInspectorState = (
     activeId: null,
     collapsedGroupIds: [],
   };
-  if (typeof window === "undefined") {
-    return null;
-  }
-  const readResult = Result.try(() =>
-    readStoredJson(
-      window.localStorage.getItem(getInspectorStateStorageKey(scope)),
-      v.unknown(),
-    ),
-  );
-  if (Result.isError(readResult)) {
-    return null;
-  }
-  const value = readResult.value;
+  const value = readPersistedState(inspectorStateEntry, scope);
   if (value === null) {
     return null;
   }
-  if (!isRecord(value)) {
-    return empty;
-  }
-  const tabs = value["tabs"];
-  const groups = value["groups"];
-  const groupAssignments = value["groupAssignments"];
-  const activeId = value["activeId"];
-  const collapsedGroupIds = value["collapsedGroupIds"];
+  const tabs = value.tabs;
+  const groups = value.groups;
+  const groupAssignments = value.groupAssignments;
+  const activeId = value.activeId;
+  const collapsedGroupIds = value.collapsedGroupIds;
   if (
     !Array.isArray(tabs) ||
     !Array.isArray(groups) ||
@@ -572,6 +668,15 @@ const readPersistedInspectorState = (
   };
 };
 
+/** The same restore policy as the store, available before its tabs hydrate. */
+export const readPersistedInspectorPaneOpen = (
+  scope: InspectorBroadcastScope,
+) =>
+  isPersistedInspectorPaneOpen(
+    scope,
+    (tabScope) => readPersistedInspectorState(tabScope)?.tabs.length ?? 0,
+  );
+
 const writePersistedInspectorState = (
   scope: InspectorBroadcastScope,
   state: InspectorTabsStore,
@@ -588,19 +693,14 @@ const writePersistedInspectorState = (
       tabIds.has(tabId),
     ),
   );
-  const storageKey = getInspectorStateStorageKey(scope);
-  const writeResult = Result.try(() =>
-    window.localStorage.setItem(
-      storageKey,
-      JSON.stringify({
-        tabs,
-        groups: state.groups,
-        groupAssignments,
-        activeId: tabIds.has(state.activeId ?? "") ? state.activeId : null,
-        collapsedGroupIds: state.collapsedGroupIds,
-      }),
-    ),
-  );
+  const storageKey = `${scope.organizationId}:${scope.userId}`;
+  const writeResult = writePersistedState(inspectorStateEntry, scope, {
+    tabs,
+    groups: state.groups,
+    groupAssignments,
+    activeId: tabIds.has(state.activeId ?? "") ? state.activeId : null,
+    collapsedGroupIds: state.collapsedGroupIds,
+  });
   if (Result.isOk(writeResult)) {
     if (failedPersistenceScope === storageKey) {
       failedPersistenceScope = null;
@@ -611,18 +711,23 @@ const writePersistedInspectorState = (
     return;
   }
   failedPersistenceScope = storageKey;
-  getAnalytics().captureError(writeResult.error, {
-    type: "detached",
-    operation: "inspector-tabs.persist",
-  });
-  notifyUserError(undefined, getTranslator()("inspector.groups.saveFailed"));
+  persistenceFailureOccurrence += 1;
+  notifyUserError(
+    writeResult.error,
+    getTranslator()("inspector.groups.saveFailed"),
+    { occurrence: persistenceFailureOccurrence },
+  );
 };
 
 const subscribeInspectorPersistence = (
   store: StoreApi<InspectorTabsStore>,
   scope: InspectorBroadcastScope,
 ) => {
+  const owner = storageOwner();
   const unsubscribeState = store.subscribe((state, previousState) => {
+    if (!isCurrentStorageOwner(owner)) {
+      return;
+    }
     if (
       state.tabs !== previousState.tabs ||
       state.groups !== previousState.groups ||
@@ -634,6 +739,9 @@ const subscribeInspectorPersistence = (
     }
   });
   const unsubscribeMinimized = store.subscribe((state, previousState) => {
+    if (!isCurrentStorageOwner(owner)) {
+      return;
+    }
     if (state.minimized !== previousState.minimized) {
       writePersistedMinimized(scope, state.minimized);
     }
@@ -648,15 +756,19 @@ export const createInspectorBroadcastSession = (
   store: StoreApi<InspectorTabsStore>,
   scope: InspectorBroadcastScope,
 ): InspectorBroadcastSession => {
+  const owner = storageOwner();
   const channel = new window.BroadcastChannel(
     getInspectorTabsBroadcastChannelName(scope),
   );
-  const clientId = uuidv7();
+  const clientId = createUuid();
   let consumers = 1;
   let applyingRemote = false;
   let lastTabsClock: InspectorBroadcastClock | null = null;
 
   const postTabs = (recipientId?: string) => {
+    if (!isCurrentStorageOwner(owner)) {
+      return;
+    }
     const state = store.getState();
     const tabs = state.tabs.filter((tab) => !isGenericInspectorTab(tab));
     if (
@@ -679,8 +791,15 @@ export const createInspectorBroadcastSession = (
       });
     } catch (error) {
       getAnalytics().captureError(error, {
-        type: "detached",
-        operation: "inspector-tabs.broadcast",
+        fingerprintKey: "createInspectorBroadcastSession.postTabs:failure",
+        scope: {
+          type: "handler",
+          handlerId: "createInspectorBroadcastSession.postTabs:failure",
+        },
+        context: {
+          type: "detached",
+          operation: "inspector-tabs.broadcast",
+        },
       });
     }
   };
@@ -700,6 +819,9 @@ export const createInspectorBroadcastSession = (
   const unsubscribePersistence = subscribeInspectorPersistence(store, scope);
 
   const handleMessage = (event: MessageEvent<unknown>) => {
+    if (!isCurrentStorageOwner(owner)) {
+      return;
+    }
     const message = event.data;
     if (
       !isInspectorBroadcastMessage(message) ||
@@ -770,12 +892,12 @@ export const createInspectorBroadcastSession = (
   };
 };
 
-export const initializeInspectorTabBroadcast = (
+const initializeInspectorScope = (
   store: StoreApi<InspectorTabsStore>,
   scope: InspectorBroadcastScope,
 ) => {
   const scopeKey = `${scope.organizationId}:${scope.userId}`;
-  const previousScopeKey = inspectorScopeOwnership.get(store);
+  const previousScopeKey = pageLoad.scopeOwnership.get(store);
   const switchingScope =
     previousScopeKey !== undefined && previousScopeKey !== scopeKey;
   if (
@@ -784,15 +906,38 @@ export const initializeInspectorTabBroadcast = (
   ) {
     inspectorBroadcastSession.dispose();
   }
-  inspectorScopeOwnership.set(store, scopeKey);
+  pageLoad.scopeOwnership.set(store, scopeKey);
   const persistedMinimized = readPersistedMinimized(scope);
-  if (store.getState().minimized !== persistedMinimized) {
-    store.setState({ minimized: persistedMinimized });
+  // A shell handoff can reconnect before this document's restore settles.
+  // Its live tabs prove that restore is still active; only a fresh scope or
+  // empty store should recover a previous document's unfinished restore.
+  const hasLiveScope =
+    previousScopeKey === scopeKey && store.getState().tabs.length > 0;
+  const recovering = isInspectorRestorePending(scope) && !hasLiveScope;
+  const minimized = persistedMinimized || recovering;
+  if (store.getState().minimized !== minimized) {
+    store.setState({ minimized });
   }
   if (inspectorBroadcastSession?.scopeKey !== scopeKey) {
     const persisted = readPersistedInspectorState(scope);
+    // Nothing to restore: a flag left by an earlier start has nothing to
+    // guard any more.
+    if (persisted === null && recovering) {
+      writeRestorePending(scope, false);
+    }
     if (persisted !== null) {
       const tabs = persisted.tabs.map(normalizeInspectorBroadcastTab);
+      if (recovering) {
+        getAnalytics().captureInspectorRestoreRecovered({
+          tabCount: tabs.length,
+        });
+      }
+      if (!minimized && tabs.length > 0) {
+        writeRestorePending(scope, true);
+        clearRestorePendingWhenSettled(scope);
+      } else if (recovering) {
+        writeRestorePending(scope, false);
+      }
       adoptRestoredLegalDocumentChatThreads(legalDocumentChatThreadsIn(tabs));
       store.setState({
         tabs,
@@ -832,4 +977,34 @@ export const initializeInspectorTabBroadcast = (
   }
   inspectorBroadcastSession = createInspectorBroadcastSession(store, scope);
   return inspectorBroadcastSession.release;
+};
+
+export const initializeInspectorTabBroadcast = (
+  store: StoreApi<InspectorTabsStore>,
+  scope: InspectorBroadcastScope,
+) => {
+  let disconnect = initializeInspectorScope(store, scope);
+  const unsubscribeOwner = onStorageOwnerChange(() => {
+    disconnect();
+    disconnect = noopInspectorBroadcastCleanup;
+    pageLoad.scopeOwnership.delete(store);
+    store.setState({
+      tabs: [],
+      groups: [],
+      groupAssignments: {},
+      collapsedGroupIds: [],
+      activeId: null,
+      reviveSuggestion: null,
+      minimized: false,
+    });
+    const owner = storageOwner();
+    if (owner.kind === "user" && owner.userId === scope.userId) {
+      disconnect = initializeInspectorScope(store, scope);
+    }
+  });
+  return () => {
+    unsubscribeOwner();
+    disconnect();
+    disconnect = noopInspectorBroadcastCleanup;
+  };
 };

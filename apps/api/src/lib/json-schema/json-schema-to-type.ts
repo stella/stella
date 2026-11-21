@@ -12,7 +12,7 @@ import type { JsonSchema } from "@valibot/to-json-schema";
  * - intersections via allOf
  *
  * Intentionally unsupported:
- * - $ref-driven schemas and recursive definitions
+ * - $ref-driven schemas and recursive definitions without explicit type names
  * - conditional / negation keywords
  * - schema combinations that cannot be rendered as one compact prompt type
  *
@@ -22,6 +22,12 @@ import type { JsonSchema } from "@valibot/to-json-schema";
  */
 
 type JsonSchemaDefinition = JsonSchema | boolean;
+
+type RenderContext = {
+  depth: number;
+  knownReferences: ReadonlyMap<string, string>;
+  optionalPropertyUndefined: "include" | "exclude";
+};
 
 const INDENT = "  ";
 const IDENTIFIER_PATTERN = /^[$A-Z_a-z][$\w]*$/u;
@@ -66,10 +72,10 @@ const renderConstType = (value: JsonSchema["const"]): string => {
 
 const renderUnionType = (
   definitions: readonly JsonSchemaDefinition[],
-  depth: number,
+  context: RenderContext,
 ): string => {
   const renderedParts = definitions.map((definition) =>
-    renderSchemaDefinition(definition, depth),
+    renderSchemaDefinition(definition, context),
   );
   if (renderedParts.some((part) => part === "unknown")) {
     return "unknown";
@@ -93,14 +99,14 @@ const renderEnumType = (values: JsonSchema["enum"]): string => {
 
 const renderPatternPropertyType = (
   patternProperties: JsonSchema["patternProperties"],
-  depth: number,
+  context: RenderContext,
 ): string | undefined => {
   if (!patternProperties) {
     return undefined;
   }
 
   const patternTypes = Object.values(patternProperties).map((definition) =>
-    renderSchemaDefinition(definition, depth),
+    renderSchemaDefinition(definition, context),
   );
   const firstType = patternTypes[0];
   if (!firstType) {
@@ -112,24 +118,27 @@ const renderPatternPropertyType = (
     : "unknown";
 };
 
+const renderArrayOfType = (itemType: string): string =>
+  /[\n|&]/u.test(itemType) ? `Array<${itemType}>` : `${itemType}[]`;
+
 type RenderTupleTypeProps = {
   additionalItems: JsonSchema["additionalItems"] | JsonSchema["items"];
-  depth: number;
+  context: RenderContext;
   itemDefinitions: JsonSchemaDefinition[];
 };
 
 const renderTupleType = ({
   additionalItems,
-  depth,
+  context,
   itemDefinitions,
 }: RenderTupleTypeProps): string => {
   const itemTypes = itemDefinitions.map((definition) =>
-    renderSchemaDefinition(definition, depth),
+    renderSchemaDefinition(definition, context),
   );
 
   if (typeof additionalItems === "object" && !Array.isArray(additionalItems)) {
-    const restType = renderSchemaDefinition(additionalItems, depth);
-    return `[${[...itemTypes, `...${restType}[]`].join(", ")}]`;
+    const restType = renderSchemaDefinition(additionalItems, context);
+    return `[${[...itemTypes, `...${renderArrayOfType(restType)}`].join(", ")}]`;
   }
 
   if (additionalItems === true) {
@@ -139,11 +148,14 @@ const renderTupleType = ({
   return `[${itemTypes.join(", ")}]`;
 };
 
-const renderArrayType = (schema: JsonSchema, depth: number): string => {
+const renderArrayType = (
+  schema: JsonSchema,
+  context: RenderContext,
+): string => {
   if (Array.isArray(schema.prefixItems)) {
     return renderTupleType({
       additionalItems: schema.items,
-      depth,
+      context,
       itemDefinitions: schema.prefixItems,
     });
   }
@@ -151,7 +163,7 @@ const renderArrayType = (schema: JsonSchema, depth: number): string => {
   if (Array.isArray(schema.items)) {
     return renderTupleType({
       additionalItems: schema.additionalItems,
-      depth,
+      context,
       itemDefinitions: schema.items,
     });
   }
@@ -159,43 +171,49 @@ const renderArrayType = (schema: JsonSchema, depth: number): string => {
   const itemDefinition = Array.isArray(schema.items)
     ? true
     : (schema.items ?? true);
-  const itemType = renderSchemaDefinition(itemDefinition, depth);
-  if (itemType.includes("\n")) {
-    return `Array<${itemType}>`;
-  }
-
-  return `${itemType}[]`;
+  const itemType = renderSchemaDefinition(itemDefinition, context);
+  return renderArrayOfType(itemType);
 };
 
 const renderAdditionalPropertiesType = (
   additionalProperties: JsonSchema["additionalProperties"],
-  depth: number,
+  context: RenderContext,
 ): string | undefined => {
   if (additionalProperties === false || additionalProperties === undefined) {
     return undefined;
   }
 
-  return renderSchemaDefinition(additionalProperties, depth);
+  return renderSchemaDefinition(additionalProperties, context);
 };
 
-const renderObjectType = (schema: JsonSchema, depth: number): string => {
+const renderObjectType = (
+  schema: JsonSchema,
+  context: RenderContext,
+): string => {
   const required = new Set(schema.required);
   const propertyLines = Object.entries(schema.properties ?? {}).map(
     ([propertyName, definition]) => {
       const optionalSuffix = required.has(propertyName) ? "" : "?";
-      const propertyType = renderSchemaDefinition(definition, depth + 1);
+      const propertyType = renderSchemaDefinition(definition, {
+        ...context,
+        depth: context.depth + 1,
+      });
 
-      return `${escapePropertyName(propertyName)}${optionalSuffix}: ${propertyType};`;
+      const optionalValue =
+        optionalSuffix && context.optionalPropertyUndefined === "include"
+          ? `${propertyType} | undefined`
+          : propertyType;
+      return `${escapePropertyName(propertyName)}${optionalSuffix}: ${optionalValue};`;
     },
   );
 
   const additionalPropertiesType = renderAdditionalPropertiesType(
     schema.additionalProperties,
-    depth + 1,
+    { ...context, depth: context.depth + 1 },
   );
   const patternPropertiesType = renderPatternPropertyType(
     schema.patternProperties,
-    depth + 1,
+    { ...context, depth: context.depth + 1 },
   );
   const indexType = additionalPropertiesType ?? patternPropertiesType;
 
@@ -213,27 +231,30 @@ const renderObjectType = (schema: JsonSchema, depth: number): string => {
   }
 
   return `{\n${members
-    .map((line) => `${INDENT.repeat(depth + 1)}${line}`)
-    .join("\n")}\n${INDENT.repeat(depth)}}`;
+    .map((line) => `${INDENT.repeat(context.depth + 1)}${line}`)
+    .join("\n")}\n${INDENT.repeat(context.depth)}}`;
 };
 
-const renderSchemaType = (schema: JsonSchema, depth: number): string => {
+const renderSchemaType = (
+  schema: JsonSchema,
+  context: RenderContext,
+): string => {
   if (schema.$ref) {
-    return "unknown";
+    return context.knownReferences.get(schema.$ref) ?? "unknown";
   }
 
   if (schema.anyOf) {
-    return renderUnionType(schema.anyOf, depth);
+    return renderUnionType(schema.anyOf, context);
   }
 
   if (schema.oneOf) {
-    return renderUnionType(schema.oneOf, depth);
+    return renderUnionType(schema.oneOf, context);
   }
 
   if (Array.isArray(schema.type)) {
     return renderUnionType(
       schema.type.map((type) => ({ type })),
-      depth,
+      context,
     );
   }
 
@@ -249,13 +270,13 @@ const renderSchemaType = (schema: JsonSchema, depth: number): string => {
   if (schema.nullable) {
     return renderUnionType(
       [{ ...schema, nullable: undefined }, { type: "null" }],
-      depth,
+      context,
     );
   }
 
   if (schema.allOf) {
     const parts = schema.allOf.map((definition) =>
-      renderSchemaDefinition(definition, depth),
+      renderSchemaDefinition(definition, context),
     );
     return parts.every((part) => part !== "unknown")
       ? parts.join(" & ")
@@ -281,9 +302,9 @@ const renderSchemaType = (schema: JsonSchema, depth: number): string => {
     case "null":
       return "null";
     case "array":
-      return renderArrayType(schema, depth);
+      return renderArrayType(schema, context);
     case "object":
-      return renderObjectType(schema, depth);
+      return renderObjectType(schema, context);
     case undefined:
       break;
     default: {
@@ -292,10 +313,10 @@ const renderSchemaType = (schema: JsonSchema, depth: number): string => {
         schema.additionalProperties !== undefined ||
         schema.patternProperties !== undefined
       ) {
-        return renderObjectType(schema, depth);
+        return renderObjectType(schema, context);
       }
       if (schema.items !== undefined || schema.prefixItems !== undefined) {
-        return renderArrayType(schema, depth);
+        return renderArrayType(schema, context);
       }
 
       return "unknown";
@@ -307,10 +328,10 @@ const renderSchemaType = (schema: JsonSchema, depth: number): string => {
     schema.additionalProperties !== undefined ||
     schema.patternProperties !== undefined
   ) {
-    return renderObjectType(schema, depth);
+    return renderObjectType(schema, context);
   }
   if (schema.items !== undefined || schema.prefixItems !== undefined) {
-    return renderArrayType(schema, depth);
+    return renderArrayType(schema, context);
   }
 
   return "unknown";
@@ -318,7 +339,7 @@ const renderSchemaType = (schema: JsonSchema, depth: number): string => {
 
 const renderSchemaDefinition = (
   definition: JsonSchemaDefinition | undefined,
-  depth: number,
+  context: RenderContext,
 ): string => {
   if (definition === undefined) {
     return "unknown";
@@ -328,11 +349,26 @@ const renderSchemaDefinition = (
     return "unknown";
   }
 
-  return renderSchemaType(definition, depth);
+  return renderSchemaType(definition, context);
 };
 
-export const jsonSchemaToType = (schema: JsonSchema): string =>
-  renderSchemaType(schema, 0);
+type JsonSchemaToTypeOptions = {
+  knownReferences?: ReadonlyMap<string, string>;
+  optionalPropertyUndefined?: "include" | "exclude";
+};
+
+export const jsonSchemaToType = (
+  schema: JsonSchema,
+  {
+    knownReferences = new Map(),
+    optionalPropertyUndefined = "exclude",
+  }: JsonSchemaToTypeOptions = {},
+): string =>
+  renderSchemaType(schema, {
+    depth: 0,
+    knownReferences,
+    optionalPropertyUndefined,
+  });
 
 type JsonSchemaToAsyncFnTypeProps = {
   inputSchema: JsonSchema;

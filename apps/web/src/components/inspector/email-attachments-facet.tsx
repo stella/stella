@@ -1,18 +1,19 @@
-import { useId, useRef, useState, type ReactNode } from "react";
+import { type ReactNode, useId, useRef, useState } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import {
-  MAX_EMAIL_TEXT_ATTACHMENT_PREVIEW_BYTES,
   type EmailAttachmentDescriptor,
+  MAX_EMAIL_TEXT_ATTACHMENT_PREVIEW_BYTES,
 } from "@stll/api-contract";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import {
   Dialog,
   DialogFooter,
+  DialogFormState,
   DialogHeader,
   DialogPanel,
   DialogPopup,
@@ -22,18 +23,14 @@ import { DirectionalIcon } from "@stll/ui/directional-icon";
 import {
   AlertTriangleIcon,
   ArrowLeftIcon,
-  ChevronDownIcon,
   PaperclipIcon,
   SaveIcon,
 } from "@stll/ui/icons";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@stll/ui/menu";
+import { MenuItem, MenuPopup } from "@stll/ui/menu";
 import { Skeleton } from "@stll/ui/skeleton";
+import { SplitButton } from "@stll/ui/split-button";
 import { stellaToast } from "@stll/ui/toast";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import type { FileChatOverlayActivation } from "@/components/ai-suggestions/file-viewer-with-ai-config";
@@ -102,6 +99,31 @@ type EmailAttachmentSaveState = {
 const createInitialSaveState = (): EmailAttachmentSaveState => ({
   status: EMAIL_ATTACHMENT_SAVE_STATUS.idle,
 });
+
+type AttachmentSaveDisabledReasonOptions = {
+  saving: boolean;
+  hasMatter: boolean;
+  t: (
+    key:
+      | "common.saving"
+      | "common.selectAMatter"
+      | "inspector.selectAttachmentToSave",
+  ) => string;
+};
+
+const attachmentSaveDisabledReason = ({
+  saving,
+  hasMatter,
+  t,
+}: AttachmentSaveDisabledReasonOptions) => {
+  if (saving) {
+    return t("common.saving");
+  }
+  if (!hasMatter) {
+    return t("common.selectAMatter");
+  }
+  return t("inspector.selectAttachmentToSave");
+};
 
 export const EmailAttachmentsFacet = ({
   chatMode,
@@ -272,6 +294,10 @@ export const EmailAttachmentsFacet = ({
         open={saveTargetAttachment !== undefined}
       >
         <DialogPopup className="max-w-lg">
+          <DialogFormState
+            dirty={matterTarget !== null}
+            onDiscard={() => setMatterTarget(null)}
+          />
           <DialogHeader>
             <DialogTitle>{t("common.selectAMatter")}</DialogTitle>
           </DialogHeader>
@@ -292,6 +318,11 @@ export const EmailAttachmentsFacet = ({
                 saveTargetAttachment === undefined ||
                 saving
               }
+              disabledReason={attachmentSaveDisabledReason({
+                saving,
+                hasMatter: matterTarget !== null,
+                t,
+              })}
               onClick={() => {
                 if (matterTarget && saveTargetAttachment) {
                   saveAttachment({
@@ -404,13 +435,13 @@ const AttachmentPreview = ({
         >
           <DirectionalIcon className="size-3.5" icon={ArrowLeftIcon} />
         </Button>
-        <BidiText
-          as="span"
-          className="min-w-0 flex-1 truncate text-sm font-medium"
+        <TruncatedText
+          className="flex-1 text-sm font-medium"
           id={fileNameId}
+          render={<BidiText as="span" />}
         >
           {fileName}
-        </BidiText>
+        </TruncatedText>
         {previewKind === EMAIL_ATTACHMENT_PREVIEW_KIND.pdf ? (
           <div className="flex shrink-0 items-center gap-1">
             <PeekPdfControls
@@ -577,6 +608,7 @@ const AttachmentPreviewContent = ({
       key={previewId}
     >
       <PDFViewport
+        pageSource="portfolio"
         buffer={previewBuffer}
         className="document-preview-surface h-full w-full"
         contentClassName="relative space-y-2 px-2 pt-2"
@@ -668,30 +700,36 @@ const AttachmentListItem = ({
   return (
     <li>
       <div className="hover:bg-muted/60 flex min-h-11 w-full items-center rounded-md border text-xs">
-        <button
-          className="flex min-h-11 min-w-0 flex-1 items-center gap-2 px-2 text-start disabled:cursor-default"
+        {/* A plain button does not dim when disabled: an attachment that
+            cannot be previewed keeps its row look (and its Save control),
+            the "unsupported" note says why it does nothing. */}
+        <Button
+          className="flex min-h-11 min-w-0 flex-1"
           disabled={!attachment.previewable}
+          disabledReason={t("inspector.attachmentNotPreviewable")}
           onClick={() => onSelect(attachment.id)}
-          type="button"
+          variant="plain"
         >
-          <DocumentIcon
-            className="text-muted-foreground size-4 shrink-0"
-            fileName={fileName}
-            mimeType={attachment.mimeType ?? "application/octet-stream"}
-          />
-          <BidiText
-            as="span"
-            className="min-w-0 flex-1 truncate"
-            id={fileNameId}
-          >
-            {fileName}
-          </BidiText>
-          {!attachment.previewable ? (
-            <span className="text-muted-foreground shrink-0">
-              {unsupportedLabel}
-            </span>
-          ) : null}
-        </button>
+          <span className="flex min-h-11 w-full min-w-0 items-center gap-2 px-2">
+            <DocumentIcon
+              className="text-muted-foreground size-4 shrink-0"
+              fileName={fileName}
+              mimeType={attachment.mimeType ?? "application/octet-stream"}
+            />
+            <TruncatedText
+              className="flex-1"
+              id={fileNameId}
+              render={<BidiText as="span" />}
+            >
+              {fileName}
+            </TruncatedText>
+            {!attachment.previewable ? (
+              <span className="text-muted-foreground shrink-0">
+                {unsupportedLabel}
+              </span>
+            ) : null}
+          </span>
+        </Button>
         {canSave ? (
           <AttachmentSaveControls
             compact
@@ -722,41 +760,27 @@ const AttachmentSaveControls = ({
   const t = useTranslations();
 
   return (
-    <div className="flex shrink-0 items-center">
-      <Button
-        aria-describedby={descriptionId}
-        aria-label={t("common.save")}
-        className="min-h-11 min-w-11"
-        disabled={disabled}
-        onClick={onSave}
-        size={compact ? "icon-sm" : "sm"}
-        variant="ghost"
-      >
-        <SaveIcon aria-hidden="true" className="size-3.5" />
-        {!compact ? t("common.save") : null}
-      </Button>
-      <DropdownMenu>
-        <DropdownMenuTrigger
-          render={
-            <Button
-              aria-describedby={descriptionId}
-              aria-label={t("common.selectAMatter")}
-              className="min-h-11 min-w-11"
-              disabled={disabled}
-              size="icon-sm"
-              variant="ghost"
-            />
-          }
-        >
-          <ChevronDownIcon aria-hidden="true" className="size-3.5" />
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
-          <DropdownMenuItem onClick={onChooseMatter}>
+    <SplitButton
+      menuDescriptionId={descriptionId}
+      menuDisabled={disabled}
+      menuLabel={t("common.selectAMatter")}
+      onPrimaryClick={onSave}
+      primaryDescriptionId={descriptionId}
+      primaryDisabledReason={disabled ? t("common.saving") : undefined}
+      primaryContent={compact ? "icon" : "text"}
+      primaryLabel={t("common.save")}
+      size="sm"
+      menu={
+        <MenuPopup align="end">
+          <MenuItem onClick={onChooseMatter}>
             {t("common.selectAMatter")}
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
-    </div>
+          </MenuItem>
+        </MenuPopup>
+      }
+    >
+      <SaveIcon aria-hidden="true" className="size-3.5" />
+      {!compact ? t("common.save") : null}
+    </SplitButton>
   );
 };
 

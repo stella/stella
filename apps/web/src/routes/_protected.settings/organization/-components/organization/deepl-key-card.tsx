@@ -1,0 +1,108 @@
+import { useQuery } from "@tanstack/react-query";
+import { useTranslations } from "use-intl";
+
+import { Button } from "@stll/ui/button";
+import { Trash2Icon } from "@stll/ui/icons";
+import { Label } from "@stll/ui/label";
+
+import { QueryViewFeedback } from "@/components/query-view-feedback";
+import { SecretInput } from "@/components/secret-input";
+import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
+import { deepLConfigOptions } from "@/lib/deepl/queries";
+import { queryView } from "@/lib/query-view.logic";
+
+import {
+  AIKeyFieldFrame,
+  AIKeySectionHeading,
+  DEEPL_KEY_SECTION,
+  DeepLKeyCardPending,
+} from "./ai-key-card.pending";
+import { AISettingsSectionFeedback } from "./ai-settings-section";
+import type { KeySettingsSectionProps } from "./ai-settings-section";
+
+export const DeepLKeyCard = ({
+  draft,
+  onChange,
+  onRemove,
+  disabled,
+  feedback,
+}: KeySettingsSectionProps) => {
+  const t = useTranslations("translate.settings");
+  const tCommon = useTranslations("common");
+  const { activeOrganizationId } = useAuthenticatedUser();
+
+  const settingsQuery = useQuery(
+    deepLConfigOptions({ organizationId: activeOrganizationId }),
+  );
+  const settingsView = queryView(settingsQuery);
+  const deeplConfig =
+    settingsView.type === "items" ? settingsView.items : undefined;
+
+  const removeLabel = tCommon("remove");
+
+  if (settingsView.type === "pending") {
+    return <DeepLKeyCardPending />;
+  }
+  if (settingsView.type !== "items") {
+    return <QueryViewFeedback view={settingsView} />;
+  }
+
+  return (
+    <div className="flex flex-col gap-4">
+      <QueryViewFeedback view={settingsView} />
+      <AIKeySectionHeading
+        description={DEEPL_KEY_SECTION.description}
+        title={DEEPL_KEY_SECTION.title}
+      />
+
+      {draft.action !== "cleared" && deeplConfig?.configured === true && (
+        <div className="flex items-center justify-between gap-2">
+          <div className="bg-muted flex flex-wrap items-center gap-2 rounded-sm border px-3 py-2">
+            <span className="text-muted-foreground text-xs">
+              {t("currentKey")}:
+            </span>
+            <span className="font-mono text-xs">
+              {deeplConfig.apiKeyMasked}
+            </span>
+            <span className="text-muted-foreground text-xs">
+              ({deeplConfig.tier === "free" ? t("tierFree") : t("tierPro")})
+            </span>
+          </div>
+          <Button
+            aria-label={removeLabel}
+            disabled={disabled}
+            disabledReason={tCommon("saving")}
+            onClick={onRemove}
+            size="sm"
+            tooltip={removeLabel}
+            variant="ghost"
+          >
+            <Trash2Icon className="size-4" />
+          </Button>
+        </div>
+      )}
+
+      <AIKeyFieldFrame
+        input={
+          <SecretInput
+            autoComplete="off"
+            disabled={disabled}
+            disabledReason={tCommon("saving")}
+            id="deepl-api-key"
+            onChange={(e) => onChange(e.target.value)}
+            placeholder={t("apiKeyPlaceholder")}
+            value={draft.action === "set" ? draft.apiKey : ""}
+          />
+        }
+        label={<Label htmlFor="deepl-api-key">{t("apiKeyLabel")}</Label>}
+      />
+
+      {draft.action === "cleared" && (
+        <p className="text-muted-foreground text-sm">
+          {tCommon("unsavedChanges")}
+        </p>
+      )}
+      <AISettingsSectionFeedback feedback={feedback} />
+    </div>
+  );
+};

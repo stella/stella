@@ -1,41 +1,50 @@
-import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
-import { status, t } from "elysia";
-import type { Static } from "elysia";
+import * as v from "valibot";
 
 import {
-  publicCaseLawCountry,
-  PUBLIC_CASE_LAW_COUNTRIES,
+  PUBLIC_CASE_LAW_PAGE_COUNTRIES,
+  publicCaseLawPageCountry,
 } from "@stll/api-contract/case-law-launch-readiness";
+import { chunk as chunkItems } from "@stll/concurrency/chunk";
+import { classifyFailure } from "@stll/errors";
 
 import {
-  caseLawDecisions,
   caseLawSitemapShards,
   caseLawSources,
+  publishedCaseLawDecisions,
 } from "@/api/db/schema";
+import { status } from "@/api/http/status";
 import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
+import { caseLawPublicReadUnderSchemaLane } from "@/api/lib/case-law-public-read-db";
 import type {
   CaseLawPublicReadDb,
   CaseLawPublicReadTransaction,
 } from "@/api/lib/case-law-public-read-db";
-import { publishedCaseLawDecision } from "@/api/lib/case-law/published-decisions";
+import { decisionDateSortKeySql } from "@/api/lib/case-law/decision-date-order";
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
+import { SITEMAP_RANGE_ROWS_CEILING } from "@/api/lib/case-law/sitemap-shard-budget";
 import {
-  decisionBucketSql,
   SITEMAP_ALL_BUCKET,
+  SITEMAP_BUCKET_PATTERN,
   SITEMAP_UNDATED_MONTH,
   SITEMAP_UNDATED_YEAR,
+  sitemapDocumentRepresentativeFor,
+  sitemapHasLanguageAlternatesFor,
+  sitemapRangeConditionsFor,
 } from "@/api/lib/case-law/sitemap-shard-sql";
-import { chunked } from "@/api/lib/chunked";
+import type { SitemapRange } from "@/api/lib/case-law/sitemap-shard-sql";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { publicLawCountryUnavailable } from "@/api/lib/legal-search/public-law-country";
 import { LIMITS } from "@/api/lib/limits";
+import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
+import { observedStatus } from "@/api/lib/observability/server-error-answer";
 
 const SITEMAP_COUNTRY_PATTERN = "^[a-z]{2,3}$";
 const SITEMAP_YEAR_PATTERN = "^(?:\\d{4}|undated)$";
 const SITEMAP_MONTH_PATTERN = "^(?:0[1-9]|1[0-2]|00)$";
-const SITEMAP_BUCKET_PATTERN = "^(?:all|[0-9]{2})$";
 const SITEMAP_LANGUAGE_ALTERNATE_GROUP_BATCH_SIZE = 1000;
 // Realistic ceiling for distinct language variants of one logical decision; used
 // to bound the per-batch alternates read so a single languageGroupKey matching
@@ -49,14 +58,41 @@ const SITEMAP_LANGUAGE_ALTERNATE_ROW_LIMIT =
   1;
 const LANGUAGE_SEGMENT_REGEX = /^[a-z]{2,3}(?:-[a-z0-9]{2,8})*$/u;
 
-export const sitemapShardDecisionsQuerySchema = t.Object({
-  country: t.String({ pattern: SITEMAP_COUNTRY_PATTERN }),
-  year: t.String({ pattern: SITEMAP_YEAR_PATTERN }),
-  month: t.String({ pattern: SITEMAP_MONTH_PATTERN }),
-  bucket: t.Optional(t.String({ pattern: SITEMAP_BUCKET_PATTERN })),
+const SITEMAP_CAPACITY_EXCEEDED = failureSink({
+  event: "case_law.sitemap_capacity_exceeded",
+  expected: [],
 });
 
-type SitemapShardDecisionsQuery = Static<
+/**
+ * A sitemap that would outgrow what one read may serve is refused rather than
+ * served truncated: the answer could not be built within its own contract.
+ */
+const capacityExceeded = (message: string) =>
+  observedStatus(
+    {
+      sink: SITEMAP_CAPACITY_EXCEEDED,
+      cause: classifyFailure(
+        new HandlerError({ status: 500, message }),
+        "response_invalid",
+      ),
+    },
+    500,
+    { message },
+  );
+
+export const sitemapShardDecisionsQuerySchema = v.object({
+  country: v.pipe(
+    v.string(),
+    v.regex(new RegExp(SITEMAP_COUNTRY_PATTERN, "u")),
+  ),
+  year: v.pipe(v.string(), v.regex(new RegExp(SITEMAP_YEAR_PATTERN, "u"))),
+  month: v.pipe(v.string(), v.regex(new RegExp(SITEMAP_MONTH_PATTERN, "u"))),
+  bucket: v.optional(
+    v.pipe(v.string(), v.regex(new RegExp(SITEMAP_BUCKET_PATTERN, "u"))),
+  ),
+});
+
+type SitemapShardDecisionsQuery = v.InferOutput<
   typeof sitemapShardDecisionsQuerySchema
 >;
 
@@ -89,9 +125,7 @@ const normalizeLanguageSegment = (language: string): string | null => {
   return normalized;
 };
 
-// The half-open [start, end) day range covered by one dated natural shard, so
-// the shard read selects it through date bounds (and so an index) rather than
-// through the `to_char` fragments the refresh groups by.
+// The half-open [start, end) day range covered by one dated month.
 const getShardDateRange = (
   year: string,
   month: string,
@@ -103,31 +137,30 @@ const getShardDateRange = (
   return { end: `${endYear}-${endMonth}-01`, start: `${year}-${month}-01` };
 };
 
+/**
+ * A month's decisions, stated on the key of
+ * `case_law_decisions_country_date_published_idx` so the month is one range of
+ * it: the dated month a half-open day range, the undated one `-infinity`.
+ */
 export const getShardConditions = ({
-  bucket = SITEMAP_ALL_BUCKET,
   country,
   month,
   year,
-}: SitemapShardDecisionsQuery): SQL[] | { error: "invalidShard" } => {
+}: Omit<SitemapShardDecisionsQuery, "bucket">):
+  SQL[] | { error: "invalidShard" } => {
+  const key = decisionDateSortKeySql(publishedCaseLawDecisions.decisionDate);
   const conditions: SQL[] = [
-    eq(caseLawDecisions.country, country.toUpperCase()),
+    eq(publishedCaseLawDecisions.country, country.toUpperCase()),
   ];
 
   if (year === SITEMAP_UNDATED_YEAR || month === SITEMAP_UNDATED_MONTH) {
     if (year !== SITEMAP_UNDATED_YEAR || month !== SITEMAP_UNDATED_MONTH) {
       return { error: "invalidShard" };
     }
-    conditions.push(isNull(caseLawDecisions.decisionDate));
+    conditions.push(sql`${key} = '-infinity'::date`);
   } else {
     const { end, start } = getShardDateRange(year, month);
-    conditions.push(
-      sql`${caseLawDecisions.decisionDate} >= ${start}`,
-      sql`${caseLawDecisions.decisionDate} < ${end}`,
-    );
-  }
-
-  if (bucket !== SITEMAP_ALL_BUCKET) {
-    conditions.push(sql`${decisionBucketSql} = ${bucket}`);
+    conditions.push(sql`${key} >= ${start}::date`, sql`${key} < ${end}::date`);
   }
 
   return conditions;
@@ -139,54 +172,115 @@ export const readSitemapDecisionAlternates = async (
 ) =>
   await tx
     .select({
-      id: caseLawDecisions.id,
-      caseNumber: caseLawDecisions.caseNumber,
-      slug: caseLawDecisions.slug,
-      country: caseLawDecisions.country,
-      court: caseLawDecisions.court,
-      language: caseLawDecisions.language,
-      languageGroupKey: caseLawDecisions.languageGroupKey,
-      updatedAt: caseLawDecisions.updatedAt,
+      id: publishedCaseLawDecisions.id,
+      caseNumber: publishedCaseLawDecisions.caseNumber,
+      slug: publishedCaseLawDecisions.slug,
+      country: publishedCaseLawDecisions.country,
+      court: publishedCaseLawDecisions.court,
+      language: publishedCaseLawDecisions.language,
+      languageGroupKey: publishedCaseLawDecisions.languageGroupKey,
+      updatedAt: publishedCaseLawDecisions.updatedAt,
     })
-    .from(caseLawDecisions)
-    .innerJoin(caseLawSources, eq(caseLawSources.id, caseLawDecisions.sourceId))
+    .from(publishedCaseLawDecisions)
+    .innerJoin(
+      caseLawSources,
+      eq(caseLawSources.id, publishedCaseLawDecisions.sourceId),
+    )
     .where(
       and(
-        inArray(caseLawDecisions.languageGroupKey, languageGroupKeys),
-        inArray(caseLawDecisions.country, [...PUBLIC_CASE_LAW_COUNTRIES]),
+        inArray(publishedCaseLawDecisions.languageGroupKey, languageGroupKeys),
+        inArray(publishedCaseLawDecisions.country, [
+          ...PUBLIC_CASE_LAW_PAGE_COUNTRIES,
+        ]),
         redistributableCaseLawSource,
-        publishedCaseLawDecision,
       ),
     )
-    .orderBy(asc(caseLawDecisions.language), asc(caseLawDecisions.id))
+    .orderBy(
+      asc(publishedCaseLawDecisions.language),
+      asc(publishedCaseLawDecisions.id),
+    )
     .limit(SITEMAP_LANGUAGE_ALTERNATE_ROW_LIMIT);
 
+/**
+ * One shard's URLs: the listed decisions of one range of the month, in the
+ * order of `case_law_decisions_country_date_published_idx`. The range is one
+ * contiguous range of that index, so the read scans the range's own decisions
+ * and stops one past the ceiling a file may serve, whatever the month holds.
+ */
 export const sitemapShardDecisionsQuery = (
   tx: CaseLawPublicReadTransaction,
   conditions: readonly SQL[],
+  range: SitemapRange,
 ) =>
   tx
     .select({
-      id: caseLawDecisions.id,
-      caseNumber: caseLawDecisions.caseNumber,
-      slug: caseLawDecisions.slug,
-      country: caseLawDecisions.country,
-      court: caseLawDecisions.court,
-      language: caseLawDecisions.language,
-      languageGroupKey: caseLawDecisions.languageGroupKey,
-      updatedAt: caseLawDecisions.updatedAt,
+      id: publishedCaseLawDecisions.id,
+      caseNumber: publishedCaseLawDecisions.caseNumber,
+      slug: publishedCaseLawDecisions.slug,
+      country: publishedCaseLawDecisions.country,
+      court: publishedCaseLawDecisions.court,
+      language: publishedCaseLawDecisions.language,
+      languageGroupKey: publishedCaseLawDecisions.languageGroupKey,
+      hasLanguageAlternates: sitemapHasLanguageAlternatesFor(
+        publishedCaseLawDecisions,
+      ),
+      updatedAt: publishedCaseLawDecisions.updatedAt,
     })
-    .from(caseLawDecisions)
-    .innerJoin(caseLawSources, eq(caseLawSources.id, caseLawDecisions.sourceId))
+    .from(publishedCaseLawDecisions)
+    .innerJoin(
+      caseLawSources,
+      eq(caseLawSources.id, publishedCaseLawDecisions.sourceId),
+    )
     .where(
       and(
-        redistributableCaseLawSource,
-        publishedCaseLawDecision,
         ...conditions,
+        ...sitemapRangeConditionsFor(publishedCaseLawDecisions, range),
+        redistributableCaseLawSource,
+        sitemapDocumentRepresentativeFor(publishedCaseLawDecisions),
       ),
     )
-    .orderBy(desc(caseLawDecisions.updatedAt), desc(caseLawDecisions.id))
-    .limit(LIMITS.caseLawSitemapShardUrlLimit + 1);
+    .orderBy(
+      asc(decisionDateSortKeySql(publishedCaseLawDecisions.decisionDate)),
+      asc(publishedCaseLawDecisions.id),
+    )
+    .limit(SITEMAP_RANGE_ROWS_CEILING + 1);
+
+const rangeKey = (
+  date: string | null,
+  id: string | null,
+): SitemapRange["start"] =>
+  date === null || id === null ? null : { date, id };
+
+/** The listed shard a file names, with its range and size. */
+const readListedShard = async (
+  tx: CaseLawPublicReadTransaction,
+  {
+    bucket,
+    country,
+    month,
+    year,
+  }: { bucket: string; country: string; month: string; year: string },
+) =>
+  (
+    await tx
+      .select({
+        total: caseLawSitemapShards.total,
+        rangeStartDate: caseLawSitemapShards.rangeStartDate,
+        rangeStartId: caseLawSitemapShards.rangeStartId,
+        rangeEndDate: caseLawSitemapShards.rangeEndDate,
+        rangeEndId: caseLawSitemapShards.rangeEndId,
+      })
+      .from(caseLawSitemapShards)
+      .where(
+        and(
+          eq(caseLawSitemapShards.country, country.toUpperCase()),
+          eq(caseLawSitemapShards.year, year),
+          eq(caseLawSitemapShards.month, month),
+          eq(caseLawSitemapShards.bucket, bucket),
+        ),
+      )
+      .limit(1)
+  ).at(0);
 
 /**
  * The public sitemap index, read from the snapshot the scheduled refresh
@@ -209,7 +303,9 @@ export const listSitemapShardsHandler = async (
         })
         .from(caseLawSitemapShards)
         .where(
-          inArray(caseLawSitemapShards.country, [...PUBLIC_CASE_LAW_COUNTRIES]),
+          inArray(caseLawSitemapShards.country, [
+            ...PUBLIC_CASE_LAW_PAGE_COUNTRIES,
+          ]),
         )
         .orderBy(
           asc(caseLawSitemapShards.country),
@@ -223,9 +319,9 @@ export const listSitemapShardsHandler = async (
   );
 
   if (shards.length > LIMITS.caseLawSitemapIndexEntryLimit - 1) {
-    return status(500, {
-      message: "Case-law sitemap shard count exceeds sitemap index capacity.",
-    });
+    return capacityExceeded(
+      "Case-law sitemap shard count exceeds sitemap index capacity.",
+    );
   }
 
   return {
@@ -244,12 +340,16 @@ export const listSitemapShardsHandler = async (
 export const listSitemapShardDecisionsHandler = async (
   query: SitemapShardDecisionsQuery,
   caseLawDb: CaseLawPublicReadDb,
+  lane: Parameters<typeof caseLawPublicReadUnderSchemaLane>[2] = {},
 ) => {
-  const unavailable = publicLawCountryUnavailable(query.country);
+  const unavailable = publicLawCountryUnavailable(query.country, {
+    domain: "caseLaw",
+    surface: "pages",
+  });
   if (unavailable !== null) {
     return unavailable;
   }
-  const country = publicCaseLawCountry(query.country);
+  const country = publicCaseLawPageCountry(query.country);
   if (country === null) {
     return status(404, { message: "Not Found" });
   }
@@ -259,52 +359,82 @@ export const listSitemapShardDecisionsHandler = async (
     return status(400, { message: "Invalid sitemap shard" });
   }
 
-  const queryResult = await caseLawDb(async (tx) => {
-    const rows = await sitemapShardDecisionsQuery(tx, conditions);
-
-    if (rows.length > LIMITS.caseLawSitemapShardUrlLimit) {
-      return { type: "capacityExceeded" as const };
-    }
-
-    const languageGroupKeys = [
-      ...new Set(
-        rows
-          .map((row) => row.languageGroupKey)
-          .filter((value): value is string => value !== null),
-      ),
-    ];
-    const alternateRows: SitemapDecisionRow[] = [];
-    // Bound rows per batch at the realistic max language variants for the up to
-    // SITEMAP_LANGUAGE_ALTERNATE_GROUP_BATCH_SIZE group keys in the batch (+1 to
-    // detect overflow). Without this, one languageGroupKey matching many rows
-    // would make the read unbounded. Hitting the cap is a data-integrity anomaly
-    // (a group exceeding the expected variant count), not a normal case: warn and
-    // proceed with what loaded rather than 500 the whole sitemap.
-    for (const groupKeyBatch of chunked(
-      languageGroupKeys,
-      SITEMAP_LANGUAGE_ALTERNATE_GROUP_BATCH_SIZE,
-    )) {
-      const batchRows = await readSitemapDecisionAlternates(tx, groupKeyBatch);
-      if (batchRows.length === SITEMAP_LANGUAGE_ALTERNATE_ROW_LIMIT) {
-        logger.warn("case_law.sitemap.language_alternate_overflow", {
-          country: scopedQuery.country,
-          year: scopedQuery.year,
-          month: scopedQuery.month,
-          bucket: scopedQuery.bucket ?? SITEMAP_ALL_BUCKET,
-          groupKeys: groupKeyBatch.length,
-          limit: SITEMAP_LANGUAGE_ALTERNATE_ROW_LIMIT,
-        });
+  // A shard read can still take seconds on a cold cache, while crawlers keep
+  // one in flight almost always: it holds the corpus schema lane so a schema
+  // upgrade drains it rather than queueing its DDL behind it. While an
+  // upgrade holds the lane this rejects, and the route
+  // (`tryCaseLawPublicRead`) answers a retryable 503 and Retry-After.
+  const queryResult = await caseLawPublicReadUnderSchemaLane(
+    caseLawDb,
+    async (tx) => {
+      const shard = await readListedShard(tx, {
+        ...scopedQuery,
+        bucket: scopedQuery.bucket ?? SITEMAP_ALL_BUCKET,
+      });
+      if (shard === undefined) {
+        return { type: "notListed" as const };
       }
-      alternateRows.push(...batchRows);
-    }
+      // A range that grew past what one read may serve since its month was
+      // last cut is refused before it is read; its recount cuts it again.
+      if (shard.total > SITEMAP_RANGE_ROWS_CEILING) {
+        return { type: "capacityExceeded" as const };
+      }
+      const rows = await sitemapShardDecisionsQuery(tx, conditions, {
+        start: rangeKey(shard.rangeStartDate, shard.rangeStartId),
+        end: rangeKey(shard.rangeEndDate, shard.rangeEndId),
+      });
+      if (rows.length > SITEMAP_RANGE_ROWS_CEILING) {
+        return { type: "capacityExceeded" as const };
+      }
 
-    return { type: "rows" as const, rows, alternateRows };
-  });
+      const languageGroupKeys = [
+        ...new Set(
+          rows
+            .filter((row) => row.hasLanguageAlternates)
+            .map((row) => row.languageGroupKey)
+            .filter((value): value is string => value !== null),
+        ),
+      ];
+      const alternateRows: SitemapDecisionRow[] = [];
+      // Bound rows per batch at the realistic max language variants for the up to
+      // SITEMAP_LANGUAGE_ALTERNATE_GROUP_BATCH_SIZE group keys in the batch (+1 to
+      // detect overflow). Without this, one languageGroupKey matching many rows
+      // would make the read unbounded. Hitting the cap is a data-integrity anomaly
+      // (a group exceeding the expected variant count), not a normal case: warn and
+      // proceed with what loaded rather than 500 the whole sitemap.
+      for (const groupKeyBatch of chunkItems(
+        languageGroupKeys,
+        SITEMAP_LANGUAGE_ALTERNATE_GROUP_BATCH_SIZE,
+      )) {
+        const batchRows = await readSitemapDecisionAlternates(
+          tx,
+          groupKeyBatch,
+        );
+        if (batchRows.length === SITEMAP_LANGUAGE_ALTERNATE_ROW_LIMIT) {
+          logger.warn("case_law.sitemap.language_alternate_overflow", {
+            country: scopedQuery.country,
+            year: scopedQuery.year,
+            month: scopedQuery.month,
+            bucket: scopedQuery.bucket ?? SITEMAP_ALL_BUCKET,
+            groupKeys: groupKeyBatch.length,
+            limit: SITEMAP_LANGUAGE_ALTERNATE_ROW_LIMIT,
+          });
+        }
+        alternateRows.push(...batchRows);
+      }
 
+      return { type: "rows" as const, rows, alternateRows };
+    },
+    lane,
+  );
+
+  if (queryResult.type === "notListed") {
+    return status(404, { message: "Not Found" });
+  }
   if (queryResult.type === "capacityExceeded") {
-    return status(500, {
-      message: "Case-law sitemap shard exceeds sitemap URL capacity.",
-    });
+    return capacityExceeded(
+      "Case-law sitemap shard exceeds sitemap URL capacity.",
+    );
   }
 
   const { alternateRows, rows } = queryResult;

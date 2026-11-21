@@ -1,4 +1,8 @@
+import { useMemo } from "react";
+
 import { useQuery } from "@tanstack/react-query";
+
+import type { WorkspaceFieldContent } from "@stll/workspace-ui/types";
 
 import {
   EMAIL_CHAT_MODE,
@@ -18,6 +22,7 @@ type FileTabEntityQueryInput = {
   isEmailViewerActive: boolean;
   isPdfDisplay: boolean;
   minimized: boolean;
+  needsConversionStatus: boolean;
   needsPropertyResolution: boolean;
 };
 
@@ -28,16 +33,18 @@ const shouldQueryFileTabEntity = ({
   isEmailViewerActive,
   isPdfDisplay,
   minimized,
+  needsConversionStatus,
   needsPropertyResolution,
 }: FileTabEntityQueryInput) =>
   isEmailViewerActive ||
   needsPropertyResolution ||
+  (isActive && !minimized && needsConversionStatus) ||
   (isActive &&
     !minimized &&
     canUpdateEntity &&
     (desktopEditFileType !== null || isPdfDisplay));
 
-const getFileTabEntityState = ({
+export const getFileTabEntityState = ({
   entityData,
   entityQueryError,
   needsPropertyResolution,
@@ -46,13 +53,20 @@ const getFileTabEntityState = ({
   entityData:
     | {
         extractionFileFieldId?: string | null | undefined;
-        fields: { id: string; propertyId?: string | undefined }[];
+        fields: {
+          id: string;
+          propertyId?: string | undefined;
+          content?: WorkspaceFieldContent;
+        }[];
       }
     | undefined;
   entityQueryError: boolean;
   needsPropertyResolution: boolean;
   tab: FileTab;
 }) => {
+  const fileContent = entityData?.fields.find(
+    (field) => field.id === tab.id,
+  )?.content;
   const resolvedEmailChatMode = getEmailChatMode({
     extractionFileFieldId: entityData?.extractionFileFieldId,
     fieldId: tab.id,
@@ -63,6 +77,11 @@ const getFileTabEntityState = ({
       isError: entityQueryError,
     });
   return {
+    conversionRefusal:
+      fileContent?.type === "file" &&
+      fileContent.pdfDerivative?.status === "failed"
+        ? fileContent.pdfDerivative.conversionRefusal
+        : undefined,
     emailChatMode: shouldSurfaceEmailResolutionError
       ? EMAIL_CHAT_MODE.resolutionError
       : resolvedEmailChatMode,
@@ -98,18 +117,31 @@ export const useFileTabEntity = ({
         isEmailViewerActive: queryInput.isEmailViewerActive,
       }),
   });
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing, without this memo boundary the React Compiler does not cache this value
+  const entityState = useMemo(
+    () =>
+      getFileTabEntityState({
+        entityData: query.data,
+        entityQueryError: query.isError,
+        needsPropertyResolution: queryInput.needsPropertyResolution,
+        tab,
+      }),
+    [query.data, query.isError, queryInput.needsPropertyResolution, tab],
+  );
+  const downloadRenditions = getEntityFileDownloadRenditions({
+    entityData: query.data,
+    fieldId: tab.id,
+  });
+  const queryState = {
+    data: query.data,
+    isError: query.isError,
+    refetch: query.refetch,
+  };
+
   return {
-    ...getFileTabEntityState({
-      entityData: query.data,
-      entityQueryError: query.isError,
-      needsPropertyResolution: queryInput.needsPropertyResolution,
-      tab,
-    }),
-    downloadRenditions: getEntityFileDownloadRenditions({
-      entityData: query.data,
-      fieldId: tab.id,
-    }),
-    query,
+    ...entityState,
+    downloadRenditions,
+    query: queryState,
   };
 };
 

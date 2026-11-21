@@ -48,6 +48,7 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import { createMembershipScopedDb } from "@/api/db/scoped";
+import { toPersistedChatMessageContentV3 } from "@/api/handlers/chat/chat-message-parts";
 import type { SafeId, SafeIdType } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { ClauseBody } from "@/api/lib/clauses/types";
@@ -67,10 +68,10 @@ import type {
   TestIds,
 } from "@/api/tests/security/rls-helpers";
 import type {
-  TestDatabase,
-  TestDatabaseTransaction,
   createDryScopedQuery,
   createScopedQuery,
+  TestDatabase,
+  TestDatabaseTransaction,
 } from "@/api/tests/security/test-utils";
 
 const testId = <T extends SafeIdType>() => toSafeId<T>(Bun.randomUUIDv7());
@@ -160,8 +161,8 @@ const addWrongOrganizationSelectTest = (table: OrganizationScopedTable) => {
 
 const addWrongWorkspaceInsertTest = ({ table, values }: InsertCase) => {
   test(`INSERT ${getTableName(table)} with wrong workspace_id → policy violation`, async () => {
-    const error = await scopedQuery([ids.wsA1], ids.orgA, async (tx) =>
-      tryCatch(async () => values(tx)),
+    const error = await tryCatch(async () =>
+      scopedQuery([ids.wsA1], ids.orgA, async (tx) => values(tx)),
     );
     expect(isPgError(error, PG_ERROR.INSUFFICIENT_PRIVILEGE)).toBe(true);
   });
@@ -169,8 +170,8 @@ const addWrongWorkspaceInsertTest = ({ table, values }: InsertCase) => {
 
 const addWrongOrganizationInsertTest = ({ table, values }: InsertCase) => {
   test(`INSERT ${getTableName(table)} with wrong org_id → policy violation`, async () => {
-    const error = await scopedQuery([ids.wsA1], ids.orgA, async (tx) =>
-      tryCatch(async () => values(tx)),
+    const error = await tryCatch(async () =>
+      scopedQuery([ids.wsA1], ids.orgA, async (tx) => values(tx)),
     );
     expect(isPgError(error, PG_ERROR.INSUFFICIENT_PRIVILEGE)).toBe(true);
   });
@@ -714,7 +715,7 @@ describe("organization INSERT — wrong scope", () => {
           organizationId: ids.orgB,
           name: "Bad",
           fileName: "bad.docx",
-          s3Key: "test/bad.docx",
+          s3Key: `${ids.orgB}/test/bad.docx`,
           sizeBytes: 1024,
           createdBy: ids.userA1,
         }),
@@ -727,7 +728,7 @@ describe("organization INSERT — wrong scope", () => {
           organizationId: ids.orgB,
           templateId: ids.templateB,
           version: 99,
-          s3Key: "test/bad-v99.docx",
+          s3Key: `${ids.orgB}/test/bad-v99.docx`,
           createdBy: ids.userA1,
         }),
     },
@@ -1417,8 +1418,8 @@ describe("workspaces table — wrong scope", () => {
   });
 
   test("UPDATE workspace organization_id with time entries → foreign key violation", async () => {
-    const error = await scopedQuery([ids.wsA1], ids.orgA, async (tx) =>
-      tryCatch(async () =>
+    const error = await tryCatch(async () =>
+      scopedQuery([ids.wsA1], ids.orgA, async (tx) =>
         tx
           .update(workspaces)
           .set({ organizationId: ids.orgB })
@@ -1439,8 +1440,8 @@ describe("workspaces table — wrong scope", () => {
   });
 
   test("INSERT workspace with wrong org → policy violation", async () => {
-    const error = await scopedQuery([ids.wsA1], ids.orgA, async (tx) =>
-      tryCatch(async () =>
+    const error = await tryCatch(async () =>
+      scopedQuery([ids.wsA1], ids.orgA, async (tx) =>
         tx.insert(workspaces).values({
           id: toSafeId<"workspace">(Bun.randomUUIDv7()),
           organizationId: ids.orgB,
@@ -1527,8 +1528,8 @@ describe("cross-org isolation", () => {
 // table that carries the column, however its workspace was authorized.
 describe("dual-scope integrity (ws + org columns)", () => {
   test("INSERT timeEntry with correct ws but wrong org → policy violation", async () => {
-    const error = await scopedQuery([ids.wsA1], ids.orgA, async (tx) =>
-      tryCatch(async () =>
+    const error = await tryCatch(async () =>
+      scopedQuery([ids.wsA1], ids.orgA, async (tx) =>
         tx.insert(timeEntries).values({
           id: testId(),
           organizationId: ids.orgB,
@@ -1549,8 +1550,8 @@ describe("dual-scope integrity (ws + org columns)", () => {
   });
 
   test("INSERT expense with correct ws but wrong org → policy violation", async () => {
-    const error = await scopedQuery([ids.wsA1], ids.orgA, async (tx) =>
-      tryCatch(async () =>
+    const error = await tryCatch(async () =>
+      scopedQuery([ids.wsA1], ids.orgA, async (tx) =>
         tx.insert(expenses).values({
           id: testId(),
           organizationId: ids.orgB,
@@ -1569,8 +1570,8 @@ describe("dual-scope integrity (ws + org columns)", () => {
   });
 
   test("INSERT invoice with correct ws but wrong org → policy violation", async () => {
-    const error = await scopedQuery([ids.wsA1], ids.orgA, async (tx) =>
-      tryCatch(async () =>
+    const error = await tryCatch(async () =>
+      scopedQuery([ids.wsA1], ids.orgA, async (tx) =>
         tx.insert(invoices).values({
           id: testId(),
           organizationId: ids.orgB,
@@ -1594,8 +1595,8 @@ describe("scope reassignment via UPDATE", () => {
     // PostgreSQL applies USING as WITH CHECK on the new row
     // when no explicit WITH CHECK is set. The updated row's
     // workspace_id would not match the session wsIds.
-    const error = await scopedQuery([ids.wsA1], ids.orgA, async (tx) =>
-      tryCatch(async () =>
+    const error = await tryCatch(async () =>
+      scopedQuery([ids.wsA1], ids.orgA, async (tx) =>
         tx
           .update(entities)
           .set({ workspaceId: ids.wsB1 })
@@ -1608,8 +1609,8 @@ describe("scope reassignment via UPDATE", () => {
 
   test("UPDATE workspace id to foreign workspace → policy violation", async () => {
     // USING defaults as WITH CHECK; the new id must be in wsIds.
-    const error = await scopedQuery([ids.wsA1], ids.orgA, async (tx) =>
-      tryCatch(async () =>
+    const error = await tryCatch(async () =>
+      scopedQuery([ids.wsA1], ids.orgA, async (tx) =>
         tx
           .update(workspaces)
           .set({ id: ids.wsB1 })
@@ -1673,7 +1674,7 @@ describe("chat mutations — wrong user", () => {
       (tx) =>
         tx
           .update(chatMessages)
-          .set({ content: { version: 1 as const, data: [] } })
+          .set({ content: toPersistedChatMessageContentV3({ data: [] }) })
           .where(eq(chatMessages.id, ids.chatMessageWorkspaceA1UserA2))
           .returning({ id: chatMessages.id }),
       ids.userA1,

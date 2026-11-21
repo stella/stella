@@ -1,22 +1,27 @@
-import { Result } from "better-result";
-import { t } from "elysia";
-import type { Static } from "elysia";
+import { panic, Result } from "better-result";
 import * as v from "valibot";
 
 import { getAuth } from "@/api/lib/auth";
+import type { UpdateApiKey } from "@/api/lib/auth/api-key-endpoints";
 import type { SafeId } from "@/api/lib/branded-types";
+import { displayNameSchema, uniqueItems } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
+  API_KEY_KIND,
+  API_KEY_POLICY,
   MACHINE_API_KEY_CONFIG_ID,
   MACHINE_API_KEY_EXPIRY,
+  MACHINE_API_KEY_GRANTABLE_AUDIENCES,
   MACHINE_API_KEY_GRANTABLE_SCOPES,
   MACHINE_API_KEY_NAME_MAX_LENGTH,
+  MACHINE_API_KEY_PERMISSION_REQUEST_LIMITS,
   machineApiKeyMetadataSchema,
   machineApiKeyPermissionsSchema,
   parseMachineApiKeyPermissions,
 } from "@/api/lib/machine-api-key-config";
 import type {
-  MACHINE_API_KEY_GRANTABLE_AUDIENCES,
+  ApiKeyKind,
+  MachineApiKeyMetadata,
   MachineApiKeyScope,
 } from "@/api/lib/machine-api-key-config";
 import { findOrganizationMachineApiKey } from "@/api/lib/machine-api-key-queries";
@@ -64,8 +69,7 @@ const reportUnreadableKey = (
  * on either endpoint so the two paths cannot drift into accepting different
  * shapes for the same credential.
  */
-export const machineApiKeyNameSchema = t.String({
-  minLength: 1,
+export const machineApiKeyNameSchema = displayNameSchema({
   maxLength: MACHINE_API_KEY_NAME_MAX_LENGTH,
 });
 
@@ -73,21 +77,40 @@ export const machineApiKeyNameSchema = t.String({
  * Scopes are constrained at the HTTP boundary to the grantable set, so an
  * unknown or anonymized-surface scope is a 422 before any handler code runs.
  */
-export const machineApiKeyScopesSchema = t.Array(
-  t.UnionEnum([...MACHINE_API_KEY_GRANTABLE_SCOPES]),
-  { minItems: 1, uniqueItems: true },
+export const machineApiKeyScopesSchema = v.pipe(
+  v.array(v.picklist([...MACHINE_API_KEY_GRANTABLE_SCOPES])),
+  v.minLength(1),
+  v.maxLength(MACHINE_API_KEY_GRANTABLE_SCOPES.length),
+  uniqueItems(),
 );
 
 /**
  * Deliberately an untyped record at the boundary: the resource/action names are
  * checked against the canonical `statements` map by
  * `validateGrantablePermissions`, which produces a far better error than a
- * TypeBox union of every resource would, and keeps this schema out of the
- * type-instantiation hot path.
+ * schema union of every resource would, and keeps this schema out of the
+ * type-instantiation hot path. New requests name each action once; their
+ * shape ceilings derive from that same catalog. Stored grants are unchanged.
  */
-export const machineApiKeyPermissionsBodySchema = t.Record(
-  t.String(),
-  t.Array(t.String({ minLength: 1 }), { minItems: 1 }),
+export const machineApiKeyPermissionsBodySchema = v.pipe(
+  v.record(
+    v.string(),
+    v.pipe(
+      v.array(
+        v.pipe(
+          v.string(),
+          v.minLength(1),
+          v.maxLength(
+            MACHINE_API_KEY_PERMISSION_REQUEST_LIMITS.actionNameChars,
+          ),
+        ),
+      ),
+      v.minLength(1),
+      v.maxLength(MACHINE_API_KEY_PERMISSION_REQUEST_LIMITS.actionsPerResource),
+      uniqueItems(),
+    ),
+  ),
+  v.maxEntries(MACHINE_API_KEY_PERMISSION_REQUEST_LIMITS.resources),
 );
 
 /**
@@ -97,34 +120,19 @@ export const machineApiKeyPermissionsBodySchema = t.Record(
  * so a key minted for the public legal corpus cannot be replayed against the
  * default surface and reach matter data.
  */
-export const machineApiKeyAudienceSchema = t.Optional(
-  // `t.Union` of literals rather than `t.UnionEnum`: the latter coerces an
-  // absent field to its first member, which would silently bind every key that
-  // named no audience to the default one instead of leaving it unbound.
-  t.Union([t.Literal("default"), t.Literal("documents"), t.Literal("law")]),
+export const machineApiKeyAudienceSchema = v.exactOptional(
+  // No default: an absent field stays absent, so a key that named no audience
+  // is left unbound instead of silently bound to the first member.
+  v.picklist(MACHINE_API_KEY_GRANTABLE_AUDIENCES),
 );
 
-// The literal list mirrors MACHINE_API_KEY_GRANTABLE_AUDIENCES: a member on
-// one side only fails to compile here.
-type GrantableAudience = (typeof MACHINE_API_KEY_GRANTABLE_AUDIENCES)[number];
-type AudienceSchemaValue = Static<typeof machineApiKeyAudienceSchema>;
-type MissingAudienceSchemaValue = Exclude<
-  GrantableAudience,
-  AudienceSchemaValue
->;
-type UnexpectedAudienceSchemaValue = Exclude<
-  AudienceSchemaValue,
-  GrantableAudience
->;
-
-true satisfies MissingAudienceSchemaValue extends never ? true : never;
-true satisfies UnexpectedAudienceSchemaValue extends never ? true : never;
-
-export const machineApiKeyExpiresInDaysSchema = t.Optional(
-  t.Integer({
-    minimum: MACHINE_API_KEY_EXPIRY.minDays,
-    maximum: MACHINE_API_KEY_EXPIRY.maxDays,
-  }),
+export const machineApiKeyExpiresInDaysSchema = v.exactOptional(
+  v.pipe(
+    v.number(),
+    v.integer(),
+    v.minValue(MACHINE_API_KEY_EXPIRY.minDays),
+    v.maxValue(MACHINE_API_KEY_EXPIRY.maxDays),
+  ),
 );
 
 /**
@@ -142,8 +150,7 @@ export const machineApiKeyAlreadyRevoked = (): HandlerError =>
   });
 
 type ValidatedPermissions =
-  | { type: "ok" }
-  | { type: "error"; error: HandlerError };
+  { type: "ok" } | { type: "error"; error: HandlerError };
 
 /**
  * The no-escalation gate. Two independent checks, both required:
@@ -208,6 +215,7 @@ export const validateGrantablePermissions = ({
 };
 
 type MintMachineApiKeyOptions = {
+  kind?: ApiKeyKind;
   name: string;
   scopes: MachineApiKeyScope[];
   permissions: Record<string, string[]>;
@@ -237,44 +245,85 @@ export type MintedMachineApiKey = {
 };
 
 /**
- * Mint a machine key.
- *
- * Called without `headers` on purpose: `permissions`, `userId`, and the rate
- * limit fields are server-only on the plugin's create endpoint and it rejects
- * them outright whenever a request or header bag is present. The ownership ids
- * are parameters rather than body fields precisely so this path cannot be
- * pointed at another user or organization.
+ * Writes a minted key. The only implementation is the key lifecycle's fenced
+ * writer, which inserts inside a transaction holding the account's credential
+ * fence, so a key cannot outlive an access reset that ran concurrently. The
+ * ownership ids are parameters rather than body fields precisely so this path
+ * cannot be pointed at another user or organization.
  */
-export const mintMachineApiKey = async ({
-  name,
-  scopes,
-  permissions,
-  expiresInDays,
-  audience,
-  userId,
-  organizationId,
-}: MintMachineApiKeyOptions): Promise<
-  Result<MintedMachineApiKey, HandlerError>
-> => {
+type CreateApiKey = (options: {
+  body: {
+    configId: string;
+    name: string;
+    userId: string;
+    permissions: Record<string, string[]>;
+    metadata: v.InferInput<typeof machineApiKeyMetadataSchema>;
+    expiresIn: number;
+  };
+}) => Promise<{
+  id: string;
+  start: string | null;
+  key: string;
+  expiresAt: Date | null;
+}>;
+
+export const mintMachineApiKey = async (
+  {
+    kind = API_KEY_KIND.machine,
+    name,
+    scopes,
+    permissions,
+    expiresInDays,
+    audience,
+    userId,
+    organizationId,
+  }: MintMachineApiKeyOptions,
+  createApiKey: CreateApiKey,
+): Promise<Result<MintedMachineApiKey, HandlerError>> => {
+  const policy = API_KEY_POLICY[kind];
+  const days = expiresInDays ?? policy.defaultDays;
+  if (
+    !Number.isInteger(days) ||
+    days < policy.minDays ||
+    days > policy.maxDays
+  ) {
+    return Result.err(
+      new HandlerError({ status: 400, message: "Invalid API key expiry" }),
+    );
+  }
+  const metadata = v.safeParse(machineApiKeyMetadataSchema, {
+    ...(kind === API_KEY_KIND.machine ? {} : { kind }),
+    ...(audience === undefined ? {} : { audience }),
+    organizationId,
+    scopes,
+  });
+  if (!metadata.success) {
+    return Result.err(
+      new HandlerError({
+        status: 400,
+        message: "Invalid API key scopes or audience",
+      }),
+    );
+  }
   const created = await Result.tryPromise({
     try: async () =>
-      await getAuth().api.createApiKey({
+      await createApiKey({
         body: {
           configId: MACHINE_API_KEY_CONFIG_ID,
           name,
           userId,
           permissions,
-          // The audience key is omitted rather than written as null when the
-          // caller named none: the metadata schema is strict, and an unbound
-          // key's row stays byte-identical to what this endpoint wrote before.
-          metadata: {
-            ...(audience === undefined ? {} : { audience }),
-            organizationId,
-            scopes,
-          },
-          ...(expiresInDays === undefined
-            ? {}
-            : { expiresIn: expiresInDays * SECONDS_PER_DAY }),
+          metadata:
+            metadata.output.kind === API_KEY_KIND.personal
+              ? metadata.output
+              : {
+                  ...(metadata.output.audience === undefined
+                    ? {}
+                    : { audience: metadata.output.audience }),
+                  organizationId: metadata.output.organizationId,
+                  scopes: metadata.output.scopes,
+                },
+          expiresIn: days * SECONDS_PER_DAY,
         },
       }),
     catch: (error: unknown) => error,
@@ -307,21 +356,19 @@ export const mintMachineApiKey = async ({
 export type LoadedMachineApiKey = {
   id: string;
   name: string;
-  scopes: MachineApiKeyScope[];
   permissions: Record<string, string[]>;
-  /**
-   * The audience the key is bound to, carried so a rotation reproduces it.
-   * Rotating a bound key into an unbound one would widen the credential.
-   */
-  audience: McpMode | undefined;
   enabled: boolean;
-  /**
-   * The member who minted the key. Lifecycle is organization-scoped, so this is
-   * frequently somebody other than the caller; the plugin's update endpoint
-   * still wants it (see `disableMachineApiKey`).
-   */
   ownerUserId: string;
-};
+} & (
+  | Pick<
+      Extract<MachineApiKeyMetadata, { kind: "machine" }>,
+      "kind" | "scopes" | "audience"
+    >
+  | Pick<
+      Extract<MachineApiKeyMetadata, { kind: "personal" }>,
+      "kind" | "scopes" | "audience"
+    >
+);
 
 /**
  * Load one machine key from the caller's organization.
@@ -431,15 +478,32 @@ export const toMachineApiKeySummary = (
     return reportUnreadableKey(row.id, "name", UNREADABLE_KEY_REASON.missing);
   }
 
-  return {
-    audience: metadata.output.audience,
+  const fields = {
     enabled: row.enabled,
     id: row.id,
     name,
     ownerUserId: row.referenceId,
     permissions: permissions.output,
-    scopes: metadata.output.scopes,
   };
+  switch (metadata.output.kind) {
+    case API_KEY_KIND.machine:
+      return {
+        ...fields,
+        kind: API_KEY_KIND.machine,
+        scopes: metadata.output.scopes,
+        audience: metadata.output.audience,
+      };
+    case API_KEY_KIND.personal:
+      return {
+        ...fields,
+        kind: API_KEY_KIND.personal,
+        scopes: metadata.output.scopes,
+        audience: metadata.output.audience,
+      };
+    default:
+      metadata.output satisfies never;
+      return panic("Unexpected parsed API key kind");
+  }
 };
 
 /**
@@ -465,10 +529,7 @@ export const disableMachineApiKey = async (
     keyId: string;
     ownerUserId: string;
   },
-  updateApiKey: (
-    ...args: Parameters<ReturnType<typeof getAuth>["api"]["updateApiKey"]>
-  ) => ReturnType<ReturnType<typeof getAuth>["api"]["updateApiKey"]> = getAuth()
-    .api.updateApiKey,
+  updateApiKey: UpdateApiKey = getAuth().api.updateApiKey,
 ): Promise<Result<void, HandlerError>> => {
   const updated = await Result.tryPromise({
     try: async () =>

@@ -3,8 +3,9 @@ import { and, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import { open, rename, unlink } from "node:fs/promises";
 import * as v from "valibot";
 
+import { chunk as chunkItems } from "@stll/concurrency/chunk";
+
 import { caseLawDecisions } from "@/api/db/schema";
-import type { StoredRawReparseInput } from "@/api/handlers/case-law/ingestion/adapter";
 import {
   ECJ_LANGUAGES,
   isValidCelex,
@@ -19,13 +20,18 @@ import { DECISION_REFRESH } from "@/api/handlers/case-law/ingestion/pipeline/typ
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CaseLawIngestionHandle } from "@/api/lib/case-law/maintenance-lane";
 import type { CaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
+import type { StoredRawReparseInput } from "@/api/lib/legal-search/ingestion-types";
 import { iterateCursorPages } from "@/api/lib/pagination";
+
+import { hashArtifactBytes as rawDigest } from "./artifact-content-hash";
 
 export class EcjFormexRefreshInputError extends TaggedError(
   "EcjFormexRefreshInputError",
 )<{
   message: string;
 }> {}
+
+const REFRESH_IDENTITY_LOOKUP_BATCH_SIZE = 500;
 
 const REPLAY_COLUMNS = {
   id: caseLawDecisions.id,
@@ -52,9 +58,7 @@ type RefreshRow = Pick<
 type RefreshOutcome = Awaited<ReturnType<typeof refreshEcjStoredFormex>>;
 type TerminalRefreshOutcome = Exclude<RefreshOutcome["type"], "rate-limited">;
 type ResultOutcome =
-  | TerminalRefreshOutcome
-  | "skipped-resume"
-  | `would-${TerminalRefreshOutcome}`;
+  TerminalRefreshOutcome | "skipped-resume" | `would-${TerminalRefreshOutcome}`;
 export type EcjFormexRefreshResult = {
   id: string;
   sourceDocumentId: string;
@@ -93,8 +97,7 @@ type RunEcjFormexRefreshOptions = {
 };
 
 type RequestedIdentity =
-  | { type: "row"; value: string }
-  | { type: "document"; value: string };
+  { type: "row"; value: string } | { type: "document"; value: string };
 
 const inputError = (message: string): never => {
   throw new EcjFormexRefreshInputError({ message });
@@ -153,8 +156,10 @@ const resolveRows = async ({
 }: ResolveRowsOptions) => {
   const rows: RefreshRow[] = [];
   // Bound SQL parameter count; all identities are resolved before any side effect.
-  for (let offset = 0; offset < requested.length; offset += 500) {
-    const chunk = requested.slice(offset, offset + 500);
+  for (const chunk of chunkItems(
+    requested,
+    REFRESH_IDENTITY_LOOKUP_BATCH_SIZE,
+  )) {
     const ids = chunk.flatMap((identity) =>
       identity.type === "row" ? [identity.value] : [],
     );
@@ -356,9 +361,6 @@ const INTENT_SCHEMA = v.object({
 });
 type RefreshIntent = v.InferOutput<typeof INTENT_SCHEMA>;
 
-const rawDigest = (raw: Uint8Array) =>
-  new Bun.CryptoHasher("sha256").update(raw).digest("hex");
-
 const readIntent = async (path: string): Promise<RefreshIntent | null> => {
   if (!(await Bun.file(path).exists())) {
     return null;
@@ -523,10 +525,14 @@ const refreshStoredRow = async ({
     observationOrder,
     refresh: DECISION_REFRESH.ALWAYS,
   });
+  if (written.isErr()) {
+    return { type: "terminal", outcome: "write-rejected", ...extra };
+  }
   return {
     type: "terminal",
     outcome:
-      written.status === PROCESS_DECISION_STATUS.RETRYABLE || !written.inserted
+      written.value.status === PROCESS_DECISION_STATUS.RETRYABLE ||
+      !written.value.inserted
         ? "write-rejected"
         : "refreshed",
     ...extra,

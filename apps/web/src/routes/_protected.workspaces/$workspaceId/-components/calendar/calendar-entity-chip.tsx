@@ -1,14 +1,14 @@
 import { useRef } from "react";
 
-import { draggable } from "@atlaskit/pragmatic-drag-and-drop/adapter/element-adapter";
 import { centerUnderPointer } from "@atlaskit/pragmatic-drag-and-drop/utils/center-under-pointer";
 import { setCustomNativeDragPreview } from "@atlaskit/pragmatic-drag-and-drop/utils/set-custom-native-drag-preview";
 import { useTranslations } from "use-intl";
 
 import { isTaskStatus } from "@stll/api-contract";
 import type { TaskStatus } from "@stll/api-contract";
-import { CalendarEntryButton } from "@stll/ui/calendar";
+import { CalendarEntryButton } from "@stll/ui/calendar-primitives";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { containedEventHandler } from "@stll/ui/use-contained-handler";
 import { cn } from "@stll/ui/utils";
 
@@ -20,6 +20,7 @@ import { useInspectorFlash } from "@/components/workspaces/hooks/use-inspector-f
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useFormatter } from "@/i18n/formatting-context";
 import { formatDecisionDate } from "@/lib/decision-date";
+import { draggable } from "@/lib/drag-and-drop/element-registration";
 import { captureInvalidTaskOption } from "@/lib/task-option-telemetry";
 import { ENTITY_DRAG_TYPE } from "@/lib/workspaces/drag-constants";
 import type { CalendarTask } from "@/lib/workspaces/queries/calendar-tasks";
@@ -104,9 +105,8 @@ export const CalendarEntityChip = ({
     <CalendarEntryButton
       ref={dragRef}
       className={cn(
-        "bg-card w-full rounded border border-s-2 px-1.5 py-0.5",
+        "bg-card w-full rounded-sm border border-s-2 px-1.5 py-0.5",
         "hover:bg-accent text-start text-xs",
-        "truncate",
         isEditable && "cursor-grab active:cursor-grabbing",
         status === null
           ? TASK_STATUS_BORDER_COLORS.open
@@ -115,7 +115,7 @@ export const CalendarEntityChip = ({
       onClick={containedEventHandler(handleClick)}
     >
       <span className="flex min-w-0 items-center gap-1">
-        <span className="truncate">{name}</span>
+        <TruncatedText hint={false}>{name}</TruncatedText>
       </span>
     </CalendarEntryButton>
   );

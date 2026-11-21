@@ -1,10 +1,9 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { expect, test } from "bun:test";
 import { Buffer } from "node:buffer";
 
 import { toSafeId } from "@/api/lib/branded-types";
 import {
-  CORPUS_INDEX_INGEST_TIMEOUT_MS,
   CORPUS_INDEX_ENGINE_INGEST_MAX_BYTES,
   CorpusIndexError,
 } from "@/api/lib/legal-search/corpus-index-client";
@@ -12,16 +11,19 @@ import { CORPUS_INDEX_MANIFESTS } from "@/api/lib/legal-search/corpus-index-mani
 import {
   appendCorpusProjectionBatch,
   censusCorpusProjectionRevisions,
-  corpusIndexUnknownAppendBarrierAt,
-  corpusProjectionRevisionsQuery,
-  CORPUS_PROJECTION_DELETE_MAX_REVISIONS,
   CORPUS_PROJECTION_APPEND_MAX_REQUEST_BYTES,
   CORPUS_PROJECTION_APPEND_MAX_REVISION_BYTES,
   CORPUS_PROJECTION_APPEND_MAX_SINGLE_REVISION_BYTES,
-  CORPUS_PROJECTION_UNKNOWN_APPEND_MARGIN_MS,
+  CORPUS_PROJECTION_DELETE_MAX_REVISIONS,
+  corpusProjectionRevisionsQuery,
   planCorpusProjectionAppendRequests,
+  proveCorpusProjectionRevisionsPresent,
 } from "@/api/lib/legal-search/corpus-index-projection-engine";
 import { LIMITS } from "@/api/lib/limits";
+
+const V5_COMMIT_TIMEOUT_SECS =
+  CORPUS_INDEX_MANIFESTS.case_law_v5.engine.indexConfig.indexing_settings
+    .commit_timeout_secs;
 
 const FIRST_REVISION = toSafeId<"corpusIndexProjectionIntent">(
   "0198e331-e578-7000-8000-000000000001",
@@ -127,10 +129,115 @@ test("revision census fails closed on approximate buckets", async () => {
   }
 });
 
+const censusOf = (buckets: readonly { key: string; doc_count: number }[]) => ({
+  aggregate: async () =>
+    Result.ok({
+      projection_revisions: {
+        buckets,
+        doc_count_error_upper_bound: 0,
+        sum_other_doc_count: 0,
+      },
+    }),
+});
+
+test("presence is proven per revision only when it counts exactly what it wrote", async () => {
+  const expected = [
+    { revision: FIRST_REVISION, documentCount: 3 },
+    { revision: SECOND_REVISION, documentCount: 2 },
+  ];
+  const proven = await proveCorpusProjectionRevisionsPresent({
+    client: censusOf([
+      { key: FIRST_REVISION, doc_count: 3 },
+      { key: SECOND_REVISION, doc_count: 2 },
+    ]),
+    indexId: "case_law_v5_cs_sk",
+    expected,
+  });
+  const census = proven.isOk()
+    ? proven.value
+    : panic("Expected an exact census to prove presence");
+  expect(census.unproven).toEqual([]);
+  expect(
+    census.proofs.map(({ indexId, revision, documentCount }) => ({
+      indexId,
+      revision,
+      documentCount,
+    })),
+  ).toEqual(
+    expected.map((presence) => ({
+      indexId: "case_law_v5_cs_sk",
+      ...presence,
+    })),
+  );
+
+  for (const [label, buckets, observedDocumentCount] of [
+    ["absent", [{ key: FIRST_REVISION, doc_count: 3 }], 0],
+    [
+      "partial",
+      [
+        { key: FIRST_REVISION, doc_count: 3 },
+        { key: SECOND_REVISION, doc_count: 1 },
+      ],
+      1,
+    ],
+    [
+      "excess",
+      [
+        { key: FIRST_REVISION, doc_count: 3 },
+        { key: SECOND_REVISION, doc_count: 3 },
+      ],
+      3,
+    ],
+  ] as const) {
+    const partial = await proveCorpusProjectionRevisionsPresent({
+      client: censusOf(buckets),
+      indexId: "case_law_v5_cs_sk",
+      expected,
+    });
+    const outcome = partial.isOk()
+      ? partial.value
+      : panic(`Expected an exact ${label} census`);
+    expect({
+      label,
+      proven: outcome.proofs.map(({ revision }) => revision),
+      unproven: outcome.unproven,
+    }).toEqual({
+      label,
+      proven: [FIRST_REVISION],
+      unproven: [
+        {
+          revision: SECOND_REVISION,
+          expectedDocumentCount: 2,
+          observedDocumentCount,
+        },
+      ],
+    });
+  }
+});
+
+test("an approximate census proves nothing", async () => {
+  const result = await proveCorpusProjectionRevisionsPresent({
+    client: {
+      aggregate: async () =>
+        Result.ok({
+          projection_revisions: {
+            buckets: [{ key: FIRST_REVISION, doc_count: 1 }],
+            doc_count_error_upper_bound: 0,
+            sum_other_doc_count: 1,
+          },
+        }),
+    },
+    indexId: "case_law_v5_cs_sk",
+    expected: [{ revision: FIRST_REVISION, documentCount: 1 }],
+  });
+
+  expect(result.isErr()).toBe(true);
+});
+
 test("committed appends preserve row boundaries and exact revision ownership", async () => {
   const requests: string[] = [];
   const client = {
-    ingestCommittedBatch: async (_indexId: string, ndjson: string) => {
+    ingestCommittedBatch: async ({ ndjson }: { ndjson: string }) => {
       requests.push(ndjson);
       return Result.ok(undefined);
     },
@@ -138,6 +245,7 @@ test("committed appends preserve row boundaries and exact revision ownership", a
   const result = await appendCorpusProjectionBatch({
     client,
     indexId: "case_law_v5_cs_sk",
+    commitTimeoutSecs: V5_COMMIT_TIMEOUT_SECS,
     entries: [
       {
         revision: FIRST_REVISION,
@@ -306,7 +414,10 @@ test("one revision is split into requests under both byte ceilings", () => {
     );
     expect(
       planned.value.flatMap(({ ndjson }) =>
-        ndjson.split("\n").map((line) => JSON.parse(line).seq),
+        ndjson.split("\n").map((line) => {
+          const doc: { seq: unknown } = JSON.parse(line);
+          return doc.seq;
+        }),
       ),
     ).toEqual(entry.documents.map(({ seq }) => seq));
   }
@@ -319,6 +430,7 @@ test("append rejects a document carrying another attempt revision", async () => 
         Result.err(new CorpusIndexError({ message: "must not be called" })),
     },
     indexId: "case_law_v5_cs_sk",
+    commitTimeoutSecs: V5_COMMIT_TIMEOUT_SECS,
     entries: [
       {
         revision: FIRST_REVISION,
@@ -352,6 +464,7 @@ test("append failure reports the exact revisions with unknown outcomes", async (
       },
     },
     indexId: "case_law_v5_cs_sk",
+    commitTimeoutSecs: V5_COMMIT_TIMEOUT_SECS,
     clock: () => {
       expect(appendReturned).toBe(true);
       return unknownOutcomeObservedAt;
@@ -406,6 +519,7 @@ test("a later part failure leaves an earlier accepted revision unknown", async (
       },
     },
     indexId: "case_law_v5_cs_sk",
+    commitTimeoutSecs: V5_COMMIT_TIMEOUT_SECS,
     clock: () => new Date("2026-08-25T12:00:00.000Z"),
     entries: [largeRevisionEntry(FIRST_REVISION)],
   });
@@ -419,22 +533,4 @@ test("a later part failure leaves an earlier accepted revision unknown", async (
     expect(result.error.unknownRevisions).toEqual([FIRST_REVISION]);
     expect(result.error.unattemptedRevisions).toEqual([]);
   }
-});
-
-test("unknown append cleanup waits beyond both request and engine windows", () => {
-  const startedAt = new Date("2026-08-25T12:00:00.000Z");
-  const commitTimeoutMs =
-    (CORPUS_INDEX_MANIFESTS.case_law_v5.engine.indexConfig.indexing_settings
-      .commit_timeout_secs ?? 0) * 1000;
-  expect(
-    corpusIndexUnknownAppendBarrierAt(
-      startedAt,
-      CORPUS_INDEX_MANIFESTS.case_law_v5,
-    ).getTime(),
-  ).toBe(
-    startedAt.getTime() +
-      CORPUS_INDEX_INGEST_TIMEOUT_MS +
-      commitTimeoutMs +
-      CORPUS_PROJECTION_UNKNOWN_APPEND_MARGIN_MS,
-  );
 });

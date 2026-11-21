@@ -3,31 +3,29 @@ import type { Command } from "@stricli/core";
 import { Result } from "better-result";
 
 import { actionAdmissionRefusalOutput } from "../action-admission-refusal.js";
+import { scopeGranted } from "../auth/command-scopes.js";
 import type { Context } from "../context.js";
 import { formatCapabilityCommand } from "../generate-capability-tree.js";
 import { EXIT_CODES, resolveMcpErrorCodeExit } from "../mcp-constants.js";
 import { buildCommonFlags, type CommonFlagValues } from "../output-flags.js";
 import {
   buildRenderPlan,
+  type OutputFormat,
   renderResult,
   terminalWidth,
-  type OutputFormat,
 } from "../output.js";
 import {
-  renderClientError,
   readOutputFormat,
+  renderClientError,
   renderToolError,
   reservedFlagUsageError,
-  scopeGranted,
   setExit,
   writersFor,
-  requestIdLine,
-  readRequestReceipt,
 } from "../run-leaf-command.js";
 import {
   createUploadDocumentDependencies,
-  type UploadFailure,
   uploadDocument,
+  type UploadFailure,
 } from "../upload-document.js";
 
 const parseString = (input: string): string => input;
@@ -86,7 +84,13 @@ const renderNestedFailure = ({
     return;
   }
   if (failure.type === "tool") {
-    renderToolError({ context, result: failure.result, writers, format });
+    renderToolError({
+      context,
+      command: "upload",
+      result: failure.result,
+      writers,
+      format,
+    });
     return;
   }
   if (failure.type === "put" && failure.admission !== undefined) {
@@ -201,9 +205,9 @@ export const uploadCommand: Command<Context> = buildCommand<
       flags.entityId === undefined
         ? ["matters_write", "documents_write"]
         : ["documents_write"];
-    const { token } = this;
     const missingScope = requiredScopes.find(
-      (scope) => !scopeGranted({ token, scope }),
+      (scope) =>
+        !scopeGranted({ effectiveGrants: this.effectiveGrants, scope }),
     );
     if (missingScope !== undefined) {
       writers.stderr(
@@ -215,7 +219,7 @@ export const uploadCommand: Command<Context> = buildCommand<
     if (
       flags.entityId === undefined &&
       flags.propertyId === undefined &&
-      !scopeGranted({ token: this.token, scope: "read" })
+      !scopeGranted({ effectiveGrants: this.effectiveGrants, scope: "read" })
     ) {
       writers.stderr(
         "Automatic file-property resolution needs scope stella:read; grant it or pass --property-id explicitly.\n",
@@ -244,15 +248,10 @@ export const uploadCommand: Command<Context> = buildCommand<
       },
     });
     if (Result.isOk(uploaded)) {
-      // The finalize capability wraps its outcome in `{ finalizedResult, meta }`;
+      // The finalize capability wraps its outcome in `{ finalizedResult }`;
       // the outcome alone is the command's result, shaped like every other
-      // save (`{ type, entityId, ... }`), and the receipt goes to stderr like
-      // any other write's request id.
+      // save (`{ type, entityId, ... }`).
       const envelope = isRecord(uploaded.value) ? uploaded.value : {};
-      const requestId = readRequestReceipt(uploaded.value);
-      if (requestId !== undefined) {
-        writers.stderr(requestIdLine(requestId, this.process.stderr.isTTY));
-      }
       const finalizedResult = envelope["finalizedResult"];
       renderResult({
         width: terminalWidth(this),

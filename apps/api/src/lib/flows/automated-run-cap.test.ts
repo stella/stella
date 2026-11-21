@@ -14,6 +14,7 @@ import {
   test,
 } from "bun:test";
 import { eq } from "drizzle-orm";
+import type { SQL } from "drizzle-orm";
 
 import { organization, user } from "@/api/db/auth-schema";
 import {
@@ -29,6 +30,7 @@ import { insertAutomatedFlowRunWithinCap } from "@/api/lib/flows/automated-run-c
 import type { FlowStep, FlowTriggerSource } from "@/api/lib/flows/flow-types";
 import { MAX_AUTOMATED_FLOW_RUNS_PER_DEFINITION_PER_DAY } from "@/api/lib/flows/flow-types";
 import { buildFlowRunRows } from "@/api/lib/flows/start-flow-run";
+import { aggregateExecutionRows } from "@/api/tests/fixtures/aggregate-lock-order";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
@@ -268,4 +270,56 @@ describe("insertAutomatedFlowRunWithinCap", () => {
 
     expect(result.outcome).toBe("started");
   });
+});
+
+test("pending automated evidence retains the prepared execution rows", async () => {
+  const entered = Promise.withResolvers<undefined>();
+  const proceed = Promise.withResolvers<undefined>();
+  const definitionId = createSafeId<"flowDefinition">();
+  const originalInput = createSafeId<"entity">();
+  const runId = createSafeId<"flowRun">();
+  const rows = buildFlowRunRows({
+    runId,
+    workspaceId: createSafeId<"workspace">(),
+    definitionId,
+    definition: { name: "Prepared", steps: [AI_STEP] },
+    triggerSource: { type: "schedule" },
+    inputEntityIds: [originalInput],
+  });
+  const written: unknown[] = [];
+  const database = asTestRaw<
+    Parameters<typeof insertAutomatedFlowRunWithinCap>[0]["database"]
+  >({
+    transaction: async (run: (tx: unknown) => Promise<unknown>) =>
+      await run({
+        execute: async (statement: SQL) => {
+          entered.resolve(undefined);
+          await proceed.promise;
+          return aggregateExecutionRows(statement);
+        },
+        $count: async () => await Promise.resolve(0),
+        insert: () => ({
+          values: async (value: unknown) => {
+            written.push(value);
+          },
+        }),
+      }),
+  });
+  const result = insertAutomatedFlowRunWithinCap({
+    definitionId,
+    rows,
+    database,
+  });
+  await entered.promise;
+  rows.run.inputEntityIds?.push(createSafeId<"entity">());
+  rows.steps.push({
+    workspaceId: rows.run.workspaceId,
+    runId,
+    index: 1,
+    kind: "review-gate",
+  });
+  proceed.resolve(undefined);
+  expect(await result).toEqual({ outcome: "started" });
+  expect(written.at(0)).toMatchObject({ inputEntityIds: [originalInput] });
+  expect(written.at(1)).toHaveLength(1);
 });

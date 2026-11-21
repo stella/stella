@@ -1,4 +1,4 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { sql } from "drizzle-orm";
 
 import {
@@ -9,14 +9,19 @@ import type {
   DecisionIdentifiers,
   DecisionPrimaryReferenceType,
 } from "@stll/legal-ast/decision-identifier";
+import { Temporal } from "@stll/time";
 
 import type { Transaction } from "@/api/db/root";
+import { abortTransaction } from "@/api/db/safe-db";
 import {
   CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE,
   CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASES,
 } from "@/api/db/schema";
 import type { CaseLawDecisionIdentifierBackfillPhase } from "@/api/db/schema";
-import { lockCitationGraph } from "@/api/handlers/case-law/citation-resolution";
+import {
+  type CitationGraphTransaction,
+  runCitationGraphTransaction,
+} from "@/api/handlers/case-law/citation-graph-transaction";
 import {
   CITATION_RESOLUTION_STATUS,
   effectiveCitationIdentifierTypeSql,
@@ -24,13 +29,24 @@ import {
   settledCitationSql,
 } from "@/api/handlers/case-law/citation-resolution-status";
 import {
-  decisionIdentifierTypeOfCitation,
+  activeAttachmentIdentifierClaimSql,
+  reconcileHostIdentifierClaimsTx,
+} from "@/api/handlers/case-law/decision-identifier-claims-persistence";
+import {
   decisionIdentifiersFromStoredMetadata,
+  decisionIdentifierTypeOfCitation,
   normalizeDecisionIdentifierIn,
   normalizeDecisionIdentifierValue,
 } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  caseNumberKeysMatchSql,
+  sameStoredCaseNumberKeySql,
+} from "@/api/lib/case-law/case-number-match-key";
+import { assertCitationStorageField } from "@/api/lib/case-law/citation-storage-bounds";
+import { DECISION_IDENTIFIER_CLAIM } from "@/api/lib/case-law/decision-identifier-claims";
 import type { CaseLawRootHandle } from "@/api/lib/case-law/maintenance-lane";
+import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import {
   lockActiveCorpusProjectionSourceTx,
@@ -55,9 +71,13 @@ export const MAX_DECISION_IDENTIFIER_BACKFILL_BATCH_SIZE = Math.floor(
     (DECISION_IDENTIFIER_MAX_COUNT * DECISION_IDENTIFIER_BIND_PARAMETERS +
       DECISION_PAGE_BIND_PARAMETERS),
 );
-export const DEFAULT_DECISION_IDENTIFIER_BACKFILL_BATCH_SIZE =
+const DEFAULT_DECISION_IDENTIFIER_BACKFILL_BATCH_SIZE =
   MAX_DECISION_IDENTIFIER_BACKFILL_BATCH_SIZE;
 const MAX_DECISION_IDENTIFIER_BACKFILL_RESTARTS = 3;
+export const DECISION_IDENTIFIER_RECONCILIATION_COOLDOWN_MS = 6 * 60 * 60_000;
+export const DECISION_IDENTIFIER_RECONCILIATION_GRACE_MS = 60 * 60_000;
+const REPAIR_DIAGNOSTIC_COURT_LIMIT = 8;
+const REPAIR_DIAGNOSTIC_COURT_BYTES = 96;
 
 type RunningBackfillPhase = Exclude<
   CaseLawDecisionIdentifierBackfillPhase,
@@ -69,6 +89,8 @@ type BackfillCheckpointBase = {
   cursorId: string | null;
   decisionsScanned: number;
   citationsScanned: number;
+  verificationRetryCount: number;
+  verificationRetryAfter: string | null;
 };
 
 type RunningBackfillCheckpoint = BackfillCheckpointBase & {
@@ -83,10 +105,9 @@ type CompleteBackfillCheckpoint = BackfillCheckpointBase & {
 };
 
 type BackfillCheckpoint =
-  | RunningBackfillCheckpoint
-  | CompleteBackfillCheckpoint;
+  RunningBackfillCheckpoint | CompleteBackfillCheckpoint;
 
-export type DecisionIdentifierBackfillGaps = {
+type DecisionIdentifierBackfillGaps = {
   decisionIdentifierMismatches: number;
   citationIdentifierMismatches: number;
   pendingTypedCitations: number;
@@ -115,6 +136,13 @@ type DecisionIdentifierBackfillPageProgress = {
   phase: RunningBackfillPhase;
   decisionsScanned: number;
   citationsScanned: number;
+  repairs?: DecisionIdentifierRepairDiagnostic;
+};
+
+type DecisionIdentifierRepairDiagnostic = {
+  count: number;
+  courts: readonly { court: string; count: number }[];
+  omittedCourts: number;
 };
 
 export type DecisionIdentifierBackfillProgress =
@@ -164,6 +192,11 @@ const readCheckpoint = (result: unknown): BackfillCheckpoint | null => {
     typeof row["version"] !== "string" ||
     !isBackfillPhase(row["phase"]) ||
     (row["cursorId"] !== null && typeof row["cursorId"] !== "string") ||
+    row["verificationRetryCount"] === undefined ||
+    row["verificationRetryCount"] === null ||
+    (row["verificationRetryAfter"] !== null &&
+      typeof row["verificationRetryAfter"] !== "string" &&
+      !(row["verificationRetryAfter"] instanceof Date)) ||
     (row["completedAt"] !== null &&
       typeof row["completedAt"] !== "string" &&
       !(row["completedAt"] instanceof Date))
@@ -175,9 +208,35 @@ const readCheckpoint = (result: unknown): BackfillCheckpoint | null => {
     cursorId: row["cursorId"],
     decisionsScanned: numberOf(row["decisionsScanned"]),
     citationsScanned: numberOf(row["citationsScanned"]),
+    verificationRetryCount: numberOf(row["verificationRetryCount"]),
+    verificationRetryAfter:
+      row["verificationRetryAfter"] instanceof Date
+        ? row["verificationRetryAfter"].toISOString()
+        : row["verificationRetryAfter"],
   };
+  const retryAfter = checkpointBase.verificationRetryAfter;
+  const invalidRetryAfter =
+    retryAfter !== null &&
+    Result.try({
+      try: () => Temporal.Instant.from(retryAfter),
+      catch: () => null,
+    }).isErr();
+  if (
+    checkpointBase.verificationRetryCount >
+      MAX_DECISION_IDENTIFIER_BACKFILL_RESTARTS ||
+    invalidRetryAfter ||
+    (checkpointBase.verificationRetryCount ===
+      MAX_DECISION_IDENTIFIER_BACKFILL_RESTARTS) !==
+      (checkpointBase.verificationRetryAfter !== null)
+  ) {
+    return panic("Decision identifier retry checkpoint is malformed");
+  }
   if (row["phase"] === CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.COMPLETE) {
-    if (row["cursorId"] !== null || row["completedAt"] === null) {
+    if (
+      row["cursorId"] !== null ||
+      row["completedAt"] === null ||
+      checkpointBase.verificationRetryCount !== 0
+    ) {
       return panic("Completed decision identifier checkpoint is malformed");
     }
     return {
@@ -205,6 +264,8 @@ const loadCheckpoint = async (
       SELECT version, phase, cursor_id AS "cursorId",
              decisions_scanned AS "decisionsScanned",
              citations_scanned AS "citationsScanned",
+             verification_retry_count AS "verificationRetryCount",
+             verification_retry_after AS "verificationRetryAfter",
              completed_at AS "completedAt"
       FROM case_law_decision_identifier_backfills
       WHERE version = ${DECISION_IDENTIFIER_BACKFILL_VERSION}
@@ -222,12 +283,14 @@ const ensureCheckpoint = async (rootDb: CaseLawRootHandle): Promise<void> => {
 };
 
 type DecisionRow = {
-  id: string;
+  id: SafeId<"caseLawDecision">;
   caseNumber: string;
   country: string;
   caseNumberType: DecisionPrimaryReferenceType;
   ecli: string | null;
   metadata: Record<string, unknown>;
+  court: string;
+  createdAt: Date;
 };
 
 /**
@@ -268,10 +331,12 @@ const readDecisionRows = (result: unknown): DecisionRow[] =>
     isRecord(row) &&
     typeof row["id"] === "string" &&
     typeof row["caseNumber"] === "string" &&
-    typeof row["country"] === "string"
+    typeof row["country"] === "string" &&
+    typeof row["court"] === "string" &&
+    (typeof row["createdAt"] === "string" || row["createdAt"] instanceof Date)
       ? [
           {
-            id: row["id"],
+            id: brandPersistedCaseLawDecisionId(row["id"]),
             caseNumber: row["caseNumber"],
             country: row["country"],
             caseNumberType: primaryReferenceTypeFromStored(
@@ -279,6 +344,11 @@ const readDecisionRows = (result: unknown): DecisionRow[] =>
             ),
             ecli: typeof row["ecli"] === "string" ? row["ecli"] : null,
             metadata: isRecord(row["metadata"]) ? row["metadata"] : {},
+            court: row["court"],
+            createdAt:
+              row["createdAt"] instanceof Date
+                ? row["createdAt"]
+                : new Date(row["createdAt"]),
           },
         ]
       : [],
@@ -346,7 +416,8 @@ const decisionRowsSql = (
 ) => sql`
   SELECT decision.id::text AS id, decision.case_number AS "caseNumber",
          decision.case_number_type AS "caseNumberType",
-         decision.country, decision.ecli, decision.metadata
+         decision.country, decision.ecli, decision.metadata, decision.court,
+         decision.created_at AS "createdAt"
   FROM case_law_decisions decision
   ${cursorId === null ? sql`` : sql`WHERE decision.id > ${cursorId}::uuid`}
   ORDER BY decision.id
@@ -369,29 +440,87 @@ const citationRowsSql = (
   ${lock ? sql`FOR UPDATE OF citation` : sql``}
 `;
 
-const resetCheckpoint = async (
-  tx: Transaction,
+type ResetCheckpointOptions = {
   phase:
     | typeof CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.DECISIONS
-    | typeof CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.CITATIONS,
-): Promise<void> => {
+    | typeof CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.CITATIONS;
+  kind: "new-pass" | "verification-retry" | "verification-resume";
+};
+
+const resetCheckpoint = async (
+  tx: Transaction,
+  { phase, kind }: ResetCheckpointOptions,
+) => {
   // audit: skip — public case-law corpus backfill checkpoint; no workspace data
-  await tx.execute(sql`
+  const row = executedRows(
+    await tx.execute(sql`
     UPDATE case_law_decision_identifier_backfills
     SET phase = ${phase}, cursor_id = NULL,
         decisions_scanned = CASE
           WHEN ${phase} = ${CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.DECISIONS}
             THEN 0 ELSE decisions_scanned END,
         citations_scanned = 0, completed_at = NULL,
+        repaired_count = CASE WHEN ${kind} = 'new-pass' THEN 0 ELSE repaired_count END,
+        verification_retry_count = CASE WHEN ${kind} <> 'verification-retry' THEN 0
+          ELSE LEAST(verification_retry_count + 1, ${MAX_DECISION_IDENTIFIER_BACKFILL_RESTARTS}) END,
+        verification_retry_after = CASE
+          WHEN ${kind} = 'verification-retry'
+            AND verification_retry_count + 1 >= ${MAX_DECISION_IDENTIFIER_BACKFILL_RESTARTS}
+          THEN clock_timestamp() + ${DECISION_IDENTIFIER_RECONCILIATION_COOLDOWN_MS} * interval '1 millisecond'
+          ELSE NULL END,
         updated_at = clock_timestamp()
     WHERE version = ${DECISION_IDENTIFIER_BACKFILL_VERSION}
-  `);
+    RETURNING verification_retry_count AS "attempt",
+      verification_retry_after AS "retryAfter"
+  `),
+  ).at(0);
+  if (
+    !isRecord(row) ||
+    row["attempt"] === undefined ||
+    row["attempt"] === null ||
+    (row["retryAfter"] !== null &&
+      typeof row["retryAfter"] !== "string" &&
+      !(row["retryAfter"] instanceof Date))
+  ) {
+    return panic("Decision identifier retry reset result is malformed");
+  }
+  return {
+    attempt: numberOf(row["attempt"]),
+    retryAfter:
+      row["retryAfter"] instanceof Date
+        ? row["retryAfter"].toISOString()
+        : row["retryAfter"],
+  };
+};
+
+type BackfillPageOptions = {
+  batchSize: number;
+  /** When the page runs; the repair grace window is measured from it. */
+  now: Date;
+};
+
+type RunBackfillPageOptions = BackfillPageOptions & {
+  mode: "scheduled" | "operator";
+};
+
+const boundedCourtLabel = (court: string): string => {
+  let label = "";
+  let bytes = 0;
+  for (const character of court) {
+    const width = Buffer.byteLength(character, "utf-8");
+    if (bytes + width > REPAIR_DIAGNOSTIC_COURT_BYTES) {
+      break;
+    }
+    label += character;
+    bytes += width;
+  }
+  return label;
 };
 
 const projectDecisionPage = async (
-  tx: Transaction,
+  tx: CitationGraphTransaction<Transaction>,
   checkpoint: RunningBackfillCheckpoint,
-  batchSize: number,
+  { batchSize, now }: BackfillPageOptions,
 ): Promise<DecisionIdentifierBackfillPageProgress> => {
   // audit: skip — rewrites derived public case-law identifiers; no workspace data
   const rows = readDecisionRows(
@@ -417,68 +546,120 @@ const projectDecisionPage = async (
       ? []
       : [{ country: row.country, decisionId: row.id, identifiers }];
   });
+  let repairs: DecisionIdentifierRepairDiagnostic | undefined;
   if (projections.length > 0) {
-    const expected = sql.join(
-      projections.flatMap(({ country, decisionId, identifiers }) =>
-        identifiers.map(
-          (identifier) =>
-            sql`(${decisionId}::uuid, ${identifier.type}::varchar, ${identifier.value}::varchar, ${normalizeDecisionIdentifierIn(country, identifier)}::varchar)`,
-        ),
-      ),
-      sql`, `,
+    // One jsonb parameter each rather than VALUES lists. The pool keeps every
+    // prepared statement for the life of its connection, and a page's identifier
+    // count varies, so VALUES would leave a large plan on the connection for each
+    // count it ever saw. These statements keep one text whatever the page holds.
+    const expectedRows = projections.flatMap(
+      ({ country, decisionId, identifiers }) =>
+        identifiers.map((identifier) => ({
+          decision_id: decisionId,
+          type: identifier.type,
+          value: identifier.value,
+          normalized_value: normalizeDecisionIdentifierIn(country, identifier),
+        })),
     );
-    const page = sql.join(
-      projections.map(({ decisionId }) => sql`(${decisionId}::uuid)`),
-      sql`, `,
+    const expected = JSON.stringify(expectedRows);
+    await reconcileHostIdentifierClaimsTx(tx, {
+      decisionIds: projections.map(({ decisionId }) => decisionId),
+      identifiers: expectedRows.map(
+        ({ decision_id, normalized_value, type, value }) => ({
+          decisionId: decision_id,
+          normalizedValue: normalized_value,
+          type,
+          value,
+        }),
+      ),
+    });
+    const attachedClaim = activeAttachmentIdentifierClaimSql({
+      decisionId: sql`stored.decision_id`,
+      type: sql`stored.type`,
+      normalizedValue: sql`stored.normalized_value`,
+    });
+    const page = JSON.stringify(
+      projections.map(({ decisionId }) => ({ decision_id: decisionId })),
     );
 
-    // Match ingestion's decision-row-then-graph lock order. NO KEY UPDATE
-    // excludes concurrent refreshes while remaining compatible with the
-    // resolver's foreign-key KEY SHARE checks.
-    await lockCitationGraph(tx);
+    // Graph acquisition precedes the decision page at the transaction owner.
+    // NO KEY UPDATE remains compatible with resolver KEY SHARE checks.
     const rewritten = await tx.execute(sql`
-    WITH expected(decision_id, type, value, normalized_value) AS (
-      VALUES ${expected}
-    ), page(decision_id) AS (VALUES ${page}),
+    WITH expected AS (
+      SELECT * FROM jsonb_to_recordset(${expected}::text::jsonb) AS row(
+        decision_id uuid, type varchar, value varchar, normalized_value varchar
+      )
+    ), page AS (
+      SELECT * FROM jsonb_to_recordset(${page}::text::jsonb) AS row(decision_id uuid)
+    ),
     deleted AS (
       DELETE FROM case_law_decision_identifiers stored USING page
       WHERE stored.decision_id = page.decision_id
-        -- A declared alias is not derived from the decision, so no
-        -- derivation removes it.
-        AND stored.declared_at IS NULL
+        AND cardinality(stored.independent_claims) = 0
+        AND NOT ${attachedClaim}
         AND NOT EXISTS (
           SELECT 1 FROM expected
           WHERE expected.decision_id = stored.decision_id
             AND expected.type = stored.type
-            AND expected.normalized_value = stored.normalized_value
+            AND ${sameStoredCaseNumberKeySql(
+              sql.raw("expected.normalized_value"),
+              sql.raw("stored.normalized_value"),
+            )}
         )
       RETURNING stored.decision_id, stored.type, stored.normalized_value
     ), inserted AS (
       INSERT INTO case_law_decision_identifiers (
-        decision_id, type, value, normalized_value
-      ) SELECT decision_id, type, value, normalized_value FROM expected
+        decision_id, type, value, normalized_value, independent_claims
+      ) SELECT decision_id, type, value, normalized_value,
+          ARRAY[${DECISION_IDENTIFIER_CLAIM.HOST}]::varchar[] FROM expected
       ON CONFLICT ON CONSTRAINT case_law_decision_identifiers_pk DO UPDATE
       SET value = EXCLUDED.value
       WHERE case_law_decision_identifiers.value IS DISTINCT FROM EXCLUDED.value
-      RETURNING decision_id, type, normalized_value
+      RETURNING decision_id, type, normalized_value, (xmax = 0) AS added
     ), changed_identifiers AS (
       SELECT decision_id, type, normalized_value FROM deleted
       UNION
       SELECT decision_id, type, normalized_value FROM inserted
+    ), moved_identities AS (
+      -- Who answers a citation changes only with an identity. A new spelling
+      -- of a stored identity changes nobody's answer, and neither does
+      -- recording the docket the decision already answers under through its
+      -- citation key, in either year form. Reopening for those would discard
+      -- links that still hold.
+      SELECT moved.type, moved.normalized_value
+      FROM (
+        SELECT decision_id, type, normalized_value FROM deleted
+        UNION
+        SELECT decision_id, type, normalized_value FROM inserted WHERE added
+      ) moved
+      JOIN case_law_decisions holder ON holder.id = moved.decision_id
+      WHERE NOT (
+        moved.type = ${DECISION_IDENTIFIER_TYPES.CASE_NUMBER}
+        AND holder.citation_key IS NOT NULL
+        AND ${caseNumberKeysMatchSql(
+          sql.raw("holder.citation_key"),
+          sql.raw("moved.normalized_value"),
+        )}
+      )
     ), reopened AS (
       UPDATE case_law_citations citation
+      -- The link stays until the resolver answers again: this pass reaches many
+      -- citations at once, and most of them resolve to the same decision.
       SET resolution_status = ${CITATION_RESOLUTION_STATUS.PENDING},
-          cited_decision_id = NULL, resolution_rule_id = NULL,
+          resolution_rule_id = NULL,
           resolution_attempted_at = NULL
       WHERE ${settledCitationSql(sql.raw("citation.resolution_status"))}
         AND EXISTS (
-          SELECT 1 FROM changed_identifiers changed
+          SELECT 1 FROM moved_identities changed
           WHERE changed.type = ${effectiveCitationIdentifierTypeSql(
             sql.raw("citation.identifier_type"),
           )}
-            AND changed.normalized_value = ${effectiveCitationIdentifierValueSql(
-              sql.raw("citation.normalized_identifier_value"),
-              sql.raw("citation.citation_key"),
+            AND ${caseNumberKeysMatchSql(
+              sql.raw("changed.normalized_value"),
+              effectiveCitationIdentifierValueSql(
+                sql.raw("citation.normalized_identifier_value"),
+                sql.raw("citation.citation_key"),
+              ),
             )}
         )
       RETURNING citation.id
@@ -490,11 +671,41 @@ const projectDecisionPage = async (
     WHERE decision.id IN (SELECT decision_id FROM changed_decisions)
     RETURNING decision.id
   `);
+    const rewrittenIds = new Set(rewrittenDecisionIds(rewritten));
+    const graceBoundary =
+      now.getTime() - DECISION_IDENTIFIER_RECONCILIATION_GRACE_MS;
+    const repairedRows = rows.filter(
+      (row) =>
+        rewrittenIds.has(brandPersistedCaseLawDecisionId(row.id)) &&
+        row.createdAt.getTime() < graceBoundary,
+    );
+    if (repairedRows.length > 0) {
+      const byCourt = Map.groupBy(repairedRows, (row) => row.court);
+      repairs = {
+        count: repairedRows.length,
+        courts: Array.from(byCourt, ([court, courtRows]) => ({
+          court: boundedCourtLabel(court),
+          count: courtRows.length,
+        }))
+          .toSorted((a, b) => b.count - a.count)
+          .slice(0, REPAIR_DIAGNOSTIC_COURT_LIMIT),
+        omittedCourts: Math.max(
+          0,
+          byCourt.size - REPAIR_DIAGNOSTIC_COURT_LIMIT,
+        ),
+      };
+      await tx.execute(sql`
+        UPDATE case_law_decision_identifier_backfills
+        SET repaired_count = repaired_count + ${repairedRows.length},
+            updated_at = clock_timestamp()
+        WHERE version = ${DECISION_IDENTIFIER_BACKFILL_VERSION}
+      `);
+    }
     // Identifiers are projection fingerprint data, and `content_hash` covers
     // only the text payload, so an identifier-only rewrite is invisible to
     // anything keyed on that. Each rewritten decision's desired state is
     // reconciled here, under its source lock, in this transaction.
-    await reconcileRewrittenAt(tx, rewrittenDecisionIds(rewritten));
+    await reconcileRewrittenAt(tx, [...rewrittenIds]);
   }
   const decisionsScanned = checkpoint.decisionsScanned + rows.length;
   await tx.execute(sql`
@@ -507,6 +718,7 @@ const projectDecisionPage = async (
     phase: CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.DECISIONS,
     decisionsScanned,
     citationsScanned: checkpoint.citationsScanned,
+    ...(repairs === undefined ? {} : { repairs }),
   };
 };
 
@@ -524,8 +736,7 @@ const projectCitationPage = async (
   batchSize: number,
 ): Promise<DecisionIdentifierBackfillPageProgress> => {
   // audit: skip — rewrites derived public case-law identifiers; no workspace data
-  // Resolver batches take the graph lock before citation row locks too.
-  await lockCitationGraph(tx);
+  // The page transaction owns the graph before any row locks.
   const rows = readCitationRows(
     await tx.execute(citationRowsSql(checkpoint.cursorId, batchSize, true)),
   );
@@ -543,15 +754,31 @@ const projectCitationPage = async (
       citationsScanned: checkpoint.citationsScanned,
     };
   }
-  const projected = sql.join(
+  const projected = JSON.stringify(
     rows.map((row) => {
       const { type, normalizedValue } = citationProjection(row);
-      return sql`(${row.id}::uuid, ${type}::varchar, ${normalizedValue}::varchar)`;
+      const checked = assertCitationStorageField(
+        "normalizedIdentifier",
+        normalizedValue,
+      );
+      if (checked.isErr()) {
+        abortTransaction(checked.error);
+      }
+      return { id: row.id, type, normalized_value: checked.value };
     }),
-    sql`, `,
+  );
+  // The citation's own stored value against its projection: a rewrite of the
+  // row, which keeps its outcome only where the stored bytes stay.
+  const storedIdentityUnchanged = sameStoredCaseNumberKeySql(
+    sql.raw("citation.normalized_identifier_value"),
+    sql.raw("projected.normalized_value"),
   );
   await tx.execute(sql`
-    WITH projected(id, type, normalized_value) AS (VALUES ${projected})
+    WITH projected AS (
+      SELECT * FROM jsonb_to_recordset(${projected}::text::jsonb) AS row(
+        id uuid, type varchar, normalized_value varchar
+      )
+    )
     UPDATE case_law_citations citation
     SET identifier_type = projected.type,
         normalized_identifier_value = projected.normalized_value,
@@ -560,23 +787,15 @@ const projectCitationPage = async (
             AND projected.type = ${DECISION_IDENTIFIER_TYPES.CASE_NUMBER}
             THEN citation.resolution_status
           WHEN citation.identifier_type = projected.type
-            AND citation.normalized_identifier_value = projected.normalized_value
+            AND ${storedIdentityUnchanged}
             THEN citation.resolution_status
           ELSE ${CITATION_RESOLUTION_STATUS.PENDING} END,
-        cited_decision_id = CASE
-          WHEN citation.identifier_type IS NULL
-            AND projected.type = ${DECISION_IDENTIFIER_TYPES.CASE_NUMBER}
-            THEN citation.cited_decision_id
-          WHEN citation.identifier_type = projected.type
-            AND citation.normalized_identifier_value = projected.normalized_value
-            THEN citation.cited_decision_id
-          ELSE NULL END,
         resolution_rule_id = CASE
           WHEN citation.identifier_type IS NULL
             AND projected.type = ${DECISION_IDENTIFIER_TYPES.CASE_NUMBER}
             THEN citation.resolution_rule_id
           WHEN citation.identifier_type = projected.type
-            AND citation.normalized_identifier_value = projected.normalized_value
+            AND ${storedIdentityUnchanged}
             THEN citation.resolution_rule_id
           ELSE NULL END,
         resolution_attempted_at = CASE
@@ -584,7 +803,7 @@ const projectCitationPage = async (
             AND projected.type = ${DECISION_IDENTIFIER_TYPES.CASE_NUMBER}
             THEN citation.resolution_attempted_at
           WHEN citation.identifier_type = projected.type
-            AND citation.normalized_identifier_value = projected.normalized_value
+            AND ${storedIdentityUnchanged}
             THEN citation.resolution_attempted_at
           ELSE NULL END
     FROM projected
@@ -638,7 +857,8 @@ const decisionMismatchCount = async (
     await tx.execute(sql`
     SELECT decision_id::text AS "decisionId", type, value,
            normalized_value AS "normalizedValue",
-           declared_at IS NOT NULL AS "declared"
+           NOT (independent_claims @> ARRAY[${DECISION_IDENTIFIER_CLAIM.HOST}]::varchar[]
+             OR (declared_at IS NULL AND independent_claims @> ARRAY[${DECISION_IDENTIFIER_CLAIM.UNVERIFIED}]::varchar[])) AS "declared"
     FROM case_law_decision_identifiers
     WHERE decision_id = ANY (ARRAY[${ids}]::uuid[])
   `),
@@ -693,9 +913,15 @@ const citationMismatchCount = (rows: readonly CitationRow[]): number =>
     );
   }).length;
 
+type RetryPageResult = {
+  status: "retry";
+  attempt: number;
+  retryAfter: string | null;
+};
+
 type VerificationPageResult =
   | { status: "progress"; progress: DecisionIdentifierBackfillPageProgress }
-  | { status: "retry" };
+  | RetryPageResult;
 
 const verifyDecisionPage = async (
   tx: Transaction,
@@ -724,11 +950,11 @@ const verifyDecisionPage = async (
     };
   }
   if ((await decisionMismatchCount(tx, rows)) > 0) {
-    await resetCheckpoint(
-      tx,
-      CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.DECISIONS,
-    );
-    return { status: "retry" };
+    const retry = await resetCheckpoint(tx, {
+      phase: CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.DECISIONS,
+      kind: "verification-retry",
+    });
+    return { status: "retry", ...retry };
   }
   await tx.execute(sql`
     UPDATE case_law_decision_identifier_backfills
@@ -760,17 +986,21 @@ const verifyCitationPage = async (
       UPDATE case_law_decision_identifier_backfills
       SET phase = ${CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.COMPLETE},
           cursor_id = NULL, completed_at = clock_timestamp(),
+          last_completed_repaired_count = repaired_count,
+          last_completed_at = clock_timestamp(),
+          verification_retry_count = 0,
+          verification_retry_after = NULL,
           updated_at = clock_timestamp()
       WHERE version = ${DECISION_IDENTIFIER_BACKFILL_VERSION}
     `);
     return { status: "completed" };
   }
   if (citationMismatchCount(rows) > 0) {
-    await resetCheckpoint(
-      tx,
-      CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.CITATIONS,
-    );
-    return { status: "retry" };
+    const retry = await resetCheckpoint(tx, {
+      phase: CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.CITATIONS,
+      kind: "verification-retry",
+    });
+    return { status: "retry", ...retry };
   }
   await tx.execute(sql`
     UPDATE case_law_decision_identifier_backfills
@@ -789,41 +1019,230 @@ const verifyCitationPage = async (
 
 type BackfillPageResult =
   | { status: "progress"; progress: DecisionIdentifierBackfillPageProgress }
-  | { status: "retry" }
+  | RetryPageResult
+  | { status: "phase-changed" }
+  | { status: "paused"; retryAfter: string }
   | { status: "completed" };
 
 const runBackfillPage = async (
   rootDb: CaseLawRootHandle,
-  batchSize: number,
-): Promise<BackfillPageResult> =>
-  await rootDb.transaction(async (tx) => {
+  { batchSize, now, mode }: RunBackfillPageOptions,
+): Promise<BackfillPageResult> => {
+  const selected = await rootDb.transaction(
+    async (tx) => await loadCheckpoint(tx, "none"),
+  );
+  if (selected === null) {
+    return panic("Decision identifier backfill checkpoint is missing");
+  }
+  // Never acquire the graph while holding the checkpoint: another projector
+  // may already own the graph and be waiting for that checkpoint. A phase
+  // change between selection and FOR UPDATE instead starts a fresh turn.
+  const loadSelectedCheckpoint = async (
+    tx: Transaction,
+  ): Promise<
+    | { status: "selected"; checkpoint: BackfillCheckpoint }
+    | { status: "phase-changed" }
+    | { status: "paused"; retryAfter: string }
+  > => {
     const checkpoint = await loadCheckpoint(tx, "for-update");
     if (checkpoint === null) {
       return panic("Decision identifier backfill checkpoint is missing");
     }
-    switch (checkpoint.phase) {
-      case CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.DECISIONS:
-        return {
-          status: "progress",
-          progress: await projectDecisionPage(tx, checkpoint, batchSize),
-        };
-      case CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.CITATIONS:
-        return {
-          status: "progress",
-          progress: await projectCitationPage(tx, checkpoint, batchSize),
-        };
-      case CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.VERIFY_DECISIONS:
-        return await verifyDecisionPage(tx, checkpoint, batchSize);
-      case CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.VERIFY_CITATIONS:
-        return await verifyCitationPage(tx, checkpoint, batchSize);
-      case CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.COMPLETE:
-        return { status: "completed" };
-      default: {
-        checkpoint satisfies never;
-        return panic(`Unhandled checkpoint: ${String(checkpoint)}`);
-      }
+    if (checkpoint.phase !== selected.phase) {
+      return { status: "phase-changed" };
     }
+    if (mode === "scheduled" && checkpoint.verificationRetryAfter !== null) {
+      return {
+        status: "paused",
+        retryAfter: checkpoint.verificationRetryAfter,
+      };
+    }
+    return { status: "selected", checkpoint };
+  };
+  switch (selected.phase) {
+    case CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.DECISIONS:
+    case CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.CITATIONS:
+      return await runCitationGraphTransaction(
+        rootDb.transaction.bind(rootDb),
+        async (tx): Promise<BackfillPageResult> => {
+          const selectedCheckpoint = await loadSelectedCheckpoint(tx);
+          if (selectedCheckpoint.status !== "selected") {
+            return selectedCheckpoint;
+          }
+          const { checkpoint } = selectedCheckpoint;
+          switch (checkpoint.phase) {
+            case CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.DECISIONS:
+              return {
+                status: "progress",
+                progress: await projectDecisionPage(tx, checkpoint, {
+                  batchSize,
+                  now,
+                }),
+              };
+            case CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.CITATIONS:
+              return {
+                status: "progress",
+                progress: await projectCitationPage(tx, checkpoint, batchSize),
+              };
+            case CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.COMPLETE:
+            case CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.VERIFY_CITATIONS:
+            case CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.VERIFY_DECISIONS:
+              return { status: "phase-changed" };
+            default:
+              checkpoint satisfies never;
+              return panic(`Unhandled checkpoint: ${String(checkpoint)}`);
+          }
+        },
+      );
+    case CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.VERIFY_DECISIONS:
+    case CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.VERIFY_CITATIONS:
+    case CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.COMPLETE:
+      return await rootDb.transaction(
+        async (tx): Promise<BackfillPageResult> => {
+          const selectedCheckpoint = await loadSelectedCheckpoint(tx);
+          if (selectedCheckpoint.status !== "selected") {
+            return selectedCheckpoint;
+          }
+          const { checkpoint } = selectedCheckpoint;
+          switch (checkpoint.phase) {
+            case CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.VERIFY_DECISIONS:
+              return await verifyDecisionPage(tx, checkpoint, batchSize);
+            case CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.VERIFY_CITATIONS:
+              return await verifyCitationPage(tx, checkpoint, batchSize);
+            case CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.COMPLETE:
+              return { status: "completed" };
+            case CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.CITATIONS:
+            case CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.DECISIONS:
+              return { status: "phase-changed" };
+            default:
+              checkpoint satisfies never;
+              return panic(`Unhandled checkpoint: ${String(checkpoint)}`);
+          }
+        },
+      );
+    default:
+      selected satisfies never;
+      return panic(`Unhandled checkpoint: ${String(selected)}`);
+  }
+};
+
+export type DecisionIdentifierReconciliationStep =
+  | { status: "cooldown"; completedAt: string }
+  | { status: "advanced"; repairs?: DecisionIdentifierRepairDiagnostic }
+  | { status: "retry"; attempt: number }
+  | { status: "retry-paused"; attempt: number; retryAfter: string }
+  | { status: "paused"; retryAfter: string }
+  | { status: "completed" };
+
+/** Advance one bounded checkpoint page, or begin the next perpetual pass. */
+type ReconcileDecisionIdentifiersStepOptions = {
+  now?: Date;
+  batchSize?: number;
+};
+
+export const reconcileDecisionIdentifiersStep = async (
+  rootDb: CaseLawRootHandle,
+  {
+    now = new Date(),
+    batchSize = DEFAULT_DECISION_IDENTIFIER_BACKFILL_BATCH_SIZE,
+  }: ReconcileDecisionIdentifiersStepOptions = {},
+): Promise<DecisionIdentifierReconciliationStep> => {
+  await ensureCheckpoint(rootDb);
+  const checkpoint = await withAggregateTransaction(
+    rootDb,
+    async (tx) => await loadCheckpoint(tx, "none"),
+  );
+  if (checkpoint === null) {
+    return panic(
+      "Decision identifier reconciliation checkpoint was not created",
+    );
+  }
+  if (
+    checkpoint.phase === CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.COMPLETE
+  ) {
+    if (
+      now.getTime() - new Date(checkpoint.completedAt).getTime() <
+      DECISION_IDENTIFIER_RECONCILIATION_COOLDOWN_MS
+    ) {
+      return { status: "cooldown", completedAt: checkpoint.completedAt };
+    }
+    await withAggregateTransaction(rootDb, async (tx) => {
+      const locked = await loadCheckpoint(tx, "for-update");
+      if (
+        locked?.phase ===
+          CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.COMPLETE &&
+        locked.completedAt === checkpoint.completedAt
+      ) {
+        await resetCheckpoint(tx, {
+          phase: CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.DECISIONS,
+          kind: "new-pass",
+        });
+      }
+    });
+  } else if (checkpoint.verificationRetryAfter !== null) {
+    if (now.getTime() < new Date(checkpoint.verificationRetryAfter).getTime()) {
+      return {
+        status: "paused",
+        retryAfter: checkpoint.verificationRetryAfter,
+      };
+    }
+    await withAggregateTransaction(rootDb, async (tx) => {
+      const locked = await loadCheckpoint(tx, "for-update");
+      if (locked === null) {
+        return;
+      }
+      const retryAfter = locked.verificationRetryAfter;
+      if (retryAfter === null) {
+        return;
+      }
+      if (now.getTime() < new Date(retryAfter).getTime()) {
+        return;
+      }
+      if (
+        locked.phase !==
+          CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.DECISIONS &&
+        locked.phase !== CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.CITATIONS
+      ) {
+        panic("Paused identifier checkpoint has an invalid phase");
+      }
+      await resetCheckpoint(tx, {
+        phase: locked.phase,
+        kind: "verification-resume",
+      });
+    });
+  }
+  const result = await runBackfillPage(rootDb, {
+    batchSize: normalizeBatchSize(batchSize),
+    now,
+    mode: "scheduled",
   });
+  switch (result.status) {
+    case "completed":
+      return { status: "completed" };
+    case "retry":
+      return result.retryAfter === null
+        ? { status: "retry", attempt: result.attempt }
+        : {
+            status: "retry-paused",
+            attempt: result.attempt,
+            retryAfter: result.retryAfter,
+          };
+    case "progress":
+      return {
+        status: "advanced",
+        ...(result.progress.repairs === undefined
+          ? {}
+          : { repairs: result.progress.repairs }),
+      };
+    case "phase-changed":
+      return { status: "advanced" };
+    case "paused":
+      return result;
+    default:
+      result satisfies never;
+      return panic("Unhandled decision identifier page result");
+  }
+};
 
 const normalizeBatchSize = (batchSize: number | undefined): number => {
   const normalized =
@@ -965,21 +1384,31 @@ const restartCompletedBackfill = async (
     { status: "backfill-required" }
   >,
 ): Promise<void> => {
-  if (verification.checkpoint === null) {
+  const expected = verification.checkpoint;
+  if (expected === null) {
     return;
   }
   await rootDb.transaction(async (tx) => {
-    await loadCheckpoint(tx, "for-update");
-    await resetCheckpoint(
-      tx,
-      verification.gaps.decisionIdentifierMismatches > 0
-        ? CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.DECISIONS
-        : CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.CITATIONS,
-    );
+    const checkpoint = await loadCheckpoint(tx, "for-update");
+    if (
+      checkpoint?.phase !==
+        CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.COMPLETE ||
+      checkpoint.completedAt !== expected.completedAt
+    ) {
+      return;
+    }
+    await resetCheckpoint(tx, {
+      phase:
+        verification.gaps.decisionIdentifierMismatches > 0
+          ? CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.DECISIONS
+          : CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.CITATIONS,
+      kind: "new-pass",
+    });
   });
 };
 
 type BackfillIteration =
+  | { status: "phase-changed" }
   | { status: "progress"; progress: DecisionIdentifierBackfillPageProgress }
   | {
       status: "retry";
@@ -997,9 +1426,18 @@ const advanceBackfill = async (
   rootDb: CaseLawRootHandle,
   batchSize: number,
 ): Promise<BackfillIteration> => {
-  const result = await runBackfillPage(rootDb, batchSize);
-  if (result.status === "progress") {
+  const result = await runBackfillPage(rootDb, {
+    batchSize,
+    now: new Date(),
+    mode: "operator",
+  });
+  if (result.status === "progress" || result.status === "phase-changed") {
     return result;
+  }
+  if (result.status === "paused") {
+    return panic(
+      "Operator backfill unexpectedly entered scheduler retry pause",
+    );
   }
   const verification = await verifyDecisionIdentifierBackfill(
     rootDb,
@@ -1042,10 +1480,20 @@ export const runDecisionIdentifierBackfill = async (
     return panic("Decision identifier backfill checkpoint was not created");
   }
   let retryCount = 0;
+  let phaseChangeCount = 0;
   for await (const result of backfillIterations(rootDb, batchSize)) {
     switch (result.status) {
       case "progress":
+        phaseChangeCount = 0;
         onProgress?.({ type: "page", progress: result.progress });
+        break;
+      case "phase-changed":
+        phaseChangeCount += 1;
+        if (phaseChangeCount > MAX_DECISION_IDENTIFIER_BACKFILL_RESTARTS) {
+          return panic(
+            `Decision identifier backfill phase changed without progress after ${MAX_DECISION_IDENTIFIER_BACKFILL_RESTARTS} retries`,
+          );
+        }
         break;
       case "retry": {
         retryCount += 1;

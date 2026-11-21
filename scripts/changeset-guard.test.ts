@@ -12,8 +12,9 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import * as v from "valibot";
 
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
+import { CAPABILITY_CATALOG_RELEASE_INPUTS } from "./capability-catalog-sources";
 import {
   checkChangesetPackages,
   decideChangesetGate,
@@ -23,7 +24,14 @@ import {
   parseChangesetPolicy,
   parseReleasePathspec,
   readChangesetDiff,
+  withoutReleasedPackages,
 } from "./changeset-guard";
+import { staticReuseCondition } from "./ci-static-checks";
+import {
+  flattenWorkflowSteps,
+  workflowJobSteps,
+  workflowStepByName,
+} from "./workflow-steps";
 
 const REPO_ROOT = path.resolve(import.meta.dirname, "..");
 const POLICY_FILE = "scripts/changeset-policy.json";
@@ -76,6 +84,8 @@ const SLUG = fc.stringMatching(/^[a-z][a-z0-9-]{0,11}$/u);
 
 const readFile = (relativePath: string): string =>
   readFileSync(path.join(REPO_ROOT, relativePath), "utf-8");
+const workflow = Bun.YAML.parse(readFile(WORKFLOW_FILE));
+const restSteps = workflowJobSteps(workflow, "ci-checks-rest");
 
 const git = (root: string, args: readonly string[]): string => {
   const result = Bun.spawnSync(["git", ...args], {
@@ -146,28 +156,53 @@ const gatedWorkspaces = (): string[] =>
     ),
   ].toSorted();
 
+/** What `bun scripts/changeset-guard.ts` loads, copied into fixture repos. */
+const GUARD_SOURCES = [
+  "scripts/changeset-guard.ts",
+  "scripts/changeset-entry.ts",
+  "scripts/changeset-policy.json",
+  "scripts/capability-catalog-sources.ts",
+  "scripts/generated-files.ts",
+  "packages/scripts/src/generated-files.ts",
+] as const;
+
+/** A repository holding the guard and its policy, ready for commits. */
+const createGuardFixture = (prefix: string): string => {
+  const root = mkdtempSync(path.join(tmpdir(), prefix));
+  for (const file of GUARD_SOURCES) {
+    mkdirSync(path.join(root, path.dirname(file)), { recursive: true });
+    writeFileSync(path.join(root, file), readFile(file));
+  }
+  mkdirSync(path.join(root, ".changeset"));
+  git(root, ["init", "-b", "main"]);
+  git(root, ["config", "user.email", "test@example.com"]);
+  git(root, ["config", "user.name", "Test"]);
+  return root;
+};
+
+const commitAll = (root: string, message: string): void => {
+  git(root, ["add", "."]);
+  git(root, ["commit", "--no-gpg-sign", "-m", message]);
+};
+
+const runPackageCheck = (root: string, base: string) =>
+  Bun.spawnSync(
+    ["bun", "scripts/changeset-guard.ts", "--base", base, "--packages-only"],
+    { cwd: root },
+  );
+
 const CHANGESET_GATE_FIRST_STEP = "Load release policy";
 const CHANGESET_GATE_LAST_STEP =
   "Changeset present for published package changes";
 
 /** The changeset gate's steps in the ci-checks-rest job, first through last. */
-const changesetJob = (): string => {
-  const lines = readFile(WORKFLOW_FILE).split("\n");
-  const job = lines.indexOf("  ci-checks-rest:");
-  expect(job).toBeGreaterThanOrEqual(0);
-  const jobLines = lines.slice(job + 1);
-  const jobEnd = jobLines.findIndex((line) => /^ {2}\S/u.test(line));
-  const steps = jobLines.slice(0, jobEnd === -1 ? jobLines.length : jobEnd);
-  const start = steps.indexOf(`      - name: ${CHANGESET_GATE_FIRST_STEP}`);
-  const last = steps.indexOf(`      - name: ${CHANGESET_GATE_LAST_STEP}`);
-  expect(start).toBeGreaterThanOrEqual(0);
-  expect(last).toBeGreaterThan(start);
-  const afterLast = steps
-    .slice(last + 1)
-    .findIndex((line) => line.startsWith("      - name: "));
-  return steps
-    .slice(start, afterLast === -1 ? steps.length : last + 1 + afterLast)
-    .join("\n");
+const changesetJob = (): Record<string, unknown>[] => {
+  const first = workflowStepByName(restSteps, CHANGESET_GATE_FIRST_STEP);
+  const last = workflowStepByName(restSteps, CHANGESET_GATE_LAST_STEP);
+  const start = restSteps.indexOf(first);
+  const end = restSteps.indexOf(last);
+  expect(end).toBeGreaterThan(start);
+  return restSteps.slice(start, end + 1);
 };
 
 describe("changeset gate decision", () => {
@@ -243,7 +278,8 @@ describe("changeset gate decision", () => {
   });
 
   test("adding any changeset entry flips a failing verdict to a passing one", () => {
-    fc.assert(
+    assertProperty(
+      "adding any changeset entry flips a failing verdict to a passing one",
       fc.property(
         fc.uniqueArray(fc.constantFrom(...GATED_FILES), { minLength: 1 }),
         fc.array(fc.tuple(fc.constantFrom(...UNGATED_PREFIXES), SLUG)),
@@ -259,12 +295,13 @@ describe("changeset gate decision", () => {
           );
         },
       ),
-      propertyConfig({ numRuns: 200 }),
+      { numRuns: 200 },
     );
   });
 
   test("never asks for a changeset when nothing gated changed", () => {
-    fc.assert(
+    assertProperty(
+      "never asks for a changeset when nothing gated changed",
       fc.property(
         fc.array(fc.tuple(fc.constantFrom(...UNGATED_PREFIXES), SLUG)),
         (ungated) => {
@@ -274,7 +311,7 @@ describe("changeset gate decision", () => {
           ).toBe("not-required");
         },
       ),
-      propertyConfig({ numRuns: 200 }),
+      { numRuns: 200 },
     );
   });
 });
@@ -286,7 +323,8 @@ describe("changeset package relevance", () => {
   });
 
   test("requires path evidence for every named package across the release policy", () => {
-    fc.assert(
+    assertProperty(
+      "requires path evidence for every named package across the release policy",
       fc.property(
         fc.constantFrom(...policy.packageFiles),
         fc.constantFrom(...policy.packageFiles),
@@ -308,7 +346,7 @@ describe("changeset package relevance", () => {
           checkChangesetPackages(options);
         },
       ),
-      propertyConfig({ numRuns: 200 }),
+      { numRuns: 200 },
     );
   });
 
@@ -334,7 +372,7 @@ describe("changeset package relevance", () => {
           entries: [entry(["@stll/cli"])],
           policy,
         }),
-      ).toThrow("no changed release-gated files");
+      ).toThrow("bun run changeset --empty");
     }
   });
 
@@ -358,44 +396,18 @@ describe("changeset package relevance", () => {
   });
 
   test("checks edits as well as additions at HEAD, while allowing consumed version entries", () => {
-    const root = mkdtempSync(path.join(tmpdir(), "stella-package-relevance-"));
+    const root = createGuardFixture("stella-package-relevance-");
     try {
-      mkdirSync(path.join(root, "scripts"));
-      mkdirSync(path.join(root, ".changeset"));
       mkdirSync(path.join(root, "packages/cli/src"), { recursive: true });
-      for (const file of [
-        "changeset-guard.ts",
-        "changeset-entry.ts",
-        "changeset-policy.json",
-      ]) {
-        writeFileSync(
-          path.join(root, "scripts", file),
-          readFile(`scripts/${file}`),
-        );
-      }
       const entryPath = path.join(root, ".changeset/change.md");
       writeFileSync(entryPath, entry(["@stll/cli"]).contents);
       writeFileSync(
         path.join(root, "packages/cli/src/main.ts"),
         "export const version = 1;\n",
       );
-      git(root, ["init", "-b", "main"]);
-      git(root, ["config", "user.email", "test@example.com"]);
-      git(root, ["config", "user.name", "Test"]);
-      git(root, ["add", "."]);
-      git(root, ["commit", "--no-gpg-sign", "-m", "base"]);
+      commitAll(root, "base");
       const base = git(root, ["rev-parse", "HEAD"]).trim();
-      const check = () =>
-        Bun.spawnSync(
-          [
-            "bun",
-            "scripts/changeset-guard.ts",
-            "--base",
-            base,
-            "--packages-only",
-          ],
-          { cwd: root },
-        );
+      const check = () => runPackageCheck(root, base);
       writeFileSync(entryPath, entry(["@stll/cli", "@stll/ui"]).contents);
       git(root, ["add", "."]);
       git(root, ["commit", "--no-gpg-sign", "-m", "edit entry"]);
@@ -502,6 +514,15 @@ describe("catalog versions a published package ships", () => {
     ]);
   });
 
+  test("a catalog bump the range already released needs no changeset", () => {
+    expect(withoutReleasedPackages(jszipBump, new Set([DOCX_UTILS]))).toEqual(
+      [],
+    );
+    expect(withoutReleasedPackages(jszipBump, new Set(["@stll/ui"]))).toEqual(
+      jszipBump,
+    );
+  });
+
   test("rejects a shipped catalog bump that no changeset names, naming the package and entry", () => {
     const changedFiles = ["package.json", "bun.lock"];
     for (const entries of [
@@ -516,6 +537,14 @@ describe("catalog versions a published package ships", () => {
           catalogInputs: jszipBump,
         }),
       ).toThrow(`${DOCX_UTILS}: jszip@catalog:`);
+      expect(() =>
+        checkChangesetPackages({
+          changedFiles,
+          entries,
+          policy,
+          catalogInputs: jszipBump,
+        }),
+      ).toThrow("bun run changeset");
     }
     expect(
       decideChangesetGate({
@@ -671,6 +700,121 @@ describe("catalog versions a published package ships", () => {
   });
 });
 
+describe("capability catalog sources", () => {
+  const CLI = "@stll/cli";
+  const REFERENCE = "@stll/cli@0.4.0";
+  const ENTRY_FILE = ".changeset/change.md";
+  const HANDLER = "apps/api/src/handlers/matters.ts";
+  /** In the API workspace, but nothing the catalog is derived from. */
+  const UNRELATED_API_FILE = "apps/api/README.md";
+  const derivedInputs = [CAPABILITY_CATALOG_RELEASE_INPUTS];
+  const entry = (names: readonly string[]) => ({
+    file: ENTRY_FILE,
+    contents: `---\n${names.map((name) => `"${name}": patch`).join("\n")}\n---\n\nA capability schema change.\n`,
+  });
+  const publishedCli = (changedFiles: readonly string[]) =>
+    new Map([[CLI, { reference: REFERENCE, changedFiles, catalogInputs: [] }]]);
+
+  test("counts a catalog source change as a release input of the CLI, with a note", () => {
+    expect(
+      checkChangesetPackages({
+        changedFiles: [HANDLER, ENTRY_FILE],
+        entries: [entry([CLI])],
+        policy,
+        derivedInputs,
+        published: publishedCli([]),
+      }),
+    ).toEqual([`${CLI}: capability catalog sources changed: ${HANDLER}.`]);
+  });
+
+  test("still refuses the CLI for an API file the catalog is not derived from", () => {
+    expect(() =>
+      checkChangesetPackages({
+        // The CLI's own ungated changelog is no catalog source either.
+        changedFiles: [
+          UNRELATED_API_FILE,
+          "packages/cli/CHANGELOG.md",
+          ENTRY_FILE,
+        ],
+        entries: [entry([CLI])],
+        policy,
+        derivedInputs,
+        published: publishedCli(["packages/cli/CHANGELOG.md"]),
+      }),
+    ).toThrow(`${ENTRY_FILE}: ${CLI}`);
+  });
+
+  test("justifies only the package that ships the catalog", () => {
+    expect(() =>
+      checkChangesetPackages({
+        changedFiles: [HANDLER, ENTRY_FILE],
+        entries: [entry(["@stll/business-registries"])],
+        policy,
+        derivedInputs,
+      }),
+    ).toThrow(`${ENTRY_FILE}: @stll/business-registries`);
+  });
+
+  test("counts catalog sources changed since the CLI's last publish", () => {
+    expect(
+      checkChangesetPackages({
+        changedFiles: [ENTRY_FILE],
+        entries: [entry([CLI])],
+        policy,
+        derivedInputs,
+        published: publishedCli(["packages/cli/CHANGELOG.md", HANDLER]),
+      }),
+    ).toEqual([
+      `${CLI}: capability catalog sources changed since ${REFERENCE}: ${HANDLER}.`,
+    ]);
+    expect(() =>
+      checkChangesetPackages({
+        changedFiles: [ENTRY_FILE],
+        entries: [entry([CLI])],
+        policy,
+        derivedInputs,
+        published: publishedCli([
+          "packages/cli/CHANGELOG.md",
+          UNRELATED_API_FILE,
+        ]),
+      }),
+    ).toThrow(`${ENTRY_FILE}: ${CLI}`);
+  });
+
+  test("the guard accepts a CLI entry for an API schema change outside packages/cli", () => {
+    const root = createGuardFixture("stella-catalog-sources-");
+    try {
+      mkdirSync(path.join(root, "packages/cli"), { recursive: true });
+      mkdirSync(path.join(root, path.dirname(HANDLER)), { recursive: true });
+      writeFileSync(
+        path.join(root, "packages/cli/package.json"),
+        '{"name":"@stll/cli","version":"0.4.0"}',
+      );
+      writeFileSync(path.join(root, HANDLER), "export const limit = 10;\n");
+      writeFileSync(path.join(root, UNRELATED_API_FILE), "# API\n");
+      commitAll(root, "base");
+      const base = git(root, ["rev-parse", "HEAD"]).trim();
+
+      writeFileSync(path.join(root, ENTRY_FILE), entry([CLI]).contents);
+      writeFileSync(path.join(root, UNRELATED_API_FILE), "# The API\n");
+      commitAll(root, "unrelated API change");
+      const refused = runPackageCheck(root, base);
+      expect(refused.exitCode).toBe(1);
+      expect(refused.stderr.toString()).toContain(`${ENTRY_FILE}: ${CLI}`);
+
+      writeFileSync(path.join(root, HANDLER), "export const limit = 20;\n");
+      commitAll(root, "schema change");
+      const accepted = runPackageCheck(root, base);
+      expect(accepted.exitCode).toBe(0);
+      expect(accepted.stdout.toString()).toContain(
+        `${CLI}: capability catalog sources changed: ${HANDLER}.`,
+      );
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+});
+
 describe("the diff the gate decides on", () => {
   test("counts a renamed empty changeset as a new entry", () => {
     // A maintenance release commit deletes the previous release's empty entry
@@ -806,10 +950,6 @@ describe("changeset policy file", () => {
     }
   });
 
-  test("gates the CLI capability catalog", () => {
-    expect(policy.releasePaths).toContain("packages/cli/capabilities/**");
-  });
-
   test("declares the same packages to the changesets entry validator", () => {
     expect([...policy.packageFiles].toSorted()).toEqual(
       gatedWorkspaces().map((workspace) => `${workspace}/package.json`),
@@ -831,31 +971,45 @@ const compareVersions = (
   return 0;
 };
 
-const expectChangesetConditions = (gate: string, stepCount: number) => {
-  const { steps } = v.parse(
-    v.object({
-      steps: v.array(v.object({ name: v.string(), if: v.string() })),
-    }),
-    Bun.YAML.parse(`steps:\n${gate}`),
+const expectChangesetConditions = (gate: unknown) => {
+  const steps = v.parse(
+    v.array(
+      v.object({
+        name: v.string(),
+        if: v.string(),
+        id: v.optional(v.string()),
+        env: v.optional(v.record(v.string(), v.string())),
+      }),
+    ),
+    flattenWorkflowSteps(gate),
   );
-  expect(steps).toHaveLength(stepCount);
+  expect(steps.length).toBeGreaterThan(0);
   for (const step of steps) {
     const suffix =
       step.name === CHANGESET_GATE_LAST_STEP
         ? " && steps.policy.outcome == 'success'"
         : "";
+    const reuse =
+      step.env?.["CI_CHECK_KIND"] === "STATIC"
+        ? staticReuseCondition(
+            step.id ?? expect.unreachable("Static changeset step has no id"),
+          )
+        : "";
     expect(step.if, step.name).toBe(
-      `\${{ !cancelled() && steps.checkout.outcome == 'success' && (github.event_name == 'pull_request')${suffix} }}`,
+      `\${{ !cancelled() && steps.checkout.outcome == 'success' && (github.event_name == 'pull_request')${suffix}${reuse} }}`,
     );
   }
 };
 
 describe("workflow and pre-push read the same policy", () => {
   test("the workflow gate feeds every list from the policy file", () => {
-    const job = changesetJob();
-    expect(job).toContain(POLICY_FILE);
+    const policyRun = workflowStepByName(
+      changesetJob(),
+      CHANGESET_GATE_FIRST_STEP,
+    )["run"];
+    expect(policyRun).toContain(POLICY_FILE);
     for (const key of ["releasePaths", "generatedPaths", "packageFiles"]) {
-      expect(job).toContain(`.${key}[]`);
+      expect(policyRun).toContain(`.${key}[]`);
     }
   });
 
@@ -879,39 +1033,50 @@ describe("workflow and pre-push read the same policy", () => {
   test("the workflow gate inlines no pathspecs of its own", () => {
     // A second copy of the list in the workflow is exactly the drift this
     // guard exists to prevent: CI would gate paths pre-push does not.
-    expect(changesetJob()).not.toMatch(/^\s+(?:apps|packages)\//mu);
+    expect(Bun.YAML.stringify(changesetJob())).not.toMatch(
+      /^\s+(?:apps|packages)\//mu,
+    );
   });
 
   test("CI runs the same package relevance check without replacing the shared presence gate", () => {
-    expect(changesetJob()).toContain(
-      'bun scripts/changeset-guard.ts --base "$BASE_SHA" --packages-only',
-    );
+    expect(
+      workflowStepByName(restSteps, "Changeset packages match changed files")[
+        "run"
+      ],
+    ).toBe('bun scripts/changeset-guard.ts --base "$BASE_SHA" --packages-only');
   });
 
   test("every changeset gate step runs on pull requests, before any install", () => {
     const gate = changesetJob();
-    const stepCount = gate.match(/^ {6}- name: /gmu)?.length ?? 0;
-    expect(stepCount).toBeGreaterThan(0);
-    expectChangesetConditions(gate, stepCount);
-    const workflow = readFile(WORKFLOW_FILE);
-    const job = workflow.indexOf("\n  ci-checks-rest:\n");
-    const gateStart = workflow.indexOf(gate, job);
-    expect(gateStart).toBeGreaterThan(job);
-    expect(gateStart).toBeLessThan(
-      workflow.indexOf("      - name: Install dependencies\n", job),
+    expectChangesetConditions(gate);
+    const lastGate = workflowStepByName(restSteps, CHANGESET_GATE_LAST_STEP);
+    const install = workflowStepByName(restSteps, "Install dependencies");
+    expect(restSteps.indexOf(lastGate)).toBeLessThan(
+      restSteps.indexOf(install),
     );
   });
 
   test("a wrapped changeset gate cannot drop its pull-request scope", () => {
     const gate = changesetJob();
-    const stepCount = gate.match(/^ {6}- name: /gmu)?.length ?? 0;
-    const changed = gate.replace(
-      " && (github.event_name == 'pull_request')",
-      "",
+    const first = workflowStepByName(gate, CHANGESET_GATE_FIRST_STEP);
+    const firstCondition = first["if"];
+    if (typeof firstCondition !== "string") {
+      throw new TypeError("Changeset gate steps must have conditions");
+    }
+    const changed = gate.map((step) =>
+      step === first
+        ? {
+            ...step,
+            if: firstCondition.replace(
+              " && (github.event_name == 'pull_request')",
+              "",
+            ),
+          }
+        : step,
     );
-    expect(changed).not.toBe(gate);
-    expect(() => expectChangesetConditions(changed, stepCount)).toThrow(
-      "Load release policy",
+    expect(changed).not.toEqual(gate);
+    expect(() => expectChangesetConditions([{ parallel: changed }])).toThrow(
+      CHANGESET_GATE_FIRST_STEP,
     );
   });
 

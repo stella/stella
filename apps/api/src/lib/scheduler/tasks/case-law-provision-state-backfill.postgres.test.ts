@@ -6,8 +6,8 @@ import { drizzle } from "drizzle-orm/pglite";
 
 import { createHeavyWorkSlot } from "@stll/db-load-gate/slot";
 import {
-  PROVISION_EXTRACTION_ADMISSION,
   PROVISION_EXTRACTION_ADMISSION_REVISION,
+  PROVISION_EXTRACTION_ADMISSION_SCOPES,
 } from "@stll/legal-atlas/provision-extraction-admission";
 
 import { BackfillFailedError } from "@/api/db/backfill-runtime";
@@ -19,8 +19,8 @@ import { schedulerJobRuns, schedulerJobs } from "@/api/db/schema";
 import { logger } from "@/api/lib/observability/logger";
 import { isPgError, PG_ERROR } from "@/api/lib/pg-error";
 import {
-  SCHEDULER_BACKFILL_CONFIG,
   SCHEDULER_BACKFILL_IDS,
+  schedulerBackfillConfig,
 } from "@/api/lib/scheduler/backfill-config";
 import { runSchedulerOnce } from "@/api/lib/scheduler/runner";
 import type {
@@ -97,9 +97,10 @@ const withFixture = async (
         `INSERT INTO ${schema}.case_law_provision_admission (key, revision) VALUES ('global', $1)`,
         [PROVISION_EXTRACTION_ADMISSION_REVISION],
       );
-      for (const { jurisdiction, language } of Object.values(
-        PROVISION_EXTRACTION_ADMISSION,
-      )) {
+      for (const {
+        jurisdiction,
+        language,
+      } of PROVISION_EXTRACTION_ADMISSION_SCOPES) {
         await operator.unsafe(
           `INSERT INTO ${schema}.case_law_provision_extraction_scopes (country, language, status, generation) VALUES ($1, $2, 'active', 1)`,
           [jurisdiction, language],
@@ -130,7 +131,7 @@ const withFixture = async (
       }: FixtureOptions = {}) => {
         // A resumed worker must start after any hold persisted by earlier runs.
         if (phase === "resumed") {
-          now += SCHEDULER_BACKFILL_CONFIG.holdBackoffCapMs;
+          now += schedulerBackfillConfig().holdBackoffCapMs;
         }
         const events: string[] = [];
         const failures: unknown[] = [];
@@ -145,7 +146,7 @@ const withFixture = async (
               await session.unsafe(`SET search_path TO ${schema}, public`);
               return session;
             },
-            cancelBackend: async (pid) =>
+            cancelBackend: async (pid): Promise<unknown> =>
               await operator.unsafe("SELECT pg_cancel_backend($1)", [pid]),
             signal,
             work: async (session, setTransactionBudget) =>
@@ -157,7 +158,7 @@ const withFixture = async (
                     unsafe: async (
                       statement: string,
                       parameters: unknown[] = [],
-                    ) => {
+                    ): Promise<unknown> => {
                       await beforeQuery(statement, session);
                       // Production catalog reads intentionally name public; isolate
                       // those reads alongside the real cloned constraints here.
@@ -320,7 +321,7 @@ describe.skipIf(!enabled)("provision task on PostgreSQL", () => {
         await held.run();
       } finally {
         await slot.close();
-        session.release();
+        await session.release();
       }
       expect(held.failures).toEqual([]);
       expect((await checkpoint()).batch.holdUntil).not.toBeNull();

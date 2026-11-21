@@ -49,6 +49,43 @@ const columns = [
   },
 ] as const;
 
+class ContainmentTarget extends EventTarget {
+  private readonly targets: Set<EventTarget>;
+
+  constructor(targets: readonly EventTarget[]) {
+    super();
+    this.targets = new Set(targets);
+  }
+
+  add(target: EventTarget) {
+    this.targets.add(target);
+  }
+
+  contains(target: EventTarget | null) {
+    return target === this || (target !== null && this.targets.has(target));
+  }
+}
+
+class ClosestTarget extends EventTarget {
+  private readonly matchingSelector: string;
+  private readonly matchTarget: EventTarget;
+
+  seenSelector = "";
+
+  constructor(matchingSelector: string, matchTarget?: EventTarget) {
+    super();
+    this.matchingSelector = matchingSelector;
+    this.matchTarget = matchTarget ?? this;
+  }
+
+  closest(selector: string) {
+    this.seenSelector = selector;
+    return selector.split(",").includes(this.matchingSelector)
+      ? this.matchTarget
+      : null;
+  }
+}
+
 describe("DataTable", () => {
   test("renders entity-agnostic columns and accessible row actions", () => {
     const markup = renderToStaticMarkup(
@@ -71,7 +108,8 @@ describe("DataTable", () => {
     expect(markup).toContain("focus-visible:ring-2");
     expect(markup).toContain("pointer-coarse:h-11");
     expect(markup).toContain('data-slot="button"');
-    expect(markup).toContain("Open Northwind</button>");
+    // The label may sit in the button's cut-to-fit span.
+    expect(markup).toMatch(/>Open Northwind<\/(?:span><\/)?button>/u);
     expect(markup).toContain("caller-row");
     expect(markup).not.toContain('role="button"');
     expect(markup).not.toContain('tabindex="0"');
@@ -204,40 +242,3 @@ const renderLoadingTable = (loadingRowCount: number) =>
       rows={[]}
     />,
   );
-
-class ContainmentTarget extends EventTarget {
-  private readonly targets: Set<EventTarget>;
-
-  constructor(targets: readonly EventTarget[]) {
-    super();
-    this.targets = new Set(targets);
-  }
-
-  add(target: EventTarget) {
-    this.targets.add(target);
-  }
-
-  contains(target: EventTarget | null) {
-    return target === this || (target !== null && this.targets.has(target));
-  }
-}
-
-class ClosestTarget extends EventTarget {
-  private readonly matchingSelector: string;
-  private readonly matchTarget: EventTarget;
-
-  seenSelector = "";
-
-  constructor(matchingSelector: string, matchTarget?: EventTarget) {
-    super();
-    this.matchingSelector = matchingSelector;
-    this.matchTarget = matchTarget ?? this;
-  }
-
-  closest(selector: string) {
-    this.seenSelector = selector;
-    return selector.split(",").includes(this.matchingSelector)
-      ? this.matchTarget
-      : null;
-  }
-}

@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import nodePath from "node:path";
+import { fileURLToPath } from "node:url";
 
 const runSeed = async (seeds: string, extraArgs: readonly string[] = []) => {
   const dir = mkdtempSync(nodePath.join(tmpdir(), "policy-cli-"));
@@ -10,7 +11,7 @@ const runSeed = async (seeds: string, extraArgs: readonly string[] = []) => {
     [
       process.execPath,
       "--no-env-file",
-      new URL("seed-usage-policies.ts", import.meta.url).pathname,
+      fileURLToPath(new URL("seed-usage-policies.ts", import.meta.url)),
       "--results",
       resultsPath,
       ...extraArgs,
@@ -50,14 +51,18 @@ const runSeed = async (seeds: string, extraArgs: readonly string[] = []) => {
   return { exitCode, stdout, stderr, report };
 };
 
-test("empty usage policy configuration exits without database access", async () => {
+// Empty seeds still retire an active free policy, so they need the database.
+test("empty usage policy configuration fails when the database is unreachable", async () => {
   const result = await runSeed("[]");
   expect(result).toEqual({
-    exitCode: 0,
-    stdout: expect.stringContaining("usage policies: seeded=0 hidden=0\n"),
+    exitCode: 1,
+    stdout: expect.stringContaining("```jsonl\n\n```"),
     report: "",
-    stderr: "",
+    stderr: expect.stringContaining(
+      "Usage policy seed failed; check configuration, results path and database access.\n",
+    ),
   });
+  expect(result.stdout).not.toContain("usage policies: seeded=");
 });
 
 test.each([

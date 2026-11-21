@@ -21,8 +21,15 @@
 //   bun scripts/check-test-input-coverage.ts
 
 import { panic } from "better-result";
-import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
+import ts from "typescript6";
+
+import { isPathInside, repoRelativePath } from "@stll/portable-path";
+
+import { readStringLiterals, readTestInputs } from "./test-input-readers";
+
+export { readStringLiterals, readTestInputs } from "./test-input-readers";
 
 const REPO_ROOT = path.resolve(import.meta.dirname, "..");
 const WORKSPACE_PARENTS = ["apps", "packages"] as const;
@@ -44,6 +51,11 @@ const WORKSPACE_DEPENDENCY_PROTOCOL = "workspace:";
  * declaration.
  */
 const TURBO_GLOBAL_INPUTS = new Set(["package.json", "bun.lock", TURBO_CONFIG]);
+const TEST_MODULE_RESOLUTION_OPTIONS = {
+  allowImportingTsExtensions: true,
+  module: ts.ModuleKind.ESNext,
+  moduleResolution: ts.ModuleResolutionKind.Bundler,
+} satisfies ts.CompilerOptions;
 
 /** Directories no test reads as repository source. */
 const IGNORED_SEGMENTS = [
@@ -56,6 +68,7 @@ const IGNORED_SEGMENTS = [
   ".astro",
   "coverage",
 ] as const;
+const IGNORED_SEGMENT_SET = new Set<string>(IGNORED_SEGMENTS);
 
 /**
  * Calls whose string arguments are values rather than paths: a matcher compares
@@ -76,198 +89,26 @@ const NON_READ_CALLS = new Set([
   "toHaveProperty",
   "toInclude",
   "toMatch",
+  "toMatchInlineSnapshot",
+  "toMatchSnapshot",
   "toStartWith",
   "toStrictEqual",
 ]);
 
-const IDENTIFIER_CHARACTER = /[A-Za-z0-9_$]/u;
-const WHITESPACE = /\s/u;
 const GLOB_CHARACTER = /[*?]/u;
-/** A `/` here opens a regular expression rather than continuing an expression. */
-const REGEX_PRECEDING = new Set([
-  "!",
-  "&",
-  "(",
-  ",",
-  ":",
-  ";",
-  "=",
-  "?",
-  "[",
-  "{",
-  "|",
-  "}",
-  "+",
-  "-",
-  "*",
-  "%",
-  "<",
-  ">",
-  "~",
-  "^",
-  "\n",
-]);
-/** Bounds brace expansion so a pathological pattern cannot fan out. */
 const MAX_BRACE_EXPANSIONS = 64;
 
-type SourceLiteral = {
-  readonly callee: string | undefined;
-  readonly line: number;
-  readonly value: string;
+type BraceGroup = {
+  readonly alternatives: readonly string[];
+  readonly prefix: string;
+  readonly suffix: string;
 };
 
-const calleeBefore = (source: string, open: number): string | undefined => {
-  let end = open - 1;
-  while (end >= 0 && WHITESPACE.test(source.charAt(end))) {
-    end -= 1;
-  }
-  let start = end;
-  while (start >= 0 && IDENTIFIER_CHARACTER.test(source.charAt(start))) {
-    start -= 1;
-  }
-  return start === end ? undefined : source.slice(start + 1, end + 1);
-};
-
-type ScanState = {
-  index: number;
-  line: number;
-};
-
-/**
- * Consumes a quoted or template literal, returning its static text. A quote
- * that never closes on its line is JSX prose (`don't`), not a literal: the scan
- * rewinds past it rather than swallowing the rest of the file.
- */
-const readQuoted = (
-  source: string,
-  state: ScanState,
-  quote: string,
-): string | undefined => {
-  const start = state.index;
-  const startLine = state.line;
-  let value = "";
-  let dynamic = false;
-  state.index += 1;
-  while (state.index < source.length) {
-    const char = source.charAt(state.index);
-    if (char === "\\") {
-      value += source.charAt(state.index + 1);
-      state.index += 2;
-      continue;
-    }
-    if (char === quote) {
-      state.index += 1;
-      return dynamic ? undefined : value;
-    }
-    if (char === "\n") {
-      if (quote !== "`") {
-        break;
-      }
-      state.line += 1;
-    }
-    if (
-      quote === "`" &&
-      char === "$" &&
-      source.charAt(state.index + 1) === "{"
-    ) {
-      dynamic = true;
-    }
-    value += char;
-    state.index += 1;
-  }
-  state.index = start + 1;
-  state.line = startLine;
-  return undefined;
-};
-
-/**
- * Every static string literal in a TypeScript source, tagged with the callee of
- * the innermost call that encloses it. Comments and regular expressions are
- * skipped so a commented-out path or a character class cannot be read as one.
- */
-export const readStringLiterals = (
-  source: string,
-): readonly SourceLiteral[] => {
-  const literals: SourceLiteral[] = [];
-  const calls: (string | undefined)[] = [];
-  const state: ScanState = { index: 0, line: 1 };
-  let previousSignificant = "\n";
-
-  while (state.index < source.length) {
-    const char = source.charAt(state.index);
-    const next = source.charAt(state.index + 1);
-
-    if (char === "\n") {
-      state.line += 1;
-      state.index += 1;
-      continue;
-    }
-    if (WHITESPACE.test(char)) {
-      state.index += 1;
-      continue;
-    }
-    if (char === "/" && next === "/") {
-      const end = source.indexOf("\n", state.index);
-      state.index = end === -1 ? source.length : end;
-      continue;
-    }
-    if (char === "/" && next === "*") {
-      const end = source.indexOf("*/", state.index + 2);
-      const stop = end === -1 ? source.length : end + 2;
-      state.line += source.slice(state.index, stop).split("\n").length - 1;
-      state.index = stop;
-      continue;
-    }
-    if (char === "/" && REGEX_PRECEDING.has(previousSignificant)) {
-      state.index += 1;
-      let inClass = false;
-      while (state.index < source.length) {
-        const regexChar = source.charAt(state.index);
-        if (regexChar === "\\") {
-          state.index += 2;
-          continue;
-        }
-        if (regexChar === "[") {
-          inClass = true;
-        } else if (regexChar === "]") {
-          inClass = false;
-        } else if (regexChar === "/" && !inClass) {
-          state.index += 1;
-          break;
-        } else if (regexChar === "\n") {
-          break;
-        }
-        state.index += 1;
-      }
-      previousSignificant = "/";
-      continue;
-    }
-    if (char === '"' || char === "'" || char === "`") {
-      const line = state.line;
-      const value = readQuoted(source, state, char);
-      if (value !== undefined) {
-        literals.push({ callee: calls.at(-1), line, value });
-      }
-      previousSignificant = char;
-      continue;
-    }
-    if (char === "(") {
-      calls.push(calleeBefore(source, state.index));
-    } else if (char === ")") {
-      calls.pop();
-    }
-    previousSignificant = char;
-    state.index += 1;
-  }
-
-  return literals;
-};
-
-/** `{apps,packages}/**` expands to `apps/**` and `packages/**`. */
-export const expandBraces = (pattern: string): readonly string[] => {
+/** The first closed top-level `{a,b}` group of a pattern. */
+const firstBraceGroup = (pattern: string): BraceGroup | undefined => {
   const open = pattern.indexOf("{");
   if (open === -1) {
-    return [pattern];
+    return undefined;
   }
   let depth = 0;
   let close = -1;
@@ -296,15 +137,40 @@ export const expandBraces = (pattern: string): readonly string[] => {
     current += char;
   }
   if (close === -1) {
-    return [pattern];
+    return undefined;
   }
   alternatives.push(current);
-  const prefix = pattern.slice(0, open);
-  const suffix = pattern.slice(close + 1);
-  const expanded = alternatives.flatMap((alternative) =>
-    expandBraces(`${prefix}${alternative}${suffix}`),
-  );
-  return expanded.slice(0, MAX_BRACE_EXPANSIONS);
+  return {
+    alternatives,
+    prefix: pattern.slice(0, open),
+    suffix: pattern.slice(close + 1),
+  };
+};
+
+/**
+ * `{apps,packages}/**` expands to `apps/**` and `packages/**`. Expansion is
+ * depth-first and stops at the cap, so the cap bounds the work as well as the
+ * result: a literal with many groups (an inline JSON snapshot) has
+ * exponentially many expansions.
+ */
+export const expandBraces = (pattern: string): readonly string[] => {
+  const expanded: string[] = [];
+  const pending = [pattern];
+  while (pending.length > 0 && expanded.length < MAX_BRACE_EXPANSIONS) {
+    const next = pending.pop();
+    if (next === undefined) {
+      continue;
+    }
+    const group = firstBraceGroup(next);
+    if (group === undefined) {
+      expanded.push(next);
+      continue;
+    }
+    for (const alternative of group.alternatives.toReversed()) {
+      pending.push(`${group.prefix}${alternative}${group.suffix}`);
+    }
+  }
+  return expanded;
 };
 
 type TargetCandidate = {
@@ -369,7 +235,9 @@ const existsExact = (root: string, relativePath: string): boolean => {
     const entries =
       cached ??
       new Set(
-        existsSync(directory) ? readdirSync(directory) : ([] as string[]),
+        existsSync(directory) && statSync(directory).isDirectory()
+          ? readdirSync(directory)
+          : ([] as string[]),
       );
     if (cached === undefined) {
       directoryEntries.set(directory, entries);
@@ -446,12 +314,14 @@ export const classifyTarget = ({
   }
   // A root-level name with no directory in it ("docs", "docker", ".env") is a
   // field value, a command, or a fixture filename far more often than a read.
+  // Dotenv suffixes remain fixture names; actual reads use an explicit path.
   // Only a named file with an extension (`oxlint.config.ts`) reads as a path —
   // unless the literal was a glob, which says outright that it scans a tree.
   if (
     !fromGlob &&
     !candidate.includes("/") &&
-    (candidate.lastIndexOf(".") <= 0 ||
+    (/^\.env(?:\.|$)/u.test(candidate) ||
+      candidate.lastIndexOf(".") <= 0 ||
       statSync(path.join(root, candidate)).isDirectory())
   ) {
     return { type: "absent" };
@@ -557,39 +427,6 @@ const dependencyClosure = (
   return closure;
 };
 
-export const readTestInputs = (
-  root: string,
-): ReadonlyMap<string, readonly string[]> => {
-  const parsed: unknown = Bun.JSONC.parse(
-    readFileSync(path.join(root, TURBO_CONFIG), "utf-8"),
-  );
-  const tasks = isRecord(parsed) ? parsed["tasks"] : undefined;
-  if (!isRecord(tasks)) {
-    panic(`${TURBO_CONFIG} must declare tasks`);
-  }
-  const inputs = new Map<string, readonly string[]>();
-  for (const [task, definition] of Object.entries(tasks)) {
-    if (!task.endsWith(TEST_TASK_SUFFIX) || !isRecord(definition)) {
-      continue;
-    }
-    const declared = definition["inputs"];
-    if (!Array.isArray(declared)) {
-      continue;
-    }
-    inputs.set(
-      task.slice(0, -TEST_TASK_SUFFIX.length),
-      declared
-        .filter(
-          (entry): entry is string =>
-            typeof entry === "string" &&
-            entry.startsWith(TURBO_ROOT_INPUT_PREFIX),
-        )
-        .map((entry) => entry.slice(TURBO_ROOT_INPUT_PREFIX.length)),
-    );
-  }
-  return inputs;
-};
-
 const testFiles = (root: string, workspaceDir: string): readonly string[] =>
   [
     ...new Set(
@@ -620,20 +457,145 @@ type OutsideRead = {
   readonly value: string;
 };
 
+type LocalModuleRead = {
+  readonly line: number;
+  readonly target: string;
+  readonly value: string;
+};
+
+/** Local imports are test dependencies even when their source omits `.ts`. */
+const localModuleReads = ({
+  packageDir,
+  root,
+  source,
+  testFile,
+}: {
+  readonly packageDir: string;
+  readonly root: string;
+  readonly source: string;
+  readonly testFile: string;
+}): readonly LocalModuleRead[] => {
+  const absoluteTestFile = path.join(root, testFile);
+  const sourceFile = ts.createSourceFile(
+    absoluteTestFile,
+    source,
+    ts.ScriptTarget.Latest,
+    true,
+  );
+  const specifiers: ts.StringLiteralLike[] = [];
+  const visit = (node: ts.Node): void => {
+    if (
+      ts.isImportDeclaration(node) &&
+      node.importClause?.phaseModifier !== ts.SyntaxKind.TypeKeyword &&
+      ts.isStringLiteralLike(node.moduleSpecifier)
+    ) {
+      specifiers.push(node.moduleSpecifier);
+    } else if (
+      ts.isExportDeclaration(node) &&
+      !node.isTypeOnly &&
+      node.moduleSpecifier !== undefined &&
+      ts.isStringLiteralLike(node.moduleSpecifier)
+    ) {
+      specifiers.push(node.moduleSpecifier);
+    } else if (
+      ts.isImportEqualsDeclaration(node) &&
+      !node.isTypeOnly &&
+      ts.isExternalModuleReference(node.moduleReference) &&
+      ts.isStringLiteralLike(node.moduleReference.expression)
+    ) {
+      specifiers.push(node.moduleReference.expression);
+    } else if (ts.isCallExpression(node) && node.arguments.length > 0) {
+      const [argument] = node.arguments;
+      const isDynamicImport =
+        node.expression.kind === ts.SyntaxKind.ImportKeyword;
+      const isRequire =
+        ts.isIdentifier(node.expression) && node.expression.text === "require";
+      if (
+        (isDynamicImport || isRequire) &&
+        argument !== undefined &&
+        ts.isStringLiteralLike(argument)
+      ) {
+        specifiers.push(argument);
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+
+  const reads: LocalModuleRead[] = [];
+  for (const specifier of specifiers) {
+    if (!isRelativeSpecifier(specifier.text)) {
+      continue;
+    }
+    const unresolved = path.posix.normalize(
+      path.posix.join(path.posix.dirname(testFile), specifier.text),
+    );
+    if (isInside(unresolved, packageDir)) {
+      continue;
+    }
+    const resolved = ts.resolveModuleName(
+      specifier.text,
+      absoluteTestFile,
+      TEST_MODULE_RESOLUTION_OPTIONS,
+      ts.sys,
+    ).resolvedModule;
+    if (resolved === undefined) {
+      // The test runner reports unresolved imports; they name no source input.
+      continue;
+    }
+    if (!isPathInside(root, resolved.resolvedFileName)) {
+      continue;
+    }
+    const repositoryTarget = repoRelativePath(root, resolved.resolvedFileName);
+    if (repositoryTarget === "") {
+      continue;
+    }
+    if (
+      repositoryTarget
+        .split("/")
+        .some((segment) => IGNORED_SEGMENT_SET.has(segment))
+    ) {
+      continue;
+    }
+    reads.push({
+      line:
+        sourceFile.getLineAndCharacterOfPosition(specifier.getStart(sourceFile))
+          .line + 1,
+      target: repositoryTarget,
+      value: specifier.text,
+    });
+  }
+  return reads;
+};
+
 /** Every repository path the package's tests reach outside their own package. */
 const outsideReads = ({
   packageDir,
   root,
-  skippedDirs,
 }: {
   readonly packageDir: string;
   readonly root: string;
-  readonly skippedDirs: ReadonlySet<string>;
 }): readonly OutsideRead[] => {
   const reads: OutsideRead[] = [];
   for (const relative of testFiles(root, packageDir)) {
     const testFile = `${packageDir}/${relative}`;
     const source = readFileSync(path.join(root, testFile), "utf-8");
+    for (const read of localModuleReads({
+      packageDir,
+      root,
+      source,
+      testFile,
+    })) {
+      const { target } = read;
+      if (
+        TURBO_GLOBAL_INPUTS.has(target) ||
+        target === packageDir ||
+        target.startsWith(`${packageDir}/`)
+      ) {
+        continue;
+      }
+      reads.push({ ...read, testFile });
+    }
     for (const { callee, line, value } of readStringLiterals(source)) {
       if (callee !== undefined && NON_READ_CALLS.has(callee)) {
         continue;
@@ -652,10 +614,7 @@ const outsideReads = ({
         if (
           TURBO_GLOBAL_INPUTS.has(target) ||
           target === packageDir ||
-          target.startsWith(`${packageDir}/`) ||
-          [...skippedDirs].some(
-            (dir) => target === dir || target.startsWith(`${dir}/`),
-          )
+          target.startsWith(`${packageDir}/`)
         ) {
           continue;
         }
@@ -663,7 +622,14 @@ const outsideReads = ({
       }
     }
   }
-  return reads;
+  return [
+    ...new Map(
+      reads.map((read) => [
+        `${read.testFile}:${read.line}:${read.target}`,
+        read,
+      ]),
+    ).values(),
+  ];
 };
 
 export const checkTestInputCoverage = (root: string): readonly string[] => {
@@ -676,10 +642,10 @@ export const checkTestInputCoverage = (root: string): readonly string[] => {
 
   for (const workspace of workspaces) {
     const inputs = declared.get(workspace.name) ?? [];
+    const dependencyDirs = dependencyClosure(workspace, byName);
     const reads = outsideReads({
       packageDir: workspace.dir,
       root,
-      skippedDirs: dependencyClosure(workspace, byName),
     });
     const matched = new Set<string>();
 
@@ -687,6 +653,11 @@ export const checkTestInputCoverage = (root: string): readonly string[] => {
       const input = inputs.find((entry) => matchesRootInput(target, entry));
       if (input !== undefined) {
         matched.add(input);
+        continue;
+      }
+      // Dependency reads need no extra input, but an explicit input still
+      // counts as used when the test reads it.
+      if ([...dependencyDirs].some((dir) => isInside(target, dir))) {
         continue;
       }
       errors.push(

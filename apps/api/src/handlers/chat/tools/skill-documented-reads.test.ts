@@ -1,7 +1,8 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
-import { listSkillMetadata, readDocumentedChatReads } from "@stll/skills";
+import { listSkillMetadata } from "@stll/skills";
+import { readDocumentedChatReads } from "@stll/skills/frontmatter";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import {
@@ -22,6 +23,7 @@ import {
   builtInCodeModePromptVariants,
   CHAT_CODE_MODE_SYSTEM_PROMPT,
   chatCodeModeSystemPrompt,
+  chatScriptReadToolNames,
   codeModePromptVariantKey,
   createChatCodeModeSurface,
 } from "@/api/handlers/chat/tools/execute/chat-code-mode";
@@ -41,6 +43,7 @@ import { createChatToolDefectMemo } from "@/api/lib/chat/tool-defect-memo";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import { enrolledTimeBillingSnapshot } from "@/api/tests/helpers/time-billing-enrolment";
 
 const PLAYBOOK_BUILDER = "playbook-builder";
 
@@ -168,7 +171,8 @@ describe("skill-documented chat reads", () => {
     }
   });
 
-  test("the documentable set is the projectable reads the base prompt leaves lazy", () => {
+  test("the base prompt leaves offered documentable reads lazy", () => {
+    const offered = new Set(chatScriptReadToolNames());
     expect(DOCUMENTABLE_CHAT_READ_NAMES).not.toContain("list_matters");
     expect(DOCUMENTABLE_CHAT_READ_NAMES).toContain("list_documents");
     // `read_document` is projectable; `fetch` is not and never enters chat.
@@ -176,13 +180,41 @@ describe("skill-documented chat reads", () => {
     expect(DOCUMENTABLE_CHAT_READ_NAMES).not.toContain("fetch");
     for (const read of DOCUMENTABLE_CHAT_READ_NAMES) {
       expect(CHAT_CODE_MODE_SYSTEM_PROMPT).not.toContain(stubOf(read));
-      expect(CHAT_CODE_MODE_SYSTEM_PROMPT).toMatch(discoveryLineOf(read));
+      if (offered.has(read)) {
+        expect(CHAT_CODE_MODE_SYSTEM_PROMPT).toMatch(discoveryLineOf(read));
+      } else {
+        expect(CHAT_CODE_MODE_SYSTEM_PROMPT).not.toMatch(discoveryLineOf(read));
+      }
     }
     // And nothing else is discoverable: the map-derived set and the
     // registry-ordered catalog code-mode renders agree in both directions.
     expect(CHAT_CODE_MODE_SYSTEM_PROMPT.match(/^- external_/gmu)?.length).toBe(
-      DOCUMENTABLE_CHAT_READ_NAMES.length,
+      DOCUMENTABLE_CHAT_READ_NAMES.filter((read) => offered.has(read)).length,
     );
+  });
+
+  test("feature-owned skill reads are documented per enrolled turn without changing the base prompt", () => {
+    const baseline = new Set(chatScriptReadToolNames());
+    const gatedReads = DOCUMENTABLE_CHAT_READ_NAMES.filter(
+      (read) => !baseline.has(read),
+    );
+    expect(gatedReads.length).toBeGreaterThan(0);
+    const context = {
+      organizationId,
+      userId,
+      featureAccessSnapshot: enrolledTimeBillingSnapshot({
+        organizationId,
+        userId,
+      }),
+    };
+    const offered = new Set(chatScriptReadToolNames(context));
+    for (const read of gatedReads) {
+      expect(offered.has(read)).toBe(true);
+      expect(chatCodeModeSystemPrompt([read], context)).toContain(stubOf(read));
+      expect(chatCodeModeSystemPrompt([read])).not.toContain(stubOf(read));
+      expect(CHAT_CODE_MODE_SYSTEM_PROMPT).not.toMatch(discoveryLineOf(read));
+    }
+    expect(chatCodeModeSystemPrompt([])).toBe(CHAT_CODE_MODE_SYSTEM_PROMPT);
   });
 
   test("a name outside the documentable set, or past the limit, is rejected with its reason", () => {
@@ -223,9 +255,18 @@ describe("skill-documented chat reads", () => {
   test("every built-in skill's documented reads fit the prompt ceiling", async () => {
     for (const { name } of listSkillMetadata()) {
       const skill = await resolveBuiltInSkill(name);
-      const added =
-        chatCodeModeSystemPrompt(skill.documentedChatReads).length -
-        CHAT_CODE_MODE_SYSTEM_PROMPT.length;
+      const prompt = chatCodeModeSystemPrompt(skill.documentedChatReads);
+      const surface = createChatCodeModeSurface({
+        concurrencyKey: "skill-documented-reads-prompt-test",
+        documentedReads: skill.documentedChatReads,
+        runReadTool: async () => Result.ok({}),
+      });
+      expect(surface.systemPrompt).toBe(prompt);
+      // Eager descriptions include their projection once, beside the stub.
+      expect(prompt.match(/Returns: /gu)?.length).toBe(
+        1 + skill.documentedChatReads.length,
+      );
+      const added = prompt.length - CHAT_CODE_MODE_SYSTEM_PROMPT.length;
       expect(added, `${name} adds ${String(added)} chars`).toBeLessThanOrEqual(
         DOCUMENTED_READS_PROMPT_CHAR_CEILING,
       );

@@ -1,4 +1,4 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
@@ -8,7 +8,20 @@ import {
   resolveSharedPoolTimeoutPolicy,
 } from "@/api/db/shared-pool-timeout-policy";
 import { envDbTimeouts } from "@/api/env-db-timeouts";
+import { SITEMAP_SHARD_READ_DEADLINE_MS } from "@/api/lib/case-law/sitemap-shard-budget";
 import { executedRows } from "@/api/lib/db/executed-rows";
+
+/**
+ * Request budgets only; background and authenticated reads retain their
+ * policy. A sitemap read ends well before the web server stops waiting for
+ * it, so it never outlives the request that asked for it.
+ */
+export const PUBLIC_READ_STATEMENT_TIMEOUT_MS = {
+  browse: 30_000,
+  search: 30_000,
+  aggregate: 30_000,
+  sitemap: SITEMAP_SHARD_READ_DEADLINE_MS,
+} as const;
 
 export const sharedPoolTimeoutPolicy = resolveSharedPoolTimeoutPolicy({
   idleTimeoutSeconds: envDbTimeouts.DATABASE_POOL_IDLE_TIMEOUT_S,
@@ -63,10 +76,78 @@ export const setSharedLockTimeout = async (
   );
 };
 
+export const setSharedTransactionTimeouts = async (
+  tx: TimeoutTransaction,
+  { statementTimeoutMs, lockTimeoutMs }: SharedQueryTimeouts,
+): Promise<void> => {
+  const lock =
+    lockTimeoutMs === undefined
+      ? sql``
+      : sql`, set_config('lock_timeout', ${`${effectiveTimeout(lockTimeoutMs)}ms`}, true)`;
+  await tx.execute(sql`SELECT
+    set_config('statement_timeout', ${`${effectiveTimeout(statementTimeoutMs)}ms`}, true)
+    ${lock}`);
+};
+
+type TransactionTimeouts = Required<SharedQueryTimeouts>;
+
+/** Restore the captured settings after the caller has settled its savepoint. */
+export const withSharedTransactionTimeoutRestoration = async <T>(
+  tx: TimeoutTransaction,
+  fn: (previous: TransactionTimeouts) => Promise<T>,
+): Promise<T> => {
+  const row = executedRows(
+    await tx.execute(sql`SELECT
+      current_setting('statement_timeout') AS statement_timeout,
+      current_setting('lock_timeout') AS lock_timeout`),
+  ).at(0);
+  if (
+    typeof row !== "object" ||
+    row === null ||
+    !("statement_timeout" in row) ||
+    !("lock_timeout" in row) ||
+    typeof row.statement_timeout !== "string" ||
+    typeof row.lock_timeout !== "string"
+  ) {
+    panic("PostgreSQL did not return transaction timeouts");
+  }
+  const previous = {
+    statementTimeoutMs: parsePostgresTimeoutMs(row.statement_timeout),
+    lockTimeoutMs: parsePostgresTimeoutMs(row.lock_timeout),
+  };
+  const outcome = await Result.tryPromise({
+    try: async () => await fn(previous),
+    catch: (cause) => cause,
+  });
+  // Restore only the captured settings, including disabled timeouts. A failed
+  // savepoint cleanup may leave the transaction aborted; preserve its error.
+  const restoration = await Result.tryPromise({
+    try: async () =>
+      await tx.execute(sql`SELECT
+    set_config('statement_timeout', ${`${previous.statementTimeoutMs}ms`}, true),
+    set_config('lock_timeout', ${`${previous.lockTimeoutMs}ms`}, true)`),
+    catch: (cause) => cause,
+  });
+  if (outcome.isErr()) {
+    throw outcome.error;
+  }
+  if (restoration.isErr()) {
+    throw restoration.error;
+  }
+  return outcome.value;
+};
+
 type SharedReadGuards = {
   statementTimeoutMs: number;
   lockTimeoutMs?: number;
   idleInTransactionTimeoutMs?: number;
+  /**
+   * A deadline for the whole transaction, counted from this statement.
+   * `statement_timeout` restarts with every statement, so only this bounds
+   * a run of statements: past it the server ends the session, whatever the
+   * transaction is doing.
+   */
+  transactionTimeoutMs?: number;
 };
 
 /** Install the public read guards together so setup costs one round trip. */
@@ -76,8 +157,13 @@ export const setSharedReadTransactionGuards = async (
     statementTimeoutMs,
     lockTimeoutMs,
     idleInTransactionTimeoutMs,
+    transactionTimeoutMs,
   }: SharedReadGuards,
 ): Promise<void> => {
+  const transaction =
+    transactionTimeoutMs === undefined
+      ? sql``
+      : sql`, set_config('transaction_timeout', ${`${effectiveTimeout(transactionTimeoutMs)}ms`}, true)`;
   const lock =
     lockTimeoutMs === undefined
       ? sql``
@@ -92,6 +178,7 @@ export const setSharedReadTransactionGuards = async (
       set_config('statement_timeout', ${`${effectiveTimeout(statementTimeoutMs)}ms`}, true)
       ${lock}
       ${idle}
+      ${transaction}
   `);
 };
 

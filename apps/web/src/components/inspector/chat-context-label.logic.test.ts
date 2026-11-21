@@ -21,7 +21,6 @@ const labelOf = (
     activeSkillName: undefined,
     boundDocumentLabel: undefined,
     matterNames: [],
-    newChatLabel: "New chat",
     tabLabel: "New chat",
     ...overrides,
   });
@@ -91,8 +90,9 @@ describe("what the composer says the chat is about", () => {
     expect(labelOf({ tabLabel: "Lease renewal" })).toBe("Lease renewal");
   });
 
-  test("falls back to the untitled name while the thread has no title", () => {
-    expect(labelOf()).toBe("New chat");
+  test("names nothing for an untitled chat with no context", () => {
+    expect(labelOf()).toBeUndefined();
+    expect(labelOf({ tabLabel: "  " })).toBeUndefined();
   });
 });
 
@@ -100,6 +100,7 @@ describe("what the tab header names", () => {
   test("names the bound document while the thread is untitled", () => {
     expect(
       chatTabHeaderLabel({
+        activeSkillName: undefined,
         boundDocumentLabel: "Mfv.10127/2026/4",
         newChatLabel: "New chat",
         tabLabel: "New chat",
@@ -107,9 +108,21 @@ describe("what the tab header names", () => {
     ).toBe("Mfv.10127/2026/4");
   });
 
+  test("names the skill the reader picked, over the document they stand on", () => {
+    expect(
+      chatTabHeaderLabel({
+        activeSkillName: "Vytvořit playbook",
+        boundDocumentLabel: "Mfv.10127/2026/4",
+        newChatLabel: "Nový chat",
+        tabLabel: "New chat",
+      }),
+    ).toBe("Vytvořit playbook");
+  });
+
   test("keeps the thread's own title once it has one", () => {
     expect(
       chatTabHeaderLabel({
+        activeSkillName: "Build a playbook",
         boundDocumentLabel: "Mfv.10127/2026/4",
         newChatLabel: "New chat",
         tabLabel: "Limitation period",

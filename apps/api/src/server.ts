@@ -1,172 +1,58 @@
-import cors from "@elysia/cors";
 import { panic } from "better-result";
-import { Elysia } from "elysia";
 
-import {
-  REQUEST_ID_HEADER,
-  STELLA_API_VERSION_PREFIX,
-} from "@stll/api-contract";
-import { AUTH_SESSION_STARTUP_HEADER } from "@stll/auth-model";
+import { HTTP_REQUEST_BODY_MAX_BYTES } from "@stll/api-contract/limits";
 import { redisConnectionConfig } from "@stll/redis-config";
 
 import { initApiBackgroundWorkers } from "@/api/api-background-workers";
+import { apiPipeline } from "@/api/api-pipeline";
+import { apiRoutes } from "@/api/api-routes";
+import { readRootPoolReport } from "@/api/db/root";
 import { env } from "@/api/env";
 import { envBase } from "@/api/env-base";
-import {
-  agentAuthConfirmRoute,
-  agentAuthRoute,
-} from "@/api/handlers/agent-auth/routes";
-import { aiAutocompleteRoute } from "@/api/handlers/ai-autocomplete/routes";
-import { aiConfigPublicRoute } from "@/api/handlers/ai-config/routes";
-import { apiKeysRoute } from "@/api/handlers/api-keys/routes";
-import { auditLogsRoute } from "@/api/handlers/audit-logs/routes";
-import {
-  authCapabilitiesRoute,
-  authMetadataRoute,
-} from "@/api/handlers/auth/routes";
-import { authUiRoute } from "@/api/handlers/auth/ui-routes";
-import { bilingualTranslationsRoute } from "@/api/handlers/bilingual-translations/routes";
-import { billingCodesRoute } from "@/api/handlers/billing-codes/routes";
-import { caseLawRoute } from "@/api/handlers/case-law/routes";
-import { catalogueRoute } from "@/api/handlers/catalogue/routes";
+import { startFeatureAccessGrantsRefresh } from "@/api/env-feature-access";
+import { computeCaseLawCoverageAnswer } from "@/api/handlers/case-law/decisions/coverage";
 import { reapOwnerlessChatTurnOnTx } from "@/api/handlers/chat/chat-turn-persistence";
-import { relinquishChatTurnRuns } from "@/api/handlers/chat/chat-turn-run";
-import { chatRoute } from "@/api/handlers/chat/routes";
 import {
-  clauseCategoriesRoute,
-  clausesRoute,
-} from "@/api/handlers/clauses/routes";
-import { contactsRoute } from "@/api/handlers/contacts/routes";
-import { desktopRegistryRoute } from "@/api/handlers/desktop-registry/routes";
-import { documentReviewPassagesRoute } from "@/api/handlers/document-reviews/passages-routes";
-import { documentReviewsRoute } from "@/api/handlers/document-reviews/routes";
-import { documentTranslationsRoute } from "@/api/handlers/document-translations/routes";
-import { documentTypesRoute } from "@/api/handlers/document-types/routes";
-import { documentsRoute } from "@/api/handlers/documents/routes";
-import { docxSuggestionsRoute } from "@/api/handlers/docx-suggestions/routes";
-import { desktopEditSessionsRoute } from "@/api/handlers/entities/desktop-edit-sessions-route";
-import { pdfSigningSessionsRoute } from "@/api/handlers/entities/pdf-signing-sessions-route";
-import { entitiesRoute } from "@/api/handlers/entities/routes";
-import { entityViewsRoute } from "@/api/handlers/entity-views/routes";
-import { expensesRoute } from "@/api/handlers/expenses/routes";
-import { externalPreviewRoute } from "@/api/handlers/external-preview/routes";
-import {
-  feedbackPublicRoute,
-  feedbackRoute,
-} from "@/api/handlers/feedback/routes";
-import { fieldsRoute } from "@/api/handlers/fields/routes";
-import { filesRoute } from "@/api/handlers/files/routes";
-import { flowsRoute } from "@/api/handlers/flows/routes";
-import { flowRunsRoute } from "@/api/handlers/flows/run-route";
-import { isFolioCollabRateLimitedPath } from "@/api/handlers/folio-collab/rate-limit";
-import { folioCollabRoute } from "@/api/handlers/folio-collab/routes";
-import { healthRoute } from "@/api/handlers/health/routes";
-import { hostedUsageWebhookRoute } from "@/api/handlers/hosted-usage-webhook/routes";
-import { invoicesRoute } from "@/api/handlers/invoices/routes";
-import { legalReaderRoute } from "@/api/handlers/legal-reader/routes";
-import { legislationCorpusRoute } from "@/api/handlers/legislation/corpus-routes";
-import { publicLegislationRoute } from "@/api/handlers/legislation/public-routes";
-import { legislationRoute } from "@/api/handlers/legislation/routes";
-import { listsRoute } from "@/api/handlers/lists/routes";
-import { handleMcpAppSandboxRequest } from "@/api/handlers/mcp-app-sandbox/routes";
-import { mcpConnectorsRoute } from "@/api/handlers/mcp-connectors/routes";
-import { mcpRoute } from "@/api/handlers/mcp/routes";
-import { handleMcpPreflightRequest } from "@/api/handlers/mcp/routes-core";
-import {
-  createMcpTransportAddressRateLimitOptions,
-  createMcpTransportRateLimitOptions,
-} from "@/api/handlers/mcp/transport-rate-limit";
-import { meRoute } from "@/api/handlers/me/routes";
-import { memoriesRoute } from "@/api/handlers/memories/routes";
-import { notificationsRoute } from "@/api/handlers/notifications/routes";
-import { numberSeriesRoute } from "@/api/handlers/number-series/routes";
-import { organizationSettingsRoute } from "@/api/handlers/organization-settings/routes";
-import { playbooksRoute } from "@/api/handlers/playbooks/routes";
-import { playbookRunsRoute } from "@/api/handlers/playbooks/run-route";
-import { propertiesRoute } from "@/api/handlers/properties/routes";
-import { publicKnowledgeRoute } from "@/api/handlers/public-knowledge/routes";
-import { ratesRoute } from "@/api/handlers/rates/routes";
+  chatTurnRelinquishmentOf,
+  relinquishChatTurnRuns,
+} from "@/api/handlers/chat/chat-turn-run";
+import { startChatLimitResumer } from "@/api/handlers/chat/limit-reminder/limit-resume-sender";
+import { startChatQueueSender } from "@/api/handlers/chat/queue/chat-queue-sender";
+import { startChatTurnAdopter } from "@/api/handlers/chat/turns/adopt";
 import { initBuiltinReportTemplates } from "@/api/handlers/reports/builtin-templates";
-import { reportsRoute } from "@/api/handlers/reports/routes";
-import { publicSanctionsRoute } from "@/api/handlers/sanctions/public-routes";
-import { savedSearchesRoute } from "@/api/handlers/saved-searches/routes";
-import { savedTimeNarrativesRoute } from "@/api/handlers/saved-time-narratives/routes";
-import { searchRoute } from "@/api/handlers/search/routes";
-import { sellerProfilesRoute } from "@/api/handlers/seller-profiles/routes";
-import { sharepointRoute } from "@/api/handlers/sharepoint/routes";
-import { signalsRoute } from "@/api/handlers/signals/routes";
-import { skillsRoute } from "@/api/handlers/skills/routes";
-import { isSkillSourceRateLimitedRequest } from "@/api/handlers/skills/source-rate-limit";
-import { smokeRoute } from "@/api/handlers/smoke/routes";
-import { styleSetsRoute } from "@/api/handlers/style-sets/routes";
-import { isStyleSetUploadRateLimitedRequest } from "@/api/handlers/style-sets/upload-rate-limit";
-import { tasksRoute } from "@/api/handlers/tasks/routes";
-import { templatePacksRoute } from "@/api/handlers/template-packs/routes";
-import { templateRecipesRoute } from "@/api/handlers/template-recipes/routes";
+import { servedRegisteredSoftLawAuthorities } from "@/api/handlers/soft-law/served-sources";
+import { syncSoftLaw } from "@/api/handlers/soft-law/sync";
 import { clearLookupPreviewCache } from "@/api/handlers/templates/lookup-preview-cache";
-import {
-  templateCategoriesRoute,
-  templatesRoute,
-} from "@/api/handlers/templates/routes";
-import { timeApprovalQueueRoute } from "@/api/handlers/time-entries/approval-queue/routes";
-import { internalTimeEntriesRoute } from "@/api/handlers/time-entries/internal/routes";
-import { myTimeEntriesRoute } from "@/api/handlers/time-entries/me/routes";
-import { memberTimeTargetsRoute } from "@/api/handlers/time-entries/members/routes";
-import { timeEntriesRoute } from "@/api/handlers/time-entries/routes";
-import { timeTimersRoute } from "@/api/handlers/time-timers/routes";
-import { uploadsRoute } from "@/api/handlers/uploads/routes";
-import { usageRoute } from "@/api/handlers/usage/routes";
-import { userFilesRoute } from "@/api/handlers/user-files/routes";
-import { vatRateRoute } from "@/api/handlers/vat-rates/routes";
-import { verifyAuthRoute } from "@/api/handlers/verify/routes";
-import { viewTemplatesRoute } from "@/api/handlers/view-templates/routes";
-import { viewsRoute } from "@/api/handlers/views/routes";
-import { wellKnownRoute } from "@/api/handlers/well-known/routes";
-import { myWorkRoute } from "@/api/handlers/work-obligations/my-work-route";
-import { workObligationsRoute } from "@/api/handlers/work-obligations/routes";
-import { workspaceEventsRoute } from "@/api/handlers/workspaces/events";
-import { workspacesRoute } from "@/api/handlers/workspaces/routes";
+import { createHttpApp } from "@/api/http/app";
 import { detached } from "@/api/lib/analytics/capture";
-import { getAuth, realtimeAuthorizers } from "@/api/lib/auth";
-import { createAuthResponseCookiesPlugin } from "@/api/lib/auth/auth-response-cookies";
-import {
-  isAllowedBrowserOrigin,
-  shouldRejectBrowserMutation,
-} from "@/api/lib/browser-origin-guard";
+import { getServerAnalytics } from "@/api/lib/analytics/client";
+import { realtimeAuthorizers } from "@/api/lib/auth";
+import { getCaseLawIngestionDb } from "@/api/lib/case-law-ingestion-db";
 import { startManagedProviderChecks } from "@/api/lib/chat/managed-provider-checks";
-import {
-  resolveClientAddress,
-  resolveSignupRateLimitClientIp,
-  sealEdgeHeaders,
-  stampClientAddressHeader,
-} from "@/api/lib/client-ip";
+import { clientAddressConfigurationWarning } from "@/api/lib/client-ip";
 import { assertConfiguredBetterAuthOAuthPolicy } from "@/api/lib/db/assert-better-auth-oauth-policy";
 import { assertMigrationsApplied } from "@/api/lib/db/assert-migrations-applied";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
-import { DEV_INSPECTOR_ORIGINS, frontendOrigins } from "@/api/lib/dev-origins";
-import { httpError } from "@/api/lib/errors/http-error";
+import {
+  drainDesktopRunnerGateway,
+  startDesktopRunnerGateway,
+} from "@/api/lib/desktop-runner/runtime";
 import { errorTag } from "@/api/lib/errors/utils";
 import {
   openFreshLoginClient,
   startDatabaseLoginProbe,
 } from "@/api/lib/health/database-login-probe";
 import { markScheduledJobsReady } from "@/api/lib/health/readiness";
-import { API_RATE_LIMITS } from "@/api/lib/limits";
-import { FORMATTING_LOCALE_HEADER } from "@/api/lib/locale";
+import { sanctionsStartupWarmup } from "@/api/lib/lists/sanctions/public-read-owner";
+import { readWorkPoolMetrics } from "@/api/lib/load/work-admission";
 import { createMemoryPressureHandler } from "@/api/lib/memory-pressure";
-import { multipartFormParser } from "@/api/lib/multipart-form-parser";
+import { startEventLoopDelayMonitor } from "@/api/lib/observability/event-loop-delay";
 import { logger } from "@/api/lib/observability/logger";
+import { flushLogExport } from "@/api/lib/observability/otel";
 import {
-  enrichRequestContext,
-  getRequestId,
-  initRequestContext,
-} from "@/api/lib/observability/request-context";
-import {
-  answerRequestError,
-  completeRequest,
-  withFinalResponseCompletion,
-} from "@/api/lib/observability/request-lifecycle";
-import { runWithRequestScope } from "@/api/lib/observability/request-scope";
+  emitEventLoopDelayMetric,
+  emitProcessMemoryLog,
+} from "@/api/lib/observability/request-metrics";
 import {
   closeActionAdmissionRedis,
   startActionAdmissionRedis,
@@ -175,13 +61,7 @@ import {
   closeMcpReadFenceRedis,
   startMcpReadFenceRedis,
 } from "@/api/lib/rate-limit/mcp-read-fence";
-import { createPublicCorpusRateLimitComposition } from "@/api/lib/rate-limit/public-corpus-rate-limit-composition";
-import { rateLimit } from "@/api/lib/rate-limit/rate-limit";
-import { createRedisRateLimit } from "@/api/lib/rate-limit/redis-context";
-import {
-  createTenantActionClassifier,
-  runTenantHttpAction,
-} from "@/api/lib/rate-limit/tenant-action-boundary";
+import { closeRateLimitContexts } from "@/api/lib/rate-limit/rate-limit";
 import {
   refreshCorpusS3,
   refreshS3,
@@ -191,31 +71,20 @@ import {
 import { ensureDefaultSchedulerJobs } from "@/api/lib/scheduler/jobs";
 import { createSchedulerTaskRegistry } from "@/api/lib/scheduler/registry";
 import { startSchedulerLoop } from "@/api/lib/scheduler/runner";
+import { createCaseLawCoverageRefreshTask } from "@/api/lib/scheduler/tasks/case-law-coverage-refresh";
 import { createReapOwnerlessChatTurnsTask } from "@/api/lib/scheduler/tasks/chat-turn-reaper";
-import { securityCanaryInterceptor } from "@/api/lib/security-canary";
-import {
-  finalizeResponseCachePolicy,
-  API_SECURITY_HEADERS,
-  setSecurityHeaders,
-  CORS_EXPOSED_HEADERS,
-} from "@/api/lib/security-headers";
+import { createSoftLawSyncTask } from "@/api/lib/scheduler/tasks/soft-law-sync";
 import { startSse, stopSse } from "@/api/lib/sse";
 import { clearByokAdapterCache } from "@/api/lib/tanstack-ai-models";
-import { isUploadRateLimitedPath } from "@/api/lib/upload-rate-limit";
 import { flushActionCostRecords } from "@/api/lib/usage/action-costs/recorder";
-import { isLocalDevOpen, runtimeMode } from "@/api/runtime-mode";
+import { isLocalDevOpen } from "@/api/runtime-mode";
+import { startConfiguredScheduler } from "@/api/server-scheduled-jobs";
 import {
   API_SHUTDOWN_OUTCOME,
   shutdownApiServices,
 } from "@/api/server-shutdown";
 
 const DEFAULT_API_PORT = 3001;
-// Keep-alive idle timeout in seconds; see the `api.listen` call.
-const HTTP_IDLE_TIMEOUT_S = 75;
-const SESSION_ID_HEADER = "x-posthog-session-id";
-const TANSTACK_RUN_ID_HEADER = "X-Run-Id";
-const SESSION_ID_MAX_LENGTH = 64;
-const SESSION_ID_PATTERN = /^[\w-]+$/u;
 const S3_REFRESH_CHECK_INTERVAL_MS = 60_000;
 const WORKER_SHUTDOWN_TIMEOUT_MS = 10_000;
 
@@ -251,419 +120,75 @@ const startMemoryPressureHandler = () => {
   );
 };
 
-const allowedBrowserOrigins = (): (string | RegExp)[] => {
-  const origins: (string | RegExp)[] = frontendOrigins({
-    frontendUrl: env.FRONTEND_URL,
-    runtimeMode: runtimeMode(),
-  });
-  if (isLocalDevOpen()) {
-    origins.push(/^chrome-extension:\/\//u);
-    origins.push(...DEV_INSPECTOR_ORIGINS);
-  }
-  if (env.EXTENSION_ORIGIN) {
-    origins.push(env.EXTENSION_ORIGIN);
-  }
-  return origins;
+const readProcessMemoryReport = () => {
+  const usage = process.memoryUsage();
+  return {
+    rssBytes: usage.rss,
+    heapUsedBytes: usage.heapUsed,
+    arrayBuffersBytes: usage.arrayBuffers,
+    workPools: readWorkPoolMetrics(),
+  };
 };
 
-const ALLOWED_BROWSER_ORIGINS = allowedBrowserOrigins();
+// One stall on this loop delays every request the task is serving, so it is
+// reported as soon as the loop is free, and its window's delay as a metric.
+const startEventLoopDelayReporting = () => {
+  let reporting: Promise<void> | undefined;
+  startEventLoopDelayMonitor({
+    onReportInterval: () => emitProcessMemoryLog(readProcessMemoryReport()),
+    onReport: (delay) => {
+      if (reporting !== undefined) {
+        return;
+      }
+      reporting = readRootPoolReport()
+        .then((rootPool) =>
+          emitEventLoopDelayMetric({
+            ...delay,
+            rootPool,
+          }),
+        )
+        .finally(() => {
+          reporting = undefined;
+        });
+    },
+    onStall: (stallMs) => {
+      logger.warn("runtime.event_loop_stalled", {
+        "event_loop.stall_ms": stallMs,
+      });
+    },
+  });
+};
 
-// Local development routes exist only in an open runtime. The module is
-// imported on demand because it loads seeding and search maintenance; the
-// browser contract names the routes in eden-contract.ts.
-const localDevPublicRoutes = new Elysia();
-const localDevVersionedRoutes = new Elysia();
-if (isLocalDevOpen()) {
-  const { devPublicRoute, devRoute } =
-    await import("@/api/handlers/dev/routes");
-  localDevPublicRoutes.use(devPublicRoute);
-  localDevVersionedRoutes.use(devRoute);
-}
-
-const CORS_PREFLIGHT_MAX_AGE_SECONDS = 60 * 60;
-
-const publicCorpusRateLimits = createPublicCorpusRateLimitComposition({
-  skipShared: (request) => {
-    // The dev-only e2e walk measures navigation, not abuse budgets.
-    if (env.E2E_DISABLE_AUTH_RATE_LIMIT) {
-      return true;
-    }
-    // Other dedicated budgets also exclude their traffic from the shared bucket.
-    const { pathname } = new URL(request.url);
-    return (
-      isUploadRateLimitedPath(pathname) ||
-      isFolioCollabRateLimitedPath(pathname) ||
-      isSkillSourceRateLimitedRequest(request) ||
-      isStyleSetUploadRateLimitedRequest(request)
-    );
-  },
+/** The API: one route table behind one pipeline, served by `Bun.serve`. */
+export const apiApp = createHttpApp({
+  routes: apiRoutes,
+  middleware: apiPipeline,
 });
-
-const api = new Elysia()
-  .use(createAuthResponseCookiesPlugin())
-  .mapResponse(({ responseValue, set }) =>
-    finalizeResponseCachePolicy({ response: responseValue, set }),
-  )
-  // Body parsing is decided before any route runs, so the multipart parser has
-  // to sit ahead of every route registration.
-  .use(multipartFormParser)
-  .onRequest(({ set }) => {
-    setSecurityHeaders(set);
-  })
-  .onRequest(async (context) => {
-    const { request, set } = context;
-
-    const rawSessionId = request.headers.get(SESSION_ID_HEADER);
-    const sessionId =
-      rawSessionId &&
-      rawSessionId.length <= SESSION_ID_MAX_LENGTH &&
-      SESSION_ID_PATTERN.test(rawSessionId)
-        ? rawSessionId
-        : undefined;
-
-    initRequestContext(request, sessionId);
-    const clientAddress = resolveClientAddress(request, context.server ?? null);
-    // Better Auth reads the address from this header.
-    stampClientAddressHeader(request, clientAddress);
-    enrichRequestContext(request, {
-      clientIp: clientAddress?.address ?? null,
-      clientAddressSource: clientAddress?.source ?? null,
-      signupRateLimitIp: resolveSignupRateLimitClientIp(
-        request,
-        context.server ?? null,
-      ),
-    });
-    sealEdgeHeaders(request, clientAddress);
-
-    // Stamp the receipt on every response from the central header point, next
-    // to the security headers, so REST callers always get an `x-request-id`
-    // they can quote back (the MCP envelope + invoke payloads carry the same id
-    // through the ambient store). Set in `onRequest` so it survives error
-    // responses too, exactly like `setSecurityHeaders`.
-    const requestId = getRequestId(request);
-    if (requestId !== undefined) {
-      set.headers[REQUEST_ID_HEADER] = requestId;
-    }
-
-    if (
-      shouldRejectBrowserMutation({
-        allowedOrigins: ALLOWED_BROWSER_ORIGINS,
-        method: request.method,
-        origin: request.headers.get("origin"),
-        secFetchSite: request.headers.get("sec-fetch-site"),
-      })
-    ) {
-      set.status = 403;
-      return httpError("Untrusted browser origin");
-    }
-
-    const interceptedResponse = await securityCanaryInterceptor(context);
-    if (interceptedResponse) {
-      return interceptedResponse;
-    }
-
-    // Ahead of the CORS layer below, which otherwise answers every preflight
-    // with the API-wide method list and leaves the MCP route's own preflight
-    // unreachable.
-    const mcpPreflightResponse = handleMcpPreflightRequest(request, set);
-    if (mcpPreflightResponse) {
-      return mcpPreflightResponse;
-    }
-
-    return handleMcpAppSandboxRequest(request, set);
-  })
-  .use(
-    cors({
-      origin: ALLOWED_BROWSER_ORIGINS,
-      methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-      credentials: true,
-      allowedHeaders: [
-        "Content-Type",
-        "Authorization",
-        "MCP-Protocol-Version",
-        FORMATTING_LOCALE_HEADER,
-        SESSION_ID_HEADER,
-        AUTH_SESSION_STARTUP_HEADER,
-        TANSTACK_RUN_ID_HEADER,
-      ],
-      exposeHeaders: CORS_EXPOSED_HEADERS,
-      maxAge: CORS_PREFLIGHT_MAX_AGE_SECONDS,
-    }),
-  )
-  .onError((context) => answerRequestError(context))
-  .onAfterHandle(async (context) => await completeRequest(context))
-  .use(authUiRoute)
-  .use(authMetadataRoute)
-  .use(
-    new Elysia()
-      .use(
-        rateLimit({
-          duration: API_RATE_LIMITS.agentAuth.duration,
-          max: API_RATE_LIMITS.agentAuth.max,
-          ...createRedisRateLimit({
-            failurePolicy: "fail_open_local",
-            scope: "agent-auth",
-          }),
-        }),
-      )
-      .use(agentAuthRoute),
-  )
-  .use(
-    // The session-authed confirm endpoint is mounted at the root (its path is
-    // fixed, not `/v1`-prefixed), so it would otherwise escape the shared `api`
-    // limiter. Give this mutating endpoint its own abuse budget.
-    new Elysia()
-      .use(
-        rateLimit({
-          duration: API_RATE_LIMITS.api.duration,
-          max: API_RATE_LIMITS.api.max,
-          ...createRedisRateLimit({
-            failurePolicy: "fail_open_local",
-            scope: "agent-auth-confirm",
-          }),
-          skip: () => env.E2E_DISABLE_AUTH_RATE_LIMIT,
-        }),
-      )
-      .use(agentAuthConfirmRoute),
-  )
-  .use(healthRoute)
-  .use(wellKnownRoute)
-  .use(hostedUsageWebhookRoute)
-  .use(
-    // The MCP transport paths sit at the root, outside the shared `/v1`
-    // budget, and one agent loop can otherwise issue unbounded JSON-RPC calls.
-    // The address budget runs first so rotating bearer values cannot dodge
-    // the credential budget. Each limiter's own `skip` keeps discovery and
-    // preflight unmetered.
-    new Elysia()
-      .use(rateLimit(createMcpTransportAddressRateLimitOptions()))
-      .use(rateLimit(createMcpTransportRateLimitOptions()))
-      .use(mcpRoute),
-  )
-  .use(aiAutocompleteRoute)
-  .use(feedbackPublicRoute)
-  .use(memoriesRoute)
-  .use(notificationsRoute)
-  .use(
-    new Elysia()
-      .use(timeApprovalQueueRoute)
-      .use(internalTimeEntriesRoute)
-      .use(myTimeEntriesRoute)
-      .use(memberTimeTargetsRoute)
-      .use(timeTimersRoute),
-  )
-  .use(localDevPublicRoutes)
-  .use(smokeRoute)
-  .mount(getAuth().handler)
-  .group(STELLA_API_VERSION_PREFIX, (app) =>
-    app
-
-      .use(publicCorpusRateLimits)
-      .use(authCapabilitiesRoute)
-      .use(workspaceEventsRoute)
-      .use(workspacesRoute)
-      .use(playbooksRoute)
-      .use(playbookRunsRoute)
-      .use(documentReviewsRoute)
-      .use(documentReviewPassagesRoute)
-      .use(documentTranslationsRoute)
-      .use(documentsRoute)
-      .use(bilingualTranslationsRoute)
-      .use(reportsRoute)
-      .use(flowsRoute)
-      .use(signalsRoute)
-      .use(flowRunsRoute)
-      .use(documentTypesRoute)
-      .use(propertiesRoute)
-      .use(filesRoute)
-      .use(
-        new Elysia()
-          .use(
-            rateLimit({
-              duration: API_RATE_LIMITS.folioCollab.duration,
-              max: API_RATE_LIMITS.folioCollab.max,
-              ...createRedisRateLimit({
-                failurePolicy: "fail_open_local",
-                scope: "folio-collab",
-              }),
-              // Same e2e escape hatch as the shared `api` bucket above: the
-              // route walk opens the document editor repeatedly and would
-              // drain this 30/min budget across back-to-back runs.
-              skip: () => env.E2E_DISABLE_AUTH_RATE_LIMIT,
-            }),
-          )
-          .use(folioCollabRoute),
-      )
-      .use(desktopEditSessionsRoute)
-      .use(uploadsRoute)
-      .use(entitiesRoute)
-      .use(docxSuggestionsRoute)
-      .use(fieldsRoute)
-      .use(templatesRoute)
-      .use(styleSetsRoute)
-      .use(templateCategoriesRoute)
-      .use(templatePacksRoute)
-      .use(templateRecipesRoute)
-      .use(timeEntriesRoute)
-      .use(billingCodesRoute)
-      .use(ratesRoute)
-      .use(expensesRoute)
-      .use(invoicesRoute)
-      // Issuer settings share one link: every `.use` here deepens the
-      // app's type, and the chain sits at TypeScript's instantiation limit.
-      .use(
-        new Elysia()
-          .use(sellerProfilesRoute)
-          .use(numberSeriesRoute)
-          .use(vatRateRoute),
-      )
-      .use(externalPreviewRoute)
-      .use(mcpConnectorsRoute)
-      .use(sharepointRoute)
-      .use(catalogueRoute)
-      .use(organizationSettingsRoute)
-      .use(apiKeysRoute)
-      .use(desktopRegistryRoute)
-      .use(aiConfigPublicRoute)
-      .use(clauseCategoriesRoute)
-      .use(clausesRoute)
-      .use(contactsRoute)
-      .use(legislationRoute)
-      .use(legislationCorpusRoute)
-      .use(new Elysia().use(publicLegislationRoute).use(publicSanctionsRoute))
-      .use(publicKnowledgeRoute)
-      .use(searchRoute)
-      .use(savedSearchesRoute)
-      .use(savedTimeNarrativesRoute)
-      .use(auditLogsRoute)
-      .use(caseLawRoute)
-      .use(legalReaderRoute)
-      .use(chatRoute)
-      .use(userFilesRoute)
-      .use(skillsRoute)
-      .use(usageRoute)
-      .use(viewTemplatesRoute)
-      .use(viewsRoute)
-      .use(entityViewsRoute)
-      .use(listsRoute)
-      .use(tasksRoute)
-      .use(workObligationsRoute)
-      .use(myWorkRoute)
-      .use(meRoute)
-      .use(localDevVersionedRoutes)
-      .use(verifyAuthRoute),
-  )
-  // Mounted after the versioned group on purpose: a route added before it
-  // deepens the type the group callback infers, which is already at
-  // TypeScript's instantiation limit for the browser's Eden client. The
-  // signing route carries the version prefix itself.
-  .use(feedbackRoute)
-  .use(pdfSigningSessionsRoute);
-
-export default api;
-
-// Scope the per-request async stores — the ambient request id and the dev/CI
-// DB query counter — around the whole composed handler.
-//
-// No lifecycle hook can do this: a hook runs *inside* the request, so both
-// stores used to open themselves from `onRequest` with
-// `AsyncLocalStorage.enterWith`. `enterWith` mutates the ambient async context
-// frame with no restore point, and the runtime leaves that frame current for
-// callbacks it dispatches afterwards, so a background loop (a BullMQ worker, a
-// reconciler tick, the SSE keep-alive) resuming there adopted the in-flight
-// request's stores and kept them from then on — billing its own queries to that
-// request's `x-db-queries` count and stamping that request's receipt id on
-// unrelated work. `run` restores the previous frame, so the scope covers the
-// request's own callback tree and nothing else.
-//
-// `wrap` is the only place that sees a whole request as one function: Elysia
-// applies it to both the general handler and the per-route handlers it hands to
-// Bun's native router, which `api.fetch` alone would miss. It is a private
-// Elysia API, so pin its two observable effects rather than trusting it: the
-// `x-request-id` header and the `x-db-queries` count both disappear if a future
-// release stops applying higher-order functions, and the route-smoke network
-// baseline fails on a budgeted endpoint whose response drops the count header.
-// Byte refusals happen before lifecycle hooks; keep their headers observable
-// through the same browser-origin and security policies as ordinary answers.
-const decorateActionSizeRefusal = (
-  response: Response,
-  request: Request,
-): Response => {
-  initRequestContext(request);
-  const headers = new Headers(response.headers);
-  for (const [name, value] of Object.entries(API_SECURITY_HEADERS)) {
-    headers.set(name, value);
-  }
-  const requestId = getRequestId(request);
-  if (requestId !== undefined) {
-    headers.set(REQUEST_ID_HEADER, requestId);
-  }
-  const origin = request.headers.get("origin");
-  if (
-    origin !== null &&
-    isAllowedBrowserOrigin(origin, ALLOWED_BROWSER_ORIGINS)
-  ) {
-    headers.set("access-control-allow-origin", origin);
-    headers.set("access-control-allow-credentials", "true");
-    headers.set(
-      "access-control-expose-headers",
-      CORS_EXPOSED_HEADERS.join(", "),
-    );
-    headers.append("vary", "Origin");
-  }
-  return new Response(response.body, { status: response.status, headers });
-};
-
-const scopeRequestAsyncStores = (): void => {
-  const isTenantAction = createTenantActionClassifier({
-    routes: api.routes,
-    staticRoutes: api.router.static,
-    strictPath: api.config.strictPath,
-    aot: api.config.aot,
-  });
-  api.wrap(
-    (handleRequest) => async (request: Request) =>
-      runWithRequestScope(async () => {
-        if (!isDeploymentFeatureEnabled("FEATURE_ACTION_ADMISSION")) {
-          return handleRequest(request);
-        }
-        return withFinalResponseCompletion(request, async () =>
-          runTenantHttpAction(request, {
-            handleRequest: async (bounded) => {
-              // The private HOC types erase the response type; validate the
-              // framework boundary before applying serialized JSON limits.
-              const response: unknown = await Promise.resolve(
-                handleRequest(bounded),
-              );
-              if (!(response instanceof Response)) {
-                return panic("The HTTP framework returned an invalid response");
-              }
-              return response;
-            },
-            isTenantAction,
-            decorateRefusal: decorateActionSizeRefusal,
-          }),
-        );
-      }),
-  );
-};
 
 const startS3RefreshLoop = () => {
   const timer = setInterval(() => {
     // `refreshStale*` own both the staleness test and the deduplication, so a
     // resolution still in flight when the next tick arrives is joined rather
     // than started again.
-    refreshStaleS3().catch((error: unknown) => {
-      logger.error("s3.refresh_failed", {
-        "error.type": errorTag(error),
-      });
-    });
+    detached(
+      async () =>
+        refreshStaleS3().catch((error: unknown) => {
+          logger.error("s3.refresh_failed", {
+            "error.type": errorTag(error),
+          });
+        }),
+      "server.refresh-stale-s3",
+    );
 
-    refreshStaleCorpusS3().catch((error: unknown) => {
-      logger.error("s3.corpus_refresh_failed", {
-        "error.type": errorTag(error),
-      });
-    });
+    detached(
+      async () =>
+        refreshStaleCorpusS3().catch((error: unknown) => {
+          logger.error("s3.corpus_refresh_failed", {
+            "error.type": errorTag(error),
+          });
+        }),
+      "server.refresh-stale-corpus-s3",
+    );
   }, S3_REFRESH_CHECK_INTERVAL_MS);
 
   timer.unref();
@@ -672,11 +197,19 @@ const startS3RefreshLoop = () => {
 // Booting (migration check, S3 warmup, BullMQ workers, bound port) runs
 // only when this module is the process entry point: `bun src/server.ts` in
 // dev and the `bun build --compile` binary in prod. Importing the module
-// instead — as the exact-mirror CI guard in
-// `apps/api/scripts/exact-mirror-guard.ts` does to build every route's
-// schema mirror — must yield the fully constructed `api` without any of
-// these side effects (no DB, no Redis, no listen).
+// instead must yield the fully constructed `apiApp` without any of these side
+// effects (no DB, no Redis, no listen).
 const startServer = async (): Promise<void> => {
+  const clientAddressWarning = clientAddressConfigurationWarning({
+    edgeHeader: env.STELLA_CLIENT_ADDRESS_HEADER,
+    originVerifySecret: env.STELLA_ORIGIN_VERIFY_SECRET,
+    originVerifySecretPrevious: env.STELLA_ORIGIN_VERIFY_SECRET_PREVIOUS,
+  });
+  if (clientAddressWarning !== null) {
+    logger.warn(clientAddressWarning, {
+      "clientAddress.configurationWarning": 1,
+    });
+  }
   if (envBase.REDIS_URL !== undefined) {
     const { mode } = redisConnectionConfig({
       url: envBase.REDIS_URL,
@@ -685,19 +218,24 @@ const startServer = async (): Promise<void> => {
     }).unwrap("Redis connection configuration must be valid.");
     logger.info("redis.connection.mode", { mode });
     if (isDeploymentFeatureEnabled("FEATURE_ACTION_ADMISSION")) {
-      detached(startActionAdmissionRedis(), "admission-store.start");
+      detached(
+        async () => startActionAdmissionRedis(),
+        "admission-store.start",
+      );
     }
     if (isDeploymentFeatureEnabled("FEATURE_MCP_READ_FENCE")) {
-      detached(startMcpReadFenceRedis(), "read-fence-store.start");
+      detached(async () => startMcpReadFenceRedis(), "read-fence-store.start");
     }
   }
 
   startMemoryPressureHandler();
+  const stopFeatureAccessGrantsRefresh =
+    await startFeatureAccessGrantsRefresh();
 
   // Start the SSE keep-alive heartbeat and cross-instance Redis subscriber
   // first, before any awaited setup below, so its connection timing
   // matches the previous import-time behavior and completes well before
-  // `api.listen()` starts accepting requests.
+  // `Bun.serve` starts accepting requests.
   startSse(realtimeAuthorizers);
 
   // Schema-drift fail-fast. If the runtime expects migrations
@@ -719,7 +257,9 @@ const startServer = async (): Promise<void> => {
   await initBuiltinReportTemplates();
 
   const closeManagedProviderChecks = await startManagedProviderChecks();
-  const backgroundWorkers = initApiBackgroundWorkers();
+  const backgroundWorkers = await initApiBackgroundWorkers(
+    env.SCHEDULED_JOBS_MODE,
+  );
 
   // Every process outside local development starts it. Same URL as the pools
   // in `db/root.ts`.
@@ -729,25 +269,32 @@ const startServer = async (): Promise<void> => {
         openClient: () => openFreshLoginClient(envBase.DATABASE_URL),
       });
 
-  scopeRequestAsyncStores();
+  // Before the listener opens, so no runner upgrade finds the gateway absent.
+  await startDesktopRunnerGateway();
+  const stopChatQueueSender = startChatQueueSender();
+  const stopChatLimitResumer = startChatLimitResumer();
+  const stopChatTurnAdopter = startChatTurnAdopter();
 
-  api.listen({
+  const server = Bun.serve({
     port: getApiPort(),
-    // Longer than the load balancer's 60 s idle timeout (Bun defaults to
-    // 10 s). The balancer may reuse an idle backend connection any time
-    // before its own timeout expires, so the server must never close
-    // first: a request written onto a connection the server is closing is
-    // lost in flight and the client hangs with no response and no
-    // server-side log line. The SSE keep-alive heartbeat (20 s) stays
-    // well inside this window.
-    idleTimeout: HTTP_IDLE_TIMEOUT_S,
+    ...apiApp.serveOptions,
+    maxRequestBodySize: HTTP_REQUEST_BODY_MAX_BYTES,
   });
+
+  // The listener stays available for liveness while /started holds traffic.
+  sanctionsStartupWarmup.start();
+
+  // From here the loop serves requests; boot work before this point delays
+  // none, so it stays out of the stall signal.
+  startEventLoopDelayReporting();
 
   // Filled in after the handlers below are attached, so a signal arriving
   // during scheduler registration still finds a shutdown path. A holder rather
   // than a binding because the shutdown closure is created before the loop
   // exists and has to observe it once it does.
-  const scheduler: { loop?: ReturnType<typeof startSchedulerLoop> } = {};
+  const scheduler: {
+    loop: ReturnType<typeof startSchedulerLoop> | undefined;
+  } = { loop: undefined };
 
   // Graceful shutdown: stop accepting HTTP requests, close long-lived SSE
   // streams, then drain the BullMQ workers on SIGTERM/SIGINT (deploy,
@@ -766,7 +313,10 @@ const startServer = async (): Promise<void> => {
     shuttingDown = true;
     logger.info("api.shutdown_started", { signal });
     const outcome = await shutdownApiServices({
-      closeBackgroundWorkers: backgroundWorkers.close,
+      closeBackgroundWorkers: async () => {
+        await stopFeatureAccessGrantsRefresh?.();
+        await backgroundWorkers.close();
+      },
       closeManagedProviderChecks,
       closeDatabaseLoginProbe,
       // Undefined when the signal beat scheduler registration; there is
@@ -777,9 +327,22 @@ const startServer = async (): Promise<void> => {
           "error.type": errorTag(error),
         });
       },
-      relinquishChatTurnRuns,
+      // Off by default: every task must adopt (`CHAT_TURN_HANDED_OVER_ROLLOUT`)
+      // before any releases a turn to one.
+      relinquishChatTurnRuns: async () =>
+        await relinquishChatTurnRuns(
+          chatTurnRelinquishmentOf(
+            isDeploymentFeatureEnabled("FEATURE_CHAT_TURN_HANDOVER"),
+          ),
+        ),
+      stopChatQueueSender,
+      stopChatLimitResumer,
+      stopChatTurnAdopter,
       stopHttp: async () => {
-        await api.stop();
+        // Runner sockets are asked to reconnect elsewhere before the
+        // listener stops waiting on open connections.
+        await drainDesktopRunnerGateway();
+        await server.stop();
       },
       // Stop claiming new jobs before draining, so a tick in flight finishes
       // and releases its lease rather than leaving it to expire.
@@ -791,8 +354,24 @@ const startServer = async (): Promise<void> => {
       flushActionCostRecords(),
       Bun.sleep(WORKER_SHUTDOWN_TIMEOUT_MS),
     ]);
+    // Telemetry queued in memory leaves before the process does. Analytics
+    // goes first: its flush never rejects and logs a failed delivery, which
+    // the log export then carries. Its retries can outlast the whole budget,
+    // so it gets half, and the log export always runs in what remains.
+    const flushTelemetry = async (): Promise<void> => {
+      await Promise.race([
+        getServerAnalytics().flush(),
+        Bun.sleep(WORKER_SHUTDOWN_TIMEOUT_MS / 2),
+      ]);
+      await flushLogExport();
+    };
+    await Promise.race([
+      flushTelemetry(),
+      Bun.sleep(WORKER_SHUTDOWN_TIMEOUT_MS),
+    ]);
     closeActionAdmissionRedis();
     closeMcpReadFenceRedis();
+    await closeRateLimitContexts();
     switch (outcome) {
       case API_SHUTDOWN_OUTCOME.drained:
         logger.info("api.shutdown_complete", { signal });
@@ -810,10 +389,10 @@ const startServer = async (): Promise<void> => {
     }
   };
   process.once("SIGTERM", () => {
-    detached(shutdownWorkers("SIGTERM"), "server.shutdown");
+    detached(async () => shutdownWorkers("SIGTERM"), "server.shutdown");
   });
   process.once("SIGINT", () => {
-    detached(shutdownWorkers("SIGINT"), "server.shutdown");
+    detached(async () => shutdownWorkers("SIGINT"), "server.shutdown");
   });
 
   // Scheduled jobs run here rather than in a process of their own. A separate
@@ -829,16 +408,31 @@ const startServer = async (): Promise<void> => {
   // After the signal handlers, because registration is awaited,
   // and a deploy landing inside that window would otherwise find no shutdown
   // path for the SSE loop, the S3 refresh loop and the listening socket.
-  await ensureDefaultSchedulerJobs();
-  scheduler.loop = startSchedulerLoop({
-    registry: createSchedulerTaskRegistry(
-      createReapOwnerlessChatTurnsTask(reapOwnerlessChatTurnOnTx),
-    ),
+  scheduler.loop = await startConfiguredScheduler({
+    mode: env.SCHEDULED_JOBS_MODE,
+    ensureDefaultJobs: ensureDefaultSchedulerJobs,
+    startLoop: () =>
+      startSchedulerLoop({
+        registry: createSchedulerTaskRegistry(
+          createReapOwnerlessChatTurnsTask(reapOwnerlessChatTurnOnTx),
+          createCaseLawCoverageRefreshTask({
+            compute: computeCaseLawCoverageAnswer,
+          }),
+          createSoftLawSyncTask({
+            authorities: servedRegisteredSoftLawAuthorities,
+            sync: async ({ authority, signal }) =>
+              await syncSoftLaw({
+                authority,
+                configuration: { type: "default" },
+                scopedDb: getCaseLawIngestionDb(),
+                signal,
+              }),
+          }),
+        ),
+      }),
+    logger,
   });
   markScheduledJobsReady();
-  logger.info("scheduler.started", {
-    "scheduler.runner_id": scheduler.loop.runnerId,
-  });
 };
 
 if (import.meta.main) {

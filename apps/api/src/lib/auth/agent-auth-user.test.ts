@@ -3,7 +3,10 @@ import { memoryAdapter } from "better-auth/adapters/memory";
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
-import { createAgentUserPlugin } from "@/api/lib/auth/agent-auth-user";
+import {
+  AGENT_IDENTITY_CREATE_USER_PATH,
+  createAgentUserPlugin,
+} from "@/api/lib/auth/agent-auth-user";
 import { createSocialIdentityValidation } from "@/api/lib/auth/social-identity-policy";
 
 describe("agent identity user creation", () => {
@@ -63,15 +66,18 @@ describe("agent identity user creation", () => {
       plugins: [createAgentUserPlugin()],
     });
     const response = await auth.handler(
-      new Request("http://localhost:3001/api/auth/create-agent-user", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          email: "account@example.test",
-          name: "Account",
-          emailVerified: true,
-        }),
-      }),
+      new Request(
+        `http://localhost:3001/api/auth${AGENT_IDENTITY_CREATE_USER_PATH}`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            email: "account@example.test",
+            name: "Account",
+            emailVerified: true,
+          }),
+        },
+      ),
     );
     expect(response.status).toBe(404);
     expect(database.user).toHaveLength(0);

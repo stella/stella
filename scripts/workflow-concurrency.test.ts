@@ -6,17 +6,16 @@ import { Script } from "node:vm";
 // GitHub has no shared `concurrency` across workflows, so every workflow a
 // pull request triggers declares its own, and this is the one rule they share:
 // a top-level group keyed per pull request, cancelling in progress.
-// Other events remain isolated, except explicit deployment/manual-run designs.
+// Main-push workflows supersede by branch; other events follow their owners.
 
 const WORKFLOWS_URL = new URL("../.github/workflows/", import.meta.url);
 const PULL_REQUEST_EVENTS = new Set([
   "pull_request",
-  "pull_request_target",
   "pull_request_review",
   "pull_request_review_comment",
 ]);
 /**
- * PR numbers survive both regular and target events. `head_ref` never
+ * PR numbers survive every pull request event. `head_ref` never
  * counts: two forks can push branches of the same name.
  */
 const PULL_REQUEST_NUMBER = [
@@ -44,6 +43,28 @@ const triggers = (on: unknown): string[] => {
 const runsOnPullRequests = (workflow: unknown) =>
   isRecord(workflow) &&
   triggers(workflow["on"]).some((event) => PULL_REQUEST_EVENTS.has(event));
+
+const HEAVY_BRANCH_GROUP = `\${{ github.workflow }}-\${{ github.event_name == 'push' && !startsWith(github.event.head_commit.message, 'chore: release v') && github.run_id || github.ref }}`;
+
+const hasMainBranchConcurrency = (workflow: unknown) => {
+  if (
+    !isRecord(workflow) ||
+    !isRecord(workflow["on"]) ||
+    !isRecord(workflow["concurrency"])
+  ) {
+    return false;
+  }
+  const push = workflow["on"]["push"];
+  return (
+    isRecord(push) &&
+    Array.isArray(push["branches"]) &&
+    push["branches"].includes("main") &&
+    (workflow["concurrency"]["group"] ===
+      `\${{ github.workflow }}-\${{ github.ref }}` ||
+      (workflow["name"] === "Main heavy suites" &&
+        workflow["concurrency"]["group"] === HEAVY_BRANCH_GROUP))
+  );
+};
 
 type ConcurrencyProblemsOptions = {
   supersedingEvents?: readonly string[];
@@ -85,6 +106,21 @@ const concurrencyProblems = (
       ...(cancel === false
         ? []
         : ["event-preserving workflow must not cancel runs"]),
+    ];
+  }
+  if (hasMainBranchConcurrency(workflow)) {
+    return [
+      ...(!events.includes("issue_comment") &&
+      events
+        .filter((event) => PULL_REQUEST_EVENTS.has(event))
+        .every((event) => event === "pull_request")
+        ? []
+        : [
+            "branch concurrency does not identify review pull requests or commented issues",
+          ]),
+      ...(cancel === true
+        ? []
+        : ["branch concurrency must cancel superseded analysis runs"]),
     ];
   }
   const protectedEvents = [
@@ -208,7 +244,22 @@ jobs:
   });
 });
 
+const concurrencyModes: Record<
+  string,
+  NonNullable<ConcurrencyProblemsOptions["mode"]>
+> = {
+  "disarm-auto-merge.yml": "preserve-events",
+  "merge-group-hold.yml": "preserve-events",
+};
+
 describe("pull request workflow concurrency", () => {
+  const supersedingEventsFor = (file: string) => {
+    if (file === "ci.yml") {
+      return ["workflow_dispatch", "push"];
+    }
+    return [];
+  };
+
   test("every pull request workflow cancels its superseded runs", async () => {
     const workflows = await repositoryWorkflows();
     const pullRequestWorkflows = workflows.filter(({ workflow }) =>
@@ -221,9 +272,8 @@ describe("pull request workflow concurrency", () => {
     expect(
       pullRequestWorkflows.flatMap(({ file, workflow }) =>
         concurrencyProblems(workflow, {
-          supersedingEvents: file === "ci.yml" ? ["workflow_dispatch"] : [],
-          mode:
-            file === "disarm-auto-merge.yml" ? "preserve-events" : "supersede",
+          supersedingEvents: supersedingEventsFor(file),
+          mode: concurrencyModes[file] ?? "supersede",
         }).map((problem) => `${file}: ${problem}`),
       ),
     ).toEqual([]);
@@ -285,15 +335,22 @@ describe("pull request workflow concurrency", () => {
         }
         const concurrency = owner["concurrency"];
         const group = concurrency["group"];
+        if (owner === workflow && hasMainBranchConcurrency(workflow)) {
+          return [];
+        }
         // These workflows deliberately supersede builds/deploys or manual
-        // CI on one branch. Promotion itself still must finish.
+        // CI on one branch. Staging builds supersede only a build of the
+        // same commit. Promotion itself still must finish.
         const deliberate =
           (file === "deploy-staging.yml" &&
-            ["staging-api-build", "staging-web-build"].includes(
-              String(group),
-            )) ||
+            [
+              `staging-api-build-\${{ needs.resolve.outputs.sha }}`,
+              `staging-web-build-\${{ needs.resolve.outputs.sha }}`,
+            ].includes(String(group))) ||
           (file === "deploy-landing.yml" &&
-            group === `deploy-landing-\${{ github.ref }}`);
+            group === `deploy-landing-\${{ github.ref }}`) ||
+          (file === "manual-checks.yml" &&
+            group === `manual-check-\${{ github.ref }}-\${{ inputs.check }}`);
         if (deliberate) {
           return [];
         }
@@ -317,13 +374,48 @@ describe("pull request workflow concurrency", () => {
 
   test("reads every trigger spelling", () => {
     expect(runsOnPullRequests({ on: "pull_request" })).toBe(true);
-    expect(runsOnPullRequests({ on: ["push", "pull_request_target"] })).toBe(
+    expect(runsOnPullRequests({ on: ["push", "pull_request_review"] })).toBe(
       true,
     );
     expect(runsOnPullRequests({ on: { pull_request: null } })).toBe(true);
     expect(runsOnPullRequests({ on: { push: null, schedule: [] } })).toBe(
       false,
     );
+  });
+
+  test("main analysis supersedes its branch while review events retain pull request identity", () => {
+    const workflow = {
+      on: { push: { branches: ["main"] }, pull_request: null, schedule: [] },
+      concurrency: {
+        group: `\${{ github.workflow }}-\${{ github.ref }}`,
+        "cancel-in-progress": true,
+      },
+    };
+    expect(concurrencyProblems(workflow)).toEqual([]);
+    for (const event of [
+      "pull_request_review",
+      "pull_request_review_comment",
+      "issue_comment",
+    ]) {
+      expect(
+        concurrencyProblems({
+          ...workflow,
+          on: { ...workflow.on, [event]: null },
+        }),
+      ).toEqual([expect.stringContaining("does not identify")]);
+    }
+    expect(
+      concurrencyProblems({
+        ...workflow,
+        on: { pull_request: null, schedule: [] },
+      }),
+    ).not.toEqual([]);
+    expect(
+      concurrencyProblems({
+        ...workflow,
+        concurrency: { ...workflow.concurrency, "cancel-in-progress": false },
+      }),
+    ).toEqual([expect.stringContaining("cancel superseded analysis")]);
   });
 
   test("rejects a workflow whose runs would not supersede each other", () => {
@@ -355,14 +447,11 @@ describe("pull request workflow concurrency", () => {
     ["pull_request", `\${{ github.workflow }}-\${{ github.ref }}`],
     // Two forks can push branches of the same name.
     ["pull_request", `\${{ github.workflow }}-\${{ github.head_ref }}`],
-    ["pull_request_target", `\${{ github.workflow }}-\${{ github.head_ref }}`],
     // Only the branch name, shared by every pull request from it.
     ["pull_request", `\${{ github.workflow }}-\${{ github.ref_name }}`],
-    // Under pull_request_target the ref is the base branch.
-    ["pull_request_target", `\${{ github.workflow }}-\${{ github.ref }}`],
     // The issue number identifies a pull request only on a comment trigger.
     [
-      "pull_request_target",
+      "pull_request",
       `\${{ github.workflow }}-\${{ github.event.issue.number }}`,
     ],
   ])("rejects a %s group keyed as %s", (event, group) => {
@@ -379,10 +468,7 @@ describe("pull request workflow concurrency", () => {
       ["pull_request"],
       `\${{ github.workflow }}-\${{ github.event.pull_request.number }}`,
     ],
-    [
-      ["pull_request_target"],
-      `\${{ github.workflow }}-\${{ github.event.number }}`,
-    ],
+    [["pull_request"], `\${{ github.workflow }}-\${{ github.event.number }}`],
   ])("accepts %p grouped as %s", (events, group) => {
     expect(
       concurrencyProblems({
@@ -429,7 +515,7 @@ describe("pull request workflow concurrency", () => {
   test("accepts a per pull request group that cancels in progress", () => {
     expect(
       concurrencyProblems({
-        on: { pull_request_target: { types: ["labeled"] } },
+        on: { pull_request: { types: ["labeled"] } },
         concurrency: {
           group: `\${{ github.workflow }}-\${{ github.event.pull_request.number }}`,
           "cancel-in-progress": true,
@@ -444,29 +530,39 @@ type ConcurrencyContext = {
   event_name: string;
   ref: string;
   run_id: number;
+  run_attempt?: string;
+  inputs?: { base_ref?: string };
   event: {
+    action?: string;
     pull_request?: { number: number; head: { sha: string } };
     label?: { name: string };
   };
 };
-const groupFor = async (file: string, github: ConcurrencyContext) => {
+const concurrencyValueFor = async (
+  file: string,
+  key: "group" | "cancel-in-progress",
+  github: ConcurrencyContext,
+) => {
   const workflow: unknown = Bun.YAML.parse(
     await Bun.file(new URL(file, WORKFLOWS_URL)).text(),
   );
   if (!isRecord(workflow) || !isRecord(workflow["concurrency"])) {
     throw new Error("Missing concurrency");
   }
-  const group = workflow["concurrency"]["group"];
-  if (typeof group !== "string") {
-    throw new TypeError("Missing group");
+  const value = workflow["concurrency"][key];
+  if (typeof value !== "string") {
+    return value;
   }
   // These group expressions use the same short-circuit/string operations
   // as JavaScript. Execute the actual file, rather than a copied key.
-  return group.replace(/\$\{\{(.*?)\}\}/gu, (_match, expression: string) =>
+  return value.replace(/\$\{\{(.*?)\}\}/gu, (_match, expression: string) =>
     String(
       new Script(expression).runInNewContext({
         github,
-        inputs: {},
+        inputs: { base_ref: github.inputs?.base_ref ?? "" },
+        contains: (members: readonly string[], candidate: string) =>
+          members.includes(candidate),
+        fromJSON: (serialized: string) => JSON.parse(serialized),
         format: (template: string, ...values: (string | number)[]) =>
           template.replace(/\{(\d+)\}/gu, (_placeholder, index: string) =>
             String(values.at(Number(index)) ?? ""),
@@ -475,6 +571,8 @@ const groupFor = async (file: string, github: ConcurrencyContext) => {
     ),
   );
 };
+const groupFor = async (file: string, github: ConcurrencyContext) =>
+  concurrencyValueFor(file, "group", github);
 const recording = {
   workflow: "Record network baseline",
   event_name: "pull_request",
@@ -505,6 +603,26 @@ test("main recordings serialize without cancelling a committed baseline", async 
   );
 });
 
+test("unrelated labels cannot supersede baseline recording requests", async () => {
+  const file = "network-baseline-request.yml";
+  const request = {
+    ...recording,
+    workflow: "Request network baseline",
+    event_name: "pull_request",
+  };
+  const group = await groupFor(file, request);
+  expect(group).toBe("Request network baseline-pr-12");
+  expect(await groupFor(file, { ...request, run_id: 2 })).toBe(group);
+  const unrelated = {
+    ...request,
+    event: { ...request.event, label: { name: "unrelated" } },
+  };
+  expect(await groupFor(file, unrelated)).not.toBe(group);
+  expect(await groupFor(file, { ...unrelated, run_id: 2 })).not.toBe(
+    await groupFor(file, unrelated),
+  );
+});
+
 test("manual CI replaces the same branch while PRs and merge groups stay isolated", async () => {
   const file = "ci.yml";
   const dispatch = {
@@ -530,4 +648,77 @@ test("manual CI replaces the same branch while PRs and merge groups stay isolate
   expect(await groupFor(file, { ...merge, run_id: 2 })).not.toBe(
     await groupFor(file, merge),
   );
+});
+
+test("CI metadata events cannot cancel the code run for the same head", async () => {
+  const file = "ci.yml";
+  const codeRun = {
+    ...recording,
+    workflow: "CI Checks",
+    run_attempt: "1",
+    event: { ...recording.event, action: "synchronize" },
+  };
+  const metadataRun = {
+    ...codeRun,
+    event: { ...codeRun.event, action: "labeled" },
+  };
+
+  expect(await groupFor(file, codeRun)).toBe("CI Checks-pr-12");
+  expect(await groupFor(file, metadataRun)).toBe(
+    "CI Checks-pr-12-head-one-meta",
+  );
+  expect(await concurrencyValueFor(file, "cancel-in-progress", codeRun)).toBe(
+    "true",
+  );
+  expect(
+    await concurrencyValueFor(file, "cancel-in-progress", metadataRun),
+  ).toBe("false");
+  expect(
+    await groupFor(file, {
+      ...metadataRun,
+      event: {
+        ...metadataRun.event,
+        pull_request: { number: 12, head: { sha: "head-two" } },
+      },
+    }),
+  ).not.toBe(await groupFor(file, metadataRun));
+  // Re-run attempts of metadata runs of one head never share a group, so
+  // none of them replaces another while pending.
+  const reruns = await Promise.all(
+    [2, 3, 4].map(async (run_id) =>
+      groupFor(file, { ...metadataRun, run_id, run_attempt: "2" }),
+    ),
+  );
+  expect(new Set([...reruns, await groupFor(file, metadataRun)]).size).toBe(4);
+  expect(
+    await concurrencyValueFor(file, "cancel-in-progress", {
+      ...metadataRun,
+      run_attempt: "2",
+    }),
+  ).toBe("false");
+  // A draft runs no CI, so ready_for_review is the first code run, and a
+  // prove-fix label changes the suites: both stay in the code-run group.
+  for (const event of [
+    { ...codeRun.event, action: "ready_for_review" },
+    { ...codeRun.event, action: "labeled", label: { name: "prove-fix" } },
+  ]) {
+    expect(await groupFor(file, { ...codeRun, event })).toBe("CI Checks-pr-12");
+    expect(
+      await concurrencyValueFor(file, "cancel-in-progress", {
+        ...codeRun,
+        event,
+      }),
+    ).toBe("true");
+  }
+  for (const event of [
+    { ...codeRun.event, action: "auto_merge_enabled" },
+    { ...codeRun.event, action: "labeled", label: { name: "merge-armed" } },
+    { ...codeRun.event, action: "unlabeled", label: { name: "merge-armed" } },
+  ]) {
+    const armed = { ...codeRun, event };
+    expect(await groupFor(file, armed)).toBe("CI Checks-pr-12-head-one-meta");
+    expect(await concurrencyValueFor(file, "cancel-in-progress", armed)).toBe(
+      "false",
+    );
+  }
 });

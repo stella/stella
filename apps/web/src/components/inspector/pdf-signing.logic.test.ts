@@ -1,14 +1,18 @@
 import { describe, expect, test } from "bun:test";
 
+import { DESKTOP_HANDOFF_FAILURE } from "@stll/api-contract/desktop-handoff";
+
 import {
   decidePdfSigningPoll,
   parsePdfSigningDeadline,
   PDF_SIGNING_POLL_INTERVAL_MS,
   pdfSigningFinalizedQueryKeys,
-  pdfSigningStartErrorCode,
   type PdfSigningSessionSnapshot,
+  pdfSigningStartErrorCode,
   resolvePdfSignTarget,
+  resolveSavedPdfSignTarget,
 } from "@/components/inspector/pdf-signing.logic";
+import { PDF_MIME } from "@/lib/consts";
 
 const NOW = Date.UTC(2026, 8, 21, 12, 0, 0);
 
@@ -23,10 +27,27 @@ const openSession = (
 });
 
 describe("pdf signing poll decisions", () => {
+  for (const closeReason of Object.values(DESKTOP_HANDOFF_FAILURE)) {
+    test(`${closeReason} settles before the handoff deadline`, () => {
+      expect(
+        decidePdfSigningPoll({
+          deadline: NOW + 120_000,
+          handoffDeadline: NOW,
+          now: NOW,
+          session: openSession({ status: "cancelled", closeReason }),
+        }),
+      ).toEqual({
+        type: "settled",
+        outcome: { type: "cancelled", closeReason },
+      });
+    });
+  }
+
   test("keeps waiting at the poll cadence while the session is open", () => {
     expect(
       decidePdfSigningPoll({
         deadline: NOW + 60_000,
+        handoffDeadline: NOW,
         now: NOW,
         session: openSession(),
       }),
@@ -43,6 +64,7 @@ describe("pdf signing poll decisions", () => {
     expect(
       decidePdfSigningPoll({
         deadline: NOW + 30_000,
+        handoffDeadline: NOW,
         now: NOW,
         session: openSession({
           expiresAt: new Date(NOW + 600_000).toISOString(),
@@ -59,6 +81,7 @@ describe("pdf signing poll decisions", () => {
     expect(
       decidePdfSigningPoll({
         deadline: NOW + 500,
+        handoffDeadline: NOW,
         now: NOW,
         session: openSession({ expiresAt: new Date(NOW + 500).toISOString() }),
       }),
@@ -69,16 +92,54 @@ describe("pdf signing poll decisions", () => {
     expect(
       decidePdfSigningPoll({
         deadline: NOW,
+        handoffDeadline: NOW,
         now: NOW,
         session: openSession({ expiresAt: new Date(NOW).toISOString() }),
       }),
-    ).toEqual({ type: "settled", outcome: { type: "expired" } });
+    ).toEqual({
+      type: "settled",
+      outcome: { type: "expired", stage: "handoff" },
+    });
+  });
+
+  test("an unredeemed handoff the server expired was never picked up", () => {
+    expect(
+      decidePdfSigningPoll({
+        deadline: NOW + 120_000,
+        handoffDeadline: NOW + 120_000,
+        now: NOW + 120_000,
+        session: openSession({
+          expiresAt: new Date(NOW + 120_000).toISOString(),
+          status: "expired",
+        }),
+      }),
+    ).toEqual({
+      type: "settled",
+      outcome: { type: "expired", stage: "handoff" },
+    });
+  });
+
+  test("a redeemed session that ran out was picked up by the desktop app", () => {
+    expect(
+      decidePdfSigningPoll({
+        deadline: NOW + 120_000,
+        handoffDeadline: NOW + 120_000,
+        now: NOW + 600_000,
+        session: openSession({
+          expiresAt: new Date(NOW + 600_000).toISOString(),
+        }),
+      }),
+    ).toEqual({
+      type: "settled",
+      outcome: { type: "expired", stage: "session" },
+    });
   });
 
   test("settles on the version the desktop app produced", () => {
     expect(
       decidePdfSigningPoll({
         deadline: NOW + 60_000,
+        handoffDeadline: NOW,
         now: NOW,
         session: openSession({
           finalizedVersionNumber: 7,
@@ -95,6 +156,7 @@ describe("pdf signing poll decisions", () => {
     expect(
       decidePdfSigningPoll({
         deadline: NOW + 60_000,
+        handoffDeadline: NOW,
         now: NOW,
         session: openSession({
           finalizedVersionNumber: null,
@@ -111,6 +173,7 @@ describe("pdf signing poll decisions", () => {
     expect(
       decidePdfSigningPoll({
         deadline: NOW + 60_000,
+        handoffDeadline: NOW,
         now: NOW,
         session: openSession({
           closeReason: "certificate_rejected",
@@ -127,10 +190,14 @@ describe("pdf signing poll decisions", () => {
     expect(
       decidePdfSigningPoll({
         deadline: NOW + 600_000,
+        handoffDeadline: NOW,
         now: NOW,
         session: openSession({ status: "expired" }),
       }),
-    ).toEqual({ type: "settled", outcome: { type: "expired" } });
+    ).toEqual({
+      type: "settled",
+      outcome: { type: "expired", stage: "session" },
+    });
   });
 });
 
@@ -253,5 +320,78 @@ describe("resolvePdfSignTarget", () => {
     ],
   ])("offers no signing %s", (_label, override) => {
     expect(resolvePdfSignTarget({ ...signable, ...override })).toBeNull();
+  });
+});
+
+describe("resolveSavedPdfSignTarget", () => {
+  const target = {
+    entityId: "entity-1",
+    propertyId: "property-1",
+    workspaceId: "workspace-1",
+  };
+  const fileField = (
+    id: string,
+    propertyId: string,
+    fileId: string,
+    mimeType: string,
+  ) => ({
+    id,
+    propertyId,
+    content: { id: fileId, type: "file", mimeType },
+  });
+
+  test("signs the file named by the saved receipt even if its property changed", () => {
+    expect(
+      resolveSavedPdfSignTarget({
+        fields: [
+          fileField(
+            "field-old-property",
+            "property-1",
+            "file-original",
+            PDF_MIME,
+          ),
+          fileField("field-saved", "property-2", "file-saved", PDF_MIME),
+        ],
+        savedFileId: "file-saved",
+        target,
+      }),
+    ).toEqual({
+      ...target,
+      fieldId: "field-saved",
+      propertyId: "property-2",
+    });
+  });
+
+  test("signs nothing when the receipt file is absent or is not a PDF", () => {
+    expect(
+      resolveSavedPdfSignTarget({
+        fields: [
+          fileField(
+            "field-old-property",
+            "property-1",
+            "file-original",
+            PDF_MIME,
+          ),
+        ],
+        savedFileId: "file-saved",
+        target,
+      }),
+    ).toBeNull();
+    expect(
+      resolveSavedPdfSignTarget({
+        fields: [
+          fileField("field-saved", "property-2", "file-saved", "image/png"),
+        ],
+        savedFileId: "file-saved",
+        target,
+      }),
+    ).toBeNull();
+    expect(
+      resolveSavedPdfSignTarget({
+        fields: [],
+        savedFileId: "file-saved",
+        target,
+      }),
+    ).toBeNull();
   });
 });

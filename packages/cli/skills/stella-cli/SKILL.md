@@ -41,7 +41,7 @@ every command accepts `--server <url>` to target another one. A default
 login requests the working set of scopes (everything but organization
 administration writes and one-off setup); pass `--scopes` to request an
 explicit set. The
-default scopes are `openid profile email offline_access stella:read stella:search stella:templates stella:documents_write stella:matters_write stella:contacts_write stella:chat stella:knowledge_write stella:billing_write stella:admin_read stella:skills stella:feedback`.
+default scopes are `openid profile email offline_access stella:read stella:search stella:templates stella:documents_write stella:matters_write stella:contacts_write stella:chat stella:knowledge_write stella:billing_write stella:admin_read stella:skills stella:feedback stella:organization_create`.
 `stella auth whoami` shows the active session; `stella auth logout` clears it.
 
 ## Conventions every agent must know
@@ -93,68 +93,76 @@ requires (request it at `stella auth login --scopes`).
 | annotation | `stella annotation create` | knowledge_write |  |
 | annotation | `stella annotation delete` | knowledge_write | destructive (needs `--yes` off a TTY) |
 | annotation | `stella annotation list` | read | paginated |
-| annotation | `stella annotation update` | knowledge_write |  |
+| annotation | `stella annotation update` | knowledge_write | destructive (needs `--yes` off a TTY) |
 | audit-log | `stella audit-log list` | admin_read | paginated |
 | capability | `stella capability describe` | read |  |
-| capability | `stella capability invoke` | read |  |
 | capability | `stella capability list` | read | paginated |
+| capability | `stella capability read` | read |  |
+| capability | `stella capability write` | read |  |
 | case-law | `stella case-law citations` | read | paginated |
-| case-law | `stella case-law lookup` | read |  |
-| case-law | `stella case-law read` | read | paginated; per-entry cursor, no `--all` |
+| case-law | `stella case-law coverage` | read |  |
+| case-law | `stella case-law open` | read |  |
+| case-law | `stella case-law read` | read |  |
+| case-law | `stella case-law resolve` | law_read |  |
 | case-law | `stella case-law search` | search | paginated |
+| case-law | `stella case-law verify-quote` | read |  |
 | clause | `stella clause delete` | knowledge_write | destructive (needs `--yes` off a TTY) |
 | clause | `stella clause list` | read | paginated |
-| clause | `stella clause save` | knowledge_write |  |
+| clause | `stella clause save` | knowledge_write | destructive (needs `--yes` off a TTY) |
 | contact | `stella contact check-counterparty` | read |  |
 | contact | `stella contact delete` | matters_write | destructive (needs `--yes` off a TTY) |
 | contact | `stella contact list` | read | paginated |
 | contact | `stella contact lookup-registry` | read |  |
 | contact | `stella contact read` | read |  |
-| contact | `stella contact save` | matters_write |  |
+| contact | `stella contact save` | matters_write | destructive (needs `--yes` off a TTY) |
 | document | `stella document compare` | documents_write |  |
 | document | `stella document comparison prepare` | documents_write |  |
 | document | `stella document comparison prepare-from-links` | documents_write |  |
 | document | `stella document content` | read | paginated; windowed text |
 | document | `stella document delete` | documents_write | destructive (needs `--yes` off a TTY) |
-| document | `stella document field set` | documents_write |  |
+| document | `stella document field set` | documents_write | destructive (needs `--yes` off a TTY) |
 | document | `stella document list` | read | paginated |
 | document | `stella document properties list` | read | paginated |
 | document | `stella document read` | read |  |
-| document | `stella document save` | documents_write |  |
+| document | `stella document save` | documents_write | destructive (needs `--yes` off a TTY) |
 | feedback | `stella feedback prepare` | feedback |  |
 | feedback | `stella feedback submit` | feedback |  |
+| guidance | `stella guidance read` | read | paginated |
+| guidance | `stella guidance search` | search | paginated |
 | invoice | `stella invoice list` | read | paginated |
 | legislation | `stella legislation boe-search` | read | paginated |
 | legislation | `stella legislation history` | read | paginated |
 | legislation | `stella legislation provisions` | read |  |
 | legislation | `stella legislation read` | read | paginated; windowed text |
+| legislation | `stella legislation resolve` | law_read |  |
 | legislation | `stella legislation search` | search | paginated |
+| matter | `stella matter add-member` | matters_write |  |
 | matter | `stella matter delete` | matters_write | destructive (needs `--yes` off a TTY) |
-| matter | `stella matter link-contact` | matters_write |  |
+| matter | `stella matter link-contact` | matters_write | destructive (needs `--yes` off a TTY) |
 | matter | `stella matter list` | read | paginated |
-| matter | `stella matter save` | matters_write |  |
-| organization | `stella organization add-member` | admin_write |  |
-| organization | `stella organization remove-member` | admin_write | destructive (needs `--yes` off a TTY) |
-| organization | `stella organization set-jurisdictions` | onboarding |  |
+| matter | `stella matter remove-member` | matters_write | destructive (needs `--yes` off a TTY) |
+| matter | `stella matter save` | matters_write | destructive (needs `--yes` off a TTY) |
+| organization | `stella organization create` | organization_create |  |
+| organization | `stella organization set-jurisdictions` | onboarding | destructive (needs `--yes` off a TTY) |
 | organization | `stella organization update-settings` | admin_write |  |
 | playbook | `stella playbook list` | read | paginated |
-| playbook | `stella playbook run` | knowledge_write |  |
-| playbook | `stella playbook save` | knowledge_write |  |
+| playbook | `stella playbook run` | knowledge_write | destructive (needs `--yes` off a TTY) |
+| playbook | `stella playbook save` | knowledge_write | destructive (needs `--yes` off a TTY) |
 | rate | `stella rate resolve` | read |  |
 | search | `stella search matters` | search | paginated |
 | task | `stella task delete` | matters_write | destructive (needs `--yes` off a TTY) |
 | task | `stella task list` | read | paginated |
-| task | `stella task save` | matters_write |  |
-| template | `stella template configure-fields` | templates |  |
-| template | `stella template create` | templates |  |
+| task | `stella task save` | matters_write | destructive (needs `--yes` off a TTY) |
+| template | `stella template configure-fields` | templates | destructive (needs `--yes` off a TTY) |
+| template | `stella template create` | templates | destructive (needs `--yes` off a TTY) |
 | template | `stella template fill` | templates |  |
 | template | `stella template list` | templates | paginated |
 | template | `stella template preview-conditions` | templates |  |
-| template | `stella template save-filled new-document` | documents_write + templates |  |
-| template | `stella template save-filled new-version` | documents_write + templates |  |
+| template | `stella template save-filled new-document` | documents_write + templates | destructive (needs `--yes` off a TTY) |
+| template | `stella template save-filled new-version` | documents_write + templates | destructive (needs `--yes` off a TTY) |
 | time-entry | `stella time-entry delete` | billing_write | destructive (needs `--yes` off a TTY) |
 | time-entry | `stella time-entry list` | read | paginated |
-| time-entry | `stella time-entry save` | billing_write |  |
+| time-entry | `stella time-entry save` | billing_write | destructive (needs `--yes` off a TTY) |
 | usage | `stella usage get` | read |  |
 
 ## Command flags
@@ -180,28 +188,40 @@ are omitted here. Input union keys are required unless marked `?`.
   - via `--input` only: change
   - change: type="body": body:string; type="color": color:"yellow" | "green" | "sky" | "violet" | "red"; type="style": style:string; type="visibility": visibility:"private" | "shared". Example: `--input '{"change":{"type":"body","body":"x"}}'`
 - `stella audit-log list`
-  - optional: --matter-id, --action, --resource-type, --resource-id, --user-id, --from, --to
+  - optional: --matter-id, --action, --resource-type, --resource-id, --user-id, --performer (people|automations), --from, --to
 - `stella capability describe`
   - `--capability` — Capability id to describe, as returned by list_capabilities (e.g. "time-entries.create"). (string)
-- `stella capability invoke`
+- `stella capability list`
+  - optional: --domain, --query, --access (all|read|write)
+- `stella capability read`
   - `--capability` — Capability id to invoke. Use an id list_capabilities returned. (string)
   - optional: --validate-only
   - via `--input` only: input
-- `stella capability list`
-  - optional: --domain, --access (all|read|write)
+- `stella capability write`
+  - `--capability` — Capability id to invoke. Use an id list_capabilities returned. (string)
+  - optional: --validate-only
+  - via `--input` only: input
 - `stella case-law citations`
   - `--decision-id` — Case-law decision ID (string)
-  - `--direction` — Which side of the citation graph to read: 'cites' for the decisions this decision cites, 'cited_by' for the decisions that cite it. Citing is not agreeing: both sides carry negative treatments. (enum: cites, cited_by)
-- `stella case-law lookup`
-  - `--identifiers` — The references to resolve, at most 50 per call: a docket number as the court writes it (the sheet number after it is ignored) or an ECLI. Each is answered on its own. (string-array, repeatable)
-  - `--country` — Required corpus country. Admitted: CZE. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read. (string)
+  - `--direction` — cites: decisions this decision cites; cited_by: its citers. Citing is not agreeing: both sides carry negative treatments. (enum: cites, cited_by)
+  - optional: --doctrine (distinguishes|limits), --polarity (negative|neutral|positive|supportive|mixed|unclassified), --detail (full|compact), --passage-query
+- `stella case-law coverage`
+  - optional: --country
+- `stella case-law open`
+  - `--decision-id` — Decision ID from search_case_law results or resolve_case_law_decision document.decisionId. (string)
+  - optional: --paragraphs
 - `stella case-law read`
-  - `--decision-ids` — The decisions to read, at most 20 per call. Each id is answered on its own, so one unknown id does not sink the rest. (string-array, repeatable)
-  - optional: --max-chars, --include (details|metadata|textFields|source|citations|outline)
+  - `--decision-ids` — Decisions, max 20/call; each id answered independently, including unknown ids. (string-array, repeatable)
+  - optional: --max-chars, --page, --full, --text-version, --preferred-language, --query, --resume-after, --section (court_reasoning), --include (details|metadata|textFields|source|citations|outline)
+- `stella case-law resolve`
+  - `--country` — Court country: alpha-2/alpha-3/name. Unknown or unsupported: country_unavailable. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read. (string)
+  - `--identifier` — Docket (sheet if known) or ECLI; CZ/SK court name/alias constrains it. For descriptions: search_case_law. (string)
 - `stella case-law search`
-  - `--queries` — Several phrasings of ONE question, at most 5. Their pages are merged and deduplicated within the page, so a reformulation costs no extra round trip; one phrasing is a valid call. (string-array, repeatable)
-  - `--country` — Required corpus country. Admitted: CZE. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read. (string)
-  - optional: --court, --courts, --category, --has-legal-sentence, --language, --decision-type, --source-id, --date-from, --date-to, --sort (relevance|newest), --strict
+  - `--country` — Required corpus country. Admitted: CZE, EU, HUN, POL, SVK. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read. (string)
+  - optional: --facets (court|decisionType|source|language|year|courtYear), --queries, --continuation-token, --court, --courts, --category, --docket-registers, --senate, --provision, --has-legal-sentence, --language, --preferred-language, --decision-type, --source-id, --date-from, --date-to, --sort (relevance|newest), --strict
+- `stella case-law verify-quote`
+  - `--decision-id` — ID from search_case_law or resolve_case_law_decision. (string)
+  - `--text` — Quote: max 4000 chars, 128 word/punctuation tokens, 16 nonempty ordered segments split by ..., …, […] or (...). Preserve case/diacritics. (string)
 - `stella clause delete`
   - `--clause-id` — Clause id to delete (string)
 - `stella clause list`
@@ -219,14 +239,14 @@ are omitted here. Input union keys are required unless marked `?`.
   - optional: --query, --type (person|organization)
 - `stella contact lookup-registry`
   - `--registry` — Business register to query (enum: ares, brreg, companies-house, denue, edgar, gcis, krs, orsr, prh, recherche-entreprises, rpo, vies)
-  - `--query` — Canonical identifier (e.g. company number, VAT number) or company name (string)
+  - `--query` — Canonical identifier (e.g. company number, VAT number) or company name (KRS names are verified) (string)
   - optional: --detail (standard|full)
 - `stella contact read`
   - `--contact-id` — Contact ID (string)
 - `stella contact save`
-  - optional: --contact-id, --type (person|organization), --display-name, --first-name, --last-name, --organization-name, --notes, --nationality-codes
-  - via `--input` only: date_of_birth
-  - date_of_birth: precision="year": year:integer; precision="month": year:integer, month:integer; precision="day": year:integer, month:integer, day:integer. Example: `--input '{"date_of_birth":{"precision":"year","year":1000}}'`
+  - optional: --prefix, --middle-name, --suffix, --color, --registration-number, --tax-id, --vat-id, --vat-payer, --default-hourly-rate, --currency, --payment-term-days, --invoice-language (ar|cs|de|en|es|et|fr|hu|lt|lv|pl|pt-BR|sk), --originating-attorney-id, --responsible-attorney-id, --contact-id, --type (person|organization), --display-name, --first-name, --last-name, --organization-name, --notes, --nationality-codes, --external.source, --external.id
+  - via `--input` only: emails, phones, addresses, metadata, tags, bank_accounts, billing_address, date_of_birth
+  - date_of_birth: precision="year": year:integer; precision="month": year:integer, month:integer; precision="day": year:integer, month:integer, day:integer. Example: `--input '{"date_of_birth":{"precision":"year","year":1900}}'`
 - `stella document compare`
   - `--base-tracked-changes` — Tracked changes the base version already carries: accept compares its final text, keep leaves them in place, reject compares its original text. (enum: keep, accept, reject)
   - `--target-tracked-changes` — Tracked changes the target version already carries: accept compares its final text, keep leaves them in place, reject compares its original text. (enum: keep, accept, reject)
@@ -236,10 +256,10 @@ are omitted here. Input union keys are required unless marked `?`.
   - source: type="versions": document_id:string, base_version_id:string, target_version_ids:string[]; type="previous": document_id:string, target_version_id:string; type="uploads": base_upload_id:string, target_upload_id:string. Example: `--input '{"source":{"type":"versions","document_id":"00000000-0000-4000-8000-000000000000","base_version_id":"00000000-0000-4000-8000-000000000000","target_version_ids":["00000000-0000-4000-8000-000000000000"]}}'`
 - `stella document comparison prepare`
   - `--base.name` — File name to show the user, including the .docx suffix. (string)
-  - `--base.size` — Exact byte length of the file, at most 50 MB. (int 1..52428800)
+  - `--base.size` — Exact byte length of the file, at most 200 MB. (int 1..209715200)
   - `--base.sha256-hex` — SHA-256 of the exact bytes you will PUT, as 64 hexadecimal characters. (string)
   - `--target.name` — File name to show the user, including the .docx suffix. (string)
-  - `--target.size` — Exact byte length of the file, at most 50 MB. (int 1..52428800)
+  - `--target.size` — Exact byte length of the file, at most 200 MB. (int 1..209715200)
   - `--target.sha256-hex` — SHA-256 of the exact bytes you will PUT, as 64 hexadecimal characters. (string)
 - `stella document comparison prepare-from-links`
   - `--base.url` — HTTPS link the server downloads the .docx from. A share link that opens a web page is not the file; use the direct-download form. (string)
@@ -254,7 +274,7 @@ are omitted here. Input union keys are required unless marked `?`.
   - `--entity-id` — Document entity ID whose cell to set (string)
   - `--property-id` — Property ID, as returned by list_properties (string)
   - via `--input` only: content
-  - content: type="text": value:string; type="single-select": value:string|null; type="multi-select": value:string[]; type="date": value:string|null; type="int": value:integer, currency?:string|null. Example: `--input '{"content":{"type":"text","value":"xxxxx"}}'`
+  - content: type="text": value:string; type="single-select": value:string|null; type="multi-select": value:string[]; type="date": value:string|null; type="int": value:integer|null, currency?:string|null. Example: `--input '{"content":{"type":"text","value":"xxxxx"}}'`
 - `stella document list`
   - `--matter-id` — Matter ID to list documents in. (string)
   - optional: --mode (flat|children), --parent-id
@@ -278,22 +298,36 @@ are omitted here. Input union keys are required unless marked `?`.
   - `--what-happened` — What stella actually did. (string)
   - `--approval-token` — From prepare_feedback; covers only that report. (string)
   - optional: --expected, --steps, --evidence, --context.client (mcp|cli|web|desktop|other), --context.client-version, --context.request-id, --context.route, --context.error-reference
+- `stella guidance read`
+  - `--document-id` — Guidance document id, as search_guidance returns it in documentId (string)
+- `stella guidance search`
+  - `--query` — Words to find in the guidance title or text (string)
+  - optional: --authority, --jurisdiction, --kind (methodology|recommendation|opinion|faq|guideline|position|statement|inspection_report|annual_report|other), --date-from, --date-to
 - `stella invoice list`
   - optional: --matter-id, --invoice-id
 - `stella legislation boe-search`
   - optional: --query, --title, --department-code, --legal-range-code, --matter-code, --date-from, --date-to, --law-id, --block-id, --relation-type (modifies|modifiedBy|derogates|derogatedBy|all), --full-text
 - `stella legislation history`
   - `--eli` — European Legislation Identifier of the work, as search_legislation returns it (for example https://www.e-sbirka.cz/eli/cz/sb/2012/89). It addresses the act, not one consolidation of it. A short, prefix-less or reordered ELI is read as the canonical one. (string)
-  - `--anchor` — Publisher provision anchor; confirm it in read_statute's outline for the chosen consolidation. Czech e-Sbírka commonly uses par_<section>, -odst_<paragraph>, and -pism_<letter> (par_1729, par_1729-odst_1, par_1729-odst_2-pism_a). Subdivision anchors narrow the answer to that subdivision. Other publishers may use different schemes. (string)
-  - optional: --language
+  - `--anchor` — Publisher provision anchor; confirm it in read_statute's outline for the chosen consolidation. Czech e-Sbírka commonly uses par_<section>, -odst_<paragraph>, and -pism_<letter> (par_1729, par_1729-odst_1, par_1729-odst_2-pism_a). Subdivision anchors narrow the answer to that subdivision. An annex also reads by number (priloha_3). Other publishers may use different schemes. (string)
+  - optional: --language, --text-cursor
 - `stella legislation provisions` — no flags; pass `--input` with items
 - `stella legislation read`
   - `--eli` — European Legislation Identifier of the work, as search_legislation returns it (for example https://www.e-sbirka.cz/eli/cz/sb/2012/89). It addresses the act, not one consolidation of it. A short, prefix-less or reordered ELI is read as the canonical one. (string)
   - optional: --language, --as-of
+- `stella legislation resolve`
+  - `--country` — Country of the cited law; alpha-2, alpha-3 or country name. Unrecognized or unsupported countries return country_unavailable. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read. (string)
+  - `--section` — Section or article, e.g. 1729, § 5a or čl. 38. (string)
+  - optional: --as-of
+  - via `--input` only: source
+  - source: type="citation": citation:string; type="structured": collection:string, year:string, number:string. Example: `--input '{"source":{"type":"citation","citation":"x"}}'`
 - `stella legislation search`
   - `--query` — Search query (string)
-  - `--country` — Required corpus country. Admitted: CZE. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read. (string)
-  - optional: --document-type, --status, --language, --date-from, --date-to
+  - `--country` — Required corpus country. Admitted: CZE, SVK. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read. (string)
+  - optional: --document-type, --status, --language, --date-from, --date-to, --as-of, --continuation-token
+- `stella matter add-member`
+  - `--matter-id` — Matter ID (string)
+  - `--user-id` — Existing organization member ID (string)
 - `stella matter delete`
   - `--matter-id` — Matter ID to delete (string)
 - `stella matter link-contact`
@@ -301,18 +335,18 @@ are omitted here. Input union keys are required unless marked `?`.
   - optional: --contact-id, --role (opposing_party|opposing_counsel|co_counsel|witness|expert_witness|third_party|judge|mediator|other), --matter-contact-id
 - `stella matter list`
   - optional: --matter-id, --status (active|all)
+- `stella matter remove-member`
+  - `--matter-id` — Matter ID (string)
+  - `--user-id` — Matter member ID (string)
+  - optional: --reassign-to
 - `stella matter save`
   - optional: --matter-id, --name, --client-id, --reference, --billing-reference, --status (active|archived)
-- `stella organization add-member`
-  - `--matter-id` — Matter ID for add_member and remove_member. (string)
-  - `--user-id` — User id to add or remove for the member actions (string)
-- `stella organization remove-member`
-  - `--matter-id` — Matter ID for add_member and remove_member. (string)
-  - `--user-id` — User id to add or remove for the member actions (string)
-  - optional: --reassign-to
+- `stella organization create`
+  - `--name` — Name of the new organization. (string)
+  - optional: --slug
 - `stella organization set-jurisdictions` — no flags; pass `--input` with jurisdictions
 - `stella organization update-settings`
-  - optional: --matter-number-pattern, --matter-number-padding, --prompt-caching-enabled, --document-processing-mode (off|searchable-text), --time-minimum-unit-minutes, --time-edit-window-days, --time-locked-through-month, --time-narrative-required, --time-zone
+  - optional: --matter-number-pattern, --matter-number-padding, --matter-numbering-enabled, --prompt-caching-enabled, --document-processing-mode (off|searchable-text), --time-minimum-unit-minutes, --time-edit-window-days, --time-locked-through-month, --time-narrative-required, --time-zone
 - `stella playbook list`
   - optional: --playbook-id
 - `stella playbook run`
@@ -326,6 +360,7 @@ are omitted here. Input union keys are required unless marked `?`.
   - `--matter-id` — Matter ID to resolve the rate in. (string)
   - `--user-id` — User ID to resolve the rate for (string)
   - `--date` — Date to resolve the rate on (ISO YYYY-MM-DD) (string)
+  - optional: --activity-code
 - `stella search matters`
   - `--query` — Search query (string)
 - `stella task delete`
@@ -333,7 +368,7 @@ are omitted here. Input union keys are required unless marked `?`.
 - `stella task list`
   - optional: --matter-id, --task-id, --assignee (me|any|unassigned), --date-from, --date-to, --status
 - `stella task save`
-  - optional: --task-id, --matter-id, --name, --status (open|in_progress|in_review|done|cancelled), --priority (none|urgent|high|medium|low), --item-type (task|fact|issue|requirement|event), --list-id, --list-section-id, --list-description, --due-date, --workflow-reason, --add-assignee-user-id, --remove-assignee-user-id, --link-entity-id, --unlink-link-id
+  - optional: --task-id, --matter-id, --name, --status (open|in_progress|in_review|done|cancelled), --priority (none|urgent|high|medium|low), --item-type (task|fact|issue|requirement|event), --list-id, --list-section-id, --description, --due-date, --workflow-reason, --assignee, --remove-assignee-user-id, --link-entity-id, --unlink-link-id
 - `stella template configure-fields`
   - `--template-id` — Template to configure, as returned by create_template or list_templates (string)
   - via `--input` only: fields
@@ -364,7 +399,7 @@ are omitted here. Input union keys are required unless marked `?`.
 - `stella time-entry delete`
   - `--time-entry-id` — Time entry ID to delete or write off (string)
 - `stella time-entry list`
-  - optional: --matter-id, --time-entry-id, --entity-id, --user-id, --date-from, --date-to, --status (draft|approved|billed|written_off)
+  - optional: --matter-id, --time-entry-id, --entity-id, --user-id, --date-from, --date-to, --status (draft|submitted|approved|billed|written_off)
 - `stella time-entry save`
   - optional: --time-entry-id, --matter-id, --entity-id, --date-worked, --timezone-id, --duration-minutes, --narrative, --narrative-language, --invoice-narrative, --billable, --no-charge, --task-code, --activity-code
 - `stella usage get` — no arguments
@@ -388,22 +423,23 @@ are omitted here. Input union keys are required unless marked `?`.
 The exit code lines up with the tool-error `code`: `validation_error` -> 2,
 `missing_scope` -> 3, `feature_disabled` -> 5, `not_found` -> 6,
 `confirmation_required` -> 7, and `rate_limited` / `upstream_unavailable` /
-`unknown_tool` / `internal_error` -> 4. A legacy server that tags only a bare `feature_disabled`
+`search_index_unavailable` / `unknown_tool` / `internal_error` -> 4. A legacy server that tags only a bare `feature_disabled`
 code (no envelope) still maps to 5; anything else falls to 4.
 
 ## Capability commands (full surface)
 
-Beyond the curated commands above, the CLI generates 403
-capability commands from the server's capability catalog: every safe handler
-that is not a curated tool, reached through the generic `invoke_capability`
-path. Every generated command lives at `stella capability <domain> <action>`;
+Beyond the curated commands above, the CLI generates capability commands
+from the server's capability catalog: every safe handler
+that is not a curated tool, reached through `read_capability` or `write_capability`
+paths. Every generated command lives at `stella capability <domain> <action>`;
 multi-segment capability actions are flattened with hyphens into `<action>`.
 
-- **Discover**: `stella capability list [--domain <d>] [--access read|write]`
-  enumerates them (paginated); `stella capability describe <id>` prints one
+- **Discover**: `stella capability list [--query <text>] [--domain <d>] [--access read|write]`
+  enumerates them (paginated); `stella capability describe --capability <id>` prints one
   capability's full input schema, scope, and flags.
-- **Invoke by id** (forward-compatible with any server): `stella capability
-  invoke <id> --input '<json>'`, where the JSON is `{ body?, params?, query? }`.
+- **Invoke by id**: `stella capability read --capability <id> --input '<json>'` or
+  `stella capability write --capability <id> --input '<json>'` for writes.
+  The JSON is `{ body?, params?, query? }`.
 - **Flags**: each capability command derives flags from its input schema;
   matter-scoped capabilities take a required `--matter-id <id>`. Deep or
   ambiguous payloads use `--input` (the whole `{ body?, params?, query? }`).
@@ -416,16 +452,16 @@ multi-segment capability actions are flattened with hyphens into `<action>`.
 ### When no curated command fits
 
 The curated commands above cover common tasks; anything else goes through the
-generic capability path. Current domains: `audit-logs`, `billing-codes`, `case-law`, `catalogue`, `chat`, `clauses`, `contacts`, `document-translations`, `document-types`, `documents`, `entities`, `entity-views`, `expenses`, `fields`, `flows`, `invoices`, `legal-reader`, `legislation`, `lists`, `matters`, `number-series`, `organization-settings`, `playbooks`, `properties`, `rates`, `reports`, `saved-time-narratives`, `seller-profiles`, `signals`, `skills`, `style-sets`, `tasks`, `template-packs`, `template-recipes`, `templates`, `time-entries`, `time-timers`, `uploads`, `usage`, `vat-rates`, `view-templates`, `views`, `work-obligations`.
+generic capability path. Current domains: `account-exports`, `audit-logs`, `billing-codes`, `case-law`, `catalogue`, `chat`, `clauses`, `client-invoices`, `conflict-checks`, `contacts`, `data-exports`, `document-translations`, `document-types`, `documents`, `docx-suggestions`, `entities`, `entity-views`, `expenses`, `fields`, `flows`, `invoices`, `legal-reader`, `legislation`, `lists`, `matters`, `memories`, `notifications`, `number-series`, `organization-settings`, `organizations`, `playbooks`, `properties`, `rates`, `reports`, `saved-time-narratives`, `search`, `search-history`, `seller-profiles`, `sharepoint`, `signals`, `skills`, `soft-law`, `style-sets`, `tasks`, `template-packs`, `template-recipes`, `templates`, `time-entries`, `time-timers`, `uploads`, `usage`, `vat-rates`, `view-templates`, `views`, `work-obligations`.
 
-- Start a document translation run: `stella capability document-translations runs-create --matter-id <matter-id> --input '{"body":{"entityId":"00000000-0000-4000-8000-000000000000","fieldId":"00000000-0000-4000-8000-000000000000","targetLang":"value","engine":"deepl","output":"translated"}}'`.
-- Start workflow extraction: `stella capability matters workflow-start --matter-id <matter-id> --input '{"body":{"serviceTier":"standard"}}'`.
+- Start a document translation run: `stella capability document-translations runs-create --matter-id <matter-id> --input '{"body":{"entityId":"value","fieldId":"value","targetLang":"value","engine":"deepl","output":"translated"}}'`.
+- Start workflow extraction: `stella capability matters workflow-start --matter-id <matter-id>`.
 - **`--input` casing is not uniform; never guess it.** A curated command's
   `--input` JSON (the table and flags above) uses the MCP tool schema's own
   keys, snake_case (`matter_id`, `contact_id`). A capability command's
   `--input` JSON uses the handler schema's own keys, camelCase (`fieldId`,
   `matterId`). Run `stella <command> --help` or `stella capability describe
-  <id>` and copy the field paths it prints.
+  --capability <id>` and copy the field paths it prints.
 
 ## Sending feedback
 

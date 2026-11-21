@@ -1,64 +1,30 @@
-import { panic } from "better-result";
-import { Elysia, type Context } from "elysia";
-
+import { classifyFailure } from "@stll/errors";
 import { Temporal } from "@stll/time";
 
 import { env } from "@/api/env";
+import type { ResponseSet } from "@/api/http/context";
+import { isEarlyHttpFailure } from "@/api/http/errors";
+import { toResponse } from "@/api/http/respond";
+import type { Middleware } from "@/api/http/route";
 import {
   type RateLimitClientAddressOptions,
   resolveRateLimitClientAddress,
 } from "@/api/lib/client-ip";
-import { isResponseValidationError } from "@/api/lib/errors/response-validation";
-import { resolveResponseStatus } from "@/api/lib/observability/response-status";
-
-type MaybePromise<T> = T | Promise<T>;
-
-export type RateLimitCounter = {
-  count: number;
-  nextReset: Date;
-  start: number;
-};
-
-export type RateLimitContextConfig = {
-  duration: number;
-};
-
-export type RateLimitContext = {
-  decrement: (key: string) => MaybePromise<void>;
-  increment: (
-    key: string,
-    duration?: number,
-    requestTime?: number,
-  ) => MaybePromise<RateLimitCounter>;
-  init: (options: RateLimitContextConfig) => void;
-  kill: () => MaybePromise<void>;
-};
-
-export type RequestIpServer = {
-  requestIP: (request: Request) => { address: string } | null;
-};
-
-export type RateLimitGenerator = (
-  request: Request,
-  server: RequestIpServer | null,
-) => MaybePromise<string>;
-
-/**
- * Body served with a 429. A string goes out as `text/plain`; an object is
- * serialized as JSON, so a route whose clients parse every response into a
- * protocol envelope (JSON-RPC) can answer in that envelope instead of prose.
- */
-export type RateLimitErrorResponse = string | object;
-
-export type RateLimitOptions = {
-  context: RateLimitContext;
-  duration: number;
-  errorResponse?: RateLimitErrorResponse;
-  generator: RateLimitGenerator;
-  max: number;
-  onLimit?: () => void;
-  skip?: (request: Request) => MaybePromise<boolean>;
-};
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { failureSink } from "@/api/lib/observability/failure";
+import {
+  type AnswerCause,
+  observedStatus,
+} from "@/api/lib/observability/server-error-answer";
+import { recordBudgetRejection } from "@/api/lib/rate-limit/budget-observability";
+import type {
+  RateLimitBudget,
+  RateLimitContext,
+  RateLimitContextConfig,
+  RateLimitGenerator,
+  RateLimitOptions,
+  ReadableRateLimitContext,
+} from "@/api/lib/rate-limit/contracts";
 
 type RateLimitEntry = {
   count: number;
@@ -96,12 +62,14 @@ export const scopedRateLimitKey = ({
  * to N× the configured limit. The hard global limit is
  * enforced at the network edge.
  */
-export class InMemoryRateLimitContext implements RateLimitContext {
+export class InMemoryRateLimitContext implements ReadableRateLimitContext {
   private durationMs = 60_000;
   private readonly store = new Map<string, RateLimitEntry>();
   private readonly cleanupTimer: ReturnType<typeof setInterval>;
+  private readonly now: () => number;
 
-  constructor() {
+  constructor(now = () => Temporal.Now.instant().epochMilliseconds) {
+    this.now = now;
     this.cleanupTimer = setInterval(
       () => this.evictExpired(),
       CLEANUP_INTERVAL_MS,
@@ -113,9 +81,21 @@ export class InMemoryRateLimitContext implements RateLimitContext {
     this.durationMs = duration;
   }
 
+  read(key: string) {
+    const entry = this.store.get(key);
+    if (!entry || entry.expiresAt <= this.now()) {
+      return null;
+    }
+    return {
+      count: entry.count,
+      nextReset: new Date(entry.expiresAt),
+      start: entry.start,
+    };
+  }
+
   increment(key: string, duration?: number, requestTime?: number) {
     const effectiveDuration = duration ?? this.durationMs;
-    const now = requestTime ?? Temporal.Now.instant().epochMilliseconds;
+    const now = requestTime ?? this.now();
     const entry = this.store.get(key);
 
     if (entry && entry.expiresAt > now) {
@@ -136,10 +116,19 @@ export class InMemoryRateLimitContext implements RateLimitContext {
     };
   }
 
-  decrement(key: string) {
-    const now = Temporal.Now.instant().epochMilliseconds;
+  complete(_key: string): void {
+    // In-memory counters retain no refund identities.
+  }
+
+  decrement(key: string, windowStart?: number) {
+    const now = this.now();
     const entry = this.store.get(key);
-    if (entry && entry.expiresAt > now && entry.count > 0) {
+    if (
+      entry &&
+      entry.expiresAt > now &&
+      entry.count > 0 &&
+      (windowStart === undefined || entry.start === windowStart)
+    ) {
       entry.count -= 1;
     }
   }
@@ -158,7 +147,7 @@ export class InMemoryRateLimitContext implements RateLimitContext {
   }
 
   private evictExpired() {
-    const now = Temporal.Now.instant().epochMilliseconds;
+    const now = this.now();
     for (const [key, entry] of this.store) {
       if (entry.expiresAt <= now) {
         this.store.delete(key);
@@ -167,28 +156,63 @@ export class InMemoryRateLimitContext implements RateLimitContext {
   }
 }
 
-type RateLimitResponseSet = Context["set"];
-
-type RateLimitRequestState =
-  | { type: "counted"; key: string }
-  | { type: "counted_early_failure" }
-  | { type: "limited" }
-  | { type: "refunded" }
-  | { type: "skipped" };
-
-type RateLimitApplicationPhase = "before_handler" | "early_failure";
+/** One window a request was charged in; refunds touch only that window. */
+type RateLimitCharge = { key: string; windowStart: number };
 
 export const DEFAULT_RATE_LIMIT_ERROR_RESPONSE = "rate-limit reached";
 
-/**
- * Before-handle hooks `rateLimit` installed. The composed-route census asserts
- * every `/v1` route carries one, which a hook's name cannot guarantee.
- */
-const rateLimitHooks = new WeakSet<object>();
+const CAPACITY_REFUSED = failureSink({
+  event: "api.capacity_refused",
+  expected: [],
+});
 
-/** Whether a mounted route's before-handle hook came out of `rateLimit`. */
-export const isRateLimitHook = (hook: unknown): boolean =>
-  typeof hook === "function" && rateLimitHooks.has(hook);
+/**
+ * The cause of a load-shedding refusal: the server declined the work for its
+ * own capacity, so a 503 built from it is graded transient
+ * (`work_capacity_unavailable`), never unclassified.
+ */
+export const capacityRefusalCause = (message: string): AnswerCause => ({
+  sink: CAPACITY_REFUSED,
+  cause: classifyFailure(
+    new HandlerError({ status: 503, code: "service_unavailable", message }),
+    "work_capacity_unavailable",
+  ),
+});
+
+/**
+ * Middleware `rateLimit` built. The composed-route census asserts every `/v1`
+ * route carries one, which a function's name cannot guarantee.
+ */
+const rateLimitMiddleware = new WeakSet<Middleware>();
+
+/** Whether a route middleware came out of `rateLimit`. */
+export const isRateLimitMiddleware = (middleware: Middleware): boolean =>
+  rateLimitMiddleware.has(middleware);
+
+/**
+ * Middleware that only spends a budget (a request count or a concurrency
+ * slot) and refuses nothing else. Capability executors draw on budgets of
+ * their own, so skipping a route budget on that path skips no access check.
+ */
+const routeBudgets = new WeakSet<Middleware>();
+
+export const asRouteBudget = (middleware: Middleware): Middleware => {
+  routeBudgets.add(middleware);
+  return middleware;
+};
+
+/** Whether a route middleware only spends a budget. */
+export const isRouteBudget = (middleware: Middleware): boolean =>
+  routeBudgets.has(middleware);
+
+/** Every counter store a limiter owns, closed once when the server stops. */
+const ownedContexts = new Set<RateLimitContext>();
+
+export const closeRateLimitContexts = async (): Promise<void> => {
+  const contexts = [...ownedContexts];
+  ownedContexts.clear();
+  await Promise.all(contexts.map(async (context) => await context.kill()));
+};
 
 const writeRateLimitHeaders = ({
   max,
@@ -201,7 +225,7 @@ const writeRateLimitHeaders = ({
   remaining: number;
   reset: number;
   retryAfter: boolean;
-  set: RateLimitResponseSet;
+  set: ResponseSet;
 }): void => {
   const previousRemaining = Number(set.headers["RateLimit-Remaining"]);
   const previousReset = Number(set.headers["RateLimit-Reset"]);
@@ -221,223 +245,142 @@ const writeRateLimitHeaders = ({
   }
 };
 
-const rateLimitErrorStatus = (error: unknown): number | undefined => {
-  if (typeof error !== "object" || error === null) {
-    return undefined;
-  }
-  if ("status" in error && typeof error.status === "number") {
-    return error.status;
-  }
-  if ("statusCode" in error && typeof error.statusCode === "number") {
-    return error.statusCode;
-  }
-  return undefined;
+/** Charge one window, write its headers, and report whether it is exhausted. */
+const chargeWindow = async ({
+  context,
+  budget,
+  set,
+}: {
+  context: RateLimitContext;
+  budget: RateLimitBudget;
+  set: ResponseSet;
+}): Promise<{ charge: RateLimitCharge; exceeded: boolean }> => {
+  const { count, nextReset, start } = await context.increment(
+    budget.key,
+    budget.duration,
+    Temporal.Now.instant().epochMilliseconds,
+  );
+  const exceeded = count > budget.max;
+  writeRateLimitHeaders({
+    max: budget.max,
+    remaining: Math.max(budget.max - count, 0),
+    reset: Math.max(
+      0,
+      Math.ceil(
+        (nextReset.getTime() - Temporal.Now.instant().epochMilliseconds) / 1000,
+      ),
+    ),
+    retryAfter: exceeded,
+    set,
+  });
+  return { charge: { key: budget.key, windowStart: start }, exceeded };
 };
 
-const isEarlyFailureStatus = (statusCode: number): boolean =>
-  statusCode === 400 || statusCode === 404 || statusCode === 422;
-
 /**
- * Stella's Elysia adapter for its replica-safe rate-limit contexts.
+ * Stella's replica-safe fixed-window limiter for a route group.
  *
- * The adapter deliberately exposes only the static fixed-window policy Stella
- * uses. Counter storage, outage behavior, and refund identity remain owned by
- * the supplied context rather than by framework middleware.
+ * Every request is charged before its route runs, so a request refused for
+ * its input still spends its budget. A charge is refunded only when the
+ * handler itself fails; charges settle with the counter store once the answer
+ * is built. Counter storage, outage behavior, and refund identity remain owned
+ * by the supplied context.
  */
 export const rateLimit = ({
   context,
   duration,
   errorResponse = DEFAULT_RATE_LIMIT_ERROR_RESPONSE,
+  refusalStatus = 429,
   generator,
   max,
+  additionalBudgets,
   onLimit,
+  budget: observeBudget,
   skip = () => false,
-}: RateLimitOptions) => {
+}: RateLimitOptions): Middleware => {
   context.init({ duration });
-  const requestState = new WeakMap<Request, RateLimitRequestState>();
+  ownedContexts.add(context);
 
-  // Each registration owns a route subtree even when two subtrees share the
-  // same counter key and limits. Keeping the plugin unnamed prevents Elysia's
-  // named-plugin deduplication from dropping either scoped hook.
-  const plugin = new Elysia();
-
-  const applyRateLimit = async ({
-    phase,
-    request,
-    server,
-    set,
-  }: {
-    phase: RateLimitApplicationPhase;
-    request: Request;
-    server: RequestIpServer | null;
-    set: RateLimitResponseSet;
-  }): Promise<RateLimitErrorResponse | undefined> => {
+  const middleware: Middleware = async (ctx, inner) => {
     // The validated development-only switch applies to every HTTP budget,
     // including dedicated budgets whose route policy does not define a bypass.
-    if (env.E2E_DISABLE_AUTH_RATE_LIMIT || (await skip(request))) {
-      requestState.set(request, { type: "skipped" });
-      return undefined;
+    if (
+      env.E2E_DISABLE_AUTH_RATE_LIMIT ||
+      (await skip(ctx.request, ctx.routeEntry))
+    ) {
+      return await inner();
     }
 
-    const key = await generator(request, server);
-    const { count, nextReset } = await context.increment(
-      key,
-      duration,
-      Temporal.Now.instant().epochMilliseconds,
-    );
-    const remaining = Math.max(max - count, 0);
-    const reset = Math.max(
-      0,
-      Math.ceil(
-        (nextReset.getTime() - Temporal.Now.instant().epochMilliseconds) / 1000,
-      ),
-    );
-    const exceeded = count > max;
-
-    writeRateLimitHeaders({
-      max,
-      remaining,
-      reset,
-      retryAfter: exceeded,
-      set,
-    });
-
-    if (exceeded) {
-      onLimit?.();
-      requestState.set(request, { type: "limited" });
-      set.status = 429;
-      return errorResponse;
-    }
-
-    requestState.set(
-      request,
-      phase === "before_handler"
-        ? { type: "counted", key }
-        : { type: "counted_early_failure" },
-    );
-    return undefined;
-  };
-
-  const beforeHandle = async ({
-    request,
-    server,
-    set,
-  }: {
-    request: Request;
-    server: RequestIpServer | null;
-    set: RateLimitResponseSet;
-  }) =>
-    await applyRateLimit({
-      phase: "before_handler",
-      request,
-      server,
-      set,
-    });
-  rateLimitHooks.add(beforeHandle);
-  plugin.onBeforeHandle({ as: "scoped" }, beforeHandle);
-
-  plugin.onError(
-    { as: "scoped" },
-    async ({ code, error, request, server, set }) => {
-      const state = requestState.get(request);
-      if (state !== undefined) {
-        switch (state.type) {
-          case "counted":
-            requestState.set(request, { type: "refunded" });
-            await context.decrement(state.key);
-            return undefined;
-          case "counted_early_failure":
-          case "limited":
-          case "refunded":
-          case "skipped":
-            return undefined;
-          default: {
-            state satisfies never;
-            return panic(`Unhandled state: ${String(state)}`);
-          }
+    const key = await generator(ctx.request, ctx.server);
+    const requestMax = typeof max === "number" ? max : await max(ctx.request);
+    const budgets = [
+      { key, max: requestMax, duration },
+      ...(additionalBudgets === undefined
+        ? []
+        : await additionalBudgets(ctx.request)),
+    ];
+    const charges: RateLimitCharge[] = [];
+    const refund = async () => {
+      const refunded = charges.splice(0);
+      await Promise.all(
+        refunded.map(
+          async ({ key: refundKey, windowStart }) =>
+            await context.decrement(refundKey, windowStart),
+        ),
+      );
+    };
+    try {
+      // Rejected attempts consume earlier windows; later windows are untouched.
+      for (const budget of budgets) {
+        let charged: Awaited<ReturnType<typeof chargeWindow>>;
+        try {
+          charged = await chargeWindow({ context, budget, set: ctx.set });
+        } catch (error) {
+          // The counter store failed, not the caller: the windows this request
+          // already charged come back before the failure propagates.
+          await refund();
+          throw error;
         }
-      }
-
-      const currentStatus =
-        typeof set.status === "number" ? set.status : undefined;
-      const failedBeforeRateLimit =
-        code === "NOT_FOUND" ||
-        code === "PARSE" ||
-        (code === "VALIDATION" && !isResponseValidationError(error)) ||
-        currentStatus === 404 ||
-        rateLimitErrorStatus(error) === 404;
-
-      if (failedBeforeRateLimit) {
-        return await applyRateLimit({
-          phase: "early_failure",
-          request,
-          server,
-          set,
-        });
-      }
-      return undefined;
-    },
-  );
-
-  plugin.mapResponse({ as: "scoped" }, async (lifecycle) => {
-    const { request, responseValue, server, set } = lifecycle;
-    const handledError = Object.hasOwn(lifecycle, "code");
-    const statusCode = resolveResponseStatus({
-      response: responseValue,
-      set,
-    });
-    const state = requestState.get(request);
-
-    if (state === undefined) {
-      if (handledError && isEarlyFailureStatus(statusCode)) {
-        const rateLimitResponse = await applyRateLimit({
-          phase: "early_failure",
-          request,
-          server,
-          set,
-        });
-        if (rateLimitResponse !== undefined) {
-          const headers = new Headers();
-          for (const [name, value] of Object.entries(set.headers)) {
-            headers.set(name, String(value));
+        const { charge, exceeded } = charged;
+        charges.push(charge);
+        if (exceeded) {
+          if (observeBudget !== undefined) {
+            recordBudgetRejection({
+              ...(typeof observeBudget === "function"
+                ? observeBudget(budget.key)
+                : observeBudget),
+              windowMs: budget.duration,
+              status: refusalStatus,
+            });
           }
-          // This branch builds the Response itself, so it owns the
-          // content-type Elysia would otherwise derive from the return value.
-          const isJson = typeof rateLimitResponse !== "string";
-          if (isJson) {
-            headers.set("content-type", "application/json");
-          }
-          return new Response(
-            isJson ? JSON.stringify(rateLimitResponse) : rateLimitResponse,
-            { headers, status: 429 },
+          onLimit?.({ key: budget.key, duration: budget.duration });
+          return toResponse(
+            observedStatus(
+              capacityRefusalCause("rate-limit budget refused"),
+              refusalStatus,
+              errorResponse,
+            ),
+            ctx.set,
           );
         }
       }
-      return undefined;
-    }
-
-    switch (state.type) {
-      case "counted":
-        if (handledError) {
-          requestState.set(request, { type: "refunded" });
-          await context.decrement(state.key);
+      try {
+        return await inner();
+      } catch (error) {
+        // The caller spent a request refused for its input; a handler fault
+        // is the server's, so its charge comes back.
+        if (!isEarlyHttpFailure(error)) {
+          await refund();
         }
-        return undefined;
-      case "counted_early_failure":
-      case "limited":
-      case "refunded":
-      case "skipped":
-        return undefined;
-      default: {
-        state satisfies never;
-        return panic(`Unhandled state: ${String(state)}`);
+        throw error;
       }
+    } finally {
+      await Promise.all(
+        charges.map(
+          async ({ key: chargedKey }) => await context.complete(chargedKey),
+        ),
+      );
     }
-  });
-
-  plugin.onStop(async () => {
-    await context.kill();
-  });
-
-  return plugin;
+  };
+  rateLimitMiddleware.add(middleware);
+  return asRouteBudget(middleware);
 };

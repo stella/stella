@@ -1,12 +1,11 @@
 import { useMemo, useRef, useState } from "react";
 import type { ComponentProps, ReactNode } from "react";
 
-import { extractClosestEdge } from "@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge";
+import { extractClosestEdge } from "@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge/extract-closest-edge";
 import type { Edge } from "@atlaskit/pragmatic-drag-and-drop-hitbox/types";
-import { combine } from "@atlaskit/pragmatic-drag-and-drop/combine";
-import { monitorForElements } from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
+import { monitorForElements } from "@atlaskit/pragmatic-drag-and-drop/adapter/element-adapter";
+import { combine } from "@atlaskit/pragmatic-drag-and-drop/utils/combine";
 import {
-  useMutation,
   useInfiniteQuery,
   useQueryClient,
   useSuspenseQuery,
@@ -29,7 +28,13 @@ import {
 import { stellaToast } from "@stll/ui/toast";
 
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
+import {
+  QueryViewFeedback,
+  SettledQueryViewFeedback,
+} from "@/components/query-view-feedback";
 import { getInternalPropertyId } from "@/components/workspaces/entity-utils";
+import { useKanbanSelectionOwner } from "@/components/workspaces/kanban/kanban-selection";
+import type { KanbanDraggedCard } from "@/components/workspaces/kanban/kanban-selection.logic";
 import {
   buildKanbanAssigneeMatrix,
   canMoveCardToSubgroupLane,
@@ -44,17 +49,25 @@ import {
 import { useWorkspaceKanbanSchema } from "@/components/workspaces/kanban/use-kanban-schema";
 import { useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
+import { useFormatter } from "@/i18n/formatting-context";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import type { PropertyOptionColor } from "@/lib/api-contract";
 import { detached } from "@/lib/detached";
-import { toAPIError, unwrapEden } from "@/lib/errors/api";
+import { toAPIError, unwrapApiResponse } from "@/lib/errors/api";
 import { ClientOperationError } from "@/lib/errors/client";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import {
   ATTACHED_TEMPLATE_UPLOAD_PREFLIGHT,
   preflightAttachedTemplateUpload,
 } from "@/lib/files/attached-template-upload-preflight";
+import {
+  exactDuplicateLookup,
+  resolveExactDuplicates,
+} from "@/lib/files/exact-duplicate-queries";
+import { useExactDuplicateUploadStore } from "@/lib/files/exact-duplicate-upload-store";
+import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
+import { queryView } from "@/lib/query-view.logic";
 import { toSafeId } from "@/lib/safe-id";
 import type { EntityKind, WorkspaceEntity, WorkspaceView } from "@/lib/types";
 import {
@@ -65,15 +78,16 @@ import {
 // -- Auto-scrolling board container with forgiving column drop --
 import { COLUMN_DRAG_TYPE } from "@/lib/workspaces/drag-constants";
 import {
+  updateKanbanPlacementRequest,
+  upsertFieldRequest,
   useCreateEntities,
   useRenameEntity,
-  useUpdateKanbanPlacement,
   useUpsertField,
 } from "@/lib/workspaces/mutations/entities";
 import { useUpdateProperty } from "@/lib/workspaces/mutations/properties";
 import {
   invalidateTaskQueries,
-  useMoveTaskAssignee,
+  moveTaskAssigneeRequest,
 } from "@/lib/workspaces/mutations/tasks";
 import {
   uploadFileEntitiesBatched,
@@ -85,18 +99,23 @@ import {
   isPlaybookVerdictProperty,
 } from "@/lib/workspaces/playbook-verdicts";
 import {
-  entitiesWindowOptions,
   entitiesKeys,
+  entitiesWindowOptions,
   useKanbanGroupOptions,
   visibleEntityFieldIds,
 } from "@/lib/workspaces/queries/entities";
 import { propertiesOptions } from "@/lib/workspaces/queries/properties";
-import { taskKeys } from "@/lib/workspaces/queries/tasks";
 import { mergeLayout } from "@/lib/workspaces/view-layout";
 import { EmptyState } from "@/routes/_protected.workspaces/$workspaceId/-components/empty-state";
+import { moveKanbanCards } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-card-moves.logic";
 import { KanbanColumn } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-column";
 import type { KanbanCalculations } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-column";
+import { KanbanSelectionSurface } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-selection-surface";
 import { KanbanSubgroupBoard } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-subgroup-board";
+import {
+  canRenderKanbanBoard,
+  KANBAN_BOARD_CLASS,
+} from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-view.pending";
 import { viewEntityKinds } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-kind-filters";
 
 type KanbanViewProps = {
@@ -109,17 +128,28 @@ type CreateFromKanbanOptions = {
   taskStatus?: string | undefined;
 };
 
+type SettleCardMovesOptions = {
+  cards: readonly KanbanDraggedCard[];
+  moveCard: (card: KanbanDraggedCard) => Promise<Result<unknown, unknown>>;
+  /** Whether a move writes task state (status, assignees). */
+  touchesTasks: boolean;
+};
+
 export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
+  const idempotentSubmit = useIdempotentSubmit();
   const t = useTranslations();
+  const format = useFormatter();
   const labels = useBatchUploadLabels();
   const analytics = useAnalytics();
+  const askAboutDuplicateFiles = useExactDuplicateUploadStore(
+    (store) => store.ask,
+  );
   const { data: properties } = useSuspenseQuery(propertiesOptions(workspaceId));
   const upsertField = useUpsertField();
-  const updateKanbanPlacement = useUpdateKanbanPlacement();
   const renameEntity = useRenameEntity();
   const updateProperty = useUpdateProperty();
   const createEntities = useCreateEntities();
-  const moveTaskAssignee = useMoveTaskAssignee(workspaceId);
+  const selection = useKanbanSelectionOwner(view.id);
   const updateView = useUpdateView(workspaceId);
   const queryClient = useQueryClient();
   const [hiddenGroups, setHiddenGroups] = useState(new Set());
@@ -144,19 +174,25 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
       });
       const body = taskStatus
         ? {
-            queryKey: entitiesKeys.all(workspaceId),
             name: t("tasks.untitled"),
             status: taskStatus,
           }
         : {
-            queryKey: entitiesKeys.all(workspaceId),
             name: t("tasks.untitled"),
           };
 
       const createResult = await Result.tryPromise(async () =>
-        api
-          .tasks({ workspaceId: toSafeId<"workspace">(workspaceId) })
-          .put(body),
+        idempotentSubmit.run({
+          operation: JSON.stringify([
+            'api.tasks({workspaceId:toSafeId<"workspace">(workspaceId)})',
+            { workspaceId: toSafeId<"workspace">(workspaceId) },
+          ]),
+          body,
+          send: async (creationPayload, request) =>
+            api
+              .tasks({ workspaceId: toSafeId<"workspace">(workspaceId) })
+              .put(creationPayload, request),
+        }),
       );
 
       taskCreationPendingRef.current = false;
@@ -164,7 +200,13 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
 
       if (Result.isError(createResult)) {
         inspector.closeTab(pendingTaskId);
-        analytics.captureError(createResult.error);
+        analytics.captureError(createResult.error, {
+          fingerprintKey: "KanbanView.handleCreate:failure",
+          scope: {
+            type: "handler",
+            handlerId: "KanbanView.handleCreate:failure",
+          },
+        });
         notifyUserError(createResult.error, t("errors.actionFailed"));
         return null;
       }
@@ -174,11 +216,19 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
       const entityId = taskData?.entityId;
       if (taskError || !entityId) {
         analytics.captureError(
-          taskError ??
-            new ClientOperationError({
-              action: "create-task",
-              message: "Task creation returned no entity ID",
-            }),
+          taskError
+            ? toAPIError(taskError)
+            : new ClientOperationError({
+                action: "create-task",
+                message: "Task creation returned no entity ID",
+              }),
+          {
+            fingerprintKey: "KanbanView.handleCreate:failure-2",
+            scope: {
+              type: "handler",
+              handlerId: "KanbanView.handleCreate:failure-2",
+            },
+          },
         );
         inspector.closeTab(pendingTaskId);
         notifyUserError(
@@ -239,11 +289,13 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
   }
 
   const schema = useWorkspaceKanbanSchema(properties);
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing, without this memo boundary the React Compiler does not cache this value
   const grouping = useMemo(
     () => resolveWorkspaceKanbanGrouping(configuredGroupBy, schema),
     [configuredGroupBy, schema],
   );
   const groupByPropertyId = getKanbanGroupingPropertyId(grouping);
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing, without this memo boundary the React Compiler does not cache this value
   const subgroupDefinition = useMemo(
     () =>
       resolveWorkspaceKanbanSubgroup(
@@ -289,17 +341,13 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
       !hiddenProperties.includes(id),
   );
 
-  const fieldIds = useMemo(
-    () =>
-      visibleEntityFieldIds({
-        hiddenProperties,
-        properties,
-        requiredPropertyIds: [groupByProperty, subgroupByProperty]
-          .filter((property) => property !== null)
-          .map((property) => property.id),
-      }),
-    [groupByProperty, hiddenProperties, properties, subgroupByProperty],
-  );
+  const fieldIds = visibleEntityFieldIds({
+    hiddenProperties,
+    properties,
+    requiredPropertyIds: [groupByProperty, subgroupByProperty]
+      .filter((property) => property !== null)
+      .map((property) => property.id),
+  });
 
   const { filters, sorts } = view.layout;
   const hasSupportedSubgroup =
@@ -327,13 +375,18 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
       isKanbanGroupingRenderable(grouping) &&
       subgroupByPropertyId !== null,
   });
+  const subgroupView = queryView(subgroupQuery);
+  const subgroupQueryData =
+    subgroupView.type === "items" ? subgroupView.items : undefined;
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- inlining this conditional pushes the component past the complexity limit
   const subgroupEntities = useMemo(
     () =>
-      subgroupQuery.data
-        ? subgroupQuery.data.pages.flatMap((page) => page.entities)
+      subgroupQueryData
+        ? subgroupQueryData.pages.flatMap((page) => page.entities)
         : [],
-    [subgroupQuery.data],
+    [subgroupQueryData],
   );
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing, without this memo boundary the React Compiler does not cache this value
   const subgroup = useMemo(
     () =>
       resolveWorkspaceKanbanDynamicSubgroup(
@@ -342,7 +395,7 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
       ),
     [subgroupDefinition, subgroupEntities],
   );
-  const subgroupMatrix = useMemo(() => {
+  const subgroupMatrix = (() => {
     if (
       !hasSupportedSubgroup ||
       !isKanbanGroupingRenderable(subgroup) ||
@@ -367,15 +420,7 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
       resolveGroupValue: ({ grouping: axis, row }) =>
         resolveWorkspaceKanbanGroupValue(axis, row),
     });
-  }, [
-    grouping,
-    hasSupportedSubgroup,
-    isAssigneeSubgroup,
-    subgroup,
-    subgroupByPropertyId,
-    subgroupEntities,
-    t,
-  ]);
+  })();
 
   // A view scoped to a kind (a task list, a message board) only ever shows
   // that kind, so it offers totals only over the properties that kind
@@ -403,54 +448,54 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
     },
   };
 
-  // Mutation for changing task status via kanban drag-drop
-  const updateTaskStatus = useMutation({
-    mutationFn: async ({
-      taskId,
-      status,
-    }: {
-      taskId: string;
-      status: string;
-    }) => {
-      const response = await api
-        .tasks({ workspaceId: toSafeId<"workspace">(workspaceId) })
-        .patch({
-          taskId: toSafeId<"entity">(taskId),
-          status,
-        });
-      unwrapEden(response);
-      return { taskId };
-    },
-    onError: (error) => {
-      analytics.captureError(error);
-      notifyUserError(error, t("errors.actionFailed"));
-    },
-    onSuccess: async ({ taskId }) => {
-      await invalidateTaskQueries({ queryClient, workspaceId, taskId });
-    },
-  });
+  const patchTaskStatus = async (taskId: string, status: string) => {
+    const response = await api
+      .tasks({ workspaceId: toSafeId<"workspace">(workspaceId) })
+      .patch({
+        taskId: toSafeId<"entity">(taskId),
+        status,
+      });
+    unwrapApiResponse(response);
+  };
 
-  // A grouping with no columns is not a board: no group-by at all, or a
-  // built-in grouping (created-by) that has no fixed column list to draw.
-  if (!isKanbanGroupingRenderable(grouping) || groupByPropertyId === null) {
-    return (
-      <EmptyState
-        hint={t("workspaces.kanban.usePropertyHint")}
-        icon={KanbanIcon}
-        message={t("workspaces.kanban.selectPropertyHint")}
-      />
+  // A drop moves one card or a whole selection the same way: every card is
+  // attempted, the board refreshes once, and failures surface as one toast.
+  const settleCardMoves = async ({
+    cards,
+    moveCard,
+    touchesTasks,
+  }: SettleCardMovesOptions) => {
+    const { movedIds, failures } = await moveKanbanCards({ cards, moveCard });
+    await (touchesTasks
+      ? invalidateTaskQueries({ queryClient, workspaceId, taskIds: movedIds })
+      : queryClient.invalidateQueries({
+          queryKey: entitiesKeys.all(workspaceId),
+        }));
+    const firstFailure = failures.at(0);
+    if (firstFailure === undefined) {
+      return;
+    }
+    for (const failure of failures) {
+      analytics.captureError(failure, {
+        fingerprintKey: "KanbanView.moveCards:failure",
+        scope: { type: "handler", handlerId: "KanbanView.moveCards:failure" },
+      });
+    }
+    notifyUserError(
+      firstFailure,
+      t("errors.actionFailed"),
+      cards.length > 1
+        ? {
+            description: t("workspaces.kanban.moveFailed", {
+              failed: failures.length,
+              total: format.number(cards.length),
+            }),
+          }
+        : {},
     );
-  }
+  };
 
-  // A Kanban card belongs to one column, and drop/upload write a single-select
-  // value to the grouping property, so the property must be single-select. A
-  // persisted multi-select grouping (from before the picker was mode-specific,
-  // or after a property type change) would render columns no card can move into,
-  // so fall back to the property prompt.
-  if (
-    grouping.type === "property" &&
-    grouping.property.content.type !== "single-select"
-  ) {
+  if (!canRenderKanbanBoard(groupByPropertyId, grouping)) {
     return (
       <EmptyState
         hint={t("workspaces.kanban.usePropertyHint")}
@@ -466,9 +511,20 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
 
   const groups = getKanbanGroups(options, t("common.uncategorized"));
 
-  const handleDrop = (targetValue: string | null, entityId: string) => {
+  const handleDrop = async (
+    targetValue: string | null,
+    cards: readonly KanbanDraggedCard[],
+  ) => {
     if (isStatusGrouping && targetValue !== null) {
-      updateTaskStatus.mutate({ taskId: entityId, status: targetValue });
+      const status = targetValue;
+      await settleCardMoves({
+        cards,
+        moveCard: async ({ entityId }) => {
+          await patchTaskStatus(entityId, status);
+          return Result.ok(undefined);
+        },
+        touchesTasks: true,
+      });
       return;
     }
     if (isBuiltInGrouping || isReadOnlyVerdictGrouping) {
@@ -478,29 +534,23 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
       });
       return;
     }
-    const content = {
-      version: 1 as const,
-      type: "single-select" as const,
-      value: targetValue,
-    };
-    upsertField.mutate(
-      {
-        workspaceId,
-        propertyId: groupByPropertyId,
-        entityId,
-        content,
-      },
-      {
-        onSuccess: () => {
-          detached(
-            queryClient.invalidateQueries({
-              queryKey: entitiesKeys.all(workspaceId),
-            }),
-            "kanban-view.invalidate",
-          );
-        },
-      },
-    );
+    await settleCardMoves({
+      cards,
+      moveCard: async ({ entityId }) =>
+        Result.ok(
+          await upsertFieldRequest({
+            workspaceId,
+            propertyId: groupByPropertyId,
+            entityId,
+            content: {
+              version: 1,
+              type: "single-select",
+              value: targetValue,
+            },
+          }),
+        ),
+      touchesTasks: false,
+    });
   };
 
   const handleFileUpload = async (
@@ -542,13 +592,46 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
         panic(`Unhandled attached-template preflight: ${String(preflight)}`);
     }
 
+    const duplicates = await resolveExactDuplicates({
+      files: filesToUpload,
+      lookup: exactDuplicateLookup(workspaceId),
+      onError: (error) =>
+        analytics.captureError(error, {
+          fingerprintKey: "KanbanView.handleFileUpload.duplicates:failure",
+          scope: {
+            type: "handler",
+            handlerId: "KanbanView.handleFileUpload.duplicates:failure",
+          },
+        }),
+    });
+    if (duplicates.length > 0) {
+      const uploadAnyway = new Set(
+        await new Promise<readonly File[]>((resolve) => {
+          askAboutDuplicateFiles({ duplicates, onResolved: resolve });
+        }),
+      );
+      const skipped = new Set(
+        duplicates
+          .map(({ file }) => file)
+          .filter((file) => !uploadAnyway.has(file)),
+      );
+      filesToUpload = filesToUpload.filter((file) => !skipped.has(file));
+    }
+
     const results = await uploadFileEntitiesBatched({
       files: filesToUpload,
       workspaceId,
       propertyId: filePropertyId,
       parentId: null,
       labels,
-      onError: (error) => analytics.captureError(error),
+      onError: (error) =>
+        analytics.captureError(error, {
+          fingerprintKey: "KanbanView.handleFileUpload:failure",
+          scope: {
+            type: "handler",
+            handlerId: "KanbanView.handleFileUpload:failure",
+          },
+        }),
     });
 
     if (columnValue === null) {
@@ -759,38 +842,34 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
     if (removeUserId === null && addUserId === null) {
       return;
     }
-    await moveTaskAssignee.mutateAsync({
+    await moveTaskAssigneeRequest({
+      workspaceId,
       taskId: sourceEntity.entityId,
       fromUserId: removeUserId,
       toUserId: addUserId,
     });
   };
 
-  const handleDropCardInCell = async (
-    entityId: string,
+  // One card into one subgroup cell. A rejection marks that card as failed;
+  // `settleCardMoves` refreshes and reports the whole drop.
+  const moveCardToCell = async (
+    { entityId, subgroupValue: sourceSubgroupValue }: KanbanDraggedCard,
     columnValue: string,
     laneValue: string | null,
-    sourceSubgroupValue: string | null | undefined,
   ) => {
     if (subgroup.type !== "property") {
       const sourceEntity = subgroupEntities.find(
         (entity) => entity.entityId === entityId,
       );
       if (!sourceEntity) {
-        panic("Dragged Kanban entity is not loaded");
-      }
-      if (
-        !canMoveCardToSubgroupLane({
-          subgroup,
-          entity: sourceEntity,
-          targetLaneValue: laneValue,
-        })
-      ) {
-        stellaToast.add({
-          title: t("workspaces.kanban.readOnlyGrouping"),
-          type: "info",
-        });
-        return;
+        // A selected card can leave the loaded rows (a filter now hides it,
+        // someone deleted it) between being selected and being dropped.
+        return Result.err(
+          new ClientOperationError({
+            action: "move-kanban-card",
+            message: "Dragged Kanban card is no longer loaded",
+          }),
+        );
       }
       if (isAssigneeSubgroup) {
         await handleAssigneeLaneDrop(
@@ -799,20 +878,14 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
           sourceSubgroupValue,
         );
       }
-    }
-
-    if (subgroup.type !== "property") {
       if (isStatusGrouping) {
-        await updateTaskStatus.mutateAsync({
-          taskId: entityId,
-          status: columnValue,
-        });
-        return;
+        await patchTaskStatus(entityId, columnValue);
+        return Result.ok(undefined);
       }
       if (isBuiltInGrouping || isReadOnlyVerdictGrouping) {
         panic("Read-only Kanban primary grouping accepted a drag");
       }
-      await upsertField.mutateAsync({
+      await upsertFieldRequest({
         workspaceId,
         propertyId: groupByPropertyId,
         entityId,
@@ -822,17 +895,14 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
           value: columnValue,
         },
       });
-      await queryClient.invalidateQueries({
-        queryKey: entitiesKeys.all(workspaceId),
-      });
-      return;
+      return Result.ok(undefined);
     }
 
     const subgroupContent = subgroupFieldContent(laneValue);
     if (subgroupContent === null) {
       panic("Writable Kanban subgroup has no field content");
     }
-    await updateKanbanPlacement.mutateAsync({
+    await updateKanbanPlacementRequest({
       workspaceId,
       entityId,
       ...(isStatusGrouping && { status: columnValue }),
@@ -855,18 +925,47 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
         },
       ],
     });
-    await Promise.all([
-      queryClient.invalidateQueries({
-        queryKey: entitiesKeys.all(workspaceId),
-      }),
-      ...(isStatusGrouping
-        ? [
-            queryClient.invalidateQueries({
-              queryKey: taskKeys.detail(workspaceId, entityId),
-            }),
-          ]
-        : []),
-    ]);
+    return Result.ok(undefined);
+  };
+
+  const handleDropCardInCell = async (
+    cards: readonly KanbanDraggedCard[],
+    columnValue: string,
+    laneValue: string | null,
+  ) => {
+    // A built-in lane accepts only some cards (a kind lane takes only its own
+    // kind); those stay put and the rest of the selection still moves.
+    const movable =
+      subgroup.type === "property"
+        ? cards
+        : cards.filter((card) => {
+            const entity = subgroupEntities.find(
+              (row) => row.entityId === card.entityId,
+            );
+            return (
+              entity === undefined ||
+              canMoveCardToSubgroupLane({
+                subgroup,
+                entity,
+                targetLaneValue: laneValue,
+              })
+            );
+          });
+    if (movable.length < cards.length) {
+      stellaToast.add({
+        title: t("workspaces.kanban.readOnlyGrouping"),
+        type: "info",
+      });
+    }
+    if (movable.length === 0) {
+      return;
+    }
+    await settleCardMoves({
+      cards: movable,
+      moveCard: async (card) =>
+        await moveCardToCell(card, columnValue, laneValue),
+      touchesTasks: isStatusGrouping || isAssigneeSubgroup,
+    });
   };
 
   const handleReorderColumn = (
@@ -973,122 +1072,140 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
           }),
         };
 
-  if (visibleSubgroupMatrix !== null) {
-    return (
-      <KanbanSubgroupBoard
-        canCreateTaskInLane={canCreateTaskInLane}
-        cardFields={cardFields}
-        hasMore={subgroupQuery.hasNextPage}
-        isLoadingMore={subgroupQuery.isFetchingNextPage}
-        isTaskCreationPending={isTaskCreationPending}
-        loadedEntityCount={subgroupEntities.length}
-        matrix={visibleSubgroupMatrix}
-        canMoveCards={
-          isStatusGrouping ||
-          (grouping.type === "property" && !isReadOnlyVerdictGrouping)
-        }
-        onChangeColumnColor={
-          handleChangeColor
-            ? (columnValue, color) => handleChangeColor(columnValue, color)
-            : undefined
-        }
-        onCreateTask={(status, laneValue) => {
-          detached(
-            handleCreateTaskInCell(status, laneValue),
-            "kanban-view.create-task-in-cell",
-          );
-        }}
-        onDropCard={(entityId, columnValue, laneValue, sourceSubgroupValue) => {
-          detached(
-            handleDropCardInCell(
-              entityId,
-              columnValue,
-              laneValue,
-              sourceSubgroupValue,
-            ),
-            "kanban-view.drop-card-in-cell",
-          );
-        }}
-        onHideColumn={handleHideColumn}
-        onLoadMore={() => {
-          if (subgroupQuery.hasNextPage && !subgroupQuery.isFetchingNextPage) {
-            detached(
-              subgroupQuery.fetchNextPage(),
-              "kanban-view.fetch-subgroups-next-page",
-            );
-          }
-        }}
-        onRenameColumn={
-          handleRenameColumn
-            ? (columnValue, newValue) =>
-                handleRenameColumn(columnValue, newValue)
-            : undefined
-        }
-        onRenameEntity={handleRenameEntity}
-        onReorderColumn={handleReorderColumn}
-        properties={properties}
-        workspaceId={workspaceId}
-      />
-    );
+  if (
+    hasSupportedSubgroup &&
+    isKanbanGroupingRenderable(grouping) &&
+    subgroupByPropertyId !== null &&
+    subgroupView.type === "error"
+  ) {
+    return <QueryViewFeedback view={subgroupView} />;
   }
 
-  return (
-    <KanbanBoard onReorderColumn={handleReorderColumn}>
-      {visibleGroups.map((group) => {
-        const { value } = group;
-        return (
-          <KanbanGroupColumn
-            calculations={calculations}
+  if (visibleSubgroupMatrix !== null) {
+    return (
+      <>
+        <SettledQueryViewFeedback view={subgroupView} />
+        <KanbanSelectionSurface className="h-full" selection={selection}>
+          <KanbanSubgroupBoard
+            canCreateTaskInLane={canCreateTaskInLane}
             cardFields={cardFields}
-            color={group.color}
-            colorBg={group.colorBg}
-            columnValue={value}
-            fieldIds={fieldIds}
-            filters={filters}
-            groupByPropertyId={groupByPropertyId}
-            key={value ?? "__uncategorized__"}
-            onChangeColor={
-              value !== null && handleChangeColor
-                ? (c) => handleChangeColor(value, c)
+            hasMore={subgroupQuery.hasNextPage}
+            isLoadingMore={subgroupQuery.isFetchingNextPage}
+            isTaskCreationPending={isTaskCreationPending}
+            loadedEntityCount={subgroupEntities.length}
+            matrix={visibleSubgroupMatrix}
+            canMoveCards={
+              isStatusGrouping ||
+              (grouping.type === "property" && !isReadOnlyVerdictGrouping)
+            }
+            onChangeColumnColor={
+              handleChangeColor
+                ? (columnValue, color) => handleChangeColor(columnValue, color)
                 : undefined
             }
-            onCreate={(kind) => {
+            onCreateTask={(status, laneValue) => {
               detached(
-                handleCreate({
-                  kind,
-                  taskStatus:
-                    isStatusGrouping && value !== null ? value : undefined,
-                }),
-                "kanban-view.create",
+                handleCreateTaskInCell(status, laneValue),
+                "kanban-view.create-task-in-cell",
               );
             }}
-            onDrop={(entityId) => handleDrop(value, entityId)}
-            onFileUpload={(files) => {
+            onDropCard={(cards, columnValue, laneValue) => {
               detached(
-                (async () => await handleFileUpload(value, files))(),
-                "kanban-view.file-upload",
+                handleDropCardInCell(cards, columnValue, laneValue),
+                "kanban-view.drop-card-in-cell",
               );
             }}
-            onHideColumn={
-              value !== null ? () => handleHideColumn(value) : undefined
-            }
+            onHideColumn={handleHideColumn}
+            onLoadMore={() => {
+              if (
+                subgroupQuery.hasNextPage &&
+                !subgroupQuery.isFetchingNextPage
+              ) {
+                detached(
+                  subgroupQuery.fetchNextPage(),
+                  "kanban-view.fetch-subgroups-next-page",
+                );
+              }
+            }}
             onRenameColumn={
-              value !== null && handleRenameColumn
-                ? (newName) => handleRenameColumn(value, newName)
+              handleRenameColumn
+                ? (columnValue, newValue) =>
+                    handleRenameColumn(columnValue, newValue)
                 : undefined
             }
             onRenameEntity={handleRenameEntity}
             onReorderColumn={handleReorderColumn}
-            optionColor={group.optionColor}
             properties={properties}
-            sorts={sorts}
-            taskOnly={isStatusGrouping}
-            title={group.label}
+            selection={selection}
             workspaceId={workspaceId}
           />
-        );
-      })}
-    </KanbanBoard>
+        </KanbanSelectionSurface>
+      </>
+    );
+  }
+
+  return (
+    <KanbanSelectionSurface className="h-full" selection={selection}>
+      <KanbanBoard onReorderColumn={handleReorderColumn}>
+        {visibleGroups.map((group) => {
+          const { value } = group;
+          return (
+            <KanbanGroupColumn
+              calculations={calculations}
+              cardFields={cardFields}
+              color={group.color}
+              colorBg={group.colorBg}
+              columnValue={value}
+              fieldIds={fieldIds}
+              filters={filters}
+              groupByPropertyId={groupByPropertyId}
+              key={value ?? "__uncategorized__"}
+              onChangeColor={
+                value !== null && handleChangeColor
+                  ? (c) => handleChangeColor(value, c)
+                  : undefined
+              }
+              onCreate={(kind) => {
+                detached(
+                  handleCreate({
+                    kind,
+                    taskStatus:
+                      isStatusGrouping && value !== null ? value : undefined,
+                  }),
+                  "kanban-view.create",
+                );
+              }}
+              onDrop={(cards) => {
+                detached(handleDrop(value, cards), "kanban-view.drop-card");
+              }}
+              onFileUpload={(files) => {
+                detached(
+                  (async () => await handleFileUpload(value, files))(),
+                  "kanban-view.file-upload",
+                );
+              }}
+              onHideColumn={
+                value !== null ? () => handleHideColumn(value) : undefined
+              }
+              onRenameColumn={
+                value !== null && handleRenameColumn
+                  ? (newName) => handleRenameColumn(value, newName)
+                  : undefined
+              }
+              onRenameEntity={handleRenameEntity}
+              onReorderColumn={handleReorderColumn}
+              optionColor={group.optionColor}
+              properties={properties}
+              selection={selection}
+              sorts={sorts}
+              taskOnly={isStatusGrouping}
+              title={group.label}
+              workspaceId={workspaceId}
+            />
+          );
+        })}
+      </KanbanBoard>
+    </KanbanSelectionSurface>
   );
 };
 
@@ -1126,24 +1243,32 @@ const KanbanGroupColumn = ({
       groupValue: columnValue,
     }),
   );
-  const entities = query.data
-    ? query.data.pages.flatMap((page) => page.entities)
+  const columnView = queryView(query);
+  const queryData = columnView.type === "items" ? columnView.items : undefined;
+  const entities = queryData
+    ? queryData.pages.flatMap((page) => page.entities)
     : [];
 
+  // A column whose page is on its way stands with its header and card
+  // placeholders; only a failed read says so above it.
   return (
-    <KanbanColumn
-      {...props}
-      columnValue={columnValue}
-      entities={entities}
-      hasMore={query.hasNextPage}
-      isLoadingMore={query.isFetchingNextPage}
-      onLoadMore={() => {
-        if (query.hasNextPage && !query.isFetchingNextPage) {
-          detached(query.fetchNextPage(), "kanban-view.fetch-next-page");
-        }
-      }}
-      workspaceId={workspaceId}
-    />
+    <>
+      <SettledQueryViewFeedback view={columnView} />
+      <KanbanColumn
+        {...props}
+        columnValue={columnValue}
+        entities={entities}
+        entitiesPending={columnView.type === "pending"}
+        hasMore={query.hasNextPage}
+        isLoadingMore={query.isFetchingNextPage}
+        onLoadMore={() => {
+          if (query.hasNextPage && !query.isFetchingNextPage) {
+            detached(query.fetchNextPage(), "kanban-view.fetch-next-page");
+          }
+        }}
+        workspaceId={workspaceId}
+      />
+    </>
   );
 };
 
@@ -1221,7 +1346,7 @@ const KanbanBoard = ({ children, onReorderColumn }: KanbanBoardProps) => {
   });
 
   return (
-    <div className="flex h-full gap-4 overflow-x-auto p-4" ref={scrollRef}>
+    <div className={KANBAN_BOARD_CLASS} ref={scrollRef}>
       {children}
     </div>
   );

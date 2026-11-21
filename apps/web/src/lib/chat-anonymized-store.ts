@@ -1,5 +1,3 @@
-import { useCallback } from "react";
-
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 
@@ -10,6 +8,7 @@ import {
 } from "@stll/anonymize-chat";
 import type { ChatSendMode } from "@stll/anonymize-chat";
 
+import { browserStateStorage } from "@/lib/account/browser-storage";
 import {
   followStorageOwner,
   userScopedStateStorage,
@@ -154,7 +153,9 @@ export const useChatAnonymizedStore = create<ChatAnonymizedStore>()(
     }),
     {
       name: "stella.chat.anonymized",
-      storage: createJSONStorage(() => userScopedStateStorage(localStorage)),
+      storage: createJSONStorage(() =>
+        userScopedStateStorage(browserStateStorage("local")),
+      ),
       partialize: ({ defaultSendMode, sendModes }) => ({
         defaultSendMode,
         sendModes,
@@ -207,10 +208,7 @@ export const useSetChatAnonymized = (threadRef: ChatThreadRef) => {
   const setThreadAnonymized = useChatAnonymizedStore(
     (state) => state.setThreadAnonymized,
   );
-  return useCallback(
-    (anonymized: boolean) => {
-      setThreadAnonymized(threadKey, anonymized);
-    },
-    [setThreadAnonymized, threadKey],
-  );
+  return (anonymized: boolean) => {
+    setThreadAnonymized(threadKey, anonymized);
+  };
 };

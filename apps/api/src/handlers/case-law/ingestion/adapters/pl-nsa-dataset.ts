@@ -1,4 +1,7 @@
-// parser-output-unchanged: stage labels route identical byte ranges through telemetry only.
+import { panic, Result } from "better-result";
+import type { AsyncBuffer, FileMetaData } from "hyparquet";
+// parser-output-unchanged: Transport failures retain their typed cause; successfully read dataset records parse unchanged.
+// parser-output-unchanged: the snapshot date is read from the adapter manifest, which states the same day; parsed records are unchanged.
 /**
  * The Hugging Face dataset `JuDDGES/pl-nsa`, pinned to one revision, and the
  * reader that walks it.
@@ -16,9 +19,6 @@
  * revision is a deliberate change to {@link PL_NSA_SNAPSHOT}, not something
  * the crawl discovers.
  */
-
-import { panic, Result } from "better-result";
-import type { AsyncBuffer, FileMetaData } from "hyparquet";
 import {
   parquetMetadataAsync,
   parquetReadObjects,
@@ -29,12 +29,20 @@ import { tmpdir } from "node:os";
 import nodePath from "node:path";
 
 import type { DocumentFetchStage } from "@stll/legal-atlas/document-fetch-diagnostics";
+// parser-output-unchanged: SHA-256 ownership changes preserve input bytes, serialization and update order, so stored hashes and parser output remain identical.
+import { createSha256 } from "@stll/sha256/bun";
+import type { Sha256Hasher } from "@stll/sha256/types";
 import { readCappedBytes } from "@stll/skills/streaming";
 
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import { fetchWithRetry } from "@/api/handlers/case-law/ingestion/adapters/retry";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
+import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
+import {
+  PUBLISHER_REQUEST,
+  type PublisherRequest,
+} from "@/api/lib/legal-search/ingestion-types";
 import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
 
 // ── The pinned snapshot ──────────────────────────────────
@@ -80,7 +88,7 @@ const shard = (
 export const PL_NSA_SNAPSHOT: PlNsaSnapshot = {
   repository: "JuDDGES/pl-nsa",
   revision: "595f2301210eb513c392b437153aa2c5f6683240",
-  snapshotDate: "2025-03-06",
+  snapshotDate: ADAPTER_MANIFESTS[ADAPTER_KEYS.PL_NSA].edition.snapshotDate,
   shards: [
     shard(
       0,
@@ -700,12 +708,16 @@ export const readPlNsaListing = async ({
  * How the adapter reaches a shard. Production downloads from the dataset
  * repository; tests hand in a recorded file.
  */
+export type LocalShardBuffer = AsyncBuffer & {
+  publisherRequest: Exclude<PublisherRequest, typeof PUBLISHER_REQUEST.FAILED>;
+};
+
 export type PlNsaShardSource = {
   /** The whole shard, local and verified, for reading rows. */
   readonly local: (
     shard: PlNsaShard,
     signal?: AbortSignal,
-  ) => Promise<DatasetResult<AsyncBuffer>>;
+  ) => Promise<DatasetResult<LocalShardBuffer>>;
   /** Ranged reads against the repository, for narrow columns. */
   readonly remote: (
     shard: PlNsaShard,
@@ -723,7 +735,13 @@ const fileBuffer = (path: string): AsyncBuffer => {
 
 /** A recorded file standing in for every shard, for tests and replays. */
 export const localFileShardSource = (path: string): PlNsaShardSource => ({
-  local: async () => await Promise.resolve(Result.ok(fileBuffer(path))),
+  local: async () =>
+    await Promise.resolve(
+      Result.ok({
+        ...fileBuffer(path),
+        publisherRequest: PUBLISHER_REQUEST.NONE,
+      }),
+    ),
   remote: async () => await Promise.resolve(Result.ok(fileBuffer(path))),
 });
 
@@ -763,10 +781,12 @@ const refusedAddress = (): AdapterFetchError =>
 const requestFailure =
   (path: string) =>
   (cause: unknown): AdapterFetchError =>
-    plNsaDatasetError(
-      PL_NSA_FAILURE.TRANSIENT,
-      `${path} could not be read: ${errorTag(cause)}`,
-    );
+    new AdapterFetchError({
+      message: `${failurePrefix(PL_NSA_FAILURE.TRANSIENT)}${path} could not be read: ${errorTag(cause)}`,
+      adapterKey: ADAPTER_KEYS.PL_NSA,
+      cursor: null,
+      cause,
+    });
 
 type RangeRequest = {
   fetchStage: DocumentFetchStage;
@@ -906,10 +926,7 @@ const locateShard = async (
     : Result.ok(redirected.toString());
 };
 
-const hashFile = async (
-  path: string,
-  hasher: Bun.CryptoHasher,
-): Promise<void> => {
+const hashFile = async (path: string, hasher: Sha256Hasher): Promise<void> => {
   for await (const chunk of Bun.file(path).stream()) {
     hasher.update(chunk);
   }
@@ -1035,7 +1052,7 @@ const downloadShard = async ({
 }: DownloadShardOptions): Promise<DatasetResult<string>> => {
   const finalPath = nodePath.join(directory, nodePath.basename(target.path));
   const partialPath = `${finalPath}.partial`;
-  const hasher = new Bun.CryptoHasher("sha256");
+  const hasher = createSha256();
 
   let have = (await sizeOf(partialPath)) ?? 0;
   if (have > target.bytes) {
@@ -1156,30 +1173,41 @@ export const huggingFaceShardSource = ({
     return await turn;
   };
 
+  type LocalShardRead = {
+    path: string;
+    publisherRequest: LocalShardBuffer["publisherRequest"];
+  };
+
   const ensureLocal = async (
     target: PlNsaShard,
     signal?: AbortSignal,
-  ): Promise<DatasetResult<string>> =>
+  ): Promise<DatasetResult<LocalShardRead>> =>
     await serialised(async () => await ensureLocalNow(target, signal));
 
   const ensureLocalNow = async (
     target: PlNsaShard,
     signal?: AbortSignal,
-  ): Promise<DatasetResult<string>> => {
+  ): Promise<DatasetResult<LocalShardRead>> => {
     const known = verified.get(target.index);
     if (known !== undefined && (await sizeOf(known)) === target.bytes) {
-      return Result.ok(known);
+      return Result.ok({
+        path: known,
+        publisherRequest: PUBLISHER_REQUEST.NONE,
+      });
     }
     await mkdir(directory, { recursive: true });
     await evictOthers(target);
 
     const finalPath = nodePath.join(directory, nodePath.basename(target.path));
     if ((await sizeOf(finalPath)) === target.bytes) {
-      const hasher = new Bun.CryptoHasher("sha256");
+      const hasher = createSha256();
       await hashFile(finalPath, hasher);
       if (hasher.digest("hex") === target.sha256) {
         verified.set(target.index, finalPath);
-        return Result.ok(finalPath);
+        return Result.ok({
+          path: finalPath,
+          publisherRequest: PUBLISHER_REQUEST.NONE,
+        });
       }
       await rm(finalPath, { force: true });
     }
@@ -1193,13 +1221,21 @@ export const huggingFaceShardSource = ({
     if (Result.isOk(downloaded)) {
       verified.set(target.index, downloaded.value);
     }
-    return downloaded;
+    return downloaded.map((path) => ({
+      path,
+      publisherRequest: PUBLISHER_REQUEST.ANSWERED,
+    }));
   };
 
   return {
     local: async (target, signal) =>
       await remembering(target, async () =>
-        Result.map(await ensureLocal(target, signal), fileBuffer),
+        (await ensureLocal(target, signal)).map(
+          ({ path, publisherRequest }) => ({
+            ...fileBuffer(path),
+            publisherRequest,
+          }),
+        ),
       ),
     remote: async (target, signal) =>
       await remembering(target, async () => {

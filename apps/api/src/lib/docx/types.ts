@@ -8,32 +8,30 @@ import type { ExtractedDocxParagraph } from "@stll/folio-core/server";
 import {
   type BlockDirectiveKind,
   type ConditionNode,
-  type FilterCall,
-  type RowScope,
-  DATE_FORMAT_STYLES,
-  type DateFormatStyle,
-  type FieldDateFormat,
   conditionNodeSchema,
+  DATE_FORMAT_STYLES,
+  type FieldDateFormat,
+  type FilterCall,
   isFieldPath,
+  type RowScope,
 } from "@stll/template-conditions";
 
 import type { ClauseSlot } from "@/api/lib/docx/discover-clause-slots";
 import type { TemplateWarning } from "@/api/lib/docx/template-warnings";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import {
+  type FieldSource,
   fieldSourceSchema,
   fieldSourceToolInputSchema,
-  type FieldSource,
 } from "@/api/lib/template-binding/binding-sources";
 
 export type { FieldSource } from "@/api/lib/template-binding/binding-sources";
-export { isFieldSource } from "@/api/lib/template-binding/binding-sources";
 export { DATE_FORMAT_STYLES };
-export type { DateFormatStyle, FieldDateFormat };
+export type { FieldDateFormat };
 
 // ── Common ────────────────────────────────────────────────
 
-export type TextFormat = {
+type TextFormat = {
   bold?: boolean;
   italic?: boolean;
 };
@@ -124,7 +122,7 @@ export type ExtractedParagraph = Omit<ExtractedDocxParagraph, "source"> & {
  *   included. This is the text as it would appear if all tracked
  *   changes were accepted (Word's "No Markup" view).
  */
-export type RevisionView = "accepted";
+type RevisionView = "accepted";
 
 export type ExtractedDocument = {
   paragraphs: ExtractedParagraph[];
@@ -242,8 +240,7 @@ export type DiscoveredTemplate = {
    *  they render (per loop iteration, never in a pruned branch or slot);
    *  `unconditional` ones have a marker that renders whatever the values. */
   renderedFieldPaths?:
-    | { scoped: string[]; unconditional: string[] }
-    | undefined;
+    { scoped: string[]; unconditional: string[] } | undefined;
   /** Per clause slot key, the field paths only that slot's clause body
    *  renders (the template's own content never does). Their requiredness
    *  holds where the slot renders, once per loop iteration it renders in. */
@@ -270,7 +267,7 @@ export type DiscoveredTemplate = {
 };
 
 /** One loop's name for its item, and the array path it stands for. */
-export type LoopAlias = { alias: string; path: string };
+type LoopAlias = { alias: string; path: string };
 
 // ── Custom XML Manifest ─────────────────────────────────
 
@@ -322,10 +319,6 @@ export const isLookupFormatKey = (value: string): boolean =>
 
 export type FieldLookup = v.InferOutput<typeof fieldLookupSchema>;
 
-export const isFieldLookupFormat = (
-  value: unknown,
-): value is FieldLookupFormat => v.is(fieldLookupFormatSchema, value);
-
 export type FieldValidation = v.InferOutput<typeof fieldValidationSchema>;
 
 /** Canonical parsed field metadata. Runtime validation, MCP schema generation,
@@ -372,7 +365,7 @@ export const fieldLookupFormatSchema = v.strictObject({
   ),
 });
 
-export const fieldLookupSchema = v.pipe(
+const fieldLookupSchema = v.pipe(
   v.strictObject({
     registry: v.pipe(
       v.picklist(LOOKUP_REGISTRIES),
@@ -408,7 +401,7 @@ export const fieldDateFormatObjectSchema = v.strictObject({
   ),
 });
 
-export const fieldDateFormatSchema = v.pipe(
+const fieldDateFormatSchema = v.pipe(
   fieldDateFormatObjectSchema,
   v.description(FIELD_DATE_FORMAT_DESCRIPTION),
 );
@@ -464,7 +457,7 @@ export const fieldValidationObjectSchema = v.strictObject({
   ),
 });
 
-export const fieldValidationSchema = v.pipe(
+const fieldValidationSchema = v.pipe(
   fieldValidationObjectSchema,
   v.description(FIELD_VALIDATION_DESCRIPTION),
 );
@@ -473,7 +466,7 @@ export const fieldValidationSchema = v.pipe(
  *  persisted manifest still spells these separately: the MCP surface carries
  *  one discriminated `source`, where a second mode is unrepresentable. Total
  *  over the mode union, so a new derived source is a compile error here. */
-export const DERIVED_SOURCE_PROPERTIES = {
+const DERIVED_SOURCE_PROPERTIES = {
   "ai-adapt": "aiAdapt",
   "ai-prompt": "aiPrompt",
   condition: "condition",
@@ -483,12 +476,7 @@ export const DERIVED_SOURCE_PROPERTIES = {
 } as const satisfies Record<DerivedSourceMode, string>;
 
 type DerivedSourceMode =
-  | "ai-adapt"
-  | "ai-prompt"
-  | "condition"
-  | "formula"
-  | "lookup"
-  | "source";
+  "ai-adapt" | "ai-prompt" | "condition" | "formula" | "lookup" | "source";
 
 /** `lookup` and `source` are only presence-checked, so the snake_case MCP
  *  mirror can pass its own shape of each. */
@@ -533,16 +521,15 @@ const activeDerivedSourceModes = ({
   return modes;
 };
 
-export const hasCompatibleDerivedSources = (
-  fields: DerivedSourceFields,
-): boolean => activeDerivedSourceModes(fields).length <= 1;
+const hasCompatibleDerivedSources = (fields: DerivedSourceFields): boolean =>
+  activeDerivedSourceModes(fields).length <= 1;
 
 /**
  * The rejection message for a manifest field that names more than one derived
  * source. "Mutually exclusive" alone leaves the reader to guess which of the
  * seven properties collided and on which field, so both are named here.
  */
-export const describeDerivedSourceConflict = (
+const describeDerivedSourceConflict = (
   fields: DerivedSourceFields & { path?: string | undefined },
 ): string => {
   const properties = activeDerivedSourceModes(fields).map(
@@ -697,12 +684,6 @@ export const FIELD_WIRE_PROPERTY = {
   string
 >;
 
-export const isFieldDateFormat = (value: unknown): value is FieldDateFormat =>
-  v.is(fieldDateFormatSchema, value);
-
-export const isFieldLookup = (value: unknown): value is FieldLookup =>
-  v.is(fieldLookupSchema, value);
-
 export const isFieldMeta = (value: unknown): value is FieldMeta =>
   v.is(fieldMetaSchema, value);
 
@@ -760,23 +741,6 @@ export const isTemplateDataValue = (
 export const isTemplateData = (value: unknown): value is TemplateData =>
   isRecordLike(value) &&
   Object.values(value).every((item) => isTemplateDataValueAtDepth(item, 0));
-
-export const isTemplateManifest = (value: unknown): value is TemplateManifest =>
-  isRecordLike(value) &&
-  typeof value["version"] === "number" &&
-  Number.isFinite(value["version"]) &&
-  Array.isArray(value["fields"]) &&
-  value["fields"].every(isFieldMeta) &&
-  (value["clauseSlots"] === undefined ||
-    (Array.isArray(value["clauseSlots"]) &&
-      value["clauseSlots"].every(
-        (slot: unknown) =>
-          isRecordLike(slot) &&
-          typeof slot["name"] === "string" &&
-          typeof slot["patchKey"] === "string" &&
-          (slot["versionModifier"] === undefined ||
-            typeof slot["versionModifier"] === "string"),
-      )));
 
 export type ResolvedField = {
   path: string;

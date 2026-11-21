@@ -1,8 +1,8 @@
 import { fetchWithTimeout } from "@stll/fetch";
 
 import { env } from "@/api/env";
+import { basicAuthorizationHeader } from "@/api/lib/auth/http-basic-auth";
 import { HealthCheckError } from "@/api/lib/errors/tagged-errors";
-import { basicAuthorizationHeader } from "@/api/lib/http-basic-auth";
 
 export const probeDocumentConverter = async (
   signal: AbortSignal,

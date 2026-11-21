@@ -1,10 +1,7 @@
-// A type-only import of the fold cannot run it at runtime, so unlike a
-// value import it does not exempt the module: the rule must still report a
-// combinator/negated read here. This fixture covers the declaration-level
-// form (`import type { foldCondition }`); the specifier-level form
-// (`import { type foldConditions }`) is rejected by the same
-// `importKind === "type"` check and is not repeated in a second import from
-// the same module here, to avoid an unrelated import/no-duplicates finding.
+// Only group callbacks actually passed to an owner fold may read condition
+// semantics; neither a value import alone nor a type-only import exempts a
+// module. This fixture covers declaration-level type imports. Specifier-level
+// type imports have the same boundary and are covered in the behavior tests.
 import type { foldCondition } from "@stll/conditions";
 
 // Reference the type-only import so it is not flagged as unused; this does

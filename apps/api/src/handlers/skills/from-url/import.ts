@@ -1,22 +1,28 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { AGENT_SKILL_SCOPES } from "@/api/db/schema";
+import { env } from "@/api/env";
 import { skillRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import {
   authorizeSkillInstallScope,
   installSkill,
 } from "@/api/lib/skills/install";
-import { fetchSkillPackageFromUrl } from "@/api/lib/skills/skill-package";
+import {
+  createSkillPackageFetchContext,
+  fetchSkillPackageFromUrl,
+} from "@/api/lib/skills/skill-package";
 
-const importSkillBodySchema = t.Object({
-  scope: t.UnionEnum(AGENT_SKILL_SCOPES),
-  url: t.String({ minLength: 1, maxLength: 2048 }),
+const importSkillBodySchema = v.object({
+  scope: v.picklist(AGENT_SKILL_SCOPES),
+  url: v.pipe(v.string(), v.minLength(1), v.maxLength(2048)),
 });
 
 const config = {
+  contract: "patch",
   contentDelivery: {
     type: "none",
     reason: "Imports skill metadata without delivering stored-file bytes.",
@@ -58,10 +64,20 @@ const importSkillFromUrl = createSafeRootHandler(
       return Result.err(authorization.error);
     }
 
-    const parsed = yield* Result.await(fetchSkillPackageFromUrl(body.url));
+    const parsed = yield* Result.await(
+      fetchSkillPackageFromUrl(
+        body.url,
+        createSkillPackageFetchContext({
+          permit: grantThirdPartyOutboundPermit(),
+          publicGithubToken: env.SKILL_IMPORT_GITHUB_TOKEN,
+        }),
+      ),
+    );
 
     const installResult = await installSkill({
+      binaryFiles: parsed.binaryFiles,
       memberRole,
+      onSlugTaken: "copy",
       origin: "url",
       parsed,
       recordAuditEvent,

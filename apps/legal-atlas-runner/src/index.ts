@@ -1,10 +1,10 @@
 import { fileURLToPath } from "node:url";
 
 import {
-  LEGAL_AST_CAPABILITIES,
   getRunnerDefinition,
   getRunnerDefinitions,
   isRunnerName,
+  LEGAL_AST_CAPABILITIES,
 } from "@stll/legal-atlas";
 import { childExitStatus } from "@stll/scripts/src/child-exit-status";
 
@@ -74,18 +74,6 @@ const runImplementedRunner = async ({
   if (runnerName === "case-law-ingest") {
     const { runCaseLawIngest } = await import("./runners/case-law-ingest.js");
     return await runCaseLawIngest(argv);
-  }
-
-  if (runnerName === "case-law-corpus-storage-backfill") {
-    const { runCaseLawCorpusStorageBackfill } =
-      await import("./runners/case-law-corpus-storage-backfill.js");
-    return await runCaseLawCorpusStorageBackfill(argv);
-  }
-
-  if (runnerName === "legal-corpus-storage-backfill") {
-    const { runLegalCorpusStorageBackfill } =
-      await import("./runners/case-law-corpus-storage-backfill.js");
-    return await runLegalCorpusStorageBackfill(argv);
   }
 
   await writeErr(`Runner ${runnerName} is registered without an entrypoint.`);

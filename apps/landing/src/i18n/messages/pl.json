@@ -15,32 +15,6 @@
     "getCli": "Pobierz CLI",
     "startFree": "Zacznij za darmo"
   },
-  "demo": {
-    "addView": "Dodaj widok",
-    "askStella": "Zapytaj aplikację stella",
-    "close": "Zamknij",
-    "documentType": "Typ dokumentu",
-    "documents": "Dokumenty",
-    "dueDate": "Termin",
-    "files": "Pliki",
-    "filter": "Filtruj",
-    "matters": "Sprawy",
-    "notes": "Notatki",
-    "overview": "Przegląd",
-    "sectionBody": "Zarejestrowane prosto w działającym produkcie. To, co tu widzisz, to dokładnie to, z czego korzystasz.",
-    "sectionLabel": "Prawdziwy produkt",
-    "sectionTitle": "stella taka, jaka jest.",
-    "sort": "Sortuj",
-    "source": "Źródło",
-    "sources": "Źródła",
-    "status": "Status",
-    "statusActive": "Aktywne",
-    "statusClosed": "Zamknięte",
-    "statusInReview": "W przeglądzie",
-    "statusOnHold": "Wstrzymane",
-    "table": "Tabela",
-    "todos": "Zadania"
-  },
   "footer": {
     "agent": "Agent AI",
     "anonymization": "Anonimizacja",
@@ -56,8 +30,8 @@
     "privacy": "Prywatność",
     "publicData": "Dane publiczne",
     "resources": "Zasoby",
-    "sourceCode": "Kod źródłowy",
     "status": "Status",
+    "support": "Pomoc",
     "tabularReview": "Przegląd tabelaryczny",
     "tagline": "Otwarty prawniczy obszar roboczy do pracy, która ma znaczenie.",
     "templates": "Szablony",
@@ -89,12 +63,23 @@
   },
   "nav": {
     "aiFactSheet": "Karta informacyjna AI",
-    "aiFactSheetBlurb": "stella w formie czytelnej dla maszyn.",
-    "beta": "Beta",
     "blog": "Blog",
     "changelog": "Dziennik zmian",
     "chooseLanguage": "Wybierz język",
     "docxEditor": "Samodzielny edytor DOCX",
+    "featurePreviews": {
+      "documents": {
+        "comments": "Komentarze"
+      },
+      "matters": {
+        "done": "Ukończone",
+        "inProgress": "W toku",
+        "open": "Otwarte"
+      },
+      "research": {
+        "caseLaw": "Orzecznictwo"
+      }
+    },
     "github": "stella na GitHubie",
     "openMenu": "Otwórz nawigację",
     "pillars": {
@@ -112,7 +97,7 @@
         "title": "Agent AI, który działa w Twoich sprawach, plikach i narzędziach."
       },
       "anonymization": {
-        "blurb": "Usuń nazwiska, podmioty i dane identyfikujące, zanim materiały trafią do AI, prosto z czatu i z przeglądu dokumentów, z zanonimizowanym wynikiem, który sprawdzisz, zanim cokolwiek pójdzie dalej.",
+        "blurb": "Usuń nazwiska, nazwy organizacji i dane identyfikujące, zanim materiały trafią do AI, prosto z czatu i z przeglądu dokumentów, z zanonimizowanym wynikiem, który sprawdzisz, zanim cokolwiek pójdzie dalej.",
         "discover": "Poznaj Anonimizację",
         "eyebrow": "Anonimizacja",
         "title": "Przygotuj materiały dla AI bez ujawniania danych identyfikujących."
@@ -356,7 +341,7 @@
       },
       "capabilities": {
         "0": {
-          "body": "Usuwa nazwiska, podmioty i dane identyfikujące, zanim materiały trafią do AI.",
+          "body": "Usuwa nazwiska, nazwy organizacji i dane identyfikujące, zanim materiały trafią do AI.",
           "title": "Dane identyfikujące zostają poza AI"
         },
         "1": {
@@ -381,20 +366,20 @@
           "question": "Czy anonimizacja jest już dostępna?"
         },
         "1": {
-          "answer": "W przygotowaniu materiałów do pracy z AI bez ujawniania nazwisk, podmiotów ani danych identyfikujących, z zanonimizowanym wynikiem do sprawdzenia.",
+          "answer": "W przygotowaniu materiałów do pracy z AI bez ujawniania nazwisk, nazw organizacji ani danych identyfikujących, z zanonimizowanym wynikiem do sprawdzenia.",
           "question": "W czym pomaga?"
         }
       },
-      "metaDescription": "Usuń nazwiska, podmioty i dane identyfikujące, zanim materiały trafią do AI, prosto z czatu i przeglądu dokumentów, z wynikiem do sprawdzenia.",
+      "metaDescription": "Usuń nazwiska, nazwy organizacji i dane identyfikujące, zanim materiały trafią do AI, prosto z czatu i przeglądu dokumentów, z wynikiem do sprawdzenia.",
       "metaTitle": "Anonimizacja dokumentów przed wysłaniem do AI | stella",
       "quickAnswer": {
-        "answer": "Usuwa nazwiska, podmioty i dane identyfikujące, zanim materiały trafią do pracy z AI, i pokazuje zanonimizowany wynik, więc potwierdzasz, co opuszcza sprawę. Jest wbudowana wprost w czat i w przegląd dokumentów.",
+        "answer": "Usuwa nazwiska, nazwy organizacji i dane identyfikujące, zanim materiały trafią do pracy z AI, i pokazuje zanonimizowany wynik, więc potwierdzasz, co opuszcza sprawę. Jest wbudowana wprost w czat i w przegląd dokumentów.",
         "question": "Czym jest anonimizacja w aplikacji stella?"
       },
       "sections": {
         "0": {
           "bullets": {
-            "0": "Nazwiska, podmioty i dane identyfikujące nie trafiają do AI",
+            "0": "Nazwiska, nazwy organizacji i dane identyfikujące nie trafiają do AI",
             "1": "Zbudowana z myślą o pracy prawników z AI, nie o ogólnym maskowaniu dokumentów",
             "2": "Przed kolejnym krokiem zostaje zanonimizowany dokument do sprawdzenia"
           },
@@ -660,7 +645,7 @@
           "question": "Skąd pochodzą te dane?"
         },
         "1": {
-          "answer": "Dwie listy, obie rosną. Podłączone rejestry obejmują już ARES (Czechy), Companies House (Wielka Brytania), SEC EDGAR (USA), KRS (Polska), PRH (Finlandia) i VIES (VAT w UE). Poza rejestrami oficjalne źródła dochodzą jurysdykcja po jurysdykcji; podłączone źródła mają już na przykład Czechy, Hiszpania i Tajwan, a czytnik orzecznictwa jest zbudowany tak, aby przeglądać i filtrować według jurysdykcji w miarę dodawania kolejnych oficjalnych źródeł.",
+          "answer": "Czytnik publicznego orzecznictwa udostępnia obecnie czeskie orzeczenia. Połączone rejestry spółek obejmują ARES (Czechy), Companies House (Wielka Brytania), SEC EDGAR (USA), KRS (Polska), PRH (Finlandia) i VIES (VAT w UE).",
           "question": "Które jurysdykcje i rejestry są objęte?"
         },
         "2": {
@@ -884,6 +869,7 @@
       }
     },
     "ui": {
+      "browseLaw": "Przeglądaj publiczną bazę prawną",
       "capabilities": "Co potrafi",
       "exploreMore": "Poznaj więcej",
       "faq": "Najczęstsze pytania",
@@ -923,8 +909,8 @@
           "title": "Czat i narzędzia wiedzy"
         },
         "4": {
-          "body": "Aplikacja desktopowa działa jako lokalny mostek do edycji dokumentów Office z aplikacji stella.",
-          "title": "Mostek desktopowy"
+          "body": "Otwiera dokumenty Office z aplikacji stella w aplikacjach na Twoim komputerze i zapisuje zmiany z powrotem w aplikacji stella. Przechowuje też historię schowka, która pozostaje na Twoim urządzeniu.",
+          "title": "Aplikacja na komputer"
         },
         "5": {
           "body": "Zapisane zmiany i wgrane pliki stają się wersjami dokumentu, więc bieżący plik i jego historia zostają razem.",
@@ -983,9 +969,11 @@
     "bringWorkspaceToFront": "Przenieś na wierzch obszar roboczy aplikacji stella",
     "controlBody": "stella to prawnicze oprogramowanie <gh>open source</gh>, które uruchomisz na własnej infrastrukturze: przejrzyj kod, korzystaj z niego na swoich zasadach i eksportuj wszystko w standardowych formatach.",
     "controlTitle": "Zachowaj kontrolę nad swoją technologią.",
-    "dataBody": "Orzecznictwo i rejestry spółek z każdej jurysdykcji, w której pracujesz, trafiają wprost do sprawy. Anonimizacja trzyma dane identyfikujące z dala od AI.",
+    "dataBody": "Czytaj czeskie orzecznictwo z uwagami AI dotyczącymi zagadnień prawnych, zaznaczeniami, podkreśleniami, komentarzami prawnika i odpowiedziami z odnośnikami do źródeł. Wyszukuj spółki w połączonych oficjalnych rejestrach i odwołuj się do źródeł ze sprawy.",
+    "dataConstitutionalAlt": "Orzeczenie czeskiego Trybunału Konstytucyjnego IV.ÚS 1394/24 z numerowanymi akapitami, uwagą AI dotyczącą zagadnienia prawnego, zaznaczeniem, podkreśleniem, komentarzem prawnika i rozmową zawierającą dwa pytania i odpowiedzi z odnośnikami do źródeł.",
     "dataEyebrow": "Dane prawne",
-    "dataMainAlt": "Oficjalne orzeczenie sądu otwarte w aplikacji stella",
+    "dataMainAlt": "Orzeczenie czeskiego Sądu Najwyższego 27 Cdo 59/2022 z numerowanymi akapitami, uwagą AI dotyczącą zagadnienia prawnego, zaznaczeniem, podkreśleniem, komentarzem prawnika i rozmową zawierającą dwa pytania i odpowiedzi z odnośnikami do źródeł.",
+    "dataSupremeAlt": "Orzeczenie czeskiego Sądu Najwyższego 27 Cdo 1525/2025 z numerowanymi akapitami, uwagą AI dotyczącą zagadnienia prawnego, zaznaczeniem, podkreśleniem, komentarzem prawnika i rozmową zawierającą dwa pytania i odpowiedzi z odnośnikami do źródeł.",
     "dataTitle": "Orzecznictwo i rejestry pod ręką.",
     "exploreAgent": "Poznaj agenta AI",
     "exploreAnonymization": "Poznaj anonimizację",

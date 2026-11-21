@@ -1,14 +1,14 @@
 import { panic, Result } from "better-result";
-import { sql, type SQL } from "drizzle-orm";
+import { type SQL, sql } from "drizzle-orm";
 
 import {
   BackfillFailedError,
   BackfillHeldError,
+  BackfillLockWaitError,
 } from "@stll/db-load-gate/backfill-pass";
 import {
   backfillHeartbeat,
   combine,
-  defaultConfig,
   initialBatchState,
 } from "@stll/db-load-gate/health";
 import type {
@@ -19,9 +19,9 @@ import type {
 } from "@stll/db-load-gate/health";
 import {
   AUTOVACUUM_SQL,
-  LONG_TRANSACTION_SQL,
   autovacuumOnTarget,
   busyWindow,
+  LONG_TRANSACTION_SQL,
   longTransaction,
 } from "@stll/db-load-gate/indicators";
 import {
@@ -30,6 +30,8 @@ import {
 } from "@stll/db-load-gate/slot";
 import { Temporal } from "@stll/time";
 
+import { loadGateHealthConfig } from "@/api/env-online-index";
+import { admitCaseLawPopulationMaintenance } from "@/api/lib/case-law/population-maintenance-admission";
 import { getPgErrorCode } from "@/api/lib/pg-error";
 
 import {
@@ -37,10 +39,19 @@ import {
   resolveEbsConfiguration,
 } from "../lib/db/ebs-signal-reader";
 import { executedRows } from "../lib/db/executed-rows";
-import { isPgError, PG_ERROR } from "../lib/pg-error";
+import { runReadCommittedUnit } from "../lib/db/read-committed-unit";
+import {
+  isLockWaitRefusal,
+  isPgError,
+  lockWaitRelation,
+  PG_ERROR,
+} from "../lib/pg-error";
 import type { IngestionTransactionRunner } from "../lib/replay-safe-ingestion";
 import { isRecord } from "../lib/type-guards";
-import type { BackfillCheckpoint } from "./adaptive-backfill";
+import type {
+  AdaptiveBackfillOptions,
+  BackfillCheckpoint,
+} from "./adaptive-backfill";
 import { runAdaptiveBackfillBatch } from "./adaptive-backfill";
 import { createBoundedIndicatorQuery } from "./indicator-query";
 import type { IndicatorQuery } from "./indicator-query";
@@ -55,6 +66,29 @@ export {
 } from "@stll/db-load-gate/backfill-pass";
 
 type Query = IndicatorQuery;
+
+/**
+ * How governed work contends on the table it names, which decides the load
+ * signals that hold it.
+ *
+ * - `write`: it writes the table's rows. A long transaction holding a lock on
+ *   the table would make it queue, and autovacuum working on the table is
+ *   competing for the same pages, so both hold it.
+ * - `shared-read`: it only reads the table under shared locks and writes
+ *   elsewhere. Neither signal describes contention it can cause or suffer, so
+ *   neither holds it.
+ *
+ * The IO and byte balance and the configured busy windows hold both kinds:
+ * they describe the database as a whole, which every reader shares.
+ */
+export const BACKFILL_TABLE_CONTENTION = {
+  WRITE: "write",
+  SHARED_READ: "shared-read",
+} as const;
+
+export type BackfillTableContention =
+  (typeof BACKFILL_TABLE_CONTENTION)[keyof typeof BACKFILL_TABLE_CONTENTION];
+
 export type BackfillRunStatus = ReturnType<typeof backfillHeartbeat> & {
   transitionEvent?: "backfill.yielded" | "backfill.resumed";
 };
@@ -62,11 +96,15 @@ export type BackfillRunStatus = ReturnType<typeof backfillHeartbeat> & {
 type RuntimeOptions = {
   name: string;
   tableName: string;
+  /** How the work contends on `tableName`; `write` when omitted. */
+  tableContention?: BackfillTableContention | undefined;
   initialSize: number;
   initialCursor?: string | null;
   config?: HealthConfig | undefined;
   clock?: (() => number) | undefined;
   readVerdict?: (() => Promise<Verdict>) | undefined;
+  /** The IO and byte balance reading; the configured RDS metrics when omitted. */
+  readEbsSignal?: (() => Promise<Signal>) | undefined;
   log?: ((record: unknown) => void) | undefined;
   reporting?: "detailed" | "changes";
   statementTimeoutPolicy?: "defer" | "fail";
@@ -149,18 +187,76 @@ const createCachedEbsSignalReader = ({ clock, config }: EbsSignalOptions) => {
   };
 };
 
-const createVerdictReader = ({
-  query,
-  tableName,
-  clock,
-  config,
-  sharedReadEbsSignal,
-}: {
+type TableSignalOptions = {
   query: Query;
   tableName: string;
   clock: () => number;
   config: HealthConfig;
-  sharedReadEbsSignal?: () => Promise<Signal>;
+};
+
+/** A writer queues behind long lock holders and races autovacuum on its table. */
+const writeContentionSignals = ({
+  query,
+  tableName,
+  clock,
+  config,
+}: TableSignalOptions): Promise<Signal>[] => [
+  longTransaction({
+    read: async () => {
+      const row = (await query(LONG_TRANSACTION_SQL, ["table", tableName])).at(
+        0,
+      );
+      return isRecord(row) &&
+        typeof row["ageMs"] === "number" &&
+        typeof row["observedAt"] === "string"
+        ? { ageMs: row["ageMs"], observedAt: row["observedAt"] }
+        : null;
+    },
+    now: clock,
+    config,
+  }),
+  autovacuumOnTarget({
+    read: async () => {
+      const row = (await query(AUTOVACUUM_SQL, [tableName])).at(0);
+      return isRecord(row) &&
+        typeof row["active"] === "boolean" &&
+        typeof row["observedAt"] === "string"
+        ? { active: row["active"], observedAt: row["observedAt"] }
+        : null;
+    },
+    now: clock,
+    config,
+    kind: "backfill_batch",
+  }),
+];
+
+/** The signals that describe contention on the work's own table. */
+const tableSignals = (
+  contention: BackfillTableContention,
+  options: TableSignalOptions,
+): Promise<Signal>[] => {
+  switch (contention) {
+    case BACKFILL_TABLE_CONTENTION.WRITE:
+      return writeContentionSignals(options);
+    case BACKFILL_TABLE_CONTENTION.SHARED_READ:
+      return [];
+    default: {
+      contention satisfies never;
+      return panic("Unknown backfill table contention");
+    }
+  }
+};
+
+const createVerdictReader = ({
+  query,
+  tableName,
+  tableContention = BACKFILL_TABLE_CONTENTION.WRITE,
+  clock,
+  config,
+  sharedReadEbsSignal,
+}: TableSignalOptions & {
+  tableContention?: BackfillTableContention | undefined;
+  sharedReadEbsSignal?: (() => Promise<Signal>) | undefined;
 }) => {
   const readEbsSignal =
     sharedReadEbsSignal ?? createCachedEbsSignalReader({ clock, config });
@@ -168,33 +264,7 @@ const createVerdictReader = ({
     combine(
       await Promise.all([
         readEbsSignal(),
-        longTransaction({
-          read: async () => {
-            const row = (
-              await query(LONG_TRANSACTION_SQL, ["table", tableName])
-            ).at(0);
-            return isRecord(row) &&
-              typeof row["ageMs"] === "number" &&
-              typeof row["observedAt"] === "string"
-              ? { ageMs: row["ageMs"], observedAt: row["observedAt"] }
-              : null;
-          },
-          now: clock,
-          config,
-        }),
-        autovacuumOnTarget({
-          read: async () => {
-            const row = (await query(AUTOVACUUM_SQL, [tableName])).at(0);
-            return isRecord(row) &&
-              typeof row["active"] === "boolean" &&
-              typeof row["observedAt"] === "string"
-              ? { active: row["active"], observedAt: row["observedAt"] }
-              : null;
-          },
-          now: clock,
-          config,
-          kind: "backfill_batch",
-        }),
+        ...tableSignals(tableContention, { query, tableName, clock, config }),
         Promise.resolve(busyWindow({ now: clock, config })),
       ]),
     );
@@ -308,18 +378,79 @@ const throwIfBackfillDeferred = ({
   }
 };
 
+/**
+ * A batch runs under the lock timeout this runtime sets, and a failed batch
+ * rolled back whole: a lost lock wait moved nothing, so it is the pass's to
+ * retry, not a failure of the run. Any other failure passes unchanged.
+ */
+const lostLockWaitOr = (name: string, cause: unknown): unknown => {
+  if (cause instanceof BackfillLockWaitError || !isLockWaitRefusal(cause)) {
+    return cause;
+  }
+  const relation = lockWaitRelation(cause);
+  return new BackfillLockWaitError({
+    message: `Backfill ${name} batch waited on a lock${relation === null ? "" : ` on ${relation}`} past its timeout; nothing moved`,
+    relation,
+    cause,
+  });
+};
+
+/** Runs one batch, rethrowing a lost lock wait as `BackfillLockWaitError`. */
+const runBackfillBatch = async <BatchTransaction, Item, Cursor>(
+  name: string,
+  options: AdaptiveBackfillOptions<BatchTransaction, Item, Cursor>,
+) => {
+  const attempted = await Result.tryPromise({
+    try: async () => await runAdaptiveBackfillBatch(options),
+    catch: (cause: unknown) => lostLockWaitOr(name, cause),
+  });
+  if (attempted.isErr()) {
+    throw attempted.error;
+  }
+  return attempted.value;
+};
+
+type SettledMaintenanceVerdictReaderOptions = Omit<
+  Parameters<typeof admitCaseLawPopulationMaintenance>[0],
+  "query" | "verdict"
+> & {
+  indicators: { query: Query; settle: () => Promise<void> };
+  readHealth: () => Promise<Verdict>;
+};
+
+/** Finish cancelled indicator reads before the reserved session starts work. */
+const createSettledMaintenanceVerdictReader =
+  ({
+    indicators,
+    readHealth,
+    ...admission
+  }: SettledMaintenanceVerdictReaderOptions) =>
+  async () => {
+    try {
+      return await admitCaseLawPopulationMaintenance({
+        ...admission,
+        query: indicators.query,
+        verdict: await readHealth(),
+      });
+    } finally {
+      await indicators.settle();
+    }
+  };
+
 const createRuntime = <BatchTransaction>({
   name,
   tableName,
+  tableContention,
   initialSize,
   initialCursor = null,
   runInTransaction,
   transactionQuery,
   slot,
   close,
-  config = defaultConfig,
+  config = loadGateHealthConfig(),
   clock = () => Temporal.Now.instant().epochMilliseconds,
   readVerdict,
+  readEbsSignal,
   observeStatus,
   reporting = "detailed",
   statementTimeoutPolicy = "defer",
@@ -338,16 +469,19 @@ const createRuntime = <BatchTransaction>({
     createVerdictReader({
       query: indicatorQueries.query,
       tableName,
+      tableContention,
       clock,
       config,
+      sharedReadEbsSignal: readEbsSignal,
     });
-  const readSettledVerdict = async () => {
-    try {
-      return await readHealth();
-    } finally {
-      await indicatorQueries.settle();
-    }
-  };
+  const readSettledVerdict = createSettledMaintenanceVerdictReader({
+    indicators: indicatorQueries,
+    readHealth,
+    tableName,
+    tableContention,
+    name,
+    clock,
+  });
   const readCheckpoint = async (tx: BatchTransaction) => {
     const q = transactionQuery(tx);
     await setSharedQueryTimeouts(q, {
@@ -410,7 +544,7 @@ const createRuntime = <BatchTransaction>({
   const step = async <Value>(work: BatchWork<BatchTransaction, Value>) => {
     const completion: { result?: { value: Value } } = {};
     let previousHeldSince: number | null = null;
-    const result = await runAdaptiveBackfillBatch({
+    const result = await runBackfillBatch(name, {
       runInTransaction,
       config,
       clock,
@@ -537,7 +671,7 @@ export const createScriptBackfillHealthReader = ({
   db,
   tableName,
   clock,
-  config = defaultConfig,
+  config = loadGateHealthConfig(),
 }: {
   db: { transaction: IngestionTransactionRunner<Transaction> };
   tableName: string;
@@ -549,13 +683,20 @@ export const createScriptBackfillHealthReader = ({
     transactionQuery: (tx: Transaction) => drizzleQuery(tx),
     readTimeoutMs: config.readTimeoutMs,
   });
+  const readHealth = createVerdictReader({
+    query: bounded.query,
+    tableName,
+    clock,
+    config,
+  });
   return {
-    readVerdict: createVerdictReader({
-      query: bounded.query,
-      tableName,
-      clock,
-      config,
-    }),
+    readVerdict: async () =>
+      await admitCaseLawPopulationMaintenance({
+        query: bounded.query,
+        tableName,
+        clock,
+        verdict: await readHealth(),
+      }),
     settle: bounded.settle,
   };
 };
@@ -645,7 +786,7 @@ type DatabaseLoadVerdictReaderOptions = {
 export const createDatabaseLoadVerdictReader = ({
   db,
   tableName,
-  config = defaultConfig,
+  config = loadGateHealthConfig(),
   clock = () => Temporal.Now.instant().epochMilliseconds,
   readEbsSignal,
   warn,
@@ -715,7 +856,12 @@ export const createDatabaseLoadVerdictReader = ({
           warn,
         });
       }
-      return verdict;
+      return await admitCaseLawPopulationMaintenance({
+        query: indicators.query,
+        tableName,
+        clock,
+        verdict,
+      });
     });
     await indicators.settle();
     if (Result.isError(result)) {
@@ -744,6 +890,16 @@ export const createDatabaseLoadVerdictReader = ({
   };
 };
 
+/** The runtime's batch bounds always admit its initial size. */
+const sizedRuntimeConfig = ({
+  config = loadGateHealthConfig(),
+  initialSize,
+}: Pick<RuntimeOptions, "config" | "initialSize">): HealthConfig => ({
+  ...config,
+  minSize: Math.min(initialSize, config.minSize),
+  maxSize: Math.max(initialSize, config.maxSize),
+});
+
 export const createScriptBackfillRuntime = ({
   db,
   slot: injectedSlot,
@@ -771,17 +927,7 @@ export const createScriptBackfillRuntime = ({
   return createRuntime({
     ...options,
     transactionQuery: (tx: Transaction) => drizzleQuery(tx),
-    config: {
-      ...(options.config ?? defaultConfig),
-      minSize: Math.min(
-        options.initialSize,
-        (options.config ?? defaultConfig).minSize,
-      ),
-      maxSize: Math.max(
-        options.initialSize,
-        (options.config ?? defaultConfig).maxSize,
-      ),
-    },
+    config: sizedRuntimeConfig(options),
     runInTransaction: db.transaction.bind(db),
     slot,
     close: async () => await Promise.resolve(),
@@ -809,19 +955,13 @@ export const createBackfillRuntime = (
   const runInTransaction: IngestionTransactionRunner<
     Pick<OnlineMigrationConnection, "execute" | "query">
   > = async (work) => {
-    await connection.execute("BEGIN");
-    const outcome = await Result.tryPromise({
-      try: async () => {
-        const result = await work(connection);
-        await connection.execute("COMMIT");
-        return result;
-      },
-      catch: (cause: unknown) => cause,
-    });
+    const outcome = await runReadCommittedUnit(
+      connection,
+      async () => await work(connection),
+    );
     if (Result.isOk(outcome)) {
       return outcome.value;
     }
-    await connection.execute("ROLLBACK");
     throw outcome.error;
   };
   return createRuntime({
@@ -839,17 +979,7 @@ export const createBackfillRuntime = (
     transactionQuery: (
       tx: Pick<OnlineMigrationConnection, "execute" | "query">,
     ) => tx.query,
-    config: {
-      ...(options.config ?? defaultConfig),
-      minSize: Math.min(
-        options.initialSize,
-        (options.config ?? defaultConfig).minSize,
-      ),
-      maxSize: Math.max(
-        options.initialSize,
-        (options.config ?? defaultConfig).maxSize,
-      ),
-    },
+    config: sizedRuntimeConfig(options),
     runInTransaction,
     close: slot.close,
   });

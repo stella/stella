@@ -1,20 +1,28 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
-import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
+import { storedAIConfigUnreadableError } from "@/api/lib/ai-config-response";
+import {
+  ACCOUNT_ACCESS,
+  configuredModelAdmission,
+  createSafeRootHandler,
+} from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { summarizeVersionChange } from "@/api/lib/entity-versions/version-change-summary";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 import { loadTemplateVersionDiffSources } from "../versions";
 
-const templateVersionSummarizeParamsSchema = t.Object({
-  templateId: tSafeId("template"),
-  versionId: tSafeId("templateVersion"),
+const templateVersionSummarizeParamsSchema = v.object({
+  templateId: resourceIdSchema("template"),
+  versionId: resourceIdSchema("templateVersion"),
 });
 
 const config = {
+  contract: "patch",
+  actionAdmission: { type: "handler", actionKind: "versions.summarize" },
   contentDelivery: {
     type: "none",
     reason:
@@ -34,7 +42,7 @@ const config = {
   },
   access: "write",
   params: templateVersionSummarizeParamsSchema,
-  requiresUsage: { actionType: "chat", modelRole: "fast" },
+  requiresUsage: { actionType: "chat", modelTask: "short-text" },
 } satisfies HandlerConfig;
 
 /**
@@ -46,6 +54,8 @@ const config = {
 const templateVersionSummarize = createSafeRootHandler(
   config,
   async function* ({
+    orgAIConfigStatus,
+    modelAdmission,
     scopedDb,
     session,
     params,
@@ -54,6 +64,10 @@ const templateVersionSummarize = createSafeRootHandler(
     orgAIConfig,
     managedAIResidency,
   }) {
+    if (orgAIConfigStatus === ORG_AI_CONFIG_STATUS.unreadable) {
+      return Result.err(storedAIConfigUnreadableError());
+    }
+
     const organizationId = session.activeOrganizationId;
 
     const sources = yield* Result.await(
@@ -85,6 +99,7 @@ const templateVersionSummarize = createSafeRootHandler(
 
     const summary = yield* Result.await(
       summarizeVersionChange({
+        admission: configuredModelAdmission({ modelAdmission }),
         prevText: sources.prevText,
         currentText: sources.currentText,
         feature: "templates.version_summary",

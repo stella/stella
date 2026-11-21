@@ -3,11 +3,16 @@ import { sql } from "drizzle-orm";
 import {
   OFFICE_EVIDENCE_FORMATS,
   OFFICE_EVIDENCE_LIMITS,
-  OFFICE_EVIDENCE_STATUSES,
   OFFICE_EVIDENCE_STATUS,
+  OFFICE_EVIDENCE_STATUSES,
   OFFICE_EVIDENCE_UNAVAILABLE_CODES,
 } from "@/api/lib/files/office-evidence-domain";
 
+import {
+  entityFeatureGateChecks,
+  entityFeatureGateColumns,
+  entityFeatureWorkspaceGateColumns,
+} from "../entity-feature-gate-columns";
 import {
   bytea,
   organization,
@@ -32,6 +37,8 @@ const unavailableStatusSql = sql.raw(`'${OFFICE_EVIDENCE_STATUS.unavailable}'`);
 export const officeFileEvidence = p.pgTable(
   "office_file_evidence",
   {
+    ...entityFeatureGateColumns(),
+    ...entityFeatureWorkspaceGateColumns(),
     organizationId: safeOrganizationId("organization_id")
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
@@ -61,6 +68,7 @@ export const officeFileEvidence = p.pgTable(
       .$onUpdate(() => new Date()),
   },
   (table) => [
+    ...entityFeatureGateChecks(table),
     p
       .uniqueIndex("office_file_evidence_source_uidx")
       .on(
@@ -158,6 +166,16 @@ export const officeFileEvidence = p.pgTable(
         AND ${table.errorCode} IN (${unavailableCodeSql})
       )`,
     ),
-    ...wsOrganizationPolicies("office_file_evidence"),
+    ...wsOrganizationPolicies("office_file_evidence", {
+      columns: table,
+      references: new Map([
+        [
+          table.entityVersionId,
+          { target: "entity_versions", kind: "owned-content" },
+        ],
+        [table.entityId, { target: "entities", kind: "owned-content" }],
+        [table.fieldId, { target: "fields", kind: "owned-content" }],
+      ]),
+    }),
   ],
 );

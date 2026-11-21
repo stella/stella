@@ -4,8 +4,10 @@ export const PUBLIC_LAW_SHARED_QUERY = {
   caseLawCorpusIndexRehydration: "case-law.corpus-index-rehydration",
   caseLawCorpusStatus: "case-law.corpus-status",
   caseLawCourtActivity: "case-law.court-activity",
+  caseLawCourtCount: "case-law.court-count",
   caseLawCourtWeights: "case-law.court-weights",
   caseLawCoverageArrivals: "case-law.coverage-arrivals",
+  caseLawCoverageSummary: "case-law.coverage-summary",
   caseLawCoverageSources: "case-law.coverage-sources",
   caseLawDecisionRead: "case-law.decision-read",
   caseLawDecisionTextPresence: "case-law.decision-text-presence",
@@ -18,6 +20,7 @@ export const PUBLIC_LAW_SHARED_QUERY = {
   caseLawSearchFacet: "case-law.search-facet",
   caseLawSearchHits: "case-law.search-hits",
   caseLawSearchTotal: "case-law.search-total",
+  caseLawSourceHealth: "case-law.source-health",
   legislationNonRedistributableSources:
     "legislation.non-redistributable-sources",
   legislationSearchHits: "legislation.search-hits",

@@ -1,9 +1,15 @@
+import { panic } from "better-result";
 import { beforeEach, describe, expect, mock, test } from "bun:test";
+
+import { MCP_CAPABILITY_EXECUTORS } from "@stll/api-contract/mcp-capability-executors";
 
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
-import type { McpRequestContext } from "@/api/mcp/context";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
+import { authorizedMcpContextForTest } from "@/api/tests/helpers/authorized-mcp-context";
+import { repositoryCapabilityCatalog } from "@/api/tests/helpers/repository-capability-catalog";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import { enrolledTimeBillingSnapshot } from "@/api/tests/helpers/time-billing-enrolment";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 
 /**
@@ -14,9 +20,10 @@ import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
  *
  *  - Static curated tools (`handleMcpToolCall` -> per-tool arg parsing): Valibot
  *    `v.strictObject` schemas wrapped in `nullAsAbsent`.
- *  - The capability invoke path (`executeInvoke` -> `validatePart`): the
- *    Elysia-parity TypeBox chain Default -> Convert -> Clean -> Check over the
- *    live handler config schemas.
+ *  - The capability invoke path (`executeInvoke` -> `validatePart`): the agent
+ *    boundary repairs the input against the advertised JSON Schema rendering
+ *    (`normalizeInputAtBoundary`), then the live route's own valibot schema
+ *    decodes it exactly as it decodes a request.
  *
  * One rule, pinned identically on both:
  *  - null on a PLAIN optional field (no null in its type) is ABSENCE. The
@@ -25,7 +32,7 @@ import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
  *    client must send every property a schema declares, so reading its null as
  *    a value would make those surfaces uncallable.
  *  - null on a NULLABLE field (declared `type: ["string","null"]` /
- *    `v.optional(v.nullable(...))` / a TypeBox null-union, the "pass null to
+ *    `v.optional(v.nullable(...))`, the "pass null to
  *    clear" convention) is ACCEPTED and passes through as a real null.
  *  - null never reaches a handler as the value of a plain optional field.
  *
@@ -34,7 +41,7 @@ import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
  * handled exactly as any other value under that key.
  */
 
-const emptyScopedDb = asTestRaw<McpRequestContext["scopedDb"]>(
+const emptyScopedDb = asTestRaw<AuthorizedMcpRequestContext["scopedDb"]>(
   async (run: (tx: unknown) => unknown) => {
     const builder = {
       select: () => builder,
@@ -55,11 +62,15 @@ const emptyScopedDb = asTestRaw<McpRequestContext["scopedDb"]>(
 
 const noopRecorder = asTestRaw<AuditRecorder>(mock(async () => undefined));
 
-const createContext = (): McpRequestContext => {
+const createContext = (): AuthorizedMcpRequestContext => {
   const workspaceIds = ["ws_1"];
   const set = new Set(workspaceIds);
   const safeDb = toSafeDbMock(emptyScopedDb);
-  return {
+  return authorizedMcpContextForTest({
+    featureAccessSnapshot: enrolledTimeBillingSnapshot({
+      organizationId: "org_1",
+      userId: "user_1",
+    }),
     accessibleWorkspaceIds: workspaceIds.map((id) => toSafeId<"workspace">(id)),
     accessibleWorkspaceIdSet: set,
     accessibleWorkspaceStatusById: new Map(
@@ -90,7 +101,7 @@ const createContext = (): McpRequestContext => {
     testDependencies: { loadOrgSettingsForAuth: loadOrgSettingsMock },
     userId: toSafeId<"user">("user_1"),
     userEmail: "standard@example.test",
-  };
+  });
 };
 
 const loadOrgSettingsMock = mock(async () => ({
@@ -100,11 +111,9 @@ const loadOrgSettingsMock = mock(async () => ({
   promptCachingEnabled: false,
 }));
 const { handleMcpToolCall } = await import("@/api/mcp/tools");
-const { readCapabilityCatalog } =
-  await import("@stll/cli/capability-catalog-data");
 const { parseCapabilityCatalog } =
   await import("../../../../packages/cli/src/capability-catalog-load");
-const capabilityCatalog = parseCapabilityCatalog(readCapabilityCatalog());
+const capabilityCatalog = parseCapabilityCatalog(repositoryCapabilityCatalog);
 if (capabilityCatalog === null) {
   throw new TypeError("Invalid capability catalog");
 }
@@ -177,11 +186,17 @@ const invokeValidateOnly = async (
 ) =>
   await handleMcpToolCall({
     args: { capability, input, validate_only: true },
+    mode: "advanced",
     context: createContext(),
-    toolName: "invoke_capability",
+    toolName:
+      MCP_CAPABILITY_EXECUTORS[
+        capabilityCatalog.find((entry) => entry.id === capability)?.access ??
+          panic("Test capability is not registered")
+      ],
   });
 
 beforeEach(() => {
+  loadOrgSettingsMock.mockClear();
   loadOrgSettingsMock.mockClear();
 });
 
@@ -275,13 +290,12 @@ describe("static tools accept explicit null on nullable ('pass null to clear') f
   });
 });
 
-// --- Path 2: capability invoke path (TypeBox Default->Convert->Clean->Check) --
+// --- Path 2: capability invoke path (advertised repair, then the route schema) --
 
-describe("invoke_capability reads explicit null on plain optional fields as omission", () => {
+describe("capability executors read explicit null on plain optional fields as omission", () => {
   // A contact body with everything the schema requires, so each case below
   // differs from its omitted twin in exactly the one null under test.
   const contact = {
-    id: "0d0d3b3c-3a55-4f9d-9d3f-2c9b1c9a8f10",
     type: "person",
     displayName: "Ada Lovelace",
   };
@@ -386,9 +400,10 @@ describe("invoke_capability reads explicit null on plain optional fields as omis
   });
 });
 
-describe("invoke_capability accepts explicit null on nullable fields", () => {
-  // TypeBox null-union fields (catalog `nullable: true`) accept null: Check
-  // passes and validate_only reports valid, with the null carried through.
+describe("capability executors accept explicit null on nullable fields", () => {
+  // Nullable fields (`v.nullable`, a null type in the advertised schema) accept
+  // null: the route schema passes it and validate_only reports valid, with the
+  // null carried through.
   const cases: {
     label: string;
     capability: string;

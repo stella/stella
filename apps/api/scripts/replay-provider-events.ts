@@ -1,5 +1,7 @@
 import { Result, TaggedError } from "better-result";
 
+import { printError } from "@stll/errors";
+
 import type { MaintenanceDb } from "@/api/lib/db/maintenance-db";
 
 import { parseReplayProviderEventsArguments } from "./replay-provider-events-arguments";
@@ -22,7 +24,7 @@ if (process.argv.slice(2).includes("--help")) {
 
 const parsed = parseReplayProviderEventsArguments(process.argv.slice(2));
 if (Result.isError(parsed)) {
-  process.stderr.write(`${parsed.error.message}\n`);
+  printError(parsed.error);
   process.exit(1);
 }
 
@@ -32,7 +34,7 @@ const identity = await resolveReplayPerformer({
   executionEnvironment: process.env["AWS_EXECUTION_ENV"],
 });
 if (Result.isError(identity)) {
-  process.stderr.write(`${identity.error.message}\n`);
+  printError(identity.error);
   process.exit(1);
 }
 const performer = identity.value;
@@ -80,7 +82,7 @@ const reportResult = await Result.tryPromise({
     }),
 });
 if (Result.isError(reportResult)) {
-  process.stderr.write(`${reportResult.error.message}\n`);
+  printError(reportResult.error);
   process.exit(1);
 }
 const report = reportResult.value;

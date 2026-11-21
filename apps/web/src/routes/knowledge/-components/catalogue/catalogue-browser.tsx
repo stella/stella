@@ -11,9 +11,9 @@ import {
   ChevronDownIcon,
   FileDownIcon,
   GraduationCapIcon,
-  LoaderIcon,
   PlusIcon,
 } from "@stll/ui/icons";
+import { Loader } from "@stll/ui/loader";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "@stll/ui/menu";
 import { stellaToast } from "@stll/ui/toast";
 
@@ -21,6 +21,7 @@ import {
   CatalogueRow,
   type CatalogueRowDisplay,
 } from "@/components/catalogue/catalogue-row";
+import { nativeToolLabelKey } from "@/components/catalogue/native-tool-label";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { useInspectorView } from "@/components/inspector/use-inspector-view";
 import { McpIcon } from "@/components/mcp-icon";
@@ -29,8 +30,8 @@ import {
   memberKnowledgeSource,
 } from "@/features/knowledge/member/member-knowledge";
 import {
-  ToolsCatalogueView,
   type ToolsCatalogueKind,
+  ToolsCatalogueView,
 } from "@/features/knowledge/views/tools/tools-catalogue-view";
 import { useMountEffect } from "@/hooks/use-effect";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
@@ -38,13 +39,13 @@ import { detached } from "@/lib/detached";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import type { PracticeJurisdiction } from "@/lib/jurisdictions";
 import {
-  isEffectivelyInstalled,
   type CatalogueDisplayEntry,
+  isEffectivelyInstalled,
 } from "@/lib/knowledge/catalogue-types";
 import { useChatUnavailableSkills } from "@/lib/prompts/use-chat-unavailable-skills";
 import {
-  BlueprintGallerySheet,
   type BlueprintCreatedSkill,
+  BlueprintGallerySheet,
 } from "@/routes/knowledge/-components/blueprint-gallery-sheet";
 import { ImportSkillDialog } from "@/routes/knowledge/-components/import-skill-dialog";
 
@@ -97,11 +98,13 @@ const toRowDisplay = (entry: CatalogueDisplayEntry): CatalogueRowDisplay => ({
   icon: entry.icon,
   iconUrl: entry.iconUrl,
   jurisdictions: entry.jurisdictions,
+  invocation: entry.invocation,
+  binding: entry.binding,
 });
 
 /** The organization's tools: the shared catalogue view with the member's
  *  install state, detail inspector, and custom-tool tools in its slots. */
-export const CatalogueBrowser = ({
+const CatalogueBrowser = ({
   organizationId,
   initialKind,
   initialSlug,
@@ -140,10 +143,11 @@ export const CatalogueBrowser = ({
       inspector.close(tabId);
       return;
     }
+    const labelKey = nativeToolLabelKey({ slug: entry.slug, kind: entry.kind });
     inspector.open({
       type: "tool-detail",
       id: tabId,
-      label: entry.displayName,
+      label: labelKey ? t(labelKey) : entry.displayName,
       payload: getToolDetailPayload(entry, organizationId),
       ownerRouteId: "/knowledge/tools",
     });
@@ -170,8 +174,8 @@ export const CatalogueBrowser = ({
     onSkillSheetChanged();
     detached(
       navigate({
-        to: "/knowledge/tools/$entry",
-        params: { entry: skill.id },
+        to: "/knowledge/tools/skills/$skillId",
+        params: { skillId: skill.id },
       }),
       "catalogue-browser.navigate",
     );
@@ -183,8 +187,8 @@ export const CatalogueBrowser = ({
     }
     detached(
       navigate({
-        to: "/knowledge/tools/$entry",
-        params: { entry: entry.installedSkillId },
+        to: "/knowledge/tools/skills/$skillId",
+        params: { skillId: entry.installedSkillId },
       }),
       "catalogue-browser.navigate",
     );
@@ -238,7 +242,7 @@ export const CatalogueBrowser = ({
                         onClick={() => setImportSkillOpen(true)}
                       >
                         <FileDownIcon className="size-4" />
-                        {t("knowledge.agentSkills.importSkill")}
+                        {t("knowledge.agentSkills.importTitle")}
                       </MenuItem>
                     );
                   default: {
@@ -406,6 +410,7 @@ const CatalogueEntryRow = ({
     actions = (
       <Button
         disabled={install.isPending}
+        disabledReason={t("common.installing")}
         onClick={(e) => {
           e.stopPropagation();
           onInstall();
@@ -414,7 +419,9 @@ const CatalogueEntryRow = ({
         type="button"
         variant="outline"
       >
-        {install.isPending && <LoaderIcon className="size-3.5 animate-spin" />}
+        {install.isPending && (
+          <Loader className="size-3.5" label={t("common.loading")} size="sm" />
+        )}
         {t("common.add")}
       </Button>
     );
@@ -422,6 +429,7 @@ const CatalogueEntryRow = ({
     actions = (
       <Button
         disabled={uninstall.isPending}
+        disabledReason={t("common.removing")}
         onClick={(e) => {
           e.stopPropagation();
           requestRemoval();
@@ -431,7 +439,7 @@ const CatalogueEntryRow = ({
         variant="destructive-outline"
       >
         {uninstall.isPending && (
-          <LoaderIcon className="size-3.5 animate-spin" />
+          <Loader className="size-3.5" label={t("common.loading")} size="sm" />
         )}
         {t("common.remove")}
       </Button>

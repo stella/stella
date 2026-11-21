@@ -1,5 +1,10 @@
 import { Result, TaggedError } from "better-result";
 
+import {
+  WORKSPACE_STATUS,
+  workspaceAcceptsWrites,
+} from "@stll/api-contract/workspace-status";
+
 import type { documentProcessingRuns, workspaces } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -10,7 +15,6 @@ import { PDF_MIME_TYPE } from "@/api/mime-types";
 export const SEARCH_INDEX_FAILURE_CODE = "search_index_failed";
 export const SEARCHABLE_PDF_FAILURE_CODE = "searchable_pdf_failed";
 export const SEARCH_INDEX_ATTEMPT_TIMEOUT_MS = 30_000;
-export const AUTOMATIC_OCR_MAX_ATTEMPTS = 5;
 
 export type CurrentDocumentSource = {
   content: FieldContent;
@@ -149,19 +153,6 @@ export const shouldPreserveCurrentProjection = (
   requestSource: (typeof documentProcessingRuns.$inferSelect)["requestSource"],
 ): boolean => requestSource !== "manual";
 
-export const shouldFailStaleAutomaticOcrRun = ({
-  attemptCount,
-  errorCode,
-  requestSource,
-}: {
-  attemptCount: number;
-  errorCode: string | null;
-  requestSource: (typeof documentProcessingRuns.$inferSelect)["requestSource"];
-}): boolean =>
-  requestSource !== "manual" &&
-  errorCode !== SEARCH_INDEX_FAILURE_CODE &&
-  attemptCount >= AUTOMATIC_OCR_MAX_ATTEMPTS;
-
 export const classifyOcrProjectionSource = ({
   run,
   source,
@@ -176,7 +167,7 @@ export const classifyOcrProjectionSource = ({
   source: CurrentDocumentSource | null;
   workspaceStatus: (typeof workspaces.$inferSelect)["status"] | undefined;
 }): "current" | "source_superseded" | "workspace_unavailable" => {
-  if (workspaceStatus !== "active") {
+  if (!workspaceAcceptsWrites(workspaceStatus)) {
     return "workspace_unavailable";
   }
   return isCurrentOcrSource({ run, source }) ? "current" : "source_superseded";
@@ -189,10 +180,13 @@ export const classifyOcrWorkspaceDispatch = ({
   requestSource: (typeof documentProcessingRuns.$inferSelect)["requestSource"];
   workspaceStatus: (typeof workspaces.$inferSelect)["status"] | undefined;
 }): "available" | "deferred" | "workspace_unavailable" => {
-  if (workspaceStatus === "active") {
+  if (workspaceAcceptsWrites(workspaceStatus)) {
     return "available";
   }
-  if (workspaceStatus === "deleting" && requestSource === "manual") {
+  if (
+    workspaceStatus === WORKSPACE_STATUS.deleting &&
+    requestSource === "manual"
+  ) {
     return "deferred";
   }
   return "workspace_unavailable";

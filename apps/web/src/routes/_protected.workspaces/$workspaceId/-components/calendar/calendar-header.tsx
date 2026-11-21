@@ -6,7 +6,8 @@ import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { ChevronLeftIcon, ChevronRightIcon } from "@stll/ui/icons";
 import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
 
-import { useLocale } from "@/i18n/formatting-context";
+import { useFormattingLocale } from "@/i18n/formatting-context";
+import { CALENDAR_HEADER_ROW_CLASS } from "@/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-view.pending";
 
 import { getMonthLabels } from "./calendar-utils";
 
@@ -30,12 +31,12 @@ export const CalendarHeader = ({
   onSetViewDate,
 }: CalendarHeaderProps) => {
   const t = useTranslations();
-  const locale = useLocale();
+  const locale = useFormattingLocale();
 
   const monthPickerMonths = getMonthLabels(locale, year, "short");
 
   return (
-    <div className="flex min-w-0 items-center gap-2 px-4 py-2">
+    <div className={CALENDAR_HEADER_ROW_CLASS}>
       <Button onClick={onNavigateToday} size="sm" variant="outline">
         {t("common.today")}
       </Button>
@@ -56,15 +57,8 @@ export const CalendarHeader = ({
         <DirectionalIcon icon={ChevronRightIcon} />
       </Button>
       <Popover>
-        <PopoverTrigger
-          render={
-            <button
-              className="text-sm font-medium hover:underline"
-              type="button"
-            />
-          }
-        >
-          {headerLabel}
+        <PopoverTrigger render={<Button size="inline" variant="link" />}>
+          <span className="text-sm font-medium">{headerLabel}</span>
         </PopoverTrigger>
         <PopoverPopup padding="sm" side="bottom">
           <div className="flex items-center justify-between pb-1">

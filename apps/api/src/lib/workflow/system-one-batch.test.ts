@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import type { FolioAIBlock } from "@stll/folio-core/server";
 
 import { toSafeId } from "@/api/lib/branded-types";
+import { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
 import type { AnswerOutcome } from "@/api/lib/workflow/decisions/answer-questions";
 import {
   decodeSystemOneAnswers,
@@ -35,6 +36,7 @@ const propertyId = (value: string) => toSafeId<"property">(value);
 const block = (id: string, text: string): FolioAIBlock => ({
   id,
   kind: "paragraph",
+  statedNumbering: { kind: "inherit" },
   text,
 });
 
@@ -64,6 +66,7 @@ const property = (
 ): AIBatchProperty => ({
   id: propertyId(id),
   status: "stale",
+  answerShape: "value",
   content,
   dependencies: [],
   tool: { version: 1, type: "ai-model", prompt: `What is ${id}?` },
@@ -85,6 +88,8 @@ const answered = (
   confidence: number,
 ): AnswerOutcome => ({
   state: "answered",
+  source: "decision-model",
+  model: "jev-1.13.0",
   answer,
   probability: 0.9,
   confidence,
@@ -153,8 +158,16 @@ describe("sourcesFromPreparedFiles", () => {
 
   test("text inputs are sources without a locator", async () => {
     const textInputs: TextInput[] = [
-      { propertyId: propertyId("col-party"), value: " Acme s.r.o. " },
-      { propertyId: propertyId("col-empty"), value: "   " },
+      {
+        propertyId: propertyId("col-party"),
+        value: " Acme s.r.o. ",
+        valueKind: "content",
+      },
+      {
+        propertyId: propertyId("col-empty"),
+        value: "   ",
+        valueKind: "content",
+      },
     ];
 
     const { sources, locators } = await sourcesFromPreparedFiles(
@@ -198,7 +211,11 @@ describe("sourcesFromPreparedFiles", () => {
   test("files come before text inputs, in prompt order", async () => {
     const files: PreparedInputFile[] = [docxFile, extractedTextFile];
     const { sources } = await sourcesFromPreparedFiles(files, [
-      { propertyId: propertyId("col-party"), value: "Acme s.r.o." },
+      {
+        propertyId: propertyId("col-party"),
+        value: "Acme s.r.o.",
+        valueKind: "content",
+      },
     ]);
 
     expect(sources.map((source) => source.id)).toEqual([
@@ -229,6 +246,20 @@ describe("splitPropertiesForSystemOne", () => {
       textProperty.id,
     ]);
   });
+
+  test.each(["clause-summary", "clause-quote"] as const)(
+    "a %s answer always goes through generation",
+    (answerShape) => {
+      const properties = [singleSelect, dateProperty, intProperty].map(
+        (entry) => ({ ...entry, answerShape }),
+      );
+
+      const split = splitPropertiesForSystemOne(properties);
+
+      expect(split.systemOne).toEqual([]);
+      expect(split.generative).toEqual(properties);
+    },
+  );
 });
 
 describe("outputFromSystemOneOutcomes", () => {
@@ -244,7 +275,7 @@ describe("outputFromSystemOneOutcomes", () => {
         [singleSelect.id, answered("Purchase agreement", "F0#b1", 0.9)],
       ]),
       locators,
-    });
+    }).unwrap();
 
     expect(fallbackPropertyIds).toEqual([]);
     const entry = output[singleSelect.id];
@@ -302,7 +333,7 @@ describe("outputFromSystemOneOutcomes", () => {
         [singleSelect.id, answered("Purchase agreement", "F1#1", 0.9)],
       ]),
       locators,
-    });
+    }).unwrap();
 
     expect(output[singleSelect.id]).toEqual({
       answer: "Purchase agreement",
@@ -310,21 +341,58 @@ describe("outputFromSystemOneOutcomes", () => {
     });
   });
 
-  test("an undecided outcome falls back to the generative model", () => {
-    const { output, fallbackPropertyIds } = outputFromSystemOneOutcomes({
-      properties: [singleSelect, dateProperty],
-      outcomes: new Map<string, AnswerOutcome>([
-        [singleSelect.id, { state: "undecided", reason: "below-floor" }],
-      ]),
-      locators,
-    });
+  test("a genuine refusal is null and only an unplanned property continues", () => {
+    const { output, fallbackPropertyIds, refusedPropertyIds } =
+      outputFromSystemOneOutcomes({
+        properties: [singleSelect, dateProperty],
+        outcomes: new Map<string, AnswerOutcome>([
+          [
+            singleSelect.id,
+            {
+              state: "undecided",
+              reason: "refusal",
+              source: "generative",
+              model: "test-generative",
+            },
+          ],
+        ]),
+        locators,
+      }).unwrap();
 
     // The unplanned date question has no outcome at all, and falls back too.
-    expect(fallbackPropertyIds).toEqual([singleSelect.id, dateProperty.id]);
-    expect(output).toEqual({});
+    expect(fallbackPropertyIds).toEqual([dateProperty.id]);
+    expect(refusedPropertyIds).toEqual([singleSelect.id]);
+    expect(output).toEqual({
+      [singleSelect.id]: { answer: null, justification: [] },
+    });
   });
 
-  test("with no decision model the whole batch is the generative model's", async () => {
+  test.each(["failed", "no-backend", "below-floor"] as const)(
+    "an unresolved %s decision propagates an integration failure",
+    (reason) => {
+      const result = outputFromSystemOneOutcomes({
+        properties: [singleSelect],
+        locators,
+        outcomes: new Map<string, AnswerOutcome>([
+          [
+            singleSelect.id,
+            { state: "undecided", reason, source: "generative", model: null },
+          ],
+        ]),
+      });
+      expect(result.isErr()).toBe(true);
+      if (result.isOk()) {
+        throw new Error("Expected the failed typed decision to propagate");
+      }
+      expect(WorkflowIntegrationError.is(result.error)).toBe(true);
+      expect(result.error.cause).toMatchObject({
+        propertyId: singleSelect.id,
+        reason,
+      });
+    },
+  );
+
+  test("with no decision model shared generation settles the planned batch", async () => {
     const { sources, locators: batchLocators } = await sourcesFromPreparedFiles(
       [docxFile],
       [],
@@ -343,6 +411,16 @@ describe("outputFromSystemOneOutcomes", () => {
       orgAIConfig: null,
       state: plan.state,
       questions: plan.questions,
+      generator: async ({ questions: openQuestions }) => ({
+        model: "test-generative",
+        output: {
+          answers: Object.keys(openQuestions).map((id) => ({
+            id,
+            answer: { type: "refusal" },
+            evidence: null,
+          })),
+        },
+      }),
       client: null,
     });
 
@@ -350,10 +428,13 @@ describe("outputFromSystemOneOutcomes", () => {
       properties,
       outcomes: decodeSystemOneAnswers({ plan, questions, decisions }),
       locators: batchLocators,
-    });
+    }).unwrap();
 
-    expect(output).toEqual({});
-    expect(fallbackPropertyIds).toEqual([singleSelect.id, dateProperty.id]);
+    expect(output).toEqual({
+      [singleSelect.id]: { answer: null, justification: [] },
+      [dateProperty.id]: { answer: null, justification: [] },
+    });
+    expect(fallbackPropertyIds).toEqual([]);
   });
 
   test("not stated above the floor is a null answer, not a fallback", () => {
@@ -364,13 +445,15 @@ describe("outputFromSystemOneOutcomes", () => {
           dateProperty.id,
           {
             state: "not_stated",
+            source: "decision-model",
+            model: "jev-1.13.0",
             confidence: 0.8,
             rationale: "Jev found no answer in the text (80% confidence).",
           },
         ],
       ]),
       locators,
-    });
+    }).unwrap();
 
     expect(fallbackPropertyIds).toEqual([]);
     expect(output[dateProperty.id]).toEqual({

@@ -10,7 +10,11 @@ import { chat as runChat } from "@tanstack/ai/chat";
 // Accepted: an unrelated export of the owned package's subpath.
 // expect-clean: confine-owner/confine-owner
 import { toolDefinition } from "@tanstack/ai/tools";
+// oxlint-disable-next-line confine-owner/confine-owner -- fixture proves the worker primitive is confined even through an import alias
+import { Queue, Worker as RawQueueWorker } from "bullmq";
 
+// oxlint-disable-next-line confine-owner/confine-owner -- fixture proves a runtime gate cannot start from the package defaults instead of the environment
+import { defaultConfig as loadGateDefaults } from "@stll/db-load-gate/health";
 // oxlint-disable-next-line confine-owner/confine-owner -- fixture proves an aliased import of an owned binding is rejected
 import { compileLegalSourceToDocx as compile } from "@stll/docx-core";
 // oxlint-disable-next-line confine-owner/confine-owner -- fixture proves a named import of an owned binding is rejected
@@ -21,6 +25,7 @@ import * as folio from "@stll/folio-core/server";
 // expect-clean: confine-owner/confine-owner
 import { paragraph } from "@stll/folio-core/server";
 
+import { auditLogs } from "@/api/db/schema";
 // oxlint-disable-next-line confine-owner/confine-owner -- fixture proves a static import of an owned module is rejected
 import { createRedisClient } from "@/api/lib/redis-client";
 // oxlint-disable-next-line confine-owner/confine-owner -- fixture proves a type-only import still opens the owned surface and is rejected
@@ -34,6 +39,11 @@ import { createRedisClient as relativeClient } from "../../apps/api/src/lib/redi
 import { createRootRunActor } from "../../apps/api/src/lib/root-scoped-db.ts";
 // oxlint-disable-next-line confine-owner/confine-owner -- fixture proves a deep relative import of an owned package source file is rejected
 import { countryCodeFromAlpha3 } from "../../packages/country-codes/src/alpha3.ts";
+
+// oxlint-disable-next-line confine-owner/confine-owner -- fixture proves a raw audit change selection is confined to its projection owner
+export const rawAuditSelection = { changes: auditLogs.changes };
+// expect-clean: confine-owner/confine-owner
+export const auditIdentitySelection = { id: auditLogs.id };
 
 // oxlint-disable-next-line confine-owner/confine-owner -- fixture proves a facade re-exporting an owned binding is rejected
 export { createDocx as serialize } from "@stll/folio-core/server";
@@ -120,6 +130,12 @@ export const readSiblingMember = async () =>
   // expect-clean: confine-owner/confine-owner
   (await import("@stll/folio-core/server")).heading;
 
+// Accepted: the health decisions stay open to every module; only the package
+// defaults are confined.
+export const readHealthDecision = async () =>
+  // expect-clean: confine-owner/confine-owner
+  (await import("@stll/db-load-gate/health")).decideStart;
+
 export const copyDirectly = async (text: string) => {
   // oxlint-disable-next-line confine-owner/confine-owner -- fixture proves a direct clipboard write is rejected
   await navigator.clipboard.writeText(text);
@@ -144,10 +160,13 @@ void createDocx;
 void compile;
 void folio;
 void paragraph;
+void RawQueueWorker;
+void Queue;
 void runChat;
 void toolDefinition;
 void relativeClient;
 void countryCodeFromAlpha3;
+void loadGateDefaults;
 void createRootSafeDb;
 void createRootRunActor;
 type _Connection = typeof createBullMqConnection;

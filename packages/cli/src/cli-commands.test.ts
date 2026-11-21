@@ -1,18 +1,63 @@
+import { panic } from "better-result";
 // End-to-end command tests (spec 051 S6): each MVP command is driven through the
 // real stricli-built CLI (`bun cli.ts ...`) against an in-process mock MCP
 // endpoint. `Bun.spawn` (async) is used, not `spawnSync`, so the in-process
 // `Bun.serve` can answer requests concurrently. No real network origin is hit.
-
 import { afterEach, describe, expect, setDefaultTimeout, test } from "bun:test";
-import { createHash } from "node:crypto";
-import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { respondToCompatibilityDiscovery } from "../tests/compatibility-discovery.js";
 import { respondToMcpLifecycle } from "../tests/mcp-test-lifecycle.js";
+import { readCapabilityCatalog } from "./capability-catalog-data.js";
+import { parseCapabilityCatalog } from "./capability-catalog-load.js";
+import { generatedToolAnnotations } from "./generated/tool-annotations.js";
 import { EXIT_CODES } from "./mcp-constants.js";
+import { validateFetchedToolsList } from "./registry-trust.js";
+
+const repositoryCapabilityCatalog = readCapabilityCatalog();
 
 const CLI_ENTRYPOINT = path.join(import.meta.dirname, "cli.ts");
+const FETCH_PRELOAD = path.join(
+  import.meta.dirname,
+  "../tests/cli-command-fetch.ts",
+);
+const registry = validateFetchedToolsList(
+  await Bun.file(
+    new URL("generated/registry-snapshot.json", import.meta.url),
+  ).text(),
+);
+if (!registry.ok) {
+  panic(`Invalid committed command-test registry: ${registry.violation}`);
+}
+const catalog = parseCapabilityCatalog(repositoryCapabilityCatalog);
+if (catalog === null) {
+  panic("Invalid committed command-test capability catalog");
+}
+// Command-behaviour tests exercise an admitted principal. Build its discovery
+// response from the shipped contract so new feature-owned commands cannot drift.
+const registryResult = {
+  tools: registry.listings.map((listing) => {
+    const featureId = generatedToolAnnotations[listing.name]?.featureId;
+    return {
+      ...listing,
+      ...(featureId === undefined ? {} : { _meta: { featureId } }),
+    };
+  }),
+  _meta: {
+    featureAccess: {
+      tools: registry.listings.flatMap((listing) =>
+        generatedToolAnnotations[listing.name]?.featureId === undefined
+          ? []
+          : [listing.name],
+      ),
+      capabilities: catalog.flatMap((entry) =>
+        entry.featureId === undefined ? [] : [entry.id],
+      ),
+    },
+  },
+};
 
 // These tests start a fresh Bun process for each real CLI invocation. Startup
 // can exceed Bun's 5-second default while the repository suite is contended.
@@ -47,11 +92,24 @@ type MockHandler = (request: JsonRpcRequest, callIndex: number) => MockResponse;
 
 type PutHandler = (request: Request) => Response | Promise<Response>;
 
-const startMockServer = (handler: MockHandler, putHandler?: PutHandler) => {
+type StartMockServerOptions = {
+  putHandler?: PutHandler;
+  deploymentEvidence?: "available" | "unknown";
+};
+
+const startMockServer = (
+  handler: MockHandler,
+  { putHandler, deploymentEvidence = "available" }: StartMockServerOptions = {},
+) => {
   const requests: JsonRpcRequest[] = [];
+  const discoveries: JsonRpcRequest[] = [];
   const server = Bun.serve({
     port: 0,
     async fetch(req) {
+      const discovery = respondToCompatibilityDiscovery(req);
+      if (discovery !== null) {
+        return discovery;
+      }
       if (req.method === "GET") {
         return new Response(null, { status: 405 });
       }
@@ -64,6 +122,21 @@ const startMockServer = (handler: MockHandler, putHandler?: PutHandler) => {
       const lifecycle = respondToMcpLifecycle(body);
       if (lifecycle !== null) {
         return lifecycle;
+      }
+      if (body.method === "tools/list") {
+        discoveries.push(body);
+        return Response.json(
+          { jsonrpc: "2.0", id: 1, result: registryResult },
+          {
+            headers:
+              deploymentEvidence === "available"
+                ? {
+                    "x-stella-feature-omitted-tools": "",
+                    "x-stella-feature-omitted-capabilities": "",
+                  }
+                : {},
+          },
+        );
       }
       const index = requests.length;
       requests.push(body);
@@ -101,9 +174,10 @@ const startMockServer = (handler: MockHandler, putHandler?: PutHandler) => {
   });
   return {
     requests,
+    discoveries,
     url: server.url.origin,
-    stop: () => {
-      void server.stop(true);
+    stop: async () => {
+      await server.stop(true);
     },
   };
 };
@@ -171,10 +245,12 @@ const runCli = async ({
   }
 
   const proc = Bun.spawn({
-    cmd: ["bun", CLI_ENTRYPOINT, ...args],
+    cmd: ["bun", "--preload", FETCH_PRELOAD, CLI_ENTRYPOINT, ...args],
     env: {
       ...process.env,
       XDG_CONFIG_HOME: configHome,
+      XDG_CACHE_HOME: path.join(configHome, "cache"),
+      STELLA_API_KEY: undefined,
       STELLA_SERVER_URL: serverUrlEnv ?? url,
     },
     stdin: stdin === undefined ? "ignore" : "pipe",
@@ -221,7 +297,7 @@ describe("--server (every command)", () => {
       serverUrlEnv: "http://127.0.0.1:1",
       token: READ,
     });
-    server.stop();
+    await server.stop();
 
     expect(result.exitCode).toBe(0);
     expect(result.stderr).not.toContain("--server");
@@ -236,12 +312,11 @@ describe("--server (every command)", () => {
       token: READ,
       signedIn: false,
     });
-    server.stop();
+    await server.stop();
 
-    // The mock has no compatibility contract, so the check fails — but on the
-    // resolved origin, not on stricli's "expected input for flag" usage error.
-    expect(result.stderr).toContain(server.url);
-    expect(result.stderr).not.toContain("--server");
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain(server.url);
+    expect(result.stderr).toBe("");
   });
 });
 
@@ -287,10 +362,12 @@ describe("one-command document upload", () => {
           },
         };
       },
-      async (request) => {
-        putBodies.push(await request.text());
-        putChecksums.push(request.headers.get("x-amz-checksum-sha256") ?? "");
-        return new Response(null, { status: 200 });
+      {
+        putHandler: async (request) => {
+          putBodies.push(await request.text());
+          putChecksums.push(request.headers.get("x-amz-checksum-sha256") ?? "");
+          return new Response(null, { status: 200 });
+        },
       },
     );
     putUrl = `${server.url}/presigned/upload-1`;
@@ -307,7 +384,7 @@ describe("one-command document upload", () => {
       url: server.url,
       token: DOCUMENT_UPLOAD,
     });
-    server.stop();
+    await server.stop();
 
     expect(result.exitCode).toBe(0);
     // The finalize envelope's outcome alone, shaped like every other save.
@@ -331,7 +408,9 @@ describe("one-command document upload", () => {
         name: "agreement.txt",
         mimeType: "text/plain",
         size: Buffer.byteLength("agreement body"),
-        sha256Hex: createHash("sha256").update("agreement body").digest("hex"),
+        // Independent of the CLI helper: SHA-256 of "agreement body".
+        sha256Hex:
+          "e1312950a806cda855e53f603301c78c3c23ea486e1beca337731fdba766720a",
       },
       params: { matterId: "workspace-1" },
     });
@@ -344,7 +423,7 @@ describe("one-command document upload", () => {
       url: server.url,
       token: DOCUMENT_UPLOAD,
     });
-    server.stop();
+    await server.stop();
 
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toContain("--file");
@@ -374,7 +453,7 @@ describe("one-command document upload", () => {
         }
         return { toolPayload: { message: "finalize failed" }, isError: true };
       },
-      () => new Response(null, { status: 200 }),
+      { putHandler: () => new Response(null, { status: 200 }) },
     );
     putUrl = `${server.url}/presigned/upload-1`;
 
@@ -391,7 +470,7 @@ describe("one-command document upload", () => {
       url: server.url,
       token: DOCUMENT_UPLOAD,
     });
-    server.stop();
+    await server.stop();
 
     expect(result.stderr).toContain(
       "stella capability uploads update --matter-id workspace-1 --upload-id upload-1",
@@ -425,10 +504,11 @@ describe("contact discovery", () => {
       url: server.url,
       token: READ,
     });
-    server.stop();
+    await server.stop();
 
     expect(result.exitCode).toBe(0);
-    expect(JSON.parse(result.stdout).items.at(0)?.id).toBe("contact-1");
+    const output: { items: { id: string }[] } = JSON.parse(result.stdout);
+    expect(output.items.at(0)?.id).toBe("contact-1");
     expect(result.stderr).toBe("");
   });
 });
@@ -442,7 +522,7 @@ describe("auth and scope gating (S4)", () => {
       token: READ,
       signedIn: false,
     });
-    server.stop();
+    await server.stop();
     expect(result.exitCode).toBe(3);
     expect(result.stderr).toContain("Not signed in");
     expect(server.requests).toHaveLength(0);
@@ -455,7 +535,7 @@ describe("auth and scope gating (S4)", () => {
       url: server.url,
       token: makeToken(["read"]), // lacks matters_write
     });
-    server.stop();
+    await server.stop();
     expect(result.exitCode).toBe(3);
     expect(result.stderr).toContain("stella:matters_write");
     expect(server.requests).toHaveLength(0);
@@ -472,7 +552,7 @@ describe("auth and scope gating (S4)", () => {
       // (see `resolveAccessToken`'s "Expired and unrefreshable" branch).
       expiresAt: Date.now() - 1000,
     });
-    server.stop();
+    await server.stop();
     expect(result.exitCode).toBe(3);
     expect(result.stderr).toContain("Not signed in");
     // The specific reason (the stored token expired and has no refresh
@@ -486,6 +566,52 @@ describe("auth and scope gating (S4)", () => {
 });
 
 describe("generated capability flags", () => {
+  test("personal history omitting kind sends an unfiltered request", async () => {
+    const server = startMockServer(() => ({
+      toolPayload: { items: [], nextCursor: null, limit: 20 },
+    }));
+    const result = await runCli({
+      args: ["capability", "search-history", "list", "--limit", "20", "--json"],
+      url: server.url,
+      token: READ,
+    });
+    await server.stop();
+    expect(result.exitCode).toBe(0);
+    expect(server.requests).toHaveLength(1);
+    expect(server.requests.at(0)?.params.name).toBe("read_capability");
+    expect(server.requests.at(0)?.params.arguments).toEqual({
+      capability: "search-history.list",
+      input: { query: { limit: 20 } },
+    });
+  });
+
+  test("personal history explicit kind sends only the requested filter", async () => {
+    const server = startMockServer(() => ({
+      toolPayload: { items: [], nextCursor: null, limit: 20 },
+    }));
+    const result = await runCli({
+      args: [
+        "capability",
+        "search-history",
+        "list",
+        "--limit",
+        "20",
+        "--kind",
+        "decision",
+        "--json",
+      ],
+      url: server.url,
+      token: READ,
+    });
+    await server.stop();
+    expect(result.exitCode).toBe(0);
+    expect(server.requests).toHaveLength(1);
+    expect(server.requests.at(0)?.params.arguments).toEqual({
+      capability: "search-history.list",
+      input: { query: { limit: 20, kind: "decision" } },
+    });
+  });
+
   test("a descriptive long flag can target a terse query property", async () => {
     const server = startMockServer(() => ({ toolPayload: { items: [] } }));
     const result = await runCli({
@@ -493,9 +619,9 @@ describe("generated capability flags", () => {
       url: server.url,
       token: READ,
     });
-    server.stop();
+    await server.stop();
     expect(result.exitCode).toBe(0);
-    expect(server.requests.at(0)?.params.name).toBe("invoke_capability");
+    expect(server.requests.at(0)?.params.name).toBe("read_capability");
     expect(server.requests.at(0)?.params.arguments).toEqual({
       capability: "contacts.search",
       input: { query: { q: "agreement" } },
@@ -518,7 +644,7 @@ describe("list rendering and pagination (S4)", () => {
       url: server.url,
       token: READ,
     });
-    server.stop();
+    await server.stop();
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toContain("m1");
     expect(result.stdout).toContain("Acme");
@@ -535,7 +661,7 @@ describe("list rendering and pagination (S4)", () => {
       url: server.url,
       token: READ,
     });
-    server.stop();
+    await server.stop();
     expect(result.exitCode).toBe(0);
     expect(JSON.parse(result.stdout)).toEqual({
       matters: [{ id: "m1" }],
@@ -554,12 +680,10 @@ describe("list rendering and pagination (S4)", () => {
       url: server.url,
       token: READ,
     });
-    server.stop();
+    await server.stop();
     expect(result.exitCode).toBe(0);
-    expect(JSON.parse(result.stdout).matters).toEqual([
-      { id: "m1" },
-      { id: "m2" },
-    ]);
+    const output: { matters: unknown } = JSON.parse(result.stdout);
+    expect(output.matters).toEqual([{ id: "m1" }, { id: "m2" }]);
     expect(server.requests).toHaveLength(2);
     expect(server.requests.at(1)?.params.arguments?.["cursor"]).toBe("c1");
   });
@@ -573,7 +697,7 @@ describe("list rendering and pagination (S4)", () => {
       url: server.url,
       token: READ,
     });
-    server.stop();
+    await server.stop();
     expect(result.exitCode).toBe(0);
     expect(result.stderr).toContain("--all truncated");
     expect(server.requests).toHaveLength(50);
@@ -593,9 +717,10 @@ describe("list rendering and pagination (S4)", () => {
       url: server.url,
       token: READ,
     });
-    server.stop();
+    await server.stop();
     expect(result.exitCode).toBe(0);
-    expect(JSON.parse(result.stdout).matter).toEqual({
+    const output: { matter: unknown } = JSON.parse(result.stdout);
+    expect(output.matter).toEqual({
       id: "m1",
       name: "Acme",
     });
@@ -615,7 +740,7 @@ describe("windowed text (S4)", () => {
       url: server.url,
       token: READ,
     });
-    server.stop();
+    await server.stop();
     expect(result.exitCode).toBe(0);
     expect(result.stdout.trim()).toBe("THE FULL BODY");
   });
@@ -639,9 +764,14 @@ describe("windowed text (S4)", () => {
       url: server.url,
       token: READ,
     });
-    server.stop();
+    await server.stop();
     expect(result.exitCode).toBe(0);
     expect(result.stdout.trim()).toBe("THE STATUTE BODY");
+    expect(server.requests).toHaveLength(1);
+    expect(server.requests.at(0)?.params).toEqual({
+      name: "read_statute",
+      arguments: { eli: "/eli/cz/sb/2012/89" },
+    });
   });
 
   test("--all concatenates the nested windows of a statute read", async () => {
@@ -656,12 +786,151 @@ describe("windowed text (S4)", () => {
       url: server.url,
       token: READ,
     });
-    server.stop();
+    await server.stop();
     expect(result.exitCode).toBe(0);
     expect(result.stdout.trim()).toBe("FIRST SECOND");
     expect(server.requests).toHaveLength(2);
     expect(server.requests.at(1)?.params.arguments).toMatchObject({
       cursor: "w2",
+    });
+  });
+
+  for (const format of ["json", "jsonl"] as const) {
+    for (const held of [true, false]) {
+      test(`--all ${format} preserves ${held ? "held" : "external"} legal citation links from the first window`, async () => {
+        const source = "https://publisher.example/act/89-2012";
+        const links = held
+          ? {
+              url: "https://app.example/law/cze/statutes/89-2012-sb/v/2014-01-01#par_1729",
+              source_url: source,
+            }
+          : { url: source };
+        const server = startMockServer((_body, index) => ({
+          toolPayload:
+            index === 0
+              ? {
+                  nextCursor: "w2",
+                  statute: { text: "FIRST ", truncated: true, ...links },
+                }
+              : {
+                  nextCursor: null,
+                  statute: { text: "SECOND", truncated: false },
+                },
+        }));
+        try {
+          const result = await runCli({
+            args: [
+              "legislation",
+              "read",
+              "--eli",
+              "/eli/cz/sb/2012/89",
+              "--all",
+              "--output",
+              format,
+            ],
+            url: server.url,
+            token: READ,
+          });
+          expect(result.exitCode).toBe(0);
+          expect(JSON.parse(result.stdout)).toEqual({
+            text: "FIRST SECOND",
+            ...links,
+          });
+          expect(server.requests).toHaveLength(2);
+          expect(server.requests.at(1)?.params.arguments).toMatchObject({
+            cursor: "w2",
+          });
+        } finally {
+          await server.stop();
+        }
+      });
+    }
+  }
+  test("a read the server states has no text exits 0 with a typed field, not empty text", async () => {
+    const server = startMockServer(() => ({
+      toolPayload: {
+        nextCursor: null,
+        statute: {
+          eli: "/eli/cz/sb/2012/89",
+          text: null,
+          textWithheldReason: "The source licence does not permit it.",
+        },
+      },
+    }));
+    const result = await runCli({
+      args: ["legislation", "read", "--eli", "/eli/cz/sb/2012/89", "--json"],
+      url: server.url,
+      token: READ,
+    });
+    await server.stop();
+    expect(result.exitCode).toBe(EXIT_CODES.ok);
+    expect(JSON.parse(result.stdout)).toEqual({
+      text: null,
+      textUnavailable: { reason: "no_text", textPath: "statute.text" },
+      response: {
+        nextCursor: null,
+        statute: {
+          eli: "/eli/cz/sb/2012/89",
+          text: null,
+          textWithheldReason: "The source licence does not permit it.",
+        },
+      },
+    });
+    expect(result.stderr).toContain("No text");
+  });
+
+  test("a response without the text the command reads fails loudly instead of printing empty text", async () => {
+    // A command built for one response shape reading another: here a batch
+    // envelope answering a single-text leaf, the shape that printed
+    // `{"text":""}` with exit 0 before. The response is kept, not dropped.
+    const items = [
+      {
+        decisionId: "00000000-0000-4000-8000-000000000001",
+        status: "found",
+        decision: { text: "THE DECISION BODY" },
+      },
+    ];
+    const server = startMockServer(() => ({ toolPayload: { items } }));
+    const result = await runCli({
+      args: ["document", "content", "--entity-id", "e1", "--json"],
+      url: server.url,
+      token: READ,
+    });
+    await server.stop();
+    expect(result.exitCode).toBe(EXIT_CODES.unexpected);
+    expect(JSON.parse(result.stdout)).toEqual({
+      text: null,
+      textUnavailable: { reason: "not_in_response", textPath: "text" },
+      response: { items },
+    });
+    expect(result.stderr).toContain("npm i -g @stll/cli");
+  });
+
+  test("--all stops at a first window without text and types it", async () => {
+    const server = startMockServer(() => ({
+      toolPayload: {
+        nextCursor: "w2",
+        statute: { text: null, textWithheldReason: "withheld" },
+      },
+    }));
+    const result = await runCli({
+      args: [
+        "legislation",
+        "read",
+        "--eli",
+        "/eli/cz/sb/2012/89",
+        "--all",
+        "--json",
+      ],
+      url: server.url,
+      token: READ,
+    });
+    await server.stop();
+    expect(result.exitCode).toBe(EXIT_CODES.ok);
+    expect(server.requests).toHaveLength(1);
+    expect(JSON.parse(result.stdout)).toMatchObject({
+      text: null,
+      textUnavailable: { reason: "no_text", textPath: "statute.text" },
     });
   });
 
@@ -697,17 +966,23 @@ describe("windowed text (S4)", () => {
         "00000000-0000-4000-8000-000000000001",
         "--decision-ids",
         "00000000-0000-4000-8000-000000000002",
+        "--json",
       ],
       url: server.url,
       token: READ,
     });
-    server.stop();
+    await server.stop();
     expect(result.exitCode).toBe(0);
+    const printed: {
+      items: { status: string; decision?: { text: string } }[];
+    } = JSON.parse(result.stdout);
     expect(
-      JSON.parse(result.stdout).items.map(
-        (item: { status: string }) => item.status,
-      ),
+      printed.items.map((item: { status: string }) => item.status),
     ).toEqual(["found", "not_found"]);
+    expect(printed.items.at(0)?.decision?.text).toBe("THE DECISION BODY");
+    expect(printed).not.toHaveProperty("text");
+    expect(server.requests).toHaveLength(1);
+    expect(server.requests.at(0)?.params.name).toBe("read_case_law_decision");
     expect(server.requests.at(0)?.params.arguments).toMatchObject({
       decision_ids: [
         "00000000-0000-4000-8000-000000000001",
@@ -716,11 +991,91 @@ describe("windowed text (S4)", () => {
     });
   });
 
-  test("a per-entry cursor leaf does not offer --all", async () => {
-    // The follow loop advances one top-level cursor. This payload carries a
-    // continuation per entry, so following nothing would print the first
-    // window as though it were the whole decision; the flag is absent rather
-    // than quietly truncating.
+  test("a generated provision read returns content through its dedicated reader", async () => {
+    const items = [{ eli: "/eli/cz/sb/2012/89", anchor: "par_1729" }];
+    const payload = {
+      items: [{ status: "found", provision: { text: "THE PROVISION BODY" } }],
+    };
+    const server = startMockServer(() => ({ toolPayload: payload }));
+    try {
+      const result = await runCli({
+        args: [
+          "legislation",
+          "provisions",
+          "--input",
+          JSON.stringify({ items }),
+          "--json",
+        ],
+        url: server.url,
+        token: READ,
+      });
+      expect(result.exitCode).toBe(EXIT_CODES.ok);
+      expect(JSON.parse(result.stdout)).toEqual(payload);
+      expect(server.requests).toHaveLength(1);
+      expect(server.requests.at(0)?.params).toEqual({
+        name: "read_statute_provisions",
+        arguments: { items },
+      });
+    } finally {
+      await server.stop();
+    }
+  });
+
+  for (const { args, toolName } of [
+    {
+      args: [
+        "case-law",
+        "read",
+        "--decision-ids",
+        "00000000-0000-4000-8000-000000000001",
+      ],
+      toolName: "read_case_law_decision",
+    },
+    {
+      args: ["legislation", "read", "--eli", "/eli/cz/sb/2012/89"],
+      toolName: "read_statute",
+    },
+    {
+      args: [
+        "legislation",
+        "provisions",
+        "--input",
+        JSON.stringify({
+          items: [{ eli: "/eli/cz/sb/2012/89", anchor: "par_1729" }],
+        }),
+      ],
+      toolName: "read_statute_provisions",
+    },
+  ]) {
+    test(`${toolName} preserves a server rate refusal`, async () => {
+      const error = {
+        code: "rate_limited",
+        message: "The read rate limit has been reached.",
+        hint: "Retry after the current window.",
+      };
+      const server = startMockServer(() => ({
+        toolPayload: { error },
+        isError: true,
+      }));
+      try {
+        const result = await runCli({
+          args: [...args, "--json"],
+          url: server.url,
+          token: READ,
+        });
+        expect(result.exitCode).toBe(EXIT_CODES.server);
+        expect(result.stderr).toContain(error.message);
+        expect(server.requests).toHaveLength(1);
+        expect(server.requests.at(0)?.params.name).toBe(toolName);
+      } finally {
+        await server.stop();
+      }
+    });
+  }
+
+  test("a decision read pages by number, so it offers neither --cursor nor --all", async () => {
+    // Each decision of a batch is paged with `--page`; there is no cursor for
+    // the follow loop to advance.
     const server = startMockServer(() => ({ toolPayload: { items: [] } }));
     const result = await runCli({
       args: [
@@ -738,11 +1093,11 @@ describe("windowed text (S4)", () => {
       url: server.url,
       token: READ,
     });
-    server.stop();
+    await server.stop();
     expect(result.exitCode).toBe(2);
     expect(server.requests).toHaveLength(0);
-    // The cursor itself stays: one decision's text is continued by hand.
-    expect(help.stdout).toContain("--cursor");
+    expect(help.stdout).toContain("--page");
+    expect(help.stdout).not.toContain("--cursor");
     expect(help.stdout).not.toContain("--all");
   });
 });
@@ -755,7 +1110,7 @@ describe("value flags and validation (S3)", () => {
       url: server.url,
       token: WRITE,
     });
-    server.stop();
+    await server.stop();
     expect(result.exitCode).toBe(2);
     expect(server.requests).toHaveLength(0);
   });
@@ -779,7 +1134,7 @@ describe("value flags and validation (S3)", () => {
       url: server.url,
       token: READ,
     });
-    server.stop();
+    await server.stop();
     expect(result.exitCode).toBe(2);
     expect(server.requests.at(0)?.params.arguments).toEqual({
       query: "Acme",
@@ -792,11 +1147,19 @@ describe("value flags and validation (S3)", () => {
       toolPayload: { contactId: "c1" },
     }));
     const result = await runCli({
-      args: ["contact", "save", "--contact-id", "c1", "--first-name", "null"],
+      args: [
+        "contact",
+        "save",
+        "--contact-id",
+        "c1",
+        "--first-name",
+        "null",
+        "--yes",
+      ],
       url: server.url,
       token: WRITE,
     });
-    server.stop();
+    await server.stop();
     expect(result.exitCode).toBe(0);
     expect(server.requests.at(0)?.params.arguments).toEqual({
       contact_id: "c1",
@@ -809,11 +1172,11 @@ describe("--input escape hatch (S3)", () => {
   test("--input '<json>' supplies the whole args object", async () => {
     const server = startMockServer(() => ({ toolPayload: { matterId: "m9" } }));
     const result = await runCli({
-      args: ["matter", "save", "--input", '{"name":"New Matter"}'],
+      args: ["matter", "save", "--input", '{"name":"New Matter"}', "--yes"],
       url: server.url,
       token: WRITE,
     });
-    server.stop();
+    await server.stop();
     expect(result.exitCode).toBe(0);
     expect(server.requests.at(0)?.params.arguments).toEqual({
       name: "New Matter",
@@ -823,12 +1186,12 @@ describe("--input escape hatch (S3)", () => {
   test("--input - reads the object from stdin", async () => {
     const server = startMockServer(() => ({ toolPayload: { matterId: "m9" } }));
     const result = await runCli({
-      args: ["matter", "save", "--input", "-"],
+      args: ["matter", "save", "--input", "-", "--yes"],
       url: server.url,
       token: WRITE,
       stdin: '{"name":"From Stdin"}',
     });
-    server.stop();
+    await server.stop();
     expect(result.exitCode).toBe(0);
     expect(server.requests.at(0)?.params.arguments).toEqual({
       name: "From Stdin",
@@ -843,11 +1206,11 @@ describe("--input escape hatch (S3)", () => {
     );
     await writeFile(file, '{"name":"From File"}');
     const result = await runCli({
-      args: ["matter", "save", "--input", `@${file}`],
+      args: ["matter", "save", "--input", `@${file}`, "--yes"],
       url: server.url,
       token: WRITE,
     });
-    server.stop();
+    await server.stop();
     await rm(path.dirname(file), { recursive: true, force: true });
     expect(result.exitCode).toBe(0);
     expect(server.requests.at(0)?.params.arguments).toEqual({
@@ -865,11 +1228,12 @@ describe("--input escape hatch (S3)", () => {
         '{"name":"FromJson"}',
         "--name",
         "FromFlag",
+        "--yes",
       ],
       url: server.url,
       token: WRITE,
     });
-    server.stop();
+    await server.stop();
     expect(result.exitCode).toBe(0);
     // The flag overrides the JSON's `name`; both are threaded to the server.
     expect(server.requests.at(0)?.params.arguments).toEqual({
@@ -885,11 +1249,11 @@ describe("--input escape hatch (S3)", () => {
       isError: true,
     }));
     const result = await runCli({
-      args: ["matter", "save", "--input", '{"status":"bogus"}'],
+      args: ["matter", "save", "--input", '{"status":"bogus"}', "--yes"],
       url: server.url,
       token: WRITE,
     });
-    server.stop();
+    await server.stop();
     expect(result.exitCode).toBe(2);
     expect(result.stderr).toContain("Invalid status");
     expect(server.requests.at(0)?.params.arguments).toEqual({
@@ -906,7 +1270,7 @@ describe("destructive confirmation (S4)", () => {
       url: server.url,
       token: WRITE,
     });
-    server.stop();
+    await server.stop();
     expect(result.exitCode).toBe(0);
     expect(server.requests).toHaveLength(1);
   });
@@ -918,7 +1282,7 @@ describe("destructive confirmation (S4)", () => {
       url: server.url,
       token: WRITE,
     });
-    server.stop();
+    await server.stop();
     expect(result.exitCode).toBe(7);
     expect(result.stderr).toContain("refusing destructive op");
     expect(server.requests).toHaveLength(0);
@@ -933,7 +1297,7 @@ describe("error tiers -> exit codes (S4)", () => {
       url: server.url,
       token: READ,
     });
-    server.stop();
+    await server.stop();
     expect(result.exitCode).toBe(4);
   });
 
@@ -944,7 +1308,7 @@ describe("error tiers -> exit codes (S4)", () => {
       url: server.url,
       token: READ,
     });
-    server.stop();
+    await server.stop();
     expect(result.exitCode).toBe(6);
   });
 
@@ -955,7 +1319,7 @@ describe("error tiers -> exit codes (S4)", () => {
       url: server.url,
       token: READ,
     });
-    server.stop();
+    await server.stop();
     expect(result.exitCode).toBe(3);
   });
 
@@ -966,7 +1330,7 @@ describe("error tiers -> exit codes (S4)", () => {
       url: server.url,
       token: READ,
     });
-    server.stop();
+    await server.stop();
     expect(result.exitCode).toBe(8);
   });
   test("HTTP 409 -> exit 10", async () => {
@@ -976,7 +1340,7 @@ describe("error tiers -> exit codes (S4)", () => {
       url: server.url,
       token: READ,
     });
-    server.stop();
+    await server.stop();
     expect(result.exitCode).toBe(10);
   });
 
@@ -989,7 +1353,7 @@ describe("error tiers -> exit codes (S4)", () => {
       url: server.url,
       token: READ,
     });
-    server.stop();
+    await server.stop();
     expect(result.exitCode).toBe(2);
   });
 
@@ -1003,7 +1367,7 @@ describe("error tiers -> exit codes (S4)", () => {
       url: server.url,
       token: READ,
     });
-    server.stop();
+    await server.stop();
     expect(result.exitCode).toBe(4);
     expect(result.stderr).toContain("Insufficient permissions");
   });
@@ -1027,7 +1391,7 @@ describe("error tiers -> exit codes (S4)", () => {
       url: server.url,
       token: READ,
     });
-    server.stop();
+    await server.stop();
     expect(result.exitCode).toBe(2);
     expect(result.stderr).toContain("error: Invalid input");
     // A field issue renders as `  <flag>: <message>`; a root issue (empty path)
@@ -1045,7 +1409,7 @@ describe("help surfaces --input for inputOnly tools", () => {
       url: server.url,
       token: makeToken(["templates"]),
     });
-    server.stop();
+    await server.stop();
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toContain("values.<key>  any JSON value  required");
     expect(result.stdout).toContain("--completion-mode");
@@ -1063,7 +1427,7 @@ describe("help surfaces --input for inputOnly tools", () => {
       url: server.url,
       token: WRITE,
     });
-    server.stop();
+    await server.stop();
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toContain('purpose = "entity_create"');
     expect(result.stdout).toContain('purpose = "entity_version"');
@@ -1079,7 +1443,7 @@ describe("help surfaces --input for inputOnly tools", () => {
       url: server.url,
       token: makeToken(["templates"]),
     });
-    server.stop();
+    await server.stop();
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toContain("--input");
     expect(result.stdout).toContain("fields");
@@ -1092,7 +1456,7 @@ describe("help surfaces --input for inputOnly tools", () => {
       url: server.url,
       token: makeToken(["documents_write"]),
     });
-    server.stop();
+    await server.stop();
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toContain('"action":"create_version"');
     expect(result.stdout).not.toContain('"action":"create_document"');
@@ -1105,7 +1469,7 @@ describe("help surfaces --input for inputOnly tools", () => {
       url: server.url,
       token: makeToken(["knowledge_write"]),
     });
-    server.stop();
+    await server.stop();
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toContain("--input");
     expect(result.stdout).toContain("body");
@@ -1144,7 +1508,7 @@ describe("template fill strictness policies", () => {
       url: server.url,
       token: makeToken(["templates"]),
     });
-    server.stop();
+    await server.stop();
 
     expect(result.exitCode).toBe(2);
     expect(result.stdout).toBe("");
@@ -1171,7 +1535,7 @@ describe("template fill strictness policies", () => {
       url: server.url,
       token: makeToken(["templates"]),
     });
-    server.stop();
+    await server.stop();
 
     expect(result.exitCode).toBe(0);
     expect(JSON.parse(result.stdout)).toEqual(fillPayload);
@@ -1203,7 +1567,7 @@ describe("template fill strictness policies", () => {
       url: server.url,
       token: makeToken(["templates"]),
     });
-    server.stop();
+    await server.stop();
 
     expect(result.exitCode).toBe(0);
     expect(server.requests.at(0)?.params.arguments).toEqual({
@@ -1237,11 +1601,12 @@ describe("template persistence discriminator split", () => {
         "retry_1",
         "--input",
         '{"values":{"tenant.name":"ACME"}}',
+        "--yes",
       ],
       url: server.url,
       token: makeToken(["documents_write"]),
     });
-    server.stop();
+    await server.stop();
 
     expect(result.exitCode).toBe(EXIT_CODES.auth);
     expect(result.stderr).toContain("Missing scope stella:templates");
@@ -1273,11 +1638,12 @@ describe("template persistence discriminator split", () => {
         "retry_1",
         "--input",
         '{"values":{"tenant.name":"ACME"}}',
+        "--yes",
       ],
       url: server.url,
       token: makeToken(["documents_write", "templates"]),
     });
-    server.stop();
+    await server.stop();
 
     expect(result.exitCode).toBe(0);
     expect(server.requests.at(0)?.params.name).toBe("save_filled_template");
@@ -1292,26 +1658,18 @@ describe("template persistence discriminator split", () => {
   });
 });
 
-describe("organization discriminator split (S2/Phase 4)", () => {
-  test("add-member injects action and forwards the flag args", async () => {
+describe("matter membership commands", () => {
+  test("add-member forwards its required inputs", async () => {
     const server = startMockServer(() => ({ toolPayload: { ok: true } }));
     const result = await runCli({
-      args: [
-        "organization",
-        "add-member",
-        "--matter-id",
-        "w1",
-        "--user-id",
-        "u1",
-      ],
+      args: ["matter", "add-member", "--matter-id", "w1", "--user-id", "u1"],
       url: server.url,
-      token: makeToken(["admin_write"]),
+      token: makeToken(["matters_write"]),
     });
-    server.stop();
+    await server.stop();
     expect(result.exitCode).toBe(0);
-    expect(server.requests.at(0)?.params.name).toBe("manage_organization");
+    expect(server.requests.at(0)?.params.name).toBe("add_matter_member");
     expect(server.requests.at(0)?.params.arguments).toEqual({
-      action: "add_member",
       matter_id: "w1",
       user_id: "u1",
     });
@@ -1320,33 +1678,33 @@ describe("organization discriminator split (S2/Phase 4)", () => {
   test("remove-member is destructive: non-TTY without --yes aborts (exit 7)", async () => {
     const server = startMockServer(() => ({ toolPayload: { ok: true } }));
     const result = await runCli({
-      args: [
-        "organization",
-        "remove-member",
-        "--matter-id",
-        "w1",
-        "--user-id",
-        "u1",
-      ],
+      args: ["matter", "remove-member", "--matter-id", "w1", "--user-id", "u1"],
       url: server.url,
-      token: makeToken(["admin_write"]),
+      token: makeToken(["matters_write"]),
     });
-    server.stop();
+    await server.stop();
     expect(result.exitCode).toBe(7);
     expect(server.requests).toHaveLength(0);
   });
 
-  test("update-settings injects its action value", async () => {
+  test("update-settings forwards settings without an action discriminator", async () => {
     const server = startMockServer(() => ({ toolPayload: { ok: true } }));
     const result = await runCli({
-      args: ["organization", "update-settings", "--matter-number-padding", "4"],
+      args: [
+        "organization",
+        "update-settings",
+        "--matter-number-pattern",
+        "{year}-{number}",
+        "--matter-number-padding",
+        "4",
+      ],
       url: server.url,
       token: makeToken(["admin_write"]),
     });
-    server.stop();
+    await server.stop();
     expect(result.exitCode).toBe(0);
     expect(server.requests.at(0)?.params.arguments).toEqual({
-      action: "update_org_settings",
+      matter_number_pattern: "{year}-{number}",
       matter_number_padding: 4,
     });
   });
@@ -1363,10 +1721,9 @@ describe("organization discriminator split (S2/Phase 4)", () => {
       url: server.url,
       token: makeToken(["admin_write"]),
     });
-    server.stop();
+    await server.stop();
     expect(result.exitCode).toBe(0);
     expect(server.requests.at(0)?.params.arguments).toEqual({
-      action: "update_org_settings",
       document_processing_mode: "searchable-text",
     });
   });
@@ -1385,7 +1742,7 @@ describe("BOE legislation multi-shape rendering (Phase 4)", () => {
       url: server.url,
       token: READ,
     });
-    server.stop();
+    await server.stop();
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toContain("l1");
     expect(result.stdout).toContain("Act 1");
@@ -1402,7 +1759,7 @@ describe("BOE legislation multi-shape rendering (Phase 4)", () => {
       url: server.url,
       token: READ,
     });
-    server.stop();
+    await server.stop();
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toContain("law_id");
     expect(result.stdout).toContain("Section text");
@@ -1422,7 +1779,7 @@ describe("audit-log Page envelope (Phase 4)", () => {
       url: server.url,
       token: makeToken(["admin_read"]),
     });
-    server.stop();
+    await server.stop();
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toContain("matter.create");
     expect(result.stderr).toContain("more: --cursor next");
@@ -1430,6 +1787,40 @@ describe("audit-log Page envelope (Phase 4)", () => {
 });
 
 describe("feature-disabled exit class (S4/Phase 4)", () => {
+  test.each(["available", "unknown"] as const)(
+    "current deployment evidence %s controls command admission",
+    async (deploymentEvidence) => {
+      const server = startMockServer(() => ({ toolPayload: { items: [] } }), {
+        deploymentEvidence,
+      });
+      const result = await runCli({
+        args: ["time-entry", "list"],
+        url: server.url,
+        token: READ,
+      });
+      await server.stop();
+      expect(server.discoveries).toHaveLength(1);
+      expect(result.exitCode).toBe(
+        deploymentEvidence === "available" ? EXIT_CODES.ok : EXIT_CODES.server,
+      );
+      expect(server.requests).toHaveLength(
+        deploymentEvidence === "available" ? 1 : 0,
+      );
+      if (deploymentEvidence === "available") {
+        expect(server.requests.at(0)).toMatchObject({
+          method: "tools/call",
+          params: { name: "list_time_entries" },
+        });
+      } else {
+        expect(result.stderr).toContain("unknown to this server");
+        expect(result.stderr).not.toContain(
+          "not enabled for this organization",
+        );
+        expect(result.stderr).not.toContain("too old");
+      }
+    },
+  );
+
   test("a plain-text feature error has no machine code and falls to exit 4", async () => {
     const server = startMockServer(() => ({
       toolPayload: "This feature is not enabled on this deployment",
@@ -1440,7 +1831,13 @@ describe("feature-disabled exit class (S4/Phase 4)", () => {
       url: server.url,
       token: READ,
     });
-    server.stop();
+    await server.stop();
+    expect(server.discoveries).toHaveLength(1);
+    expect(server.requests).toHaveLength(1);
+    expect(server.requests.at(0)).toMatchObject({
+      method: "tools/call",
+      params: { name: "list_time_entries" },
+    });
     expect(result.exitCode).toBe(4);
     expect(result.stderr).toContain("not enabled");
   });
@@ -1455,7 +1852,13 @@ describe("feature-disabled exit class (S4/Phase 4)", () => {
       url: server.url,
       token: READ,
     });
-    server.stop();
+    await server.stop();
+    expect(server.discoveries).toHaveLength(1);
+    expect(server.requests).toHaveLength(1);
+    expect(server.requests.at(0)).toMatchObject({
+      method: "tools/call",
+      params: { name: "list_time_entries" },
+    });
     expect(result.exitCode).toBe(5);
   });
 });
@@ -1481,7 +1884,13 @@ describe("structured error envelope -> exit codes (S4)", () => {
       url: server.url,
       token: READ,
     });
-    server.stop();
+    await server.stop();
+    expect(server.discoveries).toHaveLength(1);
+    expect(server.requests).toHaveLength(1);
+    expect(server.requests.at(0)).toMatchObject({
+      method: "tools/call",
+      params: { name: "list_time_entries" },
+    });
     expect(result.exitCode).toBe(5);
     expect(result.stderr).toContain(
       "error: Something went wrong: feature_disabled",
@@ -1498,7 +1907,7 @@ describe("structured error envelope -> exit codes (S4)", () => {
       url: server.url,
       token: READ,
     });
-    server.stop();
+    await server.stop();
     expect(result.exitCode).toBe(6);
     expect(result.stderr).toContain("error: Something went wrong: not_found");
   });
@@ -1510,7 +1919,7 @@ describe("structured error envelope -> exit codes (S4)", () => {
       url: server.url,
       token: READ,
     });
-    server.stop();
+    await server.stop();
     expect(result.exitCode).toBe(3);
   });
 
@@ -1523,7 +1932,7 @@ describe("structured error envelope -> exit codes (S4)", () => {
       url: server.url,
       token: READ,
     });
-    server.stop();
+    await server.stop();
     expect(result.exitCode).toBe(7);
   });
 
@@ -1534,7 +1943,7 @@ describe("structured error envelope -> exit codes (S4)", () => {
       url: server.url,
       token: READ,
     });
-    server.stop();
+    await server.stop();
     expect(result.exitCode).toBe(2);
     // stderr stays human-readable; the error is never dumped to stdout.
     expect(result.stderr).toContain(
@@ -1552,7 +1961,7 @@ describe("destructive confirm injection (S4)", () => {
       url: server.url,
       token: WRITE,
     });
-    server.stop();
+    await server.stop();
     expect(result.exitCode).toBe(0);
     expect(server.requests.at(0)?.params.name).toBe("delete_matter");
     expect(server.requests.at(0)?.params.arguments).toEqual({
@@ -1568,7 +1977,7 @@ describe("destructive confirm injection (S4)", () => {
     const server = startMockServer(() => ({ toolPayload: { removed: true } }));
     const result = await runCli({
       args: [
-        "organization",
+        "matter",
         "remove-member",
         "--matter-id",
         "w1",
@@ -1577,28 +1986,27 @@ describe("destructive confirm injection (S4)", () => {
         "--yes",
       ],
       url: server.url,
-      token: makeToken(["admin_write"]),
+      token: makeToken(["matters_write"]),
     });
-    server.stop();
+    await server.stop();
     expect(result.exitCode).toBe(0);
-    expect(server.requests.at(0)?.params.name).toBe("manage_organization");
+    expect(server.requests.at(0)?.params.name).toBe("remove_matter_member");
     expect(server.requests.at(0)?.params.arguments).toEqual({
-      action: "remove_member",
       matter_id: "w1",
       user_id: "u1",
       confirm: true,
     });
   });
 
-  test("capability invoke --yes injects confirm: true (confirm passthrough)", async () => {
-    // invoke_capability's leaf is non-destructive (destructiveness is
+  test("capability write --yes injects confirm: true (confirm passthrough)", async () => {
+    // write_capability's leaf is non-destructive (destructiveness is
     // per-invoked-capability), but its confirmPassthrough annotation registers
     // --yes and injects the confirm gate upfront.
     const server = startMockServer(() => ({ toolPayload: { ok: true } }));
     const result = await runCli({
       args: [
         "capability",
-        "invoke",
+        "write",
         "--capability",
         "clauses.categories.delete",
         "--yes",
@@ -1606,16 +2014,16 @@ describe("destructive confirm injection (S4)", () => {
       url: server.url,
       token: READ,
     });
-    server.stop();
+    await server.stop();
     expect(result.exitCode).toBe(0);
-    expect(server.requests.at(0)?.params.name).toBe("invoke_capability");
+    expect(server.requests.at(0)?.params.name).toBe("write_capability");
     expect(server.requests.at(0)?.params.arguments).toEqual({
       capability: "clauses.categories.delete",
       confirm: true,
     });
   });
 
-  test("capability invoke without --yes off a TTY exits 7 on confirmation_required", async () => {
+  test("capability write without --yes off a TTY exits 7 on confirmation_required", async () => {
     const server = startMockServer(() => ({
       toolPayload: {
         error: {
@@ -1628,14 +2036,14 @@ describe("destructive confirm injection (S4)", () => {
     const result = await runCli({
       args: [
         "capability",
-        "invoke",
+        "write",
         "--capability",
         "clauses.categories.delete",
       ],
       url: server.url,
       token: READ,
     });
-    server.stop();
+    await server.stop();
     expect(result.exitCode).toBe(7);
     // No prompt and no retry off a TTY: exactly one server call, without confirm.
     expect(server.requests).toHaveLength(1);
@@ -1679,11 +2087,12 @@ describe("feedback (S4)", () => {
       url: server.url,
       token: makeToken(["feedback"]),
     });
-    server.stop();
+    await server.stop();
     expect(result.exitCode).toBe(0);
     expect(server.requests.at(0)?.params.name).toBe("prepare_feedback");
     expect(server.requests.at(0)?.params.arguments).toEqual(report);
-    expect(JSON.parse(result.stdout).report).toEqual(report);
+    const output: { report: unknown } = JSON.parse(result.stdout);
+    expect(output.report).toEqual(report);
   });
 
   test("submit --yes sends the approved report and prints the receipt", async () => {
@@ -1708,7 +2117,7 @@ describe("feedback (S4)", () => {
       url: server.url,
       token: makeToken(["feedback"]),
     });
-    server.stop();
+    await server.stop();
     expect(result.exitCode).toBe(0);
     expect(server.requests.at(0)?.params.name).toBe("submit_feedback");
     expect(server.requests.at(0)?.params.arguments).toEqual({
@@ -1716,7 +2125,8 @@ describe("feedback (S4)", () => {
       approval_token: APPROVAL_TOKEN,
       confirm: true,
     });
-    expect(JSON.parse(result.stdout).receipt).toBe("FB-7K2M-9QXA");
+    const output: { receipt: unknown } = JSON.parse(result.stdout);
+    expect(output.receipt).toBe("FB-7K2M-9QXA");
   });
 });
 
@@ -1739,7 +2149,7 @@ describe("reference resources (S5.4/Phase 4)", () => {
       url: server.url,
       token: READ,
     });
-    server.stop();
+    await server.stop();
     expect(result.exitCode).toBe(0);
     expect(server.requests.at(0)?.method).toBe("resources/list");
     expect(result.stdout).toContain("template-markers");
@@ -1763,7 +2173,7 @@ describe("reference resources (S5.4/Phase 4)", () => {
       url: server.url,
       token: READ,
     });
-    server.stop();
+    await server.stop();
     expect(result.exitCode).toBe(0);
     expect(server.requests.at(0)?.method).toBe("resources/read");
     expect(server.requests.at(0)?.params).toMatchObject({
@@ -1781,7 +2191,7 @@ describe("reference resources (S5.4/Phase 4)", () => {
       url: server.url,
       token: READ,
     });
-    server.stop();
+    await server.stop();
     expect(result.exitCode).toBe(6);
     expect(result.stderr).toContain("Unknown resource");
   });
@@ -1793,7 +2203,7 @@ describe("reference resources (S5.4/Phase 4)", () => {
       url: server.url,
       token: READ,
     });
-    server.stop();
+    await server.stop();
     expect(result.exitCode).toBe(8);
   });
 });

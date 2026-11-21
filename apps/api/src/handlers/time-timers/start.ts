@@ -10,14 +10,17 @@ import {
   timerItem,
 } from "@/api/lib/billing/time-timers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { scheduleTimerActivityUpdates } from "@/api/lib/push/timer-activity-queue";
 import { hasCurrentTimerMatterAccess } from "@/api/lib/time-entry-timer-access";
 
 const startTimer = createSafeRootHandler(
   {
+    contract: "patch",
     description:
       "Start your timer in the active organization, optionally assigning a matter and description. Automatically pauses your running timer. Returns its ID for pause, resume, update, confirm or discard.",
     permissions: { timeEntry: ["create"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
+    featureAccess: { featureId: "time-billing", type: "required" },
     mcp: {
       type: "capability",
       reason: "billing_admin",
@@ -74,6 +77,9 @@ const startTimer = createSafeRootHandler(
         return Result.ok(timerItem(timer));
       }),
     );
+    if (outcome.isOk()) {
+      scheduleTimerActivityUpdates([owner]);
+    }
     return outcome;
   },
 );

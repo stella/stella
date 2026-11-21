@@ -1,5 +1,8 @@
 import { describe, expect, test } from "bun:test";
 
+import { statuteAnchorKindPrefix } from "@stll/legal-ast/statute-anchor-scheme";
+import { normalizeUnicode } from "@stll/text-normalize";
+
 import { CZ_PROFILE } from "./cz-provision-citation-profile";
 import type {
   ActAliasSpec,
@@ -10,8 +13,7 @@ import type {
 import { SK_PROFILE } from "./sk-provision-citation-profile";
 
 type TableEntry =
-  | { kind: "alias"; spec: ActAliasSpec }
-  | { kind: "title"; spec: ActTitleSpec };
+  { kind: "alias"; spec: ActAliasSpec } | { kind: "title"; spec: ActTitleSpec };
 
 const PROFILES = [
   { name: "Czech", profile: CZ_PROFILE },
@@ -31,8 +33,7 @@ const SPACE_AFTER_PERIOD = /(?<=\.) (?=\S)/gu;
  * run, with or without a space between abbreviated components.
  */
 const spellingKey = (spelling: string): string =>
-  spelling
-    .normalize("NFC")
+  normalizeUnicode(spelling, "NFC")
     .replaceAll(SPACE_RUN, " ")
     .replaceAll(SPACE_AFTER_PERIOD, "");
 
@@ -151,9 +152,9 @@ describe.each(PROFILES)("$name profile act tables", ({ profile }) => {
   });
 
   test("section and article anchors never render alike", () => {
-    const { render } = profile.anchor;
-
-    expect(render.section("1")).not.toBe(render.article("1"));
+    expect(statuteAnchorKindPrefix(profile.anchor, "section")).not.toBe(
+      statuteAnchorKindPrefix(profile.anchor, "article"),
+    );
   });
 });
 

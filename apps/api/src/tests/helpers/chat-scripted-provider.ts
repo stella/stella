@@ -17,8 +17,8 @@ import {
 } from "@/api/tests/helpers/chat-prompt-prefix";
 import type { PromptPrefixLedger } from "@/api/tests/helpers/chat-prompt-prefix";
 import {
-  ScriptedProviderError,
   scriptedAdapterBase,
+  ScriptedProviderError,
   scriptedTurnChunks,
 } from "@/api/tests/helpers/chat-round-trip";
 import type { ScriptedTurn } from "@/api/tests/helpers/chat-round-trip";
@@ -187,11 +187,8 @@ async function* recordingProduced(
   step: { signatures: string[]; toolCallIds: string[] },
 ): AsyncGenerator<AdapterYieldChunk> {
   for await (const chunk of chunks) {
-    if (
-      chunk.type === EventType.STEP_FINISHED &&
-      chunk.signature !== undefined
-    ) {
-      step.signatures.push(chunk.signature);
+    if (chunk.type === EventType.REASONING_ENCRYPTED_VALUE) {
+      step.signatures.push(chunk.encryptedValue);
     }
     if (chunk.type === EventType.TOOL_CALL_START) {
       step.toolCallIds.push(chunk.toolCallId);
@@ -212,7 +209,7 @@ const adapter: AnyTextAdapter = {
     threadId,
     tools,
   }) {
-    const scripts = threadId === undefined ? undefined : threads.get(threadId);
+    const scripts = threads.get(threadId);
     scripts?.modelOptions.push(modelOptions);
     scripts?.requests.push({
       earlierSteps: [...scripts.produced],
@@ -224,18 +221,14 @@ const adapter: AnyTextAdapter = {
       recordToolResults(scripts, messages);
       scripts.prompts.push(promptOf(messages));
     }
-    if (
-      threadId === undefined ||
-      runId === undefined ||
-      scripts === undefined
-    ) {
+    if (runId === undefined || scripts === undefined) {
       yield* scriptedTurnChunks(
         { finishReason: "stop", text: SIDE_CALL_TEXT, type: "text" },
         {
           index: 0,
           model,
           runId: runId ?? "side-run",
-          threadId: threadId ?? "side-thread",
+          threadId,
         },
       );
       return;
@@ -295,16 +288,28 @@ const adapter: AnyTextAdapter = {
 
 let registered = false;
 
+type ScriptedProviderOptions = {
+  textAdapterFactory?: ((modelId: string) => AnyTextAdapter) | undefined;
+};
+let activeTextAdapterFactory: ScriptedProviderOptions["textAdapterFactory"];
+
 /**
  * Serves every chat model call from scripts until `restore`. The mock-model
  * flag is the switch the model seam reads, so restoring it hands resolution
  * back to the configured providers.
  */
-export const installScriptedProvider = () => {
+export const installScriptedProvider = ({
+  textAdapterFactory,
+}: ScriptedProviderOptions = {}) => {
   if (!registered) {
-    registerTanStackMockTextAdapterFactory(() => adapter);
+    registerTanStackMockTextAdapterFactory(
+      (modelId) =>
+        activeTextAdapterFactory?.(modelId) ?? { ...adapter, model: modelId },
+    );
     registered = true;
   }
+  const previousTextAdapterFactory = activeTextAdapterFactory;
+  activeTextAdapterFactory = textAdapterFactory;
   const previousMockAI = env.USE_MOCK_AI;
   // "force": the scripts answer even a request made with an organization key.
   env.USE_MOCK_AI = "force";
@@ -359,6 +364,7 @@ export const installScriptedProvider = () => {
       };
     },
     restore: () => {
+      activeTextAdapterFactory = previousTextAdapterFactory;
       env.USE_MOCK_AI = previousMockAI;
       for (const threadId of owned) {
         threads.delete(threadId);

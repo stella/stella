@@ -1,11 +1,19 @@
 import { panic, Result } from "better-result";
-import { and, eq, inArray, sql } from "drizzle-orm";
 import * as v from "valibot";
 
-import { entities, extractedContent, fields } from "@/api/db/schema";
-import { readEntityByIdHandler } from "@/api/handlers/entities/get";
+import { SEARCH_PAGINATION_TRUNCATED_TIME_BUDGET } from "@stll/api-contract/search";
+
 import type { SafeId } from "@/api/lib/branded-types";
-import { decryptContent } from "@/api/lib/content-encryption";
+import {
+  loadAgentDocumentSources,
+  loadCurrentExtractedContents,
+} from "@/api/lib/document-content-provenance";
+import {
+  ActionAdmissionError,
+  actionAdmissionRefusal,
+} from "@/api/lib/errors/action-admission-error";
+import { LEGAL_FILE_READERS } from "@/api/lib/files/read-legal-file";
+import { getPublicReadSignal } from "@/api/lib/legal-search/public-read-timeout-context";
 import { LIMITS } from "@/api/lib/limits";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import {
@@ -15,6 +23,11 @@ import {
 import { decodeCursor } from "@/api/lib/search/cursor";
 import { getSearchReader } from "@/api/lib/search/provider";
 import {
+  type AuthorizedWorkspaceIds,
+  authorizedWorkspaceIds,
+  type AuthorizedWorkspaceReadError,
+} from "@/api/lib/workspaces/authorized-workspace-ids";
+import {
   COMPAT_FETCH_OUTPUT_SCHEMA,
   COMPAT_SEARCH_OUTPUT_SCHEMA,
 } from "@/api/mcp/compat-contract";
@@ -22,7 +35,7 @@ import {
   EMPTY_CORPUS_CURSORS,
   hasMoreCorpusPages,
   resolveCompatCorpusCountries,
-  searchCompatCorpus,
+  waitForCompatCorpus,
 } from "@/api/mcp/compat-corpus";
 import {
   COMPAT_ID_HINT,
@@ -31,17 +44,21 @@ import {
   decodeCompatId,
 } from "@/api/mcp/compat-ids";
 import {
+  COMPAT_PAIR_HOST_META,
   COMPAT_SEARCH_CURSOR_MAX_LENGTH,
   compatCorpusFetchResponse,
   compatSearchCursorError,
   compatSearchPageLimitResult,
+  type CompatSearchPosition,
   decodeCompatSearchCursor,
   encodeCompatSearchCursor,
   invalidCompatIdResult,
   publicLawDisabledResult,
-  type CompatSearchPosition,
 } from "@/api/mcp/compat-shared";
-import type { McpRequestContext } from "@/api/mcp/context";
+import type { McpRequestResources } from "@/api/mcp/context";
+import { cursorInput, nullAsAbsent } from "@/api/mcp/input-schemas";
+import { legalFileReadError } from "@/api/mcp/legal-file-read-error";
+import { underFleetCallerSlot } from "@/api/mcp/public-read-continuation";
 import { isMcpToolFeatureEnabled } from "@/api/mcp/tool-feature";
 import type {
   McpCompatSearchResult,
@@ -50,21 +67,24 @@ import type {
 } from "@/api/mcp/tool-types";
 import { defineMcpToolSet } from "@/api/mcp/tool-types";
 import {
+  bindWorkspaceRecorder,
   buildDocumentUrl,
   buildMatterUrl,
-  cursorInput,
   DEFAULT_COMPAT_SEARCH_LIMIT,
   ensureWorkspaceAccess,
   errorResult,
+  internalFailureResult,
   MCP_CONTENT_MAX_CHARS,
   notFoundResult,
-  nullAsAbsent,
+  structuredErrorResult,
   validationErrorResult,
 } from "@/api/mcp/tool-utils";
 import {
   defineMcpToolOutput,
   defineValibotMcpTool,
 } from "@/api/mcp/valibot-tool-definition";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
+import { openMcpRead } from "@/api/mcp/write-tool-authority";
 
 type CompatToolName = "fetch" | "search";
 
@@ -74,75 +94,75 @@ type FetchableEntity = {
   workspaceId: SafeId<"workspace">;
 };
 
-type CompatFetchPayload = {
-  charCount: number | null;
-  text: string;
-  title: string;
-  truncated: boolean;
-  workspaceId: SafeId<"workspace">;
-};
-
 const PUBLIC_LAW_FEATURE = "FEATURE_PUBLIC_LAW";
+
+/**
+ * The one compat path into matter content: the workspace check and the
+ * content read share one scoped transaction, and any failure inside it,
+ * thrown or returned, comes back as an error Result for the internal
+ * failure envelope.
+ */
+const readAuthorizedMatterContent = async <T>(
+  context: McpRequestResources,
+  read: (
+    tx: Parameters<Parameters<McpRequestResources["scopedDb"]>[0]>[0],
+    workspaceIds: AuthorizedWorkspaceIds,
+  ) => Promise<T>,
+): Promise<Result<T, unknown>> =>
+  (
+    await Result.tryPromise({
+      try: async () =>
+        await context.scopedDb(
+          async (tx): Promise<Result<T, AuthorizedWorkspaceReadError>> => {
+            const workspaceIds = await authorizedWorkspaceIds(tx, {
+              organizationId: context.organizationId,
+              workspaceIds: context.accessibleWorkspaceIds,
+            });
+            if (workspaceIds.isErr()) {
+              return Result.err(workspaceIds.error);
+            }
+            return Result.ok(await read(tx, workspaceIds.value));
+          },
+        ),
+      catch: (cause) => cause,
+    })
+  ).andThen((inner) => inner);
 
 const getFetchableEntityMap = async ({
   context,
   entityIds,
 }: {
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   entityIds: string[];
 }) => {
   if (entityIds.length === 0) {
-    return new Map<string, FetchableEntity>();
+    return Result.ok(new Map<string, FetchableEntity>());
   }
 
   const safeEntityIds = entityIds.map(brandPersistedEntityId);
 
-  const rows = await context.scopedDb((tx) =>
-    tx
-      .select({
-        entityId: extractedContent.entityId,
-        workspaceId: extractedContent.workspaceId,
-        fieldId: fields.id,
-      })
-      .from(extractedContent)
-      .innerJoin(
-        entities,
-        and(
-          eq(entities.id, extractedContent.entityId),
-          eq(entities.workspaceId, extractedContent.workspaceId),
-        ),
-      )
-      .leftJoin(
-        fields,
-        and(
-          eq(fields.entityVersionId, entities.currentVersionId),
-          sql`(${fields.content} ->> 'type') = 'file'`,
-        ),
-      )
-      .where(
-        and(
-          eq(extractedContent.organizationId, context.organizationId),
-          inArray(extractedContent.entityId, safeEntityIds),
-        ),
-      ),
+  const loaded = await readAuthorizedMatterContent(
+    context,
+    async (tx, workspaceIds) =>
+      await loadAgentDocumentSources(tx, {
+        entityIds: safeEntityIds,
+        organizationId: context.organizationId,
+        workspaceIds,
+      }),
   );
-
+  if (loaded.isErr()) {
+    return loaded;
+  }
   const fetchableEntityMap = new Map<string, FetchableEntity>();
-
-  for (const row of rows) {
-    const existing = fetchableEntityMap.get(row.entityId);
-    if (existing && existing.fieldId !== null) {
-      continue;
-    }
-
+  for (const row of loaded.value) {
     fetchableEntityMap.set(row.entityId, {
       entityId: row.entityId,
-      fieldId: row.fieldId,
+      fieldId: row.sourceFieldId,
       workspaceId: brandPersistedWorkspaceId(row.workspaceId),
     });
   }
 
-  return fetchableEntityMap;
+  return Result.ok(fetchableEntityMap);
 };
 
 const getCompatSearchHits = (result: unknown): unknown[] => {
@@ -212,64 +232,6 @@ const mapCompatSearchResults = ({
     ];
   });
 
-const getCompatFetchPayload = ({
-  entityId,
-  result,
-}: {
-  entityId: string;
-  result: unknown;
-}): CompatFetchPayload | null => {
-  const workspaceId =
-    typeof result === "object" &&
-    result !== null &&
-    "workspaceId" in result &&
-    typeof result.workspaceId === "string"
-      ? brandPersistedWorkspaceId(result.workspaceId)
-      : null;
-  const title =
-    typeof result === "object" &&
-    result !== null &&
-    "name" in result &&
-    typeof result.name === "string" &&
-    result.name.length > 0
-      ? result.name
-      : entityId;
-  const text =
-    typeof result === "object" &&
-    result !== null &&
-    "text" in result &&
-    typeof result.text === "string"
-      ? result.text
-      : null;
-
-  if (workspaceId === null || text === null) {
-    return null;
-  }
-
-  const charCount =
-    typeof result === "object" &&
-    result !== null &&
-    "charCount" in result &&
-    typeof result.charCount === "number"
-      ? result.charCount
-      : null;
-  const truncated =
-    typeof result === "object" &&
-    result !== null &&
-    "truncated" in result &&
-    typeof result.truncated === "boolean"
-      ? result.truncated
-      : false;
-
-  return {
-    charCount,
-    text,
-    title,
-    truncated,
-    workspaceId,
-  };
-};
-
 const compatSearchArgsSchema = nullAsAbsent(
   v.strictObject({
     query: v.pipe(
@@ -321,9 +283,9 @@ export const resolveCompatFetchReadClass = (args: unknown) => {
   }
 };
 
-export const COMPAT_TOOL_DEFINITIONS = [
+const COMPAT_TOOL_DEFINITIONS = [
   defineValibotMcpTool({
-    consumesServices: true,
+    consumesServices: false,
     annotations: {
       title: "Search",
       destructiveHint: false,
@@ -331,6 +293,9 @@ export const COMPAT_TOOL_DEFINITIONS = [
       openWorldHint: false,
     },
     access: "read",
+    permissions: openMcpRead(
+      "searches only public law and caller-accessible matter records",
+    ),
     readClass: "both",
     anonymized: {
       exposure: "anonymize",
@@ -345,13 +310,15 @@ export const COMPAT_TOOL_DEFINITIONS = [
       "Search knowledge across accessible matters using the OpenAI-compatible " +
       "search tool shape. Where this deployment enables the public legal corpus, the same " +
       "query also returns case-law decisions and statutes from every jurisdiction the corpus " +
-      `holds, the organization's practice jurisdictions first. ${COMPAT_ID_VOCABULARY} Pass an id back to fetch verbatim.`,
+      `holds, the organization's practice jurisdictions first. ${COMPAT_ID_VOCABULARY} Pass an id back to fetch verbatim. ` +
+      "Use legal citation `url` for the reader and `source_url` for the publisher.",
     inputSchema: compatSearchArgsSchema,
+    _meta: COMPAT_PAIR_HOST_META,
     name: "search",
     scope: "stella:search",
   }),
   defineValibotMcpTool({
-    consumesServices: true,
+    consumesServices: false,
     annotations: {
       title: "Fetch",
       destructiveHint: false,
@@ -359,6 +326,9 @@ export const COMPAT_TOOL_DEFINITIONS = [
       openWorldHint: false,
     },
     access: "read",
+    permissions: openMcpRead(
+      "fetches only public law or caller-accessible matter records",
+    ),
     readClass: resolveCompatFetchReadClass,
     anonymized: {
       exposure: "anonymize",
@@ -367,14 +337,17 @@ export const COMPAT_TOOL_DEFINITIONS = [
         "Fetch one search result by id using the OpenAI-compatible fetch tool " +
         `shape. ${COMPAT_ID_VOCABULARY} A matter document is returned anonymized; a ` +
         "decision or a statute is published law and is returned as written. Long text is " +
-        "returned in windows; pass the returned nextCursor back as cursor to read more.",
+        "returned in windows; pass the returned nextCursor back as cursor to read more. " +
+        "Use legal citation `url` for the reader and `source_url` for the publisher.",
     },
     description:
       "Fetch one search result by id using the OpenAI-compatible fetch tool " +
       `shape. ${COMPAT_ID_VOCABULARY} \`metadata.kind\` says which of the three the ` +
       "answer is. Long text is returned in windows; pass the returned nextCursor back " +
-      "as cursor to read more.",
+      "as cursor to read more. " +
+      "Use legal citation `url` for the reader and `source_url` for the publisher.",
     inputSchema: compatFetchArgsSchema,
+    _meta: COMPAT_PAIR_HOST_META,
     name: "fetch",
     scope: "stella:read",
   }),
@@ -425,10 +398,10 @@ const searchMatterKnowledge = async ({
   cursor,
   query,
 }: {
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   cursor: string | undefined;
   query: string;
-}): Promise<MatterSearchPage> => {
+}): Promise<Result<MatterSearchPage, unknown>> => {
   const page = await (
     context.testDependencies?.getSearchReader ?? getSearchReader
   )(context.scopedDb).search({
@@ -450,11 +423,14 @@ const searchMatterKnowledge = async ({
     context,
     entityIds: getCompatSearchEntityIds(hits),
   });
+  if (fetchableMap.isErr()) {
+    return fetchableMap;
+  }
 
-  return {
+  return Result.ok({
     nextCursor: page.nextCursor,
-    results: mapCompatSearchResults({ fetchableMap, hits }),
-  };
+    results: mapCompatSearchResults({ fetchableMap: fetchableMap.value, hits }),
+  });
 };
 
 const handleCompatSearchTool: McpToolHandler<
@@ -481,14 +457,27 @@ const handleCompatSearchTool: McpToolHandler<
     return pageLimitResult;
   }
 
-  const matter =
+  const matterResult =
     position.matter === null
-      ? EXHAUSTED_MATTER_PAGE
-      : await searchMatterKnowledge({
+      ? Result.ok(EXHAUSTED_MATTER_PAGE)
+      : // The slot covers this read alone: holding it through the corpus wait
+        // would queue the continued read behind its own caller.
+        await underFleetCallerSlot({
           context,
-          cursor: position.matter,
-          query,
+          signal: getPublicReadSignal() ?? new AbortController().signal,
+          run: async () =>
+            await searchMatterKnowledge({
+              context,
+              cursor: position.matter ?? undefined,
+              query,
+            }),
         });
+  if (matterResult.isErr()) {
+    return ActionAdmissionError.is(matterResult.error)
+      ? structuredErrorResult(actionAdmissionRefusal(matterResult.error))
+      : internalFailureResult(matterResult.error, "mcp.compatSearch.matter");
+  }
+  const matter = matterResult.value;
 
   if (!corpusEnabled) {
     return {
@@ -498,14 +487,27 @@ const handleCompatSearchTool: McpToolHandler<
     };
   }
 
-  const corpus = await searchCompatCorpus({
+  const corpus = await waitForCompatCorpus({
     context,
     countries: await resolveCompatCorpusCountries(context),
     cursors: position.corpus,
     query,
   });
   if (corpus.type === "failed") {
-    return errorResult(corpus.message);
+    return corpus.result;
+  }
+  if (corpus.type === "still_running") {
+    // Nothing here says "running", so the page says it is cut short and its
+    // cursor runs the same corpus page again.
+    return {
+      egress: "compatSearch",
+      paginationOutcome: SEARCH_PAGINATION_TRUNCATED_TIME_BUDGET,
+      nextCursor: encodeCompatSearchCursor({
+        matter: matter.nextCursor ?? null,
+        corpus: position.corpus,
+      }),
+      results: matter.results,
+    };
   }
 
   // Matter hits first, then decisions, then statutes: a caller asking this
@@ -548,7 +550,7 @@ export const compatFetchConsumesServices = (args: unknown): boolean => {
       return false;
     case "decision":
     case "statute":
-      return true;
+      return false;
     default: {
       id satisfies never;
       return panic("Unclassified compat fetch target");
@@ -583,81 +585,74 @@ const handleCompatFetchTool: McpToolHandler<
     return errorResult("Document content is unavailable");
   }
 
-  const row = await context.scopedDb((tx) =>
-    tx.query.extractedContent.findFirst({
-      where: {
-        entityId: { eq: entityId },
-        organizationId: { eq: context.organizationId },
-        workspaceId: { in: context.accessibleWorkspaceIds },
-      },
-      with: {
-        entity: {
-          columns: {
-            name: true,
-            workspaceId: true,
-          },
-        },
-      },
-    }),
-  );
-
-  if (!row?.entity) {
-    return errorResult("Document content is unavailable");
-  }
-
-  const text = await decryptContent(
-    context.organizationId,
-    row.ciphertext,
-    row.iv,
-  );
-  // Keep the full decrypted text here; windowing happens in the egress
-  // pipeline so anonymized fetches anonymize the whole document before slicing
-  // (slicing raw text first could split an entity name across the window
-  // boundary and leak its prefix).
-  const result = {
-    charCount: row.charCount,
-    name: row.entity.name,
-    text,
-    truncated: false,
-    workspaceId: row.entity.workspaceId,
-  };
-
-  const fetchPayload = getCompatFetchPayload({ entityId: rawEntityId, result });
-  if (!fetchPayload) {
-    return errorResult("Document content is unavailable");
-  }
-
-  const workspaceAccess = ensureWorkspaceAccess({
+  const loaded = await readAuthorizedMatterContent(
     context,
-    workspaceId: fetchPayload.workspaceId,
+    async (tx, workspaceIds) => {
+      const options = {
+        entityIds: [entityId],
+        organizationId: context.organizationId,
+        workspaceIds,
+      };
+      const source = (await loadAgentDocumentSources(tx, options)).at(0);
+      if (!source) {
+        return null;
+      }
+      if (source.legalFormat) {
+        return { kind: "legal", source, format: source.legalFormat } as const;
+      }
+      const extracted = (await loadCurrentExtractedContents(tx, options)).at(0);
+      if (
+        !extracted ||
+        extracted.currentVersionId !== source.currentVersionId ||
+        extracted.sourceFieldId !== source.sourceFieldId
+      ) {
+        return null;
+      }
+      return { kind: "extracted", source, text: extracted.text } as const;
+    },
+  );
+  if (loaded.isErr()) {
+    return internalFailureResult(loaded.error, "mcp.compatFetch.matter");
+  }
+  const doc = loaded.value;
+  if (!doc) {
+    return errorResult("Document content is unavailable");
+  }
+  const workspaceId = ensureWorkspaceAccess({
+    context,
+    workspaceId: doc.source.workspaceId,
   });
-  if (!workspaceAccess) {
+  if (!workspaceId) {
     return notFoundResult("Matter not found or not accessible");
   }
-
-  const entityResult = await Result.gen(() =>
-    readEntityByIdHandler({
-      safeDb: context.safeDb,
-      workspaceId: workspaceAccess,
-      entityId,
-    }),
-  );
-
-  let url = buildMatterUrl(fetchPayload.workspaceId);
-  if (Result.isOk(entityResult)) {
-    const entity = entityResult.value;
-    const fileField = entity.fields.find(
-      (field: { content: { type: string } }) => field.content.type === "file",
-    );
-    if (fileField) {
-      url = buildDocumentUrl({
-        entityId: rawEntityId,
-        fieldId: fileField.id,
-        workspaceId: workspaceAccess,
+  let text: string;
+  switch (doc.kind) {
+    case "legal": {
+      const preview = await LEGAL_FILE_READERS[doc.format.kind]({
+        purpose: "standalone",
+        scopedDb: context.scopedDb,
+        organizationId: context.organizationId,
+        fieldId: doc.source.sourceFieldId,
+        workspaceId,
+        recordAuditEvent: bindWorkspaceRecorder(context, workspaceId),
       });
+      if (preview.isErr()) {
+        return legalFileReadError(preview.error, "mcp.compatFetch.legal_file");
+      }
+      text = preview.value.text;
+      break;
     }
+    case "extracted":
+      text = doc.text;
+      break;
+    default:
+      return panic(doc satisfies never);
   }
-
+  const url = buildDocumentUrl({
+    entityId: rawEntityId,
+    fieldId: doc.source.sourceFieldId,
+    workspaceId,
+  });
   // Hand the full document to the egress pipeline: it anonymizes title + text
   // (anonymized mode) before windowing, then serializes. No mode branch here.
   return {
@@ -665,9 +660,9 @@ const handleCompatFetchTool: McpToolHandler<
     cursor,
     id: rawId,
     maxChars: MCP_CONTENT_MAX_CHARS,
-    subject: { kind: "document", workspaceId: fetchPayload.workspaceId },
-    text: fetchPayload.text,
-    title: fetchPayload.title,
+    subject: { kind: "document", workspaceId },
+    text,
+    title: doc.source.name || rawEntityId,
     url,
   };
 };

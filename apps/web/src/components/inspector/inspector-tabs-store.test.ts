@@ -1,9 +1,25 @@
-import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
+import { QueryClient } from "@tanstack/react-query";
+import { panic } from "better-result";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  mock,
+  spyOn,
+  test,
+} from "bun:test";
 
 import { Temporal } from "@stll/time";
 import { stellaToast } from "@stll/ui/toast";
 
-import { isFileFacet } from "@/components/inspector/inspector-broadcast";
+import {
+  holdInspectorRestoreSettle,
+  isFileFacet,
+  readPersistedInspectorPaneOpen,
+  startNewPageLoadForTest,
+} from "@/components/inspector/inspector-broadcast";
+import { INSPECTOR_FOCUS_INTENT } from "@/components/inspector/inspector-store-types";
 import {
   buildSkillResourceTabId,
   closeInspectorTabsForEntities,
@@ -22,38 +38,21 @@ import {
   lookupLegalDocumentChatThread,
   useLegalDocumentChatThreads,
 } from "@/features/chat/legal-document-chat-threads";
+import { browserStorage } from "@/lib/account/browser-storage";
+import { installUserScopedStorage } from "@/lib/account/install-user-scoped-storage";
+import {
+  releaseUserStorage,
+  userStorageKey,
+} from "@/lib/account/user-scoped-storage";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { toChatThreadId } from "@/lib/chat-thread-ref";
+
+const localArea = () =>
+  browserStorage("local") ?? panic("Test requires local browser storage");
 
 let cleanupInspectorBroadcast: (() => void) | null = null;
 let restoreTemporalNow: (() => void) | undefined;
 let previousWindowDescriptor: PropertyDescriptor | undefined;
-
-afterEach(() => {
-  cleanupInspectorBroadcast?.();
-  cleanupInspectorBroadcast = null;
-  restoreTemporalNow?.();
-  restoreTemporalNow = undefined;
-  FakeBroadcastChannel.reset();
-  if (previousWindowDescriptor) {
-    Object.defineProperty(globalThis, "window", previousWindowDescriptor);
-    previousWindowDescriptor = undefined;
-  } else {
-    Reflect.deleteProperty(globalThis, "window");
-  }
-  useInspectorTabsStore.setState({
-    tabs: [],
-    groups: [],
-    groupAssignments: {},
-    collapsedGroupIds: [],
-    activeId: null,
-    activationSeq: 0,
-    flashTabId: null,
-    flashSeq: 0,
-    minimized: false,
-    reviveSuggestion: null,
-  });
-});
 
 class FakeBroadcastChannel {
   static readonly channels = new Map<string, Set<FakeBroadcastChannel>>();
@@ -131,6 +130,36 @@ class FakeBroadcastChannel {
   }
 }
 
+afterEach(() => {
+  // Spies created in a test stay attached if it fails before restoring them.
+  mock.restore();
+  cleanupInspectorBroadcast?.();
+  cleanupInspectorBroadcast = null;
+  // The next test is a fresh page: this one's pending restore settle ends.
+  startNewPageLoadForTest();
+  restoreTemporalNow?.();
+  restoreTemporalNow = undefined;
+  FakeBroadcastChannel.reset();
+  if (previousWindowDescriptor) {
+    Object.defineProperty(globalThis, "window", previousWindowDescriptor);
+    previousWindowDescriptor = undefined;
+  } else {
+    Reflect.deleteProperty(globalThis, "window");
+  }
+  useInspectorTabsStore.setState({
+    tabs: [],
+    groups: [],
+    groupAssignments: {},
+    collapsedGroupIds: [],
+    activeId: null,
+    activationSeq: 0,
+    flashTabId: null,
+    flashSeq: 0,
+    minimized: false,
+    reviveSuggestion: null,
+  });
+});
+
 class MemoryStorage implements Storage {
   private readonly values = new Map<string, string>();
   get length() {
@@ -162,7 +191,10 @@ const installFakeBroadcastChannel = () => {
     configurable: true,
     value: {
       BroadcastChannel: FakeBroadcastChannel,
+      setTimeout: globalThis.setTimeout,
+      clearTimeout: globalThis.clearTimeout,
       localStorage: new MemoryStorage(),
+      sessionStorage: new MemoryStorage(),
     },
   });
 };
@@ -322,6 +354,7 @@ describe("openChat", () => {
       id: threadId,
       workspaceId: "ws-1",
       contextMatterIds: ["ws-1"],
+      focus: INSPECTOR_FOCUS_INTENT.claim,
     });
 
     const tab = useInspectorTabsStore
@@ -337,7 +370,9 @@ describe("openChat", () => {
 
   test("creates a global tab when workspaceId is omitted", () => {
     const threadId = toChatThreadId("thread-B");
-    useInspectorTabsStore.getState().openChat({ id: threadId });
+    useInspectorTabsStore
+      .getState()
+      .openChat({ id: threadId, focus: INSPECTOR_FOCUS_INTENT.claim });
 
     const tab = useInspectorTabsStore
       .getState()
@@ -355,10 +390,12 @@ describe("openChat", () => {
     useInspectorTabsStore.getState().openChat({
       id: threadId,
       workspaceId: "ws-1",
+      focus: INSPECTOR_FOCUS_INTENT.claim,
     });
     useInspectorTabsStore.getState().openChat({
       id: threadId,
       contextMatterIds: ["ws-2"],
+      focus: INSPECTOR_FOCUS_INTENT.claim,
     });
 
     const tab = useInspectorTabsStore
@@ -378,11 +415,13 @@ describe("openChat", () => {
     useInspectorTabsStore.getState().openChat({
       id: threadId,
       activeSkill: { skillId: "skill-1", skillName: "Review Skill" },
+      focus: INSPECTOR_FOCUS_INTENT.claim,
     });
 
     useInspectorTabsStore.getState().openChat({
       id: threadId,
       label: "Renamed skill chat",
+      focus: INSPECTOR_FOCUS_INTENT.claim,
     });
 
     const tab = useInspectorTabsStore
@@ -465,7 +504,10 @@ describe("openSkillResourceTab", () => {
       skillName: "review",
     };
 
-    useInspectorTabsStore.getState().openSkillResourceTab(resource);
+    useInspectorTabsStore.getState().openSkillResourceTab({
+      ...resource,
+      focus: INSPECTOR_FOCUS_INTENT.claim,
+    });
     useInspectorTabsStore
       .getState()
       .updateSkillResourceTabContent(
@@ -475,6 +517,7 @@ describe("openSkillResourceTab", () => {
     useInspectorTabsStore.getState().openSkillResourceTab({
       ...resource,
       content: "Stale tool output",
+      focus: INSPECTOR_FOCUS_INTENT.claim,
     });
 
     const tab = useInspectorTabsStore
@@ -497,12 +540,16 @@ describe("openSkillResourceTab", () => {
       skillName: "review",
     };
 
-    useInspectorTabsStore.getState().openSkillResourceTab(resource);
+    useInspectorTabsStore.getState().openSkillResourceTab({
+      ...resource,
+      focus: INSPECTOR_FOCUS_INTENT.claim,
+    });
     useInspectorTabsStore.getState().openSkillResourceTab({
       ...resource,
       content: "Installed content",
       origin: "upload",
       skillId: "agentSkill_1",
+      focus: INSPECTOR_FOCUS_INTENT.claim,
     });
 
     const tab = useInspectorTabsStore
@@ -527,12 +574,16 @@ describe("openSkillResourceTab", () => {
       skillName: "review",
     };
 
-    useInspectorTabsStore.getState().openSkillResourceTab(resource);
+    useInspectorTabsStore.getState().openSkillResourceTab({
+      ...resource,
+      focus: INSPECTOR_FOCUS_INTENT.claim,
+    });
     useInspectorTabsStore.getState().openSkillResourceTab({
       ...resource,
       content: "Installed content",
       origin: "upload",
       skillId: "agentSkill_1",
+      focus: INSPECTOR_FOCUS_INTENT.claim,
     });
 
     const tab = useInspectorTabsStore
@@ -557,7 +608,10 @@ describe("openSkillResourceTab", () => {
       skillName: "review",
     };
 
-    useInspectorTabsStore.getState().openSkillResourceTab(resource);
+    useInspectorTabsStore.getState().openSkillResourceTab({
+      ...resource,
+      focus: INSPECTOR_FOCUS_INTENT.claim,
+    });
     useInspectorTabsStore
       .getState()
       .updateSkillResourceTabContent(
@@ -568,6 +622,7 @@ describe("openSkillResourceTab", () => {
       ...resource,
       content: "Tool output",
       refreshContent: true,
+      focus: INSPECTOR_FOCUS_INTENT.claim,
     });
 
     const tab = useInspectorTabsStore
@@ -675,6 +730,38 @@ describe("replaceFileFieldId", () => {
       .getState()
       .tabs.find((item) => item.id === "field-pdf");
     expect(tab).toMatchObject({ facet: "preview", type: "pdf" });
+  });
+
+  test("reopening an open file applies a requested facet and keeps the reader's otherwise", () => {
+    const contract = {
+      id: "field-contract",
+      entityId: "entity-1",
+      label: "Contract",
+      fileName: "contract.pdf",
+      mimeType: "application/pdf",
+      pdfFileId: null,
+      propertyId: "property-1",
+      workspaceId: "workspace-1",
+    };
+    const contractTab = () =>
+      useInspectorTabsStore
+        .getState()
+        .tabs.find((item) => item.id === contract.id);
+    useInspectorTabsStore.getState().openFile(contract);
+    useInspectorTabsStore.getState().setFileFacet(contract.id, "metadata");
+
+    useInspectorTabsStore
+      .getState()
+      .openFile({ ...contract, facet: "versions" });
+    expect(contractTab()).toMatchObject({ facet: "versions", type: "pdf" });
+
+    useInspectorTabsStore.getState().openFile(contract);
+    expect(contractTab()).toMatchObject({ facet: "versions", type: "pdf" });
+
+    useInspectorTabsStore
+      .getState()
+      .openFileForEntity({ ...contract, facet: "preview" });
+    expect(contractTab()).toMatchObject({ facet: "preview", type: "pdf" });
   });
 
   test("openFileForEntity drops a stale tab whose id collides with the new field", () => {
@@ -856,6 +943,18 @@ describe("revive suggestion", () => {
     expect(useInspectorTabsStore.getState().reviveSuggestion).toBeNull();
   });
 
+  test("a tab moved to the main view minimizes the pane; a plain close does not", () => {
+    openFullscreenFileTab();
+    useInspectorTabsStore.getState().setMinimized(false);
+    useInspectorTabsStore.getState().closeTab("field-1");
+    expect(useInspectorTabsStore.getState().minimized).toBe(false);
+
+    openFullscreenFileTab();
+    useInspectorTabsStore.getState().closeTab("field-1", { movedToMain: true });
+    expect(useInspectorTabsStore.getState().tabs).toHaveLength(0);
+    expect(useInspectorTabsStore.getState().minimized).toBe(true);
+  });
+
   test("closing a side-peek file tab leaves no suggestion", () => {
     useInspectorTabsStore.getState().openFile({
       id: "field-1",
@@ -905,9 +1004,10 @@ describe("revive suggestion", () => {
 
   test("closeAll keeps a suggestion for the swept-away bound tab", () => {
     openFullscreenFileTab();
-    useInspectorTabsStore
-      .getState()
-      .openChat({ id: toChatThreadId("thread-1") });
+    useInspectorTabsStore.getState().openChat({
+      id: toChatThreadId("thread-1"),
+      focus: INSPECTOR_FOCUS_INTENT.claim,
+    });
 
     useInspectorTabsStore.getState().closeAll();
     expect(useInspectorTabsStore.getState().tabs).toHaveLength(0);
@@ -923,9 +1023,10 @@ describe("revive suggestion", () => {
       label: "Draft",
       payload: { source: "First" },
     });
-    useInspectorTabsStore
-      .getState()
-      .openChat({ id: toChatThreadId("thread-1") });
+    useInspectorTabsStore.getState().openChat({
+      id: toChatThreadId("thread-1"),
+      focus: INSPECTOR_FOCUS_INTENT.claim,
+    });
     const activationSeq = useInspectorTabsStore.getState().activationSeq;
 
     useInspectorTabsStore.getState().updateView({
@@ -1011,7 +1112,10 @@ describe("revive suggestion", () => {
 
   test("a route-owned tab lives exactly as long as its owner route is matched", () => {
     const store = useInspectorTabsStore.getState();
-    store.openChat({ id: toChatThreadId("thread-1") });
+    store.openChat({
+      id: toChatThreadId("thread-1"),
+      focus: INSPECTOR_FOCUS_INTENT.claim,
+    });
     store.openView({
       type: "test-owned-view",
       id: "test-owned-view:1",
@@ -1055,7 +1159,10 @@ describe("revive suggestion", () => {
 
   test("rejects assignment to a missing custom group", () => {
     const store = useInspectorTabsStore.getState();
-    store.openChat({ id: toChatThreadId("thread-1") });
+    store.openChat({
+      id: toChatThreadId("thread-1"),
+      focus: INSPECTOR_FOCUS_INTENT.claim,
+    });
 
     expect(() => store.setTabGroup("thread-1", "custom:missing")).toThrow(
       "Cannot assign an Inspector tab to a missing group",
@@ -1103,9 +1210,11 @@ describe("closeTabsForEntities", () => {
     });
     useInspectorTabsStore.getState().openChat({
       id: toChatThreadId("thread-after"),
+      focus: INSPECTOR_FOCUS_INTENT.claim,
     });
     useInspectorTabsStore.getState().openChat({
       id: toChatThreadId("thread-last"),
+      focus: INSPECTOR_FOCUS_INTENT.claim,
     });
     useInspectorTabsStore.getState().setActive("field-1");
 
@@ -1158,6 +1267,7 @@ describe("closeTabsForEntities", () => {
     });
     useInspectorTabsStore.getState().openChat({
       id: toChatThreadId("thread-keep"),
+      focus: INSPECTOR_FOCUS_INTENT.claim,
     });
 
     closeInspectorTabsForEntities(["entity-1"]);
@@ -1168,6 +1278,7 @@ describe("closeTabsForEntities", () => {
   test("preserves the tabs reference when no open tab was deleted", () => {
     useInspectorTabsStore.getState().openChat({
       id: toChatThreadId("thread-keep"),
+      focus: INSPECTOR_FOCUS_INTENT.claim,
     });
     const tabsBefore = useInspectorTabsStore.getState().tabs;
 
@@ -1281,7 +1392,11 @@ describe("Inspector tab broadcast", () => {
     );
     const store = useInspectorTabsStore.getState();
     const threadId = toChatThreadId("thread-1");
-    store.openChat({ id: threadId, label: "Local chat" });
+    store.openChat({
+      id: threadId,
+      label: "Local chat",
+      focus: INSPECTOR_FOCUS_INTENT.claim,
+    });
     const groupId = store.createGroup({ name: "Review", color: "blue" });
     store.setTabGroup(threadId, groupId);
     cleanupInspectorBroadcast = initializeInspectorTabBroadcast(scope);
@@ -1342,6 +1457,30 @@ describe("Inspector tab broadcast", () => {
     });
   });
 
+  test("reserved pane visibility matches restoration before tabs arrive", () => {
+    installFakeBroadcastChannel();
+    const scope = { organizationId: "org-1", userId: "user-1" };
+    expect(readPersistedInspectorPaneOpen(scope)).toBe(false);
+    cleanupInspectorBroadcast = initializeInspectorTabBroadcast(scope);
+    openFullscreenFileTab();
+    useInspectorTabsStore.setState({ minimized: false });
+    cleanupInspectorBroadcast();
+    cleanupInspectorBroadcast = null;
+    useInspectorTabsStore.setState({ tabs: [], activeId: null });
+    expect(readPersistedInspectorPaneOpen(scope)).toBe(true);
+    expect(
+      readPersistedInspectorPaneOpen({ ...scope, userId: "other-user" }),
+    ).toBe(false);
+    expect(
+      readPersistedInspectorPaneOpen({ ...scope, organizationId: "other-org" }),
+    ).toBe(false);
+    cleanupInspectorBroadcast = initializeInspectorTabBroadcast(scope);
+    expect(useInspectorTabsStore.getState().tabs.length).toBeGreaterThan(0);
+    expect(useInspectorTabsStore.getState().minimized).toBe(false);
+    useInspectorTabsStore.setState({ minimized: true });
+    expect(readPersistedInspectorPaneOpen(scope)).toBe(false);
+  });
+
   test("a reload restores a full-view file tab in side peek", () => {
     installFakeBroadcastChannel();
     const scope = { organizationId: "org-1", userId: "user-1" };
@@ -1356,6 +1495,237 @@ describe("Inspector tab broadcast", () => {
     const restored = useInspectorTabsStore.getState().tabs.at(0);
     expect(restored).toMatchObject({ id: "field-1", type: "pdf" });
     expect(restored).not.toHaveProperty("metadataLane");
+  });
+
+  test("a shell handoff keeps a restored inspector open before its settle delay", () => {
+    installFakeBroadcastChannel();
+    const scope = { organizationId: "org-1", userId: "user-1" };
+    cleanupInspectorBroadcast = initializeInspectorTabBroadcast(scope);
+    openFullscreenFileTab();
+    useInspectorTabsStore.setState({ minimized: false });
+
+    // A fresh document restores the persisted tab.
+    cleanupInspectorBroadcast();
+    useInspectorTabsStore.setState({ tabs: [], activeId: null });
+    cleanupInspectorBroadcast = initializeInspectorTabBroadcast(scope);
+    expect(useInspectorTabsStore.getState().minimized).toBe(false);
+
+    // The route switches shells in the same document before restore settles.
+    cleanupInspectorBroadcast();
+    cleanupInspectorBroadcast = initializeInspectorTabBroadcast(scope);
+    expect(useInspectorTabsStore.getState().minimized).toBe(false);
+    expect(useInspectorTabsStore.getState().tabs.at(0)).toMatchObject({
+      id: "field-1",
+    });
+  });
+
+  test("a restore that never settled reopens minimized on the next start", () => {
+    installFakeBroadcastChannel();
+    const scope = { organizationId: "org-1", userId: "user-1" };
+    const recovered = spyOn(getAnalytics(), "captureInspectorRestoreRecovered");
+    cleanupInspectorBroadcast = initializeInspectorTabBroadcast(scope);
+    openFullscreenFileTab();
+    useInspectorTabsStore.setState({ minimized: false });
+
+    // A load that restores the tab, then never settles (no timer runs).
+    cleanupInspectorBroadcast();
+    useInspectorTabsStore.setState({ tabs: [], activeId: null });
+    startNewPageLoadForTest();
+    cleanupInspectorBroadcast = initializeInspectorTabBroadcast(scope);
+    expect(useInspectorTabsStore.getState().minimized).toBe(false);
+    expect(recovered).not.toHaveBeenCalled();
+
+    // The next start still finds the flag: tabs come back, the pane stays shut.
+    cleanupInspectorBroadcast();
+    useInspectorTabsStore.setState({
+      tabs: [],
+      activeId: null,
+      minimized: false,
+    });
+    startNewPageLoadForTest();
+    cleanupInspectorBroadcast = initializeInspectorTabBroadcast(scope);
+    expect(useInspectorTabsStore.getState().minimized).toBe(true);
+    expect(useInspectorTabsStore.getState().tabs.at(0)).toMatchObject({
+      id: "field-1",
+    });
+    expect(recovered).toHaveBeenCalledTimes(1);
+    expect(recovered).toHaveBeenCalledWith({ tabCount: 1 });
+    recovered.mockRestore();
+  });
+
+  test("a restore that settles leaves the next start unchanged", async () => {
+    installFakeBroadcastChannel();
+    const scope = { organizationId: "org-1", userId: "user-1" };
+    const recovered = spyOn(getAnalytics(), "captureInspectorRestoreRecovered");
+    cleanupInspectorBroadcast = initializeInspectorTabBroadcast(scope);
+    openFullscreenFileTab();
+    useInspectorTabsStore.setState({ minimized: false });
+
+    cleanupInspectorBroadcast();
+    useInspectorTabsStore.setState({ tabs: [], activeId: null });
+    startNewPageLoadForTest();
+    cleanupInspectorBroadcast = initializeInspectorTabBroadcast(scope);
+    // The page stays responsive past the settle delay.
+    await Bun.sleep(2200);
+
+    cleanupInspectorBroadcast();
+    useInspectorTabsStore.setState({
+      tabs: [],
+      activeId: null,
+      minimized: false,
+    });
+    startNewPageLoadForTest();
+    cleanupInspectorBroadcast = initializeInspectorTabBroadcast(scope);
+    expect(useInspectorTabsStore.getState().minimized).toBe(false);
+    expect(useInspectorTabsStore.getState().tabs).toHaveLength(1);
+    expect(recovered).not.toHaveBeenCalled();
+    recovered.mockRestore();
+  });
+
+  test("another start in the same page while its restore settles keeps the pane open", () => {
+    installFakeBroadcastChannel();
+    const scope = { organizationId: "org-1", userId: "user-1" };
+    const recovered = spyOn(getAnalytics(), "captureInspectorRestoreRecovered");
+    cleanupInspectorBroadcast = initializeInspectorTabBroadcast(scope);
+    openFullscreenFileTab();
+    useInspectorTabsStore.setState({ minimized: false });
+
+    // A load restores the tab and has not settled yet.
+    cleanupInspectorBroadcast();
+    useInspectorTabsStore.setState({ tabs: [], activeId: null });
+    startNewPageLoadForTest();
+    cleanupInspectorBroadcast = initializeInspectorTabBroadcast(scope);
+    expect(useInspectorTabsStore.getState().minimized).toBe(false);
+
+    // A shell in the same page attaches the store again (a client navigation),
+    // inside the settle delay: its own pending restore is not a stalled load.
+    cleanupInspectorBroadcast();
+    useInspectorTabsStore.setState({ tabs: [], activeId: null });
+    cleanupInspectorBroadcast = initializeInspectorTabBroadcast(scope);
+    expect(useInspectorTabsStore.getState().minimized).toBe(false);
+    expect(useInspectorTabsStore.getState().tabs.at(0)).toMatchObject({
+      id: "field-1",
+    });
+    expect(recovered).not.toHaveBeenCalled();
+    recovered.mockRestore();
+  });
+
+  test("leaving the page before the settle delay is not a stalled restore", () => {
+    installFakeBroadcastChannel();
+    const pagehide = new EventTarget();
+    const addListener = spyOn(
+      globalThis,
+      "addEventListener",
+    ).mockImplementation(
+      (...args: Parameters<typeof globalThis.addEventListener>) => {
+        pagehide.addEventListener(...args);
+      },
+    );
+    const scope = { organizationId: "org-1", userId: "user-1" };
+    const recovered = spyOn(getAnalytics(), "captureInspectorRestoreRecovered");
+    cleanupInspectorBroadcast = initializeInspectorTabBroadcast(scope);
+    openFullscreenFileTab();
+    useInspectorTabsStore.setState({ minimized: false });
+
+    cleanupInspectorBroadcast();
+    useInspectorTabsStore.setState({ tabs: [], activeId: null });
+    startNewPageLoadForTest();
+    cleanupInspectorBroadcast = initializeInspectorTabBroadcast(scope);
+    // A quick reload: the page leaves well inside the settle delay.
+    pagehide.dispatchEvent(new Event("pagehide"));
+
+    cleanupInspectorBroadcast();
+    useInspectorTabsStore.setState({
+      tabs: [],
+      activeId: null,
+      minimized: false,
+    });
+    startNewPageLoadForTest();
+    cleanupInspectorBroadcast = initializeInspectorTabBroadcast(scope);
+    expect(useInspectorTabsStore.getState().minimized).toBe(false);
+    expect(recovered).not.toHaveBeenCalled();
+    recovered.mockRestore();
+    addListener.mockRestore();
+  });
+
+  test("a viewer still loading past the settle delay keeps the flag", async () => {
+    installFakeBroadcastChannel();
+    const scope = { organizationId: "org-1", userId: "user-1" };
+    const recovered = spyOn(getAnalytics(), "captureInspectorRestoreRecovered");
+    cleanupInspectorBroadcast = initializeInspectorTabBroadcast(scope);
+    openFullscreenFileTab();
+    useInspectorTabsStore.setState({ minimized: false });
+
+    cleanupInspectorBroadcast();
+    useInspectorTabsStore.setState({ tabs: [], activeId: null });
+    startNewPageLoadForTest();
+    cleanupInspectorBroadcast = initializeInspectorTabBroadcast(scope);
+    // The restored viewer mounts and its document is still downloading.
+    const release = holdInspectorRestoreSettle();
+    await Bun.sleep(2200);
+
+    // It stalled after the delay: the next start must still recover.
+    cleanupInspectorBroadcast();
+    useInspectorTabsStore.setState({
+      tabs: [],
+      activeId: null,
+      minimized: false,
+    });
+    startNewPageLoadForTest();
+    cleanupInspectorBroadcast = initializeInspectorTabBroadcast(scope);
+    expect(useInspectorTabsStore.getState().minimized).toBe(true);
+    expect(recovered).toHaveBeenCalledTimes(1);
+    release();
+    recovered.mockRestore();
+  });
+
+  test("a viewer hold an earlier page load never released does not hold the next one", async () => {
+    installFakeBroadcastChannel();
+    const pagehide = new EventTarget();
+    const addListener = spyOn(
+      globalThis,
+      "addEventListener",
+    ).mockImplementation(
+      (...args: Parameters<typeof globalThis.addEventListener>) => {
+        pagehide.addEventListener(...args);
+      },
+    );
+    const scope = { organizationId: "org-1", userId: "user-1" };
+    const recovered = spyOn(getAnalytics(), "captureInspectorRestoreRecovered");
+    cleanupInspectorBroadcast = initializeInspectorTabBroadcast(scope);
+    openFullscreenFileTab();
+    useInspectorTabsStore.setState({ minimized: false });
+
+    // The restored viewer is still downloading when the page reloads.
+    cleanupInspectorBroadcast();
+    useInspectorTabsStore.setState({ tabs: [], activeId: null });
+    startNewPageLoadForTest();
+    cleanupInspectorBroadcast = initializeInspectorTabBroadcast(scope);
+    const releaseEarlierPage = holdInspectorRestoreSettle();
+    pagehide.dispatchEvent(new Event("pagehide"));
+
+    // The next load restores and stays responsive past the settle delay.
+    cleanupInspectorBroadcast();
+    useInspectorTabsStore.setState({ tabs: [], activeId: null });
+    startNewPageLoadForTest();
+    cleanupInspectorBroadcast = initializeInspectorTabBroadcast(scope);
+    await Bun.sleep(2200);
+
+    // Its restore settled, so the start after it reopens the pane, and the
+    // late release from the first page changes nothing.
+    releaseEarlierPage();
+    cleanupInspectorBroadcast();
+    useInspectorTabsStore.setState({
+      tabs: [],
+      activeId: null,
+      minimized: false,
+    });
+    startNewPageLoadForTest();
+    cleanupInspectorBroadcast = initializeInspectorTabBroadcast(scope);
+    expect(useInspectorTabsStore.getState().minimized).toBe(false);
+    expect(recovered).not.toHaveBeenCalled();
+    recovered.mockRestore();
+    addListener.mockRestore();
   });
 
   test("keeps each window's own file tab lane across syncs", () => {
@@ -1438,7 +1808,9 @@ describe("Inspector tab broadcast", () => {
     );
 
     const localThreadId = toChatThreadId("thread-local");
-    useInspectorTabsStore.getState().openChat({ id: localThreadId });
+    useInspectorTabsStore
+      .getState()
+      .openChat({ id: localThreadId, focus: INSPECTOR_FOCUS_INTENT.claim });
     cleanupInspectorBroadcast = initializeInspectorTabBroadcast(scope);
 
     peer.emit({
@@ -1496,6 +1868,7 @@ describe("Inspector tab broadcast", () => {
     useInspectorTabsStore.getState().openChat({
       id: localThreadId,
       label: "Local chat",
+      focus: INSPECTOR_FOCUS_INTENT.claim,
     });
 
     const syncMessage = received.findLast(
@@ -1747,9 +2120,10 @@ describe("Inspector tab broadcast", () => {
     );
 
     expect(() =>
-      useInspectorTabsStore
-        .getState()
-        .openChat({ id: toChatThreadId("thread-local") }),
+      useInspectorTabsStore.getState().openChat({
+        id: toChatThreadId("thread-local"),
+        focus: INSPECTOR_FOCUS_INTENT.claim,
+      }),
     ).not.toThrow();
     expect(useInspectorTabsStore.getState().tabs).toHaveLength(1);
   });
@@ -1905,32 +2279,34 @@ describe("Inspector tab broadcast", () => {
     const captureSpy = spyOn(getAnalytics(), "captureError").mockImplementation(
       () => undefined,
     );
-    const workingSetItem = window.localStorage.setItem.bind(
-      window.localStorage,
-    );
+    const workingSetItem = localArea().setItem.bind(localArea());
     const failingSetItem = () => {
       throw new DOMException("Storage unavailable", "QuotaExceededError");
     };
-    window.localStorage.setItem = failingSetItem;
+    localArea().setItem = failingSetItem;
 
-    useInspectorTabsStore
-      .getState()
-      .openChat({ id: toChatThreadId("thread-1") });
-    useInspectorTabsStore
-      .getState()
-      .openChat({ id: toChatThreadId("thread-2") });
+    useInspectorTabsStore.getState().openChat({
+      id: toChatThreadId("thread-1"),
+      focus: INSPECTOR_FOCUS_INTENT.claim,
+    });
+    useInspectorTabsStore.getState().openChat({
+      id: toChatThreadId("thread-2"),
+      focus: INSPECTOR_FOCUS_INTENT.claim,
+    });
 
     expect(toastSpy).toHaveBeenCalledTimes(1);
     expect(captureSpy).toHaveBeenCalledTimes(1);
 
-    window.localStorage.setItem = workingSetItem;
-    useInspectorTabsStore
-      .getState()
-      .openChat({ id: toChatThreadId("thread-3") });
-    window.localStorage.setItem = failingSetItem;
-    useInspectorTabsStore
-      .getState()
-      .openChat({ id: toChatThreadId("thread-4") });
+    localArea().setItem = workingSetItem;
+    useInspectorTabsStore.getState().openChat({
+      id: toChatThreadId("thread-3"),
+      focus: INSPECTOR_FOCUS_INTENT.claim,
+    });
+    localArea().setItem = failingSetItem;
+    useInspectorTabsStore.getState().openChat({
+      id: toChatThreadId("thread-4"),
+      focus: INSPECTOR_FOCUS_INTENT.claim,
+    });
 
     expect(toastSpy).toHaveBeenCalledTimes(2);
     expect(captureSpy).toHaveBeenCalledTimes(2);
@@ -1944,9 +2320,10 @@ describe("Inspector tab broadcast", () => {
       organizationId: "org-old",
       userId: "user-scope-switch",
     });
-    useInspectorTabsStore
-      .getState()
-      .openChat({ id: toChatThreadId("old-scope-thread") });
+    useInspectorTabsStore.getState().openChat({
+      id: toChatThreadId("old-scope-thread"),
+      focus: INSPECTOR_FOCUS_INTENT.claim,
+    });
 
     cleanupInspectorBroadcast();
     cleanupInspectorBroadcast = initializeInspectorTabBroadcast({
@@ -1956,8 +2333,11 @@ describe("Inspector tab broadcast", () => {
 
     expect(useInspectorTabsStore.getState().tabs).toEqual([]);
     expect(
-      window.localStorage.getItem(
-        "stella:inspector-state:v1:org-new:user-scope-switch",
+      localArea().getItem(
+        userStorageKey("stella:inspector-state:v1:org-new:", {
+          kind: "user",
+          userId: "user-scope-switch",
+        }),
       ),
     ).toBeNull();
   });
@@ -1969,9 +2349,10 @@ describe("Inspector tab broadcast", () => {
       organizationId: "org-storage-old",
       userId: "user-storage",
     });
-    useInspectorTabsStore
-      .getState()
-      .openChat({ id: toChatThreadId("storage-old-thread") });
+    useInspectorTabsStore.getState().openChat({
+      id: toChatThreadId("storage-old-thread"),
+      focus: INSPECTOR_FOCUS_INTENT.claim,
+    });
     useInspectorTabsStore.getState().setMinimized(true);
 
     cleanupInspectorBroadcast();
@@ -1983,10 +2364,13 @@ describe("Inspector tab broadcast", () => {
     expect(useInspectorTabsStore.getState().tabs).toEqual([]);
     expect(useInspectorTabsStore.getState().minimized).toBe(false);
     expect(
-      window.localStorage.getItem(
-        "stella:inspector-minimized:v1:org-storage-old:user-storage",
+      localArea().getItem(
+        userStorageKey("stella:inspector-minimized:v1:org-storage-old:", {
+          kind: "user",
+          userId: "user-storage",
+        }),
       ),
-    ).toBe("1");
+    ).toBe(JSON.stringify({ version: 1, value: true }));
   });
 
   test("does not exchange tabs across organization scopes", () => {
@@ -2006,9 +2390,10 @@ describe("Inspector tab broadcast", () => {
       organizationId: "org-1",
       userId: "user-1",
     });
-    useInspectorTabsStore
-      .getState()
-      .openChat({ id: toChatThreadId("thread-1") });
+    useInspectorTabsStore.getState().openChat({
+      id: toChatThreadId("thread-1"),
+      focus: INSPECTOR_FOCUS_INTENT.claim,
+    });
 
     expect(received).toEqual([]);
   });
@@ -2021,9 +2406,15 @@ describe("a legal document's chat tab and the reader's composer", () => {
 
   test("open the same thread every time the document is asked about", () => {
     const store = useInspectorTabsStore.getState();
-    store.openChat({ activeLegalKey: decisionChatKey("decision-1") });
+    store.openChat({
+      activeLegalKey: decisionChatKey("decision-1"),
+      focus: INSPECTOR_FOCUS_INTENT.claim,
+    });
     const first = useInspectorTabsStore.getState().tabs.at(0);
-    store.openChat({ activeLegalKey: decisionChatKey("decision-1") });
+    store.openChat({
+      activeLegalKey: decisionChatKey("decision-1"),
+      focus: INSPECTOR_FOCUS_INTENT.claim,
+    });
     const tabs = useInspectorTabsStore.getState().tabs;
 
     expect(tabs).toHaveLength(1);
@@ -2032,8 +2423,14 @@ describe("a legal document's chat tab and the reader's composer", () => {
 
   test("keep separate threads for separate documents", () => {
     const store = useInspectorTabsStore.getState();
-    store.openChat({ activeLegalKey: decisionChatKey("decision-1") });
-    store.openChat({ activeLegalKey: decisionChatKey("decision-2") });
+    store.openChat({
+      activeLegalKey: decisionChatKey("decision-1"),
+      focus: INSPECTOR_FOCUS_INTENT.claim,
+    });
+    store.openChat({
+      activeLegalKey: decisionChatKey("decision-2"),
+      focus: INSPECTOR_FOCUS_INTENT.claim,
+    });
     const tabs = useInspectorTabsStore.getState().tabs;
 
     expect(tabs).toHaveLength(2);
@@ -2042,8 +2439,14 @@ describe("a legal document's chat tab and the reader's composer", () => {
 
   test("keep a consolidation apart from a decision of the same id", () => {
     const store = useInspectorTabsStore.getState();
-    store.openChat({ activeLegalKey: decisionChatKey("shared-1") });
-    store.openChat({ activeLegalKey: statuteChatKey("shared-1") });
+    store.openChat({
+      activeLegalKey: decisionChatKey("shared-1"),
+      focus: INSPECTOR_FOCUS_INTENT.claim,
+    });
+    store.openChat({
+      activeLegalKey: statuteChatKey("shared-1"),
+      focus: INSPECTOR_FOCUS_INTENT.claim,
+    });
 
     expect(useInspectorTabsStore.getState().tabs).toHaveLength(2);
   });
@@ -2052,18 +2455,21 @@ describe("a legal document's chat tab and the reader's composer", () => {
     const owned = ensureLegalDocumentChatThread({
       documentKey: statuteChatKey("document-1"),
     });
-    useInspectorTabsStore
-      .getState()
-      .openChat({ activeLegalKey: statuteChatKey("document-1") });
+    useInspectorTabsStore.getState().openChat({
+      activeLegalKey: statuteChatKey("document-1"),
+      focus: INSPECTOR_FOCUS_INTENT.claim,
+    });
 
     expect(useInspectorTabsStore.getState().tabs.at(0)?.id).toBe(owned);
   });
 
   test("follow a thread the caller names, so the reader binds to it too", () => {
     const named = toChatThreadId("thread-named");
-    useInspectorTabsStore
-      .getState()
-      .openChat({ activeLegalKey: decisionChatKey("decision-1"), id: named });
+    useInspectorTabsStore.getState().openChat({
+      activeLegalKey: decisionChatKey("decision-1"),
+      id: named,
+      focus: INSPECTOR_FOCUS_INTENT.claim,
+    });
 
     expect(
       lookupLegalDocumentChatThread(decisionChatKey("decision-1")),
@@ -2072,7 +2478,10 @@ describe("a legal document's chat tab and the reader's composer", () => {
 
   test("follow the tab when a reserved /new command rotates its thread", () => {
     const store = useInspectorTabsStore.getState();
-    store.openChat({ activeLegalKey: decisionChatKey("decision-1") });
+    store.openChat({
+      activeLegalKey: decisionChatKey("decision-1"),
+      focus: INSPECTOR_FOCUS_INTENT.claim,
+    });
     const opened = useInspectorTabsStore.getState().tabs.at(0);
     if (opened?.type !== "chat") {
       throw new Error("expected chat tab");
@@ -2094,22 +2503,29 @@ describe("a legal document's chat tab and the reader's composer", () => {
       userId: "user-restore",
     };
     const restored = toChatThreadId("thread-restored");
-    window.localStorage.setItem(
-      `stella:inspector-state:v1:${scope.organizationId}:${scope.userId}`,
+    localArea().setItem(
+      userStorageKey(`stella:inspector-state:v1:${scope.organizationId}:`, {
+        kind: "user",
+        userId: scope.userId,
+      }),
       JSON.stringify({
-        activeId: restored,
-        collapsedGroupIds: [],
-        groupAssignments: {},
-        groups: [],
-        tabs: [
-          {
-            activeLegalKey: statuteChatKey("document-1"),
-            contextMatterIds: [],
-            id: restored,
-            label: "Statute chat",
-            type: "chat",
-          },
-        ],
+        version: 1,
+        value: {
+          activeId: restored,
+          collapsedGroupIds: [],
+          groupAssignments: {},
+          groups: [],
+          tabs: [
+            {
+              activeLegalKey: statuteChatKey("document-1"),
+              contextMatterIds: [],
+              id: restored,
+              label: "Statute chat",
+              started: true,
+              type: "chat",
+            },
+          ],
+        },
       }),
     );
     const minted = ensureLegalDocumentChatThread({
@@ -2135,22 +2551,29 @@ describe("a legal document's chat tab and the reader's composer", () => {
       userId: "user-legacy",
     };
     const restored = toChatThreadId("thread-legacy");
-    window.localStorage.setItem(
-      `stella:inspector-state:v1:${scope.organizationId}:${scope.userId}`,
+    localArea().setItem(
+      userStorageKey(`stella:inspector-state:v1:${scope.organizationId}:`, {
+        kind: "user",
+        userId: scope.userId,
+      }),
       JSON.stringify({
-        activeId: restored,
-        collapsedGroupIds: [],
-        groupAssignments: {},
-        groups: [],
-        tabs: [
-          {
-            activeDecisionId: "decision-1",
-            contextMatterIds: [],
-            id: restored,
-            label: "Decision chat",
-            type: "chat",
-          },
-        ],
+        version: 1,
+        value: {
+          activeId: restored,
+          collapsedGroupIds: [],
+          groupAssignments: {},
+          groups: [],
+          tabs: [
+            {
+              activeDecisionId: "decision-1",
+              contextMatterIds: [],
+              id: restored,
+              label: "Decision chat",
+              started: true,
+              type: "chat",
+            },
+          ],
+        },
       }),
     );
 
@@ -2165,9 +2588,58 @@ describe("a legal document's chat tab and the reader's composer", () => {
     ).toEqual({ status: "thread", threadId: restored });
   });
 
+  // A document finds its conversation on the server when it opens, so a
+  // document's chat that never got a message would only pile up as empty
+  // tabs across reloads and windows.
+  test("keep a document's chat across reloads only once its conversation started", () => {
+    installFakeBroadcastChannel();
+    const scope = { organizationId: "org-started", userId: "user-started" };
+    cleanupInspectorBroadcast = initializeInspectorTabBroadcast(scope);
+    const store = useInspectorTabsStore.getState();
+    const used = toChatThreadId("thread-used");
+    store.openChat({
+      activeLegalKey: decisionChatKey("decision-empty"),
+      focus: INSPECTOR_FOCUS_INTENT.claim,
+    });
+    store.openChat({
+      activeLegalKey: decisionChatKey("decision-used"),
+      id: used,
+      focus: INSPECTOR_FOCUS_INTENT.claim,
+    });
+    store.markChatStarted(used);
+    store.openChat({
+      id: toChatThreadId("thread-plain"),
+      focus: INSPECTOR_FOCUS_INTENT.claim,
+    });
+
+    const persisted: unknown = JSON.parse(
+      localArea().getItem(
+        userStorageKey(`stella:inspector-state:v1:${scope.organizationId}:`, {
+          kind: "user",
+          userId: scope.userId,
+        }),
+      ) ?? "null",
+    );
+    // Exactly these two: the empty document chat is left out.
+    expect(persisted).toEqual(
+      expect.objectContaining({
+        version: 1,
+        value: expect.objectContaining({
+          tabs: [
+            expect.objectContaining({ id: used, started: true }),
+            expect.objectContaining({ id: "thread-plain" }),
+          ],
+        }),
+      }),
+    );
+  });
+
   test("leave the owner alone when a chat about nothing rotates", () => {
     const store = useInspectorTabsStore.getState();
-    store.openChat({ id: toChatThreadId("thread-plain") });
+    store.openChat({
+      id: toChatThreadId("thread-plain"),
+      focus: INSPECTOR_FOCUS_INTENT.claim,
+    });
     store.resetChatTabId(
       toChatThreadId("thread-plain"),
       toChatThreadId("thread-plain-2"),
@@ -2177,4 +2649,52 @@ describe("a legal document's chat tab and the reader's composer", () => {
       useLegalDocumentChatThreads.getState().threadIdByDocumentKey,
     ).toEqual({});
   });
+});
+
+test("inspector subscriptions restore only their active account scope", () => {
+  installFakeBroadcastChannel();
+  const client = new QueryClient();
+  const areas = () => ({ local: null, session: null });
+  const unsubscribe = installUserScopedStorage(client, areas);
+  client.setQueryData(["session"], { user: { id: "a" } });
+  cleanupInspectorBroadcast = initializeInspectorTabBroadcast({
+    organizationId: "org",
+    userId: "a",
+  });
+  useInspectorTabsStore.getState().setMinimized(true);
+  const keyA = userStorageKey("stella:inspector-minimized:v1:org:", {
+    kind: "user",
+    userId: "a",
+  });
+  expect(localArea().getItem(keyA)).toBe(
+    JSON.stringify({ version: 1, value: true }),
+  );
+  client.setQueryData(["session"], { user: { id: "b" } });
+  expect(useInspectorTabsStore.getState().minimized).toBe(false);
+  expect(useInspectorTabsStore.getState().tabs).toEqual([]);
+  localArea().removeItem(keyA);
+  useInspectorTabsStore.getState().setMinimized(true);
+  expect(localArea().getItem(keyA)).toBeNull();
+  cleanupInspectorBroadcast();
+  cleanupInspectorBroadcast = null;
+  const keyB = userStorageKey("stella:inspector-minimized:v1:org:", {
+    kind: "user",
+    userId: "b",
+  });
+  localArea().setItem(keyB, JSON.stringify({ version: 1, value: true }));
+  cleanupInspectorBroadcast = initializeInspectorTabBroadcast({
+    organizationId: "org",
+    userId: "b",
+  });
+  expect(useInspectorTabsStore.getState().minimized).toBe(true);
+  useInspectorTabsStore.getState().setMinimized(false);
+  expect(localArea().getItem(keyB)).toBe(
+    JSON.stringify({ version: 1, value: false }),
+  );
+  expect(localArea().getItem(keyA)).toBeNull();
+  cleanupInspectorBroadcast();
+  cleanupInspectorBroadcast = null;
+  unsubscribe();
+  releaseUserStorage(areas());
+  client.clear();
 });

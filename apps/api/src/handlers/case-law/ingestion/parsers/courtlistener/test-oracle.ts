@@ -1,3 +1,4 @@
+// parser-output-unchanged: HTML parser bindings come from their package owner; DOM and serialization behavior are unchanged.
 /**
  * Test support for recorded opinion fixtures and a text-conservation oracle.
  * HTML is read by a lexical source walk; fixture tests declare excluded source
@@ -5,13 +6,14 @@
  */
 
 import { panic } from "better-result";
-import * as cheerio from "cheerio";
 import { decodeHTML } from "entities";
 import { readFileSync } from "node:fs";
 import { gunzipSync } from "node:zlib";
 import * as slimdom from "slimdom";
 
-import { type Block, plainTextOf } from "@/api/handlers/case-law/document-ast";
+import { load } from "@stll/html";
+import { type Block, plainTextOf } from "@stll/legal-ast/document-ast";
+
 import {
   isCsvRow,
   OPINION_COLUMNS,
@@ -149,7 +151,7 @@ export const sourceWords = (
         ),
       );
     case "pre": {
-      const $ = cheerio.load(source);
+      const $ = load(source);
       $("script, style").remove();
       return words($.root().text());
     }

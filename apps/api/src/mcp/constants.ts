@@ -1,4 +1,6 @@
 import {
+  MCP_ADVANCED_HTTP_PATH,
+  MCP_ADVANCED_RESOURCE_SCOPES,
   MCP_ANONYMIZED_HTTP_PATH,
   MCP_ANONYMIZED_RESOURCE_SCOPES,
   MCP_ANONYMIZED_SCOPE_BY_DEFAULT_SCOPE,
@@ -10,16 +12,21 @@ import {
   type McpOAuthScope,
   REQUEST_ID_HEADER,
 } from "@stll/api-contract";
+import { MCP_REGISTRY_VERSION_HEADER } from "@stll/api-contract/mcp-registry";
 
 import { env } from "@/api/env";
-import { declareCliSupportBand } from "@/api/mcp/cli-support-band";
+import {
+  LOCAL_CLIENT_IDENTITY_HEADER,
+  LOCAL_CLIENT_SUPPORT,
+} from "@/api/lib/mcp-connectors/local-client-support";
 import {
   getMcpResourceModeConfig,
   getMcpResourceScopes,
+  MCP_ADVANCED_DISCOVERY_PATH,
   MCP_ANONYMIZED_DISCOVERY_PATH,
   MCP_DISCOVERY_PATH,
-  MCP_DOCUMENTS_RESOURCE_SCOPES,
   MCP_DOCUMENTS_DISCOVERY_PATH,
+  MCP_DOCUMENTS_RESOURCE_SCOPES,
   MCP_LAW_DISCOVERY_PATH,
   MCP_LAW_RESOURCE_SCOPES,
   MCP_MODES,
@@ -28,6 +35,7 @@ import {
 import type { McpMode } from "@/api/mcp/resource-policy-contract";
 
 export {
+  MCP_ADVANCED_RESOURCE_SCOPES,
   MCP_ANONYMIZED_RESOURCE_SCOPES,
   MCP_ANONYMIZED_SCOPE_BY_DEFAULT_SCOPE,
   MCP_DEFAULT_RESOURCE_SCOPES,
@@ -38,7 +46,7 @@ export { MCP_DOCUMENTS_RESOURCE_SCOPES, MCP_LAW_RESOURCE_SCOPES, MCP_MODES };
 export type { McpMode };
 
 export const MCP_ALL_RESOURCE_SCOPES = [
-  ...MCP_DEFAULT_RESOURCE_SCOPES,
+  ...MCP_ADVANCED_RESOURCE_SCOPES,
   ...MCP_ANONYMIZED_RESOURCE_SCOPES,
 ] as const;
 
@@ -56,6 +64,7 @@ export const MCP_OAUTH_SCOPES = [
 export type { McpOAuthScope };
 
 export {
+  MCP_ADVANCED_HTTP_PATH,
   MCP_ANONYMIZED_HTTP_PATH,
   MCP_DOCUMENTS_HTTP_PATH,
   MCP_HTTP_PATH,
@@ -86,9 +95,10 @@ export const MCP_MAX_REQUEST_BODY_BYTES = 512 * 1024;
  * below edge/request deadlines: the canary derives its fetch timeout from the
  * same value, so transport and observer cannot silently drift apart.
  */
-export const MCP_NOTIFICATION_KEEP_ALIVE_MS = 5000;
+export { MCP_NOTIFICATION_KEEP_ALIVE_MS } from "./transport-contract";
 
 export {
+  MCP_ADVANCED_DISCOVERY_PATH,
   MCP_ANONYMIZED_DISCOVERY_PATH,
   MCP_DISCOVERY_PATH,
   MCP_DOCUMENTS_DISCOVERY_PATH,
@@ -96,43 +106,45 @@ export {
   ROOT_MCP_DISCOVERY_PATH,
 };
 
+export const MCP_PROTOCOL_VERSION_HEADER = "MCP-Protocol-Version";
+
+export const MCP_DISCOVERY_ALLOWED_HEADERS = [
+  "Authorization",
+  "Content-Type",
+  MCP_PROTOCOL_VERSION_HEADER,
+] as const;
+
+/**
+ * The standard request headers the MCP transports read (SEP-2243):
+ * `MCP-Protocol-Version` on every request, and on the 2026-07-28 revision
+ * `Mcp-Method` on every request and `Mcp-Name` on the methods that name a
+ * tool, resource or prompt. A browser client sends each of them, so each is
+ * allowed on preflight; a census test fails if the transport reads a request
+ * header the preflight does not allow.
+ */
+const MCP_PROTOCOL_REQUEST_HEADERS = [
+  "MCP-Protocol-Version",
+  "Mcp-Method",
+  "Mcp-Name",
+] as const;
+
 export const MCP_ALLOWED_HEADERS = [
   "Authorization",
   "Content-Type",
-  "MCP-Protocol-Version",
+  ...MCP_PROTOCOL_REQUEST_HEADERS,
+  LOCAL_CLIENT_IDENTITY_HEADER,
 ] as const;
 
-// Public protocol/revision contract advertised by protected-resource
-// discovery. CLI package versions are deliberately absent: compatibility is a
-// property of the wire protocol and capabilities, not release numbering.
-export const STELLA_API_CONTRACT = {
-  // 2: the agent surface renamed the client-engagement container to "matter"
-  // (tool inputs, capability ids, capability params), with no alias. A CLI
-  // built for protocol 1 refuses this server up front instead of failing on
-  // its first renamed input.
-  protocol: 2,
-  revision: 3,
-  capabilities: {
-    "document-version-upload": 1,
-    "mcp-v2-transport": 1,
-  },
-} as const;
+export {
+  STELLA_API_CONTRACT,
+  STELLA_MCP_API_CONTRACT_VERSION,
+} from "./stella-api-contract";
 
-// Retained as a response header and in the legacy discovery object for clients
-// published before `stella_contract` existed.
-export const STELLA_MCP_API_CONTRACT_VERSION = STELLA_API_CONTRACT.protocol;
-
-// Legacy package-version band. Freeze the ceiling at the transition CLI:
-// future CLIs negotiate `STELLA_API_CONTRACT` and never require another bump.
-const CLI_SUPPORT_BAND = declareCliSupportBand({
-  minimum: "0.3.0",
-  maximum: "0.4.3",
-});
-
-export const STELLA_CLI_MINIMUM_VERSION = CLI_SUPPORT_BAND.minimum;
-export const STELLA_CLI_MAXIMUM_VERSION = CLI_SUPPORT_BAND.maximum;
+export const STELLA_CLI_MINIMUM_VERSION = LOCAL_CLIENT_SUPPORT.cli.minimum;
+export const STELLA_CLI_LATEST_VERSION = LOCAL_CLIENT_SUPPORT.cli.latest;
 export const STELLA_MCP_API_CONTRACT_HEADER = "x-stella-api-contract-version";
 export const STELLA_CLI_MINIMUM_HEADER = "x-stella-cli-minimum";
+export const STELLA_CLI_LATEST_HEADER = "x-stella-cli-latest";
 
 // Identity of the authenticated session, echoed back to the caller on every
 // authenticated MCP response so `stella auth whoami` can confirm which org and
@@ -144,6 +156,9 @@ export const STELLA_MCP_SCOPES_HEADER = "x-stella-scopes";
 
 /** Access-token claim naming the membership row the token was issued under. */
 export const MCP_MEMBER_ID_CLAIM = "member_id";
+
+/** The `purpose` claim that marks an access token minted for one agent run. */
+export const AGENT_RUN_TOKEN_PURPOSE = "agent-run" as const;
 
 /**
  * Why an authenticated tools/list projection left a static tool out. A client
@@ -163,7 +178,7 @@ export const STELLA_MCP_OMITTED_TOOLS_HEADER_BY_REASON = {
 } as const satisfies Record<McpToolOmissionReason, string>;
 
 // The same deployment-feature evidence for catalog capabilities, which ride
-// `invoke_capability` rather than tools/list: the exact capability ids gated off.
+// capability executors rather than tools/list: the exact capability ids gated off.
 export const STELLA_MCP_FEATURE_OMITTED_CAPABILITIES_HEADER =
   "x-stella-feature-omitted-capabilities";
 
@@ -171,19 +186,22 @@ export const MCP_EXPOSE_HEADERS = [
   "WWW-Authenticate",
   STELLA_MCP_API_CONTRACT_HEADER,
   STELLA_CLI_MINIMUM_HEADER,
+  STELLA_CLI_LATEST_HEADER,
   STELLA_MCP_ORGANIZATION_HEADER,
   STELLA_MCP_SCOPES_HEADER,
   ...MCP_TOOL_OMISSION_REASONS.map(
     (reason) => STELLA_MCP_OMITTED_TOOLS_HEADER_BY_REASON[reason],
   ),
   STELLA_MCP_FEATURE_OMITTED_CAPABILITIES_HEADER,
+  // The tool-list projection version, so a browser client can compare it.
+  MCP_REGISTRY_VERSION_HEADER,
   // The per-request receipt (also on the global CORS exposeHeaders list):
   // browser-based MCP clients correlate a failed/successful call with server
   // logs the same way REST callers do.
   REQUEST_ID_HEADER,
 ] as const;
 
-export { getMcpResourceScopes };
+export { getMcpResourceModeConfig, getMcpResourceScopes };
 
 export const getMcpBaseUrl = () => env.PUBLIC_URL ?? env.BETTER_AUTH_URL;
 
@@ -192,9 +210,6 @@ export const getMcpResourceUrl = (mode: McpMode = "default") =>
     getMcpResourceModeConfig(mode).httpPath,
     `${getMcpBaseUrl().replace(/\/$/u, "")}/`,
   ).toString();
-
-export const getMcpResourceUrls = () =>
-  MCP_MODES.map((mode) => getMcpResourceUrl(mode));
 
 export const getMcpProtectedResourceMetadataUrl = (mode: McpMode = "default") =>
   new URL(

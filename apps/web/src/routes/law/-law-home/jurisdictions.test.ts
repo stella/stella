@@ -5,7 +5,10 @@ import { parseDecisionQuery } from "@stll/api-contract/decision-query-intent";
 import { parseStatuteQuery } from "@stll/api-contract/statute-query-intent";
 
 import { REGION_BY_COUNTRY } from "@/features/case-law/case-law-jurisdiction";
-import { isPublicStatuteCountry, STATUTE_COUNTRIES } from "@/lib/statute-route";
+import {
+  isPublicStatuteCountry,
+  STATUTE_COUNTRIES,
+} from "@/lib/statutes/statute-route";
 import {
   LAW_HOME_JURISDICTION_CODES,
   lawHomeDescriptor,
@@ -103,7 +106,7 @@ describe("law home jurisdictions", () => {
 
   test("statuteCountryOf answers only for jurisdictions the browser covers", () => {
     expect(statuteCountryOf("CZE")).toBe("cze");
-    expect(statuteCountryOf("SVK")).toBeNull();
+    expect(statuteCountryOf("SVK")).toBe("svk");
     expect(statuteCountryOf("POL")).toBeNull();
     expect(statuteCountryOf("EU")).toBeNull();
     expect(statuteCountryOf(undefined)).toBeNull();

@@ -4,6 +4,7 @@ import { useForm, useSelector } from "@tanstack/react-form";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
+import { ORGANIZATION_NAME_MAX_LENGTH } from "@stll/api-contract/organization-create";
 import { Button } from "@stll/ui/button";
 import { Field, FieldError, FieldLabel } from "@stll/ui/field";
 import { Form } from "@stll/ui/form";
@@ -12,18 +13,27 @@ import { cn } from "@stll/ui/utils";
 
 import { usePulse } from "@/hooks/use-pulse";
 import { detached } from "@/lib/detached";
-import { createSlug } from "@/lib/organization/utils";
 import { schemaFormOptions, toFormErrors } from "@/lib/schema";
+
+import {
+  OrganizationStepFooter,
+  OrganizationStepHeading,
+} from "./organization-step.pending";
 
 type OrganizationStepProps = {
   defaultName: string;
-  onNext: (data: { name: string; slug: string }) => void;
+  onNext: (data: { name: string }) => void;
   onNameChange: (name: string) => void;
 };
 
 const makeSchema = (required: string) =>
   v.strictObject({
-    name: v.pipe(v.string(), v.trim(), v.nonEmpty(required), v.maxLength(50)),
+    name: v.pipe(
+      v.string(),
+      v.trim(),
+      v.nonEmpty(required),
+      v.maxLength(ORGANIZATION_NAME_MAX_LENGTH),
+    ),
   });
 
 export const OrganizationStep = ({
@@ -41,8 +51,7 @@ export const OrganizationStep = ({
       defaultValues: { name: defaultName },
       submitValues: "schema-output",
       onSubmit: ({ value }) => {
-        const slug = createSlug(value.name);
-        onNext({ name: value.name, slug });
+        onNext({ name: value.name });
       },
     }),
   );
@@ -59,12 +68,10 @@ export const OrganizationStep = ({
 
   return (
     <>
-      <h1 className="text-foreground text-3xl font-light tracking-tight">
-        {t("onboarding.orgTitle")}
-      </h1>
-      <p className="text-muted-foreground mt-2 text-sm">
-        {t("onboarding.orgSubtitle")}
-      </p>
+      <OrganizationStepHeading
+        title={t("onboarding.orgTitle")}
+        description={t("onboarding.orgSubtitle")}
+      />
       <Form
         className="mt-8 flex flex-1 flex-col"
         errors={formErrors}
@@ -84,7 +91,7 @@ export const OrganizationStep = ({
               <Input
                 autoFocus
                 className={cn(isInputPulsing && "ring-primary ring-2")}
-                maxLength={50}
+                maxLength={ORGANIZATION_NAME_MAX_LENGTH}
                 onBlur={field.handleBlur}
                 onChange={(e) => {
                   field.handleChange(e.target.value);
@@ -98,7 +105,7 @@ export const OrganizationStep = ({
             </Field>
           )}
         </form.Field>
-        <div className="mt-auto flex items-center justify-end pt-8">
+        <OrganizationStepFooter>
           <Button
             aria-disabled={!currentName.trim() || undefined}
             className={cn(
@@ -115,7 +122,7 @@ export const OrganizationStep = ({
               ? t("common.next")
               : t("onboarding.enterTeamName")}
           </Button>
-        </div>
+        </OrganizationStepFooter>
       </Form>
     </>
   );

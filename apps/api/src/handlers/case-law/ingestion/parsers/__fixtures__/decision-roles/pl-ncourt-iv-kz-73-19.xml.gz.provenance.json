@@ -1,0 +1,7 @@
+{
+  "capture": "recorded",
+  "sha256": "da5d55b21091222808dd83dfa9d28bf0f66c1e96f28050189ac4e0a7770b3842",
+  "sourceUrl": "https://apiorzeczenia.wroclaw.sa.gov.pl/ncourt-api/judgement/content?id=155010000002006_IV_Kz_000073_2019_Uz_2019-03-13_001",
+  "capturedAt": "2026-11-07T20:41:16.189Z",
+  "note": "IV Kz 73/19 (Sąd Okręgowy w Legnicy, 2019-03-13): a recital printed line by line, one line opening on an abbreviation that reads like a list marker, before the letter-spaced operative verb; gzip of the captured response"
+}

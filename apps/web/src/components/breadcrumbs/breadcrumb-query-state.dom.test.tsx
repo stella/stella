@@ -1,7 +1,13 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
+import { panic } from "better-result";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
+import { sleep } from "@stll/concurrency/sleep";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
+import { parseTimeZoneId } from "@stll/time";
+
 import type { ChatThreadFetched } from "@/features/chat/queries";
+import type { OrganizationSettings } from "@/queries/organization-settings";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/" });
 const originalFetch = globalThis.fetch;
@@ -17,6 +23,8 @@ const { AuthenticatedUserProvider } =
   await import("@/lib/authenticated-user-context");
 const { contactOptions } = await import("@/lib/contacts/queries");
 const { workspaceOptions } = await import("@/lib/workspaces/queries");
+const { organizationSettingsOptions } =
+  await import("@/queries/organization-settings");
 const { skillDetailOptions } = await import("@/lib/knowledge/queries");
 const { fileMetadataOptions } = await import("@/lib/files/file-metadata-query");
 const {
@@ -54,10 +62,8 @@ afterEach(() => {
 });
 afterAll(async () => {
   globalThis.fetch = originalFetch;
-  await new Promise((resolve) => {
-    setTimeout(resolve, 0);
-  });
-  await GlobalRegistrator.unregister();
+  await sleep(0);
+  await unregisterDomEnvironment();
 });
 
 const groupedKey = groupedChatThreadsOptions({
@@ -81,6 +87,7 @@ const persistedThread = {
   contextMatterIds: [],
   lastActivityAt: null,
   threadRevision: null,
+  activeSkill: null,
   threadExists: true,
   usedAnonymization: false,
   webSearchAvailable: false,
@@ -100,6 +107,43 @@ const seedPersistedThread = (client: InstanceType<typeof QueryClient>) => {
   client.setQueryData(threadKey, persistedThread);
 };
 
+// The matter title reads whether numbering is on; this suite fails only the
+// breadcrumb's own read.
+const utcTimeZone =
+  parseTimeZoneId("UTC") ?? panic("UTC fixture must be a supported time zone");
+const organizationSettings = {
+  aiInstructions: "",
+  aiInstructionsMaxLength: 3000,
+  declaredFeatureIds: [],
+  deploymentFeatures: { legalLists: true, invoiceLinks: true },
+  capabilities: {},
+  documentProcessingMode: "off",
+  matterNumberPattern: "{year}/{number}",
+  matterNumberPadding: 3,
+  matterNumberingEnabled: true,
+  practiceJurisdictions: [],
+  promptCachingEnabled: true,
+  managedAIResidency: "eu",
+  memoryExtractionEnabled: false,
+  localRunMaxApprovalMode: "full_auto",
+  timeMinimumUnitMinutes: 1,
+  timeEditWindowDays: 30,
+  timeLockedThroughMonth: null,
+  timeNarrativeRequired: false,
+  timeZone: utcTimeZone,
+  primaryJurisdictionTimeZone: utcTimeZone,
+  timeZoneSource: "organization",
+} satisfies OrganizationSettings;
+const seedOrganizationSettings = (client: InstanceType<typeof QueryClient>) => {
+  client.setQueryData(
+    organizationSettingsOptions({
+      organizationId: user.activeOrganizationId,
+      userId: user.id,
+    }).queryKey,
+    organizationSettings,
+  );
+};
+
 const cases = [
   {
     name: "contact",
@@ -114,11 +158,12 @@ const cases = [
     url: "/workspaces/matter",
     key: workspaceOptions("matter").queryKey,
     component: () => <WorkspaceBreadcrumb workspaceId="matter" />,
+    seed: seedOrganizationSettings,
   },
   {
     name: "skill",
-    path: "/knowledge/tools_/$entry",
-    url: "/knowledge/tools_/11111111-1111-4111-8111-111111111111",
+    path: "/knowledge/tools_/skills/$skillId",
+    url: "/knowledge/tools_/skills/11111111-1111-4111-8111-111111111111",
     key: skillDetailOptions(
       user.activeOrganizationId,
       user.id,
@@ -158,8 +203,8 @@ const cases = [
     url: "/chat/thread",
     key: chatThreadTitleOptions({
       activeOrganizationId: user.activeOrganizationId,
-      enabled: true,
       key: { threadId: "thread" },
+      persistedThread,
     }).queryKey,
     component: () => <ChatBreadcrumb threadId="thread" />,
     seed: seedPersistedThread,
@@ -170,13 +215,14 @@ const cases = [
     url: "/file-chat",
     key: chatThreadTitleOptions({
       activeOrganizationId: user.activeOrganizationId,
-      enabled: true,
       key: { threadId: "thread" },
+      persistedThread,
     }).queryKey,
     component: () => (
       <FileChatTitleSlot
         activeOrganizationId={user.activeOrganizationId}
         hasMessages
+        persistedThread={persistedThread}
         threadRef={{ scope: "global", threadId: toChatThreadId("thread") }}
         usedAnonymization={false}
       />

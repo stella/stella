@@ -11,18 +11,24 @@ import {
   beforeEach,
   describe,
   expect,
+  mock,
   setDefaultTimeout,
   spyOn,
   test,
 } from "bun:test";
 import { eq } from "drizzle-orm";
-import JSZip from "jszip";
 
+import { ZipArchive } from "@stll/docx-core/zip";
 import { filtersFromFieldConfig } from "@stll/template-conditions";
 
 import { member } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
-import { reportExports, templates, workspaceMembers } from "@/api/db/schema";
+import {
+  entities,
+  reportExports,
+  templates,
+  workspaceMembers,
+} from "@/api/db/schema";
 import type { ViewLayout } from "@/api/db/schema";
 import type { RlsDatabase } from "@/api/db/scoped";
 import * as reportData from "@/api/handlers/reports/build-report-data";
@@ -36,10 +42,13 @@ import type { SafeId } from "@/api/lib/branded-types";
 import * as chatRuntime from "@/api/lib/chat/tanstack-chat-runtime";
 import type { FieldMeta } from "@/api/lib/docx/types";
 import { writeFieldFilters } from "@/api/lib/docx/write-field-filters";
+import * as entityWriter from "@/api/lib/entities/create-from-buffer";
 import { createRootRunActor } from "@/api/lib/root-scoped-db";
 import { brandPersistedReportExportId } from "@/api/lib/safe-id-boundaries";
 import * as modelTransport from "@/api/lib/tanstack-ai-generate";
+import * as decisions from "@/api/lib/workflow/decisions/decide";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
+import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
 import { testDocxFile } from "@/api/tests/helpers/scanned-file";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
@@ -94,10 +103,23 @@ const actor = {
   exportId,
 };
 
-const reportDataSpy = spyOn(reportData, "buildReportData");
-const textModelSpy = spyOn(modelTransport, "generateTanStackTextForRole");
-const objectModelSpy = spyOn(modelTransport, "generateTanStackObjectForRole");
-const chatObjectSpy = spyOn(chatRuntime, "generateChatObject");
+// A copy taken before the spy keeps the real assembler for call-through cases.
+const { buildReportData } = { ...reportData };
+// Spies typed through spyOn itself, naming each module as a whole: a typed
+// member access here would leave the module's other exports looking unused.
+type SpyOn<T extends object, K extends keyof T> = ReturnType<
+  typeof spyOn<T, K>
+>;
+let reportDataSpy: SpyOn<typeof reportData, "buildReportData">;
+let textModelSpy: SpyOn<typeof modelTransport, "generateTanStackTextForTask">;
+let objectModelSpy: SpyOn<
+  typeof modelTransport,
+  "generateTanStackObjectForTask"
+>;
+let chatObjectSpy: SpyOn<typeof chatRuntime, "generateChatObject">;
+// Every model run resolves its model here, and every AI condition decides here.
+let resolveModelSpy: SpyOn<typeof modelTransport, "resolveTanStackTextModel">;
+let decideSpy: SpyOn<typeof decisions, "decide">;
 
 const readExport = async () =>
   (
@@ -112,11 +134,26 @@ const objectWrites = () =>
   fakeS3.requests.filter((request) => request.method === "PUT");
 
 beforeEach(async () => {
+  reportDataSpy = spyOn(reportData, "buildReportData");
+  textModelSpy = spyOn(modelTransport, "generateTanStackTextForTask");
+  objectModelSpy = spyOn(modelTransport, "generateTanStackObjectForTask");
+  chatObjectSpy = spyOn(chatRuntime, "generateChatObject");
+  resolveModelSpy = spyOn(modelTransport, "resolveTanStackTextModel");
+  decideSpy = spyOn(decisions, "decide");
+
   reportDataSpy.mockClear();
   textModelSpy.mockClear();
   objectModelSpy.mockClear();
   chatObjectSpy.mockClear();
-  for (const spy of [textModelSpy, objectModelSpy, chatObjectSpy]) {
+  resolveModelSpy.mockClear();
+  decideSpy.mockClear();
+  for (const spy of [
+    textModelSpy,
+    objectModelSpy,
+    chatObjectSpy,
+    resolveModelSpy,
+    decideSpy,
+  ]) {
     spy.mockImplementation(async () => panic("Unexpected model call"));
   }
   fakeS3.requests.length = 0;
@@ -134,11 +171,15 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  mock.restore();
   await testDb.delete(reportExports).where(eq(reportExports.id, exportId));
   await testDb
     .insert(member)
     .values(originalOrganizationMember)
-    .onConflictDoNothing();
+    .onConflictDoUpdate({
+      target: member.id,
+      set: { role: originalOrganizationMember.role },
+    });
   await testDb
     .insert(workspaceMembers)
     .values(originalMatterMember)
@@ -150,12 +191,19 @@ afterAll(async () => {
   textModelSpy.mockRestore();
   objectModelSpy.mockRestore();
   chatObjectSpy.mockRestore();
+  resolveModelSpy.mockRestore();
+  decideSpy.mockRestore();
   fakeS3.stop();
   await releaseRlsFixture();
 });
 
 const expectStoppedBeforeReading = async () => {
-  await processReportExport(actor, { format: "docx", aiNarrative: true });
+  await processReportExport(actor, {
+    admission: testModelAdmission(actor.organizationId),
+    signal: new AbortController().signal,
+    format: "docx",
+    aiNarrative: true,
+  });
   expect(await readExport()).toMatchObject({
     status: "failed",
     error: "The report source is no longer available.",
@@ -181,12 +229,216 @@ describe("report export run", () => {
     await expectStoppedBeforeReading();
   });
 
+  test("a run stops when its requester loses entity-create permission", async () => {
+    await testDb
+      .update(member)
+      .set({ role: "external" })
+      .where(eq(member.id, ids.memberA1org));
+    await expectStoppedBeforeReading();
+  });
+
+  test("a workspace export rechecks create permission at the artifact write", async () => {
+    await testDb
+      .update(reportExports)
+      .set({ aiNarrative: false, mode: "workspace" })
+      .where(eq(reportExports.id, exportId));
+    reportDataSpy.mockImplementationOnce(async (options) => {
+      const result = await buildReportData(options);
+      await testDb
+        .update(member)
+        .set({ role: "external" })
+        .where(eq(member.id, ids.memberA1org));
+      return result;
+    });
+
+    await processReportExport(actor, {
+      admission: testModelAdmission(actor.organizationId),
+      signal: new AbortController().signal,
+      format: "docx",
+      aiNarrative: false,
+    });
+
+    expect(await readExport()).toMatchObject({
+      status: "failed",
+      error: "The report source is no longer available.",
+      resultEntityId: null,
+      resultS3Key: null,
+    });
+    expect(reportDataSpy).toHaveBeenCalledTimes(1);
+    expect(objectWrites()).toEqual([]);
+  });
+
+  test("a workspace export refuses role loss after its object write starts", async () => {
+    await testDb
+      .update(reportExports)
+      .set({ aiNarrative: false, mode: "workspace" })
+      .where(eq(reportExports.id, exportId));
+    const heldWrite = fakeS3.holdNext({
+      method: "PUT",
+      keyIncludes: `${ids.orgA}/${ids.wsA1}/`,
+    });
+
+    const running = processReportExport(actor, {
+      admission: testModelAdmission(actor.organizationId),
+      signal: new AbortController().signal,
+      format: "docx",
+      aiNarrative: false,
+    });
+    await heldWrite.reached;
+    await testDb
+      .update(member)
+      .set({ role: "external" })
+      .where(eq(member.id, ids.memberA1org));
+    heldWrite.release();
+    await running;
+
+    expect(await readExport()).toMatchObject({
+      status: "failed",
+      resultEntityId: null,
+      resultS3Key: null,
+    });
+    expect(heldWrite.isReached).toBe(true);
+  });
+
+  test("a workspace export commits its document and its completion together", async () => {
+    await testDb
+      .update(reportExports)
+      .set({ aiNarrative: false, mode: "workspace" })
+      .where(eq(reportExports.id, exportId));
+    const documentsBefore = await testDb.$count(
+      entities,
+      eq(entities.workspaceId, ids.wsA1),
+    );
+    const realCreateEntity = entityWriter.createEntityFromBuffer;
+    let createdEntityId: SafeId<"entity"> | undefined;
+    // The requester loses access right after the writer's transaction commits.
+    const writeSpy = spyOn(
+      entityWriter,
+      "createEntityFromBuffer",
+    ).mockImplementation(async (input) => {
+      const created = await realCreateEntity(input);
+      if (created.isOk()) {
+        createdEntityId = created.value.entityId;
+      }
+      await testDb
+        .update(member)
+        .set({ role: "external" })
+        .where(eq(member.id, ids.memberA1org));
+      return created;
+    });
+    try {
+      const run = async () =>
+        await processReportExport(actor, {
+          admission: testModelAdmission(actor.organizationId),
+          signal: new AbortController().signal,
+          format: "docx",
+          aiNarrative: false,
+        });
+      await run();
+      if (createdEntityId === undefined) {
+        panic("The workspace export wrote no document");
+      }
+      expect(await readExport()).toMatchObject({
+        status: "completed",
+        resultEntityId: createdEntityId,
+      });
+      // A re-delivered job finds the export settled and publishes nothing.
+      await run();
+      expect(writeSpy).toHaveBeenCalledTimes(1);
+      expect(
+        await testDb.$count(entities, eq(entities.workspaceId, ids.wsA1)),
+      ).toBe(documentsBefore + 1);
+    } finally {
+      writeSpy.mockRestore();
+    }
+  });
+
+  test("a workspace export whose run no longer holds the export publishes no document", async () => {
+    await testDb
+      .update(reportExports)
+      .set({ aiNarrative: false, mode: "workspace" })
+      .where(eq(reportExports.id, exportId));
+    const documentsBefore = await testDb.$count(
+      entities,
+      eq(entities.workspaceId, ids.wsA1),
+    );
+    const realCreateEntity = entityWriter.createEntityFromBuffer;
+    // Another run settles the export before this one's writer commits.
+    const writeSpy = spyOn(
+      entityWriter,
+      "createEntityFromBuffer",
+    ).mockImplementation(async (input) => {
+      await testDb
+        .update(reportExports)
+        .set({ status: "failed", error: "Settled by another run" })
+        .where(eq(reportExports.id, exportId));
+      return await realCreateEntity(input);
+    });
+    try {
+      await processReportExport(actor, {
+        admission: testModelAdmission(actor.organizationId),
+        signal: new AbortController().signal,
+        format: "docx",
+        aiNarrative: false,
+      });
+      expect(await readExport()).toMatchObject({
+        status: "failed",
+        resultEntityId: null,
+      });
+      expect(
+        await testDb.$count(entities, eq(entities.workspaceId, ids.wsA1)),
+      ).toBe(documentsBefore);
+    } finally {
+      writeSpy.mockRestore();
+    }
+  });
+
+  test("a download export refuses role loss while its object upload is paused", async () => {
+    await testDb
+      .update(reportExports)
+      .set({ aiNarrative: false })
+      .where(eq(reportExports.id, exportId));
+    const key = `exports/${ids.orgA}/${ids.wsA1}/${exportId}.docx`;
+    const heldWrite = fakeS3.holdNext({ method: "PUT", keyIncludes: key });
+
+    const running = processReportExport(actor, {
+      admission: testModelAdmission(actor.organizationId),
+      signal: new AbortController().signal,
+      format: "docx",
+      aiNarrative: false,
+    });
+    await heldWrite.reached;
+    await testDb
+      .update(member)
+      .set({ role: "external" })
+      .where(eq(member.id, ids.memberA1org));
+    heldWrite.release();
+    await running;
+
+    expect(await readExport()).toMatchObject({
+      status: "failed",
+      error: "The requester can no longer export reports from this matter.",
+      resultS3Key: null,
+    });
+    // The writer's cleanup removes the object the export never published.
+    expect(
+      fakeS3.requests.filter(
+        (request) => request.method === "DELETE" && request.key === key,
+      ),
+    ).toHaveLength(1);
+  });
+
   test("a run completes while its requester keeps access", async () => {
     await testDb
       .update(reportExports)
       .set({ aiNarrative: false })
       .where(eq(reportExports.id, exportId));
-    await processReportExport(actor, { format: "docx", aiNarrative: false });
+    await processReportExport(actor, {
+      admission: testModelAdmission(actor.organizationId),
+      signal: new AbortController().signal,
+      format: "docx",
+      aiNarrative: false,
+    });
     const row = await readExport();
     expect(row).toMatchObject({ status: "completed", error: null });
     expect(reportDataSpy).toHaveBeenCalledTimes(1);
@@ -208,21 +460,21 @@ describe("report export run", () => {
     conditions: readonly FieldMeta[];
   }) => {
     const templateId = createSafeId<"template">();
-    const s3Key = `report-templates/${templateId}.docx`;
+    const s3Key = `${ids.orgA}/report-templates/${templateId}.docx`;
     const body = paragraphs
       .map((text) => `<w:p><w:r><w:t>${text}</w:t></w:r></w:p>`)
       .join("");
-    const zip = new JSZip();
-    zip.file(
+    const zip = new ZipArchive();
+    zip.set(
       "word/document.xml",
       `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>${body}</w:body></w:document>`,
     );
-    zip.file(
+    zip.set(
       "[Content_Types].xml",
       '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="xml" ContentType="application/xml"/></Types>',
     );
     const { file } = await writeFieldFilters(
-      testDocxFile(await zip.generateAsync({ type: "uint8array" })),
+      testDocxFile(await zip.generate({ compression: "store" })),
       [],
       conditions.map((condition) => ({
         path: condition.path,
@@ -265,7 +517,12 @@ describe("report export run", () => {
         templateRef: { type: "stored", templateId },
       })
       .where(eq(reportExports.id, exportId));
-    await processReportExport(actor, { format: "docx", aiNarrative: false });
+    await processReportExport(actor, {
+      admission: testModelAdmission(actor.organizationId),
+      signal: new AbortController().signal,
+      format: "docx",
+      aiNarrative: false,
+    });
   };
 
   test("a stored template whose AI condition stays undecided fails the export with the condition named and no use recorded", async () => {
@@ -304,6 +561,41 @@ describe("report export run", () => {
         useCount: 0,
         lastUsedAt: null,
       });
+    } finally {
+      await testDb.delete(templates).where(eq(templates.id, templateId));
+    }
+  });
+
+  test("a deterministic export of a stored template with an AI condition calls no model", async () => {
+    const templateId = await insertStoredTemplate({
+      paragraphs: [
+        "Report.",
+        "{% if is_consumer %}",
+        "Consumer notice.",
+        "{% endif %}",
+      ],
+      conditions: [
+        {
+          path: "is_consumer",
+          label: "Consumer contract",
+          inputType: "boolean",
+          aiPrompt: "Is this a consumer contract?",
+        },
+      ],
+    });
+    try {
+      await exportStoredTemplate(templateId);
+
+      expect(await readExport()).toMatchObject({ status: "failed" });
+      for (const spy of [
+        textModelSpy,
+        objectModelSpy,
+        chatObjectSpy,
+        resolveModelSpy,
+        decideSpy,
+      ]) {
+        expect(spy).not.toHaveBeenCalled();
+      }
     } finally {
       await testDb.delete(templates).where(eq(templates.id, templateId));
     }

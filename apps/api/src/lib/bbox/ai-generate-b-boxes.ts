@@ -2,19 +2,20 @@ import type { DocumentPart } from "@tanstack/ai";
 import type { AnthropicDocumentMetadata } from "@tanstack/ai-anthropic";
 import { Result } from "better-result";
 
-import { resolveCaching, type OrgAIConfig } from "@/api/lib/ai-config";
+import { type OrgAIConfig, resolveCaching } from "@/api/lib/ai-config";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import {
   BBOX_SYSTEM_PROMPT,
+  type BBoxItem,
   bboxOutputSchema,
   buildBBoxUserMessage,
-  type BBoxItem,
 } from "@/api/lib/bbox/ai-prompts";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
+import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
 import { markTanStackCacheBreakpoint } from "@/api/lib/tanstack-ai-caching";
-import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
+import { generateTanStackObjectForTask } from "@/api/lib/tanstack-ai-generate";
 
 type GenerateBBoxDataProps = {
   pdfData: Uint8Array;
@@ -22,15 +23,17 @@ type GenerateBBoxDataProps = {
   fieldContent: string;
   justificationText: string;
   abortSignal: AbortSignal;
+  deadlineMs: number;
   justificationId: string;
   organizationId: SafeId<"organization">;
+  admission: ModelDispatchAdmission;
   pageNumber: number;
   workspaceId: SafeId<"workspace">;
   orgAIConfig?: OrgAIConfig | null;
   managedAIResidency: ManagedAIResidency;
   promptCachingEnabled: boolean;
   /** External model-dispatch boundary; supplied by focused integration tests. */
-  generateObjectForRole?: typeof generateTanStackObjectForRole | undefined;
+  generateObjectForTask?: typeof generateTanStackObjectForTask | undefined;
 };
 
 export const generateBBoxData = async ({
@@ -39,28 +42,31 @@ export const generateBBoxData = async ({
   fieldContent,
   justificationText,
   abortSignal,
+  deadlineMs,
   justificationId,
   organizationId,
+  admission,
   pageNumber,
   workspaceId,
   orgAIConfig,
   managedAIResidency,
   promptCachingEnabled,
-  generateObjectForRole = generateTanStackObjectForRole,
+  generateObjectForTask = generateTanStackObjectForTask,
 }: GenerateBBoxDataProps): Promise<
   Result<BBoxItem[], WorkflowIntegrationError>
 > => {
   const caching = resolveCaching({
     promptCachingEnabled,
-    role: "pdf",
+    task: "pdf",
     scopeKey: justificationId,
   });
   const aiAnalytics = createTanStackAIAnalyticsCallbacks({
     dataClass: "customer",
     feature: "bbox.generate",
-    modelRole: "pdf",
+    modelTask: "pdf",
     organizationId,
     orgAIConfig: orgAIConfig ?? null,
+    modelTier: admission.modelTier,
     properties: {
       justification_id: justificationId,
       organization_id: organizationId,
@@ -77,17 +83,19 @@ export const generateBBoxData = async ({
         type: "document",
         source: {
           type: "data",
-          value: Buffer.from(pdfData).toString("base64"),
+          value: Buffer.from(pdfData).toBase64(),
           mimeType: "application/pdf",
         },
       };
-      const result = await generateObjectForRole({
+      const result = await generateObjectForTask({
+        userId: admission.userId,
         dataClass: "customer",
-        role: "pdf",
+        task: "pdf",
         serviceTier: "standard",
         orgAIConfig,
         managedAIResidency,
         organizationId,
+        admission,
         tenantWorkspaceIds: [workspaceId],
         analytics: aiAnalytics,
         caching,
@@ -110,6 +118,7 @@ export const generateBBoxData = async ({
         ],
         outputSchema: bboxOutputSchema,
         abortSignal,
+        deadlineMs,
       });
 
       return result.boxes;

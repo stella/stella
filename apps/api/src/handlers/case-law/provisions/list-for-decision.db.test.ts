@@ -70,6 +70,7 @@ beforeAll(async () => {
 afterAll(async () => await client.close());
 
 type DecisionOptions = {
+  country?: "CZE";
   contentHash?: string | null;
   language?: string;
   redacted?: boolean;
@@ -77,13 +78,14 @@ type DecisionOptions = {
 
 const decision = async ({
   contentHash = CONTENT_HASH,
+  country = "CZE",
   language = "cs",
   redacted = false,
 }: DecisionOptions = {}): Promise<SafeId<"caseLawDecision">> => {
   const id = createSafeId<"caseLawDecision">();
   await run(sql`INSERT INTO case_law_decisions
     (id, source_id, country, language, court, case_number, content_hash, redacted_at)
-    VALUES (${id}, ${SOURCE_ID}, 'CZE', ${language}, 'Court', ${id},
+    VALUES (${id}, ${SOURCE_ID}, ${country}, ${language}, 'Court', ${id},
       ${redacted ? null : contentHash},
       ${redacted ? "2026-01-01T00:00:00Z" : null}::timestamptz)`);
   return id;
@@ -144,8 +146,12 @@ const withSubject = async <T>(
   id: SafeId<"caseLawDecision">,
   read: (subject: RedistributableDecisionSubject) => Promise<T>,
 ): Promise<T> =>
-  (await withRedistributableSubject(reader, { kind: "id", id }, read)) ??
-  panic("expected a public decision subject");
+  (await withRedistributableSubject(
+    reader,
+    "pages",
+    { kind: "id", id },
+    read,
+  )) ?? panic("expected a public decision subject");
 
 const page = async (id: SafeId<"caseLawDecision">, cursor?: string) =>
   await withSubject(
@@ -300,8 +306,6 @@ test("status precedence uses the decision, scope, and current payload before pub
 
   for (const [id, type] of [
     [outOfScope, "out_of_scope"],
-    [outOfScopeWithheld, "out_of_scope"],
-    [withheld, "withheld"],
     [unavailable, "unavailable"],
     [nullHashEnvelope, "unavailable"],
     [unplaceable, "unplaceable"],
@@ -313,6 +317,16 @@ test("status precedence uses the decision, scope, and current payload before pub
       nextCursor: null,
       status: { type },
     });
+  }
+  for (const id of [outOfScopeWithheld, withheld]) {
+    expect(
+      await withRedistributableSubject(
+        reader,
+        "pages",
+        { kind: "id", id },
+        async (subject) => subject.id,
+      ),
+    ).toBeNull();
   }
 });
 
@@ -494,3 +508,22 @@ test("malformed cursors fail before a page is returned", async () => {
     expect(await page(id, cursor)).toMatchObject({ code: 400 });
   }
 });
+
+test.each([{ country: "CZE", language: "en" }] as const)(
+  "unsupported reader $country/$language stays unsupported across grants",
+  async (scope) => {
+    const id = await decision(scope);
+    for (const grants of ["revoke", "grant"] as const) {
+      await setStatusGrants(grants);
+      try {
+        expect(await page(id)).toMatchObject({
+          status: { type: "out_of_scope" },
+          capability: { type: "notSupportedYet" },
+          pendingSince: null,
+        });
+      } finally {
+        await setStatusGrants("grant");
+      }
+    }
+  },
+);

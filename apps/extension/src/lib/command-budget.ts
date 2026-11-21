@@ -31,10 +31,13 @@ type CommandCost = { actions: 0 | 1; navigations: 0 | 1 };
 const commandCost = (command: BrowserControlCommand): CommandCost => {
   switch (command.action) {
     case BROWSER_CONTROL_ACTION.snapshot:
+    case BROWSER_CONTROL_ACTION.find:
       return { actions: 0, navigations: 0 };
     case BROWSER_CONTROL_ACTION.goBack:
     case BROWSER_CONTROL_ACTION.open:
       return { actions: 1, navigations: 1 };
+    // Switching moves control to a page already loaded; nothing navigates.
+    case BROWSER_CONTROL_ACTION.switchTab:
     case BROWSER_CONTROL_ACTION.click:
     case BROWSER_CONTROL_ACTION.fill:
     case BROWSER_CONTROL_ACTION.pressKey:

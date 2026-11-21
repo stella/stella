@@ -1,15 +1,14 @@
-import { useId, useState } from "react";
+import { useState } from "react";
 
 import { useTranslations } from "use-intl";
 
-import { DirectionalIcon } from "@stll/ui/directional-icon";
-import { ChevronRightIcon } from "@stll/ui/icons";
-import { cn } from "@stll/ui/utils";
+import { SingleCourtFilter } from "@stll/ui/court-filter";
 
-import { DatePickerPopover } from "@/components/date-picker-popover";
+import { DateRangeFilter } from "@/components/date-range-filter";
 import {
   FACET_SECTION_LIMIT,
   facetSectionView,
+  formatFacetCount,
 } from "@/components/public-law-table/public-law-facets.logic";
 import type { FacetSourceBucket } from "@/components/public-law-table/public-law-facets.logic";
 import {
@@ -30,9 +29,15 @@ import {
 import {
   COLLAPSED_COURT_TIERS,
   COURT_TIER_LABEL_KEYS,
+  decisionTypeKindLabel,
+  decisionTypeSectionBuckets,
   YEAR_SECTION_LIMIT,
 } from "@/features/case-law/decision-filter-facets.logic";
-import type { DecisionFilterFacets } from "@/features/case-law/decision-filter-facets.logic";
+import type {
+  DecisionFilterFacets,
+  DecisionTypeFacetBucket,
+} from "@/features/case-law/decision-filter-facets.logic";
+import { useFormatter } from "@/i18n/formatting-context";
 
 /** What the URL selects, one value per facet. */
 type DecisionFacetSelection = Record<CaseLawFilterKey, string | undefined>;
@@ -46,6 +51,38 @@ type DecisionFilterPopoverProps = {
   onDateRangeChange: (range: DecisionDateRange) => void;
   onSelect: (key: CaseLawFilterKey, value: string | undefined) => void;
   selection: DecisionFacetSelection;
+};
+
+/**
+ * The decision type, each canonical kind in the reader's language. Every entry
+ * carries its own label, so the shared section never falls back to drawing a
+ * bucket's value.
+ */
+export const DecisionTypeFacetSection = ({
+  buckets,
+  onSelect,
+  selectedValue,
+}: {
+  buckets: readonly DecisionTypeFacetBucket[];
+  onSelect: (value: string | undefined) => void;
+  selectedValue: string | undefined;
+}) => {
+  const t = useTranslations();
+  return (
+    <FacetSection
+      buckets={decisionTypeSectionBuckets(buckets, selectedValue).map(
+        ({ count, kind, value }) => ({
+          value,
+          label: kind === null ? value : decisionTypeKindLabel(kind, t),
+          count,
+        }),
+      )}
+      heading={t("common.type")}
+      name="type"
+      onSelect={onSelect}
+      selectedValue={selectedValue}
+    />
+  );
 };
 
 /**
@@ -63,23 +100,43 @@ export const DecisionFilterPopover = ({
   selection,
 }: DecisionFilterPopoverProps) => {
   const t = useTranslations();
+  const format = useFormatter();
 
   return (
     <PublicLawFilterPopover activeFilterCount={activeFilterCount}>
       {facets.courtTiers.length > 0 && (
         <section>
           <FilterSectionHeading>{t("common.court")}</FilterSectionHeading>
-          <div className="flex flex-col gap-3">
-            {facets.courtTiers.map(({ courts, tier }) => (
-              <CourtTierSection
-                courts={courts}
-                key={tier ?? "untiered"}
-                onSelect={(value) => onSelect("court", value)}
-                selectedValue={selection.court}
-                tier={tier}
-              />
-            ))}
-          </div>
+          <SingleCourtFilter
+            collapsedGroups={COLLAPSED_COURT_TIERS}
+            visibleRowLimit={FACET_SECTION_LIMIT}
+            showAllLabel={t("common.showAll")}
+            groups={facets.courtTiers.map(({ courts, tier }) => ({
+              value: tier ?? "untiered",
+              label: tier === null ? null : t(COURT_TIER_LABEL_KEYS[tier]),
+              courts: courts.map((court) => {
+                const badgeText =
+                  court.count === null || court.count === undefined
+                    ? undefined
+                    : (formatFacetCount(
+                        {
+                          ...court,
+                          label: court.label ?? court.value,
+                          count: court.count,
+                        },
+                        format.number,
+                      ) ?? undefined);
+                return {
+                  value: court.value,
+                  label: court.label ?? court.value,
+                  ...(badgeText === undefined ? {} : { badgeText }),
+                };
+              }),
+            }))}
+            selected={selection.court}
+            onChange={(value) => onSelect("court", value)}
+            label={t("common.court")}
+          />
         </section>
       )}
       {/* No source (publisher) section: the court filter already says where
@@ -90,10 +147,8 @@ export const DecisionFilterPopover = ({
         dateRange={dateRange}
         onDateRangeChange={onDateRangeChange}
       />
-      <FacetSection
+      <DecisionTypeFacetSection
         buckets={facets.decisionType}
-        heading={t("common.type")}
-        name="type"
         onSelect={(value) => onSelect("type", value)}
         selectedValue={selection.type}
       />
@@ -156,135 +211,18 @@ const DateSection = ({
           {t("common.showAll")}
         </ShowAllButton>
       )}
-      <div className="mt-2 flex flex-col gap-1.5">
-        <DateBound
-          label={t("search.dateFrom")}
-          onChange={(from) => onDateRangeChange({ ...dateRange, from })}
-          value={dateRange.from ?? null}
-          {...(dateRange.to === undefined ? {} : { maxDate: dateRange.to })}
-        />
-        <DateBound
-          label={t("search.dateTo")}
-          onChange={(to) => onDateRangeChange({ ...dateRange, to })}
-          value={dateRange.to ?? null}
-          {...(dateRange.from === undefined ? {} : { minDate: dateRange.from })}
-        />
-      </div>
+      <DateRangeFilter
+        className="mt-2"
+        from={dateRange.from ?? null}
+        to={dateRange.to ?? null}
+        noFuture
+        onFromChange={(from) =>
+          onDateRangeChange({ ...dateRange, from: from ?? undefined })
+        }
+        onToChange={(to) =>
+          onDateRangeChange({ ...dateRange, to: to ?? undefined })
+        }
+      />
     </section>
   );
 };
-
-/** One end of the range: the app's own calendar, labelled as this end. */
-const DateBound = ({
-  label,
-  maxDate,
-  minDate,
-  onChange,
-  value,
-}: {
-  label: string;
-  maxDate?: string;
-  minDate?: string;
-  onChange: (value: string | undefined) => void;
-  value: string | null;
-}) => (
-  <label className="flex flex-col gap-1">
-    <span className="text-muted-foreground text-3xs font-medium tracking-wide uppercase">
-      {label}
-    </span>
-    <DatePickerPopover
-      onChange={(next) => onChange(next ?? undefined)}
-      value={value}
-      {...(maxDate === undefined ? {} : { maxDate })}
-      {...(minDate === undefined ? {} : { minDate })}
-    />
-  </label>
-);
-
-const CourtTierSection = ({
-  courts,
-  onSelect,
-  selectedValue,
-  tier,
-}: {
-  courts: readonly FacetSourceBucket[];
-  onSelect: (value: string | undefined) => void;
-  selectedValue: string | undefined;
-  tier: CourtTierBucketsTier;
-}) => {
-  const t = useTranslations();
-  const panelId = useId();
-  const collapsedByDefault =
-    tier !== null && COLLAPSED_COURT_TIERS.includes(tier);
-  const selectedHere = courts.some((court) => court.value === selectedValue);
-  const [open, setOpen] = useState(!collapsedByDefault);
-  const [showAll, setShowAll] = useState(false);
-  const { hiddenCount, items } = facetSectionView({
-    buckets: courts,
-    expanded: showAll,
-    limit: FACET_SECTION_LIMIT,
-    // A tier the selection is not in must not pull the selection into itself.
-    selectedValue: selectedHere ? selectedValue : undefined,
-  });
-  if (items.length === 0) {
-    return null;
-  }
-  if (tier === null) {
-    return (
-      <div>
-        <FacetOptions
-          groupLabel={t("common.court")}
-          items={items}
-          name="court"
-          onSelect={onSelect}
-          selectedValue={selectedValue}
-        />
-        {hiddenCount > 0 && (
-          <ShowAllButton onClick={() => setShowAll(true)}>
-            {t("common.showAll")}
-          </ShowAllButton>
-        )}
-      </div>
-    );
-  }
-
-  // A tier holding the reader's own choice opens whatever its default was.
-  const expanded = open || selectedHere;
-  return (
-    <div>
-      <button
-        aria-controls={panelId}
-        aria-expanded={expanded}
-        className="text-foreground-strong-muted hover:text-foreground flex min-h-11 w-full items-center gap-1 py-1 text-start text-xs font-medium"
-        onClick={() => setOpen(!expanded)}
-        type="button"
-      >
-        <DirectionalIcon
-          className={cn(
-            "size-3 shrink-0 transition-transform",
-            expanded && "rotate-90",
-          )}
-          flip={!expanded}
-          icon={ChevronRightIcon}
-        />
-        {t(COURT_TIER_LABEL_KEYS[tier])}
-      </button>
-      <div hidden={!expanded} id={panelId}>
-        <FacetOptions
-          groupLabel={t(COURT_TIER_LABEL_KEYS[tier])}
-          items={items}
-          name={`court-${tier}`}
-          onSelect={onSelect}
-          selectedValue={selectedValue}
-        />
-        {hiddenCount > 0 && (
-          <ShowAllButton onClick={() => setShowAll(true)}>
-            {t("common.showAll")}
-          </ShowAllButton>
-        )}
-      </div>
-    </div>
-  );
-};
-
-type CourtTierBucketsTier = DecisionFilterFacets["courtTiers"][number]["tier"];

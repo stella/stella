@@ -1,37 +1,45 @@
 import { and, asc, desc, eq, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
-import { status, t } from "elysia";
-import type { Static } from "elysia";
+import * as v from "valibot";
 
+import { apiDateSchema } from "@stll/api-contract/api-date";
 import {
   LEGISLATION_PUBLISHER_WINDOW_INCONSISTENT,
   LEGISLATION_PUBLISHER_WINDOW_INCONSISTENT_CODE,
   LEGISLATION_PUBLISHER_WINDOW_INCONSISTENT_MESSAGE,
 } from "@stll/api-contract/legislation-expression";
 import type { LegislationInconsistentVersion } from "@stll/api-contract/legislation-expression";
+import type { PublicCountrySurface } from "@stll/api-contract/public-country-capability";
 
 import { legislationDocuments, legislationSources } from "@/api/db/schema";
 import { projectInconsistentVersion } from "@/api/handlers/legislation/catalog-response";
 import { readPublicLegislationHandler } from "@/api/handlers/legislation/get";
+import { status } from "@/api/http/status";
 import type { SafeId } from "@/api/lib/branded-types";
-import { publishedLegislationDocument } from "@/api/lib/legal-search/legislation-redistribution";
+import { publishedLegislationDocumentFor } from "@/api/lib/legal-search/legislation-redistribution";
 import {
   eligibleExpression,
   inForceOn,
   legislationVersionRef,
   versionSortKey,
 } from "@/api/lib/legal-search/legislation-validity-window";
-import { selectInconsistentWindowVersions } from "@/api/lib/legal-search/legislation-window-gap";
-import type { LegislationReadDb } from "@/api/lib/legislation-public-read-db";
+import {
+  selectInconsistentWindowVersions,
+  selectPromulgatedOnlyVersion,
+} from "@/api/lib/legal-search/legislation-window-gap";
+import { legislationWorkIdentifierCondition } from "@/api/lib/legal-search/legislation-work-identifiers";
+import type {
+  LegislationReadDb,
+  LegislationReadTransaction,
+} from "@/api/lib/legislation-public-read-db";
 
-export const readStatuteByEliQuerySchema = t.Object({
-  eli: t.String({ minLength: 1, maxLength: 512 }),
-  language: t.Optional(t.String({ minLength: 2, maxLength: 8 })),
-  /** Absent means "the text in force today". */
-  asOf: t.Optional(t.String({ format: "date" })),
+export const readStatuteByEliQuerySchema = v.object({
+  eli: v.pipe(v.string(), v.minLength(1), v.maxLength(512)),
+  language: v.optional(v.pipe(v.string(), v.minLength(2), v.maxLength(8))),
+  asOf: v.optional(apiDateSchema),
 });
 
-type ReadStatuteByEliQuery = Static<typeof readStatuteByEliQuerySchema>;
+type ReadStatuteByEliQuery = v.InferOutput<typeof readStatuteByEliQuerySchema>;
 
 /**
  * Which Expression a Work-plus-date address names, or why it names none.
@@ -41,9 +49,14 @@ type ReadStatuteByEliQuery = Static<typeof readStatuteByEliQuerySchema>;
  * misspelled an ELI needs to hear that it does not, and a caller whose date
  * falls where the publisher's own dates contradict each other needs to hear
  * that, with the versions responsible, rather than that nothing covers it.
+ *
+ * `promulgated-only` answers a Work that holds no version of an applicable
+ * kind with its text as promulgated: a text to read, never the text in force,
+ * so a caller decides whether it may answer with it.
  */
 export type StatuteExpressionResolution =
   | { type: "expression"; id: SafeId<"legislationDocument"> }
+  | { type: "promulgated-only"; id: SafeId<"legislationDocument"> }
   | { type: "unknown-work" }
   | { type: "uncovered-date" }
   | {
@@ -76,21 +89,27 @@ export const publisherWindowInconsistentBody = (
  * Work key, so it is ordered on rather than left to the planner when the
  * caller does not name one.
  *
+ * A Work holding no version of an applicable kind answers `promulgated-only`
+ * with its text as promulgated on any date that text's window covers; a date
+ * before it stays uncovered.
+ *
  * Exported because the HTTP read and the agent-facing statute tools address
  * statutes the same way: one implementation decides what an ELI plus a date
  * means, so a tool cannot resolve it differently from the reader.
  */
-const workConditionsFor = ({
-  eli,
-  language,
-}: {
-  eli: string;
-  language?: string | undefined;
-}): SQL[] => {
-  const conditions: SQL[] = [
-    eq(legislationDocuments.eli, eli),
-    publishedLegislationDocument,
-  ];
+type WorkConditionsOptions = {
+  tx: LegislationReadTransaction;
+  query: { eli: string; language?: string | undefined };
+  surface: PublicCountrySurface;
+};
+
+const workConditionsFor = async ({
+  tx,
+  query: { eli, language },
+  surface,
+}: WorkConditionsOptions): Promise<SQL[]> => {
+  const identity = await legislationWorkIdentifierCondition(tx, eli);
+  const conditions = [identity, publishedLegislationDocumentFor(surface)];
   if (language !== undefined) {
     conditions.push(eq(legislationDocuments.language, language));
   }
@@ -112,10 +131,12 @@ const workConditionsFor = ({
 export const resolveStatuteWorkVersion = async (
   query: { eli: string; language?: string | undefined },
   legislationDb: LegislationReadDb,
-): Promise<StatuteExpressionResolution> => {
-  const conditions = workConditionsFor(query);
-
-  return await legislationDb(async (tx) => {
+  surface: PublicCountrySurface,
+): Promise<
+  Extract<StatuteExpressionResolution, { type: "expression" | "unknown-work" }>
+> =>
+  await legislationDb(async (tx) => {
+    const conditions = await workConditionsFor({ tx, query, surface });
     const [version] = await tx
       .select({ id: legislationDocuments.id })
       .from(legislationDocuments)
@@ -136,18 +157,17 @@ export const resolveStatuteWorkVersion = async (
       ? ({ type: "unknown-work" } as const)
       : ({ type: "expression", id: version.id } as const);
   });
-};
 
 export const resolveStatuteExpression = async (
   query: ReadStatuteByEliQuery,
   legislationDb: LegislationReadDb,
+  surface: PublicCountrySurface,
 ): Promise<StatuteExpressionResolution> => {
   const asOf =
     query.asOf === undefined ? sql`CURRENT_DATE` : sql`${query.asOf}::date`;
 
-  const workConditions = workConditionsFor(query);
-
   return await legislationDb(async (tx) => {
+    const workConditions = await workConditionsFor({ tx, query, surface });
     const [expression] = await tx
       .select({ id: legislationDocuments.id })
       .from(legislationDocuments)
@@ -180,6 +200,14 @@ export const resolveStatuteExpression = async (
       } as const;
     }
 
+    const promulgated = await selectPromulgatedOnlyVersion(tx, {
+      conditions: workConditions,
+      asOf,
+    });
+    if (promulgated !== null) {
+      return { type: "promulgated-only", id: promulgated } as const;
+    }
+
     // Separating "no such work" from "no window covers that date" is the
     // whole answer for a caller who asked for a date before the corpus
     // covers the act.
@@ -204,7 +232,11 @@ export const readStatuteByEliHandler = async (
   query: ReadStatuteByEliQuery,
   legislationDb: LegislationReadDb,
 ) => {
-  const resolved = await resolveStatuteExpression(query, legislationDb);
+  const resolved = await resolveStatuteExpression(
+    query,
+    legislationDb,
+    "pages",
+  );
 
   if (resolved.type === "unknown-work") {
     return status(404, { message: "Legislation document not found" });
@@ -220,5 +252,9 @@ export const readStatuteByEliHandler = async (
     return status(404, publisherWindowInconsistentBody(resolved.versions));
   }
 
-  return await readPublicLegislationHandler(resolved.id, legislationDb);
+  return await readPublicLegislationHandler(
+    resolved.id,
+    legislationDb,
+    "pages",
+  );
 };

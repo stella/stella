@@ -1,8 +1,15 @@
+import { MCP_TOOL_NAME_PATTERN } from "@stll/api-contract/mcp-tool-name";
+
 import type { CachedMcpToolDefinition } from "@/api/db/schema";
 import { LIMITS } from "@/api/lib/limits";
 import { isRecord } from "@/api/lib/type-guards";
 
-import { namespaceMcpToolName, shortToolNameHash } from "./namespace";
+import {
+  collisionSafeToolName,
+  EMITTED_TOOL_NAME_MAX_LENGTH,
+  namespaceMcpToolName,
+  sanitizeToolNamePart,
+} from "./namespace";
 
 type ToolAnnotationInput = {
   readOnlyHint?: unknown;
@@ -84,9 +91,9 @@ export const normalizeDiscoveredMcpTools = ({
   const cachedTools: CachedMcpToolDefinition[] = [];
 
   for (const { baseName, tool } of candidates) {
-    const exposedName = uniqueExposedToolName({
+    const exposedName = collisionSafeToolName({
       baseName,
-      hasSanitizedCollision: (baseNameCounts.get(baseName) ?? 0) > 1,
+      hashFirst: (baseNameCounts.get(baseName) ?? 0) > 1,
       rawName: tool.name,
       seen,
     });
@@ -119,36 +126,6 @@ const isCacheableTool = (
   tool.name.length <= LIMITS.mcpGatewayToolNameMaxChars &&
   isValidInputSchema(tool.inputSchema);
 
-const uniqueExposedToolName = ({
-  baseName,
-  hasSanitizedCollision,
-  rawName,
-  seen,
-}: {
-  baseName: string;
-  hasSanitizedCollision: boolean;
-  rawName: string;
-  seen: Set<string>;
-}): string => {
-  const preferredName = hasSanitizedCollision
-    ? `${baseName}_${shortToolNameHash(rawName)}`
-    : baseName;
-  if (!seen.has(preferredName)) {
-    seen.add(preferredName);
-    return preferredName;
-  }
-
-  for (let attempt = 2; attempt < 100; attempt += 1) {
-    const candidate = `${preferredName}_${attempt}`;
-    if (!seen.has(candidate)) {
-      seen.add(candidate);
-      return candidate;
-    }
-  }
-
-  return `${preferredName}_${Bun.randomUUIDv7().slice(0, 8)}`;
-};
-
 const isCachedToolDefinition = (
   value: unknown,
 ): value is CachedMcpToolDefinition => {
@@ -171,10 +148,13 @@ const isCachedToolDefinition = (
     return false;
   }
 
+  // An entry cached before the name contract tightened is dropped rather than
+  // served: one name outside the contract makes clients reject the listing.
   if (
     typeof exposedName !== "string" ||
-    exposedName.length === 0 ||
-    exposedName.length > LIMITS.mcpGatewayToolNameMaxChars * 3
+    exposedName.length > EMITTED_TOOL_NAME_MAX_LENGTH ||
+    sanitizeToolNamePart(exposedName) !== exposedName ||
+    !MCP_TOOL_NAME_PATTERN.test(exposedName)
   ) {
     return false;
   }

@@ -1,25 +1,32 @@
 import { Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
+import { noDecisionReviewFound } from "@stll/api-contract/case-law-reviews";
+import { createTestState } from "@stll/test-state";
+
 import type { ScopedDb } from "@/api/db/safe-db";
+import { env } from "@/api/env";
 import { resolveToolWorkspaceIds } from "@/api/handlers/chat/tools/authorized-workspace-ids";
+import type { TurnAppRead } from "@/api/handlers/chat/tools/show-app-tool";
 import { toSafeId } from "@/api/lib/branded-types";
-import {
-  containsRawUuid,
-  PROJECTION_SCHEMA_FAILURE_MESSAGE,
-} from "@/api/lib/chat/projection-schema";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
+import { containsRawUuid, MASKED_CONTENT_ID } from "@/api/lib/chat/uuid-mask";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
-import type { McpRequestContext } from "@/api/mcp/context";
+import { DEFAULT_MCP_TOOL_DEFINITIONS } from "@/api/mcp/static-tool-definitions";
 import type { McpToolHandler } from "@/api/mcp/tool-types";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
+import { authorizedMcpContextForTest } from "@/api/tests/helpers/authorized-mcp-context";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 
 import { buildMcpContextFromChat } from "./mcp-chat-context";
+import { READ_TOOL_REF_FIELD_MAP } from "./ref-field-map";
 import { dehydrateInputRefs } from "./ref-mediation";
 import { runRegistryReadTool } from "./run-registry-tool";
+
+const testState = createTestState({ file: import.meta.path, config: env });
 
 const WS_UUID = "0dc54d0c-10d7-501d-897e-e801dbd0998c";
 const OTHER_WS_UUID = "4e919658-a448-5354-8e3a-e99911214d2c";
@@ -55,19 +62,24 @@ const buildContext = ({
 }: {
   accessibleWorkspaceIds?: ReturnType<typeof toSafeId<"workspace">>[];
   scopedDb?: ScopedDb;
-} = {}): McpRequestContext =>
-  buildMcpContextFromChat({
-    memberRole: sessionMemberRole("owner"),
-    organizationId: toSafeId<"organization">("org_1"),
-    safeDb: toSafeDbMock(scopedDb),
-    scopedDb,
-    toolWorkspaceIds: resolveToolWorkspaceIds({
-      accessibleWorkspaceIds,
-      pinnedIds: [],
+} = {}): AuthorizedMcpRequestContext =>
+  authorizedMcpContextForTest(
+    buildMcpContextFromChat({
+      memberRole: sessionMemberRole("owner"),
+      organizationId: toSafeId<"organization">("org_1"),
+      safeDb: toSafeDbMock(scopedDb),
+      scopedDb,
+      toolWorkspaceIds: resolveToolWorkspaceIds({
+        accessibleWorkspaceIds,
+        pinnedIds: [],
+      }),
+      workspaceStatusById: new Map(
+        accessibleWorkspaceIds.map((id) => [id, "active" as const]),
+      ),
+      userId: toSafeId<"user">("user_1"),
+      userEmail: "standard@example.test",
     }),
-    userId: toSafeId<"user">("user_1"),
-    userEmail: "standard@example.test",
-  });
+  );
 
 describe("runRegistryReadTool", () => {
   // Per test: the real capture path throttles identical errors to one event
@@ -245,13 +257,13 @@ describe("runRegistryReadTool", () => {
     }
   });
 
-  test("fails closed when a raw uuid survives ref hydration at an undeclared path", async () => {
+  test("masks a raw uuid that survives ref hydration at an undeclared path", async () => {
     const registry = createChatRefRegistry();
     // Doctored: `reference` is an ordinary free-text field the ref map never
     // mediates (it is not one of `list_matters`'s `outputRefs` or
     // `passthroughIdPaths`), but nothing stops it from holding a raw uuid.
     // The path-aware backstop must catch this survivor at its exact path even
-    // though no per-field ref rule exists for it.
+    // though no per-field ref rule exists for it, and mask the id in place.
     const rows = [
       {
         id: WS_UUID,
@@ -270,22 +282,27 @@ describe("runRegistryReadTool", () => {
       toolName: "list_matters",
     });
 
-    expect(Result.isError(result)).toBe(true);
-    if (Result.isError(result)) {
-      expect(result.error.message).not.toContain(WS_UUID);
-      expect(result.error.message).not.toContain(OTHER_WS_UUID);
-      // The backstop refusal is a Stella bug, not a caller mistake: the kind
-      // drives the orchestrator's mechanical no-retry policy.
-      expect(result.error.kind).toBe("server-defect");
-    }
+    const payload = result.unwrap();
+    expect(payload).toMatchObject({
+      matters: [
+        {
+          id: "mat_1",
+          name: "Acme",
+          reference: MASKED_CONTENT_ID,
+          status: "active",
+        },
+      ],
+    });
+    expect(containsRawUuid(payload)).toBe(false);
     // Telemetry carries the offending path so the survivor is traceable, but
     // never the leaked value itself.
     expect(
       analytics.exceptions().map((event) => event.properties),
     ).toMatchObject([
       {
-        "error.class": "ChatToolError",
-        path: "matters[].reference",
+        defect: "unmapped_id",
+        "error.class": "ToolOutputContractDegradedError",
+        paths: "matters[].reference",
         source: "run-registry-tool",
         toolName: "list_matters",
       },
@@ -315,7 +332,10 @@ describe("runRegistryReadTool", () => {
             versions: [{ id: "version-1" }],
           }),
         },
-        documentProcessingRuns: { findMany: async () => [] },
+        documentProcessingRuns: {
+          findFirst: async () => undefined,
+          findMany: async () => [],
+        },
         entityVersions: { findFirst: async () => ({ id: "version-1" }) },
         extractedContent: { findFirst: async () => null },
         organizationSettings: {
@@ -333,7 +353,7 @@ describe("runRegistryReadTool", () => {
   const PROPERTY_UUID = "6111c8e9-1404-5b6f-8a9a-0e3a93e8179a";
   const ENTITY_UUID = "c09ec856-d945-5ecc-82e3-bb5382165f34";
 
-  test("strict projection parse refuses an undeclared handler field before it can flow", async () => {
+  test("strict projection parse strips an undeclared handler field before it can flow", async () => {
     const registry = createChatRefRegistry();
     const entityRef = registry.toEntityRef({
       entityId: toSafeId<"entity">(ENTITY_UUID),
@@ -342,8 +362,9 @@ describe("runRegistryReadTool", () => {
     // Doctored field row: `extractorRunId` is a handler field nobody
     // classified in the projection schema, carrying a UUID. Unlike the
     // runtime backstop (which only fires on UUID-shaped values), the strict
-    // parse refuses the undeclared KEY itself, so the class is closed even
-    // for payload slots that happen to be null or non-UUID today.
+    // parse removes the undeclared KEY itself, so the class is closed even
+    // for payload slots that happen to be null or non-UUID today; the call
+    // succeeds without it and the defect is reported.
     const result = await runRegistryReadTool({
       args: { entity_id: entityRef },
       context: buildContext({
@@ -360,22 +381,20 @@ describe("runRegistryReadTool", () => {
       toolName: "read_document",
     });
 
-    expect(Result.isError(result)).toBe(true);
-    if (Result.isError(result)) {
-      expect(result.error.kind).toBe("server-defect");
-      expect(result.error.message).toBe(PROJECTION_SCHEMA_FAILURE_MESSAGE);
-      expect(result.error.message).not.toContain(OTHER_WS_UUID);
-    }
-    // Telemetry carries the offending path(s), never the refused value.
+    expect(Result.isOk(result)).toBe(true);
+    const serialized = JSON.stringify(result.unwrap());
+    expect(serialized).not.toContain("extractorRunId");
+    expect(serialized).not.toContain(OTHER_WS_UUID);
+    expect(serialized).toContain("Body text");
+    // Telemetry carries the offending path(s), never the stripped value.
     const [exception] = analytics.exceptions();
     expect(exception?.properties).toMatchObject({
-      "error.class": "ChatToolError",
+      defect: "undeclared_fields",
+      "error.class": "ToolOutputContractDegradedError",
+      paths: "fields[].extractorRunId",
       source: "run-registry-tool",
       toolName: "read_document",
     });
-    expect(JSON.stringify(exception?.properties)).toContain(
-      "fields[].extractorRunId",
-    );
     expect(JSON.stringify(analytics.exceptions())).not.toContain(OTHER_WS_UUID);
   });
 
@@ -450,20 +469,29 @@ describe("runRegistryReadTool", () => {
     });
   });
 
-  test("refuses a read tool the ref map keeps off the chat surface", async () => {
-    const result = await runRegistryReadTool({
-      args: {},
-      context: buildContext(),
-      refRegistry: createChatRefRegistry(),
-      toolName: "list_audit_log",
-    });
-
-    expect(Result.isError(result)).toBe(true);
-    if (Result.isError(result)) {
-      expect(result.error.message).toContain("not available in chat");
-      expect(result.error.kind).toBe("unavailable");
+  for (const definition of DEFAULT_MCP_TOOL_DEFINITIONS) {
+    if (definition.access !== "read") {
+      continue;
     }
-  });
+    if (READ_TOOL_REF_FIELD_MAP[definition.name].chatProjectable) {
+      continue;
+    }
+    const toolName = definition.name;
+    test(`refuses ${toolName} kept off the chat surface`, async () => {
+      const result = await runRegistryReadTool({
+        args: {},
+        context: buildContext(),
+        refRegistry: createChatRefRegistry(),
+        toolName,
+      });
+
+      expect(Result.isError(result)).toBe(true);
+      if (Result.isError(result)) {
+        expect(result.error.message).toContain("not available in chat");
+        expect(result.error.kind).toBe("unavailable");
+      }
+    });
+  }
 
   test("classifies a structured registry error envelope by its code", async () => {
     const registry = createChatRefRegistry();
@@ -485,5 +513,63 @@ describe("runRegistryReadTool", () => {
     if (Result.isError(result)) {
       expect(result.error.kind).toBe("not-found");
     }
+  });
+
+  test("keeps a read a chat app presents, with the MCP result, and names it", async () => {
+    testState.setConfig("FEATURE_PUBLIC_LAW", true);
+    {
+      const kept: TurnAppRead[] = [];
+      const answer = {
+        doctrineAvailability: "unavailable",
+        appealReviews: noDecisionReviewFound(),
+        decisionId: DOCUMENT_UUID,
+        direction: "cites",
+        nextCursor: null,
+        citations: [],
+      } as const;
+      const handler: McpToolHandler = () => ({
+        status: "success",
+        data: answer,
+      });
+      const result = await runRegistryReadTool({
+        args: { decision_id: DOCUMENT_UUID, direction: "cites" },
+        context: buildContext(),
+        refRegistry: createChatRefRegistry(),
+        toolName: "read_case_law_citations",
+        handler,
+        recordAppRead: (read) => {
+          kept.push(read);
+          return "app_1";
+        },
+      });
+      expect(result.unwrap()).toMatchObject({
+        direction: "cites",
+        appId: "app_1",
+      });
+      expect(kept).toHaveLength(1);
+      expect(kept.at(0)).toMatchObject({
+        toolName: "read_case_law_citations",
+        call: {
+          input: { decision_id: DOCUMENT_UUID, direction: "cites" },
+          result: { structuredContent: { decisionId: DOCUMENT_UUID } },
+        },
+      });
+    }
+  });
+
+  test("keeps no read no chat app presents", async () => {
+    const kept: TurnAppRead[] = [];
+    const result = await runRegistryReadTool({
+      args: {},
+      context: buildContext({ scopedDb: selectScopedDb([ONE_MATTER_ROW]) }),
+      refRegistry: createChatRefRegistry(),
+      toolName: "list_matters",
+      recordAppRead: (read) => {
+        kept.push(read);
+        return "app_1";
+      },
+    });
+    expect(result.unwrap()).not.toHaveProperty("appId");
+    expect(kept).toEqual([]);
   });
 });

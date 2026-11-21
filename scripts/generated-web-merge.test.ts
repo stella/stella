@@ -11,7 +11,8 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import ts from "typescript";
+
+import { parseSource } from "../packages/scripts/src/syntax-tree.ts";
 
 const repository = path.resolve(import.meta.dir, "..");
 const generators = ["apps/api/scripts/generate-web-api-types.ts"];
@@ -40,20 +41,9 @@ const copyGenerator = ({ directory, file, copied }: CopyGeneratorOptions) => {
   copied.add(file);
   const source = readFileSync(path.join(repository, file), "utf-8");
   write({ directory, file, source });
-  const parsed = ts.createSourceFile(
-    file,
-    source,
-    ts.ScriptTarget.Latest,
-    true,
-  );
-  for (const statement of parsed.statements) {
-    if (
-      !ts.isImportDeclaration(statement) ||
-      !ts.isStringLiteral(statement.moduleSpecifier)
-    ) {
-      continue;
-    }
-    const specifier = statement.moduleSpecifier.text;
+  const { module } = parseSource(file, source);
+  for (const { moduleRequest } of module.staticImports) {
+    const specifier = moduleRequest.value;
     if (!specifier.startsWith(".")) {
       continue;
     }
@@ -69,18 +59,31 @@ const copyGenerator = ({ directory, file, copied }: CopyGeneratorOptions) => {
   }
 };
 
+const fixtureEnvironment = (inherited: NodeJS.ProcessEnv) => {
+  const env = { ...inherited };
+  delete env["CI_GENERATED_SOURCES_MANIFEST"];
+  return {
+    ...env,
+    GIT_CONFIG_GLOBAL: "/dev/null",
+    GIT_CONFIG_NOSYSTEM: "1",
+    GIT_AUTHOR_NAME: "Fixture",
+    GIT_AUTHOR_EMAIL: "fixture@example.invalid",
+    GIT_COMMITTER_NAME: "Fixture",
+    GIT_COMMITTER_EMAIL: "fixture@example.invalid",
+  };
+};
+
+// The host-wide generated-output store is shared across checkouts on purpose;
+// each fixture gets its own so one run cannot restore another's printout.
+const generatorEnvironment = (directory: string) => ({
+  ...fixtureEnvironment(process.env),
+  STELLA_GENERATED_STORE: path.join(directory, ".cache/generated-store"),
+});
+
 const run = (directory: string, command: string[]) => {
   const result = Bun.spawnSync(command, {
     cwd: directory,
-    env: {
-      ...process.env,
-      GIT_CONFIG_GLOBAL: "/dev/null",
-      GIT_CONFIG_NOSYSTEM: "1",
-      GIT_AUTHOR_NAME: "Fixture",
-      GIT_AUTHOR_EMAIL: "fixture@example.invalid",
-      GIT_COMMITTER_NAME: "Fixture",
-      GIT_COMMITTER_EMAIL: "fixture@example.invalid",
-    },
+    env: generatorEnvironment(directory),
   });
   expect({
     exitCode: result.exitCode,
@@ -89,15 +92,14 @@ const run = (directory: string, command: string[]) => {
   return result.stdout.toString().trim();
 };
 
-const generate = (directory: string, check = false) => {
-  for (const generator of generators) {
+const generate = (directory: string, check = false) =>
+  generators.map((generator) =>
     run(directory, [
       process.execPath,
       generator,
       ...(check ? ["--check"] : []),
-    ]);
-  }
-};
+    ]),
+  );
 
 const fixture = () => {
   const directory = mkdtempSync(path.join(tmpdir(), "stella-generated-merge-"));
@@ -109,6 +111,13 @@ const fixture = () => {
       directory,
       file: ".gitignore",
       source: readFileSync(path.join(repository, ".gitignore"), "utf-8"),
+    });
+    // The generator checks what the compiler read against the Turbo inputs it
+    // declares, as in a real checkout.
+    write({
+      directory,
+      file: "turbo.json",
+      source: readFileSync(path.join(repository, "turbo.json"), "utf-8"),
     });
     write({
       directory,
@@ -132,7 +141,7 @@ const fixture = () => {
     });
     write({
       directory,
-      file: "apps/api/src/eden-contract.ts",
+      file: "apps/api/src/web-contract.ts",
       source:
         'import type { Routes } from "./routes";\nexport type WebApiContract = { routes: Routes };\n',
     });
@@ -242,7 +251,15 @@ test("independent source routes merge cleanly and the generated API output remai
       expect(generated).toContain("alpha");
       expect(generated).toContain("beta");
     }
-    generate(directory);
+    // Unchanged compiler inputs restore the last printout without a program,
+    // including after the output itself is removed.
+    for (const output of outputs) {
+      rmSync(path.join(directory, output));
+    }
+    for (const log of generate(directory)) {
+      expect(log).toContain("compiler inputs unchanged");
+      expect(log).not.toContain("printed in");
+    }
     expect(
       outputs.map((output) =>
         readFileSync(path.join(directory, output), "utf-8"),
@@ -277,6 +294,7 @@ test("API determinism check rejects output that changes between generation passe
     );
     const result = Bun.spawnSync([process.execPath, generator, "--check"], {
       cwd: directory,
+      env: generatorEnvironment(directory),
     });
     expect(result.exitCode).not.toBe(0);
     expect(result.stderr.toString()).toMatch(
@@ -298,7 +316,10 @@ test("consumer generation prints once while the dedicated check validates identi
     expect(printed.match(/printed in/gu)).toHaveLength(1);
     expect(printed).not.toContain("identity verified");
     const checked = run(directory, [process.execPath, generator, "--check"]);
-    expect(checked.match(/printed in/gu)).toHaveLength(2);
+    // Two independent generations: the first prints, the second prints again and
+    // proves identity against the first's declared form in the same program.
+    expect(checked.match(/printed in/gu)).toHaveLength(1);
+    expect(checked.match(/printed and identity verified in/gu)).toHaveLength(1);
     expect(checked.match(/identity verified/gu)).toHaveLength(1);
     expect(checked).toContain("verified deterministic");
 
@@ -320,6 +341,7 @@ test("consumer generation prints once while the dedicated check validates identi
     );
     const result = Bun.spawnSync([process.execPath, generator, "--check"], {
       cwd: directory,
+      env: generatorEnvironment(directory),
     });
     expect(result.exitCode).not.toBe(0);
     expect(result.stderr.toString()).toContain(
@@ -329,3 +351,25 @@ test("consumer generation prints once while the dedicated check validates identi
     rmSync(temporaryRoot, { recursive: true, force: true });
   }
 }, 30_000);
+
+test("fixture subprocesses do not inherit another checkout's prepared sources", () => {
+  const inherited = {
+    ...process.env,
+    CI_GENERATED_SOURCES_MANIFEST: "/other-checkout/manifest.json",
+  };
+  const child = Bun.spawnSync(
+    [
+      process.execPath,
+      "-e",
+      "process.stdout.write(JSON.stringify(process.env.CI_GENERATED_SOURCES_MANIFEST ?? null))",
+    ],
+    {
+      env: fixtureEnvironment(inherited),
+    },
+  );
+  expect(child.exitCode, child.stderr.toString()).toBe(0);
+  expect(child.stdout.toString()).toBe("null");
+  expect(inherited.CI_GENERATED_SOURCES_MANIFEST).toBe(
+    "/other-checkout/manifest.json",
+  );
+});

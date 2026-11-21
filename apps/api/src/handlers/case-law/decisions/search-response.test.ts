@@ -1,11 +1,13 @@
-import { Value } from "@sinclair/typebox/value";
 import { expect, test } from "bun:test";
-import type { Static } from "elysia";
 import fc from "fast-check";
+import * as v from "valibot";
 
 import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
+import { DECISION_TYPE_KIND_OTHER } from "@stll/api-contract/case-law-decision-types";
 import {
+  SEARCH_PAGE_REACH,
   SEARCH_PAGINATION_COMPLETE,
+  SEARCH_PHASE_NOT_DUE,
   SEARCH_TOTAL_NOT_COUNTED,
 } from "@stll/api-contract/search";
 import { assertProperty } from "@stll/property-testing";
@@ -14,11 +16,16 @@ import { LIMITS } from "@/api/lib/limits";
 import { escapeSearchHtml } from "@/api/lib/search/highlight";
 import { responseByteBound } from "@/api/lib/search/response-byte-bound";
 
-import { projectCaseLawSearchResponse } from "./search-response";
+import {
+  type CaseLawSearchAnswer,
+  projectCaseLawSearchResponse,
+} from "./search-response";
 import { searchDecisionsSuccessResponseSchema } from "./search-schema";
 
-type SearchResponse = Static<typeof searchDecisionsSuccessResponseSchema>;
-const responseWithText = (text: string): SearchResponse => {
+type SearchResponse = v.InferOutput<
+  typeof searchDecisionsSuccessResponseSchema
+>;
+const responseWithText = (text: string): CaseLawSearchAnswer => {
   const bucket = { value: text, label: text, count: Number.MAX_SAFE_INTEGER };
   const hit = {
     decisionId: text,
@@ -46,7 +53,9 @@ const responseWithText = (text: string): SearchResponse => {
     ),
     decisionDate: text,
     decisionType: text,
+    decisionTypeKind: "finding",
     sourceUrl: text,
+    keywords: null,
     headnote: {
       type: "keywords",
       items: Array.from(
@@ -55,16 +64,22 @@ const responseWithText = (text: string): SearchResponse => {
       ),
       omitted: 0,
     },
+    textWithheldReason: null,
     headline: `<mark>${escapeSearchHtml(text)}</mark>`,
     anchorId: text,
     citationCount: Number.MAX_VALUE,
     citationAuthority: -Number.MAX_VALUE,
+    textAvailability: "available",
     matchingPassages: Number.MAX_SAFE_INTEGER,
+    match: "all_terms",
+    matchedTerms: [],
+    missingTerms: [],
     createdAt: text,
   } as const satisfies SearchResponse["hits"][number];
   return {
     hits: Array.from({ length: 2 }, () => hit),
     facets: {
+      courtYear: null,
       court: COURT_TIER_LABELS.map((tierLabel) => ({
         tierLabel,
         courts: Array.from(
@@ -76,13 +91,20 @@ const responseWithText = (text: string): SearchResponse => {
         { length: LIMITS.caseLawYearFacetLimit + 1 },
         () => bucket,
       ),
-      decisionType: [bucket],
+      decisionType: [{ ...bucket, value: DECISION_TYPE_KIND_OTHER }],
       source: [{ ...bucket, countType: "exact" }],
       language: [bucket],
     },
     total: SEARCH_TOTAL_NOT_COUNTED,
+    hitOrder: "all_words_first",
+    relaxedHitCount: 0,
+    termDecisionCounts: null,
     nextCursor: text,
-    paginationOutcome: SEARCH_PAGINATION_COMPLETE,
+    phases: {
+      scan: SEARCH_PAGINATION_COMPLETE,
+      partialMatches: SEARCH_PHASE_NOT_DUE,
+    },
+    pageReach: SEARCH_PAGE_REACH.REACHED,
     queryUsed: text,
     warnings: [{ code: "function_words_optional", message: text, hint: text }],
   };
@@ -108,9 +130,7 @@ test("case-law search envelopes bound Unicode and every nested collection", () =
       (parts) => {
         const text = parts.join("").repeat(20_000);
         const response = projectCaseLawSearchResponse(responseWithText(text));
-        expect(
-          Value.Check(searchDecisionsSuccessResponseSchema, response),
-        ).toBe(true);
+        expect(v.is(searchDecisionsSuccessResponseSchema, response)).toBe(true);
         expect(Buffer.byteLength(JSON.stringify(response))).toBeLessThanOrEqual(
           responseByteBound(searchDecisionsSuccessResponseSchema),
         );
@@ -153,10 +173,92 @@ test("case-law search caps a complete page envelope before serialization", () =>
     text: "😀".repeat(LIMITS.caseLawHeadnoteMaxChars),
     truncated: true,
   });
-  expect(Value.Check(searchDecisionsSuccessResponseSchema, response)).toBe(
-    true,
-  );
+  expect(v.is(searchDecisionsSuccessResponseSchema, response)).toBe(true);
   expect(Buffer.byteLength(JSON.stringify(response))).toBeLessThanOrEqual(
     responseByteBound(searchDecisionsSuccessResponseSchema),
   );
+});
+
+test.each([false, true])(
+  "case-law search preserves populated court/year facets with truncated=%s",
+  (truncated) => {
+    const courtYear = {
+      buckets: [
+        {
+          court: "Nejvyšší soud",
+          courtName: "Nejvyšší soud",
+          courtAbbreviation: "NS",
+          tier: "supreme",
+          year: 2024,
+          count: 17,
+          citationSum: null,
+          treatment: null,
+        },
+        {
+          court: "Krajský soud v Brně",
+          courtName: "Krajský soud v Brně",
+          courtAbbreviation: null,
+          tier: "regional",
+          year: 2025,
+          count: 3,
+          citationSum: null,
+          treatment: null,
+        },
+      ],
+      truncated,
+    } as const satisfies NonNullable<
+      NonNullable<SearchResponse["facets"]>["courtYear"]
+    >;
+    const response = projectCaseLawSearchResponse({
+      ...responseWithText("ř"),
+      facets: {
+        court: [],
+        year: [],
+        decisionType: [],
+        source: [],
+        language: [],
+        courtYear,
+      },
+    });
+    expect(response.facets?.courtYear).toEqual(courtYear);
+    expect(v.is(searchDecisionsSuccessResponseSchema, response)).toBe(true);
+  },
+);
+
+test("expanded search preserves the full headnote reading and separate classifications", () => {
+  const fixture = responseWithText("ř");
+  const hit = fixture.hits.at(0);
+  if (hit === undefined) {
+    throw new Error("Missing search hit");
+  }
+  const text = "The court requires proof of causation. ".repeat(80).trim();
+  expect(text.length).toBeGreaterThan(LIMITS.caseLawHeadnoteMaxChars * 4);
+  expect(text.length).toBeLessThan(LIMITS.mcpCaseLawHeadnoteMaxChars);
+  const response = projectCaseLawSearchResponse(
+    {
+      ...fixture,
+      hits: [
+        {
+          ...hit,
+          headnote: { type: "present", text, truncated: false },
+          keywords: {
+            type: "keywords",
+            items: ["Compensation", "Causation"],
+            omitted: 0,
+          },
+        },
+      ],
+    },
+    LIMITS.mcpCaseLawHeadnoteMaxChars,
+  );
+  expect(response.hits.at(0)?.headnote).toEqual({
+    type: "present",
+    text,
+    truncated: false,
+  });
+  expect(response.hits.at(0)?.keywords).toEqual({
+    type: "keywords",
+    items: ["Compensation", "Causation"],
+    omitted: 0,
+  });
 });

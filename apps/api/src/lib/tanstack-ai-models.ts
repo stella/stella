@@ -1,11 +1,24 @@
+import type {
+  BetaOutputConfig,
+  BetaThinkingConfigParam,
+} from "@anthropic-ai/sdk/resources/beta/messages/messages";
+import type { ThinkingConfig } from "@google/genai";
 import { HarmBlockThreshold, HarmCategory } from "@google/genai";
 import { FetchHttpHandler } from "@smithy/fetch-http-handler";
-import { createModel, extendAdapter } from "@tanstack/ai";
-import type { AnyTextAdapter, ContentPart, ModelMessage } from "@tanstack/ai";
+import { createModel, EventType, extendAdapter } from "@tanstack/ai";
+import type {
+  AdapterYieldChunk,
+  AnyTextAdapter,
+  ContentPart,
+  ModelMessage,
+} from "@tanstack/ai";
 import { createAnthropicChat } from "@tanstack/ai-anthropic";
 import type { AnthropicTextProviderOptions } from "@tanstack/ai-anthropic";
 import { BedrockConverseTextAdapter } from "@tanstack/ai-bedrock";
-import type { BedrockConverseProviderOptions } from "@tanstack/ai-bedrock";
+import type {
+  BedrockConverseProviderOptions,
+  ResolvedBedrockAuth,
+} from "@tanstack/ai-bedrock";
 import { createGeminiChat } from "@tanstack/ai-gemini";
 import type { GeminiTextProviderOptions } from "@tanstack/ai-gemini";
 import { createMistralText } from "@tanstack/ai-mistral";
@@ -13,19 +26,19 @@ import type { MistralTextProviderOptions } from "@tanstack/ai-mistral";
 import { createOpenaiChat } from "@tanstack/ai-openai";
 import type { OpenAITextProviderOptions } from "@tanstack/ai-openai";
 import type { OpenRouterTextModelOptions } from "@tanstack/ai-openrouter";
-import { Result, panic } from "better-result";
+import { panic, Result } from "better-result";
 import * as v from "valibot";
 
 import {
   AI_PROVIDERS,
-  ANTHROPIC_ADAPTIVE_THINKING_MODELS,
   BYOK_MODEL_OPTIONS,
-  DEFAULT_MODELS,
-  FALLBACK_CHAT_MODEL_BY_PROVIDER,
   getModelRate,
+  getModelReasoningCapabilities,
   isBYOKModelRoleSupported,
   isBYOKProviderRoleSupported,
   isChatPdfAttachmentModelSupported,
+  MODEL_TASK_OVERRIDE_GROUP,
+  resolveDefaultModel,
   resolveReasoningEffort,
   shouldEmitTemperature,
   supportsStreamingToolUse,
@@ -34,19 +47,28 @@ import {
 import type {
   AIProvider,
   BYOKProvider,
-  ModelRole,
+  ModelOverrideGroup,
+  ModelTask,
   ReasoningEffort,
   ResolvedReasoningEffort,
   TanStackAIProvider,
 } from "@stll/ai-catalog";
+import { MODEL_DEFAULTS_LEDGER } from "@stll/ai-catalog/model-defaults-ledger";
+import type { ModelDefaultCandidate } from "@stll/ai-catalog/model-defaults-ledger";
+import { AI_FAILURE_CODES } from "@stll/api-contract";
+import { createSha256 } from "@stll/sha256/bun";
 
 import { env } from "@/api/env";
 import {
-  normalizeProviderRegion,
   type AIRequestServiceTier,
   type DataRegion,
+  type ModelLookup,
+  modelLookupTask,
+  normalizeProviderRegion,
   type OrgAIConfig,
   type OrgAIProviderConfig,
+  resolveOrgAIModel,
+  resolveOrgAIModelForTask,
 } from "@/api/lib/ai-config";
 import type { OrgAIConfigStatus } from "@/api/lib/ai-config-loader-core";
 import { orgAIConfigStatusError } from "@/api/lib/ai-config-response";
@@ -56,6 +78,7 @@ import type {
   AIRequestPolicy,
   ManagedAIResidency,
 } from "@/api/lib/chat/ai-data-policy";
+import { anthropicClientOptions } from "@/api/lib/chat/anthropic-config";
 import {
   getManagedOpenRouterConfiguration,
   type ManagedOpenRouterCredential,
@@ -70,12 +93,29 @@ import {
 import { withProviderImageInput } from "@/api/lib/chat/provider-image-input";
 import { withProviderStreamContract } from "@/api/lib/chat/provider-stream-contract";
 import { validateDataUrl } from "@/api/lib/data-url";
+import {
+  markProviderAdapterError,
+  providerAdapterEvidence,
+} from "@/api/lib/errors/provider-call-failure";
+import {
+  providerTransportCode,
+  recordProviderSends,
+  withRecordedResponse,
+  withSendEvidence,
+} from "@/api/lib/errors/provider-retry-evidence";
+import type { ProviderSendRecord } from "@/api/lib/errors/provider-retry-evidence";
+import { registerProviderDiagnosticCredentials } from "@/api/lib/errors/redacted-provider-diagnostic";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
 import {
   createManagedOpenRouterText,
   createStellaOpenRouterText,
 } from "@/api/lib/stella-openrouter-text-adapter";
+import { isRecord } from "@/api/lib/type-guards";
+import {
+  MANAGED_MODEL_TIER,
+  type ManagedModelTier,
+} from "@/api/lib/usage/managed-model-tier";
 
 const AI_PROVIDER_VALUES = new Set<string>(AI_PROVIDERS);
 const ANTHROPIC_LEGACY_THINKING_BUDGET_TOKENS = 10_000;
@@ -91,8 +131,7 @@ type StellaOpenRouterTextModelOptions = Omit<
   // The request-level prompt-cache marker OpenRouter forwards to Anthropic
   // models; the adapter spreads it into the SDK request, whose type has it.
   cacheControl?:
-    | { ttl?: "5m" | "1h" | undefined; type: "ephemeral" }
-    | undefined;
+    { ttl?: "5m" | "1h" | undefined; type: "ephemeral" } | undefined;
   // Narrowed from the SDK's open enum: an effort must be proven
   // against the target model's declared capability
   // (`resolveReasoningEffort`) before it can be sent.
@@ -104,9 +143,9 @@ const OPENROUTER_CHAT_MODEL_OPTIONS: StellaOpenRouterTextModelOptions = {};
 const isAIProvider = (value: string): value is AIProvider =>
   AI_PROVIDER_VALUES.has(value);
 
-export { AI_PROVIDERS, BYOK_MODEL_OPTIONS, DEFAULT_MODELS };
-export { MODEL_ROLES } from "@stll/ai-catalog";
-export type { AIProvider, BYOKProvider, ModelRole };
+export { AI_PROVIDERS, BYOK_MODEL_OPTIONS };
+export { MODEL_TASKS } from "@stll/ai-catalog";
+export type { AIProvider, BYOKProvider, ModelTask };
 
 type TanStackTextAdapterFactory = (modelId: string) => AnyTextAdapter;
 
@@ -128,20 +167,14 @@ type MissingInstanceProvider = Exclude<
 
 true satisfies MissingInstanceProvider extends never ? true : never;
 
-type AnthropicAdaptiveThinking = {
-  type: "adaptive";
-  display?: "omitted" | "summarized" | undefined;
-};
+// The provider-native settings preserve reviewed defaults that the unified
+// reasoning level cannot express (adaptive thinking without a chosen effort).
+// The adapter patch rejects mixing these with top-level reasoning.
+type StellaAnthropicThinking = BetaThinkingConfigParam;
 
-type StellaAnthropicThinking =
-  | NonNullable<AnthropicTextProviderOptions["thinking"]>
-  | AnthropicAdaptiveThinking;
-
-type StellaAnthropicTextProviderOptions = Omit<
-  AnthropicTextProviderOptions,
-  "thinking"
-> & {
+type StellaAnthropicTextProviderOptions = AnthropicTextProviderOptions & {
   thinking?: StellaAnthropicThinking | undefined;
+  output_config?: BetaOutputConfig | undefined;
 };
 
 type AnthropicReasoningEffort = NonNullable<
@@ -172,10 +205,7 @@ type ResolvedGoogleThinkingLevel = v.InferOutput<
   typeof resolvedGoogleThinkingLevelSchema
 >;
 
-type StellaGeminiThinkingConfig = Omit<
-  NonNullable<GeminiTextProviderOptions["thinkingConfig"]>,
-  "thinkingLevel"
-> & {
+type StellaGeminiThinkingConfig = Omit<ThinkingConfig, "thinkingLevel"> & {
   thinkingLevel: ResolvedGoogleThinkingLevel;
 };
 
@@ -195,8 +225,7 @@ type StellaOpenAITextProviderOptions = Omit<
 };
 
 export type TanStackAIProviderUnsupportedReason =
-  | "provider-not-implemented"
-  | "regional-routing-not-implemented";
+  "provider-not-implemented" | "regional-routing-not-implemented";
 
 export type TanStackAIProviderSupport =
   | { supported: true }
@@ -274,7 +303,7 @@ export const modelAcceptsPdfDocumentInput = (
 
 /**
  * Whether a resolved model can accept a textual `document` content part
- * (extracted docx / txt / csv / md) in chat. This is the pdf-role document set
+ * (extracted docx / txt / csv / md) in chat. This is the pdf-task document set
  * (`BYOK_DOCUMENT_INPUT_MODEL_OPTIONS`), which excludes Mistral because its
  * `document_url` path handles PDF only. Fail closed on unrecognized providers.
  */
@@ -310,14 +339,14 @@ export const isAllowedBYOKModel = (
   return allowed.includes(modelId);
 };
 
-export const isAllowedBYOKModelForRole = ({
+export const isAllowedBYOKModelForTask = ({
   provider,
   modelId,
-  role,
+  task,
 }: {
   provider: AIProvider;
   modelId: string;
-  role: ModelRole;
+  task: ModelTask;
 }): boolean => {
   if (!isBYOKProvider(provider)) {
     return false;
@@ -326,8 +355,102 @@ export const isAllowedBYOKModelForRole = ({
   const allowed: readonly string[] = BYOK_MODEL_OPTIONS[provider];
   return (
     allowed.includes(modelId) &&
-    isBYOKModelRoleSupported({ provider, modelId, role })
+    isBYOKModelRoleSupported({
+      provider,
+      modelId,
+      role: MODEL_TASK_OVERRIDE_GROUP[task],
+    })
   );
+};
+
+type ModelSelectionAvailabilityOptions = {
+  dataClass: AIDataClass;
+  provider: AIProvider;
+  modelId: string;
+  orgAIConfig: OrgAIConfig | null | undefined;
+  task: ModelTask;
+};
+
+export const isModelSelectionAvailableForTask = ({
+  dataClass,
+  provider,
+  modelId,
+  orgAIConfig,
+  task,
+}: ModelSelectionAvailabilityOptions): boolean => {
+  if (!isAllowedBYOKModelForTask({ provider, modelId, task })) {
+    return false;
+  }
+  if (orgAIConfig) {
+    return orgAIConfig.providers.some(
+      (providerConfig) => providerConfig.provider === provider,
+    );
+  }
+  return (
+    hasConfiguredTanStackInstanceProvider() &&
+    (isMockTextAdapterActive() ||
+      isManagedProviderAvailable(provider, dataClass)) &&
+    getActiveProvider() === provider
+  );
+};
+
+type StructuredOutputFallbackModelOptions = {
+  failedModelId: string;
+  orgAIConfig: OrgAIConfig | null | undefined;
+  task: ModelTask;
+  modelTier: ManagedModelTier;
+} & AIRequestPolicy;
+
+/** Select once in catalog order; dispatch still proves admission and policy. */
+export const getStructuredOutputFallbackModelId = ({
+  failedModelId,
+  orgAIConfig,
+  task,
+  modelTier,
+  dataClass,
+}: StructuredOutputFallbackModelOptions): string | null => {
+  // Managed fast-tier resolution pins every selection to the fast primary.
+  if (!orgAIConfig && modelTier === MANAGED_MODEL_TIER.fast) {
+    return null;
+  }
+  const assignedProvider = orgAIConfig
+    ? resolveOrgAIModelForTask(orgAIConfig, task)?.provider
+    : getActiveProvider();
+  for (const provider of TANSTACK_AI_PROVIDERS) {
+    if (provider !== assignedProvider) {
+      continue;
+    }
+    for (const modelId of BYOK_MODEL_OPTIONS[provider]) {
+      if (
+        modelId === failedModelId ||
+        !isModelSelectionAvailableForTask({
+          dataClass,
+          provider,
+          modelId,
+          orgAIConfig,
+          task,
+        })
+      ) {
+        continue;
+      }
+      if (!orgAIConfig) {
+        if (
+          !isManagedProviderAvailable(provider, dataClass) ||
+          getModelRate(modelId) === undefined
+        ) {
+          continue;
+        }
+        if (
+          provider === "openrouter" &&
+          Result.isError(assertManagedOpenRouterModel(modelId))
+        ) {
+          continue;
+        }
+      }
+      return `${provider}::${modelId}`;
+    }
+  }
+  return null;
 };
 
 type ModelOverride = {
@@ -338,6 +461,7 @@ type ModelOverride = {
 type TanStackModelFactoryOptions = {
   provider: AIProvider;
   region?: DataRegion | undefined;
+  anthropicWorkspaceId?: string | undefined;
 } & (
   | { apiKey: string; dataClass: AIDataClass }
   | ({
@@ -365,8 +489,7 @@ export const registerTanStackMockTextAdapterFactory = (
  * with the flag still set.
  */
 const activeMockTextAdapterFactory = ():
-  | TanStackTextAdapterFactory
-  | undefined =>
+  TanStackTextAdapterFactory | undefined =>
   env.USE_MOCK_AI === false ? undefined : mockTextAdapterFactory;
 
 /**
@@ -565,17 +688,225 @@ const createExtendedGeminiAdapter = (
   return gemini(modelId, apiKey);
 };
 
-const createExtendedAnthropicAdapter = (
-  modelId: string,
-  apiKey: string,
-): AnyTextAdapter => {
+type AdapterChatOptions = Parameters<AnyTextAdapter["chatStream"]>[0];
+type AdapterRunError = Extract<
+  AdapterYieldChunk,
+  { type: typeof EventType.RUN_ERROR }
+>;
+
+type AdapterLogger = AdapterChatOptions["logger"];
+
+/**
+ * `logger`, also recording the socket code of the failure an adapter logs
+ * as fatal. The Gemini and Bedrock adapters take no `wrapFetch`, and log the
+ * failure they then report as a `RUN_ERROR` without it.
+ */
+const recordingLogger = (
+  logger: AdapterLogger,
+  record: ProviderSendRecord,
+): AdapterLogger =>
+  new Proxy(logger, {
+    get: (target, key) => {
+      if (key === "errors") {
+        const errors: AdapterLogger["errors"] = (message, meta) => {
+          const code = providerTransportCode(meta?.["error"]);
+          if (record.evidence === undefined && code !== undefined) {
+            record.evidence = { code };
+          }
+          target.errors(message, meta);
+        };
+        return errors;
+      }
+      const value: unknown = Reflect.get(target, key, target);
+      if (typeof value !== "function") {
+        return value;
+      }
+      const bound: unknown = value.bind(target);
+      return bound;
+    },
+  });
+
+/** `options` with its requests recorded into `record`. */
+const recordedOptions = (
+  options: AdapterChatOptions,
+  record: ProviderSendRecord,
+): AdapterChatOptions => ({
+  ...options,
+  logger: recordingLogger(options.logger, record),
+  wrapFetch: recordProviderSends({
+    record,
+    signal: options.request?.signal ?? options.abortController?.signal,
+    outer: options.wrapFetch,
+  }),
+});
+
+/**
+ * A `RUN_ERROR`'s evidence with what its last request recorded: the retry
+ * hints and the request id join the provider's body, and a request that got
+ * no response, which has no body, is its socket code. A per-call `wrapFetch`
+ * makes some adapters (OpenRouter) send through a client of their own for
+ * that call, which skips any projection installed on the adapter's client,
+ * so the record is what keeps the request id.
+ */
+const runErrorEvidence = (
+  chunk: AdapterRunError,
+  record: ProviderSendRecord,
+): Record<string, unknown> | undefined => {
+  const recorded = record.evidence;
+  if (recorded === undefined) {
+    return isRecord(chunk.rawEvent) ? chunk.rawEvent : undefined;
+  }
+  if (isRecord(chunk.rawEvent)) {
+    return withRecordedResponse(chunk.rawEvent, recorded);
+  }
+  if (chunk.rawEvent !== undefined) {
+    return undefined;
+  }
+  return recorded.code === undefined ? undefined : { code: recorded.code };
+};
+
+/**
+ * Marks every failure the provider adapter itself raises or reports, so the
+ * generation layer tells a provider request that got no response from the
+ * same socket failure anywhere else in a run (an MCP connection, a
+ * middleware's database or cache call), which it does not retry
+ * (`providerFailureKind`). Each call's requests go through
+ * `recordProviderSends`, so the retry hints and the socket code TanStack's
+ * `RUN_ERROR` projection drops join its evidence.
+ */
+const withProviderFailureOrigin = (adapter: AnyTextAdapter): AnyTextAdapter => {
+  const marked = async function* (
+    record: ProviderSendRecord,
+    stream: AsyncIterable<AdapterYieldChunk>,
+  ): AsyncIterable<AdapterYieldChunk> {
+    const iterator = stream[Symbol.asyncIterator]();
+    // Set once the adapter's stream has finished on its own, by ending or by
+    // throwing; any other exit (the reader stopped early) closes it here.
+    let settled = false;
+    try {
+      for (;;) {
+        const step = await Result.tryPromise(async () => await iterator.next());
+        if (Result.isError(step)) {
+          settled = true;
+          // Both mark the adapter's own error in place; it is rethrown as is.
+          const failure = step.error.cause;
+          markProviderAdapterError(withSendEvidence(failure, record));
+          throw failure;
+        }
+        if (step.value.done === true) {
+          settled = true;
+          return;
+        }
+        const chunk = step.value.value;
+        if (chunk.type !== EventType.RUN_ERROR) {
+          yield chunk;
+          continue;
+        }
+        const evidence = runErrorEvidence(chunk, record);
+        yield evidence === undefined
+          ? chunk
+          : { ...chunk, rawEvent: providerAdapterEvidence(evidence) };
+      }
+    } finally {
+      if (!settled) {
+        const closed = await Result.tryPromise(
+          async () => await iterator.return?.(),
+        );
+        // Best effort: the reader already stopped, so a close that fails has
+        // no one left to tell.
+        closed.match({ err: () => undefined, ok: () => undefined });
+      }
+    }
+  };
+  const chatStream: AnyTextAdapter["chatStream"] = (options) => {
+    const record: ProviderSendRecord = { evidence: undefined };
+    return marked(record, adapter.chatStream(recordedOptions(options, record)));
+  };
+  const structuredOutput: AnyTextAdapter["structuredOutput"] = async (
+    options,
+  ) => {
+    const record: ProviderSendRecord = { evidence: undefined };
+    const output = await Result.tryPromise(
+      async () =>
+        await adapter.structuredOutput({
+          ...options,
+          chatOptions: recordedOptions(options.chatOptions, record),
+        }),
+    );
+    if (Result.isError(output)) {
+      // Both mark the adapter's own error in place; it is rethrown as is.
+      const failure = output.error.cause;
+      markProviderAdapterError(withSendEvidence(failure, record));
+      throw failure;
+    }
+    return output.value;
+  };
+  const originalStream = adapter.structuredOutputStream;
+  const structuredOutputStream: AnyTextAdapter["structuredOutputStream"] =
+    originalStream === undefined
+      ? undefined
+      : (options) => {
+          const record: ProviderSendRecord = { evidence: undefined };
+          return marked(
+            record,
+            originalStream.call(adapter, {
+              ...options,
+              chatOptions: recordedOptions(options.chatOptions, record),
+            }),
+          );
+        };
+  return new Proxy(adapter, {
+    get: (target, key) => {
+      if (key === "chatStream") {
+        return chatStream;
+      }
+      if (key === "structuredOutput") {
+        return structuredOutput;
+      }
+      if (key === "structuredOutputStream") {
+        return structuredOutputStream;
+      }
+      const value: unknown = Reflect.get(target, key, target);
+      if (typeof value !== "function") {
+        return value;
+      }
+      const bound: unknown = value.bind(target);
+      return bound;
+    },
+  });
+};
+
+/**
+ * A provider SDK client sends each request once. The generation layer
+ * (`withProviderRetryWait`) owns every retry, so each send passes the checks
+ * it makes before a dispatch; an SDK retry would send the same request again
+ * below them. `provider-retry-policy.ts` restates what the SDKs retried, and
+ * `tanstack-ai-models.retries.test.ts` holds every provider to one request
+ * per attempt.
+ */
+const SDK_RETRIES_OFF = { maxRetries: 0 } as const;
+
+type AnthropicAdapterOptions = {
+  modelId: string;
+  apiKey: string;
+  anthropicWorkspaceId: string | undefined;
+};
+
+const createExtendedAnthropicAdapter = ({
+  modelId,
+  apiKey,
+  anthropicWorkspaceId,
+}: AnthropicAdapterOptions): AnyTextAdapter => {
   const anthropic = extendAdapter(createAnthropicChat, [
     createModel(modelId, {
       input: ["text", "image", "document"] as const,
       features: ["structured_outputs"] as const,
     }),
   ]);
-  return anthropic(modelId, apiKey);
+  return anthropic(modelId, apiKey, {
+    ...anthropicClientOptions(anthropicWorkspaceId),
+    ...SDK_RETRIES_OFF,
+  });
 };
 
 const createExtendedOpenAIAdapter = (
@@ -588,7 +919,7 @@ const createExtendedOpenAIAdapter = (
       features: ["structured_outputs"] as const,
     }),
   ]);
-  return openai(modelId, apiKey);
+  return openai(modelId, apiKey, SDK_RETRIES_OFF);
 };
 
 type OpenRouterAdapterOptions = { modelId: string } & (
@@ -711,6 +1042,20 @@ const withInlineImages = (messages: ModelMessage[]): ModelMessage[] =>
 class BunBedrockTextAdapter extends BedrockConverseTextAdapter<never> {
   private readonly requestHandler = new FetchHttpHandler();
 
+  // One attempt per request, as `SDK_RETRIES_OFF` asks of the other
+  // clients: AWS standard mode makes three, and an explicit `maxAttempts`
+  // also outranks `AWS_MAX_ATTEMPTS`.
+  protected override buildClientConfig(
+    resolved: ResolvedBedrockAuth,
+    region: string,
+    endpoint: string | undefined,
+  ) {
+    return {
+      ...super.buildClientConfig(resolved, region, endpoint),
+      maxAttempts: 1,
+    };
+  }
+
   protected override async getClient() {
     const client = await super.getClient();
     client.config.requestHandler = this.requestHandler;
@@ -742,6 +1087,7 @@ class BunBedrockTextAdapter extends BedrockConverseTextAdapter<never> {
     if (!response.stream) {
       throw new HandlerError({
         status: 502,
+        code: "internal_error",
         message: "Bedrock Converse returned no stream.",
       });
     }
@@ -859,7 +1205,10 @@ export const createTanStackTextAdapterFactory = (
   const factory = createProviderTextAdapterFactory({ ...options, provider });
   return (modelId) =>
     withProviderStreamContract(
-      withProviderImageInput(factory(modelId), provider),
+      withProviderImageInput(
+        withProviderFailureOrigin(factory(modelId)),
+        provider,
+      ),
       stopReasons,
     );
 };
@@ -884,7 +1233,12 @@ const createProviderTextAdapterFactory = (
         apiKey ?? env.ANTHROPIC_API_KEY,
         "ANTHROPIC_API_KEY",
       );
-      return (modelId) => createExtendedAnthropicAdapter(modelId, key);
+      return (modelId) =>
+        createExtendedAnthropicAdapter({
+          modelId,
+          apiKey: key,
+          anthropicWorkspaceId: options.anthropicWorkspaceId,
+        });
     }
     case "bedrock": {
       const key = apiKey ?? env.BEDROCK_API_KEY;
@@ -903,19 +1257,12 @@ const createProviderTextAdapterFactory = (
         options.apiKey === undefined
           ? options.managedOpenRouterCredential
           : undefined;
-      const staticKey = env.OPENROUTER_API_KEY?.trim()
-        ? env.OPENROUTER_API_KEY
-        : undefined;
-      if (
-        options.apiKey === undefined &&
-        staticKey === undefined &&
-        managedCredential === undefined
-      ) {
+      if (options.apiKey === undefined && managedCredential === undefined) {
         throw managedProviderUnavailable("openrouter");
       }
       const key = requireCredential(
         supportedProvider,
-        apiKey ?? staticKey ?? managedCredential?.apiKey,
+        apiKey ?? managedCredential?.apiKey,
         "OPENROUTER_API_KEY",
       );
       if (options.apiKey !== undefined) {
@@ -926,10 +1273,10 @@ const createProviderTextAdapterFactory = (
             keySource: "byok",
           });
       }
-      const credential =
-        staticKey === undefined && managedCredential !== undefined
-          ? managedCredential
-          : { type: "static" as const, apiKey: key };
+      const credential = managedCredential ?? {
+        type: "static" as const,
+        apiKey: key,
+      };
       return (modelId) =>
         createExtendedOpenRouterAdapter({
           modelId,
@@ -970,7 +1317,14 @@ const hasInstanceProviderCredentials = (provider: AIProvider): boolean => {
     case "google":
       return !!env.GOOGLE_GENERATIVE_AI_API_KEY;
     case "openrouter":
-      return getManagedOpenRouterConfiguration().type !== "unavailable";
+      // Each request dispatches on its own tier's credential; the boot
+      // invariant in env-schema (managedProviderCheckInvariantViolation)
+      // provisions every tier an organization can stand on whenever any
+      // tier is, so one deployment-wide answer holds for each of them.
+      return Object.values(MANAGED_MODEL_TIER).some(
+        (tier) =>
+          getManagedOpenRouterConfiguration(tier).type !== "unavailable",
+      );
     case "openai":
       return !!env.OPENAI_API_KEY;
     case "anthropic":
@@ -1098,84 +1452,95 @@ const getOrgProviderConfig = (
   findOrgProviderConfig(config, provider) ??
   panic(`Org AI config has no ${provider} provider`);
 
-const byokProviderRoleUnsupportedError = (
+const byokProviderTaskUnsupportedError = (
   provider: BYOKProvider,
-  role: ModelRole,
+  task: ModelTask,
 ): HandlerError<400> =>
   new HandlerError({
+    code: AI_FAILURE_CODES.provider_task_unsupported,
     status: 400,
     message:
-      `${provider} is not available for the "${role}" AI role. ` +
+      `${provider} is not available for the "${task}" AI task. ` +
       "Choose a provider that supports document input for PDF flows.",
   });
 
-const byokModelRoleUnsupportedError = ({
+const byokModelTaskUnsupportedError = ({
   provider,
   modelId,
-  role,
+  task,
 }: {
   provider: BYOKProvider;
   modelId: string;
-  role: ModelRole;
+  task: ModelTask;
 }): HandlerError<400> =>
   new HandlerError({
     status: 400,
     message:
-      `${provider} model "${modelId}" is not available for the "${role}" AI role. ` +
+      `${provider} model "${modelId}" is not available for the "${task}" AI task. ` +
       "Choose a model that supports document input for PDF flows.",
   });
 
-const supportsTanStackProviderRole = (
+const supportsTanStackProviderTask = (
   provider: TanStackTextProvider,
-  role: ModelRole,
+  task: ModelTask,
 ): boolean =>
-  isBYOKProvider(provider) && isBYOKProviderRoleSupported({ provider, role });
+  isBYOKProvider(provider) &&
+  isBYOKProviderRoleSupported({
+    provider,
+    role: MODEL_TASK_OVERRIDE_GROUP[task],
+  });
 
-const assertTanStackProviderRoleSupport = (
+const assertTanStackProviderTaskSupport = (
   provider: TanStackTextProvider,
-  role: ModelRole,
+  task: ModelTask,
 ): void => {
-  if (supportsTanStackProviderRole(provider, role)) {
+  if (supportsTanStackProviderTask(provider, task)) {
     return;
   }
 
   if (isBYOKProvider(provider)) {
-    throw byokProviderRoleUnsupportedError(provider, role);
+    throw byokProviderTaskUnsupportedError(provider, task);
   }
 
-  panic("Unsupported TanStack AI role provider.");
+  panic("Unsupported TanStack AI task provider.");
 };
 
-const assertTanStackBYOKModelRoleSupport = ({
+const assertTanStackBYOKModelTaskSupport = ({
   provider,
   modelId,
-  role,
+  task,
 }: {
   provider: TanStackTextProvider;
   modelId: string;
-  role: ModelRole;
+  task: ModelTask;
 }): void => {
   if (!isBYOKProvider(provider)) {
-    panic("Unsupported TanStack AI role provider.");
+    panic("Unsupported TanStack AI task provider.");
   }
 
-  if (isBYOKModelRoleSupported({ provider, modelId, role })) {
+  if (
+    isBYOKModelRoleSupported({
+      provider,
+      modelId,
+      role: MODEL_TASK_OVERRIDE_GROUP[task],
+    })
+  ) {
     return;
   }
 
-  throw byokModelRoleUnsupportedError({ provider, modelId, role });
+  throw byokModelTaskUnsupportedError({ provider, modelId, task });
 };
 
-export const requireTanStackAIAvailableForRole = ({
+export const requireTanStackAIAvailableForTask = ({
   configStatus,
   orgConfig,
-  role,
+  task,
   dataClass,
 }: {
   dataClass: AIDataClass;
   configStatus: OrgAIConfigStatus;
   orgConfig: OrgAIConfig | null;
-  role: ModelRole;
+  task: ModelTask;
 }): Result<void, HandlerError> => {
   // A stored config that did not decrypt, or an org barred from the instance
   // provider, is not the same as no config: the null below would otherwise
@@ -1187,7 +1552,7 @@ export const requireTanStackAIAvailableForRole = ({
 
   if (!orgConfig) {
     if (!hasConfiguredTanStackInstanceProvider()) {
-      return Result.err(byokRoleNotConfiguredError(role));
+      return Result.err(byokRoleNotConfiguredError(task));
     }
 
     const activeProvider = getActiveProvider();
@@ -1198,17 +1563,20 @@ export const requireTanStackAIAvailableForRole = ({
       return Result.err(managedProviderUnavailable(activeProvider));
     }
     const provider = resolveTanStackTextProvider({ provider: activeProvider });
-    if (!supportsTanStackProviderRole(provider, role)) {
+    if (!supportsTanStackProviderTask(provider, task)) {
       if (isBYOKProvider(provider)) {
-        return Result.err(byokProviderRoleUnsupportedError(provider, role));
+        return Result.err(byokProviderTaskUnsupportedError(provider, task));
       }
-      return panic("Unsupported TanStack AI role provider.");
+      return panic("Unsupported TanStack AI task provider.");
     }
 
     return Result.ok(undefined);
   }
 
-  const selection = orgConfig.overrideModels[role];
+  const selection = resolveOrgAIModelForTask(orgConfig, task);
+  if (selection === null) {
+    return Result.err(byokRoleNotConfiguredError(task));
+  }
   const providerConfig = getOrgProviderConfig(orgConfig, selection.provider);
   const support = resolveTanStackAIProviderSupport({
     provider: providerConfig.provider,
@@ -1220,11 +1588,11 @@ export const requireTanStackAIAvailableForRole = ({
       isBYOKProvider(providerConfig.provider) &&
       !isBYOKProviderRoleSupported({
         provider: providerConfig.provider,
-        role,
+        role: MODEL_TASK_OVERRIDE_GROUP[task],
       })
     ) {
       return Result.err(
-        byokProviderRoleUnsupportedError(providerConfig.provider, role),
+        byokProviderTaskUnsupportedError(providerConfig.provider, task),
       );
     }
     if (
@@ -1232,14 +1600,14 @@ export const requireTanStackAIAvailableForRole = ({
       !isBYOKModelRoleSupported({
         provider: providerConfig.provider,
         modelId: selection.modelId,
-        role,
+        role: MODEL_TASK_OVERRIDE_GROUP[task],
       })
     ) {
       return Result.err(
-        byokModelRoleUnsupportedError({
+        byokModelTaskUnsupportedError({
           provider: providerConfig.provider,
           modelId: selection.modelId,
-          role,
+          task,
         }),
       );
     }
@@ -1254,12 +1622,15 @@ export const requireTanStackAIAvailableForRole = ({
   );
 };
 
-export const isDeferredServiceTierAvailableForRole = (
-  role: ModelRole,
+export const isDeferredServiceTierAvailableForTask = (
+  task: ModelTask,
   orgConfig: OrgAIConfig | null | undefined,
 ): boolean => {
   if (orgConfig) {
-    const selection = orgConfig.overrideModels[role];
+    const selection = resolveOrgAIModelForTask(orgConfig, task);
+    if (selection === null) {
+      return false;
+    }
     const providerConfig = getOrgProviderConfig(orgConfig, selection.provider);
     const region = providerRegion(providerConfig);
     return (
@@ -1341,7 +1712,7 @@ export const clearByokAdapterCache = () => {
 };
 
 const byokCacheKey = (config: OrgAIProviderConfig): string => {
-  const hasher = new Bun.CryptoHasher("sha256");
+  const hasher = createSha256();
   hasher.update(config.provider);
   hasher.update(config.apiKey);
   switch (config.provider) {
@@ -1352,10 +1723,13 @@ const byokCacheKey = (config: OrgAIProviderConfig): string => {
     case "huggingface":
       hasher.update(config.baseURL);
       break;
+    case "anthropic":
+      hasher.update(config.anthropicWorkspaceId ?? "");
+      hasher.update(providerRegion(config) ?? "global");
+      break;
     case "google":
     case "openrouter":
     case "openai":
-    case "anthropic":
     case "bedrock":
     case "mistral":
     case "openai_compatible":
@@ -1363,9 +1737,7 @@ const byokCacheKey = (config: OrgAIProviderConfig): string => {
       break;
     default: {
       config satisfies never;
-      return panic(
-        `Unsupported BYOK provider configuration: ${JSON.stringify(config)}`,
-      );
+      return panic("Unsupported BYOK provider configuration");
     }
   }
   const hash = hasher.digest("hex").slice(0, 16);
@@ -1374,15 +1746,19 @@ const byokCacheKey = (config: OrgAIProviderConfig): string => {
 
 const factoryExtras = (
   config: OrgAIProviderConfig,
-): Pick<TanStackModelFactoryOptions, "region"> => {
+): Pick<TanStackModelFactoryOptions, "region" | "anthropicWorkspaceId"> => {
   switch (config.provider) {
     case "azure_foundry":
     case "huggingface":
       return {};
+    case "anthropic":
+      return {
+        region: providerRegion(config),
+        anthropicWorkspaceId: config.anthropicWorkspaceId,
+      };
     case "google":
     case "openrouter":
     case "openai":
-    case "anthropic":
     case "bedrock":
     case "mistral":
     case "openai_compatible":
@@ -1444,12 +1820,53 @@ const getInstanceFactory = (
     ...policy,
   });
 
+// One setting per role that owns a task. A role that inherits its task
+// (browse) has none: it runs on that task's instance model.
 const MODEL_OVERRIDES = {
   fast: env.AI_MODEL_FAST,
   chat: env.AI_MODEL_CHAT,
   reasoning: env.AI_MODEL_REASONING,
   pdf: env.AI_MODEL_PDF,
-} satisfies Record<ModelRole, string | undefined>;
+} satisfies Record<
+  (typeof MODEL_TASK_OVERRIDE_GROUP)[ModelTask],
+  string | undefined
+>;
+
+/** The fast tier serves every task with the short-text model. */
+const managedModelTask = (
+  task: ModelTask,
+  modelTier: ManagedModelTier,
+): ModelTask => {
+  switch (modelTier) {
+    case MANAGED_MODEL_TIER.standard:
+      return task;
+    case MANAGED_MODEL_TIER.fast:
+      return "short-text";
+    default:
+      modelTier satisfies never;
+      return panic("Unhandled managed model tier");
+  }
+};
+
+const instanceModelIdForTask = ({
+  provider,
+  task,
+  modelTier,
+}: {
+  provider: AIProvider;
+  task: ModelTask;
+  modelTier: ManagedModelTier;
+}): string => {
+  const servingTask = managedModelTask(task, modelTier);
+  const modelId =
+    MODEL_OVERRIDES[MODEL_TASK_OVERRIDE_GROUP[servingTask]] ??
+    resolveDefaultModel({ task: servingTask, orgProviders: [provider] })
+      ?.modelId;
+  if (modelId === undefined) {
+    return panic("Supported instance task has no catalog default");
+  }
+  return modelId;
+};
 
 const GOOGLE_SAFETY_SETTINGS_BASELINE = [
   {
@@ -1474,45 +1891,46 @@ const GOOGLE_SAFETY_SETTINGS_BASELINE = [
  * `{ temperature: 0 }` only when the catalog policy says to emit it.
  * Models that reject, deprecate, or ignore the parameter, plus unknown
  * model IDs, get nothing and run on provider defaults. This is the sole
- * temperature emission point for role defaults.
+ * temperature emission point for task defaults.
  */
 const deterministicSamplingForModel = (
   modelId: string,
-): { temperature: 0 } | Record<never, never> =>
-  shouldEmitTemperature(modelId) ? { temperature: 0 } : {};
-
-const usesAnthropicAdaptiveThinking = (modelId: string): boolean =>
-  ANTHROPIC_ADAPTIVE_THINKING_MODELS.some((adaptiveModelId) =>
-    modelId.includes(adaptiveModelId),
-  );
+  seed: ModelDefaultCandidate,
+): { temperature: 0 } | Record<never, never> => {
+  const emit =
+    modelId === seed.modelId
+      ? seed.mode.temperaturePolicy === "emit"
+      : shouldEmitTemperature(modelId);
+  return emit ? { temperature: 0 } : {};
+};
 
 const anthropicThinkingForModel = (
   modelId: string,
 ): StellaAnthropicThinking => {
-  if (usesAnthropicAdaptiveThinking(modelId)) {
+  const capability = getModelReasoningCapabilities(modelId);
+  if (capability === null || capability.anthropicThinking === "none") {
+    return { type: "disabled" };
+  }
+  if (capability.anthropicThinking === "adaptive") {
     return { type: "adaptive" };
   }
-
   return {
     type: "enabled",
     budget_tokens: ANTHROPIC_LEGACY_THINKING_BUDGET_TOKENS,
   };
 };
 
-type TanStackModelOptionsForRoleInput<TProvider extends TanStackTextProvider> =
+type TanStackModelOptionsForTaskInput<TProvider extends TanStackTextProvider> =
   {
-    role: ModelRole;
+    task: ModelTask;
     provider: TProvider;
     modelId: string;
     organizationId: SafeId<"organization"> | null;
     reasoningEffort?: ReasoningEffort | undefined;
-    useRoleReasoningDefault?: boolean | undefined;
+    useTaskReasoningDefault?: boolean | undefined;
   };
 
-const GOOGLE_THINKING_LEVEL_BY_EFFORT: Record<
-  ReasoningEffort,
-  GoogleThinkingLevel
-> = {
+const GOOGLE_THINKING_LEVEL_BY_EFFORT = {
   none: "MINIMAL",
   minimal: "MINIMAL",
   low: "LOW",
@@ -1520,9 +1938,9 @@ const GOOGLE_THINKING_LEVEL_BY_EFFORT: Record<
   high: "HIGH",
   xhigh: "HIGH",
   max: "HIGH",
-};
+} as const satisfies Record<ReasoningEffort, GoogleThinkingLevel>;
 
-// Sole constructor of the ResolvedGoogleThinkingLevel brand; the
+// Capability-based constructor of the ResolvedGoogleThinkingLevel brand; the
 // input effort is already capability-checked, the mapping is
 // exhaustive over the effort ladder, and the parse revalidates it.
 const googleThinkingLevelForEffort = (
@@ -1535,39 +1953,45 @@ const googleThinkingLevelForEffort = (
   );
 };
 
-const GOOGLE_REASONING_EFFORT_BY_ROLE = {
-  fast: "none",
-  chat: "none",
-  reasoning: "high",
-  pdf: "none",
-} as const satisfies Record<ModelRole, ReasoningEffort>;
-
-const tanStackGoogleModelOptionsForRole = ({
-  role,
+const tanStackGoogleModelOptionsForTask = ({
+  task,
   modelId,
   reasoningEffort,
-  useRoleReasoningDefault = true,
-}: TanStackModelOptionsForRoleInput<"google">): StellaGeminiTextProviderOptions => {
-  // Clamped into the model's declared capability: Flash models turn a
-  // "none" request into MINIMAL, Pro (whose floor is "low") into LOW.
+  useTaskReasoningDefault = true,
+}: TanStackModelOptionsForTaskInput<"google">): StellaGeminiTextProviderOptions => {
+  // Explicit selections clamp the preference to the selected model.
+  // Defaults carry the reviewed wire level beside the original preference.
   // Unknown models (env overrides, custom IDs) get no thinkingConfig
   // at all — the provider default is the only universally safe choice.
   const requested =
     reasoningEffort ??
-    (useRoleReasoningDefault
-      ? GOOGLE_REASONING_EFFORT_BY_ROLE[role]
+    (useTaskReasoningDefault
+      ? MODEL_DEFAULTS_LEDGER[task].google.candidate.mode.requestedEffort
       : undefined);
   const effort =
     requested === undefined
       ? null
       : resolveReasoningEffort({ modelId, requested });
   return {
-    ...deterministicSamplingForModel(modelId),
+    ...deterministicSamplingForModel(
+      modelId,
+      MODEL_DEFAULTS_LEDGER[task].google.candidate,
+    ),
     ...(effort === null
       ? {}
       : {
           thinkingConfig: {
-            thinkingLevel: googleThinkingLevelForEffort(effort),
+            thinkingLevel:
+              modelId ===
+                MODEL_DEFAULTS_LEDGER[task].google.candidate.modelId &&
+              useTaskReasoningDefault &&
+              reasoningEffort === undefined
+                ? v.parse(
+                    resolvedGoogleThinkingLevelSchema,
+                    MODEL_DEFAULTS_LEDGER[task].google.candidate.mode
+                      .thinkingLevel,
+                  )
+                : googleThinkingLevelForEffort(effort),
             includeThoughts: false,
           },
         }),
@@ -1575,11 +1999,11 @@ const tanStackGoogleModelOptionsForRole = ({
   };
 };
 
-const tanStackAnthropicModelOptionsForRole = ({
-  role,
+const tanStackAnthropicModelOptionsForTask = ({
+  task,
   modelId,
   reasoningEffort,
-}: TanStackModelOptionsForRoleInput<"anthropic">): StellaAnthropicTextProviderOptions => {
+}: TanStackModelOptionsForTaskInput<"anthropic">): StellaAnthropicTextProviderOptions => {
   if (reasoningEffort !== undefined) {
     const effort = resolveReasoningEffort({
       modelId,
@@ -1595,128 +2019,156 @@ const tanStackAnthropicModelOptionsForRole = ({
       };
     }
   }
-  if (role === "reasoning") {
+  const seed = MODEL_DEFAULTS_LEDGER[task].anthropic.candidate;
+  if (seed.mode.type === "anthropic-thinking") {
     return {
-      thinking: anthropicThinkingForModel(modelId),
+      thinking:
+        modelId === seed.modelId
+          ? seed.mode.thinking
+          : anthropicThinkingForModel(modelId),
     };
   }
 
-  return deterministicSamplingForModel(modelId);
+  return deterministicSamplingForModel(
+    modelId,
+    MODEL_DEFAULTS_LEDGER[task].anthropic.candidate,
+  );
 };
 
-const tanStackOpenAIModelOptionsForRole = ({
-  role,
+const tanStackOpenAIModelOptionsForTask = ({
+  task,
   modelId,
   reasoningEffort,
-}: TanStackModelOptionsForRoleInput<"openai">): StellaOpenAITextProviderOptions => {
-  if (role !== "reasoning" && reasoningEffort === undefined) {
-    return deterministicSamplingForModel(modelId);
+}: TanStackModelOptionsForTaskInput<"openai">): StellaOpenAITextProviderOptions => {
+  const capability = getModelReasoningCapabilities(modelId);
+  const replayOptions: StellaOpenAITextProviderOptions = {
+    include: capability?.openAIIncludeEncryptedContent
+      ? ["reasoning.encrypted_content"]
+      : [],
+    ...(capability?.openAIStore === false ? { store: false } : {}),
+  };
+  const mode = MODEL_DEFAULTS_LEDGER[task].openai.candidate.mode;
+  if (mode.type === "provider-default" && reasoningEffort === undefined) {
+    return {
+      ...deterministicSamplingForModel(
+        modelId,
+        MODEL_DEFAULTS_LEDGER[task].openai.candidate,
+      ),
+      ...replayOptions,
+    };
   }
   const effort = resolveReasoningEffort({
     modelId,
-    requested: reasoningEffort ?? "medium",
+    requested:
+      reasoningEffort ??
+      (mode.type === "reasoning-effort" ? mode.effort : "medium"),
   });
-  return effort === null ? {} : { reasoning: { effort } };
-};
-
-/**
- * Per-role reasoning-effort *requests* for OpenRouter models. These
- * are preferences, not what gets sent: `resolveReasoningEffort` clamps
- * each into the target model's declared capability (so "none" against
- * a reasoning-mandatory model degrades to its weakest tier instead of
- * erroring), and `null` sends no reasoning field at all.
- */
-const OPENROUTER_REASONING_EFFORT_BY_ROLE = {
-  fast: "none",
-  chat: null,
-  reasoning: "high",
-  pdf: null,
-} as const satisfies Record<ModelRole, ReasoningEffort | null>;
-
-const tanStackOpenRouterModelOptionsForRole = ({
-  role,
-  modelId,
-  reasoningEffort,
-}: TanStackModelOptionsForRoleInput<"openrouter">): StellaOpenRouterTextModelOptions => {
-  const requested =
-    reasoningEffort ?? OPENROUTER_REASONING_EFFORT_BY_ROLE[role];
-  const effort =
-    requested === null ? null : resolveReasoningEffort({ modelId, requested });
   return {
-    ...deterministicSamplingForModel(modelId),
+    ...replayOptions,
     ...(effort === null ? {} : { reasoning: { effort } }),
   };
 };
 
-const tanStackMistralModelOptionsForRole = (
-  modelId: string,
-): MistralTextProviderOptions => deterministicSamplingForModel(modelId);
+const tanStackOpenRouterModelOptionsForTask = ({
+  task,
+  modelId,
+  reasoningEffort,
+}: TanStackModelOptionsForTaskInput<"openrouter">): StellaOpenRouterTextModelOptions => {
+  const mode = MODEL_DEFAULTS_LEDGER[task].openrouter.candidate.mode;
+  const requested =
+    reasoningEffort ?? (mode.type === "reasoning-effort" ? mode.effort : null);
+  const effort =
+    requested === null ? null : resolveReasoningEffort({ modelId, requested });
+  return {
+    ...deterministicSamplingForModel(
+      modelId,
+      MODEL_DEFAULTS_LEDGER[task].openrouter.candidate,
+    ),
+    ...(effort === null ? {} : { reasoning: { effort } }),
+  };
+};
 
-const tanStackBedrockModelOptionsForRole = (
+const tanStackMistralModelOptionsForTask = (
   modelId: string,
-): BedrockConverseProviderOptions => deterministicSamplingForModel(modelId);
+  task: ModelTask,
+): MistralTextProviderOptions => {
+  const seed = resolveDefaultModel({ task, orgProviders: ["mistral"] });
+  if (seed === null) {
+    return panic("Unsupported Mistral task mode");
+  }
+  return deterministicSamplingForModel(modelId, seed);
+};
 
-export function tanStackModelOptionsForRole(
-  input: TanStackModelOptionsForRoleInput<"google">,
+const tanStackBedrockModelOptionsForTask = (
+  modelId: string,
+  task: ModelTask,
+): BedrockConverseProviderOptions =>
+  deterministicSamplingForModel(
+    modelId,
+    MODEL_DEFAULTS_LEDGER[task].bedrock.candidate,
+  );
+
+export function tanStackModelOptionsForTask(
+  input: TanStackModelOptionsForTaskInput<"google">,
 ): StellaGeminiTextProviderOptions;
-export function tanStackModelOptionsForRole(
-  input: TanStackModelOptionsForRoleInput<"anthropic">,
+export function tanStackModelOptionsForTask(
+  input: TanStackModelOptionsForTaskInput<"anthropic">,
 ): StellaAnthropicTextProviderOptions;
-export function tanStackModelOptionsForRole(
-  input: TanStackModelOptionsForRoleInput<"bedrock">,
+export function tanStackModelOptionsForTask(
+  input: TanStackModelOptionsForTaskInput<"bedrock">,
 ): BedrockConverseProviderOptions;
-export function tanStackModelOptionsForRole(
-  input: TanStackModelOptionsForRoleInput<"mistral">,
+export function tanStackModelOptionsForTask(
+  input: TanStackModelOptionsForTaskInput<"mistral">,
 ): MistralTextProviderOptions;
-export function tanStackModelOptionsForRole(
-  input: TanStackModelOptionsForRoleInput<"openai">,
+export function tanStackModelOptionsForTask(
+  input: TanStackModelOptionsForTaskInput<"openai">,
 ): StellaOpenAITextProviderOptions;
-export function tanStackModelOptionsForRole(
-  input: TanStackModelOptionsForRoleInput<"openrouter">,
+export function tanStackModelOptionsForTask(
+  input: TanStackModelOptionsForTaskInput<"openrouter">,
 ): StellaOpenRouterTextModelOptions;
 // General form for callers iterating over the provider union (e.g.
 // the capability invariant test); the literal-provider overloads
 // above stay the precise path for single-provider call sites.
-export function tanStackModelOptionsForRole(
-  input: TanStackModelOptionsForRoleInput<TanStackTextProvider>,
+export function tanStackModelOptionsForTask(
+  input: TanStackModelOptionsForTaskInput<TanStackTextProvider>,
 ): TanStackModelOptions;
-export function tanStackModelOptionsForRole(
-  input: TanStackModelOptionsForRoleInput<TanStackTextProvider>,
+export function tanStackModelOptionsForTask(
+  input: TanStackModelOptionsForTaskInput<TanStackTextProvider>,
 ): TanStackModelOptions {
   const { provider } = input;
   switch (provider) {
     case "google":
-      return tanStackGoogleModelOptionsForRole({
-        role: input.role,
+      return tanStackGoogleModelOptionsForTask({
+        task: input.task,
         provider,
         modelId: input.modelId,
         organizationId: input.organizationId,
         reasoningEffort: input.reasoningEffort,
-        useRoleReasoningDefault: input.useRoleReasoningDefault,
+        useTaskReasoningDefault: input.useTaskReasoningDefault,
       });
     case "anthropic":
-      return tanStackAnthropicModelOptionsForRole({
-        role: input.role,
+      return tanStackAnthropicModelOptionsForTask({
+        task: input.task,
         provider,
         modelId: input.modelId,
         organizationId: input.organizationId,
         reasoningEffort: input.reasoningEffort,
       });
     case "bedrock":
-      return tanStackBedrockModelOptionsForRole(input.modelId);
+      return tanStackBedrockModelOptionsForTask(input.modelId, input.task);
     case "mistral":
-      return tanStackMistralModelOptionsForRole(input.modelId);
+      return tanStackMistralModelOptionsForTask(input.modelId, input.task);
     case "openai":
-      return tanStackOpenAIModelOptionsForRole({
-        role: input.role,
+      return tanStackOpenAIModelOptionsForTask({
+        task: input.task,
         provider,
         modelId: input.modelId,
         organizationId: input.organizationId,
         reasoningEffort: input.reasoningEffort,
       });
     case "openrouter":
-      return tanStackOpenRouterModelOptionsForRole({
-        role: input.role,
+      return tanStackOpenRouterModelOptionsForTask({
+        task: input.task,
         provider,
         modelId: input.modelId,
         organizationId: input.organizationId,
@@ -1729,12 +2181,13 @@ export function tanStackModelOptionsForRole(
   }
 }
 
-const byokRoleNotConfiguredError = (role: ModelRole): HandlerError =>
+const byokRoleNotConfiguredError = (task: ModelTask): HandlerError =>
   new HandlerError({
+    code: AI_FAILURE_CODES.role_not_configured,
     status: 403,
     message:
-      `AI is not available for the "${role}" role on this deployment. ` +
-      "Configure an organization-wide AI key (or include this role in " +
+      `AI is not available for the "${task}" task on this deployment. ` +
+      "Configure an organization-wide AI key (or include this task in " +
       "the BYOK override list) in organization settings.",
   });
 
@@ -1745,7 +2198,7 @@ type BuildResolvedTextModelBase<TProvider extends TanStackTextProvider> = {
   organizationId: SafeId<"organization"> | null;
   provider: TProvider;
   region?: DataRegion | undefined;
-  role: ModelRole;
+  task: ModelTask;
 };
 
 type BuildResolvedTextModelWithOptions<TProvider extends TanStackTextProvider> =
@@ -1779,8 +2232,8 @@ const buildResolvedTextModel = ({
   provider,
   reasoningEffort,
   region,
-  role,
-  useRoleReasoningDefault = true,
+  task,
+  useTaskReasoningDefault = true,
 }: {
   adapter: AnyTextAdapter;
   keySource: "byok" | "instance";
@@ -1789,8 +2242,8 @@ const buildResolvedTextModel = ({
   provider: TanStackTextProvider;
   reasoningEffort?: ReasoningEffort | undefined;
   region?: DataRegion | undefined;
-  role: ModelRole;
-  useRoleReasoningDefault?: boolean | undefined;
+  task: ModelTask;
+  useTaskReasoningDefault?: boolean | undefined;
 }): ResolvedTanStackTextModel => {
   switch (provider) {
     case "google":
@@ -1800,16 +2253,16 @@ const buildResolvedTextModel = ({
         provider,
         modelId,
         organizationId,
-        modelOptions: tanStackGoogleModelOptionsForRole({
-          role,
+        modelOptions: tanStackGoogleModelOptionsForTask({
+          task,
           provider,
           modelId,
           organizationId,
           reasoningEffort,
-          useRoleReasoningDefault,
+          useTaskReasoningDefault,
         }),
         ...(region === undefined ? {} : { region }),
-        role,
+        task,
       });
     case "anthropic":
       return buildResolvedTextModelWithOptions({
@@ -1818,15 +2271,15 @@ const buildResolvedTextModel = ({
         provider,
         modelId,
         organizationId,
-        modelOptions: tanStackAnthropicModelOptionsForRole({
-          role,
+        modelOptions: tanStackAnthropicModelOptionsForTask({
+          task,
           provider,
           modelId,
           organizationId,
           reasoningEffort,
         }),
         ...(region === undefined ? {} : { region }),
-        role,
+        task,
       });
     case "bedrock":
       return buildResolvedTextModelWithOptions({
@@ -1835,9 +2288,9 @@ const buildResolvedTextModel = ({
         provider,
         modelId,
         organizationId,
-        modelOptions: tanStackBedrockModelOptionsForRole(modelId),
+        modelOptions: tanStackBedrockModelOptionsForTask(modelId, task),
         ...(region === undefined ? {} : { region }),
-        role,
+        task,
       });
     case "mistral":
       return buildResolvedTextModelWithOptions({
@@ -1846,9 +2299,9 @@ const buildResolvedTextModel = ({
         provider,
         modelId,
         organizationId,
-        modelOptions: tanStackMistralModelOptionsForRole(modelId),
+        modelOptions: tanStackMistralModelOptionsForTask(modelId, task),
         ...(region === undefined ? {} : { region }),
-        role,
+        task,
       });
     case "openai":
       return buildResolvedTextModelWithOptions({
@@ -1857,15 +2310,15 @@ const buildResolvedTextModel = ({
         provider,
         modelId,
         organizationId,
-        modelOptions: tanStackOpenAIModelOptionsForRole({
-          role,
+        modelOptions: tanStackOpenAIModelOptionsForTask({
+          task,
           provider,
           modelId,
           organizationId,
           reasoningEffort,
         }),
         ...(region === undefined ? {} : { region }),
-        role,
+        task,
       });
     case "openrouter":
       return buildResolvedTextModelWithOptions({
@@ -1874,15 +2327,15 @@ const buildResolvedTextModel = ({
         provider,
         modelId,
         organizationId,
-        modelOptions: tanStackOpenRouterModelOptionsForRole({
-          role,
+        modelOptions: tanStackOpenRouterModelOptionsForTask({
+          task,
           provider,
           modelId,
           organizationId,
           reasoningEffort,
         }),
         ...(region === undefined ? {} : { region }),
-        role,
+        task,
       });
     default: {
       provider satisfies never;
@@ -1892,40 +2345,42 @@ const buildResolvedTextModel = ({
 };
 
 const resolveByokTextModel = ({
-  role,
+  task,
   providerConfig,
   modelId,
   organizationId,
   reasoningEffort,
-  useRoleReasoningDefault,
+  useTaskReasoningDefault,
 }: {
-  role: ModelRole;
+  task: ModelTask;
   providerConfig: OrgAIProviderConfig;
   modelId: string;
   organizationId: SafeId<"organization"> | null;
   reasoningEffort?: ReasoningEffort | undefined;
-  useRoleReasoningDefault?: boolean | undefined;
+  useTaskReasoningDefault?: boolean | undefined;
 }): ResolvedTanStackTextModel => {
   const region = providerRegion(providerConfig);
   const provider = resolveTanStackTextProvider({
     provider: providerConfig.provider,
     region,
   });
-  assertTanStackProviderRoleSupport(provider, role);
-  assertTanStackBYOKModelRoleSupport({ provider, modelId, role });
+  assertTanStackProviderTaskSupport(provider, task);
+  assertTanStackBYOKModelTaskSupport({ provider, modelId, task });
 
   const factory = getCachedFactory(providerConfig);
-  return buildResolvedTextModel({
+  const resolved = buildResolvedTextModel({
     adapter: factory(modelId),
     keySource: "byok",
     provider,
     modelId,
     region,
-    role,
+    task,
     organizationId,
     reasoningEffort,
-    useRoleReasoningDefault,
+    useTaskReasoningDefault,
   });
+  registerProviderDiagnosticCredentials(resolved, [providerConfig.apiKey]);
+  return resolved;
 };
 
 /**
@@ -1948,20 +2403,20 @@ const assertInstanceModelRated = (modelId: string): void => {
 };
 
 const resolveInstanceTextModel = ({
-  role,
+  task,
   modelId,
   provider,
   organizationId,
   reasoningEffort,
-  useRoleReasoningDefault,
+  useTaskReasoningDefault,
   ...policy
 }: {
-  role: ModelRole;
+  task: ModelTask;
   modelId: string;
   provider: AIProvider;
   organizationId: SafeId<"organization"> | null;
   reasoningEffort?: ReasoningEffort | undefined;
-  useRoleReasoningDefault?: boolean | undefined;
+  useTaskReasoningDefault?: boolean | undefined;
   managedOpenRouterCredential?: ManagedOpenRouterCredential | undefined;
 } & AIRequestPolicy): ResolvedTanStackTextModel => {
   if (!isMockTextAdapterActive()) {
@@ -1974,7 +2429,7 @@ const resolveInstanceTextModel = ({
     }
   }
   const supportedProvider = resolveTanStackTextProvider({ provider });
-  assertTanStackProviderRoleSupport(supportedProvider, role);
+  assertTanStackProviderTaskSupport(supportedProvider, task);
   if (supportedProvider === "openrouter") {
     const eligibility = assertManagedOpenRouterModel(modelId);
     if (Result.isError(eligibility)) {
@@ -1988,33 +2443,60 @@ const resolveInstanceTextModel = ({
     keySource: "instance",
     provider: supportedProvider,
     modelId,
-    role,
+    task,
     organizationId,
     reasoningEffort,
-    useRoleReasoningDefault,
+    useTaskReasoningDefault,
   });
 };
 
-export const getTanStackTextModelForRole = (
-  role: ModelRole,
+type TextModelOptions = {
+  organizationId: SafeId<"organization"> | null;
+  modelTier: ManagedModelTier;
+  managedOpenRouterCredential?: ManagedOpenRouterCredential | undefined;
+} & AIRequestPolicy;
+
+type TextModelInfoOptions = {
+  dataClass: AIDataClass;
+  organizationId: SafeId<"organization"> | null;
+  modelTier: ManagedModelTier;
+};
+
+export const getTanStackTextModelForTask = (
+  task: ModelTask,
   orgConfig: OrgAIConfig | null | undefined,
-  options: {
-    organizationId: SafeId<"organization"> | null;
-    managedOpenRouterCredential?: ManagedOpenRouterCredential | undefined;
-  } & AIRequestPolicy,
+  options: TextModelOptions,
+): ResolvedTanStackTextModel =>
+  getTanStackTextModelForLookup({ task }, orgConfig, options);
+
+/** The model of a role an admin picks (`browse`), else of its inherited task. */
+export const getTanStackTextModelForOverrideGroup = (
+  overrideGroup: ModelOverrideGroup,
+  orgConfig: OrgAIConfig | null | undefined,
+  options: TextModelOptions,
+): ResolvedTanStackTextModel =>
+  getTanStackTextModelForLookup({ overrideGroup }, orgConfig, options);
+
+// An instance deployment has one setting per task-owning role; a role that
+// inherits its task (browse) runs on that task's instance model.
+const getTanStackTextModelForLookup = (
+  lookup: ModelLookup,
+  orgConfig: OrgAIConfig | null | undefined,
+  { modelTier, ...options }: TextModelOptions,
 ): ResolvedTanStackTextModel => {
-  if (orgConfig) {
-    const selection = orgConfig.overrideModels[role];
+  const task = modelLookupTask(lookup);
+  const selection = orgConfig ? resolveOrgAIModel(orgConfig, lookup) : null;
+  if (orgConfig && selection !== null) {
     return resolveByokTextModel({
-      role,
+      task,
       providerConfig: getOrgProviderConfig(orgConfig, selection.provider),
       modelId: selection.modelId,
       organizationId: options.organizationId,
     });
   }
 
-  if (!hasConfiguredTanStackInstanceProvider()) {
-    throw byokRoleNotConfiguredError(role);
+  if (orgConfig || !hasConfiguredTanStackInstanceProvider()) {
+    throw byokRoleNotConfiguredError(task);
   }
 
   const provider = getActiveProvider();
@@ -2027,36 +2509,46 @@ export const getTanStackTextModelForRole = (
       throw availability.error;
     }
   }
-  const modelId = MODEL_OVERRIDES[role] ?? DEFAULT_MODELS[provider][role];
+  assertTanStackProviderTaskSupport(
+    resolveTanStackTextProvider({ provider }),
+    task,
+  );
+  const modelId = instanceModelIdForTask({ provider, task, modelTier });
   return resolveInstanceTextModel({
-    role,
+    task,
     modelId,
     provider,
     ...options,
   });
 };
 
-export const getTanStackTextModelInfoForRole = (
-  role: ModelRole,
+export const getTanStackTextModelInfoForTask = (
+  task: ModelTask,
   orgConfig: OrgAIConfig | null | undefined,
-  options: {
-    dataClass: AIDataClass;
-    organizationId: SafeId<"organization"> | null;
-  },
+  options: TextModelInfoOptions,
+): ResolvedTanStackTextModelInfo =>
+  getTanStackTextModelInfoForLookup({ task }, orgConfig, options);
+
+/** Metadata twin of `getTanStackTextModelForLookup`, without an adapter. */
+export const getTanStackTextModelInfoForLookup = (
+  lookup: ModelLookup,
+  orgConfig: OrgAIConfig | null | undefined,
+  options: TextModelInfoOptions,
 ): ResolvedTanStackTextModelInfo => {
-  if (orgConfig) {
-    const selection = orgConfig.overrideModels[role];
+  const task = modelLookupTask(lookup);
+  const selection = orgConfig ? resolveOrgAIModel(orgConfig, lookup) : null;
+  if (orgConfig && selection !== null) {
     const providerConfig = getOrgProviderConfig(orgConfig, selection.provider);
     const region = providerRegion(providerConfig);
     const provider = resolveTanStackTextProvider({
       provider: providerConfig.provider,
       region,
     });
-    assertTanStackProviderRoleSupport(provider, role);
-    assertTanStackBYOKModelRoleSupport({
+    assertTanStackProviderTaskSupport(provider, task);
+    assertTanStackBYOKModelTaskSupport({
       provider,
       modelId: selection.modelId,
-      role,
+      task,
     });
 
     return {
@@ -2068,14 +2560,18 @@ export const getTanStackTextModelInfoForRole = (
     };
   }
 
-  if (!hasConfiguredTanStackInstanceProvider()) {
-    throw byokRoleNotConfiguredError(role);
+  if (orgConfig || !hasConfiguredTanStackInstanceProvider()) {
+    throw byokRoleNotConfiguredError(task);
   }
 
   const provider = getActiveProvider();
   const supportedProvider = resolveTanStackTextProvider({ provider });
-  assertTanStackProviderRoleSupport(supportedProvider, role);
-  const modelId = MODEL_OVERRIDES[role] ?? DEFAULT_MODELS[provider][role];
+  assertTanStackProviderTaskSupport(supportedProvider, task);
+  const modelId = instanceModelIdForTask({
+    provider,
+    task,
+    modelTier: options.modelTier,
+  });
   // Metadata must agree with dispatch: never advertise an instance
   // model that resolveInstanceTextModel would refuse as unrated.
   if (supportedProvider === "openrouter") {
@@ -2113,23 +2609,40 @@ export const resolveFallbackChatSelection = (
     return null;
   }
   const provider = getActiveProvider();
-  const modelId = FALLBACK_CHAT_MODEL_BY_PROVIDER[provider];
-  return modelId === null ? null : `${provider}::${modelId}`;
+  if (!isBYOKProvider(provider)) {
+    return null;
+  }
+  const candidate = resolveDefaultModel({
+    task: "short-text",
+    orgProviders: [provider],
+  });
+  return candidate === null ? null : `${provider}::${candidate.modelId}`;
 };
 
 /**
  * Metadata-only resolution for an explicit per-turn model selection.
  * Mirrors `getTanStackTextModelById`'s provider/key-source branching
  * without constructing an adapter, so metering and analytics can rate
- * the model that actually served the turn rather than the role default.
+ * the model that actually served the turn rather than the task default.
  */
 export const getTanStackTextModelInfoById = (
   modelId: string,
   orgConfig: OrgAIConfig | null | undefined,
-  role: ModelRole,
-  dataClass: AIDataClass,
+  task: ModelTask,
+  {
+    dataClass,
+    modelTier,
+  }: { dataClass: AIDataClass; modelTier: ManagedModelTier },
 ): ResolvedTanStackTextModelInfo => {
   const override = decodeModelOverride(modelId);
+
+  if (!orgConfig && modelTier === MANAGED_MODEL_TIER.fast) {
+    return getTanStackTextModelInfoForTask(task, null, {
+      dataClass,
+      organizationId: null,
+      modelTier,
+    });
+  }
 
   if (orgConfig) {
     const providerConfig = override.provider
@@ -2150,7 +2663,7 @@ export const getTanStackTextModelInfoById = (
   }
 
   if (!hasConfiguredTanStackInstanceProvider() && !override.provider) {
-    throw byokRoleNotConfiguredError(role);
+    throw byokRoleNotConfiguredError(task);
   }
 
   const provider = override.provider ?? getActiveProvider();
@@ -2172,34 +2685,48 @@ export const getTanStackTextModelInfoById = (
   };
 };
 
+/**
+ * A per-turn selection chooses among the standard tier's models. On the
+ * managed fast tier the task resolves to the fast model instead, with the
+ * task's default reasoning; an organization's own key serves the selection.
+ */
 export const getTanStackTextModelById = (
   modelId: string,
   orgConfig: OrgAIConfig | null | undefined,
-  options: {
-    role: ModelRole;
+  {
+    modelTier,
+    ...options
+  }: {
+    task: ModelTask;
     organizationId: SafeId<"organization"> | null;
+    modelTier: ManagedModelTier;
     reasoningEffort?: ReasoningEffort | undefined;
     managedOpenRouterCredential?: ManagedOpenRouterCredential | undefined;
   } & AIRequestPolicy,
 ): ResolvedTanStackTextModel => {
   const override = decodeModelOverride(modelId);
 
+  if (!orgConfig && modelTier === MANAGED_MODEL_TIER.fast) {
+    const { task, reasoningEffort: _selectedEffort, ...dispatch } = options;
+    return getTanStackTextModelForTask(task, null, { ...dispatch, modelTier });
+  }
+
   if (orgConfig) {
     const providerConfig = override.provider
       ? getOrgProviderConfig(orgConfig, override.provider)
       : getPrimaryOrgProvider(orgConfig);
     return resolveByokTextModel({
-      role: options.role,
+      task: options.task,
       providerConfig,
       modelId: override.modelId,
       organizationId: options.organizationId,
       reasoningEffort: options.reasoningEffort,
-      useRoleReasoningDefault: false,
+      useTaskReasoningDefault: false,
     });
   }
 
   if (!hasConfiguredTanStackInstanceProvider() && !override.provider) {
-    throw byokRoleNotConfiguredError(options.role);
+    throw byokRoleNotConfiguredError(options.task);
   }
 
   const provider = override.provider ?? getActiveProvider();
@@ -2231,10 +2758,10 @@ export const getTanStackTextModelById = (
       keySource: "instance",
       provider: supportedProvider,
       modelId: resolvedModelId,
-      role: options.role,
+      task: options.task,
       organizationId: options.organizationId,
       reasoningEffort: options.reasoningEffort,
-      useRoleReasoningDefault: false,
+      useTaskReasoningDefault: false,
     });
   }
 
@@ -2242,6 +2769,6 @@ export const getTanStackTextModelById = (
     ...options,
     modelId: resolvedModelId,
     provider: supportedProvider,
-    useRoleReasoningDefault: false,
+    useTaskReasoningDefault: false,
   });
 };

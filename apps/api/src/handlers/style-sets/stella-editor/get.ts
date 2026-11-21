@@ -5,6 +5,7 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { createStellaStyleEditorPreset } from "@/api/lib/style-set-editor";
 
 const config = {
+  contract: "patch",
   description:
     "Read the built-in stella style preset as editor settings, the starting " +
     "point for a new style set. Takes no arguments and reads no stored data.",

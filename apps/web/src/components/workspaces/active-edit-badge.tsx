@@ -1,7 +1,7 @@
 import { LockIcon } from "@stll/ui/icons";
 import {
-  TooltipPopup,
   Tooltip as TooltipRoot,
+  TooltipPopup,
   TooltipTrigger,
 } from "@stll/ui/tooltip";
 import { cn } from "@stll/ui/utils";
@@ -22,6 +22,7 @@ export const ActiveEditBadge = ({
   <TooltipRoot>
     <TooltipTrigger
       className={cn("inline-flex items-center gap-0.5", className)}
+      data-slot="active-edit-badge"
       render={<span />}
     >
       <LockIcon className="text-warning size-3" />

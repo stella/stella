@@ -4,20 +4,28 @@ import type {
 } from "@modelcontextprotocol/server";
 import type * as v from "valibot";
 
-import type { SearchPaginationOutcome } from "@stll/api-contract/search";
+import type {
+  SEARCH_PAGINATION_TRUNCATED_TIME_BUDGET,
+  SearchPaginationOutcome,
+} from "@stll/api-contract/search";
 
 import type { AccountAccess } from "@/api/lib/api-handlers";
 import type { DeploymentFeatureFlag } from "@/api/lib/deployment-feature";
 import type { FeatureId } from "@/api/lib/feature-access/registry";
+import type { WindowedReadSurface } from "@/api/lib/files/windowed-read-surface";
 import type {
+  MCP_ADVANCED_RESOURCE_SCOPES,
   MCP_ALL_RESOURCE_SCOPES,
-  MCP_DEFAULT_RESOURCE_SCOPES,
 } from "@/api/mcp/constants";
 import type { McpRequestContext } from "@/api/mcp/context";
 import type { McpErrorCode, McpValidationIssue } from "@/api/mcp/error-codes";
 import type { MCP_INTERNAL_TOOL_FAILURE } from "@/api/mcp/tool-call-outcome";
 import type { TextWindowResult } from "@/api/mcp/tool-utils";
-import type { McpWriteToolPermissions } from "@/api/mcp/write-tool-authority";
+import type {
+  AuthorizedMcpRequestContext,
+  McpReadToolPermissions,
+  McpWriteToolPermissions,
+} from "@/api/mcp/write-tool-authority";
 
 /**
  * v2 types `Tool["inputSchema"]` as an arbitrary JSON value, which loses the
@@ -27,11 +35,9 @@ import type { McpWriteToolPermissions } from "@/api/mcp/write-tool-authority";
 export type JsonSchema = JsonSchemaType;
 
 /**
- * Every MCP tool accepts one named-argument object, never a scalar root. The
- * authoring type also accepts TypeBox/Elysia's runtime schemas, which carry
- * non-enumerable symbols beyond their JSON fields. Wire projections rebuild
- * and validate the enumerable JSON recursively, so those symbols never enter
- * the protocol payload.
+ * Every MCP tool accepts one named-argument object, never a scalar root. Wire
+ * projections rebuild and validate the enumerable JSON recursively, so only
+ * JSON fields enter the protocol payload.
  */
 export type McpToolInputSchema = {
   type: "object";
@@ -73,6 +79,8 @@ export type ToolScope = (typeof MCP_ALL_RESOURCE_SCOPES)[number];
  * `static-tool-definitions.ts` can only reason about known reasons.
  */
 const MCP_ANONYMIZED_EXCLUSION_REASONS = [
+  /** An OAuth grant may create browser session authority only on the ordinary surface. */
+  "credential_authority",
   /** Mutating tool. The anonymized surface is egress-only, so writes never appear. */
   "write",
   /**
@@ -99,7 +107,7 @@ const MCP_ANONYMIZED_EXCLUSION_REASONS = [
   "personal_register_data",
 ] as const;
 
-export type McpAnonymizedExclusionReason =
+type McpAnonymizedExclusionReason =
   (typeof MCP_ANONYMIZED_EXCLUSION_REASONS)[number];
 
 /**
@@ -148,9 +156,16 @@ export type McpToolAnnotations = NonNullable<McpTool["annotations"]> & {
   title: string;
 };
 
+/** Human-readable reasons for each client safety hint, kept with the registry contract. */
+export type McpToolAnnotationReasons = Readonly<{
+  destructiveHint: string;
+  openWorldHint: string;
+  readOnlyHint: string;
+}>;
+
 export type McpReadClass = "tenant" | "public" | "both";
 
-export type McpReadClassResolver = (
+type McpReadClassResolver = (
   args: unknown,
 ) => McpReadClass | undefined | Promise<McpReadClass | undefined>;
 
@@ -176,11 +191,16 @@ export type McpToolAccessBranch =
       access: "read";
       readClass: McpReadClass | McpReadClassResolver;
       annotations: McpToolAnnotations & { readOnlyHint: true };
+      /**
+       * The member authority required before a permission-gated read can reach
+       * its handler, or an explicit reason the read is open to every caller
+       * admitted by its scope.
+       */
+      permissions: McpReadToolPermissions;
     }
   | {
       access: "write";
-      /** Generic dispatch may invoke a read target despite its own write access. */
-      readClass?: McpReadClassResolver;
+      readClass?: never;
       annotations: McpToolAnnotations & { readOnlyHint: false };
       /**
        * The member authority every call needs; discovery and dispatch enforce
@@ -195,7 +215,7 @@ export type McpToolAccessBranch =
       accountAccess: AccountAccess;
     };
 
-export type McpToolDestructiveBehavior =
+type McpToolDestructiveBehavior =
   | { type: "always" }
   | {
       type: "input-discriminator";
@@ -207,9 +227,8 @@ export type McpToolDestructiveBehavior =
 
 /**
  * A call that sends workspace-authored content outside the workspace. It
- * destroys nothing, so `destructiveHint` stays false and clients must not
- * render it as a deletion, but it is irreversible in the sense that matters to
- * a human: the content is gone from their control once it lands. The transport
+ * is irreversible in the sense that matters to a human: the content is gone
+ * from their control once it lands, so `destructiveHint` is true. The transport
  * gate treats it exactly like a destructive call and refuses without
  * `confirm: true`; `reason` is what the refusal tells the model it is about to
  * do.
@@ -218,28 +237,26 @@ type McpToolOutboundBehavior = { type: "outbound"; reason: string };
 
 /** Every behavior the transport confirmation gate reads. */
 type McpToolConfirmationBehavior =
-  | McpToolDestructiveBehavior
-  | McpToolOutboundBehavior;
+  McpToolDestructiveBehavior | McpToolOutboundBehavior;
 
 type McpToolDestructiveBranch =
   | {
       annotations: McpToolAnnotations & { destructiveHint: false };
       destructiveBehavior?: undefined;
-    }
-  | {
-      annotations: McpToolAnnotations & { destructiveHint: false };
-      destructiveBehavior: Extract<
-        McpToolConfirmationBehavior,
-        { type: "outbound" }
-      >;
+      /** Why a broader update grant does not imply this handler modifies data. */
+      nonDestructiveReason?: string;
     }
   | {
       annotations: McpToolAnnotations & { destructiveHint: true };
-      destructiveBehavior: McpToolDestructiveBehavior;
+      // Updating existing data needs the client hint even when the server
+      // requires no irreversible-action confirmation.
+      destructiveBehavior?: McpToolConfirmationBehavior;
+      nonDestructiveReason?: never;
     };
 
 export type McpToolDefinition = McpToolAccessBranch &
   McpToolDestructiveBranch & {
+    annotationReasons: McpToolAnnotationReasons;
     /**
      * Host-extension metadata served verbatim through `tools/list`. Keep it on
      * the canonical definition so MCP Apps and host-specific transports cannot
@@ -263,6 +280,12 @@ export type McpToolDefinition = McpToolAccessBranch &
      */
     feature?: DeploymentFeatureFlag;
     featureId?: FeatureId;
+    featureInput?: {
+      featureId: FeatureId;
+      usesFeature: (args: unknown) => boolean;
+      projectInputSchema: (schema: McpToolInputSchema) => McpToolInputSchema;
+      unavailableDescription: string;
+    };
     inputSchema: McpToolInputSchema;
     /**
      * Optional session-member visibility predicate, enforced centrally for both
@@ -276,16 +299,18 @@ export type McpToolDefinition = McpToolAccessBranch &
     scope: ToolScope;
   };
 
-type DefaultMcpResourceScope = (typeof MCP_DEFAULT_RESOURCE_SCOPES)[number];
+type DefaultMcpResourceScope = (typeof MCP_ADVANCED_RESOURCE_SCOPES)[number];
 
 type BareMcpResourceScope<TScope extends `stella:${string}`> =
   TScope extends `stella:${infer TName}` ? TName : never;
 
 const MCP_CLI_TOOL_SCOPE_BY_RESOURCE_SCOPE = {
   "stella:read": "read",
+  "stella:law_read": "law_read",
   "stella:contacts_write": "contacts_write",
   "stella:matters_write": "matters_write",
   "stella:chat": "chat",
+  "stella:memory_write": "memory_write",
   "stella:documents_write": "documents_write",
   "stella:knowledge_write": "knowledge_write",
   "stella:search": "search",
@@ -294,6 +319,9 @@ const MCP_CLI_TOOL_SCOPE_BY_RESOURCE_SCOPE = {
   "stella:billing_write": "billing_write",
   "stella:admin_read": "admin_read",
   "stella:admin_write": "admin_write",
+  "stella:account_export_read": null,
+  "stella:account_export_write": null,
+  "stella:organization_create": "organization_create",
   "stella:feedback": "feedback",
   "stella:skills": null,
   "stella:external_mcps": null,
@@ -310,7 +338,7 @@ export const MCP_CLI_TOOL_SCOPES: readonly McpCliToolScope[] = Object.values(
   MCP_CLI_TOOL_SCOPE_BY_RESOURCE_SCOPE,
 ).filter((scope): scope is McpCliToolScope => scope !== null);
 
-export type McpCliDiscriminatorSubcommand = {
+type McpCliDiscriminatorSubcommand = {
   command: string;
   destructive?: boolean;
   include?: readonly string[];
@@ -318,6 +346,7 @@ export type McpCliDiscriminatorSubcommand = {
 };
 
 export type McpCliToolAnnotation = {
+  feature?: DeploymentFeatureFlag;
   featureId?: FeatureId;
   command: readonly string[];
   additionalScopes?: readonly McpCliToolScope[];
@@ -361,9 +390,8 @@ export type McpCliToolAnnotation = {
    */
   localFileBase64Prop?: string;
   /**
-   * The tool is not destructive itself but gates SOME calls behind its `confirm`
-   * arg (per-target destructiveness, e.g. `invoke_capability` where the invoked
-   * capability's catalog flag decides). The CLI leaf then accepts `--yes`
+   * Some calls require the `confirm` arg in addition to host approval
+   * (e.g. write_capability checks the invoked capability's catalog flag). The CLI leaf then accepts `--yes`
    * (injecting `confirm: true` upfront) and, on a `confirmation_required`
    * envelope at a TTY, prompts and retries once with `confirm: true`.
    */
@@ -430,7 +458,13 @@ export type McpCompatSearchResult =
       url: string;
       workspaceId: string;
     }
-  | { kind: "corpus"; id: string; title: string; url: string };
+  | {
+      kind: "corpus";
+      id: string;
+      title: string;
+      url: string;
+      source_url?: string;
+    };
 
 /**
  * What one compat fetch is reading, and therefore whether its text is
@@ -467,7 +501,8 @@ export type McpStructuredTextField = {
  * metadata back into the payload. Windowing runs after anonymization so an
  * entity name can never be split across a window edge.
  */
-export type McpStructuredWindow = {
+type McpStructuredWindow = {
+  surface: WindowedReadSurface;
   apply: (window: TextWindowResult) => void;
   cursor: string | undefined;
   maxChars: number;
@@ -492,6 +527,7 @@ export type InternalToolStructuredError = {
   hint?: string;
   issues?: readonly McpValidationIssue[];
   retryable?: boolean;
+  retryAfterMs?: number;
   contactUrl?: string;
   requestId?: string;
 } & (
@@ -499,14 +535,13 @@ export type InternalToolStructuredError = {
   | { code: Exclude<McpErrorCode, "internal_error"> }
 );
 
-export type InternalToolTextError = {
+type InternalToolTextError = {
   type: "text";
   message: string;
 };
 
 export type InternalToolError =
-  | InternalToolStructuredError
-  | InternalToolTextError;
+  InternalToolStructuredError | InternalToolTextError;
 
 export type InternalToolErrorResult = {
   status: "error";
@@ -519,8 +554,7 @@ export type InternalToolErrorResult = {
  * this result to `CallToolResult`; internal consumers use it directly.
  */
 export type InternalToolResult<TData = unknown> =
-  | InternalToolSuccess<TData>
-  | InternalToolErrorResult;
+  InternalToolSuccess<TData> | InternalToolErrorResult;
 
 /**
  * A handler either returns a finished internal result, or an egress plan the
@@ -540,12 +574,15 @@ export type InternalToolResult<TData = unknown> =
 export type McpEgressPlan<TPayload = unknown> =
   | {
       egress: "compatSearch";
-      paginationOutcome?: SearchPaginationOutcome;
+      paginationOutcome?:
+        | SearchPaginationOutcome
+        | typeof SEARCH_PAGINATION_TRUNCATED_TIME_BUDGET;
       nextCursor: string | null | undefined;
       results: readonly McpCompatSearchResult[];
     }
   | {
       egress: "compatFetch";
+      source_url?: string;
       cursor: string | undefined;
       id: string;
       maxChars: number;
@@ -564,8 +601,7 @@ export type McpEgressPlan<TPayload = unknown> =
     };
 
 export type McpToolResponse<TData = unknown> =
-  | InternalToolResult<TData>
-  | McpEgressPlan<TData>;
+  InternalToolResult<TData> | McpEgressPlan<TData>;
 
 export type TypedMcpToolResponse<TData> =
   | InternalToolResult<TData>
@@ -580,16 +616,15 @@ export type McpToolHandler<TData = unknown> = ({
   context,
 }: {
   args: Record<string, unknown>;
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
 }) => McpToolResponse<TData> | Promise<McpToolResponse<TData>>;
 
 type TypedMcpToolHandlerResult<TData> =
-  | TypedMcpToolResponse<TData>
-  | Promise<TypedMcpToolResponse<TData>>;
+  TypedMcpToolResponse<TData> | Promise<TypedMcpToolResponse<TData>>;
 
 export type TypedMcpToolHandler<TData> = (options: {
   args: Record<string, unknown>;
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
 }) => TypedMcpToolHandlerResult<TData>;
 
 type TypedHandlerData<THandler> =
@@ -655,11 +690,8 @@ export type HandlerOutputsMatchByName<
   ? false
   : true;
 
-export type AssertTrue<TValue extends true> = TValue;
-
-export type McpToolHandlerMap<
-  TDefinitions extends readonly McpToolDefinition[],
-> = Readonly<Record<TDefinitions[number]["name"], McpToolHandler>>;
+type McpToolHandlerMap<TDefinitions extends readonly McpToolDefinition[]> =
+  Readonly<Record<TDefinitions[number]["name"], McpToolHandler>>;
 
 export type McpToolOutputContractMap<
   TDefinitions extends readonly McpToolDefinition[],

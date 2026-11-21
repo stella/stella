@@ -72,7 +72,7 @@ export type ReviewLabelMessage =
   | { type: "plain"; key: PlainLabelKey }
   | { type: "forSide"; key: ForSideLabelKey; role: string };
 
-export const impactLabelMessage = (
+const impactLabelMessage = (
   impact: DirectedImpact,
   perspective: ReviewPerspective,
 ): ReviewLabelMessage =>

@@ -4,10 +4,11 @@
  * screen; the search box already narrowed the corpus.
  */
 
+import { STATUTE_COLUMN_IDS } from "@stll/api-contract/public-law-table";
+import type { StatuteColumnId } from "@stll/api-contract/public-law-table";
+import { statuteDisplayLabel } from "@stll/api-contract/statute-display-label";
+
 import type { StatuteListItem } from "@/features/statutes/queries/statutes";
-import { statuteActLabel } from "@/features/statutes/statute-act-number";
-import { STATUTE_COLUMN_IDS } from "@/features/statutes/statute-columns.logic";
-import type { StatuteColumnId } from "@/features/statutes/statute-columns.logic";
 
 type StatuteFindText = (statute: StatuteListItem) => string;
 
@@ -20,7 +21,7 @@ type StatuteFindText = (statute: StatuteListItem) => string;
 const STATUTE_FIND_TEXT = {
   // Both lines of the cell, each marked on its own.
   act: (statute) => {
-    const { name, number } = statuteActLabel(statute);
+    const { subject: name, identity: number } = statuteDisplayLabel(statute);
     return [number, name].filter((part) => part !== null).join("\n");
   },
   type: (statute) => statute.documentType ?? "",

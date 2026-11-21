@@ -3,16 +3,21 @@ import type { ReactNode } from "react";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
-import { ScrollArea } from "@stll/ui/scroll-area";
+import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
+import { DetailsGrid, DetailsItem } from "@stll/ui/details-grid";
 
 import { KnowledgeStatusMessage } from "@/features/knowledge/views/knowledge-status-message";
+import {
+  TemplateCatalogueDetailFrame,
+  TemplateCataloguePreviewFrame,
+  TemplateCataloguePreviewPending,
+} from "@/features/knowledge/views/templates/template-catalogue-detail-view.pending";
 import { TemplatePreviewView } from "@/features/knowledge/views/templates/template-preview-view";
 import type {
   ExtractedParagraph,
   StructureError,
 } from "@/features/knowledge/views/templates/template-preview-view";
 import type { KnowledgeCatalogueTemplate } from "@/features/knowledge/views/templates/templates-seam";
-import { sanitizeHref } from "@/lib/sanitize-href";
 
 /** The rendered preview, or where it stands. */
 export type CatalogueTemplatePreview =
@@ -41,26 +46,14 @@ export const TemplateCatalogueDetailView = ({
   const licenseUrl = sanitizeHref(template.licenseUrl ?? undefined);
 
   return (
-    <ScrollArea axis="vertical" className="flex-1">
-      <div className="mx-auto flex w-full max-w-4xl flex-col gap-8 px-5 py-7 sm:px-7 sm:py-9">
-        <header className="flex flex-col items-start justify-between gap-4 sm:flex-row">
-          <div className="min-w-0">
-            <h1 className="text-2xl font-semibold tracking-tight" dir="auto">
-              {template.title}
-            </h1>
-            <p className="text-muted-foreground mt-1 text-sm" dir="auto">
-              {template.packName}
-            </p>
-          </div>
-          {actions !== undefined && actions !== null && (
-            <div className="flex shrink-0 flex-wrap items-center gap-2">
-              {actions}
-            </div>
-          )}
-        </header>
-
-        <dl className="grid grid-cols-1 gap-4 text-sm sm:grid-cols-2">
-          <DetailItem label={t("onboarding.catalogueDetailLicense")}>
+    <TemplateCatalogueDetailFrame
+      actions={actions}
+      packName={template.packName}
+      title={template.title}
+    >
+      <DetailsGrid>
+        <DetailsItem label={t("onboarding.catalogueDetailLicense")}>
+          <bdi>
             {licenseUrl ? (
               <a
                 className="underline underline-offset-2"
@@ -73,65 +66,57 @@ export const TemplateCatalogueDetailView = ({
             ) : (
               template.license
             )}
-          </DetailItem>
-          {template.legalArea !== null && (
-            <DetailItem label={t("caseLaw.viewer.legalArea")}>
-              {template.legalArea}
-            </DetailItem>
-          )}
-          {template.jurisdictions.length > 0 && (
-            <DetailItem label={t("onboarding.catalogueDetailJurisdictions")}>
-              {template.jurisdictions.join(", ")}
-            </DetailItem>
-          )}
-          {template.languages.length > 0 && (
-            <DetailItem label={t("templates.languages")}>
-              {template.languages.join(", ")}
-            </DetailItem>
-          )}
-        </dl>
-
-        {template.disclaimer !== null && (
-          <p className="text-muted-foreground text-sm" dir="auto">
-            {template.disclaimer}
-          </p>
+          </bdi>
+        </DetailsItem>
+        {template.legalArea !== null && (
+          <DetailsItem label={t("caseLaw.viewer.legalArea")}>
+            <bdi>{template.legalArea}</bdi>
+          </DetailsItem>
         )}
-
-        {template.fields.length > 0 && (
-          <section aria-labelledby="catalogue-template-fields">
-            <h2
-              className="mb-3 text-base font-semibold"
-              id="catalogue-template-fields"
-            >
-              {t("templates.fields")}
-            </h2>
-            <ul className="flex flex-wrap gap-1.5">
-              {template.fields.map((field) => (
-                <li
-                  className="bg-muted rounded-md px-2 py-0.5 text-xs font-medium"
-                  dir="auto"
-                  key={field}
-                >
-                  {field}
-                </li>
-              ))}
-            </ul>
-          </section>
+        {template.jurisdictions.length > 0 && (
+          <DetailsItem label={t("onboarding.catalogueDetailJurisdictions")}>
+            <bdi>{template.jurisdictions.join(", ")}</bdi>
+          </DetailsItem>
         )}
+        {template.languages.length > 0 && (
+          <DetailsItem label={t("templates.languages")}>
+            <bdi>{template.languages.join(", ")}</bdi>
+          </DetailsItem>
+        )}
+      </DetailsGrid>
 
-        <section aria-labelledby="catalogue-template-preview">
+      {template.disclaimer !== null && (
+        <p className="text-muted-foreground text-sm" dir="auto">
+          {template.disclaimer}
+        </p>
+      )}
+
+      {template.fields.length > 0 && (
+        <section aria-labelledby="catalogue-template-fields">
           <h2
             className="mb-3 text-base font-semibold"
-            id="catalogue-template-preview"
+            id="catalogue-template-fields"
           >
-            {t("common.preview")}
+            {t("templates.fields")}
           </h2>
-          <div className="rounded-xl border px-4">
-            <CataloguePreview preview={preview} />
-          </div>
+          <ul className="flex flex-wrap gap-1.5">
+            {template.fields.map((field) => (
+              <li
+                className="bg-muted rounded-md px-2 py-0.5 text-xs font-medium"
+                dir="auto"
+                key={field}
+              >
+                {field}
+              </li>
+            ))}
+          </ul>
         </section>
-      </div>
-    </ScrollArea>
+      )}
+
+      <TemplateCataloguePreviewFrame heading={t("common.preview")}>
+        <CataloguePreview preview={preview} />
+      </TemplateCataloguePreviewFrame>
+    </TemplateCatalogueDetailFrame>
   );
 };
 
@@ -144,9 +129,7 @@ const CataloguePreview = ({
 
   switch (preview.status) {
     case "loading":
-      return (
-        <KnowledgeStatusMessage>{t("common.loading")}</KnowledgeStatusMessage>
-      );
+      return <TemplateCataloguePreviewPending />;
     case "unavailable":
       return (
         <KnowledgeStatusMessage>
@@ -166,20 +149,3 @@ const CataloguePreview = ({
     }
   }
 };
-
-const DetailItem = ({
-  label,
-  children,
-}: {
-  label: string;
-  children: ReactNode;
-}) => (
-  <div className="flex flex-col gap-0.5">
-    <dt className="text-muted-foreground text-xs font-medium tracking-wider uppercase">
-      {label}
-    </dt>
-    <dd className="text-foreground" dir="auto">
-      {children}
-    </dd>
-  </div>
-);

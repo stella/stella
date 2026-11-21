@@ -15,6 +15,8 @@
 import { panic, Result, TaggedError, UnhandledException } from "better-result";
 import { eq } from "drizzle-orm";
 
+import { declareFingerprintFields } from "@stll/errors";
+
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { chatThreads } from "@/api/db/schema";
@@ -28,10 +30,18 @@ import {
   runChatThreadCompaction,
 } from "@/api/lib/chat/thread-compaction";
 import type { ChatCompactionOutcome } from "@/api/lib/chat/thread-compaction";
+import { withThreadStoredContentEgress } from "@/api/lib/chat/thread-stored-content-egress";
+import type { WithThreadStoredContentEgress } from "@/api/lib/chat/thread-stored-content-egress";
+import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { holdMemberAccessOnTx } from "@/api/lib/db/member-access-hold";
 import { errorTag } from "@/api/lib/errors/utils";
-import { createRootMembershipSafeDb } from "@/api/lib/root-scoped-db";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
+import { runScheduledBackgroundWork } from "@/api/lib/rate-limit/queued-action-admission";
+import {
+  createRootMembershipSafeDb,
+  createRootMembershipScopedDb,
+} from "@/api/lib/root-scoped-db";
 import type { MembershipSafeDb } from "@/api/lib/root-scoped-db";
 import {
   buildClaimChatCompactionQueueQuery,
@@ -76,28 +86,47 @@ export type ChatCompactorOutcome =
   | { type: "owner-access-lost"; reason: OwnerAccessLostReason };
 
 type ChatThreadCompactorOptions = {
+  /** Test seam at the final current-authority check. */
+  beforeDispatchAuthorization?: (() => Promise<void>) | undefined;
   /** The RLS connection the owner's reads and writes run on. Tests inject
    *  their database; production uses the application connection. */
   database?: RlsDatabase<Transaction>;
+  /** Provider-egress session fence. Tests replace the dedicated connection. */
+  withStoredContentEgress?: WithThreadStoredContentEgress;
 };
 
 export const createChatThreadCompactor =
-  ({ database }: ChatThreadCompactorOptions = {}): SchedulerTask =>
+  ({
+    beforeDispatchAuthorization,
+    database,
+    withStoredContentEgress = withThreadStoredContentEgress,
+  }: ChatThreadCompactorOptions = {}): SchedulerTask =>
   async (context) =>
-    await drainCompactionQueue({ ...context, database });
+    await drainCompactionQueue({
+      ...context,
+      beforeDispatchAuthorization,
+      database,
+      withStoredContentEgress,
+    });
 
 export const compactChatThreads = createChatThreadCompactor();
 
 type DrainCompactionQueueOptions = Pick<
   SchedulerTaskContext,
   "db" | "logger" | "signal"
-> & { database: RlsDatabase<Transaction> | undefined };
+> & {
+  beforeDispatchAuthorization: (() => Promise<void>) | undefined;
+  database: RlsDatabase<Transaction> | undefined;
+  withStoredContentEgress: WithThreadStoredContentEgress;
+};
 
 const drainCompactionQueue = async ({
+  beforeDispatchAuthorization,
   database,
   db,
   logger,
   signal,
+  withStoredContentEgress,
 }: DrainCompactionQueueOptions): Promise<void> => {
   const claim = await claimCompactionBatch(db);
 
@@ -117,13 +146,23 @@ const drainCompactionQueue = async ({
       return;
     }
 
-    const outcome = await compactThread({ database, db, signal, thread });
+    const outcome = await compactThread({
+      beforeDispatchAuthorization,
+      database,
+      db,
+      signal,
+      thread,
+      withStoredContentEgress,
+    });
     if (Result.isError(outcome)) {
       failed += 1;
-      captureError(outcome.error, {
-        feature: "chat.thread_compactor",
-        threadId: thread.threadId,
-      });
+      captureError(
+        outcome.error,
+        handlerErrorContext("tasks.processThreadAt.outcome_error", {
+          feature: "chat.thread_compactor",
+          threadId: thread.threadId,
+        }),
+      );
       logger.warn("scheduler.chat_compactor_failed", {
         "error.type": errorTag(outcome.error),
         "thread.id": thread.threadId,
@@ -268,10 +307,12 @@ export const settlementForOutcome = (
 };
 
 type CompactThreadOptions = {
+  beforeDispatchAuthorization: (() => Promise<void>) | undefined;
   database: RlsDatabase<Transaction> | undefined;
   db: SchedulerDb;
   signal: AbortSignal;
   thread: QueuedCompactionThread;
+  withStoredContentEgress: WithThreadStoredContentEgress;
 };
 
 type CompactThreadResult = Result<
@@ -280,10 +321,12 @@ type CompactThreadResult = Result<
 >;
 
 const compactThread = async ({
+  beforeDispatchAuthorization,
   database,
   db,
   signal,
   thread,
+  withStoredContentEgress,
 }: CompactThreadOptions): Promise<CompactThreadResult> => {
   const memberDb = createRootMembershipSafeDb(
     { organizationId: thread.organizationId, userId: thread.userId },
@@ -326,46 +369,74 @@ const compactThread = async ({
   }
   const { orgAIConfig, managedAIResidency } = configResult.value;
 
-  const { preserveTokens, triggerTokens } = resolveChatCompactionBudget({
-    chatModelOverride: thread.chatModel ?? undefined,
-    orgAIConfig,
+  // The thread's sends drew its actions; the drain takes a background slot.
+  const admitted = await runScheduledBackgroundWork({
+    actionKind: "chat.background",
     organizationId: thread.organizationId,
-  });
-
-  const compacted = await runChatThreadCompaction({
-    abortSignal: AbortSignal.any([
-      AbortSignal.timeout(COMPACTION_TIMEOUT_MS),
-      signal,
-    ]),
-    analytics: createTanStackAIAnalyticsCallbacks({
-      dataClass: "customer",
-      feature: "chat.thread_compaction",
-      modelRole: "chat",
-      orgAIConfig,
-      properties: { organization_id: thread.organizationId },
-      sessionId: thread.threadId,
-      traceId: Bun.randomUUIDv7(),
-      usageMetering: {
-        actionType: "background",
+    userId: thread.userId,
+    organizationStateDb: createRootMembershipScopedDb(
+      { organizationId: thread.organizationId, userId: thread.userId },
+      database,
+    ),
+    run: async (leaseSignal, admission) => {
+      // Sized for the model the admitted tier serves.
+      const { preserveTokens, triggerTokens } = resolveChatCompactionBudget({
+        chatModelOverride: thread.chatModel ?? undefined,
+        orgAIConfig,
         organizationId: thread.organizationId,
-        // Usage already incurred is recorded even if the owner has just
-        // left; reads and the checkpoint write hold the owner's access.
-        safeDb: memberDb,
-        serviceTier: "batch",
+        modelTier: admission.modelTier,
+      });
+      return await runChatThreadCompaction({
+        abortSignal: AbortSignal.any([
+          AbortSignal.timeout(COMPACTION_TIMEOUT_MS),
+          signal,
+          leaseSignal,
+        ]),
+        admission,
+        analytics: createTanStackAIAnalyticsCallbacks({
+          dataClass: "customer",
+          feature: "chat.thread_compaction",
+          modelTask: "chat",
+          orgAIConfig,
+          modelTier: admission.modelTier,
+          properties: { organization_id: thread.organizationId },
+          sessionId: thread.threadId,
+          traceId: Bun.randomUUIDv7(),
+          usageMetering: {
+            actionType: "background",
+            organizationId: thread.organizationId,
+            // Usage already incurred is recorded even if the owner has just
+            // left; reads and the checkpoint write hold the owner's access.
+            safeDb: memberDb,
+            serviceTier: "batch",
+            userId: thread.userId,
+            workspaceId: null,
+          },
+        }),
+        beforeDispatchAuthorization,
+        modelId: thread.chatModel ?? undefined,
+        orgAIConfig,
+        managedAIResidency,
+        organizationId: thread.organizationId,
+        preserveTokens,
+        safeDb,
+        threadId: thread.threadId,
+        triggerTokens,
         userId: thread.userId,
-        workspaceId: null,
-      },
-    }),
-    dataWorkspaceIds: thread.dataWorkspaceIds,
-    modelId: thread.chatModel ?? undefined,
-    orgAIConfig,
-    managedAIResidency,
-    organizationId: thread.organizationId,
-    preserveTokens,
-    safeDb,
-    threadId: thread.threadId,
-    triggerTokens,
+        withStoredContentEgress,
+      });
+    },
   });
+  if (Result.isError(admitted)) {
+    return Result.err(
+      new ChatCompactionError({
+        cause: admitted.error,
+        message: "chat compaction was not admitted",
+        threadId: thread.threadId,
+      }),
+    );
+  }
+  const compacted = admitted.value;
   if (Result.isError(compacted)) {
     const lost = ownerAccessLostOutcome(compacted.error);
     return lost === null ? Result.err(compacted.error) : Result.ok(lost);
@@ -378,7 +449,11 @@ const compactThread = async ({
 class OwnerAccessLostError extends TaggedError("OwnerAccessLostError")<{
   message: string;
   reason: OwnerAccessLostReason;
-}> {}
+}> {
+  static {
+    declareFingerprintFields(this, ["reason"]);
+  }
+}
 
 const OWNER_ACCESS_LOST_MESSAGE = {
   [OWNER_ACCESS_LOST_REASON.ORGANIZATION]:
@@ -393,9 +468,10 @@ const OWNER_ACCESS_LOST_MESSAGE = {
  *
  * Thread RLS checks a thread outside any matter against the organization id
  * alone, so the handle's own scope does not stop a run whose owner has left.
- * Holding the membership rows in the transaction that reads the transcript or
- * writes the checkpoint means a concurrent removal either waits for it or is
- * seen by it.
+ * Locking the thread makes its current matter scope stable for this short
+ * transaction. Concurrent deletion, anonymization, and scope changes either
+ * commit first and are observed, or wait. Holding the matching membership rows
+ * gives access revocation the same ordering.
  */
 const holdThreadOwnerAccess = async (
   tx: Transaction,
@@ -408,6 +484,15 @@ const holdThreadOwnerAccess = async (
   });
   if (organization.type === "not-member") {
     return OWNER_ACCESS_LOST_REASON.ORGANIZATION;
+  }
+  const threadLock = await withAggregateLock({
+    aggregate: "chatThread",
+    id: { id: threadId, organizationId, userId },
+    mode: "update",
+    tx,
+  });
+  if (threadLock.status === "missing") {
+    return OWNER_ACCESS_LOST_REASON.THREAD;
   }
   const scope = (
     await tx

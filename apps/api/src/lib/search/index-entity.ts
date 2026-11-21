@@ -1,6 +1,7 @@
 import { panic } from "better-result";
 import { eq, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
+import { EmptyFilter } from "drizzle-orm/relations";
 
 import { documentReferenceBase } from "@stll/api-contract";
 import { compareCodeUnit } from "@stll/collation";
@@ -10,13 +11,20 @@ import { entities, extractedContent } from "@/api/db/schema";
 import type { LinkMetadata, searchDocuments } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
 import { captureError } from "@/api/lib/analytics/capture";
+import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { decryptContent } from "@/api/lib/content-encryption";
+import {
+  withAggregateLock,
+  withAggregateTransaction,
+} from "@/api/lib/db/aggregate-lock";
+import { lockForWrite } from "@/api/lib/db/lock-for-write";
 import { timestampCasToken } from "@/api/lib/db/timestamp-cas";
 import type { TimestampCasToken } from "@/api/lib/db/timestamp-cas";
-import { selectCurrentExtractedContent } from "@/api/lib/document-content-provenance";
+import { loadCurrentExtractedContentsForSearchIndex } from "@/api/lib/document-content-provenance";
 import { docxReviewMarkupToSearchText } from "@/api/lib/docx-review-markup";
+import { recordText } from "@/api/lib/fields/record-text";
 import { LIMITS } from "@/api/lib/limits";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { createCursorPage, iterateCursorPages } from "@/api/lib/pagination";
 import { isoToRegconfig } from "@/api/lib/search/detect-language";
 import { syncWorkspaceSearchActivity } from "@/api/lib/search/index-global";
@@ -24,6 +32,8 @@ import {
   buildSearchPreviewPassages,
   buildSearchPreviewPassageValueRows,
 } from "@/api/lib/search/preview-passages";
+import { lockCurrentSearchProjectionRepair } from "@/api/lib/search/projection-repair-fence";
+import type { SearchProjectionRepairFence } from "@/api/lib/search/projection-repair-fence";
 import { fileNameSearchText } from "@/api/lib/search/query";
 
 type SearchDocumentRow = typeof searchDocuments.$inferInsert;
@@ -105,6 +115,8 @@ const extractFieldText = (content: FieldContent): string => {
       return `${content.amountCents} ${content.currency}`;
     case "person":
       return content.name;
+    case "record":
+      return recordText(content.state);
     case "file":
       return content.fileName ? fileNameSearchText(content.fileName) : "";
     case "error":
@@ -182,9 +194,7 @@ const buildSearchDocument = async (
       },
       extractedContent: {
         columns: {
-          ciphertext: true,
           extractedAt: true,
-          iv: true,
           language: true,
           sourceEntityVersionId: true,
           sourceFieldId: true,
@@ -208,7 +218,7 @@ const buildSearchDocument = async (
       where: {
         entityId: { eq: entityId },
         workspaceId: { eq: entity.workspaceId },
-        versionNumber: cursor === null ? undefined : { lt: Number(cursor) },
+        versionNumber: cursor === null ? EmptyFilter : { lt: Number(cursor) },
       },
       // Include tombstones: a deleted newer version must prevent legacy text
       // from being attributed to a promoted older version.
@@ -222,7 +232,6 @@ const buildSearchDocument = async (
       cursorForItem: (row) => String(row.versionNumber),
     });
   });
-  let latestVersionId: SafeId<"entityVersion"> | undefined;
 
   const fieldTexts: string[] = [];
   let title = entity.name;
@@ -259,7 +268,6 @@ const buildSearchDocument = async (
   // way it stops resolving everywhere else.
   const stampTexts = new Set<string>();
   for await (const versions of versionPages) {
-    latestVersionId ??= versions.at(0)?.id;
     for (const { deletedAt, stamp } of versions) {
       if (deletedAt || !stamp) {
         continue;
@@ -279,32 +287,34 @@ const buildSearchDocument = async (
   let language: string | null = null;
 
   const extractedContentRow = entity.extractedContent;
-  const currentExtractedContent = selectCurrentExtractedContent({
-    extracted: extractedContentRow,
-    allowLegacy: latestVersionId === version.id,
-    currentVersionCreatedAt: version.createdAt,
-    currentVersionId: version.id,
-    fields: version.fields,
-  });
-  if (currentExtractedContent) {
-    const { ciphertext, iv } = currentExtractedContent;
-    language = isoToRegconfig(currentExtractedContent.language);
-    try {
-      const plaintext = await decryptContent(
-        workspace.organizationId,
-        ciphertext,
-        iv,
-      );
+  // Search indexing is an organization-wide system projection.
+  try {
+    const currentExtractedContent = (
+      await loadCurrentExtractedContentsForSearchIndex(
+        database,
+        "search-indexing",
+        {
+          entityIds: [entityId],
+          organizationId: workspace.organizationId,
+        },
+      )
+    ).at(0);
+    if (currentExtractedContent) {
+      language = isoToRegconfig(currentExtractedContent.language);
+      const plaintext = currentExtractedContent.text;
       if (plaintext) {
         fieldTexts.push(docxReviewMarkupToSearchText(plaintext));
       }
-    } catch (error) {
-      // Decryption fails when CONTENT_ENCRYPTION_KEY was
-      // added or rotated after this content was stored.
-      // Keep the last complete projection until re-extraction fixes it.
-      captureError(error, { entityId });
-      throw error;
     }
+  } catch (error) {
+    // Decryption fails when CONTENT_ENCRYPTION_KEY was
+    // added or rotated after this content was stored.
+    // Keep the last complete projection until re-extraction fixes it.
+    captureError(
+      error,
+      handlerErrorContext("search.buildSearchDocument", { entityId }),
+    );
+    throw error;
   }
 
   return {
@@ -341,12 +351,19 @@ const buildSearchDocument = async (
 // producer funnels through — strip here, not at each producer.
 const stripNulBytes = (text: string): string => text.replaceAll("\u0000", "");
 
+type EntityProjectionPublication =
+  | { type: "direct" }
+  | { type: "repair"; fence: SearchProjectionRepairFence<"entity"> };
+
+const DIRECT_PUBLICATION: EntityProjectionPublication = { type: "direct" };
+
 export const upsertSearchDocument = async (
   entityId: SafeId<"entity">,
   {
     database = rootDb,
     syncActivity = syncWorkspaceSearchActivity,
   }: IndexEntityDependencies = {},
+  publication: EntityProjectionPublication = DIRECT_PUBLICATION,
 ): Promise<void> => {
   const built = await buildSearchDocument(entityId, database);
   if (!built) {
@@ -367,19 +384,33 @@ export const upsertSearchDocument = async (
   const observedSource = doc.extractedContentSource;
   const hasObservedSource = observedSource !== null;
 
-  await database.transaction(async (tx) => {
+  await withAggregateTransaction(database, async (tx) => {
+    // audit: skip - derived search projection synchronized from authoritative entity state
+    const parents = await lockForWrite(tx, {
+      organizationIds: [doc.organizationId],
+      workspaceIds: [doc.workspaceId],
+    });
+    if (
+      !parents.organizationIds.has(doc.organizationId) ||
+      !parents.workspaceIds.has(doc.workspaceId)
+    ) {
+      return;
+    }
     // Version writers serialize on this entity. Take the lock in a separate
     // statement so the following CAS sees commits made while we waited.
-    const locked = await tx.execute<IndexedSearchDocument>(sql`
-      SELECT e.id AS "entityId"
-      FROM entities e
-      INNER JOIN workspaces w ON w.id = e.workspace_id
-      WHERE e.id = ${doc.entityId}
-        AND e.workspace_id = ${doc.workspaceId}
-        AND w.organization_id = ${doc.organizationId}
-      FOR UPDATE OF e
-    `);
-    if (!locked.at(0)) {
+    const locked = await withAggregateLock({
+      aggregate: "entity",
+      id: { id: doc.entityId, workspaceId: doc.workspaceId },
+      mode: "update",
+      tx,
+    });
+    if (locked.status !== "locked") {
+      return;
+    }
+    if (
+      publication.type === "repair" &&
+      !(await lockCurrentSearchProjectionRepair(tx, publication.fence))
+    ) {
       return;
     }
 
@@ -448,7 +479,6 @@ export const upsertSearchDocument = async (
             )
           )
         )
-      FOR UPDATE OF e
       ON CONFLICT (entity_id) DO UPDATE SET
         organization_id = EXCLUDED.organization_id,
         workspace_id = EXCLUDED.workspace_id,
@@ -490,6 +520,16 @@ export const upsertSearchDocument = async (
       WHERE entity_id = ${doc.entityId}
     `);
     await syncActivity(doc.workspaceId, tx);
+  });
+};
+
+export const repairSearchDocument = async (
+  fence: SearchProjectionRepairFence<"entity">,
+  dependencies: IndexEntityDependencies = {},
+): Promise<void> => {
+  await upsertSearchDocument(toSafeId<"entity">(fence.sourceId), dependencies, {
+    fence,
+    type: "repair",
   });
 };
 

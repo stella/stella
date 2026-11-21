@@ -1,8 +1,9 @@
+import { parseProvisionDesignation } from "@stll/decision-reader/reader-outline";
 import type { ProvisionUnit } from "@stll/legal-ast/provision-reference";
-import { stripDiacritics } from "@stll/text-normalize";
+import { foldSearchMatchText } from "@stll/text-normalize";
 import { OUTLINE_EMPHASIS, type OutlineItem } from "@stll/ui/outline-rail";
 
-import { parseProvisionDesignation } from "@/components/legal-reader/reader-outline";
+import { AhoCorasick } from "#aho-corasick";
 
 /**
  * What the rail's jump field makes of what the reader typed.
@@ -60,14 +61,17 @@ type OutlineQuery =
 /** Digits plus any letter suffix, as an act prints them: `10`, `265b`. */
 const BARE_NUMBER_RE = /^\d+[a-z]*$/iu;
 
-/** Fold used for every comparison here: diacritics and case are not meant. */
+/**
+ * Fold used for every comparison here, the app-wide search key: case,
+ * accents and letters such as `ł` or `ß` are not meant.
+ */
 const foldForMatch = (value: string): string =>
-  stripDiacritics(value).toLowerCase();
+  foldSearchMatchText(value.toWellFormed());
 
 const parseOutlineQuery = (raw: string): OutlineQuery => {
   const text = raw.trim();
 
-  if (text.length === 0) {
+  if (foldForMatch(text) === "") {
     return { type: "empty" };
   }
 
@@ -117,14 +121,17 @@ const designationRank = (
     : null;
 };
 
-const rankOf = (
-  item: OutlineItem,
-  query: OutlineQuery,
-): OutlineMatchRank | null => {
-  if (query.type === "empty") {
-    return null;
-  }
+type RankOfOptions = {
+  item: OutlineItem;
+  query: Exclude<OutlineQuery, { type: "empty" }>;
+  matcher: AhoCorasick;
+};
 
+const rankOf = ({
+  item,
+  query,
+  matcher,
+}: RankOfOptions): OutlineMatchRank | null => {
   const byDesignation = designationRank(item, query);
 
   if (byDesignation !== null) {
@@ -135,9 +142,16 @@ const rankOf = (
     `${item.label} ${item.title ?? ""} ${item.meta ?? ""}`,
   );
 
-  return haystack.includes(foldForMatch(query.text))
-    ? OUTLINE_MATCH_RANKS.text
-    : null;
+  return matcher.isMatch(haystack) ? OUTLINE_MATCH_RANKS.text : null;
+};
+
+let cachedMatcher: { needle: string; matcher: AhoCorasick } | undefined;
+
+const outlineTextMatcher = (needle: string): AhoCorasick => {
+  if (cachedMatcher?.needle !== needle) {
+    cachedMatcher = { needle, matcher: new AhoCorasick([needle]) };
+  }
+  return cachedMatcher.matcher;
 };
 
 /**
@@ -150,10 +164,14 @@ export const rankOutlineMatches = (
   rawQuery: string,
 ): OutlineMatches => {
   const query = parseOutlineQuery(rawQuery);
+  if (query.type === "empty") {
+    return { exactId: null, matches: [] };
+  }
+  const matcher = outlineTextMatcher(foldForMatch(query.text));
   const matches: OutlineMatch[] = [];
 
   for (const item of items) {
-    const rank = rankOf(item, query);
+    const rank = rankOf({ item, query, matcher });
 
     if (rank !== null) {
       matches.push({ item, rank });

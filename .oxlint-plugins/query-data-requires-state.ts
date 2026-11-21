@@ -9,10 +9,10 @@ import {
   isIdentifier,
   isIdentifierReference,
   repoRelativeFilename,
-  resolveImportedExpression,
+  resolveImportedExpressionForEnforcement,
   resolveVariable,
-  staticStringValue,
   type ScopeContext,
+  staticStringValue,
   unwrapExpression,
 } from "./utils.ts";
 
@@ -334,7 +334,10 @@ const preservesState = ({
     });
   }
   if (expression.type === "CallExpression") {
-    const imported = resolveImportedExpression(context, expression.callee);
+    const imported = resolveImportedExpressionForEnforcement(
+      context,
+      expression.callee,
+    );
     if (
       imported?.source === "react" &&
       imported.imported === "useMemo" &&
@@ -1004,7 +1007,7 @@ export default eslintCompatPlugin({
         type: "problem",
         messages: {
           queryState:
-            "Query data requires its error state. Pass the result to useQueryView from @/lib/use-query-view, or handle and preserve its error/status. Query binding: {{key}}.",
+            "Query data requires its error state. Pass the result to queryView from @/lib/query-view.logic, or handle and preserve its error/status. Query binding: {{key}}.",
         },
         schema: [
           {

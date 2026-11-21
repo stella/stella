@@ -38,6 +38,7 @@ export const fetchStorageArrayBuffer = async (
   }
 
   if (!response.ok) {
+    await Promise.allSettled([response.body?.cancel()]);
     throw new APIError({
       status: response.status,
       message: `Failed to fetch file from storage (purpose=${purpose})`,

@@ -1,8 +1,6 @@
 import { STELLA_API_VERSION_PREFIX } from "@stll/api-contract";
 
 import { env } from "@/api/env";
-import type { publicCaseLawRoute } from "@/api/handlers/case-law/public-routes";
-import type { publicLegislationRoute } from "@/api/handlers/legislation/public-routes";
 import { getPublicCorpusLimits } from "@/api/lib/limits";
 
 export const getPublicCorpusClassPolicy = () => getPublicCorpusLimits(env);
@@ -10,18 +8,6 @@ export const getPublicCorpusClassPolicy = () => getPublicCorpusLimits(env);
 export type PublicCorpusClass = keyof ReturnType<
   typeof getPublicCorpusClassPolicy
 >["classes"];
-
-// Derive identifiers from the mounted Elysia registry, without importing any
-// handlers at runtime or traversing their payload/response types.
-type RouteIds<Tree, Path extends string = ""> = {
-  [Key in keyof Tree & string]: Tree[Key] extends { response: unknown }
-    ? `${Uppercase<Key>} ${Path}`
-    : RouteIds<Tree[Key], `${Path}/${Key}`>;
-}[keyof Tree & string];
-
-export type PublicRouteId =
-  | RouteIds<(typeof publicLegislationRoute)["~Routes"]>
-  | RouteIds<(typeof publicCaseLawRoute)["~Routes"]>;
 
 export const PUBLIC_CORPUS_ROUTE_POLICY = {
   "GET /law/statutes": "browse",
@@ -38,13 +24,18 @@ export const PUBLIC_CORPUS_ROUTE_POLICY = {
   "GET /law/sitemap/shards": "sitemap",
   "GET /law/sitemap/statutes/shard": "sitemap",
   "GET /case/coverage": "browse",
+  "GET /case/browse/courts": "browse",
+  "GET /case/browse/calendar": "browse",
   // Adding facets to listing requires updating this classifier and its guard.
   "GET /case/decisions": "browse",
   "GET /case/decisions/facets": "aggregate",
+  "GET /case/decisions/filter-validation": "search",
   "GET /case/decisions/status": "browse",
   "GET /case/decisions/latest": "browse",
   "GET /case/decisions/by-slug/:slug": "browse",
+  "GET /case/decisions/:decisionId/summary": "browse",
   "GET /case/decisions/:decisionId": "browse",
+  "GET /case/decisions/:decisionId/anchor-redirects": "browse",
   "GET /case/decisions/:decisionId/citations": "browse",
   "GET /case/decisions/:decisionId/citations/summary": "browse",
   "GET /case/decisions/:decisionId/citations/leading": "browse",
@@ -53,36 +44,64 @@ export const PUBLIC_CORPUS_ROUTE_POLICY = {
   "GET /case/provisions/citing-decisions": "aggregate",
   "GET /case/provisions/citation-counts": "aggregate",
   "POST /case/decisions/search": "search",
+  // One decision, then a token comparison over its whole text on this process.
+  "POST /case/decisions/quotes/verify": "search",
   "GET /case/sitemap/shards": "sitemap",
   "GET /case/sitemap/decisions/shard": "sitemap",
-} as const satisfies Record<PublicRouteId, PublicCorpusClass>;
+} as const satisfies Record<string, PublicCorpusClass>;
 
-// Resolve literals first, just as the router does, so `facets` cannot inherit
-// the browse policy of `:decisionId`. Patterns are built once, never per request.
-const routePolicies = Object.entries(PUBLIC_CORPUS_ROUTE_POLICY)
-  .map(([route, routeClass]) => {
-    const separator = route.indexOf(" ");
-    const method = route.slice(0, separator);
-    const path = route.slice(separator + 1);
-    return {
-      route,
-      class: routeClass,
-      method,
-      dynamic: path.includes(":"),
-      pattern: new RegExp(
-        `^${STELLA_API_VERSION_PREFIX}${path.replace(/:[^/]+/gu, "[^/]+")}/?$`,
-        "u",
-      ),
-    };
-  })
-  .toSorted((left, right) => Number(left.dynamic) - Number(right.dynamic));
+const ROUTE_POLICY: ReadonlyMap<string, PublicCorpusClass> = new Map(
+  Object.entries(PUBLIC_CORPUS_ROUTE_POLICY),
+);
 
-export const resolvePublicCorpusPolicy = (
-  request: Pick<Request, "method" | "url">,
-) => {
-  const method = request.method === "HEAD" ? "GET" : request.method;
-  const { pathname } = new URL(request.url);
-  return routePolicies.find(
-    (policy) => policy.method === method && policy.pattern.test(pathname),
-  );
+/**
+ * Listings whose class depends on the request: a non-empty value of the named
+ * query parameter makes the listing do a search's work, so it is metered as
+ * one.
+ */
+type QueryUpgrade = { parameter: string; class: PublicCorpusClass };
+const QUERY_UPGRADE_ENTRIES = [
+  ["GET /law/statutes", { parameter: "query", class: "search" }],
+] as const satisfies readonly (readonly [
+  keyof typeof PUBLIC_CORPUS_ROUTE_POLICY,
+  QueryUpgrade,
+])[];
+
+const QUERY_UPGRADES: ReadonlyMap<string, QueryUpgrade> = new Map(
+  QUERY_UPGRADE_ENTRIES,
+);
+
+/** A mounted route as the policy table names it: its method and full path pattern. */
+type MountedRoute = { readonly method: string; readonly path: string };
+
+/**
+ * The public corpus class of a mounted route, or `undefined` for every other
+ * route. The table names routes the way the router matched them (method and
+ * pattern, without the version prefix), so a literal segment such as `facets`
+ * can never fall into the class of `:decisionId`; a HEAD request is served by
+ * its GET route. The census in `public-corpus-policy.test.ts` ties the table
+ * to the mounted public corpus routes in both directions.
+ */
+export const publicCorpusClassOf = (
+  route: MountedRoute | undefined,
+  url: URL,
+): PublicCorpusClass | undefined => {
+  if (
+    route === undefined ||
+    !route.path.startsWith(STELLA_API_VERSION_PREFIX)
+  ) {
+    return undefined;
+  }
+  const method = route.method === "HEAD" ? "GET" : route.method;
+  const key = `${method} ${route.path.slice(STELLA_API_VERSION_PREFIX.length)}`;
+  const upgrade = QUERY_UPGRADES.get(key);
+  if (
+    upgrade !== undefined &&
+    url.searchParams
+      .getAll(upgrade.parameter)
+      .some((value) => value.trim() !== "")
+  ) {
+    return upgrade.class;
+  }
+  return ROUTE_POLICY.get(key);
 };

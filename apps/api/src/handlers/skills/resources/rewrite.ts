@@ -1,34 +1,48 @@
 import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
+
+import { SKILL_RESOURCE_REFUSAL_CODE } from "@stll/api-contract";
 
 import { agentSkillResources } from "@/api/db/schema";
 import { loadManagedSkill } from "@/api/handlers/skills/managed-skill";
 import { stripMarkdownFences } from "@/api/lib/agent-skills/markdown-fences";
 import { resolveCaching } from "@/api/lib/ai-config";
+import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
+import { storedAIConfigUnreadableError } from "@/api/lib/ai-config-response";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
-import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
+import {
+  ACCOUNT_ACCESS,
+  configuredModelAdmission,
+  createSafeRootHandler,
+} from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
-import { generateTanStackTextForRole } from "@/api/lib/tanstack-ai-generate";
-import { requireTanStackAIAvailableForRole } from "@/api/lib/tanstack-ai-models";
+import { generateTanStackTextForTask } from "@/api/lib/tanstack-ai-generate";
+import { requireTanStackAIAvailableForTask } from "@/api/lib/tanstack-ai-models";
 
 const REWRITE_PROMPT_MAX_CHARS = 2000;
 const REWRITE_TIMEOUT_MS = 60_000;
 const REWRITE_MAX_OUTPUT_TOKENS = 8192;
 
-const rewriteSkillResourceParamsSchema = t.Object({
-  skillId: tSafeId("agentSkill"),
+const rewriteSkillResourceParamsSchema = v.object({
+  skillId: resourceIdSchema("agentSkill"),
 });
 
-const rewriteSkillResourceBodySchema = t.Object({
-  path: t.String({ minLength: 1, maxLength: 512 }),
-  prompt: t.String({ minLength: 1, maxLength: REWRITE_PROMPT_MAX_CHARS }),
+const rewriteSkillResourceBodySchema = v.object({
+  path: v.pipe(v.string(), v.minLength(1), v.maxLength(512)),
+  prompt: v.pipe(
+    v.string(),
+    v.minLength(1),
+    v.maxLength(REWRITE_PROMPT_MAX_CHARS),
+  ),
 });
 
 const config = {
+  contract: "patch",
+  actionAdmission: { type: "handler", actionKind: "skills.rewrite-resource" },
   description:
     "Rewrite one file of an agent skill with the model, from a free-text " +
     "instruction and the file's current content. Returns the proposed " +
@@ -43,12 +57,13 @@ const config = {
   },
   params: rewriteSkillResourceParamsSchema,
   body: rewriteSkillResourceBodySchema,
-  requiresUsage: { actionType: "chat", modelRole: "fast" },
+  requiresUsage: { actionType: "chat", modelTask: "short-text" },
 } satisfies HandlerConfig;
 
 const rewriteSkillResource = createSafeRootHandler(
   config,
   async function* ({
+    modelAdmission,
     body,
     memberRole,
     orgAIConfig,
@@ -60,11 +75,15 @@ const rewriteSkillResource = createSafeRootHandler(
     session,
     user,
   }) {
-    yield* requireTanStackAIAvailableForRole({
+    if (orgAIConfigStatus === ORG_AI_CONFIG_STATUS.unreadable) {
+      return Result.err(storedAIConfigUnreadableError());
+    }
+
+    yield* requireTanStackAIAvailableForTask({
       dataClass: "customer",
       configStatus: orgAIConfigStatus,
       orgConfig: orgAIConfig,
-      role: "fast",
+      task: "short-text",
     });
 
     yield* Result.await(
@@ -101,6 +120,19 @@ const rewriteSkillResource = createSafeRootHandler(
         new HandlerError({ status: 404, message: "Resource not found" }),
       );
     }
+    // The model reads the whole file in one prompt, so a file stored past
+    // what a model may hold at once is not rewritten.
+    if (
+      resource.content.length > LIMITS.agentSkillResourceModelContextMaxChars
+    ) {
+      return Result.err(
+        new HandlerError({
+          status: 413,
+          code: SKILL_RESOURCE_REFUSAL_CODE.tooLargeForAi,
+          message: "This file is too large to rewrite with AI",
+        }),
+      );
+    }
 
     const aiAnalytics = createTanStackAIAnalyticsCallbacks({
       dataClass: "customer",
@@ -113,8 +145,9 @@ const rewriteSkillResource = createSafeRootHandler(
         workspaceId: null,
       },
       feature: "skills.rewrite_resource",
-      modelRole: "fast",
+      modelTask: "short-text",
       orgAIConfig,
+      modelTier: configuredModelAdmission({ modelAdmission }).modelTier,
       properties: { organization_id: session.activeOrganizationId },
       traceId: Bun.randomUUIDv7(),
     });
@@ -127,12 +160,14 @@ const rewriteSkillResource = createSafeRootHandler(
 
     const generation = await Result.tryPromise({
       try: async () =>
-        await generateTanStackTextForRole({
+        await generateTanStackTextForTask({
+          userId: user.id,
           dataClass: "customer",
-          abortSignal: AbortSignal.timeout(REWRITE_TIMEOUT_MS),
+          admission: configuredModelAdmission({ modelAdmission }),
+          deadlineMs: REWRITE_TIMEOUT_MS,
           finishPolicy: "require-complete",
           maxOutputTokens: REWRITE_MAX_OUTPUT_TOKENS,
-          role: "fast",
+          task: "short-text",
           serviceTier: "standard",
           orgAIConfig,
           managedAIResidency,
@@ -142,7 +177,7 @@ const rewriteSkillResource = createSafeRootHandler(
           analytics: aiAnalytics,
           caching: resolveCaching({
             promptCachingEnabled,
-            role: "fast",
+            task: "short-text",
             scopeKey: `${session.activeOrganizationId}:skills:${params.skillId}:${resource.path}`,
           }),
           prompt,
@@ -151,6 +186,7 @@ const rewriteSkillResource = createSafeRootHandler(
         aiAnalytics.captureError(cause);
         return new HandlerError({
           status: 502,
+          code: "internal_error",
           message: "Could not rewrite file. Please try again.",
           cause,
         });
@@ -165,11 +201,12 @@ const rewriteSkillResource = createSafeRootHandler(
       return Result.err(
         new HandlerError({
           status: 502,
+          code: "internal_error",
           message: "Rewrite was empty. Please try again.",
         }),
       );
     }
-    if (rewritten.length > LIMITS.agentSkillResourceMaxChars) {
+    if (rewritten.length > LIMITS.agentSkillResourceModelContextMaxChars) {
       return Result.err(
         new HandlerError({
           status: 400,

@@ -1,0 +1,3 @@
+{
+  "add-constraint": "The widened access-state shape check is added NOT VALID, so it scans no rows under the lock; the online phase validates it, with 1s lock_timeout and 5s statement_timeout."
+}

@@ -1,7 +1,30 @@
 import { panic } from "better-result";
-import { afterEach, describe, expect, mock, spyOn, test } from "bun:test";
+import { afterEach, describe, expect, mock, test } from "bun:test";
 
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
+import { PublisherPageError } from "@/api/handlers/case-law/ingestion/adapters/publisher-page";
+import { PUBLISHER_BODY_MAX_BYTES } from "@/api/handlers/case-law/ingestion/adapters/publisher-read";
+import {
+  assembleSkCourtsDecision,
+  reparseSkCourtsStoredMetadata,
+  SK_COURTS_SOURCE_FIELD_PATHS,
+  skCourtsAdapter,
+} from "@/api/handlers/case-law/ingestion/adapters/sk-courts";
+import {
+  planUnreadItems,
+  type UnavailableStreaks,
+} from "@/api/handlers/case-law/ingestion/pipeline/unread-items";
+import { toPlainTextMetadataObject } from "@/api/lib/case-law/plain-text";
+import {
+  isReadRefusal,
+  isStoredReadAbsence,
+  isStoredReadUnavailable,
+  READ_OUTCOME_METADATA_KEY,
+  type StoredReadOutcome,
+  UNAVAILABLE_CYCLES_BEFORE_MARKING,
+} from "@/api/lib/errors/read-outcome";
+import { FetchBoundaryError } from "@/api/lib/errors/tagged-errors";
+import { readGzipJson } from "@/api/lib/gzip-json";
 /**
  * What this adapter does with the record its publisher serves.
  *
@@ -20,41 +43,23 @@ import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
  */
 import {
   decodeSourceRawEnvelope,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import type { StoredRawReparseOutcome } from "@/api/handlers/case-law/ingestion/adapter";
-import { PublisherPageError } from "@/api/handlers/case-law/ingestion/adapters/publisher-page";
-import { PUBLISHER_BODY_MAX_BYTES } from "@/api/handlers/case-law/ingestion/adapters/publisher-read";
-import {
-  assembleSkCourtsDecision,
-  skCourtsAdapter,
-  SK_COURTS_SOURCE_FIELD_PATHS,
-} from "@/api/handlers/case-law/ingestion/adapters/sk-courts";
-import { requireReconciliation } from "@/api/handlers/case-law/ingestion/adapters/test-utils";
-import {
-  planUnreadItems,
-  type UnavailableStreaks,
-} from "@/api/handlers/case-law/ingestion/pipeline/unread-items";
-import { toPlainTextMetadataObject } from "@/api/lib/case-law/plain-text";
-import {
-  isReadRefusal,
-  isStoredReadAbsence,
-  isStoredReadUnavailable,
-  READ_OUTCOME_METADATA_KEY,
-  type StoredReadOutcome,
-  UNAVAILABLE_CYCLES_BEFORE_MARKING,
-} from "@/api/lib/errors/read-outcome";
-import { FetchBoundaryError } from "@/api/lib/errors/tagged-errors";
-import { readGzipJson } from "@/api/lib/gzip-json";
-import {
+  decodeSourceRawEnvelopeObjects,
+  encodeSourceRawEnvelope,
   type IngestionResult,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+  type StoredRawReparseOutcome,
   toPlainTextIngestionResult,
 } from "@/api/lib/legal-search/ingestion-types";
 import { rehydrateMetadataUrls } from "@/api/lib/legal-search/metadata-urls";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
+import { requireReconciliation } from "@/api/tests/helpers/case-law-adapter-test-utils";
+import { deferredSkDocumentRawFixture } from "@/api/tests/helpers/sk-document-raw-storage";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
 import { SK_COURTS_METADATA_URL_SCHEMA } from "./sk-courts.metadata-urls";
+
+const testFetchState = createTestFetch();
 
 /**
  * The stored read-outcome marker, typed as the stored shape: metadata values
@@ -95,7 +100,10 @@ const oversizedBody = (): ReadableStream<Uint8Array> => {
 };
 
 describe("Slovak court backfill rejects unreadable publisher listings", () => {
-  afterEach(() => mock.restore());
+  afterEach(() => {
+    testFetchState.restore();
+    mock.restore();
+  });
 
   for (const body of [
     "<html><script src='/challenge.js'></script></html>",
@@ -106,8 +114,8 @@ describe("Slovak court backfill rejects unreadable publisher listings", () => {
     "",
   ]) {
     test(`holds the page on ${JSON.stringify(body)}`, async () => {
-      spyOn(globalThis, "fetch").mockImplementation(
-        asFetchMock(async () => new Response(body)),
+      testFetchState.set(
+        asFetchMock(mock(asFetchMock(async () => new Response(body)))),
       );
       const page = await skCourtsAdapter.fetchPage(null, {});
       expect(page.isErr()).toBe(true);
@@ -118,9 +126,13 @@ describe("Slovak court backfill rejects unreadable publisher listings", () => {
   }
 
   test("accepts an explicit small empty collection", async () => {
-    spyOn(globalThis, "fetch").mockImplementation(
+    testFetchState.set(
       asFetchMock(
-        async () => new Response('{"rozhodnutieList":[],"numFound":0}'),
+        mock(
+          asFetchMock(
+            async () => new Response('{"rozhodnutieList":[],"numFound":0}'),
+          ),
+        ),
       ),
     );
     const page = await skCourtsAdapter.fetchPage(null, {});
@@ -139,23 +151,27 @@ describe("Slovak court backfill rejects unreadable publisher listings", () => {
           sud: { nazov: "Okresný súd Bratislava I" },
           datumVydania: "14.05.2020",
         };
-        spyOn(globalThis, "fetch").mockImplementation(
-          asFetchMock(async (input: string | URL | Request) => {
-            const url = new URL(
-              input instanceof Request ? input.url : String(input),
-            );
-            return Response.json(
-              url.searchParams.has("page")
-                ? {
-                    rozhodnutieList: [
-                      ...Array.from({ length: 99 }, () => good),
-                      malformed,
-                    ],
-                    numFound: 200,
-                  }
-                : { ecli: "ECLI:SK:OSBA1:2020:1.C.1.2020" },
-            );
-          }),
+        testFetchState.set(
+          asFetchMock(
+            mock(
+              asFetchMock(async (input: string | URL | Request) => {
+                const url = new URL(
+                  input instanceof Request ? input.url : String(input),
+                );
+                return Response.json(
+                  url.searchParams.has("page")
+                    ? {
+                        rozhodnutieList: [
+                          ...Array.from({ length: 99 }, () => good),
+                          malformed,
+                        ],
+                        numFound: 200,
+                      }
+                    : { ecli: "ECLI:SK:OSBA1:2020:1.C.1.2020" },
+                );
+              }),
+            ),
+          ),
         );
         const page = await skCourtsAdapter.fetchPage(cursor, {});
         expect(page.isOk()).toBe(true);
@@ -191,25 +207,29 @@ describe("Slovak court backfill rejects unreadable publisher listings", () => {
           datumVydania: "14.05.2020",
         };
         const bad = { ...good, guid: "bad-detail", spisovaZnacka: "1C/2/2020" };
-        spyOn(globalThis, "fetch").mockImplementation(
-          asFetchMock(async (input: string | URL | Request) => {
-            const url = new URL(
-              input instanceof Request ? input.url : String(input),
-            );
-            if (url.searchParams.has("page")) {
-              return Response.json({
-                rozhodnutieList: [
-                  ...Array.from({ length: 99 }, () => good),
-                  bad,
-                ],
-                numFound: 200,
-              });
-            }
-            if (url.pathname.endsWith("/bad-detail")) {
-              return Response.json(detail);
-            }
-            return Response.json({ ecli: "ECLI:SK:OSBA1:2020:1.C.1.2020" });
-          }),
+        testFetchState.set(
+          asFetchMock(
+            mock(
+              asFetchMock(async (input: string | URL | Request) => {
+                const url = new URL(
+                  input instanceof Request ? input.url : String(input),
+                );
+                if (url.searchParams.has("page")) {
+                  return Response.json({
+                    rozhodnutieList: [
+                      ...Array.from({ length: 99 }, () => good),
+                      bad,
+                    ],
+                    numFound: 200,
+                  });
+                }
+                if (url.pathname.endsWith("/bad-detail")) {
+                  return Response.json(detail);
+                }
+                return Response.json({ ecli: "ECLI:SK:OSBA1:2020:1.C.1.2020" });
+              }),
+            ),
+          ),
         );
         const page = await skCourtsAdapter.fetchPage(cursor, {});
         if (outcome === "unreadable") {
@@ -437,7 +457,7 @@ const reparse = (
   stored: StoredDecision,
   caseNumber: string,
 ): StoredRawReparseOutcome => {
-  const outcome = skCourtsAdapter.reparseStoredRaw?.({
+  const outcome = reparseSkCourtsStoredMetadata({
     raw: new TextEncoder().encode(stored.sourceRaw),
     contentType: stored.sourceRawContentType,
     caseNumber,
@@ -451,12 +471,7 @@ const reparse = (
     documentUrl: null,
     metadata: {},
   });
-  if (outcome === undefined) {
-    return panic("sk-courts declares no reparseStoredRaw");
-  }
-  return outcome instanceof Promise
-    ? panic("sk-courts reparseStoredRaw must answer without I/O")
-    : outcome;
+  return outcome;
 };
 
 describe("a stored record reaches the targets the inventory declares", () => {
@@ -471,6 +486,39 @@ describe("a stored record reaches the targets the inventory declares", () => {
     const outcome = reparse(stored, TRANSFERRED_FILE_DOCKET);
 
     expect(outcome.type).toBe("parsed");
+  });
+
+  test("capturing a legacy wrapper preserves its metadata replay fixed point", async () => {
+    const original = await storedDecision(TRANSFERRED_FILE_ID);
+    expect(original.sourceRawContentType).toBe("application/json");
+    expect(decodeSourceRawEnvelope(original.sourceRaw)).toBeNull();
+    const expected = reparse(original, TRANSFERRED_FILE_DOCKET);
+    expect(expected.type).toBe("parsed");
+    const captured = await deferredSkDocumentRawFixture(original.sourceRaw);
+    expect(decodeSourceRawEnvelope(captured.raw)?.["legacy"]).toBe(
+      original.sourceRaw,
+    );
+    expect(Object.keys(decodeSourceRawEnvelopeObjects(captured.raw))).toEqual([
+      "document-pdf",
+    ]);
+    testFetchState.set(
+      asFetchMock(async () =>
+        panic("Stored metadata replay must not fetch the publisher"),
+      ),
+    );
+    try {
+      expect(
+        reparse(
+          {
+            sourceRaw: captured.raw,
+            sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+          },
+          TRANSFERRED_FILE_DOCKET,
+        ),
+      ).toEqual(expected);
+    } finally {
+      testFetchState.restore();
+    }
   });
 
   test("the three fields the adapter used to discard land in metadata", async () => {
@@ -575,7 +623,7 @@ describe("a stored record reaches the targets the inventory declares", () => {
 });
 
 describe("the census and the registry agree about this adapter", () => {
-  test("its recorded surfaces match a complete decision envelope", () => {
+  test("its recorded surfaces match a complete decision envelope", async () => {
     const { surfaces } = skCourtsAdapter.sourceSurfaces;
     const recorded = Object.entries(surfaces).flatMap(([, disposition]) =>
       disposition.disposition === "stored" ? [disposition.part] : [],
@@ -602,9 +650,17 @@ describe("the census and the registry agree about this adapter", () => {
     if (decision === null) {
       panic("Complete surface fixture must build a decision");
     }
-    const parts = decodeSourceRawEnvelope(decision.sourceRaw ?? "");
+    const { raw } = await deferredSkDocumentRawFixture(
+      decision.sourceRaw ?? panic("Missing source envelope"),
+    );
+    const parts = decodeSourceRawEnvelope(raw);
     expect(parts).not.toBeNull();
-    expect(recorded.toSorted()).toEqual(Object.keys(parts ?? {}).toSorted());
+    expect(recorded.toSorted()).toEqual(
+      [
+        ...Object.keys(parts ?? {}),
+        ...Object.keys(decodeSourceRawEnvelopeObjects(raw)),
+      ].toSorted(),
+    );
   });
 
   test("the surfaces still on the backlog name why", () => {
@@ -614,7 +670,7 @@ describe("the census and the registry agree about this adapter", () => {
         disposition.disposition === "backlog" ? [surface] : [],
     );
 
-    expect(backlog.toSorted()).toEqual(["bulk-dump", "document"]);
+    expect(backlog.toSorted()).toEqual(["bulk-dump"]);
     expect(skCourtsAdapter.key).toBe(ADAPTER_KEYS.SK_COURTS);
   });
 });
@@ -626,12 +682,12 @@ describe("derived general-court metadata", () => {
     sud: { nazov: "Okresný súd" },
   };
 
-  test("absent documents have no public API link and absent text is not published", () => {
+  test("unavailable detail has no public link or publisher URL absence assertion", () => {
     const decision = assembleSkCourtsDecision({ item, detail: null });
     expect(decision?.sourceUrl).toBeUndefined();
-    expect(
-      decision?.metadata["sourceUrlStatus"] === "not-published-by-source",
-    ).toBe(true);
+    expect(decision?.metadata["sourceUrlStatus"] === "detail-unavailable").toBe(
+      true,
+    );
     expect(decision?.textFields.headnote).toEqual({
       type: "absent",
       reason: "not_published",
@@ -640,6 +696,27 @@ describe("derived general-court metadata", () => {
       type: "absent",
       reason: "not_published",
     });
+  });
+
+  test("stored listings without detail replay with unknown publisher URL availability", () => {
+    const outcome = reparse(
+      {
+        sourceRaw: encodeSourceRawEnvelope({
+          listing: JSON.stringify(item),
+        }),
+        sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+      },
+      item.spisovaZnacka,
+    );
+    expect(outcome.type).toBe("parsed");
+    if (outcome.type !== "parsed") {
+      panic("the stored listing must be reparsable without its detail");
+    }
+    expect(outcome.result.sourceUrl).toBeUndefined();
+    expect(
+      outcome.result.metadata["sourceUrlStatus"] === "detail-unavailable",
+    ).toBe(true);
+    expect(outcome.result.metadata["statedSourceUrl"]).toBeUndefined();
   });
 
   test("published documents remain the public link, independently of a listing guid", () => {
@@ -684,6 +761,16 @@ test("rejected source links retain plain publisher-stated text", () => {
     expect(decision?.metadata).toHaveProperty("statedSourceUrl", url.trim());
     expect(decision?.metadata["metadataUrlDiagnostics"]).toBeUndefined();
   }
+});
+
+test("a successful detail without a URL states publisher absence", () => {
+  const decision = assembleSkCourtsDecision({
+    item: { spisovaZnacka: "1C/1/2024", sud: { nazov: "Okresný súd" } },
+    detail: {},
+  });
+  expect(
+    decision?.metadata["sourceUrlStatus"] === "not-published-by-source",
+  ).toBe(true);
 });
 
 describe("declared metadata URLs remain scalar across projection and reload", () => {
@@ -766,9 +853,8 @@ describe("declared metadata URLs remain scalar across projection and reload", ()
 });
 
 describe("Slovak detail refusals preserve listing-only decisions", () => {
-  const originalFetch = globalThis.fetch;
   afterEach(() => {
-    globalThis.fetch = originalFetch;
+    testFetchState.restore();
   });
 
   test.each([401, 403] as const)(
@@ -781,22 +867,26 @@ describe("Slovak detail refusals preserve listing-only decisions", () => {
         panic("the recorded decision has no listing item");
       }
       let detailRequests = 0;
-      globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
-        const url = new URL(
-          input instanceof Request ? input.url : String(input),
-        );
-        if (url.searchParams.has("page")) {
-          return Response.json({ rozhodnutieList: [listing], numFound: 1 });
-        }
-        if (url.pathname.includes("/v1/sud/")) {
-          return new Response("registry unavailable", { status: 404 });
-        }
-        expect(
-          decodeURIComponent(url.pathname).endsWith(`/${TRANSFERRED_FILE_ID}`),
-        ).toBe(true);
-        detailRequests += 1;
-        return new Response("refused", { status });
-      });
+      testFetchState.set(
+        asFetchMock(async (input: string | URL | Request) => {
+          const url = new URL(
+            input instanceof Request ? input.url : String(input),
+          );
+          if (url.searchParams.has("page")) {
+            return Response.json({ rozhodnutieList: [listing], numFound: 1 });
+          }
+          if (url.pathname.includes("/v1/sud/")) {
+            return new Response("registry unavailable", { status: 404 });
+          }
+          expect(
+            decodeURIComponent(url.pathname).endsWith(
+              `/${TRANSFERRED_FILE_ID}`,
+            ),
+          ).toBe(true);
+          detailRequests += 1;
+          return new Response("refused", { status });
+        }),
+      );
 
       const page = (await skCourtsAdapter.fetchPage(null, {})).unwrap();
       expect(detailRequests).toBe(1);
@@ -829,18 +919,20 @@ describe("Slovak detail refusals preserve listing-only decisions", () => {
       if (!isRecord(listing)) {
         panic("the recorded decision has no listing item");
       }
-      globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
-        const url = new URL(
-          input instanceof Request ? input.url : String(input),
-        );
-        if (url.searchParams.has("page")) {
-          return Response.json({ rozhodnutieList: [listing], numFound: 1 });
-        }
-        if (url.pathname.includes("/v1/sud/")) {
-          return new Response("registry unavailable", { status: 404 });
-        }
-        return await Promise.resolve(new Response("", { status }));
-      });
+      testFetchState.set(
+        asFetchMock(async (input: string | URL | Request) => {
+          const url = new URL(
+            input instanceof Request ? input.url : String(input),
+          );
+          if (url.searchParams.has("page")) {
+            return Response.json({ rozhodnutieList: [listing], numFound: 1 });
+          }
+          if (url.pathname.includes("/v1/sud/")) {
+            return new Response("registry unavailable", { status: 404 });
+          }
+          return await Promise.resolve(new Response("", { status }));
+        }),
+      );
 
       const page = (await skCourtsAdapter.fetchPage(null, {})).unwrap();
       expect(
@@ -870,16 +962,20 @@ describe("Slovak detail refusals preserve listing-only decisions", () => {
     if (!isRecord(listing)) {
       return panic("the recorded decision has no listing item");
     }
-    globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
-      const url = new URL(input instanceof Request ? input.url : String(input));
-      if (url.searchParams.has("page")) {
-        return Response.json({ rozhodnutieList: [listing], numFound: 1 });
-      }
-      if (url.pathname.includes("/v1/sud/")) {
-        return new Response("registry unavailable", { status: 404 });
-      }
-      return await Promise.resolve(answer());
-    });
+    testFetchState.set(
+      asFetchMock(async (input: string | URL | Request) => {
+        const url = new URL(
+          input instanceof Request ? input.url : String(input),
+        );
+        if (url.searchParams.has("page")) {
+          return Response.json({ rozhodnutieList: [listing], numFound: 1 });
+        }
+        if (url.pathname.includes("/v1/sud/")) {
+          return new Response("registry unavailable", { status: 404 });
+        }
+        return await Promise.resolve(answer());
+      }),
+    );
     return listing;
   };
 

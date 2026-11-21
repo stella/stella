@@ -15,32 +15,6 @@
     "getCli": "Töltse le a CLI-t",
     "startFree": "Kezdje el ingyen"
   },
-  "demo": {
-    "addView": "Nézet hozzáadása",
-    "askStella": "Kérdezze a stella alkalmazást",
-    "close": "Bezárás",
-    "documentType": "Dokumentumtípus",
-    "documents": "Dokumentumok",
-    "dueDate": "Határidő",
-    "files": "Fájlok",
-    "filter": "Szűrés",
-    "matters": "Ügyek",
-    "notes": "Jegyzetek",
-    "overview": "Áttekintés",
-    "sectionBody": "Közvetlenül a működő termékből rögzítve. Amit itt lát, azt is használja.",
-    "sectionLabel": "A valódi termék",
-    "sectionTitle": "stella, úgy, ahogy van.",
-    "sort": "Rendezés",
-    "source": "Forrás",
-    "sources": "Források",
-    "status": "Állapot",
-    "statusActive": "Aktív",
-    "statusClosed": "Lezárt",
-    "statusInReview": "Ellenőrzés alatt",
-    "statusOnHold": "Felfüggesztve",
-    "table": "Táblázat",
-    "todos": "Feladatok"
-  },
   "footer": {
     "agent": "AI-ügynök",
     "anonymization": "Anonimizálás",
@@ -56,8 +30,8 @@
     "privacy": "Adatvédelem",
     "publicData": "Nyilvános adatok",
     "resources": "Források",
-    "sourceCode": "Forráskód",
     "status": "Szolgáltatás állapota",
+    "support": "Támogatás",
     "tabularReview": "Táblázatos ellenőrzés",
     "tagline": "Nyílt jogi munkaterület a fontos munkához.",
     "templates": "Sablonok",
@@ -89,12 +63,23 @@
   },
   "nav": {
     "aiFactSheet": "AI-adatlap",
-    "aiFactSheetBlurb": "A stella géppel olvasható formában.",
-    "beta": "Béta",
     "blog": "Blog",
     "changelog": "Változásnapló",
     "chooseLanguage": "Válasszon nyelvet",
     "docxEditor": "Önálló DOCX-szerkesztő",
+    "featurePreviews": {
+      "documents": {
+        "comments": "Megjegyzések"
+      },
+      "matters": {
+        "done": "Kész",
+        "inProgress": "Folyamatban",
+        "open": "Nyitott"
+      },
+      "research": {
+        "caseLaw": "Ítélkezési gyakorlat"
+      }
+    },
     "github": "stella a GitHubon",
     "openMenu": "Navigáció megnyitása",
     "pillars": {
@@ -660,7 +645,7 @@
           "question": "Honnan származnak az adatok?"
         },
         "1": {
-          "answer": "Két lista, mindkettő bővül. A csatlakoztatott nyilvántartások között már ott van az ARES (Csehország), a Companies House (Egyesült Királyság), a SEC EDGAR (Egyesült Államok), a KRS (Lengyelország), a PRH (Finnország) és a VIES (uniós áfa). A nyilvántartásokon túl a hivatalos források joghatóságról joghatóságra kerülnek be; Csehországnak, Spanyolországnak és Tajvannak például már vannak összekapcsolt forrásai, az ítélkezési gyakorlat olvasónézete pedig úgy készült, hogy joghatóság szerint lehessen böngészni és szűrni, ahogy újabb hivatalos források kerülnek be.",
+          "answer": "A nyilvános ítélkezési gyakorlat olvasója jelenleg cseh határozatokat tesz elérhetővé. A csatlakoztatott cégnyilvántartások közé tartozik az ARES (Csehország), a Companies House (Egyesült Királyság), a SEC EDGAR (Egyesült Államok), a KRS (Lengyelország), a PRH (Finnország) és a VIES (uniós áfa).",
           "question": "Mely joghatóságokra és nyilvántartásokra terjed ki?"
         },
         "2": {
@@ -884,6 +869,7 @@
       }
     },
     "ui": {
+      "browseLaw": "A nyilvános jogi adatbázis böngészése",
       "capabilities": "Képességek",
       "exploreMore": "Fedezzen fel többet",
       "faq": "GYIK",
@@ -923,8 +909,8 @@
           "title": "Csevegés és tudáseszközök"
         },
         "4": {
-          "body": "Egy asztali alkalmazás helyi hídként szolgál az Office-dokumentumok szerkesztéséhez a stella alkalmazásból.",
-          "title": "Asztali híd"
+          "body": "Megnyitja a stella alkalmazás Office-dokumentumait az Ön számítógépén használt alkalmazásokban, és visszamenti a módosításokat a stella alkalmazásba. A vágólapelőzményeket is megőrzi, kizárólag az Ön eszközén.",
+          "title": "Asztali alkalmazás"
         },
         "5": {
           "body": "A mentett módosítások és feltöltések dokumentumverziókká válnak, így az aktuális fájl és az előzménye együtt marad.",
@@ -983,9 +969,11 @@
     "bringWorkspaceToFront": "A stella alkalmazás munkaterületének előtérbe hozása",
     "controlBody": "A stella <gh>nyílt forráskódú</gh> jogi szoftver, amelyet saját maga is üzemeltethet: vizsgálja meg a kódot, futtassa a maga módján, és exportáljon mindent szabványos formátumokban.",
     "controlTitle": "Tartsa kézben a rendszerét.",
-    "dataBody": "Ítélkezési gyakorlat és cégnyilvántartások közvetlenül az ügyben, minden joghatóságból, amelyben dolgozik. Az anonimizálás távol tartja az azonosító adatokat az AI-tól.",
+    "dataBody": "Olvasson cseh ítélkezési gyakorlatot a jogkérdésekhez fűzött AI-megjegyzésekkel, kiemelésekkel, aláhúzásokkal, ügyvédi hozzászólásokkal és forráshivatkozásos válaszokkal. Keressen cégeket a csatlakoztatott hivatalos nyilvántartásokban, és hivatkozzon a forrásokra az ügyből.",
+    "dataConstitutionalAlt": "A cseh Alkotmánybíróság IV.ÚS 1394/24 számú határozata számozott bekezdésekkel, a jogkérdéshez fűzött egy AI-megjegyzéssel, egy kiemeléssel, egy aláhúzással, egy ügyvédi hozzászólással és két kérdést, valamint forráshivatkozásos válaszokat tartalmazó beszélgetéssel.",
     "dataEyebrow": "Jogi adatok",
-    "dataMainAlt": "Egy hivatalos bírósági határozat a stella alkalmazásban megnyitva",
+    "dataMainAlt": "A cseh Legfelsőbb Bíróság 27 Cdo 59/2022 számú határozata számozott bekezdésekkel, a jogkérdéshez fűzött egy AI-megjegyzéssel, egy kiemeléssel, egy aláhúzással, egy ügyvédi hozzászólással és két kérdést, valamint forráshivatkozásos válaszokat tartalmazó beszélgetéssel.",
+    "dataSupremeAlt": "A cseh Legfelsőbb Bíróság 27 Cdo 1525/2025 számú határozata számozott bekezdésekkel, a jogkérdéshez fűzött egy AI-megjegyzéssel, egy kiemeléssel, egy aláhúzással, egy ügyvédi hozzászólással és két kérdést, valamint forráshivatkozásos válaszokat tartalmazó beszélgetéssel.",
     "dataTitle": "Ítélkezési gyakorlat és nyilvántartások kéznél.",
     "exploreAgent": "AI-ügynök felfedezése",
     "exploreAnonymization": "Anonimizálás felfedezése",

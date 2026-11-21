@@ -1,0 +1,75 @@
+import { panic } from "better-result";
+
+import { DEFAULT_CUTOFF } from "@stll/sanctions";
+import type { ParsedList } from "@stll/sanctions";
+
+import { createSanctionsMatcherPoolCore } from "@/api/lib/lists/sanctions/matcher-pool-core";
+
+export const checkBundledSanctionsMatcher = async (): Promise<void> => {
+  const failures: string[] = [];
+  // Work the pool starts without awaiting is joined after close, so its
+  // failures land in `failures` instead of escaping the smoke.
+  const detachedWork: Promise<void>[] = [];
+  const pool = createSanctionsMatcherPoolCore({
+    deadlineMs: 10_000,
+    reportFailure: ({ reason }) => {
+      failures.push(reason);
+    },
+    detach: (work, _context, onRejection) => {
+      detachedWork.push(Promise.try(work).then(() => undefined, onRejection));
+    },
+  });
+  const list = {
+    version: { source: "eu", publishedAt: "2026-09-20", fileId: null },
+    entries: [
+      {
+        source: "eu",
+        issuer: "EU",
+        sourceId: "smoke",
+        referenceNumber: null,
+        entityType: "organisation",
+        names: [{ name: "Česká společnost", quality: "strong" }],
+        birthDates: [],
+        nationalities: [],
+        identifiers: [],
+        addresses: [],
+        programme: null,
+        legalBasis: null,
+        listedOn: null,
+        sourceUrl: "https://eur-lex.europa.eu/",
+      },
+    ],
+  } satisfies ParsedList;
+  try {
+    // The public path: index the edition once, then screen it from the cache.
+    const response = await pool.run(async (session) => {
+      const indexed = await session.load({
+        source: "eu",
+        editionId: "smoke",
+        list,
+      });
+      return indexed === "indexed"
+        ? await session.match({
+            source: "eu",
+            editionId: "smoke",
+            list: null,
+            query: { name: "Česká společnost", entityType: "organisation" },
+            cutoff: DEFAULT_CUTOFF,
+            limit: 1,
+          })
+        : null;
+    });
+    if (
+      response.status !== "completed" ||
+      response.value?.status !== "screened" ||
+      response.value.result.possibleMatches.at(0)?.entry.sourceId !== "smoke"
+    ) {
+      panic(
+        `Sanctions smoke pool did not screen its edition: ${failures.join(",")}`,
+      );
+    }
+  } finally {
+    await pool.close();
+    await Promise.all(detachedWork);
+  }
+};

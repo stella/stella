@@ -12,7 +12,7 @@ import type { DocumentReferenceMatch } from "@stll/api-contract";
 import { mapWithConcurrency } from "@stll/concurrency";
 
 import { api } from "@/lib/api";
-import { shouldRetryAPIRequest, unwrapEden } from "@/lib/errors/api";
+import { shouldRetryAPIRequest, unwrapApiResponse } from "@/lib/errors/api";
 import type { DocumentReferenceEvidence } from "@/lib/files/document-reference";
 import {
   couldCarryDocumentReference,
@@ -92,7 +92,7 @@ const documentReferenceOptions = ({
       if (response.error?.status === NOT_FOUND_STATUS) {
         return null;
       }
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
   });
 

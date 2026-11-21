@@ -1,18 +1,20 @@
+// parser-output-unchanged: the cz-ns-sbirka adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
+// parser-output-unchanged: the br-tjdft adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
 /**
  * Lazy adapter module registry.
  *
- * Shared between health-check.ts and update-fixtures.ts to
+ * Shared between health-check.ts and update-adapter-fixtures.ts to
  * avoid duplicating the adapter import map. Uses dynamic
  * imports to avoid pulling in the full app dependency graph.
  */
 
 import { panic } from "better-result";
 
-import type { SourceAdapter } from "@/api/handlers/case-law/ingestion/adapter";
 import {
   ADAPTER_KEYS,
   type AdapterKey,
 } from "@/api/lib/legal-search/ingestion-constants";
+import type { SourceAdapter } from "@/api/lib/legal-search/ingestion-types";
 
 type AdapterLoader = () => Promise<SourceAdapter>;
 
@@ -27,6 +29,8 @@ export const ADAPTER_MODULES = {
   [ADAPTER_KEYS.CZ_US]: async () => (await import("./cz-us")).czUsAdapter,
   [ADAPTER_KEYS.CZ_REGIONAL]: async () =>
     (await import("./cz-regional")).czRegionalAdapter,
+  [ADAPTER_KEYS.CZ_UOHS]: async () => (await import("./cz-uohs")).czUohsAdapter,
+  [ADAPTER_KEYS.BR_TST]: async () => (await import("./br-tst")).brTstAdapter,
   [ADAPTER_KEYS.SK_COURTS]: async () =>
     (await import("./sk-courts")).skCourtsAdapter,
   [ADAPTER_KEYS.SK_US]: async () => (await import("./sk-us")).skUsAdapter,
@@ -55,10 +59,16 @@ export const ADAPTER_MODULES = {
     (await import("./at-findok")).atFindokAdapter,
   [ADAPTER_KEYS.EU_ECJ]: async () => (await import("./eu-ecj")).euEcjAdapter,
   [ADAPTER_KEYS.HU_BHGY]: async () => (await import("./hu-bhgy")).huBhgyAdapter,
+  [ADAPTER_KEYS.UK_FCL]: async () => (await import("./uk-fcl")).ukFclAdapter,
   [ADAPTER_KEYS.PL_KIS]: async () => (await import("./pl-kis")).plKisAdapter,
   [ADAPTER_KEYS.PL_UODO]: async () => (await import("./pl-uodo")).plUodoAdapter,
   [ADAPTER_KEYS.PL_UOKIK]: async () =>
     (await import("./pl-uokik")).plUokikAdapter,
+  [ADAPTER_KEYS.BR_TJDFT]: async () =>
+    (await import("./br-tjdft")).brTjdftAdapter,
+  [ADAPTER_KEYS.CZ_NS_SBIRKA]: async () =>
+    (await import("./cz-ns-sbirka")).czNsSbirkaAdapter,
+  [ADAPTER_KEYS.CZ_ISIR]: async () => (await import("./cz-isir")).czIsirAdapter,
 } as const satisfies Record<AdapterKey, AdapterLoader>;
 
 const adapterKeyFromString = (key: string): AdapterKey | undefined =>

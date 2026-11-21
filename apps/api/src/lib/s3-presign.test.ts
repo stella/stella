@@ -10,7 +10,13 @@ import {
   mock,
   test,
 } from "bun:test";
+import { once } from "node:events";
+import { createServer } from "node:http";
 
+import { rejectionOf } from "@stll/property-testing/rejection";
+import { sha256Base64 as hashSha256Base64 } from "@stll/sha256/node";
+
+import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
 import { getS3 } from "@/api/lib/s3";
 import {
   copyObject,
@@ -20,9 +26,9 @@ import {
   hasScopedSessionTimeForPresign,
   headObject,
   isS3KeyInSigningScope,
-  prewarmScopedDownloadSigning,
   presignDownloadUrl,
   presignUploadUrl,
+  prewarmScopedDownloadSigning,
   readTenantS3ArrayBuffer,
   readTenantS3ObjectSize,
   resetAwsS3ClientForTesting,
@@ -32,12 +38,13 @@ import {
   setTenantS3OperationHooksForTesting,
   writeTenantS3Object,
 } from "@/api/lib/s3-presign";
-import type { S3SigningScope } from "@/api/lib/s3-presign";
+import type {
+  PresignDownloadOptions,
+  S3SigningScope,
+} from "@/api/lib/s3-presign";
+import { SYNTHETIC_PRINCIPAL } from "@/api/lib/synthetic-principal/constants";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
-
-const sha256Base64 = (data: string): string =>
-  new Bun.CryptoHasher("sha256").update(data).digest("base64");
 
 const parseSignedHeaders = (url: string): Set<string> => {
   const parsed = new URL(url);
@@ -49,8 +56,11 @@ const parseSignedHeaders = (url: string): Set<string> => {
 };
 
 const HELLO_BODY = "hello";
-const HELLO_SHA256_BASE64 = sha256Base64(HELLO_BODY);
+const HELLO_SHA256_BASE64 = hashSha256Base64(HELLO_BODY);
 const HELLO_BYTES = new TextEncoder().encode(HELLO_BODY);
+type TenantS3OperationHooks = Required<
+  Parameters<typeof setTenantS3OperationHooksForTesting>[0]
+>;
 
 describe("isS3KeyInSigningScope", () => {
   test("accepts document keys under the requested workspace prefix", () => {
@@ -123,6 +133,7 @@ describe("presignUploadUrl", () => {
 
   test("binds checksum, content-length, and content-type into the signature", async () => {
     const result = await presignUploadUrl({
+      userId: null,
       key: "tmp/presign-shape-probe",
       expiresIn: 60,
       contentType: "application/octet-stream",
@@ -163,11 +174,12 @@ describe("presignUploadUrl", () => {
 
   test("signs the PUT method, not GET", async () => {
     const result = await presignUploadUrl({
+      userId: null,
       key: "tmp/presign-method-probe",
       expiresIn: 60,
       contentType: "text/plain",
       contentLength: 1,
-      sha256Base64: sha256Base64("x"),
+      sha256Base64: hashSha256Base64("x"),
     });
     expect(Result.isOk(result)).toBe(true);
     if (!Result.isOk(result)) {
@@ -186,6 +198,7 @@ describe("presignUploadUrl", () => {
 
   test("binds temporary upload tagging into a request header", async () => {
     const result = await presignUploadUrl({
+      userId: null,
       key: "org_1/ws_1/tmp/presign-tagging-probe",
       expiresIn: 60,
       contentType: "application/octet-stream",
@@ -213,12 +226,146 @@ describe("presignUploadUrl", () => {
 describe("presignDownloadUrl", () => {
   test("requires storage to return the shared no-store cache policy", async () => {
     const url = await presignDownloadUrl("org_1/ws_1/file_1.pdf", {
+      userId: null,
       expiresIn: 60,
+      source: { kind: "background", reason: "storage cache policy test" },
+      readSessionAuthority: async () => null,
     });
 
     expect(new URL(url).searchParams.get("response-cache-control")).toBe(
       "private, no-store",
     );
+  });
+
+  const syntheticOptions = (expiresAt: Date) =>
+    ({
+      userId: SYNTHETIC_PRINCIPAL.user.id,
+      organizationId: SYNTHETIC_PRINCIPAL.org.id,
+      expiresIn: 900,
+      source: { kind: "request", sessionId: "synthetic-session-download" },
+      readSessionAuthority: async () => ({
+        sessionId: "synthetic-session-download",
+        expiresAt,
+      }),
+      scope: { organizationId: SYNTHETIC_PRINCIPAL.org.id },
+    }) satisfies PresignDownloadOptions;
+
+  test("bounds a dedicated-principal download to the configured lifetime", async () => {
+    const url = await presignDownloadUrl(
+      `${SYNTHETIC_PRINCIPAL.org.id}/file.pdf`,
+      syntheticOptions(new Date(Date.now() + 5 * 60 * 1000)),
+    );
+
+    expect(
+      Number(new URL(url).searchParams.get("X-Amz-Expires")),
+    ).toBeLessThanOrEqual(60);
+  });
+
+  test("bounds a dedicated-principal download to the remaining session lifetime", async () => {
+    const url = await presignDownloadUrl(
+      `${SYNTHETIC_PRINCIPAL.org.id}/file.pdf`,
+      syntheticOptions(new Date(Date.now() + 20_000)),
+    );
+
+    expect(
+      Number(new URL(url).searchParams.get("X-Amz-Expires")),
+    ).toBeLessThanOrEqual(20);
+  });
+
+  test("keeps the requested lifetime for a regular user's background download", async () => {
+    const url = await presignDownloadUrl("org_1/file.pdf", {
+      userId: "user_1",
+      organizationId: "org_1",
+      expiresIn: 900,
+      source: { kind: "background", reason: "regular-user export" },
+      readSessionAuthority: async () => null,
+      scope: { organizationId: "org_1" },
+    });
+
+    expect(new URL(url).searchParams.get("X-Amz-Expires")).toBe("900");
+  });
+
+  test("refuses dedicated-principal uploads", async () => {
+    expect(
+      await rejectionOf(
+        presignUploadUrl({
+          userId: SYNTHETIC_PRINCIPAL.user.id,
+          key: `${SYNTHETIC_PRINCIPAL.org.id}/file.pdf`,
+          expiresIn: 900,
+          contentType: "application/pdf",
+          contentLength: HELLO_BYTES.byteLength,
+          sha256Base64: HELLO_SHA256_BASE64,
+          scope: { organizationId: SYNTHETIC_PRINCIPAL.org.id },
+        }),
+      ),
+    ).toMatchObject({
+      status: 403,
+      code: "account_access_unavailable",
+    });
+  });
+
+  test.each([
+    {
+      name: "monitoring user in another organization",
+      options: {
+        ...syntheticOptions(new Date(Date.now() + 60_000)),
+        organizationId: "org_1",
+        scope: { organizationId: "org_1" },
+      },
+    },
+    {
+      name: "another user in the monitoring organization",
+      options: {
+        ...syntheticOptions(new Date(Date.now() + 60_000)),
+        userId: "user_1",
+      },
+    },
+    {
+      name: "monitoring file in another organization",
+      key: "org_1/file.pdf",
+      options: {
+        ...syntheticOptions(new Date(Date.now() + 60_000)),
+        scope: { organizationId: "org_1" },
+      },
+    },
+    {
+      name: "inactive dedicated session",
+      options: {
+        ...syntheticOptions(new Date(Date.now() + 60_000)),
+        readSessionAuthority: async () => null,
+      },
+    },
+    {
+      name: "dedicated-principal email with other identifiers",
+      options: {
+        userId: "user_1",
+        organizationId: "org_1",
+        email: SYNTHETIC_PRINCIPAL.user.email,
+        expiresIn: 900,
+        source: { kind: "request", sessionId: "session_1" },
+        readSessionAuthority: async () => null,
+        scope: { organizationId: "org_1" },
+      },
+    },
+    {
+      name: "dedicated principal without a request session",
+      options: {
+        ...syntheticOptions(new Date(Date.now() + 60_000)),
+        source: { kind: "background", reason: "scheduled export" },
+      },
+    },
+  ])("refuses $name", async ({ key, options }) => {
+    expect(
+      await rejectionOf(
+        presignDownloadUrl(
+          key ?? `${SYNTHETIC_PRINCIPAL.org.id}/file.pdf`,
+          options,
+        ),
+      ),
+    ).toMatchObject({
+      status: 403,
+      code: "account_access_unavailable",
+    });
   });
 });
 
@@ -363,12 +510,16 @@ describe("scoped object operations", () => {
   });
   const installHooks = () => {
     const hooks = {
-      headObjectSize: mock(
+      headObjectSize: mock<TenantS3OperationHooks["headObjectSize"]>(
         async (_client, _command, _signal) => HELLO_BYTES.byteLength,
       ),
-      readObject: mock(async (_client, _command, _signal) => HELLO_BYTES),
+      readObject: mock<TenantS3OperationHooks["readObject"]>(
+        async (_client, _command, _signal) => HELLO_BYTES,
+      ),
       resolveClient: mock(async () => client),
-      writeObject: mock(async (_client, _command, _signal) => undefined),
+      writeObject: mock<TenantS3OperationHooks["writeObject"]>(
+        async (_client, _command, _signal) => undefined,
+      ),
     } satisfies Parameters<typeof setTenantS3OperationHooksForTesting>[0];
     setTenantS3OperationHooksForTesting(hooks);
     return hooks;
@@ -413,7 +564,7 @@ describe("scoped object operations", () => {
     expect(hooks.readObject).toHaveBeenCalledTimes(1);
     const call = hooks.readObject.mock.calls.at(0);
     expect(call?.at(0)).toBe(client);
-    expect(call?.at(1).input).toEqual({
+    expect(call?.[1].input).toEqual({
       Bucket: "stella",
       Key: "org_1/ws_1/file.pdf",
     });
@@ -439,7 +590,7 @@ describe("scoped object operations", () => {
     });
     const call = hooks.headObjectSize.mock.calls.at(0);
     expect(call?.at(0)).toBe(client);
-    expect(call?.at(1).input).toEqual({
+    expect(call?.[1].input).toEqual({
       Bucket: "stella",
       Key: "org_1/ws_1/file.pdf",
     });
@@ -479,7 +630,7 @@ describe("scoped object operations", () => {
     expect(hooks.writeObject).toHaveBeenCalledTimes(1);
     const call = hooks.writeObject.mock.calls.at(0);
     expect(call?.at(0)).toBe(client);
-    expect(call?.at(1).input).toEqual({
+    expect(call?.[1].input).toEqual({
       Body: HELLO_BYTES,
       Bucket: "stella",
       ContentType: "application/pdf",
@@ -693,6 +844,109 @@ describe("scoped object operations over the S3 wire protocol", () => {
       new Uint8Array(await readTenantS3ArrayBuffer({ key, scope, signal })),
     ).toEqual(HELLO_BYTES);
   });
+
+  test.each(["oversized", "undeclared"] as const)(
+    "%s object lengths are refused through the real tenant client",
+    async (length) => {
+      const key = "org_1/ws_1/document.pdf";
+      const scope = { organizationId: "org_1", workspaceId: "ws_1" };
+      const requests: { method: string | undefined; path: string }[] = [];
+      // Bun's streaming Response strips Content-Length. A framed response
+      // keeps the declared length while sending only a tiny unfinished body.
+      const server = createServer((request, response) => {
+        requests.push({
+          method: request.method,
+          path: new URL(request.url ?? "/", "http://127.0.0.1").pathname,
+        });
+        response.setHeader("content-type", "application/pdf");
+        if (length === "oversized") {
+          response.setHeader(
+            "content-length",
+            FILE_SIZE_LIMIT_BYTES.document + 1,
+          );
+        }
+        response.write(HELLO_BYTES);
+      }).listen(0, "127.0.0.1");
+      await once(server, "listening");
+      const address = server.address();
+      if (address === null || typeof address === "string") {
+        await server[Symbol.asyncDispose]();
+        throw new Error("Expected a loopback TCP listener");
+      }
+      const client = new AwsS3Client({
+        endpoint: `http://127.0.0.1:${address.port}`,
+        forcePathStyle: true,
+        region: "us-east-1",
+        credentials: {
+          accessKeyId: "test-access-key",
+          secretAccessKey: "test-secret-key",
+        },
+      });
+      const receivedLengths: unknown[] = [];
+      client.middlewareStack.add(
+        (handleRequest) => async (args) => {
+          const result = await handleRequest(args);
+          receivedLengths.push(
+            result.output !== undefined && "ContentLength" in result.output
+              ? result.output.ContentLength
+              : undefined,
+          );
+          return result;
+        },
+        {
+          step: "deserialize",
+          priority: "high",
+          name: "observeTenantBodyLength",
+        },
+      );
+      setTenantS3OperationHooksForTesting({
+        resolveClient: async () => client,
+      });
+      try {
+        const controller = new AbortController();
+        const failure = await rejectionOf(
+          readTenantS3ArrayBuffer({ key, scope, signal: controller.signal }),
+        );
+
+        expect(receivedLengths).toEqual([
+          length === "oversized"
+            ? FILE_SIZE_LIMIT_BYTES.document + 1
+            : undefined,
+        ]);
+        expect(failure).toMatchObject({
+          _tag: "S3PresignError",
+          message: "S3 object length does not satisfy the document byte limit",
+        });
+        expect(requests).toEqual([{ method: "GET", path: `/stella/${key}` }]);
+        expect(controller.signal.aborted).toBe(false);
+      } finally {
+        client.destroy();
+        server.closeAllConnections();
+        await server[Symbol.asyncDispose]();
+      }
+    },
+  );
+
+  test("caller cancellation stops a tenant read while the store holds it", async () => {
+    const key = "org_1/ws_1/document.pdf";
+    const scope = { organizationId: "org_1", workspaceId: "ws_1" };
+    fake.put("stella", key, HELLO_BYTES, "application/pdf");
+    const held = fake.holdNext({ method: "GET", keyIncludes: key });
+    const controller = new AbortController();
+    const pending = rejectionOf(
+      readTenantS3ArrayBuffer({ key, scope, signal: controller.signal }),
+    );
+    try {
+      await held.reached;
+      controller.abort(
+        new DOMException("Document read cancelled", "AbortError"),
+      );
+      expect(await pending).toMatchObject({ name: "AbortError" });
+      expect(fake.requests.map(({ method }) => method)).toEqual(["GET"]);
+    } finally {
+      held.release();
+    }
+  });
 });
 
 // -----------------------------------------------------------------
@@ -751,6 +1005,7 @@ describe.skipIf(!rustfsReachable)(
 
     test("S3 rejects a PUT whose body sha256 does not match the signed checksum", async () => {
       const presign = await presignUploadUrl({
+        userId: null,
         key: probeKey,
         expiresIn: 60,
         contentType: "application/octet-stream",
@@ -782,6 +1037,7 @@ describe.skipIf(!rustfsReachable)(
 
     test("S3 accepts a matching PUT and Bun's native reader returns its bytes", async () => {
       const presign = await presignUploadUrl({
+        userId: null,
         key: probeKey,
         expiresIn: 60,
         contentType: "application/octet-stream",
@@ -825,6 +1081,7 @@ describe.skipIf(!rustfsReachable)(
       // Seed source via a presigned PUT so the helper's auth path
       // matches what finalize will use in real traffic.
       const seed = await presignUploadUrl({
+        userId: null,
         key: sourceKey,
         expiresIn: 60,
         contentType: "application/octet-stream",

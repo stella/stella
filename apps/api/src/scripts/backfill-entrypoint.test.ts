@@ -50,12 +50,47 @@ describe("converted backfill entrypoints wire operator input to the gated runtim
       },
     },
     {
+      entrypoint: "legislation-corpus-storage",
+      args: ["--apply", "--page", "3", "--limit", "456", "--after", after],
+      expected: {
+        name: `legislation-corpus-storage:${after}`,
+        tableName: "legislation_documents",
+        initialSize: 3,
+      },
+    },
+    {
+      entrypoint: "legislation-version-changes",
+      args: [
+        "--apply",
+        "--page",
+        "12",
+        "--limit",
+        "456",
+        "--after",
+        `${after}//eli/cz/sb/2012/89`,
+      ],
+      expected: {
+        name: `legislation-version-changes:${after}//eli/cz/sb/2012/89`,
+        tableName: "legislation_documents",
+        initialSize: 12,
+      },
+    },
+    {
       entrypoint: "property-roles",
       args: [],
       expected: {
         name: "property-roles",
         tableName: "properties",
         initialSize: 234,
+      },
+    },
+    {
+      entrypoint: "cz-us-judge-relink",
+      args: [],
+      expected: {
+        name: "cz-us-judge-relink",
+        tableName: "case_law_decision_judges",
+        initialSize: 500,
       },
     },
     {
@@ -129,5 +164,10 @@ describe("converted backfill entrypoints wire operator input to the gated runtim
         args: ["--apply", "--dry-run"],
       }),
     ).toThrow("--apply contradicts --dry-run");
+    expect(() =>
+      backfillEntrypoints["legislation-version-changes"]({
+        args: ["--apply=yes"],
+      }),
+    ).toThrow("--apply and --dry-run do not accept values");
   });
 });

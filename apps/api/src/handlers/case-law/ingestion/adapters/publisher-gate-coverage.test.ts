@@ -2,10 +2,9 @@ import { describe, expect, test } from "bun:test";
 import { readdirSync } from "node:fs";
 import nodePath from "node:path";
 
-const caseLawRoot = nodePath.resolve(
-  new URL(".", import.meta.url).pathname,
-  "../..",
-);
+import { repoRelativePath } from "@stll/portable-path";
+
+const caseLawRoot = nodePath.resolve(import.meta.dirname, "../..");
 
 /**
  * The trees a publisher request can leave from: the crawl, the backfills and
@@ -38,9 +37,6 @@ const DIRECT_FETCH_MODULES = {
    * court site's slot before each request.
    */
   "judges/import-cz-us-roster.ts": "reserve",
-  /** Test-only helpers, not a path any crawl takes. */
-  "ingestion/adapters/test-utils.ts": "test-only",
-  "ingestion/adapters/update-fixtures.ts": "test-only",
 } as const;
 
 /**
@@ -88,9 +84,10 @@ const modulesUnder = (tree: string): readonly string[] =>
         !entry.name.endsWith(".test.ts"),
     )
     .map((entry) =>
-      nodePath
-        .relative(caseLawRoot, nodePath.resolve(entry.parentPath, entry.name))
-        .replaceAll(nodePath.sep, "/"),
+      repoRelativePath(
+        caseLawRoot,
+        nodePath.resolve(entry.parentPath, entry.name),
+      ),
     );
 
 const scannedModules = SCANNED_TREES.flatMap(modulesUnder).toSorted();
@@ -118,7 +115,7 @@ const expectNoUngatedCall = (entry: string, code: string): void => {
 describe("every publisher request goes through the gate", () => {
   test("the patterns match a module that reaches the network directly", () => {
     const ungated = [
-      "const r = await fetchWithTimeout(url, { timeoutMs: 1 });",
+      "const r = await fetchWithTimeout(url, { timeoutMs: 1 });", // timeout under test
       "await fetch(url);",
       "await globalThis.fetch(url);",
       'import { x } from "@stll/fetch";',
@@ -146,15 +143,13 @@ describe("every publisher request goes through the gate", () => {
       expect(scannedModules).toContain(entry);
     }
 
-    for (const [entry, role] of Object.entries(DIRECT_FETCH_MODULES)) {
-      if (role !== "reserve") {
-        continue;
-      }
+    for (const entry of Object.keys(DIRECT_FETCH_MODULES)) {
       // A gate wrapper earns its exemption by reserving; one that stopped
       // would otherwise keep the exemption and spend nothing.
       expect(await sourceOf(entry)).toMatch(
         /createPublisherSlot|reservePublisherSlot|reservePublisherGateSlot|createPublisherRequestSlot|createPublisherGateSlot/u,
       );
+      expect(await sourceOf(entry)).toContain("limitPublisherResponse");
     }
   });
 

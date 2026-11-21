@@ -1,0 +1,1797 @@
+//! Optional transcription by stella AI. Only when the server enables cloud
+//! dictation for the linked account and the user chose it does the captured
+//! audio leave this computer: it goes, as WAV chunks the API's limits admit,
+//! to that account, with a model its region offers, the dictation language
+//! and, for a model that reads vocabulary, the speaker's custom words.
+//! Audio, text and custom words are never logged or stored here.
+//!
+//! Each stretch of speech is uploaded as soon as the speaker pauses, through
+//! one [`CloudSession`] per dictation. The choice is read again before every
+//! chunk; once it is no longer stella AI, or dictation is off, no further
+//! chunk is sent. When stella AI cannot transcribe and the speech model is
+//! installed, the whole dictation is transcribed on this computer instead:
+//! the more private destination. A dictation set to this computer never goes
+//! to stella AI.
+
+#![cfg_attr(
+  not(dictation),
+  allow(dead_code, reason = "only builds with the speech engine transcribe")
+)]
+
+use std::{
+  cell::{Cell, RefCell},
+  future::Future,
+  ops::Range,
+  sync::OnceLock,
+  time::Duration,
+};
+
+use serde::{Deserialize, Serialize};
+use tauri::{AppHandle, Manager};
+
+use crate::{
+  account::AccountRequest,
+  dictation::{self, Failure},
+  dictation_audio::{MODEL_SAMPLE_RATE, holds_speech, samples_in},
+  dictation_cleanup::{self, dictation_account},
+  dictation_models::{self, ListRead, Looked},
+  feature_gate::{DesktopFeature, FeatureGates},
+  http_client::{DesktopHttpClient, HttpClientOptions},
+  logging::{json_cause_logged, request_cause_logged},
+};
+
+const FAILURE: &str = "dictation transcription request failed";
+const UNAVAILABLE: &str = "stella AI transcription is not enabled for this account";
+const STOPPED: &str = "dictation no longer goes to stella AI";
+const TIMED_OUT: &str = "stella AI transcription timed out";
+/// stella AI does not take the model a chunk named: the model list changed.
+const MODEL_REFUSED: &str = "stella AI refused the transcription model";
+/// The code the API answers with when it no longer offers a named model.
+const MODEL_UNAVAILABLE_CODE: &str = "transcription_model_unavailable";
+/// The longest refusal read for its code.
+const MAX_REFUSAL_BYTES: usize = 16 * 1024;
+/// One chunk's upload and transcription.
+pub const CHUNK_TIMEOUT: Duration = Duration::from_secs(30);
+/// Every request of one dictation together, account and model reads
+/// included; time spent waiting for the speaker's next stretch does not
+/// count. Past it the dictation falls back as any other failure does.
+pub const DEADLINE: Duration = Duration::from_secs(120);
+/// The account read, bounded as cleanup bounds it.
+const ACCOUNT_TIMEOUT: Duration = dictation_cleanup::TIMEOUT;
+const MODELS_TIMEOUT: Duration = Duration::from_secs(15);
+const MAX_RESPONSE_BYTES: usize = 1024 * 1024;
+const WAV_HEADER_BYTES: usize = 44;
+/// The stretch a chunk boundary is cut in, and how far before the limit it
+/// is looked for.
+const QUIET_WINDOW_MILLIS: usize = 200;
+const CUT_SEARCH_MILLIS: usize = 5_000;
+/// A final chunk shorter than this joins the one before it.
+const MIN_CHUNK_MILLIS: usize = 1_000;
+/// How much of the second a cut keeps in reserve a joined chunk may use.
+const JOIN_RESERVE_MILLIS: usize = 500;
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct Contract {
+  models_path: String,
+  /// Asks for the labeled model list this version shows.
+  models_labeled_query: String,
+  /// Asks also for models whose provider keeps the audio, which this
+  /// version shows only with a warning.
+  models_retention_query: String,
+  transcribe_path: String,
+  /// Where a recording's transcript is filed in a matter.
+  transcripts_path: String,
+  /// Where the recording uploaded into a transcript's folder is finalized.
+  transcript_audio_path: String,
+  max_audio_bytes: usize,
+  max_audio_seconds: usize,
+  /// How many custom words one chunk may carry, and how long each may be in
+  /// UTF-16 code units.
+  max_vocabulary_terms: usize,
+  max_vocabulary_term_length: usize,
+  /// The largest recording a transcript's folder takes.
+  max_transcript_audio_bytes: u64,
+}
+
+const CONTRACT: &str = include_str!(
+  "../../../../packages/api-contract/src/desktop-dictation-transcription.json"
+);
+
+/// How many custom words the API takes, and how long each may be.
+pub(crate) fn vocabulary_limits() -> crate::dictation_words::Limits {
+  crate::dictation_words::Limits {
+    words: contract().max_vocabulary_terms,
+    length: contract().max_vocabulary_term_length,
+  }
+}
+
+/// Where a recording's transcript is filed in a matter.
+pub(crate) fn transcripts_path() -> &'static str {
+  &contract().transcripts_path
+}
+
+/// The largest recording a transcript's folder takes.
+pub(crate) fn max_transcript_audio_bytes() -> u64 {
+  contract().max_transcript_audio_bytes
+}
+
+fn contract() -> &'static Contract {
+  static PARSED: OnceLock<Contract> = OnceLock::new();
+  PARSED.get_or_init(|| {
+    serde_json::from_str(CONTRACT)
+      .expect("the committed dictation transcription contract must be valid")
+  })
+}
+
+/// Where the user asked dictation to be transcribed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum Destination {
+  /// The speech model on this computer; audio never leaves it.
+  Local,
+  /// stella AI; audio goes to stella and the chosen model's provider.
+  Cloud,
+}
+
+impl Destination {
+  /// The stored preference; anything but `cloud` is this computer.
+  pub fn parse(stored: Option<&str>) -> Self {
+    if stored == Some("cloud") {
+      Self::Cloud
+    } else {
+      Self::Local
+    }
+  }
+
+  pub const fn stored(self) -> &'static str {
+    match self {
+      Self::Local => "local",
+      Self::Cloud => "cloud",
+    }
+  }
+
+  /// The destination a dictation actually uses: stella AI only while the
+  /// server enables it, whatever the stored preference says.
+  pub const fn effective(self, cloud_enabled: bool) -> Self {
+    match self {
+      Self::Cloud if cloud_enabled => Self::Cloud,
+      Self::Cloud | Self::Local => Self::Local,
+    }
+  }
+}
+
+/// Whether the server enables stella AI transcription for this account.
+pub fn enabled(app: &AppHandle) -> bool {
+  app
+    .try_state::<FeatureGates>()
+    .is_some_and(|gates| gates.is_enabled(DesktopFeature::DictationCloud))
+}
+
+/// One attempt at turning the audio into text.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Attempt {
+  Local,
+  Cloud,
+}
+
+/// The attempts, in order: stella AI first when chosen, then this computer
+/// when its model is installed. This computer never falls back to stella AI.
+pub fn attempts(destination: Destination, local_installed: bool) -> Vec<Attempt> {
+  match destination {
+    Destination::Local => vec![Attempt::Local],
+    Destination::Cloud if local_installed => vec![Attempt::Cloud, Attempt::Local],
+    Destination::Cloud => vec![Attempt::Cloud],
+  }
+}
+
+/// What a dictation reports once no attempt produced its text: a local
+/// dictation whose model is missing says so; anything else reports the
+/// failure of the destination the user chose.
+pub const fn failure(destination: Destination, local_installed: bool) -> Failure {
+  match destination {
+    Destination::Local if !local_installed => Failure::ModelMissing,
+    Destination::Local => Failure::Transcription,
+    Destination::Cloud => Failure::CloudTranscription,
+  }
+}
+
+/// 16-bit PCM WAV of mono samples, the format the API reads exactly.
+pub fn wav(samples: &[f32], rate: u32) -> Vec<u8> {
+  let data_bytes = u32::try_from(samples.len() * 2).unwrap_or(u32::MAX);
+  let mut bytes = Vec::with_capacity(WAV_HEADER_BYTES + samples.len() * 2);
+  bytes.extend_from_slice(b"RIFF");
+  bytes.extend_from_slice(&(36 + data_bytes).to_le_bytes());
+  bytes.extend_from_slice(b"WAVEfmt ");
+  bytes.extend_from_slice(&16_u32.to_le_bytes());
+  bytes.extend_from_slice(&1_u16.to_le_bytes());
+  bytes.extend_from_slice(&1_u16.to_le_bytes());
+  bytes.extend_from_slice(&rate.to_le_bytes());
+  bytes.extend_from_slice(&(rate * 2).to_le_bytes());
+  bytes.extend_from_slice(&2_u16.to_le_bytes());
+  bytes.extend_from_slice(&16_u16.to_le_bytes());
+  bytes.extend_from_slice(b"data");
+  bytes.extend_from_slice(&data_bytes.to_le_bytes());
+  for sample in samples {
+    // The clamped sample scaled to the i16 range fits by construction.
+    let value = (sample.clamp(-1.0, 1.0) * f32::from(i16::MAX)) as i16;
+    bytes.extend_from_slice(&value.to_le_bytes());
+  }
+  bytes
+}
+
+/// The longest chunk: a second under the API's limit, so a container
+/// rounding a boundary never pushes one over it.
+fn chunk_limit(rate: u32) -> usize {
+  contract().max_audio_seconds.saturating_sub(1).max(1) * rate as usize
+}
+
+/// The longest chunk a short final piece may join into: the chunk limit plus
+/// part of the second it keeps in reserve.
+fn join_limit(rate: u32) -> usize {
+  chunk_limit(rate) + samples_in(JOIN_RESERVE_MILLIS, rate)
+}
+
+/// Where to cut inside `search`: the middle of its quietest `window`-long
+/// stretch, so a boundary falls in a pause rather than inside a word.
+fn quietest_cut(samples: &[f32], search: Range<usize>, window: usize) -> usize {
+  let search = search.start.min(samples.len())..search.end.min(samples.len());
+  if window == 0 || search.len() <= window {
+    return search.start + search.len() / 2;
+  }
+  let hop = (window / 4).max(1);
+  let energy = |start: usize| {
+    samples[start..start + window]
+      .iter()
+      .map(|sample| f64::from(*sample).powi(2))
+      .sum::<f64>()
+  };
+  let quietest = (search.start..=search.end - window)
+    .step_by(hop)
+    .min_by(|left, right| energy(*left).total_cmp(&energy(*right)))
+    .unwrap_or(search.start);
+  quietest + window / 2
+}
+
+/// How far before the chunk limit a cut is looked for.
+fn cut_search(rate: u32) -> usize {
+  samples_in(CUT_SEARCH_MILLIS, rate).min(chunk_limit(rate) / 2)
+}
+
+/// Where audio longer than one chunk is cut: the quietest moment of the last
+/// seconds before the chunk limit, so the first piece always fits. `None`
+/// while the audio still fits one chunk. Recording cuts a stretch that grows
+/// this long the same way, so no stretch is longer than a chunk.
+pub fn cap_cut(samples: &[f32], rate: u32) -> Option<usize> {
+  let limit = chunk_limit(rate);
+  (samples.len() > limit).then(|| {
+    quietest_cut(
+      samples,
+      limit - cut_search(rate)..limit,
+      samples_in(QUIET_WINDOW_MILLIS, rate),
+    )
+  })
+}
+
+/// The pieces a dictation is uploaded in: each at most the chunk limit, cut
+/// at the quietest moment of the last seconds before it. A final piece too
+/// short to transcribe well joins the one before it when the two still fit
+/// the API's limit; otherwise the two are split again around their middle.
+pub fn chunk_bounds(samples: &[f32], rate: u32) -> Vec<Range<usize>> {
+  let window = samples_in(QUIET_WINDOW_MILLIS, rate);
+  let search = cut_search(rate);
+  let mut bounds = Vec::new();
+  let mut start = 0;
+  while let Some(cut) = cap_cut(&samples[start..], rate) {
+    bounds.push(start..start + cut);
+    start += cut;
+  }
+  bounds.push(start..samples.len());
+  let short_tail = bounds.len() >= 2
+    && bounds
+      .last()
+      .is_some_and(|last| last.len() < samples_in(MIN_CHUNK_MILLIS, rate));
+  if short_tail && let (Some(last), Some(previous)) = (bounds.pop(), bounds.pop()) {
+    if last.end - previous.start <= join_limit(rate) {
+      bounds.push(previous.start..last.end);
+    } else {
+      let middle = previous.start + (last.end - previous.start) / 2;
+      let cut = quietest_cut(samples, middle - search / 2..middle + search / 2, window);
+      bounds.push(previous.start..cut);
+      bounds.push(cut..last.end);
+    }
+  }
+  bounds
+}
+
+/// The chunks worth uploading: every piece that holds speech.
+pub fn chunks(samples: &[f32], rate: u32) -> Vec<&[f32]> {
+  chunk_bounds(samples, rate)
+    .into_iter()
+    .map(|range| &samples[range])
+    .filter(|piece| holds_speech(piece))
+    .collect()
+}
+
+fn client(timeout: Duration) -> Result<DesktopHttpClient, String> {
+  DesktopHttpClient::new(HttpClientOptions {
+    redirect: reqwest::redirect::Policy::none(),
+    timeout: Some(timeout),
+  })
+  .map_err(request_cause_logged(FAILURE))
+}
+
+fn refused(status: reqwest::StatusCode) -> String {
+  format!("stella AI refused the request: {status}")
+}
+
+async fn read_bounded(response: reqwest::Response) -> Result<Vec<u8>, String> {
+  if !response.status().is_success() {
+    return Err(refused(response.status()));
+  }
+  read_body(response, MAX_RESPONSE_BYTES).await
+}
+
+async fn read_body(
+  mut response: reqwest::Response,
+  limit: usize,
+) -> Result<Vec<u8>, String> {
+  let mut body = Vec::new();
+  while let Some(chunk) = response
+    .chunk()
+    .await
+    .map_err(request_cause_logged(FAILURE))?
+  {
+    if body.len() + chunk.len() > limit {
+      return Err("stella AI answer is too large".to_string());
+    }
+    body.extend_from_slice(&chunk);
+  }
+  Ok(body)
+}
+
+#[derive(Deserialize)]
+struct Refusal {
+  code: Option<String>,
+}
+
+/// Whether a refused chunk was refused for its model: the API no longer
+/// offers it (503 with its code), or does not know it (422, the request's
+/// shape; the model id is the only field taken from the model list).
+fn refuses_model(status: reqwest::StatusCode, body: &[u8]) -> bool {
+  status == reqwest::StatusCode::UNPROCESSABLE_ENTITY
+    || (status == reqwest::StatusCode::SERVICE_UNAVAILABLE
+      && serde_json::from_slice::<Refusal>(body)
+        .ok()
+        .and_then(|refusal| refusal.code)
+        .is_some_and(|code| code == MODEL_UNAVAILABLE_CODE))
+}
+
+/// A chunk's answer, or [`MODEL_REFUSED`] when the API refused its model.
+async fn read_chunk_answer(response: reqwest::Response) -> Result<Vec<u8>, String> {
+  let status = response.status();
+  if status.is_success() {
+    return read_body(response, MAX_RESPONSE_BYTES).await;
+  }
+  let body = read_body(response, MAX_REFUSAL_BYTES)
+    .await
+    .unwrap_or_default();
+  Err(if refuses_model(status, &body) {
+    MODEL_REFUSED.to_string()
+  } else {
+    refused(status)
+  })
+}
+
+/// `future`'s result, or `elapsed` once `limit` passes.
+async fn within<T>(
+  limit: Duration,
+  elapsed: &str,
+  future: impl Future<Output = Result<T, String>>,
+) -> Result<T, String> {
+  tokio::time::timeout(limit, future)
+    .await
+    .unwrap_or_else(|_elapsed| Err(elapsed.to_string()))
+}
+
+/// The dictation account, read within the cleanup bound, and only while the
+/// server enables stella AI transcription for that same account.
+async fn cloud_account(app: &AppHandle) -> Result<AccountRequest, String> {
+  cloud_account_within(app, ACCOUNT_TIMEOUT).await
+}
+
+/// The dictation account within `limit`. Every request holds the account
+/// lease while it runs, so a recording piece queued behind others waits for
+/// them inside its own budget rather than the live dictation bound.
+async fn cloud_account_within(
+  app: &AppHandle,
+  limit: Duration,
+) -> Result<AccountRequest, String> {
+  let account = within(limit, TIMED_OUT, dictation_account(app)).await?;
+  let bound = app
+    .try_state::<FeatureGates>()
+    .and_then(|gates| gates.account_binding(DesktopFeature::DictationCloud))
+    .is_some_and(|(_, namespace)| account.local_data_namespace() == namespace);
+  if bound {
+    Ok(account)
+  } else {
+    Err(UNAVAILABLE.to_string())
+  }
+}
+
+#[derive(Deserialize)]
+struct Transcript {
+  text: String,
+}
+
+/// Where a chunk goes besides its audio: the model, the language, the
+/// speaker's custom words for a model that reads them and, for a recording
+/// filed under a matter, that matter, whose names the API adds to the
+/// vocabulary. A recording's piece also names itself, the same on every
+/// attempt, so a retried piece is counted once.
+struct ChunkRequest<'a> {
+  model_id: Option<&'a str>,
+  language: Option<&'a str>,
+  /// Empty: no vocabulary field, as an older API expects.
+  vocabulary: &'a [String],
+  matter_id: Option<&'a str>,
+  piece_id: Option<&'a str>,
+  timeout: Duration,
+}
+
+async fn send_chunk(
+  account: &AccountRequest,
+  wav: Vec<u8>,
+  chunk: ChunkRequest<'_>,
+) -> Result<String, String> {
+  let file = reqwest::multipart::Part::bytes(wav)
+    .file_name("dictation.wav")
+    .mime_str("audio/wav")
+    .map_err(request_cause_logged(FAILURE))?;
+  let mut form = reqwest::multipart::Form::new().part("file", file);
+  if let Some(model_id) = chunk.model_id {
+    form = form.text("modelId", model_id.to_string());
+  }
+  if let Some(language) = chunk.language {
+    form = form.text("language", language.to_string());
+  }
+  if !chunk.vocabulary.is_empty() {
+    // Never logged: the words are the speaker's own.
+    let vocabulary =
+      serde_json::to_string(chunk.vocabulary).map_err(|_error| FAILURE.to_string())?;
+    form = form.text("vocabulary", vocabulary);
+  }
+  if let Some(matter_id) = chunk.matter_id {
+    form = form.text("matterId", matter_id.to_string());
+  }
+  if let Some(piece_id) = chunk.piece_id {
+    form = form.text("pieceId", piece_id.to_string());
+  }
+  let response = crate::http_client::device_proof_request(
+    client(chunk.timeout)?
+      .post(format!(
+        "{}{}",
+        account.api_base_url,
+        contract().transcribe_path
+      ))
+      .multipart(form),
+    &account.device_key,
+    Some(&account.credential.key),
+    None,
+  )?
+  .send()
+  .await
+  .map_err(request_cause_logged(FAILURE))?;
+  let body = read_chunk_answer(response).await?;
+  // A serde error is never logged with its message: it can quote the text.
+  serde_json::from_slice::<Transcript>(&body)
+    .map(|transcript| transcript.text)
+    .map_err(|_error| FAILURE.to_string())
+}
+
+/// Sends `pieces` in order, each within [`CHUNK_TIMEOUT`] and all within
+/// `budget`, asking `allowed` before every one; the first refusal, failure or
+/// timeout stops the rest.
+async fn upload<F>(
+  pieces: Vec<Vec<u8>>,
+  budget: Duration,
+  allowed: impl Fn() -> bool,
+  mut send: impl FnMut(Vec<u8>) -> F,
+) -> Result<String, String>
+where
+  F: Future<Output = Result<String, String>>,
+{
+  let deadline = tokio::time::Instant::now() + budget;
+  let mut texts = Vec::with_capacity(pieces.len());
+  for piece in pieces {
+    if !allowed() {
+      return Err(STOPPED.to_string());
+    }
+    let remaining = deadline.saturating_duration_since(tokio::time::Instant::now());
+    if remaining.is_zero() {
+      return Err(TIMED_OUT.to_string());
+    }
+    let text = within(CHUNK_TIMEOUT.min(remaining), TIMED_OUT, send(piece)).await?;
+    texts.push(text.trim().to_string());
+  }
+  Ok(
+    texts
+      .into_iter()
+      .filter(|text| !text.is_empty())
+      .collect::<Vec<_>>()
+      .join(" "),
+  )
+}
+
+/// The model a dictation uses: the stored one while the region still offers
+/// it, otherwise the region's default, which then replaces the stored one.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ModelChoice {
+  pub model_id: String,
+  /// The stored model is missing or no longer offered.
+  pub replaces_stored: bool,
+}
+
+pub fn choose_model(
+  stored: Option<&str>,
+  offered: &CloudModels,
+) -> Option<ModelChoice> {
+  if let Some(stored) = stored.filter(|stored| offered.offers(stored)) {
+    return Some(ModelChoice {
+      model_id: stored.to_string(),
+      replaces_stored: false,
+    });
+  }
+  // Never falls back to a model whose provider keeps the audio: that one is
+  // used only once picked where its warning shows.
+  let without_warning = |model_id: &str| {
+    offered
+      .models
+      .iter()
+      .any(|model| model.id == model_id && !model.retains_data)
+  };
+  offered
+    .default_model_id
+    .as_deref()
+    .filter(|default| without_warning(default))
+    .or_else(|| {
+      offered
+        .models
+        .iter()
+        .find(|model| !model.retains_data)
+        .map(|model| model.id.as_str())
+    })
+    .map(|model_id| ModelChoice {
+      model_id: model_id.to_string(),
+      replaces_stored: true,
+    })
+}
+
+/// `future`'s result within what is left of `budget`, which then loses the
+/// time the future took, whether it answered, failed or ran out.
+async fn spend<T>(
+  budget: &mut Duration,
+  future: impl Future<Output = Result<T, String>>,
+) -> Result<T, String> {
+  if budget.is_zero() {
+    return Err(TIMED_OUT.to_string());
+  }
+  let started = tokio::time::Instant::now();
+  let result = within(*budget, TIMED_OUT, future).await;
+  *budget = budget.saturating_sub(started.elapsed());
+  result
+}
+
+/// One dictation's way to stella AI. Every stretch is uploaded the way a
+/// whole recording once was: chunk by chunk, each within [`CHUNK_TIMEOUT`]
+/// and only while stella AI is still chosen. The model is chosen once, from
+/// the model list the press looked up, and all requests of the dictation
+/// together stay within [`DEADLINE`]. A model the API refuses has the list
+/// read again once, and the refused chunk goes again with the model it then
+/// gives, if that is another one.
+pub struct CloudSession {
+  app: AppHandle,
+  stored_model: Option<String>,
+  language: Option<&'static str>,
+  /// The speaker's custom words, sent only if the chosen model reads them.
+  vocabulary: Vec<String>,
+  model: Option<ChosenModel>,
+  budget: Duration,
+  /// The model list lookup the press started, until the first request.
+  pressed: Option<tauri::async_runtime::JoinHandle<Result<Looked, String>>>,
+  /// When the model list was at hand, once a request chose the model.
+  list_read: Option<ListRead>,
+  /// The list was read again after the API refused the model.
+  read_again: bool,
+}
+
+/// The model a dictation uses, and whether it reads vocabulary.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ChosenModel {
+  id: String,
+  takes_vocabulary: bool,
+}
+
+impl CloudSession {
+  pub const fn new(
+    app: AppHandle,
+    stored_model: Option<String>,
+    language: Option<&'static str>,
+    vocabulary: Vec<String>,
+  ) -> Self {
+    Self {
+      app,
+      stored_model,
+      language,
+      vocabulary,
+      model: None,
+      budget: DEADLINE,
+      pressed: None,
+      list_read: None,
+      read_again: false,
+    }
+  }
+
+  /// Starts looking up the model list now, at the press, so the first
+  /// request does not wait for it: the kept list answers at once, otherwise
+  /// it is read beside recording.
+  pub fn look_up_models(&mut self) {
+    let app = self.app.clone();
+    self.pressed = Some(tauri::async_runtime::spawn(
+      async move { looked_up(&app).await },
+    ));
+  }
+
+  /// The text of one stretch of 16 kHz audio, or an error that names no
+  /// audio and no text.
+  pub fn transcribe(&mut self, samples: &[f32]) -> Result<String, String> {
+    let pieces = chunks(samples, MODEL_SAMPLE_RATE)
+      .into_iter()
+      .map(|piece| wav(piece, MODEL_SAMPLE_RATE))
+      .collect::<Vec<_>>();
+    if pieces
+      .iter()
+      .any(|piece| piece.len() > contract().max_audio_bytes)
+    {
+      return Err("dictation audio is larger than stella AI accepts".to_string());
+    }
+    if pieces.is_empty() {
+      return Ok(String::new());
+    }
+    let mut budget = self.budget;
+    let text =
+      dictation_cleanup::bounded(DEADLINE, spend(&mut budget, self.send(pieces)));
+    self.budget = budget;
+    text.unwrap_or_else(|| {
+      self.budget = Duration::ZERO;
+      Err(TIMED_OUT.to_string())
+    })
+  }
+
+  /// The model this dictation uses, once a request chose it.
+  pub fn model_id(&self) -> Option<&str> {
+    self.model.as_ref().map(|model| model.id.as_str())
+  }
+
+  /// When the model list was at hand, and whether it was read again after
+  /// the API refused the model; `None` before a request chose the model.
+  pub fn list_read(&self) -> Option<(ListRead, bool)> {
+    self.list_read.map(|read| (read, self.read_again))
+  }
+
+  /// The stored model while the region still offers it, otherwise the
+  /// region's default, which then replaces the stored one.
+  async fn model(&mut self) -> Result<ChosenModel, String> {
+    if let Some(model) = &self.model {
+      return Ok(model.clone());
+    }
+    let pressed = match self.pressed.take() {
+      Some(lookup) => Some(
+        lookup
+          .await
+          .unwrap_or_else(|_stopped| Err(FAILURE.to_string())),
+      ),
+      None => None,
+    };
+    // The list the press read is used only for the account this request
+    // goes to.
+    let (namespace, fetch) = models_read(cloud_account(&self.app).await?);
+    let (looked, read) = dictation_models::at_request(
+      dictation_models::shared(),
+      pressed,
+      namespace,
+      || fetch,
+    )
+    .await?;
+    self.list_read = Some(read);
+    let choice = choose_model(self.stored_model.as_deref(), &looked.models)
+      .ok_or_else(|| UNAVAILABLE.to_string())?;
+    self.adopt(&choice, &looked.models)
+  }
+
+  /// Makes `choice` this dictation's model, and the stored one where it
+  /// replaces it.
+  fn adopt(
+    &mut self,
+    choice: &ModelChoice,
+    offered: &CloudModels,
+  ) -> Result<ChosenModel, String> {
+    if choice.replaces_stored {
+      dictation::adopt_cloud_model(&self.app, &choice.model_id)?;
+      self.stored_model = Some(choice.model_id.clone());
+    }
+    let model = ChosenModel {
+      id: choice.model_id.clone(),
+      takes_vocabulary: offered.takes_vocabulary(&choice.model_id),
+    };
+    self.model = Some(model.clone());
+    Ok(model)
+  }
+
+  async fn send(&mut self, pieces: Vec<Vec<u8>>) -> Result<String, String> {
+    let model = RefCell::new(self.model().await?);
+    // The list is read again at most once a dictation.
+    let may_read_again = Cell::new(!self.read_again);
+    let replacement = RefCell::new(None);
+    let app = &self.app;
+    let language = self.language;
+    let words = &self.vocabulary;
+    let stored = self.stored_model.as_deref();
+    let text = upload(
+      pieces,
+      DEADLINE,
+      || dictation::cloud_chosen(app),
+      |piece| {
+        send_replacing(
+          piece,
+          &model,
+          &may_read_again,
+          &replacement,
+          |piece, model| async move {
+            send_piece(app, piece, &model, language, words).await
+          },
+          || replacing(app, stored),
+        )
+      },
+    )
+    .await;
+    self.read_again |= !may_read_again.get();
+    if let Some((choice, offered)) = replacement.into_inner() {
+      self.adopt(&choice, &offered)?;
+    }
+    text
+  }
+}
+
+/// The model list for the dictation account: the kept one while it is
+/// fresh and was read for that account, otherwise the list as the API
+/// gives it now, which is then kept.
+async fn looked_up(app: &AppHandle) -> Result<Looked, String> {
+  let (namespace, fetch) = models_read(cloud_account(app).await?);
+  dictation_models::look_up(dictation_models::shared(), namespace, || fetch).await
+}
+
+/// After the API refused a model: the model list read again, and the model
+/// it gives, with the choice and the list for [`CloudSession::adopt`].
+async fn replacing(
+  app: &AppHandle,
+  stored: Option<&str>,
+) -> Result<Option<(ChosenModel, (ModelChoice, CloudModels))>, String> {
+  let (namespace, fetch) = models_read(cloud_account(app).await?);
+  let looked =
+    dictation_models::read_again(dictation_models::shared(), namespace, || fetch)
+      .await?;
+  Ok(choose_model(stored, &looked.models).map(|choice| {
+    let model = ChosenModel {
+      id: choice.model_id.clone(),
+      takes_vocabulary: looked.models.takes_vocabulary(&choice.model_id),
+    };
+    (model, (choice, looked.models))
+  }))
+}
+
+/// Sends `piece` with the model in `model`. When the API refuses that model
+/// and the list may still be read again, `replace` reads it once; if it
+/// gives another model, the piece goes again with that one, which becomes
+/// `model`, and what came with it is kept in `replaced`.
+async fn send_replacing<X, S, F, R, G>(
+  piece: Vec<u8>,
+  model: &RefCell<ChosenModel>,
+  may_read_again: &Cell<bool>,
+  replaced: &RefCell<Option<X>>,
+  mut send: S,
+  replace: R,
+) -> Result<String, String>
+where
+  S: FnMut(Vec<u8>, ChosenModel) -> F,
+  F: Future<Output = Result<String, String>>,
+  R: FnOnce() -> G,
+  G: Future<Output = Result<Option<(ChosenModel, X)>, String>>,
+{
+  let current = model.borrow().clone();
+  let spare = may_read_again.get().then(|| piece.clone());
+  let text = send(piece, current.clone()).await;
+  let refused = matches!(&text, Err(error) if error == MODEL_REFUSED);
+  let Some(piece) = spare.filter(|_spare| refused) else {
+    return text;
+  };
+  may_read_again.set(false);
+  let Some((next, extra)) = replace()
+    .await?
+    .filter(|(next, _extra)| next.id != current.id)
+  else {
+    return text;
+  };
+  model.replace(next.clone());
+  replaced.replace(Some(extra));
+  send(piece, next).await
+}
+
+/// One chunk of a dictation, for the dictation account as it is now.
+async fn send_piece(
+  app: &AppHandle,
+  piece: Vec<u8>,
+  model: &ChosenModel,
+  language: Option<&str>,
+  words: &[String],
+) -> Result<String, String> {
+  let account = cloud_account(app).await?;
+  let text = send_chunk(
+    &account,
+    piece,
+    ChunkRequest {
+      model_id: Some(&model.id),
+      language,
+      vocabulary: chunk_vocabulary(model.takes_vocabulary, words),
+      matter_id: None,
+      piece_id: None,
+      timeout: CHUNK_TIMEOUT,
+    },
+  )
+  .await;
+  drop(account);
+  text
+}
+
+/// The custom words a chunk carries: none for a model that does not read
+/// vocabulary, or from an API too old to say which models do.
+fn chunk_vocabulary(takes_vocabulary: bool, words: &[String]) -> &[String] {
+  if takes_vocabulary { words } else { &[] }
+}
+
+/// The model a recording is transcribed with: the one dictation uses, the
+/// region's default where none is stored or the stored one is gone. It
+/// names the account it was read for, which every piece is sent for.
+pub(crate) async fn recording_model(app: &AppHandle) -> Result<RecordingModel, String> {
+  let (namespace, offered) = namespaced_models(cloud_account(app).await?).await?;
+  let (_, stored) = dictation::destination(app);
+  let choice =
+    choose_model(stored.as_deref(), &offered).ok_or_else(|| UNAVAILABLE.to_string())?;
+  if choice.replaces_stored {
+    dictation::adopt_cloud_model(app, &choice.model_id)?;
+  }
+  let model = offered
+    .models
+    .iter()
+    .find(|model| model.id == choice.model_id)
+    .ok_or_else(|| UNAVAILABLE.to_string())?;
+  Ok(RecordingModel {
+    id: model.id.clone(),
+    display_name: model.display_name.clone(),
+    provider: model.provider.clone(),
+    retains_data: model.retains_data,
+    takes_vocabulary: model.takes_vocabulary,
+    account: namespace,
+  })
+}
+
+/// The model a recording goes to, as its window names it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct RecordingModel {
+  pub id: String,
+  pub display_name: String,
+  /// Who runs the model, as a name to show.
+  pub provider: Option<String>,
+  /// The provider keeps the audio; the window warns.
+  pub retains_data: bool,
+  /// The model reads vocabulary, so a piece carries the custom words.
+  #[serde(skip)]
+  pub takes_vocabulary: bool,
+  /// The account the model was read for; never shown.
+  #[serde(skip)]
+  pub account: String,
+}
+
+/// A recording's piece, and where it goes.
+pub(crate) struct RecordingPiece<'a> {
+  pub model: &'a RecordingModel,
+  /// The same on every attempt at this piece.
+  pub piece_id: &'a str,
+  pub language: Option<&'a str>,
+  pub matter_id: Option<&'a str>,
+  pub timeout: Duration,
+}
+
+/// Why a recording's piece has no text.
+#[derive(Debug)]
+pub(crate) enum PieceFailure {
+  /// The dictation account is no longer the one the recording started
+  /// for; nothing was sent.
+  AccountChanged,
+  /// stella AI did not transcribe it; trying again may.
+  Failed(String),
+}
+
+/// The longest reply a saved transcript sends back.
+const MAX_SAVED_REPLY_BYTES: usize = 64 * 1024;
+
+/// How long the API may take to check, scan and file an uploaded recording:
+/// it reads the whole file, up to the largest matter document.
+const AUDIO_FINALIZE_TIMEOUT: Duration = Duration::from_secs(5 * 60);
+
+/// Saves a transcribed recording to a matter for the dictation account,
+/// whose lease is held until the reply has been read. Returns the reply.
+pub(crate) async fn save_transcript(
+  app: &AppHandle,
+  body: &impl Serialize,
+  failure: &'static str,
+) -> Result<Vec<u8>, String> {
+  post_for_account(
+    app,
+    transcripts_path(),
+    body,
+    Duration::from_secs(60),
+    failure,
+  )
+  .await
+}
+
+/// Finalizes the recording uploaded into a transcript's folder, for the
+/// dictation account. Returns the reply.
+pub(crate) async fn finalize_transcript_audio(
+  app: &AppHandle,
+  body: &impl Serialize,
+  failure: &'static str,
+) -> Result<Vec<u8>, String> {
+  post_for_account(
+    app,
+    &contract().transcript_audio_path,
+    body,
+    AUDIO_FINALIZE_TIMEOUT,
+    failure,
+  )
+  .await
+}
+
+async fn post_for_account(
+  app: &AppHandle,
+  path: &str,
+  body: &impl Serialize,
+  timeout: Duration,
+  failure: &'static str,
+) -> Result<Vec<u8>, String> {
+  let account = dictation_account(app).await?;
+  let client = DesktopHttpClient::new(HttpClientOptions {
+    redirect: reqwest::redirect::Policy::none(),
+    timeout: Some(timeout),
+  })
+  .map_err(request_cause_logged(failure))?;
+  let response = save_request(&account, &client, path, body)?
+    .send()
+    .await
+    .map_err(request_cause_logged(failure))?;
+  if !response.status().is_success() {
+    return Err(failure.to_string());
+  }
+  let bytes = response
+    .bytes()
+    .await
+    .map_err(request_cause_logged(failure))?;
+  drop(account);
+  if bytes.len() > MAX_SAVED_REPLY_BYTES {
+    return Err(failure.to_string());
+  }
+  Ok(bytes.to_vec())
+}
+
+fn save_request(
+  account: &AccountRequest,
+  client: &DesktopHttpClient,
+  path: &str,
+  body: &impl Serialize,
+) -> Result<crate::http_client::DeviceProofRequest, String> {
+  crate::http_client::device_proof_request(
+    client
+      .post(format!("{}{}", account.api_base_url, path))
+      .json(body),
+    &account.device_key,
+    Some(&account.credential.key),
+    None,
+  )
+}
+
+/// One piece of a recording, already 16 kHz WAV, transcribed by stella AI,
+/// and only for the account the recording started for while the server
+/// still enables it.
+pub(crate) async fn transcribe_recording_piece(
+  app: &AppHandle,
+  wav: Vec<u8>,
+  piece: RecordingPiece<'_>,
+) -> Result<String, PieceFailure> {
+  if wav.len() > contract().max_audio_bytes {
+    return Err(PieceFailure::Failed(
+      "the piece is larger than stella AI accepts".to_string(),
+    ));
+  }
+  let waited = std::time::Instant::now();
+  let account = cloud_account_within(app, piece.timeout)
+    .await
+    .map_err(PieceFailure::Failed)?;
+  if account.local_data_namespace() != piece.model.account {
+    return Err(PieceFailure::AccountChanged);
+  }
+  let timeout = upload_budget(piece.timeout, waited.elapsed());
+  let words = crate::dictation_words::stored_for(&piece.model.account);
+  let text = send_chunk(
+    &account,
+    wav,
+    ChunkRequest {
+      model_id: Some(&piece.model.id),
+      language: piece.language,
+      vocabulary: chunk_vocabulary(piece.model.takes_vocabulary, &words),
+      matter_id: piece.matter_id,
+      piece_id: Some(piece.piece_id),
+      timeout,
+    },
+  )
+  .await;
+  drop(account);
+  text.map_err(PieceFailure::Failed)
+}
+
+/// What is left of a piece's budget for its upload once it had to wait for
+/// the account lease.
+fn upload_budget(piece_timeout: Duration, waited: Duration) -> Duration {
+  piece_timeout.saturating_sub(waited)
+}
+
+/// One model stella AI offers this organization. Fields a newer API adds are
+/// ignored, so a model list with them still reads on this version.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CloudModel {
+  id: String,
+  display_name: String,
+  /// Who runs the model, as a name to show; absent from older APIs.
+  #[serde(default)]
+  provider: Option<String>,
+  /// Whether the model processes audio outside the organization's region.
+  #[serde(default)]
+  outside_region: bool,
+  /// Whether the provider keeps the audio and transcript; the settings
+  /// window warns where such a model is chosen.
+  #[serde(default)]
+  retains_data: bool,
+  /// Whether the model reads vocabulary, so chunks carry the custom words;
+  /// absent from older APIs, which take none.
+  #[serde(default)]
+  takes_vocabulary: bool,
+}
+
+/// The models stella AI offers this organization, as the API lists them.
+/// Fields a newer API adds are ignored.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CloudModels {
+  models: Vec<CloudModel>,
+  default_model_id: Option<String>,
+  unavailable: Option<String>,
+}
+
+impl CloudModels {
+  pub fn offers(&self, model_id: &str) -> bool {
+    self.models.iter().any(|model| model.id == model_id)
+  }
+
+  fn takes_vocabulary(&self, model_id: &str) -> bool {
+    self
+      .models
+      .iter()
+      .any(|model| model.id == model_id && model.takes_vocabulary)
+  }
+}
+
+/// The account's models as the API lists them now, for the Settings
+/// window; the list is kept for the next dictation.
+pub async fn models(app: &AppHandle) -> Result<CloudModels, String> {
+  let (namespace, fetch) = models_read(cloud_account(app).await?);
+  dictation_models::read_again(dictation_models::shared(), namespace, || fetch)
+    .await
+    .map(|looked| looked.models)
+}
+
+/// The account's models, with the namespace that names the account.
+async fn namespaced_models(
+  account: AccountRequest,
+) -> Result<(String, CloudModels), String> {
+  let namespace = account.local_data_namespace();
+  models_for(account).await.map(|models| (namespace, models))
+}
+
+/// The namespace that names the account, and the read of its models.
+fn models_read(
+  account: AccountRequest,
+) -> (String, impl Future<Output = Result<CloudModels, String>>) {
+  let namespace = account.local_data_namespace();
+  (namespace, models_for(account))
+}
+
+async fn models_for(account: AccountRequest) -> Result<CloudModels, String> {
+  let response = crate::http_client::device_proof_request(
+    client(MODELS_TIMEOUT)?
+      .get(format!(
+        "{}{}",
+        account.api_base_url,
+        contract().models_path
+      ))
+      .query(&[
+        (contract().models_labeled_query.as_str(), "1"),
+        (contract().models_retention_query.as_str(), "1"),
+      ]),
+    &account.device_key,
+    Some(&account.credential.key),
+    None,
+  )?
+  .send()
+  .await
+  .map_err(request_cause_logged(FAILURE));
+  drop(account);
+  let body = read_bounded(response?).await?;
+  serde_json::from_slice(&body).map_err(json_cause_logged(FAILURE))
+}
+
+#[cfg(test)]
+mod tests {
+  use std::sync::atomic::{AtomicUsize, Ordering};
+
+  use super::*;
+  use crate::dictation_format::{AppClass, Stroke, is_untyped};
+
+  const RATE: u32 = 16_000;
+
+  fn seconds(value: f64) -> usize {
+    (value * f64::from(RATE)) as usize
+  }
+
+  /// A steady tone loud enough to count as speech, with a silent stretch of
+  /// `pause` samples starting at each of `pauses`.
+  fn speech(total: usize, pauses: &[usize], pause: usize) -> Vec<f32> {
+    (0..total)
+      .map(|index| {
+        if pauses
+          .iter()
+          .any(|start| (*start..*start + pause).contains(&index))
+        {
+          0.0
+        } else {
+          0.3 * ((index as f32) * 0.05).sin()
+        }
+      })
+      .collect()
+  }
+
+  fn models_fixture(default: Option<&str>) -> CloudModels {
+    CloudModels {
+      models: [
+        "mistralai/voxtral-mini-transcribe",
+        "openai/whisper-large-v3",
+      ]
+      .map(|id| CloudModel {
+        id: id.to_string(),
+        display_name: id.to_string(),
+        provider: None,
+        outside_region: false,
+        retains_data: false,
+        takes_vocabulary: false,
+      })
+      .to_vec(),
+      default_model_id: default.map(ToString::to_string),
+      unavailable: None,
+    }
+  }
+
+  #[test]
+  fn a_model_list_from_a_newer_api_still_reads() {
+    let newer: CloudModels = serde_json::from_str(
+      r#"{
+        "models": [
+          {"id": "mistralai/voxtral-mini-transcribe", "displayName": "Voxtral Mini Transcribe"},
+          {"id": "google/chirp-3", "displayName": "Chirp 3", "provider": "Google",
+           "outsideRegion": true, "pricePerHour": 0.96},
+          {"id": "elevenlabs-direct/scribe-v3", "displayName": "Scribe v3",
+           "provider": "ElevenLabs", "outsideRegion": false, "retainsData": true}
+        ],
+        "defaultModelId": "mistralai/voxtral-mini-transcribe",
+        "unavailable": null,
+        "environment": "eu"
+      }"#,
+    )
+    .expect("a newer model list reads");
+    assert!(newer.offers("google/chirp-3"));
+    assert_eq!(newer.models[1].provider.as_deref(), Some("Google"));
+    assert!(newer.models[1].outside_region);
+    assert!(!newer.models[0].outside_region);
+    let shown = serde_json::to_value(&newer.models[1]).expect("serializes");
+    assert_eq!(shown["outsideRegion"], true);
+    assert_eq!(shown["retainsData"], false);
+    let retaining = serde_json::to_value(&newer.models[2]).expect("serializes");
+    assert_eq!(retaining["retainsData"], true);
+  }
+
+  #[test]
+  fn custom_words_go_only_to_a_model_the_api_says_reads_them() {
+    let listed: CloudModels = serde_json::from_str(
+      r#"{
+        "models": [
+          {"id": "openai/whisper-large-v3", "displayName": "Whisper",
+           "provider": "OpenAI", "outsideRegion": false, "takesVocabulary": true},
+          {"id": "elevenlabs-direct/scribe-v3", "displayName": "Scribe v3",
+           "provider": "ElevenLabs", "outsideRegion": false, "takesVocabulary": false},
+          {"id": "mistralai/voxtral-mini-transcribe", "displayName": "Voxtral"}
+        ],
+        "defaultModelId": "openai/whisper-large-v3",
+        "unavailable": null
+      }"#,
+    )
+    .expect("a model list reads");
+    assert!(listed.takes_vocabulary("openai/whisper-large-v3"));
+    assert!(!listed.takes_vocabulary("elevenlabs-direct/scribe-v3"));
+    // An older API lists no such field: no model gets the words.
+    assert!(!listed.takes_vocabulary("mistralai/voxtral-mini-transcribe"));
+    assert!(!listed.takes_vocabulary("google/chirp-3"));
+    let words = vec!["custom terms list".to_string()];
+    assert_eq!(chunk_vocabulary(true, &words), words.as_slice());
+    assert!(chunk_vocabulary(false, &words).is_empty());
+  }
+
+  #[test]
+  fn the_vocabulary_limits_are_the_contracts() {
+    let limits = vocabulary_limits();
+    assert_eq!(limits.words, 100);
+    assert_eq!(limits.length, 100);
+  }
+
+  #[test]
+  fn this_computer_never_falls_back_to_stella_ai() {
+    assert_eq!(attempts(Destination::Local, true), vec![Attempt::Local]);
+    assert_eq!(attempts(Destination::Local, false), vec![Attempt::Local]);
+    assert_eq!(failure(Destination::Local, true), Failure::Transcription);
+  }
+
+  #[test]
+  fn stella_ai_falls_back_to_this_computer_only_with_the_model_installed() {
+    assert_eq!(
+      attempts(Destination::Cloud, true),
+      vec![Attempt::Cloud, Attempt::Local]
+    );
+    assert_eq!(attempts(Destination::Cloud, false), vec![Attempt::Cloud]);
+    for installed in [true, false] {
+      assert_eq!(
+        failure(Destination::Cloud, installed),
+        Failure::CloudTranscription
+      );
+    }
+  }
+
+  #[test]
+  fn a_missing_model_is_reported_for_this_computer() {
+    assert_eq!(failure(Destination::Local, false), Failure::ModelMissing);
+  }
+
+  #[test]
+  fn recording_cuts_a_long_stretch_where_the_upload_would() {
+    let limit = chunk_limit(RATE);
+    let pause = limit - seconds(2.5);
+    let audio = speech(limit + seconds(20.0), &[pause], seconds(0.3));
+    assert_eq!(cap_cut(&audio[..limit], RATE), None);
+    let cut = cap_cut(&audio, RATE).unwrap();
+    assert_eq!(cut, chunk_bounds(&audio, RATE)[0].end);
+    assert!((pause..pause + seconds(0.3)).contains(&cut), "cut at {cut}");
+    // The cut reads only the audio before the limit, so how much more has
+    // arrived by the time it is taken never moves it.
+    assert_eq!(cap_cut(&audio[..=limit], RATE), Some(cut));
+  }
+
+  #[tokio::test(start_paused = true)]
+  async fn the_dictation_budget_counts_only_time_spent_on_requests() {
+    let mut budget = DEADLINE;
+    for _ in 0..2 {
+      let answer = spend(&mut budget, async {
+        tokio::time::advance(Duration::from_secs(50)).await;
+        Ok("part")
+      })
+      .await;
+      assert_eq!(answer, Ok("part"));
+      // Waiting for the next stretch costs nothing.
+      tokio::time::advance(Duration::from_secs(300)).await;
+    }
+    assert_eq!(budget, Duration::from_secs(20));
+    let sent = AtomicUsize::new(0);
+    let late = spend(&mut budget, async {
+      sent.fetch_add(1, Ordering::SeqCst);
+      std::future::pending::<Result<&str, String>>().await
+    })
+    .await;
+    assert_eq!(late, Err(TIMED_OUT.to_string()));
+    assert!(budget.is_zero());
+    // Once the budget is gone nothing more is sent.
+    let after = spend(&mut budget, async {
+      sent.fetch_add(1, Ordering::SeqCst);
+      Ok("never")
+    })
+    .await;
+    assert_eq!(after, Err(TIMED_OUT.to_string()));
+    assert_eq!(sent.load(Ordering::SeqCst), 1);
+  }
+
+  #[test]
+  fn a_piece_that_waited_for_the_lease_uploads_in_what_is_left() {
+    let piece = Duration::from_secs(90);
+    // Queued behind two slow pieces: far past the live dictation bound, yet
+    // the piece still runs.
+    let waited = ACCOUNT_TIMEOUT * 2;
+    assert!(waited < piece);
+    assert_eq!(upload_budget(piece, waited), piece - waited);
+    assert_eq!(upload_budget(piece, piece * 2), Duration::ZERO);
+  }
+
+  #[tokio::test(start_paused = true)]
+  async fn a_failed_request_still_spends_its_time() {
+    let mut budget = DEADLINE;
+    let failed = spend(&mut budget, async {
+      tokio::time::advance(Duration::from_secs(30)).await;
+      Err::<(), String>(FAILURE.to_string())
+    })
+    .await;
+    assert_eq!(failed, Err(FAILURE.to_string()));
+    assert_eq!(budget, Duration::from_secs(90));
+  }
+
+  #[test]
+  fn only_cloud_is_stored_as_stella_ai() {
+    assert_eq!(Destination::parse(Some("cloud")), Destination::Cloud);
+    for stored in [None, Some("local"), Some("Cloud"), Some("")] {
+      assert_eq!(Destination::parse(stored), Destination::Local);
+    }
+    assert_eq!(
+      Destination::parse(Some(Destination::Cloud.stored())),
+      Destination::Cloud
+    );
+  }
+
+  #[test]
+  fn a_stored_stella_ai_choice_stays_local_without_the_server_decision() {
+    assert_eq!(Destination::Cloud.effective(false), Destination::Local);
+    assert_eq!(Destination::Local.effective(false), Destination::Local);
+    assert_eq!(Destination::Local.effective(true), Destination::Local);
+    assert_eq!(Destination::Cloud.effective(true), Destination::Cloud);
+  }
+
+  #[test]
+  fn wav_is_a_16_bit_mono_pcm_file_of_the_samples() {
+    let bytes = wav(&[0.0, 1.0, -1.0, 2.0], RATE);
+    assert_eq!(bytes.len(), WAV_HEADER_BYTES + 8);
+    assert_eq!(&bytes[0..4], b"RIFF");
+    assert_eq!(
+      u32::from_le_bytes(bytes[4..8].try_into().unwrap()) as usize + 8,
+      bytes.len()
+    );
+    assert_eq!(&bytes[8..16], b"WAVEfmt ");
+    assert_eq!(u16::from_le_bytes([bytes[20], bytes[21]]), 1);
+    assert_eq!(u16::from_le_bytes([bytes[22], bytes[23]]), 1);
+    assert_eq!(u32::from_le_bytes(bytes[24..28].try_into().unwrap()), RATE);
+    assert_eq!(
+      u32::from_le_bytes(bytes[28..32].try_into().unwrap()),
+      RATE * 2
+    );
+    assert_eq!(&bytes[36..40], b"data");
+    let samples = bytes[44..]
+      .chunks(2)
+      .map(|pair| i16::from_le_bytes([pair[0], pair[1]]))
+      .collect::<Vec<_>>();
+    assert_eq!(samples, vec![0, i16::MAX, -i16::MAX, i16::MAX]);
+  }
+
+  #[test]
+  fn every_chunk_fits_the_api_limits_and_the_pieces_cover_the_audio() {
+    let ten_minutes = speech(seconds(600.0), &[], 0);
+    let bounds = chunk_bounds(&ten_minutes, RATE);
+    assert_eq!(bounds.first().map(|range| range.start), Some(0));
+    assert_eq!(
+      bounds.last().map(|range| range.end),
+      Some(ten_minutes.len())
+    );
+    for pair in bounds.windows(2) {
+      assert_eq!(pair[0].end, pair[1].start);
+    }
+    for range in &bounds {
+      assert!(range.len() <= join_limit(RATE));
+      assert!(range.len() >= seconds(1.0));
+      assert!(
+        wav(&ten_minutes[range.clone()], RATE).len() <= contract().max_audio_bytes
+      );
+    }
+    assert!(join_limit(RATE) < contract().max_audio_seconds * RATE as usize);
+    assert_eq!(chunk_bounds(&[0.0; 10], RATE), vec![0..10]);
+  }
+
+  #[test]
+  fn a_chunk_is_cut_in_the_quietest_moment_before_the_limit() {
+    let limit = chunk_limit(RATE);
+    // A pause two and a half seconds before the limit.
+    let pause = limit - seconds(2.5);
+    let audio = speech(limit + seconds(20.0), &[pause], seconds(0.3));
+    let bounds = chunk_bounds(&audio, RATE);
+    assert_eq!(bounds.len(), 2);
+    let cut = bounds[0].end;
+    assert!(
+      (pause..pause + seconds(0.3)).contains(&cut),
+      "cut at {cut}, pause at {pause}"
+    );
+    // Without a pause the cut still falls within the last five seconds.
+    let steady = speech(limit + seconds(20.0), &[], 0);
+    let cut = chunk_bounds(&steady, RATE)[0].end;
+    assert!((limit - seconds(5.0)..=limit).contains(&cut));
+  }
+
+  #[test]
+  fn a_final_piece_under_a_second_joins_or_rebalances_the_one_before() {
+    let limit = chunk_limit(RATE);
+    // A pause right before the limit leaves a tail of half a second, and the
+    // two still fit the API's limit together: one chunk.
+    let joined = speech(limit + seconds(0.4), &[limit - seconds(0.2)], seconds(0.2));
+    assert_eq!(chunk_bounds(&joined, RATE), vec![0..joined.len()]);
+    // A longer total does not fit: the two are split again near the middle.
+    let full = speech(limit + seconds(0.8), &[limit - seconds(0.2)], seconds(0.2));
+    let bounds = chunk_bounds(&full, RATE);
+    assert_eq!(bounds.len(), 2, "{bounds:?}");
+    assert_eq!(bounds[0].start, 0);
+    assert_eq!(bounds[0].end, bounds[1].start);
+    assert_eq!(bounds[1].end, full.len());
+    for range in &bounds {
+      assert!(range.len() >= seconds(25.0), "{range:?}");
+      assert!(range.len() <= limit);
+    }
+  }
+
+  #[test]
+  fn silent_pieces_are_not_uploaded() {
+    let limit = chunk_limit(RATE);
+    let mut audio = speech(limit + seconds(10.0), &[], 0);
+    for sample in &mut audio[limit - seconds(5.0)..] {
+      *sample = 0.0;
+    }
+    assert_eq!(chunk_bounds(&audio, RATE).len(), 2);
+    assert_eq!(chunks(&audio, RATE).len(), 1);
+  }
+
+  #[test]
+  fn the_stored_model_is_used_only_while_the_region_offers_it() {
+    let offered = models_fixture(Some("openai/whisper-large-v3"));
+    assert_eq!(
+      choose_model(Some("mistralai/voxtral-mini-transcribe"), &offered),
+      Some(ModelChoice {
+        model_id: "mistralai/voxtral-mini-transcribe".to_string(),
+        replaces_stored: false,
+      })
+    );
+    for stale in [Some("retired/model"), None] {
+      assert_eq!(
+        choose_model(stale, &offered),
+        Some(ModelChoice {
+          model_id: "openai/whisper-large-v3".to_string(),
+          replaces_stored: true,
+        }),
+        "{stale:?}"
+      );
+    }
+    assert_eq!(
+      choose_model(Some("retired/model"), &models_fixture(None))
+        .map(|choice| choice.model_id),
+      Some("mistralai/voxtral-mini-transcribe".to_string())
+    );
+    let none = CloudModels {
+      models: Vec::new(),
+      default_model_id: None,
+      unavailable: Some("region".to_string()),
+    };
+    assert_eq!(choose_model(Some("retired/model"), &none), None);
+  }
+
+  #[test]
+  fn a_model_that_keeps_audio_is_used_only_once_picked() {
+    let mut offered = models_fixture(None);
+    for model in &mut offered.models {
+      model.retains_data = model.id == "mistralai/voxtral-mini-transcribe";
+    }
+    assert_eq!(
+      choose_model(None, &offered).map(|choice| choice.model_id),
+      Some("openai/whisper-large-v3".to_string())
+    );
+    assert_eq!(
+      choose_model(Some("mistralai/voxtral-mini-transcribe"), &offered),
+      Some(ModelChoice {
+        model_id: "mistralai/voxtral-mini-transcribe".to_string(),
+        replaces_stored: false,
+      })
+    );
+    for model in &mut offered.models {
+      model.retains_data = true;
+    }
+    assert_eq!(choose_model(Some("retired/model"), &offered), None);
+  }
+
+  #[tokio::test]
+  async fn the_choice_is_read_again_before_every_chunk() {
+    let checks = AtomicUsize::new(0);
+    let sent = AtomicUsize::new(0);
+    let result = upload(
+      vec![vec![1], vec![2], vec![3]],
+      DEADLINE,
+      // stella AI stays chosen for the first chunk only.
+      || checks.fetch_add(1, Ordering::SeqCst) == 0,
+      |_piece| {
+        sent.fetch_add(1, Ordering::SeqCst);
+        async { Ok("first".to_string()) }
+      },
+    )
+    .await;
+    assert_eq!(result, Err(STOPPED.to_string()));
+    assert_eq!(sent.load(Ordering::SeqCst), 1);
+    assert_eq!(checks.load(Ordering::SeqCst), 2);
+  }
+
+  #[tokio::test]
+  async fn every_chunk_answers_in_order_while_the_choice_holds() {
+    let mut order = 0;
+    let result = upload(
+      vec![vec![1], vec![2], vec![3]],
+      DEADLINE,
+      || true,
+      |_piece| {
+        order += 1;
+        let text = if order == 2 {
+          " ".to_string()
+        } else {
+          format!(" part {order} ")
+        };
+        async move { Ok(text) }
+      },
+    )
+    .await;
+    assert_eq!(result, Ok("part 1 part 3".to_string()));
+  }
+
+  #[tokio::test(start_paused = true)]
+  async fn a_chunk_that_never_answers_fails_by_the_chunk_timeout() {
+    let sent = AtomicUsize::new(0);
+    let result = upload(
+      vec![vec![1], vec![2]],
+      DEADLINE,
+      || true,
+      |_piece| {
+        sent.fetch_add(1, Ordering::SeqCst);
+        std::future::pending::<Result<String, String>>()
+      },
+    )
+    .await;
+    // A pending answer ends only by a timer; the paused clock runs it.
+    assert_eq!(result, Err(TIMED_OUT.to_string()));
+    assert_eq!(sent.load(Ordering::SeqCst), 1);
+    assert_eq!(CHUNK_TIMEOUT, Duration::from_secs(30));
+  }
+
+  #[tokio::test(start_paused = true)]
+  async fn no_chunk_is_sent_once_the_dictation_deadline_passes() {
+    let sent = AtomicUsize::new(0);
+    let result = upload(
+      vec![vec![1]; 6],
+      DEADLINE,
+      || true,
+      |_piece| {
+        sent.fetch_add(1, Ordering::SeqCst);
+        async {
+          // Each answer arrives just inside the chunk timeout.
+          tokio::time::advance(CHUNK_TIMEOUT - Duration::from_secs(1)).await;
+          Ok("part".to_string())
+        }
+      },
+    )
+    .await;
+    // Four answers take 116 s; the fifth may use only the 4 s left, and with
+    // the deadline gone no sixth chunk is sent. Chunk timeouts alone would
+    // have sent all six.
+    assert_eq!(result, Err(TIMED_OUT.to_string()));
+    assert_eq!(sent.load(Ordering::SeqCst), 5);
+    assert_eq!(DEADLINE, Duration::from_secs(120));
+  }
+
+  #[tokio::test]
+  async fn a_cloud_transcript_typed_raw_never_presses_return_or_types_a_control() {
+    let answers = [
+      "ls\r\n-la\n",
+      "pwd\u{2028}rm\u{2029}\u{202E}x\u{2066}\u{1b}[A",
+    ];
+    let mut next = answers.iter();
+    let transcript = upload(
+      vec![vec![1], vec![2]],
+      DEADLINE,
+      || true,
+      |_piece| {
+        let text = next.next().copied().unwrap_or_default().to_string();
+        async move { Ok(text) }
+      },
+    )
+    .await
+    .unwrap();
+    assert!(transcript.contains(['\r', '\n', '\u{2028}', '\u{202E}']));
+    // Cleanup off, refused, timed out or skipped: the transcript is typed raw.
+    for class in [
+      AppClass::Terminal,
+      AppClass::Other,
+      AppClass::Chat,
+      AppClass::Rich,
+    ] {
+      let strokes = dictation_cleanup::strokes(&transcript, None, class);
+      let [Stroke::Text(text)] = strokes.as_slice() else {
+        panic!("{class:?} gets a keystroke from a raw transcript");
+      };
+      assert_eq!(text.as_str(), "ls  -la pwd rm x [A ", "{class:?}");
+      assert!(!text.as_str().chars().any(is_untyped), "{class:?}");
+    }
+  }
+
+  fn chosen(id: &str) -> ChosenModel {
+    ChosenModel {
+      id: id.to_string(),
+      takes_vocabulary: false,
+    }
+  }
+
+  /// Sends one piece the way a dictation does: `refusing` names the models
+  /// the API refuses, `replacement` is the model the list gives when read
+  /// again. Returns the text, the models each send named, how often the
+  /// list was read and the model the dictation goes on with.
+  async fn send_with(
+    model: &str,
+    may_read_again: bool,
+    refusing: &[&str],
+    replacement: Option<&str>,
+  ) -> (
+    Result<String, String>,
+    Vec<String>,
+    usize,
+    ChosenModel,
+    bool,
+  ) {
+    let model = RefCell::new(chosen(model));
+    let may_read_again = Cell::new(may_read_again);
+    let replaced = RefCell::new(None);
+    let sent = RefCell::new(Vec::new());
+    let reads = Cell::new(0);
+    let text = send_replacing(
+      vec![1, 2, 3],
+      &model,
+      &may_read_again,
+      &replaced,
+      |piece, model| {
+        assert_eq!(piece, vec![1, 2, 3]);
+        sent.borrow_mut().push(model.id.clone());
+        let refused = refusing.contains(&model.id.as_str());
+        async move {
+          if refused {
+            Err(MODEL_REFUSED.to_string())
+          } else {
+            Ok(format!("text from {}", model.id))
+          }
+        }
+      },
+      || {
+        reads.set(reads.get() + 1);
+        std::future::ready(Ok(replacement.map(|id| (chosen(id), ()))))
+      },
+    )
+    .await;
+    let replaced = replaced.into_inner().is_some();
+    (
+      text,
+      sent.into_inner(),
+      reads.get(),
+      model.into_inner(),
+      replaced,
+    )
+  }
+
+  #[tokio::test]
+  async fn a_refused_model_has_the_list_read_again_and_the_piece_sent_once_more() {
+    let (text, sent, reads, model, replaced) =
+      send_with("retired", true, &["retired"], Some("scribe")).await;
+    assert_eq!(text, Ok("text from scribe".to_string()));
+    assert_eq!(sent, vec!["retired", "scribe"]);
+    assert_eq!((reads, model, replaced), (1, chosen("scribe"), true));
+  }
+
+  #[tokio::test]
+  async fn the_list_is_read_again_only_once_a_dictation_and_only_on_a_refusal() {
+    // Read again already: the refusal fails the piece as before.
+    let (text, sent, reads, _, _) =
+      send_with("retired", false, &["retired"], Some("scribe")).await;
+    assert_eq!(text, Err(MODEL_REFUSED.to_string()));
+    assert_eq!((sent.len(), reads), (1, 0));
+    // The replacement is refused too: no third request.
+    let (text, sent, reads, _, _) =
+      send_with("retired", true, &["retired", "scribe"], Some("scribe")).await;
+    assert_eq!(text, Err(MODEL_REFUSED.to_string()));
+    assert_eq!((sent.len(), reads), (2, 1));
+    // An answered piece never reads the list.
+    let (text, _, reads, model, _) = send_with("scribe", true, &[], None).await;
+    assert_eq!((text.is_ok(), reads, model), (true, 0, chosen("scribe")));
+  }
+
+  #[tokio::test]
+  async fn a_refused_model_the_list_still_gives_is_not_sent_again() {
+    for replacement in [Some("retired"), None] {
+      let (text, sent, reads, model, replaced) =
+        send_with("retired", true, &["retired"], replacement).await;
+      assert_eq!(text, Err(MODEL_REFUSED.to_string()));
+      assert_eq!(sent, vec!["retired"]);
+      assert_eq!((reads, model, replaced), (1, chosen("retired"), false));
+    }
+  }
+
+  #[test]
+  fn only_a_refusal_of_the_model_reads_the_list_again() {
+    use reqwest::StatusCode;
+    let unavailable = br#"{"code":"transcription_model_unavailable","message":"x"}"#;
+    assert!(refuses_model(StatusCode::SERVICE_UNAVAILABLE, unavailable));
+    assert!(refuses_model(StatusCode::UNPROCESSABLE_ENTITY, b""));
+    assert!(!refuses_model(
+      StatusCode::SERVICE_UNAVAILABLE,
+      br#"{"code":"service_unavailable"}"#
+    ));
+    assert!(!refuses_model(StatusCode::SERVICE_UNAVAILABLE, b"<html>"));
+    assert!(!refuses_model(StatusCode::TOO_MANY_REQUESTS, unavailable));
+    assert!(!refuses_model(StatusCode::FORBIDDEN, unavailable));
+  }
+
+  #[test]
+  fn the_contract_paths_are_versioned_desktop_routes() {
+    assert!(contract().models_path.starts_with("/v1/desktop/"));
+    assert!(contract().transcribe_path.starts_with("/v1/desktop/"));
+  }
+
+  #[test]
+  fn a_listed_model_is_offered_and_a_malformed_answer_is_refused() {
+    let models: CloudModels = serde_json::from_str(
+      r#"{"models":[{"id":"mistralai/voxtral-mini-transcribe","displayName":"Voxtral Mini Transcribe"}],"defaultModelId":"mistralai/voxtral-mini-transcribe","unavailable":null}"#,
+    )
+    .unwrap();
+    assert!(models.offers("mistralai/voxtral-mini-transcribe"));
+    assert!(!models.offers("openai/whisper-large-v3"));
+    // Fields a newer API adds are read past (see the test above); an answer
+    // without the model list is still refused.
+    assert!(
+      serde_json::from_str::<CloudModels>(
+        r#"{"defaultModelId":null,"unavailable":null}"#
+      )
+      .is_err()
+    );
+    assert!(
+      serde_json::from_str::<CloudModels>(
+        r#"{"models":[{"id":"x"}],"defaultModelId":null,"unavailable":null}"#
+      )
+      .is_err()
+    );
+  }
+}

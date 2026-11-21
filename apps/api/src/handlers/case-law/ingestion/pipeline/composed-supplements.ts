@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 
 import { mapWithConcurrency } from "@stll/concurrency";
+import { sanitizeErrorForOutput } from "@stll/errors";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { wrappedErrorDetail } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
@@ -12,6 +13,7 @@ import type { StoredSupplement } from "@/api/handlers/case-law/ingestion/supplem
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { errorSystemFields } from "@/api/lib/errors/utils";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { logger } from "@/api/lib/observability/logger";
 
 /** Emitted when a supplement's standalone row could not be absorbed. */
@@ -73,12 +75,13 @@ export const absorbComposedSupplementRows = async ({
         return Result.isError(rehomed.value) ? rehomed.value.error : null;
       })();
       if (rehomeError !== null) {
+        const safeError = sanitizeErrorForOutput(rehomeError);
         logger.error(SUPPLEMENT_ABSORB_FAILED, {
           sourceId,
           judgmentId,
           sourceDocumentId,
           ...errorSystemFields(rehomeError),
-          "error.detail": wrappedErrorDetail(rehomeError),
+          "error.detail": wrappedErrorDetail(safeError),
         });
         return [sourceDocumentId];
       }
@@ -91,17 +94,21 @@ export const absorbComposedSupplementRows = async ({
         observationOrder,
       });
       if (Result.isError(absorbed)) {
+        const safeError = sanitizeErrorForOutput(absorbed.error);
         logger.error(SUPPLEMENT_ABSORB_FAILED, {
           sourceId,
           judgmentId,
           sourceDocumentId,
           ...errorSystemFields(absorbed.error),
-          "error.detail": wrappedErrorDetail(absorbed.error),
+          "error.detail": wrappedErrorDetail(safeError),
         });
-        captureError(absorbed.error, {
-          sourceId,
-          step: "absorbComposedSupplementRows",
-        });
+        captureError(
+          safeError,
+          handlerErrorContext("pipeline.standing.safeError", {
+            sourceId,
+            step: "absorbComposedSupplementRows",
+          }),
+        );
         return [sourceDocumentId];
       }
       if (absorbed.value.type === "withdraw-incomplete") {

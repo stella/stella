@@ -1,25 +1,25 @@
 import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { mcpUserConnections } from "@/api/db/schema";
 import { mcpConnectorRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
-const routeParams = t.Object({
-  connectionId: tSafeId("mcpUserConnection"),
+const routeParams = v.object({
+  connectionId: resourceIdSchema("mcpUserConnection"),
 });
 
-const requestBody = t.Object({
-  enabled: t.Boolean(),
-});
+const requestBody = v.object({ enabled: v.boolean() });
 
 const config = {
+  contract: "patch",
   permissions: { integration: ["update"] },
-  accountAccess: ACCOUNT_ACCESS.standard,
+  accountAccess: ACCOUNT_ACCESS.accountControl,
   realtime: mcpConnectorRealtimeUpdates,
   mcp: { type: "internal", reason: "mcp_transport" },
   params: routeParams,
@@ -28,12 +28,17 @@ const config = {
 
 const updateMcpConnection = createSafeRootHandler(
   config,
-  async function* ({ body, params: requestParams, safeDb, session, user }) {
+  async function* ({
+    body,
+    params: requestParams,
+    recordAuditEvent,
+    safeDb,
+    session,
+    user,
+  }) {
     const updated = yield* Result.await(
-      // oxlint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
-      safeDb((tx) => {
-        // audit: skip — per-user MCP connection enable/disable toggle; the connector itself is SOC 2-audited at create-connector / delete-connector.
-        return tx
+      safeDb(async (tx) => {
+        const rows = await tx
           .update(mcpUserConnections)
           .set({
             enabled: body.enabled,
@@ -51,9 +56,25 @@ const updateMcpConnection = createSafeRootHandler(
           )
           .returning({
             id: mcpUserConnections.id,
+            connectorId: mcpUserConnections.connectorId,
             enabled: mcpUserConnections.enabled,
             status: mcpUserConnections.status,
           });
+        const row = rows.at(0);
+        if (row) {
+          await recordAuditEvent(tx, {
+            action: AUDIT_ACTION.UPDATE,
+            resourceType: AUDIT_RESOURCE_TYPE.MCP_CONNECTION,
+            resourceId: row.id,
+            workspaceId: null,
+            metadata: {
+              connectorId: row.connectorId,
+              enabled: row.enabled,
+              operation: "set_enabled",
+            },
+          });
+        }
+        return rows;
       }),
     );
 
@@ -64,7 +85,11 @@ const updateMcpConnection = createSafeRootHandler(
       );
     }
 
-    return Result.ok(connection);
+    return Result.ok({
+      id: connection.id,
+      enabled: connection.enabled,
+      status: connection.status,
+    });
   },
 );
 

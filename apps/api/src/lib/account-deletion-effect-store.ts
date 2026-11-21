@@ -1,4 +1,4 @@
-import { and, asc, eq, gte, lt, notExists, or, sql } from "drizzle-orm";
+import { and, asc, eq, notExists, or, sql } from "drizzle-orm";
 
 import type { rootDb, Transaction } from "@/api/db/root";
 import {
@@ -8,22 +8,24 @@ import {
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
 import {
-  DESTRUCTIVE_EFFECT_CHUNK_INSERT_BATCH_SIZE,
-  DESTRUCTIVE_EFFECT_LEGACY_STALE_PROCESSING_MS,
+  withAggregateLock,
+  withAggregateTransaction,
+  withSkipLockedBatch,
+} from "@/api/lib/db/aggregate-lock";
+import {
   assertValidS3DeletionEffectChunk,
   consumeInBatches,
   createS3DeletionEffectChunks,
+  DESTRUCTIVE_EFFECT_CHUNK_INSERT_BATCH_SIZE,
+  DESTRUCTIVE_EFFECT_LEGACY_STALE_PROCESSING_MS,
   getDestructiveEffectRetryDelayMs,
 } from "@/api/lib/destructive-effect-chunks";
 import { createEffectLease } from "@/api/lib/effect-lease";
 import type { EffectLease } from "@/api/lib/effect-lease";
 
 export const ACCOUNT_DELETION_EFFECT_KIND = "account-deletion-s3" as const;
-export const ACCOUNT_DELETION_EFFECT_LEASE_MS = 15 * 60_000;
-export const ACCOUNT_DELETION_EFFECT_MAX_ATTEMPTS = 20;
+const ACCOUNT_DELETION_EFFECT_LEASE_MS = 15 * 60_000;
 const RECOVERY_STATE_LIMIT = 50;
-const EXHAUSTED_LEASE_ERROR =
-  "Deletion effect lease expired after final attempt";
 
 export type AccountDeletionEffectClaim = {
   attemptCount: number;
@@ -39,46 +41,25 @@ export type AccountDeletionEffectDb = Pick<
 >;
 
 const eligibleChunkPredicate = () =>
-  and(
-    lt(
-      accountDeletionEffectChunks.attemptCount,
-      ACCOUNT_DELETION_EFFECT_MAX_ATTEMPTS,
+  or(
+    eq(accountDeletionEffectChunks.status, "pending"),
+    and(
+      eq(accountDeletionEffectChunks.status, "failed"),
+      sql`${accountDeletionEffectChunks.nextAttemptAt} <= CURRENT_TIMESTAMP`,
     ),
-    or(
-      eq(accountDeletionEffectChunks.status, "pending"),
-      and(
-        eq(accountDeletionEffectChunks.status, "failed"),
-        sql`${accountDeletionEffectChunks.nextAttemptAt} <= CURRENT_TIMESTAMP`,
-      ),
-      and(
-        eq(accountDeletionEffectChunks.status, "processing"),
-        sql`${accountDeletionEffectChunks.leaseExpiresAt} <= CURRENT_TIMESTAMP`,
-      ),
+    and(
+      eq(accountDeletionEffectChunks.status, "processing"),
+      sql`${accountDeletionEffectChunks.leaseExpiresAt} <= CURRENT_TIMESTAMP`,
     ),
   );
-
-const expiredLeasePredicate = () =>
-  and(
-    eq(accountDeletionEffectChunks.status, "processing"),
-    sql`${accountDeletionEffectChunks.leaseExpiresAt} <= CURRENT_TIMESTAMP`,
-  );
-
-const recoverableChunkPredicate = () =>
-  or(eligibleChunkPredicate(), expiredLeasePredicate());
 
 const legacyParentEligiblePredicate = () =>
-  and(
-    lt(
-      accountDeletionRequests.attemptCount,
-      ACCOUNT_DELETION_EFFECT_MAX_ATTEMPTS,
-    ),
-    or(
-      eq(accountDeletionRequests.status, "pending"),
-      eq(accountDeletionRequests.status, "failed"),
-      and(
-        eq(accountDeletionRequests.status, "processing"),
-        sql`${accountDeletionRequests.updatedAt} < CURRENT_TIMESTAMP - (${DESTRUCTIVE_EFFECT_LEGACY_STALE_PROCESSING_MS} * INTERVAL '1 millisecond')`,
-      ),
+  or(
+    eq(accountDeletionRequests.status, "pending"),
+    eq(accountDeletionRequests.status, "failed"),
+    and(
+      eq(accountDeletionRequests.status, "processing"),
+      sql`${accountDeletionRequests.updatedAt} < CURRENT_TIMESTAMP - (${DESTRUCTIVE_EFFECT_LEGACY_STALE_PROCESSING_MS} * INTERVAL '1 millisecond')`,
     ),
   );
 
@@ -103,13 +84,21 @@ const synchronizeParentProjection = async (
   tx: Transaction,
   requestId: SafeId<"accountDeletionRequest">,
 ): Promise<void> => {
+  const parentLock = await withAggregateLock({
+    aggregate: "accountDeletionRequest",
+    id: requestId,
+    mode: "update",
+    tx,
+  });
+  if (parentLock.status !== "locked") {
+    return;
+  }
   const parent = (
     await tx
       .select({ id: accountDeletionRequests.id })
       .from(accountDeletionRequests)
       .where(eq(accountDeletionRequests.id, requestId))
       .limit(1)
-      .for("update")
   ).at(0);
   if (!parent) {
     return;
@@ -157,7 +146,7 @@ export const ensureAccountDeletionEffectChunks = async (
   requestId: SafeId<"accountDeletionRequest">,
   db: AccountDeletionEffectDb,
 ): Promise<number> =>
-  await db.transaction(async (tx) => {
+  await withAggregateTransaction(db, async (tx) => {
     const existing = (
       await tx
         .select({ id: accountDeletionEffectChunks.id })
@@ -166,6 +155,15 @@ export const ensureAccountDeletionEffectChunks = async (
         .limit(1)
     ).at(0);
     if (existing) {
+      return 0;
+    }
+    const requestLock = await withAggregateLock({
+      aggregate: "accountDeletionRequest",
+      id: requestId,
+      mode: "update",
+      tx,
+    });
+    if (requestLock.status !== "locked") {
       return 0;
     }
     const request = (
@@ -179,7 +177,6 @@ export const ensureAccountDeletionEffectChunks = async (
           ),
         )
         .limit(1)
-        .for("update")
     ).at(0);
     if (!request) {
       return 0;
@@ -221,113 +218,104 @@ export const ensureAccountDeletionEffectChunks = async (
     return chunks.length;
   });
 
+// The deadline is fixed when the request is recorded. No object is deleted
+// before it, so no export attempt can still publish an object it removes.
+const storageCleanupDeferred = async (
+  requestId: SafeId<"accountDeletionRequest">,
+  db: AccountDeletionEffectDb,
+): Promise<boolean> => {
+  const deadlines = await db
+    .select({
+      deferred: sql<boolean>`coalesce((${accountDeletionRequests.storageCleanup} ->> 'notBefore')::timestamptz > clock_timestamp(), false)`,
+    })
+    .from(accountDeletionRequests)
+    .where(eq(accountDeletionRequests.id, requestId))
+    .limit(1);
+  return deadlines.at(0)?.deferred === true;
+};
+
 export const claimNextAccountDeletionEffectChunk = async (
   requestId: SafeId<"accountDeletionRequest">,
   db: AccountDeletionEffectDb,
-): Promise<AccountDeletionEffectClaim | null> =>
-  await db.transaction(async (tx) => {
-    const candidate = (
-      await tx
+): Promise<AccountDeletionEffectClaim | null> => {
+  if (await storageCleanupDeferred(requestId, db)) {
+    return null;
+  }
+  return await withSkipLockedBatch({
+    database: db,
+    limit: 1,
+    select: (tx) =>
+      tx
         .select({
-          attemptCount: accountDeletionEffectChunks.attemptCount,
           id: accountDeletionEffectChunks.id,
-          status: accountDeletionEffectChunks.status,
         })
         .from(accountDeletionEffectChunks)
         .where(
           and(
             eq(accountDeletionEffectChunks.requestId, requestId),
-            recoverableChunkPredicate(),
+            eligibleChunkPredicate(),
           ),
         )
         .orderBy(asc(accountDeletionEffectChunks.chunkIndex))
         .limit(1)
-        .for("update", { skipLocked: true })
-    ).at(0);
-    if (!candidate) {
-      return null;
-    }
-    if (
-      candidate.status === "processing" &&
-      candidate.attemptCount >= ACCOUNT_DELETION_EFFECT_MAX_ATTEMPTS
-    ) {
-      const exhausted = (
+        .$dynamic(),
+    run: async (tx, rows) => {
+      // audit: skip - deletion effect lease state belongs to the parent request audit trail
+      const candidate = rows.at(0);
+      if (!candidate) {
+        return null;
+      }
+      const lease = createEffectLease(ACCOUNT_DELETION_EFFECT_KIND);
+      const claimed = (
         await tx
           .update(accountDeletionEffectChunks)
           .set({
-            errorMessage: EXHAUSTED_LEASE_ERROR,
-            leaseExpiresAt: null,
-            leaseToken: null,
-            nextAttemptAt: sql`CURRENT_TIMESTAMP`,
-            status: "failed",
+            attemptCount: sql`${accountDeletionEffectChunks.attemptCount} + 1`,
+            errorMessage: null,
+            leaseExpiresAt: sql`CURRENT_TIMESTAMP + (${ACCOUNT_DELETION_EFFECT_LEASE_MS} * INTERVAL '1 millisecond')`,
+            leaseToken: lease.token,
+            nextAttemptAt: null,
+            status: "processing",
             updatedAt: sql`CURRENT_TIMESTAMP`,
           })
           .where(
             and(
               eq(accountDeletionEffectChunks.id, candidate.id),
-              gte(
-                accountDeletionEffectChunks.attemptCount,
-                ACCOUNT_DELETION_EFFECT_MAX_ATTEMPTS,
-              ),
-              expiredLeasePredicate(),
+              eligibleChunkPredicate(),
             ),
           )
-          .returning({ id: accountDeletionEffectChunks.id })
+          .returning({
+            attemptCount: accountDeletionEffectChunks.attemptCount,
+            chunkIndex: accountDeletionEffectChunks.chunkIndex,
+            chunkId: accountDeletionEffectChunks.id,
+            payloadHash: accountDeletionEffectChunks.payloadHash,
+            requestId: accountDeletionEffectChunks.requestId,
+            s3Keys: accountDeletionEffectChunks.s3Keys,
+          })
       ).at(0);
-      if (exhausted) {
-        await synchronizeParentProjection(tx, requestId);
+      if (!claimed) {
+        return null;
       }
-      return null;
-    }
-    const lease = createEffectLease(ACCOUNT_DELETION_EFFECT_KIND);
-    const claimed = (
+      assertValidS3DeletionEffectChunk(claimed);
       await tx
-        .update(accountDeletionEffectChunks)
+        .update(accountDeletionRequests)
         .set({
-          attemptCount: sql`${accountDeletionEffectChunks.attemptCount} + 1`,
+          completedAt: null,
           errorMessage: null,
-          leaseExpiresAt: sql`CURRENT_TIMESTAMP + (${ACCOUNT_DELETION_EFFECT_LEASE_MS} * INTERVAL '1 millisecond')`,
-          leaseToken: lease.token,
-          nextAttemptAt: null,
           status: "processing",
           updatedAt: sql`CURRENT_TIMESTAMP`,
         })
-        .where(
-          and(
-            eq(accountDeletionEffectChunks.id, candidate.id),
-            eligibleChunkPredicate(),
-          ),
-        )
-        .returning({
-          attemptCount: accountDeletionEffectChunks.attemptCount,
-          chunkIndex: accountDeletionEffectChunks.chunkIndex,
-          chunkId: accountDeletionEffectChunks.id,
-          payloadHash: accountDeletionEffectChunks.payloadHash,
-          requestId: accountDeletionEffectChunks.requestId,
-          s3Keys: accountDeletionEffectChunks.s3Keys,
-        })
-    ).at(0);
-    if (!claimed) {
-      return null;
-    }
-    assertValidS3DeletionEffectChunk(claimed);
-    await tx
-      .update(accountDeletionRequests)
-      .set({
-        completedAt: null,
-        errorMessage: null,
-        status: "processing",
-        updatedAt: sql`CURRENT_TIMESTAMP`,
-      })
-      .where(eq(accountDeletionRequests.id, requestId));
-    return {
-      attemptCount: claimed.attemptCount,
-      chunkId: claimed.chunkId,
-      lease,
-      requestId: claimed.requestId,
-      s3Keys: claimed.s3Keys,
-    };
+        .where(eq(accountDeletionRequests.id, requestId));
+      return {
+        attemptCount: claimed.attemptCount,
+        chunkId: claimed.chunkId,
+        lease,
+        requestId: claimed.requestId,
+        s3Keys: claimed.s3Keys,
+      };
+    },
   });
+};
 
 export const completeAccountDeletionEffectChunk = async (
   claim: AccountDeletionEffectClaim,
@@ -433,7 +421,7 @@ export const listRecoverableAccountDeletionEffectRequestIds = async (
       accountDeletionRequests,
       eq(accountDeletionRequests.id, accountDeletionEffectChunks.requestId),
     )
-    .where(recoverableChunkPredicate())
+    .where(eligibleChunkPredicate())
     .orderBy(
       asc(accountDeletionRequests.updatedAt),
       asc(accountDeletionEffectChunks.requestId),

@@ -9,7 +9,10 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { LOCAL_SEED_SCRIPTS } from "../apps/api/scripts/seed-local-scripts";
 import {
+  corpusEngineScopeViolations,
+  devSeedDependencies,
   planServiceSuites,
   requiresServiceSuites,
   serviceSuiteDependencies,
@@ -19,12 +22,22 @@ import { GENERATORS } from "./generated-files";
 // The detector and the modules it imports, copied into fixture checkouts.
 const DETECTOR_SOURCES = Object.fromEntries(
   [
+    "../apps/api/scripts/seed-local-scripts.ts",
+    "../packages/scripts/src/generated-files.ts",
+    "ci-repository-cache.ts",
     "detect-service-suite-changes.ts",
     "generated-files.ts",
     "baseline-paths.ts",
   ].map((file) => [
-    `scripts/${file}`,
+    path.posix.normalize(`scripts/${file}`),
     readFileSync(new URL(file, import.meta.url), "utf-8"),
+  ]),
+);
+// Without its entry points the dev seed scope fails closed.
+const DEV_SEED_SOURCES = Object.fromEntries(
+  ["seed-local.ts", ...LOCAL_SEED_SCRIPTS].map((script) => [
+    `apps/api/scripts/${script}`,
+    "",
   ]),
 );
 
@@ -41,9 +54,42 @@ test("database, migrations, scheduler, backfills, suites, and harness changes re
     "apps/collab/src/server.test.ts",
     "bun.lock",
     "patches/new.patch",
+    "docker/postgres/Dockerfile",
+    "docker/postgres/.dockerignore",
+    "docker/postgres/init.sql",
     ".github/workflows/ci.yml",
+    "apps/api/.env.example",
   ]) {
     expect(requiresServiceSuites([file]), file).toBe(true);
+  }
+});
+
+test("the dev seed scope covers migrations, its fixtures and every file it imports, and selects the Postgres job", () => {
+  const graph = devSeedDependencies();
+  if (graph.status !== "complete") {
+    throw new TypeError(graph.message);
+  }
+  expect(graph.dependencies).toContain("apps/api/scripts/seed-dev.ts");
+  expect(graph.dependencies).toContain(
+    "apps/api/scripts/seed-marketing-case-law.ts",
+  );
+  for (const file of [
+    ...graph.dependencies,
+    "apps/api/drizzle/20991231235959_new/migration.sql",
+    "apps/api/scripts/__fixtures__/case-law/cz-ns.json.gz",
+    "apps/api/.env.example",
+  ]) {
+    const plan = planServiceSuites([file]);
+    expect(plan.devSeed, file).toBe(true);
+    expect(plan.postgres, file).toBe(true);
+  }
+  for (const file of [
+    "docs/guide.md",
+    "apps/web/src/page.tsx",
+    "apps/api/src/unused-new-handler.ts",
+    "apps/api/scripts/seed-email-viewer-demo.ts",
+  ]) {
+    expect(planServiceSuites([file]).devSeed, file).toBe(false);
   }
 });
 
@@ -87,17 +133,22 @@ test("a derived module is followed through its generator inputs, never its ignor
   expect(graph.dependencies).toContain(
     "apps/api/scripts/generate-capability-runtime.ts",
   );
+  // The runtime derives the catalog from the handler graph, not CLI shards.
+  expect(graph.dependencies).toContain(
+    "apps/api/scripts/export-capability-catalog.ts",
+  );
   expect(
     [...graph.dependencies].some((file) =>
       file.startsWith("packages/cli/capabilities/"),
     ),
-  ).toBe(true);
+  ).toBe(false);
 });
 
 test("a newly added transitive import is picked up without editing the detector", () => {
   const root = mkdtempSync(path.join(tmpdir(), "service-suite-graph-"));
   const sources = {
     ...DETECTOR_SOURCES,
+    ...DEV_SEED_SOURCES,
     "apps/api/package.json": readFileSync(
       new URL("../apps/api/package.json", import.meta.url),
       "utf-8",
@@ -120,6 +171,7 @@ test("a newly added transitive import is picked up without editing the detector"
   };
   try {
     for (const [file, source] of Object.entries(sources)) {
+      mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
       mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
       writeFileSync(path.join(root, file), source);
     }
@@ -172,6 +224,55 @@ test("a newly added transitive import is picked up without editing the detector"
   }
 });
 
+test("a concrete path selected by a derived output glob follows generator inputs", () => {
+  const root = mkdtempSync(path.join(tmpdir(), "service-suite-derived-glob-"));
+  const generator = GENERATORS.find(({ id }) => id === "capability-runtime");
+  if (generator === undefined) {
+    throw new TypeError("Missing capability runtime generator");
+  }
+  const sources = {
+    ...Object.fromEntries(
+      generator.inputs
+        .filter((input) => !/[*?[{]/u.test(input))
+        .map((input) => [input, ""]),
+    ),
+    ...DETECTOR_SOURCES,
+    "apps/api/src/handlers/lists/verifications/get.ts": "",
+    "apps/api/package.json": readFileSync(
+      new URL("../apps/api/package.json", import.meta.url),
+      "utf-8",
+    ),
+    "apps/api/src/tests/setup-env.ts": "",
+    "apps/api/scripts/run-postgres-tests.ts": "",
+    "apps/api/scripts/run-valkey-tests.ts": "",
+    "apps/api/src/db/migrate.ts": "",
+    "apps/collab/src/server.test.ts": "",
+    "apps/api/src/gated.test.ts": [
+      'const gate = "STELLA_RUN_POSTGRES_TESTS";',
+      'import "@/api/mcp/generated/capability-dispatch/lists.verifications.get";',
+    ].join(" "),
+  };
+  try {
+    for (const [file, source] of Object.entries(sources)) {
+      mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
+      writeFileSync(path.join(root, file), source);
+    }
+    const graph = serviceSuiteDependencies(root, "postgres");
+    expect(graph.status).toBe("complete");
+    if (graph.status !== "complete") {
+      return;
+    }
+    expect(graph.dependencies).toContain(
+      "apps/api/scripts/generate-capability-runtime.ts",
+    );
+    expect(graph.dependencies).toContain(
+      "apps/api/src/handlers/lists/verifications/get.ts",
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("each suite follows its own import closure without planning unrelated siblings", () => {
   const root = mkdtempSync(path.join(tmpdir(), "service-suite-scopes-"));
   const sources = {
@@ -189,12 +290,17 @@ test("each suite follows its own import closure without planning unrelated sibli
       'const gate = "STELLA_RUN_CORPUS_ENGINE_TESTS"; import "./corpus-only";',
     "apps/api/src/valkey.test.ts":
       'const gate = "STELLA_RUN_VALKEY_TESTS"; import "./valkey-only";',
-    "apps/api/src/postgres-only.ts": "",
+    // A first-party helper outside the app and package roots.
+    "apps/api/src/postgres-only.ts": 'import "../../../tools/service-helper";',
+    "tools/service-helper.ts": "",
     "apps/api/src/corpus-only.ts": "",
     "apps/api/src/valkey-only.ts": "",
     "apps/collab/src/server.test.ts": 'import "@stll/collaboration-only";',
     "packages/collaboration-only/package.json":
       '{"name":"@stll/collaboration-only"}',
+    ...DEV_SEED_SOURCES,
+    "apps/api/scripts/seed-dev.ts": 'import "@/api/seed-only";',
+    "apps/api/src/seed-only.ts": "",
   };
   try {
     for (const [file, source] of Object.entries(sources)) {
@@ -203,17 +309,54 @@ test("each suite follows its own import closure without planning unrelated sibli
     }
     for (const [suite, file] of [
       ["postgres", "apps/api/src/postgres-only.ts"],
+      ["postgres", "tools/service-helper.ts"],
       ["corpus", "apps/api/src/corpus-only.ts"],
       ["valkey", "apps/api/src/valkey-only.ts"],
       ["collab", "packages/collaboration-only/src/new.ts"],
+      ["devSeed", "apps/api/src/seed-only.ts"],
     ] as const) {
       expect(planServiceSuites([file], root), file).toEqual({
-        postgres: suite === "postgres",
+        postgres: suite === "postgres" || suite === "devSeed",
         corpus: suite === "corpus",
         valkey: suite === "valkey",
         collab: suite === "collab",
+        devSeed: suite === "devSeed",
       });
     }
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("every engine-reaching test remains inside the corpus dependency scope", () => {
+  expect(corpusEngineScopeViolations()).toEqual([]);
+});
+
+test("an engine-reaching test outside the corpus glob fails the scope census", () => {
+  const root = mkdtempSync(path.join(tmpdir(), "corpus-engine-scope-"));
+  const sources = {
+    ...DETECTOR_SOURCES,
+    "apps/api/package.json": readFileSync(
+      new URL("../apps/api/package.json", import.meta.url),
+      "utf-8",
+    ),
+    "apps/api/src/tests/setup-env.ts": "",
+    "apps/api/src/db/migrate.ts": "",
+    "apps/api/scripts/run-postgres-tests.ts": "",
+    "apps/api/scripts/run-valkey-tests.ts": "",
+    "apps/collab/src/server.test.ts": "",
+    "apps/api/engine-tests/planted.contract.test.ts":
+      'const enabled = process.env["STELLA_RUN_CORPUS_ENGINE_TESTS"] === "true";',
+  };
+  try {
+    for (const [file, source] of Object.entries(sources)) {
+      mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
+      writeFileSync(path.join(root, file), source);
+    }
+    expect(corpusEngineScopeViolations(root)).toEqual([
+      "apps/api/engine-tests/planted.contract.test.ts: engine test is outside the corpus scope",
+      "apps/api/scripts/run-corpus-engine-suites.test.ts: stale or unreasoned corpus engine census allowlist entry",
+    ]);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
@@ -225,6 +368,7 @@ test("removed runner metadata widens the detector inside its guarded execution",
     mkdirSync(path.join(root, "scripts"));
     mkdirSync(path.join(root, "apps/api"), { recursive: true });
     for (const [file, source] of Object.entries(DETECTOR_SOURCES)) {
+      mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
       writeFileSync(path.join(root, file), source);
     }
     for (const metadata of [

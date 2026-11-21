@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { useTranslations } from "use-intl";
+import { useNow, useTranslations } from "use-intl";
 
 import {
   matchesMatterReferencePattern,
@@ -9,22 +9,30 @@ import {
 import { Button } from "@stll/ui/button";
 import { AlertTriangleIcon } from "@stll/ui/icons";
 import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { organizationSettingsOptions } from "@/lib/organization/settings-queries";
+import { queryView } from "@/lib/query-view.logic";
+import { useQueryViewError } from "@/lib/use-query-view";
 
 export type MatterNumberHintProps = InlineProps | PopoverProps;
 
 export const MatterNumberHint = (props: MatterNumberHintProps) => {
   const t = useTranslations();
+  const now = useNow();
   const { activeOrganizationId, id: userId } = useAuthenticatedUser();
-  const { data: settings } = useQuery(
+  const settingsQuery = useQuery(
     organizationSettingsOptions({
       organizationId: activeOrganizationId,
       userId,
     }),
   );
+  const settingsView = queryView(settingsQuery);
+  useQueryViewError(settingsView, "MatterNumberHint:query");
+  const settings =
+    settingsView.type === "items" ? settingsView.items : undefined;
 
   if (!settings) {
     return null;
@@ -33,7 +41,7 @@ export const MatterNumberHint = (props: MatterNumberHintProps) => {
   const { matterNumberPattern: pattern, matterNumberPadding: padding } =
     settings;
   const example = renderMatterReference({
-    now: new Date(),
+    now,
     padding,
     pattern,
     seq: 1,
@@ -157,8 +165,8 @@ const MatterNumberHintBody = ({
   }
 
   return (
-    <p className="text-muted-foreground truncate text-xs">
+    <TruncatedText className="text-muted-foreground text-xs" render={<p />}>
       {t("workspaces.referenceConventionHint", { example })}
-    </p>
+    </TruncatedText>
   );
 };

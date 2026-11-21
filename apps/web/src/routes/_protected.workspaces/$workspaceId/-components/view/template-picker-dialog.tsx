@@ -37,14 +37,23 @@ import {
 } from "@stll/ui/icons";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { stellaToast } from "@stll/ui/toast";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
+import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { useStartWorkflow } from "@/components/workspaces/hooks/use-start-workflow";
-import { useAvtPreviewEnabled } from "@/hooks/use-avt-preview";
 import { usePermissions } from "@/hooks/use-permissions";
+import { useSingleFlight } from "@/hooks/use-single-flight";
 import type { ViewLayoutType } from "@/lib/api-contract";
 import { detached } from "@/lib/detached";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { isCapabilityActionVisible } from "@/lib/organization/feature-access/action-capabilities.logic";
+import {
+  CapabilityAction,
+  useActionCapabilities,
+} from "@/lib/organization/feature-access/capability-actions";
+import { queryView } from "@/lib/query-view.logic";
+import { createUuid } from "@/lib/uuid";
 import { useCreateView } from "@/lib/workspaces/mutations/views";
 import type { WorkspaceViewTemplate } from "@/lib/workspaces/queries/view-templates";
 import { viewTemplatesOptions } from "@/lib/workspaces/queries/view-templates";
@@ -88,21 +97,31 @@ export const TemplatePickerDialog = ({
     select: (ctx) => ctx.user.id,
   });
   const canDeleteTemplate = usePermissions({ view: ["delete"] });
+  const verificationCapabilities = useActionCapabilities("verification");
   const [previewLayout, setPreviewLayout] = useState<ViewLayoutType | null>(
     null,
   );
-  const { data: templates, isPending } = useQuery({
+  const templatesQuery = useQuery({
     ...viewTemplatesOptions({
       key: { organizationId, userId },
       context: { workspaceId },
     }),
     enabled: open,
   });
+  const { isPending } = templatesQuery;
+  const templatesView = queryView(templatesQuery);
+  const templates =
+    templatesView.type === "items" ? templatesView.items : undefined;
   const visibleTemplates = templates?.filter(
     (template) => !disallowedLayoutTypes.has(template.layoutType),
   );
   // AVT has no saved template to start from, so the preview offers its own.
-  const offersAvt = useAvtPreviewEnabled() && !disallowedLayoutTypes.has("avt");
+  const offersAvt =
+    !disallowedLayoutTypes.has("avt") &&
+    isCapabilityActionVisible(
+      { capability: "verification" },
+      verificationCapabilities,
+    );
   const hasSavedTemplates = (visibleTemplates?.length ?? 0) > 0;
   const hasTemplates = hasSavedTemplates || offersAvt;
 
@@ -110,21 +129,26 @@ export const TemplatePickerDialog = ({
   const deleteTemplate = useDeleteViewTemplate();
   const startWorkflow = useStartWorkflow(workspaceId);
 
-  const handleUse = (template: WorkspaceViewTemplate) => {
-    const newId = crypto.randomUUID();
+  // One view per click: both create paths share the in-flight guard.
+  const createOnce = useSingleFlight();
+  const createFromTemplate = (
+    template: WorkspaceViewTemplate,
+    settled: () => void,
+  ) => {
     const hasAITemplateProperty = template.templateProperties.some(
       (p) => p.createIfMissing && p.tool.type === "ai-model",
     );
     createView.mutate(
       {
-        id: newId,
+        id: createUuid(),
         name: template.name,
         layout: template.layout,
         templateProperties: template.templateProperties,
       },
       {
-        onSuccess: () => {
-          onCreated(newId);
+        onSettled: settled,
+        onSuccess: (view) => {
+          onCreated(view.id);
           onOpenChange(false);
           if (hasAITemplateProperty) {
             detached(startWorkflow(), "template-picker-dialog.start-workflow");
@@ -137,17 +161,17 @@ export const TemplatePickerDialog = ({
     );
   };
 
-  const handleCreateAvt = () => {
-    const newId = crypto.randomUUID();
+  const createAvt = (settled: () => void) => {
     createView.mutate(
       {
-        id: newId,
+        id: createUuid(),
         name: t("workspaces.views.layouts.avt"),
         layout: EMPTY_AVT_LAYOUT,
       },
       {
-        onSuccess: () => {
-          onCreated(newId);
+        onSettled: settled,
+        onSuccess: (view) => {
+          onCreated(view.id);
           onOpenChange(false);
         },
         onError: (error) => {
@@ -155,6 +179,16 @@ export const TemplatePickerDialog = ({
         },
       },
     );
+  };
+
+  const handleUse = (template: WorkspaceViewTemplate) => {
+    detached(
+      createOnce.runSettled((settled) => createFromTemplate(template, settled)),
+      "template-picker-dialog.use",
+    );
+  };
+  const handleCreateAvt = () => {
+    detached(createOnce.runSettled(createAvt), "template-picker-dialog.avt");
   };
 
   const handleDelete = (templateId: string) => {
@@ -194,10 +228,14 @@ export const TemplatePickerDialog = ({
           </DialogDescription>
         </DialogHeader>
         <DialogPanel>
+          {templatesView.type !== "pending" && (
+            <QueryViewFeedback view={templatesView} />
+          )}
           <div className="flex items-stretch">
             <div className="min-w-0 flex-1">
               {offersAvt && (
                 <BuiltInTemplateRow
+                  capability="verification"
                   icon={layoutIcons.avt}
                   isPending={createView.isPending}
                   name={t("workspaces.views.layouts.avt")}
@@ -205,17 +243,20 @@ export const TemplatePickerDialog = ({
                   onUse={handleCreateAvt}
                 />
               )}
-              {(!offersAvt || isPending || hasSavedTemplates) && (
-                <TemplateList
-                  canDeleteTemplate={canDeleteTemplate}
-                  isMutating={createView.isPending || deleteTemplate.isPending}
-                  isPending={isPending}
-                  onDelete={handleDelete}
-                  onPreview={setPreviewLayout}
-                  onUse={handleUse}
-                  templates={visibleTemplates}
-                />
-              )}
+              {templatesView.type !== "error" &&
+                (!offersAvt || isPending || hasSavedTemplates) && (
+                  <TemplateList
+                    canDeleteTemplate={canDeleteTemplate}
+                    isMutating={
+                      createView.isPending || deleteTemplate.isPending
+                    }
+                    isPending={isPending}
+                    onDelete={handleDelete}
+                    onPreview={setPreviewLayout}
+                    onUse={handleUse}
+                    templates={visibleTemplates}
+                  />
+                )}
             </div>
             {hasTemplates && (
               <div className="ms-3 hidden border-s ps-1 sm:block">
@@ -311,24 +352,35 @@ const TemplateRow = ({
   onPreview,
 }: TemplateRowProps) => {
   const t = useTranslations();
+  const capability = template.templateProperties.some(
+    (property) => property.createIfMissing && property.tool.type === "ai-model",
+  )
+    ? "ai"
+    : null;
   const Icon = layoutIcons[template.layoutType];
 
   return (
-    // oxlint-disable-next-line jsx-a11y/no-noninteractive-element-interactions -- onFocus mirrors onMouseEnter (keyboard parity); the <li> stays a semantic list item wrapping the actionable <button>
+    // oxlint-disable-next-line jsx-a11y/no-noninteractive-element-interactions -- onFocus mirrors onMouseEnter (keyboard parity); the <li> stays a semantic list item wrapping the actionable Button
     <li
-      className="hover:bg-muted/50 flex items-center gap-2 rounded p-2"
+      className="hover:bg-muted/50 flex items-center gap-2 rounded-sm p-2"
       onFocus={onPreview}
       onMouseEnter={onPreview}
     >
       <Icon className="text-muted-foreground size-4 shrink-0" />
-      <button
-        className="min-w-0 flex-1 truncate text-start text-sm"
-        disabled={isPending}
-        onClick={onUse}
-        type="button"
-      >
-        {template.name}
-      </button>
+      <CapabilityAction action={{ capability }} surface="control">
+        {(capabilityProps) => (
+          <Button
+            className="flex min-w-0 flex-1"
+            disabled={isPending}
+            disabledReason={t("common.preparing")}
+            onClick={onUse}
+            variant="plain"
+            {...capabilityProps}
+          >
+            <TruncatedText className="text-sm">{template.name}</TruncatedText>
+          </Button>
+        )}
+      </CapabilityAction>
       {canDelete && (
         <DeleteTemplateConfirm
           name={template.name}
@@ -336,19 +388,26 @@ const TemplateRow = ({
           pending={isPending}
         />
       )}
-      <Button
-        disabled={isPending}
-        onClick={onUse}
-        size="xs"
-        variant="secondary"
-      >
-        {t("workspaces.views.templates.use")}
-      </Button>
+      <CapabilityAction action={{ capability }} surface="control">
+        {(capabilityProps) => (
+          <Button
+            disabled={isPending}
+            disabledReason={t("common.preparing")}
+            onClick={onUse}
+            size="xs"
+            variant="secondary"
+            {...capabilityProps}
+          >
+            {t("workspaces.views.templates.use")}
+          </Button>
+        )}
+      </CapabilityAction>
     </li>
   );
 };
 
 type BuiltInTemplateRowProps = {
+  capability: "verification";
   icon: React.ElementType;
   name: string;
   isPending: boolean;
@@ -357,6 +416,7 @@ type BuiltInTemplateRowProps = {
 };
 
 const BuiltInTemplateRow = ({
+  capability,
   icon: Icon,
   name,
   isPending,
@@ -366,26 +426,38 @@ const BuiltInTemplateRow = ({
   const t = useTranslations();
 
   return (
-    <div className="hover:bg-muted/50 mb-1 flex items-center gap-2 rounded p-2">
+    <div className="hover:bg-muted/50 mb-1 flex items-center gap-2 rounded-sm p-2">
       <Icon className="text-muted-foreground size-4 shrink-0" />
-      <button
-        className="min-w-0 flex-1 truncate text-start text-sm"
-        disabled={isPending}
-        onClick={onUse}
-        onFocus={onPreview}
-        onMouseEnter={onPreview}
-        type="button"
-      >
-        {name}
-      </button>
-      <Button
-        disabled={isPending}
-        onClick={onUse}
-        size="xs"
-        variant="secondary"
-      >
-        {t("workspaces.views.templates.use")}
-      </Button>
+      <CapabilityAction action={{ capability }} surface="control">
+        {(capabilityProps) => (
+          <Button
+            className="flex min-w-0 flex-1"
+            disabled={isPending}
+            disabledReason={t("common.preparing")}
+            onClick={onUse}
+            onFocus={onPreview}
+            onMouseEnter={onPreview}
+            variant="plain"
+            {...capabilityProps}
+          >
+            <TruncatedText className="text-sm">{name}</TruncatedText>
+          </Button>
+        )}
+      </CapabilityAction>
+      <CapabilityAction action={{ capability }} surface="control">
+        {(capabilityProps) => (
+          <Button
+            disabled={isPending}
+            disabledReason={t("common.preparing")}
+            onClick={onUse}
+            size="xs"
+            variant="secondary"
+            {...capabilityProps}
+          >
+            {t("workspaces.views.templates.use")}
+          </Button>
+        )}
+      </CapabilityAction>
     </div>
   );
 };
@@ -407,10 +479,12 @@ const DeleteTemplateConfirm = ({
   return (
     <AlertDialog onOpenChange={setOpen} open={open}>
       <AlertDialogTrigger
+        nativeButton
         render={
           <Button
             aria-label={t("workspaces.views.templates.delete")}
             disabled={pending}
+            disabledReason={t("common.deleting")}
             size="icon-xs"
             variant="ghost"
           />

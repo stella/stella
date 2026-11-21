@@ -3,8 +3,8 @@ import { describe, expect, test } from "bun:test";
 import {
   blockDirectiveLinePattern,
   classifyMarker,
-  clauseSlotPattern,
   classifyMarkerDefect,
+  clauseSlotPattern,
   DIRECTIVE_KINDS,
   isBlockDirectiveKind,
   isFieldPath,

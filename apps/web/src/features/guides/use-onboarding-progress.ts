@@ -15,9 +15,11 @@ import {
 } from "@/features/guides/guide-types";
 import { api } from "@/lib/api";
 import { sessionOptions } from "@/lib/auth-queries";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { queryView } from "@/lib/query-view.logic";
 import { readStoredJson } from "@/lib/stored-json";
+import { useQueryViewError } from "@/lib/use-query-view";
 
 // Progress is the source of truth in the DB: it rides the `["session"]` query
 // (`user.guideProgress`, a serialized JSON map), so reads add no request and it
@@ -80,8 +82,12 @@ export const useOnboardingProgress = (
 ): OnboardingProgress => {
   const queryClient = useQueryClient();
   const t = useTranslations();
-  const { data } = useQuery(sessionOptions);
+  const dataQuery = useQuery(sessionOptions);
+  const dataView = queryView(dataQuery);
+  useQueryViewError(dataView, "useOnboardingProgress:query");
+  const data = dataView.type === "items" ? dataView.items : undefined;
 
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing, without this memo boundary the React Compiler does not cache this value
   const stored = useMemo(
     () => parseGuideProgress(data?.user.guideProgress),
     [data?.user.guideProgress],
@@ -98,7 +104,7 @@ export const useOnboardingProgress = (
         tourId,
         status,
       });
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onSuccess: ({ guideProgress }) => {
       queryClient.setQueryData(sessionOptions.queryKey, (current) =>

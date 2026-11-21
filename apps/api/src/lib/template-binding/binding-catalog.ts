@@ -40,7 +40,7 @@ type CatalogRef = { value: AttorneyRef; labelKey: CatalogLabelKey };
  * carries `roles`, `attorney` carries `refs`, and the rest carry neither. A new
  * kind then fails typecheck at every consumer instead of silently defaulting.
  */
-export type CatalogSource =
+type CatalogSource =
   | { kind: "contact"; labelKey: CatalogLabelKey; fields: CatalogField[] }
   | {
       kind: "party";
@@ -74,7 +74,7 @@ const CONTACT_FIELD_LABELS = {
   addressPostalCode: "contacts.fields.billingAddressPostalCode",
   addressCountry: "common.country",
   registrationNumber: "contacts.fields.registrationNumber",
-  taxId: "contacts.fields.taxId",
+  taxId: "common.taxId",
   iban: "contacts.fields.bankAccountIban",
   bic: "contacts.fields.bankAccountBic",
   dataBox: "contacts.communication.dataBoxPlaceholder",
@@ -124,11 +124,12 @@ const SOURCE_LABELS = {
 
 /**
  * Every i18n key the catalog can emit, as a literal union. Flows to the
- * frontend through Eden, where `t(labelKey)` then typechecks against the real
+ * frontend through the API client, where `t(labelKey)` then typechecks
+ * against the real
  * message catalog — a stale or values-bearing key fails the web typecheck
  * instead of needing a runtime cast.
  */
-export type CatalogLabelKey =
+type CatalogLabelKey =
   | (typeof SOURCE_LABELS)[CatalogSource["kind"]]
   | (typeof CONTACT_FIELD_LABELS)[ContactField]
   | (typeof MATTER_FIELD_LABELS)[MatterField]

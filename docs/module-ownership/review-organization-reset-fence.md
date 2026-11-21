@@ -1,0 +1,7 @@
+# Locking the restricted review organization before each reset transaction
+
+Generated from `scripts/ownership/review-organization-reset-fence.ts`. See [Module ownership](../module-ownership.md).
+
+| Capability                                                                                                   | Owner                     | Enforcement                                                                 | Summary                                                                                                                                                                                                |
+| ------------------------------------------------------------------------------------------------------------ | ------------------------- | --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `review-organization-reset-fence` — Locking the restricted review organization before each reset transaction | `apps/api/src/db/root.ts` | import `createFencedRlsDatabase` from `@/api/db/root` (plus 1 allowed file) | Runs the caller's organization-row lock and sole-membership check as the owner at the start of each scoped transaction, before the role switch; the caller receives a scoped database, never the pool. |

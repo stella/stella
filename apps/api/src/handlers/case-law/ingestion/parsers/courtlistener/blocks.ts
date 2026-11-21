@@ -1,3 +1,4 @@
+// parser-output-unchanged: HTML parser bindings come from their package owner; DOM and serialization behavior are unchanged.
 // parser-output-unchanged: shared exclusion and text helpers discard the same script/style content as the existing walks.
 /**
  * Block machinery shared by the CourtListener text formats: a builder that
@@ -10,18 +11,19 @@
  */
 
 import { panic } from "better-result";
-import type * as cheerio from "cheerio";
+
+import type * as cheerio from "@stll/html";
 import {
   type AnyNode,
+  createText,
   type Element,
   hasChildren,
   isCDATA,
   isTag,
   isText,
   type ParentNode,
-  Text,
-} from "domhandler";
-
+} from "@stll/html/nodes";
+// parser-output-unchanged: imports the document AST from its package owner
 import {
   type Block,
   hasInlineChildren,
@@ -30,7 +32,8 @@ import {
   plainTextOf,
   projectPlainText,
   type TableCell,
-} from "@/api/handlers/case-law/document-ast";
+} from "@stll/legal-ast/document-ast";
+
 import {
   appendTextInline,
   isExcludedHtmlTag,
@@ -147,9 +150,6 @@ type Frame = {
   readonly position: UnitPosition;
 };
 
-/** A root title that makes the document an order, as printed alone. */
-const ORDER_TITLE = /^ORDER\.?$/u;
-
 type UnitBuilder = ReturnType<typeof createUnitBuilder>;
 
 const outsideFrame = (id: number): Frame => ({
@@ -158,22 +158,6 @@ const outsideFrame = (id: number): Frame => ({
   domType: null,
   position: "row",
 });
-
-/** The first block, when it is `ORDER` alone. */
-const orderTitleOf = (blocks: readonly Block[]): string | null => {
-  const first = blocks.find(
-    (block) =>
-      block.type !== "paragraph" ||
-      !["front-matter", "parties", "case-number", "panel", "counsel"].includes(
-        block.role ?? "",
-      ),
-  );
-  return first !== undefined &&
-    "inlines" in first &&
-    ORDER_TITLE.test(plainTextOf(first.inlines).trim())
-    ? first.id
-    : null;
-};
 
 const tableBlock = ({
   rows,
@@ -216,20 +200,14 @@ const tableBlock = ({
 const buildTextUnits = (
   units: { frame: Frame; blocks: Block[] }[],
   boundaries: TextUnit["boundaries"],
-): TextUnit[] => {
-  const root = units.find(({ frame }) => frame.kind === "opinion");
-  return units.map(({ blocks, frame }) => ({
+): TextUnit[] =>
+  units.map(({ blocks, frame }) => ({
     kind: frame.kind,
     domType: frame.domType,
     position: frame.position,
     boundaries,
     blocks,
-    orderTitleBlockId:
-      root?.frame.id === frame.id && frame.position === "row"
-        ? orderTitleOf(blocks)
-        : null,
   }));
-};
 
 /**
  * Numbers one opinion row's blocks under `prefix` and groups them into units:
@@ -460,6 +438,8 @@ export const createUnitBuilder = ({
 
 /** What a format's elements mean at the block level. */
 export type BodyVocabulary = {
+  /** Positively identified page furniture; excluded from the source snapshot. */
+  readonly excluded?: (element: Element) => boolean;
   /** Elements that are one paragraph each, by role. */
   readonly paragraphs: Readonly<Record<string, DraftRole>>;
   /**
@@ -545,7 +525,7 @@ export const cdataAsText = (root: ParentNode): void => {
     }
     for (const [index, child] of parent.children.entries()) {
       if (isCDATA(child)) {
-        const text = new Text(textOf(child));
+        const text = createText(textOf(child));
         text.parent = parent;
         text.prev = child.prev;
         text.next = child.next;
@@ -614,7 +594,11 @@ export const sourceTextOf = (
       current += textOf(node);
       return;
     }
-    if (!isTag(node) || isExcludedHtmlTag(nameOf(node))) {
+    if (
+      !isTag(node) ||
+      isExcludedHtmlTag(nameOf(node)) ||
+      vocabulary.excluded?.(node)
+    ) {
       return;
     }
     const anchor = vocabulary.pageAnchor(node);

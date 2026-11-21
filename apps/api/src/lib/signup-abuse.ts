@@ -2,11 +2,11 @@ import { disposableEmailBlocklistSet } from "disposable-email-domains-js";
 
 import { env } from "@/api/env";
 import { normalizeRateLimitClientAddress } from "@/api/lib/client-ip";
-import {
-  EXISTING_ACCOUNT_OTP_EMAIL_MAX,
-  NEW_ACCOUNT_OTP_RATE_LIMITS,
-} from "@/api/lib/limits";
-import type { RateLimitContext } from "@/api/lib/rate-limit/rate-limit";
+import { normalizeEmail } from "@/api/lib/email/normalized-email";
+import type { NormalizedEmail } from "@/api/lib/email/normalized-email";
+import { NEW_ACCOUNT_OTP_RATE_LIMITS } from "@/api/lib/limits";
+import { OTP_DELIVERY_RATE_LIMITS } from "@/api/lib/rate-limit/budget-config";
+import type { RateLimitContext } from "@/api/lib/rate-limit/contracts";
 import { RedisRateLimitContext } from "@/api/lib/rate-limit/redis-context";
 
 const DISPOSABLE_EMAIL_DOMAINS = disposableEmailBlocklistSet();
@@ -21,11 +21,8 @@ const getSharedRateLimitContext = (): RedisRateLimitContext => {
   return sharedRateLimitContext;
 };
 
-export const normalizeAuthEmail = (email: string): string =>
-  email.trim().toLowerCase();
-
 const domainFromEmail = (email: string): string | null => {
-  const normalizedEmail = normalizeAuthEmail(email);
+  const normalizedEmail = normalizeEmail(email);
   const separatorIndex = normalizedEmail.lastIndexOf("@");
   if (separatorIndex <= 0 || separatorIndex === normalizedEmail.length - 1) {
     return null;
@@ -94,7 +91,16 @@ export const consumeSignupOtpRateLimit = async ({
 };
 
 export type NewAccountOtpPolicyResult =
-  | { status: "allowed"; reason: "existing_account" | "new_account" }
+  | { status: "allowed"; reason: "new_account" }
+  | {
+      status: "allowed";
+      reason: "existing_account";
+      /**
+       * What the same request would get for an address without an account:
+       * `rate_limited` means only accounts receive a code right now.
+       */
+      newAccounts: "allowed" | "rate_limited";
+    }
   | { status: "rejected"; reason: "disposable_email" }
   | {
       status: "rate_limited";
@@ -107,12 +113,12 @@ export const evaluateNewAccountOtpPolicy = async ({
   context,
   email,
 }: {
-  accountExists: (normalizedEmail: string) => Promise<boolean>;
+  accountExists: (normalizedEmail: NormalizedEmail) => Promise<boolean>;
   clientIp: string | null;
   context?: Pick<RateLimitContext, "increment">;
   email: string;
 }): Promise<NewAccountOtpPolicyResult> => {
-  const normalizedEmail = normalizeAuthEmail(email);
+  const normalizedEmail = normalizeEmail(email);
 
   // Both counters are consumed before the account-existence branch, so a
   // request for a registered address and one for an unregistered address
@@ -135,9 +141,18 @@ export const evaluateNewAccountOtpPolicy = async ({
   // An address that already has an account gets a higher ceiling on the same
   // email counter; new-account capacity (and the IP counter) does not apply.
   if (await accountExists(normalizedEmail)) {
-    return emailRateLimitResult.count > EXISTING_ACCOUNT_OTP_EMAIL_MAX
+    return emailRateLimitResult.count >
+      OTP_DELIVERY_RATE_LIMITS.existingAccountEmailMax
       ? { status: "rate_limited", reason: "email" }
-      : { status: "allowed", reason: "existing_account" };
+      : {
+          status: "allowed",
+          reason: "existing_account",
+          newAccounts:
+            emailRateLimitResult.status === "rate_limited" ||
+            ipRateLimitResult?.status === "rate_limited"
+              ? "rate_limited"
+              : "allowed",
+        };
   }
 
   if (emailRateLimitResult.status === "rate_limited") {

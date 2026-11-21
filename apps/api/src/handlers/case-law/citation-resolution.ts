@@ -109,33 +109,43 @@ import {
   CITATION_DECISION_TYPE_HINT_FAMILIES,
   CITATION_DECISION_TYPE_HINTS,
 } from "@/api/handlers/case-law/citation-decision-type-hint";
+import {
+  type CitationGraphTransaction,
+  runCitationGraphTransaction,
+  tryCitationGraphTransaction,
+} from "@/api/handlers/case-law/citation-graph-transaction";
 import { citationResolutionPolicyRows } from "@/api/handlers/case-law/citation-jurisdiction-policy";
 import {
+  CITATION_CANDIDATE_SCAN_CAP,
   CITATION_RESOLUTION_RULE,
   CITATION_RESOLUTION_RULES,
   CITATION_RESOLUTION_SCOPE,
   CITATION_RESOLUTION_STATUS,
   CITATION_RESOLUTION_STATUSES,
+  citationReopenableByKeySql,
   type CitationResolutionRule,
   type CitationResolutionStatus,
-  CITATION_CANDIDATE_SCAN_CAP,
-  citationReopenableByKeySql,
   countsByRule,
+  effectiveCitationIdentifierTypeSql,
+  effectiveCitationIdentifierValueSql,
   MERITS_DECISION_TYPES,
   PROCEDURAL_DECISION_TYPES,
   unsettledCitationSql,
 } from "@/api/handlers/case-law/citation-resolution-status";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  caseNumberKeyAmongSql,
+  caseNumberKeysMatchSql,
+} from "@/api/lib/case-law/case-number-match-key";
+import { languageGroupWorkKeySql } from "@/api/lib/case-law/decision-work";
 import { executedRows } from "@/api/lib/db/executed-rows";
-import { brandPersistedCaseLawDecisionId } from "@/api/lib/safe-id-boundaries";
+import {
+  brandPersistedCaseLawCitationId,
+  brandPersistedCaseLawDecisionId,
+} from "@/api/lib/safe-id-boundaries";
 import { isRecord } from "@/api/lib/type-guards";
 
-/**
- * Structural, not the `Transaction` type: the pipeline passes its open
- * transaction and the tests pass a pglite handle, and importing the concrete
- * type would pull the connection singleton into a module that only ever
- * executes SQL. Same shape the citation-authority recompute takes.
- */
+/** Read-only queries need SQL execution without the graph mutation capability. */
 type CitationResolutionTx = {
   execute: (query: SQL) => Promise<unknown>;
 };
@@ -301,7 +311,7 @@ const SHEET_READING_SQL = {
   stated: (value, { sheetNumber, familyKey }, holder) => sql`(
         btrim(${value}) ~ ${String.raw`^[0-9]{1,${String(DECISION_STATED_SHEET_MAX_DIGITS)}}$`}
     AND ${numeralSql(sql`btrim(${value})`)} = ${numeralSql(sheetNumber)}
-    AND ${holder}.citation_key = ${familyKey}
+    AND ${caseNumberKeysMatchSql(sql`${holder}.citation_key`, familyKey)}
     AND ${holder}.docket_family_key IS NOT NULL
   )`,
 } as const satisfies Record<
@@ -453,40 +463,6 @@ const toCount = (value: unknown): number => {
   return Number.isFinite(n) ? n : 0;
 };
 
-/**
- * The key every writer of the citation graph serializes on.
- *
- * Read Committed is not enough here, and the anomaly is not obvious. A batch
- * of the standing walk snapshots a citation as pending; ingestion then commits
- * a decision that matches it and announces the arrival, sees the row still
- * pending in its own snapshot, and correctly concludes there is nothing to
- * reopen; the older batch then commits `unmatched`. The row is terminal, the
- * decision that answers it is stored, and nothing will ever put the two
- * together again.
- *
- * So the walk and the ingestion path take the same transaction-scoped advisory
- * lock — the walk conditionally, because a held walk is a reason to come back
- * later rather than to wait, and ingestion unconditionally, because its work is
- * bounded and must not be dropped. One key, so there is no lock order to get
- * wrong.
- */
-const CITATION_GRAPH_LOCK = sql`hashtext('case_law'), hashtext('citation_resolution_walk')`;
-
-/**
- * Serialize this transaction's citation-graph writes against the standing
- * walk. Taken inside every helper that mutates the graph rather than left to
- * call sites: a caller that forgot would reintroduce exactly the interleaving
- * above, and nothing about the resulting rows would look wrong.
- *
- * Re-entrant within a transaction, so a path that reopens and then resolves
- * pays one wait, not two.
- */
-export const lockCitationGraph = async (
-  tx: CitationResolutionTx,
-): Promise<void> => {
-  await tx.execute(sql`SELECT pg_advisory_xact_lock(${CITATION_GRAPH_LOCK})`);
-};
-
 /** The SQL column name a rule's counter is read from: `unique-key` → `by_rule_unique_key`. */
 const ruleCountColumn = (rule: CitationResolutionRule): string =>
   `by_rule_${rule.replaceAll("-", "_")}`;
@@ -574,16 +550,21 @@ const citationMatchingHoldersSql = ({
            ${holder}.decision_date,
            ${holder}.language,
            ${holderSheetColumnsSql(holder)},
-           CASE
-             WHEN ${holder}.language_group_key IS NULL
-               THEN 'decision:' || ${holder}.id::text
-             ELSE 'group:' || ${holder}.language_group_key
-           END AS work_key
+           ${languageGroupWorkKeySql({
+             id: sql`${holder}.id`,
+             languageGroupKey: sql`${holder}.language_group_key`,
+           })} AS work_key
       FROM ${caseLawDecisionIdentifiers} identifier
       JOIN ${caseLawDecisions} ${holder}
         ON ${holder}.id = identifier.decision_id
      WHERE identifier.type = coalesce(${identifierType}, 'case-number')
-       AND identifier.normalized_value = coalesce(${normalizedIdentifierValue}, ${citationKey})
+       AND ${caseNumberKeysMatchSql(
+         sql.raw("identifier.normalized_value"),
+         effectiveCitationIdentifierValueSql(
+           normalizedIdentifierValue,
+           citationKey,
+         ),
+       )}
        AND ${jurisdictionPredicate}
        AND ${holder}.id <> ${citingDecisionId}
        AND (
@@ -599,14 +580,13 @@ const citationMatchingHoldersSql = ({
            ${holder}.decision_date,
            ${holder}.language,
            ${holderSheetColumnsSql(holder)},
-           CASE
-             WHEN ${holder}.language_group_key IS NULL
-               THEN 'decision:' || ${holder}.id::text
-             ELSE 'group:' || ${holder}.language_group_key
-           END AS work_key
+           ${languageGroupWorkKeySql({
+             id: sql`${holder}.id`,
+             languageGroupKey: sql`${holder}.language_group_key`,
+           })} AS work_key
       FROM ${caseLawDecisions} ${holder}
      WHERE (${identifierType} IS NULL OR ${identifierType} = 'case-number')
-       AND ${holder}.citation_key = ${citationKey}
+       AND ${caseNumberKeysMatchSql(sql`${holder}.citation_key`, citationKey)}
        AND ${jurisdictionPredicate}
        AND ${holder}.id <> ${citingDecisionId}
        AND (
@@ -619,7 +599,10 @@ const citationMatchingHoldersSql = ({
          FROM ${caseLawDecisionIdentifiers} existing_identifier
          WHERE existing_identifier.decision_id = ${holder}.id
            AND existing_identifier.type = 'case-number'
-           AND existing_identifier.normalized_value = ${citationKey}
+           AND ${caseNumberKeysMatchSql(
+             sql.raw("existing_identifier.normalized_value"),
+             citationKey,
+           )}
        )
   ) candidate
   -- Language manifestations are one judgment, not competing decisions.
@@ -859,8 +842,8 @@ const classificationCtes = (batch: SQL): SQL => sql`
  * different definitions of an honest link.
  *
  * `cited_decision_id` is written from the same CASE that writes the status, so
- * a resolved row always carries its target and an unresolved one never carries
- * a stale target from an earlier attempt.
+ * a resolved row carries its target and one answered unresolved carries none;
+ * a `pending` row may still hold the target it had before it was reopened.
  */
 const resolutionStatement = (selection: SQL): SQL => sql`
   WITH ${classificationCtes(sql`
@@ -950,7 +933,7 @@ const countsOf = (row: Record<string, unknown>): CitationResolutionCounts => ({
  * candidate lookups is `limit`, whatever the corpus holds.
  */
 const resolveCitationBatchIn = async (
-  tx: CitationResolutionTx,
+  tx: CitationGraphTransaction,
   { limit, after }: ResolveCitationBatchOptions,
 ): Promise<CitationResolutionBatch> => {
   // audit: skip — derived citation graph, not a user action
@@ -985,20 +968,18 @@ const resolveCitationBatchIn = async (
  * Settle one batch from an explicit position, waiting for the walk rather than
  * skipping it.
  *
- * Every exported entry point that touches the graph takes the lock, including
- * this one: an unlocked variant sitting beside the locked ones is the call site
- * that reintroduces the interleaving, and the rows it produces look correct.
- * The daemon uses `tryResolveCitationBatch`, which declines instead of waiting
+ * Graph mutations require a transaction admitted by the graph owner. The
+ * daemon uses `tryResolveCitationBatch`, which declines instead of waiting
  * because a held walk is a reason to come back later.
  */
 export const resolveCitationBatch = async (
   scopedDb: ScopedDb,
   options: ResolveCitationBatchOptions,
 ): Promise<CitationResolutionBatch> =>
-  await scopedDb(async (tx) => {
-    await lockCitationGraph(tx);
-    return await resolveCitationBatchIn(tx, options);
-  });
+  await runCitationGraphTransaction(
+    scopedDb,
+    async (tx) => await resolveCitationBatchIn(tx, options),
+  );
 
 /**
  * Settle one batch, or report that another writer is already walking.
@@ -1021,15 +1002,7 @@ export const tryResolveCitationBatch = async (
   scopedDb: ScopedDb,
   { limit }: { limit: number },
 ): Promise<CitationResolutionBatch | null> =>
-  await scopedDb(async (tx) => {
-    const lockResult: unknown = await tx.execute(
-      sql`SELECT pg_try_advisory_xact_lock(${CITATION_GRAPH_LOCK}) AS locked`,
-    );
-    const lockRow = executedRows(lockResult).at(0);
-    if (!isRecord(lockRow) || lockRow["locked"] !== true) {
-      return null;
-    }
-
+  await tryCitationGraphTransaction(scopedDb, async (tx) => {
     const after = await readCitationResolutionCursor(tx);
     const batch = await resolveCitationBatchIn(tx, { limit, after });
     await writeCitationResolutionCursor(
@@ -1067,7 +1040,7 @@ const readCitationResolutionCursor = async (
 };
 
 const writeCitationResolutionCursor = async (
-  tx: CitationResolutionTx,
+  tx: CitationGraphTransaction,
   cursor: CitationResolutionCursor | null,
 ): Promise<void> => {
   // Written as SQL rather than through the query builder: the cursor travels
@@ -1092,6 +1065,17 @@ const writeCitationResolutionCursor = async (
   `);
 };
 
+/** Settle the unsettled citations a write names, inside that write. */
+const settleSelectedCitations = async (
+  tx: CitationGraphTransaction,
+  selection: SQL,
+): Promise<CitationResolutionCounts> => {
+  // audit: skip — derived citation graph, not a user action
+  const result: unknown = await tx.execute(resolutionStatement(selection));
+  const row = executedRows(result).at(0);
+  return isRecord(row) ? countsOf(row) : EMPTY_COUNTS;
+};
+
 /**
  * Settle the citations of one decision, in the transaction that just wrote
  * them.
@@ -1106,17 +1090,13 @@ const writeCitationResolutionCursor = async (
  * Bounded by the decision's own citation count, which the extractor caps.
  */
 export const resolveCitationsForDecision = async (
-  tx: CitationResolutionTx,
+  tx: CitationGraphTransaction,
   decisionId: SafeId<"caseLawDecision">,
-): Promise<CitationResolutionCounts> => {
-  await lockCitationGraph(tx);
-  // audit: skip — derived citation graph, not a user action
-  const result: unknown = await tx.execute(
-    resolutionStatement(sql`AND c.citing_decision_id = ${decisionId}::uuid`),
+): Promise<CitationResolutionCounts> =>
+  await settleSelectedCitations(
+    tx,
+    sql`AND c.citing_decision_id = ${decisionId}::uuid`,
   );
-  const row = executedRows(result).at(0);
-  return isRecord(row) ? countsOf(row) : EMPTY_COUNTS;
-};
 
 /** A citation about to be written, in the columns classification reads. */
 export type UnwrittenCitation = {
@@ -1164,7 +1144,7 @@ const isCitationResolutionRule = (
  * resolution policy.
  */
 export const classifyCitationsBeforeWrite = async (
-  tx: CitationResolutionTx,
+  tx: CitationGraphTransaction,
   {
     citingDecisionId,
     citations,
@@ -1179,7 +1159,6 @@ export const classifyCitationsBeforeWrite = async (
   if (resolvable.length === 0) {
     return new Map();
   }
-  await lockCitationGraph(tx);
   // One jsonb parameter rather than a VALUES list, so the statement's text is
   // the same whatever the decision's citation count and one prepared plan
   // serves every call.
@@ -1251,6 +1230,88 @@ export const classifyCitationsBeforeWrite = async (
   return resolutions;
 };
 
+/**
+ * How many reopened citations one decision write settles itself.
+ *
+ * A reopened citation is one indexed candidate lookup to answer, and the write
+ * that reopened it already holds the graph. So the write answers them, and a
+ * citation is linked when the decision it names is stored rather than when the
+ * standing walk next comes round. The bound keeps one write's cost independent
+ * of how often its decision is cited: the rows past it stay pending, which is
+ * what the walk is for.
+ */
+export const CITATION_ARRIVAL_SETTLE_CAP = 200;
+
+/** What a reopen put back in the queue. */
+export type ReopenedCitations = {
+  /** Every row reopened. */
+  reopened: number;
+  /** At most the arrival cap of them, for the write to settle itself. */
+  citationIds: readonly SafeId<"caseLawCitation">[];
+};
+
+const NOTHING_REOPENED: ReopenedCitations = { reopened: 0, citationIds: [] };
+
+/**
+ * The reopen statements' last SELECT: how many rows `reopened` holds, and a
+ * bounded handful of their ids. `reopened` is a relation of `id`.
+ */
+const reopenedSelectSql = (reopened: SQL): SQL => sql`
+  SELECT (SELECT count(*)::int FROM (${reopened}) counted) AS reopened,
+         (SELECT array_agg(picked.id::text)
+            FROM (
+              SELECT every.id
+                FROM (${reopened}) every
+               LIMIT ${CITATION_ARRIVAL_SETTLE_CAP}
+            ) picked) AS ids`;
+
+const reopenedOf = (result: unknown): ReopenedCitations => {
+  const row = executedRows(result).at(0);
+  if (!isRecord(row)) {
+    return NOTHING_REOPENED;
+  }
+  const ids: unknown = row["ids"];
+  return {
+    reopened: toCount(row["reopened"]),
+    citationIds: Array.isArray(ids)
+      ? ids.flatMap((id: unknown) =>
+          typeof id === "string" ? [brandPersistedCaseLawCitationId(id)] : [],
+        )
+      : [],
+  };
+};
+
+/**
+ * Answer the citations a decision write just reopened, in that write.
+ *
+ * Call it once the write has stored everything the candidate join reads of
+ * its decision: the row and its identifiers. The doctrine is the walk's own
+ * statement, so a row settled here gets the outcome the walk would have given
+ * it, only now. Rows past the cap, and rows of a citing jurisdiction with no
+ * declared reach, stay pending for the walk.
+ */
+export const settleReopenedCitations = async (
+  tx: CitationGraphTransaction,
+  reopened: readonly ReopenedCitations[],
+): Promise<CitationResolutionCounts> => {
+  const ids = [
+    ...new Set(reopened.flatMap(({ citationIds }) => citationIds)),
+  ].slice(0, CITATION_ARRIVAL_SETTLE_CAP);
+  if (ids.length === 0) {
+    return EMPTY_COUNTS;
+  }
+  // One jsonb parameter, so the statement's text is the same whatever the
+  // number of rows and one prepared plan serves every write.
+  return await settleSelectedCitations(
+    tx,
+    sql`
+      AND c.id = ANY (ARRAY(
+        SELECT jsonb_array_elements_text(${JSON.stringify(ids)}::text::jsonb)::uuid
+      ))
+    `,
+  );
+};
+
 export type ReopenCitationsForKeyOptions = {
   /** The key the arriving decision canonicalizes to. */
   citationKey: string;
@@ -1283,7 +1344,7 @@ export type ReopenCitationsForKeyOptions = {
  * again. The ambiguity tier reopens the same way.
  */
 export const reopenCitationsForDecisionKey = async (
-  tx: CitationResolutionTx,
+  tx: CitationGraphTransaction,
   {
     citationKey,
     decisionId,
@@ -1291,7 +1352,6 @@ export const reopenCitationsForDecisionKey = async (
     decisionDate,
   }: ReopenCitationsForKeyOptions,
 ): Promise<number> => {
-  await lockCitationGraph(tx);
   const reachedFrom = sql`(
     SELECT pol.citing_country
       FROM (VALUES ${sql.join(
@@ -1328,7 +1388,7 @@ export const reopenCitationsForDecisionKey = async (
              resolution_rule_id = NULL
         FROM ${caseLawDecisions} citing
        WHERE citing.id = c.citing_decision_id
-         AND c.citation_key = ${citationKey}
+         AND ${caseNumberKeyAmongSql(sql.raw("c.citation_key"), [citationKey])}
          AND ${citationReopenableByKeySql(sql.raw("c.resolution_status"))}
          AND ${affects}
       RETURNING c.id
@@ -1342,7 +1402,7 @@ export const reopenCitationsForDecisionKey = async (
        WHERE citing.id = c.citing_decision_id
          AND cited.id = c.cited_decision_id
          AND cited.id <> ${decisionId}::uuid
-         AND cited.citation_key = ${citationKey}
+         AND ${caseNumberKeyAmongSql(sql.raw("cited.citation_key"), [citationKey])}
          AND c.resolution_status = ${CITATION_RESOLUTION_STATUS.RESOLVED}
          AND ${affects}
       RETURNING c.id
@@ -1369,19 +1429,18 @@ type ReopenCitationsForDecisionIdentifiersOptions = {
 
 /** Reopen typed citations whose candidate set changed with one decision. */
 export const reopenCitationsForDecisionIdentifiers = async (
-  tx: CitationResolutionTx,
+  tx: CitationGraphTransaction,
   {
     identifiers,
     decisionId,
     jurisdiction,
     decisionDate,
   }: ReopenCitationsForDecisionIdentifiersOptions,
-): Promise<number> => {
+): Promise<ReopenedCitations> => {
   // audit: skip — reopens derived public case-law citation resolutions
   if (identifiers.length === 0) {
-    return 0;
+    return NOTHING_REOPENED;
   }
-  await lockCitationGraph(tx);
   const identifierRows = sql.join(
     identifiers.map(
       (identifier) =>
@@ -1412,11 +1471,16 @@ export const reopenCitationsForDecisionIdentifiers = async (
          AND EXISTS (
            SELECT 1
            FROM arriving
-           WHERE arriving.type = coalesce(citation.identifier_type, 'case-number')
-             AND arriving.normalized_value = coalesce(
-               citation.normalized_identifier_value,
-               citation.citation_key
-             )
+           WHERE arriving.type = ${effectiveCitationIdentifierTypeSql(
+             sql.raw("citation.identifier_type"),
+           )}
+             AND ${caseNumberKeysMatchSql(
+               sql.raw("arriving.normalized_value"),
+               effectiveCitationIdentifierValueSql(
+                 sql.raw("citation.normalized_identifier_value"),
+                 sql.raw("citation.citation_key"),
+               ),
+             )}
          )
          AND ${citationReopenableByKeySql(sql.raw("citation.resolution_status"))}
          AND citing.country IN ${reachedFrom}
@@ -1441,7 +1505,10 @@ export const reopenCitationsForDecisionIdentifiers = async (
            FROM arriving
            JOIN ${caseLawDecisionIdentifiers} cited_identifier
              ON cited_identifier.type = arriving.type
-            AND cited_identifier.normalized_value = arriving.normalized_value
+            AND ${caseNumberKeysMatchSql(
+              sql.raw("cited_identifier.normalized_value"),
+              sql.raw("arriving.normalized_value"),
+            )}
            WHERE cited_identifier.decision_id = cited.id
          )
          AND citation.resolution_status = ${CITATION_RESOLUTION_STATUS.RESOLVED}
@@ -1453,11 +1520,11 @@ export const reopenCitationsForDecisionIdentifiers = async (
              )
       RETURNING citation.id
     )
-    SELECT (SELECT count(*)::int FROM revived)
-         + (SELECT count(*)::int FROM contested) AS reopened
+    ${reopenedSelectSql(
+      sql`SELECT id FROM revived UNION ALL SELECT id FROM contested`,
+    )}
   `);
-  const row = executedRows(result).at(0);
-  return isRecord(row) ? toCount(row["reopened"]) : 0;
+  return reopenedOf(result);
 };
 
 /**
@@ -1481,17 +1548,14 @@ export const reopenCitationsForDecisionIdentifiers = async (
  * creates and the one that leaves an arbitrary authority edge behind.
  */
 export const reopenCitationsForKeys = async (
-  tx: CitationResolutionTx,
+  tx: CitationGraphTransaction,
   citationKeys: readonly string[],
-): Promise<number> => {
-  if (citationKeys.length === 0) {
-    return 0;
+): Promise<ReopenedCitations> => {
+  const [firstKey, ...otherKeys] = citationKeys;
+  if (firstKey === undefined) {
+    return NOTHING_REOPENED;
   }
-  await lockCitationGraph(tx);
-  const keys = sql`ARRAY[${sql.join(
-    citationKeys.map((key) => sql`${key}`),
-    sql`, `,
-  )}]::varchar[]`;
+  const keys = [firstKey, ...otherKeys] as const;
   // Disjoint arms again: `revived` reads the negative outcomes, `contested`
   // reads `resolved`, and no row can match both.
   // audit: skip — derived citation graph, not a user action
@@ -1500,7 +1564,7 @@ export const reopenCitationsForKeys = async (
       UPDATE ${caseLawCitations} c
          SET resolution_status = ${CITATION_RESOLUTION_STATUS.PENDING},
              resolution_rule_id = NULL
-       WHERE c.citation_key = ANY (${keys})
+       WHERE ${caseNumberKeyAmongSql(sql.raw("c.citation_key"), keys)}
          AND ${citationReopenableByKeySql(sql.raw("c.resolution_status"))}
       RETURNING c.id
     ),
@@ -1511,51 +1575,48 @@ export const reopenCitationsForKeys = async (
              resolution_rule_id = NULL
         FROM ${caseLawDecisions} cited
        WHERE cited.id = c.cited_decision_id
-         AND cited.citation_key = ANY (${keys})
+         AND ${caseNumberKeyAmongSql(sql.raw("cited.citation_key"), keys)}
          AND c.resolution_status = ${CITATION_RESOLUTION_STATUS.RESOLVED}
       RETURNING c.id
     )
-    SELECT (SELECT count(*)::int FROM revived)
-         + (SELECT count(*)::int FROM contested) AS reopened
+    ${reopenedSelectSql(
+      sql`SELECT id FROM revived UNION ALL SELECT id FROM contested`,
+    )}
   `);
-  const row = executedRows(result).at(0);
-  return isRecord(row) ? toCount(row["reopened"]) : 0;
+  return reopenedOf(result);
 };
 
 /**
- * Retract every edge drawn to a decision whose identity just changed.
+ * Re-queue every edge drawn to a decision whose identity just changed.
  *
- * The complement of `reopenCitationsForDecisionKey`, which deliberately
- * excludes the arriving decision's own links. A refresh that rewrites the case
- * number, the jurisdiction or the date changes what this decision is, and
- * every one of those three fields is a filter in the candidate join — so an
- * edge drawn under the old values was decided against a decision that no
- * longer exists in that form. It is not enough to announce the new key: the
- * old links point here, and nothing else would ever ask about them again.
+ * The complement of `reopenCitationsForDecisionKey`, which excludes the
+ * arriving decision's own links. A refresh rewriting the case number, the
+ * jurisdiction or the date changes what this decision is, and each is a
+ * filter in the candidate join, so these edges must be re-decided. The link
+ * stays until the resolver answers: clearing it empties the decision's
+ * incoming citations for as long as the queue takes, and most rows resolve
+ * to the same decision.
  *
  * Bounded by the cited-decision index, so the cost is this decision's incoming
  * citations rather than the table.
  */
 export const reopenCitationsResolvedTo = async (
-  tx: CitationResolutionTx,
+  tx: CitationGraphTransaction,
   decisionId: SafeId<"caseLawDecision">,
-): Promise<number> => {
-  await lockCitationGraph(tx);
+): Promise<ReopenedCitations> => {
   // audit: skip — derived citation graph, not a user action
   const result: unknown = await tx.execute(sql`
     WITH retracted AS (
       UPDATE ${caseLawCitations}
          SET resolution_status = ${CITATION_RESOLUTION_STATUS.PENDING}::text,
-             cited_decision_id = NULL,
              resolution_rule_id = NULL
        WHERE cited_decision_id = ${decisionId}::uuid
          AND resolution_status = ${CITATION_RESOLUTION_STATUS.RESOLVED}
       RETURNING id
     )
-    SELECT count(*)::int AS reopened FROM retracted
+    ${reopenedSelectSql(sql`SELECT id FROM retracted`)}
   `);
-  const row = executedRows(result).at(0);
-  return isRecord(row) ? toCount(row["reopened"]) : 0;
+  return reopenedOf(result);
 };
 
 /**
@@ -1573,21 +1634,20 @@ export const reopenCitationsResolvedTo = async (
  *
  * Every non-pending row, not just the negatives: a date moving backwards
  * retracts, a date moving forwards revives, and this cannot tell which without
- * redoing the adjudication that the resolver owns.
+ * redoing the adjudication that the resolver owns. A `resolved` row keeps its
+ * link until that answer, as in `reopenCitationsResolvedTo`.
  *
  * Bounded by the citing index, so the cost is this decision's own citations.
  */
 export const reopenCitationsFrom = async (
-  tx: CitationResolutionTx,
+  tx: CitationGraphTransaction,
   decisionId: SafeId<"caseLawDecision">,
 ): Promise<number> => {
-  await lockCitationGraph(tx);
   // audit: skip — derived citation graph, not a user action
   const result: unknown = await tx.execute(sql`
     WITH requeued AS (
       UPDATE ${caseLawCitations}
          SET resolution_status = ${CITATION_RESOLUTION_STATUS.PENDING}::text,
-             cited_decision_id = NULL,
              resolution_rule_id = NULL
        WHERE citing_decision_id = ${decisionId}::uuid
          AND resolution_status <> ${CITATION_RESOLUTION_STATUS.PENDING}
@@ -1609,15 +1669,15 @@ export const reopenCitationsFrom = async (
  *
  * Bounded by the caller's list, and the list is the caller's bound to keep;
  * this refuses an unbounded one by construction because it takes ids.
+ * Unlike the identity paths it clears the link: its callers want a new answer.
  */
 export const reopenCitations = async (
-  tx: CitationResolutionTx,
+  tx: CitationGraphTransaction,
   citationIds: readonly SafeId<"caseLawCitation">[],
 ): Promise<number> => {
   if (citationIds.length === 0) {
     return 0;
   }
-  await lockCitationGraph(tx);
   // audit: skip — derived citation graph, not a user action
   const result: unknown = await tx.execute(sql`
     WITH reopened AS (
@@ -1667,8 +1727,7 @@ export const readjudicateAmbiguousCitations = async (
   scopedDb: ScopedDb,
   { limit, after }: ReadjudicateAmbiguousCitationsOptions,
 ): Promise<ReadjudicateAmbiguousCitationsBatch> =>
-  await scopedDb(async (tx) => {
-    await lockCitationGraph(tx);
+  await runCitationGraphTransaction(scopedDb, async (tx) => {
     // audit: skip — derived citation graph, not a user action
     const picked: unknown = await tx.execute(sql`
       WITH slice AS (

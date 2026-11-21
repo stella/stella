@@ -6,6 +6,7 @@ import type { DecisionIdentifiers } from "@stll/legal-ast/decision-identifier";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
 import type { SafeId } from "@/api/lib/branded-types";
+import type { PopulationCountsReadFreshness } from "@/api/lib/case-law/population-count-freshness";
 import type { LegalBrowseFacetsError } from "@/api/lib/legal-search/browse-facets";
 import type { CorpusFamily } from "@/api/lib/legal-search/corpus-generation-contract";
 import type { EmptyAst } from "@/api/lib/legal-search/document-types";
@@ -21,7 +22,7 @@ type LegalSearchDocumentFamily = Extract<CorpusFamily, "case_law">;
  * (public records): there are no tenant/workspace fields here.
  */
 
-export const LEGAL_SEARCH_ENGINES = ["pg-fts", "corpus-index"] as const;
+const LEGAL_SEARCH_ENGINES = ["pg-fts", "corpus-index"] as const;
 export type LegalSearchEngine = (typeof LEGAL_SEARCH_ENGINES)[number];
 
 export type LegalSearchQuery = {
@@ -72,7 +73,7 @@ export type LegalSearchHit = {
   createdAt: string;
 };
 
-export type LegalSearchFacets = {
+type LegalSearchFacets = {
   court: FacetBucket[];
   country: FacetBucket[];
   language: FacetBucket[];
@@ -109,6 +110,8 @@ export type LegalDocumentContext = {
  * cacheable for minutes.
  */
 export type LegalBrowseFacetsQuery = {
+  /** Fold and window state resolved before the cache lookup. */
+  populationVersion?: string;
   /** Browse facets currently describe the case-law decision corpus. */
   documentFamily?: LegalSearchDocumentFamily | undefined;
   /** Maps from the decision's `country`; scopes every facet to it. */
@@ -127,6 +130,8 @@ export type LegalBrowseFacetsQuery = {
 };
 
 export type LegalBrowseFacets = {
+  /** Present for the maintained population owner; provider-native facets have no fold. */
+  countsFreshness?: PopulationCountsReadFreshness | undefined;
   country: FacetBucket[];
   court: FacetBucket[];
   year: FacetBucket[];

@@ -1,5 +1,7 @@
 import { panic } from "better-result";
 
+import { sha256Base64 as hashSha256Base64 } from "@stll/sha256/bun";
+
 import { configureS3ForTesting, resetS3ForTesting } from "@/api/lib/s3";
 import {
   configureS3PresignForTesting,
@@ -118,7 +120,7 @@ const escapeXml = (value: string): string =>
 const requestedSha256 = (headers: Headers, bytes: Uint8Array): string | null =>
   (headers.get("x-amz-sdk-checksum-algorithm") ??
     headers.get("x-amz-checksum-algorithm")) === "SHA256"
-    ? new Bun.CryptoHasher("sha256").update(bytes).digest("base64")
+    ? hashSha256Base64(bytes)
     : null;
 
 type CopiedSha256Options = {
@@ -269,6 +271,11 @@ const listResponse = ({
 };
 
 export type FakeS3Options = {
+  /** Override a successful whole-object GET to exercise transport body faults. */
+  readonly readResponse?: (input: {
+    object: FakeS3Object;
+    headers: Record<string, string>;
+  }) => Response;
   /**
    * Hold every served response this long before applying and answering it,
    * so a test can observe a request while it is in flight. A client that
@@ -282,7 +289,11 @@ export type FakeS3Options = {
  * Start the store and point `lib/s3.ts` at it. Call `stop()` in `afterAll`
  * (or `afterEach` for a store per test); it also restores the real clients.
  */
-export const startFakeS3 = ({ delayMs = 0 }: FakeS3Options = {}): FakeS3 => {
+export const startFakeS3 = ({
+  delayMs = 0,
+  readResponse = ({ object, headers }) =>
+    new Response(object.bytes, { status: 200, headers }),
+}: FakeS3Options = {}): FakeS3 => {
   const objects = new Map<string, FakeS3Object>();
   const versions = new Map<string, number>();
   const etags = new Map<string, string>();
@@ -513,7 +524,7 @@ export const startFakeS3 = ({ delayMs = 0 }: FakeS3Options = {}): FakeS3 => {
         return new Response(null, { status: 200, headers });
       }
       if (range === null) {
-        return new Response(object.bytes, { status: 200, headers });
+        return readResponse({ object, headers });
       }
       return rangeResponse({
         bytes: object.bytes,

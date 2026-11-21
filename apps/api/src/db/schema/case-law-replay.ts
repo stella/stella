@@ -3,8 +3,8 @@ import type { Verdict } from "@stll/db-load-gate/health";
 import type { BackgroundReplaySource } from "@/api/handlers/case-law/ingestion/background-replay";
 import type { ReplayRowOutcome } from "@/api/handlers/case-law/ingestion/replay";
 import {
-  REPLAY_FAILURE_CODES,
   MAX_REPLAY_ROW_READMISSIONS,
+  REPLAY_FAILURE_CODES,
   type ReplayFailure,
   type ReplayPreviewFailure,
 } from "@/api/handlers/case-law/ingestion/replay-failure";
@@ -54,6 +54,8 @@ export const caseLawReplayBatches = p.pgTable.withRLS(
     lastDecisionId: safeUuid<"caseLawDecision">("last_decision_id").notNull(),
     parserVersionFrom: p.integer("parser_version_from"),
     parserVersionTo: p.integer("parser_version_to").notNull(),
+    /** Immutable raw generation captured when this reservation was created; null for legacy reservations. */
+    sourceRawS3Key: p.varchar("source_raw_s3_key", { length: 512 }),
     budgetDay: p.date("budget_day").notNull(),
     status: p.text({ enum: REPLAY_BATCH_STATUSES }).notNull(),
     outcome: p.text().$type<ReplayRowOutcome | ReplayPreviewFailure>(),
@@ -141,15 +143,16 @@ export const caseLawReplayBatches = p.pgTable.withRLS(
     p.pgPolicy("case_law_replay_batches_owner_access", {
       for: "all",
       to: "public",
-      using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.case_law_replay_batches'::regclass)`,
-      withCheck: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.case_law_replay_batches'::regclass)`,
+      using: sql`(SELECT current_user = pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.case_law_replay_batches'::regclass)`,
+      withCheck: sql`(SELECT current_user = pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.case_law_replay_batches'::regclass)`,
     }),
   ],
 );
 
-// Any terminal receipt excludes its target version until the parser advances.
-// This existing table also owns changed and unchanged terminal receipts.
-// Decision IDs intentionally have no FK: receipts survive decision cleanup.
+// One current terminal receipt per decision and target parser. Legacy writers
+// keep this pair identity; only a receipt for the selected immutable generation
+// excludes it. Decision IDs have no FK so receipts survive decision cleanup.
+
 export const caseLawReplayBlocked = p.pgTable.withRLS(
   "case_law_replay_blocked",
   {
@@ -157,6 +160,8 @@ export const caseLawReplayBlocked = p.pgTable.withRLS(
       .notNull()
       .references(() => caseLawSources.id, { onDelete: "restrict" }),
     decisionId: safeUuid<"caseLawDecision">("decision_id").notNull(),
+    /** Exact raw generation verified at completion; null means unknown. */
+    sourceRawS3Key: p.varchar("source_raw_s3_key", { length: 512 }),
     parserVersionFrom: p.integer("parser_version_from"),
     parserVersionTo: p.integer("parser_version_to").notNull(),
     outcome: p.text({ enum: REPLAY_TERMINAL_OUTCOMES }).notNull(),
@@ -186,8 +191,8 @@ export const caseLawReplayBlocked = p.pgTable.withRLS(
     p.pgPolicy("case_law_replay_blocked_owner_access", {
       for: "all",
       to: "public",
-      using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.case_law_replay_blocked'::regclass)`,
-      withCheck: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.case_law_replay_blocked'::regclass)`,
+      using: sql`(SELECT current_user = pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.case_law_replay_blocked'::regclass)`,
+      withCheck: sql`(SELECT current_user = pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.case_law_replay_blocked'::regclass)`,
     }),
   ],
 );
@@ -217,8 +222,8 @@ export const caseLawReplayDailyRows = p.pgTable.withRLS(
     p.pgPolicy("case_law_replay_daily_rows_owner_access", {
       for: "all",
       to: "public",
-      using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.case_law_replay_daily_rows'::regclass)`,
-      withCheck: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.case_law_replay_daily_rows'::regclass)`,
+      using: sql`(SELECT current_user = pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.case_law_replay_daily_rows'::regclass)`,
+      withCheck: sql`(SELECT current_user = pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.case_law_replay_daily_rows'::regclass)`,
     }),
   ],
 );
@@ -256,8 +261,8 @@ export const caseLawReplaySourceProgress = p.pgTable.withRLS(
     p.pgPolicy("case_law_replay_source_progress_owner_access", {
       for: "all",
       to: "public",
-      using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.case_law_replay_source_progress'::regclass)`,
-      withCheck: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.case_law_replay_source_progress'::regclass)`,
+      using: sql`(SELECT current_user = pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.case_law_replay_source_progress'::regclass)`,
+      withCheck: sql`(SELECT current_user = pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.case_law_replay_source_progress'::regclass)`,
     }),
   ],
 );
@@ -343,8 +348,8 @@ export const caseLawReplayAuditEvents = p.pgTable.withRLS(
     p.pgPolicy("case_law_replay_audit_events_owner_access", {
       for: "all",
       to: "public",
-      using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.case_law_replay_audit_events'::regclass)`,
-      withCheck: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.case_law_replay_audit_events'::regclass)`,
+      using: sql`(SELECT current_user = pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.case_law_replay_audit_events'::regclass)`,
+      withCheck: sql`(SELECT current_user = pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.case_law_replay_audit_events'::regclass)`,
     }),
   ],
 );

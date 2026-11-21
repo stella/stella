@@ -84,7 +84,7 @@ const isSeverity = (value: string): value is PositionSeverity =>
 
 /** How much a position matters, as a word, where it cannot be changed: the
  *  same chip the editors offer, minus the menu. */
-export const SeverityWord = ({ severity }: { severity: PositionSeverity }) => {
+const SeverityWord = ({ severity }: { severity: PositionSeverity }) => {
   const t = useTranslations();
   const level = POSITION_SEVERITY_LEVEL[severity];
   return (
@@ -101,9 +101,12 @@ export const SeverityWord = ({ severity }: { severity: PositionSeverity }) => {
 export const SeverityChip = ({
   severity,
   onChange,
+  labelClassName,
 }: {
   severity: PositionSeverity;
   onChange: (severity: PositionSeverity) => void;
+  /** Lets a narrow surface keep the dot and drop the word. */
+  labelClassName?: string | undefined;
 }) => {
   const t = useTranslations();
   const level = POSITION_SEVERITY_LEVEL[severity];
@@ -118,7 +121,9 @@ export const SeverityChip = ({
           tone={reviewSeverityTone(level)}
           variant="solid"
         >
-          {t(SEVERITY_LABEL_KEYS[severity])}
+          <span className={labelClassName}>
+            {t(SEVERITY_LABEL_KEYS[severity])}
+          </span>
         </ReviewStatusBadge>
       </MenuTrigger>
       <MenuPopup>
@@ -246,14 +251,12 @@ const PositionNote = ({ label, text }: { label: string; text: string }) => {
  */
 export const PositionQuickRow = ({
   position,
-  index,
   referenceNames,
   passageTexts,
   onChange,
   onRemove,
 }: {
   position: Position;
-  index: number;
   referenceNames: ReferenceNameLookup | undefined;
   /** The words behind every passage on the list this row sits in, so twenty
    *  rows cost the one read the list already made. */
@@ -306,7 +309,6 @@ export const PositionQuickRow = ({
             </>
           )
         }
-        index={index}
         label={
           position.mode === "graded" &&
           (onChange === undefined ? (

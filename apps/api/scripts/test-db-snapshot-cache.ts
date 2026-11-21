@@ -1,12 +1,11 @@
 import { TaggedError } from "better-result";
-import { createHash } from "node:crypto";
 import {
   accessSync,
   constants,
   createReadStream,
   mkdirSync,
-  readFileSync,
   readdirSync,
+  readFileSync,
   realpathSync,
   renameSync,
   rmSync,
@@ -19,6 +18,9 @@ import path from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 
 import { compareCodeUnit } from "@stll/collation";
+import { printError } from "@stll/errors";
+import { isPathInside, repoRelativePath } from "@stll/portable-path";
+import { createSha256 } from "@stll/sha256/bun";
 
 const SNAPSHOT_FORMAT = "1";
 const LOCK_TIMEOUT_MS = 5 * 60_000;
@@ -34,6 +36,11 @@ export class SnapshotBuildError extends TaggedError("SnapshotBuildError")<{
   message: string;
   exitCode: number;
 }> {}
+
+export const exitAfterSnapshotFailure = (error: unknown): never => {
+  printError(error);
+  process.exit(error instanceof SnapshotBuildError ? error.exitCode : 1);
+};
 
 class SnapshotInputsChangedError extends TaggedError(
   "SnapshotInputsChangedError",
@@ -60,7 +67,7 @@ export const snapshotInputPaths = (
     const canonicalFile = realpathSync(candidate);
     if (
       canonicalFile.split(path.sep).includes("node_modules") ||
-      !canonicalFile.startsWith(`${canonicalRoot}${path.sep}`)
+      !isPathInside(canonicalRoot, canonicalFile)
     ) {
       // The installed location distinguishes dependency versions even when
       // bun.lock has changed without a matching install in this checkout.
@@ -70,7 +77,7 @@ export const snapshotInputPaths = (
     }
     const filePath = path.join(
       repositoryRoot,
-      path.relative(canonicalRoot, canonicalFile),
+      repoRelativePath(canonicalRoot, canonicalFile),
     );
     if (visited.has(filePath)) {
       continue;
@@ -134,7 +141,7 @@ export const snapshotInputPaths = (
 };
 
 export const snapshotKey = (repositoryRoot: string, entryPoint: string) => {
-  const hash = createHash("sha256");
+  const hash = createSha256();
   const canonicalRoot = realpathSync(repositoryRoot);
   hash.update(SNAPSHOT_FORMAT);
   hash.update("\0");
@@ -142,10 +149,10 @@ export const snapshotKey = (repositoryRoot: string, entryPoint: string) => {
   const inputs = snapshotInputPaths(repositoryRoot, entryPoint)
     .map((filePath) => {
       let identity = filePath;
-      if (filePath.startsWith(`${repositoryRoot}${path.sep}`)) {
-        identity = path.relative(repositoryRoot, filePath);
-      } else if (filePath.startsWith(`${canonicalRoot}${path.sep}`)) {
-        identity = path.relative(canonicalRoot, filePath);
+      if (isPathInside(repositoryRoot, filePath)) {
+        identity = repoRelativePath(repositoryRoot, filePath);
+      } else if (isPathInside(canonicalRoot, filePath)) {
+        identity = repoRelativePath(canonicalRoot, filePath);
       }
       return { filePath, identity };
     })
@@ -167,7 +174,7 @@ export const snapshotCacheDir = (env: NodeJS.ProcessEnv) =>
   );
 
 export const snapshotDigest = async (filePath: string) => {
-  const hash = createHash("sha256");
+  const hash = createSha256();
   for await (const chunk of createReadStream(filePath)) {
     hash.update(chunk);
   }
@@ -186,6 +193,7 @@ type AcquireOptions = {
   validate: (filePath: string) => Promise<boolean>;
   signal?: AbortSignal;
   timeoutMs?: number;
+  waitForLock?: (signal: AbortSignal | undefined) => Promise<void>;
 };
 
 const assertNotAborted = (signal: AbortSignal | undefined) => {
@@ -361,6 +369,7 @@ export const acquireCachedSnapshot = async ({
   validate,
   signal,
   timeoutMs = LOCK_TIMEOUT_MS,
+  waitForLock: wait = waitForLock,
 }: AcquireOptions): Promise<CacheResult> => {
   assertNotAborted(signal);
   try {
@@ -403,7 +412,7 @@ export const acquireCachedSnapshot = async ({
             } catch {
               // Another waiter may already have removed it.
             }
-            await waitForLock(signal);
+            await wait(signal);
             continue;
           }
           try {
@@ -425,7 +434,7 @@ export const acquireCachedSnapshot = async ({
         }
         // Another process may have released or replaced the lock.
       }
-      await waitForLock(signal);
+      await wait(signal);
       continue;
     }
     try {
@@ -441,6 +450,7 @@ export const acquireCachedSnapshot = async ({
         } catch {
           // Treat an unreadable entry exactly like a corrupt one.
         }
+        assertNotAborted(signal);
         if (!valid) {
           rmSync(finalPath);
           rmSync(path.join(cacheDir, `${key}.sha256`), { force: true });
@@ -469,7 +479,15 @@ export const acquireCachedSnapshot = async ({
         rmSync(temporaryPath, { force: true });
         rmSync(temporaryDigestPath, { force: true });
       }
-      if (!(await validate(finalPath))) {
+      let valid: boolean;
+      try {
+        valid = await validate(finalPath);
+      } catch (error) {
+        assertNotAborted(signal);
+        throw error;
+      }
+      assertNotAborted(signal);
+      if (!valid) {
         return {
           status: "fallback",
           reason: "built snapshot is unreadable or corrupt",

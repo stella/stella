@@ -1,9 +1,12 @@
-import { render } from "@react-email/render";
-import { panic } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
+import * as v from "valibot";
 
 import type { FeedbackReportInput } from "@stll/api-contract/feedback";
 import * as BetterAuthOTP from "@stll/transactional/emails/better-auth-otp";
 import { subject as betterAuthOTPSubject } from "@stll/transactional/emails/better-auth-otp-subject";
+import * as InvoiceLink from "@stll/transactional/emails/invoice-link";
+import type { InvoiceLinkEmailProps } from "@stll/transactional/emails/invoice-link";
+import { subject as invoiceLinkSubject } from "@stll/transactional/emails/invoice-link-subject";
 import * as NewDeviceLogin from "@stll/transactional/emails/new-device-login";
 import { subject as newDeviceLoginSubject } from "@stll/transactional/emails/new-device-login-subject";
 import * as OrganizationInvitation from "@stll/transactional/emails/organization-invitation";
@@ -13,16 +16,35 @@ import { subject as productFeedbackSubject } from "@stll/transactional/emails/pr
 import * as ReportExportStatus from "@stll/transactional/emails/report-export-status";
 import type { ReportExportEmailStatus } from "@stll/transactional/emails/report-export-status";
 import { subject as reportExportStatusSubject } from "@stll/transactional/emails/report-export-status-subject";
+import {
+  LOCATION_MAP_CONTENT_TYPE,
+  type MapPlace,
+  renderLocationMap,
+} from "@stll/transactional/map/location-map";
+import { renderEmail } from "@stll/transactional/render";
 
 import { env } from "@/api/env";
+import type { ViewerLocation } from "@/api/lib/auth/viewer-location";
+import {
+  emailAddressSchema,
+  normalizeEmail,
+} from "@/api/lib/email/normalized-email";
+import {
+  readRecipientRefusal,
+  recordRecipientFailures,
+} from "@/api/lib/email/recipient-deliverability";
 import type { SupportedLang } from "@/api/lib/locale";
+import { failureSink } from "@/api/lib/observability/failure";
+import { logger } from "@/api/lib/observability/logger";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
+import { isSyntheticPrincipal } from "@/api/lib/synthetic-principal/constants";
 import { isLocalDevOpen } from "@/api/runtime-mode";
 
 import { isEmailTransportConfigComplete } from "./config";
 import { formatTransactionalEmailFrom } from "./from";
 import { createSESTransport } from "./ses";
 import { createSMTPTransport } from "./smtp";
-import type { EmailTransport } from "./transport";
+import type { EmailTransport, InlineImage } from "./transport";
 
 export const isTransactionalEmailConfigured = () =>
   isEmailTransportConfigComplete({
@@ -79,10 +101,73 @@ const resolveTransport = (): EmailTransport => {
   }
 };
 
+// A failed lookup sends anyway; it is observed, never fatal to the send.
+const deliverabilityUnread = failureSink({
+  event: "email.send.deliverability_unread",
+  expected: [],
+});
+
+// A dropped send whose failure is not recorded is observed, never fatal.
+const skippedSendUnrecorded = failureSink({
+  event: "email.send.skip_unrecorded",
+  expected: [],
+});
+
+/**
+ * Whether the provider has refused this recipient's account address, so a
+ * send would only be dropped. A failed read sends anyway: the provider still
+ * refuses what it must, and a sign-in code must not wait on this lookup.
+ */
+const isRefusedRecipient = async (to: string): Promise<boolean> => {
+  const address = v.safeParse(emailAddressSchema, to);
+  if (!address.success) {
+    return false;
+  }
+  const refusal = await Result.tryPromise(
+    async () => await readRecipientRefusal(normalizeEmail(address.output)),
+  );
+  if (refusal.isErr()) {
+    observeFailure(refusal.error, { sink: deliverabilityUnread });
+    return false;
+  }
+  if (refusal.value === undefined) {
+    return false;
+  }
+  logger.info("email.send.skipped_undeliverable", {
+    "user.id": refusal.value.userId,
+    "delivery.refusal_reason": refusal.value.reason,
+  });
+  // A dropped send is recorded like a provider suppression-list bounce,
+  // account or not.
+  const recorded = await Result.tryPromise(
+    async () =>
+      await recordRecipientFailures(
+        [{ email: normalizeEmail(address.output), reason: "suppressed" }],
+        new Date(),
+      ),
+  );
+  if (recorded.isErr()) {
+    observeFailure(recorded.error, { sink: skippedSendUnrecorded });
+  }
+  return true;
+};
+
 let cachedTransport: EmailTransport | undefined;
+let deliveryTransport: EmailTransport | undefined;
 
 const getTransport = (): EmailTransport => {
-  cachedTransport ??= resolveTransport();
+  cachedTransport ??= {
+    send: async (message) => {
+      if (isSyntheticPrincipal({ email: message.to })) {
+        return { type: "skipped" };
+      }
+      if (await isRefusedRecipient(message.to)) {
+        return { type: "skipped" };
+      }
+      deliveryTransport ??= resolveTransport();
+      return await deliveryTransport.send(message);
+    },
+  };
   return cachedTransport;
 };
 
@@ -112,12 +197,9 @@ export const sendOTPEmail = async ({
   lang,
 }: SendOTPEmailProps) => {
   const node = <BetterAuthOTP.Email lang={lang} otp={otp} type={type} />;
-  const [html, text] = await Promise.all([
-    render(node),
-    render(node, { plainText: true }),
-  ]);
+  const { html, text } = renderEmail(node);
 
-  await getTransport().send({
+  return await getTransport().send({
     from: getTransactionalEmailFrom(),
     to: email,
     subject: betterAuthOTPSubject(lang),
@@ -128,8 +210,9 @@ export const sendOTPEmail = async ({
 
 type SendNewDeviceLoginEmailProps = {
   email: string;
-  device: string;
-  ipAddress: string;
+  device: NewDeviceLogin.SignInDevice;
+  ipAddress: NewDeviceLogin.SignInAddress;
+  location: ViewerLocation;
   time: string;
   sessionsUrl: string;
   lang: SupportedLang;
@@ -139,23 +222,39 @@ export const sendNewDeviceLoginEmail = async ({
   email,
   device,
   ipAddress,
+  location,
   time,
   sessionsUrl,
   lang,
 }: SendNewDeviceLoginEmailProps) => {
+  const map =
+    location.type === "known" && location.coordinates !== null
+      ? await renderSignInLocationMap({
+          point: location.coordinates,
+          countryCode: location.countryCode,
+        })
+      : null;
   const node = (
     <NewDeviceLogin.Email
       device={device}
       ipAddress={ipAddress}
       lang={lang}
+      location={
+        location.type === "known"
+          ? {
+              type: "known",
+              city: location.city,
+              region: location.region,
+              countryCode: location.countryCode,
+              map: map === null ? null : { contentId: map.contentId },
+            }
+          : { type: "unknown" }
+      }
       sessionsUrl={sessionsUrl}
       time={time}
     />
   );
-  const [html, text] = await Promise.all([
-    render(node),
-    render(node, { plainText: true }),
-  ]);
+  const { html, text } = renderEmail(node);
 
   await getTransport().send({
     from: getTransactionalEmailFrom(),
@@ -163,7 +262,56 @@ export const sendNewDeviceLoginEmail = async ({
     subject: newDeviceLoginSubject(lang),
     html,
     text,
+    ...(map === null ? {} : { inlineImages: [map] }),
   });
+};
+
+const SIGN_IN_LOCATION_MAP_CONTENT_ID = "sign-in-location-map";
+
+// The notice still goes out without the map; a map that fails to render is
+// observed, never fatal to the send.
+const locationMapUnrendered = failureSink({
+  event: "email.new_device_login.location_map_unrendered",
+  expected: [],
+});
+
+// A country code the map cannot find is a defect in its country table; the
+// map is still sent, with no country shaded.
+const locationMapCountryUnresolved = failureSink({
+  event: "email.new_device_login.location_map_country_unresolved",
+  expected: [],
+});
+
+class LocationMapCountryUnresolvedError extends TaggedError(
+  "LocationMapCountryUnresolvedError",
+)<{ message: string; countryCode: string }> {}
+
+const renderSignInLocationMap = async (
+  place: MapPlace,
+): Promise<InlineImage | null> => {
+  const rendered = await Result.tryPromise(
+    async () => await renderLocationMap(place),
+  );
+  if (rendered.isErr()) {
+    observeFailure(rendered.error, { sink: locationMapUnrendered });
+    return null;
+  }
+  const { png, highlight } = rendered.value;
+  if (highlight.type === "unresolved") {
+    observeFailure(
+      new LocationMapCountryUnresolvedError({
+        message: "The location map has no feature for the reported country",
+        countryCode: highlight.countryCode,
+      }),
+      { sink: locationMapCountryUnresolved },
+    );
+  }
+  return {
+    contentId: SIGN_IN_LOCATION_MAP_CONTENT_ID,
+    filename: "sign-in-location.png",
+    contentType: LOCATION_MAP_CONTENT_TYPE,
+    content: png,
+  };
 };
 
 type SendOrganizationInvitationProps = {
@@ -189,10 +337,7 @@ export const sendOrganizationInvitation = async ({
       organizationName={organizationName}
     />
   );
-  const [html, text] = await Promise.all([
-    render(node),
-    render(node, { plainText: true }),
-  ]);
+  const { html, text } = renderEmail(node);
 
   await getTransport().send({
     from: getTransactionalEmailFrom(),
@@ -228,10 +373,7 @@ export const sendFeedbackEmail = async ({
       serverVersion={serverVersion}
     />
   );
-  const [html, text] = await Promise.all([
-    render(node),
-    render(node, { plainText: true }),
-  ]);
+  const { html, text } = renderEmail(node);
 
   await getTransport().send({
     from: getTransactionalEmailFrom(),
@@ -252,7 +394,7 @@ type RenderReportExportStatusEmailOptions = {
   status: ReportExportEmailStatus;
 };
 
-export const renderReportExportStatusEmail = async ({
+export const renderReportExportStatusEmail = ({
   appUrl,
   lang,
   status,
@@ -260,10 +402,7 @@ export const renderReportExportStatusEmail = async ({
   const node = (
     <ReportExportStatus.Email appUrl={appUrl} lang={lang} status={status} />
   );
-  const [html, text] = await Promise.all([
-    render(node),
-    render(node, { plainText: true }),
-  ]);
+  const { html, text } = renderEmail(node);
   return {
     html,
     subject: reportExportStatusSubject(lang, status),
@@ -282,7 +421,7 @@ export const sendReportExportStatusEmail = async ({
   lang,
   status,
 }: SendReportExportStatusEmailOptions) => {
-  const rendered = await renderReportExportStatusEmail({
+  const rendered = renderReportExportStatusEmail({
     appUrl,
     lang,
     status,
@@ -291,5 +430,32 @@ export const sendReportExportStatusEmail = async ({
     from: getTransactionalEmailFrom(),
     to: email,
     ...rendered,
+  });
+};
+
+type SendInvoiceLinkEmailOptions = InvoiceLinkEmailProps & {
+  to: string;
+  /** The firm's address: the platform sends, the firm receives the replies. */
+  replyTo: string;
+};
+
+/** One invoice link to one recipient; nothing is attached. */
+export const sendInvoiceLinkEmail = async ({
+  to,
+  replyTo,
+  ...props
+}: SendInvoiceLinkEmailOptions) => {
+  const { html, text } = renderEmail(<InvoiceLink.Email {...props} />);
+  await getTransport().send({
+    from: getTransactionalEmailFrom(),
+    to,
+    replyTo,
+    subject: invoiceLinkSubject(props.lang, {
+      documentType: props.documentType,
+      invoiceNumber: props.invoiceNumber,
+      firmName: props.firmName,
+    }),
+    html,
+    text,
   });
 };

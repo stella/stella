@@ -5,12 +5,19 @@ import type { SafeDb } from "@/api/db/safe-db";
 import { createSafeDb } from "@/api/db/scoped";
 import { createCopyToWorkspace } from "@/api/handlers/entities/copy";
 import { createEntitiesHandler } from "@/api/handlers/entities/create";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
 const copy = createCopyToWorkspace({
+  copyFileObjects: async ({ sources }) => {
+    if (sources.length > 0) {
+      panic("Document numbering fixture does not create file fields");
+    }
+    return await Promise.resolve(Result.ok([]));
+  },
   enqueueDocumentProcessingRun: async () => await Promise.resolve(),
   enqueueEntitySearchRepairs: async () => await Promise.resolve(),
   enqueueImageThumbnailOrMarkFailed: async () => await Promise.resolve(),
@@ -75,7 +82,8 @@ export const runNumberingCopy = async ({
       createAuditRecorder: () => recordAuditEvent,
       recordAuditEvent,
       request: new Request("https://example.test/entities/copy"),
-      route: "/test/entities/copy",
+      route:
+        "/v1/entities/:workspaceId/copy-to-workspace" satisfies ApiRoutePath,
       safeDb,
       session: { activeOrganizationId: organizationId },
       user: { id: userId },

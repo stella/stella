@@ -10,7 +10,7 @@ import { Result } from "better-result";
  * that silent failure into a loud CI failure, using live, public,
  * keyless listings.
  *
- * Four signals:
+ * Five signals:
  *  1. Discovery — every newly released, general-purpose first-party model
  *     must be offered or carry an exact, dated review disposition. This is
  *     the reverse check the picker previously lacked: upstream additions now
@@ -33,6 +33,10 @@ import { Result } from "better-result";
  *     requiring reasoning, changes effort tiers, or flips temperature
  *     support fails CI before a stale declaration lets request
  *     construction send a parameter the model rejects.
+ *  5. Transcription — each OpenRouter endpoint's transcription listing
+ *     (absent from the text listing) is compared with the transcription
+ *     catalog: dropped models, moved prices, newly served regions, lost
+ *     zero data retention, and unreviewed zero-retention models.
  *
  * Aggregators lag on brand-new models, and a model we offer may be
  * deprecated upstream while we still intend to serve it until shutdown.
@@ -45,21 +49,21 @@ import {
   BYOK_DOCUMENT_INPUT_MODEL_OPTIONS,
   BYOK_MODEL_OPTIONS,
   CAPABILITY_OVERRIDES,
-  DEFAULT_MODELS,
   DOCUMENT_INPUT_OVERRIDES,
   FIRST_PARTY_MODEL_PROVIDERS,
   MODEL_REASONING_EFFORTS,
   MODEL_TEMPERATURE_POLICIES,
 } from "@stll/ai-catalog";
 import type { FirstPartyModelProvider } from "@stll/ai-catalog";
+import { MODEL_DEFAULTS_LEDGER } from "@stll/ai-catalog/model-defaults-ledger";
 
 import {
   parseUpstreamCapabilities,
   validateCapabilities,
 } from "./model-catalog-capabilities";
 import type {
-  CatalogEntry,
   CapabilityFailure,
+  CatalogEntry,
   UpstreamCapabilities,
 } from "./model-catalog-capabilities";
 import {
@@ -71,6 +75,10 @@ import {
   isModelRateSnapshotCurrent,
   parseModelsDevRateRecords,
 } from "./model-catalog-rates-gen";
+import {
+  loadTranscriptionFindings,
+  printTranscriptionFindings,
+} from "./model-catalog-transcription";
 
 const FETCH_TIMEOUT_MS = 15_000;
 
@@ -195,9 +203,11 @@ const collectCatalogEntries = (): CatalogEntry[] => {
       add(provider, modelId);
     }
   }
-  for (const [provider, roles] of Object.entries(DEFAULT_MODELS)) {
-    for (const modelId of Object.values(roles)) {
-      add(provider, modelId);
+  for (const defaults of Object.values(MODEL_DEFAULTS_LEDGER)) {
+    for (const [provider, entry] of Object.entries(defaults)) {
+      if (entry.kind === "candidate") {
+        add(provider, entry.candidate.modelId);
+      }
     }
   }
 
@@ -432,6 +442,8 @@ const main = async (): Promise<void> => {
   console.log("Validating offered model IDs against upstream listings…");
   const upstream = await loadUpstream();
 
+  const transcriptionFindings = await loadTranscriptionFindings(fetchJson);
+
   const entries = collectCatalogEntries();
   const pickerRelevantUpstreamModels = upstream.modelsDevReachable
     ? upstream.discoveryModels.filter(isPickerRelevantUpstreamModel)
@@ -558,7 +570,8 @@ const main = async (): Promise<void> => {
     discoveryFailures.length +
     failures.length +
     (rateSnapshotCurrent ? 0 : 1) +
-    capabilityFailures.length;
+    capabilityFailures.length +
+    transcriptionFindings.length;
   if (failureCount > 0) {
     console.error(`\n✗ ${failureCount} model catalog issue(s) need attention:`);
     for (const model of discoveryFailures) {
@@ -583,6 +596,7 @@ const main = async (): Promise<void> => {
         `  ✗ [${label}] ${entry.provider} / ${entry.modelId} — ${detail}`,
       );
     }
+    printTranscriptionFindings(transcriptionFindings);
     console.error(
       "\nResolve by updating @stll/ai-catalog (offer a discovered model, migrate\n" +
         "off a retired model, or refresh its rates/capabilities), or, if\n" +

@@ -1,21 +1,29 @@
 import { useSyncExternalStore } from "react";
 
+import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { Result, TaggedError } from "better-result";
 
+import { PROFESSIONAL_USE_STATEMENT_VERSION } from "@stll/api-contract/professional-use";
 import { Button } from "@stll/ui/button";
 import { stellaToast } from "@stll/ui/toast";
 
 import { useMountEffect } from "@/hooks/use-effect";
 import { useInvalidateSession } from "@/hooks/use-invalidate-session";
+import { updateUserResource } from "@/lib/account/update-user";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { authClient, isTwoFactorRedirect } from "@/lib/auth-client";
+import { invokeCapability } from "@/lib/capabilities/capability-request";
 import { detached } from "@/lib/detached";
 import { fetchDevOtp } from "@/lib/dev-otp";
+import { toAPIError, unwrapApiResponse } from "@/lib/errors/api";
+import type { ToAPIErrorProps } from "@/lib/errors/api";
 import { toAuthClientError } from "@/lib/errors/auth";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { createSubmitIntent } from "@/lib/idempotency/idempotent-submit.logic";
+import { createRandomValue } from "@/lib/uuid";
 
 import { devQuickStartRuntime } from "./dev-quick-start-runtime";
 import {
@@ -23,9 +31,9 @@ import {
   writeDevQuickStartAttempt,
 } from "./dev-quick-start-storage";
 import {
+  createDevQuickStartIdentity,
   DEV_QUICK_START_PHASE,
   DEV_QUICK_START_STAGE,
-  createDevQuickStartIdentity,
   type DevQuickStartAttempt,
   type DevQuickStartIdentity,
   type DevQuickStartPhase,
@@ -53,6 +61,7 @@ const DEV_QUICK_START_COPY = {
 } as const;
 
 const DEV_QUICK_START_ERROR = {
+  professionalUse: "professionalUse",
   matterImport: "matterImport",
   matterImportRunning: "matterImportRunning",
   otpUnavailable: "otpUnavailable",
@@ -62,6 +71,8 @@ type DevQuickStartErrorCode =
   (typeof DEV_QUICK_START_ERROR)[keyof typeof DEV_QUICK_START_ERROR];
 
 const ERROR_MESSAGES = {
+  [DEV_QUICK_START_ERROR.professionalUse]:
+    "The professional-use statement could not be accepted.",
   [DEV_QUICK_START_ERROR.matterImport]:
     "The Harvey LAB import could not start.",
   [DEV_QUICK_START_ERROR.matterImportRunning]:
@@ -74,6 +85,31 @@ class DevQuickStartError extends TaggedError("DevQuickStartError")<{
   code: DevQuickStartErrorCode;
   message: string;
 }> {}
+
+// A developer tool: name the server's refusal instead of a generic failure,
+// so a new gate in front of a step is visible at once.
+function refusedStep(
+  code: DevQuickStartErrorCode,
+  error: ToAPIErrorProps,
+): never {
+  throw new DevQuickStartError({
+    code,
+    message: `${ERROR_MESSAGES[code]} (${String(error.status)}: ${toAPIError(error).message})`,
+  });
+}
+
+// A new quick-start account has not seen the professional-use statement, and
+// the API refuses its signed-in requests until it is accepted. Record it the
+// way the professional-use page does; this also covers accounts created
+// before this step existed, two-factor sign-in and resumed attempts.
+const acceptProfessionalUse = async () => {
+  const accepted = await api.me["professional-use"].post({
+    statementVersion: PROFESSIONAL_USE_STATEMENT_VERSION,
+  });
+  if (accepted.error) {
+    refusedStep(DEV_QUICK_START_ERROR.professionalUse, accepted.error);
+  }
+};
 
 const AUTHENTICATION_OUTCOME = {
   authenticated: "authenticated",
@@ -119,14 +155,25 @@ const createOrganization = async (identity: DevQuickStartIdentity) => {
       return listed.data;
     },
     createOrganization: async ({ organizationName, organizationSlug }) => {
-      const created = await authClient.organization.create({
-        name: organizationName,
-        slug: organizationSlug,
-      });
-      if (created.error) {
-        throw toAuthClientError(created.error);
-      }
-      return created.data.id;
+      const intent = createSubmitIntent(() => organizationSlug);
+      const replayRequest = intent.request();
+      const created = await invokeCapability(
+        "organizations.create",
+        async (request) =>
+          unwrapApiResponse(
+            await api.organizations.post(
+              { name: organizationName, slug: organizationSlug },
+              {
+                ...request,
+                headers: {
+                  "Idempotency-Key": replayRequest.headers["Idempotency-Key"],
+                  ...request.headers,
+                },
+              },
+            ),
+          ),
+      );
+      return created.organizationId;
     },
   });
   if (Result.isError(resolved)) {
@@ -148,6 +195,9 @@ const startMatterImport = async (
   { selectionSeed }: DevQuickStartIdentity,
   organizationId: string,
 ) => {
+  // Every path reaches here, including attempts resumed after the
+  // organization step; acceptance is idempotent.
+  await acceptProfessionalUse();
   const response = await api.dev["seed-firm-knowledge"].post({
     incompleteMatterMode: QUICK_START_INCOMPLETE_MATTER_MODE,
     matters: QUICK_START_MATTER_COUNT,
@@ -159,10 +209,7 @@ const startMatterImport = async (
       response.error.status === 409
         ? DEV_QUICK_START_ERROR.matterImportRunning
         : DEV_QUICK_START_ERROR.matterImport;
-    throw new DevQuickStartError({
-      code,
-      message: ERROR_MESSAGES[code],
-    });
+    refusedStep(code, response.error);
   }
 
   if (response.data instanceof Response) {
@@ -186,7 +233,7 @@ export const DevQuickStartButton = ({ redirectTo }: { redirectTo: string }) => {
 
   const runQuickStart = async () => {
     const createIdentity = () =>
-      createDevQuickStartIdentity(crypto.randomUUID());
+      createDevQuickStartIdentity(createRandomValue());
     const retainedAttempt = devQuickStartRuntime.getAttempt(
       () =>
         readDevQuickStartAttempt() ??
@@ -207,10 +254,16 @@ export const DevQuickStartButton = ({ redirectTo }: { redirectTo: string }) => {
     });
 
     if (Result.isError(result)) {
-      analytics.captureError(result.error);
+      analytics.captureError(result.error, {
+        fingerprintKey: "DevQuickStartButton.runQuickStart:failure",
+        scope: {
+          type: "handler",
+          handlerId: "DevQuickStartButton.runQuickStart:failure",
+        },
+      });
       notifyUserError(result.error, DEV_QUICK_START_COPY.errorTitle, {
         description: DevQuickStartError.is(result.error)
-          ? ERROR_MESSAGES[result.error.code]
+          ? result.error.message
           : userErrorFromThrown(
               result.error,
               DEV_QUICK_START_COPY.errorFallback,
@@ -246,16 +299,35 @@ export const DevQuickStartButton = ({ redirectTo }: { redirectTo: string }) => {
   };
 
   const handleQuickStart = async () => {
-    await devQuickStartRuntime.runSingleFlight({
-      stage: DEV_QUICK_START_STAGE.authenticate,
-      run: runQuickStart,
-    });
+    const result = await Result.tryPromise(
+      async () =>
+        await devQuickStartRuntime.runSingleFlight({
+          stage: DEV_QUICK_START_STAGE.authenticate,
+          run: runQuickStart,
+        }),
+    );
+    if (result.isErr()) {
+      analytics.captureError(result.error, {
+        fingerprintKey: "DevQuickStartButton.refresh:failure",
+        scope: {
+          type: "handler",
+          handlerId: "DevQuickStartButton.refresh:failure",
+        },
+      });
+      notifyUserError(result.error, DEV_QUICK_START_COPY.errorTitle, {
+        description: userErrorFromThrown(
+          result.error,
+          DEV_QUICK_START_COPY.errorFallback,
+        ),
+      });
+    }
   };
 
   return (
     <Button
       className="w-full uppercase"
       disabled={phase !== null}
+      disabledReason={currentPhaseLabel ?? undefined}
       loading={phase !== null}
       onClick={() => {
         detached(handleQuickStart(), "dev-quick-start.run");
@@ -276,6 +348,7 @@ export const DevQuickStartContinuation = ({
 }) => {
   const analytics = useAnalytics();
   const invalidateSession = useInvalidateSession();
+  const queryClient = useQueryClient();
   const phase = useSyncExternalStore(
     devQuickStartRuntime.subscribe,
     devQuickStartRuntime.getPhase,
@@ -289,7 +362,7 @@ export const DevQuickStartContinuation = ({
         readDevQuickStartAttempt() ??
         ({
           completedPhase: DEV_QUICK_START_PHASE.authenticate,
-          identity: createDevQuickStartIdentity(crypto.randomUUID()),
+          identity: createDevQuickStartIdentity(createRandomValue()),
           organizationId: null,
         } satisfies DevQuickStartAttempt),
     );
@@ -298,11 +371,13 @@ export const DevQuickStartContinuation = ({
 
     const result = await Result.tryPromise({
       try: async () => {
-        const updated = await authClient.updateUser({
-          name: "Dev Quick Start",
+        const updated = await updateUserResource({
+          queryClient,
+          input: { name: "Dev Quick Start" },
+          owner: null,
         });
-        if (updated.error) {
-          throw toAuthClientError(updated.error);
+        if (Result.isError(updated)) {
+          throw updated.error;
         }
 
         await runDevQuickStart({
@@ -324,10 +399,16 @@ export const DevQuickStartContinuation = ({
     });
 
     if (Result.isError(result)) {
-      analytics.captureError(result.error);
+      analytics.captureError(result.error, {
+        fingerprintKey: "DevQuickStartContinuation.runContinuation:failure",
+        scope: {
+          type: "handler",
+          handlerId: "DevQuickStartContinuation.runContinuation:failure",
+        },
+      });
       notifyUserError(result.error, DEV_QUICK_START_COPY.errorTitle, {
         description: DevQuickStartError.is(result.error)
-          ? ERROR_MESSAGES[result.error.code]
+          ? result.error.message
           : userErrorFromThrown(
               result.error,
               DEV_QUICK_START_COPY.errorFallback,
@@ -358,6 +439,7 @@ export const DevQuickStartContinuation = ({
     <Button
       className="w-full max-w-md uppercase"
       disabled={phase !== null}
+      disabledReason={currentPhaseLabel ?? undefined}
       loading={phase !== null}
       onClick={() => {
         detached(handleContinuation(), "dev-quick-start.retry");

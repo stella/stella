@@ -13,6 +13,7 @@ import {
   legislationDocuments,
   legislationSources,
 } from "@/api/db/schema";
+import { readCaseLawJurisdictionVacatedTx } from "@/api/lib/legal-search/corpus-index-jurisdiction-serving-store";
 import type { CorpusIndexManifest } from "@/api/lib/legal-search/corpus-index-manifest";
 import { deriveCorpusIndexProjectionDescriptor } from "@/api/lib/legal-search/corpus-index-projection-descriptor";
 import {
@@ -21,6 +22,8 @@ import {
   legislationProjectionInputFromCanonical,
   readActiveCorpusProjectionManifest,
 } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
+import { readCaseLawProvisionKeys } from "@/api/lib/legal-search/corpus-index-projection-provision-keys";
+import { readCaseLawRankingSignals } from "@/api/lib/legal-search/corpus-index-projection-ranking-signals";
 import {
   CORPUS_PROJECTION_STORE_MAX_BATCH_SIZE,
   type CorpusProjectionIntentLease,
@@ -49,9 +52,9 @@ export type CorpusProjectionMaterial =
       astS3Key: string | null;
     });
 
-export type CorpusProjectionMaterialRejection = {
+type CorpusProjectionMaterialRejection = {
   lease: CorpusProjectionIntentLease;
-  status: "lease_lost" | "stale" | "unreadable";
+  status: "lease_lost" | "stale" | "canonical_input_mismatch" | "unreadable";
   reason: string;
 };
 
@@ -152,7 +155,6 @@ const rejection = (
 
 type MaterialRow = {
   documentId: string;
-  projectionEpoch: CorpusProjectionIntentLease["epoch"];
   textS3Key: string | null;
 };
 
@@ -165,10 +167,16 @@ type ProjectedMaterialRow = {
 };
 
 // Every family sorts its leases the same way: a lease whose reservation moved
-// is lost, one whose canonical row, desired state or derived descriptor moved
-// is stale, and one without a text pointer is unreadable. `project` derives a
+// is lost, one whose desired state moved or canonical input was removed is
+// stale, and a still-current state with a different upsert descriptor is a
+// canonical mismatch. One without a text pointer is unreadable. `project` derives a
 // row's descriptor and material, and runs only for a lease whose reservation
 // and canonical state are still there.
+//
+// Currency is the generation's own: its desired state still names the
+// lease's epoch, fingerprint and index, and the canonical row still derives
+// that content. The canonical row's epoch is not compared, since another
+// generation's change moves it without touching what this lease carries.
 const sortLeasesByReadiness = <Row extends MaterialRow>(
   {
     leases,
@@ -201,12 +209,17 @@ const sortLeasesByReadiness = <Row extends MaterialRow>(
       continue;
     }
     const { descriptor, material } = project(row);
-    if (
-      row.projectionEpoch !== lease.epoch ||
-      !stateMatchesLease(state, lease) ||
-      !descriptorMatchesLease(descriptor, lease)
-    ) {
-      rejected.push(rejection(lease, "stale", "canonical input changed"));
+    const stateCurrent = stateMatchesLease(state, lease);
+    if (!stateCurrent || !descriptorMatchesLease(descriptor, lease)) {
+      rejected.push({
+        lease,
+        status:
+          stateCurrent && descriptor.action === "upsert"
+            ? "canonical_input_mismatch"
+            : "stale",
+        reason:
+          "projection reservation rejected: its desired or canonical input differs",
+      });
       continue;
     }
     if (row.textS3Key === null) {
@@ -220,13 +233,21 @@ const sortLeasesByReadiness = <Row extends MaterialRow>(
   return { ready, rejected };
 };
 
-const readCaseLawMaterials = async (
-  tx: Transaction,
-  leases: readonly CorpusProjectionIntentLease[],
-  manifest: Extract<CorpusIndexManifest, { family: "case_law" }>,
-  intents: ReadonlyMap<string, IntentSnapshot>,
-  states: ReadonlyMap<string, StateSnapshot>,
-): Promise<CorpusProjectionMaterialsResult> => {
+type ReadCaseLawMaterialsOptions = {
+  tx: Transaction;
+  leases: readonly CorpusProjectionIntentLease[];
+  manifest: Extract<CorpusIndexManifest, { family: "case_law" }>;
+  intents: ReadonlyMap<string, IntentSnapshot>;
+  states: ReadonlyMap<string, StateSnapshot>;
+};
+
+const readCaseLawMaterials = async ({
+  tx,
+  leases,
+  manifest,
+  intents,
+  states,
+}: ReadCaseLawMaterialsOptions): Promise<CorpusProjectionMaterialsResult> => {
   const entityIds = leases.map(({ entityId }) =>
     brandPersistedCaseLawDecisionId(entityId),
   );
@@ -248,7 +269,6 @@ const readCaseLawMaterials = async (
       // here: the builder already holds it, from the payload object this
       // transaction hands on a pointer to.
       metadata: caseLawDecisions.metadata,
-      projectionEpoch: caseLawDecisions.projectionEpoch,
       textS3Key: caseLawDecisions.textS3Key,
       astS3Key: caseLawDecisions.astS3Key,
       sourceDescriptor: caseLawSources.descriptor,
@@ -292,41 +312,80 @@ const readCaseLawMaterials = async (
     }
     values.push({ type: identifier.type, value: identifier.value });
   }
-  return sortLeasesByReadiness({ leases, intents, states, rows }, (row) => {
-    const input = caseLawProjectionInputFromCanonical({
-      ...row,
-      identifiers:
-        identifiersByDecision.get(row.documentId) ??
-        panic(`Corpus projection material lost identifiers: ${row.documentId}`),
-    });
-    return {
-      descriptor: deriveCorpusIndexProjectionDescriptor(manifest, input),
-      material: (lease, textS3Key) => ({
-        family: "case_law",
-        lease,
-        manifest,
-        input,
-        textS3Key,
-        astS3Key: row.astS3Key,
-      }),
-    };
+  const provisionKeysByDecision = await readCaseLawProvisionKeys(
+    tx,
+    rows.map(({ documentId, jurisdiction }) => ({
+      id: documentId,
+      jurisdiction,
+    })),
+  );
+  const vacatedByJurisdiction = await readCaseLawJurisdictionVacatedTx(
+    tx,
+    rows.map(({ jurisdiction }) => jurisdiction),
+  );
+  const rankingSignalsByDecision = await readCaseLawRankingSignals(
+    tx,
+    rows.map(({ documentId }) => documentId),
+  );
+  // The rows were read without a lock, so one can disappear between the two
+  // statements; its lease is then stale, like any other vanished row.
+  const signalled = rows.flatMap((row) => {
+    const rankingSignals = rankingSignalsByDecision.get(row.documentId);
+    return rankingSignals === undefined ? [] : [{ ...row, rankingSignals }];
   });
+  return sortLeasesByReadiness(
+    { leases, intents, states, rows: signalled },
+    (row) => {
+      const input = caseLawProjectionInputFromCanonical({
+        ...row,
+        identifiers:
+          identifiersByDecision.get(row.documentId) ??
+          panic(
+            `Corpus projection material lost identifiers: ${row.documentId}`,
+          ),
+        vacatedFrom: vacatedByJurisdiction.get(row.jurisdiction) ?? null,
+        provisionKeys:
+          provisionKeysByDecision.get(row.documentId) ??
+          panic(
+            `Corpus projection material lost provision keys: ${row.documentId}`,
+          ),
+      });
+      return {
+        descriptor: deriveCorpusIndexProjectionDescriptor(manifest, input),
+        material: (lease, textS3Key) => ({
+          family: "case_law",
+          lease,
+          manifest,
+          input,
+          textS3Key,
+          astS3Key: row.astS3Key,
+        }),
+      };
+    },
+  );
 };
 
-const readLegislationMaterials = async (
-  tx: Transaction,
-  leases: readonly CorpusProjectionIntentLease[],
-  manifest: Extract<CorpusIndexManifest, { family: "legislation" }>,
-  intents: ReadonlyMap<string, IntentSnapshot>,
-  states: ReadonlyMap<string, StateSnapshot>,
-): Promise<CorpusProjectionMaterialsResult> => {
+type ReadLegislationMaterialsOptions = {
+  tx: Transaction;
+  leases: readonly CorpusProjectionIntentLease[];
+  manifest: Extract<CorpusIndexManifest, { family: "legislation" }>;
+  intents: ReadonlyMap<string, IntentSnapshot>;
+  states: ReadonlyMap<string, StateSnapshot>;
+};
+
+const readLegislationMaterials = async ({
+  tx,
+  leases,
+  manifest,
+  intents,
+  states,
+}: ReadLegislationMaterialsOptions): Promise<CorpusProjectionMaterialsResult> => {
   const entityIds = leases.map(({ entityId }) =>
     brandPersistedLegislationDocumentId(entityId),
   );
   const rows = await tx
     .select({
       ...LEGISLATION_PROJECTION_CANONICAL_COLUMNS,
-      projectionEpoch: legislationDocuments.projectionEpoch,
       textS3Key: legislationDocuments.textS3Key,
       astS3Key: legislationDocuments.astS3Key,
       sourceDescriptor: legislationSources.descriptor,
@@ -385,46 +444,85 @@ export const readReservedCorpusProjectionMaterialsTx = async (
     .from(corpusIndexProjectionIntents)
     .where(inArray(corpusIndexProjectionIntents.id, intentIds))
     .limit(intentIds.length);
-  const stateRows = await tx
-    .select({
-      entityId: corpusIndexProjectionStates.entityId,
-      desiredAction: corpusIndexProjectionStates.desiredAction,
-      desiredEpoch: corpusIndexProjectionStates.desiredEpoch,
-      desiredFingerprint: corpusIndexProjectionStates.desiredFingerprint,
-      desiredIndexId: corpusIndexProjectionStates.desiredIndexId,
-    })
-    .from(corpusIndexProjectionStates)
-    .where(
-      and(
-        eq(corpusIndexProjectionStates.family, family),
-        eq(corpusIndexProjectionStates.generation, generation),
-        inArray(corpusIndexProjectionStates.entityId, entityIds),
-      ),
-    )
-    .limit(entityIds.length);
+  const readStates = async (ids: readonly string[]) =>
+    await tx
+      .select({
+        entityId: corpusIndexProjectionStates.entityId,
+        desiredAction: corpusIndexProjectionStates.desiredAction,
+        desiredEpoch: corpusIndexProjectionStates.desiredEpoch,
+        desiredFingerprint: corpusIndexProjectionStates.desiredFingerprint,
+        desiredIndexId: corpusIndexProjectionStates.desiredIndexId,
+      })
+      .from(corpusIndexProjectionStates)
+      .where(
+        and(
+          eq(corpusIndexProjectionStates.family, family),
+          eq(corpusIndexProjectionStates.generation, generation),
+          inArray(corpusIndexProjectionStates.entityId, [...ids]),
+        ),
+      )
+      .limit(ids.length);
+  const stateRows = await readStates(entityIds);
   const intents = new Map(intentRows.map((row) => [row.id, row]));
   const states = new Map(stateRows.map((row) => [row.entityId, row]));
-  switch (family) {
-    case "case_law": {
-      if (manifest.family !== "case_law") {
-        return panic("Case-law material manifest has another family");
+  const materials = await (async () => {
+    switch (family) {
+      case "case_law": {
+        if (manifest.family !== "case_law") {
+          return panic("Case-law material manifest has another family");
+        }
+        return await readCaseLawMaterials({
+          tx,
+          leases,
+          manifest,
+          intents,
+          states,
+        });
       }
-      return await readCaseLawMaterials(tx, leases, manifest, intents, states);
-    }
-    case "legislation": {
-      if (manifest.family !== "legislation") {
-        return panic("Legislation material manifest has another family");
+      case "legislation": {
+        if (manifest.family !== "legislation") {
+          return panic("Legislation material manifest has another family");
+        }
+        return await readLegislationMaterials({
+          tx,
+          leases,
+          manifest,
+          intents,
+          states,
+        });
       }
-      return await readLegislationMaterials(
-        tx,
-        leases,
-        manifest,
-        intents,
-        states,
-      );
+      default:
+        family satisfies never;
+        return panic(`Unhandled family: ${String(family)}`);
     }
-    default:
-      family satisfies never;
-      return panic(`Unhandled family: ${String(family)}`);
+  })();
+  const mismatches = materials.rejected.filter(
+    ({ status }) => status === "canonical_input_mismatch",
+  );
+  if (mismatches.length === 0) {
+    return materials;
   }
+  // A canonical writer can commit between the first state read and the
+  // canonical reads. Its newer desired state makes this normal supersession.
+  const latestStates = new Map(
+    (await readStates(mismatches.map(({ lease }) => lease.entityId))).map(
+      (state) => [state.entityId, state],
+    ),
+  );
+  return {
+    ready: materials.ready,
+    rejected: materials.rejected.map((entry) => {
+      if (entry.status !== "canonical_input_mismatch") {
+        return entry;
+      }
+      const latest = latestStates.get(entry.lease.entityId);
+      return latest === undefined || !stateMatchesLease(latest, entry.lease)
+        ? rejection(
+            entry.lease,
+            "stale",
+            "desired state changed during canonical read",
+          )
+        : entry;
+    }),
+  };
 };

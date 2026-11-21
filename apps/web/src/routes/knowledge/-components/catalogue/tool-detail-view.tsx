@@ -2,7 +2,8 @@ import { useNavigate } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
-import { LoaderIcon, PencilIcon, XIcon } from "@stll/ui/icons";
+import { PencilIcon, XIcon } from "@stll/ui/icons";
+import { Loader } from "@stll/ui/loader";
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
@@ -19,8 +20,8 @@ import { SIDE_RAIL_TAB_ICON_SIZE_PX, TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import {
-  isEffectivelyInstalled,
   type CatalogueDisplayEntry,
+  isEffectivelyInstalled,
 } from "@/lib/knowledge/catalogue-types";
 
 import { useCatalogueRemoval } from "./use-catalogue-removal";
@@ -148,8 +149,8 @@ const ToolDetailContent = ({
     }
     detached(
       navigate({
-        to: "/knowledge/tools/$entry",
-        params: { entry: entry.installedSkillId },
+        to: "/knowledge/tools/skills/$skillId",
+        params: { skillId: entry.installedSkillId },
       }),
       "tool-detail-view.navigate",
     );
@@ -185,11 +186,16 @@ const ToolDetailContent = ({
             <Button
               className="flex-1"
               disabled={install.isPending}
+              disabledReason={t("common.installing")}
               onClick={onInstall}
               type="button"
             >
               {install.isPending && (
-                <LoaderIcon className="size-4 animate-spin" />
+                <Loader
+                  className="size-4"
+                  label={t("common.loading")}
+                  size="sm"
+                />
               )}
               {t("common.add")}
             </Button>
@@ -211,12 +217,17 @@ const ToolDetailContent = ({
             <Button
               className="flex-1"
               disabled={uninstall.isPending}
+              disabledReason={t("common.removing")}
               onClick={requestRemoval}
               type="button"
               variant="destructive-outline"
             >
               {uninstall.isPending && (
-                <LoaderIcon className="size-4 animate-spin" />
+                <Loader
+                  className="size-4"
+                  label={t("common.loading")}
+                  size="sm"
+                />
               )}
               {t("common.remove")}
             </Button>

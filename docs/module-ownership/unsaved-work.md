@@ -1,0 +1,7 @@
+# Guarding unsaved local work in the web app
+
+Generated from `scripts/ownership/unsaved-work.ts`. See [Module ownership](../module-ownership.md).
+
+| Capability                                                  | Owner                                    | Enforcement | Summary                                                                                                                                                                                                                                                                                                                                                      |
+| ----------------------------------------------------------- | ---------------------------------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `unsaved-work` — Guarding unsaved local work in the web app | `apps/web/src/hooks/use-unsaved-work.ts` | none        | useUnsavedWork registers a named surface while it is dirty and installs the route blocker and unload prompt its guard asks for. The stale-client refresh reads hasUnsavedWork() before reloading, so work guarded anywhere else would be reloaded over. no-direct-unsaved-work-guard rejects TanStack blockers and beforeunload listeners outside the owner. |

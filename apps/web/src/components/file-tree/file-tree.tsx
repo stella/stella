@@ -3,8 +3,10 @@ import type { ReactNode } from "react";
 import { BidiText } from "@stll/ui/bidi-text";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { ChevronRightIcon } from "@stll/ui/icons";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
+import { FILE_TREE_ROW_HEIGHT_PX } from "@/components/file-tree/file-tree.pending";
 import { EntityKindIcon } from "@/components/workspaces/entity-kind-icon";
 
 // Shared presentation for the file/folder tree used by the workspace Files view
@@ -12,8 +14,7 @@ import { EntityKindIcon } from "@/components/workspaces/entity-kind-icon";
 // guides, disclosure chevron, icon, name) from one place. Data, selection, and
 // behaviour live in the host; this module owns the look.
 
-export const FILE_TREE_ROW_HEIGHT_PX = 36;
-export const FILE_TREE_INDENT_PX = 20;
+const FILE_TREE_INDENT_PX = 20;
 const DISCLOSURE_SLOT_PX = 14;
 const GUIDE_COLUMN_OFFSET_PX = DISCLOSURE_SLOT_PX / 2;
 const GUIDE_LINE_COLOR_CLASS = "bg-muted-foreground/20";
@@ -23,7 +24,7 @@ const GUIDE_LINE_COLOR_CLASS = "bg-muted-foreground/20";
  * ancestor's disclosure column. Nested rows read as belonging to their parent
  * without the visual noise of per-row elbow connectors.
  */
-export const TreeGuideLines = ({ depth }: { depth: number }) => {
+const TreeGuideLines = ({ depth }: { depth: number }) => {
   if (depth === 0) {
     return null;
   }
@@ -177,7 +178,7 @@ export const FileTree = ({
                 rename input — interactive elements can't nest inside a button. */}
             <div
               className={cn(
-                "hover:bg-muted flex h-full min-w-0 flex-1 cursor-pointer items-center rounded px-2 text-start text-sm",
+                "hover:bg-muted flex h-full min-w-0 flex-1 cursor-pointer items-center rounded-sm px-2 text-start text-sm",
                 selectedId === node.id && "bg-accent",
               )}
               onClick={() => (isFolder ? onToggle(node.id) : onSelect(node))}
@@ -205,14 +206,14 @@ export const FileTree = ({
                 {renderName ? (
                   renderName(node)
                 ) : (
-                  <BidiText as="span" className="truncate" title={node.name}>
+                  <TruncatedText render={<BidiText as="span" />}>
                     {node.name}
-                  </BidiText>
+                  </TruncatedText>
                 )}
               </FileTreeNameCell>
             </div>
             {renderActions && (
-              <span className="invisible absolute end-1 flex gap-0.5 group-hover/row:visible">
+              <span className="invisible absolute end-1 flex gap-0.5 group-hover/row:visible pointer-coarse:visible">
                 {renderActions(node)}
               </span>
             )}

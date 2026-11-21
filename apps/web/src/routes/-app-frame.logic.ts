@@ -1,5 +1,8 @@
 import { panic } from "better-result";
 
+import { APP_FRAME_SCOPE } from "./-app-frame-scope";
+import type { AppFrameScope } from "./-app-frame-scope";
+
 /**
  * Which frame the root renders around the matched routes.
  *
@@ -9,31 +12,22 @@ import { panic } from "better-result";
  *   neither frame mounts, so nothing fetches.
  * - `neutral`: the same skeleton around a page that shows the same to every
  *   visitor (a published catalogue entry), so it renders, on the server too,
- *   before the visitor is known.
- * - `none`: the route renders its own shell (sign-in, public law, …) or is
- *   still pending, so the root adds nothing.
+ *   before the visitor is known; also around a redirect into the member
+ *   frame, which shows its target's pending view there.
+ * - `auth`: the shared sign-in header, introduction and form column.
+ * - `none`: the route renders its own shell (public law, …), so
+ *   the root adds nothing.
  * - `unresolved`: the frame depends on who is visiting; read the session and
  *   ask again with `audience`.
  */
 export type AppFrame =
-  | "none"
-  | "member"
-  | "public"
-  | "checking"
-  | "neutral"
-  | "unresolved";
+  "auth" | "none" | "member" | "public" | "checking" | "neutral" | "unresolved";
 
 /** Who is visiting, as far as the frame is concerned. A member has a
  *  session and an active organization; anyone else is anonymous, and a
  *  session that could not be read is `unavailable`. */
 export type AppFrameAudience =
-  | "checking"
-  | "anonymous"
-  | "unavailable"
-  | "member";
-
-const PROTECTED_ROUTE_ID = "/_protected";
-const KNOWLEDGE_ROUTE_ID = "/knowledge";
+  "checking" | "anonymous" | "unavailable" | "member";
 
 // Pages that show the same to every visitor: published catalogue entries.
 const VISITOR_INDEPENDENT_ROUTE_IDS: readonly string[] = [
@@ -43,6 +37,7 @@ const VISITOR_INDEPENDENT_ROUTE_IDS: readonly string[] = [
 ];
 
 type SelectAppFrameInput = {
+  scope: AppFrameScope;
   /** Ids of the matched routes, root first. */
   routeIds: readonly string[];
   /** Whether a matched route has put the signed-in user in its context. */
@@ -51,26 +46,44 @@ type SelectAppFrameInput = {
   publicKnowledge: boolean;
   /** Who is visiting; `undefined` until the session has been asked for. */
   audience?: AppFrameAudience | undefined;
+  /**
+   * For a leaf route that only redirects, the frame of the page it leads to
+   * (`leafRedirectFrameScope`); `undefined` for a leaf with its own page.
+   */
+  redirectScope?: AppFrameScope | undefined;
 };
 
 export const selectAppFrame = ({
+  scope,
   routeIds,
   hasRouteUser,
   publicKnowledge,
   audience,
+  redirectScope,
 }: SelectAppFrameInput): AppFrame => {
-  const isKnowledge = routeIds.includes(KNOWLEDGE_ROUTE_ID);
-  // Routes that sign the visitor in first: the frame waits for the user their
-  // guard puts in context, and until then the route shows its own pending
-  // shell.
-  if (
-    routeIds.includes(PROTECTED_ROUTE_ID) ||
-    (isKnowledge && !publicKnowledge)
-  ) {
-    return hasRouteUser ? "member" : "none";
-  }
-  if (!isKnowledge) {
-    return "none";
+  switch (scope) {
+    case APP_FRAME_SCOPE.auth:
+      return "auth";
+    case APP_FRAME_SCOPE.none:
+      if (redirectScope === APP_FRAME_SCOPE.auth) {
+        return "auth";
+      }
+      // A route that only redirects into the signed-in app (the root, which
+      // sends a member to the chat) shows the member frame's skeleton around
+      // its target's pending view while it runs: the frame the page lands
+      // in, not a bare step before it. No frame mounts, so nothing is read
+      // for a visitor it then sends to sign in.
+      return redirectScope === APP_FRAME_SCOPE.member ? "neutral" : "none";
+    case APP_FRAME_SCOPE.member:
+      return hasRouteUser ? "member" : "checking";
+    case APP_FRAME_SCOPE.knowledge:
+      if (!publicKnowledge) {
+        return hasRouteUser ? "member" : "checking";
+      }
+      break;
+    default:
+      scope satisfies never;
+      return panic(`Unhandled frame scope: ${String(scope)}`);
   }
   // Knowledge for everyone: the frame follows the session, and fails closed
   // while it is unknown.
@@ -114,6 +127,7 @@ export const frameVisitor = (
     case "checking":
     case "neutral":
     case "unresolved":
+    case "auth":
     case "none":
       return null;
     default: {

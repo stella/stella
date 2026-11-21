@@ -1,7 +1,8 @@
 import { TaggedError } from "better-result";
 import { file, serve } from "bun";
-import nodePath from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { fileURLToPath } from "node:url";
+
+import { loadLocalModule, LocalModuleLoadError } from "./local-module-loader";
 
 const DEFAULT_HEALTH_PATH = "/health";
 const DEFAULT_IMMUTABLE_ASSET_PREFIX = "/assets/";
@@ -175,7 +176,8 @@ const isModuleResolutionError = (error: unknown): boolean =>
   error !== null &&
   (("name" in error && error.name === "ResolveMessage") ||
     ("code" in error && error.code === "ERR_MODULE_NOT_FOUND") ||
-    error instanceof SyntaxError);
+    error instanceof SyntaxError ||
+    error instanceof LocalModuleLoadError);
 
 const describeModuleFailure = ({ error, path }: ServerModuleFailure): string =>
   `${path}: ${error instanceof Error ? error.message : String(error)}`;
@@ -212,9 +214,19 @@ export const verifyServerModuleGraph = async ({
     await Promise.all(
       paths.map(async (relativePath): Promise<ServerModuleFailure | null> => {
         try {
-          await import(
-            pathToFileURL(nodePath.join(serverDirectoryPath, relativePath)).href
-          );
+          const loaded = await loadLocalModule({
+            root: serverDirectoryPath,
+            modulePath: relativePath,
+          });
+          if (loaded.isErr()) {
+            return {
+              error:
+                loaded.error.code === "module-failed"
+                  ? loaded.error.cause
+                  : loaded.error,
+              path: relativePath,
+            };
+          }
           return null;
         } catch (error) {
           return { error, path: relativePath };

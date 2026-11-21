@@ -13,6 +13,7 @@ import {
   DialogClose,
   DialogDescription,
   DialogFooter,
+  DialogFormState,
   DialogHeader,
   DialogPanel,
   DialogPopup,
@@ -36,25 +37,31 @@ import {
 } from "@stll/ui/select";
 import { Skeleton } from "@stll/ui/skeleton";
 import { stellaToast } from "@stll/ui/toast";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
-import { ContactPicker } from "@/components/contact-picker";
+import {
+  CONTACT_PICKER_SUGGESTIONS,
+  ContactPicker,
+} from "@/components/contact-picker";
 import { MATTER_INFO_ICON_SLOT_CLASS } from "@/components/workspaces/matter-info-layout";
+import { useSingleFlight } from "@/hooks/use-single-flight";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { useCreateContact } from "@/lib/contacts/mutations";
 import { contactsKeys } from "@/lib/contacts/queries";
 import { detached } from "@/lib/detached";
-import { toAPIError, unwrapEden } from "@/lib/errors/api";
+import { toAPIError, unwrapApiResponse } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
+import { queryView } from "@/lib/query-view.logic";
 import { toSafeId } from "@/lib/safe-id";
-import { useQueryView } from "@/lib/use-query-view";
 import { useUpdateWorkspace } from "@/lib/workspaces/mutations";
 import {
-  PARTY_ROLES,
   PARTY_ROLE_LABEL_KEYS,
+  PARTY_ROLES,
   toPartyRole,
 } from "@/lib/workspaces/party-roles";
 import type { PartyRole } from "@/lib/workspaces/party-roles";
@@ -73,19 +80,24 @@ export const PartiesSection = ({ workspaceId }: PartiesSectionProps) => {
   const updateWorkspace = useUpdateWorkspace();
   const createContact = useCreateContact();
 
-  const handleCreateAndSetClient = (name: string, type: ContactType) => {
-    const id = toSafeId<"contact">(crypto.randomUUID());
+  const createOnce = useSingleFlight();
+  const createAndSetClient = (
+    name: string,
+    type: ContactType,
+    settled: () => void,
+  ) => {
     createContact.mutate(
-      { id, type, displayName: name },
+      { type, displayName: name },
       {
-        onSuccess: () => {
+        onSettled: settled,
+        onSuccess: (contact) => {
           detached(
             queryClient.invalidateQueries({
               queryKey: contactsKeys.all,
             }),
             "parties-section.invalidate",
           );
-          handleSetClient({ id, displayName: name });
+          handleSetClient({ id: contact.id, displayName: name });
         },
         onError: (error) => {
           notifyUserError(error, t("errors.actionFailed"));
@@ -93,12 +105,27 @@ export const PartiesSection = ({ workspaceId }: PartiesSectionProps) => {
       },
     );
   };
+  const handleCreateAndSetClient = (name: string, type: ContactType) => {
+    detached(
+      createOnce.runSettled((settled) =>
+        createAndSetClient(name, type, settled),
+      ),
+      "parties-section.create-client",
+    );
+  };
 
   const handleSetClient = (contact: { id: string; displayName: string }) => {
+    if (!workspace) {
+      return;
+    }
     updateWorkspace.mutate(
       {
         workspaceId,
-        update: { type: "clientId", value: contact.id },
+        update: {
+          type: "clientId",
+          value: contact.id,
+          expectedClientId: workspace.client?.id ?? null,
+        },
       },
       {
         onSuccess: () => {
@@ -174,13 +201,17 @@ export const PartiesSection = ({ workspaceId }: PartiesSectionProps) => {
                 <BuildingIcon className="text-muted-foreground size-4" />
               </span>
             )}
-            <Link
-              className="min-w-0 truncate text-sm font-medium hover:underline"
-              params={{ contactId: client.id }}
-              to="/contacts/$contactId"
+            <TruncatedText
+              className="text-sm font-medium hover:underline"
+              render={
+                <Link
+                  params={{ contactId: client.id }}
+                  to="/contacts/$contactId"
+                />
+              }
             >
               <BidiText>{client.displayName}</BidiText>
-            </Link>
+            </TruncatedText>
           </div>
         </section>
       )}
@@ -206,7 +237,7 @@ export const PartiesSection = ({ workspaceId }: PartiesSectionProps) => {
 
 const PartiesList = ({ workspaceId }: PartiesSectionProps) => {
   const t = useTranslations();
-  const view = useQueryView(useQuery(workspaceContactsOptions(workspaceId)), {
+  const view = queryView(useQuery(workspaceContactsOptions(workspaceId)), {
     isEmpty: ({ contacts, overflow }) => contacts.length === 0 && !overflow,
   });
   switch (view.type) {
@@ -334,6 +365,7 @@ const ChangeClientDialog = ({
               setIsOpen(false);
             }}
             placeholder={t("workspaces.parties.changeClient")}
+            suggestions={CONTACT_PICKER_SUGGESTIONS.recentClients}
           />
         </DialogPanel>
       </DialogPopup>
@@ -361,24 +393,37 @@ const PromoteDialog = ({ workspaceId }: PromoteDialogProps) => {
     setSelectedContact(null);
   };
 
-  const handleCreateContact = (name: string, type: ContactType) => {
-    const id = toSafeId<"contact">(crypto.randomUUID());
+  const createOnce = useSingleFlight();
+  const createPartyContact = (
+    name: string,
+    type: ContactType,
+    settled: () => void,
+  ) => {
     createContact.mutate(
-      { id, type, displayName: name },
+      { type, displayName: name },
       {
-        onSuccess: () => {
+        onSettled: settled,
+        onSuccess: (contact) => {
           detached(
             queryClient.invalidateQueries({
               queryKey: contactsKeys.all,
             }),
             "parties-section.invalidate",
           );
-          setSelectedContact({ id, displayName: name });
+          setSelectedContact({ id: contact.id, displayName: name });
         },
         onError: (error) => {
           notifyUserError(error, t("errors.actionFailed"));
         },
       },
+    );
+  };
+  const handleCreateContact = (name: string, type: ContactType) => {
+    detached(
+      createOnce.runSettled((settled) =>
+        createPartyContact(name, type, settled),
+      ),
+      "parties-section.create-contact",
     );
   };
 
@@ -391,8 +436,9 @@ const PromoteDialog = ({ workspaceId }: PromoteDialogProps) => {
       {
         workspaceId,
         update: {
-          type: "promote",
-          value: { clientId: selectedContact.id },
+          type: "clientId",
+          value: selectedContact.id,
+          expectedClientId: null,
         },
       },
       {
@@ -437,6 +483,12 @@ const PromoteDialog = ({ workspaceId }: PromoteDialogProps) => {
         {t("workspaces.parties.promoteCta")}
       </DialogTrigger>
       <DialogPopup>
+        <DialogFormState
+          dirty={selectedContact !== null}
+          onDiscard={() => {
+            setSelectedContact(null);
+          }}
+        />
         <DialogHeader>
           <DialogTitle>{t("workspaces.parties.promoteCta")}</DialogTitle>
           <DialogDescription>
@@ -471,6 +523,7 @@ const PromoteDialog = ({ workspaceId }: PromoteDialogProps) => {
                     displayName: contact.displayName,
                   })
                 }
+                suggestions={CONTACT_PICKER_SUGGESTIONS.recentClients}
               />
             )}
           </div>
@@ -481,6 +534,7 @@ const PromoteDialog = ({ workspaceId }: PromoteDialogProps) => {
           </DialogClose>
           <Button
             disabled={!selectedContact}
+            disabledReason={t("workspaces.parties.chooseContact")}
             loading={updateWorkspace.isPending}
             onClick={handleSubmit}
           >
@@ -528,7 +582,10 @@ const PartyRow = ({ party, workspaceId }: PartyRowProps) => {
       }
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "PartyRow:failure",
+        scope: { type: "handler", handlerId: "PartyRow:failure" },
+      });
     },
   });
 
@@ -594,6 +651,7 @@ const PartyRow = ({ party, workspaceId }: PartyRowProps) => {
         aria-label={t("workspaces.parties.removeParty")}
         className="ms-auto"
         disabled={removeParty.isPending}
+        disabledReason={t("common.removing")}
         onClick={handleRemove}
         size="icon-xs"
         variant="ghost"
@@ -613,6 +671,7 @@ const AddPartyDialog = ({
   workspaceId,
   showTriggerLabel = true,
 }: AddPartyDialogProps) => {
+  const idempotentSubmit = useIdempotentSubmit();
   const t = useTranslations();
   const queryClient = useQueryClient();
   const analytics = useAnalytics();
@@ -627,17 +686,26 @@ const AddPartyDialog = ({
       isPrimary?: boolean;
       notes?: string | null;
     }) => {
-      const response = await api
-        .workspaces({ workspaceId: toSafeId<"workspace">(ws) })
-        .contacts.put({
+      const response = await idempotentSubmit.run({
+        operation: JSON.stringify([
+          'api.workspaces({workspaceId:toSafeId<"workspace">(ws)}).contacts',
+          { workspaceId: toSafeId<"workspace">(ws) },
+        ]),
+        body: {
           ...body,
           contactId: toSafeId<"contact">(body.contactId),
-        });
+        },
+        send: api.workspaces({ workspaceId: toSafeId<"workspace">(ws) })
+          .contacts.put,
+      });
 
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "AddPartyDialog:failure",
+        scope: { type: "handler", handlerId: "AddPartyDialog:failure" },
+      });
     },
   });
   const [isOpen, setIsOpen] = useState(false);
@@ -652,8 +720,10 @@ const AddPartyDialog = ({
     value: role,
   }));
 
-  const handleSubmit = () => {
+  const submitOnce = useSingleFlight();
+  const addSelectedParty = (settled: () => void) => {
     if (!selectedContact || !selectedRole) {
+      settled();
       return;
     }
 
@@ -664,6 +734,7 @@ const AddPartyDialog = ({
         role: selectedRole,
       },
       {
+        onSettled: settled,
         onSuccess: () => {
           stellaToast.add({
             title: t("success.partyAdded"),
@@ -683,6 +754,12 @@ const AddPartyDialog = ({
           notifyUserError(error, t("errors.actionFailed"));
         },
       },
+    );
+  };
+  const handleSubmit = () => {
+    detached(
+      submitOnce.runSettled(addSelectedParty),
+      "parties-section.add-party",
     );
   };
 
@@ -715,6 +792,13 @@ const AddPartyDialog = ({
         {showTriggerLabel ? t("workspaces.parties.addParty") : null}
       </DialogTrigger>
       <DialogPopup>
+        <DialogFormState
+          dirty={selectedContact !== null || selectedRole !== null}
+          onDiscard={() => {
+            setSelectedContact(null);
+            setSelectedRole(null);
+          }}
+        />
         <DialogHeader>
           <DialogTitle>{t("workspaces.parties.addParty")}</DialogTitle>
           <DialogDescription />
@@ -783,6 +867,11 @@ const AddPartyDialog = ({
           </DialogClose>
           <Button
             disabled={!selectedContact || !selectedRole}
+            disabledReason={
+              selectedContact
+                ? t("common.selectARole")
+                : t("workspaces.parties.chooseContact")
+            }
             loading={addParty.isPending}
             onClick={handleSubmit}
           >

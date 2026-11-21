@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import {
   normalizeAnonymizationBlacklistEntries,
@@ -10,24 +10,32 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { LIMITS } from "@/api/lib/limits";
 
-const blacklistEntrySchema = t.Object({
-  canonical: t.String({ minLength: 1, maxLength: 512 }),
-  enabled: t.Optional(t.Boolean()),
-  label: t.String({ minLength: 1, maxLength: 64 }),
-  variants: t.Optional(
-    t.Array(t.String({ minLength: 1, maxLength: 512 }), {
-      maxItems: LIMITS.anonymizationBlacklistVariantsPerEntry,
-    }),
+const blacklistEntrySchema = v.object({
+  canonical: v.pipe(v.string(), v.minLength(1), v.maxLength(512)),
+  enabled: v.optional(v.boolean()),
+  label: v.pipe(v.string(), v.minLength(1), v.maxLength(64)),
+  variants: v.optional(
+    v.pipe(
+      v.array(v.pipe(v.string(), v.minLength(1), v.maxLength(512))),
+      v.maxLength(LIMITS.anonymizationBlacklistVariantsPerEntry),
+    ),
   ),
 });
 
-const updateAnonymizationBlacklistBodySchema = t.Object({
-  entries: t.Array(blacklistEntrySchema, {
-    maxItems: LIMITS.anonymizationBlacklistEntriesPerOrganization,
-  }),
+const updateAnonymizationBlacklistBodySchema = v.object({
+  entries: v.pipe(
+    v.array(blacklistEntrySchema),
+    v.maxLength(LIMITS.anonymizationBlacklistEntriesPerOrganization),
+  ),
 });
 
 const config = {
+  contract: "replace",
+  precondition: {
+    type: "deferred",
+    baselineId:
+      "apps/api/src/handlers/organization-settings/anonymization-blacklist/update.ts",
+  },
   description:
     "Replace the organization-wide always-mask list with the entries you " +
     "pass: terms not in the list are deleted, terms already present are " +

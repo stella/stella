@@ -8,24 +8,27 @@ import {
   CHAT_PROMPT_IMPROVEMENT_STRATEGY,
   type ChatPromptImprovementStrategy,
 } from "@stll/api-contract/chat";
-import { Button } from "@stll/ui/button";
-import { ChevronDownIcon, Loader2Icon, AiActionIcon } from "@stll/ui/icons";
-import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
+import { AiActionIcon } from "@stll/ui/icons";
+import { Loader } from "@stll/ui/loader";
+import { MenuItem, MenuPopup } from "@stll/ui/menu";
+import { SplitButton } from "@stll/ui/split-button";
 import { stellaToast } from "@stll/ui/toast";
 
 import type { ChatEditorController } from "@/components/chat-editor-provider";
 import { composerStoredMarkdown } from "@/components/chat-editor-source";
+import { getLiveEditor } from "@/components/live-editor";
 import type { TranslationKey } from "@/i18n/types";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 
 type ChatPromptImproveButtonProps = {
   anonymized: boolean;
   controller: ChatEditorController;
   disabled: boolean;
+  disabledReason?: string | undefined;
 };
 
 const PROMPT_IMPROVEMENT_OPTIONS = [
@@ -63,18 +66,51 @@ type MissingPromptImprovementOption = Exclude<
 
 true satisfies MissingPromptImprovementOption extends never ? true : never;
 
+type PromptImprovementDisabledReasonOptions = {
+  anonymized: boolean;
+  isPending: boolean;
+  disabled: boolean;
+  disabledReason: string | undefined;
+  t: (
+    key:
+      | "chat.improvePromptUnavailableAnonymized"
+      | "chat.improvingPrompt"
+      | "chat.improvePromptEmpty",
+  ) => string;
+};
+
+const promptImprovementDisabledReason = ({
+  anonymized,
+  isPending,
+  disabled,
+  disabledReason,
+  t,
+}: PromptImprovementDisabledReasonOptions) => {
+  if (isPending) {
+    return t("chat.improvingPrompt");
+  }
+  if (anonymized) {
+    return t("chat.improvePromptUnavailableAnonymized");
+  }
+  if (disabled) {
+    return disabledReason ?? t("chat.improvePromptEmpty");
+  }
+  return undefined;
+};
+
 export const ChatPromptImproveButton = ({
   anonymized,
   controller,
   disabled,
+  disabledReason,
 }: ChatPromptImproveButtonProps) => {
   const t = useTranslations();
   const [isPending, setIsPending] = useState(false);
   const [open, setOpen] = useState(false);
 
   const improvePrompt = async (strategy: ChatPromptImprovementStrategy) => {
-    const { editor } = controller;
-    if (!editor || editor.isDestroyed || !isPlainTextDraft(editor)) {
+    const editor = getLiveEditor(controller.editor);
+    if (!editor || !isPlainTextDraft(editor)) {
       stellaToast.add({
         title: t("chat.improvePromptPlainTextOnly"),
         type: "warning",
@@ -96,12 +132,18 @@ export const ChatPromptImproveButton = ({
           ? CHAT_SEND_MODE.anonymized
           : CHAT_SEND_MODE.rawOverride,
       });
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     });
     setIsPending(false);
 
     if (Result.isError(result)) {
-      getAnalytics().captureError(result.error);
+      getAnalytics().captureError(result.error, {
+        fingerprintKey: "ChatPromptImproveButton.improvePrompt:failure",
+        scope: {
+          type: "handler",
+          handlerId: "ChatPromptImproveButton.improvePrompt:failure",
+        },
+      });
       notifyUserError(result.error, t("common.somethingWentWrong"));
       return;
     }
@@ -139,79 +181,46 @@ export const ChatPromptImproveButton = ({
   const unavailable = anonymized || disabled || isPending;
 
   return (
-    <div
-      className="text-muted-foreground hover:text-foreground inline-flex shrink-0 items-center"
-      data-slot="chat-prompt-improve-control"
+    <SplitButton
+      primaryContent="icon"
+      primaryLabel={label}
+      menuLabel={t("chat.choosePromptImprovementStrategy")}
+      primaryDisabledReason={promptImprovementDisabledReason({
+        anonymized,
+        isPending,
+        disabled,
+        disabledReason,
+        t,
+      })}
+      menuDisabled={unavailable}
+      open={open}
+      onOpenChange={setOpen}
+      onPrimaryClick={() =>
+        runImprovement(CHAT_PROMPT_IMPROVEMENT_STRATEGY.structure)
+      }
+      menu={
+        <MenuPopup align="end" className="w-[min(20rem,calc(100vw-2rem))]">
+          {PROMPT_IMPROVEMENT_OPTIONS.map((option) => (
+            <MenuItem
+              className="min-h-12 flex-col items-start gap-0.5 px-3 py-2 text-start whitespace-normal"
+              key={option.strategy}
+              onClick={() => runImprovement(option.strategy)}
+            >
+              <span className="font-medium">{t(option.labelKey)}</span>
+              <span className="text-muted-foreground text-xs leading-snug font-normal">
+                {t(option.descriptionKey)}
+              </span>
+            </MenuItem>
+          ))}
+        </MenuPopup>
+      }
     >
-      <Button
-        aria-label={label}
-        className="size-11 max-w-11 flex-none rounded-e-none"
-        disabled={unavailable}
-        onClick={() =>
-          runImprovement(CHAT_PROMPT_IMPROVEMENT_STRATEGY.structure)
-        }
-        size="icon-sm"
-        tooltip={label}
-        type="button"
-        variant="ghost"
-      >
-        {isPending ? (
-          <Loader2Icon
-            aria-hidden
-            className="size-3.5 animate-spin ltr:translate-x-1 rtl:-translate-x-1"
-          />
-        ) : (
-          <AiActionIcon
-            aria-hidden
-            className="size-3.5 ltr:translate-x-1 rtl:-translate-x-1"
-          />
-        )}
-      </Button>
-      <Popover onOpenChange={setOpen} open={open}>
-        <PopoverTrigger
-          render={
-            <Button
-              aria-label={t("chat.choosePromptImprovementStrategy")}
-              className="size-11 max-w-11 flex-none rounded-s-none border-s px-1"
-              disabled={unavailable}
-              size="icon-sm"
-              tooltip={t("chat.choosePromptImprovementStrategy")}
-              type="button"
-              variant="ghost"
-            />
-          }
-        >
-          <ChevronDownIcon
-            aria-hidden
-            className="size-3 ltr:-translate-x-1 rtl:translate-x-1"
-          />
-        </PopoverTrigger>
-        <PopoverPopup
-          align="end"
-          className="w-[min(20rem,calc(100vw-2rem))]"
-          padding="xs"
-          side="bottom"
-        >
-          <div className="flex flex-col gap-0.5">
-            {PROMPT_IMPROVEMENT_OPTIONS.map((option) => (
-              <Button
-                className="h-auto min-h-12 w-full flex-col items-start gap-0.5 px-3 py-2 text-start whitespace-normal sm:h-auto"
-                key={option.strategy}
-                onClick={() => runImprovement(option.strategy)}
-                size="sm"
-                type="button"
-                variant="ghost"
-              >
-                <span className="font-medium">{t(option.labelKey)}</span>
-                <span className="text-muted-foreground text-xs leading-snug font-normal">
-                  {t(option.descriptionKey)}
-                </span>
-              </Button>
-            ))}
-          </div>
-        </PopoverPopup>
-      </Popover>
-    </div>
+      {isPending ? (
+        <Loader className="size-3.5" label={t("common.loading")} size="sm" />
+      ) : (
+        <AiActionIcon aria-hidden="true" className="size-3.5" />
+      )}
+    </SplitButton>
   );
 };
 
@@ -245,10 +254,10 @@ const isCurrentDraftUnchanged = ({
   editor: NonNullable<ChatEditorController["editor"]>;
   prompt: string;
 }): boolean => {
-  const currentEditor = controller.editor;
+  const currentEditor = getLiveEditor(controller.editor);
   return (
+    currentEditor !== null &&
     currentEditor === editor &&
-    !currentEditor.isDestroyed &&
     currentEditor.getText().trim() === prompt
   );
 };

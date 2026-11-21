@@ -1,13 +1,24 @@
-import "@/api/lib/observability/otel";
-import { logs, SeverityNumber } from "@opentelemetry/api-logs";
+// parser-output-unchanged: Release attribution adds a service.version attribute to telemetry records; parsed ingestion records are unchanged.
+import { Result } from "better-result";
 
 import type { FailureGrade, FailureReason } from "@stll/errors";
-import { FAILURE_GRADES, isFailureReason } from "@stll/errors";
+import {
+  FAILURE_GRADES,
+  isFailureReason,
+  isQueryErrorOutputKey,
+  sanitizeErrorForOutput,
+} from "@stll/errors";
 
 import type { ErrorFingerprint } from "@/api/lib/errors/utils";
 import { SENSITIVE_LOG_ATTRIBUTE_KEY_PATTERN } from "@/api/lib/observability/log-attribute-policy";
+import { otlpLogExporter } from "@/api/lib/observability/otel";
+import {
+  LOG_SEVERITY_NUMBER,
+  type LogAttributeValue,
+  type LogSeverityNumber,
+} from "@/api/lib/observability/otlp-log-exporter";
+import { APP_VERSION, SERVICE_VERSION_KEY } from "@/api/lib/version";
 
-const otelLogger = logs.getLogger("stella.api");
 // Denylist of attribute-key substrings whose values may carry document
 // content, client-identifying text, PII, or credentials, none of which
 // belong in telemetry for privileged legal data. This is defense-in-depth:
@@ -23,21 +34,28 @@ const otelLogger = logs.getLogger("stella.api");
 // rejects such keys at the call site can pin the same one.
 const SENSITIVE_ATTRIBUTE_KEY_PATTERN = SENSITIVE_LOG_ATTRIBUTE_KEY_PATTERN;
 
-type LoggerAttributeValue = boolean | number | string;
+type LoggerAttributeValue = LogAttributeValue;
 
 export type LoggerAttributes = Record<string, LoggerAttributeValue>;
+type LoggerAttributeInput = Record<string, unknown>;
 
 /** The request's graded failure, from the request's failure observation. */
 type RequestLogFailure = {
   readonly grade: FailureGrade;
   readonly reason: FailureReason;
+  /**
+   * `grade`: the record's severity and capture follow the grade, so it is an
+   * owned record. Without it the grade rides along in shadow.
+   */
+  readonly policy?: "grade" | undefined;
 };
 
 type RequestLogOptions = {
   clientAddressSource?: string | undefined;
   durationMs: number;
   errorFingerprint?: ErrorFingerprint | undefined;
-  elysiaCode?: string | undefined;
+  /** Why the HTTP layer refused the request (`malformed`, `not_found`, ...). */
+  failureKind?: string | undefined;
   errorType?: string | undefined;
   failure?: RequestLogFailure | undefined;
   message: "request.completed" | "request.failed";
@@ -63,10 +81,7 @@ const FAILURE_REASON_KEYS: ReadonlySet<string> = new Set([
 const isFailureGrade = (value: unknown): boolean =>
   FAILURE_GRADES.some((grade) => grade === value);
 
-const isOwnedValueValid = (
-  key: string,
-  value: LoggerAttributeValue,
-): boolean => {
+const isOwnedValueValid = (key: string, value: unknown): boolean => {
   if (FAILURE_GRADE_KEYS.has(key)) {
     return isFailureGrade(value);
   }
@@ -76,16 +91,61 @@ const isOwnedValueValid = (
   return true;
 };
 
-export const sanitizeLogAttributes = (
-  attributes: LoggerAttributes | undefined,
-): LoggerAttributes | undefined => {
-  if (!attributes) {
+const UNSERIALIZABLE_ATTRIBUTE = "[unserializable attribute]";
+
+const outputAttributeValue = (
+  value: unknown,
+): LogAttributeValue | undefined => {
+  if (
+    typeof value === "string" ||
+    typeof value === "number" ||
+    typeof value === "boolean"
+  ) {
+    return value;
+  }
+  if (Array.isArray(value)) {
+    if (value.every((item: unknown) => typeof item === "string")) {
+      return value;
+    }
+    if (value.every((item: unknown) => typeof item === "number")) {
+      return value;
+    }
+    if (value.every((item: unknown) => typeof item === "boolean")) {
+      return value;
+    }
+  }
+  if (typeof value === "bigint") {
+    return String(value);
+  }
+  if (value === undefined) {
     return undefined;
   }
+  return Result.try(() => {
+    const serialized: unknown = JSON.stringify(value, (_key, item: unknown) =>
+      typeof item === "bigint" ? String(item) : item,
+    );
+    return typeof serialized === "string"
+      ? serialized
+      : UNSERIALIZABLE_ATTRIBUTE;
+  }).unwrapOr(UNSERIALIZABLE_ATTRIBUTE);
+};
 
-  let dropped = 0;
-  const safeAttributes: LoggerAttributes = {};
-
+const filterLogAttributes = ({
+  attributes,
+  queryFieldsDropped,
+}: {
+  attributes: unknown;
+  queryFieldsDropped: number;
+}): LoggerAttributes | undefined => {
+  if (
+    attributes === null ||
+    typeof attributes !== "object" ||
+    Array.isArray(attributes)
+  ) {
+    return undefined;
+  }
+  let dropped = queryFieldsDropped;
+  const safeAttributes = new Map<string, LoggerAttributeValue>();
   for (const [key, value] of Object.entries(attributes)) {
     if (
       SENSITIVE_ATTRIBUTE_KEY_PATTERN.test(key) ||
@@ -94,16 +154,33 @@ export const sanitizeLogAttributes = (
       dropped += 1;
       continue;
     }
-
-    safeAttributes[key] = value;
+    const safeValue = outputAttributeValue(value);
+    if (safeValue === undefined) {
+      dropped += 1;
+      continue;
+    }
+    safeAttributes.set(key, safeValue);
   }
-
   if (dropped > 0) {
-    safeAttributes["log.attributes_dropped"] = dropped;
+    safeAttributes.set("log.attributes_dropped", dropped);
   }
-
-  return safeAttributes;
+  return Object.fromEntries(safeAttributes);
 };
+
+const queryFieldCount = (
+  attributes: LoggerAttributeInput | undefined,
+): number =>
+  Result.try(
+    () => Object.keys(attributes ?? {}).filter(isQueryErrorOutputKey).length,
+  ).unwrapOr(0);
+
+export const sanitizeLogAttributes = (
+  attributes: LoggerAttributeInput | undefined,
+): LoggerAttributes | undefined =>
+  filterLogAttributes({
+    attributes: sanitizeErrorForOutput(attributes),
+    queryFieldsDropped: queryFieldCount(attributes),
+  });
 
 export type LogRecord = {
   readonly severityText: string;
@@ -112,7 +189,7 @@ export type LogRecord = {
 };
 
 // Test seam: when set, every sanitized record goes here instead of to the
-// OTel pipeline and the process streams, so a test reads what the real
+// OTLP exporter and the process streams, so a test reads what the real
 // logger would have emitted (after attribute sanitization) without replacing
 // the module.
 let recordSink: ((record: LogRecord) => void) | null = null;
@@ -135,12 +212,12 @@ const UNOWNED_KEY = "observability.unowned";
  * deployed log stream.
  */
 const annotateUnowned = (
-  severityNumber: SeverityNumber,
+  severityNumber: LogSeverityNumber,
   attributes: LoggerAttributes | undefined,
 ): LoggerAttributes | undefined => {
   if (
     attributes === undefined ||
-    severityNumber < SeverityNumber.WARN ||
+    severityNumber < LOG_SEVERITY_NUMBER.WARN ||
     Object.hasOwn(attributes, OWNED_FAILURE_KEY) ||
     !Object.keys(attributes).some((key) =>
       key.startsWith(ERROR_ATTRIBUTE_PREFIX),
@@ -151,41 +228,38 @@ const annotateUnowned = (
   return { ...attributes, [UNOWNED_KEY]: true };
 };
 
-const emit = ({
-  attributes,
-  message,
+type OutputStream = "stderr" | "stdout";
+
+/** Write a record that is already safe to emit to every sink. */
+const write = ({
+  attributes: safeAttributes,
+  message: safeMessage,
   severityNumber,
   severityText,
+  outputStream,
 }: {
   attributes: LoggerAttributes | undefined;
   message: string;
-  severityNumber: SeverityNumber;
+  severityNumber: LogSeverityNumber;
   severityText: string;
+  outputStream: OutputStream;
 }): void => {
-  const safeAttributes = annotateUnowned(
-    severityNumber,
-    sanitizeLogAttributes(attributes),
-  );
   if (recordSink !== null) {
-    recordSink({ severityText, message, attributes: safeAttributes });
-    return;
-  }
-  const record = {
-    severityNumber,
-    severityText,
-    body: message,
-  };
-
-  if (safeAttributes) {
-    otelLogger.emit({
-      ...record,
+    recordSink({
+      severityText,
+      message: safeMessage,
       attributes: safeAttributes,
     });
-  } else {
-    otelLogger.emit(record);
+    return;
   }
+  otlpLogExporter?.emit({
+    attributes: safeAttributes,
+    body: safeMessage,
+    severityNumber,
+    severityText,
+  });
 
-  // Backstop for every structured record above DEBUG. The OTel pipeline
+  // Backstop for every structured record above DEBUG. The OTLP export
   // above exports only when a deployment opts in (see `otel.ts`), so this
   // stream is the sink operational tooling can always rely on.
   //
@@ -200,27 +274,71 @@ const emit = ({
   // drops payload- and credential-shaped keys from every record regardless
   // of severity, so severity was never what kept payloads out. DEBUG stays
   // unmirrored as the escape hatch for hot loops.
-  if (severityNumber >= SeverityNumber.INFO) {
-    process.stderr.write(
+  //
+  // The release rides on every line as the OTLP resource does on exported
+  // records, after the attributes so no caller key can replace it: a failure
+  // is attributable to a release without a deploy timeline.
+  if (severityNumber >= LOG_SEVERITY_NUMBER.INFO) {
+    process[outputStream].write(
       `${JSON.stringify({
         severity: severityText,
-        message,
+        message: safeMessage,
         ...safeAttributes,
+        [SERVICE_VERSION_KEY]: APP_VERSION,
       })}\n`,
     );
   }
 };
 
+const emit = ({
+  attributes,
+  message,
+  severityNumber,
+  severityText,
+  outputStream = "stderr",
+}: {
+  attributes: LoggerAttributeInput | undefined;
+  message: string;
+  severityNumber: LogSeverityNumber;
+  severityText: string;
+  outputStream?: OutputStream;
+}): void => {
+  const output = sanitizeErrorForOutput([message, attributes]);
+  write({
+    message:
+      Array.isArray(output) && typeof output.at(0) === "string"
+        ? String(output.at(0))
+        : "[unreadable log]",
+    attributes: annotateUnowned(
+      severityNumber,
+      filterLogAttributes({
+        attributes: Array.isArray(output) ? output.at(1) : undefined,
+        queryFieldsDropped: queryFieldCount(attributes),
+      }),
+    ),
+    severityNumber,
+    severityText,
+    outputStream,
+  });
+};
+
 const REQUEST_SEVERITY = {
-  ERROR: SeverityNumber.ERROR,
-  INFO: SeverityNumber.INFO,
-  WARN: SeverityNumber.WARN,
+  ERROR: LOG_SEVERITY_NUMBER.ERROR,
+  INFO: LOG_SEVERITY_NUMBER.INFO,
+  WARN: LOG_SEVERITY_NUMBER.WARN,
 } as const;
 
+/**
+ * The request record. Its own fields are typed (a method, a route pattern,
+ * numbers and closed vocabularies under fixed keys) and written as they are;
+ * only what came from a thrown error, the fingerprint and the error type,
+ * passes the scrub every free-form attribute passes. The request fields go
+ * last, so no error-derived key can replace them.
+ */
 const emitRequest = ({
   clientAddressSource,
   durationMs,
-  elysiaCode,
+  failureKind,
   errorFingerprint,
   errorType,
   failure,
@@ -231,74 +349,72 @@ const emitRequest = ({
   severity,
   statusCode,
 }: RequestLogOptions): void => {
-  const safeAttributes = annotateUnowned(REQUEST_SEVERITY[severity], {
-    // The fingerprint's keys are already this sink's attribute names, so the
-    // record ships whole rather than being re-listed field by field. A second
-    // copy of that key set can only ever be a shorter one, and a field it
-    // leaves out is a field no reader of this sink can get back. It goes
-    // first, so none of its keys can override the request's own.
-    ...sanitizeLogAttributes(errorFingerprint),
-    "http.method": method,
-    "http.route": route ?? "unmatched",
-    "http.status_code": statusCode,
-    "request.duration_ms": durationMs,
-    ...(elysiaCode === undefined ? {} : { "http.elysia_code": elysiaCode }),
-    ...(errorType === undefined ? {} : { "error.type": errorType }),
-    ...(requestId === undefined ? {} : { "request.id": requestId }),
-    ...(clientAddressSource === undefined
-      ? {}
-      : { "client.address_source": clientAddressSource }),
-    ...(failure === undefined
-      ? {}
-      : {
-          "failure.grade": failure.grade,
-          "failure.reason": failure.reason,
-          "failure.shadow": "true",
-        }),
-  });
-
-  if (recordSink !== null) {
-    recordSink({ severityText: severity, message, attributes: safeAttributes });
-    return;
-  }
-  otelLogger.emit({
-    ...(safeAttributes === undefined ? {} : { attributes: safeAttributes }),
-    body: message,
-    severityNumber: REQUEST_SEVERITY[severity],
+  const errorAttributes =
+    errorFingerprint === undefined && errorType === undefined
+      ? undefined
+      : sanitizeLogAttributes({
+          ...errorFingerprint,
+          ...(errorType === undefined ? {} : { "error.type": errorType }),
+        });
+  const severityNumber = REQUEST_SEVERITY[severity];
+  write({
+    message,
+    severityNumber,
     severityText: severity,
+    outputStream: "stdout",
+    attributes: annotateUnowned(severityNumber, {
+      ...errorAttributes,
+      "http.method": method,
+      "http.route": route ?? "unmatched",
+      "http.status_code": statusCode,
+      "request.duration_ms": durationMs,
+      ...(failureKind === undefined
+        ? {}
+        : { "http.failure_kind": failureKind }),
+      ...(requestId === undefined ? {} : { "request.id": requestId }),
+      ...(clientAddressSource === undefined
+        ? {}
+        : { "client.address_source": clientAddressSource }),
+      ...(failure === undefined
+        ? {}
+        : {
+            "failure.grade": failure.grade,
+            "failure.reason": failure.reason,
+            ...(failure.policy === undefined
+              ? { "failure.shadow": "true" }
+              : { "failure.policy": failure.policy }),
+          }),
+    }),
   });
-  process.stdout.write(
-    `${JSON.stringify({ severity, message, ...safeAttributes })}\n`,
-  );
 };
 
 export const logger = {
-  debug: (message: string, attributes?: LoggerAttributes) =>
+  debug: (message: string, attributes?: LoggerAttributeInput) =>
     emit({
       message,
       attributes,
-      severityNumber: SeverityNumber.DEBUG,
+      severityNumber: LOG_SEVERITY_NUMBER.DEBUG,
       severityText: "DEBUG",
     }),
-  info: (message: string, attributes?: LoggerAttributes) =>
+  info: (message: string, attributes?: LoggerAttributeInput) =>
     emit({
       message,
       attributes,
-      severityNumber: SeverityNumber.INFO,
+      severityNumber: LOG_SEVERITY_NUMBER.INFO,
       severityText: "INFO",
     }),
-  warn: (message: string, attributes?: LoggerAttributes) =>
+  warn: (message: string, attributes?: LoggerAttributeInput) =>
     emit({
       message,
       attributes,
-      severityNumber: SeverityNumber.WARN,
+      severityNumber: LOG_SEVERITY_NUMBER.WARN,
       severityText: "WARN",
     }),
-  error: (message: string, attributes?: LoggerAttributes) =>
+  error: (message: string, attributes?: LoggerAttributeInput) =>
     emit({
       message,
       attributes,
-      severityNumber: SeverityNumber.ERROR,
+      severityNumber: LOG_SEVERITY_NUMBER.ERROR,
       severityText: "ERROR",
     }),
   request: (options: RequestLogOptions) => emitRequest(options),

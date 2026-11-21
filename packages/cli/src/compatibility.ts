@@ -3,9 +3,10 @@ import * as v from "valibot";
 
 import packageJson from "../package.json" with { type: "json" };
 import {
-  readHttpActionAdmissionRefusal,
   type CliActionAdmissionRefusal,
+  readHttpActionAdmissionRefusal,
 } from "./action-admission-refusal.js";
+import { apiFetch } from "./api-fetch.js";
 import {
   AUTH_FETCH_TIMEOUT_MS,
   CLI_REQUIRED_RESOURCE_SCOPES,
@@ -16,6 +17,7 @@ import {
   CLI_SUPPORTED_API_PROTOCOLS,
 } from "./generated/api-contract.js";
 import { MCP_DISCOVERY_PATH, MCP_HTTP_PATH } from "./generated/mcp-contract.js";
+import { commandUnavailableMessage } from "./unavailable-command.js";
 
 const SEMVER_PATTERN =
   /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/u;
@@ -188,14 +190,20 @@ const validateContract = (
   if (!supportsProtocol(contract.protocol)) {
     return Result.err(
       new CompatibilityCheckError({
-        message: `Server API protocol ${contract.protocol} is incompatible; this CLI supports ${CLI_SUPPORTED_API_PROTOCOLS.join(", ")}.`,
+        message: commandUnavailableMessage({
+          type: "protocol-incompatible",
+          message: `Server API protocol ${contract.protocol} is incompatible; this CLI supports ${CLI_SUPPORTED_API_PROTOCOLS.join(", ")}.`,
+        }),
       }),
     );
   }
   if (contract.revision < CLI_MINIMUM_SERVER_REVISION) {
     return Result.err(
       new CompatibilityCheckError({
-        message: `Server contract revision ${contract.revision} is too old; this CLI requires revision ${CLI_MINIMUM_SERVER_REVISION} or newer.`,
+        message: commandUnavailableMessage({
+          type: "protocol-incompatible",
+          message: `Server contract revision ${contract.revision} is too old; this CLI requires revision ${CLI_MINIMUM_SERVER_REVISION} or newer.`,
+        }),
       }),
     );
   }
@@ -209,7 +217,10 @@ const validateContract = (
   if (missingCapabilities.length > 0) {
     return Result.err(
       new CompatibilityCheckError({
-        message: `Server contract is missing required ${missingCapabilities.length === 1 ? "capability" : "capabilities"}: ${missingCapabilities.join(", ")}.`,
+        message: commandUnavailableMessage({
+          type: "protocol-incompatible",
+          message: `Server contract is missing required ${missingCapabilities.length === 1 ? "capability" : "capabilities"}: ${missingCapabilities.join(", ")}.`,
+        }),
       }),
     );
   }
@@ -227,7 +238,10 @@ const validateLegacyCompatibility = (
   if (!supportsProtocol(compatibility.api_contract_version)) {
     return Result.err(
       new CompatibilityCheckError({
-        message: `Server API contract ${compatibility.api_contract_version} is incompatible; this CLI supports ${CLI_SUPPORTED_API_PROTOCOLS.join(", ")}.`,
+        message: commandUnavailableMessage({
+          type: "protocol-incompatible",
+          message: `Server API contract ${compatibility.api_contract_version} is incompatible; this CLI supports ${CLI_SUPPORTED_API_PROTOCOLS.join(", ")}.`,
+        }),
       }),
     );
   }
@@ -259,7 +273,10 @@ const validateLegacyCompatibility = (
   ) {
     return Result.err(
       new CompatibilityCheckError({
-        message: `CLI ${packageJson.version} is incompatible with this legacy server; supported CLI versions are ${compatibility.cli_version.minimum} through ${compatibility.cli_version.maximum}, inclusive.`,
+        message: commandUnavailableMessage({
+          type: "protocol-incompatible",
+          message: `CLI ${packageJson.version} is incompatible with this legacy server; supported CLI versions are ${compatibility.cli_version.minimum} through ${compatibility.cli_version.maximum}, inclusive.`,
+        }),
       }),
     );
   }
@@ -272,10 +289,19 @@ const validateLegacyCompatibility = (
   });
 };
 
-const validateCompatibility = (
-  metadata: CompatibilityMetadata,
+export const validateCompatibility = (
+  input: unknown,
   serverUrl: string,
 ): Result<CompatibilityReport, CompatibilityCheckError> => {
+  const parsed = v.safeParse(compatibilityMetadataSchema, input);
+  if (!parsed.success) {
+    return Result.err(
+      new CompatibilityCheckError({
+        message: "Server compatibility metadata is absent or malformed.",
+      }),
+    );
+  }
+  const metadata = parsed.output;
   let negotiated: Result<NegotiatedContract, CompatibilityCheckError>;
   if (metadata.stella_contract !== undefined) {
     negotiated = validateContract(metadata.stella_contract);
@@ -293,6 +319,29 @@ const validateCompatibility = (
     return Result.err(negotiated.error);
   }
 
+  const minimumVersion = metadata.stella_compatibility?.cli_version.minimum;
+  const minimum =
+    minimumVersion === undefined ? undefined : parseSemver(minimumVersion);
+  const current = parseSemver(packageJson.version);
+  if (
+    minimumVersion === undefined ||
+    minimum === undefined ||
+    current === undefined
+  ) {
+    return Result.err(
+      new CompatibilityCheckError({
+        message:
+          "Server compatibility metadata lacks a valid minimum CLI version.",
+      }),
+    );
+  }
+  if (compareSemver(current, minimum) < 0) {
+    return Result.err(
+      new CompatibilityCheckError({
+        message: `CLI ${packageJson.version} is below the server minimum ${minimumVersion}.`,
+      }),
+    );
+  }
   const supportedScopes = new Set(metadata.scopes_supported);
   const missingScopes = CLI_REQUIRED_RESOURCE_SCOPES.filter(
     (scope) => !supportedScopes.has(scope),
@@ -327,6 +376,7 @@ const validateCompatibility = (
 
 export const checkServerCompatibility = async (
   serverUrl: string,
+  onMetadata?: (metadata: unknown) => Promise<void>,
 ): Promise<Result<CompatibilityReport, CompatibilityCheckError>> =>
   await Result.tryPromise({
     catch: (cause) =>
@@ -341,7 +391,7 @@ export const checkServerCompatibility = async (
         MCP_DISCOVERY_PATH,
         `${serverUrl.replace(/\/$/u, "")}/`,
       );
-      const response = await fetch(discoveryUrl, {
+      const response = await apiFetch(discoveryUrl, {
         headers: { Accept: "application/json" },
         signal: AbortSignal.timeout(AUTH_FETCH_TIMEOUT_MS),
       });
@@ -359,17 +409,11 @@ export const checkServerCompatibility = async (
       }
 
       const body: unknown = await response.json();
-      const parsed = v.safeParse(compatibilityMetadataSchema, body);
-      if (!parsed.success) {
-        throw new CompatibilityCheckError({
-          message: `stella compatibility discovery at ${discoveryUrl.toString()} is absent or malformed. Deploy an API that advertises a stella compatibility contract before publishing this CLI.`,
-        });
-      }
-
-      const result = validateCompatibility(parsed.output, serverUrl);
+      const result = validateCompatibility(body, serverUrl);
       if (Result.isError(result)) {
         throw result.error;
       }
+      await onMetadata?.(body);
       return result.value;
     },
   });

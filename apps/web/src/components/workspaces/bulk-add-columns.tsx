@@ -1,11 +1,4 @@
-import {
-  Suspense,
-  useCallback,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { Suspense, useMemo, useRef, useState } from "react";
 
 import {
   useMutation,
@@ -14,14 +7,16 @@ import {
 } from "@tanstack/react-query";
 import type { Editor } from "@tiptap/react";
 import { Result } from "better-result";
-import { useFormatter, useTranslations } from "use-intl";
+import { useTranslations } from "use-intl";
 
 import { PROPERTY_DEPENDENCIES_PER_PROPERTY_MAX } from "@stll/api-contract";
+import { DEFAULT_VARCHAR_MAX_LENGTH } from "@stll/api-contract/limits";
 import { Button } from "@stll/ui/button";
 import {
   Dialog,
   DialogClose,
   DialogFooter,
+  DialogFormState,
   DialogPopup,
   DialogTitle,
   DialogTrigger,
@@ -37,17 +32,22 @@ import {
 } from "@stll/ui/select";
 import { Skeleton } from "@stll/ui/skeleton";
 import { stellaToast } from "@stll/ui/toast";
-import { cn } from "@stll/ui/utils";
 
 import { AiRewriteControl } from "@/components/ai-rewrite-control";
 import Tooltip from "@/components/tooltip";
 import {
+  columnDialogCopy,
+  columnDialogLimitReached,
+  columnDraftsChanged,
   makeEmptyDraft,
   questionColumnContent,
   questionDraft,
   settleColumnWrites,
 } from "@/components/workspaces/bulk-add-columns.logic";
-import type { Draft } from "@/components/workspaces/bulk-add-columns.logic";
+import type {
+  ColumnDialogMode,
+  Draft,
+} from "@/components/workspaces/bulk-add-columns.logic";
 import { usePropertiesCountLimit } from "@/components/workspaces/hooks/use-limits";
 import { useStartWorkflow } from "@/components/workspaces/hooks/use-start-workflow";
 import {
@@ -63,6 +63,7 @@ import type {
 import { InlineOptionEditor } from "@/components/workspaces/properties/inline-option-editor";
 import { PropertyPromptInput } from "@/components/workspaces/properties/property-input/input";
 import type { PropertyPromptFieldHandle } from "@/components/workspaces/properties/property-input/input";
+import { propertyToolAction } from "@/components/workspaces/property-utils";
 import { ADD_COLUMN_RAIL_PLUS_CLASS_NAME } from "@/components/workspaces/table/add-column-rail";
 import {
   buildDocTypeGate,
@@ -76,7 +77,6 @@ import {
 } from "@/features/case-law/research/queries";
 import { questionEditDiscardsAnswers } from "@/features/case-law/research/question-columns.logic";
 import type {
-  QuestionColumn,
   QuestionColumnInput,
   QuestionSuggestionScope,
 } from "@/features/case-law/research/question-columns.logic";
@@ -84,9 +84,13 @@ import { useQuestionColumnsCountLimit } from "@/features/case-law/research/use-q
 import { guideAnchor } from "@/features/guides/guide-anchor";
 import { GUIDE_ANCHORS } from "@/features/guides/guide-anchors";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
+import { useSingleFlight } from "@/hooks/use-single-flight";
+import { useFormatter } from "@/i18n/formatting-context";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import type { Capability } from "@/lib/organization/feature-access/action-capabilities.logic";
+import { CapabilityAction } from "@/lib/organization/feature-access/capability-actions";
 import { toSafeId } from "@/lib/safe-id";
 import type { PropertyDependency } from "@/lib/types";
 import {
@@ -94,6 +98,7 @@ import {
   useCreatePropertiesBatch,
 } from "@/lib/workspaces/mutations/properties";
 import type { CreatePropertySpec } from "@/lib/workspaces/mutations/properties";
+import { usePropertyDisplayName } from "@/lib/workspaces/property-display-name";
 import { propertiesOptions } from "@/lib/workspaces/queries/properties";
 
 // Sentinel for the "every document type" (ungated) scope; a Select value can't
@@ -144,11 +149,10 @@ type AddColumnsTarget =
   | {
       kind: "organisation";
       /**
-       * The question being reworded, when the dialog was opened from a
-       * column's own menu. One card then, seeded from the question, saved back
-       * over it — the composer is the same one a new question is written in.
+       * Editing seeds one card from the column and saves over it; adding
+       * composes new questions in the same form.
        */
-      editing?: QuestionColumn | undefined;
+      mode: ColumnDialogMode;
       /** The search the questions are asked of; grounds the suggestion. */
       suggestion: QuestionSuggestionScope;
       /**
@@ -171,17 +175,8 @@ export const BulkAddColumns = ({
   open,
   onOpenChange,
 }: BulkAddColumnsProps) => {
-  const t = useTranslations();
   const isLimitReached = useAddColumnsLimit(target);
   const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
-  const [flashClose, setFlashClose] = useState(false);
-  const dirtyRef = useRef(false);
-  // Set to true by the X button click handler immediately before
-  // it triggers onOpenChange(false). The dirty guard sees this flag,
-  // resets it, and lets the close through — Esc / backdrop clicks
-  // never set it, so they still get the flash treatment.
-  const explicitCloseRef = useRef(false);
-  const flashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dialogOpen = open ?? uncontrolledOpen;
   const setDialogOpen = (next: boolean) => {
     onOpenChange?.(next);
@@ -190,56 +185,17 @@ export const BulkAddColumns = ({
     }
   };
 
-  const triggerFlash = useCallback(() => {
-    if (flashTimerRef.current !== null) {
-      clearTimeout(flashTimerRef.current);
-    }
-    setFlashClose(true);
-    flashTimerRef.current = setTimeout(() => {
-      setFlashClose(false);
-      flashTimerRef.current = null;
-    }, 700);
-  }, []);
-
   if (isLimitReached) {
     return null;
   }
 
   return (
-    <Dialog
-      onOpenChange={(nextOpen) => {
-        if (!nextOpen && dirtyRef.current && !explicitCloseRef.current) {
-          triggerFlash();
-          return;
-        }
-        explicitCloseRef.current = false;
-        setDialogOpen(nextOpen);
-      }}
-      open={dialogOpen}
-    >
+    <Dialog onOpenChange={setDialogOpen} open={dialogOpen}>
       <BulkTrigger triggerVariant={triggerVariant} />
-      <DialogPopup className="sm:max-w-[640px]" showCloseButton={false}>
-        <DialogClose
-          aria-label={t("common.close")}
-          className={cn(
-            "absolute end-2 top-2 z-10 transition-transform duration-200",
-            flashClose &&
-              "bg-muted ring-foreground-strong-muted scale-125 ring-2",
-          )}
-          onClick={() => {
-            explicitCloseRef.current = true;
-          }}
-          render={<Button size="icon" variant="ghost" />}
-        >
-          <XIcon />
-        </DialogClose>
+      <DialogPopup className="sm:max-w-[640px]">
         {dialogOpen && (
           <Suspense fallback={<BulkBodyFallback />}>
-            <BulkBody
-              dirtyRef={dirtyRef}
-              onClose={() => setDialogOpen(false)}
-              target={target}
-            />
+            <BulkBody onClose={() => setDialogOpen(false)} target={target} />
           </Suspense>
         )}
       </DialogPopup>
@@ -280,19 +236,19 @@ const BulkTrigger = ({ triggerVariant }: BulkTriggerProps) => {
         render={
           <DialogTrigger
             render={
-              <button
+              <Button
                 aria-label={t("workspaces.properties.newColumn")}
-                className="ring-ring focus-visible:ring-offset-background text-muted-foreground flex h-full w-full cursor-pointer items-center justify-center border-0 bg-transparent p-0 outline-none focus-visible:ring-2 focus-visible:ring-offset-1"
+                className="flex h-full w-full items-center justify-center"
                 data-add-property-trigger
                 data-row-expansion-ignore
                 onClick={(event) => event.currentTarget.blur()}
-                type="button"
+                variant="plain"
               />
             }
           />
         }
       >
-        <PlusIcon className="size-4" />
+        <PlusIcon className="text-muted-foreground size-4" />
       </Tooltip>
     );
   }
@@ -303,13 +259,13 @@ const BulkTrigger = ({ triggerVariant }: BulkTriggerProps) => {
         render={
           <DialogTrigger
             render={
-              <button
+              <Button
                 aria-label={t("workspaces.properties.newColumn")}
-                className="group/add-column-rail ring-ring focus-visible:ring-offset-background absolute inset-0 z-10 cursor-pointer border-0 bg-transparent p-0 outline-none focus-visible:ring-2 focus-visible:ring-offset-1"
+                className="group/add-column-rail absolute inset-0 z-10"
                 data-add-property-trigger
                 data-row-expansion-ignore
                 onClick={(event) => event.currentTarget.blur()}
-                type="button"
+                variant="plain"
               />
             }
           />
@@ -332,15 +288,13 @@ const BulkBodyFallback = () => (
 type BulkBodyProps = {
   target: AddColumnsTarget;
   onClose: () => void;
-  dirtyRef: React.RefObject<boolean>;
 };
 
-const BulkBody = ({ target, onClose, dirtyRef }: BulkBodyProps) => {
+const BulkBody = ({ target, onClose }: BulkBodyProps) => {
   if (target.kind === "organisation") {
     return (
       <QuestionColumnsBody
-        dirtyRef={dirtyRef}
-        {...(target.editing === undefined ? {} : { editing: target.editing })}
+        mode={target.mode}
         onClose={onClose}
         {...(target.onCreated === undefined
           ? {}
@@ -350,11 +304,7 @@ const BulkBody = ({ target, onClose, dirtyRef }: BulkBodyProps) => {
     );
   }
   return (
-    <PropertyColumnsBody
-      dirtyRef={dirtyRef}
-      onClose={onClose}
-      workspaceId={target.workspaceId}
-    />
+    <PropertyColumnsBody onClose={onClose} workspaceId={target.workspaceId} />
   );
 };
 
@@ -372,7 +322,7 @@ const useAddColumnsLimit = (target: AddColumnsTarget): boolean => {
 
   return target.kind === "workspace"
     ? workspaceLimitReached
-    : organisationLimitReached;
+    : columnDialogLimitReached(target.mode, organisationLimitReached);
 };
 
 type DraftHandlers = {
@@ -383,38 +333,30 @@ type DraftHandlers = {
 
 /** The drafts a reader is composing, and what they may do to one. */
 const useColumnDrafts = (defaultFileIds: string[], seed?: Draft) => {
-  const [drafts, setDrafts] = useState<Draft[]>(() => [
+  const [initialDrafts] = useState<Draft[]>(() => [
     seed ?? makeEmptyDraft(0, defaultFileIds),
   ]);
+  const [drafts, setDrafts] = useState(initialDrafts);
   const nextId = useNextId(drafts.length);
 
-  const updateDraft = useCallback((id: number, patch: Partial<Draft>) => {
+  const updateDraft = (id: number, patch: Partial<Draft>) => {
     setDrafts((prev) =>
       prev.map((d) => (d.id === id ? { ...d, ...patch } : d)),
     );
-  }, []);
+  };
 
-  const removeDraft = useCallback((id: number) => {
+  const removeDraft = (id: number) => {
     setDrafts((prev) =>
       prev.length === 1 ? prev : prev.filter((d) => d.id !== id),
     );
-  }, []);
+  };
 
-  const addDraft = useCallback(() => {
+  const addDraft = () => {
     setDrafts((prev) => [...prev, makeEmptyDraft(nextId(), defaultFileIds)]);
-  }, [defaultFileIds, nextId]);
+  };
 
-  const validDrafts = useMemo(
-    () => drafts.filter((d) => d.name.trim().length > 0),
-    [drafts],
-  );
-  const isDirty = useMemo(
-    () =>
-      drafts.some(
-        (d) => d.name.trim().length > 0 || d.prompt.trim().length > 0,
-      ),
-    [drafts],
-  );
+  const validDrafts = drafts.filter((d) => d.name.trim().length > 0);
+  const isDirty = columnDraftsChanged(drafts, initialDrafts);
 
   const handlersFor = (draft: Draft): DraftHandlers => ({
     canRemove: drafts.length > 1,
@@ -427,9 +369,13 @@ const useColumnDrafts = (defaultFileIds: string[], seed?: Draft) => {
 
 type BulkColumnsFormProps = React.PropsWithChildren<{
   canSubmit: boolean;
+  submitDisabledReason: string | undefined;
+  capability: Capability | null;
+  mode: ColumnDialogMode;
   /** The matter's document-type gate; the organization's columns have none. */
   footerExtra?: React.ReactNode;
   isPending: boolean;
+  dirty: boolean;
   /** Omitted while one existing column is being reworded. */
   onAddDraft?: (() => void) | undefined;
   onSubmit: () => void;
@@ -438,23 +384,29 @@ type BulkColumnsFormProps = React.PropsWithChildren<{
 /** The dialog's chrome: the title, the drafts, the gate and the two buttons. */
 const BulkColumnsForm = ({
   canSubmit,
+  submitDisabledReason,
+  capability,
+  dirty,
   children,
   footerExtra,
   isPending,
+  mode,
   onAddDraft,
   onSubmit,
 }: BulkColumnsFormProps) => {
   const t = useTranslations();
+  const copy = columnDialogCopy(mode);
 
   return (
     <>
+      <DialogFormState dirty={dirty} />
       <header className="flex items-center gap-2 px-5 pt-4 pb-3">
         <DialogTitle className="flex-1 text-base leading-tight font-semibold">
-          {t("workspaces.properties.bulk.title")}
+          {t(copy.title)}
         </DialogTitle>
       </header>
 
-      <div className="flex max-h-[60vh] flex-col gap-3 overflow-y-auto px-5 pt-1 pb-2">
+      <div className="flex max-h-[60dvh] flex-col gap-3 overflow-y-auto px-5 pt-1 pb-2">
         {children}
         {onAddDraft !== undefined && (
           <Button
@@ -476,14 +428,20 @@ const BulkColumnsForm = ({
           <DialogClose render={<Button size="sm" variant="ghost" />}>
             {t("common.cancel")}
           </DialogClose>
-          <Button
-            disabled={!canSubmit}
-            loading={isPending}
-            onClick={onSubmit}
-            size="sm"
-          >
-            {t("workspaces.properties.bulk.title")}
-          </Button>
+          <CapabilityAction action={{ capability }} surface="control">
+            {(capabilityProps) => (
+              <Button
+                disabled={!canSubmit}
+                disabledReason={submitDisabledReason}
+                loading={isPending}
+                onClick={onSubmit}
+                size="sm"
+                {...capabilityProps}
+              >
+                {t(copy.primary)}
+              </Button>
+            )}
+          </CapabilityAction>
         </div>
       </DialogFooter>
     </>
@@ -507,7 +465,10 @@ const useColumnsSubmit = (onClose: () => void) => {
   }) => {
     const created = await run();
     if (Result.isError(created)) {
-      getAnalytics().captureError(created.error);
+      getAnalytics().captureError(created.error, {
+        fingerprintKey: "useColumnsSubmit:failure",
+        scope: { type: "handler", handlerId: "useColumnsSubmit:failure" },
+      });
       notifyUserError(
         created.error,
         t("workspaces.properties.bulk.createFailed"),
@@ -518,9 +479,7 @@ const useColumnsSubmit = (onClose: () => void) => {
       title:
         count === 1
           ? t("workspaces.properties.bulk.createdOne")
-          : t("workspaces.properties.bulk.createdMany", {
-              count: String(count),
-            }),
+          : t("workspaces.properties.bulk.createdMany", { count }),
       type: "success",
     });
     onClose();
@@ -529,31 +488,58 @@ const useColumnsSubmit = (onClose: () => void) => {
 
 type ColumnsBodyProps = {
   onClose: () => void;
-  dirtyRef: React.RefObject<boolean>;
+};
+
+type BulkColumnSubmitDisabledReasonOptions = {
+  isPending: boolean;
+  withinDependencyCap: boolean;
+  t: (
+    key:
+      | "common.creating"
+      | "workspaces.properties.reduceDependencies"
+      | "workspaces.properties.completeColumn",
+  ) => string;
+};
+
+const bulkColumnSubmitDisabledReason = ({
+  isPending,
+  withinDependencyCap,
+  t,
+}: BulkColumnSubmitDisabledReasonOptions) => {
+  if (isPending) {
+    return t("common.creating");
+  }
+  if (!withinDependencyCap) {
+    return t("workspaces.properties.reduceDependencies");
+  }
+  return t("workspaces.properties.completeColumn");
 };
 
 const PropertyColumnsBody = ({
   workspaceId,
   onClose,
-  dirtyRef,
 }: ColumnsBodyProps & { workspaceId: string }) => {
   const t = useTranslations();
   const submit = useColumnsSubmit(onClose);
   const batch = useCreatePropertiesBatch({ workspaceId });
+  const submitOnce = useSingleFlight();
   const startWorkflow = useStartWorkflow(workspaceId);
   const { data: properties } = useSuspenseQuery(propertiesOptions(workspaceId));
+  const displayName = usePropertyDisplayName();
 
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing, without this memo boundary the React Compiler does not cache this value
   const fileProperties = useMemo<FileChip[]>(
     () =>
       properties.flatMap((p) =>
-        p.content.type === "file" ? [{ id: p.id, name: p.name }] : [],
+        p.content.type === "file" ? [{ id: p.id, name: displayName(p) }] : [],
       ),
-    [properties],
+    [displayName, properties],
   );
-  const allProperties = useMemo<FileChip[]>(
-    () => properties.map((p) => ({ id: p.id, name: p.name })),
-    [properties],
-  );
+  const allProperties: FileChip[] = properties.map((p) => ({
+    id: p.id,
+    name: displayName(p),
+  }));
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing, without this memo boundary the React Compiler does not cache this value
   const defaultFileIds = useMemo(
     () => fileProperties.map((p) => p.id),
     [fileProperties],
@@ -561,6 +547,7 @@ const PropertyColumnsBody = ({
 
   // Shared "applies to" scope: gate every AI column added here to one document
   // type (or all). Offered only when a Document Type classifier exists.
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing, without this memo boundary the React Compiler does not cache this value
   const classifier = useMemo(
     () => resolveDocumentTypeClassifier(properties),
     [properties],
@@ -584,13 +571,6 @@ const PropertyColumnsBody = ({
   );
   const canSubmit =
     validDrafts.length > 0 && withinDependencyCap && !batch.isPending;
-
-  // The dialog's onOpenChange close guard reads dirtiness off the
-  // parent-owned ref at close time; mirror it after commit so the
-  // compiler can model this component.
-  useLayoutEffect(() => {
-    dirtyRef.current = isDirty;
-  });
 
   const handleSubmit = async () => {
     if (!canSubmit) {
@@ -639,7 +619,20 @@ const PropertyColumnsBody = ({
 
   return (
     <BulkColumnsForm
+      capability={
+        validDrafts.some(
+          (draft) => propertyToolAction(draft.tool).capability === "ai",
+        )
+          ? "ai"
+          : null
+      }
+      dirty={isDirty || scopeDocType !== null}
       canSubmit={canSubmit}
+      submitDisabledReason={bulkColumnSubmitDisabledReason({
+        isPending: batch.isPending,
+        withinDependencyCap,
+        t,
+      })}
       footerExtra={
         classifier && docTypeOptions.length > 0 ? (
           <div className="flex min-w-0 items-center gap-2">
@@ -672,10 +665,11 @@ const PropertyColumnsBody = ({
           </div>
         ) : undefined
       }
+      mode={{ type: "add" }}
       isPending={batch.isPending}
       onAddDraft={addDraft}
       onSubmit={() => {
-        detached(handleSubmit(), "bulk-add-columns.submit");
+        detached(submitOnce.run(handleSubmit), "bulk-add-columns.submit");
       }}
     >
       {drafts.map((draft) => (
@@ -704,13 +698,12 @@ const NO_DEFAULT_FILE_IDS: string[] = [];
  * kind of answer, and a select's options.
  */
 const QuestionColumnsBody = ({
-  editing,
+  mode,
   onClose,
   onCreated,
-  dirtyRef,
   suggestion,
 }: ColumnsBodyProps & {
-  editing?: QuestionColumn | undefined;
+  mode: ColumnDialogMode;
   onCreated?: ((columnIds: readonly string[]) => void) | undefined;
   suggestion: QuestionSuggestionScope;
 }) => {
@@ -720,7 +713,7 @@ const QuestionColumnsBody = ({
   const { addDraft, drafts, handlersFor, isDirty, validDrafts } =
     useColumnDrafts(
       NO_DEFAULT_FILE_IDS,
-      editing === undefined ? undefined : questionDraft(editing),
+      mode.type === "edit" ? questionDraft(mode.column) : undefined,
     );
 
   const save = useMutation({
@@ -733,8 +726,8 @@ const QuestionColumnsBody = ({
       // read back before the failure is reported.
       const settled = await settleColumnWrites({
         writes: inputs.map((input, index) => async () => {
-          if (editing !== undefined) {
-            await updateQuestionColumn({ ...input, columnId: editing.id });
+          if (mode.type === "edit") {
+            await updateQuestionColumn({ ...input, columnId: mode.column.id });
             return;
           }
           createdIds[index] = (await createQuestionColumn(input)).id;
@@ -753,11 +746,8 @@ const QuestionColumnsBody = ({
       return settled;
     },
   });
+  const submitOnce = useSingleFlight();
   const canSubmit = validDrafts.length > 0 && !save.isPending;
-
-  useLayoutEffect(() => {
-    dirtyRef.current = isDirty;
-  });
 
   const inputs = validDrafts.map((draft) => ({
     question: draft.name.trim(),
@@ -765,9 +755,9 @@ const QuestionColumnsBody = ({
   }));
   const firstInput = inputs.at(0);
   const discardsAnswers =
-    editing !== undefined &&
+    mode.type === "edit" &&
     firstInput !== undefined &&
-    questionEditDiscardsAnswers({ draft: firstInput, stored: editing });
+    questionEditDiscardsAnswers({ draft: firstInput, stored: mode.column });
 
   const handleSubmit = async () => {
     if (!canSubmit) {
@@ -781,7 +771,14 @@ const QuestionColumnsBody = ({
 
   return (
     <BulkColumnsForm
+      capability="ai"
+      dirty={isDirty}
       canSubmit={canSubmit}
+      submitDisabledReason={
+        save.isPending
+          ? t("common.saving")
+          : t("workspaces.properties.enterQuestion")
+      }
       {...(discardsAnswers
         ? {
             footerExtra: (
@@ -791,10 +788,11 @@ const QuestionColumnsBody = ({
             ),
           }
         : {})}
+      mode={mode}
       isPending={save.isPending}
-      {...(editing === undefined ? { onAddDraft: addDraft } : {})}
+      {...(mode.type === "add" ? { onAddDraft: addDraft } : {})}
       onSubmit={() => {
-        detached(handleSubmit(), "bulk-add-columns.submit");
+        detached(submitOnce.run(handleSubmit), "bulk-add-columns.submit");
       }}
     >
       {drafts.map((draft) => (
@@ -811,10 +809,10 @@ const QuestionColumnsBody = ({
 
 const useNextId = (initial: number) => {
   const ref = useRef(initial);
-  return useCallback(() => {
+  return () => {
     ref.current += 1;
     return ref.current;
-  }, []);
+  };
 };
 
 /**
@@ -862,26 +860,20 @@ const DraftCard = ({
     onChange({ prompt: next });
   });
 
-  const promptField: PropertyPromptFieldHandle = useMemo(
-    () => ({
-      name: `draft-${draft.id}`,
-      state: { value: initialPrompt },
-      handleChange: handlePromptChange,
-      handleBlur: () => undefined,
-    }),
-    [draft.id, handlePromptChange, initialPrompt],
-  );
+  const promptField: PropertyPromptFieldHandle = {
+    name: `draft-${draft.id}`,
+    state: { value: initialPrompt },
+    handleChange: handlePromptChange,
+    handleBlur: () => undefined,
+  };
 
-  const handleMentions = useCallback(
-    (mentions: string[]) => {
-      onChange({ mentions });
-    },
-    [onChange],
-  );
+  const handleMentions = (mentions: string[]) => {
+    onChange({ mentions });
+  };
 
-  const handleEditorReady = useCallback((editor: Editor) => {
+  const handleEditorReady = (editor: Editor) => {
     editorRef.current = editor;
-  }, []);
+  };
 
   const trimmedName = draft.name.trim();
   const isAi = draft.tool === "ai-model" && isWorkspace;
@@ -911,7 +903,10 @@ const DraftCard = ({
             scope: target.suggestion,
           }),
     onError: (error) => {
-      getAnalytics().captureError(error);
+      getAnalytics().captureError(error, {
+        fingerprintKey: "DraftCard:failure",
+        scope: { type: "handler", handlerId: "DraftCard:failure" },
+      });
       notifyUserError(error, t("workspaces.properties.autoPromptFailed"));
     },
   });
@@ -942,18 +937,11 @@ const DraftCard = ({
     });
   };
 
-  const sourceIds = useMemo(
-    () => [...new Set([...draft.fileIds, ...draft.mentions])],
-    [draft.fileIds, draft.mentions],
-  );
-  const selectedFiles = useMemo(
-    () =>
-      sourceIds.flatMap((id) => {
-        const found = allProperties.find((p) => p.id === id);
-        return found ? [found] : [];
-      }),
-    [sourceIds, allProperties],
-  );
+  const sourceIds = [...new Set([...draft.fileIds, ...draft.mentions])];
+  const selectedFiles = sourceIds.flatMap((id) => {
+    const found = allProperties.find((p) => p.id === id);
+    return found ? [found] : [];
+  });
   const availableFiles = allProperties.filter((p) => !sourceIds.includes(p.id));
   const needsOptions =
     draft.contentType === "single-select" ||
@@ -972,7 +960,10 @@ const DraftCard = ({
         <Input
           autoComplete="off"
           autoFocus
-          className="text-foreground placeholder:text-foreground-placeholder w-full px-0 text-[15px] font-semibold tracking-tight"
+          className="text-foreground placeholder:text-foreground-placeholder w-full text-[15px] font-semibold tracking-tight"
+          // A workspace draft becomes a column name; a research draft is a
+          // question with its own bound.
+          maxLength={isWorkspace ? DEFAULT_VARCHAR_MAX_LENGTH : undefined}
           onChange={(e) => onChange({ name: e.target.value })}
           placeholder={
             isWorkspace
@@ -989,6 +980,7 @@ const DraftCard = ({
           <AiRewriteControl
             className="text-muted-foreground hover:text-foreground shrink-0"
             disabled={suggestDisabled}
+            disabledReason={t("workspaces.properties.enterQuestion")}
             isPending={suggestPrompt.isPending}
             label={t("workspaces.properties.suggestWithAI")}
             onRewrite={handleAutoPrompt}
@@ -1037,6 +1029,7 @@ const DraftCard = ({
           <PropertyPromptInput
             aiEditAction={{
               disabled: autoPromptDisabled,
+              disabledReason: t("workspaces.properties.enterColumnName"),
               isPending: suggestPrompt.isPending,
               label: t("workspaces.properties.suggestWithAI"),
               onClick: handleAutoPrompt,
@@ -1084,12 +1077,11 @@ const DraftCard = ({
         {...guideAnchor(GUIDE_ANCHORS.tabularReviewAnswerType, draft.id === 0)}
       >
         <TypeChipsRow
+          capability={propertyToolAction(draft.tool).capability}
           chipDefs={chipDefs}
           contentType={draft.contentType}
           {...(isWorkspace ? { manualChip } : {})}
-          onContentTypeChange={(next) =>
-            onChange({ contentType: next, tool: "ai-model" })
-          }
+          onContentTypeChange={(next) => onChange({ contentType: next })}
           showSeparator
           typeChanged={false}
         />

@@ -27,6 +27,7 @@ describe("CLI client metadata document", () => {
     const clientId = `https://api.stella.example${CLI_CLIENT_METADATA_PATH}`;
     const document = buildCliClientMetadataDocument(clientId);
     expect(document.client_id).toBe(clientId);
+    expect(document.client_name).toBe("stella CLI");
     expect(document.redirect_uris).toContain(LOOPBACK_REDIRECT_URI);
     expect(document.token_endpoint_auth_method).toBe("none");
     expect(document.scope.split(" ")).toContain("stella:admin_read");

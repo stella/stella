@@ -1,0 +1,7 @@
+{
+  "add-column": "The two session columns are nullable and default-free catalog additions under a 1s lock_timeout, without a heap rewrite.",
+  "add-foreign-key": "The session foreign key is added NOT VALID, avoiding an existing-row scan while the 1s lock_timeout bounds locks on session and oauth_consent.",
+  "create-policy": "Both policies are installed on the new empty handoff table under a 1s lock_timeout; their expressions inspect table ownership or return false, without reading application relations.",
+  "create-table-references": "Foreign keys are installed with a new empty table, so no existing rows are scanned; the 1s lock_timeout bounds referenced-table lock acquisition.",
+  "row-level-security": "ENABLE and FORCE RLS apply only to the new empty handoff table before it becomes visible to application traffic, under a 1s lock_timeout."
+}

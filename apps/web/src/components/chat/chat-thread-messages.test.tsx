@@ -1,74 +1,374 @@
 import type { ReactNode } from "react";
-import { renderToStaticMarkup } from "react-dom/server";
+import { renderToReadableStream, renderToStaticMarkup } from "react-dom/server";
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { afterAll, describe, expect, test } from "bun:test";
+import { panic, Result } from "better-result";
+import { describe, expect, test } from "bun:test";
+import { Window } from "happy-dom";
 import { IntlProvider } from "use-intl";
+import { createFormatter } from "use-intl/core";
 
+import {
+  AI_ERROR_KINDS,
+  AI_FAILURE_CODES,
+  CHAT_CONTINUATION_REJECTED_ERROR_CODE,
+  CHAT_MESSAGE_EMPTY_ERROR_CODE,
+} from "@stll/api-contract";
 import {
   ACTION_ADMISSION_CODES,
   ACTION_ADMISSION_REFUSALS,
 } from "@stll/api-contract/action-admission";
+import {
+  BROWSE_WEB_TOOL_NAME,
+  BROWSER_CONTROL_TOOL_NAME,
+} from "@stll/api-contract/browser-control";
+import { createChatPastedTextPart } from "@stll/api-contract/chat";
+import {
+  PROVIDER_SETUP_ERROR_CATALOGUE,
+  PROVIDER_SETUP_ERROR_CODE,
+} from "@stll/api-contract/provider-setup";
+import { createTestState } from "@stll/test-state";
 
 import { ChatApprovalContext } from "@/components/chat/chat-approval-context";
+import { testChatApprovalContextValue } from "@/components/chat/chat-approval-context.test-fixtures";
 import { ChatMattersContext } from "@/components/chat/chat-matters-context";
-import { getChatAssistantTurnError } from "@/components/chat/chat-ui-tools";
+import type {
+  SubagentChatPart,
+  SubagentChildPart,
+} from "@/components/chat/chat-subagent-parts.logic";
+import {
+  getChatAssistantTurnError,
+  isOpaquePersistedChatToolCallPart,
+  toSubagentChildUIPart,
+} from "@/components/chat/chat-ui-tools";
 import type {
   ChatUIMessage,
+  ChatUIPart,
   PersistedChatMessage,
 } from "@/components/chat/chat-ui-tools";
+import { withLocalRunLimitResetsAt } from "@/features/chat/chat-local-run-limit";
+import { FormattingProvider } from "@/i18n/formatting-context";
 import messages from "@/i18n/langs/en.json";
 import { toChatThreadId } from "@/lib/chat-thread-ref";
 import { ChatThreadTestRouter } from "@/lib/chat-thread-test-router";
+import { APIError, toAPIError } from "@/lib/errors/api";
+import {
+  ACTION_ADMISSION_ERROR_KEYS,
+  translateError,
+} from "@/lib/errors/localization";
+import { ProviderDiagnosticError } from "@/lib/errors/provider-diagnostic";
+import { MEDIUM_DATE_SHORT_TIME_FORMAT } from "@/lib/relative-time";
 
-const previousApiUrl = process.env["VITE_API_URL"];
-process.env["VITE_API_URL"] = previousApiUrl ?? "https://api.example.test";
+const testState = createTestState({ file: import.meta.path, config: {} });
+
+testState.setEnvIfAbsent("VITE_API_URL", "https://api.example.test");
 
 const { ChatEditorProvider } =
   await import("@/components/chat-editor-provider");
-const { ChatThreadMessages } =
+const { ChatThreadMessages, ChatErrorMessage } =
   await import("@/components/chat/chat-thread-messages");
-const { buildMessageTurns } =
+const { buildMessageTurns, CHAT_MESSAGE_RENDER_POLICY } =
   await import("@/components/chat/chat-thread-messages.logic");
 
-afterAll(() => {
-  if (previousApiUrl === undefined) {
-    delete process.env["VITE_API_URL"];
-    return;
-  }
-  process.env["VITE_API_URL"] = previousApiUrl;
-});
+// A button's label, which may sit in the button's cut-to-fit span.
+const RETRY_BUTTON = />Retry<\/(?:span><\/)?button>/u;
+const RETRY_BUTTONS = new RegExp(RETRY_BUTTON.source, "gu");
+const RESEND_BUTTON = />Resend<\/(?:span><\/)?button>/u;
 
-const renderWithProviders = (children: ReactNode) =>
-  renderToStaticMarkup(
+const withProviders = (children: ReactNode, savedSecretAvailable = false) => {
+  const queryClient = new QueryClient();
+  if (savedSecretAvailable) {
+    queryClient.setQueryData(["chat-saved-secret", "test-thread", "sample"], {
+      available: true,
+      connector: {
+        connectionId: "sample-connection",
+        displayName: "Sample connector",
+        host: "sample.test",
+        responseDisposition: "receipt-only",
+      },
+    });
+  }
+  return (
     <ChatThreadTestRouter>
-      <QueryClientProvider client={new QueryClient()}>
+      <QueryClientProvider client={queryClient}>
         <IntlProvider locale="en" messages={messages} timeZone="UTC">
           <ChatMattersContext
             value={{
               createDocumentMattersView: { type: "empty" },
             }}
           >
-            <ChatApprovalContext
-              value={{
-                activeOrganizationId: "test-active-organization",
-                alwaysApprovedTools: new Set(),
-                conversationApprovedTools: new Set(),
-                handleAllowInConversation: () => {},
-                handleAlwaysAllow: () => {},
-                handleApprove: () => {},
-                handleDeny: () => {},
-              }}
-            >
-              <ChatEditorProvider>{children}</ChatEditorProvider>
+            <ChatApprovalContext value={testChatApprovalContextValue}>
+              <FormattingProvider locale="en" timeZone="UTC">
+                <ChatEditorProvider>{children}</ChatEditorProvider>
+              </FormattingProvider>
             </ChatApprovalContext>
           </ChatMattersContext>
         </IntlProvider>
       </QueryClientProvider>
-    </ChatThreadTestRouter>,
+    </ChatThreadTestRouter>
   );
+};
+
+const renderWithProviders = (
+  children: ReactNode,
+  savedSecretAvailable = false,
+) => renderToStaticMarkup(withProviders(children, savedSecretAvailable));
+
+const renderWithLoadedMarkdown = async (children: ReactNode) => {
+  const stream = await renderToReadableStream(withProviders(children));
+  await stream.allReady;
+  return new Response(stream).text();
+};
+
+const renderedText = (html: string) => {
+  const window = new Window();
+  const root = window.document.createElement("div");
+  // safe-html: React renderToStaticMarkup/renderToReadableStream output from this test's own components, parsed in a detached happy-dom document.
+  root.innerHTML = html;
+  return root.textContent;
+};
+
+/**
+ * Whether the disclosure whose trigger reads `label` is open: its trigger's
+ * `aria-expanded`, or null when no trigger carries that label. The innermost
+ * matching trigger wins, so a step list around a reasoning trace does not
+ * answer for it.
+ */
+const disclosureExpanded = (html: string, label: string): string | null => {
+  const window = new Window();
+  const root = window.document.createElement("div");
+  // safe-html: React renderToStaticMarkup/renderToReadableStream output from this test's own components, parsed in a detached happy-dom document.
+  root.innerHTML = html;
+  const triggers = [
+    ...root.querySelectorAll('[data-slot="collapsible-trigger"]'),
+  ].filter((trigger) => trigger.textContent.includes(label));
+  return triggers.at(-1)?.getAttribute("aria-expanded") ?? null;
+};
 
 describe("chat thread messages", () => {
+  test("activity roles and embedded parts show translated labels without internal payloads", () => {
+    for (const role of Object.values(CHAT_MESSAGE_RENDER_POLICY)) {
+      if (role === "text") {
+        continue;
+      }
+      for (const stickyUserMessages of [false, true]) {
+        const content = {
+          status: "Review complete",
+          detail: "<script>activity payload</script>",
+        };
+        const activity = {
+          id: "activity-progress",
+          role,
+          parts: [{ type: "activity", activityType: "review", content }],
+        } satisfies ChatUIMessage;
+        const html = renderWithProviders(
+          <ChatThreadMessages
+            activitySession={{
+              reportedUnknownActivityTypes: new Set<string>(),
+            }}
+            approvalPendingMessageId={null}
+            messages={[activity]}
+            onAskUserSubmit={() => {}}
+            onCreateDocumentResolve={() => {}}
+            onOpenCreatedDocument={() => {}}
+            stickyUserMessages={stickyUserMessages}
+            streamdownComponents={{
+              a: ({ children, ...props }) => <a {...props}>{children}</a>,
+            }}
+          />,
+        );
+        expect(renderedText(html)).toContain(messages.chat.activity.review);
+        expect(
+          renderedText(html),
+          JSON.stringify({ oracle: "chat.render.cards-match-stored" }),
+        ).not.toContain(content.status);
+        expect(renderedText(html)).not.toContain(content.detail);
+        expect(html).toContain("<figcaption");
+        expect(html).not.toContain("<script>activity payload</script>");
+      }
+    }
+  });
+
+  test("unknown activity types and malformed activity messages leave the thread readable", () => {
+    const activities = [
+      {
+        id: "activity-unknown",
+        role: "activity",
+        parts: [
+          {
+            type: "activity",
+            activityType: "internal-event",
+            content: { secret: "internal-payload" },
+          },
+        ],
+      },
+      { id: "activity-empty", role: "activity", parts: [] },
+      {
+        id: "activity-text",
+        role: "activity",
+        parts: [{ type: "text", content: "malformed-activity" }],
+      },
+      {
+        id: "activity-multiple",
+        role: "activity",
+        parts: [
+          { type: "activity", activityType: "review", content: {} },
+          { type: "activity", activityType: "progress", content: {} },
+        ],
+      },
+    ] satisfies ChatUIMessage[];
+    const rendered = Result.try(() =>
+      renderWithProviders(
+        <ChatThreadMessages
+          activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
+          approvalPendingMessageId={null}
+          messages={[
+            ...activities,
+            {
+              id: "readable-user",
+              role: "user",
+              parts: [{ type: "text", content: "Still readable" }],
+            },
+            {
+              id: "activity-progress",
+              role: "assistant",
+              parts: [
+                {
+                  type: "activity",
+                  activityType: "progress",
+                  content: { secret: "internal-payload" },
+                },
+              ],
+            },
+          ]}
+          onAskUserSubmit={() => {}}
+          onCreateDocumentResolve={() => {}}
+          onOpenCreatedDocument={() => {}}
+          streamdownComponents={{
+            a: ({ children, ...props }) => <a {...props}>{children}</a>,
+          }}
+        />,
+      ),
+    );
+    expect(
+      rendered.isOk(),
+      JSON.stringify({ oracle: "chat.client.no-errors" }),
+    ).toBe(true);
+    if (!rendered.isOk()) {
+      return;
+    }
+    const html = rendered.value;
+    expect(renderedText(html)).toContain("Still readable");
+    expect(renderedText(html)).toContain(messages.chat.thinking);
+    expect(renderedText(html)).not.toContain("internal-event");
+    expect(renderedText(html)).not.toContain("internal-payload");
+    expect(renderedText(html)).not.toContain("malformed-activity");
+    expect(
+      html.match(/<figcaption/gu),
+      JSON.stringify({ oracle: "chat.render.cards-match-stored" }),
+    ).toHaveLength(1);
+  });
+
+  test("labels a reloaded user stop without labelling other terminal outcomes", () => {
+    for (const outcome of [
+      { type: "cancelled", reason: "user-stop" },
+      { type: "cancelled", reason: "superseded" },
+      { type: "completed" },
+    ] as const) {
+      const stored = {
+        id: "assistant-terminal",
+        role: "assistant",
+        parts: [{ type: "text", content: "A partial answer" }],
+        metadata: { turnOutcome: outcome },
+      } satisfies ChatUIMessage;
+      const html = renderWithProviders(
+        <ChatThreadMessages
+          activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
+          approvalPendingMessageId={null}
+          messages={[structuredClone(stored)]}
+          onAskUserSubmit={() => {}}
+          onCreateDocumentResolve={() => {}}
+          onOpenCreatedDocument={() => {}}
+          onResend={() => {}}
+          streamdownComponents={{
+            a: ({ children, ...props }) => <a {...props}>{children}</a>,
+          }}
+        />,
+      );
+      expect(renderedText(html).includes(messages.chat.stopped)).toBe(
+        outcome.type === "cancelled" && outcome.reason === "user-stop",
+      );
+    }
+  });
+
+  test("a paused answer says where it stopped and offers Continue only as the latest answer", () => {
+    const paused = {
+      id: "assistant-paused",
+      role: "assistant",
+      parts: [
+        {
+          type: "tool-call",
+          id: "call-1",
+          // An external tool name keeps the output untyped.
+          name: "mcp__external-lookup",
+          arguments: '{"query":"court fees"}',
+          state: "complete",
+          output: { result: "Court fees" },
+        },
+      ],
+      metadata: {
+        turnOutcome: { type: "paused", reason: "tool-calls", toolCalls: 3 },
+      },
+    } satisfies ChatUIMessage;
+    const status = messages.chat.turnPaused.status.replace(
+      "{count, plural, one {# tool call} other {# tool calls}}",
+      "3 tool calls",
+    );
+    const render = (thread: ChatUIMessage[]) =>
+      renderWithProviders(
+        <ChatThreadMessages
+          activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
+          approvalPendingMessageId={null}
+          messages={structuredClone(thread)}
+          onAskUserSubmit={() => {}}
+          onContinuePausedTurn={() => {}}
+          onCreateDocumentResolve={() => {}}
+          onOpenCreatedDocument={() => {}}
+          onResend={() => {}}
+          streamdownComponents={{
+            a: ({ children, ...props }) => <a {...props}>{children}</a>,
+          }}
+        />,
+      );
+    // The fixture's copy must be what the page renders for three tool calls.
+    expect(status).toBe("Paused after 3 tool calls");
+
+    const latest = render([paused]);
+    expect(renderedText(latest)).toContain(status);
+    expect(latest).toContain(
+      `>${messages.chat.turnPaused.continue}</span></button>`,
+    );
+
+    const continued = render([
+      paused,
+      {
+        id: "user-continue",
+        role: "user",
+        parts: [{ type: "text", content: messages.chat.turnPaused.continue }],
+      },
+      {
+        id: "assistant-after",
+        role: "assistant",
+        parts: [{ type: "text", content: "Found the court fees" }],
+        metadata: { turnOutcome: { type: "completed" } },
+      },
+    ]);
+    expect(renderedText(continued)).toContain(status);
+    expect(continued).not.toContain(
+      `>${messages.chat.turnPaused.continue}</span></button>`,
+    );
+  });
+
   test("renders every reloaded admission refusal with its recovery action", () => {
     for (const code of Object.values(ACTION_ADMISSION_CODES)) {
       const refusal = {
@@ -87,6 +387,7 @@ describe("chat thread messages", () => {
       const reloaded = structuredClone(stored);
       const html = renderWithProviders(
         <ChatThreadMessages
+          activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
           approvalPendingMessageId={null}
           messages={[reloaded]}
           error={getChatAssistantTurnError(reloaded)}
@@ -100,7 +401,9 @@ describe("chat thread messages", () => {
         />,
       );
       expect(html).toContain('role="status"');
-      expect(html).toContain(refusal.message);
+      expect(renderedText(html)).toContain(
+        translateError(ACTION_ADMISSION_ERROR_KEYS[code]),
+      );
       expect(html.includes(messages.common.tryAgain)).toBe(refusal.retryable);
       expect(html.includes('href="https://example.test/contact"')).toBe(
         refusal.status === 403,
@@ -120,6 +423,7 @@ describe("chat thread messages", () => {
 
     const html = renderWithProviders(
       <ChatThreadMessages
+        activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
         approvalPendingMessageId={null}
         messages={chatMessages}
         onAskUserSubmit={() => {}}
@@ -139,6 +443,7 @@ describe("chat thread messages", () => {
   test("treats an error as terminal even if generation state is stale", () => {
     const html = renderWithProviders(
       <ChatThreadMessages
+        activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
         approvalPendingMessageId={null}
         error={new Error("provider failed")}
         isGenerating
@@ -147,7 +452,6 @@ describe("chat thread messages", () => {
         onCreateDocumentResolve={() => {}}
         onOpenCreatedDocument={() => {}}
         onResend={() => {}}
-        showThinkingIndicator
         streamdownComponents={{
           a: ({ children, ...props }) => <a {...props}>{children}</a>,
         }}
@@ -162,6 +466,7 @@ describe("chat thread messages", () => {
   test("says a reply cut off before it finished can be tried again", () => {
     const html = renderWithProviders(
       <ChatThreadMessages
+        activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
         approvalPendingMessageId={null}
         error={new Error("provider_stream_incomplete")}
         isGenerating={false}
@@ -170,7 +475,6 @@ describe("chat thread messages", () => {
         onCreateDocumentResolve={() => {}}
         onOpenCreatedDocument={() => {}}
         onResend={() => {}}
-        showThinkingIndicator={false}
         streamdownComponents={{
           a: ({ children, ...props }) => <a {...props}>{children}</a>,
         }}
@@ -179,6 +483,88 @@ describe("chat thread messages", () => {
 
     expect(html).toContain(messages.chat.sendErrorStreamIncomplete);
     expect(html).toContain(messages.chat.resend);
+  });
+
+  test.each(AI_ERROR_KINDS.filter((kind) => kind !== "unknown"))(
+    "a failed chat turn says what the REST failure says for %s",
+    (kind) => {
+      const restMessage = toAPIError({
+        status: 502,
+        value: {
+          code: AI_FAILURE_CODES[kind],
+          message: "Private provider detail",
+        },
+      }).message;
+      const html = renderWithProviders(
+        <ChatErrorMessage error={new Error(kind)} isGenerating={false} />,
+      );
+
+      expect(renderedText(html)).toContain(restMessage);
+      expect(renderedText(html)).not.toContain(messages.chat.sendError);
+    },
+  );
+
+  test("a local run's usage limit says when it resets, in the member's locale and time zone, live and after a reload", () => {
+    const resetsAt = "2026-11-08T09:30:00.000Z";
+    const inZone = (timeZone: string, error: Error) =>
+      renderedText(
+        renderToStaticMarkup(
+          <IntlProvider locale="en" messages={messages} timeZone={timeZone}>
+            <FormattingProvider locale="en" timeZone={timeZone}>
+              <ChatErrorMessage error={error} isGenerating={false} />
+            </FormattingProvider>
+          </IntlProvider>,
+        ),
+      );
+    const expected = (timeZone: string) =>
+      messages.chat.localRun.errorLimitResetsAt.replace("{time}", () =>
+        createFormatter({ locale: "en", timeZone }).dateTime(
+          new Date(resetsAt),
+          MEDIUM_DATE_SHORT_TIME_FORMAT,
+        ),
+      );
+    const stored = {
+      id: "assistant-limited",
+      role: "assistant",
+      parts: [],
+      metadata: {
+        turnOutcome: {
+          type: "failed",
+          error: "local_runner_limit_reached",
+          limitResetsAt: resetsAt,
+        },
+      },
+    } satisfies PersistedChatMessage;
+    const reloaded =
+      getChatAssistantTurnError(structuredClone(stored)) ??
+      new Error("no turn error");
+    const live = withLocalRunLimitResetsAt(
+      new Error("local_runner_limit_reached"),
+      resetsAt,
+    );
+    for (const error of [reloaded, live]) {
+      expect(inZone("Europe/Prague", error)).toContain(
+        expected("Europe/Prague"),
+      );
+      expect(inZone("America/New_York", error)).toContain(
+        expected("America/New_York"),
+      );
+    }
+    // The fixture differs by zone, so the zone is what changed the text.
+    expect(expected("Europe/Prague")).not.toBe(expected("America/New_York"));
+
+    // Without a known reset the notice keeps its plain copy.
+    expect(inZone("UTC", new Error("local_runner_limit_reached"))).toContain(
+      messages.chat.localRun.errorLimitReached,
+    );
+  });
+
+  test("an unknown AI failure keeps the chat's own copy", () => {
+    const html = renderWithProviders(
+      <ChatErrorMessage error={new Error("unknown")} isGenerating={false} />,
+    );
+
+    expect(renderedText(html)).toContain(messages.chat.sendError);
   });
 
   test("shows a copy action at the end of assistant responses", () => {
@@ -192,6 +578,7 @@ describe("chat thread messages", () => {
 
     const html = renderWithProviders(
       <ChatThreadMessages
+        activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
         approvalPendingMessageId={null}
         messages={chatMessages}
         onAskUserSubmit={() => {}}
@@ -245,6 +632,7 @@ describe("chat thread messages", () => {
 
     const html = renderWithProviders(
       <ChatThreadMessages
+        activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
         approvalPendingMessageId={null}
         messages={chatMessages}
         onAskUserSubmit={() => {}}
@@ -282,6 +670,7 @@ describe("chat thread messages", () => {
 
     const html = renderWithProviders(
       <ChatThreadMessages
+        activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
         approvalPendingMessageId={null}
         isGenerating
         messages={chatMessages}
@@ -324,6 +713,7 @@ describe("chat thread messages", () => {
 
     const html = renderWithProviders(
       <ChatThreadMessages
+        activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
         approvalPendingMessageId={null}
         messages={chatMessages}
         onAskUserSubmit={() => {}}
@@ -336,8 +726,8 @@ describe("chat thread messages", () => {
     );
 
     expect(html).toContain(">Reasoning trace<");
-    expect(html).toContain("<details");
-    expect(html).not.toContain('open=""');
+    // Folded: the trace is still in the page, behind a closed disclosure.
+    expect(disclosureExpanded(html, "Reasoning trace")).toBe("false");
     expect(html).toContain("12 reasoning tokens");
     expect(html).toContain("Checked the contract timeline.");
     expect(html).toContain("The deadline is Friday.");
@@ -365,6 +755,7 @@ describe("chat thread messages", () => {
 
     const html = renderWithProviders(
       <ChatThreadMessages
+        activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
         approvalPendingMessageId={null}
         messages={chatMessages}
         onAskUserSubmit={() => {}}
@@ -402,6 +793,7 @@ describe("chat thread messages", () => {
 
     const html = renderWithProviders(
       <ChatThreadMessages
+        activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
         approvalPendingMessageId={null}
         messages={chatMessages}
         onAskUserSubmit={() => {}}
@@ -443,6 +835,7 @@ describe("chat thread messages", () => {
   test("offers a decision on the approval the conversation waits on", () => {
     const html = renderWithProviders(
       <ChatThreadMessages
+        activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
         approvalPendingMessageId="message-approval"
         messages={approvalRequestMessages()}
         onAskUserSubmit={() => {}}
@@ -463,6 +856,7 @@ describe("chat thread messages", () => {
   test("withdraws the decision once a later message supersedes the turn", () => {
     const html = renderWithProviders(
       <ChatThreadMessages
+        activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
         approvalPendingMessageId={null}
         isGenerating
         messages={[
@@ -517,6 +911,7 @@ describe("chat thread messages", () => {
   test("offers the form of the user-input card the conversation waits on", () => {
     const html = renderWithProviders(
       <ChatThreadMessages
+        activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
         approvalPendingMessageId={null}
         messages={askUserMessages()}
         onAskUserSubmit={() => {}}
@@ -532,11 +927,117 @@ describe("chat thread messages", () => {
     expect(html).toContain("Which matter?");
   });
 
+  test("renders a private credential form in the user-owned turn", () => {
+    const secretInput = {
+      purpose: "Authenticate the sample connector",
+      kind: "token" as const,
+      target: { type: "mcp-connector" as const, connectorSlug: "sample" },
+    };
+    const html = renderWithProviders(
+      <ChatThreadMessages
+        activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
+        approvalPendingMessageId={null}
+        messages={[
+          {
+            id: "message-user",
+            parts: [{ type: "text", content: "Continue the lookup" }],
+            role: "user",
+          },
+          {
+            id: "message-secret",
+            parts: [
+              {
+                arguments: JSON.stringify(secretInput),
+                id: "tool-call-secret",
+                input: secretInput,
+                name: "request_secret",
+                state: "input-complete",
+                type: "tool-call",
+              },
+            ],
+            role: "assistant",
+          },
+        ]}
+        onAskUserSubmit={() => {}}
+        onCreateDocumentResolve={() => {}}
+        onOpenCreatedDocument={() => {}}
+        streamdownComponents={{
+          a: ({ children, ...props }) => <a {...props}>{children}</a>,
+        }}
+      />,
+      true,
+    );
+
+    expect(html).toContain("Authenticate the sample connector");
+    expect(html).toContain('type="password"');
+    expect(html).toContain("The assistant will not see this value.");
+    expect(html).toContain("Provide");
+    expect(html).toContain("Decline");
+    expect(html).toContain("Use saved credential");
+    const window = new Window();
+    const root = window.document.createElement("div");
+    // safe-html: React's static markup from this test's own components is parsed in a detached document.
+    root.innerHTML = html;
+    expect(
+      root
+        .querySelector('input[type="password"]')
+        ?.closest('[data-slot="collapsible-panel"]'),
+    ).toBeNull();
+  });
+
+  test("keeps the connector sign-in card outside a closed process disclosure", () => {
+    const input = {
+      connectorSlug: "sample",
+      purpose: "Read the selected source",
+    };
+    const html = renderWithProviders(
+      <ChatThreadMessages
+        activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
+        approvalPendingMessageId={null}
+        messages={[
+          {
+            id: "message-user",
+            parts: [{ type: "text", content: "Read the source" }],
+            role: "user",
+          },
+          {
+            id: "message-connector",
+            parts: [
+              {
+                arguments: JSON.stringify(input),
+                id: "tool-call-connector",
+                input,
+                name: "connect_connector",
+                state: "input-complete",
+                type: "tool-call",
+              },
+            ],
+            role: "assistant",
+          },
+        ]}
+        onAskUserSubmit={() => {}}
+        onCreateDocumentResolve={() => {}}
+        onOpenCreatedDocument={() => {}}
+        streamdownComponents={{
+          a: ({ children, ...props }) => <a {...props}>{children}</a>,
+        }}
+      />,
+    );
+    const window = new Window();
+    const root = window.document.createElement("div");
+    // safe-html: React's static markup from this test's own components is parsed in a detached document.
+    root.innerHTML = html;
+    const card = root.querySelector('[data-slot="connect-connector-card"]');
+    expect(card).not.toBeNull();
+    expect(card?.closest('[data-slot="collapsible-panel"]')).toBeNull();
+  });
+
   // The same supersession withdraws a user-input card: the runtime has no
   // interrupt left to answer it, and the server rejects a late answer.
   test("withdraws the user-input form once a later message supersedes the turn", () => {
     const html = renderWithProviders(
       <ChatThreadMessages
+        activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
         approvalPendingMessageId={null}
         isGenerating
         messages={[
@@ -561,6 +1062,157 @@ describe("chat thread messages", () => {
     expect(html).toContain("Use the Acme matter.");
   });
 
+  const browsingTask = "Find the registry's opening hours";
+  const browserApproval = (id: string) => {
+    const input = { action: "open", url: `https://www.example.cz/${id}` };
+    return {
+      approval: { id: `${id}-approval`, needsApproval: true },
+      arguments: JSON.stringify(input),
+      id,
+      input,
+      name: BROWSER_CONTROL_TOOL_NAME,
+      state: "approval-requested",
+      type: "tool-call",
+    } as const;
+  };
+  const browsingRun = (
+    id: string,
+    parts: SubagentChildPart[],
+    status: SubagentChatPart["subagent"]["status"],
+  ): SubagentChatPart => ({
+    subagent: {
+      id,
+      messages: [{ id: `${id}-message`, parts, role: "assistant" }],
+      name: BROWSE_WEB_TOOL_NAME,
+      parentToolCallId: `${id}-call`,
+      status,
+    },
+    type: "subagent",
+  });
+  /** The call that started a run: a tool this release does not register. */
+  const browseWebCall = (id: string) => {
+    const call: unknown = {
+      arguments: JSON.stringify({ task: browsingTask }),
+      id,
+      input: { task: browsingTask },
+      name: BROWSE_WEB_TOOL_NAME,
+      state: "input-complete",
+      type: "tool-call",
+    };
+    return isOpaquePersistedChatToolCallPart(call)
+      ? call
+      : panic("The fixture must be an opaque tool call");
+  };
+  const renderBrowsingTurn = (parts: ChatUIPart[]) =>
+    renderWithProviders(
+      <ChatThreadMessages
+        activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
+        approvalPendingMessageId="message-browse"
+        messages={[
+          {
+            id: "message-user",
+            parts: [{ type: "text", content: "When is the registry open?" }],
+            role: "user",
+          },
+          { id: "message-browse", parts, role: "assistant" },
+        ]}
+        onAskUserSubmit={() => {}}
+        onCreateDocumentResolve={() => {}}
+        onOpenCreatedDocument={() => {}}
+        streamdownComponents={{
+          a: ({ children, ...props }) => <a {...props}>{children}</a>,
+        }}
+      />,
+    );
+  const approvalCardsOutsideClosedPanels = (html: string) => {
+    const window = new Window();
+    const root = window.document.createElement("div");
+    // safe-html: React's static markup from this test's own components is parsed in a detached document.
+    root.innerHTML = html;
+    return [...root.querySelectorAll("button")]
+      .filter(
+        (button) => button.textContent === messages.chat.approval.allowOnce,
+      )
+      .filter((button) =>
+        [...root.querySelectorAll('[data-slot="collapsible-panel"]')].every(
+          (panel) => !panel.contains(button) || !panel.hasAttribute("hidden"),
+        ),
+      ).length;
+  };
+
+  test("shows a browsing run under its task with its approval card answerable outside any closed disclosure", () => {
+    const html = renderBrowsingTurn([
+      { type: "thinking", content: "The registry publishes its hours." },
+      browseWebCall("run-call"),
+      browsingRun(
+        "run",
+        [
+          { type: "text", content: "Opening the registry." },
+          browserApproval("open-registry"),
+        ],
+        "suspended",
+      ),
+    ]);
+    const text = renderedText(html);
+
+    expect(text).toContain(messages.chat.subagentRun.browseWeb);
+    expect(text).toContain(browsingTask);
+    expect(text).toContain("Opening the registry.");
+    expect(text).toContain(messages.chat.approval.browser.question);
+    expect(approvalCardsOutsideClosedPanels(html)).toBe(1);
+    expect(disclosureExpanded(html, messages.chat.subagentRun.browseWeb)).toBe(
+      "true",
+    );
+    // The run draws the call that started it; the call draws no step.
+    expect(text).not.toContain(messages.chat.tool.unknown);
+  });
+
+  test("keeps a text written before an approval card, which draws no run of steps", () => {
+    const text = renderedText(
+      renderBrowsingTurn([
+        { type: "text", content: "Opening the registry's website." },
+        toSubagentChildUIPart(browserApproval("top-level-page")) ??
+          panic("The fixture must be a canonical browser call"),
+      ]),
+    );
+    expect(text).toContain("Opening the registry's website.");
+    expect(text).toContain(messages.chat.approval.browser.question);
+  });
+
+  test("shows the approval card of a run nested inside a run", () => {
+    const html = renderBrowsingTurn([
+      browseWebCall("outer-call"),
+      browsingRun(
+        "outer",
+        [
+          browseWebCall("inner-call"),
+          browsingRun("inner", [browserApproval("inner-page")], "suspended"),
+        ],
+        // A run whose nested run stopped on an answer stops with it.
+        "suspended",
+      ),
+    ]);
+
+    expect(approvalCardsOutsideClosedPanels(html)).toBe(1);
+    expect(renderedText(html)).toContain("https://www.example.cz/inner-page");
+  });
+
+  test("folds a run that renders settled", () => {
+    const html = renderBrowsingTurn([
+      browseWebCall("run-call"),
+      browsingRun(
+        "run",
+        [{ type: "text", content: "Open 8:00 to 16:00 on weekdays." }],
+        "finished",
+      ),
+    ]);
+
+    expect(disclosureExpanded(html, messages.chat.subagentRun.browseWeb)).toBe(
+      "false",
+    );
+    expect(renderedText(html)).toContain(browsingTask);
+  });
+
   test("folds process steps across invisible tool results into one disclosure", () => {
     const chatMessages: ChatUIMessage[] = [
       {
@@ -571,8 +1223,9 @@ describe("chat thread messages", () => {
             type: "tool-call",
             id: "tool-call-failed",
             // An external tool name keeps the output untyped, so the fixture
-            // can carry the runtime error shape the renderer inspects.
-            name: "mcp__external-lookup",
+            // can carry the runtime error shape the renderer inspects. Its
+            // verb makes it a read the run's summary counts as a source.
+            name: "mcp__external__lookup",
             arguments: JSON.stringify({ query: "deadline" }),
             state: "error",
             input: { query: "deadline" },
@@ -590,7 +1243,7 @@ describe("chat thread messages", () => {
           {
             type: "tool-call",
             id: "tool-call-complete",
-            name: "mcp__external-lookup",
+            name: "mcp__external__lookup",
             arguments: JSON.stringify({ query: "governing law" }),
             state: "complete",
             input: { query: "governing law" },
@@ -610,6 +1263,7 @@ describe("chat thread messages", () => {
 
     const html = renderWithProviders(
       <ChatThreadMessages
+        activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
         approvalPendingMessageId={null}
         messages={chatMessages}
         onAskUserSubmit={() => {}}
@@ -621,18 +1275,63 @@ describe("chat thread messages", () => {
       />,
     );
 
-    // The whole run sits behind one step-count summary, collapsed by
-    // default; a failed step reads as a short human line with the raw
-    // output tucked behind its own disclosure.
-    expect(html).toContain("3 steps");
-    expect(html).not.toContain(">1 step<");
-    expect(html).not.toContain("<details open");
-    expect(html).toContain("This step failed — stella will work around it.");
-    expect(html).toContain(">Show details<");
+    // The whole run sits behind one summary of the work that landed,
+    // collapsed by default: the failed call is left out of it. The turn went
+    // on to answer, so the failed step reads as retried, with no failure line
+    // in the summary; its raw output stays behind the step's own disclosure.
+    expect(html).toContain(">1 source checked<");
+    expect(html).not.toContain("2 sources checked");
+    expect(html).not.toContain("3 steps");
+    expect(disclosureExpanded(html, "1 source checked")).toBe("false");
+    expect(html).toContain(">Retried<");
+    expect(html).not.toContain("This step failed");
+    expect(html).not.toContain("work around it");
     expect(html).toContain("Here is the answer.");
   });
 
-  test("keeps streaming reasoning visible and immediately collapsible", () => {
+  test("shows an approval-gated call as a card while its input streams", () => {
+    const chatMessages: ChatUIMessage[] = [
+      {
+        id: "message-A",
+        parts: [
+          { type: "thinking", content: "Drafting the positions." },
+          {
+            type: "tool-call",
+            id: "tool-call-save",
+            name: "save_playbook",
+            arguments: '{"name":"Mutual NDA","positions":[',
+            state: "input-streaming",
+          },
+        ],
+        role: "assistant",
+      },
+    ];
+
+    const html = renderWithProviders(
+      <ChatThreadMessages
+        activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
+        approvalPendingMessageId={null}
+        isGenerating
+        messages={chatMessages}
+        onAskUserSubmit={() => {}}
+        onCreateDocumentResolve={() => {}}
+        onOpenCreatedDocument={() => {}}
+        streamdownComponents={{
+          a: ({ children, ...props }) => <a {...props}>{children}</a>,
+        }}
+      />,
+    );
+
+    // The save always ends in a question for the user, so it renders as its
+    // own card with a running indicator from the first input byte; only the
+    // reasoning stays folded, and as a settled step rather than a live one.
+    expect(html).toContain("1 step");
+    expect(html).toContain(">Save playbook<");
+    expect(html).toContain('data-slot="loader"');
+    expect(html).not.toContain("animate-skeleton");
+  });
+
+  test("keeps streaming reasoning visible and immediately collapsible", async () => {
     const chatMessages: ChatUIMessage[] = [
       {
         id: "message-A",
@@ -646,8 +1345,9 @@ describe("chat thread messages", () => {
       },
     ];
 
-    const html = renderWithProviders(
+    const content = (
       <ChatThreadMessages
+        activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
         approvalPendingMessageId={null}
         isGenerating
         messages={chatMessages}
@@ -657,15 +1357,22 @@ describe("chat thread messages", () => {
         streamdownComponents={{
           a: ({ children, ...props }) => <a {...props}>{children}</a>,
         }}
-      />,
+      />
     );
 
-    expect(html).toContain("<details");
-    expect(html).toContain('open=""');
-    expect(html).toContain("Reading cited documents with create-document.");
-    expect(html).not.toContain("**");
-    expect(html).not.toContain("animate-pulse");
-    expect(html).not.toContain("Working with context");
+    const html = renderWithProviders(content);
+    const loadedHtml = await renderWithLoadedMarkdown(content);
+    expect(loadedHtml).toContain('data-streamdown="strong"');
+    for (const output of [html, loadedHtml]) {
+      expect(disclosureExpanded(output, "Reasoning trace")).toBe("true");
+      expect(renderedText(output)).toContain(
+        "Reading cited documents with create-document.",
+      );
+      expect(output).not.toContain("**");
+      expect(output.match(/data-slot="loader"/gu)).toHaveLength(1);
+      expect(output.match(/data-turn-live-status/gu)).toHaveLength(1);
+      expect(renderedText(output)).toContain(messages.chat.thinking);
+    }
   });
 
   test("folds assistant reasoning once streaming settles, even before answer text starts", () => {
@@ -679,6 +1386,7 @@ describe("chat thread messages", () => {
 
     const html = renderWithProviders(
       <ChatThreadMessages
+        activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
         approvalPendingMessageId={null}
         messages={chatMessages}
         onAskUserSubmit={() => {}}
@@ -691,15 +1399,14 @@ describe("chat thread messages", () => {
     );
 
     // A settled message that never produced answer text now collapses into a
-    // foldable <details> (collapsed by default) rather than staying pinned
+    // foldable disclosure (collapsed by default) rather than staying pinned
     // open — the reasoning text is still present, just tucked away.
-    expect(html).toContain("<details");
-    expect(html).not.toContain("<details open");
+    expect(disclosureExpanded(html, "Reasoning trace")).toBe("false");
     expect(html).toContain("Checking cited filings.");
     expect(html).not.toContain("Working with context");
   });
 
-  test("preserves generated document filename casing in the preview", () => {
+  test("preserves generated document filename casing in the preview", async () => {
     const input = {
       name: "Dohoda_o_ochrane_duvernych_informaci_NDA",
       source:
@@ -722,8 +1429,9 @@ describe("chat thread messages", () => {
       },
     ];
 
-    const html = renderWithProviders(
+    const content = (
       <ChatThreadMessages
+        activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
         approvalPendingMessageId={null}
         messages={chatMessages}
         onAskUserSubmit={() => {}}
@@ -732,13 +1440,20 @@ describe("chat thread messages", () => {
         streamdownComponents={{
           a: ({ children, ...props }) => <a {...props}>{children}</a>,
         }}
-      />,
+      />
     );
 
-    expect(html).toContain("Dohoda_o_ochrane_duvernych_informaci_NDA.docx");
-    expect(html).toContain("Smluvní strany: Poskytovatel a příjemce");
-    expect(html).not.toContain("**Smluvní strany:**");
-    expect(html).not.toContain("tracking-wide uppercase");
+    const html = renderWithProviders(content);
+    const loadedHtml = await renderWithLoadedMarkdown(content);
+    expect(loadedHtml).toContain('data-streamdown="strong"');
+    for (const output of [html, loadedHtml]) {
+      expect(output).toContain("Dohoda_o_ochrane_duvernych_informaci_NDA.docx");
+      expect(renderedText(output)).toContain(
+        "Smluvní strany: Poskytovatel a příjemce",
+      );
+      expect(output).not.toContain("**Smluvní strany:**");
+      expect(output).not.toContain("tracking-wide uppercase");
+    }
   });
 
   test("renders a terminal generated-document state as a failure", () => {
@@ -760,6 +1475,7 @@ describe("chat thread messages", () => {
 
     const html = renderWithProviders(
       <ChatThreadMessages
+        activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
         approvalPendingMessageId={null}
         messages={chatMessages}
         onAskUserSubmit={() => {}}
@@ -804,6 +1520,7 @@ describe("chat thread messages", () => {
 
     const html = renderWithProviders(
       <ChatThreadMessages
+        activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
         approvalPendingMessageId={null}
         messages={chatMessages}
         onAskUserSubmit={() => {}}
@@ -842,6 +1559,7 @@ describe("chat thread messages", () => {
 
     const html = renderWithProviders(
       <ChatThreadMessages
+        activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
         approvalPendingMessageId={null}
         messages={chatMessages}
         onAskUserSubmit={() => {}}
@@ -861,6 +1579,97 @@ describe("chat thread messages", () => {
     expect(html).not.toContain('href="/v1/user-files/file_test123/content"');
   });
 
+  describe("an answer's files", () => {
+    const fileUrl = "stella://file::file_report";
+    const documentPart = {
+      type: "document",
+      source: { type: "url", value: fileUrl, mimeType: "text/html" },
+      metadata: { filename: "report.html" },
+    } as const;
+    const render = (message: Partial<ChatUIMessage>) =>
+      renderWithProviders(
+        <ChatThreadMessages
+          activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
+          approvalPendingMessageId={null}
+          messages={[
+            {
+              id: "answer",
+              role: "assistant",
+              parts: [{ type: "text", content: "It is ready." }, documentPart],
+              ...message,
+            },
+          ]}
+          onAskUserSubmit={() => {}}
+          onCreateDocumentResolve={() => {}}
+          onOpenCreatedDocument={() => {}}
+          streamdownComponents={{
+            a: ({ children, ...props }) => <a {...props}>{children}</a>,
+          }}
+        />,
+      );
+
+    test("opens from a chip under the answer", () => {
+      const html = render({});
+      expect(html).toContain("It is ready.");
+      expect(html).toContain("report.html");
+      expect(html).toContain('/v1/user-files/file_report/content"');
+    });
+
+    test("an answer holding only a file still shows it", () => {
+      const html = render({ parts: [documentPart] });
+      expect(html).toContain("report.html");
+    });
+
+    test("names what could not be shared", () => {
+      const html = render({
+        parts: [{ type: "text", content: "It is ready." }],
+        metadata: { localRunFilesNotShared: ["data.zip", "dump.bin"] },
+      });
+      expect(html).toContain(
+        "Files that could not be shared stay on your computer: data.zip, dump.bin",
+      );
+    });
+  });
+
+  test("does not render remote image attachment URLs", () => {
+    const remoteUrl = "https://untrusted.example/evidence.png";
+    const chatMessages: ChatUIMessage[] = [
+      {
+        id: "message-A",
+        parts: [
+          {
+            type: "image",
+            source: {
+              type: "url",
+              value: remoteUrl,
+              mimeType: "image/png",
+            },
+            metadata: { filename: "evidence.png" },
+          },
+        ],
+        role: "user",
+      },
+    ];
+
+    const html = renderWithProviders(
+      <ChatThreadMessages
+        activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
+        approvalPendingMessageId={null}
+        messages={chatMessages}
+        onAskUserSubmit={() => {}}
+        onCreateDocumentResolve={() => {}}
+        onOpenCreatedDocument={() => {}}
+        streamdownComponents={{
+          a: ({ children, ...props }) => <a {...props}>{children}</a>,
+        }}
+      />,
+    );
+
+    expect(html).toContain("evidence.png");
+    expect(html).not.toContain("<img");
+    expect(html).not.toContain(remoteUrl);
+  });
+
   test("shows retry only on the latest assistant response", () => {
     const chatMessages: ChatUIMessage[] = [
       {
@@ -877,6 +1686,7 @@ describe("chat thread messages", () => {
 
     const html = renderWithProviders(
       <ChatThreadMessages
+        activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
         approvalPendingMessageId={null}
         messages={chatMessages}
         onAskUserSubmit={() => {}}
@@ -892,7 +1702,7 @@ describe("chat thread messages", () => {
     expect(html).toContain("First answer");
     expect(html).toContain("Second answer");
     expect(html.match(/aria-label="Copy"/gu)?.length).toBe(2);
-    expect(html.match(/>Retry<\/button>/gu)?.length).toBe(1);
+    expect(html.match(RETRY_BUTTONS)?.length).toBe(1);
   });
 
   test("hides retry when a later user message is the final turn", () => {
@@ -911,6 +1721,7 @@ describe("chat thread messages", () => {
 
     const html = renderWithProviders(
       <ChatThreadMessages
+        activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
         approvalPendingMessageId={null}
         messages={chatMessages}
         onAskUserSubmit={() => {}}
@@ -926,7 +1737,7 @@ describe("chat thread messages", () => {
     expect(html).toContain("Answer before retry");
     expect(html).toContain("Follow-up prompt");
     expect(html.match(/aria-label="Copy"/gu)?.length).toBe(1);
-    expect(html).not.toContain(">Retry</button>");
+    expect(html).not.toMatch(RETRY_BUTTON);
   });
 
   test("hides retry while the latest assistant response is generating", () => {
@@ -940,6 +1751,7 @@ describe("chat thread messages", () => {
 
     const html = renderWithProviders(
       <ChatThreadMessages
+        activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
         approvalPendingMessageId={null}
         isGenerating
         messages={chatMessages}
@@ -955,12 +1767,13 @@ describe("chat thread messages", () => {
 
     expect(html).toContain("Streaming answer");
     expect(html).toContain('aria-label="Copy"');
-    expect(html).not.toContain(">Retry</button>");
+    expect(html).not.toMatch(RETRY_BUTTON);
   });
 
   test("shows a resendable chat message when the chat runtime errors", () => {
     const html = renderWithProviders(
       <ChatThreadMessages
+        activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
         approvalPendingMessageId={null}
         error={new Error("provider details must stay hidden")}
         messages={[]}
@@ -979,9 +1792,116 @@ describe("chat thread messages", () => {
     expect(html).not.toContain("provider details must stay hidden");
   });
 
+  test.each([
+    { status: 401, copy: messages.errors.api.unauthorized },
+    { status: 403, copy: messages.errors.api.forbidden },
+    { status: 404, copy: messages.errors.api.notFound },
+    { status: 409, copy: messages.errors.api.conflict },
+    { status: 429, copy: messages.errors.api.rateLimited },
+    { status: 500, copy: messages.errors.api.server },
+    { status: 503, copy: messages.errors.api.serviceUnavailable },
+  ])(
+    "an HTTP $status refusal keeps localized copy through transport wrappers",
+    ({ status, copy }) => {
+      const refusal = toAPIError({
+        status,
+        value: {
+          code: "unrecognized_http_refusal",
+          message: "Private request diagnostics",
+        },
+      });
+      const html = renderWithProviders(
+        <ChatErrorMessage
+          error={new Error("Stream read failed", { cause: refusal })}
+          isGenerating={false}
+          onResend={() => {}}
+        />,
+      );
+
+      expect(html).toContain(copy);
+      expect(html).toContain("Resend");
+      expect(html).not.toContain(messages.chat.sendError);
+      expect(html).not.toContain("Private request diagnostics");
+    },
+  );
+
+  test.each([400, 422])(
+    "an HTTP %s input rejection asks the user to check the request",
+    (status) => {
+      const html = renderWithProviders(
+        <ChatErrorMessage
+          error={
+            new APIError({ status, message: messages.errors.api.badRequest })
+          }
+          isGenerating={false}
+          onResend={() => {}}
+        />,
+      );
+      expect(html).toContain(messages.errors.api.validation);
+      expect(html).not.toContain(messages.chat.sendError);
+    },
+  );
+
+  test("explains a permanent approval continuation rejection without offering resend", () => {
+    const refusal = toAPIError({
+      status: 400,
+      value: {
+        code: CHAT_CONTINUATION_REJECTED_ERROR_CODE,
+        message: "Private continuation mismatch details",
+      },
+    });
+    const html = renderWithProviders(
+      <ChatErrorMessage
+        error={new Error("SDK transport wrapper", { cause: refusal })}
+        isGenerating={false}
+        onResend={() => {}}
+      />,
+    );
+    expect(html).toContain(messages.chat.sendErrorContinuationRejected);
+    expect(html).not.toContain("Resend");
+    expect(html).not.toContain("Private continuation mismatch details");
+  });
+
+  test("hides every retry action after a permanent approval continuation rejection", () => {
+    const refusal = toAPIError({
+      status: 400,
+      value: {
+        code: CHAT_CONTINUATION_REJECTED_ERROR_CODE,
+        message: "Private continuation mismatch details",
+      },
+    });
+    const html = renderWithProviders(
+      <ChatThreadMessages
+        activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
+        approvalPendingMessageId={null}
+        error={new Error("SDK transport wrapper", { cause: refusal })}
+        messages={[
+          {
+            id: "answer-A",
+            role: "assistant",
+            parts: [{ type: "text", content: "Answer awaiting continuation" }],
+          },
+        ]}
+        onAskUserSubmit={() => {}}
+        onCreateDocumentResolve={() => {}}
+        onOpenCreatedDocument={() => {}}
+        onResend={() => {}}
+        streamdownComponents={{
+          a: ({ children, ...props }) => <a {...props}>{children}</a>,
+        }}
+      />,
+    );
+    expect(html).toContain("Answer awaiting continuation");
+    expect(html).toContain(messages.chat.sendErrorContinuationRejected);
+    expect(html).not.toContain('aria-label="Retry"');
+    expect(html).not.toMatch(RETRY_BUTTON);
+    expect(html).not.toMatch(RESEND_BUTTON);
+  });
+
   test("maps model-unavailable stream errors to admin-facing copy", () => {
     const html = renderWithProviders(
       <ChatThreadMessages
+        activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
         approvalPendingMessageId={null}
         error={new Error("model_unavailable")}
         messages={[]}
@@ -1003,6 +1923,7 @@ describe("chat thread messages", () => {
   test("offers a raw-send override when anonymization blocks an attachment", () => {
     const html = renderWithProviders(
       <ChatThreadMessages
+        activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
         approvalPendingMessageId={null}
         error={
           new Error(
@@ -1088,6 +2009,7 @@ describe("buildMessageTurns", () => {
 
     const html = renderWithProviders(
       <ChatThreadMessages
+        activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
         approvalPendingMessageId={null}
         messages={chatMessages}
         onAskUserSubmit={() => {}}
@@ -1107,12 +2029,13 @@ describe("buildMessageTurns", () => {
     // Both assistant messages retain their secondary actions in the menu. The
     // user message has no assistant-message action row.
     expect(html.match(/aria-label="Actions"/gu)).toHaveLength(2);
-    expect(html.match(/>Retry<\/button>/gu)).toHaveLength(1);
+    expect(html.match(RETRY_BUTTONS)).toHaveLength(1);
   });
 
   test("keeps the actions menu off the sticky user header", () => {
     const html = renderWithProviders(
       <ChatThreadMessages
+        activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
         approvalPendingMessageId={null}
         messages={[
           {
@@ -1148,6 +2071,7 @@ describe("buildMessageTurns", () => {
   test("offers no assistant-message actions on a user message", () => {
     const html = renderWithProviders(
       <ChatThreadMessages
+        activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
         approvalPendingMessageId={null}
         messages={[
           {
@@ -1187,6 +2111,7 @@ describe("buildMessageTurns", () => {
   test("omits thread actions on surfaces that carry no thread reference", () => {
     const html = renderWithProviders(
       <ChatThreadMessages
+        activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
         approvalPendingMessageId={null}
         messages={[
           {
@@ -1227,4 +2152,109 @@ describe("buildMessageTurns", () => {
     }
     expect(orphan.body.map((item) => item.index)).toEqual([0, 1]);
   });
+});
+
+test.each([...Object.values(PROVIDER_SETUP_ERROR_CODE), null])(
+  "runtime chat error %s renders its typed message and setup fix, never the provider's wording",
+  (code) => {
+    const provider =
+      code === null
+        ? "custom-provider"
+        : PROVIDER_SETUP_ERROR_CATALOGUE[code].provider;
+    const diagnostic = {
+      provider,
+      code,
+      message: "messages.0: user messages must have non-empty content",
+    };
+    const stored = {
+      id: "failed-diagnostic",
+      role: "assistant",
+      parts: [],
+      metadata: {
+        turnOutcome: {
+          type: "failed",
+          error: "provider_credentials_rejected",
+          providerDiagnostic: diagnostic,
+        },
+      },
+    } satisfies PersistedChatMessage;
+    const error = getChatAssistantTurnError(structuredClone(stored));
+    expect(error).toBeDefined();
+    // Reload is the authoritative message path; live streaming uses the same tagged diagnostic.
+    expect(ProviderDiagnosticError.is(error)).toBe(true);
+    if (!ProviderDiagnosticError.is(error)) {
+      return;
+    }
+    const restored = error;
+    const html = renderWithProviders(
+      <ChatErrorMessage
+        error={restored}
+        isGenerating={false}
+        onResend={() => {}}
+      />,
+    );
+    const text = renderedText(html);
+    expect(text).toContain(messages.chat.sendErrorProviderCredentialsRejected);
+    expect(text).not.toContain(diagnostic.message);
+    expect(text).not.toContain(`${provider}:`);
+    expect(html).not.toContain(messages.common.copy);
+    // A provider failure is worth sending again.
+    expect(text).toContain(messages.chat.resend);
+    if (code !== null) {
+      expect(html).toContain(
+        PROVIDER_SETUP_ERROR_CATALOGUE[code].url.replaceAll("&", "&amp;"),
+      );
+    }
+  },
+);
+
+test("a message refused as empty says what to do and offers no resend", () => {
+  const refusal = toAPIError({
+    status: 422,
+    value: {
+      code: CHAT_MESSAGE_EMPTY_ERROR_CODE,
+      message: "Chat message has no text or attachment",
+    },
+  });
+  const html = renderWithProviders(
+    <ChatErrorMessage
+      error={new Error("Chat request failed", { cause: refusal })}
+      isGenerating={false}
+      onResend={() => {}}
+    />,
+  );
+  const text = renderedText(html);
+  expect(text).toContain(messages.chat.sendErrorMessageEmpty);
+  expect(text).not.toContain("Chat message has no text or attachment");
+  expect(text).not.toContain(messages.chat.resend);
+});
+test("sent pasted text renders once as a collapsed attachment", () => {
+  const text = "First line\n  <literal> & whitespace\n";
+  const html = renderWithProviders(
+    <ChatThreadMessages
+      activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
+      approvalPendingMessageId={null}
+      messages={[
+        {
+          id: "message-pasted",
+          role: "user",
+          parts: [createChatPastedTextPart(text)],
+        },
+      ]}
+      onAskUserSubmit={() => {}}
+      onCreateDocumentResolve={() => {}}
+      onOpenCreatedDocument={() => {}}
+      streamdownComponents={{
+        a: ({ children, ...props }) => <a {...props}>{children}</a>,
+      }}
+    />,
+  );
+  const window = new Window();
+  const { body } = new window.DOMParser().parseFromString(html, "text/html");
+  const content = body.querySelector("pre");
+  expect(content?.hidden).toBe(true);
+  expect(content?.textContent).toBe(text);
+  expect(body.querySelectorAll("pre")).toHaveLength(1);
+  expect(body.querySelector('[aria-expanded="false"]')).not.toBeNull();
+  expect(body.querySelectorAll("literal")).toHaveLength(0);
 });

@@ -1,7 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
-cd "${GITHUB_WORKSPACE:?}/apps/web"
-echo "Container Playwright package: $(realpath node_modules/@playwright/test)"
+cd "${GITHUB_WORKSPACE:?}/${PLAYWRIGHT_PACKAGE_DIR:-apps/web}"
+if [[ ! -d node_modules/@playwright/test ]]; then
+  echo "::error::Playwright is not installed in $PWD" >&2
+  exit 1
+fi
+playwright_package=$(realpath node_modules/@playwright/test)
+echo "Container Playwright package: $playwright_package"
 bun -e '
   import { existsSync } from "node:fs";
   import * as playwright from "@playwright/test";

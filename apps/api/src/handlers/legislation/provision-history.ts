@@ -1,22 +1,30 @@
+import { panic } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
-import { status, t } from "elysia";
-import type { Static } from "elysia";
+import * as v from "valibot";
 
+import { numberFromString } from "@stll/api-contract/http-input";
+import type { PublicCountrySurface } from "@stll/api-contract/public-country-capability";
+import { statuteAnchorSchemeFor } from "@stll/api-contract/statute-anchor-schemes";
 import { mapWithConcurrency } from "@stll/concurrency";
 
 import { legislationDocuments, legislationSources } from "@/api/db/schema";
-import { extractProvisionText } from "@/api/handlers/legislation/provision-text";
+import { readProvision } from "@/api/handlers/legislation/provision-text";
+import {
+  provisionWordingChange,
+  type VersionProvisionReading,
+} from "@/api/handlers/legislation/provision-wording-change";
 import { projectProvisionHistoryItem } from "@/api/handlers/legislation/reader-response";
 import {
   selectWorkKey,
   workKeyConditions,
 } from "@/api/handlers/legislation/work-key";
+import { status } from "@/api/http/status";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
-  tPaginationCursor,
-  tPaginationLimit,
-  tSafeId,
+  paginationCursorSchema,
+  paginationLimitSchema,
+  resourceIdSchema,
 } from "@/api/lib/custom-schema";
 import { legislationExpressionLabelColumns } from "@/api/lib/legal-search/legislation-expression-label";
 import { derivedAiLegislationSource } from "@/api/lib/legal-search/legislation-redistribution";
@@ -25,7 +33,7 @@ import {
   versionSortKey,
 } from "@/api/lib/legal-search/legislation-validity-window";
 import {
-  readVersionBlocks,
+  readVersionAst,
   versionAstColumns,
 } from "@/api/lib/legal-search/legislation-version-blocks";
 import type { LegislationReadDb } from "@/api/lib/legislation-public-read-db";
@@ -42,25 +50,29 @@ import { brandPersistedLegislationDocumentId } from "@/api/lib/safe-id-boundarie
 
 const HISTORY_READ_STEP = "provisionHistory.corpusAst";
 
-export const provisionHistoryParamsSchema = t.Object({
-  documentId: tSafeId("legislationDocument"),
-  anchor: t.String({ minLength: 1, maxLength: 256 }),
+export const provisionHistoryParamsSchema = v.object({
+  documentId: resourceIdSchema("legislationDocument"),
+  anchor: v.pipe(v.string(), v.minLength(1), v.maxLength(256)),
 });
 
-export const provisionHistoryQuerySchema = t.Object({
-  limit: t.Optional(
-    tPaginationLimit(LIMITS.legislationProvisionHistoryPageSizeMax),
+export const provisionHistoryQuerySchema = v.object({
+  limit: v.optional(
+    numberFromString(
+      paginationLimitSchema(LIMITS.legislationProvisionHistoryPageSizeMax),
+    ),
   ),
-  cursor: t.Optional(tPaginationCursor()),
+  cursor: v.optional(paginationCursorSchema()),
 });
 
-type ProvisionHistoryQuery = Static<typeof provisionHistoryQuerySchema>;
+type ProvisionHistoryQuery = v.InferOutput<typeof provisionHistoryQuerySchema>;
 
 type ProvisionHistoryOptions = {
   documentId: SafeId<"legislationDocument">;
   anchor: string;
   query: ProvisionHistoryQuery;
   legislationDb: LegislationReadDb;
+  /** The surface this read answers for; its country list decides publication. */
+  surface: PublicCountrySurface;
 };
 
 type VersionCursor = {
@@ -68,7 +80,9 @@ type VersionCursor = {
   id: SafeId<"legislationDocument">;
 };
 
-const decodeVersionCursor = (cursor: string): VersionCursor | null => {
+export const decodeProvisionHistoryCursor = (
+  cursor: string,
+): VersionCursor | null => {
   const parts = decodePaginationCursor(cursor);
 
   if (parts?.length !== 2) {
@@ -87,8 +101,15 @@ const decodeVersionCursor = (cursor: string): VersionCursor | null => {
   return { validFrom, id: brandPersistedLegislationDocumentId(id) };
 };
 
+export const encodeProvisionHistoryCursor = (cursor: VersionCursor): string =>
+  encodePaginationCursor([cursor.validFrom, cursor.id]);
+
 const versionColumns = {
   ...versionAstColumns,
+  country: legislationDocuments.country,
+  slug: legislationDocuments.slug,
+  sourceUrl: legislationDocuments.sourceUrl,
+
   versionValidFrom: legislationDocuments.versionValidFrom,
   versionValidTo: legislationDocuments.versionValidTo,
   ...legislationExpressionLabelColumns,
@@ -109,12 +130,22 @@ const versionColumns = {
  * document only establishes the Work key: an anchor a later consolidation
  * dropped is still reachable, and "provision not found" is answered once the
  * walk has seen every version of the Work without one occurrence.
+ *
+ * Each found wording says how it relates to the consolidation just before
+ * it (`wordingChange`), compared on the full text rather than the projected
+ * one. The page already reads one version past its end for the cursor, so
+ * the last item of a page is compared with the first version of the next
+ * one at no extra read, and a run of unchanged wording reads the same at any
+ * page size. A version whose structure cannot be read is an `unavailable`
+ * item: neither it nor its newer neighbour is claimed changed or unchanged,
+ * and it is never mistaken for one that lacks the provision.
  */
 export const readProvisionHistoryHandler = async ({
   documentId,
   anchor,
   query,
   legislationDb,
+  surface,
 }: ProvisionHistoryOptions) => {
   const limit = normalizeTenantPageLimit(
     query.limit ?? LIMITS.legislationProvisionHistoryPageSizeDefault,
@@ -122,7 +153,7 @@ export const readProvisionHistoryHandler = async ({
   let cursor: VersionCursor | null = null;
 
   if (query.cursor !== undefined) {
-    cursor = decodeVersionCursor(query.cursor);
+    cursor = decodeProvisionHistoryCursor(query.cursor);
 
     if (cursor === null) {
       return status(400, { message: "Invalid cursor" });
@@ -130,13 +161,13 @@ export const readProvisionHistoryHandler = async ({
   }
 
   const versions = await legislationDb(async (tx) => {
-    const work = await selectWorkKey(tx, documentId);
+    const work = await selectWorkKey(tx, documentId, surface);
 
     if (work === null) {
       return null;
     }
 
-    const conditions: SQL[] = workKeyConditions(work);
+    const conditions: SQL[] = workKeyConditions(work, surface);
 
     if (cursor !== null) {
       conditions.push(
@@ -166,30 +197,47 @@ export const readProvisionHistoryHandler = async ({
   // One object-storage read per version, bounded rather than one request per
   // item: a page is already capped far below the version page size because
   // each item costs one whole AST.
-  const texts = await mapWithConcurrency({
+  const readings = await mapWithConcurrency({
     items: versions,
     limit: LIMITS.legislationProvisionReadConcurrency,
-    operation: async (version) =>
-      extractProvisionText(
-        await readVersionBlocks({
-          row: version,
-          legislationDb,
-          step: HISTORY_READ_STEP,
-        }),
+    operation: async (version): Promise<VersionProvisionReading> => {
+      const ast = await readVersionAst({
+        surface,
+        row: version,
+        legislationDb,
+        step: HISTORY_READ_STEP,
+      });
+      // No structure (unreadable, or a source without a parser) says nothing
+      // about whether the provision is there.
+      if (ast === null || !("blocks" in ast)) {
+        return { type: "unavailable" };
+      }
+      const reading = readProvision(
+        { blocks: ast.blocks, scheme: statuteAnchorSchemeFor(version.country) },
         anchor,
-      ),
+      );
+      return reading === null ? { type: "absent" } : { type: "found", reading };
+    },
   });
 
   const page = createCursorPage({
     rows: versions.map((version, index) => ({
       allowsDerivedAi: version.allowsDerivedAi,
       documentId: version.id,
+      country: version.country,
+      slug: version.slug,
+      sourceUrl: version.sourceUrl,
+
       versionValidFrom: version.versionValidFrom,
       versionValidTo: version.versionValidTo,
       expressionKind: version.expressionKind,
       windowDisposition: version.windowDisposition,
       windowDispositionBasis: version.windowDispositionBasis,
-      text: texts[index] ?? null,
+      reading: readings[index] ?? panic("A history version lost its reading"),
+      // The look-ahead row is the next page's first version, so even a
+      // page's last item has its older neighbour here; only the oldest
+      // version of the Work has none.
+      older: readings[index + 1],
     })),
     limit,
     cursorForItem: (item) =>
@@ -199,9 +247,31 @@ export const readProvisionHistoryHandler = async ({
       ]),
   });
 
-  const items = page.items.flatMap(({ text, ...item }) =>
-    text === null ? [] : [projectProvisionHistoryItem({ ...item, text })],
-  );
+  const items = page.items.flatMap(({ reading, older, ...item }) => {
+    switch (reading.type) {
+      case "absent":
+        return [];
+      case "unavailable":
+        return [
+          projectProvisionHistoryItem({ ...item, status: "unavailable" }),
+        ];
+      case "found":
+        return [
+          projectProvisionHistoryItem({
+            ...item,
+            status: "found",
+            wordingChange: provisionWordingChange(reading.reading, older),
+            text: reading.reading.text,
+            governingText: reading.reading.governing,
+            ...(reading.reading.governingTruncated
+              ? { governingTextTruncated: true as const }
+              : {}),
+          }),
+        ];
+      default:
+        return panic("Unhandled provision reading", reading satisfies never);
+    }
+  });
 
   // Only a first page can establish that no consolidation of the Work carries
   // the anchor. A continuation page sees the older tail alone: versions that

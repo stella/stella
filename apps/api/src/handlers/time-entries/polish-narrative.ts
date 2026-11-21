@@ -1,24 +1,32 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { resolveCaching } from "@/api/lib/ai-config";
 import { loadOrgAISettings } from "@/api/lib/ai-config-loader";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { aiHandlerError } from "@/api/lib/ai-error";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
-import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
+import {
+  ACCOUNT_ACCESS,
+  configuredModelAdmission,
+  createSafeHandler,
+} from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { generateTanStackTextForRole } from "@/api/lib/tanstack-ai-generate";
-import { requireTanStackAIAvailableForRole } from "@/api/lib/tanstack-ai-models";
+import { generateTanStackTextForTask } from "@/api/lib/tanstack-ai-generate";
+import { requireTanStackAIAvailableForTask } from "@/api/lib/tanstack-ai-models";
 
 const POLISH_TIMEOUT_MS = 20_000;
 const MAX_OUTPUT_TOKENS = 4096;
 const MAX_NARRATIVE_LENGTH = 10_000;
 
-const polishNarrativeBodySchema = t.Object({
-  narrative: t.String({ minLength: 1, maxLength: MAX_NARRATIVE_LENGTH }),
-  instruction: t.String({ minLength: 1, maxLength: 2000 }),
+const polishNarrativeBodySchema = v.object({
+  narrative: v.pipe(
+    v.string(),
+    v.minLength(1),
+    v.maxLength(MAX_NARRATIVE_LENGTH),
+  ),
+  instruction: v.pipe(v.string(), v.minLength(1), v.maxLength(2000)),
 });
 
 const TIME_NARRATIVE_SYSTEM_PROMPT = `You revise a legal-services time-entry narrative.
@@ -44,16 +52,23 @@ export const buildPolishNarrativeMessage = ({
   });
 
 const config = {
+  contract: "patch",
+  actionAdmission: {
+    type: "handler",
+    actionKind: "time-entries.polish-narrative",
+  },
   permissions: { timeEntry: ["create"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
+  featureAccess: { featureId: "time-billing", type: "required" },
   mcp: { type: "internal", reason: "billing_ui" },
   body: polishNarrativeBodySchema,
-  requiresUsage: { actionType: "chat", modelRole: "fast" },
+  requiresUsage: { actionType: "chat", modelTask: "short-text" },
 } satisfies WorkspaceHandlerConfig;
 
 const polishTimeEntryNarrative = createSafeHandler(
   config,
   async function* ({
+    modelAdmission,
     body,
     request,
     safeDb,
@@ -82,11 +97,11 @@ const polishTimeEntryNarrative = createSafeHandler(
         ),
       );
 
-    yield* requireTanStackAIAvailableForRole({
+    yield* requireTanStackAIAvailableForTask({
       dataClass: "customer",
       configStatus: ORG_AI_CONFIG_STATUS.ok,
       orgConfig: orgAIConfig,
-      role: "fast",
+      task: "short-text",
     });
 
     const aiAnalytics = createTanStackAIAnalyticsCallbacks({
@@ -100,8 +115,9 @@ const polishTimeEntryNarrative = createSafeHandler(
         workspaceId,
       },
       feature: "time_entries.polish_narrative",
-      modelRole: "fast",
+      modelTask: "short-text",
       orgAIConfig,
+      modelTier: configuredModelAdmission({ modelAdmission }).modelTier,
       properties: { organization_id: organizationId },
       traceId: Bun.randomUUIDv7(),
     });
@@ -109,16 +125,16 @@ const polishTimeEntryNarrative = createSafeHandler(
     const generation = yield* Result.await(
       Result.tryPromise({
         try: async () =>
-          await generateTanStackTextForRole({
+          await generateTanStackTextForTask({
+            userId: user.id,
             dataClass: "customer",
-            abortSignal: AbortSignal.any([
-              request.signal,
-              AbortSignal.timeout(POLISH_TIMEOUT_MS),
-            ]),
+            admission: configuredModelAdmission({ modelAdmission }),
+            abortSignal: request.signal,
+            deadlineMs: POLISH_TIMEOUT_MS,
             analytics: aiAnalytics,
             caching: resolveCaching({
               promptCachingEnabled,
-              role: "fast",
+              task: "short-text",
               scopeKey: workspaceId,
             }),
             messages: [
@@ -135,7 +151,7 @@ const polishTimeEntryNarrative = createSafeHandler(
             organizationId,
             orgAIConfig,
             managedAIResidency,
-            role: "fast",
+            task: "short-text",
             serviceTier: "standard",
             system: TIME_NARRATIVE_SYSTEM_PROMPT,
             systemPromptOrigin: "server-built",
@@ -157,6 +173,7 @@ const polishTimeEntryNarrative = createSafeHandler(
       return Result.err(
         new HandlerError({
           status: 502,
+          code: "internal_error",
           message: "AI returned an invalid time narrative",
         }),
       );

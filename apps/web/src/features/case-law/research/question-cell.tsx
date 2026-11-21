@@ -15,15 +15,16 @@ import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import type { CaseLawResearchAnswerFailureReason } from "@stll/api-contract";
-import { Button } from "@stll/ui/button";
-import { RefreshCwIcon } from "@stll/ui/icons";
 import {
   PreviewCard,
   PreviewCardPopup,
   PreviewCardTrigger,
 } from "@stll/ui/preview-card";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { FieldValue } from "@stll/workspace-ui/field-value";
 
+import { AiCell } from "@/components/workspaces/ai-cell";
+import { questionAiCellState } from "@/components/workspaces/ai-cell-state.logic";
 import { Justification } from "@/components/workspaces/justification";
 import type { Decision } from "@/features/case-law/components/decision-cells";
 import { answerKey } from "@/features/case-law/research/question-columns.logic";
@@ -45,6 +46,8 @@ const FAILURE_REASON_MESSAGE = {
 
 type QuestionCellProps = {
   answersByKey: ReadonlyMap<string, QuestionAnswer>;
+  queuedAnswerKeys?: ReadonlySet<string>;
+  refusedAnswerKeys?: ReadonlySet<string>;
   column: QuestionColumn;
   decision: Decision;
   /**
@@ -57,93 +60,78 @@ type QuestionCellProps = {
 
 export const QuestionCell = ({
   answersByKey,
+  queuedAnswerKeys,
+  refusedAnswerKeys,
   column,
   decision,
   onRetry,
   onShowPassage,
 }: QuestionCellProps) => {
   const t = useTranslations();
-  const answer = answersByKey.get(answerKey(column.id, decision.id));
-
-  if (answer === undefined) {
-    return (
-      <span className="text-foreground-placeholder text-xs">
-        {t("caseLaw.research.answers.notRun")}
-      </span>
-    );
-  }
-
-  switch (answer.state) {
-    case "pending":
-      return (
-        <FieldValue
-          content={PENDING_CONTENT}
-          property={column}
-          variant="table"
-        />
-      );
-    case "not_allowed":
-      return (
-        <span className="text-muted-foreground text-xs">
-          {t("caseLaw.research.answers.notAllowed")}
-        </span>
-      );
-    case "not_stated":
-      return (
-        <WithProvenance
-          decision={decision}
-          onShowPassage={onShowPassage}
-          run={answer.run}
-        >
-          <span className="text-muted-foreground line-clamp-2 text-xs">
-            {t("caseLaw.research.answers.notStated")}
-          </span>
-        </WithProvenance>
-      );
-    case "failed": {
-      // A failed cell without a reason is a writer that broke the contract.
-      const reason =
-        answer.failureReason ??
-        panic(`Failed answer without a reason: ${answer.columnId}`);
-      return (
-        <span className="flex min-w-0 items-start gap-1">
-          <span className="text-destructive line-clamp-2 text-sm italic">
-            {t(FAILURE_REASON_MESSAGE[reason])}
-          </span>
-          {onRetry !== undefined && (
-            <Button
-              aria-label={t("common.retry")}
-              className="text-foreground-ghost hover:text-foreground shrink-0"
-              onClick={() => onRetry(column, decision.id)}
-              size="icon-xs"
-              title={t("common.retry")}
-              variant="ghost"
-            >
-              <RefreshCwIcon aria-hidden="true" className="size-3.5" />
-            </Button>
-          )}
-        </span>
-      );
-    }
-    case "answered":
-      return (
-        <WithProvenance
-          decision={decision}
-          onShowPassage={onShowPassage}
-          run={answer.run}
-        >
+  const key = answerKey(column.id, decision.id);
+  const answer = answersByKey.get(key);
+  const state = questionAiCellState({
+    answer,
+    queued: queuedAnswerKeys?.has(key) ?? false,
+    refusedBudget: refusedAnswerKeys?.has(key) ?? false,
+  });
+  let value: ReactNode;
+  let failure: ReactNode;
+  if (answer !== undefined) {
+    switch (answer.state) {
+      case "withdrawn":
+        value = <span>{t("caseLaw.withdrawnByPublisher")}</span>;
+        break;
+      case "answered":
+        value = (
           <FieldValue
             content={answer.answer ?? undefined}
             property={column}
             variant="table"
           />
-        </WithProvenance>
-      );
-    default: {
-      answer.state satisfies never;
-      return panic(`Unhandled answer state: ${String(answer.state)}`);
+        );
+        break;
+      case "not_stated":
+        value = (
+          <TruncatedText className="text-muted-foreground text-xs" lines={2}>
+            {t("caseLaw.research.answers.notStated")}
+          </TruncatedText>
+        );
+        break;
+      case "not_allowed":
+        failure = t("caseLaw.research.answers.notAllowed");
+        break;
+      case "failed": {
+        const reason =
+          answer.failureReason ??
+          panic(`Failed answer without a reason: ${answer.columnId}`);
+        failure = t(FAILURE_REASON_MESSAGE[reason]);
+        break;
+      }
+      case "pending":
+        break;
+      default:
+        answer.state satisfies never;
+        return panic("Unhandled answer state");
     }
   }
+  return (
+    <AiCell
+      state={state}
+      failure={failure}
+      {...(onRetry !== undefined && answer?.state === "failed"
+        ? { onRetry: () => onRetry(column, decision.id) }
+        : {})}
+    >
+      <WithProvenance
+        decision={decision}
+        onShowPassage={onShowPassage}
+        run={answer?.run}
+      >
+        {value}
+      </WithProvenance>
+    </AiCell>
+  );
 };
 
 type WithProvenanceProps = {
@@ -180,14 +168,13 @@ const WithProvenance = ({
       </PreviewCardTrigger>
       <PreviewCardPopup align="start" className="w-80">
         <div className="flex flex-col gap-2 text-xs leading-relaxed">
-          <p className="text-muted-foreground text-justify hyphens-auto">
-            {run.rationale}
-          </p>
+          <p className="text-muted-foreground hyphens-auto">{run.rationale}</p>
           {run.justification.blocks.length > 0 && (
             <div className="text-foreground-strong-muted wrap-break-word">
               <Justification
                 source={{
                   kind: "decision",
+                  decision,
                   content: run.justification,
                   onOpenPassage: (anchorId) =>
                     onShowPassage(decision, anchorId),
@@ -200,10 +187,3 @@ const WithProvenance = ({
     </PreviewCard>
   );
 };
-
-/**
- * A cell the run has not answered yet. The field renderer shimmers in the
- * shape the column's kind will land in, which is exactly what a matter's
- * pending extraction cell does.
- */
-const PENDING_CONTENT = { version: 1, type: "pending" } as const;

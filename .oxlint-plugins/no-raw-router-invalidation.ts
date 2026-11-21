@@ -1,4 +1,6 @@
-// Confine TanStack Router invalidation to its three owned lifecycle boundaries.
+// Confine TanStack Router invalidation to its owned lifecycle boundaries:
+// session, locale, workspace route metadata, and the route error page's retry
+// of a failed loader.
 //
 // `router.invalidate()` is navigation-grade work: it reruns route context,
 // beforeLoad, loaders, and head resolution. Query mutations must not use it as
@@ -8,8 +10,8 @@
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
 import {
-  getImportLocalName,
   getImportedName,
+  getImportLocalName,
   getPropertyName,
   isAstNode,
   isFileIn,
@@ -21,6 +23,7 @@ const ROUTER_MODULE = "@tanstack/react-router";
 
 const OWNED_INVALIDATION_FILES = [
   "apps/web/src/app-providers.tsx",
+  "apps/web/src/components/route-components.tsx",
   "apps/web/src/hooks/use-invalidate-session.ts",
   "apps/web/src/lib/workspaces/mutations.ts",
 ];

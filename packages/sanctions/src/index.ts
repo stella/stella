@@ -30,7 +30,9 @@ export {
   ScreeningQueryError,
   ScreeningWorkLimitError,
   buildScreeningIndex,
+  buildScreeningIndexCooperatively,
   screen,
+  screenRecords,
 } from "./screening";
 export type {
   FieldComparison,
@@ -38,12 +40,21 @@ export type {
   PossibleMatch,
   IdentityField,
   QueryBirthDate,
+  RecordMatch,
+  RecordScreeningResult,
   ScreeningIndex,
   ScreeningQuery,
   ScreeningResult,
+  ScreeningWorkUsage,
 } from "./screening";
+export { buildPartyIndex } from "./party-screening";
+export type { PartyIndex, ScreenedParty } from "./party-screening";
 export { parseUnList, readUnListVersion } from "./un";
 export { parseUkList, readUkListVersion } from "./uk";
 export { parseSecoList, readSecoListVersion } from "./seco";
 
-export { MAX_QUERY_TOKENS, hasExcessQueryTokens } from "./normalise";
+export {
+  MAX_QUERY_CHARACTERS,
+  MAX_QUERY_TOKENS,
+  hasExcessQueryTokens,
+} from "./normalise";

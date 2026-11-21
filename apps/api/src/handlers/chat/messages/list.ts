@@ -1,10 +1,26 @@
 import { panic, Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
+
+import {
+  CHAT_RUN_TARGET_KIND,
+  type ChatRunTarget,
+} from "@stll/api-contract/chat-run-target";
+import {
+  CHAT_TURN_STEERING,
+  type ChatTurnSteering,
+} from "@stll/api-contract/chat-send-intent";
+import { booleanFromString } from "@stll/api-contract/http-input";
 
 import type { SafeDbError } from "@/api/db/safe-db";
-import { estimateChatContextPromptTokens } from "@/api/handlers/chat/chat-prompt";
+import { chatMessageFromPersisted } from "@/api/handlers/chat/chat-message-parts";
+import {
+  estimateChatContextPromptTokens,
+  estimateChatRevisionNoteTokens,
+} from "@/api/handlers/chat/chat-prompt";
+import { readChatRevisionContextChanges } from "@/api/handlers/chat/chat-revision-context";
 import {
   assertChatThreadScopeMatches,
+  chatThreadScopeMismatchError,
   resolveChatScope,
 } from "@/api/handlers/chat/chat-scope";
 import { computeThreadContextUsage } from "@/api/handlers/chat/compaction";
@@ -25,10 +41,22 @@ import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { resolveEffectiveChatModelId } from "@/api/lib/chat-model-selection";
+import { THREAD_ARTEFACT_PROVENANCE_COLUMNS } from "@/api/lib/chat/artefact-provenance";
 import { resolveChatCompactionBudget } from "@/api/lib/chat/compaction-budget";
-import { tSafeId } from "@/api/lib/custom-schema";
+import {
+  chatRunTargetOf,
+  localRunTargetField,
+  reportedLocalRunContext,
+} from "@/api/lib/chat/run-target";
+import { readChatCopyProjection } from "@/api/lib/chat/withdrawn-copies";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
+import { getDesktopRunnerControl } from "@/api/lib/desktop-runner/runtime";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { getDisabledNativeToolSlugsFromSettingsRow } from "@/api/lib/mcp-connectors/catalog-metadata";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
+import type { ManagedModelTier } from "@/api/lib/usage/managed-model-tier";
+import { readManagedModelTierOnTx } from "@/api/lib/usage/organization-access-state";
 import { resolveWebSearchProvidersFromOrgSettingsRow } from "@/api/lib/web-search/load-org-keys";
 
 /**
@@ -94,6 +122,7 @@ const resolveForkProvenance = ({
 };
 
 const config = {
+  contract: "patch",
   contentDelivery: {
     type: "none",
     reason:
@@ -117,12 +146,51 @@ const config = {
     reason: "assistant_chat",
     consumesServices: false,
   },
-  params: t.Object({ threadId: tSafeId("chatThread") }),
-  query: t.Object({
-    allowMissingThread: t.Optional(t.Boolean()),
-    workspaceId: t.Optional(tSafeId("workspace")),
+  params: v.object({ threadId: resourceIdSchema("chatThread") }),
+  query: v.object({
+    allowMissingThread: v.optional(booleanFromString()),
+    workspaceId: v.optional(resourceIdSchema("workspace")),
   }),
 } satisfies HandlerConfig;
+
+const ACTIVE_TURN_STEERING_SINK = failureSink({
+  event: "chat.active_turn_steering_read_failed",
+  expected: [],
+});
+
+/**
+ * Whether the thread's unsettled turn takes a message mid-turn, for a page
+ * opened while it runs or waits on the member; a read of the turn's run tells
+ * it again on the stream. A failed read tells `not_steerable`: a message then
+ * waits for the turn's end, and nothing the turn shows is declined.
+ */
+const readActiveTurnSteering = async ({
+  activeTurnId,
+  organizationId,
+  runTarget,
+  threadId,
+  userId,
+}: {
+  activeTurnId: SafeId<"chatTurn"> | null;
+  organizationId: SafeId<"organization">;
+  runTarget: ChatRunTarget;
+  threadId: SafeId<"chatThread">;
+  userId: SafeId<"user">;
+}): Promise<ChatTurnSteering> => {
+  // Only a turn on a computer has a run that can take a message.
+  if (activeTurnId === null || runTarget.kind !== CHAT_RUN_TARGET_KIND.local) {
+    return CHAT_TURN_STEERING.notSteerable;
+  }
+  const read = await getDesktopRunnerControl().control.readChatTurnSteering({
+    owner: { organizationId, userId },
+    chat: { threadId, turnId: activeTurnId },
+  });
+  if (Result.isError(read)) {
+    observeFailure(read.error, { sink: ACTIVE_TURN_STEERING_SINK });
+    return CHAT_TURN_STEERING.notSteerable;
+  }
+  return read.value;
+};
 
 const getMessages = createSafeRootHandler(
   config,
@@ -136,6 +204,7 @@ const getMessages = createSafeRootHandler(
     user,
   }) {
     const scope = yield* resolveChatScope({
+      admitted: "active-or-archived",
       getWorkspaceAccess,
       workspaceId,
     });
@@ -150,11 +219,15 @@ const getMessages = createSafeRootHandler(
     // next send would use.
     const buildNextSendContext = ({
       messages,
+      revisionNoteTokens = 0,
       summary,
       threadChatModel,
       webResearch,
+      modelTier,
     }: {
+      modelTier: ManagedModelTier;
       messages: readonly ChatMessage[];
+      revisionNoteTokens?: number;
       summary: {
         summarizedMessageCount: number;
         summaryMarkdown: string;
@@ -180,9 +253,11 @@ const getMessages = createSafeRootHandler(
         chatModelOverride,
         orgAIConfig,
         organizationId: session.activeOrganizationId,
+        modelTier,
       });
       return computeThreadContextUsage({
         messages,
+        conversationContextTokens: revisionNoteTokens,
         promptTokens,
         toolTokens,
         triggerTokens,
@@ -206,12 +281,14 @@ const getMessages = createSafeRootHandler(
             userId: { eq: user.id },
           },
           columns: {
+            activeSkill: true,
             workspaceId: true,
             contextMatterIds: true,
             webSearchEnabled: true,
             usedAnonymization: true,
             chatModel: true,
             chatReasoningEffort: true,
+            chatLocalRunTarget: true,
             forkedFromMessageId: true,
             parentThreadId: true,
             updatedAt: true,
@@ -249,8 +326,17 @@ const getMessages = createSafeRootHandler(
           disabledNativeToolSlugs,
         });
 
+        const modelTier = await readManagedModelTierOnTx(
+          tx,
+          session.activeOrganizationId,
+        );
+
         if (!thread) {
-          return { kind: "not-found" as const, webSearchAvailable };
+          return {
+            kind: "not-found" as const,
+            webSearchAvailable,
+            modelTier,
+          };
         }
 
         // Reject requests whose scope contradicts the persisted thread.
@@ -267,7 +353,10 @@ const getMessages = createSafeRootHandler(
             }),
           )
         ) {
-          return { kind: "scope-mismatch" as const };
+          return {
+            kind: "scope-mismatch" as const,
+            workspaceId: thread.workspaceId ?? null,
+          };
         }
 
         // The most-recent page is loaded first; older pages are fetched on
@@ -298,7 +387,14 @@ const getMessages = createSafeRootHandler(
                 id: { eq: thread.parentThreadId },
                 userId: { eq: user.id },
               },
-              columns: { id: true, title: true, workspaceId: true },
+              columns: {
+                id: true,
+                title: true,
+                titleSource: true,
+                ...THREAD_ARTEFACT_PROVENANCE_COLUMNS,
+                subjectDecisionId: true,
+                workspaceId: true,
+              },
             })
           : undefined;
 
@@ -313,16 +409,38 @@ const getMessages = createSafeRootHandler(
             checkpoint,
           }),
         );
+        const revisionChanges = unwrapTxRead(
+          await readChatRevisionContextChanges({
+            messages: windowedMessages,
+            threadId,
+            tx,
+          }),
+        );
 
+        const { projection: parentWithdrawal } = await readChatCopyProjection({
+          tx,
+          threadIds: [threadId],
+          values: parent,
+        });
+        const maskedParent =
+          parent === undefined
+            ? undefined
+            : {
+                id: parent.id,
+                title: parentWithdrawal.thread(parent).title,
+                workspaceId: parent.workspaceId,
+              };
         return {
           kind: "ok" as const,
           attachedFiles,
           webSearchAvailable,
+          modelTier,
           thread,
           page,
-          parent,
+          parent: maskedParent,
           checkpoint,
           windowedMessages,
+          revisionNoteTokens: estimateChatRevisionNoteTokens(revisionChanges),
         };
       }),
     );
@@ -330,7 +448,9 @@ const getMessages = createSafeRootHandler(
     if (reads.kind === "not-found") {
       if (allowMissingThread) {
         return Result.ok({
+          activeSkill: null,
           activeTurnId: null,
+          activeTurnSteering: CHAT_TURN_STEERING.notSteerable,
           attachedFiles: EMPTY_CHAT_THREAD_ATTACHED_FILES,
           forkProvenance: { type: "none" } as const,
           messages: [],
@@ -344,6 +464,7 @@ const getMessages = createSafeRootHandler(
           webSearchEnabled: false,
           model: null,
           reasoningEffort: null,
+          ...localRunTargetField(chatRunTargetOf(null)),
           // A not-yet-created draft still carries the cache-stable floor its
           // first send will pay. Web search is off (`webSearchEnabled: false`)
           // and the model defaults (`threadChatModel: null`) until the draft
@@ -353,6 +474,7 @@ const getMessages = createSafeRootHandler(
             summary: null,
             threadChatModel: null,
             webResearch: false,
+            modelTier: reads.modelTier,
           }),
         });
       }
@@ -367,10 +489,15 @@ const getMessages = createSafeRootHandler(
 
     if (reads.kind === "scope-mismatch") {
       return Result.err(
-        new HandlerError({
-          status: 400,
-          message: "Chat thread scope does not match request",
-        }),
+        yield* Result.await(
+          Result.tryPromise(
+            async () =>
+              await chatThreadScopeMismatchError({
+                workspaceId: reads.workspaceId,
+                getWorkspaceAccess,
+              }),
+          ),
+        ),
       );
     }
 
@@ -382,6 +509,8 @@ const getMessages = createSafeRootHandler(
       parent,
       checkpoint,
       windowedMessages,
+      modelTier,
+      revisionNoteTokens,
     } = reads;
 
     // Estimated for every thread, empty ones included: with no messages and no
@@ -391,11 +520,15 @@ const getMessages = createSafeRootHandler(
     // path applies (provider availability and the thread's opt-in), and (unlike
     // template studio) the standalone read path never carries template-authoring
     // tools. The trigger denominator resolves the same model the next send uses.
-    const context = buildNextSendContext({
-      messages: windowedMessages.map((message) => ({
-        id: message.id,
-        role: message.role,
-        parts: message.content.data,
+    const persistedMessages = windowedMessages.map((message) =>
+      chatMessageFromPersisted(message),
+    );
+    const estimate = buildNextSendContext({
+      revisionNoteTokens,
+      messages: persistedMessages.map(({ id, role, parts }) => ({
+        id,
+        role,
+        parts,
       })),
       summary: checkpoint
         ? {
@@ -405,10 +538,30 @@ const getMessages = createSafeRootHandler(
         : null,
       threadChatModel: thread.chatModel,
       webResearch: webSearchAvailable && thread.webSearchEnabled,
+      modelTier,
+    });
+    // A thread whose turns run on the member's computer shows what its
+    // harness reported: the harness manages that context, not stella.
+    const reported = reportedLocalRunContext({
+      target: chatRunTargetOf(thread.chatLocalRunTarget),
+      messages: persistedMessages,
+    });
+    const context: ThreadContextUsage =
+      reported === undefined ? estimate : { ...estimate, reported };
+
+    const activeTurnSteering = await readActiveTurnSteering({
+      activeTurnId: page.activeTurnId,
+      organizationId: session.activeOrganizationId,
+      runTarget: chatRunTargetOf(thread.chatLocalRunTarget),
+      threadId,
+      userId: user.id,
     });
 
     return Result.ok({
+      activeSkill: thread.activeSkill,
       activeTurnId: page.activeTurnId,
+      /** Whether the active turn takes a message mid-turn (`ChatTurnSteering`). */
+      activeTurnSteering,
       attachedFiles,
       forkProvenance: resolveForkProvenance({
         forkedFromMessageId: thread.forkedFromMessageId,
@@ -425,6 +578,8 @@ const getMessages = createSafeRootHandler(
       webSearchEnabled: thread.webSearchEnabled,
       model: thread.chatModel,
       reasoningEffort: thread.chatReasoningEffort,
+      // Present only for a thread whose turns run on a computer; absent is cloud.
+      ...localRunTargetField(chatRunTargetOf(thread.chatLocalRunTarget)),
       context,
     });
   },

@@ -1,76 +1,87 @@
 import { panic, Result } from "better-result";
 import { and, eq, isNull, ne } from "drizzle-orm";
-import { type Static, t } from "elysia";
+import * as v from "valibot";
 
 import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
 import type { InvoiceTotals } from "@stll/invoicing";
+import { withBillingRead } from "@stll/permissions";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDbError } from "@/api/db/safe-db";
 import { resultTx } from "@/api/db/safe-db";
 import { BILLING_STATUS, expenses, timeEntries } from "@/api/db/schema";
-import {
-  checkInvoiceLineCapacity,
-  expenseLineDraft,
-  type InvoiceLineDraft,
-  insertInvoiceLines,
-  lockDraftInvoiceForLines,
-  manualLineDraft,
-  recalculateInvoiceTotals,
-  tInvoiceLineQuantity,
-  tLineDescription,
-  tLineUnit,
-  timeEntryLineDraft,
-  tVatRateBps,
-  tVatTreatment,
-} from "@/api/handlers/invoices/invoice-lines";
 import { invoiceRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditEvent } from "@/api/lib/audit-log";
 import { UNPRICED_TIME_ENTRY_CURRENCY } from "@/api/lib/billing-constants";
 import { flatFeeInvoiceRefusal } from "@/api/lib/billing/invoice-arrangements";
+import {
+  checkInvoiceLineCapacity,
+  expenseLineDraft,
+  insertInvoiceLines,
+  type InvoiceLineDraft,
+  lockDraftInvoiceForLines,
+  manualLineDraft,
+  recalculateInvoiceTotals,
+  tExemptionReason,
+  timeEntryLineDraft,
+  tInvoiceLineQuantity,
+  tLineDescription,
+  tLineUnit,
+  tVatRateBps,
+  tVatTreatment,
+} from "@/api/lib/billing/invoice-lines";
+import { invoiceLineMoneyResponse } from "@/api/lib/billing/response-schemas";
 import { guardRunningTimeEntries } from "@/api/lib/billing/time-entry-running";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
-  tMinorUnitAmount,
-  tSafeId,
+  minorUnitAmountSchema,
+  resourceIdSchema,
   workspaceParams,
 } from "@/api/lib/custom-schema";
+import { TRANSITIONS } from "@/api/lib/db/transition-specs";
+import { transitionBatch } from "@/api/lib/db/transitions";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { cents } from "@/api/lib/money";
 import { PG_ERROR } from "@/api/lib/pg-error";
 
-const createLineBodySchema = t.Object({
-  source: t.Union([
-    t.Object({
-      type: t.Literal("manual"),
+const createLineBodySchema = v.object({
+  source: v.union([
+    v.object({
+      type: v.literal("manual"),
       description: tLineDescription,
       quantity: tInvoiceLineQuantity,
-      unit: t.Optional(t.Nullable(tLineUnit)),
-      unitPriceMinor: tMinorUnitAmount(0),
+      unit: v.optional(v.nullable(tLineUnit)),
+      unitPriceMinor: minorUnitAmountSchema(0),
     }),
-    t.Object({
-      type: t.Literal("time_entry"),
-      timeEntryId: tSafeId("timeEntry"),
-      description: t.Optional(tLineDescription),
+    v.object({
+      type: v.literal("time_entry"),
+      timeEntryId: resourceIdSchema("timeEntry"),
+      description: v.optional(tLineDescription),
     }),
-    t.Object({
-      type: t.Literal("expense"),
-      expenseId: tSafeId("expense"),
-      description: t.Optional(tLineDescription),
+    v.object({
+      type: v.literal("expense"),
+      expenseId: resourceIdSchema("expense"),
+      description: v.optional(tLineDescription),
     }),
   ]),
   vatRateBps: tVatRateBps,
   vatTreatment: tVatTreatment,
+  exemptionReason: v.optional(tExemptionReason),
 });
 
 const prepareLineInput = ({
   source,
   vatRateBps,
   vatTreatment,
-}: Static<typeof createLineBodySchema>) => {
-  const vat = { vatRateBps, vatTreatment };
+  exemptionReason,
+}: v.InferOutput<typeof createLineBodySchema>) => {
+  const vat = {
+    vatRateBps,
+    vatTreatment,
+    exemptionReason: exemptionReason ?? null,
+  };
   if (source.type !== "manual") {
     return Result.ok({ manualDraft: null, vat });
   }
@@ -83,7 +94,9 @@ const prepareLineInput = ({
   }).map((manualDraft) => ({ manualDraft, vat }));
 };
 
-const lineParamsSchema = workspaceParams({ invoiceId: tSafeId("invoice") });
+const lineParamsSchema = workspaceParams({
+  invoiceId: resourceIdSchema("invoice"),
+});
 
 type CreatedLine = { id: SafeId<"invoiceLine">; totals: InvoiceTotals };
 
@@ -96,8 +109,11 @@ const lineCreationError = (error: HandlerError | SafeDbError) =>
     : error;
 
 type ReadInvoiceLineDraftOptions = {
-  source: Static<typeof createLineBodySchema>["source"];
-  vat: Pick<InvoiceLineDraft, "vatRateBps" | "vatTreatment">;
+  source: v.InferOutput<typeof createLineBodySchema>["source"];
+  vat: Pick<
+    InvoiceLineDraft,
+    "vatRateBps" | "vatTreatment" | "exemptionReason"
+  >;
   manualDraft: InvoiceLineDraft | null;
   workspaceId: SafeId<"workspace">;
   currency: string;
@@ -177,15 +193,20 @@ const readInvoiceLineDraft = async (
 
 const createInvoiceLine = createSafeHandler(
   {
+    moneyResponse: invoiceLineMoneyResponse,
+    contract: "patch",
+    idempotency: { type: "replay" },
     description:
       "Add one line to a draft invoice and recompute its totals. The source " +
       "is a manual line (description, decimal quantity, optional unit, unit " +
       "price in minor units), an approved unbilled time entry, or an " +
       "approved unbilled expense; an entry line takes its amount from the " +
       "entry and marks the entry billed. Every line carries a VAT rate in " +
-      "basis points and a VAT treatment. Only draft invoices accept lines.",
-    permissions: { invoice: ["update"] },
+      "basis points and a VAT treatment. Only never-issued drafts accept lines; " +
+      "issued invoices require a credit note even after reverting to draft.",
+    permissions: withBillingRead({ invoice: ["update"] }),
     accountAccess: ACCOUNT_ACCESS.sandbox,
+    featureAccess: { featureId: "time-billing", type: "required" },
     realtime: invoiceRealtimeUpdates,
     mcp: {
       type: "capability",
@@ -210,25 +231,29 @@ const createInvoiceLine = createSafeHandler(
     const txResult = await resultTx(
       safeDb,
       async (tx): Promise<Result<CreatedLine, HandlerError>> => {
-        const runningError = await guardRunningTimeEntries({
+        const running = await guardRunningTimeEntries({
           tx,
+          organizationId: session.activeOrganizationId,
           workspaceId,
           actorUserId: user.id,
           selection: {
-            type: "entries",
-            ids:
+            type: "invoice",
+            runningCheck: "additional",
+            invoiceId: params.invoiceId,
+            additionalIds:
               body.source.type === "time_entry"
                 ? [body.source.timeEntryId]
                 : [],
           },
         });
-        if (runningError) {
-          return Result.err(runningError);
+        if (running.isErr()) {
+          return Result.err(running.error);
         }
         const invoiceResult = await lockDraftInvoiceForLines(
           tx,
           {
             invoiceId: params.invoiceId,
+            matterLocks: running.value,
             organizationId: session.activeOrganizationId,
             workspaceId,
           },
@@ -295,65 +320,96 @@ const createInvoiceLine = createSafeHandler(
           status: { old: BILLING_STATUS.APPROVED, new: BILLING_STATUS.BILLED },
           invoiceId: { old: null, new: params.invoiceId },
         };
-        if (draft.timeEntryId !== null) {
-          await tx
-            .update(timeEntries)
-            .set(billed)
-            .where(
+        const completeLine = async (): Promise<
+          Result<CreatedLine, HandlerError>
+        > => {
+          if (draft.expenseId !== null) {
+            await tx
+              .update(expenses)
+              .set(billed)
+              .where(
+                and(
+                  eq(expenses.id, draft.expenseId),
+                  eq(expenses.workspaceId, workspaceId),
+                ),
+              );
+            events.push({
+              action: AUDIT_ACTION.UPDATE,
+              resourceType: AUDIT_RESOURCE_TYPE.EXPENSE,
+              resourceId: draft.expenseId,
+              changes: billedChanges,
+            });
+          }
+
+          const scope = { invoiceId: params.invoiceId, workspaceId };
+          // The line and the new totals record their own invoice events.
+          const inserted = await insertInvoiceLines(
+            tx,
+            { ...scope, organizationId: session.activeOrganizationId },
+            [draft],
+            { recordAuditEvent },
+          );
+          if (inserted.isErr()) {
+            return Result.err(inserted.error);
+          }
+          const lineId =
+            inserted.value.at(0)?.id ??
+            panic("Invoice line insert returned no row");
+          const totals = await recalculateInvoiceTotals(
+            tx,
+            scope,
+            now,
+            recordAuditEvent,
+          );
+
+          if (totals.isErr()) {
+            return Result.err(totals.error);
+          }
+
+          await recordAuditEvent(tx, events);
+
+          return Result.ok({ id: lineId, totals: totals.value });
+        };
+        if (draft.timeEntryId === null) {
+          return completeLine();
+        }
+
+        events.push({
+          action: AUDIT_ACTION.UPDATE,
+          resourceType: AUDIT_RESOURCE_TYPE.TIME_ENTRY,
+          resourceId: draft.timeEntryId,
+          changes: billedChanges,
+        });
+        const completion: { result: Result<CreatedLine, HandlerError> | null } =
+          {
+            result: null,
+          };
+        await transitionBatch({
+          tx,
+          spec: TRANSITIONS.timeEntries,
+          ids: [draft.timeEntryId],
+          options: {
+            from: [BILLING_STATUS.APPROVED],
+            to: BILLING_STATUS.BILLED,
+            guard:
               and(
                 eq(timeEntries.id, draft.timeEntryId),
                 eq(timeEntries.workspaceId, workspaceId),
                 eq(timeEntries.activityGroup, TIME_ENTRY_ACTIVITY_GROUP.CLIENT),
-              ),
-            );
-          events.push({
-            action: AUDIT_ACTION.UPDATE,
-            resourceType: AUDIT_RESOURCE_TYPE.TIME_ENTRY,
-            resourceId: draft.timeEntryId,
-            changes: billedChanges,
-          });
-        }
-        if (draft.expenseId !== null) {
-          await tx
-            .update(expenses)
-            .set(billed)
-            .where(
-              and(
-                eq(expenses.id, draft.expenseId),
-                eq(expenses.workspaceId, workspaceId),
-              ),
-            );
-          events.push({
-            action: AUDIT_ACTION.UPDATE,
-            resourceType: AUDIT_RESOURCE_TYPE.EXPENSE,
-            resourceId: draft.expenseId,
-            changes: billedChanges,
-          });
-        }
-
-        const scope = { invoiceId: params.invoiceId, workspaceId };
-        // The line and the new totals record their own invoice events.
-        const [line] = await insertInvoiceLines(
-          tx,
-          { ...scope, organizationId: session.activeOrganizationId },
-          [draft],
-          { recordAuditEvent },
+              ) ?? panic("The invoice entry claim has no guard"),
+            set: { invoiceId: params.invoiceId, updatedAt: now },
+          },
+          recordTransitionAuditEvent: async (_tx, changed) => {
+            if (changed.length !== 1) {
+              panic("The locked invoice entry claim returned no row");
+            }
+            completion.result = await completeLine();
+          },
+        });
+        return (
+          completion.result ??
+          panic("The locked invoice entry claim returned no row")
         );
-        const lineId = line?.id ?? panic("Invoice line insert returned no row");
-        const totals = await recalculateInvoiceTotals(
-          tx,
-          scope,
-          now,
-          recordAuditEvent,
-        );
-
-        if (totals.isErr()) {
-          return Result.err(totals.error);
-        }
-
-        await recordAuditEvent(tx, events);
-
-        return Result.ok({ id: lineId, totals: totals.value });
       },
     );
 

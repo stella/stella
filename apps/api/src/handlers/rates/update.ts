@@ -1,30 +1,33 @@
 import { Result } from "better-result";
 import { and, eq, ne, sql } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
+import { currencyCodeSchema } from "@stll/api-contract/currency-code";
 import { currencyMinorUnitDigits } from "@stll/money";
 
 import { rateEntries, rateTables } from "@/api/db/schema";
 import { rateRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
-import {
-  tCurrencyCode,
-  tDefaultVarchar,
-  tSafeId,
-} from "@/api/lib/custom-schema";
+import { displayNameSchema, resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { pickDefined } from "@/api/lib/pick-defined";
 
-const updateRateTableBodySchema = t.Object({
-  id: tSafeId("rateTable"),
-  name: t.Optional(tDefaultVarchar),
-  currency: t.Optional(tCurrencyCode),
-  isDefault: t.Optional(t.Boolean()),
+import {
+  lockLegacyRateEntryTable,
+  lockRateTableWorkspace,
+} from "./rate-table-lock";
+
+const updateRateTableBodySchema = v.object({
+  id: resourceIdSchema("rateTable"),
+  name: v.optional(displayNameSchema()),
+  currency: v.optional(currencyCodeSchema),
+  isDefault: v.optional(v.boolean()),
 });
 
 const updateRateTable = createSafeHandler(
   {
+    contract: "patch",
     description:
       "Rename a rate table, change its currency, or make it the matter's " +
       "default, which clears the flag on the previous default. Unsetting the " +
@@ -34,6 +37,7 @@ const updateRateTable = createSafeHandler(
       "recorded on time entries are not rewritten.",
     permissions: { rate: ["update"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
+    featureAccess: { featureId: "time-billing", type: "required" },
     realtime: rateRealtimeUpdates,
     mcp: {
       type: "capability",
@@ -71,9 +75,9 @@ const updateRateTable = createSafeHandler(
 
     const outcome = yield* Result.await(
       safeDb(async (tx) => {
-        await tx.execute(
-          sql`SELECT pg_advisory_xact_lock(hashtext(${workspaceId}))`,
-        );
+        await lockRateTableWorkspace(tx, workspaceId);
+        // Previous builds create and move entries under this lock alone.
+        await lockLegacyRateEntryTable(tx, body.id);
         // The currency the rates are currently stored in, read under a row
         // lock BEFORE anything is written. The `existing` read above happened
         // outside this transaction, so a currency change that landed in
@@ -92,8 +96,7 @@ const updateRateTable = createSafeHandler(
               eq(rateTables.id, body.id),
               eq(rateTables.workspaceId, workspaceId),
             ),
-          )
-          .for("update");
+          );
         const locked = lockedRows.at(0);
         if (!locked) {
           return { status: "rate-not-found" as const };

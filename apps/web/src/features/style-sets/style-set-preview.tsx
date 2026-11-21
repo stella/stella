@@ -10,8 +10,8 @@ import "@stll/folio-react/editor.css";
 import { DocxLoadingShell } from "@/components/docx/docx-loading-shell";
 import type { StyleSetEditorSettings } from "@/features/style-sets/style-set-editor-types";
 import {
-  styleSetPreviewOptions,
   type StyleSetPreviewContent,
+  styleSetPreviewOptions,
   type StyleSetPreviewSource,
 } from "@/features/style-sets/style-set-queries";
 
@@ -74,6 +74,7 @@ export const StyleSetPreview = ({
     previewResult = (
       <Suspense fallback={<DocxLoadingShell />}>
         <DocxEditor
+          accessibleName={t("styleSets.editor.previewDocument")}
           autoOpenReviewSidebar={false}
           className="folio-docx-preview h-full"
           documentBuffer={preview.data}

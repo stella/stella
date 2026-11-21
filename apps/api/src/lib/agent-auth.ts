@@ -1,6 +1,10 @@
 import { panic, Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 
+import {
+  sha256Base64Url as hashSha256Base64Url,
+  sha256Hex as hashSha256Hex,
+} from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
 import {
@@ -28,14 +32,18 @@ import { env } from "@/api/env";
 import { getAuth } from "@/api/lib/auth";
 import { sessionCookieName } from "@/api/lib/auth/auth-cookie-name";
 import {
+  getAgentRedirectUri,
   getAuthEndpointUrl,
-  getAuthIssuerUrl,
 } from "@/api/lib/auth/auth-paths";
 import { reserveRegistration } from "@/api/lib/auth/registration-budget";
+import { createSignedSessionCookieValue } from "@/api/lib/auth/signed-session-cookie";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { readAccountEmail } from "@/api/lib/db/account-row";
+import { normalizeEmail } from "@/api/lib/email/normalized-email";
+import type { NormalizedEmail } from "@/api/lib/email/normalized-email";
 import type { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { getBetterAuthOAuthResources } from "@/api/lib/oauth-resource-policy";
+import { requireSessionCredentialIssuer } from "@/api/lib/synthetic-principal/credential-policy";
 import { getMcpResourceUrl } from "@/api/mcp/constants";
 import type { McpMode } from "@/api/mcp/constants";
 
@@ -47,31 +55,20 @@ import type { McpMode } from "@/api/mcp/constants";
  * better-auth's exact redirect-uri match at authorize and token time, so
  * it points at an internal, handler-less path under our own origin.
  */
-const AGENT_REDIRECT_URI =
-  `${getAuthIssuerUrl()}/agent/internal/code-sink` as const;
+const AGENT_REDIRECT_URI = getAgentRedirectUri();
 
 /** How long an unconsumed claim token / registration row stays valid. */
 const REGISTRATION_TTL_MS = AGENT_AUTH_CEREMONY_TTL_SECONDS * 1000;
 
-const sha256Hex = (value: string): string =>
-  new Bun.CryptoHasher("sha256").update(value).digest("hex");
-
-/**
- * better-auth's default `storeClientSecret: "hashed"` form: SHA-256 of
- * the secret, base64url without padding. Reproduced here so we can mint
- * a confidential agent client by inserting the row directly (the admin
- * create-client endpoint requires an interactive session we do not have
- * at registration time). Kept in lockstep with `defaultHasher` in
- * `@better-auth/oauth-provider`.
- */
+/** better-auth stores confidential client secrets as unpadded SHA-256 base64url. */
 const hashClientSecret = (secret: string): string =>
-  new Bun.CryptoHasher("sha256").update(secret).digest("base64url");
+  hashSha256Base64Url(secret);
 
 export const generateOpaqueToken = (): string =>
   Bun.randomUUIDv7().replaceAll("-", "") +
   Bun.randomUUIDv7().replaceAll("-", "");
 
-export const hashClaimToken = (token: string): string => sha256Hex(token);
+export const hashClaimToken = (token: string): string => hashSha256Hex(token);
 
 const getResourceModeForType = (
   registrationType: AgentRegistrationType,
@@ -194,9 +191,7 @@ export type TokenResponseShape = {
   scope: string;
 };
 
-export const isTokenResponse = (
-  value: unknown,
-): value is TokenResponseShape => {
+const isTokenResponse = (value: unknown): value is TokenResponseShape => {
   if (typeof value !== "object" || value === null) {
     return false;
   }
@@ -210,7 +205,7 @@ export const isTokenResponse = (
   );
 };
 
-export const reshapeTokenResponse = (
+const reshapeTokenResponse = (
   value: TokenResponseShape,
 ): TokenResponseShape => ({
   access_token: value.access_token,
@@ -219,8 +214,22 @@ export const reshapeTokenResponse = (
   scope: value.scope,
 });
 
-/** The redirect URI every agent client is bound to (never navigated to). */
-export const getAgentRedirectUri = (): string => AGENT_REDIRECT_URI;
+export type AgentTokenErrorCode =
+  | "authorization_pending"
+  | "slow_down"
+  | "expired_token"
+  | "access_denied"
+  | "invalid_grant"
+  | "token_mint_failed";
+
+export class AgentTokenError extends Error {
+  readonly code: AgentTokenErrorCode;
+  constructor(code: AgentTokenErrorCode) {
+    super(code);
+    this.code = code;
+    this.name = "AgentTokenError";
+  }
+}
 
 /**
  * Exchange a stored authorization code for an MCP-audience JWT using the
@@ -289,23 +298,6 @@ const mintAnonymousToken = async (
   }
   return Result.ok(reshapeTokenResponse(result.value));
 };
-
-export type AgentTokenErrorCode =
-  | "authorization_pending"
-  | "slow_down"
-  | "expired_token"
-  | "access_denied"
-  | "invalid_grant"
-  | "token_mint_failed";
-
-export class AgentTokenError extends Error {
-  readonly code: AgentTokenErrorCode;
-  constructor(code: AgentTokenErrorCode) {
-    super(code);
-    this.code = code;
-    this.name = "AgentTokenError";
-  }
-}
 
 export type ServiceAuthCeremony = {
   registrationId: string;
@@ -553,7 +545,9 @@ const confirmerEmailMatchesHint = async (
   loginHint: string,
 ): Promise<boolean> => {
   const email = await readAccountEmail(userId);
-  return email !== undefined && email.toLowerCase() === loginHint.toLowerCase();
+  return (
+    email !== undefined && normalizeEmail(email) === normalizeEmail(loginHint)
+  );
 };
 
 export class AuthorizeCodeError extends Error {
@@ -580,6 +574,7 @@ export const mintInternalSessionCookieHeader = async ({
   userId: SafeId<"user">;
   organizationId: SafeId<"organization">;
 }): Promise<string> => {
+  requireSessionCredentialIssuer("agentDelegation", { userId, organizationId });
   const now = new Date();
   const token = `${Bun.randomUUIDv7()}${Bun.randomUUIDv7()}`.replaceAll(
     "-",
@@ -598,11 +593,10 @@ export const mintInternalSessionCookieHeader = async ({
     userAgent: "stella-agent-auth/id-jag",
   });
 
-  const signature = new Bun.CryptoHasher("sha256", env.BETTER_AUTH_SECRET)
-    .update(token)
-    .digest("base64");
-
-  return `${getSessionCookieName()}=${token}.${signature}`;
+  return `${getSessionCookieName()}=${createSignedSessionCookieValue(
+    token,
+    env.BETTER_AUTH_SECRET,
+  )}`;
 };
 
 /**
@@ -880,7 +874,7 @@ export const startAnonymousUpgrade = async ({
   email,
 }: {
   claimToken: string;
-  email: string;
+  email: NormalizedEmail;
 }): Promise<Result<ServiceAuthCeremony, AgentTokenError | HandlerError>> => {
   const tokenHash = hashClaimToken(claimToken);
   const rows = await rootDb

@@ -1,3 +1,8 @@
+import { panic, Result } from "better-result";
+
+import { backoffDelay } from "@stll/concurrency/backoff-delay";
+import { handlerErrorContext } from "@stll/errors/exception-context";
+import { withExceptionScope } from "@stll/errors/exception-scope-context";
 /**
  * Continuous case law ingestion daemon.
  *
@@ -16,19 +21,16 @@
  * Without arguments, runs all sources in independent loops.
  * With an adapter key, runs only that source once and exits.
  */
-
-import { panic, Result } from "better-result";
-
 import {
   DOCUMENT_FETCH_EVENT,
   documentFetchErrorOutcome,
   type DocumentStageObservation,
 } from "@stll/legal-atlas/document-fetch-diagnostics";
 import { observeDocumentStageSafely } from "@stll/legal-atlas/document-stage-observer";
-import type { IngestionStopKind } from "@stll/legal-atlas/ingestion-cycle";
+import { CYCLE_OUTCOME } from "@stll/legal-atlas/ingestion-cycle";
 import { Temporal } from "@stll/time";
 
-import { SOURCE_TOTAL_ORIGIN, caseLawIngestionEvents } from "@/api/db/schema";
+import { caseLawIngestionEvents, SOURCE_TOTAL_ORIGIN } from "@/api/db/schema";
 import { corpusStorageMode } from "@/api/env-base";
 import {
   hasResolvedCitations,
@@ -37,7 +39,7 @@ import {
 } from "@/api/handlers/case-law/citation-authority";
 import {
   countPendingCitations,
-  tryResolveCitationBatch,
+  tryResolveCitationBatch as tryResolveCitationBatchInTransaction,
 } from "@/api/handlers/case-law/citation-resolution";
 import {
   ADAPTER_KEYS,
@@ -47,7 +49,8 @@ import {
 import {
   getAdapter,
   listAdapters,
-  skCourtsDocumentFetch,
+  listDeferredDocumentDrains,
+  startDocumentFetchBudget,
 } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
 import { runIngestionPipeline } from "@/api/handlers/case-law/ingestion/pipeline";
 import type { SliceRetrySchedule } from "@/api/handlers/case-law/ingestion/reconciliation-engine";
@@ -70,10 +73,8 @@ import {
 } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { backfillSearchIndex } from "@/api/lib/legal-search/case-law-search-index";
-import { acquireCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
+import { withCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import {
-  DOCUMENT_FETCH_BUDGET_MS,
-  fetchDecisionDocument,
   hasPendingDeferredDocuments,
   scopedPendingDocumentTierLoaders,
 } from "@/api/lib/legal-search/sk-document-backfill";
@@ -104,39 +105,38 @@ import {
   CITATION_RESOLUTION_STEP,
   type CitationResolutionStep,
   runCitationResolutionDrain,
+  tryResolveCitationBatch,
 } from "./citation-resolution-drain";
 import { executeIngestionCycle } from "./cycle-execution";
 import {
+  type CadenceStreaks,
   CYCLE_CADENCE,
   CYCLE_CADENCE_DELAY_MS,
-  CYCLE_OUTCOME,
-  type CadenceStreaks,
   type CycleCadence,
+  cycleMadeProgress,
   type CycleResult,
   INITIAL_CADENCE_STREAKS,
-  INITIAL_STALL_ALERT,
-  type StallAlertState,
-  cycleMadeProgress,
   stepCadence,
-  stepAdapterCycleHealth,
 } from "./cycle-progress";
 import {
-  createIngestionHealthRefresh,
-  ingestionHealthRecord,
-} from "./ingestion-health";
+  createIngestionAlertHealth,
+  SOURCE_UNAVAILABLE_AFTER_MS,
+} from "./ingestion-alert-health";
+import { createIngestionHealthRefresh } from "./ingestion-health";
 import { formatLogDetail } from "./log-detail";
 import {
+  nextRecomputeDelayMs,
   RECOMPUTE_OUTCOME,
   type RecomputeOutcome,
-  nextRecomputeDelayMs,
 } from "./recompute-schedule";
+import { createSettlingDeadlineSignal } from "./settling-deadline";
 import {
-  SK_DOCUMENT_DRAIN_TIMING,
-  runSkDocumentDrain,
+  DEFERRED_DOCUMENT_DRAIN_TIMING,
+  runDeferredDocumentDrain,
 } from "./sk-document-drain";
 import {
-  SOURCE_TOTAL_POLL_TIMING,
   runSourceTotalPoll,
+  SOURCE_TOTAL_POLL_TIMING,
 } from "./source-total-poll";
 import { isTransientConnectionError } from "./transient-connection-error";
 
@@ -227,12 +227,12 @@ const SEARCH_INDEX_INTERVAL_MS = 10_000;
 const SEARCH_INDEX_IDLE_MAX_MS = 15 * 60_000;
 const SEARCH_INDEX_BATCH_SIZE = 20;
 const SEARCH_INDEX_DRAIN_CONCURRENCY = 4;
-// Deferred Slovak documents. The page size is how many rows one tier query
+// Deferred documents. The page size is how many rows one tier query
 // reads ahead of the walk, and the probe interval is the longest a decision
 // a reader asked for waits behind the bulk tier. Neither touches throughput:
 // that is the fetch gap and nothing else.
-const SK_DOCUMENT_PAGE_SIZE = 20;
-const SK_DOCUMENT_REQUESTED_POLL_INTERVAL_MS = 5000;
+const DEFERRED_DOCUMENT_PAGE_SIZE = 20;
+const DEFERRED_DOCUMENT_REQUESTED_POLL_INTERVAL_MS = 5000;
 // Citation authority decays slowly; a pass over the corpus every interval
 // keeps the materialized ranking signal fresh without per-cycle cost. The
 // pass's position is persisted, so a process whose lifetime is shorter than a
@@ -337,6 +337,7 @@ const RECONCILIATION_HARD_DEADLINE_MS =
   RECONCILIATION_LISTING_WORST_CASE_MS +
   RECONCILIATION_INGEST_BUDGET_MS +
   RECONCILIATION_UNIT_SETTLE_MS;
+const RECONCILIATION_ABORT_SETTLE_MARGIN_MS = RECONCILIATION_UNIT_SETTLE_MS;
 
 type Semaphore = {
   acquire: (signal?: AbortSignal) => Promise<void>;
@@ -408,8 +409,7 @@ const MAX_CONCURRENT_DB_WRITES = Math.max(
 const dbWriteSemaphore = createSemaphore("DB slot", MAX_CONCURRENT_DB_WRITES);
 
 let storedTotalMaintenance:
-  | ReturnType<typeof createSourceStoredTotalMaintenanceRuntime>
-  | undefined;
+  ReturnType<typeof createSourceStoredTotalMaintenanceRuntime> | undefined;
 const getStoredTotalMaintenance = () => {
   storedTotalMaintenance ??=
     createSourceStoredTotalMaintenanceRuntime(ingestionDb);
@@ -449,8 +449,11 @@ const inFlightCycles = new Set<string>();
  */
 const cyclesSinceWatchdogTick = new Set<string>();
 
-/** Sources whose current no-progress episode reached the alert threshold. */
-const stalledAdapters = new Map<AdapterKey, IngestionStopKind>();
+const alertHealth = createIngestionAlertHealth({
+  now: () => performance.now(),
+  stallThreshold: SUSTAINED_FAILURE_THRESHOLD,
+  sourceUnavailableAfterMs: SOURCE_UNAVAILABLE_AFTER_MS,
+});
 
 const writeHeartbeat = () => {
   void Bun.write(
@@ -507,11 +510,10 @@ let pagesSinceStart = 0;
 const logHeartbeat = (): void => {
   logInfo(
     JSON.stringify(
-      ingestionHealthRecord({
+      alertHealth.record({
         uptimeSec: Math.round(process.uptime()),
         pagesSinceStart,
         activeCycles: inFlightCycles.size,
-        stalledAdapters,
       }),
     ),
   );
@@ -678,61 +680,57 @@ const runOneCycle = async (
     adapterKey === ADAPTER_KEYS.CZ_REGIONAL ? daysAgoCursor(7) : null;
 
   const configuredSource = await ensureSource(adapterKey, name, initialCursor);
-  const sourceLease = await acquireCaseLawSourceIngestionLease({
-    scopedDb: ingestionDb,
-    sourceId: configuredSource.id,
-  });
-  if (!sourceLease) {
+  // The owner releases the lease in its own `finally`, whatever the cycle
+  // does; a failed release fails the cycle rather than leave the source
+  // leased unnoticed until the lease expires.
+  const leased = await withCaseLawSourceIngestionLease(
+    { scopedDb: ingestionDb, sourceId: configuredSource.id },
+    async (sourceLease) => {
+      const { source } = sourceLease;
+      const cursorBefore = source.syncCursor;
+
+      logInfo(`[${adapterKey}] Ingesting (cursor: ${cursorBefore ?? "start"})`);
+
+      const startedAt = new Date();
+      const t0 = performance.now();
+      const adapter = getAdapter(adapterKey);
+      const execution = await executeIngestionCycle({
+        cursorBefore,
+        describeFailure: (error) => ({
+          stopKind: ingestionStopKindOf(error),
+          message: `[${errorTag(error)}] ${error instanceof Error ? error.message : String(error)}`,
+        }),
+        recordPages: (pages) => {
+          pagesSinceStart += pages;
+        },
+        runPipeline: async () =>
+          await runIngestionPipeline({
+            source,
+            sourceLease,
+            scopedDb: ingestionDb,
+            acquireStoredTotalAdmission:
+              getStoredTotalMaintenance().acquireAdmission,
+            dbSlot: dbWriteSemaphore,
+            cycle: {
+              budgetMs: adapter?.maxCycleMs ?? MAX_CYCLE_MS,
+              abortEarlyOn: [drainController.signal],
+            },
+            ...(bounds.maxPages !== undefined && { maxPages: bounds.maxPages }),
+            ...(bounds.maxDecisions !== undefined && {
+              maxDecisions: bounds.maxDecisions,
+            }),
+          }),
+      });
+      return { source, cursorBefore, startedAt, t0, execution };
+    },
+  );
+  if (leased === null) {
     logInfo(`[${adapterKey}] Source is leased by another ingestion worker`);
     return {
       type: "lease_busy",
     };
   }
-  const { source } = sourceLease;
-  const cursorBefore = source.syncCursor;
-
-  logInfo(`[${adapterKey}] Ingesting (cursor: ${cursorBefore ?? "start"})`);
-
-  const startedAt = new Date();
-  const t0 = performance.now();
-
-  let execution: Awaited<ReturnType<typeof executeIngestionCycle>>;
-  try {
-    const adapter = getAdapter(adapterKey);
-    execution = await executeIngestionCycle({
-      cursorBefore,
-      describeFailure: (error) => ({
-        stopKind: ingestionStopKindOf(error),
-        message: `[${errorTag(error)}] ${error instanceof Error ? error.message : String(error)}`,
-      }),
-      recordPages: (pages) => {
-        pagesSinceStart += pages;
-      },
-      runPipeline: async () =>
-        await runIngestionPipeline({
-          source,
-          sourceLease,
-          scopedDb: ingestionDb,
-          acquireStoredTotalAdmission:
-            getStoredTotalMaintenance().acquireAdmission,
-          dbSlot: dbWriteSemaphore,
-          cycle: {
-            budgetMs: adapter?.maxCycleMs ?? MAX_CYCLE_MS,
-            abortEarlyOn: [drainController.signal],
-          },
-          ...(bounds.maxPages !== undefined && { maxPages: bounds.maxPages }),
-          ...(bounds.maxDecisions !== undefined && {
-            maxDecisions: bounds.maxDecisions,
-          }),
-        }),
-    });
-  } finally {
-    try {
-      await sourceLease.release();
-    } catch (error) {
-      logError(`[${adapterKey}] Failed to release source lease:`, error);
-    }
-  }
+  const { source, cursorBefore, startedAt, t0, execution } = leased;
 
   if (drainController.signal.aborted) {
     return { type: "drained" };
@@ -743,15 +741,13 @@ const runOneCycle = async (
   const durationMs = Math.round(performance.now() - t0);
   const cursorAfter = result !== null ? result.nextCursor : cursorBefore;
 
-  // DB status column only supports "completed" | "failed";
-  // timeouts are recorded as "completed" (progress was made).
-  const dbStatus = outcome === CYCLE_OUTCOME.FAILED ? "failed" : "completed";
-
   try {
     await ingestionDb(async (tx) => {
       await tx.insert(caseLawIngestionEvents).values({
         sourceId: source.id,
-        status: dbStatus,
+        status: outcome,
+        pauseReason:
+          cycle.outcome === CYCLE_OUTCOME.PAUSED ? cycle.pauseReason : null,
         inserted: result?.inserted ?? 0,
         skipped: result?.skipped ?? 0,
         searchVectorFailures: result?.searchVectorFailures ?? 0,
@@ -774,6 +770,11 @@ const runOneCycle = async (
         `Pages: ${result?.pagesProcessed ?? 0}, ` +
         `Duration: ${durationMs}ms`,
     );
+  } else if (cycle.outcome === CYCLE_OUTCOME.PAUSED) {
+    logInfo(
+      `[${adapterKey}] Paused: ${cycle.pauseReason} ` +
+        `(inserted: ${cycle.inserted}, pages: ${cycle.pagesProcessed})`,
+    );
   } else if (outcome === CYCLE_OUTCOME.TIMEOUT) {
     logInfo(
       `[${adapterKey}] Timed out after ${durationMs}ms ` +
@@ -791,158 +792,161 @@ const runOneCycle = async (
  * catching all errors so it never crashes.
  */
 
-const runAdapterLoop = async ({ adapterKey, name }: SourceDef) => {
-  /** Stall streak plus the once-per-episode capture latch; see cycle-progress. */
-  let stallAlert: StallAlertState = INITIAL_STALL_ALERT;
-  /** Separate counter for backoff; not reset by the alert threshold. */
-  let backoffFailures = 0;
-  /** Quiet and unproductive streaks; drive the inter-cycle delay. */
-  let streaks: CadenceStreaks = INITIAL_CADENCE_STREAKS;
-  let cadence: CycleCadence = CYCLE_CADENCE.FAST;
+const runAdapterLoop = async ({ adapterKey, name }: SourceDef) =>
+  await withExceptionScope({ type: "ingestion", adapterKey }, async () => {
+    /** Separate counter for backoff; not reset by the alert threshold. */
+    let backoffFailures = 0;
+    /** Quiet and unproductive streaks; drive the inter-cycle delay. */
+    let streaks: CadenceStreaks = INITIAL_CADENCE_STREAKS;
+    let cadence: CycleCadence = CYCLE_CADENCE.FAST;
 
-  while (true) {
-    if (isDraining()) {
-      return;
-    }
-    let leaseBusy = false;
-    /** Null when the cycle never ran (lease busy), so it folds no evidence. */
-    let finishedCycle: CycleResult | null = null;
-    try {
-      // Bound concurrent cycles: the fetch/enrich/parse phase runs outside
-      // the DB-write slot, so without this every source crawls its backlog
-      // at once and saturates the worker. Held only for the cycle and
-      // released before the inter-cycle delay, so idle adapters free the slot.
-      await cycleSemaphore.acquire();
-      // A loop that queued on acquire() passed the drain check before the
-      // signal arrived; hand the slot back instead of starting a new cycle.
+    while (true) {
       if (isDraining()) {
-        cycleSemaphore.release();
         return;
       }
-      let attempt: CycleAttempt;
-      // Hard wall-clock backstop on the held slot. runOneCycle has awaits that
-      // ignore the per-cycle abort signal (the source lookup before it is
-      // created, the event write after the pipeline); if one wedges on a
-      // broken connection the cycle never returns and the slot parks every
-      // other adapter. The lag watchdog can't see an I/O-wait hang (the loop
-      // stays responsive), so bound it here: if a cycle outlives the ceiling,
-      // exit so ECS relaunches a healthy task.
-      inFlightCycles.add(adapterKey);
-      cyclesSinceWatchdogTick.add(adapterKey);
+      let leaseBusy = false;
+      /** Null when the cycle never ran (lease busy), so it folds no evidence. */
+      let finishedCycle: CycleResult | null = null;
       try {
-        attempt = await runWithHardDeadline(
-          adapterKey,
-          CYCLE_HARD_DEADLINE_MS,
-          async () => await runOneCycle(adapterKey, name),
-        );
-      } finally {
-        inFlightCycles.delete(adapterKey);
-        cycleSemaphore.release();
-      }
-      if (attempt.type === "lease_busy") {
-        // Another healthy task owns this source during a rolling handoff.
-        // This is neither source progress nor a failure; retry promptly without
-        // mutating the source's accumulated health or cadence evidence.
-        leaseBusy = true;
-      } else if (attempt.type === "drained") {
-        return;
-      } else {
-        const { cycle } = attempt;
-        const { outcome } = cycle;
-
-        // A stall is a cycle that advanced no page, whatever its outcome; a halt
-        // or a timeout that still walked pages moved the cursor.
-        const madeProgress = cycleMadeProgress(cycle);
-        finishedCycle = cycle;
-
-        if (outcome === CYCLE_OUTCOME.FAILED && !madeProgress) {
-          backoffFailures++;
-        } else {
-          backoffFailures = 0;
-          // How the cycle ended does not decide the cadence; what it wrote
-          // does. An adapter whose page budget outlasts its cycle deadline
-          // times out every cycle, so keying the cadence on a clean outcome
-          // pinned a source re-fetching its stored corpus to the fast cadence
-          // forever, holding a cycle slot against sources with work.
-          const step = stepCadence(streaks, cycle);
-          streaks = step.streaks;
-          if (step.cadence !== cadence) {
-            cadence = step.cadence;
-            logInfo(`[${adapterKey}] ${CADENCE_ENTRY_MESSAGE[cadence]}`);
-          }
-          if (step.unproductiveRescan) {
-            logger.error("case_law.ingestion.unproductive_rescan", {
-              adapterKey,
-              ...step.unproductiveRescan,
-            });
-          }
+        // Bound concurrent cycles: the fetch/enrich/parse phase runs outside
+        // the DB-write slot, so without this every source crawls its backlog
+        // at once and saturates the worker. Held only for the cycle and
+        // released before the inter-cycle delay, so idle adapters free the slot.
+        await cycleSemaphore.acquire();
+        // A loop that queued on acquire() passed the drain check before the
+        // signal arrived; hand the slot back instead of starting a new cycle.
+        if (isDraining()) {
+          cycleSemaphore.release();
+          return;
         }
-      }
-    } catch (error) {
-      // A thrown cycle made no forward progress either.
-      finishedCycle = {
-        outcome: CYCLE_OUTCOME.FAILED,
-        stopKind: ingestionStopKindOf(error),
-        inserted: 0,
-        skipped: 0,
-        pagesProcessed: 0,
-        cursorAdvanced: false,
-      };
-      backoffFailures++;
-      const msg = error instanceof Error ? error.message : String(error);
-      if (isTransientConnectionError(error)) {
-        logError(`[${adapterKey}] DB connection error (will retry): ${msg}`);
-      } else {
-        logError(`[${adapterKey}] Unexpected error:`, error);
-      }
-    }
-
-    // A run of cycles that advanced no page means the source is stalled.
-    // The log signal re-fires every threshold-worth of stalled cycles; the
-    // exception capture fires once per episode, when it begins, so a source
-    // outage reaches error tracking as one alert instead of one event per
-    // failed fetch.
-    if (finishedCycle !== null) {
-      const { stall, stopKind } = stepAdapterCycleHealth({
-        adapterKey,
-        cycle: finishedCycle,
-        stallAlert,
-        stalledAdapters,
-        threshold: SUSTAINED_FAILURE_THRESHOLD,
-      });
-      stallAlert = stall.state;
-      if (stall.sustained !== null) {
-        logger.error("case_law.ingestion.sustained_failure", {
-          adapterKey,
-          noProgressStreak: stall.sustained,
-          stopKind,
-        });
-        if (stall.capture) {
-          captureError(
-            new IngestionStallError({
-              message: `Source made no progress for ${stall.sustained} consecutive cycles`,
-              adapterKey,
-              code: adapterKey,
-              noProgressCycles: stall.sustained,
-            }),
-            { adapterKey },
+        let attempt: CycleAttempt;
+        // Hard wall-clock backstop on the held slot. runOneCycle has awaits that
+        // ignore the per-cycle abort signal (the source lookup before it is
+        // created, the event write after the pipeline); if one wedges on a
+        // broken connection the cycle never returns and the slot parks every
+        // other adapter. The lag watchdog can't see an I/O-wait hang (the loop
+        // stays responsive), so bound it here: if a cycle outlives the ceiling,
+        // exit so ECS relaunches a healthy task.
+        inFlightCycles.add(adapterKey);
+        cyclesSinceWatchdogTick.add(adapterKey);
+        try {
+          attempt = await runWithHardDeadline(
+            adapterKey,
+            CYCLE_HARD_DEADLINE_MS,
+            async () => await runOneCycle(adapterKey, name),
           );
+        } finally {
+          inFlightCycles.delete(adapterKey);
+          cycleSemaphore.release();
+        }
+        if (attempt.type === "lease_busy") {
+          // Another healthy task owns this source during a rolling handoff.
+          // This is neither source progress nor a failure; retry promptly without
+          // mutating the source's accumulated health or cadence evidence.
+          leaseBusy = true;
+        } else if (attempt.type === "drained") {
+          return;
+        } else {
+          const { cycle } = attempt;
+          const { outcome } = cycle;
+
+          // A stall is a cycle that advanced no page, whatever its outcome; a halt
+          // or a timeout that still walked pages moved the cursor.
+          const madeProgress = cycleMadeProgress(cycle);
+          finishedCycle = cycle;
+
+          if (outcome === CYCLE_OUTCOME.FAILED && !madeProgress) {
+            backoffFailures++;
+          } else {
+            backoffFailures = 0;
+            // How the cycle ended does not decide the cadence; what it wrote
+            // does. An adapter whose page budget outlasts its cycle deadline
+            // times out every cycle, so keying the cadence on a clean outcome
+            // pinned a source re-fetching its stored corpus to the fast cadence
+            // forever, holding a cycle slot against sources with work.
+            const step = stepCadence(streaks, cycle);
+            streaks = step.streaks;
+            if (step.cadence !== cadence) {
+              cadence = step.cadence;
+              logInfo(`[${adapterKey}] ${CADENCE_ENTRY_MESSAGE[cadence]}`);
+            }
+            if (step.unproductiveRescan) {
+              logger.error("case_law.ingestion.unproductive_rescan", {
+                adapterKey,
+                ...step.unproductiveRescan,
+              });
+            }
+          }
+        }
+      } catch (error) {
+        // A thrown cycle made no forward progress either.
+        finishedCycle = {
+          outcome: CYCLE_OUTCOME.FAILED,
+          stopKind: ingestionStopKindOf(error),
+          inserted: 0,
+          skipped: 0,
+          pagesProcessed: 0,
+          cursorAdvanced: false,
+        };
+        backoffFailures++;
+        const msg = error instanceof Error ? error.message : String(error);
+        if (isTransientConnectionError(error)) {
+          logError(`[${adapterKey}] DB connection error (will retry): ${msg}`);
+        } else {
+          logError(`[${adapterKey}] Unexpected error:`, error);
         }
       }
-    }
 
-    writeHeartbeat();
-    // Failure backoff wins when active (5s, 10s, 20s, 40s, cap 60s).
-    // Otherwise the cadence the last returned cycle earned.
-    let delayMs = CYCLE_CADENCE_DELAY_MS[cadence];
-    if (leaseBusy) {
-      delayMs = CYCLE_DELAY_MS;
-    } else if (backoffFailures > 0) {
-      delayMs = Math.min(CYCLE_DELAY_MS * 2 ** backoffFailures, 60_000);
+      if (finishedCycle !== null) {
+        const { stall, stopKind, disposition } = alertHealth.step(
+          adapterKey,
+          finishedCycle,
+        );
+        if (stall.sustained !== null) {
+          const fields = {
+            adapterKey,
+            noProgressStreak: stall.sustained,
+            stopKind,
+          };
+          if (disposition === "source_unavailable") {
+            logInfo(
+              JSON.stringify({
+                message: "case_law.ingestion.source_unavailable",
+                ...fields,
+              }),
+            );
+          } else {
+            logger.error("case_law.ingestion.sustained_failure", fields);
+          }
+          if (stall.capture) {
+            captureError(
+              new IngestionStallError({
+                message: `Source made no progress for ${stall.sustained} consecutive cycles`,
+                adapterKey,
+                code: adapterKey,
+                noProgressCycles: stall.sustained,
+              }),
+              handlerErrorContext("runners.runAdapterLoop", { adapterKey }),
+            );
+          }
+        }
+      }
+
+      writeHeartbeat();
+      // Failure backoff wins when active (5s, 10s, 20s, 40s, cap 60s).
+      // Otherwise the cadence the last returned cycle earned.
+      let delayMs = CYCLE_CADENCE_DELAY_MS[cadence];
+      if (leaseBusy) {
+        delayMs = CYCLE_DELAY_MS;
+      } else if (backoffFailures > 0) {
+        delayMs = backoffDelay(backoffFailures, {
+          baseMs: CYCLE_DELAY_MS,
+          maxMs: 60_000,
+        });
+      }
+      await Bun.sleep(delayMs);
     }
-    await Bun.sleep(delayMs);
-  }
-};
+  });
 
 type IngestCliArgs = {
   filterKey: string | undefined;
@@ -1025,7 +1029,10 @@ export const runCaseLawIngest = async (
     if (attempt.type === "lease_busy" || attempt.type === "drained") {
       return 0;
     }
-    return attempt.cycle.outcome === CYCLE_OUTCOME.COMPLETED ? 0 : 1;
+    return attempt.cycle.outcome === CYCLE_OUTCOME.COMPLETED ||
+      attempt.cycle.outcome === CYCLE_OUTCOME.PAUSED
+      ? 0
+      : 1;
   }
 
   if (SOURCES.length === 0) {
@@ -1117,7 +1124,10 @@ export const runCaseLawIngest = async (
         // retry cadence.
         pollMs =
           found === 0
-            ? Math.min(pollMs * 2, SEARCH_INDEX_IDLE_MAX_MS)
+            ? backoffDelay(1, {
+                baseMs: pollMs,
+                maxMs: SEARCH_INDEX_IDLE_MAX_MS,
+              })
             : SEARCH_INDEX_INTERVAL_MS;
         if (indexed > 0) {
           logInfo(`[search-index] Indexed ${indexed} decisions (backfill)`);
@@ -1249,19 +1259,47 @@ export const runCaseLawIngest = async (
     );
     await runCitationResolutionDrain({
       settleBatch: async (): Promise<CitationResolutionStep> => {
+        const signal = AbortSignal.any([
+          drainController.signal,
+          AbortSignal.timeout(BACKFILL_HARD_DEADLINE_MS),
+        ]);
         const batch = await runWithHardDeadline(
           "citation-resolution",
           BACKFILL_HARD_DEADLINE_MS,
           async () =>
-            await tryResolveCitationBatch(backfillDb, { limit: batchSize }),
+            await tryResolveCitationBatch({
+              limit: batchSize,
+              signal,
+              resolveBatch: async (limit) =>
+                await tryResolveCitationBatchInTransaction(backfillDb, {
+                  limit,
+                }),
+            }),
         );
-        if (batch === null) {
-          return { type: CITATION_RESOLUTION_STEP.BUSY };
+        switch (batch.type) {
+          case "busy":
+            return { type: CITATION_RESOLUTION_STEP.BUSY };
+          case "aborted":
+            return batch.counts.scanned === 0
+              ? { type: CITATION_RESOLUTION_STEP.DRAINED }
+              : {
+                  type: CITATION_RESOLUTION_STEP.SETTLED,
+                  counts: batch.counts,
+                };
+          case "settled":
+            return batch.counts.scanned === 0
+              ? { type: CITATION_RESOLUTION_STEP.DRAINED }
+              : {
+                  type: CITATION_RESOLUTION_STEP.SETTLED,
+                  counts: batch.counts,
+                };
+          default: {
+            batch satisfies never;
+            return panic(
+              `Unhandled citation batch outcome: ${JSON.stringify(batch)}`,
+            );
+          }
         }
-        if (batch.scanned === 0) {
-          return { type: CITATION_RESOLUTION_STEP.DRAINED };
-        }
-        return { type: CITATION_RESOLUTION_STEP.SETTLED, counts: batch };
       },
       // Bounded like the batch is. A rejection is safe — the loop catches it
       // and reports the window anyway — but a hang is not: the summary flush
@@ -1348,7 +1386,10 @@ export const runCaseLawIngest = async (
         );
         pollMs =
           found === 0
-            ? Math.min(pollMs * 2, SEARCH_INDEX_IDLE_MAX_MS)
+            ? backoffDelay(1, {
+                baseMs: pollMs,
+                maxMs: SEARCH_INDEX_IDLE_MAX_MS,
+              })
             : SEARCH_INDEX_INTERVAL_MS;
         if (indexed > 0) {
           logInfo(`[legislation-search-index] Indexed ${indexed} documents`);
@@ -1366,99 +1407,105 @@ export const runCaseLawIngest = async (
     }
   })();
 
-  // Deferred Slovak document walk: `sk-courts` ingests metadata only, so
+  // Deferred document walks, one per adapter whose manifest declares a
+  // `deferred` document stage: such an adapter ingests metadata only, so
   // every page it stores leaves decisions with nothing readable until this
-  // fetches and parses their PDF. Continuous rather than scheduled, because
-  // the fetch gap is already the constraint and an outer interval could only
-  // hold it below that. Gated: it is the one loop here that fetches from a
-  // publisher outside an adapter crawl.
+  // fetches and parses their document. Continuous rather than scheduled,
+  // because the fetch gap is already the constraint and an outer interval
+  // could only hold it below that. Gated: these are the loops here that
+  // fetch from a publisher outside an adapter crawl. Each walk paces its own
+  // publisher with the configured gap.
   //
   // Overlapping runner replicas each pace their own clock, so the aggregate
   // fetch rate briefly multiplies during a rolling deployment. Accepted
   // rather than leased: the queue's per-document claims keep the work
   // correct and unduplicated, the service runs one task otherwise, and the
   // overlap is bounded by the deployment window.
-  const skDocumentLoop = (async () => {
-    if (!LEGAL_ATLAS_RUNNER_ENV.skDocumentBackfillEnabled) {
-      return;
-    }
-    const fetchDelayMs = LEGAL_ATLAS_RUNNER_ENV.skDocumentFetchDelayMs;
-    logInfo(`[sk-documents] Enabled (one fetch per ${fetchDelayMs}ms)`);
-    const documentLoaders = scopedPendingDocumentTierLoaders(backfillDb);
-    await runSkDocumentDrain({
-      documentObservations: {
-        source: ADAPTER_KEYS.SK_COURTS,
-        observe: async (observation) => {
-          if (observation.event === DOCUMENT_FETCH_EVENT.window) {
-            await logDocumentStageObservation(observation);
-          }
-        },
-        hasPending: async () => {
-          const pending = await Result.tryPromise({
-            try: async () => await hasPendingDeferredDocuments(backfillDb),
-            catch: (error) => error,
-          });
-          if (Result.isError(pending)) {
-            await logDocumentStageObservation(
-              documentFetchErrorOutcome(ADAPTER_KEYS.SK_COURTS, pending.error),
-            );
-            throw pending.error;
-          }
-          return pending.value;
-        },
-      },
-      queue: createPendingDocumentQueue({
-        loaders: documentLoaders,
-        pageSize: SK_DOCUMENT_PAGE_SIZE,
-        requestedPollIntervalMs: SK_DOCUMENT_REQUESTED_POLL_INTERVAL_MS,
-      }),
-      // The unit bounds itself (download timeout, wall-clock budget) and
-      // the transaction handle bounds its writes; the hard deadline is the
-      // same backstop the other loops carry, for a future await that slips
-      // in unbounded and would otherwise park the walk forever.
-      fetchDocument: async (decision, onDocumentObservation) =>
-        await runWithHardDeadline(
-          "sk-documents",
-          BACKFILL_HARD_DEADLINE_MS,
-          async () =>
-            await fetchDecisionDocument({
-              onDocumentObservation,
-              decisionId: decision.id,
-              fetchDocument: skCourtsDocumentFetch,
-              scopedDb: backfillDb,
-              signal: AbortSignal.timeout(DOCUMENT_FETCH_BUDGET_MS),
+  const deferredDocumentLoops = LEGAL_ATLAS_RUNNER_ENV.skDocumentBackfillEnabled
+    ? listDeferredDocumentDrains().map(
+        async ({ adapterKey, processDocument }) => {
+          const fetchDelayMs = LEGAL_ATLAS_RUNNER_ENV.skDocumentFetchDelayMs;
+          logInfo(
+            `[deferred-documents] Enabled source=${adapterKey} (one fetch per ${fetchDelayMs}ms)`,
+          );
+          await runDeferredDocumentDrain({
+            documentObservations: {
+              source: adapterKey,
+              observe: async (observation) => {
+                if (observation.event === DOCUMENT_FETCH_EVENT.window) {
+                  await logDocumentStageObservation(observation);
+                }
+              },
+              hasPending: async () => {
+                const pending = await Result.tryPromise({
+                  try: async () =>
+                    await hasPendingDeferredDocuments(backfillDb, adapterKey),
+                  catch: (error) => error,
+                });
+                if (Result.isError(pending)) {
+                  await logDocumentStageObservation(
+                    documentFetchErrorOutcome(adapterKey, pending.error),
+                  );
+                  throw pending.error;
+                }
+                return pending.value;
+              },
+            },
+            queue: createPendingDocumentQueue({
+              loaders: scopedPendingDocumentTierLoaders(backfillDb, adapterKey),
+              pageSize: DEFERRED_DOCUMENT_PAGE_SIZE,
+              requestedPollIntervalMs:
+                DEFERRED_DOCUMENT_REQUESTED_POLL_INTERVAL_MS,
             }),
-        ),
-      isDraining,
-      now: () => Temporal.Now.instant().epochMilliseconds,
-      report: (summary) => {
-        logInfo(
-          `[sk-documents] case_law.sk_documents.swept ` +
-            `attempted=${summary.attempted} ` +
-            `filled=${summary.filled} ` +
-            `unavailable=${summary.unavailable} ` +
-            `claimed=${summary.claimed} ` +
-            `superseded=${summary.superseded} ` +
-            `deferred=${summary.deferred} ` +
-            `parked=${summary.parked} ` +
-            `publisherStatus=${summary.failures["publisher-status"]} ` +
-            `network=${summary.failures.network} ` +
-            `tooLarge=${summary.failures["too-large"]} ` +
-            `unparseable=${summary.failures.unparseable} ` +
-            `lastFailure=${summary.lastFailureDetail ?? "none"} ` +
-            `failed=${summary.failed} ` +
-            `lastErrorType=${summary.failed === 0 ? "none" : errorTag(summary.lastError)} ` +
-            `lastErrorKind=${summary.lastErrorDiagnostic?.kind ?? "none"} ` +
-            `lastHttpStatus=${summary.lastErrorDiagnostic?.httpStatus ?? "none"} ` +
-            `lastHttpStatusClass=${summary.lastErrorDiagnostic?.httpStatusClass ?? "none"}`,
-        );
-      },
-      sleep: async (ms) => {
-        await Bun.sleep(ms);
-      },
-      timing: { ...SK_DOCUMENT_DRAIN_TIMING, fetchDelayMs },
-    });
-  })();
+            // The unit bounds itself (download timeout, wall-clock budget) and
+            // the transaction handle bounds its writes; the hard deadline is the
+            // same backstop the other loops carry, for a future await that slips
+            // in unbounded and would otherwise park the walk forever.
+            fetchDocument: async (decision, onDocumentObservation) =>
+              await runWithHardDeadline(
+                `deferred-documents ${adapterKey}`,
+                BACKFILL_HARD_DEADLINE_MS,
+                async () =>
+                  await processDocument({
+                    onDocumentObservation,
+                    decisionId: decision.id,
+                    scopedDb: backfillDb,
+                    signal: startDocumentFetchBudget(),
+                  }),
+              ),
+            isDraining,
+            now: () => Temporal.Now.instant().epochMilliseconds,
+            report: (summary) => {
+              logInfo(
+                `[deferred-documents] case_law.deferred_documents.swept ` +
+                  `source=${adapterKey} ` +
+                  `attempted=${summary.attempted} ` +
+                  `filled=${summary.filled} ` +
+                  `unavailable=${summary.unavailable} ` +
+                  `claimed=${summary.claimed} ` +
+                  `superseded=${summary.superseded} ` +
+                  `deferred=${summary.deferred} ` +
+                  `parked=${summary.parked} ` +
+                  `publisherStatus=${summary.failures["publisher-status"]} ` +
+                  `network=${summary.failures.network} ` +
+                  `tooLarge=${summary.failures["too-large"]} ` +
+                  `unparseable=${summary.failures.unparseable} ` +
+                  `lastFailure=${summary.lastFailureDetail ?? "none"} ` +
+                  `failed=${summary.failed} ` +
+                  `lastErrorType=${summary.failed === 0 ? "none" : errorTag(summary.lastError)} ` +
+                  `lastErrorKind=${summary.lastErrorDiagnostic?.kind ?? "none"} ` +
+                  `lastHttpStatus=${summary.lastErrorDiagnostic?.httpStatus ?? "none"} ` +
+                  `lastHttpStatusClass=${summary.lastErrorDiagnostic?.httpStatusClass ?? "none"}`,
+              );
+            },
+            sleep: async (ms) => {
+              await Bun.sleep(ms);
+            },
+            timing: { ...DEFERRED_DOCUMENT_DRAIN_TIMING, fetchDelayMs },
+          });
+        },
+      )
+    : [];
 
   // The standing listing reconciliation: for every source whose adapter can
   // be asked what its publisher lists for a slice, keep verifying that what is
@@ -1491,6 +1538,13 @@ export const runCaseLawIngest = async (
       reconcilable.push({
         adapterKey,
         runWorkUnit: async () => {
+          const signal = AbortSignal.any([
+            drainController.signal,
+            createSettlingDeadlineSignal({
+              hardDeadlineMs: RECONCILIATION_HARD_DEADLINE_MS,
+              settleMarginMs: RECONCILIATION_ABORT_SETTLE_MARGIN_MS,
+            }),
+          ]);
           const outcome = await runWithHardDeadline(
             "case-law-reconciliation",
             RECONCILIATION_HARD_DEADLINE_MS,
@@ -1507,6 +1561,7 @@ export const runCaseLawIngest = async (
                   await Bun.sleep(ms);
                 },
                 sliceRetries,
+                signal,
               }),
           );
           switch (outcome.type) {
@@ -1521,6 +1576,8 @@ export const runCaseLawIngest = async (
               return { turn: RECONCILIATION_TURN.IDLE };
             case "misconfigured":
               return { turn: RECONCILIATION_TURN.MISCONFIGURED };
+            case "aborted":
+              return { turn: RECONCILIATION_TURN.ABORTED };
             default: {
               outcome satisfies never;
               return panic(
@@ -1641,7 +1698,7 @@ export const runCaseLawIngest = async (
     citationResolutionLoop,
     citationAuthorityLoop,
     legislationSearchIndexLoop,
-    skDocumentLoop,
+    ...deferredDocumentLoops,
     reconciliationLoop,
     sourceTotalLoop,
   ]);

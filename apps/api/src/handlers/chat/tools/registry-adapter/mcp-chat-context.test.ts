@@ -35,12 +35,16 @@ const buildDeps = (
       accessibleWorkspaceIds: [workspaceOne, workspaceTwo],
       pinnedIds: [],
     }),
+    workspaceStatusById: new Map([
+      [workspaceOne, "active" as const],
+      [workspaceTwo, "active" as const],
+    ]),
     ...overrides,
   };
 };
 
 describe("buildMcpContextFromChat", () => {
-  test("maps every McpRequestContext field from chat-resolved state", () => {
+  test("maps every AuthorizedMcpRequestContext field from chat-resolved state", () => {
     const deps = buildDeps();
     const context = buildMcpContextFromChat(deps);
 
@@ -52,8 +56,7 @@ describe("buildMcpContextFromChat", () => {
       workspaceOne,
       workspaceTwo,
     ]);
-    // No status carried by chat's authorized ids, and read tools never consult
-    // it: every authorized workspace defaults to "active".
+    // The real statuses the turn resolved, one per authorized matter.
     expect(context.accessibleWorkspaceStatusById).toEqual(
       new Map([
         [workspaceOne, "active"],
@@ -104,16 +107,18 @@ describe("buildMcpContextFromChat", () => {
     const noop = buildMcpContextFromChat(
       buildDeps({ recordAuditEvent: undefined }),
     ).recordAuditEvent;
-    expect(typeof noop).toBe("function");
     const settled = noop(asTestRaw(null), asTestRaw({ action: "noop" }));
     expect(settled).toBeInstanceOf(Promise);
     await settled;
   });
 
-  test("uses a supplied per-workspace status override when the writer path needs it", () => {
+  test("carries an archived matter's real status", () => {
     const context = buildMcpContextFromChat(
       buildDeps({
-        workspaceStatusById: new Map([[workspaceTwo, "archived"]]),
+        workspaceStatusById: new Map([
+          [workspaceOne, "active"],
+          [workspaceTwo, "archived"],
+        ]),
       }),
     );
     expect(context.accessibleWorkspaceStatusById.get(workspaceOne)).toBe(
@@ -122,6 +127,16 @@ describe("buildMcpContextFromChat", () => {
     expect(context.accessibleWorkspaceStatusById.get(workspaceTwo)).toBe(
       "archived",
     );
+  });
+
+  test("a matter without a known status never reads as active", () => {
+    const context = buildMcpContextFromChat(
+      buildDeps({
+        workspaceStatusById: new Map([[workspaceOne, "active"]]),
+      }),
+    );
+    expect(context.accessibleWorkspaceIds).toContain(workspaceTwo);
+    expect(context.accessibleWorkspaceStatusById.has(workspaceTwo)).toBe(false);
   });
 });
 

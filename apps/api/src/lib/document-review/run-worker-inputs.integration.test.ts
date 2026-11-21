@@ -5,6 +5,8 @@ import {
   beforeEach,
   describe,
   expect,
+  type Mock,
+  mock,
   spyOn,
   test,
 } from "bun:test";
@@ -39,15 +41,20 @@ import {
 import { brandPersistedDocumentReviewRunId } from "@/api/lib/safe-id-boundaries";
 import * as modelTransport from "@/api/lib/tanstack-ai-generate";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
+import { applicationRoleDatabase } from "@/api/tests/helpers/application-role-db";
+import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
-import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
+import { asFetchMock, asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
   releaseRlsFixture,
 } from "@/api/tests/security/rls-fixture";
 
+const testFetchState = createTestFetch();
+
 const { testDb, ids } = await getRlsFixture();
-const database = asTestRaw<RlsDatabase<Transaction>>(testDb);
+const database = applicationRoleDatabase(testDb);
 const scope = { organizationId: ids.orgA, userId: ids.userA1 };
 const inputDb = createRootMembershipScopedDb(scope, database);
 const runId = createSafeId<"documentReviewRun">();
@@ -103,6 +110,7 @@ const basis = {
           },
         ],
       },
+      scope: null,
     },
   },
   references: [
@@ -122,13 +130,20 @@ const actor = createRootRunActor(
   database,
 );
 
-const preparationSpy = spyOn(preparation, "fetchAndPrepareReviewFiles");
-const modelSpy = spyOn(modelTransport, "generateTanStackTextForRole");
+let preparationSpy: Mock<typeof preparation.fetchAndPrepareReviewFiles>;
+let modelSpy: Mock<typeof modelTransport.generateTanStackTextForTask>;
 const fetchPreconnect = globalThis.fetch.preconnect;
-const fetchSpy = spyOn(globalThis, "fetch");
+let fetchSpy: Mock<typeof globalThis.fetch>;
 const analytics = installRecordingAnalytics();
 
 beforeEach(async () => {
+  preparationSpy = spyOn(preparation, "fetchAndPrepareReviewFiles");
+  modelSpy = spyOn(modelTransport, "generateTanStackTextForTask");
+  fetchSpy = Object.assign(mock(globalThis.fetch), {
+    preconnect: globalThis.fetch.preconnect,
+  });
+  testFetchState.set(asFetchMock(fetchSpy));
+
   preparationSpy.mockClear();
   preparationSpy.mockImplementation(async () =>
     panic("Unexpected review file preparation"),
@@ -180,6 +195,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  mock.restore();
   await testDb
     .delete(documentReviewRuns)
     .where(eq(documentReviewRuns.id, runId));
@@ -187,6 +203,10 @@ afterEach(async () => {
     .insert(member)
     .values(originalOrganizationMember)
     .onConflictDoNothing();
+  await testDb
+    .update(member)
+    .set({ role: originalOrganizationMember.role })
+    .where(eq(member.id, ids.memberA1org));
   await testDb
     .insert(workspaceMembers)
     .values(originalMemberships)
@@ -200,7 +220,7 @@ afterEach(async () => {
 afterAll(async () => {
   preparationSpy.mockRestore();
   modelSpy.mockRestore();
-  fetchSpy.mockRestore();
+  testFetchState.restore();
   analytics.restore();
   await releaseRlsFixture();
 });
@@ -215,11 +235,14 @@ const readRun = async () =>
   ).at(0);
 
 const expectStoppedBeforeReading = async () => {
-  await processDocumentReviewRun(actor);
+  await processDocumentReviewRun(
+    actor,
+    testModelAdmission(actor.organizationId),
+  );
   const run = await readRun();
   expect(run).toMatchObject({
     status: "failed",
-    errorCode: "pin_unresolved",
+    errorCode: "internal",
   });
   expect(run?.finishedAt).not.toBeNull();
   expect(
@@ -241,7 +264,10 @@ describe("document review run revocation", () => {
   // or storage call.
   test("a run resolves its inputs while its requester keeps access", async () => {
     preparationSpy.mockImplementation(async () => []);
-    await processDocumentReviewRun(actor);
+    await processDocumentReviewRun(
+      actor,
+      testModelAdmission(actor.organizationId),
+    );
     expect(
       preparationSpy.mock.calls.map(([files]) =>
         files.map(({ workspaceId }) => workspaceId),
@@ -266,6 +292,14 @@ describe("document review run revocation", () => {
     await testDb.delete(member).where(eq(member.id, ids.memberA1org));
     await expectStoppedBeforeReading();
   });
+
+  test("a run stops before model work after a permission-losing role downgrade", async () => {
+    await testDb
+      .update(member)
+      .set({ role: "external" })
+      .where(eq(member.id, ids.memberA1org));
+    await expectStoppedBeforeReading();
+  });
 });
 
 describe("document review input readiness", () => {
@@ -273,7 +307,10 @@ describe("document review input readiness", () => {
     await testDb
       .delete(workspaceMembers)
       .where(eq(workspaceMembers.id, ids.memberA1wsA2));
-    await processDocumentReviewRun(actor);
+    await processDocumentReviewRun(
+      actor,
+      testModelAdmission(actor.organizationId),
+    );
     const run = (
       await testDb
         .select()
@@ -300,13 +337,16 @@ describe("document review input readiness", () => {
         throw failure;
       },
     });
-    await processDocumentReviewRun({
-      ...actor,
-      inputDb: createRootMembershipScopedDb(
-        scope,
-        asTestRaw<RlsDatabase<Transaction>>(failingDatabase),
-      ),
-    });
+    await processDocumentReviewRun(
+      {
+        ...actor,
+        inputDb: createRootMembershipScopedDb(
+          scope,
+          asTestRaw<RlsDatabase<Transaction>>(failingDatabase),
+        ),
+      },
+      testModelAdmission(actor.organizationId),
+    );
     const run = (
       await testDb
         .select()

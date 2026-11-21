@@ -7,6 +7,7 @@ import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { LIMITS } from "@/api/lib/limits";
 
 const config = {
+  contract: "patch",
   permissions: { workspace: ["read"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "mcp_transport" },
@@ -23,6 +24,7 @@ const listMcpConnections = createSafeRootHandler(
             id: mcpUserConnections.id,
             connectorId: mcpUserConnections.connectorId,
             connectorSlug: mcpConnectors.slug,
+            responseDisposition: mcpUserConnections.responseDisposition,
             status: mcpUserConnections.status,
             enabled: mcpUserConnections.enabled,
             scope: mcpUserConnections.scope,

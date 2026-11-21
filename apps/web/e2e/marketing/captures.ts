@@ -77,7 +77,11 @@ export type CaptureDefinition = {
 const COMMON_WATCHED_PATHS = [
   "apps/web/e2e/marketing/captures.ts",
   "apps/web/e2e/marketing/record-product-story.ts",
+  // Releases the editor scenes' edit lock, which every list scene would show.
+  "apps/web/e2e/marketing/edit-locks.ts",
   "apps/api/scripts/seed-dev.ts",
+  // The Export Review data room's documents, filmed by several scenes.
+  "apps/api/scripts/seed-export-review.ts",
   // Owns the filmed organization and primary-user display names, which the
   // sidebar chrome and every authored-by surface render.
   "apps/api/scripts/seed-test-user.ts",
@@ -118,11 +122,15 @@ const SCENE_WATCHED_PATHS: Record<StoryCaptureId, readonly string[]> = {
   editor: ["apps/web/src/routes/_protected.workspaces/$workspaceId"],
   // Document full view of the same Supplier Agreement, sidebar collapsed.
   "editor-doc": ["apps/web/src/routes/_protected.workspaces/$workspaceId"],
-  // Seeded agent thread in the chat surface.
+  // Seeded agent thread in the chat surface: its seed, the shared wait and
+  // framing helper, and the generated view's page and sandbox runtime.
   agent: [
     "apps/web/src/routes/_protected.chat",
     "apps/web/src/components/chat",
     "apps/web/src/components/ai-elements",
+    "apps/web/e2e/marketing/agent-thread.ts",
+    "apps/api/scripts/seed-marketing-agent-thread.ts",
+    "apps/api/src/handlers/visual-sandbox",
   ],
   // Seeded Supply Agreement template in the Knowledge template studio; the
   // filmed content comes from seed-templates.ts, not seed-dev.ts.

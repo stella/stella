@@ -1,10 +1,14 @@
 import { queryOptions } from "@tanstack/react-query";
-import type { InferDataFromTag } from "@tanstack/react-query";
+
+import type { TanStackAIProvider } from "@stll/ai-catalog";
+import { RESOURCE_TYPE } from "@stll/api-contract";
+import type { OrganizationAIAvailability } from "@stll/api-contract/organization-ai-availability";
 
 import { api } from "@/lib/api";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
 import type { QueryOptionsInput } from "@/lib/react-query";
+import { resourceQueryOptions } from "@/lib/workspace-realtime";
 
 type OrganizationAIConfigKey = {
   organizationId: string;
@@ -12,6 +16,11 @@ type OrganizationAIConfigKey = {
 
 export const aiConfigKeys = {
   all: ["organization-ai-config"] as const,
+  defaultsPreview: ({
+    organizationId,
+    providers,
+  }: OrganizationAIConfigKey & { providers: readonly TanStackAIProvider[] }) =>
+    ["organization-ai-defaults-preview", organizationId, providers] as const,
   availabilityRoot: ["organization-ai-availability"] as const,
   byOrganization: ({ organizationId }: OrganizationAIConfigKey) => [
     ...aiConfigKeys.all,
@@ -32,17 +41,50 @@ export type OrganizationAIConfig = NonNullable<
 >;
 
 export const aiConfigOptions = ({ organizationId }: AIConfigOptionsInput) =>
-  queryOptions({
-    queryKey: aiConfigKeys.byOrganization({ organizationId }),
-    queryFn: async ({ signal }) => {
-      const response = await api["organization-settings"]["ai-config"].get({
-        fetch: { signal },
-      });
+  resourceQueryOptions(
+    queryOptions({
+      queryKey: aiConfigKeys.byOrganization({ organizationId }),
+      queryFn: async ({ signal }) => {
+        const response = await api["organization-settings"]["ai-config"].get({
+          fetch: { signal },
+        });
 
-      return unwrapEden(response);
+        return unwrapApiResponse(response);
+      },
+      staleTime: ROUTE_QUERY_STALE_TIME_MS,
+    }),
+    {
+      resources: [RESOURCE_TYPE.ORGANIZATION],
+      scope: { type: "organization", organizationId },
     },
-    staleTime: ROUTE_QUERY_STALE_TIME_MS,
-  });
+  );
+
+type AIDefaultsPreviewOptionsInput = QueryOptionsInput<
+  OrganizationAIConfigKey & {
+    providers: readonly TanStackAIProvider[];
+  }
+>;
+
+export const aiDefaultsPreviewOptions = ({
+  organizationId,
+  providers,
+}: AIDefaultsPreviewOptionsInput) =>
+  resourceQueryOptions(
+    queryOptions({
+      queryKey: aiConfigKeys.defaultsPreview({ organizationId, providers }),
+      queryFn: async ({ signal }) =>
+        unwrapApiResponse(
+          await api["organization-settings"]["ai-config"][
+            "defaults-preview"
+          ].post({ providers: [...providers] }, { fetch: { signal } }),
+        ),
+      staleTime: ROUTE_QUERY_STALE_TIME_MS,
+    }),
+    {
+      resources: [RESOURCE_TYPE.ORGANIZATION],
+      scope: { type: "organization", organizationId },
+    },
+  );
 
 /**
  * AI availability for any org member, regardless of admin
@@ -52,24 +94,25 @@ export const aiConfigOptions = ({ organizationId }: AIConfigOptionsInput) =>
 export const aiAvailabilityOptions = ({
   organizationId,
 }: AIAvailabilityOptionsInput) =>
-  queryOptions({
-    queryKey: aiConfigKeys.availability({ organizationId }),
-    queryFn: async ({ signal }) => {
-      const response = await api["organization-settings"][
-        "ai-availability"
-      ].get({
-        fetch: { signal },
-      });
+  resourceQueryOptions(
+    queryOptions({
+      queryKey: aiConfigKeys.availability({ organizationId }),
+      queryFn: async ({ signal }) => {
+        const response = await api["organization-settings"][
+          "ai-availability"
+        ].get({
+          fetch: { signal },
+        });
 
-      return unwrapEden(response);
+        return unwrapApiResponse(response);
+      },
+      staleTime: ROUTE_QUERY_STALE_TIME_MS,
+    }),
+    {
+      resources: [RESOURCE_TYPE.ORGANIZATION],
+      scope: { type: "organization", organizationId },
     },
-    staleTime: ROUTE_QUERY_STALE_TIME_MS,
-  });
-
-type OrganizationAIAvailability = InferDataFromTag<
-  unknown,
-  ReturnType<typeof aiAvailabilityOptions>["queryKey"]
->;
+  );
 
 type UpdateCachedAIAvailabilityOptions = {
   current: OrganizationAIAvailability | undefined;
@@ -90,8 +133,7 @@ export const updateCachedAIAvailability = ({
   instanceProvisioned,
   orgConfigured,
 }: UpdateCachedAIAvailabilityOptions):
-  | OrganizationAIAvailability
-  | undefined => {
+  OrganizationAIAvailability | undefined => {
   if (current === undefined) {
     return current;
   }
@@ -101,6 +143,10 @@ export const updateCachedAIAvailability = ({
   return {
     ...current,
     available: nextInstanceProvisioned || orgConfigured,
+    unavailableReason:
+      nextInstanceProvisioned || orgConfigured
+        ? null
+        : "provider_not_configured",
     instanceProvisioned: nextInstanceProvisioned,
     orgConfigured,
   };

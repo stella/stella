@@ -1,6 +1,8 @@
 import { Result } from "better-result";
 import { expect, test } from "bun:test";
-import JSZip from "jszip";
+
+import { API_FILE_SECURITY_REJECTED_ERROR_CODE } from "@stll/api-contract";
+import { ZipArchive } from "@stll/docx-core/zip";
 
 import uploadSkill from "@/api/handlers/skills/upload";
 import fillTemplate from "@/api/handlers/templates/fill";
@@ -8,7 +10,10 @@ import prepareTemplate from "@/api/handlers/templates/prepare";
 import { DocxArchiveError, validateDocxArchive } from "@/api/lib/docx-archive";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
-import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
+import {
+  createTestHandlerContext,
+  NO_AUDIT,
+} from "@/api/tests/helpers/handler-context";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 const { safeDb, scopedDb } = createScopedDbMock({});
@@ -25,6 +30,7 @@ test("archive entry validation returns a client response before parsing", async 
   const file = new File([bytes], "input.docx", { type: DOCX_MIME_TYPE });
   const filled = await fillTemplate.handler(
     createTestHandlerContext<Parameters<typeof fillTemplate.handler>[0]>({
+      audit: NO_AUDIT,
       safeDb,
       scopedDb,
       body: { file, values: "{}" },
@@ -39,6 +45,7 @@ test("archive entry validation returns a client response before parsing", async 
 
   const prepared = await prepareTemplate.handler(
     createTestHandlerContext<Parameters<typeof prepareTemplate.handler>[0]>({
+      audit: NO_AUDIT,
       safeDb,
       scopedDb,
       body: { file },
@@ -51,6 +58,7 @@ test("archive entry validation returns a client response before parsing", async 
 
   const uploaded = await uploadSkill.handler(
     createTestHandlerContext<Parameters<typeof uploadSkill.handler>[0]>({
+      audit: NO_AUDIT,
       safeDb,
       scopedDb,
       memberRole: sessionMemberRole("member"),
@@ -60,19 +68,18 @@ test("archive entry validation returns a client response before parsing", async 
       },
     }),
   );
+  // A skill upload is read by its bytes, which are no archive here: the file
+  // scan refuses the mislabeled zip before any parser runs.
   expect(uploaded).toMatchObject({
     code: 422,
-    response: { message: "Invalid archive" },
+    response: { code: API_FILE_SECURITY_REJECTED_ERROR_CODE },
   });
 });
 
 test("archive validation applies configured limits", async () => {
-  const zip = new JSZip();
-  zip.file("word/document.xml", "<document/>", { createFolders: false });
-  const bytes = await zip.generateAsync({
-    type: "uint8array",
-    compression: "STORE",
-  });
+  const zip = new ZipArchive();
+  zip.set("word/document.xml", "<document/>");
+  const bytes = await zip.generate({ compression: "store" });
   const accepted = await validateDocxArchive(bytes, {
     maxEntries: 1,
     maxEntryBytes: 16,

@@ -6,7 +6,8 @@
 // Route fire-and-forget work through the `detached(promise, context)` helper
 // (`@/lib/detached` on the web, `@/api/lib/analytics/capture` on the API) so every
 // rejection reaches the shared error-capture channel with a stable context
-// tag.
+// tag. The API helper takes the work as a function, `detached(() => work,
+// context)`, and starts it outside the caller's query counter.
 //
 // This bans the value-level `void` UNARY operator only; the `void` TYPE
 // keyword (`: void`, `Promise<void>`, `() => void`) is a different AST node

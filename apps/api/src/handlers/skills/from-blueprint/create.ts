@@ -1,36 +1,52 @@
 import { panic, Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
-import { BLUEPRINT_IDS, getBlueprint, parseSkillFile } from "@stll/skills";
+import {
+  BLUEPRINT_IDS,
+  getBlueprint,
+  hashSkillPackage,
+  validateSkillPackage,
+} from "@stll/skills";
 
 import { AGENT_SKILL_SCOPES } from "@/api/db/schema";
 import { skillRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
-import { skillTextSha256 } from "@/api/lib/agent-skills/content-hash";
+import {
+  authorizeSkillBinding,
+  skillBindingBodyFields,
+} from "@/api/handlers/skills/skill-binding";
+import { skillRequirableToolNames } from "@/api/lib/agent-skills/required-tools-validation";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import {
-  authorizeSkillInstallScope,
-  installSkill,
-} from "@/api/lib/skills/install";
+import { installSkill } from "@/api/lib/skills/install";
 import type { ParsedSkillPackage } from "@/api/lib/skills/skill-package";
 
 import { uniqueSlug } from "../slug";
 
 const encoder = new TextEncoder();
 
-const fromBlueprintBodySchema = t.Object({
-  scope: t.UnionEnum(AGENT_SKILL_SCOPES),
-  blueprintId: t.UnionEnum(BLUEPRINT_IDS),
+const fromBlueprintBodySchema = v.object({
+  scope: v.picklist(AGENT_SKILL_SCOPES),
+  blueprintId: v.picklist(BLUEPRINT_IDS),
+  ...skillBindingBodyFields,
 });
 
 const config = {
+  contract: "patch",
+  contentDelivery: {
+    type: "none",
+    reason:
+      "Stores a draft skill and returns its metadata rather than file bytes.",
+  },
   description:
     "Create an editable draft skill from one of the bundled blueprints, a " +
     "SKILL.md skeleton with placeholder resource files. The draft is " +
     "installed disabled and under a fresh slug, so the same blueprint can be " +
     "used more than once, and stays fully editable afterwards. Team scope " +
-    "requires admin or owner.",
+    "requires admin or owner, unless the draft is bound to a matter " +
+    "(`boundWorkspaceId`) the caller reaches; `boundClientId` binds it to one " +
+    "client (admins and owners only). A bound skill is visible and usable " +
+    "only there, and the binding cannot change later.",
   permissions: { agentSkill: ["create"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   realtime: skillRealtimeUpdates,
@@ -53,25 +69,36 @@ const buildParsedBlueprint = (
     return null;
   }
 
-  const parsed = parseSkillFile(blueprint.source);
-  if (parsed.isErr()) {
-    return panic(`Blueprint skill file is invalid: ${parsed.error.message}`);
+  const validated = validateSkillPackage({
+    files: [
+      { content: blueprint.source, path: "SKILL.md" },
+      ...blueprint.resources.map((resource) => ({
+        content: resource.source,
+        path: resource.path,
+      })),
+    ],
+    tools: { known: skillRequirableToolNames(), type: "check" },
+  });
+  if (validated.isErr()) {
+    return panic(
+      `Blueprint skill package is invalid: ${JSON.stringify(validated.error)}`,
+    );
   }
-  const { body, metadata } = parsed.value;
+  const { body, metadata, resources, source } = validated.value;
 
   return {
     body,
     compatibility: metadata.compatibility ?? null,
     description: metadata.description,
-    entrypointHash: skillTextSha256(blueprint.source),
+    entrypointHash: hashSkillPackage({ resources, source }),
+    identity: null,
+    invocation: metadata.invocation,
     license: metadata.license ?? null,
-    metadata: { blueprintId: blueprint.id },
+    metadata: { ...metadata.metadata, blueprintId: blueprint.id },
     name: metadata.name,
-    resources: blueprint.resources.map((resource) => ({
-      content: resource.source,
-      kind: resource.kind,
-      path: resource.path,
-      sizeBytes: encoder.encode(resource.source).byteLength,
+    resources: resources.map((resource) => ({
+      ...resource,
+      sizeBytes: encoder.encode(resource.content).byteLength,
     })),
     sourceUrl: null,
     version: metadata.version,
@@ -88,13 +115,18 @@ const fromBlueprint = createSafeRootHandler(
     session,
     user,
   }) {
-    const authorization = authorizeSkillInstallScope({
-      memberRole,
-      scope: body.scope,
-    });
-    if (Result.isError(authorization)) {
-      return Result.err(authorization.error);
-    }
+    const binding = {
+      boundClientId: body.boundClientId ?? null,
+      boundWorkspaceId: body.boundWorkspaceId ?? null,
+    };
+    yield* Result.await(
+      authorizeSkillBinding({
+        binding,
+        memberRole,
+        safeDb,
+        scope: body.scope,
+      }),
+    );
 
     const parsed = buildParsedBlueprint(body.blueprintId);
     if (!parsed) {
@@ -108,6 +140,7 @@ const fromBlueprint = createSafeRootHandler(
     // so the same blueprint can be used more than once.
     const installed = yield* Result.await(
       installSkill({
+        binding,
         enabled: false,
         memberRole,
         origin: "authored",

@@ -51,3 +51,23 @@ export const KANBAN_BAND_CAPTION_ROW_HEIGHT_PX = KANBAN_CHROME_ROW_HEIGHT_PX;
  */
 export const KANBAN_CHROME_TOGGLE_COARSE_TARGET_CLASS =
   "relative pointer-coarse:after:absolute pointer-coarse:after:inset-x-0 pointer-coarse:after:top-1/2 pointer-coarse:after:h-11 pointer-coarse:after:-translate-y-1/2";
+
+/**
+ * Sticks a card's identity row under everything pinned above it. The fallback
+ * keeps the row usable inside a card rendered outside a cell that publishes the
+ * offset, where nothing is pinned above it at all.
+ */
+export const KANBAN_CARD_STICKY_TOP_CLASS =
+  "top-(--kanban-card-sticky-top,0px)";
+
+/**
+ * Every board column takes this inline size; a collapsed band takes one lane.
+ * The board and its loading face both lay their columns out at it.
+ */
+export const KANBAN_COLUMN_WIDTH_CLASS = "w-[300px] shrink-0";
+export const KANBAN_COLUMN_WIDTH_PX = 300;
+/** The `gap-3` between columns, so a band header can span its columns. */
+export const KANBAN_COLUMN_GAP_PX = 12;
+/** A collapsed band folds its columns into one narrow lane. */
+export const KANBAN_COLLAPSED_BAND_WIDTH_CLASS = "w-12 shrink-0";
+export const KANBAN_COLLAPSED_BAND_WIDTH_PX = 48;

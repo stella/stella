@@ -1,5 +1,5 @@
 import { hasNonModifierKey, normalizeHotkey } from "@tanstack/react-hotkeys";
-import type { Hotkey } from "@tanstack/react-hotkeys";
+import type { HotkeyChord } from "@tanstack/react-hotkeys";
 import { panic, Result } from "better-result";
 
 import { SHORTCUT_GROUPS } from "@/lib/hotkeys";
@@ -19,7 +19,7 @@ import type {
  * so override values are always hotkey bindings.
  */
 export type ShortcutOverrides = Partial<
-  Record<ShortcutId, { readonly type: "hotkey"; readonly hotkey: Hotkey }>
+  Record<ShortcutId, { readonly type: "hotkey"; readonly hotkey: HotkeyChord }>
 >;
 
 const flattenShortcuts = (groups: readonly ShortcutGroup[]) =>
@@ -65,7 +65,10 @@ export const parseUserShortcuts = (
     return {};
   }
 
-  const overrides: ShortcutOverrides = {};
+  const overrides = new Map<
+    ShortcutId,
+    Extract<ShortcutBinding, { type: "hotkey" }>
+  >();
   for (const [id, value] of Object.entries(record)) {
     if (typeof value !== "string" || !isShortcutId(id)) {
       continue;
@@ -77,20 +80,17 @@ export const parseUserShortcuts = (
     if (!hasNonModifierKey(hotkey)) {
       continue;
     }
-    overrides[id] = { type: "hotkey", hotkey };
+    overrides.set(id, { type: "hotkey", hotkey });
   }
-  return overrides;
+  return Object.fromEntries(overrides);
 };
 
-export const serializeUserShortcuts = (
-  overrides: ShortcutOverrides,
-): string => {
-  const record: Record<string, string> = {};
-  for (const [id, binding] of Object.entries(overrides)) {
-    record[id] = binding.hotkey;
-  }
-  return JSON.stringify(record);
-};
+export const serializeUserShortcuts = (overrides: ShortcutOverrides): string =>
+  JSON.stringify(
+    Object.fromEntries(
+      Object.entries(overrides).map(([id, binding]) => [id, binding.hotkey]),
+    ),
+  );
 
 /**
  * Apply an override map onto the default registry, returning a fresh group
@@ -207,7 +207,7 @@ export type RebindError =
 
 type ValidateRebindInput = {
   readonly id: ShortcutId;
-  // The raw recorded candidate: it may not yet be a valid `Hotkey` (e.g. a
+  // The raw recorded candidate: it may not yet be a valid `HotkeyChord` (e.g. a
   // modifier-only chord), which is exactly what the guard below rejects.
   readonly hotkey: string;
   readonly groups: readonly ShortcutGroup[];
@@ -267,12 +267,15 @@ export const resetShortcutOverride = (
   overrides: ShortcutOverrides,
   id: ShortcutId,
 ): ShortcutOverrides => {
-  const next: ShortcutOverrides = {};
+  const next = new Map<
+    ShortcutId,
+    Extract<ShortcutBinding, { type: "hotkey" }>
+  >();
   for (const key of REBINDABLE_SHORTCUT_IDS) {
     const binding = overrides[key];
     if (key !== id && binding) {
-      next[key] = binding;
+      next.set(key, binding);
     }
   }
-  return next;
+  return Object.fromEntries(next);
 };

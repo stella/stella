@@ -2,21 +2,21 @@ import { PLAYBOOK_VERSION_SOURCES } from "@/api/lib/workflow/playbook-positions"
 import type { PlaybookVersionSource } from "@/api/lib/workflow/playbook-positions";
 
 import {
-  PROPERTY_ROLES,
-  PROPERTY_STATUSES,
   isNotNull,
   jsonb,
-  orgPolicies,
   organization,
+  orgPolicies,
   p,
+  PROPERTY_ROLES,
+  PROPERTY_STATUSES,
   pUuid,
   safeOrganizationId,
   safeUuid,
   safeWorkspaceId,
   sql,
+  timestamptz,
   user,
   wsPolicies,
-  timestamptz,
 } from "./common";
 import type {
   ConditionNode,
@@ -77,7 +77,7 @@ export const properties = p.pgTable(
       .uniqueIndex("properties_ws_document_type_classifier_unq")
       .on(table.workspaceId)
       .where(sql`${table.role} = 'document-type-classifier'`),
-    ...wsPolicies(),
+    ...wsPolicies({ columns: table }),
   ],
 );
 
@@ -119,7 +119,7 @@ export const propertyDependencies = p.pgTable(
       })
       .onDelete("restrict"),
     p.index("property_dependencies_workspace_id_idx").on(table.workspaceId),
-    ...wsPolicies(),
+    ...wsPolicies({ columns: table }),
   ],
 );
 

@@ -8,12 +8,12 @@
  * anchored text and the prompt its language resolves to today?
  */
 
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { readdir } from "node:fs/promises";
 import path from "node:path";
 import { gunzipSync } from "node:zlib";
 
-import { parseUsableDocumentAst } from "@stll/legal-ast/document-ast";
+import { parseCaseLawDecisionAst } from "@stll/legal-ast/case-law-reader";
 
 import { getSystemPrompt } from "@/api/handlers/case-law/analysis/prompts/prompt-registry";
 import { analysisInputOf } from "@/api/lib/case-law/analysis-prompt";
@@ -95,9 +95,17 @@ export const readCaseLawFixtureAnalyses = async (): Promise<
       if (!analysis) {
         continue;
       }
-      const ast = parseUsableDocumentAst(decision.document_ast);
+      const ast = parseCaseLawDecisionAst(decision.document_ast);
       if (ast === null) {
         continue;
+      }
+      const systemPrompt = getSystemPrompt(decision.language);
+      if (Result.isError(systemPrompt)) {
+        // An analysis stored for a language with no prompt could not have
+        // been produced by the run it claims to describe.
+        return panic(
+          `${fixtureName} ${decision.case_number}: ${systemPrompt.error.message}`,
+        );
       }
       const currentFingerprint = analysisInputOf({
         blocks: ast.blocks,
@@ -107,7 +115,7 @@ export const readCaseLawFixtureAnalyses = async (): Promise<
           decisionType: decision.decision_type ?? null,
           language: decision.language,
         },
-        systemPrompt: getSystemPrompt(decision.language),
+        systemPrompt: systemPrompt.value,
       }).fingerprint;
       entries.push({
         fixtureName,

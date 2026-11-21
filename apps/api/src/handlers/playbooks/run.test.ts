@@ -5,7 +5,10 @@ import { toSafeId } from "@/api/lib/branded-types";
 import type { OpenPlaybookRunResult } from "@/api/lib/document-review/open-playbook-run";
 import { PLAYBOOK_RUN_PROJECTION } from "@/api/lib/workflow/playbook-run-projection";
 import { mapHandlerResult } from "@/api/mcp/capability-tools";
-import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
+import {
+  createTestHandlerContext,
+  NO_AUDIT,
+} from "@/api/tests/helpers/handler-context";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 const loadLatestApprovedVersionMock = mock();
@@ -34,6 +37,7 @@ const opened = {
     definitionSnapshot: {
       name: "Vendor agreement review",
       positions: { version: 3, items: [] },
+      scope: null,
     },
   },
   materializedPropertyIds: [propertyId],
@@ -65,6 +69,7 @@ const runColumnsProjection = async () => {
   });
   return await runPlaybook.handler(
     createTestHandlerContext<RunPlaybookCtx>({
+      audit: NO_AUDIT,
       body: { projection: PLAYBOOK_RUN_PROJECTION.COLUMNS },
       params: { playbookId },
       safeDb,
@@ -134,7 +139,6 @@ describe("run playbook handler", () => {
       const mcp = mapHandlerResult({
         id: "playbooks.run",
         result,
-        access: "write",
       });
       expect(mcp).toMatchObject({
         status: "error",

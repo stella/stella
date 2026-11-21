@@ -1,3 +1,9 @@
+import type { AppliedProvisionVersion } from "@stll/api-contract/provision-applied-version";
+import type {
+  ListedAnchorScheme,
+  StatuteAnchorLevel,
+} from "@stll/legal-ast/statute-anchor-scheme";
+
 /**
  * A jurisdiction profile: what a citation reader needs to know about a legal
  * culture, as data.
@@ -13,7 +19,10 @@
  */
 
 /** Which top-level unit a number names. Acts use one or the other, not both. */
-export const SECTION_UNITS = ["section", "article"] as const;
+export const SECTION_UNITS = [
+  "section",
+  "article",
+] as const satisfies readonly StatuteAnchorLevel[];
 
 export type SectionUnit = (typeof SECTION_UNITS)[number];
 
@@ -34,20 +43,15 @@ export const SUBDIVISION_LEVELS = [
 
 export type SubdivisionLevel = (typeof SUBDIVISION_LEVELS)[number];
 
-/** The subdivision levels a publisher anchor scheme actually addresses. */
+/**
+ * The subdivision levels a publisher anchor scheme actually addresses, each
+ * one the scheme names a segment kind for.
+ */
 export const ANCHORED_SUBDIVISION_LEVELS = [
   "subsection",
   "letter",
   "point",
-] as const satisfies readonly SubdivisionLevel[];
-
-/**
- * Every level an anchor mapper has to render, derived from the two lists above
- * rather than restated, so a new level cannot land without an anchor decision.
- */
-export type AnchorLevel =
-  | SectionUnit
-  | (typeof ANCHORED_SUBDIVISION_LEVELS)[number];
+] as const satisfies readonly (SubdivisionLevel & StatuteAnchorLevel)[];
 
 /** An act's identity in a national collection. */
 export type WorkIdentifier = {
@@ -128,6 +132,17 @@ export type ActTitleSpec = CitedWindow &
     identifier: WorkIdentifier;
   };
 
+/**
+ * A noun a short title opens with (`zákon o obětech trestných činů`) and the
+ * forms a citing sentence declines it to (`§ 2 zákona o obětech …`). The
+ * words after the head keep their form in every case, so a name stored in
+ * the nominative is read in any case by declining the head alone.
+ */
+export type TitleHeadSpec = {
+  nominative: string;
+  forms: readonly string[];
+};
+
 type SuccessionOptions = {
   spellings: readonly string[];
   older: WorkIdentifier;
@@ -185,21 +200,57 @@ export const priorWindowed = (
   { spellings: options.spellings, identifier: options.newer },
 ];
 
-/** How a provision path renders as the publisher's deep-link anchor. */
-export type AnchorScheme = {
-  /** What joins two path segments: `-` for e-sbirka, `.` for Slov-Lex. */
-  join: string;
+/** Explicit version language; generic as-amended wording has no entry. */
+export type VersionGrammar = {
+  dateStatements: readonly {
+    prefix: string;
+    relation: Extract<
+      AppliedProvisionVersion,
+      { type: "stated_date" }
+    >["relation"];
+  }[];
+  amendmentPrefixes: readonly string[];
   /**
-   * One renderer per anchorable level. Total by construction: a level without
-   * a renderer is a compile error, not a link silently missing a segment.
+   * Phrases that cite an act as amended to date (`ve znění pozdějších
+   * předpisů`); like a date or an amendment, they follow the act's name.
    */
-  render: Readonly<Record<AnchorLevel, (value: string) => string>>;
+  currentVersionMarkers: readonly string[];
+  /** Inflected month spellings, mapped to calendar month numbers. */
+  monthNames: Readonly<Record<string, number>>;
+};
+
+/**
+ * The designators a canonical citation is written with, one per unit and
+ * level: the profile's term lists carry every spelling in no order, so the
+ * canonical one is named here rather than picked from them.
+ */
+export type CitationTerms = {
+  readonly section: string;
+  readonly article: string;
+  readonly subsection: string;
+  readonly letter: string;
+  readonly point: string;
+};
+
+export type AmendingClauseSpec = {
+  /** The words that open the clause. */
+  openers: readonly string[];
+  /** How a word naming an act begins: what makes it an amendment of one. */
+  amendedActStems: readonly string[];
 };
 
 export type JurisdictionProfile = {
+  versionGrammar: VersionGrammar;
   jurisdiction: ProvisionCitationJurisdiction;
   /** BCP-47 primary subtag of the language the profile's vocabulary is in. */
   language: string;
+  citationTerms: CitationTerms;
+  /**
+   * The words that put a bare year as a version of the act (`stav k roku
+   * 2021`, `ve znění z 2012`). A year after anything else is a number, and a
+   * number after the first provision names a further one.
+   */
+  versionYearLeadIns: readonly string[];
   sectionTerms: readonly SectionTermSpec[];
   subdivisionTerms: readonly SubdivisionTermSpec[];
   /** `,` and `;` are always connectors; these are the word-shaped ones. */
@@ -217,6 +268,13 @@ export type JurisdictionProfile = {
   actLeadIns: readonly string[];
   aliases: readonly ActAliasSpec[];
   titles: readonly ActTitleSpec[];
+  /** Heads of short titles, with every declined form including the nominative. */
+  titleHeads: readonly TitleHeadSpec[];
+  /**
+   * How a title states the clause that only amends other acts (`a o změně
+   * některých zákonů`). Courts print the name before it.
+   */
+  amendingClause: AmendingClauseSpec;
   /** Ordinal words a sentence reference uses, mapped to their digit. */
   ordinalWords: Readonly<Record<string, string>>;
   /**
@@ -231,5 +289,9 @@ export type JurisdictionProfile = {
   earliestYear: number;
   /** How far past a provision the act it belongs to may sit, in characters. */
   maxActGapChars: number;
-  anchor: AnchorScheme;
+  /**
+   * The publisher's anchor scheme a provision path renders in, so a profile
+   * cannot mint a segment its publisher's scheme would read otherwise.
+   */
+  anchor: ListedAnchorScheme;
 };

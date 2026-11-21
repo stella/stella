@@ -20,12 +20,12 @@ import { createChatAttachmentPart } from "@/api/handlers/chat/chat-message-parts
 import type { ChatMessage } from "@/api/handlers/chat/types";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { createUserFileKey } from "@/api/lib/file-key";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { toUserFileUrl } from "@/api/lib/user-files/types";
 import { XLSX_MIME_TYPE } from "@/api/mime-types";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
-import { testFileKey } from "@/api/tests/helpers/file-key";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -34,7 +34,7 @@ import {
 import type { TestIds } from "@/api/tests/security/rls-helpers";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
-import { hydrateMessages } from "./stream-chat";
+import { hydrateMessages, localRunAttachmentsOf } from "./stream-chat";
 
 // Evidence for the `no-raw-filename-write` waiver in `hydrateMessages`: the
 // filename handed to the provider-bound part is the stored `user_files` value,
@@ -98,6 +98,27 @@ beforeAll(async () => {
     createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
   );
 
+  const ownFileKey = createUserFileKey({
+    fileId: ownFileId,
+    mimeType: TEXT_PLAIN_MIME_TYPE,
+    organizationId: ids.orgA,
+  });
+  const ownXlsxFileKey = createUserFileKey({
+    fileId: ownXlsxFileId,
+    mimeType: XLSX_MIME_TYPE,
+    organizationId: ids.orgA,
+  });
+  const secondOwnXlsxFileKey = createUserFileKey({
+    fileId: secondOwnXlsxFileId,
+    mimeType: XLSX_MIME_TYPE,
+    organizationId: ids.orgA,
+  });
+  const foreignFileKey = createUserFileKey({
+    fileId: foreignFileId,
+    mimeType: TEXT_PLAIN_MIME_TYPE,
+    organizationId: ids.orgB,
+  });
+
   await testDb.insert(userFiles).values([
     {
       id: ownFileId,
@@ -106,7 +127,7 @@ beforeAll(async () => {
       mimeType: TEXT_PLAIN_MIME_TYPE,
       sizeBytes: attachmentBytes.byteLength,
       sha256Hex: "a".repeat(64),
-      s3Key: testFileKey(`chat/${ids.userA1}/${ownFileId}`),
+      s3Key: ownFileKey,
       threadId: ids.chatThreadWorkspaceA1,
     },
     {
@@ -116,7 +137,7 @@ beforeAll(async () => {
       mimeType: XLSX_MIME_TYPE,
       sizeBytes: xlsxBytes.byteLength,
       sha256Hex: "c".repeat(64),
-      s3Key: testFileKey(`chat/${ids.userA1}/${ownXlsxFileId}.xlsx`),
+      s3Key: ownXlsxFileKey,
       threadId: ids.chatThreadWorkspaceA1,
     },
     {
@@ -126,7 +147,7 @@ beforeAll(async () => {
       mimeType: XLSX_MIME_TYPE,
       sizeBytes: xlsxBytes.byteLength,
       sha256Hex: "d".repeat(64),
-      s3Key: testFileKey(`chat/${ids.userA1}/${secondOwnXlsxFileId}.xlsx`),
+      s3Key: secondOwnXlsxFileKey,
       threadId: ids.chatThreadWorkspaceA1,
     },
     {
@@ -136,17 +157,17 @@ beforeAll(async () => {
       mimeType: TEXT_PLAIN_MIME_TYPE,
       sizeBytes: attachmentBytes.byteLength,
       sha256Hex: "b".repeat(64),
-      s3Key: testFileKey(`chat/${ids.userB1}/${foreignFileId}`),
+      s3Key: foreignFileKey,
       threadId: ids.chatThreadWorkspaceB1,
     },
   ]);
 
   // Every row above is hydrated from its own stored object, so the store holds
   // exactly what `user_files.s3_key` names.
-  fake.put(bucket, `chat/${ids.userA1}/${ownFileId}`, attachmentBytes);
-  fake.put(bucket, `chat/${ids.userA1}/${ownXlsxFileId}.xlsx`, xlsxBytes);
-  fake.put(bucket, `chat/${ids.userA1}/${secondOwnXlsxFileId}.xlsx`, xlsxBytes);
-  fake.put(bucket, `chat/${ids.userB1}/${foreignFileId}`, attachmentBytes);
+  fake.put(bucket, ownFileKey, attachmentBytes);
+  fake.put(bucket, ownXlsxFileKey, xlsxBytes);
+  fake.put(bucket, secondOwnXlsxFileKey, xlsxBytes);
+  fake.put(bucket, foreignFileKey, attachmentBytes);
 });
 
 afterAll(async () => {
@@ -166,6 +187,7 @@ afterAll(async () => {
 
 const hydrate = async (message: ChatMessage) =>
   await hydrateMessages({
+    copiesFilesToComputer: false,
     messages: [message],
     safeDb,
     sendMode: CHAT_SEND_MODE.rawOverride,
@@ -209,6 +231,47 @@ describe("chat attachment hydration provenance", () => {
     expect(hydrated).not.toContain("../../etc/passwd");
   });
 
+  test("a turn on the computer names the file's place beside its text", async () => {
+    const message = attachmentMessage(ownFileId, "renamed-by-client.txt");
+    const hydrated = await hydrateMessages({
+      copiesFilesToComputer: true,
+      messages: [message],
+      safeDb,
+      sendMode: CHAT_SEND_MODE.rawOverride,
+      userId: ids.userA1,
+    });
+    const text = textOf(hydrated);
+    expect(text).toContain(`attachments/${ownFileId}/`);
+    expect(text).toContain("Attachment body");
+
+    const attachments = await localRunAttachmentsOf({
+      messages: [message, message],
+      safeDb,
+      userId: ids.userA1,
+    });
+    expect(attachments.unwrap()).toEqual([
+      {
+        path: `attachments/${ownFileId}/${STORED_NAME}`,
+        fileId: ownFileId,
+        fileName: STORED_NAME,
+        s3Key: createUserFileKey({
+          fileId: ownFileId,
+          mimeType: TEXT_PLAIN_MIME_TYPE,
+          organizationId: ids.orgA,
+        }),
+      },
+    ]);
+  });
+
+  test("a turn on the computer copies nothing of another member's", async () => {
+    const attachments = await localRunAttachmentsOf({
+      messages: [attachmentMessage(foreignFileId, "other-tenant-brief.txt")],
+      safeDb,
+      userId: ids.userA1,
+    });
+    expect(attachments.unwrap()).toEqual([]);
+  });
+
   test("hydrates legacy XLSX files and persists their tenant-scoped cache in a batch", async () => {
     const message = asTestRaw<ChatMessage>({
       id: toSafeId<"chatMessage">(Bun.randomUUIDv7()),
@@ -244,6 +307,59 @@ describe("chat attachment hydration provenance", () => {
     expect(secondHydration).toContain("Acme s.r.o.");
     // The cached text served the second hydration: no workbook was refetched.
     expect(objectReadCount()).toBe(readsAfterFirstHydration);
+  });
+
+  describe("a file on an answer", () => {
+    const answerWith = (fileId: SafeId<"userFile">): ChatMessage =>
+      asTestRaw<ChatMessage>({
+        ...attachmentMessage(fileId, "report.pdf"),
+        role: "assistant",
+      });
+    /** No such row: the answer's file may be gone without breaking the turn. */
+    const goneFileId = toSafeId<"userFile">(Bun.randomUUIDv7());
+
+    test.each([
+      { copiesFilesToComputer: false, sendMode: CHAT_SEND_MODE.rawOverride },
+      { copiesFilesToComputer: true, sendMode: CHAT_SEND_MODE.rawOverride },
+      { copiesFilesToComputer: false, sendMode: CHAT_SEND_MODE.anonymized },
+      { copiesFilesToComputer: true, sendMode: CHAT_SEND_MODE.anonymized },
+    ])(
+      "is not fetched, not refused and stays on the message: $copiesFilesToComputer, $sendMode",
+      async ({ copiesFilesToComputer, sendMode }) => {
+        const readsBefore = objectReadCount();
+        const message = answerWith(ownFileId);
+        const hydrated = await hydrateMessages({
+          copiesFilesToComputer,
+          messages: [answerWith(goneFileId), message],
+          safeDb,
+          sendMode,
+          userId: ids.userA1,
+        });
+
+        expect(Result.isOk(hydrated)).toBe(true);
+        expect(objectReadCount()).toBe(readsBefore);
+        // Nothing tells the agent the answer's own file was attached.
+        expect(JSON.stringify(hydrated.unwrap())).not.toContain(
+          "is in your folder",
+        );
+        expect(hydrated.unwrap().at(1)?.parts).toEqual(message.parts);
+      },
+    );
+
+    test("is not copied back to the computer, and a member's own file still is", async () => {
+      const attachments = await localRunAttachmentsOf({
+        messages: [
+          answerWith(ownXlsxFileId),
+          attachmentMessage(ownFileId, "notes.txt"),
+        ],
+        safeDb,
+        userId: ids.userA1,
+      });
+
+      expect(attachments.unwrap().map(({ fileId }) => fileId)).toEqual([
+        ownFileId,
+      ]);
+    });
   });
 
   test("another user's file id hydrates nothing", async () => {

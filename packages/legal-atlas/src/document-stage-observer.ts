@@ -1,7 +1,9 @@
+// parser-output-unchanged: declares observer error fingerprint metadata; observation delivery and parser results are unchanged.
 // parser-output-unchanged: observer failure handling is isolated from parser results.
 import { Result, TaggedError } from "better-result";
 
 import { TimeoutError, withTimeout } from "@stll/concurrency/with-timeout";
+import type { FingerprintFields } from "@stll/errors/fingerprint-fields";
 
 import {
   DOCUMENT_FETCH_EVENT,
@@ -17,7 +19,17 @@ class DocumentTelemetryObserverError extends TaggedError(
   message: string;
   cause: unknown;
   reason: DocumentTelemetryObserverFailure["reason"];
-}> {}
+}> {
+  static readonly stellaExceptionFingerprintFields = [
+    "reason",
+  ] as const satisfies FingerprintFields<DocumentTelemetryObserverError>;
+}
+
+type DocumentObserverTimeoutOperation = "deliver" | "report-failure";
+const DOCUMENT_OBSERVER_TIMEOUT_LABEL = {
+  deliver: "document-stage-observer-delivery",
+  "report-failure": "document-stage-observer-failure-report",
+} as const satisfies Record<DocumentObserverTimeoutOperation, string>;
 
 type DocumentStageObserverOptions = {
   observation: DocumentStageObservation;
@@ -67,7 +79,7 @@ export const observeDocumentStageSafely = async ({
       : await Result.tryPromise({
           try: async () =>
             await withTimeout(async () => await observe(observation), {
-              label: DOCUMENT_FETCH_EVENT.observerFailed,
+              label: DOCUMENT_OBSERVER_TIMEOUT_LABEL.deliver,
               timeoutMs: budgetMs,
             }),
           catch: (cause) =>
@@ -92,7 +104,7 @@ export const observeDocumentStageSafely = async ({
       await withTimeout(
         async (signal) => await reportFailure(failure, signal),
         {
-          label: DOCUMENT_FETCH_EVENT.observerFailed,
+          label: DOCUMENT_OBSERVER_TIMEOUT_LABEL["report-failure"],
           timeoutMs: Math.max(1, remainingMs),
         },
       );

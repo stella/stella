@@ -1,7 +1,6 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import type { StopReason as BedrockStopReason } from "@aws-sdk/client-bedrock-runtime";
 import type { FinishReason as GeminiFinishReason } from "@google/genai";
-import type { CompletionResponseStreamChoiceFinishReason as MistralFinishReasons } from "@mistralai/mistralai/models/components";
 import type { ChatFinishReasonEnum as OpenRouterFinishReasons } from "@openrouter/sdk/models";
 import { EventType } from "@tanstack/ai";
 import type { AnyTextAdapter, StreamChunk } from "@tanstack/ai";
@@ -14,6 +13,7 @@ import type {
   AnthropicWebFetchTool,
   AnthropicWebSearchTool,
 } from "@tanstack/ai-anthropic/tools";
+import type { CompletionResponseStreamChoiceFinishReason as MistralFinishReasons } from "@tanstack/ai-mistral";
 import { panic } from "better-result";
 import type OpenAI from "openai";
 
@@ -86,6 +86,8 @@ const ANTHROPIC = {
 const GOOGLE = {
   STOP: "ended",
   MAX_TOKENS: "length",
+  // Resuming needs a continuation token in another request.
+  CONTINUATION: "unfinished",
   SAFETY: "content_filter",
   RECITATION: "content_filter",
   BLOCKLIST: "content_filter",
@@ -94,9 +96,20 @@ const GOOGLE = {
   IMAGE_SAFETY: "content_filter",
   IMAGE_PROHIBITED_CONTENT: "content_filter",
   IMAGE_RECITATION: "content_filter",
+  // Blocked by Model Armor (Vertex AI) or filtered by an escalation rule
+  // (Gemini API).
+  MODEL_ARMOR: "content_filter",
+  ESCALATION: "content_filter",
+  // The request lacked a thought signature the model needs: a defect in the
+  // request, not an empty answer.
+  MISSING_THOUGHT_SIGNATURE: "failed",
+  // The account is limited or disabled for Prohibited Use Policy violations;
+  // no answer can follow until that is resolved.
+  PUP_LIMITED_DISABLED: "failed",
   // The model wrote a tool call that could not be parsed or was not
   // offered: nothing usable came back, which is not an empty answer.
   MALFORMED_FUNCTION_CALL: "failed",
+  MALFORMED_RESPONSE: "failed",
   UNEXPECTED_TOOL_CALL: "failed",
   TOO_MANY_TOOL_CALLS: "failed",
   LANGUAGE: "failed",
@@ -131,6 +144,10 @@ const MISTRAL = {
 const OPENAI = {
   completed: "ended",
   max_output_tokens: "length",
+  // These incomplete responses need another response, not a larger token
+  // ceiling. WebSocket steering's automatic successor is not this SSE run.
+  max_messages: "unfinished",
+  steered: "unfinished",
   content_filter: "content_filter",
   incomplete: "unfinished",
   cancelled: "unfinished",
@@ -148,16 +165,17 @@ const OPENROUTER = {
   error: "unfinished",
 } as const satisfies Record<OpenRouterFinishReason, StopOutcome>;
 
-export const PROVIDER_STOP_REASONS: Readonly<
-  Record<TanStackAIProvider, Readonly<Record<string, StopOutcome>>>
-> = {
+export const PROVIDER_STOP_REASONS = {
   anthropic: ANTHROPIC,
   bedrock: BEDROCK,
   google: GOOGLE,
   mistral: MISTRAL,
   openai: OPENAI,
   openrouter: OPENROUTER,
-};
+} as const satisfies Record<
+  TanStackAIProvider,
+  Readonly<Record<string, StopOutcome>>
+>;
 
 /** The outcome of `reason` from `provider`: `null` is a stream that ended
  *  without one, and a reason the SDK does not know is `unrecognized`. */
@@ -168,7 +186,8 @@ const stopOutcomeOf = (
   if (reason === null) {
     return "unfinished";
   }
-  const table = PROVIDER_STOP_REASONS[provider];
+  const table: Readonly<Record<string, StopOutcome>> =
+    PROVIDER_STOP_REASONS[provider];
   return Object.hasOwn(table, reason)
     ? (table[reason] ?? "unrecognized")
     : "unrecognized";
@@ -177,6 +196,35 @@ const stopOutcomeOf = (
 /** The stop reason a finish of an `unrecognized` stop records; the
  *  provider's own value goes to the logs only. */
 export const UNRECOGNIZED_STOP_REASON = "unknown";
+
+/**
+ * The metadata key a decided terminal event records the provider's stop
+ * reason under: the provider's own value when its table lists it,
+ * `UNRECOGNIZED_STOP_REASON` for a finish whose reason no table lists. A
+ * value no table lists never enters the run.
+ */
+const RECORDED_STOP_REASON_KEY = "stopReason";
+
+/** The stop reason a decided terminal event recorded, if it recorded one. */
+export const recordedStopReasonOf = (chunk: {
+  metadata?: unknown;
+}): string | undefined => {
+  const metadata: unknown = chunk.metadata;
+  if (!isRecord(metadata)) {
+    return undefined;
+  }
+  const reason = metadata[RECORDED_STOP_REASON_KEY];
+  return typeof reason === "string" ? reason : undefined;
+};
+
+/** `terminal` recording `reason`, a value its provider's table lists. */
+const withRecordedStopReason = (
+  terminal: TerminalChunk,
+  reason: string,
+): TerminalChunk => ({
+  ...terminal,
+  metadata: { ...terminal.metadata, [RECORDED_STOP_REASON_KEY]: reason },
+});
 
 /** The longest provider value a log line carries. */
 const LOGGED_REASON_MAX = 64;
@@ -341,6 +389,11 @@ const sharedFields = (chunk: TerminalChunk) => ({
   ...(chunk.usage === undefined ? {} : { usage: chunk.usage }),
 });
 
+/** The message of a run error for a response the provider stopped before
+ *  it finished; `null` when it reported no stop reason at all. */
+export const unfinishedStopMessage = (reason: string | null): string =>
+  `The provider stopped before the response finished (${reason ?? "no stop reason"}).`;
+
 const stoppedError = (
   chunk: TerminalChunk,
   code: string,
@@ -411,11 +464,7 @@ const decidedTerminal = ({
       return finished(outcome);
     }
     case "unfinished": {
-      return stoppedError(
-        chunk,
-        unfinishedCode,
-        `The provider stopped before the response finished (${reason ?? "no stop reason"}).`,
-      );
+      return stoppedError(chunk, unfinishedCode, unfinishedStopMessage(reason));
     }
     case "failed": {
       return failed(
@@ -435,7 +484,10 @@ const decidedTerminal = ({
       const answer = finished("stop");
       return {
         ...answer,
-        metadata: { ...answer.metadata, stopReason: UNRECOGNIZED_STOP_REASON },
+        metadata: {
+          ...answer.metadata,
+          [RECORDED_STOP_REASON_KEY]: UNRECOGNIZED_STOP_REASON,
+        },
       };
     }
     default: {
@@ -500,7 +552,7 @@ export const withDecidedStopReasons = async function* (
     if (outcome === "unrecognized" && reason !== null) {
       reportUnrecognizedStopReason(provider, reason);
     }
-    yield decidedTerminal({
+    const decided = decidedTerminal({
       answered,
       calledTools,
       chunk,
@@ -510,5 +562,8 @@ export const withDecidedStopReasons = async function* (
       run,
       unfinishedCode,
     });
+    yield outcome === "unrecognized" || reason === null
+      ? decided
+      : withRecordedStopReason(decided, reason);
   }
 };

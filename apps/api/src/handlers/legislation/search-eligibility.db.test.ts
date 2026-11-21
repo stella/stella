@@ -132,7 +132,7 @@ beforeAll(
         const tx = new Proxy(roleTx, {
           get: (target, property, receiver) => {
             if (property !== "execute") {
-              return Reflect.get(target, property, receiver);
+              return Reflect.get(target, property, receiver) as unknown;
             }
             return async (...args: Parameters<typeof roleTx.execute>) =>
               (await roleTx.execute(...args)).rows;
@@ -233,7 +233,7 @@ test("a withdrawn version stays openable by its id, labelled withdrawn", async (
 
   expect(await search(term, 10)).toEqual({ ids: [], nextCursor: null });
   expect(
-    await readPublicLegislationHandler(withdrawn, legislationDb),
+    await readPublicLegislationHandler(withdrawn, legislationDb, "pages"),
   ).toMatchObject({
     id: withdrawn,
     windowDisposition: "withdrawn",

@@ -1,4 +1,4 @@
-import { Result, panic } from "better-result";
+import { panic, Result } from "better-result";
 import {
   afterAll,
   afterEach,
@@ -10,7 +10,7 @@ import {
 import { eq } from "drizzle-orm";
 import fc from "fast-check";
 
-import { assertProperty } from "@stll/property-testing";
+import { assertProperty, propertyConfig } from "@stll/property-testing";
 
 import { organization } from "@/api/db/auth-schema";
 import type { SafeDb } from "@/api/db/safe-db";
@@ -19,6 +19,7 @@ import { createSafeDb } from "@/api/db/scoped";
 import { createSafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
@@ -68,7 +69,7 @@ beforeEach(async () => {
   );
 });
 afterEach(async () => {
-  await db.delete(organization).where(eq(organization.id, organizationId));
+  await deleteOrganizationsForTest(db, [organizationId]);
 });
 
 const fill = async (workspaceId: typeof sourceId) => {
@@ -462,6 +463,6 @@ test("contact link mutations preserve the database capacity", async () => {
         }
       },
     ),
-    { numRuns: 12 },
+    propertyConfig({ numRuns: 12 }),
   );
 });

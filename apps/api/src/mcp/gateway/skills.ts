@@ -1,8 +1,13 @@
 import { panic, Result } from "better-result";
 
-import type { SkillResourceKind } from "@stll/skills/resource-kinds";
-
 import type { SafeDbError } from "@/api/db/safe-db";
+import { NO_SKILL_BINDING_SCOPE } from "@/api/lib/agent-skills/binding";
+import {
+  narrowModelOfferedSkills,
+  offerSkillsToModel,
+  SKILL_INVOCATION,
+} from "@/api/lib/agent-skills/invocation";
+import type { ModelOfferedSkills } from "@/api/lib/agent-skills/invocation";
 import {
   anySkillRequiresTools,
   resolveSkillToolAvailability,
@@ -26,11 +31,19 @@ import {
   collisionSafeToolName,
   namespaceSkillToolName,
 } from "@/api/lib/mcp-upstream/namespace";
-import type { McpRequestContext } from "@/api/mcp/context";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
+import type { McpMode } from "@/api/mcp/constants";
+import type { McpRequestResources } from "@/api/mcp/context";
 import { McpGatewayLoadError } from "@/api/mcp/errors";
+import { isMcpDescriptorFeatureEnabled } from "@/api/mcp/feature-access";
+import {
+  modeAllowsSkillTools,
+  servesBuiltInSkillTools,
+} from "@/api/mcp/gateway/mode-policy";
 import {
   hasGrantedScope,
-  listOfferedStaticMcpToolDefinitions,
+  loadOfferedStaticMcpToolDefinitions,
+  usableStaticMcpToolNames,
 } from "@/api/mcp/gateway/static-tool-visibility";
 
 const AVAILABLE: SkillToolAvailability = {
@@ -48,17 +61,20 @@ export type ResolvedSkillTool = AvailableChatSkill & {
 };
 
 /**
- * The skill catalog is the one chat serves (enabled team skills plus the
- * caller's private ones, private first on a slug collision), so every agent
- * surface offers the same skills under the same precedence. Exposed names are
- * assigned over the whole catalog, so hiding an unavailable skill never
- * renames another one.
+ * The skill catalog starts from the one chat serves so installed rows keep
+ * chat's private-over-team precedence and continue to shadow a built-in with
+ * the same slug. Built-ins are tools only for an agent run
+ * (`servesBuiltInSkillTools`); other clients read their guidance as
+ * resources. Exposed names are assigned over the whole catalog, so hiding an
+ * unavailable skill never renames another one.
  */
 const loadSkillTools = async ({
   context,
+  mode,
   scopes,
 }: {
-  context: McpRequestContext;
+  context: McpRequestResources;
+  mode: McpMode;
   scopes: readonly string[] | undefined;
 }): Promise<ResolvedSkillTool[]> => {
   // A load fault propagates instead of `[]`, so a transient DB outage is not
@@ -66,30 +82,30 @@ const loadSkillTools = async ({
   // `tools/list` fails loudly rather than silently dropping skill tools.
   const skills = throwOnLoadFault(
     await listAvailableChatSkillMetadata({
+      // An MCP session has no conversation matter: unbound skills only.
+      bindingScope: NO_SKILL_BINDING_SCOPE,
       organizationId: context.organizationId,
       safeDb: context.safeDb,
       userId: context.userId,
     }),
   );
-  const exposed = exposeSkillTools(skills);
+  const exposed = exposeSkillTools(skills, {
+    includeBuiltIns: servesBuiltInSkillTools(context),
+  });
   if (!anySkillRequiresTools(skills)) {
     return exposed.map((skill) =>
       Object.assign(skill, { availability: AVAILABLE }),
     );
   }
 
-  // `tools/list` keeps a compound tool discoverable on its primary scope
-  // alone; a skill can use it only with every scope it needs.
-  const offeredToolNames = new Set(
-    listOfferedStaticMcpToolDefinitions({
+  const offeredToolNames = usableStaticMcpToolNames(
+    await loadOfferedStaticMcpToolDefinitions({
       context,
-      mode: "default",
+      mode,
       scopes,
-    }).flatMap(({ additionalScopes = [], name }) =>
-      additionalScopes.every((scope) => hasGrantedScope(scopes, scope))
-        ? [name]
-        : [],
-    ),
+      audience: "model",
+    }),
+    scopes,
   );
   return exposed.map((skill) =>
     Object.assign(skill, {
@@ -102,36 +118,71 @@ const loadSkillTools = async ({
 };
 
 /**
- * The skills this session is offered: a skill whose required tools the
+ * The skills this session offers as tools: a skill whose required tools the
  * session does not list is left out, so a client cannot start a skill it
- * cannot finish. `scopes` are the session's granted scopes (`undefined`
- * grants all, as for `tools/list` without a scope filter).
+ * cannot finish. A tool call is the model's own pick, so a `manual` skill is
+ * never a tool; it is served as a prompt (`loadSkillPrompts`), which the
+ * user starts. `scopes` are the session's granted scopes (`undefined` grants
+ * all, as for `tools/list` without a scope filter).
  */
 export const loadVisibleSkillTools = async ({
   context,
+  mode,
   scopes,
 }: {
-  context: McpRequestContext;
+  context: McpRequestResources;
+  mode: McpMode;
   scopes?: readonly string[] | undefined;
-}): Promise<ResolvedSkillTool[]> =>
-  (await loadSkillTools({ context, scopes })).filter(
-    ({ availability }) =>
-      availability.status === SKILL_TOOL_AVAILABILITY_STATUS.available,
+}): Promise<ModelOfferedSkills<ResolvedSkillTool>> =>
+  narrowModelOfferedSkills(
+    offerSkillsToModel({
+      invokedSkillNames: new Set(),
+      skills: await loadSkillTools({ context, mode, scopes }),
+    }),
+    isSkillToolAvailable,
   );
 
 /**
- * Resolves a called skill by its exposed name, unavailable ones included, so
- * a call naming a hidden skill is refused with the reason rather than as an
- * unknown tool.
+ * The `manual` skills this session serves as prompts: the user picks one in
+ * the client, which is the explicit invocation such a skill needs. Same
+ * availability rule as the tools.
+ */
+export const loadSkillPrompts = async ({
+  context,
+  mode,
+  scopes,
+}: {
+  context: McpRequestResources;
+  mode: McpMode;
+  scopes?: readonly string[] | undefined;
+}): Promise<ResolvedSkillTool[]> =>
+  (await loadSkillTools({ context, mode, scopes })).filter(
+    (skill) =>
+      skill.invocation === SKILL_INVOCATION.manual &&
+      isSkillToolAvailable(skill),
+  );
+
+const isSkillToolAvailable = ({
+  availability,
+}: Pick<ResolvedSkillTool, "availability">): boolean =>
+  availability.status === SKILL_TOOL_AVAILABILITY_STATUS.available;
+
+/**
+ * Resolves a called skill by its exposed name, unavailable and `manual` ones
+ * included, so a call naming a hidden skill is refused with the reason rather
+ * than as an unknown tool. Dispatch refuses a `manual` one
+ * (`modelMayStartUninvoked`) before reading anything.
  */
 export const resolveSkillTool = async ({
   context,
+  mode,
   toolName,
 }: {
-  context: McpRequestContext;
+  context: McpRequestResources;
+  mode: McpMode;
   toolName: string;
 }): Promise<ResolvedSkillTool | null> =>
-  (await loadSkillTools({ context, scopes: context.grantedScopes })).find(
+  (await loadSkillTools({ context, mode, scopes: context.grantedScopes })).find(
     (skill) => skill.exposedName === toolName,
   ) ?? null;
 
@@ -146,7 +197,6 @@ export type SkillToolRead =
   | {
       type: typeof SKILL_TOOL_READ_TYPE.resource;
       content: string;
-      kind: SkillResourceKind;
       path: string;
       skill: ResolvedSkillTool;
     }
@@ -169,11 +219,12 @@ export const readSkillTool = async ({
   resourcePath,
   skill,
 }: {
-  context: McpRequestContext;
+  context: McpRequestResources;
   resourcePath: string | undefined;
   skill: ResolvedSkillTool;
 }): Promise<SkillToolRead | null> => {
   const scope = {
+    bindingScope: NO_SKILL_BINDING_SCOPE,
     organizationId: context.organizationId,
     safeDb: context.safeDb,
     skillName: skill.name,
@@ -206,7 +257,6 @@ export const readSkillTool = async ({
         ? {
             type: SKILL_TOOL_READ_TYPE.resource,
             content: read.content,
-            kind: read.kind,
             path: resourcePath,
             skill,
           }
@@ -245,7 +295,12 @@ const isResolvedSkill = ({
 
 const throwOnLoadFault = <T>(result: Result<T, SafeDbError>): T => {
   if (Result.isError(result)) {
-    captureError(result.error, { source: "mcp-gateway-skills" });
+    captureError(
+      result.error,
+      handlerErrorContext("gateway.throwOnLoadFault.result_error", {
+        source: "mcp-gateway-skills",
+      }),
+    );
     // A load fault means the skills may still exist: dispatch answers a
     // retryable error rather than `unknown_tool`.
     throw new McpGatewayLoadError({
@@ -257,21 +312,71 @@ const throwOnLoadFault = <T>(result: Result<T, SafeDbError>): T => {
 };
 
 /**
- * Pure naming step over an already precedence-resolved catalog, exported so
- * tests and the orientation eval derive collision-safe exposed names through
- * the served code path rather than a hand-written mirror of it.
+ * Filters and names an already precedence-resolved catalog, exported so tests
+ * and the orientation eval derive collision-safe installed-skill names through
+ * the served code path rather than a hand-written mirror of it. Installed
+ * skills are named first, so serving built-ins as well never renames one.
  */
 export const exposeSkillTools = (
   skills: readonly AvailableChatSkill[],
+  { includeBuiltIns = false }: { includeBuiltIns?: boolean } = {},
 ): (AvailableChatSkill & { exposedName: string })[] => {
   const seenToolNames = new Set<string>();
+  const exposedNames = new Map<AvailableChatSkill, string>();
+  const nameAll = (source: AvailableChatSkill["source"]) => {
+    for (const skill of skills) {
+      if (skill.source === source) {
+        exposedNames.set(
+          skill,
+          collisionSafeToolName({
+            baseName: namespaceSkillToolName(skill.name),
+            rawName: skill.name,
+            seen: seenToolNames,
+          }),
+        );
+      }
+    }
+  };
+  nameAll(CHAT_SKILL_SOURCE.installed);
+  if (includeBuiltIns) {
+    nameAll(CHAT_SKILL_SOURCE.builtIn);
+  }
 
-  return skills.map((skill) => ({
-    ...skill,
-    exposedName: collisionSafeToolName({
-      baseName: namespaceSkillToolName(skill.name),
-      rawName: skill.name,
-      seen: seenToolNames,
-    }),
-  }));
+  return skills.flatMap((skill) => {
+    const exposedName = exposedNames.get(skill);
+    return exposedName === undefined ? [] : [{ ...skill, exposedName }];
+  });
+};
+
+/**
+ * The skill tools a session is served, exactly as `tools/list` lists them:
+ * the surface and the credential allow skill tools, the session holds
+ * `stella:skills`, and each tool's name is enabled for the caller. The prompt
+ * of a run on the member's computer lists the same set
+ * (`handlers/chat/local-run-skills.ts`), so its catalog and its MCP server
+ * cannot disagree.
+ */
+export const loadServedSkillTools = async ({
+  context,
+  mode,
+  scopes,
+}: {
+  context: McpRequestResources;
+  mode: McpMode;
+  scopes?: readonly string[] | undefined;
+}): Promise<readonly ResolvedSkillTool[]> => {
+  if (
+    !modeAllowsSkillTools(mode, context) ||
+    !hasGrantedScope(scopes, "stella:skills")
+  ) {
+    return [];
+  }
+  return (await loadVisibleSkillTools({ context, mode, scopes })).filter(
+    (skill) =>
+      isMcpDescriptorFeatureEnabled({
+        context,
+        kind: "tools",
+        id: skill.exposedName,
+      }),
+  );
 };

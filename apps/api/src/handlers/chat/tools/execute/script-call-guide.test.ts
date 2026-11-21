@@ -1,13 +1,13 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
 import {
   buildScriptCallGuide,
   classifyScriptName,
-  scriptNameMessage,
   type ScriptCallCatalog,
+  scriptNameMessage,
 } from "@/api/handlers/chat/tools/execute/script-call-guide";
 
 const CATALOG = {
@@ -108,7 +108,8 @@ describe("a read called without its prefix or in another case", () => {
 
   test("only ever runs a read function of the catalog", () => {
     const nameArb = fc.stringMatching(/^[A-Za-z_]{1,24}$/u);
-    fc.assert(
+    assertProperty(
+      "only ever runs a read function of the catalog",
       fc.property(
         fc.array(nameArb, { maxLength: 6 }),
         fc.array(nameArb, { maxLength: 6 }),
@@ -130,7 +131,7 @@ describe("a read called without its prefix or in another case", () => {
           }
         },
       ),
-      propertyConfig(),
+      {},
     );
   });
 });
@@ -191,6 +192,16 @@ describe("a tool this chat does not offer", () => {
 });
 
 describe("any other undefined name", () => {
+  test("does not suggest near matches for a long name", () => {
+    const name = "x".repeat(10_000);
+    const startedAt = performance.now();
+    expect(classifyScriptName(name, CATALOG)).toEqual({
+      kind: "unknown",
+      name,
+    });
+    expect(performance.now() - startedAt).toBeLessThan(50);
+  });
+
   test("keeps the script's own error", () => {
     for (const name of ["result", "matters", "x", "window", "_"]) {
       expect(classifyScriptName(name, CATALOG).kind).toBe("unknown");

@@ -2,12 +2,16 @@ import { useQuery } from "@tanstack/react-query";
 import { useNow, useTranslations } from "use-intl";
 
 import { Temporal } from "@stll/time";
+import { Button } from "@stll/ui/button";
 import { Popover, PopoverPanel, PopoverTrigger } from "@stll/ui/popover";
 import { cn } from "@stll/ui/utils";
 
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { decisionYear } from "@/features/case-law/citation-format";
-import { totalCitations } from "@/features/case-law/citation-treatment";
+import {
+  citationSummaryIsCapped,
+  totalCitations,
+} from "@/features/case-law/citation-treatment";
 import { citationStripFromYear } from "@/features/case-law/components/case-viewer/citation-header";
 import { CitationTimelinePanel } from "@/features/case-law/components/citation-timeline-panel";
 import {
@@ -19,7 +23,7 @@ import { decisionCitationSummaryOptions } from "@/features/case-law/queries/cita
 import { useMainCaseLawDecision } from "@/features/case-law/use-main-decision";
 import { useHydrated } from "@/hooks/use-hydrated";
 import { useFormatter } from "@/i18n/formatting-context";
-import { useQueryView } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
 
 /**
  * The reception of the decision on the main view, in the title row: the
@@ -53,7 +57,7 @@ export const TopBarCitationsFor = ({
   const t = useTranslations();
   const format = useFormatter();
   const now = useNow();
-  const summaryView = useQueryView(
+  const summaryView = queryView(
     useQuery(decisionCitationSummaryOptions(decision.id)),
   );
   // Prefetched without blocking the route: known on one side of hydration
@@ -67,7 +71,7 @@ export const TopBarCitationsFor = ({
   }
   const summary = summaryView.items;
   const total = totalCitations(summary.incoming);
-  if (total === 0 && !summary.capped.incoming) {
+  if (total === 0 && !citationSummaryIsCapped(summary, "incoming")) {
     return <QueryViewFeedback view={summaryView} />;
   }
   const positive = summary.incoming.positive + summary.incoming.supportive;
@@ -81,13 +85,13 @@ export const TopBarCitationsFor = ({
     firstCitedYear: summary.incomingByYear.at(0)?.year ?? null,
   });
   const label = [
-    summary.capped.incoming
+    citationSummaryIsCapped(summary, "incoming")
       ? t("caseLaw.citation.citedAtLeast", { count: format.number(total) })
       : t("caseLaw.citation.citedSummary", { count: total }),
-    !summary.capped.incoming && positive > 0
+    !citationSummaryIsCapped(summary, "incoming") && positive > 0
       ? t("caseLaw.citation.positiveCount", { count: positive })
       : null,
-    !summary.capped.incoming && negative > 0
+    !citationSummaryIsCapped(summary, "incoming") && negative > 0
       ? t("caseLaw.citation.negativeCount", { count: negative })
       : null,
   ]
@@ -109,40 +113,50 @@ export const TopBarCitationsFor = ({
       <Popover>
         <PopoverTrigger
           render={
-            <button
+            <Button
               aria-label={label}
-              className={cn(
-                "text-muted-foreground hover:text-foreground ms-3 flex shrink-0 items-center gap-2 rounded-sm px-1 py-0.5 font-sans text-xs",
-                CITATION_TRIGGER_TOUCH_TARGET,
-              )}
-              type="button"
+              className="group/plain ms-3 shrink-0"
+              variant="plain"
             />
           }
         >
-          <CitationYearStrip
-            byYear={summary.incomingByYear}
-            fromYear={fromYear}
-            toYear={currentYear}
-          />
-          <span aria-hidden="true" className="tabular-nums">
-            {format.number(total)}
-            {summary.capped.incoming ? "+" : null}
-          </span>
-          {!summary.capped.incoming && (positive > 0 || negative > 0) && (
-            <span
-              aria-hidden="true"
-              className="flex items-center gap-1 tabular-nums"
-            >
-              {positive > 0 && (
-                <span className="text-primary">+{format.number(positive)}</span>
-              )}
-              {negative > 0 && (
-                <span className="text-destructive">
-                  −{format.number(negative)}
+          <span
+            className={cn(
+              "text-muted-foreground group-hover/plain:text-foreground group-data-popup-open/plain:text-foreground flex items-center gap-2 rounded-sm px-1 py-0.5 font-sans text-xs",
+              CITATION_TRIGGER_TOUCH_TARGET,
+            )}
+          >
+            {/* The counts carry the trigger at phone width; the strip would
+              take the room the case number needs. */}
+            <CitationYearStrip
+              byYear={summary.incomingByYear}
+              className="max-sm:hidden"
+              fromYear={fromYear}
+              toYear={currentYear}
+            />
+            <span aria-hidden="true" className="tabular-nums">
+              {format.number(total)}
+              {citationSummaryIsCapped(summary, "incoming") ? "+" : null}
+            </span>
+            {!citationSummaryIsCapped(summary, "incoming") &&
+              (positive > 0 || negative > 0) && (
+                <span
+                  aria-hidden="true"
+                  className="flex items-center gap-1 tabular-nums"
+                >
+                  {positive > 0 && (
+                    <span className="text-primary">
+                      +{format.number(positive)}
+                    </span>
+                  )}
+                  {negative > 0 && (
+                    <span className="text-destructive">
+                      −{format.number(negative)}
+                    </span>
+                  )}
                 </span>
               )}
-            </span>
-          )}
+          </span>
         </PopoverTrigger>
         <PopoverPanel
           align="start"

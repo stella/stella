@@ -5,43 +5,72 @@ import type { QueryClient } from "@tanstack/react-query";
 import {
   ClientOnly,
   createRootRouteWithContext,
+  type ErrorComponentProps,
   HeadContent,
   Outlet,
+  redirect,
   Scripts,
+  useNavigate,
+  useRouter,
   useRouterState,
-  type ErrorComponentProps,
 } from "@tanstack/react-router";
+import { panic } from "better-result";
+
+import { cn } from "@stll/ui/utils";
 
 import { AppProviders } from "@/app-providers";
 import { ApiVersionMismatchProvider } from "@/components/api-version-mismatch-refresh";
 import {
   DefaultErrorComponent,
-  DefaultPendingComponent,
+  DefaultNotFoundComponent,
 } from "@/components/route-components";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
-import { getLangDir, useI18nStore } from "@/i18n/i18n-store";
+import { RouteProviderScopeBoundary } from "@/components/route-provider-scope/route-provider-scope";
+import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
+import { ClientDocumentPresentationBoot } from "@/i18n/client-document-presentation-boot";
+import {
+  documentPresentationSnapshot,
+  loadDocumentPresentation,
+} from "@/i18n/document-presentation";
+import {
+  getLangDir,
+  RenderedI18nStoreProvider,
+  useI18nStore,
+} from "@/i18n/i18n-store";
+import "@/fonts.css";
 import {
   applyDocumentLanguage,
   pageDocumentLanguage,
   resolveDocumentLanguage,
 } from "@/i18n/page-language";
-import "@/fonts.css";
+import { loadMcpHandoff, pendingHandoffPath } from "@/lib/account/mcp-handoff";
+import type { PresentationPrefs } from "@/lib/account/presentation-prefs/preferences";
+import {
+  getBrowserPresentationPrefs,
+  PresentationPrefsProvider,
+} from "@/lib/account/presentation-prefs/provider";
 import type { AnalyticsValue } from "@/lib/analytics/provider";
 import type { RouteErrorLifecycleController } from "@/lib/analytics/route-error-lifecycle";
 import { RouteErrorLifecycleProvider } from "@/lib/analytics/route-error-lifecycle-context";
+import { detached } from "@/lib/detached";
 import {
-  isPublicKnowledgeEnabled,
   isPublicKnowledgeCrawlAllowed,
+  isPublicKnowledgeEnabled,
 } from "@/lib/knowledge/public-knowledge-launch";
 import { publicToolsBasePath } from "@/lib/knowledge/public-tools-path";
+import { sweepStaleRedirectRequests } from "@/lib/mcp-oauth-channel";
 import { isPublicLawCrawlAllowed } from "@/lib/public-law-launch";
 import { isPublicSsrPath } from "@/lib/public-ssr-paths";
 import { isPublicToolsCrawlAllowed } from "@/lib/public-tools-launch";
 import { requireFreshDocument } from "@/lib/session-cache-guard";
 import { documentResponsePolicyHeaders } from "@/route-response-policy";
 import { AppFrameHost } from "@/routes/-app-frame-host";
+import { APP_FRAME_SCOPE } from "@/routes/-app-frame-scope";
+import { requireProfessionalUseForSignedInRoute } from "@/routes/-auth-context";
 import { createRootHead } from "@/routes/-root-head";
+import { RootPendingComponent } from "@/routes/-root-pending";
+import { StrayFileDropGuard } from "@/routes/-stray-file-drop-guard";
 import "@/styles/app.css";
+import "@/styles/print.css";
 
 const isDev = import.meta.env.DEV;
 const DevRoot = isDev
@@ -51,11 +80,36 @@ const DevRoot = isDev
 export const Route = createRootRouteWithContext<{
   analyticsValue: AnalyticsValue;
   queryClient: QueryClient;
+  presentationPrefs: PresentationPrefs;
   routeErrorLifecycle: RouteErrorLifecycleController;
 }>()({
+  staticData: { appFrame: APP_FRAME_SCOPE.none },
   ssr: ({ location: routeLocation }) => isPublicSsrPath(routeLocation.pathname),
   beforeLoad: async ({ context, location }) => {
+    const handoffRedirect = await loadMcpHandoff();
+    if (handoffRedirect) {
+      redirect({ ...handoffRedirect.options, throw: true });
+      panic("TanStack Router did not throw the handoff redirect.");
+    }
     await requireFreshDocument({ queryClient: context.queryClient, location });
+    // Public SSR has no browser session. Caching its anonymous response would
+    // keep signed-in member actions hidden after hydration.
+    if (import.meta.env.SSR) {
+      return {
+        presentationPrefs: await loadDocumentPresentation(context.queryClient),
+      };
+    }
+    // Development fixtures supply their own auth providers without an API.
+    if (isDev && location.pathname === "/dev") {
+      return { presentationPrefs: getBrowserPresentationPrefs() };
+    }
+    await requireProfessionalUseForSignedInRoute({
+      queryClient: context.queryClient,
+      location,
+    });
+    return {
+      presentationPrefs: await loadDocumentPresentation(context.queryClient),
+    };
   },
   shellComponent: RootDocument,
   component: RootComponent,
@@ -72,9 +126,28 @@ export const Route = createRootRouteWithContext<{
         toolsBasePath: publicToolsBasePath(),
       },
     }),
-  pendingComponent: () => <DefaultPendingComponent className="h-dvh" />,
+  pendingComponent: RootPendingComponent,
   errorComponent: RootErrorComponent,
+  notFoundComponent: RootNotFoundComponent,
 });
+
+function RootNotFoundComponent() {
+  const appContext = Route.useRouteContext({
+    select: (context) => ({
+      analyticsValue: context.analyticsValue,
+      queryClient: context.queryClient,
+    }),
+  });
+
+  return (
+    <AppProviders
+      analyticsValue={appContext.analyticsValue}
+      queryClient={appContext.queryClient}
+    >
+      <DefaultNotFoundComponent />
+    </AppProviders>
+  );
+}
 
 function RootErrorComponent(props: ErrorComponentProps) {
   const appContext = Route.useRouteContext({
@@ -95,7 +168,38 @@ function RootErrorComponent(props: ErrorComponentProps) {
 }
 
 function RootComponent() {
-  const appContext = Route.useRouteContext({
+  const pathname = useRouterState({
+    select: (state) => state.location.pathname,
+  });
+  const navigate = useNavigate();
+  const router = useRouter();
+  // Public documents reuse server route context during hydration. Re-enter
+  // the browser guard after mounting so redirects stay in the router boundary.
+  useMountEffect(() => {
+    sweepStaleRedirectRequests();
+    const href = pendingHandoffPath();
+    if (href) {
+      detached(
+        navigate({
+          href,
+          replace: true,
+        }),
+        "mcp-handoff.route-entry",
+      );
+      return;
+    }
+    if (isPublicSsrPath(router.state.location.pathname)) {
+      detached(
+        navigate({
+          href: router.state.location.publicHref,
+          replace: true,
+          resetScroll: false,
+        }),
+        "professional-use.route-entry",
+      );
+    }
+  });
+  const { analyticsValue, queryClient } = Route.useRouteContext({
     select: (context) => ({
       analyticsValue: context.analyticsValue,
       queryClient: context.queryClient,
@@ -103,21 +207,31 @@ function RootComponent() {
   });
 
   return (
-    <AppProviders
-      analyticsValue={appContext.analyticsValue}
-      queryClient={appContext.queryClient}
-    >
+    <AppProviders analyticsValue={analyticsValue} queryClient={queryClient}>
+      {!(isDev && pathname === "/dev") && (
+        <ClientDocumentPresentationBoot queryClient={queryClient} />
+      )}
       <RootApp />
     </AppProviders>
   );
 }
 
 function RootDocument({ children }: Readonly<{ children: ReactNode }>) {
+  const nonce = useRouter().options.ssr?.nonce;
   const routeErrorLifecycle = Route.useRouteContext({
     select: (context) => context.routeErrorLifecycle,
   });
-  const interfaceLocale = useI18nStore((s) => s.loadedLang);
+  const prefs = Route.useRouteContext({
+    select: (context) => context.presentationPrefs,
+  });
+  const loadedLang = useI18nStore((s) => s.loadedLang);
   const hasLoadedOnce = useI18nStore((s) => s.hasLoadedOnce);
+  // A member page's root does not load on the server, so no locale is
+  // rendered there; its document takes the presentation's locale, the one
+  // the browser restores before it hydrates.
+  const interfaceLocale = hasLoadedOnce
+    ? loadedLang
+    : documentPresentationSnapshot(prefs).locale;
   const documentLanguage = useRouterState({
     select: (state) => pageDocumentLanguage(state.matches),
   });
@@ -127,10 +241,7 @@ function RootDocument({ children }: Readonly<{ children: ReactNode }>) {
   });
   const dir = getLangDir(interfaceLocale);
 
-  // Hydration keeps the attributes the server (or prepaint-init.js) put on
-  // the element, so later locale loads and navigations are written here.
-  // Until the first locale has loaded, the server markup and the prepaint
-  // guess stand.
+  // Synchronize later language changes and navigations with the document.
   useExternalSyncEffect(() => {
     if (!hasLoadedOnce) {
       return;
@@ -138,32 +249,38 @@ function RootDocument({ children }: Readonly<{ children: ReactNode }>) {
     applyDocumentLanguage({ dir, lang });
   }, [dir, hasLoadedOnce, lang]);
 
+  // The system colour scheme alone depends on browser media queries.
   return (
-    // prepaint-init.js mutates the html element's class, and for RTL
-    // locales its lang/dir, before React hydrates the document, so the
-    // attribute set never matches the server markup; suppress the
-    // per-element warning rather than letting every SSR page log a
-    // recovered hydration error. The server renders the document's own
-    // language on pages that show one, and the interface locale otherwise;
-    // data-lang-source tells prepaint-init.js to keep a document language.
-    <html
-      lang={lang}
-      dir={dir}
-      data-lang-source={langSource}
-      suppressHydrationWarning
-    >
-      <head>
-        <HeadContent />
+    <RenderedI18nStoreProvider>
+      <html
+        className={cn(
+          prefs.theme === "dark" && "dark",
+          prefs.palette !== "neutral" && `palette-${prefs.palette}`,
+        )}
+        data-theme={prefs.theme}
+        lang={lang}
+        dir={dir}
+        data-lang-source={langSource}
+        suppressHydrationWarning
+      >
+        <head>
+          <HeadContent />
 
-        <script src="/prepaint-init.js" />
-      </head>
-      <body>
-        <RouteErrorLifecycleProvider controller={routeErrorLifecycle}>
-          {children}
-        </RouteErrorLifecycleProvider>
-        <Scripts />
-      </body>
-    </html>
+          <script nonce={nonce} src="/handoff-init.js" />
+          <script nonce={nonce} src="/prepaint-init.js" />
+        </head>
+        <body>
+          <RouteErrorLifecycleProvider controller={routeErrorLifecycle}>
+            <RouteProviderScopeBoundary>
+              <PresentationPrefsProvider initialPrefs={prefs}>
+                {children}
+              </PresentationPrefsProvider>
+            </RouteProviderScopeBoundary>
+          </RouteErrorLifecycleProvider>
+          <Scripts />
+        </body>
+      </html>
+    </RenderedI18nStoreProvider>
   );
 }
 
@@ -174,6 +291,7 @@ function RootApp() {
         <AppFrameHost>
           <Outlet />
         </AppFrameHost>
+        <StrayFileDropGuard />
         {DevRoot ? (
           <ClientOnly>
             <Suspense fallback={null}>

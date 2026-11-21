@@ -1,10 +1,37 @@
+import { panic } from "better-result";
+import { and, inArray, notInArray, or, sql } from "drizzle-orm";
+import type { SQLWrapper } from "drizzle-orm";
+
+import { AUDIT_CHANGES_STATUS } from "@stll/api-contract/audit-log";
+
+import { auditActivityActionSql, auditLogs } from "@/api/db/schema";
 import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log.constants";
 import type { AuditResourceType } from "@/api/lib/audit-log.constants";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
+import type { DeploymentFeatureFlag } from "@/api/lib/deployment-feature";
+import { isFeatureEnabled } from "@/api/lib/feature-access/policy";
+import type {
+  FeatureAccessPrincipal,
+  FeatureAccessSnapshot,
+} from "@/api/lib/feature-access/policy";
+import {
+  AI_MEMORY_FEATURE_ID,
+  CONFLICT_CHECK_FEATURE_ID,
+  LEGAL_LISTS_FEATURE_ID,
+  LIST_VERIFICATION_FEATURE_ID,
+} from "@/api/lib/feature-access/registry";
+import type { FeatureId } from "@/api/lib/feature-access/registry";
+import { LIST_VERIFICATION_ITEM_OPERATION } from "@/api/lib/lists/item-operations";
+import { SOURCE_KIND_SET_OPERATION } from "@/api/lib/lists/source-kind";
 
 export type ChatAuditResourceType =
   | typeof AUDIT_RESOURCE_TYPE.CHAT_THREAD
   | typeof AUDIT_RESOURCE_TYPE.CHAT_MESSAGE
-  | typeof AUDIT_RESOURCE_TYPE.CHAT_FILE;
+  | typeof AUDIT_RESOURCE_TYPE.CHAT_FILE
+  | typeof AUDIT_RESOURCE_TYPE.CHAT_TOOL_EXECUTION
+  | typeof AUDIT_RESOURCE_TYPE.CHAT_TOOL_GRANT
+  | typeof AUDIT_RESOURCE_TYPE.CHAT_BROWSER_SITE_GRANT
+  | typeof AUDIT_RESOURCE_TYPE.CHAT_LOCAL_FOLDER_APPROVAL;
 
 export type NonChatAuditResourceType = Exclude<
   AuditResourceType,
@@ -15,8 +42,12 @@ export type NonChatAuditResourceType = Exclude<
 const CHAT_THREAD_SETTING_FIELDS = [
   "chatModel",
   "chatReasoningEffort",
+  "chatLocalRunTarget",
   "contextMatterIds",
   "dataWorkspaceIds",
+  "limitReminder",
+  "limitReminderOnReset",
+  "pinState",
   "titleChanged",
   "titleSource",
   "webSearchEnabled",
@@ -44,6 +75,12 @@ const CHAT_CHANGE_FIELDS = {
     CHAT_MESSAGE_CHANGE_FIELDS,
   ),
   [AUDIT_RESOURCE_TYPE.CHAT_FILE]: new Set<string>(),
+  // Tool executions, grants and folder approvals describe themselves in
+  // `metadata` only.
+  [AUDIT_RESOURCE_TYPE.CHAT_TOOL_EXECUTION]: new Set<string>(),
+  [AUDIT_RESOURCE_TYPE.CHAT_TOOL_GRANT]: new Set<string>(),
+  [AUDIT_RESOURCE_TYPE.CHAT_BROWSER_SITE_GRANT]: new Set<string>(),
+  [AUDIT_RESOURCE_TYPE.CHAT_LOCAL_FOLDER_APPROVAL]: new Set<string>(),
 } as const satisfies Record<ChatAuditResourceType, ReadonlySet<string>>;
 
 type AuditDiff = { old: unknown; new: unknown };
@@ -64,6 +101,10 @@ export type ChatAuditChanges = {
     Record<(typeof CHAT_MESSAGE_CHANGE_FIELDS)[number], AuditDiff>
   >;
   [AUDIT_RESOURCE_TYPE.CHAT_FILE]: Record<string, never>;
+  [AUDIT_RESOURCE_TYPE.CHAT_TOOL_EXECUTION]: Record<string, never>;
+  [AUDIT_RESOURCE_TYPE.CHAT_TOOL_GRANT]: Record<string, never>;
+  [AUDIT_RESOURCE_TYPE.CHAT_BROWSER_SITE_GRANT]: Record<string, never>;
+  [AUDIT_RESOURCE_TYPE.CHAT_LOCAL_FOLDER_APPROVAL]: Record<string, never>;
 };
 
 const isChatResourceType = (
@@ -152,4 +193,348 @@ export const auditMetadataForResource = (
       .filter(([key]) => key !== "title")
       .map(([key, value]) => [key, withoutTitles(value)]),
   );
+};
+
+type AuditDetailPolicy =
+  | { type: "ungated" }
+  | { type: "caller-feature"; featureId: FeatureId }
+  | { type: "deployment-feature"; feature: DeploymentFeatureFlag };
+
+export type AuditResourceDetailPolicy = {
+  default: AuditDetailPolicy;
+  operations: Readonly<Record<string, AuditDetailPolicy>>;
+};
+
+// The indexed relationship classifier reads workspace changes without a feature predicate.
+type AuditDetailPolicies = Record<
+  AuditResourceType,
+  AuditResourceDetailPolicy
+> & {
+  [AUDIT_RESOURCE_TYPE.WORKSPACE]: {
+    readonly default: { readonly type: "ungated" };
+    readonly operations: Readonly<Record<string, never>>;
+  };
+};
+
+const UNGATED_AUDIT_DETAILS = {
+  default: { type: "ungated" },
+  operations: {},
+} as const;
+const TIME_BILLING_AUDIT_DETAILS = {
+  default: { type: "caller-feature", featureId: "time-billing" },
+  operations: {},
+} as const satisfies AuditResourceDetailPolicy;
+const VERIFICATION_AUDIT_DETAILS = {
+  type: "caller-feature",
+  featureId: LIST_VERIFICATION_FEATURE_ID,
+} as const satisfies AuditDetailPolicy;
+
+/** Every new audit resource requires an explicit detail policy. */
+export const AUDIT_DETAIL_POLICY = {
+  [AUDIT_RESOURCE_TYPE.LEGAL_HOLD]: UNGATED_AUDIT_DETAILS,
+  [AUDIT_RESOURCE_TYPE.MCP_WEB_HANDOFF]: UNGATED_AUDIT_DETAILS,
+  [AUDIT_RESOURCE_TYPE.SERVICE_OAUTH_CLIENT]: UNGATED_AUDIT_DETAILS,
+  [AUDIT_RESOURCE_TYPE.LEGAL_RESOLVE]: UNGATED_AUDIT_DETAILS,
+  [AUDIT_RESOURCE_TYPE.AUDIT_LOG]: UNGATED_AUDIT_DETAILS,
+  [AUDIT_RESOURCE_TYPE.AGENT_SKILL]: UNGATED_AUDIT_DETAILS,
+  [AUDIT_RESOURCE_TYPE.AGENT_SKILL_COMMENT]: UNGATED_AUDIT_DETAILS,
+  [AUDIT_RESOURCE_TYPE.AGENT_SKILL_PROPOSAL]: UNGATED_AUDIT_DETAILS,
+  [AUDIT_RESOURCE_TYPE.AI_MEMORY]: {
+    default: { type: "caller-feature", featureId: AI_MEMORY_FEATURE_ID },
+    operations: {},
+  },
+  [AUDIT_RESOURCE_TYPE.ANNOUNCEMENT]: UNGATED_AUDIT_DETAILS,
+  [AUDIT_RESOURCE_TYPE.BILLING_CODE]: TIME_BILLING_AUDIT_DETAILS,
+  [AUDIT_RESOURCE_TYPE.CASE_LAW_MATTER_LINK]: UNGATED_AUDIT_DETAILS,
+  [AUDIT_RESOURCE_TYPE.CASE_LAW_DECISION_ANNOTATION]: UNGATED_AUDIT_DETAILS,
+  [AUDIT_RESOURCE_TYPE.CASE_LAW_READER_ANSWER]: UNGATED_AUDIT_DETAILS,
+  [AUDIT_RESOURCE_TYPE.CASE_LAW_RESEARCH_COLUMN]: UNGATED_AUDIT_DETAILS,
+  [AUDIT_RESOURCE_TYPE.CHAT_FILE]: UNGATED_AUDIT_DETAILS,
+  [AUDIT_RESOURCE_TYPE.CHAT_MESSAGE]: UNGATED_AUDIT_DETAILS,
+  [AUDIT_RESOURCE_TYPE.CHAT_THREAD]: UNGATED_AUDIT_DETAILS,
+  [AUDIT_RESOURCE_TYPE.CHAT_TOOL_EXECUTION]: UNGATED_AUDIT_DETAILS,
+  [AUDIT_RESOURCE_TYPE.CHAT_TOOL_GRANT]: UNGATED_AUDIT_DETAILS,
+  [AUDIT_RESOURCE_TYPE.CHAT_BROWSER_SITE_GRANT]: UNGATED_AUDIT_DETAILS,
+  [AUDIT_RESOURCE_TYPE.CHAT_LOCAL_FOLDER_APPROVAL]: UNGATED_AUDIT_DETAILS,
+  [AUDIT_RESOURCE_TYPE.CLAUSE]: UNGATED_AUDIT_DETAILS,
+  [AUDIT_RESOURCE_TYPE.CLAUSE_CATEGORY]: UNGATED_AUDIT_DETAILS,
+  [AUDIT_RESOURCE_TYPE.CLAUSE_TEMPLATE_LINK]: UNGATED_AUDIT_DETAILS,
+  [AUDIT_RESOURCE_TYPE.CLAUSE_VARIANT]: UNGATED_AUDIT_DETAILS,
+  [AUDIT_RESOURCE_TYPE.CONFLICT_CHECK]: {
+    default: { type: "caller-feature", featureId: CONFLICT_CHECK_FEATURE_ID },
+    operations: {},
+  },
+  [AUDIT_RESOURCE_TYPE.CONTACT]: UNGATED_AUDIT_DETAILS,
+  [AUDIT_RESOURCE_TYPE.CONTACT_DIRECTORY]: UNGATED_AUDIT_DETAILS,
+  [AUDIT_RESOURCE_TYPE.CORRESPONDENCE]: UNGATED_AUDIT_DETAILS,
+  [AUDIT_RESOURCE_TYPE.DOCUMENT_ANNOTATION]: UNGATED_AUDIT_DETAILS,
+  [AUDIT_RESOURCE_TYPE.DOCUMENT_TYPE]: UNGATED_AUDIT_DETAILS,
+  [AUDIT_RESOURCE_TYPE.USAGE_ALLOCATION]: {
+    default: { type: "deployment-feature", feature: "FEATURE_USAGE" },
+    operations: {},
+  },
+  [AUDIT_RESOURCE_TYPE.USAGE_ENTITLEMENT]: {
+    default: { type: "deployment-feature", feature: "FEATURE_USAGE" },
+    operations: {},
+  },
+  [AUDIT_RESOURCE_TYPE.USAGE_EVENT]: {
+    default: { type: "deployment-feature", feature: "FEATURE_USAGE" },
+    operations: {},
+  },
+  [AUDIT_RESOURCE_TYPE.USAGE_PROVIDER_EVENT]: {
+    default: { type: "deployment-feature", feature: "FEATURE_USAGE" },
+    operations: {},
+  },
+  [AUDIT_RESOURCE_TYPE.DESKTOP_EDIT_SESSION]: UNGATED_AUDIT_DETAILS,
+  [AUDIT_RESOURCE_TYPE.BILINGUAL_TRANSLATION_RUN]: UNGATED_AUDIT_DETAILS,
+  [AUDIT_RESOURCE_TYPE.DOCUMENT_TRANSLATION_RUN]: UNGATED_AUDIT_DETAILS,
+  [AUDIT_RESOURCE_TYPE.DOCUMENT_REVIEW_RUN]: UNGATED_AUDIT_DETAILS,
+  [AUDIT_RESOURCE_TYPE.ENTITY]: {
+    default: { type: "ungated" },
+    operations: { sample_case_fact_created: VERIFICATION_AUDIT_DETAILS },
+  },
+  [AUDIT_RESOURCE_TYPE.ENTITY_VERSION]: UNGATED_AUDIT_DETAILS,
+  [AUDIT_RESOURCE_TYPE.EXPENSE]: TIME_BILLING_AUDIT_DETAILS,
+  [AUDIT_RESOURCE_TYPE.FEEDBACK_REPORT]: UNGATED_AUDIT_DETAILS,
+  [AUDIT_RESOURCE_TYPE.FIELD]: UNGATED_AUDIT_DETAILS,
+  [AUDIT_RESOURCE_TYPE.FILE_COMPARISON]: UNGATED_AUDIT_DETAILS,
+  [AUDIT_RESOURCE_TYPE.FLOW_DEFINITION]: UNGATED_AUDIT_DETAILS,
+  [AUDIT_RESOURCE_TYPE.FLOW_RUN]: UNGATED_AUDIT_DETAILS,
+  [AUDIT_RESOURCE_TYPE.FOLIO_COLLAB_ROOM]: UNGATED_AUDIT_DETAILS,
+  [AUDIT_RESOURCE_TYPE.SIGNAL]: UNGATED_AUDIT_DETAILS,
+  [AUDIT_RESOURCE_TYPE.INVOICE]: TIME_BILLING_AUDIT_DETAILS,
+  [AUDIT_RESOURCE_TYPE.PERSONAL_API_KEY]: UNGATED_AUDIT_DETAILS,
+  [AUDIT_RESOURCE_TYPE.MACHINE_API_KEY]: UNGATED_AUDIT_DETAILS,
+  [AUDIT_RESOURCE_TYPE.LEGAL_LIST]: {
+    default: { type: "caller-feature", featureId: LEGAL_LISTS_FEATURE_ID },
+    operations: {
+      sample_case_loaded: VERIFICATION_AUDIT_DETAILS,
+      sample_case_released: VERIFICATION_AUDIT_DETAILS,
+      verification_chronology_exported: VERIFICATION_AUDIT_DETAILS,
+      [SOURCE_KIND_SET_OPERATION]: VERIFICATION_AUDIT_DETAILS,
+    },
+  },
+  [AUDIT_RESOURCE_TYPE.LEGAL_LIST_GENERATION]: {
+    default: { type: "caller-feature", featureId: LEGAL_LISTS_FEATURE_ID },
+    operations: {
+      fact_extraction_started: VERIFICATION_AUDIT_DETAILS,
+      fact_extraction_completed: VERIFICATION_AUDIT_DETAILS,
+      fact_extraction_failed: VERIFICATION_AUDIT_DETAILS,
+    },
+  },
+  [AUDIT_RESOURCE_TYPE.LEGAL_LIST_ITEM]: {
+    default: { type: "caller-feature", featureId: LEGAL_LISTS_FEATURE_ID },
+    operations: {
+      [LIST_VERIFICATION_ITEM_OPERATION.factDetailsSet]:
+        VERIFICATION_AUDIT_DETAILS,
+      [LIST_VERIFICATION_ITEM_OPERATION.sourceVerificationChanged]:
+        VERIFICATION_AUDIT_DETAILS,
+    },
+  },
+  [AUDIT_RESOURCE_TYPE.LEGAL_LIST_VERIFICATION]: {
+    default: VERIFICATION_AUDIT_DETAILS,
+    operations: {},
+  },
+  [AUDIT_RESOURCE_TYPE.MCP_CONNECTION]: UNGATED_AUDIT_DETAILS,
+  [AUDIT_RESOURCE_TYPE.MCP_GATEWAY_TOOL]: UNGATED_AUDIT_DETAILS,
+  [AUDIT_RESOURCE_TYPE.ORGANIZATION_ACCESS_STATE]: {
+    default: {
+      type: "deployment-feature",
+      feature: "FEATURE_ORG_ACCESS_STATE",
+    },
+    operations: {},
+  },
+  [AUDIT_RESOURCE_TYPE.ORGANIZATION_SETTINGS]: UNGATED_AUDIT_DETAILS,
+  [AUDIT_RESOURCE_TYPE.OUTBOUND_ACTION]: UNGATED_AUDIT_DETAILS,
+  [AUDIT_RESOURCE_TYPE.PDF_SIGNING_SESSION]: UNGATED_AUDIT_DETAILS,
+  [AUDIT_RESOURCE_TYPE.PLAYBOOK]: UNGATED_AUDIT_DETAILS,
+  [AUDIT_RESOURCE_TYPE.PROPERTY]: UNGATED_AUDIT_DETAILS,
+  [AUDIT_RESOURCE_TYPE.RATE_ENTRY]: TIME_BILLING_AUDIT_DETAILS,
+  [AUDIT_RESOURCE_TYPE.REPORT_EXPORT]: UNGATED_AUDIT_DETAILS,
+  [AUDIT_RESOURCE_TYPE.DATA_EXPORT]: UNGATED_AUDIT_DETAILS,
+  [AUDIT_RESOURCE_TYPE.RATE_TABLE]: TIME_BILLING_AUDIT_DETAILS,
+  [AUDIT_RESOURCE_TYPE.SAVED_SEARCH]: UNGATED_AUDIT_DETAILS,
+  [AUDIT_RESOURCE_TYPE.SEARCH_HISTORY]: UNGATED_AUDIT_DETAILS,
+  [AUDIT_RESOURCE_TYPE.SELLER_PROFILE]: TIME_BILLING_AUDIT_DETAILS,
+  [AUDIT_RESOURCE_TYPE.SAVED_TIME_NARRATIVE]: TIME_BILLING_AUDIT_DETAILS,
+  [AUDIT_RESOURCE_TYPE.VAT_RATE]: TIME_BILLING_AUDIT_DETAILS,
+  [AUDIT_RESOURCE_TYPE.NUMBER_SERIES]: TIME_BILLING_AUDIT_DETAILS,
+  [AUDIT_RESOURCE_TYPE.STATUTE_ANNOTATION]: UNGATED_AUDIT_DETAILS,
+  [AUDIT_RESOURCE_TYPE.LEGISLATION_MATTER_LINK]: UNGATED_AUDIT_DETAILS,
+  [AUDIT_RESOURCE_TYPE.STYLE_SET]: UNGATED_AUDIT_DETAILS,
+  [AUDIT_RESOURCE_TYPE.TEMPLATE]: UNGATED_AUDIT_DETAILS,
+  [AUDIT_RESOURCE_TYPE.TEMPLATE_LOOKUP_FORMAT]: UNGATED_AUDIT_DETAILS,
+  [AUDIT_RESOURCE_TYPE.TIME_ENTRY]: TIME_BILLING_AUDIT_DETAILS,
+  [AUDIT_RESOURCE_TYPE.TIME_DAILY_TARGET]: TIME_BILLING_AUDIT_DETAILS,
+  [AUDIT_RESOURCE_TYPE.TIME_TIMER]: TIME_BILLING_AUDIT_DETAILS,
+  [AUDIT_RESOURCE_TYPE.USER_FILE]: UNGATED_AUDIT_DETAILS,
+  [AUDIT_RESOURCE_TYPE.VIEW]: UNGATED_AUDIT_DETAILS,
+  [AUDIT_RESOURCE_TYPE.VIEW_TEMPLATE]: UNGATED_AUDIT_DETAILS,
+  [AUDIT_RESOURCE_TYPE.WORKSPACE]: UNGATED_AUDIT_DETAILS,
+  [AUDIT_RESOURCE_TYPE.WORKSPACE_CONTACT]: UNGATED_AUDIT_DETAILS,
+  [AUDIT_RESOURCE_TYPE.WORKSPACE_MEMBER]: UNGATED_AUDIT_DETAILS,
+  [AUDIT_RESOURCE_TYPE.WORK_OBLIGATION]: {
+    default: {
+      type: "deployment-feature",
+      feature: "FEATURE_GOVERNED_WORKFLOW",
+    },
+    operations: {},
+  },
+} as const satisfies AuditDetailPolicies;
+
+/** Preserve the indexed action expression; only ungated workspace changes affect it. */
+export const auditReadActivityActionSql = () =>
+  auditActivityActionSql(auditLogs);
+
+type AuditReadChanges =
+  | {
+      changesStatus: typeof AUDIT_CHANGES_STATUS.visible;
+      changes: Record<string, unknown> | null;
+    }
+  | {
+      changesStatus: typeof AUDIT_CHANGES_STATUS.featureUnavailable;
+      changes: null;
+    };
+
+type ProjectAuditReadChangesOptions = {
+  resourceType: string;
+  changes: Record<string, unknown> | null | undefined;
+  metadata: Record<string, unknown> | null | undefined;
+  featureAccessSnapshot: FeatureAccessSnapshot | undefined;
+  principal: FeatureAccessPrincipal;
+};
+
+export type AuditReadContext = Pick<
+  ProjectAuditReadChangesOptions,
+  "featureAccessSnapshot" | "principal"
+>;
+
+const isClassifiedAuditResource = (
+  resourceType: string,
+): resourceType is AuditResourceType =>
+  Object.hasOwn(AUDIT_DETAIL_POLICY, resourceType);
+
+type AuditPolicyEnabledOptions = {
+  policy: AuditDetailPolicy;
+  featureAccessSnapshot: FeatureAccessSnapshot | undefined;
+  principal: FeatureAccessPrincipal;
+};
+
+const isAuditPolicyEnabled = ({
+  policy,
+  featureAccessSnapshot,
+  principal,
+}: AuditPolicyEnabledOptions) => {
+  switch (policy.type) {
+    case "ungated":
+      return true;
+    case "caller-feature":
+      return (
+        featureAccessSnapshot !== undefined &&
+        isFeatureEnabled(featureAccessSnapshot, policy.featureId, principal)
+      );
+    case "deployment-feature":
+      return isDeploymentFeatureEnabled(policy.feature);
+    default:
+      policy satisfies never;
+      return panic("Audit detail policy requires a supported type");
+  }
+};
+
+type AuditReadColumns = {
+  changes: SQLWrapper;
+  resourceType: SQLWrapper;
+  metadata: SQLWrapper;
+};
+
+/** Apply the same feature policy before a query derives values from changes. */
+/**
+ * Whether the stored row recorded any changes, regardless of read policy.
+ * Lets a caller say changes were withheld without ever reading their content.
+ */
+export const auditStoredChangesPresentSql = () =>
+  sql<boolean>`${auditLogs.changes} is not null`;
+
+export const auditReadChangesSql = (
+  context: AuditReadContext,
+  columns: AuditReadColumns = auditLogs,
+) => {
+  const unrestrictedResources: string[] = [];
+  const operationConditions = [];
+  for (const resourceType of Object.values(AUDIT_RESOURCE_TYPE)) {
+    const policy = AUDIT_DETAIL_POLICY[resourceType];
+    const operations = Object.entries(policy.operations);
+    if (isAuditPolicyEnabled({ policy: policy.default, ...context })) {
+      if (operations.length === 0) {
+        unrestrictedResources.push(resourceType);
+        continue;
+      }
+      operationConditions.push(
+        and(
+          sql`${columns.resourceType} = ${resourceType}`,
+          notInArray(
+            sql<string>`coalesce(${columns.metadata} ->> 'operation', '')`,
+            operations.map(([operation]) => operation),
+          ),
+        ),
+      );
+    }
+    const visibleOperations = operations
+      .filter(([, operationPolicy]) =>
+        isAuditPolicyEnabled({ policy: operationPolicy, ...context }),
+      )
+      .map(([operation]) => operation);
+    if (visibleOperations.length > 0) {
+      operationConditions.push(
+        and(
+          sql`${columns.resourceType} = ${resourceType}`,
+          inArray(
+            sql<string>`${columns.metadata} ->> 'operation'`,
+            visibleOperations,
+          ),
+        ),
+      );
+    }
+  }
+  const visible =
+    or(
+      inArray(columns.resourceType, unrestrictedResources),
+      ...operationConditions,
+    ) ?? sql`false`;
+  return sql<Record<
+    string,
+    unknown
+  > | null>`case when ${visible} then ${columns.changes} else null end`;
+};
+
+/** Read projection shared by audit pages and exports; stored details remain intact. */
+export const projectAuditReadChanges = ({
+  resourceType,
+  changes,
+  metadata,
+  featureAccessSnapshot,
+  principal,
+}: ProjectAuditReadChangesOptions): AuditReadChanges => {
+  if (!isClassifiedAuditResource(resourceType)) {
+    return panic("Audit resource requires a detail policy");
+  }
+  const resourcePolicy = AUDIT_DETAIL_POLICY[resourceType];
+  const operationPolicy = Object.entries(resourcePolicy.operations).find(
+    ([operation]) => operation === metadata?.["operation"],
+  )?.[1];
+  const enabled = isAuditPolicyEnabled({
+    policy: operationPolicy ?? resourcePolicy.default,
+    featureAccessSnapshot,
+    principal,
+  });
+  if (!enabled) {
+    return {
+      changesStatus: AUDIT_CHANGES_STATUS.featureUnavailable,
+      changes: null,
+    };
+  }
+  return {
+    changesStatus: AUDIT_CHANGES_STATUS.visible,
+    changes: auditChangesForResource(resourceType, changes),
+  };
 };

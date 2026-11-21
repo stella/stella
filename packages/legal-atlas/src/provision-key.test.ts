@@ -1,11 +1,12 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
-import { createHash } from "node:crypto";
 
 import { CASE_LAW_JURISDICTIONS } from "@stll/api-contract/case-law-jurisdictions";
 import { formatProvisionKey } from "@stll/api-contract/provision-key";
 import { assertProperty } from "@stll/property-testing";
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/node";
+import { normalizeUnicode } from "@stll/text-normalize";
 
 import suffixFixture from "./__fixtures__/cz-esbirka-262-2006-par-1a.json" with { type: "json" };
 import suffixProvenance from "./__fixtures__/cz-esbirka-262-2006-par-1a.json.provenance.json" with { type: "json" };
@@ -17,9 +18,17 @@ import {
 } from "./cz-provision-citation-profile";
 import { PROVISION_CITATION_GRAMMARS } from "./provision-citation-grammars";
 import { formatWorkIdentifier } from "./provision-citation-profile";
-import { provisionRefOf, parseProvisionKey } from "./provision-key";
+import { parseProvisionKey, provisionRefOf } from "./provision-key";
 
 const grammar = PROVISION_CITATION_GRAMMARS.CZE;
+
+/** The jurisdictions with a provision grammar, named here so adding one is a decision. */
+const WITH_GRAMMAR = ["CZE", "EU", "SVK", "USA"] as const;
+
+const hasGrammar = (
+  jurisdiction: (typeof CASE_LAW_JURISDICTIONS)[number],
+): jurisdiction is (typeof WITH_GRAMMAR)[number] =>
+  WITH_GRAMMAR.some((supported) => supported === jurisdiction);
 const reference = fc.record({
   unit: fc.constant("section" as const),
   section: fc.integer({ min: 1, max: 9999 }),
@@ -104,9 +113,7 @@ describe("provision identity construction", () => {
       const bytes = await Bun.file(
         new URL(`__fixtures__/${capture.file}`, import.meta.url),
       ).bytes();
-      expect(createHash("sha256").update(bytes).digest("hex")).toBe(
-        capture.provenance.sha256,
-      );
+      expect(hashSha256Hex(bytes)).toBe(capture.provenance.sha256);
       expect(capture.provenance.capture).toBe("recorded");
       expect(capture.fixture.results.bindings).toHaveLength(capture.rows);
       for (const { citace, url } of capture.fixture.results.bindings) {
@@ -165,12 +172,14 @@ describe("provision identity construction", () => {
         fc.integer({ min: 0, max: 2 }),
         fc.constantFrom(" ", "\u00a0", "\u202f"),
         (row, padding, space) => {
-          const heading = row.citace.value
-            .replace(/\d+/gu, (digits) =>
-              digits.padStart(digits.length + padding, "0"),
-            )
-            .replaceAll(" ", () => space)
-            .normalize("NFD");
+          const heading = normalizeUnicode(
+            row.citace.value
+              .replace(/\d+/gu, (digits) =>
+                digits.padStart(digits.length + padding, "0"),
+              )
+              .replaceAll(" ", () => space),
+            "NFD",
+          );
           const ref = grammar.parseReference(heading);
           expect(ref).not.toBeNull();
           if (ref === null) {
@@ -316,6 +325,8 @@ describe("provision identity construction", () => {
     for (const invalid of [
       { ...ref, unit: "article" as const },
       { ...ref, section: -1 },
+      // The shared schema admits zero for the codes that number from it.
+      { ...ref, section: 0 },
       { ...ref, letter: "two" },
       { ...ref, subsection: "\0" },
     ]) {
@@ -461,7 +472,7 @@ describe("provision identity construction", () => {
       }),
     ).toEqual({ status: "invalid_work_identifier" });
     for (const jurisdiction of CASE_LAW_JURISDICTIONS) {
-      if (jurisdiction === "CZE") {
+      if (hasGrammar(jurisdiction)) {
         continue;
       }
       expect(
@@ -515,9 +526,9 @@ describe("provision identity construction", () => {
     );
   });
 
-  test("every other jurisdiction explicitly declines provision construction", () => {
+  test("unsupported jurisdictions explicitly decline provision construction", () => {
     for (const jurisdiction of CASE_LAW_JURISDICTIONS) {
-      if (jurisdiction === "CZE") {
+      if (hasGrammar(jurisdiction)) {
         continue;
       }
       expect(PROVISION_CITATION_GRAMMARS[jurisdiction]).toEqual({

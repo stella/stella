@@ -2,14 +2,15 @@ import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
 import { extractCaseLawDecisionIdFromIdRouteParam } from "@stll/api-contract/case-law-decision-route";
-import { propertyConfig } from "@stll/property-testing";
+import { CASE_LAW_BROWSER_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
+import { isPlainPrimaryClick } from "@stll/decision-reader/citation-click";
+import { assertProperty } from "@stll/property-testing";
 
 import {
   CASE_DECISION_VIEW,
   createCaseDecisionViewTab,
   isCaseDecisionGenericTab,
   isCaseDecisionViewPayload,
-  isPlainPrimaryClick,
   navigateToCaseDecisionMain,
   opensCitationInInspector,
 } from "@/components/inspector/case-decision-view";
@@ -43,6 +44,53 @@ describe("case decision inspector", () => {
         },
       },
     });
+  });
+
+  test("reopening the same search starts a fresh find session in the same tab", () => {
+    const target = {
+      caseNumber: "100 A 1/2026",
+      country: "CZ",
+      court: "Synthetic Court",
+      decisionId: "synthetic-decision",
+      language: null,
+      languageAlternates: null,
+      slug: "synthetic-decision",
+      searchQuery: "odpovědnost",
+    };
+    const first = createCaseDecisionViewTab(target);
+    const reopened = createCaseDecisionViewTab(target);
+
+    expect(reopened.id).toBe(first.id);
+    expect(reopened.payload.searchQuery).toBe(first.payload.searchQuery);
+    expect(first.payload.findSessionId).toBeDefined();
+    expect(reopened.payload.findSessionId).not.toBe(
+      first.payload.findSessionId,
+    );
+    expect(isCaseDecisionViewPayload(reopened.payload)).toBe(true);
+    expect(
+      isCaseDecisionViewPayload({ ...reopened.payload, findSessionId: "" }),
+    ).toBe(false);
+  });
+
+  test("reopening a passage scrolls again while retaining the same decision chip", () => {
+    const target = {
+      caseNumber: "100 A 1/2026",
+      country: "CZ",
+      court: "Synthetic Court",
+      decisionId: "synthetic-decision",
+      language: null,
+      languageAlternates: null,
+      slug: "synthetic-decision",
+      anchorId: "p-12",
+    };
+    const first = createCaseDecisionViewTab(target);
+    const reopened = createCaseDecisionViewTab(target);
+    expect(reopened.id).toBe(first.id);
+    expect(reopened.payload.anchorId).toBe(first.payload.anchorId);
+    expect(first.payload.findSessionId).toBeDefined();
+    expect(reopened.payload.findSessionId).not.toBe(
+      first.payload.findSessionId,
+    );
   });
 
   test("validates synchronized payloads", () => {
@@ -180,11 +228,12 @@ describe("case decision inspector", () => {
   // same way, never its URL segments, and route to the same decision. It
   // carries no route identity of its own, so a rebuild states that as nulls.
   test("a tab rebuilt from its own payload names and routes the same decision", () => {
-    fc.assert(
+    assertProperty(
+      "a tab rebuilt from its own payload names and routes the same decision",
       fc.property(
         fc.record({
           caseNumber: fc.string({ minLength: 1 }),
-          country: fc.constantFrom("CZE", "POL", "SVK", "EU"),
+          country: fc.constantFrom(...CASE_LAW_BROWSER_COUNTRIES),
           court: fc.constantFrom(
             "Nejvyšší soud",
             "Sąd Najwyższy",
@@ -215,7 +264,7 @@ describe("case decision inspector", () => {
           ).toBe(decision.decisionId);
         },
       ),
-      propertyConfig(),
+      {},
     );
   });
 

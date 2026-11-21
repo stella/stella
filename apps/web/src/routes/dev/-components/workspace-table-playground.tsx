@@ -20,6 +20,7 @@ import { useState } from "react";
 
 import { TEXT_FIELD_TYPE } from "@stll/api-contract/case-law-text-field";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
+import { Button } from "@stll/ui/button";
 
 import type { Decision } from "@/features/case-law/components/decision-cells";
 import { DecisionTable } from "@/features/case-law/components/decision-table";
@@ -27,6 +28,15 @@ import { DEFAULT_DECISION_TABLE_LAYOUT } from "@/features/case-law/decision-colu
 import type { DecisionTableLayout } from "@/features/case-law/decision-column-preferences.logic";
 import { decisionReferenceColumnKind } from "@/features/case-law/decision-columns.logic";
 import type { QuestionColumnSurface } from "@/features/case-law/research/question-columns.logic";
+import type { api } from "@/lib/api";
+import type { PublicLawData } from "@/lib/public-law-api";
+
+type SearchHit = PublicLawData<
+  typeof api.case.decisions.search.post
+>["hits"][number];
+type BenchDecision = Pick<SearchHit, Exclude<keyof Decision, "id">> & {
+  id: SearchHit["decisionId"];
+};
 
 /** A bench has no organization, so it draws no question columns. */
 const NO_QUESTION_COLUMNS: QuestionColumnSurface = { type: "hidden" };
@@ -70,6 +80,9 @@ const benchDecisions = (): Decision[] =>
     const sequence = 1400 + index * 7;
     return {
       id: `bench-${index}`,
+      match: "all_terms",
+      missingTerms: [],
+      textAvailability: "available",
       caseNumber: `${senate} Cdo ${sequence}/2024`,
       caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
       ecli: `ECLI:BENCH:2024:${senate}.CDO.${sequence}.1`,
@@ -82,14 +95,23 @@ const benchDecisions = (): Decision[] =>
       slug: null,
       decisionDate: benchDate(index),
       decisionType: BENCH_TYPES[index % BENCH_TYPES.length] ?? "judgment",
+      decisionTypeKind: null,
       headline: BENCH_HEADNOTES[index % BENCH_HEADNOTES.length] ?? null,
       headnote: {
         type: TEXT_FIELD_TYPE.PRESENT,
         text: BENCH_HEADNOTES[(index + 2) % BENCH_HEADNOTES.length] ?? "",
         truncated: false,
       },
+      identifiers: [
+        {
+          type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+          value: `${senate} Cdo ${sequence}/2024`,
+        },
+      ],
+      anchorId: null,
+      sourceUrl: null,
       citationCount: index % 17,
-    } satisfies Decision;
+    } satisfies BenchDecision;
   });
 
 export const WorkspaceTablePlayground = () => {
@@ -103,28 +125,30 @@ export const WorkspaceTablePlayground = () => {
       data-playground-section="workspace-table"
     >
       <div className="flex shrink-0 items-center gap-2">
-        <button
-          className="rounded border px-2 py-1 text-xs"
+        <Button
           data-playground-content-mode="tight"
           onClick={() =>
             setLayout((current) => ({ ...current, contentMode: "tight" }))
           }
-          type="button"
+          size="xs"
+          variant="outline"
         >
           tight
-        </button>
-        <button
-          className="rounded border px-2 py-1 text-xs"
+        </Button>
+        <Button
           data-playground-content-mode="fit-content"
           onClick={() =>
             setLayout((current) => ({ ...current, contentMode: "fit-content" }))
           }
-          type="button"
+          size="xs"
+          variant="outline"
         >
           fit content
-        </button>
+        </Button>
       </div>
       <DecisionTable
+        // Bench rows have no endpoint to ask for another order.
+        dateOrder={null}
         decisions={decisions}
         firstRowNumber={1}
         isLoading={false}

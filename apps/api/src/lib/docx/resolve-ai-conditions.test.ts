@@ -44,6 +44,23 @@ describe("resolveAiConditions", () => {
     ]);
   });
 
+  test("a terminal model refusal keeps its reason through condition resolution", async () => {
+    const result = await resolveAiConditions({
+      fields,
+      values: {},
+      decide: async () => ({ decidedBy: "undecided", reason: "refusal" }),
+    });
+    expect(result.values).toEqual({});
+    expect(result.conditions).toEqual([
+      {
+        path: "is_consumer",
+        label: "Consumer contract",
+        state: "undecided",
+        reason: "refusal",
+      },
+    ]);
+  });
+
   test("the decision model's answer carries the probability it chose", async () => {
     const { conditions } = await resolveAiConditions({
       values: {},

@@ -1,12 +1,17 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 
-import { DefaultPendingComponent } from "@/components/route-components";
 import { useMountEffect } from "@/hooks/use-effect";
 import { detached } from "@/lib/detached";
+import { APP_FRAME_SCOPE } from "@/routes/-app-frame-scope";
 import { loadAuthContextForRootRedirect } from "@/routes/-auth-context";
+import { redirectRouteComponent } from "@/routes/-route-pending-view";
 
+// The root sends almost every visitor on to the chat, so while the session
+// is read it shows the chat home's pending view in the member frame; a
+// visitor without a session goes on to sign in from there.
 export const Route = createFileRoute("/")({
-  component: RootRedirect,
+  staticData: { appFrame: APP_FRAME_SCOPE.none },
+  component: redirectRouteComponent({ navigator: RootNavigator, to: "/chat" }),
 });
 
 // Dispatch from a mounted component instead of throwing redirect from
@@ -14,7 +19,7 @@ export const Route = createFileRoute("/")({
 // redirects) blanks the page on cold direct loads, since the router
 // can render this redirected match while the suspending target (e.g.
 // /chat) holds the transition open. See `no-beforeload-redirect`.
-function RootRedirect() {
+function RootNavigator() {
   const navigate = useNavigate();
   const queryClient = Route.useRouteContext({
     select: (context) => context.queryClient,
@@ -58,5 +63,5 @@ function RootRedirect() {
     };
   });
 
-  return <DefaultPendingComponent />;
+  return null;
 }

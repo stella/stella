@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 /**
  * DocxBrowserEditor — wrapper that manages the edit session lifecycle
  * and renders the Folio DocxEditor.
@@ -20,9 +20,9 @@ import {
   EyeIcon,
   GitCommitHorizontalIcon,
   PenLineIcon,
-  RefreshCwIcon,
   XIcon,
 } from "@stll/ui/icons";
+import { Loader } from "@stll/ui/loader";
 import { ReviewOutOfDateNotice } from "@stll/ui/review-out-of-date-notice";
 import type { ReviewOutOfDateReason } from "@stll/ui/review-out-of-date-notice";
 import {
@@ -32,6 +32,7 @@ import {
   SelectTrigger as StSelectTrigger,
   SelectValue as StSelectValue,
 } from "@stll/ui/select";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
 import "@stll/folio-react/editor.css";
 
 import { useDocxWheelZoom } from "@/components/docx-preview-zoom";
@@ -54,6 +55,8 @@ import { detached } from "@/lib/detached";
 import { folioUIComponents } from "@/lib/folio-ui-components";
 import "@/components/pdf/peek/peek-docx.css";
 
+import { TruncatedText } from "@stll/ui/truncated-text";
+
 import {
   editSessionErrorDescriptionKey,
   getDocxEditorBlockingError,
@@ -75,8 +78,12 @@ import { useDocxCompatibility } from "./use-docx-compatibility";
 import { useDocxEditOpening } from "./use-docx-edit-opening";
 import { useDocxEditorMode } from "./use-docx-editor-mode";
 import { useDocxEditorView } from "./use-docx-editor-view";
-import { useDocxEditorViewport } from "./use-docx-editor-viewport";
+import {
+  DOCX_TIMING_SURFACE,
+  useDocxEditorViewport,
+} from "./use-docx-editor-viewport";
 import type { DocxEditorSurface } from "./use-docx-editor-viewport";
+import { useDocxOpenTiming } from "./use-docx-open-timing";
 import { useDocxPreviewFile } from "./use-docx-preview-file";
 import {
   useDocxEditSession,
@@ -106,11 +113,9 @@ type DocxBrowserEditorBaseProps = {
   isEditing?: boolean | undefined;
   onClose: () => void;
   onCompatibilityChange?:
-    | ((compatibility: DocxCompatibility) => void)
-    | undefined;
+    ((compatibility: DocxCompatibility) => void) | undefined;
   onCollaborationPublishableChange?:
-    | ((publishable: boolean) => void)
-    | undefined;
+    ((publishable: boolean) => void) | undefined;
   canUnlock: boolean;
   onBlockedUnlock?: (() => void) | undefined;
   onUnlockedChange?: ((isUnlocked: boolean) => void) | undefined;
@@ -192,6 +197,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorContentProps) => {
     surface,
   } = props;
   const editorRef = useRef<DocxEditorRef>(null);
+  const attachEditor = useDocxOpenTiming({ editorRef, fieldId, surface });
   const containerRef = useRef<HTMLDivElement>(null);
   const { editorView, editorProps: editorViewProps } = useDocxEditorView({
     entityId,
@@ -206,12 +212,13 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorContentProps) => {
   const preservedLoadedBufferRef = useRef<PreservedLoadedBuffer | null>(null);
   const editTargetKey = `${workspaceId}:${entityId}:${propertyId}:${fieldId}`;
   const [, setAutosaveStatus] = useState<AutosaveStatus>("synced");
-  const { composedContainerRef, find, targetZoom } = useDocxEditorViewport({
-    containerRef,
-    editorRef,
-    scaleOffset,
-    surface,
-  });
+  const { composedContainerRef, find, targetZoom, zoomMode } =
+    useDocxEditorViewport({
+      containerRef,
+      editorRef,
+      scaleOffset,
+      surface,
+    });
   const { isPlaceholderData: isPreviewPlaceholderData, previewFile } =
     useDocxPreviewFile({ fieldId, optimisticPreviewRef, workspaceId });
   const { compatibility, handleCompatibilityChange, resetCompatibility } =
@@ -283,9 +290,6 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorContentProps) => {
   const { isUnlocked, requestEditMode } = opening;
   const { editorMode, handleEditorModeChange } = useDocxEditorMode(isUnlocked);
 
-  useLayoutEffect(() => {
-    editorRef.current?.setZoom(targetZoom);
-  }, [targetZoom]);
   useDocxWheelZoom(containerRef, editorRef);
   useDocxBlockScroll({ editorRef, fieldId });
 
@@ -323,6 +327,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorContentProps) => {
       markDirty: editSession.markDirty,
       saveCheckpoint: editSession.saveCheckpoint,
       setAutosaveStatus,
+      timingSurface: DOCX_TIMING_SURFACE[surface],
     });
   const comments = useDocxComments(handleChange);
 
@@ -463,7 +468,8 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorContentProps) => {
         >
           <DocxEditor
             key={`docx-${previewIdentity}-${collaborationSession?.roomId ?? "local"}`}
-            ref={editorRef}
+            ref={attachEditor}
+            accessibleName={previewFile.fileName}
             autoOpenReviewSidebar={false}
             // Docked, the pane has a find bar of its own and no Folio binding
             // may answer beside it. Full view keeps Folio's bindings for a
@@ -473,7 +479,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorContentProps) => {
             comments={comments.docxComments}
             onCommentsChange={comments.handleEditorDocxCommentsChange}
             documentBuffer={editorBuffer}
-            initialZoom={targetZoom}
+            initialZoom={zoomMode === "fit-width" ? "fit-width" : targetZoom}
             mode={isUnlocked ? editorMode : "viewing"}
             onModeChange={handleEditorModeChange}
             onCompatibilityChange={handleCompatibilityChange}
@@ -600,6 +606,7 @@ const DocxCollaborationToolbarControls = ({
       <Button
         className="min-h-11 px-3"
         disabled={!canPublish}
+        disabledReason={t("folio.syncing")}
         onClick={() => {
           detached(
             onPublish(),
@@ -715,7 +722,7 @@ const CollaborationStatusIndicator = ({
         return <EyeIcon className="size-3.5" />;
       case "connecting":
       case "reconnecting":
-        return <RefreshCwIcon className="size-3.5 motion-safe:animate-spin" />;
+        return <Loader className="size-3.5" size="sm" variant="decorative" />;
       default: {
         status satisfies never;
         return panic(`Unhandled status: ${String(status)}`);
@@ -819,18 +826,23 @@ const CollaborationPresence = ({
   return (
     <ul className="flex min-h-11 items-center -space-x-2 px-2">
       {users.map((user) => (
-        <li
-          aria-label={user.name}
-          className="border-background rounded-full border-2"
-          key={user.id}
-          title={user.name}
-        >
-          <UserIdentityAvatar
-            className="text-3xs size-7"
-            image={user.image}
-            name={user.name}
-          />
-        </li>
+        <Tooltip key={user.id}>
+          <TooltipTrigger
+            render={
+              <li
+                aria-label={user.name}
+                className="border-background rounded-full border-2"
+              />
+            }
+          >
+            <UserIdentityAvatar
+              className="text-3xs size-7"
+              image={user.image}
+              name={user.name}
+            />
+          </TooltipTrigger>
+          <TooltipPopup>{user.name}</TooltipPopup>
+        </Tooltip>
       ))}
     </ul>
   );
@@ -952,7 +964,7 @@ const DocxLoadingPriorityExtra = () => {
         variant="ghost"
       >
         <PenLineIcon className="size-3.5" />
-        <span className="truncate">{t("trackingOff")}</span>
+        <TruncatedText>{t("trackingOff")}</TruncatedText>
       </Button>
       <StSelect value="all-markup" onValueChange={noop}>
         <StSelectTrigger

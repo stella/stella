@@ -3,6 +3,7 @@ import { expect, test } from "bun:test";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import nodePath from "node:path";
+import { fileURLToPath } from "node:url";
 
 import {
   MAX_PROVIDER_EVENT_REPLAY_IDS,
@@ -308,10 +309,13 @@ test("builds and copies the standalone replay command into the API image", () =>
     new URL("../Dockerfile", import.meta.url),
     "utf-8",
   );
-  expect(dockerfile).toContain("--outfile /app/replay-provider-events.js");
+  // The split script build names each output after its source in
+  // /app/bundles; the runner copies that directory to /app, so the command
+  // stays /app/replay-provider-events.js.
+  expect(dockerfile).toContain('--entry-naming "[name].js"');
   expect(dockerfile).toContain("apps/api/scripts/replay-provider-events.ts");
   expect(dockerfile).toContain(
-    "COPY --chown=stella:stella --from=builder /app/replay-provider-events.js /app/replay-provider-events.js",
+    "COPY --chown=stella:stella --from=builder /app/bundles/ /app/",
   );
 });
 
@@ -332,7 +336,7 @@ test("ECS identity failure refuses replay before opening results or the database
     const child = Bun.spawn({
       cmd: [
         process.execPath,
-        new URL("replay-provider-events.ts", import.meta.url).pathname,
+        fileURLToPath(new URL("replay-provider-events.ts", import.meta.url)),
         "--event-id",
         "event-a",
         "--results",

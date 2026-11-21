@@ -1,6 +1,14 @@
 import { toolDefinition } from "@tanstack/ai";
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
+import * as v from "valibot";
+
+import {
+  BUILT_IN_CHAT_TOOL_POLICY_KINDS,
+  CHAT_TOOL_POLICY_REQUIRES_APPROVAL,
+} from "@stll/api-contract";
+import { SUBAGENT_TITLE_MAX_CHARS } from "@stll/api-contract/spawn-subagents";
+import { createTestState } from "@stll/test-state";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
@@ -17,12 +25,29 @@ import {
 import {
   createSpawnSubagentsTool,
   resolveValidatedSubagentModelId,
+  SPAWN_SUBAGENTS_TOOL_DEFINITION,
+  SUBAGENT_FAILED_MESSAGE,
 } from "@/api/handlers/chat/tools/spawn-subagents-tool";
+import { SPAWN_SUBAGENTS_TOOL_NAME } from "@/api/handlers/chat/tools/subagent-tool-shared";
 import type { SubagentProposalSink } from "@/api/handlers/chat/tools/subagent-tool-shared";
+import { projectToolMapForSubagent } from "@/api/handlers/chat/tools/subagent-tools";
+import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
+import {
+  applyChatToolPolicy,
+  CHAT_TOOL_POLICY_KIND,
+  getChatToolPolicy,
+} from "@/api/handlers/chat/tools/tool-policy";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { ChatToolMap } from "@/api/lib/chat/chat-tool-types";
-import { UsageLimitExceededError } from "@/api/lib/errors/tagged-errors";
+import { ProviderCallError } from "@/api/lib/errors/provider-call-error";
+import {
+  HandlerError,
+  UsageLimitExceededError,
+} from "@/api/lib/errors/tagged-errors";
+import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+
+const testState = createTestState({ file: import.meta.path, config: env });
 
 // `spawn-subagents-tool.ts` calls `runSubagent` (a real provider/model call
 // with its own metering side effects) and `assertUsageAvailable` (a real DB
@@ -167,14 +192,17 @@ const rawBoundary: ChatThirdPartyBoundary = { type: "raw" };
 const passthroughSafeDb: SafeDb = async (fn) =>
   Result.ok(await fn(asTestRaw<Transaction>({})));
 
-const buildTool = (
+const buildToolDefinition = (
   buildSubagentToolset: (
     sink: SubagentProposalSink,
   ) => ChatToolMap = (): ChatToolMap => ({}),
-) => {
-  const tools = createSpawnSubagentsTool({
+  organizationAIInstructions = "",
+) =>
+  createSpawnSubagentsTool({
+    organizationAIInstructions,
     buildSubagentToolset,
     organizationId,
+    modelAdmission: testModelAdmission(organizationId),
     orgAIConfig: null,
     managedAIResidency: "eu" as const,
     safeDb: passthroughSafeDb,
@@ -188,30 +216,87 @@ const buildTool = (
       runSubagent: runSubagentForTest,
     },
   });
-  // SAFETY: test invokes the server tool's execute directly with a stub
-  // call context, same pattern as template-tools.test.ts.
-  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-  return tools.spawn_subagents.execute as unknown as (
-    input: { subagents: { task: string }[] },
+
+const buildTool = (
+  buildSubagentToolset?: (sink: SubagentProposalSink) => ChatToolMap,
+  organizationAIInstructions = "",
+) => {
+  const tools = buildToolDefinition(
+    buildSubagentToolset,
+    organizationAIInstructions,
+  );
+  const execute = tools.spawn_subagents.execute;
+  if (execute === undefined) {
+    return panic("The subagent tool is missing its executor");
+  }
+  return async (
+    input: Parameters<typeof execute>[0],
     ctx: { abortSignal?: AbortSignal },
-  ) => Promise<{
-    results: {
-      index: number;
-      status: string;
-      result?: string;
-      error?: string;
-    }[];
-  }>;
+  ) => await execute(input, { ...ctx, emitCustomEvent: () => {} });
 };
+
+describe("subagent titles are required and bounded at the model boundary", () => {
+  test("rejects absent, blank, invalid and overlong titles", async () => {
+    const schema = SPAWN_SUBAGENTS_TOOL_DEFINITION.inputSchema;
+    for (const subagent of [
+      { task: "Find relevant case law" },
+      { title: "", task: "Find relevant case law" },
+      { title: "   ", task: "Find relevant case law" },
+      { title: null, task: "Find relevant case law" },
+      { title: 123, task: "Find relevant case law" },
+      {
+        title: "x".repeat(SUBAGENT_TITLE_MAX_CHARS + 1),
+        task: "Find relevant case law",
+      },
+    ]) {
+      const result = await schema["~standard"].validate({
+        subagents: [subagent],
+      });
+      expect(result.issues).toBeDefined();
+      expect(
+        result.issues?.some(
+          (issue) =>
+            issue.path?.includes("title") ||
+            issue.path?.some(
+              (segment) =>
+                typeof segment === "object" && segment.key === "title",
+            ),
+        ),
+      ).toBe(true);
+    }
+  });
+
+  test("preserves localized human titles separately from the full prompt", async () => {
+    const schema = SPAWN_SUBAGENTS_TOOL_DEFINITION.inputSchema;
+    for (const title of [
+      "Neplatnost právního jednání",
+      "بطلان العقد",
+      "x".repeat(SUBAGENT_TITLE_MAX_CHARS),
+    ]) {
+      const result = await schema["~standard"].validate({
+        subagents: [
+          {
+            title: ` ${title} `,
+            task: "Find relevant case law and return citations.",
+          },
+        ],
+      });
+      if (result.issues !== undefined) {
+        panic("A valid subagent title was rejected");
+      }
+      expect(result.value.subagents.at(0)).toEqual({
+        title,
+        task: "Find relevant case law and return citations.",
+      });
+    }
+  });
+});
 
 describe("createSpawnSubagentsTool — batch usage pre-flight", () => {
   test("dispatches every subagent when the batch fits the org's remaining balance", async () => {
-    const previousEnforcement = env.USAGE_ENFORCEMENT_ENABLED;
-    const previousProvider = env.AI_PROVIDER;
-    const previousAnthropicKey = env.ANTHROPIC_API_KEY;
-    env.USAGE_ENFORCEMENT_ENABLED = true;
-    env.AI_PROVIDER = "anthropic";
-    env.ANTHROPIC_API_KEY = "sk-test";
+    testState.setConfig("USAGE_ENFORCEMENT_ENABLED", true);
+    testState.setConfig("AI_PROVIDER", "anthropic");
+    testState.setConfig("ANTHROPIC_API_KEY", "sk-test");
     runSubagentCalls.length = 0;
     assertUsageAvailableCalls.length = 0;
     nextAssertUsageAvailableResult = { ok: true, available: 1000 };
@@ -221,39 +306,36 @@ describe("createSpawnSubagentsTool — batch usage pre-flight", () => {
       usage: undefined,
     });
 
-    try {
-      const execute = buildTool();
-      const result = await execute(
-        { subagents: [{ task: "a" }, { task: "b" }, { task: "c" }] },
-        {},
-      );
+    const execute = buildTool();
+    const result = await execute(
+      {
+        subagents: [
+          { title: "Matter inventory", task: "a" },
+          { title: "Document inventory", task: "b" },
+          { title: "Contact inventory", task: "c" },
+        ],
+      },
+      {},
+    );
 
-      // Non-BYOK "fast" role, standard tier: computeUsageUnitCost({actionType:
-      // "subagent", serviceTier: "standard", isByok: false}) === 2 per
-      // subtask, so the batch of 3 must request 6 units — one pre-flight
-      // check for the whole call, not per-subagent.
-      expect(assertUsageAvailableCalls).toEqual([
-        { organizationId, required: 6 },
-      ]);
-      expect(runSubagentCalls).toHaveLength(3);
-      expect(result.results).toHaveLength(3);
-      for (const entry of result.results) {
-        expect(entry.status).toBe("completed");
-      }
-    } finally {
-      env.USAGE_ENFORCEMENT_ENABLED = previousEnforcement;
-      env.AI_PROVIDER = previousProvider;
-      env.ANTHROPIC_API_KEY = previousAnthropicKey;
+    // Non-BYOK "fast" role, standard tier: computeUsageUnitCost({actionType:
+    // "subagent", serviceTier: "standard", isByok: false}) === 2 per
+    // subtask, so the batch of 3 must request 6 units — one pre-flight
+    // check for the whole call, not per-subagent.
+    expect(assertUsageAvailableCalls).toEqual([
+      { organizationId, required: 6 },
+    ]);
+    expect(runSubagentCalls).toHaveLength(3);
+    expect(result.results).toHaveLength(3);
+    for (const entry of result.results) {
+      expect(entry.status).toBe("completed");
     }
   });
 
   test("rejects the whole batch with a structured error and dispatches nothing when the org is over its cap", async () => {
-    const previousEnforcement = env.USAGE_ENFORCEMENT_ENABLED;
-    const previousProvider = env.AI_PROVIDER;
-    const previousAnthropicKey = env.ANTHROPIC_API_KEY;
-    env.USAGE_ENFORCEMENT_ENABLED = true;
-    env.AI_PROVIDER = "anthropic";
-    env.ANTHROPIC_API_KEY = "sk-test";
+    testState.setConfig("USAGE_ENFORCEMENT_ENABLED", true);
+    testState.setConfig("AI_PROVIDER", "anthropic");
+    testState.setConfig("ANTHROPIC_API_KEY", "sk-test");
     runSubagentCalls.length = 0;
     assertUsageAvailableCalls.length = 0;
     nextAssertUsageAvailableResult = {
@@ -271,39 +353,36 @@ describe("createSpawnSubagentsTool — batch usage pre-flight", () => {
       usage: undefined,
     });
 
-    try {
-      const execute = buildTool();
-      const result = await execute(
-        { subagents: [{ task: "a" }, { task: "b" }, { task: "c" }] },
-        {},
-      );
+    const execute = buildTool();
+    const result = await execute(
+      {
+        subagents: [
+          { title: "Matter inventory", task: "a" },
+          { title: "Document inventory", task: "b" },
+          { title: "Contact inventory", task: "c" },
+        ],
+      },
+      {},
+    );
 
-      // No provider calls and no usage events: `runSubagent` (the only place
-      // that writes `recordUsageEvent({ actionType: "subagent" })`) is never
-      // invoked when the batch pre-flight rejects.
-      expect(runSubagentCalls).toHaveLength(0);
-      expect(result.results).toHaveLength(3);
-      for (const [index, entry] of result.results.entries()) {
-        expect(entry).toEqual({
-          index,
-          status: "failed",
-          error: "Usage limit exceeded: need 6, have 1",
-        });
-      }
-    } finally {
-      env.USAGE_ENFORCEMENT_ENABLED = previousEnforcement;
-      env.AI_PROVIDER = previousProvider;
-      env.ANTHROPIC_API_KEY = previousAnthropicKey;
+    // No provider calls and no usage events: `runSubagent` (the only place
+    // that writes `recordUsageEvent({ actionType: "subagent" })`) is never
+    // invoked when the batch pre-flight rejects.
+    expect(runSubagentCalls).toHaveLength(0);
+    expect(result.results).toHaveLength(3);
+    for (const [index, entry] of result.results.entries()) {
+      expect(entry).toEqual({
+        index,
+        status: "failed",
+        error: "Usage limit exceeded: need 6, have 1",
+      });
     }
   });
 
   test("skips the pre-flight entirely (and never reads the ledger) when usage enforcement is disabled", async () => {
-    const previousEnforcement = env.USAGE_ENFORCEMENT_ENABLED;
-    const previousProvider = env.AI_PROVIDER;
-    const previousAnthropicKey = env.ANTHROPIC_API_KEY;
-    env.USAGE_ENFORCEMENT_ENABLED = false;
-    env.AI_PROVIDER = "anthropic";
-    env.ANTHROPIC_API_KEY = "sk-test";
+    testState.setConfig("USAGE_ENFORCEMENT_ENABLED", false);
+    testState.setConfig("AI_PROVIDER", "anthropic");
+    testState.setConfig("ANTHROPIC_API_KEY", "sk-test");
     runSubagentCalls.length = 0;
     assertUsageAvailableCalls.length = 0;
     runSubagentImpl = async () => ({
@@ -312,56 +391,51 @@ describe("createSpawnSubagentsTool — batch usage pre-flight", () => {
       usage: undefined,
     });
 
-    try {
-      const execute = buildTool();
-      const result = await execute({ subagents: [{ task: "a" }] }, {});
+    const execute = buildTool();
+    const result = await execute(
+      { subagents: [{ title: "Matter inventory", task: "a" }] },
+      {},
+    );
 
-      expect(assertUsageAvailableCalls).toHaveLength(0);
-      expect(runSubagentCalls).toHaveLength(1);
-      expect(result.results[0]?.status).toBe("completed");
-    } finally {
-      env.USAGE_ENFORCEMENT_ENABLED = previousEnforcement;
-      env.AI_PROVIDER = previousProvider;
-      env.ANTHROPIC_API_KEY = previousAnthropicKey;
-    }
+    expect(assertUsageAvailableCalls).toHaveLength(0);
+    expect(runSubagentCalls).toHaveLength(1);
+    expect(result.results[0]?.status).toBe("completed");
   });
 });
 
 describe("createSpawnSubagentsTool — subagent system prompt", () => {
-  const runWithToolset = async (
-    toolset: ChatToolMap,
-    subagent?: { task: string; expectedOutput?: string },
-  ) => {
-    const previousEnforcement = env.USAGE_ENFORCEMENT_ENABLED;
-    const previousProvider = env.AI_PROVIDER;
-    const previousAnthropicKey = env.ANTHROPIC_API_KEY;
-    env.USAGE_ENFORCEMENT_ENABLED = false;
-    env.AI_PROVIDER = "anthropic";
-    env.ANTHROPIC_API_KEY = "sk-test";
+  type RunWithToolsetOptions = {
+    toolset: ChatToolMap;
+    subagent?: Parameters<ReturnType<typeof buildTool>>[0]["subagents"][number];
+    organizationAIInstructions?: string;
+  };
+  const runWithToolset = async ({
+    toolset,
+    subagent,
+    organizationAIInstructions = "",
+  }: RunWithToolsetOptions) => {
+    testState.setConfig("USAGE_ENFORCEMENT_ENABLED", false);
+    testState.setConfig("AI_PROVIDER", "anthropic");
+    testState.setConfig("ANTHROPIC_API_KEY", "sk-test");
     runSubagentCalls.length = 0;
     runSubagentImpl = async () => ({
       outcome: "completed",
       text: "done",
       usage: undefined,
     });
-    try {
-      await buildTool(() => toolset)(
-        { subagents: [subagent ?? { task: "a" }] },
-        {},
-      );
-      const call = runSubagentCalls.at(0);
-      if (call === undefined) {
-        throw new Error("The tool did not run a subagent");
-      }
-      return {
-        systemSafe: call.systemSafe,
-        systemUntrusted: call.systemUntrusted,
-      };
-    } finally {
-      env.USAGE_ENFORCEMENT_ENABLED = previousEnforcement;
-      env.AI_PROVIDER = previousProvider;
-      env.ANTHROPIC_API_KEY = previousAnthropicKey;
+
+    await buildTool(() => toolset, organizationAIInstructions)(
+      { subagents: [subagent ?? { title: "Matter inventory", task: "a" }] },
+      {},
+    );
+    const call = runSubagentCalls.at(0);
+    if (call === undefined) {
+      throw new Error("The tool did not run a subagent");
     }
+    return {
+      systemSafe: call.systemSafe,
+      systemUntrusted: call.systemUntrusted,
+    };
   };
 
   // `execute_typescript` declares `list_matters` only in this section and
@@ -375,24 +449,47 @@ describe("createSpawnSubagentsTool — subagent system prompt", () => {
     }).server(async () => "ok");
 
     const { systemSafe, systemUntrusted } = await runWithToolset({
-      [CODE_MODE_EXECUTE_TOOL_NAME]: executeTypescript,
+      toolset: { [CODE_MODE_EXECUTE_TOOL_NAME]: executeTypescript },
     });
     expect(systemSafe).toContain(CHAT_CODE_MODE_SYSTEM_PROMPT);
     expect(systemUntrusted).toBe("");
   });
 
+  test("delegated work inherits organization instructions on the untrusted prompt half", async () => {
+    const { systemSafe, systemUntrusted } = await runWithToolset({
+      toolset: {},
+      subagent: {
+        title: "Matter inventory",
+        task: "a",
+        expectedOutput: "a table of matters",
+      },
+      organizationAIInstructions: "Refer to the client as Acme Platform.",
+    });
+    expect(systemSafe).not.toContain("Acme Platform");
+    expect(systemUntrusted).toContain("Refer to the client as Acme Platform.");
+    expect(systemUntrusted).toContain(
+      "ahead of conflicting personal preferences",
+    );
+    expect(systemUntrusted).toContain("do not override stella's safety");
+    expect(systemUntrusted).toContain("a table of matters");
+  });
+
   test("omits the code-mode catalog when the toolset has no execute_typescript", async () => {
-    const { systemSafe } = await runWithToolset({});
+    const { systemSafe } = await runWithToolset({ toolset: {} });
     expect(systemSafe).not.toContain(CHAT_CODE_MODE_SYSTEM_PROMPT);
   });
 
   // The shape hint is the parent model's own text, so it must cross the
   // third-party boundary rather than ride verbatim with the framing.
   test("puts the parent model's expected-output brief on the untrusted half", async () => {
-    const { systemSafe, systemUntrusted } = await runWithToolset(
-      {},
-      { task: "a", expectedOutput: "a table of matters" },
-    );
+    const { systemSafe, systemUntrusted } = await runWithToolset({
+      toolset: {},
+      subagent: {
+        title: "Matter inventory",
+        task: "a",
+        expectedOutput: "a table of matters",
+      },
+    });
     expect(systemUntrusted).toContain("a table of matters");
     expect(systemSafe).not.toContain("a table of matters");
   });
@@ -400,12 +497,9 @@ describe("createSpawnSubagentsTool — subagent system prompt", () => {
 
 describe("createSpawnSubagentsTool — abort propagation", () => {
   test("rejects with AbortError and reports no results when the parent signal aborts mid-run", async () => {
-    const previousEnforcement = env.USAGE_ENFORCEMENT_ENABLED;
-    const previousProvider = env.AI_PROVIDER;
-    const previousAnthropicKey = env.ANTHROPIC_API_KEY;
-    env.USAGE_ENFORCEMENT_ENABLED = false;
-    env.AI_PROVIDER = "anthropic";
-    env.ANTHROPIC_API_KEY = "sk-test";
+    testState.setConfig("USAGE_ENFORCEMENT_ENABLED", false);
+    testState.setConfig("AI_PROVIDER", "anthropic");
+    testState.setConfig("ANTHROPIC_API_KEY", "sk-test");
     runSubagentCalls.length = 0;
 
     const abortError = new Error("Subagent run was aborted.");
@@ -429,39 +523,35 @@ describe("createSpawnSubagentsTool — abort propagation", () => {
       };
     };
 
-    try {
-      const execute = buildTool();
+    const execute = buildTool();
 
-      const outcome = await Result.tryPromise(
-        async () =>
-          await execute(
-            { subagents: [{ task: "finishes" }, { task: "aborts" }] },
-            {},
-          ),
-      );
+    const outcome = await Result.tryPromise(
+      async () =>
+        await execute(
+          {
+            subagents: [
+              { title: "Matter review", task: "finishes" },
+              { title: "Document review", task: "aborts" },
+            ],
+          },
+          {},
+        ),
+    );
 
-      // The whole tool call must reject with the AbortError — a resolved
-      // Result here would mean partial results were reported as success.
-      expect(Result.isError(outcome)).toBe(true);
-      if (Result.isError(outcome)) {
-        expect(outcome.error.cause).toBe(abortError);
-      }
-    } finally {
-      env.USAGE_ENFORCEMENT_ENABLED = previousEnforcement;
-      env.AI_PROVIDER = previousProvider;
-      env.ANTHROPIC_API_KEY = previousAnthropicKey;
+    // The whole tool call must reject with the AbortError — a resolved
+    // Result here would mean partial results were reported as success.
+    expect(Result.isError(outcome)).toBe(true);
+    if (Result.isError(outcome)) {
+      expect(outcome.error.cause).toBe(abortError);
     }
   });
 });
 
 describe("createSpawnSubagentsTool — incomplete subagent runs", () => {
   test("reports a run without a complete answer as a failed subtask, not as a finding", async () => {
-    const previousEnforcement = env.USAGE_ENFORCEMENT_ENABLED;
-    const previousProvider = env.AI_PROVIDER;
-    const previousAnthropicKey = env.ANTHROPIC_API_KEY;
-    env.USAGE_ENFORCEMENT_ENABLED = false;
-    env.AI_PROVIDER = "anthropic";
-    env.ANTHROPIC_API_KEY = "sk-test";
+    testState.setConfig("USAGE_ENFORCEMENT_ENABLED", false);
+    testState.setConfig("AI_PROVIDER", "anthropic");
+    testState.setConfig("ANTHROPIC_API_KEY", "sk-test");
     const cutOff =
       "The subagent's answer was cut off at the model's output limit.";
     runSubagentImpl = async () => ({
@@ -471,27 +561,21 @@ describe("createSpawnSubagentsTool — incomplete subagent runs", () => {
       usage: undefined,
     });
 
-    try {
-      const execute = buildTool();
-      const result = await execute({ subagents: [{ task: "a" }] }, {});
+    const execute = buildTool();
+    const result = await execute(
+      { subagents: [{ title: "Matter inventory", task: "a" }] },
+      {},
+    );
 
-      expect(result.results).toEqual([
-        { error: cutOff, index: 0, status: "failed" },
-      ]);
-    } finally {
-      env.USAGE_ENFORCEMENT_ENABLED = previousEnforcement;
-      env.AI_PROVIDER = previousProvider;
-      env.ANTHROPIC_API_KEY = previousAnthropicKey;
-    }
+    expect(result.results).toEqual([
+      { error: cutOff, index: 0, status: "failed" },
+    ]);
   });
 
   test("keeps the writes a run proposed before it stopped short", async () => {
-    const previousEnforcement = env.USAGE_ENFORCEMENT_ENABLED;
-    const previousProvider = env.AI_PROVIDER;
-    const previousAnthropicKey = env.ANTHROPIC_API_KEY;
-    env.USAGE_ENFORCEMENT_ENABLED = false;
-    env.AI_PROVIDER = "anthropic";
-    env.ANTHROPIC_API_KEY = "sk-test";
+    testState.setConfig("USAGE_ENFORCEMENT_ENABLED", false);
+    testState.setConfig("AI_PROVIDER", "anthropic");
+    testState.setConfig("ANTHROPIC_API_KEY", "sk-test");
     const cutOff =
       "The subagent's answer was cut off at the model's output limit.";
     let sink: SubagentProposalSink | undefined;
@@ -505,23 +589,152 @@ describe("createSpawnSubagentsTool — incomplete subagent runs", () => {
       };
     };
 
-    try {
-      const execute = buildTool((proposalSink) => {
-        sink = proposalSink;
-        return {};
-      });
-      const result = await execute({ subagents: [{ task: "a" }] }, {});
+    const execute = buildTool((proposalSink) => {
+      sink = proposalSink;
+      return {};
+    });
+    const result = await execute(
+      { subagents: [{ title: "Matter inventory", task: "a" }] },
+      {},
+    );
 
-      expect(result.results).toHaveLength(1);
-      expect(result.results[0]).toMatchObject({ index: 0, status: "failed" });
-      expect(result.results[0]?.error).toStartWith(cutOff);
-      expect(result.results[0]?.error).toContain(
-        '1. update_field {"value":"x"}',
-      );
-    } finally {
-      env.USAGE_ENFORCEMENT_ENABLED = previousEnforcement;
-      env.AI_PROVIDER = previousProvider;
-      env.ANTHROPIC_API_KEY = previousAnthropicKey;
+    expect(result.results).toHaveLength(1);
+    expect(result.results[0]).toMatchObject({ index: 0, status: "failed" });
+    const entry = result.results.at(0);
+    if (entry?.status !== "failed") {
+      panic("The incomplete subagent did not report a failure");
     }
+    expect(entry.error).toStartWith(cutOff);
+    expect(entry.error).toContain('1. update_field {"value":"x"}');
+  });
+});
+
+describe("createSpawnSubagentsTool — thrown subagent failures", () => {
+  const sentinel = "SENTINEL_SUBAGENT_THROWN_TEXT";
+  const thrown: { name: string; error: unknown; expected: string }[] = [
+    {
+      name: "a library error",
+      error: new Error(sentinel),
+      expected: SUBAGENT_FAILED_MESSAGE,
+    },
+    {
+      name: "a thrown string",
+      error: sentinel,
+      expected: SUBAGENT_FAILED_MESSAGE,
+    },
+    {
+      name: "a server-side handler error",
+      error: new HandlerError({
+        status: 502,
+        code: "internal_error",
+        message: sentinel,
+      }),
+      expected: SUBAGENT_FAILED_MESSAGE,
+    },
+    {
+      name: "a provider call error",
+      error: new ProviderCallError({
+        model: { provider: "openrouter", keySource: "instance" },
+        status: 502,
+        kind: "provider_unavailable",
+      }),
+      expected: SUBAGENT_FAILED_MESSAGE,
+    },
+    {
+      name: "a curated refusal",
+      error: new HandlerError({ status: 422, message: "Invalid brief" }),
+      expected: "Invalid brief",
+    },
+  ];
+
+  const runThrowing = async (failure: unknown) => {
+    testState.setConfig("USAGE_ENFORCEMENT_ENABLED", false);
+    testState.setConfig("AI_PROVIDER", "anthropic");
+    testState.setConfig("ANTHROPIC_API_KEY", "sk-test");
+    runSubagentImpl = async () => {
+      throw failure;
+    };
+
+    return await buildTool()(
+      { subagents: [{ title: "Matter inventory", task: "a" }] },
+      {},
+    );
+  };
+
+  for (const { name, error, expected } of thrown) {
+    test(`reports ${name} with application-owned text`, async () => {
+      const result = await runThrowing(error);
+
+      expect(result.results).toEqual([
+        { error: expected, index: 0, status: "failed" },
+      ]);
+      expect(JSON.stringify(result)).not.toContain(sentinel);
+    });
+  }
+});
+
+describe("createSpawnSubagentsTool — delegation without an approval pause", () => {
+  test("the delegation policy needs no approval, so the call starts at once", () => {
+    const policyKind =
+      BUILT_IN_CHAT_TOOL_POLICY_KINDS[SPAWN_SUBAGENTS_TOOL_NAME];
+    expect(CHAT_TOOL_POLICY_REQUIRES_APPROVAL[policyKind]).toBe(false);
+
+    const spawn = applyChatToolPolicy(
+      buildToolDefinition()[SPAWN_SUBAGENTS_TOOL_NAME],
+      policyKind,
+    );
+    expect(getChatToolPolicy(spawn).needsApproval).toBe(false);
+    expect(spawn.needsApproval).toBeUndefined();
+  });
+
+  test("a subagent's write still comes back as a proposal and never runs", async () => {
+    const sideEffects: string[] = [];
+    const saveMatter = applyChatToolPolicy(
+      toolDefinition({
+        name: "save_matter",
+        description: "save_matter",
+        inputSchema: toTanStackToolSchema(v.strictObject({ name: v.string() })),
+      }).server(async () => {
+        sideEffects.push("save_matter");
+        return await Promise.resolve({});
+      }),
+      CHAT_TOOL_POLICY_KIND.mutation,
+    );
+
+    testState.setConfig("USAGE_ENFORCEMENT_ENABLED", false);
+    testState.setConfig("AI_PROVIDER", "anthropic");
+    testState.setConfig("ANTHROPIC_API_KEY", "sk-test");
+    runSubagentCalls.length = 0;
+    // The fake subagent calls the write it was handed, as a model would.
+    runSubagentImpl = async (options) => {
+      await options.tools["save_matter"]?.execute?.(
+        { name: "Acme" },
+        undefined,
+      );
+      return {
+        outcome: "completed",
+        text: "drafted the matter",
+        usage: undefined,
+      };
+    };
+
+    const execute = buildTool((sink) =>
+      projectToolMapForSubagent({ save_matter: saveMatter }, sink),
+    );
+    const result = await execute(
+      { subagents: [{ title: "Create matter", task: "create Acme" }] },
+      {},
+    );
+
+    expect(runSubagentCalls).toHaveLength(1);
+    expect(sideEffects).toEqual([]);
+    expect(result.results).toHaveLength(1);
+    expect(result.results[0]?.status).toBe("completed");
+    const entry = result.results.at(0);
+    if (entry?.status !== "completed") {
+      panic("The subagent did not complete its proposal");
+    }
+    expect(entry.result).toContain("PROPOSED WRITES");
+    expect(entry.result).toContain('1. save_matter {"name":"Acme"}');
   });
 });

@@ -1,26 +1,29 @@
-import { Result } from "better-result";
-import { and, eq } from "drizzle-orm";
-import { t } from "elysia";
+import { panic, Result } from "better-result";
+import { and } from "drizzle-orm";
+import * as v from "valibot";
 
-import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
+import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
 
 import { desktopEditSessions } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
+import { TRANSITIONS } from "@/api/lib/db/transition-specs";
+import { transition } from "@/api/lib/db/transitions";
 import { closeSessionConnections } from "@/api/lib/desktop-edit-session-notifications";
 import { liveOwnDesktopEditSessionTargetPredicates } from "@/api/lib/desktop-edit-session-predicates";
 import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
 import { broadcastSessionEvent } from "@/api/lib/sse";
 
 const config = {
+  contract: "patch",
   permissions: { entity: ["update"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "session_token_exchange" },
-  body: t.Object({
-    entityId: tSafeId("entity"),
-    propertyId: tSafeId("property"),
+  body: v.object({
+    entityId: resourceIdSchema("entity"),
+    propertyId: resourceIdSchema("property"),
   }),
 } satisfies WorkspaceHandlerConfig;
 
@@ -50,20 +53,36 @@ export default createSafeHandler(
 
         const session = sessions.at(0);
         if (session) {
-          await tx
-            .update(desktopEditSessions)
-            .set({ status: "cancelled", closedAt: new Date() })
-            .where(eq(desktopEditSessions.id, session.id));
-
-          await recordAuditEvent(tx, {
-            action: AUDIT_ACTION.UPDATE,
-            resourceType: AUDIT_RESOURCE_TYPE.DESKTOP_EDIT_SESSION,
-            resourceId: session.id,
-            changes: {
-              status: { old: "open", new: "cancelled" },
+          const closed = await transition({
+            tx,
+            spec: TRANSITIONS.desktopEditSessions,
+            id: session.id,
+            options: {
+              from: ["open"],
+              to: "cancelled",
+              set: { closedAt: new Date() },
             },
-            metadata: { reason: "released_by_user" },
+            recordTransitionAuditEvent: async (auditTx) => {
+              await recordAuditEvent(auditTx, {
+                action: AUDIT_ACTION.UPDATE,
+                resourceType: AUDIT_RESOURCE_TYPE.DESKTOP_EDIT_SESSION,
+                resourceId: session.id,
+                changes: {
+                  status: { old: "open", new: "cancelled" },
+                },
+                metadata: { reason: "released_by_user" },
+              });
+            },
           });
+          switch (closed.type) {
+            case "transitioned":
+              break;
+            case "stale":
+              return panic("Locked desktop edit session failed to close");
+            default:
+              closed satisfies never;
+              return panic("Unhandled desktop edit session transition");
+          }
         }
 
         return session?.id ?? null;

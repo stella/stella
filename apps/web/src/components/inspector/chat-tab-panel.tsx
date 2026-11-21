@@ -23,6 +23,7 @@ import {
   useSuspenseQuery,
 } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
+import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 import { useShallow } from "zustand/react/shallow";
 
@@ -30,7 +31,6 @@ import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import { Button } from "@stll/ui/button";
 import { Maximize2Icon } from "@stll/ui/icons";
 import { stellaToast } from "@stll/ui/toast";
-import { cn } from "@stll/ui/utils";
 
 import {
   Conversation,
@@ -40,28 +40,33 @@ import {
 import { PromptBar } from "@/components/ai-suggestions/host";
 import { useMainLegalDocument } from "@/components/ai-suggestions/use-main-legal-document";
 import {
-  ChatSubmitPreservedError,
+  CHAT_SEND_KEPT,
+  CHAT_SEND_SENT,
   useChatEditor,
 } from "@/components/chat-editor-provider";
-import type { ChatDraftAttachment } from "@/components/chat-editor-provider";
+import type {
+  ChatDraftAttachment,
+  ChatSendOutcome,
+} from "@/components/chat-editor-provider";
 import {
   composerStoredMarkdown,
   composerText,
 } from "@/components/chat-editor-source";
 import { ChatApprovalContext } from "@/components/chat/chat-approval-context";
 import { ChatComposerDock } from "@/components/chat/chat-composer-dock";
-import {
-  ChatMatterPicker,
-  ChatMatterPickerPending,
-} from "@/components/chat/chat-matter-picker";
+import { ChatMatterPicker } from "@/components/chat/chat-matter-picker";
+import { ChatMatterPickerPending } from "@/components/chat/chat-matter-picker.pending";
 import { ChatMattersContext } from "@/components/chat/chat-matters-context";
 import { ChatThreadMessages } from "@/components/chat/chat-thread-messages";
+import { continuePausedTurnWhenReady } from "@/components/chat/continue-paused-turn.logic";
 import {
   DockedComposer,
   PromptBarPending,
   PromptBarPlaceholderContent,
 } from "@/components/chat/docked-composer";
 import { PromptSuggestions } from "@/components/chat/prompt-suggestions";
+import { useChatComposerModels } from "@/components/chat/use-chat-composer-models";
+import { useUserMessageEditActions } from "@/components/chat/user-message-edit";
 import {
   boundLegalDocumentLabel,
   chatContextLabel,
@@ -69,11 +74,16 @@ import {
 } from "@/components/inspector/chat-context-label.logic";
 import { useDecisionChatPrompts } from "@/components/inspector/decision-chat-prompts";
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
-import { skillLabel } from "@/components/inspector/inspector-store-types";
-import { InspectorTabHeader } from "@/components/inspector/inspector-tab-header";
+import { INSPECTOR_FOCUS_INTENT } from "@/components/inspector/inspector-store-types";
+import {
+  type HeaderAction,
+  InspectorTabHeader,
+} from "@/components/inspector/inspector-tab-header";
 import type { ChatTab } from "@/components/inspector/inspector-tabs-store";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { buildMaximizeTabAction } from "@/components/inspector/maximize-tab";
+import { dockNewChatArgs } from "@/components/inspector/new-chat-scope";
+import { useRouteWorkspaceId } from "@/components/inspector/use-route-workspace-id";
 import {
   AIUnavailableDialogTrigger,
   useAIKeyGate,
@@ -81,7 +91,6 @@ import {
 import { StellaMark } from "@/components/stella-mark";
 import Tooltip from "@/components/tooltip";
 import { ChatTitleSuggestButton } from "@/features/chat/components/chat-title-rename";
-import { SuggestedFollowupChips } from "@/features/chat/components/suggested-followup-chips";
 import { useChatSession } from "@/features/chat/hooks/use-chat-session";
 import { useChatThreadRuntime } from "@/features/chat/hooks/use-chat-thread-runtime";
 import { useChatUserContext } from "@/features/chat/hooks/use-chat-user-context";
@@ -91,7 +100,20 @@ import { useSuggestedFollowupPrompts } from "@/features/chat/hooks/use-suggested
 import { legalDocumentChatContext } from "@/features/chat/legal-document-chat-context";
 import { buildChatRequestMessage } from "@/features/chat/lib/build-chat-request-message";
 import { startNewThreadCommandHandoff } from "@/features/chat/lib/start-new-thread-command-handoff";
-import { chatThreadOptions } from "@/features/chat/queries";
+import {
+  chatThreadOptions,
+  chatThreadTitleOptions,
+} from "@/features/chat/queries";
+import {
+  claimQueuedChatSend,
+  hasQueuedChatSend,
+  settleQueuedChatSend,
+  subscribeQueuedChatSend,
+} from "@/features/chat/queued-chat-sends";
+import {
+  useMakeSkillFromChat,
+  useSaveDraftedSkill,
+} from "@/features/chat/use-make-skill-from-chat";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useInlineRename } from "@/hooks/use-inline-rename";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
@@ -103,15 +125,23 @@ import {
   useChatAnonymized,
 } from "@/lib/chat-anonymized-store";
 import {
+  type ChatThreadRef,
   createChatThreadId,
   getChatThreadKey,
-  type ChatThreadRef,
 } from "@/lib/chat-thread-ref";
+import { isPlaceholderThreadTitle } from "@/lib/chat-thread-title";
 import { detached } from "@/lib/detached";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { useSkillLabel } from "@/lib/knowledge/built-in-skills";
+import { REQUIREMENT } from "@/lib/platform/requirements.logic";
 import type { PromptSuggestion } from "@/lib/prompts/types";
-import { useSuggestedSkills } from "@/lib/prompts/use-suggested-skills";
+import {
+  offeredSuggestedSkills,
+  useSuggestedSkills,
+} from "@/lib/prompts/use-suggested-skills";
+import { queryView } from "@/lib/query-view.logic";
 import { runReservedChatCommand } from "@/lib/reserved-chat-commands";
+import { useQueryViewError } from "@/lib/use-query-view";
 import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
 
 type ChatTabPanelProps = {
@@ -164,15 +194,15 @@ export const ChatTabPanel = ({
   const t = useTranslations();
   const capturePromptSubmitError = useCallback(
     (error: unknown): void => {
-      if (ChatSubmitPreservedError.is(error)) {
-        return;
-      }
-      getAnalytics().captureError(error);
+      getAnalytics().captureError(error, {
+        fingerprintKey: "ChatTabPanel:failure",
+        scope: { type: "handler", handlerId: "ChatTabPanel:failure" },
+      });
       notifyUserError(error, t("common.somethingWentWrong"));
     },
     [t],
   );
-  const { ensureAIAvailable } = useAIKeyGate();
+  const { availability, ensureAIAvailable } = useAIKeyGate();
 
   // Read live tab state on every send. The Chat instance is created
   // once and cached per `threadRef`, so a plain closure over `tab`
@@ -190,17 +220,26 @@ export const ChatTabPanel = ({
   const [composerFocused, setComposerFocused] = useState(false);
   const getSendMode = useLatestCallback(() => getChatSendMode(threadRef));
   const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
-  const contextLabel = useChatContextLabel(tab, activeOrganizationId);
+  const composerPlaceholder = useChatComposerPlaceholder(
+    tab,
+    activeOrganizationId,
+  );
 
-  const { openChat, resetChatTabId, setChatContext, updateLabel } =
-    useInspectorTabsStore(
-      useShallow((s) => ({
-        openChat: s.openChat,
-        resetChatTabId: s.resetChatTabId,
-        setChatContext: s.setChatContext,
-        updateLabel: s.updateLabel,
-      })),
-    );
+  const {
+    markChatStarted,
+    openChat,
+    resetChatTabId,
+    setChatContext,
+    updateLabel,
+  } = useInspectorTabsStore(
+    useShallow((s) => ({
+      markChatStarted: s.markChatStarted,
+      openChat: s.openChat,
+      resetChatTabId: s.resetChatTabId,
+      setChatContext: s.setChatContext,
+      updateLabel: s.updateLabel,
+    })),
+  );
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
@@ -222,57 +261,95 @@ export const ChatTabPanel = ({
     getContextMatterIds,
     getSendMode,
   };
-  const { data } = useSuspenseQuery(
-    chatThreadOptions({
-      activeOrganizationId,
-      key: threadRef,
-      context: chatThreadContext,
-    }),
-  );
+  const threadQueryOptions = chatThreadOptions({
+    activeOrganizationId,
+    key: threadRef,
+    context: chatThreadContext,
+  });
+  const { data } = useSuspenseQuery(threadQueryOptions);
+  // The same model menu and Run on choice the chat page offers. The target
+  // is read at send time; the cache key never depends on it, so the runtime
+  // addresses the entry read above.
+  const composerModels = useChatComposerModels({
+    activeOrganizationId,
+    threadRef,
+    stored: data,
+    queryKey: threadQueryOptions.queryKey,
+    opensNewChats: true,
+  });
+  const { getRunTarget } = composerModels;
   const chat = useChatThreadRuntime({
     activeOrganizationId,
-    context: chatThreadContext,
+    context: { ...chatThreadContext, getRunTarget },
     data,
     key: threadRef,
   });
 
   const {
+    activitySession,
     error,
     messages,
+    refreshAnswers,
     loadOlder,
     olderCursor,
     isLoadingOlder,
     loadOlderError,
+    approvalIdsAwaitedAtOpen,
+    continuePausedTurn,
     resendLatestMessage,
     sendMessage,
-    queuedMessages,
-    removeQueuedMessage,
+    queue,
     stop,
+    stopPending,
     leave,
     isGenerating,
     turnAbandoned,
+    computerWait,
+    turnSentAt,
     alwaysApprovedTools,
     conversationApprovedTools,
+    confirmStoredApprovalGrant,
     handleApprove,
     handleAllowInConversation,
     handleDeny,
+    handleRequestSecret,
+    continueRequestSecret,
+    handleConnectConnector,
+    continueConnectConnector,
+    resolveSecretTarget,
+    secretAvailabilityKey,
     handleAskUserSubmit,
     handleAskUserEditAndRerun,
+    startUserMessageEdit,
+    holdQueueForMessageEdit,
+    editUserMessage,
     handleAlwaysAllow,
     handleCreateDocumentResolve,
     handleOpenCreateDocumentDraft,
     handleOpenCreatedDocument,
+    handleOpenPlaybook,
     createDocumentMattersView,
     streamdownComponents,
     approvalPendingMessageId,
   } = useChatSession({
+    exceptionScope: { type: "handler", handlerId: "chat-session.inspector" },
     chat,
+    timingSurface: "inspector-chat",
     conversationId: threadRef.threadId,
     getContextMatterIds,
     getSendMode,
     initialOlderCursor: data.olderCursor,
+    playbookPane: "on-request",
     threadRef,
     workspaceId: tabWorkspaceId,
+  });
+  const userMessageEdit = useUserMessageEditActions({
+    editUserMessage,
+    ensureAIAvailable,
+    holdQueueForMessageEdit,
+    messages,
+    startUserMessageEdit,
+    threadRef,
   });
   const handlePromptSubmit = useLatestCallback(
     async ({
@@ -281,47 +358,59 @@ export const ChatTabPanel = ({
     }: {
       prompt: string;
       files: ChatDraftAttachment[];
-    }) => {
+    }): Promise<ChatSendOutcome> => {
       try {
         if (!(await ensureAIAvailable())) {
-          return;
+          return CHAT_SEND_KEPT;
+        }
+        // A model or Run on choice may still be landing; the send waits so
+        // it never runs on the previous one. A failure was already toasted.
+        if (Result.isError(await composerModels.awaitPendingSelection())) {
+          return CHAT_SEND_KEPT;
         }
 
         // PromptBar emits the raw editor HTML; the backend parses
         // `<entity-mention>` tags out of TanStack text content.
-        await sendMessage(
-          await buildChatRequestMessage({ files, html: prompt }),
-        );
+        const message = await buildChatRequestMessage({ files, html: prompt });
+        if (message.isErr()) {
+          notifyUserError(message.error, t("chat.sendErrorMessageEmpty"));
+          return CHAT_SEND_KEPT;
+        }
+        return await sendMessage(message.value);
       } catch (submitError) {
+        // Reported here, so the composer only takes the draft back.
         capturePromptSubmitError(submitError);
+        return CHAT_SEND_KEPT;
       }
     },
   );
 
-  const {
-    handleAskUserEditingChange,
-    suggestedFollowupPrompt,
-    suggestedPrompts,
-  } = useSuggestedFollowupPrompts({
-    activeOrganizationId,
-    approvalPendingMessageId,
-    error,
-    isGenerating,
-    messages,
-    threadRef,
-    turnAbandoned,
-  });
+  const { handleAskUserEditingChange, lastMessageId, suggestedPrompts } =
+    useSuggestedFollowupPrompts({
+      activeOrganizationId,
+      approvalPendingMessageId,
+      error,
+      isGenerating,
+      messages,
+      threadRef,
+      turnAbandoned,
+    });
   // TipTap composer for this thread — `@`-mention chips, drafts,
   // attachments come from the same provider as the right-panel
   // chat. Thread ref is shared with `chatThreadOptions` above so
   // drafts persist across tab close/open.
   const editorController = useChatEditor({
-    placeholder: t("chat.contextPlaceholder", { context: contextLabel }),
-    suggestedFollowupPrompt,
+    placeholder: composerPlaceholder,
     threadRef,
   });
-  const hasSuggestedFollowups = suggestedPrompts.length > 0;
   const focusComposer = editorController.focus;
+  const handleContinuePausedTurn = useLatestCallback(async () => {
+    await continuePausedTurnWhenReady({
+      ensureAIAvailable,
+      awaitPendingSelection: composerModels.awaitPendingSelection,
+      continueTurn: continuePausedTurn,
+    });
+  });
   const sendWithoutAnonymization = useLatestCallback(async () => {
     await resendLatestMessage({ sendMode: CHAT_SEND_MODE.rawOverride });
   });
@@ -340,7 +429,7 @@ export const ChatTabPanel = ({
     };
   }, [focusComposer, isGenerating, messages.length, tab.id]);
 
-  const suggestedSkills = useSuggestedSkills();
+  const suggestedSkills = offeredSuggestedSkills(useSuggestedSkills());
   // A chat about a decision opens on the questions a judgment answers. The
   // suggested skills are the reader's own drafting and review skills, which are
   // about a document they are writing, not one a court handed down.
@@ -357,7 +446,16 @@ export const ChatTabPanel = ({
   // label while the real conversation title stayed stale on every other
   // surface. Pre-first-message renames stay label-only, as before.
   const renameThread = useRenameChatThread(threadRef);
+  const saveDraftedSkill = useSaveDraftedSkill();
+  const makeSkillFromChat = useMakeSkillFromChat(saveDraftedSkill);
   const hasThreadMessages = messages.length > 0;
+  // The tab store keeps a document's chat across reloads only once its
+  // conversation exists on the server.
+  useExternalSyncEffect(() => {
+    if (hasThreadMessages && tab.started !== true) {
+      markChatStarted(tab.id);
+    }
+  }, [hasThreadMessages, markChatStarted, tab.id, tab.started]);
   // The optimistic label write needs its own rollback: the mutation's
   // onError restores the query caches but cannot reach this local tabs
   // store, and a failed PATCH must not leave the tab showing a title the
@@ -381,6 +479,39 @@ export const ChatTabPanel = ({
       updateLabel(tab.id, value);
     },
   });
+
+  // Once the thread exists on the server its title is the tab's name. A tab
+  // opened for an existing thread (moved over from the main chat, reopened from
+  // history or the rail) starts on the default label, and a title generated or
+  // renamed on another surface would otherwise never reach it. The by-id read
+  // is bounded and runs only for a persisted thread.
+  const titleView = queryView(
+    useQuery(
+      chatThreadTitleOptions({
+        activeOrganizationId,
+        key: {
+          threadId: threadRef.threadId,
+          workspaceId:
+            threadRef.scope === "workspace" ? threadRef.workspaceId : undefined,
+        },
+        persistedThread: data,
+      }),
+    ),
+  );
+  useQueryViewError(titleView, "ChatTabPanel:thread-title");
+  const persistedTitle =
+    titleView.type === "items" && !isPlaceholderThreadTitle(titleView.items)
+      ? titleView.items
+      : null;
+  const editingLabel = labelRename.state.mode === "edit";
+  useExternalSyncEffect(() => {
+    if (persistedTitle === null || editingLabel) {
+      return;
+    }
+    if (persistedTitle !== tab.label) {
+      updateLabel(tab.id, persistedTitle);
+    }
+  }, [editingLabel, persistedTitle, tab.id, tab.label, updateLabel]);
 
   // Mirrors of the label edit session, maintained at the handlers below, so
   // the async title suggestion can tell whether the user typed, cancelled,
@@ -426,19 +557,12 @@ export const ChatTabPanel = ({
   };
 
   // New-chat lives in the composer's status row (the dock), not the
-  // pane header: opens a fresh tab with the same scope + context.
+  // pane header: opens a fresh tab scoped to the route's matter.
+  const routeWorkspaceId = useRouteWorkspaceId();
   const startNewThread = () => {
     openChat({
-      // Named explicitly: a chat about a legal document otherwise continues
-      // that document's one conversation, and this button asks for a fresh
-      // one. Naming it also makes it the document's conversation, so the
-      // reader's floating composer follows rather than staying on the thread
-      // left here.
-      id: createChatThreadId(),
-      workspaceId: tabWorkspaceId,
-      contextMatterIds: tab.contextMatterIds,
-      ...(tab.activeLegalKey ? { activeLegalKey: tab.activeLegalKey } : {}),
-      ...(tab.activeSkill ? { activeSkill: tab.activeSkill } : {}),
+      ...dockNewChatArgs({ id: createChatThreadId(), routeWorkspaceId, tab }),
+      focus: INSPECTOR_FOCUS_INTENT.claim,
     });
   };
 
@@ -458,6 +582,46 @@ export const ChatTabPanel = ({
     return useInspectorCommandStore.subscribe(consumeRenameRequest);
   });
 
+  // A surface that opened this tab with its question queued ("Ask in chat"):
+  // send it once, through the same AI check and session a typed message takes.
+  // The question is claimed only once that check passes: while it fails (no
+  // key yet, or the check itself failed) the question stays queued, and asking
+  // again retries here instead of losing it.
+  const queuedSendInFlight = useRef(false);
+  const sendQueuedQuestion = useLatestCallback(async () => {
+    if (queuedSendInFlight.current || !hasQueuedChatSend(threadRef)) {
+      return;
+    }
+    queuedSendInFlight.current = true;
+    try {
+      if (!(await ensureAIAvailable())) {
+        return;
+      }
+      const queuedHtml = claimQueuedChatSend(threadRef);
+      if (queuedHtml === null) {
+        return;
+      }
+      const outcome = await handlePromptSubmit({
+        prompt: queuedHtml,
+        files: [],
+      });
+      // A question that was not sent waits again, so the next attempt sends
+      // it instead of losing it.
+      settleQueuedChatSend(
+        threadRef,
+        outcome.kind === "sent" ? "sent" : "not-sent",
+      );
+    } finally {
+      queuedSendInFlight.current = false;
+    }
+  });
+  useMountEffect(() => {
+    detached(sendQueuedQuestion(), "chat-tab-panel.queued-send");
+    return subscribeQueuedChatSend(threadRef, () => {
+      detached(sendQueuedQuestion(), "chat-tab-panel.queued-send");
+    });
+  });
+
   const handleComposerSubmit = useLatestCallback(
     async ({
       prompt,
@@ -465,7 +629,7 @@ export const ChatTabPanel = ({
     }: {
       prompt: string;
       files: ChatDraftAttachment[];
-    }) => {
+    }): Promise<ChatSendOutcome> => {
       const newThreadMessages: string[] = [];
       const handledReserved = runReservedChatCommand(prompt, {
         new: (args) => {
@@ -492,18 +656,36 @@ export const ChatTabPanel = ({
           }
           startLabelEditingWithSuggestion();
         },
+        "make-skill": (args) => {
+          editorController.setContent(composerText(""));
+          if (!hasThreadMessages) {
+            stellaToast.add({
+              title: t("chat.makeSkill.emptyThread"),
+              type: "info",
+            });
+            return;
+          }
+          makeSkillFromChat({ intent: args, threadRef });
+        },
       });
+      // Inside the member's send gesture, before any await: a turn for
+      // their computer opens stella desktop when none is connected. A queued
+      // question sent on mount is no gesture, so it never opens it.
       if (!handledReserved) {
-        await handlePromptSubmit({ prompt, files });
-        return;
+        composerModels.openDesktopForSend();
+        return await handlePromptSubmit({ prompt, files });
       }
 
       const newThreadMessage = newThreadMessages.at(0);
       if (newThreadMessage === undefined) {
-        return;
+        return CHAT_SEND_SENT;
       }
+      composerModels.openDesktopForSend();
       if (!(await ensureAIAvailable())) {
-        throw new ChatSubmitPreservedError({ message: "AI is unavailable" });
+        return CHAT_SEND_KEPT;
+      }
+      if (Result.isError(await composerModels.awaitPendingSelection())) {
+        return CHAT_SEND_KEPT;
       }
       const newThreadId = createChatThreadId();
       const newThreadRef: ChatThreadRef =
@@ -514,10 +696,13 @@ export const ChatTabPanel = ({
               threadId: newThreadId,
               workspaceId: tabWorkspaceId,
             };
-      await startNewThreadCommandHandoff({
+      const handoff = await startNewThreadCommandHandoff({
         activeOrganizationId,
         context: {
           ...chatThreadContext,
+          // The new thread starts where this chat's turns run, as the chat
+          // page's `/new` does.
+          getRunTarget: composerModels.getRunTarget,
           getSendMode: () => getChatSendMode(newThreadRef),
         },
         files,
@@ -525,8 +710,13 @@ export const ChatTabPanel = ({
         queryClient,
         threadRef: newThreadRef,
       });
+      if (handoff.isErr()) {
+        notifyUserError(handoff.error, t("chat.sendErrorMessageEmpty"));
+        return CHAT_SEND_KEPT;
+      }
       leave();
       resetChatTabId(tab.id, newThreadId);
+      return CHAT_SEND_SENT;
     },
   );
 
@@ -536,12 +726,20 @@ export const ChatTabPanel = ({
       <ChatApprovalContext
         value={{
           activeOrganizationId,
+          approvalIdsAwaitedAtOpen,
           alwaysApprovedTools,
           conversationApprovedTools,
+          confirmStoredApprovalGrant,
           handleAllowInConversation,
           handleAlwaysAllow,
           handleApprove,
           handleDeny,
+          handleRequestSecret,
+          continueRequestSecret,
+          handleConnectConnector,
+          continueConnectConnector,
+          resolveSecretTarget,
+          secretAvailabilityKey,
         }}
       >
         <ChatTabPanelChrome
@@ -585,12 +783,8 @@ export const ChatTabPanel = ({
         >
           <Conversation className="min-h-0 flex-1">
             {/* Bottom padding keeps the last messages readable above the
-                floating composer block (veil + pill + status row). Extra
-                space when follow-up chips are showing so Copy/Retry can
-                scroll clear of the chip row. */}
-            <ConversationContent
-              className={cn("gap-3", hasSuggestedFollowups ? "pb-44" : "pb-32")}
-            >
+                floating composer block (veil + pill + status row). */}
+            <ConversationContent className="gap-3 pb-32">
               {messages.length === 0 && !isGenerating && !error ? (
                 <ChatEmptyState
                   onSelectPrompt={handleSelectPrompt}
@@ -598,6 +792,40 @@ export const ChatTabPanel = ({
                 />
               ) : (
                 <ChatThreadMessages
+                  activitySession={activitySession}
+                  followUps={{
+                    analyticsSurface: "inspector-chat",
+                    messageId: lastMessageId,
+                    onSelect: (prompt) => {
+                      editorController.setContent(
+                        composerStoredMarkdown(prompt),
+                      );
+                      detached(
+                        editorController.submit(async (draft) => {
+                          composerModels.openDesktopForSend();
+                          if (!(await ensureAIAvailable())) {
+                            return CHAT_SEND_KEPT;
+                          }
+                          const message = await buildChatRequestMessage(draft);
+                          if (message.isErr()) {
+                            notifyUserError(
+                              message.error,
+                              t("chat.sendErrorMessageEmpty"),
+                            );
+                            return CHAT_SEND_KEPT;
+                          }
+                          return await sendMessage(message.value);
+                        }),
+                        "chat-tab-panel.submit",
+                      );
+                    },
+                    prompts: suggestedPrompts,
+                    threadId: threadRef.threadId,
+                  }}
+                  onAnswerEdited={refreshAnswers}
+                  answerRewriteAvailability={
+                    data.usedAnonymization ? "anonymized" : "available"
+                  }
                   approvalPendingMessageId={approvalPendingMessageId}
                   branchSource={{
                     contextMatterIds: tab.contextMatterIds,
@@ -616,12 +844,15 @@ export const ChatTabPanel = ({
                   onCreateDocumentResolve={handleCreateDocumentResolve}
                   onOpenCreateDocumentDraft={handleOpenCreateDocumentDraft}
                   onOpenCreatedDocument={handleOpenCreatedDocument}
-                  onRemoveQueuedMessage={removeQueuedMessage}
+                  onOpenPlaybook={handleOpenPlaybook}
+                  onContinuePausedTurn={handleContinuePausedTurn}
                   onResend={resendLatestMessage}
                   onSendWithoutAnonymization={sendWithoutAnonymization}
-                  queuedMessages={queuedMessages}
-                  showThinkingIndicator
+                  queue={queue}
                   streamdownComponents={streamdownComponents}
+                  userMessageEdit={userMessageEdit}
+                  computerWait={computerWait}
+                  turnSentAt={turnSentAt}
                   workspaceId={tabWorkspaceId}
                 />
               )}
@@ -638,34 +869,18 @@ export const ChatTabPanel = ({
           {/* PromptBar owns its own docked positioning (via
               DockedComposer): it floats over the transcript, centred and
               pinned to the pane's bottom, identically to the file-overlay
-              chat. The chips ride the same one geometry through the
-              `followupChips` slot. */}
+              chat. Suggested follow-ups sit under the answer they follow,
+              in the transcript, not over it. */}
           <PromptBar
+            sendDisabled={availability !== "available"}
             anonymized={anonymized}
             attachmentsEnabled
             context={{ activeOrganizationId, threadRef }}
             editorController={editorController}
             emptyPlaceholder={
               <PromptBarPlaceholderContent>
-                {t("chat.contextPlaceholder", { context: contextLabel })}
+                {composerPlaceholder}
               </PromptBarPlaceholderContent>
-            }
-            followupChips={
-              <SuggestedFollowupChips
-                onSelect={(prompt) => {
-                  editorController.setContent(composerStoredMarkdown(prompt));
-                  detached(
-                    editorController.submit(async (draft) => {
-                      if (!(await ensureAIAvailable())) {
-                        return;
-                      }
-                      await sendMessage(await buildChatRequestMessage(draft));
-                    }),
-                    "chat-tab-panel.submit",
-                  );
-                }}
-                prompts={suggestedPrompts}
-              />
             }
             layout="standalone"
             onFocusChange={setComposerFocused}
@@ -673,14 +888,17 @@ export const ChatTabPanel = ({
             onStop={() => {
               stop();
             }}
+            stopping={stopPending}
             onNewThread={messages.length > 0 ? startNewThread : null}
             onSubmit={handleComposerSubmit}
             pendingCount={0}
             queueWhileGenerating
             reservedCommands={{ hasPersistedThread: hasThreadMessages }}
+            models={composerModels.models}
             skillChat={{
               contextMatterIds: tab.contextMatterIds,
               document: null,
+              runTarget: composerModels.runTarget,
               threadRef,
               webSearch: {
                 available: data.webSearchAvailable,
@@ -692,6 +910,7 @@ export const ChatTabPanel = ({
             dock={
               <ChatComposerDock
                 data={data}
+                models={composerModels.models}
                 leadingContext={
                   <ChatMatterPicker
                     matterIds={tab.contextMatterIds}
@@ -719,23 +938,39 @@ const useBoundLegalDocumentLabel = (tab: ChatTab): string | undefined => {
   });
 };
 
-const useChatContextLabel = (tab: ChatTab, activeOrganizationId: string) => {
+/** The composer's placeholder: what the chat is about, when something names it. */
+const useChatComposerPlaceholder = (
+  tab: ChatTab,
+  activeOrganizationId: string,
+) => {
   const t = useTranslations();
-  const { data } = useQuery(workspacesNavigationOptions(activeOrganizationId));
+  const skillLabel = useSkillLabel();
+  const { id: userId } = useAuthenticatedUser();
+  const dataQuery = useQuery(
+    workspacesNavigationOptions({
+      organizationId: activeOrganizationId,
+      userId,
+    }),
+  );
+  const dataView = queryView(dataQuery);
+  useQueryViewError(dataView, "useChatComposerPlaceholder:query");
+  const data = dataView.type === "items" ? dataView.items : undefined;
   const boundDocumentLabel = useBoundLegalDocumentLabel(tab);
   const workspaces = data?.workspaces ?? [];
   const matterNames = tab.contextMatterIds
     .map((id) => workspaces.find((workspace) => workspace.id === id)?.name)
     .filter((name): name is string => name !== undefined);
 
-  return chatContextLabel({
+  const context = chatContextLabel({
     activeSkillName:
       tab.activeSkill === undefined ? undefined : skillLabel(tab.activeSkill),
     boundDocumentLabel,
     matterNames,
-    newChatLabel: t("chat.newChat"),
     tabLabel: tab.label,
   });
+  return context === undefined
+    ? t("chat.placeholder")
+    : t("chat.contextPlaceholder", { context });
 };
 
 type ChatEmptyStateProps = {
@@ -791,28 +1026,50 @@ const ChatTabPanelChrome = ({
   children,
 }: ChatTabPanelChromeProps) => {
   const t = useTranslations();
+  const skillLabel = useSkillLabel();
   const boundDocumentLabel = useBoundLegalDocumentLabel(tab);
   // New-chat is not a header action: it lives in the composer's status
   // row (`ChatComposerDock`), uniform with every other chat surface.
-  const actions = onMoveToMain && (
-    <Tooltip
-      content={t("inspector.moveToMain")}
-      render={
-        <Button onClick={onMoveToMain} size="icon-xs" variant="ghost">
-          <Maximize2Icon className="size-3.5" />
-        </Button>
-      }
-    />
-  );
+  const actions: HeaderAction[] =
+    onMoveToMain === undefined
+      ? []
+      : [
+          {
+            id: "move-to-main",
+            requires: [REQUIREMENT.sidePanel],
+            render: () => (
+              <Tooltip
+                content={t("inspector.moveToMain")}
+                render={
+                  <Button
+                    aria-label={t("inspector.moveToMain")}
+                    onClick={onMoveToMain}
+                    size="icon-xs"
+                    variant="ghost"
+                  >
+                    <Maximize2Icon className="size-3.5" />
+                  </Button>
+                }
+              />
+            ),
+          },
+        ];
 
   return (
     <div
       className="relative flex min-w-0 flex-1 flex-col"
+      // Which conversation the pane shows, for tests that need to tell a
+      // restored thread from a freshly minted one.
+      data-chat-thread-id={tab.id}
       data-slot="inspector-chat-panel"
     >
       <InspectorTabHeader
         actions={actions}
         label={chatTabHeaderLabel({
+          activeSkillName:
+            tab.activeSkill === undefined
+              ? undefined
+              : skillLabel(tab.activeSkill),
           boundDocumentLabel,
           newChatLabel: t("chat.newChat"),
           tabLabel: tab.label,
@@ -850,14 +1107,12 @@ const ChatTabPanelChrome = ({
  * in once data arrives.
  */
 const PromptBarPlaceholder = ({ tab }: { tab: ChatTab }) => {
-  const t = useTranslations();
   const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
-  const contextLabel = useChatContextLabel(tab, activeOrganizationId);
-  return (
-    <PromptBarPending>
-      {t("chat.contextPlaceholder", { context: contextLabel })}
-    </PromptBarPending>
+  const composerPlaceholder = useChatComposerPlaceholder(
+    tab,
+    activeOrganizationId,
   );
+  return <PromptBarPending>{composerPlaceholder}</PromptBarPending>;
 };
 
 /**
@@ -869,7 +1124,7 @@ const PromptBarPlaceholder = ({ tab }: { tab: ChatTab }) => {
  * spinner flash, no layout shift.
  */
 export const ChatTabPanelShell = ({ tab }: { tab: ChatTab }) => {
-  const suggestedSkills = useSuggestedSkills();
+  const suggestedSkills = offeredSuggestedSkills(useSuggestedSkills());
   const decisionPrompts = useDecisionChatPrompts(tab.activeLegalKey);
   const threadRef = chatTabThreadRef(tab);
   return (
@@ -904,6 +1159,8 @@ export const ChatTabPanelShell = ({ tab }: { tab: ChatTab }) => {
         dock={
           <ChatComposerDock
             leadingContext={<ChatMatterPickerPending />}
+            // The live panel's menu replaces this once the thread is read.
+            models={null}
             status="pending"
             threadRef={threadRef}
           />

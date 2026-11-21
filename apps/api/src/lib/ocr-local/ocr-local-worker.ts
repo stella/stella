@@ -17,18 +17,19 @@
  *   stdout → JSON { pages: [{ width, height, lines: [...] }] }
  *   exit 0 = success, exit 1 = OCR error
  */
-
-import { PDFiumLibrary } from "@hyzyla/pdfium";
 import path from "node:path";
 import * as ort from "onnxruntime-node";
 
+import { chunk as chunkItems } from "@stll/concurrency/chunk";
+
 import {
-  OCR_LOCAL_MODEL_FILES,
-  OCR_MAX_PAGES,
   type DocumentOcrLine,
   type DocumentOcrPage,
+  OCR_LOCAL_MODEL_FILES,
+  OCR_MAX_PAGES,
 } from "@/api/lib/document-processing-contract";
 import { buildOcrPage } from "@/api/lib/document-processing-ocr-result";
+import { openPdfiumDocument } from "@/api/lib/files/pdfium";
 import {
   buildCtcDecodeTable,
   compareReadingOrder,
@@ -43,6 +44,7 @@ import {
   type TextBox,
 } from "@/api/lib/ocr-local/ppocr-pipeline";
 import { resizeRgbRegion, rgbaToRgb } from "@/api/lib/ocr-local/rgb-image";
+import { writeWorkerStdout } from "@/api/lib/subprocess";
 
 /** Render at 300dpi, capped so an oversized page cannot balloon memory. */
 const RENDER_TARGET_SCALE = 300 / 72;
@@ -126,11 +128,13 @@ const recognize = async (
     .toSorted((a, b) => (ratios[a] ?? 0) - (ratios[b] ?? 0));
   const lines: (DocumentOcrLine | null)[] = boxes.map(() => null);
 
-  const recognizeBatch = async (start: number): Promise<void> => {
-    if (start >= order.length) {
+  const itemBatches = chunkItems(order, REC_BATCH_SIZE)[Symbol.iterator]();
+  const recognizeBatch = async (): Promise<void> => {
+    const nextBatch = itemBatches.next();
+    if (nextBatch.done) {
       return;
     }
-    const batch = order.slice(start, start + REC_BATCH_SIZE);
+    const batch = nextBatch.value;
     const maxRatio = Math.max(...batch.map((index) => ratios[index] ?? 1));
     const batchWidth = Math.min(
       REC_MAX_INPUT_WIDTH,
@@ -226,10 +230,10 @@ const recognize = async (
         text,
       };
     }
-    await recognizeBatch(start + REC_BATCH_SIZE);
+    await recognizeBatch();
   };
 
-  await recognizeBatch(0);
+  await recognizeBatch();
 
   const orderedBoxes = boxes
     .map((box, index) => ({ box, line: lines[index] }))
@@ -245,33 +249,46 @@ const recognize = async (
 
 try {
   const pdfBytes = new Uint8Array(await Bun.stdin.arrayBuffer());
-  const library = await PDFiumLibrary.init();
-  const document = await library.loadDocument(Buffer.from(pdfBytes));
-  const pageCount = document.getPageCount();
+  const opened = await openPdfiumDocument(pdfBytes);
+  const document = opened.isErr()
+    ? die(`pdfium ${opened.error.operation} failed (code ${opened.error.code})`)
+    : opened.value;
+  const { pageCount } = document;
   if (pageCount < 1 || pageCount > OCR_MAX_PAGES) {
     die(`page count ${pageCount} is outside the supported range`);
   }
 
   const processPage = async (index: number): Promise<DocumentOcrPage> => {
-    const page = document.getPage(index);
-    const { originalHeight: pointHeight, originalWidth: pointWidth } =
-      page.getOriginalSize();
+    const size = document.pageSize(index);
+    if (size.isErr()) {
+      return die(
+        `pdfium ${size.error.operation} failed (code ${size.error.code})`,
+      );
+    }
+    const { pointHeight, pointWidth } = size.value;
     const scale = Math.min(
       RENDER_TARGET_SCALE,
       RENDER_MAX_SIDE_PIXELS / Math.max(pointWidth, pointHeight),
     );
-    const render = await page.render({ scale });
-    const rgb = rgbaToRgb({
-      data: render.data,
-      width: render.width,
-      height: render.height,
+    // Whole points first, as the previous renderer sized its bitmaps, so
+    // the same page keeps the same bitmap under processor version 3.
+    const render = document.renderPage({
+      index,
+      width: Math.floor(Math.floor(pointWidth) * scale),
+      height: Math.floor(Math.floor(pointHeight) * scale),
     });
+    if (render.isErr()) {
+      return die(
+        `pdfium ${render.error.operation} failed (code ${render.error.code})`,
+      );
+    }
+    const { rgba, width, height } = render.value;
     const rendered: RenderedPage = {
-      data: rgb,
-      width: render.width,
-      height: render.height,
-      scaleX: render.width / pointWidth,
-      scaleY: render.height / pointHeight,
+      data: rgbaToRgb({ data: rgba, width, height }),
+      width,
+      height,
+      scaleX: width / pointWidth,
+      scaleY: height / pointHeight,
       pointWidth,
       pointHeight,
     };
@@ -289,10 +306,9 @@ try {
     await processPages(index + 1);
   };
   await processPages(0);
-  document.destroy();
-  library.destroy();
+  document.close();
 
-  process.stdout.write(JSON.stringify({ pages }));
+  await writeWorkerStdout(JSON.stringify({ pages }));
   process.exit(0);
 } catch (error) {
   // Only the error type reaches stderr: messages could carry recognized

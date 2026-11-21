@@ -1,0 +1,12 @@
+name: Save scoped store now
+description: Save a zstd cache now with a non-fatal progress-based stall watchdog.
+inputs:
+  key:
+    description: Exact sealed install-store key.
+    required: true
+  path:
+    description: Absolute sealed install-store directory.
+    required: true
+runs:
+  using: node24
+  main: index.mjs

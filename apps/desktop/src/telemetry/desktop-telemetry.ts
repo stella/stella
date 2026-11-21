@@ -6,6 +6,9 @@ export const DESKTOP_TELEMETRY_WINDOWS = {
   main: "main",
   selfHostConnectDialog: "selfHostConnectDialog",
   takeoverDialog: "takeoverDialog",
+  activity: "activity",
+  onboarding: "onboarding",
+  transcribe: "transcribe",
 } as const;
 
 export const DESKTOP_TELEMETRY_OPERATIONS = {
@@ -23,6 +26,11 @@ export const DESKTOP_TELEMETRY_OPERATIONS = {
   registryConnectionSubscribe: "registryConnectionSubscribe",
   render: "render",
   runtime: "runtime",
+  activityRead: "activityRead",
+  activitySubscribe: "activitySubscribe",
+  activityUpdate: "activityUpdate",
+  permissionsUpdate: "permissionsUpdate",
+  shortcutUpdate: "shortcutUpdate",
 } as const;
 
 export const DESKTOP_TELEMETRY_ERROR_CODES = {
@@ -41,6 +49,18 @@ export const DESKTOP_TELEMETRY_ERROR_CODES = {
  * Startup spans the frontend measures. The native side owns the full list and
  * attaches the open kind; only a duration crosses IPC.
  */
+export const DESKTOP_TELEMETRY_REASONS = {
+  accountUnavailable: "accountUnavailable",
+  windowRefused: "windowRefused",
+  billingRequestFailed: "billingRequestFailed",
+  typeError: "typeError",
+  referenceError: "referenceError",
+  rangeError: "rangeError",
+  syntaxError: "syntaxError",
+  otherError: "otherError",
+  unclassified: "unclassified",
+} as const;
+
 export const DESKTOP_TELEMETRY_SPANS = {
   clipboardFirstPaint: "clipboardFirstPaint",
   clipboardHistoryReady: "clipboardHistoryReady",
@@ -49,12 +69,14 @@ export const DESKTOP_TELEMETRY_SPANS = {
   clipboardSnapshotRequest: "clipboardSnapshotRequest",
 } as const;
 
-type DesktopTelemetryWindow =
+export type DesktopTelemetryWindow =
   (typeof DESKTOP_TELEMETRY_WINDOWS)[keyof typeof DESKTOP_TELEMETRY_WINDOWS];
 type DesktopTelemetryOperation =
   (typeof DESKTOP_TELEMETRY_OPERATIONS)[keyof typeof DESKTOP_TELEMETRY_OPERATIONS];
 type DesktopTelemetryErrorCode =
   (typeof DESKTOP_TELEMETRY_ERROR_CODES)[keyof typeof DESKTOP_TELEMETRY_ERROR_CODES];
+export type DesktopTelemetryReason =
+  (typeof DESKTOP_TELEMETRY_REASONS)[keyof typeof DESKTOP_TELEMETRY_REASONS];
 export type DesktopTelemetrySpan =
   (typeof DESKTOP_TELEMETRY_SPANS)[keyof typeof DESKTOP_TELEMETRY_SPANS];
 
@@ -75,7 +97,75 @@ export type DesktopErrorReport = {
   code: DesktopTelemetryErrorCode;
   detail?: DesktopErrorDetail;
   operation: DesktopTelemetryOperation;
+  reason?: DesktopTelemetryReason;
   window: DesktopTelemetryWindow;
+};
+
+/** The fixed native rejections a report may name. Anything else is unnamed. */
+const NATIVE_REJECTION_REASONS: ReadonlyMap<string, DesktopTelemetryReason> =
+  new Map([
+    [
+      "activity account is unavailable",
+      DESKTOP_TELEMETRY_REASONS.accountUnavailable,
+    ],
+    [
+      "draft time entry is unavailable",
+      DESKTOP_TELEMETRY_REASONS.accountUnavailable,
+    ],
+    [
+      "activity timeline is not available here",
+      DESKTOP_TELEMETRY_REASONS.windowRefused,
+    ],
+    [
+      "activity settings are not available here",
+      DESKTOP_TELEMETRY_REASONS.windowRefused,
+    ],
+    [
+      "clipboard history is not available here",
+      DESKTOP_TELEMETRY_REASONS.windowRefused,
+    ],
+    [
+      "billing draft request failed",
+      DESKTOP_TELEMETRY_REASONS.billingRequestFailed,
+    ],
+  ]);
+
+const ERROR_CLASS_REASONS: ReadonlyMap<string, DesktopTelemetryReason> =
+  new Map([
+    ["TypeError", DESKTOP_TELEMETRY_REASONS.typeError],
+    ["ReferenceError", DESKTOP_TELEMETRY_REASONS.referenceError],
+    ["RangeError", DESKTOP_TELEMETRY_REASONS.rangeError],
+    ["SyntaxError", DESKTOP_TELEMETRY_REASONS.syntaxError],
+  ]);
+
+/**
+ * What kind of failure a caught value was, for windows that report no detail:
+ * one of a fixed set, whatever the value holds. A wrapped rejection is read
+ * through its cause.
+ */
+export const failureReason = (value: unknown): DesktopTelemetryReason => {
+  const seen = new Set<Error>();
+  let current = value;
+  while (current instanceof Error && current.cause !== undefined) {
+    if (seen.has(current)) {
+      return DESKTOP_TELEMETRY_REASONS.otherError;
+    }
+    seen.add(current);
+    current = current.cause;
+  }
+  if (typeof current === "string") {
+    return (
+      NATIVE_REJECTION_REASONS.get(current) ??
+      DESKTOP_TELEMETRY_REASONS.unclassified
+    );
+  }
+  if (current instanceof Error) {
+    return (
+      ERROR_CLASS_REASONS.get(current.name) ??
+      DESKTOP_TELEMETRY_REASONS.otherError
+    );
+  }
+  return DESKTOP_TELEMETRY_REASONS.unclassified;
 };
 
 const MAX_ERROR_NAME_CHARS = 64;
@@ -307,13 +397,14 @@ export const reportDesktopTiming = ({
 const reported = new Set<string>();
 
 export const reportDesktopError = (report: DesktopErrorReport) => {
-  // Each distinct failure reports once per window; the detail keeps two
-  // different rejections under the same code apart, string rejections by
-  // their digest.
+  // Each distinct failure reports once per window; the reason and the detail
+  // keep two different rejections under the same code apart, string rejections
+  // by their digest.
   const key = [
     report.window,
     report.operation,
     report.code,
+    report.reason ?? "",
     report.detail?.errorName ?? "",
     report.detail?.frame ?? "",
     report.detail?.message ?? "",
@@ -345,6 +436,7 @@ export const installDesktopErrorTelemetry = (
       code: DESKTOP_TELEMETRY_ERROR_CODES.unhandledError,
       detail,
       operation: DESKTOP_TELEMETRY_OPERATIONS.runtime,
+      reason: failureReason(event.error),
       window: desktopWindow,
     });
   };
@@ -353,6 +445,7 @@ export const installDesktopErrorTelemetry = (
       code: DESKTOP_TELEMETRY_ERROR_CODES.unhandledRejection,
       detail: describeError(event.reason),
       operation: DESKTOP_TELEMETRY_OPERATIONS.runtime,
+      reason: failureReason(event.reason),
       window: desktopWindow,
     });
   };
@@ -372,12 +465,22 @@ export const desktopTelemetryWindowFromLabel = (
       return DESKTOP_TELEMETRY_WINDOWS.clipboard;
     case "clipboard-editor":
       return DESKTOP_TELEMETRY_WINDOWS.clipboardEditor;
+    // The dictation notice belongs to the Dictation settings.
+    case "dictation-notice":
     case "main":
+    case "dictation-preview":
       return DESKTOP_TELEMETRY_WINDOWS.main;
     case "selfhost-connect-dialog":
       return DESKTOP_TELEMETRY_WINDOWS.selfHostConnectDialog;
     case "takeover-dialog":
       return DESKTOP_TELEMETRY_WINDOWS.takeoverDialog;
+    case "activity":
+      return DESKTOP_TELEMETRY_WINDOWS.activity;
+    case "onboarding":
+    case "accessibility-guide":
+      return DESKTOP_TELEMETRY_WINDOWS.onboarding;
+    case "transcribe":
+      return DESKTOP_TELEMETRY_WINDOWS.transcribe;
     default:
       reportDesktopError({
         code: DESKTOP_TELEMETRY_ERROR_CODES.windowLabelMismatch,

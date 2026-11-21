@@ -1,0 +1,19 @@
+FROM oven/bun:1.4.4-slim@sha256:1846adf22496bd711036aae8be147e57bdebbaea2e5264e3e0b5af1db187d9a4 AS builder
+WORKDIR /app
+COPY . .
+# Match the API image's filtered, frozen install; materialize dependencies so
+# the runtime image does not depend on the build cache's virtual store.
+RUN --mount=type=cache,target=/root/.bun/install/cache \
+    BUN_INSTALL_GLOBAL_STORE=0 bun install --filter @stll/visual-preview --frozen-lockfile --ignore-scripts --network-concurrency=8
+RUN bun build apps/visual-preview/src/handler.ts --target=node --format=esm \
+    --external playwright-core --outfile /app/handler.mjs
+RUN mkdir -p /runtime/node_modules && cp -RL node_modules/playwright-core /runtime/node_modules/
+ADD --checksum=sha256:b6874fc0d7af15e16a15ef1b73177731f698c296c73d26aa4a90840c0777a338 \
+    https://github.com/Sparticuz/chromium/releases/download/v153.0.0/chromium-v153.0.0-pack.arm64.tar /chromium.tar
+RUN mkdir -p /chromium && tar -xf /chromium.tar -C /chromium
+
+FROM public.ecr.aws/lambda/nodejs:24.2026.11.10.01-arm64@sha256:fcb9085a7ddafb6c121a6d690cc11d16f9902e6ebda0e1b2ec721fd59093f0ba
+COPY --from=builder /chromium /opt/chromium
+COPY --from=builder /app/handler.mjs /var/task/handler.mjs
+COPY --from=builder /runtime/node_modules /var/task/node_modules
+CMD ["handler.handler"]

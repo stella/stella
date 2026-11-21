@@ -1,17 +1,12 @@
 import {
-  LEGISLATION_DOCUMENT_STATUSES,
   isLegislationDocumentStatus,
+  LEGISLATION_DOCUMENT_STATUSES,
 } from "@stll/api-contract/legislation-status";
-import type { LegislationDocumentStatus } from "@stll/api-contract/legislation-status";
 import { parsePlainDate, Temporal } from "@stll/time";
 
 import type { TranslationKey } from "@/i18n/types";
 
-export { LEGISLATION_DOCUMENT_STATUSES as STATUTE_STATUSES };
-export { isLegislationDocumentStatus as isStatuteStatus };
-export type StatuteStatus = LegislationDocumentStatus;
-
-export const STATUTE_DISPLAY_STATUSES = [
+const STATUTE_DISPLAY_STATUSES = [
   ...LEGISLATION_DOCUMENT_STATUSES,
   "future",
 ] as const;
@@ -28,6 +23,7 @@ export const STATUTE_STATUS_LABEL_KEYS = {
   future: "statutes.status.future",
   historical: "statutes.status.historical",
   repealed: "statutes.status.repealed",
+  unknown: "statutes.status.unknown",
 } as const satisfies Record<StatuteDisplayStatus, TranslationKey>;
 
 type ResolveStatuteDisplayStatusOptions = {

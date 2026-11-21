@@ -2,6 +2,8 @@ import { describe, expect, test } from "bun:test";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import nodePath from "node:path";
 
+import { repoRelativePath } from "@stll/portable-path";
+
 // Chain-of-custody class guard. A document version is legal evidence: it must
 // never be hard-deleted, and its bytes must stay retained under legal hold.
 // `delete.ts` tombstones the row (sets `deletedAt` + actor) instead of
@@ -12,6 +14,11 @@ import nodePath from "node:path";
 
 const API_SRC = nodePath.resolve(import.meta.dir, "../../..");
 
+const isProductionSource = (file: string): boolean =>
+  file.endsWith(".ts") &&
+  !file.endsWith(".test.ts") &&
+  !repoRelativePath(API_SRC, file).startsWith("tests/");
+
 const collectSourceFiles = (dir: string, acc: string[] = []): string[] => {
   for (const entry of readdirSync(dir)) {
     const full = nodePath.join(dir, entry);
@@ -19,12 +26,9 @@ const collectSourceFiles = (dir: string, acc: string[] = []): string[] => {
       collectSourceFiles(full, acc);
       continue;
     }
-    if (!entry.endsWith(".ts")) {
-      continue;
-    }
-    // Tests may exercise raw deletes against a throwaway DB; only production
-    // source is bound by the no-hard-delete invariant.
-    if (entry.endsWith(".test.ts")) {
+    // Dedicated test helpers are forbidden imports for production modules.
+    // Like test modules, their cleanup may delete isolated fixture rows.
+    if (!isProductionSource(full)) {
       continue;
     }
     acc.push(full);
@@ -33,6 +37,21 @@ const collectSourceFiles = (dir: string, acc: string[] = []): string[] => {
 };
 
 describe("delete-version chain-of-custody guard", () => {
+  test("excludes test modules and dedicated helpers while retaining production sources", () => {
+    for (const [relative, production] of [
+      ["handlers/entities/versions/delete.ts", true],
+      ["handlers/entities/versions/delete.test.ts", false],
+      ["tests/read-scaling/entity-fixture.ts", false],
+      ["lib/read-scaling/entity-fixture.ts", true],
+      ["lib/tests/entity-fixture.ts", true],
+      ["tests-support/entity-fixture.ts", true],
+    ] as const) {
+      expect(isProductionSource(nodePath.join(API_SRC, relative))).toBe(
+        production,
+      );
+    }
+  });
+
   test("no production code hard-deletes an entity version", () => {
     const offenders = collectSourceFiles(API_SRC).filter((file) =>
       readFileSync(file, "utf-8").includes("delete(entityVersions)"),
@@ -194,10 +213,7 @@ describe("delete-version chain-of-custody guard", () => {
     const offenders: string[] = [];
     for (const file of collectSourceFiles(API_SRC)) {
       const lines = readFileSync(file, "utf-8").split("\n");
-      const rel = nodePath
-        .relative(API_SRC, file)
-        .split(nodePath.sep)
-        .join("/");
+      const rel = repoRelativePath(API_SRC, file);
       for (const [index, line] of lines.entries()) {
         if (!RELATIONAL_DEPENDENT_READS.some((p) => line.includes(p))) {
           continue;
@@ -240,9 +256,9 @@ describe("delete-version chain-of-custody guard", () => {
     > = {
       "handlers/entities/delete.ts": [
         {
-          anchor: "inArray(entities.id, body.entityIds)",
+          anchor: "inArray(entities.id, deletionEntityIds)",
           reason:
-            "Whole-entity delete GC: enumerates every version (incl. tombstoned) to collect S3 file refs to release; sees no field content.",
+            "Whole-entity delete GC: enumerates every version (incl. tombstoned) of the deletion tree to collect S3 file refs to release; sees no field content.",
         },
       ],
       "handlers/workspaces/read-overview-activity.query.ts": [
@@ -280,6 +296,28 @@ describe("delete-version chain-of-custody guard", () => {
             "Session-resume staleness check: reads versionNumber only. The byte-serving chokepoint (readVersionDocxTarget) separately requires deletedAt IS NULL.",
         },
       ],
+      "mcp/stella-tools.ts": [
+        {
+          anchor:
+            "A newer tombstone invalidates a legacy extraction's cached provenance.",
+          reason:
+            "Window-cache provenance reads only the newest version ID across tombstones; matching it to the admitted live current version prevents a rollback from reusing stale extracted text.",
+        },
+      ],
+      "handlers/entities/copy-utils.ts": [
+        {
+          anchor: "movedVersionRows(sourceWorkspaceId, sourceIds)",
+          reason:
+            "A move carries every version, tombstones included: its limit check and row lock read exactly the rows the move snapshot carries, as IDs and counts only, and serve no content.",
+        },
+      ],
+      "lib/entity-versions/insert-entity-version.ts": [
+        {
+          anchor: "tombstoned version moves with its tombstone",
+          reason:
+            "A move carries each version's verification code with it, a tombstoned version's included, so the code keeps resolving to nothing on the target; reads ID and code only under FOR UPDATE.",
+        },
+      ],
       "mcp/document-tools.ts": [
         {
           anchor: "Provenance fence: include tombstones",
@@ -287,23 +325,15 @@ describe("delete-version chain-of-custody guard", () => {
             "MCP processing-state provenance reads only the latest version ID across tombstones so a rollback cannot expose stale extracted text.",
         },
       ],
-      "mcp/stella-tools.ts": [
-        {
-          anchor: "Provenance fence: include tombstones",
-          reason:
-            "MCP content provenance reads only the latest version ID across tombstones so a rollback cannot expose withdrawn extracted text.",
-        },
-      ],
     };
 
-    const toPosix = (file: string) =>
-      nodePath.relative(API_SRC, file).split(nodePath.sep).join("/");
+    const toRepoPath = (file: string) => repoRelativePath(API_SRC, file);
 
     const uncovered: string[] = [];
     const matchedExceptions = new Set<string>();
 
     for (const file of collectSourceFiles(API_SRC)) {
-      const rel = toPosix(file);
+      const rel = toRepoPath(file);
       const lines = readFileSync(file, "utf-8").split("\n");
       const fileExceptions = REVIEWED_EXCEPTIONS[rel] ?? [];
 
@@ -420,19 +450,42 @@ describe("delete-version chain-of-custody guard", () => {
     ).toBeGreaterThan(restoredCheck);
   });
 
-  test("deleting the current version withdraws and rebuilds its search projection", () => {
+  test("every version tombstone withdraws its search projection before repair", () => {
     const source = readFileSync(
       nodePath.join(import.meta.dir, "delete.ts"),
       "utf-8",
     );
     const txStart = source.indexOf("safeDb(async (tx) =>");
     const projectionDelete = source.indexOf(".delete(searchDocuments)");
+    const tombstoneWrite = source.indexOf(".update(entityVersions)");
     const txEnd = source.indexOf("if (!txOutcome.ok)");
+    const currentPromotion = source.indexOf("if (isDeletingCurrent) {");
+    const currentPromotionOpen = source.indexOf("{", currentPromotion);
+    let currentPromotionEnd = -1;
+    let braceDepth = 0;
+    for (let index = currentPromotionOpen; index < source.length; index += 1) {
+      if (source[index] === "{") {
+        braceDepth += 1;
+      } else if (source[index] === "}") {
+        braceDepth -= 1;
+        if (braceDepth === 0) {
+          currentPromotionEnd = index;
+          break;
+        }
+      }
+    }
 
+    expect(currentPromotion).toBeGreaterThan(txStart);
+    expect(currentPromotionEnd).toBeGreaterThan(currentPromotion);
     expect(projectionDelete).toBeGreaterThan(txStart);
+    expect(projectionDelete).toBeGreaterThan(currentPromotionEnd);
+    expect(projectionDelete).toBeLessThan(tombstoneWrite);
     expect(projectionDelete).toBeLessThan(txEnd);
+    // The promoted version is reprojected after the transaction, through the
+    // injected projector whose production default is the extraction owner.
+    expect(source).toContain("processPromotedVersion = processExtraction,");
     expect(
-      source.indexOf("processExtraction(params.entityId)"),
+      source.indexOf("processPromotedVersion(params.entityId)"),
     ).toBeGreaterThan(txEnd);
   });
 
@@ -448,6 +501,11 @@ describe("delete-version chain-of-custody guard", () => {
       string,
       { anchor: string; reason: string }
     > = {
+      "lib/entity-versions/insert-entity-version.ts": {
+        anchor: "verificationCode: null",
+        reason:
+          "A move clears the codes it just read and locked FOR UPDATE, tombstoned versions included, because each code travels with its version; it touches verificationCode only.",
+      },
       "lib/entity-versions/compute-version-diff.ts": {
         anchor: "diffWordsAdded",
         reason:
@@ -459,10 +517,7 @@ describe("delete-version chain-of-custody guard", () => {
     const matchedExceptions = new Set<string>();
     for (const file of collectSourceFiles(API_SRC)) {
       const lines = readFileSync(file, "utf-8").split("\n");
-      const rel = nodePath
-        .relative(API_SRC, file)
-        .split(nodePath.sep)
-        .join("/");
+      const rel = repoRelativePath(API_SRC, file);
       for (const [index, line] of lines.entries()) {
         if (!line.includes(".update(entityVersions)")) {
           continue;

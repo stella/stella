@@ -5,16 +5,17 @@ import path from "node:path";
 import { DESKTOP_EDIT_FILE_TYPES } from "@stll/api-contract";
 
 import {
-  isAppSnapshot,
   type AppSnapshot,
   type DesktopNotificationPreferences,
   type DesktopUpdateSnapshot,
+  isAppSnapshot,
   type LinkedAccountSnapshot,
   type OpenFileRequest,
   type OpenFileResponse,
   type SessionSnapshot,
   type TrustedSelfHostConnection,
 } from "../src/shared/rpc";
+import { BRIDGE_VERSION } from "./bridge-version";
 
 // Golden-fixture contract for the desktop bridge RPC surface.
 //
@@ -42,6 +43,13 @@ const FIXTURE_DIR = path.join(import.meta.dir, "../fixtures/rpc");
 
 const readFixture = (name: string): unknown =>
   JSON.parse(readFileSync(path.join(FIXTURE_DIR, name), "utf-8"));
+
+test("snapshot fixture advertises the native bridge contract revision", () => {
+  expect(
+    readFixtureRecord("app-snapshot.json")["bridgeVersion"],
+    "apps/desktop/fixtures/rpc/app-snapshot.json bridgeVersion must match BRIDGE_VERSION in apps/desktop/src-tauri/src/types.rs; update the recorded fixture after a bridge version bump",
+  ).toBe(BRIDGE_VERSION);
+});
 
 // Fixtures are hand-authored JSON objects (never arrays or primitives); this
 // guard narrows the parsed `unknown` before mutating tests spread/drop keys,
@@ -80,12 +88,18 @@ const CAMEL_CASE = /^[a-z][a-zA-Z0-9]*$/u;
 // runtime `toEqual` is the on-disk half.
 const appSnapshot = {
   bridgePort: 45_901,
-  bridgeVersion: 16,
-  capabilities: ["office-edit.v1", "self-host.connect", "account-link.v3"],
+  bridgeVersion: BRIDGE_VERSION,
+  capabilities: ["office-edit.v1", "self-host.connect", "account-link.v7"],
   notificationPreferences: {
     documentReady: true,
     revisionCreated: true,
     syncIssues: false,
+  },
+  documentRecovery: {
+    edits: [],
+    unassigned: false,
+    pending: false,
+    access: "available",
   },
   runningSince: "2026-07-18T08:00:00Z",
   sessions: [
@@ -371,4 +385,34 @@ describe("desktop bridge RPC golden fixtures", () => {
     expect(isAppSnapshot("app-snapshot")).toBe(false);
     expect(isAppSnapshot([])).toBe(false);
   });
+});
+
+test("recovery snapshots require known states and complete entries", () => {
+  const snapshot = readFixtureRecord("app-snapshot.json");
+  for (const recovery of [
+    undefined,
+    {},
+    { edits: [], unassigned: false, pending: false, access: "unknown" },
+    {
+      edits: [{ id: "edit", fileName: "Příloha.docx", status: "unknown" }],
+      unassigned: false,
+      pending: false,
+      access: "available",
+    },
+  ]) {
+    expect(isAppSnapshot({ ...snapshot, documentRecovery: recovery })).toBe(
+      false,
+    );
+  }
+  expect(
+    isAppSnapshot({
+      ...snapshot,
+      documentRecovery: {
+        edits: [{ id: "edit", fileName: "Příloha.docx", status: "pending" }],
+        unassigned: true,
+        pending: true,
+        access: "signInRequired",
+      },
+    }),
+  ).toBe(true);
 });

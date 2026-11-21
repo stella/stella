@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
-import { PgDialect, getTableConfig } from "drizzle-orm/pg-core";
+import { getTableConfig, PgDialect } from "drizzle-orm/pg-core";
 import { drizzle } from "drizzle-orm/pglite";
 import { readFileSync } from "node:fs";
 import nodePath from "node:path";
@@ -18,6 +18,12 @@ import { createTestPglite } from "@/api/tests/pglite-test-db";
 const MIGRATION_PATH = nodePath.resolve(
   import.meta.dir,
   "../../../drizzle/20261002120400_case_law_decision_court_id/migration.sql",
+);
+
+/** The migration that replaced the CHECK with the one the schema declares. */
+const PRINTED_COURTS_MIGRATION_PATH = nodePath.resolve(
+  import.meta.dir,
+  "../../../drizzle/20261117210000_case_law_decision_court_id_printed_courts/migration.sql",
 );
 
 let client: Awaited<ReturnType<typeof createTestPglite>>;
@@ -71,14 +77,17 @@ afterAll(async () => {
   await client.close();
 });
 
-test("a USA row needs a court id and every other row refuses one", async () => {
+test("a USA row needs a court id, a Czech or Slovak row may carry one, and every other row refuses one", async () => {
   await insert("USA", "scotus");
   await insert("CZE", null);
+  await insert("CZE", "KSHKPA");
+  await insert("SVK", "OSBN");
+  await insert("SVK", null);
   await insert("ROU", null);
   expect(await rejectionOf(insert("USA", null))).toContain(
     CASE_LAW_DECISION_COURT_ID_CONSTRAINT,
   );
-  expect(await rejectionOf(insert("CZE", "scotus"))).toContain(
+  expect(await rejectionOf(insert("POL", "scotus"))).toContain(
     CASE_LAW_DECISION_COURT_ID_CONSTRAINT,
   );
   // A changed row is held to it as well: the id cannot be dropped later.
@@ -104,7 +113,7 @@ test("the migration adds the expression the schema declares, NOT VALID", () => {
   expect(params).toEqual([]);
   const added =
     /ADD CONSTRAINT "case_law_decisions_court_id_by_country"\s+CHECK \((?<body>[\s\S]*?)\) NOT VALID;/u.exec(
-      readFileSync(MIGRATION_PATH, "utf-8"),
+      readFileSync(PRINTED_COURTS_MIGRATION_PATH, "utf-8"),
     )?.groups?.["body"];
   if (added === undefined) {
     throw new Error("migration does not add the constraint NOT VALID");
@@ -131,6 +140,10 @@ test("the migration adds the expression the schema declares, NOT VALID", () => {
 const preMigrationDb = async () => {
   const preClient = await createTestPglite();
   const preDb = drizzle({ client: preClient });
+  // Drizzle creates the published views during the PGlite schema push; this
+  // fixture rewinds the base table to a pre-court-id shape.
+  await preDb.execute(sql.raw('DROP VIEW "case_law_unredacted_decisions"'));
+  await preDb.execute(sql.raw('DROP VIEW "case_law_published_decisions"'));
   await preDb.execute(
     sql.raw(
       `ALTER TABLE "case_law_decisions" DROP CONSTRAINT "${CASE_LAW_DECISION_COURT_ID_CONSTRAINT}"`,

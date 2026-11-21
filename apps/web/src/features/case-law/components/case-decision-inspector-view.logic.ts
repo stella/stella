@@ -1,9 +1,9 @@
+import { decisionCaseName } from "@stll/decision-reader/decision-text.logic";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
 import type { CaseDecisionViewPayload } from "@/components/inspector/case-decision-view";
 import type { ReaderAnnotationTarget } from "@/components/legal-reader/annotations/reader-annotation-target";
-import { decisionCaseName } from "@/features/case-law/components/case-viewer/decision-text.logic";
 import type { PublicCaseLawDecision } from "@/features/case-law/public-decision";
 
 type DecisionCitationFacts = Pick<

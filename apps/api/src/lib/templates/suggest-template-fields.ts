@@ -6,7 +6,7 @@ import * as v from "valibot";
  * the document from the returned suggestions.
  *
  * Uses the same structured-output pattern as workflow generation
- * (`generateTanStackObjectForRole`). An empty list means the model looked and
+ * (`generateTanStackObjectForTask`). An empty list means the model looked and
  * found nothing to suggest; a call failure (BYOK misconfiguration, provider
  * outage, timeout) instead rejects. `suggestTemplateFields` is the throwing
  * primitive for a caller that wants the failure surfaced
@@ -18,13 +18,14 @@ import * as v from "valibot";
 
 import { isFieldPath } from "@stll/template-conditions";
 
-import { resolveCaching, type OrgAIConfig } from "@/api/lib/ai-config";
+import { type OrgAIConfig, resolveCaching } from "@/api/lib/ai-config";
 import type { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import type { FieldSuggestion } from "@/api/lib/docx/apply-field-suggestions";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
+import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
+import { generateTanStackObjectForTask } from "@/api/lib/tanstack-ai-generate";
 
 const SUGGEST_TIMEOUT_MS = 45_000;
 
@@ -100,42 +101,46 @@ export const suggestTemplateFields = async ({
   orgAIConfig,
   managedAIResidency,
   organizationId,
+  admission,
   aiAnalytics,
-  generateObjectForRole,
+  generateObjectForTask,
 }: {
   documentText: string;
   instructions?: string | undefined;
   orgAIConfig: OrgAIConfig | null;
   managedAIResidency: ManagedAIResidency;
   organizationId: SafeId<"organization">;
+  admission: ModelDispatchAdmission;
   aiAnalytics: ReturnType<typeof createTanStackAIAnalyticsCallbacks>;
   /** External model-dispatch boundary; supplied by focused integration tests. */
-  generateObjectForRole?: typeof generateTanStackObjectForRole | undefined;
+  generateObjectForTask?: typeof generateTanStackObjectForTask | undefined;
 }): Promise<SuggestedTemplateField[]> => {
   // No try/catch here: a call failure (BYOK misconfiguration, provider
   // outage, timeout) propagates to the caller, which decides whether to
   // surface it (suggest-fields.ts) or degrade to [] after capturing it
   // (prepare.ts) — see the module doc comment.
   const { suggestions } = await (
-    generateObjectForRole ?? generateTanStackObjectForRole
+    generateObjectForTask ?? generateTanStackObjectForTask
   )({
+    userId: admission.userId,
     dataClass: "customer",
-    role: "fast",
+    task: "short-text",
     orgAIConfig,
     managedAIResidency,
     organizationId,
+    admission,
     // No workspace id is threaded through this helper's options.
     tenantWorkspaceIds: [],
     analytics: aiAnalytics,
     caching: resolveCaching({
       promptCachingEnabled: false,
-      role: "fast",
+      task: "short-text",
       scopeKey: organizationId,
     }),
     system: SYSTEM_PROMPT,
     prompt: buildPrompt(documentText, instructions),
     outputSchema: fieldSuggestionsSchema,
-    abortSignal: AbortSignal.timeout(SUGGEST_TIMEOUT_MS),
+    deadlineMs: SUGGEST_TIMEOUT_MS,
     serviceTier: "standard",
   });
   // The schema models "absent" as null (OpenAI strict mode); FieldSuggestion

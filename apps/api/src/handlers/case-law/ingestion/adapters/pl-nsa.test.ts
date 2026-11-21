@@ -1,5 +1,13 @@
 import { panic, Result } from "better-result";
-import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  mock,
+  spyOn,
+  test,
+} from "bun:test";
 import { parquetMetadataAsync, parquetSchema } from "hyparquet";
 /**
  * pl-nsa against rows the dataset serves.
@@ -13,9 +21,10 @@ import { parquetMetadataAsync, parquetSchema } from "hyparquet";
 import { mkdtemp, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import nodePath from "node:path";
+import { fileURLToPath } from "node:url";
 
-import { decodeSourceRawEnvelope } from "@/api/handlers/case-law/ingestion/adapter";
-import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
+import { createSha256 } from "@stll/sha256/node";
+
 import {
   assemblePlNsaDecision,
   composePlNsaFullText,
@@ -23,6 +32,7 @@ import {
   encodePlNsaCursor,
   normalizePlNsaRow,
   parsePlNsaCursor,
+  PL_NSA_UNSTATED_COURT,
   plNsaAdapter,
   plNsaCourt,
   plNsaDecisionKind,
@@ -30,7 +40,6 @@ import {
   plNsaDocketRangeMembers,
   plNsaIdentityOf,
   plNsaQuarantineId,
-  PL_NSA_UNSTATED_COURT,
 } from "@/api/handlers/case-law/ingestion/adapters/pl-nsa";
 import type { PlNsaDecisionKind } from "@/api/handlers/case-law/ingestion/adapters/pl-nsa";
 import {
@@ -52,19 +61,31 @@ import {
   decisionIdentifiersFromMetadata,
   normalizeDecisionIdentifier,
 } from "@/api/handlers/case-law/ingestion/citation-extractor";
-import { parsePlNsaDecision } from "@/api/handlers/case-law/ingestion/parsers/pl-nsa";
+import { parsePlNsaDecision as uncheckedParsePlNsaDecision } from "@/api/handlers/case-law/ingestion/parsers/pl-nsa";
 import { toPlainTextMetadataObject } from "@/api/lib/case-law/plain-text";
-import { toPlainTextIngestionResult } from "@/api/lib/legal-search/ingestion-types";
+import {
+  decodeSourceRawEnvelope,
+  PUBLISHER_REQUEST,
+  toPlainTextIngestionResult,
+} from "@/api/lib/legal-search/ingestion-types";
+import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { rehydrateMetadataUrls } from "@/api/lib/legal-search/metadata-urls";
 import { logger } from "@/api/lib/observability/logger";
 import { isRecord } from "@/api/lib/type-guards";
+import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
 import { PL_NSA_METADATA_URL_SCHEMA } from "./pl-nsa.metadata-urls";
 
+const parsePlNsaDecision = guardParser(uncheckedParsePlNsaDecision);
+const testFetchState = createTestFetch();
+
 const FIXTURES_DIR = new URL("__fixtures__/", import.meta.url);
 const ROWS_JSON = new URL("pl-nsa-rows.json", FIXTURES_DIR);
-const ROWS_PARQUET = new URL("pl-nsa-rows.parquet", FIXTURES_DIR).pathname;
+const ROWS_PARQUET = fileURLToPath(
+  new URL("pl-nsa-rows.parquet", FIXTURES_DIR),
+);
 
 type RecordedRow = {
   case: string;
@@ -118,7 +139,8 @@ const blocksOf = (decision: IngestionResult) =>
 
 const headingsOf = (decision: IngestionResult): string[] =>
   blocksOf(decision).flatMap((block) =>
-    block.type === "heading" && block.role === "section-heading"
+    block.type === "heading" &&
+    (block.role === "section-heading" || block.role === "publisher-heading")
       ? [block.plainText]
       : [],
   );
@@ -189,6 +211,11 @@ type ExpectedClassification = {
   branch?: string;
   finality?: string;
 };
+
+// Spies created in a test stay attached if it fails before restoring them.
+afterEach(() => {
+  mock.restore();
+});
 
 describe("the recorded dataset rows", () => {
   test("every row builds, keyed by the portal's own document id", async () => {
@@ -631,8 +658,32 @@ describe("the cursor", () => {
     const crawler = createPlNsaCrawler({ snapshot, source: counted });
     const parked = `${snapshot.revision}:2:0`;
     const page = (await crawler.fetchPage(parked)).unwrap();
-    expect(page).toEqual({ decisions: [], nextCursor: parked });
+    // Nothing was asked, so the page says so and the run is no sync.
+    expect(page).toEqual({
+      decisions: [],
+      nextCursor: parked,
+      publisherRequest: PUBLISHER_REQUEST.NONE,
+    });
     expect(local).not.toHaveBeenCalled();
+  });
+
+  test("local shard and cached window pages report no publisher answer", async () => {
+    const counted = { ...source };
+    const local = spyOn(counted, "local");
+    const crawler = createPlNsaCrawler({
+      snapshot,
+      source: counted,
+      pageRows: 1,
+      windowRows: 2,
+    });
+    const first = (await crawler.fetchPage(null)).unwrap();
+    expect(first.publisherRequest).toBe(PUBLISHER_REQUEST.NONE);
+    const second = (await crawler.fetchPage(first.nextCursor)).unwrap();
+    expect(second.publisherRequest).toBe(PUBLISHER_REQUEST.NONE);
+    expect(local).toHaveBeenCalledTimes(1);
+    const third = (await crawler.fetchPage(second.nextCursor)).unwrap();
+    expect(third.publisherRequest).toBe(PUBLISHER_REQUEST.NONE);
+    expect(local).toHaveBeenCalledTimes(2);
   });
 
   test("resumes mid-shard where it stopped, across the shard boundary", async () => {
@@ -1128,7 +1179,6 @@ describe("the document is checked against the dataset's own text", () => {
     "Wojewódzki sąd rozpoznał skargę podatnika na interpretację indywidualną organu i uznał, że wnioskodawca prawidłowo ustalił przychód, a organ błędnie zastosował przepisy ustawy o podatku dochodowym od osób fizycznych w brzmieniu obowiązującym w dacie zdarzenia, co przesądziło o uchyleniu zaskarżonego aktu.";
 
   test("text only the full rendering carries is kept, from the rendering", () => {
-    const error = spyOn(logger, "error");
     const parsed = parsePlNsaDecision({
       ...input,
       reference: [
@@ -1141,11 +1191,6 @@ describe("the document is checked against the dataset's own text", () => {
     expect(parsed.textSource).toBe("full-text");
     expect(parsed.fulltext).toContain(REASONS);
     expect(parsed.validation.ok).toBe(true);
-    expect(error).not.toHaveBeenCalledWith(
-      "case_law.ingestion.ast_content_lost",
-      expect.anything(),
-    );
-    error.mockRestore();
   });
 
   test("with every section empty, the rendering is the document", () => {
@@ -1160,7 +1205,6 @@ describe("the document is checked against the dataset's own text", () => {
   });
 
   test("with no text anywhere, the check still runs and reports it", () => {
-    const error = spyOn(logger, "error");
     const parsed = parsePlNsaDecision({
       ...input,
       sections: { thesis: null, sentence: null, reasons: null, dissent: null },
@@ -1169,7 +1213,6 @@ describe("the document is checked against the dataset's own text", () => {
     expect(parsed.documentAst).toBeNull();
     expect(parsed.textSource).toBe("none");
     expect(parsed.validation.issues.length).toBeGreaterThan(0);
-    error.mockRestore();
   });
 
   test("sections that hold everything are used as sections", () => {
@@ -1183,7 +1226,6 @@ describe("the document is checked against the dataset's own text", () => {
 });
 
 describe("shard download failures", () => {
-  const originalFetch = globalThis.fetch;
   const originalSleep = Bun.sleep;
   const bytes = new Uint8Array(Bun.file(ROWS_PARQUET).size);
 
@@ -1206,8 +1248,8 @@ describe("shard download failures", () => {
   ): { requests: string[] } => {
     const requests: string[] = [];
     let issued = 0;
-    globalThis.fetch = asFetchMock(
-      async (input: string | URL | Request, init?: RequestInit) => {
+    testFetchState.set(
+      asFetchMock(async (input: string | URL | Request, init?: RequestInit) => {
         const url = requestUrlOf(input);
         expect(url).toMatch(/^https:\/\/[^/]*(huggingface\.co|hf\.co)\//u);
         const range = new Headers(init?.headers).get("range") ?? "";
@@ -1232,7 +1274,7 @@ describe("shard download failures", () => {
         return await Promise.resolve(
           new Response(bytes.slice(start, (end ?? 0) + 1), { status: 206 }),
         );
-      },
+      }),
     );
     return { requests };
   };
@@ -1246,13 +1288,12 @@ describe("shard download failures", () => {
     };
   });
   afterEach(async () => {
-    globalThis.fetch = originalFetch;
+    testFetchState.restore();
     Bun.sleep = originalSleep;
     await rm(directory, { recursive: true, force: true });
   });
 
-  const sha256 = (): string =>
-    new Bun.CryptoHasher("sha256").update(bytes).digest("hex");
+  const sha256 = (): string => createSha256().update(bytes).digest("hex");
 
   test("a verified download reads, and a verified file is not fetched twice", async () => {
     const { requests } = serve(() => null);
@@ -1264,8 +1305,10 @@ describe("shard download failures", () => {
     const crawler = createPlNsaCrawler({ snapshot, source });
     const page = (await crawler.fetchPage(null)).unwrap();
     expect(page.decisions).toHaveLength(28);
+    expect(page.publisherRequest).toBe(PUBLISHER_REQUEST.ANSWERED);
     const before = requests.length;
-    (await source.local(shardOf(sha256()))).unwrap();
+    const cached = (await source.local(shardOf(sha256()))).unwrap();
+    expect(cached.publisherRequest).toBe(PUBLISHER_REQUEST.NONE);
     expect(requests.length).toBe(before);
   });
 

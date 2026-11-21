@@ -19,8 +19,7 @@ type ValidCompiledSchemaPattern = Extract<
 
 /** A validation outcome: valid, or the failing JSON path plus a message. */
 export type SchemaValidationResult =
-  | { valid: true }
-  | { valid: false; path: string; message: string };
+  { valid: true } | { valid: false; path: string; message: string };
 
 const ok: SchemaValidationResult = { valid: true };
 

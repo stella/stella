@@ -1,13 +1,18 @@
+import type { ReactElement } from "react";
+
 import { Link, useRouterState } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
 import { Separator } from "@stll/ui/separator";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { PublicWorkspaceShell } from "@/components/public-workspace-shell";
 import { SidebarTrigger, useSidebar } from "@/components/sidebar";
 
-export function PublicToolsShell() {
-  return <PublicWorkspaceShell topBar={<PublicToolsTopBar />} />;
+export function PublicToolsShell({ content }: { content: ReactElement }) {
+  return (
+    <PublicWorkspaceShell content={content} topBar={<PublicToolsTopBar />} />
+  );
 }
 
 /**
@@ -54,9 +59,9 @@ function PublicToolsTopBar() {
         {entryName !== null && (
           <>
             <span className="text-foreground-placeholder">/</span>
-            <span className="text-foreground truncate font-medium">
+            <TruncatedText className="text-foreground font-medium">
               {entryName}
-            </span>
+            </TruncatedText>
           </>
         )}
       </nav>

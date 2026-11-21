@@ -1,3 +1,4 @@
+// parser-output-unchanged: The retention check moved to the pipeline; dropping the parser's own validation call leaves its blocks and fulltext unchanged.
 /**
  * Czech Regional Courts parser.
  *
@@ -17,21 +18,32 @@
  * styles[]: { localId, alignment, bold, italic, ... }
  */
 
+import { opensWithCourtParagraphMarker } from "@stll/legal-ast/court-paragraph-numbers";
 import {
   CZ_CLOSING_RE as CLOSING_RE,
   CZ_JUDGE_TITLE_RE as SIGNATURE_RE,
+  CZ_TAKTO,
+  isCzechOpeningFormula,
 } from "@stll/legal-ast/czech-document-roles";
-
+// parser-output-unchanged: imports the document AST from its package owner
+// parser-output-unchanged: The output is typed as a decision document AST; the emitted AST is unchanged.
 import type {
   Block,
-  DocumentAst,
+  DecisionDocumentAst,
   Inline,
-} from "@/api/handlers/case-law/document-ast";
-import { hasInlineChildren } from "@/api/handlers/case-law/document-ast";
+} from "@stll/legal-ast/document-ast";
 import {
-  buildValidationHtml,
-  validateAndLog,
-} from "@/api/lib/legal-search/parsers/validate-ast";
+  normalizeInlineLine,
+  stripInlineLinePrefix,
+} from "@stll/legal-ast/inline-line";
+
+import { courtParagraphNumbers } from "@/api/lib/legal-search/parsers/court-paragraph-numbers";
+import { withAttestedLetterSpacing } from "@/api/lib/legal-search/parsers/letter-spacing";
+import {
+  continuesAcrossPageBreak,
+  isRunningHeaderLine,
+  withoutSoftHyphens,
+} from "@/api/lib/legal-search/parsers/page-furniture";
 
 // ── Types for the finaldoc JSON ────────────────────────────
 
@@ -76,7 +88,7 @@ export type ParseRegionalInput = {
 };
 
 type ParseRegionalOutput = {
-  documentAst: DocumentAst;
+  documentAst: DecisionDocumentAst;
   fulltext: string;
 };
 
@@ -94,21 +106,34 @@ export const parseRegionalDecision = (
     paragraphs: FinaldocParagraph[],
     fallbackText: string,
   ) => {
-    const content = paragraphs
-      .map((para) => toInlines(para, styleMap))
-      .filter(({ plainText }) => plainText.length > 0);
+    const content = withoutPageFurniture(
+      joinSoftBreaks(
+        paragraphs
+          .map((para) => toInlines(para, styleMap))
+          .filter(({ plainText }) => plainText.length > 0),
+        fallbackText,
+      ),
+    );
     if (content.length > 0 || !fallbackText.trim()) {
       return content;
     }
-    return [
-      { inlines: textInline(fallbackText), plainText: fallbackText.trim() },
-    ];
+    return withoutPageFurniture(
+      fallbackText
+        .split(/\r?\n/u)
+        .map((plainText) => ({
+          inlines: textInline(plainText),
+          plainText: plainText.trim(),
+        }))
+        .filter(({ plainText }) => plainText.length > 0),
+    );
   };
+  const header = sectionContent(input.header, "");
   const verdict = sectionContent(input.verdict, input.verdictText);
   const justification = sectionContent(
     input.justification,
     input.justificationText,
   );
+  const information = sectionContent(input.information, "");
 
   const blocks: Block[] = [];
   let blockIndex = 0;
@@ -122,7 +147,11 @@ export const parseRegionalDecision = (
     usnesení: "USNESENÍ",
     "trestní příkaz": "TRESTNÍ PŘÍKAZ",
   };
-  const title = titleMap[input.decisionType ?? ""];
+  // The court's own title line, where the header prints one, is the title;
+  // a synthesized one beside it would print the title twice.
+  const title = header.some(({ plainText }) => isDecisionTypeTitle(plainText))
+    ? undefined
+    : titleMap[input.decisionType ?? ""];
   if (title) {
     blockIndex += 1;
     blocks.push({
@@ -137,34 +166,46 @@ export const parseRegionalDecision = (
   }
 
   // ── Header (intro) ───────────────────────────────────
-  for (const para of input.header) {
-    const { inlines, plainText } = toInlines(para, styleMap);
-    if (!plainText) {
-      continue;
-    }
+  // The state and the formula beside the title are the court's words, not
+  // its preamble's prose.
+  for (const { inlines, plainText } of header) {
+    blockIndex += 1;
+    blocks.push(
+      isDecisionTypeTitle(plainText)
+        ? {
+            id: makeBlockId(),
+            anchorId: `h-${blockIndex}`,
+            type: "heading",
+            level: 1,
+            role: "decision-title",
+            inlines,
+            plainText,
+          }
+        : {
+            id: makeBlockId(),
+            anchorId: `p-${blockIndex}`,
+            type: "paragraph",
+            role: isCzechOpeningFormula(plainText)
+              ? "opening-formula"
+              : "intro",
+            inlines,
+            plainText,
+          },
+    );
+  }
 
+  // ── Verdict (ruling items) ───────────────────────────
+  if (verdict.length > 0) {
+    // The lead-in to the operative part is the court's sentence ending, not
+    // a section of its own.
     blockIndex += 1;
     blocks.push({
       id: makeBlockId(),
       anchorId: `p-${blockIndex}`,
       type: "paragraph",
       role: "intro",
-      inlines,
-      plainText,
-    });
-  }
-
-  // ── Verdict (ruling items) ───────────────────────────
-  if (verdict.length > 0) {
-    blockIndex += 1;
-    blocks.push({
-      id: makeBlockId(),
-      anchorId: `h-${blockIndex}`,
-      type: "heading",
-      level: 2,
-      role: "section-heading",
-      inlines: textInline("takto:"),
-      plainText: "takto:",
+      inlines: textInline(CZ_TAKTO),
+      plainText: CZ_TAKTO,
     });
 
     for (const { inlines, plainText } of verdict) {
@@ -218,12 +259,9 @@ export const parseRegionalDecision = (
       plainText: "Poučení:",
     });
 
-    for (const para of input.information) {
-      const { inlines, plainText } = toInlines(para, styleMap);
-      if (!plainText) {
-        continue;
-      }
-
+    // The synthesized heading stands for a label the court printed itself,
+    // whether alone in its paragraph or opening the first instruction.
+    for (const { inlines, plainText } of withoutInstructionLabel(information)) {
       blockIndex += 1;
       blocks.push({
         id: makeBlockId(),
@@ -235,23 +273,16 @@ export const parseRegionalDecision = (
     }
   }
 
-  const fulltext = blocks
+  const numbered = courtParagraphNumbers(withAttestedLetterSpacing(blocks), {
+    parser: "cz-regional",
+    caseNumber: input.caseNumber,
+    url: input.sourceUrl,
+  });
+  const fulltext = numbered
     .flatMap((b) => (b.plainText ? [b.plainText] : []))
     .join("\n\n");
 
-  const validationHtml = buildValidationHtml([
-    ...input.header.map((para) => toInlines(para, styleMap).plainText),
-    ...verdict.map(({ plainText }) => plainText),
-    ...justification.map(({ plainText }) => plainText),
-    ...input.information.map((para) => toInlines(para, styleMap).plainText),
-  ]);
-  validateAndLog(
-    { parser: "cz-regional", caseNumber: input.caseNumber },
-    validationHtml,
-    blocks,
-  );
-
-  const ast: DocumentAst = {
+  const ast: DecisionDocumentAst = {
     version: 1,
     source: {
       system: "justice.cz",
@@ -268,7 +299,7 @@ export const parseRegionalDecision = (
       keywords: [],
       statutes: [],
     },
-    blocks,
+    blocks: numbered,
   };
 
   return { documentAst: ast, fulltext };
@@ -278,6 +309,205 @@ export const parseRegionalDecision = (
 
 const textInline = (text: string): Inline[] => [{ type: "text", text }];
 
+/** The decision types a header prints as its title line. */
+const DECISION_TYPE_TITLES = [
+  "ROZSUDEK",
+  "USNESENÍ",
+  "TRESTNÍ PŘÍKAZ",
+  "PLATEBNÍ ROZKAZ",
+  "ELEKTRONICKÝ PLATEBNÍ ROZKAZ",
+  "EVROPSKÝ PLATEBNÍ ROZKAZ",
+  "SMĚNEČNÝ PLATEBNÍ ROZKAZ",
+  "ŠEKOVÝ PLATEBNÍ ROZKAZ",
+] as const;
+
+/** A title line's letters, whatever the spacing: "R O Z S U D E K". */
+const compactTitle = (text: string): string =>
+  text.toLocaleUpperCase("cs-CZ").replace(/\s+/gu, "");
+
+const COMPACT_DECISION_TYPE_TITLES: ReadonlySet<string> = new Set(
+  DECISION_TYPE_TITLES.map(compactTitle),
+);
+
+const isDecisionTypeTitle = (text: string): boolean =>
+  COMPACT_DECISION_TYPE_TITLES.has(compactTitle(text));
+
+type SectionParagraph = { inlines: Inline[]; plainText: string };
+
+/**
+ * A section's paragraphs without the running headers ("pokračování -3- sp.
+ * zn. 9 C 191/2025") the publisher keeps where a page broke, and with the
+ * sentence the page break cut read as one paragraph again.
+ */
+const withoutPageFurniture = (
+  paragraphs: readonly SectionParagraph[],
+): SectionParagraph[] => {
+  const kept: SectionParagraph[] = [];
+  let afterPageBreak = false;
+  for (const paragraph of paragraphs) {
+    if (isRunningHeaderLine(paragraph.plainText)) {
+      afterPageBreak = true;
+      continue;
+    }
+    const previous = kept.at(-1);
+    if (
+      afterPageBreak &&
+      previous !== undefined &&
+      continuesAcrossPageBreak(previous.plainText, paragraph.plainText)
+    ) {
+      previous.inlines.push({ type: "text", text: " " }, ...paragraph.inlines);
+      previous.plainText = `${previous.plainText} ${paragraph.plainText}`;
+    } else {
+      kept.push(paragraph);
+    }
+    afterPageBreak = false;
+  }
+  return kept;
+};
+
+/**
+ * The court's own `Poučení:` label opening the first instruction paragraph:
+ * alone (the colon optional) or followed by the instruction itself.
+ */
+const INSTRUCTION_LABEL_RE = /^P\s*o\s*u\s*č\s*e\s*n\s*í\s*(?::\s*|$)/iu;
+
+/** Drop the court's label from the instructions the heading already names. */
+const withoutInstructionLabel = (
+  information: readonly { inlines: Inline[]; plainText: string }[],
+) =>
+  information.flatMap((paragraph, index) => {
+    if (index > 0) {
+      return [paragraph];
+    }
+    const { match, line } = stripInlineLinePrefix(
+      normalizeInlineLine(paragraph.inlines),
+      INSTRUCTION_LABEL_RE,
+    );
+    if (match === null) {
+      return [paragraph];
+    }
+    return line.plainText.length > 0
+      ? [{ inlines: line.inlines, plainText: line.plainText }]
+      : [];
+  });
+
+const OPENING_QUOTE = "„";
+const SPACE_RE = /^[ \t ]$/u;
+const VISIBLE_RE = /^\S$/u;
+/** What a quotation may open right after, with no space between. */
+const OPENS_BEFORE_QUOTE_RE = /^[\s([{/]$/u;
+
+/**
+ * The paragraph's span texts as the court printed them.
+ *
+ * The publisher's conversion moves the space before an opening quotation
+ * mark inside it ("nazvané„ Dálnice", "(„ oprava“)"). Czech typography never
+ * spaces the inside of a quotation, so the space goes back before the mark,
+ * or away where the mark follows a bracket or opens the paragraph. The repair
+ * reads the paragraph's whole text, because the mark and the word it quotes
+ * can sit in different spans ("též„ " before an anonymised name), and each
+ * character stays in the span it came from.
+ */
+type SpanTextRun = { text: string; span: TextSpan };
+
+const spanTexts = (spans: readonly TextSpan[]): SpanTextRun[] => {
+  const chars = spans.flatMap((span) =>
+    Array.from(withoutSoftHyphens(span.text), (char) => ({ char, span })),
+  );
+  for (let index = 0; index < chars.length; index++) {
+    const quote = chars[index];
+    const space = chars[index + 1];
+    if (
+      quote?.char !== OPENING_QUOTE ||
+      space === undefined ||
+      !SPACE_RE.test(space.char) ||
+      !VISIBLE_RE.test(chars[index + 2]?.char ?? "")
+    ) {
+      continue;
+    }
+    const before = chars[index - 1]?.char;
+    if (before === undefined || OPENS_BEFORE_QUOTE_RE.test(before)) {
+      chars.splice(index + 1, 1);
+      continue;
+    }
+    chars[index] = space;
+    chars[index + 1] = quote;
+    index += 1;
+  }
+  const runs: SpanTextRun[] = [];
+  for (const { char, span } of chars) {
+    const previous = runs.at(-1);
+    if (previous?.span === span) {
+      previous.text += char;
+    } else {
+      runs.push({ text: char, span });
+    }
+  }
+  return runs;
+};
+
+/**
+ * A text as both renderings of a section spell it: its letters and digits.
+ * The structured entries set an anonymised name without the brackets the
+ * plain text keeps (`jméno` / `[jméno]`), and space and quotes differently.
+ */
+const comparable = (text: string): string =>
+  text.replaceAll(/[^\p{L}\p{N}]+/gu, "");
+
+/**
+ * Join the paragraphs a section split at a line break typed inside a
+ * paragraph. The publisher's structured entries break at every line, but its
+ * plain text of the same section tells the two apart: a paragraph ends at a
+ * newline, a line break typed inside it is a carriage return
+ * (`nařízením vlády\rč. 351/2013 Sb.`). Two entries the plain text joins with
+ * a carriage return are one paragraph, joined by a space. Where the two texts
+ * do not line up entry for entry, the entries stay as they are.
+ */
+const joinSoftBreaks = (
+  paragraphs: readonly SectionParagraph[],
+  plainText: string,
+): SectionParagraph[] => {
+  const pieces = plainText.split(/\r?\n/u).flatMap((line) => {
+    const parts = line
+      .split("\r")
+      .map(comparable)
+      .filter((part) => part.length > 0);
+    return parts.map((text, index) => ({
+      text,
+      breaksLine: index < parts.length - 1,
+    }));
+  });
+  if (
+    pieces.length !== paragraphs.length ||
+    pieces.some(
+      ({ text }, index) =>
+        text !== comparable(paragraphs[index]?.plainText ?? ""),
+    )
+  ) {
+    return [...paragraphs];
+  }
+  const joined: SectionParagraph[] = [];
+  let open: SectionParagraph | null = null;
+  for (const [index, paragraph] of paragraphs.entries()) {
+    open =
+      open === null
+        ? { inlines: [...paragraph.inlines], plainText: paragraph.plainText }
+        : {
+            inlines: [
+              ...open.inlines,
+              { type: "text", text: " " },
+              ...paragraph.inlines,
+            ],
+            plainText: `${open.plainText} ${paragraph.plainText}`,
+          };
+    if (pieces[index]?.breaksLine !== true) {
+      joined.push(open);
+      open = null;
+    }
+  }
+  return joined;
+};
+
 /** Convert a finaldoc paragraph to Inline nodes. */
 const toInlines = (
   para: FinaldocParagraph,
@@ -286,17 +516,18 @@ const toInlines = (
   const style = styleMap.get(para.styleLocalId);
   const inlines: Inline[] = [];
   let plain = "";
+  const texts = spanTexts(para.texts);
 
-  for (const span of para.texts) {
-    if (!span.text) {
+  for (const { text, span } of texts) {
+    if (!text) {
       continue;
     }
-    plain += span.text;
+    plain += text;
 
     const isAnon = span.anonStyle === "ANON";
     const node: Inline = isAnon
-      ? { type: "text", text: span.text, anonymized: true }
-      : { type: "text", text: span.text };
+      ? { type: "text", text, anonymized: true }
+      : { type: "text", text };
 
     if (style?.bold && style.italic) {
       inlines.push({
@@ -315,82 +546,6 @@ const toInlines = (
   return { inlines, plainText: plain.trim() };
 };
 
-const inlinePlainLength = (nodes: readonly Inline[]): number => {
-  let len = 0;
-  for (const n of nodes) {
-    if (n.type === "text") {
-      len += n.text.length;
-    } else if (hasInlineChildren(n)) {
-      len += inlinePlainLength(n.children);
-    }
-  }
-  return len;
-};
-
-/** Strip N characters from the front of inlines. */
-const stripPrefix = (
-  inlines: readonly Inline[],
-  charCount: number,
-): Inline[] => {
-  if (charCount <= 0) {
-    return [...inlines];
-  }
-
-  const result: Inline[] = [];
-  let remaining = charCount;
-
-  for (const node of inlines) {
-    if (remaining <= 0) {
-      result.push(node);
-      continue;
-    }
-    if (node.type === "text") {
-      if (node.text.length <= remaining) {
-        remaining -= node.text.length;
-      } else {
-        const sliced: Inline = {
-          type: "text",
-          text: node.text.slice(remaining),
-          ...(node.anonymized && { anonymized: true }),
-        };
-        result.push(sliced);
-        remaining = 0;
-      }
-    } else if (
-      node.type === "bold" ||
-      node.type === "italic" ||
-      node.type === "link"
-    ) {
-      const len = inlinePlainLength(node.children);
-      if (len <= remaining) {
-        remaining -= len;
-      } else {
-        const stripped = stripPrefix(node.children, remaining);
-        remaining = 0;
-        if (stripped.length > 0) {
-          result.push({ ...node, children: stripped });
-        }
-      }
-    }
-  }
-
-  const first = result[0];
-  if (result.length > 0 && first?.type === "text") {
-    const trimmed = first.text.trimStart();
-    if (trimmed) {
-      result[0] = {
-        type: "text",
-        text: trimmed,
-        ...(first.anonymized && { anonymized: true }),
-      };
-    } else {
-      result.shift();
-    }
-  }
-
-  return result;
-};
-
 /** Classify a justification paragraph into the right block type. */
 const classifyJustificationParagraph = (
   inlines: Inline[],
@@ -398,16 +553,18 @@ const classifyJustificationParagraph = (
   blockIndex: number,
   makeBlockId: () => string,
 ): Block => {
-  // Numbered paragraph: "1. ...", "2. ..."
-  const numMatch = NUMBERED_PARA_RE.exec(plainText);
-  if (numMatch) {
-    const text = plainText.slice(numMatch[0].length).trim();
+  // A numbered paragraph ("1. …") stays whole here: whether its marker is the
+  // court's numbering is decided over the whole decision, by
+  // `courtParagraphNumbers` once every block is built. It is body text, never
+  // a closing or a signature: "3. Věc projednala samosoudkyně …" names the
+  // judge but is the court's paragraph 3.
+  if (opensWithCourtParagraphMarker(plainText)) {
     return {
       id: makeBlockId(),
       anchorId: `p-${blockIndex}`,
       type: "paragraph",
-      inlines: stripPrefix(inlines, numMatch[0].length),
-      plainText: text,
+      inlines,
+      plainText,
     };
   }
 
@@ -444,7 +601,3 @@ const classifyJustificationParagraph = (
     plainText,
   };
 };
-
-// ── Patterns ───────────────────────────────────────────────
-
-const NUMBERED_PARA_RE = /^(?:\d+)\.\s+/u;

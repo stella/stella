@@ -17,14 +17,22 @@
 # silent breakage between desktop and web releases.
 set -euo pipefail
 
-base="${GITHUB_BASE_REF:-main}"
+retry="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/retry.sh"
 
-# Use origin/<base> when running in CI, fall back to local <base>
-# for ad-hoc invocation.
-if git rev-parse --verify "origin/$base" >/dev/null 2>&1; then
-  base_ref="origin/$base"
+if [[ "${GITHUB_EVENT_NAME:-}" == "merge_group" ]]; then
+  base_ref="${BRIDGE_BASE_SHA:?BRIDGE_BASE_SHA must be github.event.merge_group.base_sha}"
+  if ! git cat-file -e "$base_ref^{commit}" 2>/dev/null; then
+    bash "$retry" git fetch --no-tags origin "$base_ref"
+  fi
 else
-  base_ref="$base"
+  base="${GITHUB_BASE_REF:-main}"
+  # Use origin/<base> when running in CI, fall back to local <base>
+  # for ad-hoc invocation.
+  if git rev-parse --verify "origin/$base" >/dev/null 2>&1; then
+    base_ref="origin/$base"
+  else
+    base_ref="$base"
+  fi
 fi
 
 bridge_files=(
@@ -35,6 +43,20 @@ bridge_files=(
   apps/desktop/src/shared/rpc.ts
   packages/api-contract/src/desktop-edit-file-types.ts
 )
+
+# The modules the bridge calls are part of its surface: how account.rs
+# authorizes a request, or what the session manager reports, is what the web
+# app sees. Reading them from bridge.rs keeps a newly called module covered.
+bridge_source=apps/desktop/src-tauri/src/bridge.rs
+if [[ -f "$bridge_source" ]]; then
+  while IFS= read -r module; do
+    for candidate in "apps/desktop/src-tauri/src/$module.rs" "apps/desktop/src-tauri/src/$module"; do
+      if [[ -e "$candidate" ]]; then
+        bridge_files+=("$candidate")
+      fi
+    done
+  done < <(grep -oE 'crate::[a-z_]+' "$bridge_source" | sed 's/^crate:://' | sort -u)
+fi
 
 bridge_changed=false
 for f in "${bridge_files[@]}"; do
@@ -59,7 +81,7 @@ version_re='^pub const BRIDGE_VERSION: u32 = ([0-9]+);'
 
 extract_version() {
   local content="$1" line
-  line=$(printf '%s\n' "$content" | grep -E "$version_re" | head -n 1 || true)
+  line=$(grep -m 1 -E "$version_re" <<<"$content" || true)
   if [[ -z "$line" ]]; then
     echo ""
     return
@@ -88,17 +110,14 @@ if [[ -z "$new_version" ]]; then
 fi
 
 if (( new_version <= old_version )); then
+  {
+    echo "::error::Bridge surface changed but BRIDGE_VERSION did not strictly increase ($old_version -> $new_version)."
+    echo
+    echo "A change to one of these files implies the bridge protocol that"
+    echo "the web app talks to has shifted:"
+    printf '  - %s\n' "${bridge_files[@]}"
+  } >&2
   cat >&2 <<MSG
-::error::Bridge surface changed but BRIDGE_VERSION did not strictly increase ($old_version -> $new_version).
-
-A change to one of these files implies the bridge protocol that
-the web app talks to has shifted:
-  - apps/desktop/src-tauri/src/bridge.rs
-  - apps/desktop/src-tauri/src/commands.rs
-  - apps/desktop/src-tauri/src/types.rs
-  - apps/desktop/src/shared/rpc.gen.ts
-  - apps/desktop/src/shared/rpc.ts
-  - packages/api-contract/src/desktop-edit-file-types.ts
 
 Bump BRIDGE_VERSION in $types_path to a value greater than $old_version
 (and add a string to BRIDGE_CAPABILITIES if you added a new endpoint)

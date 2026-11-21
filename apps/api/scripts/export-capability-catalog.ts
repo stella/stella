@@ -1,4 +1,3 @@
-import { KindGuard } from "@sinclair/typebox";
 // Dev-only exporter: projects the safe-handler universe down to a capability
 // catalog and writes a deterministic JSON snapshot
 // (`packages/cli/capabilities/*.json`).
@@ -11,8 +10,8 @@ import { KindGuard } from "@sinclair/typebox";
 // through (`tool`/`covered` name their curated tool; `capability` names its
 // reason). Each entry is
 // a pure projection of the handler's config: id (from the file path), input JSON
-// Schema (`body`/`params`/`query`, TypeBox symbols stripped by a JSON round
-// trip), permissions, handler-scope kind, access (read/write) + destructive
+// Schema (`body`/`params`/`query`, rendered from the route's valibot
+// schemas), permissions, handler-scope kind, access (read/write) + destructive
 // flag, and the MCP OAuth scope for the capability's domain.
 //
 // Each capability is a compact JSON shard with sorted object keys. Each
@@ -26,30 +25,33 @@ import { KindGuard } from "@sinclair/typebox";
 //
 // Modes:
 //   bun --env-file=apps/api/.env apps/api/scripts/export-capability-catalog.ts
-//       regenerate the committed catalog JSON
+//       regenerate coverage and embedded API runtime data
 //   bun --env-file=apps/api/.env apps/api/scripts/export-capability-catalog.ts --check
-//       drift guard: regenerate in-memory, byte-compare against the committed
-//       JSON, exit 1 with a diff summary on mismatch
+//       drift guard: regenerate in memory and compare coverage
+//   bun apps/api/scripts/export-capability-catalog.ts --catalog-only [--out <dir>]
+//       write the npm package shards (--check compares them instead); --out
+//       names another shard directory than packages/cli/capabilities
 //
 // Env-dependent by design (it imports the handler graph, which validates the API
 // env at module load), so run under `bun --env-file=apps/api/.env`. Wired into
 // `bun run verify` and CI next to the CLI registry-snapshot drift guard.
 import { panic, Result } from "better-result";
-import { existsSync, readFileSync } from "node:fs";
-import { mkdtemp, rm } from "node:fs/promises";
-import os from "node:os";
+import { mkdir } from "node:fs/promises";
 import path from "node:path";
 
+import { printError } from "@stll/errors";
+
+import { parseCapabilityCatalog } from "../../../packages/cli/src/capability-catalog-load";
+import { expandSchemaDefs } from "../../../packages/cli/src/expand-schema-defs";
+import { buildCliRouteTree } from "../../../packages/cli/src/generate-capability-tree";
+import type { RouteNode } from "../../../packages/cli/src/route-types";
 // Pure CLI generator modules (constants, classes, pure functions; no env, no
 // I/O at import time), imported relatively because `@stll/cli`'s exports map
 // only exposes its bin entry. The coverage doc computes each capability's REAL
 // generated command path through the same `buildCliRouteTree` codegen uses, so
 // collision fallbacks (curated command wins, capability relocates under
 // `stella capability <domain> <action>`) are never hand-replicated here.
-import { parseCapabilityCatalog } from "../../../packages/cli/src/capability-catalog-load";
-import { expandSchemaDefs } from "../../../packages/cli/src/expand-schema-defs";
-import { buildCliRouteTree } from "../../../packages/cli/src/generate-capability-tree";
-import type { RouteNode } from "../../../packages/cli/src/route-types";
+import type { Middleware, RouteEntry } from "../src/http/route";
 import type { CapabilityTransport } from "../src/lib/capability-transport";
 import {
   isTransportInvocable,
@@ -57,23 +59,22 @@ import {
 } from "../src/lib/capability-transport";
 import { FEATURE_REGISTRY } from "../src/lib/feature-access/registry";
 import {
-  VALIDATED_INPUT_SERVICE_CLASSIFICATION,
   type CatalogServiceClassification,
   type ServiceClassification,
+  VALIDATED_INPUT_SERVICE_CLASSIFICATION,
 } from "../src/lib/rate-limit/service-classification";
+import type { RouteGate } from "../src/lib/route-gates";
 import type { HandlerKind } from "../src/lib/safe-handler-factories";
-import { advertisedSchema } from "../src/mcp/advertised-schema";
 import { CONTEXT_FIDELITY_WAIVERS } from "../src/mcp/capability-waivers";
-import { PUBLIC_FIELD_NAME } from "../src/mcp/public-field-names";
 import type { McpReadClass, McpToolDefinition } from "../src/mcp/tool-types";
 import { WRITE_PRIMITIVE_SCOPES } from "../src/mcp/write-primitive-scopes";
-import { generateCapabilityRuntime } from "./generate-capability-runtime";
 import {
-  type CapabilityDispatchRecord,
   type AccessResolution,
   CANONICAL_ACTION_VERBS,
   CAPABILITY_ID_SEGMENT_PATTERN,
+  type CapabilityDispatchRecord,
   type CapabilityInputSchema,
+  checkCapabilityRouteGates,
   checkTransportAgainstDerived,
   compareCapabilityIds,
   compareScopeStrictness,
@@ -91,18 +92,23 @@ import {
   parseCapabilityTransport,
   readScopeForDomainScope,
   resolveAccess,
+  resolveCapabilityDeploymentFeature,
   resolveHandlerKind,
   resolveScope,
+  reviewedInvoiceManagementEndpoints,
   scanBinarySchemaFields,
   scanContextFidelity,
   scanFileResponseReturns,
-  scanRouteHookGuards,
   serializeCatalog,
   serializeCoverageDoc,
   serializeDispatchModule,
   WRITE_ONLY_SCOPES,
   writePrimitivesImportedBy,
 } from "./lib/capability-catalog";
+import {
+  buildInputSchema,
+  parseFeatureRequirement,
+} from "./lib/capability-input-schema";
 import {
   serializeCapabilityShard,
   syncCapabilityShards,
@@ -118,60 +124,18 @@ import {
   REPO_ROOT,
 } from "./lib/enumerate-safe-handlers";
 import { assertFeatureAccessDeclarations } from "./lib/feature-access-declarations";
+import { writeCapabilityRuntime } from "./lib/write-capability-runtime";
 
 const CATALOG_PATH = path.resolve(REPO_ROOT, "packages/cli/capabilities");
-
-const DISPATCH_PATH = path.resolve(
-  REPO_ROOT,
-  "apps/api/src/mcp/generated/capability-dispatch",
-);
 
 // Generated capability-coverage table: one section per domain plus the
 // permanent internal-waiver summary, drift-guarded alongside the JSON/dispatch
 // artifacts above (see `serializeCoverageDoc`).
-const COVERAGE_DOC_PATH = path.resolve(
-  REPO_ROOT,
-  "docs/capability-coverage.md",
-);
-
-const OXFMT_BIN = path.resolve(REPO_ROOT, "node_modules/.bin/oxfmt");
-const OXFMT_CONFIG = path.resolve(REPO_ROOT, ".oxfmtrc.json");
-
-/**
- * Format a generated TS module with the repo's oxfmt config before it is
- * written or drift-compared, mirroring how the CLI codegen runs oxfmt over its
- * generated modules. Formatting through the real formatter (instead of hand-
- * matching its wrapping style) keeps the committed artifact byte-identical to
- * what CI's `oxfmt --check` expects, so the `--check` drift guard and the
- * format gate can never disagree. The temp file lives outside the repo so no
- * ignore rules apply to it.
- */
-const formatGeneratedArtifacts = async (
-  artifacts: ReadonlyMap<string, string>,
-): Promise<Map<string, string>> => {
-  const dir = await mkdtemp(path.join(os.tmpdir(), "capability-artifact-"));
-  try {
-    for (const [fileName, raw] of artifacts) {
-      await Bun.write(path.join(dir, fileName), raw);
-    }
-    const proc = Bun.spawnSync([OXFMT_BIN, "-c", OXFMT_CONFIG, dir], {
-      stderr: "pipe",
-      stdout: "pipe",
-    });
-    if (proc.exitCode !== 0) {
-      return panic(
-        `export-capability-catalog: oxfmt failed: ${proc.stderr.toString()}`,
-      );
-    }
-    const formatted = new Map<string, string>();
-    for (const fileName of artifacts.keys()) {
-      formatted.set(fileName, await Bun.file(path.join(dir, fileName)).text());
-    }
-    return formatted;
-  } finally {
-    await rm(dir, { force: true, recursive: true });
-  }
-};
+const COVERAGE_DOC_INPUT = "docs/capability-coverage.md";
+export const CI_MARKDOWN_READER_INPUTS = [COVERAGE_DOC_INPUT];
+export const CI_MARKDOWN_READER_COMMAND =
+  "bun apps/api/scripts/export-capability-catalog.ts --check";
+const COVERAGE_DOC_PATH = path.resolve(REPO_ROOT, COVERAGE_DOC_INPUT);
 
 /**
  * MCP OAuth WRITE/consent scope per capability domain (the first id segment).
@@ -186,6 +150,7 @@ const formatGeneratedArtifacts = async (
  * `apps/api/src/mcp/constants.ts`.
  */
 const DOMAIN_SCOPE: Record<string, string> = {
+  "account-exports": "stella:account_export_write",
   "audit-logs": "stella:admin_read",
   "billing-codes": "stella:billing_write",
   // Corpus reads (decision analysis, ingestion status, matter-link list)
@@ -199,11 +164,22 @@ const DOMAIN_SCOPE: Record<string, string> = {
   // matters-write consent. They get their own dedicated consent bucket rather
   // than borrowing the workspace write scope.
   chat: "stella:chat",
+  dictation: "stella:chat",
   clauses: "stella:knowledge_write",
   // Organization-wide address-book mutations cross matter boundaries, so
   // they require their own consent instead of borrowing a workspace write.
   contacts: "stella:contacts_write",
+  // A conflict check reads across every matter of the firm and records the
+  // result, so it takes the address-book consent rather than a matter write.
+  "conflict-checks": "stella:contacts_write",
+  // A full copy of the organization's data, held by owners and admins only:
+  // starting one and minting its download links are administrative actions,
+  // so they take the admin consent rather than a matter write.
+  "data-exports": "stella:admin_write",
   "document-types": "stella:matters_write",
+  // Redline suggestions queued on a document: deciding or reopening one is a
+  // document review act, so it takes the document write consent.
+  "docx-suggestions": "stella:documents_write",
   // A translation run reads a matter document and writes the translated one
   // back as a new document, so it takes the workspace write bucket.
   "document-translations": "stella:matters_write",
@@ -220,13 +196,23 @@ const DOMAIN_SCOPE: Record<string, string> = {
   // Now carries invoice create/delete/transition capabilities, not just the
   // read tool, so it reuses the billing write bucket.
   invoices: "stella:billing_write",
+  "client-invoices": "stella:billing_write",
   // A reader's highlights and comments: personal knowledge, like clauses.
   "legal-reader": "stella:knowledge_write",
   legislation: "stella:read",
+  "soft-law": "stella:read",
   lists: "stella:matters_write",
+  // Assistant memory is replayed into future chat prompts, so it shares the
+  // assistant's own consent rather than a workspace write.
+  memories: "stella:chat",
   "number-series": "stella:billing_write",
+  // The caller's own inbox. Marking one read is per-user bookkeeping, but it
+  // is still a write, so it takes the workspace write bucket while listing
+  // reads under stella:read.
+  notifications: "stella:matters_write",
   "vat-rates": "stella:billing_write",
   "organization-settings": "stella:admin_write",
+  organizations: "stella:admin_write",
   playbooks: "stella:knowledge_write",
   // Now carries property create/update/delete capabilities, so it reuses the
   // workspace write bucket rather than the read scope its read tool used.
@@ -235,6 +221,13 @@ const DOMAIN_SCOPE: Record<string, string> = {
   // billing write bucket rather than the read scope its resolution tool used.
   rates: "stella:billing_write",
   "saved-time-narratives": "stella:billing_write",
+  // `search.results.list`: results across the matters a caller can open, a
+  // read-only domain at the read scope. It is not the curated `search` tool,
+  // which reads matter knowledge on its own at `stella:search`. Chat results
+  // also need `stella:chat`, applied per result type in the handler
+  // (`GLOBAL_SEARCH_RESULT_TYPE_SCOPE`).
+  search: "stella:read",
+  "search-history": "stella:knowledge_write",
   // Report export creates workspace artifacts (entities / template records), so
   // it stays on the workspace write bucket. Unlike chat (which got its own
   // stella:chat scope because thread reads/renames should not demand a
@@ -242,6 +235,10 @@ const DOMAIN_SCOPE: Record<string, string> = {
   // dedicated read-only scope would understate what it does.
   reports: "stella:matters_write",
   "seller-profiles": "stella:billing_write",
+  // Browse a connected SharePoint or OneDrive account and copy files into a
+  // matter as documents: the copy writes document content, so it takes the
+  // document write consent; the browse reads downgrade to the read scope.
+  sharepoint: "stella:documents_write",
   skills: "stella:skills",
   "style-sets": "stella:templates",
   tasks: "stella:matters_write",
@@ -285,6 +282,9 @@ const UNMAPPED_DOMAINS: ReadonlySet<string> = new Set<string>();
  * different scope fails the export until pinned in ENTRY_SCOPE_OVERRIDES.
  */
 const SCOPE_STRICTNESS: Record<string, number> = {
+  "stella:account_export_read": 2,
+  "stella:account_export_write": 3,
+  "stella:organization_create": 3,
   "stella:search": 0,
   "stella:read": 1,
   "stella:onboarding": 2,
@@ -293,6 +293,7 @@ const SCOPE_STRICTNESS: Record<string, number> = {
   "stella:documents_write": 2,
   "stella:matters_write": 2,
   "stella:chat": 2,
+  "stella:memory_write": 3,
   "stella:knowledge_write": 2,
   "stella:billing_write": 2,
   "stella:skills": 2,
@@ -315,10 +316,21 @@ const SCOPE_STRICTNESS: Record<string, number> = {
  * the same consent.
  */
 const ENTRY_SCOPE_OVERRIDES: Record<string, string> = {
+  // The same consent its MCP tool demands.
+  "soft-law.search": "stella:search",
+  "legislation.matter-links.batch.create": "stella:matters_write",
+  "legislation.matter-links.create": "stella:matters_write",
+  "legislation.matter-links.delete": "stella:matters_write",
+  // Creating an organization is an account-level grant, not an administrative
+  // write inside the caller's current organization.
+  "organizations.create": "stella:organization_create",
+  "memories.create": "stella:memory_write",
+  "memories.update": "stella:memory_write",
   // Document writes that reach storage through helpers shared with other
   // entity kinds, so WRITE_PRIMITIVE_SCOPES cannot see them from the handler's
   // imports; the direct callers of document primitives need no pin.
   "entities.create": "stella:documents_write",
+  "entities.folder-from-selection.create": "stella:documents_write",
   "entities.blank-document.create": "stella:documents_write",
   "entities.delete": "stella:documents_write",
   "entities.versions.delete": "stella:documents_write",
@@ -350,26 +362,37 @@ const ENTRY_ADDITIONAL_SCOPES: Record<string, readonly string[]> = {
   "entities.duplicate": ["stella:documents_write"],
 };
 
-/** `additionalScopes` plus the entry's ENTRY_ADDITIONAL_SCOPES, minus its scope. */
+/** Retain independent domain consent alongside entry and tool consents. */
 const withEntryAdditionalScopes = ({
   additionalScopes,
+  domainWriteScope,
   id,
+  isRead,
   scope,
   uses,
 }: {
   additionalScopes: readonly string[];
+  domainWriteScope: string;
   id: string;
+  isRead: boolean;
   scope: string;
   uses: Set<string>;
 }): readonly string[] => {
+  const scopes = new Set(additionalScopes);
   const extraScopes = ENTRY_ADDITIONAL_SCOPES[id];
-  if (extraScopes === undefined) {
-    return additionalScopes;
+  if (extraScopes !== undefined) {
+    uses.add(id);
+    for (const extraScope of extraScopes) {
+      scopes.add(extraScope);
+    }
   }
-  uses.add(id);
-  return [...new Set([...additionalScopes, ...extraScopes])].filter(
-    (requiredScope) => requiredScope !== scope,
-  );
+  // A document writer adds consent to a list mutation; it cannot replace
+  // the list's own consent, including when the endpoint has a scope pin.
+  if (!isRead && deriveDomain(id) === "lists") {
+    scopes.add(domainWriteScope);
+  }
+  scopes.delete(scope);
+  return [...scopes];
 };
 
 /**
@@ -395,7 +418,7 @@ const DESTRUCTIVE_NAME_OPT_OUTS: ReadonlySet<string> = new Set([
 
 /**
  * Files with `capability`-annotated endpoints defined INLINE in route files
- * (mounted directly into Elysia, never exported as `{ config, handler }`).
+ * (mounted directly in a route table, never exported as `{ config, handler }`).
  * These are known catalog GAPS: an inline endpoint cannot be enumerated, so its
  * capability is not projected into the catalog (nor invokable through the
  * generic path) until the handler is refactored into an endpoint module. Counts
@@ -406,54 +429,14 @@ const DESTRUCTIVE_NAME_OPT_OUTS: ReadonlySet<string> = new Set([
 const INLINE_CAPABILITY_ALLOWLIST: Record<string, number> = {};
 
 /**
- * Capabilities whose REST route resolves workspace access through
- * `validateWorkspaceAccessIncludingArchived` (so they may run against an
- * archived workspace), carried into the catalog as `allowsArchivedWorkspace` and
- * consulted by the invoke write gate (see capability-tools.ts). Sweep of
- * `validateWorkspaceAccessIncludingArchived` usages over capability endpoints
- * (apps/api/src/handlers/workspaces/routes.ts): only `unarchive`. Stale-checked:
- * a flagged id that is no longer a discovered capability fails the export.
- *
- * - `matters.unarchive`: flips an archived workspace back to active; must be
- *   reachable while the workspace is archived.
+ * Waivers for capability endpoints mounted under a route middleware the
+ * capability executors do not run (see `checkCapabilityRouteGates`). Each entry
+ * is a reviewed decision that the gate is also enforced on the capability path
+ * (id -> justification), or the export fails on the hit. A budget, a
+ * deployment-feature gate over the entry's own `feature` flag and a
+ * feature-access gate over the config's own `featureAccess` need no waiver.
  */
-const ALLOWS_ARCHIVED_WORKSPACE: ReadonlySet<string> = new Set([
-  "matters.unarchive",
-]);
-
-/**
- * Waivers for capability endpoints mounted under a route-level
- * `onBeforeHandle`/`beforeHandle` hook the generic invoke path would bypass
- * (see `scanRouteHookGuards`). Each entry is a reviewed decision that the hook's
- * gate is also enforced on the invoke path (id -> justification), or the export
- * fails on the hit. A `deploymentFeatureGate` over a canonical flag needs no
- * waiver when the entry carries that feature tag; custom hooks are listed here.
- */
-const ROUTE_HOOK_WAIVERS: Record<string, string> = {
-  "template-packs.get":
-    "template-packs onBeforeHandle only 404s while FEATURE_TEMPLATE_PACKS is off; the catalog entry carries that feature tag",
-  "template-packs.installs.create":
-    "template-packs onBeforeHandle only 404s while FEATURE_TEMPLATE_PACKS is off; the catalog entry carries that feature tag",
-  "template-packs.list":
-    "template-packs onBeforeHandle only 404s while FEATURE_TEMPLATE_PACKS is off; the catalog entry carries that feature tag",
-  "template-packs.visibility.update":
-    "template-packs onBeforeHandle only 404s while FEATURE_TEMPLATE_PACKS is off; the catalog entry carries that feature tag",
-  "usage.entitlement.get":
-    "usage onRequest only 404s /usage paths while FEATURE_USAGE is off (the provider webhook keeps its own contract); get_usage carries FEATURE_USAGE",
-};
-
-/** Source of an `@/api/...` module, for the route-hook guard's feature-gate helpers. */
-const readApiModule = (importPath: string): string | undefined => {
-  if (!importPath.startsWith("@/api/")) {
-    return undefined;
-  }
-  const file = path.join(
-    import.meta.dir,
-    "../src",
-    `${importPath.slice("@/api/".length)}.ts`,
-  );
-  return existsSync(file) ? readFileSync(file, "utf-8") : undefined;
-};
+const ROUTE_GATE_WAIVERS: Record<string, string> = {};
 
 /**
  * Deployment feature flag per capability domain, mirroring the `feature` field
@@ -494,12 +477,16 @@ const DOMAIN_FEATURE: Record<string, string> = {
   "case-law": "FEATURE_PUBLIC_LAW",
   expenses: "FEATURE_TIME_BILLING",
   invoices: "FEATURE_TIME_BILLING",
+  "client-invoices": "FEATURE_TIME_BILLING",
   legislation: "FEATURE_PUBLIC_LAW",
+  "soft-law": "FEATURE_PUBLIC_LAW",
   lists: "FEATURE_LEGAL_LISTS",
+  memories: "FEATURE_AI_MEMORY",
   "number-series": "FEATURE_TIME_BILLING",
   rates: "FEATURE_TIME_BILLING",
   "saved-time-narratives": "FEATURE_TIME_BILLING",
   "seller-profiles": "FEATURE_TIME_BILLING",
+  sharepoint: "FEATURE_SHAREPOINT",
   "template-packs": "FEATURE_TEMPLATE_PACKS",
   "time-entries": "FEATURE_TIME_BILLING",
   "time-timers": "FEATURE_TIME_BILLING",
@@ -518,23 +505,25 @@ type CapabilityEntry = {
    * Prose from the handler config's `description`, written for the agent
    * deciding whether to call this capability. Carried verbatim into the
    * committed catalog; the CLI renders it as the generated command's
-   * `--help` brief and MCP renders it in list/describe. Absent only for a
-   * capability that has not been given one yet; each of those is listed by id
-   * in apps/api/capability-description-ledger.json and guarded by
-   * apps/api/scripts/capability-description-guard.ts.
+   * `--help` brief and MCP renders it in list/describe.
+   * apps/api/scripts/capability-description-guard.ts fails a capability
+   * without one.
    */
   description?: string;
   handlerKind: HandlerKind;
   access: "read" | "write";
   readClass?: McpReadClass;
   destructive: boolean;
+  confirmation?: "required";
+  idempotency?: { type: "replay" };
   consumesServices: CatalogServiceClassification;
   scope: string;
+  accountScope?: string;
   /** Additional OAuth grants required by a compound covering tool. */
   additionalScopes?: readonly string[];
   /** API-owned finite transport deadline for this generated capability command. */
   requestTimeoutMs?: number;
-  /** REST route uses `validateWorkspaceAccessIncludingArchived` (fix-4). */
+  /** The route admits archived matters (`workspaceStatus: "active-or-archived"`). */
   allowsArchivedWorkspace?: true;
   /**
    * How this capability's payload crosses the generic JSON transport. Total and
@@ -547,7 +536,8 @@ type CapabilityEntry = {
   transport: CapabilityTransport;
   /**
    * Deployment feature flag gating this capability: the covering tool's
-   * `feature` (tool/covered dispositions) else the DOMAIN_FEATURE table.
+   * `feature` (tool/covered dispositions), the DOMAIN_FEATURE table, or the
+   * deployment flag of the handler's required feature-access declaration.
    * Consulted by list_capabilities/describe/invoke (see capability-feature.ts).
    */
   feature?: string;
@@ -602,127 +592,6 @@ const extractVerbs = (permissions: unknown): string[] => {
   return verbs;
 };
 
-// The config's `body`/`params`/`query` are TypeBox schemas: plain JSON Schema
-// objects at runtime plus non-enumerable symbol metadata. The final
-// `JSON.stringify` of the whole catalog drops those symbols, leaving clean JSON
-// Schema on disk, so the raw schema value can go straight into the entry.
-const buildInputSchema = (
-  config: Record<string, unknown>,
-): CapabilityInputSchema => {
-  const inputSchema: CapabilityInputSchema = {};
-  if ("body" in config) {
-    inputSchema.body = withPublicFieldNames(advertisedPart(config["body"]));
-  }
-  if ("params" in config) {
-    inputSchema.params = withPublicFieldNames(advertisedPart(config["params"]));
-  }
-  if ("query" in config) {
-    inputSchema.query = withPublicFieldNames(advertisedPart(config["query"]));
-  }
-  return inputSchema;
-};
-
-/**
- * The catalog carries the same projection `describe_capability` advertises
- * (coercion unions flattened to their scalar), so the CLI's generated flags
- * and the MCP surface enforce one contract. A part that is not a TypeBox
- * schema is left as the handler declared it.
- */
-const advertisedPart = (part: unknown): unknown =>
-  KindGuard.IsSchema(part) ? advertisedSchema(part) : part;
-
-/** Schema keywords whose value is itself a schema node. */
-const SCHEMA_NODE_KEYWORDS = ["items", "additionalProperties", "not"] as const;
-/** Schema keywords whose value is a list of schema nodes. */
-const SCHEMA_NODE_LIST_KEYWORDS = ["anyOf", "oneOf", "allOf"] as const;
-/** Schema keywords whose value maps names to schema nodes. */
-const SCHEMA_NODE_MAP_KEYWORDS = [
-  "properties",
-  "$defs",
-  "definitions",
-] as const;
-
-/**
- * Rename internal input fields to their public spelling on the way out, at
- * every depth.
- *
- * The container is a `workspaceId` in the DB, the handler config and the REST
- * route; it is a `matterId` to every agent. This is the outbound half of that
- * split: `describe_capability` and the CLI's generated `--matter-id` flag both
- * read this schema. The inbound half is `withInternalFieldNames`
- * (apps/api/src/mcp/capability-tools.ts), which renames the field back before
- * the handler's own schema validates it, so the two names never both reach a
- * handler. Both halves derive from `PUBLIC_FIELD_NAME`'s one table.
- *
- * The walk covers every place a schema node can hide (`properties`, `items`,
- * `additionalProperties`, `anyOf`/`oneOf`/`allOf`, `$defs`), because the
- * container is not always top level: `flows.create` carries it inside a union
- * branch of `body.trigger`, `playbooks.create` inside an array of passages,
- * `signals.acceptances.create` inside `body.result`. Renaming only the top
- * level would advertise `--matter-id` on one capability and
- * `--body-trigger-workspace-id` on the next.
- *
- * The exemption is evaluated per NODE, not per part: a node that already owns
- * the public name (`expenses.create` body declares its own `matterId`) has no
- * internal name to rename, so the two cannot meet.
- */
-const withPublicFieldNames = (node: unknown): unknown => {
-  if (Array.isArray(node)) {
-    return node.map((entry) => withPublicFieldNames(entry));
-  }
-  if (!isRecord(node)) {
-    return node;
-  }
-  const rename = (name: string): string => PUBLIC_FIELD_NAME[name] ?? name;
-  const projected: Record<string, unknown> = { ...node };
-
-  for (const keyword of SCHEMA_NODE_KEYWORDS) {
-    if (keyword in node) {
-      projected[keyword] = withPublicFieldNames(node[keyword]);
-    }
-  }
-  for (const keyword of SCHEMA_NODE_LIST_KEYWORDS) {
-    const branches = node[keyword];
-    if (Array.isArray(branches)) {
-      projected[keyword] = branches.map((branch) =>
-        withPublicFieldNames(branch),
-      );
-    }
-  }
-  for (const keyword of SCHEMA_NODE_MAP_KEYWORDS) {
-    const members = node[keyword];
-    if (!isRecord(members)) {
-      continue;
-    }
-    // `$defs`/`definitions` name reusable schemas, not input fields, so only
-    // `properties` keys are renamed; every value is still descended into.
-    const renameKeys = keyword === "properties";
-    if (renameKeys) {
-      for (const [internal, publicName] of Object.entries(PUBLIC_FIELD_NAME)) {
-        if (internal in members && publicName in members) {
-          panic(
-            `capability input declares both ${internal} and ${publicName}; the public rename would drop one`,
-          );
-        }
-      }
-    }
-    projected[keyword] = Object.fromEntries(
-      Object.entries(members).map(([name, member]) => [
-        renameKeys ? rename(name) : name,
-        withPublicFieldNames(member),
-      ]),
-    );
-  }
-
-  const required = node["required"];
-  if (Array.isArray(required)) {
-    projected["required"] = required.map((name) =>
-      typeof name === "string" ? rename(name) : name,
-    );
-  }
-  return projected;
-};
-
 /**
  * The handler config's tool-level `description`. A non-string or empty value is
  * reported as absent rather than emitted, so a malformed config shows up as a
@@ -740,8 +609,7 @@ const readDescription = (
 };
 
 type EntryScopeResult =
-  | { status: "resolved"; scope: string }
-  | { status: "error"; message: string };
+  { status: "resolved"; scope: string } | { status: "error"; message: string };
 
 /**
  * Final scope for a `tool`/`covered` entry: the entry must never advertise a
@@ -933,8 +801,10 @@ type BuildCatalogEntryOptions = {
   consumesServices: ServiceClassification;
   readClass: McpReadClass | undefined;
   scope: string;
+  accountScope: string | undefined;
   additionalScopes: readonly string[];
   requestTimeoutMs: number | undefined;
+  idempotency: { type: "replay" } | undefined;
   hasPermissions: boolean;
   permissions: unknown;
   /**
@@ -946,10 +816,11 @@ type BuildCatalogEntryOptions = {
   exposure: ParsedExposure;
   feature: string | undefined;
   featureAccess:
-    | { featureId: string; type: "required" | "conditional" }
-    | undefined;
+    { featureId: string; type: "required" | "conditional" } | undefined;
   /** Declared transport, already cross-checked against the live schema. */
   transport: CapabilityTransport;
+  /** The route admits archived matters (`workspaceStatus: "active-or-archived"`). */
+  allowsArchivedWorkspace: boolean;
 };
 
 /**
@@ -968,7 +839,9 @@ const buildCatalogEntry = ({
   readClass,
   scope,
   additionalScopes,
+  accountScope,
   requestTimeoutMs,
+  idempotency,
   hasPermissions,
   permissions,
   compactedInputSchema,
@@ -976,6 +849,7 @@ const buildCatalogEntry = ({
   feature,
   featureAccess,
   transport,
+  allowsArchivedWorkspace,
 }: BuildCatalogEntryOptions): CapabilityEntry => ({
   id,
   ...(description === undefined ? {} : { description }),
@@ -983,14 +857,19 @@ const buildCatalogEntry = ({
   access: access.access,
   ...(readClass === undefined ? {} : { readClass }),
   destructive: access.destructive,
+  ...(exposure.type === "capability" && exposure.confirmation === "required"
+    ? { confirmation: exposure.confirmation }
+    : {}),
   consumesServices:
     typeof consumesServices === "function"
       ? VALIDATED_INPUT_SERVICE_CLASSIFICATION
       : consumesServices,
   scope,
+  ...(accountScope === undefined ? {} : { accountScope }),
   ...(additionalScopes.length === 0 ? {} : { additionalScopes }),
   ...(requestTimeoutMs === undefined ? {} : { requestTimeoutMs }),
-  ...(ALLOWS_ARCHIVED_WORKSPACE.has(id)
+  ...(idempotency === undefined ? {} : { idempotency }),
+  ...(allowsArchivedWorkspace
     ? { allowsArchivedWorkspace: true as const }
     : {}),
   transport,
@@ -1054,7 +933,7 @@ const compactInputSchemaGuarded = ({
   const bytes = inputSchemaByteSize(compacted);
   if (bytes > MAX_CAPABILITY_SCHEMA_BYTES) {
     errors.push(
-      `capability "${id}": input schema is ${bytes} bytes after $defs compaction, over the ${MAX_CAPABILITY_SCHEMA_BYTES}-byte cap. Shrink the handler's schema (factor the repeated shape into one reusable TypeBox type) or improve compaction; the cap is not the thing to raise`,
+      `capability "${id}": input schema is ${bytes} bytes after $defs compaction, over the ${MAX_CAPABILITY_SCHEMA_BYTES}-byte cap. Shrink the handler's schema (factor the repeated shape into one reusable valibot schema) or improve compaction; the cap is not the thing to raise`,
     );
     return compacted;
   }
@@ -1068,30 +947,32 @@ const compactInputSchemaGuarded = ({
  *    context must be waived;
  *  - file-response (fix-6): a handler returning a file/stream Response must be
  *    flagged (refused at invoke);
- *  - route-hook (fix-2): a capability endpoint under a route-level pre-handler
- *    hook the generic path bypasses must be waived (gate also in the handler);
- *  - archived-flag (fix-4) stale check: a flagged id must still be a capability.
+ *  - route-gate (fix-2): every middleware on a capability's mounted routes is
+ *    either reproduced by the capability executors or waived with a reason.
  */
 const collectClassGuardErrors = ({
   entries,
   entrySources,
-  routeFiles,
+  entryDefinitions,
+  routes,
+  classifyRouteGate,
   toolFeatureByName,
 }: {
   entries: readonly CapabilityEntry[];
   entrySources: readonly { id: string; source: string }[];
-  routeFiles: readonly { id: string; source: string }[];
+  entryDefinitions: ReadonlyMap<string, object>;
+  routes: readonly RouteEntry[];
+  classifyRouteGate: (middleware: Middleware) => RouteGate;
   toolFeatureByName: ReadonlyMap<string, string>;
 }): string[] => {
   const errors: string[] = [];
-  const capabilityIdSet = new Set(entries.map((entry) => entry.id));
 
   // Read-scope guard: a READ capability must never require a write-only scope,
   // or a read-only credential (`stella:read` / `stella:admin_read`) could not
   // invoke it. The access-keyed resolver above already downgrades reads to their
   // domain read tier, so this can only fire if that resolver is later broken —
-  // which is exactly when it must fail the export (companion to the
-  // `read-capabilities-with-write-scope` ratchet over the committed catalog).
+  // which is exactly when it must fail the export. The catalog is derived,
+  // never committed, so no hand-edited copy can bypass this.
   for (const entry of entries) {
     if (entry.access === "read" && WRITE_ONLY_SCOPES.has(entry.scope)) {
       errors.push(
@@ -1134,37 +1015,38 @@ const collectClassGuardErrors = ({
     );
   }
 
-  const routeHooks = scanRouteHookGuards({
-    routeFiles,
-    capabilityIds: capabilityIdSet,
-    capabilityFeatures: new Map(
-      entries.map((entry) => [entry.id, entry.feature]),
-    ),
-    readModule: readApiModule,
-    waivedIds: new Set(Object.keys(ROUTE_HOOK_WAIVERS)),
+  const routeGates = checkCapabilityRouteGates({
+    capabilities: entries.flatMap((entry) => {
+      const definition = entryDefinitions.get(entry.id);
+      return definition === undefined
+        ? []
+        : [
+            {
+              id: entry.id,
+              definition,
+              feature: entry.feature,
+              featureId: entry.featureId,
+            },
+          ];
+    }),
+    routes,
+    classify: classifyRouteGate,
+    waivedIds: new Set(Object.keys(ROUTE_GATE_WAIVERS)),
   });
-  for (const { routeFile, id } of routeHooks.violations) {
+  for (const { id, method, path: routePath, reason } of routeGates.violations) {
     errors.push(
-      `route-hook: capability "${id}" is mounted under a route-level hook (onBeforeHandle, beforeHandle, onRequest or deploymentFeatureGate) in ${routeFile} that invoke_capability bypasses (a hook that only checks a FEATURE_ flag passes when the catalog entry carries that feature tag). Move the gate into the handler config (like case-law.ingestion.get), or add "${id}" to ROUTE_HOOK_WAIVERS with a justification`,
+      `route-gate: capability "${id}" is mounted at ${method} ${routePath} behind ${reason}, which capability executors bypass. Declare the gate in the handler config (featureAccess, or the entry's feature flag), or add "${id}" to ROUTE_GATE_WAIVERS with a justification`,
     );
   }
-  for (const { routeFile, route } of routeHooks.childRouteMounts) {
+  for (const id of routeGates.unmounted) {
     errors.push(
-      `route-hook: ${routeFile} mounts child route ${route} under a route-level hook, so the hook covers handlers this guard cannot attribute. Apply the hook inside ${route}, or mount it outside the hooked instance`,
+      `route-gate: capability "${id}" is not mounted on any route; mount its definition in apps/api/src/api-routes.ts (capabilities run the same definition REST serves)`,
     );
   }
-  for (const id of routeHooks.staleWaivers) {
+  for (const id of routeGates.staleWaivers) {
     errors.push(
-      `stale ROUTE_HOOK_WAIVERS entry "${id}": it is no longer mounted under any route hook (remove it)`,
+      `stale ROUTE_GATE_WAIVERS entry "${id}": every gate on its routes is reproduced on the capability path (remove it)`,
     );
-  }
-
-  for (const id of ALLOWS_ARCHIVED_WORKSPACE) {
-    if (!capabilityIdSet.has(id)) {
-      errors.push(
-        `stale ALLOWS_ARCHIVED_WORKSPACE entry "${id}": no catalog capability has that id (remove it)`,
-      );
-    }
   }
 
   // Feature-gate coherence: DOMAIN_FEATURE must stay in lockstep with the
@@ -1217,17 +1099,6 @@ const collectClassGuardErrors = ({
   return errors;
 };
 
-const parseFeatureRequirement = (value: unknown) => {
-  if (!isRecord(value) || typeof value["featureId"] !== "string") {
-    return undefined;
-  }
-  const type = value["type"];
-  if (type !== "required" && type !== "conditional") {
-    return undefined;
-  }
-  return { featureId: value["featureId"], type } as const;
-};
-
 const readFeatureDeclarationSources = async () => {
   const featureSources = new Map<string, string>();
   for (const file of new Bun.Glob(
@@ -1241,16 +1112,54 @@ const readFeatureDeclarationSources = async () => {
   return featureSources;
 };
 
+type GeneratedFeatureDeclarationOptions = Parameters<
+  typeof assertFeatureAccessDeclarations
+>[0] & {
+  dispatchRecords: readonly CapabilityDispatchRecord[];
+  invoiceManagementFiles: ReadonlySet<string>;
+};
+
+/** Validate emitted dispatch entries rather than previously generated shards. */
+const validateGeneratedFeatureDeclarations = ({
+  registry,
+  endpoints,
+  sources: sourceModules,
+  dispatchRecords,
+  invoiceManagementFiles,
+}: GeneratedFeatureDeclarationOptions): void => {
+  const sources = new Map(sourceModules);
+  for (const file of sources.keys()) {
+    if (file.startsWith("apps/api/src/mcp/generated/capability-dispatch/")) {
+      sources.delete(file);
+    }
+  }
+  sources.set(
+    "apps/api/src/mcp/generated/capability-dispatch.ts",
+    serializeDispatchModule(dispatchRecords),
+  );
+  assertFeatureAccessDeclarations({
+    registry,
+    endpoints,
+    sources,
+    invoiceManagementFiles,
+  });
+};
+
 const buildCatalog = async (): Promise<BuildResult> => {
-  const { endpoints, files, routeFiles, importErrors } =
-    await discoverSafeHandlers();
+  const { endpoints, files, importErrors } = await discoverSafeHandlers();
   const errors: string[] = [];
   const featureSources = await readFeatureDeclarationSources();
-  assertFeatureAccessDeclarations({
-    registry: FEATURE_REGISTRY,
-    endpoints,
-    sources: featureSources,
-  });
+  const { invoiceSendManagementRoute } =
+    await import("../src/handlers/invoices/routes");
+  const { classifyRouteGate: classifyManagementGate } =
+    await import("../src/lib/route-gates");
+  const invoiceManagementFiles = new Set(
+    reviewedInvoiceManagementEndpoints({
+      routes: invoiceSendManagementRoute,
+      endpoints,
+      classify: classifyManagementGate,
+    }).map(({ file }) => file),
+  );
 
   for (const { id, message } of importErrors) {
     errors.push(`import failed: ${id}: ${message}`);
@@ -1300,6 +1209,7 @@ const buildCatalog = async (): Promise<BuildResult> => {
   const entries: CapabilityEntry[] = [];
   const dispatchRecords: CapabilityDispatchRecord[] = [];
   const entrySources: { id: string; source: string }[] = [];
+  const entryDefinitions = new Map<string, object>();
   const idToFile = new Map<string, string>();
   const presentDomains = new Set<string>();
   const kindOverrideUses: string[] = [];
@@ -1358,6 +1268,15 @@ const buildCatalog = async (): Promise<BuildResult> => {
     endpoint: (typeof endpoints)[number],
     id: string,
   ) => {
+    const accountScopeValue = endpoint.config["accountScope"];
+    const accountScope =
+      typeof accountScopeValue === "string" ? accountScopeValue : undefined;
+    if (accountScopeValue !== undefined && accountScope === undefined) {
+      errors.push(
+        `capability "${id}" declares invalid accountScope; expected an OAuth scope`,
+      );
+      return undefined;
+    }
     const requestTimeoutValue = endpoint.config["requestTimeoutMs"];
     const requestTimeoutMs =
       typeof requestTimeoutValue === "number" &&
@@ -1383,7 +1302,21 @@ const buildCatalog = async (): Promise<BuildResult> => {
         `capability "${id}" declares invalid access ${JSON.stringify(declaredAccessValue)}; expected "read" or "write"`,
       );
     }
-    return { requestTimeoutMs, declaredAccess } as const;
+    const declaredIdempotency = endpoint.config["idempotency"];
+    const idempotency =
+      isRecord(declaredIdempotency) && declaredIdempotency["type"] === "replay"
+        ? { type: "replay" as const }
+        : undefined;
+    if (declaredIdempotency !== undefined && idempotency === undefined) {
+      errors.push(`capability "${id}" declares invalid idempotency policy`);
+      return undefined;
+    }
+    return {
+      requestTimeoutMs,
+      declaredAccess,
+      accountScope,
+      idempotency,
+    } as const;
   };
 
   /** Compile one discovered handler into its catalog and dispatch projections. */
@@ -1400,7 +1333,7 @@ const buildCatalog = async (): Promise<BuildResult> => {
       exportName: endpoint.exportName,
     });
     if (!isWellFormedCapabilityId(id)) {
-      // Capability ids are public (CLI command paths, `invoke_capability`
+      // Capability ids are public (CLI command paths, capability executors
       // arguments), so an id segment must never be an internal identifier. The
       // only way to produce a non-kebab segment is a NAMED export, whose TS
       // identifier gets suffixed onto the path-derived id.
@@ -1411,7 +1344,7 @@ const buildCatalog = async (): Promise<BuildResult> => {
     }
     if (!isAllowedActionVerb(id)) {
       // The final id segment is the PUBLIC action verb (`stella contacts list`,
-      // `invoke_capability contacts.list`). Keeping it inside a small canonical
+      // `read_capability contacts.list`). Keeping it inside a small canonical
       // set plus a reviewed domain list is what stops the surface drifting back
       // into synonym soup (`read` vs `list` vs `get` for the same shape).
       errors.push(
@@ -1447,7 +1380,8 @@ const buildCatalog = async (): Promise<BuildResult> => {
     if (metadata === undefined) {
       return;
     }
-    const { requestTimeoutMs, declaredAccess } = metadata;
+    const { requestTimeoutMs, declaredAccess, accountScope, idempotency } =
+      metadata;
     const verbs = extractVerbs(permissions);
     const inferredAccess = resolveAccess({
       id,
@@ -1613,7 +1547,9 @@ const buildCatalog = async (): Promise<BuildResult> => {
     scope = primitiveResolution.scope;
     additionalScopes = withEntryAdditionalScopes({
       additionalScopes,
+      domainWriteScope: scopeResolution.writeScope,
       id,
+      isRead,
       scope,
       uses: additionalScopeUses,
     });
@@ -1650,13 +1586,16 @@ const buildCatalog = async (): Promise<BuildResult> => {
     if (transportErrors.length > 0) {
       return;
     }
-    // Deployment feature gate: the covering tool's flag wins (mechanical
-    // inheritance), the reviewed domain table covers the rest.
+    // Preserve reviewed tool/domain gates; required handler feature access
+    // also supplies a deployment gate for capabilities in a mixed domain.
     const coveringToolName = coveringToolOf(endpoint.exposure);
     const inheritedFeature =
       coveringToolName === undefined
         ? undefined
         : toolFeatureByName.get(coveringToolName);
+    const featureAccess = parseFeatureRequirement(
+      endpoint.config["featureAccess"],
+    );
     const consumesServices = serviceConsumptionOf(
       endpoint.exposure,
       toolServicesByName,
@@ -1676,22 +1615,31 @@ const buildCatalog = async (): Promise<BuildResult> => {
         }),
         scope,
         additionalScopes,
+        accountScope,
         requestTimeoutMs,
+        idempotency,
         hasPermissions,
         permissions,
         compactedInputSchema,
         exposure: endpoint.exposure,
-        feature: inheritedFeature ?? DOMAIN_FEATURE[domain],
-        featureAccess: parseFeatureRequirement(
-          endpoint.config["featureAccess"],
-        ),
+        feature: resolveCapabilityDeploymentFeature({
+          registry: FEATURE_REGISTRY,
+          requirement: featureAccess,
+          inheritedFeature,
+          domainFeature: DOMAIN_FEATURE[domain],
+        }),
+        featureAccess,
         transport,
+        allowsArchivedWorkspace:
+          endpoint.config["workspaceStatus"] === "active-or-archived",
       }),
     );
+    entryDefinitions.set(id, endpoint.definition);
     dispatchRecords.push({
       id,
       importPath: deriveHandlerImportPath(endpoint.file),
       exportName: endpoint.exportName,
+      featureAccess,
     });
     const source = sourceByFile.get(endpoint.file);
     if (source !== undefined) {
@@ -1703,13 +1651,27 @@ const buildCatalog = async (): Promise<BuildResult> => {
     projectEndpoint(endpoint);
   }
 
+  validateGeneratedFeatureDeclarations({
+    registry: FEATURE_REGISTRY,
+    endpoints,
+    sources: featureSources,
+    dispatchRecords,
+    invoiceManagementFiles,
+  });
+
   // Class guards over the built entries (context-fidelity, file-response,
   // route-hook, archived-flag). Extracted to keep buildCatalog's complexity in
   // check; each pushes reviewer-actionable errors that fail the export.
+  // The mounted routes, after discovery seeded the env defaults their module
+  // graph validates at load.
+  const { apiRoutes } = await import("../src/api-routes");
+  const { classifyRouteGate } = await import("../src/lib/route-gates");
   for (const message of collectClassGuardErrors({
     entries,
     entrySources,
-    routeFiles,
+    entryDefinitions,
+    routes: apiRoutes,
+    classifyRouteGate,
     toolFeatureByName,
   })) {
     errors.push(message);
@@ -1781,7 +1743,7 @@ const printErrors = (errors: readonly string[]): void => {
     "\nexport-capability-catalog: cannot generate the catalog until these are resolved:",
   );
   for (const error of errors) {
-    console.error(`  ${error}`);
+    printError(`  ${error}`);
   }
 };
 
@@ -1876,10 +1838,58 @@ const computeCliCommandPaths = async (
   return { cliCommandPathById, errors };
 };
 
-const main = async (): Promise<number> => {
-  const checkMode = process.argv.includes("--check");
-  const { entries, dispatchRecords, errors, internalWaiverCounts } =
-    await buildCatalog();
+// Discovery imports descriptor helpers that consume these bindings. Seed only
+// the absent module; the runtime generator replaces it with the real bindings.
+const buildRepositoryCatalog = async () => {
+  const bindings = new URL(
+    "../src/mcp/generated/capability-feature-bindings.ts",
+    import.meta.url,
+  );
+  if (!(await Bun.file(bindings).exists())) {
+    await mkdir(new URL("./", bindings), { recursive: true });
+    await Bun.write(
+      bindings,
+      "export const CAPABILITY_FEATURE_BINDINGS = new Map<string, string>();\n",
+    );
+  }
+  return buildCatalog();
+};
+
+let repositoryCatalog: ReturnType<typeof buildRepositoryCatalog> | undefined;
+
+/** Build repository contract data without requiring the npm package's shards. */
+export const buildCapabilityCatalog = async () => {
+  repositoryCatalog ??= buildRepositoryCatalog();
+  const { entries, errors } = await repositoryCatalog;
+  if (errors.length > 0) {
+    panic(`Capability catalog generation failed:\n${errors.join("\n")}`);
+  }
+  // Match the npm contract's canonical object-key order as well as its values:
+  // CLI flag ordering follows schema property insertion order.
+  return entries.map((entry) => {
+    const shard: unknown = JSON.parse(serializeCapabilityShard(entry));
+    return shard;
+  });
+};
+
+/**
+ * What one export produces from its single catalog build: the coverage doc and
+ * embedded API runtime, the npm package shards, or both.
+ */
+type CatalogExportScope = "runtime" | "shards" | "both";
+
+// Repeated calls rescan handler files; already imported modules remain warm.
+// Callers must start a new process when changing an existing handler's source.
+export const exportCapabilityCatalog = async (
+  mode: "write" | "check",
+  scope: CatalogExportScope = "runtime",
+  catalogDirectory = CATALOG_PATH,
+): Promise<number> => {
+  const checkMode = mode === "check";
+  const shardsInScope = scope !== "runtime";
+  const runtimeInScope = scope !== "shards";
+  const { entries, errors, internalWaiverCounts } =
+    await buildRepositoryCatalog();
 
   if (errors.length > 0) {
     printErrors(errors);
@@ -1893,15 +1903,6 @@ const main = async (): Promise<number> => {
       serializeCapabilityShard(entry),
     ]),
   );
-  const dispatchShards = await formatGeneratedArtifacts(
-    new Map(
-      dispatchRecords.map((record) => [
-        `${record.id}.ts`,
-        serializeDispatchModule([record]),
-      ]),
-    ),
-  );
-
   const { cliCommandPathById, errors: pathErrors } =
     await computeCliCommandPaths(serialized);
   // Reachability agreement, asserted in BOTH directions over the real generated
@@ -1951,43 +1952,41 @@ const main = async (): Promise<number> => {
     internalWaiverCounts,
   });
 
-  const mode = checkMode ? "check" : "write";
-  const catalogDrift = await syncCapabilityShards({
-    directory: CATALOG_PATH,
-    shards: catalogShards,
-    mode,
-  });
-  const dispatchDrift = await syncCapabilityShards({
-    directory: DISPATCH_PATH,
-    shards: dispatchShards,
-    mode,
-  });
+  const catalogDrift = shardsInScope
+    ? await syncCapabilityShards({
+        directory: catalogDirectory,
+        shards: catalogShards,
+        mode,
+      })
+    : [];
   if (!checkMode) {
-    await generateCapabilityRuntime();
-    await Bun.write(COVERAGE_DOC_PATH, doc);
+    if (runtimeInScope) {
+      await writeCapabilityRuntime(entries);
+      await Bun.write(COVERAGE_DOC_PATH, doc);
+    }
+    const written = {
+      runtime: "coverage and runtime",
+      shards: "npm shards",
+      both: "npm shards, coverage and runtime",
+    }[scope];
     process.stderr.write(
-      `export-capability-catalog: wrote ${entries.length} capability and dispatch shards\n`,
+      `export-capability-catalog: wrote ${written} for ${entries.length} capabilities\n`,
     );
     return 0;
   }
-  const committedDoc = await Bun.file(COVERAGE_DOC_PATH)
-    .text()
-    .catch(() => null);
-  if (
-    catalogDrift.length === 0 &&
-    dispatchDrift.length === 0 &&
-    committedDoc === doc
-  ) {
+  const committedDoc = !runtimeInScope
+    ? doc
+    : await Bun.file(COVERAGE_DOC_PATH)
+        .text()
+        .catch(() => null);
+  if (catalogDrift.length === 0 && committedDoc === doc) {
     console.log(
-      `export-capability-catalog: OK. ${entries.length} capability and dispatch shards are up to date.`,
+      `export-capability-catalog: OK. ${entries.length} capabilities are up to date.`,
     );
     return 0;
   }
   for (const file of catalogDrift) {
     console.error(`Capability shard drift: ${file}`);
-  }
-  for (const file of dispatchDrift) {
-    console.error(`Dispatch shard drift: ${file}`);
   }
   if (committedDoc !== doc) {
     console.error("Capability coverage doc drift");
@@ -1998,4 +1997,19 @@ const main = async (): Promise<number> => {
 // The handler graph transitively opens a Redis subscriber (lib/sse.ts) at import
 // time and never unrefs it, so this one-off script's event loop would hang. The
 // work is done here; exit explicitly like export-mcp-tool-registry.ts.
-process.exit(await main());
+if (import.meta.main) {
+  const out = process.argv.indexOf("--out");
+  const catalogDirectory =
+    out === -1
+      ? CATALOG_PATH
+      : path.resolve(
+          process.argv.at(out + 1) ?? panic("--out requires a directory"),
+        );
+  process.exit(
+    await exportCapabilityCatalog(
+      process.argv.includes("--check") ? "check" : "write",
+      process.argv.includes("--catalog-only") ? "shards" : "runtime",
+      catalogDirectory,
+    ),
+  );
+}

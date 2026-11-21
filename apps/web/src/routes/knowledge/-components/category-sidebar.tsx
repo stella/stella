@@ -1,8 +1,9 @@
 import type { DragEvent, ReactNode } from "react";
-import { useCallback, useState } from "react";
+import { useState } from "react";
 
 import { useTranslations } from "use-intl";
 
+import { DEFAULT_VARCHAR_MAX_LENGTH } from "@stll/api-contract/limits";
 import {
   AlertDialog,
   AlertDialogClose,
@@ -19,6 +20,7 @@ import {
   Dialog,
   DialogClose,
   DialogFooter,
+  DialogFormState,
   DialogHeader,
   DialogPanel,
   DialogPopup,
@@ -31,19 +33,30 @@ import {
   Trash2Icon,
 } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
+import { Label } from "@stll/ui/label";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@stll/ui/menu";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
+import {
+  CategoryMobileFilterBarFrame,
+  CategorySidebarDivider,
+  CategorySidebarFooter,
+  CategorySidebarFrame,
+  CategorySidebarNav,
+} from "@/features/knowledge/views/category-sidebar.pending";
 import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
 import type { ToAPIErrorProps } from "@/lib/errors/api";
 import { userErrorMessage } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
+import type { IdempotentRequest } from "@/lib/idempotency/use-idempotent-submit";
 
 // ── Types ────────────────────────────────────────────
 
@@ -66,7 +79,10 @@ type CategoryApiResponse<Data> = {
 };
 
 type CategoryApiOptions = {
-  create: (name: string) => Promise<CategoryApiResponse<CategoryEntity>>;
+  create: (
+    name: string,
+    request: IdempotentRequest,
+  ) => Promise<CategoryApiResponse<CategoryEntity>>;
   rename: (id: string, name: string) => Promise<CategoryApiResponse<unknown>>;
   remove: (id: string) => Promise<CategoryApiResponse<unknown>>;
   /** Toast title when a create or rename fails. */
@@ -84,6 +100,7 @@ export const useCategoryOps = ({
   saveFailedTitle,
   deleteFailedTitle,
 }: CategoryApiOptions): CategoryOps => {
+  const idempotentSubmit = useIdempotentSubmit();
   const t = useTranslations();
   const reportFailure = (title: string, error: ToAPIErrorProps) => {
     notifyUserError(toAPIError(error), title, {
@@ -93,7 +110,11 @@ export const useCategoryOps = ({
 
   return {
     create: async (name) => {
-      const response = await create(name);
+      const response = await idempotentSubmit.run({
+        body: name,
+        operation: "category.create",
+        send: create,
+      });
       if (response.error) {
         reportFailure(saveFailedTitle, response.error);
         return null;
@@ -124,7 +145,7 @@ export const useCategoryOps = ({
 /** Granular gating, resolved by the caller. Kept separate (not one "canManage"
  *  flag) so a role with, say, create+update but not delete still sees the
  *  affordances it is entitled to. */
-export type CategoryPermissions = {
+type CategoryPermissions = {
   canCreate: boolean;
   canUpdate: boolean;
   canDelete: boolean;
@@ -146,7 +167,7 @@ export type CategoryLabels = {
   namePlaceholder: string;
 };
 
-export type CategoryMobileExtraFilter = {
+type CategoryMobileExtraFilter = {
   id: string;
   label: string;
   active: boolean;
@@ -157,7 +178,7 @@ export type CategoryMobileExtraFilter = {
 /** Drag-and-drop wiring, supplied only by features that support reassigning a
  *  dragged item onto a category (Templates). When omitted, no drop targets
  *  render (Clauses). */
-export type CategoryDragAndDrop = {
+type CategoryDragAndDrop = {
   mime: string;
   onAssign: (itemId: string, categoryId: string | null) => void | Promise<void>;
 };
@@ -205,9 +226,9 @@ export const CategorySidebar = ({
     : [];
 
   return (
-    <div className="flex w-48 shrink-0 flex-col overflow-y-auto">
+    <CategorySidebarFrame className="overflow-y-auto">
       <ContextMenu actions={createCategoryActions}>
-        <nav className="flex-1 p-2">
+        <CategorySidebarNav>
           <CategoryNavButton
             dragAndDrop={dragAndDrop}
             isSelected={selectedId === null}
@@ -223,7 +244,7 @@ export const CategorySidebar = ({
             targetCategoryId={null}
           />
 
-          {categories.length > 0 && <div className="my-1 border-t" />}
+          {categories.length > 0 && <CategorySidebarDivider />}
 
           {categories.map((cat) => (
             <CategoryRow
@@ -240,11 +261,11 @@ export const CategorySidebar = ({
           ))}
 
           {children}
-        </nav>
+        </CategorySidebarNav>
       </ContextMenu>
 
       {permissions.canCreate && (
-        <div className="border-t p-2">
+        <CategorySidebarFooter>
           <Button
             className="w-full justify-start"
             onClick={() => setCreateOpen(true)}
@@ -254,7 +275,7 @@ export const CategorySidebar = ({
             <PlusIcon />
             {labels.createCategory}
           </Button>
-        </div>
+        </CategorySidebarFooter>
       )}
 
       <CategoryFormDialog
@@ -265,7 +286,7 @@ export const CategorySidebar = ({
         open={createOpen}
         ops={ops}
       />
-    </div>
+    </CategorySidebarFrame>
   );
 };
 
@@ -301,56 +322,54 @@ export const CategoryMobileFilterBar = ({
   );
 
   return (
-    <div className="border-b px-3 py-2 md:hidden">
-      <div className="flex gap-1 overflow-x-auto pb-0.5">
+    <CategoryMobileFilterBarFrame rowClassName="overflow-x-auto">
+      <CategoryMobileFilterButton
+        active={selectedId === null && !hasActiveExtraFilter}
+        label={labels.all}
+        onSelect={() => {
+          if (onSelectAll) {
+            onSelectAll();
+            return;
+          }
+          onSelect(null);
+        }}
+      />
+      <CategoryMobileFilterButton
+        active={selectedId === "uncategorized"}
+        label={t("common.uncategorized")}
+        onSelect={() => onSelect("uncategorized")}
+      />
+      {categories.map((category) => (
         <CategoryMobileFilterButton
-          active={selectedId === null && !hasActiveExtraFilter}
-          label={labels.all}
-          onSelect={() => {
-            if (onSelectAll) {
-              onSelectAll();
-              return;
-            }
-            onSelect(null);
-          }}
+          active={selectedId === category.id}
+          key={`category:${category.id}`}
+          label={category.name}
+          onSelect={() => onSelect(category.id)}
         />
+      ))}
+      {resolvedExtraFilters.map((filter) => (
         <CategoryMobileFilterButton
-          active={selectedId === "uncategorized"}
-          label={t("common.uncategorized")}
-          onSelect={() => onSelect("uncategorized")}
+          active={filter.active}
+          icon={filter.icon}
+          key={`extra:${filter.id}`}
+          label={filter.label}
+          onSelect={filter.onSelect}
+          variant="extra"
         />
-        {categories.map((category) => (
-          <CategoryMobileFilterButton
-            active={selectedId === category.id}
-            key={`category:${category.id}`}
-            label={category.name}
-            onSelect={() => onSelect(category.id)}
-          />
-        ))}
-        {resolvedExtraFilters.map((filter) => (
-          <CategoryMobileFilterButton
-            active={filter.active}
-            icon={filter.icon}
-            key={`extra:${filter.id}`}
-            label={filter.label}
-            onSelect={filter.onSelect}
-            variant="extra"
-          />
-        ))}
-        {canCreate && (
-          <Button
-            className="h-8 shrink-0"
-            onClick={onCreateCategory}
-            size="sm"
-            type="button"
-            variant="ghost"
-          >
-            <PlusIcon />
-            {labels.createCategory}
-          </Button>
-        )}
-      </div>
-    </div>
+      ))}
+      {canCreate && (
+        <Button
+          className="h-8 shrink-0"
+          onClick={onCreateCategory}
+          size="sm"
+          type="button"
+          variant="ghost"
+        >
+          <PlusIcon />
+          {labels.createCategory}
+        </Button>
+      )}
+    </CategoryMobileFilterBarFrame>
   );
 };
 
@@ -367,28 +386,36 @@ const CategoryMobileFilterButton = ({
   label,
   active,
   icon,
-  variant,
+  variant = "default",
 }: CategoryMobileFilterButtonProps) => {
-  const resolvedVariant = variant ?? "default";
+  // An inactive extra filter (a view, not a category) reads apart from the
+  // categories by a dashed outline, drawn over a borderless button.
+  const dashed = variant === "extra" && !active;
+  let buttonVariant: "default" | "ghost" | "outline" = "outline";
+  if (active) {
+    buttonVariant = "default";
+  } else if (dashed) {
+    buttonVariant = "ghost";
+  }
 
   return (
-    <button
+    <Button
       aria-pressed={active}
-      className={cn(
-        "border-input bg-popover text-foreground relative inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md border px-2.5 text-sm font-medium pointer-coarse:after:absolute pointer-coarse:after:start-0 pointer-coarse:after:top-1/2 pointer-coarse:after:h-11 pointer-coarse:after:w-full pointer-coarse:after:-translate-y-1/2",
-        resolvedVariant === "extra" && "border-dashed",
-        active
-          ? "border-foreground bg-foreground text-background"
-          : "hover:bg-muted",
-      )}
+      className="shrink-0"
       onClick={onSelect}
-      type="button"
+      variant={buttonVariant}
     >
+      {dashed && (
+        <span
+          aria-hidden="true"
+          className="border-input pointer-events-none absolute inset-0 rounded-[inherit] border border-dashed"
+        />
+      )}
       {icon ?? null}
-      <span className="max-w-40 truncate" dir="auto">
+      <TruncatedText className="max-w-40" dir="auto">
         {label}
-      </span>
-    </button>
+      </TruncatedText>
+    </Button>
   );
 };
 
@@ -474,20 +501,31 @@ const CategoryNavButton = ({
   const drop = useCategoryDropTarget(dragAndDrop, targetCategoryId);
 
   return (
-    <button
+    <div
       className={cn(
-        "w-full truncate rounded-md px-3 py-1.5 text-start text-sm",
-        isSelected ? "bg-muted font-medium" : "hover:bg-muted/50",
+        "rounded-md",
+        isSelected && "bg-muted",
         drop.isDragOver && "ring-primary bg-muted ring-2 ring-inset",
       )}
-      onClick={onSelect}
       onDragLeave={drop.onDragLeave}
       onDragOver={drop.onDragOver}
       onDrop={drop.onDrop}
-      type="button"
     >
-      {label}
-    </button>
+      {/* The selected fill sits on the row, as for a category row below, so
+          "all" and a category read selected the same way. */}
+      <Button
+        aria-pressed={isSelected}
+        onClick={onSelect}
+        size="row"
+        variant="ghost"
+      >
+        <TruncatedText
+          className={cn(isSelected ? "font-medium" : "font-normal")}
+        >
+          {label}
+        </TruncatedText>
+      </Button>
+    </div>
   );
 };
 
@@ -520,7 +558,7 @@ const CategoryRow = ({
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
-  const handleDelete = useCallback(async () => {
+  const handleDelete = async () => {
     setDeleting(true);
     const ok = await ops.remove(category.id);
     setDeleting(false);
@@ -531,30 +569,33 @@ const CategoryRow = ({
 
     setDeleteOpen(false);
     onChanged();
-  }, [category.id, ops, onChanged]);
+  };
 
   return (
     <div
       className={cn(
         "group flex items-center rounded-md",
-        isSelected ? "bg-muted" : "hover:bg-muted/50",
+        isSelected && "bg-muted",
         drop.isDragOver && "ring-primary bg-muted ring-2 ring-inset",
       )}
       onDragLeave={drop.onDragLeave}
       onDragOver={drop.onDragOver}
       onDrop={drop.onDrop}
     >
-      <button
-        className={cn(
-          "min-w-0 flex-1 truncate px-3 py-1.5 text-start text-sm",
-          isSelected && "font-medium",
-        )}
+      <Button
+        aria-pressed={isSelected}
+        className="flex-1"
         dir="auto"
         onClick={onSelect}
-        type="button"
+        size="row"
+        variant="ghost"
       >
-        {category.name}
-      </button>
+        <TruncatedText
+          className={cn(isSelected ? "font-medium" : "font-normal")}
+        >
+          {category.name}
+        </TruncatedText>
+      </Button>
 
       <AlertDialog onOpenChange={setDeleteOpen} open={deleteOpen}>
         {(permissions.canUpdate || permissions.canDelete) && (
@@ -562,7 +603,7 @@ const CategoryRow = ({
             <DropdownMenuTrigger
               render={
                 <Button
-                  className="invisible shrink-0 group-hover:visible"
+                  className="invisible shrink-0 group-hover:visible pointer-coarse:visible"
                   size="icon-xs"
                   variant="ghost"
                 />
@@ -603,6 +644,7 @@ const CategoryRow = ({
             </AlertDialogClose>
             <Button
               disabled={deleting}
+              disabledReason={t("common.deleting")}
               onClick={() => {
                 detached(handleDelete(), "category-sidebar.delete");
               }}
@@ -690,7 +732,7 @@ const CategoryFormDialogBody = ({
   const [name, setName] = useState(initial?.name ?? "");
   const [saving, setSaving] = useState(false);
 
-  const handleSave = useCallback(async () => {
+  const handleSave = async () => {
     const trimmed = name.trim();
     if (!trimmed) {
       return;
@@ -715,10 +757,16 @@ const CategoryFormDialogBody = ({
 
     onOpenChange(false);
     onChanged();
-  }, [name, initial, ops, onOpenChange, onChanged, onCreated]);
+  };
 
   return (
     <DialogPopup className="sm:max-w-sm">
+      <DialogFormState
+        dirty={name !== (initial?.name ?? "")}
+        onDiscard={() => {
+          setName(initial?.name ?? "");
+        }}
+      />
       <DialogHeader>
         <DialogTitle>
           {isEdit ? labels.editCategory : labels.createCategory}
@@ -726,11 +774,10 @@ const CategoryFormDialogBody = ({
       </DialogHeader>
       <DialogPanel className="grid gap-4">
         <div className="grid gap-1.5">
-          <label className="text-sm font-medium" htmlFor="category-name">
-            {labels.nameLabel}
-          </label>
+          <Label htmlFor="category-name">{labels.nameLabel}</Label>
           <Input
             id="category-name"
+            maxLength={DEFAULT_VARCHAR_MAX_LENGTH}
             onChange={(e) => setName(e.target.value)}
             placeholder={labels.namePlaceholder}
             value={name}
@@ -743,6 +790,7 @@ const CategoryFormDialogBody = ({
         </DialogClose>
         <Button
           disabled={saving || !name.trim()}
+          disabledReason={saving ? t("common.saving") : t("common.enterName")}
           onClick={() => {
             detached(handleSave(), "category-sidebar.save");
           }}

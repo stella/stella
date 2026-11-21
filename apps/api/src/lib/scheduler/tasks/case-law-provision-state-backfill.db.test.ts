@@ -11,8 +11,8 @@ import { setTimeout as sleepWithSignal } from "node:timers/promises";
 
 import type { Verdict } from "@stll/db-load-gate/health";
 import {
-  PROVISION_EXTRACTION_ADMISSION,
   PROVISION_EXTRACTION_ADMISSION_REVISION,
+  PROVISION_EXTRACTION_ADMISSION_SCOPES,
 } from "@stll/legal-atlas/provision-extraction-admission";
 
 import { BackfillFailedError } from "@/api/db/backfill-runtime";
@@ -56,7 +56,7 @@ beforeEach(async () => {
     [PROVISION_EXTRACTION_ADMISSION_REVISION],
   );
   for (const { jurisdiction, language } of Object.values(
-    PROVISION_EXTRACTION_ADMISSION,
+    PROVISION_EXTRACTION_ADMISSION_SCOPES,
   )) {
     await client.query(
       "INSERT INTO case_law_provision_extraction_scopes AS scope (country, language, status, generation) VALUES ($1, $2, 'active', 1) ON CONFLICT (country, language) DO UPDATE SET status = 'active', generation = scope.generation + 1 WHERE scope.status <> 'active'",
@@ -287,25 +287,45 @@ describe("provision scheduler wiring through the real backfill steps", () => {
     }
   });
 
-  test("a completed task commits both real cursors, paces each unit and settles completion", async () => {
-    const task = fixture();
-    await task.run();
-    expect(await cursorRows()).toEqual([
-      { name: "scope-bootstrap", complete: true },
-      { name: "state-seed", complete: true },
-    ]);
-    expect(task.sleeps).toEqual([100, 100]);
-    expect((await checkpoint()).batch).toMatchObject({
-      heldSince: null,
-      holdUntil: null,
-      stableBatches: 0,
+  test("a repeatable-read session still runs gated backfill updates in read committed", async () => {
+    const statements: string[] = [];
+    const task = fixture({
+      onQuery: (statement) => {
+        statements.push(statement);
+      },
     });
-    await task.run();
-    expect(task.sleeps).toEqual([100, 100]);
-    expect(task.events).toEqual([
-      "scheduler.case_law_provision_state_backfill",
-      "scheduler.case_law_provision_state_backfill",
-    ]);
+    await client.query(
+      "SET SESSION CHARACTERISTICS AS TRANSACTION ISOLATION LEVEL REPEATABLE READ",
+    );
+    try {
+      await task.run();
+      expect(
+        statements.filter((statement) => statement.startsWith("BEGIN")),
+      ).not.toContain("BEGIN");
+      expect(
+        statements.filter((statement) => statement.startsWith("BEGIN")),
+      ).toContain("BEGIN ISOLATION LEVEL READ COMMITTED");
+      expect(await cursorRows()).toEqual([
+        { name: "scope-bootstrap", complete: true },
+        { name: "state-seed", complete: true },
+      ]);
+      expect(task.sleeps).toEqual([100, 100]);
+      expect((await checkpoint()).batch).toMatchObject({
+        heldSince: null,
+        holdUntil: null,
+        stableBatches: 0,
+      });
+      await task.run();
+      expect(task.sleeps).toEqual([100, 100]);
+      expect(task.events).toEqual([
+        "scheduler.case_law_provision_state_backfill",
+        "scheduler.case_law_provision_state_backfill",
+      ]);
+    } finally {
+      await client.query(
+        "SET SESSION CHARACTERISTICS AS TRANSACTION ISOLATION LEVEL READ COMMITTED",
+      );
+    }
   });
 
   test("pacing consumes the run budget and leaves the next real unit for another run", async () => {

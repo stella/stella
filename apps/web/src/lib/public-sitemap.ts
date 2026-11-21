@@ -1,8 +1,17 @@
+import { TaggedError } from "better-result";
+
 import { ClientOperationError } from "@/lib/errors/client";
 import { ssrCacheClassHeaders } from "@/route-response-policy";
 
+/**
+ * A cached sitemap may also be served for a day after its origin starts
+ * failing, the same staleness `stale-while-revalidate` already accepts: a
+ * crawler that meets an unreadable file is shown the last good copy rather
+ * than an error. A failure itself is answered fresh and never cached, so the
+ * copy is replaced as soon as the file reads again.
+ */
 const SITEMAP_CACHE_CONTROL =
-  "public, max-age=3600, s-maxage=21600, stale-while-revalidate=86400";
+  "public, max-age=3600, s-maxage=21600, stale-while-revalidate=86400, stale-if-error=86400";
 const SITEMAP_XML_MAX_BYTES = 50 * 1024 * 1024;
 
 export const TOOLS_SITEMAP_PATH = "/sitemaps/tools.xml";
@@ -12,6 +21,62 @@ export const SITEMAP_XML_RESPONSE_HEADERS = {
   "Cache-Control": SITEMAP_CACHE_CONTROL,
   "Content-Type": "application/xml; charset=utf-8",
 } as const;
+
+const SITEMAP_DEFAULT_RETRY_AFTER_SECONDS = "60";
+
+/** The API refused a sitemap read for its request budget; worth retrying later. */
+export class SitemapUpstreamBusyError extends TaggedError(
+  "SitemapUpstreamBusyError",
+)<{
+  action: string;
+  message: string;
+  retryAfter: string;
+}> {}
+
+export const createSitemapUpstreamBusyError = ({
+  action,
+  response,
+}: {
+  action: string;
+  response: Response;
+}): SitemapUpstreamBusyError => {
+  const seconds = Number(response.headers.get("Retry-After"));
+
+  return new SitemapUpstreamBusyError({
+    action,
+    message: "The public sitemap source is over its request budget.",
+    retryAfter:
+      Number.isSafeInteger(seconds) && seconds > 0
+        ? String(seconds)
+        : SITEMAP_DEFAULT_RETRY_AFTER_SECONDS,
+  });
+};
+
+/**
+ * A busy refusal is a deliberate 503, indistinguishable from a fault in the
+ * load balancer's counts. One line per refusal lets them be told apart; any
+ * other unreadable sitemap logs nothing here and keeps counting as a fault.
+ */
+const createSitemapBusyResponse = (
+  error: SitemapUpstreamBusyError,
+): Response => {
+  process.stdout.write(
+    `${JSON.stringify({ message: "web.sitemap.busy_refusal" })}\n`,
+  );
+  return new Response("Service Unavailable", {
+    headers: { "Retry-After": error.retryAfter },
+    status: 503,
+  });
+};
+
+/**
+ * An unreadable sitemap answers a retryable status rather than an empty
+ * document: a crawler retries the former and caches the latter as the truth.
+ */
+export const createSitemapReadFailureResponse = (error: unknown): Response =>
+  SitemapUpstreamBusyError.is(error)
+    ? createSitemapBusyResponse(error)
+    : new Response("Service Unavailable", { status: 503 });
 
 export const escapeSitemapXml = (value: string): string =>
   value

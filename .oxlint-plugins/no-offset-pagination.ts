@@ -3,36 +3,57 @@ import { eslintCompatPlugin } from "@oxlint/plugins";
 // Large list endpoints should use cursor pagination and the standard Page<T>
 // envelope. Legacy offset endpoints must be listed explicitly in oxlint.config.ts
 // with a justification.
+//
+// An `offset` property is a request field when its value is schema-shaped:
+// it contains a valibot call (`v.number()`, `v.optional(...)`), a wire helper
+// from `@stll/api-contract/http-input` (`numberFromString(...)`), or a call or
+// binding named `...Schema` (`decisionPageOffsetSchema()`). Any wrapper around
+// it is seen through, so `v.exactOptional(numberFromString(...))` cannot hide
+// the offset. A runtime value (`offset: 20`, `offset: page * size`) is not a
+// schema and stays out of scope.
 
-import { getCalleeName, getPropertyName, isFileIn } from "./utils.ts";
+import {
+  getCalleeName,
+  getPropertyName,
+  isAstNode,
+  isFileIn,
+  unwrapExpression,
+} from "./utils.ts";
 
-const SCHEMA_CALLEES = new Set([
-  "t.Integer",
-  "t.Number",
-  "t.Optional",
-  "t.Union",
+const WIRE_HELPERS: ReadonlySet<string> = new Set([
+  "arrayFromQuery",
+  "booleanFromString",
+  "jsonFromString",
+  "numberFromString",
 ]);
 
-const HARDCODED_ALLOWED_FILES = ["apps/api/src/handlers/skills/list.ts"];
+const isSchemaCallee = (calleeName: string): boolean =>
+  calleeName.startsWith("v.") ||
+  WIRE_HELPERS.has(calleeName) ||
+  calleeName.endsWith("Schema");
 
-const containsRequestSchemaCall = (node) => {
-  if (!node) {
+const containsRequestSchema = (node: unknown): boolean => {
+  const current = unwrapExpression(node);
+  if (current === null) {
     return false;
   }
-
-  if (node.type === "CallExpression") {
-    const calleeName = getCalleeName(node.callee);
-    if (calleeName !== null && SCHEMA_CALLEES.has(calleeName)) {
-      return true;
-    }
-    return node.arguments.some(containsRequestSchemaCall);
+  if (current.type === "Identifier") {
+    return typeof current.name === "string" && current.name.endsWith("Schema");
   }
-
-  if (node.type === "TSAsExpression" || node.type === "TSSatisfiesExpression") {
-    return containsRequestSchemaCall(node.expression);
+  if (current.type !== "CallExpression") {
+    return false;
   }
-
-  return false;
+  const calleeName = getCalleeName(current.callee);
+  if (calleeName !== null && isSchemaCallee(calleeName)) {
+    return true;
+  }
+  const args = Array.isArray(current.arguments) ? current.arguments : [];
+  return args.some(
+    (argument) =>
+      isAstNode(argument) &&
+      argument.type !== "SpreadElement" &&
+      containsRequestSchema(argument),
+  );
 };
 
 export default eslintCompatPlugin({
@@ -43,7 +64,11 @@ export default eslintCompatPlugin({
         type: "problem",
         messages: {
           noOffsetPagination:
-            "New API list endpoints must use cursor pagination (`cursor` + `limit`) and return Page<T>. Offset pagination requires an explicit exception in oxlint.config.ts.",
+            "New API list endpoints must use cursor pagination: accept " +
+            "`cursor: v.optional(paginationCursorSchema())` and " +
+            "`limit: v.optional(numberFromString(paginationLimitSchema(max)))` " +
+            "and return Page<T>. Offset pagination requires an explicit " +
+            "`allowedFiles` exception with its reason in oxlint.config.ts.",
         },
         schema: [
           {
@@ -71,17 +96,14 @@ export default eslintCompatPlugin({
                     (value) => typeof value === "string",
                   )
                 : [];
-            return !isFileIn(context, [
-              ...HARDCODED_ALLOWED_FILES,
-              ...allowedFiles,
-            ]);
+            return !isFileIn(context, allowedFiles);
           },
           Property(node) {
             if (getPropertyName(node.key) !== "offset") {
               return;
             }
 
-            if (!containsRequestSchemaCall(node.value)) {
+            if (!containsRequestSchema(node.value)) {
               return;
             }
 

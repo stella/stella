@@ -1,13 +1,14 @@
 import fc from "fast-check";
-import path from "node:path";
 import { fileURLToPath } from "node:url";
+
+import { isPathInside, repoRelativePath } from "@stll/portable-path";
 
 import { failureFingerprint } from "./failure-fingerprint";
 import {
   PROPERTY_SEEDS_FILE,
+  readPinnedSeeds,
   REPLAY_PATH_PATTERN,
   REPO_ROOT,
-  readPinnedSeeds,
 } from "./pinned-seeds";
 import type { PinnedSeed } from "./pinned-seeds";
 import { PropertyTestConfigError } from "./property-test-config-error";
@@ -33,7 +34,7 @@ export type { PropertyFailureRecord } from "./failure-fingerprint";
  *     run log carries the full list of shrunk failing values (not only the
  *     final counterexample). The seed + counterexample fast-check already
  *     prints on failure are enough to replay a failure locally with
- *     `fc.assert(prop, propertyConfig({ seed, path }))`.
+ *     `assertProperty("normalization is idempotent", prop, { seed, path })`.
  *
  *  3. Deterministic PR inputs. Unless the caller supplies a seed, the tier
  *     policy supplies the fixed seed for PRs and explores during nightly runs.
@@ -51,9 +52,23 @@ const DEFAULT_PROPERTY_TEST_TIMEOUT_MS = 5000;
 // details are invariant in the value type, so it is not assignable to
 // `Plugin<Ts>`. The plugin never reads generated values: it times each run
 // and clears its timer when the runs complete.
-const timeLimitPlugin = <Ts>(timeLimit: number): fc.Plugin<Ts> =>
+const timeLimitPlugin = <Ts>(
+  timeLimit: number,
+  options?: { failOnInterrupt: boolean },
+): fc.Plugin<Ts> =>
   // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- the plugin never reads generated values
-  fc.interruptAfterTimeLimit(timeLimit) as fc.Plugin<Ts>;
+  fc.interruptAfterTimeLimit(timeLimit, options) as fc.Plugin<Ts>;
+
+/**
+ * A budget on a whole property run, its shrinking included, for properties
+ * whose runs are slow (a real database per run). Reaching it fails the
+ * property, reporting the smallest counterexample found so far, so a slow
+ * shrink still ends with a replayable failure instead of a test timeout.
+ * Scale the budget with `propertyTestTimeout` so the nightly sweep's larger
+ * run count fits it.
+ */
+export const failAfterTimeLimit = <Ts>(timeLimit: number): fc.Plugin<Ts> =>
+  timeLimitPlugin<Ts>(timeLimit, { failOnInterrupt: true });
 
 // Treat the common CI values as enabled, but honor an explicit opt-out
 // (`CI=false`/`0`) so verbose reporting can be silenced locally.
@@ -62,21 +77,24 @@ const isCi = (): boolean => {
   return raw !== undefined && raw !== "" && raw !== "false" && raw !== "0";
 };
 
+type PropertyParameters<Ts> = Omit<fc.Parameters<Ts>, "seed"> & {
+  seed?: number | undefined;
+};
+
 /**
- * Build the `fc.assert` parameters for a property test: pass the per-test
+ * Build low-level `fc.check` parameters: pass the per-test
  * tuning you want in PR CI (typically just `numRuns`) and this scales it for
  * the nightly sweep and enables verbose reporting under CI. An omitted seed
  * defaults to propertySeed(): fixed in PR CI, exploratory in the nightly sweep.
- * An explicit seed is preserved.
+ * An explicit seed is preserved. `assertProperty` applies this internally;
+ * callers of that runner pass raw parameters instead.
  *
  * ```ts
- * fc.assert(fc.property(arb, predicate), propertyConfig({ numRuns: 200 }));
+ * fc.check(fc.property(arb, predicate), propertyConfig({ numRuns: 200 }));
  * ```
  */
 export const propertyConfig = <Ts>(
-  options: Omit<fc.Parameters<Ts>, "seed"> & {
-    seed?: number | undefined;
-  } = {},
+  options: PropertyParameters<Ts> = {},
 ): fc.Parameters<Ts> => {
   const { seed: requestedSeed, ...params } = options;
   const seed = "seed" in options ? requestedSeed : propertySeed();
@@ -137,7 +155,7 @@ const DEFAULT_PROPERTY_SEED = 20_260_901;
  * fast-check draws a fresh one) during the nightly sweep.
  *
  * ```ts
- * fc.assert(prop, propertyConfig({ numRuns: 300 }));
+ * assertProperty("normalization is idempotent", prop, { numRuns: 300 });
  * ```
  *
  * The two runs answer different questions. PR CI is a regression gate: it
@@ -257,11 +275,10 @@ const callerFile = (): string => {
     if (absolute === SELF || !/\.test\.tsx?$/u.test(absolute)) {
       continue;
     }
-    const file = path.relative(REPO_ROOT, absolute).replaceAll("\\", "/");
-    if (file.startsWith("../")) {
+    if (!isPathInside(REPO_ROOT, absolute)) {
       break;
     }
-    return file;
+    return repoRelativePath(REPO_ROOT, absolute);
   }
   throw new PropertyTestConfigError(
     "assertProperty must be called from a repository test file",
@@ -290,7 +307,7 @@ type PropertyRunOptions<Ts> = {
   file: string;
   id: string;
   property: fc.IRawProperty<Ts>;
-  params: fc.Parameters<Ts>;
+  params: PropertyParameters<Ts>;
   pinned: readonly PinnedSeed[];
 };
 
@@ -326,7 +343,7 @@ export function runProperty<Ts>({
     const factorEnv =
       factor === 1 ? "" : ` PROPERTY_TEST_NUM_RUNS_FACTOR=${factor}`;
     const workspace = file.split("/").slice(0, 2).join("/");
-    const testFile = `./${path.posix.relative(workspace, file)}`;
+    const testFile = `./${repoRelativePath(workspace, file)}`;
     const replay = `PROPERTY_TEST_SEED=${details.seed} PROPERTY_TEST_PATH=${shellQuote(details.counterexamplePath ?? "")}${factorEnv} bun run --cwd ${shellQuote(workspace)} test --preload @stll/property-testing/preload ${shellQuote(testFile)} -t ${shellQuote(regexEscape(id))}`;
     const error =
       details.errorInstance instanceof Error
@@ -402,17 +419,17 @@ export function runProperty<Ts>({
 export function assertProperty<Ts>(
   id: string,
   property: fc.IAsyncProperty<Ts>,
-  params?: fc.Parameters<Ts>,
+  params?: PropertyParameters<Ts>,
 ): Promise<void>;
 export function assertProperty<Ts>(
   id: string,
   property: fc.IProperty<Ts>,
-  params?: fc.Parameters<Ts>,
+  params?: PropertyParameters<Ts>,
 ): void;
 export function assertProperty<Ts>(
   id: string,
   property: fc.IRawProperty<Ts>,
-  params: fc.Parameters<Ts> = {},
+  params: PropertyParameters<Ts> = {},
 ): void | Promise<void> {
   if (id.trim() === "") {
     throw new PropertyTestConfigError(

@@ -1,7 +1,7 @@
 import { queryOptions } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import {
   anonymizationAllowlistQueryRoot,
   workspaceAnonymizationAllowlistQueryRoot,
@@ -37,15 +37,17 @@ export const anonymizationAllowlistOptions = ({
   queryOptions({
     queryKey: anonymizationAllowlistKeys.all({ workspaceId, entityId }),
     queryFn: async ({ signal }) => {
-      const response = await api
-        .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
-        ["anonymization-allowlist"].get({
-          fetch: { signal },
-          ...(entityId
-            ? { query: { entityId: toSafeId<"entity">(entityId) } }
-            : {}),
-        });
+      const workspaceApi = api.workspaces({
+        workspaceId: toSafeId<"workspace">(workspaceId),
+      });
 
-      return unwrapEden(response);
+      const response = await workspaceApi["anonymization-allowlist"].get({
+        fetch: { signal },
+        ...(entityId
+          ? { query: { entityId: toSafeId<"entity">(entityId) } }
+          : {}),
+      });
+
+      return unwrapApiResponse(response);
     },
   });

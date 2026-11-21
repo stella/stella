@@ -1,8 +1,0 @@
-{
-  "ci-browser": "queue-only because PR lint/typecheck and unit tests check desktop, UI and extension sources; only the queue executes their browser specs and extension boundary behavior",
-  "migration-upgrade-rehearsal": "queue-only because PR lint/typecheck, migration guards and scoped database suites check API changes; only the queue rehearses final queued migrations against the promoted release schema at scale, including rerun and schema parity",
-  "mobile-build": "queue-only because PR lint/typecheck and scoped unit tests check mobile sources; only the queue runs Expo doctor and Android, iOS and web exports to validate the dependency graph and Metro/Babel platform resolution",
-  "stack-redaction-browsers": "queue-only because PR lint/typecheck checks analytics sources and browser specs, and unit tests check redaction logic; only the queue executes stack-redaction assertions in Firefox and WebKit",
-  "e2e-vite-canary": "queue-only because the development-server canary supplements production PR coverage in the merged-tree tier",
-  "e2e-landing": "queue-only because the production-preview landing browser suite retains the merged-tree browser tier"
-}

@@ -1,18 +1,19 @@
 import type { QueryClient } from "@tanstack/react-query";
 
+import { statuteListSortIsBounded } from "@stll/api-contract/statute-list-sort";
+
 import {
   publicLawPageIndex,
   publicLawPageNumber,
   publicLawPageSize,
   publicLawPagesToWalk,
 } from "@/components/public-law-table/public-law-pagination.logic";
-import { publicLawLoadMode } from "@/components/public-law-table/public-law-results-state.logic";
 import { createStatuteFilters } from "@/features/statutes/open-statute-match";
 import {
   statuteFacetsOptions,
-  statutesInfiniteOptions,
   type StatuteListFilters,
   type StatuteListItem,
+  statutesInfiniteOptions,
 } from "@/features/statutes/queries/statutes";
 import {
   readStatuteIntent,
@@ -20,12 +21,18 @@ import {
 } from "@/features/statutes/statute-index-search.logic";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";
+import { routeLoadMode } from "@/lib/query-view.logic";
 import {
   ensureRouteInfiniteQueryData,
   prefetchRouteQuery,
 } from "@/lib/react-query";
 
-/** What the list asks the corpus for: the entry, narrowed by the filters. */
+/**
+ * What the list asks the corpus for: the entry, narrowed by the filters, in
+ * the column order the address names while a year bounds it. An address
+ * carrying an order but no year (edited by hand) reads the default order
+ * rather than a request the API refuses.
+ */
 export const createStatuteListFilters = (
   country: string,
   search: StatutesIndexSearch,
@@ -33,6 +40,10 @@ export const createStatuteListFilters = (
   ...createStatuteFilters(country, readStatuteIntent(country, search.q)),
   ...(search.type === undefined ? {} : { documentType: search.type }),
   ...(search.validity === undefined ? {} : { validity: search.validity }),
+  ...(search.year === undefined ? {} : { year: search.year }),
+  ...(search.order === undefined || !statuteListSortIsBounded(search)
+    ? {}
+    : { sort: search.order }),
 });
 
 /**
@@ -78,7 +89,13 @@ export const loadPublicStatutesIndex = async ({
       queryClient,
       statuteFacetsOptions(country.toUpperCase()),
       (error: unknown) => {
-        getAnalytics().captureError(error);
+        getAnalytics().captureError(error, {
+          fingerprintKey: "loadPublicStatutesIndex:failure",
+          scope: {
+            type: "handler",
+            handlerId: "loadPublicStatutesIndex:failure",
+          },
+        });
       },
     ),
     "statutes.facets-prefetch",
@@ -93,7 +110,7 @@ export const loadPublicStatutesIndex = async ({
   // components hold the previous rows and swap them in place, so awaiting
   // here would only replace a live page with a skeleton.
   if (
-    publicLawLoadMode({ cause, hasCachedPages: cached !== undefined }) ===
+    routeLoadMode({ cause, hasCachedPages: cached !== undefined }) ===
     "background"
   ) {
     return { statutes: shownStatutes(cached, search.page) };

@@ -15,6 +15,7 @@ import {
 } from "@/api/lib/style-sets";
 
 const config = {
+  contract: "patch",
   contentDelivery: {
     type: "none",
     reason:

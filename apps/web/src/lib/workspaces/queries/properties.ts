@@ -2,7 +2,7 @@ import { queryOptions } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
 import type { WorkspacePropertyWire } from "@/lib/api-contract";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
 import { propertiesQueryRoot } from "@/lib/resource-query-roots.logic";
 import { toSafeId } from "@/lib/safe-id";
@@ -20,13 +20,13 @@ export const propertiesOptions = (workspaceId: string) =>
         .properties({ workspaceId })
         .get({ fetch: { signal } });
 
-      return unwrapEden(response).map(toWorkspaceProperty);
+      return unwrapApiResponse(response).map(toWorkspaceProperty);
     },
     refetchOnMount: false,
     staleTime: ROUTE_QUERY_STALE_TIME_MS,
   });
 
-// Derived from the Eden response type rather than from `WorkspaceProperty`:
+// Derived from the API response type rather than from `WorkspaceProperty`:
 // a field the API projects but this file's mapping doesn't handle (or vice
 // versa) surfaces as a type error here instead of silently drifting.
 type RawWorkspaceProperty = Omit<

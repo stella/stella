@@ -4,11 +4,7 @@ import type { QueryClient } from "@tanstack/react-query";
 import { fetchMemoriesPage } from "@/lib/memory-api";
 import type { MemoryScope, MemoryStatus } from "@/lib/memory-api";
 
-export type {
-  MemoryListItem,
-  MemoryScope,
-  MemoryStatus,
-} from "@/lib/memory-api";
+export type { MemoryListItem, MemoryScope } from "@/lib/memory-api";
 
 const MEMORIES_PAGE_SIZE = 50;
 const INITIAL_PAGE_CURSOR = "";

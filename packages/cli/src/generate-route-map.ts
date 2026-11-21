@@ -29,10 +29,7 @@ const LIMIT_ARG = "limit";
  * `--confirm` flag: the reserved `--yes` flow owns the confirmation, and the
  * executor injects `confirm: true` after the human confirms. It is dropped from
  * the generated per-tool flags of EVERY leaf of any tool that declares it
- * (including non-destructive sibling subcommands of a discriminated tool such
- * as `manage_organization`, where only `remove-member` is destructive but all
- * three subcommands share the one schema). It stays reachable through `--input`
- * for scripts that want it.
+ * and stays reachable through `--input` for scripts that want it.
  */
 const CONFIRM_ARG = "confirm";
 
@@ -55,13 +52,11 @@ const propertyMap = (schema: PropSchema): Record<string, PropSchema> => {
   if (!isRecord(raw)) {
     return {};
   }
-  const out: Record<string, PropSchema> = {};
-  for (const [key, value] of Object.entries(raw)) {
-    if (isRecord(value)) {
-      out[key] = value;
-    }
-  }
-  return out;
+  return Object.fromEntries(
+    Object.entries(raw).filter((entry): entry is [string, PropSchema] =>
+      isRecord(entry[1]),
+    ),
+  );
 };
 
 /** Hard codegen failure: a collision or reserved-name violation (spec S1). */
@@ -194,19 +189,42 @@ const unwrapNullableUnion = (schema: PropSchema): PropSchema => {
   return { ...outer, ...valueBranch, type: [...valueTypes, "null"] };
 };
 
+const enumValues = (schema: PropSchema): readonly string[] | undefined => {
+  const values = schema["enum"];
+  if (values !== undefined) {
+    return Array.isArray(values) &&
+      values.every((value) => typeof value === "string")
+      ? values
+      : undefined;
+  }
+  const branches = schema["anyOf"];
+  if (!Array.isArray(branches) || branches.length === 0) {
+    return undefined;
+  }
+  const literals: string[] = [];
+  for (const branch of branches) {
+    // A string `const` implies its type, so a branch may leave `type` out.
+    if (
+      !isRecordSchema(branch) ||
+      (branch["type"] !== undefined && branch["type"] !== "string") ||
+      typeof branch["const"] !== "string"
+    ) {
+      return undefined;
+    }
+    literals.push(branch["const"]);
+  }
+  return [...new Set(literals)];
+};
+
 const typeInfo = (schema: PropSchema): TypeInfo => {
   const types = schemaTypeList(schema["type"]);
   const nullable = types.includes("null");
-  const base = types.find((t) => t !== "null");
+  const base =
+    types.find((type) => type !== "null") ??
+    (types.length === 0 && enumValues(schema) !== undefined
+      ? "string"
+      : undefined);
   return { base, nullable };
-};
-
-const enumValues = (schema: PropSchema): readonly string[] | undefined => {
-  const values = schema["enum"];
-  if (!Array.isArray(values)) {
-    return undefined;
-  }
-  return values.every((v) => typeof v === "string") ? values : undefined;
 };
 
 /** Conditionally include `min`/`max` so an absent bound is omitted, not `undefined`. */
@@ -366,7 +384,7 @@ const classifyObject = (
 /**
  * The schema's own `description`, as a spreadable field. Present on a curated
  * tool's hand-written property schema and on any handler-config property given
- * an Elysia `t.X({ description })`; both reach the generator as plain JSON
+ * a `v.description(...)`; both reach the generator as plain JSON
  * Schema, so one helper covers the tool tree and the capability tree alike.
  */
 const descriptionField = (schema: PropSchema): { description?: string } => {
@@ -532,7 +550,9 @@ const buildFlags = ({
     if (skipProps.has(prop)) {
       continue;
     }
-    const schema = properties[prop];
+    const schema = Object.hasOwn(properties, prop)
+      ? properties[prop]
+      : undefined;
     if (schema === undefined) {
       continue;
     }
@@ -582,7 +602,10 @@ const heuristicCommandPath = (name: string): readonly string[] => {
     return [kebabCase(name)];
   }
   const head = name.slice(0, underscore);
-  const rest = name.slice(underscore + 1);
+  const rest = name.slice(underscore + 1).replace(/^[_-]+/u, "");
+  if (rest.length === 0) {
+    return [kebabCase(name)];
+  }
   if (VERB_PREFIXES.has(head)) {
     return [kebabCase(rest), head];
   }
@@ -612,7 +635,9 @@ const resolveLocalFileProp = ({
   if (prop === undefined) {
     return undefined;
   }
-  const propSchema = properties[prop];
+  const propSchema = Object.hasOwn(properties, prop)
+    ? properties[prop]
+    : undefined;
   if (
     propSchema === undefined ||
     propSchema["type"] !== "string" ||
@@ -630,15 +655,19 @@ const toolMetadata = ({
   listing: RegistryToolListing;
   annotation: ToolAnnotation | undefined;
 }) => {
+  const feature = annotation?.feature ?? listing.feature;
   const featureId = annotation?.featureId ?? listing.featureId;
   const additionalScopes = annotation?.additionalScopes;
   const requestTimeoutMs = annotation?.requestTimeoutMs;
   const scope = annotation ? scopeOf(annotation) : undefined;
+  const readOnlyHint = listing.annotations?.readOnlyHint;
   return {
+    ...(feature === undefined ? {} : { feature }),
     ...(featureId === undefined ? {} : { featureId }),
     ...(additionalScopes === undefined ? {} : { additionalScopes }),
     ...(requestTimeoutMs === undefined ? {} : { requestTimeoutMs }),
     ...(scope === undefined ? {} : { scope }),
+    ...(readOnlyHint === undefined ? {} : { readOnlyHint }),
   };
 };
 
@@ -697,7 +726,9 @@ const leafSpecsForTool = ({
       });
 
   if (discriminatorProp !== undefined) {
-    const propSchema = properties[discriminatorProp];
+    const propSchema = Object.hasOwn(properties, discriminatorProp)
+      ? properties[discriminatorProp]
+      : undefined;
     const values = enumValues(propSchema ?? {}) ?? [];
     const skipWithDiscriminator = new Set([
       ...paginationSkip,
@@ -709,7 +740,11 @@ const leafSpecsForTool = ({
 
     const specs: LeafCommandSpec[] = [];
     for (const value of values) {
-      const sub = annotation?.discriminator?.subcommands[value];
+      const subcommands = annotation?.discriminator?.subcommands;
+      const sub =
+        subcommands !== undefined && Object.hasOwn(subcommands, value)
+          ? subcommands[value]
+          : undefined;
       const subCommandName = sub?.command ?? kebabCase(value);
       const subRequired = new Set([...baseRequired, ...(sub?.required ?? [])]);
       const { flags, inputOnly } = buildFlags({
@@ -793,10 +828,20 @@ const insertLeaf = (root: RouteNode, spec: LeafCommandSpec): void => {
         `Command path ${path.join(" ")} passes through leaf '${segment}'`,
       );
     }
-    const existing: RouteNode | undefined = node.children[segment];
+    const existing: RouteNode | undefined = Object.hasOwn(
+      node.children,
+      segment,
+    )
+      ? node.children[segment]
+      : undefined;
     if (existing === undefined) {
       const created: RouteNode = { kind: "route", children: {} };
-      node.children[segment] = created;
+      Object.defineProperty(node.children, segment, {
+        value: created,
+        enumerable: true,
+        configurable: true,
+        writable: true,
+      });
       node = created;
       continue;
     }
@@ -814,12 +859,17 @@ const insertLeaf = (root: RouteNode, spec: LeafCommandSpec): void => {
       `Command path ${path.join(" ")} cannot attach under a leaf`,
     );
   }
-  if (node.children[verb] !== undefined) {
+  if (Object.hasOwn(node.children, verb) && node.children[verb] !== undefined) {
     throw new RouteGenerationError(
       `Duplicate command '${path.join(" ")}' (tool ${spec.toolName})`,
     );
   }
-  node.children[verb] = { kind: "leaf", spec };
+  Object.defineProperty(node.children, verb, {
+    value: { kind: "leaf", spec },
+    enumerable: true,
+    configurable: true,
+    writable: true,
+  });
 };
 
 /**
@@ -835,7 +885,9 @@ export const generateRouteMap = (
   const root: RouteNode = { kind: "route", children: {} };
 
   for (const listing of listings) {
-    const annotation = annotations[listing.name];
+    const annotation = Object.hasOwn(annotations, listing.name)
+      ? annotations[listing.name]
+      : undefined;
     if (annotation?.excluded === true) {
       continue;
     }

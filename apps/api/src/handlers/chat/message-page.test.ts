@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { toChatMessageContent } from "@/api/handlers/chat/chat-message-parts";
+import { toPersistedChatMessageContentV3 } from "@/api/handlers/chat/chat-message-parts";
 import {
   clientMessageFromPageRow,
   decodeMessagePageCursor,
@@ -14,7 +14,10 @@ const MESSAGE_ID = brandPersistedChatMessageId(
 const CREATED_AT = new Date("2026-09-02T15:06:00.000Z");
 
 const encodeParts = (parts: unknown): string =>
-  Buffer.from(JSON.stringify(parts)).toString("base64url");
+  Buffer.from(JSON.stringify(parts)).toBase64({
+    alphabet: "base64url",
+    omitPadding: true,
+  });
 
 describe("chat message page cursor", () => {
   test("roundtrips the message id", () => {
@@ -52,8 +55,8 @@ describe("clientMessageFromPageRow", () => {
         createdAt: CREATED_AT,
         id: MESSAGE_ID,
         role: "assistant",
-        content: toChatMessageContent({
-          version: 2,
+        revision: 0,
+        content: toPersistedChatMessageContentV3({
           data: [{ type: "text", content: "Done" }],
           metadata: {
             anonRestorations: {
@@ -99,5 +102,31 @@ describe("clientMessageFromPageRow", () => {
       },
     });
     expect(message.createdAt).toBe(CREATED_AT.toISOString());
+    expect(message.revision).toBe(0);
+    expect(message.edited).toBe(false);
   });
+
+  test.each([0, 1, 4])(
+    "exposes revision %i and its edited state",
+    (revision) => {
+      const message = clientMessageFromPageRow(
+        {
+          createdAt: CREATED_AT,
+          id: MESSAGE_ID,
+          role: "assistant",
+          revision,
+          content: toPersistedChatMessageContentV3({
+            data: [{ type: "text", content: "Current answer" }],
+          }),
+        },
+        new Map(),
+      );
+
+      expect(message.revision).toBe(revision);
+      expect(message.edited).toBe(revision !== 0);
+      expect(message.parts).toEqual([
+        { type: "text", content: "Current answer" },
+      ]);
+    },
+  );
 });

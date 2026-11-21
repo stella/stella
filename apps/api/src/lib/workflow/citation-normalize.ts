@@ -1,3 +1,5 @@
+import { normalizeUnicode } from "@stll/text-normalize";
+
 /**
  * Canonical normalizer for deciding whether an AI citation's quoted
  * text corresponds to real source content.
@@ -34,7 +36,12 @@ export type CitationNormalizeOptions = {
 //   U+200B ZERO WIDTH SPACE      U+200C ZERO WIDTH NON-JOINER
 //   U+200D ZERO WIDTH JOINER     U+2060 WORD JOINER
 //   U+FEFF ZERO WIDTH NO-BREAK SPACE (BOM)
-const ZERO_WIDTH = /\u200B|\u200C|\u200D|\u2060|\uFEFF/gu;
+// Bidirectional marks are invisible too, and prompt sanitizing removes them, so
+// a model quoting right-to-left text never sends back the ones in the source:
+//   U+200E/U+200F LRM/RLM   U+202A-U+202E embeddings and overrides
+//   U+2066-U+2069 isolates
+const ZERO_WIDTH =
+  /\u200B|\u200C|\u200D|\u200E|\u200F|\u2060|\uFEFF|[\u202A-\u202E]|[\u2066-\u2069]/gu;
 
 // Dash-like separators folded to ASCII hyphen-minus. Legal text mixes
 // these freely (hyphenated terms, numeric ranges, minus signs):
@@ -72,8 +79,7 @@ export const normalizeForCitationMatch = (
   text: string,
   { caseFold = true }: CitationNormalizeOptions = {},
 ): string => {
-  const folded = text
-    .normalize("NFC")
+  const folded = normalizeUnicode(text, "NFC")
     .replace(ZERO_WIDTH, "")
     .replace(DASHES, "-")
     .replace(SINGLE_QUOTES, "'")

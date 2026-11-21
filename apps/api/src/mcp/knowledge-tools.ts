@@ -3,6 +3,7 @@ import { deepEquals } from "bun";
 import * as v from "valibot";
 
 import { AGENT_INPUT_NORMALIZATION_KIND } from "@stll/agent-input";
+import { displayNameSchema } from "@stll/api-contract/display-name";
 import { BLOCK_DIRECTIVE_KINDS } from "@stll/template-conditions";
 
 import { listCategoriesHandler } from "@/api/handlers/clauses/categories";
@@ -26,14 +27,13 @@ import { captureError } from "@/api/lib/analytics/capture";
 import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
-  type AssertNoExtraFields,
   DELETED_TRUE_PROJECTION,
-  type LIST_CLAUSES_DETAIL_PROJECTION,
-  type LIST_CLAUSES_LIST_PROJECTION,
+  LIST_CLAUSES_DETAIL_PROJECTION,
+  LIST_CLAUSES_LIST_PROJECTION,
   LIST_CLAUSES_PROJECTION,
-  type LIST_CLAUSES_VERSION_PROJECTION,
-  type LIST_PLAYBOOKS_DETAIL_PROJECTION,
-  type LIST_PLAYBOOKS_LIST_PROJECTION,
+  LIST_CLAUSES_VERSION_PROJECTION,
+  LIST_PLAYBOOKS_DETAIL_PROJECTION,
+  LIST_PLAYBOOKS_LIST_PROJECTION,
   LIST_PLAYBOOKS_PROJECTION,
   RUN_PLAYBOOK_PROJECTION,
   SAVE_CLAUSE_PROJECTION,
@@ -57,6 +57,9 @@ import {
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { requestExtractionRunStore } from "@/api/lib/extraction-runs/request-run-store";
 import { LIMITS } from "@/api/lib/limits";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
+import { projectionPayload } from "@/api/lib/projection-totality";
+import { createModelActionAdmitter } from "@/api/lib/rate-limit/model-action-admission";
 import {
   brandPersistedClauseCategoryId,
   brandPersistedClauseId,
@@ -80,9 +83,13 @@ import type {
   Tiers,
 } from "@/api/lib/workflow/playbook-positions";
 import { PLAYBOOK_RUN_PROJECTION } from "@/api/lib/workflow/playbook-run-projection";
-import type { McpRequestContext } from "@/api/mcp/context";
 import { hasEffectiveAuthority } from "@/api/mcp/effective-authority";
-import { plainRecord } from "@/api/mcp/input-schemas";
+import {
+  cursorInput,
+  nullAsAbsent,
+  plainRecord,
+  uuidInputSchema,
+} from "@/api/mcp/input-schemas";
 import {
   mergePlaybookPositions,
   playbookPositionInputSchema,
@@ -102,25 +109,25 @@ import type {
   McpToolDefinition,
   McpToolHandler,
   TypedMcpToolHandler,
+  TypedMcpToolResponse,
 } from "@/api/mcp/tool-types";
 import { defineMcpToolSet } from "@/api/mcp/tool-types";
 import {
   bindWorkspaceRecorder,
-  cursorInput,
   ensureActiveWorkspace,
   errorResult,
   internalFailureResult,
   MCP_INTERNAL_ERROR_HINT,
-  nullAsAbsent,
+  structuredEgressPlan,
   structuredErrorResult,
   toolDataResult,
-  uuidInputSchema,
   validationErrorResult,
 } from "@/api/mcp/tool-utils";
 import {
   defineChatProjectionMcpToolOutput,
   defineValibotMcpTool,
 } from "@/api/mcp/valibot-tool-definition";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 
 type KnowledgeToolName =
   | "list_clauses"
@@ -667,7 +674,7 @@ const listClausesArgsSchema = nullAsAbsent(
           v.number(),
           v.integer(),
           v.minValue(1),
-          v.maxValue(LIMITS.clausesPageSizeMax),
+          v.maxValue(LIMITS.mcpListPageSizeMax),
           v.description("Max clauses to return"),
         ),
       ),
@@ -714,9 +721,11 @@ const readClauseDetail = async ({
   versionId,
 }: {
   clauseId: SafeId<"clause">;
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   versionId: string | undefined;
-}) => {
+}): Promise<
+  TypedMcpToolResponse<v.InferInput<typeof LIST_CLAUSES_PROJECTION>>
+> => {
   const organizationId = context.organizationId;
 
   if (versionId !== undefined) {
@@ -729,7 +738,7 @@ const readClauseDetail = async ({
       }),
     );
     if (Result.isError(result)) {
-      return internalFailureResult(result.error);
+      return internalFailureResult(result.error, "mcp.readClauseVersion");
     }
     const rawVersion = result.value;
     // Fail-closed (P7): a malformed version body aborts before any push runs,
@@ -759,14 +768,17 @@ const readClauseDetail = async ({
       ],
       { version },
     );
-    return { egress: "structured", payload: { version }, textFields } as const;
+    return structuredEgressPlan({
+      payload: projectionPayload(LIST_CLAUSES_VERSION_PROJECTION, { version }),
+      textFields,
+    });
   }
 
   const result = await Result.gen(() =>
     getClauseHandler({ safeDb: context.safeDb, organizationId, clauseId }),
   );
   if (Result.isError(result)) {
-    return internalFailureResult(result.error);
+    return internalFailureResult(result.error, "mcp.readClause");
   }
   const { metadata: _metadata, ...rawClause } = result.value;
   if (!isClauseBody(rawClause.body)) {
@@ -840,7 +852,10 @@ const readClauseDetail = async ({
       ),
     );
   }
-  return { egress: "structured", payload: { clause }, textFields } as const;
+  return structuredEgressPlan({
+    payload: projectionPayload(LIST_CLAUSES_DETAIL_PROJECTION, { clause }),
+    textFields,
+  });
 };
 
 const handleListClausesTool: TypedMcpToolHandler<
@@ -882,7 +897,10 @@ const handleListClausesTool: TypedMcpToolHandler<
     }),
   );
   if (Result.isError(listed)) {
-    return internalFailureResult(listed.error);
+    return internalFailureResult(
+      listed.error,
+      "mcp.handleListClausesTool.listed_error",
+    );
   }
   const clauses = listed.value.items.map(
     ({ createdAt, updatedAt, ...clause }) =>
@@ -904,7 +922,10 @@ const handleListClausesTool: TypedMcpToolHandler<
         )
       : undefined;
   if (categoriesResult !== undefined && Result.isError(categoriesResult)) {
-    return internalFailureResult(categoriesResult.error);
+    return internalFailureResult(
+      categoriesResult.error,
+      "mcp.handleListClausesTool.categoriesResult_error",
+    );
   }
   const categories =
     categoriesResult !== undefined && !Result.isError(categoriesResult)
@@ -917,11 +938,11 @@ const handleListClausesTool: TypedMcpToolHandler<
         )
       : undefined;
 
-  const payload = {
+  const payload = projectionPayload(LIST_CLAUSES_LIST_PROJECTION, {
     clauses,
     ...(categories ? { categories } : {}),
     nextCursor: listed.value.nextCursor,
-  } satisfies v.InferInput<typeof LIST_CLAUSES_LIST_PROJECTION>;
+  });
   const textFields = [
     ...runTextFieldSpecs(clauseListTextFieldSpecs(organizationId), payload),
     ...(categories
@@ -931,7 +952,7 @@ const handleListClausesTool: TypedMcpToolHandler<
       : []),
   ];
 
-  return { egress: "structured", payload, textFields };
+  return structuredEgressPlan({ payload, textFields });
 };
 
 // --- save_clause --------------------------------------------------------
@@ -975,11 +996,22 @@ const clauseParagraphArgSchema = v.strictObject({
       v.description("List item kind when the paragraph is a list item"),
     ),
   ),
-  list_level: v.optional(
+  numbering: v.optional(
     v.pipe(
-      v.number(),
-      v.integer(),
-      v.description("0-based list nesting depth for a list item"),
+      v.strictObject({
+        kind: v.pipe(
+          v.literal("levelOnly"),
+          v.description("Set only the paragraph's list nesting depth"),
+        ),
+        ilvl: v.pipe(
+          v.number(),
+          v.integer(),
+          v.minValue(LIMITS.clauseNumberingLevelMin),
+          v.maxValue(LIMITS.clauseNumberingLevelMax),
+          v.description("0-based list nesting depth for a list item"),
+        ),
+      }),
+      v.description("List nesting depth for the paragraph"),
     ),
   ),
   is_directive: v.optional(
@@ -1027,9 +1059,9 @@ const toClauseParagraph = (
   ...(paragraph.list_kind === undefined
     ? {}
     : { listKind: paragraph.list_kind }),
-  ...(paragraph.list_level === undefined
+  ...(paragraph.numbering === undefined
     ? {}
-    : { listLevel: paragraph.list_level }),
+    : { numbering: paragraph.numbering }),
   ...(paragraph.is_directive === undefined
     ? {}
     : { isDirective: paragraph.is_directive }),
@@ -1263,11 +1295,16 @@ const handleSaveClauseTool: TypedMcpToolHandler<
       }),
     );
     if (Result.isError(created)) {
-      return internalFailureResult(created.error);
+      return internalFailureResult(
+        created.error,
+        "mcp.handleSaveClauseTool.created_error",
+      );
     }
-    return toolDataResult({
-      clauseId: created.value.id,
-    } satisfies v.InferInput<typeof SAVE_CLAUSE_PROJECTION>);
+    return toolDataResult(
+      projectionPayload(SAVE_CLAUSE_PROJECTION, {
+        clauseId: created.value.id,
+      }),
+    );
   }
 
   // Update branch. Bind clauseId in the narrowed scope: inside the closure below
@@ -1311,11 +1348,16 @@ const handleSaveClauseTool: TypedMcpToolHandler<
     }),
   );
   if (Result.isError(updated)) {
-    return internalFailureResult(updated.error);
+    return internalFailureResult(
+      updated.error,
+      "mcp.handleSaveClauseTool.updated_error",
+    );
   }
-  return toolDataResult({
-    clauseId: updated.value.id,
-  } satisfies v.InferInput<typeof SAVE_CLAUSE_PROJECTION>);
+  return toolDataResult(
+    projectionPayload(SAVE_CLAUSE_PROJECTION, {
+      clauseId: updated.value.id,
+    }),
+  );
 };
 
 // --- delete_clause ------------------------------------------------------
@@ -1356,11 +1398,16 @@ const handleDeleteClauseTool: TypedMcpToolHandler<
     }),
   );
   if (Result.isError(deleted)) {
-    return internalFailureResult(deleted.error);
+    return internalFailureResult(
+      deleted.error,
+      "mcp.handleDeleteClauseTool.deleted_error",
+    );
   }
-  return toolDataResult({
-    deleted: true,
-  } satisfies v.InferInput<typeof DELETED_TRUE_PROJECTION>);
+  return toolDataResult(
+    projectionPayload(DELETED_TRUE_PROJECTION, {
+      deleted: true,
+    }),
+  );
 };
 
 // --- list_playbooks -----------------------------------------------------
@@ -1402,9 +1449,11 @@ const readPlaybookDetail = async ({
   context,
   playbookId,
 }: {
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   playbookId: SafeId<"playbookDefinition">;
-}) => {
+}): Promise<
+  TypedMcpToolResponse<v.InferInput<typeof LIST_PLAYBOOKS_PROJECTION>>
+> => {
   const organizationId = context.organizationId;
   const result = await Result.gen(() =>
     getPlaybookDefinitionHandler({
@@ -1414,7 +1463,10 @@ const readPlaybookDetail = async ({
     }),
   );
   if (Result.isError(result)) {
-    return internalFailureResult(result.error);
+    return internalFailureResult(
+      result.error,
+      "mcp.readPlaybookDetail.result_error",
+    );
   }
   // Remove the sources the caller cannot read before the payload is used
   // anywhere else. Chat creates a ref for each source, and a ref adds the
@@ -1427,7 +1479,10 @@ const readPlaybookDetail = async ({
     accessibleWorkspaceIds: context.accessibleWorkspaceIds,
   });
   if (Result.isError(readableSources)) {
-    return internalFailureResult(readableSources.error);
+    return internalFailureResult(
+      readableSources.error,
+      "mcp.readPlaybookDetail.readableSources_error",
+    );
   }
   const playbook = {
     ...result.value,
@@ -1448,15 +1503,10 @@ const readPlaybookDetail = async ({
   // `playbook` is forwarded verbatim, so a bare `satisfies` gets no
   // excess-property check below the top level: a field added to
   // `positionSchema` would typecheck here and fail the strict parse in chat.
-  type ListPlaybooksDetailPayload = AssertNoExtraFields<
-    { playbook: typeof playbook },
-    v.InferInput<typeof LIST_PLAYBOOKS_DETAIL_PROJECTION>
-  >;
-  return {
-    egress: "structured",
-    payload: { playbook } satisfies ListPlaybooksDetailPayload,
+  return structuredEgressPlan({
+    payload: projectionPayload(LIST_PLAYBOOKS_DETAIL_PROJECTION, { playbook }),
     textFields,
-  } as const;
+  });
 };
 
 const handleListPlaybooksTool: TypedMcpToolHandler<
@@ -1491,20 +1541,23 @@ const handleListPlaybooksTool: TypedMcpToolHandler<
     }),
   );
   if (Result.isError(listed)) {
-    return internalFailureResult(listed.error);
+    return internalFailureResult(
+      listed.error,
+      "mcp.handleListPlaybooksTool.listed_error",
+    );
   }
   const items = listed.value.items;
 
-  const payload = {
+  const payload = projectionPayload(LIST_PLAYBOOKS_LIST_PROJECTION, {
     items,
     nextCursor: listed.value.nextCursor,
-  } satisfies v.InferInput<typeof LIST_PLAYBOOKS_LIST_PROJECTION>;
+  });
   const textFields = runTextFieldSpecs(
     playbookListTextFieldSpecs(organizationId),
     payload,
   );
 
-  return { egress: "structured", payload, textFields };
+  return structuredEgressPlan({ payload, textFields });
 };
 
 // --- save_playbook ------------------------------------------------------
@@ -1528,9 +1581,7 @@ const savePlaybookArgsSchema = nullAsAbsent(
       ),
       name: v.optional(
         v.pipe(
-          v.string(),
-          v.minLength(1),
-          v.maxLength(256),
+          displayNameSchema(),
           v.description("Playbook name; required when creating"),
         ),
       ),
@@ -1668,7 +1719,7 @@ const toPlaybookScope = ({
   const scope = {
     ...(documentTypeKey === undefined ? {} : { documentTypeKey }),
     ...(perspective === undefined ? {} : { perspective }),
-    ...(stored?.trigger === undefined ? {} : { trigger: stored.trigger }),
+    ...(stored?.trigger !== undefined ? { trigger: stored.trigger } : {}),
   };
   // An unscoped playbook is stored as null, never as an empty object.
   return Object.keys(scope).length === 0 ? null : scope;
@@ -1729,6 +1780,23 @@ const savePlaybookRefusedResult = (issues: readonly PlaybookMergeIssue[]) =>
   });
 
 /**
+ * Carries the current token so a call that only adds positions can retry
+ * without a read: an editor autosaving between model turns makes this routine.
+ */
+const savePlaybookConflictResult = (currentUpdatedAt: string) =>
+  structuredErrorResult({
+    code: "conflict",
+    message:
+      "The playbook changed since it was read, so nothing was saved. Its " +
+      `current updatedAt is ${currentUpdatedAt}`,
+    hint:
+      "If this call only adds positions, call save_playbook again with " +
+      `expected_updated_at ${currentUpdatedAt}. ` +
+      "If it changes or removes stored positions, someone may have edited " +
+      `them: ${SAVE_PLAYBOOK_REREAD_HINT}`,
+  });
+
+/**
  * The two refusals of the shared create and update paths an agent can act on,
  * given the step that acts on them; anything else takes the common sink.
  */
@@ -1753,7 +1821,47 @@ const savePlaybookFailureResult = (error: unknown) => {
         "from the document-types.list capability.",
     });
   }
-  return internalFailureResult(error);
+  return internalFailureResult(error, "mcp.savePlaybookFailureResult.error");
+};
+
+const loadOrgSettings = async (context: AuthorizedMcpRequestContext) => {
+  const reader = {
+    organizationId: context.organizationId,
+    userId: context.userId,
+  };
+  return await (context.testDependencies?.loadOrgSettingsForAuth?.(reader) ??
+    context.scopedDb(async (tx) => await loadOrgSettingsForAuth(tx, reader)));
+};
+
+type SavePlaybookUpdateFailureOptions = {
+  context: AuthorizedMcpRequestContext;
+  error: unknown;
+  playbookId: ReturnType<typeof brandPersistedPlaybookDefinitionId>;
+};
+
+/** A stale token is answered with the token now stored, read after the refusal. */
+const savePlaybookUpdateFailureResult = async ({
+  context,
+  error,
+  playbookId,
+}: SavePlaybookUpdateFailureOptions) => {
+  if (!HandlerError.is(error) || error.status !== 409) {
+    return savePlaybookFailureResult(error);
+  }
+  const current = await Result.gen(() =>
+    getPlaybookDefinitionHandler({
+      safeDb: context.safeDb,
+      organizationId: context.organizationId,
+      playbookId,
+    }),
+  );
+  if (Result.isError(current)) {
+    return internalFailureResult(
+      current.error,
+      "mcp.savePlaybookUpdateFailureResult.current_error",
+    );
+  }
+  return savePlaybookConflictResult(current.value.updatedAt);
 };
 
 /**
@@ -1766,7 +1874,7 @@ const readSavePlaybookSources = async ({
   positions,
   stored,
 }: {
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   positions: readonly PlaybookPositionInput[];
   stored: readonly Position[];
 }) => {
@@ -1792,6 +1900,15 @@ const readSavePlaybookSources = async ({
   );
 };
 
+/** A playbook save's ask derivations, admitted inside the tool call's action. */
+const playbookDerivationAdmitter = (context: AuthorizedMcpRequestContext) =>
+  createModelActionAdmitter({
+    organizationId: context.organizationId,
+    userId: context.userId,
+    organizationStateDb: context.scopedDb,
+    actionKind: "playbooks.derive-ask",
+  });
+
 const handleSavePlaybookTool: TypedMcpToolHandler<
   v.InferInput<typeof SAVE_PLAYBOOK_PROJECTION>
 > = async ({ args, context }) => {
@@ -1801,15 +1918,9 @@ const handleSavePlaybookTool: TypedMcpToolHandler<
   }
   const input = parsed.output;
   const organizationId = context.organizationId;
-  const mintId = () => Bun.randomUUIDv7();
   // A call that only renames, rescopes, or removes names no positions.
   const positions = input.positions ?? NO_POSITION_INPUTS;
-  const reader = { organizationId, userId: context.userId };
-  const loadOrgSettings = async () =>
-    await (context.testDependencies?.loadOrgSettingsForAuth?.(reader) ??
-      context.scopedDb(async (tx) => await loadOrgSettingsForAuth(tx, reader)));
 
-  // Create branch.
   if (input.playbook_id === undefined) {
     if (!hasEffectiveAuthority(context, { playbook: ["create"] })) {
       return errorResult("Forbidden");
@@ -1832,34 +1943,30 @@ const handleSavePlaybookTool: TypedMcpToolHandler<
       stored: [],
     });
     if (Result.isError(readableSources)) {
-      return internalFailureResult(readableSources.error);
+      return internalFailureResult(
+        readableSources.error,
+        "mcp.createPlaybook.readSources",
+      );
     }
     const merged = mergePlaybookPositions({
       stored: [],
       positions,
       removeSourceIds: NO_SOURCE_IDS,
       readableSources: readableSources.value,
-      mintId,
+      mintId: () => Bun.randomUUIDv7(),
     });
     if (merged.issues.length > 0 && merged.written.length === 0) {
       return savePlaybookRefusedResult(merged.issues);
     }
-    const {
-      orgAIConfig,
-      orgAIConfigStatus,
-      promptCachingEnabled,
-      managedAIResidency,
-    } = await loadOrgSettings();
+    const orgSettings = await loadOrgSettings(context);
     const scope = toPlaybookScope({ stored: null, input: input.scope });
     const created = await Result.gen(() =>
       createPlaybookDefinitionHandler({
+        admitModelAction: playbookDerivationAdmitter(context),
         safeDb: context.safeDb,
         organizationId,
         accessibleWorkspaceIds: context.accessibleWorkspaceIds,
-        orgAIConfig,
-        orgAIConfigStatus,
-        promptCachingEnabled,
-        managedAIResidency,
+        ...orgSettings,
         recordAuditEvent: context.recordAuditEvent,
         body: {
           name,
@@ -1885,19 +1992,22 @@ const handleSavePlaybookTool: TypedMcpToolHandler<
       }),
     );
     if (Result.isError(stored)) {
-      return internalFailureResult(stored.error);
+      return internalFailureResult(
+        stored.error,
+        "mcp.createPlaybook.readStored",
+      );
     }
-    return toolDataResult({
+    const payload = projectionPayload(SAVE_PLAYBOOK_PROJECTION, {
       playbookId: created.value.id,
       updatedAt: stored.value.updatedAt,
       positionCount: merged.items.length,
       positions: merged.written,
       removed: [],
       issues: toSavePlaybookIssues(merged.issues),
-    } satisfies v.InferInput<typeof SAVE_PLAYBOOK_PROJECTION>);
+    });
+    return toolDataResult(payload);
   }
 
-  // Update branch: read, merge, then replace through the shared update path.
   if (!hasEffectiveAuthority(context, { playbook: ["update"] })) {
     return errorResult("Forbidden");
   }
@@ -1910,7 +2020,7 @@ const handleSavePlaybookTool: TypedMcpToolHandler<
     }),
   );
   if (Result.isError(stored)) {
-    return internalFailureResult(stored.error);
+    return internalFailureResult(stored.error, "mcp.updatePlaybook.readStored");
   }
   const readableSources = await readSavePlaybookSources({
     context,
@@ -1918,14 +2028,17 @@ const handleSavePlaybookTool: TypedMcpToolHandler<
     stored: stored.value.positions.items,
   });
   if (Result.isError(readableSources)) {
-    return internalFailureResult(readableSources.error);
+    return internalFailureResult(
+      readableSources.error,
+      "mcp.updatePlaybook.readSources",
+    );
   }
   const merged = mergePlaybookPositions({
     stored: stored.value.positions.items,
     positions,
     removeSourceIds: input.remove_source_ids ?? NO_SOURCE_IDS,
     readableSources: readableSources.value,
-    mintId,
+    mintId: () => Bun.randomUUIDv7(),
   });
   const changesDefinition =
     input.name !== undefined ||
@@ -1954,32 +2067,26 @@ const handleSavePlaybookTool: TypedMcpToolHandler<
     deepEquals(scope, stored.value.scope) &&
     deepEquals(merged.items, stored.value.positions.items)
   ) {
-    return toolDataResult({
+    const payload = projectionPayload(SAVE_PLAYBOOK_PROJECTION, {
       playbookId,
       updatedAt: stored.value.updatedAt,
       positionCount: merged.items.length,
       positions: [],
       removed: [],
       issues: toSavePlaybookIssues(merged.issues),
-    } satisfies v.InferInput<typeof SAVE_PLAYBOOK_PROJECTION>);
+    });
+    return toolDataResult(payload);
   }
 
-  const {
-    orgAIConfig,
-    orgAIConfigStatus,
-    promptCachingEnabled,
-    managedAIResidency,
-  } = await loadOrgSettings();
+  const orgSettings = await loadOrgSettings(context);
   const updated = await Result.gen(() =>
     updatePlaybookDefinitionHandler({
+      admitModelAction: playbookDerivationAdmitter(context),
       safeDb: context.safeDb,
       organizationId,
       accessibleWorkspaceIds: context.accessibleWorkspaceIds,
       playbookId,
-      orgAIConfig,
-      orgAIConfigStatus,
-      promptCachingEnabled,
-      managedAIResidency,
+      ...orgSettings,
       recordAuditEvent: context.recordAuditEvent,
       body: {
         name,
@@ -1993,16 +2100,21 @@ const handleSavePlaybookTool: TypedMcpToolHandler<
     }),
   );
   if (Result.isError(updated)) {
-    return savePlaybookFailureResult(updated.error);
+    return await savePlaybookUpdateFailureResult({
+      context,
+      error: updated.error,
+      playbookId,
+    });
   }
-  return toolDataResult({
+  const payload = projectionPayload(SAVE_PLAYBOOK_PROJECTION, {
     playbookId,
     updatedAt: updated.value.updatedAt,
     positionCount: merged.items.length,
     positions: merged.written,
     removed: merged.removedSourceIds.map((sourceId) => ({ sourceId })),
     issues: toSavePlaybookIssues(merged.issues),
-  } satisfies v.InferInput<typeof SAVE_PLAYBOOK_PROJECTION>);
+  });
+  return toolDataResult(payload);
 };
 
 // --- run_playbook -------------------------------------------------------
@@ -2095,19 +2207,23 @@ const handleRunPlaybookTool: TypedMcpToolHandler<
     });
   });
   if (Result.isError(txResult)) {
-    return internalFailureResult(txResult.error);
+    return internalFailureResult(
+      txResult.error,
+      "mcp.handleRunPlaybookTool.txResult_error",
+    );
   }
   const outcome = txResult.value;
   if (!outcome.ok) {
     return internalFailureResult(
       new HandlerError(playbookRunFailureDetails(outcome)),
+      "mcp.handleRunPlaybookTool.failure",
     );
   }
 
   if (outcome.materializedPropertyIds.length === 0) {
-    return toolDataResult({ runPropertyCount: 0 } satisfies v.InferInput<
-      typeof RUN_PLAYBOOK_PROJECTION
-    >);
+    return toolDataResult(
+      projectionPayload(RUN_PLAYBOOK_PROJECTION, { runPropertyCount: 0 }),
+    );
   }
 
   const started = await Result.tryPromise({
@@ -2123,7 +2239,12 @@ const handleRunPlaybookTool: TypedMcpToolHandler<
     catch: (cause) => cause,
   });
   if (Result.isError(started)) {
-    captureError(started.error, { workspaceId });
+    captureError(
+      started.error,
+      handlerErrorContext("mcp.handleRunPlaybookTool.started_error", {
+        workspaceId,
+      }),
+    );
     return workflowStartFailureResult();
   }
   // The queue reports an enqueue failure in band (having already captured the
@@ -2136,9 +2257,11 @@ const handleRunPlaybookTool: TypedMcpToolHandler<
     return workflowStartFailureResult();
   }
 
-  return toolDataResult({
-    runPropertyCount: outcome.materializedPropertyIds.length,
-  } satisfies v.InferInput<typeof RUN_PLAYBOOK_PROJECTION>);
+  return toolDataResult(
+    projectionPayload(RUN_PLAYBOOK_PROJECTION, {
+      runPropertyCount: outcome.materializedPropertyIds.length,
+    }),
+  );
 };
 
 export const KNOWLEDGE_TOOL_DEFINITIONS = [
@@ -2167,6 +2290,7 @@ export const KNOWLEDGE_TOOL_DEFINITIONS = [
         "in the runtime schema.",
     },
     access: "read",
+    permissions: { type: "all", permissions: { workspace: ["read"] } },
     readClass: "tenant",
     anonymized: {
       exposure: "anonymize",
@@ -2178,15 +2302,12 @@ export const KNOWLEDGE_TOOL_DEFINITIONS = [
   defineValibotMcpTool({
     consumesServices: false,
     description:
-      "Create or update a clause in the organization's clause library. Omit " +
-      "clause_id to create (title and body required); pass clause_id to update. " +
-      "body is an ordered array of paragraphs, each with text and optional " +
-      "style, level, runs, list_kind, list_level, is_directive, directive_kind, " +
-      "and directive_expression. Use balanced {% ... %} tags. " +
-      "Keep num(), ref(), clause() and ai(adapt=true) in the template body. " +
-      "category_id, language, description, usage_notes, and metadata " +
-      "accept null to clear them on update. Set snapshot_version true on an " +
-      "update to also append a version snapshot of the body. Returns the clause id.",
+      "Create or update a library clause. Omit clause_id to create (title and " +
+      "body required); include it to update. body contains ordered paragraphs. " +
+      "Use balanced {% ... %} tags; keep num(), ref(), clause() and ai(adapt=true) " +
+      "in the template body. Clear category_id, language, description, usage_notes " +
+      "or metadata with null. Set snapshot_version true to append a body version " +
+      "on update. Returns the clause id.",
     inputSchema: saveClauseArgsSchema,
     jsonSchemaProjectionWaiver: {
       ignoreActions: ["partial_check"],
@@ -2196,7 +2317,7 @@ export const KNOWLEDGE_TOOL_DEFINITIONS = [
     },
     annotations: {
       title: "Save clause",
-      destructiveHint: false,
+      destructiveHint: true,
       idempotentHint: false,
       openWorldHint: false,
       readOnlyHint: false,
@@ -2260,6 +2381,7 @@ export const KNOWLEDGE_TOOL_DEFINITIONS = [
         "pagination dependency; it remains authoritative in the runtime schema.",
     },
     access: "read",
+    permissions: { type: "all", permissions: { workspace: ["read"] } },
     readClass: "tenant",
     anonymized: {
       exposure: "anonymize",
@@ -2274,16 +2396,12 @@ export const KNOWLEDGE_TOOL_DEFINITIONS = [
   defineValibotMcpTool({
     consumesServices: false,
     description:
-      "Create a review playbook, or add, change, and remove positions in one. " +
-      "Omit playbook_id to create (name required); pass playbook_id and " +
-      "expected_updated_at to update. positions lists only what is added or " +
-      "changed, never the whole playbook: an entry with source_id replaces " +
-      "that stored position whole, an entry without one is added. Entries are " +
-      "checked one by one; a refused entry comes back in issues with the fix " +
-      "and the rest are saved. A saved playbook is a draft that a person " +
-      "approves in the editor before it can run. Returns the playbook id, the " +
-      "updatedAt to pass as the next expected_updated_at, and each written " +
-      "position's sourceId.",
+      "Create a review playbook or change its positions. Omit playbook_id to " +
+      "create (name required); to update, pass it with expected_updated_at. " +
+      "positions is a patch: source_id replaces one position, while no source_id " +
+      "adds one. Invalid entries return in issues; valid entries are saved. The " +
+      "result is a draft for human approval and returns the id, updatedAt for the " +
+      "next update, and written sourceIds.",
     inputSchema: savePlaybookArgsSchema,
     inputNormalization: {
       "scope.perspective": { kind: AGENT_INPUT_NORMALIZATION_KIND.enum },
@@ -2300,7 +2418,7 @@ export const KNOWLEDGE_TOOL_DEFINITIONS = [
     },
     annotations: {
       title: "Save playbook",
-      destructiveHint: false,
+      destructiveHint: true,
       idempotentHint: false,
       openWorldHint: false,
       readOnlyHint: false,
@@ -2330,7 +2448,7 @@ export const KNOWLEDGE_TOOL_DEFINITIONS = [
     inputSchema: runPlaybookArgsSchema,
     annotations: {
       title: "Run playbook",
-      destructiveHint: false,
+      destructiveHint: true,
       idempotentHint: false,
       openWorldHint: false,
       readOnlyHint: false,

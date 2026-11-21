@@ -8,7 +8,7 @@
 import type { JSONContent } from "@tiptap/core";
 import * as v from "valibot";
 
-import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
+import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
 
 import type { ChatMentionOption } from "@/components/chat-mention-extension";
 import { toChatMentionNodeAttrs } from "@/components/chat-mention-node-attrs";
@@ -38,7 +38,7 @@ export const writeDecisionPassage = (
 };
 
 export const readDecisionPassage = (
-  dataTransfer: DataTransfer,
+  dataTransfer: Pick<DataTransfer, "getData">,
 ): DecisionPassage | null => {
   const raw = dataTransfer.getData(DECISION_PASSAGE_MIME);
   if (raw === "") {

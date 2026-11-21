@@ -1,9 +1,11 @@
 import { Result } from "better-result";
 
+import { workspaceAcceptsWrites } from "@stll/api-contract/workspace-status";
+
 import type { rootDb } from "@/api/db/root";
 import { captureError } from "@/api/lib/analytics/capture";
-import type { resolveCredentialMemberAuthorization } from "@/api/lib/auth";
 import { resolveMemberAuthorization } from "@/api/lib/auth";
+import type { ResolveCredentialMemberAuthorization } from "@/api/lib/auth/member-authorization";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
 import { errorTag } from "@/api/lib/errors/utils";
@@ -15,9 +17,13 @@ import type {
 import { enqueueFlowStep } from "@/api/lib/flows/flow-run-queue";
 import type { FlowTriggerSource } from "@/api/lib/flows/flow-types";
 import { buildFlowRunRows } from "@/api/lib/flows/start-flow-run";
+import { isMemberRole } from "@/api/lib/member-roles";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
+import { hasCurrentMemberPermission } from "@/api/lib/permission-authorization";
+import { snapshotOperationInput } from "@/api/lib/proofs/checked-transaction";
 import { QUEUED_ACTION_KIND } from "@/api/lib/rate-limit/action-kinds";
 import { runQueuedKickoff } from "@/api/lib/rate-limit/queued-action-admission";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
@@ -74,7 +80,7 @@ type StartAutomatedFlowRunDependencies = {
       }
     | undefined
   >;
-  resolveAuthorization: typeof resolveCredentialMemberAuthorization;
+  resolveAuthorization: ResolveCredentialMemberAuthorization;
   insertWithinCap: (
     input: Omit<InsertAutomatedFlowRunWithinCapInput, "database">,
   ) => Promise<InsertAutomatedFlowRunWithinCapResult>;
@@ -102,23 +108,17 @@ export const automatedFlowRunDependencies = (
       columns: { id: true, name: true, steps: true, enabled: true },
     }),
   resolveAuthorization: async (lookup) =>
-    await resolveMemberAuthorization(lookup, database),
+    await resolveMemberAuthorization(
+      { ...lookup, authentication: { kind: "credential" } },
+      database,
+    ),
   insertWithinCap: async (input) =>
     await insertAutomatedFlowRunWithinCap({ ...input, database }),
   enqueueStep: enqueueFlowStep,
 });
 
 export const startAutomatedFlowRun = async (
-  {
-    definitionId,
-    organizationId,
-    workspaceId,
-    createdByUserId,
-    triggerSource,
-    inputEntityIds,
-    enqueueDelayMs,
-    logContext,
-  }: StartAutomatedFlowRunArgs,
+  input: StartAutomatedFlowRunArgs,
   {
     findDefinition,
     resolveAuthorization,
@@ -127,6 +127,16 @@ export const startAutomatedFlowRun = async (
     kickoff = runQueuedKickoff,
   }: StartAutomatedFlowRunDependencies,
 ): Promise<void> => {
+  const {
+    definitionId,
+    organizationId,
+    workspaceId,
+    createdByUserId,
+    triggerSource,
+    inputEntityIds,
+    enqueueDelayMs,
+    logContext,
+  } = snapshotOperationInput(input);
   if (createdByUserId === null) {
     logger.warn("flow.automated_run_skipped_no_actor", logContext);
     return;
@@ -139,14 +149,20 @@ export const startAutomatedFlowRun = async (
     catch: (cause) => cause,
   });
   if (Result.isError(definitionResult)) {
-    captureError(definitionResult.error, logContext);
+    captureError(
+      definitionResult.error,
+      handlerErrorContext(
+        "flows.startAutomatedFlowRun.definitionResult_error",
+        logContext,
+      ),
+    );
     logger.error("flow.automated_run_start_failed", {
       ...logContext,
       "error.type": errorTag(definitionResult.error),
     });
     return;
   }
-  const definition = definitionResult.value;
+  const definition = snapshotOperationInput(definitionResult.value);
   if (!definition) {
     logger.info("flow.automated_run_definition_missing", logContext);
     return;
@@ -174,15 +190,25 @@ export const startAutomatedFlowRun = async (
     catch: (cause) => cause,
   });
   if (Result.isError(authorization)) {
-    captureError(authorization.error, logContext);
+    captureError(
+      authorization.error,
+      handlerErrorContext(
+        "flows.startAutomatedFlowRun.authorization_error",
+        logContext,
+      ),
+    );
     logger.error("flow.automated_run_start_failed", {
       ...logContext,
       "error.type": errorTag(authorization.error),
     });
     return;
   }
-  const authorizedWorkspace = authorization.value?.workspace;
-  if (authorizedWorkspace === undefined || authorizedWorkspace === null) {
+  const currentAuthority = authorization.value;
+  if (
+    !workspaceAcceptsWrites(currentAuthority?.workspace?.status) ||
+    !isMemberRole(currentAuthority.role) ||
+    !hasCurrentMemberPermission(currentAuthority.role, { flow: ["run"] })
+  ) {
     logger.warn("flow.automated_run_actor_unauthorized", logContext);
     return;
   }
@@ -212,7 +238,13 @@ export const startAutomatedFlowRun = async (
       catch: (cause) => cause,
     });
     if (Result.isError(insertResult)) {
-      captureError(insertResult.error, logContext);
+      captureError(
+        insertResult.error,
+        handlerErrorContext(
+          "flows.createAndEnqueue.insertResult_error",
+          logContext,
+        ),
+      );
       logger.error("flow.automated_run_start_failed", {
         ...logContext,
         "error.type": errorTag(insertResult.error),
@@ -240,7 +272,13 @@ export const startAutomatedFlowRun = async (
       catch: (cause) => cause,
     });
     if (Result.isError(enqueued)) {
-      captureError(enqueued.error, logContext);
+      captureError(
+        enqueued.error,
+        handlerErrorContext(
+          "flows.createAndEnqueue.enqueued_error",
+          logContext,
+        ),
+      );
       logger.error("flow.automated_run_start_failed", {
         ...logContext,
         "error.type": errorTag(enqueued.error),

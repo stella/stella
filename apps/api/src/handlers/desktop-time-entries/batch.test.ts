@@ -1,0 +1,566 @@
+import { panic, Result } from "better-result";
+import { expect, test } from "bun:test";
+import type { SQL } from "drizzle-orm";
+import * as v from "valibot";
+
+import {
+  DESKTOP_ACTIVITY_REVIEW_LIMIT,
+  DESKTOP_TIME_ENTRY_BATCH_STATUSES,
+  type DesktopTimeEntryBatch,
+  desktopTimeEntryBatchResponseSchema,
+} from "@stll/api-contract/desktop-time-entries";
+import { createTestState } from "@stll/test-state";
+
+import {
+  auditLogs,
+  desktopTimeEntryBatches,
+  timeEntries,
+} from "@/api/db/schema";
+import { env } from "@/api/env";
+import { createHttpApp } from "@/api/http/app";
+import { routes } from "@/api/http/route";
+import type { RouteTable } from "@/api/http/route";
+import { DEFAULT_TIME_POLICY } from "@/api/lib/billing-time";
+import { toSafeId } from "@/api/lib/branded-types";
+import { buildFeatureAccessSnapshot } from "@/api/lib/feature-access/snapshot";
+import { LIMITS } from "@/api/lib/limits";
+import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
+import { aggregateExecutionRows } from "@/api/tests/fixtures/aggregate-lock-order";
+import {
+  claimFixtureDeviceProof,
+  createDesktopDeviceSigner,
+} from "@/api/tests/helpers/desktop-device-proof";
+import { serveForTest } from "@/api/tests/helpers/test-server";
+import {
+  createScopedDbMock,
+  createSelectQueryMock,
+} from "@/api/tests/scoped-db-mock";
+
+import {
+  createDesktopTimeEntryBatchEndpoint,
+  desktopBatchFingerprint,
+} from "./batch";
+import { createDesktopTimeEntryBatchStatusEndpoint } from "./batch-status";
+
+const testState = createTestState({ file: import.meta.path, config: env });
+const MATTER = "00000000-0000-4000-8000-00000000abcd";
+const BODY = {
+  idempotencyKey: "review",
+  entries: [
+    {
+      matterId: MATTER,
+      dateWorked: new Date().toISOString().slice(0, 10),
+      timezoneId: "UTC",
+      durationMinutes: 6,
+      narrative: "Reviewed agreement",
+      billable: false,
+    },
+  ],
+};
+const serve = (table: RouteTable) =>
+  serveForTest(
+    createHttpApp({ routes: routes(table), middleware: [errorBoundary] }),
+  );
+
+const receiptSchema = v.object({
+  requestFingerprint: v.nullable(v.string()),
+  status: v.picklist(DESKTOP_TIME_ENTRY_BATCH_STATUSES),
+  result: v.nullable(desktopTimeEntryBatchResponseSchema),
+});
+test("batch fingerprint follows reviewed field values rather than JSON key order", () => {
+  const entry = BODY.entries.at(0);
+  if (!entry) {
+    panic("Missing fixture entry");
+  }
+  const {
+    matterId,
+    dateWorked,
+    timezoneId,
+    durationMinutes,
+    narrative,
+    billable,
+  } = entry;
+  expect(desktopBatchFingerprint(BODY)).toBe(
+    desktopBatchFingerprint({
+      entries: [
+        {
+          billable,
+          narrative,
+          durationMinutes,
+          timezoneId,
+          dateWorked,
+          matterId,
+        },
+      ],
+      idempotencyKey: "different-key",
+    }),
+  );
+  expect(desktopBatchFingerprint(BODY)).not.toBe(
+    desktopBatchFingerprint({
+      ...BODY,
+      entries: [{ ...entry, narrative: "Changed" }],
+    }),
+  );
+});
+
+test("a classification is part of the fingerprint, in any key order, and an entry without one hashes as before", () => {
+  const entry = BODY.entries.at(0) ?? panic("Missing fixture entry");
+  const withCodes = (
+    classification: DesktopTimeEntryBatch["entries"][number]["classification"],
+  ) =>
+    desktopBatchFingerprint({
+      ...BODY,
+      entries: [{ ...entry, classification }],
+    });
+  expect(withCodes(undefined)).toBe(desktopBatchFingerprint(BODY));
+  expect(
+    withCodes({ type: "ledes", taskCode: "L120", activityCode: "A104" }),
+  ).not.toBe(desktopBatchFingerprint(BODY));
+  expect(
+    withCodes({ type: "ledes", taskCode: "L120", activityCode: "A104" }),
+  ).toBe(withCodes({ activityCode: "A104", taskCode: "L120", type: "ledes" }));
+  expect(
+    withCodes({ type: "ledes", taskCode: "L120", activityCode: "A104" }),
+  ).not.toBe(
+    withCodes({ type: "ledes", taskCode: "L130", activityCode: "A104" }),
+  );
+});
+
+const LEDES = {
+  type: "ledes",
+  taskCode: "L120",
+  activityCode: "A104",
+} as const;
+const CLIENT_GROUP = {
+  type: "activity_group",
+  activityGroup: "client",
+} as const;
+
+const classified = (
+  classification: DesktopTimeEntryBatch["entries"][number]["classification"],
+  idempotencyKey: string,
+): DesktopTimeEntryBatch => ({
+  idempotencyKey,
+  entries: BODY.entries.map((entry) => ({ ...entry, classification })),
+});
+
+/** How the fixture matter's client bills: no client, a client billed in
+ * categories or in LEDES, or a client the caller cannot read. */
+type ClientBilling = "none" | "categories" | "ledes" | "unreadable";
+
+const matterRow = (billing: ClientBilling) => ({
+  id: MATTER,
+  clientId: billing === "none" ? null : "00000000-0000-4000-8000-0000000000c1",
+  client:
+    billing === "none" || billing === "unreadable"
+      ? null
+      : { timeBillingFormat: billing },
+});
+
+const createBatchHarness = (
+  existingEntries = 0,
+  clientBilling: ClientBilling = "none",
+) => {
+  let receipt: v.InferOutput<typeof receiptSchema> | undefined;
+  let missingMatter = false;
+  let rateReads = 0;
+  const writes: unknown[] = [];
+  // Every insert in arrival order, so a test can place audit rows relative
+  // to the entry and receipt writes of the same transaction.
+  const inserts: string[] = [];
+  const { scopedDb } = createScopedDbMock(
+    {
+      execute: async (statement: SQL) => aggregateExecutionRows(statement),
+      query: {
+        workspaces: {
+          findMany: async () =>
+            missingMatter ? [] : [matterRow(clientBilling)],
+          findFirst: async () => ({ leadUserId: null }),
+        },
+        organizationSettings: { findFirst: async () => DEFAULT_TIME_POLICY },
+        rateTables: {
+          findMany: async () => {
+            rateReads += 1;
+            return [];
+          },
+        },
+      },
+      select: () => createSelectQueryMock(receipt ? [receipt] : []),
+      $count: async () => existingEntries,
+      insert: (table: unknown) => ({
+        values: (row: unknown) => {
+          if (table === auditLogs) {
+            inserts.push(
+              ...(Array.isArray(row) ? row : [row]).map(() => "audit"),
+            );
+          }
+          if (table === timeEntries) {
+            inserts.push("entry");
+          }
+          if (table === desktopTimeEntryBatches) {
+            inserts.push("receipt");
+            receipt = v.parse(receiptSchema, row);
+          }
+          if (table === timeEntries) {
+            writes.push(row);
+          }
+          return {
+            returning: async () => [
+              { id: "00000000-0000-4000-8000-000000000002" },
+            ],
+          };
+        },
+      }),
+    },
+    {
+      featureAccess: {
+        identity: { email: "desktop@example.test", emailVerified: true },
+        enrolments: [
+          {
+            featureId: "time-billing",
+            organizationId: toSafeId<"organization">("org_test"),
+            userId: "user_test",
+          },
+        ],
+      },
+    },
+  );
+  const deviceSigner = createDesktopDeviceSigner();
+  const authorizeAccount = async (request: Request) => {
+    const device = await deviceSigner;
+    return Result.ok({
+      featureAccessSnapshot: buildFeatureAccessSnapshot({
+        organizationId: toSafeId<"organization">("org_test"),
+        userId: "user_test",
+        identity: { email: "desktop@example.test", emailVerified: true },
+        enrolments: [
+          {
+            featureId: "time-billing",
+            organizationId: "org_test",
+            userId: "user_test",
+          },
+        ],
+      }),
+      consumedProof: await claimFixtureDeviceProof({
+        request: await device.signRequest({
+          request,
+          credential: "fixture-credential",
+        }),
+        deviceJkt: device.deviceJkt,
+        keyId: "desktop-key",
+        credential: "fixture-credential",
+      }),
+      scopedDb,
+      organizationId: toSafeId<"organization">("org_test"),
+      userId: toSafeId<"user">("user_test"),
+      keyId: "desktop-key",
+      memberRole: sessionMemberRole("member"),
+    });
+  };
+  const endpoint = createDesktopTimeEntryBatchEndpoint(authorizeAccount);
+  const statusEndpoint =
+    createDesktopTimeEntryBatchStatusEndpoint(authorizeAccount);
+  const server = serve({
+    "/batch": { PUT: endpoint },
+    "/status": { PUT: statusEndpoint },
+  });
+  const status = async () =>
+    await server.fetch(
+      new Request("http://localhost/status", {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ idempotencyKey: BODY.idempotencyKey }),
+      }),
+    );
+  const send = async (body: DesktopTimeEntryBatch) =>
+    await server.fetch(
+      new Request("http://localhost/batch", {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+      }),
+    );
+  testState.setConfig("FEATURE_TIME_BILLING", true);
+  testState.setConfig("API_FEATURE_ACCESS_GRANTS", {
+    "activity-timeline": [
+      {
+        type: "member",
+        organizationId: toSafeId<"organization">("org_test"),
+        email: "desktop@example.test",
+      },
+    ],
+  });
+  return {
+    send,
+    status,
+    writes,
+    inserts,
+    rateReads: () => rateReads,
+    revokeMatter: () => {
+      missingMatter = true;
+    },
+    [Symbol.asyncDispose]: server.stop,
+  };
+};
+
+test("batch replay converges and a changed payload or revoked matter refuses without new writes", async () => {
+  await using harness = createBatchHarness();
+  const { send, writes, revokeMatter } = harness;
+  const first = await send(BODY);
+  expect(first.status).toBe(200);
+  const result = await first.json();
+  const replay = await send(BODY);
+  expect(replay.status).toBe(200);
+  expect(await replay.json()).toEqual(result);
+  expect(writes).toHaveLength(1);
+  const changed = await send({
+    ...BODY,
+    entries: BODY.entries.map((entry) => ({
+      ...entry,
+      narrative: "Changed",
+    })),
+  });
+  expect(changed.status).toBe(409);
+  revokeMatter();
+  expect((await send(BODY)).status).toBe(404);
+  expect(writes).toHaveLength(1);
+});
+
+test("batch rejects unknown fields before authorization", async () => {
+  const endpoint = createDesktopTimeEntryBatchEndpoint(async () =>
+    panic("Invalid batch must fail validation before authorization"),
+  );
+  await using server = serve({ "/batch": { PUT: endpoint } });
+  for (const extra of [
+    { appName: "private" },
+    { rawSegments: [] },
+    { summary: "private" },
+    { taskCode: "private" },
+  ]) {
+    for (const body of [
+      { ...BODY, ...extra },
+      {
+        ...BODY,
+        entries: BODY.entries.map((entry) => ({ ...entry, ...extra })),
+      },
+    ]) {
+      const response = await server.fetch(
+        new Request("http://localhost/batch", {
+          method: "PUT",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(body),
+        }),
+      );
+      expect(response.status).toBe(422);
+    }
+  }
+});
+
+test.each(["2026-02-30", "1900-02-29", "2026-04-31", "0000-01-01"])(
+  "batch rejects invalid calendar date %s before authorization",
+  async (dateWorked) => {
+    let authorizationCalls = 0;
+    const endpoint = createDesktopTimeEntryBatchEndpoint(async () => {
+      authorizationCalls += 1;
+      return panic("Invalid calendar date must not reach authorization");
+    });
+    await using server = serve({ "/batch": { PUT: endpoint } });
+    const response = await server.fetch(
+      new Request("http://localhost/batch", {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          ...BODY,
+          entries: BODY.entries.map((entry) => ({ ...entry, dateWorked })),
+        }),
+      }),
+    );
+    expect(response.status).toBe(422);
+    expect(authorizationCalls).toBe(0);
+  },
+);
+
+test("uppercase matter identifiers converge with lowercase database identities and fingerprints", async () => {
+  await using harness = createBatchHarness();
+  const { send, writes } = harness;
+  const uppercase = {
+    ...BODY,
+    entries: BODY.entries.map((entry) => ({
+      ...entry,
+      matterId: entry.matterId.toUpperCase(),
+    })),
+  };
+  expect(uppercase.entries.at(0)?.matterId).not.toBe(MATTER);
+  expect(desktopBatchFingerprint(uppercase)).toBe(
+    desktopBatchFingerprint(BODY),
+  );
+  const created = await send(uppercase);
+  expect(created.status).toBe(200);
+  expect(await created.json()).toEqual({
+    entries: [{ id: "00000000-0000-4000-8000-000000000002", matterId: MATTER }],
+  });
+  expect((await send(BODY)).status).toBe(200);
+  expect(writes).toHaveLength(1);
+  expect(writes.at(0)).toMatchObject({ workspaceId: MATTER });
+});
+
+test("recovery cancels a noncommitted batch after rejection and fences delayed originals", async () => {
+  await using harness = createBatchHarness();
+  const { send, status, writes } = harness;
+  // The first attempt was not delivered; a subsequent attempt is definitively rejected.
+  expect(
+    (
+      await send({
+        ...BODY,
+        entries: BODY.entries.map((entry) => ({
+          ...entry,
+          durationMinutes: 0,
+        })),
+      })
+    ).status,
+  ).toBe(422);
+  const recovered = await status();
+  expect(recovered.status).toBe(200);
+  expect(await recovered.json()).toEqual({ type: "cancelled" });
+  expect(await (await status()).json()).toEqual({ type: "cancelled" });
+  expect((await send(BODY)).status).toBe(409);
+  expect(writes).toHaveLength(0);
+});
+
+test("entry creation is audited in the batch transaction; a cancellation receipt writes no entry or audit row", async () => {
+  await using committed = createBatchHarness();
+  expect((await committed.send(BODY)).status).toBe(200);
+  // The audit skip in batch status covers only the receipt: the committed
+  // batch audits its entries before the receipt closes the transaction.
+  expect(committed.inserts).toContain("audit");
+  expect(committed.inserts.indexOf("entry")).toBeLessThan(
+    committed.inserts.lastIndexOf("audit"),
+  );
+  expect(committed.inserts.at(-1)).toBe("receipt");
+
+  await using cancelled = createBatchHarness();
+  expect(await (await cancelled.status()).json()).toEqual({
+    type: "cancelled",
+  });
+  expect(cancelled.inserts).toEqual(["receipt"]);
+});
+
+test("recovery preserves a committed batch and returns its exact receipt without new writes", async () => {
+  await using harness = createBatchHarness();
+  const { send, status, writes } = harness;
+  const created = await send(BODY);
+  expect(created.status).toBe(200);
+  const receipt = v.parse(
+    desktopTimeEntryBatchResponseSchema,
+    await created.json(),
+  );
+  const recovered = await status();
+  expect(recovered.status).toBe(200);
+  expect(await recovered.json()).toEqual({ type: "committed", ...receipt });
+  expect((await send(BODY)).status).toBe(200);
+  expect(writes).toHaveLength(1);
+});
+
+test("uppercase matter identifiers count towards the authorized matter capacity", async () => {
+  await using harness = createBatchHarness(LIMITS.timeEntriesPerWorkspace);
+  const { send, writes } = harness;
+  const uppercase = {
+    ...BODY,
+    entries: BODY.entries.map((entry) => ({
+      ...entry,
+      matterId: entry.matterId.toUpperCase(),
+    })),
+  };
+  expect((await send(uppercase)).status).toBe(400);
+  expect(writes).toHaveLength(0);
+});
+
+test("a full unpriced batch resolves rates once and preserves nonbillable entries", async () => {
+  await using harness = createBatchHarness();
+  const { send, writes, rateReads } = harness;
+  const entry = BODY.entries.at(0);
+  if (!entry) {
+    panic("Missing fixture entry");
+  }
+  const response = await send({
+    ...BODY,
+    entries: Array.from(
+      { length: DESKTOP_ACTIVITY_REVIEW_LIMIT },
+      (_, index) => ({
+        ...entry,
+        narrative: `Reviewed agreement ${index}`,
+      }),
+    ),
+  });
+  expect(response.status).toBe(200);
+  expect(writes).toHaveLength(DESKTOP_ACTIVITY_REVIEW_LIMIT);
+  expect(rateReads()).toBe(1);
+});
+
+test("missing bulk rates reject billable entries without individual rate reads or writes", async () => {
+  await using harness = createBatchHarness();
+  const { send, writes, rateReads } = harness;
+  const response = await send({
+    ...BODY,
+    entries: BODY.entries.map((entry) => ({ ...entry, billable: true })),
+  });
+  expect(response.status).toBe(400);
+  expect(writes).toHaveLength(0);
+  expect(rateReads()).toBe(1);
+});
+
+test("UTBMS codes reach the entry only on a matter whose client bills in LEDES", async () => {
+  await using ledes = createBatchHarness(0, "ledes");
+  expect((await ledes.send(classified(LEDES, "ledes-codes"))).status).toBe(200);
+  expect(ledes.writes).toEqual([
+    expect.objectContaining({ taskCode: "L120", activityCode: "A104" }),
+  ]);
+
+  for (const billing of ["none", "categories"] as const) {
+    await using harness = createBatchHarness(0, billing);
+    expect(
+      (await harness.send(classified(LEDES, `codes-${billing}`))).status,
+    ).toBe(400);
+    expect(harness.writes).toEqual([]);
+  }
+});
+
+test("the client activity group fits only a matter not billed in LEDES, and adds no codes", async () => {
+  for (const billing of ["none", "categories"] as const) {
+    await using harness = createBatchHarness(0, billing);
+    expect(
+      (await harness.send(classified(CLIENT_GROUP, `group-${billing}`))).status,
+    ).toBe(200);
+    expect(harness.writes).toEqual([
+      expect.objectContaining({ taskCode: null, activityCode: null }),
+    ]);
+  }
+  await using ledes = createBatchHarness(0, "ledes");
+  expect(
+    (await ledes.send(classified(CLIENT_GROUP, "group-ledes"))).status,
+  ).toBe(400);
+  await using internal = createBatchHarness(0, "categories");
+  expect(
+    (
+      await internal.send(
+        classified(
+          { type: "activity_group", activityGroup: "internal" },
+          "group-internal",
+        ),
+      )
+    ).status,
+  ).toBe(400);
+  expect([...ledes.writes, ...internal.writes]).toEqual([]);
+});
+
+test("a classified entry on a matter whose client the caller cannot read is refused, not failed", async () => {
+  await using harness = createBatchHarness(0, "unreadable");
+  expect((await harness.send(classified(LEDES, "unreadable"))).status).toBe(
+    409,
+  );
+  expect(harness.writes).toEqual([]);
+  // Without a classification the client's billing format does not matter.
+  expect((await harness.send(BODY)).status).toBe(200);
+  expect(harness.writes).toHaveLength(1);
+});

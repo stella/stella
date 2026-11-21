@@ -3,12 +3,27 @@ import { toolDefinition } from "@tanstack/ai";
 import { createMCPClient } from "@tanstack/ai-mcp";
 import type { MCPClient } from "@tanstack/ai-mcp";
 import { panic, Result } from "better-result";
-import { and, asc, eq, inArray, isNull, lte, or, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  eq,
+  gt,
+  inArray,
+  isNull,
+  lte,
+  ne,
+  or,
+  sql,
+} from "drizzle-orm";
 
+import { CONNECTABLE_CONNECTORS_PAGE_SIZE } from "@stll/api-contract/chat-connector";
+import type { ConnectableMcpConnectorCatalog } from "@stll/api-contract/chat-connector";
+import { sleep } from "@stll/concurrency/sleep";
 import { Temporal } from "@stll/time";
 
-import type { SafeDb } from "@/api/db/safe-db";
+import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import {
+  MCP_RESPONSE_DISPOSITION,
   mcpConnectorAuthorizationReviews,
   mcpConnectors,
   mcpOAuthClients,
@@ -19,11 +34,15 @@ import type {
   McpConnectionStatus,
 } from "@/api/db/schema";
 import { createBackgroundAuditRecorder } from "@/api/lib/audit-log";
+import { safeOutboundFetchStream } from "@/api/lib/auth/authorized-outbound-fetch";
+import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type { SafeId } from "@/api/lib/branded-types";
+import { readCursorPage } from "@/api/lib/db/read-bounded";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { getCuratedMcpOAuthApproval } from "@/api/lib/mcp-connectors/catalog-metadata";
 import {
+  approvedMcpAuthorizationReview,
   recordMcpAuthorizationReview,
   resolveMcpIssuerBinding,
 } from "@/api/lib/mcp-upstream/authorization-review";
@@ -32,11 +51,11 @@ import {
   encryptMcpSecret,
 } from "@/api/lib/mcp-upstream/crypto";
 import {
-  MCP_OAUTH_BINDING_FAILURE_CODE,
-  MCP_OAUTH_INVALID_GRANT_CODE,
   discoverOAuthMetadata,
   discoverOAuthMetadataForApproval,
   getOAuthEndpointOrigins,
+  MCP_OAUTH_BINDING_FAILURE_CODE,
+  MCP_OAUTH_INVALID_GRANT_CODE,
   refreshOAuthToken,
   tokenExpiresAt,
 } from "@/api/lib/mcp-upstream/oauth";
@@ -48,10 +67,7 @@ import type {
 import { mcpResourceMatchesConnector } from "@/api/lib/mcp-upstream/url-safety";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
-import {
-  safeOutboundFetchStream,
-  validateOutboundFetchTarget,
-} from "@/api/lib/safe-outbound-fetch";
+import { validateOutboundFetchTarget } from "@/api/lib/safe-outbound-fetch";
 import type { SafeOutboundFetchBody } from "@/api/lib/safe-outbound-fetch";
 import {
   errorResult,
@@ -151,6 +167,7 @@ const DEFAULT_OUTBOUND_FETCH_DEPENDENCIES: OutboundFetchDependencies = {
 };
 
 type RawConnectionRow = {
+  responseDisposition: typeof mcpUserConnections.$inferSelect.responseDisposition;
   accessTokenEncrypted: Buffer | null;
   accessTokenIv: Buffer | null;
   allowedTools: string[] | null;
@@ -178,6 +195,7 @@ type RawConnectionRow = {
 };
 
 type McpConnectionBase = {
+  responseDisposition: typeof MCP_RESPONSE_DISPOSITION.normal;
   allowedTools: string[] | null;
   connectorId: SafeId<"mcpConnector">;
   description: string;
@@ -229,6 +247,7 @@ const bindMcpConnection = (
       return Result.err(
         new HandlerError({
           status: 502,
+          code: "internal_error",
           message: "MCP connection resource does not match the connector URL",
         }),
       );
@@ -240,6 +259,7 @@ const bindMcpConnection = (
 };
 
 const selectConnectionFields = {
+  responseDisposition: mcpUserConnections.responseDisposition,
   userConnectionId: mcpUserConnections.id,
   connectorId: mcpConnectors.id,
   slug: mcpConnectors.slug,
@@ -309,10 +329,11 @@ export const loadActiveMcpConnectionsForUser = async ({
           eq(mcpUserConnections.userId, userId),
           eq(mcpUserConnections.enabled, true),
           eq(mcpUserConnections.status, "connected"),
-          or(
-            isNull(mcpConnectorAuthorizationReviews.status),
-            eq(mcpConnectorAuthorizationReviews.status, "approved"),
+          eq(
+            mcpUserConnections.responseDisposition,
+            MCP_RESPONSE_DISPOSITION.normal,
           ),
+          approvedMcpAuthorizationReview,
         ),
       )
       .orderBy(asc(mcpUserConnections.createdAt), asc(mcpUserConnections.id))
@@ -375,10 +396,11 @@ export const loadMcpConnectionById = async ({
           eq(mcpUserConnections.organizationId, organizationId),
           eq(mcpUserConnections.userId, userId),
           eq(mcpUserConnections.status, "connected"),
-          or(
-            isNull(mcpConnectorAuthorizationReviews.status),
-            eq(mcpConnectorAuthorizationReviews.status, "approved"),
+          eq(
+            mcpUserConnections.responseDisposition,
+            MCP_RESPONSE_DISPOSITION.normal,
           ),
+          approvedMcpAuthorizationReview,
         ),
       )
       .limit(1),
@@ -398,6 +420,187 @@ export const loadMcpConnectionById = async ({
   return normalized.at(0) ?? null;
 };
 
+/**
+ * Connectors the organization offers whose tools would not load for this
+ * user: no connection yet, or an enabled one that is not connected (it needs
+ * sign-in again). A connection the user disabled is a choice, not a gap, so
+ * it is not offered. Uses the same authorization-review gate as
+ * {@link loadActiveMcpConnectionsForUser}.
+ */
+export const loadConnectableMcpConnectorsForUser = async ({
+  afterSlug,
+  organizationId,
+  safeDb,
+  userId,
+}: {
+  afterSlug?: string | undefined;
+  organizationId: SafeId<"organization">;
+  safeDb: SafeDb;
+  userId: SafeId<"user">;
+}): Promise<Result<ConnectableMcpConnectorCatalog, SafeDbError>> => {
+  const result = await safeDb(async (tx) =>
+    readCursorPage(
+      tx
+        .selectDistinctOn([mcpConnectors.slug], {
+          slug: mcpConnectors.slug,
+          displayName: mcpConnectors.displayName,
+        })
+        .from(mcpConnectors)
+        .leftJoin(
+          mcpConnectorAuthorizationReviews,
+          and(
+            eq(mcpConnectorAuthorizationReviews.connectorId, mcpConnectors.id),
+            eq(mcpConnectorAuthorizationReviews.organizationId, organizationId),
+          ),
+        )
+        .leftJoin(
+          mcpUserConnections,
+          and(
+            eq(mcpUserConnections.connectorId, mcpConnectors.id),
+            eq(mcpUserConnections.organizationId, organizationId),
+            eq(mcpUserConnections.userId, userId),
+          ),
+        )
+        .where(
+          and(
+            or(
+              isNull(mcpConnectors.organizationId),
+              eq(mcpConnectors.organizationId, organizationId),
+            ),
+            approvedMcpAuthorizationReview,
+            afterSlug === undefined
+              ? undefined
+              : gt(mcpConnectors.slug, afterSlug),
+            or(
+              isNull(mcpUserConnections.id),
+              and(
+                eq(mcpUserConnections.enabled, true),
+                or(
+                  ne(mcpUserConnections.status, "connected"),
+                  ne(
+                    mcpUserConnections.responseDisposition,
+                    MCP_RESPONSE_DISPOSITION.normal,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        )
+        .orderBy(asc(mcpConnectors.slug), asc(mcpConnectors.id)),
+      {
+        limit: CONNECTABLE_CONNECTORS_PAGE_SIZE,
+        cursorForItem: ({ slug }) => slug,
+      },
+    ),
+  );
+  return result.map((page) => ({
+    connectors: page.items,
+    continuation:
+      page.nextCursor === null
+        ? { type: "complete" }
+        : { type: "more-available", afterSlug: page.nextCursor },
+  }));
+};
+
+/**
+ * The credential columns a disconnect deletes and returns in one statement,
+ * so revocation uses exactly the credentials of the row that was removed.
+ */
+export const DELETED_MCP_CONNECTION_CREDENTIAL_FIELDS = {
+  responseDisposition: mcpUserConnections.responseDisposition,
+  userConnectionId: mcpUserConnections.id,
+  connectorId: mcpUserConnections.connectorId,
+  accessTokenEncrypted: mcpUserConnections.accessTokenEncrypted,
+  accessTokenIv: mcpUserConnections.accessTokenIv,
+  refreshTokenEncrypted: mcpUserConnections.refreshTokenEncrypted,
+  refreshTokenIv: mcpUserConnections.refreshTokenIv,
+  staticTokenEncrypted: mcpUserConnections.staticTokenEncrypted,
+  staticTokenIv: mcpUserConnections.staticTokenIv,
+  expiresAt: mcpUserConnections.expiresAt,
+  oauthResourceUrl: mcpUserConnections.resourceUrl,
+  oauthAuthorizationServerUrl: mcpUserConnections.authorizationServerUrl,
+} satisfies Record<string, unknown>;
+
+export type DeletedMcpConnectionCredentials = Pick<
+  RawConnectionRow,
+  keyof typeof DELETED_MCP_CONNECTION_CREDENTIAL_FIELDS
+>;
+
+/**
+ * A deleted connection's credentials joined with its connector's current
+ * authorization metadata (organization-level, untouched by a user's own
+ * reconnect), in the form revocation takes; null when it cannot be revoked.
+ */
+export const revocableMcpConnectionFromDeleted = async ({
+  deleted,
+  organizationId,
+  safeDb,
+}: {
+  deleted: DeletedMcpConnectionCredentials;
+  organizationId: SafeId<"organization">;
+  safeDb: SafeDb;
+}) => {
+  const connectorResult = await safeDb((tx) =>
+    tx
+      .select({
+        slug: mcpConnectors.slug,
+        displayName: mcpConnectors.displayName,
+        description: mcpConnectors.description,
+        url: mcpConnectors.url,
+        authType: mcpConnectors.authType,
+        allowedTools: mcpConnectors.allowedTools,
+        oauthConnectorIssuer: mcpConnectors.oauthIssuer,
+        oauthConnectorConfirmedEndpointOrigins:
+          mcpConnectors.oauthConfirmedEndpointOrigins,
+        oauthReviewApprovedIssuer:
+          mcpConnectorAuthorizationReviews.approvedIssuer,
+        oauthReviewApprovedEndpointOrigins:
+          mcpConnectorAuthorizationReviews.approvedEndpointOrigins,
+        oauthClientId: mcpOAuthClients.clientId,
+        oauthClientSecretEncrypted: mcpOAuthClients.clientSecretEncrypted,
+        oauthClientSecretIv: mcpOAuthClients.clientSecretIv,
+      })
+      .from(mcpConnectors)
+      .leftJoin(
+        mcpConnectorAuthorizationReviews,
+        and(
+          eq(mcpConnectorAuthorizationReviews.connectorId, mcpConnectors.id),
+          eq(mcpConnectorAuthorizationReviews.organizationId, organizationId),
+        ),
+      )
+      .leftJoin(
+        mcpOAuthClients,
+        and(
+          eq(mcpOAuthClients.connectorId, mcpConnectors.id),
+          eq(mcpOAuthClients.organizationId, organizationId),
+          deleted.oauthAuthorizationServerUrl === null
+            ? isNull(mcpOAuthClients.authorizationServerUrl)
+            : eq(
+                mcpOAuthClients.authorizationServerUrl,
+                deleted.oauthAuthorizationServerUrl,
+              ),
+        ),
+      )
+      .where(eq(mcpConnectors.id, deleted.connectorId))
+      .limit(1),
+  );
+  return connectorResult.map((rows): LoadedMcpConnection | null => {
+    const connector = rows.at(0);
+    if (
+      connector === undefined ||
+      deleted.responseDisposition !== MCP_RESPONSE_DISPOSITION.normal
+    ) {
+      return null;
+    }
+    const normalized = normalizeMcpConnectionRow({
+      ...connector,
+      ...deleted,
+      responseDisposition: MCP_RESPONSE_DISPOSITION.normal,
+    });
+    return normalized.type === "loaded" ? normalized.connection : null;
+  });
+};
+
 type NormalizeConnectionRowsOptions = {
   organizationId: SafeId<"organization">;
   rows: RawConnectionRow[];
@@ -413,7 +616,15 @@ const normalizeConnectionRows = async ({
 }: NormalizeConnectionRowsOptions): Promise<LoadedMcpConnection[]> => {
   const loaded: LoadedMcpConnection[] = [];
   const needsReauthIds: SafeId<"mcpUserConnection">[] = [];
-  for (const rawRow of rows) {
+  // Receipt-only connections never enter discovery, including direct connection loads.
+  const normalRows = rows.filter(
+    (
+      row,
+    ): row is RawConnectionRow & {
+      responseDisposition: typeof MCP_RESPONSE_DISPOSITION.normal;
+    } => row.responseDisposition === MCP_RESPONSE_DISPOSITION.normal,
+  );
+  for (const rawRow of normalRows) {
     const normalized = normalizeMcpConnectionRow(rawRow);
     switch (normalized.type) {
       case "loaded":
@@ -444,6 +655,7 @@ const normalizeConnectionRows = async ({
 };
 
 export const createMcpClientForConnection = async ({
+  permit,
   organizationId,
   dependencies = DEFAULT_CONNECTION_DEPENDENCIES,
   outboundFetch = DEFAULT_OUTBOUND_FETCH_DEPENDENCIES,
@@ -451,6 +663,7 @@ export const createMcpClientForConnection = async ({
   safeDb,
   userId,
 }: {
+  permit: ThirdPartyOutboundPermit;
   organizationId: SafeId<"organization">;
   outboundFetch?: OutboundFetchDependencies;
   dependencies?: ConnectionDependencies;
@@ -481,6 +694,7 @@ export const createMcpClientForConnection = async ({
   }
   const token = await resolveAuthorizationToken({
     organizationId,
+    permit,
     row: bound.value,
     safeDb,
     userId,
@@ -503,6 +717,7 @@ export const createMcpClientForConnection = async ({
       row: bound.value,
       token: token.value,
       safeFetch: outboundFetch.safeOutboundFetchStream,
+      permit,
     }),
   });
 };
@@ -510,17 +725,19 @@ export const createMcpClientForConnection = async ({
 type BoundMcpTransportOptions = {
   row: BoundMcpConnection;
   token: string | null;
+  permit: ThirdPartyOutboundPermit;
   safeFetch: typeof safeOutboundFetchStream;
 };
 
 const createBoundMcpTransport = ({
   row,
   token,
+  permit,
   safeFetch,
 }: BoundMcpTransportOptions) => ({
   type: "http" as const,
   url: new URL(row.url).toString(),
-  fetch: createSafeMcpFetch(safeFetch),
+  fetch: createSafeMcpFetch(safeFetch, permit),
   ...(token === null ? {} : { headers: { Authorization: `Bearer ${token}` } }),
 });
 
@@ -536,18 +753,21 @@ type DiscoverCachedMcpToolsResult = {
   server: McpServerMetadata | null;
 };
 
-export const discoverCachedMcpTools = async ({
+const discoverCachedMcpTools = async ({
+  permit,
   organizationId,
   row,
   safeDb,
   userId,
 }: {
+  permit: ThirdPartyOutboundPermit;
   organizationId: SafeId<"organization">;
   row: LoadedMcpConnection;
   safeDb: SafeDb;
   userId: SafeId<"user">;
 }): Promise<DiscoverCachedMcpToolsResult> => {
   const client = await createMcpClientForConnection({
+    permit,
     organizationId,
     row,
     safeDb,
@@ -578,11 +798,13 @@ export const discoverCachedMcpTools = async ({
 
 export const refreshCachedMcpToolsForConnection = async ({
   connectionId,
+  permit,
   organizationId,
   safeDb,
   userId,
 }: {
   connectionId: SafeId<"mcpUserConnection">;
+  permit: ThirdPartyOutboundPermit;
   organizationId: SafeId<"organization">;
   safeDb: SafeDb;
   userId: SafeId<"user">;
@@ -599,15 +821,15 @@ export const refreshCachedMcpToolsForConnection = async ({
     }
 
     const { tools: cachedTools, server } = await discoverCachedMcpTools({
+      permit,
       organizationId,
       row,
       safeDb,
       userId,
     });
-    // oxlint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
-    const updated = await safeDb((tx) => {
+    const updated = await safeDb((tx) =>
       // audit: skip — derived MCP tool-cache metadata, not a user-facing state change
-      return tx
+      tx
         .update(mcpUserConnections)
         .set({
           cachedTools,
@@ -618,8 +840,8 @@ export const refreshCachedMcpToolsForConnection = async ({
           instructions: server?.instructions ?? null,
           updatedAt: new Date(),
         })
-        .where(eq(mcpUserConnections.id, connectionId));
-    });
+        .where(eq(mcpUserConnections.id, connectionId)),
+    );
     if (Result.isError(updated)) {
       observeFailure(updated.error, { sink: TOOL_CACHE_REFRESH_FAILED });
     }
@@ -652,6 +874,7 @@ export const proxyMcpToolCall = async ({
   dependencies,
   outboundFetch,
   organizationId,
+  permit,
   row,
   safeDb,
   userId,
@@ -661,12 +884,14 @@ export const proxyMcpToolCall = async ({
   dependencies?: ConnectionDependencies;
   outboundFetch?: OutboundFetchDependencies;
   organizationId: SafeId<"organization">;
+  permit: ThirdPartyOutboundPermit;
   row: LoadedMcpConnection;
   safeDb: SafeDb;
   userId: SafeId<"user">;
 }): Promise<CallToolResult> => {
   const client = await createMcpClientForConnection({
     organizationId,
+    permit,
     ...(dependencies === undefined ? {} : { dependencies }),
     ...(outboundFetch === undefined ? {} : { outboundFetch }),
     row,
@@ -707,6 +932,7 @@ export const proxyMcpToolCall = async ({
 
 const createSafeMcpFetch = (
   safeOutboundFetchStreamImpl: typeof safeOutboundFetchStream,
+  permit: ThirdPartyOutboundPermit,
 ): typeof fetch => {
   const safeFetch: typeof fetch = Object.assign(
     async (
@@ -725,6 +951,7 @@ const createSafeMcpFetch = (
         maxBytes: MCP_HTTP_RESPONSE_MAX_BYTES,
         method:
           init?.method ?? (input instanceof Request ? input.method : "GET"),
+        permit,
         signal:
           init?.signal ?? (input instanceof Request ? input.signal : undefined),
         timeoutMs: mcpRequestTimeoutMs(body),
@@ -744,6 +971,29 @@ const createSafeMcpFetch = (
 
   return safeFetch;
 };
+
+type BearerMcpClientOptions = {
+  url: string;
+  credential: string;
+  permit: ThirdPartyOutboundPermit;
+  safeFetch: typeof safeOutboundFetchStream;
+};
+
+/** A one-off client for a credential the caller resolved; nothing is cached. */
+export const createBearerMcpClient = async ({
+  url,
+  credential,
+  permit,
+  safeFetch,
+}: BearerMcpClientOptions): Promise<MCPClient> =>
+  await createMCPClient({
+    transport: {
+      type: "http",
+      url,
+      headers: { Authorization: `Bearer ${credential}` },
+      fetch: createSafeMcpFetch(safeFetch, permit),
+    },
+  });
 
 const mcpRequestTimeoutMs = (
   body: SafeOutboundFetchBody | undefined,
@@ -911,10 +1161,9 @@ const writeUnderRefreshLease = async ({
   fence,
   values,
 }: WriteUnderRefreshLeaseOptions) =>
-  // oxlint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
-  await safeDb((tx) => {
+  await safeDb((tx) =>
     // audit: skip — refresh coordination and token rotation for the caller's existing MCP connection
-    return tx
+    tx
       .update(mcpUserConnections)
       .set(values)
       .where(
@@ -927,8 +1176,8 @@ const writeUnderRefreshLease = async ({
       .returning({
         id: mcpUserConnections.id,
         expiresAt: mcpUserConnections.refreshLeaseExpiresAt,
-      });
-  });
+      }),
+  );
 
 type ClaimMcpRefreshLeaseOptions = {
   safeDb: SafeDb;
@@ -1003,18 +1252,19 @@ const deferMcpRefresh = async ({
 type ResolveAuthorizationTokenOptions = {
   dependencies: ConnectionDependencies;
   organizationId: SafeId<"organization">;
+  permit: ThirdPartyOutboundPermit;
   row: BoundMcpConnection;
   safeDb: SafeDb;
   userId: SafeId<"user">;
 };
 
 type ResolvedAuthorizationToken =
-  | { type: "ok"; value: string | null }
-  | { type: "skip" };
+  { type: "ok"; value: string | null } | { type: "skip" };
 
 const resolveAuthorizationToken = async ({
   dependencies,
   organizationId,
+  permit,
   row,
   safeDb,
   userId,
@@ -1040,6 +1290,7 @@ const resolveAuthorizationToken = async ({
   return await resolveOAuthAuthorizationToken({
     dependencies,
     organizationId,
+    permit,
     row,
     safeDb,
     userId,
@@ -1063,11 +1314,15 @@ type ResolveOAuthAuthorizationTokenOptions = Omit<
 const requestUnconfiguredIssuerReview = async ({
   dependencies,
   organizationId,
+  permit,
   row,
   safeDb,
   userId,
 }: ResolveOAuthAuthorizationTokenOptions): Promise<void> => {
-  const observed = await dependencies.discoverOAuthMetadataForApproval(row.url);
+  const observed = await dependencies.discoverOAuthMetadataForApproval({
+    rawMcpUrl: row.url,
+    permit,
+  });
   if (Result.isError(observed)) {
     // Without observed metadata there is nothing to approve: no review is
     // recorded and the connection stays unused until discovery succeeds.
@@ -1133,6 +1388,7 @@ type ResolveMcpTokenDuringRefreshOptions =
 const resolveMcpTokenDuringRefresh = async ({
   dependencies,
   organizationId,
+  permit,
   row,
   safeDb,
   userId,
@@ -1153,9 +1409,7 @@ const resolveMcpTokenDuringRefresh = async ({
   }
   for (let attempt = 0; attempt < MCP_REFRESH_WAIT_ATTEMPTS; attempt += 1) {
     await (dependencies.wait?.(MCP_REFRESH_WAIT_INTERVAL_MS) ??
-      new Promise<void>((resolve) => {
-        setTimeout(resolve, MCP_REFRESH_WAIT_INTERVAL_MS);
-      }));
+      sleep(MCP_REFRESH_WAIT_INTERVAL_MS));
     // db-await-in-loop: bounded wait for a concurrent refresh; each attempt re-reads one row after a pause
     const refreshedRow = await loadMcpConnectionById({
       connectionId: row.userConnectionId,
@@ -1187,6 +1441,7 @@ const resolveMcpTokenDuringRefresh = async ({
       (await approvedStoredMcpIssuer({
         dependencies,
         organizationId,
+        permit,
         row: bound.value,
         safeDb,
         userId,
@@ -1219,6 +1474,7 @@ type DiscoverMcpRefreshMetadataOptions =
 const discoverMcpRefreshMetadata = async ({
   dependencies,
   organizationId,
+  permit,
   row,
   safeDb,
   userId,
@@ -1226,11 +1482,11 @@ const discoverMcpRefreshMetadata = async ({
   leaseExpiresAt,
   deferRefresh,
 }: DiscoverMcpRefreshMetadataOptions): Promise<BoundOAuthMetadata | null> => {
-  const metadata = await dependencies.discoverOAuthMetadata(
-    row.url,
-    undefined,
-    issuerBinding.endpointOrigins,
-  );
+  const metadata = await dependencies.discoverOAuthMetadata({
+    rawMcpUrl: row.url,
+    permit,
+    confirmedEndpointOrigins: issuerBinding.endpointOrigins,
+  });
   const recordAuditEvent = mcpAuthorizationReviewRecorder({
     organizationId,
     userId,
@@ -1238,9 +1494,10 @@ const discoverMcpRefreshMetadata = async ({
   if (Result.isError(metadata)) {
     observeFailure(metadata.error, { sink: TOKEN_REFRESH_FAILED });
     if (metadata.error.code === "mcp_authorization_approval_required") {
-      const observed = await dependencies.discoverOAuthMetadataForApproval(
-        row.url,
-      );
+      const observed = await dependencies.discoverOAuthMetadataForApproval({
+        rawMcpUrl: row.url,
+        permit,
+      });
       if (Result.isError(observed)) {
         observeFailure(observed.error, { sink: TOKEN_REFRESH_FAILED });
         await deferRefresh();
@@ -1312,6 +1569,7 @@ const discoverMcpRefreshMetadata = async ({
 const resolveOAuthAuthorizationToken = async ({
   dependencies,
   organizationId,
+  permit,
   row,
   safeDb,
   userId,
@@ -1319,6 +1577,7 @@ const resolveOAuthAuthorizationToken = async ({
   const issuerBinding = await approvedStoredMcpIssuer({
     dependencies,
     organizationId,
+    permit,
     row,
     safeDb,
     userId,
@@ -1370,6 +1629,7 @@ const resolveOAuthAuthorizationToken = async ({
     return await resolveMcpTokenDuringRefresh({
       dependencies,
       organizationId,
+      permit,
       row,
       safeDb,
       userId,
@@ -1389,6 +1649,7 @@ const resolveOAuthAuthorizationToken = async ({
   const metadata = await discoverMcpRefreshMetadata({
     dependencies,
     organizationId,
+    permit,
     row,
     safeDb,
     userId,
@@ -1420,6 +1681,7 @@ const resolveOAuthAuthorizationToken = async ({
       : null;
   const refreshed = await dependencies.refreshOAuthToken({
     metadata,
+    permit,
     clientId: row.oauthClientId,
     clientSecret,
     refreshToken,
@@ -1498,9 +1760,12 @@ type NormalizedConnectionRow =
   | { type: "unusable" };
 
 const normalizeMcpConnectionRow = (
-  rawRow: RawConnectionRow,
+  rawRow: RawConnectionRow & {
+    responseDisposition: typeof MCP_RESPONSE_DISPOSITION.normal;
+  },
 ): NormalizedConnectionRow => {
   const base = {
+    responseDisposition: rawRow.responseDisposition,
     allowedTools: rawRow.allowedTools,
     connectorId: rawRow.connectorId,
     description: rawRow.description,
@@ -1626,10 +1891,9 @@ const markConnectionsStatus = async ({
   if (connectionIds.length === 0) {
     return;
   }
-  // oxlint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
-  const result = await safeDb((tx) => {
+  const result = await safeDb((tx) =>
     // audit: skip — derived status for the caller's existing MCP connections once stored credentials or authorization no longer apply
-    return tx
+    tx
       .update(mcpUserConnections)
       .set({ status, refreshLeaseExpiresAt: null, updatedAt: new Date() })
       .where(
@@ -1639,8 +1903,8 @@ const markConnectionsStatus = async ({
           eq(mcpUserConnections.userId, userId),
           eq(mcpUserConnections.status, "connected"),
         ),
-      );
-  });
+      ),
+  );
   if (Result.isError(result)) {
     observeFailure(result.error, { sink: CONNECTION_STATUS_WRITE_FAILED });
   }

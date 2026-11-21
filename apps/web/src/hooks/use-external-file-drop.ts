@@ -4,6 +4,8 @@ import { dropTargetForExternal } from "@atlaskit/pragmatic-drag-and-drop/adapter
 import { containsFiles } from "@atlaskit/pragmatic-drag-and-drop/utils/contains-files";
 import { useTranslations } from "use-intl";
 
+import type { HandlerExceptionScope } from "@stll/errors";
+
 import {
   collectDroppedFileTree,
   type DroppedFileTree,
@@ -15,6 +17,7 @@ import { ClientOperationError } from "@/lib/errors/client";
 import { notifyUserError } from "@/lib/errors/user-toast";
 
 type ExternalFileDropOptions = {
+  exceptionScope: HandlerExceptionScope;
   onDrop: (files: File[]) => void;
   // Optionals accept explicit `undefined` (exactOptionalPropertyTypes) so wrapper
   // components like FileDropZone can forward their own optional props through.
@@ -49,6 +52,7 @@ type ExternalFileDropResult = {
  * while a descendant claims the drag.
  */
 export const useExternalFileDrop = ({
+  exceptionScope,
   onDrop,
   onDropTree,
   onError,
@@ -75,6 +79,26 @@ export const useExternalFileDrop = ({
   const handleDropError = useLatestCallback((error: Error) => {
     onError?.(error);
   });
+  const handleDropFailure = useLatestCallback((error: unknown) => {
+    getAnalytics().captureError(error, {
+      fingerprintKey: "useExternalFileDrop.onDrop:failure",
+      scope: exceptionScope,
+    });
+    const normalized =
+      error instanceof Error
+        ? error
+        : new ClientOperationError({
+            action: "read-dropped-files",
+            message: "Failed to read dropped files",
+            cause: error,
+          });
+    handleDropError(normalized);
+    notifyUserError(normalized, t("errors.uploadFailed"));
+  });
+  const callbacksRef = useRef({ handleDropFailure, handleDroppedTree });
+  useExternalSyncEffect(() => {
+    callbacksRef.current = { handleDropFailure, handleDroppedTree };
+  }, [handleDropFailure, handleDroppedTree]);
 
   useExternalSyncEffect(() => {
     const el = ref.current;
@@ -82,7 +106,7 @@ export const useExternalFileDrop = ({
       return undefined;
     }
 
-    return dropTargetForExternal({
+    const unregister = dropTargetForExternal({
       element: el,
       canDrop: ({ source }) => containsFiles({ source }),
       onDragEnter: () => setIsDropTarget(true),
@@ -106,25 +130,21 @@ export const useExternalFileDrop = ({
               return undefined;
             }
 
-            handleDroppedTree(tree);
+            callbacksRef.current.handleDroppedTree(tree);
             return undefined;
           })
-          .catch((error: unknown) => {
-            getAnalytics().captureError(error);
-            const normalized =
-              error instanceof Error
-                ? error
-                : new ClientOperationError({
-                    action: "read-dropped-files",
-                    message: "Failed to read dropped files",
-                    cause: error,
-                  });
-            handleDropError(normalized);
-            notifyUserError(normalized, t("errors.uploadFailed"));
-          });
+          .catch((error: unknown) =>
+            callbacksRef.current.handleDropFailure(error),
+          );
       },
     });
-  }, [enabled, ref, t, handleDropError, handleDroppedTree]);
+
+    return () => {
+      unregister();
+      setIsDropTarget(false);
+      setIsInnerActive(false);
+    };
+  }, [enabled, ref]);
 
   return { ref, isDropTarget, isInnerActive };
 };

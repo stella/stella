@@ -1,0 +1,1332 @@
+import { panic } from "better-result";
+import { existsSync, readFileSync, statSync } from "node:fs";
+import path from "node:path";
+import * as ts from "tsrs/ast";
+import { API, type Checker, type Symbol as CompilerSymbol } from "tsrs/async";
+
+import { compareCodeUnit } from "@stll/collation";
+import { repoRelativePath } from "@stll/portable-path";
+
+import { childExitStatus } from "../packages/scripts/src/child-exit-status";
+import { createProgram } from "../packages/scripts/src/typescript-program";
+import { BASELINE_PATHS } from "./baseline-paths.ts";
+import { runLedgerMembershipGuard } from "./ledger-membership.ts";
+
+export const REACHABILITY_CATEGORIES = [
+  "imported-source-subject",
+  "source-factory",
+  "e2e-surface",
+  "spawned-entry",
+  "bundled-entry",
+  "sql-or-schema-reader",
+  "artifact-or-workflow-guard",
+  "repository-text-guard",
+  "patched-dependency-subject",
+] as const;
+
+export type ReachabilityCategory = (typeof REACHABILITY_CATEGORIES)[number];
+
+export type ReachabilityFinding = {
+  file: string;
+  kind: "no-classified-reachability" | "local-export-collision";
+  name?: string;
+  attempted?: readonly ReachabilityCategory[];
+};
+
+type AnalyzeOptions = {
+  repoRoot: string;
+  files?: readonly string[];
+  /** Alternate source provider for equivalence tests. */
+  siblingSource?: (
+    filename: string,
+  ) => ts.SourceFile | undefined | Promise<ts.SourceFile | undefined>;
+};
+
+export const parseReachabilityBaseline = (
+  text: string,
+  label: string = BASELINE_PATHS.testSubjectReachability,
+): Record<string, string[]> => {
+  const parsed: unknown = JSON.parse(text);
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+    return panic(`${label} must be an object`);
+  }
+  const entries: (readonly [string, string[]])[] = [];
+  for (const [file, members] of Object.entries(parsed)) {
+    if (
+      !TEST_FILE.test(file) ||
+      !Array.isArray(members) ||
+      members.some((member) => typeof member !== "string")
+    ) {
+      return panic(`Invalid ${label} entry: ${file}`);
+    }
+    entries.push([file, members]);
+  }
+  return Object.fromEntries(entries);
+};
+
+const TEST_FILE = /\.(?:test|spec)\.[cm]?[jt]sx?$/u;
+// Lint fixtures deliberately contain rule violations; their owning tests execute them.
+const isReachabilityTest = (file: string): boolean =>
+  TEST_FILE.test(file) && !file.startsWith(".oxlint-plugins/__fixtures__/");
+const TEST_SUPPORT =
+  /(?:^|\/)(?:__tests__|test|tests|fixtures?|mocks?|test-utils?)(?:\/|[.-])/u;
+const SOURCE_FILE = /(?:\.[cm]?[jt]sx?|\.json)$/u;
+const NODE_NEXT_SOURCE_EXTENSION_SUBSTITUTIONS = new Map([
+  [".js", [".ts", ".tsx"]],
+  [".mjs", [".mts"]],
+  [".cjs", [".cts"]],
+]);
+
+const visitChildren = async (
+  node: ts.Node,
+  visit: (child: ts.Node) => Promise<void>,
+) => {
+  for (const child of node.childrenIter()) {
+    await visit(child);
+  }
+};
+
+const trackedTests = (repoRoot: string): string[] => {
+  const result = Bun.spawnSync(["git", "ls-files", "-z"], {
+    cwd: repoRoot,
+    stderr: "pipe",
+  });
+  if (result.exitCode !== 0) {
+    return panic(`Could not enumerate tests: ${result.stderr.toString()}`);
+  }
+  return result.stdout.toString().split("\0").filter(isReachabilityTest);
+};
+
+const exportTarget = (entry: unknown): string | undefined => {
+  if (typeof entry === "string") {
+    return entry;
+  }
+  if (typeof entry !== "object" || entry === null) {
+    return undefined;
+  }
+  for (const condition of ["import", "default", "types"]) {
+    const target: unknown = Reflect.get(entry, condition);
+    if (typeof target === "string") {
+      return target;
+    }
+  }
+  return undefined;
+};
+
+// Mirrors Node package resolution for workspace packages: an exports map
+// decides every subpath; without one, a subpath is relative to the package
+// root and the bare specifier falls back to src/index.
+const workspacePackageTarget = (
+  packageRoot: string,
+  subpath: string,
+): string | undefined => {
+  const manifestPath = path.join(packageRoot, "package.json");
+  const manifest: unknown = existsSync(manifestPath)
+    ? JSON.parse(readFileSync(manifestPath, "utf-8"))
+    : undefined;
+  const exportsMap: unknown =
+    typeof manifest === "object" && manifest !== null
+      ? Reflect.get(manifest, "exports")
+      : undefined;
+  if (typeof exportsMap === "string") {
+    return subpath === ""
+      ? path.resolve(packageRoot, exportsMap.replace(/\.[cm]?[jt]sx?$/u, ""))
+      : undefined;
+  }
+  if (typeof exportsMap === "object" && exportsMap !== null) {
+    const key = subpath === "" ? "." : `./${subpath}`;
+    let target = exportTarget(Reflect.get(exportsMap, key));
+    for (const [pattern, entry] of Object.entries(exportsMap)) {
+      const [prefix, suffix, ...extra] = pattern.split("*");
+      if (
+        target !== undefined ||
+        prefix === undefined ||
+        suffix === undefined ||
+        extra.length > 0 ||
+        !key.startsWith(prefix) ||
+        !key.endsWith(suffix) ||
+        key.length < prefix.length + suffix.length
+      ) {
+        continue;
+      }
+      const match = key.slice(prefix.length, key.length - suffix.length);
+      target = exportTarget(entry)?.replaceAll("*", () => match);
+    }
+    return target === undefined
+      ? undefined
+      : path.resolve(packageRoot, target.replace(/\.[cm]?[jt]sx?$/u, ""));
+  }
+  return path.resolve(packageRoot, subpath === "" ? "src/index" : subpath);
+};
+
+const candidatePaths = (
+  repoRoot: string,
+  testFile: string,
+  specifier: string,
+) => {
+  const packageMatch = /^(apps|packages)\/([^/]+)\//u.exec(testFile);
+  let unresolved: string | undefined;
+  if (specifier.startsWith(".")) {
+    unresolved = path.resolve(repoRoot, path.dirname(testFile), specifier);
+  } else if (specifier.startsWith("@/") && packageMatch) {
+    const rootKind = packageMatch.at(1);
+    const packageName = packageMatch.at(2);
+    if (rootKind === undefined || packageName === undefined) {
+      return panic(`Invalid package path: ${testFile}`);
+    }
+    const aliasPath =
+      packageName === "api" && specifier.startsWith("@/api/")
+        ? specifier.slice("@/api/".length)
+        : specifier.slice(2);
+    unresolved = path.resolve(
+      repoRoot,
+      rootKind,
+      packageName,
+      "src",
+      aliasPath,
+    );
+  } else if (specifier.startsWith("@stll/")) {
+    const [packageName, ...rest] = specifier.slice("@stll/".length).split("/");
+    if (packageName === undefined) {
+      return [];
+    }
+    const rootKind = statSync(
+      path.join(repoRoot, "packages", packageName, "package.json"),
+      { throwIfNoEntry: false },
+    )?.isFile()
+      ? "packages"
+      : "apps";
+    unresolved = workspacePackageTarget(
+      path.join(repoRoot, rootKind, packageName),
+      rest.join("/"),
+    );
+  }
+  if (!unresolved) {
+    return [];
+  }
+  const runtimeExtension = path.extname(unresolved);
+  const sourceExtensions =
+    NODE_NEXT_SOURCE_EXTENSION_SUBSTITUTIONS.get(runtimeExtension);
+  if (sourceExtensions !== undefined) {
+    const sourcePath = unresolved.slice(0, -runtimeExtension.length);
+    return [
+      ...sourceExtensions.map(
+        (sourceExtension) => `${sourcePath}${sourceExtension}`,
+      ),
+      unresolved,
+    ];
+  }
+  return [
+    unresolved,
+    ...[".ts", ".tsx", ".mts", ".cts"].map(
+      (extension) => `${unresolved}${extension}`,
+    ),
+    ...["index.ts", "index.tsx"].map((name) => path.join(unresolved, name)),
+  ];
+};
+
+const existingSource = (
+  repoRoot: string,
+  testFile: string,
+  specifier: string,
+  includeSupport = false,
+): string | undefined =>
+  candidatePaths(repoRoot, testFile, specifier).find((candidate) => {
+    const relative = repoRelativePath(repoRoot, candidate);
+    return (
+      SOURCE_FILE.test(candidate) &&
+      !TEST_FILE.test(candidate) &&
+      // A support module is a subject when its own colocated test exercises it;
+      // importing unrelated fixtures still does not establish reachability.
+      (includeSupport ||
+        !TEST_SUPPORT.test(relative) ||
+        candidate.replace(/\.[cm]?[jt]sx?$/u, "") ===
+          path.resolve(
+            repoRoot,
+            testFile.replace(/\.(?:test|spec)\.[cm]?[jt]sx?$/u, ""),
+          )) &&
+      existsSync(candidate) &&
+      statSync(candidate).isFile()
+    );
+  });
+
+const namedImports = (node: ts.ImportDeclaration): string[] => {
+  if (node.importClause?.phaseModifier === ts.SyntaxKind.TypeKeyword) {
+    return [];
+  }
+  const names: string[] = [];
+  if (node.importClause?.name) {
+    names.push(node.importClause.name.text);
+  }
+  const bindings = node.importClause?.namedBindings;
+  if (bindings && ts.isNamedImports(bindings)) {
+    for (const element of bindings.elements) {
+      if (!element.isTypeOnly) {
+        names.push(element.name.text);
+      }
+    }
+  } else if (bindings && ts.isNamespaceImport(bindings)) {
+    names.push(bindings.name.text);
+  }
+  return names;
+};
+
+const importedBinding = (
+  node: ts.ImportDeclaration,
+  name: string,
+): ts.Identifier | undefined => {
+  if (node.importClause?.name?.text === name) {
+    return node.importClause.name;
+  }
+  const bindings = node.importClause?.namedBindings;
+  if (bindings && ts.isNamedImports(bindings)) {
+    return bindings.elements.find((element) => element.name.text === name)
+      ?.name;
+  }
+  return bindings?.name;
+};
+
+const isTypePosition = (node: ts.Identifier): boolean => {
+  for (
+    let current: ts.Node = node;
+    !ts.isSourceFile(current);
+    current = current.parent
+  ) {
+    if (ts.isTypeNode(current)) {
+      return true;
+    }
+    if (ts.isExpression(current) && current !== node) {
+      return false;
+    }
+  }
+  return false;
+};
+
+const TEST_ENTRY_POINTS = new Set([
+  "afterAll",
+  "afterEach",
+  "beforeAll",
+  "beforeEach",
+  "describe",
+  "it",
+  "test",
+]);
+
+const calledIdentifier = (
+  node: ts.CallExpression,
+): ts.Identifier | undefined =>
+  ts.isIdentifier(node.expression) ? node.expression : undefined;
+
+const entryPointName = (node: ts.Expression): string | undefined => {
+  if (ts.isIdentifier(node)) {
+    return node.text;
+  }
+  if (ts.isPropertyAccessExpression(node)) {
+    return entryPointName(node.expression);
+  }
+  if (ts.isCallExpression(node)) {
+    return entryPointName(node.expression);
+  }
+  return undefined;
+};
+
+// The name in `const helper = ...` or `function helper()` declares the
+// helper; only a reference elsewhere can make its body run.
+const isDeclarationName = (node: ts.Identifier): boolean =>
+  ((ts.isVariableDeclaration(node.parent) ||
+    ts.isFunctionDeclaration(node.parent) ||
+    ts.isBindingElement(node.parent)) &&
+    node.parent.name === node) ||
+  (ts.isBindingElement(node.parent) && node.parent.propertyName === node);
+
+const runtimeRoots = async (
+  source: ts.SourceFile,
+  checker: Checker,
+  entryNames?: ReadonlySet<string>,
+) => {
+  const identifiers: ts.Identifier[] = [];
+  const collectIdentifiers = (node: ts.Node): void => {
+    if (ts.isIdentifier(node)) {
+      identifiers.push(node);
+    }
+    node.forEachChild(collectIdentifiers);
+  };
+  collectIdentifiers(source);
+  const identifierSymbols = await checker.getSymbolAtLocation(identifiers);
+  const symbolsByIdentifier = new Map(
+    identifiers.map(
+      (identifier, index) => [identifier, identifierSymbols.at(index)] as const,
+    ),
+  );
+  const roots: ts.Node[] = [];
+  const queuedNodes = new Set<ts.Node>();
+  const queuedSymbols = new Set<CompilerSymbol>();
+  const queue: ts.Node[] = [];
+
+  const enqueueNode = (node: ts.Node): void => {
+    if (!queuedNodes.has(node)) {
+      queuedNodes.add(node);
+      queue.push(node);
+    }
+  };
+
+  const enqueueFunction = async (node: ts.Node) => {
+    if (ts.isArrowFunction(node) || ts.isFunctionExpression(node)) {
+      enqueueNode(node.body);
+      return;
+    }
+    if (ts.isIdentifier(node)) {
+      // `return { refresh }` hands the local helper out, not a new property.
+      const symbol = ts.isShorthandPropertyAssignment(node.parent)
+        ? await checker.getShorthandAssignmentValueSymbol(node.parent)
+        : symbolsByIdentifier.get(node);
+      if (symbol === undefined || queuedSymbols.has(symbol)) {
+        return;
+      }
+      queuedSymbols.add(symbol);
+      for (const handle of symbol.declarations) {
+        const declaration =
+          (await handle.resolve()) ??
+          panic("Runtime reachability declaration did not resolve");
+        if (declaration.getSourceFile() !== source) {
+          continue;
+        }
+        if (ts.isFunctionDeclaration(declaration) && declaration.body) {
+          enqueueNode(declaration.body);
+        }
+        if (ts.isVariableDeclaration(declaration) && declaration.initializer) {
+          if (
+            ts.isArrowFunction(declaration.initializer) ||
+            ts.isFunctionExpression(declaration.initializer)
+          ) {
+            enqueueNode(declaration.initializer.body);
+            continue;
+          }
+          if (ts.isSourceFile(declaration.parent.parent.parent)) {
+            enqueueNode(declaration.initializer);
+          }
+        }
+        if (ts.isBindingElement(declaration)) {
+          const variable = declaration.parent.parent;
+          if (
+            ts.isVariableDeclaration(variable) &&
+            variable.initializer &&
+            ts.isSourceFile(variable.parent.parent.parent)
+          ) {
+            enqueueNode(variable.initializer);
+          }
+        }
+      }
+    }
+  };
+
+  const findEntries = async (node: ts.Node) => {
+    if (ts.isCallExpression(node)) {
+      const name = entryPointName(node.expression);
+      if (name && TEST_ENTRY_POINTS.has(name)) {
+        enqueueNode(node);
+        for (const argument of node.arguments) {
+          await enqueueFunction(argument);
+        }
+      }
+    }
+    await visitChildren(node, findEntries);
+  };
+  if (entryNames === undefined) {
+    await findEntries(source);
+  } else {
+    for (const statement of source.statements) {
+      if (
+        !(
+          ts.isFunctionDeclaration(statement) ||
+          ts.isVariableStatement(statement)
+        ) ||
+        !statement.modifiers?.some(
+          (modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword,
+        )
+      ) {
+        continue;
+      }
+      const names = ts.isFunctionDeclaration(statement)
+        ? [statement.name]
+        : statement.declarationList.declarations.map(({ name }) => name);
+      for (const name of names) {
+        if (name && ts.isIdentifier(name) && entryNames.has(name.text)) {
+          await enqueueFunction(name);
+        }
+      }
+    }
+  }
+  for (const statement of entryNames === undefined ? source.statements : []) {
+    if (!ts.isExpressionStatement(statement)) {
+      continue;
+    }
+    const expression = ts.isAwaitExpression(statement.expression)
+      ? statement.expression.expression
+      : statement.expression;
+    if (
+      ts.isCallExpression(expression) &&
+      ts.isIdentifier(expression.expression) &&
+      expression.expression.text.startsWith("register")
+    ) {
+      enqueueNode(expression);
+    }
+  }
+
+  while (queue.length > 0) {
+    const root = queue.shift();
+    if (root === undefined) {
+      return panic("Runtime reachability queue lost an entry");
+    }
+    roots.push(root);
+    const visitCalls = async (node: ts.Node) => {
+      if (node !== root && isDeclaredHelper(node)) {
+        return;
+      }
+      if (ts.isCallExpression(node)) {
+        const callee = calledIdentifier(node);
+        if (callee) {
+          await enqueueFunction(callee);
+        }
+      }
+      if (
+        ts.isIdentifier(node) &&
+        !isTypePosition(node) &&
+        !isDeclarationName(node)
+      ) {
+        await enqueueFunction(node);
+      }
+      await visitChildren(node, visitCalls);
+    };
+    await visitCalls(root);
+  }
+  return roots;
+};
+
+// A helper declared inside a reachable body runs only when called; calls make
+// its body a root of its own. Inline callbacks passed as arguments stay counted.
+const isDeclaredHelper = (node: ts.Node): boolean =>
+  ts.isFunctionDeclaration(node) ||
+  (ts.isFunctionLikeDeclaration(node) &&
+    ts.isVariableDeclaration(node.parent) &&
+    node.parent.initializer === node);
+
+const visitRuntime = (root: ts.Node, visit: (node: ts.Node) => void) => {
+  const walk = (node: ts.Node) => {
+    if (node !== root && isDeclaredHelper(node)) {
+      return;
+    }
+    visit(node);
+    node.forEachChild(walk);
+  };
+  walk(root);
+};
+
+// Source text of the reachable code only, so pattern categories (spawn,
+// build, file reads) cannot match a helper that never runs.
+const runtimeText = (
+  roots: readonly ts.Node[],
+  source: ts.SourceFile,
+): string => {
+  const parts: string[] = [];
+  for (const root of roots) {
+    let cursor = root.getStart(source);
+    const end = root.getEnd();
+    const skip = (node: ts.Node): void => {
+      if (node !== root && isDeclaredHelper(node)) {
+        parts.push(source.text.slice(cursor, node.getStart(source)));
+        cursor = node.getEnd();
+        return;
+      }
+      node.forEachChild(skip);
+    };
+    skip(root);
+    parts.push(source.text.slice(cursor, end));
+  }
+  return parts.join("\n");
+};
+
+const runtimeSymbols = async (roots: readonly ts.Node[], checker: Checker) => {
+  const identifiers: ts.Identifier[] = [];
+  const visit = (node: ts.Node) => {
+    if (
+      ts.isIdentifier(node) &&
+      !isTypePosition(node) &&
+      !isDeclarationName(node) &&
+      !ts.isImportSpecifier(node.parent) &&
+      !ts.isImportClause(node.parent) &&
+      !ts.isNamespaceImport(node.parent)
+    ) {
+      identifiers.push(node);
+    }
+  };
+  for (const root of roots) {
+    visitRuntime(root, visit);
+  }
+  const symbols = new Set<CompilerSymbol>();
+  for (const symbol of await checker.getSymbolAtLocation(identifiers)) {
+    if (symbol !== undefined) {
+      symbols.add(symbol);
+    }
+  }
+  return symbols;
+};
+
+const invokedRuntimeSymbols = async (
+  roots: readonly ts.Node[],
+  checker: Checker,
+) => {
+  const identifiers: ts.Identifier[] = [];
+  for (const root of roots) {
+    visitRuntime(root, (node) => {
+      if (!ts.isCallExpression(node)) {
+        return;
+      }
+      const callee = calledIdentifier(node);
+      if (callee) {
+        identifiers.push(callee);
+      }
+      const entry = entryPointName(node.expression);
+      if (entry && TEST_ENTRY_POINTS.has(entry)) {
+        for (const argument of node.arguments) {
+          if (ts.isIdentifier(argument)) {
+            identifiers.push(argument);
+          }
+        }
+      }
+    });
+  }
+  return new Set(
+    (await checker.getSymbolAtLocation(identifiers)).filter(
+      (symbol) => symbol !== undefined,
+    ),
+  );
+};
+
+const includesRuntimeBinding = (
+  usedSymbols: ReadonlySet<CompilerSymbol>,
+  bindings: ReadonlySet<CompilerSymbol>,
+): boolean => {
+  for (const binding of bindings) {
+    if (usedSymbols.has(binding)) {
+      return true;
+    }
+  }
+  return false;
+};
+
+type NamedCategoryOptions = {
+  file: string;
+  fileText: string;
+  // Pattern categories match only code that runs; see `runtimeText`.
+  reachableText: string;
+};
+
+const namedCategory = ({
+  file,
+  fileText,
+  reachableText: text,
+}: NamedCategoryOptions): ReachabilityCategory | undefined => {
+  if (/\b(?:lint|run)SingleRule\s*\(/u.test(text)) {
+    return "source-factory";
+  }
+  if (
+    /(?:^|\/)(?:e2e|playwright)(?:\/|[.-])/u.test(file) ||
+    /["']@playwright\/test["']/u.test(fileText)
+  ) {
+    return "e2e-surface";
+  }
+  if (/(?:Bun\.spawn|spawnSync|execFile|execa)\s*\(/u.test(text)) {
+    return "spawned-entry";
+  }
+  if (/\bBun\.build\s*\(/u.test(text)) {
+    return "bundled-entry";
+  }
+  if (
+    /readFile(?:Sync)?\s*\([^)]*\.(?:sql|schema)["'`]/su.test(text) ||
+    /(?:drizzle|migration|schema)[^\n]*(?:readFile|glob)/iu.test(text) ||
+    // A migrated test database runs the committed schema itself.
+    (/\bcreateTestPglite\s*\(/u.test(text) &&
+      /\.(?:query|exec)\s*\(/u.test(text))
+  ) {
+    return "sql-or-schema-reader";
+  }
+  if (
+    /(?:\.github\/workflows|artifacts?\/|workflow)[^\n]*(?:readFile|Bun\.file|parse)/iu.test(
+      text,
+    )
+  ) {
+    return "artifact-or-workflow-guard";
+  }
+  if (/(?:readFile(?:Sync)?|Bun\.file|globSync|git\W+show)\s*\(/u.test(text)) {
+    return "repository-text-guard";
+  }
+  return undefined;
+};
+
+type SiblingExportOptions = {
+  repoRoot: string;
+  testFile: string;
+  sourceFor: (
+    filename: string,
+  ) => ts.SourceFile | undefined | Promise<ts.SourceFile | undefined>;
+  parser: API;
+};
+
+const siblingExportNames = async ({
+  repoRoot,
+  testFile,
+  sourceFor,
+  parser,
+}: SiblingExportOptions) => {
+  const stem = testFile.replace(/\.(?:test|spec)\.[cm]?[jt]sx?$/u, "");
+  const names = new Set<string>();
+  for (const extension of [".ts", ".tsx", ".mts", ".cts"]) {
+    const candidate = path.join(repoRoot, `${stem}${extension}`);
+    if (!statSync(candidate, { throwIfNoEntry: false })?.isFile()) {
+      continue;
+    }
+    const source =
+      (await sourceFor(candidate)) ??
+      (
+        await parser.createSourceFile(
+          candidate,
+          readFileSync(candidate, "utf-8"),
+        )
+      ).sourceFile;
+    for (const statement of source.statements) {
+      if (!(
+        ts.isFunctionDeclaration(statement) ||
+        ts.isClassDeclaration(statement) ||
+        ts.isVariableStatement(statement)
+      )) {
+        continue;
+      }
+      if (
+        !statement.modifiers?.some(
+          (modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword,
+        )
+      ) {
+        continue;
+      }
+      if (
+        (ts.isFunctionDeclaration(statement) ||
+          ts.isClassDeclaration(statement)) &&
+        statement.name
+      ) {
+        names.add(statement.name.text);
+      }
+      if (ts.isVariableStatement(statement)) {
+        for (const declaration of statement.declarationList.declarations) {
+          if (ts.isIdentifier(declaration.name)) {
+            names.add(declaration.name.text);
+          }
+        }
+      }
+    }
+  }
+  return names;
+};
+
+type SupportSubject = { file: string; imported: string };
+
+type ImportReachability = {
+  supportSubjects: SupportSubject[];
+  hasFactory: boolean;
+  importedRuntimeBindings: Set<CompilerSymbol>;
+  patchedDependencyBindings: Set<CompilerSymbol>;
+  reachesSourceFileIndex: boolean;
+  reachedSiblingExports: Set<string>;
+};
+
+const SOURCE_FILE_INDEX_OWNER = "packages/scripts/src/source-file-index";
+
+type ImportReachabilityOptions = {
+  repoRoot: string;
+  file: string;
+  source: ts.SourceFile;
+  checker: Checker;
+  usedSymbols: ReadonlySet<CompilerSymbol>;
+  invokedSymbols: ReadonlySet<CompilerSymbol>;
+  patchedPackages: ReadonlySet<string>;
+};
+
+// The repository owns the behaviour its committed dependency patches add, so a
+// test that drives a patched package reaches repository code.
+const patchedPackageNames = (repoRoot: string): ReadonlySet<string> => {
+  const manifestPath = path.join(repoRoot, "package.json");
+  if (!existsSync(manifestPath)) {
+    return new Set();
+  }
+  const manifest: unknown = JSON.parse(readFileSync(manifestPath, "utf-8"));
+  const patched =
+    typeof manifest === "object" && manifest !== null
+      ? Reflect.get(manifest, "patchedDependencies")
+      : undefined;
+  if (typeof patched !== "object" || patched === null) {
+    return new Set();
+  }
+  return new Set(
+    Object.keys(patched).map((key) => {
+      const versionAt = key.lastIndexOf("@");
+      return versionAt > 0 ? key.slice(0, versionAt) : key;
+    }),
+  );
+};
+
+const packageNameOf = (specifier: string): string => {
+  const segments = specifier.split("/");
+  return specifier.startsWith("@")
+    ? segments.slice(0, 2).join("/")
+    : (segments.at(0) ?? specifier);
+};
+
+type DynamicImport = {
+  specifier: string;
+  bindings: readonly { symbol: CompilerSymbol; imported: string }[];
+};
+
+// Destructured imports may initialize a subject inside a test or its helpers.
+const dynamicImport = async (
+  declaration: ts.VariableDeclaration,
+  checker: Checker,
+): Promise<DynamicImport | undefined> => {
+  const awaited = declaration.initializer;
+  const imported =
+    awaited && ts.isAwaitExpression(awaited) ? awaited.expression : awaited;
+  if (
+    !ts.isObjectBindingPattern(declaration.name) ||
+    !imported ||
+    !ts.isCallExpression(imported) ||
+    imported.expression.kind !== ts.SyntaxKind.ImportKeyword ||
+    imported.arguments.length !== 1
+  ) {
+    return undefined;
+  }
+  const specifier = imported.arguments.at(0);
+  if (!specifier || !ts.isStringLiteral(specifier)) {
+    return undefined;
+  }
+  const bindings = [];
+  for (const element of declaration.name.elements) {
+    if (!element.name || !ts.isIdentifier(element.name)) {
+      continue;
+    }
+    const symbol = await checker.getSymbolAtLocation(element.name);
+    const exportName = element.propertyName ?? element.name;
+    if (symbol && ts.isIdentifier(exportName)) {
+      bindings.push({ symbol, imported: exportName.text });
+    }
+  }
+  return { specifier: specifier.text, bindings };
+};
+
+const reachedNamedImports = async (
+  statement: ts.ImportDeclaration,
+  checker: Checker,
+  usedSymbols: ReadonlySet<CompilerSymbol>,
+): Promise<string[]> => {
+  const clause = statement.importClause;
+  const bindings = clause?.namedBindings;
+  if (
+    !clause ||
+    clause.phaseModifier === ts.SyntaxKind.TypeKeyword ||
+    !bindings ||
+    !ts.isNamedImports(bindings)
+  ) {
+    return [];
+  }
+  const names: string[] = [];
+  for (const element of bindings.elements) {
+    if (element.isTypeOnly) {
+      continue;
+    }
+    const symbol = await checker.getSymbolAtLocation(element.name);
+    if (symbol && usedSymbols.has(symbol)) {
+      names.push(element.propertyName?.text ?? element.name.text);
+    }
+  }
+  return names;
+};
+
+const importReachability = async ({
+  repoRoot,
+  file,
+  source,
+  checker,
+  usedSymbols,
+  invokedSymbols,
+  patchedPackages,
+}: ImportReachabilityOptions): Promise<ImportReachability> => {
+  const supportSubjects: SupportSubject[] = [];
+  const importedRuntimeBindings = new Set<CompilerSymbol>();
+  const patchedDependencyBindings = new Set<CompilerSymbol>();
+  const reachedSiblingExports = new Set<string>();
+  const siblingStem = path.resolve(
+    repoRoot,
+    file.replace(/\.(?:test|spec)\.[cm]?[jt]sx?$/u, ""),
+  );
+  let hasFactory = false;
+  let reachesSourceFileIndex = false;
+  const visitImports = async (node: ts.Node): Promise<void> => {
+    if (ts.isVariableDeclaration(node)) {
+      const dynamic = await dynamicImport(node, checker);
+      if (dynamic) {
+        const resolved = existingSource(repoRoot, file, dynamic.specifier);
+        const support =
+          resolved === undefined
+            ? existingSource(repoRoot, file, dynamic.specifier, true)
+            : undefined;
+        for (const { symbol, imported } of dynamic.bindings) {
+          if (patchedPackages.has(packageNameOf(dynamic.specifier))) {
+            patchedDependencyBindings.add(symbol);
+          } else if (support && invokedSymbols.has(symbol)) {
+            supportSubjects.push({ file: support, imported });
+          } else if (resolved) {
+            importedRuntimeBindings.add(symbol);
+            if (
+              usedSymbols.has(symbol) &&
+              resolved.replace(/\.[cm]?[jt]sx?$/u, "") === siblingStem
+            ) {
+              reachedSiblingExports.add(imported);
+            }
+          }
+        }
+      }
+    }
+    await visitChildren(node, visitImports);
+  };
+  await visitImports(source);
+  for (const statement of source.statements) {
+    if (
+      !ts.isImportDeclaration(statement) ||
+      !ts.isStringLiteral(statement.moduleSpecifier)
+    ) {
+      continue;
+    }
+    if (patchedPackages.has(packageNameOf(statement.moduleSpecifier.text))) {
+      for (const name of namedImports(statement)) {
+        const binding = importedBinding(statement, name);
+        const symbol = binding && (await checker.getSymbolAtLocation(binding));
+        if (symbol) {
+          patchedDependencyBindings.add(symbol);
+        }
+      }
+      continue;
+    }
+    const resolvedSource = existingSource(
+      repoRoot,
+      file,
+      statement.moduleSpecifier.text,
+    );
+    if (!resolvedSource) {
+      const support = existingSource(
+        repoRoot,
+        file,
+        statement.moduleSpecifier.text,
+        true,
+      );
+      if (support) {
+        for (const imported of await reachedNamedImports(
+          statement,
+          checker,
+          invokedSymbols,
+        )) {
+          supportSubjects.push({ file: support, imported });
+        }
+      }
+      continue;
+    }
+    for (const name of namedImports(statement)) {
+      const binding = importedBinding(statement, name);
+      const symbol = binding && (await checker.getSymbolAtLocation(binding));
+      if (symbol) {
+        importedRuntimeBindings.add(symbol);
+        const owner = resolvedSource
+          .replaceAll(path.sep, "/")
+          .replace(/\.[cm]?[jt]sx?$/u, "");
+        if (
+          owner.endsWith(SOURCE_FILE_INDEX_OWNER) &&
+          usedSymbols.has(symbol)
+        ) {
+          reachesSourceFileIndex = true;
+        }
+      }
+      if (/^(?:create|build|make)|Factory$/u.test(name)) {
+        hasFactory = true;
+      }
+    }
+    if (resolvedSource.replace(/\.[cm]?[jt]sx?$/u, "") !== siblingStem) {
+      continue;
+    }
+    const bindings = statement.importClause?.namedBindings;
+    if (!bindings || !ts.isNamedImports(bindings)) {
+      continue;
+    }
+    for (const element of bindings.elements) {
+      const symbol = await checker.getSymbolAtLocation(element.name);
+      if (symbol && usedSymbols.has(symbol)) {
+        reachedSiblingExports.add(
+          element.propertyName?.text ?? element.name.text,
+        );
+      }
+    }
+  }
+  return {
+    supportSubjects,
+    hasFactory,
+    importedRuntimeBindings,
+    patchedDependencyBindings,
+    reachesSourceFileIndex,
+    reachedSiblingExports,
+  };
+};
+
+type LocalCollisionOptions = {
+  repoRoot: string;
+  file: string;
+  source: ts.SourceFile;
+  reachedSiblingExports: ReadonlySet<string>;
+  sourceFor: (
+    filename: string,
+  ) => ts.SourceFile | undefined | Promise<ts.SourceFile | undefined>;
+  parser: API;
+};
+
+const localCollisionFindings = async ({
+  repoRoot,
+  file,
+  source,
+  reachedSiblingExports,
+  sourceFor,
+  parser,
+}: LocalCollisionOptions): Promise<ReachabilityFinding[]> => {
+  const findings: ReachabilityFinding[] = [];
+  const siblingNames = await siblingExportNames({
+    repoRoot,
+    testFile: file,
+    sourceFor,
+    parser,
+  });
+  const addCollision = (name: string): void => {
+    if (
+      siblingNames.has(name) &&
+      !/fixture/iu.test(name) &&
+      !reachedSiblingExports.has(name)
+    ) {
+      findings.push({ file, kind: "local-export-collision", name });
+    }
+  };
+  for (const statement of source.statements) {
+    if (
+      (ts.isFunctionDeclaration(statement) ||
+        ts.isClassDeclaration(statement)) &&
+      statement.name
+    ) {
+      addCollision(statement.name.text);
+    }
+    if (!ts.isVariableStatement(statement)) {
+      continue;
+    }
+    for (const declaration of statement.declarationList.declarations) {
+      if (
+        ts.isIdentifier(declaration.name) &&
+        declaration.initializer &&
+        (ts.isArrowFunction(declaration.initializer) ||
+          ts.isFunctionExpression(declaration.initializer))
+      ) {
+        addCollision(declaration.name.text);
+      }
+    }
+  }
+  return findings;
+};
+
+// Include support modules as compiler roots even when their application's alias
+// is not part of this repository-wide program. Discovery alone never grants
+// reachability: only the imported export's invoked body is inspected below.
+const supportSourceRoots = (
+  repoRoot: string,
+  files: readonly string[],
+): string[] => {
+  const discovered = new Set<string>();
+  const queue = [...files];
+  const transpilers = {
+    ts: new Bun.Transpiler({ loader: "ts" }),
+    tsx: new Bun.Transpiler({ loader: "tsx" }),
+  };
+  for (const file of queue) {
+    const text = readFileSync(path.resolve(repoRoot, file), "utf-8");
+    const transpiler = file.endsWith("x") ? transpilers.tsx : transpilers.ts;
+    for (const { path: specifier } of transpiler.scanImports(
+      text.replace(/^#![^\n]*\n/u, ""),
+    )) {
+      const resolved = existingSource(repoRoot, file, specifier, true);
+      if (
+        !resolved ||
+        resolved.endsWith(".json") ||
+        discovered.has(resolved) ||
+        !TEST_SUPPORT.test(repoRelativePath(repoRoot, resolved))
+      ) {
+        continue;
+      }
+      discovered.add(resolved);
+      queue.push(repoRelativePath(repoRoot, resolved));
+    }
+  }
+  return [...discovered];
+};
+
+export const analyzeTestSubjectReachability = async ({
+  repoRoot,
+  files = trackedTests(repoRoot),
+  siblingSource,
+}: AnalyzeOptions): Promise<ReachabilityFinding[]> => {
+  const testFiles = files.filter(isReachabilityTest);
+  const findings: ReachabilityFinding[] = [];
+  const opened = await createProgram({
+    rootNames: [
+      ...testFiles.map((file) => path.join(repoRoot, file)),
+      ...supportSourceRoots(repoRoot, testFiles),
+    ],
+    compilerOptions: {
+      allowJs: true,
+      jsx: "preserve",
+      moduleResolution: "bundler",
+      noResolve: false,
+    },
+  });
+  const parser = new API({ cwd: repoRoot });
+  try {
+    const { program, checker } = opened;
+    const patchedPackages = patchedPackageNames(repoRoot);
+    // The compiler's resolution-aware index already owns imported siblings.
+    // Keep reuse inside this scan so changed sources/resolution cannot go stale.
+    const sourceFor =
+      siblingSource ??
+      (async (filename: string) => await program.getSourceFile(filename));
+    const supportReachesSubject = async (
+      subjects: readonly SupportSubject[],
+      visited = new Set<string>(),
+    ): Promise<boolean> => {
+      for (const subject of subjects) {
+        const key = `${subject.file}:${subject.imported}`;
+        if (visited.has(key)) {
+          continue;
+        }
+        visited.add(key);
+        const source = await program.getSourceFile(subject.file);
+        if (!source) {
+          panic(`Could not inspect test support ${subject.file}`);
+        }
+        const roots = await runtimeRoots(
+          source,
+          checker,
+          new Set([subject.imported]),
+        );
+        const usedSymbols = await runtimeSymbols(roots, checker);
+        const invokedSymbols = await invokedRuntimeSymbols(roots, checker);
+        const file = repoRelativePath(repoRoot, subject.file);
+        const imports = await importReachability({
+          repoRoot,
+          file,
+          source,
+          checker,
+          usedSymbols,
+          invokedSymbols,
+          patchedPackages,
+        });
+        if (
+          namedCategory({
+            file,
+            fileText: source.text,
+            reachableText: runtimeText(roots, source),
+          }) ||
+          includesRuntimeBinding(
+            usedSymbols,
+            imports.importedRuntimeBindings,
+          ) ||
+          includesRuntimeBinding(
+            usedSymbols,
+            imports.patchedDependencyBindings,
+          ) ||
+          (await supportReachesSubject(imports.supportSubjects, visited))
+        ) {
+          return true;
+        }
+      }
+      return false;
+    };
+    for (const file of testFiles) {
+      const absolute = path.join(repoRoot, file);
+      const source =
+        (await program.getSourceFile(absolute)) ??
+        panic(`Could not parse ${file}`);
+      const text = source.text;
+      const reachableRuntime = await runtimeRoots(source, checker);
+      const usedSymbols = await runtimeSymbols(reachableRuntime, checker);
+      const invokedSymbols = await invokedRuntimeSymbols(
+        reachableRuntime,
+        checker,
+      );
+      const {
+        hasFactory,
+        importedRuntimeBindings,
+        patchedDependencyBindings,
+        reachesSourceFileIndex,
+        reachedSiblingExports,
+        supportSubjects,
+      } = await importReachability({
+        repoRoot,
+        file,
+        source,
+        checker,
+        usedSymbols,
+        invokedSymbols,
+        patchedPackages,
+      });
+      let category = namedCategory({
+        file,
+        fileText: text,
+        reachableText: runtimeText(reachableRuntime, source),
+      });
+      if (reachesSourceFileIndex) {
+        category = "repository-text-guard";
+      } else if (includesRuntimeBinding(usedSymbols, importedRuntimeBindings)) {
+        category = hasFactory ? "source-factory" : "imported-source-subject";
+      } else if (
+        !category &&
+        includesRuntimeBinding(usedSymbols, patchedDependencyBindings)
+      ) {
+        category = "patched-dependency-subject";
+      }
+      if (!category && (await supportReachesSubject(supportSubjects))) {
+        category = "source-factory";
+      }
+      if (!category) {
+        let attempted: readonly ReachabilityCategory[] =
+          REACHABILITY_CATEGORIES;
+        if (hasFactory) {
+          attempted = ["source-factory"];
+        } else if (importedRuntimeBindings.size > 0) {
+          attempted = ["imported-source-subject"];
+        }
+        findings.push({
+          file,
+          kind: "no-classified-reachability",
+          attempted,
+        });
+      }
+
+      findings.push(
+        ...(await localCollisionFindings({
+          repoRoot,
+          file,
+          source,
+          reachedSiblingExports,
+          sourceFor,
+          parser,
+        })),
+      );
+    }
+    return findings.toSorted((left, right) => {
+      const leftKey = `${left.file}:${left.kind}:${left.name ?? ""}`;
+      const rightKey = `${right.file}:${right.kind}:${right.name ?? ""}`;
+      return compareCodeUnit(leftKey, rightKey);
+    });
+  } finally {
+    await Promise.all([parser.close(), opened.close()]);
+  }
+};
+
+const baselineMembers = (text: string, label: string): string[] =>
+  Object.entries(parseReachabilityBaseline(text, label)).flatMap(
+    ([file, members]) => members.map((member) => `${file}:${member}`),
+  );
+
+export const checkReachabilityBaselineMembership = (
+  repoRoot: string,
+  args: readonly string[],
+): number =>
+  runLedgerMembershipGuard({
+    ledgerRel: BASELINE_PATHS.testSubjectReachability,
+    repoRoot,
+    parseLedger: baselineMembers,
+    label: "test subject reachability",
+    remediation: "remove the new exception and make the test reach its subject",
+    args,
+  });
+
+if (import.meta.main) {
+  const repoRoot = path.resolve(import.meta.dir, "..");
+  if (process.argv.includes("--self-test")) {
+    const result = Bun.spawnSync(
+      // CI runs this beside other checks; the slowest fixture test took
+      // 6.4 s there, so allow about 2.5 times that instead of Bun's 5 s.
+      [
+        "bun",
+        "test",
+        "--timeout",
+        "15000",
+        "scripts/test-subject-reachability.test.ts",
+      ],
+      {
+        cwd: repoRoot,
+        stdout: "inherit",
+        stderr: "inherit",
+      },
+    );
+    process.exit(childExitStatus(result));
+  }
+  if (!process.argv.includes("--base")) {
+    panic(
+      "Usage: bun scripts/test-subject-reachability.ts --self-test | --base",
+    );
+  }
+  const membershipStatus = checkReachabilityBaselineMembership(
+    repoRoot,
+    process.argv.slice(2),
+  );
+  if (membershipStatus !== 0) {
+    process.exit(membershipStatus);
+  }
+  const findings = await analyzeTestSubjectReachability({ repoRoot });
+  const baseline = parseReachabilityBaseline(
+    readFileSync(
+      path.join(repoRoot, "scripts/test-subject-reachability-baseline.json"),
+      "utf-8",
+    ),
+  );
+  const current = new Map<string, string[]>();
+  for (const finding of findings) {
+    const member = `${finding.kind}${finding.name ? `:${finding.name}` : ""}`;
+    current.set(finding.file, [...(current.get(finding.file) ?? []), member]);
+  }
+  const failures: string[] = [];
+  for (const [file, members] of current) {
+    const allowed = new Set(baseline[file]);
+    for (const member of members) {
+      if (!allowed.has(member)) {
+        const finding = findings.find(
+          (candidate) =>
+            candidate.file === file &&
+            `${candidate.kind}${candidate.name ? `:${candidate.name}` : ""}` ===
+              member,
+        );
+        const attempted = finding?.attempted?.join(", ") ?? "not applicable";
+        failures.push(`${file}: ${member} (attempted: ${attempted})`);
+      }
+    }
+  }
+  for (const [file, allowed] of Object.entries(baseline)) {
+    const actual = new Set(current.get(file));
+    for (const member of allowed) {
+      if (!actual.has(member)) {
+        failures.push(`${file}: remove cleaned baseline member ${member}`);
+      }
+    }
+  }
+  if (failures.length > 0) {
+    panic(`Test subject reachability census failed:\n${failures.join("\n")}`);
+  }
+}

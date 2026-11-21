@@ -1,12 +1,19 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import path from "node:path";
-import ts from "typescript";
-
 import {
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
+import path from "node:path";
+import { API, ModuleKind, ModuleResolutionKind } from "tsrs/async";
+
+import { createProgram } from "../packages/scripts/src/typescript-program";
+import {
+  countDbAwaitInLoopDirectives,
   type DbAwaitInLoopReport,
   isApiSourceInScope,
-  countDbAwaitInLoopDirectives,
   scanDbAwaitInLoop,
 } from "./db-await-in-loop";
 
@@ -45,16 +52,21 @@ export const Result = {
   tryPromise: async <T>(fn: () => Promise<T>): Promise<T> => await fn(),
 };
 `,
-  "chunked.ts": `
-export const chunked = <T>(items: readonly T[], size: number): T[][] => {
+  "packages/concurrency/src/chunk.ts": `
+export const chunk = <T>(items: readonly T[], size: number): T[][] => {
   const chunks: T[][] = [];
   for (let i = 0; i < items.length; i += size) chunks.push(items.slice(i, i + size));
   return chunks;
 };
 `,
+  "fake-chunk.ts": `
+export const chunk = <T>(items: readonly T[], _size: number): T[][] => items.map(item => [item]);
+`,
   "bounded-rounds.ts": `
 import { rootDb, items, type Transaction } from "./db/root";
-import { chunked, chunked as batches } from "./chunked";
+import { chunk, chunk as batches } from "@stll/concurrency/chunk";
+import * as concurrency from "@stll/concurrency/chunk";
+import { chunk as lookalike } from "./fake-chunk";
 import { writeOne } from "./helpers";
 import { Result } from "./result";
 declare const ids: number[];
@@ -64,10 +76,15 @@ const tuple = [1, 2, 3] as const;
 const registry = { first: 1, second: 2 } as const;
 const readonlyRegistry: { readonly first: number; readonly second: number } = { first: 1, second: 2 };
 const alias = batches;
+const namespaceAlias = concurrency.chunk;
 export const accepted = async () => {
-  for (const group of chunked(ids, SIZE)) { await rootDb.select().from(items); }
+  for (const group of chunk(ids, SIZE)) { await rootDb.select().from(items); }
   for (const group of batches(ids, SIZES.batch)) { await rootDb.select().from(items); }
   for (const group of alias(ids, 4)) { await rootDb.select().from(items); }
+  for (const group of concurrency.chunk(ids, SIZE)) { await rootDb.select().from(items); }
+  for (const group of namespaceAlias(ids, SIZE)) { await rootDb.select().from(items); }
+  for (const [index, group] of batches(ids, SIZE).entries()) { await rootDb.select().from(items); }
+  for (const group of batches(ids, SIZE).values()) { await rootDb.select().from(items); }
   for (let i = 0; i < ids.length; i += SIZE) {
     const group = ids.slice(i, i + SIZE);
     await rootDb.select().from(items);
@@ -88,11 +105,21 @@ export const signalBound = async (signal: AbortSignal) => {
   for (let i = 0; i < 3 && !signal.aborted; i++) { await rootDb.select().from(items); }
 };
 export async function* yieldedFanOut(tx: Transaction) {
-  for (const group of chunked(ids, SIZE)) {
+  for (const group of chunk(ids, SIZE)) {
     yield* Result.await(Promise.all(group.map(id => writeOne(tx, id)))); // expect: handle
   }
 }
 export const rejected = async (size: number, narrowSize: 8, cursor: string | null, tx: Transaction) => {
+  for (const group of lookalike(ids, SIZE)) {
+    await rootDb.select().from(items); // expect: query
+  }
+  const localChunk = <T>(items: readonly T[], _size: number) => items.map(item => [item]);
+  for (const group of localChunk(ids, SIZE)) {
+    await rootDb.select().from(items); // expect: query
+  }
+  for (const [index, group] of batches(ids, size).entries()) {
+    await rootDb.select().from(items); // expect: query
+  }
   const mutableView: { first: number; second: number } = registry;
   for (const kind of Object.values(mutableView)) {
     await rootDb.select().from(items); // expect: query
@@ -100,45 +127,45 @@ export const rejected = async (size: number, narrowSize: 8, cursor: string | nul
   for (const id of ids) {
     await rootDb.select().from(items); // expect: query
   }
-  for (const group of chunked(ids, size)) {
+  for (const group of chunk(ids, size)) {
     await rootDb.select().from(items); // expect: query
   }
-  for (const group of chunked(ids, narrowSize)) {
+  for (const group of chunk(ids, narrowSize)) {
     await rootDb.select().from(items); // expect: query
   }
   let variableSize = 4;
-  for (const group of chunked(ids, variableSize)) {
+  for (const group of chunk(ids, variableSize)) {
     await rootDb.select().from(items); // expect: query
   }
-  for (const group of chunked(ids, Math.min(4, size))) {
+  for (const group of chunk(ids, Math.min(4, size))) {
     await rootDb.select().from(items); // expect: query
   }
-  for (const group of chunked(ids, 1)) {
+  for (const group of chunk(ids, 1)) {
     await rootDb.select().from(items); // expect: query
   }
-  for (const group of chunked(ids, SIZE)) {
+  for (const group of chunk(ids, SIZE)) {
     await rootDb.select().from(items); // expect: query
     if (group.length === 0) return await rootDb.select().from(items);
   }
-  for (const group of chunked(ids, SIZE)) {
+  for (const group of chunk(ids, SIZE)) {
     await rootDb.select().from(items); // expect: query
     await rootDb.select().from(items); // expect: query
   }
   for (const id of ids) {
-    for (const group of chunked(ids, SIZE)) {
+    for (const group of chunk(ids, SIZE)) {
       await rootDb.select().from(items); // expect: query
     }
   }
-  for (const group of chunked(ids, SIZE)) {
+  for (const group of chunk(ids, SIZE)) {
     for (const row of group) {
       await rootDb.select().from(items); // expect: query
     }
   }
-  for (const group of chunked(ids, SIZE)) {
+  for (const group of chunk(ids, SIZE)) {
     await Promise.all(group.map(id => writeOne(tx, id))); // expect: handle
   }
   await Promise.all(ids.map(async id => {
-    for (const group of chunked(ids, SIZE)) {
+    for (const group of chunk(ids, SIZE)) {
       await rootDb.select().from(items); // expect: query
     }
   }));
@@ -610,6 +637,7 @@ const expectedFromMarkers = (source: string): string[] =>
     .toSorted();
 
 let fixtureRoot = "";
+let resolvedChunkFile: string | undefined;
 let report: DbAwaitInLoopReport = {
   hits: [],
   suppressedHits: 0,
@@ -620,7 +648,9 @@ let report: DbAwaitInLoopReport = {
   filesScanned: 0,
 };
 
-beforeAll(() => {
+// timeout: checking the fixture program against the Drizzle types can exceed
+// Bun's five-second default on a loaded runner; no wait is involved.
+beforeAll(async () => {
   mkdirSync(FIXTURE_PARENT, { recursive: true });
   fixtureRoot = mkdtempSync(path.join(FIXTURE_PARENT, "db-await-in-loop-"));
   const rootNames = Object.entries(FIXTURE_FILES).map(([relative, source]) => {
@@ -629,27 +659,61 @@ beforeAll(() => {
     writeFileSync(file, source.trimStart());
     return file;
   });
-  const program = ts.createProgram({
+  const chunkPackage = path.join(fixtureRoot, "packages/concurrency");
+  writeFileSync(
+    path.join(chunkPackage, "package.json"),
+    JSON.stringify({
+      name: "@stll/concurrency",
+      exports: { "./chunk": "./src/chunk.ts" },
+    }),
+  );
+  mkdirSync(path.join(fixtureRoot, "node_modules/@stll"), { recursive: true });
+  symlinkSync(
+    chunkPackage,
+    path.join(fixtureRoot, "node_modules/@stll/concurrency"),
+    "dir",
+  );
+  const opened = await createProgram({
     rootNames,
-    options: {
-      module: ts.ModuleKind.ESNext,
-      moduleResolution: ts.ModuleResolutionKind.Bundler,
+    compilerOptions: {
+      preserveSymlinks: true,
+      module: "ESNext",
+      moduleResolution: "Bundler",
       noEmit: true,
       skipLibCheck: true,
       strict: true,
-      target: ts.ScriptTarget.ESNext,
-      lib: ["lib.esnext.d.ts"],
+      target: "ESNext",
+      lib: ["esnext"],
       types: [],
     },
   });
-  report = scanDbAwaitInLoop({
-    program,
-    repositoryRoot: fixtureRoot,
-    isInScope: (relative) => !relative.startsWith("db/"),
-    handleDeclarationFiles: HANDLE_MODULES,
-    chunkHelperFiles: ["chunked.ts"],
-  });
-});
+  const api = new API({ cwd: fixtureRoot });
+  try {
+    const resolver = await api.createModuleResolver({
+      preserveSymlinks: true,
+      module: ModuleKind.ESNext,
+      moduleResolution: ModuleResolutionKind.Bundler,
+    });
+    resolvedChunkFile = (
+      await resolver.resolveModuleName(
+        "@stll/concurrency/chunk",
+        fixtureRoot,
+        undefined,
+        {},
+      )
+    ).resolvedModule?.resolvedFileName;
+    report = await scanDbAwaitInLoop({
+      program: opened.program,
+      checker: opened.checker,
+      repositoryRoot: fixtureRoot,
+      isInScope: (relative) => !relative.startsWith("db/"),
+      handleDeclarationFiles: HANDLE_MODULES,
+    });
+  } finally {
+    await api.close();
+    await opened.close();
+  }
+}, 60_000);
 
 afterAll(() => {
   if (fixtureRoot !== "") {
@@ -671,6 +735,11 @@ const observed = (file: string): string[] =>
   ].toSorted();
 
 describe("db-await-in-loop", () => {
+  test("resolves canonical workspace imports through preserved symlinks", () => {
+    expect(resolvedChunkFile).toBe(
+      path.join(fixtureRoot, "node_modules/@stll/concurrency/src/chunk.ts"),
+    );
+  });
   test("recognizes handles by type, not by name", () => {
     expect(observed("cases.ts")).toEqual(
       expectedFromMarkers(sourceOf("cases.ts")),
@@ -681,7 +750,7 @@ describe("db-await-in-loop", () => {
     expect(observed("bounded-rounds.ts")).toEqual(
       expectedFromMarkers(sourceOf("bounded-rounds.ts")),
     );
-    expect(report.boundedRoundHits).toBe(16);
+    expect(report.boundedRoundHits).toBe(20);
   });
 
   test("helpers reached from a flagged site are not reported on their own", () => {

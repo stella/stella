@@ -1,11 +1,14 @@
 import { useQuery } from "@tanstack/react-query";
+import { useRouter } from "@tanstack/react-router";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { SIGNAL_KIND } from "@stll/api-contract/signals";
 import type { SignalEvidence } from "@stll/api-contract/signals";
+import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 import { UserText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
+import { DetailsGrid, DetailsItem } from "@stll/ui/details-grid";
 import { AlertCircleIcon } from "@stll/ui/icons";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { Skeleton } from "@stll/ui/skeleton";
@@ -13,8 +16,10 @@ import { cn } from "@stll/ui/utils";
 
 import { openEntityInInspector } from "@/components/chat/entity-open";
 import { InspectorTabHeader } from "@/components/inspector/inspector-tab-header";
+import { InspectorTitle } from "@/components/inspector/inspector-title";
 import type { InspectorViewRenderProps } from "@/components/inspector/view-registry";
 import { MatterRefLink } from "@/components/matter-ref-link";
+import { RecoverableErrorStatus } from "@/components/recoverable-error-status";
 import type { InboxSignalViewPayload } from "@/features/inbox/signal-inspector.logic";
 import {
   OPEN_WORK_STATUS_LABEL_KEY,
@@ -30,7 +35,7 @@ import { detached } from "@/lib/detached";
 import type { InboxSignal } from "@/lib/inbox/queries";
 import { inboxSignalOptions } from "@/lib/inbox/queries";
 import { MEDIUM_DATE_SHORT_TIME_FORMAT } from "@/lib/relative-time";
-import { sanitizeHref } from "@/lib/sanitize-href";
+import { getCurrentWorkspaceDocument } from "@/lib/workspaces/use-workspace-view-params";
 
 /** One inbox signal's evidence: the facts the card's claim rests on. */
 export const SignalInspectorView = ({
@@ -55,22 +60,22 @@ export const SignalInspectorView = ({
         <div className="flex flex-col gap-5 p-4">
           {isPending && <EvidenceSkeleton />}
           {isError && (
-            <div
+            <RecoverableErrorStatus
               className="text-muted-foreground flex flex-col items-center gap-3 py-10 text-center text-sm"
-              role="alert"
-            >
-              <AlertCircleIcon className="text-destructive size-8" />
-              <p>{t("common.unexpectedError")}</p>
-              <Button
-                onClick={() => {
-                  detached(refetch(), "inbox.refetch-signal-evidence");
-                }}
-                size="sm"
-                variant="outline"
-              >
-                {t("common.retry")}
-              </Button>
-            </div>
+              message={t("common.unexpectedError")}
+              icon={<AlertCircleIcon className="text-destructive size-8" />}
+              actions={
+                <Button
+                  onClick={() => {
+                    detached(refetch(), "inbox.refetch-signal-evidence");
+                  }}
+                  size="sm"
+                  variant="outline"
+                >
+                  {t("common.retry")}
+                </Button>
+              }
+            />
           )}
           {signal && <SignalHeader signal={signal} />}
           {signal && (
@@ -123,9 +128,9 @@ const SignalHeader = ({ signal }: { signal: InboxSignal }) => {
           )}
         </time>
       </div>
-      <h2 className="text-base font-semibold text-balance">
+      <InspectorTitle isEmpty={signal.title === ""}>
         <UserText>{signal.title}</UserText>
-      </h2>
+      </InspectorTitle>
       <UserText as="p" className="text-muted-foreground text-sm text-pretty">
         {signal.summary}
       </UserText>
@@ -163,8 +168,8 @@ const EvidenceBody = ({ evidence, signal }: EvidenceBodyProps) => {
           <UserText as="p" className="text-pretty whitespace-pre-wrap">
             {evidence.description}
           </UserText>
-          <dl className="flex flex-col gap-2">
-            <Row label={t("emailViewer.attachments")}>
+          <DetailsGrid>
+            <DetailsItem label={t("emailViewer.attachments")}>
               {evidence.attachments.length === 0 ? (
                 <span className="text-muted-foreground">
                   {t("inbox.evidence.noAttachments")}
@@ -178,68 +183,68 @@ const EvidenceBody = ({ evidence, signal }: EvidenceBodyProps) => {
                   ))}
                 </ul>
               )}
-            </Row>
-          </dl>
+            </DetailsItem>
+          </DetailsGrid>
         </div>
       );
     case SIGNAL_KIND.HEARING_CHANGED:
       return (
-        <dl className="flex flex-col gap-2 text-sm">
-          <Row label={t("common.court")}>
+        <DetailsGrid>
+          <DetailsItem label={t("common.court")}>
             <UserText>{evidence.courtName}</UserText>
-          </Row>
-          <Row label={t("caseLaw.columns.caseNumber")}>
+          </DetailsItem>
+          <DetailsItem label={t("caseLaw.columns.caseNumber")}>
             <UserText>{evidence.caseNumber}</UserText>
-          </Row>
+          </DetailsItem>
           {evidence.previousAt !== null && (
-            <Row label={t("inbox.evidence.previous")}>
+            <DetailsItem label={t("inbox.evidence.previous")}>
               <s className="text-muted-foreground">
                 {formatDateTime(evidence.previousAt)}
               </s>
-            </Row>
+            </DetailsItem>
           )}
-          <Row label={t("inbox.evidence.current")}>
+          <DetailsItem label={t("inbox.evidence.current")}>
             {formatDateTime(evidence.currentAt)}
-          </Row>
+          </DetailsItem>
           {evidence.hearingType !== null && (
-            <Row label={t("inbox.evidence.hearingType")}>
+            <DetailsItem label={t("inbox.evidence.hearingType")}>
               <UserText>{evidence.hearingType}</UserText>
-            </Row>
+            </DetailsItem>
           )}
           {evidence.sourceUrl !== null && (
-            <Row label={t("common.source")}>
+            <DetailsItem label={t("common.source")} span="wide">
               <SourceLink url={evidence.sourceUrl} />
-            </Row>
+            </DetailsItem>
           )}
-        </dl>
+        </DetailsGrid>
       );
     case SIGNAL_KIND.DEADLINE_DETECTED:
       return (
-        <dl className="flex flex-col gap-2 text-sm">
-          <Row label={t("inbox.evidence.dueAt")}>
+        <DetailsGrid>
+          <DetailsItem label={t("inbox.evidence.dueAt")}>
             {format.dateTime(new Date(evidence.dueAt), { dateStyle: "long" })}
-          </Row>
-          <Row label={t("common.name")}>
+          </DetailsItem>
+          <DetailsItem label={t("common.name")}>
             <UserText>{evidence.label}</UserText>
-          </Row>
-          <Row label={t("common.document")}>
+          </DetailsItem>
+          <DetailsItem label={t("common.document")}>
             <DocumentRef
               entityId={evidence.entityId}
               name={evidence.entityName}
               signal={signal}
             />
-          </Row>
-          <Row label={t("inbox.evidence.quote")}>
+          </DetailsItem>
+          <DetailsItem label={t("inbox.evidence.quote")} span="wide">
             <blockquote className="border-s-2 ps-3 text-pretty italic">
               <UserText>{evidence.quote}</UserText>
             </blockquote>
-          </Row>
-        </dl>
+          </DetailsItem>
+        </DetailsGrid>
       );
     case SIGNAL_KIND.CONTRACT_REVIEWED:
       return (
-        <dl className="flex flex-col gap-2 text-sm">
-          <Row label={t("inbox.evidence.verdict")}>
+        <DetailsGrid orientation="vertical">
+          <DetailsItem label={t("inbox.evidence.verdict")}>
             <span
               className={cn(
                 "rounded-sm px-1.5 py-0.5 text-xs font-medium",
@@ -252,15 +257,15 @@ const EvidenceBody = ({ evidence, signal }: EvidenceBodyProps) => {
             >
               {t(VERDICT_LABEL_KEY[evidence.verdict])}
             </span>
-          </Row>
-          <Row label={t("common.document")}>
+          </DetailsItem>
+          <DetailsItem label={t("common.document")}>
             <DocumentRef
               entityId={evidence.entityId}
               name={evidence.entityName}
               signal={signal}
             />
-          </Row>
-          <Row label={t("inbox.evidence.findings")}>
+          </DetailsItem>
+          <DetailsItem label={t("inbox.evidence.findings")} span="wide">
             {evidence.findings.length === 0 ? (
               <span className="text-muted-foreground">{t("common.none")}</span>
             ) : (
@@ -288,37 +293,37 @@ const EvidenceBody = ({ evidence, signal }: EvidenceBodyProps) => {
                 ))}
               </ul>
             )}
-          </Row>
-        </dl>
+          </DetailsItem>
+        </DetailsGrid>
       );
     case SIGNAL_KIND.WORK_UNACKNOWLEDGED:
       return (
-        <dl className="flex flex-col gap-2 text-sm">
-          <Row label={t("tasks.assigned")}>
+        <DetailsGrid>
+          <DetailsItem label={t("tasks.assigned")}>
             {formatDateTime(evidence.assignedAt)}
-          </Row>
-          <Row label={t("inbox.evidence.daysUnacknowledged")}>
+          </DetailsItem>
+          <DetailsItem label={t("inbox.evidence.daysUnacknowledged")}>
             {format.number(evidence.daysWaiting)}
-          </Row>
+          </DetailsItem>
           {evidence.workingTargetDate !== null && (
-            <Row label={t("tasks.workingTarget")}>
+            <DetailsItem label={t("tasks.workingTarget")}>
               {formatDate(evidence.workingTargetDate)}
-            </Row>
+            </DetailsItem>
           )}
           {evidence.hardDeadlineDate !== null && (
-            <Row label={t("tasks.hardDeadline")}>
+            <DetailsItem label={t("tasks.hardDeadline")}>
               {formatDate(evidence.hardDeadlineDate)}
-            </Row>
+            </DetailsItem>
           )}
-        </dl>
+        </DetailsGrid>
       );
     case SIGNAL_KIND.WORK_DEADLINE_AT_RISK:
       return (
-        <dl className="flex flex-col gap-2 text-sm">
-          <Row label={t("tasks.hardDeadline")}>
+        <DetailsGrid>
+          <DetailsItem label={t("tasks.hardDeadline")}>
             {formatDate(evidence.hardDeadlineDate)}
-          </Row>
-          <Row
+          </DetailsItem>
+          <DetailsItem
             label={t(
               evidence.daysUntilDeadline < 0
                 ? "inbox.evidence.daysOverdue"
@@ -326,16 +331,16 @@ const EvidenceBody = ({ evidence, signal }: EvidenceBodyProps) => {
             )}
           >
             {format.number(Math.abs(evidence.daysUntilDeadline))}
-          </Row>
+          </DetailsItem>
           {evidence.workingTargetDate !== null && (
-            <Row label={t("tasks.workingTarget")}>
+            <DetailsItem label={t("tasks.workingTarget")}>
               {formatDate(evidence.workingTargetDate)}
-            </Row>
+            </DetailsItem>
           )}
-          <Row label={t("tasks.status")}>
+          <DetailsItem label={t("tasks.status")}>
             {t(OPEN_WORK_STATUS_LABEL_KEY[evidence.obligationStatus])}
-          </Row>
-        </dl>
+          </DetailsItem>
+        </DetailsGrid>
       );
     default: {
       evidence satisfies never;
@@ -353,24 +358,29 @@ const DocumentRef = ({
   name: string;
   signal: InboxSignal;
 }) => {
+  const router = useRouter();
   if (signal.workspaceId === null) {
     return <UserText>{name}</UserText>;
   }
 
   const workspaceId = signal.workspaceId;
   return (
-    <button
-      className="text-start underline-offset-2 hover:underline"
+    <Button
       onClick={() => {
         detached(
-          openEntityInInspector(entityId, name, workspaceId),
+          openEntityInInspector({
+            documentOnScreen: getCurrentWorkspaceDocument(router.state.matches),
+            entityId,
+            label: name,
+            workspaceId,
+          }),
           "inbox.open-evidence-entity",
         );
       }}
-      type="button"
+      size="inline"
     >
       <UserText>{name}</UserText>
-    </button>
+    </Button>
   );
 };
 
@@ -388,16 +398,6 @@ const SourceLink = ({ url }: { url: string }) =>
       {url}
     </a>
   );
-
-const Row = ({
-  label,
-  children,
-}: React.PropsWithChildren<{ label: string }>) => (
-  <div className="flex flex-col gap-0.5">
-    <dt className="text-muted-foreground text-xs">{label}</dt>
-    <dd>{children}</dd>
-  </div>
-);
 
 const EvidenceSkeleton = () => (
   <div className="flex flex-col gap-3">

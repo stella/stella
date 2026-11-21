@@ -1,0 +1,79 @@
+import { create } from "zustand";
+
+import { sha256Hex } from "@stll/sha256/browser";
+
+import { readQueryResult } from "@/lib/errors/query-result";
+import { validateUploadFileSize } from "@/lib/files/upload-file-validation";
+
+type ActiveUploadState = {
+  count: number;
+};
+
+const useActiveUploadStore = create<ActiveUploadState>(() => ({ count: 0 }));
+
+/** True while at least one file-upload batch is still in flight. */
+export const hasActiveUpload = (): boolean =>
+  useActiveUploadStore.getState().count > 0;
+
+/** Subscribes a mounted guard to the same in-flight signal. */
+export const useActiveUpload = (): boolean =>
+  useActiveUploadStore((state) => state.count > 0);
+
+/**
+ * Count one in-flight upload batch. The returned release is idempotent:
+ * a batch that both finishes and is cancelled must not drop the count
+ * below the batches that are still running.
+ */
+export const retainActiveUpload = (): (() => void) => {
+  useActiveUploadStore.setState((state) => ({ count: state.count + 1 }));
+  let released = false;
+  return () => {
+    if (released) {
+      return;
+    }
+    released = true;
+    useActiveUploadStore.setState((state) => ({ count: state.count - 1 }));
+  };
+};
+
+/**
+ * Run one upload whose bytes live only in this page, counted as in flight
+ * until it settles. Every matter-file upload (new files and new versions)
+ * goes through here so a reload cannot drop it without a prompt.
+ */
+export const withActiveUpload = async <T>(
+  upload: () => Promise<T>,
+): Promise<T> => {
+  const release = retainActiveUpload();
+  try {
+    return await upload();
+  } finally {
+    release();
+  }
+};
+
+// A Blob's bytes never change, and the duplicate check hashes a file before
+// its upload does: the second caller must not read the file again.
+const hashes = new WeakMap<Blob, string>();
+
+/**
+ * Hash one file in bounded chunks while the reload guard counts the read.
+ * Every upload hashes here first, so a size the API refuses fails without
+ * reading the file.
+ */
+export const hashActiveUploadFile = async (file: Blob): Promise<string> =>
+  await withActiveUpload(async () => {
+    readQueryResult(validateUploadFileSize(file.size));
+    const known = hashes.get(file);
+    if (known !== undefined) {
+      return known;
+    }
+    const hash = await sha256Hex(file);
+    hashes.set(file, hash);
+    return hash;
+  });
+
+/** Test seam. Production batches release themselves. */
+export const resetActiveUploadsForTests = (): void => {
+  useActiveUploadStore.setState({ count: 0 });
+};

@@ -1,10 +1,10 @@
-import { frameAccents, productCtaLabels, type Product } from "./types";
+import { frameAccents, type Product, productCtaLabels } from "./types";
 
 export const editor = {
   slug: "editor",
   hero: {
     type: "live-editor",
-    alt: "stella · Editor — live demo",
+    alt: "stella · Editor: live demo",
     aspect: "16 / 11",
   },
   heroFrameVariant: "bloom",
@@ -18,7 +18,7 @@ export const editor = {
   evidence: [
     {
       type: "source",
-      path: "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx",
+      path: "apps/web/src/routes/_protected.workspaces/$workspaceId/-$viewId.document.page.tsx",
       contains: ["DocxBrowserEditor", "app-docx-editor"],
     },
     {

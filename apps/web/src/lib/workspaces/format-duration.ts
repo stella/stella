@@ -25,9 +25,3 @@ export const formatMinutes = (minutes: number): string => {
   }
   return parts.join(" ");
 };
-
-export const formatDecimalHours = (minutes: number): string =>
-  getFormatter().number(minutes / 60, {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });

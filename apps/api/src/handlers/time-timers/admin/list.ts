@@ -1,10 +1,16 @@
 import { Result } from "better-result";
 import { and, asc, eq, gt, sql } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
+
+import { numberFromString } from "@stll/api-contract/http-input";
+import { WORKSPACE_STATUS } from "@stll/api-contract/workspace-status";
 
 import { timeTimers, workspaces } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
-import { tPaginationCursor, tPaginationLimit } from "@/api/lib/custom-schema";
+import {
+  paginationCursorSchema,
+  paginationLimitSchema,
+} from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import {
@@ -74,10 +80,12 @@ true satisfies UnexpectedAdminTimerColumn extends never ? true : never;
 
 const listRunningMemberTimers = createSafeRootHandler(
   {
+    contract: "patch",
     description:
       "List running timers in the active organization as an organization owner or admin. Use the timer ID with time-timers.admin.stop to end it into its owner's draft entry. Follow nextCursor to read the next page.",
     permissions: { timeEntry: ["approve"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
+    featureAccess: { featureId: "time-billing", type: "required" },
     access: "read",
     mcp: {
       type: "capability",
@@ -85,9 +93,11 @@ const listRunningMemberTimers = createSafeRootHandler(
       reason: "billing_admin",
       consumesServices: false,
     },
-    query: t.Object({
-      limit: t.Optional(tPaginationLimit(LIMITS.timeEntriesPageSizeMax)),
-      cursor: t.Optional(tPaginationCursor()),
+    query: v.object({
+      limit: v.optional(
+        numberFromString(paginationLimitSchema(LIMITS.timeEntriesPageSizeMax)),
+      ),
+      cursor: v.optional(paginationCursorSchema()),
     }),
   },
   async function* ({ safeDb, session, user, memberRole, query }) {
@@ -127,7 +137,7 @@ const listRunningMemberTimers = createSafeRootHandler(
             and(
               eq(workspaces.id, timeTimers.workspaceId),
               eq(workspaces.organizationId, session.activeOrganizationId),
-              eq(workspaces.status, "active"),
+              eq(workspaces.status, WORKSPACE_STATUS.active),
               sql`CASE WHEN ${workspaces.clientId} IS NOT NULL THEN true
                 ELSE EXISTS (
                   SELECT 1 FROM workspace_members AS workspace_member

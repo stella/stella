@@ -6,9 +6,15 @@ import { apiPut, apiStatus, apiUploadDocx } from "../helpers/api";
 import { createUploadedDocumentRoute } from "../helpers/document";
 import { expect, test } from "../helpers/test";
 import {
-  type TestWorkspace,
+  PLAYWRIGHT_EXPECT_TIMEOUT_10_SECONDS_MS,
+  PLAYWRIGHT_EXPECT_TIMEOUT_15_SECONDS_MS,
+  PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
+  PLAYWRIGHT_EXPECT_TIMEOUT_45_SECONDS_MS,
+} from "../helpers/wait-budgets";
+import {
   createTestWorkspace,
   deleteTestWorkspace,
+  type TestWorkspace,
 } from "../helpers/workspace";
 
 const DOCX_MIME =
@@ -22,12 +28,14 @@ test.describe("find in table", () => {
     workspace = await createTestWorkspace(request, "table-search");
   });
 
-  test.afterEach(async ({ request }) => {
+  test.afterEach(async ({ page, request }, testInfo) => {
     if (workspace === null) {
       return;
     }
 
-    await deleteTestWorkspace(request, workspace.id);
+    await deleteTestWorkspace(request, workspace.id, {
+      leave: { page, testInfo },
+    });
     workspace = null;
   });
 
@@ -67,7 +75,7 @@ test.describe("find in table", () => {
           await apiStatus(page.request, `/workspaces/${testWorkspace.id}`),
         {
           message: "browser context can read the created workspace",
-          timeout: 10_000,
+          timeout: PLAYWRIGHT_EXPECT_TIMEOUT_10_SECONDS_MS,
         },
       )
       .toBe(200);
@@ -77,7 +85,9 @@ test.describe("find in table", () => {
     });
 
     const tableTab = page.getByRole("tab", { exact: true, name: "Table" });
-    await expect(tableTab).toBeVisible({ timeout: 30_000 });
+    await expect(tableTab).toBeVisible({
+      timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
+    });
     await tableTab.click();
 
     const matchingRow = page.getByRole("button", {
@@ -85,7 +95,9 @@ test.describe("find in table", () => {
       name: matchingName,
     });
     const otherRow = page.getByRole("button", { exact: true, name: otherName });
-    await expect(matchingRow).toBeVisible({ timeout: 30_000 });
+    await expect(matchingRow).toBeVisible({
+      timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
+    });
     await expect(otherRow).toBeVisible();
 
     await page.keyboard.press("ControlOrMeta+f");
@@ -94,7 +106,9 @@ test.describe("find in table", () => {
 
     await findInput.fill("alpha");
 
-    await expect(otherRow).toBeHidden({ timeout: 15_000 });
+    await expect(otherRow).toBeHidden({
+      timeout: PLAYWRIGHT_EXPECT_TIMEOUT_15_SECONDS_MS,
+    });
     await expect(matchingRow).toBeVisible();
     await expect(page.locator("mark").first()).toHaveText("alpha");
 
@@ -123,7 +137,9 @@ test.describe("find in table", () => {
       .getByRole("button", { exact: true, name: "Remove" })
       .click();
     await expect(findChip).toBeHidden();
-    await expect(otherRow).toBeVisible({ timeout: 15_000 });
+    await expect(otherRow).toBeVisible({
+      timeout: PLAYWRIGHT_EXPECT_TIMEOUT_15_SECONDS_MS,
+    });
     await expect(page.locator("mark")).toHaveCount(0);
   });
 
@@ -165,7 +181,7 @@ test.describe("find in table", () => {
           await apiStatus(page.request, `/workspaces/${testWorkspace.id}`),
         {
           message: "browser context can read the created workspace",
-          timeout: 10_000,
+          timeout: PLAYWRIGHT_EXPECT_TIMEOUT_10_SECONDS_MS,
         },
       )
       .toBe(200);
@@ -174,10 +190,14 @@ test.describe("find in table", () => {
       waitUntil: "domcontentloaded",
     });
     const tableTab = page.getByRole("tab", { exact: true, name: "Table" });
-    await expect(tableTab).toBeVisible({ timeout: 30_000 });
+    await expect(tableTab).toBeVisible({
+      timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
+    });
     await tableTab.click();
     const otherRow = page.getByRole("button", { exact: true, name: otherName });
-    await expect(otherRow).toBeVisible({ timeout: 30_000 });
+    await expect(otherRow).toBeVisible({
+      timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
+    });
 
     await page.keyboard.press("ControlOrMeta+f");
     const findInput = page.getByRole("searchbox");
@@ -196,7 +216,9 @@ test.describe("find in table", () => {
     await expect(findInput).not.toHaveAccessibleDescription(
       "Type at least 3 characters",
     );
-    await expect(otherRow).toBeHidden({ timeout: 15_000 });
+    await expect(otherRow).toBeHidden({
+      timeout: PLAYWRIGHT_EXPECT_TIMEOUT_15_SECONDS_MS,
+    });
     await expect(page.locator("mark").first()).toHaveText("alp");
   });
 
@@ -259,7 +281,7 @@ test.describe("find in table", () => {
           await apiStatus(page.request, `/workspaces/${testWorkspace.id}`),
         {
           message: "browser context can read the created workspace",
-          timeout: 10_000,
+          timeout: PLAYWRIGHT_EXPECT_TIMEOUT_10_SECONDS_MS,
         },
       )
       .toBe(200);
@@ -273,20 +295,31 @@ test.describe("find in table", () => {
       exact: true,
       name: secondViewName,
     });
-    await expect(tableTab).toBeVisible({ timeout: 30_000 });
+    await expect(tableTab).toBeVisible({
+      timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
+    });
     await expect(secondTab).toBeVisible();
 
     // Both views into history, ending on the first, so the switch below is a
     // back navigation.
+    //
+    // A switch changes the URL at once and keeps the outgoing view mounted
+    // until the target's loader settles. The selected tab is drawn by the
+    // view on screen, so it is what says a switch has landed; a press made
+    // before then reaches the outgoing view's bar, which the switch removes.
     await secondTab.click();
+    await expect(secondTab).toHaveAttribute("aria-selected", "true");
     await tableTab.click();
+    await expect(tableTab).toHaveAttribute("aria-selected", "true");
 
     const matchingRow = page.getByRole("button", {
       exact: true,
       name: matchingName,
     });
     const otherRow = page.getByRole("button", { exact: true, name: otherName });
-    await expect(matchingRow).toBeVisible({ timeout: 30_000 });
+    await expect(matchingRow).toBeVisible({
+      timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
+    });
     await expect(otherRow).toBeVisible();
 
     await page.keyboard.press("ControlOrMeta+f");
@@ -299,12 +332,16 @@ test.describe("find in table", () => {
     // assertions below already describe: the test cannot fail spuriously, it
     // can only stop exercising the race.
     await page.goBack({ waitUntil: "commit" });
+    await expect(secondTab).toHaveAttribute("aria-selected", "true");
     await expect(findInput).toBeHidden();
 
     await page.goForward({ waitUntil: "commit" });
+    await expect(tableTab).toHaveAttribute("aria-selected", "true", {
+      timeout: PLAYWRIGHT_EXPECT_TIMEOUT_15_SECONDS_MS,
+    });
     await expect(
       page.getByRole("button", { exact: true, name: "alpha" }),
-    ).toBeVisible({ timeout: 15_000 });
+    ).toBeVisible({ timeout: PLAYWRIGHT_EXPECT_TIMEOUT_15_SECONDS_MS });
     await expect(otherRow).toBeHidden();
     await expect(matchingRow).toBeVisible();
 
@@ -325,6 +362,9 @@ test.describe("find in table", () => {
     await expect(allColumnsRow).toBeVisible();
 
     await page.goBack({ waitUntil: "commit" });
+    await expect(secondTab).toHaveAttribute("aria-selected", "true");
+    // The view switched to never took the term.
+    await expect(otherRow).toBeVisible();
     await page.keyboard.press("ControlOrMeta+f");
     await expect(page.getByRole("searchbox")).toBeFocused();
     await expect(columnsToggle).toHaveAttribute("aria-expanded", "false");
@@ -363,7 +403,7 @@ test.describe("find in table", () => {
           await apiStatus(page.request, `/workspaces/${testWorkspace.id}`),
         {
           message: "browser context can read the created workspace",
-          timeout: 10_000,
+          timeout: PLAYWRIGHT_EXPECT_TIMEOUT_10_SECONDS_MS,
         },
       )
       .toBe(200);
@@ -373,11 +413,13 @@ test.describe("find in table", () => {
     });
 
     const tableTab = page.getByRole("tab", { exact: true, name: "Table" });
-    await expect(tableTab).toBeVisible({ timeout: 30_000 });
+    await expect(tableTab).toBeVisible({
+      timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
+    });
     await tableTab.click();
     await expect(
       page.getByRole("button", { exact: true, name: rowName }),
-    ).toBeVisible({ timeout: 30_000 });
+    ).toBeVisible({ timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS });
 
     // Records every find press that survives to the document's bubble phase,
     // and whether the app had already claimed it. An attribute rather than a
@@ -413,13 +455,25 @@ test.describe("find in table", () => {
     // find still opens.
     await page.keyboard.press("ControlOrMeta+k");
     await expect(page.getByRole("combobox").first()).toBeVisible({
-      timeout: 30_000,
+      timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
     });
 
     await page.keyboard.press("ControlOrMeta+f");
     await expect(body).toHaveAttribute(
       "data-bubbled-find-presses",
       "prevented,untouched",
+    );
+
+    const searchDialog = page.getByRole("dialog");
+    await expect(searchDialog.getByRole("combobox").first()).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(searchDialog).toBeHidden();
+
+    await page.keyboard.press("ControlOrMeta+f");
+    await expect(page.getByRole("searchbox")).toBeFocused();
+    await expect(body).toHaveAttribute(
+      "data-bubbled-find-presses",
+      "prevented,untouched,prevented",
     );
   });
 
@@ -454,7 +508,7 @@ test.describe("find in table", () => {
           await apiStatus(page.request, `/workspaces/${testWorkspace.id}`),
         {
           message: "browser context can read the created workspace",
-          timeout: 10_000,
+          timeout: PLAYWRIGHT_EXPECT_TIMEOUT_10_SECONDS_MS,
         },
       )
       .toBe(200);
@@ -464,11 +518,15 @@ test.describe("find in table", () => {
     });
 
     const tableTab = page.getByRole("tab", { exact: true, name: "Table" });
-    await expect(tableTab).toBeVisible({ timeout: 30_000 });
+    await expect(tableTab).toBeVisible({
+      timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
+    });
     await tableTab.click();
 
     const row = page.getByRole("button", { exact: true, name: rowName });
-    await expect(row).toBeVisible({ timeout: 30_000 });
+    await expect(row).toBeVisible({
+      timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
+    });
     await row.click({ button: "right" });
     const preview = page.getByRole("menuitem", {
       exact: true,
@@ -483,7 +541,7 @@ test.describe("find in table", () => {
       page.locator(".layout-run-text", {
         hasText: "Stella E2E test document.",
       }),
-    ).toBeVisible({ timeout: 45_000 });
+    ).toBeVisible({ timeout: PLAYWRIGHT_EXPECT_TIMEOUT_45_SECONDS_MS });
 
     const folioDialog = page.locator(".docx-find-replace-dialog-overlay");
 
@@ -539,7 +597,7 @@ test.describe("find in table", () => {
           await apiStatus(page.request, `/workspaces/${testWorkspace.id}`),
         {
           message: "browser context can read the created workspace",
-          timeout: 10_000,
+          timeout: PLAYWRIGHT_EXPECT_TIMEOUT_10_SECONDS_MS,
         },
       )
       .toBe(200);
@@ -549,7 +607,7 @@ test.describe("find in table", () => {
       page.locator(".layout-run-text", {
         hasText: "Stella E2E test document.",
       }),
-    ).toBeVisible({ timeout: 45_000 });
+    ).toBeVisible({ timeout: PLAYWRIGHT_EXPECT_TIMEOUT_45_SECONDS_MS });
 
     const folioDialog = page.locator(".docx-find-replace-dialog-overlay");
 

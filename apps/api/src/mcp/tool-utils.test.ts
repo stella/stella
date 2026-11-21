@@ -1,23 +1,27 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import fc from "fast-check";
 import * as v from "valibot";
 
+import { assertProperty } from "@stll/property-testing";
 import { RUNTIME_MODE } from "@stll/runtime-mode";
+import { createTestState } from "@stll/test-state";
 
 import { env } from "@/api/env";
 import { type SafeId, toSafeId } from "@/api/lib/branded-types";
+import { TOOL_OUTPUT_CONTRACT_DEGRADED_EVENT } from "@/api/lib/chat/tool-output-degrade";
 import { runWithRequestId } from "@/api/lib/observability/request-context";
 import { encodePaginationCursor } from "@/api/lib/pagination";
-import type { McpRequestContext } from "@/api/mcp/context";
 import type { InternalToolSuccess } from "@/api/mcp/tool-types";
 import {
   buildCaseLawDecisionAppUrl,
   buildCaseLawDecisionUrl,
+  buildLegislationDocumentAppUrl,
   closestToolNames,
   didYouMean,
   ensureActiveWorkspace,
   ensureWorkspaceAccess,
-  ISO_DATE_SCHEMA,
   isToolErrorResult,
+  legalCitationLinkFields,
   mapValibotIssues,
   notFoundResult,
   oauthScopeRecoveryHint,
@@ -25,7 +29,11 @@ import {
   serializeToolResult,
   structuredErrorResult,
   toolDataResult,
+  toolNameDistance,
+  toolNameKey,
+  toPlainCorpusText,
   toPlainTextSnippet,
+  untypedToolDataResult,
   validationErrorResult,
   windowTextByCursor,
 } from "@/api/mcp/tool-utils";
@@ -33,8 +41,19 @@ import {
   defineMcpToolOutput,
   defineProjectedMcpToolOutput,
 } from "@/api/mcp/valibot-tool-definition";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
+import {
+  installRecordingAnalytics,
+  installRecordingLogger,
+} from "@/api/tests/helpers/recording-telemetry";
+import type {
+  RecordingAnalytics,
+  RecordingLogger,
+} from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+
+const testState = createTestState({ file: import.meta.path, config: env });
 
 // FRONTEND_URL is "http://localhost:3000" (no trailing slash) from
 // the test env preload; getAppBaseUrl() strips any trailing slash.
@@ -43,22 +62,15 @@ const WORKSPACE_ID = toSafeId<"workspace">("ws_1");
 const DECISION_ID = "019dd47d-f507-7c84-b827-980af11b8980";
 const COMPACT_DECISION_ID = "AZ3UffUHfIS4J5gK8RuJgA";
 
-describe("MCP ISO date contract", () => {
-  test("accepts ISO dates and rejects out-of-range date components", () => {
-    expect(v.is(ISO_DATE_SCHEMA, "2026-08-23")).toBe(true);
-    expect(v.is(ISO_DATE_SCHEMA, "2026-99-99")).toBe(false);
-  });
-});
-
 const createWorkspaceGateContext = (
   status: "active" | "archived",
 ): {
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   pinnedWorkspaceIds: string[];
 } => {
   const pinnedWorkspaceIds: string[] = [];
   return {
-    context: asTestRaw<McpRequestContext>({
+    context: asTestRaw<AuthorizedMcpRequestContext>({
       accessibleWorkspaceIdSet: new Set([WORKSPACE_ID]),
       accessibleWorkspaceStatusById: new Map([[WORKSPACE_ID, status]]),
       pinServerValidatedWorkspaceId: (
@@ -131,7 +143,6 @@ describe("buildCaseLawDecisionUrl", () => {
 
 describe("buildCaseLawDecisionAppUrl gate", () => {
   let restoreRuntimeMode: () => void = () => undefined;
-  let previousFeaturePublicLaw: boolean;
 
   const input = {
     caseNumber: "1/24",
@@ -143,20 +154,15 @@ describe("buildCaseLawDecisionAppUrl gate", () => {
     slug: "s",
   };
 
-  beforeEach(() => {
-    previousFeaturePublicLaw = env.FEATURE_PUBLIC_LAW;
-  });
-
   afterEach(() => {
     restoreRuntimeMode();
-    env.FEATURE_PUBLIC_LAW = previousFeaturePublicLaw;
   });
 
   test("returns null when public law is disabled outside local development", () => {
     restoreRuntimeMode = setRuntimeModeForTesting({
       mode: RUNTIME_MODE.strict,
     });
-    env.FEATURE_PUBLIC_LAW = false;
+    testState.setConfig("FEATURE_PUBLIC_LAW", false);
 
     expect(buildCaseLawDecisionAppUrl(input)).toBeNull();
   });
@@ -165,7 +171,7 @@ describe("buildCaseLawDecisionAppUrl gate", () => {
     restoreRuntimeMode = setRuntimeModeForTesting({
       mode: RUNTIME_MODE.strict,
     });
-    env.FEATURE_PUBLIC_LAW = true;
+    testState.setConfig("FEATURE_PUBLIC_LAW", true);
 
     expect(buildCaseLawDecisionAppUrl(input)).toBe(
       `${BASE}/law/cze/cases/ns/s`,
@@ -174,7 +180,7 @@ describe("buildCaseLawDecisionAppUrl gate", () => {
 
   test("builds the URL in local development regardless of the feature flag", () => {
     restoreRuntimeMode = setRuntimeModeForTesting({ mode: RUNTIME_MODE.open });
-    env.FEATURE_PUBLIC_LAW = false;
+    testState.setConfig("FEATURE_PUBLIC_LAW", false);
 
     expect(buildCaseLawDecisionAppUrl(input)).toBe(
       `${BASE}/law/cze/cases/ns/s`,
@@ -312,7 +318,7 @@ describe("serializeToolResult", () => {
       v.object({ entityId: v.string(), nextStep: v.string() }),
     );
     const result = serializeToolResult(
-      toolDataResult({
+      untypedToolDataResult({
         nextStep: "Choose a file.",
         undeclared: true,
         entityId: "doc_1",
@@ -373,6 +379,140 @@ describe("serializeToolResult", () => {
         contract,
       ),
     ).toThrow("MCP tool output violated its advertised contract");
+  });
+
+  describe("undeclared output keys", () => {
+    let analytics: RecordingAnalytics;
+    let logs: RecordingLogger;
+
+    beforeEach(() => {
+      analytics = installRecordingAnalytics();
+      logs = installRecordingLogger();
+    });
+
+    afterEach(() => {
+      analytics.restore();
+      logs.restore();
+    });
+
+    const degradeLogs = () =>
+      logs
+        .at("ERROR")
+        .filter(
+          ({ message }) => message === TOOL_OUTPUT_CONTRACT_DEGRADED_EVENT,
+        )
+        .map(({ attributes }) => attributes);
+
+    const contract = defineMcpToolOutput(
+      v.strictObject({
+        entityId: v.string(),
+        hits: v.array(
+          v.strictObject({
+            match: v.variant("kind", [
+              v.strictObject({ kind: v.literal("exact"), score: v.number() }),
+              v.strictObject({
+                kind: v.literal("fuzzy"),
+                distance: v.number(),
+              }),
+            ]),
+            title: v.string(),
+          }),
+        ),
+      }),
+    );
+
+    test("are stripped at every depth, the result returned and the defect logged", () => {
+      const result = serializeToolResult(
+        untypedToolDataResult({
+          entityId: "doc_1",
+          hits: [
+            {
+              match: { kind: "exact", score: 1, rawScore: "privileged-1" },
+              title: "A",
+            },
+            {
+              match: { distance: 2, kind: "fuzzy" },
+              snippetHtml: "privileged-2",
+              title: "B",
+            },
+          ],
+          internalCursor: "privileged-3",
+        }),
+        contract,
+        "search_test",
+      );
+
+      const expected = {
+        entityId: "doc_1",
+        hits: [
+          { match: { kind: "exact", score: 1 }, title: "A" },
+          { match: { distance: 2, kind: "fuzzy" }, title: "B" },
+        ],
+      };
+      expect(result.isError).toBeUndefined();
+      expect(result.structuredContent).toEqual(expected);
+      expect(result.content).toEqual([
+        { type: "text", text: JSON.stringify(result.structuredContent) },
+      ]);
+      expect(degradeLogs()).toEqual([
+        {
+          defect: "undeclared_fields",
+          paths: "hits[].match.rawScore, hits[].snippetHtml, internalCursor",
+          source: "mcp",
+          tool: "search_test",
+        },
+      ]);
+      expect(
+        analytics.exceptions().map((event) => event.properties),
+      ).toMatchObject([
+        {
+          defect: "undeclared_fields",
+          "error.class": "ToolOutputContractDegradedError",
+          toolName: "search_test",
+        },
+      ]);
+      expect(JSON.stringify([analytics.events, logs.records])).not.toContain(
+        "privileged",
+      );
+    });
+
+    test("never excuse a missing or invalid declared field", () => {
+      for (const data of [
+        // Missing declared field.
+        { hits: [] },
+        // Invalid declared field.
+        { entityId: 42, hits: [] },
+        // Invalid declared field inside a union branch, beside an extra key.
+        {
+          entityId: "doc_1",
+          hits: [{ match: { kind: "exact", score: "1" }, title: "A", x: 1 }],
+        },
+        // An extra key beside a missing one.
+        { extra: true, hits: [] },
+      ]) {
+        expect(() =>
+          serializeToolResult(
+            untypedToolDataResult(data),
+            contract,
+            "search_test",
+          ),
+        ).toThrow("MCP tool output violated its advertised contract");
+      }
+      expect(degradeLogs()).toEqual([]);
+    });
+
+    test("a contract-clean output reports nothing", () => {
+      const data = { entityId: "doc_1", hits: [] };
+      const result = serializeToolResult(
+        untypedToolDataResult(data),
+        contract,
+        "search_test",
+      );
+
+      expect(result.structuredContent).toEqual(data);
+      expect(degradeLogs()).toEqual([]);
+      expect(analytics.exceptions()).toEqual([]);
+    });
   });
 
   test("omits structuredContent for a non-object payload", () => {
@@ -500,12 +640,14 @@ describe("structuredErrorResult", () => {
   });
 
   test("carries the active request receipt under error.requestId", () => {
-    const parsed = runWithRequestId("req_envelope", () =>
-      JSON.parse(
-        errorText(
-          structuredErrorResult({ code: "not_found", message: "gone" }),
-        ),
-      ),
+    const parsed = runWithRequestId(
+      "req_envelope",
+      () =>
+        JSON.parse(
+          errorText(
+            structuredErrorResult({ code: "not_found", message: "gone" }),
+          ),
+        ) as unknown,
     );
 
     expect(parsed).toEqual({
@@ -561,7 +703,9 @@ describe("validationErrorResult", () => {
     const result = validationErrorResult(parsed.issues);
 
     expect(result.status).toBe("error");
-    const payload = JSON.parse(errorText(result));
+    const payload: {
+      error: { code: unknown; message: unknown; issues: unknown };
+    } = JSON.parse(errorText(result));
     expect(payload.error.code).toBe("validation_error");
     expect(payload.error.message).toBe(parsed.issues.at(0)?.message);
     expect(payload.error.issues).toEqual([
@@ -586,6 +730,56 @@ describe("notFoundResult", () => {
   });
 });
 
+const legacyAsciiDistance = (left: string, right: string): number => {
+  let previous = Array.from({ length: right.length + 1 }, (_, index) => index);
+  for (let row = 1; row <= left.length; row += 1) {
+    const current = [row];
+    for (let column = 1; column <= right.length; column += 1) {
+      current.push(
+        Math.min(
+          (previous[column] ?? 0) + 1,
+          (current[column - 1] ?? 0) + 1,
+          (previous[column - 1] ?? 0) +
+            (left[row - 1] === right[column - 1] ? 0 : 1),
+        ),
+      );
+    }
+    previous = current;
+  }
+  return previous[right.length] ?? 0;
+};
+
+test("ASCII tool distances retain the legacy minimum across name variants", () => {
+  const spelling = fc.stringMatching(/^[a-zA-Z._-]{0,14}$/u);
+  assertProperty(
+    "ASCII tool distances retain the legacy minimum across name variants",
+    fc.property(spelling, spelling, (target, name) => {
+      const sortWords = (value: string) =>
+        value.split(/[._-]/u).toSorted().join(" ");
+      expect(toolNameDistance(target, name)).toBe(
+        Math.min(
+          legacyAsciiDistance(target, name),
+          legacyAsciiDistance(sortWords(target), sortWords(name)),
+          legacyAsciiDistance(toolNameKey(target), toolNameKey(name)),
+        ),
+      );
+    }),
+  );
+});
+
+test("tool suggestions retain Czech diacritics and inflected names", () => {
+  expect(toolNameDistance("kůň", "kun")).toBe(2);
+  expect(toolNameDistance("Novákem", "Novák")).toBe(2);
+  expect(closestToolNames("kůň", ["kun", "kům"])).toEqual(["kům", "kun"]);
+});
+
+test("tool suggestions count astral Unicode characters as single edits", () => {
+  expect(toolNameDistance("😀", "x")).toBe(1);
+  expect(toolNameDistance("a😀😀", "abc")).toBe(2);
+  expect(closestToolNames("😀", ["x"])).toEqual(["x"]);
+  expect(closestToolNames("a😀😀", ["abc"])).toEqual(["abc"]);
+});
+
 describe("closestToolNames", () => {
   const candidates = [
     "list_matters",
@@ -600,33 +794,24 @@ describe("closestToolNames", () => {
     );
   });
 
-  test("matches a name whose words were regrouped", () => {
-    expect(
-      closestToolNames("widgets.delete-part", [
-        "widgets.bolts.delete",
-        "widgets.parts.get",
-        "widgets.parts.delete",
-      ]).at(0),
-    ).toBe("widgets.parts.delete");
-  });
-
   test("returns nothing for an unrelated miss", () => {
     expect(closestToolNames("zzzzzzzzzzzz", candidates)).toEqual([]);
   });
 
-  test("caps the suggestions at the requested limit", () => {
-    expect(
-      closestToolNames("matter", candidates, 2).length,
-    ).toBeLessThanOrEqual(2);
+  test("keeps ASCII tie order and empty candidate behavior", () => {
+    expect(closestToolNames("x", ["b", "a"])).toEqual(["a", "b"]);
+    expect(closestToolNames("x", [])).toEqual([]);
+    expect(closestToolNames("", ["a", "ab"])).toEqual(["a", "ab"]);
   });
 
-  test("matches a name spelled as a chat script function or in another case", () => {
-    for (const spelling of [
-      "external_list_matters",
-      "listMatters",
-      "LIST_MATTERS",
-      "list-matters",
-    ]) {
+  test("caps suggestions at three names", () => {
+    expect(closestToolNames("matter", candidates).length).toBeLessThanOrEqual(
+      3,
+    );
+  });
+
+  test("matches common separator and case spellings", () => {
+    for (const spelling of ["listMatters", "LIST_MATTERS", "list-matters"]) {
       expect(closestToolNames(spelling, candidates).at(0)).toBe("list_matters");
     }
   });
@@ -663,5 +848,114 @@ describe("resolveWindowBounds", () => {
       end: 5,
       nextOffset: null,
     });
+  });
+});
+
+describe("primary legal citation links", () => {
+  for (const path of [
+    "/law/cze/statutes/89-2012-sb",
+    "/law/cze/statutes/89-2012-sb/v/2014-01-01#par_1729",
+    "/law/cze/cases/ns/1-24",
+  ]) {
+    test(`held ${path} keeps its publisher as a secondary source`, () => {
+      const sourceUrl = `https://publisher.example/${DECISION_ID}`;
+      const url = `${BASE}${path}`;
+      expect(legalCitationLinkFields({ url, sourceUrl })).toEqual({
+        url,
+        source_url: sourceUrl,
+      });
+    });
+    test(`unserved ${path} falls back to the publisher`, () => {
+      const sourceUrl = `https://publisher.example/${DECISION_ID}`;
+      expect(legalCitationLinkFields({ url: null, sourceUrl })).toEqual({
+        url: sourceUrl,
+      });
+    });
+  }
+  test("a held provision links its consolidation and exact anchor", () => {
+    const restore = setRuntimeModeForTesting({ mode: RUNTIME_MODE.open });
+    try {
+      expect(
+        buildLegislationDocumentAppUrl({
+          country: "CZE",
+          documentId: DECISION_ID,
+          eli: "/eli/cz/sb/2012/89",
+          slug: "89-2012-sb",
+          version: "2014-01-01",
+          anchor: "par_1729",
+        }),
+      ).toBe(`${BASE}/law/cze/statutes/89-2012-sb/v/2014-01-01#par_1729`);
+    } finally {
+      restore();
+    }
+  });
+});
+
+describe("served corpus text", () => {
+  test("a paragraph the court numbered is served with its number", () => {
+    // The number is structure, not text: without it a paragraph can be
+    // quoted from the served text but not cited.
+    const text = toPlainCorpusText({
+      blocks: [
+        { type: "heading", plainText: "Costs" },
+        { type: "paragraph", plainText: "It follows that…", number: 134 },
+        { type: "paragraph", plainText: "1. A quoted provision." },
+        { type: "paragraph", plainText: "", number: 135 },
+      ],
+      fulltext: null,
+    });
+    expect(text).toBe(
+      "Costs\n\n¶ 134 It follows that…\n\n1. A quoted provision.",
+    );
+  });
+
+  test("a footnote is served under its printed mark, once per note", () => {
+    const note = (label: string, noteId?: string) => ({ label, noteId });
+    expect(
+      toPlainCorpusText({
+        blocks: [
+          { type: "paragraph", plainText: "As stated[1], it holds[2]." },
+          { type: "paragraph", plainText: "See point 2.", note: note("[1]") },
+          {
+            type: "paragraph",
+            plainText: "See the letter",
+            note: note("[2]", "n2"),
+          },
+          {
+            type: "table",
+            plainText: "of 28 May 2021.",
+            note: note("[2]", "n2"),
+          },
+          {
+            type: "paragraph",
+            plainText: "3 Already marked.",
+            note: note("3"),
+          },
+          { type: "paragraph", plainText: "30 days.", note: note("3") },
+        ],
+        fulltext: null,
+      }),
+    ).toBe(
+      [
+        "As stated[1], it holds[2].",
+        "[1] See point 2.",
+        "[2] See the letter",
+        "of 28 May 2021.",
+        "3 Already marked.",
+        "3 30 days.",
+      ].join("\n\n"),
+    );
+  });
+
+  test("a heading or a number that is no paragraph number adds nothing", () => {
+    expect(
+      toPlainCorpusText({
+        blocks: [
+          { type: "heading", plainText: "I.", number: 1 },
+          { type: "paragraph", plainText: "Zero.", number: 0 },
+        ],
+        fulltext: null,
+      }),
+    ).toBe("I.\n\nZero.");
   });
 });

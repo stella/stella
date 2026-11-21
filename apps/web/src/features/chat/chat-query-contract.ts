@@ -1,6 +1,8 @@
 import type { ChatSendMode } from "@stll/anonymize-chat";
 import { CHAT_TOOL_SCOPE } from "@stll/api-contract";
+import type { ChatThreadPinState } from "@stll/api-contract/chat";
 import type { DocxSuggestionSurface } from "@stll/api-contract/chat-docx-suggestions";
+import type { ChatRunTarget } from "@stll/api-contract/chat-run-target";
 
 import type { ChatUserContext } from "@/features/chat/hooks/use-chat-user-context";
 import type {
@@ -68,7 +70,7 @@ type ActiveExternalContext = {
   url: string;
 };
 
-export type ActiveSkillContext = {
+type ActiveSkillContext = {
   /** Absent for a built-in skill, which has no row: `skillName` names it. */
   skillId?: string | undefined;
   skillName: string;
@@ -88,6 +90,12 @@ export type TemplateChatThreadKey = {
   userId: string;
 };
 
+/** A reader's one conversation about a case-law decision. */
+export type DecisionChatThreadKey = {
+  decisionId: string;
+  userId: string;
+};
+
 export type ChatThreadTitleKey = {
   threadId: string;
   workspaceId?: string | undefined;
@@ -95,8 +103,12 @@ export type ChatThreadTitleKey = {
 
 export type GroupedChatThreadsKey = {
   activeOrganizationId: string;
+  /** Only the reader's pinned, or only their unpinned, threads. */
+  pinState?: ChatThreadPinState | undefined;
   search?: string | undefined;
   userId: string;
+  /** Only the threads that live in this matter. */
+  workspaceId?: string | undefined;
 };
 
 export const SUGGEST_TEMPLATE_FIELDS_TOOL_SCOPE =
@@ -114,10 +126,11 @@ export type ChatThreadOptionsContext = {
   getContextMatterIds?: (() => string[]) | undefined;
   getEditApplyMode?: (() => ChatEditApplyMode) | undefined;
   getDocxEditRepresentation?:
-    | (() => DocxEditRepresentation | undefined)
-    | undefined;
+    (() => DocxEditRepresentation | undefined) | undefined;
   getSendMode?: (() => ChatSendMode) | undefined;
   getUserContext?: (() => ChatUserContext) | undefined;
+  /** Where the next turn runs; absent on surfaces that only run in the cloud. */
+  getRunTarget?: (() => ChatRunTarget) | undefined;
   /**
    * Present on a surface that mounts a `suggest_changes` review-queue
    * bridge (the file overlay). Its presence, not its value, keys the
@@ -130,7 +143,6 @@ export type ChatRuntimeContextKind =
   | "active-docx-edit"
   | "active-external"
   | "active-file"
-  | "active-skill"
   | "active-template"
   | "plain";
 
@@ -139,6 +151,12 @@ type ChatThreadQueryKey = ChatThreadRef & {
   contextKind?: ChatRuntimeContextKind | undefined;
 };
 
+/**
+ * A chat's skill never selects a kind: the thread response itself
+ * restores it (`activeSkill`), so a surface learns the skill only after
+ * reading the thread. Keying by it would read the thread under one key
+ * and run its runtime under another.
+ */
 export const getChatRuntimeContextKind = (
   context: ChatThreadOptionsContext | undefined,
 ): ChatRuntimeContextKind => {
@@ -154,9 +172,6 @@ export const getChatRuntimeContextKind = (
   if (context?.getActiveExternal) {
     return "active-external";
   }
-  if (context?.getActiveSkill) {
-    return "active-skill";
-  }
   if (context?.getActiveTemplate) {
     return "active-template";
   }
@@ -168,8 +183,24 @@ const CHAT_TRANSPORT_VERSION = 2;
 /** Bump when `GET /chat/model-options` changes shape so cached rows refetch. */
 const MODEL_OPTIONS_RESPONSE_VERSION = 2;
 
+type AnswerRevisionQueryKey = {
+  activeOrganizationId: string;
+  userId: string;
+  threadId: string;
+  messageId: string;
+  revision: number;
+};
+
 export const chatKeys = {
   all: ["chat"],
+  /** The reader's own chats that are working or waiting on them, all matters. */
+  activeRuns: (activeOrganizationId: string, userId: string) => [
+    ...chatKeys.all,
+    activeOrganizationId,
+    userId,
+    "runs",
+    "active",
+  ],
   fileThread: (activeOrganizationId: string, key: FileChatThreadKey) => [
     ...chatKeys.all,
     activeOrganizationId,
@@ -189,23 +220,133 @@ export const chatKeys = {
     "template-thread",
     key.templateId,
   ],
-  groupedThreads: ({
+  decisionThread: (
+    activeOrganizationId: string,
+    key: DecisionChatThreadKey,
+  ) => [
+    ...chatKeys.all,
     activeOrganizationId,
-    search,
-    userId,
-  }: GroupedChatThreadsKey) => [
+    key.userId,
+    "decision-thread",
+    key.decisionId,
+  ],
+  /** Every grouped thread list of the reader, whatever its filters. */
+  groupedThreadLists: (activeOrganizationId: string, userId: string) => [
     ...chatKeys.all,
     activeOrganizationId,
     userId,
     "threads",
     "grouped",
+  ],
+  groupedThreads: ({
+    activeOrganizationId,
+    pinState,
+    search,
+    userId,
+    workspaceId,
+  }: GroupedChatThreadsKey) => [
+    ...chatKeys.groupedThreadLists(activeOrganizationId, userId),
+    pinState ?? "",
     search ?? "",
+    workspaceId ?? "",
+  ],
+  toolGrants: (
+    activeOrganizationId: string,
+    userId: string,
+    threadId: string,
+  ) => [...chatKeys.all, activeOrganizationId, userId, "tool-grants", threadId],
+  limitReminder: (
+    activeOrganizationId: string,
+    userId: string,
+    threadKey: string,
+  ) => [
+    ...chatKeys.all,
+    activeOrganizationId,
+    userId,
+    "limit-reminder",
+    threadKey,
+  ],
+  localFilesUndo: (
+    activeOrganizationId: string,
+    userId: string,
+    threadId: string,
+    messageId: string,
+  ) => [
+    ...chatKeys.all,
+    activeOrganizationId,
+    userId,
+    "local-files-undo",
+    threadId,
+    messageId,
+  ],
+  /** Every chat's background count of the reader, for one refresh. */
+  backgroundTaskCounts: (activeOrganizationId: string, userId: string) => [
+    ...chatKeys.all,
+    activeOrganizationId,
+    userId,
+    "background-tasks",
+  ],
+  backgroundTasks: (
+    activeOrganizationId: string,
+    userId: string,
+    threadId: string,
+  ) => [
+    ...chatKeys.backgroundTaskCounts(activeOrganizationId, userId),
+    threadId,
+  ],
+  /** Every chat queue of the reader, for one refresh. */
+  queues: (activeOrganizationId: string, userId: string) => [
+    ...chatKeys.all,
+    activeOrganizationId,
+    userId,
+    "queue",
+  ],
+  /** The messages the reader queued in one thread, and what holds them. */
+  queue: (activeOrganizationId: string, userId: string, threadId: string) => [
+    ...chatKeys.queues(activeOrganizationId, userId),
+    threadId,
+  ],
+  /** Every stored step of one thread, as a fork's copy completes them. */
+  localRunStepOutputs: ({
+    activeOrganizationId,
+    userId,
+    threadId,
+  }: {
+    activeOrganizationId: string;
+    userId: string;
+    threadId: string;
+  }) => [
+    ...chatKeys.all,
+    activeOrganizationId,
+    userId,
+    "local-run-step-output",
+    threadId,
+  ],
+  localRunStepOutput: ({
+    callId,
+    ...thread
+  }: {
+    activeOrganizationId: string;
+    userId: string;
+    threadId: string;
+    callId: string;
+  }) => [...chatKeys.localRunStepOutputs(thread), callId],
+  browserSiteGrants: (activeOrganizationId: string, userId: string) => [
+    ...chatKeys.all,
+    activeOrganizationId,
+    userId,
+    "browser-site-grants",
   ],
   modelOptions: (activeOrganizationId: string) => [
     ...chatKeys.all,
     activeOrganizationId,
     "modelOptions",
     MODEL_OPTIONS_RESPONSE_VERSION,
+  ],
+  localRunners: (activeOrganizationId: string) => [
+    ...chatKeys.all,
+    activeOrganizationId,
+    "localRunners",
   ],
   threadTitle: (activeOrganizationId: string, key: ChatThreadTitleKey) => [
     ...chatKeys.all,
@@ -236,6 +377,37 @@ export const chatKeys = {
     key.allowMissingThread ?? false,
     key.contextKind ?? "plain",
     CHAT_TRANSPORT_VERSION,
+  ],
+  answerSnapshot: ({
+    activeOrganizationId,
+    userId,
+    threadId,
+    messageId,
+    revision,
+  }: AnswerRevisionQueryKey) => [
+    ...chatKeys.all,
+    activeOrganizationId,
+    userId,
+    "answer",
+    threadId,
+    messageId,
+    revision,
+  ],
+  answerHistory: ({
+    activeOrganizationId,
+    userId,
+    threadId,
+    messageId,
+    revision,
+  }: AnswerRevisionQueryKey) => [
+    ...chatKeys.answerSnapshot({
+      activeOrganizationId,
+      userId,
+      threadId,
+      messageId,
+      revision,
+    }),
+    "history",
   ],
   draftMeta: (activeOrganizationId: string, threadRef: ChatThreadRef) => [
     ...chatKeys.threadPrefix(activeOrganizationId, threadRef),

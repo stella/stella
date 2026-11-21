@@ -10,7 +10,7 @@ import { useContentDir } from "../hooks/use-content-dir";
 import { SearchIcon } from "../icons";
 import { CONTROL_SIZE } from "../lib/control-size";
 import type { ControlSize } from "../lib/control-size";
-import { MENU_ROW_CLASS_NAME } from "../lib/menu-row";
+import { MENU_ROW_CLASS_NAME } from "../lib/list-row-metric";
 import { cn } from "../lib/utils";
 import { DialogPopup } from "./dialog";
 
@@ -142,7 +142,7 @@ const CommandList = ({
 }) => (
   <AutocompletePrimitive.List
     className={cn(
-      "max-h-[300px] scroll-py-1 overflow-x-hidden overflow-y-auto",
+      "max-h-[300px] scroll-py-1 overflow-x-hidden overflow-y-auto overscroll-contain",
       className,
     )}
     data-slot="command-list"

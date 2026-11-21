@@ -1,7 +1,7 @@
 import { queryOptions } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
 
 export const connectedAppsKeys = {
@@ -12,7 +12,7 @@ export const connectedAppsKeys = {
 type ListConnectedAppsFn = (typeof api.me)["oauth-connections"]["get"];
 
 /** The session user's authorized OAuth clients ("connected apps"). */
-export type ConnectedAppsResponse = NonNullable<
+type ConnectedAppsResponse = NonNullable<
   Awaited<ReturnType<ListConnectedAppsFn>>["data"]
 >;
 
@@ -26,7 +26,7 @@ const fetchConnectedApps = async ({
   const response = await api.me["oauth-connections"].get({
     fetch: { signal },
   });
-  return unwrapEden(response);
+  return unwrapApiResponse(response);
 };
 
 // Keyed by the session user; see `sessionsOptions` in

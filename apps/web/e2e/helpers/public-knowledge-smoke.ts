@@ -5,67 +5,25 @@ import * as v from "valibot";
 
 import { loadCatalogue } from "@stll/catalogue";
 
-import messages from "../../src/i18n/langs/en.json" with { type: "json" };
 import { getStagingReporterEnvironment } from "../staging/env";
+import { installContentSecurityPolicyCollector } from "./content-security-policy";
+import { assertRouteLayoutShift, observeLayoutShift } from "./layout-shift";
 import { createNetworkCollector } from "./network";
 import {
   classifyPublicKnowledgeWebProbe,
   isMemberOnlySmokeRequest,
   publicKnowledgeVisitorSkipReason,
 } from "./public-knowledge-smoke.logic";
+import {
+  PACK_ID,
+  PUBLIC_VISITOR_ROUTE_DEFS,
+  type VisitorRoute,
+} from "./public-visitor-route-defs";
 import { parseStagingState, STAGING_CHECKS } from "./staging-state";
 
-const PACK_ID = "general-legal";
 const PUBLIC_API = "/api/v1/public/knowledge/template-packs";
 const templateSchema = v.object({ id: v.string(), title: v.string() });
 type CatalogueTemplate = v.InferOutput<typeof templateSchema>;
-type VisitorRoute = {
-  template: string;
-  resolve: (template: CatalogueTemplate) => {
-    path: string;
-    heading: string;
-    level: 1 | 2;
-  };
-};
-const tool =
-  loadCatalogue().find(({ slug }) => slug === "contract-review") ??
-  panic("smoke catalogue entry missing");
-
-export const PUBLIC_VISITOR_ROUTE_DEFS = [
-  {
-    template: "/knowledge/templates/catalogue",
-    resolve: () => ({
-      path: "/knowledge/templates/catalogue",
-      heading: messages.knowledge.sections.templates.title,
-      level: 2,
-    }),
-  },
-  {
-    template: "/knowledge/templates/catalogue/$packId/$templateId",
-    resolve: ({ id, title }) => ({
-      path: `/knowledge/templates/catalogue/${PACK_ID}/${id}`,
-      heading: title,
-      level: 1,
-    }),
-  },
-  {
-    template: "/knowledge/tools/$entry",
-    resolve: () => ({
-      path: `/knowledge/tools/${tool.slug}`,
-      heading: tool.displayName,
-      level: 2,
-    }),
-  },
-  {
-    template: "/knowledge/tools/contribute",
-    resolve: () => ({
-      path: "/knowledge/tools/contribute",
-      heading: messages.publicTools.contribute.title,
-      level: 1,
-    }),
-  },
-] as const satisfies readonly VisitorRoute[];
-
 type VisitorCatalogue =
   | { status: "unprobed" }
   | { status: "disabled" }
@@ -160,11 +118,18 @@ export const declarePublicKnowledgeSmoke = ({
 
     const declareRoute = (def: VisitorRoute) => {
       test(def.template, async ({ page }, testInfo) => {
+        const policy = await installContentSecurityPolicyCollector(page);
         const current = catalogue;
         if (current.status !== "ready") {
           panic("public route smoke ran without a ready catalogue");
         }
-        const route = def.resolve(current.template);
+        const route = def.resolve(
+          current.template,
+          () =>
+            loadCatalogue().find(
+              ({ slug }) => slug === "contract-review-anthropic",
+            ) ?? panic("smoke catalogue entry missing"),
+        );
         const requests: string[] = [];
         const unauthorized: string[] = [];
         const forbidden: string[] = [];
@@ -207,8 +172,10 @@ export const declarePublicKnowledgeSmoke = ({
           }
         });
         const network = createNetworkCollector();
-        const detach = network.trackPage(page);
+        let detach: (() => Promise<void>) | undefined;
         try {
+          await observeLayoutShift(page);
+          detach = await network.trackPage(page);
           const response = await page.goto(route.path, {
             waitUntil: "domcontentloaded",
           });
@@ -238,16 +205,21 @@ export const declarePublicKnowledgeSmoke = ({
               timeout: 5000,
             })
             .toBe(0);
+          await assertRouteLayoutShift(page, route.path);
           expect(forbidden, "member-only requests").toEqual([]);
           expect(unauthorized, "unauthorized responses").toEqual([]);
+          await policy.assertClean();
         } finally {
-          detach();
-          page.off("requestfinished", settleRequest);
-          page.off("requestfailed", settleRequest);
-          await testInfo.attach("public-network", {
-            body: JSON.stringify({ requests, forbidden, unauthorized }),
-            contentType: "application/json",
-          });
+          try {
+            await detach?.();
+          } finally {
+            page.off("requestfinished", settleRequest);
+            page.off("requestfailed", settleRequest);
+            await testInfo.attach("public-network", {
+              body: JSON.stringify({ requests, forbidden, unauthorized }),
+              contentType: "application/json",
+            });
+          }
         }
       });
     };

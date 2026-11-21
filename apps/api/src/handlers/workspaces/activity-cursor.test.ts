@@ -38,14 +38,17 @@ describe("workspace activity cursor", () => {
       decodeWorkspaceActivityCursor(
         Buffer.from(
           JSON.stringify(["2026-07-09T21:05:28.123456", ENTITY_ID]),
-        ).toString("base64url"),
+        ).toBase64({ alphabet: "base64url", omitPadding: true }),
       ),
     ).toBeNull();
   });
 
   test("rejects invalid timestamps and activity types", () => {
     const encodeParts = (parts: unknown[]) =>
-      Buffer.from(JSON.stringify(parts)).toString("base64url");
+      Buffer.from(JSON.stringify(parts)).toBase64({
+        alphabet: "base64url",
+        omitPadding: true,
+      });
 
     expect(
       decodeWorkspaceActivityCursor(

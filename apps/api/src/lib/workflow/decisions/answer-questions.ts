@@ -21,13 +21,11 @@
 import { panic } from "better-result";
 
 import { normalizeDateValue, normalizeNumber } from "@stll/agent-input";
+import type { DecisionUndecidedReason } from "@stll/api-contract/ai-decision-provider";
 
 import type { AiExtractablePropertyContent } from "@/api/db/schema-validators";
 import type { Answer } from "@/api/lib/workflow/ai-answer-schema";
-import type {
-  Decisions,
-  DecisionUndecidedReason,
-} from "@/api/lib/workflow/decisions/decide";
+import type { Decisions } from "@/api/lib/workflow/decisions/decide";
 import {
   choice,
   DEFAULT_SYSTEM_ONE_MODEL,
@@ -79,14 +77,17 @@ export type AnswerSource = {
   text: string;
 };
 
+// Free text has no candidate set to choose from, and a money amount needs a
+// currency read alongside its number, which a numeric candidate does not carry.
 export type SystemOneAnswerableContent = Exclude<
   AiExtractablePropertyContent,
-  { type: "text" }
+  { type: "text" | "money" }
 >;
 
 export const isSystemOneAnswerable = (
   content: AiExtractablePropertyContent,
-): content is SystemOneAnswerableContent => content.type !== "text";
+): content is SystemOneAnswerableContent =>
+  content.type !== "text" && content.type !== "money";
 
 export type AnswerQuestion = {
   id: string;
@@ -94,7 +95,7 @@ export type AnswerQuestion = {
   content: SystemOneAnswerableContent;
 };
 
-export type AnswerOutcome =
+type DecodedAnswerOutcome =
   | {
       state: "answered";
       answer: Exclude<Answer, null>;
@@ -112,10 +113,15 @@ export type AnswerOutcome =
       rationale: string;
     }
   | {
-      /** No answer to write: no decision model, under the floor, or a failed call. */
+      /** The shared generative fallback still could not settle the answer. */
       state: "undecided";
       reason: DecisionUndecidedReason;
     };
+
+export type AnswerOutcome = DecodedAnswerOutcome & {
+  source: "decision-model" | "generative";
+  model: string | null;
+};
 
 type Candidate = {
   key: string;
@@ -128,7 +134,7 @@ type Candidate = {
 type Plan =
   | { kind: "single-select"; valueKey: string; whereKey: string | null }
   | { kind: "multi-select"; optionKeys: string[]; whereKey: string | null }
-  | { kind: "candidates"; valueKey: string | null; candidates: Candidate[] };
+  | { kind: "candidates"; valueKey: string; candidates: Candidate[] };
 
 type PlannedQuestion = {
   plan: Plan;
@@ -316,17 +322,21 @@ const integerCandidates = ({
 const candidateCriteria = (
   candidates: readonly Candidate[],
 ): Record<string, SystemOneEntry> => {
-  const criteria: Record<string, SystemOneEntry> = {};
-  for (const candidate of candidates) {
-    criteria[candidate.key] = {
-      value: candidate.verbatim,
-      in: candidate.sourceId,
-      context: candidate.snippet,
-    };
-  }
-  criteria[NOT_STATED] =
-    "None of the listed values is the one the question asks for, or the sources do not state it.";
-  return criteria;
+  const criteria = new Map<string, SystemOneEntry>(
+    candidates.map((candidate) => [
+      candidate.key,
+      {
+        value: candidate.verbatim,
+        in: candidate.sourceId,
+        context: candidate.snippet,
+      },
+    ]),
+  );
+  criteria.set(
+    NOT_STATED,
+    "None of the listed values is the one the question asks for, or the sources do not state it.",
+  );
+  return Object.fromEntries(criteria);
 };
 
 const whereQuestion = (
@@ -336,20 +346,19 @@ const whereQuestion = (
   if (sources.length === 0 || sources.length > LOCATOR_CHOICE_MAX_SOURCES) {
     return null;
   }
-  const criteria: Record<string, SystemOneEntry> = {};
-  for (const source of sources) {
-    criteria[source.id] = truncate(
-      collapseWhitespace(source.text),
-      LOCATOR_DESCRIPTION_CHARS,
-    );
-  }
-  criteria[NO_SOURCE] = "No source states the answer.";
+  const criteria = new Map(
+    sources.map((source) => [
+      source.id,
+      truncate(collapseWhitespace(source.text), LOCATOR_DESCRIPTION_CHARS),
+    ]),
+  );
+  criteria.set(NO_SOURCE, "No source states the answer.");
   return choice(
     {
       question,
       task: "Which entry of `sources` states the answer to `question`? Choose `__none` when no entry states it.",
     },
-    criteria,
+    Object.fromEntries(criteria),
   );
 };
 
@@ -367,51 +376,61 @@ const planSelect = (
   ) {
     return null;
   }
-  const questions: Record<string, SystemOneQuestion> = {};
+  const questions = new Map<string, SystemOneQuestion>();
   const where = whereQuestion(question.question, sources);
   const whereKey = where === null ? null : `${question.id}:where`;
   if (where !== null && whereKey !== null) {
-    questions[whereKey] = where;
+    questions.set(whereKey, where);
   }
   if (content.type === "single-select") {
-    const criteria: Record<string, SystemOneEntry> = {};
-    for (const [index, option] of content.options.entries()) {
-      criteria[selectOptionKey(index)] = option.value;
-    }
-    criteria[NOT_STATED] =
-      "The sources do not state this, or none of the listed options applies.";
+    const criteria = new Map(
+      content.options.map((option, index) => [
+        selectOptionKey(index),
+        option.value,
+      ]),
+    );
+    criteria.set(
+      NOT_STATED,
+      "The sources do not state this, or none of the listed options applies.",
+    );
     const valueKey = `${question.id}:value`;
-    questions[valueKey] = choice(
-      {
-        question: question.question,
-        task: "Which option answers `question` according to `sources`? Judge only what the sources state; do not use outside knowledge.",
-      },
-      criteria,
+    questions.set(
+      valueKey,
+      choice(
+        {
+          question: question.question,
+          task: "Which option answers `question` according to `sources`? Judge only what the sources state; do not use outside knowledge.",
+        },
+        Object.fromEntries(criteria),
+      ),
     );
     return {
       plan: { kind: "single-select", valueKey, whereKey },
-      questions,
+      questions: Object.fromEntries(questions),
     };
   }
   const optionKeys = content.options.map((option, index) => {
     const key = `${question.id}:${selectOptionKey(index)}`;
-    questions[key] = noul(
-      {
-        question: question.question,
-        option: option.value,
-        task: "According to `sources`, is `option` one of the answers to `question`?",
-      },
-      {
-        true: "The sources state that this option applies.",
-        false:
-          "The sources do not state it, or they state that it does not apply.",
-      },
+    questions.set(
+      key,
+      noul(
+        {
+          question: question.question,
+          option: option.value,
+          task: "According to `sources`, is `option` one of the answers to `question`?",
+        },
+        {
+          true: "The sources state that this option applies.",
+          false:
+            "The sources do not state it, or they state that it does not apply.",
+        },
+      ),
     );
     return key;
   });
   return {
     plan: { kind: "multi-select", optionKeys, whereKey },
-    questions,
+    questions: Object.fromEntries(questions),
   };
 };
 
@@ -423,18 +442,18 @@ const planCandidates = (
   if (candidates.length === 0) {
     return null;
   }
-  const questions: Record<string, SystemOneQuestion> = {};
   const valueKey = `${question.id}:value`;
-  questions[valueKey] = choice(
-    {
-      question: question.question,
-      task: `Which of the listed ${noun} is the one \`question\` asks for? Each option shows the value as written, the source it appears in, and its surrounding text. Choose \`__not_stated\` when none of them is.`,
-    },
-    candidateCriteria(candidates),
-  );
   return {
     plan: { kind: "candidates", valueKey, candidates },
-    questions,
+    questions: {
+      [valueKey]: choice(
+        {
+          question: question.question,
+          task: `Which of the listed ${noun} is the one \`question\` asks for? Each option shows the value as written, the source it appears in, and its surrounding text. Choose \`__not_stated\` when none of them is.`,
+        },
+        candidateCriteria(candidates),
+      ),
+    },
   };
 };
 
@@ -475,7 +494,7 @@ export const planSystemOneAnswers = ({
     document,
     sources: sources.map((source) => ({ id: source.id, text: source.text })),
   };
-  const questions: Record<string, SystemOneQuestion> = {};
+  let questions: Record<string, SystemOneQuestion> = {};
   const plans = new Map<string, Plan>();
   const unplanned: string[] = [];
   let dates: Candidate[] | undefined;
@@ -506,16 +525,14 @@ export const planSystemOneAnswers = ({
       continue;
     }
     const stagedEntries = Object.entries(staged.questions);
+    const acceptedQuestions = questions;
     const hasKeyCollision = stagedEntries.some(([key]) =>
-      Object.hasOwn(questions, key),
+      Object.hasOwn(acceptedQuestions, key),
     );
-    const nextQuestions: Record<string, SystemOneQuestion> = {};
-    for (const [key, plannedQuestion] of Object.entries(questions)) {
-      nextQuestions[key] = plannedQuestion;
-    }
-    for (const [key, plannedQuestion] of stagedEntries) {
-      nextQuestions[key] = plannedQuestion;
-    }
+    const nextQuestions = Object.fromEntries([
+      ...Object.entries(acceptedQuestions),
+      ...stagedEntries,
+    ]);
     if (
       hasKeyCollision ||
       Object.keys(nextQuestions).length >
@@ -526,9 +543,7 @@ export const planSystemOneAnswers = ({
       unplanned.push(question.id);
       continue;
     }
-    for (const [key, plannedQuestion] of stagedEntries) {
-      questions[key] = plannedQuestion;
-    }
+    questions = nextQuestions;
     plans.set(question.id, staged.plan);
   }
   return {
@@ -578,17 +593,17 @@ const sourceChosen = (
   return answer.choice;
 };
 
-const notStated = (confidence: number): AnswerOutcome => ({
+const notStated = (confidence: number): DecodedAnswerOutcome => ({
   state: "not_stated",
   confidence,
-  rationale: `Jev found no answer in the text (${percent(confidence)} confidence).`,
+  rationale: `Decision model found no answer in the text (${percent(confidence)} confidence).`,
 });
 
 const decodeSingleSelect = (
   answer: ChoiceAnswer,
   content: SelectContent,
   sourceId: string | null,
-): AnswerOutcome => {
+): DecodedAnswerOutcome => {
   const label = (key: string): string => {
     if (key === NOT_STATED) {
       return "not stated";
@@ -611,19 +626,19 @@ const decodeSingleSelect = (
     probability,
     confidence: answer.confidence,
     sourceId,
-    rationale: `Jev chose ${label(answer.choice)} at ${percent(probability)}${runnerUp(answer, label)}.`,
+    rationale: `Decision model chose ${label(answer.choice)} at ${percent(probability)}${runnerUp(answer, label)}.`,
   };
 };
 
 /**
  * Every option is its own decision, so one option under the floor leaves the
  * whole cell undecided: a list the model was unsure about anywhere is not a
- * list, and the generative model answers the column instead.
+ * list. Remaining uncertainty is terminal after the shared fallback.
  */
 const decodeMultiSelect = (
   optionAnswers: readonly (readonly [string, NoulAnswer])[],
   sourceId: string | null,
-): AnswerOutcome => {
+): Exclude<DecodedAnswerOutcome, { state: "undecided" }> => {
   const chosen = optionAnswers.filter(([, answer]) => answer.noul > NOUL_YES);
   const confidence =
     optionAnswers.length === 0
@@ -633,7 +648,11 @@ const decodeMultiSelect = (
           0,
         ) / optionAnswers.length;
   if (chosen.length === 0) {
-    return notStated(confidence);
+    return {
+      state: "not_stated",
+      confidence,
+      rationale: `None of the options is stated in the sources (${percent(confidence)} confidence).`,
+    };
   }
   const listed = chosen
     .map(([value, answer]) => `"${value}" (${percent(answer.noul)})`)
@@ -644,14 +663,14 @@ const decodeMultiSelect = (
     probability: Math.min(...chosen.map(([, answer]) => answer.noul)),
     confidence,
     sourceId,
-    rationale: `Jev marked ${listed}.`,
+    rationale: `Selected ${listed}.`,
   };
 };
 
 const decodeCandidates = (
   answer: ChoiceAnswer,
   candidates: readonly Candidate[],
-): AnswerOutcome => {
+): DecodedAnswerOutcome => {
   const byKey = new Map(
     candidates.map((candidate) => [candidate.key, candidate]),
   );
@@ -674,7 +693,7 @@ const decodeCandidates = (
     probability,
     confidence: answer.confidence,
     sourceId: candidate.sourceId,
-    rationale: `Jev chose "${candidate.verbatim}" (read as ${reading}) in ${candidate.sourceId} at ${percent(probability)}${runnerUp(answer, label)}.`,
+    rationale: `Decision model chose "${candidate.verbatim}" (read as ${reading}) in ${candidate.sourceId} at ${percent(probability)}${runnerUp(answer, label)}.`,
   };
 };
 
@@ -685,9 +704,39 @@ type DecodeSystemOneAnswersOptions = {
   decisions: PlanDecisions;
 };
 
-const undecided = (reason: DecisionUndecidedReason): AnswerOutcome => ({
+const undecided = (
+  decision: Extract<PlanDecisions[string], { state: "undecided" }>,
+): AnswerOutcome => ({
   state: "undecided",
-  reason,
+  reason: decision.reason,
+  source: decision.source,
+  model: decision.model,
+});
+
+type WithDecisionSourceOptions = {
+  outcome: DecodedAnswerOutcome;
+  decision: PlanDecisions[string];
+};
+
+const withDecisionSource = ({
+  outcome,
+  decision,
+}: WithDecisionSourceOptions): AnswerOutcome => ({
+  ...outcome,
+  ...(outcome.state === "undecided"
+    ? {}
+    : {
+        rationale:
+          decision.state === "decided" && decision.evidence !== null
+            ? decision.evidence
+            : outcome.rationale.replaceAll("Decision model", () =>
+                decision.source === "generative"
+                  ? "Generative model"
+                  : "Decision model",
+              ),
+      }),
+  source: decision.source,
+  model: decision.model,
 });
 
 /**
@@ -712,75 +761,104 @@ export const decodeSystemOneAnswers = ({
           decision === undefined ||
           question.content.type !== "single-select"
         ) {
-          break;
+          panic("Planned answer does not match its decision or column");
         }
         if (decision.state === "undecided") {
-          outcomes.set(question.id, undecided(decision.reason));
+          outcomes.set(question.id, undecided(decision));
           break;
         }
         if (decision.answer.type !== "choice") {
-          break;
+          panic("Planned select must return a choice decision");
         }
         outcomes.set(
           question.id,
-          decodeSingleSelect(
-            decision.answer,
-            question.content,
-            sourceChosen(decisions, entry.whereKey),
-          ),
+          withDecisionSource({
+            outcome: decodeSingleSelect(
+              decision.answer,
+              question.content,
+              sourceChosen(decisions, entry.whereKey),
+            ),
+            decision,
+          }),
         );
         break;
       }
       case "multi-select": {
         if (question.content.type !== "multi-select") {
-          break;
+          panic("Planned multi-select must retain its column type");
         }
         const { options } = question.content;
         const optionAnswers: (readonly [string, NoulAnswer])[] = [];
-        let unsure: DecisionUndecidedReason | null = null;
+        const evidence: string[] = [];
+        let unsure: Extract<
+          PlanDecisions[string],
+          { state: "undecided" }
+        > | null = null;
+        let answeringDecision: PlanDecisions[string] | undefined;
         for (const [index, key] of entry.optionKeys.entries()) {
           const decision = decisions[key];
           const option = options[index];
           if (decision === undefined || option === undefined) {
-            continue;
+            panic("Planned option is missing its decision or column value");
           }
           if (decision.state === "undecided") {
-            unsure ??= decision.reason;
+            unsure ??= decision;
             continue;
           }
-          if (decision.answer.type === "noul") {
-            optionAnswers.push([option.value, decision.answer]);
+          if (
+            answeringDecision === undefined ||
+            decision.source === "generative"
+          ) {
+            answeringDecision = decision;
+          }
+          if (decision.answer.type !== "noul") {
+            panic("Planned option must return a noul decision");
+          }
+          optionAnswers.push([option.value, decision.answer]);
+          if (decision.evidence !== null) {
+            evidence.push(`"${option.value}": ${decision.evidence}`);
           }
         }
-        outcomes.set(
-          question.id,
-          unsure === null
-            ? decodeMultiSelect(
-                optionAnswers,
-                sourceChosen(decisions, entry.whereKey),
-              )
-            : undecided(unsure),
-        );
+        if (unsure !== null) {
+          outcomes.set(question.id, undecided(unsure));
+          break;
+        }
+        if (answeringDecision !== undefined) {
+          const aggregate = decodeMultiSelect(
+            optionAnswers,
+            sourceChosen(decisions, entry.whereKey),
+          );
+          outcomes.set(question.id, {
+            ...aggregate,
+            rationale:
+              evidence.length === 0
+                ? aggregate.rationale
+                : `${aggregate.rationale} ${evidence.join(" ")}`,
+            source: answeringDecision.source,
+            model: answeringDecision.model,
+          });
+        }
         break;
       }
       case "candidates": {
-        if (entry.valueKey === null) {
-          break;
-        }
         const decision = decisions[entry.valueKey];
         if (decision === undefined) {
-          break;
+          panic("Planned answer does not match its decision or column");
         }
         if (decision.state === "undecided") {
-          outcomes.set(question.id, undecided(decision.reason));
+          outcomes.set(question.id, undecided(decision));
           break;
         }
-        if (decision.answer.type === "choice") {
-          outcomes.set(
-            question.id,
-            decodeCandidates(decision.answer, entry.candidates),
-          );
+        if (decision.answer.type !== "choice") {
+          panic("Planned candidate must return a choice decision");
         }
+        outcomes.set(
+          question.id,
+          withDecisionSource({
+            outcome: decodeCandidates(decision.answer, entry.candidates),
+            decision,
+          }),
+        );
         break;
       }
       default: {

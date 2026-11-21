@@ -5,7 +5,7 @@ import {
   replaceEqualDeep,
 } from "@tanstack/react-query";
 import { Result } from "better-result";
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, mock, spyOn } from "bun:test";
 
 import type { ReasoningEffort } from "@stll/ai-catalog";
 import {
@@ -14,13 +14,18 @@ import {
 } from "@stll/anonymize-chat";
 import {
   CHAT_CONTINUATION_REJECTED_ERROR_CODE,
+  CHAT_TURN_ID_HEADER,
   CHAT_TURN_INTENT,
+  RESOURCE_TYPE,
 } from "@stll/api-contract";
 import {
   ACTION_ADMISSION_CODES,
   ACTION_ADMISSION_REFUSALS,
 } from "@stll/api-contract/action-admission";
+import type { ChatRunTarget } from "@stll/api-contract/chat-run-target";
+import { sleep } from "@stll/concurrency/sleep";
 import { rejectionOf } from "@stll/property-testing/rejection";
+import { requestTest as test } from "@stll/start-runtime/test-request";
 
 import { getChatAssistantTurnError } from "@/components/chat/chat-ui-tools";
 import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
@@ -36,23 +41,28 @@ import {
 import {
   __resetChatRequestStateForTests,
   acquireChatRuntime,
+} from "@/features/chat/chat-runtime-registry";
+import { chatToolGrantsOptions } from "@/features/chat/chat-tool-grants";
+import {
   applyChatModelChange,
+  type ChatThreadFetched,
   chatThreadOptions,
+  chatThreadTitleOptions,
+  fileChatThreadOptions,
   groupedChatThreadsOptions,
-  invalidateGroupedChatThreads,
   invalidateChatThreadLists,
-  installChatRuntimeCleanup,
+  invalidateGroupedChatThreads,
   listChatHistoryItems,
   matchesChatThread,
   matchesChatThreadAcrossScopes,
   mergeGroupedChatThreadPages,
-  type ChatThreadFetched,
 } from "@/features/chat/queries";
+import { getAnalytics } from "@/lib/analytics/provider";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { toChatThreadId } from "@/lib/chat-thread-ref";
 import { actionAdmissionOutcome } from "@/lib/errors/action-admission";
-import { APIError } from "@/lib/errors/api";
-import { toSafeId, type SafeId } from "@/lib/safe-id";
+import { APIError, chatRefusal } from "@/lib/errors/api";
+import { type SafeId, toSafeId } from "@/lib/safe-id";
 import { workspaceActivityOptions } from "@/lib/workspaces/queries";
 
 const createMessage = (id = "message-A"): PersistedChatMessage => ({
@@ -97,6 +107,37 @@ const chatRequestRunId = (body: unknown): string => {
 const parseChatRequestRunId = (init: RequestInit | undefined): string =>
   chatRequestRunId(parseJsonRequestBody(init));
 
+test("retains answer revisions when hydrating and refreshing the live runtime", () => {
+  const originalAnswer = {
+    id: assistantMessageId,
+    role: "assistant",
+    parts: [{ type: "text", content: "The deadline is Monday." }],
+    revision: 0,
+    edited: false,
+  } as const satisfies PersistedChatMessage;
+  const runtime = createChatRuntime({
+    activeTurnId: null,
+    context: undefined,
+    initialMessages: [originalAnswer],
+    key: { scope: "global", threadId: toChatThreadId("thread-A") },
+    onError: (error) => {
+      throw error;
+    },
+    onFinish: () => undefined,
+    reloadThread: () => undefined,
+  });
+  expect(runtime.getSnapshot().messages).toEqual([originalAnswer]);
+  const editedAnswer = {
+    ...originalAnswer,
+    parts: [{ type: "text", content: "The deadline is Friday." }],
+    revision: 1,
+    edited: true,
+  } as const satisfies PersistedChatMessage;
+  runtime.setMessages([editedAnswer]);
+  expect(runtime.getSnapshot().messages).toEqual([editedAnswer]);
+  runtime.leave();
+});
+
 describe("chatKeys", () => {
   test("isolates normalized history searches from the unfiltered list", () => {
     const activeOrganizationId = "org_test";
@@ -112,7 +153,45 @@ describe("chatKeys", () => {
     });
 
     expect(searched.queryKey).not.toEqual(unfiltered.queryKey);
-    expect(searched.queryKey.at(-1)).toBe("Matter B");
+    expect(searched.queryKey.at(-2)).toBe("Matter B");
+  });
+
+  test("isolates a matter-filtered history from the unfiltered list", () => {
+    const activeOrganizationId = "org_test";
+    const userId = "user_test";
+    const unfiltered = groupedChatThreadsOptions({
+      activeOrganizationId,
+      userId,
+    });
+    const inMatter = groupedChatThreadsOptions({
+      activeOrganizationId,
+      userId,
+      workspaceId: "matter_b",
+    });
+
+    expect(inMatter.queryKey).not.toEqual(unfiltered.queryKey);
+    expect(inMatter.queryKey.at(-1)).toBe("matter_b");
+  });
+
+  test("isolates the pinned and unpinned histories from each other and the unfiltered list", () => {
+    const activeOrganizationId = "org_test";
+    const userId = "user_test";
+    const keys = ([undefined, "pinned", "unpinned"] as const).map(
+      (pinState) =>
+        groupedChatThreadsOptions({
+          activeOrganizationId,
+          ...(pinState === undefined ? {} : { pinState }),
+          userId,
+        }).queryKey,
+    );
+
+    expect(new Set(keys.map((key) => JSON.stringify(key))).size).toBe(3);
+    // Each sits under the reader's lists prefix the user stream refreshes.
+    for (const key of keys) {
+      expect(key.slice(0, 5)).toEqual(
+        chatKeys.groupedThreadLists(activeOrganizationId, userId),
+      );
+    }
   });
 
   test("separates plain chat transports from active DOCX edit transports", () => {
@@ -206,6 +285,48 @@ describe("chat thread fetch failures", () => {
     globalThis.fetch = previousFetch;
   });
 
+  test("a thread whose first message is still being sent has no title to read", async () => {
+    globalThis.fetch = createFetchMock(404, { message: "Thread not found" });
+    const draft = await queryClient().query(options(true));
+    const titleOptions = (
+      persistedThread: ChatThreadFetched | undefined,
+      needed?: boolean,
+    ) =>
+      chatThreadTitleOptions({
+        activeOrganizationId: "org_test",
+        key: { threadId: "thread-fetch-failure", workspaceId: undefined },
+        persistedThread,
+        ...(needed === undefined ? {} : { needed }),
+      });
+
+    // Before the server read resolves, and while it reports no row (the send
+    // that creates it is in flight), GET /title would answer 404.
+    expect(titleOptions(undefined).enabled).toBe(false);
+    expect(titleOptions(draft).enabled).toBe(false);
+    // Once a refetch after the turn reports the row, the title is read.
+    const persisted = { ...draft, threadExists: true };
+    expect(titleOptions(persisted).enabled).toBe(true);
+    expect(titleOptions(persisted, false).enabled).toBe(false);
+  });
+
+  test("the title read follows the thread in its matter or organization", () => {
+    const resourceReads = (workspaceId: string | undefined) =>
+      chatThreadTitleOptions({
+        activeOrganizationId: "org_test",
+        key: { threadId: "thread-title", workspaceId },
+        persistedThread: undefined,
+      }).meta.resourceReads;
+
+    expect(resourceReads(undefined)).toEqual({
+      resources: [RESOURCE_TYPE.CHAT_THREAD],
+      scope: { type: "organization", organizationId: "org_test" },
+    });
+    expect(resourceReads("ws_test")).toEqual({
+      resources: [RESOURCE_TYPE.CHAT_THREAD],
+      scope: { type: "workspace", workspaceId: "ws_test" },
+    });
+  });
+
   test("returns an empty draft for an allowed missing thread", async () => {
     globalThis.fetch = createFetchMock(404, { message: "Thread not found" });
 
@@ -213,17 +334,17 @@ describe("chat thread fetch failures", () => {
 
     expect(data).toMatchObject({
       messages: [],
+      activeSkill: null,
       threadExists: false,
     });
   });
 
-  test.each([
+  for (const { allowMissingThread, status } of [
     { allowMissingThread: false, status: 404 },
     { allowMissingThread: false, status: 500 },
     { allowMissingThread: true, status: 500 },
-  ])(
-    "propagates status $status when allowMissingThread is $allowMissingThread",
-    async ({ allowMissingThread, status }) => {
+  ]) {
+    test(`propagates status ${status} when allowMissingThread is ${allowMissingThread}`, async () => {
       globalThis.fetch = createFetchMock(status, { message: "Request failed" });
       const result = await Result.tryPromise({
         try: async () => await queryClient().query(options(allowMissingThread)),
@@ -237,8 +358,8 @@ describe("chat thread fetch failures", () => {
           expect(result.error.status).toBe(status);
         }
       }
-    },
-  );
+    });
+  }
 });
 
 describe("thread-scoped chat keys", () => {
@@ -438,6 +559,9 @@ describe("mergeGroupedChatThreadPages", () => {
             updatedAt: "2026-05-16T08:00:00.000Z",
             usedAnonymization: false,
             context: EMPTY_THREAD_CONTEXT,
+            decision: null,
+            pinState: "unpinned",
+            readState: "read",
           },
         ],
         nextCursor: "page-2",
@@ -454,6 +578,9 @@ describe("mergeGroupedChatThreadPages", () => {
                 updatedAt: "2026-05-16T07:00:00.000Z",
                 usedAnonymization: false,
                 context: EMPTY_THREAD_CONTEXT,
+                decision: null,
+                pinState: "unpinned",
+                readState: "read",
               },
             ],
           },
@@ -469,6 +596,9 @@ describe("mergeGroupedChatThreadPages", () => {
             updatedAt: "2026-05-16T08:00:00.000Z",
             usedAnonymization: false,
             context: EMPTY_THREAD_CONTEXT,
+            decision: null,
+            pinState: "unpinned",
+            readState: "read",
           },
           {
             createdAt: "2026-05-16T06:00:00.000Z",
@@ -478,6 +608,9 @@ describe("mergeGroupedChatThreadPages", () => {
             updatedAt: "2026-05-16T06:00:00.000Z",
             usedAnonymization: false,
             context: EMPTY_THREAD_CONTEXT,
+            decision: null,
+            pinState: "unpinned",
+            readState: "read",
           },
         ],
         nextCursor: null,
@@ -494,6 +627,9 @@ describe("mergeGroupedChatThreadPages", () => {
                 updatedAt: "2026-05-16T07:00:00.000Z",
                 usedAnonymization: false,
                 context: EMPTY_THREAD_CONTEXT,
+                decision: null,
+                pinState: "unpinned",
+                readState: "read",
               },
               {
                 createdAt: "2026-05-16T05:00:00.000Z",
@@ -503,6 +639,9 @@ describe("mergeGroupedChatThreadPages", () => {
                 updatedAt: "2026-05-16T05:00:00.000Z",
                 usedAnonymization: false,
                 context: EMPTY_THREAD_CONTEXT,
+                decision: null,
+                pinState: "unpinned",
+                readState: "read",
               },
             ],
           },
@@ -518,6 +657,9 @@ describe("mergeGroupedChatThreadPages", () => {
                 updatedAt: "2026-05-16T06:00:00.000Z",
                 usedAnonymization: false,
                 context: EMPTY_THREAD_CONTEXT,
+                decision: null,
+                pinState: "unpinned",
+                readState: "read",
               },
               {
                 createdAt: "2026-05-16T04:00:00.000Z",
@@ -527,6 +669,9 @@ describe("mergeGroupedChatThreadPages", () => {
                 updatedAt: "2026-05-16T04:00:00.000Z",
                 usedAnonymization: false,
                 context: EMPTY_THREAD_CONTEXT,
+                decision: null,
+                pinState: "unpinned",
+                readState: "read",
               },
             ],
           },
@@ -690,6 +835,30 @@ describe("buildSendRequestBody", () => {
       sendMode: CHAT_SEND_MODE.anonymized,
       threadId: "thread-A",
     });
+  });
+
+  test("names the Run on choice, cloud included, and nothing without one", () => {
+    const threadId = toChatThreadId("thread-A");
+    const bodyFor = (runTarget: ChatRunTarget | undefined) =>
+      buildSendRequestBody({
+        context:
+          runTarget === undefined ? {} : { getRunTarget: () => runTarget },
+        key: { scope: "global", threadId },
+        messages: [createMessage()],
+        run: { runId: "run-A", threadId },
+      });
+    const local: ChatRunTarget = {
+      kind: "local",
+      harness: "codex",
+      model: "gpt-5-codex",
+      approvals: "full_auto",
+      reasoningEffort: null,
+    };
+    expect(bodyFor(local).runTarget).toEqual(local);
+    // The server runs a send that names no target where its thread runs, so
+    // a member who picked cloud on a thread that ran on a computer must say so.
+    expect(bodyFor({ kind: "cloud" }).runTarget).toEqual({ kind: "cloud" });
+    expect("runTarget" in bodyFor(undefined)).toBe(false);
   });
 
   test("forwards the complete native AG-UI interrupt continuation", () => {
@@ -1129,20 +1298,37 @@ describe("chat runtime", () => {
 
   test("latches an explicitly stopped turn until authoritative hydration", async () => {
     const threadId = toChatThreadId("thread-stopped");
-    globalThis.fetch = createFetchMock(
-      async (_input, init) =>
-        await new Promise<Response>((_resolve, reject) => {
-          init?.signal?.addEventListener(
-            "abort",
-            () => {
-              const error = new Error("aborted");
-              error.name = "AbortError";
-              reject(error);
-            },
-            { once: true },
-          );
+    const accepted = Promise.withResolvers<undefined>();
+    globalThis.fetch = createFetchMock(async (input, init) => {
+      const url = input instanceof Request ? input.url : input.toString();
+      if (init?.method === "POST" && url.endsWith("/cancel")) {
+        return Response.json({
+          turn: {
+            id: "018f0000-0000-7000-8000-00000000000a",
+            reason: "user-stop",
+            status: "cancelled",
+          },
+        });
+      }
+      await accepted.promise;
+      return new Response(
+        new ReadableStream({
+          start(controller) {
+            init?.signal?.addEventListener(
+              "abort",
+              () => controller.error(new DOMException("Aborted", "AbortError")),
+              { once: true },
+            );
+          },
         }),
-    );
+        {
+          headers: {
+            "Content-Type": "text/event-stream",
+            [CHAT_TURN_ID_HEADER]: "018f0000-0000-7000-8000-00000000000a",
+          },
+        },
+      );
+    });
     const runtime = createChatRuntime({
       activeTurnId: null,
       context: undefined,
@@ -1161,11 +1347,13 @@ describe("chat runtime", () => {
 
     runtime.stop();
 
+    expect(runtime.getSnapshot().turnAbandoned).toBe(true);
+    accepted.resolve(undefined);
+    await stream;
     expect(runtime.getSnapshot()).toMatchObject({
       status: "ready",
       turnAbandoned: true,
     });
-    await stream;
   });
 
   test("exposes progressive create-document source from partial arguments", async () => {
@@ -1774,6 +1962,8 @@ describe("chat runtime", () => {
       reloadThread: () => {},
     });
 
+    expect(runtime.getSnapshot().turnsStarted).toBe(0);
+
     await runtime.reload();
 
     expect(requests).toHaveLength(1);
@@ -1783,6 +1973,8 @@ describe("chat runtime", () => {
         turnIntent: CHAT_TURN_INTENT.regenerate,
       },
     });
+    // A retry is a turn the page started, which the turn announcer reads.
+    expect(runtime.getSnapshot().turnsStarted).toBe(1);
   });
 
   test("streams reasoning-first chunks through tanstack ChatClient", async () => {
@@ -2030,7 +2222,7 @@ describe("chat runtime", () => {
     const messageId = toSafeId<"chatMessage">(
       "22222222-2222-4222-8222-222222222222",
     );
-    const started = runtime.startRouteHandoffMessage({
+    const started = await runtime.startRouteHandoffMessage({
       id: messageId,
       content: "ahoj",
     });
@@ -2426,7 +2618,7 @@ describe("chat runtime", () => {
   }: Awaited<ReturnType<typeof sendWhileInterruptPending>>) => {
     expect(requests).toHaveLength(2);
     expect(requests.at(1)).toMatchObject({
-      data: { message: { id: followUpMessageId } },
+      forwardedProps: { message: { id: followUpMessageId } },
     });
     expect(requests.at(1)).not.toHaveProperty("resume");
     expect(requests.at(1)).not.toHaveProperty("parentRunId");
@@ -2627,13 +2819,11 @@ describe("chat runtime", () => {
                 part.state === "input-complete",
             ),
           );
-      const toolCallShown = new Promise<void>((resolve) => {
-        const unsubscribe = runtime.subscribe(() => {
-          if (hasCompleteToolCall()) {
-            unsubscribe();
-            resolve();
-          }
-        });
+      const toolCallShown = Promise.withResolvers<undefined>();
+      const unsubscribe = runtime.subscribe(() => {
+        if (hasCompleteToolCall()) {
+          toolCallShown.resolve(undefined);
+        }
       });
       const sent = sendThreadChatMessage(
         runtime,
@@ -2650,7 +2840,7 @@ describe("chat runtime", () => {
         toolCall: answerCase.toolCall,
       });
       pushFirstStream(chunks.filter((chunk) => chunk.type !== "RUN_FINISHED"));
-      await toolCallShown;
+      await toolCallShown.promise;
       // The answer leaves while the run that asked is still open, and before
       // the page has seen the interrupt it resolves.
       expect(runtime.getSnapshot().isLoading).toBe(true);
@@ -2664,6 +2854,7 @@ describe("chat runtime", () => {
       await sent;
       await answered;
       await continuationRequested;
+      unsubscribe();
 
       expect(requests).toHaveLength(2);
       expect(requests.at(1)).toMatchObject({
@@ -2759,9 +2950,7 @@ describe("chat runtime", () => {
       id: "approval_tool-first",
     });
     // The answer is applied on a microtask; let it wait for the batch.
-    await new Promise((resolve) => {
-      setTimeout(() => resolve(undefined), 0);
-    });
+    await sleep(0);
     await sendThreadChatMessage(
       runtime,
       createOutgoingMessage(
@@ -2898,6 +3087,9 @@ describe("chat runtime", () => {
       const refusal = {
         code,
         ...metadata,
+        ...(code === ACTION_ADMISSION_CODES.concurrencyBusy
+          ? { retryAfterMs: 1250 }
+          : {}),
         contactUrl: "https://example.test/contact",
       };
       const stored = {
@@ -3095,6 +3287,7 @@ describe("acquireChatRuntime reconcile", () => {
   });
   afterEach(() => {
     globalThis.fetch = previousFetch;
+    mock.restore();
   });
 
   const threadId = toChatThreadId("thread-acquire");
@@ -3112,6 +3305,7 @@ describe("acquireChatRuntime reconcile", () => {
     contextMatterIds: [],
     lastActivityAt: null,
     threadRevision: null,
+    activeSkill: null,
     threadExists: true,
     usedAnonymization: false,
     webSearchAvailable: false,
@@ -3212,6 +3406,168 @@ describe("acquireChatRuntime reconcile", () => {
       },
     },
   ];
+
+  for (const { code, reported } of [
+    { code: "provider_unavailable", reported: false },
+    { code: "local_runner_needs_login", reported: false },
+    { code: ACTION_ADMISSION_CODES.concurrencyBusy, reported: false },
+    { code: "unknown", reported: true },
+    { code: undefined, reported: true },
+  ]) {
+    test(`reports a run error with code ${String(code)} only when the server left it unclassified`, async () => {
+      const capture = spyOn(getAnalytics(), "captureError").mockImplementation(
+        () => undefined,
+      );
+      globalThis.fetch = createFetchMock(async (_input, init) =>
+        createSseResponse([
+          {
+            type: "RUN_STARTED",
+            threadId,
+            runId: parseChatRequestRunId(init),
+          },
+          {
+            type: "RUN_ERROR",
+            message: code ?? "AI stream error",
+            ...(code === undefined ? {} : { code }),
+          },
+        ]),
+      );
+      const runtime = acquireChatRuntime({
+        activeOrganizationId,
+        context: { allowMissingThread: true },
+        data: buildThreadData(),
+        key: {
+          scope: "global",
+          threadId: toChatThreadId(`thread-run-${code ?? "none"}`),
+        },
+        queryClient: new QueryClient(),
+      });
+
+      await sendThreadChatMessage(
+        runtime,
+        createOutgoingMessage("22222222-2222-4222-8222-2222222222d1"),
+      );
+
+      expect(runtime.getSnapshot().status).toBe("error");
+      const reports = capture.mock.calls.filter(
+        ([, options]) =>
+          options.fingerprintKey === "acquireChatRuntime:failure",
+      );
+      expect(reports).toHaveLength(reported ? 1 : 0);
+    });
+  }
+
+  test("shows a rejected native approval continuation as the thread error", async () => {
+    const requests: unknown[] = [];
+    globalThis.fetch = createFetchMock(async (_input, init) => {
+      requests.push(parseJsonRequestBody(init));
+      if (requests.length === 1) {
+        return createSseResponse(
+          createApprovalSseChunks(parseChatRequestRunId(init)),
+        );
+      }
+      return Response.json(
+        {
+          code: CHAT_CONTINUATION_REJECTED_ERROR_CODE,
+          message: "Chat continuation does not match its awaited interaction",
+        },
+        { status: 400 },
+      );
+    });
+    const runtime = acquireChatRuntime({
+      activeOrganizationId,
+      context: { allowMissingThread: true },
+      data: buildThreadData(),
+      key: threadRef,
+      queryClient: new QueryClient(),
+    });
+    const started = await runtime.startRouteHandoffMessage(
+      createOutgoingMessage("22222222-2222-4222-8222-2222222222c4"),
+    );
+    await started.stream;
+    expect(runtime.getSnapshot().messages.at(-1)?.parts).toContainEqual(
+      expect.objectContaining({
+        type: "tool-call",
+        state: "approval-requested",
+      }),
+    );
+    await runtime.resolveToolApproval({
+      approved: true,
+      id: "approval_tool-A",
+    });
+    expect(requests).toHaveLength(2);
+    expect(requests.at(1)).toMatchObject({
+      parentRunId: chatRequestRunId(requests.at(0)),
+      resume: [
+        {
+          interruptId: "approval_tool-A",
+          payload: { approved: true },
+          status: "resolved",
+        },
+      ],
+      threadId,
+    });
+    expect(chatRefusal(runtime.getSnapshot().error)).toMatchObject({
+      status: 400,
+      code: CHAT_CONTINUATION_REJECTED_ERROR_CODE,
+    });
+    expect(runtime.getSnapshot().isLoading).toBe(false);
+  });
+
+  test("keeps a classified run error of an approval continuation out of error tracking", async () => {
+    const capture = spyOn(getAnalytics(), "captureError").mockImplementation(
+      () => undefined,
+    );
+    let requests = 0;
+    globalThis.fetch = createFetchMock(async (_input, init) => {
+      requests += 1;
+      return createSseResponse(
+        requests === 1
+          ? createApprovalSseChunks(parseChatRequestRunId(init))
+          : [
+              {
+                type: "RUN_STARTED",
+                threadId,
+                runId: parseChatRequestRunId(init),
+              },
+              {
+                type: "RUN_ERROR",
+                code: "provider_unavailable",
+                message: "provider_unavailable",
+              },
+            ],
+      );
+    });
+    const runtime = acquireChatRuntime({
+      activeOrganizationId,
+      context: { allowMissingThread: true },
+      data: buildThreadData(),
+      key: threadRef,
+      queryClient: new QueryClient(),
+    });
+    const started = await runtime.startRouteHandoffMessage(
+      createOutgoingMessage("22222222-2222-4222-8222-2222222222d2"),
+    );
+    await started.stream;
+
+    await Result.tryPromise(async () => {
+      await runtime.resolveToolApproval({
+        approved: true,
+        id: "approval_tool-A",
+      });
+    });
+
+    expect(requests).toBe(2);
+    expect(runtime.getSnapshot().error).toMatchObject({
+      code: "provider_unavailable",
+    });
+    expect(
+      capture.mock.calls.filter(
+        ([, options]) =>
+          options.fingerprintKey === "acquireChatRuntime:failure",
+      ),
+    ).toEqual([]);
+  });
 
   test("reattaches to the same runtime when the freshness signal is unchanged", () => {
     const queryClient = new QueryClient();
@@ -3317,7 +3673,7 @@ describe("acquireChatRuntime reconcile", () => {
       key: threadRef,
       queryClient,
     });
-    const started = handoff.startRouteHandoffMessage(
+    const started = await handoff.startRouteHandoffMessage(
       createOutgoingMessage("22222222-2222-4222-8222-2222222222b2"),
     );
     await responseRequested;
@@ -3365,6 +3721,10 @@ describe("acquireChatRuntime reconcile", () => {
       queryClient,
     });
     expect(afterRefetch).not.toBe(handoff);
+    // Replacing the runtime is not a turn: the page's count of the turns it
+    // started on the thread goes on, so the turn announcer hears no change.
+    expect(handoff.getSnapshot().turnsStarted).toBe(1);
+    expect(afterRefetch.getSnapshot().turnsStarted).toBe(1);
   });
 
   test("replaces an errored runtime with a stranded tool part", async () => {
@@ -3398,9 +3758,10 @@ describe("acquireChatRuntime reconcile", () => {
       queryClient,
     });
 
-    await runtime.startRouteHandoffMessage(
+    const started = await runtime.startRouteHandoffMessage(
       createOutgoingMessage("22222222-2222-4222-8222-2222222222e1"),
-    ).stream;
+    );
+    await started.stream;
 
     expect(runtime.getSnapshot()).toMatchObject({ status: "error" });
     expect(runtime.getSnapshot().messages.at(-1)?.parts.at(0)).toMatchObject({
@@ -3408,10 +3769,22 @@ describe("acquireChatRuntime reconcile", () => {
       type: "tool-call",
     });
 
+    // The server accepted the turn before it failed, so the stored thread
+    // holds the message the page sent.
     const reconciled = acquireChatRuntime({
       activeOrganizationId,
       context: { allowMissingThread: true },
-      data: newerThreadData(),
+      data: buildThreadData({
+        lastActivityAt: "2026-07-08T10:00:00.000Z",
+        messages: [
+          createMessage("22222222-2222-4222-8222-2222222222e1"),
+          {
+            id: assistantMessageId,
+            role: "assistant",
+            parts: [{ type: "text", content: "Ahoj!" }],
+          },
+        ],
+      }),
       key: threadRef,
       queryClient,
     });
@@ -3436,7 +3809,7 @@ describe("acquireChatRuntime reconcile", () => {
       queryClient,
     });
 
-    const started = runtime.startRouteHandoffMessage(
+    const started = await runtime.startRouteHandoffMessage(
       createOutgoingMessage("22222222-2222-4222-8222-2222222222c1"),
     );
     await started.stream;
@@ -3532,7 +3905,7 @@ describe("acquireChatRuntime reconcile", () => {
       queryClient,
     });
 
-    const started = runtime.startRouteHandoffMessage(
+    const started = await runtime.startRouteHandoffMessage(
       createOutgoingMessage("22222222-2222-4222-8222-2222222222c3"),
     );
     await started.stream;
@@ -3568,7 +3941,7 @@ describe("acquireChatRuntime reconcile", () => {
       queryClient,
     });
 
-    const started = runtime.startRouteHandoffMessage(
+    const started = await runtime.startRouteHandoffMessage(
       createOutgoingMessage("22222222-2222-4222-8222-2222222222c2"),
     );
     await started.stream;
@@ -3585,6 +3958,57 @@ describe("acquireChatRuntime reconcile", () => {
     });
 
     expect(reattached).toBe(runtime);
+  });
+
+  test("keeps a route handoff's turn streaming while its only view remounts", async () => {
+    const queryClient = new QueryClient();
+    const responseRequested = Promise.withResolvers<undefined>();
+    const releaseResponse = Promise.withResolvers<undefined>();
+    globalThis.fetch = createFetchMock(async (_input, init) => {
+      responseRequested.resolve(undefined);
+      await releaseResponse.promise;
+      return createSseResponse(
+        createApprovalSseChunks(parseChatRequestRunId(init)),
+      );
+    });
+    const context = { allowMissingThread: true };
+    const preSendData = buildThreadData();
+    const runtime = acquireChatRuntime({
+      activeOrganizationId,
+      context,
+      data: preSendData,
+      key: threadRef,
+      queryClient,
+    });
+    const started = await runtime.startRouteHandoffMessage(
+      createOutgoingMessage("22222222-2222-4222-8222-2222222222c5"),
+    );
+    await responseRequested.promise;
+
+    // The destination page mounts, unmounts and mounts again (StrictMode,
+    // a move between surfaces) while the first turn is still running.
+    runtime.subscribe(() => undefined)();
+    const unsubscribe = runtime.subscribe(() => undefined);
+    try {
+      releaseResponse.resolve(undefined);
+      await started.stream;
+
+      expect(runtime.getSnapshot().messages.at(-1)?.parts.at(0)).toMatchObject({
+        state: "approval-requested",
+        type: "tool-call",
+      });
+      expect(
+        acquireChatRuntime({
+          activeOrganizationId,
+          context,
+          data: preSendData,
+          key: threadRef,
+          queryClient,
+        }),
+      ).toBe(runtime);
+    } finally {
+      unsubscribe();
+    }
   });
 
   test("keeps a resolved continuation while acknowledged approval data is stale", async () => {
@@ -3608,7 +4032,7 @@ describe("acquireChatRuntime reconcile", () => {
       queryClient,
     });
 
-    const started = runtime.startRouteHandoffMessage(
+    const started = await runtime.startRouteHandoffMessage(
       createOutgoingMessage("22222222-2222-4222-8222-2222222222c4"),
     );
     await started.stream;
@@ -3654,7 +4078,6 @@ describe("acquireChatRuntime reconcile", () => {
 
   test("keeps distinct runtimes per context capability set and sweeps them all on query GC", () => {
     const queryClient = new QueryClient();
-    installChatRuntimeCleanup(queryClient);
     const data = buildThreadData();
 
     // Both contexts map to the SAME pure-data query key: contextKind
@@ -3785,7 +4208,7 @@ describe("acquireChatRuntime reconcile", () => {
       queryClient,
     });
     expect(streaming).not.toBe(idlePlain);
-    const started = streaming.startRouteHandoffMessage(
+    const started = await streaming.startRouteHandoffMessage(
       createOutgoingMessage("22222222-2222-4222-8222-2222222222b3"),
     );
     await responseRequested;
@@ -3854,18 +4277,21 @@ describe("acquireChatRuntime reconcile", () => {
 
     const staleData = buildThreadData();
     const plainContext = { allowMissingThread: true };
-    // `getActiveSkill` flips contextKind, so this surface's PURE-DATA
+    // `getActiveTemplate` flips contextKind, so this surface's PURE-DATA
     // query key differs from the plain one — the busy reattach must
     // match on thread identity, not on the query key.
-    const skillContext = {
+    const templateContext = {
       allowMissingThread: true,
-      getActiveSkill: () => ({ skillId: "skill-A", skillName: "Summarize" }),
+      getActiveTemplate: () => ({
+        fileName: "template.docx",
+        templateId: "template-A",
+      }),
     };
     expect(
       chatThreadOptions({
         activeOrganizationId,
         key: threadRef,
-        context: skillContext,
+        context: templateContext,
       }).queryKey,
     ).not.toEqual(
       chatThreadOptions({
@@ -3877,12 +4303,12 @@ describe("acquireChatRuntime reconcile", () => {
 
     const streaming = acquireChatRuntime({
       activeOrganizationId,
-      context: skillContext,
+      context: templateContext,
       data: staleData,
       key: threadRef,
       queryClient,
     });
-    const started = streaming.startRouteHandoffMessage(
+    const started = await streaming.startRouteHandoffMessage(
       createOutgoingMessage("22222222-2222-4222-8222-2222222222b4"),
     );
     await responseRequested;
@@ -3921,21 +4347,24 @@ describe("acquireChatRuntime reconcile", () => {
 
     const staleData = buildThreadData();
     const plainContext = { allowMissingThread: true };
-    const skillContext = {
+    const templateContext = {
       allowMissingThread: true,
-      getActiveSkill: () => ({ skillId: "skill-A", skillName: "Summarize" }),
+      getActiveTemplate: () => ({
+        fileName: "template.docx",
+        templateId: "template-A",
+      }),
     };
 
     // No prior entry under the plain key: the mid-stream acquire hits
     // the cross-key busy scan and records an alias under it.
     const streaming = acquireChatRuntime({
       activeOrganizationId,
-      context: skillContext,
+      context: templateContext,
       data: staleData,
       key: threadRef,
       queryClient,
     });
-    const started = streaming.startRouteHandoffMessage(
+    const started = await streaming.startRouteHandoffMessage(
       createOutgoingMessage("22222222-2222-4222-8222-2222222222b5"),
     );
     await responseRequested;
@@ -3992,7 +4421,7 @@ describe("acquireChatRuntime reconcile", () => {
     expect(
       acquireChatRuntime({
         activeOrganizationId,
-        context: skillContext,
+        context: templateContext,
         data: staleData,
         key: threadRef,
         queryClient,
@@ -4002,12 +4431,14 @@ describe("acquireChatRuntime reconcile", () => {
 
   test("GC sweep removes only the entries of the removed query key", () => {
     const queryClient = new QueryClient();
-    installChatRuntimeCleanup(queryClient);
     const staleData = buildThreadData();
     const plainContext = { allowMissingThread: true };
-    const skillContext = {
+    const templateContext = {
       allowMissingThread: true,
-      getActiveSkill: () => ({ skillId: "skill-A", skillName: "Summarize" }),
+      getActiveTemplate: () => ({
+        fileName: "template.docx",
+        templateId: "template-A",
+      }),
     };
     const plainOptions = chatThreadOptions({
       activeOrganizationId,
@@ -4024,7 +4455,7 @@ describe("acquireChatRuntime reconcile", () => {
     });
     const skillRuntime = acquireChatRuntime({
       activeOrganizationId,
-      context: skillContext,
+      context: templateContext,
       data: staleData,
       key: threadRef,
       queryClient,
@@ -4049,11 +4480,101 @@ describe("acquireChatRuntime reconcile", () => {
     expect(
       acquireChatRuntime({
         activeOrganizationId,
-        context: skillContext,
+        context: templateContext,
         data: staleData,
         key: threadRef,
         queryClient,
       }),
     ).toBe(skillRuntime);
+  });
+});
+
+describe("file thread binding", () => {
+  const previousFetch = globalThis.fetch;
+  const fileKey = {
+    entityId: "entity-1",
+    fieldId: "field-1",
+    userId: "user-1",
+    workspaceId: "workspace-1",
+  };
+  const fileThreadResponse = (threadId: string | null) => ({
+    threadId,
+    activeTurnId: null,
+    attachedFiles: [],
+    messages: [],
+    olderCursor: null,
+    contextMatterIds: [],
+    lastActivityAt: null,
+    usedAnonymization: false,
+    webSearchAvailable: false,
+    webSearchEnabled: false,
+    model: null,
+    reasoningEffort: null,
+    context: null,
+  });
+  const serve = (threadId: string | null, requested: string[]): typeof fetch =>
+    Object.assign(
+      async (...[input]: Parameters<typeof fetch>) => {
+        const url = input instanceof Request ? input.url : input.toString();
+        requested.push(new URL(url).pathname);
+        return url.includes("/tool-grants")
+          ? Response.json({ grants: [] })
+          : Response.json(fileThreadResponse(threadId));
+      },
+      { preconnect: previousFetch.preconnect },
+    );
+
+  afterEach(() => {
+    globalThis.fetch = previousFetch;
+  });
+
+  test("a file without a thread reads no tool grants", async () => {
+    const requested: string[] = [];
+    globalThis.fetch = serve(null, requested);
+    const client = new QueryClient();
+
+    const binding = await client.query(
+      fileChatThreadOptions({
+        activeOrganizationId: "org-1",
+        key: fileKey,
+        hasDocxEditSurface: false,
+      }),
+    );
+
+    expect(binding.threadExists).toBeFalse();
+    expect(requested.some((path) => path.includes("/tool-grants"))).toBeFalse();
+    expect(
+      client.getQueryData(
+        chatToolGrantsOptions({
+          activeOrganizationId: "org-1",
+          threadId: binding.threadId,
+          userId: fileKey.userId,
+        }).queryKey,
+      ),
+    ).toEqual({ grants: [] });
+  });
+
+  test("a file with a thread starts its tool grants read with the binding", async () => {
+    const requested: string[] = [];
+    globalThis.fetch = serve("018f0000-0000-7000-8000-0000000000f1", requested);
+    const client = new QueryClient();
+
+    const binding = await client.query(
+      fileChatThreadOptions({
+        activeOrganizationId: "org-1",
+        key: fileKey,
+        hasDocxEditSurface: false,
+      }),
+    );
+    const grantsKey = chatToolGrantsOptions({
+      activeOrganizationId: "org-1",
+      threadId: binding.threadId,
+      userId: fileKey.userId,
+    }).queryKey;
+
+    // The binding itself started the grants read; nothing mounted yet.
+    expect(client.getQueryState(grantsKey)).toBeDefined();
+    await sleep(0);
+    expect(requested.some((path) => path.includes("/tool-grants"))).toBeTrue();
   });
 });

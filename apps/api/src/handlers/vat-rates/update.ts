@@ -17,10 +17,12 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { pickDefined } from "@/api/lib/pick-defined";
 
 const config = {
+  contract: "patch",
   description:
     "Update an active VAT rate validity period without overlapping another period for its code.",
   permissions: { organizationSettings: ["update"] },
   accountAccess: ACCOUNT_ACCESS.standard,
+  featureAccess: { featureId: "time-billing", type: "required" },
   mcp: { type: "capability", reason: "billing_admin", consumesServices: false },
   params: vatRateParams,
   body: updateVatRateBody,
@@ -66,7 +68,7 @@ export default createSafeRootHandler(
           excludeId: current.id,
         });
         if (Result.isError(overlap)) {
-          return overlap;
+          return Result.err(overlap.error);
         }
         const changedFields = Object.keys(updates);
         if (changedFields.length === 0) {

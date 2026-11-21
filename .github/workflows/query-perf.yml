@@ -1,0 +1,86 @@
+name: Record query measurements
+
+on:
+  workflow_call:
+    inputs:
+      sha:
+        type: string
+        default: ""
+      heavy_only:
+        type: boolean
+        default: false
+  workflow_dispatch:
+
+defaults:
+  run:
+    shell: bash
+
+permissions: {}
+
+concurrency:
+  group: query-perf-${{ github.event_name }}-${{ github.ref }}-${{ inputs.sha || github.sha }}
+  cancel-in-progress: false
+
+env:
+  DB_LOAD_GATE_EBS_SIGNAL: disabled
+  DB_LOAD_GATE_BUSY_WINDOWS: "[]"
+
+jobs:
+  query-perf:
+    if: >-
+      !(github.event_name == 'workflow_dispatch'
+      && contains(github.workflow_ref, '/.github/workflows/query-perf.yml@'))
+      || github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    services:
+      postgres:
+        image: postgres:18.6@sha256:e3d24f6906d0760bf4da0dae872415391ededefad23fd471c47dc53b0ddf3c42
+        env:
+          POSTGRES_USER: stella_owner
+          POSTGRES_PASSWORD: stella
+          POSTGRES_DB: stella
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U stella_owner -d postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - name: Checkout tested revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: ${{ inputs.heavy_only == true && inputs.sha || '' }}
+
+      - name: Setup Bun
+        uses: stella/.github/actions/setup-bun-cached@2664e46f02aea7164ba71bcdd485a686166993a4
+        with:
+          save: ${{ github.ref == 'refs/heads/main' }}
+
+      - name: Install dependencies
+        timeout-minutes: 2
+        run: bash scripts/retry.sh bun ci --ignore-scripts
+        env:
+          NPM_TOKEN: ""
+
+      - name: Configure test Postgres parity
+        run: |
+          bash scripts/configure-test-postgres.sh "${{ job.services.postgres.id }}" stella_owner
+
+      - name: Apply database migrations
+        run: bun --filter @stll/api db:migrate
+        env:
+          DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5432/stella
+
+      - name: Run query performance suite
+        id: measurements
+        run: bun scripts/run-perf-tests.ts
+        working-directory: apps/api
+        env:
+          DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5432/stella
+          STELLA_RUN_QUERY_PERF_TESTS: "true"

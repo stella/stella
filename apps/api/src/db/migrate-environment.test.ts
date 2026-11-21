@@ -1,6 +1,9 @@
 import { expect, setDefaultTimeout, test } from "bun:test";
+import { mkdtemp, rm, symlink } from "node:fs/promises";
 import nodeOs from "node:os";
 import nodePath from "node:path";
+
+import { stageMigrateEntrypoint } from "./migrate-entrypoint.test-helpers";
 
 /**
  * The migrate entrypoint runs with a database-only environment.
@@ -33,7 +36,7 @@ import nodePath from "node:path";
  * `Invalid environment variables`.
  */
 
-const MIGRATE_ENTRYPOINT = nodePath.join(import.meta.dir, "migrate.ts");
+const API_ROOT = nodePath.resolve(import.meta.dir, "../..");
 
 /**
  * Empties Bun's default `.env` loading for the spawned process. Written to the
@@ -51,30 +54,84 @@ const UNREACHABLE_DATABASE_URL =
   "postgres://stella_owner:stella@127.0.0.1:1/stella?sslmode=require";
 
 const ENVIRONMENT_VALIDATION_MESSAGE = "Invalid environment variables";
+const MIGRATION_MODULE_LOADED = "migration module loaded";
 
 setDefaultTimeout(60_000);
 
+test.each(["migration-runner.ts", "online-migrations.ts"])(
+  "%s imports all registered repairs with only DATABASE_URL",
+  async (moduleName) => {
+    await Bun.write(EMPTY_ENV_FILE, "");
+    const modulePath = nodePath.join(import.meta.dir, moduleName);
+    const child = Bun.spawn({
+      cmd: [
+        "bun",
+        `--env-file=${EMPTY_ENV_FILE}`,
+        "--eval",
+        `const loaded = await import(${JSON.stringify(modulePath)}); console.log(${JSON.stringify(MIGRATION_MODULE_LOADED)}); if (loaded.ONLINE_MIGRATION_REPAIRS) console.log(loaded.ONLINE_MIGRATION_REPAIRS.map(({ name }) => name).join("\\n"));`,
+      ],
+      env: {
+        DATABASE_URL: UNREACHABLE_DATABASE_URL,
+        PATH: process.env["PATH"] ?? "",
+      },
+      stderr: "pipe",
+      stdout: "pipe",
+    });
+    const [stderr, stdout, exitCode] = await Promise.all([
+      new Response(child.stderr).text(),
+      new Response(child.stdout).text(),
+      child.exited,
+    ]);
+
+    expect(stderr).not.toContain(ENVIRONMENT_VALIDATION_MESSAGE);
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain(MIGRATION_MODULE_LOADED);
+    if (moduleName === "online-migrations.ts") {
+      expect(stdout).toContain("invoice-sent-at");
+      expect(stdout).toContain("invoice-legacy-payments");
+    }
+  },
+);
+
 const runMigrateEntrypoint = async (environment: Record<string, string>) => {
   await Bun.write(EMPTY_ENV_FILE, "");
-  const migrate = Bun.spawn({
-    cmd: ["bun", "run", `--env-file=${EMPTY_ENV_FILE}`, MIGRATE_ENTRYPOINT],
-    env: {
-      DATABASE_URL: UNREACHABLE_DATABASE_URL,
-      HOME: "/tmp",
-      NODE_ENV: "test",
-      // `bun` itself has to be findable; nothing else is inherited.
-      PATH: process.env["PATH"] ?? "",
-      ...environment,
-    },
-    stderr: "pipe",
-    stdout: "pipe",
-  });
-  const [stderr, stdout, exitCode] = await Promise.all([
-    new Response(migrate.stderr).text(),
-    new Response(migrate.stdout).text(),
-    migrate.exited,
-  ]);
-  return { exitCode, output: `${stdout}\n${stderr}` };
+  // An adjacent disposable test configuration must not override the explicit
+  // deployment database or satisfy its required load-gate setting.
+  const directory = await mkdtemp(
+    nodePath.join(nodeOs.tmpdir(), "migrate-env-"),
+  );
+  try {
+    const entrypoint = await stageMigrateEntrypoint(directory);
+    await Bun.write(
+      nodePath.join(directory, ".env.test"),
+      "NODE_ENV=test\nDATABASE_URL=postgres://wrong-test-database.invalid/cloud_test\nREDIS_URL=redis://127.0.0.1:16379\nDB_LOAD_GATE_EBS_SIGNAL=disabled\n",
+    );
+    await symlink(
+      nodePath.join(API_ROOT, "../../node_modules"),
+      nodePath.join(directory, "node_modules"),
+    );
+    const migrate = Bun.spawn({
+      cmd: ["bun", "run", `--env-file=${EMPTY_ENV_FILE}`, entrypoint],
+      env: {
+        DATABASE_URL: UNREACHABLE_DATABASE_URL,
+        HOME: "/tmp",
+        NODE_ENV: "test",
+        // `bun` itself has to be findable; nothing else is inherited.
+        PATH: process.env["PATH"] ?? "",
+        ...environment,
+      },
+      stderr: "pipe",
+      stdout: "pipe",
+    });
+    const [stderr, stdout, exitCode] = await Promise.all([
+      new Response(migrate.stderr).text(),
+      new Response(migrate.stdout).text(),
+      migrate.exited,
+    ]);
+    return { exitCode, output: `${stdout}\n${stderr}` };
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
 };
 
 test("the migrate entrypoint needs only the database and its load-gate setting", async () => {

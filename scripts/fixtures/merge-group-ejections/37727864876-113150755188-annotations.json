@@ -1,0 +1,50 @@
+[
+  {
+    "path": ".github",
+    "blob_href": "https://example.invalid/stella/stella/blob/0696d83b154a33ef3874b6689bec6cc96bd0e048/.github",
+    "start_line": 1,
+    "start_column": null,
+    "end_line": 1,
+    "end_column": null,
+    "annotation_level": "failure",
+    "title": "",
+    "message": "The run was canceled by @github-actions[bot].",
+    "raw_details": ""
+  },
+  {
+    "path": ".github",
+    "blob_href": "https://example.invalid/stella/stella/blob/0696d83b154a33ef3874b6689bec6cc96bd0e048/.github",
+    "start_line": 54,
+    "start_column": null,
+    "end_line": 54,
+    "end_column": null,
+    "annotation_level": "failure",
+    "title": "",
+    "message": "e2e-production-shard: cancelling failed merge group; failed steps: e2e-production-shard (1) / 9: Run Playwright shard (https://example.invalid/stella/stella/actions/runs/37727864876/job/113150755188)",
+    "raw_details": ""
+  },
+  {
+    "path": ".github",
+    "blob_href": "https://example.invalid/stella/stella/blob/0696d83b154a33ef3874b6689bec6cc96bd0e048/.github",
+    "start_line": 192,
+    "start_column": null,
+    "end_line": 192,
+    "end_column": null,
+    "annotation_level": "failure",
+    "title": "",
+    "message": "Process completed with exit code 1.",
+    "raw_details": ""
+  },
+  {
+    "path": ".github",
+    "blob_href": "https://example.invalid/stella/stella/blob/0696d83b154a33ef3874b6689bec6cc96bd0e048/.github",
+    "start_line": 1,
+    "start_column": null,
+    "end_line": 1,
+    "end_column": null,
+    "annotation_level": "notice",
+    "title": "",
+    "message": "\"The ubuntu-latest label will migrate to Ubuntu 26 beginning October 19, 2026. For more information, see https://example.invalid/actions/runner-images/issues/14748\"",
+    "raw_details": ""
+  }
+]

@@ -19,23 +19,22 @@ import { describe, expect, test } from "bun:test";
 import { DAY_IN_MS } from "@stll/time";
 
 import { czRegionalAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-regional";
-import { requireReconciliation } from "@/api/handlers/case-law/ingestion/adapters/test-utils";
 import type {
   FailedSliceCandidate,
   LedgerSlice,
-  ShortSliceCandidate,
   SelectReconciliationWorkUnitInput,
+  ShortSliceCandidate,
   SliceWalkReason,
 } from "@/api/handlers/case-law/ingestion/reconciliation-plan";
 import {
-  RECONCILIATION_FAILED_SLICE_RETRY_MS,
-  RECONCILIATION_SETTLED_RECHECK_MS,
-  RECONCILIATION_SLICE_STALE_MS,
-  SLICE_WALK_REASON,
   floorSliceWalk,
   isSliceSettled,
   partitionShortSliceCandidates,
+  RECONCILIATION_FAILED_SLICE_RETRY_MS,
+  RECONCILIATION_SETTLED_RECHECK_MS,
+  RECONCILIATION_SLICE_STALE_MS,
   selectReconciliationWorkUnit,
+  SLICE_WALK_REASON,
   tipWindowSlices,
 } from "@/api/handlers/case-law/ingestion/reconciliation-plan";
 import { toUtcDateString } from "@/api/lib/dates";
@@ -44,6 +43,7 @@ import {
   listingIdentityKey,
   parseListingIdentityKey,
 } from "@/api/lib/legal-search/ingestion-types";
+import { requireReconciliation } from "@/api/tests/helpers/case-law-adapter-test-utils";
 
 const NOW = new Date("2026-08-11T09:30:00.000Z");
 const FRESH = new Date("2026-08-11T06:00:00.000Z");

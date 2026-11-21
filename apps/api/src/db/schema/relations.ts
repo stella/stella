@@ -2,26 +2,28 @@ import {
   billingCodes,
   expenses,
   invoiceLines,
+  invoicePayments,
   invoices,
+  invoiceSends,
   numberSeries,
   numberSeriesAllocations,
   numberSeriesCounters,
   rateEntries,
   rateTables,
-  sellerProfiles,
   savedTimeNarratives,
+  sellerProfiles,
   timeEntries,
-  timeTimers,
   timeTimerConfirmations,
+  timeTimers,
 } from "./billing";
 import { billingArrangements } from "./billing-arrangements";
 import {
   caseLawCitations,
-  caseLawCourtWeights,
   caseLawCourtDirectoryRanks,
+  caseLawCourtWeights,
   caseLawDecisionIdentifiers,
-  caseLawDecisionSourceIdentities,
   caseLawDecisions,
+  caseLawDecisionSourceIdentities,
   caseLawFtsConfigs,
   caseLawIngestionEvents,
   caseLawIngestionFailures,
@@ -31,21 +33,22 @@ import {
   caseLawSources,
 } from "./case-law";
 import {
-  chatMessageSearchDocuments,
+  chatMessageRevisions,
   chatMessages,
-  chatTurns,
+  chatMessageSearchDocuments,
   chatThreadCompactions,
   chatThreadNames,
-  chatThreadSearchDocuments,
   chatThreads,
+  chatThreadSearchDocuments,
+  chatTurns,
   fileChatThreads,
   templateChatThreads,
 } from "./chat";
 import {
   clauseCategories,
+  clauses,
   clauseVariants,
   clauseVersions,
-  clauses,
   templateClauses,
   templateFills,
   templateRecipes,
@@ -84,10 +87,10 @@ import {
 import { entityViews } from "./entity-views";
 import {
   userFiles,
-  workspaceViewTemplates,
   workspaceViews,
+  workspaceViewTemplates,
 } from "./files-views";
-import { flowDefinitions, flowRunSteps, flowRuns } from "./flows";
+import { flowDefinitions, flowRuns, flowRunSteps } from "./flows";
 import {
   legalListColumns,
   legalListGenerationCandidates,
@@ -110,13 +113,18 @@ import {
 } from "./mcp";
 import {
   documentTypes,
-  playbookDefinitionVersions,
   playbookDefinitions,
+  playbookDefinitionVersions,
   properties,
   propertyDependencies,
 } from "./properties";
+import {
+  legalReaderAnswerMessages,
+  legalReaderAnswers,
+} from "./reader-answers";
 import { reportExports } from "./reports";
 import { savedSearches } from "./saved-searches";
+import { sharepointConnections } from "./sharepoint";
 import { scoutRuns, signalEvents, signals } from "./signals";
 import { agentSkillResources, agentSkills } from "./skills";
 import { styleSets } from "./style-sets";
@@ -124,22 +132,25 @@ import {
   extractedContent,
   searchDocuments,
   templateCategories,
-  templateVersions,
   templates,
+  templateVersions,
 } from "./templates";
 import { workObligationEvents, workObligations } from "./workflow";
 import {
   anonymizationAllowlistEntries,
   anonymizationBlacklistEntries,
+  businessRegistryCredentials,
   documentCounters,
   documentReferenceCounters,
   matterCounters,
   organizationSettings,
-  businessRegistryCredentials,
 } from "./workspace-admin";
 
 export const relations = defineRelations(
   {
+    sharepointConnections,
+    legalReaderAnswers,
+    legalReaderAnswerMessages,
     agentSkills,
     agentSkillResources,
     savedSearches,
@@ -200,6 +211,8 @@ export const relations = defineRelations(
     expenses,
     invoices,
     invoiceLines,
+    invoiceSends,
+    invoicePayments,
     matterCounters,
     documentCounters,
     documentReferenceCounters,
@@ -233,6 +246,7 @@ export const relations = defineRelations(
     caseLawIngestionFailures,
     chatThreads,
     chatMessages,
+    chatMessageRevisions,
     chatTurns,
     chatMessageSearchDocuments,
     chatThreadCompactions,
@@ -1079,13 +1093,28 @@ export const relations = defineRelations(
         from: r.invoices.id,
         to: r.invoiceLines.invoiceId,
       }),
+      payments: r.many.invoicePayments({
+        from: r.invoices.id,
+        to: r.invoicePayments.invoiceId,
+      }),
+    },
+    invoicePayments: {
+      invoice: r.one.invoices({
+        from: r.invoicePayments.invoiceId,
+        to: r.invoices.id,
+      }),
     },
     invoiceLines: {
+      workspace: r.one.workspaces({
+        from: r.invoiceLines.workspaceId,
+        to: r.workspaces.id,
+      }),
       invoice: r.one.invoices({
         from: r.invoiceLines.invoiceId,
         to: r.invoices.id,
       }),
     },
+    invoiceSends: {},
     matterCounters: {},
     documentCounters: {},
     documentReferenceCounters: {},
@@ -1320,6 +1349,10 @@ export const relations = defineRelations(
       }),
     },
     chatMessages: {
+      revisions: r.many.chatMessageRevisions({
+        from: r.chatMessages.id,
+        to: r.chatMessageRevisions.messageId,
+      }),
       thread: r.one.chatThreads({
         from: r.chatMessages.threadId,
         to: r.chatThreads.id,
@@ -1341,6 +1374,24 @@ export const relations = defineRelations(
         from: r.chatMessages.id,
         to: r.chatTurns.assistantMessageId,
         alias: "chatTurnAssistantMessage",
+      }),
+    },
+    chatMessageRevisions: {
+      message: r.one.chatMessages({
+        from: r.chatMessageRevisions.messageId,
+        to: r.chatMessages.id,
+      }),
+      thread: r.one.chatThreads({
+        from: r.chatMessageRevisions.threadId,
+        to: r.chatThreads.id,
+      }),
+      workspace: r.one.workspaces({
+        from: r.chatMessageRevisions.workspaceId,
+        to: r.workspaces.id,
+      }),
+      creator: r.one.user({
+        from: r.chatMessageRevisions.createdBy,
+        to: r.user.id,
       }),
     },
     chatTurns: {

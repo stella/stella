@@ -1,165 +1,126 @@
 import { Result } from "better-result";
 
+import { moneyExportSchema } from "@stll/api-contract/billing-money";
+import { withBillingRead } from "@stll/permissions";
 import { Temporal } from "@stll/time";
 
-import { INVOICE_STATUS } from "@/api/db/schema";
-import { INVOICE_DETAIL_RELATIONS } from "@/api/handlers/invoices/invoice-detail";
-import { readInvoiceDocumentLines } from "@/api/handlers/invoices/invoice-lines";
-import { renderInvoicePdf } from "@/api/handlers/invoices/pdf/render";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
+import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { auditedPresignDownload } from "@/api/lib/audited-download";
-import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
-import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { ownerSyntheticSessionAuthorityReader } from "@/api/lib/auth";
+import { paidAmountOf } from "@/api/lib/billing/invoice-payments";
 import {
-  extractFormattingLocale,
-  extractLangFromRequest,
-} from "@/api/lib/locale";
+  invoiceDocumentError,
+  invoicePdfFileName,
+  loadInvoiceDocument,
+  renderInvoiceDocumentPdf,
+} from "@/api/lib/billing/invoice-pdf/document";
+import type { InvoicePdfRenderer } from "@/api/lib/billing/invoice-pdf/document";
+import { renderInvoiceWithTypst } from "@/api/lib/billing/invoice-pdf/typst/render-typst";
+import type { SafeId } from "@/api/lib/branded-types";
+import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
+import { holdMemberAccessOnTx } from "@/api/lib/db/member-access-hold";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { noResourceSetUpdates } from "@/api/lib/resource-set-realtime";
 import { writeS3ObjectWithRetry } from "@/api/lib/s3";
-import { sanitizeFilenamePreservingExtension } from "@/api/lib/sanitize-filename";
+import { callerDownloadSource } from "@/api/lib/s3-presign";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 
 const EXPORT_URL_TTL_SECONDS = 300;
 
+/** Hold the requester's matter access for the rest of the download write. */
+const holdsInvoiceMatter = async (
+  tx: Parameters<typeof holdMemberAccessOnTx>[0],
+  {
+    organizationId,
+    userId,
+    workspaceId,
+  }: {
+    organizationId: SafeId<"organization">;
+    userId: SafeId<"user">;
+    workspaceId: SafeId<"workspace">;
+  },
+): Promise<boolean> => {
+  const access = await holdMemberAccessOnTx(tx, {
+    organizationId,
+    userId,
+    workspaceIds: [workspaceId],
+  });
+  return access.type === "held" && access.workspaceIds.includes(workspaceId);
+};
+
+const config = {
+  moneyResponse: moneyExportSchema,
+  contract: "patch",
+  contentDelivery: { type: "audited" },
+  description:
+    "Download an invoice, advance invoice or credit note as PDF, including its parties, lines, VAT breakdown and payment QR. Drafts have no document number. Returns a short-lived downloadUrl, fileName and expiresAt; hand the URL to the user without reading the file bytes.",
+  permissions: withBillingRead({ workspace: ["read"] }),
+  accountAccess: ACCOUNT_ACCESS.sandbox,
+  featureAccess: { featureId: "time-billing", type: "required" },
+  access: "write",
+  mcp: {
+    type: "capability",
+    reason: "billing_admin",
+    consumesServices: false,
+  },
+  params: workspaceParams({ invoiceId: resourceIdSchema("invoice") }),
+  realtime: noResourceSetUpdates(
+    "Stores a generated PDF download; nothing a web view lists changes.",
+  ),
+} satisfies WorkspaceHandlerConfig;
+
 // permissions-exempt: rendering a temporary copy needs the same matter read
 // permission as the invoice; it does not modify the invoice.
-export const createInvoicePdfExport = (writeObject = writeS3ObjectWithRetry) =>
+export const createInvoicePdfExport = (
+  writeObject = writeS3ObjectWithRetry,
+  renderInvoice: InvoicePdfRenderer = renderInvoiceWithTypst,
+) =>
   createSafeHandler(
-    {
-      contentDelivery: { type: "audited" },
-      description:
-        "Download an invoice, advance invoice or credit note as PDF, including its parties, lines, VAT breakdown and payment QR. Drafts have no document number. Returns a short-lived downloadUrl, fileName and expiresAt; hand the URL to the user without reading the file bytes.",
-      permissions: { workspace: ["read"] },
-      accountAccess: ACCOUNT_ACCESS.sandbox,
-      access: "write",
-      mcp: {
-        type: "capability",
-        reason: "billing_admin",
-        consumesServices: false,
-      },
-      params: workspaceParams({ invoiceId: tSafeId("invoice") }),
-      realtime: noResourceSetUpdates(
-        "Stores a generated PDF download; nothing a web view lists changes.",
-      ),
-    },
+    config,
     async function* ({
       safeDb,
       workspaceId,
       session,
       params,
-      request,
+      user,
       recordAuditEvent,
     }) {
       const loaded = yield* Result.await(
-        safeDb(async (tx) => {
-          const invoice = await tx.query.invoices.findFirst({
-            where: {
-              id: { eq: params.invoiceId },
-              workspaceId: { eq: workspaceId },
-              organizationId: { eq: session.activeOrganizationId },
-            },
-            with: INVOICE_DETAIL_RELATIONS,
-          });
-          if (!invoice) {
-            return null;
-          }
-          const seller =
-            invoice.sellerProfileId === null
-              ? null
-              : await tx.query.sellerProfiles.findFirst({
-                  where: {
-                    id: { eq: invoice.sellerProfileId },
-                    organizationId: { eq: session.activeOrganizationId },
-                  },
-                });
-          const original =
-            invoice.originalInvoiceId === null
-              ? null
-              : await tx.query.invoices.findFirst({
-                  where: {
-                    id: { eq: invoice.originalInvoiceId },
-                    workspaceId: { eq: workspaceId },
-                    organizationId: { eq: session.activeOrganizationId },
-                  },
-                  columns: { invoiceNumber: true },
-                });
-          return {
-            invoice,
-            seller: seller ?? null,
-            originalNumber: original?.invoiceNumber ?? null,
-          };
-        }),
-      );
-      if (!loaded) {
-        return Result.err(
-          new HandlerError({ status: 404, message: "Invoice not found" }),
-        );
-      }
-      if (loaded.invoice.sellerProfileId !== null && loaded.seller === null) {
-        return Result.err(
-          new HandlerError({
-            status: 409,
-            message: "Invoice seller profile is unavailable",
-            hint: "Select an available seller profile before exporting the invoice.",
-          }),
-        );
-      }
-      if (
-        loaded.invoice.documentType === "credit_note" &&
-        loaded.originalNumber === null
-      ) {
-        return Result.err(
-          new HandlerError({
-            status: 409,
-            message: "Original invoice number is unavailable",
-            hint: "The credit note must reference an issued invoice in this matter.",
-          }),
-        );
-      }
-      const amounts = yield* readInvoiceDocumentLines(loaded.invoice);
-      const rendered = yield* Result.await(
-        Result.tryPromise(
-          async () =>
-            await renderInvoicePdf({
-              ...loaded,
-              invoice: {
-                ...loaded.invoice,
-                lines: amounts.lines.map((line) => ({
-                  description: line.description,
-                  quantity: line.quantity,
-                  unit: line.unit,
-                  unitPrice: line.unitPrice,
-                  netAmount: line.netAmountMinor,
-                  vatAmount: line.vatAmountMinor,
-                  grossAmount: line.grossAmountMinor,
-                  vatRateBps: line.vatRateBps,
-                  vatTreatment: line.vatTreatment,
-                })),
-              },
-              totals: amounts.totals,
-              locale: extractFormattingLocale(request),
-              lang: extractLangFromRequest(request),
+        safeDb(
+          async (tx) =>
+            await loadInvoiceDocument(tx, {
+              organizationId: session.activeOrganizationId,
+              workspaceId,
+              invoiceId: params.invoiceId,
             }),
         ),
       );
-      if (rendered.isErr()) {
+      if (!loaded) {
         return Result.err(
           new HandlerError({
-            status: 409,
-            message: rendered.error.message,
-            hint: "Check the seller payment details and invoice dates before exporting.",
+            status: 404,
+            code: "not_found",
+            message: "Invoice not found",
           }),
         );
       }
-      const body = rendered.value;
-      const number =
-        loaded.invoice.status === INVOICE_STATUS.DRAFT
-          ? "draft"
-          : loaded.invoice.invoiceNumber;
-      const fileName = sanitizeFilenamePreservingExtension(
-        `invoice-${number ?? loaded.invoice.id}.pdf`,
+      const unavailable = invoiceDocumentError(loaded);
+      if (unavailable !== null) {
+        return Result.err(unavailable);
+      }
+      const body = yield* Result.await(
+        renderInvoiceDocumentPdf({
+          loaded,
+          ledger: {
+            paidAmount: paidAmountOf(loaded.invoice.payments),
+            creditedAmount: loaded.invoice.creditedAmount,
+          },
+          renderInvoice,
+        }),
       );
+      const fileName = invoicePdfFileName(loaded.invoice);
       const key = `exports/${session.activeOrganizationId}/${workspaceId}/invoices/${loaded.invoice.id}/${Bun.randomUUIDv7()}.pdf`;
       yield* Result.await(
         Result.tryPromise({
@@ -171,29 +132,49 @@ export const createInvoicePdfExport = (writeObject = writeS3ObjectWithRetry) =>
           catch: (cause) =>
             new HandlerError({
               status: 502,
+              code: "internal_error",
               message: "The invoice PDF could not be stored.",
               cause,
             }),
         }),
       );
       const downloadUrl = yield* Result.await(
-        safeDb(
-          async (tx) =>
-            await auditedPresignDownload({
-              tx,
-              recordAuditEvent,
-              resourceType: AUDIT_RESOURCE_TYPE.INVOICE,
-              resourceId: loaded.invoice.id,
-              s3Key: key,
-              s3Keyspace: "exports",
-              expiresInSeconds: EXPORT_URL_TTL_SECONDS,
-              fileName,
-              organizationId: session.activeOrganizationId,
-              workspaceId,
-              metadata: { format: "pdf" },
-            }),
-        ),
+        safeDb(async (tx) => {
+          const holdsMatter = await holdsInvoiceMatter(tx, {
+            organizationId: session.activeOrganizationId,
+            userId: user.id,
+            workspaceId,
+          });
+          if (!holdsMatter) {
+            return null;
+          }
+          return await auditedPresignDownload({
+            readSessionAuthority: ownerSyntheticSessionAuthorityReader,
+            tx,
+            recordAuditEvent,
+            resourceType: AUDIT_RESOURCE_TYPE.INVOICE,
+            resourceId: loaded.invoice.id,
+            userId: user.id,
+            source: callerDownloadSource(session),
+            s3Key: key,
+            s3Keyspace: "exports",
+            expiresInSeconds: EXPORT_URL_TTL_SECONDS,
+            fileName,
+            organizationId: session.activeOrganizationId,
+            workspaceId,
+            metadata: { format: "pdf" },
+          });
+        }),
       );
+      if (downloadUrl === null) {
+        return Result.err(
+          new HandlerError({
+            status: 404,
+            code: "not_found",
+            message: "Invoice not found",
+          }),
+        );
+      }
       return Result.ok({
         downloadUrl,
         fileName,

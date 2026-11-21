@@ -1,11 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
 
 import { publicStatuteSearchSchema } from "@/features/statutes/statute-page-search";
-import { PublicStatuteViewer } from "@/routes/law/-statute-detail";
 import {
   createPublicStatuteHead,
   loadPublicStatuteRoute,
 } from "@/routes/law/-statute-detail.logic";
+import { PublicStatutePage } from "@/routes/law/-statute-detail.page";
+import { StatuteReaderPending } from "@/routes/law/-statute-detail.pending";
 
 /**
  * A statute at its canonical address: the readable segment alone, which
@@ -26,26 +27,6 @@ export const Route = createFileRoute("/law/$country/statutes/$slug/")({
     }),
   head: ({ loaderData }) =>
     loaderData ? createPublicStatuteHead(loaderData) : { meta: [] },
-  component: PublicStatuteRoute,
+  component: PublicStatutePage,
+  pendingComponent: StatuteReaderPending,
 });
-
-function PublicStatuteRoute() {
-  const { statute, versions, windowGap, work } = Route.useLoaderData();
-  const asOf = Route.useSearch({ select: (search) => search.asOf });
-  const requestedJump = Route.useSearch({ select: (search) => search.jump });
-  const compare = Route.useSearch({ select: (search) => search.compare });
-  const provision = Route.useSearch({ select: (search) => search.provision });
-  const show = Route.useSearch({ select: (search) => search.show });
-
-  return (
-    <PublicStatuteViewer
-      comparison={{ compare, provision, show }}
-      asOf={asOf}
-      requestedJump={requestedJump}
-      statute={statute}
-      versions={versions}
-      windowGap={windowGap}
-      work={work}
-    />
-  );
-}

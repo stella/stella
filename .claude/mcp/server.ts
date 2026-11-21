@@ -1,5 +1,4 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod/v3";
 
 import {
@@ -29,11 +28,6 @@ const MAX_CHUNKS_LIMIT = 8;
 const MAX_CHUNK_CHARS = 1600;
 const DEFAULT_HEADING = "Introduction";
 
-const server = new McpServer({
-  name: "stella-docs",
-  version: "1.2.1",
-});
-
 type SourceEntry = {
   name: string;
   indexUrl: string;
@@ -60,20 +54,6 @@ type DocChunk = {
   text: string;
   score: number;
 };
-
-server.registerTool(
-  "list_doc_sources",
-  {
-    description:
-      "List source names available to search_docs when you need to select or narrow documentation libraries",
-  },
-  () => ({
-    content: Object.entries(DOC_SOURCES).map(([name, { url }]) => ({
-      type: "text" as const,
-      text: `${name}: ${url}`,
-    })),
-  }),
-);
 
 const ALLOWED_HOSTS = new Set(
   Object.values(DOC_SOURCES).flatMap(({ url: u }) => {
@@ -552,104 +532,210 @@ const splitIntoChunks = (pageText: string) => {
   return [{ heading: DEFAULT_HEADING, text: fallbackText }];
 };
 
-server.registerTool(
-  "fetch_docs",
-  {
-    description:
-      `Fetch one small, known Markdown or plain-text documentation URL; successful content is capped at ${MAX_FETCH_DOC_CHARS} characters. ` +
-      "For normal retrieval, call search_docs first and fetch_doc_chunks with its selected URL.",
-    inputSchema: { url: z.string().url() },
-  },
-  async ({ url }) => {
-    try {
-      const text = await fetchConfiguredDocUrl(url);
-      return {
-        content: [
-          {
-            type: "text" as const,
-            text: formatFetchDocsOutput({ text, url }),
-          },
-        ],
-      };
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Unknown error";
-      return {
-        content: [
-          {
-            type: "text" as const,
-            text: `Failed to fetch ${url}: ${message}`,
-          },
-        ],
-        isError: true,
-      };
-    }
-  },
-);
-
-server.registerTool(
-  "search_docs",
-  {
-    description:
-      "Start documentation retrieval here: search configured indexes and return only the top matching page URLs. Pass a selected URL to fetch_doc_chunks, which normalizes known providers to Markdown.",
-    inputSchema: {
-      query: z.string().min(2),
-      sources: z.array(z.string()).optional(),
-      maxResults: z.number().int().min(1).max(MAX_RESULTS_LIMIT).optional(),
+const registerListDocSources = (server: McpServer) => {
+  server.registerTool(
+    "list_doc_sources",
+    {
+      description:
+        "List source names available to search_docs when you need to select or narrow documentation libraries",
     },
-  },
-  async ({ query, sources, maxResults }) => {
-    try {
-      const selectedSources = validateSources(sources);
-      const results: SearchResult[] = [];
-      const settledSources = await Promise.allSettled(
-        selectedSources.map(async ({ name, indexUrl }) => ({
-          name,
-          indexUrl,
-          indexText: await fetchConfiguredDocUrl(indexUrl),
-        })),
-      );
+    () => ({
+      content: Object.entries(DOC_SOURCES).map(([name, { url }]) => ({
+        type: "text" as const,
+        text: `${name}: ${url}`,
+      })),
+    }),
+  );
+};
 
-      const successfulSources = settledSources.filter(
-        (
-          source,
-        ): source is PromiseFulfilledResult<{
-          indexText: string;
-          indexUrl: string;
-          name: string;
-        }> => source.status === "fulfilled",
-      );
-
-      if (successfulSources.length === 0) {
-        throw new Error("Could not fetch any selected documentation indexes");
+const registerFetchDocs = (server: McpServer) => {
+  server.registerTool(
+    "fetch_docs",
+    {
+      description:
+        `Fetch one small, known Markdown or plain-text documentation URL; successful content is capped at ${MAX_FETCH_DOC_CHARS} characters. ` +
+        "For normal retrieval, call search_docs first and fetch_doc_chunks with its selected URL.",
+      inputSchema: { url: z.string().url() },
+    },
+    async ({ url }) => {
+      try {
+        const text = await fetchConfiguredDocUrl(url);
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: formatFetchDocsOutput({ text, url }),
+            },
+          ],
+        };
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : "Unknown error";
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `Failed to fetch ${url}: ${message}`,
+            },
+          ],
+          isError: true,
+        };
       }
+    },
+  );
+};
 
-      // A source that fails to fetch is dropped from the search silently, which
-      // makes a broken entry indistinguishable from one that simply has no
-      // match: the index looks configured while contributing nothing. Name the
-      // casualties in the response so a misconfigured source is visible rather
-      // than inferred from suspiciously empty results.
-      const failedSourceNames = settledSources.flatMap((source, index) =>
-        source.status === "rejected"
-          ? [selectedSources[index]?.name ?? "unknown"]
-          : [],
-      );
-      const failureNote =
-        failedSourceNames.length > 0
-          ? `Note: could not fetch ${failedSourceNames.join(", ")}; results exclude ${failedSourceNames.length === 1 ? "it" : "them"}.`
-          : "";
+const registerSearchDocs = (server: McpServer) => {
+  server.registerTool(
+    "search_docs",
+    {
+      description:
+        "Start documentation retrieval here: search configured indexes and return only the top matching page URLs. Pass a selected URL to fetch_doc_chunks, which normalizes known providers to Markdown.",
+      inputSchema: {
+        query: z.string().min(2),
+        sources: z.array(z.string()).optional(),
+        maxResults: z.number().int().min(1).max(MAX_RESULTS_LIMIT).optional(),
+      },
+    },
+    async ({ query, sources, maxResults }) => {
+      try {
+        const selectedSources = validateSources(sources);
+        const results: SearchResult[] = [];
+        const settledSources = await Promise.allSettled(
+          selectedSources.map(async ({ name, indexUrl }) => ({
+            name,
+            indexUrl,
+            indexText: await fetchConfiguredDocUrl(indexUrl),
+          })),
+        );
 
-      for (const { value } of successfulSources) {
-        const { name, indexText, indexUrl } = value;
-        for (const entry of parseIndexEntries({
-          source: name,
-          indexUrl,
-          indexText,
-        })) {
-          const score = scoreDocEntry({
-            title: entry.title,
-            section: entry.section,
-            slug: entry.slug,
-            description: entry.description,
+        const successfulSources = settledSources.filter(
+          (
+            source,
+          ): source is PromiseFulfilledResult<{
+            indexText: string;
+            indexUrl: string;
+            name: string;
+          }> => source.status === "fulfilled",
+        );
+
+        if (successfulSources.length === 0) {
+          throw new Error("Could not fetch any selected documentation indexes");
+        }
+
+        // A source that fails to fetch is dropped from the search silently, which
+        // makes a broken entry indistinguishable from one that simply has no
+        // match: the index looks configured while contributing nothing. Name the
+        // casualties in the response so a misconfigured source is visible rather
+        // than inferred from suspiciously empty results.
+        const failedSourceNames = settledSources.flatMap((source, index) =>
+          source.status === "rejected"
+            ? [selectedSources[index]?.name ?? "unknown"]
+            : [],
+        );
+        const failureNote =
+          failedSourceNames.length > 0
+            ? `Note: could not fetch ${failedSourceNames.join(", ")}; results exclude ${failedSourceNames.length === 1 ? "it" : "them"}.`
+            : "";
+
+        for (const { value } of successfulSources) {
+          const { name, indexText, indexUrl } = value;
+          for (const entry of parseIndexEntries({
+            source: name,
+            indexUrl,
+            indexText,
+          })) {
+            const score = scoreDocEntry({
+              title: entry.title,
+              section: entry.section,
+              slug: entry.slug,
+              description: entry.description,
+              query,
+            });
+
+            if (score <= 0) {
+              continue;
+            }
+
+            results.push({
+              source: entry.source,
+              title:
+                entry.section.length > 0
+                  ? `${entry.title} (${entry.section})`
+                  : entry.title,
+              url: entry.url,
+              score,
+            });
+          }
+        }
+
+        const limitedResults = results
+          .toSorted((left, right) => right.score - left.score)
+          .slice(0, maxResults ?? DEFAULT_MAX_RESULTS);
+
+        if (limitedResults.length === 0) {
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: `No matching documentation pages found for "${query}".${failureNote.length > 0 ? ` ${failureNote}` : ""}`,
+              },
+            ],
+          };
+        }
+
+        // The note rides as its own content block rather than being appended to
+        // the JSON text: a caller parsing the results block must still get valid
+        // JSON, so the warning cannot be concatenated onto it.
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: JSON.stringify(limitedResults, null, 2),
+            },
+            ...(failureNote.length > 0
+              ? [{ type: "text" as const, text: failureNote }]
+              : []),
+          ],
+        };
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : "Unknown error";
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `Failed to search docs: ${message}`,
+            },
+          ],
+          isError: true,
+        };
+      }
+    },
+  );
+};
+
+const registerFetchDocChunks = (server: McpServer) => {
+  server.registerTool(
+    "fetch_doc_chunks",
+    {
+      description:
+        "After search_docs, fetch only the most relevant bounded chunks from its selected Markdown or plain-text page URL.",
+      inputSchema: {
+        url: z.string().url(),
+        query: z.string().min(2),
+        maxChunks: z.number().int().min(1).max(MAX_CHUNKS_LIMIT).optional(),
+      },
+    },
+    async ({ url, query, maxChunks }) => {
+      try {
+        const pageText = await fetchConfiguredDocUrl(url);
+        const scoredChunks: DocChunk[] = [];
+
+        for (const chunk of splitIntoChunks(pageText)) {
+          const score = scoreText({
+            heading: chunk.heading,
+            body: chunk.text,
             query,
           });
 
@@ -657,141 +743,69 @@ server.registerTool(
             continue;
           }
 
-          results.push({
-            source: entry.source,
-            title:
-              entry.section.length > 0
-                ? `${entry.title} (${entry.section})`
-                : entry.title,
-            url: entry.url,
+          scoredChunks.push({
+            heading: chunk.heading,
+            text: chunk.text,
             score,
           });
         }
-      }
 
-      const limitedResults = results
-        .toSorted((left, right) => right.score - left.score)
-        .slice(0, maxResults ?? DEFAULT_MAX_RESULTS);
+        const limitedChunks = scoredChunks
+          .toSorted((left, right) => right.score - left.score)
+          .slice(0, maxChunks ?? DEFAULT_MAX_CHUNKS);
 
-      if (limitedResults.length === 0) {
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: `No matching documentation pages found for "${query}".${failureNote.length > 0 ? ` ${failureNote}` : ""}`,
-            },
-          ],
-        };
-      }
-
-      // The note rides as its own content block rather than being appended to
-      // the JSON text: a caller parsing the results block must still get valid
-      // JSON, so the warning cannot be concatenated onto it.
-      return {
-        content: [
-          {
-            type: "text" as const,
-            text: JSON.stringify(limitedResults, null, 2),
-          },
-          ...(failureNote.length > 0
-            ? [{ type: "text" as const, text: failureNote }]
-            : []),
-        ],
-      };
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Unknown error";
-      return {
-        content: [
-          {
-            type: "text" as const,
-            text: `Failed to search docs: ${message}`,
-          },
-        ],
-        isError: true,
-      };
-    }
-  },
-);
-
-server.registerTool(
-  "fetch_doc_chunks",
-  {
-    description:
-      "After search_docs, fetch only the most relevant bounded chunks from its selected Markdown or plain-text page URL.",
-    inputSchema: {
-      url: z.string().url(),
-      query: z.string().min(2),
-      maxChunks: z.number().int().min(1).max(MAX_CHUNKS_LIMIT).optional(),
-    },
-  },
-  async ({ url, query, maxChunks }) => {
-    try {
-      const pageText = await fetchConfiguredDocUrl(url);
-      const scoredChunks: DocChunk[] = [];
-
-      for (const chunk of splitIntoChunks(pageText)) {
-        const score = scoreText({
-          heading: chunk.heading,
-          body: chunk.text,
-          query,
-        });
-
-        if (score <= 0) {
-          continue;
+        if (limitedChunks.length === 0) {
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: `No relevant chunks found for "${query}" in ${url}.`,
+              },
+            ],
+          };
         }
 
-        scoredChunks.push({
-          heading: chunk.heading,
-          text: chunk.text,
-          score,
-        });
-      }
-
-      const limitedChunks = scoredChunks
-        .toSorted((left, right) => right.score - left.score)
-        .slice(0, maxChunks ?? DEFAULT_MAX_CHUNKS);
-
-      if (limitedChunks.length === 0) {
         return {
           content: [
             {
               type: "text" as const,
-              text: `No relevant chunks found for "${query}" in ${url}.`,
+              text: JSON.stringify(
+                limitedChunks.map((chunk) => ({
+                  heading: chunk.heading,
+                  score: chunk.score,
+                  text: chunk.text,
+                })),
+                null,
+                2,
+              ),
             },
           ],
         };
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : "Unknown error";
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `Failed to fetch doc chunks for ${url}: ${message}`,
+            },
+          ],
+          isError: true,
+        };
       }
+    },
+  );
+};
 
-      return {
-        content: [
-          {
-            type: "text" as const,
-            text: JSON.stringify(
-              limitedChunks.map((chunk) => ({
-                heading: chunk.heading,
-                score: chunk.score,
-                text: chunk.text,
-              })),
-              null,
-              2,
-            ),
-          },
-        ],
-      };
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Unknown error";
-      return {
-        content: [
-          {
-            type: "text" as const,
-            text: `Failed to fetch doc chunks for ${url}: ${message}`,
-          },
-        ],
-        isError: true,
-      };
-    }
-  },
-);
-
-const transport = new StdioServerTransport();
-await server.connect(transport);
+export const createStellaDocsServer = () => {
+  const server = new McpServer({
+    name: "stella-docs",
+    version: "1.2.1",
+  });
+  registerListDocSources(server);
+  registerFetchDocs(server);
+  registerSearchDocs(server);
+  registerFetchDocChunks(server);
+  return server;
+};

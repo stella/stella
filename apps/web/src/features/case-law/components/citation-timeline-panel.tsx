@@ -3,9 +3,11 @@ import { useTranslations } from "use-intl";
 
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
+import { DocumentIdentityBadge } from "@stll/ui/document-identity-badge";
 import { PopoverClose, PopoverTitle } from "@stll/ui/popover";
 import { Skeleton } from "@stll/ui/skeleton";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { createCaseDecisionDetailsTab } from "@/components/inspector/case-decision-details-view";
@@ -18,6 +20,7 @@ import {
   CITATION_TREATMENT_FILL,
   CITATION_TREATMENT_LABEL,
   CITATION_TREATMENT_ORDER,
+  citationSummaryIsCapped,
   totalCitations,
 } from "@/features/case-law/citation-treatment";
 import type {
@@ -46,8 +49,9 @@ import { CitationTreatmentBar } from "@/features/case-law/components/citation-tr
 import { decisionLeadingCitationsOptions } from "@/features/case-law/queries/citations";
 import type { LeadingCitation } from "@/features/case-law/queries/citations";
 import { useFormatter } from "@/i18n/formatting-context";
-import { citedDecisionLabel } from "@/lib/cited-decision-label";
 import { detached } from "@/lib/detached";
+import { citedDecisionLabel } from "@/lib/legal/cited-decision-label";
+import { decisionDocumentIdentity } from "@/lib/legal/document-identity";
 
 /** The panel's own width, minus its padding: the plot is drawn at this size. */
 const CHART_WIDTH = 350;
@@ -112,17 +116,17 @@ export const CitationTimelinePanel = ({
         </PopoverTitle>
         <span className="text-muted-foreground text-xs tabular-nums">
           {format.number(total)}
-          {summary.capped.incoming ? "+" : null}
+          {citationSummaryIsCapped(summary, "incoming") ? "+" : null}
         </span>
       </div>
 
-      {summary.capped.incoming && (
+      {citationSummaryIsCapped(summary, "incoming") && (
         <p className="text-muted-foreground text-xs">
           {t("caseLaw.citation.partialSummary")}
         </p>
       )}
 
-      {!summary.capped.incoming && (
+      {!citationSummaryIsCapped(summary, "incoming") && (
         <div className="flex flex-col gap-2">
           <CitationTreatmentBar
             className="h-2"
@@ -162,7 +166,7 @@ export const CitationTimelinePanel = ({
           />
         }
       >
-        {summary.capped.incoming
+        {citationSummaryIsCapped(summary, "incoming")
           ? t("common.showAll")
           : t("caseLaw.citation.showAll", { count: total })}
       </PopoverClose>
@@ -274,8 +278,8 @@ const CitingDecisionRow = ({ row }: { row: LeadingCitation }) => {
       {/* The panel steps aside for the decision it sent the reader to. */}
       <PopoverClose
         render={
-          <button
-            className="hover:bg-muted/60 -mx-1.5 flex w-full items-center gap-2 rounded-md px-1.5 py-1 text-start"
+          <Button
+            className="-mx-2 w-auto flex-1"
             onClick={() => {
               inspector.open(
                 createCaseDecisionViewTab({
@@ -289,25 +293,30 @@ const CitingDecisionRow = ({ row }: { row: LeadingCitation }) => {
                 }),
               );
             }}
-            type="button"
+            size="row"
+            variant="ghost"
           />
         }
       >
+        <DocumentIdentityBadge
+          identity={decisionDocumentIdentity(row.decision)}
+          title={`${row.decision.caseNumber} · ${row.decision.court}`}
+        />
         <span className="flex min-w-0 flex-1 flex-col">
-          <BidiText
-            as="span"
-            className="text-foreground-strong-muted truncate text-xs font-medium"
+          <TruncatedText
+            className="text-foreground-strong-muted text-xs font-medium"
+            render={<BidiText as="span" />}
           >
             {citedDecisionLabel(row.decision)}
-          </BidiText>
-          <BidiText
-            as="span"
-            className="text-muted-foreground truncate text-[0.7rem]"
+          </TruncatedText>
+          <TruncatedText
+            className="text-muted-foreground text-[0.7rem]"
+            render={<BidiText as="span" />}
           >
             {year === null
               ? row.decision.court
               : `${row.decision.court} · ${formatYear(format, year)}`}
-          </BidiText>
+          </TruncatedText>
         </span>
         <span
           className={cn(

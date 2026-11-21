@@ -1,0 +1,242 @@
+import { Result } from "better-result";
+
+import type { CorpusSourceDescriptor } from "@/api/lib/legal-search/corpus-source";
+import {
+  SOFT_LAW_SERVING_SETTINGS,
+  softLawDescriptorFlags,
+} from "@/api/lib/legal-search/soft-law-serving";
+import { SoftLawIngestionError } from "@/api/lib/legal-search/soft-law-types";
+import type {
+  SoftLawAdapterConfiguration,
+  SoftLawAuthority,
+  SoftLawSourceAdapter,
+} from "@/api/lib/legal-search/soft-law-types";
+
+import { bfdiAdapter } from "./bfdi";
+import { edpbAdapter } from "./edpb";
+import { gfrAdapter, mfAdapter } from "./financnisprava";
+import { MV_PSMV_PAGE_URL, mvPsmvAdapter } from "./mv-psmv";
+import { suipAdapter } from "./suip";
+import { uoouCzAdapter } from "./uoou-cz";
+import { uoouSkAdapter } from "./uoou-sk";
+import { wp29Adapter } from "./wp29";
+
+type SourceRegistration<Authority extends SoftLawAuthority> = {
+  state: "registered";
+  adapter: SoftLawSourceAdapter & { authority: Authority };
+  descriptor: CorpusSourceDescriptor;
+  reuseNotice: string;
+};
+
+type AdmissionDisposition<Authority extends SoftLawAuthority> =
+  | SourceRegistration<Authority>
+  | { state: "held"; reason: string; adapter?: never }
+  | { state: "unverified"; reason: string; adapter?: never }
+  | {
+      state: "none-found";
+      checkedAt: string;
+      evidence: readonly [string, ...string[]];
+      adapter?: never;
+    };
+
+const unverified = {
+  state: "unverified",
+  reason: "Source coverage has not been verified",
+} as const;
+const held = {
+  state: "held",
+  reason: "Pending source-specific admission",
+} as const;
+
+/** Registration decides what a sync may acquire; serving is decided in `soft-law-serving.ts`. */
+export const SOFT_LAW_ADMISSIONS = {
+  "eu-edpb": {
+    state: "registered",
+    adapter: edpbAdapter,
+    descriptor: {
+      license: "permitted-redistribution",
+      attribution:
+        "European Data Protection Board; https://www.edpb.europa.eu/copyright_en",
+      ...softLawDescriptorFlags(SOFT_LAW_SERVING_SETTINGS["eu-edpb"]),
+    },
+    reuseNotice: "https://www.edpb.europa.eu/copyright_en",
+  },
+  "eu-wp29": {
+    state: "registered",
+    adapter: wp29Adapter,
+    descriptor: {
+      license: "restricted",
+      attribution: "Article 29 Working Party; European Commission archive",
+      ...softLawDescriptorFlags(SOFT_LAW_SERVING_SETTINGS["eu-wp29"]),
+    },
+    reuseNotice: "https://commission.europa.eu/legal-notice_en",
+  },
+  "cz-uoou": {
+    state: "registered",
+    adapter: uoouCzAdapter,
+    descriptor: {
+      license: "restricted",
+      attribution: "Úřad pro ochranu osobních údajů; https://uoou.gov.cz",
+      ...softLawDescriptorFlags(SOFT_LAW_SERVING_SETTINGS["cz-uoou"]),
+    },
+    // The site states no reuse terms beyond its copyright footer.
+    reuseNotice: "https://uoou.gov.cz/",
+  },
+  "cz-suip": {
+    state: "registered",
+    adapter: suipAdapter,
+    descriptor: {
+      license: "restricted",
+      attribution: "Státní úřad inspekce práce; https://suip.gov.cz",
+      ...softLawDescriptorFlags(SOFT_LAW_SERVING_SETTINGS["cz-suip"]),
+    },
+    // The site states no reuse terms beyond its copyright footer.
+    reuseNotice: "https://suip.gov.cz/",
+  },
+  "cz-gfr": {
+    state: "registered",
+    adapter: gfrAdapter,
+    descriptor: {
+      license: "restricted",
+      attribution:
+        "Generální finanční ředitelství; https://financnisprava.gov.cz",
+      ...softLawDescriptorFlags(SOFT_LAW_SERVING_SETTINGS["cz-gfr"]),
+    },
+    // The site states no reuse terms beyond its copyright footer.
+    reuseNotice:
+      "https://financnisprava.gov.cz/cs/dane/legislativa-a-metodika/pokyny-d",
+  },
+  "cz-mf": {
+    state: "registered",
+    adapter: mfAdapter,
+    descriptor: {
+      license: "restricted",
+      attribution: "Ministerstvo financí; https://financnisprava.gov.cz",
+      ...softLawDescriptorFlags(SOFT_LAW_SERVING_SETTINGS["cz-mf"]),
+    },
+    reuseNotice:
+      "https://financnisprava.gov.cz/cs/dane/legislativa-a-metodika/pokyny-mf",
+  },
+  "cz-mv-psmv": {
+    state: "registered",
+    adapter: mvPsmvAdapter,
+    descriptor: {
+      license: "restricted",
+      attribution: "Ministerstvo vnitra; https://mv.gov.cz",
+      // The registered row records the listing decision; a permission named
+      // in the deployment widens serving without rewriting the row.
+      ...softLawDescriptorFlags(SOFT_LAW_SERVING_SETTINGS["cz-mv-psmv"]),
+    },
+    // The page itself states that the závěry may be used for non-commercial purposes only.
+    reuseNotice: MV_PSMV_PAGE_URL,
+  },
+  "at-dsb": unverified,
+  "be-apd": unverified,
+  "bg-cpdp": unverified,
+  "hr-azop": unverified,
+  "cy-dpa": unverified,
+  "dk-datatilsynet": unverified,
+  "ee-aki": unverified,
+  "fi-ombudsman": unverified,
+  "fr-cnil": held,
+  "de-bfdi": {
+    state: "registered",
+    adapter: bfdiAdapter,
+    descriptor: {
+      license: "restricted",
+      attribution: "BfDI; https://www.bfdi.bund.de",
+      ...softLawDescriptorFlags(SOFT_LAW_SERVING_SETTINGS["de-bfdi"]),
+    },
+    reuseNotice: "https://www.bfdi.bund.de",
+  },
+  "el-hdpa": unverified,
+  "hu-naih": unverified,
+  "is-personuvernd": unverified,
+  "ie-dpc": unverified,
+  "it-garante": unverified,
+  "lv-dvi": unverified,
+  "li-dss": unverified,
+  "lt-vdai": unverified,
+  "lu-cnpd": unverified,
+  "mt-idpc": unverified,
+  "nl-ap": unverified,
+  "no-datatilsynet": unverified,
+  "pl-uodo": unverified,
+  "pt-cnpd": unverified,
+  "ro-anspdcp": unverified,
+  "sk-uoou": {
+    state: "registered",
+    adapter: uoouSkAdapter,
+    descriptor: {
+      license: "restricted",
+      attribution:
+        "Úrad na ochranu osobných údajov Slovenskej republiky; https://dataprotection.gov.sk",
+      ...softLawDescriptorFlags(SOFT_LAW_SERVING_SETTINGS["sk-uoou"]),
+    },
+    // The site states no reuse terms; its home page asks reusers of
+    // published documents to limit any personal data they contain.
+    reuseNotice: "https://dataprotection.gov.sk/sk/",
+  },
+  "si-ip": unverified,
+  "es-aepd": held,
+  "se-imy": unverified,
+  "eu-edps": unverified,
+  "de-dsk": held,
+  "de-bw": unverified,
+  "de-by-baylfd": unverified,
+  "de-by-baylda": unverified,
+  "de-be": unverified,
+  "de-bb": unverified,
+  "de-hb": unverified,
+  "de-hh": unverified,
+  "de-he": unverified,
+  "de-mv": unverified,
+  "de-ni": unverified,
+  "de-nw": unverified,
+  "de-rp": unverified,
+  "de-sl": unverified,
+  "de-sn": unverified,
+  "de-st": unverified,
+  "de-sh": unverified,
+  "de-th": unverified,
+  "es-apdcat": unverified,
+  "es-avpd": unverified,
+  "es-ctpd": unverified,
+  "at-pdk": unverified,
+  "be-vtc": unverified,
+  "be-coc": unverified,
+  "be-comitei": unverified,
+  "be-comitep": unverified,
+} as const satisfies {
+  [Authority in SoftLawAuthority]: AdmissionDisposition<Authority>;
+};
+
+export type RegisteredSoftLawAuthority = {
+  [
+    Authority in SoftLawAuthority
+  ]: (typeof SOFT_LAW_ADMISSIONS)[Authority] extends {
+    state: "registered";
+  }
+    ? Authority
+    : never;
+}[SoftLawAuthority];
+
+type RegisteredSoftLawAdapter =
+  (typeof SOFT_LAW_ADMISSIONS)[RegisteredSoftLawAuthority]["adapter"];
+
+export const configureSoftLawAdapter = async (
+  adapter: RegisteredSoftLawAdapter,
+  configuration: SoftLawAdapterConfiguration,
+) => {
+  if ("configure" in adapter) {
+    return await adapter.configure(configuration);
+  }
+  if (configuration.type === "default") {
+    return Result.ok(adapter);
+  }
+  return Result.err(
+    new SoftLawIngestionError({
+      message: "This source does not accept an admission file",
+    }),
+  );
+};

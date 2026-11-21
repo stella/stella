@@ -1,0 +1,44 @@
+[
+  {
+    "name": "v1-text-file-metadata",
+    "input": {
+      "version": 1,
+      "data": [
+        {
+          "type": "text",
+          "text": "Legacy answer"
+        },
+        {
+          "type": "file",
+          "filename": "../brief:v2.pdf",
+          "mediaType": "application/pdf",
+          "url": "https://files.example/brief.pdf"
+        },
+        {
+          "type": "data-stella-anon-restorations",
+          "data": {
+            "pairs": [
+              {
+                "placeholder": "[PERSON_1]",
+                "original": "Ada"
+              }
+            ]
+          }
+        },
+        {
+          "type": "data-stella-mentions",
+          "data": {
+            "mentions": []
+          }
+        },
+        {
+          "type": "data-stella-source-document",
+          "data": {
+            "kind": "document",
+            "title": "Brief.pdf"
+          }
+        }
+      ]
+    }
+  }
+]

@@ -12,6 +12,11 @@ import { sqlCaseFragment } from "@/api/lib/sql-case-expression";
 import { entityViewReorderBody, viewOwner } from "./shared";
 
 const config = {
+  contract: "replace",
+  precondition: {
+    type: "deferred",
+    baselineId: "apps/api/src/handlers/entity-views/reorder.ts",
+  },
   description:
     "Reorder every personal cross-matter view. Supply each of the user's view IDs exactly once.",
   permissions: { view: ["update"] },

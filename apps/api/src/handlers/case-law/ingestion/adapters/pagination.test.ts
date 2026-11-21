@@ -3,17 +3,27 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import fc from "fast-check";
 import * as v from "valibot";
 
-import { propertyConfig } from "@stll/property-testing";
+import { INGESTION_STOP_KIND } from "@stll/legal-atlas/ingestion-cycle";
+import { assertProperty } from "@stll/property-testing";
 
-import type { IngestionItem } from "@/api/handlers/case-law/ingestion/adapter";
 import {
-  TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
+  TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
+import type { IngestionItem } from "@/api/lib/legal-search/ingestion-types";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
-import { asTestRaw, readTestJson } from "@/api/tests/helpers/test-tool-set";
+import {
+  mockFetchWithFixtures,
+  saveFixture,
+} from "@/api/tests/helpers/case-law-adapter-test-utils";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
+import {
+  asFetchMock,
+  asTestRaw,
+  readTestJson,
+} from "@/api/tests/helpers/test-tool-set";
 
 import type { FirstPageNumber } from "./pagination";
 import {
@@ -24,9 +34,11 @@ import {
   encodeOffsetCursor,
   encodeTraversalCursor,
 } from "./pagination";
-import { mockFetchWithFixtures, saveFixture } from "./test-utils";
+
+const testFetchState = createTestFetch();
 
 const FIXTURE_NAME = "pagination-test.json";
+const HTML_FIXTURE_NAME = "pagination-test-html.json";
 
 type TestItem = { id: number };
 type TestResponse = { results: TestItem[]; total: number };
@@ -48,7 +60,7 @@ const itemToDecision = (item: TestItem): IngestionItem => ({
   }),
 });
 
-const createTestFetch = (opts?: {
+const createTestPageFetcher = (opts?: {
   pageSize?: number;
   legacyPageSize?: number;
   firstPage?: FirstPageNumber;
@@ -128,11 +140,11 @@ const mockFetchFromDataset = (
     },
   );
 
-  globalThis.fetch = mockedFetch;
+  testFetchState.set(mockedFetch);
 
   return {
     restore: () => {
-      globalThis.fetch = originalFetch;
+      testFetchState.restore();
     },
     requestedPages,
   };
@@ -155,7 +167,7 @@ describe("createPagePaginatedFetch", () => {
       { pattern: "/test-api", fixture: FIXTURE_NAME },
     ]);
 
-    const fetchPage = createTestFetch();
+    const fetchPage = createTestPageFetcher();
     const result = await fetchPage(null, {});
     expect(result.isOk()).toBe(true);
 
@@ -171,7 +183,7 @@ describe("createPagePaginatedFetch", () => {
       { pattern: "/test-api", fixture: FIXTURE_NAME },
     ]);
 
-    const page = (await createTestFetch()(null, {})).unwrap();
+    const page = (await createTestPageFetcher()(null, {})).unwrap();
 
     // The recorder cites this as a fixture's provenance, so it has to be
     // the request that served the listing rather than a URL rebuilt from
@@ -185,7 +197,7 @@ describe("createPagePaginatedFetch", () => {
       { pattern: "/test-api", fixture: FIXTURE_NAME },
     ]);
 
-    const fetchPage = createTestFetch();
+    const fetchPage = createTestPageFetcher();
     const result = await fetchPage(null, {});
     const page = result.unwrap();
     expect(page.nextCursor).toBe("offset:1");
@@ -197,7 +209,7 @@ describe("createPagePaginatedFetch", () => {
       { pattern: "/test-api", fixture: FIXTURE_NAME },
     ]);
 
-    const fetchPage = createTestFetch({ firstPage: 0 });
+    const fetchPage = createTestPageFetcher({ firstPage: 0 });
     const result = await fetchPage("offset:21", {});
     const page = result.unwrap();
     expect(page.nextCursor).toBe("offset:22");
@@ -213,7 +225,7 @@ describe("createPagePaginatedFetch", () => {
       { pattern: "/test-api", fixture: FIXTURE_NAME },
     ]);
 
-    const fetchPage = createTestFetch({ firstPage: 0 });
+    const fetchPage = createTestPageFetcher({ firstPage: 0 });
     const result = await fetchPage("10", {});
     const page = result.unwrap();
     expect(page.decisions).toHaveLength(0);
@@ -258,8 +270,27 @@ describe("createPagePaginatedFetch", () => {
     expect(result.error.message).toBe("test: the body states no results array");
   });
 
+  test("a page that stays unparseable after its retry is the publisher unavailable", async () => {
+    await saveFixture(
+      HTML_FIXTURE_NAME,
+      "<html><body>maintenance</body></html>",
+    );
+    restore = await mockFetchWithFixtures([
+      { pattern: "/test-api", fixture: HTML_FIXTURE_NAME },
+    ]);
+
+    const result = await createTestPageFetcher()(null, {});
+
+    expect(result.isErr()).toBe(true);
+    if (!Result.isError(result)) {
+      return;
+    }
+    expect(result.error.message).toContain("retry unparseable");
+    expect(result.error.stopKind).toBe(INGESTION_STOP_KIND.SOURCE_UNREACHABLE);
+  });
+
   test("returns error for invalid cursor", async () => {
-    const fetchPage = createTestFetch();
+    const fetchPage = createTestPageFetcher();
     for (const cursor of [
       "not-a-number",
       "offset:12garbage",
@@ -284,7 +315,7 @@ describe("createPagePaginatedFetch", () => {
       { pattern: "/test-api", fixture: FIXTURE_NAME },
     ]);
 
-    const fetchPage = createTestFetch({
+    const fetchPage = createTestPageFetcher({
       pageSize: 5,
       firstPage: 0,
     });
@@ -304,7 +335,7 @@ describe("createPagePaginatedFetch", () => {
       { pattern: "/test-api", fixture: FIXTURE_NAME },
     ]);
 
-    const fetchPage = createTestFetch({
+    const fetchPage = createTestPageFetcher({
       pageSize: 5,
       skipEven: true,
     });
@@ -475,20 +506,22 @@ const mockFailingEndpoint = (
   const originalFetch = globalThis.fetch;
   const requestedPages: number[] = [];
 
-  globalThis.fetch = Object.assign(
-    async (input: string | URL | Request): Promise<Response> => {
-      const url = new URL(requestUrl(input));
-      requestedPages.push(
-        Number.parseInt(url.searchParams.get("page") ?? "", 10),
-      );
-      return await Promise.resolve(new Response("", { status }));
-    },
-    { preconnect: originalFetch.preconnect.bind(originalFetch) },
+  testFetchState.set(
+    Object.assign(
+      async (input: string | URL | Request): Promise<Response> => {
+        const url = new URL(requestUrl(input));
+        requestedPages.push(
+          Number.parseInt(url.searchParams.get("page") ?? "", 10),
+        );
+        return await Promise.resolve(new Response("", { status }));
+      },
+      { preconnect: originalFetch.preconnect.bind(originalFetch) },
+    ),
   );
 
   return {
     restore: () => {
-      globalThis.fetch = originalFetch;
+      testFetchState.restore();
     },
     requestedPages,
   };
@@ -522,7 +555,7 @@ describe("a page the origin never answered does not move the cursor", () => {
    * where it was, so only a successful page supplies the next one.
    */
   const walk = async (
-    fetchPage: ReturnType<typeof createTestFetch>,
+    fetchPage: ReturnType<typeof createTestPageFetcher>,
     from: string,
     cycles: number,
   ): Promise<string | null> => {
@@ -536,6 +569,33 @@ describe("a page the origin never answered does not move the cursor", () => {
     return cursor;
   };
 
+  test("a transport timeout exhausts retries and keeps the cursor", async () => {
+    const requestedPages: string[] = [];
+    testFetchState.set(
+      asFetchMock(async (input: Parameters<typeof globalThis.fetch>[0]) => {
+        const url = new URL(
+          input instanceof Request ? input.url : String(input),
+        );
+        requestedPages.push(url.searchParams.get("page") ?? "");
+        throw new DOMException("Request timed out", "TimeoutError");
+      }),
+    );
+    restore = () => {
+      testFetchState.restore();
+    };
+    const fetchPage = createTestPageFetcher({ firstPage: 0 });
+    const result = await fetchPage("offset:30", {});
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error.stopKind).toBe("source_unreachable");
+      expect(result.error.cursor).toBe("offset:30");
+    }
+    expect(requestedPages).toEqual(["10", "10", "10"]);
+    requestedPages.length = 0;
+    expect(await walk(fetchPage, "offset:30", 2)).toBe("offset:30");
+    expect(requestedPages).toEqual(["10", "10", "10", "10", "10", "10"]);
+  });
+
   test("a bad-gateway outage holds the cursor instead of consuming the collection", async () => {
     // The gateway got nothing from the origin, so this page's items are
     // unknown. Every page answers alike while it is down, so a skip that
@@ -545,7 +605,7 @@ describe("a page the origin never answered does not move the cursor", () => {
     restore = endpoint.restore;
 
     const cursor = await walk(
-      createTestFetch({ firstPage: 0 }),
+      createTestPageFetcher({ firstPage: 0 }),
       "offset:30",
       3,
     );
@@ -557,8 +617,7 @@ describe("a page the origin never answered does not move the cursor", () => {
   /**
    * The origin answered, so the refusal is about this page and skipping it is
    * what keeps one page from stalling a source. A 504 is the publisher proxy's
-   * own read timeout, which the origin earns by being slow on this page — the
-   * same event `page_skipped_timeout` skips when our timeout fires first.
+   * own read timeout; a transport timeout has no response and holds the cursor.
    */
   test.each([500, 503, 504])(
     "a %i still skips its own page",
@@ -567,7 +626,7 @@ describe("a page the origin never answered does not move the cursor", () => {
       restore = endpoint.restore;
 
       const cursor = await walk(
-        createTestFetch({ firstPage: 0 }),
+        createTestPageFetcher({ firstPage: 0 }),
         "offset:30",
         2,
       );
@@ -592,25 +651,30 @@ const mockClampedEndpoint = (
   const originalFetch = globalThis.fetch;
   const requestedPages: number[] = [];
 
-  globalThis.fetch = Object.assign(
-    async (input: string | URL | Request): Promise<Response> => {
-      const url = new URL(requestUrl(input));
-      const requested = Number.parseInt(url.searchParams.get("page") ?? "", 10);
-      requestedPages.push(requested);
-      const start = (Math.max(firstPage, requested) - firstPage) * pageSize;
-      return await Promise.resolve(
-        new Response(
-          makeFixture(items.slice(start, start + pageSize), items.length),
-          { headers: { "Content-Type": "application/json; charset=utf-8" } },
-        ),
-      );
-    },
-    { preconnect: originalFetch.preconnect.bind(originalFetch) },
+  testFetchState.set(
+    Object.assign(
+      async (input: string | URL | Request): Promise<Response> => {
+        const url = new URL(requestUrl(input));
+        const requested = Number.parseInt(
+          url.searchParams.get("page") ?? "",
+          10,
+        );
+        requestedPages.push(requested);
+        const start = (Math.max(firstPage, requested) - firstPage) * pageSize;
+        return await Promise.resolve(
+          new Response(
+            makeFixture(items.slice(start, start + pageSize), items.length),
+            { headers: { "Content-Type": "application/json; charset=utf-8" } },
+          ),
+        );
+      },
+      { preconnect: originalFetch.preconnect.bind(originalFetch) },
+    ),
   );
 
   return {
     restore: () => {
-      globalThis.fetch = originalFetch;
+      testFetchState.restore();
     },
     requestedPages,
   };
@@ -636,7 +700,7 @@ describe("an offset names the same items whatever the publisher numbers from", (
   ): Promise<void> => {
     const endpoint = mockClampedEndpoint(dataset, firstPage, PAGE_SIZE);
     restore = endpoint.restore;
-    const fetchPage = createTestFetch({ pageSize: PAGE_SIZE, firstPage });
+    const fetchPage = createTestPageFetcher({ pageSize: PAGE_SIZE, firstPage });
 
     for (const offset of [0, PAGE_SIZE, 3 * PAGE_SIZE, 19 * PAGE_SIZE]) {
       const result = await fetchPage(encodeOffsetCursor(offset), {});
@@ -665,7 +729,7 @@ describe("an offset names the same items whatever the publisher numbers from", (
   ): Promise<void> => {
     const endpoint = mockClampedEndpoint(dataset, firstPage, PAGE_SIZE);
     restore = endpoint.restore;
-    const fetchPage = createTestFetch({ pageSize: PAGE_SIZE, firstPage });
+    const fetchPage = createTestPageFetcher({ pageSize: PAGE_SIZE, firstPage });
 
     const seen: string[] = [];
     let cursor: string | null = null;
@@ -696,7 +760,8 @@ describe("an offset names the same items whatever the publisher numbers from", (
 
 describe("offset cursor codec", () => {
   test("INVARIANT: every encoded safe offset decodes exactly", () => {
-    fc.assert(
+    assertProperty(
+      "INVARIANT: every encoded safe offset decodes exactly",
       fc.property(
         fc.maxSafeInteger().filter((offset) => offset >= 0),
         (offset) => {
@@ -709,12 +774,13 @@ describe("offset cursor codec", () => {
           ).toBe(offset);
         },
       ),
-      propertyConfig({ numRuns: 500 }),
+      { numRuns: 500 },
     );
   });
 
   test("INVARIANT: suffixing a canonical cursor with non-digits is rejected", () => {
-    fc.assert(
+    assertProperty(
+      "INVARIANT: suffixing a canonical cursor with non-digits is rejected",
       fc.property(
         fc.maxSafeInteger().filter((offset) => offset >= 0),
         fc.constantFrom("a", ".0", " ", "+", "-", "_"),
@@ -728,7 +794,7 @@ describe("offset cursor codec", () => {
           ).toBeNull();
         },
       ),
-      propertyConfig({ numRuns: 500 }),
+      { numRuns: 500 },
     );
   });
 });

@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 
 import type { PluggableList } from "unified";
 
@@ -19,6 +19,7 @@ import {
   getAdjacentSearchMatchIndex,
   getCenteredSearchMatchScrollTop,
   MAX_SEARCH_PREVIEW_MATCHES,
+  readScrollPaddingBlockEnd,
   type SearchMatchSummary,
 } from "@/lib/search-match-navigation";
 import { searchTextQueryKey } from "@/lib/search-text";
@@ -46,6 +47,7 @@ export const SearchChatPreview = ({
   const [matchSummary, setMatchSummary] =
     useState<SearchMatchSummary>(EMPTY_MATCH_SUMMARY);
   const searchTextKey = searchTextQueryKey(searchText);
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing, without this memo boundary the React Compiler does not cache this value
   const rehypePluginsByMessage = useMemo<PluggableList[]>(() => {
     // Allocate immutable per-message budgets from the same matcher before
     // rendering. Their sum is globally bounded while each transform remains
@@ -130,23 +132,21 @@ export const SearchChatPreview = ({
         currentScrollTop: scrollArea.scrollTop,
         matchHeight: matchRect.height,
         matchTop: matchRect.top,
+        obscuredBlockEnd: readScrollPaddingBlockEnd(scrollArea),
       }),
     });
     lastScrolledMatchRef.current = activeMatch;
   }, [activeIndex, domRevision, matchSummary.count]);
 
-  const navigate = useCallback(
-    (direction: "next" | "previous") => {
-      setActiveIndex((current) =>
-        getAdjacentSearchMatchIndex({
-          activeIndex: current,
-          direction,
-          matchCount: matchSummary.count,
-        }),
-      );
-    },
-    [matchSummary.count],
-  );
+  const navigate = (direction: "next" | "previous") => {
+    setActiveIndex((current) =>
+      getAdjacentSearchMatchIndex({
+        activeIndex: current,
+        direction,
+        matchCount: matchSummary.count,
+      }),
+    );
+  };
 
   return (
     <div ref={rootRef} className="space-y-5">

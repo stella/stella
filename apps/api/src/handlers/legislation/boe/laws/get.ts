@@ -1,24 +1,27 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
+
+import { booleanFromString } from "@stll/api-contract/http-input";
 
 import { mapBoeError } from "@/api/handlers/legislation/boe-error";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { boeClient } from "@/api/lib/legal-search/boe-client";
 
-const paramsSchema = t.Object({
-  lawId: t.String({ pattern: "^BOE-[A-Z]-\\d{4}-\\d+$" }),
+const paramsSchema = v.object({
+  lawId: v.pipe(v.string(), v.regex(/^BOE-[A-Z]-\d{4}-\d+$/u)),
 });
 
-const querySchema = t.Object({
-  metadata: t.Optional(t.BooleanString()),
-  analysis: t.Optional(t.BooleanString()),
-  fullText: t.Optional(t.BooleanString()),
-  eli: t.Optional(t.BooleanString()),
+const querySchema = v.object({
+  metadata: v.optional(booleanFromString()),
+  analysis: v.optional(booleanFromString()),
+  fullText: v.optional(booleanFromString()),
+  eli: v.optional(booleanFromString()),
 });
 
 const boeGetLaw = createSafeRootHandler(
   {
+    contract: "patch",
     description:
       "Read one consolidated Spanish law from the BOE by its BOE-X-YYYY-N " +
       "identifier. The metadata, analysis, fullText, and eli flags select " +

@@ -8,17 +8,41 @@ import { panic, Result } from "better-result";
  * The wire values live in @stll/api-contract so producers and consumers are
  * checked against one source.
  */
-import { AI_ERROR_KINDS, type AIErrorKind } from "@stll/api-contract";
-import { classifyFailure } from "@stll/errors";
-import type { FailureReason } from "@stll/errors";
+import { parseIntegerToken } from "@stll/agent-input/numeric-token";
+import {
+  AI_FAILURE_CODES,
+  DOCUMENT_TOO_LARGE_ERROR_CODE,
+  isAIFailureCode,
+} from "@stll/api-contract";
+import type { AIErrorKind, AIFailureCode } from "@stll/api-contract";
+import type { ProviderDiagnostic } from "@stll/api-contract/provider-setup";
+import { classifyFailure, FAILURE_REASON_GRADE } from "@stll/errors";
+import { isNonNullObject } from "@stll/template-conditions/path";
 
 import { MANAGED_PROVIDER_UNAVAILABLE_CODE } from "@/api/lib/chat/provider-data-policy";
-import { INCOMPLETE_STREAM_CODE } from "@/api/lib/chat/provider-stream-contract";
-import { ProviderCallError } from "@/api/lib/errors/provider-call-error";
+import {
+  INCOMPLETE_STREAM_CODE,
+  isOutputCeilingStopReport,
+} from "@/api/lib/chat/provider-stream-contract";
+import {
+  CHAT_RUN_LOG_REFUSAL_KIND,
+  ChatRunLogRefusedError,
+} from "@/api/lib/chat/run-log-refusal";
+import {
+  ModelDeadlineExceededError,
+  ModelOutputIncompleteError,
+  ModelOutputInvalidError,
+  ModelOutputModeratedError,
+  ModelRunUnfinishedError,
+  PROVIDER_CALL_FAILURE_REASON,
+  ProviderCallError,
+} from "@/api/lib/errors/provider-call-error";
+import { isProviderAccountOutOfCredit } from "@/api/lib/errors/provider-error-catalogue";
 import {
   AIGenerationCancelledError,
   ChatEmptyCompletionError,
   ChatLoopDetectedError,
+  DocumentTooLargeError,
   HandlerError,
 } from "@/api/lib/errors/tagged-errors";
 import type {
@@ -27,6 +51,7 @@ import type {
 } from "@/api/lib/errors/tagged-errors";
 import type { AwsExceptionName } from "@/api/lib/observability/failure";
 import {
+  NETWORK_ERROR_CODE_REASON,
   providerStatusFieldsOf,
   shadowGradeFields,
 } from "@/api/lib/observability/failure";
@@ -34,11 +59,20 @@ import {
   readEvidence,
   readProviderStatus,
 } from "@/api/lib/observability/failure-evidence";
+import { providerErrorBodyOf } from "@/api/lib/observability/provider-error-reason";
 
-export { AI_ERROR_KINDS };
 export type { AIErrorKind };
 
 const HTTP_SERVER_ERROR_MIN = 500;
+
+// Derive transport recovery from the failure owner's policy. A refused
+// connection or socket that never opened can indicate a bad endpoint, so it
+// remains unknown unless the destination owner explicitly classifies it.
+const TRANSIENT_PROVIDER_NETWORK_CODES = new Set(
+  Object.entries(NETWORK_ERROR_CODE_REASON)
+    .filter(([, reason]) => FAILURE_REASON_GRADE[reason] === "transient")
+    .map(([code]) => code),
+);
 
 // The run error codes of a stream that ended before its terminal event: the
 // provider stream contract's own, and the one TanStack's adapters report
@@ -47,6 +81,112 @@ const INCOMPLETE_STREAM_CODES: ReadonlySet<string> = new Set([
   INCOMPLETE_STREAM_CODE,
   "incomplete-stream",
 ]);
+
+/**
+ * The run error codes a chat turn ends with when its own runtime, not a
+ * provider, names why it stopped, by the kind each names: the computer a local
+ * turn ran on (`local-run-chunks.ts`), or the turn's delivery log
+ * (`ChatDeliveryError`). A model at capacity is the provider's outage,
+ * reported under its own code by the harness (`@stll/agent-engine` stream
+ * chunks).
+ */
+const RUNTIME_KIND_BY_CODE: ReadonlyMap<string, AIErrorKind> = new Map([
+  [AI_FAILURE_CODES.local_runner_needs_login, "local_runner_needs_login"],
+  [AI_FAILURE_CODES.local_runner_limit_reached, "local_runner_limit_reached"],
+  [AI_FAILURE_CODES.local_runner_unavailable, "local_runner_unavailable"],
+  [AI_FAILURE_CODES.local_runner_turn_too_large, "local_runner_turn_too_large"],
+  [AI_FAILURE_CODES.turn_too_large, "turn_too_large"],
+  [AI_FAILURE_CODES.local_runner_not_reached, "local_runner_not_reached"],
+  [AI_FAILURE_CODES.local_runner_relinked, "local_runner_relinked"],
+  [AI_FAILURE_CODES.local_runner_restoring, "local_runner_restoring"],
+  [
+    AI_FAILURE_CODES.local_runner_folder_unavailable,
+    "local_runner_folder_unavailable",
+  ],
+  [AI_FAILURE_CODES.local_runner_no_computer, "local_runner_no_computer"],
+  [
+    AI_FAILURE_CODES.local_runner_harness_unavailable,
+    "local_runner_harness_unavailable",
+  ],
+  [
+    AI_FAILURE_CODES.local_runner_model_unavailable,
+    "local_runner_model_unavailable",
+  ],
+  [
+    AI_FAILURE_CODES.local_runner_reasoning_effort_unavailable,
+    "local_runner_reasoning_effort_unavailable",
+  ],
+  [
+    AI_FAILURE_CODES.local_runner_approvals_unavailable,
+    "local_runner_approvals_unavailable",
+  ],
+  [
+    AI_FAILURE_CODES.local_runner_folder_not_approved,
+    "local_runner_folder_not_approved",
+  ],
+  [AI_FAILURE_CODES.provider_unavailable, "provider_unavailable"],
+]);
+
+/**
+ * The run error codes TanStack's structured-output engine and its adapters
+ * report for an answer that arrived but cannot be used, by what each means.
+ * A cut-off answer is incomplete however it was noticed: the adapter saw the
+ * output ceiling (`max_tokens`), or the JSON it produced stops mid-value and
+ * does not parse (the adapter's `parse-error`, the engine's own
+ * `structured-output-parse-failed`). A complete answer the schema rejects is
+ * invalid. The output-ceiling stop itself is read by
+ * `isOutputCeilingStopReport`, which also knows OpenAI's spelling.
+ */
+const STRUCTURED_OUTPUT_FAILURE_CODE_KIND = {
+  "parse-error": "output_incomplete",
+  "structured-output-parse-failed": "output_incomplete",
+  "structured-output-validation-failed": "output_invalid",
+} as const satisfies Record<string, AIErrorKind>;
+
+// Own keys only, so a code named `toString` reads as unknown.
+const STRUCTURED_OUTPUT_FAILURE_KIND_BY_CODE: ReadonlyMap<string, AIErrorKind> =
+  new Map(Object.entries(STRUCTURED_OUTPUT_FAILURE_CODE_KIND));
+
+const structuredOutputFailureKind = (
+  error: Record<string, unknown>,
+): AIErrorKind | null => {
+  if (
+    isOutputCeilingStopReport({
+      code: error["code"],
+      message: error["message"],
+    })
+  ) {
+    return "output_incomplete";
+  }
+  const code = error["code"];
+  return typeof code === "string"
+    ? (STRUCTURED_OUTPUT_FAILURE_KIND_BY_CODE.get(code) ?? null)
+    : null;
+};
+
+/**
+ * The model-run failures this service names itself, by class. Total over the
+ * classes, so a new named run failure is a compile-time decision here.
+ */
+const NAMED_RUN_FAILURE_KINDS = [
+  [ModelOutputIncompleteError, "output_incomplete"],
+  [ModelOutputInvalidError, "output_invalid"],
+  [ModelOutputModeratedError, "output_moderated"],
+  [ModelRunUnfinishedError, "provider_stream_incomplete"],
+  [ModelDeadlineExceededError, "deadline_exceeded"],
+] as const satisfies readonly (readonly [
+  abstract new (...args: never) => Error,
+  AIErrorKind,
+])[];
+
+const namedRunFailureKind = (error: unknown): AIErrorKind | null => {
+  for (const [ErrorClass, kind] of NAMED_RUN_FAILURE_KINDS) {
+    if (error instanceof ErrorClass) {
+      return kind;
+    }
+  }
+  return null;
+};
 
 // TanStack preserves these provider-owned response-body values when an adapter
 // cannot preserve the numeric status itself (notably OpenAI's 401 response).
@@ -58,28 +198,47 @@ const PROVIDER_CREDENTIAL_REJECTION_MARKERS = new Set([
 const hasProviderCredentialRejectionMarker = (value: unknown): boolean =>
   typeof value === "string" && PROVIDER_CREDENTIAL_REJECTION_MARKERS.has(value);
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  value !== null && typeof value === "object";
+type ProviderResponsePurpose = "classification" | "facts";
 
-/**
- * The provider HTTP status one link of an error chain carries, or `null` when
- * that link carries none of its own.
- *
- * Exported because every decision taken on a provider status has to read it
- * the same way: naming the failure here, and the service-tier retry predicate
- * in `tanstack-ai-generate`. A second reader drifts, and it drifts silently,
- * because both agree on the shape the tests happen to use and disagree on the
- * one production sends. The `HandlerError` exclusion is exactly such a
- * disagreement: a reader without it names every wrapped failure 502 and reads
- * a permanent credential, billing or retired-model answer as a server error.
- * The rule lives with the failure snapshot, so the status a failure is graded
- * and logged with is the one it is answered with.
- */
+/** A classified provider error owns its kind; its response still owns the facts. */
+const selectProviderResponse = (
+  error: unknown,
+  purpose: ProviderResponsePurpose,
+) => {
+  const seen = new Set<object>();
+  let current = error;
+  while (isNonNullObject(current) && !seen.has(current)) {
+    seen.add(current);
+    if (purpose === "classification" && current instanceof ProviderCallError) {
+      return undefined;
+    }
+    const { status } = providerResponseEvidence(current);
+    if (status !== undefined) {
+      return { status: status.status, source: current };
+    }
+    current = errorCause(current);
+  }
+  return undefined;
+};
+
+export const providerFailureFacts = (error: unknown) => {
+  const response = selectProviderResponse(error, "facts");
+  if (response === undefined) {
+    return undefined;
+  }
+  const isRetryable = response.source["isRetryable"];
+  return {
+    status: response.status,
+    ...(typeof isRetryable === "boolean" ? { isRetryable } : {}),
+  };
+};
+
+/** Read the upstream status through wrappers without using HandlerError's own status. */
 export const providerStatusCode = (error: unknown): number | null =>
-  readProviderStatus(error)?.status ?? null;
+  providerFailureFacts(error)?.status ?? null;
 
 const isProviderCredentialRejection = (error: unknown): boolean => {
-  if (!isRecord(error)) {
+  if (!isNonNullObject(error)) {
     return false;
   }
 
@@ -92,7 +251,7 @@ const isProviderCredentialRejection = (error: unknown): boolean => {
 
   const body = error["error"];
   return (
-    isRecord(body) &&
+    isNonNullObject(body) &&
     (hasProviderCredentialRejectionMarker(body["code"]) ||
       hasProviderCredentialRejectionMarker(body["type"]))
   );
@@ -127,16 +286,12 @@ const isAwsExceptionName = (name: unknown): name is AwsExceptionName =>
 // `$fault` marks an AWS SDK service exception; the name alone does not, since
 // any error can be named `ThrottlingException`.
 const awsExceptionKind = (error: unknown): AIErrorKind | null => {
-  if (!isRecord(error) || !AWS_FAULTS.has(String(error["$fault"]))) {
+  if (!isNonNullObject(error) || !AWS_FAULTS.has(String(error["$fault"]))) {
     return null;
   }
   const name = error["name"];
   return isAwsExceptionName(name) ? AWS_EXCEPTION_KINDS[name] : null;
 };
-
-const isProviderError = (error: unknown): boolean =>
-  isRecord(error) &&
-  (providerStatusCode(error) !== null || isProviderCredentialRejection(error));
 
 /**
  * The provider's structured error body, recovered from a stream error message.
@@ -155,69 +310,85 @@ const isProviderError = (error: unknown): boolean =>
 export const providerErrorBody = (
   message: string,
 ): Record<string, unknown> | undefined => {
-  // `JSON.parse` skips leading whitespace, so the guard must too; otherwise a
-  // body an adapter passed through verbatim would be dropped over a newline.
-  if (!message.trimStart().startsWith("{")) {
+  const trimmed = message.trimStart();
+  // TanStack's OpenAI-compatible adapters prefix an in-stream HTTP error
+  // rather than forwarding rawEvent. Only this complete envelope is accepted;
+  // arbitrary prose containing JSON is not provider status evidence.
+  const prefixed = /^got status: ([1-5]\d{2})\.\s*(\{[\s\S]*\})\s*$/u.exec(
+    trimmed,
+  );
+  const body = prefixed?.[2] ?? trimmed;
+  if (!body.startsWith("{")) {
     return undefined;
   }
-  const parsed = Result.try((): unknown => JSON.parse(message));
-  if (Result.isError(parsed)) {
+  const parsed = Result.try((): unknown => JSON.parse(body));
+  if (Result.isError(parsed) || !isNonNullObject(parsed.value)) {
     return undefined;
   }
-  return isRecord(parsed.value) ? parsed.value : undefined;
+  if (prefixed === null) {
+    return parsed.value;
+  }
+  const status = parseIntegerToken(prefixed[1]);
+  return Result.isError(status)
+    ? undefined
+    : { ...parsed.value, status: status.value };
+};
+
+// Both classification and status extraction normalize messages at this boundary.
+const providerMessageBody = (error: unknown) =>
+  error instanceof Error ? providerErrorBody(error.message) : undefined;
+
+// Structured status owns the response. Only recover message evidence when it
+// is absent, so classification and preserved facts cannot disagree.
+const providerResponseEvidence = (error: unknown) => {
+  const structuredStatus = readProviderStatus(error);
+  if (structuredStatus !== undefined) {
+    return { status: structuredStatus, credentialsRejected: false };
+  }
+  const body = providerMessageBody(error);
+  return {
+    status: readProviderStatus(body),
+    credentialsRejected:
+      isProviderCredentialRejection(error) ||
+      isProviderCredentialRejection(body),
+  };
 };
 
 const errorCause = (error: unknown): unknown => {
-  if (!isRecord(error)) {
+  if (!isNonNullObject(error)) {
     return undefined;
   }
   return error["cause"];
 };
 
-const classifyAIErrorInternal = (
-  error: unknown,
-  seen: Set<object>,
-): AIErrorKind => {
-  if (error instanceof ProviderCallError) {
-    return error.kind;
-  }
-  if (isRecord(error)) {
-    if (seen.has(error)) {
-      return "unknown";
-    }
-    seen.add(error);
-  }
+const UNAVAILABLE_MODEL_CODES: ReadonlySet<string> = new Set([
+  "model_not_found",
+]);
 
-  if (isRecord(error) && error["code"] === MANAGED_PROVIDER_UNAVAILABLE_CODE) {
-    return "model_unavailable";
-  }
+const namesUnavailableModel = (source: unknown): boolean =>
+  [
+    providerErrorBodyOf(source),
+    providerErrorBodyOf(providerMessageBody(source)),
+  ]
+    .map((body) => body?.["code"])
+    .some(
+      (code) => typeof code === "string" && UNAVAILABLE_MODEL_CODES.has(code),
+    );
 
-  if (ChatLoopDetectedError.is(error)) {
-    return "loop_detected";
+const providerResponseKind = (error: unknown): AIErrorKind | null => {
+  const response = selectProviderResponse(error, "classification");
+  const statusCode = response?.status ?? null;
+  const { credentialsRejected } = providerResponseEvidence(error);
+  if (response === undefined && !credentialsRejected) {
+    return null;
   }
-  if (ChatEmptyCompletionError.is(error)) {
-    return "empty_completion";
-  }
-  // A stream that stopped before its terminal event, named by the provider
-  // stream contract or by the adapter itself.
-  if (isRecord(error) && INCOMPLETE_STREAM_CODES.has(String(error["code"]))) {
-    return "provider_stream_incomplete";
-  }
-  // TanStack wraps provider RUN_ERROR events in a 502 HandlerError. Preserve a
-  // recognised provider cause so a permanent provider response does not look
-  // like a transient transport outage.
-  if (HandlerError.is(error) && error.cause !== undefined) {
-    const causeKind = classifyAIErrorInternal(error.cause, seen);
-    if (causeKind !== "unknown") {
-      return causeKind;
+  if (response !== undefined) {
+    const awsKind = awsExceptionKind(response.source);
+    if (awsKind !== null) {
+      return awsKind;
     }
   }
-  const awsKind = awsExceptionKind(error);
-  if (awsKind !== null) {
-    return awsKind;
-  }
-  if (isProviderError(error)) {
-    const statusCode = providerStatusCode(error);
+  if (statusCode !== null || credentialsRejected) {
     if (statusCode === 429) {
       return "quota_exhausted";
     }
@@ -236,12 +407,9 @@ const classifyAIErrorInternal = (
     // Only a provider status or explicit provider-owned credential marker
     // counts, which is what keeps a 401 this service raised itself out of
     // here: its curated copy would otherwise be replaced by the provider's.
-    // A provider 403 stays unmapped because it is ambiguous (permission,
-    // region, or account state) where a 401 is not.
-    if (
-      statusCode === 401 ||
-      (statusCode === null && isProviderCredentialRejection(error))
-    ) {
+    // A provider 403 otherwise stays unmapped because it is ambiguous
+    // (permission, region, or account state) where a 401 is not.
+    if (statusCode === 401 || (statusCode === null && credentialsRejected)) {
       return "provider_credentials_rejected";
     }
     // A 404 on a generate/stream call means the provider no longer
@@ -250,9 +418,107 @@ const classifyAIErrorInternal = (
     if (statusCode === 404) {
       return "model_unavailable";
     }
+    // A 403 whose body names the model as the refused resource is the same
+    // configuration state: the key cannot use the configured model.
+    if (statusCode === 403 && namesUnavailableModel(response?.source)) {
+      return "model_unavailable";
+    }
     if (statusCode !== null && statusCode >= HTTP_SERVER_ERROR_MIN) {
       return "provider_unavailable";
     }
+  }
+  return "unknown";
+};
+
+const classifyAIErrorInternal = (
+  error: unknown,
+  seen: Set<object>,
+): AIErrorKind => {
+  if (error instanceof ProviderCallError) {
+    return error.kind;
+  }
+  if (isNonNullObject(error)) {
+    if (seen.has(error)) {
+      return "unknown";
+    }
+    seen.add(error);
+  }
+
+  if (
+    isNonNullObject(error) &&
+    error["code"] === MANAGED_PROVIDER_UNAVAILABLE_CODE
+  ) {
+    return "model_unavailable";
+  }
+
+  const namedKind = namedRunFailureKind(error);
+  if (namedKind !== null) {
+    return namedKind;
+  }
+  if (ChatRunLogRefusedError.is(error)) {
+    return CHAT_RUN_LOG_REFUSAL_KIND[error.reason];
+  }
+  if (isNonNullObject(error)) {
+    const structuredKind = structuredOutputFailureKind(error);
+    if (structuredKind !== null) {
+      return structuredKind;
+    }
+  }
+
+  if (isNonNullObject(error) && typeof error["code"] === "string") {
+    const runtimeKind = RUNTIME_KIND_BY_CODE.get(error["code"]);
+    if (runtimeKind !== undefined) {
+      return runtimeKind;
+    }
+  }
+  if (ChatLoopDetectedError.is(error)) {
+    return "loop_detected";
+  }
+  if (ChatEmptyCompletionError.is(error)) {
+    return "empty_completion";
+  }
+  // A stream that stopped before its terminal event, named by the provider
+  // stream contract or by the adapter itself.
+  if (
+    isNonNullObject(error) &&
+    INCOMPLETE_STREAM_CODES.has(String(error["code"]))
+  ) {
+    return "provider_stream_incomplete";
+  }
+  // Finding a response is terminal even when its status has no mapped kind.
+  // Otherwise a later cause can disagree with the status retained above.
+  const providerKind = providerResponseKind(error);
+  if (providerKind !== null) {
+    return providerKind;
+  }
+  // An adapter can forward the provider's error body without its status. The
+  // body still names an account out of credit, which only its owner can fix.
+  const providerBody = providerErrorBodyOf(error);
+  if (
+    providerBody !== undefined &&
+    isProviderAccountOutOfCredit(providerBody)
+  ) {
+    return "provider_billing";
+  }
+  // TanStack wraps provider RUN_ERROR events in a 502 HandlerError. Preserve a
+  // recognised provider cause so a permanent provider response does not look
+  // like a transient transport outage.
+  if (HandlerError.is(error) && error.cause !== undefined) {
+    const causeKind = classifyAIErrorInternal(error.cause, seen);
+    if (causeKind !== "unknown") {
+      return causeKind;
+    }
+  }
+  const awsKind = awsExceptionKind(error);
+  if (awsKind !== null) {
+    return awsKind;
+  }
+  if (
+    isNonNullObject(error) &&
+    typeof error["code"] === "string" &&
+    TRANSIENT_PROVIDER_NETWORK_CODES.has(error["code"])
+  ) {
+    return "provider_unavailable";
   }
   // Walk through any wrapper that carries the original provider error
   // on `cause` (e.g. our own `WorkflowIntegrationError`, or generic
@@ -366,6 +632,55 @@ export const isAnticipatedAIFailure = (
   isCancelledGeneration(error) ||
   (HandlerError.is(error) && error.status < HTTP_SERVER_ERROR_MIN);
 
+// Whether the same request could succeed a moment later. A retry resends the
+// whole request, so it is wasted on a failure only a person can fix.
+const AI_FAILURE_CAN_CLEAR_ON_RETRY = {
+  quota_exhausted: true,
+  provider_billing: false,
+  provider_credentials_rejected: false,
+  model_unavailable: false,
+  provider_unavailable: true,
+  provider_stream_incomplete: true,
+  output_incomplete: true,
+  output_moderated: true,
+  output_invalid: true,
+  deadline_exceeded: true,
+  loop_detected: true,
+  empty_completion: true,
+  local_runner_needs_login: false,
+  local_runner_limit_reached: false,
+  local_runner_unavailable: true,
+  local_runner_turn_too_large: false,
+  turn_too_large: false,
+  local_runner_not_reached: true,
+  local_runner_relinked: true,
+  local_runner_restoring: true,
+  local_runner_folder_unavailable: false,
+  local_runner_no_computer: false,
+  local_runner_harness_unavailable: false,
+  local_runner_model_unavailable: false,
+  local_runner_reasoning_effort_unavailable: false,
+  local_runner_approvals_unavailable: false,
+  local_runner_folder_not_approved: false,
+  unknown: true,
+} as const satisfies Record<AIErrorKind, boolean>;
+
+// The provider refused this request as built, for example because it overflows
+// the model's context window. No failure kind names these.
+const REJECTED_REQUEST_STATUSES: ReadonlySet<number> = new Set([400, 413]);
+
+/**
+ * Whether a failed model request could succeed if sent again unchanged: the
+ * one rule every caller that retries a model request applies.
+ */
+export const aiFailureCanClearOnRetry = (error: unknown): boolean => {
+  const status = providerStatusCode(error);
+  if (status !== null && REJECTED_REQUEST_STATUSES.has(status)) {
+    return false;
+  }
+  return AI_FAILURE_CAN_CLEAR_ON_RETRY[classifyAIError(error)];
+};
+
 /**
  * The same judgement for a sink that holds no classified kind of its own.
  *
@@ -387,16 +702,7 @@ type AIHandlerErrorFallback = {
 
 // The failure reason each named kind is observed as. Total over the named
 // kinds, so a new kind cannot ship without deciding how a sink grades it.
-export const AI_ERROR_KIND_FAILURE_REASON = {
-  quota_exhausted: "quota_exhausted",
-  provider_billing: "provider_billing",
-  provider_credentials_rejected: "provider_credentials_rejected",
-  model_unavailable: "model_unavailable",
-  provider_unavailable: "provider_unavailable",
-  provider_stream_incomplete: "provider_stream_incomplete",
-  loop_detected: "chat_loop_detected",
-  empty_completion: "chat_empty_completion",
-} as const satisfies Record<Exclude<AIErrorKind, "unknown">, FailureReason>;
+export const AI_ERROR_KIND_FAILURE_REASON = PROVIDER_CALL_FAILURE_REASON;
 
 /**
  * Name a failure at the AI boundary, and classify it for every sink that
@@ -404,11 +710,31 @@ export const AI_ERROR_KIND_FAILURE_REASON = {
  * unbounded walk, is the one a sink records, so a bare provider error and the
  * same error wrapped by `aiHandlerError` grade alike.
  */
+/**
+ * Grade a provider 400 that no kind names as a request this service built
+ * and the provider refused (`provider_request_rejected`, a defect), rather
+ * than leaving it unclassified. A kind already decided keeps its own grade.
+ */
+export const classifyRejectedProviderRequest = (
+  error: unknown,
+  kind: AIErrorKind,
+): void => {
+  if (
+    kind === "unknown" &&
+    typeof error === "object" &&
+    error !== null &&
+    providerStatusCode(error) === 400
+  ) {
+    classifyFailure(error, "provider_request_rejected");
+  }
+};
+
 export const classifyAIBoundaryFailure = (error: unknown): AIErrorKind => {
   const kind = classifyAIError(error);
   if (kind !== "unknown" && typeof error === "object" && error !== null) {
     classifyFailure(error, AI_ERROR_KIND_FAILURE_REASON[kind]);
   }
+  classifyRejectedProviderRequest(error, kind);
   return kind;
 };
 
@@ -417,9 +743,11 @@ const aiKindHandlerError = (
   error: unknown,
   fallback: AIHandlerErrorFallback,
 ): HandlerError => {
+  const code = AI_FAILURE_CODES[kind];
   switch (kind) {
     case "quota_exhausted":
       return new HandlerError({
+        code,
         status: 429,
         message:
           "The AI provider's quota is exhausted. Try again shortly, or contact your workspace admin.",
@@ -427,6 +755,7 @@ const aiKindHandlerError = (
       });
     case "provider_billing":
       return new HandlerError({
+        code,
         status: 402,
         message:
           "The AI provider reported a billing or credit problem. An administrator should check the provider account.",
@@ -434,6 +763,7 @@ const aiKindHandlerError = (
       });
     case "provider_credentials_rejected":
       return new HandlerError({
+        code,
         status: 502,
         message:
           "The AI provider rejected the configured credentials. An administrator should check the provider API key in organization settings.",
@@ -441,6 +771,7 @@ const aiKindHandlerError = (
       });
     case "model_unavailable":
       return new HandlerError({
+        code,
         status: 502,
         message:
           "The configured AI model is no longer available from the provider. An administrator should update the model in organization settings.",
@@ -448,6 +779,7 @@ const aiKindHandlerError = (
       });
     case "provider_unavailable":
       return new HandlerError({
+        code,
         status: 502,
         message:
           "The AI provider is temporarily unavailable. Please try again in a moment.",
@@ -455,13 +787,47 @@ const aiKindHandlerError = (
       });
     case "provider_stream_incomplete":
       return new HandlerError({
+        code,
         status: 502,
         message:
           "The AI model's reply was cut off before it finished. Please try again.",
         cause: error,
       });
+    case "output_incomplete":
+      return new HandlerError({
+        code,
+        status: 502,
+        message:
+          "The AI model's answer was cut off before it was complete. Please try again.",
+        cause: error,
+      });
+    case "output_invalid":
+      return new HandlerError({
+        code,
+        status: 502,
+        message:
+          "The AI model's answer did not have the expected structure. Please try again.",
+        cause: error,
+      });
+    case "output_moderated":
+      return new HandlerError({
+        code,
+        status: 502,
+        message:
+          "The AI provider stopped the answer under its content policy. Rephrase the request or choose another model.",
+        cause: error,
+      });
+    case "deadline_exceeded":
+      return new HandlerError({
+        code,
+        status: 502,
+        message:
+          "The AI model did not answer in time. Please try again in a moment.",
+        cause: error,
+      });
     case "loop_detected":
       return new HandlerError({
+        code,
         status: 502,
         message:
           "The AI model repeated the same work and could not recover. Please try again with a narrower request.",
@@ -469,13 +835,31 @@ const aiKindHandlerError = (
       });
     case "empty_completion":
       return new HandlerError({
+        code,
         status: 502,
         message:
           "The AI model returned an empty reply. Please try again, or rephrase the request.",
         cause: error,
       });
+    // A computer's run and a turn's delivery limit end a chat turn, never a
+    // request this maps; the code still names the reason for whoever reads one.
+    case "local_runner_needs_login":
+    case "local_runner_limit_reached":
+    case "local_runner_unavailable":
+    case "local_runner_turn_too_large":
+    case "turn_too_large":
+    case "local_runner_not_reached":
+    case "local_runner_relinked":
+    case "local_runner_restoring":
+    case "local_runner_folder_unavailable":
+    case "local_runner_no_computer":
+    case "local_runner_harness_unavailable":
+    case "local_runner_model_unavailable":
+    case "local_runner_reasoning_effort_unavailable":
+    case "local_runner_approvals_unavailable":
+    case "local_runner_folder_not_approved":
     case "unknown":
-      return new HandlerError({ ...fallback, cause: error });
+      return new HandlerError({ ...fallback, code, cause: error });
     default: {
       kind satisfies never;
       return panic(`Unhandled kind: ${String(kind)}`);
@@ -492,12 +876,22 @@ const aiKindHandlerError = (
  * status answers the caller, the classification tells a failure sink what
  * happened. A provider 429 answered 429 is still an exhausted quota, not a
  * client error. For everything else, returns the caller's fallback so
- * unrelated bugs aren't masked as "AI unavailable".
+ * unrelated bugs aren't masked as "AI unavailable"; a cancelled generation
+ * keeps that fallback and is classified as cancelled.
  */
 export const aiHandlerError = (
   error: unknown,
   fallback: AIHandlerErrorFallback,
 ): HandlerError => {
+  // Raised before any model call, so no provider failure kind describes it.
+  if (DocumentTooLargeError.is(error)) {
+    return new HandlerError({
+      code: DOCUMENT_TOO_LARGE_ERROR_CODE,
+      status: 413,
+      message: error.message,
+      cause: error,
+    });
+  }
   const kind = classifyAIBoundaryFailure(error);
   const mapped = aiKindHandlerError(kind, error, fallback);
   const handlerError =
@@ -505,33 +899,44 @@ export const aiHandlerError = (
       ? new ProviderCallError({
           model: { provider: error.provider, keySource: error.keySource },
           status: mapped.status,
-          code: error.code,
+          code: error.code ?? AI_FAILURE_CODES[kind],
           kind: error.kind,
           requestId: error.requestId,
+          providerDiagnostic: error.providerDiagnostic,
+          retryAfterMs: error.retryAfterMs,
           facts:
             error.providerStatus === undefined
               ? undefined
               : {
                   status: error.providerStatus,
-                  ...(isRecord(error.cause) &&
+                  ...(isNonNullObject(error.cause) &&
                   typeof error.cause["isRetryable"] === "boolean"
                     ? { isRetryable: error.cause["isRetryable"] }
                     : {}),
                 },
         })
       : mapped;
-  return kind === "unknown"
-    ? handlerError
-    : classifyFailure(handlerError, AI_ERROR_KIND_FAILURE_REASON[kind]);
+  if (kind !== "unknown") {
+    return classifyFailure(handlerError, AI_ERROR_KIND_FAILURE_REASON[kind]);
+  }
+  // The fallback wraps the helper's cancelled 502, and a grader reads a brand
+  // only at the failure node, so the wrapper carries the cancellation itself.
+  return isCancelledGeneration(error)
+    ? classifyFailure(handlerError, "generation_cancelled")
+    : handlerError;
 };
 
 type AIErrorStatusBody = {
   status: HandlerErrorStatusCode;
-  body: { message: string };
+  body: {
+    code: AIFailureCode;
+    message: string;
+    providerDiagnostic?: ProviderDiagnostic;
+  };
 };
 
 /**
- * Variant of `aiHandlerError` for handlers that build an Elysia
+ * Variant of `aiHandlerError` for handlers that build an HTTP core
  * `status()` response directly instead of returning `HandlerError`.
  * Returns `{ status, body }` so callers can spread it into
  * `status(status, body)`.
@@ -543,6 +948,17 @@ export const aiErrorStatusBody = (
   const handlerError = aiHandlerError(error, fallback);
   return {
     status: handlerError.status,
-    body: { message: handlerError.message },
+    body: {
+      // A code the handler error already carries (a configuration refusal such
+      // as the managed-provider one) is more precise than the classified kind.
+      code: isAIFailureCode(handlerError.code)
+        ? handlerError.code
+        : AI_FAILURE_CODES[classifyAIError(error)],
+      message: handlerError.message,
+      ...(handlerError instanceof ProviderCallError &&
+      handlerError.providerDiagnostic !== undefined
+        ? { providerDiagnostic: handlerError.providerDiagnostic }
+        : {}),
+    },
   };
 };

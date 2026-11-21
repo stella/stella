@@ -1,18 +1,27 @@
 import { panic } from "better-result";
 
-import { foldToAscii } from "@stll/text-normalize";
+import { parseIntegerToken } from "@stll/agent-input/numeric-token";
+import { foldToAscii, normalizeUnicode } from "@stll/text-normalize";
 
 import {
-  STATUTE_ALIASES,
+  type HungarianActDesignation,
+  hungarianDesignationCollection,
+  readHungarianActCitations,
+} from "./magyar-kozlony-designation";
+import {
   resolveStatuteAlias,
+  STATUTE_ALIASES,
   type StatuteAliasTarget,
 } from "./statute-aliases";
 import {
   CZE_CASE_LAW_REPORTER_TAIL_RE,
   STATUTE_GAZETTES,
+  statuteGazetteAbbreviation,
 } from "./statute-gazette";
 import {
+  isStatuteGazetteCountry,
   STATUTE_QUERY_CAPABILITIES,
+  type StatuteGazetteCountry,
   type StatuteQueryCountry,
 } from "./statute-query-capability";
 
@@ -45,7 +54,10 @@ export type StatuteQueryIntent =
  * lower-case, runs of any whitespace collapsed to one space.
  */
 export const foldStatuteQuery = (raw: string): string =>
-  foldToAscii(raw.normalize("NFKC")).toLowerCase().replace(/\s+/gu, " ").trim();
+  foldToAscii(normalizeUnicode(raw, "NFKC"))
+    .toLowerCase()
+    .replace(/\s+/gu, " ")
+    .trim();
 
 /** `Sb.`, `Z. z.`, `Ú.l. I` → `sb`, `zz`, `ul`: dots, spaces and series dropped. */
 const canonicalCollectionAbbreviation = (suffix: string): string =>
@@ -73,7 +85,7 @@ const collectionsByAbbreviation = (
 const COLLECTION_BY_ABBREVIATION = {
   cze: collectionsByAbbreviation(STATUTE_GAZETTES.cze),
   svk: collectionsByAbbreviation(STATUTE_GAZETTES.svk),
-} satisfies Record<StatuteQueryCountry, Readonly<Record<string, string>>>;
+} satisfies Record<StatuteGazetteCountry, Readonly<Record<string, string>>>;
 
 // The patterns below run on folded text, where every whitespace run is one
 // space, so they spell spaces literally instead of with `\s*` runs: two
@@ -108,7 +120,7 @@ const stripActPrefixWords = (folded: string): string => {
 };
 
 const actFromNumber = (
-  country: StatuteQueryCountry,
+  country: StatuteGazetteCountry,
   folded: string,
   provision: string | null,
 ): StatuteQueryIntent | null => {
@@ -131,6 +143,22 @@ const actFromNumber = (
       return null;
     }
     collection = collections[abbreviation] ?? null;
+    const spelling =
+      collection === null
+        ? null
+        : statuteGazetteAbbreviation(
+            collection,
+            parseIntegerToken(year, { sign: "unsigned" }).unwrap(
+              "Act number grammar captures a four-digit year",
+            ),
+          );
+    if (
+      spelling === null ||
+      canonicalCollectionAbbreviation(foldStatuteQuery(spelling)) !==
+        abbreviation
+    ) {
+      return null;
+    }
   }
 
   return {
@@ -156,7 +184,7 @@ const actFromAlias = (
 });
 
 const actIntent = (
-  country: StatuteQueryCountry,
+  country: StatuteGazetteCountry,
   folded: string,
   provision: string | null,
 ): StatuteQueryIntent | null => {
@@ -166,6 +194,45 @@ const actIntent = (
   }
   const alias = resolveStatuteAlias(country, folded);
   return alias === null ? null : actFromAlias(alias, provision);
+};
+
+// A code abbreviation typed into the box names the code in force now, the
+// latest reading the alias table holds.
+const LATEST_READING = "9999-12-31";
+
+// `6:519. §`, `25/G. §`, `10. §` after the act: the section the entry asks
+// the reader to jump to, as its outline prints it.
+const HUNGARIAN_SECTION_RE =
+  /(?<![\p{L}\p{N}/:])((?:\d{1,2}:)?\d{1,4}(?:\/[A-Z])?\. ?§)/u;
+
+const hungarianTarget = (
+  act: HungarianActDesignation,
+): { collection: string; number: string; year: string } => ({
+  collection: hungarianDesignationCollection(act),
+  number: String(act.number),
+  year: String(act.year),
+});
+
+/**
+ * A Hungarian entry naming exactly one act by its gazette designation or a
+ * code abbreviation (`Ptk.`), with the section it names after the act.
+ */
+const hungarianIntent = (text: string): StatuteQueryIntent | null => {
+  const [act, ...others] = readHungarianActCitations(text, LATEST_READING);
+  if (act === undefined || others.length > 0) {
+    return null;
+  }
+  // Compatibility-normalised with whitespace runs as one space, as the act
+  // grammar reads it, so a non-breaking space does not hide the section.
+  const section = HUNGARIAN_SECTION_RE.exec(
+    normalizeUnicode(text, "NFKC").replace(/\s+/gu, " "),
+  )?.[1];
+  return {
+    type: "act",
+    ...hungarianTarget(act),
+    label: null,
+    provision: section === undefined ? null : section.replace(/\. ?§$/u, ". §"),
+  };
 };
 
 /**
@@ -181,6 +248,9 @@ export const parseStatuteQuery = (
   const text = raw.trim();
   if (text.length === 0) {
     return { type: "empty" };
+  }
+  if (!isStatuteGazetteCountry(country)) {
+    return hungarianIntent(text) ?? { type: "text", text };
   }
   const folded = foldStatuteQuery(text);
 
@@ -269,11 +339,9 @@ const EMBEDDED_ALIAS_POLICY = {
     "spravny poriadok": "title",
   },
 } as const satisfies {
-  [Country in StatuteQueryCountry]: {
+  [Country in StatuteGazetteCountry]: {
     [Alias in keyof (typeof STATUTE_ALIASES)[Country]]:
-      | "whole-query"
-      | "title"
-      | readonly string[];
+      "whole-query" | "title" | readonly string[];
   };
 };
 
@@ -288,8 +356,15 @@ export const readStatuteQueryReferences = (
   country: StatuteQueryCountry,
   raw: string,
 ): StatuteQueryReference[] => {
+  if (!isStatuteGazetteCountry(country)) {
+    return readHungarianActCitations(raw, LATEST_READING).map((act) => ({
+      country,
+      ...hungarianTarget(act),
+      label: null,
+    }));
+  }
   const folded = foldStatuteQuery(raw);
-  const casePreserved = foldToAscii(raw.normalize("NFKC"))
+  const casePreserved = foldToAscii(normalizeUnicode(raw, "NFKC"))
     .replace(/\s+/gu, " ")
     .trim();
   const wholeQuery = parseStatuteQuery(country, raw);

@@ -24,13 +24,14 @@
       "@stll/money": ["../../packages/money/src/index.ts"],
       "@stll/permissions": ["../../packages/permissions/src/index.ts"],
       "@stll/skills": ["../../packages/skills/src/index.ts"],
-      "@stll/time": ["../../packages/time/src/index.ts"],
       "@stll/transactional": ["../../packages/transactional/src/index.ts"],
       "@stll/transactional/*": ["../../packages/transactional/*"],
       "@/api/*": ["../api/src/*"]
     },
     "types": ["bun-types"]
   },
-  "include": ["src", "../api/src", "../../types"],
-  "exclude": ["node_modules", "../api/src/mcp/apps"]
+  // Imported API modules are checked through traversal; the API's own projects
+  // cover the remaining sources without rooting them in this runner as well.
+  "include": ["src", "../../types"],
+  "exclude": ["node_modules", "../api/src/handlers/visual-sandbox/browser"]
 }

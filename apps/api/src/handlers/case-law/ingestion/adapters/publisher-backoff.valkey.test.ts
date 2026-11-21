@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import { createRedisClient } from "@/api/lib/redis-client";
+import { HAPPY_PATH_TIMEOUT_MS } from "@/api/tests/test-timeouts";
 
 import {
   createPublisherGateSlot,
@@ -10,8 +11,8 @@ import {
 import {
   abortableSleep,
   createPublisherRequestSlot,
-  publisherGateKeys,
   type PublisherGateClient,
+  publisherGateKeys,
   type PublisherRequestGateDependencies,
 } from "./publisher-request-gate";
 import { PublisherRateLimitRefusalError, retryPublisherRequest } from "./retry";
@@ -51,6 +52,7 @@ const withStore = async (run: (store: PublisherStore) => Promise<void>) => {
           {
             intervalMs,
             key: slot,
+            publisherCode: "cellar-eu",
             publisher: "ECJ backoff test",
             cooldown: "shared",
           },
@@ -227,7 +229,8 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
             if (args.at(2) === cooldownKey && args.length === 4) {
               publishedDurations.push(Number(args.at(3)));
             }
-            return await first.send(command, args);
+            const reply: unknown = await first.send(command, args);
+            return reply;
           },
         };
         const firstGate = gate({ client: observed });
@@ -240,7 +243,7 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
           {
             adapterKey: ADAPTER_KEYS.EU_ECJ,
             fetchStage: "listing",
-            timeoutMs: 1000,
+            timeoutMs: HAPPY_PATH_TIMEOUT_MS,
           },
           {
             request: async (_url, init) => {
@@ -305,7 +308,7 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
           {
             adapterKey: ADAPTER_KEYS.EU_ECJ,
             fetchStage: "listing",
-            timeoutMs: 1000,
+            timeoutMs: HAPPY_PATH_TIMEOUT_MS,
           },
           {
             request: async (_url, init) => {
@@ -524,7 +527,7 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
         const checkedKeys = new Set<string>();
         const observed: PublisherGateClient = {
           send: async (command, args) => {
-            const response = await first.send(command, args);
+            const response: unknown = await first.send(command, args);
             const keyCount = Number(args.at(1));
             for (const scriptKey of args.slice(2, 2 + keyCount)) {
               const ttl = await first.send("PTTL", [scriptKey]);

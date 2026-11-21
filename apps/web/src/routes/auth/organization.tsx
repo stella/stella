@@ -1,77 +1,27 @@
-import * as React from "react";
-import { useRef } from "react";
-
-import { useForm, useSelector } from "@tanstack/react-form";
-import {
-  type QueryClient,
-  useMutation,
-  useQuery,
-  useQueryClient,
-} from "@tanstack/react-query";
-import {
-  createFileRoute,
-  Navigate,
-  redirect,
-  useNavigate,
-} from "@tanstack/react-router";
-import { panic } from "better-result";
-import { useTranslations } from "use-intl";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 import * as v from "valibot";
 
-import { Avatar, AvatarFallback } from "@stll/ui/avatar";
-import { Button } from "@stll/ui/button";
-import { Field, FieldError, FieldLabel } from "@stll/ui/field";
-import { Form } from "@stll/ui/form";
 import {
-  Frame,
-  FrameDescription,
-  FrameHeader,
-  FramePanel,
-  FrameTitle,
-} from "@stll/ui/frame";
-import { getInitials } from "@stll/ui/initials";
-import { Input } from "@stll/ui/input";
-import { Skeleton } from "@stll/ui/skeleton";
-
-import { useExternalSyncEffect } from "@/hooks/use-effect";
-import { useHydrated } from "@/hooks/use-hydrated";
-import { useAnalytics } from "@/lib/analytics/provider";
-import { optionalArray } from "@/lib/arrays";
-import { authClient } from "@/lib/auth-client";
-import { refreshAuthQueries } from "@/lib/auth-queries";
-import { detached } from "@/lib/detached";
-import { toAuthClientError } from "@/lib/errors/auth";
-import {
-  notifyAuthClientError,
-  notifyUserError,
-} from "@/lib/errors/user-toast";
-import {
+  getOauthContinuationHref,
   getOauthHashFragment,
-  getOauthRedirectUrl,
   getSignedOauthQueryFromHash,
   hasSignedOauthQuery,
 } from "@/lib/oauth-provider";
-import { organizationListOptions } from "@/lib/organization/queries";
-import { createSlug, getOrganizationSchema } from "@/lib/organization/utils";
 import {
+  destinationNavigation,
   isAcceptInvitationRedirect,
   normalizeRedirectTo,
-  onboardingNavigation,
 } from "@/lib/redirect";
-import { schemaFormOptions, toFormErrors } from "@/lib/schema";
+import { optionalFlagSearchSchema } from "@/lib/schema";
+import { routeSearchSchema } from "@/route-search-params";
 
-const searchSchema = v.object({
-  devQuickStart: v.optional(v.boolean()),
+import { OrganizationPage } from "./-organization.page";
+import { OrganizationPending } from "./-organization.pending";
+
+const searchSchema = routeSearchSchema({
+  devQuickStart: optionalFlagSearchSchema,
   redirectTo: v.optional(v.pipe(v.string(), v.transform(normalizeRedirectTo))),
 });
-
-const DevQuickStartContinuation = import.meta.env.DEV
-  ? React.lazy(async () => {
-      const module =
-        await import("@/routes/auth/-components/dev-quick-start-button");
-      return { default: module.DevQuickStartContinuation };
-    })
-  : null;
 
 export const Route = createFileRoute("/auth/organization")({
   validateSearch: searchSchema,
@@ -99,366 +49,32 @@ export const Route = createFileRoute("/auth/organization")({
     const isOauthPostLogin =
       bridgedQuery !== null || isOauthPostLoginFromSearch;
 
+    // A sign-in step hands the authorization on inside `redirectTo`. Picking
+    // here would set the organization without it and land on this page again
+    // with the request, or on the home page; resume it on this page first.
+    const continuation = isOauthPostLogin
+      ? null
+      : getOauthContinuationHref(search.redirectTo);
+
     const isDevQuickStart =
       import.meta.env.DEV && search.devQuickStart === true;
-    if (
+    const skipsPicking =
       !isDevQuickStart &&
       !isOauthPostLogin &&
-      (context.session.activeOrganizationId ||
-        isAcceptInvitationRedirect(search.redirectTo ?? "/"))
-    ) {
-      throw redirect({ to: search.redirectTo ?? "/", replace: true });
+      Boolean(
+        context.session.activeOrganizationId ||
+        isAcceptInvitationRedirect(search.redirectTo ?? "/"),
+      );
+    if (continuation !== null || skipsPicking) {
+      throw redirect(
+        continuation === null
+          ? destinationNavigation(search.redirectTo ?? "/")
+          : { href: continuation, replace: true },
+      );
     }
 
-    return { isOauthPostLoginFromSearch, userId: context.session.userId };
+    return { userId: context.session.userId };
   },
-  component: Organization,
+  component: OrganizationPage,
+  pendingComponent: OrganizationPending,
 });
-
-function Organization() {
-  const hydrated = useHydrated();
-  const { devQuickStart, redirectTo } = Route.useSearch({
-    select: (search) => ({
-      devQuickStart: search.devQuickStart,
-      redirectTo: search.redirectTo ?? "/",
-    }),
-  });
-
-  if (import.meta.env.DEV && devQuickStart && hydrated) {
-    if (DevQuickStartContinuation === null) {
-      return null;
-    }
-    return (
-      <React.Suspense fallback={<OrganizationSkeleton />}>
-        <DevQuickStartContinuation redirectTo={redirectTo} />
-      </React.Suspense>
-    );
-  }
-
-  if (!hydrated && import.meta.env.DEV && devQuickStart) {
-    return <OrganizationSkeleton />;
-  }
-
-  return <OrganizationFlow hydrated={hydrated} />;
-}
-
-const OrganizationSkeleton = () => (
-  <Frame className="w-full max-w-sm">
-    <FrameHeader>
-      <Skeleton className="h-5 w-48" />
-      <Skeleton className="mt-2 h-4 w-64" />
-    </FrameHeader>
-    <FramePanel className="flex flex-col gap-2">
-      <Skeleton className="h-16 w-full rounded-lg" />
-      <Skeleton className="h-16 w-full rounded-lg" />
-    </FramePanel>
-  </Frame>
-);
-
-const OrganizationFlow = ({ hydrated }: { hydrated: boolean }) => {
-  const userId = Route.useRouteContext({ select: (ctx) => ctx.userId });
-  const { data: organizations, isPending } = useQuery(
-    organizationListOptions(userId),
-  );
-  const redirectTo = Route.useSearch({ select: (search) => search.redirectTo });
-  const hasOrganizations = (organizations?.length ?? 0) > 0;
-  const isOauthPostLoginFromSearch = Route.useRouteContext({
-    select: (context) => context.isOauthPostLoginFromSearch,
-  });
-  const isOauthPostLogin =
-    isOauthPostLoginFromSearch ||
-    (hydrated && getSignedOauthQueryFromHash(window.location.hash) !== null);
-
-  if (hydrated && !isPending && !hasOrganizations && !isOauthPostLogin) {
-    return <Navigate {...onboardingNavigation(redirectTo)} />;
-  }
-
-  if (!hydrated || isPending || (!hasOrganizations && !isOauthPostLogin)) {
-    return <OrganizationSkeleton />;
-  }
-
-  return (
-    <div className="flex flex-1 items-center justify-center">
-      {hasOrganizations ? (
-        <OrganizationList
-          isOauthPostLogin={isOauthPostLogin}
-          organizations={optionalArray(organizations)}
-        />
-      ) : (
-        <CreateOrganizationForm isOauthPostLogin={isOauthPostLogin} />
-      )}
-    </div>
-  );
-};
-
-type OrganizationListProps = {
-  isOauthPostLogin: boolean;
-  organizations: { id: string; name: string; slug: string }[];
-};
-
-const completeOrganizationFlow = async ({
-  isOauthPostLogin,
-  navigate,
-  queryClient,
-  redirectTo,
-  status,
-}: {
-  isOauthPostLogin: boolean;
-  navigate: ReturnType<typeof useNavigate>;
-  queryClient: QueryClient;
-  redirectTo: string;
-  status: "created" | "selected";
-}) => {
-  // This route redirects once the refreshed session exposes an active
-  // organization. Refresh the auth caches without invalidating the current
-  // route; self-invalidation can leave that redirect transition pending.
-  await refreshAuthQueries(queryClient);
-
-  if (!isOauthPostLogin) {
-    await navigate({ to: redirectTo, replace: true });
-    return;
-  }
-
-  const result = await authClient.oauth2.continue({
-    ...(status === "created" ? { created: true } : { selected: true }),
-    postLogin: true,
-  });
-  if (result.error) {
-    throw toAuthClientError(result.error);
-  }
-
-  const redirectUrl = getOauthRedirectUrl(result.data);
-  if (!redirectUrl) {
-    panic("Missing OAuth continuation redirect URL");
-  }
-
-  window.location.href = redirectUrl;
-};
-
-const OrganizationList = ({
-  isOauthPostLogin,
-  organizations,
-}: OrganizationListProps) => {
-  const t = useTranslations();
-  const redirectTo = Route.useSearch({ select: (s) => s.redirectTo ?? "/" });
-  const analytics = useAnalytics();
-  const navigate = useNavigate();
-  const queryClient = useQueryClient();
-
-  const { isPending: isSelectPending, mutate: selectOrg } = useMutation({
-    mutationFn: async (organizationId: string) => {
-      const { error } = await authClient.organization.setActive({
-        organizationId,
-      });
-
-      if (error) {
-        notifyUserError(toAuthClientError(error), t("errors.actionFailed"));
-        throw toAuthClientError(error);
-      }
-
-      await completeOrganizationFlow({
-        isOauthPostLogin,
-        navigate,
-        queryClient,
-        redirectTo,
-        status: "selected",
-      });
-    },
-    onError: (error) => {
-      analytics.captureError(error);
-    },
-  });
-
-  // Auto-select when there's only one organization
-  const singleOrg = organizations.length === 1 ? organizations[0] : null;
-  const autoSelected = useRef(false);
-  useExternalSyncEffect(() => {
-    if (singleOrg && !autoSelected.current && !isSelectPending) {
-      autoSelected.current = true;
-      selectOrg(singleOrg.id);
-    }
-  }, [singleOrg, isSelectPending, selectOrg]);
-
-  // Show skeleton while auto-selecting the single org
-  // oxlint-disable-next-line react/refs -- one-time guard ref read during render only gates the initial skeleton (before the auto-select effect fires) and the error path; the re-render is driven by singleOrg/isSelectPending
-  if (singleOrg && (isSelectPending || !autoSelected.current)) {
-    return (
-      <Frame className="w-full max-w-sm">
-        <FrameHeader>
-          <Skeleton className="h-5 w-48" />
-          <Skeleton className="mt-2 h-4 w-64" />
-        </FrameHeader>
-        <FramePanel className="flex flex-col gap-2">
-          <Skeleton className="h-16 w-full rounded-lg" />
-        </FramePanel>
-      </Frame>
-    );
-  }
-
-  return (
-    <Frame className="w-full max-w-sm">
-      <FrameHeader>
-        <FrameTitle>{t("auth.selectOrganization")}</FrameTitle>
-        <FrameDescription>{t("auth.chooseOrganization")}</FrameDescription>
-      </FrameHeader>
-      <FramePanel className="flex flex-col gap-2">
-        {organizations.map((org) => (
-          <button
-            className="hover:bg-accent/50 flex w-full items-center gap-3 rounded-lg border px-4 py-3 text-start disabled:opacity-64"
-            disabled={isSelectPending}
-            key={org.id}
-            onClick={() => selectOrg(org.id)}
-            type="button"
-          >
-            <Avatar className="size-10">
-              <AvatarFallback>{getInitials(org.name)}</AvatarFallback>
-            </Avatar>
-            <div>
-              <p className="font-medium">{org.name}</p>
-              <p className="text-muted-foreground text-sm">{org.slug}</p>
-            </div>
-          </button>
-        ))}
-      </FramePanel>
-    </Frame>
-  );
-};
-
-const CreateOrganizationForm = ({
-  isOauthPostLogin,
-}: {
-  isOauthPostLogin: boolean;
-}) => {
-  const t = useTranslations();
-  const redirectTo = Route.useSearch({ select: (s) => s.redirectTo ?? "/" });
-  const analytics = useAnalytics();
-  const navigate = useNavigate();
-  const queryClient = useQueryClient();
-
-  const form = useForm(
-    schemaFormOptions({
-      schema: getOrganizationSchema(),
-      defaultValues: { name: "", slug: "" },
-      submitValues: "schema-output",
-      onSubmit: async ({ value, formApi }) => {
-        const { data: slugCheckData, error: slugCheckError } =
-          await authClient.organization.checkSlug({
-            slug: value.slug,
-          });
-
-        if (slugCheckError) {
-          analytics.captureError(toAuthClientError(slugCheckError));
-          notifyAuthClientError(slugCheckError, t("errors.actionFailed"));
-          return;
-        }
-
-        if (!slugCheckData.status) {
-          formApi.setErrorMap({
-            onSubmit: { fields: { slug: t("errors.slugAlreadyTaken") } },
-          });
-          return;
-        }
-
-        const { data, error: createError } =
-          await authClient.organization.create({
-            name: value.name,
-            slug: value.slug,
-          });
-
-        if (createError) {
-          analytics.captureError(toAuthClientError(createError));
-          notifyAuthClientError(createError, t("errors.actionFailed"));
-          return;
-        }
-
-        const { error: setActiveError } =
-          await authClient.organization.setActive({
-            organizationId: data.id,
-          });
-
-        if (setActiveError) {
-          analytics.captureError(toAuthClientError(setActiveError));
-          notifyAuthClientError(setActiveError, t("errors.actionFailed"));
-          return;
-        }
-
-        try {
-          await completeOrganizationFlow({
-            isOauthPostLogin,
-            navigate,
-            queryClient,
-            redirectTo,
-            status: "created",
-          });
-        } catch (error) {
-          analytics.captureError(error);
-          notifyUserError(error, t("errors.actionFailed"));
-        }
-      },
-    }),
-  );
-
-  const formErrors = useSelector(form.store, (s) => toFormErrors(s.fieldMeta));
-
-  return (
-    <Frame className="w-full max-w-sm">
-      <FrameHeader>
-        <FrameTitle>{t("auth.createOrganization")}</FrameTitle>
-        <FrameDescription>{t("auth.createFirstOrganization")}</FrameDescription>
-      </FrameHeader>
-      <FramePanel>
-        <Form
-          errors={formErrors}
-          onSubmit={(event) => {
-            event.preventDefault();
-            detached(form.handleSubmit(), "auth-organization.submit");
-          }}
-        >
-          <form.Field name="name">
-            {(field) => (
-              <Field name={field.name}>
-                <FieldLabel>{t("common.organizationName")}</FieldLabel>
-                <Input
-                  autoFocus
-                  onBlur={field.handleBlur}
-                  onChange={(event) => {
-                    const value = event.target.value;
-                    field.handleChange(value);
-                    form.setFieldValue("slug", createSlug(value));
-                  }}
-                  placeholder={t("auth.organizationNamePlaceholder")}
-                  required
-                  value={field.state.value}
-                />
-                <FieldError />
-              </Field>
-            )}
-          </form.Field>
-          <form.Field name="slug">
-            {(field) => (
-              <Field name={field.name}>
-                <FieldLabel>{t("common.urlIdentifier")}</FieldLabel>
-                <Input
-                  dir="ltr"
-                  onBlur={field.handleBlur}
-                  onChange={(event) => field.handleChange(event.target.value)}
-                  placeholder={t("common.urlIdentifierPlaceholder")}
-                  required
-                  value={field.state.value}
-                />
-                <FieldError />
-              </Field>
-            )}
-          </form.Field>
-          <form.Subscribe selector={(state) => state.isSubmitting}>
-            {(isSubmitting) => (
-              <Button className="w-full" loading={isSubmitting} type="submit">
-                {t("auth.createOrganizationButton")}
-              </Button>
-            )}
-          </form.Subscribe>
-        </Form>
-      </FramePanel>
-    </Frame>
-  );
-};

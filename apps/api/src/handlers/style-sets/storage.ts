@@ -16,7 +16,9 @@ import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { writeScannedObject } from "@/api/lib/file-scan/stored-object";
 import { deleteOrganizationFileWithSignal } from "@/api/lib/files/delete-organization-file";
 import { writeOrganizationFile } from "@/api/lib/files/organization-file-usage";
+import type { CheckedFileWrite } from "@/api/lib/files/organization-file-usage";
 import { LIMITS } from "@/api/lib/limits";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { assertUnchangedSince } from "@/api/lib/optimistic-concurrency";
 import { getS3 } from "@/api/lib/s3";
 import {
@@ -85,33 +87,23 @@ export const createStoredStyleSet = async ({
     const s3Key = buildStyleSetKey({ organizationId, styleSetId });
 
     yield* Result.await(claimPackageCleanup(s3Key, styleSetId, enqueueCleanup));
-    const writePackage = async () =>
+    const writePackage = async ({
+      content,
+      objectKey,
+    }: CheckedFileWrite<ScannedFile>) =>
       await writeScannedObject(
-        { file, key: s3Key },
+        { file: content, key: objectKey },
         { type: "style-set-cleanup", styleSetId },
       );
-    const { object: stored } = isDeploymentFeatureEnabled(
-      "FEATURE_FILE_USAGE_LIMITS",
-    )
-      ? yield* Result.await(
-          writeOrganizationFile({
-            organizationId,
-            objectKey: s3Key,
-            sizeBytes: file.bytes.byteLength,
-            write: writePackage,
-          }),
-        )
-      : yield* Result.await(
-          Result.tryPromise({
-            try: writePackage,
-            catch: (cause) =>
-              new HandlerError({
-                status: 500,
-                message: "Could not store the style set.",
-                cause,
-              }),
-          }),
-        );
+    const { object: stored } = yield* Result.await(
+      writeOrganizationFile({
+        organizationId,
+        objectKey: s3Key,
+        sizeBytes: file.bytes.byteLength,
+        content: file,
+        write: writePackage,
+      }),
+    );
 
     let persisted = false;
     try {
@@ -198,15 +190,17 @@ export const createStoredStyleSet = async ({
           }),
         );
         if (Result.isError(cleanup)) {
-          captureError(cleanup.error);
+          captureError(
+            cleanup.error,
+            handlerErrorContext("stylesets.createStoredStyleSet.cleanup_error"),
+          );
         }
       }
     }
   });
 
 type ReplacementName =
-  | { type: "preserve" }
-  | { type: "replace"; value: string };
+  { type: "preserve" } | { type: "replace"; value: string };
 
 type ReplaceStoredStyleSetOptions = {
   safeDb: SafeDb;
@@ -277,53 +271,33 @@ export const replaceStoredStyleSet = async ({
             }),
         }),
       );
-      yield* Result.await(
-        safeDb(async (tx) => {
-          // audit: skip — cleanup metadata for the audited replacement below
-          await tx
-            .update(styleSets)
-            .set({ cleanupS3Key: null })
-            .where(
-              and(
-                eq(styleSets.id, styleSetId),
-                eq(styleSets.organizationId, organizationId),
-                eq(styleSets.cleanupS3Key, cleanupS3Key),
-                isNull(styleSets.deletedAt),
-              ),
-            );
+      return Result.err(
+        new HandlerError({
+          status: 409,
+          message: "Previous style set cleanup is still pending",
         }),
       );
     }
 
     const s3Key = buildStyleSetKey({ organizationId, styleSetId });
     yield* Result.await(claimPackageCleanup(s3Key, styleSetId));
-    const writePackage = async () =>
+    const writePackage = async ({
+      content,
+      objectKey,
+    }: CheckedFileWrite<ScannedFile>) =>
       await writeScannedObject(
-        { file, key: s3Key },
+        { file: content, key: objectKey },
         { type: "style-set-cleanup", styleSetId },
       );
-    const { object: stored } = isDeploymentFeatureEnabled(
-      "FEATURE_FILE_USAGE_LIMITS",
-    )
-      ? yield* Result.await(
-          writeOrganizationFile({
-            organizationId,
-            objectKey: s3Key,
-            sizeBytes: file.bytes.byteLength,
-            write: writePackage,
-          }),
-        )
-      : yield* Result.await(
-          Result.tryPromise({
-            try: writePackage,
-            catch: (cause) =>
-              new HandlerError({
-                status: 500,
-                message: "Could not store the replacement style set.",
-                cause,
-              }),
-          }),
-        );
+    const { object: stored } = yield* Result.await(
+      writeOrganizationFile({
+        organizationId,
+        objectKey: s3Key,
+        sizeBytes: file.bytes.byteLength,
+        content: file,
+        write: writePackage,
+      }),
+    );
 
     let persisted = false;
     try {
@@ -421,6 +395,7 @@ export const replaceStoredStyleSet = async ({
         return Result.err(
           new HandlerError({
             status: 409,
+            code: "style_set_cleanup_pending",
             message: "Previous style set cleanup is still pending",
           }),
         );
@@ -444,25 +419,12 @@ export const replaceStoredStyleSet = async ({
           }),
       });
       if (Result.isError(cleanupResult)) {
-        captureError(cleanupResult.error);
-      } else {
-        const cleared = await safeDb(async (tx) => {
-          // audit: skip — cleanup metadata for the already-audited replacement
-          await tx
-            .update(styleSets)
-            .set({ cleanupS3Key: null })
-            .where(
-              and(
-                eq(styleSets.id, styleSetId),
-                eq(styleSets.organizationId, organizationId),
-                eq(styleSets.cleanupS3Key, replaced.oldS3Key),
-                isNull(styleSets.deletedAt),
-              ),
-            );
-        });
-        if (Result.isError(cleared)) {
-          captureError(cleared.error);
-        }
+        captureError(
+          cleanupResult.error,
+          handlerErrorContext(
+            "stylesets.replaceStoredStyleSet.cleanupResult_error",
+          ),
+        );
       }
       return Result.ok(replaced.row);
     } finally {
@@ -489,7 +451,12 @@ export const replaceStoredStyleSet = async ({
           }),
         );
         if (Result.isError(cleanup)) {
-          captureError(cleanup.error);
+          captureError(
+            cleanup.error,
+            handlerErrorContext(
+              "stylesets.replaceStoredStyleSet.cleanup_error",
+            ),
+          );
         }
       }
     }

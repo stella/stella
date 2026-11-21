@@ -1,19 +1,16 @@
-import {
-  Body,
-  Container,
-  Head,
-  Heading,
-  Hr,
-  Html,
-  Img,
-  Preview,
-  Section,
-  Text,
-} from "@react-email/components";
-
+import { Body } from "../components/body";
+import { Container } from "../components/container";
+import { Head } from "../components/head";
+import { Heading } from "../components/heading";
+import { Hr } from "../components/hr";
+import { Html } from "../components/html";
+import { Preview } from "../components/preview";
+import { Section } from "../components/section";
+import { Text } from "../components/text";
 import { getEmailDirection, getTranslator } from "../i18n/translate";
 import type { SupportedLang } from "../i18n/translate";
-import { BRAND_FOOTER_TEXT, ICON_URL, brand, sharedStyles } from "./_shared";
+import { brand, BRAND_FOOTER_TEXT, sharedStyles } from "./_shared";
+import { Wordmark } from "./_wordmark";
 
 const otpTypeKey = {
   "sign-in": "otp.signIn",
@@ -40,19 +37,11 @@ export const Email = ({ otp, type, lang }: Props) => {
       <Preview>{tr("otp.preview")}</Preview>
       <Body style={sharedStyles.body}>
         <Container style={sharedStyles.container}>
-          <Section style={sharedStyles.wordmarkSection}>
-            <Img
-              src={ICON_URL}
-              alt="stella"
-              width="40"
-              height="40"
-              style={{ margin: "0 auto", display: "block" }}
-            />
-          </Section>
+          <Wordmark />
           <Heading style={sharedStyles.heading}>{tr("otp.heading")}</Heading>
           <Text style={sharedStyles.text}>{tr(otpTypeKey[type])}</Text>
-          <Section style={styles["codeSection"]}>
-            <Text style={styles["code"]}>{otp}</Text>
+          <Section style={styles.codeSection}>
+            <Text style={styles.code}>{otp}</Text>
           </Section>
           <Text style={sharedStyles.muted}>{tr("otp.expires")}</Text>
           <Hr style={sharedStyles.hr} />
@@ -64,13 +53,7 @@ export const Email = ({ otp, type, lang }: Props) => {
   );
 };
 
-Email.PreviewProps = {
-  otp: "123456",
-  type: "sign-in",
-  lang: "en",
-} satisfies Props;
-
-const styles: Record<string, React.CSSProperties> = {
+const styles = {
   codeSection: {
     marginBottom: "16px",
     borderRadius: "10px",
@@ -86,4 +69,4 @@ const styles: Record<string, React.CSSProperties> = {
     letterSpacing: "6px",
     fontWeight: "700",
   },
-};
+} satisfies Record<string, React.CSSProperties>;

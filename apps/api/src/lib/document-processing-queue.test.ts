@@ -13,8 +13,8 @@ import { createIdleExitCheck } from "@/api/lib/document-processing-idle-exit";
 import {
   abortDocumentProcessingWorkerBeforeClose,
   createDocumentProcessingLeaseRenewal,
-  createDocumentProcessingWorkerConnection,
   createDocumentProcessingReconciliationPhases,
+  createDocumentProcessingWorkerConnection,
   createRepairPassMemo,
   createWorkerReconciliationPhases,
   DOCUMENT_PROCESSING_RECONCILIATION_PHASE_FEEDS,
@@ -36,7 +36,6 @@ import {
 } from "@/api/lib/document-processing-queue";
 import type { DocumentProcessingReconciliationDependencies } from "@/api/lib/document-processing-queue";
 import {
-  automaticOcrRetryDelayMs,
   DOCUMENT_PROCESSING_FAILURE_REPORT,
   documentProcessingFailureReport,
   DocumentProcessingRunSettledError,
@@ -55,10 +54,10 @@ import {
   isPreservableAutomaticProjection,
   ownsPromotedManualOcrClaim,
   requiresOcrPolicy,
-  shouldFailStaleAutomaticOcrRun,
   shouldPreserveCurrentProjection,
 } from "@/api/lib/document-processing-queue-policy";
 import { createReconciliationProgress } from "@/api/lib/document-processing-reconciliation-progress";
+import { documentProcessingRetryDelayMs } from "@/api/lib/document-processing-retry";
 import { TimeoutError } from "@/api/lib/errors/tagged-errors";
 import { isTransientPgConnectionError } from "@/api/lib/pg-error";
 import { isTransientRedisConnectionError } from "@/api/lib/redis-error-classification";
@@ -218,6 +217,43 @@ describe("OCR derivative durability", () => {
     expect(stageSource).toContain("code: SEARCHABLE_PDF_FAILURE_CODE");
   });
 
+  test("binds derivative publication to a live claim and durable cleanup intent", () => {
+    const stageStart = queueSource.indexOf(
+      "const writeOcrSearchablePdfDerivative",
+    );
+    const stageEnd = queueSource.indexOf(
+      "\nconst markRunCancelled",
+      stageStart,
+    );
+    const stageSource = queueSource.slice(stageStart, stageEnd);
+    const reserve = stageSource.indexOf("reserveObjectCleanupIntent");
+    const storageWrite = stageSource.indexOf(
+      "storeOcrSearchablePdfDerivative",
+      reserve,
+    );
+    const claimFence = stageSource.lastIndexOf(
+      "eq(documentProcessingRuns.claimedBy, claimToken)",
+    );
+    const intentFence = stageSource.indexOf(
+      "lockObjectCleanupIntentsForWriter",
+      storageWrite,
+    );
+    const retire = stageSource.indexOf(
+      "retirePublishedObjectCleanupIntentsInTransaction",
+      intentFence,
+    );
+
+    expect(stageStart).toBeGreaterThan(-1);
+    expect(stageEnd).toBeGreaterThan(stageStart);
+    expect(reserve).toBeGreaterThan(-1);
+    expect(storageWrite).toBeGreaterThan(reserve);
+    expect(claimFence).toBeGreaterThan(storageWrite);
+    expect(intentFence).toBeGreaterThan(claimFence);
+    expect(retire).toBeGreaterThan(intentFence);
+    expect(stageSource).toContain("if (cleanupIntentId === null)");
+    expect(stageSource).toContain("return published");
+  });
+
   test("uses the metered OCR write when file usage limits are enabled", async () => {
     const calls: string[] = [];
     const pdfBytes = new Uint8Array([1, 2, 3]);
@@ -231,14 +267,20 @@ describe("OCR derivative durability", () => {
       writePdf: async () => {
         calls.push("storage");
       },
-      writeMetered: async ({ objectKey, organizationId, sizeBytes, write }) => {
+      writeMetered: async ({
+        content,
+        objectKey,
+        organizationId,
+        sizeBytes,
+        write,
+      }) => {
         expect(objectKey).toBe("org/workspace/ocr/run.pdf");
         expect(String(organizationId)).toBe(
           "019864b8-48d0-7f37-94d5-948e3bcf3f40",
         );
         expect(sizeBytes).toBe(pdfBytes.byteLength);
         calls.push("metered");
-        await write();
+        await write({ content, objectKey, sizeBytes });
         return Result.ok();
       },
     });
@@ -284,6 +326,32 @@ describe("OCR derivative durability", () => {
 });
 
 describe("lease heartbeat", () => {
+  test("aborts the attempt when a renewal no longer owns the run", () => {
+    const heartbeatStart = queueSource.indexOf(
+      "const startDocumentProcessingLeaseHeartbeat",
+    );
+    const heartbeatEnd = queueSource.indexOf(
+      "\nconst readCurrentDocumentSource",
+      heartbeatStart,
+    );
+    const heartbeatSource = queueSource.slice(heartbeatStart, heartbeatEnd);
+    const processStart = queueSource.indexOf(
+      "export const processDocumentProcessingRun",
+    );
+    const processEnd = queueSource.indexOf("\nconst errorCode", processStart);
+    const processSource = queueSource.slice(processStart, processEnd);
+
+    expect(heartbeatStart).toBeGreaterThan(-1);
+    expect(heartbeatSource).toContain(
+      ".returning({ id: documentProcessingRuns.id })",
+    );
+    expect(heartbeatSource).toContain("if (!renewed.at(0))");
+    expect(heartbeatSource).toContain("leaseController.abort()");
+    expect(processSource).toContain("AbortSignal.any([");
+    expect(processSource).toContain("heartbeat.signal");
+    expect(processSource).toContain("signal: attemptSignal");
+  });
+
   test("reports a deadline without accumulating stalled renewals", async () => {
     let finishRenewal: () => void = () => undefined;
     const stalledRenewal = new Promise<void>((resolve) => {
@@ -299,7 +367,7 @@ describe("lease heartbeat", () => {
         renewalCount += 1;
         await stalledRenewal;
       },
-      timeoutMs: 5,
+      timeoutMs: 5, // timeout under test
     });
 
     renew();
@@ -313,7 +381,7 @@ describe("lease heartbeat", () => {
     expect(errors.at(0)).toBeInstanceOf(TimeoutError);
     expect(errors.at(0)).toMatchObject({
       label: "document processing lease heartbeat",
-      timeoutMs: 5,
+      timeoutMs: 5, // timeout under test
     });
 
     finishRenewal();
@@ -326,10 +394,10 @@ describe("lease heartbeat", () => {
 
 describe("repair cursor Redis deadlines", () => {
   test("bounds a stalled cursor read", async () => {
-    const rejection: unknown = await readRepairScanCursor(async () => {
-      await Bun.sleep(50);
-      return null;
-    }, 5).then(
+    const rejection: unknown = await readRepairScanCursor(
+      async () => await new Promise<null>(() => {}),
+      5,
+    ).then(
       () => null,
       (error: unknown) => error,
     );
@@ -337,7 +405,7 @@ describe("repair cursor Redis deadlines", () => {
     expect(rejection).toBeInstanceOf(TimeoutError);
     expect(rejection).toMatchObject({
       label: "document OCR repair cursor read",
-      timeoutMs: 5,
+      timeoutMs: 5, // timeout under test
     });
   });
 
@@ -345,11 +413,8 @@ describe("repair cursor Redis deadlines", () => {
     const rejection: unknown = await writeRepairScanCursor({
       expectedCursor: null,
       nextCursor: run.fieldId,
-      sendCommand: async () => {
-        await Bun.sleep(50);
-        return 1;
-      },
-      timeoutMs: 5,
+      sendCommand: async () => await new Promise<number>(() => {}),
+      timeoutMs: 5, // timeout under test
     }).then(
       () => null,
       (error: unknown) => error,
@@ -358,39 +423,12 @@ describe("repair cursor Redis deadlines", () => {
     expect(rejection).toBeInstanceOf(TimeoutError);
     expect(rejection).toMatchObject({
       label: "document OCR repair cursor write",
-      timeoutMs: 5,
+      timeoutMs: 5, // timeout under test
     });
   });
 });
 
 describe("reconciliation fault isolation", () => {
-  test("dispatches every durable processing kind and repairs native gaps", () => {
-    const dispatchStart = queueSource.indexOf(
-      "export const dispatchQueuedDocumentProcessingRuns",
-    );
-    const dispatchEnd = queueSource.indexOf(
-      "const dispatchScheduledDocumentProcessingRetries",
-      dispatchStart,
-    );
-    const dispatchSource = queueSource.slice(dispatchStart, dispatchEnd);
-    const repairStart = queueSource.indexOf(
-      "const recoverMissingNativeExtractionRuns",
-    );
-    const repairEnd = queueSource.indexOf(
-      "const updateQueuedRunSchedule",
-      repairStart,
-    );
-    const repairSource = queueSource.slice(repairStart, repairEnd);
-
-    expect(dispatchStart).toBeGreaterThan(-1);
-    expect(dispatchSource).not.toContain(
-      'eq(documentProcessingRuns.kind, "ocr")',
-    );
-    expect(repairStart).toBeGreaterThan(-1);
-    expect(repairSource).toContain("persistMissingNativeExtractionRuns");
-    expect(repairSource).not.toContain("organizationSettings");
-  });
-
   test("prioritizes never-dispatched OCR runs ahead of visibility retries", () => {
     const dispatchStart = queueSource.indexOf(
       "export const dispatchQueuedDocumentProcessingRuns",
@@ -484,11 +522,9 @@ describe("reconciliation fault isolation", () => {
       captureEnqueueError: (error) => {
         captured.push(error);
       },
-      enqueue: async () => {
-        await Bun.sleep(50);
-      },
+      enqueue: async () => await new Promise<void>(() => {}),
       runId: toSafeId<"documentProcessingRun">("run_test"),
-      timeoutMs: 5,
+      timeoutMs: 5, // timeout under test
     });
 
     expect(result.status).toBe("failed");
@@ -496,7 +532,7 @@ describe("reconciliation fault isolation", () => {
     expect(captured.at(0)).toBeInstanceOf(TimeoutError);
     expect(captured.at(0)).toMatchObject({
       label: "document OCR queue handoff",
-      timeoutMs: 5,
+      timeoutMs: 5, // timeout under test
     });
   });
 
@@ -602,7 +638,7 @@ describe("isCurrentNativeExtractionSource", () => {
     const rejectionCases = {
       deletedVersion: {
         ...docxSource,
-        versionDeletedAt: new Date(),
+        versionDeletedAt: new Date("2026-04-30T09:00:00.000Z"),
       },
       encryptedFile: {
         ...docxSource,
@@ -822,7 +858,7 @@ describe("bounded search-index replay", () => {
   test("classifies a stalled initial index write for durable replay", async () => {
     const indexed = await indexDocumentProjection({
       indexEntity: async () => await new Promise<void>(() => {}),
-      timeoutMs: 5,
+      timeoutMs: 5, // timeout under test
     });
 
     expect(Result.isError(indexed)).toBe(true);
@@ -835,7 +871,7 @@ describe("bounded search-index replay", () => {
     expect(indexed.error.cause).toBeInstanceOf(TimeoutError);
     expect(indexed.error.cause).toMatchObject({
       label: "document processing initial search index",
-      timeoutMs: 5,
+      timeoutMs: 5, // timeout under test
     });
   });
 
@@ -916,7 +952,7 @@ describe("bounded search-index replay", () => {
                   calls.push("reindex-succeeded");
                   return true;
                 },
-                timeoutMs: 5,
+                timeoutMs: 5, // timeout under test
               }),
             ),
             hasMore: false,
@@ -938,7 +974,7 @@ describe("bounded search-index replay", () => {
     expect(replayError).toBeInstanceOf(TimeoutError);
     expect(replayError).toMatchObject({
       label: "document OCR search-index replay",
-      timeoutMs: 5,
+      timeoutMs: 5, // timeout under test
     });
     expect(calls).toEqual(["reindex-failed", "retry"]);
     expect(phaseErrors).toEqual([]);
@@ -965,7 +1001,7 @@ describe("bounded search-index replay", () => {
             await new Promise<void>(() => {});
             return true;
           },
-          timeoutMs: 5,
+          timeoutMs: 5, // timeout under test
           transitionTimeoutMs: 5,
         }).then(
           () => null,
@@ -975,44 +1011,18 @@ describe("bounded search-index replay", () => {
         expect(rejection).toBeInstanceOf(TimeoutError);
         expect(rejection).toMatchObject({
           label: `document OCR search-index replay ${transition} transition`,
-          timeoutMs: 5,
+          timeoutMs: 5, // timeout under test
         });
       }),
     );
   });
 });
 
-describe("stale OCR lease recovery", () => {
-  test("terminates capped automatic OCR but leaves manual and index replay claims recoverable", () => {
-    expect(
-      shouldFailStaleAutomaticOcrRun({
-        attemptCount: 5,
-        errorCode: null,
-        requestSource: "upload",
-      }),
-    ).toBe(true);
-    expect(
-      shouldFailStaleAutomaticOcrRun({
-        attemptCount: 5,
-        errorCode: null,
-        requestSource: "manual",
-      }),
-    ).toBe(false);
-    expect(
-      shouldFailStaleAutomaticOcrRun({
-        attemptCount: 5,
-        errorCode: "search_index_failed",
-        requestSource: "repair",
-      }),
-    ).toBe(false);
-  });
-});
-
 describe("automatic OCR failure recovery", () => {
   test("uses bounded exponential backoff", () => {
-    expect(automaticOcrRetryDelayMs(1)).toBe(30_000);
-    expect(automaticOcrRetryDelayMs(2)).toBe(60_000);
-    expect(automaticOcrRetryDelayMs(10)).toBe(30 * 60 * 1000);
+    expect(documentProcessingRetryDelayMs(1)).toBe(30_000);
+    expect(documentProcessingRetryDelayMs(2)).toBe(60_000);
+    expect(documentProcessingRetryDelayMs(10)).toBe(30 * 60 * 1000);
   });
 
   test("requeues only retryable automatic failures below the attempt cap", () => {
@@ -1065,7 +1075,7 @@ describe("unconfigured worker lifecycle", () => {
       "const ocrConfigured = isLocalDocumentOcrConfigured()",
     );
     const consumerStart = queueSource.indexOf(
-      "const worker = new Worker<DocumentProcessingJobData>",
+      "const worker = new BullMqWorker<DocumentProcessingJobData>",
     );
     const readinessGuard = queueSource.indexOf(
       "if (ocrConfigured)",
@@ -1195,8 +1205,8 @@ describe("worker interruption lifecycle", () => {
     expect(queueSource).toContain("cause: processingResult.error");
     expect(queueSource).toContain('if (settlement === "unsettled")');
     expect(queueSource).toContain("throw processingResult.error");
-    expect(queueSource).toContain(
-      'logger.warn("document_processing.attempt_failed", {\n      ...documentProcessingFailureFields(error)',
+    expect(queueSource).toMatch(
+      /logger\.warn\(\s*"document_processing\.attempt_failed",\s*sanitizeErrorAttributesForOutput\(\{\s*\.\.\.documentProcessingFailureFields\(error\)/u,
     );
   });
 

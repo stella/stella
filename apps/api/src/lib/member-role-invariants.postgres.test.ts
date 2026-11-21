@@ -3,10 +3,12 @@ import { describe, expect, setDefaultTimeout, test } from "bun:test";
 import { eq, inArray, sql } from "drizzle-orm";
 
 import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
+import { waitForExternalState } from "@stll/property-testing/external-state";
 
 import { member, organization, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import { timeEntries, timeTimers } from "@/api/db/schema";
+import { createScopedDb, markRlsDatabase } from "@/api/db/scoped";
 import { ACCOUNT_DELETION_ERROR_CODE } from "@/api/lib/account-deletion-steps";
 import { getAuth } from "@/api/lib/auth";
 import { UNPRICED_TIME_ENTRY_CURRENCY } from "@/api/lib/billing-constants";
@@ -19,12 +21,14 @@ import {
 } from "@/api/lib/membership-role-invariants";
 import { cents } from "@/api/lib/money";
 import { closeRemovedMemberActiveTimer } from "@/api/lib/time-entry-offboarding";
+import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 import {
-  withGatedTestClients,
   type GatedTestDb,
+  withGatedTestClients,
 } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { signInHuman } from "@/api/tests/helpers/human-session";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -34,16 +38,12 @@ const BLOCK_OBSERVATION_INTERVAL_MS = 10;
 setDefaultTimeout(120_000);
 
 const waitForMembershipBlock = async (observeBlock: () => Promise<boolean>) => {
-  const deadline = performance.now() + BLOCK_OBSERVATION_TIMEOUT_MS;
-  while (performance.now() < deadline) {
-    if (await observeBlock()) {
-      return;
-    }
-    await Bun.sleep(BLOCK_OBSERVATION_INTERVAL_MS);
-  }
-  throw new Error(
-    "Membership mutation did not reach its database lock before the deadline",
-  );
+  await waitForExternalState({
+    description: "the membership mutation reaches its database lock",
+    intervalMs: BLOCK_OBSERVATION_INTERVAL_MS,
+    timeoutMs: BLOCK_OBSERVATION_TIMEOUT_MS,
+    read: observeBlock,
+  });
 };
 
 const fixture = async (db: GatedTestDb, ownerCount: number) => {
@@ -67,6 +67,10 @@ const fixture = async (db: GatedTestDb, ownerCount: number) => {
     name: "Membership",
     slug: organizationId,
     createdAt: new Date(),
+  });
+  await recordNewOrganizationAccessState(db, {
+    organizationId,
+    now: new Date(),
   });
   await db.insert(member).values(
     owners.map(({ userId, memberId }) => ({
@@ -98,25 +102,29 @@ const fixture = async (db: GatedTestDb, ownerCount: number) => {
         }) satisfies typeof timeEntries.$inferInsert,
     ),
   );
-  await db.insert(timeTimers).values(
-    owners.map(
-      ({ userId, entryId, timerId }) =>
-        ({
-          id: timerId,
-          userId,
-          organizationId,
-          legacyTimeEntryId: entryId,
-          state: "running",
-          startedAt,
-          lastResumedAt: startedAt,
-        }) satisfies typeof timeTimers.$inferInsert,
-    ),
-  );
+  for (const { userId, entryId, timerId } of owners) {
+    await createScopedDb(
+      markRlsDatabase(db),
+      [],
+      organizationId,
+      userId,
+    )(async (tx) => {
+      await tx.insert(timeTimers).values({
+        id: timerId,
+        userId,
+        organizationId,
+        legacyTimeEntryId: entryId,
+        state: "running",
+        startedAt,
+        lastResumedAt: startedAt,
+      });
+    });
+  }
   return {
     organizationId,
     owners,
     cleanUp: async () => {
-      await db.delete(organization).where(eq(organization.id, organizationId));
+      await deleteOrganizationsForTest(db, [organizationId]);
       await db.delete(user).where(
         inArray(
           user.id,
@@ -289,10 +297,18 @@ if (!databaseUrl || !runPostgresTests) {
                 .select()
                 .from(timeEntries)
                 .where(eq(timeEntries.id, secondTarget.entryId));
-              const [timer] = await setup.db
-                .select()
-                .from(timeTimers)
-                .where(eq(timeTimers.id, secondTarget.timerId));
+              const [timer] = await createScopedDb(
+                markRlsDatabase(setup.db),
+                [],
+                data.organizationId,
+                secondTarget.userId,
+              )(
+                async (tx) =>
+                  await tx
+                    .select()
+                    .from(timeTimers)
+                    .where(eq(timeTimers.id, secondTarget.timerId)),
+              );
               expect(entry?.timerStartedAt).toBeInstanceOf(Date);
               expect(entry?.timerStoppedAt).toBeNull();
               expect(entry?.durationMinutes).toBe(0);
@@ -483,10 +499,18 @@ if (!databaseUrl || !runPostgresTests) {
               .select()
               .from(timeEntries)
               .where(eq(timeEntries.id, secondTarget.entryId));
-            const [timer] = await setup.db
-              .select()
-              .from(timeTimers)
-              .where(eq(timeTimers.id, secondTarget.timerId));
+            const [timer] = await createScopedDb(
+              markRlsDatabase(setup.db),
+              [],
+              data.organizationId,
+              secondTarget.userId,
+            )(
+              async (tx) =>
+                await tx
+                  .select()
+                  .from(timeTimers)
+                  .where(eq(timeTimers.id, secondTarget.timerId)),
+            );
             expect(entry?.timerStartedAt).toBeInstanceOf(Date);
             expect(entry?.timerStoppedAt).toBeNull();
             expect(entry?.durationMinutes).toBe(0);
@@ -544,9 +568,7 @@ if (!databaseUrl || !runPostgresTests) {
             .where(eq(member.id, owner.memberId));
           expect(retainedMember?.role).toBe("owner");
           await setup.db.transaction(async (tx) => {
-            await tx
-              .delete(organization)
-              .where(eq(organization.id, data.organizationId));
+            await deleteOrganizationsForTest(tx, [data.organizationId]);
           });
           const rows = await setup.db.execute(
             sql`SELECT id FROM member WHERE organization_id = ${data.organizationId}`,

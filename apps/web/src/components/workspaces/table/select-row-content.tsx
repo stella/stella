@@ -7,12 +7,12 @@
 import type React from "react";
 
 import type { RowSelectionState } from "@tanstack/react-table";
-import {
-  row_getIsSelected,
-  row_getIsSomeSelected,
-} from "@tanstack/react-table/static-functions";
+import { row_getIsSomeSelected } from "@tanstack/react-table/static-functions";
 
 import { Checkbox } from "@stll/ui/checkbox";
+import { TABLE_FIRST_LINE as ROW_FIRST_LINE } from "@stll/ui/table";
+import type { TableFirstLine as RowFirstLine } from "@stll/ui/table";
+import { cn } from "@stll/ui/utils";
 
 import type {
   TableRow,
@@ -21,7 +21,56 @@ import type {
   WorkspaceTable,
 } from "@/components/workspaces/table/types";
 
+export { ROW_FIRST_LINE };
+export type { RowFirstLine };
+
+// A line box needs a glyph to have a baseline; this one has no width.
+const ZERO_WIDTH_SPACE = "\u200B";
+
+const firstLineSlot = (firstLine: RowFirstLine) =>
+  cn(
+    "absolute inset-x-0 top-2 flex min-w-12 items-center justify-center",
+    ROW_FIRST_LINE[firstLine].slot,
+  );
+
+/**
+ * An empty line of the first line's height, centred like the number. A cell
+ * whose items align by baseline puts each item's first line on this one,
+ * whatever padding the item carries above its text.
+ */
+export const FirstLineStrut = ({ firstLine }: { firstLine: RowFirstLine }) => (
+  <span
+    aria-hidden="true"
+    className={cn(
+      "flex w-0 shrink-0 items-center",
+      ROW_FIRST_LINE[firstLine].slot,
+    )}
+    data-slot="table-first-line-strut"
+  >
+    {ZERO_WIDTH_SPACE}
+  </span>
+);
+
+export const RowNumberLabel = ({
+  className,
+  firstLine,
+  label,
+}: {
+  className?: string;
+  firstLine: RowFirstLine;
+  label: string;
+}) => (
+  <span
+    className={cn(firstLineSlot(firstLine), "text-xs tabular-nums", className)}
+    data-slot="table-row-number"
+  >
+    {label}
+  </span>
+);
+
 type SelectRowContentProps<TRow extends TableRowData> = {
+  ariaLabel?: string | undefined;
+  firstLine: RowFirstLine;
   index: number;
   label: string;
   row: TableRow<TRow>;
@@ -30,6 +79,8 @@ type SelectRowContentProps<TRow extends TableRowData> = {
 };
 
 export const SelectRowContent = <TRow extends TableRowData = TableTreeNode>({
+  ariaLabel,
+  firstLine,
   index,
   label,
   row,
@@ -38,14 +89,11 @@ export const SelectRowContent = <TRow extends TableRowData = TableTreeNode>({
 }: SelectRowContentProps<TRow>) => {
   // A row that contains others is partly selected when only some of them are;
   // a kind whose rows never nest has no sub-rows and so never shows it.
+  const selected = table.state.rowSelection[row.id] === true;
   const someSelected = row.subRows.length > 0 && row_getIsSomeSelected(row);
 
-  const handleChange = (_checked: boolean, eventDetails: { event: Event }) => {
-    if (
-      eventDetails.event instanceof PointerEvent &&
-      eventDetails.event.shiftKey &&
-      lastSelectedIndex.current !== null
-    ) {
+  const toggleSelection = (shiftKey: boolean) => {
+    if (shiftKey && lastSelectedIndex.current !== null) {
       const start = Math.min(lastSelectedIndex.current, index);
       const end = Math.max(lastSelectedIndex.current, index);
       const rows = table.getRowModel().rows;
@@ -68,17 +116,31 @@ export const SelectRowContent = <TRow extends TableRowData = TableTreeNode>({
   };
 
   return (
-    <div className="absolute inset-0 flex min-w-12 shrink-0 items-center justify-center">
-      <span className="absolute inset-0 flex min-w-12 shrink-0 items-center justify-center text-xs tabular-nums transition-opacity group-hover/row:opacity-0 group-data-[state=selected]/row:opacity-0">
-        {label}
-      </span>
-      <Checkbox
-        checked={row_getIsSelected(row)}
-        className="pointer-events-none absolute shrink-0 opacity-0 transition-opacity group-hover/row:pointer-events-auto group-hover/row:opacity-100 group-data-[state=selected]/row:pointer-events-auto group-data-[state=selected]/row:opacity-100"
-        indeterminate={someSelected}
-        onCheckedChange={handleChange}
-        tabIndex={row_getIsSelected(row) ? 0 : -1}
-      />
-    </div>
+    <Checkbox
+      appearance="cell"
+      aria-label={ariaLabel ?? label}
+      checked={selected}
+      indeterminate={someSelected}
+      firstLine={firstLine}
+      rowLabel={label}
+      data-slot="table-selection-cell"
+      onCheckedChange={(_checked, details) => {
+        toggleSelection(
+          "shiftKey" in details.event && details.event.shiftKey === true,
+        );
+      }}
+      onClick={(event) => {
+        event.stopPropagation();
+      }}
+      onKeyDown={(event) => {
+        if (event.key === " " || event.key === "Enter") {
+          event.stopPropagation();
+        }
+        if (event.key === "Enter") {
+          event.preventDefault();
+          toggleSelection(event.shiftKey);
+        }
+      }}
+    />
   );
 };

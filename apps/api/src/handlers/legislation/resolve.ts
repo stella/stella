@@ -1,12 +1,13 @@
 import { inArray } from "drizzle-orm";
-import { t } from "elysia";
-import type { Static } from "elysia";
+import * as v from "valibot";
 
+import { apiDateSchema } from "@stll/api-contract/api-date";
 import { LEGISLATION_PUBLISHER_WINDOW_INCONSISTENT } from "@stll/api-contract/legislation-expression";
 import { PUBLIC_LEGISLATION_COUNTRIES } from "@stll/api-contract/legislation-publication";
 
 import { legislationDocuments } from "@/api/db/schema";
 import { projectResolveStatutesResponse } from "@/api/handlers/legislation/catalog-response";
+import { legislationCountriesFor } from "@/api/lib/legal-search/legislation-redistribution";
 import { resolveWorksAtDate } from "@/api/lib/legal-search/legislation-works-at-date";
 import type { WorkAtDateRequest } from "@/api/lib/legal-search/legislation-works-at-date";
 import {
@@ -16,20 +17,24 @@ import {
 import type { LegislationReadDb } from "@/api/lib/legislation-public-read-db";
 import { LIMITS } from "@/api/lib/limits";
 
-export const resolveStatutesBodySchema = t.Object({
-  works: t.Array(
-    t.Object({
-      /** Jurisdiction of the cited work, which need not be the reader's own. */
-      country: tPublicLawCountry,
-      eli: t.String({ minLength: 1, maxLength: LIMITS.legislationEliMaxChars }),
-      /** Date whose applicable consolidation should answer for the work. */
-      asOf: t.String({ format: "date" }),
-    }),
-    { maxItems: LIMITS.legislationResolveWorksMax },
+export const resolveStatutesBodySchema = v.object({
+  works: v.pipe(
+    v.array(
+      v.object({
+        country: tPublicLawCountry,
+        eli: v.pipe(
+          v.string(),
+          v.minLength(1),
+          v.maxLength(LIMITS.legislationEliMaxChars),
+        ),
+        asOf: apiDateSchema,
+      }),
+    ),
+    v.maxLength(LIMITS.legislationResolveWorksMax),
   ),
 });
 
-type ResolveStatutesBody = Static<typeof resolveStatutesBodySchema>;
+type ResolveStatutesBody = v.InferOutput<typeof resolveStatutesBodySchema>;
 
 /** What a link to a consolidation needs, the same fields the list returns. */
 const resolvedStatuteColumns = {
@@ -68,7 +73,9 @@ export const resolveStatutesHandler = async (
   const requests: WorkAtDateRequest[] = [];
   for (const [index, work] of body.works.entries()) {
     const countryRead = readPublicLawCountry(work.country, {
+      domain: "legislation",
       admitted: PUBLIC_LEGISLATION_COUNTRIES,
+      surface: "search",
     });
     if (countryRead.kind === "read") {
       requests.push({
@@ -82,7 +89,13 @@ export const resolveStatutesHandler = async (
 
   const { idByKey, inconsistentKeys, statutes } = await legislationDb(
     async (tx) => {
-      const resolved = await resolveWorksAtDate(tx, requests);
+      // The batch read admits search countries only (above), so it resolves
+      // against the same list.
+      const resolved = await resolveWorksAtDate(
+        tx,
+        requests,
+        legislationCountriesFor("search"),
+      );
       const ids = [...new Set(resolved.idByKey.values())];
 
       return {
@@ -104,7 +117,9 @@ export const resolveStatutesHandler = async (
   return projectResolveStatutesResponse({
     items: body.works.map((work, index) => {
       const countryRead = readPublicLawCountry(work.country, {
+        domain: "legislation",
         admitted: PUBLIC_LEGISLATION_COUNTRIES,
+        surface: "search",
       });
       if (countryRead.kind === "unavailable") {
         return {

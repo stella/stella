@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useRef, useState } from "react";
 
 import Bold from "@tiptap/extension-bold";
 import Document from "@tiptap/extension-document";
@@ -28,6 +28,7 @@ import {
 } from "@stll/folio-core/prosemirror/commands/comments";
 import { Button } from "@stll/ui/button";
 import {
+  AiActionIcon,
   BoldIcon,
   CheckIcon,
   Heading1Icon,
@@ -36,13 +37,12 @@ import {
   ItalicIcon,
   ListIcon,
   ListOrderedIcon,
-  Loader2Icon,
   Redo2Icon,
   RotateCcwIcon,
   Undo2Icon,
-  AiActionIcon,
   XIcon,
 } from "@stll/ui/icons";
+import { Loader } from "@stll/ui/loader";
 import { Textarea } from "@stll/ui/textarea";
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
@@ -57,9 +57,9 @@ import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
-import { notifyUserError } from "@/lib/errors/user-toast";
+import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
 
 import {
   bodyKey,
@@ -121,7 +121,7 @@ export type ClauseRewrite = (
 ) => Promise<ClauseParagraph[]>;
 
 const rewriteClause: ClauseRewrite = async (request) =>
-  unwrapEden(await api.clauses["ai-rewrite"].post(request)).body;
+  unwrapApiResponse(await api.clauses["ai-rewrite"].post(request)).body;
 
 type ClauseEditorProps = {
   content: ClauseParagraph[];
@@ -300,7 +300,13 @@ export const ClauseEditor = ({
             };
             detached(
               settleReviewPersist(persistReviewedBody, (error) => {
-                getAnalytics().captureError(error);
+                getAnalytics().captureError(error, {
+                  fingerprintKey: "ClauseEditor.onUpdate:failure",
+                  scope: {
+                    type: "handler",
+                    handlerId: "ClauseEditor.onUpdate:failure",
+                  },
+                });
                 notifyUserError(error, t("clauses.saveFailed"), {
                   description: userErrorFromThrown(
                     error,
@@ -435,7 +441,10 @@ export const ClauseEditor = ({
       return;
     }
     if (rewrittenResult.isErr()) {
-      getAnalytics().captureError(rewrittenResult.error.cause);
+      getAnalytics().captureError(rewrittenResult.error.cause, {
+        fingerprintKey: "ClauseEditor.runRewrite:cause",
+        scope: { type: "handler", handlerId: "ClauseEditor.runRewrite:cause" },
+      });
       notifyUserError(rewrittenResult.error, t("ai.editWithAI"), {
         description: userErrorFromThrown(
           rewrittenResult.error.cause,
@@ -455,7 +464,7 @@ export const ClauseEditor = ({
 
     const rewritten = rewrittenResult.value;
     if (!hasAlignedClauseStructure(baseline, rewritten)) {
-      notifyUserError(undefined, t("ai.editWithAI"), {
+      notifyUserProblem(t("ai.editWithAI"), {
         description: t("clauses.aiStructureChanged"),
       });
       setAiEdit({ status: "prompting", instruction: trimmed });
@@ -582,37 +591,37 @@ export const ClauseEditor = ({
     editor.chain().focus().toggleHeading({ level }).run();
   };
 
-  const toggleBulletList = useCallback(() => {
+  const toggleBulletList = () => {
     if (!isUsableEditor(editor)) {
       return;
     }
 
     editor.chain().focus().toggleBulletList().run();
-  }, [editor]);
+  };
 
-  const toggleOrderedList = useCallback(() => {
+  const toggleOrderedList = () => {
     if (!isUsableEditor(editor)) {
       return;
     }
 
     editor.chain().focus().toggleOrderedList().run();
-  }, [editor]);
+  };
 
-  const undo = useCallback(() => {
+  const undo = () => {
     if (!isUsableEditor(editor)) {
       return;
     }
 
     editor.chain().focus().undo().run();
-  }, [editor]);
+  };
 
-  const redo = useCallback(() => {
+  const redo = () => {
     if (!isUsableEditor(editor)) {
       return;
     }
 
     editor.chain().focus().redo().run();
-  }, [editor]);
+  };
 
   const canUndo = editorReady && editor.can().undo();
   const canRedo = editorReady && editor.can().redo();
@@ -622,6 +631,11 @@ export const ClauseEditor = ({
   // TipTap's `editable: false` (which only blocks direct DOM interaction),
   // so the toolbar must disable them itself during review and generation.
   const editingLocked = reviewing || aiEdit.status === "generating";
+  const formattingDisabledReason = reviewing
+    ? t("common.finishReview")
+    : t("common.loading");
+  const historyDisabledReason =
+    editingLocked || !editorReady ? formattingDisabledReason : undefined;
 
   return (
     // Stop modifier key combos from propagating to global
@@ -641,6 +655,10 @@ export const ClauseEditor = ({
         <Button
           aria-label={t("folio.undo")}
           disabled={!canUndo || editingLocked}
+          disabledReason={
+            historyDisabledReason ??
+            t("legalReader.annotations.history.nothingToUndo")
+          }
           onClick={undo}
           size="icon-xs"
           title={t("folio.undo")}
@@ -652,6 +670,10 @@ export const ClauseEditor = ({
         <Button
           aria-label={t("folio.redo")}
           disabled={!canRedo || editingLocked}
+          disabledReason={
+            historyDisabledReason ??
+            t("legalReader.annotations.history.nothingToRedo")
+          }
           onClick={redo}
           size="icon-xs"
           title={t("folio.redo")}
@@ -665,6 +687,7 @@ export const ClauseEditor = ({
           aria-label={t("folio.bold")}
           className={cn(editorReady && editor.isActive("bold") && "bg-muted")}
           disabled={!editorReady || editingLocked}
+          disabledReason={formattingDisabledReason}
           onClick={toggleBold}
           size="icon-xs"
           type="button"
@@ -676,6 +699,7 @@ export const ClauseEditor = ({
           aria-label={t("folio.italic")}
           className={cn(editorReady && editor.isActive("italic") && "bg-muted")}
           disabled={!editorReady || editingLocked}
+          disabledReason={formattingDisabledReason}
           onClick={toggleItalic}
           size="icon-xs"
           type="button"
@@ -692,6 +716,7 @@ export const ClauseEditor = ({
               "bg-muted",
           )}
           disabled={!editorReady || editingLocked}
+          disabledReason={formattingDisabledReason}
           onClick={() => toggleHeading(1)}
           size="icon-xs"
           type="button"
@@ -707,6 +732,7 @@ export const ClauseEditor = ({
               "bg-muted",
           )}
           disabled={!editorReady || editingLocked}
+          disabledReason={formattingDisabledReason}
           onClick={() => toggleHeading(2)}
           size="icon-xs"
           type="button"
@@ -722,6 +748,7 @@ export const ClauseEditor = ({
               "bg-muted",
           )}
           disabled={!editorReady || editingLocked}
+          disabledReason={formattingDisabledReason}
           onClick={() => toggleHeading(3)}
           size="icon-xs"
           type="button"
@@ -736,6 +763,7 @@ export const ClauseEditor = ({
             editorReady && editor.isActive("bulletList") && "bg-muted",
           )}
           disabled={!editorReady || editingLocked}
+          disabledReason={formattingDisabledReason}
           onClick={toggleBulletList}
           size="icon-xs"
           type="button"
@@ -749,6 +777,7 @@ export const ClauseEditor = ({
             editorReady && editor.isActive("orderedList") && "bg-muted",
           )}
           disabled={!editorReady || editingLocked}
+          disabledReason={formattingDisabledReason}
           onClick={toggleOrderedList}
           size="icon-xs"
           type="button"
@@ -896,12 +925,19 @@ const AiEditBar = ({
         )}
         <Button
           disabled={generating || instruction.trim() === ""}
+          disabledReason={
+            generating ? t("common.loading") : t("common.enterInstruction")
+          }
           onClick={onSubmit}
           size="sm"
           type="button"
           variant={reviewing ? "ghost" : undefined}
         >
-          <AiEditSubmitIcon generating={generating} reviewing={reviewing} />
+          <AiEditSubmitIcon
+            generating={generating}
+            label={t("common.loading")}
+            reviewing={reviewing}
+          />
           {reviewing ? t("common.regenerate") : t("ai.editWithAI")}
         </Button>
         {reviewing ? (
@@ -917,13 +953,15 @@ const AiEditBar = ({
 
 const AiEditSubmitIcon = ({
   generating,
+  label,
   reviewing,
 }: {
   generating: boolean;
+  label: string;
   reviewing: boolean;
 }) => {
   if (generating) {
-    return <Loader2Icon className="size-3.5 animate-spin" />;
+    return <Loader className="size-3.5" label={label} size="sm" />;
   }
   if (reviewing) {
     return <RotateCcwIcon className="size-3.5" />;

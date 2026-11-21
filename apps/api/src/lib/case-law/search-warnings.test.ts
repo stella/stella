@@ -10,12 +10,16 @@ import {
   AGENT_CASE_LAW_SEARCH_WARNING_PRODUCERS,
   CASE_LAW_SEARCH_WARNING_PRODUCERS,
   caseLawSearchWarnings,
+  collectionCitationUnresolvedWarning,
+  DECISION_QUERY_WARNING_CODES,
+  DECISION_QUERY_WARNING_PRODUCERS,
 } from "@/api/lib/case-law/search-warnings";
 
 describe("caseLawSearchWarnings", () => {
   test("a page with hits and every word required earns nothing", () => {
     expect(
       caseLawSearchWarnings({
+        hitOrder: "all_words_first",
         droppedFunctionWords: [],
         filters: [],
         emptyResultSet: false,
@@ -25,6 +29,7 @@ describe("caseLawSearchWarnings", () => {
 
   test("names the words the query stopped requiring", () => {
     const [warning] = caseLawSearchWarnings({
+      hitOrder: "all_words_first",
       droppedFunctionWords: ["jak", "musí", "být"],
       filters: [],
       emptyResultSet: false,
@@ -40,6 +45,7 @@ describe("caseLawSearchWarnings", () => {
     // that found nothing is not the query the caller sent.
     expect(
       caseLawSearchWarnings({
+        hitOrder: "all_words_first",
         droppedFunctionWords: ["na"],
         filters: [],
         emptyResultSet: true,
@@ -49,6 +55,7 @@ describe("caseLawSearchWarnings", () => {
 
   test("an empty page under filters is the filters', not the corpus'", () => {
     const warnings = caseLawSearchWarnings({
+      hitOrder: "all_words_first",
       droppedFunctionWords: [],
       filters: ["court", "dateFrom"],
       emptyResultSet: true,
@@ -62,6 +69,7 @@ describe("caseLawSearchWarnings", () => {
   test("one filter is spoken of in the singular", () => {
     expect(
       caseLawSearchWarnings({
+        hitOrder: "all_words_first",
         droppedFunctionWords: [],
         filters: ["language"],
         emptyResultSet: true,
@@ -72,12 +80,41 @@ describe("caseLawSearchWarnings", () => {
   test("the two empty-page codes never both appear", () => {
     for (const filters of [[], ["court"]]) {
       const codes = caseLawSearchWarnings({
+        hitOrder: "all_words_first",
         droppedFunctionWords: [],
         filters,
         emptyResultSet: true,
       }).map(({ code }) => code);
       expect(codes).toHaveLength(1);
     }
+  });
+});
+
+describe("partial matches are told by where the page put them", () => {
+  const partialWarning = (hitOrder: "score" | "all_words_first") =>
+    caseLawSearchWarnings({
+      hitOrder,
+      droppedFunctionWords: [],
+      partialHitCount: 2,
+      filters: [],
+      emptyResultSet: false,
+    });
+
+  test("a page listing full matches first says the partial ones follow", () => {
+    const [warning] = partialWarning("all_words_first");
+    expect(warning?.code).toBe("partial_matches_appended");
+    expect(warning?.message).toContain("appended after");
+  });
+
+  test("a page in score order never says the partial ones follow", () => {
+    const [warning] = partialWarning("score");
+    expect(warning?.code).toBe("partial_matches_ranked");
+    expect(warning?.message).not.toContain("appended");
+    expect(warning?.message).not.toContain("after");
+    expect(warning?.message).toContain(
+      "ranked among the decisions holding every word",
+    );
+    expect(warning?.hint).toContain("strict: true");
   });
 });
 
@@ -88,15 +125,32 @@ describe("caseLawSearchWarnings", () => {
 describe("warning code census", () => {
   test("every declared code is produced by a search that earns it", () => {
     const produced = new Set<CaseLawSearchWarningCode>([
+      collectionCitationUnresolvedWarning("Rc 60/2015").code,
       ...caseLawSearchWarnings({
+        hitOrder: "all_words_first",
         droppedFunctionWords: ["na"],
         filters: [],
         emptyResultSet: true,
       }).map(({ code }) => code),
       ...caseLawSearchWarnings({
+        hitOrder: "all_words_first",
         droppedFunctionWords: [],
         filters: ["court"],
         emptyResultSet: true,
+      }).map(({ code }) => code),
+      ...caseLawSearchWarnings({
+        hitOrder: "all_words_first",
+        droppedFunctionWords: [],
+        partialHitCount: 2,
+        filters: [],
+        emptyResultSet: false,
+      }).map(({ code }) => code),
+      ...caseLawSearchWarnings({
+        hitOrder: "score",
+        droppedFunctionWords: [],
+        partialHitCount: 2,
+        filters: [],
+        emptyResultSet: false,
       }).map(({ code }) => code),
     ]);
 
@@ -111,6 +165,16 @@ describe("warning code census", () => {
       expect(warning.code).toBe(code);
       // A hint that only restates the message is a dead end; every one of
       // these names a call to make or a filter to drop.
+      expect(warning.hint.length).toBeGreaterThan(0);
+      expect(warning.hint).not.toBe(warning.message);
+      expect(warning.message.endsWith(".")).toBe(true);
+    }
+  });
+
+  test("every decision-query code's producer emits that code, and says what to do", () => {
+    for (const code of DECISION_QUERY_WARNING_CODES) {
+      const warning = DECISION_QUERY_WARNING_PRODUCERS[code]();
+      expect(warning.code).toBe(code);
       expect(warning.hint.length).toBeGreaterThan(0);
       expect(warning.hint).not.toBe(warning.message);
       expect(warning.message.endsWith(".")).toBe(true);

@@ -1,5 +1,7 @@
 import { panic } from "better-result";
 
+import type { OnlineTableGate } from "./online-ddl";
+
 /**
  * The connection the online phase of a migration runs on, and the shape of a
  * data repair registered with it. Separate from `online-migrations.ts` so a
@@ -14,12 +16,7 @@ import { panic } from "better-result";
  * joined string and split it in SQL (`string_to_array($1, ',')::uuid[]`).
  */
 export type OnlineMigrationParam =
-  | string
-  | number
-  | bigint
-  | boolean
-  | Date
-  | null;
+  string | number | bigint | boolean | Date | null;
 
 const isOnlineMigrationParam = (
   value: unknown,
@@ -75,24 +72,63 @@ export type OnlineRepairCompletion =
   | { type: "complete" };
 
 /**
+ * Where an online step stopped. A step whose table-locking work the gate held
+ * or cancelled defers the phase at that step: every later step may depend on
+ * it, so none of them runs, and the caller runs the phase again after
+ * `retryAfterMs`.
+ */
+export type OnlineMigrationOutcome =
+  | { type: "complete" }
+  | { type: "deferred"; step: string; retryAfterMs: number };
+
+/** A code-owned step follows its source's live postcondition on every boot. */
+export type CodeOwnedOnlineStep = {
+  type: "code";
+  owner: `src/${string}.ts`;
+};
+
+export type OnlineStepIntroduction = string | CodeOwnedOnlineStep;
+
+/**
  * A data repair that a schema migration left to the online phase.
  *
  * `repair` runs on the migrate entrypoint under the online-migrations lock,
  * with no statement budget on the session; it owns its own transactions and
  * their budgets, and must converge: every call brings the database closer to
  * `readCompletion` reporting `complete`, an interrupted call is resumed by
- * calling again, and a call on a completed database changes nothing.
+ * calling again, and a call on a completed database changes nothing. A
+ * statement that locks a table (a validation, an ANALYZE) runs only through
+ * `tables`; when the gate defers it, `repair` returns that deferral, the
+ * phase defers there as it does at an index, and the next run calls `repair`
+ * again.
  *
  * `readCompletion` never repairs. The phase reads it before the repair, and
  * runs no walk when the postcondition already holds, so the fixed point costs
- * one read rather than a pass over the table. A durable pending backfill is
- * resumable and may pass deploy/startup; an unattempted incomplete repair
- * still refuses those gates.
+ * one read rather than a pass over the table. Repair mode may defer a durable
+ * pending backfill. Startup admits a migration-owned repair's durable
+ * `pending` checkpoint under any release, so the data it produces must read
+ * as not ready, never as complete, until `readCompletion` says `complete`;
+ * the migrate run or the repair's scheduled owner resumes it. `incomplete`
+ * work has no checkpoint to resume: the migrate run refuses to finish while
+ * it remains. Startup never refuses a migration-owned repair, because tasks
+ * already running serve the same data; once a newer migration exists it
+ * reports an `incomplete` one as regressed, an error for an operator. So
+ * `readCompletion` must hold for every row live code writes: a writer that
+ * breaks it is the defect.
  */
 export type OnlineRepair = {
+  introducedBy: OnlineStepIntroduction;
   name: string;
   readCompletion: (
     connection: OnlineMigrationConnection,
   ) => Promise<OnlineRepairCompletion>;
-  repair: (connection: OnlineMigrationConnection) => Promise<void>;
+  repair: (
+    connection: OnlineMigrationConnection,
+    tables: OnlineTableGate,
+  ) => Promise<OnlineMigrationOutcome>;
+};
+
+/** A migration-owned repair keeps its ledger identity available to callers. */
+export type MigrationOwnedOnlineRepair = OnlineRepair & {
+  introducedBy: string;
 };

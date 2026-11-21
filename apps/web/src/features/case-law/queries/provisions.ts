@@ -1,11 +1,14 @@
 import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 
 import { LEGISLATION_PUBLISHER_WINDOW_INCONSISTENT } from "@stll/api-contract/legislation-expression";
+import type { ProvisionLinkStatus } from "@stll/api-contract/provision-link-status";
+import type { ProvisionVersionBasis } from "@stll/api-contract/provision-version-basis";
+import { chunk as chunkItems } from "@stll/concurrency/chunk";
 
 import { api } from "@/lib/api";
 import { optionalArray } from "@/lib/arrays";
 import { nullableStringCursorSeed } from "@/lib/infinite-query";
-import { unwrapPublicLawEden } from "@/lib/public-law-api";
+import { unwrapPublicLawResponse } from "@/lib/public-law-api";
 import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
 
@@ -72,12 +75,24 @@ const fetchDecisionProvisionsPage = async ({
       fetch: { signal },
     });
 
-  return unwrapPublicLawEden(response, DECISION_PROVISIONS_ACTION);
+  return unwrapPublicLawResponse(response, DECISION_PROVISIONS_ACTION);
 };
 
 type DecisionProvisionsPage = Awaited<
   ReturnType<typeof fetchDecisionProvisionsPage>
 >;
+
+type ProvisionFallbackSource = {
+  status: ProvisionLinkStatus;
+  items: readonly { versionBasis: ProvisionVersionBasis }[];
+};
+
+/** A missing or newly extracted result cannot authorize decision-date inference. */
+export const allowsLegacyProvisionFallback = (
+  source: ProvisionFallbackSource | undefined,
+): boolean =>
+  source?.status.type === "legacy" &&
+  source.items.every(({ versionBasis }) => versionBasis.type === "inferred");
 
 /** The provisions a decision applies, in the order its text states them. */
 export const decisionProvisionsInfiniteOptions = (decisionId: string) =>
@@ -106,7 +121,7 @@ export const decisionProvisionsInfiniteOptions = (decisionId: string) =>
           exact: true,
         });
       }
-      return unwrapPublicLawEden(response, DECISION_PROVISIONS_ACTION);
+      return unwrapPublicLawResponse(response, DECISION_PROVISIONS_ACTION);
     },
     initialPageParam: nullableStringCursorSeed(),
     getNextPageParam: (lastPage) => lastPage.nextCursor,
@@ -124,8 +139,20 @@ export const decisionProvisionsForLinkingOptions = (decisionId: string) =>
     queryFn: async ({ signal }) => {
       const items: DecisionProvisionsPage["items"] = [];
       const previews: DecisionProvisionsPage["previews"] = [];
-      let cursor: string | null = null;
-      for (let page = 0; page < PROVISIONS_LINKING_PAGE_LIMIT; page += 1) {
+      const first = await fetchDecisionProvisionsPage({
+        cursor: null,
+        decisionId,
+        limit: PROVISIONS_LINKING_PAGE_SIZE,
+        signal,
+      });
+      items.push(...first.items);
+      previews.push(...first.previews);
+      let cursor = first.nextCursor;
+      for (
+        let page = 1;
+        cursor !== null && page < PROVISIONS_LINKING_PAGE_LIMIT;
+        page += 1
+      ) {
         const data = await fetchDecisionProvisionsPage({
           cursor,
           decisionId,
@@ -139,7 +166,13 @@ export const decisionProvisionsForLinkingOptions = (decisionId: string) =>
           break;
         }
       }
-      return { items, previews };
+      return {
+        items,
+        nextCursor: cursor,
+        previews,
+        status: first.status,
+        generation: first.generation,
+      };
     },
     staleTime: ROUTE_QUERY_STALE_TIME_MS,
   });
@@ -168,7 +201,7 @@ const fetchStatutesResolveChunk = async (
     { fetch: { signal } },
   );
 
-  return unwrapPublicLawEden(response, "resolvePublicStatutes").items;
+  return unwrapPublicLawResponse(response, "resolvePublicStatutes").items;
 };
 
 type ResolvedCitedWork = Awaited<
@@ -235,14 +268,7 @@ export const statutesResolveOptions = (works: readonly CitedWorkAtDate[]) => {
   return queryOptions({
     queryKey: decisionProvisionKeys.statutesResolve(sorted),
     queryFn: async ({ signal }) => {
-      const chunks: CitedWorkAtDate[][] = [];
-      for (
-        let start = 0;
-        start < sorted.length;
-        start += STATUTES_RESOLVE_CHUNK_SIZE
-      ) {
-        chunks.push(sorted.slice(start, start + STATUTES_RESOLVE_CHUNK_SIZE));
-      }
+      const chunks = chunkItems(sorted, STATUTES_RESOLVE_CHUNK_SIZE);
       const answers = await Promise.all(
         chunks.map(
           async (chunk) => await fetchStatutesResolveChunk(chunk, signal),
@@ -273,7 +299,7 @@ export const statuteVersionsOptions = (documentId: string) =>
           fetch: { signal },
         });
 
-      const data = unwrapPublicLawEden(
+      const data = unwrapPublicLawResponse(
         response,
         "listPublicStatuteVersionsForProvision",
       );

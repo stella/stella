@@ -1,38 +1,30 @@
 import { useRef, useState } from "react";
+import type { ReactNode } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMatch, useNavigate } from "@tanstack/react-router";
-import { Result } from "better-result";
+import { useNavigate } from "@tanstack/react-router";
+import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { isDocumentTranslationSourceEligible } from "@stll/api-contract/document-translation";
 import { fetchWithTimeout } from "@stll/fetch";
-import {
-  AlertDialog,
-  AlertDialogClose,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogPopup,
-  AlertDialogTitle,
-} from "@stll/ui/alert-dialog";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { openFilePicker } from "@stll/ui/file-picker";
 import {
   ArchiveIcon,
-  CopyIcon,
   DownloadIcon,
+  DuplicateIcon,
+  EditPagesIcon,
   EllipsisVerticalIcon,
   EyeIcon,
   FileDownIcon,
-  FilePenLineIcon,
   FileOutputIcon,
   FileTextIcon,
   FolderPlusIcon,
   FolderSyncIcon,
-  LaptopIcon,
   LanguagesIcon,
+  LaptopIcon,
   LockOpenIcon,
   Maximize2Icon,
   MessageSquareIcon,
@@ -55,6 +47,7 @@ import {
   MenuTrigger,
 } from "@stll/ui/menu";
 import { stellaToast } from "@stll/ui/toast";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { buildEntityMentionOption } from "@/components/chat-mention-helpers";
@@ -63,14 +56,15 @@ import { DownloadRenditionMenuItems } from "@/components/inspector/download-rend
 import { downloadTabFile } from "@/components/inspector/file-download-service";
 import {
   canDownloadScrubbed,
-  getDownloadRenditions,
   type DownloadRendition,
   type DownloadVariant,
+  getDownloadRenditions,
+  getPrimaryDownloadVariant,
 } from "@/components/inspector/file-download-service.logic";
 import { openInspectorSelection } from "@/components/inspector/inspector-actions";
 import {
-  PdfSignDialogs,
-  usePdfSignFlow,
+  PdfSignRequiredDialog,
+  usePdfSignFromList,
 } from "@/components/inspector/pdf-sign-action";
 import { resolvePdfSignTarget } from "@/components/inspector/pdf-signing.logic";
 import Tooltip from "@/components/tooltip";
@@ -82,8 +76,8 @@ import {
 import { CopyToMatterDialog } from "@/components/workspaces/copy-to-matter-dialog";
 import {
   buildSelectionParentLookup,
-  resolveAncestorIds,
   type CopyToMatterEntity,
+  resolveAncestorIds,
 } from "@/components/workspaces/copy-to-matter-dialog.logic";
 import {
   getEntityName,
@@ -91,7 +85,11 @@ import {
 } from "@/components/workspaces/entity-utils";
 import { useEntitiesCountLimit } from "@/components/workspaces/hooks/use-limits";
 import { useRetryCell } from "@/components/workspaces/hooks/use-retry-cell";
-import { requestManualOcr } from "@/components/workspaces/request-manual-ocr";
+import { WithOcrBatchHelp } from "@/components/workspaces/ocr-batch-help";
+import {
+  manualOcrSuccessKey,
+  requestManualOcr,
+} from "@/components/workspaces/request-manual-ocr";
 import {
   canRunManualOcr,
   getDesktopEditLockState,
@@ -99,19 +97,30 @@ import {
   getOcrExportFileName,
   getOcrExportFormats,
   getOcrSources,
+  getRowMenuSections,
   hasOcrExport,
   type OcrExportFormat,
   type OcrSource,
+  planFolderFromSelection,
   requestDesktopEditTakeover,
-  type RowActionContext,
+  resolveRowMenuSubject,
+  ROW_MENU_ACTION_CONTEXT,
+  type RowMenuSection,
+  type RowMenuSubject,
 } from "@/components/workspaces/row-actions.logic";
+import { RowDeleteDialog } from "@/components/workspaces/row-delete-dialog";
 import type { TableTreeNode } from "@/components/workspaces/table/types";
 import { WorkflowQueryFeedback } from "@/components/workspaces/workflow-query-feedback";
 import { PDF_MIME_TYPE } from "@/consts";
 import {
   DesktopRequiredDialog,
+  DesktopSetupMenuItem,
   useDesktopActionGate,
 } from "@/features/desktop/desktop-action-gate";
+import type {
+  DesktopActionStatus,
+  DesktopSetupStep,
+} from "@/features/desktop/desktop-action-gate.logic";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
@@ -125,17 +134,21 @@ import {
   type OpenFileInDesktopResult,
 } from "@/lib/desktop-bridge";
 import {
-  DESKTOP_EDIT_FILE_TYPE_DETAILS,
   canOpenDesktopEdit,
+  canReleaseDesktopEditLock,
+  DESKTOP_EDIT_FILE_TYPE_DETAILS,
   getDesktopEditFileType,
 } from "@/lib/desktop-edit-formats";
 import { showDesktopEditOpenResultToast } from "@/lib/desktop-edit-status-toast";
 import { detached } from "@/lib/detached";
-import { toAPIError, unwrapEden } from "@/lib/errors/api";
+import { toAPIError, unwrapApiResponse } from "@/lib/errors/api";
 import { isUnauthorizedError } from "@/lib/errors/auth";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { getExtension } from "@/lib/files/file-extension";
+import type { Capability } from "@/lib/organization/feature-access/action-capabilities.logic";
+import { CapabilityAction } from "@/lib/organization/feature-access/capability-actions";
+import { queryView } from "@/lib/query-view.logic";
 import { toSafeId } from "@/lib/safe-id";
 import type {
   OcrExportStatus,
@@ -143,9 +156,12 @@ import type {
   WorkspaceCellMetadata,
   WorkspaceEntity,
 } from "@/lib/types";
+import { useQueryViewError } from "@/lib/use-query-view";
 import { downloadFile } from "@/lib/utils";
+import { createUuid } from "@/lib/uuid";
 import {
   useCreateEntities,
+  useCreateFolderFromSelection,
   useDeleteEntities,
 } from "@/lib/workspaces/mutations/entities";
 import { useUploadVersion } from "@/lib/workspaces/mutations/use-upload-version";
@@ -154,6 +170,7 @@ import { propertiesOptions } from "@/lib/workspaces/queries/properties";
 import { useIsWorkflowRunning } from "@/lib/workspaces/queries/workspace";
 import { workflowActionsDisabled } from "@/lib/workspaces/queries/workspace.logic";
 import { useWorkspaceStore } from "@/lib/workspaces/store";
+import { useWorkspaceViewParams } from "@/lib/workspaces/use-workspace-view-params";
 
 export type VirtualAnchor = {
   getBoundingClientRect: () => DOMRect;
@@ -167,9 +184,10 @@ type RowActionsProps = {
   open?: boolean | undefined;
   onOpenChange?: ((open: boolean) => void) | undefined;
   onRename?: (() => void) | undefined;
+  /** A folder was created from this menu under `parentId` (null: the matter
+   *  root); the caller reveals it and starts renaming it. */
   onSubfolderCreated?:
-    | ((entityId: string, parentId: string) => void)
-    | undefined;
+    ((entityId: string, parentId: string | null) => void) | undefined;
   triggerClassName?: string | undefined;
   triggerTabIndex?: number | undefined;
   anchor?: VirtualAnchor | null | undefined;
@@ -199,8 +217,7 @@ type GetRowFileTargetOptions = {
 };
 
 type TranslationDialogState =
-  | { type: "closed" }
-  | { target: TranslationTarget; type: "open" };
+  { type: "closed" } | { target: TranslationTarget; type: "open" };
 
 /** What a confirmed deletion removes, captured when it was requested. */
 type DeleteRequest = {
@@ -265,6 +282,7 @@ const useOpenPDFPageEditor = ({
   workspaceId,
 }: UseOpenPDFPageEditorOptions): (() => void) | undefined => {
   const navigate = useNavigate();
+  const viewParams = useWorkspaceViewParams(workspaceId);
   if (target === null) {
     return undefined;
   }
@@ -272,7 +290,7 @@ const useOpenPDFPageEditor = ({
     detached(
       navigate({
         to: "/workspaces/$workspaceId/$viewId/document",
-        params: { workspaceId, viewId: "all" },
+        params: viewParams,
         search: {
           entity: entityId,
           field: target.fieldId,
@@ -315,6 +333,47 @@ const OcrExportMenuItems = ({
   );
 };
 
+type ExportableOcrSourcesOptions = {
+  ocrSource: OcrSource | undefined;
+  ocrSources: readonly OcrSource[];
+  subject: RowMenuSubject;
+};
+
+const getExportableOcrSources = ({
+  ocrSource,
+  ocrSources,
+  subject,
+}: ExportableOcrSourcesOptions): readonly OcrSource[] => {
+  switch (subject) {
+    case "bulk":
+      return [];
+    case "row":
+      return ocrSources.filter(hasOcrExport);
+    case "row-file-cell":
+    case "file-cell":
+    case "value-cell":
+      return ocrSource && hasOcrExport(ocrSource) ? [ocrSource] : [];
+    default:
+      subject satisfies never;
+      return panic(`Unhandled row menu subject: ${String(subject)}`);
+  }
+};
+
+type RowMenuSections = ReadonlySet<RowMenuSection>;
+
+/** `value` where the menu's subject offers `section`; nothing elsewhere. */
+const offer = <T,>(
+  sections: RowMenuSections,
+  section: RowMenuSection,
+  value: T,
+): T | undefined => (sections.has(section) ? value : undefined);
+
+const offerWhen = (
+  sections: RowMenuSections,
+  section: RowMenuSection,
+  condition: boolean,
+): boolean => sections.has(section) && condition;
+
 export const RowActions = ({
   duplicatePresentation = "menu-only",
   entity,
@@ -334,6 +393,7 @@ export const RowActions = ({
   const t = useTranslations();
   const analytics = useAnalytics();
   const navigate = useNavigate();
+  const viewParams = useWorkspaceViewParams(workspaceId);
   const queryClient = useQueryClient();
   const deleteEntities = useDeleteEntities();
   const uploadVersion = useUploadVersion();
@@ -352,15 +412,25 @@ export const RowActions = ({
   const [isOcrPending, setIsOcrPending] = useState(false);
   const [translationDialogState, setTranslationDialogState] =
     useState<TranslationDialogState>({ type: "closed" });
-  const { data: properties } = useQuery(propertiesOptions(workspaceId));
+  const propertiesQuery = useQuery(propertiesOptions(workspaceId));
+  const propertiesView = queryView(propertiesQuery);
+  useQueryViewError(propertiesView, "RowActions:query");
+  const properties =
+    propertiesView.type === "items" ? propertiesView.items : undefined;
   const duplicateTargetIdsRef = useRef(new Map<string, string>());
   const file = getFirstFile(entity);
   const name = getEntityName(entity);
   const isFolder = entity.kind === "folder";
   const isBulk = selectedEntities !== undefined && selectedEntities.length > 1;
   const bulkTargets = isBulk ? selectedEntities : [entity];
-  const isCellContext =
-    !isBulk && cellMetadataTarget !== null && cellMetadataTarget !== undefined;
+  const menuSubject = resolveRowMenuSubject({
+    cellPropertyId: cellMetadataTarget?.propertyId ?? null,
+    fields: entity.fields,
+    isBulk,
+    rowFilePropertyId: file?.propertyId ?? null,
+  });
+  const sections = getRowMenuSections(menuSubject);
+  const rowActionContext = ROW_MENU_ACTION_CONTEXT[menuSubject];
   const translationTarget = getTranslationTarget({
     cellMetadataTarget,
     entity,
@@ -390,18 +460,14 @@ export const RowActions = ({
     }
   };
   const ocrSources = getOcrSources(entity.fields);
-  let rowActionContext: RowActionContext = "row";
-  if (isBulk) {
-    rowActionContext = "bulk";
-  } else if (isCellContext) {
-    rowActionContext = "cell";
-  }
   const canRunOcr = canRunManualOcr({
     context: rowActionContext,
     entity,
     ocrSource,
   });
-  const rowOcrSources = isCellContext
+  // A cell runs OCR on its own file; only the row offers every file.
+  const isCellOcr = menuSubject !== "row";
+  const rowOcrSources = isCellOcr
     ? []
     : ocrSources.filter((source) =>
         canRunManualOcr({
@@ -428,13 +494,17 @@ export const RowActions = ({
     readOnly: entity.readOnly,
   });
   const desktopEditGate = useDesktopActionGate("edit-file");
-  const pdfSignFlow = usePdfSignFlow();
   // A folder has no file; a row always shows the current version.
   const pdfSignTarget = resolvePdfSignTarget({
     canUpdateEntity: !entity.readOnly,
     entityId: entity.entityId,
     file: isBulk ? null : file,
     isCurrentVersion: true,
+    workspaceId,
+  });
+  const { flow: pdfSignFlow, sign: signPdf } = usePdfSignFromList({
+    entity,
+    target: pdfSignTarget,
     workspaceId,
   });
   const openCopyToMatterDialog = () => {
@@ -458,7 +528,7 @@ export const RowActions = ({
         detached(
           navigate({
             to: "/workspaces/$workspaceId/$viewId/document",
-            params: { workspaceId, viewId: "all" },
+            params: viewParams,
             search: {
               entity: entity.entityId,
               field: file.fieldId,
@@ -480,12 +550,11 @@ export const RowActions = ({
 
   const hasPdfConversion =
     file !== null && file.pdfFileId !== null && file.mimeType !== PDF_MIME_TYPE;
-  let exportableOcrSources: readonly OcrSource[] = [];
-  if (!isBulk && isCellContext && ocrSource && hasOcrExport(ocrSource)) {
-    exportableOcrSources = [ocrSource];
-  } else if (!isBulk && !isCellContext) {
-    exportableOcrSources = ocrSources.filter(hasOcrExport);
-  }
+  const exportableOcrSources = getExportableOcrSources({
+    ocrSource,
+    ocrSources,
+    subject: menuSubject,
+  });
   // A bulk selection keeps the originals: it spans files whose versions do not
   // share one answer, so no rendition is offered for all of them.
   const downloadRenditions =
@@ -513,6 +582,9 @@ export const RowActions = ({
       DESKTOP_EDIT_FILE_TYPE_DETAILS[desktopEditFileType].application;
     await showDesktopEditOpenResultToast({
       messages: {
+        accountRequiredTitle: t(
+          "workspaces.files.desktopEdit.accountRequiredTitle",
+        ),
         notOpenedDescription: t.rich(
           "workspaces.files.desktopEdit.notOpenedDescription",
           {
@@ -602,7 +674,13 @@ export const RowActions = ({
       const openResult = await openFileInDesktop(desktopInput);
       await showDesktopOpenResult(openResult);
     } catch (error) {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "RowActions.handleOpenInDesktop:failure",
+        scope: {
+          type: "handler",
+          handlerId: "RowActions.handleOpenInDesktop:failure",
+        },
+      });
       if (error instanceof Error && isUnauthorizedError(error)) {
         notifyUserError(
           error,
@@ -664,7 +742,13 @@ export const RowActions = ({
     try {
       await doForceTakeover();
     } catch (forceError) {
-      analytics.captureError(forceError);
+      analytics.captureError(forceError, {
+        fingerprintKey: "RowActions.forceTakeoverWithFeedback:forceError",
+        scope: {
+          type: "handler",
+          handlerId: "RowActions.forceTakeoverWithFeedback:forceError",
+        },
+      });
       if (forceError instanceof Error && isUnauthorizedError(forceError)) {
         notifyUserError(
           forceError,
@@ -707,18 +791,25 @@ export const RowActions = ({
     }
 
     if (desktopEditLockState === "locked-by-me") {
-      const requested = await Result.tryPromise(async () =>
-        unwrapEden(
-          await api
-            .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
-            ["desktop-edit-sessions"].release.post({
-              entityId: toSafeId<"entity">(file.entityId),
-              propertyId: toSafeId<"property">(file.propertyId),
-            }),
-        ),
-      );
+      const requested = await Result.tryPromise(async () => {
+        const entitiesApi = api.entities({
+          workspaceId: toSafeId<"workspace">(workspaceId),
+        });
+        return unwrapApiResponse(
+          await entitiesApi["desktop-edit-sessions"].release.post({
+            entityId: toSafeId<"entity">(file.entityId),
+            propertyId: toSafeId<"property">(file.propertyId),
+          }),
+        );
+      });
       if (Result.isError(requested)) {
-        analytics.captureError(requested.error);
+        analytics.captureError(requested.error, {
+          fingerprintKey: "RowActions.handleReleaseLock:failure",
+          scope: {
+            type: "handler",
+            handlerId: "RowActions.handleReleaseLock:failure",
+          },
+        });
         notifyUserError(requested.error, t("errors.actionFailed"), {
           description: userErrorFromThrown(
             requested.error,
@@ -740,12 +831,16 @@ export const RowActions = ({
       // Resolves false on an error response (e.g. no active session), which
       // forces the release.
       requestTakeover: async () => {
-        const response = await api
-          .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
-          ["desktop-edit-sessions"]["request-takeover"].post({
-            entityId: toSafeId<"entity">(file.entityId),
-            propertyId: toSafeId<"property">(file.propertyId),
-          });
+        const entitiesApi = api.entities({
+          workspaceId: toSafeId<"workspace">(workspaceId),
+        });
+
+        const response = await entitiesApi["desktop-edit-sessions"][
+          "request-takeover"
+        ].post({
+          entityId: toSafeId<"entity">(file.entityId),
+          propertyId: toSafeId<"property">(file.propertyId),
+        });
         return !response.error;
       },
       forceTakeover: forceTakeoverWithFeedback,
@@ -775,7 +870,13 @@ export const RowActions = ({
         }, 30_000);
       },
       reportError: (error) => {
-        analytics.captureError(error);
+        analytics.captureError(error, {
+          fingerprintKey: "RowActions.handleReleaseLock.reportError:failure",
+          scope: {
+            type: "handler",
+            handlerId: "RowActions.handleReleaseLock.reportError:failure",
+          },
+        });
       },
     });
   };
@@ -827,7 +928,6 @@ export const RowActions = ({
     const toastId = stellaToast.add({
       title: t("common.duplicating"),
       type: "loading",
-      timeout: Number.POSITIVE_INFINITY,
     });
     let failedCount = 0;
     let firstFailure: unknown;
@@ -835,8 +935,7 @@ export const RowActions = ({
     try {
       for (const target of bulkTargets) {
         const targetEntityId =
-          duplicateTargetIdsRef.current.get(target.entityId) ??
-          crypto.randomUUID();
+          duplicateTargetIdsRef.current.get(target.entityId) ?? createUuid();
         duplicateTargetIdsRef.current.set(target.entityId, targetEntityId);
         const result = await Result.tryPromise(async () => {
           // oxlint-disable-next-line no-network-await-in-loop/no-network-await-in-loop -- sequential bulk action: each source owns a stable target identity, so retries converge and a partial failure has an exact per-item result
@@ -851,12 +950,18 @@ export const RowActions = ({
               }),
               targetEntityId: toSafeId<"entity">(targetEntityId),
             });
-          return unwrapEden(response);
+          return unwrapApiResponse(response);
         });
         if (Result.isError(result)) {
           failedCount++;
           firstFailure ??= result.error;
-          analytics.captureError(result.error);
+          analytics.captureError(result.error, {
+            fingerprintKey: "RowActions.handleDuplicate:failure",
+            scope: {
+              type: "handler",
+              handlerId: "RowActions.handleDuplicate:failure",
+            },
+          });
           continue;
         }
         duplicateTargetIdsRef.current.delete(target.entityId);
@@ -886,7 +991,7 @@ export const RowActions = ({
       if (openedDuplicate) {
         await navigate({
           to: "/workspaces/$workspaceId/$viewId/document",
-          params: { workspaceId, viewId: "all" },
+          params: viewParams,
           search: {
             entity: openedDuplicate.entityId,
             field: openedDuplicate.fieldId,
@@ -951,7 +1056,7 @@ export const RowActions = ({
 
     setIsOcrPending(true);
     try {
-      const { outcome } = await requestManualOcr({
+      const response = await requestManualOcr({
         entityId: entity.entityId,
         fieldId: source.fieldId,
         workspaceId,
@@ -960,15 +1065,17 @@ export const RowActions = ({
         queryKey: entitiesKeys.all(workspaceId),
       });
       stellaToast.add({
-        title: t(
-          outcome === "already_processed"
-            ? "workspaces.files.ocrAlreadyProcessed"
-            : "workspaces.files.ocrQueued",
-        ),
+        title: t(manualOcrSuccessKey(response)),
         type: "success",
       });
     } catch (error) {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "RowActions.handleRunOcr:failure",
+        scope: {
+          type: "handler",
+          handlerId: "RowActions.handleRunOcr:failure",
+        },
+      });
       notifyUserError(error, t("workspaces.files.ocrQueueFailed"), {
         description: userErrorFromThrown(error, t("errors.actionFailed")),
       });
@@ -997,14 +1104,30 @@ export const RowActions = ({
     ? `.${versionAcceptExtension}`
     : "*/*";
 
+  // Each action is offered only where the menu's subject has it: a gated-out
+  // handler is undefined, so the item hides.
+  const openAction = offer(sections, "open", openVersionHistory);
+  const editPagesAction = offer(sections, "edit-pages", openPDFPageEditor);
+  const chatAction = offer(sections, "chat", handleChatAbout);
+  const offeredTranslationTarget =
+    offer(sections, "translate", translationTarget) ?? null;
+  const hasFeatureActions = [
+    openAction,
+    editPagesAction,
+    chatAction,
+    offeredTranslationTarget,
+  ].some((action) => action !== undefined && action !== null);
+
   return (
     <Menu onOpenChange={onOpenChange} open={open}>
       <RowDuplicatePrimaryAction
-        isCellContext={isCellContext}
         label={t("common.duplicate")}
         onDuplicate={handleDuplicate}
         pending={isDuplicating}
-        presentation={duplicatePresentation}
+        presentation={
+          offer(sections, "file-operations", duplicatePresentation) ??
+          "menu-only"
+        }
       />
       <Tooltip
         content={t("common.actions")}
@@ -1013,7 +1136,7 @@ export const RowActions = ({
             aria-label={t("common.actions")}
             className={cn(
               triggerClassName ??
-                "opacity-0! transition-opacity group-hover/row:opacity-100!",
+                "opacity-0! transition-opacity group-hover/row:opacity-100! pointer-coarse:opacity-100!",
             )}
             onClick={(event) => event.stopPropagation()}
             onPointerDown={(event) => event.stopPropagation()}
@@ -1025,55 +1148,116 @@ export const RowActions = ({
         <EllipsisVerticalIcon />
       </Tooltip>
       <MenuPopup anchor={anchor ?? undefined}>
+        {offer(
+          sections,
+          "new-folder-from-selection",
+          <CreateFolderFromSelectionMenuItem
+            getAncestorIds={getAncestorIds}
+            onFolderCreated={onSubfolderCreated}
+            targets={bulkTargets}
+            workspaceId={workspaceId}
+          />,
+        )}
         {/* --- View / Edit --- */}
         <RowOpenMenuActions
-          canUploadVersion={canUploadVersion}
+          canUploadVersion={offerWhen(
+            sections,
+            "upload-version",
+            canUploadVersion,
+          )}
           isBulk={isBulk}
-          isCellContext={isCellContext}
-          onOpen={resolvedOnOpen}
-          onRename={onRename}
+          onOpen={offer(sections, "preview", resolvedOnOpen)}
+          onRename={offer(sections, "rename", onRename)}
           onUploadVersion={handleUploadVersionSelect}
           uploadVersionPending={uploadVersion.isPending}
         />
         <RowOcrMenuActions
-          canRunOcr={canRunOcr}
+          canRunOcr={offerWhen(sections, "run-ocr", canRunOcr)}
           isPending={isOcrPending}
           onRun={handleRunOcr}
           rowSources={rowOcrSources}
           selectedSource={ocrSource}
         />
-        <RowCellMenuActions
-          canRetry={canRetryCell}
-          entityId={entity.entityId}
-          isBulk={isBulk}
-          metadataTarget={cellMetadataTarget}
-          onRetry={handleRetryCell}
-          retryDisabled={retryDisabled}
-          workspaceId={workspaceId}
-        />
-        <RowFolderDesktopMenuActions
-          canOpenInDesktop={canOpenInDesktop}
-          canReleaseDesktopLock={
-            !entity.readOnly &&
-            hasDesktopEditFileType &&
-            desktopEditLockState !== "unlocked"
-          }
+        <RowFolderMenuActions
           entity={entity}
           isBulk={isBulk}
-          isCellContext={isCellContext}
           isFolder={isFolder}
-          onOpenInDesktop={() => {
-            desktopEditGate.run(() => {
-              detached(handleOpenInDesktop(), "row-actions.open-in-desktop");
-            });
-          }}
-          openInDesktopLabel={desktopEditGate.label}
-          onReleaseDesktopLock={handleReleaseLock}
-          onSubfolderCreated={onSubfolderCreated}
+          onSubfolderCreated={offer(
+            sections,
+            "new-subfolder",
+            onSubfolderCreated,
+          )}
           workspaceId={workspaceId}
         />
+        {offer(
+          sections,
+          "cell-review",
+          <RowCellMenuActions
+            canRetry={canRetryCell}
+            entityId={entity.entityId}
+            isBulk={isBulk}
+            metadataTarget={cellMetadataTarget}
+            onRetry={handleRetryCell}
+            retryDisabled={retryDisabled}
+            workspaceId={workspaceId}
+          />,
+        )}
+        <RowDesktopMenuActions
+          edit={
+            offerWhen(sections, "desktop-edit", canOpenInDesktop) &&
+            desktopEditFileType !== null
+              ? {
+                  capability: "desktop",
+                  label: t.rich(
+                    "workspaces.files.desktopEdit.editInApplication",
+                    {
+                      application:
+                        DESKTOP_EDIT_FILE_TYPE_DETAILS[desktopEditFileType]
+                          .application,
+                      bdi: (chunks) => <bdi dir="ltr">{chunks}</bdi>,
+                    },
+                  ),
+                  onSelect: () => {
+                    desktopEditGate.run(() => {
+                      detached(
+                        handleOpenInDesktop(),
+                        "row-actions.open-in-desktop",
+                      );
+                    });
+                  },
+                  onSetUp: desktopEditGate.setUp,
+                  status: desktopEditGate.status,
+                }
+              : null
+          }
+          onReleaseLock={
+            offerWhen(
+              sections,
+              "desktop-edit",
+              canReleaseDesktopEditLock({
+                context: rowActionContext,
+                fileType: desktopEditFileType,
+                lockState: desktopEditLockState,
+                readOnly: entity.readOnly,
+              }),
+            )
+              ? handleReleaseLock
+              : null
+          }
+          sign={
+            offerWhen(sections, "sign", pdfSignTarget !== null)
+              ? {
+                  capability: "desktop",
+                  label: pdfSignFlow.actionLabel,
+                  onSelect: signPdf,
+                  onSetUp: pdfSignFlow.setUp,
+                  status: pdfSignFlow.status,
+                }
+              : null
+          }
+        />
 
-        <MenuSeparator />
+        {hasFeatureActions && <MenuSeparator />}
 
         {/* --- Features --- */}
         <RowFeatureMenuActions
@@ -1082,33 +1266,37 @@ export const RowActions = ({
           file={file}
           isBulk={isBulk}
           isFolder={isFolder}
-          onChatAbout={handleChatAbout}
-          onOpenVersionHistory={openVersionHistory}
-          onEditPages={openPDFPageEditor}
-          onSign={pdfSignTarget === null ? undefined : pdfSignFlow.start}
-          signLabel={pdfSignFlow.label}
+          onChatAbout={chatAction}
+          onOpenVersionHistory={openAction}
+          onEditPages={editPagesAction}
           onTranslate={openTranslationDialog}
-          translationTarget={translationTarget}
+          translationTarget={offeredTranslationTarget}
         />
-        <RowCellOcrExportMenuActions
-          isCellContext={isCellContext}
-          onExport={handleOcrExport}
-          sources={exportableOcrSources}
-        />
-        <RowFileOperationsMenu
-          downloadRenditions={downloadRenditions}
-          exportableOcrSources={exportableOcrSources}
-          hasAnyFile={hasAnyFile}
-          hasAnyFolder={hasAnyFolder}
-          isCellContext={isCellContext}
-          onCopyToMatter={openCopyToMatterDialog}
-          onDelete={requestDelete}
-          onDownload={handleDownload}
-          onDuplicate={handleDuplicate}
-          duplicatePending={isDuplicating}
-          onOcrExport={handleOcrExport}
-          onZipDownload={handleZipDownload}
-        />
+        {offer(
+          sections,
+          "cell-ocr-export",
+          <RowCellOcrExportMenuActions
+            onExport={handleOcrExport}
+            sources={exportableOcrSources}
+          />,
+        )}
+        {offer(
+          sections,
+          "file-operations",
+          <RowFileOperationsMenu
+            downloadRenditions={downloadRenditions}
+            exportableOcrSources={exportableOcrSources}
+            hasAnyFile={hasAnyFile}
+            hasAnyFolder={hasAnyFolder}
+            onCopyToMatter={openCopyToMatterDialog}
+            onDelete={requestDelete}
+            onDownload={handleDownload}
+            onDuplicate={handleDuplicate}
+            duplicatePending={isDuplicating}
+            onOcrExport={handleOcrExport}
+            onZipDownload={handleZipDownload}
+          />,
+        )}
       </MenuPopup>
       <CopyToMatterDialog
         entities={copyToMatterEntities}
@@ -1142,16 +1330,13 @@ export const RowActions = ({
         }
         workspaceId={workspaceId}
       />
-      {pdfSignTarget !== null && (
-        <PdfSignDialogs flow={pdfSignFlow} target={pdfSignTarget} />
-      )}
+      {pdfSignTarget !== null && <PdfSignRequiredDialog flow={pdfSignFlow} />}
       <DesktopRequiredDialog {...desktopEditGate.requiredDialog} />
     </Menu>
   );
 };
 
 type RowDuplicatePrimaryActionProps = {
-  isCellContext: boolean;
   label: string;
   onDuplicate: () => Promise<void>;
   pending: boolean;
@@ -1159,20 +1344,21 @@ type RowDuplicatePrimaryActionProps = {
 };
 
 const RowDuplicatePrimaryAction = ({
-  isCellContext,
   label,
   onDuplicate,
   pending,
   presentation,
 }: RowDuplicatePrimaryActionProps) => {
-  if (presentation !== "primary" || isCellContext) {
+  const t = useTranslations();
+  if (presentation !== "primary") {
     return null;
   }
 
   return (
     <Button
-      className="opacity-0 transition-opacity group-hover/row:opacity-100 focus-visible:opacity-100"
+      className="opacity-0 transition-opacity group-hover/row:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100"
       disabled={pending}
+      disabledReason={t("workspaces.duplicatingRow")}
       onClick={(event) => {
         event.stopPropagation();
         detached(onDuplicate(), "row-actions.duplicate-primary");
@@ -1182,7 +1368,7 @@ const RowDuplicatePrimaryAction = ({
       tooltip={label}
       variant="ghost"
     >
-      {pending ? <Loader label={label} size="sm" /> : <CopyIcon />}
+      {pending ? <Loader label={label} size="sm" /> : <DuplicateIcon />}
     </Button>
   );
 };
@@ -1190,7 +1376,6 @@ const RowDuplicatePrimaryAction = ({
 const RowOpenMenuActions = ({
   canUploadVersion,
   isBulk,
-  isCellContext,
   onOpen,
   onRename,
   onUploadVersion,
@@ -1198,7 +1383,6 @@ const RowOpenMenuActions = ({
 }: {
   canUploadVersion: boolean;
   isBulk: boolean;
-  isCellContext: boolean;
   onOpen: (() => void) | undefined;
   onRename: (() => void) | undefined;
   onUploadVersion: () => void;
@@ -1219,7 +1403,7 @@ const RowOpenMenuActions = ({
           {t("common.rename")}
         </MenuItem>
       )}
-      {!isCellContext && canUploadVersion && (
+      {canUploadVersion && (
         <MenuItem disabled={uploadVersionPending} onClick={onUploadVersion}>
           <UploadIcon />
           {t("fileDetail.uploadNewVersion")}
@@ -1229,7 +1413,7 @@ const RowOpenMenuActions = ({
   );
 };
 
-const RowOcrMenuActions = ({
+export const RowOcrMenuActions = ({
   canRunOcr,
   isPending,
   onRun,
@@ -1246,32 +1430,60 @@ const RowOcrMenuActions = ({
   return (
     <>
       {canRunOcr && (
-        <MenuItem
-          disabled={isPending}
-          onClick={() => detached(onRun(selectedSource), "row-actions.run-ocr")}
-        >
-          <ScanTextIcon />
-          {t("workspaces.files.runOcr")}
-        </MenuItem>
+        <WithOcrBatchHelp>
+          <CapabilityAction action={{ capability: "ocr" }}>
+            {(capabilityProps) => (
+              <MenuItem
+                className="min-w-0 flex-1"
+                disabled={isPending}
+                onClick={() =>
+                  detached(onRun(selectedSource), "row-actions.run-ocr")
+                }
+                {...capabilityProps}
+              >
+                <ScanTextIcon />
+                {t("workspaces.files.queueForOcr")}
+              </MenuItem>
+            )}
+          </CapabilityAction>
+        </WithOcrBatchHelp>
       )}
       {rowSources.length > 0 && (
         <MenuSub>
-          <MenuSubTrigger>
-            <ScanTextIcon />
-            {t("workspaces.files.runOcr")}
-          </MenuSubTrigger>
+          <WithOcrBatchHelp>
+            <CapabilityAction action={{ capability: "ocr" }}>
+              {(capabilityProps) => (
+                <MenuSubTrigger className="min-w-0 flex-1" {...capabilityProps}>
+                  <ScanTextIcon />
+                  {t("workspaces.files.queueForOcr")}
+                </MenuSubTrigger>
+              )}
+            </CapabilityAction>
+          </WithOcrBatchHelp>
           <MenuSubPopup>
             {rowSources.map((source) => (
-              <MenuItem
-                disabled={isPending}
+              <CapabilityAction
                 key={source.fieldId}
-                onClick={() => detached(onRun(source), "row-actions.run-ocr")}
+                action={{ capability: "ocr" }}
               >
-                <ScanTextIcon />
-                <BidiText as="span" className="max-w-64 truncate">
-                  {source.fileName}
-                </BidiText>
-              </MenuItem>
+                {(capabilityProps) => (
+                  <MenuItem
+                    disabled={isPending}
+                    onClick={() =>
+                      detached(onRun(source), "row-actions.run-ocr")
+                    }
+                    {...capabilityProps}
+                  >
+                    <ScanTextIcon />
+                    <TruncatedText
+                      className="max-w-64"
+                      render={<BidiText as="span" />}
+                    >
+                      {source.fileName}
+                    </TruncatedText>
+                  </MenuItem>
+                )}
+              </CapabilityAction>
             ))}
           </MenuSubPopup>
         </MenuSub>
@@ -1329,55 +1541,91 @@ const RowCellMenuActions = ({
   );
 };
 
-const RowFolderDesktopMenuActions = ({
-  canOpenInDesktop,
-  canReleaseDesktopLock,
+const RowFolderMenuActions = ({
   entity,
   isBulk,
-  isCellContext,
   isFolder,
-  onOpenInDesktop,
-  openInDesktopLabel,
-  onReleaseDesktopLock,
   onSubfolderCreated,
   workspaceId,
 }: {
-  canOpenInDesktop: boolean;
-  canReleaseDesktopLock: boolean;
   entity: WorkspaceEntity;
   isBulk: boolean;
-  isCellContext: boolean;
   isFolder: boolean;
-  onOpenInDesktop: () => void;
-  openInDesktopLabel: string;
-  onReleaseDesktopLock: () => Promise<void>;
   onSubfolderCreated: RowActionsProps["onSubfolderCreated"];
   workspaceId: string;
 }) => {
+  if (isBulk || !isFolder || onSubfolderCreated === undefined) {
+    return null;
+  }
+  return (
+    <CreateSubfolderMenuItem
+      entity={entity}
+      onSubfolderCreated={onSubfolderCreated}
+      workspaceId={workspaceId}
+    />
+  );
+};
+
+/** A file action stella desktop runs, with the desktop status it depends on. */
+type RowDesktopAction = {
+  capability: Capability;
+  label: ReactNode;
+  onSelect: () => void;
+  onSetUp: (step: DesktopSetupStep) => void;
+  status: DesktopActionStatus;
+};
+
+/**
+ * The menu's desktop group: the desktop status first, so it reads as what the
+ * actions below need, then actions named by what they do. Editing applies to
+ * Office files and signing to PDFs, so at most one of them is offered.
+ */
+const RowDesktopMenuActions = ({
+  edit,
+  onReleaseLock,
+  sign,
+}: {
+  edit: RowDesktopAction | null;
+  onReleaseLock: (() => Promise<void>) | null;
+  sign: RowDesktopAction | null;
+}) => {
   const t = useTranslations();
-  if (isCellContext) {
+  const statusSource = edit ?? sign;
+  if (statusSource === null && onReleaseLock === null) {
     return null;
   }
   return (
     <>
-      {!isBulk && isFolder && onSubfolderCreated !== undefined && (
-        <CreateSubfolderMenuItem
-          entity={entity}
-          onSubfolderCreated={onSubfolderCreated}
-          workspaceId={workspaceId}
+      <MenuSeparator />
+      {statusSource !== null && (
+        <DesktopSetupMenuItem
+          onSetUp={statusSource.onSetUp}
+          status={statusSource.status}
         />
       )}
-      {canOpenInDesktop && (
-        <MenuItem onClick={onOpenInDesktop}>
-          <LaptopIcon />
-          {openInDesktopLabel}
-        </MenuItem>
+      {edit !== null && (
+        <CapabilityAction action={{ capability: edit.capability }}>
+          {(capabilityProps) => (
+            <MenuItem onClick={edit.onSelect} {...capabilityProps}>
+              <LaptopIcon />
+              {edit.label}
+            </MenuItem>
+          )}
+        </CapabilityAction>
       )}
-      {canReleaseDesktopLock && (
+      {sign !== null && (
+        <CapabilityAction action={{ capability: sign.capability }}>
+          {(capabilityProps) => (
+            <MenuItem onClick={sign.onSelect} {...capabilityProps}>
+              <SignatureIcon />
+              {sign.label}
+            </MenuItem>
+          )}
+        </CapabilityAction>
+      )}
+      {onReleaseLock !== null && (
         <MenuItem
-          onClick={() =>
-            detached(onReleaseDesktopLock(), "row-actions.release-lock")
-          }
+          onClick={() => detached(onReleaseLock(), "row-actions.release-lock")}
         >
           <LockOpenIcon />
           {t("workspaces.files.desktopEdit.releaseLock")}
@@ -1387,7 +1635,7 @@ const RowFolderDesktopMenuActions = ({
   );
 };
 
-const RowFeatureMenuActions = ({
+export const RowFeatureMenuActions = ({
   canCreateEntity,
   entity,
   file,
@@ -1396,9 +1644,7 @@ const RowFeatureMenuActions = ({
   onChatAbout,
   onEditPages,
   onOpenVersionHistory,
-  onSign,
   onTranslate,
-  signLabel,
   translationTarget,
 }: {
   canCreateEntity: boolean;
@@ -1406,13 +1652,10 @@ const RowFeatureMenuActions = ({
   file: ReturnType<typeof getFirstFile>;
   isBulk: boolean;
   isFolder: boolean;
-  onChatAbout: () => void;
+  onChatAbout: (() => void) | undefined;
   onEditPages: (() => void) | undefined;
   onOpenVersionHistory: (() => void) | undefined;
-  /** Always offered for a signable PDF; the label says what it needs. */
-  onSign: (() => void) | undefined;
   onTranslate: () => void;
-  signLabel: string;
   translationTarget: TranslationTarget | null;
 }) => {
   const t = useTranslations();
@@ -1433,25 +1676,40 @@ const RowFeatureMenuActions = ({
         )}
       {onEditPages !== undefined && (
         <MenuItem onClick={onEditPages}>
-          <FilePenLineIcon />
+          <EditPagesIcon />
           {t("workspaces.pdf.pageEditor.editPages")}
         </MenuItem>
       )}
-      {onSign !== undefined && (
-        <MenuItem onClick={onSign}>
-          <SignatureIcon />
-          {signLabel}
-        </MenuItem>
+      {onChatAbout !== undefined && (
+        <CapabilityAction action={{ capability: "ai" }}>
+          {(capabilityProps) => (
+            <MenuItem onClick={onChatAbout} {...capabilityProps}>
+              <MessageSquareIcon />
+              {t("chat.chatAbout")}
+            </MenuItem>
+          )}
+        </CapabilityAction>
       )}
-      <MenuItem onClick={onChatAbout}>
-        <MessageSquareIcon />
-        {t("chat.chatAbout")}
-      </MenuItem>
       {translationTarget !== null && (
-        <MenuItem disabled={!canCreateEntity} onClick={onTranslate}>
-          <LanguagesIcon />
-          {t("common.translate")}
-        </MenuItem>
+        <CapabilityAction
+          action={{
+            capability:
+              translationTarget.mimeType === DOCX_MIME
+                ? "translation"
+                : "deepl",
+          }}
+        >
+          {(capabilityProps) => (
+            <MenuItem
+              disabled={!canCreateEntity}
+              onClick={onTranslate}
+              {...capabilityProps}
+            >
+              <LanguagesIcon />
+              {t("common.translate")}
+            </MenuItem>
+          )}
+        </CapabilityAction>
       )}
     </>
   );
@@ -1472,10 +1730,7 @@ const RowTranslationDialog = ({
   target: TranslationTarget | null;
   workspaceId: string;
 }) => {
-  const viewMatch = useMatch({
-    from: "/_protected/workspaces/$workspaceId/$viewId",
-    shouldThrow: false,
-  });
+  const { viewId } = useWorkspaceViewParams(workspaceId);
   if (target === null) {
     return null;
   }
@@ -1489,23 +1744,21 @@ const RowTranslationDialog = ({
       mode="controlled"
       onOpenChange={onOpenChange}
       open={open}
-      viewId={viewMatch?.params.viewId ?? "all"}
+      viewId={viewId}
       workspaceId={workspaceId}
     />
   );
 };
 
 const RowCellOcrExportMenuActions = ({
-  isCellContext,
   onExport,
   sources,
 }: {
-  isCellContext: boolean;
   onExport: (source: OcrSource, format: OcrExportFormat) => Promise<void>;
   sources: readonly OcrSource[];
 }) => {
   const t = useTranslations();
-  if (!isCellContext || sources.length !== 1) {
+  if (sources.length !== 1) {
     return null;
   }
   return (
@@ -1532,7 +1785,6 @@ type RowFileOperationsMenuProps = {
   exportableOcrSources: readonly OcrSource[];
   hasAnyFile: boolean;
   hasAnyFolder: boolean;
-  isCellContext: boolean;
   onCopyToMatter: () => void;
   onDelete: () => void;
   onDownload: (variant: DownloadVariant) => Promise<void>;
@@ -1547,7 +1799,6 @@ const RowFileOperationsMenu = ({
   exportableOcrSources,
   hasAnyFile,
   hasAnyFolder,
-  isCellContext,
   onCopyToMatter,
   onDelete,
   onDownload,
@@ -1556,9 +1807,6 @@ const RowFileOperationsMenu = ({
   onZipDownload,
 }: RowFileOperationsMenuProps) => {
   const t = useTranslations();
-  if (isCellContext) {
-    return null;
-  }
   const hasDownloadAsMenu =
     downloadRenditions.length > 0 || exportableOcrSources.length > 0;
   const renderOcrExport = (source: OcrSource) => (
@@ -1577,7 +1825,10 @@ const RowFileOperationsMenu = ({
       {hasAnyFile && (
         <MenuItem
           onClick={() =>
-            detached(onDownload("original"), "row-actions.download")
+            detached(
+              onDownload(getPrimaryDownloadVariant(downloadRenditions)),
+              "row-actions.download",
+            )
           }
         >
           <DownloadIcon />
@@ -1619,9 +1870,12 @@ const RowFileOperationsMenu = ({
                 <MenuSub key={source.fieldId}>
                   <MenuSubTrigger>
                     <ScanTextIcon />
-                    <BidiText as="span" className="max-w-64 truncate">
+                    <TruncatedText
+                      className="max-w-64"
+                      render={<BidiText as="span" />}
+                    >
                       {source.fileName}
-                    </BidiText>
+                    </TruncatedText>
                   </MenuSubTrigger>
                   <MenuSubPopup>{renderOcrExport(source)}</MenuSubPopup>
                 </MenuSub>
@@ -1641,7 +1895,7 @@ const RowFileOperationsMenu = ({
         disabled={duplicatePending}
         onClick={() => detached(onDuplicate(), "row-actions.duplicate")}
       >
-        <CopyIcon />
+        <DuplicateIcon />
         {duplicatePending ? t("common.duplicating") : t("common.duplicate")}
       </MenuItem>
       <MenuItem onClick={onCopyToMatter}>
@@ -1659,60 +1913,10 @@ const RowFileOperationsMenu = ({
   );
 };
 
-type RowDeleteDialogProps = {
-  isBulk: boolean;
-  name: string;
-  onConfirm: () => void;
-  onOpenChange: (open: boolean) => void;
-  open: boolean;
-  selectedCount: number;
-};
-
-const RowDeleteDialog = ({
-  isBulk,
-  name,
-  onConfirm,
-  onOpenChange,
-  open,
-  selectedCount,
-}: RowDeleteDialogProps) => {
-  const t = useTranslations();
-  return (
-    <AlertDialog onOpenChange={onOpenChange} open={open}>
-      <AlertDialogPopup>
-        <AlertDialogHeader>
-          <AlertDialogTitle>
-            {isBulk
-              ? t("workspaces.deleteItems", { count: selectedCount })
-              : t("workspaces.deleteItem")}
-          </AlertDialogTitle>
-          <AlertDialogDescription>
-            {isBulk
-              ? t("workspaces.deleteItemsDescription", {
-                  count: selectedCount,
-                })
-              : t("common.deleteConfirmDescription", { name })}
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogClose render={<Button variant="ghost" />}>
-            {t("common.cancel")}
-          </AlertDialogClose>
-          <AlertDialogClose
-            render={<Button onClick={onConfirm} variant="destructive" />}
-          >
-            {t("common.delete")}
-          </AlertDialogClose>
-        </AlertDialogFooter>
-      </AlertDialogPopup>
-    </AlertDialog>
-  );
-};
-
 type CreateSubfolderMenuItemProps = {
   entity: WorkspaceEntity;
   workspaceId: string;
-  onSubfolderCreated: (entityId: string, parentId: string) => void;
+  onSubfolderCreated: NonNullable<RowActionsProps["onSubfolderCreated"]>;
 };
 
 const CreateSubfolderMenuItem = ({
@@ -1764,6 +1968,75 @@ const CreateSubfolderMenuItem = ({
         <FolderPlusIcon />
         {t("workspaces.filesystem.newSubfolder")}
       </MenuItem>
+    </>
+  );
+};
+
+type CreateFolderFromSelectionMenuItemProps = {
+  getAncestorIds: RowActionsProps["getAncestorIds"];
+  onFolderCreated: RowActionsProps["onSubfolderCreated"];
+  targets: readonly WorkspaceEntity[];
+  workspaceId: string;
+};
+
+const CreateFolderFromSelectionMenuItem = ({
+  getAncestorIds,
+  onFolderCreated,
+  targets,
+  workspaceId,
+}: CreateFolderFromSelectionMenuItemProps) => {
+  const t = useTranslations();
+  const createFolder = useCreateFolderFromSelection();
+  const workflowView = useIsWorkflowRunning(workspaceId);
+  const workflowDisabled = workflowActionsDisabled(workflowView);
+  const isEntitiesLimitReached = useEntitiesCountLimit(workspaceId);
+  const canCreateAndMove = usePermissions({ entity: ["create", "update"] });
+  const plan = planFolderFromSelection(
+    toCopyToMatterEntities(targets, getAncestorIds),
+  );
+  const movedIds = new Set(plan.entityIds);
+  const movesReadOnly = targets.some(
+    (target) => target.readOnly && movedIds.has(target.entityId),
+  );
+
+  if (isEntitiesLimitReached || !canCreateAndMove || movesReadOnly) {
+    return null;
+  }
+
+  // The menu closes, and the selection with it, before the request settles,
+  // so the outcome is read from the request itself rather than from
+  // per-call mutation callbacks bound to this item.
+  const handleCreate = async () => {
+    const created = await Result.tryPromise(
+      async () =>
+        await createFolder.mutateAsync({
+          workspaceId,
+          name: t("workspaces.newFolder"),
+          parentId: plan.parentId,
+          entityIds: plan.entityIds,
+        }),
+    );
+    if (Result.isError(created)) {
+      notifyUserError(created.error, t("errors.actionFailed"));
+      return;
+    }
+    stellaToast.add({ title: t("success.folderCreated"), type: "success" });
+    onFolderCreated?.(created.value.entityId, plan.parentId);
+  };
+
+  return (
+    <>
+      <WorkflowQueryFeedback display="menu" view={workflowView} />
+      <MenuItem
+        disabled={workflowDisabled || createFolder.isPending}
+        onClick={() =>
+          detached(handleCreate(), "row-actions.create-folder-from-selection")
+        }
+      >
+        <FolderPlusIcon />
+        {t("workspaces.newFolder")}
+      </MenuItem>
+      <MenuSeparator />
     </>
   );
 };

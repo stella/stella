@@ -15,32 +15,6 @@
     "getCli": "Obtenir la CLI",
     "startFree": "Commencer gratuitement"
   },
-  "demo": {
-    "addView": "Ajouter une vue",
-    "askStella": "Demander à stella",
-    "close": "Fermer",
-    "documentType": "Type de document",
-    "documents": "Documents",
-    "dueDate": "Échéance",
-    "files": "Fichiers",
-    "filter": "Filtrer",
-    "matters": "Dossiers",
-    "notes": "Notes",
-    "overview": "Vue d’ensemble",
-    "sectionBody": "Capturé directement dans le produit, tel qu’il fonctionne réellement. Ce que vous voyez ici est ce que vous utilisez.",
-    "sectionLabel": "Le produit réel",
-    "sectionTitle": "stella, telle qu’elle est.",
-    "sort": "Trier",
-    "source": "Source",
-    "sources": "Sources",
-    "status": "Statut",
-    "statusActive": "Actif",
-    "statusClosed": "Fermé",
-    "statusInReview": "En révision",
-    "statusOnHold": "En attente",
-    "table": "Tableau",
-    "todos": "Tâches"
-  },
   "footer": {
     "agent": "Agent IA",
     "anonymization": "Anonymisation",
@@ -56,8 +30,8 @@
     "privacy": "Confidentialité",
     "publicData": "Données publiques",
     "resources": "Ressources",
-    "sourceCode": "Code source",
     "status": "État du service",
+    "support": "Assistance",
     "tabularReview": "Revue tabulaire",
     "tagline": "Un espace de travail juridique ouvert pour le travail qui compte.",
     "templates": "Modèles",
@@ -89,12 +63,23 @@
   },
   "nav": {
     "aiFactSheet": "Fiche pour l’IA",
-    "aiFactSheetBlurb": "stella sous forme lisible par machine.",
-    "beta": "Bêta",
     "blog": "Blog",
     "changelog": "Journal des modifications",
     "chooseLanguage": "Choisir une langue",
     "docxEditor": "Éditeur DOCX autonome",
+    "featurePreviews": {
+      "documents": {
+        "comments": "Commentaires"
+      },
+      "matters": {
+        "done": "Terminé",
+        "inProgress": "En cours",
+        "open": "Ouvert"
+      },
+      "research": {
+        "caseLaw": "Jurisprudence"
+      }
+    },
     "github": "stella sur GitHub",
     "openMenu": "Ouvrir la navigation",
     "pillars": {
@@ -660,7 +645,7 @@
           "question": "D’où proviennent les données ?"
         },
         "1": {
-          "answer": "Deux listes, l’une et l’autre en expansion. Les registres connectés couvrent déjà ARES (Tchéquie), Companies House (Royaume-Uni), SEC EDGAR (États-Unis), KRS (Pologne), PRH (Finlande) et VIES (TVA de l’UE). Au-delà des registres, les sources officielles s’ajoutent juridiction par juridiction : la Tchéquie, l’Espagne et Taïwan, par exemple, ont déjà des sources connectées, et le lecteur de jurisprudence est conçu pour parcourir et filtrer par juridiction à mesure que d’autres sources officielles s’ajoutent.",
+          "answer": "Le lecteur de jurisprudence publique donne actuellement accès aux décisions tchèques. Les registres de sociétés connectés comprennent ARES (Tchéquie), Companies House (Royaume-Uni), SEC EDGAR (États-Unis), KRS (Pologne), PRH (Finlande) et VIES (TVA de l’UE).",
           "question": "Quelles juridictions et quels registres sont couverts ?"
         },
         "2": {
@@ -884,6 +869,7 @@
       }
     },
     "ui": {
+      "browseLaw": "Parcourir la base juridique publique",
       "capabilities": "Fonctionnalités",
       "exploreMore": "Pour aller plus loin",
       "faq": "Questions fréquentes",
@@ -923,8 +909,8 @@
           "title": "Conversation IA et base de connaissances"
         },
         "4": {
-          "body": "Une application de bureau sert de passerelle locale pour modifier les documents Office depuis stella.",
-          "title": "Passerelle bureau"
+          "body": "Ouvre les documents Office de stella dans les applications installées sur votre ordinateur et enregistre les modifications dans stella. Conserve aussi un historique du presse-papiers qui reste sur votre appareil.",
+          "title": "Application de bureau"
         },
         "5": {
           "body": "Les modifications enregistrées et les envois deviennent des révisions : le fichier courant et son historique restent ensemble.",
@@ -983,9 +969,11 @@
     "bringWorkspaceToFront": "Mettre l’espace de travail stella au premier plan",
     "controlBody": "stella est un logiciel juridique <gh>open source</gh> que vous pouvez auto-héberger : inspectez le code, exécutez-le à votre façon et exportez tout dans des formats standard.",
     "controlTitle": "Gardez le contrôle de votre infrastructure.",
-    "dataBody": "Jurisprudence et registres du commerce chargés directement dans le dossier, dans chaque juridiction où vous exercez. L’anonymisation tient les éléments identifiants à l’écart de l’IA.",
+    "dataBody": "Lisez la jurisprudence tchèque avec des notes de l’IA sur les questions juridiques, des passages surlignés et soulignés, des commentaires d’avocat et des réponses avec citations. Recherchez des sociétés dans les registres officiels connectés et référez-vous aux sources depuis un dossier.",
+    "dataConstitutionalAlt": "Décision de la Cour constitutionnelle tchèque IV.ÚS 1394/24 avec des paragraphes numérotés, une note de l’IA sur la question juridique, un passage surligné, un passage souligné, un commentaire d’avocat et un échange comprenant deux questions et des réponses avec citations.",
     "dataEyebrow": "Données juridiques",
-    "dataMainAlt": "Une décision de justice officielle ouverte dans stella",
+    "dataMainAlt": "Décision de la Cour suprême tchèque 27 Cdo 59/2022 avec des paragraphes numérotés, une note de l’IA sur la question juridique, un passage surligné, un passage souligné, un commentaire d’avocat et un échange comprenant deux questions et des réponses avec citations.",
+    "dataSupremeAlt": "Décision de la Cour suprême tchèque 27 Cdo 1525/2025 avec des paragraphes numérotés, une note de l’IA sur la question juridique, un passage surligné, un passage souligné, un commentaire d’avocat et un échange comprenant deux questions et des réponses avec citations.",
     "dataTitle": "Jurisprudence et registres à portée de main.",
     "exploreAgent": "Découvrir l’agent IA",
     "exploreAnonymization": "Découvrir l’anonymisation",

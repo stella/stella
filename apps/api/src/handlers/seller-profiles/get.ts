@@ -22,12 +22,17 @@ const SELLER_PROFILE_GET_COLUMNS = {
   id: true,
   legalName: true,
   registrationId: true,
+  taxId: true,
   vatId: true,
+  registerEntry: true,
+  barRegistration: true,
+  vatPayer: true,
   addressLine1: true,
   addressLine2: true,
   city: true,
   postalCode: true,
   country: true,
+  email: true,
   iban: true,
   bic: true,
   accountNumber: true,
@@ -53,9 +58,11 @@ true satisfies MissingSellerProfileGetColumn extends never ? true : never;
 true satisfies UnexpectedSellerProfileGetColumn extends never ? true : never;
 
 const config = {
+  contract: "patch",
   description: "Read one active issuer profile in the active organization.",
   permissions: { organizationSettings: ["update"] },
   accountAccess: ACCOUNT_ACCESS.standard,
+  featureAccess: { featureId: "time-billing", type: "required" },
   mcp: {
     type: "capability",
     readClass: "tenant",

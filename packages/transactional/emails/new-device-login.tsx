@@ -1,22 +1,58 @@
-import {
-  Body,
-  Button,
-  Container,
-  Head,
-  Heading,
-  Hr,
-  Html,
-  Preview,
-  Section,
-  Text,
-} from "@react-email/components";
+import { panic } from "better-result";
 
+import type { CountryCode } from "@stll/country-codes";
+
+import { Body } from "../components/body";
+import { Button } from "../components/button";
+import { Container } from "../components/container";
+import { Head } from "../components/head";
+import { Heading } from "../components/heading";
+import { Hr } from "../components/hr";
+import { Html } from "../components/html";
+import { Img } from "../components/img";
+import { Preview } from "../components/preview";
+import { Section } from "../components/section";
+import { Text } from "../components/text";
 import { getEmailDirection, getTranslator } from "../i18n/translate";
 import type { SupportedLang } from "../i18n/translate";
+import { LOCATION_MAP_DISPLAY_SIZE } from "../map/location-map";
+import { brand, BRAND_FOOTER_TEXT, sharedStyles } from "./_shared";
+import { Wordmark } from "./_wordmark";
+
+/**
+ * Where the sign-in came from, as far as the IP address tells. `unknown` when
+ * nothing trustworthy says (a private or local address, no geolocating proxy):
+ * the email then leaves the location out rather than guess.
+ */
+export type SignInLocation =
+  | { type: "unknown" }
+  | {
+      type: "known";
+      city: string | null;
+      region: string | null;
+      countryCode: CountryCode;
+      /** The map image, attached to the message as an inline part. */
+      map: { contentId: string } | null;
+    };
+
+/**
+ * The signing-in device as its user agent names it. Browser and OS names are
+ * proper nouns and print as parsed; the email words the rest in its language.
+ */
+export type SignInDevice =
+  | { type: "browserOnOs"; browser: string; os: string }
+  | { type: "browser"; browser: string }
+  | { type: "os"; os: string }
+  | { type: "unknown" };
+
+/** The address the sign-in came from; `unknown` when the runtime gave none. */
+export type SignInAddress =
+  { type: "known"; address: string } | { type: "unknown" };
 
 type Props = {
-  device: string;
-  ipAddress: string;
+  device: SignInDevice;
+  ipAddress: SignInAddress;
+  location: SignInLocation;
   time: string;
   sessionsUrl: string;
   lang: SupportedLang;
@@ -25,119 +61,185 @@ type Props = {
 export const Email = ({
   device,
   ipAddress,
+  location,
   time,
   sessionsUrl,
   lang,
 }: Props) => {
   const t = getTranslator(lang);
+  const place = location.type === "known" ? placeName(location, lang) : null;
+  const deviceName = describeDevice(device, lang);
 
   return (
     <Html lang={lang} dir={getEmailDirection(lang)}>
       <Head />
-      <Preview>{t("newDeviceLogin.preview", { device })}</Preview>
-      <Body style={styles["body"]}>
-        <Container style={styles["container"]}>
-          <Heading style={styles["heading"]}>
+      <Preview>
+        {device.type === "unknown"
+          ? t("newDeviceLogin.previewUnknownDevice")
+          : t("newDeviceLogin.preview", { device: deviceName })}
+      </Preview>
+      <Body style={sharedStyles.body}>
+        <Container style={sharedStyles.container}>
+          <Wordmark />
+          <Heading style={sharedStyles.heading}>
             {t("newDeviceLogin.heading")}
           </Heading>
-          <Text style={styles["text"]}>{t("newDeviceLogin.body")}</Text>
-          <Section style={styles["detailsSection"]}>
-            <Text style={styles["detailRow"]}>
-              <strong>{t("newDeviceLogin.device")}:</strong> {device}
+          <Text style={sharedStyles.text}>{t("newDeviceLogin.body")}</Text>
+          <Section style={styles.detailsSection}>
+            {location.type === "known" ? (
+              <LocationMap lang={lang} location={location} />
+            ) : null}
+            <Text style={styles.detailRow}>
+              <strong>{t("newDeviceLogin.device")}:</strong> {deviceName}
             </Text>
-            <Text style={styles["detailRow"]}>
-              <strong>{t("newDeviceLogin.ipAddress")}:</strong> {ipAddress}
+            {place === null ? null : (
+              <Text style={styles.detailRow}>
+                <strong>{t("newDeviceLogin.location")}:</strong>{" "}
+                {t("newDeviceLogin.placeApproximate", { place })}
+              </Text>
+            )}
+            <Text style={styles.detailRow}>
+              <strong>{t("newDeviceLogin.ipAddress")}:</strong>{" "}
+              {ipAddress.type === "known"
+                ? ipAddress.address
+                : t("newDeviceLogin.ipAddressUnknown")}
             </Text>
-            <Text style={styles["detailRow"]}>
+            <Text style={styles.detailRow}>
               <strong>{t("newDeviceLogin.time")}:</strong> {time}
             </Text>
           </Section>
-          <Section style={styles["buttonSection"]}>
-            <Button href={sessionsUrl} style={styles["button"]}>
+          <Text style={sharedStyles.text}>{t("newDeviceLogin.ignore")}</Text>
+          <Section style={styles.buttonSection}>
+            <Button href={sessionsUrl} style={styles.button}>
               {t("newDeviceLogin.action")}
             </Button>
           </Section>
-          <Hr style={styles["hr"]} />
-          <Text style={styles["footer"]}>{t("newDeviceLogin.ignore")}</Text>
+          <Text style={styles.actionNote}>
+            {t("newDeviceLogin.actionNote")}
+          </Text>
+          <Hr style={sharedStyles.hr} />
+          <Text style={sharedStyles.brandFooter}>{BRAND_FOOTER_TEXT}</Text>
         </Container>
       </Body>
     </Html>
   );
 };
 
-Email.PreviewProps = {
-  device: "Chrome on macOS",
-  ipAddress: "203.0.113.42",
-  time: "Mar 6, 2026, 2:30 PM UTC",
-  sessionsUrl: "http://localhost:3000/account/sessions",
-  lang: "en",
-} satisfies Props;
+type KnownLocation = Extract<SignInLocation, { type: "known" }>;
 
-const styles: Record<string, React.CSSProperties> = {
-  body: {
-    margin: "0",
-    backgroundColor: "#f6f9fc",
-    padding: "24px 0",
-    fontFamily:
-      '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
-  },
-  container: {
-    margin: "0 auto",
-    maxWidth: "520px",
-    borderRadius: "12px",
-    backgroundColor: "#ffffff",
-    padding: "24px",
-    border: "1px solid #e5e7eb",
-  },
-  heading: {
-    margin: "0 0 12px",
-    color: "#111827",
-    fontSize: "24px",
-    lineHeight: "32px",
-    fontWeight: "700",
-    textAlign: "center",
-  },
-  text: {
-    margin: "0 0 16px",
-    color: "#374151",
-    fontSize: "16px",
-    lineHeight: "24px",
-    textAlign: "center",
-  },
+type LocationMapProps = { location: KnownLocation; lang: SupportedLang };
+
+/**
+ * The map, when there is one, heading the sign-in details. The base map is
+ * public domain and needs no credit line.
+ */
+const LocationMap = ({ location, lang }: LocationMapProps) => {
+  const t = getTranslator(lang);
+  return location.map === null ? null : (
+    <Img
+      alt={t("newDeviceLogin.mapAlt", {
+        location: placeName(location, lang),
+      })}
+      height={String(LOCATION_MAP_DISPLAY_SIZE.height)}
+      src={`cid:${location.map.contentId}`}
+      style={styles.map}
+      width={String(LOCATION_MAP_DISPLAY_SIZE.width)}
+    />
+  );
+};
+
+const describeDevice = (device: SignInDevice, lang: SupportedLang): string => {
+  const t = getTranslator(lang);
+  switch (device.type) {
+    case "browserOnOs":
+      return t("newDeviceLogin.deviceName.browserOnOs", {
+        browser: device.browser,
+        os: device.os,
+      });
+    case "browser":
+      return device.browser;
+    case "os":
+      return device.os;
+    case "unknown":
+      return t("newDeviceLogin.deviceName.unknown");
+    default:
+      device satisfies never;
+      return panic("Unknown sign-in device kind");
+  }
+};
+
+/**
+ * City, region and country, most specific first, with the locale's own
+ * separators. The country name is localized from its code; city and region
+ * come as the geolocation source spells them. A region named like its city
+ * (Prague, Vienna) is said once.
+ */
+const placeName = (
+  { city, region, countryCode }: KnownLocation,
+  lang: SupportedLang,
+): string => {
+  const t = getTranslator(lang);
+  const country =
+    new Intl.DisplayNames([lang], { type: "region" }).of(countryCode) ??
+    countryCode;
+  const distinctRegion = region === city ? null : region;
+  if (city !== null && distinctRegion !== null) {
+    return t("newDeviceLogin.place.cityRegionCountry", {
+      city,
+      region: distinctRegion,
+      country,
+    });
+  }
+  if (city !== null) {
+    return t("newDeviceLogin.place.cityCountry", { city, country });
+  }
+  if (distinctRegion !== null) {
+    return t("newDeviceLogin.place.regionCountry", {
+      region: distinctRegion,
+      country,
+    });
+  }
+  return country;
+};
+
+const styles = {
   detailsSection: {
     marginBottom: "16px",
     borderRadius: "10px",
-    backgroundColor: "#f3f4f6",
+    backgroundColor: brand.backgroundCodeBlock,
     padding: "16px",
   },
   detailRow: {
     margin: "0 0 4px",
-    color: "#374151",
+    color: brand.textPrimary,
     fontSize: "14px",
     lineHeight: "22px",
+  },
+  map: {
+    margin: "0 0 12px",
+    width: "100%",
+    maxWidth: `${LOCATION_MAP_DISPLAY_SIZE.width}px`,
+    height: "auto",
+    borderRadius: "10px",
+    border: `1px solid ${brand.border}`,
+  },
+  actionNote: {
+    margin: "-8px 0 24px",
+    color: brand.textMuted,
+    fontSize: "13px",
+    lineHeight: "20px",
   },
   buttonSection: {
     margin: "24px 0",
     textAlign: "center" as const,
   },
   button: {
-    backgroundColor: "#111827",
+    backgroundColor: brand.foreground,
     borderRadius: "8px",
-    color: "#ffffff",
+    color: brand.foregroundOnAccent,
     fontSize: "16px",
     fontWeight: "600",
     padding: "12px 24px",
     textDecoration: "none",
   },
-  hr: {
-    margin: "0 0 16px",
-    borderColor: "#e5e7eb",
-  },
-  footer: {
-    margin: "0",
-    color: "#6b7280",
-    fontSize: "13px",
-    lineHeight: "20px",
-    textAlign: "center",
-  },
-};
+} satisfies Record<string, React.CSSProperties>;

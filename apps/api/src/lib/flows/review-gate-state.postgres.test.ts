@@ -1,5 +1,4 @@
 import { describe, expect, test } from "bun:test";
-import { drizzle } from "drizzle-orm/bun-sql";
 import fc from "fast-check";
 
 import { assertProperty } from "@stll/property-testing";
@@ -7,6 +6,7 @@ import { assertProperty } from "@stll/property-testing";
 import { databaseRelations } from "@/api/db/database-relations";
 import type { SafeDb } from "@/api/db/safe-db";
 import { createSafeDb, markRlsDatabase } from "@/api/db/scoped";
+import { createDatabase } from "@/api/db/sql-client";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { flowReviewGateFixture } from "@/api/tests/helpers/flow-review-gate";
@@ -40,7 +40,7 @@ if (!databaseUrl || !runPostgresTests) {
               );
               const written = Promise.withResolvers<undefined>();
               const release = Promise.withResolvers<undefined>();
-              const otherDb = drizzle({
+              const otherDb = createDatabase({
                 client: otherClient,
                 relations: databaseRelations,
                 logger: {

@@ -29,9 +29,11 @@
 //
 // The published tarball is data, never code: its generated modules are read
 // as text and parsed as literals, so nothing fetched from the registry runs
-// inside the release job. Runs without `bun install`: the tag workflow checks
-// out the repository and nothing else, so this file uses only Bun and Node
-// built-ins.
+// inside the release job. This file uses only Bun and Node built-ins, so the
+// verdicts that need no contract comparison run without `bun install`. The
+// capability catalog is generated from API sources, never committed: the
+// drift comparison derives the head's catalog in a child process, which needs
+// the installed dependencies and fails the gate closed without them.
 //
 //   bun scripts/check-cli-release-coupling.ts --version 1.2.3
 //   bun scripts/check-cli-release-coupling.ts --base origin/main
@@ -42,7 +44,11 @@ import path from "node:path";
 
 // Relative: CI runs this before the dependency install.
 import { compareCodeUnit } from "../packages/collation/src/collation";
+import { deriveRevisionCatalog } from "./capability-catalog-revision";
 import { isChangesetEntry } from "./changeset-guard";
+
+// Computed filesystem reads retain these repository Markdown inputs.
+export const CI_MARKDOWN_READER_INPUTS = [".changeset/*.md"];
 
 const REPO_ROOT = path.resolve(import.meta.dirname, "..");
 const CLI_PACKAGE_NAME = "@stll/cli";
@@ -169,7 +175,7 @@ export const classifyCliRelease = ({
  * The generated files that decide whether a CLI can drive a server: the tool
  * catalog and registry it bakes in, the negotiated API contract, and the MCP
  * paths, scopes and error codes. The catalog retains its logical surface name
- * while its committed and newly published data lives in per-capability shards.
+ * while its generated and newly published data lives in per-capability shards.
  */
 const SURFACE_PARTS = [
   "capability-catalog.json",
@@ -178,7 +184,7 @@ const SURFACE_PARTS = [
   "src/generated/mcp-contract.ts",
 ] as const;
 
-/** Logical surface names; the catalog is assembled from committed shards. */
+/** Logical surface names; the catalog is assembled from generated shards. */
 export const CLI_CONTRACT_SURFACE_PATHS = SURFACE_PARTS;
 
 export type CliContractSurfacePart = (typeof SURFACE_PARTS)[number];
@@ -461,13 +467,103 @@ export const report = (verdict: CliReleaseVerdict): number => {
 
 type CommandRun = { readonly ok: boolean; readonly stdout: string };
 
-const run = (command: readonly string[], cwd: string): CommandRun => {
+// Remote lookups that stall must fail, so the caller runs the full check.
+const REMOTE_TIMEOUT_MS = 60_000;
+
+const run = (
+  command: readonly string[],
+  cwd: string,
+  timeoutMs?: number,
+): CommandRun => {
   const result = Bun.spawnSync([...command], {
     cwd,
     stdout: "pipe",
     stderr: "inherit",
+    maxBuffer: 64 * 1024 * 1024,
+    ...(timeoutMs === undefined ? {} : { timeout: timeoutMs }),
   });
   return { ok: result.exitCode === 0, stdout: result.stdout.toString() };
+};
+
+type QueuedPullRequest = { readonly number: string };
+
+const parseQueuedPullRequest = (ref: string): QueuedPullRequest | undefined => {
+  const match =
+    /^refs\/heads\/gh-readonly-queue\/(?:[A-Za-z0-9_.-]+\/)+pr-([1-9]\d*)-[0-9a-f]{40}$/u.exec(
+      ref,
+    );
+  const number = match?.at(1);
+  return number === undefined || match?.at(0) !== ref ? undefined : { number };
+};
+
+/** The history this run lands; squash merge groups do not contain the PR head. */
+const landedCommit = (): string | undefined => {
+  if (process.env["GITHUB_EVENT_NAME"] !== "merge_group") {
+    return "HEAD";
+  }
+  const queued = parseQueuedPullRequest(process.env["GITHUB_REF"] ?? "");
+  if (queued === undefined) {
+    return undefined;
+  }
+  const ref = `refs/pull/${queued.number}/head`;
+  const remote = run(
+    ["git", "ls-remote", "origin", ref],
+    REPO_ROOT,
+    REMOTE_TIMEOUT_MS,
+  );
+  const match = /^([0-9a-f]{40})\t([^\s]+)\n?$/u.exec(remote.stdout);
+  const commit = match?.at(1);
+  if (!remote.ok || commit === undefined || match?.at(2) !== ref) {
+    return undefined;
+  }
+  const local = run(["git", "cat-file", "-e", `${commit}^{commit}`], REPO_ROOT);
+  if (!local.ok) {
+    const fetched = run(
+      ["git", "fetch", "--no-tags", "origin", commit],
+      REPO_ROOT,
+      REMOTE_TIMEOUT_MS,
+    );
+    if (!fetched.ok) {
+      return undefined;
+    }
+  }
+  return commit;
+};
+
+/**
+ * The commit `v<version>` names, when that tag exists and the landed history
+ * contains it. Any failed lookup returns undefined, so the caller runs the
+ * full check.
+ */
+const releasedTagCommit = (
+  version: string,
+  landed: string,
+): string | undefined => {
+  const ref = `refs/tags/v${version}`;
+  const local = run(
+    ["git", "rev-parse", "--quiet", "--verify", `${ref}^{commit}`],
+    REPO_ROOT,
+  );
+  let commit = local.ok ? local.stdout.trim() : "";
+  if (commit === "") {
+    // CI checkouts carry no tags; the remote still names them.
+    const remote = run(
+      ["git", "ls-remote", "origin", `${ref}^{}`, ref],
+      REPO_ROOT,
+      REMOTE_TIMEOUT_MS,
+    );
+    const lines = remote.ok ? remote.stdout.trim().split("\n") : [];
+    const peeled = lines.find((line) => line.endsWith(`${ref}^{}`));
+    commit = (peeled ?? lines.at(0) ?? "").split(/\s+/u).at(0) ?? "";
+  }
+  if (!/^[0-9a-f]{40}$/u.test(commit)) {
+    return undefined;
+  }
+  const contained = run(
+    ["git", "merge-base", "--is-ancestor", commit, landed],
+    REPO_ROOT,
+  );
+  return contained.ok ? commit : undefined;
 };
 
 const readPendingCliChangesets = (root: string): readonly string[] =>
@@ -519,8 +615,13 @@ const readPublishedCli = (): PublishedCli => {
   return { latest: parsed["dist-tags.latest"], versions: parsed.versions };
 };
 
-const readCapabilityShards = (root: string): string => {
-  const directory = path.join(root, "capabilities");
+/** Canonical catalog text assembled from one directory of capability shards. */
+export const readCapabilityShards = (directory: string): string => {
+  if (!existsSync(directory)) {
+    return panic(
+      `${directory} is missing: the capability catalog is generated, never committed`,
+    );
+  }
   const entries = readdirSync(directory)
     .filter((file) => file.endsWith(".json"))
     .toSorted()
@@ -554,13 +655,26 @@ const readSurface = (
       : readFileSync(path.join(root, locate(part)), "utf-8"),
   );
 
-export const readHeadSurface = (root: string): CliContractSurface => {
-  const directory = path.join(root, CLI_DIRECTORY);
-  return readSurface(
-    directory,
+/** Reads the head's committed parts and the shards in `catalogDirectory`. */
+export const readHeadSurface = (
+  root: string,
+  catalogDirectory = path.join(root, CLI_DIRECTORY, "capabilities"),
+): CliContractSurface =>
+  readSurface(
+    path.join(root, CLI_DIRECTORY),
     (part) => part,
-    readCapabilityShards(directory),
+    readCapabilityShards(catalogDirectory),
   );
+
+/** Derives the head revision's catalog without writing to the checkout. */
+const generateHeadCatalog = (root: string): string => {
+  const catalog = deriveRevisionCatalog({ repoRoot: root, revision: "HEAD" });
+  if (catalog.status === "failed") {
+    return panic(
+      `${catalog.command} failed, so the head capability catalog cannot be compared`,
+    );
+  }
+  return catalog.directory;
 };
 
 /** Published versions before the shard cutover contain the monolithic catalog. */
@@ -569,7 +683,7 @@ export const readPublishedPackageSurface = (root: string): CliContractSurface =>
     root,
     (part) => CLI_CONTRACT_SURFACE[part].published,
     existsSync(path.join(root, "capabilities"))
-      ? readCapabilityShards(root)
+      ? readCapabilityShards(path.join(root, "capabilities"))
       : readFileSync(path.join(root, "capability-catalog.json"), "utf-8"),
   );
 
@@ -632,11 +746,30 @@ const main = (args: readonly string[]): number => {
   const version = versionArg ?? readVersionFile(REPO_ROOT);
 
   if (base !== null) {
-    const previous = run(["git", "show", `${base}:${VERSION_FILE}`], REPO_ROOT);
+    // CI may fetch a newer base than the merge checkout was built from.
+    const mergeBase = run(["git", "merge-base", base, "HEAD"], REPO_ROOT);
+    const previous = mergeBase.ok
+      ? run(
+          ["git", "show", `${mergeBase.stdout.trim()}:${VERSION_FILE}`],
+          REPO_ROOT,
+        )
+      : mergeBase;
     if (previous.ok && previous.stdout.trim() === version) {
       return report({
         status: "not-a-release",
         reason: `${VERSION_FILE} unchanged against ${base}`,
+      });
+    }
+    // A release candidate is tagged from its release pull request's head, and
+    // release-tag runs this check on that exact commit. Landing the pull
+    // request afterwards releases nothing: the merge result is never tagged.
+    const landed = landedCommit();
+    const released =
+      landed === undefined ? undefined : releasedTagCommit(version, landed);
+    if (released !== undefined) {
+      return report({
+        status: "not-a-release",
+        reason: `v${version} is already tagged at ${released}, which release-tag checked`,
       });
     }
   }
@@ -655,7 +788,7 @@ const main = (args: readonly string[]): number => {
   }
 
   const drift = findSurfaceDrift({
-    head: readHeadSurface(REPO_ROOT),
+    head: readHeadSurface(REPO_ROOT, generateHeadCatalog(REPO_ROOT)),
     published: readPublishedSurface(verdict.cliVersion),
   });
   if (drift.length === 0) {

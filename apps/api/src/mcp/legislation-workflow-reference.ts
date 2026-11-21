@@ -18,8 +18,8 @@ import { namedToolNames as namedToolNamesIn } from "@/api/mcp/tool-mentions";
  * The order to drive the stella legislation corpus in. The tool descriptions
  * say what each tool takes; none of them says that an ELI is the handle every
  * later call needs, that anchors come from a read rather than from a section
- * number, or that a point-in-time question is answered by `as_of` on the read
- * rather than by a filter on the search. An agent holding only the tool list
+ * number, or that `as_of` selects the same consolidation date on search
+ * and read. An agent holding only the tool list
  * has to discover that order by trial, so it is written down here.
  *
  * Every tool this document names is typed as {@link McpToolName} and every
@@ -89,7 +89,9 @@ const WORKFLOW_STEPS: readonly ReferenceSection[] = [
       `${SEARCH_LEGISLATION} with \`query\` and a \`country\`. Each hit ` +
       "carries the act's `eli` (the European Legislation Identifier), its " +
       "title, language, document type, publication status, effective date " +
-      "and a matched snippet. No facets come back and `total` is not " +
+      "and a matched snippet. `as_of` (ISO YYYY-MM-DD) searches the consolidation " +
+      "in force on that date; omit it to include historical wording. Each hit carries its " +
+      "`versionValidFrom`/`versionValidTo`. No facets come back and `total` is not " +
       "counted, so page with the returned `nextCursor` rather than " +
       "reasoning about how many results exist. The `eli` is the handle " +
       "every later call takes: it addresses the act, not one consolidation " +
@@ -100,15 +102,26 @@ const WORKFLOW_STEPS: readonly ReferenceSection[] = [
     detail:
       `${READ_STATUTE} with that \`eli\`. \`as_of\` (ISO YYYY-MM-DD) picks ` +
       "the consolidation in force on that day; omit it for the text in " +
-      "force today. There is no as-of filter on the search, so a " +
-      "point-in-time question is answered here. The reply carries the " +
+      "force today. Pass the same `as_of` used in search to read the matched " +
+      "consolidation. The reply carries the " +
       "text's `versionValidFrom`/`versionValidTo`, `versions` (up to " +
       `${LIMITS.legislationVersionsPageSizeDefault} of the work's ` +
       "versions, newest window first), `outline` (its heading " +
       `anchors, at most ${LIMITS.legislationOutlineHeadingsMax} of them ` +
       "with `outlineTruncated` when there are more) and the plain `text` " +
       "in windows: pass the returned `nextCursor` back as `cursor` to keep " +
-      "reading. The text and every `versions` entry carry " +
+      "reading. `pendingChanges` contains only publisher-stated effects with " +
+      "dates after today in the source jurisdiction, plus effects whose " +
+      "date is unstated. `effectiveText` preserves stated start conditions; " +
+      "an unknown date does not prove a future start. Null means no " +
+      "amendment snapshot has been ingested. Its `coverage` records source " +
+      "gaps, and `truncated: true` marks a capped preview. The preview " +
+      "does not offer pagination; consult the publisher for further effects. " +
+      "Each version's `amendedBy` filters explicit publisher relations by " +
+      "that eligible wording's opening day; several amending acts can share " +
+      "one day. A date never supplies the actor's identity. An empty preview " +
+      "with incomplete coverage does not establish that no changes exist. " +
+      "The text and every `versions` entry carry " +
       "`expressionKind` and `windowDisposition`; a version applied in its " +
       "window only when both hold: " +
       `\`windowDisposition\` is \`${LEGISLATION_APPLICABLE_WINDOW_DISPOSITION}\` ` +
@@ -116,6 +129,10 @@ const WORKFLOW_STEPS: readonly ReferenceSection[] = [
       `read. A \`${PROMULGATED}\` entry is the text as first published, ` +
       "kept as history: it never applied, even when " +
       `\`${LEGISLATION_APPLICABLE_WINDOW_DISPOSITION}\`. ` +
+      "A work the corpus holds only as published, with no consolidation, " +
+      "is read as that text on any date from its publication, and the " +
+      `reply says \`expressionKind: ${PROMULGATED}\`: quote it as the text ` +
+      "as published, never as the text in force. " +
       "An ELI the corpus does not hold, a date no " +
       "consolidation covers, and a date the publisher's own inconsistent " +
       "dates leave without an in-force reading are different answers, and " +
@@ -126,7 +143,10 @@ const WORKFLOW_STEPS: readonly ReferenceSection[] = [
     detail:
       `${READ_STATUTE_PROVISIONS} with \`items\`, up to ` +
       `${LIMITS.legislationProvisionBatchMax} entries of ` +
-      "{ eli, anchor } plus an optional `as_of` and `language`. An `anchor` " +
+      "{ eli, anchor } plus optional `language` and either `as_of` or " +
+      "`document_id`, never both. `document_id` reads the exact consolidation " +
+      "whose `documentId` came from provision history, including a version " +
+      "without a usable start date. An `anchor` " +
       `is the publisher's own, and the \`outline\` from ${READ_STATUTE} is ` +
       "where the provision anchors come from (`par_1729`): they are not " +
       "derivable from a section number, so do not spell one yourself. A " +
@@ -137,9 +157,13 @@ const WORKFLOW_STEPS: readonly ReferenceSection[] = [
       `under \`status\`: ${PROVISION_READ_STATUSES.join(", ")}. Only ` +
       "`found` carries `text`; `invalid` carries that entry's own `issues[]` " +
       "and the rest carry a `message` saying what to change, so resend only " +
-      "the entries the reply names. Provision text is cut at " +
+      "the entries the reply names. A `found` entry carries the same " +
+      "`expressionKind` and `windowDisposition` as the statute it was read " +
+      "from. Provision text is cut at " +
       `${LIMITS.legislationProvisionTextChars} characters with ` +
-      "`truncated` set. Prefer one batched call over one call per provision.",
+      "`truncated` set; when `nextTextCursor` is present, pass it as " +
+      "`text_cursor` on the same entry and concatenate the text windows until " +
+      "it is null. Prefer one batched call over one call per provision.",
   },
   {
     title: "Follow one provision across amendments",
@@ -157,7 +181,10 @@ const WORKFLOW_STEPS: readonly ReferenceSection[] = [
       `${LIMITS.legislationProvisionHistoryPageSizeDefault} versions per ` +
       "page and takes at most " +
       `${LIMITS.legislationProvisionHistoryPageSizeMax}; pass the returned ` +
-      "`nextCursor` back as `cursor` for older windows.",
+      "`nextCursor` back as `cursor` for older windows. Each long item also " +
+      "returns `nextTextCursor`; pass it as " +
+      "`text_cursor` with the same `eli`, `anchor`, and original `cursor`, then " +
+      "concatenate windows until it is null.",
   },
 ];
 
@@ -180,7 +207,7 @@ const FACTS: readonly ReferenceSection[] = [
       "versions and the outline, and `textWithheldReason` in place of " +
       `\`text\`; ${READ_STATUTE_PROVISIONS} and ${READ_PROVISION_HISTORY} ` +
       "answer `text_withheld` for the versions it covers. Follow the " +
-      "statute's `appUrl` and read it there instead; retrying will not " +
+      "statute's `url` and read it there instead; retrying will not " +
       "change the answer.",
   },
   {
@@ -227,8 +254,23 @@ const servedWorkflowSteps = (mode: McpMode): readonly ReferenceSection[] => {
  * document whose every step was filtered out is not a reference, so the
  * resource is not served there rather than shipping a title and no procedure.
  */
-export const hasLegislationWorkflowContent = (mode: McpMode): boolean =>
-  servedWorkflowSteps(mode).length > 0;
+export const legislationWorkflowToolNames = (
+  mode: McpMode,
+): readonly string[] => {
+  const listedToolNames = listedToolNamesFor(mode);
+  const sections = [
+    ...servedWorkflowSteps(mode),
+    ...FACTS.filter((fact) => isServedOnSurface(fact, listedToolNames)),
+  ];
+  return [
+    ...new Set([
+      SEARCH_LEGISLATION,
+      ...sections.flatMap(({ detail, title }) =>
+        namedToolNames(`${title}. ${detail}`),
+      ),
+    ]),
+  ];
+};
 
 /**
  * Build the legislation-workflow reference text for one audience: only the

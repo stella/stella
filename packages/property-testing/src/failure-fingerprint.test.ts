@@ -1,4 +1,7 @@
 import { expect, test } from "bun:test";
+import { fileURLToPath } from "node:url";
+
+import { sha256Hex } from "@stll/sha256/node";
 
 import { failureFingerprint } from "./failure-fingerprint";
 
@@ -29,7 +32,9 @@ test("quoted values preserve escaped delimiters and unmatched literal text", () 
 });
 
 test("unterminated escaped quote suffixes finish within a bounded subprocess", () => {
-  const source = new URL("failure-fingerprint.ts", import.meta.url).pathname;
+  const source = fileURLToPath(
+    new URL("failure-fingerprint.ts", import.meta.url),
+  );
   const result = Bun.spawnSync({
     cmd: [
       process.execPath,
@@ -48,3 +53,45 @@ test("unterminated escaped quote suffixes finish within a bounded subprocess", (
   expect(result.exitCode).toBe(0);
   expect(result.stdout.toString().trim()).toBe("finished");
 });
+
+const storedFingerprintVectors = [
+  {
+    id: "",
+    error: "",
+    normalized: "",
+    fingerprint: "6e340b9cffb37a98",
+  },
+  {
+    id: "assertion",
+    error: "abc",
+    normalized: "abc",
+    fingerprint: "76a202f07e378883",
+  },
+  {
+    id: "Příliš žluťoučký kůň 📄 中文",
+    error: "Článek 📄",
+    normalized: "Článek 📄",
+    fingerprint: "f70268804a35637b",
+  },
+  {
+    id: "é",
+    error: "é",
+    normalized: "é",
+    fingerprint: "f316c6bf1753c1ee",
+  },
+  {
+    id: "quoted input",
+    error: '  Expected "Příliš" to equal 42\nstack ignored',
+    normalized: "Expected <value> to equal <value>",
+    fingerprint: "fd7821f72af0e4d0",
+  },
+] as const;
+
+for (const { id, error, normalized, fingerprint } of storedFingerprintVectors) {
+  test(`property failure grouping retains normalized NUL-delimited SHA identity: ${JSON.stringify(id)}`, () => {
+    expect(failureFingerprint({ id, error })).toBe(fingerprint);
+    expect(failureFingerprint({ id, error })).toBe(
+      sha256Hex(`${id}\0${normalized}`).slice(0, 16),
+    );
+  });
+}

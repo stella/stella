@@ -3,12 +3,16 @@ import { sql } from "drizzle-orm";
 import type { PgliteDatabase } from "drizzle-orm/pglite";
 
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
+import type { DecisionPrimaryReferenceType } from "@stll/legal-ast/decision-identifier";
 
 import {
   caseLawCitations,
+  caseLawDecisionCitationStats,
+  caseLawDecisionCitationStatsState,
   caseLawDecisionIdentifiers,
   caseLawDecisions,
   caseLawIndexJobs,
+  caseLawPopulationDeltas,
   caseLawProvisionCitations,
   caseLawProvisionExtractions,
   caseLawSearchDocumentPreviewPassages,
@@ -25,17 +29,24 @@ import {
   statuteSitemapShards,
   systemAuditRuns,
 } from "@/api/db/schema";
+import { decisionDocketColumns } from "@/api/handlers/case-law/ingestion/pipeline/decision-docket-columns";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import { EMPTY_CORPUS_CONTENT_HASHES } from "@/api/lib/legal-search/corpus-content-hash";
 import {
   CORPUS_INDEX_MANIFESTS,
   corpusIndexManifestDigest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
+import { corpusMorphologyLanguage } from "@/api/lib/legal-search/morphology/corpus-language";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
 
 import { PLAN_GUARD_TABLES } from "../../db/plan-guard-tables";
 
 export const QUERY_PLAN_ROW_COUNT = 3000;
+/**
+ * Link rows under the sample provision, out of the seed's
+ * `QUERY_PLAN_ROW_COUNT`: two mentions from each of 1,000 Czech decisions.
+ */
+export const QUERY_PLAN_PROVISION_SUBTREE_ROWS = 2000;
 const DECISION_ID_PREFIX = "00000000-0000-7000-8000-";
 const LEGISLATION_DOCUMENT_ID_PREFIX = "00000000-0000-7000-9000-";
 const SAMPLE_DECISION_NUMBER = 12;
@@ -43,6 +54,51 @@ const CASE_LAW_GENERATION = "case_law_v5";
 const emptyContentHash =
   EMPTY_CORPUS_CONTENT_HASHES.at(0) ??
   panic("The empty corpus hash fixture must exist");
+
+/** In seed order: decision `n` is in `SEEDED_COUNTRIES[n % 3]`. */
+const SEEDED_COUNTRIES = ["CZE", "SVK", "POL"] as const;
+
+/**
+ * Decision `n`'s primary reference as a publisher prints it. Its docket
+ * columns come from the ingestion writer (`decisionDocketColumns`), never a
+ * format of the seed's own. The mix: dockets with a four-digit year, whose
+ * match key folds the year; sheets that share one case file; dockets with a
+ * two-digit year and references without one, whose keys the match key keeps;
+ * and neutral citations, which are no docket and get no key.
+ */
+const seededPrimaryReference = (
+  n: number,
+): { caseNumber: string; caseNumberType: DecisionPrimaryReferenceType } => {
+  // Within each run of 30, two decisions of one country share a case file.
+  const file = Math.floor(n / 30);
+  switch (n % 5) {
+    case 0:
+      return {
+        caseNumber: `QPG ${String(n)}/2024`,
+        caseNumberType: DECISION_IDENTIFIER_TYPES.NEUTRAL_CITATION,
+      };
+    case 1:
+      return {
+        caseNumber: `${String(1 + (n % 30))} Cdo ${String(n)}/${String(2000 + (n % 20))}`,
+        caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+      };
+    case 2:
+      return {
+        caseNumber: `${String(1 + (file % 30))} Tdo ${String(file)}/${String(2000 + (file % 20))}-${String(n)}`,
+        caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+      };
+    case 3:
+      return {
+        caseNumber: `${String(1 + (n % 30))} Odo ${String(n)}/${String(n % 20).padStart(2, "0")}`,
+        caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+      };
+    default:
+      return {
+        caseNumber: `qpg-case-${String(n)}`,
+        caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+      };
+  }
+};
 
 const makeUuid = (prefix: string, number: number): string =>
   `${prefix}${String(number).padStart(12, "0")}`;
@@ -55,6 +111,9 @@ export const QUERY_PLAN_SAMPLE = {
       makeUuid(DECISION_ID_PREFIX, SAMPLE_DECISION_NUMBER),
     ),
     sharedEcli: "ECLI:EU:C:2024:12",
+    /** The work and provision the seed's link rows concentrate on. */
+    provisionWork: "/eli/cz/sb/2024/1",
+    provisionAnchor: "section-1",
     generation: CASE_LAW_GENERATION,
     candidateIds: Array.from({ length: 10 }, (_, index) =>
       toSafeId<"caseLawDecision">(
@@ -93,17 +152,45 @@ export const seedQueryPlanData = async (
     }),
   );
 
+  const decisionReferences = Array.from(
+    { length: QUERY_PLAN_ROW_COUNT },
+    (_, index) => {
+      const n = index + 1;
+      const country = SEEDED_COUNTRIES[n % SEEDED_COUNTRIES.length] ?? "CZE";
+      const columns = decisionDocketColumns({
+        ...seededPrimaryReference(n),
+        country,
+      });
+      // Pairs of decisions alternate between the jurisdiction's own language
+      // and the English translation its apex courts publish beside it.
+      const language =
+        Math.floor((n + 1) / 2) % 2 === 0
+          ? (corpusMorphologyLanguage(country) ??
+            panic(
+              `The seeded jurisdiction has no primary language: ${country}`,
+            ))
+          : "en";
+      return sql`(${n}::integer, ${country}::varchar, ${language}::varchar,
+        ${columns.caseNumber}::varchar,
+        ${columns.caseNumberType}::varchar, ${columns.citationKey}::varchar,
+        ${columns.docketFamilyKey}::varchar)`;
+    },
+  );
   await db.execute(sql`
     INSERT INTO ${caseLawDecisions}
-      (id, source_id, case_number, court, country, language, ecli,
-       language_group_key, decision_date, metadata, updated_at)
+      (id, source_id, case_number, case_number_type, citation_key,
+       docket_family_key, court, country, language, ecli,
+       language_group_key, decision_date, metadata, created_at, updated_at)
     SELECT
       (${sql.raw(`'${DECISION_ID_PREFIX}'`)} || lpad(n::text, 12, '0'))::uuid,
       ${caseLawSourceId}::uuid,
-      'qpg-case-' || n::text,
+      reference.case_number,
+      reference.case_number_type,
+      reference.citation_key,
+      reference.docket_family_key,
       'Query Plan Court ' || (n % 40)::text,
-      CASE n % 3 WHEN 0 THEN 'CZE' WHEN 1 THEN 'SVK' ELSE 'POL' END,
-      CASE ((n + 1) / 2) % 2 WHEN 0 THEN 'cs' ELSE 'en' END,
+      reference.country,
+      reference.language,
       CASE WHEN n % 7 = 0 THEN NULL
         ELSE 'ECLI:EU:C:2024:' || (n % 120)::text END,
       CASE WHEN n % 5 = 0 THEN NULL
@@ -111,8 +198,12 @@ export const seedQueryPlanData = async (
       CASE WHEN n % 20 = 0 THEN NULL
         ELSE DATE '2010-01-01' + (n % 5800) END,
       '{}'::jsonb,
+      TIMESTAMPTZ '2024-01-01 00:00:00+00' + n * INTERVAL '1 minute',
       TIMESTAMPTZ '2024-01-01 00:00:00+00' + n * INTERVAL '1 minute'
-    FROM generate_series(1, ${QUERY_PLAN_ROW_COUNT}) AS generated(n)
+    FROM (VALUES ${sql.join(decisionReferences, sql`, `)}) AS reference(
+      n, country, language, case_number, case_number_type, citation_key,
+      docket_family_key
+    )
   `);
 
   await db.execute(sql`
@@ -215,6 +306,27 @@ export const seedQueryPlanData = async (
   `);
   await db.execute(sql`ANALYZE ${caseLawCitations}`);
 
+  await db.execute(
+    sql`TRUNCATE ${caseLawDecisionCitationStats}, ${caseLawDecisionCitationStatsState}`,
+  );
+  await db.execute(sql`
+    INSERT INTO ${caseLawDecisionCitationStats}
+      (decision_id, direction, related_year, related_country, related_source_id, polarity, count)
+    SELECT
+      (${sql.raw(`'${DECISION_ID_PREFIX}'`)} || lpad(n::text, 12, '0'))::uuid,
+      'incoming', 2024, 'CZE', ${caseLawSourceId}::uuid, 'positive', 1
+    FROM generate_series(1, ${QUERY_PLAN_ROW_COUNT}) AS generated(n)
+  `);
+  await db.execute(sql`
+    INSERT INTO ${caseLawDecisionCitationStatsState} (decision_id, status)
+    SELECT
+      (${sql.raw(`'${DECISION_ID_PREFIX}'`)} || lpad(n::text, 12, '0'))::uuid,
+      'exact'
+    FROM generate_series(1, ${QUERY_PLAN_ROW_COUNT}) AS generated(n)
+  `);
+  await db.execute(sql`VACUUM (ANALYZE) ${caseLawDecisionCitationStats}`);
+  await db.execute(sql`VACUUM (ANALYZE) ${caseLawDecisionCitationStatsState}`);
+
   await db.insert(corpusIndexGenerations).values({
     family: "case_law",
     generation: CASE_LAW_GENERATION,
@@ -280,6 +392,37 @@ export const seedQueryPlanData = async (
     FROM generate_series(1, ${QUERY_PLAN_ROW_COUNT}) AS generated(n)
   `);
 
+  // One heavily cited provision: two mentions, the section and one of its
+  // subsections, from each Czech decision (3, 6, 9, ...; every third decision
+  // is Czech). The remaining rows spread over the other works as before.
+  const subtreeDecisions = QUERY_PLAN_PROVISION_SUBTREE_ROWS / 2;
+  await db.execute(sql`
+    INSERT INTO ${caseLawProvisionCitations}
+      (id, decision_id, jurisdiction, work_identifier, work_number,
+       work_year, work_collection, unit, section, anchor, decision_date,
+       sentence_text, span_start, span_end, confidence)
+    SELECT
+      md5('qpg-provision-' || n::text)::uuid,
+      (${sql.raw(`'${DECISION_ID_PREFIX}'`)} || lpad(subtree.decision::text, 12, '0'))::uuid,
+      ${QUERY_PLAN_SAMPLE.caseLaw.country}::text,
+      ${QUERY_PLAN_SAMPLE.caseLaw.provisionWork}::text,
+      1, 2024, 'sb', 'section', 1,
+      CASE WHEN subtree.mention = 1
+        THEN ${QUERY_PLAN_SAMPLE.caseLaw.provisionAnchor}::text
+        ELSE ${QUERY_PLAN_SAMPLE.caseLaw.provisionAnchor}::text || '-odst_' || (n % 5 + 1)::text
+      END,
+      DATE '2024-01-01' + (subtree.decision % 365),
+      'Query plan provision citation',
+      subtree.mention * 20 - 20,
+      subtree.mention * 20 - 10,
+      0.9
+    FROM generate_series(1, ${QUERY_PLAN_PROVISION_SUBTREE_ROWS}::integer) AS generated(n)
+    CROSS JOIN LATERAL (
+      SELECT
+        3 * ((n - 1) % ${subtreeDecisions}::integer + 1) AS decision,
+        (n - 1) / ${subtreeDecisions}::integer + 1 AS mention
+    ) subtree
+  `);
   await db.execute(sql`
     INSERT INTO ${caseLawProvisionCitations}
       (id, decision_id, jurisdiction, work_identifier, work_number,
@@ -292,9 +435,15 @@ export const seedQueryPlanData = async (
       n % 100 + 1, 2024, 'sb', 'section', n % 20 + 1,
       'section-' || (n % 20 + 1)::text,
       DATE '2024-01-01' + (n % 365),
-      'Query plan provision citation', 0, 10, 0.9
-    FROM generate_series(1, ${QUERY_PLAN_ROW_COUNT}) AS generated(n)
+      'Query plan provision citation', 40, 50, 0.9
+    FROM generate_series(
+      ${QUERY_PLAN_PROVISION_SUBTREE_ROWS + 1}::integer,
+      ${QUERY_PLAN_ROW_COUNT}::integer
+    ) AS generated(n)
   `);
+  // Vacuumed like the corpus table it stands for, so the subtree range can
+  // be read from the index alone.
+  await db.execute(sql`VACUUM (ANALYZE) ${caseLawProvisionCitations}`);
 
   await db.execute(sql`
     INSERT INTO ${caseLawProvisionExtractions}
@@ -404,6 +553,34 @@ export const seedQueryPlanData = async (
       ${QUERY_PLAN_SAMPLE.systemAudit.now}::timestamptz
         - make_interval(mins => n * 384)
     FROM generate_series(1, ${QUERY_PLAN_ROW_COUNT}) AS generated(n)
+  `);
+
+  // The decision write triggers leave aggregated population deltas. They fold
+  // through the owner, then a self-cancelling backlog of one row per seeded
+  // decision gives the queue its corpus-sized shape without moving any count.
+  await db.execute(sql`
+    DO $seed$
+    DECLARE
+      fold_done boolean := false;
+      attempts integer := 0;
+    BEGIN
+      WHILE NOT fold_done LOOP
+        attempts := attempts + 1;
+        IF attempts > 10000 THEN
+          RAISE EXCEPTION 'Query-plan population fold did not finish';
+        END IF;
+        SELECT done INTO STRICT fold_done
+        FROM public.fold_case_law_population_counts(2048);
+      END LOOP;
+    END
+    $seed$
+  `);
+  await db.execute(sql`
+    INSERT INTO ${caseLawPopulationDeltas} (kind, country, source_id, value, delta)
+    SELECT 'court', 'CZE', ${caseLawSourceId}::uuid, 'Query Plan Court 0',
+      CASE WHEN n % 2 = 1 THEN 1 ELSE -1 END
+    FROM generate_series(1, ${QUERY_PLAN_ROW_COUNT}) AS generated(n)
+    ORDER BY n
   `);
 
   for (const table of PLAN_GUARD_TABLES) {

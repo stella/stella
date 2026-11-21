@@ -4,14 +4,22 @@
 // `unknown` so rule files can call them without per-call type ceremony or
 // shared type-import boilerplate.
 
-import type { ESTree, Ranged, Scope, Variable } from "@oxlint/plugins";
+import type { Context, ESTree, Ranged, Scope, Variable } from "@oxlint/plugins";
+import { panic } from "better-result";
 
 import { isDatabaseHandleName, MUTATION_METHODS } from "./database-access.ts";
 import { canonicalModuleId } from "./module-id.ts";
 
-export { canonicalModuleId } from "./module-id.ts";
+export { canonicalModuleId, exactModuleId } from "./module-id.ts";
 
-export type AstNode = Ranged & { type: string } & Record<string, unknown>;
+type NodeFieldNames<Node> = Node extends unknown ? keyof Node : never;
+
+// Nodes are untrusted at this boundary: declared ESTree fields remain
+// unknown until each helper validates them, without an independent field list.
+export type AstNode = Ranged & { type: string } & Partial<
+    Record<NodeFieldNames<ESTree.Node>, unknown>
+  > &
+  Record<string, unknown>;
 
 export type FilenameContext = {
   filename?: string;
@@ -108,7 +116,7 @@ export const isCallTo = (node: unknown, name: string): boolean =>
   isIdentifier(node.callee, name);
 
 // Resolve the dot-notation name of a callee: an Identifier, or a
-// non-computed MemberExpression chain (e.g. `t.String`, `Schema.is`,
+// non-computed MemberExpression chain (e.g. `v.string`, `Schema.is`,
 // `process.stderr.write`). Returns null when the chain is computed
 // or the property name itself can't be resolved.
 //
@@ -516,7 +524,7 @@ export type ScopeContext = {
 // the identifier outwards. Null for an unresolved (global) name.
 export const resolveVariable = (
   context: ScopeContext,
-  identifier: ESTree.IdentifierReference,
+  identifier: ESTree.IdentifierReference | ESTree.JSXIdentifier,
 ): Variable | null => {
   let scope: Scope | null = context.sourceCode.getScope(identifier);
   while (scope !== null) {
@@ -527,6 +535,20 @@ export const resolveVariable = (
     scope = scope.upper;
   }
   return null;
+};
+
+export const isUnshadowedGlobalIdentifier = (
+  context: Context,
+  value: unknown,
+): boolean => {
+  if (!isIdentifierReference(value)) {
+    return false;
+  }
+  if (context.sourceCode.isGlobalReference(value)) {
+    return true;
+  }
+  const variable = resolveVariable(context, value);
+  return variable === null || variable.defs.length === 0;
 };
 
 // Whether a variable is never reassigned after its declaration, so its
@@ -566,32 +588,83 @@ export type ImportedBinding = { source: string; imported: string };
 
 export const NAMESPACE_IMPORT = "*";
 
-// The module a `require("m")`, `import("m")` or `await import("m")` loads.
-export const dynamicModuleSource = (node: unknown): string | null => {
+const isCreateRequireReference = (
+  context: ScopeContext,
+  reference: ESTree.IdentifierReference,
+): boolean => {
+  const variable = resolveVariable(context, reference);
+  const initializer = variable === null ? null : stableInitializer(variable);
+  const definition = variable?.defs.at(0);
+  if (
+    variable === null ||
+    initializer?.type !== "CallExpression" ||
+    !isAstNode(definition?.node) ||
+    !isAstNode(definition.parent) ||
+    definition.parent.type !== "VariableDeclaration" ||
+    definition.parent.kind !== "const" ||
+    !isIdentifier(definition.node.id, reference.name)
+  ) {
+    return false;
+  }
+  const callee = unwrapExpression(initializer.callee);
+  const base =
+    callee?.type === "MemberExpression"
+      ? unwrapExpression(callee.object)
+      : callee;
+  if (
+    !isIdentifierReference(base) ||
+    resolveVariable(context, base)?.defs.at(0)?.type !== "ImportBinding"
+  ) {
+    return false;
+  }
+  // Only an imported factory is eligible; a loader cannot prove itself through
+  // another call to its own binding.
+  const factory = resolveImportedExpressionForEnforcement(context, callee);
+  return (
+    factory?.imported === "createRequire" &&
+    (factory.source === "node:module" || factory.source === "module")
+  );
+};
+
+// Enforcement provenance recognizes stable loaders regardless of read count.
+// Admission checks must separately prove that the expression is eligible.
+export const dynamicModuleSourceForEnforcement = (
+  node: unknown,
+  context: ScopeContext,
+): string | null => {
   const expression = unwrapExpression(node);
   if (!isAstNode(expression)) {
     return null;
   }
   if (expression.type === "AwaitExpression") {
-    return dynamicModuleSource(expression.argument);
+    return dynamicModuleSourceForEnforcement(expression.argument, context);
   }
   if (expression.type === "ImportExpression") {
     return isStringLiteral(expression.source) ? expression.source.value : null;
   }
   if (
     expression.type === "CallExpression" &&
-    isIdentifier(expression.callee, "require") &&
+    isIdentifierReference(expression.callee) &&
     Array.isArray(expression.arguments) &&
     expression.arguments.length === 1 &&
     isStringLiteral(expression.arguments[0])
   ) {
-    return expression.arguments[0].value;
+    const binding = resolveVariable(context, expression.callee);
+    const globalRequire =
+      expression.callee.name === "require" &&
+      (binding === null || binding.defs.length === 0);
+    return globalRequire || isCreateRequireReference(context, expression.callee)
+      ? expression.arguments[0].value
+      : null;
   }
   return null;
 };
 
 // The static key of a member expression: `a.b`, `a["b"]`, `` a[`b`] ``.
-export const memberPropertyName = (member: AstNode): string | null => {
+export const memberPropertyName = (member: unknown): string | null => {
+  if (!isAstNode(member)) {
+    return null;
+  }
   if (member.computed !== true) {
     return getPropertyName(member.property);
   }
@@ -696,10 +769,10 @@ const bindingFromVariable = (
   ) {
     return null;
   }
-  const loaded = dynamicModuleSource(node.init);
+  const loaded = dynamicModuleSourceForEnforcement(node.init, context);
   const init =
     loaded === null
-      ? resolveImportedExpression(context, node.init, seen)
+      ? resolveImportedExpressionForEnforcement(context, node.init, seen)
       : { source: loaded, imported: NAMESPACE_IMPORT };
   if (init === null) {
     return null;
@@ -713,9 +786,10 @@ const bindingFromVariable = (
   return null;
 };
 
+// Enforcement provenance; recognizing a binding never grants an exemption.
 // The module export an expression evaluates to, or null when it is anything
 // else: a local, a parameter, a call result, an unresolved global.
-export const resolveImportedExpression = (
+export const resolveImportedExpressionForEnforcement = (
   context: ScopeContext,
   node: unknown,
   seen = new Set<unknown>(),
@@ -732,10 +806,17 @@ export const resolveImportedExpression = (
       : bindingFromVariable(context, variable, seen);
   }
   if (expression.type === "MemberExpression") {
-    const loaded = dynamicModuleSource(expression.object);
+    const loaded = dynamicModuleSourceForEnforcement(
+      expression.object,
+      context,
+    );
     const base =
       loaded === null
-        ? resolveImportedExpression(context, expression.object, seen)
+        ? resolveImportedExpressionForEnforcement(
+            context,
+            expression.object,
+            seen,
+          )
         : { source: loaded, imported: NAMESPACE_IMPORT };
     return memberOfNamespace(base, memberPropertyName(expression));
   }
@@ -760,7 +841,7 @@ export const resolveImport = (
   context: ScopeContext & FilenameContext,
   node: unknown,
 ): ResolvedImport | null => {
-  const binding = resolveImportedExpression(context, node);
+  const binding = resolveImportedExpressionForEnforcement(context, node);
   if (binding === null) {
     return null;
   }
@@ -928,7 +1009,7 @@ const isDatabaseHandle = (
 };
 
 // The static text of a drizzle `sql` template, or of a const holding one.
-const writeSqlText = (
+export const writeSqlText = (
   context: DatabaseWriteContext,
   node: unknown,
   depth = 0,
@@ -1009,7 +1090,7 @@ const dottedName = (node: unknown, depth = 0): string | null => {
 };
 
 const SQL_WRITE_TARGET =
-  /\b(?<verb>INSERT\s+INTO|DELETE\s+FROM|UPDATE(?:\s+ONLY)?)\s+(?<table>[\w."]+)/iu;
+  /\b(INSERT\s+INTO|DELETE\s+FROM|UPDATE(?:\s+ONLY)?)\s+([\w."]+)/iu;
 
 /**
  * What a write `isDatabaseWriteCall` accepts touches, as `<verb>:<table>`
@@ -1034,9 +1115,85 @@ export const databaseWriteTarget = (
   }
   const text = writeSqlText(context, args.at(0));
   const match = text === null ? null : SQL_WRITE_TARGET.exec(text);
-  const verb = match?.groups?.verb?.split(/\s+/u).at(0)?.toLowerCase();
-  const table = match?.groups?.table?.replaceAll('"', "");
+  const verb = match?.at(1)?.split(/\s+/u).at(0)?.toLowerCase();
+  const table = match?.at(2)?.replaceAll('"', "");
   const named =
     table === undefined || table === SQL_PLACEHOLDER.trim() ? "?" : table;
   return `${verb ?? "execute"}:${named}`;
+};
+
+export type ReplayOptionDescription<T> =
+  | { kind: "plan" }
+  | { kind: "property"; key: string }
+  | { kind: "spread"; properties: readonly T[] }
+  | { kind: "unresolved" };
+
+type ReplayOptionEntry<T> =
+  { kind: "plan"; node: T } | { kind: "property"; key: string; node: T };
+
+type OrderedReplayOptions<T> = {
+  properties: readonly T[];
+  describe: (property: T) => ReplayOptionDescription<T>;
+};
+
+type OrderedReplayOptionResult<T> =
+  | { status: "resolved"; entries: ReplayOptionEntry<T>[] }
+  | { status: "unsafe" };
+
+/** Flatten known literal spreads in order; no later source may replace a plan's contract. */
+export const orderedReplayOptions = <T>({
+  properties,
+  describe,
+}: OrderedReplayOptions<T>): OrderedReplayOptionResult<T> => {
+  const entries: ReplayOptionEntry<T>[] = [];
+  const defined = new Set<string>();
+  let phase: "before-plan" | "after-plan" = "before-plan";
+  const visit = (items: readonly T[]): boolean => {
+    for (const node of items) {
+      const part = describe(node);
+      switch (part.kind) {
+        case "unresolved":
+          return false;
+        case "spread":
+          if (!visit(part.properties)) {
+            return false;
+          }
+          break;
+        case "plan":
+          if (
+            phase === "after-plan" ||
+            defined.has("set") ||
+            defined.has("setWhere")
+          ) {
+            return false;
+          }
+          phase = "after-plan";
+          defined.add("set");
+          defined.add("setWhere");
+          entries.push({ kind: "plan", node });
+          break;
+        case "property": {
+          const protectedKey = ["set", "setWhere", "where", "target"].includes(
+            part.key,
+          );
+          if (
+            protectedKey &&
+            (phase === "after-plan" || defined.has(part.key))
+          ) {
+            return false;
+          }
+          defined.add(part.key);
+          entries.push({ kind: "property", key: part.key, node });
+          break;
+        }
+        default:
+          part satisfies never;
+          return panic("Unknown replay option kind");
+      }
+    }
+    return true;
+  };
+  return visit(properties)
+    ? { status: "resolved", entries }
+    : { status: "unsafe" };
 };

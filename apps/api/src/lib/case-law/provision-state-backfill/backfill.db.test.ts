@@ -3,6 +3,8 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
+import { PROVISION_EXTRACTION_ADMISSION_SCOPES } from "@stll/legal-atlas/provision-extraction-admission";
+
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
 import { isRecord } from "@/api/lib/type-guards";
@@ -108,6 +110,8 @@ describe("provision state backfill", () => {
         await runProvisionStateBackfill({
           connection,
           deadline: Number.POSITIVE_INFINITY,
+          // Empty admitted scopes share a bounded unit rather than one each.
+          maxUnits: 100,
           signal: new AbortController().signal,
         })
       ).unwrap();
@@ -123,6 +127,25 @@ describe("provision state backfill", () => {
       "case-law-provision-citation-checks",
       "complete",
     ]);
+    const activeScopes = await rows(`SELECT country, language
+      FROM case_law_provision_extraction_scopes WHERE status = 'active'`);
+    expect(activeScopes).toHaveLength(
+      PROVISION_EXTRACTION_ADMISSION_SCOPES.length,
+    );
+    expect(activeScopes).toEqual(
+      expect.arrayContaining(
+        PROVISION_EXTRACTION_ADMISSION_SCOPES.map(
+          ({ jurisdiction, language }) => ({
+            country: jurisdiction,
+            language,
+          }),
+        ),
+      ),
+    );
+    expect(
+      await rows(`SELECT count(*)::int AS count FROM case_law_provision_scope_transitions
+        WHERE completed_at IS NULL`),
+    ).toEqual([{ count: 0 }]);
     expect(
       await rows(`SELECT count(*)::int AS count FROM case_law_provision_extractions
         WHERE decision_id IN (${decisions.map((id) => `'${id}'`).join(", ")})`),
@@ -282,6 +305,63 @@ describe("provision state backfill", () => {
       await rows(`SELECT enqueue_reason FROM case_law_provision_extractions
         WHERE decision_id = '${id}'`),
     ).toEqual([{ enqueue_reason: "scope_activated" }]);
+  });
+
+  test("scope transition units process one populated decision page", async () => {
+    const scopes = [
+      { country: "ZPA", language: "p1" },
+      { country: "ZPB", language: "p2" },
+    ] as const;
+    for (const scope of scopes) {
+      const ids = Array.from({ length: 50 }, () =>
+        createSafeId<"caseLawDecision">(),
+      );
+      await db.insert(caseLawDecisions).values(
+        ids.map((id) => ({
+          id,
+          sourceId: source.id,
+          ...scope,
+          court: "Court",
+          caseNumber: id,
+          decisionDate: "2020-03-01",
+          metadata: {},
+        })),
+      );
+      await connection.execute(
+        `UPDATE case_law_provision_extraction_scopes
+         SET status = 'active', generation = generation + 1
+         WHERE country = $1 AND language = $2`,
+        [scope.country, scope.language],
+      );
+      await connection.execute(
+        `INSERT INTO case_law_provision_scope_transitions
+           (country, language, generation, action)
+         SELECT country, language, generation, 'activate'
+         FROM case_law_provision_extraction_scopes
+         WHERE country = $1 AND language = $2`,
+        [scope.country, scope.language],
+      );
+    }
+
+    const extractionCounts = async () =>
+      await rows(`SELECT decision.country, count(state.decision_id)::int AS count
+        FROM case_law_decisions decision
+        LEFT JOIN case_law_provision_extractions state
+          ON state.decision_id = decision.id
+        WHERE decision.country IN ('ZPA', 'ZPB')
+        GROUP BY decision.country ORDER BY decision.country`);
+
+    (await stepNamed("scope-transitions").advance(connection)).unwrap();
+    expect(await extractionCounts()).toEqual([
+      { country: "ZPA", count: 50 },
+      { country: "ZPB", count: 0 },
+    ]);
+
+    (await stepNamed("scope-transitions").advance(connection)).unwrap();
+    expect(await extractionCounts()).toEqual([
+      { country: "ZPA", count: 50 },
+      { country: "ZPB", count: 50 },
+    ]);
   });
 
   test("a committed transition page resumes and later decision moves converge", async () => {

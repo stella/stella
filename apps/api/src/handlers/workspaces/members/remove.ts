@@ -1,11 +1,11 @@
 import { Result } from "better-result";
 import { and, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { RESOURCE_TYPE } from "@stll/api-contract";
 
 import type { Transaction } from "@/api/db/root";
-import { abortTransaction, abortableTx } from "@/api/db/safe-db";
+import { abortableTx, abortTransaction } from "@/api/db/safe-db";
 import type { SafeDb } from "@/api/db/safe-db";
 import {
   correspondence,
@@ -18,14 +18,15 @@ import {
   workspaceMembers,
   workspaces,
 } from "@/api/db/schema";
-import { workspaceRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
+import { organizationWorkspaceRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tUserId, workspaceParams } from "@/api/lib/custom-schema";
+import { lockChatOwnerStoredContentTransitionOnTx } from "@/api/lib/chat/thread-stored-content-egress";
+import { userIdSchema, workspaceParams } from "@/api/lib/custom-schema";
 import { closeSessionConnections } from "@/api/lib/desktop-edit-session-notifications";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
@@ -35,6 +36,7 @@ import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import { broadcastSessionEvent, revokeWorkspaceSseAccess } from "@/api/lib/sse";
 
 const config = {
+  contract: "patch",
   description:
     "Remove one member from a matter, revoking their live access and " +
     "cancelling their open desktop editing sessions. Their active work " +
@@ -43,10 +45,10 @@ const config = {
     "they own more work obligations than one call may unassign at once.",
   permissions: { workspace: ["update"] },
   accountAccess: ACCOUNT_ACCESS.standard,
-  realtime: workspaceRealtimeUpdates,
-  mcp: { type: "covered", by: "manage_organization" },
-  params: workspaceParams({ userId: tUserId }),
-  body: t.Optional(t.Object({ reassign_to: t.Optional(tUserId) })),
+  realtime: organizationWorkspaceRealtimeUpdates,
+  mcp: { type: "tool", name: "remove_matter_member" },
+  params: workspaceParams({ userId: userIdSchema }),
+  body: v.optional(v.object({ reassign_to: v.optional(userIdSchema) })),
 } satisfies WorkspaceHandlerConfig;
 
 export type RemoveWorkspaceMemberProps = {
@@ -213,7 +215,7 @@ const removedMemberWorkEvents = ({
   );
 
 // Shared remove-member logic reused by the HTTP handler and the
-// `manage_organization` MCP tool. Keeps the tx (last-member guard, lead
+// `remove_matter_member` MCP tool. Keeps the tx (last-member guard, lead
 // clear, desktop-edit session cancel, audit events) and the in-process SSE
 // dispatch together so member removal has identical side effects on both
 // transports.
@@ -231,6 +233,20 @@ export const removeWorkspaceMemberHandler = async function* ({
   // member rows so concurrent removals serialize.
   const txResult = yield* Result.await(
     abortableTx(safeDb, async (tx) => {
+      const authorityRows = await tx
+        .select({ organizationId: workspaces.organizationId })
+        .from(workspaces)
+        .where(eq(workspaces.id, workspaceId))
+        .limit(1);
+      const authority = authorityRows.at(0);
+      if (!authority) {
+        throw new HandlerError({ status: 404, message: "Member not found" });
+      }
+      await lockChatOwnerStoredContentTransitionOnTx(tx, {
+        organizationId: authority.organizationId,
+        userId,
+      });
+
       // Timer starts take this lock before inserting. Hold it through the
       // active-timer check and member deletion so removal cannot strand a
       // timer that starts concurrently.
@@ -473,9 +489,9 @@ export const createRemoveWorkspaceMember = (
         userId: brandPersistedUserId(userId),
         actorUserId: user.id,
         reassignTo:
-          body?.reassign_to === undefined
-            ? undefined
-            : brandPersistedUserId(body.reassign_to),
+          body?.reassign_to !== undefined
+            ? brandPersistedUserId(body.reassign_to)
+            : undefined,
         recordAuditEvent,
         dependencies,
       });

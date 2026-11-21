@@ -1,4 +1,14 @@
 import { panic, Result } from "better-result";
+
+import { isPolishConstitutionalDocket } from "@stll/api-contract/decision-docket-grammar";
+// parser-output-unchanged: HTML loads through @stll/html, which reproduces cheerio.load output; parsed content is unchanged.
+// parser-output-unchanged: a page states whether the publisher was asked; parsed decision output is unchanged.
+// parser-output-unchanged: imports ingestion bindings directly from their existing owner.
+// parser-output-unchanged: session-protocol rejection carries explicit failure metadata; accepted sessions and parsed records are unchanged.
+// parser-output-unchanged: shared warning projection changes error telemetry only; parsed decisions are unchanged.
+// parser-output-unchanged: [pl-tk] Case-page parsing is reused within each assembly; stored fields, HTML and AST output are unchanged.
+// parser-output-unchanged: [pl-tk] The bench builder is typed to printed names only; the judges it emits are unchanged.
+import { load } from "@stll/html";
 /**
  * Polish Constitutional Tribunal (Trybunał Konstytucyjny) adapter.
  *
@@ -40,45 +50,19 @@ import { panic, Result } from "better-result";
  * are the keys a SAOS row and a row from this portal share when they describe
  * the same ruling, stored as `rulingKeys` on the rows of both.
  */
-import * as cheerio from "cheerio";
-import type { AnyNode } from "domhandler";
-
-import { isPolishConstitutionalDocket } from "@stll/api-contract/decision-docket-grammar";
+import type * as cheerio from "@stll/html";
+import type { AnyNode } from "@stll/html/nodes";
+// parser-output-unchanged: error output projection only; parsed decision fields are unchanged.
+// parser-output-unchanged: imports the document AST from its package owner
+import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import type { DocumentFetchStage } from "@stll/legal-atlas/document-fetch-diagnostics";
 import { INGESTION_STOP_KIND } from "@stll/legal-atlas/ingestion-cycle";
+// parser-output-unchanged: SHA-256 ownership changes preserve input bytes, serialization and update order, so stored hashes and parser output remain identical.
+import { sha256Hex as hashContent } from "@stll/sha256/bun";
 import { readCappedBytes } from "@stll/skills/streaming";
 import { DAY_IN_MS, Temporal } from "@stll/time";
 
 import { ADAPTER_KEYS, PARSER_VERSIONS } from "@/api/handlers/case-law/consts";
-import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
-import {
-  defineSourceAdapter,
-  EMPTY_AST,
-  encodeSourceRawEnvelope,
-  excludedSourceSurface,
-  isPersistableSourceDocumentId,
-  readStoredRawListing,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  sourceTotalRead,
-  STORED_RAW_REPARSE_REJECTION,
-  storedSourceSurface,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import type {
-  DecisionJudgeInput,
-  EmptyAst,
-  IngestionResult,
-  ListingIdentity,
-  ReconciliationBuildOutcome,
-  ReconciliationSlicePage,
-  ReconciliationSlicePageOptions,
-  SourceFieldDisposition,
-  SourceRawParts,
-  SourceSurfaceCensus,
-  SourceSurfaceDisposition,
-  StoredRawReparseInput,
-  StoredRawReparseOutcome,
-  SyncPage,
-} from "@/api/handlers/case-law/ingestion/adapter";
 import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
 import {
   PL_TK_RULING_FAMILY,
@@ -94,12 +78,10 @@ import {
   fetchWithRetry,
   parsePublisherRetryAfter,
 } from "@/api/handlers/case-law/ingestion/adapters/retry";
-import {
-  adapterCatch,
-  hashContent,
-} from "@/api/handlers/case-law/ingestion/adapters/utils";
+import { adapterCatch } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import {
   listPlTkPageFields,
+  parsePlTkPage,
   parsePlTkText,
   parsePolishDate,
   PL_TK_ORIGIN,
@@ -107,24 +89,56 @@ import {
   readPlTkRuling,
 } from "@/api/handlers/case-law/ingestion/parsers/pl-tk";
 import type {
+  ParsedPlTkPage,
   PlTkCaseRecord,
   PlTkRuling,
 } from "@/api/handlers/case-law/ingestion/parsers/pl-tk";
 import { visibleHtmlText } from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
 import { DECISION_JUDGE_ROLE } from "@/api/handlers/case-law/judges/consts";
 import {
-  TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
   checkedDecisionMetadata,
+  TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
+import { inlineStyleIsItalic } from "@/api/lib/legal-search/document-builders/inline-style";
+import {
+  defineSourceAdapter,
+  EMPTY_AST,
+  encodeSourceRawEnvelope,
+  excludedSourceSurface,
+  isPersistableSourceDocumentId,
+  PUBLISHER_REQUEST,
+  readStoredRawListing,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+  sourceTotalRead,
+  STORED_RAW_REPARSE_REJECTION,
+  storedSourceSurface,
+} from "@/api/lib/legal-search/ingestion-types";
+import type {
+  EmptyAst,
+  IngestionResult,
+  ListingIdentity,
+  PrintedDecisionJudge,
+  ReconciliationBuildOutcome,
+  ReconciliationSlicePage,
+  ReconciliationSlicePageOptions,
+  SourceFieldDisposition,
+  SourceRawParts,
+  SourceSurfaceCensus,
+  SourceSurfaceDisposition,
+  StoredRawReparseInput,
+  StoredRawReparseOutcome,
+  SyncPage,
+} from "@/api/lib/legal-search/ingestion-types";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { logger } from "@/api/lib/observability/logger";
 import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
 import { isRecord } from "@/api/lib/type-guards";
 
+import { logDocumentParseFailure } from "./document-parse-failure";
 import { PL_TK_METADATA_URL_SCHEMA } from "./pl-tk.metadata-urls";
 
 // ── Publisher boundary ───────────────────────────────────
@@ -459,11 +473,15 @@ const openSession = async (
   const sessionId = cookieValue(landing.setCookies, "JSESSIONID");
   if (landing.status !== 200 || sessionId === undefined) {
     return Result.err(
-      tkError(
+      new AdapterFetchError({
+        adapterKey: ADAPTER_KEYS.PL_TK,
         cursor,
-        `the portal opened no session (${landing.status})`,
-        landing.status,
-      ),
+        message: `ipo.trybunal.gov.pl: the portal opened no session (${landing.status})`,
+        httpStatus: landing.status,
+        ...(landing.status === 200
+          ? { stopKind: INGESTION_STOP_KIND.ADAPTER_ERROR }
+          : {}),
+      }),
     );
   }
   return Result.ok({ sessionId });
@@ -611,7 +629,7 @@ export const parsePlTkListingPage = (
   html: string,
   stage: PlTkStage,
 ): PlTkListingPage | null => {
-  const $ = cheerio.load(html);
+  const $ = load(html);
   const body = $('[id="wyszukiwanie:dataTable_data"]');
   if (body.length === 0) {
     return null;
@@ -641,7 +659,16 @@ export const parsePlTkListingPage = (
       const caseNumber = collapse(
         visibleHtmlText(cell.find(".sygnatura").first()),
       );
-      const subjectNode = cell.find('span[style*="italic"]');
+      // Only the outermost italic span: a nested span inherits the italic, and
+      // reading both would repeat the subject.
+      const subjectNode = cell.find("span").filter(
+        (_, el) =>
+          inlineStyleIsItalic(el) &&
+          !$(el)
+            .parentsUntil(cell, "span")
+            .toArray()
+            .some((ancestor) => inlineStyleIsItalic(ancestor)),
+      );
       const subject = collapse(visibleHtmlText(subjectNode));
       const lineNode = cell.clone();
       lineNode.find("a, span").remove();
@@ -780,7 +807,7 @@ const openStageListing = async (
     stage,
     cursor,
     signal,
-    pages: new Map(),
+    pages: new Map<number, { page: PlTkListingPage; url: string }>(),
   });
 };
 
@@ -918,10 +945,10 @@ const RAPPORTEUR = /^sprawozdawc/iu;
  * The bench as the ruling's table prints it, and the dissenters its text
  * names. A judge is listed once per role.
  */
-export const plTkJudges = (ruling: PlTkRuling): DecisionJudgeInput[] => {
-  const judges: DecisionJudgeInput[] = [];
+export const plTkJudges = (ruling: PlTkRuling): PrintedDecisionJudge[] => {
+  const judges: PrintedDecisionJudge[] = [];
   const seen = new Set<string>();
-  const add = (judge: DecisionJudgeInput): void => {
+  const add = (judge: PrintedDecisionJudge): void => {
     const key = `${judge.role}\u0000${judge.nameAsPrinted}`;
     if (!seen.has(key)) {
       seen.add(key);
@@ -1011,6 +1038,8 @@ export type AssemblePlTkDecisionOptions = {
   row: PlTkListingRow;
   /** The case page, where one was read. */
   casePage: string | undefined;
+  /** The already parsed case page when the caller owns one. */
+  parsedPage?: ParsedPlTkPage | undefined;
   rawParts: SourceRawParts;
 };
 
@@ -1023,6 +1052,7 @@ export type AssemblePlTkDecisionOptions = {
  */
 export const assemblePlTkDecision = ({
   casePage,
+  parsedPage: suppliedPage,
   rawParts,
   row,
 }: AssemblePlTkDecisionOptions): PlTkBuildResult => {
@@ -1030,8 +1060,12 @@ export const assemblePlTkDecision = ({
   if (!isPersistableSourceDocumentId(id)) {
     return { type: "unkeyable" };
   }
-  const page = casePage === undefined ? null : readPlTkCasePage(casePage);
-  const ruling = casePage === undefined ? null : readPlTkRuling(casePage, id);
+  const parsedPage =
+    suppliedPage ??
+    (casePage === undefined ? undefined : parsePlTkPage(casePage));
+  const page = parsedPage === undefined ? null : readPlTkCasePage(parsedPage);
+  const ruling =
+    parsedPage === undefined ? null : readPlTkRuling(parsedPage, id);
   const statedCaseNumber = page?.record.caseNumber ?? row.caseNumber;
   // A row that states no docket still has to be stored under one; the audit
   // id stands in and is flagged as a placeholder.
@@ -1060,12 +1094,15 @@ export const assemblePlTkDecision = ({
       ? ruling.wordDocumentUrl
       : undefined;
 
+  // parser-output-unchanged: the absent-object case takes the same branch as before; only its spelling changed.
   const parsed =
-    ruling?.textHtml === undefined
-      ? null
-      : Result.try({
+    ruling?.textHtml !== undefined
+      ? Result.try({
           try: () =>
             parsePlTkText({
+              page:
+                parsedPage ??
+                panic("a ruling cannot exist without its parsed page"),
               caseNumber,
               court,
               decisionDate,
@@ -1076,14 +1113,15 @@ export const assemblePlTkDecision = ({
               textHtml: ruling.textHtml ?? "",
             }),
           catch: errorTag,
-        });
+        })
+      : null;
   if (parsed !== null && Result.isError(parsed)) {
     // The case page is stored verbatim below, so the text is recoverable by
     // re-parsing it rather than by asking the portal again.
-    logger.warn("case_law.ingestion.document_parse_failed", {
+    logDocumentParseFailure({
       adapterKey: ADAPTER_KEYS.PL_TK,
       caseNumber,
-      "error.type": parsed.error,
+      error: parsed.error,
     });
   }
   const document = parsed !== null && Result.isOk(parsed) ? parsed.value : null;
@@ -1169,11 +1207,39 @@ export const plTkRawPartsOf = (
   ...(casePage === undefined ? {} : { [PL_TK_RAW_PART.CASE_PAGE]: casePage }),
 });
 
+export type PlTkPageCache = {
+  /** Raw responses remain reusable for a case revisited later in the batch. */
+  html: Map<string, string>;
+  parse: (caseId: string, html: string) => ParsedPlTkPage;
+  parsedSize: () => number;
+};
+
+/** A batch keeps raw pages, but owns only the currently assembled case's DOM. */
+export const createPlTkPageCache = (
+  parsePage: (html: string) => ParsedPlTkPage = parsePlTkPage,
+): PlTkPageCache => {
+  let parsed: { caseId: string; page: ParsedPlTkPage } | undefined;
+  return {
+    html: new Map<string, string>(),
+    parse: (caseId, html) => {
+      if (parsed?.caseId === caseId) {
+        return parsed.page;
+      }
+      // Release the previous case's DOM before constructing the next one.
+      parsed = undefined;
+      const page = parsePage(html);
+      parsed = { caseId, page };
+      return page;
+    },
+    parsedSize: () => (parsed === undefined ? 0 : 1),
+  };
+};
+
 /**
  * Fetch a listed ruling's case page and assemble it. A refused request is
  * the ruling's failure, not its absence, so it comes back as an `Err`.
  */
-const buildPlTkDecision = async ({
+export const buildPlTkDecision = async ({
   cursor,
   pageCache,
   row,
@@ -1182,7 +1248,7 @@ const buildPlTkDecision = async ({
 }: {
   cursor: string;
   /** Case pages already read in this call, by case page path. */
-  pageCache: Map<string, string>;
+  pageCache: PlTkPageCache;
   row: PlTkListingRow;
   session: Session;
   signal: AbortSignal | undefined;
@@ -1205,7 +1271,11 @@ const buildPlTkDecision = async ({
   }
   const path = casePagePath(row);
   let casePage =
-    row.caseId === undefined ? undefined : pageCache.get(row.caseId);
+    row.caseId === undefined ? undefined : pageCache.html.get(row.caseId);
+  let parsedPage =
+    row.caseId === undefined || casePage === undefined
+      ? undefined
+      : pageCache.parse(row.caseId, casePage);
   if (casePage === undefined) {
     const first = await requestTk({
       cursor,
@@ -1259,7 +1329,8 @@ const buildPlTkDecision = async ({
         ),
       );
     }
-    if (readPlTkCasePage(response.body) === null) {
+    parsedPage = pageCache.parse(row.caseId ?? row.documentId, response.body);
+    if (readPlTkCasePage(parsedPage) === null) {
       // A 200 that is not a case page is the portal's shell for a session
       // it no longer holds: the ruling was not refused, it was not served.
       return Result.err(
@@ -1268,13 +1339,14 @@ const buildPlTkDecision = async ({
     }
     casePage = response.body;
     if (row.caseId !== undefined) {
-      pageCache.set(row.caseId, casePage);
+      pageCache.html.set(row.caseId, casePage);
     }
   }
   return Result.ok(
     assemblePlTkDecision({
       row,
       casePage,
+      parsedPage,
       rawParts: plTkRawPartsOf(row, casePage),
     }),
   );
@@ -1340,6 +1412,10 @@ const SOURCE_FIELDS = [
   "Skład",
 ] as const;
 
+type PlTkPublisherRecord = Readonly<
+  Record<(typeof SOURCE_FIELDS)[number], unknown>
+>;
+
 const PL_TK_SOURCE_FIELDS = {
   Sygnatura: {
     disposition: "stored",
@@ -1402,14 +1478,11 @@ const PL_TK_SOURCE_FIELDS = {
     target: { type: "metadata", key: "publications" },
   },
   Skład: { disposition: "stored", target: { type: "result", key: "judges" } },
-} as const satisfies Record<
-  (typeof SOURCE_FIELDS)[number],
-  SourceFieldDisposition
->;
+} as const satisfies Record<keyof PlTkPublisherRecord, SourceFieldDisposition>;
 
 const listPlTkSourceFields = (parts: SourceRawParts): readonly string[] => {
   const page = parts[PL_TK_RAW_PART.CASE_PAGE];
-  return page === undefined ? [] : listPlTkPageFields(page);
+  return page === undefined ? [] : listPlTkPageFields(parsePlTkPage(page));
 };
 
 /**
@@ -1545,6 +1618,7 @@ const plTkFetchPage = async (
     return Result.ok({
       decisions: [],
       sourceUrl: firstUrl,
+      publisherRequest: PUBLISHER_REQUEST.ANSWERED,
       nextCursor: encodePlTkCursor({
         stage: stageAfter(stage),
         read: { ...cursor.read, [stage]: read },
@@ -1558,7 +1632,7 @@ const plTkFetchPage = async (
   }
   const decisions: IngestionResult[] = [];
   let itemBuildFailures = 0;
-  const pageCache = new Map<string, string>();
+  const pageCache = createPlTkPageCache();
   let consumed = 0;
   for (let offset = window.from; offset >= window.to; offset -= 1) {
     if (signal?.aborted) {
@@ -1643,6 +1717,7 @@ const plTkFetchPage = async (
           },
         }),
     sourceUrl: listed.value.url,
+    publisherRequest: PUBLISHER_REQUEST.ANSWERED,
     nextCursor: encodePlTkCursor({
       stage,
       read: { ...cursor.read, [stage]: read + consumed },
@@ -1806,7 +1881,7 @@ const buildPlTkFromPayload = async (
   }
   const attempted = await buildPlTkDecision({
     cursor: label,
-    pageCache: new Map(),
+    pageCache: createPlTkPageCache(),
     row,
     session: session.value,
     signal,

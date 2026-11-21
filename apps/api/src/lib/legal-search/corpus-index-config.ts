@@ -20,6 +20,8 @@ import type { CorpusFamily } from "@/api/lib/legal-search/corpus-generation-cont
 
 type CorpusIndexFieldType =
   | "text"
+  // The engine takes several values for a field only when its type says so.
+  | "array<text>"
   | "u64"
   | "i64"
   | "f64"
@@ -70,10 +72,7 @@ type CorpusIndexFieldMapping = {
   // Built-in names plus whatever `CUSTOM_TOKENIZERS` declares, so a field can
   // never name a tokenizer the doc mapping does not ship.
   tokenizer?:
-    | "raw"
-    | "default"
-    | "en_stem"
-    | (typeof CUSTOM_TOKENIZERS)[number]["name"];
+    "raw" | "default" | "en_stem" | (typeof CUSTOM_TOKENIZERS)[number]["name"];
   record?: "basic" | "freq" | "position";
   fieldnorms?: boolean;
   /** Fast-field resolution for a datetime; coarser truncates harder. */
@@ -91,11 +90,17 @@ type CorpusIndexMergePolicy = {
   min_level_num_docs: number;
 };
 
+/**
+ * The engine reports a maturation period back in humantime's format, whatever
+ * spelling created the index: four hours as `4h`, seven days as `7days`
+ * (Quickwit 0.9's index metadata for an index created with `7d` reads
+ * `7days`). The configuration attestation compares against this rendering.
+ */
 const QUICKWIT_CANONICAL_MATURATION_PERIOD = {
   "4h": "4h",
   "4hours": "4h",
-  "7d": "7d",
-  "7days": "7d",
+  "7d": "7days",
+  "7days": "7days",
 } as const;
 
 type CorpusIndexMaturationPeriod =
@@ -120,7 +125,7 @@ export const canonicalCorpusIndexMaturationPeriod = (
 ) => QUICKWIT_CANONICAL_MATURATION_PERIOD[value];
 
 /** Merge policy retained by the legacy generation helpers. */
-export const CORPUS_INDEX_MERGE_POLICY = {
+const CORPUS_INDEX_MERGE_POLICY = {
   type: "stable_log",
   maturation_period: "7days",
   merge_factor: 10,
@@ -128,14 +133,50 @@ export const CORPUS_INDEX_MERGE_POLICY = {
   min_level_num_docs: 100_000,
 } as const satisfies CorpusIndexMergePolicy;
 
-/** Final-index merge window and asynchronous-delete settlement bound. */
-export const CORPUS_FINAL_INDEX_MERGE_POLICY = {
+/**
+ * Final-index age-based merge window. Each merge output starts a new maturity
+ * clock, so this period does not bound asynchronous-delete settlement.
+ */
+const CORPUS_FINAL_INDEX_MERGE_POLICY = {
   ...CORPUS_INDEX_MERGE_POLICY,
   maturation_period: "4hours",
 } as const satisfies CorpusIndexMergePolicy;
 
-/** Engine commit window pinned by final-generation manifests and clients. */
-export const CORPUS_INDEX_COMMIT_TIMEOUT_SECS = 60;
+/**
+ * Commit window and merge policy; per generation, like the docstore, because
+ * both are part of the manifest a generation is identified by.
+ */
+export type CorpusIndexIndexingSettings = {
+  commitTimeoutSecs: number;
+  mergePolicy: CorpusIndexMergePolicy;
+};
+
+/** What the generations through case_law_v7 and legislation_v2 use. */
+export const CORPUS_FINAL_INDEX_INDEXING_DEFAULT = {
+  commitTimeoutSecs: 60,
+  mergePolicy: CORPUS_FINAL_INDEX_MERGE_POLICY,
+} as const satisfies CorpusIndexIndexingSettings;
+
+/**
+ * Settings case_law_v8 and legislation_v3 are created with. A trickle of
+ * appends stages one split per commit, and a split that matures before nine
+ * siblings join it is never merged again, so a longer commit window stages
+ * fewer splits and a longer maturation keeps merging them. Deletes apply to
+ * mature splits only; repeated merges can restart maturity, so physical
+ * deletion and settlement can exceed the period. Only a generation that
+ * stores the projection revision filters candidate passages on the revision
+ * Postgres records as applied; on a `query_only` one (case_law_v8 and
+ * legislation_v3 among them) every copy still in the index is a candidate and
+ * ranks with the applied one, and only the snippet read is narrowed to the
+ * applied revision.
+ */
+export const CORPUS_FINAL_INDEX_INDEXING_V8 = {
+  commitTimeoutSecs: 600,
+  mergePolicy: {
+    ...CORPUS_FINAL_INDEX_MERGE_POLICY,
+    maturation_period: "7days",
+  },
+} as const satisfies CorpusIndexIndexingSettings;
 
 type CorpusIndexDocMappingMode = "lenient" | "strict" | "dynamic";
 
@@ -386,6 +427,21 @@ export const DECISION_TIMESTAMP_FIELD = "decision_date_ts";
 export const UNDATED_DECISION_TIMESTAMP = "1800-01-01";
 
 /**
+ * The index field carrying the provision keys of a decision's recorded
+ * provision links (`@/api/lib/case-law/provision-keys`): a raw, multi-valued
+ * keyword, written on every passage of the decision so a provision filter is
+ * one exact term on any passage a query reaches.
+ *
+ * Not part of any generation's manifest. Only a case-law index group created
+ * under the `provision_keys_v1` group contract maps it, and adding a field to
+ * a mapping an index was already created with does nothing, so it arrives with
+ * a group's index and never before one.
+ */
+export const PROJECTION_GENERATION_FIELD = "projection_generation";
+
+export const PROVISION_KEYS_FIELD = "provision_keys";
+
+/**
  * The index field carrying a decision's headnote: the publisher's own sentence
  * about the case, from `publisher-summary.ts`. Its own field rather than a
  * prefix of `text`, so a term matching the headnote is a document-level hit
@@ -440,6 +496,33 @@ export const STEM_FIELD_OF = {
   text: "text_stem",
   [PUBLISHER_SUMMARY_FIELD]: "headnote_stem",
 } as const;
+
+/**
+ * The index field carrying a whole decision's terms on its opening passage, so
+ * one engine query can rank decisions rather than passages: BM25 over the
+ * decision, with its length as the field norm.
+ *
+ * Total over languages. A decision whose language has a stemmer carries the
+ * stems of its passages' tokens, in order; one without (or with no recorded
+ * language) carries its surface tokens, which the field's folding tokenizer
+ * lowercases and folds like `text`. Named for what it holds in both cases:
+ * terms, not stems. Which of the two a decision holds follows from its
+ * `language`, the same key its projection fingerprint already folds in.
+ *
+ * Written to the opening passage only and never a default search field, for
+ * the reason `title` and the headnote are: a field repeated across passages
+ * would let one decision answer once per passage.
+ */
+export const DECISION_TERMS_FIELD = "decision_terms";
+
+/**
+ * Set on the opening passage of a decision whose terms did not fit the engine's
+ * document ceiling and were written as a prefix cut at a term boundary. Its
+ * passages still carry every word in `text` and `text_stem`, so only the
+ * decision-level ranking reads less than the whole decision, and an exact
+ * term query on this field counts every such decision.
+ */
+export const DECISION_TERMS_PARTIAL_FIELD = "decision_terms_partial";
 
 const FAMILY_FIELDS: Record<CorpusFamily, CorpusIndexFieldMapping[]> = {
   case_law: [
@@ -517,7 +600,9 @@ const FAMILY_FIELDS: Record<CorpusFamily, CorpusIndexFieldMapping[]> = {
       stored: true,
       fast: false,
     },
-    // current | historical | repealed
+    // The stored status. `current` and `historical` are the ingest day's
+    // reading of the window, so search filters only the other values here
+    // (see `legislationStatusToday`).
     {
       name: "status",
       type: "text",

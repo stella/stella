@@ -4,7 +4,11 @@ import type { InspectorOpenTarget } from "@/components/inspector/inspector-store
 import { toSafeId } from "@/lib/safe-id";
 import type { WorkspaceEntity } from "@/lib/types";
 
-import { planInspectorOpen } from "./open-entities.logic";
+import {
+  definedFields,
+  planInspectorOpen,
+  toRequestedFileTab,
+} from "./open-entities.logic";
 
 const WORKSPACE_ID = "workspace-1";
 
@@ -111,6 +115,36 @@ const targetsOf = (
     workspaceId,
   })?.targets ?? [];
 
+describe("toRequestedFileTab", () => {
+  const requested = (subject: WorkspaceEntity) =>
+    toRequestedFileTab({
+      entityId: subject.entityId,
+      fields: definedFields(subject),
+      label: "Label",
+      workspaceId: WORKSPACE_ID,
+    });
+
+  test("gives a file no viewer renders a tab of its own", () => {
+    expect(
+      requested(
+        entity(
+          "drawing",
+          "document",
+          fileFields({
+            entityId: "drawing",
+            fileName: "drawing.svg",
+            mimeType: "image/svg+xml",
+          }),
+        ),
+      ),
+    ).toMatchObject({ id: "field-drawing", fileName: "drawing.svg" });
+  });
+
+  test("has no tab for an entity that holds no file", () => {
+    expect(requested(entity("empty", "document"))).toBeNull();
+  });
+});
+
 describe("projecting a selection onto inspector tabs", () => {
   test("keeps the caller's order so the tab strip matches the selection", () => {
     const targets = targetsOf(
@@ -125,7 +159,7 @@ describe("projecting a selection onto inspector tabs", () => {
     ]);
   });
 
-  test("skips folders and files the inspector cannot render", () => {
+  test("opens every requested file, including a download-only file", () => {
     const unrenderable = entity(
       "raw",
       "document",
@@ -136,14 +170,15 @@ describe("projecting a selection onto inspector tabs", () => {
       }),
     );
 
-    // The fixture must actually be unrenderable, or the assertion is vacuous.
-    expect(targetsOf([unrenderable], WORKSPACE_ID)).toEqual([]);
+    expect(targetsOf([unrenderable], WORKSPACE_ID)).toMatchObject([
+      { id: "field-raw" },
+    ]);
     expect(
       targetsOf(
         [entity("folder", "folder"), unrenderable, pdfEntity("doc")],
         WORKSPACE_ID,
       ).map((target) => target.id),
-    ).toEqual(["field-doc"]);
+    ).toEqual(["field-raw", "field-doc"]);
   });
 
   test("opens the first displayable file, not the first file", () => {
@@ -210,6 +245,7 @@ describe("projecting a selection onto inspector tabs", () => {
         fileName: "brief.docx",
         mimeType: "application/octet-stream",
         pdfFileId: "pdf-docx",
+        encrypted: false,
         propertyId: "property-docx",
         workspaceId: WORKSPACE_ID,
       },

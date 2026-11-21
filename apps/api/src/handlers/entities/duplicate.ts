@@ -1,6 +1,5 @@
 import { panic, Result } from "better-result";
-import { t } from "elysia";
-import type { Static } from "elysia";
+import * as v from "valibot";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { transactionAbortError } from "@/api/db/safe-db";
@@ -19,12 +18,16 @@ import {
   snapshotOfCurrentVersion,
 } from "@/api/handlers/entities/copy-utils";
 import { entityFileRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
-import { captureError } from "@/api/lib/analytics/capture";
+import {
+  captureError,
+  createErrorCapture,
+  detached,
+} from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { enqueueDocumentProcessingRun } from "@/api/lib/document-processing-enqueue";
 import { handoffCommittedDocumentProcessingRuns } from "@/api/lib/document-processing-handoff";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -32,7 +35,13 @@ import {
   enqueueImageThumbnailOrMarkFailed,
   enqueuePdfDerivativeOrMarkFailed,
 } from "@/api/lib/file-derivative-queue";
+import {
+  abortCopyPublicationTransaction,
+  lockCopyPublicationIntentsInTransaction,
+  retirePublishedCopyIntentsInTransaction,
+} from "@/api/lib/files/copy-organization-files";
 import { LIMITS } from "@/api/lib/limits";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import {
   requestNativeExtractionRuns,
   SEARCH_INDEX_OWNER,
@@ -40,12 +49,12 @@ import {
 import { flushEntitySearchRepairs } from "@/api/lib/search/projection-repair-flush";
 import { enqueueEntitySearchRepairs } from "@/api/lib/search/projection-repair-queue";
 
-const duplicateEntityBodySchema = t.Object({
-  entityId: tSafeId("entity"),
-  name: t.Optional(
-    t.String({ minLength: 1, maxLength: LIMITS.entityNameMaxLength }),
+const duplicateEntityBodySchema = v.object({
+  entityId: resourceIdSchema("entity"),
+  name: v.optional(
+    v.pipe(v.string(), v.minLength(1), v.maxLength(LIMITS.entityNameMaxLength)),
   ),
-  targetEntityId: t.Optional(tSafeId("entity")),
+  targetEntityId: v.optional(resourceIdSchema("entity", { usage: "creation" })),
 });
 
 type DuplicateEntityHandlerProps = {
@@ -54,7 +63,7 @@ type DuplicateEntityHandlerProps = {
   workspaceId: SafeId<"workspace">;
   userId: SafeId<"user">;
   recordAuditEvent: AuditRecorder;
-  body: Static<typeof duplicateEntityBodySchema>;
+  body: v.InferOutput<typeof duplicateEntityBodySchema>;
   dependencies: DuplicateEntityDependencies;
 };
 
@@ -80,15 +89,93 @@ const duplicateReplayPayload = ({
 
 export type DuplicateEntityDependencies = CopyEntitiesDependencies & {
   enqueueDocumentProcessingRun: typeof enqueueDocumentProcessingRun;
+  fileUsageDb?: Parameters<typeof copyFileObjects>[0]["fileUsageDb"];
   flushEntitySearchRepairs: typeof flushEntitySearchRepairs;
+  lockCopyPublicationIntentsInTransaction: typeof lockCopyPublicationIntentsInTransaction;
+  retirePublishedCopyIntentsInTransaction: typeof retirePublishedCopyIntentsInTransaction;
 };
 
 const defaultDuplicateEntityDependencies = {
   enqueueDocumentProcessingRun,
   enqueueEntitySearchRepairs,
   flushEntitySearchRepairs,
+  lockCopyPublicationIntentsInTransaction,
   requestNativeExtractionRuns,
+  retirePublishedCopyIntentsInTransaction,
 } satisfies DuplicateEntityDependencies;
+
+const DUPLICATE_CAPTURE_CONTEXT = {
+  searchRepair: handlerErrorContext("duplicateEntityHandler.rejection"),
+  documentProcessing: handlerErrorContext(
+    "duplicateEntityHandler.handoffCommittedDocumentProcessingRuns",
+  ),
+  pdfDerivative: handlerErrorContext(
+    "duplicateEntityHandler.enqueuePdfDerivativeOrMarkFailed",
+  ),
+  imageThumbnail: handlerErrorContext(
+    "duplicateEntityHandler.enqueueImageThumbnailOrMarkFailed",
+  ),
+} as const;
+
+type DuplicateReplayOptions = Pick<
+  DuplicateEntityHandlerProps,
+  "safeDb" | "workspaceId" | "userId"
+> & {
+  sourceEntityId: SafeId<"entity">;
+  targetEntityId: SafeId<"entity">;
+};
+
+const findDuplicateReplay = async ({
+  safeDb,
+  workspaceId,
+  userId,
+  sourceEntityId,
+  targetEntityId,
+}: DuplicateReplayOptions) =>
+  await safeDb(
+    async (tx) =>
+      await tx.query.entities.findFirst({
+        where: {
+          id: { eq: targetEntityId },
+          workspaceId: { eq: workspaceId },
+          createdBy: { eq: userId },
+          duplicateSourceEntityId: { eq: sourceEntityId },
+        },
+        columns: { id: true, name: true },
+        with: {
+          currentVersion: {
+            columns: { id: true },
+            with: {
+              fields: {
+                columns: { id: true, content: true },
+                orderBy: { id: "asc" },
+                limit: LIMITS.propertiesCount,
+              },
+            },
+          },
+        },
+      }),
+  );
+
+/** PDF and thumbnail derivatives for one copied file, after commit. */
+const startCopyDerivatives = (
+  file: Parameters<typeof enqueuePdfDerivativeOrMarkFailed>[0],
+) => {
+  detached(
+    async () =>
+      enqueuePdfDerivativeOrMarkFailed(file).catch(
+        createErrorCapture(DUPLICATE_CAPTURE_CONTEXT.pdfDerivative),
+      ),
+    "entities-duplicate.enqueue-pdf-derivative-or-mark-failed",
+  );
+  detached(
+    async () =>
+      enqueueImageThumbnailOrMarkFailed(file).catch(
+        createErrorCapture(DUPLICATE_CAPTURE_CONTEXT.imageThumbnail),
+      ),
+    "entities-duplicate.enqueue-image-thumbnail-or-mark-failed",
+  );
+};
 
 const duplicateEntityHandler = async function* ({
   safeDb,
@@ -116,33 +203,16 @@ const duplicateEntityHandler = async function* ({
     );
   }
 
-  const findReplay = async (replayTargetEntityId: SafeId<"entity">) =>
-    await safeDb(
-      async (tx) =>
-        await tx.query.entities.findFirst({
-          where: {
-            id: { eq: replayTargetEntityId },
-            workspaceId: { eq: workspaceId },
-            createdBy: { eq: userId },
-            duplicateSourceEntityId: { eq: sourceEntityId },
-          },
-          columns: { id: true, name: true },
-          with: {
-            currentVersion: {
-              columns: { id: true },
-              with: {
-                fields: {
-                  columns: { id: true, content: true },
-                  orderBy: { id: "asc" },
-                  limit: LIMITS.propertiesCount,
-                },
-              },
-            },
-          },
-        }),
-    );
   if (targetEntityId) {
-    const replayed = yield* Result.await(findReplay(targetEntityId));
+    const replayed = yield* Result.await(
+      findDuplicateReplay({
+        safeDb,
+        workspaceId,
+        userId,
+        sourceEntityId,
+        targetEntityId,
+      }),
+    );
     if (replayed) {
       return Result.ok(duplicateReplayPayload(replayed));
     }
@@ -184,10 +254,19 @@ const duplicateEntityHandler = async function* ({
     organizationId,
     targetWorkspaceId: workspaceId,
     copiedS3Keys,
+    ...(dependencies.fileUsageDb === undefined
+      ? {}
+      : { fileUsageDb: dependencies.fileUsageDb }),
   });
   if (Result.isError(fileMappings)) {
     await rollbackS3Copies(copiedS3Keys);
-    captureError(fileMappings.error, { workspaceId, sourceEntityId });
+    captureError(
+      fileMappings.error,
+      handlerErrorContext(
+        "entities.duplicateEntityHandler.fileMappings_error",
+        { workspaceId, sourceEntityId },
+      ),
+    );
     return Result.err(
       new HandlerError({ status: 500, message: "Failed to copy files" }),
     );
@@ -195,34 +274,63 @@ const duplicateEntityHandler = async function* ({
 
   const remappedEntities = remapFileIds(sourceEntities, fileMappings.value);
 
+  // The copies land in the source's own matter.
+  const publication = { organizationId, workspaceIds: [workspaceId] };
   const txResultResult = (
-    await safeDb(
-      async (tx) =>
-        await copyEntities({
-          organizationId,
+    await safeDb(async (tx) => {
+      const copyCleanupIntentIds = fileMappings.value.flatMap(
+        ({ cleanupIntentIds }) => cleanupIntentIds,
+      );
+      abortCopyPublicationTransaction(
+        await dependencies.lockCopyPublicationIntentsInTransaction({
+          intentIds: copyCleanupIntentIds,
+          ...publication,
           tx,
-          targetWorkspaceId: workspaceId,
-          targetParentId: source.parentId,
-          userId,
-          recordAuditEvent,
-          sourceEntityId,
-          sourceEntities: remappedEntities,
-          targetRootEntityId: targetEntityId,
-          targetRootName: name,
-          // A duplicate is a new document in the same matter: its own
-          // version 1, its own stamp and code.
-          transfer: { type: "copy" },
-          fieldMapping: { type: "omit" },
-          dependencies,
+          workspaceMode: "update",
         }),
-    )
+      );
+      const copied = await copyEntities({
+        organizationId,
+        tx,
+        targetWorkspaceId: workspaceId,
+        targetParentId: source.parentId,
+        userId,
+        recordAuditEvent,
+        sourceEntityId,
+        sourceEntities: remappedEntities,
+        targetRootEntityId: targetEntityId,
+        targetRootName: name,
+        // A duplicate is a new document in the same matter: its own
+        // version 1, its own stamp and code.
+        transfer: { type: "copy" },
+        fieldMapping: { type: "omit" },
+        dependencies,
+      });
+      if (Result.isError(copied)) {
+        return copied;
+      }
+      abortCopyPublicationTransaction(
+        await dependencies.retirePublishedCopyIntentsInTransaction({
+          intentIds: copyCleanupIntentIds,
+          ...publication,
+          tx,
+        }),
+      );
+      return copied;
+    })
   )
     .mapError(transactionAbortError)
     .andThen((copied) => copied);
 
   if (Result.isError(txResultResult)) {
     if (targetEntityId) {
-      const replayed = await findReplay(targetEntityId);
+      const replayed = await findDuplicateReplay({
+        safeDb,
+        workspaceId,
+        userId,
+        sourceEntityId,
+        targetEntityId,
+      });
       if (Result.isError(replayed)) {
         // The transaction outcome and the ownership of its objects are both
         // unknown. Retain them until a replay can prove whether they are
@@ -242,38 +350,36 @@ const duplicateEntityHandler = async function* ({
 
   // Acceleration only: the marks are already committed, and the standing
   // drain repairs whatever a lost flush leaves behind.
-  dependencies
-    .flushEntitySearchRepairs(
-      txResult.entityIdsBySearchIndexOwner[SEARCH_INDEX_OWNER.searchMark],
-    )
-    .catch(captureError);
+  detached(
+    async () =>
+      dependencies
+        .flushEntitySearchRepairs([
+          ...txResult.entityIdsBySearchIndexOwner[
+            SEARCH_INDEX_OWNER.searchMark
+          ],
+          ...txResult.entityIdsBySearchIndexOwner[
+            SEARCH_INDEX_OWNER.durableExtraction
+          ],
+        ])
+        .catch(createErrorCapture(DUPLICATE_CAPTURE_CONTEXT.searchRepair)),
+    "entities-duplicate.flush-entity-search-repairs",
+  );
 
-  handoffCommittedDocumentProcessingRuns({
-    enqueue: dependencies.enqueueDocumentProcessingRun,
-    runIds: txResult.nativeExtractionRunIds,
-  }).catch(captureError);
+  detached(
+    async () =>
+      handoffCommittedDocumentProcessingRuns({
+        enqueue: dependencies.enqueueDocumentProcessingRun,
+        runIds: txResult.nativeExtractionRunIds,
+      }).catch(
+        createErrorCapture(DUPLICATE_CAPTURE_CONTEXT.documentProcessing),
+      ),
+    "entities-duplicate.handoff-committed-document-processing-runs",
+  );
 
   // The copies reference fresh file IDs, so each needs its own
   // PDF/thumbnail derivatives.
   for (const fileField of txResult.fileFields) {
-    enqueuePdfDerivativeOrMarkFailed({
-      entityId: fileField.entityId,
-      fieldId: fileField.fieldId,
-      mimeType: fileField.mimeType,
-      encrypted: fileField.encrypted,
-      organizationId,
-      userId,
-      workspaceId,
-    }).catch(captureError);
-    enqueueImageThumbnailOrMarkFailed({
-      entityId: fileField.entityId,
-      fieldId: fileField.fieldId,
-      mimeType: fileField.mimeType,
-      encrypted: fileField.encrypted,
-      organizationId,
-      userId,
-      workspaceId,
-    }).catch(captureError);
+    startCopyDerivatives({ ...fileField, organizationId, userId, workspaceId });
   }
 
   return Result.ok({
@@ -289,6 +395,7 @@ const duplicateEntityHandler = async function* ({
 };
 
 const config = {
+  contract: "patch",
   contentDelivery: {
     type: "none",
     reason:

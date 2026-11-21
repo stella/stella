@@ -35,6 +35,7 @@ import { panic, Result } from "better-result";
 import { writeFile } from "node:fs/promises";
 
 import { DOCX_SUGGEST_CHANGES_AUTO_APPLY_OPTIONS } from "@stll/api-contract/chat-docx-suggestions";
+import { markdownToStellaDocx } from "@stll/docx-authoring/markdown";
 import {
   createReviewerBridge,
   executeFolioToolCallUntyped,
@@ -51,7 +52,7 @@ import type { FolioAIEditSnapshot } from "@stll/folio-core/server";
 import { resolveCaching } from "@/api/lib/ai-config";
 import { projectChatToolSchemasForProvider } from "@/api/lib/chat/provider-tool-projection";
 import { streamChatChunks } from "@/api/lib/chat/tanstack-chat-runtime";
-import { markdownToStellaDocx } from "@/api/lib/docx-authoring/from-markdown";
+import { NO_ORGANIZATION_MODEL_DISPATCH } from "@/api/lib/rate-limit/model-dispatch-admission";
 import {
   mergeGenerationOptions,
   systemPromptsPatch,
@@ -412,7 +413,7 @@ const runModelTurn = async ({
 }): Promise<ModelTurn> => {
   const caching = resolveCaching({
     promptCachingEnabled: false,
-    role: "chat",
+    task: "chat",
     scopeKey: null,
   });
   const system = `${SYSTEM_PROMPT}\nEditable DOCX blocks:\n\`\`\`json\n${renderEditableBlocks(snapshot)}\n\`\`\``;
@@ -421,6 +422,7 @@ const runModelTurn = async ({
     timeoutMs: MODEL_REQUEST_TIMEOUT_MS,
     chat: (abortController) =>
       streamChatChunks({
+        threadId: Bun.randomUUIDv7(),
         abortController,
         adapter: model.adapter,
         messages: [{ role: "user", content: request }],
@@ -842,12 +844,14 @@ const resolveModels = async (
     modelIds.map(async (id) => ({
       id,
       model: await resolveTanStackTextModel({
+        userId: null,
         modelId: id,
         orgAIConfig: null,
         dataClass: "customer",
         managedAIResidency: "eu",
-        role: "chat",
+        task: "chat",
         organizationId: null,
+        admission: NO_ORGANIZATION_MODEL_DISPATCH,
       }),
     })),
   );

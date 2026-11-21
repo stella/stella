@@ -45,13 +45,19 @@ const compatFetchOutput = <const TMetadata extends v.GenericSchema>(
     title: v.string(),
     text: v.string(),
     url: v.string(),
+    source_url: v.optional(v.string()),
     nextCursor: v.nullable(v.string()),
     metadata,
   });
 
 export const COMPAT_SEARCH_OUTPUT_SCHEMA = v.strictObject({
   results: v.array(
-    v.strictObject({ id: v.string(), title: v.string(), url: v.string() }),
+    v.strictObject({
+      id: v.string(),
+      title: v.string(),
+      url: v.string(),
+      source_url: v.optional(v.string()),
+    }),
   ),
   nextCursor: v.optional(v.nullable(v.string())),
   paginationOutcome: v.optional(SEARCH_PAGINATION_OUTCOME_SCHEMA),

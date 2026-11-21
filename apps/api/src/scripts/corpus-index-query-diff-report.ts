@@ -1,6 +1,8 @@
 import { Result, TaggedError } from "better-result";
 import * as v from "valibot";
 
+import { apiDateSchema } from "@stll/api-contract/api-date";
+
 import type { CorpusIndexHit } from "@/api/lib/legal-search/corpus-index-client";
 import {
   corpusIndexRoute,
@@ -25,8 +27,8 @@ export class GoldenQueryFileError extends TaggedError("GoldenQueryFileError")<{
 const goldenQueryFiltersSchema = v.pipe(
   v.strictObject({
     court: v.optional(v.pipe(v.string(), v.nonEmpty())),
-    dateFrom: v.optional(v.pipe(v.string(), v.isoDate())),
-    dateTo: v.optional(v.pipe(v.string(), v.isoDate())),
+    dateFrom: v.optional(apiDateSchema),
+    dateTo: v.optional(apiDateSchema),
     documentType: v.optional(v.pipe(v.string(), v.nonEmpty())),
     language: v.optional(v.pipe(v.string(), v.nonEmpty())),
     source: v.optional(v.pipe(v.string(), v.nonEmpty())),

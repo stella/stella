@@ -1,7 +1,7 @@
 import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { stringCursorSeed } from "@/lib/infinite-query";
 import type { QueryOptionsInput } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
@@ -66,7 +66,7 @@ export const reportExportsHistoryOptions = (
           fetch: { signal },
         });
 
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     initialPageParam: stringCursorSeed(),
     getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
@@ -101,7 +101,55 @@ export const reportExportDetailOptions = (
         })
         .get({ fetch: { signal } });
 
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
+    },
+    staleTime: 0,
+  });
+
+/** How often the recovery page rereads an export that has not settled. */
+const REPORT_EXPORT_RECOVERY_POLL_INTERVAL_MS = 2000;
+
+type ReportExportRecoveryKey = {
+  exportId: string;
+  userId: string;
+  workspaceId: string;
+};
+
+const reportExportRecoveryKeys = {
+  all: (workspaceId: string) =>
+    ["report-export-recovery", workspaceId] as const,
+  detail: ({ exportId, userId, workspaceId }: ReportExportRecoveryKey) =>
+    [...reportExportRecoveryKeys.all(workspaceId), userId, exportId] as const,
+};
+
+/**
+ * One export as the recovery page reads it, polled until it completes or
+ * fails.
+ */
+export const reportExportRecoveryOptions = ({
+  exportId,
+  userId,
+  workspaceId,
+}: ReportExportRecoveryKey) =>
+  queryOptions({
+    queryKey: reportExportRecoveryKeys.detail({
+      exportId,
+      userId,
+      workspaceId,
+    }),
+    queryFn: async ({ signal }) => {
+      const response = await api
+        .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
+        .reports({ exportId: toSafeId<"reportExport">(exportId) })
+        .get({ fetch: { signal } });
+      return unwrapApiResponse(response);
+    },
+    refetchInterval: (query) => {
+      const status = query.state.data?.status;
+      if (status === "completed" || status === "failed") {
+        return false;
+      }
+      return REPORT_EXPORT_RECOVERY_POLL_INTERVAL_MS;
     },
     staleTime: 0,
   });

@@ -5,15 +5,26 @@ import type {
   CaseLawDecisionRouteInput,
   CaseLawDecisionRouteParams,
 } from "@stll/api-contract/case-law-decision-route";
+import { isPlainPrimaryClick } from "@stll/decision-reader/citation-click";
+import type { CitationClick } from "@stll/decision-reader/citation-click";
+import { decisionTitle } from "@stll/decision-reader/decision-title";
 
 import type {
   GenericTab,
   InspectorTab,
 } from "@/components/inspector/inspector-store-types";
-import { decisionTitle } from "@/features/case-law/decision-title";
+import { createUuid } from "@/lib/uuid";
 
 /** Registered inspector view kind for one public case-law decision. */
 export const CASE_DECISION_VIEW = "case-law-decision";
+
+export const CASE_DECISION_PLACEMENT = {
+  mainIfOpen: "main-if-open",
+  side: "side",
+} as const;
+
+export type CaseDecisionPlacement =
+  (typeof CASE_DECISION_PLACEMENT)[keyof typeof CASE_DECISION_PLACEMENT];
 
 /**
  * One decision in an inspector tab. The top-level fields are the decision
@@ -29,6 +40,8 @@ export type CaseDecisionViewPayload = {
   country: string;
   court: string;
   decisionId: string;
+  /** A fresh passage or search resets a reused tab, even when the target repeats. */
+  findSessionId?: string | undefined;
   route: CaseLawDecisionRouteParams;
   /** The words that found the decision, so the reader opens on them marked. */
   searchQuery?: string | undefined;
@@ -77,7 +90,10 @@ export const isCaseDecisionViewPayload = (
     "route" in value &&
     isCaseLawDecisionRouteParams(value.route) &&
     (!("anchorId" in value) || isOptionalNonEmptyString(value.anchorId)) &&
-    (!("searchQuery" in value) || isOptionalNonEmptyString(value.searchQuery))
+    (!("searchQuery" in value) ||
+      isOptionalNonEmptyString(value.searchQuery)) &&
+    (!("findSessionId" in value) ||
+      isOptionalNonEmptyString(value.findSessionId))
   );
 };
 
@@ -176,25 +192,15 @@ export const createCaseDecisionViewTab = ({
       decisionId,
       route,
       ...(anchorId === undefined ? {} : { anchorId }),
-      ...(searchQuery === undefined ? {} : { searchQuery }),
+      ...(searchQuery === undefined || searchQuery === ""
+        ? {}
+        : { searchQuery }),
+      ...(anchorId === undefined && !searchQuery
+        ? {}
+        : { findSessionId: createUuid() }),
     },
   };
 };
-
-type CitationClick = Pick<
-  MouseEvent,
-  "altKey" | "button" | "ctrlKey" | "metaKey" | "shiftKey"
->;
-
-/** True only for an unmodified primary click; every other gesture stays native. */
-export const isPlainPrimaryClick = ({
-  altKey,
-  button,
-  ctrlKey,
-  metaKey,
-  shiftKey,
-}: CitationClick): boolean =>
-  button === 0 && !altKey && !ctrlKey && !metaKey && !shiftKey;
 
 /** Plain primary clicks stay in context; browser navigation gestures remain native. */
 export const opensCitationInInspector = (

@@ -10,22 +10,40 @@
  * constructing a client anywhere else.
  */
 import { panic } from "better-result";
-import { SQL } from "bun";
+import type { SQL } from "bun";
 import { afterAll } from "bun:test";
 import { sql } from "drizzle-orm";
 import type { Logger } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/bun-sql";
 
 import { databaseRelations } from "@/api/db/database-relations";
+import { createDatabase, createSqlClient } from "@/api/db/sql-client";
+import { forceClosePool } from "@/api/db/sql-close";
+import {
+  instrumentSqlTransactionCounts,
+  queryCountLogger,
+} from "@/api/lib/db-query-counter";
+import { runTransactionsInCallerContext } from "@/api/lib/db/caller-async-context";
 
 const openDatabase = (client: SQL, logger?: Logger) =>
-  drizzle({ client, relations: databaseRelations, logger });
+  createDatabase({
+    client,
+    relations: databaseRelations,
+    logger: {
+      logQuery: (query, params) => {
+        queryCountLogger.logQuery(query, params);
+        if (logger !== undefined && logger !== queryCountLogger) {
+          logger.logQuery(query, params);
+        }
+      },
+    },
+  });
 
 export type GatedTestDb = ReturnType<typeof openDatabase>;
 
 type CleanupStep = () => Promise<void>;
 
 export type GatedTestDatabase = {
+  readonly sql: SQL;
   readonly db: GatedTestDb;
   /**
    * Registers suite cleanup (deleting the rows the suite wrote). Steps run
@@ -43,9 +61,11 @@ export type GatedTestDatabase = {
  */
 export const openGatedTestDatabase = (
   databaseUrl: string,
-  options: { max?: number } = {},
+  { max, cleanupTimeoutMs }: { max?: number; cleanupTimeoutMs?: number } = {},
 ): GatedTestDatabase => {
-  const client = new SQL({ url: databaseUrl, ...options });
+  const client = instrumentSqlTransactionCounts(
+    runTransactionsInCallerContext(createSqlClient({ url: databaseUrl, max })),
+  );
   const cleanupSteps: CleanupStep[] = [];
 
   afterAll(async () => {
@@ -56,9 +76,10 @@ export const openGatedTestDatabase = (
     } finally {
       await client.close();
     }
-  });
+  }, cleanupTimeoutMs);
 
   return {
+    sql: client,
     db: openDatabase(client),
     cleanUp: (step) => {
       cleanupSteps.push(step);
@@ -73,29 +94,34 @@ type GatedTestClient = {
 };
 
 type OpenClientOptions = {
+  /** A separately authenticated fixture login on the same test server. */
+  readonly databaseUrl?: string;
   readonly logger?: Logger;
   /** Connections in this client's pool. */
   readonly max?: number;
   /** Seconds of inactivity before Bun closes a connection. */
   readonly idleTimeout?: number;
+  /** Seconds before Bun retires a connection, once its running work has finished. */
+  readonly maxLifetime?: number;
   /** PostgreSQL settings sent when each connection opens. */
   readonly connection?: {
+    readonly application_name?: string;
     readonly statement_timeout?: number;
     readonly lock_timeout?: number;
+    readonly default_transaction_read_only?: "on" | "off";
+    readonly plan_cache_mode?:
+      "auto" | "force_custom_plan" | "force_generic_plan";
   };
 };
 
-type GatedTestClientScope = {
+export type GatedTestClientScope = {
   /** Opens a client with a pool of its own, closed when the scope ends. */
   readonly openClient: (options?: OpenClientOptions) => GatedTestClient;
 };
 
 type GatedTestClientsOptions = {
-  /**
-   * Seconds each close waits for in-flight queries before it terminates
-   * them; the driver waits for them by default. `0` closes at once.
-   */
-  readonly closeTimeout?: number;
+  /** Draining waits for queries; forced cleanup terminates them through the pool owner. */
+  readonly closeMode?: "drain" | "force";
 };
 
 /**
@@ -107,16 +133,28 @@ type GatedTestClientsOptions = {
 export const withGatedTestClients = async <T>(
   databaseUrl: string,
   fn: (scope: GatedTestClientScope) => Promise<T>,
-  { closeTimeout }: GatedTestClientsOptions = {},
+  { closeMode = "drain" }: GatedTestClientsOptions = {},
 ): Promise<T> => {
   const opened: SQL[] = [];
   const openClient = ({
+    databaseUrl: clientDatabaseUrl = databaseUrl,
     max = 1,
     idleTimeout,
+    maxLifetime,
     connection,
     logger,
   }: OpenClientOptions = {}) => {
-    const client = new SQL({ url: databaseUrl, max, idleTimeout, connection });
+    const client = instrumentSqlTransactionCounts(
+      runTransactionsInCallerContext(
+        createSqlClient({
+          url: clientDatabaseUrl,
+          max,
+          idleTimeout,
+          maxLifetime,
+          connection,
+        }),
+      ),
+    );
     opened.push(client);
     return { sql: client, db: openDatabase(client, logger) };
   };
@@ -125,12 +163,21 @@ export const withGatedTestClients = async <T>(
     return await fn({ openClient });
   } finally {
     await Promise.all(
-      opened.map(
-        async (client) =>
-          await client.close(
-            closeTimeout === undefined ? undefined : { timeout: closeTimeout },
-          ),
-      ),
+      opened.map(async (client) => {
+        switch (closeMode) {
+          case "drain":
+            await client.close();
+            return;
+          case "force":
+            await forceClosePool(client);
+            return;
+          default:
+            panic(
+              "Unexpected test client close mode",
+              closeMode satisfies never,
+            );
+        }
+      }),
     );
   }
 };
@@ -153,14 +200,20 @@ export const copyIngestionTablePrivileges = async ({
     tableNames.map((name) => sql`${name}`),
     sql`, `,
   );
-  const tableGrants = await sourceDb.execute(sql`
+  const tableGrants = await sourceDb.execute(
+    sql`
     SELECT table_name, privilege_type FROM information_schema.table_privileges
     WHERE table_schema = 'public' AND grantee = 'stella_ingestion'
-      AND table_name IN (${tables}) ORDER BY table_name, privilege_type`);
-  const columnGrants = await sourceDb.execute(sql`
+      AND table_name IN (${tables}) ORDER BY table_name, privilege_type`,
+    "objects",
+  );
+  const columnGrants = await sourceDb.execute(
+    sql`
     SELECT table_name, column_name, privilege_type FROM information_schema.column_privileges
     WHERE table_schema = 'public' AND grantee = 'stella_ingestion'
-      AND table_name IN (${tables}) ORDER BY table_name, privilege_type, column_name`);
+      AND table_name IN (${tables}) ORDER BY table_name, privilege_type, column_name`,
+    "objects",
+  );
   await targetDb.execute(
     sql`GRANT USAGE ON SCHEMA ${sql.identifier(targetSchema)} TO stella_ingestion`,
   );

@@ -7,15 +7,26 @@
 # Commits on a remote-tracking ref are already published, so a branch that
 # merged main scans its own commits, not main's. Merges are read with
 # `--remerge-diff`: a plain `git log -p` prints no patch for a merge, which
-# would leave anything added while resolving it unscanned.
+# would leave anything added while resolving it unscanned. If replay fails,
+# scan against the published parent closest to the merge, or the first parent
+# when none is published.
 # Everything else is validated in CI.
 set -euo pipefail
 
-if ! command -v gitleaks >/dev/null 2>&1; then
-  echo "error: gitleaks is required for pre-push secret scanning." >&2
+# A scanner on PATH is used as is. Without one, the pinned release is
+# provisioned the way the staged hook does it (scripts/gitleaks.ts: official
+# archive, repository-pinned SHA-256, per-user cache), so a host without a
+# preinstalled scanner still scans instead of refusing every push.
+if command -v gitleaks >/dev/null 2>&1; then
+  scanner="gitleaks"
+elif ! command -v bun >/dev/null 2>&1; then
+  echo "error: gitleaks is required for pre-push secret scanning, and Bun is needed to provision it." >&2
   echo "Install it from https://github.com/gitleaks/gitleaks/releases" >&2
   echo "  macOS (Homebrew): brew install gitleaks" >&2
-  echo "  Other platforms: use the releases page above" >&2
+  exit 1
+elif ! scanner="$(bun "$(dirname -- "${BASH_SOURCE[0]}")/gitleaks.ts")" ||
+  [[ ! -x "${scanner}" ]]; then
+  echo "error: cannot provision the pinned gitleaks; secret scanning refused." >&2
   exit 1
 fi
 
@@ -72,6 +83,110 @@ if ! git log --remerge-diff -n 0 HEAD >/dev/null 2>&1; then
   exit 1
 fi
 
+# A resolvable range can still fail to print its patches (a blob a partial
+# clone must fetch lazily, and the fetch fails); the scanner then reads no
+# commits and exits 0, so every patch must be readable before the scan.
 for range in "${ranges[@]}"; do
-  gitleaks git --redact --no-banner --no-color --log-opts="--remerge-diff ${range}" .
+  read -r -a revisions <<<"${range}"
+  if ! git log -p --remerge-diff "${revisions[@]}" >/dev/null 2>&1; then
+    echo "error: cannot read the patches of pushed commit range ${range}; secret scanning refused." >&2
+    exit 1
+  fi
+done
+
+# Every changed commit must be read by the scanner. It counts a commit whose
+# patch changes text lines in a file the commit keeps (not deleted); the scan
+# passes only when its reported count covers the same count of the range.
+# Merge commits are scanned one at a time after the rest of the range.
+scanner_log="$(mktemp)"
+merge_patch="$(mktemp)"
+merge_errors="$(mktemp)"
+trap 'rm -f "${scanner_log}" "${merge_patch}" "${merge_errors}"' EXIT
+
+count_changed_commits() {
+  awk '
+    /^\001/ { counted = 0; next }
+    /^diff --git / { deleted = 0; next }
+    /^deleted file mode / { deleted = 1; next }
+    /^@@ / && !deleted && !counted { commits++; counted = 1 }
+    END { print commits + 0 }
+  '
+}
+
+# Runs the scanner over Git history and checks it read `expected` commits.
+scan_history() {
+  local log_opts="$1" expected="$2" label="$3" status=0 scanned
+  "${scanner}" git --redact --no-banner --no-color --log-opts="${log_opts}" . 2>"${scanner_log}" || status=$?
+  cat "${scanner_log}" >&2
+  if [[ ${status} -ne 0 ]]; then
+    exit "${status}"
+  fi
+  scanned="$(sed -n 's/.* \([0-9][0-9]*\) commits scanned.*/\1/p' "${scanner_log}" | tail -n 1)"
+  if [[ -z "${scanned}" ]]; then
+    echo "error: the scanner did not report how many commits of ${label} it read; secret scanning refused." >&2
+    exit 1
+  fi
+  if ((scanned < expected)); then
+    echo "error: the scanner read ${scanned} of ${expected} changed commits in ${label}; secret scanning refused." >&2
+    exit 1
+  fi
+}
+
+for range in "${ranges[@]}"; do
+  read -r -a revisions <<<"${range}"
+  expected="$(
+    git log -p --no-merges --no-ext-diff --no-color --format=%x01 "${revisions[@]}" |
+      count_changed_commits
+  )"
+  scan_history "--no-merges ${range}" "${expected}" "${range}"
+
+  # A merge's remerge-diff is what it adds beyond Git's automatic merge: a
+  # conflict resolution or any other edit made while merging. Git still exits
+  # 0 when it cannot read a blob that diff needs (a partial clone whose lazy
+  # fetch fails), and the scanner then reads nothing, so any error falls back
+  # to a diff against a published parent (first parent if none is published).
+  merges="$(git rev-list --merges "${revisions[@]}")"
+  while read -r merge; do
+    [[ -n "${merge}" ]] || continue
+    merge_diff="--remerge-diff"
+    if ! git show -p --remerge-diff --no-ext-diff --no-color --format=%x01 "${merge}" \
+      >"${merge_patch}" 2>"${merge_errors}" || [[ -s "${merge_errors}" ]]; then
+      parents="$(git show -s --format=%P "${merge}")"
+      read -r -a parent_oids <<<"${parents}"
+      # Any published parent is sound: whatever it lacks is scanned. Merging
+      # main into an already pushed branch publishes both parents, and the
+      # first parent's diff would rescan all of main, so take the published
+      # parent closest to the merge. A parent whose diff cannot be read is
+      # skipped; with no usable published parent, the first parent is used.
+      fallback_parent="${parent_oids[0]}"
+      fallback_size=""
+      for parent in "${parent_oids[@]}"; do
+        published_refs="$(git for-each-ref --contains="${parent}" --format='%(refname)' refs/remotes/)"
+        [[ -n "${published_refs}" ]] || continue
+        size="$(git diff --numstat "${parent}" "${merge}" 2>/dev/null | awk '{ n += $1 + $2 } END { print n + 0 }')" || continue
+        if [[ -z "${fallback_size}" ]] || ((size < fallback_size)); then
+          fallback_parent="${parent}"
+          fallback_size="${size}"
+        fi
+      done
+      echo "secrets: cannot replay merge ${merge}; scanning its diff against parent ${fallback_parent}." >&2
+      if [[ "${fallback_parent}" == "${parent_oids[0]}" ]]; then
+        merge_diff="--diff-merges=first-parent"
+      else
+        # A single-parent commit with the merge's tree lets gitleaks read
+        # exactly this diff, retaining paths, added lines and scan accounting.
+        # Only an unreachable object is written: no refs or index are changed.
+        merge="$(git -c user.name=secret-scan -c user.email=secret-scan@example.invalid \
+          commit-tree "${merge}^{tree}" -p "${fallback_parent}" <<<"Secret scan merge fallback")"
+        merge_diff="--no-merges"
+      fi
+      if ! git show -p "${merge_diff}" --no-ext-diff --no-color --format=%x01 "${merge}" \
+        >"${merge_patch}" 2>"${merge_errors}" || [[ -s "${merge_errors}" ]]; then
+        echo "error: cannot read the fallback patch; secret scanning refused." >&2
+        exit 1
+      fi
+    fi
+    expected="$(count_changed_commits <"${merge_patch}")"
+    scan_history "${merge_diff} -n 1 ${merge}" "${expected}" "merge ${merge}"
+  done <<<"${merges}"
 done

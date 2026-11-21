@@ -10,7 +10,7 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 import {
   classifyMarker,
   filtersFromFieldConfig,
@@ -29,10 +29,10 @@ import {
 import { fieldMetaFromFilters } from "./field-filters";
 import {
   DATE_FORMAT_STYLES,
+  type FieldMeta,
   isFieldMeta,
   LOOKUP_REGISTRIES,
   SMALLEST_MAXIMUM,
-  type FieldMeta,
 } from "./types";
 
 // Text an author or an agent puts in a label, a hint or a prompt. Quotes,
@@ -180,7 +180,8 @@ const asDocumentSaysIt = (original: FieldMeta): FieldMeta => {
 
 describe("a field and its filter chain are one round trip", () => {
   test("the chain a field writes reads back as that field", () => {
-    fc.assert(
+    assertProperty(
+      "the chain a field writes reads back as that field",
       fc.property(field, (original) => {
         const filters = filtersFromFieldConfig(original);
         fc.pre(filters.length > 0);
@@ -191,12 +192,13 @@ describe("a field and its filter chain are one round trip", () => {
         expect(issues).toEqual([]);
         expect(readBack).toEqual(asDocumentSaysIt(original));
       }),
-      propertyConfig(),
+      {},
     );
   });
 
   test("the chain survives the marker text it is written into", () => {
-    fc.assert(
+    assertProperty(
+      "the chain survives the marker text it is written into",
       fc.property(field, (original) => {
         const filters = filtersFromFieldConfig(original);
         fc.pre(filters.length > 0);
@@ -207,12 +209,13 @@ describe("a field and its filter chain are one round trip", () => {
           filters,
         });
       }),
-      propertyConfig(),
+      {},
     );
   });
 
   test("a field the document already declares is a fixed point of the writer", () => {
-    fc.assert(
+    assertProperty(
+      "a field the document already declares is a fixed point of the writer",
       fc.property(field, (original) => {
         const once = filtersFromFieldConfig(original);
         fc.pre(once.length > 0);
@@ -220,7 +223,7 @@ describe("a field and its filter chain are one round trip", () => {
         expect(readBack).not.toBeNull();
         expect(filtersFromFieldConfig(readBack ?? original)).toEqual(once);
       }),
-      propertyConfig(),
+      {},
     );
   });
 });

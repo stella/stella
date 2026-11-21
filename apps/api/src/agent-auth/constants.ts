@@ -43,18 +43,6 @@ export const AGENT_AUTH_ASSERTION_TYPES = [
 ] as const;
 
 /**
- * RFC 8935 security-event schema for identity-assertion revocation. NOT yet
- * advertised in `events_supported`: the events endpoint acknowledges SETs but
- * does not verify their signature or enforce them, so advertising the type
- * would let providers treat the 202 as a successful revocation that never
- * takes effect (an upstream-revoked identity could keep minting tokens). Add
- * it to AGENT_AUTH_EVENTS_SUPPORTED only once SET verification + delegation
- * revocation land.
- */
-export const AGENT_AUTH_ASSERTION_REVOKED_EVENT =
-  "https://schemas.workos.com/events/agent/auth/identity/assertion/revoked" as const;
-
-/**
  * Security-event schemas we advertise as supported — i.e. verified AND
  * enforced. Empty until the SET-verification phase lands; the events endpoint
  * still accepts and acknowledges deliveries.
@@ -72,7 +60,7 @@ export const AGENT_AUTH_JWT_BEARER_GRANT_TYPE =
 const withTrailingSlash = (url: string) => `${url.replace(/\/$/u, "")}/`;
 
 /** Public origin the agent-auth surface (manifest + endpoints) is served from. */
-export const getAgentAuthBaseUrl = () => getMcpBaseUrl();
+const getAgentAuthBaseUrl = () => getMcpBaseUrl();
 
 export const getAgentAuthUrl = (path: string) =>
   new URL(
@@ -91,7 +79,7 @@ export const AGENT_AUTH_CONFIRM_PATH = "/agent/identity/confirm" as const;
  * `claimed` has an authorization code ready to exchange; `denied` was
  * rejected by the human; `expired` outlived `expiresAt`.
  */
-export const AGENT_REGISTRATION_STATUSES = [
+const AGENT_REGISTRATION_STATUSES = [
   "pending",
   "claimed",
   "denied",
@@ -102,7 +90,7 @@ export type AgentRegistrationStatus =
   (typeof AGENT_REGISTRATION_STATUSES)[number];
 
 /** Identity types this phase implements end to end. */
-export const AGENT_AUTH_REGISTRABLE_TYPES = [
+const AGENT_AUTH_REGISTRABLE_TYPES = [
   "service_auth",
   "anonymous",
   "identity_assertion",

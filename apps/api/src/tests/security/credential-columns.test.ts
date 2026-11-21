@@ -1,6 +1,6 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { is } from "drizzle-orm";
+import { is, TransactionRollbackError } from "drizzle-orm";
 import {
   boolean,
   getTableConfig,
@@ -10,6 +10,7 @@ import {
   pgTable,
   text,
 } from "drizzle-orm/pg-core";
+import { drizzle } from "drizzle-orm/pg-proxy";
 import fc from "fast-check";
 import { readFileSync } from "node:fs";
 import path from "node:path";
@@ -17,14 +18,22 @@ import { pathToFileURL } from "node:url";
 import * as v from "valibot";
 
 import { assertProperty } from "@stll/property-testing";
+import { treeBaseRevision } from "@stll/scripts/src/tree-base-revision";
 
 import { agentDelegation } from "@/api/db/agent-auth-schema";
 import { oauthConsent } from "@/api/db/auth-schema";
 import { bytea } from "@/api/db/columns";
-import { matterInboundAddresses } from "@/api/db/schema";
+import { matterInboundAddresses, searchHistoryEntries } from "@/api/db/schema";
 import { ACCOUNT_DELETION_MANUAL_TABLES } from "@/api/lib/account-deletion-steps";
-import { revokeOrganizationMemberAuthArtifacts } from "@/api/lib/auth-artifacts";
-import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import {
+  ORGANIZATION_MEMBER_CLEANUP_COLUMNS,
+  removeOrganizationMemberInTransaction,
+} from "@/api/lib/member-assignment-offboarding";
+import {
+  mintAuthProviderId,
+  mintAuthProviderIdValue,
+} from "@/api/tests/helpers/auth-provider-id";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 import drizzleConfig from "../../../drizzle.config";
 import classificationData from "./credential-column-classifications.json";
@@ -52,6 +61,10 @@ const classificationSchema = v.variant("status", [
     reason: reasonSchema,
   }),
   v.strictObject({ status: v.literal("cleartext"), reason: reasonSchema }),
+  v.strictObject({
+    status: v.literal("resource_content"),
+    reason: reasonSchema,
+  }),
 ]);
 const registrySchema = v.record(v.string(), classificationSchema);
 type ClassificationRegistry = v.InferOutput<typeof registrySchema>;
@@ -94,6 +107,7 @@ const OPAQUE_CREDENTIAL_COLUMNS = new Set([
   "sharepoint_oauth_state.state",
   "mcp_oauth_clients.registration_response",
   "business_registry_credentials.ciphertext",
+  "request_idempotency_receipts.response_body",
 ]);
 
 const discoverTables = async () => {
@@ -208,7 +222,11 @@ const addedCleartextColumns = (
 
 const readBaseRegistry = () => {
   const result = Bun.spawnSync(
-    ["git", "show", `origin/main:${REGISTRY_PATH}`],
+    [
+      "git",
+      "show",
+      `${treeBaseRevision({ repoRoot: REPO_ROOT })}:${REGISTRY_PATH}`,
+    ],
     { cwd: REPO_ROOT, stdout: "pipe", stderr: "pipe" },
   );
   if (result.exitCode === 0) {
@@ -234,7 +252,10 @@ const organizationCredentialTables = () => {
   const credentialTables = new Set(
     Object.entries(classifications)
       .filter(
-        ([, classification]) => classification.status !== "public_by_design",
+        ([, classification]) =>
+          classification.status === "hashed" ||
+          classification.status === "encrypted" ||
+          classification.status === "cleartext",
       )
       .map(([column]) => column.split(".").at(0)),
   );
@@ -268,23 +289,64 @@ const organizationCredentialTables = () => {
   return [...selected].toSorted();
 };
 
-const handledMemberTables = async () => {
+const handledMemberTables = async (omittedDelete?: PgTable) => {
   const handled = new Set<string>();
-  const record = (table: PgTable) => ({
-    where: async () => {
-      handled.add(getTableConfig(table).name);
+  const organizationId = mintAuthProviderId<"organization">();
+  const userId = mintAuthProviderId<"user">();
+  // Only awaited statements reach this transport; constructing a builder or
+  // declaring a cleanup disposition cannot satisfy the guard.
+  const database = drizzle(async (query, params) => {
+    const table = /^(?:delete from|update) "([^"]+)"/u.exec(query)?.at(1);
+    if (table !== undefined) {
+      handled.add(table);
+    }
+    if (table === "mcp_web_handoff") {
+      expect(query).toContain('"mcp_web_handoff"."user_id" = $1');
+      expect(query).toContain('"mcp_web_handoff"."organization_id" = $2');
+      expect(params).toEqual([userId, organizationId]);
+    }
+    if (query.includes("AS aggregate_context")) {
+      return { rows: [["fixture_owner", "", "", "", "", ""]] };
+    }
+    // The removal runs on the owner connection, which names no organization
+    // before it scopes the departing member's contacts.
+    if (query.includes("AS is_owner")) {
+      return { rows: [{ organization_id: "", is_owner: true }] };
+    }
+    // Advisory fences report their physical identity and acquisition.
+    if (query.includes("AS key1")) {
+      return { rows: [{ acquired: true, key1: 1, key2: 2 }] };
+    }
+    return { rows: query.startsWith("select count(*)") ? [[0]] : [] };
+  });
+  const transactionHandle = Object.assign(database, {
+    rollback() {
+      throw new TransactionRollbackError();
     },
   });
-  await revokeOrganizationMemberAuthArtifacts(
-    {
-      delete: record,
-      update: (table) => ({ set: () => record(table) }),
+  const transaction = new Proxy(transactionHandle, {
+    get: (target, property, receiver) => {
+      if (property === "transaction") {
+        // Each savepoint is its own handle, as the driver's are, so the
+        // aggregate lock history of the enclosing transaction stays open.
+        return async (run: (savepoint: typeof database) => Promise<unknown>) =>
+          await run(new Proxy(transaction, {}));
+      }
+      if (property === "delete") {
+        return (table: PgTable) =>
+          table === omittedDelete
+            ? { where: async () => [] }
+            : target.delete(table);
+      }
+      return Reflect.get(target, property, receiver) as unknown;
     },
-    {
-      organizationId: mintAuthProviderId<"organization">(),
-      userId: mintAuthProviderId<"user">(),
-    },
-  );
+  });
+  await removeOrganizationMemberInTransaction(asTestRaw(transaction), {
+    organizationId,
+    userId,
+    actorUserId: mintAuthProviderId<"user">(),
+    memberId: mintAuthProviderIdValue(),
+  });
   return handled;
 };
 
@@ -475,6 +537,18 @@ describe("stored credential column classifications", () => {
 
   test("member removal handles every organization credential table", async () => {
     expect(missingCleanupTables(await handledMemberTables())).toEqual([]);
+  });
+
+  test("a declared disposition cannot replace an executed cleanup", async () => {
+    expect(
+      ORGANIZATION_MEMBER_CLEANUP_COLUMNS.some(
+        ([column]) => column === searchHistoryEntries.userId,
+      ),
+    ).toBe(true);
+    const missing = missingCleanupTables(
+      await handledMemberTables(searchHistoryEntries),
+    );
+    expect(missing).toEqual([getTableConfig(searchHistoryEntries).name]);
   });
 
   test("every cleanup table remains required when a disposition is removed", async () => {

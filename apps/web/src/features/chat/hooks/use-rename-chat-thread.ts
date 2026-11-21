@@ -11,7 +11,7 @@ import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { toSafeId } from "@/lib/safe-id";
 
@@ -19,7 +19,7 @@ import { toSafeId } from "@/lib/safe-id";
  * The one web-side writer for a chat thread's title: PATCHes
  * `/chat/threads/:threadId/title`, optimistically patching the
  * grouped-threads and by-id title caches so every surface that shows the
- * title (sidebar, threads sheet, breadcrumb, overlay card) updates
+ * title (sidebar, chat history, breadcrumb, overlay card) updates
  * immediately, and invalidating them on settle. Shared by every rename
  * affordance so the cache bookkeeping exists exactly once.
  */
@@ -35,12 +35,12 @@ export const useRenameChatThread = (threadRef: ChatThreadRef) => {
     activeOrganizationId,
     userId,
   }).queryKey;
-  // Only the typed query key is used here; `enabled: false` marks that this
-  // options object never runs the query itself.
+  // Only the typed query key is used here; with no thread read this options
+  // object never runs the query itself.
   const titleKey = chatThreadTitleOptions({
     activeOrganizationId,
-    enabled: false,
     key: { threadId, workspaceId },
+    persistedThread: undefined,
   }).queryKey;
 
   return useMutation({
@@ -55,7 +55,7 @@ export const useRenameChatThread = (threadRef: ChatThreadRef) => {
               : {},
           },
         );
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onMutate: async (nextTitle) => {
       await queryClient.cancelQueries({ queryKey: groupedKey });
@@ -99,7 +99,10 @@ export const useRenameChatThread = (threadRef: ChatThreadRef) => {
         // remove it, not leave the rejected title behind.
         queryClient.removeQueries({ queryKey: titleKey, exact: true });
       }
-      getAnalytics().captureError(error);
+      getAnalytics().captureError(error, {
+        fingerprintKey: "useRenameChatThread:failure",
+        scope: { type: "handler", handlerId: "useRenameChatThread:failure" },
+      });
       notifyUserError(error, t("errors.actionFailed"));
     },
     onSettled: () => {

@@ -13,7 +13,10 @@ import path from "node:path";
 import { Script } from "node:vm";
 import * as v from "valibot";
 
-import { mainHeavyJobs, THIN_JOBS } from "./main-heavy-plan";
+import { ciExpressionContext } from "./ci-expression-context";
+import { isRepositoryCheckoutAction } from "./ci-job-classification/checkout-actions";
+import { contextFromNested, evaluate, UNKNOWN } from "./github-expression";
+import { mainHeavyJobs, thinJobs } from "./main-heavy-plan";
 
 const stepSchema = v.looseObject({
   name: v.optional(v.string()),
@@ -78,7 +81,7 @@ const mainWorkflow = {
   ...parsedMain,
   jobs: v.parse(
     v.object({
-      validate: callerJobSchema,
+      validate: jobSchema,
       suites: callerJobSchema,
       status: callerJobSchema,
     }),
@@ -86,59 +89,62 @@ const mainWorkflow = {
   ),
 };
 const ciWorkflow = readWorkflow(".github/workflows/ci.yml");
+const THIN_JOBS = thinJobs(ciWorkflow);
 const mainTriggers = v.parse(mainTriggersSchema, mainWorkflow.on);
 const ciCall = v.parse(ciCallSchema, ciWorkflow.on).workflow_call;
 
-const assertTriggerBehavior = (validationCondition: string) => {
+const assertTriggerBehavior = (validationCondition?: string) => {
   const cases = [
-    { event: "push", message: "fix: ordinary change", runs: false },
-    {
-      event: "push",
-      message: "fix: ordinary change\nchore: release v1.2.3",
-      runs: false,
-    },
-    {
-      event: "push",
-      message: "chore: release v1.2.3\n\nRelease notes",
-      runs: true,
-    },
-    { event: "schedule", message: "", runs: true },
-    { event: "workflow_dispatch", message: "", runs: true },
+    { event: "push", message: "fix: ordinary change" },
+    { event: "push", message: "fix: ordinary change\nchore: release v1.2.3" },
+    { event: "push", message: "chore: release v1.2.3\n\nRelease notes" },
+    { event: "schedule", message: "" },
+    { event: "workflow_dispatch", message: "" },
   ];
-  for (const { event, message, runs } of cases) {
-    const context = {
-      github: { event_name: event, event: { head_commit: { message } } },
-      vars: { MERGE_QUEUE_DEPTH: "" },
-      startsWith: (value: string, prefix: string) =>
-        value.toLowerCase().startsWith(prefix.toLowerCase()),
-      always: () => true,
-    };
-    const validates = new Script(
-      `Boolean(${validationCondition})`,
-    ).runInNewContext(context);
-    expect(validates, `${event}: ${message}`).toBe(runs);
-    expect(mainWorkflow.jobs.suites.needs).toBe("validate");
-    const needs = { validate: { result: validates ? "success" : "skipped" } };
-    expect(
-      new Script(`Boolean(${mainWorkflow.jobs.suites.if})`).runInNewContext({
-        ...context,
-        needs,
-      }),
-    ).toBe(runs);
-    const publishes = new Script(
-      `Boolean(${mainWorkflow.jobs.status.if})`,
-    ).runInNewContext({
-      ...context,
-      needs,
-    });
-    expect(publishes, `${event} status`).toBe(runs);
+  for (const depth of ["", "fast", "full"]) {
+    for (const { event, message } of cases) {
+      const context = {
+        github: { event_name: event, event: { head_commit: { message } } },
+        vars: { MERGE_QUEUE_DEPTH: depth },
+        startsWith: (value: string, prefix: string) =>
+          value.toLowerCase().startsWith(prefix.toLowerCase()),
+        always: () => true,
+      };
+      const validates = new Script(
+        `Boolean(${validationCondition ?? "true"})`,
+      ).runInNewContext(context);
+      const required =
+        event !== "push" || message.startsWith("chore: release v");
+      expect(validates, `${event}: ${message} depth=${depth}`).toBe(required);
+      expect(mainWorkflow.jobs.suites.needs).toBe("validate");
+      const needs = {
+        validate: {
+          result: validates ? "success" : "skipped",
+          outputs: { run: "true" },
+        },
+      };
+      expect(
+        new Script(`Boolean(${mainWorkflow.jobs.suites.if})`).runInNewContext({
+          ...context,
+          needs,
+        }),
+      ).toBe(required);
+      expect(
+        new Script(`Boolean(${mainWorkflow.jobs.status.if})`).runInNewContext({
+          ...context,
+          needs,
+        }),
+        `${event} status`,
+      ).toBe(required);
+    }
   }
 };
 
-test("nightly, release pushes and dispatches run suites; ordinary pushes skip suites and status", () => {
+test("only release pushes, schedules and dispatches select heavy suites at every queue depth", () => {
   expect(mainTriggers.schedule).toHaveLength(1);
   const cron = mainTriggers.schedule.at(0)?.cron.split(" ");
-  expect(cron?.slice(1)).toEqual(["2", "*", "*", "*"]);
+  expect(cron?.at(0)).toBe("17");
+  expect(cron?.slice(2)).toEqual(["*", "*", "*"]);
   expect(Number(cron?.at(0)) % 5).not.toBe(0);
   expect(
     mainWorkflow.jobs.validate.steps?.find(
@@ -148,32 +154,29 @@ test("nightly, release pushes and dispatches run suites; ordinary pushes skip su
   assertTriggerBehavior(mainWorkflow.jobs.validate.if);
 });
 
-test("dropping the release filter breaks the trigger contract", () => {
-  expect(() => assertTriggerBehavior("true")).toThrow(
-    "push: fix: ordinary change",
-  );
+test("removing release-only selection or introducing depth gating fails the trigger contract", () => {
+  for (const condition of ["true", "github.event_name != 'push'"]) {
+    expect(() => assertTriggerBehavior(condition)).toThrow(/push:/u);
+  }
 });
 
-test("every main-heavy job has a job-level condition that skips ordinary pushes", () => {
-  for (const [name, job] of Object.entries(mainWorkflow.jobs)) {
-    expect(typeof job.if, name).toBe("string");
+test("suites require selected validation success and status reports its failures", () => {
+  expect(mainWorkflow.jobs.validate.if).toContain("chore: release v");
+  for (const result of ["success", "failure", "cancelled", "skipped"]) {
+    const context = {
+      always: () => true,
+      needs: { validate: { result, outputs: { run: "true" } } },
+    };
     expect(
-      new Script(`Boolean(${job.if})`).runInNewContext({
-        vars: { MERGE_QUEUE_DEPTH: "" },
-        github: {
-          event_name: "push",
-          event: { head_commit: { message: "fix: ordinary change" } },
-        },
-        startsWith: (value: string, prefix: string) =>
-          value.toLowerCase().startsWith(prefix.toLowerCase()),
-        always: () => true,
-        needs: {
-          validate: { result: "skipped" },
-          suites: { result: "skipped" },
-        },
-      }),
-      name,
-    ).toBe(false);
+      new Script(`Boolean(${mainWorkflow.jobs.suites.if})`).runInNewContext(
+        context,
+      ),
+    ).toBe(result === "success");
+    expect(
+      new Script(`Boolean(${mainWorkflow.jobs.status.if})`).runInNewContext(
+        context,
+      ),
+    ).toBe(result !== "skipped");
   }
 });
 
@@ -182,15 +185,18 @@ test("main heavy workflow dispatches exactly the validated commit through ci.yml
     `Main heavy suites \${{ inputs.sha || github.sha }}`,
   );
   expect(mainTriggers.push.branches).toEqual(["main"]);
-  expect(Object.keys(mainTriggers.workflow_dispatch.inputs)).toEqual(["sha"]);
+  expect(Object.keys(mainTriggers.workflow_dispatch.inputs)).toEqual([
+    "release_candidate",
+    "sha",
+  ]);
   expect(mainTriggers.workflow_dispatch.inputs["sha"]).toMatchObject({
     required: true,
     type: "string",
   });
 
-  expect(mainWorkflow.concurrency.group).toContain("inputs.sha");
-  expect(mainWorkflow.concurrency.group).toContain("github.sha");
-  expect(mainWorkflow.concurrency["cancel-in-progress"]).toBe(false);
+  expect(mainWorkflow.concurrency.group).toContain("github.ref");
+  expect(mainWorkflow.concurrency.group).toContain("github.run_id");
+  expect(mainWorkflow.concurrency["cancel-in-progress"]).toBeDefined();
 
   const suites = mainWorkflow.jobs.suites;
   expect(suites.uses).toBe("./.github/workflows/ci.yml");
@@ -221,15 +227,12 @@ test("main heavy workflow dispatches exactly the validated commit through ci.yml
 });
 
 const expressionValue = (value: unknown, context: object) => {
-  const expression = v
-    .parse(v.string(), value)
-    .replace(/^\s*\$\{\{([\s\S]*)\}\}\s*$/u, "$1");
-  return new Script(
-    expression.replaceAll(
-      /needs\.([\w-]+)/gu,
-      (_, job: string) => `needs[${JSON.stringify(job)}]`,
-    ),
-  ).runInNewContext(context);
+  const expression = v.parse(v.string(), value);
+  const result = evaluate(expression, contextFromNested(context));
+  if (result === UNKNOWN) {
+    panic(`Unresolved heavy workflow expression: ${expression}`);
+  }
+  return result;
 };
 
 type CheckoutWorkflow = v.InferOutput<typeof workflowSchema>;
@@ -247,33 +250,31 @@ const heavyCheckoutCensus = (workflow: CheckoutWorkflow) => {
         scope === null ? [] : [[scope, "true"]],
       ),
     ),
+    run_required: "true",
+    heavy_proof: "true",
     trusted: "true",
     suite_depth: "full",
     queue_depth: "full",
+    coverage_profile: "normal-v1",
+    queue_required_jobs: "[]",
     fix_tests_on_base_required: "false",
   };
-  const context = {
-    inputs: { heavy_only: true, sha: "a".repeat(40) },
-    github: {
-      sha: "b".repeat(40),
-      workflow_sha: "c".repeat(40),
-      event_name: "workflow_dispatch",
-      event: { pull_request: { draft: false } },
-    },
-    needs: Object.fromEntries(
+  const context = ciExpressionContext({
+    event: "workflow_dispatch",
+    heavyOnly: true,
+    plan,
+    needsResults: Object.fromEntries(
       Object.keys(workflow.jobs).map((job) => [
         job,
-        {
-          result: THIN_JOBS.some((thin) => thin === job)
-            ? "skipped"
-            : "success",
-          outputs: plan,
-        },
+        THIN_JOBS.some((thin) => thin === job) ? "skipped" : "success",
       ]),
     ),
-    always: () => true,
-    cancelled: () => false,
-  };
+  });
+  Object.assign(context.inputs, { sha: "a".repeat(40) });
+  Object.assign(context.github, {
+    sha: "b".repeat(40),
+    workflow_sha: "c".repeat(40),
+  });
   const executed = new Set<string>();
   const visit = (job: string) => {
     if (executed.has(job)) {
@@ -296,9 +297,10 @@ const heavyCheckoutCensus = (workflow: CheckoutWorkflow) => {
   for (const job of mainHeavyJobs(workflow)) {
     visit(job);
   }
-  const checkouts = [...executed].flatMap((job) =>
+  const checkoutOwners = new Set([...mainHeavyJobs(workflow), ...executed]);
+  const checkouts = [...checkoutOwners].flatMap((job) =>
     (workflow.jobs[job]?.steps ?? [])
-      .filter(({ uses }) => uses?.startsWith("actions/checkout@"))
+      .filter(({ uses }) => isRepositoryCheckoutAction(uses))
       .map((step) => ({ job, step })),
   );
   expect(checkouts.length).toBeGreaterThan(0);
@@ -326,6 +328,7 @@ test("every executed heavy checkout targets the validated source or workflow too
   const checkouts = heavyCheckoutCensus(ciWorkflow);
   expect(checkouts.some(({ job }) => job === "ci-plan")).toBe(true);
   expect(checkouts.some(({ job }) => job === "heavy-web-build")).toBe(true);
+  expect(checkouts.some(({ job }) => job === "ci-tests")).toBe(true);
   for (const { job, step } of checkouts) {
     const mutant = structuredClone(ciWorkflow);
     const checkout = mutant.jobs[job]?.steps?.find(
@@ -348,12 +351,96 @@ test("every executed heavy checkout targets the validated source or workflow too
   }
 });
 
+test("heavy test shards execute full scope while ordinary runs retain affected scope", () => {
+  const affected = ciWorkflow.jobs["ci-tests"]?.steps?.find(
+    ({ name }) => name === "Compute affected flag",
+  );
+  const script = v.parse(v.string(), affected?.run);
+  expect(affected?.env?.["HEAVY_ONLY"]).toBe(`\${{ inputs.heavy_only }}`);
+  for (const event of [
+    "push",
+    "schedule",
+    "workflow_dispatch",
+    "merge_group",
+  ]) {
+    for (const heavyOnly of [false, true]) {
+      const fixture = mkdtempSync(path.join(tmpdir(), "heavy-test-scope-"));
+      try {
+        const output = path.join(fixture, "output");
+        const environment = path.join(fixture, "environment");
+        writeFileSync(output, "");
+        writeFileSync(environment, "");
+        const result = Bun.spawnSync(["bash", "-euc", script], {
+          cwd: fixture,
+          env: {
+            ...Bun.env,
+            EVENT_NAME: event,
+            HEAVY_ONLY: String(heavyOnly),
+            COMPARISON_BASE: "0123abc",
+            TEST_SCOPE: "--filter=...[0123abc...HEAD]",
+            GITHUB_OUTPUT: output,
+            GITHUB_ENV: environment,
+          },
+        });
+        expect(result.exitCode, `${event}/${String(heavyOnly)}`).toBe(0);
+        const full = heavyOnly || event === "workflow_dispatch";
+        expect(
+          readFileSync(output, "utf-8"),
+          `${event}/${String(heavyOnly)}`,
+        ).toBe(full ? "flag=\n" : "flag=--affected\n");
+        expect(
+          readFileSync(environment, "utf-8"),
+          `${event}/${String(heavyOnly)}`,
+        ).toBe(full ? "" : "TURBO_SCM_BASE=0123abc\n");
+      } finally {
+        rmSync(fixture, { recursive: true, force: true });
+      }
+    }
+  }
+});
+
+test("ordinary test shards run the full tree without the planner's base or scope", () => {
+  const affected = ciWorkflow.jobs["ci-tests"]?.steps?.find(
+    ({ name }) => name === "Compute affected flag",
+  );
+  const script = v.parse(v.string(), affected?.run);
+  for (const [comparisonBase, testScope] of [
+    ["", "--filter=...[0123abc...HEAD]"],
+    ["0123abc", ""],
+  ]) {
+    const fixture = mkdtempSync(path.join(tmpdir(), "missing-test-scope-"));
+    try {
+      const output = path.join(fixture, "output");
+      const environment = path.join(fixture, "environment");
+      writeFileSync(output, "");
+      writeFileSync(environment, "");
+      const result = Bun.spawnSync(["bash", "-euc", script], {
+        cwd: fixture,
+        env: {
+          ...Bun.env,
+          EVENT_NAME: "pull_request",
+          HEAVY_ONLY: "false",
+          COMPARISON_BASE: comparisonBase,
+          TEST_SCOPE: testScope,
+          GITHUB_OUTPUT: output,
+          GITHUB_ENV: environment,
+        },
+      });
+      expect(result.exitCode).toBe(0);
+      expect(readFileSync(output, "utf-8")).toBe("flag=\n");
+      expect(readFileSync(environment, "utf-8")).toBe("");
+    } finally {
+      rmSync(fixture, { recursive: true, force: true });
+    }
+  }
+});
+
 test("source checkouts use the selected event SHA while tooling uses the workflow SHA", () => {
   const validatedSha = "a".repeat(40);
   const eventSha = "b".repeat(40);
   const workflowSha = "c".repeat(40);
   const mainContext = {
-    inputs: { heavy_only: true, sha: validatedSha },
+    inputs: { heavy_only: true, pr_depth_only: false, sha: validatedSha },
     github: {
       sha: eventSha,
       workflow_sha: workflowSha,
@@ -362,7 +449,7 @@ test("source checkouts use the selected event SHA while tooling uses the workflo
   };
   for (const [job, body] of Object.entries(ciWorkflow.jobs)) {
     for (const checkout of body.steps?.filter(({ uses }) =>
-      uses?.startsWith("actions/checkout@"),
+      isRepositoryCheckoutAction(uses),
     ) ?? []) {
       const reference = checkout.with?.["ref"];
       if (reference === undefined) {
@@ -379,7 +466,11 @@ test("source checkouts use the selected event SHA while tooling uses the workflo
       ]) {
         expect(
           expressionValue(reference, {
-            inputs: { heavy_only: false, sha: validatedSha },
+            inputs: {
+              heavy_only: false,
+              pr_depth_only: false,
+              sha: validatedSha,
+            },
             github: {
               sha: eventSha,
               workflow_sha: workflowSha,
@@ -402,7 +493,7 @@ test("source checkouts use the selected event SHA while tooling uses the workflo
     ).toBe(validatedSha);
     expect(
       expressionValue(stack?.with?.["expected-sha"], {
-        inputs: { heavy_only: false, sha: validatedSha },
+        inputs: { heavy_only: false, pr_depth_only: false, sha: validatedSha },
         github: { sha: eventSha },
       }),
       job,
@@ -412,7 +503,7 @@ test("source checkouts use the selected event SHA while tooling uses the workflo
   expect(expressionValue(forwarded, mainContext)).toBe(validatedSha);
   expect(
     expressionValue(forwarded, {
-      inputs: { heavy_only: false, sha: validatedSha },
+      inputs: { heavy_only: false, pr_depth_only: false, sha: validatedSha },
     }),
   ).toBe("");
   const marketing = v.parse(
@@ -429,7 +520,7 @@ test("source checkouts use the selected event SHA while tooling uses the workflo
   );
   const marketingCheckouts =
     marketing.jobs["check"]?.steps?.filter(({ uses }) =>
-      uses?.startsWith("actions/checkout@"),
+      isRepositoryCheckoutAction(uses),
     ) ?? [];
   expect(marketingCheckouts.length).toBeGreaterThan(0);
   for (const checkout of marketingCheckouts) {
@@ -454,7 +545,15 @@ test("only the final job can publish the main/heavy status", () => {
     .filter(([, job]) => job.permissions?.["statuses"] === "write")
     .map(([name]) => name);
   expect(jobsWithStatusPermission).toEqual(["status"]);
-  expect(mainWorkflow.jobs.status.permissions).toEqual({ statuses: "write" });
+  const ciStatusWriters = Object.values(ciWorkflow.jobs)
+    .flatMap((job) => job.steps ?? [])
+    .filter((step) => /commitstatus|\/statuses\b/iu.test(JSON.stringify(step)));
+  expect(ciStatusWriters).toEqual([]);
+  expect(mainWorkflow.jobs.status.permissions).toEqual({
+    contents: "read",
+    actions: "read",
+    statuses: "write",
+  });
   expect(mainWorkflow.jobs.status.needs).toEqual(["validate", "suites"]);
   const publication = mainWorkflow.jobs.status.steps?.find(
     ({ name }) => name === "Publish heavy conclusion",
@@ -525,6 +624,7 @@ test("status step publishes success only when both workflow jobs succeeded", () 
           env: {
             ...Bun.env,
             GH_LOG: logPath,
+            GH_RETRY_SCRIPT: path.resolve(import.meta.dirname, "gh-retry.sh"),
             GH_TOKEN: "fixture-token",
             GITHUB_OUTPUT: outputPath,
             PATH: `${bin}:${Bun.env["PATH"] ?? ""}`,
@@ -532,6 +632,7 @@ test("status step publishes success only when both workflow jobs succeeded", () 
             RESULTS: results,
             RUN_URL: runUrl,
             SHA: sha,
+            PROOF_MAIN_BASE: validatedSha,
           },
         });
         expect(process.exitCode).toBe(exit);
@@ -546,7 +647,7 @@ test("status step publishes success only when both workflow jobs succeeded", () 
           "-f",
           `state=${expected}`,
           "-f",
-          `description=Main heavy suites: ${expected}`,
+          `description=Main heavy suites: ${expected}; main=${validatedSha}`,
           "-f",
           `target_url=${runUrl}`,
         ]);
@@ -556,3 +657,189 @@ test("status step publishes success only when both workflow jobs succeeded", () 
     }
   }
 }, 30_000);
+
+const concurrencyContext = (
+  event: string,
+  sha = "",
+  runId = 1,
+  message = "fix: change",
+) => ({
+  github: {
+    workflow: "Main heavy suites",
+    event_name: event,
+    ref: "refs/heads/main",
+    run_id: runId,
+    sha,
+    event: { head_commit: { message } },
+  },
+  inputs: { sha, heavy_only: sha !== "" },
+  needs: { resolve: { outputs: { sha } } },
+});
+const concurrencyGroup = (group: string, context: object) =>
+  group.replaceAll(/\$\{\{(.*?)\}\}/gu, (_, expression: string) => {
+    const value: unknown = new Script(expression).runInNewContext({
+      ...context,
+      startsWith: (text: string, prefix: string) => text.startsWith(prefix),
+      format: (template: string, ...values: unknown[]) =>
+        template.replaceAll(/\{(\d+)\}/gu, (_match, index: string) => {
+          const argument = values.at(Number(index));
+          if (typeof argument !== "string" && typeof argument !== "number") {
+            return panic("Unresolved concurrency format argument");
+          }
+          return String(argument);
+        }),
+    });
+    if (typeof value !== "string" && typeof value !== "number") {
+      return panic(`Concurrency group fragment is not resolved: ${expression}`);
+    }
+    return String(value);
+  });
+const assertPinnedIsolation = (group: string) => {
+  const pinned = ["a".repeat(40), "b".repeat(40)].map((sha) =>
+    concurrencyGroup(group, concurrencyContext("workflow_dispatch", sha)),
+  );
+  expect(new Set(pinned).size).toBe(pinned.length);
+  expect(pinned).not.toContain(
+    concurrencyGroup(group, concurrencyContext("schedule", "", 2)),
+  );
+  expect(pinned).not.toContain(
+    concurrencyGroup(group, concurrencyContext("push", "", 2)),
+  );
+  expect(pinned).not.toContain(
+    concurrencyGroup(
+      group,
+      concurrencyContext("push", "c".repeat(40), 2, "chore: release v1.0.0"),
+    ),
+  );
+};
+test("pinned heavy gates remain independent of schedules, ordinary pushes and other candidate SHAs", () => {
+  assertPinnedIsolation(mainWorkflow.concurrency.group);
+  assertPinnedIsolation(ciWorkflow.concurrency.group);
+  for (const sha of ["a".repeat(40), "b".repeat(40)]) {
+    for (const workflow of [mainWorkflow, ciWorkflow]) {
+      expect(
+        expressionValue(
+          workflow.concurrency["cancel-in-progress"],
+          concurrencyContext("workflow_dispatch", sha),
+        ),
+      ).toBe(false);
+    }
+  }
+  expect(
+    expressionValue(
+      mainWorkflow.concurrency["cancel-in-progress"],
+      concurrencyContext("schedule"),
+    ),
+  ).toBe(true);
+  expect(
+    concurrencyGroup(
+      mainWorkflow.concurrency.group,
+      concurrencyContext("schedule", "", 1),
+    ),
+  ).toBe(
+    concurrencyGroup(
+      mainWorkflow.concurrency.group,
+      concurrencyContext("schedule", "", 2),
+    ),
+  );
+});
+test("release pushes coalesce with matching pinned gates without schedule cancellation", () => {
+  const sha = "a".repeat(40);
+  const group = mainWorkflow.concurrency.group;
+  const cancel = mainWorkflow.concurrency["cancel-in-progress"];
+  const schedule = concurrencyContext("schedule", sha);
+  const normalPush = concurrencyContext("push", sha, 2);
+  const releasePush = concurrencyContext(
+    "push",
+    sha,
+    3,
+    "chore: release v0.9.1",
+  );
+  const pinnedDispatch = concurrencyContext("workflow_dispatch", sha, 4);
+
+  const groups = {
+    schedule: concurrencyGroup(group, schedule),
+    normalPush: concurrencyGroup(group, normalPush),
+    releasePush: concurrencyGroup(group, releasePush),
+    pinnedDispatch: concurrencyGroup(group, pinnedDispatch),
+  };
+
+  expect(groups.releasePush).toBe(groups.pinnedDispatch);
+  expect(groups.schedule).not.toBe(groups.releasePush);
+  expect(groups.schedule).not.toBe(groups.normalPush);
+  expect(expressionValue(cancel, releasePush)).toBe(false);
+});
+test("unpinned dispatches share the schedule group and cancel it", () => {
+  const unpinned = concurrencyContext("workflow_dispatch", "", 5);
+  const schedule = concurrencyContext("schedule", "");
+  const group = mainWorkflow.concurrency.group;
+  expect(concurrencyGroup(group, unpinned)).toBe(
+    concurrencyGroup(group, schedule),
+  );
+  expect(
+    expressionValue(mainWorkflow.concurrency["cancel-in-progress"], unpinned),
+  ).toBe(true);
+});
+test("removing the pinned SHA concurrency key violates isolation", () => {
+  const changed = mainWorkflow.concurrency.group.replace(
+    "format('release-{0}', inputs.sha)",
+    "github.ref",
+  );
+  expect(changed).not.toBe(mainWorkflow.concurrency.group);
+  expect(() => assertPinnedIsolation(changed)).toThrow(/Expected/u);
+});
+test("staging SHA build groups are isolated and its shared deploy group cannot cancel", () => {
+  const workflow = v.parse(
+    v.object({
+      jobs: v.record(
+        v.string(),
+        v.looseObject({
+          concurrency: v.optional(
+            v.object({ group: v.string(), "cancel-in-progress": v.boolean() }),
+          ),
+        }),
+      ),
+    }),
+    Bun.YAML.parse(
+      readFileSync(
+        new URL("../.github/workflows/deploy-staging.yml", import.meta.url),
+        "utf-8",
+      ),
+    ),
+  );
+  const groups = Object.values(workflow.jobs).flatMap((job) =>
+    job.concurrency ? [job.concurrency] : [],
+  );
+  expect(groups.length).toBeGreaterThan(0);
+  for (const group of groups) {
+    if (!group["cancel-in-progress"]) {
+      continue;
+    }
+    const candidates = ["a".repeat(40), "b".repeat(40)].map((sha) =>
+      concurrencyGroup(
+        group.group,
+        concurrencyContext("workflow_dispatch", sha),
+      ),
+    );
+    expect(new Set(candidates).size).toBe(candidates.length);
+  }
+});
+
+test("same-SHA dispatches coalesce with the running run preserved and newer pending runs replacing older pending runs", () => {
+  const sha = "a".repeat(40);
+  for (const workflow of [mainWorkflow, ciWorkflow]) {
+    const groups = [1, 2, 3].map((runId) =>
+      concurrencyGroup(
+        workflow.concurrency.group,
+        concurrencyContext("workflow_dispatch", sha, runId),
+      ),
+    );
+    expect(new Set(groups).size).toBe(1);
+    expect(
+      expressionValue(
+        workflow.concurrency["cancel-in-progress"],
+        concurrencyContext("workflow_dispatch", sha),
+      ),
+    ).toBe(false);
+  }
+});

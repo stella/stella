@@ -7,6 +7,7 @@ import {
 } from "./read";
 
 const config = {
+  contract: "patch",
   description:
     "List the organization's playbook definitions with cursor pagination, " +
     "each with its scope, status, and approval metadata. Read one playbook's " +

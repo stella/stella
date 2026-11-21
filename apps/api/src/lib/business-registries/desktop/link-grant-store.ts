@@ -1,8 +1,9 @@
 import { Result } from "better-result";
 import { and, eq, gt, inArray, like, lte, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
-import { createHash } from "node:crypto";
+import * as v from "valibot";
 
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
 import { verification } from "@/api/db/auth-schema";
@@ -10,19 +11,40 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { escapeLike } from "@/api/lib/escape-like";
 import { brandActorSessionIdentity } from "@/api/lib/safe-id-boundaries";
+import { checkSessionCredentialIssuer } from "@/api/lib/synthetic-principal/credential-policy";
 
 const LINK_GRANT_LIFETIME_MS = 60_000;
 const LINK_GRANT_PREFIX = "desktop-link";
 
-const grantValue = ({
-  userId,
-  organizationId,
-  verifierHash,
-}: {
+type GrantClaim = {
   userId: SafeId<"user">;
   organizationId: SafeId<"organization">;
   verifierHash: string;
-}) => JSON.stringify({ userId, organizationId, verifierHash });
+  deviceJkt: string;
+};
+
+const claimValue = ({
+  userId,
+  organizationId,
+  verifierHash,
+  deviceJkt,
+}: GrantClaim) =>
+  JSON.stringify({ userId, organizationId, verifierHash, deviceJkt });
+
+// The issuing browser session is stored beside the claim: the desktop never
+// learns it, and redemption issues its credential only while it is live.
+const ISSUING_SESSION_FIELD = "sessionId";
+const grantValue = (claim: GrantClaim & { sessionId: string }) =>
+  JSON.stringify({
+    userId: claim.userId,
+    organizationId: claim.organizationId,
+    verifierHash: claim.verifierHash,
+    deviceJkt: claim.deviceJkt,
+    [ISSUING_SESSION_FIELD]: claim.sessionId,
+  });
+const issuingSessionSchema = v.object({
+  [ISSUING_SESSION_FIELD]: v.pipe(v.string(), v.nonEmpty()),
+});
 
 // Auth verification rows deny ordinary application access. A single root
 // DELETE commits the claim independently of later credential issuance.
@@ -51,8 +73,11 @@ const sweepExpiredLinkGrants = async (db: LinkGrantDb, now: Date) => {
 export type CreateDesktopLinkGrantOptions = {
   correlationId: string;
   verifierHash: string;
+  deviceJkt: string;
   userId: SafeId<"user">;
   organizationId: SafeId<"organization">;
+  /** The browser session that requests the connection. */
+  sessionId: string;
   db: LinkGrantDb;
   now?: Date;
 };
@@ -60,19 +85,34 @@ export type CreateDesktopLinkGrantOptions = {
 export const createDesktopLinkGrant = async ({
   correlationId,
   verifierHash,
+  deviceJkt,
   userId,
   organizationId,
+  sessionId,
   db,
   now = new Date(Temporal.Now.instant().epochMilliseconds),
-}: CreateDesktopLinkGrantOptions) =>
-  await Result.tryPromise({
+}: CreateDesktopLinkGrantOptions) => {
+  const access = checkSessionCredentialIssuer("desktopAccount", {
+    userId,
+    organizationId,
+  });
+  if (Result.isError(access)) {
+    return Result.err(access.error);
+  }
+  return await Result.tryPromise({
     try: async () => {
       await sweepExpiredLinkGrants(db, now);
       const expiresAt = new Date(now.getTime() + LINK_GRANT_LIFETIME_MS);
       await db.insert(verification).values({
         id: `${LINK_GRANT_PREFIX}:${correlationId}`,
         identifier: `${LINK_GRANT_PREFIX}:${correlationId}`,
-        value: grantValue({ userId, organizationId, verifierHash }),
+        value: grantValue({
+          userId,
+          organizationId,
+          verifierHash,
+          deviceJkt,
+          sessionId,
+        }),
         expiresAt,
       });
       return { userId, organizationId, expiresAt: expiresAt.toISOString() };
@@ -80,16 +120,19 @@ export const createDesktopLinkGrant = async ({
     catch: (cause) =>
       new HandlerError({
         status: 503,
+        code: "internal_error",
         message: "Could not connect desktop account",
         cause,
       }),
   });
+};
 
 export type ConsumeDesktopLinkGrantOptions = {
   correlationId: string;
   verifier: string;
   expectedUserId: string;
   expectedOrganizationId: string;
+  deviceJkt: string;
   db: LinkGrantDb;
   now?: Date;
 };
@@ -99,6 +142,7 @@ export const consumeDesktopLinkGrant = async ({
   verifier,
   expectedUserId,
   expectedOrganizationId,
+  deviceJkt,
   db,
   now = new Date(Temporal.Now.instant().epochMilliseconds),
 }: ConsumeDesktopLinkGrantOptions) => {
@@ -118,14 +162,13 @@ export const consumeDesktopLinkGrant = async ({
               `${LINK_GRANT_PREFIX}:${correlationId}`,
             ),
             eq(
-              verification.value,
-              grantValue({
+              sql`${verification.value}::text::jsonb - ${ISSUING_SESSION_FIELD}::text`,
+              sql`${claimValue({
                 userId: identity.userId,
                 organizationId: identity.organizationId,
-                verifierHash: createHash("sha256")
-                  .update(verifier)
-                  .digest("hex"),
-              }),
+                deviceJkt,
+                verifierHash: hashSha256Hex(verifier),
+              })}::text::jsonb`,
             ),
             gt(verification.expiresAt, sql`${now.toISOString()}::timestamptz`),
           ),
@@ -134,6 +177,7 @@ export const consumeDesktopLinkGrant = async ({
     catch: (cause) =>
       new HandlerError({
         status: 503,
+        code: "internal_error",
         message: "Desktop connection is unavailable",
         cause,
       }),
@@ -141,7 +185,12 @@ export const consumeDesktopLinkGrant = async ({
   if (consumed.isErr()) {
     return Result.err(consumed.error);
   }
-  if (consumed.value.length !== 1) {
+  const [claimed] = consumed.value;
+  const issuing = v.safeParse(
+    issuingSessionSchema,
+    Result.try((): unknown => JSON.parse(claimed?.value ?? "")).unwrapOr(null),
+  );
+  if (consumed.value.length !== 1 || !issuing.success) {
     return Result.err(
       new HandlerError({
         status: 401,
@@ -151,5 +200,9 @@ export const consumeDesktopLinkGrant = async ({
   }
   // The conditional claim proves these exact identity values were stored by
   // the signed-in browser; request identity alone never authorizes a member.
-  return Result.ok(identity);
+  return Result.ok({
+    ...identity,
+    deviceJkt,
+    sessionId: issuing.output[ISSUING_SESSION_FIELD],
+  });
 };

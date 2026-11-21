@@ -15,4 +15,5 @@ export const AUTH_SESSION_STORAGE_OPTIONS = {
 
 export const AUTH_VERIFICATION_STORAGE_OPTIONS = {
   storeInDatabase: true,
+  storeIdentifier: "plain",
 } as const;

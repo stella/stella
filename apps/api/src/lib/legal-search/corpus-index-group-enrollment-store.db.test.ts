@@ -22,6 +22,7 @@ import {
   CorpusIndexGroupNotReadyError,
   CorpusIndexGroupWithdrawalRefusedError,
   readCorpusIndexGroupReadinessTx,
+  readGenerationCorpusIndexTargetTx,
   readServingCorpusIndexTargetTx,
   unattestedCorpusIndexIdsTx,
   withdrawCorpusIndexGroupEnrollmentTx,
@@ -37,6 +38,7 @@ import {
   startCorpusProjectionAppendBatchTx,
   startCorpusProjectionAppendTx,
 } from "@/api/lib/legal-search/corpus-index-projection-store";
+import { optOutOfCorpusProjectionSeedingGuard } from "@/api/tests/helpers/corpus-projection-seeding-guard";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
@@ -99,6 +101,10 @@ beforeAll(async () => {
 
 beforeEach(async () => {
   client = await createTestPglite(seededSnapshot);
+  await optOutOfCorpusProjectionSeedingGuard(client, {
+    reason:
+      "Exercises the projection store, executor and serving pipeline on canonical rows and desired states this suite stands up as fixtures; no desired writer runs here, and the writer suites keep the guard.",
+  });
   db = drizzle({ client });
 });
 
@@ -226,7 +232,7 @@ test("a scoped read of a group refuses until it is attested; other reads never w
   const unattestedGlobal = await target(undefined);
   expect(unattestedGlobal.contract).toBeNull();
   expect(unattestedGlobal.route.indexId).toBe(
-    "case_law_v7_aut,case_law_v7_cs_sk,case_law_v7_eu,case_law_v7_hun*,case_law_v7_pol",
+    "case_law_v7_aut,case_law_v7_bra*,case_law_v7_cs_sk,case_law_v7_eu,case_law_v7_gbr*,case_law_v7_hun*,case_law_v7_pol",
   );
   expect(unattestedGlobal.cursorTarget).toMatch(/^[0-9a-f]{32}$/u);
 
@@ -268,7 +274,7 @@ test("a scoped read of a group refuses until it is attested; other reads never w
   await inTx(async (tx) => await bindCorpusIndexGroupEnrollmentTx(tx, hun));
   const hunPending = await target(undefined);
   expect(hunPending.route.indexId).toBe(
-    "case_law_v7_aut,case_law_v7_cs_sk,case_law_v7_eu,case_law_v7_pol",
+    "case_law_v7_aut,case_law_v7_bra*,case_law_v7_cs_sk,case_law_v7_eu,case_law_v7_gbr*,case_law_v7_pol",
   );
   expect(hunPending.cursorTarget).not.toBe(unattestedGlobal.cursorTarget);
   expect((await target("HUN")).route.indexId).toBe("case_law_v7_hun");
@@ -281,7 +287,7 @@ test("a scoped read of a group refuses until it is attested; other reads never w
   );
   const withHun = await target(undefined);
   expect(withHun.route.indexId).toBe(
-    "case_law_v7_aut,case_law_v7_cs_sk,case_law_v7_eu,case_law_v7_hun,case_law_v7_pol",
+    "case_law_v7_aut,case_law_v7_bra*,case_law_v7_cs_sk,case_law_v7_eu,case_law_v7_gbr*,case_law_v7_hun,case_law_v7_pol",
   );
   expect(withHun.cursorTarget).not.toBe(unattestedGlobal.cursorTarget);
 });
@@ -686,4 +692,56 @@ test("a generation's enrollments leave with its registration", async () => {
   await inTx(async (tx) => await bindCorpusIndexGroupEnrollmentTx(tx, USA));
   await db.delete(corpusIndexGenerations).where(sql`true`);
   expect(await db.select().from(corpusIndexGroupEnrollments)).toEqual([]);
+});
+
+test("a named building generation is readable for measurement while readers stay on the serving one", async () => {
+  const candidate = CORPUS_INDEX_MANIFESTS.case_law_v11;
+  await db.insert(corpusIndexGenerations).values({
+    family: "case_law",
+    generation: candidate.generation,
+    cluster: "q09",
+    manifestDigest: corpusIndexManifestDigest(candidate),
+    status: "building",
+  });
+  const named = await inTx(
+    async (tx) =>
+      await readGenerationCorpusIndexTargetTx(tx, {
+        family: "case_law",
+        generation: candidate.generation,
+        jurisdiction: "HUN",
+      }),
+  );
+  expect(Result.isOk(named) && named.value.serving.generation).toBe(
+    candidate.generation,
+  );
+  expect(Result.isOk(named) && named.value.route.indexId).toBe(
+    "case_law_v11_hun",
+  );
+  const served = await inTx(
+    async (tx) =>
+      await readServingCorpusIndexTargetTx(tx, {
+        family: "case_law",
+        jurisdiction: "HUN",
+      }),
+  );
+  expect(Result.isOk(served) && served.value.serving.generation).toBe(
+    MANIFEST.generation,
+  );
+
+  await db
+    .update(corpusIndexGenerations)
+    .set({ status: "retiring" })
+    .where(eq(corpusIndexGenerations.generation, candidate.generation));
+  expect(
+    await rejectionOf(
+      inTx(
+        async (tx) =>
+          await readGenerationCorpusIndexTargetTx(tx, {
+            family: "case_law",
+            generation: candidate.generation,
+            jurisdiction: "HUN",
+          }),
+      ),
+    ),
+  ).toBeInstanceOf(Error);
 });

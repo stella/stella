@@ -1,37 +1,48 @@
 import { Result } from "better-result";
 import { and, eq, gt, lt, or } from "drizzle-orm";
-import { t } from "elysia";
 import * as v from "valibot";
 
+import { classifyFailure } from "@stll/errors";
+import { sha256Base64ToHex } from "@stll/sha256";
 import { Temporal } from "@stll/time";
 
 import { contactExtractionUploads } from "@/api/db/schema";
 import { contactExtractionUploadKey } from "@/api/handlers/contacts/contact-extraction-upload";
 import { resolveCaching } from "@/api/lib/ai-config";
-import { captureError } from "@/api/lib/analytics/capture";
+import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
+import { storedAIConfigUnreadableError } from "@/api/lib/ai-config-response";
+import { createErrorCapture, detached } from "@/api/lib/analytics/capture";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
-import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
+import {
+  ACCOUNT_ACCESS,
+  configuredModelAdmission,
+  createSafeRootHandler,
+} from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { scanUploadForHandler } from "@/api/lib/file-scan/scan-upload-handler";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { getS3 } from "@/api/lib/s3";
-import { headObject, readTenantS3ArrayBuffer } from "@/api/lib/s3-presign";
+import {
+  headObject,
+  readTenantS3ArrayBuffer,
+  S3ObjectMissingError,
+} from "@/api/lib/s3-presign";
 import {
   extractFileText,
   resolveExtractionMimeType,
 } from "@/api/lib/search/extract-content";
-import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
-import { requireTanStackAIAvailableForRole } from "@/api/lib/tanstack-ai-models";
-import { sha256Base64ToHex } from "@/api/lib/uploads/runtime";
+import { generateTanStackObjectForTask } from "@/api/lib/tanstack-ai-generate";
+import { requireTanStackAIAvailableForTask } from "@/api/lib/tanstack-ai-models";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 const MAX_SOURCE_CHARS = 30_000;
 const EXTRACT_TIMEOUT_MS = 60_000;
 const PROCESSING_LEASE_MS = 3 * 60 * 1000;
 
-const extractProcuracaoBodySchema = t.Object({
-  uploadId: tSafeId("contactExtractionUpload"),
+const extractProcuracaoBodySchema = v.object({
+  uploadId: resourceIdSchema("contactExtractionUpload"),
 });
 
 // strictObject + nullable-required members: OpenAI strict structured output
@@ -49,7 +60,8 @@ const outorganteCandidateSchema = v.strictObject({
   contactType: v.nullable(v.picklist(["person", "organization"])),
 });
 
-const extractProcuracaoOutputSchema = v.strictObject({
+/** Read by the structured-output role contract test. @public */
+export const extractProcuracaoOutputSchema = v.strictObject({
   outorgantes: v.array(outorganteCandidateSchema),
 });
 
@@ -79,6 +91,11 @@ const buildPrompt = (documentText: string): string =>
   `Document (procuração):\n---\n${documentText}\n---`;
 
 const config = {
+  contract: "patch",
+  actionAdmission: {
+    type: "handler",
+    actionKind: "contacts.extract-power-of-attorney",
+  },
   contentDelivery: {
     type: "none",
     reason: "Extracts contact fields without returning the source file.",
@@ -87,7 +104,7 @@ const config = {
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "upload_mechanics" },
   body: extractProcuracaoBodySchema,
-  requiresUsage: { actionType: "chat", modelRole: "fast" },
+  requiresUsage: { actionType: "chat", modelTask: "short-text" },
 } satisfies HandlerConfig;
 
 /**
@@ -100,6 +117,7 @@ const config = {
 const extractProcuracao = createSafeRootHandler(
   config,
   async function* ({
+    modelAdmission,
     session,
     body,
     orgAIConfig,
@@ -108,13 +126,17 @@ const extractProcuracao = createSafeRootHandler(
     user,
     safeDb,
   }) {
+    if (orgAIConfigStatus === ORG_AI_CONFIG_STATUS.unreadable) {
+      return Result.err(storedAIConfigUnreadableError());
+    }
+
     const organizationId = session.activeOrganizationId;
 
-    yield* requireTanStackAIAvailableForRole({
+    yield* requireTanStackAIAvailableForTask({
       dataClass: "customer",
       configStatus: orgAIConfigStatus,
       orgConfig: orgAIConfig,
-      role: "fast",
+      task: "short-text",
     });
 
     const claimToken = Bun.randomUUIDv7();
@@ -186,11 +208,20 @@ const extractProcuracao = createSafeRootHandler(
       const objectHead = await headObject(key);
       if (Result.isError(objectHead)) {
         return Result.err(
-          new HandlerError({
-            status: 422,
-            message: "The source upload is incomplete",
-            cause: objectHead.error,
-          }),
+          S3ObjectMissingError.is(objectHead.error)
+            ? new HandlerError({
+                status: 422,
+                message: "The source upload is incomplete",
+                cause: objectHead.error,
+              })
+            : classifyFailure(
+                new HandlerError({
+                  status: 500,
+                  message: "Failed to read the source upload",
+                  cause: objectHead.error,
+                }),
+                "upstream_unavailable",
+              ),
         );
       }
       if (
@@ -273,8 +304,9 @@ const extractProcuracao = createSafeRootHandler(
           workspaceId: null,
         },
         feature: "contacts.extractProcuracao",
-        modelRole: "fast",
+        modelTask: "short-text",
         orgAIConfig,
+        modelTier: configuredModelAdmission({ modelAdmission }).modelTier,
         properties: { organization_id: organizationId },
         traceId: Bun.randomUUIDv7(),
       });
@@ -283,9 +315,11 @@ const extractProcuracao = createSafeRootHandler(
       const truncated = normalizedText.length > MAX_SOURCE_CHARS;
       const generated = await Result.tryPromise({
         try: async () =>
-          await generateTanStackObjectForRole({
+          await generateTanStackObjectForTask({
+            userId: user.id,
             dataClass: "customer",
-            role: "fast",
+            admission: configuredModelAdmission({ modelAdmission }),
+            task: "short-text",
             orgAIConfig,
             managedAIResidency,
             organizationId,
@@ -293,13 +327,13 @@ const extractProcuracao = createSafeRootHandler(
             analytics: aiAnalytics,
             caching: resolveCaching({
               promptCachingEnabled: false,
-              role: "fast",
+              task: "short-text",
               scopeKey: organizationId,
             }),
             system: SYSTEM_PROMPT,
             prompt: buildPrompt(normalizedText.slice(0, MAX_SOURCE_CHARS)),
             outputSchema: extractProcuracaoOutputSchema,
-            abortSignal: AbortSignal.timeout(EXTRACT_TIMEOUT_MS),
+            deadlineMs: EXTRACT_TIMEOUT_MS,
             serviceTier: "standard",
           }),
         catch: (cause) => {
@@ -376,7 +410,17 @@ const extractProcuracao = createSafeRootHandler(
       );
     }
 
-    getS3().delete(key).catch(captureError);
+    detached(
+      async () =>
+        getS3()
+          .delete(key)
+          .catch(
+            createErrorCapture(
+              handlerErrorContext("extractProcuracao.rejection"),
+            ),
+          ),
+      "extract-procuracao.delete-upload",
+    );
 
     return extractionResult;
   },

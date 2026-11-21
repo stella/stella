@@ -1,5 +1,6 @@
 import { COUNTRY_CODES, isCountryCode } from "@stll/country-codes";
 import type { CountryCode } from "@stll/country-codes";
+import { stripUnicodeMarks } from "@stll/text-normalize";
 
 import type { Country } from "./entry";
 
@@ -29,9 +30,7 @@ const OFFICIAL_NAMES: Readonly<Record<string, CountryCode>> = {
 };
 
 const countryKey = (name: string): string =>
-  name
-    .normalize("NFD")
-    .replaceAll(/\p{M}/gu, "")
+  stripUnicodeMarks(name, { form: "NFD", markClass: "combining" })
     .toLowerCase()
     .replaceAll("&", " and ")
     .replaceAll(/[^\p{L}\p{N}]+/gu, " ")

@@ -2,8 +2,8 @@ import { describe, expect, mock, test } from "bun:test";
 
 import { toSafeId } from "@/api/lib/branded-types";
 import {
-  enqueueDocumentDeadlineScoutJob,
   type DocumentDeadlineScoutJobData,
+  enqueueDocumentDeadlineScoutJob,
 } from "@/api/lib/document-processing-enqueue";
 
 const JOB: DocumentDeadlineScoutJobData = {

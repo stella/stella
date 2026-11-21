@@ -2,14 +2,19 @@ import { Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { asc, eq, inArray } from "drizzle-orm";
 
+import { CHAT_HISTORY_CHANGED_ERROR_CODE } from "@stll/api-contract";
+
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { chatMessages, chatThreads, chatTurns } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
 import {
-  toChatMessageContent,
   toPersistableChatMessage,
+  toPersistedChatMessageContentV3,
 } from "@/api/handlers/chat/chat-message-parts";
-import { persistAcceptedMessageWithClaim } from "@/api/handlers/chat/chat-message-persistence";
+import {
+  CHAT_MEMBER_MESSAGE_PLACEMENT,
+  persistAcceptedMessageWithClaim,
+} from "@/api/handlers/chat/chat-message-persistence";
 import { createChatTurnAcceptance } from "@/api/handlers/chat/chat-turn-persistence";
 import { resolveTruncationTarget } from "@/api/handlers/chat/history-window";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -151,6 +156,7 @@ describe("a send whose thread changed between its read and its claim", () => {
         rejection: {
           code: 409,
           response: {
+            code: CHAT_HISTORY_CHANGED_ERROR_CODE,
             message:
               "The chat changed while this message was being sent; send it again",
           },
@@ -236,9 +242,8 @@ describe("a regeneration of the latest user turn", () => {
       role: "assistant" | "user";
     }) => {
       await testDb.insert(chatMessages).values({
-        content: toChatMessageContent({
+        content: toPersistedChatMessageContentV3({
           data: [{ content: `message ${offset}`, type: "text" }],
-          version: 2,
         }),
         createdAt: new Date(Date.parse("2026-08-03T12:00:00.000Z") + offset),
         id,
@@ -280,11 +285,13 @@ describe("a regeneration of the latest user turn", () => {
         messageId: regenerated,
         type: "update",
       },
+      placement: CHAT_MEMBER_MESSAGE_PLACEMENT.rewrite,
       plannedOnHistory: target.value.snapshot,
       recordAuditEvent: async () => await Promise.resolve(),
       safeDb,
       threadId,
       turnAcceptance: createChatTurnAcceptance({
+        source: { type: "member" },
         organizationId: ids.orgA,
         threadId,
         userId: ids.userA1,

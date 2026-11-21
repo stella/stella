@@ -1,9 +1,9 @@
 import { encodeRegistryComponent } from "../shared/encode-registry-component.js";
 import {
-  hasOptionalString,
   hasOptionalNumber,
-  isRecord,
+  hasOptionalString,
   isOptionalArrayOf,
+  isRecord,
 } from "../shared/guards.js";
 import { type RegistryClientOptions, registryFetch } from "../shared/http.js";
 import { clampSearchLimit } from "../shared/search.js";

@@ -4,10 +4,10 @@ import { readCapabilityCatalog } from "./capability-catalog-data.js";
 import { parseCapabilityCatalog } from "./capability-catalog-load.js";
 import {
   type CapabilityCatalogEntry,
-  type CatalogTransport,
   capabilityCommandPath,
-  formatCapabilityCommand,
+  type CatalogTransport,
   deriveCapabilityLeaf,
+  formatCapabilityCommand,
   insertCapabilities,
   isCatalogTransportInvocable,
 } from "./generate-capability-tree.js";
@@ -21,6 +21,8 @@ import type {
   CapabilityLeafSpec,
   RouteNode,
 } from "./route-types.js";
+
+const repositoryCapabilityCatalog = readCapabilityCatalog();
 
 const objectSchema = (
   properties: Record<string, unknown>,
@@ -41,6 +43,32 @@ const entry = (
   inputSchema: {},
   transport: { type: "json" },
   ...overrides,
+});
+
+test("catalog confirmation requirements survive generated leaf projection", () => {
+  const parsed = parseCapabilityCatalog(repositoryCapabilityCatalog);
+  expect(parsed).not.toBeNull();
+  const guarded =
+    parsed?.filter((candidate) => candidate.confirmation === "required") ?? [];
+  expect(guarded.length).toBeGreaterThan(0);
+  for (const item of guarded) {
+    expect(deriveCapabilityLeaf(item).spec.confirmation, item.id).toBe(
+      "required",
+    );
+  }
+});
+
+test("catalog replay declarations survive every generated capability projection", () => {
+  const parsed = parseCapabilityCatalog(readCapabilityCatalog());
+  expect(parsed).not.toBeNull();
+  expect(parsed?.some((item) => item.idempotency?.type === "replay")).toBe(
+    true,
+  );
+  for (const item of parsed ?? []) {
+    expect(deriveCapabilityLeaf(item).spec.idempotency, item.id).toEqual(
+      item.idempotency,
+    );
+  }
 });
 
 const fileInput = (field: string, required: boolean): CatalogTransport => ({
@@ -111,6 +139,24 @@ describe("capabilityCommandPath", () => {
 });
 
 describe("deriveCapabilityLeaf: flags", () => {
+  test.each([undefined, "required", "conditional"] as const)(
+    "preserves deployment ownership independently from caller access %s",
+    (featureAccess) => {
+      const source = entry({
+        id: "example.read",
+        feature: "FEATURE_EXAMPLE",
+        ...(featureAccess === undefined
+          ? {}
+          : { featureId: "example", featureAccess }),
+      });
+      const { spec } = deriveCapabilityLeaf(source);
+      expect(spec.feature).toBe(source.feature);
+      expect(spec.featureId).toBe(
+        featureAccess === "required" ? source.featureId : undefined,
+      );
+    },
+  );
+
   test("carries the catalog's finite transport deadline to the executable leaf", () => {
     const { spec } = deriveCapabilityLeaf(
       entry({ id: "documents.compare", requestTimeoutMs: 600_000 }),
@@ -619,7 +665,7 @@ describe("insertCapabilities: against the real curated tree + catalog", () => {
       "generated/registry-snapshot.json",
       import.meta.url,
     );
-    const catalog = parseCapabilityCatalog(readCapabilityCatalog());
+    const catalog = parseCapabilityCatalog(repositoryCapabilityCatalog);
     if (catalog === null) {
       throw new TypeError("Invalid capability catalog");
     }
@@ -636,13 +682,69 @@ describe("insertCapabilities: against the real curated tree + catalog", () => {
     expect(stats.generated).toBe(catalog.length - suppressed);
   });
 
+  test("agent workflow capabilities generate their commands and flags", async () => {
+    const catalog = parseCapabilityCatalog(repositoryCapabilityCatalog);
+    if (catalog === null) {
+      throw new TypeError("Invalid capability catalog");
+    }
+    const listings = await Bun.file(
+      new URL("generated/registry-snapshot.json", import.meta.url),
+    ).json();
+    const { tree } = insertCapabilities({
+      tree: generateRouteMap(listings, TOOL_ANNOTATIONS),
+      entries: catalog,
+    });
+    // A discriminated-union body has no flag projection, so it travels in
+    // `--input`; every other property is a flag.
+    const expected = {
+      "docx-suggestions.list": {
+        flags: ["--entity-id", "--matter-id", "--status"],
+        inputOnly: [],
+      },
+      "docx-suggestions.resolve": {
+        flags: ["--entity-id", "--matter-id", "--suggestion-id"],
+        inputOnly: ["body"],
+      },
+      "docx-suggestions.revert": {
+        flags: ["--entity-id", "--matter-id", "--suggestion-id"],
+        inputOnly: [],
+      },
+      "memories.create": { flags: [], inputOnly: ["body"] },
+      "memories.list": {
+        flags: ["--matter-id", "--scope", "--status"],
+        inputOnly: [],
+      },
+      "memories.update": {
+        flags: ["--memory-id", "--content", "--pinned", "--status"],
+        inputOnly: [],
+      },
+      "notifications.list": { flags: [], inputOnly: [] },
+      "notifications.read-state.update": {
+        flags: ["--notification-id"],
+        inputOnly: [],
+      },
+    } as const;
+    for (const [id, { flags, inputOnly }] of Object.entries(expected)) {
+      const catalogEntry = catalog.find((candidate) => candidate.id === id);
+      const leaf = leafAt(tree, capabilityCommandPath(id));
+      expect(catalogEntry).toBeDefined();
+      expect(leaf).toMatchObject({
+        capabilityId: id,
+        access: catalogEntry?.access,
+        destructive: catalogEntry?.destructive,
+      });
+      expect(leaf?.flags.map((flag) => flag.flag)).toEqual([...flags]);
+      expect(leaf?.inputOnly).toEqual([...inputOnly]);
+    }
+  });
+
   test("no committed input schema carries a transport coercion union", async () => {
-    // Elysia compiles `t.Integer` and friends to a string|scalar union with
-    // the bounds hoisted above it. The catalog embeds the advertised
-    // projection, which flattens that to the scalar; a union surviving here
+    // A path or query number travels as a string (`numberFromString`); the
+    // advertised projection the catalog embeds renders the scalar it stands
+    // for, never a string|scalar union. A union surviving here
     // would give the generated command an opaque `--input` where the MCP
     // surface advertises a bounded flag.
-    const catalog = parseCapabilityCatalog(readCapabilityCatalog());
+    const catalog = parseCapabilityCatalog(repositoryCapabilityCatalog);
     if (catalog === null) {
       throw new TypeError("Invalid capability catalog");
     }
@@ -659,9 +761,9 @@ describe("insertCapabilities: against the real curated tree + catalog", () => {
         return;
       }
       const record: Record<string, unknown> = { ...node };
-      const branches = record["anyOf"];
+      const anyOf = record["anyOf"];
+      const branches: unknown[] = Array.isArray(anyOf) ? anyOf : [];
       if (
-        Array.isArray(branches) &&
         branches.some(
           (branch) =>
             typeof branch === "object" &&
@@ -690,7 +792,7 @@ describe("insertCapabilities: against the real curated tree + catalog", () => {
     // read as a plain JSON capability by anything less strict than
     // `parseCapabilityCatalog`, which is exactly the silent default this
     // field replaced.
-    const catalog = readCapabilityCatalog();
+    const catalog = repositoryCapabilityCatalog;
     expect(catalog.length).toBeGreaterThan(0);
     expect(parseCapabilityCatalog(catalog)).not.toBeNull();
     for (const capability of catalog) {
@@ -733,7 +835,7 @@ describe("curated commands must not shadow capability commands", () => {
   };
 
   test("every generated capability stays at one fixed-depth namespace", async () => {
-    const catalog = parseCapabilityCatalog(readCapabilityCatalog());
+    const catalog = parseCapabilityCatalog(repositoryCapabilityCatalog);
     if (catalog === null) {
       throw new TypeError("Invalid capability catalog");
     }
@@ -800,7 +902,7 @@ describe("every capability flag maps to a real path in its wrapper schema", () =
   };
 
   test("no flag targets a path absent from the wrapper schema", async () => {
-    const raw = readCapabilityCatalog();
+    const raw = repositoryCapabilityCatalog;
     const entries = parseCapabilityCatalog(raw);
     expect(entries).not.toBeNull();
 

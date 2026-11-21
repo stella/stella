@@ -1,5 +1,7 @@
 import * as v from "valibot";
 
+import { SEARCH_PAGINATION_TRUNCATED_TIME_BUDGET } from "@stll/api-contract/search";
+
 import { LIMITS } from "@/api/lib/limits";
 import {
   COMPAT_SEARCH_OUTPUT_SCHEMA,
@@ -8,7 +10,7 @@ import {
 import {
   hasMoreCorpusPages,
   resolveCompatCorpusCountries,
-  searchCompatCorpus,
+  waitForCompatCorpus,
 } from "@/api/mcp/compat-corpus";
 import {
   COMPAT_CORPUS_ID_HINT,
@@ -17,26 +19,24 @@ import {
   decodeCompatCorpusId,
 } from "@/api/mcp/compat-ids";
 import {
-  LAW_COMPAT_SEARCH_CURSOR_MAX_LENGTH,
+  COMPAT_PAIR_HOST_META,
   compatCorpusFetchResponse,
   compatSearchCursorError,
   compatSearchPageLimitResult,
   decodeCompatSearchCursor,
   encodeCompatSearchCursor,
   invalidCompatIdResult,
+  LAW_COMPAT_SEARCH_CURSOR_MAX_LENGTH,
 } from "@/api/mcp/compat-shared";
+import { cursorInput, nullAsAbsent } from "@/api/mcp/input-schemas";
 import type { McpToolDefinition, McpToolHandler } from "@/api/mcp/tool-types";
 import { defineMcpToolSet } from "@/api/mcp/tool-types";
-import {
-  cursorInput,
-  errorResult,
-  nullAsAbsent,
-  validationErrorResult,
-} from "@/api/mcp/tool-utils";
+import { validationErrorResult } from "@/api/mcp/tool-utils";
 import {
   defineMcpToolOutput,
   defineValibotMcpTool,
 } from "@/api/mcp/valibot-tool-definition";
+import { openMcpRead } from "@/api/mcp/write-tool-authority";
 
 /**
  * The OpenAI-compatible `search`/`fetch` pair for the law audience.
@@ -82,7 +82,7 @@ const lawCompatFetchArgsSchema = nullAsAbsent(
 
 const LAW_COMPAT_TOOL_DEFINITIONS = [
   defineValibotMcpTool({
-    consumesServices: true,
+    consumesServices: false,
     annotations: {
       title: "Search",
       destructiveHint: false,
@@ -90,20 +90,23 @@ const LAW_COMPAT_TOOL_DEFINITIONS = [
       openWorldHint: false,
     },
     access: "read",
+    permissions: openMcpRead("public law corpus"),
     readClass: "public",
     anonymized: { exposure: "passthrough" },
     description:
       "Search the public legal corpus (case-law decisions and statutes) using " +
       "the OpenAI-compatible search tool shape, over every jurisdiction the corpus holds, " +
       `the organization's practice jurisdictions first. ${COMPAT_CORPUS_ID_VOCABULARY} Pass an id back to fetch verbatim. No ` +
-      "matter, document, contact or billing data is reachable here.",
+      "matter, document, contact or billing data is reachable here. " +
+      "Use `url` for the reader and `source_url` for the publisher.",
     feature: "FEATURE_PUBLIC_LAW",
     inputSchema: lawCompatSearchArgsSchema,
+    _meta: COMPAT_PAIR_HOST_META,
     name: "search",
     scope: "stella:search",
   }),
   defineValibotMcpTool({
-    consumesServices: true,
+    consumesServices: false,
     annotations: {
       title: "Fetch",
       destructiveHint: false,
@@ -111,15 +114,18 @@ const LAW_COMPAT_TOOL_DEFINITIONS = [
       openWorldHint: false,
     },
     access: "read",
+    permissions: openMcpRead("public law corpus"),
     readClass: "public",
     anonymized: { exposure: "passthrough" },
     description:
       "Fetch one public-corpus document by id using the OpenAI-compatible fetch " +
       `tool shape. ${COMPAT_CORPUS_ID_VOCABULARY} A decision answers with its text, a ` +
       "statute with the text in force today, and `metadata.kind` says which. Long text " +
-      "is returned in windows; pass the returned nextCursor back as cursor to read more.",
+      "is returned in windows; pass the returned nextCursor back as cursor to read more. " +
+      "Use `url` for the reader and `source_url` for the publisher.",
     feature: "FEATURE_PUBLIC_LAW",
     inputSchema: lawCompatFetchArgsSchema,
+    _meta: COMPAT_PAIR_HOST_META,
     name: "fetch",
     scope: "stella:read",
   }),
@@ -144,14 +150,27 @@ const handleLawCompatSearchTool: McpToolHandler<
     return pageLimitResult;
   }
 
-  const corpus = await searchCompatCorpus({
+  const corpus = await waitForCompatCorpus({
     context,
     countries: await resolveCompatCorpusCountries(context),
     cursors: position.corpus,
     query,
   });
   if (corpus.type === "failed") {
-    return errorResult(corpus.message);
+    return corpus.result;
+  }
+  if (corpus.type === "still_running") {
+    // Nothing here says "running", so the page says it is cut short and its
+    // cursor runs the same page again.
+    return {
+      egress: "compatSearch",
+      paginationOutcome: SEARCH_PAGINATION_TRUNCATED_TIME_BUDGET,
+      nextCursor: encodeCompatSearchCursor({
+        matter: null,
+        corpus: position.corpus,
+      }),
+      results: [],
+    };
   }
 
   // The corpus results are public law, so the egress pipeline passes them

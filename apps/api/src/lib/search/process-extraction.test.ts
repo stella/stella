@@ -2,9 +2,13 @@ import { Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import type { SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
-import JSZip from "jszip";
 
-import { EML_MIME_TYPE } from "@stll/api-contract/email-mime-types";
+import { DATA_BOX_MESSAGE_MIME_TYPE } from "@stll/api-contract/data-box";
+import {
+  EML_MIME_TYPE,
+  MSG_MIME_TYPE,
+} from "@stll/api-contract/email-mime-types";
+import { ZipArchive } from "@stll/docx-core/zip";
 
 import type { rootDb } from "@/api/db/root";
 import type { FieldContent } from "@/api/db/schema-validators";
@@ -20,6 +24,7 @@ import { LIMITS } from "@/api/lib/limits";
 import {
   executeNativeExtraction as executeNativeExtractionWithDependencies,
   persistNativeExtractionProjection as persistNativeExtractionProjectionWithDatabase,
+  pickExtractionSource,
   processExtraction as processExtractionWithDependencies,
   requiresDurableNativeExtraction,
 } from "@/api/lib/search/process-extraction";
@@ -63,7 +68,14 @@ const extractionEntity = {
 };
 let findFirstResult: typeof extractionEntity | null = null;
 const findFirstMock = mock(async () => findFirstResult);
-const executeMock = mock(async (_query: SQL) => [{ entityId }]);
+// Lock queries bind the locked id first; echo it so the parents read as live.
+const executeRows = async (query: SQL) => [
+  {
+    id: new PgDialect().sqlToQuery(query).params.at(0),
+    entityId,
+  },
+];
+const executeMock = mock(executeRows);
 const transactionMock = mock(
   async (
     runTransaction: (tx: { execute: typeof executeMock }) => Promise<unknown>,
@@ -223,7 +235,7 @@ type PersistedProjection = {
  * an id, a count or a hash.
  */
 const persistedProjection = async (): Promise<PersistedProjection> => {
-  const writeQuery = executeMock.mock.calls.at(1)?.[0];
+  const writeQuery = executeMock.mock.calls.at(3)?.[0];
   if (writeQuery === undefined) {
     throw new Error("no projection write statement was executed");
   }
@@ -247,7 +259,7 @@ beforeEach(() => {
   findFirstResult = null;
   findFirstMock.mockClear();
   executeMock.mockReset();
-  executeMock.mockImplementation(async (_query: SQL) => [{ entityId }]);
+  executeMock.mockImplementation(executeRows);
   transactionMock.mockClear();
   insertMock.mockClear();
   valuesMock.mockClear();
@@ -285,9 +297,11 @@ afterEach(() => {
 });
 
 describe("processExtraction", () => {
-  // Files with a pending PDF derivative wait for it so extraction reads the
-  // rendered PDF rather than the original bytes.
-  test("requires durable extraction only after any pending PDF derivative exists", () => {
+  // Direct parsers do not wait for the PDF preview: extraction reads the
+  // original bytes, and a failed preview must not leave the body unindexed.
+  // Formats with no parser still wait, because the rendered PDF is their
+  // only text layer.
+  test("extracts a directly parsed file before its PDF preview exists", () => {
     expect(requiresDurableNativeExtraction(fileContent)).toBe(true);
     expect(
       requiresDurableNativeExtraction({
@@ -302,15 +316,52 @@ describe("processExtraction", () => {
         fileName: "notes.txt",
         mimeType: "text/plain",
       }),
-    ).toBe(false);
+    ).toBe(true);
     expect(
       requiresDurableNativeExtraction({
         ...fileContent,
         fileName: "notes.txt",
-        mimeType: "text/plain",
+        mimeType: "text/plain; charset=utf-8",
+      }),
+    ).toBe(true);
+    expect(
+      requiresDurableNativeExtraction({
+        ...fileContent,
+        fileName: "sheet.xlsx",
+        mimeType:
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      }),
+    ).toBe(true);
+    expect(
+      requiresDurableNativeExtraction({
+        ...fileContent,
+        fileName: "photo.png",
+        mimeType: "image/png",
+      }),
+    ).toBe(false);
+    expect(
+      requiresDurableNativeExtraction({
+        ...fileContent,
+        fileName: "photo.png",
+        mimeType: "image/png",
         pdfFileId: "derived_pdf_1",
       }),
     ).toBe(true);
+  });
+
+  // The run's unique source is the original file, so the preview finishing
+  // later reaches the run extracted at upload instead of starting another.
+  test("keeps a parsed file's extraction source when its PDF preview arrives", () => {
+    const notes = {
+      ...fileContent,
+      fileName: "notes.txt",
+      mimeType: "text/plain",
+    };
+
+    expect(
+      pickExtractionSource({ ...notes, pdfFileId: "derived_pdf_1" }),
+    ).toEqual(pickExtractionSource({ ...notes, pdfFileId: null }));
+    expect(pickExtractionSource(notes).fileId).toBe(fileContent.id);
   });
 
   test("orders the current version's fields by id, matching readEntityByIdHandler, so 'first file field' selection is deterministic", async () => {
@@ -368,7 +419,13 @@ describe("processExtraction", () => {
 
     expect(extractedContentFindFirstMock).toHaveBeenCalled();
     expect(updateSetMock).toHaveBeenCalledWith(
-      expect.objectContaining({ status: "queued", finishedAt: null }),
+      expect.objectContaining({
+        status: "queued",
+        finishedAt: null,
+        attemptCount: 0,
+        errorMessage: null,
+        nextDeliveryAt: null,
+      }),
     );
     expect(enqueueDocumentProcessingRunMock).toHaveBeenCalledWith(runId);
     expect(indexEntityMock).not.toHaveBeenCalled();
@@ -395,6 +452,7 @@ describe("processExtraction", () => {
       mimeType: fileContent.mimeType,
       sizeBytes: fileContent.sizeBytes,
       termination: null,
+      workerErrorClass: null,
     });
     extractFileTextResultMock.mockImplementationOnce(async () =>
       Result.err(workerError),
@@ -425,7 +483,7 @@ describe("processExtraction", () => {
     expect(objectReadKeys()).toEqual([key]);
     expect(extractFileTextResultMock).toHaveBeenCalledWith(expect.anything(), {
       signal: lifecycleSignal,
-      timeoutMs: LIMITS.documentProcessingExtractionTimeoutMs,
+      timeoutMs: LIMITS.documentProcessingExtractionTimeoutMs, // timeout: asserted call argument, not a deadline
     });
     const extracted = extractFileTextResultMock.mock.calls.at(0)?.[0];
     // The bytes reach the extractor as a stored file under the run's key.
@@ -475,7 +533,7 @@ describe("processExtraction", () => {
     const projection = await persistedProjection();
     expect(projection.text).toBe("");
     expect(projection.iv.every((byte) => byte === 0)).toBe(false);
-    expect(executeMock).toHaveBeenCalledTimes(2);
+    expect(executeMock).toHaveBeenCalledTimes(4);
     expect(requestAutomaticDocumentOcrMock).not.toHaveBeenCalled();
     expect(restoreManualOcrRunAfterProjectionLossMock).not.toHaveBeenCalled();
   });
@@ -508,6 +566,41 @@ describe("processExtraction", () => {
     // The provided scope replaces the default reader outright: the store sees
     // no request at all.
     expect(fake.requests).toEqual([]);
+  });
+
+  test("bounds native reads of generated PDF derivatives", async () => {
+    const imageWithDerivative = {
+      ...fileContent,
+      fileName: "scan.png",
+      mimeType: "image/png",
+      pdfFileId: "derived_pdf_1",
+    } satisfies FieldContent;
+    const readSource = mock(
+      async ({ mimeType }: { mimeType: string; maxBytes?: number }) =>
+        testScannedFile({ bytes: new ArrayBuffer(8), mimeType }),
+    );
+
+    await executeNativeExtraction({
+      fileField: imageWithDerivative,
+      lifecycleSignal: new AbortController().signal,
+      readSource,
+      run: {
+        entityId,
+        entityVersionId,
+        fieldId,
+        organizationId,
+        sourceFileId: fileContent.id,
+        sourceSha256Hex: fileContent.sha256Hex,
+        workspaceId,
+      },
+    });
+
+    expect(readSource).toHaveBeenCalledWith({
+      key: `${organizationId}/${workspaceId}/derived_pdf_1.pdf`,
+      mimeType: PDF_MIME_TYPE,
+      signal: expect.any(AbortSignal),
+      maxBytes: LIMITS.fileDerivativePdfMaxBytes,
+    });
   });
 
   test("propagates lifecycle cancellation to the caller-provided storage reader", async () => {
@@ -660,8 +753,8 @@ describe("processExtraction", () => {
     });
 
     expect(persisted).toBe("persisted");
-    const lockQuery = executeMock.mock.calls.at(0)?.[0];
-    const writeQuery = executeMock.mock.calls.at(1)?.[0];
+    const lockQuery = executeMock.mock.calls.at(2)?.[0];
+    const writeQuery = executeMock.mock.calls.at(3)?.[0];
     expect(lockQuery).toBeDefined();
     expect(writeQuery).toBeDefined();
     if (!(lockQuery && writeQuery)) {
@@ -707,6 +800,8 @@ describe("processExtraction", () => {
   });
 
   test("does not overwrite a newer projection after its source is replaced", async () => {
+    executeMock.mockResolvedValueOnce([{ id: organizationId, entityId }]);
+    executeMock.mockResolvedValueOnce([{ id: workspaceId, entityId }]);
     executeMock.mockResolvedValueOnce([]);
 
     const persisted = await persistNativeExtractionProjection({
@@ -725,11 +820,15 @@ describe("processExtraction", () => {
     });
 
     expect(persisted).toBe("source_cancelled");
-    expect(executeMock).toHaveBeenCalledTimes(1);
+    expect(executeMock).toHaveBeenCalledTimes(3);
   });
 
   test("reports that the ownership-fenced native projection was not persisted", async () => {
-    executeMock.mockResolvedValueOnce([{ entityId }]).mockResolvedValueOnce([]);
+    executeMock
+      .mockResolvedValueOnce([{ id: organizationId, entityId }])
+      .mockResolvedValueOnce([{ id: workspaceId, entityId }])
+      .mockResolvedValueOnce([{ id: entityId, entityId }])
+      .mockResolvedValueOnce([]);
 
     const persisted = await persistNativeExtractionProjection({
       charCount: 14,
@@ -747,11 +846,15 @@ describe("processExtraction", () => {
     });
 
     expect(persisted).toBe("preserved");
-    expect(executeMock).toHaveBeenCalledTimes(2);
+    expect(executeMock).toHaveBeenCalledTimes(4);
   });
 
   test("surfaces preserved manual OCR ownership and skips automatic fallback", async () => {
-    executeMock.mockResolvedValueOnce([{ entityId }]).mockResolvedValueOnce([]);
+    executeMock
+      .mockResolvedValueOnce([{ id: organizationId, entityId }])
+      .mockResolvedValueOnce([{ id: workspaceId, entityId }])
+      .mockResolvedValueOnce([{ id: entityId, entityId }])
+      .mockResolvedValueOnce([]);
     extractFileTextResultMock.mockImplementationOnce(async () =>
       Result.ok(null),
     );
@@ -824,19 +927,19 @@ describe("the extraction's database", () => {
   });
 
   test("stamps a DOCX-declared language on the same connection", async () => {
-    const zip = new JSZip();
-    zip.file(
+    const zip = new ZipArchive();
+    zip.set(
       "word/document.xml",
       `<w:document xmlns:w="${WORD_NAMESPACE}"><w:body><w:p><w:r><w:t>Text</w:t></w:r></w:p></w:body></w:document>`,
     );
-    zip.file(
+    zip.set(
       "word/styles.xml",
       `<w:styles xmlns:w="${WORD_NAMESPACE}"><w:docDefaults><w:rPrDefault><w:rPr><w:lang w:val="cs-CZ"/></w:rPr></w:rPrDefault></w:docDefaults></w:styles>`,
     );
     fake.put(
       envBase.S3_BUCKET,
       sourceKey("docx"),
-      new Uint8Array(await zip.generateAsync({ type: "arraybuffer" })),
+      new Uint8Array((await zip.generate({ compression: "store" })).buffer),
       DOCX_MIME_TYPE,
     );
     const docxContent = {
@@ -878,46 +981,60 @@ describe("the extraction's database", () => {
     expect(requestAutomaticDocumentOcrMock).not.toHaveBeenCalled();
   });
 
-  test("hands only an email document to the correspondence job", async () => {
-    seedSource("pdf");
-
-    const outcome = await executeNativeExtraction({
-      fileField: fileContent,
-      lifecycleSignal: new AbortController().signal,
-      run,
-    });
-
-    expect(outcome).toBe("persisted");
-    expect(enqueueUploadedMailMock).not.toHaveBeenCalled();
-  });
-
-  test("hands an email document to the correspondence job by file", async () => {
-    seedSource("eml");
-    const emailContent = {
-      ...fileContent,
-      fileName: "letter.eml",
-      mimeType: EML_MIME_TYPE,
-    } satisfies FieldContent;
-
-    const outcome = await executeNativeExtraction({
-      fileField: emailContent,
-      lifecycleSignal: new AbortController().signal,
-      run,
-    });
-
-    expect(outcome).toBe("persisted");
-    expect(enqueueUploadedMailMock.mock.calls).toEqual([
-      [
-        {
-          file: {
-            sourceFileId: fileContent.id,
-            storageMimeType: EML_MIME_TYPE,
-            mimeType: EML_MIME_TYPE,
-          },
-          scope: { organizationId, workspaceId, entityId },
+  test.each([
+    ["pdf", PDF_MIME_TYPE],
+    ["eml", EML_MIME_TYPE],
+    ["msg", MSG_MIME_TYPE],
+    ["zfo", DATA_BOX_MESSAGE_MIME_TYPE],
+  ])(
+    "hands every projected %s generation to correspondence reconciliation",
+    async (extension, mimeType) => {
+      seedSource(extension);
+      const outcome = await executeNativeExtraction({
+        fileField: {
+          ...fileContent,
+          fileName: `letter.${extension}`,
+          mimeType,
         },
-      ],
-    ]);
+        lifecycleSignal: new AbortController().signal,
+        run,
+      });
+      expect(outcome).toBe("persisted");
+      expect(enqueueUploadedMailMock.mock.calls).toEqual([
+        [
+          {
+            file: {
+              sourceFileId: fileContent.id,
+              storageMimeType: mimeType,
+              mimeType,
+            },
+            scope: { organizationId, workspaceId, entityId },
+          },
+        ],
+      ]);
+    },
+  );
+
+  test("a PDF derivative reconciles the original current file generation", async () => {
+    seedSource("pdf");
+    const originalFileId = "original-image";
+    const outcome = await executeNativeExtraction({
+      fileField: {
+        ...fileContent,
+        id: originalFileId,
+        fileName: "scan.png",
+        mimeType: "image/png",
+        pdfFileId: fileContent.id,
+      },
+      lifecycleSignal: new AbortController().signal,
+      run: { ...run, sourceFileId: originalFileId },
+    });
+    expect(outcome).toBe("persisted");
+    expect(enqueueUploadedMailMock.mock.calls.at(0)?.[0].file).toEqual({
+      sourceFileId: originalFileId,
+      storageMimeType: PDF_MIME_TYPE,
+      mimeType: PDF_MIME_TYPE,
+    });
   });
 
   test("a failed hand-off leaves the document indexed", async () => {

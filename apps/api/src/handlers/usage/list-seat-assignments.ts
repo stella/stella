@@ -13,6 +13,7 @@ import { LIMITS } from "@/api/lib/limits";
  */
 
 const config = {
+  contract: "patch",
   description:
     "List the members assigned to the organization's per-user included " +
     "limits, with the total capacity. Requires organization-settings " +

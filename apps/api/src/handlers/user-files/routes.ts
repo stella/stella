@@ -1,18 +1,13 @@
-import Elysia from "elysia";
-
 import readUserFileContent from "@/api/handlers/user-files/read-content";
 import readUserFileThumbnail from "@/api/handlers/user-files/read-thumbnail";
-import { authMacro, permissionMacro } from "@/api/lib/auth";
+import readUserFileVisual from "@/api/handlers/user-files/read-visual";
+import { routes } from "@/api/http/route";
 
-export const userFilesRoute = new Elysia({ prefix: "/user-files" })
-  .use(authMacro)
-  .use(permissionMacro)
-  .guard({ validateAuth: true })
-  .get("/:fileId/content", readUserFileContent.handler, {
-    params: readUserFileContent.config.params,
-    permissions: readUserFileContent.config.permissions,
-  })
-  .get("/:fileId/thumbnail", readUserFileThumbnail.handler, {
-    params: readUserFileThumbnail.config.params,
-    permissions: readUserFileThumbnail.config.permissions,
-  });
+export const userFilesRoute = routes(
+  {
+    "/:fileId/visual": { GET: readUserFileVisual },
+    "/:fileId/content": { GET: readUserFileContent },
+    "/:fileId/thumbnail": { GET: readUserFileThumbnail },
+  },
+  { prefix: "/user-files" },
+);

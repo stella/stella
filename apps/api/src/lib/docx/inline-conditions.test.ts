@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import JSZip from "jszip";
 import * as slimdom from "slimdom";
+
+import { ZipArchive } from "@stll/docx-core/zip";
 
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { testDocxFile } from "@/api/tests/helpers/scanned-file";
@@ -57,9 +58,9 @@ const boldRunTexts = (body: slimdom.Element): string[] => {
 };
 
 const makeDocx = async (documentXml: string): Promise<ScannedFile> => {
-  const zip = new JSZip();
-  zip.file("word/document.xml", documentXml);
-  zip.file(
+  const zip = new ZipArchive();
+  zip.set("word/document.xml", documentXml);
+  zip.set(
     "[Content_Types].xml",
     `<?xml version="1.0" encoding="UTF-8"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
@@ -67,12 +68,12 @@ const makeDocx = async (documentXml: string): Promise<ScannedFile> => {
   <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
 </Types>`,
   );
-  return testDocxFile(await zip.generateAsync({ type: "uint8array" }));
+  return testDocxFile(await zip.generate({ compression: "store" }));
 };
 
 const documentText = async (file: ScannedFile): Promise<string> => {
-  const zip = await JSZip.loadAsync(file.bytes);
-  const xml = (await zip.file("word/document.xml")?.async("string")) ?? "";
+  const zip = await ZipArchive.read(file.bytes);
+  const xml = (await zip.entry("word/document.xml")?.text()) ?? "";
   const texts: string[] = [];
   // Cut spans leave empty self-closing <w:t/> runs behind; match both forms.
   for (const match of xml.matchAll(
@@ -84,8 +85,8 @@ const documentText = async (file: ScannedFile): Promise<string> => {
 };
 
 const documentBody = async (file: ScannedFile): Promise<slimdom.Element> => {
-  const zip = await JSZip.loadAsync(file.bytes);
-  const xml = (await zip.file("word/document.xml")?.async("string")) ?? "";
+  const zip = await ZipArchive.read(file.bytes);
+  const xml = (await zip.entry("word/document.xml")?.text()) ?? "";
   return parseBody(xml);
 };
 

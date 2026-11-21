@@ -1,10 +1,16 @@
+import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import { runWithPublicReadStatementTimeout } from "@/api/lib/legal-search/public-read-timeout-context";
 import {
   assertPublicLawDatabaseRolePermissions,
   type PublicLawDatabaseRolePermissions,
+  publicLawReadDb,
 } from "@/api/lib/public-law-read-db";
 import {
+  COLLECTION_BODY_COLUMN_GRANTS_BY_RELATION,
+  COLLECTION_OBSERVATION_COLUMN_GRANTS_BY_RELATION,
+  COLLECTION_PART_COLUMN_GRANTS_BY_RELATION,
   PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION,
   publicLawColumnPairs,
 } from "@/api/lib/public-law-relations";
@@ -24,6 +30,64 @@ const VALID_PERMISSIONS = {
 } as const satisfies PublicLawDatabaseRolePermissions;
 
 describe("external public-law database boundary", () => {
+  test("permits every typed collection-part column without exposing attachment metadata", () => {
+    const future = publicLawColumnPairs(
+      COLLECTION_PART_COLUMN_GRANTS_BY_RELATION,
+    );
+    const allowed = publicLawColumnPairs(PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION);
+    expect(future.length).toBeGreaterThan(0);
+    for (const pair of future) {
+      expect(pair.grant).toBe("permitted");
+      expect(allowed).toContainEqual(pair);
+    }
+    expect(
+      PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION.case_law_collection_bodies,
+    ).not.toHaveProperty("metadata");
+    expect(PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION).not.toHaveProperty(
+      "case_law_held_decision_attachments",
+    );
+  });
+
+  test("permits observed source time only on the published decision projection", () => {
+    const future = publicLawColumnPairs(
+      COLLECTION_OBSERVATION_COLUMN_GRANTS_BY_RELATION,
+    );
+    const allowed = publicLawColumnPairs(PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION);
+    expect(future.length).toBeGreaterThan(0);
+    for (const pair of future) {
+      expect(pair.grant).toBe("permitted");
+      expect(allowed).toContainEqual(pair);
+    }
+    expect(
+      PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION.case_law_unredacted_decisions,
+    ).not.toHaveProperty("source_observed_at");
+  });
+
+  test("tolerates future collection-body grants without requiring or widening attachment access", () => {
+    const future = publicLawColumnPairs(
+      COLLECTION_BODY_COLUMN_GRANTS_BY_RELATION,
+    );
+    const allowed = publicLawColumnPairs(PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION);
+    expect(future.length).toBeGreaterThan(0);
+    for (const pair of future) {
+      expect(pair.grant).toBe("permitted");
+      expect(allowed).toContainEqual(pair);
+    }
+    expect(PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION).not.toHaveProperty(
+      "case_law_held_decision_attachments",
+    );
+    const collection =
+      PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION.case_law_collection_bodies;
+    expect(collection).not.toHaveProperty("metadata");
+    expect(collection).not.toHaveProperty("source_raw_s3_key");
+    expect(
+      PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION.case_law_published_decisions.id,
+    ).toBe("required");
+    expect(
+      PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION.case_law_unredacted_decisions,
+    ).not.toHaveProperty("normalized_s3_key");
+  });
+
   test("excludes tenant and operational relations", () => {
     expect(PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION).not.toHaveProperty(
       "case_law_matter_links",
@@ -88,4 +152,24 @@ describe("external public-law database boundary", () => {
       );
     },
   );
+});
+
+test("a cancelled public read stops before opening a transaction", async () => {
+  const controller = new AbortController();
+  const reason = new DOMException("Read cancelled", "AbortError");
+  controller.abort(reason);
+  let entered = false;
+  const result = await runWithPublicReadStatementTimeout(
+    { budgetMs: 1000, signal: controller.signal },
+    async () =>
+      await Result.tryPromise({
+        try: async () =>
+          await publicLawReadDb(async () => {
+            entered = true;
+          }),
+        catch: (error: unknown) => error,
+      }),
+  );
+  expect(entered).toBe(false);
+  expect(result).toEqual(Result.err(reason));
 });

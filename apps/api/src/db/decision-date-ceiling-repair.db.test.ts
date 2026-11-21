@@ -15,6 +15,7 @@ import { isRecord } from "@/api/lib/type-guards";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
 import { createDecisionDateCeilingRepair } from "./decision-date-ceiling-repair";
+import { createUngatedTableGateForTests } from "./online-ddl";
 import type { OnlineMigrationConnection } from "./online-migration-connection";
 
 const DECISION_DATE_CEILING_REPAIR = createDecisionDateCeilingRepair({
@@ -33,6 +34,13 @@ const DECISION_DATE_CEILING_REPAIR = createDecisionDateCeilingRepair({
     ],
   }),
 });
+
+// PGlite has one session and no health source, so its validation runs ungated.
+const repairOn = async (connection: OnlineMigrationConnection) =>
+  await DECISION_DATE_CEILING_REPAIR.repair(
+    connection,
+    createUngatedTableGateForTests(connection),
+  );
 
 /**
  * The ceiling migration and its online repair against a table still carrying
@@ -94,8 +102,16 @@ const constraintState = async (
 };
 
 type ConnectionOptions = {
-  /** Throw instead of running the statement; `count` is how many times it has been seen so far. */
-  failOn?: (statement: string, count: number) => boolean;
+  /**
+   * Throw instead of running the statement; `count` is how many times it has
+   * been seen so far and `transaction` lists the statements since the last
+   * BEGIN.
+   */
+  failOn?: (
+    statement: string,
+    count: number,
+    transaction: readonly string[],
+  ) => boolean;
 };
 
 /** The migrate entrypoint's reserved connection, over the test database. */
@@ -104,17 +120,24 @@ const connectionOver = (
   { failOn = () => false }: ConnectionOptions = {},
 ): OnlineMigrationConnection => {
   const seen = new Map<string, number>();
+  let transaction: string[] = [];
   return {
     execute: async (query, params = []) => {
       const count = (seen.get(query) ?? 0) + 1;
       seen.set(query, count);
-      if (failOn(query, count)) {
+      if (query.startsWith("BEGIN")) {
+        transaction = [];
+      }
+      if (failOn(query, count, transaction)) {
         throw new Error(`connection dropped at ${query}`);
       }
+      transaction.push(query);
       await client.query(query, [...params]);
     },
-    query: async (query, params = []) =>
-      (await client.query(query, [...params])).rows,
+    query: async (query, params = []) => {
+      transaction.push(query);
+      return (await client.query(query, [...params])).rows;
+    },
     release: () => {},
   };
 };
@@ -282,7 +305,7 @@ test("the migration swaps the CHECK untouched, the repair clears and reopens, bo
     type: "incomplete",
   });
 
-  await DECISION_DATE_CEILING_REPAIR.repair(connection);
+  expect(await repairOn(connection)).toEqual({ type: "complete" });
   expect(await DECISION_DATE_CEILING_REPAIR.readCompletion(connection)).toEqual(
     { type: "complete" },
   );
@@ -304,7 +327,7 @@ test("the migration swaps the CHECK untouched, the repair clears and reopens, bo
   expect(repaired.citations).toEqual([
     {
       citingDecisionId: citingId,
-      citedDecisionId: null,
+      citedDecisionId: clearedId,
       citationText: "a incoming",
       resolutionStatus: "pending",
     },
@@ -316,7 +339,7 @@ test("the migration swaps the CHECK untouched, the repair clears and reopens, bo
     },
     {
       citingDecisionId: clearedId,
-      citedDecisionId: null,
+      citedDecisionId: keptId,
       citationText: "c outgoing",
       resolutionStatus: "pending",
     },
@@ -334,21 +357,21 @@ test("the migration swaps the CHECK untouched, the repair clears and reopens, bo
     },
     {
       citingDecisionId: citingId,
-      citedDecisionId: null,
+      citedDecisionId: rederivedId,
       citationText: "f incoming rederived",
       resolutionStatus: "pending",
     },
   ]);
 
   // Fixed point: another run finds nothing and validates a validated CHECK.
-  await DECISION_DATE_CEILING_REPAIR.repair(connection);
+  expect(await repairOn(connection)).toEqual({ type: "complete" });
   expect(await snapshot(db)).toEqual(repaired);
   expect((await constraintState(db))?.isValidated).toBe(true);
 
   // The migration is re-runnable as a pair, and the repair validates again.
   await applyMigration(db);
   expect((await constraintState(db))?.isValidated).toBe(false);
-  await DECISION_DATE_CEILING_REPAIR.repair(connection);
+  expect(await repairOn(connection)).toEqual({ type: "complete" });
   expect(await snapshot(db)).toEqual(repaired);
   expect((await constraintState(db))?.isValidated).toBe(true);
   await client.close();
@@ -379,13 +402,22 @@ test("an interrupted repair keeps its committed batches and resumes by running a
   expect(await corruptCount(db)).toBe(population);
 
   // The connection drops while the second batch commits: the first batch
-  // stays committed, the second is rolled back, nothing is validated.
+  // stays committed, the second is rolled back, nothing is validated. Only
+  // checkpoint transactions count; health reads commit on their own.
+  let batchCommits = 0;
   const dropped = connectionOver(client, {
-    failOn: (statement, count) => statement === "COMMIT" && count === 2,
+    failOn: (statement, _count, transaction) => {
+      if (
+        statement !== "COMMIT" ||
+        !transaction.some((query) => query.includes("database_backfill_states"))
+      ) {
+        return false;
+      }
+      batchCommits += 1;
+      return batchCommits === 2;
+    },
   });
-  const rejection: unknown = await DECISION_DATE_CEILING_REPAIR.repair(
-    dropped,
-  ).then(
+  const rejection: unknown = await repairOn(dropped).then(
     () => null,
     (error: unknown) => error,
   );
@@ -403,7 +435,9 @@ test("an interrupted repair keeps its committed batches and resumes by running a
     holdUntil: null,
   });
 
-  await DECISION_DATE_CEILING_REPAIR.repair(connectionOver(client));
+  expect(await repairOn(connectionOver(client))).toEqual({
+    type: "complete",
+  });
   expect(await corruptCount(db)).toBe(0);
   expect((await constraintState(db))?.isValidated).toBe(true);
   const cleared = await db

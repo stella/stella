@@ -2,14 +2,14 @@ import { eslintCompatPlugin } from "@oxlint/plugins";
 
 import {
   type AstNode,
-  type ScopeContext,
   getPropertyName,
   isAstNode,
   isIdentifier,
   isIdentifierReference,
   isSingleAssignment,
-  resolveImportedExpression,
+  resolveImportedExpressionForEnforcement,
   resolveVariable,
+  type ScopeContext,
   unwrapExpression,
 } from "./utils.ts";
 
@@ -73,13 +73,16 @@ export default eslintCompatPlugin({
       createOnce(context) {
         return {
           CallExpression(node) {
-            const binding = resolveImportedExpression(context, node.callee);
+            const binding = resolveImportedExpressionForEnforcement(
+              context,
+              node.callee,
+            );
             if (binding?.imported !== "notifyUserError") {
               return;
             }
             const error = unwrapExpression(node.arguments.at(0));
             if (error?.type === "CallExpression") {
-              const flattened = resolveImportedExpression(
+              const flattened = resolveImportedExpressionForEnforcement(
                 context,
                 error.callee,
               );

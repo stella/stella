@@ -1,13 +1,21 @@
-import { EventType } from "@tanstack/ai";
+import { EventType, memoryStream } from "@tanstack/ai";
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
+
+import { CHAT_TOOL_EXECUTOR_METADATA_KEY } from "@stll/api-contract/chat";
+import { CHAT_RUN_TARGET_KIND } from "@stll/api-contract/chat-run-target";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { chatMessages, chatTurns } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
 import { ActionAdmissionError } from "@/api/lib/rate-limit/action-admission";
 import type { AdmittedActionIdentity } from "@/api/lib/rate-limit/action-kinds";
-import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
+import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
+import { HELD_TEST_STREAM_BINDING } from "@/api/tests/helpers/sse-stream-binding";
+import {
+  createScopedDbMock,
+  createSelectQueryMock,
+} from "@/api/tests/scoped-db-mock";
 
 import {
   chatMessageContentFromMessage,
@@ -22,6 +30,7 @@ describe("send lifecycle checkpoint indexing", () => {
     for (const turn of ["turn-a", "turn-b"]) {
       const db = createScopedDbMock({});
       const lifecycle = new ChatSendLifecycle({
+        organizationId: toSafeId<"organization">("organization_lifecycle"),
         mode: "raw",
         indexThread: async () => undefined,
         startAdmission: async (options) => {
@@ -29,6 +38,7 @@ describe("send lifecycle checkpoint indexing", () => {
           return Result.ok({
             signal: new AbortController().signal,
             release: async () => undefined,
+            modelAdmission: testModelAdmission(options.organizationId),
             reservePeriod: async (
               identity: AdmittedActionIdentity,
               organizationStateDb?: ScopedDb,
@@ -43,7 +53,7 @@ describe("send lifecycle checkpoint indexing", () => {
         externalMcpToolsLoader: createLazyExternalMcpToolsLoader(async () => {
           throw new ActionAdmissionError({
             message: "Connector discovery was not expected",
-            reason: "unavailable",
+            reason: "lease_lost",
           });
         }),
         recordAuditEvent: async () => undefined,
@@ -62,10 +72,14 @@ describe("send lifecycle checkpoint indexing", () => {
           }),
         ),
       ).toBe(true);
+      const viewer = new AbortController();
+      viewer.abort();
+      expect(lifecycle.isClientConnectionAborted(viewer.signal)).toBe(true);
       lifecycle.claimTurn(
         { id: toSafeId<"chatTurn">(turn), executionId: turn },
         undefined,
       );
+      expect(lifecycle.isClientConnectionAborted(viewer.signal)).toBe(false);
       for (const runId of [
         "initial",
         "initial",
@@ -75,7 +89,8 @@ describe("send lifecycle checkpoint indexing", () => {
         const outcome = await lifecycle.reserveExecutionPeriod(runId);
         expect(Result.isOk(outcome)).toBe(true);
       }
-      const run = lifecycle.startRun(undefined);
+      const run = lifecycle.startRun(undefined, CHAT_RUN_TARGET_KIND.cloud);
+      expect(lifecycle.isClientConnectionAborted(viewer.signal)).toBe(false);
       const response = run.produce(
         (async function* () {
           yield {
@@ -86,6 +101,8 @@ describe("send lifecycle checkpoint indexing", () => {
           } as const;
           await run.settle(async () => ({ type: "not-owned" }));
         })(),
+        memoryStream({ runId: Bun.randomUUIDv7() }),
+        HELD_TEST_STREAM_BINDING,
       );
       await response.text();
       await lifecycle.cleanup();
@@ -96,7 +113,7 @@ describe("send lifecycle checkpoint indexing", () => {
   });
 
   test("uses the injected indexer when admission loss restores before and after run handoff", async () => {
-    for (const phase of ["preflight", "handed-over"] as const) {
+    for (const phase of ["preflight", "with-run"] as const) {
       const checkpoint = toPersistableChatMessage({
         id: toSafeId<"chatMessage">("11111111-1111-4111-8111-111111111111"),
         metadata: {
@@ -108,6 +125,7 @@ describe("send lifecycle checkpoint indexing", () => {
         parts: [
           {
             type: "tool-call",
+            metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "server" },
             id: "approval-1",
             name: "web_search",
             arguments: "{}",
@@ -120,6 +138,7 @@ describe("send lifecycle checkpoint indexing", () => {
       const writtenMessages: Record<string, unknown>[] = [];
       const writtenTurns: Record<string, unknown>[] = [];
       const db = createScopedDbMock({
+        select: () => createSelectQueryMock([]),
         query: {
           chatThreadCompactions: {
             findFirst: async () => await Promise.resolve(null),
@@ -140,6 +159,7 @@ describe("send lifecycle checkpoint indexing", () => {
                     id: "turn_lifecycle",
                     organizationId: "organization_lifecycle",
                     runId: null,
+                    userId: "user_lifecycle",
                   },
                 ],
               };
@@ -151,6 +171,7 @@ describe("send lifecycle checkpoint indexing", () => {
       const indexedThreads: string[] = [];
       const threadId = toSafeId<"chatThread">("thread_lifecycle");
       const lifecycle = new ChatSendLifecycle({
+        organizationId: toSafeId<"organization">("organization_lifecycle"),
         mode: "raw",
         indexThread: async (indexedThreadId) => {
           indexedThreads.push(indexedThreadId);
@@ -162,6 +183,7 @@ describe("send lifecycle checkpoint indexing", () => {
           });
           return Result.ok({
             signal: admission.signal,
+            modelAdmission: testModelAdmission(options.organizationId),
             reservePeriod: async (
               identity: AdmittedActionIdentity,
               organizationStateDb?: ScopedDb,
@@ -182,7 +204,7 @@ describe("send lifecycle checkpoint indexing", () => {
         externalMcpToolsLoader: createLazyExternalMcpToolsLoader(async () => {
           throw new ActionAdmissionError({
             message: "Connector discovery was not expected",
-            reason: "unavailable",
+            reason: "lease_lost",
           });
         }),
         recordAuditEvent: async () => undefined,
@@ -209,11 +231,13 @@ describe("send lifecycle checkpoint indexing", () => {
         Result.isOk(await lifecycle.reserveExecutionPeriod("run_lifecycle")),
       ).toBe(true);
       const run =
-        phase === "handed-over" ? lifecycle.startRun(undefined) : undefined;
+        phase === "with-run"
+          ? lifecycle.startRun(undefined, CHAT_RUN_TARGET_KIND.cloud)
+          : undefined;
       admission.abort(
         new ActionAdmissionError({
           message: "Admission lease lost",
-          reason: "unavailable",
+          reason: "lease_lost",
         }),
       );
       if (run !== undefined) {

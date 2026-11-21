@@ -12,6 +12,7 @@ node_modules
 
 # Testing
 coverage
+apps/api/.test-mutants/
 
 # AI SDK DevTools traces (local plaintext AI interactions)
 .devtools/
@@ -31,8 +32,9 @@ apps/landing/public/media/products/*-poster.jpg
 # Claude Code worktrees (local state)
 .claude/worktrees/
 
-# QA reports (ephemeral, local-only)
+# QA reports and implementation plans (local-only)
 .agents/reports/
+.agents/plans/
 
 # Tan Stack
 .nitro
@@ -68,7 +70,8 @@ apps/playground/public/fixtures
 # Bun binary lockfile (text-based bun.lock is committed instead)
 bun.lockb
 
-# Debug
+# Debug and tool logs (committed fixture logs are force-added)
+*.log
 npm-debug.log*
 
 # Misc
@@ -76,6 +79,7 @@ npm-debug.log*
 *.pem
 .prettiercache
 i18n.cache
+/.tailwind-cache/
 
 # Claude Code runtime artifacts
 .claude/scheduled_tasks.lock
@@ -83,10 +87,24 @@ i18n.cache
 # API runtime aggregates embed the committed per-capability shards.
 apps/api/src/mcp/generated/capability-dispatch.ts
 apps/api/src/mcp/generated/capability-catalog.ts
+apps/api/src/mcp/generated/capability-feature-bindings.ts
 
 # CLI runtime projections are restored by codegen:runtime.
+packages/cli/capabilities/
 packages/cli/src/generated/route-map.ts
 packages/cli/src/generated/tool-annotations.ts
 
 # Derived TanStack route tree, restored by the web generation task.
 apps/web/src/routeTree.gen.ts
+apps/web/src/route-templates.gen.ts
+apps/web/src/i18n/langs/messages.gen.ts
+
+# MCP runtime and browser outputs are prepared before use.
+apps/api/src/mcp/generated/
+packages/mcp-apps/src/*/generated/*
+!packages/mcp-apps/src/shared/generated/style.css.d.ts
+!packages/mcp-apps/src/shared/generated/tsconfig.json
+packages/mcp-apps/src/generated/
+
+# Per-run build directories of the rule catalog test.
+/.oxlint-rule-ids-*/

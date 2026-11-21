@@ -1,7 +1,8 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
+import { fileURLToPath } from "node:url";
 
-import api from "@/api/server";
+import { apiApp } from "@/api/server";
 
 const LOCAL_DEV_PATHS = ["/dev-public/last-otp", "/v1/dev/seed"] as const;
 
@@ -9,7 +10,7 @@ const isLocalDevPath = (path: string) =>
   path.startsWith("/dev-public/") || path.startsWith("/v1/dev/");
 
 const serverModuleUrl = new URL("../../server.ts", import.meta.url).href;
-const apiRoot = new URL("../../..", import.meta.url).pathname;
+const apiRoot = fileURLToPath(new URL("../../..", import.meta.url));
 
 // A complete strict configuration: loopback services, a content key, no
 // local development opt-in.
@@ -30,13 +31,13 @@ const strictEnvironment = {
   S3_REGION: "us-east-1",
 } as const;
 
-const ROUTE_PATHS_SCRIPT = `const { default: api } = await import(${JSON.stringify(serverModuleUrl)});
-process.stdout.write(JSON.stringify(api.routes.map(({ path }) => path)));
+const ROUTE_PATHS_SCRIPT = `const { apiApp } = await import(${JSON.stringify(serverModuleUrl)});
+process.stdout.write(JSON.stringify(apiApp.routes.map(({ path }) => path)));
 process.exit(0);`;
 
 describe("local development routes", () => {
   test("are registered when local development access is open", () => {
-    const paths = api.routes.map(({ path }) => path);
+    const paths = apiApp.routes.map(({ path }) => path);
 
     for (const path of LOCAL_DEV_PATHS) {
       expect(paths).toContain(path);

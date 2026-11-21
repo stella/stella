@@ -1,15 +1,13 @@
 import { type ReactNode, useRef, useState } from "react";
 
-import {
-  draggable,
-  dropTargetForElements,
-} from "@atlaskit/pragmatic-drag-and-drop/adapter/element-adapter";
 import { combine } from "@atlaskit/pragmatic-drag-and-drop/utils/combine";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { BidiText } from "@stll/ui/bidi-text";
+import { Button } from "@stll/ui/button";
+import { DialogFormState } from "@stll/ui/dialog";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import {
   ChevronRightIcon,
@@ -20,6 +18,7 @@ import {
 } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import { Label } from "@stll/ui/label";
+import { MatterIcon } from "@stll/ui/matter-icon";
 import {
   Menu,
   MenuGroupLabel,
@@ -28,19 +27,20 @@ import {
   MenuTrigger,
 } from "@stll/ui/menu";
 import { ScrollArea } from "@stll/ui/scroll-area";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import {
   withDragAnnouncementData,
   withDropAnnouncementData,
 } from "@/components/drag-and-drop-live-region.logic";
-import { MatterIcon } from "@/components/matter-icon";
+import { filterMatterPickerItems } from "@/components/matter-picker-search.logic";
 import {
   canMoveMatterFolder,
   discardPendingMatterFolder,
-  MAX_FOLDER_NAME_LENGTH,
-  matterFolderPath,
   matterFolderMoveDestinations,
+  matterFolderPath,
+  MAX_FOLDER_NAME_LENGTH,
   reparentPendingMatterFolder,
   resolveMatterTarget,
   selectExistingMatterTarget,
@@ -48,14 +48,20 @@ import {
   stageMatterFolder,
 } from "@/components/matter-target-picker.logic";
 import type { MatterTarget } from "@/components/matter-target-picker.logic";
-import Tooltip from "@/components/tooltip";
+import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { EntityKindIcon } from "@/components/workspaces/entity-kind-icon";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
+import {
+  draggable,
+  dropTargetForElements,
+} from "@/lib/drag-and-drop/element-registration";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { queryView } from "@/lib/query-view.logic";
+import { useQueryViewError } from "@/lib/use-query-view";
 import {
   useCreateEntities,
   useMoveEntity,
@@ -295,21 +301,20 @@ const FolderDragDropRow = ({
     source === undefined ? null : (
       <Menu onOpenChange={setIsMoveMenuOpen}>
         <MenuTrigger
-          aria-label={t("workspaces.copyToMatter.moveFolder")}
           disabled={!handleEnabled}
           render={
-            <button
+            <Button
+              aria-label={t("workspaces.copyToMatter.moveFolder")}
               className={cn(
-                "border-border/70 bg-background text-muted-foreground ms-auto flex size-6 shrink-0 touch-none items-center justify-center rounded border shadow-sm",
-                handleEnabled
-                  ? "hover:text-foreground cursor-grab active:cursor-grabbing"
-                  : "cursor-not-allowed opacity-50",
+                "ms-auto shrink-0 touch-none",
+                handleEnabled && "cursor-grab active:cursor-grabbing",
               )}
               ref={dragHandleRef}
-              type="button"
+              size="icon-xs"
+              tooltip={t("workspaces.copyToMatter.dragFolder")}
+              variant="outline"
             />
           }
-          tooltip={t("workspaces.copyToMatter.dragFolder")}
         >
           <GripVerticalIcon className="size-3.5" />
         </MenuTrigger>
@@ -327,9 +332,9 @@ const FolderDragDropRow = ({
                   }
                 >
                   <EntityKindIcon className="size-4 shrink-0" kind="folder" />
-                  <BidiText as="span" className="truncate">
+                  <TruncatedText render={<BidiText as="span" />}>
                     {destination.name}
-                  </BidiText>
+                  </TruncatedText>
                 </MenuItem>
               ))}
         </MenuPopup>
@@ -350,19 +355,22 @@ const FolderSelectionButton = ({
   selected,
   onSelect,
 }: FolderSelectionButtonProps) => (
-  <button
-    className={cn(
-      "hover:bg-accent flex min-w-0 flex-1 items-center gap-1 rounded px-2 py-1 text-start text-sm",
-      selected && "bg-accent",
-    )}
+  <Button
+    className="min-w-0 flex-1"
+    focusRing="inside"
     onClick={onSelect}
-    type="button"
+    variant="plain"
   >
-    <EntityKindIcon className="size-4 shrink-0" kind="folder" />
-    <BidiText as="span" className="truncate">
-      {name}
-    </BidiText>
-  </button>
+    <span
+      className={cn(
+        "hover:bg-accent flex w-full min-w-0 items-center gap-1 rounded-sm px-2 py-1 text-sm",
+        selected && "bg-accent",
+      )}
+    >
+      <EntityKindIcon className="size-4 shrink-0" kind="folder" />
+      <TruncatedText render={<BidiText as="span" />}>{name}</TruncatedText>
+    </span>
+  </Button>
 );
 
 /**
@@ -435,7 +443,10 @@ export const MatterTargetPicker = ({
   const t = useTranslations();
   const [search, setSearch] = useState("");
   const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
-  const { data } = useQuery(workspacesOptions(activeOrganizationId));
+  const dataQuery = useQuery(workspacesOptions(activeOrganizationId));
+  const dataView = queryView(dataQuery);
+  useQueryViewError(dataView, "MatterTargetPicker:query");
+  const data = dataView.type === "items" ? dataView.items : undefined;
 
   // The endpoint returns matters ordered by most recent activity; keep that
   // order so the matter the user just touched is on top.
@@ -443,31 +454,20 @@ export const MatterTargetPicker = ({
     ? data.workspaces.filter((w) => w.id !== excludeWorkspaceId)
     : [];
 
-  const query = search.trim().toLowerCase();
-  const visibleMatters =
-    query === ""
-      ? matters
-      : matters.filter(
-          (w) =>
-            w.name.toLowerCase().includes(query) ||
-            (w.client?.displayName ?? "").toLowerCase().includes(query),
-        );
   const selectedMatter =
     value === null
       ? undefined
       : matters.find((workspace) => workspace.id === value.workspaceId);
-  const orderedVisibleMatters =
-    query === "" && selectedMatter !== undefined
-      ? [
-          selectedMatter,
-          ...visibleMatters.filter(
-            (workspace) => workspace.id !== selectedMatter.id,
-          ),
-        ]
-      : visibleMatters;
+  const visibleMatters = filterMatterPickerItems({
+    getClientLabel: (workspace) => workspace.client?.displayName ?? "",
+    items: matters,
+    query: search,
+    selectedId: selectedMatter?.id,
+  });
 
   return (
     <div className="space-y-4">
+      <QueryViewFeedback view={dataView} />
       <div className="space-y-2">
         <Label>{t("workspaces.copyToMatter.targetMatter")}</Label>
         <Input
@@ -484,6 +484,9 @@ export const MatterTargetPicker = ({
         >
           <div className="p-1">
             {(() => {
+              if (data === undefined) {
+                return null;
+              }
               if (matters.length === 0) {
                 return (
                   <p className="text-muted-foreground p-2 text-sm">
@@ -498,15 +501,14 @@ export const MatterTargetPicker = ({
                   </p>
                 );
               }
-              return orderedVisibleMatters.map((workspace) => {
+              return visibleMatters.map((workspace) => {
                 const isSelected = value?.workspaceId === workspace.id;
                 return (
-                  <button
-                    className={cn(
-                      "hover:bg-accent flex w-full items-center gap-2 rounded px-2 py-1.5 text-start text-sm",
-                      isSelected && "bg-accent",
-                    )}
+                  <Button
+                    className="block w-full"
+                    focusRing="inside"
                     key={workspace.id}
+                    variant="plain"
                     onClick={() => {
                       if (value?.workspaceId === workspace.id) {
                         onChange(selectExistingMatterTarget(value, null));
@@ -518,24 +520,33 @@ export const MatterTargetPicker = ({
                         parentId: null,
                       });
                     }}
-                    type="button"
                   >
-                    <MatterIcon
-                      className="size-4 shrink-0"
-                      matter={{ id: workspace.id, color: workspace.color }}
-                    />
-                    <BidiText as="span" className="min-w-0 flex-1 truncate">
-                      {workspace.name}
-                    </BidiText>
-                    {workspace.client?.displayName !== undefined && (
-                      <BidiText
-                        as="span"
-                        className="text-muted-foreground max-w-32 shrink-0 truncate text-xs"
+                    <span
+                      className={cn(
+                        "hover:bg-accent flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm",
+                        isSelected && "bg-accent",
+                      )}
+                    >
+                      <MatterIcon
+                        className="size-4 shrink-0"
+                        matter={{ id: workspace.id, color: workspace.color }}
+                      />
+                      <TruncatedText
+                        className="flex-1"
+                        render={<BidiText as="span" />}
                       >
-                        {workspace.client.displayName}
-                      </BidiText>
-                    )}
-                  </button>
+                        {workspace.name}
+                      </TruncatedText>
+                      {workspace.client?.displayName !== undefined && (
+                        <TruncatedText
+                          className="text-muted-foreground max-w-32 shrink-0 text-xs"
+                          render={<BidiText as="span" />}
+                        >
+                          {workspace.client.displayName}
+                        </TruncatedText>
+                      )}
+                    </span>
+                  </Button>
                 );
               });
             })()}
@@ -565,14 +576,12 @@ type FolderPickerProps = {
 };
 
 type FolderDraft =
-  | { type: "create"; name: string }
-  | { type: "edit"; name: string };
+  { type: "create"; name: string } | { type: "edit"; name: string };
 
 const FolderPicker = ({ value, onChange }: FolderPickerProps) => {
   const t = useTranslations();
   const canCreate = usePermissions({ entity: ["create"] });
   const canMove = usePermissions({ entity: ["update"] });
-  const queryClient = useQueryClient();
   const moveEntity = useMoveEntity();
   const workspaceId = value.workspaceId;
   const {
@@ -627,19 +636,6 @@ const FolderPicker = ({ value, onChange }: FolderPickerProps) => {
               parentId: targetParentId,
             },
             {
-              onSuccess: () => {
-                detached(
-                  Promise.all([
-                    queryClient.invalidateQueries({
-                      queryKey: workspaceFoldersOptions(workspaceId).queryKey,
-                    }),
-                    queryClient.invalidateQueries({
-                      queryKey: entitiesKeys.all(workspaceId),
-                    }),
-                  ]),
-                  "matter-target-picker.invalidate-moved-folder",
-                );
-              },
               onError: (error) => {
                 notifyUserError(error, t("errors.actionFailed"));
               },
@@ -739,7 +735,18 @@ const FolderPicker = ({ value, onChange }: FolderPickerProps) => {
           autoFocus
           className="h-7 min-w-0 flex-1 px-2 text-sm"
           maxLength={MAX_FOLDER_NAME_LENGTH}
-          onBlur={() => {
+          onBlur={(event) => {
+            const popup = event.currentTarget.closest<HTMLElement>(
+              '[data-slot="dialog-popup"]',
+            );
+            if (
+              popup?.dataset["endingStyle"] !== undefined ||
+              (popup &&
+                event.relatedTarget &&
+                !popup.contains(event.relatedTarget))
+            ) {
+              return;
+            }
             if (draftCancelledRef.current) {
               draftCancelledRef.current = false;
               return;
@@ -753,12 +760,6 @@ const FolderPicker = ({ value, onChange }: FolderPickerProps) => {
             if (e.key === "Enter") {
               e.preventDefault();
               stageFolder();
-            }
-            if (e.key === "Escape") {
-              // Cancel only the draft; the enclosing dialog dismisses on Escape.
-              e.stopPropagation();
-              draftCancelledRef.current = true;
-              setFolderDraft(null);
             }
           }}
           placeholder={t("workspaces.newFolder")}
@@ -781,7 +782,7 @@ const FolderPicker = ({ value, onChange }: FolderPickerProps) => {
           className="flex items-center gap-1"
           style={{ paddingInlineStart: `${depth * 16 + 8}px` }}
         >
-          <span className="w-4" />
+          <span className="w-5 shrink-0 sm:w-4" />
           {newFolderDraft}
         </div>
       );
@@ -806,7 +807,7 @@ const FolderPicker = ({ value, onChange }: FolderPickerProps) => {
             className="flex items-center gap-1"
             style={{ paddingInlineStart: `${depth * 16 + 8}px` }}
           >
-            <span className="w-4" />
+            <span className="w-5 shrink-0 sm:w-4" />
             <FolderSelectionButton
               name={pendingFolder.name}
               onSelect={() =>
@@ -814,40 +815,32 @@ const FolderPicker = ({ value, onChange }: FolderPickerProps) => {
               }
               selected={pendingFolder.selection.type === "pending"}
             />
-            <Tooltip
-              content={t("common.edit")}
-              render={
-                <button
-                  aria-label={t("common.edit")}
-                  className="text-muted-foreground hover:bg-muted hover:text-foreground flex size-6 shrink-0 items-center justify-center rounded"
-                  onClick={() => {
-                    draftCancelledRef.current = false;
-                    setFolderDraft({
-                      type: "edit",
-                      name: pendingFolder.name,
-                    });
-                  }}
-                  type="button"
-                />
-              }
+            <Button
+              aria-label={t("common.edit")}
+              className="shrink-0"
+              onClick={() => {
+                draftCancelledRef.current = false;
+                setFolderDraft({
+                  type: "edit",
+                  name: pendingFolder.name,
+                });
+              }}
+              size="icon-xs"
+              variant="muted"
             >
               <PencilIcon className="size-3.5" />
-            </Tooltip>
-            <Tooltip
-              content={t("common.remove")}
-              render={
-                <button
-                  aria-label={t("common.remove")}
-                  className="text-muted-foreground hover:bg-muted hover:text-foreground flex size-6 shrink-0 items-center justify-center rounded"
-                  onClick={() =>
-                    onChange(discardPendingMatterFolder(pendingFolder))
-                  }
-                  type="button"
-                />
+            </Button>
+            <Button
+              aria-label={t("common.remove")}
+              className="shrink-0"
+              onClick={() =>
+                onChange(discardPendingMatterFolder(pendingFolder))
               }
+              size="icon-xs"
+              variant="muted"
             >
               <XIcon className="size-3.5" />
-            </Tooltip>
+            </Button>
             {dragHandle}
           </div>
         )}
@@ -857,18 +850,21 @@ const FolderPicker = ({ value, onChange }: FolderPickerProps) => {
 
   const newFolderButton =
     canCreate && folderDraft === null && pendingFolder === null ? (
-      <button
-        className="hover:bg-accent text-muted-foreground flex w-full items-center gap-1 rounded px-2 py-1 text-start text-sm"
+      <Button
+        className="block w-full"
+        focusRing="inside"
         onClick={() => {
           draftCancelledRef.current = false;
           setFolderDraft({ type: "create", name: "" });
           expandFolderPath(value.parentId);
         }}
-        type="button"
+        variant="plain"
       >
-        <FolderPlusIcon className="size-4 shrink-0" />
-        <span className="truncate">{t("workspaces.newFolder")}</span>
-      </button>
+        <span className="hover:bg-accent text-muted-foreground flex w-full items-center gap-1 rounded-sm px-2 py-1 text-sm">
+          <FolderPlusIcon className="size-4 shrink-0" />
+          <TruncatedText>{t("workspaces.newFolder")}</TruncatedText>
+        </span>
+      </Button>
     ) : null;
 
   const renderFolder = (folder: WorkspaceFolder, depth: number) => {
@@ -901,34 +897,25 @@ const FolderPicker = ({ value, onChange }: FolderPickerProps) => {
           {({ isDropTarget, dragHandle }) => (
             <div
               className={cn(
-                "flex items-center gap-1 rounded",
+                "flex items-center gap-1 rounded-sm",
                 isDropTarget && "bg-primary/8 ring-primary/40 ring-1",
               )}
               style={{ paddingInlineStart: `${depth * 16 + 8}px` }}
             >
               {hasChildren ? (
-                <Tooltip
-                  content={
+                <Button
+                  aria-expanded={isExpanded}
+                  aria-label={
                     isExpanded
                       ? t("workspaces.importOrganizer.collapseFolder")
                       : t("workspaces.importOrganizer.expandFolder")
                   }
-                  render={
-                    <button
-                      className="hover:bg-muted rounded p-0.5"
-                      aria-expanded={isExpanded}
-                      aria-label={
-                        isExpanded
-                          ? t("workspaces.importOrganizer.collapseFolder")
-                          : t("workspaces.importOrganizer.expandFolder")
-                      }
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        toggleExpand(folder.entityId);
-                      }}
-                      type="button"
-                    />
-                  }
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    toggleExpand(folder.entityId);
+                  }}
+                  size="icon-2xs"
+                  variant="ghost"
                 >
                   <DirectionalIcon
                     className={cn(
@@ -938,9 +925,9 @@ const FolderPicker = ({ value, onChange }: FolderPickerProps) => {
                     flip={!isExpanded}
                     icon={ChevronRightIcon}
                   />
-                </Tooltip>
+                </Button>
               ) : (
-                <span className="w-4" />
+                <span className="w-5 shrink-0 sm:w-4" />
               )}
               <FolderSelectionButton
                 name={folder.name}
@@ -965,6 +952,18 @@ const FolderPicker = ({ value, onChange }: FolderPickerProps) => {
 
   return (
     <ScrollArea className="border-border h-60 max-h-[35dvh] rounded-md border">
+      <DialogFormState
+        dirty={
+          folderDraft !== null &&
+          folderDraft.name !== "" &&
+          (folderDraft.type === "create" ||
+            folderDraft.name !== pendingFolder?.name)
+        }
+        onDiscard={() => {
+          draftCancelledRef.current = true;
+          setFolderDraft(null);
+        }}
+      />
       <div className="p-1">
         <FolderDragDropRow
           folders={folders}
@@ -979,19 +978,24 @@ const FolderPicker = ({ value, onChange }: FolderPickerProps) => {
           }
         >
           {({ isDropTarget }) => (
-            <button
-              className={cn(
-                "hover:bg-accent flex w-full items-center gap-1 rounded px-2 py-1 text-start text-sm",
-                selectedExistingParentId === null && "bg-accent",
-                isDropTarget && "bg-primary/8 ring-primary/40 ring-1",
-              )}
+            <Button
+              className="block w-full"
+              focusRing="inside"
               onClick={() => onChange(selectExistingMatterTarget(value, null))}
-              type="button"
+              variant="plain"
             >
-              <span className="text-muted-foreground">
-                {t("workspaces.copyToMatter.rootFolder")}
+              <span
+                className={cn(
+                  "hover:bg-accent flex w-full items-center gap-1 rounded-sm px-2 py-1 text-sm",
+                  selectedExistingParentId === null && "bg-accent",
+                  isDropTarget && "bg-primary/8 ring-primary/40 ring-1",
+                )}
+              >
+                <span className="text-muted-foreground">
+                  {t("workspaces.copyToMatter.rootFolder")}
+                </span>
               </span>
-            </button>
+            </Button>
           )}
         </FolderDragDropRow>
         {rootFolders.map((folder) => renderFolder(folder, 0))}

@@ -1,10 +1,11 @@
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
-import { PlusIcon, RotateCcwIcon, WorkflowIcon } from "@stll/ui/icons";
+import { PlusIcon, RotateCcwIcon } from "@stll/ui/icons";
+import { Switch } from "@stll/ui/switch";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { FlowTriggerBadge } from "@/components/flows/flow-badges";
-import { FlowSwitch } from "@/components/flows/flow-switch";
 import { guideAnchor } from "@/features/guides/guide-anchor";
 import { GUIDE_ANCHORS } from "@/features/guides/guide-anchors";
 import { usePermissions } from "@/hooks/use-permissions";
@@ -13,6 +14,12 @@ import {
   FLOW_EXAMPLE_KEYS,
   type FlowExampleKey,
 } from "@/routes/knowledge/-components/flow-examples";
+import {
+  FLOW_LIST_CLASS,
+  FLOW_ROW_CLASS,
+  FlowListToolbar,
+  FlowRowBody,
+} from "@/routes/knowledge/-components/flow-list.pending";
 import type { FlowListItem } from "@/routes/knowledge/-components/flow-types";
 
 type FlowListProps = {
@@ -39,8 +46,8 @@ export const FlowList = ({
   const canUpdate = usePermissions({ flow: ["update"] });
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex items-center justify-end gap-1 border-b px-4 py-2">
+    <div className={FLOW_LIST_CLASS}>
+      <FlowListToolbar>
         <Button
           aria-label={t("common.refresh")}
           onClick={onRefresh}
@@ -62,7 +69,7 @@ export const FlowList = ({
             <span className="hidden sm:inline">{t("flows.createFlow")}</span>
           </Button>
         )}
-      </div>
+      </FlowListToolbar>
 
       <div className="flex-1 overflow-y-auto">
         {flows.length === 0 && (
@@ -154,18 +161,16 @@ const FlowExampleCard = ({
   const example = buildFlowExample(exampleKey, tExamples);
 
   return (
-    <button
-      className="border-border hover:border-foreground/30 hover:bg-muted/40 flex flex-col items-start gap-1 rounded-lg border p-4 text-start"
-      onClick={onSelect}
-      type="button"
-    >
-      <span className="text-foreground text-sm font-medium">
-        {example.name}
+    <Button onClick={onSelect} variant="plain">
+      <span className="border-border hover:border-foreground/30 hover:bg-muted/40 flex h-full flex-col items-start gap-1 rounded-lg border p-4 text-start">
+        <span className="text-foreground text-sm font-medium">
+          {example.name}
+        </span>
+        <span className="text-muted-foreground text-sm">
+          {example.description}
+        </span>
       </span>
-      <span className="text-muted-foreground text-sm">
-        {example.description}
-      </span>
-    </button>
+    </Button>
   );
 };
 
@@ -185,27 +190,28 @@ const FlowRow = ({
   const t = useTranslations();
 
   return (
-    <li className="flex items-center gap-3 px-4 py-3">
-      <button
-        className="flex min-w-0 flex-1 items-center gap-3 text-start"
-        onClick={onSelect}
-        type="button"
-      >
-        <div className="bg-muted flex size-9 shrink-0 items-center justify-center rounded-lg">
-          <WorkflowIcon className="text-muted-foreground size-4" />
-        </div>
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-medium" dir="auto">
-            {flow.name}
-          </p>
-          <div className="text-muted-foreground mt-0.5 flex items-center gap-2 text-xs">
-            <FlowTriggerBadge triggerType={flow.triggerType} />
-            <span>{t("common.stepCount", { count: flow.stepCount })}</span>
-          </div>
-        </div>
+    <li className={FLOW_ROW_CLASS}>
+      <Button className="min-w-0 flex-1" onClick={onSelect} variant="plain">
+        <FlowRowBody
+          meta={
+            <>
+              <FlowTriggerBadge triggerType={flow.triggerType} />
+              <span>{t("common.stepCount", { count: flow.stepCount })}</span>
+            </>
+          }
+          title={
+            <TruncatedText
+              className="text-sm font-medium"
+              dir="auto"
+              render={<span />}
+            >
+              {flow.name}
+            </TruncatedText>
+          }
+        />
         <span className="sr-only">{t("common.edit")}</span>
-      </button>
-      <FlowSwitch
+      </Button>
+      <Switch
         aria-label={
           flow.enabled ? t("flows.disableFlow") : t("flows.enableFlow")
         }

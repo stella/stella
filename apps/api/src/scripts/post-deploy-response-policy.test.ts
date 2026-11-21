@@ -24,6 +24,7 @@ import {
   resolvePublicKnowledgeState,
   RESPONSE_CLASS,
 } from "@/api/scripts/post-deploy-response-policy";
+import { serveForTest } from "@/api/tests/helpers/test-server";
 
 const cdnHeaders = (headers: Record<string, string>): Headers =>
   new Headers({ "x-amz-cf-id": "request-id", ...headers });
@@ -505,15 +506,16 @@ describe("build commits", () => {
 
 describe("member response policy", () => {
   test("every sampled member route carries the global policy", async () => {
-    const { default: api } = await import("@/api/server");
+    const { apiApp } = await import("@/api/server");
+    await using api = serveForTest(apiApp);
     for (const path of MEMBER_JSON_POLICY_PATHS) {
       const apiPath = path.slice("/api".length);
       expect(
-        api.routes.some(
+        apiApp.routes.some(
           (route) => `${route.path}/`.replace(/\/\//gu, "/") === apiPath,
         ),
       ).toBe(true);
-      const response = await api.handle(
+      const response = await api.fetch(
         new Request(`http://localhost${apiPath}`),
       );
       expect(response.status, path).toBe(401);
@@ -559,7 +561,10 @@ describe("targets", () => {
         .map((target) => target.path)
         .toSorted(),
     ).toEqual([
+      "/knowledge/playbooks/catalogue",
+      "/knowledge/templates/catalogue",
       "/knowledge/templates/catalogue/pack%20one/tpl",
+      "/knowledge/tools/catalogue",
       "/knowledge/tools/contribute",
       "/knowledge/tools/tool",
     ]);

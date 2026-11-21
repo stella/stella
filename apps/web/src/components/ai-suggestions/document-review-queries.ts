@@ -1,10 +1,13 @@
 import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
+import type { QueryClient } from "@tanstack/react-query";
 
 import type { ReviewFlag } from "@stll/api-contract";
 
 import { documentReviewRunPollInterval } from "@/components/ai-suggestions/document-review-run.logic";
+import { refetchDocxSuggestionsList } from "@/components/ai-suggestions/docx-suggestion-cache";
 import { api } from "@/lib/api";
-import { unwrapEden } from "@/lib/errors/api";
+import { detached } from "@/lib/detached";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { stringCursorSeed } from "@/lib/infinite-query";
 import { toSafeId } from "@/lib/safe-id";
 
@@ -15,7 +18,7 @@ const DOCUMENT_REVIEW_SOURCE_LIMIT = 20;
 // through a document's whole review history.
 const DOCUMENT_REVIEW_RUN_HISTORY_LIMIT = 10;
 
-export const documentReviewSourceKeys = {
+const documentReviewSourceKeys = {
   all: (workspaceId: string) =>
     ["document-review-sources", workspaceId] as const,
   search: (workspaceId: string, q: string) =>
@@ -29,6 +32,8 @@ export type DocumentReviewRunTarget = {
   fileFieldId: string;
 };
 
+type DocumentReviewPartiesMode = "cached" | "detect";
+
 /** One durable run, by id. */
 type DocumentReviewRunRef = {
   workspaceId: string;
@@ -40,10 +45,12 @@ type DocumentReviewRunRef = {
 // hand-listed subset of its fields.
 const documentReviewRunKeys = {
   all: (workspaceId: string) => ["document-review-runs", workspaceId] as const,
+  /** Every document's history in a workspace, for a refresh across them. */
+  histories: (workspaceId: string) =>
+    [...documentReviewRunKeys.all(workspaceId), "history"] as const,
   history: (target: DocumentReviewRunTarget) =>
     [
-      ...documentReviewRunKeys.all(target.workspaceId),
-      "history",
+      ...documentReviewRunKeys.histories(target.workspaceId),
       { entityId: target.entityId, fileFieldId: target.fileFieldId },
     ] as const,
   detail: (ref: DocumentReviewRunRef) =>
@@ -60,9 +67,10 @@ const documentReviewRunKeys = {
 export const documentReviewPartiesKeys = {
   all: (workspaceId: string) =>
     ["document-review-parties", workspaceId] as const,
-  target: (target: DocumentReviewRunTarget) =>
+  target: (target: DocumentReviewRunTarget, mode: DocumentReviewPartiesMode) =>
     [
       ...documentReviewPartiesKeys.all(target.workspaceId),
+      mode,
       { entityId: target.entityId, fileFieldId: target.fileFieldId },
     ] as const,
 };
@@ -71,40 +79,71 @@ export const documentReviewPartiesKeys = {
  * Which sides the reviewed document has, so "We act for" can be answered on
  * the launcher instead of after a proposal has already been paid for.
  *
- * The server caches the detection per document version, so a re-run costs
- * nothing; the client keeps the answer for the session because the reviewer
- * moves between the launcher and the results while the document stands still.
+ * The server caches the detection per document version. `cached` is for
+ * document-open prefetches; `detect` is reserved for the review launcher, the
+ * user's first explicit request to use AI on the document.
  */
 const fetchDocumentReviewParties = async (
-  { workspaceId, entityId, fileFieldId }: DocumentReviewRunTarget,
+  {
+    workspaceId,
+    entityId,
+    fileFieldId,
+    mode,
+  }: DocumentReviewRunTarget & {
+    mode: DocumentReviewPartiesMode;
+  },
   signal: AbortSignal,
-) =>
-  unwrapEden(
-    await api
-      .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
-      ["document-reviews"].parties.post(
-        {
-          target: {
-            entityId: toSafeId<"entity">(entityId),
-            fileFieldId: toSafeId<"field">(fileFieldId),
-          },
+) => {
+  const workspaceApi = api.workspaces({
+    workspaceId: toSafeId<"workspace">(workspaceId),
+  });
+  return unwrapApiResponse(
+    await workspaceApi["document-reviews"].parties.post(
+      {
+        mode,
+        target: {
+          entityId: toSafeId<"entity">(entityId),
+          fileFieldId: toSafeId<"field">(fileFieldId),
         },
-        { fetch: { signal } },
-      ),
+      },
+      { fetch: { signal } },
+    ),
   );
+};
 
-export type DocumentReviewPartiesAnswer = Awaited<
-  ReturnType<typeof fetchDocumentReviewParties>
->;
-
-export const documentReviewPartiesOptions = (target: DocumentReviewRunTarget) =>
+export const documentReviewPartiesOptions = (
+  target: DocumentReviewRunTarget,
+  mode: DocumentReviewPartiesMode,
+) =>
   queryOptions({
-    queryKey: documentReviewPartiesKeys.target(target),
+    queryKey: documentReviewPartiesKeys.target(target, mode),
     queryFn: async ({ signal }) =>
-      await fetchDocumentReviewParties(target, signal),
+      await fetchDocumentReviewParties({ ...target, mode }, signal),
+    // Detection can spend usage on a miss. Failures surface through the
+    // launcher's existing retry affordance instead of retrying automatically.
+    retry: false,
     // The detection is pinned to a document version; a new version changes the
     // document on screen, which is a navigation, not a refetch.
     staleTime: Number.POSITIVE_INFINITY,
+  });
+
+/**
+ * The launcher's explicit detection, seeded from a positive document-open
+ * read so cached parties show without a second request. A `not-detected`
+ * read seeds nothing, so opening the launcher still detects.
+ */
+export const documentReviewPartiesDetectOptions = (
+  target: DocumentReviewRunTarget,
+  queryClient: QueryClient,
+) =>
+  queryOptions({
+    ...documentReviewPartiesOptions(target, "detect"),
+    initialData: () => {
+      const cached = queryClient.getQueryData(
+        documentReviewPartiesOptions(target, "cached").queryKey,
+      );
+      return cached?.type === "cached" ? cached : undefined;
+    },
   });
 
 export const documentReviewSourcesOptions = ({
@@ -117,17 +156,19 @@ export const documentReviewSourcesOptions = ({
   infiniteQueryOptions({
     queryKey: documentReviewSourceKeys.search(workspaceId, q),
     queryFn: async ({ pageParam, signal }) => {
-      const response = await api
-        .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
-        ["document-reviews"].sources.get({
-          fetch: { signal },
-          query: {
-            q,
-            limit: DOCUMENT_REVIEW_SOURCE_LIMIT,
-            ...(pageParam ? { cursor: pageParam } : {}),
-          },
-        });
-      return unwrapEden(response);
+      const workspaceApi = api.workspaces({
+        workspaceId: toSafeId<"workspace">(workspaceId),
+      });
+
+      const response = await workspaceApi["document-reviews"].sources.get({
+        fetch: { signal },
+        query: {
+          q,
+          limit: DOCUMENT_REVIEW_SOURCE_LIMIT,
+          ...(pageParam ? { cursor: pageParam } : {}),
+        },
+      });
+      return unwrapApiResponse(response);
     },
     initialPageParam: stringCursorSeed(),
     getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
@@ -150,20 +191,22 @@ type FetchDocumentReviewRunsOptions = {
 export const fetchDocumentReviewRuns = async (
   { workspaceId, entityId, fileFieldId }: DocumentReviewRunTarget,
   { includeLatest = false, signal }: FetchDocumentReviewRunsOptions = {},
-) =>
-  unwrapEden(
-    await api
-      .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
-      ["document-reviews"].runs.get({
-        query: {
-          entityId: toSafeId<"entity">(entityId),
-          fileFieldId: toSafeId<"field">(fileFieldId),
-          limit: DOCUMENT_REVIEW_RUN_HISTORY_LIMIT,
-          includeLatest,
-        },
-        ...(signal === undefined ? {} : { fetch: { signal } }),
-      }),
+) => {
+  const workspaceApi = api.workspaces({
+    workspaceId: toSafeId<"workspace">(workspaceId),
+  });
+  return unwrapApiResponse(
+    await workspaceApi["document-reviews"].runs.get({
+      query: {
+        entityId: toSafeId<"entity">(entityId),
+        fileFieldId: toSafeId<"field">(fileFieldId),
+        limit: DOCUMENT_REVIEW_RUN_HISTORY_LIMIT,
+        includeLatest,
+      },
+      ...(signal === undefined ? {} : { fetch: { signal } }),
+    }),
   );
+};
 
 export type DocumentReviewRunPage = Awaited<
   ReturnType<typeof fetchDocumentReviewRuns>
@@ -199,6 +242,84 @@ export const documentReviewRunDetailSeeds = (
   ];
 };
 
+type RefreshSuggestionsOnRunCompletionArgs = {
+  client: QueryClient;
+  workspaceId: string;
+  read: DocumentReviewRunDetail;
+};
+
+type CompletionMemory = {
+  /** Runs this client read unfinished and has not refreshed the list for. */
+  awaiting: Set<string>;
+  /** Runs whose completion already refreshed the list. */
+  refreshed: Set<string>;
+  /** Runs whose end already refreshed the document's review history. */
+  historyRefreshed: Set<string>;
+};
+
+/**
+ * Lives beside the cache rather than in it, so a run detail the cache evicted
+ * while the review was closed still refreshes the list when the reopened run
+ * reads completed.
+ */
+const completionMemories = new WeakMap<QueryClient, CompletionMemory>();
+
+const completionMemory = (client: QueryClient): CompletionMemory => {
+  const known = completionMemories.get(client);
+  if (known !== undefined) {
+    return known;
+  }
+  const created: CompletionMemory = {
+    awaiting: new Set(),
+    refreshed: new Set(),
+    historyRefreshed: new Set(),
+  };
+  completionMemories.set(client, created);
+  return created;
+};
+
+/**
+ * A run's fixes become pending suggestions in the transaction that marks it
+ * completed, so a list read while the run was active cannot hold them. Call
+ * before the read lands in the cache: only a run this client last saw unfinished
+ * refreshes the list, once, however many reads report its completion, so
+ * reopening a finished review costs no extra request.
+ */
+const refreshSuggestionsOnRunCompletion = ({
+  client,
+  workspaceId,
+  read: { run },
+}: RefreshSuggestionsOnRunCompletionArgs) => {
+  const { awaiting, refreshed } = completionMemory(client);
+  if (run.status !== "completed") {
+    awaiting.add(run.id);
+    return;
+  }
+  // A detail seeded straight into the cache never passed through here, so an
+  // unfinished cached read also counts as having seen the run unfinished.
+  const cached = client.getQueryData(
+    documentReviewRunOptions({ workspaceId, runId: run.id }).queryKey,
+  );
+  const seenUnfinished =
+    awaiting.has(run.id) ||
+    (cached !== undefined && cached.run.status !== "completed");
+  awaiting.delete(run.id);
+  // The history and detail reads can both report this completion before
+  // either lands in the cache; only the first refreshes the list.
+  if (!seenUnfinished || refreshed.has(run.id)) {
+    return;
+  }
+  refreshed.add(run.id);
+  detached(
+    refetchDocxSuggestionsList({
+      queryClient: client,
+      workspaceId,
+      entityId: run.entityId,
+    }),
+    "document-review-queries.refresh-suggestions-on-completion",
+  );
+};
+
 export const documentReviewRunsOptions = (target: DocumentReviewRunTarget) =>
   queryOptions({
     queryKey: documentReviewRunKeys.history(target),
@@ -215,6 +336,11 @@ export const documentReviewRunsOptions = (target: DocumentReviewRunTarget) =>
         target.workspaceId,
         page,
       )) {
+        refreshSuggestionsOnRunCompletion({
+          client,
+          workspaceId: target.workspaceId,
+          read: detail,
+        });
         client.setQueryData(options.queryKey, detail);
       }
       return page;
@@ -233,15 +359,18 @@ const DOCUMENT_REVIEW_RUN_DETAIL_FRESH_MS = 2000;
 const fetchDocumentReviewRun = async (
   { workspaceId, runId }: DocumentReviewRunRef,
   signal?: AbortSignal,
-) =>
-  unwrapEden(
-    await api
-      .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
-      ["document-reviews"].runs({
+) => {
+  const workspaceApi = api.workspaces({
+    workspaceId: toSafeId<"workspace">(workspaceId),
+  });
+  return unwrapApiResponse(
+    await workspaceApi["document-reviews"]
+      .runs({
         runId: toSafeId<"documentReviewRun">(runId),
       })
       .get({ ...(signal === undefined ? {} : { fetch: { signal } }) }),
   );
+};
 
 export type DocumentReviewRunDetail = Awaited<
   ReturnType<typeof fetchDocumentReviewRun>
@@ -260,7 +389,6 @@ export type ReviewFinding = DocumentReviewFindingRow["payload"]["finding"];
 
 export type ReviewVerdict = NonNullable<ReviewFinding["verdict"]>;
 export type ReviewSeverity = ReviewFinding["severity"];
-export type ReviewCitation = ReviewFinding["citations"][number];
 
 /** What a reviewer decided about one finding, and how many findings sit in
  *  each decision. Both read back from the run itself, so the client cannot
@@ -285,14 +413,6 @@ export const REVIEW_DECISION = {
   DocumentReviewDecision
 >;
 
-export const REVIEW_APPLICATION_STATUS = {
-  PENDING: "pending",
-  APPLIED: "applied",
-} as const satisfies Record<
-  Uppercase<DocumentReviewApplicationStatus>,
-  DocumentReviewApplicationStatus
->;
-
 /** A decision the reviewer has actually taken: everything the vocabulary holds
  *  except the state a finding is born in. */
 export type DecidedReviewDecision = Exclude<
@@ -315,9 +435,8 @@ type DecideReviewFindingArgs = {
  * Record one reviewer answer against one finding: the disposition, the flags,
  * or both.
  *
- * `decision` is always sent, current value included, because Elysia coerces an
- * absent optional `UnionEnum` to the first member of its vocabulary — which
- * here would silently reopen the finding. The endpoint treats a restated
+ * `decision` is always sent, current value included: the route's schema
+ * requires it. The endpoint treats a restated
  * decision as the no-op it is and leaves the decider and the moment alone.
  */
 export const decideReviewFinding = async ({
@@ -325,23 +444,83 @@ export const decideReviewFinding = async ({
   findingId,
   decision,
   flags,
-}: DecideReviewFindingArgs) =>
-  unwrapEden(
-    await api
-      .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
-      ["document-reviews"].findings({ findingId })
+}: DecideReviewFindingArgs) => {
+  const workspaceApi = api.workspaces({
+    workspaceId: toSafeId<"workspace">(workspaceId),
+  });
+  return unwrapApiResponse(
+    await workspaceApi["document-reviews"]
+      .findings({ findingId })
       .patch({ decision, ...(flags !== undefined && { flags: [...flags] }) }),
   );
+};
 
 /** One recorded decision as the endpoint answers it. */
 export type DecidedReviewFinding = Awaited<
   ReturnType<typeof decideReviewFinding>
 >;
 
+/**
+ * The history list is read once per open and keeps the row it read, so a run
+ * that ends while the review stays open would still read as running there.
+ * Call from the point read before it lands in the cache: the first read that
+ * reports the end of a run this client saw unfinished refreshes the document's
+ * history, once.
+ */
+const refreshHistoryOnRunEnd = ({
+  client,
+  workspaceId,
+  read: { run },
+}: RefreshSuggestionsOnRunCompletionArgs) => {
+  if (documentReviewRunPollInterval(run.status) !== false) {
+    return;
+  }
+  const { historyRefreshed } = completionMemory(client);
+  const cached = client.getQueryData(
+    documentReviewRunOptions({ workspaceId, runId: run.id }).queryKey,
+  );
+  const seenUnfinished =
+    cached !== undefined &&
+    documentReviewRunPollInterval(cached.run.status) !== false;
+  if (!seenUnfinished || historyRefreshed.has(run.id)) {
+    return;
+  }
+  historyRefreshed.add(run.id);
+  const historiesKey = documentReviewRunKeys.histories(workspaceId);
+  detached(
+    client.invalidateQueries({
+      queryKey: documentReviewRunKeys.histories(workspaceId),
+      predicate: ({ queryKey }) => {
+        const target = queryKey[historiesKey.length];
+        return (
+          typeof target === "object" &&
+          target !== null &&
+          "entityId" in target &&
+          target.entityId === run.entityId
+        );
+      },
+    }),
+    "document-review-queries.refresh-history-on-run-end",
+  );
+};
+
 export const documentReviewRunOptions = (ref: DocumentReviewRunRef) =>
   queryOptions({
     queryKey: documentReviewRunKeys.detail(ref),
-    queryFn: async ({ signal }) => await fetchDocumentReviewRun(ref, signal),
+    queryFn: async ({ client, signal }) => {
+      const detail = await fetchDocumentReviewRun(ref, signal);
+      refreshHistoryOnRunEnd({
+        client,
+        workspaceId: ref.workspaceId,
+        read: detail,
+      });
+      refreshSuggestionsOnRunCompletion({
+        client,
+        workspaceId: ref.workspaceId,
+        read: detail,
+      });
+      return detail;
+    },
     staleTime: DOCUMENT_REVIEW_RUN_DETAIL_FRESH_MS,
     // Progress and findings arrive while the worker executes, and this read
     // answers with both — so the poll that advances the progress line is the
@@ -377,7 +556,7 @@ export const saveRunAsPlaybook = async ({
   runId,
   name,
 }: SaveRunAsPlaybookArgs) =>
-  unwrapEden(
+  unwrapApiResponse(
     await api.playbooks["from-run"].post(
       {
         workspaceId: toSafeId<"workspace">(workspaceId),

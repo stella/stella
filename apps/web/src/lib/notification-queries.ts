@@ -2,7 +2,7 @@ import { infiniteQueryOptions } from "@tanstack/react-query";
 import type { QueryClient } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { stringCursorSeed } from "@/lib/infinite-query";
 
 type NotificationsKey = {
@@ -32,7 +32,7 @@ export const notificationsOptions = ({
     queryKey: notificationKeys.list({ organizationId, userId }),
     initialPageParam: stringCursorSeed(),
     queryFn: async ({ pageParam, signal }) =>
-      unwrapEden(
+      unwrapApiResponse(
         await api.notifications.get({
           query: { ...(pageParam ? { cursor: pageParam } : {}) },
           fetch: { signal },
@@ -56,16 +56,34 @@ export const refetchFirstNotificationsPage = async ({
 }: NotificationsKey & {
   queryClient: QueryClient;
 }): Promise<void> => {
-  const queryKey = notificationsOptions({ organizationId, userId }).queryKey;
-  queryClient.setQueryData(queryKey, (cached) =>
-    cached === undefined
-      ? cached
-      : {
-          pages: cached.pages.slice(0, 1),
-          pageParams: cached.pageParams.slice(0, 1),
-        },
-  );
+  const { prepare, queryKey } = firstNotificationsPageRefresh({
+    organizationId,
+    queryClient,
+    userId,
+  });
+  prepare();
   await queryClient.invalidateQueries({ queryKey, refetchType: "active" });
+};
+
+export const firstNotificationsPageRefresh = ({
+  organizationId,
+  queryClient,
+  userId,
+}: NotificationsKey & { queryClient: QueryClient }) => {
+  const queryKey = notificationsOptions({ organizationId, userId }).queryKey;
+  return {
+    queryKey,
+    prepare: () => {
+      queryClient.setQueryData(queryKey, (cached) =>
+        cached === undefined
+          ? cached
+          : {
+              pages: cached.pages.slice(0, 1),
+              pageParams: cached.pageParams.slice(0, 1),
+            },
+      );
+    },
+  };
 };
 
 type NotificationsQueryFn = NonNullable<

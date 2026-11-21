@@ -4,29 +4,30 @@ import {
   beforeEach,
   describe,
   expect,
-  test,
   expectTypeOf,
+  test,
 } from "bun:test";
+import fc from "fast-check";
 import * as v from "valibot";
 
 import {
   PUBLIC_COUNTRIES,
   publicCountryUnavailable,
 } from "@stll/api-contract/public-country-capability";
+import { assertProperty } from "@stll/property-testing";
 
 import { type SafeId, toSafeId } from "@/api/lib/branded-types";
 import type { PersistedJsonValue } from "@/api/lib/chat/persisted-message-content";
 import {
   chatEntityRef,
   chatRef,
-  containsRawUuid,
+  contentText,
   deriveRefMediationEntry,
   passthroughId,
+  projectForChat,
   PROJECTION_SCHEMA_FAILURE_MESSAGE,
   projectionBranch,
-  projectForChat,
   publicUrl,
-  REF_PROJECTION_FAILURE_MESSAGE,
   renderProjectionShape,
   strippedField,
   unenumeratedJson,
@@ -37,18 +38,28 @@ import type {
 } from "@/api/lib/chat/projection-schema";
 import { READ_DOCUMENT_VERSION_PROJECTION } from "@/api/lib/chat/projections";
 import type {
-  AssertNoExtraFields,
   LIST_MATTERS_LIST_PROJECTION,
   LIST_PROPERTIES_PROJECTION,
 } from "@/api/lib/chat/projections";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
-// The fail-closed tests assert the exact telemetry contract (paths only,
-// never values) on the event the real capture path would have shipped.
-import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
-import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
+import { TOOL_OUTPUT_CONTRACT_DEGRADED_EVENT } from "@/api/lib/chat/tool-output-degrade";
+import { containsRawUuid, MASKED_CONTENT_ID } from "@/api/lib/chat/uuid-mask";
+import type { AssertNoExtraFields } from "@/api/lib/projection-totality";
+// The fail-closed and degrade tests assert the exact telemetry contract
+// (paths only, never values) on the event the real capture path would have
+// shipped.
+import {
+  installRecordingAnalytics,
+  installRecordingLogger,
+} from "@/api/tests/helpers/recording-telemetry";
+import type {
+  RecordingAnalytics,
+  RecordingLogger,
+} from "@/api/tests/helpers/recording-telemetry";
 
 import {
   READ_TOOL_REF_FIELD_MAP,
+  type RegistryRefFieldMapEntry,
   WRITE_TOOL_REF_FIELD_MAP,
 } from "./ref-field-map";
 
@@ -96,37 +107,128 @@ describe("projectForChat", () => {
   // Per test: every fail-closed case captures from the same construction
   // site, which the real path throttles to one event per window.
   let analytics: RecordingAnalytics;
+  let logs: RecordingLogger;
 
   beforeEach(() => {
     analytics = installRecordingAnalytics();
+    logs = installRecordingLogger();
   });
 
   afterEach(() => {
     analytics.restore();
+    logs.restore();
   });
 
   const exceptionProperties = () =>
     analytics.exceptions().map((event) => event.properties);
 
-  test("an undeclared field fails the strict parse with its path, never its value", () => {
+  /** The degrade defect reports: one ERROR log line per degraded result. */
+  const degradeLogs = () =>
+    logs
+      .at("ERROR")
+      .filter(({ message }) => message === TOOL_OUTPUT_CONTRACT_DEGRADED_EVENT)
+      .map(({ attributes }) => attributes);
+
+  /** Every telemetry record, serialized, for "no value leaked" assertions. */
+  const allTelemetry = () => JSON.stringify([analytics.events, logs.records]);
+
+  const matterRow = {
+    createdAt: "2026-01-01T00:00:00.000Z",
+    id: WS_UUID,
+    lastActivityAt: "2026-01-01T00:00:00.000Z",
+    name: "Acme",
+    reference: "REF-1",
+    status: "active",
+  };
+
+  test("an undeclared field is stripped and reported by path, never by value", () => {
+    const refRegistry = createChatRefRegistry();
     const result = project({
-      schema: LIST_MATTERS_PROJECTION,
       payload: {
-        matters: [
-          {
-            id: WS_UUID,
-            name: "Acme",
-            reference: "REF-1",
-            status: "active",
-            lastActivityAt: "2026-01-01T00:00:00.000Z",
-            createdAt: "2026-01-01T00:00:00.000Z",
-            // The class under guard: a handler field nobody classified,
-            // carrying a UUID. The strict parse refuses it by construction.
-            plumbingId: ROGUE_UUID,
-          },
-        ],
+        // The class under guard: a handler field nobody classified, carrying
+        // a UUID, inside an array item of a union branch.
+        matters: [{ ...matterRow, plumbingId: ROGUE_UUID }],
         nextCursor: null,
       },
+      refRegistry,
+      schema: LIST_MATTERS_PROJECTION,
+    });
+
+    expect(Result.isOk(result)).toBe(true);
+    const projected = result.unwrap();
+    expect(projected).toEqual({
+      matters: [
+        {
+          ...matterRow,
+          id: refRegistry.toMatterRef(toSafeId<"workspace">(WS_UUID)),
+        },
+      ],
+      nextCursor: null,
+    });
+    expect(containsRawUuid(projected)).toBe(false);
+    expect(degradeLogs()).toEqual([
+      {
+        defect: "undeclared_fields",
+        paths: "matters[].plumbingId",
+        source: "run-registry-tool",
+        tool: "test_tool",
+      },
+    ]);
+    expect(exceptionProperties()).toMatchObject([
+      {
+        defect: "undeclared_fields",
+        "error.class": "ToolOutputContractDegradedError",
+        paths: "matters[].plumbingId",
+        source: "run-registry-tool",
+        toolName: "test_tool",
+      },
+    ]);
+    expect(allTelemetry()).not.toContain(ROGUE_UUID);
+  });
+
+  test("undeclared fields are stripped at the top level and inside nested objects", () => {
+    const schema: ChatProjectionSchema = v.strictObject({
+      document: v.strictObject({
+        title: v.string(),
+        versions: v.array(v.strictObject({ label: v.string() })),
+      }),
+      total: v.number(),
+    });
+
+    const projected = project({
+      payload: {
+        document: {
+          internalNote: "privileged",
+          title: "NDA",
+          versions: [{ label: "v1" }, { label: "v2", storageKey: "s3://x" }],
+        },
+        debug: { trace: true },
+        total: 2,
+      },
+      schema,
+    }).unwrap();
+
+    expect(projected).toEqual({
+      document: { title: "NDA", versions: [{ label: "v1" }, { label: "v2" }] },
+      total: 2,
+    });
+    expect(degradeLogs()).toEqual([
+      expect.objectContaining({
+        paths: "document.internalNote, document.versions[].storageKey, debug",
+      }),
+    ]);
+    expect(allTelemetry()).not.toContain("privileged");
+    expect(allTelemetry()).not.toContain("s3://x");
+  });
+
+  test("a missing declared field still fails closed, with no degrade report", () => {
+    const { reference: _reference, ...missingReference } = matterRow;
+    const result = project({
+      payload: {
+        matters: [{ ...missingReference, plumbingId: ROGUE_UUID }],
+        nextCursor: null,
+      },
+      schema: LIST_MATTERS_PROJECTION,
     });
 
     expect(Result.isError(result)).toBe(true);
@@ -135,16 +237,63 @@ describe("projectForChat", () => {
       expect(result.error.message).toBe(PROJECTION_SCHEMA_FAILURE_MESSAGE);
       expect(JSON.stringify(result.error)).not.toContain(ROGUE_UUID);
     }
-    const [exception] = analytics.exceptions();
-    expect(exception?.properties).toMatchObject({
-      "error.class": "ChatToolError",
-      source: "run-registry-tool",
-      toolName: "test_tool",
+    expect(degradeLogs()).toEqual([]);
+    expect(exceptionProperties()).toMatchObject([
+      {
+        "error.class": "ChatToolError",
+        source: "run-registry-tool",
+        toolName: "test_tool",
+      },
+    ]);
+    expect(allTelemetry()).not.toContain(ROGUE_UUID);
+  });
+
+  test("an invalid declared field still fails closed, alone or beside an undeclared one", () => {
+    const schema: ChatProjectionSchema = v.strictObject({
+      count: v.number(),
+      name: v.string(),
     });
-    expect(JSON.stringify(exception?.properties)).toContain(
-      "matters[].plumbingId",
-    );
-    expect(JSON.stringify(analytics.exceptions())).not.toContain(ROGUE_UUID);
+
+    for (const payload of [
+      { count: "three", name: "Acme" },
+      { count: "three", extra: true, name: "Acme" },
+    ]) {
+      const result = project({ payload, schema });
+
+      expect(Result.isError(result)).toBe(true);
+      if (Result.isError(result)) {
+        expect(result.error.message).toBe(PROJECTION_SCHEMA_FAILURE_MESSAGE);
+      }
+    }
+    expect(degradeLogs()).toEqual([]);
+  });
+
+  test("an undeclared field inside a union branch is stripped against that branch", () => {
+    const schema: ChatProjectionSchema = v.strictObject({
+      result: v.variant("type", [
+        projectionBranch(
+          v.strictObject({ type: v.literal("found"), name: v.string() }),
+        ),
+        projectionBranch(
+          v.strictObject({ type: v.literal("missing"), reason: v.string() }),
+        ),
+      ]),
+    });
+
+    const projected = project({
+      payload: {
+        result: { name: "Acme", rowVersion: 7, type: "found" },
+      },
+      schema,
+    }).unwrap();
+
+    expect(projected).toEqual({ result: { name: "Acme", type: "found" } });
+    expect(degradeLogs()).toEqual([
+      expect.objectContaining({
+        defect: "undeclared_fields",
+        paths: "result.rowVersion",
+      }),
+    ]);
   });
 
   test("each simple ref kind hydrates to the registry's chat ref", () => {
@@ -250,6 +399,38 @@ describe("projectForChat", () => {
     }).unwrap();
 
     expect(projected).toEqual({ sourceUrl: justiceCzUrl });
+  });
+
+  test("contentText masks each embedded UUID and keeps the rest of the text", () => {
+    const schema: ChatProjectionSchema = v.strictObject({
+      text: contentText(),
+    });
+
+    const projected = project({
+      payload: {
+        text: `Ref ${ROGUE_UUID} and ${WS_UUID.toUpperCase()}.`,
+      },
+      schema,
+    }).unwrap();
+
+    expect(projected).toEqual({
+      text: `Ref ${MASKED_CONTENT_ID} and ${MASKED_CONTENT_ID}.`,
+    });
+    expect(containsRawUuid(projected)).toBe(false);
+    expect(degradeLogs()).toEqual([]);
+  });
+
+  test("contentText without a UUID is forwarded verbatim", () => {
+    const schema: ChatProjectionSchema = v.strictObject({
+      text: v.nullable(contentText()),
+    });
+
+    expect(
+      project({ payload: { text: "Plain text." }, schema }).unwrap(),
+    ).toEqual({ text: "Plain text." });
+    expect(project({ payload: { text: null }, schema }).unwrap()).toEqual({
+      text: null,
+    });
   });
 
   test("sibling workspace source reads the raw payload, not the hydrated output", () => {
@@ -558,76 +739,284 @@ describe("projectForChat", () => {
     expect(projected).toEqual({ content, question: "Which cap applies?" });
   });
 
-  test("the UUID invariant still covers unenumeratedJson contents, unlicensed", () => {
+  test("the UUID invariant still covers unenumeratedJson contents: each id is masked", () => {
     const schema: ChatProjectionSchema = v.strictObject({
       content: unenumeratedJson(),
     });
 
-    const result = project({
+    const projected = project({
       payload: {
-        content: { nodes: [{ value: `see ${ROGUE_UUID}` }] },
+        content: {
+          nodes: [{ kind: "text", value: `see ${ROGUE_UUID}` }],
+          tags: ["kept", ROGUE_UUID],
+        },
       },
       schema,
-    });
+    }).unwrap();
 
-    expect(Result.isError(result)).toBe(true);
-    if (Result.isError(result)) {
-      expect(result.error.kind).toBe("server-defect");
-      expect(result.error.message).toBe(REF_PROJECTION_FAILURE_MESSAGE);
-    }
+    expect(projected).toEqual({
+      content: {
+        nodes: [{ kind: "text", value: `see ${MASKED_CONTENT_ID}` }],
+        tags: ["kept", MASKED_CONTENT_ID],
+      },
+    });
+    expect(containsRawUuid(projected)).toBe(false);
+    expect(degradeLogs()).toEqual([
+      {
+        defect: "unmapped_id",
+        paths: "content.nodes[].value, content.tags[]",
+        source: "run-registry-tool",
+        tool: "test_tool",
+      },
+    ]);
     expect(exceptionProperties()).toMatchObject([
       {
-        "error.class": "ChatToolError",
-        path: "content.nodes[].value",
-        source: "run-registry-tool",
-        toolName: "test_tool",
+        defect: "unmapped_id",
+        "error.class": "ToolOutputContractDegradedError",
+        paths: "content.nodes[].value, content.tags[]",
       },
     ]);
-    expect(JSON.stringify(analytics.exceptions())).not.toContain(ROGUE_UUID);
+    expect(allTelemetry()).not.toContain(ROGUE_UUID);
   });
 
-  test("a UUID embedded in a declared plain string fails closed with its path", () => {
+  test("a UUID embedded in a declared plain string is masked, reported by path", () => {
     const schema: ChatProjectionSchema = v.strictObject({
-      matters: v.array(v.strictObject({ reference: v.string() })),
+      matters: v.array(
+        v.strictObject({ name: v.string(), reference: v.string() }),
+      ),
+    });
+
+    const projected = project({
+      payload: {
+        matters: [
+          { name: "Acme", reference: `REF-${ROGUE_UUID}` },
+          { name: "Beta", reference: "REF-2" },
+        ],
+      },
+      schema,
+    }).unwrap();
+
+    // The model keeps the reference text, never the raw id.
+    expect(projected).toEqual({
+      matters: [
+        { name: "Acme", reference: `REF-${MASKED_CONTENT_ID}` },
+        { name: "Beta", reference: "REF-2" },
+      ],
+    });
+    expect(containsRawUuid(projected)).toBe(false);
+    expect(degradeLogs()).toEqual([
+      expect.objectContaining({
+        defect: "unmapped_id",
+        paths: "matters[].reference",
+      }),
+    ]);
+    expect(allTelemetry()).not.toContain(ROGUE_UUID);
+  });
+
+  test("a bare string array item carrying a UUID keeps its place, masked", () => {
+    const schema: ChatProjectionSchema = v.strictObject({
+      labels: v.array(v.string()),
+    });
+
+    const projected = project({
+      payload: { labels: ["urgent", `ref ${ROGUE_UUID}`, "nda"] },
+      schema,
+    }).unwrap();
+
+    expect(projected).toEqual({
+      labels: ["urgent", `ref ${MASKED_CONTENT_ID}`, "nda"],
+    });
+    expect(containsRawUuid(projected)).toBe(false);
+    expect(degradeLogs()).toEqual([
+      expect.objectContaining({ defect: "unmapped_id", paths: "labels[]" }),
+    ]);
+  });
+
+  test("a ref leaf with an embedded UUID is dropped, never masked into a fake handle", () => {
+    const schema: ChatProjectionSchema = v.strictObject({
+      matterId: chatRef("matter"),
+      name: v.string(),
+    });
+
+    const projected = project({
+      payload: { matterId: `prefix-${ROGUE_UUID}`, name: "Acme" },
+      schema,
+    }).unwrap();
+
+    expect(projected).toEqual({ name: "Acme" });
+    expect(degradeLogs()).toEqual([
+      expect.objectContaining({ defect: "unmapped_id", paths: "matterId" }),
+    ]);
+    expect(allTelemetry()).not.toContain(ROGUE_UUID);
+  });
+
+  test("masking keeps every non-id character of a data string and leaves no raw UUID", () => {
+    const schema: ChatProjectionSchema = v.strictObject({
+      content: unenumeratedJson(),
+      labels: v.array(v.string()),
+      text: v.string(),
+    });
+    const uuid = fc
+      .tuple(
+        fc.uuid(),
+        fc.array(fc.boolean(), { maxLength: 36, minLength: 36 }),
+      )
+      .map(([id, upper]) =>
+        id.replaceAll(/[a-f]/gu, (char, offset: number) =>
+          upper[offset] === true ? char.toUpperCase() : char,
+        ),
+      );
+    // Dash-free segments (hex digits and diacritics included) with UUIDs
+    // spliced between them. A UUID match needs dashes at fixed offsets, which
+    // only a spliced id provides, so the expected text is the segments joined
+    // around the mask without re-running the masking regex.
+    const segment = fc.stringMatching(
+      /^[0-9a-zA-Z áčďéěíňóřšťúůýž.,;:()"'„“«»_\n]{0,12}$/u,
+    );
+    const textWithIds = fc
+      .array(fc.tuple(segment, fc.option(uuid, { nil: undefined })), {
+        maxLength: 5,
+      })
+      .map((parts) => ({
+        expected: parts
+          .map(([text, id]) =>
+            id === undefined ? text : `${text}${MASKED_CONTENT_ID}`,
+          )
+          .join(""),
+        raw: parts.map(([text, id]) => `${text}${id ?? ""}`).join(""),
+      }));
+
+    assertProperty(
+      "masking keeps every non-id character of a data string and leaves no raw UUID",
+      fc.property(
+        textWithIds,
+        fc.array(textWithIds, { maxLength: 3 }),
+        (text, labels) => {
+          const projected = project({
+            payload: {
+              content: { nested: [text.raw] },
+              labels: labels.map(({ raw }) => raw),
+              text: text.raw,
+            },
+            schema,
+          }).unwrap();
+
+          expect(projected).toEqual({
+            content: { nested: [text.expected] },
+            labels: labels.map(({ expected }) => expected),
+            text: text.expected,
+          });
+          expect(containsRawUuid(projected)).toBe(false);
+          expect(containsRawUuid(allTelemetry())).toBe(false);
+        },
+      ),
+    );
+  });
+
+  test("UUID-bearing JSON keys are masked without one entry overwriting another", () => {
+    const schema: ChatProjectionSchema = v.strictObject({
+      content: unenumeratedJson(),
+    });
+
+    const projected = project({
+      payload: {
+        content: {
+          [MASKED_CONTENT_ID]: "literal",
+          [ROGUE_UUID]: "first",
+          [WS_UUID.toUpperCase()]: { [`row-${ENTITY_UUID}`]: "nested" },
+        },
+      },
+      schema,
+    }).unwrap();
+
+    expect(projected).toEqual({
+      content: {
+        [MASKED_CONTENT_ID]: "literal",
+        [`${MASKED_CONTENT_ID} (2)`]: "first",
+        [`${MASKED_CONTENT_ID} (3)`]: {
+          [`row-${MASKED_CONTENT_ID}`]: "nested",
+        },
+      },
+    });
+    expect(containsRawUuid(projected)).toBe(false);
+    expect(degradeLogs()).toEqual([
+      expect.objectContaining({ defect: "unmapped_id" }),
+    ]);
+    expect(containsRawUuid(allTelemetry())).toBe(false);
+  });
+
+  test("a degrade report masks ids in undeclared field paths", () => {
+    const schema: ChatProjectionSchema = v.strictObject({
+      content: v.strictObject({ name: v.string() }),
+    });
+
+    project({
+      payload: { content: { [ROGUE_UUID]: "x", name: "Acme" } },
+      schema,
+    }).unwrap();
+
+    expect(degradeLogs()).toEqual([
+      expect.objectContaining({ defect: "undeclared_fields" }),
+    ]);
+    expect(allTelemetry()).not.toContain(ROGUE_UUID);
+  });
+
+  test("a failed parse reports its paths with ids masked", () => {
+    const schema: ChatProjectionSchema = v.strictObject({
+      content: v.strictObject({ count: v.number() }),
     });
 
     const result = project({
-      payload: { matters: [{ reference: `REF-${ROGUE_UUID}` }] },
+      payload: { content: { [ROGUE_UUID]: "x", count: "not a number" } },
       schema,
     });
 
     expect(Result.isError(result)).toBe(true);
-    if (Result.isError(result)) {
-      expect(result.error.message).toBe(REF_PROJECTION_FAILURE_MESSAGE);
-      expect(result.error.message).not.toContain(ROGUE_UUID);
-    }
-    expect(exceptionProperties()).toMatchObject([
-      { "error.class": "ChatToolError", path: "matters[].reference" },
+    expect(exceptionProperties()).toEqual([
+      expect.objectContaining({ paths: expect.any(String) }),
     ]);
+    expect(allTelemetry()).not.toContain(ROGUE_UUID);
   });
 
-  test("an entity ref whose workspace is unrecoverable fails closed instead of leaking", () => {
+  test("a data string without a UUID is forwarded byte for byte, with no degrade report", () => {
+    const schema: ChatProjectionSchema = v.strictObject({ text: v.string() });
+
+    assertProperty(
+      "a data string without a UUID is forwarded byte for byte, with no degrade report",
+      fc.property(
+        fc
+          .string({ unit: "grapheme" })
+          .filter((text) => !containsRawUuid(text)),
+        (text) => {
+          expect(project({ payload: { text }, schema }).unwrap()).toEqual({
+            text,
+          });
+        },
+      ),
+    );
+    expect(degradeLogs()).toEqual([]);
+  });
+
+  test("an entity ref whose workspace is unrecoverable is dropped instead of leaking", () => {
     // The sibling workspace slot is null, so no ref can be minted; the raw
     // entity UUID would survive at an entity-ref position, which is never
-    // licensed, so the invariant refuses the payload.
+    // licensed, so the leaf is dropped.
     const schema: ChatProjectionSchema = v.strictObject({
       entityId: chatEntityRef({ from: "sibling", key: "workspaceId" }),
       workspaceId: v.nullable(chatRef("matter")),
     });
 
-    const result = project({
+    const projected = project({
       payload: { entityId: ENTITY_UUID, workspaceId: null },
       schema,
-    });
+    }).unwrap();
 
-    expect(Result.isError(result)).toBe(true);
-    if (Result.isError(result)) {
-      expect(result.error.kind).toBe("server-defect");
-      expect(result.error.message).toBe(REF_PROJECTION_FAILURE_MESSAGE);
-    }
-    expect(exceptionProperties()).toMatchObject([
-      { "error.class": "ChatToolError", path: "entityId" },
+    expect(projected).toEqual({ workspaceId: null });
+    expect(containsRawUuid(projected)).toBe(false);
+    expect(degradeLogs()).toEqual([
+      expect.objectContaining({ defect: "unmapped_id", paths: "entityId" }),
     ]);
+    expect(allTelemetry()).not.toContain(ENTITY_UUID);
   });
 
   test("a matching payload with no ids projects to the declared shape verbatim", () => {
@@ -705,7 +1094,7 @@ describe("projectForChat", () => {
       READ_TOOL_REF_FIELD_MAP,
       WRITE_TOOL_REF_FIELD_MAP,
     ]) {
-      for (const entry of Object.values(fieldMap)) {
+      for (const entry of Object.values<RegistryRefFieldMapEntry>(fieldMap)) {
         if (entry.chatProjectable) {
           expect(() => deriveRefMediationEntry(entry.projection)).not.toThrow();
         }
@@ -715,12 +1104,15 @@ describe("projectForChat", () => {
 
   test("public law projections preserve every unavailable country response", () => {
     const projections = [
+      READ_TOOL_REF_FIELD_MAP.case_law_coverage.projection,
       READ_TOOL_REF_FIELD_MAP.search_case_law.projection,
-      READ_TOOL_REF_FIELD_MAP.lookup_case_law.projection,
       READ_TOOL_REF_FIELD_MAP.search_legislation.projection,
     ];
     for (const country of PUBLIC_COUNTRIES) {
-      const payload = publicCountryUnavailable(country);
+      const payload = publicCountryUnavailable(country, {
+        domain: "caseLaw",
+        surface: "search",
+      });
       if (payload === null) {
         continue;
       }

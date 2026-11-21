@@ -3,7 +3,7 @@ import { getRouteApi } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 import { useShallow } from "zustand/shallow";
 
-import { WORKSPACES_PER_ORGANIZATION_MAX } from "@stll/api-contract";
+import { WORKSPACE_STATUS } from "@stll/api-contract/workspace-status";
 import { Button } from "@stll/ui/button";
 import {
   ArrowDownIcon,
@@ -11,10 +11,7 @@ import {
   CheckIcon,
   LayoutGridIcon,
   ListIcon,
-  PlusIcon,
-  SlidersHorizontalIcon,
 } from "@stll/ui/icons";
-import { Input } from "@stll/ui/input";
 import {
   Menu,
   MenuGroup,
@@ -23,15 +20,25 @@ import {
   MenuPopup,
   MenuTrigger,
 } from "@stll/ui/menu";
+import { SearchField } from "@stll/ui/search-field";
 import { Separator } from "@stll/ui/separator";
-import { cn } from "@stll/ui/utils";
 
+import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { usePermissions } from "@/hooks/use-permissions";
-import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
+import { queryView } from "@/lib/query-view.logic";
+import type { MatterListStatus } from "@/lib/workspaces/archived-matters.logic";
 import { useCreateMatterStore } from "@/lib/workspaces/create-matter-store";
 import { workspacesRouteOptions } from "@/lib/workspaces/queries";
 import type { MattersColumnId } from "@/lib/workspaces/types";
 import { ALL_COLUMNS, MATTERS_SORT_KEYS } from "@/lib/workspaces/types";
+import {
+  MATTERS_SEARCH_FIELD_CLASS,
+  MattersCreateContent,
+  MattersLayoutToggleContent,
+  MattersSortChipContent,
+  MattersSortDirectionIcon,
+  MattersToolbarShell,
+} from "@/routes/_protected.workspaces/-components/matters-toolbar.pending";
 import { useColumnLabels } from "@/routes/_protected.workspaces/-hooks/use-column-labels";
 import { useSortLabels } from "@/routes/_protected.workspaces/-hooks/use-sort-labels";
 import { useConfigStore } from "@/stores/config-store";
@@ -39,12 +46,16 @@ import { useConfigStore } from "@/stores/config-store";
 const routeApi = getRouteApi("/_protected");
 
 type MattersToolbarProps = {
+  status: MatterListStatus;
+  onStatusChange: (status: MatterListStatus) => void;
   search: string;
   onSearchChange: (value: string) => void;
   searchRef: React.RefObject<HTMLInputElement | null>;
 };
 
 export const MattersToolbar = ({
+  status,
+  onStatusChange,
   search,
   onSearchChange,
   searchRef,
@@ -55,166 +66,178 @@ export const MattersToolbar = ({
   const update = useConfigStore((s) => s.updateMatters);
 
   return (
-    <div
-      className={cn(
-        "flex items-center gap-1 border-b px-2",
-        TOOLBAR_ROW_HEIGHT,
-      )}
-    >
-      <Input
-        className="min-w-0 flex-1 sm:w-64 sm:max-w-[40%] sm:flex-none"
-        onChange={(e) => onSearchChange(e.currentTarget.value)}
-        placeholder={t("common.search")}
-        ref={searchRef}
-        size="sm"
-        value={search}
-      />
-
-      <ToolbarSeparator />
-
-      <Menu>
-        <MenuTrigger
-          render={
-            <Button
-              aria-label={t("common.sort")}
-              size="xs"
-              title={t("common.sort")}
-              variant="ghost"
-            />
+    <MattersToolbarShell
+      create={<CreateMatterPopover />}
+      layout={
+        <Button
+          onClick={() =>
+            update({
+              viewMode: config.viewMode === "grid" ? "table" : "grid",
+            })
           }
+          size="xs"
+          title={
+            config.viewMode === "grid"
+              ? t("workspaces.views.layouts.table")
+              : t("workspaces.views.layouts.grid")
+          }
+          variant="ghost"
         >
-          <SlidersHorizontalIcon />
-          <span className="text-muted-foreground hidden text-xs sm:inline">
-            {sortLabels[config.sortKey]}
-          </span>
-          {config.sortDesc ? (
-            <ArrowDownIcon className="size-3" />
-          ) : (
-            <ArrowUpIcon className="size-3" />
-          )}
-        </MenuTrigger>
-        <MenuPopup align="end">
-          <MenuGroup>
-            <MenuGroupLabel>{t("common.sort")}</MenuGroupLabel>
-            {MATTERS_SORT_KEYS.map((key) => (
-              <MenuItem
-                key={key}
-                onClick={() => {
-                  if (config.sortKey === key) {
-                    update({ sortDesc: !config.sortDesc });
-                  } else {
-                    update({ sortKey: key, sortDesc: true });
-                  }
-                }}
-              >
-                <span className="flex-1">{sortLabels[key]}</span>
-                {config.sortKey === key &&
-                  (config.sortDesc ? (
-                    <ArrowDownIcon className="text-primary size-3" />
-                  ) : (
-                    <ArrowUpIcon className="text-primary size-3" />
-                  ))}
+          <MattersLayoutToggleContent
+            icon={
+              config.viewMode === "grid" ? <ListIcon /> : <LayoutGridIcon />
+            }
+            label={
+              config.viewMode === "grid"
+                ? t("workspaces.views.layouts.table")
+                : t("workspaces.views.layouts.grid")
+            }
+          />
+        </Button>
+      }
+      search={
+        <SearchField
+          aria-label={t("common.search")}
+          clearLabel={t("common.clearSearch")}
+          groupClassName={MATTERS_SEARCH_FIELD_CLASS}
+          onValueChange={onSearchChange}
+          placeholder={t("common.search")}
+          ref={searchRef}
+          size="sm"
+          value={search}
+        />
+      }
+      sort={
+        <Menu>
+          <MenuTrigger
+            render={
+              <Button
+                aria-label={t("common.sort")}
+                size="xs"
+                title={t("common.sort")}
+                variant="ghost"
+              />
+            }
+          >
+            <MattersSortChipContent
+              direction={<MattersSortDirectionIcon desc={config.sortDesc} />}
+              label={sortLabels[config.sortKey]}
+            />
+          </MenuTrigger>
+          <MenuPopup align="end">
+            <MenuGroup>
+              <MenuGroupLabel>{t("common.sort")}</MenuGroupLabel>
+              {MATTERS_SORT_KEYS.map((key) => (
+                <MenuItem
+                  key={key}
+                  onClick={() => {
+                    if (config.sortKey === key) {
+                      update({ sortDesc: !config.sortDesc });
+                    } else {
+                      update({ sortKey: key, sortDesc: true });
+                    }
+                  }}
+                >
+                  <span className="flex-1">{sortLabels[key]}</span>
+                  {config.sortKey === key &&
+                    (config.sortDesc ? (
+                      <ArrowDownIcon className="text-primary size-3" />
+                    ) : (
+                      <ArrowUpIcon className="text-primary size-3" />
+                    ))}
+                </MenuItem>
+              ))}
+            </MenuGroup>
+
+            <Separator className="my-1" />
+
+            <MenuGroup>
+              <MenuGroupLabel>{t("workspaces.views.groupBy")}</MenuGroupLabel>
+              <MenuItem onClick={() => update({ groupBy: "none" })}>
+                <span className="flex-1">{t("workspaces.noGrouping")}</span>
+                {config.groupBy === "none" && (
+                  <CheckIcon className="text-primary size-3" />
+                )}
               </MenuItem>
-            ))}
-          </MenuGroup>
+              <MenuItem onClick={() => update({ groupBy: "client" })}>
+                <span className="flex-1">{t("workspaces.parties.client")}</span>
+                {config.groupBy === "client" && (
+                  <CheckIcon className="text-primary size-3" />
+                )}
+              </MenuItem>
+            </MenuGroup>
 
-          <Separator className="my-1" />
-
-          <MenuGroup>
-            <MenuGroupLabel>{t("workspaces.views.groupBy")}</MenuGroupLabel>
-            <MenuItem onClick={() => update({ groupBy: "none" })}>
-              <span className="flex-1">{t("workspaces.noGrouping")}</span>
-              {config.groupBy === "none" && (
-                <CheckIcon className="text-primary size-3" />
-              )}
+            {config.viewMode === "table" && (
+              <>
+                <Separator className="my-1" />
+                <ColumnsGroup />
+              </>
+            )}
+          </MenuPopup>
+        </Menu>
+      }
+      status={
+        <Menu>
+          <MenuTrigger render={<Button size="xs" variant="ghost" />}>
+            {status === WORKSPACE_STATUS.archived
+              ? t("memory.views.archived")
+              : t("common.active")}
+          </MenuTrigger>
+          <MenuPopup>
+            <MenuItem onClick={() => onStatusChange("active")}>
+              {t("common.active")}
+              {status === WORKSPACE_STATUS.active && <CheckIcon />}
             </MenuItem>
-            <MenuItem onClick={() => update({ groupBy: "client" })}>
-              <span className="flex-1">{t("workspaces.parties.client")}</span>
-              {config.groupBy === "client" && (
-                <CheckIcon className="text-primary size-3" />
-              )}
+            <MenuItem onClick={() => onStatusChange(WORKSPACE_STATUS.archived)}>
+              {t("memory.views.archived")}
+              {status === WORKSPACE_STATUS.archived && <CheckIcon />}
             </MenuItem>
-          </MenuGroup>
-
-          {config.viewMode === "table" && (
-            <>
-              <Separator className="my-1" />
-              <ColumnsGroup />
-            </>
-          )}
-        </MenuPopup>
-      </Menu>
-
-      <Button
-        onClick={() =>
-          update({
-            viewMode: config.viewMode === "grid" ? "table" : "grid",
-          })
-        }
-        size="xs"
-        title={
-          config.viewMode === "grid"
-            ? t("workspaces.views.layouts.table")
-            : t("workspaces.views.layouts.grid")
-        }
-        variant="ghost"
-      >
-        {config.viewMode === "grid" ? (
-          <>
-            <ListIcon />
-            <span className="hidden sm:inline">
-              {t("workspaces.views.layouts.table")}
-            </span>
-          </>
-        ) : (
-          <>
-            <LayoutGridIcon />
-            <span className="hidden sm:inline">
-              {t("workspaces.views.layouts.grid")}
-            </span>
-          </>
-        )}
-      </Button>
-
-      <CreateMatterPopover className="ms-auto" />
-    </div>
+          </MenuPopup>
+        </Menu>
+      }
+    />
   );
 };
 
-type CreateMatterPopoverProps = {
-  className?: string | undefined;
-};
-
-const CreateMatterPopover = ({ className }: CreateMatterPopoverProps) => {
+const CreateMatterPopover = () => {
   const t = useTranslations();
   const canCreate = usePermissions({ workspace: ["create"] });
   const activeOrganizationId = routeApi.useRouteContext({
     select: (ctx) => ctx.user.activeOrganizationId,
   });
-  const { data } = useQuery(workspacesRouteOptions(activeOrganizationId));
+  const dataQuery = useQuery(workspacesRouteOptions(activeOrganizationId));
+  const dataView = queryView(dataQuery);
+  const data = dataView.type === "items" ? dataView.items : undefined;
   const openCreateMatter = useCreateMatterStore((s) => s.openDialog);
 
-  if (!data || !canCreate) {
+  if (!canCreate) {
     return null;
   }
+  if (!data) {
+    // While the list loads the button's place stays empty, as the toolbar's
+    // loading face leaves it: a loading line here would push nothing but
+    // reads as the page still loading after it has.
+    return dataView.type === "pending" ? null : (
+      <QueryViewFeedback view={dataView} />
+    );
+  }
 
-  const isLimitReached =
-    data.workspaces.length >= WORKSPACES_PER_ORGANIZATION_MAX;
-  if (isLimitReached) {
+  if (!data.creationCapacity.canCreate) {
     return null;
   }
 
   return (
-    <Button
-      aria-label={t("common.newMatter")}
-      className={className}
-      onClick={() => openCreateMatter()}
-      size="xs"
-      title={t("common.newMatter")}
-    >
-      <PlusIcon />
-      <span className="hidden sm:inline">{t("common.newMatter")}</span>
-    </Button>
+    <>
+      <QueryViewFeedback view={dataView} />
+      <Button
+        aria-label={t("common.newMatter")}
+        onClick={(event) => openCreateMatter({ opener: event.currentTarget })}
+        size="xs"
+        title={t("common.newMatter")}
+      >
+        <MattersCreateContent label={t("common.newMatter")} />
+      </Button>
+    </>
   );
 };
 
@@ -248,7 +271,3 @@ const ColumnToggleItem = ({ id, label }: ColumnToggleItemProps) => {
     </MenuItem>
   );
 };
-
-const ToolbarSeparator = () => (
-  <Separator className="mx-1 h-4" orientation="vertical" />
-);

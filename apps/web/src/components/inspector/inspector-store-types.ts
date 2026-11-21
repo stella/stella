@@ -4,6 +4,9 @@ import type { Draft } from "immer";
 import type { TaskStatus } from "@stll/api-contract";
 
 import type { ComposerSource } from "@/components/chat-editor-source";
+import type { PastedTextAttrs } from "@/components/chat-pasted-text-extension";
+import type { CaseDecisionPlacement } from "@/components/inspector/case-decision-view";
+import type { FileTab } from "@/components/inspector/file-tab";
 import type { StructuredCloneable } from "@/components/inspector/view-registry";
 import type { LegalDocumentChatKey } from "@/features/chat/legal-document-chat-key";
 import type { ChatThreadId } from "@/lib/chat-thread-ref";
@@ -11,37 +14,39 @@ import type { skillDetailOptions } from "@/lib/knowledge/queries";
 
 export type ExternalTabId = `external:${string}`;
 
+/**
+ * What the file's chat does with a handed-over draft: leave it in the
+ * composer for the reader to edit and send, or send it at once (a request
+ * whose wording the reader does not write, such as "Explain").
+ */
+export const FILE_CHAT_DRAFT_DELIVERY = {
+  draft: "draft",
+  send: "send",
+} as const;
+type FileChatDraftDelivery =
+  (typeof FILE_CHAT_DRAFT_DELIVERY)[keyof typeof FILE_CHAT_DRAFT_DELIVERY];
+
+/**
+ * What another surface hands the file's chat: a prose draft that replaces
+ * the composer's unsent text (a review finding to discuss, "Explain"), or a
+ * passage the reader selected, which joins what they already typed as a
+ * pasted-text chip.
+ */
+export type FileChatHandoff =
+  | {
+      type: "prose";
+      delivery: FileChatDraftDelivery;
+      /** What the composer takes: prose or its own inline Markdown. */
+      markdown: ComposerSource;
+    }
+  | { type: "passage"; quote: PastedTextAttrs };
+
 /** The route a page-owned tab belongs to; the tab closes when it leaves. */
 export type InspectorOwnerRouteId = RouteIds<RegisteredRouter["routeTree"]>;
 
-/** Canonical file-inspector facet domain shared by state, UI, and broadcast validation. */
-export const FILE_FACETS = [
-  "preview",
-  "attachments",
-  "metadata",
-  "versions",
-  "playbook",
-  "anonymization",
-] as const;
-
-export type FileFacet = (typeof FILE_FACETS)[number];
-
-export type FileTab = {
-  type: "pdf";
-  id: string;
-  renderId?: string | undefined;
-  entityId: string;
-  label: string;
-  fileName: string;
-  mimeType?: string | undefined;
-  pdfFileId: string | null;
-  workspaceId: string;
-  justificationFieldId?: string | undefined;
-  propertyId?: string | undefined;
-  metadataLane?: "closed" | "expanded" | undefined;
-  facet?: FileFacet | undefined;
-  facetPulseSeq?: number | undefined;
-};
+export { FILE_FACETS } from "@stll/api-contract/inspector-file-facet";
+export type { FileFacet } from "@stll/api-contract/inspector-file-facet";
+export type { FileTab } from "@/components/inspector/file-tab";
 
 export type TaskTab = {
   type: "task";
@@ -61,13 +66,19 @@ export type ChatTab = {
   contextMatterIds: string[];
   /** The legal document this chat is about, when it was opened from one. */
   activeLegalKey?: LegalDocumentChatKey | undefined;
+  /**
+   * The conversation has a message on the server. A document's chat that
+   * never got one is not kept across reloads: the document reopens its
+   * conversation from the server, so an empty tab would only pile up.
+   */
+  started?: true | undefined;
   activeSkill?:
     | {
         /** Absent for a built-in skill, which has no row: `skillName` names it. */
         skillId?: string | undefined;
         /** The skill's identifier (its slug), never shown as its title. */
         skillName: string;
-        /** The title a person reads (`skillLabel`); absent on older tabs. */
+        /** The title a person reads (`useSkillLabel`); absent on older tabs. */
         skillDisplayName?: string | undefined;
       }
     | undefined;
@@ -75,7 +86,7 @@ export type ChatTab = {
 
 export type MatterTabId = `matter:${string}`;
 
-export type MatterTab = {
+type MatterTab = {
   type: "matter";
   id: MatterTabId;
   label: string;
@@ -83,7 +94,7 @@ export type MatterTab = {
   color?: string | null | undefined;
 };
 
-export type ExternalTab = {
+type ExternalTab = {
   type: "external";
   id: ExternalTabId;
   chatThreadId: ChatThreadId;
@@ -147,29 +158,29 @@ type SkillResourceTabFields = {
   label: string;
   /** The skill's identifier (its slug), never shown as its title. */
   skillName: string;
-  /** The title a person reads (`skillLabel`), when it was known. */
-  skillDisplayName?: string | undefined;
   target: "body" | "resource";
   resourcePath: string;
   mimeType: string;
   content: string;
 };
 
-export type SkillResourceTab = SkillResourceTabFields & SkillResourceSource;
+/**
+ * A built-in skill's title follows the reader's language (`useSkillLabel`),
+ * so only an installed skill's tab stores one.
+ */
+type SkillResourceTabSource =
+  | { origin: typeof BUILT_IN_SKILL_ORIGIN; skillId: null }
+  | {
+      origin: SkillResourceOrigin;
+      skillId: string;
+      /** The title a person reads, when it was known. */
+      skillDisplayName?: string | undefined;
+    };
 
-/** What a skill is called on screen: its title, or its slug if none is known. */
-export const skillLabel = ({
-  skillDisplayName,
-  skillName,
-}: {
-  skillDisplayName?: string | undefined;
-  skillName: string;
-}): string => skillDisplayName ?? skillName;
+export type SkillResourceTab = SkillResourceTabFields & SkillResourceTabSource;
 
-export type InstalledSkillResourceTab = SkillResourceTabFields & {
-  origin: SkillResourceOrigin;
-  skillId: string;
-};
+export type InstalledSkillResourceTab = SkillResourceTabFields &
+  Exclude<SkillResourceTabSource, { origin: typeof BUILT_IN_SKILL_ORIGIN }>;
 
 export type GenericTab = {
   type: "view";
@@ -196,7 +207,7 @@ export type InspectorTabGroup =
 /** A tab shape `openTabs` can materialize: the kinds a workspace entity maps to. */
 export type InspectorOpenTarget = FileTab | TaskTab;
 
-export type DocumentTextSelection = {
+type DocumentTextSelection = {
   text: string;
   seq: number;
 };
@@ -207,9 +218,9 @@ export type AnonymizationMatchSnapshot = {
   labelByCanonical: Map<string, string>;
 };
 
-export type AnonymizationSelectionSource = "doc" | "sidebar";
+type AnonymizationSelectionSource = "doc" | "sidebar";
 
-export type AnonymizationSelection = {
+type AnonymizationSelection = {
   canonical: string | null;
   label: string | null;
   source: AnonymizationSelectionSource | null;
@@ -230,7 +241,7 @@ export type InspectorTabsState = {
   reviveSuggestion: InspectorTab | null;
 };
 
-export type InspectorCommandState = {
+type InspectorCommandState = {
   desktopOpenAttention: {
     fieldId: string;
     sequence: number;
@@ -258,18 +269,31 @@ export type InspectorCommandState = {
   } | null;
   pendingDocxEditTabId: string | null;
   /** A composer draft handed to the chat over one document (a review
-   *  finding to discuss); the overlay for that file consumes it. */
+   *  finding to discuss, a selected passage); the overlay for that file
+   *  consumes it. */
   pendingFileChatDraft: {
     fileFieldId: string;
-    /** What the composer takes: prose or its own inline Markdown. */
-    markdown: ComposerSource;
+    handoff: FileChatHandoff;
     sequence: number;
   } | null;
 };
 
-type AnonymizationPipelineStatus = "idle" | "running" | "ready" | "error";
+export type AnonymizationPipelineStatus =
+  "idle" | "running" | "ready" | "error";
 
-export type InspectorAnonymizationState = {
+/**
+ * Asks one open editor's live DOCX detection whether its result covers the
+ * current document version; a stale one starts detection and answers false.
+ */
+type AnonymizationDetectionConfirm = () => boolean;
+
+type AnonymizationDetectionRegistration = {
+  confirm: AnonymizationDetectionConfirm;
+  readStatus: () => AnonymizationPipelineStatus;
+  retry: () => void;
+};
+
+type InspectorAnonymizationState = {
   anonymizationActiveMountCount: number;
   documentTextSelectionByFieldId: Record<string, DocumentTextSelection>;
   anonymizationMatchesByFieldId: Record<string, AnonymizationMatchSnapshot>;
@@ -278,17 +302,32 @@ export type InspectorAnonymizationState = {
     AnonymizationPipelineStatus
   >;
   anonymizationRetryByFieldId: Record<string, number>;
+  /**
+   * Live DOCX detections per field, one per open editor (docked and full
+   * view can both be open). A field without editors has no entry.
+   */
+  anonymizationDetectionsByFieldId: Record<
+    string,
+    readonly AnonymizationDetectionRegistration[]
+  >;
   anonymizationSelection: AnonymizationSelection;
 };
 
-export type CloseTabOptions = {
+type CloseTabOptions = {
   suggestRevive?: boolean;
+  /**
+   * The tab's content moved to the main view. The pane is minimized with it:
+   * what would remain in front is not what the reader asked to look at, and
+   * the rail keeps every other tab one click away.
+   */
+  movedToMain?: boolean;
 };
 
-export type FileFieldReplacement = {
+type FileFieldReplacement = {
   id: string;
   fileName?: string | undefined;
   label?: string | undefined;
+  encrypted?: boolean | undefined;
   mimeType?: string | undefined;
   pdfFileId?: string | null | undefined;
   propertyId?: string | undefined;
@@ -314,7 +353,24 @@ export const INSPECTOR_PANE_INTENT = {
 type InspectorPaneIntent =
   (typeof INSPECTOR_PANE_INTENT)[keyof typeof INSPECTOR_PANE_INTENT];
 
-export type InspectorTabsActions = {
+/**
+ * Whether an opener takes the inspector's focus. Every opener says which:
+ * - `claim`: the tab is what the user asked for (a click, or a navigation
+ *   whose point is this tab), so it becomes the active tab.
+ * - `ifIdle`: a page opens it on its own while mounting. The tab joins the
+ *   rail but becomes active only when no tab is, so it never takes the
+ *   place of what the user had open; a narrow inspector has no rail to go
+ *   back to it.
+ */
+export const INSPECTOR_FOCUS_INTENT = {
+  claim: "claim",
+  ifIdle: "if-idle",
+} as const;
+
+export type InspectorFocusIntent =
+  (typeof INSPECTOR_FOCUS_INTENT)[keyof typeof INSPECTOR_FOCUS_INTENT];
+
+type InspectorTabsActions = {
   createGroup: (args: { name: string; color: string }) => string;
   updateGroup: (args: { id: string; name: string; color: string }) => void;
   removeGroup: (id: string) => void;
@@ -350,25 +406,31 @@ export type InspectorTabsActions = {
   }) => void;
   openSkillResourceTab: (
     tab: Omit<SkillResourceTabFields, "type" | "id" | "target"> &
-      SkillResourceSource & {
+      SkillResourceTabSource & {
         refreshContent?: boolean | undefined;
         target?: SkillResourceTab["target"];
+        focus: InspectorFocusIntent;
       },
   ) => void;
   updateSkillResourceTabContent: (
     tabId: SkillResourceTabId,
     content: string,
   ) => void;
-  openChat: (args?: {
+  openChat: (args: {
     id?: ChatThreadId;
     label?: string;
     workspaceId?: string | undefined;
     contextMatterIds?: string[];
     activeLegalKey?: LegalDocumentChatKey;
     activeSkill?: ChatTab["activeSkill"];
+    /** The thread is known to have messages on the server. */
+    started?: true;
     pane?: InspectorPaneIntent;
+    focus: InspectorFocusIntent;
   }) => void;
   setChatContext: (tabId: string, matterIds: string[]) => void;
+  /** Records that a chat tab's conversation has a message on the server. */
+  markChatStarted: (tabId: string) => void;
   resetChatTabId: (oldId: ChatThreadId, newId: ChatThreadId) => void;
   openView: <P>(args: {
     type: string;
@@ -376,6 +438,8 @@ export type InspectorTabsActions = {
     label: string;
     payload: StructuredCloneable<P>;
     ownerRouteId?: InspectorOwnerRouteId;
+    /** Explicit docking may move the current main decision into the inspector. */
+    decisionPlacement?: CaseDecisionPlacement;
     pane?: InspectorPaneIntent;
   }) => void;
   updateView: <P>(args: {
@@ -420,7 +484,7 @@ export type InspectorTabsActions = {
   toggleMinimized: () => void;
 };
 
-export type InspectorCommandActions = {
+type InspectorCommandActions = {
   requestDesktopOpenAttention: (fieldId: string) => void;
   clearDesktopOpenAttention: (sequence: number) => void;
   requestRename: (id: string) => void;
@@ -429,7 +493,7 @@ export type InspectorCommandActions = {
   clearDocxEditRequest: () => void;
   requestFileChatDraft: (request: {
     fileFieldId: string;
-    markdown: ComposerSource;
+    handoff: FileChatHandoff;
   }) => void;
   clearFileChatDraft: (sequence: number) => void;
   requestBlockScroll: (request: {
@@ -449,7 +513,7 @@ export type InspectorCommandActions = {
   clearCommandsForMissingTabs: (tabIds: ReadonlySet<string>) => void;
 };
 
-export type InspectorAnonymizationActions = {
+type InspectorAnonymizationActions = {
   acquireAnonymizationActive: () => void;
   releaseAnonymizationActive: () => void;
   publishDocumentTextSelection: (fieldId: string, text: string) => void;
@@ -463,6 +527,14 @@ export type InspectorAnonymizationActions = {
   markAnonymizationPipelineFailed: (fieldId: string) => void;
   retryAnonymizationPipeline: (fieldId: string) => void;
   clearAnonymizationMatches: (fieldId: string) => void;
+  registerAnonymizationDetection: (
+    fieldId: string,
+    registration: AnonymizationDetectionRegistration,
+  ) => void;
+  unregisterAnonymizationDetection: (
+    fieldId: string,
+    confirm: AnonymizationDetectionConfirm,
+  ) => void;
   selectAnonymizationTerm: (
     canonical: string,
     label: string,

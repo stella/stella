@@ -9,7 +9,7 @@ import {
   useSyncExternalStore,
 } from "react";
 
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { Temporal } from "temporal-polyfill/full";
 
 import { CalendarIcon, ChevronLeftIcon, ChevronRightIcon } from "../icons";
@@ -19,33 +19,24 @@ import { cn } from "../lib/utils";
 import { getLocaleWeekInfo, getWeekendDays } from "../lib/week";
 import { Button } from "./button";
 import {
+  type CalendarMonth,
   DATE_PICKER_MODE,
-  DEFAULT_PICKER_TIME,
   type DatePickerMode,
+  DEFAULT_PICKER_TIME,
   formatDateTimeValue,
-  getHourOptions,
-  getMinuteOptions,
-  getTimeFieldNames,
   joinPickerTime,
   localDateFromTimestamp,
   millisecondsUntilNextLocalDate,
   parseDateTimeValue,
+  type PickerClock,
   resolveCalendarViewMonth,
   shiftCalendarDate,
-  splitPickerTime,
-  type CalendarMonth,
-  type PickerClock,
-  type PickerTimeOption,
 } from "./date-picker-popover.logic";
 import { DirectionalIcon } from "./directional-icon";
+import { Input } from "./input";
 import { Popover, PopoverPopup, PopoverTrigger } from "./popover";
-import {
-  Select,
-  SelectItem,
-  SelectPopup,
-  SelectTrigger,
-  SelectValue,
-} from "./select";
+import { TimeField } from "./time-field";
+import { TruncatedText } from "./truncated-text";
 
 // ---------------------------------------------------------------------------
 // Calendar utilities
@@ -130,12 +121,8 @@ const subscribeToLocalDate = (onStoreChange: () => void) => {
   };
 };
 
-const useHydrationSafeToday = (): string =>
-  useSyncExternalStore(
-    subscribeToLocalDate,
-    getLocalToday,
-    () => HYDRATION_DATE,
-  );
+const useHydrationSafeToday = (getToday: () => string): string =>
+  useSyncExternalStore(subscribeToLocalDate, getToday, () => HYDRATION_DATE);
 
 const useHydrationSafeBrowserLocale = (): string =>
   useSyncExternalStore(
@@ -153,13 +140,21 @@ const getFirstDayOfWeek = (locale: string): number => {
   return info.firstDay === 7 ? 6 : info.firstDay - 1;
 };
 
-const getMonthDays = (
-  year: number,
-  month: number,
-  firstDow: number,
-  weekendDays: ReadonlySet<number>,
-  today: string,
-): CalendarDay[] => {
+type GetMonthDaysOptions = {
+  year: number;
+  month: number;
+  firstDow: number;
+  weekendDays: ReadonlySet<number>;
+  today: string;
+};
+
+const getMonthDays = ({
+  year,
+  month,
+  firstDow,
+  weekendDays,
+  today,
+}: GetMonthDaysOptions): CalendarDay[] => {
   const days: CalendarDay[] = [];
   const first = Temporal.PlainDate.from({ year, month: month + 1, day: 1 });
   const startOffset = (first.dayOfWeek - 1 - firstDow + 7) % 7;
@@ -504,8 +499,20 @@ type DatePickerPopoverProps = {
    *  the control still has height; pass a call-to-action ("Select date…") to
    *  make the empty state self-explanatory. */
   placeholderLabel?: string;
+  /** Replaces the formatted date in the trigger, as a week range does. */
+  triggerLabel?: string;
   clearLabel?: string;
   defaultOpen?: boolean;
+  open?: boolean;
+  triggerRef?: React.Ref<HTMLButtonElement> | undefined;
+  /** Keep the trigger focused when opening a following range bound. */
+  focusTriggerOnOpen?: boolean;
+  /** Enables direct date entry, with host-localized validation. */
+  dateInputLabel?: string;
+  outOfRangeLabel?: string;
+  noFuture?: boolean;
+  /** Host-owned calendar date; defaults to the browser timezone. */
+  getToday?: () => string;
   onOpenChange?: (open: boolean) => void;
   /** Label for the "go to today" button. Auto-localized from the locale when omitted. */
   todayLabel?: string;
@@ -522,11 +529,15 @@ type DatePickerPopoverProps = {
   /** Label of the time input in `date-time` mode. */
   timeLabel?: string;
   /** Inclusive `YYYY-MM-DD` bounds; in `date-time` mode they bound the day. */
-  minDate?: string;
-  maxDate?: string;
+  minDate?: string | undefined;
+  maxDate?: string | undefined;
   isDateDisabled?: (date: string) => boolean;
   layer?: OverlayLayer;
 };
+
+/** The trigger keeps its height with an em dash when nothing has a label. */
+const firstLabel = (...labels: readonly (string | null | undefined)[]) =>
+  labels.find((label) => label !== null && label !== undefined) ?? "—";
 
 type DatePickerPopoverContentProps = DatePickerPopoverProps & {
   locale: string;
@@ -549,8 +560,14 @@ const DatePickerPopoverContent = (props: DatePickerPopoverContentProps) => {
     isOverdue = false,
     showIcon = true,
     placeholderLabel,
+    triggerLabel,
     clearLabel = "Clear date",
     defaultOpen = false,
+    open: controlledOpen,
+    triggerRef,
+    focusTriggerOnOpen = false,
+    dateInputLabel,
+    outOfRangeLabel,
     onOpenChange,
     todayLabel: todayLabelProp,
     overdueLabel,
@@ -583,7 +600,14 @@ const DatePickerPopoverContent = (props: DatePickerPopoverContentProps) => {
   const decadeBase = decadeBaseOverride ?? decadeStart(viewYear);
 
   const days = useMemo(
-    () => getMonthDays(viewYear, viewMonth, firstDow, weekendDays, today),
+    () =>
+      getMonthDays({
+        year: viewYear,
+        month: viewMonth,
+        firstDow,
+        weekendDays,
+        today,
+      }),
     [viewYear, viewMonth, firstDow, weekendDays, today],
   );
   const weekdays = useMemo(
@@ -610,17 +634,22 @@ const DatePickerPopoverContent = (props: DatePickerPopoverContentProps) => {
     [minDate, maxDate, isDateDisabled],
   );
 
-  const displayLabel =
-    formatSelection(locale, selection) ?? placeholderLabel ?? "\u2014";
+  const dateDraft = useDatePickerDraft({ value, isDayDisabled, onChange });
+
+  const displayLabel = firstLabel(
+    triggerLabel,
+    formatSelection(locale, selection),
+    placeholderLabel,
+  );
 
   const selectDay = (date: string) => {
     switch (selection.mode) {
       case DATE_PICKER_MODE.date: {
-        onChange(date);
+        dateDraft.apply(date);
         return;
       }
       case DATE_PICKER_MODE.dateTime: {
-        onChange(
+        dateDraft.apply(
           formatDateTimeValue({
             date,
             time: selection.time ?? DEFAULT_PICKER_TIME,
@@ -639,7 +668,9 @@ const DatePickerPopoverContent = (props: DatePickerPopoverContentProps) => {
     if (value === "") {
       return;
     }
-    onChange(formatDateTimeValue({ date: value, time: joinPickerTime(clock) }));
+    dateDraft.apply(
+      formatDateTimeValue({ date: value, time: joinPickerTime(clock) }),
+    );
   };
 
   const formatDayLabel = useCallback(
@@ -798,6 +829,10 @@ const DatePickerPopoverContent = (props: DatePickerPopoverContentProps) => {
   // Reset view state when the popover closes so reopening always shows the day grid
   const handleOpenChange = (open: boolean) => {
     onOpenChange?.(open);
+    if (open) {
+      setViewMonthOverride(null);
+      setFocusedDate(value || today);
+    }
     if (!open) {
       setView("days");
       setDecadeBaseOverride(decadeStart(viewYear));
@@ -815,7 +850,11 @@ const DatePickerPopoverContent = (props: DatePickerPopoverContentProps) => {
   })();
 
   return (
-    <Popover defaultOpen={defaultOpen} onOpenChange={handleOpenChange}>
+    <Popover
+      defaultOpen={defaultOpen}
+      open={controlledOpen}
+      onOpenChange={handleOpenChange}
+    >
       <PopoverTrigger
         disabled={disabled}
         render={
@@ -830,22 +869,32 @@ const DatePickerPopoverContent = (props: DatePickerPopoverContentProps) => {
               className,
             )}
             id={id}
+            ref={triggerRef}
             type="button"
           />
         }
       >
         {showIcon && <CalendarIcon className="size-3.5 shrink-0" />}
-        <span
-          className="min-w-0 flex-1 overflow-hidden text-start wrap-break-word text-ellipsis"
+        <TruncatedText
+          className="flex-1 text-start"
           id={labelledBy ? displayValueId : undefined}
         >
           {displayLabel}
-        </span>
+        </TruncatedText>
         {isOverdue && overdueLabel && (
           <span className="text-destructive text-xs">{overdueLabel}</span>
         )}
       </PopoverTrigger>
       <PopoverPopup
+        onBlur={dateDraft.handleBlur}
+        initialFocus={
+          focusTriggerOnOpen
+            ? false
+            : () =>
+                gridRef.current?.querySelector<HTMLButtonElement>(
+                  `[data-date="${value || today}"]`,
+                ) ?? gridRef.current
+        }
         // The entry scale would shrink the day cells below their touch and
         // compact sizes while the popup opens.
         className="data-starting-style:scale-100"
@@ -945,6 +994,7 @@ const DatePickerPopoverContent = (props: DatePickerPopoverContentProps) => {
                           selectDay(day.date);
                         }
                       }}
+                      onFocus={() => setFocusedDate(day.date)}
                       role="gridcell"
                       tabIndex={isFocused ? 0 : -1}
                       type="button"
@@ -983,6 +1033,7 @@ const DatePickerPopoverContent = (props: DatePickerPopoverContentProps) => {
 
           {selection.mode === DATE_PICKER_MODE.dateTime && (
             <TimeField
+              className="mt-1 border-t pt-1"
               disabled={value === ""}
               label={labels.time}
               locale={locale}
@@ -991,11 +1042,22 @@ const DatePickerPopoverContent = (props: DatePickerPopoverContentProps) => {
             />
           )}
 
+          <TypedDateField
+            mode={selection.mode}
+            label={dateInputLabel}
+            value={dateDraft.value}
+            invalid={dateDraft.invalid}
+            errorLabel={outOfRangeLabel}
+            onDraftChange={dateDraft.edit}
+            onCommit={dateDraft.submit}
+          />
+
           {/* Bottom row: today + clear */}
           <div className="mt-1 flex items-center gap-1 border-t pt-1">
             <Button
               className="flex-1"
               onClick={() => {
+                dateDraft.discard();
                 const todayDate = Temporal.PlainDate.from(today);
                 setViewMonthOverride({
                   month: todayDate.month - 1,
@@ -1011,7 +1073,7 @@ const DatePickerPopoverContent = (props: DatePickerPopoverContentProps) => {
             {value && !hideClear && (
               <Button
                 className="flex-1"
-                onClick={() => onChange(null)}
+                onClick={() => dateDraft.apply(null)}
                 size="xs"
                 variant="ghost"
               >
@@ -1027,10 +1089,21 @@ const DatePickerPopoverContent = (props: DatePickerPopoverContentProps) => {
 
 const DatePickerPopover = (props: DatePickerPopoverProps) => {
   const browserLocale = useHydrationSafeBrowserLocale();
-  const today = useHydrationSafeToday();
+  const today = useHydrationSafeToday(props.getToday ?? getLocalToday);
   const locale = props.locale ?? browserLocale;
 
-  return <DatePickerPopoverContent {...props} locale={locale} today={today} />;
+  const maxDate =
+    props.noFuture && (!props.maxDate || props.maxDate > today)
+      ? today
+      : props.maxDate;
+  return (
+    <DatePickerPopoverContent
+      {...props}
+      maxDate={maxDate}
+      locale={locale}
+      today={today}
+    />
+  );
 };
 
 export { DatePickerPopover };
@@ -1097,96 +1170,6 @@ const PickerHeader = ({
     </div>
   );
 };
-
-// -- Time row (date-time mode) --
-
-/**
- * Hour and minute selects in the locale's own clock and numerals. Inert
- * until a day is picked, since a time alone is not a value.
- */
-const TimeField = ({
-  disabled,
-  label,
-  locale,
-  onChange,
-  time,
-}: {
-  disabled: boolean;
-  label: string;
-  locale: string;
-  onChange: (clock: PickerClock) => void;
-  time: string | null;
-}) => {
-  const labelId = useId();
-  const hourOptions = useMemo(() => getHourOptions(locale), [locale]);
-  const minuteOptions = useMemo(() => getMinuteOptions(locale), [locale]);
-  const fieldNames = useMemo(() => getTimeFieldNames(locale), [locale]);
-  const clock = time === null ? null : splitPickerTime(time);
-
-  return (
-    <div
-      aria-labelledby={labelId}
-      className="mt-1 flex items-center gap-1.5 border-t pt-1"
-      role="group"
-    >
-      <span className="text-foreground-label shrink-0 text-xs" id={labelId}>
-        {label}
-      </span>
-      <TimePartSelect
-        disabled={disabled}
-        label={fieldNames.hour}
-        onChange={(hour) => onChange({ hour, minute: clock?.minute ?? 0 })}
-        options={hourOptions}
-        value={clock?.hour ?? null}
-      />
-      <span aria-hidden="true" className="text-muted-foreground text-xs">
-        :
-      </span>
-      <TimePartSelect
-        disabled={disabled}
-        label={fieldNames.minute}
-        onChange={(minute) => onChange({ hour: clock?.hour ?? 0, minute })}
-        options={minuteOptions}
-        value={clock?.minute ?? null}
-      />
-    </div>
-  );
-};
-
-const TimePartSelect = ({
-  disabled,
-  label,
-  onChange,
-  options,
-  value,
-}: {
-  disabled: boolean;
-  label: string;
-  onChange: (value: number) => void;
-  options: PickerTimeOption[];
-  value: number | null;
-}) => (
-  <Select
-    disabled={disabled}
-    onValueChange={(next) => {
-      if (typeof next === "number") {
-        onChange(next);
-      }
-    }}
-    value={value}
-  >
-    <SelectTrigger aria-label={label} className="min-w-0 flex-1" size="sm">
-      <SelectValue placeholder={"\u2014"} />
-    </SelectTrigger>
-    <SelectPopup>
-      {options.map((option) => (
-        <SelectItem key={option.value} value={option.value}>
-          {option.label}
-        </SelectItem>
-      ))}
-    </SelectPopup>
-  </Select>
-);
 
 // -- Month picker grid (4×3) --
 
@@ -1333,6 +1316,124 @@ const YearGrid = ({
           })}
         </div>
       ))}
+    </div>
+  );
+};
+
+type DatePickerDraftOptions = {
+  value: string;
+  isDayDisabled: (date: string) => boolean;
+  onChange: (date: string | null) => void;
+};
+
+const useDatePickerDraft = ({
+  value,
+  isDayDisabled,
+  onChange,
+}: DatePickerDraftOptions) => {
+  const [draft, setDraft] = useState<{
+    baseValue: string;
+    value: string;
+  } | null>(null);
+  // Applying can move focus before React renders the cleared draft. Disarm that stale blur synchronously.
+  const commitStatus = useRef<"pending" | "consumed">("consumed");
+  const hasDraft = draft?.baseValue === value;
+  const inputValue = hasDraft ? draft.value : value;
+  const parsed = Result.try(() => Temporal.PlainDate.from(inputValue));
+  // Only the user's own typing is judged: an applied value outside today's
+  // bounds is not an input error until the field is edited.
+  const invalid =
+    hasDraft &&
+    inputValue !== "" &&
+    (parsed.isErr() ||
+      parsed.value.toString() !== inputValue ||
+      isDayDisabled(inputValue));
+  const discard = () => {
+    commitStatus.current = "consumed";
+    setDraft(null);
+  };
+  const apply = (next: string | null) => {
+    discard();
+    onChange(next);
+  };
+  const commit = () => {
+    if (commitStatus.current !== "pending" || invalid || inputValue === value) {
+      return;
+    }
+    apply(inputValue || null);
+  };
+  return {
+    value: inputValue,
+    invalid,
+    edit: (next: string) => {
+      commitStatus.current = "pending";
+      setDraft({ baseValue: value, value: next });
+    },
+    discard,
+    apply,
+    submit: () => {
+      if (!invalid) {
+        apply(inputValue || null);
+      }
+    },
+    handleBlur: (event: React.FocusEvent<HTMLDivElement>) => {
+      if (event.currentTarget.contains(event.relatedTarget)) {
+        return;
+      }
+      commit();
+    },
+  };
+};
+
+type TypedDateFieldProps = {
+  mode: DatePickerMode;
+  label: string | undefined;
+  value: string;
+  invalid: boolean;
+  errorLabel: string | undefined;
+  onDraftChange: (date: string) => void;
+  onCommit: () => void;
+};
+
+const TypedDateField = ({
+  mode,
+  label,
+  value,
+  invalid,
+  errorLabel = "Choose a date within the allowed range.",
+  onDraftChange,
+  onCommit,
+}: TypedDateFieldProps) => {
+  const id = useId();
+  if (!label || mode !== DATE_PICKER_MODE.date) {
+    return null;
+  }
+  return (
+    <div className="mt-2 flex flex-col gap-1">
+      <label htmlFor={id} className="text-xs">
+        {label}
+      </label>
+      <Input
+        id={id}
+        value={value}
+        placeholder="YYYY-MM-DD"
+        dir="ltr"
+        aria-invalid={invalid}
+        aria-describedby={invalid ? `${id}-error` : undefined}
+        onChange={(event) => onDraftChange(event.currentTarget.value)}
+        onKeyDown={(event) => {
+          if (event.key !== "Enter" || event.nativeEvent.isComposing) {
+            return;
+          }
+          event.preventDefault();
+          onCommit();
+        }}
+      />
+      {invalid && (
+        <p id={`${id}-error`} role="alert" className="text-destructive text-xs">
+          {errorLabel}
+        </p>
+      )}
     </div>
   );
 };

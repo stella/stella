@@ -6,20 +6,36 @@
  * that cannot be hydrated is still a decision a reader can see.
  */
 
-import { describe, expect, test } from "bun:test";
+import { panic } from "better-result";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+
+import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
 import {
   isDeferredDocumentFetchable,
   readThroughDeferredDocument,
+  recordDocumentPacingOutcome,
+  resetDocumentFetchesForTesting,
 } from "@/api/handlers/case-law/decisions/document-on-demand";
-import type { OnDemandDocumentDeps } from "@/api/handlers/case-law/decisions/document-on-demand";
-import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
+import type {
+  DocumentReadDeferral,
+  OnDemandDocumentDeps,
+} from "@/api/handlers/case-law/decisions/document-on-demand";
+import { resetCaptureWindows } from "@/api/lib/analytics/capture";
+import {
+  resetAnalyticsForTesting,
+  setAnalyticsForTesting,
+} from "@/api/lib/analytics/client";
+import type { ServerAnalyticsCaptureParams } from "@/api/lib/analytics/server-analytics";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { gradedDocumentFetchBudget } from "@/api/lib/legal-search/document-fetch-budget";
 import type {
   BackfilledDocument,
   PendingDocument,
 } from "@/api/lib/legal-search/sk-document-backfill";
+
+const TEXT_ELIGIBILITY_FINGERPRINT = "synthetic-text-eligibility";
 
 const availableBudget: OnDemandDocumentDeps["withFetchBudget"] = async (
   _adapterKey,
@@ -102,8 +118,8 @@ const recorder = (
     deps: {
       recordPacingOutcome: () => {},
       withFetchBudget: availableBudget,
-      recordRequest: async (id) => {
-        requested.push(id);
+      recordRequest: async ({ decisionId }) => {
+        requested.push(decisionId);
         await Promise.resolve();
       },
       fetchDocument: async (decision) => {
@@ -125,24 +141,34 @@ const recorder = (
 };
 
 describe("deferred document read-through", () => {
+  afterEach(() => {
+    resetDocumentFetchesForTesting();
+  });
+
   test("many readers of one decision cause one fetch", async () => {
     const { deps, fetched, release } = recorder();
     const decision = pending();
 
     const readers = [
       readThroughDeferredDocument({
+        textEligibilityFingerprint: TEXT_ELIGIBILITY_FINGERPRINT,
+        textRevisionFingerprint: TEXT_ELIGIBILITY_FINGERPRINT,
         adapterKey: "sk-courts",
         decision,
         deps,
         recordDemand: true,
       }),
       readThroughDeferredDocument({
+        textEligibilityFingerprint: TEXT_ELIGIBILITY_FINGERPRINT,
+        textRevisionFingerprint: TEXT_ELIGIBILITY_FINGERPRINT,
         adapterKey: "sk-courts",
         decision,
         deps,
         recordDemand: true,
       }),
       readThroughDeferredDocument({
+        textEligibilityFingerprint: TEXT_ELIGIBILITY_FINGERPRINT,
+        textRevisionFingerprint: TEXT_ELIGIBILITY_FINGERPRINT,
         adapterKey: "sk-courts",
         decision,
         deps,
@@ -157,11 +183,40 @@ describe("deferred document read-through", () => {
     expect(documents).toEqual([parsed, parsed, parsed]);
   });
 
+  test("readers with a different text revision do not share the transient document", async () => {
+    const { deps, fetched, release } = recorder();
+    const decision = pending();
+    const first = readThroughDeferredDocument({
+      textEligibilityFingerprint: TEXT_ELIGIBILITY_FINGERPRINT,
+      textRevisionFingerprint: TEXT_ELIGIBILITY_FINGERPRINT,
+      adapterKey: "sk-courts",
+      decision,
+      deps,
+      recordDemand: false,
+    });
+    const second = readThroughDeferredDocument({
+      textEligibilityFingerprint: "another-text-eligibility",
+      textRevisionFingerprint: TEXT_ELIGIBILITY_FINGERPRINT,
+      adapterKey: "sk-courts",
+      decision,
+      deps,
+      recordDemand: false,
+    });
+
+    release();
+
+    expect(await first).toEqual(parsed);
+    expect(await second).toBeNull();
+    expect(fetched).toEqual([decision.id]);
+  });
+
   test("a failed fetch reads as metadata-only and leaves the request recorded", async () => {
     const { deps, requested, release } = recorder("throws");
     const decision = pending();
 
     const reader = readThroughDeferredDocument({
+      textEligibilityFingerprint: TEXT_ELIGIBILITY_FINGERPRINT,
+      textRevisionFingerprint: TEXT_ELIGIBILITY_FINGERPRINT,
       adapterKey: "sk-courts",
       decision,
       deps,
@@ -178,6 +233,8 @@ describe("deferred document read-through", () => {
     const decision = pending();
 
     const reader = readThroughDeferredDocument({
+      textEligibilityFingerprint: TEXT_ELIGIBILITY_FINGERPRINT,
+      textRevisionFingerprint: TEXT_ELIGIBILITY_FINGERPRINT,
       adapterKey: "sk-courts",
       decision,
       deps,
@@ -197,6 +254,8 @@ describe("deferred document read-through", () => {
     const decision = pending();
 
     const reader = readThroughDeferredDocument({
+      textEligibilityFingerprint: TEXT_ELIGIBILITY_FINGERPRINT,
+      textRevisionFingerprint: TEXT_ELIGIBILITY_FINGERPRINT,
       adapterKey: "sk-courts",
       decision,
       deps,
@@ -212,6 +271,8 @@ describe("deferred document read-through", () => {
     const decision = pending();
 
     const reader = readThroughDeferredDocument({
+      textEligibilityFingerprint: TEXT_ELIGIBILITY_FINGERPRINT,
+      textRevisionFingerprint: TEXT_ELIGIBILITY_FINGERPRINT,
       adapterKey: "sk-courts",
       decision,
       deps,
@@ -219,8 +280,8 @@ describe("deferred document read-through", () => {
     });
     release();
 
-    // The other worker's fetch will store the document; this reader
-    // does not wait for it and does not fetch it again.
+    // The other worker owns its fetch. This reader returns metadata-only
+    // instead of sharing a transient AST from a different execution.
     expect(await reader).toBeNull();
   });
 
@@ -230,22 +291,24 @@ describe("deferred document read-through", () => {
 
     release();
     const first = await readThroughDeferredDocument({
+      textEligibilityFingerprint: TEXT_ELIGIBILITY_FINGERPRINT,
+      textRevisionFingerprint: TEXT_ELIGIBILITY_FINGERPRINT,
       adapterKey: "sk-courts",
       decision,
       deps,
       recordDemand: true,
     });
     const second = await readThroughDeferredDocument({
+      textEligibilityFingerprint: TEXT_ELIGIBILITY_FINGERPRINT,
+      textRevisionFingerprint: TEXT_ELIGIBILITY_FINGERPRINT,
       adapterKey: "sk-courts",
       decision,
       deps,
       recordDemand: true,
     });
 
-    // Nothing caches the outcome in memory: the second read runs the
-    // same idempotent unit again and reaches the same document. In
-    // production the first fetch has already filled the row, so the
-    // second read never gets this far.
+    // Transient results are not cached: a later read performs its own
+    // fetch. Durable ingestion is queued independently of this read.
     expect(fetched).toEqual([decision.id, decision.id]);
     expect(second).toEqual(first);
   });
@@ -254,18 +317,24 @@ describe("deferred document read-through", () => {
     const { deps, fetched, release } = recorder();
 
     const first = readThroughDeferredDocument({
+      textEligibilityFingerprint: TEXT_ELIGIBILITY_FINGERPRINT,
+      textRevisionFingerprint: TEXT_ELIGIBILITY_FINGERPRINT,
       adapterKey: "sk-courts",
       decision: pending(),
       deps,
       recordDemand: true,
     });
     const second = readThroughDeferredDocument({
+      textEligibilityFingerprint: TEXT_ELIGIBILITY_FINGERPRINT,
+      textRevisionFingerprint: TEXT_ELIGIBILITY_FINGERPRINT,
       adapterKey: "sk-courts",
       decision: pending(),
       deps,
       recordDemand: true,
     });
     const third = readThroughDeferredDocument({
+      textEligibilityFingerprint: TEXT_ELIGIBILITY_FINGERPRINT,
+      textRevisionFingerprint: TEXT_ELIGIBILITY_FINGERPRINT,
       adapterKey: "sk-courts",
       decision: pending(),
       deps,
@@ -355,6 +424,8 @@ describe("deferred document read-through", () => {
     test(`${name} reads as metadata-only rather than failing the read`, async () => {
       expect(
         await readThroughDeferredDocument({
+          textEligibilityFingerprint: TEXT_ELIGIBILITY_FINGERPRINT,
+          textRevisionFingerprint: TEXT_ELIGIBILITY_FINGERPRINT,
           adapterKey: "sk-courts",
           decision: pending(),
           deps: build(),
@@ -389,10 +460,157 @@ describe("deferred document read-through", () => {
     expect(isDeferredDocumentFetchable({ ...state, documentUrl: null })).toBe(
       false,
     );
-    // Other sources store the document during the crawl, so an empty
-    // one of theirs is a gap this path cannot fill.
+    // Other sources have no transient reader, so this path cannot fill
+    // an empty document for them.
     expect(isDeferredDocumentFetchable({ ...state, adapterKey: "cz-ns" })).toBe(
       false,
     );
+  });
+});
+
+for (const status of ["busy", "lost"] as const) {
+  test(`source ownership ${status} reads as metadata-only with a typed reason`, async () => {
+    const decision = pending();
+    const reasons: string[] = [];
+    const requested: string[] = [];
+    const deps: OnDemandDocumentDeps = {
+      withFetchBudget: availableBudget,
+      recordRequest: async ({ decisionId }) => {
+        requested.push(decisionId);
+      },
+      recordPacingOutcome: (id, reason) => {
+        expect(id).toBe(decision.id);
+        reasons.push(reason);
+      },
+      fetchDocument: async () => ({ status }),
+    };
+    expect(
+      await readThroughDeferredDocument({
+        textEligibilityFingerprint: TEXT_ELIGIBILITY_FINGERPRINT,
+        textRevisionFingerprint: TEXT_ELIGIBILITY_FINGERPRINT,
+        decision,
+        adapterKey: "sk-courts",
+        deps,
+        recordDemand: true,
+      }),
+    ).toBeNull();
+    expect(reasons).toEqual([`ownership-${status}`]);
+    expect(requested).toEqual([decision.id]);
+  });
+}
+
+describe("deferral reporting", () => {
+  const captured: ServerAnalyticsCaptureParams[] = [];
+
+  beforeEach(() => {
+    captured.length = 0;
+    resetCaptureWindows();
+    setAnalyticsForTesting({
+      capture: (event) => {
+        captured.push(event);
+      },
+      flush: async () => undefined,
+      identifyOrganizationGroup: () => undefined,
+    });
+  });
+
+  afterEach(() => {
+    resetCaptureWindows();
+    resetAnalyticsForTesting();
+  });
+
+  const deferrals = {
+    "pacing-deferred": true,
+    "pacing-unavailable": true,
+    "ownership-busy": true,
+    "ownership-lost": true,
+  } as const satisfies Record<DocumentReadDeferral, true>;
+
+  for (const outcome of Object.keys(deferrals).filter(
+    (key): key is DocumentReadDeferral => Object.hasOwn(deferrals, key),
+  )) {
+    test(`${outcome} deferral is not captured as an exception`, () => {
+      recordDocumentPacingOutcome(createSafeId<"caseLawDecision">(), outcome);
+      expect(captured).toEqual([]);
+    });
+  }
+
+  test("a fetch that outlasts its budget is not captured as an exception", async () => {
+    expect(
+      await readThroughDeferredDocument({
+        adapterKey: "sk-courts",
+        decision: pending(),
+        deps: {
+          recordPacingOutcome: () => {},
+          withFetchBudget: availableBudget,
+          recordRequest: async () => {},
+          fetchDocument: async () => {
+            const budget = gradedDocumentFetchBudget(AbortSignal.timeout(1));
+            await new Promise<void>((resolve) => {
+              budget.addEventListener("abort", () => {
+                resolve();
+              });
+            });
+            budget.throwIfAborted();
+            return panic("The budget has expired");
+          },
+        },
+        recordDemand: false,
+        textEligibilityFingerprint: TEXT_ELIGIBILITY_FINGERPRINT,
+        textRevisionFingerprint: TEXT_ELIGIBILITY_FINGERPRINT,
+      }),
+    ).toBeNull();
+    expect(captured).toEqual([]);
+  });
+
+  test("a fetch the request's own deadline aborts is not captured as an exception", async () => {
+    expect(
+      await readThroughDeferredDocument({
+        adapterKey: "sk-courts",
+        decision: pending(),
+        deps: {
+          recordPacingOutcome: () => {},
+          withFetchBudget: availableBudget,
+          recordRequest: async () => {},
+          fetchDocument: async () => {
+            // The request scope's signal, ungraded, ends before the read budget.
+            const requestDeadline = AbortSignal.timeout(1);
+            await new Promise<void>((resolve) => {
+              requestDeadline.addEventListener("abort", () => {
+                resolve();
+              });
+            });
+            requestDeadline.throwIfAborted();
+            return panic("The request deadline has passed");
+          },
+        },
+        recordDemand: false,
+        textEligibilityFingerprint: TEXT_ELIGIBILITY_FINGERPRINT,
+        textRevisionFingerprint: TEXT_ELIGIBILITY_FINGERPRINT,
+      }),
+    ).toBeNull();
+    expect(captured).toEqual([]);
+  });
+
+  test("a failing fetch is still captured as an exception", async () => {
+    expect(
+      await readThroughDeferredDocument({
+        adapterKey: "sk-courts",
+        decision: pending(),
+        deps: {
+          recordPacingOutcome: () => {},
+          withFetchBudget: availableBudget,
+          recordRequest: async () => {},
+          fetchDocument: async () => {
+            await Promise.resolve();
+            throw new Error("court site unreachable");
+          },
+        },
+        recordDemand: false,
+        textEligibilityFingerprint: TEXT_ELIGIBILITY_FINGERPRINT,
+        textRevisionFingerprint: TEXT_ELIGIBILITY_FINGERPRINT,
+      }),
+    ).toBeNull();
+    expect(captured).toHaveLength(1);
   });
 });

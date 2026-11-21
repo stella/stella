@@ -1,15 +1,177 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
+import fc from "fast-check";
 import { createServer } from "node:http";
 import type { RequestListener } from "node:http";
+
+import { assertProperty } from "@stll/property-testing";
+import { rejectionOf } from "@stll/property-testing/rejection";
+import { settledWithin, waitFor } from "@stll/test-kit";
 
 import {
   fetchStreamWithResolvedAddress,
   fetchWithResolvedAddress,
+} from "@/api/lib/auth/authorized-outbound-fetch";
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
+import { fetchStreamFollowingRedirects } from "@/api/lib/redirect-fetch";
+import {
   OUTBOUND_IPV6_POLICY,
+  OUTBOUND_USER_AGENT,
   parseSafeOutboundUrl,
   validateOutboundFetchTarget,
 } from "@/api/lib/safe-outbound-fetch";
+import { outboundPermitContract } from "@/api/lib/safe-outbound-fetch.type-test";
+import { HAPPY_PATH_TIMEOUT_MS } from "@/api/tests/test-timeouts";
+
+const fetchMetadataAt = async ({
+  port,
+  totalTimeoutMs = HAPPY_PATH_TIMEOUT_MS,
+  signal,
+}: {
+  port: number;
+  totalTimeoutMs?: number;
+  signal?: AbortSignal;
+}) =>
+  await fetchWithResolvedAddress({
+    permit: grantThirdPartyOutboundPermit(),
+    addresses: [{ address: "127.0.0.1", family: 4 }],
+    transfer: { type: "bounded-metadata", totalTimeoutMs },
+    signal,
+    url: new URL(`http://metadata.example.test:${port}/metadata`),
+  });
+
+describe("bounded metadata transfers", () => {
+  test("a progressing slow-drip body still expires at the total deadline", async () => {
+    let chunks = 0;
+    const completeAfter = 40;
+    let dripTarget: { write: (chunk: string) => void; end: () => void } | null =
+      null;
+    await withHttpServer(
+      (_request, response) => {
+        response.writeHead(200);
+        response.write("start");
+        chunks++;
+        dripTarget = response;
+        response.on("close", () => {
+          dripTarget = null;
+        });
+      },
+      async (port) => {
+        let settled:
+          { value: Awaited<ReturnType<typeof fetchMetadataAt>> } | undefined;
+        const pending = fetchMetadataAt({ port, totalTimeoutMs: 200 }).then(
+          (value) => {
+            settled = { value };
+            return value;
+          },
+        );
+        // Each re-check drips one more byte while the transfer is admitted,
+        // so the body keeps progressing until the total deadline ends it.
+        const { value: result } = await waitFor(
+          () => {
+            if (settled === undefined && dripTarget !== null) {
+              chunks++;
+              dripTarget.write(".");
+              if (chunks === completeAfter) {
+                dripTarget.end();
+              }
+            }
+            return settled;
+          },
+          {
+            description: "the slow-drip transfer to settle",
+            intervalMs: 10,
+            timeoutMs: HAPPY_PATH_TIMEOUT_MS,
+          },
+        );
+        await pending;
+        expect(result.isErr()).toBe(true);
+        if (result.isErr()) {
+          expect(result.error.message).toBe("Request timed out");
+        }
+        expect(chunks).toBeGreaterThan(1);
+        expect(chunks).toBeLessThan(completeAfter);
+      },
+    );
+  });
+
+  test("the fixed 64 KiB cap rejects even one extra byte", async () => {
+    await withHttpServer(
+      (_request, response) => {
+        response.end("x".repeat(64 * 1024 + 1));
+      },
+      async (port) => {
+        const result = await fetchMetadataAt({ port });
+        expect(result.isErr()).toBe(true);
+        if (result.isErr()) {
+          expect(result.error.message).toBe(
+            "Response body exceeded size limit",
+          );
+        }
+      },
+    );
+  });
+
+  test("redirects are refused without following a new destination", async () => {
+    let requests = 0;
+    let host: string | undefined;
+    const closed = Promise.withResolvers<boolean>();
+    await withHttpServer(
+      (request, response) => {
+        requests++;
+        host = request.headers.host;
+        response.writeHead(302, {
+          Location: "https://elsewhere.example/target",
+        });
+        // The body stays open, so only the client can end the connection.
+        response.write("redirect body");
+        response.on("close", () => {
+          closed.resolve(true);
+        });
+      },
+      async (port) => {
+        const result = await fetchMetadataAt({ port, totalTimeoutMs: 200 });
+        expect(result.isErr()).toBe(true);
+        if (result.isErr()) {
+          expect(result.error.message).toBe("Redirects are not allowed");
+        }
+        const observedClosed = await settledWithin(closed.promise, {
+          description: "the refused redirect's connection to close",
+          timeoutMs: HAPPY_PATH_TIMEOUT_MS,
+        });
+        expect(observedClosed).toBe(true);
+        expect(requests).toBe(1);
+        expect(host).toBe(`metadata.example.test:${port}`);
+      },
+    );
+  });
+
+  test("caller abort ends an admitted body and preserves its reason", async () => {
+    const controller = new AbortController();
+    const reason = new Error("metadata caller stopped");
+    let admitted = false;
+    await withHttpServer(
+      (_request, response) => {
+        admitted = true;
+        response.writeHead(200);
+        response.write("partial");
+        controller.abort(reason);
+      },
+      async (port) => {
+        const result = await fetchMetadataAt({
+          port,
+          totalTimeoutMs: 200,
+          signal: controller.signal,
+        });
+        expect(admitted).toBe(true);
+        expect(result.isErr()).toBe(true);
+        if (result.isErr()) {
+          expect(result.error.cause).toBe(reason);
+        }
+      },
+    );
+  });
+});
 
 describe("fetchWithResolvedAddress", () => {
   test("connects to the pre-resolved address while preserving the URL host", async () => {
@@ -19,9 +181,10 @@ describe("fetchWithResolvedAddress", () => {
       },
       async (port) => {
         const result = await fetchWithResolvedAddress({
+          permit: grantThirdPartyOutboundPermit(),
           addresses: [{ address: "127.0.0.1", family: 4 }],
           maxBytes: 1024,
-          timeoutMs: 1000,
+          timeoutMs: HAPPY_PATH_TIMEOUT_MS,
           url: new URL(`http://example.test:${port}/probe`),
         });
 
@@ -37,6 +200,60 @@ describe("fetchWithResolvedAddress", () => {
     );
   });
 
+  test("names stella as the User-Agent unless the caller names one", async () => {
+    await withHttpServer(
+      (request, response) => {
+        response.end(request.headers["user-agent"] ?? "(none)");
+      },
+      async (port) => {
+        const userAgentSent = async (headers?: Record<string, string>) => {
+          const result = await fetchWithResolvedAddress({
+            permit: grantThirdPartyOutboundPermit(),
+            addresses: [{ address: "127.0.0.1", family: 4 }],
+            maxBytes: 1024,
+            timeoutMs: HAPPY_PATH_TIMEOUT_MS,
+            url: new URL(`http://example.test:${port}/probe`),
+            ...(headers === undefined ? {} : { headers }),
+          });
+          if (Result.isError(result)) {
+            throw result.error;
+          }
+          return new TextDecoder().decode(result.value.body);
+        };
+
+        expect(await userAgentSent()).toBe(OUTBOUND_USER_AGENT);
+        expect(OUTBOUND_USER_AGENT).toStartWith("stella-api/");
+        expect(await userAgentSent({ "User-Agent": "stella-ingestion" })).toBe(
+          "stella-ingestion",
+        );
+      },
+    );
+  });
+
+  test("streams name stella as the User-Agent too", async () => {
+    await withHttpServer(
+      (request, response) => {
+        response.end(request.headers["user-agent"] ?? "(none)");
+      },
+      async (port) => {
+        const result = await fetchStreamWithResolvedAddress({
+          permit: grantThirdPartyOutboundPermit(),
+          addresses: [{ address: "127.0.0.1", family: 4 }],
+          maxBytes: 1024,
+          timeoutMs: HAPPY_PATH_TIMEOUT_MS,
+          url: new URL(`http://example.test:${port}/probe`),
+        });
+        if (Result.isError(result)) {
+          throw result.error;
+        }
+
+        expect(await new Response(result.value.body).text()).toBe(
+          OUTBOUND_USER_AGENT,
+        );
+      },
+    );
+  });
+
   test("falls back when the first resolved address is unreachable", async () => {
     await withHttpServer(
       (_request, response) => {
@@ -44,12 +261,13 @@ describe("fetchWithResolvedAddress", () => {
       },
       async (port) => {
         const result = await fetchWithResolvedAddress({
+          permit: grantThirdPartyOutboundPermit(),
           addresses: [
             { address: "::1", family: 6 },
             { address: "127.0.0.1", family: 4 },
           ],
           maxBytes: 1024,
-          timeoutMs: 1000,
+          timeoutMs: HAPPY_PATH_TIMEOUT_MS,
           url: new URL(`http://example.test:${port}/probe`),
         });
 
@@ -69,9 +287,10 @@ describe("fetchWithResolvedAddress", () => {
       },
       async (port) => {
         const result = await fetchWithResolvedAddress({
+          permit: grantThirdPartyOutboundPermit(),
           addresses: [{ address: "127.0.0.1", family: 4 }],
           maxBytes: 4,
-          timeoutMs: 1000,
+          timeoutMs: HAPPY_PATH_TIMEOUT_MS,
           url: new URL(`http://example.test:${port}/large`),
         });
 
@@ -88,9 +307,10 @@ describe("fetchWithResolvedAddress", () => {
       },
       async (port) => {
         const result = await fetchWithResolvedAddress({
+          permit: grantThirdPartyOutboundPermit(),
           addresses: [{ address: "127.0.0.1", family: 4 }],
           maxBytes: 1024,
-          timeoutMs: 1000,
+          timeoutMs: HAPPY_PATH_TIMEOUT_MS,
           url: new URL(`http://example.test:${port}/redirect`),
         });
 
@@ -107,10 +327,11 @@ describe("fetchWithResolvedAddress", () => {
       },
       async (port) => {
         const result = await fetchWithResolvedAddress({
+          permit: grantThirdPartyOutboundPermit(),
           addresses: [{ address: "127.0.0.1", family: 4 }],
           maxBytes: 1024,
           redirect: "manual",
-          timeoutMs: 1000,
+          timeoutMs: HAPPY_PATH_TIMEOUT_MS,
           url: new URL(`http://example.test:${port}/redirect`),
         });
 
@@ -125,6 +346,36 @@ describe("fetchWithResolvedAddress", () => {
     );
   });
 
+  test("header timeout permits a byte body to finish after headers arrive", async () => {
+    await withHttpServer(
+      (_request, response) => {
+        response.writeHead(200);
+        response.write("partial");
+        setTimeout(() => {
+          response.end("complete");
+        }, 150);
+      },
+      async (port) => {
+        const result = await fetchWithResolvedAddress({
+          permit: grantThirdPartyOutboundPermit(),
+          addresses: [{ address: "127.0.0.1", family: 4 }],
+          maxBytes: 1024,
+          signal: AbortSignal.timeout(1000),
+          timeoutMs: HAPPY_PATH_TIMEOUT_MS,
+          timeoutPolicy: "headers",
+          url: new URL(`http://example.test:${port}/slow-body`),
+        });
+        expect(Result.isOk(result)).toBe(true);
+        if (Result.isError(result)) {
+          throw result.error;
+        }
+        expect(new TextDecoder().decode(result.value.body)).toBe(
+          "partialcomplete",
+        );
+      },
+    );
+  });
+
   test("aborts a byte response that stops sending its body", async () => {
     await withHttpServer(
       (_request, response) => {
@@ -134,13 +385,16 @@ describe("fetchWithResolvedAddress", () => {
       async (port) => {
         const controller = new AbortController();
         const pending = fetchWithResolvedAddress({
+          permit: grantThirdPartyOutboundPermit(),
           addresses: [{ address: "127.0.0.1", family: 4 }],
           maxBytes: 1024,
           signal: controller.signal,
-          timeoutMs: 1000,
+          timeoutMs: HAPPY_PATH_TIMEOUT_MS,
           url: new URL(`http://example.test:${port}/stalled`),
         });
-        setTimeout(() => controller.abort(), 10);
+        setTimeout(() => {
+          controller.abort();
+        }, 10);
         const result = await pending;
         expect(Result.isError(result)).toBe(true);
       },
@@ -161,10 +415,11 @@ describe("fetchWithResolvedAddress", () => {
           fetchStreamWithResolvedAddress,
         ]) {
           const result = await fetch({
+            permit: grantThirdPartyOutboundPermit(),
             addresses: [{ address: "127.0.0.1", family: 4 }],
             maxBytes: 1024,
             signal: controller.signal,
-            timeoutMs: 1000,
+            timeoutMs: HAPPY_PATH_TIMEOUT_MS,
             url: new URL(`http://example.test:${port}/pre-aborted`),
           });
           expect(result.isErr()).toBe(true);
@@ -172,6 +427,125 @@ describe("fetchWithResolvedAddress", () => {
             expect(result.error.cause).toBe(abortReason);
           }
         }
+      },
+    );
+  });
+
+  test("stream redirects remain refused unless manual handling is requested", async () => {
+    await withHttpServer(
+      (_request, response) => {
+        response.writeHead(302, { Location: "/target" });
+        response.end();
+      },
+      async (port) => {
+        const options = {
+          permit: grantThirdPartyOutboundPermit(),
+          addresses: [{ address: "127.0.0.1", family: 4 }],
+          maxBytes: 1024,
+          timeoutMs: HAPPY_PATH_TIMEOUT_MS,
+          url: new URL(`http://example.test:${port}/redirect`),
+        } as const;
+        const refused = await fetchStreamWithResolvedAddress(options);
+        expect(refused.isErr()).toBe(true);
+        if (refused.isErr()) {
+          expect(refused.error.message).toBe("Redirects are not allowed");
+        }
+        const manual = await fetchStreamWithResolvedAddress({
+          ...options,
+          redirect: "manual",
+        });
+        const response = manual.unwrap();
+        expect(response.status).toBe(302);
+        expect(response.headers.get("location")).toBe("/target");
+        await response.body.cancel();
+      },
+    );
+  });
+
+  test("revalidates streamed redirect targets before another connection", async () => {
+    for (const location of [
+      "https://127.0.0.1/private?token=secret",
+      "http://publisher.test/plaintext",
+      "https://name:secret@publisher.test/file",
+      "https://publisher.test/file#fragment",
+    ]) {
+      let connections = 0;
+      await withHttpServer(
+        (_request, response) => {
+          connections += 1;
+          response.writeHead(302, { Location: location });
+          response.write("redirect body remains open");
+        },
+        async (port) => {
+          const result = await fetchStreamFollowingRedirects({
+            url: "https://publisher.test/file",
+            maxHops: 4,
+            fetchStream: async (target) => {
+              const validated = await validateOutboundFetchTarget(target, {
+                resolveAddresses: async () =>
+                  Result.ok([{ address: "93.184.216.34", family: 4 }]),
+              });
+              if (validated.isErr()) {
+                return validated;
+              }
+              const transportUrl = new URL(validated.value.url);
+              transportUrl.protocol = "http:";
+              transportUrl.port = String(port);
+              return await fetchStreamWithResolvedAddress({
+                permit: grantThirdPartyOutboundPermit(),
+                addresses: [{ address: "127.0.0.1", family: 4 }],
+                maxBytes: 1024,
+                redirect: "manual",
+                timeoutMs: HAPPY_PATH_TIMEOUT_MS,
+                url: transportUrl,
+              });
+            },
+          });
+          expect(result.isErr()).toBe(true);
+          expect(connections).toBe(1);
+          if (result.isErr()) {
+            expect(result.error.message).not.toContain("secret");
+          }
+        },
+      );
+    }
+  });
+
+  test("a shared abort signal bounds the final body after streamed redirects", async () => {
+    await withHttpServer(
+      (request, response) => {
+        if (request.url === "/start") {
+          response.writeHead(302, { Location: "/stalled" });
+          response.write("redirect");
+          return;
+        }
+        response.writeHead(200);
+        response.write("partial");
+      },
+      async (port) => {
+        const controller = new AbortController();
+        const abortReason = new Error("shared deadline reached");
+        const result = await fetchStreamFollowingRedirects({
+          url: `http://publisher.test:${port}/start`,
+          maxHops: 4,
+          fetchStream: async (target) =>
+            await fetchStreamWithResolvedAddress({
+              permit: grantThirdPartyOutboundPermit(),
+              addresses: [{ address: "127.0.0.1", family: 4 }],
+              maxBytes: 1024,
+              redirect: "manual",
+              signal: controller.signal,
+              timeoutMs: HAPPY_PATH_TIMEOUT_MS,
+              url: new URL(target),
+            }),
+        });
+        const reader = result.unwrap().body.getReader();
+        expect((await reader.read()).done).toBe(false);
+        const pendingRead = reader.read();
+        controller.abort(abortReason);
+        const read = await Result.tryPromise(async () => await pendingRead);
+        expect(read.isErr()).toBe(true);
+        reader.releaseLock();
       },
     );
   });
@@ -184,9 +558,10 @@ describe("fetchWithResolvedAddress", () => {
       },
       async (port) => {
         const result = await fetchStreamWithResolvedAddress({
+          permit: grantThirdPartyOutboundPermit(),
           addresses: [{ address: "127.0.0.1", family: 4 }],
           maxBytes: 1024,
-          timeoutMs: 1000,
+          timeoutMs: HAPPY_PATH_TIMEOUT_MS,
           url: new URL(`http://example.test:${port}/events`),
         });
 
@@ -215,12 +590,13 @@ describe("fetchWithResolvedAddress", () => {
       },
       async (port) => {
         const result = await fetchStreamWithResolvedAddress({
+          permit: grantThirdPartyOutboundPermit(),
           addresses: [
             { address: "::1", family: 6 },
             { address: "127.0.0.1", family: 4 },
           ],
           maxBytes: 1024,
-          timeoutMs: 1000,
+          timeoutMs: HAPPY_PATH_TIMEOUT_MS,
           url: new URL(`http://example.test:${port}/events`),
         });
 
@@ -516,7 +892,7 @@ describe("validateOutboundFetchTarget", () => {
           await new Promise(() => {
             // Intentionally never resolves: the validation deadline must win.
           }),
-        timeoutMs: 5,
+        timeoutMs: 5, // timeout under test
       },
     );
 
@@ -537,7 +913,7 @@ describe("validateOutboundFetchTarget", () => {
             // The abort must settle validation while DNS is still pending.
           }),
         signal: controller.signal,
-        timeoutMs: 1000,
+        timeoutMs: HAPPY_PATH_TIMEOUT_MS,
       },
     );
     controller.abort();
@@ -608,6 +984,61 @@ const withHttpServer = async (
         }
         resolve();
       });
+      server.closeAllConnections();
     });
   }
 };
+
+describe("outbound request authority", () => {
+  const requests = Object.values(outboundPermitContract);
+
+  test("checks issued identities before request preparation", async () => {
+    for (const request of requests) {
+      for (const permit of [
+        undefined,
+        null,
+        {},
+        { ...grantThirdPartyOutboundPermit() },
+      ]) {
+        expect(
+          await rejectionOf(Reflect.apply(request, undefined, [{ permit }])),
+        ).toMatchObject({
+          message: "An issued third-party outbound permit is required",
+        });
+      }
+    }
+  });
+
+  test("issued identities reach request validation", async () => {
+    for (const request of requests) {
+      const result = await request({
+        addresses: [],
+        maxBytes: 1024,
+        permit: grantThirdPartyOutboundPermit(),
+        timeoutMs: HAPPY_PATH_TIMEOUT_MS,
+        url: new URL("file:///fixture"),
+      });
+      expect(result.isErr()).toBe(true);
+      if (result.isErr()) {
+        expect(result.error.message).toMatch(
+          /No resolved address available|URL must use HTTPS/u,
+        );
+      }
+    }
+  });
+
+  test("outbound authority accepts only issued identities", async () => {
+    await assertProperty(
+      "outbound authority accepts only issued identities",
+      fc.asyncProperty(fc.jsonValue(), async (permit) => {
+        for (const request of requests) {
+          expect(
+            await rejectionOf(Reflect.apply(request, undefined, [{ permit }])),
+          ).toMatchObject({
+            message: "An issued third-party outbound permit is required",
+          });
+        }
+      }),
+    );
+  });
+});

@@ -46,6 +46,15 @@ export const Fixture = () => (
       <SettingsIcon />
     </Button>
 
+    <Button aria-label={t("close")} size="icon-xs">
+      <XIcon />
+    </Button>
+
+    {/* oxlint-disable-next-line icon-button-requires-tooltip/icon-button-requires-tooltip -- fixture: a text-size Button derives no tooltip from its label */}
+    <Button aria-label={t("close")} size="sm">
+      <XIcon />
+    </Button>
+
     {/* oxlint-disable-next-line icon-button-requires-tooltip/icon-button-requires-tooltip -- fixture: native icon-only button without tooltip must be reported */}
     <button aria-label={t("close")} type="button">
       <XIcon />

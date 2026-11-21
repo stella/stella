@@ -1,7 +1,13 @@
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
+import { sleep } from "@stll/concurrency/sleep";
+import { createTestClock } from "@stll/test-kit";
+
 import { desktopEditSessionEventsHandler } from "@/api/handlers/entities/desktop-edit-session-events";
 import { toSafeId } from "@/api/lib/branded-types";
+import { closeSessionConnections } from "@/api/lib/desktop-edit-session-notifications";
+import { LIMITS } from "@/api/lib/limits";
+import { broadcastSessionEvent } from "@/api/lib/sse";
 
 const authorizeDesktopEditSessionMock = mock();
 const readDesktopEditSessionEventStateMock = mock();
@@ -21,6 +27,7 @@ const sessionId = toSafeId<"desktopEditSession">(
   "019aa0bc-d957-7bb3-9234-9c2440377225",
 );
 const sessionToken = "a".repeat(64);
+const testClock = createTestClock();
 
 /** Stands in for the session's scoped handle: one fresh transaction per call. */
 const createSessionScope = () => {
@@ -58,6 +65,38 @@ describe("desktop edit session events", () => {
     );
   });
 
+  test("one session keeps at most the stream limit open, closing its oldest", async () => {
+    const scope = createSessionScope();
+    authorizeDesktopEditSessionMock.mockResolvedValue({
+      status: "authorized",
+      value: { scopedDb: scope.scopedDb, userId: "user-1" },
+    });
+    readDesktopEditSessionEventStateMock.mockResolvedValue({
+      pendingRequest: null,
+    });
+
+    const readers = [];
+    for (let index = 0; index <= LIMITS.desktopEditSessionStreams; index++) {
+      const response = await desktopEditSessionEventsHandlerForTest({
+        headers: { authorization: `Bearer ${sessionToken}` },
+        sessionId,
+      });
+      if (!(response instanceof Response) || response.body === null) {
+        throw new TypeError("Expected an SSE response with a body.");
+      }
+      const reader = response.body.getReader();
+      // The connected comment flushes headers on every admitted stream.
+      expect((await reader.read()).done).toBe(false);
+      readers.push(reader);
+    }
+
+    const [oldest, ...newer] = readers;
+    expect((await oldest?.read())?.done).toBe(true);
+    for (const reader of newer) {
+      await reader.cancel();
+    }
+  });
+
   test("reads state and refreshes liveness in separate scoped transactions", async () => {
     const scope = createSessionScope();
     authorizeDesktopEditSessionMock.mockResolvedValue({
@@ -74,7 +113,7 @@ describe("desktop edit session events", () => {
     });
 
     if (!(response instanceof Response)) {
-      throw new Error(
+      throw new TypeError(
         "Expected desktop edit events to return an SSE response.",
       );
     }
@@ -123,9 +162,7 @@ describe("desktop edit session events", () => {
       return response;
     });
 
-    await new Promise<void>((resolve) => {
-      setTimeout(resolve, 0);
-    });
+    await sleep(0);
     expect(refreshDesktopEditSessionLivenessMock).toHaveBeenCalledWith(
       scope.transactions.at(1),
       {
@@ -139,11 +176,90 @@ describe("desktop edit session events", () => {
 
     const response = await responsePromise;
     if (!(response instanceof Response)) {
-      throw new Error(
+      throw new TypeError(
         "Expected desktop edit events to return an SSE response.",
       );
     }
 
     await response.body?.cancel();
+  });
+
+  test("closes the stream when its token no longer refreshes", async () => {
+    const scope = createSessionScope();
+    authorizeDesktopEditSessionMock.mockResolvedValue({
+      status: "authorized",
+      value: { scopedDb: scope.scopedDb, userId: "user-1" },
+    });
+    readDesktopEditSessionEventStateMock.mockResolvedValue({
+      pendingRequest: null,
+    });
+    refreshDesktopEditSessionLivenessMock.mockResolvedValueOnce(true);
+    refreshDesktopEditSessionLivenessMock.mockResolvedValue(false);
+
+    const response = await desktopEditSessionEventsHandler(
+      {
+        headers: { authorization: `Bearer ${sessionToken}` },
+        sessionId,
+      },
+      {
+        authorizeDesktopEditSession: authorizeDesktopEditSessionMock,
+        livenessRefreshIntervalMs: 1,
+        readDesktopEditSessionEventState: readDesktopEditSessionEventStateMock,
+        refreshDesktopEditSessionLiveness:
+          refreshDesktopEditSessionLivenessMock,
+      },
+    );
+    if (!(response instanceof Response) || response.body === null) {
+      throw new Error(
+        "Expected desktop edit events to return a readable SSE response.",
+      );
+    }
+
+    const reader = response.body.getReader();
+    expect(await reader.read()).toEqual({
+      done: false,
+      value: new TextEncoder().encode(": connected\n\n"),
+    });
+    const closed = reader.read();
+    expect(await closed).toEqual({ done: true, value: undefined });
+  });
+
+  test("closes the previous bearer stream before delivering later takeover events", async () => {
+    const scope = createSessionScope();
+    authorizeDesktopEditSessionMock.mockResolvedValue({
+      status: "authorized",
+      value: { scopedDb: scope.scopedDb, userId: "user-1" },
+    });
+    readDesktopEditSessionEventStateMock.mockResolvedValue({
+      pendingRequest: null,
+    });
+
+    const response = await desktopEditSessionEventsHandlerForTest({
+      headers: { authorization: `Bearer ${sessionToken}` },
+      sessionId,
+    });
+    if (!(response instanceof Response) || response.body === null) {
+      throw new Error(
+        "Expected desktop edit events to return a readable SSE response.",
+      );
+    }
+
+    const reader = response.body.getReader();
+    expect(await reader.read()).toEqual({
+      done: false,
+      value: new TextEncoder().encode(": connected\n\n"),
+    });
+
+    closeSessionConnections(sessionId);
+    expect(await reader.read()).toEqual({ done: true, value: undefined });
+
+    broadcastSessionEvent(sessionId, {
+      type: "takeover-requested",
+      data: {
+        requestedBy: "Replacement editor",
+        requestedAt: new Date(testClock.now()).toISOString(),
+      },
+    });
+    expect(await reader.read()).toEqual({ done: true, value: undefined });
   });
 });

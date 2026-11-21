@@ -1,7 +1,8 @@
 import type { APIRequestContext } from "@playwright/test";
-import JSZip from "jszip";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
+
+import { ZipArchive } from "@stll/docx-core/zip";
 
 import {
   apiDownloadFileField,
@@ -9,11 +10,18 @@ import {
   apiStatus,
   apiUploadDocx,
 } from "../helpers/api";
+import { createProfileTestSession } from "../helpers/profile-session";
 import { expect, test } from "../helpers/test";
 import {
-  type TestWorkspace,
+  PLAYWRIGHT_EXPECT_TIMEOUT_10_SECONDS_MS,
+  PLAYWRIGHT_EXPECT_TIMEOUT_20_SECONDS_MS,
+  PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
+  PLAYWRIGHT_EXPECT_TIMEOUT_45_SECONDS_MS,
+} from "../helpers/wait-budgets";
+import {
   createTestWorkspace,
   deleteTestWorkspace,
+  type TestWorkspace,
 } from "../helpers/workspace";
 
 const DOCX_MIME =
@@ -84,7 +92,7 @@ const waitForFileFieldId = async (
           findFileFieldForProperty(entity, propertyId)?.id ?? null;
         return result.fieldId;
       },
-      { timeout: 30_000 },
+      { timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS },
     )
     .not.toBeNull();
   if (result.fieldId === null) {
@@ -118,7 +126,7 @@ const waitForDocumentContaining = async (
         result.xml = xml;
         return true;
       },
-      { timeout: 30_000 },
+      { timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS },
     )
     .toBe(true);
   if (result.xml === null) {
@@ -128,8 +136,8 @@ const waitForDocumentContaining = async (
 };
 
 const readDocumentXml = async (docxBuffer: Buffer) => {
-  const zip = await JSZip.loadAsync(docxBuffer);
-  const documentXml = await zip.file("word/document.xml")?.async("text");
+  const zip = await ZipArchive.read(docxBuffer);
+  const documentXml = await zip.entry("word/document.xml")?.text();
   if (documentXml === undefined) {
     throw new Error("Saved DOCX is missing word/document.xml");
   }
@@ -140,24 +148,41 @@ for (const locale of ["cs", "en", "ar"] as const) {
   test.describe(`DOCX evidence references (${locale})`, () => {
     test.use({ locale });
     let workspace: TestWorkspace | null = null;
+    let profileSession: Awaited<
+      ReturnType<typeof createProfileTestSession>
+    > | null = null;
 
-    test.beforeEach(async ({ request }) => {
-      workspace = await createTestWorkspace(request, "evidence-references");
+    test.beforeEach(async ({ page, baseURL }) => {
+      profileSession = await createProfileTestSession({
+        page,
+        label: "evidence-references",
+        webUrl: baseURL ?? "http://localhost:3000",
+        locale,
+      });
+      workspace = await createTestWorkspace(
+        page.request,
+        "evidence-references",
+      );
     });
 
-    test.afterEach(async ({ page, request }) => {
-      if (workspace === null) {
-        return;
+    test.afterEach(async ({ page }, testInfo) => {
+      try {
+        if (workspace !== null) {
+          await deleteTestWorkspace(page.request, workspace.id, {
+            leave: { page, testInfo },
+          });
+          workspace = null;
+        }
+      } finally {
+        await profileSession?.cleanup();
+        profileSession = null;
       }
-      await page.goto("about:blank", { waitUntil: "commit" });
-      await deleteTestWorkspace(request, workspace.id);
-      workspace = null;
     });
 
     test("persists references, resolves the source, and renumbers after reload", async ({
       page,
-      request,
     }) => {
+      const request = page.request;
       const messages = await readEvidenceMessages(locale);
       const testWorkspace = workspace;
       if (testWorkspace === null) {
@@ -234,7 +259,7 @@ for (const locale of ["cs", "en", "ar"] as const) {
         .poll(
           async () =>
             await apiStatus(page.request, `/workspaces/${testWorkspace.id}`),
-          { timeout: 10_000 },
+          { timeout: PLAYWRIGHT_EXPECT_TIMEOUT_10_SECONDS_MS },
         )
         .toBe(200);
 
@@ -247,7 +272,7 @@ for (const locale of ["cs", "en", "ar"] as const) {
         page.locator(".layout-run-text", {
           hasText: "Stella E2E test document.",
         }),
-      ).toBeVisible({ timeout: 45_000 });
+      ).toBeVisible({ timeout: PLAYWRIGHT_EXPECT_TIMEOUT_45_SECONDS_MS });
 
       await expect(page.locator("html")).toHaveAttribute("lang", locale);
       await expect(page.locator("html")).toHaveAttribute(
@@ -269,7 +294,7 @@ for (const locale of ["cs", "en", "ar"] as const) {
       await expect(evidenceDialog).toBeHidden();
       await expect(
         page.locator('[aria-label="Document content"][contenteditable="true"]'),
-      ).toBeVisible({ timeout: 45_000 });
+      ).toBeVisible({ timeout: PLAYWRIGHT_EXPECT_TIMEOUT_45_SECONDS_MS });
 
       await page
         .locator('[aria-label="Document content"][contenteditable="true"]')
@@ -277,7 +302,7 @@ for (const locale of ["cs", "en", "ar"] as const) {
       await page.keyboard.type(": Faktura");
       await expect(
         page.locator(".layout-run-text", { hasText: "Důkaz 1" }),
-      ).toBeVisible({ timeout: 20_000 });
+      ).toBeVisible({ timeout: PLAYWRIGHT_EXPECT_TIMEOUT_20_SECONDS_MS });
 
       const finalizeResponse = page.waitForResponse(
         (response) =>
@@ -309,7 +334,7 @@ for (const locale of ["cs", "en", "ar"] as const) {
       );
       await expect(
         page.locator('[aria-label="Document content"][contenteditable="true"]'),
-      ).toBeVisible({ timeout: 45_000 });
+      ).toBeVisible({ timeout: PLAYWRIGHT_EXPECT_TIMEOUT_45_SECONDS_MS });
 
       await evidenceButton.click();
       const reloadedDialog = page.getByRole("dialog", {
@@ -344,7 +369,7 @@ for (const locale of ["cs", "en", "ar"] as const) {
         .click();
       await expect(
         page.locator(".layout-run-text", { hasText: "Důkaz 2" }),
-      ).toBeVisible({ timeout: 20_000 });
+      ).toBeVisible({ timeout: PLAYWRIGHT_EXPECT_TIMEOUT_20_SECONDS_MS });
 
       const secondFinalizeResponse = page.waitForResponse(
         (response) =>

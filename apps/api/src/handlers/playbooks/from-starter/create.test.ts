@@ -16,7 +16,9 @@ import { createSafeDb } from "@/api/db/scoped";
 import { deriveAutoAsks } from "@/api/handlers/playbooks/derive-ask";
 import createPlaybookFromStarter from "@/api/handlers/playbooks/from-starter/create";
 import { instantiateStarterPositions } from "@/api/handlers/playbooks/instantiate-starter";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
+import type { SafeHandlerLogContext } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -25,6 +27,7 @@ import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import type { PlaybookPositions } from "@/api/lib/workflow/playbook-positions";
 import { assertPositionsValid } from "@/api/lib/workflow/playbook-positions-validation";
 import { STARTER_PLAYBOOKS } from "@/api/lib/workflow/starter-playbooks";
+import { testModelActionAdmitter } from "@/api/tests/helpers/model-dispatch-admission";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 import {
@@ -75,7 +78,7 @@ const createOrgContext = (
     promptCachingEnabled: false,
     recordAuditEvent: noopAuditRecorder,
     request: new Request("https://example.test/playbooks/from-starter"),
-    route: "/playbooks/from-starter",
+    route: "/v1/playbooks/from-starter" satisfies ApiRoutePath,
     safeDb,
     session: { activeOrganizationId: organizationId },
     user: { id: userId },
@@ -83,12 +86,12 @@ const createOrgContext = (
 };
 
 // The exported `.handler` returns the *unwrapped* success payload on ok, or an
-// Elysia status response ({ code, ... }) on error — not a raw Result.
-type TestEndpoint<TContext> = {
+// `HttpStatusResponse` ({ code, ... }) on error — not a raw Result.
+type TestEndpoint<TContext extends SafeHandlerLogContext> = {
   handler: (context: TContext) => Promise<unknown>;
 };
 
-const runHandler = async <TContext>(
+const runHandler = async <TContext extends SafeHandlerLogContext>(
   endpoint: TestEndpoint<TContext>,
   context: OrgContext,
   requestShape: Record<string, unknown>,
@@ -232,6 +235,7 @@ describe("starter playbook content", () => {
 
     for (const starter of STARTER_PLAYBOOKS) {
       await deriveAutoAsks(instantiateStarterPositions(starter.positions), {
+        admitModelAction: testModelActionAdmitter(ids.orgA),
         organizationId: ids.orgA,
         orgAIConfig: null,
         orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,

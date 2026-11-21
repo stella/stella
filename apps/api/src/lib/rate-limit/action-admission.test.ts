@@ -7,6 +7,52 @@ import {
   ActionAdmissionError,
   withActionAdmission,
 } from "@/api/lib/rate-limit/action-admission";
+import type { ActionCostObservation } from "@/api/lib/usage/action-costs/context";
+
+test("pending action admission retains its organization and execution callback", async () => {
+  const entered = Promise.withResolvers<undefined>();
+  const proceed = Promise.withResolvers<undefined>();
+  const observedOrganizations: string[] = [];
+  const acquisitionKeys: string[] = [];
+  const options = {
+    enabled: true,
+    organizationId,
+    userId: firstUser,
+    policy: { ...policy },
+    periodIdentity: {
+      actionKind: "chat.send",
+      logicalPhaseId: "original-phase",
+    },
+    costRecorder: {
+      enqueue: (observation: ActionCostObservation) => {
+        observedOrganizations.push(observation.record.organizationId);
+      },
+      estimate: () => 0,
+      callRate: () => 0,
+    },
+    redis: {
+      send: async (_command: string, args: string[]) => {
+        if (args.at(0)?.includes("ZREMRANGEBYSCORE")) {
+          acquisitionKeys.push(args.at(2) ?? "missing");
+          entered.resolve(undefined);
+          await proceed.promise;
+        }
+        return 1;
+      },
+    },
+    run: async () => await Promise.resolve("original"),
+  } satisfies Parameters<typeof withActionAdmission>[0];
+  const admitted = withActionAdmission(options);
+  await entered.promise;
+  options.organizationId = toSafeId<"organization">("org_changed");
+  options.periodIdentity.logicalPhaseId = "changed-phase";
+  options.run = async () => await Promise.resolve("changed");
+  proceed.resolve(undefined);
+  expect(await admitted).toEqual(Result.ok("original"));
+  expect(acquisitionKeys).toHaveLength(1);
+  expect(acquisitionKeys.at(0)).toContain("org_a");
+  expect(observedOrganizations).toEqual([organizationId, organizationId]);
+});
 
 test("period exhaustion has its own non-transient code before execution", async () => {
   let calls = 0;
@@ -16,6 +62,11 @@ test("period exhaustion has its own non-transient code before execution", async 
       organizationId,
       userId: firstUser,
       policy,
+      periodPolicy: { periodMs: 86_400_000, limit: 3 },
+      periodIdentity: {
+        actionKind: "chat.improve-prompt",
+        logicalPhaseId: "exhausted-phase",
+      },
       redis: { send: async () => -1 },
       run: async () => {
         calls += 1;
@@ -108,7 +159,7 @@ const sharedRedis = ({
           organization.size >= Number(orgMax) ||
           user.size >= Number(userMax)
         ) {
-          return 0;
+          return [0, 1000];
         }
         organization.set(leaseId, currentTime + Number(leaseMs));
         user.set(leaseId, currentTime + Number(leaseMs));
@@ -477,7 +528,7 @@ describe("shared action admission", () => {
     };
     const failure = new ActionAdmissionError({
       message: "Action failed",
-      reason: "unavailable",
+      reason: "lease_lost",
     });
     expect(
       await failureOf(
@@ -613,7 +664,7 @@ describe("shared action admission", () => {
     const failure = failureOf(admitted);
     await started.promise;
     await timing.fireNext();
-    expect(await failure).toMatchObject({ reason: "unavailable" });
+    expect(await failure).toMatchObject({ reason: "lease_lost" });
     expect(observedAbort).toBe(true);
   });
   for (const failureKind of [
@@ -661,8 +712,75 @@ describe("shared action admission", () => {
         expect(error).toMatchObject({ status: 409 });
       } else {
         expect(ActionAdmissionError.is(error)).toBe(true);
-        expect(error).toMatchObject({ reason: "unavailable" });
+        expect(error).toMatchObject({ reason: "lease_lost" });
       }
     });
   }
+});
+
+test.each([
+  {
+    name: "command failure",
+    send: async () => {
+      throw new TypeError("Unavailable");
+    },
+  },
+  { name: "invalid reply", send: async () => "invalid" },
+  { name: "timeout", send: async () => await new Promise<never>(() => {}) },
+])(
+  "$name refuses admission with the shared store outcome",
+  async ({ send }) => {
+    let executions = 0;
+    const error = await failureOf(
+      withActionAdmission({
+        enabled: true,
+        organizationId,
+        userId: firstUser,
+        policy,
+        redis: { send },
+        run: async () => {
+          executions += 1;
+        },
+      }),
+    );
+    expect(error).toMatchObject({
+      reason: "store_unavailable",
+      code: "limiter_store_unavailable",
+    });
+    expect(executions).toBe(0);
+  },
+);
+
+test("a renewal outage retains the store refusal when the lease expires", async () => {
+  const redis = sharedRedis({
+    onRenew: async () => {
+      throw new TypeError("Unavailable");
+    },
+  });
+  const timing = manualTiming(redis);
+  const started = deferred();
+  const pending = deferred();
+  const admitted = withActionAdmission({
+    enabled: true,
+    organizationId,
+    userId: firstUser,
+    policy: { ...policy, leaseMs: 100 },
+    redis,
+    timing,
+    run: async (signal) => {
+      started.finish();
+      await pending.promise;
+      signal.throwIfAborted();
+    },
+  });
+  const failure = failureOf(admitted);
+  await started.promise;
+  await timing.fireNext();
+  await timing.fireNext();
+  await timing.fireNext();
+  pending.finish();
+  expect(await failure).toMatchObject({
+    reason: "store_unavailable",
+    code: "limiter_store_unavailable",
+  });
 });

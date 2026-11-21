@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 // Chat mutation matrix runner.
 //
 // scripts/chat-mutation-matrix.json lists behaviours of the chat pipeline, each
@@ -24,12 +25,11 @@
 //   bun apps/api/scripts/chat-mutation-matrix.ts            run every active entry
 //   bun apps/api/scripts/chat-mutation-matrix.ts --only ID  run one entry
 //   bun apps/api/scripts/chat-mutation-matrix.ts --check    validate the data only
+//   Add --matrix PATH to validate or run an alternate matrix (e.g. a fixture).
 //   bun apps/api/scripts/chat-mutation-matrix.ts --self-test check the restore
 //
-// On demand and nightly (`.github/workflows/nightly-property-test.yml`), never
-// per PR: each entry runs its scenario twice.
-
-import { panic } from "better-result";
+// Scenarios run on demand and nightly; PR CI validates the targets with --check.
+// Each scenario entry runs twice, once unchanged and once mutated.
 import {
   mkdtempSync,
   readdirSync,
@@ -39,6 +39,8 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+
+import { printError } from "@stll/errors";
 
 import { CHAT_ORACLE } from "../src/tests/helpers/chat-oracles";
 import { RECORDED_CONVERSATION_SUITES } from "../src/tests/helpers/recorded-conversation-suites";
@@ -93,14 +95,14 @@ const isEntry = (value: unknown): value is Entry => {
   );
 };
 
-const readMatrix = (): Entry[] => {
-  const parsed: unknown = JSON.parse(readFileSync(MATRIX_PATH, "utf-8"));
+const readMatrix = (matrixPath: string): Entry[] => {
+  const parsed: unknown = JSON.parse(readFileSync(matrixPath, "utf-8"));
   const entries =
     typeof parsed === "object" && parsed !== null && "entries" in parsed
       ? parsed.entries
       : undefined;
   if (!Array.isArray(entries) || !entries.every(isEntry)) {
-    return panic(`${MATRIX_PATH} does not match the entry shape`);
+    return panic(`${matrixPath} does not match the entry shape`);
   }
   return entries;
 };
@@ -191,7 +193,7 @@ const withMutatedFile = async <T>(
     void abandon(TERMINATION_SIGNALS[signal]);
   };
   const onUncaught = (error: unknown) => {
-    console.error(error);
+    printError(error);
     void abandon(1);
   };
   const signals = Object.keys(TERMINATION_SIGNALS).filter(
@@ -216,13 +218,20 @@ const withMutatedFile = async <T>(
 };
 
 /**
+ * The `-t` filter for exactly one scenario test, inside a describe block or
+ * at the top level of its file.
+ */
+export const scenarioTestPattern = (test: string): string =>
+  `^(?:.* )?${escapeRegExp(test)}$`;
+
+/**
  * The command that runs one scenario test: the api package's runner, or the
  * web app's for a web scenario.
  */
 const scenarioCommand = (
   scenario: Entry["scenario"],
 ): { command: string[]; cwd: string } => {
-  const pattern = `^.* ${escapeRegExp(scenario.test)}$`;
+  const pattern = scenarioTestPattern(scenario.test);
   return scenario.file.startsWith(WEB_PREFIX)
     ? {
         command: [
@@ -323,6 +332,16 @@ const namesOracle = (output: string, oracle: string): boolean =>
   output.includes(`"oracle":"${oracle}"`) ||
   output.includes(`"oracle": "${oracle}"`);
 
+/** The oracle ids a failed scenario's output names, for a non-kill's detail. */
+export const namedOracles = (output: string): string[] => [
+  ...new Set(
+    Array.from(
+      output.matchAll(/"oracle": ?"([^"]+)"/gu),
+      ([, oracle]) => oracle ?? "",
+    ),
+  ),
+];
+
 type Verdict = { detail: string; entry: Entry; killed: boolean };
 
 const runEntry = async (
@@ -360,7 +379,7 @@ const runEntry = async (
     return namesOracle(mutated.output, entry.oracle)
       ? { detail: `failed at ${entry.oracle}`, entry, killed: true }
       : {
-          detail: `failed without naming ${entry.oracle} (not a kill)`,
+          detail: `failed without naming ${entry.oracle} (not a kill; named: ${namedOracles(mutated.output).join(", ") || "no oracle"})`,
           entry,
           killed: false,
         };
@@ -458,7 +477,12 @@ const main = async (): Promise<number> => {
   if (args.includes("--self-test")) {
     return await selfTest();
   }
-  const entries = readMatrix();
+  const matrixIndex = args.indexOf("--matrix");
+  const matrixPath =
+    matrixIndex === -1
+      ? MATRIX_PATH
+      : (args[matrixIndex + 1] ?? panic("--matrix needs a file"));
+  const entries = readMatrix(matrixPath);
   const problems = validate(entries);
   if (problems.length > 0) {
     for (const problem of problems) {

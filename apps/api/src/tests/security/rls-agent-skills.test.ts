@@ -17,8 +17,8 @@ import {
 } from "@/api/tests/security/rls-fixture";
 import type { TestIds } from "@/api/tests/security/rls-helpers";
 import type {
-  TestDatabase,
   createScopedQuery,
+  TestDatabase,
 } from "@/api/tests/security/test-utils";
 
 const testId = <T extends SafeIdType>() => toSafeId<T>(Bun.randomUUIDv7());
@@ -104,22 +104,22 @@ describe("agent skill RLS", () => {
       userId: ids.userB1,
     });
 
-    const error = await scopedQuery(
-      [ids.wsA1],
-      ids.orgA,
-      async (tx) =>
-        await tryCatch(async () => {
+    const error = await tryCatch(async () =>
+      scopedQuery(
+        [ids.wsA1],
+        ids.orgA,
+        async (tx) => {
           await tx.insert(agentSkillResources).values({
             id: testId(),
             organizationId: ids.orgA,
             skillId: foreignSkillId,
             path: "references/foreign.md",
-            kind: "reference",
             content: "foreign",
             sizeBytes: 7,
           });
-        }),
-      ids.userA1,
+        },
+        ids.userA1,
+      ),
     );
 
     expect(isPgError(error, PG_ERROR.INSUFFICIENT_PRIVILEGE)).toBe(true);
@@ -168,7 +168,7 @@ const readPolicies = async (policyNames: readonly string[]) =>
   `);
 
 describe("agent skill policy migrations", () => {
-  test("the write policy migration leaves the policies as the schema declares them", async () => {
+  test("the write policy migrations leave the policies as the schema declares them", async () => {
     const policyNames = [
       "agent_skill_insert",
       "agent_skill_update",
@@ -179,6 +179,7 @@ describe("agent skill policy migrations", () => {
     ];
     const fromSchema = await readPolicies(policyNames);
     await applyMigration("20260925230000_agent_skill_write_policies");
+    await applyMigration("20261016100500_agent_skill_binding");
     const migrated = await readPolicies(policyNames);
 
     expect(fromSchema.rows).toHaveLength(policyNames.length);
@@ -222,10 +223,6 @@ const CHECK_VIOLATION = "23514";
 const DOMAIN_CHECKS = [
   { table: "agent_skills", constraint: "agent_skills_scope_check" },
   { table: "agent_skills", constraint: "agent_skills_origin_check" },
-  {
-    table: "agent_skill_resources",
-    constraint: "agent_skill_resources_kind_check",
-  },
 ] as const;
 
 const readDomainChecks = async () =>
@@ -245,19 +242,13 @@ const readDomainChecks = async () =>
 describe("agent skill domain values", () => {
   // The scope decides who may read and write a skill, so the database refuses
   // a value the application does not know rather than trusting every writer.
-  test("an unknown scope, origin, or resource kind is refused", async () => {
+  test("an unknown scope or origin is refused", async () => {
     const skillId = await insertSkill({
       organizationId: ids.orgA,
       scope: "team",
       slug: `domain-${Bun.randomUUIDv7()}`,
       userId: ids.userAdmin,
     });
-    const resourceId = await insertResource({
-      organizationId: ids.orgA,
-      path: "references/kind.md",
-      skillId,
-    });
-
     const errors = [
       await tryCatch(async () => {
         await testDb.execute(
@@ -269,15 +260,9 @@ describe("agent skill domain values", () => {
           sql`UPDATE agent_skills SET origin = 'mirror' WHERE id = ${skillId}`,
         );
       }),
-      await tryCatch(async () => {
-        await testDb.execute(
-          sql`UPDATE agent_skill_resources SET kind = 'binary' WHERE id = ${resourceId}`,
-        );
-      }),
     ];
 
     expect(errors.map((error) => isPgError(error, CHECK_VIOLATION))).toEqual([
-      true,
       true,
       true,
     ]);
@@ -290,8 +275,13 @@ describe("agent skill domain values", () => {
         sql.raw(`ALTER TABLE "${table}" DROP CONSTRAINT "${constraint}"`),
       );
     }
+    // Replay the historical column shape, then the cutover that removes it.
+    await testDb.execute(
+      sql`ALTER TABLE agent_skill_resources ADD COLUMN kind text NOT NULL DEFAULT 'reference'`,
+    );
     await applyMigration("20260925230200_agent_skill_domain_checks");
     await applyMigration("20261003123500_agent_skill_default_origin");
+    await applyMigration("20261010005100_standard_skill_resource_folders");
     const migrated = await readDomainChecks();
 
     expect(fromSchema.rows).toHaveLength(DOMAIN_CHECKS.length);
@@ -308,28 +298,30 @@ describe("agent skill anchor lock", () => {
       userId: ids.userAdmin,
     });
 
-    const lockError = await scopedQuery(
-      [ids.wsA1],
-      ids.orgA,
-      async (tx) =>
-        await tryCatch(async () => {
+    const lockError = await tryCatch(async () =>
+      scopedQuery(
+        [ids.wsA1],
+        ids.orgA,
+        async (tx) => {
           await tx.execute(sql`SELECT lock_agent_skill_for_anchor(${skillId})`);
-        }),
-      ids.userA1,
+        },
+        ids.userA1,
+      ),
     );
     // Revisions are read-only to the request role: even a manager's update is
     // refused before any row policy is consulted.
-    const updateError = await scopedQuery(
-      [ids.wsA1],
-      ids.orgA,
-      async (tx) =>
-        await tryCatch(async () => {
+    const updateError = await tryCatch(async () =>
+      scopedQuery(
+        [ids.wsA1],
+        ids.orgA,
+        async (tx) => {
           await tx
             .update(agentSkillRevisions)
             .set({ body: "rewritten" })
             .where(eq(agentSkillRevisions.skillId, skillId));
-        }),
-      ids.userAdmin,
+        },
+        ids.userAdmin,
+      ),
     );
 
     expect(lockError).toBeNull();
@@ -351,16 +343,17 @@ describe("agent skill anchor lock", () => {
     });
 
     const lockAsMember = async (skillId: SafeId<"agentSkill">) =>
-      await scopedQuery(
-        [ids.wsA1],
-        ids.orgA,
-        async (tx) =>
-          await tryCatch(async () => {
+      await tryCatch(async () =>
+        scopedQuery(
+          [ids.wsA1],
+          ids.orgA,
+          async (tx) => {
             await tx.execute(
               sql`SELECT lock_agent_skill_for_anchor(${skillId})`,
             );
-          }),
-        ids.userA1,
+          },
+          ids.userA1,
+        ),
       );
     const privateError = await lockAsMember(privateSkillId);
     const foreignError = await lockAsMember(foreignSkillId);
@@ -446,22 +439,22 @@ describe("agent skill write RLS", () => {
             .returning({ id: agentSkillResources.id }),
         actorId(actor),
       );
-      const insertError = await scopedQuery(
-        [ids.wsA1],
-        ids.orgA,
-        async (tx) =>
-          await tryCatch(async () => {
+      const insertError = await tryCatch(async () =>
+        scopedQuery(
+          [ids.wsA1],
+          ids.orgA,
+          async (tx) => {
             await tx.insert(agentSkillResources).values({
               id: testId(),
               organizationId: ids.orgA,
               skillId,
               path: "references/added.md",
-              kind: "reference",
               content: "added",
               sizeBytes: 5,
             });
-          }),
-        actorId(actor),
+          },
+          actorId(actor),
+        ),
       );
       const deletedSkills = await scopedQuery(
         [ids.wsA1],
@@ -490,11 +483,11 @@ describe("agent skill write RLS", () => {
 
   test("only an owner or admin may create a team skill", async () => {
     const insertAs = async (userId: SafeId<"user">) =>
-      await scopedQuery(
-        [ids.wsA1],
-        ids.orgA,
-        async (tx) =>
-          await tryCatch(async () => {
+      await tryCatch(async () =>
+        scopedQuery(
+          [ids.wsA1],
+          ids.orgA,
+          async (tx) => {
             await tx.insert(agentSkills).values(
               skillRow({
                 organizationId: ids.orgA,
@@ -503,8 +496,9 @@ describe("agent skill write RLS", () => {
                 userId,
               }),
             );
-          }),
-        userId,
+          },
+          userId,
+        ),
       );
 
     const memberError = await insertAs(ids.userA1);
@@ -515,11 +509,11 @@ describe("agent skill write RLS", () => {
   });
 
   test("a member may create a private skill of their own", async () => {
-    const error = await scopedQuery(
-      [ids.wsA1],
-      ids.orgA,
-      async (tx) =>
-        await tryCatch(async () => {
+    const error = await tryCatch(async () =>
+      scopedQuery(
+        [ids.wsA1],
+        ids.orgA,
+        async (tx) => {
           await tx.insert(agentSkills).values(
             skillRow({
               organizationId: ids.orgA,
@@ -528,8 +522,9 @@ describe("agent skill write RLS", () => {
               userId: ids.userA1,
             }),
           );
-        }),
-      ids.userA1,
+        },
+        ids.userA1,
+      ),
     );
 
     expect(error).toBeNull();
@@ -543,17 +538,18 @@ describe("agent skill write RLS", () => {
       userId: ids.userA1,
     });
 
-    const error = await scopedQuery(
-      [ids.wsA1],
-      ids.orgA,
-      async (tx) =>
-        await tryCatch(async () => {
+    const error = await tryCatch(async () =>
+      scopedQuery(
+        [ids.wsA1],
+        ids.orgA,
+        async (tx) => {
           await tx
             .update(agentSkills)
             .set({ scope: "team" })
             .where(eq(agentSkills.id, skillId));
-        }),
-      ids.userA1,
+        },
+        ids.userA1,
+      ),
     );
 
     expect(isPgError(error, PG_ERROR.INSUFFICIENT_PRIVILEGE)).toBe(true);
@@ -608,7 +604,6 @@ const insertResource = async ({
     organizationId,
     skillId,
     path,
-    kind: "reference",
     content: "resource",
     sizeBytes: 8,
   });

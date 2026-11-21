@@ -1,4 +1,14 @@
-import { stripDiacritics } from "@stll/text-normalize";
+import { stripUnicodeMarks } from "@stll/text-normalize";
+
+/**
+ * NFD, then every `\p{Diacritic}` removed, spacing ones (`´`, `ʼ`, `^`)
+ * included. `stripDiacritics` keeps spacing characters for search, but name
+ * keys are persisted in `case_law_judges.name_key` and decision-judge rows
+ * and are never re-keyed, so this fold stays pinned to the one they were
+ * minted with.
+ */
+const stripNameKeyDiacritics = (text: string): string =>
+  stripUnicodeMarks(text, { form: "NFD", markClass: "diacritic" });
 
 /**
  * Academic titles a court prints around a judge's name, folded the way
@@ -16,6 +26,7 @@ const ACADEMIC_TITLE_SHAPES: ReadonlySet<string> = new Set([
   "doc",
   "dr",
   "drsc",
+  "dsc",
   "et",
   "ing",
   "judr",
@@ -27,6 +38,7 @@ const ACADEMIC_TITLE_SHAPES: ReadonlySet<string> = new Set([
   "phdr",
   "prof",
   "rndr",
+  "sjd",
 ]);
 
 /**
@@ -35,6 +47,13 @@ const ACADEMIC_TITLE_SHAPES: ReadonlySet<string> = new Set([
  * full stop vary between publishers.
  */
 const HONORARY_DOCTORATE_PATTERN = /\bdr\s*\.\s*h\s*\.\s*c\s*\.?/giu;
+
+/**
+ * `Univ. Priv. Prof.`, an Austrian habilitation title, is removed as a
+ * phrase for the same reason: `univ` and `priv` are titles only
+ * inside it.
+ */
+const PRIVATE_DOCENT_PATTERN = /\buniv\s*\.\s*priv\s*\.\s*prof\s*\.?/giu;
 
 const WHITESPACE_PATTERN = /\s+/u;
 const NON_ALPHANUMERIC_PATTERN = /[^\p{L}\p{N}]+/gu;
@@ -49,7 +68,7 @@ const REPEATED_SEPARATOR_PATTERN = /,(?:\s*,)+/gu;
 
 /** The comparable shape of one printed token: `Ph.D.,` and `phd` agree here. */
 const titleShape = (token: string): string =>
-  stripDiacritics(token).toLowerCase().replace(NON_LETTER_PATTERN, "");
+  stripNameKeyDiacritics(token).toLowerCase().replace(NON_LETTER_PATTERN, "");
 
 /**
  * The name without the titles the publisher printed around it.
@@ -60,6 +79,7 @@ const titleShape = (token: string): string =>
 export const stripAcademicTitles = (printed: string): string =>
   printed
     .replace(HONORARY_DOCTORATE_PATTERN, " ")
+    .replace(PRIVATE_DOCENT_PATTERN, " ")
     .split(WHITESPACE_PATTERN)
     .filter((token) => !ACADEMIC_TITLE_SHAPES.has(titleShape(token)))
     .join(" ")
@@ -79,7 +99,7 @@ export const stripAcademicTitles = (printed: string): string =>
  * would leave every decision's bench unmatched.
  */
 export const judgeNameKey = (printed: string): string =>
-  stripDiacritics(stripAcademicTitles(printed))
+  stripNameKeyDiacritics(stripAcademicTitles(printed))
     .toLowerCase()
     .replace(NON_ALPHANUMERIC_PATTERN, " ")
     .trim()

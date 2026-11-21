@@ -1,3 +1,4 @@
+import { createUuid } from "@/lib/uuid";
 /** Inspector view kind for one consolidation of a statute, read whole. */
 export const STATUTE_VIEW = "statute";
 
@@ -9,8 +10,17 @@ export const STATUTE_VIEW = "statute";
 export type StatuteViewPayload = {
   /** A block to scroll to and mark once the text is shown. */
   anchorId?: string | undefined;
+  /**
+   * The subdivisions of that block the citation itself names (`§ 240 odst. 3`
+   * on a link to § 240): marked, and landed on, in its place where the text
+   * holds them.
+   */
+  citedAnchorIds?: string[] | undefined;
   /** Jurisdiction, as the act's public address spells it. */
   country: string;
+  searchQuery?: string | undefined;
+  /** A search opening resets find even when this tab already holds the same query. */
+  findSessionId?: string | undefined;
   /** The consolidation on screen: every read in the pane is addressed by it. */
   documentId: string;
   /** The work's own identifier, for the readable half of the id-form address. */
@@ -30,6 +40,10 @@ const isNullableString = (value: unknown): value is string | null =>
 
 const isOptionalNonEmptyString = (value: unknown): boolean =>
   value === undefined || isNonEmptyString(value);
+
+const isOptionalNonEmptyStringArray = (value: unknown): boolean =>
+  value === undefined ||
+  (Array.isArray(value) && value.every((item) => isNonEmptyString(item)));
 
 export const isStatuteViewPayload = (
   value: unknown,
@@ -53,7 +67,13 @@ export const isStatuteViewPayload = (
     isNonEmptyString(value.statuteTitle) &&
     "versionValidFrom" in value &&
     isNullableString(value.versionValidFrom) &&
-    (!("anchorId" in value) || isOptionalNonEmptyString(value.anchorId))
+    (!("findSessionId" in value) ||
+      isOptionalNonEmptyString(value.findSessionId)) &&
+    (!("searchQuery" in value) ||
+      isOptionalNonEmptyString(value.searchQuery)) &&
+    (!("anchorId" in value) || isOptionalNonEmptyString(value.anchorId)) &&
+    (!("citedAnchorIds" in value) ||
+      isOptionalNonEmptyStringArray(value.citedAnchorIds))
   );
 };
 
@@ -79,7 +99,9 @@ export type StatuteViewTab = {
  */
 type CreateStatuteViewTabOptions = {
   anchorId?: string | undefined;
+  citedAnchorIds?: readonly string[] | undefined;
   country: string;
+  searchQuery?: string | undefined;
   documentId: string;
   eli?: string | null | undefined;
   slug?: string | null | undefined;
@@ -90,10 +112,12 @@ type CreateStatuteViewTabOptions = {
 /** The `openView` arguments for the act a citation names. */
 export const createStatuteViewTab = ({
   anchorId,
+  citedAnchorIds = [],
   country,
   documentId,
   eli,
   slug,
+  searchQuery,
   statuteTitle,
   versionValidFrom,
 }: CreateStatuteViewTabOptions): StatuteViewTab => ({
@@ -107,6 +131,12 @@ export const createStatuteViewTab = ({
     slug: slug ?? null,
     statuteTitle,
     versionValidFrom: versionValidFrom ?? null,
+    ...(searchQuery === undefined || searchQuery.trim() === ""
+      ? {}
+      : { searchQuery, findSessionId: createUuid() }),
     ...(anchorId === undefined ? {} : { anchorId }),
+    ...(citedAnchorIds.length === 0
+      ? {}
+      : { citedAnchorIds: [...citedAnchorIds] }),
   },
 });

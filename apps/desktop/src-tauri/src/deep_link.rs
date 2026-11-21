@@ -1,3 +1,4 @@
+use crate::logging::best_effort;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -9,7 +10,6 @@ use crate::session_manager::{SessionManager, download_file_standalone};
 use crate::types::{ErrorResponse, OpenFileRequest, is_safe_session_id};
 use crate::updater;
 
-const REDEEM_TIMEOUT: Duration = Duration::from_secs(20);
 const ACKNOWLEDGE_TIMEOUT: Duration = Duration::from_secs(10);
 const SELF_HOST_CONNECT_APPROVAL_TIMEOUT: Duration = Duration::from_secs(120);
 const HANDOFF_TOKEN_LENGTH: usize = 64;
@@ -17,12 +17,14 @@ const HANDOFF_TOKEN_LENGTH: usize = 64;
 static SELF_HOST_CONNECT_SENDER: std::sync::Mutex<
   Option<tokio::sync::oneshot::Sender<bool>>,
 > = std::sync::Mutex::new(None);
+static CONNECTION_CONFIRMATION: Mutex<()> = Mutex::const_new(());
 
 #[derive(Debug, PartialEq, Eq)]
 enum DeepLinkAction {
   ConnectAccount {
     api_base_url: String,
     web_origin: String,
+    intent: crate::account::LinkIntent,
   },
   CompleteAccount {
     correlation_id: String,
@@ -34,6 +36,7 @@ enum DeepLinkAction {
     web_origin: String,
   },
   Ping,
+  OpenAgentSettings(crate::AgentSettingsFocus),
   OpenDesktopEdit {
     api_base_url: String,
     handoff_token: String,
@@ -56,8 +59,9 @@ fn is_safe_handoff_token(value: &str) -> bool {
 }
 
 fn normalize_and_validate_api_base_url(value: &str) -> Result<String, String> {
-  config::normalize_self_host_api_base_url(value)
-    .map_err(|_| "Invalid desktop edit API URL.".to_string())
+  config::normalize_self_host_api_base_url(value).map_err(
+    crate::logging::with_cause_logged("Invalid desktop edit API URL."),
+  )
 }
 
 /// Reserves the approval channel for a single in-flight prompt. Returns the
@@ -73,6 +77,7 @@ fn try_reserve_self_host_connect_sender(
     return Err(sender);
   }
   *guard = Some(sender);
+  drop(guard);
   Ok(())
 }
 
@@ -80,8 +85,30 @@ pub fn set_self_host_connect_response(approved: bool) {
   let mut guard = SELF_HOST_CONNECT_SENDER
     .lock()
     .unwrap_or_else(|e| e.into_inner());
-  if let Some(sender) = guard.take() {
-    let _ = sender.send(approved);
+  if let Some(sender) = guard.take()
+    && sender.send(approved).is_err()
+  {
+    tracing::debug!("self-host connection answer had no waiter");
+  }
+}
+
+/// `stella://settings/agents`, optionally with exactly one `harness` naming
+/// a managed agent. Anything else, an extra or repeated parameter included,
+/// opens nothing, so the window only ever receives one of its own ids.
+fn parse_agent_settings(url: &reqwest::Url) -> Option<crate::AgentSettingsFocus> {
+  if url.path() != "/agents" || url.fragment().is_some() {
+    return None;
+  }
+  let mut pairs = url.query_pairs();
+  match (pairs.next(), pairs.next()) {
+    (None, _) => Some(crate::AgentSettingsFocus::All),
+    (Some((key, value)), None) if key == "harness" => {
+      crate::harness_release::ManagedHarness::ALL
+        .into_iter()
+        .find(|harness| harness.id() == value)
+        .map(crate::AgentSettingsFocus::Harness)
+    }
+    _ => None,
   }
 }
 
@@ -103,6 +130,7 @@ fn parse_deep_link(raw_url: &str) -> Option<DeepLinkAction> {
           .ok()?,
           web_origin: config::normalize_self_host_web_origin(params.get("webOrigin")?)
             .ok()?,
+          intent: crate::account::LinkIntent::parse(params.get("intent")?)?,
         });
       }
       "/complete" => {
@@ -132,6 +160,10 @@ fn parse_deep_link(raw_url: &str) -> Option<DeepLinkAction> {
 
   if url.host_str() == Some("ping") {
     return Some(DeepLinkAction::Ping);
+  }
+
+  if url.host_str() == Some("settings") {
+    return parse_agent_settings(&url).map(DeepLinkAction::OpenAgentSettings);
   }
 
   if url.host_str() == Some("self-host") && url.path() == "/connect" {
@@ -212,10 +244,12 @@ pub fn handle_url(
   manager: Arc<Mutex<SessionManager>>,
   app_handle: AppHandle,
 ) {
+  let handoff_expires = std::time::Instant::now() + crate::handoff::HANDOFF_LIFETIME;
   match parse_deep_link(raw_url) {
     Some(DeepLinkAction::ConnectAccount {
       api_base_url,
       web_origin,
+      intent,
     }) => {
       tauri::async_runtime::spawn(async move {
         let static_pair = config::resolve_trusted_api_base_urls()
@@ -237,7 +271,10 @@ pub fn handle_url(
           &app_handle,
           &api_base_url,
           &web_origin,
-        ) {
+          intent,
+        )
+        .await
+        {
           tracing::warn!(error = %error, "desktop account connection could not start");
         }
       });
@@ -258,8 +295,16 @@ pub fn handle_url(
         )
         .await
         {
-          tracing::warn!(error = %error, "desktop account connection could not complete");
+          tracing::warn!(
+            error = %error,
+            reason = error.reason.as_str(),
+            "desktop account connection could not complete"
+          );
+          tracing::warn!(target: crate::logging::TRAIL_TARGET, event = "account.link_failed");
+          return;
         }
+        tracing::info!(target: crate::logging::TRAIL_TARGET, event = "account.linked");
+        resume_parked_handoff(manager, app_handle).await;
       });
     }
     Some(DeepLinkAction::ConnectSelfHost {
@@ -284,10 +329,9 @@ pub fn handle_url(
           return;
         }
 
-        let active_edit_sessions = {
-          let mgr = manager.lock().await;
-          mgr.has_active_edit_sessions()
-        };
+        let sessions = &*manager;
+        let active_edit_sessions =
+          move || async move { sessions.lock().await.has_active_edit_sessions() };
 
         match updater::run_check(&app_handle, active_edit_sessions).await {
           updater::CheckOutcome::Deferred { version } => {
@@ -305,61 +349,381 @@ pub fn handle_url(
           updater::CheckOutcome::Failed(error) => {
             tracing::warn!(error = %error, "deep link updater check failed");
           }
+          updater::CheckOutcome::Disabled => {
+            tracing::debug!("deep link updater check skipped: updates are managed");
+          }
         }
+      });
+    }
+    Some(DeepLinkAction::OpenAgentSettings(focus)) => {
+      tracing::info!("agent settings deep link received");
+      tauri::async_runtime::spawn(async move {
+        crate::show_settings(&app_handle, crate::SettingsView::Agents(focus));
       });
     }
     Some(DeepLinkAction::OpenDesktopEdit {
       api_base_url,
       handoff_token,
     }) => {
-      tracing::info!("desktop edit handoff deep link received");
-      tauri::async_runtime::spawn(async move {
-        if !is_trusted_api_base_url(&manager, &api_base_url).await {
-          tracing::warn!(
-            api_base_url = %api_base_url,
-            "desktop edit handoff rejected because API URL is not trusted"
-          );
-          return;
-        }
-
-        if let Err(error) =
-          redeem_and_open_desktop_edit(manager, app_handle, api_base_url, handoff_token)
-            .await
-        {
-          tracing::error!(error = %error, "desktop edit handoff failed");
-        }
-      });
+      tracing::info!(target: crate::logging::TRAIL_TARGET, event = "handoff.received", target_kind = "DesktopEdit");
+      start_handoff(
+        HandoffRun {
+          target: crate::handoff::Target::DesktopEdit,
+          api_base_url,
+          token: handoff_token,
+          expires: handoff_expires,
+        },
+        manager,
+        app_handle,
+      );
     }
     Some(DeepLinkAction::OpenPdfSigning {
       api_base_url,
       handoff_token,
     }) => {
-      tracing::info!("PDF signing handoff deep link received");
-      tauri::async_runtime::spawn(async move {
-        if !crate::pdf_signing::api_trusted_for_signing(&manager, &api_base_url).await {
-          tracing::warn!(
-            api_base_url = %api_base_url,
-            "PDF signing handoff rejected because API URL is not trusted"
-          );
-          return;
-        }
-
-        if let Err(error) = crate::pdf_signing::redeem_and_sign(
-          manager,
-          app_handle,
+      tracing::info!(target: crate::logging::TRAIL_TARGET, event = "handoff.received", target_kind = "PdfSigning");
+      start_handoff(
+        HandoffRun {
+          target: crate::handoff::Target::PdfSigning,
           api_base_url,
-          handoff_token,
-        )
-        .await
-        {
-          tracing::error!(error = %error, "PDF signing handoff failed");
-        }
-      });
+          token: handoff_token,
+          expires: handoff_expires,
+        },
+        manager,
+        app_handle,
+      );
     }
     None => {
       tracing::warn!("unsupported deep link received");
     }
   }
+}
+
+struct HandoffRun {
+  target: crate::handoff::Target,
+  api_base_url: String,
+  token: String,
+  expires: std::time::Instant,
+}
+
+/// Every handoff ends in front of the user: in its own window, in a notice,
+/// or in an offer to link the account it is waiting for.
+fn start_handoff(run: HandoffRun, manager: Arc<Mutex<SessionManager>>, app: AppHandle) {
+  tauri::async_runtime::spawn(async move {
+    match redeem_handoff(&run, &manager, &app).await {
+      Ok(()) => {
+        tracing::info!(target: crate::logging::TRAIL_TARGET, event = "handoff.completed", target_kind = ?run.target);
+      }
+      Err(crate::handoff::Stop::Presented(message)) => {
+        tracing::warn!(error = %message, "document handoff ended");
+        tracing::warn!(target: crate::logging::TRAIL_TARGET, event = "handoff.ended", target_kind = ?run.target);
+      }
+      Err(crate::handoff::Stop::AccountRequired)
+      | Err(crate::handoff::Stop::AccountMismatch(_)) => {
+        crate::account::notify(&app);
+        offer_account_link(run, manager, app).await;
+      }
+      Err(crate::handoff::Stop::Failed(failure)) => {
+        tracing::warn!(
+          target: crate::logging::TRAIL_TARGET, event = "handoff.failed",
+          target_kind = ?run.target,
+          code = failure.message_key()
+        );
+        present_handoff_failure(&app, &failure).await;
+      }
+    }
+  });
+}
+
+async fn redeem_handoff(
+  run: &HandoffRun,
+  manager: &Arc<Mutex<SessionManager>>,
+  app: &AppHandle,
+) -> Result<(), crate::handoff::Stop> {
+  if std::time::Instant::now() >= run.expires {
+    return Err(crate::handoff::Failure::Expired.into());
+  }
+  let trusted = match run.target {
+    crate::handoff::Target::DesktopEdit => {
+      is_trusted_api_base_url(manager, &run.api_base_url).await
+    }
+    crate::handoff::Target::PdfSigning => {
+      crate::pdf_signing::api_trusted_for_signing(manager, &run.api_base_url).await
+    }
+  };
+  if !trusted {
+    return Err(crate::handoff::Failure::UntrustedServer.into());
+  }
+  match run.target {
+    crate::handoff::Target::DesktopEdit => {
+      redeem_and_open_desktop_edit(
+        manager.clone(),
+        app.clone(),
+        run.api_base_url.clone(),
+        run.token.clone(),
+      )
+      .await
+    }
+    crate::handoff::Target::PdfSigning => {
+      crate::pdf_signing::redeem_and_sign(
+        manager.clone(),
+        app.clone(),
+        run.api_base_url.clone(),
+        run.token.clone(),
+      )
+      .await
+    }
+  }
+}
+
+async fn present_handoff_failure(app: &AppHandle, failure: &crate::handoff::Failure) {
+  if let Err(error) =
+    show_connection_confirmation(app, ConnectionConfirmation::HandoffError(failure))
+      .await
+  {
+    tracing::warn!(error = %error, "document handoff notice was not shown");
+  }
+}
+
+/// Retries a link completed since admission, or parks and offers to link;
+/// a later completion resumes it through `resume_parked_handoff`.
+async fn offer_account_link(
+  run: HandoffRun,
+  manager: Arc<Mutex<SessionManager>>,
+  app: AppHandle,
+) {
+  match crate::handoff::park_if_unlinked(
+    &app.state::<crate::account::AccountState>(),
+    run.target,
+    &run.api_base_url,
+    &run.token,
+    run.expires,
+  )
+  .await
+  {
+    Ok(crate::handoff::AccountWait::AccountAvailable) => {
+      start_handoff(run, manager, app);
+      return;
+    }
+    Ok(crate::handoff::AccountWait::Parked) => {}
+    Ok(crate::handoff::AccountWait::Expired) => {
+      present_handoff_failure(&app, &crate::handoff::Failure::Expired).await;
+      return;
+    }
+    Err(error) => {
+      present_handoff_failure(&app, &crate::handoff::Failure::Terminal(error)).await;
+      return;
+    }
+  }
+  tracing::info!(target: crate::logging::TRAIL_TARGET, event = "handoff.parked", target_kind = ?run.target);
+  let expiry_token = zeroize::Zeroizing::new(run.token.clone());
+  let expiry_app = app.clone();
+  let expiry_api = run.api_base_url.clone();
+  tauri::async_runtime::spawn(async move {
+    if matches!(
+      crate::handoff::expire_parked(&expiry_token, &expiry_api).await,
+      crate::handoff::Resumable::Expired
+    ) {
+      present_handoff_failure(&expiry_app, &crate::handoff::Failure::Expired).await;
+    }
+  });
+  offer_parked_handoff(run, manager, app).await;
+}
+
+async fn offer_parked_handoff(
+  run: HandoffRun,
+  manager: Arc<Mutex<SessionManager>>,
+  app: AppHandle,
+) {
+  let offer = crate::handoff::account_offer(&run.token, &run.api_base_url).await;
+  match offer.pending() {
+    crate::handoff::Resumable::Nothing => return,
+    crate::handoff::Resumable::Expired => {
+      present_handoff_failure(&app, &crate::handoff::Failure::Expired).await;
+      return;
+    }
+    crate::handoff::Resumable::Ready(_) => {}
+  }
+  let state = app.state::<crate::account::AccountState>();
+  match crate::handoff::account_mismatch(&state, &run.api_base_url).await {
+    Ok(Some(mismatch)) => {
+      present_account_mismatch(&app, &mismatch).await;
+      return;
+    }
+    Ok(None) => {}
+    Err(error) => {
+      present_handoff_failure(&app, &crate::handoff::Failure::Terminal(error)).await;
+      return;
+    }
+  }
+  let approved = match show_connection_confirmation(
+    &app,
+    ConnectionConfirmation::HandoffConnect(run.target),
+  )
+  .await
+  {
+    Ok(approved) => approved,
+    Err(error) => {
+      // The expiry task still owns an outcome if the native window fails.
+      tracing::warn!(error = %error, "account link offer was not shown");
+      return;
+    }
+  };
+  // A replacement has its own queued offer. Consent for the old token must
+  // neither cancel it nor start a connection for its potentially different API.
+  match offer.pending() {
+    crate::handoff::Resumable::Nothing => return,
+    crate::handoff::Resumable::Expired => {
+      present_handoff_failure(&app, &crate::handoff::Failure::Expired).await;
+      return;
+    }
+    crate::handoff::Resumable::Ready(_) => {}
+  }
+  if !approved {
+    if crate::handoff::unpark(&run.token, &run.api_base_url) {
+      tracing::info!(target: crate::logging::TRAIL_TARGET, event = "handoff.dropped", target_kind = ?run.target);
+      crate::handoff::decline(run.target, &run.api_base_url, &run.token).await;
+    }
+    return;
+  }
+  match offer
+    .connect(
+      &DesktopConnectionHost {
+        manager: &manager,
+        app: &app,
+      },
+      &state,
+    )
+    .await
+  {
+    Ok(crate::handoff::OfferConnection::AccountMismatch(mismatch)) => {
+      present_account_mismatch(&app, &mismatch).await;
+    }
+    Ok(crate::handoff::OfferConnection::NotCurrent) => {}
+    Ok(crate::handoff::OfferConnection::Expired) => {
+      present_handoff_failure(&app, &crate::handoff::Failure::Expired).await;
+    }
+    Ok(crate::handoff::OfferConnection::Started(outcome)) => match outcome {
+      crate::account::ConnectionStart::Started => {
+        tracing::info!(target: crate::logging::TRAIL_TARGET, event = "account.link_started");
+      }
+      crate::account::ConnectionStart::Resumed => {
+        tracing::info!(target: crate::logging::TRAIL_TARGET, event = "account.link_resumed");
+      }
+      crate::account::ConnectionStart::SameOriginPending => {}
+      crate::account::ConnectionStart::DifferentOriginPending => {
+        // Keep this token for its own offer after the other connection completes.
+        present_handoff_failure(&app, &crate::handoff::Failure::AccountMismatch).await;
+      }
+    },
+    Err(failure) => {
+      crate::handoff::unpark(&run.token, &run.api_base_url);
+      present_handoff_failure(&app, &failure).await;
+    }
+  }
+}
+
+async fn present_account_mismatch(
+  app: &AppHandle,
+  mismatch: &crate::handoff::AccountMismatch,
+) {
+  if let Err(error) =
+    show_connection_confirmation(app, ConnectionConfirmation::AccountMismatch(mismatch))
+      .await
+  {
+    tracing::warn!(error = %error, "account mismatch notice was not shown");
+  }
+}
+
+struct DesktopConnectionHost<'a> {
+  manager: &'a Mutex<SessionManager>,
+  app: &'a AppHandle,
+}
+
+impl crate::handoff::ConnectionHost for DesktopConnectionHost<'_> {
+  type Prepared = crate::account::PreparedBrowserConnection;
+
+  async fn web_origin(&self, api_base_url: &str) -> Option<String> {
+    web_origin_for_api(self.manager, api_base_url).await
+  }
+
+  async fn prepare(
+    &self,
+    api_base_url: &str,
+    web_origin: &str,
+  ) -> Result<Self::Prepared, String> {
+    crate::account::prepare_browser_connection(
+      api_base_url,
+      web_origin,
+      crate::account::LinkIntent::Connect,
+    )
+    .await
+  }
+
+  fn open(
+    &self,
+    prepared: Self::Prepared,
+  ) -> Result<crate::account::ConnectionStart, String> {
+    prepared.open(self.app)
+  }
+}
+
+async fn resume_parked_handoff(manager: Arc<Mutex<SessionManager>>, app: AppHandle) {
+  let account =
+    match crate::account::current(&app.state::<crate::account::AccountState>()).await {
+      Ok(Some(account)) => account,
+      Ok(None) => return,
+      Err(error) => {
+        present_handoff_failure(&app, &crate::handoff::Failure::Terminal(error)).await;
+        return;
+      }
+    };
+  match crate::handoff::take_parked_for_account(&account.api_base_url).await {
+    crate::handoff::ResumeAfterLink::Nothing => {}
+    crate::handoff::ResumeAfterLink::Expired => {
+      tracing::info!(target: crate::logging::TRAIL_TARGET, event = "handoff.expired");
+      present_handoff_failure(&app, &crate::handoff::Failure::Expired).await;
+    }
+    crate::handoff::ResumeAfterLink::Ready(parked) => {
+      tracing::info!(target: crate::logging::TRAIL_TARGET, event = "handoff.resumed", target_kind = ?parked.target);
+      start_handoff(
+        HandoffRun {
+          target: parked.target,
+          api_base_url: parked.api_base_url.clone(),
+          token: parked.token.to_string(),
+          expires: parked.expires,
+        },
+        manager,
+        app,
+      );
+    }
+    crate::handoff::ResumeAfterLink::NeedsOffer(parked) => {
+      offer_parked_handoff(
+        HandoffRun {
+          target: parked.target,
+          api_base_url: parked.api_base_url.clone(),
+          token: parked.token.to_string(),
+          expires: parked.expires,
+        },
+        manager,
+        app,
+      )
+      .await;
+    }
+  }
+}
+
+async fn web_origin_for_api(
+  manager: &Mutex<SessionManager>,
+  api_base_url: &str,
+) -> Option<String> {
+  if let Some(origin) = config::web_origin_for_trusted_api(api_base_url) {
+    return Some(origin);
+  }
+  manager
+    .lock()
+    .await
+    .trusted_self_host_web_origin(api_base_url)
 }
 
 async fn confirm_and_trust_self_host(
@@ -386,19 +750,30 @@ async fn confirm_and_trust_self_host(
     }
   }
 
-  let mut mgr = manager.lock().await;
-  mgr
+  manager
+    .lock()
+    .await
     .trust_self_host_connection(web_origin, api_base_url)
     .await;
   Ok(())
 }
 
 pub(crate) enum ConnectionConfirmation<'a> {
+  HandoffError(&'a crate::handoff::Failure),
+  AccountMismatch(&'a crate::handoff::AccountMismatch),
+  /// A document handoff waits for the account link.
+  HandoffConnect(crate::handoff::Target),
   SelfHost {
     web_origin: &'a str,
     api_base_url: &'a str,
   },
   Account {
+    email: &'a str,
+    organization_name: &'a str,
+  },
+  /// Replacing the linked account; Cancel is the default answer.
+  Switch {
+    current_email: &'a str,
     email: &'a str,
     organization_name: &'a str,
   },
@@ -410,6 +785,9 @@ pub(crate) async fn show_connection_confirmation(
 ) -> Result<bool, String> {
   use tauri::Manager;
 
+  // Notices and approvals share a native window. Queue them through its
+  // destruction so a busy dialog cannot swallow a handoff's final notice.
+  let _dialog = CONNECTION_CONFIRMATION.lock().await;
   let (sender, receiver) = tokio::sync::oneshot::channel();
   if try_reserve_self_host_connect_sender(sender).is_err() {
     return Err("A self-host connection dialog is already open.".to_string());
@@ -430,6 +808,42 @@ pub(crate) async fn show_connection_confirmation(
   // with the origins, so it renders in the language the rest of the app runs
   // in.
   let (details, title_key) = match confirmation {
+    ConnectionConfirmation::HandoffError(failure) => {
+      let detail = match failure {
+        crate::handoff::Failure::Retryable(message)
+        | crate::handoff::Failure::Terminal(message) => message.as_str(),
+        _ => "",
+      };
+      (
+        format!(
+          "mode=handoff&message={}&action={}&detail={}",
+          percent_encode(crate::i18n::t(failure.message_key())),
+          percent_encode(failure.action_key().map(crate::i18n::t).unwrap_or("")),
+          percent_encode(detail)
+        ),
+        "dialog.handoffWindowTitle",
+      )
+    }
+    ConnectionConfirmation::AccountMismatch(mismatch) => (
+      format!(
+        "mode=handoff&message={}&action=&detail=",
+        percent_encode(&mismatch.message()),
+      ),
+      "dialog.handoffWindowTitle",
+    ),
+    ConnectionConfirmation::HandoffConnect(target) => (
+      format!(
+        "mode=handoff&message={}&action={}&dismiss={}&detail={}",
+        percent_encode(crate::i18n::t(match target {
+          crate::handoff::Target::PdfSigning => "dialog.handoffConnectToSign",
+          crate::handoff::Target::DesktopEdit => "dialog.handoffConnectToOpen",
+        })),
+        percent_encode(crate::i18n::t("dialog.connect")),
+        percent_encode(crate::i18n::t("dialog.cancel")),
+        percent_encode(crate::i18n::t("dialog.handoffConnectDetail")),
+      ),
+      "dialog.handoffWindowTitle",
+    ),
     ConnectionConfirmation::SelfHost {
       web_origin,
       api_base_url,
@@ -452,6 +866,22 @@ pub(crate) async fn show_connection_confirmation(
       ),
       "dialog.accountWindowTitle",
     ),
+    ConnectionConfirmation::Switch {
+      current_email,
+      email,
+      organization_name,
+    } => (
+      format!(
+        "mode=switch&message={}&accountEmail={}&organizationName={}",
+        percent_encode(&crate::i18n::t_fmt(
+          "dialog.switchSubtitle",
+          &[("currentEmail", current_email), ("email", email)],
+        )),
+        percent_encode(email),
+        percent_encode(organization_name)
+      ),
+      "dialog.switchWindowTitle",
+    ),
   };
   let hash = format!(
     "{details}&strings={}&lang={}&dir={}",
@@ -460,10 +890,10 @@ pub(crate) async fn show_connection_confirmation(
     percent_encode(crate::i18n::text_direction()),
   );
 
-  let builder = tauri::WebviewWindowBuilder::new(
+  let builder = crate::app_window::builder(
     app_handle,
     "selfhost-connect-dialog",
-    tauri::WebviewUrl::App(format!("selfhost-connect-dialog.html#{hash}").into()),
+    format!("selfhost-connect-dialog.html#{hash}"),
   )
   .title(crate::i18n::t(title_key))
   .inner_size(420.0, 320.0)
@@ -485,12 +915,26 @@ pub(crate) async fn show_connection_confirmation(
       // Cancel/Connect commands, so release the reserved approval sender on
       // destroy. Otherwise the slot stays reserved until the timeout and every
       // retry fails as "already open".
-      window.on_window_event(|event| {
+      let (closed_sender, closed_receiver) = tokio::sync::oneshot::channel();
+      let closed_sender = std::sync::Mutex::new(Some(closed_sender));
+      window.on_window_event(move |event| {
         if matches!(event, tauri::WindowEvent::Destroyed) {
           set_self_host_connect_response(false);
+          let sender = closed_sender
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .take();
+          if let Some(sender) = sender
+            && sender.send(()).is_err()
+          {
+            tracing::debug!("self-host connection window close had no waiter");
+          }
         }
       });
-      let _ = window.set_focus();
+      best_effort(
+        window.set_focus(),
+        "self-host connection window could not be focused",
+      );
       let outcome = match tokio::time::timeout(
         SELF_HOST_CONNECT_APPROVAL_TIMEOUT,
         receiver,
@@ -506,7 +950,18 @@ pub(crate) async fn show_connection_confirmation(
       };
       // The dialog closes itself once the user responds; close it explicitly so
       // a timeout or dropped sender does not leave a ghost window behind.
-      let _ = window.close();
+      best_effort(
+        window.close(),
+        "self-host connection window could not be closed",
+      );
+      tokio::time::timeout(ACKNOWLEDGE_TIMEOUT, closed_receiver)
+        .await
+        .map_err(crate::logging::with_cause_logged(
+          "A self-host connection dialog is already open.",
+        ))?
+        .map_err(crate::logging::with_cause_logged(
+          "A self-host connection dialog is already open.",
+        ))?;
       Ok(outcome)
     }
     Err(error) => {
@@ -519,7 +974,7 @@ pub(crate) async fn show_connection_confirmation(
 }
 
 fn percent_encode(value: &str) -> String {
-  use std::fmt::Write;
+  const HEX: &[u8; 16] = b"0123456789ABCDEF";
 
   let mut encoded = String::with_capacity(value.len());
   for byte in value.bytes() {
@@ -528,17 +983,13 @@ fn percent_encode(value: &str) -> String {
         encoded.push(byte as char);
       }
       _ => {
-        let _ = write!(encoded, "%{byte:02X}");
+        encoded.push('%');
+        encoded.push(char::from(HEX[usize::from(byte >> 4)]));
+        encoded.push(char::from(HEX[usize::from(byte & 0x0F)]));
       }
     }
   }
   encoded
-}
-
-#[derive(serde::Serialize)]
-#[serde(rename_all = "camelCase")]
-struct RedeemDesktopEditHandoffRequest<'a> {
-  handoff_token: &'a str,
 }
 
 #[derive(serde::Deserialize)]
@@ -551,48 +1002,13 @@ struct RedeemedDesktopEditHandoff {
 pub(crate) fn ensure_handoff_identity(
   identity: &crate::types::DesktopAccountIdentity,
   expected: &crate::types::DesktopAccountIdentity,
-) -> Result<(), String> {
+) -> Result<(), crate::handoff::Failure> {
   if identity.user_id != expected.user_id
     || identity.organization_id != expected.organization_id
   {
-    return Err(
-      "The document link belongs to a different desktop account.".to_string(),
-    );
+    return Err(crate::handoff::Failure::AccountMismatch);
   }
   Ok(())
-}
-
-async fn redeem_desktop_edit_handoff(
-  client: &crate::http_client::DesktopHttpClient,
-  api_base_url: &str,
-  handoff_token: &str,
-  credential_key: &str,
-) -> Result<RedeemedDesktopEditHandoff, String> {
-  let url = format!("{api_base_url}/v1/desktop-edit-handoffs/redeem");
-  let response = client
-    .post(url)
-    .bearer_auth(credential_key)
-    .json(&RedeemDesktopEditHandoffRequest { handoff_token })
-    .timeout(REDEEM_TIMEOUT)
-    .send()
-    .await
-    .map_err(|e| format!("stella desktop could not redeem the edit handoff: {e}"))?;
-
-  if !response.status().is_success() {
-    let status = response.status();
-    let message = response
-      .json::<ErrorResponse>()
-      .await
-      .ok()
-      .and_then(|body| body.message)
-      .unwrap_or_else(|| format!("Desktop edit handoff was rejected ({status})."));
-    return Err(message);
-  }
-
-  response
-    .json::<RedeemedDesktopEditHandoff>()
-    .await
-    .map_err(|e| format!("stella desktop could not read the edit handoff: {e}"))
 }
 
 #[derive(serde::Serialize)]
@@ -608,26 +1024,39 @@ async fn acknowledge_desktop_edit_handoff_opened(
   handoff_id: &str,
   handoff_token: &str,
   session_id: &str,
-  credential_key: &str,
-) -> Result<(), String> {
+  app: &AppHandle,
+  expected_account: &crate::account::LinkedAccount,
+) -> Result<(), crate::handoff::Stop> {
   if !is_safe_session_id(handoff_id) {
-    return Err("Invalid desktop edit handoff payload.".to_string());
+    return Err(String::from("Invalid desktop edit handoff payload.").into());
   }
 
+  let state = app.state::<crate::account::AccountState>();
+  let account = crate::account::request_account(&state)
+    .await?
+    .ok_or(crate::handoff::Failure::AccountChanged)?;
+  ensure_handoff_identity(&account.identity, &expected_account.identity)?;
+  if account.api_base_url != api_base_url {
+    return Err(crate::handoff::Failure::AccountChanged.into());
+  }
   let url = format!("{api_base_url}/v1/desktop-edit-handoffs/{handoff_id}/opened");
-  let response = client
+  let builder = client
     .post(url)
-    .bearer_auth(credential_key)
     .json(&AcknowledgeDesktopEditHandoffOpenedRequest {
       handoff_token,
       session_id,
     })
-    .timeout(ACKNOWLEDGE_TIMEOUT)
-    .send()
-    .await
-    .map_err(|e| {
-      format!("stella desktop could not acknowledge the edit handoff: {e}")
-    })?;
+    .timeout(ACKNOWLEDGE_TIMEOUT);
+  let response = crate::http_client::device_proof_request(
+    builder,
+    &account.device_key,
+    Some(&account.credential.key),
+    None,
+  )?
+  .send()
+  .await
+  .map_err(|e| format!("stella desktop could not acknowledge the edit handoff: {e}"))?;
+  drop(account);
 
   if response.status().is_success() {
     return Ok(());
@@ -643,35 +1072,24 @@ async fn acknowledge_desktop_edit_handoff_opened(
       format!("Desktop edit handoff acknowledgement was rejected ({status}).")
     });
 
-  Err(message)
+  Err(message.into())
 }
 
-pub(crate) async fn linked_handoff_account(
-  app_handle: &AppHandle,
-  api_base_url: &str,
-) -> Result<crate::account::LinkedAccount, String> {
-  let state = app_handle.state::<crate::account::AccountState>();
-  let account = crate::account::current(&state).await?.ok_or_else(|| {
-    "Connect the desktop to your account before opening a document.".to_string()
-  })?;
-  if account.api_base_url != api_base_url {
-    return Err(
-      "The document link belongs to a different desktop account server.".to_string(),
-    );
-  }
-  Ok(account)
-}
-
+/// The account a redeemed handoff was opened for must still be the linked one.
 pub(crate) async fn recheck_handoff_account(
   app_handle: &AppHandle,
   expected: &crate::account::LinkedAccount,
-) -> Result<(), String> {
-  let current = linked_handoff_account(app_handle, &expected.api_base_url).await?;
-  ensure_handoff_identity(&current.identity, &expected.identity)?;
-  if current.credential.key != expected.credential.key {
-    return Err(
-      "The desktop account connection changed while opening the document.".to_string(),
-    );
+) -> Result<(), crate::handoff::Stop> {
+  let state = app_handle.state::<crate::account::AccountState>();
+  let unchanged = crate::account::current(&state)
+    .await?
+    .is_some_and(|current| {
+      current.api_base_url == expected.api_base_url
+        && current.identity.user_id == expected.identity.user_id
+        && current.identity.organization_id == expected.identity.organization_id
+    });
+  if !unchanged {
+    return Err(crate::handoff::Failure::AccountChanged.into());
   }
   Ok(())
 }
@@ -681,37 +1099,37 @@ async fn redeem_and_open_desktop_edit(
   app_handle: AppHandle,
   api_base_url: String,
   handoff_token: String,
-) -> Result<(), String> {
-  let account = linked_handoff_account(&app_handle, &api_base_url).await?;
+) -> Result<(), crate::handoff::Stop> {
   let http_client = {
     let mgr = manager.lock().await;
     mgr.http_client().clone()
   };
-  // The handoff token travels in the request body; a redirect would replay it
-  // to another origin, so handoff requests never follow one.
+  // Acknowledgements also carry the token and must never follow redirects.
   let handoff_client =
     crate::http_client::DesktopHttpClient::new(crate::http_client::HttpClientOptions {
       redirect: reqwest::redirect::Policy::none(),
       timeout: None,
     })
-    .map_err(|e| format!("stella desktop could not start the handoff client: {e}"))?;
-
-  let redeemed = redeem_desktop_edit_handoff(
-    &handoff_client,
-    &api_base_url,
-    &handoff_token,
-    &account.credential.key,
+    .map_err(|error| error.to_string())?;
+  let (redeemed, account) = crate::handoff::redeem::<RedeemedDesktopEditHandoff>(
+    crate::handoff::RedeemOptions {
+      manager: &manager,
+      app: &app_handle,
+      target: crate::handoff::Target::DesktopEdit,
+      api_base_url: &api_base_url,
+      token: &handoff_token,
+    },
   )
   .await?;
   ensure_handoff_identity(&redeemed.identity, &account.identity)?;
   let request = redeemed.request;
   if request.api_base_url != api_base_url {
-    return Err("Desktop edit session names a different account server.".to_string());
+    return Err(crate::handoff::Failure::AccountMismatch.into());
   }
   let handoff_id = request.handoff_id.clone();
 
   if !is_safe_session_id(&request.remote_session.session_id) {
-    return Err("Invalid desktop edit session payload.".to_string());
+    return Err(String::from("Invalid desktop edit session payload.").into());
   }
 
   recheck_handoff_account(&app_handle, &account).await?;
@@ -726,7 +1144,13 @@ async fn redeem_and_open_desktop_edit(
   let result = {
     let mut mgr = manager.lock().await;
     recheck_handoff_account(&app_handle, &account).await?;
-    mgr.open_file(request, Some(prefetched_buffer)).await
+    mgr
+      .open_file(crate::session_manager::OpenDocument {
+        account: &account,
+        request,
+        prefetched_buffer,
+      })
+      .await
   }?;
 
   SessionManager::attach_watcher(&manager, &result.session_id).await;
@@ -738,12 +1162,13 @@ async fn redeem_and_open_desktop_edit(
       &handoff_id,
       &handoff_token,
       &result.session_id,
-      &account.credential.key,
+      &app_handle,
+      &account,
     )
     .await
   {
     tracing::warn!(
-      error = %error,
+      error = ?error,
       session_id = %result.session_id,
       "desktop edit handoff acknowledgement failed",
     );
@@ -761,8 +1186,97 @@ async fn redeem_and_open_desktop_edit(
 mod tests {
   use super::*;
 
+  #[test]
+  fn percent_encoding_spells_every_other_byte_as_uppercase_hex() {
+    assert_eq!(percent_encode("Az09-._~"), "Az09-._~");
+    for character in ['\0', ' ', '%', '/', '\u{7f}', 'é', '€', '😀'] {
+      let text = character.to_string();
+      let expected: String = text.bytes().map(|byte| format!("%{byte:02X}")).collect();
+      assert_eq!(percent_encode(&text), expected);
+    }
+  }
+
   const TOKEN: &str =
     "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+
+  const ACCOUNT_LINK_CONTRACT: &str = include_str!(
+    "../../../../packages/api-contract/src/desktop-account-link.fixtures.json"
+  );
+
+  #[test]
+  fn connect_links_carry_the_intent_the_page_asked_for() {
+    let contract: serde_json::Value =
+      serde_json::from_str(ACCOUNT_LINK_CONTRACT).unwrap();
+    let mut intents = Vec::new();
+    for link in contract["connectLinks"].as_array().unwrap() {
+      let intent =
+        crate::account::LinkIntent::parse(link["intent"].as_str().unwrap()).unwrap();
+      assert_eq!(
+        parse_deep_link(link["url"].as_str().unwrap()),
+        Some(DeepLinkAction::ConnectAccount {
+          api_base_url: link["apiBaseUrl"].as_str().unwrap().into(),
+          web_origin: link["webOrigin"].as_str().unwrap().into(),
+          intent,
+        })
+      );
+      intents.push(intent);
+    }
+    assert_eq!(
+      intents,
+      [
+        crate::account::LinkIntent::Connect,
+        crate::account::LinkIntent::Switch
+      ]
+    );
+  }
+
+  #[test]
+  fn settings_links_open_only_a_known_agent_focus() {
+    let contract: serde_json::Value =
+      serde_json::from_str(ACCOUNT_LINK_CONTRACT).unwrap();
+    let links = &contract["settingsLinks"];
+    let valid = links["valid"].as_array().unwrap();
+    let mut focuses = Vec::new();
+    for link in valid {
+      let focus = match link["harness"].as_str() {
+        None => crate::AgentSettingsFocus::All,
+        Some(id) => crate::AgentSettingsFocus::Harness(
+          crate::harness_release::ManagedHarness::ALL
+            .into_iter()
+            .find(|harness| harness.id() == id)
+            .unwrap(),
+        ),
+      };
+      assert_eq!(
+        parse_deep_link(link["url"].as_str().unwrap()),
+        Some(DeepLinkAction::OpenAgentSettings(focus))
+      );
+      focuses.push(focus);
+    }
+    // Every focus once, in whatever order the fixture lists them.
+    assert_eq!(focuses.len(), crate::AgentSettingsFocus::ALL.len());
+    for focus in crate::AgentSettingsFocus::ALL {
+      assert!(focuses.contains(&focus), "{focus:?} has no settings link");
+    }
+    let rejected = links["rejected"].as_array().unwrap();
+    assert!(!rejected.is_empty());
+    for url in rejected {
+      let url = url.as_str().unwrap();
+      assert_eq!(parse_deep_link(url), None, "{url}");
+    }
+  }
+
+  #[test]
+  fn a_connect_link_without_a_known_intent_does_nothing() {
+    let base = "stella://account/connect?apiBaseUrl=https%3A%2F%2Fapi.stll.app&webOrigin=https%3A%2F%2Fmy.stll.app";
+    for url in [
+      base.to_string(),
+      format!("{base}&intent=replace"),
+      format!("{base}&intent=Switch"),
+    ] {
+      assert_eq!(parse_deep_link(&url), None);
+    }
+  }
 
   #[test]
   fn account_links_accept_provider_ids_and_require_a_uuid_correlation() {
@@ -825,7 +1339,7 @@ mod tests {
       };
       assert_eq!(
         ensure_handoff_identity(&identity, &expected),
-        Err("The document link belongs to a different desktop account.".into())
+        Err(crate::handoff::Failure::AccountMismatch)
       );
     }
   }

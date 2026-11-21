@@ -23,6 +23,7 @@ type ServiceTemplate = {
   requiredUserInputs: Record<string, string>;
   variables: Record<string, string>;
   build?: ServiceBuild;
+  volumeMountPath?: string;
 };
 
 type TemplateManifest = {
@@ -64,14 +65,14 @@ const readStringRecord = (
     throw new RailwayTemplateDraftError(`${label} must be an object`);
   }
 
-  const result: Record<string, string> = {};
-  for (const [key, item] of Object.entries(value)) {
-    if (typeof item !== "string") {
-      throw new RailwayTemplateDraftError(`${label}.${key} must be a string`);
-    }
-    result[key] = item;
-  }
-  return result;
+  return Object.fromEntries(
+    Object.entries(value).map(([key, item]) => {
+      if (typeof item !== "string") {
+        throw new RailwayTemplateDraftError(`${label}.${key} must be a string`);
+      }
+      return [key, item] as const;
+    }),
+  );
 };
 
 const readServiceBuild = (
@@ -110,29 +111,38 @@ const readManifest = (): TemplateManifest => {
     );
   }
 
-  const services: Record<string, ServiceTemplate> = {};
-  for (const [serviceName, service] of Object.entries(value["services"])) {
-    if (!isRecord(service)) {
-      throw new RailwayTemplateDraftError(
-        `${MANIFEST_PATH} service ${serviceName} must be an object`,
+  const services = Object.fromEntries(
+    Object.entries(value["services"]).map(([serviceName, service]) => {
+      if (!isRecord(service)) {
+        throw new RailwayTemplateDraftError(
+          `${MANIFEST_PATH} service ${serviceName} must be an object`,
+        );
+      }
+      const build = readServiceBuild(
+        service["build"],
+        `services.${serviceName}.build`,
       );
-    }
-    const build = readServiceBuild(
-      service["build"],
-      `services.${serviceName}.build`,
-    );
-    services[serviceName] = {
-      requiredUserInputs: readStringRecord(
-        service["requiredUserInputs"] ?? {},
-        `services.${serviceName}.requiredUserInputs`,
-      ),
-      variables: readStringRecord(
-        service["variables"] ?? {},
-        `services.${serviceName}.variables`,
-      ),
-      ...(build === undefined ? {} : { build }),
-    };
-  }
+      const volumeMountPath =
+        service["volumeMountPath"] === undefined
+          ? undefined
+          : getString(service, "volumeMountPath");
+      return [
+        serviceName,
+        {
+          requiredUserInputs: readStringRecord(
+            service["requiredUserInputs"] ?? {},
+            `services.${serviceName}.requiredUserInputs`,
+          ),
+          variables: readStringRecord(
+            service["variables"] ?? {},
+            `services.${serviceName}.variables`,
+          ),
+          ...(build === undefined ? {} : { build }),
+          ...(volumeMountPath === undefined ? {} : { volumeMountPath }),
+        },
+      ] as const;
+    }),
+  );
 
   return { services, buckets: readManifestBuckets(value["buckets"]) };
 };
@@ -362,6 +372,31 @@ const validateBuckets = (
   }
 };
 
+type ServiceVolumeMountOptions = {
+  draftService: Record<string, unknown>;
+  serviceName: string;
+  volumeMountPath: string;
+};
+
+export const serviceVolumeMountViolations = ({
+  draftService,
+  serviceName,
+  volumeMountPath,
+}: ServiceVolumeMountOptions): string[] => {
+  const mounts = draftService["volumeMounts"];
+  if (
+    isRecord(mounts) &&
+    Object.values(mounts).some(
+      (mount) => isRecord(mount) && mount["mountPath"] === volumeMountPath,
+    )
+  ) {
+    return [];
+  }
+  return [
+    `${serviceName} must mount a persistent volume at ${volumeMountPath} in the template draft`,
+  ];
+};
+
 const printUsage = () => {
   console.log(
     "Usage: bun scripts/check-railway-template-draft.ts --template <template-id>",
@@ -449,6 +484,15 @@ const main = async () => {
         build: serviceTemplate.build,
       });
     }
+    if (serviceTemplate.volumeMountPath !== undefined) {
+      failures.push(
+        ...serviceVolumeMountViolations({
+          draftService,
+          serviceName,
+          volumeMountPath: serviceTemplate.volumeMountPath,
+        }),
+      );
+    }
   }
 
   validateBuckets(serializedConfig, manifest.buckets);
@@ -465,7 +509,9 @@ const main = async () => {
   );
 };
 
-main().catch((error: unknown) => {
-  console.error(error instanceof Error ? error.message : String(error));
-  process.exit(1);
-});
+if (import.meta.main) {
+  main().catch((error: unknown) => {
+    console.error(error instanceof Error ? error.message : String(error));
+    process.exit(1);
+  });
+}

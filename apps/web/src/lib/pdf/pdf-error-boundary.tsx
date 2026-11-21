@@ -4,6 +4,7 @@ import type { ErrorInfo, ReactNode } from "react";
 import { useTranslations } from "use-intl";
 
 import { getAnalytics } from "@/lib/analytics/provider";
+import { reportErrorOnce } from "@/lib/analytics/reported-error";
 import { ClientTelemetryError } from "@/lib/errors/telemetry";
 
 /**
@@ -37,17 +38,26 @@ export class PDFErrorBoundary extends Component<
   }
 
   override componentDidCatch(error: Error, _info: ErrorInfo) {
-    getAnalytics().captureError(
-      new ClientTelemetryError({
-        area: "pdf-viewer",
-        message: `[PDF] ${error.message}`,
-        cause: error,
-      }),
-    );
+    reportErrorOnce(error, () => {
+      getAnalytics().captureError(
+        new ClientTelemetryError({
+          area: "pdf-viewer",
+          message: `[PDF] ${error.message}`,
+          cause: error,
+        }),
+        {
+          fingerprintKey: "PDFErrorBoundary.componentDidCatch:caught",
+          scope: {
+            type: "handler",
+            handlerId: "PDFErrorBoundary.componentDidCatch:caught",
+          },
+        },
+      );
+    });
     this.props.onError?.(error);
   }
 
-  // oxlint-disable-next-line typescript-eslint/promise-function-async -- React render() must stay sync; ReactNode children can be thenable
+  // oxlint-disable-next-line typescript/promise-function-async -- React render() must stay sync; ReactNode children can be thenable
   override render() {
     const { error } = this.state;
     if (error !== null) {

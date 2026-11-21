@@ -3,18 +3,33 @@ import { describe, expect, test } from "bun:test";
 
 import { API_FILE_SECURITY_REJECTED_ERROR_CODE } from "@stll/api-contract";
 import type { ApiFileSecurityIssue } from "@stll/api-contract";
-import { ACTION_ADMISSION_REFUSALS } from "@stll/api-contract/action-admission";
+import {
+  ACTION_ADMISSION_CODES,
+  ACTION_ADMISSION_REFUSALS,
+} from "@stll/api-contract/action-admission";
+import { createTestState } from "@stll/test-state";
 
+import { safeDbFromScoped } from "@/api/db/safe-db";
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { env } from "@/api/env";
+import tableChart from "@/api/handlers/chat/table-chart";
+import { createHttpApp } from "@/api/http/app";
+import { routes } from "@/api/http/route";
+import { HttpStatusResponse } from "@/api/http/status";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import type { OrgAIConfigStatus } from "@/api/lib/ai-config-loader-core";
 import { AI_MEMBER_ASSIGNMENT_REQUIRED_ERROR_CODE } from "@/api/lib/ai-config-response";
 import {
+  captureError,
+  detached,
+  resetCaptureWindows,
+} from "@/api/lib/analytics/capture";
+import {
   ACCOUNT_ACCESS,
-  assertRunSizeConfirmedForHandler,
+  authorizeHandlerRunSize,
   createSafeHandler,
+  createSafePublicHandler,
   createSafeRootHandler,
   errorCauseChainAttributes,
   resolveMeteringContext,
@@ -23,14 +38,26 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import { ActionAdmissionError } from "@/api/lib/errors/action-admission-error";
 import { PROVIDER_CALL_ERROR_MESSAGE } from "@/api/lib/errors/provider-call-error";
+import { createProviderCallError } from "@/api/lib/errors/provider-call-failure";
 import {
   DatabaseError,
   DatabaseRlsError,
   HandlerError,
   UsageLimitExceededError,
 } from "@/api/lib/errors/tagged-errors";
+import { runWithContentDeliveryScope } from "@/api/lib/files/content-delivery";
+import { createPublicSearchCoalescer } from "@/api/lib/legal-search/public-search-coalescer";
+import { WorkRefusal } from "@/api/lib/load/work-admission";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
+import {
+  enrichRequestContext,
+  getRequestContext,
+  openRequestContext,
+  runWithRequestIdScope,
+} from "@/api/lib/observability/request-context";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
-import { generateTanStackTextForRole } from "@/api/lib/tanstack-ai-generate";
+import { NO_ORGANIZATION_MODEL_DISPATCH } from "@/api/lib/rate-limit/model-dispatch-admission";
+import { generateTanStackTextForTask } from "@/api/lib/tanstack-ai-generate";
 import {
   instanceWireErrorModel,
   providerCallErrorCassettes,
@@ -41,20 +68,181 @@ import {
   installRecordingAnalytics,
   installRecordingLogger,
 } from "@/api/tests/helpers/recording-telemetry";
+import { serveForTest } from "@/api/tests/helpers/test-server";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+
+const testState = createTestState({ file: import.meta.path, config: env });
 
 const noopAuditRecorder: AuditRecorder = async () => undefined;
 
+test.each([
+  [
+    "work refusal",
+    () => {
+      const refusal = new WorkRefusal({
+        message: "Work capacity is unavailable",
+        reason: "busy",
+        retryAfterMs: 2000,
+      });
+      return new HandlerError({
+        status: 503,
+        code: "internal_error",
+        message: refusal.message,
+        retryable: true,
+        retryAfterMs: refusal.retryAfterMs,
+      });
+    },
+  ],
+  [
+    "provider refusal",
+    () =>
+      createProviderCallError({
+        model: { provider: "openai", keySource: "byok" },
+        status: 503,
+        evidence: { status: 503, headers: { "Retry-After": "2" } },
+      }),
+  ],
+])("%s never shortens the advised retry wait", async (_name, createError) => {
+  const endpoint = createSafeRootHandler(
+    {
+      contract: "patch",
+      permissions: { workspace: ["read"] },
+      accountAccess: ACCOUNT_ACCESS.sandbox,
+      mcp: { type: "internal", reason: "health_infra" },
+    },
+    async function* () {
+      return Result.err(createError());
+    },
+  );
+  const safeDb: SafeDb = async <T>() =>
+    Result.err<T, SafeDbError>(new DatabaseError({ message: "unused" }));
+  const ctx = createContext(endpoint, safeDb);
+  const response = await endpoint.handler(ctx);
+  expect(Number(ctx.set.headers["Retry-After"])).toBeGreaterThanOrEqual(2);
+  if (!(response instanceof HttpStatusResponse)) {
+    throw new TypeError("Expected a status response");
+  }
+  expect(response.response.retryable).toBe(true);
+  expect(response.response.retryAfterMs).toBeGreaterThanOrEqual(1000);
+});
+
+test("a thrown retryable handler error sets Retry-After", async () => {
+  const endpoint = createSafeRootHandler(
+    {
+      contract: "patch",
+      permissions: { workspace: ["read"] },
+      accountAccess: ACCOUNT_ACCESS.sandbox,
+      mcp: { type: "internal", reason: "health_infra" },
+    },
+    async function* () {
+      throw new HandlerError({
+        status: 503,
+        code: "internal_error",
+        message: "Work capacity is unavailable",
+        retryable: true,
+        retryAfterMs: 2000,
+      });
+    },
+  );
+  const safeDb: SafeDb = async <T>() =>
+    Result.err<T, SafeDbError>(new DatabaseError({ message: "unused" }));
+  const ctx = createContext(endpoint, safeDb);
+
+  const response = await endpoint.handler(ctx);
+
+  expect(Number(ctx.set.headers["Retry-After"])).toBeGreaterThanOrEqual(2);
+  expect(response).toMatchObject({
+    code: 503,
+    response: { retryable: true, retryAfterMs: 2000 },
+  });
+});
+
+test("a retryable handler error sets a whole-second Retry-After", async () => {
+  const endpoint = createSafeRootHandler(
+    {
+      contract: "patch",
+      permissions: { workspace: ["read"] },
+      accountAccess: ACCOUNT_ACCESS.sandbox,
+      mcp: { type: "internal", reason: "health_infra" },
+    },
+    async function* () {
+      return Result.err(
+        new HandlerError({
+          status: 503,
+          code: "internal_error",
+          message: "Work capacity is unavailable",
+          retryable: true,
+          retryAfterMs: 2000,
+        }),
+      );
+    },
+  );
+  const safeDb: SafeDb = async <T>() =>
+    Result.err<T, SafeDbError>(new DatabaseError({ message: "unused" }));
+  const ctx = createContext(endpoint, safeDb);
+
+  await endpoint.handler(ctx);
+
+  const retryAfter = ctx.set.headers["Retry-After"];
+  expect(retryAfter).toMatch(/^\d+$/u);
+  expect(Number(retryAfter)).toBeGreaterThanOrEqual(2);
+});
+
+test.each([
+  [
+    "canonical",
+    () => ({ "Content-Disposition": "attachment; filename=fixture.txt" }),
+  ],
+  [
+    "lower-cased",
+    () => ({ "content-disposition": "attachment; filename=fixture.txt" }),
+  ],
+] as const)(
+  "reads a %s Content-Disposition header",
+  async (_name, createHeaders) => {
+    const endpoint = createSafePublicHandler(
+      {
+        contract: "patch",
+        accountAccess: ACCOUNT_ACCESS.sandbox,
+        cache: { kind: "none" },
+        mcp: { type: "internal", reason: "health_infra" },
+        contentDelivery: { type: "audited" },
+      },
+      async function* () {
+        return Result.ok("fixture");
+      },
+    );
+
+    const response = await runWithContentDeliveryScope(
+      { type: "audited" },
+      async () =>
+        await endpoint.handler(
+          asTestRaw({
+            request: new Request("https://example.test/delivery"),
+            route: "/delivery",
+            set: { headers: createHeaders(), status: 200 },
+          }),
+        ),
+    );
+
+    expect(response).toMatchObject({ code: 500 });
+  },
+);
+
 describe("createSafeHandler workspace audit binding", () => {
-  test("rebinds audit recording to the validated workspace", async () => {
+  // The caller binds the recorder to the matter it proved (REST in
+  // `authorizeWorkspace`, MCP in `capabilityHandlerContext`); the handler
+  // factory hands that recorder on and never builds or swaps its own.
+  test("hands the handler the recorder its caller bound to the matter", async () => {
     const workspaceId = toSafeId<"workspace">(
       "019e7000-0000-7000-8000-000000000003",
     );
-    const reboundRecorder: AuditRecorder = async () => undefined;
+    const boundRecorder: AuditRecorder = async () => undefined;
     let recorderSeenByHandler: AuditRecorder | undefined;
-    let recorderWorkspaceId: string | null | undefined;
+    let recorderFactoryCalled = false;
     const endpoint = createSafeHandler(
       {
+        contract: "patch",
         permissions: { workspace: ["read"] },
         accountAccess: ACCOUNT_ACCESS.sandbox,
         mcp: { type: "internal", reason: "health_infra" },
@@ -93,181 +281,228 @@ describe("createSafeHandler workspace audit binding", () => {
       orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
       managedAIResidency: "eu" as const,
       promptCachingEnabled: false,
-      recordAuditEvent: noopAuditRecorder,
-      createAuditRecorder: (options?: {
-        workspaceId?: typeof workspaceId | null;
-      }) => {
-        recorderWorkspaceId = options?.workspaceId;
-        return reboundRecorder;
+      recordAuditEvent: boundRecorder,
+      createAuditRecorder: () => {
+        recorderFactoryCalled = true;
+        return noopAuditRecorder;
       },
     };
 
     const result = await endpoint.handler(asTestRaw(context));
 
     expect(result).toEqual({ ok: true });
-    expect(recorderWorkspaceId).toBe(workspaceId);
-    expect(recorderSeenByHandler).toBe(reboundRecorder);
+    expect(recorderSeenByHandler).toBe(boundRecorder);
+    expect(recorderFactoryCalled).toBe(false);
   });
 });
 
 describe("createSafeRootHandler usage preflight", () => {
-  test("uses effective provider tier for preflight cost", () => {
-    const previousProvider = env.AI_PROVIDER;
-    const previousAnthropicKey = env.ANTHROPIC_API_KEY;
-    try {
-      env.AI_PROVIDER = "anthropic";
-      env.ANTHROPIC_API_KEY = "sk-test";
+  test("retains the complete static refusal response for exhausted managed usage", async () => {
+    testState.setConfig("USAGE_ENFORCEMENT_ENABLED", true);
+    testState.setConfig("FEATURE_CONFIGURED_ACCESS", false);
+    testState.setConfig("AI_PROVIDER", "openrouter");
+    testState.setConfig("OPENROUTER_API_KEY", "sk-test");
 
-      const context = resolveMeteringContext({
-        metering: {
-          actionType: "chat",
-          modelRole: "fast",
-          serviceTier: "flex",
-        },
-        organizationId: toSafeId<"organization">(
-          "019e7000-0000-7000-8000-000000000002",
+    let bodyRan = false;
+    const endpoint = createSafeRootHandler(
+      {
+        contract: "patch",
+        permissions: { workspace: ["read"] },
+        accountAccess: ACCOUNT_ACCESS.sandbox,
+        mcp: { type: "internal", reason: "health_infra" },
+        requiresUsage: { actionType: "chat" },
+      },
+      async function* () {
+        bodyRan = true;
+        return Result.ok({ ok: true });
+      },
+    );
+    const safeDb = safeDbFromScoped(
+      async (run) =>
+        await run(
+          asTestRaw({
+            select: () => ({
+              from: () => ({
+                where: () =>
+                  Object.assign([{ total: 0 }], {
+                    limit: async () =>
+                      await Promise.resolve([
+                        {
+                          status: "active",
+                          currentPeriodStart: new Date("2020-01-01"),
+                          currentPeriodEnd: new Date("2099-01-01"),
+                        },
+                      ]),
+                  }),
+              }),
+            }),
+          }),
         ),
-        orgAIConfig: null,
-        workspaceId: null,
-        userId: toSafeId<"user">("019e7000-0000-7000-8000-000000000001"),
-      });
-
-      expect(context.serviceTier).toBe("standard");
-      expect(context.cost).toBe(2);
-    } finally {
-      env.AI_PROVIDER = previousProvider;
-      env.ANTHROPIC_API_KEY = previousAnthropicKey;
+    );
+    const result = await endpoint.handler(createContext(endpoint, safeDb));
+    expect(bodyRan).toBe(false);
+    if (!("code" in result)) {
+      throw new TypeError("Expected static admission refusal");
     }
+    expect({ status: result.code, body: result.response }).toEqual({
+      status: 402,
+      body: {
+        code: "usage_limit_exceeded",
+        message: "Usage limit exceeded: need 2, have 0",
+        reason: "usage_limit_exceeded",
+        required: 2,
+        available: 0,
+      },
+    });
+  });
+
+  test("uses effective provider tier for preflight cost", () => {
+    testState.setConfig("AI_PROVIDER", "anthropic");
+    testState.setConfig("ANTHROPIC_API_KEY", "sk-test");
+
+    const context = resolveMeteringContext({
+      metering: {
+        actionType: "chat",
+        modelTask: "short-text",
+        serviceTier: "flex",
+      },
+      organizationId: toSafeId<"organization">(
+        "019e7000-0000-7000-8000-000000000002",
+      ),
+      orgAIConfig: null,
+      workspaceId: null,
+      userId: toSafeId<"user">("019e7000-0000-7000-8000-000000000001"),
+    });
+
+    expect(context.serviceTier).toBe("standard");
+    expect(context.cost).toBe(2);
   });
 
   test("fails closed when enforced usage preflight cannot read the ledger", async () => {
-    const previousEnforcement = env.USAGE_ENFORCEMENT_ENABLED;
-    env.USAGE_ENFORCEMENT_ENABLED = true;
-    try {
-      let meteredHandlerCalled = false;
-      const endpoint = createSafeRootHandler(
-        {
-          permissions: { workspace: ["read"] },
-          accountAccess: ACCOUNT_ACCESS.sandbox,
-          mcp: { type: "internal", reason: "health_infra" },
-          requiresUsage: { actionType: "chat" },
-        },
-        async function* () {
-          meteredHandlerCalled = true;
-          return Result.ok({ ok: true });
-        },
-      );
-      const dbError = new DatabaseError({
-        message: "usage ledger unavailable",
-      });
-      const safeDb: SafeDb = async <T>() => Result.err<T, SafeDbError>(dbError);
+    testState.setConfig("USAGE_ENFORCEMENT_ENABLED", true);
+    testState.setConfig("AI_PROVIDER", "openrouter");
+    testState.setConfig("OPENROUTER_API_KEY", "sk-test");
 
-      const result = await endpoint.handler(createContext(endpoint, safeDb));
+    let meteredHandlerCalled = false;
+    const endpoint = createSafeRootHandler(
+      {
+        contract: "patch",
+        permissions: { workspace: ["read"] },
+        accountAccess: ACCOUNT_ACCESS.sandbox,
+        mcp: { type: "internal", reason: "health_infra" },
+        requiresUsage: { actionType: "chat" },
+      },
+      async function* () {
+        meteredHandlerCalled = true;
+        return Result.ok({ ok: true });
+      },
+    );
+    const dbError = new DatabaseError({
+      message: "usage ledger unavailable",
+    });
+    const safeDb: SafeDb = async <T>() => Result.err<T, SafeDbError>(dbError);
 
-      expect(meteredHandlerCalled).toBe(false);
-      if (!("code" in result)) {
-        throw new Error("Expected usage preflight to return a status response");
-      }
-      expect(result.code).toBe(500);
-      expect(result.response).toEqual({
-        code: "internal_server_error",
-        message: "Internal server error",
-      });
-    } finally {
-      env.USAGE_ENFORCEMENT_ENABLED = previousEnforcement;
+    const result = await endpoint.handler(createContext(endpoint, safeDb));
+
+    expect(meteredHandlerCalled).toBe(false);
+    if (!("code" in result)) {
+      throw new Error("Expected usage preflight to return a status response");
     }
+    expect(result.code).toBe(500);
+    expect(result.response).toEqual({
+      code: "internal_server_error",
+      message: "Internal server error",
+    });
   });
 
   test("skips metering entirely when enforcement is disabled", async () => {
-    const previousEnforcement = env.USAGE_ENFORCEMENT_ENABLED;
-    env.USAGE_ENFORCEMENT_ENABLED = false;
-    try {
-      let meteredHandlerCalled = false;
-      let safeDbCalled = false;
-      const endpoint = createSafeRootHandler(
-        {
-          permissions: { workspace: ["read"] },
-          accountAccess: ACCOUNT_ACCESS.sandbox,
-          mcp: { type: "internal", reason: "health_infra" },
-          requiresUsage: { actionType: "chat" },
-        },
-        async function* () {
-          meteredHandlerCalled = true;
-          return Result.ok({ ok: true });
-        },
+    testState.setConfig("USAGE_ENFORCEMENT_ENABLED", false);
+
+    let meteredHandlerCalled = false;
+    let safeDbCalled = false;
+    const endpoint = createSafeRootHandler(
+      {
+        contract: "patch",
+        permissions: { workspace: ["read"] },
+        accountAccess: ACCOUNT_ACCESS.sandbox,
+        mcp: { type: "internal", reason: "health_infra" },
+        requiresUsage: { actionType: "chat" },
+      },
+      async function* () {
+        meteredHandlerCalled = true;
+        return Result.ok({ ok: true });
+      },
+    );
+    const safeDb: SafeDb = async <T>() => {
+      safeDbCalled = true;
+      return Result.err<T, SafeDbError>(
+        new DatabaseError({ message: "ledger should not be read" }),
       );
-      const safeDb: SafeDb = async <T>() => {
-        safeDbCalled = true;
-        return Result.err<T, SafeDbError>(
-          new DatabaseError({ message: "ledger should not be read" }),
-        );
-      };
+    };
 
-      const result = await endpoint.handler(createContext(endpoint, safeDb));
+    const result = await endpoint.handler(createContext(endpoint, safeDb));
 
-      expect(safeDbCalled).toBe(false);
-      expect(meteredHandlerCalled).toBe(true);
-      expect(result).toEqual({ ok: true });
-    } finally {
-      env.USAGE_ENFORCEMENT_ENABLED = previousEnforcement;
-    }
+    expect(safeDbCalled).toBe(false);
+    expect(meteredHandlerCalled).toBe(true);
+    expect(result).toEqual({ ok: true });
   });
 
   test("does not run usage preflight when the metered role uses BYOK", async () => {
-    const previousEnforcement = env.USAGE_ENFORCEMENT_ENABLED;
-    env.USAGE_ENFORCEMENT_ENABLED = true;
-    try {
-      let meteredHandlerCalled = false;
-      let safeDbCalled = false;
-      const endpoint = createSafeRootHandler(
-        {
-          permissions: { workspace: ["read"] },
-          accountAccess: ACCOUNT_ACCESS.sandbox,
-          mcp: { type: "internal", reason: "health_infra" },
-          requiresUsage: { actionType: "chat", modelRole: "fast" },
-        },
-        async function* () {
-          meteredHandlerCalled = true;
-          return Result.ok({ ok: true });
-        },
-      );
-      const dbError = new DatabaseError({
-        message: "usage ledger should not be read",
-      });
-      const safeDb: SafeDb = async <T>() => {
-        safeDbCalled = true;
-        return Result.err<T, SafeDbError>(dbError);
-      };
+    testState.setConfig("USAGE_ENFORCEMENT_ENABLED", true);
 
-      const result = await endpoint.handler(
-        createContext(endpoint, safeDb, { orgAIConfig: createOrgAIConfig() }),
-      );
+    let meteredHandlerCalled = false;
+    let safeDbCalled = false;
+    const endpoint = createSafeRootHandler(
+      {
+        contract: "patch",
+        permissions: { workspace: ["read"] },
+        accountAccess: ACCOUNT_ACCESS.sandbox,
+        mcp: { type: "internal", reason: "health_infra" },
+        requiresUsage: { actionType: "chat", modelTask: "short-text" },
+      },
+      async function* () {
+        meteredHandlerCalled = true;
+        return Result.ok({ ok: true });
+      },
+    );
+    const dbError = new DatabaseError({
+      message: "usage ledger should not be read",
+    });
+    const safeDb: SafeDb = async <T>() => {
+      safeDbCalled = true;
+      return Result.err<T, SafeDbError>(dbError);
+    };
 
-      expect(safeDbCalled).toBe(false);
-      expect(meteredHandlerCalled).toBe(true);
-      expect(result).toEqual({ ok: true });
-    } finally {
-      env.USAGE_ENFORCEMENT_ENABLED = previousEnforcement;
-    }
+    const result = await endpoint.handler(
+      createContext(endpoint, safeDb, { orgAIConfig: createOrgAIConfig() }),
+    );
+
+    expect(safeDbCalled).toBe(false);
+    expect(meteredHandlerCalled).toBe(true);
+    expect(result).toEqual({ ok: true });
   });
 });
 
-const createContext = (
-  endpoint: ReturnType<typeof createSafeRootHandler>,
+const createContext = <TContext>(
+  _endpoint: { readonly handler: (ctx: TContext) => unknown },
   safeDb: SafeDb,
   {
     orgAIConfig = null,
     orgAIConfigStatus = ORG_AI_CONFIG_STATUS.ok,
     role = "owner",
+    request = new Request("https://example.test/usage-preflight"),
   }: {
     orgAIConfig?: OrgAIConfig | null;
     orgAIConfigStatus?: OrgAIConfigStatus;
     role?: "owner" | "admin" | "member" | "intern" | "external";
+    request?: Request;
   } = {},
-): Parameters<typeof endpoint.handler>[0] =>
+): TContext =>
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test fixture only provides fields used before the handler body can run
   ({
-    request: new Request("https://example.test/usage-preflight"),
+    request,
     route: "/usage-preflight",
+    set: { headers: {} },
     user: {
       id: toSafeId<"user">("019e7000-0000-7000-8000-000000000001"),
     },
@@ -290,8 +525,7 @@ const createContext = (
     promptCachingEnabled: false,
     recordAuditEvent: noopAuditRecorder,
     createAuditRecorder: () => noopAuditRecorder,
-    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test fixture only provides fields used before the handler body can run
-  }) as unknown as Parameters<typeof endpoint.handler>[0];
+  }) as unknown as TContext;
 
 const createOrgAIConfig = (): OrgAIConfig => ({
   providers: [{ provider: "openai", apiKey: "test-api-key" }],
@@ -310,47 +544,75 @@ describe("createSafeRootHandler member AI access", () => {
       new DatabaseError({ message: "the ledger should not be read" }),
     );
 
-  test("refuses an AI handler for a member without a seat assignment, own key included", async () => {
-    const previousEnforcement = env.USAGE_ENFORCEMENT_ENABLED;
-    env.USAGE_ENFORCEMENT_ENABLED = true;
-    try {
-      let bodyRan = false;
-      const endpoint = createSafeRootHandler(
-        {
-          permissions: { workspace: ["read"] },
-          accountAccess: ACCOUNT_ACCESS.sandbox,
-          mcp: { type: "internal", reason: "health_infra" },
-          requiresUsage: { actionType: "chat", laneRouting: true },
-        },
-        async function* () {
-          bodyRan = true;
-          return Result.ok({ ok: true });
-        },
-      );
-
-      const result = await endpoint.handler(
-        createContext(endpoint, unreadableLedger, {
-          orgAIConfig: createOrgAIConfig(),
-          orgAIConfigStatus: ORG_AI_CONFIG_STATUS.memberAssignmentRequired,
-        }),
-      );
-
-      expect(bodyRan).toBe(false);
-      if (!("code" in result)) {
-        throw new Error("expected a status response");
-      }
-      expect(result.code).toBe(403);
-      expect(result.response).toMatchObject({
-        code: AI_MEMBER_ASSIGNMENT_REQUIRED_ERROR_CODE,
-      });
-    } finally {
-      env.USAGE_ENFORCEMENT_ENABLED = previousEnforcement;
+  test("applies chart member AI access before model dispatch", async () => {
+    let bodyRan = false;
+    const endpoint = createSafeRootHandler(
+      { ...tableChart.config, contract: "patch" },
+      async function* () {
+        bodyRan = true;
+        return Result.ok({ ok: true });
+      },
+    );
+    const result = await endpoint.handler(
+      createContext(endpoint, unreadableLedger, {
+        orgAIConfig: createOrgAIConfig(),
+        orgAIConfigStatus: ORG_AI_CONFIG_STATUS.memberAssignmentRequired,
+      }),
+    );
+    expect(bodyRan).toBe(false);
+    if (!("code" in result)) {
+      throw new Error("Expected an AI access response");
     }
+    expect(result.code).toBe(403);
+    expect(result.response).toMatchObject({
+      code: AI_MEMBER_ASSIGNMENT_REQUIRED_ERROR_CODE,
+    });
+  });
+
+  test("refuses an AI handler for a member without a seat assignment, own key included", async () => {
+    testState.setConfig("USAGE_ENFORCEMENT_ENABLED", true);
+
+    let bodyRan = false;
+    const endpoint = createSafeRootHandler(
+      {
+        contract: "patch",
+        permissions: { workspace: ["read"] },
+        accountAccess: ACCOUNT_ACCESS.sandbox,
+        mcp: { type: "internal", reason: "health_infra" },
+        requiresUsage: { actionType: "chat", laneRouting: true },
+      },
+      async function* () {
+        bodyRan = true;
+        return Result.ok({ ok: true });
+      },
+    );
+
+    const result = await endpoint.handler(
+      createContext(endpoint, unreadableLedger, {
+        orgAIConfig: createOrgAIConfig(),
+        orgAIConfigStatus: ORG_AI_CONFIG_STATUS.memberAssignmentRequired,
+      }),
+    );
+
+    expect(bodyRan).toBe(false);
+    if (!("code" in result)) {
+      throw new Error("expected a status response");
+    }
+    expect({ status: result.code, body: result.response }).toEqual({
+      status: 403,
+      body: {
+        code: AI_MEMBER_ASSIGNMENT_REQUIRED_ERROR_CODE,
+        message:
+          "AI is available only to members with an assigned seat in this " +
+          "organization. Ask an organization admin to assign you one.",
+      },
+    });
   });
 
   test("runs a handler that declares no AI usage for the same member", async () => {
     const endpoint = createSafeRootHandler(
       {
+        contract: "patch",
         permissions: { workspace: ["read"] },
         accountAccess: ACCOUNT_ACCESS.sandbox,
         mcp: { type: "internal", reason: "health_infra" },
@@ -375,6 +637,7 @@ describe("createSafeRootHandler permission gate", () => {
     let bodyRan = false;
     const endpoint = createSafeRootHandler(
       {
+        contract: "patch",
         permissions: { organization: ["delete"] },
         accountAccess: ACCOUNT_ACCESS.standard,
         mcp: { type: "internal", reason: "health_infra" },
@@ -408,6 +671,7 @@ describe("createSafeRootHandler permission gate", () => {
     let bodyRan = false;
     const endpoint = createSafeRootHandler(
       {
+        contract: "patch",
         permissions: { organization: ["delete"] },
         accountAccess: ACCOUNT_ACCESS.standard,
         mcp: { type: "internal", reason: "health_infra" },
@@ -429,6 +693,186 @@ describe("createSafeRootHandler permission gate", () => {
   });
 });
 
+test("safe handlers group plain errors by declared route across source-line moves", async () => {
+  const analytics = installRecordingAnalytics();
+  const recordingLogger = installRecordingLogger();
+  let sourceLine = 100;
+  const createFailingEndpoint = () =>
+    createSafeRootHandler(
+      {
+        contract: "patch",
+        permissions: { workspace: ["read"] },
+        accountAccess: ACCOUNT_ACCESS.sandbox,
+        mcp: { type: "internal", reason: "health_infra" },
+      },
+      async function* () {
+        const error = new Error("Handler failed");
+        error.stack = `Error: Handler failed\n    at performOperation (/app/operation.ts:${sourceLine}:9)`;
+        return Result.ok(await Promise.reject(error));
+      },
+    );
+  const first = createFailingEndpoint();
+  const second = createFailingEndpoint();
+  const safeDb: SafeDb = async <T>() =>
+    Result.err<T, SafeDbError>(new DatabaseError({ message: "unused" }));
+  const app = serveForTest(
+    createHttpApp({
+      middleware: [],
+      routes: routes({
+        "/first/:entityId": {
+          GET: {
+            access: "public",
+            config: {},
+            run: async ({ ctx, route }) =>
+              await first.handler({
+                ...createContext(first, safeDb),
+                request: ctx.request,
+                route,
+              }),
+          },
+        },
+        "/second/:entityId": {
+          GET: {
+            access: "public",
+            config: {},
+            run: async ({ ctx, route }) =>
+              await second.handler({
+                ...createContext(second, safeDb),
+                request: ctx.request,
+                route,
+              }),
+          },
+        },
+      }),
+    }),
+  );
+  try {
+    for (const path of [
+      "/first/first-private-id",
+      "/second/second-private-id",
+    ]) {
+      const response = await app.fetch(
+        new Request(`https://example.test${path}`),
+      );
+      expect(response.status).toBe(500);
+    }
+    const original = analytics.exceptions();
+    expect(original).toHaveLength(2);
+    const firstFingerprint =
+      original.at(0)?.properties["$exception_fingerprint"];
+    const secondFingerprint =
+      original.at(1)?.properties["$exception_fingerprint"];
+    expect(firstFingerprint).toContain("/first/:entityId");
+    expect(secondFingerprint).toContain("/second/:entityId");
+    expect(firstFingerprint).not.toBe(secondFingerprint);
+    expect(JSON.stringify(original)).not.toContain("private-id");
+
+    sourceLine += 10;
+    resetCaptureWindows();
+    const shifted = await app.fetch(
+      new Request("https://example.test/first/another-private-id"),
+    );
+    expect(shifted.status).toBe(500);
+    const captures = analytics.exceptions();
+    expect(captures).toHaveLength(3);
+    expect(captures.at(2)?.properties["$exception_fingerprint"]).toBe(
+      firstFingerprint,
+    );
+    expect(captures.at(2)?.properties["error.cause.frame"]).not.toBe(
+      captures.at(0)?.properties["error.cause.frame"],
+    );
+  } finally {
+    await app.stop();
+    recordingLogger.restore();
+    analytics.restore();
+  }
+});
+
+test("safe handlers preserve request scope through shared helpers and detached rejections", async () => {
+  const analytics = installRecordingAnalytics();
+  const logs = installRecordingLogger();
+  const endpoint = createSafeRootHandler(
+    {
+      contract: "patch",
+      permissions: { workspace: ["read"] },
+      accountAccess: ACCOUNT_ACCESS.sandbox,
+      mcp: { type: "internal", reason: "health_infra" },
+    },
+    async function* () {
+      captureError(
+        new Error("Shared failure"),
+        handlerErrorContext("test.sharedCapture"),
+      );
+      detached(async () => {
+        throw new Error("Detached failure");
+      }, "test.shared-detached");
+      return Result.ok({ ok: true });
+    },
+  );
+  const safeDb: SafeDb = async <T>() =>
+    Result.err<T, SafeDbError>(new DatabaseError({ message: "unused" }));
+  const app = serveForTest(
+    createHttpApp({
+      middleware: [],
+      routes: routes({
+        "/first/:id": {
+          GET: {
+            access: "public",
+            config: {},
+            run: async ({ ctx, route }) =>
+              await endpoint.handler({
+                ...createContext(endpoint, safeDb),
+                request: ctx.request,
+                route,
+              }),
+          },
+        },
+        "/second/:id": {
+          GET: {
+            access: "public",
+            config: {},
+            run: async ({ ctx, route }) =>
+              await endpoint.handler({
+                ...createContext(endpoint, safeDb),
+                request: ctx.request,
+                route,
+              }),
+          },
+        },
+      }),
+    }),
+  );
+  try {
+    for (const path of ["/first/private-first", "/second/private-second"]) {
+      const response = await app.fetch(
+        new Request(`https://example.test${path}`),
+      );
+      expect(response.status).toBe(200);
+    }
+    const fingerprints = analytics
+      .exceptions()
+      .map(({ properties }) => properties["$exception_fingerprint"]);
+    expect(fingerprints).toHaveLength(4);
+    expect(new Set(fingerprints).size).toBe(4);
+    expect(
+      fingerprints.filter(
+        (key) => typeof key === "string" && key.includes("/first/:id"),
+      ),
+    ).toHaveLength(2);
+    expect(
+      fingerprints.filter(
+        (key) => typeof key === "string" && key.includes("/second/:id"),
+      ),
+    ).toHaveLength(2);
+    expect(JSON.stringify(fingerprints)).not.toContain("private-first");
+    expect(JSON.stringify(fingerprints)).not.toContain("private-second");
+  } finally {
+    await app.stop();
+    logs.restore();
+    analytics.restore();
+  }
+});
+
 describe("request.failed severity", () => {
   const runFailingHandler = async (error: SafeDbError | HandlerError) => {
     const analytics = installRecordingAnalytics();
@@ -436,6 +880,7 @@ describe("request.failed severity", () => {
     try {
       const endpoint = createSafeRootHandler(
         {
+          contract: "patch",
           permissions: { workspace: ["read"] },
           accountAccess: ACCOUNT_ACCESS.sandbox,
           mcp: { type: "internal", reason: "health_infra" },
@@ -452,7 +897,9 @@ describe("request.failed severity", () => {
       return {
         response,
         failures: recordingLogger.records.filter(
-          (record) => record.message === "request.failed",
+          (record) =>
+            record.message === "request.failed" ||
+            record.message === "limiter_admission.unavailable",
         ),
         exceptions: analytics.exceptions(),
       };
@@ -461,6 +908,64 @@ describe("request.failed severity", () => {
       analytics.restore();
     }
   };
+
+  test.each(["outside", "absent", "empty", "present"] as const)(
+    "keeps ordered request identity fields for %s context IDs",
+    async (mode) => {
+      const error = new HandlerError({ status: 400, message: "Invalid input" });
+      const result =
+        mode === "outside"
+          ? await runFailingHandler(error)
+          : await runWithRequestIdScope(async () => {
+              openRequestContext();
+              if (mode !== "absent") {
+                enrichRequestContext({
+                  posthogDistinctId:
+                    mode === "present" ? "fixture-distinct" : "",
+                  sessionId: mode === "present" ? "fixture-session" : "",
+                  organizationId:
+                    mode === "present" ? "fixture-organization" : "",
+                });
+              }
+              const contextBefore = { ...getRequestContext() };
+              const outcome = await runFailingHandler(error);
+              expect(getRequestContext()).toMatchObject(contextBefore);
+              return outcome;
+            });
+      expect(result.failures).toHaveLength(1);
+      const attributes = result.failures.at(0)?.attributes;
+      expect(attributes).toMatchObject({
+        "http.status_code": 400,
+        "error.type": "HandlerError",
+      });
+      const keys = Object.keys(attributes ?? {});
+      const contextKeys = [
+        "request.id",
+        "posthogDistinctId",
+        "sessionId",
+        "enduser.organization_id",
+      ];
+      const expectedContextKeys =
+        mode === "present" ? contextKeys : ["request.id"];
+      expect(keys.filter((key) => contextKeys.includes(key))).toEqual(
+        mode === "outside" ? [] : expectedContextKeys,
+      );
+      if (mode !== "outside") {
+        expect(attributes?.["request.id"]).toMatch(/^req_[a-f0-9]+$/u);
+        expect(keys.indexOf("request.id")).toBeGreaterThan(
+          keys.indexOf("error.type"),
+        );
+      }
+      if (mode === "present") {
+        expect(attributes).toMatchObject({
+          posthogDistinctId: "fixture-distinct",
+          sessionId: "fixture-session",
+          "enduser.organization_id": "fixture-organization",
+        });
+      }
+      expect(result.exceptions).toEqual([]);
+    },
+  );
 
   test("grades a row-level security denial as a client outcome", async () => {
     const { response, failures, exceptions } = await runFailingHandler(
@@ -501,6 +1006,37 @@ describe("request.failed severity", () => {
     expect(exceptions).toHaveLength(0);
   });
 
+  test("an operator feature refusal is a warning without exception capture", async () => {
+    const refusal =
+      ACTION_ADMISSION_REFUSALS[ACTION_ADMISSION_CODES.featureDisabled];
+    const { response, failures, exceptions } = await runFailingHandler(
+      new HandlerError({
+        status: refusal.status,
+        code: ACTION_ADMISSION_CODES.featureDisabled,
+        message: refusal.message,
+      }),
+    );
+    expect(response).toMatchObject({ code: 503 });
+    expect(failures).toHaveLength(1);
+    expect(failures.at(0)?.severityText).toBe("WARN");
+    expect(exceptions).toEqual([]);
+  });
+
+  test("an unavailable admission store is observed as a transient warning", async () => {
+    const refusal =
+      ACTION_ADMISSION_REFUSALS[ACTION_ADMISSION_CODES.storeUnavailable];
+    const { response, failures, exceptions } = await runFailingHandler(
+      new HandlerError({
+        status: refusal.status,
+        code: ACTION_ADMISSION_CODES.storeUnavailable,
+        message: refusal.message,
+      }),
+    );
+    expect(response).toMatchObject({ code: 503 });
+    expect(failures.at(0)?.severityText).toBe("WARN");
+    expect(exceptions).toHaveLength(0);
+  });
+
   test("grades a database failure as a server fault", async () => {
     const { response, failures } = await runFailingHandler(
       new DatabaseError({ message: "connection closed" }),
@@ -525,6 +1061,7 @@ describe("a mapped status survives the transport wrapper", () => {
     try {
       const endpoint = createSafeRootHandler(
         {
+          contract: "patch",
           permissions: { workspace: ["read"] },
           accountAccess: ACCOUNT_ACCESS.sandbox,
           mcp: { type: "internal", reason: "health_infra" },
@@ -542,52 +1079,50 @@ describe("a mapped status survives the transport wrapper", () => {
   };
 
   test("raw and wrapped admission outcomes survive returned and thrown safe handlers", async () => {
-    const previousContact = env.ACTION_LIMIT_CONTACT_URL;
-    env.ACTION_LIMIT_CONTACT_URL = "https://example.test/contact";
-    try {
-      for (const reason of [
-        "busy",
-        "period_exhausted",
-        "not_enabled",
-        "unavailable",
-      ] as const) {
-        const refusal = new ActionAdmissionError({
-          reason,
-          message: "Private coordination detail",
-        });
-        const metadata = ACTION_ADMISSION_REFUSALS[refusal.code];
-        for (const wrapped of [
-          refusal,
-          new UnhandledException({ cause: refusal }),
-          new HandlerError({
-            status: 500,
-            message: "Request failed",
-            cause: refusal,
-          }),
-        ]) {
-          for (const mode of ["return", "throw"] as const) {
-            const response = await runEndpoint(async function* () {
-              if (mode === "throw") {
-                throw wrapped;
-              }
-              return Result.err(wrapped);
-            });
-            expect(response).toMatchObject({
-              code: metadata.status,
-              response: {
-                code: refusal.code,
-                message: metadata.message,
-                retryable: metadata.retryable,
-                ...(metadata.status === 403
-                  ? { contactUrl: env.ACTION_LIMIT_CONTACT_URL }
-                  : {}),
-              },
-            });
-          }
+    testState.setConfig(
+      "ACTION_LIMIT_CONTACT_URL",
+      "https://example.test/contact",
+    );
+    for (const reason of [
+      "busy",
+      "period_exhausted",
+      "not_enabled",
+      "store_unavailable",
+    ] as const) {
+      const refusal = new ActionAdmissionError({
+        reason,
+        message: "Private coordination detail",
+      });
+      const metadata = ACTION_ADMISSION_REFUSALS[refusal.code];
+      for (const wrapped of [
+        refusal,
+        new UnhandledException({ cause: refusal }),
+        new HandlerError({
+          status: 500,
+          message: "Request failed",
+          cause: refusal,
+        }),
+      ]) {
+        for (const mode of ["return", "throw"] as const) {
+          const response = await runEndpoint(async function* () {
+            if (mode === "throw") {
+              throw new Error("Action admission refused", { cause: wrapped });
+            }
+            return Result.err(wrapped);
+          });
+          expect(response).toMatchObject({
+            code: metadata.status,
+            response: {
+              code: refusal.code,
+              message: metadata.message,
+              retryable: metadata.retryable,
+              ...(metadata.status === 403
+                ? { contactUrl: env.ACTION_LIMIT_CONTACT_URL }
+                : {}),
+            },
+          });
         }
       }
-    } finally {
-      env.ACTION_LIMIT_CONTACT_URL = previousContact;
     }
   });
 
@@ -617,6 +1152,7 @@ describe("a mapped status survives the transport wrapper", () => {
   const upstreamRefusal = () =>
     new HandlerError({
       status: 503,
+      code: "internal_error",
       message: "Search is temporarily unavailable",
     });
 
@@ -686,8 +1222,16 @@ describe("a mapped status survives the transport wrapper", () => {
   test("a status thrown through Result.tryPromise is answered, not graded 500", async () => {
     const response = await runEndpoint(async function* () {
       const value = yield* Result.await(
-        Result.tryPromise(async () => {
-          throw upstreamRefusal();
+        Result.tryPromise({
+          try: async () => {
+            throw new Error("Upstream request refused", {
+              cause: upstreamRefusal(),
+            });
+          },
+          catch: (cause) =>
+            new UnhandledException({
+              cause: cause instanceof Error ? cause.cause : cause,
+            }),
         }),
       );
 
@@ -731,6 +1275,105 @@ describe("a mapped status survives the transport wrapper", () => {
   });
 });
 
+describe("a request its caller cancelled", () => {
+  const runEndpoint = async (
+    request: Request,
+    body: Parameters<typeof createSafeRootHandler>[1],
+  ) => {
+    const analytics = installRecordingAnalytics();
+    const recordingLogger = installRecordingLogger();
+    try {
+      const endpoint = createSafeRootHandler(
+        {
+          contract: "patch",
+          permissions: { workspace: ["read"] },
+          accountAccess: ACCOUNT_ACCESS.sandbox,
+          mcp: { type: "internal", reason: "health_infra" },
+        },
+        body,
+      );
+      const safeDb: SafeDb = async <T>() =>
+        Result.err<T, SafeDbError>(new DatabaseError({ message: "unused" }));
+
+      return await endpoint.handler(
+        createContext(endpoint, safeDb, { request }),
+      );
+    } finally {
+      recordingLogger.restore();
+      analytics.restore();
+    }
+  };
+
+  // A coalesced search answers a caller that leaves with its own signal's
+  // reason, which the route's Result.tryPromise wraps as UnhandledException.
+  test("a caller that leaves a shared search is answered as a client outcome, not a 500", async () => {
+    const coalescer = createPublicSearchCoalescer<{ hits: number }>({
+      limits: { maxEntries: 4, maxBytes: 4096, ttlMs: 1000 },
+      now: () => 0,
+    });
+    const caller = new AbortController();
+    const request = new Request("https://example.test/case/decisions/search", {
+      signal: caller.signal,
+    });
+    const response = await runEndpoint(request, async function* () {
+      const answer = coalescer.search({
+        key: "cancelled-search",
+        signal: request.signal,
+        cacheable: () => false,
+        run: async (signal) =>
+          await new Promise<{ hits: number }>((_resolve, reject) => {
+            signal.addEventListener(
+              "abort",
+              () => {
+                const reason: unknown = signal.reason;
+                reject(
+                  reason instanceof Error
+                    ? reason
+                    : new Error("Search aborted", { cause: reason }),
+                );
+              },
+              { once: true },
+            );
+          }),
+      });
+      caller.abort();
+      const value = yield* Result.await(
+        Result.tryPromise(async () => await answer),
+      );
+
+      return Result.ok({ value });
+    });
+
+    if (!("code" in response)) {
+      throw new Error("expected a status response");
+    }
+    expect(response.code).toBe(400);
+    expect(response.response).toMatchObject({ code: "request_aborted" });
+  });
+
+  test("another abort after the caller left is still graded a server fault", async () => {
+    const caller = new AbortController();
+    const request = new Request("https://example.test/case/decisions/search", {
+      signal: caller.signal,
+    });
+    const response = await runEndpoint(request, async function* () {
+      caller.abort();
+      const value = yield* Result.await(
+        Result.tryPromise(async () => {
+          throw new DOMException("The operation timed out.", "TimeoutError");
+        }),
+      );
+
+      return Result.ok({ value });
+    });
+
+    if (!("code" in response)) {
+      throw new Error("expected a status response");
+    }
+    expect(response.code).toBe(500);
+  });
+});
+
 describe("errorCauseChainAttributes", () => {
   test("records the status of a typed cause behind a generic wrapper", () => {
     const cause = new HandlerError({ status: 403, message: "byok missing" });
@@ -747,7 +1390,11 @@ describe("errorCauseChainAttributes", () => {
   });
 
   test("walks nested causes and omits the status of untyped levels", () => {
-    const root = new HandlerError({ status: 502, message: "upstream" });
+    const root = new HandlerError({
+      status: 502,
+      code: "internal_error",
+      message: "upstream",
+    });
     const middle = new Error("adapter", { cause: root });
     const wrapper = new HandlerError({
       status: 500,
@@ -773,14 +1420,14 @@ describe("errorCauseChainAttributes", () => {
   });
 });
 
-describe("assertRunSizeConfirmedForHandler", () => {
+describe("authorizeHandlerRunSize", () => {
   const organizationId = toSafeId<"organization">(
     "019e7000-0000-7000-8000-000000000002",
   );
   const userId = toSafeId<"user">("019e7000-0000-7000-8000-000000000001");
 
   const baseInput = {
-    metering: { actionType: "doc_review", modelRole: "pdf" },
+    metering: { actionType: "doc_review", modelTask: "pdf" },
     organizationId,
     orgAIConfig: null,
     workspaceId: null,
@@ -810,48 +1457,34 @@ describe("assertRunSizeConfirmedForHandler", () => {
   const withInstanceEnforcement = async (
     fn: () => Promise<void>,
   ): Promise<void> => {
-    const previous = {
-      enforcement: env.USAGE_ENFORCEMENT_ENABLED,
-      provider: env.AI_PROVIDER,
-      openaiKey: env.OPENAI_API_KEY,
-    };
-    env.USAGE_ENFORCEMENT_ENABLED = true;
-    env.AI_PROVIDER = "openai";
-    env.OPENAI_API_KEY = "test-openai-instance-key";
-    try {
-      await fn();
-    } finally {
-      env.USAGE_ENFORCEMENT_ENABLED = previous.enforcement;
-      env.AI_PROVIDER = previous.provider;
-      env.OPENAI_API_KEY = previous.openaiKey;
-    }
+    testState.patchConfig({
+      USAGE_ENFORCEMENT_ENABLED: true,
+      AI_PROVIDER: "openai",
+      OPENAI_API_KEY: "test-openai-instance-key",
+    });
+    await fn();
   };
 
   test("no-op while enforcement is off", async () => {
-    const previous = env.USAGE_ENFORCEMENT_ENABLED;
-    env.USAGE_ENFORCEMENT_ENABLED = false;
-    try {
-      const outcome = await assertRunSizeConfirmedForHandler({
-        ...baseInput,
-        estimatedUnits: 10_000,
-        confirmedUnits: undefined,
-        safeDb: untouchableDb,
-      });
-      expect(outcome).toBeNull();
-    } finally {
-      env.USAGE_ENFORCEMENT_ENABLED = previous;
-    }
+    testState.setConfig("USAGE_ENFORCEMENT_ENABLED", false);
+    const outcome = await authorizeHandlerRunSize({
+      ...baseInput,
+      estimatedUnits: 10_000,
+      confirmedUnits: undefined,
+      safeDb: untouchableDb,
+    });
+    expect(Result.isOk(outcome)).toBe(true);
   });
 
   test("a zero estimate never touches the ledger", async () => {
     await withInstanceEnforcement(async () => {
-      const outcome = await assertRunSizeConfirmedForHandler({
+      const outcome = await authorizeHandlerRunSize({
         ...baseInput,
         estimatedUnits: 0,
         confirmedUnits: undefined,
         safeDb: untouchableDb,
       });
-      expect(outcome).toBeNull();
+      expect(Result.isOk(outcome)).toBe(true);
     });
   });
 
@@ -867,38 +1500,38 @@ describe("assertRunSizeConfirmedForHandler", () => {
         },
         decision: null,
       };
-      const outcome = await assertRunSizeConfirmedForHandler({
+      const outcome = await authorizeHandlerRunSize({
         ...baseInput,
         orgAIConfig: byokConfig,
         estimatedUnits: 10_000,
         confirmedUnits: undefined,
         safeDb: untouchableDb,
       });
-      expect(outcome).toBeNull();
+      expect(Result.isOk(outcome)).toBe(true);
     });
   });
 
   test("small runs pass once the whole estimate is affordable", async () => {
     await withInstanceEnforcement(async () => {
-      const outcome = await assertRunSizeConfirmedForHandler({
+      const outcome = await authorizeHandlerRunSize({
         ...baseInput,
         estimatedUnits: 10,
         confirmedUnits: undefined,
         safeDb: availableDb(500),
       });
-      expect(outcome).toBeNull();
+      expect(Result.isOk(outcome)).toBe(true);
     });
   });
 
   test("an unaffordable estimate answers the over-limit shape, not a confirmation", async () => {
     await withInstanceEnforcement(async () => {
-      const outcome = await assertRunSizeConfirmedForHandler({
+      const outcome = await authorizeHandlerRunSize({
         ...baseInput,
         estimatedUnits: 800,
         confirmedUnits: undefined,
         safeDb: overLimitDb(800, 30),
       });
-      expect(outcome).toMatchObject({
+      expect(Result.isError(outcome) ? outcome.error : outcome).toMatchObject({
         status: 402,
         code: "usage_limit_exceeded",
         usage: { required: 800, available: 30 },
@@ -908,13 +1541,13 @@ describe("assertRunSizeConfirmedForHandler", () => {
 
   test("a large unconfirmed run answers 428 carrying the estimate", async () => {
     await withInstanceEnforcement(async () => {
-      const outcome = await assertRunSizeConfirmedForHandler({
+      const outcome = await authorizeHandlerRunSize({
         ...baseInput,
         estimatedUnits: 120,
         confirmedUnits: undefined,
         safeDb: availableDb(500),
       });
-      expect(outcome).toMatchObject({
+      expect(Result.isError(outcome) ? outcome.error : outcome).toMatchObject({
         status: 428,
         code: "usage_confirmation_required",
         confirmation: { estimatedUnits: 120, availableUnits: 500 },
@@ -924,25 +1557,27 @@ describe("assertRunSizeConfirmedForHandler", () => {
 
   test("a stale lower confirmation does not cover a grown estimate", async () => {
     await withInstanceEnforcement(async () => {
-      const outcome = await assertRunSizeConfirmedForHandler({
+      const outcome = await authorizeHandlerRunSize({
         ...baseInput,
         estimatedUnits: 120,
         confirmedUnits: 60,
         safeDb: availableDb(500),
       });
-      expect(outcome).toMatchObject({ status: 428 });
+      expect(Result.isError(outcome) ? outcome.error : outcome).toMatchObject({
+        status: 428,
+      });
     });
   });
 
   test("restating the estimate lets the run proceed", async () => {
     await withInstanceEnforcement(async () => {
-      const outcome = await assertRunSizeConfirmedForHandler({
+      const outcome = await authorizeHandlerRunSize({
         ...baseInput,
         estimatedUnits: 120,
         confirmedUnits: 120,
         safeDb: availableDb(500),
       });
-      expect(outcome).toBeNull();
+      expect(Result.isOk(outcome)).toBe(true);
     });
   });
 });
@@ -953,27 +1588,29 @@ describe("provider failure HTTP response", () => {
       const replay = installProviderWireReplay({ retryAfterMs: 1 });
       const analytics = installRecordingAnalytics();
       const logs = installRecordingLogger();
-      const previousMockAI = env.USE_MOCK_AI;
-      env.USE_MOCK_AI = false;
+      testState.setConfig("USE_MOCK_AI", false);
       try {
         replay.serve(cassette);
         const model = instanceWireErrorModel(cassette.model);
         const endpoint = createSafeRootHandler(
           {
+            contract: "patch",
             permissions: { workspace: ["read"] },
             accountAccess: ACCOUNT_ACCESS.sandbox,
             mcp: { type: "internal", reason: "health_infra" },
           },
           async function* () {
             const generated = await Result.tryPromise(async () =>
-              generateTanStackTextForRole({
+              generateTanStackTextForTask({
                 tenantWorkspaceIds: [],
                 caching: { enabled: false, reason: "org-disabled" },
                 serviceTier: "standard",
                 orgAIConfig: null,
                 dataClass: "public_corpus",
-                role: "chat",
+                task: "chat",
                 organizationId: null,
+                userId: null,
+                admission: NO_ORGANIZATION_MODEL_DISPATCH,
                 prompt: "Draft a memo",
                 finishPolicy: "require-complete",
                 resolveTextModel: async () => model,
@@ -1010,11 +1647,45 @@ describe("provider failure HTTP response", () => {
           }),
         ).not.toContain(providerCallErrorSentinel(cassette));
       } finally {
-        env.USE_MOCK_AI = previousMockAI;
         logs.restore();
         analytics.restore();
         replay.restore();
       }
     });
   }
+});
+
+test("BYOK provider diagnostics cross HTTP as a top-level field without entering telemetry", async () => {
+  const error = createProviderCallError({
+    model: { provider: "openai", keySource: "byok" },
+    status: 502,
+    evidence: {
+      error: {
+        code: "insufficient_quota",
+        message: "Provider quota reason in full",
+      },
+    },
+  });
+  const endpoint = createSafeRootHandler(
+    {
+      contract: "patch",
+      permissions: { workspace: ["read"] },
+      accountAccess: ACCOUNT_ACCESS.sandbox,
+      mcp: { type: "internal", reason: "health_infra" },
+    },
+    async function* () {
+      return Result.err(error);
+    },
+  );
+  const safeDb: SafeDb = async <T>() =>
+    Result.err<T, SafeDbError>(new DatabaseError({ message: "unused" }));
+  const response = await endpoint.handler(createContext(endpoint, safeDb));
+  if (!("code" in response)) {
+    throw new TypeError("Expected error response");
+  }
+  expect(response.response).toMatchObject({
+    message: PROVIDER_CALL_ERROR_MESSAGE,
+    providerDiagnostic: error.providerDiagnostic,
+  });
+  expect(JSON.stringify(error.toJSON())).not.toContain("Provider quota reason");
 });

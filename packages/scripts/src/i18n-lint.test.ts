@@ -1,16 +1,29 @@
 import { describe, expect, test } from "bun:test";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { LOCALES, parseGlossary } from "./glossary-gen";
+import { isPlainRecord } from "./i18n-check";
 import {
   buildForbiddenRules,
+  findBareErrors,
   findDroppedExactSelectors,
   findDroppedPlurals,
+  findForbiddenGuidance,
   findForbiddenTerms,
-  hasInvalidCapitalizedStella,
   findIcuError,
+  findInternalIdArguments,
   findMissingPluralCategories,
   findPlaceholderMismatch,
+  hasAsciiEllipsis,
+  hasBareUngrammaticalStella,
+  hasEmDash,
+  hasFirstPersonAppVoice,
+  hasInflectedStella,
+  hasInvalidCapitalizedStella,
+  hasRegisterDrift,
+  isBareErrorMessage,
   isSuppressed,
 } from "./i18n-lint";
 import type { LintBaseline } from "./i18n-lint";
@@ -39,7 +52,10 @@ describe("findPlaceholderMismatch", () => {
   test("tracks rich-text tag names (t.rich), not just their children", () => {
     expect(
       findPlaceholderMismatch("<terms>Terms</terms>", "<link>Podmínky</link>"),
-    ).toEqual({ missing: ["<terms>"], extra: ["<link>"] });
+    ).toEqual({
+      missing: ["<terms>"],
+      extra: ["<link>"],
+    });
   });
 
   test("counts the plural argument, not the # placeholder", () => {
@@ -67,6 +83,112 @@ describe("stella wordmark casing", () => {
     expect(hasInvalidCapitalizedStella("stella reviews the document")).toBe(
       false,
     );
+  });
+});
+
+describe("em dash in catalogue copy", () => {
+  test("rejects the em dash and allows other punctuation and ranges", () => {
+    expect(hasEmDash("Saved \u2014 just now")).toBe(true);
+    expect(hasEmDash("Uloženo \u2014 právě teď")).toBe(true);
+    expect(hasEmDash("Saved: just now")).toBe(false);
+    expect(hasEmDash("Pages 2–4")).toBe(false);
+    expect(hasEmDash("Uloženo – právě teď")).toBe(false);
+    expect(hasEmDash("Draft (not sent)")).toBe(false);
+    expect(hasEmDash("\u2014")).toBe(false);
+    expect(hasEmDash(" \u2014 ")).toBe(true);
+  });
+});
+
+describe("ASCII ellipsis in catalogue copy", () => {
+  test("flags three ASCII dots and allows the Unicode horizontal ellipsis", () => {
+    expect(hasAsciiEllipsis("Loading...")).toBe(true);
+    expect(hasAsciiEllipsis("Načítání...")).toBe(true);
+    expect(hasAsciiEllipsis("Loading…")).toBe(false);
+    expect(hasAsciiEllipsis("Done.")).toBe(false);
+  });
+});
+
+describe("stella brand form across inflected locales", () => {
+  test("flags inflected stella in cs, sk, pl, hu, et, lt, lv and ignores German Stelle", () => {
+    expect(hasInflectedStella("Přidat do stelly", "cs")).toBe(true);
+    expect(hasInflectedStella("Otevřít stellu", "cs")).toBe(true);
+    expect(hasInflectedStella("Otvoriť stellu", "sk")).toBe(true);
+    expect(hasInflectedStella("Otwórz ze stelli", "pl")).toBe(true);
+    expect(hasInflectedStella("Nyissa meg a stellát", "hu")).toBe(true);
+    expect(hasInflectedStella("Lisa stellasse", "et")).toBe(true);
+    expect(hasInflectedStella("Pridėti į stellą", "lt")).toBe(true);
+    expect(hasInflectedStella("Atvērt stellā", "lv")).toBe(true);
+    expect(hasInflectedStella("Přidat do aplikace stella", "cs")).toBe(false);
+    expect(hasInflectedStella("Nyissa meg a stella alkalmazást", "hu")).toBe(
+      false,
+    );
+    expect(hasInflectedStella("an der genauen Stelle öffnen", "de")).toBe(
+      false,
+    );
+  });
+
+  test("flags bare ungrammatical preposition/verb + stella in cs and sk while allowing compound names", () => {
+    expect(hasBareUngrammaticalStella("Přidat do stella", "cs")).toBe(true);
+    expect(hasBareUngrammaticalStella("Otevřít stella", "cs")).toBe(true);
+    expect(hasBareUngrammaticalStella("Otvoriť stella", "sk")).toBe(true);
+    expect(hasBareUngrammaticalStella("Přidat do aplikace stella", "cs")).toBe(
+      false,
+    );
+    expect(hasBareUngrammaticalStella("Otevřít stella desktop", "cs")).toBe(
+      false,
+    );
+    expect(hasBareUngrammaticalStella("Vytvořit ze stella Style", "cs")).toBe(
+      false,
+    );
+  });
+});
+
+describe("first-person app voice", () => {
+  test("flags anthropomorphic 1st-person progress verbs in cs, sk, de and allows impersonal forms", () => {
+    expect(hasFirstPersonAppVoice("Analyzuji…", "cs")).toBe(true);
+    expect(hasFirstPersonAppVoice("Pracujem…", "sk")).toBe(true);
+    expect(hasFirstPersonAppVoice("Ich lade das Dokument…", "de")).toBe(true);
+    expect(hasFirstPersonAppVoice("Analyzuje se…", "cs")).toBe(false);
+    expect(hasFirstPersonAppVoice("Prebieha spracovanie…", "sk")).toBe(false);
+    expect(hasFirstPersonAppVoice("Dokument wird geladen…", "de")).toBe(false);
+  });
+});
+
+describe("register drift", () => {
+  test("flags pronouns that break the locale's established register", () => {
+    expect(hasRegisterDrift("Dein Konto ist bereit", "de")).toBe(true);
+    expect(hasRegisterDrift("Ihr Konto ist bereit", "de")).toBe(false);
+    expect(hasRegisterDrift("Ordner {dir} öffnen", "de")).toBe(false);
+    expect(hasRegisterDrift("Tvůj účet je připraven", "cs")).toBe(true);
+    expect(hasRegisterDrift("Váš účet je připraven", "cs")).toBe(false);
+    expect(hasRegisterDrift("Tvoj účet je pripravený", "sk")).toBe(true);
+    expect(hasRegisterDrift("Si fue usted, ignore esto", "es")).toBe(true);
+    expect(hasRegisterDrift("Si fuiste tú, ignora esto", "es")).toBe(false);
+    expect(hasRegisterDrift("Neked küldtük", "hu")).toBe(true);
+    expect(hasRegisterDrift("Önnek küldtük", "hu")).toBe(false);
+  });
+});
+
+describe("findInternalIdArguments", () => {
+  test("flags an argument that names a storage handle", () => {
+    expect(findInternalIdArguments("Replace {blockId}")).toEqual(["blockId"]);
+    expect(
+      findInternalIdArguments(
+        "{count, plural, one {# edit in {paraId}} other {# edits in {commentIds}}}",
+      ),
+    ).toEqual(["commentIds", "paraId"]);
+  });
+
+  test("accepts arguments that describe what the reader knows", () => {
+    expect(
+      findInternalIdArguments("Replace “{find}” with “{replace}”"),
+    ).toEqual([]);
+    expect(
+      findInternalIdArguments(
+        "{label, select, none {Rewrite a paragraph} other {Rewrite paragraph {label}}}",
+      ),
+    ).toEqual([]);
+    expect(findInternalIdArguments("Paid {amount} on {valid}")).toEqual([]);
   });
 });
 
@@ -209,27 +331,45 @@ describe("isSuppressed", () => {
 
   test("suppresses only when both source and target are unchanged", () => {
     expect(
-      isSuppressed(baseline, "placeholder", "a.b", "cs", {
-        source: "Open {x}",
-        target: "Otevřít",
+      isSuppressed({
+        baseline,
+        category: "placeholder",
+        key: "a.b",
+        locale: "cs",
+        entry: {
+          source: "Open {x}",
+          target: "Otevřít",
+        },
       }),
     ).toBe(true);
   });
 
   test("re-checks when the translation is edited", () => {
     expect(
-      isSuppressed(baseline, "placeholder", "a.b", "cs", {
-        source: "Open {x}",
-        target: "Edited",
+      isSuppressed({
+        baseline,
+        category: "placeholder",
+        key: "a.b",
+        locale: "cs",
+        entry: {
+          source: "Open {x}",
+          target: "Edited",
+        },
       }),
     ).toBe(false);
   });
 
   test("re-checks when the en source changes under a stale translation", () => {
     expect(
-      isSuppressed(baseline, "placeholder", "a.b", "cs", {
-        source: "Open {x} and {y}",
-        target: "Otevřít",
+      isSuppressed({
+        baseline,
+        category: "placeholder",
+        key: "a.b",
+        locale: "cs",
+        entry: {
+          source: "Open {x} and {y}",
+          target: "Otevřít",
+        },
       }),
     ).toBe(false);
   });
@@ -257,31 +397,46 @@ describe("terminology", () => {
 
   test("flags a forbidden rendering when the source is about the concept", () => {
     expect(
-      findForbiddenTerms("Open this matter", "Diese Sache öffnen", "de", rules),
+      findForbiddenTerms({
+        source: "Open this matter",
+        target: "Diese Sache öffnen",
+        locale: "de",
+        rules,
+      }),
     ).toEqual(["Sache"]);
   });
 
   test("does not fire when the source is unrelated to the concept", () => {
     expect(
-      findForbiddenTerms("A factual question", "Eine reine Sache", "de", rules),
+      findForbiddenTerms({
+        source: "A factual question",
+        target: "Eine reine Sache",
+        locale: "de",
+        rules,
+      }),
     ).toEqual([]);
   });
 
   test("matches whole words only (no substring false positives)", () => {
     expect(
-      findForbiddenTerms("Open this matter", "Sachenrecht gilt", "de", rules),
+      findForbiddenTerms({
+        source: "Open this matter",
+        target: "Sachenrecht gilt",
+        locale: "de",
+        rules,
+      }),
     ).toEqual([]);
   });
 
   test("detects the concept when the source uses the plural trigger", () => {
     // "matters" (plural) still triggers the "Matter" concept.
     expect(
-      findForbiddenTerms(
-        "Manage your matters",
-        "Diese Sache öffnen",
-        "de",
+      findForbiddenTerms({
+        source: "Manage your matters",
+        target: "Diese Sache öffnen",
+        locale: "de",
         rules,
-      ),
+      }),
     ).toEqual(["Sache"]);
   });
 
@@ -304,13 +459,28 @@ describe("terminology", () => {
     );
     // bare, ال-prefixed, and و+ال-prefixed forms all count.
     expect(
-      findForbiddenTerms("Open this matter", "افتح قضية", "ar", arRules),
+      findForbiddenTerms({
+        source: "Open this matter",
+        target: "افتح قضية",
+        locale: "ar",
+        rules: arRules,
+      }),
     ).toEqual(["قضية"]);
     expect(
-      findForbiddenTerms("Open this matter", "افتح القضية", "ar", arRules),
+      findForbiddenTerms({
+        source: "Open this matter",
+        target: "افتح القضية",
+        locale: "ar",
+        rules: arRules,
+      }),
     ).toEqual(["قضية"]);
     expect(
-      findForbiddenTerms("Open this matter", "والقضية مفتوحة", "ar", arRules),
+      findForbiddenTerms({
+        source: "Open this matter",
+        target: "والقضية مفتوحة",
+        locale: "ar",
+        rules: arRules,
+      }),
     ).toEqual(["قضية"]);
   });
 });
@@ -340,46 +510,51 @@ describe("terminology: keyExempt", () => {
 
   test("still flags the rendering on a key outside the exemption", () => {
     expect(
-      findForbiddenTerms(
-        "Template",
-        "Šablona",
-        "cs",
+      findForbiddenTerms({
+        source: "Template",
+        target: "Šablona",
+        locale: "cs",
         rules,
-        "templates.studio.heading",
-      ),
+        key: "templates.studio.heading",
+      }),
     ).toEqual(["šablona"]);
   });
 
   test("allows the rendering on an exempt key", () => {
     expect(
-      findForbiddenTerms(
-        "Template",
-        "Šablona",
-        "cs",
+      findForbiddenTerms({
+        source: "Template",
+        target: "Šablona",
+        locale: "cs",
         rules,
-        "inspector.metadata.documentProperties.keys.template",
-      ),
+        key: "inspector.metadata.documentProperties.keys.template",
+      }),
     ).toEqual([]);
   });
 
   test("exempts the ungated bans too, since the whole concept is exempt", () => {
     expect(
-      findForbiddenTerms(
-        "Something else entirely",
-        "Šablonovač",
-        "cs",
+      findForbiddenTerms({
+        source: "Something else entirely",
+        target: "Šablonovač",
+        locale: "cs",
         rules,
-        "inspector.metadata.documentProperties.keys.template",
-      ),
+        key: "inspector.metadata.documentProperties.keys.template",
+      }),
     ).toEqual([]);
   });
 
   test("cannot exempt a check that passes no key", () => {
     // Source-only callers have no key to match, so the ban still applies:
     // an exemption must never widen into "off everywhere" by omission.
-    expect(findForbiddenTerms("Template", "Šablona", "cs", rules)).toEqual([
-      "šablona",
-    ]);
+    expect(
+      findForbiddenTerms({
+        source: "Template",
+        target: "Šablona",
+        locale: "cs",
+        rules,
+      }),
+    ).toEqual(["šablona"]);
   });
 });
 
@@ -408,24 +583,114 @@ describe("terminology: forbiddenAlways", () => {
     // The point of an unconditional ban: reword the en source and the stale
     // translation must still be caught.
     expect(
-      findForbiddenTerms(
-        "This document has no fields to view",
-        "Tato entita nemá žádná pole k zobrazení",
-        "cs",
+      findForbiddenTerms({
+        source: "This document has no fields to view",
+        target: "Tato entita nemá žádná pole k zobrazení",
+        locale: "cs",
         rules,
-        "workspaces.noFields",
-      ),
+        key: "workspaces.noFields",
+      }),
     ).toEqual(["entita"]);
   });
 
   test("flags the banned wording in the English source itself", () => {
     const source = "This entity has no fields to view";
-    expect(findForbiddenTerms(source, source, "en", rules)).toEqual(["entity"]);
+    expect(
+      findForbiddenTerms({
+        source,
+        target: source,
+        locale: "en",
+        rules,
+      }),
+    ).toEqual(["entity"]);
   });
 
   test("still matches whole words only", () => {
     expect(
-      findForbiddenTerms("Usage entitlement", "Nárok entitlement", "cs", rules),
+      findForbiddenTerms({
+        source: "Usage entitlement",
+        target: "Nárok entitlement",
+        locale: "cs",
+        rules,
+      }),
+    ).toEqual([]);
+  });
+});
+
+describe("terminology: catalogue copy quality", () => {
+  const guidance =
+    "Use direct, specific, professional language instead of placeholder, promotional, or playful copy.";
+  const fill = (value: string): Record<string, string> =>
+    Object.fromEntries(LOCALES.map((locale) => [locale, value]));
+  const forbiddenAlways = Object.fromEntries(
+    ["en", ...LOCALES].map((locale) => [
+      locale,
+      ["Lorem ipsum", "seamless", "Oops", "\\p{Emoji}"],
+    ]),
+  );
+  const rules = buildForbiddenRules(
+    parseGlossary(
+      JSON.stringify({
+        verbs: [],
+        legalConcepts: [],
+        nouns: [
+          {
+            id: "catalogue-copy-quality",
+            en: "Catalogue copy quality",
+            guidance,
+            forbiddenAlways,
+            translations: fill("x"),
+          },
+        ],
+        ptBR: [],
+      }),
+    ),
+  );
+
+  test.each(["Lorem ipsum dolor sit amet", "A seamless workflow", "Oops!"])(
+    "rejects filler copy: %s",
+    (value) => {
+      expect(
+        findForbiddenTerms({
+          source: value,
+          target: value,
+          locale: "en",
+          rules,
+        }),
+      ).not.toEqual([]);
+    },
+  );
+
+  test("rejects emoji code points in every locale", () => {
+    expect(
+      findForbiddenTerms({
+        source: "Saved",
+        target: "Uloženo ✅",
+        locale: "cs",
+        rules,
+      }),
+    ).toEqual(["\\p{Emoji}"]);
+  });
+
+  test("reports the expected replacement tone", () => {
+    expect(
+      findForbiddenGuidance({
+        source: "Oops!",
+        target: "Oops!",
+        locale: "en",
+        rules,
+      }),
+    ).toEqual([guidance]);
+  });
+
+  test("allows concrete copy and non-emoji symbols", () => {
+    expect(
+      findForbiddenTerms({
+        source: "File saved",
+        target: "Soubor uložen § 10",
+        locale: "cs",
+        rules,
+      }),
     ).toEqual([]);
   });
 });
@@ -457,13 +722,13 @@ describe("terminology: key triggers and forbiddenOnKey", () => {
 
   test("key trigger fires the rule even when English lacks the trigger word", () => {
     expect(
-      findForbiddenTerms(
-        "Everyone in the organisation",
-        "Alle in der Organisation",
-        "de",
+      findForbiddenTerms({
+        source: "Everyone in the organisation",
+        target: "Alle in der Organisation",
+        locale: "de",
         rules,
-        "knowledge.skills.form.scopeTeam",
-      ),
+        key: "knowledge.skills.form.scopeTeam",
+      }),
     ).toEqual(["Organisation"]);
   });
 
@@ -471,13 +736,13 @@ describe("terminology: key triggers and forbiddenOnKey", () => {
     // Source says "team member" (no "organiz-"); a target rendering it as an
     // organization member is caught even on a non-scope key.
     expect(
-      findForbiddenTerms(
-        "Choose an existing team member",
-        "Ein Organisation hinzufügen",
-        "de",
+      findForbiddenTerms({
+        source: "Choose an existing team member",
+        target: "Ein Organisation hinzufügen",
+        locale: "de",
         rules,
-        "workspaces.members.addMemberDescription",
-      ),
+        key: "workspaces.members.addMemberDescription",
+      }),
     ).toEqual(["Organisation"]);
   });
 
@@ -485,61 +750,61 @@ describe("terminology: key triggers and forbiddenOnKey", () => {
     // Source also says "organize", so a Slavic/German org form renders that
     // word, not the team concept: not flagged on a non-scope key.
     expect(
-      findForbiddenTerms(
-        "Organize team activity",
-        "Alle in der Organisation",
-        "de",
+      findForbiddenTerms({
+        source: "Organize team activity",
+        target: "Alle in der Organisation",
+        locale: "de",
         rules,
-        "workspaces.emptyMatters.description",
-      ),
+        key: "workspaces.emptyMatters.description",
+      }),
     ).toEqual([]);
   });
 
   test("key trigger ignores sourceExempt (scope labels are always strict)", () => {
     expect(
-      findForbiddenTerms(
-        "Organize the team",
-        "Alle in der Organisation",
-        "de",
+      findForbiddenTerms({
+        source: "Organize the team",
+        target: "Alle in der Organisation",
+        locale: "de",
         rules,
-        "knowledge.agentSkills.scopeTeam",
-      ),
+        key: "knowledge.agentSkills.scopeTeam",
+      }),
     ).toEqual(["Organisation"]);
   });
 
   test("forbidden (firm) words are enforced broadly via the word trigger", () => {
     expect(
-      findForbiddenTerms(
-        "team-wide list",
-        "kanzleiweite Kanzlei",
-        "de",
+      findForbiddenTerms({
+        source: "team-wide list",
+        target: "kanzleiweite Kanzlei",
+        locale: "de",
         rules,
-        "settings.anonymization.description",
-      ),
+        key: "settings.anonymization.description",
+      }),
     ).toEqual(["Kanzlei"]);
   });
 
   test("English self-check flags banned source wording on a key-trigger key", () => {
     expect(
-      findForbiddenTerms(
-        "Everyone in the organisation",
-        "Everyone in the organisation",
-        "en",
+      findForbiddenTerms({
+        source: "Everyone in the organisation",
+        target: "Everyone in the organisation",
+        locale: "en",
         rules,
-        "knowledge.agentSkills.scopeTeam",
-      ),
+        key: "knowledge.agentSkills.scopeTeam",
+      }),
     ).toEqual(["organisation"]);
   });
 
   test("no key and no word trigger means no enforcement", () => {
     expect(
-      findForbiddenTerms(
-        "Configure your organisation",
-        "Alle in der Organisation",
-        "de",
+      findForbiddenTerms({
+        source: "Configure your organisation",
+        target: "Alle in der Organisation",
+        locale: "de",
         rules,
-        "consent.scopeOnboarding",
-      ),
+        key: "consent.scopeOnboarding",
+      }),
     ).toEqual([]);
   });
 });
@@ -588,7 +853,13 @@ describe("terminology: real glossary covers migrated Team-scope keys", () => {
   for (const { key, regressed } of migrated) {
     test(`English regression to org/firm wording is caught on ${key}`, () => {
       expect(
-        findForbiddenTerms(regressed, regressed, "en", realRules, key),
+        findForbiddenTerms({
+          source: regressed,
+          target: regressed,
+          locale: "en",
+          rules: realRules,
+          key,
+        }),
       ).not.toEqual([]);
     });
   }
@@ -596,13 +867,14 @@ describe("terminology: real glossary covers migrated Team-scope keys", () => {
   test("a target-locale org regression is caught on the member key", () => {
     // de "Organisationsmitglied" reintroduced where Team wording is required.
     expect(
-      findForbiddenTerms(
-        "Choose an existing team member to add to this matter",
-        "Ein bestehendes Organisationsmitglied zu dieser Akte hinzufügen",
-        "de",
-        realRules,
-        "workspaces.members.addMemberDescription",
-      ),
+      findForbiddenTerms({
+        source: "Choose an existing team member to add to this matter",
+        target:
+          "Ein bestehendes Organisationsmitglied zu dieser Akte hinzufügen",
+        locale: "de",
+        rules: realRules,
+        key: "workspaces.members.addMemberDescription",
+      }),
     ).not.toEqual([]);
   });
 
@@ -610,13 +882,13 @@ describe("terminology: real glossary covers migrated Team-scope keys", () => {
     // settings.organization.renameTitle is legitimately about the org entity;
     // its source has no "team" word and its path is not a Team-scope trigger.
     expect(
-      findForbiddenTerms(
-        "Rename organization",
-        "Rename organization",
-        "en",
-        realRules,
-        "settings.organization.renameTitle",
-      ),
+      findForbiddenTerms({
+        source: "Rename organization",
+        target: "Rename organization",
+        locale: "en",
+        rules: realRules,
+        key: "settings.organization.renameTitle",
+      }),
     ).toEqual([]);
   });
 
@@ -639,13 +911,13 @@ describe("terminology: real glossary covers migrated Team-scope keys", () => {
   for (const { locale, value } of loadingRegressions) {
     test(`${locale} standalone Loading cannot regress to analysis copy`, () => {
       expect(
-        findForbiddenTerms(
-          "Loading",
-          value,
+        findForbiddenTerms({
+          source: "Loading",
+          target: value,
           locale,
-          realRules,
-          "common.loading",
-        ),
+          rules: realRules,
+          key: "common.loading",
+        }),
       ).toEqual([value]);
     });
   }
@@ -654,25 +926,25 @@ describe("terminology: real glossary covers migrated Team-scope keys", () => {
 describe("terminology: Matter stays canonical in search", () => {
   test("the search kind remains protected if its English source is reworded", () => {
     expect(
-      findForbiddenTerms(
-        "Client work",
-        "Věc",
-        "cs",
-        realRules,
-        "search.kinds.matter",
-      ),
+      findForbiddenTerms({
+        source: "Client work",
+        target: "Věc",
+        locale: "cs",
+        rules: realRules,
+        key: "search.kinds.matter",
+      }),
     ).toEqual(["Věc"]);
   });
 
   test("Czech case-law uses of věc remain outside the Matter concept", () => {
     expect(
-      findForbiddenTerms(
-        "No case was found for this court and case number.",
-        "Pro tento soud a sp. zn. nebyla nalezena věc.",
-        "cs",
-        realRules,
-        "workspaces.infosoud.notFound",
-      ),
+      findForbiddenTerms({
+        source: "No case was found for this court and case number.",
+        target: "Pro tento soud a sp. zn. nebyla nalezena věc.",
+        locale: "cs",
+        rules: realRules,
+        key: "workspaces.infosoud.notFound",
+      }),
     ).toEqual([]);
   });
 
@@ -712,35 +984,176 @@ describe("terminology: matter transfers", () => {
       ["et", "asja"],
     ] as const) {
       expect(
-        findForbiddenTerms(
+        findForbiddenTerms({
           source,
-          term,
+          target: term,
           locale,
-          realRules,
-          "inspector.groups.fileMoveDescription",
-        ),
+          rules: realRules,
+          key: "inspector.groups.fileMoveDescription",
+        }),
       ).toContain(term);
     }
   });
 
   test("ordinary in-case idioms outside matter copy remain valid", () => {
     expect(
-      findForbiddenTerms(
-        "In case of an error",
-        "V případě chyby",
-        "cs",
-        realRules,
-        "errors.example",
-      ),
+      findForbiddenTerms({
+        source: "In case of an error",
+        target: "V případě chyby",
+        locale: "cs",
+        rules: realRules,
+        key: "errors.example",
+      }),
     ).toEqual([]);
     expect(
-      findForbiddenTerms(
-        "In case of an error",
-        "V prípade chyby",
-        "sk",
-        realRules,
-        "errors.example",
-      ),
+      findForbiddenTerms({
+        source: "In case of an error",
+        target: "V prípade chyby",
+        locale: "sk",
+        rules: realRules,
+        key: "errors.example",
+      }),
     ).toEqual([]);
   });
 });
+
+describe("bare error messages", () => {
+  test("a message that only says something failed is bare", () => {
+    for (const message of [
+      "Error",
+      "Error:",
+      "error.",
+      "Something went  wrong",
+      "An unexpected error occurred!",
+      "Oops\u2026",
+      "Action failed",
+    ]) {
+      expect(isBareErrorMessage(message)).toBe(true);
+    }
+  });
+
+  test("a message that says what failed or what to do is not bare", () => {
+    for (const message of [
+      "Something went wrong. Try again, or reload the page if it keeps happening.",
+      "Something went wrong. Please try again.",
+      "Recent activity could not be loaded.",
+      "Failed",
+    ]) {
+      expect(isBareErrorMessage(message)).toBe(false);
+    }
+  });
+
+  test("reports the keys of bare messages", () => {
+    expect(
+      findBareErrors({
+        "common.somethingWentWrong":
+          "Something went wrong. Try again, or reload the page if it keeps happening.",
+        "billing.saveFailed": "Something went wrong",
+        "common.error": "Error",
+      }),
+    ).toEqual(["billing.saveFailed", "common.error"]);
+  });
+
+  test("the MCP app catalog has no bare message", async () => {
+    const catalogPath = path.resolve(
+      import.meta.dir,
+      "../../api-contract/src/mcp-app-messages.json",
+    );
+    const catalog: unknown = JSON.parse(await Bun.file(catalogPath).text());
+    const en = isPlainRecord(catalog) ? catalog["en"] : undefined;
+    if (!isPlainRecord(en)) {
+      throw new Error(`${catalogPath} has no en messages`);
+    }
+    expect(
+      Object.entries(en)
+        .filter(
+          ([, value]) => typeof value === "string" && isBareErrorMessage(value),
+        )
+        .map(([key]) => key),
+    ).toEqual([]);
+  });
+});
+
+test.each(["nested-last", "literal-last"])(
+  "lint baseline keeps the last flattened value with %s",
+  async (order) => {
+    const directory = await mkdtemp(path.join(tmpdir(), "i18n-lint-records-"));
+    const langs = path.join(directory, "langs");
+    try {
+      await mkdir(langs);
+      await writeFile(
+        path.join(directory, "glossary.json"),
+        JSON.stringify({ verbs: [], legalConcepts: [], ptBR: [] }),
+      );
+      const source =
+        order === "nested-last"
+          ? {
+              "nested.key": "Hello {person}",
+              nested: { key: "Hello {name}" },
+              second: "Goodbye {person}",
+            }
+          : {
+              nested: { key: "Hello {name}" },
+              "nested.key": "Hello {person}",
+              second: "Goodbye {person}",
+            };
+      const target =
+        order === "nested-last"
+          ? {
+              "nested.key": "Hallo {person}",
+              nested: { key: "Hallo {user}" },
+              second: "Tschüss {user}",
+            }
+          : {
+              nested: { key: "Hallo {user}" },
+              "nested.key": "Hallo {person}",
+              second: "Tschüss {user}",
+            };
+      await writeFile(path.join(langs, "en.json"), JSON.stringify(source));
+      for (const locale of ["fr", "de"]) {
+        await writeFile(
+          path.join(langs, `${locale}.json`),
+          JSON.stringify(target),
+        );
+      }
+      const subprocess = Bun.spawn(
+        [
+          process.execPath,
+          path.join(import.meta.dir, "i18n-lint.ts"),
+          langs,
+          "--write-baseline",
+        ],
+        { stdout: "pipe", stderr: "pipe" },
+      );
+      const [exitCode, stdout, stderr] = await Promise.all([
+        subprocess.exited,
+        new Response(subprocess.stdout).text(),
+        new Response(subprocess.stderr).text(),
+      ]);
+      const result = { exitCode, output: stdout + stderr };
+      expect(result.exitCode, result.output).toBe(0);
+      const entry = { source: "Goodbye {person}", target: "Tschüss {user}" };
+      const nested = { source: "Hello {name}", target: "Hallo {user}" };
+      const placeholder =
+        order === "nested-last"
+          ? {
+              "nested.key": { de: nested, fr: nested },
+              second: { de: entry, fr: entry },
+            }
+          : { second: { de: entry, fr: entry } };
+      expect(result.output).toContain(
+        `${order === "nested-last" ? 4 : 2} grandfathered violations.`,
+      );
+      expect(
+        await readFile(
+          path.join(directory, "i18n-lint-baseline.json"),
+          "utf-8",
+        ),
+      ).toBe(
+        `${JSON.stringify({ placeholder, icu: {}, plural: {}, terminology: {} }, null, 2)}\n`,
+      );
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  },
+);

@@ -4,19 +4,20 @@ import * as v from "valibot";
 
 import { CASE_LAW_RESEARCH_ANSWER_TYPES } from "@stll/api-contract";
 import type { CaseLawResearchAnswerType } from "@stll/api-contract";
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
 import type { FieldContent } from "@/api/db/schema-validators";
 import {
-  type CaseLawResearchColumnContent,
-  type ResearchQuestion,
   buildAnswerJustification,
   buildResearchAnswersSchema,
   buildResearchUserMessage,
+  type CaseLawResearchColumnContent,
   parseResearchAnswers,
   parseStoredAnswerContent,
+  type ResearchQuestion,
   selectPassagesWithinBudget,
 } from "@/api/lib/case-law/research-answers";
+import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 
 const passage = fc.record({
   anchorId: fc.stringMatching(/^[a-z0-9-]{0,12}$/u),
@@ -25,7 +26,8 @@ const passage = fc.record({
 
 describe("selecting passages within a budget", () => {
   test("stays within budget, keeps order, and cites each anchor once", () => {
-    fc.assert(
+    assertProperty(
+      "stays within budget, keeps order, and cites each anchor once",
       fc.property(
         fc.array(passage, { maxLength: 40 }),
         fc.integer({ min: 0, max: 3000 }),
@@ -59,7 +61,7 @@ describe("selecting passages within a budget", () => {
           }
         },
       ),
-      propertyConfig(),
+      {},
     );
   });
 
@@ -73,6 +75,58 @@ describe("selecting passages within a budget", () => {
       { budgetChars: 130, passageChars: 100 },
     );
     expect(selected.map((entry) => entry.anchorId)).toEqual(["p-1"]);
+  });
+
+  test("a long passage rejected by the remaining budget counts only against the budget", () => {
+    const recording = installRecordingLogger();
+    try {
+      expect(
+        selectPassagesWithinBudget(
+          [
+            { anchorId: "p-1", excerpt: "kept" },
+            { anchorId: "p-2", excerpt: "x".repeat(20) },
+          ],
+          { budgetChars: 10, passageChars: 15 },
+        ),
+      ).toEqual([{ anchorId: "p-1", excerpt: "kept" }]);
+      expect(recording.records).toEqual([
+        {
+          severityText: "INFO",
+          message: "case_law.answer.incomplete",
+          attributes: {
+            surface: "research",
+            reason: "passage_budget",
+            count: 1,
+          },
+        },
+      ]);
+    } finally {
+      recording.restore();
+    }
+  });
+
+  test("classifies every passage after a budget rejection by its own reason", () => {
+    const recording = installRecordingLogger();
+    try {
+      expect(
+        selectPassagesWithinBudget(
+          [
+            { anchorId: "p-1", excerpt: "kept" },
+            { anchorId: "p-2", excerpt: "x".repeat(20) },
+            { anchorId: "p-3", excerpt: "   " },
+            { anchorId: "p-1", excerpt: "duplicate" },
+          ],
+          { budgetChars: 10, passageChars: 15 },
+        ),
+      ).toEqual([{ anchorId: "p-1", excerpt: "kept" }]);
+      expect(recording.records.map(({ attributes }) => attributes)).toEqual([
+        { surface: "research", reason: "passage_invalid", count: 1 },
+        { surface: "research", reason: "passage_duplicate", count: 1 },
+        { surface: "research", reason: "passage_budget", count: 1 },
+      ]);
+    } finally {
+      recording.restore();
+    }
   });
 });
 
@@ -216,7 +270,8 @@ const CONTENT_BY_KIND = {
 
 describe("a decision that does not state the answer", () => {
   test("is not_stated for every kind, with the run's reasoning kept", () => {
-    fc.assert(
+    assertProperty(
+      "is not_stated for every kind, with the run's reasoning kept",
       fc.property(
         fc.constantFrom(...CASE_LAW_RESEARCH_ANSWER_TYPES),
         fc.string({ maxLength: 40 }),
@@ -242,7 +297,7 @@ describe("a decision that does not state the answer", () => {
           });
         },
       ),
-      propertyConfig(),
+      {},
     );
   });
 });
@@ -313,7 +368,8 @@ describe("parsing the model's answers", () => {
         ),
       );
 
-    fc.assert(
+    assertProperty(
+      "every question ends answered, not stated or failed, whatever the model returns",
       fc.property(scenario, ([columnIds, output]) => {
         const asked = columnIds.map((columnId) => question(columnId, yesNo));
         const parsed = parseResearchAnswers({
@@ -335,7 +391,7 @@ describe("parsing the model's answers", () => {
           expect(entry.outcome.answer.type).toBe("single-select");
         }
       }),
-      propertyConfig(),
+      {},
     );
   });
 });
@@ -365,14 +421,48 @@ describe("the cited passages", () => {
         ["p-1", "first"],
         ["p-2", "second"],
       ]),
+      new Map(),
     );
     expect(justification).toEqual({
       version: 1,
       blocks: [
-        { kind: "decision-passage", anchorId: "p-2", excerpt: "second" },
-        { kind: "decision-passage", anchorId: "p-1", excerpt: "first" },
+        {
+          kind: "decision-passage",
+          anchorId: "p-2",
+          courtParagraphNumber: null,
+          excerpt: "second",
+        },
+        {
+          kind: "decision-passage",
+          anchorId: "p-1",
+          courtParagraphNumber: null,
+          excerpt: "first",
+        },
       ],
     });
+  });
+
+  test("name the court's number for a numbered block, never the anchor's counter", () => {
+    // `p-8` is the eighth block; the court numbered it 6. `p-3` is unnumbered.
+    const justification = buildAnswerJustification(
+      ["p-8", "p-3", "p-99"],
+      new Map([
+        ["p-8", "The appeal is dismissed."],
+        ["p-3", "Facts."],
+      ]),
+      new Map([["p-8", 6]]),
+    );
+    expect(
+      justification.blocks.map((block) =>
+        block.kind === "decision-passage"
+          ? [block.anchorId, block.courtParagraphNumber]
+          : null,
+      ),
+    ).toEqual([
+      ["p-8", 6],
+      ["p-3", null],
+      ["p-99", null],
+    ]);
   });
 });
 

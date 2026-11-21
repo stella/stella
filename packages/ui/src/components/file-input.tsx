@@ -6,12 +6,14 @@ import { UploadIcon } from "../icons";
 import { openFilePicker } from "../lib/file-picker";
 import { cn } from "../lib/utils";
 import { Button } from "./button";
+import { TruncatedText } from "./truncated-text";
 
 type FileInputProps = {
   accept?: string | undefined;
   "aria-labelledby"?: string | undefined;
   className?: string | undefined;
   disabled?: boolean | undefined;
+  disabledReason?: string | undefined;
   file: File | null;
   onFileChange: (file: File) => void;
   chooseLabel: string;
@@ -28,6 +30,7 @@ const FileInput = ({
   "aria-labelledby": labelledBy,
   className,
   disabled,
+  disabledReason,
   file,
   onFileChange,
   chooseLabel,
@@ -44,6 +47,7 @@ const FileInput = ({
         aria-labelledby={labelledBy ? `${labelledBy} ${triggerId}` : undefined}
         data-slot="file-input-trigger"
         disabled={disabled}
+        disabledReason={disabledReason}
         id={triggerId}
         onClick={() =>
           openFilePicker({
@@ -57,12 +61,12 @@ const FileInput = ({
         <UploadIcon aria-hidden="true" />
         {chooseLabel}
       </Button>
-      <span
-        className="text-muted-foreground min-w-0 truncate text-sm"
+      <TruncatedText
+        className="text-muted-foreground text-sm"
         data-slot="file-input-name"
       >
         {file ? <bdi>{file.name}</bdi> : emptyLabel}
-      </span>
+      </TruncatedText>
     </span>
   );
 };

@@ -3,6 +3,10 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
+import { PUBLIC_CASE_LAW_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
+import { PUBLIC_LEGISLATION_COUNTRIES } from "@stll/api-contract/legislation-publication";
+import type { DocumentAst } from "@stll/legal-ast/document-ast";
+
 import { databaseRelations } from "@/api/db/database-relations";
 import type { SafeDb } from "@/api/db/safe-db";
 import {
@@ -21,6 +25,7 @@ import type {
   CaseLawPublicReadDb,
   CaseLawPublicReadTransaction,
 } from "@/api/lib/case-law-public-read-db";
+import { loadCourtParagraphNumbers } from "@/api/lib/case-law/court-paragraph-numbers";
 import type { CorpusSourceDescriptor } from "@/api/lib/legal-search/corpus-source";
 import { EMPTY_AST } from "@/api/lib/legal-search/document-types";
 import { readStoredVersionAst } from "@/api/lib/legal-search/legislation-version-blocks";
@@ -73,12 +78,20 @@ const POLICIES = [
   expected: string;
 }[];
 const COUNTRIES = ["CZE", "SVK", "POL", "DEU"] as const;
+const admittedIn = (countries: readonly string[], country: string) =>
+  countries.includes(country);
+// Decisions and statutes each follow their own domain's public admission.
 const fixtures = COUNTRIES.flatMap((country) =>
   POLICIES.map((policy) => ({
     name: `${policy.name}-${country}`,
     country,
     descriptor: policy.descriptor,
-    expected: country === "CZE" ? policy.expected : ("absent" as const),
+    decisionExpected: admittedIn(PUBLIC_CASE_LAW_COUNTRIES, country)
+      ? policy.expected
+      : ("absent" as const),
+    statuteExpected: admittedIn(PUBLIC_LEGISLATION_COUNTRIES, country)
+      ? policy.expected
+      : ("absent" as const),
     decisionId: createSafeId<"caseLawDecision">(),
     caseSourceId: createSafeId<"caseLawSource">(),
     statuteId: createSafeId<"legislationDocument">(),
@@ -88,6 +101,38 @@ const fixtures = COUNTRIES.flatMap((country) =>
 const listingId = createSafeId<"caseLawDecision">();
 const unavailableCountryId = createSafeId<"caseLawDecision">();
 const WORDING = "Distinct corpus wording must obey the source permission.";
+// Anchors count every block: `p-3` is the court's paragraph 7.
+const NUMBERED_AST = {
+  version: 1,
+  source: { system: "", documentId: "", webUrl: "", printUrl: "" },
+  metadata: {
+    caseNumber: null,
+    ecli: null,
+    court: null,
+    decisionDate: null,
+    decisionType: null,
+    keywords: [],
+    statutes: [],
+  },
+  blocks: [
+    {
+      id: "h-1",
+      anchorId: "h-1",
+      type: "heading",
+      level: 2,
+      inlines: [{ type: "text", text: "Reasons" }],
+      plainText: "Reasons",
+    },
+    {
+      id: "p-3",
+      anchorId: "p-3",
+      type: "paragraph",
+      number: 7,
+      inlines: [{ type: "text", text: WORDING }],
+      plainText: WORDING,
+    },
+  ],
+} satisfies DocumentAst;
 const tenantDb: SafeDb = () =>
   panic("Anonymous corpus prompts must not read tenant data");
 let client: Awaited<ReturnType<typeof createTestPglite>>;
@@ -105,7 +150,6 @@ beforeAll(
         db,
         async (tx) =>
           await fn({
-            query: tx.query,
             select: tx.select.bind(tx),
             execute: () => panic("This corpus prompt does not execute raw SQL"),
           }),
@@ -139,6 +183,7 @@ beforeAll(
         court: "Court",
         language: "cs",
         fulltext: WORDING,
+        documentAst: NUMBERED_AST,
       });
       await db.insert(legislationSources).values({
         id: fixture.statuteSourceId,
@@ -203,11 +248,11 @@ test.each(fixtures)(
   "active corpus prompts enforce $name source policy",
   async (fixture) => {
     const organizationId =
-      fixture.expected === "available"
+      fixture.decisionExpected === "available"
         ? undefined
         : toSafeId<"organization">("org-corpus-policy");
     const userId =
-      fixture.expected === "available"
+      fixture.decisionExpected === "available"
         ? undefined
         : toSafeId<"user">("user-corpus-policy");
     const decision = await buildActiveDecisionSection({
@@ -225,15 +270,18 @@ test.each(fixtures)(
       userId,
     });
     const fallbackAst = await readStoredVersionAst({
+      surface: "search",
       legislationDb,
       id: fixture.statuteId,
       purpose: "derived-ai",
     });
     expect(fallbackAst).toEqual(
-      fixture.expected === "available" ? EMPTY_AST : null,
+      fixture.statuteExpected === "available" ? EMPTY_AST : null,
     );
-    const expected = fixture.expected;
-    for (const prompt of [decision.unwrap(), statute.unwrap()]) {
+    for (const [prompt, expected] of [
+      [decision.unwrap().prompt, fixture.decisionExpected],
+      [statute.unwrap(), fixture.statuteExpected],
+    ] as const) {
       switch (expected) {
         case "available":
           expect(prompt).toContain(WORDING);
@@ -267,8 +315,32 @@ test("client-provided active decision ids cannot disclose unpublished or missing
       safeDb: tenantDb,
       userId: undefined,
     });
-    expect(prompt.unwrap()).toBe("");
+    expect(prompt.unwrap().prompt).toBe("");
   }
+});
+
+test("court paragraph numbers load in one gated batch, only for decisions the public may read", async () => {
+  const czech = fixtures.filter((fixture) => fixture.country === "CZE");
+  const missing = createSafeId<"caseLawDecision">();
+  const numbers = await loadCourtParagraphNumbers({
+    caseLawDb,
+    decisionIds: [
+      ...czech.map((fixture) => fixture.decisionId),
+      listingId,
+      unavailableCountryId,
+      missing,
+    ],
+  });
+
+  // Paragraph numbers name a block of a decision the reader shows, so the
+  // redistribution gate decides, not the derived-AI permission.
+  expect(numbers).toEqual(
+    new Map(
+      czech
+        .filter((fixture) => fixture.decisionExpected !== "absent")
+        .map((fixture) => [fixture.decisionId, new Map([["p-3", 7]])]),
+    ),
+  );
 });
 
 test("statute fallback withholds wording and marks when AI permission changes between reads", async () => {

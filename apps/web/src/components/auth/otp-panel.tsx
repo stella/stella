@@ -1,26 +1,27 @@
 import { useState } from "react";
-import type { ReactNode } from "react";
 
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
-import { TaggedError } from "better-result";
+import { Result, TaggedError } from "better-result";
 import { useTranslations } from "use-intl";
 
-import { BidiText } from "@stll/ui/bidi-text";
-import { Button } from "@stll/ui/button";
+import type { SignInCodeFailureReason } from "@stll/api-contract/email-delivery";
 import {
-  Frame,
-  FrameDescription,
-  FrameHeader,
-  FramePanel,
-} from "@stll/ui/frame";
-import { InputOTP, InputOTPGroup, InputOTPSlot } from "@stll/ui/input-otp";
+  PROFESSIONAL_USE_DISPLAYED_VERSION_FIELD,
+  PROFESSIONAL_USE_STATEMENT_VERSION,
+} from "@stll/api-contract/professional-use";
+import { Temporal } from "@stll/time";
+import { Button } from "@stll/ui/button";
+import { DialogFormState } from "@stll/ui/dialog";
+import { FrameDescription } from "@stll/ui/frame";
+import { InputOTP, InputOTPSlot } from "@stll/ui/input-otp";
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
 import { InboxQuickJump } from "@/components/auth/inbox-quick-jump";
 import { useInvalidateSession } from "@/hooks/use-invalidate-session";
 import { usePulse } from "@/hooks/use-pulse";
+import { updateUserResource } from "@/lib/account/update-user";
 import { useAnalytics } from "@/lib/analytics/provider";
 import {
   authClient,
@@ -31,11 +32,36 @@ import { detached } from "@/lib/detached";
 import { toAuthClientError } from "@/lib/errors/auth";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { queryView } from "@/lib/query-view.logic";
 import { COMMON_TIMEZONES } from "@/lib/timezones";
+import { useQueryViewError } from "@/lib/use-query-view";
 
-const renderEmail = (chunks: ReactNode) => (
-  <BidiText direction="ltr">{chunks}</BidiText>
-);
+import {
+  accessResetProviders,
+  isSocialProvider,
+  socialProviderName,
+} from "./access-reset.logic";
+import type { SocialProvider } from "./access-reset.logic";
+import {
+  AUTH_CODE_LENGTH,
+  AuthCodeSlots,
+  AuthCodeVerification,
+} from "./code-verification-face.pending";
+import { newSignInAttempt, signInAttemptHeaders } from "./email-delivery.logic";
+import {
+  OTPPanelFrame,
+  OTPPanelLayout,
+  OTPProfessionalUseStatement,
+} from "./otp-panel-face.pending";
+import {
+  EmailDeliveryFailureText,
+  OTPEmailText,
+  renderEmail,
+} from "./otp-panel-text";
+import {
+  SIGN_IN_CODE_DELIVERY_WINDOW_MS,
+  signInCodeDeliveryOptions,
+} from "./sign-in-code-delivery";
 
 type OTPPanelProps = {
   className?: string;
@@ -47,9 +73,20 @@ type OTPPanelProps = {
   surface?: "frame" | "bare";
   onUseDifferentEmail?: () => void;
   onVerified?: () => void | Promise<void>;
+  linkProvider?: SocialProvider | undefined;
+  /**
+   * The attempt id the code request that opened this panel carried. While
+   * the code can be used, the panel asks whether that request's own code
+   * mail bounced, and if so explains why instead of saying a code was sent.
+   */
+  signInAttempt?: string | undefined;
+  /**
+   * A code sent again names a new attempt; the owner of `signInAttempt`
+   * keeps it, so a reload or remount follows the new code's mail.
+   */
+  onSignInAttemptChange?: (signInAttempt: string) => void;
 };
 
-const OTP_LENGTH = 6;
 const OTP_EXPIRED_MESSAGE = "OTP expired";
 
 type VerifyOtpError = {
@@ -68,19 +105,54 @@ class AlreadyToastedError extends TaggedError("AlreadyToastedError")<{
 
 export const OTPPanel = ({
   className,
+  surface = "frame",
+  ...props
+}: OTPPanelProps) => {
+  const body = <OTPPanelBody {...props} surface={surface} />;
+  if (surface === "bare") {
+    return <div className={cn("w-full", className)}>{body}</div>;
+  }
+  return <OTPPanelFrame className={className}>{body}</OTPPanelFrame>;
+};
+
+export const OTPPanelBody = ({
   email,
   initialOtp,
   redirectTo,
   surface = "frame",
   onUseDifferentEmail,
   onVerified,
-}: OTPPanelProps) => {
+  linkProvider,
+  signInAttempt: initialSignInAttempt,
+  onSignInAttemptChange,
+}: Omit<OTPPanelProps, "className">) => {
   const t = useTranslations();
   const analytics = useAnalytics();
+  const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [otp, setOtp] = useState(initialOtp ?? "");
+  const [signInAttempt, setSignInAttempt] = useState(() => ({
+    attempt: initialSignInAttempt,
+    pollUntil:
+      Temporal.Now.instant().epochMilliseconds +
+      SIGN_IN_CODE_DELIVERY_WINDOW_MS,
+  }));
+  const delivery = queryView(
+    useQuery(signInCodeDeliveryOptions(signInAttempt)),
+  );
+  // The follow-up only adds an explanation; when it fails, the panel keeps
+  // saying a code was sent and the failure is reported.
+  useQueryViewError(delivery, "OTPPanel:delivery");
+  const deliveryFailure =
+    delivery.type === "items" && delivery.items.status === "failed"
+      ? delivery.items.reason
+      : undefined;
+  const [resetConfirmation, setResetConfirmation] = useState<{
+    otp: string;
+    providers: string[];
+  } | null>(null);
   const invalidateSession = useInvalidateSession();
-  const isOtpComplete = otp.length === OTP_LENGTH;
+  const isOtpComplete = otp.length === AUTH_CODE_LENGTH;
   const { isPulsing: isOtpPulsing, pulse: pulseOtp } = usePulse(600);
 
   // A closure over `t` (not a parameter) so its type is never written out:
@@ -120,9 +192,11 @@ export const OTPPanel = ({
 
   const resendOtp = useMutation({
     mutationFn: async () => {
+      const attempt = newSignInAttempt();
       const { error } = await authClient.emailOtp.sendVerificationOtp({
         email,
         type: "sign-in",
+        fetchOptions: { headers: signInAttemptHeaders(attempt) },
       });
 
       if (error) {
@@ -139,6 +213,15 @@ export const OTPPanel = ({
       }
 
       setOtp("");
+      // The new code's own mail is followed from now on; an earlier
+      // attempt's bounce no longer describes it.
+      setSignInAttempt({
+        attempt,
+        pollUntil:
+          Temporal.Now.instant().epochMilliseconds +
+          SIGN_IN_CODE_DELIVERY_WINDOW_MS,
+      });
+      onSignInAttemptChange?.(attempt);
       stellaToast.add({
         description: t("auth.checkSpamHint"),
         title: t("auth.codeSentAgain"),
@@ -146,7 +229,10 @@ export const OTPPanel = ({
       });
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "OTPPanel:failure",
+        scope: { type: "handler", handlerId: "OTPPanel:failure" },
+      });
     },
   });
 
@@ -154,17 +240,35 @@ export const OTPPanel = ({
     mutationFn: async ({
       email: emailArg,
       otp: otpArg,
+      confirmReset,
     }: {
       email: string;
       otp: string;
+      confirmReset?: true;
     }) => {
-      const { data: signInData, error: signInError } =
-        await authClient.signIn.emailOtp({
-          email: emailArg,
-          otp: otpArg,
-        });
+      const { data: signInData, error: signInError } = await authClient.$fetch(
+        "/sign-in/email-otp",
+        {
+          method: "POST",
+          body: {
+            email: emailArg,
+            otp: otpArg,
+            // This panel shows the statement; a new account is
+            // created accepted only when it is the current one.
+            [PROFESSIONAL_USE_DISPLAYED_VERSION_FIELD]:
+              PROFESSIONAL_USE_STATEMENT_VERSION,
+            ...(confirmReset ? { confirmReset } : {}),
+          },
+        },
+      );
 
       if (signInError) {
+        const providers = accessResetProviders(signInError);
+        if (providers !== null) {
+          setResetConfirmation({ otp: otpArg, providers });
+          return;
+        }
+        setResetConfirmation(null);
         setOtp("");
         const cause = toAuthClientError(signInError);
         const title = verifyErrorTitle(signInError, cause);
@@ -172,10 +276,12 @@ export const OTPPanel = ({
         throw new AlreadyToastedError({ message: title, cause });
       }
 
+      setResetConfirmation(null);
       if (isTwoFactorRedirect(signInData)) {
+        await invalidateSession.mutateAsync();
         await navigate({
           to: "/auth/two-factor",
-          search: { redirectTo },
+          search: { redirectTo, linkProvider },
         });
         return;
       }
@@ -189,12 +295,29 @@ export const OTPPanel = ({
           const browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
           const timezones: readonly string[] = COMMON_TIMEZONES;
           if (timezones.includes(browserTz)) {
-            await authClient.updateUser({ timezoneId: browserTz });
+            const updated = await updateUserResource({
+              queryClient,
+              input: { timezoneId: browserTz },
+              owner: {
+                userId: freshSession.user.id,
+                organizationId:
+                  freshSession.session.activeOrganizationId ?? null,
+              },
+            });
+            if (Result.isError(updated)) {
+              throw updated.error;
+            }
           }
           return;
         })
         .catch((error: unknown) => {
-          analytics.captureError(error);
+          analytics.captureError(error, {
+            fingerprintKey: "OTPPanel.mutationFn:failure",
+            scope: {
+              type: "handler",
+              handlerId: "OTPPanel.mutationFn:failure",
+            },
+          });
         });
 
       await invalidateSession.mutateAsync();
@@ -203,6 +326,10 @@ export const OTPPanel = ({
     onError: (error) => {
       analytics.captureError(
         AlreadyToastedError.is(error) ? error.cause : error,
+        {
+          fingerprintKey: "OTPPanel:failure-2",
+          scope: { type: "handler", handlerId: "OTPPanel:failure-2" },
+        },
       );
       // Only the structured sign-in error already toasted a message in the
       // mutationFn (marked by AlreadyToastedError); every other throw
@@ -216,36 +343,84 @@ export const OTPPanel = ({
     },
   });
 
-  const panel = (
-    <OTPPanelContent
-      email={email}
-      isOtpComplete={isOtpComplete}
-      isOtpPulsing={isOtpPulsing}
-      isBare={surface === "bare"}
-      onOtpChange={setOtp}
-      onResend={() => resendOtp.mutate()}
-      onSubmit={(code = otp) => {
-        if (code.length !== OTP_LENGTH) {
-          pulseOtp();
-          return;
-        }
-        verifyOtp.mutate({ email, otp: code });
-      }}
-      onUseDifferentEmail={handleUseDifferentEmail}
-      otp={otp}
-      resendPending={resendOtp.isPending}
-      verifyPending={verifyOtp.isPending}
-    />
+  return (
+    <>
+      <DialogFormState
+        dirty={otp !== (initialOtp ?? "")}
+        onDiscard={() => setOtp(initialOtp ?? "")}
+      />
+      <OTPProfessionalUseStatement>
+        {t("auth.professionalUseStatement")}
+      </OTPProfessionalUseStatement>
+      {resetConfirmation ? (
+        <div className="flex flex-col gap-4 p-6">
+          <FrameDescription>
+            {t.rich("auth.accessReset.description", {
+              identity: renderEmail,
+              providers: resetConfirmation.providers
+                .map((provider) => {
+                  if (isSocialProvider(provider)) {
+                    return socialProviderName(provider);
+                  }
+                  if (provider === "credential") {
+                    return t("auth.password");
+                  }
+                  return provider;
+                })
+                .join(", "),
+            })}
+          </FrameDescription>
+          <Button
+            loading={verifyOtp.isPending}
+            disabled={verifyOtp.isPending}
+            disabledReason={t("common.verifying")}
+            onClick={() =>
+              verifyOtp.mutate({
+                email,
+                otp: resetConfirmation.otp,
+                confirmReset: true,
+              })
+            }
+          >
+            {t("auth.continueWithEmail")}
+          </Button>
+          <Button
+            variant="ghost"
+            disabled={verifyOtp.isPending}
+            disabledReason={t("common.verifying")}
+            onClick={handleUseDifferentEmail}
+          >
+            {t("common.cancel")}
+          </Button>
+        </div>
+      ) : (
+        <OTPPanelContent
+          deliveryFailure={deliveryFailure}
+          email={email}
+          isOtpComplete={isOtpComplete}
+          isOtpPulsing={isOtpPulsing}
+          isBare={surface === "bare"}
+          onOtpChange={setOtp}
+          onResend={() => resendOtp.mutate()}
+          onSubmit={(code = otp) => {
+            if (code.length !== AUTH_CODE_LENGTH) {
+              pulseOtp();
+              return;
+            }
+            verifyOtp.mutate({ email, otp: code });
+          }}
+          onUseDifferentEmail={handleUseDifferentEmail}
+          otp={otp}
+          resendPending={resendOtp.isPending}
+          verifyPending={verifyOtp.isPending}
+        />
+      )}
+    </>
   );
-
-  if (surface === "bare") {
-    return <div className={cn("w-full", className)}>{panel}</div>;
-  }
-
-  return <Frame className={cn("w-full max-w-md", className)}>{panel}</Frame>;
 };
 
-const OTPPanelContent = ({
+export const OTPPanelContent = ({
+  deliveryFailure,
   email,
   isOtpComplete,
   isOtpPulsing,
@@ -258,6 +433,7 @@ const OTPPanelContent = ({
   onSubmit,
   onUseDifferentEmail,
 }: {
+  deliveryFailure?: SignInCodeFailureReason | undefined;
   email: string;
   isOtpComplete: boolean;
   isOtpPulsing: boolean;
@@ -272,95 +448,88 @@ const OTPPanelContent = ({
 }) => {
   const t = useTranslations();
 
-  const header = (
-    <>
-      <FrameDescription>
-        {t.rich("auth.weSentCodeTo", {
-          email: renderEmail,
-          emailAddress: email,
-        })}
-        {" · "}
-        <Button
-          className="h-auto p-0 align-baseline text-sm font-normal text-inherit underline"
-          disabled={verifyPending || resendPending}
-          onClick={onUseDifferentEmail}
-          variant="link"
-        >
-          {t("auth.useDifferentEmail")}
-        </Button>
-      </FrameDescription>
-      <div className="mt-2">
-        <InboxQuickJump email={email} />
-      </div>
-    </>
-  );
-
-  const body = (
-    <>
-      <div className="mx-auto flex w-fit flex-col items-stretch gap-2">
-        <InputOTP
-          autoFocus
-          containerClassName={cn(
-            "rounded-md",
-            isOtpPulsing && "ring-primary ring-2",
+  return (
+    <OTPPanelLayout
+      code={
+        <AuthCodeVerification
+          input={
+            <InputOTP
+              autoFocus
+              containerClassName={cn(
+                "rounded-md",
+                isOtpPulsing && "ring-primary ring-2",
+              )}
+              maxLength={AUTH_CODE_LENGTH}
+              onChange={onOtpChange}
+              onComplete={(code: string) => {
+                onOtpChange(code);
+                onSubmit(code);
+              }}
+              value={otp}
+            >
+              <AuthCodeSlots Slot={InputOTPSlot} />
+            </InputOTP>
+          }
+          verify={
+            <Button
+              aria-disabled={!isOtpComplete || undefined}
+              className={cn(!isOtpComplete && "cursor-not-allowed opacity-64")}
+              disabled={verifyPending}
+              disabledReason={t("common.verifying")}
+              loading={verifyPending}
+              onClick={() => onSubmit()}
+            >
+              {t("common.verify")}
+            </Button>
+          }
+        />
+      }
+      description={
+        <>
+          {deliveryFailure === undefined ? (
+            <OTPEmailText email={email} id="auth.weSentCodeTo" />
+          ) : (
+            <span className="text-destructive" role="alert">
+              <EmailDeliveryFailureText
+                email={email}
+                reason={deliveryFailure}
+              />
+            </span>
           )}
-          maxLength={OTP_LENGTH}
-          onChange={onOtpChange}
-          onComplete={(code: string) => {
-            onOtpChange(code);
-            onSubmit(code);
-          }}
-          value={otp}
-        >
-          <InputOTPGroup>
-            <InputOTPSlot index={0} />
-            <InputOTPSlot index={1} />
-            <InputOTPSlot index={2} />
-            <InputOTPSlot index={3} />
-            <InputOTPSlot index={4} />
-            <InputOTPSlot index={5} />
-          </InputOTPGroup>
-        </InputOTP>
-        <Button
-          aria-disabled={!isOtpComplete || undefined}
-          className={cn(!isOtpComplete && "cursor-not-allowed opacity-64")}
-          disabled={verifyPending}
-          loading={verifyPending}
-          onClick={() => onSubmit()}
-        >
-          {t("common.verify")}
-        </Button>
-      </div>
-      <div className="mt-3 flex justify-center">
+          {" · "}
+          <Button
+            disabled={verifyPending || resendPending}
+            disabledReason={
+              verifyPending ? t("common.verifying") : t("auth.sendingCode")
+            }
+            onClick={onUseDifferentEmail}
+            size="inline"
+            variant="link"
+          >
+            {t("auth.useDifferentEmail")}
+          </Button>
+        </>
+      }
+      inbox={<InboxQuickJump email={email} />}
+      isBare={isBare}
+      resend={
         <Button
           disabled={verifyPending || resendPending}
+          disabledReason={
+            verifyPending ? t("common.verifying") : t("auth.sendingCode")
+          }
           loading={resendPending}
           onClick={onResend}
           size="sm"
           variant="link"
         >
-          {t.rich("auth.resendCode", {
-            email: renderEmail,
-            emailAddress: email,
-          })}
+          {/* Keep the label and email in one flex item so the button's gap
+              does not add space before the address. */}
+          <span>
+            <OTPEmailText email={email} id="auth.resendCode" />
+          </span>
         </Button>
-      </div>
-    </>
-  );
-
-  if (isBare) {
-    return (
-      <div className="flex flex-col gap-5">
-        <div>{header}</div>
-        <div>{body}</div>
-      </div>
-    );
-  }
-
-  return (
-    <>
-      <FrameHeader>{header}</FrameHeader>
-      <FramePanel>{body}</FramePanel>
-    </>
+      }
+    />
   );
 };

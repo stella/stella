@@ -1,18 +1,27 @@
 import { Result } from "better-result";
-import { t } from "elysia";
 import * as v from "valibot";
 
+import {
+  aiGenerationSchema,
+  buildSkillDraftPrompt,
+  RESOURCE_FOLDER_LIST,
+  sanitizeDraftResources,
+} from "@/api/lib/agent-skills/draft-prompt";
 import { stripMarkdownFences } from "@/api/lib/agent-skills/markdown-fences";
 import { resolveCaching } from "@/api/lib/ai-config";
+import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
+import { storedAIConfigUnreadableError } from "@/api/lib/ai-config-response";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
-import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
+import {
+  ACCOUNT_ACCESS,
+  configuredModelAdmission,
+  createSafeRootHandler,
+} from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
-import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
-import { requireTanStackAIAvailableForRole } from "@/api/lib/tanstack-ai-models";
-
-import { isAiResourcePath } from "../ai-resource-path";
+import { generateTanStackObjectForTask } from "@/api/lib/tanstack-ai-generate";
+import { requireTanStackAIAvailableForTask } from "@/api/lib/tanstack-ai-models";
 
 const INTENT_MAX_CHARS = 2000;
 const EXAMPLES_MAX_CHARS = 2000;
@@ -20,30 +29,42 @@ const FEEDBACK_MAX_CHARS = 2000;
 const PREVIOUS_DRAFT_MAX_CHARS = LIMITS.agentSkillBodyMaxChars;
 const PREVIOUS_RESOURCES_MAX = 24;
 const PREVIOUS_RESOURCE_PATH_MAX = 256;
-const PREVIOUS_RESOURCE_CONTENT_MAX = LIMITS.agentSkillResourceMaxChars;
+// Resources pass through the model whole: previous ones in the prompt,
+// generated ones in its answer.
+const RESOURCE_CONTENT_MAX = LIMITS.agentSkillResourceModelContextMaxChars;
 const GENERATION_TIMEOUT_MS = 90_000;
 const GENERATION_MAX_OUTPUT_TOKENS = 8192;
-const AI_RESOURCES_MAX = 8;
 
-const previousResourceSchema = t.Object({
-  path: t.String({ minLength: 1, maxLength: PREVIOUS_RESOURCE_PATH_MAX }),
-  content: t.String({ maxLength: PREVIOUS_RESOURCE_CONTENT_MAX }),
+const previousResourceSchema = v.object({
+  path: v.pipe(
+    v.string(),
+    v.minLength(1),
+    v.maxLength(PREVIOUS_RESOURCE_PATH_MAX),
+  ),
+  content: v.pipe(v.string(), v.maxLength(RESOURCE_CONTENT_MAX)),
 });
 
-const generateDraftBodySchema = t.Object({
-  intent: t.String({ minLength: 1, maxLength: INTENT_MAX_CHARS }),
-  examples: t.Optional(t.String({ maxLength: EXAMPLES_MAX_CHARS })),
-  previousDraft: t.Optional(t.String({ maxLength: PREVIOUS_DRAFT_MAX_CHARS })),
-  previousResources: t.Optional(
-    t.Array(previousResourceSchema, { maxItems: PREVIOUS_RESOURCES_MAX }),
+const generateDraftBodySchema = v.object({
+  intent: v.pipe(v.string(), v.minLength(1), v.maxLength(INTENT_MAX_CHARS)),
+  examples: v.optional(v.pipe(v.string(), v.maxLength(EXAMPLES_MAX_CHARS))),
+  previousDraft: v.optional(
+    v.pipe(v.string(), v.maxLength(PREVIOUS_DRAFT_MAX_CHARS)),
   ),
-  feedback: t.Optional(t.String({ maxLength: FEEDBACK_MAX_CHARS })),
+  previousResources: v.optional(
+    v.pipe(
+      v.array(previousResourceSchema),
+      v.maxLength(PREVIOUS_RESOURCES_MAX),
+    ),
+  ),
+  feedback: v.optional(v.pipe(v.string(), v.maxLength(FEEDBACK_MAX_CHARS))),
 });
 
 const config = {
+  contract: "patch",
+  actionAdmission: { type: "handler", actionKind: "skills.generate-draft" },
   description:
     "Draft a skill bundle with the model: returns SKILL.md markdown plus up " +
-    "to eight companion files under references/, prompts/, or knowledge/. " +
+    `to eight companion files under ${RESOURCE_FOLDER_LIST}. ` +
     "Pass intent, optionally examples, and, to revise an existing draft, " +
     "previousDraft with previousResources and feedback. Nothing is stored: " +
     "pass the result to skills.create and the resource endpoints to keep it. " +
@@ -62,43 +83,14 @@ const config = {
   requiresUsage: {
     actionType: "chat",
     serviceTier: "flex",
-    modelRole: "fast",
+    modelTask: "short-text",
   },
 } satisfies HandlerConfig;
-
-const aiResourceSchema = v.strictObject({
-  path: v.pipe(
-    v.string(),
-    v.description(
-      "Relative path inside the skill folder. Must start with references/, prompts/, or knowledge/ and end in .md. Subfolders are allowed to organise material (e.g. references/cz/act-110.md). Use lowercase letters, digits, hyphens, dots, or underscores in each segment.",
-    ),
-  ),
-  content: v.pipe(
-    v.string(),
-    v.description("Full Markdown content for the file."),
-  ),
-});
-
-const aiGenerationSchema = v.strictObject({
-  markdown: v.pipe(
-    v.string(),
-    v.description(
-      "Full SKILL.md including YAML frontmatter (name, description, optional version/license/compatibility) and the Markdown body. No surrounding code fences.",
-    ),
-  ),
-  resources: v.pipe(
-    v.array(aiResourceSchema),
-    v.description(
-      "Optional companion files for the skill folder. Return an empty array if no supporting files are needed.",
-    ),
-  ),
-});
-
-type GeneratedResource = { content: string; path: string };
 
 const generateSkillDraft = createSafeRootHandler(
   config,
   async function* ({
+    modelAdmission,
     body,
     orgAIConfig,
     managedAIResidency,
@@ -108,11 +100,15 @@ const generateSkillDraft = createSafeRootHandler(
     session,
     user,
   }) {
-    yield* requireTanStackAIAvailableForRole({
+    if (orgAIConfigStatus === ORG_AI_CONFIG_STATUS.unreadable) {
+      return Result.err(storedAIConfigUnreadableError());
+    }
+
+    yield* requireTanStackAIAvailableForTask({
       dataClass: "customer",
       configStatus: orgAIConfigStatus,
       orgConfig: orgAIConfig,
-      role: "fast",
+      task: "short-text",
     });
 
     const aiAnalytics = createTanStackAIAnalyticsCallbacks({
@@ -126,20 +122,23 @@ const generateSkillDraft = createSafeRootHandler(
         workspaceId: null,
       },
       feature: "skills.generate_draft",
-      modelRole: "fast",
+      modelTask: "short-text",
       orgAIConfig,
+      modelTier: configuredModelAdmission({ modelAdmission }).modelTier,
       properties: { organization_id: session.activeOrganizationId },
       traceId: Bun.randomUUIDv7(),
     });
 
-    const prompt = buildPrompt(body);
+    const prompt = buildSkillDraftPrompt(body);
     const generation = await Result.tryPromise({
       try: async () =>
-        await generateTanStackObjectForRole({
+        await generateTanStackObjectForTask({
+          userId: user.id,
           dataClass: "customer",
-          abortSignal: AbortSignal.timeout(GENERATION_TIMEOUT_MS),
+          admission: configuredModelAdmission({ modelAdmission }),
+          deadlineMs: GENERATION_TIMEOUT_MS,
           maxOutputTokens: GENERATION_MAX_OUTPUT_TOKENS,
-          role: "fast",
+          task: "short-text",
           serviceTier: "flex",
           orgAIConfig,
           managedAIResidency,
@@ -149,7 +148,7 @@ const generateSkillDraft = createSafeRootHandler(
           analytics: aiAnalytics,
           caching: resolveCaching({
             promptCachingEnabled,
-            role: "fast",
+            task: "short-text",
             scopeKey: `${session.activeOrganizationId}:skills:draft`,
           }),
           outputSchema: aiGenerationSchema,
@@ -159,6 +158,7 @@ const generateSkillDraft = createSafeRootHandler(
         aiAnalytics.captureError(cause);
         return new HandlerError({
           status: 502,
+          code: "internal_error",
           message: "Could not generate skill draft. Please try again.",
           cause,
         });
@@ -173,112 +173,16 @@ const generateSkillDraft = createSafeRootHandler(
       return Result.err(
         new HandlerError({
           status: 502,
+          code: "internal_error",
           message: "Skill draft was empty. Please try again.",
         }),
       );
     }
 
-    const resources = sanitizeResources(generation.value.resources);
+    const resources = sanitizeDraftResources(generation.value.resources);
 
     return Result.ok({ markdown, resources });
   },
 );
-
-const sanitizeResources = (
-  raw: readonly { content: string; path: string }[],
-): GeneratedResource[] => {
-  const seen = new Set<string>();
-  const result: GeneratedResource[] = [];
-
-  for (const item of raw) {
-    if (result.length >= AI_RESOURCES_MAX) {
-      break;
-    }
-    const path = item.path.trim();
-    if (!isAiResourcePath(path) || seen.has(path)) {
-      continue;
-    }
-    const content = item.content;
-    if (
-      content.length === 0 ||
-      content.length > PREVIOUS_RESOURCE_CONTENT_MAX
-    ) {
-      continue;
-    }
-    seen.add(path);
-    result.push({ content, path });
-  }
-
-  return result;
-};
-
-const buildPrompt = ({
-  intent,
-  examples,
-  previousDraft,
-  previousResources,
-  feedback,
-}: {
-  intent: string;
-  examples?: string | undefined;
-  previousDraft?: string | undefined;
-  previousResources?: readonly { content: string; path: string }[] | undefined;
-  feedback?: string | undefined;
-}): string => {
-  const sections = [
-    `You are drafting a stella agent skill, returned as JSON matching the provided schema.
-
-A skill bundle contains a SKILL.md file at the root and zero or more companion Markdown files under fixed subfolders. The bundle teaches an AI agent when to use the skill and how to follow it.
-
-SKILL.md rules:
-- YAML frontmatter delimited by lines containing only "---".
-- Required: name (lowercase letters/digits/hyphens, max 64 chars, starts with a letter or digit) and description (one sentence, <= 300 chars, helps the AI decide when to trigger the skill).
-- Optional: version (semver), license (SPDX id), compatibility.
-- Body: clear, imperative Markdown for the agent. Cover when to use the skill, the steps to follow, and any constraints. Reference companion files by relative path when appropriate (e.g. "see knowledge/01-foundations.md").
-- Keep the body under 2,000 words. No code fences around the whole file.
-
-Companion files (the "resources" array):
-- Each path must start with references/, prompts/, or knowledge/ and end in .md. Lowercase letters, digits, hyphens, dots, and underscores only. Subfolders are allowed to organise material by topic, jurisdiction, or source type. Examples: knowledge/01-foundations.md, prompts/draft-summary.prompt.md, references/checklists.md, references/cz/act-110.md, references/case-law/supreme.md.
-- knowledge/* — background material the agent reads (definitions, frameworks, examples).
-- prompts/* — reusable prompts the agent can run for sub-tasks.
-- references/* — checklists, lookup tables, format guides.
-- Each file is plain Markdown. No frontmatter on companion files.
-- Return at most ${AI_RESOURCES_MAX} files. Only include a file if it genuinely helps the skill; return an empty array if none are needed.
-- Never invent legal facts, jurisdictions, citations, or company details. Stay generic unless the user supplied specifics.`,
-    `User intent:\n${intent.trim()}`,
-  ];
-
-  const trimmedExamples = examples?.trim();
-  if (trimmedExamples) {
-    sections.push(`Example trigger phrases or scenarios:\n${trimmedExamples}`);
-  }
-
-  const trimmedPrevious = previousDraft?.trim();
-  if (trimmedPrevious) {
-    sections.push(
-      `Previous SKILL.md to revise:\n\`\`\`\n${trimmedPrevious}\n\`\`\``,
-    );
-  }
-
-  if (previousResources && previousResources.length > 0) {
-    const formatted = previousResources
-      .map(
-        (resource) =>
-          `### ${resource.path}\n\`\`\`\n${resource.content}\n\`\`\``,
-      )
-      .join("\n\n");
-    sections.push(`Previous companion files:\n${formatted}`);
-  }
-
-  const trimmedFeedback = feedback?.trim();
-  if (trimmedFeedback) {
-    sections.push(`Revision feedback to apply:\n${trimmedFeedback}`);
-  }
-
-  sections.push(
-    "Return the complete updated skill now, including all companion files.",
-  );
-  return sections.join("\n\n");
-};
 
 export default generateSkillDraft;

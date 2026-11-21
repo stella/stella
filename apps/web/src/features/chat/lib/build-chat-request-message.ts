@@ -1,12 +1,23 @@
 import type { MultimodalContent } from "@tanstack/ai-client";
+import { Result } from "better-result";
+
+import { createChatPastedTextPart } from "@stll/api-contract/chat";
+import type { ChatPastedTextPart } from "@stll/api-contract/chat";
+import { hasChatModelContent } from "@stll/api-contract/chat-message-content";
 
 import type { ChatInputDraft } from "@/components/chat-editor-provider";
 import type {
   ChatAttachmentPart,
   ChatPart,
 } from "@/components/chat/chat-ui-tools";
+import {
+  chatDraftHasModelContent,
+  type EmptyChatMessageError,
+  emptyChatMessageError,
+} from "@/features/chat/lib/chat-message-model-content";
 import { toSafeId } from "@/lib/safe-id";
 import type { SafeId } from "@/lib/safe-id";
+import { createUuid } from "@/lib/uuid";
 
 type ChatRequestMessage = MultimodalContent & {
   id: SafeId<"chatMessage">;
@@ -15,9 +26,9 @@ type ChatRequestMessage = MultimodalContent & {
 const IMAGE_MIME_PREFIX = "image/";
 
 const createChatMessageId = (): SafeId<"chatMessage"> =>
-  toSafeId<"chatMessage">(crypto.randomUUID());
+  toSafeId<"chatMessage">(createUuid());
 
-const toDataUrl = async (file: File) =>
+const toDataUrl = async (file: Blob) =>
   await new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
     reader.addEventListener("error", () => {
@@ -34,39 +45,75 @@ const toDataUrl = async (file: File) =>
     reader.readAsDataURL(file);
   });
 
-export const buildChatRequestMessage = async ({
-  files,
-  html,
-}: ChatInputDraft): Promise<ChatRequestMessage> => {
+/**
+ * A message of plain text, such as a preset prompt, refused like a draft
+ * when it has nothing for the model to read.
+ */
+export const buildChatTextMessage = (
+  text: string,
+): Result<ChatRequestMessage, EmptyChatMessageError> => {
+  if (!hasChatModelContent([{ type: "text", content: text }])) {
+    return Result.err(emptyChatMessageError());
+  }
+  return Result.ok({ content: text, id: createChatMessageId() });
+};
+
+/**
+ * The one way a composer draft becomes a chat request message. A draft with
+ * nothing for the model to read is refused with `EmptyChatMessageError`
+ * before any attachment is read, so nothing is sent and the composer keeps
+ * the draft.
+ */
+export const buildChatRequestMessage = async (
+  draft: ChatInputDraft,
+): Promise<Result<ChatRequestMessage, EmptyChatMessageError>> => {
+  if (!chatDraftHasModelContent(draft)) {
+    return Result.err(emptyChatMessageError());
+  }
+  const { files, html } = draft;
   const id = createChatMessageId();
 
   if (files.length === 0) {
-    return { id, content: html };
+    return Result.ok({ id, content: html });
   }
 
-  const fileParts: ChatAttachmentPart[] = await Promise.all(
-    files.map(async (file): Promise<ChatAttachmentPart> => {
-      const source = {
-        type: "url" as const,
-        value: await toDataUrl(file.file),
-        mimeType: file.mimeType,
-      };
-      const metadata = { filename: file.filename };
+  const attachmentParts = await Promise.all(
+    files.map(
+      async (file): Promise<ChatAttachmentPart | ChatPastedTextPart> => {
+        if (file.type === "pasted_text") {
+          return createChatPastedTextPart(file.text);
+        }
+        // A stored file goes by reference; a file picked here, inline.
+        const source = {
+          type: "url" as const,
+          value:
+            file.type === "stored_file"
+              ? file.url
+              : await toDataUrl(
+                  file.file.slice(0, file.file.size, file.mimeType),
+                ),
+          mimeType: file.mimeType,
+        };
+        const metadata = { filename: file.filename };
 
-      if (file.mimeType.startsWith(IMAGE_MIME_PREFIX)) {
-        return { type: "image", source, metadata };
-      }
+        if (file.mimeType.startsWith(IMAGE_MIME_PREFIX)) {
+          return { type: "image", source, metadata };
+        }
 
-      return { type: "document", source, metadata };
-    }),
+        return { type: "document", source, metadata };
+      },
+    ),
   );
 
   if (!html) {
-    return { id, content: fileParts };
+    return Result.ok({ id, content: attachmentParts });
   }
 
-  return {
+  return Result.ok({
     id,
-    content: [{ type: "text", content: html } satisfies ChatPart, ...fileParts],
-  };
+    content: [
+      { type: "text", content: html } satisfies ChatPart,
+      ...attachmentParts,
+    ],
+  });
 };

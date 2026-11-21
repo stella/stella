@@ -16,6 +16,9 @@ bun --filter @stll/landing preview
 bun --filter @stll/landing typecheck
 ```
 
+`typecheck` runs `astro check`, which needs the `typescript` package; that is
+why this app keeps a `typescript` dependency.
+
 ## Social cards
 
 Every page's Open Graph card is generated during `build` from that page's own

@@ -1,6 +1,7 @@
 import { panic } from "better-result";
 
-import { env } from "@/api/env";
+import type { env } from "@/api/env";
+import { readDeploymentFlag } from "@/api/env-feature-access";
 import { isLocalDevOpen } from "@/api/runtime-mode";
 
 /**
@@ -33,10 +34,16 @@ const LOCAL_DEV_ACCESS_BY_FLAG = {
   FEATURE_ACTION_COST_RECORDS: LOCAL_DEV_ACCESS.followsFlag,
   FEATURE_AGENT_ID_JAG: LOCAL_DEV_ACCESS.followsFlag,
   FEATURE_AI_MEMORY: LOCAL_DEV_ACCESS.followsFlag,
+  FEATURE_CHAT_TURN_HANDOVER: LOCAL_DEV_ACCESS.followsFlag,
   FEATURE_CONFIGURED_ACCESS: LOCAL_DEV_ACCESS.followsFlag,
+  FEATURE_CONFLICT_CHECK: LOCAL_DEV_ACCESS.followsFlag,
+  FEATURE_ENTERPRISE_SSO: LOCAL_DEV_ACCESS.followsFlag,
   FEATURE_FILE_USAGE_LIMITS: LOCAL_DEV_ACCESS.followsFlag,
+  FEATURE_FREE_TIER: LOCAL_DEV_ACCESS.followsFlag,
   FEATURE_GOVERNED_WORKFLOW: LOCAL_DEV_ACCESS.open,
+  FEATURE_GENERATED_VIEWS: LOCAL_DEV_ACCESS.followsFlag,
   FEATURE_INBOX_DOCUMENT_SCOUTS: LOCAL_DEV_ACCESS.open,
+  FEATURE_INVOICE_LINKS: LOCAL_DEV_ACCESS.followsFlag,
   FEATURE_LEGAL_LISTS: LOCAL_DEV_ACCESS.open,
   FEATURE_MANAGED_PROVIDER_CHECKS: LOCAL_DEV_ACCESS.followsFlag,
   FEATURE_MCP_READ_FENCE: LOCAL_DEV_ACCESS.followsFlag,
@@ -57,6 +64,8 @@ const LOCAL_DEV_ACCESS_BY_FLAG = {
  * goes through here (enforced by `deployment-feature-flags`), so a route gate,
  * an agent tool and an in-handler default cannot disagree about one flag.
  * Reads per call: runtime mode and env are resolved when the caller asks.
+ * The flag values come through the base-environment binding, so the database
+ * layer decides with this owner without loading the API environment.
  */
 export const isDeploymentFeatureEnabled = (
   flag: DeploymentFeatureFlag,
@@ -64,9 +73,9 @@ export const isDeploymentFeatureEnabled = (
   const access = LOCAL_DEV_ACCESS_BY_FLAG[flag];
   switch (access) {
     case LOCAL_DEV_ACCESS.open:
-      return isLocalDevOpen() || env[flag];
+      return isLocalDevOpen() || readDeploymentFlag(flag);
     case LOCAL_DEV_ACCESS.followsFlag:
-      return env[flag];
+      return readDeploymentFlag(flag);
     default:
       access satisfies never;
       return panic(`Unknown local development access for ${flag}`);

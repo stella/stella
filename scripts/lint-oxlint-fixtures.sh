@@ -3,8 +3,8 @@
 # and their tests, run the tests, and lint the regression fixtures under
 # `.oxlint-plugins/__fixtures__`. Each fixture relies on
 # `oxlint-disable-next-line` directives that go unused when the
-# associated custom rule regresses, so we run oxlint with
-# `--report-unused-disable-directives-severity=error` here.
+# associated custom rule regresses, so they go through scripts/lint.ts,
+# whose check reports unused directives as errors.
 #
 # Arguments forwarded by callers (e.g. `--affected` from
 # `bun run lint -- --affected` in CI) are intentionally swallowed:
@@ -14,36 +14,29 @@ set -euo pipefail
 
 bun scripts/check-swallowed-item-error-ledger.ts --self-test
 bun scripts/check-swallowed-item-error-ledger.ts
+bun scripts/check-test-state-baseline.ts --base "${RATCHET_BASE_REF:-origin/main}"
+bun scripts/check-test-state-baseline.ts --kind ambient-time --base "${RATCHET_BASE_REF:-origin/main}"
+bun scripts/check-test-state-baseline.ts --kind real-timers --base "${RATCHET_BASE_REF:-origin/main}"
+bun scripts/check-test-state-baseline.ts --kind wallclock-assertion --base "${RATCHET_BASE_REF:-origin/main}"
+bun scripts/check-rust-test-determinism.ts --base "${RATCHET_BASE_REF:-origin/main}"
+bun test ./scripts/check-rust-test-determinism.test.ts
+bun scripts/check-concurrency-exceptions.ts
+bun test ./scripts/check-concurrency-exceptions.test.ts
 bun scripts/check-contract-domain-ledger.ts --self-test
 bun scripts/check-contract-domain-ledger.ts
+bun scripts/check-audit-mutation-ledger.ts --base "${RATCHET_BASE_REF:-origin/main}"
 bun scripts/calendar-day-ledger.ts --self-test
 bun scripts/calendar-day-ledger.ts
 bun scripts/fill-diagnostics-ledger.ts --self-test
+bun scripts/test-timing-ledger.ts --self-test
+bun scripts/test-timing-ledger.ts --base "${RATCHET_BASE_REF:-origin/main}"
+bun scripts/refusal-code-ledger.ts --self-test
+bun scripts/refusal-code-ledger.ts --base "${RATCHET_BASE_REF:-origin/main}"
 
-# Plugin sources have to load under Node's ESM resolver, not only Bun's.
-#
-# The lint below runs them through `bun --bun`, which infers a missing file
-# extension on a relative import. `node_modules/.bin/oxlint` is a Node shim and
-# does not, so a plugin importing a sibling without its extension loads in one
-# invocation and not the other. That asymmetry is expensive to meet in the
-# wild: the whole plugin set fails at config-parse time, and the error names
-# the offending import rather than whatever was being linted, which reads like
-# a broken toolchain rather than a one-character omission.
-#
-# Lint target is irrelevant — plugins load while the config is parsed, so any
-# file exercises it. The lint result is discarded on purpose; only the loader
-# is under test here.
-plugin_load_output=$(./node_modules/.bin/oxlint \
-  .oxlint-plugins/physical-properties.ts 2>&1 || true)
-
-if grep -qE "Failed to load JS plugin|ERR_MODULE_NOT_FOUND" \
-  <<<"$plugin_load_output"; then
-  echo "An oxlint plugin does not load under Node." >&2
-  echo "Usual cause: a relative import missing its file extension." >&2
-  echo "" >&2
-  echo "$plugin_load_output" >&2
-  exit 1
-fi
+bash scripts/check-oxlint-node-loader.test.sh
+bash scripts/check-oxlint-node-loader.sh oxlint.design.config.ts
+# Oxlint RuleTester requires Node; Bun does not support its raw AST transfer.
+node scripts/check-oxlint-design-system.ts
 
 # The rule sources sit outside every Turbo workspace, so no workspace `lint`
 # reaches them. The fixtures are excluded: they violate rules on purpose and
@@ -60,24 +53,19 @@ if [[ ${#plugin_sources[@]} -eq 0 ]]; then
   exit 1
 fi
 
-bun --bun oxlint -c oxlint.config.ts \
-  --report-unused-disable-directives-severity=error \
-  --type-aware \
-  --type-check \
-  "${plugin_sources[@]}"
+bun scripts/lint.ts "${plugin_sources[@]}"
 
 bun test ./scripts/oxlint-safe-fixers.test.ts
-bun test ./scripts/oxlint-typebox-unsafe.test.ts
 bun test ./scripts/oxlint-additional-guards.test.ts
 bun test ./scripts/check-oxlint-plugin-registry.test.ts
 bun test ./scripts/check-oxlint-fixture-counts.test.ts
-bun test ./.oxlint-plugins/__tests__
+# One isolated worker per core: the rule test files share no state, and run
+# serially they dominate this check.
+bun scripts/run-custom-lint-tests.ts --parallel
+bun scripts/check-desktop-section-sign-glyph.ts
 
 # Directive usage proves each expected hit fires at least once; the count
 # check then proves each fires exactly as often as its fixture line claims.
 bun scripts/check-oxlint-fixture-counts.ts
 
-exec bun --bun oxlint -c oxlint.config.ts \
-  --report-unused-disable-directives-severity=error \
-  --type-aware \
-  .oxlint-plugins/__fixtures__
+exec bun scripts/lint.ts --no-type-check .oxlint-plugins/__fixtures__

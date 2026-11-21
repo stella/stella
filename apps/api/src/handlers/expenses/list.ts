@@ -1,17 +1,33 @@
 import { Result } from "better-result";
 import { and, asc, eq, gt, gte, inArray, lte, or } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
+
+import { apiDateSchema } from "@stll/api-contract/api-date";
+import {
+  booleanFromString,
+  numberFromString,
+} from "@stll/api-contract/http-input";
+import { withBillingRead } from "@stll/permissions";
 
 import { member, user } from "@/api/db/auth-schema";
 import {
   expenseCategorySchema,
   timeEntryStatusSchema,
 } from "@/api/db/billing-validators";
+import {
+  entityContextId,
+  entityContextReference,
+} from "@/api/db/entity-feature-policies";
 import { expenses } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
+import { expenseMoneyResponse } from "@/api/lib/billing/response-schemas";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tPaginationCursor, tSafeId, tUserId } from "@/api/lib/custom-schema";
+import {
+  paginationCursorSchema,
+  resourceIdSchema,
+  userIdSchema,
+} from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import {
@@ -24,29 +40,39 @@ import {
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedExpenseId } from "@/api/lib/safe-id-boundaries";
 
-const readExpensesQuerySchema = t.Object({
-  limit: t.Optional(
-    t.Integer({ minimum: 1, maximum: LIMITS.expensesPageSizeMax }),
+const readExpensesQuerySchema = v.object({
+  limit: v.optional(
+    numberFromString(
+      v.pipe(
+        v.number(),
+        v.integer(),
+        v.minValue(1),
+        v.maxValue(LIMITS.expensesPageSizeMax),
+      ),
+    ),
   ),
-  cursor: t.Optional(tPaginationCursor()),
-  userId: t.Optional(tUserId),
-  matterId: t.Optional(tSafeId("entity")),
-  dateFrom: t.Optional(t.String({ format: "date" })),
-  dateTo: t.Optional(t.String({ format: "date" })),
-  status: t.Optional(timeEntryStatusSchema),
-  category: t.Optional(expenseCategorySchema),
-  billable: t.Optional(t.BooleanString()),
+  cursor: v.optional(paginationCursorSchema()),
+  userId: v.optional(userIdSchema),
+  matterId: v.optional(resourceIdSchema("entity")),
+  dateFrom: v.optional(apiDateSchema),
+  dateTo: v.optional(apiDateSchema),
+  status: v.optional(timeEntryStatusSchema),
+  category: v.optional(expenseCategorySchema),
+  billable: v.optional(booleanFromString()),
 });
 
 const config = {
+  moneyResponse: expenseMoneyResponse,
+  contract: "patch",
   description:
     "List expenses in a matter, earliest date first, with cursor pagination. " +
     "Filter by userId, work item (matterId), a date-incurred range " +
     "(dateFrom/dateTo, ISO YYYY-MM-DD), status, category, and billable. Each " +
     "item carries the amount in minor currency units, currency, category, " +
     "markup percentage, status, and the recording user's name.",
-  permissions: { workspace: ["read"] },
+  permissions: withBillingRead({ workspace: ["read"] }),
   accountAccess: ACCOUNT_ACCESS.sandbox,
+  featureAccess: { featureId: "time-billing", type: "required" },
   mcp: {
     type: "capability",
     readClass: "tenant",
@@ -135,7 +161,8 @@ const readExpenses = createSafeHandler(
           .select({
             id: expenses.id,
             userId: expenses.userId,
-            matterId: expenses.matterId,
+            matterId: entityContextId(expenses.matterId),
+            matterReference: entityContextReference(expenses.matterId),
             dateIncurred: expenses.dateIncurred,
             amount: expenses.amount,
             currency: expenses.currency,
@@ -196,6 +223,7 @@ const readExpenses = createSafeHandler(
         id: row.id,
         userId: row.userId,
         matterId: row.matterId,
+        matterReference: row.matterReference,
         dateIncurred: row.dateIncurred,
         amount: row.amount,
         currency: row.currency,

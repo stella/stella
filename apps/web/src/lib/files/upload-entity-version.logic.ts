@@ -1,16 +1,16 @@
 import { ClientOperationError } from "@/lib/errors/client";
 
-type CompleteEntityVersionUploadOptions = {
+type CompleteEntityVersionUploadOptions<TResult> = {
   abort: () => Promise<void>;
-  finalize: () => Promise<void>;
+  finalize: () => Promise<TResult>;
   put: () => Promise<Response>;
 };
 
-export const completeEntityVersionUpload = async ({
+export const completeEntityVersionUpload = async <TResult>({
   abort,
   finalize,
   put,
-}: CompleteEntityVersionUploadOptions): Promise<void> => {
+}: CompleteEntityVersionUploadOptions<TResult>): Promise<TResult> => {
   let putResponse: Response;
   try {
     putResponse = await put();
@@ -27,5 +27,5 @@ export const completeEntityVersionUpload = async ({
     });
   }
 
-  await finalize();
+  return await finalize();
 };

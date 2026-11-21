@@ -11,7 +11,7 @@ import { toChatThreadId } from "@/lib/chat-thread-ref";
 import {
   activeChatTabThreadId,
   legalDocumentChatTabThreadId,
-  overlayThreadCardVisibility,
+  readerOverlayActivation,
 } from "./legal-reader-ai-chat.logic";
 
 const DECISION = decisionChatKey("decision-1");
@@ -113,44 +113,44 @@ describe("the thread the docked inspector is showing", () => {
   });
 });
 
-describe("where the reader's conversation is read", () => {
-  test("is the tab when it is on screen showing this very thread", () => {
+describe("whether the composer floats over the text", () => {
+  test("does not while a tab on screen shows this very thread", () => {
     expect(
-      overlayThreadCardVisibility({
+      readerOverlayActivation({
         overlayThreadId: THREAD,
         tabOpen: true,
         tabThreadId: THREAD,
       }),
-    ).toBe("tab");
+    ).toBe("deferred");
   });
 
-  test("is the floating card while the inspector is minimized", () => {
+  test("does while the inspector is minimized", () => {
     expect(
-      overlayThreadCardVisibility({
+      readerOverlayActivation({
         overlayThreadId: THREAD,
         tabOpen: false,
         tabThreadId: THREAD,
       }),
-    ).toBe("card");
+    ).toBe("active");
   });
 
-  test("is the floating card when the tab on screen is another thread", () => {
+  test("does when the tab on screen is another thread", () => {
     expect(
-      overlayThreadCardVisibility({
+      readerOverlayActivation({
         overlayThreadId: THREAD,
         tabOpen: true,
         tabThreadId: OTHER_THREAD,
       }),
-    ).toBe("card");
+    ).toBe("active");
   });
 
-  test("is the floating card when no chat tab is on screen", () => {
+  test("does when no chat tab is on screen", () => {
     expect(
-      overlayThreadCardVisibility({
+      readerOverlayActivation({
         overlayThreadId: THREAD,
         tabOpen: true,
         tabThreadId: undefined,
       }),
-    ).toBe("card");
+    ).toBe("active");
   });
 });

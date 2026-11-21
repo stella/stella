@@ -1,18 +1,35 @@
-// parser-output-unchanged: adds explicit URL projection modes and reserves internal diagnostics; existing publisher metadata and public text fields are unchanged
+// parser-output-unchanged: the decision-type availability marker is derived only from metadata a source sets; only cz-uohs sets it, and it bumps its own version.
+// parser-output-unchanged: the decision-date availability marker is derived only from metadata a source sets; sources that never set it parse as before.
+// parser-output-unchanged: Text and publication absence sidecars change metadata only; canonical documents and replay comparison inputs are unchanged.
+// parser-output-unchanged: The text fidelity check only validates a `textFidelity` entry a source sets and adds, drops or changes nothing; no source's parsed output differs.
 import { panic } from "better-result";
 
 import {
+  DECISION_DATE_AVAILABILITY_STATUSES,
   DECISION_HEADNOTE_KEYWORDS,
   DECISION_TEXT_ABSENCE_METADATA_KEY,
+  DECISION_TEXT_ABSENCE_SCHEMA_VERSION,
+  DECISION_TEXT_ABSENCE_VERSION_METADATA_KEY,
+  DECISION_TEXT_FIDELITY_METADATA_KEY,
   DECISION_TEXT_FIELD,
   DECISION_TEXT_FIELD_KEYS,
   DECISION_TEXT_METADATA_KEYS,
-  TEXT_ABSENCE_REASON,
-  TEXT_ABSENCE_REASONS,
-  TEXT_FIELD_TYPE,
+  DECISION_TYPE_AVAILABILITY_STATUSES,
+  type DecisionDateAvailability,
   type DecisionHeadnotePreview,
+  type DecisionTextAbsenceEntry,
+  type DecisionTextAbsenceParseResult,
   type DecisionTextFieldKey,
+  type DecisionTypeAvailability,
+  isDecisionTextFidelity,
+  parseDecisionTextAbsence,
   type ReadDecisionTextFields,
+  SK_COURTS_SOURCE_URL_STATUSES,
+  SK_US_ECLI_AVAILABILITY_STATUSES,
+  type SkCourtsSourceUrlStatus,
+  type SkUsEcliAvailability,
+  TEXT_ABSENCE_REASON,
+  TEXT_FIELD_TYPE,
   type TextAbsenceReason,
   type TextField,
 } from "@stll/api-contract/case-law-text-field";
@@ -26,9 +43,9 @@ import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import type { AdapterKey } from "@/api/lib/legal-search/ingestion-constants";
 import {
   approveMetadataUrls,
-  rehydrateMetadataUrls,
   META_URL_DIAGNOSTICS,
   type MetadataUrlSchema,
+  rehydrateMetadataUrls,
 } from "@/api/lib/legal-search/metadata-urls";
 import { isRecord } from "@/api/lib/type-guards";
 
@@ -151,22 +168,60 @@ export const storeTextField = (field: TextField): string | undefined => {
   }
 };
 
-type StoredTextAbsenceReason = Exclude<
-  TextAbsenceReason,
-  typeof TEXT_ABSENCE_REASON.NOT_PUBLISHED
+const ECLI_ABSENCE_REASON_BY_STATUS = {
+  published: undefined,
+  not_published: TEXT_ABSENCE_REASON.NOT_PUBLISHED,
+  not_stated: undefined,
+} as const satisfies Record<
+  SkUsEcliAvailability["status"],
+  TextAbsenceReason | undefined
 >;
 
-type StoredTextAbsence = {
-  readonly field: DecisionTextFieldKey;
-  readonly reason: StoredTextAbsenceReason;
-};
+const DECISION_DATE_ABSENCE_REASON_BY_STATUS = {
+  published: undefined,
+  "not-published-by-source": TEXT_ABSENCE_REASON.NOT_PUBLISHED,
+} as const satisfies Record<
+  DecisionDateAvailability["status"],
+  TextAbsenceReason | undefined
+>;
 
-const isStoredTextAbsenceReason = (
-  reason: unknown,
-): reason is StoredTextAbsenceReason =>
-  typeof reason === "string" &&
-  TEXT_ABSENCE_REASONS.some((candidate) => candidate === reason) &&
-  reason !== TEXT_ABSENCE_REASON.NOT_PUBLISHED;
+const DECISION_TYPE_ABSENCE_REASON_BY_STATUS = {
+  published: undefined,
+  "not-published-by-source": TEXT_ABSENCE_REASON.NOT_PUBLISHED,
+} as const satisfies Record<
+  DecisionTypeAvailability["status"],
+  TextAbsenceReason | undefined
+>;
+
+const SOURCE_URL_ABSENCE_REASON_BY_STATUS = {
+  published: undefined,
+  "not-published-by-source": TEXT_ABSENCE_REASON.NOT_PUBLISHED,
+  "rejected-url": TEXT_ABSENCE_REASON.PARSE_FAILED,
+  "detail-unavailable": undefined,
+} as const satisfies Record<
+  SkCourtsSourceUrlStatus,
+  TextAbsenceReason | undefined
+>;
+
+const isEcliAvailabilityStatus = (
+  status: unknown,
+): status is SkUsEcliAvailability["status"] =>
+  SK_US_ECLI_AVAILABILITY_STATUSES.some((candidate) => candidate === status);
+
+const isDecisionDateAvailabilityStatus = (
+  status: unknown,
+): status is DecisionDateAvailability["status"] =>
+  DECISION_DATE_AVAILABILITY_STATUSES.some((candidate) => candidate === status);
+
+const isDecisionTypeAvailabilityStatus = (
+  status: unknown,
+): status is DecisionTypeAvailability["status"] =>
+  DECISION_TYPE_AVAILABILITY_STATUSES.some((candidate) => candidate === status);
+
+const isSourceUrlStatus = (
+  status: unknown,
+): status is SkCourtsSourceUrlStatus =>
+  SK_COURTS_SOURCE_URL_STATUSES.some((candidate) => candidate === status);
 
 type StoreDecisionTextFieldsOptions = {
   metadata: Record<string, unknown>;
@@ -207,8 +262,7 @@ export function checkedDecisionMetadata(
 export function checkedDecisionMetadata<Value extends Record<string, unknown>>(
   metadata: Value,
   schema?:
-    | NoInfer<MetadataUrlSchema<Value>>
-    | StoredDecisionMetadataProjectionOptions,
+    NoInfer<MetadataUrlSchema<Value>> | StoredDecisionMetadataProjectionOptions,
 ): Value | Record<string, unknown> {
   checkDecisionTextMetadata(metadata);
   if (isStoredMetadataProjection(schema)) {
@@ -231,8 +285,14 @@ export const storeDecisionTextFields = ({
   // URL diagnostics are generated before the internal text-field projection;
   // publisher keys are reserved by checkedDecisionMetadata at the producer.
   checkDecisionTextMetadata(metadata);
-  const stored = { ...metadata };
-  const absent: StoredTextAbsence[] = [];
+  // Spreading an index-signature record beside a computed key drops the index
+  // signature from the inferred type; the stored row is an open record.
+  const stored: Record<string, unknown> = {
+    ...metadata,
+    [DECISION_TEXT_ABSENCE_VERSION_METADATA_KEY]:
+      DECISION_TEXT_ABSENCE_SCHEMA_VERSION,
+  };
+  const absent: DecisionTextAbsenceEntry[] = [];
   for (const key of DECISION_TEXT_FIELD_KEYS) {
     const field = textFields[key];
     const value = storeTextField(field);
@@ -240,11 +300,75 @@ export const storeDecisionTextFields = ({
       stored[key] = value;
       continue;
     }
-    if (
-      field.type === TEXT_FIELD_TYPE.ABSENT &&
-      isStoredTextAbsenceReason(field.reason)
-    ) {
+    if (field.type === TEXT_FIELD_TYPE.ABSENT) {
       absent.push({ field: key, reason: field.reason });
+    }
+  }
+  const ecliAvailability = metadata["ecliAvailability"];
+  if (ecliAvailability !== undefined) {
+    if (
+      !isRecord(ecliAvailability) ||
+      !isEcliAvailabilityStatus(ecliAvailability["status"])
+    ) {
+      return panic("ECLI availability must carry a publisher status");
+    }
+    const reason = ECLI_ABSENCE_REASON_BY_STATUS[ecliAvailability["status"]];
+    if (reason !== undefined) {
+      absent.push({ field: "ecli", reason });
+    }
+  }
+  const decisionDateAvailability = metadata["decisionDateAvailability"];
+  if (decisionDateAvailability !== undefined) {
+    if (
+      !isRecord(decisionDateAvailability) ||
+      !isDecisionDateAvailabilityStatus(decisionDateAvailability["status"])
+    ) {
+      return panic("Decision date availability must carry a source status");
+    }
+    const reason =
+      DECISION_DATE_ABSENCE_REASON_BY_STATUS[
+        decisionDateAvailability["status"]
+      ];
+    if (reason !== undefined) {
+      absent.push({ field: "decisionDate", reason });
+    }
+  }
+  const decisionTypeAvailability = metadata["decisionTypeAvailability"];
+  if (decisionTypeAvailability !== undefined) {
+    if (
+      !isRecord(decisionTypeAvailability) ||
+      !isDecisionTypeAvailabilityStatus(decisionTypeAvailability["status"])
+    ) {
+      return panic("Decision type availability must carry a source status");
+    }
+    const reason =
+      DECISION_TYPE_ABSENCE_REASON_BY_STATUS[
+        decisionTypeAvailability["status"]
+      ];
+    if (reason !== undefined) {
+      absent.push({ field: "decisionType", reason });
+    }
+  }
+  const textFidelity = metadata[DECISION_TEXT_FIDELITY_METADATA_KEY];
+  if (textFidelity !== undefined && !isDecisionTextFidelity(textFidelity)) {
+    return panic(
+      "Text fidelity must carry a status, character counts and its first difference",
+    );
+  }
+  const sourceUrlStatus = metadata["sourceUrlStatus"];
+  if (sourceUrlStatus !== undefined) {
+    if (!isSourceUrlStatus(sourceUrlStatus)) {
+      return panic("Unhandled source URL publication status");
+    }
+    if (
+      sourceUrlStatus === "rejected-url" &&
+      typeof metadata["statedSourceUrl"] !== "string"
+    ) {
+      return panic("Rejected publisher URLs must retain their stated value");
+    }
+    const reason = SOURCE_URL_ABSENCE_REASON_BY_STATUS[sourceUrlStatus];
+    if (reason !== undefined) {
+      absent.push({ field: "sourceUrl", reason });
     }
   }
   if (absent.length > 0) {
@@ -263,9 +387,24 @@ export const readTextField = (value: unknown): TextField => {
   return presentTextField(value);
 };
 
+// parser-output-unchanged: keyword reading is extracted unchanged and the headnote budget defaults to the compact row.
+/** Publisher classifications stay distinct from publisher prose. */
+export const readDecisionKeywords = (value: unknown) => {
+  const classification = normalizeDecisionKeywords(value);
+  return classification === null
+    ? null
+    : ({
+        type: DECISION_HEADNOTE_KEYWORDS,
+        items: classification.items,
+        omitted: classification.omitted,
+      } as const);
+};
+
 type ReadDecisionHeadnoteOptions = {
   /** The publisher's sentence, as the row's SQL read it. */
   headnote: unknown;
+  /** Internal presentation budget; the default remains the compact row. */
+  maxChars?: number;
   /** The terms they filed the decision under, where they wrote no sentence. */
   keywords: unknown;
 };
@@ -279,21 +418,16 @@ type ReadDecisionHeadnoteOptions = {
 export const readDecisionHeadnote = ({
   headnote,
   keywords,
+  maxChars,
 }: ReadDecisionHeadnoteOptions): DecisionHeadnotePreview => {
   const field = readTextField(headnote);
   switch (field.type) {
     case TEXT_FIELD_TYPE.ABSENT: {
-      const classification = normalizeDecisionKeywords(keywords);
-      return classification === null
-        ? field
-        : {
-            type: DECISION_HEADNOTE_KEYWORDS,
-            items: classification.items,
-            omitted: classification.omitted,
-          };
+      const classification = readDecisionKeywords(keywords);
+      return classification ?? field;
     }
     case TEXT_FIELD_TYPE.PRESENT: {
-      const preview = normalizeDecisionHeadnote(field.text);
+      const preview = normalizeDecisionHeadnote(field.text, maxChars);
       return preview === null
         ? absentTextField(TEXT_ABSENCE_REASON.PARSE_FAILED)
         : {
@@ -337,67 +471,15 @@ type SplitStoredDecisionTextMetadataResult = {
   textFields: DecisionTextFields;
 };
 
-type ReadTextAbsence = {
-  readonly field: DecisionTextFieldKey;
-  readonly reason: TextAbsenceReason;
-};
-
-type StoredTextAbsenceParseResult =
-  | { readonly type: "invalid" }
-  | { readonly type: "valid"; readonly entries: readonly ReadTextAbsence[] };
-
-const isReadTextAbsenceReason = (
-  reason: unknown,
-): reason is TextAbsenceReason =>
-  typeof reason === "string" &&
-  TEXT_ABSENCE_REASONS.some((candidate) => candidate === reason);
-
-const parseStoredTextAbsence = (
-  value: unknown,
-): StoredTextAbsenceParseResult => {
-  if (value === undefined) {
-    return { type: "valid", entries: [] };
-  }
-  if (!Array.isArray(value)) {
-    return { type: "invalid" };
-  }
-  const entries: ReadTextAbsence[] = [];
-  const seenFields = new Set<string>();
-  for (const entry of value) {
-    if (
-      !isRecord(entry) ||
-      Object.keys(entry).length !== 2 ||
-      !Object.hasOwn(entry, "field") ||
-      !Object.hasOwn(entry, "reason")
-    ) {
-      return { type: "invalid" };
-    }
-    const field = entry["field"];
-    const reason = entry["reason"];
-    if (
-      typeof field !== "string" ||
-      !isReadTextAbsenceReason(reason) ||
-      seenFields.has(field)
-    ) {
-      return { type: "invalid" };
-    }
-    seenFields.add(field);
-    // New publisher fields must not poison text reads during a rolling deploy.
-    if (!isDecisionTextFieldKey(field)) {
-      continue;
-    }
-    entries.push({ field, reason });
-  }
-  return { type: "valid", entries };
-};
-
 export const readStoredDecisionTextAbsence = (
   storedMetadata: Record<string, unknown> | null,
-): StoredTextAbsenceParseResult =>
-  parseStoredTextAbsence(storedMetadata?.[DECISION_TEXT_ABSENCE_METADATA_KEY]);
+): DecisionTextAbsenceParseResult =>
+  parseDecisionTextAbsence(
+    storedMetadata?.[DECISION_TEXT_ABSENCE_METADATA_KEY],
+  );
 
 type ReadStoredTextFieldOptions = {
-  absence: StoredTextAbsenceParseResult;
+  absence: DecisionTextAbsenceParseResult;
   field: DecisionTextFieldKey;
   value: unknown;
 };
@@ -422,7 +504,8 @@ export const splitStoredDecisionTextMetadata = (
     Object.entries(storedMetadata).filter(
       ([key]) =>
         !isDecisionTextFieldKey(key) &&
-        key !== DECISION_TEXT_ABSENCE_METADATA_KEY,
+        key !== DECISION_TEXT_ABSENCE_METADATA_KEY &&
+        key !== DECISION_TEXT_ABSENCE_VERSION_METADATA_KEY,
     ),
   );
   return {

@@ -1,19 +1,40 @@
-import { QueryClient, skipToken, type QueryKey } from "@tanstack/react-query";
+import { QueryClient, type QueryKey, skipToken } from "@tanstack/react-query";
 import { describe, expect, test } from "bun:test";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import nodePath from "node:path";
 
+import { repoRelativePath } from "@stll/portable-path";
+import { type Node, parseSource, walk } from "@stll/scripts/src/syntax-tree";
+
 import { savedTimeNarrativesKeys } from "@/components/billing/saved-time-narratives";
 import { companyFormatKeys } from "@/components/company-format-library";
 import { readerAnnotationKeys } from "@/components/legal-reader/annotations/reader-annotations-query";
+import { documentAnnotationKeys } from "@/components/pdf/annotations/document-annotations-query";
 import { savedSearchKeys } from "@/components/saved-searches.logic";
+import { claimCommentKeys } from "@/features/avt/claim-comments-query";
+import { readerAnswersOptions } from "@/features/case-law/components/case-viewer/reader-answers-query";
+import { browserSiteGrantsOptions } from "@/features/chat/browser-control/browser-site-grants";
+import { chatLimitReminderOptions } from "@/features/chat/chat-limit-reminder";
 import { chatKeys } from "@/features/chat/chat-query-contract";
+import { chatToolGrantsOptions } from "@/features/chat/chat-tool-grants";
+import { desktopPresenceOptions } from "@/features/desktop/desktop-presence";
+import { lawHistoryKeys } from "@/features/law-search-history/law-search-history-query";
+import {
+  sharepointAccessOptions,
+  sharepointChildrenOptions,
+  sharepointDrivesOptions,
+  sharepointSitesOptions,
+} from "@/features/sharepoint/sharepoint-queries";
 import { timeTimersOptions } from "@/features/time-timers/queries";
+import { accountDataExportLatestOptions } from "@/lib/account/account-data-export-queries";
 import {
   linkedAccountsOptions,
   pendingDeletionTasksOptions,
   sessionsOptions,
 } from "@/lib/account/queries";
+import { sessionSignInsOptions } from "@/lib/account/session-sign-ins";
+import { professionalUseOptions } from "@/lib/auth-queries";
+import { toChatThreadId } from "@/lib/chat-thread-ref";
 import { inboxCountOptions } from "@/lib/inbox/queries";
 import {
   chatUnavailableSkillsOptions,
@@ -24,25 +45,57 @@ import {
 } from "@/lib/knowledge/queries";
 import { catalogueOptions } from "@/lib/knowledge/queries/catalogue";
 import { notificationsOptions } from "@/lib/notification-queries";
+import { organizationAuditExportLatestOptions } from "@/lib/organization/audit-export-queries";
 import { organizationListOptions } from "@/lib/organization/queries";
-import { searchPreviewOptions } from "@/lib/search";
+import {
+  searchFacetOptions,
+  searchInfiniteOptions,
+  searchPreviewOptions,
+} from "@/lib/search";
 import { usageLaneOptions } from "@/lib/usage-queries";
+import {
+  DEFAULT_MATTER_ACTIVITY_FILTERS,
+  overviewActivityOptions,
+  workspacesNavigationOptions,
+} from "@/lib/workspaces/queries";
 import { workspacesKeys } from "@/lib/workspaces/queries.logic";
 import {
   entityViewKeys,
   entityViewsOptions,
 } from "@/lib/workspaces/queries/entity-views";
+import {
+  invoiceSendsInfiniteOptions,
+  invoiceSendsOptions,
+  invoicesKeys,
+} from "@/lib/workspaces/queries/invoices";
+import {
+  legalListActivityOptions,
+  legalListItemsOptions,
+  legalListKeys,
+  legalListSourcesOptions,
+} from "@/lib/workspaces/queries/legal-lists";
 import { myTimeEntriesInfiniteOptions } from "@/lib/workspaces/queries/my-time-entries";
+import { myTimeSuggestionsOptions } from "@/lib/workspaces/queries/my-time-suggestions";
 import { reportExportsKeys } from "@/lib/workspaces/queries/report-exports";
+import {
+  timeApprovalPendingOptions,
+  timeApprovalQueueOptions,
+} from "@/lib/workspaces/queries/time-approvals";
 import { timeEntriesKeys } from "@/lib/workspaces/queries/time-entries";
 import { viewTemplateKeys } from "@/lib/workspaces/queries/view-templates";
 import { workspaceMemberPreviewsOptions } from "@/lib/workspaces/queries/workspace-member-previews";
+import { featureEnrolmentsOptions } from "@/queries/feature-enrolments";
 import {
-  organizationSettingsOptions,
   optionalOrganizationSettingsOptions,
+  organizationSettingsOptions,
 } from "@/queries/organization-settings";
 import { connectedAppsOptions } from "@/routes/_protected.settings/-queries/connections";
 import { memoriesKeys } from "@/routes/_protected.settings/-queries/memories";
+import { memoryMattersOptions } from "@/routes/_protected.settings/-queries/memory-matters";
+import { auditLogOptions } from "@/routes/_protected.settings/organization/-queries/audit-logs";
+import { timeReportOptions } from "@/routes/_protected.time_.report/-components/report-query";
+
+import { API_CLIENT_REQUEST_METHODS } from "../../../.oxlint-plugins/api-client-chain";
 
 // API reads that answer for the signed-in user are cached under a key that
 // names that user. The manifests below list every such read:
@@ -94,9 +147,130 @@ const DOWNLOAD = "a file download, not cached";
 const OAUTH_REDIRECT = "an OAuth redirect, not cached";
 const OWN_EDIT_SESSION = "marks the caller's own open edit session";
 const KEY_TYPE_HAS_USER = "the key argument's type requires userId";
+const READ_FRESH = "read fresh at each use, never cached";
+const SHAREPOINT_QUERIES = "features/sharepoint/sharepoint-queries.ts";
+const SHAREPOINT_VIEWER = { organizationId: ORG, userId: USER };
+
+const SEARCH_PROBE = {
+  editedByUserIds: [],
+  enabled: true,
+  kinds: [],
+  mimeTypes: [],
+  organizationId: ORG,
+  query: "query",
+  types: [],
+  userId: USER,
+  workspaceIds: [],
+};
 
 // Keyed by handler path under apps/api/src/handlers.
 const PER_USER_READS: Record<string, PerUserRead> = {
+  "invoices/sends/list.ts": {
+    kind: "keyed",
+    calls: ["api.invoices()().sends.get"],
+    files: ["lib/workspaces/queries/invoices.ts"],
+    keys: () => [
+      invoiceSendsOptions({
+        workspaceId: WORKSPACE,
+        invoiceId: "invoice-probe",
+        userId: USER,
+      }).queryKey,
+      invoiceSendsInfiniteOptions({
+        workspaceId: WORKSPACE,
+        invoiceId: "invoice-probe",
+        userId: USER,
+      }).queryKey,
+    ],
+  },
+  "outbound-actions/read.ts": { kind: "no-web-caller", calls: [] },
+  "account-exports/download.ts": { kind: "not-per-user", reason: DOWNLOAD },
+  "account-exports/download/get.ts": { kind: "no-web-caller", calls: [] },
+  "account-exports/get.ts": {
+    kind: "keyed",
+    calls: ['api.me["data-exports"].get'],
+    files: ["lib/account/account-data-export-queries.ts"],
+    keys: () => [accountDataExportLatestOptions(USER).queryKey],
+  },
+  "account-exports/status/get.ts": { kind: "no-web-caller", calls: [] },
+  "organizations/audit-export/get.ts": {
+    kind: "keyed",
+    calls: ['api.organizations["audit-export"].get'],
+    files: ["lib/organization/audit-export-queries.ts"],
+    keys: () => [organizationAuditExportLatestOptions(ORG, USER).queryKey],
+  },
+  "files/thumbnail.ts": { kind: "owned-id", reason: OWNED_FILE },
+  "search-history/list.ts": {
+    kind: "keyed",
+    calls: ['api["search-history"].get'],
+    files: ["features/law-search-history/law-search-history-query.ts"],
+    keys: () => [
+      lawHistoryKeys.list({
+        scope: { organizationId: ORG, userId: USER },
+        filter: "all",
+        country: "CZE",
+      }),
+    ],
+    opaqueKeys: {
+      "lawHistoryKeys.list({ scope: scope ?? keyScope, filter, country, })":
+        KEY_TYPE_HAS_USER,
+    },
+  },
+  // The caller-bound clock anchor is fetched inside the import query and
+  // spent by the import write; it is never cached on its own.
+  "search-history/import-clock.ts": {
+    kind: "keyed",
+    calls: ['api["search-history"]["import-clock"].get'],
+    files: ["features/law-search-history/law-search-history-query.ts"],
+    keys: () => [lawHistoryKeys.import({ organizationId: ORG, userId: USER })],
+    opaqueKeys: {
+      "lawHistoryKeys.import(scope ?? keyScope)": KEY_TYPE_HAS_USER,
+    },
+  },
+  "organization-settings/feature-access/get.ts": {
+    kind: "no-web-caller",
+    calls: ['api["organization-settings"]["feature-access"].get'],
+  },
+  "desktop-presence/read.ts": {
+    kind: "keyed",
+    calls: ["api.desktop.presence.get"],
+    files: ["features/desktop/desktop-presence.ts"],
+    keys: () => [
+      desktopPresenceOptions({ userId: USER, organizationId: ORG }).queryKey,
+    ],
+    opaqueKeys: { "desktopPresenceKeys.all(key)": KEY_TYPE_HAS_USER },
+  },
+  "views/list.ts": {
+    kind: "caller-marker",
+    reason:
+      "Shared view identities carry caller eligibility; session-cache-guard clears them on member changes.",
+  },
+
+  "workspaces/read-navigation.ts": {
+    kind: "keyed",
+    calls: ["api.workspaces.navigation.get", "fetchWorkspaceNavigationPage"],
+    files: [
+      "lib/memory-api.ts",
+      "lib/workspaces/queries.ts",
+      "routes/_protected.settings/-queries/memory-matters.ts",
+    ],
+    keys: () => [
+      workspacesNavigationOptions({ organizationId: ORG, userId: USER })
+        .queryKey,
+      memoryMattersOptions({ organizationId: ORG, userId: USER }).queryKey,
+    ],
+    opaqueKeys: {
+      "workspacesKeys.navigation(caller)": KEY_TYPE_HAS_USER,
+      "memoryMatterKeys.all(caller)": KEY_TYPE_HAS_USER,
+    },
+  },
+  "api-keys/personal/list.ts": {
+    kind: "no-web-caller",
+    calls: ['api["api-keys"].personal.get'],
+  },
+  "chat/messages/revisions/list.ts": {
+    kind: "no-web-caller",
+    calls: [],
+  },
   "organization-settings/get.ts": {
     kind: "keyed",
     calls: ['api["organization-settings"].get'],
@@ -112,18 +286,86 @@ const PER_USER_READS: Record<string, PerUserRead> = {
       }).queryKey,
     ],
   },
+  "organization-settings/feature-enrolments/get.ts": {
+    kind: "keyed",
+    calls: ['api["organization-settings"]["feature-enrolments"].get'],
+    files: ["queries/feature-enrolments.ts"],
+    keys: () => [
+      featureEnrolmentsOptions({ organizationId: ORG, userId: USER }).queryKey,
+    ],
+  },
   "audit-logs/export.ts": { kind: "not-per-user", reason: DOWNLOAD },
+  "audit-logs/list.ts": {
+    kind: "keyed",
+    calls: ['api["audit-logs"].get'],
+    files: ["routes/_protected.settings/organization/-queries/audit-logs.ts"],
+    keys: () => [
+      auditLogOptions({
+        viewer: { userId: USER, organizationId: ORG },
+        key: {},
+      }).queryKey,
+    ],
+    opaqueKeys: { "auditLogKeys.filtered(viewer, key)": KEY_TYPE_HAS_USER },
+  },
+  "lists/verifications/get.ts": {
+    kind: "not-per-user",
+    reason:
+      "The actor determines the read-audit receipt; returned run content is shared within the matter.",
+  },
+  "lists/verifications/graph/get.ts": {
+    kind: "not-per-user",
+    reason:
+      "The actor determines the read-audit receipts; the returned graph is shared within the matter.",
+  },
+  "lists/verifications/chronology/export.ts": {
+    kind: "not-per-user",
+    reason: DOWNLOAD,
+  },
+  "lists/graph/nodes/list.ts": {
+    kind: "not-per-user",
+    reason:
+      "The actor determines the read-audit receipt; the matter's graph is shared within the matter.",
+  },
+  "lists/graph/neighbours/list.ts": {
+    kind: "not-per-user",
+    reason:
+      "The actor determines the read-audit receipt; the matter's graph is shared within the matter.",
+  },
+  "lists/graph/paths/list.ts": {
+    kind: "not-per-user",
+    reason:
+      "The actor determines the read-audit receipt; the matter's graph is shared within the matter.",
+  },
+  "case-law/analysis/generate.ts": { kind: "not-per-user", reason: USAGE_ONLY },
   "catalogue/list.ts": {
     kind: "keyed",
     calls: ["api.catalogue.get"],
     files: ["lib/knowledge/queries/catalogue.ts"],
     keys: () => [catalogueOptions(ORG, USER).queryKey],
   },
+  "chat/link-icons/get.ts": {
+    kind: "not-per-user",
+    reason:
+      "Public site icons are shared by hostname; the caller is used only for miss admission.",
+  },
+  "chat/link-icons/get-exact.ts": {
+    kind: "not-per-user",
+    reason:
+      "Public icon bytes are shared by exact URL; the caller is used only for miss admission.",
+  },
   "chat/get-suggested-prompts.ts": { kind: "owned-id", reason: OWNED_THREAD },
   "chat/get-thread-recap.ts": { kind: "owned-id", reason: OWNED_THREAD },
   "chat/get-thread-title.ts": { kind: "owned-id", reason: OWNED_THREAD },
   "chat/messages/list.ts": { kind: "owned-id", reason: OWNED_THREAD },
+  "chat/messages/get.ts": { kind: "owned-id", reason: OWNED_THREAD },
+  "chat/messages/revisions/span-edit.ts": {
+    kind: "owned-id",
+    reason:
+      "An uncached rewrite proposal; its thread lookup is owner-filtered.",
+  },
   "chat/older-messages/list.ts": { kind: "owned-id", reason: OWNED_THREAD },
+  "chat/queue/read-message.ts": { kind: "owned-id", reason: OWNED_THREAD },
+  "chat/queue/read.ts": { kind: "owned-id", reason: OWNED_THREAD },
   "chat/read-file-thread.ts": {
     kind: "keyed",
     calls: ['api.chat.workspaces()["file-thread"].get'],
@@ -167,11 +409,65 @@ const PER_USER_READS: Record<string, PerUserRead> = {
       "chatKeys.templateThread(activeOrganizationId, key)": KEY_TYPE_HAS_USER,
     },
   },
+  "chat/saved-secret.ts": { kind: "owned-id", reason: OWNED_THREAD },
+  "chat/tool-grants/list.ts": {
+    kind: "keyed",
+    calls: ['api.chat["tool-grants"].get'],
+    files: ["features/chat/chat-tool-grants.ts"],
+    keys: () => [
+      chatToolGrantsOptions({
+        activeOrganizationId: ORG,
+        threadId: "thread",
+        userId: USER,
+      }).queryKey,
+    ],
+  },
+  "chat/tool-grants/coverage.ts": { kind: "not-per-user", reason: READ_FRESH },
+  "chat/limit-reminder/get.ts": {
+    kind: "keyed",
+    calls: ['api.chat.threads()["limit-reminder"].get'],
+    files: ["features/chat/chat-limit-reminder.ts"],
+    keys: () => [
+      chatLimitReminderOptions({
+        activeOrganizationId: ORG,
+        threadRef: { scope: "global", threadId: toChatThreadId("thread") },
+        userId: USER,
+      }).queryKey,
+    ],
+  },
+  "chat/browser-site-grants/list.ts": {
+    kind: "keyed",
+    calls: ['api.chat["browser-site-grants"].get'],
+    files: ["features/chat/browser-control/browser-site-grants.ts"],
+    keys: () => [
+      browserSiteGrantsOptions({
+        activeOrganizationId: ORG,
+        userId: USER,
+      }).queryKey,
+    ],
+  },
   "chat/skill-availability/list.ts": {
     kind: "keyed",
     calls: ['api.chat["skill-availability"].get'],
     files: ["lib/knowledge/queries.ts"],
     keys: () => [chatUnavailableSkillsOptions(ORG, USER).queryKey],
+  },
+  "chat/decision-threads/get.ts": {
+    kind: "keyed",
+    calls: ['api.chat["decision-threads"]().get'],
+    files: ["features/chat/queries.ts"],
+    keys: () => [
+      chatKeys.decisionThread(ORG, { decisionId: "decision", userId: USER }),
+    ],
+    opaqueKeys: {
+      "chatKeys.decisionThread(activeOrganizationId, key)": KEY_TYPE_HAS_USER,
+    },
+  },
+  "chat/runs/list.ts": {
+    kind: "keyed",
+    calls: ["api.chat.runs.active.get"],
+    files: ["features/chat/active-runs.ts"],
+    keys: () => [chatKeys.activeRuns(ORG, USER)],
   },
   "chat/threads/list.ts": {
     kind: "keyed",
@@ -231,9 +527,83 @@ const PER_USER_READS: Record<string, PerUserRead> = {
     ],
     opaqueKeys: { "readerAnnotationKeys.forTarget(key)": KEY_TYPE_HAS_USER },
   },
+  "legal-reader/answers/list.ts": {
+    kind: "keyed",
+    calls: ["api.reader.answers.get"],
+    files: ["features/case-law/components/case-viewer/reader-answers-query.ts"],
+    keys: () => [
+      readerAnswersOptions({
+        organizationId: ORG,
+        userId: USER,
+        decisionId: "decision",
+      }).queryKey,
+    ],
+  },
+  "lists/verifications/claim-comments/list.ts": {
+    kind: "keyed",
+    calls: ['api.lists()["claim-comments"].get'],
+    files: ["features/avt/claim-comments-query.ts"],
+    keys: () => [
+      claimCommentKeys.forClaim({
+        claimId: "claim-probe",
+        runId: "run-probe",
+        viewer: { organizationId: ORG, userId: USER },
+        workspaceId: WORKSPACE,
+      }),
+    ],
+    opaqueKeys: { "claimCommentKeys.forClaim(key)": KEY_TYPE_HAS_USER },
+  },
+  "entities/annotations/list.ts": {
+    kind: "keyed",
+    calls: ["api.entities().entity().field().annotations.get"],
+    files: ["components/pdf/annotations/document-annotations-query.ts"],
+    keys: () => [
+      documentAnnotationKeys.forFile({
+        entityId: "entity-probe",
+        fieldId: "field-probe",
+        viewer: { organizationId: ORG, userId: USER },
+        workspaceId: WORKSPACE,
+      }),
+    ],
+    opaqueKeys: { "documentAnnotationKeys.forFile(key)": KEY_TYPE_HAS_USER },
+  },
+  "lists/items/list.ts": {
+    kind: "keyed",
+    calls: ["api.lists()().items.get"],
+    files: ["lib/workspaces/queries/legal-lists.ts"],
+    keys: () => [
+      legalListItemsOptions({
+        workspaceId: WORKSPACE,
+        listId: "list-probe",
+        viewer: { userId: USER, organizationId: ORG },
+      }).queryKey,
+    ],
+  },
   "lists/items/activity/list.ts": {
-    kind: "not-per-user",
-    reason: JOINS_NAMES,
+    kind: "keyed",
+    calls: ["api.lists()().items().activity.get"],
+    files: ["lib/workspaces/queries/legal-lists.ts"],
+    keys: () => [
+      legalListActivityOptions({
+        workspaceId: WORKSPACE,
+        listId: "list-probe",
+        itemEntityId: "item-probe",
+        viewer: { userId: USER, organizationId: ORG },
+      }).queryKey,
+    ],
+  },
+  "lists/items/sources/list.ts": {
+    kind: "keyed",
+    calls: ["api.lists()().items().sources.get"],
+    files: ["lib/workspaces/queries/legal-lists.ts"],
+    keys: () => [
+      legalListSourcesOptions({
+        workspaceId: WORKSPACE,
+        listId: "list-probe",
+        itemEntityId: "item-probe",
+        viewer: { userId: USER, organizationId: ORG },
+      }).queryKey,
+    ],
   },
   "mcp-connectors/list-connections.ts": {
     kind: "keyed",
@@ -251,6 +621,12 @@ const PER_USER_READS: Record<string, PerUserRead> = {
     files: ["routes/_protected.settings/-queries/connections.ts"],
     keys: () => [connectedAppsOptions(USER).queryKey],
   },
+  "me/professional-use.ts": {
+    kind: "keyed",
+    calls: ['api.me["professional-use"].get'],
+    files: ["lib/auth-queries.ts"],
+    keys: () => [professionalUseOptions(USER).queryKey],
+  },
   "me/pending-tasks.ts": {
     kind: "keyed",
     calls: ['api.me.delete["pending-tasks"].get'],
@@ -260,7 +636,7 @@ const PER_USER_READS: Record<string, PerUserRead> = {
   // Filtered by row-level security rather than in the handler.
   "memories/list.ts": {
     kind: "keyed",
-    calls: ["memoriesApi.get", "fetchMemoriesPage"],
+    calls: ["api.memories.get", "fetchMemoriesPage"],
     files: [
       "lib/memory-api.ts",
       "routes/_protected.settings/-queries/memories.ts",
@@ -278,7 +654,7 @@ const PER_USER_READS: Record<string, PerUserRead> = {
     ],
   },
   "notifications/read-all.ts": { kind: "not-per-user", reason: WRITE },
-  "notifications/read.ts": { kind: "not-per-user", reason: WRITE },
+  "notifications/read-state/update.ts": { kind: "not-per-user", reason: WRITE },
   "playbooks/recent/list.ts": {
     kind: "keyed",
     calls: ["api.playbooks.recent.get"],
@@ -289,10 +665,7 @@ const PER_USER_READS: Record<string, PerUserRead> = {
   "reports/exports/get.ts": {
     kind: "keyed",
     calls: ["api.workspaces().reports().get"],
-    files: [
-      "lib/workspaces/queries/report-exports.ts",
-      "routes/_protected.workspaces/$workspaceId/reports/$exportId.tsx",
-    ],
+    files: ["lib/workspaces/queries/report-exports.ts"],
     keys: () => [
       reportExportsKeys.detail({
         exportId: "export",
@@ -315,6 +688,7 @@ const PER_USER_READS: Record<string, PerUserRead> = {
     ],
     opaqueKeys: { "reportExportsKeys.history(key)": KEY_TYPE_HAS_USER },
   },
+  "saved-searches/get.ts": { kind: "not-per-user", reason: READ_FRESH },
   "saved-searches/list.ts": {
     kind: "keyed",
     calls: ['api["saved-searches"].get'],
@@ -342,17 +716,56 @@ const PER_USER_READS: Record<string, PerUserRead> = {
       }).queryKey,
     ],
   },
-  "sharepoint/list-drive-root.ts": {
-    kind: "no-web-caller",
-    calls: ["api.sharepoint.drive.root.get"],
+  // Facet buckets count only the matters and result types the caller may see.
+  "search/facets/list.ts": {
+    kind: "keyed",
+    calls: ["api.search.facets.post"],
+    files: ["lib/search.ts"],
+    opaqueKeys: { "searchKeys.facet(params)": KEY_TYPE_HAS_USER },
+    keys: () => [
+      searchFacetOptions({ ...SEARCH_PROBE, facet: "workspace", search: "" })
+        .queryKey,
+    ],
+  },
+  "search/results/list.ts": {
+    kind: "keyed",
+    calls: ["api.search.post"],
+    files: ["lib/search.ts"],
+    opaqueKeys: { "searchKeys.query(params)": KEY_TYPE_HAS_USER },
+    keys: () => [searchInfiniteOptions(SEARCH_PROBE).queryKey],
+  },
+  "sharepoint/drives/items/list.ts": {
+    kind: "keyed",
+    calls: ["api.sharepoint.drives().items().children.get"],
+    files: [SHAREPOINT_QUERIES],
+    keys: () => [
+      sharepointChildrenOptions(SHAREPOINT_VIEWER, {
+        driveId: "drive-probe",
+        folderId: null,
+      }).queryKey,
+    ],
+  },
+  "sharepoint/drives/list.ts": {
+    kind: "keyed",
+    calls: ["api.sharepoint.drives.get"],
+    files: [SHAREPOINT_QUERIES],
+    keys: () => [sharepointDrivesOptions(SHAREPOINT_VIEWER, null).queryKey],
   },
   "sharepoint/oauth-callback.ts": {
     kind: "not-per-user",
     reason: OAUTH_REDIRECT,
   },
+  "sharepoint/sites/list.ts": {
+    kind: "keyed",
+    calls: ["api.sharepoint.sites.get"],
+    files: [SHAREPOINT_QUERIES],
+    keys: () => [sharepointSitesOptions(SHAREPOINT_VIEWER, "").queryKey],
+  },
   "sharepoint/status.ts": {
-    kind: "no-web-caller",
+    kind: "keyed",
     calls: ["api.sharepoint.connection.get"],
+    files: [SHAREPOINT_QUERIES],
+    keys: () => [sharepointAccessOptions(SHAREPOINT_VIEWER).queryKey],
   },
   "signals/count.ts": {
     kind: "keyed",
@@ -377,10 +790,12 @@ const PER_USER_READS: Record<string, PerUserRead> = {
     files: ["lib/knowledge/queries.ts"],
     keys: () => [skillsOptions(ORG, USER).queryKey],
   },
+  "tasks/list.ts": { kind: "no-web-caller", calls: ["api.tasks.get"] },
   "templates/condition-decisions/get.ts": {
     kind: "not-per-user",
     reason: "the caller is recorded for usage only",
   },
+  "templates/get.ts": { kind: "owned-id", reason: DOWNLOAD },
   "templates/fills/preview.ts": { kind: "not-per-user", reason: USAGE_ONLY },
   "templates/list.ts": { kind: "not-per-user", reason: JOINS_NAMES },
   "templates/lookup-formats/list.ts": {
@@ -395,6 +810,8 @@ const PER_USER_READS: Record<string, PerUserRead> = {
       }),
     ],
   },
+  "templates/versions/get.ts": { kind: "owned-id", reason: DOWNLOAD },
+  "style-sets/download.ts": { kind: "owned-id", reason: DOWNLOAD },
   "time-entries/get.ts": { kind: "not-per-user", reason: JOINS_NAMES },
   "time-entries/list.ts": {
     kind: "keyed",
@@ -403,15 +820,48 @@ const PER_USER_READS: Record<string, PerUserRead> = {
     keys: () => [timeEntriesKeys.list(WORKSPACE, USER, {})],
   },
   "time-entries/approval-queue/list.ts": {
-    kind: "no-web-caller",
+    kind: "keyed",
     calls: ['api["time-entries"]["approval-queue"].get'],
+    files: ["lib/workspaces/queries/time-approvals.ts"],
+    keys: () => [
+      timeApprovalQueueOptions(ORG, USER, {}).queryKey,
+      timeApprovalPendingOptions(ORG, USER).queryKey,
+    ],
+  },
+  "time-entries/report/get.ts": {
+    kind: "keyed",
+    calls: ['api["time-entries"].report.get'],
+    files: ["routes/_protected.time_.report/-components/report-query.ts"],
+    keys: () => [
+      timeReportOptions(ORG, USER, {
+        bucket: "day",
+        from: "2026-10-26",
+        groupBy: "member",
+        to: "2026-11-01",
+      }).queryKey,
+    ],
   },
   "time-entries/me/list.ts": {
     kind: "keyed",
-    calls: ["myTimeEntriesApi.get"],
+    calls: ['api["time-entries"].me.get'],
     files: ["lib/workspaces/queries/my-time-entries.ts"],
     keys: () => [
-      myTimeEntriesInfiniteOptions(ORG, USER, "2026-01-01").queryKey,
+      myTimeEntriesInfiniteOptions(ORG, USER, {
+        startDate: "2026-01-05",
+        endDate: "2026-01-11",
+      }).queryKey,
+    ],
+  },
+  "time-entries/me/suggestions/list.ts": {
+    kind: "keyed",
+    calls: ['api["time-entries"].me.suggestions.get'],
+    files: ["lib/workspaces/queries/my-time-suggestions.ts"],
+    keys: () => [
+      myTimeSuggestionsOptions(ORG, USER, {
+        startDate: "2026-01-05",
+        endDate: "2026-01-11",
+        timezoneId: "UTC",
+      }).queryKey,
     ],
   },
   "time-entries/suggestions/list.ts": {
@@ -450,6 +900,11 @@ const PER_USER_READS: Record<string, PerUserRead> = {
       usageLaneOptions({ organizationId: ORG, userId: USER }).queryKey,
     ],
   },
+  "user-files/read-visual.ts": {
+    kind: "owned-id",
+    reason:
+      "Cached by attachment id; generated views are private and owner-filtered.",
+  },
   "user-files/read-content.ts": { kind: "owned-id", reason: OWNED_FILE },
   "user-files/read-thumbnail.ts": { kind: "owned-id", reason: OWNED_FILE },
   "view-templates/list.ts": {
@@ -477,6 +932,10 @@ const PER_USER_READS: Record<string, PerUserRead> = {
     ],
   },
   "workspaces/list.ts": { kind: "not-per-user", reason: JOINS_NAMES },
+  "workspaces/member-candidates/list.ts": {
+    kind: "not-per-user",
+    reason: JOINS_NAMES,
+  },
   "workspaces/read-active.ts": {
     kind: "no-web-caller",
     calls: ["api.workspaces.active.get"],
@@ -491,6 +950,22 @@ const PER_USER_READS: Record<string, PerUserRead> = {
     opaqueKeys: {
       "workspacesKeys.activity(activeOrganizationId, key)": KEY_TYPE_HAS_USER,
     },
+  },
+  "workspaces/export-overview-activity.ts": {
+    kind: "not-per-user",
+    reason: DOWNLOAD,
+  },
+  "workspaces/read-overview-activity.ts": {
+    kind: "keyed",
+    calls: ["api.workspaces().overview.activity.get"],
+    files: ["lib/workspaces/queries.ts"],
+    keys: () => [
+      overviewActivityOptions({
+        viewer: { userId: USER, organizationId: ORG },
+        workspaceId: WORKSPACE,
+        filters: DEFAULT_MATTER_ACTIVITY_FILTERS,
+      }).queryKey,
+    ],
   },
   "workspaces/read-overview-activity-actors.query.ts": {
     kind: "not-per-user",
@@ -520,6 +995,10 @@ const AUTH_CLIENT_READS: Record<string, PerUserRead> = {
     files: ["lib/auth-client.ts", "lib/account/queries.ts"],
     keys: () => [sessionsOptions(USER).queryKey],
   },
+  "authClient.organization.getActiveMember": {
+    kind: "session",
+    reason: "the signed-in member's own membership grants",
+  },
   "authClient.organization.getActiveMemberRole": {
     kind: "session",
     reason: "the signed-in member's role",
@@ -541,6 +1020,12 @@ const AUTH_CLIENT_READS: Record<string, PerUserRead> = {
       "routes/auth/-components/dev-quick-start-button.tsx",
     ],
     keys: () => [organizationListOptions(USER).queryKey],
+  },
+  "authClient.sessionSignIns.list": {
+    kind: "keyed",
+    calls: ["authClient.sessionSignIns.list"],
+    files: ["lib/account/session-sign-ins.ts"],
+    keys: () => [sessionSignInsOptions(USER).queryKey],
   },
 };
 
@@ -602,7 +1087,7 @@ const readHandlers = () => {
     }
   }
   for (const path of listFiles(API_HANDLERS)) {
-    const handler = nodePath.relative(API_HANDLERS, path);
+    const handler = repoRelativePath(API_HANDLERS, path);
     if (READ_HANDLER_NAME.test(`/${handler}`)) {
       reads.add(handler);
     }
@@ -610,71 +1095,383 @@ const readHandlers = () => {
   return reads;
 };
 
-const IDENTIFIER = /[A-Za-z_$][\w$]*/uy;
-const BRACKETED = /\[\s*"([^"]+)"\s*\]/uy;
+type ReadBinding = {
+  value: Node | null;
+  stable: boolean;
+  root: string | null;
+};
+type ReadCall = { chain: string; start: number; end: number };
+const functionScope = (node: Node) =>
+  node.type === "FunctionDeclaration" ||
+  node.type === "FunctionExpression" ||
+  node.type === "ArrowFunctionExpression";
+const lexicalScope = (node: Node) =>
+  functionScope(node) ||
+  [
+    "Program",
+    "BlockStatement",
+    "CatchClause",
+    "ForStatement",
+    "ForOfStatement",
+    "ForInStatement",
+    "SwitchStatement",
+  ].includes(node.type);
 
-const closingParen = (source: string, open: number) => {
-  let depth = 0;
-  for (let index = open; index < source.length; index += 1) {
-    if (source[index] === "(") {
-      depth += 1;
-    } else if (source[index] === ")") {
-      depth -= 1;
-      if (depth === 0) {
-        return index;
-      }
-    }
+const bindingNames = (node: Node): string[] => {
+  if (node.type === "Identifier") {
+    return [node.name];
   }
-  return -1;
+  if (node.type === "ObjectPattern") {
+    return node.properties.flatMap((property) =>
+      bindingNames(
+        property.type === "RestElement" ? property.argument : property.value,
+      ),
+    );
+  }
+  if (node.type === "ArrayPattern") {
+    return node.elements.flatMap((element) =>
+      element ? bindingNames(element) : [],
+    );
+  }
+  if (node.type === "AssignmentPattern") {
+    return bindingNames(node.left);
+  }
+  if (node.type === "RestElement") {
+    return bindingNames(node.argument);
+  }
+  if (node.type === "TSParameterProperty") {
+    return bindingNames(node.parameter);
+  }
+  return [];
+};
+const clientModule = (name: string) => {
+  if (name === "api" || name === "apiClient") {
+    return "api";
+  }
+  if (name === "authClient") {
+    return "auth-client";
+  }
+  return null;
 };
 
-/**
- * Member chains starting at one of `roots`, with call arguments dropped:
- * `api.workspaces({ workspaceId }).activity.get({ … })` reads
- * `api.workspaces().activity.get()`.
- */
-const callChains = (source: string, roots: readonly string[]) => {
-  const chains: string[] = [];
-  const root = new RegExp(`(?<![\\w$.])(?:${roots.join("|")})(?![\\w$])`, "gu");
-  for (const match of source.matchAll(root)) {
-    let chain = match[0];
-    let index = match.index + chain.length;
-    for (;;) {
-      while (/\s/u.test(source[index] ?? "")) {
-        index += 1;
-      }
-      const next = source[index];
-      if (next === ".") {
-        IDENTIFIER.lastIndex = index + 1;
-        const name = IDENTIFIER.exec(source);
-        if (name === null) {
-          break;
+/** Actual calls, with immutable route receivers resolved in their lexical scope. */
+const readCalls = (
+  source: string,
+  roots: readonly string[],
+  fileName = "per-user-read.tsx",
+): ReadCall[] => {
+  const { program } = parseSource(fileName, source);
+  const parents = new Map<Node, Node>();
+  const bindings = new Map<Node, Map<string, ReadBinding>>();
+  const importedRoot = (module: string, name: string) => {
+    if (!roots.includes(name)) {
+      return null;
+    }
+    const owner = clientModule(name);
+    if (owner === null) {
+      return name;
+    }
+    return module === `@/lib/${owner}` ||
+      (module.startsWith(".") &&
+        nodePath
+          .resolve(nodePath.dirname(fileName), module)
+          .replace(/\.tsx?$/u, "") === nodePath.join(WEB_SOURCE, "lib", owner))
+      ? name
+      : null;
+  };
+  const dynamicImports = (
+    pattern: Node,
+    value: Node | null,
+  ): Map<string, string> => {
+    const imported = new Map<string, string>();
+    if (value?.type === "AwaitExpression") {
+      return dynamicImports(pattern, value.argument);
+    }
+    if (
+      pattern.type === "ObjectPattern" &&
+      value?.type === "ImportExpression" &&
+      value.source.type === "Literal" &&
+      typeof value.source.value === "string"
+    ) {
+      for (const property of pattern.properties) {
+        if (
+          property.type !== "Property" ||
+          property.computed ||
+          property.key.type !== "Identifier" ||
+          property.value.type !== "Identifier"
+        ) {
+          continue;
         }
-        chain += `.${name[0]}`;
-        index = IDENTIFIER.lastIndex;
-      } else if (next === "[") {
-        BRACKETED.lastIndex = index;
-        const name = BRACKETED.exec(source);
-        if (name === null) {
-          break;
+        const root = importedRoot(value.source.value, property.key.name);
+        if (root !== null) {
+          imported.set(property.value.name, root);
         }
-        chain += `["${name[1] ?? ""}"]`;
-        index = BRACKETED.lastIndex;
-      } else if (next === "(") {
-        const close = closingParen(source, index);
-        if (close === -1) {
-          break;
-        }
-        chain += "()";
-        index = close + 1;
-      } else {
-        break;
       }
     }
-    chains.push(chain);
-  }
-  return chains;
+    if (
+      pattern.type === "ArrayPattern" &&
+      value?.type === "CallExpression" &&
+      value.callee.type === "MemberExpression" &&
+      value.callee.object.type === "Identifier" &&
+      value.callee.object.name === "Promise" &&
+      !value.callee.computed &&
+      value.callee.property.type === "Identifier" &&
+      value.callee.property.name === "all"
+    ) {
+      const inputs = value.arguments.at(0);
+      if (inputs?.type === "ArrayExpression") {
+        for (const [index, element] of pattern.elements.entries()) {
+          const input = inputs.elements.at(index);
+          if (element && input) {
+            for (const [name, root] of dynamicImports(element, input)) {
+              imported.set(name, root);
+            }
+          }
+        }
+      }
+    }
+    return imported;
+  };
+
+  const declare = (scope: Node, name: string, binding: ReadBinding) => {
+    let names = bindings.get(scope);
+    if (!names) {
+      names = new Map();
+      bindings.set(scope, names);
+    }
+    names.set(
+      name,
+      names.has(name) ? { value: null, stable: false, root: null } : binding,
+    );
+  };
+  const opaque = (scope: Node, pattern: Node) => {
+    for (const name of bindingNames(pattern)) {
+      declare(scope, name, { value: null, stable: false, root: null });
+    }
+  };
+  walk(program, (node, ancestors) => {
+    const parent = ancestors.at(-1);
+    if (parent) {
+      parents.set(node, parent);
+    }
+    const scope = ancestors.findLast(lexicalScope) ?? program;
+    if (
+      node.type === "VariableDeclarator" &&
+      parent?.type === "VariableDeclaration"
+    ) {
+      const owner =
+        parent.kind === "var"
+          ? (ancestors.findLast(
+              (ancestor) =>
+                functionScope(ancestor) || ancestor.type === "Program",
+            ) ?? program)
+          : scope;
+      const imported = dynamicImports(node.id, node.init);
+      for (const name of bindingNames(node.id)) {
+        const ownClient = clientModule(name);
+        const canonicalRoot =
+          owner === program &&
+          ownClient !== null &&
+          nodePath.resolve(fileName).replace(/\.tsx?$/u, "") ===
+            nodePath.join(WEB_SOURCE, "lib", ownClient) &&
+          roots.includes(name)
+            ? name
+            : null;
+        declare(owner, name, {
+          value: node.id.type === "Identifier" ? node.init : null,
+          stable:
+            parent.kind === "const" &&
+            (node.id.type === "Identifier" || imported.has(name)),
+          root: imported.get(name) ?? canonicalRoot,
+        });
+      }
+    }
+    if (
+      node.type === "FunctionDeclaration" ||
+      node.type === "FunctionExpression" ||
+      node.type === "ArrowFunctionExpression"
+    ) {
+      if (node.type !== "ArrowFunctionExpression" && node.id) {
+        opaque(node.type === "FunctionDeclaration" ? scope : node, node.id);
+      }
+      for (const parameter of node.params) {
+        opaque(node, parameter);
+      }
+    }
+    if (node.type === "CatchClause" && node.param) {
+      opaque(node, node.param);
+    }
+    if (node.type === "ClassDeclaration" && node.id) {
+      opaque(scope, node.id);
+    }
+    if (node.type === "ImportDeclaration") {
+      const module = node.source.value;
+      for (const specifier of node.specifiers) {
+        let root: string | null = null;
+        if (
+          node.importKind !== "type" &&
+          specifier.type === "ImportSpecifier" &&
+          specifier.importKind !== "type"
+        ) {
+          const name =
+            specifier.imported.type === "Identifier"
+              ? specifier.imported.name
+              : specifier.imported.value;
+          root = importedRoot(module, name);
+        }
+        declare(program, specifier.local.name, {
+          value: null,
+          stable: true,
+          root,
+        });
+      }
+    }
+  });
+  const bindingFor = (node: Node, name: string) => {
+    for (
+      let current: Node | undefined = node;
+      current;
+      current = parents.get(current)
+    ) {
+      const binding = bindings.get(current)?.get(name);
+      if (binding) {
+        return binding;
+      }
+    }
+    return undefined;
+  };
+  walk(program, (node) => {
+    if (node.type === "VariableDeclarator" && node.id.type === "ArrayPattern") {
+      const value =
+        node.init?.type === "AwaitExpression" ? node.init.argument : node.init;
+      if (
+        value?.type === "CallExpression" &&
+        value.callee.type === "MemberExpression" &&
+        value.callee.object.type === "Identifier" &&
+        value.callee.object.name === "Promise" &&
+        bindingFor(value.callee.object, "Promise")
+      ) {
+        for (const name of bindingNames(node.id)) {
+          const binding = bindingFor(node, name);
+          if (binding) {
+            binding.stable = false;
+          }
+        }
+      }
+    }
+    let target: Node | null = null;
+    if (node.type === "AssignmentExpression") {
+      target = node.left;
+    }
+    if (node.type === "UpdateExpression") {
+      target = node.argument;
+    }
+    if (target) {
+      for (const name of bindingNames(target)) {
+        const binding = bindingFor(node, name);
+        if (binding) {
+          binding.stable = false;
+        }
+      }
+    }
+  });
+  const memberName = (node: Node) => {
+    if (node.type !== "MemberExpression") {
+      return null;
+    }
+    if (!node.computed && node.property.type === "Identifier") {
+      return node.property.name;
+    }
+    return node.property.type === "Literal" &&
+      typeof node.property.value === "string"
+      ? node.property.value
+      : null;
+  };
+  const chainOf = (
+    node: Node,
+    seen: Set<Node>,
+    allowRequest: boolean,
+  ): string | null => {
+    if (seen.has(node)) {
+      return null;
+    }
+    const nextSeen = new Set(seen).add(node);
+    if (
+      node.type !== "Identifier" &&
+      node.type !== "MemberExpression" &&
+      node.type !== "CallExpression" &&
+      node.type !== "ParenthesizedExpression" &&
+      node.type !== "TSAsExpression" &&
+      node.type !== "TSSatisfiesExpression" &&
+      node.type !== "TSNonNullExpression"
+    ) {
+      return null;
+    }
+    switch (node.type) {
+      case "Identifier": {
+        const binding = bindingFor(node, node.name);
+        if (!binding) {
+          return roots.includes(node.name) ? node.name : null;
+        }
+        if (!binding.stable) {
+          return null;
+        }
+        return (
+          binding.root ??
+          (binding.value ? chainOf(binding.value, nextSeen, false) : null)
+        );
+      }
+      case "MemberExpression": {
+        const name = memberName(node);
+        const owner = chainOf(node.object, nextSeen, false);
+        return name !== null && owner !== null
+          ? `${owner}${node.computed ? `[${JSON.stringify(name)}]` : `.${name}`}`
+          : null;
+      }
+      case "CallExpression": {
+        const name = memberName(node.callee);
+        if (
+          !allowRequest &&
+          ((name === null && node.callee.type !== "CallExpression") ||
+            (name !== null &&
+              (API_CLIENT_REQUEST_METHODS.has(name) ||
+                ((name.startsWith("get") || name.startsWith("list")) &&
+                  chainOf(node.callee, nextSeen, false)?.startsWith(
+                    "authClient.",
+                  )))))
+        ) {
+          return null;
+        }
+        const callee = chainOf(node.callee, nextSeen, false);
+        return callee === null ? null : `${callee}()`;
+      }
+      case "ParenthesizedExpression":
+      case "TSAsExpression":
+      case "TSSatisfiesExpression":
+      case "TSNonNullExpression":
+        return chainOf(node.expression, nextSeen, allowRequest);
+      default:
+        return null;
+    }
+  };
+  const calls: ReadCall[] = [];
+  walk(program, (node) => {
+    if (node.type !== "CallExpression") {
+      return;
+    }
+    const chain = chainOf(node, new Set(), true);
+    if (chain !== null) {
+      calls.push({ chain, start: node.start, end: node.end });
+    }
+  });
+  return calls;
 };
+
+const callChains = (
+  source: string,
+  roots: readonly string[],
+  fileName?: string,
+) => readCalls(source, roots, fileName).map(({ chain }) => chain);
 
 const callsOf = (read: PerUserRead): readonly string[] =>
   "calls" in read ? read.calls : [];
@@ -683,15 +1480,31 @@ const rootsOf = (calls: readonly string[]) => [
   ...new Set(calls.map((call) => call.split(/[.[(]/u)[0] ?? call)),
 ];
 
-const reaches = (
-  source: string,
-  calls: readonly string[],
-  helpers: ReadonlySet<string>,
-) =>
-  callChains(source, rootsOf(calls)).some((chain) =>
-    calls.some((call) => chain.startsWith(`${call}()`)),
+type ReachesOptions = {
+  source: string;
+  calls: readonly string[];
+  helpers: ReadonlySet<string>;
+  observed: readonly ReadCall[];
+  start: number;
+  end: number;
+};
+const reaches = ({
+  source,
+  calls,
+  helpers,
+  observed,
+  start,
+  end,
+}: ReachesOptions) =>
+  observed.some(
+    (read) =>
+      read.start >= start &&
+      read.end <= end &&
+      calls.some((call) => read.chain.startsWith(`${call}()`)),
   ) ||
-  [...helpers].some((name) => new RegExp(`\\b${name}\\b`, "u").test(source));
+  [...helpers].some((name) =>
+    new RegExp(`\\b${name}\\b`, "u").test(source.slice(start, end)),
+  );
 
 /** Top-level declarations by name, each with the text up to the next one. */
 const topLevelDeclarations = (source: string) => {
@@ -702,19 +1515,27 @@ const topLevelDeclarations = (source: string) => {
   ];
   return starts.map((start, index) => ({
     name: start[1] ?? "",
-    text: source.slice(start.index, starts[index + 1]?.index ?? source.length),
+    start: start.index,
+    end: starts[index + 1]?.index ?? source.length,
   }));
 };
 
 /** Top-level helpers in `source` that end up calling one of `calls`. */
-const helpersReaching = (source: string, calls: readonly string[]) => {
+const helpersReaching = (
+  source: string,
+  calls: readonly string[],
+  observed: readonly ReadCall[],
+) => {
   const declarations = topLevelDeclarations(source);
   const helpers = new Set<string>();
   let grew = true;
   while (grew) {
     grew = false;
-    for (const { name, text } of declarations) {
-      if (!helpers.has(name) && reaches(text, calls, helpers)) {
+    for (const { name, start, end } of declarations) {
+      if (
+        !helpers.has(name) &&
+        reaches({ source, calls, helpers, observed, start, end })
+      ) {
         helpers.add(name);
         grew = true;
       }
@@ -778,8 +1599,13 @@ const NAMES_A_USER = /[uU]ser(?:Id\b|\.id\b)/u;
  * Query keys, in `source`, of queries that reach one of `calls` without
  * naming a user. A key held in a local `const` is read from its declaration.
  */
-const unkeyedQueries = (source: string, calls: readonly string[]) => {
-  const helpers = helpersReaching(source, calls);
+const unkeyedQueries = (
+  source: string,
+  calls: readonly string[],
+  fileName?: string,
+) => {
+  const observed = readCalls(source, rootsOf(calls), fileName);
+  const helpers = helpersReaching(source, calls, observed);
   const unkeyed: string[] = [];
   for (const match of source.matchAll(/(?<![\w$.])queryKey\b(?=\s*[:,}])/gu)) {
     const object = enclosingObject(source, match.index);
@@ -787,8 +1613,16 @@ const unkeyedQueries = (source: string, calls: readonly string[]) => {
     if (source[object.start] !== "{") {
       continue;
     }
-    const text = source.slice(object.start, object.end + 1);
-    if (!reaches(text, calls, helpers)) {
+    if (
+      !reaches({
+        source,
+        calls,
+        helpers,
+        observed,
+        start: object.start,
+        end: object.end + 1,
+      })
+    ) {
       continue;
     }
     const after = match.index + match[0].length;
@@ -813,12 +1647,12 @@ const webCallers = () => {
   const roots = rootsOf(calls);
   const callers = new Map<string, string[]>();
   for (const path of listFiles(WEB_SOURCE)) {
-    const chains = callChains(readSource(path), roots);
+    const chains = callChains(readSource(path), roots, path);
     for (const call of calls) {
       if (chains.some((chain) => chain.startsWith(`${call}()`))) {
         callers.set(call, [
           ...(callers.get(call) ?? []),
-          nodePath.relative(WEB_SOURCE, path),
+          repoRelativePath(WEB_SOURCE, path),
         ]);
       }
     }
@@ -865,7 +1699,7 @@ describe("per-user reads", () => {
   test("every auth client list or get call is classified", () => {
     const found = new Set(
       listFiles(WEB_SOURCE).flatMap((path) =>
-        callChains(readSource(path), ["authClient"])
+        callChains(readSource(path), ["authClient"], path)
           .map((chain) => chain.split("(")[0] ?? chain)
           .filter((chain) => /\.(?:list|get)[A-Za-z]*$/u.test(chain)),
       ),
@@ -909,6 +1743,7 @@ describe("per-user reads", () => {
               unkeyedQueries(
                 readSource(nodePath.join(WEB_SOURCE, file)),
                 read.calls,
+                nodePath.join(WEB_SOURCE, file),
               ),
             )
             .filter((expression) => !(expression in (read.opaqueKeys ?? {})))
@@ -918,6 +1753,94 @@ describe("per-user reads", () => {
 
     expect(unkeyed).toEqual([]);
   });
+});
+
+test("invoice send keys isolate caller reply-to metadata and retain invoice invalidation", async () => {
+  const scope = { workspaceId: WORKSPACE, invoiceId: "invoice-probe" };
+  const queryClient = new QueryClient();
+  for (const options of [invoiceSendsOptions, invoiceSendsInfiniteOptions]) {
+    const callerKey = Array.from(options({ ...scope, userId: USER }).queryKey);
+    const otherKey = Array.from(
+      options({ ...scope, userId: "another-user" }).queryKey,
+    );
+    queryClient.setQueryData(callerKey, { replyTo: "caller@example.test" });
+    expect(queryClient.getQueryData(otherKey)).toBeUndefined();
+    queryClient.setQueryData(otherKey, { replyTo: "other@example.test" });
+    expect(queryClient.getQueryData(callerKey)).toEqual({
+      replyTo: "caller@example.test",
+    });
+    await queryClient.invalidateQueries({
+      queryKey: invoicesKeys.byId(scope.workspaceId, scope.invoiceId),
+      refetchType: "none",
+    });
+    expect(queryClient.getQueryState(callerKey)?.isInvalidated).toBe(true);
+    expect(queryClient.getQueryState(otherKey)?.isInvalidated).toBe(true);
+  }
+});
+
+test("list detail keys carry caller identity and retain broad invalidation", async () => {
+  const scope = {
+    workspaceId: WORKSPACE,
+    listId: "list-probe",
+    itemEntityId: "item-probe",
+  };
+  const caller = { organizationId: ORG, userId: USER };
+  const reads = [
+    {
+      options: legalListItemsOptions,
+      root: legalListKeys.items(scope.workspaceId, scope.listId),
+    },
+    {
+      options: legalListSourcesOptions,
+      root: legalListKeys.sources(
+        scope.workspaceId,
+        scope.listId,
+        scope.itemEntityId,
+      ),
+    },
+    {
+      options: legalListActivityOptions,
+      root: legalListKeys.activity(
+        scope.workspaceId,
+        scope.listId,
+        scope.itemEntityId,
+      ),
+    },
+  ];
+  const queryClient = new QueryClient();
+  for (const { options, root } of reads) {
+    const callerKey = Array.from(
+      options({ ...scope, viewer: caller }).queryKey,
+    );
+    expect(callerKey).toContain(caller.userId);
+    expect(callerKey).toContain(caller.organizationId);
+    queryClient.setQueryData(callerKey, { details: "visible" });
+    await queryClient.invalidateQueries({
+      queryKey: root,
+      refetchType: "none",
+    });
+    expect(queryClient.getQueryState(callerKey)?.isInvalidated).toBe(true);
+  }
+});
+
+test("matter overview activity keys carry caller identity and retain workspace invalidation", async () => {
+  const scope = {
+    workspaceId: WORKSPACE,
+    filters: DEFAULT_MATTER_ACTIVITY_FILTERS,
+  };
+  const caller = { organizationId: ORG, userId: USER };
+  const queryClient = new QueryClient();
+  const callerKey = Array.from(
+    overviewActivityOptions({ ...scope, viewer: caller }).queryKey,
+  );
+  expect(callerKey).toContain(caller.userId);
+  expect(callerKey).toContain(caller.organizationId);
+  queryClient.setQueryData(callerKey, { target: "caller" });
+  await queryClient.invalidateQueries({
+    queryKey: workspacesKeys.overviewActivityAll(WORKSPACE),
+    refetchType: "none",
+  });
+  expect(queryClient.getQueryState(callerKey)?.isInvalidated).toBe(true);
 });
 
 test("organization settings isolate caller capabilities by user and organization", () => {
@@ -966,7 +1889,6 @@ test("organization settings skip authenticated reads until an organization is se
     organizationId: ORG,
     userId: USER,
   });
-  expect(typeof selected.queryFn).toBe("function");
   expect(selected.queryKey).not.toEqual(unselected.queryKey);
   const selectedOptional = optionalOrganizationSettingsOptions({
     organizationId: ORG,
@@ -977,6 +1899,212 @@ test("organization settings skip authenticated reads until an organization is se
 });
 
 describe("the per-user read scan", () => {
+  test("a defining client module keeps nested local shadows opaque", () => {
+    const source = `
+export const authClient = createAuthClient();
+function local() {
+  const authClient = localClient;
+  return authClient.getSession();
+}
+authClient.listSessions();
+`;
+    expect(
+      callChains(
+        source,
+        ["authClient"],
+        nodePath.join(WEB_SOURCE, "lib/auth-client.ts"),
+      ),
+    ).toEqual(["authClient.listSessions()"]);
+  });
+
+  test("retains canonical dynamic imports and explicitly listed read helpers", () => {
+    expect(
+      callChains(
+        'const { authClient: auth } = await import("@/lib/auth-client"); auth.organization.getActiveMember();',
+        ["authClient"],
+      ),
+    ).toContain("authClient.organization.getActiveMember()");
+    expect(
+      callChains(
+        'const [{ api }] = await Promise.all([import("@/lib/api")]); api.me.get();',
+        ["api"],
+      ),
+    ).toContain("api.me.get()");
+    expect(
+      callChains(
+        'import { fetchWorkspaceNavigationPage as read } from "@/lib/memory-api"; read({});',
+        ["fetchWorkspaceNavigationPage"],
+      ),
+    ).toContain("fetchWorkspaceNavigationPage()");
+  });
+
+  test("an unrelated dynamic import or shadowed import aggregate is not an API root", () => {
+    expect(
+      callChains(
+        'const { api } = await import("./local-client"); api.me.get();',
+        ["api"],
+      ),
+    ).toEqual([]);
+    expect(
+      callChains(
+        'async function read(Promise) { const [{ api }] = await Promise.all([import("@/lib/api")]); return api.me.get(); }',
+        ["api"],
+      ),
+    ).not.toContain("api.me.get()");
+  });
+
+  test("a terminal auth request result cannot masquerade as a route", () => {
+    expect(
+      callChains(
+        'import { authClient } from "@/lib/auth-client"; const result = authClient.getSession(); result.organization.list();',
+        ["authClient"],
+      ),
+    ).not.toContain("authClient.getSession().organization.list()");
+  });
+
+  test("ignores strings and comments that merely name a request", () => {
+    expect(
+      callChains("const example = 'api.me.get()'; // api.me.get()\n", ["api"]),
+    ).toEqual([]);
+  });
+
+  test("follows stable route receivers without losing the original call chain", () => {
+    const source = `
+import { api as client } from "@/lib/api";
+const workspaceApi = client.chat.workspaces({ workspaceId });
+const alias = workspaceApi;
+async function read() {
+  return alias["file-thread"].get({ query: { entityId, fieldId } });
+}
+`;
+    expect(callChains(source, ["api"])).toContain(
+      'api.chat.workspaces()["file-thread"].get()',
+    );
+  });
+
+  test("an outer route receiver cannot hide a query that omits its user", () => {
+    const source = `
+import { api } from "@/lib/api";
+export const options = (workspaceId: string, userId: string) => {
+  const workspaceApi = api.chat.workspaces({ workspaceId });
+  return queryOptions({
+    queryKey: ["file-thread", workspaceId],
+    queryFn: () => workspaceApi["file-thread"].get({}),
+  });
+};
+`;
+    const calls = ['api.chat.workspaces()["file-thread"].get'];
+    expect(unkeyedQueries(source, calls)).toEqual([
+      '["file-thread", workspaceId]',
+    ]);
+    expect(
+      unkeyedQueries(
+        source.replace(
+          '["file-thread", workspaceId]',
+          '["file-thread", workspaceId, userId]',
+        ),
+        calls,
+      ),
+    ).toEqual([]);
+  });
+
+  test("follows a receiver in a local fetch helper when checking caller keys", () => {
+    const source = `
+import { api } from "@/lib/api";
+const route = api.chat.workspaces({ workspaceId });
+const fetchFile = async () => await route["file-thread"].get({});
+export const options = (workspaceId: string) =>
+  queryOptions({ queryKey: ["file-thread", workspaceId], queryFn: fetchFile });
+`;
+    expect(
+      unkeyedQueries(source, ['api.chat.workspaces()["file-thread"].get']),
+    ).toEqual(['["file-thread", workspaceId]']);
+  });
+
+  for (const { name, source } of [
+    {
+      name: "a parameter shadows a route",
+      source:
+        'const route = api.chat.workspaces({}); function read(route) { return route["file-thread"].get({}); }',
+    },
+    {
+      name: "a destructured parameter shadows a route",
+      source:
+        'const route = api.chat.workspaces({}); const read = ({ route }) => route["file-thread"].get({});',
+    },
+    {
+      name: "a block shadows a route",
+      source:
+        'const route = api.chat.workspaces({}); { const route = localClient; route["file-thread"].get({}); }',
+    },
+    {
+      name: "a mutable receiver",
+      source:
+        'let route = api.chat.workspaces({}); route["file-thread"].get({});',
+    },
+    {
+      name: "a reassigned receiver",
+      source:
+        'const route = api.chat.workspaces({}); route = localClient; route["file-thread"].get({});',
+    },
+    {
+      name: "cyclic aliases",
+      source:
+        'const first = second; const second = first; first["file-thread"].get({});',
+    },
+    {
+      name: "a destructured value",
+      source:
+        'const { route } = api.chat.workspaces({}); route["file-thread"].get({});',
+    },
+    {
+      name: "an awaited request result",
+      source:
+        'const route = await api.chat.workspaces({}).get(); route["file-thread"].get({});',
+    },
+    {
+      name: "a request promise",
+      source:
+        'const route = api.chat.workspaces({}).post({}); route["file-thread"].get({});',
+    },
+    {
+      name: "an opaque factory",
+      source:
+        'const make = () => api.chat.workspaces({}); const route = make(); route["file-thread"].get({});',
+    },
+    {
+      name: "a shadowed API root",
+      source:
+        'function read(api) { const route = api.chat.workspaces({}); return route["file-thread"].get({}); }',
+    },
+    {
+      name: "an unrelated API import",
+      source:
+        'import { api } from "./local-client"; const route = api.chat.workspaces({}); route["file-thread"].get({});',
+    },
+  ]) {
+    test(`does not assign a per-user route to ${name}`, () => {
+      expect(
+        callChains(source, ["api"]).filter((chain) =>
+          chain.endsWith('["file-thread"].get()'),
+        ),
+      ).toEqual([]);
+    });
+  }
+
+  test("keeps the outer receiver visible after a shadowed block", () => {
+    const source = `
+const route = api.chat.workspaces({});
+{ const route = localClient; route["file-thread"].get({}); }
+route["file-thread"].get({});
+`;
+    expect(
+      callChains(source, ["api"]).filter(
+        (chain) => chain === 'api.chat.workspaces()["file-thread"].get()',
+      ),
+    ).toHaveLength(1);
+  });
+
   test("sees the caller however a handler refers to it", () => {
     for (const reference of [
       "eq(timeEntries.userId, currentUser.id)",
@@ -1003,11 +2131,11 @@ export const myTimeEntriesInfiniteOptions = (organizationId: string, date: strin
   infiniteQueryOptions({
     queryKey: myTimeEntriesKeys.day(organizationId, date),
     queryFn: async ({ signal }) =>
-      unwrapEden(await myTimeEntriesApi.get({ query: { date }, fetch: { signal } })),
+      unwrapApiResponse(await api["time-entries"].me.get({ query: { date }, fetch: { signal } })),
   });
 `;
 
-    expect(unkeyedQueries(source, ["myTimeEntriesApi.get"])).toEqual([
+    expect(unkeyedQueries(source, ['api["time-entries"].me.get'])).toEqual([
       "myTimeEntriesKeys.day(organizationId, date)",
     ]);
     expect(
@@ -1016,7 +2144,7 @@ export const myTimeEntriesInfiniteOptions = (organizationId: string, date: strin
           "(organizationId, date)",
           "(organizationId, userId, date)",
         ),
-        ["myTimeEntriesApi.get"],
+        ['api["time-entries"].me.get'],
       ),
     ).toEqual([]);
   });

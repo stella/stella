@@ -33,3 +33,20 @@ export const parseContractDomainLedger = (
   }
   return parsed;
 };
+
+export const serializeContractDomainLedger = (
+  entries: readonly ContractDomainLedgerEntry[],
+): string =>
+  `${JSON.stringify(
+    entries.toSorted((left, right) => {
+      if (left.id < right.id) {
+        return -1;
+      }
+      if (left.id > right.id) {
+        return 1;
+      }
+      return 0;
+    }),
+    null,
+    2,
+  )}\n`;

@@ -189,7 +189,7 @@ describe("runEvalModelTurn", () => {
 
     const result = await runEvalModelTurn({
       chat: (abortController) => neverFinishes(abortController),
-      timeoutMs: 10,
+      timeoutMs: 10, // timeout under test
       onChunk: () => {
         // The text is scored by the caller; this test is about the deadline.
       },

@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
 import {
   canonicalUsReporterCitation,
@@ -14,6 +14,15 @@ const pinsOf = (text: string) => {
 };
 
 describe("full citations", () => {
+  test("a comma can separate a reporter from its first page", () => {
+    for (const text of ["987 U.S., 9229", "987 U.S.,9229", "987 U.S. , 9229"]) {
+      expect(canonicalUsReporterCitation(text)).toBe("987 U.S. 9229");
+    }
+    expect(parseUsReporterReference("987 Cranch,9229")?.type).toBe("full");
+    expect(canonicalUsReporterCitation("987 Cranch,9229")).toBeNull();
+    expect(canonicalUsReporterCitation("987 Cranch, at 9229")).toBeNull();
+    expect(parseUsReporterReference("987 Cranch, at 9229")?.type).toBe("short");
+  });
   test("volume, reporter and first page are the identity", () => {
     expect(parseUsReporterReference("347 U.S. 483")).toEqual({
       type: "full",
@@ -273,10 +282,11 @@ test("any spacing of a canonical citation reads to the same identity", () => {
       const typed = `${volume ?? ""} ${edition} ${page}`;
       return { citation, typed: lower ? typed.toLowerCase() : typed };
     });
-  fc.assert(
+  assertProperty(
+    "any spacing of a canonical citation reads to the same identity",
     fc.property(respaced, ({ citation, typed }) => {
       expect(canonicalUsReporterCitation(typed)).toBe(citation);
     }),
-    propertyConfig(),
+    {},
   );
 });

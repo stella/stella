@@ -1,0 +1,549 @@
+import { panic, Result } from "better-result";
+import { describe, expect, test } from "bun:test";
+import * as v from "valibot";
+
+import { noDecisionReviewFound } from "@stll/api-contract/case-law-reviews";
+import { legalResolveResponseSchema } from "@stll/api-contract/legal-resolve";
+import type { LegalResolveResponse } from "@stll/api-contract/legal-resolve";
+
+import type { DecisionIdentityRow } from "@/api/handlers/case-law/decisions/lookup-by-identity";
+import { admitLawRead } from "@/api/handlers/legal-resolve/admission";
+import { resolveDecision } from "@/api/handlers/legal-resolve/decision";
+import { resolveLawCitation } from "@/api/handlers/legal-resolve/law";
+import { createSafeId, toSafeId } from "@/api/lib/branded-types";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+
+import { hasGrantedScope } from "./gateway/static-tool-visibility";
+import { normalizeObjectInputAtBoundary } from "./input-normalization";
+import {
+  LEGAL_RESOLVE_TOOL_HANDLERS,
+  LEGAL_RESOLVE_TOOL_SET,
+} from "./legal-resolve-tools";
+import type { InternalToolResult, TypedMcpToolResponse } from "./tool-types";
+import { isMcpEgressPlan } from "./tool-types";
+import { serializeToolResult } from "./tool-utils";
+
+const organizationId = toSafeId<"organization">(
+  "00000000-0000-4000-8000-0000000d0091",
+);
+const admitted = admitLawRead({
+  organizationId,
+  publicLawEnabled: () => true,
+});
+if (Result.isError(admitted)) {
+  panic("expected fixture admission");
+}
+const contextWith = (
+  testDependencies: NonNullable<
+    AuthorizedMcpRequestContext["testDependencies"]
+  >,
+) =>
+  asTestRaw<AuthorizedMcpRequestContext>({
+    organizationId,
+    testDependencies: {
+      admitLawRead: () => admitted,
+      ...testDependencies,
+    },
+  });
+
+const unwrapInternalResult = <TData>(
+  response: TypedMcpToolResponse<TData>,
+): InternalToolResult<TData> => {
+  if (isMcpEgressPlan(response)) {
+    return panic("Expected a finished tool result, not an egress plan");
+  }
+  return response;
+};
+
+type DecisionIdentity = Omit<
+  Extract<
+    Extract<LegalResolveResponse, { status: "resolved" }>["document"],
+    { kind: "decision" }
+  >,
+  "text"
+>;
+
+const identity = {
+  kind: "decision",
+  appealReviews: {
+    status: "none_found" as const,
+    basis: "available_corpus" as const,
+    reason: "no_link_in_corpus" as const,
+    reviewedBy: [],
+    reviews: [],
+    reviewedByTruncated: false,
+    reviewsTruncated: false,
+  },
+  decisionId: "00000000-0000-4000-8000-0000000d0041",
+  identifier: "ECLI:CZ:NS:2026:1.CDO.1.2026.1",
+  country: "CZE",
+  caseNumber: "1 Cdo 1/2026",
+  ecli: "ECLI:CZ:NS:2026:1.CDO.1.2026.1",
+  court: "Nejvyšší soud",
+  decisionDate: "2026-01-01",
+  language: "cs",
+  languageAlternates: [],
+  readerUrl:
+    "https://app.stella.law/case-law/00000000-0000-4000-8000-0000000d0041",
+} satisfies DecisionIdentity;
+const responses = {
+  resolved: [
+    {
+      status: "resolved",
+      document: {
+        ...identity,
+        text: { status: "readable", charCount: 10_000 },
+      },
+    },
+    {
+      status: "resolved",
+      document: {
+        ...identity,
+        text: { status: "withheld", reason: "licence" },
+      },
+    },
+    {
+      status: "resolved",
+      document: { ...identity, text: { status: "unavailable" } },
+    },
+    {
+      status: "resolved",
+      document: {
+        kind: "provision",
+        documentId: "00000000-0000-4000-8000-0000000d0042",
+        eli: "https://www.e-sbirka.cz/sb/2012/89",
+        country: "CZE",
+        title: "Občanský zákoník",
+        section: "1729",
+        readerUrl:
+          "https://app.stella.law/legislation/00000000-0000-4000-8000-0000000d0042",
+        inForce: { from: "2014-01-01", to: null },
+        versionStatus: "current",
+        blocks: [],
+      },
+    },
+  ],
+  not_found: [
+    {
+      status: "not_found",
+      reason: "not_at_this_court",
+      otherCourtCandidates: [
+        {
+          decisionId: identity.decisionId,
+          identifier: "52 A 6/2023",
+          label: "Krajský soud v Hradci Králové, rozsudek, 2023-06-01",
+          readerUrl: identity.readerUrl,
+          court: "Krajský soud v Hradci Králové",
+          decisionDate: "2023-06-01",
+          decisionType: "rozsudek",
+          subjectSummary: "Synthetic classification",
+        },
+      ],
+    },
+    { status: "not_found", reason: "unknown_document" },
+    {
+      status: "not_found",
+      reason: "unknown_document",
+      hint: "Use collection Zb. for 513/1991.",
+    },
+    { status: "not_found", reason: "unknown_section" },
+    { status: "not_found", reason: "no_exact_identity" },
+  ],
+  ambiguous: [
+    {
+      status: "ambiguous",
+      candidates: [
+        {
+          decisionId: identity.decisionId,
+          identifier: "1 Cdo 1/2026",
+          label: "Synthetic court",
+          readerUrl: identity.readerUrl,
+        },
+      ],
+    },
+  ],
+  incomplete_identifier: [
+    { status: "incomplete_identifier", missing: ["sheet"] },
+  ],
+  country_unavailable: [{ status: "country_unavailable" }],
+} satisfies Record<LegalResolveResponse["status"], LegalResolveResponse[]>;
+
+describe("legal resolve MCP and HTTP envelopes stay identical", () => {
+  for (const definition of LEGAL_RESOLVE_TOOL_SET.definitions) {
+    const output = LEGAL_RESOLVE_TOOL_SET.outputs[definition.name];
+    test(`${definition.name} publishes the shared API schema and law scope`, () => {
+      expect(output.outputSchemaSource).toBe(legalResolveResponseSchema);
+      expect(output.projection).toBe("identity");
+      expect(definition.scope).toBe("stella:law_read");
+    });
+    for (const [status, variants] of Object.entries(responses)) {
+      for (const [index, response] of variants.entries()) {
+        test(`${definition.name} preserves ${status} variant ${index}`, async () => {
+          const context = contextWith({
+            resolveDecision: async () => response,
+            resolveLawCitation: async () => response,
+          });
+          const args =
+            definition.name === "resolve_case_law_decision"
+              ? { country: "CZE", identifier: identity.identifier }
+              : {
+                  country: "CZE",
+                  source: { type: "citation", citation: "89/2012 Sb." },
+                  section: "1729",
+                };
+          const result = unwrapInternalResult(
+            await LEGAL_RESOLVE_TOOL_HANDLERS[definition.name]({
+              args,
+              context,
+            }),
+          );
+          const wire = serializeToolResult(result, output, definition.name);
+          expect(wire.isError).not.toBe(true);
+          expect(wire.structuredContent).toEqual(
+            v.parse(legalResolveResponseSchema, response),
+          );
+          expect(wire.content).toEqual([
+            {
+              type: "text",
+              text: JSON.stringify(
+                v.parse(legalResolveResponseSchema, response),
+              ),
+            },
+          ]);
+          if (
+            response.status === "resolved" &&
+            response.document.kind === "decision"
+          ) {
+            expect(wire.structuredContent).not.toHaveProperty(
+              "document.blocks",
+            );
+            expect(wire.structuredContent).not.toHaveProperty(
+              "document.text.blocks",
+            );
+          }
+        });
+      }
+    }
+  }
+
+  test("the boundary normalizes country spelling and preserves the exact sheet", async () => {
+    const definition = LEGAL_RESOLVE_TOOL_SET.definitions[0];
+    const input = {
+      country: "Česko",
+      identifier: "č. j. 22 Cdo 1000/2020 – 28",
+    };
+    const normalized = normalizeObjectInputAtBoundary({
+      access: "read",
+      schema: definition.inputSchema,
+      value: input,
+    });
+    expect(normalized.ok).toBe(true);
+    if (!normalized.ok) {
+      return;
+    }
+    const calls: unknown[] = [];
+    await LEGAL_RESOLVE_TOOL_HANDLERS.resolve_case_law_decision({
+      args: normalized.value,
+      context: contextWith({
+        resolveDecision: async (...serviceArgs) => {
+          calls.push(serviceArgs);
+          return { status: "not_found", reason: "no_exact_identity" };
+        },
+      }),
+    });
+    expect(calls).toEqual([
+      [
+        {
+          admission: admitted.value,
+          country: "CZE",
+          identifier: input.identifier,
+        },
+      ],
+    ]);
+  });
+
+  test.each(LEGAL_RESOLVE_TOOL_SET.definitions)(
+    "$name returns country_unavailable for an unparseable country",
+    async (definition) => {
+      const input =
+        definition.name === "resolve_case_law_decision"
+          ? { country: "XAA", identifier: identity.identifier }
+          : {
+              country: "XAA",
+              source: { type: "citation", citation: "89/2012 Sb." },
+              section: "1729",
+            };
+      const normalized = normalizeObjectInputAtBoundary({
+        access: "read",
+        schema: definition.inputSchema,
+        value: input,
+      });
+      expect(normalized.ok).toBe(true);
+      if (!normalized.ok) {
+        return;
+      }
+      const result = unwrapInternalResult(
+        await LEGAL_RESOLVE_TOOL_HANDLERS[definition.name]({
+          args: normalized.value,
+          context: contextWith({
+            admitLawRead: () => admitted,
+            resolveDecision,
+            resolveLawCitation,
+          }),
+        }),
+      );
+      expect(result).toEqual({
+        status: "success",
+        data: { status: "country_unavailable" },
+      });
+    },
+  );
+
+  test("structured and citation inputs dispatch to the same statute service", async () => {
+    const calls: unknown[] = [];
+    const context = contextWith({
+      resolveLawCitation: async (...input) => {
+        calls.push(input);
+        return { status: "country_unavailable" };
+      },
+    });
+    for (const source of [
+      { type: "citation", citation: "zákon č. 89/2012 Sb." },
+      { type: "structured", collection: "sb", year: "2012", number: "89" },
+    ]) {
+      await LEGAL_RESOLVE_TOOL_HANDLERS.resolve_law_citation({
+        args: { country: "CZE", source, section: "1729", as_of: "2020-01-01" },
+        context,
+      });
+    }
+    expect(calls).toEqual([
+      [
+        {
+          admission: admitted.value,
+          country: "CZE",
+          input: {
+            citation: "zákon č. 89/2012 Sb.",
+            section: "1729",
+            asOf: "2020-01-01",
+          },
+        },
+      ],
+      [
+        {
+          admission: admitted.value,
+          country: "CZE",
+          input: {
+            collection: "sb",
+            year: "2012",
+            number: "89",
+            section: "1729",
+            asOf: "2020-01-01",
+          },
+        },
+      ],
+    ]);
+  });
+
+  test("contradictory statute sources and batch decision identities are rejected before reading", async () => {
+    const calls: unknown[] = [];
+    const context = contextWith({
+      admitLawRead: () => panic("invalid inputs must not request admission"),
+      resolveDecision: async (...input) => {
+        calls.push(input);
+        return { status: "country_unavailable" };
+      },
+      resolveLawCitation: async (...input) => {
+        calls.push(input);
+        return { status: "country_unavailable" };
+      },
+    });
+    const law = unwrapInternalResult(
+      await LEGAL_RESOLVE_TOOL_HANDLERS.resolve_law_citation({
+        args: {
+          country: "CZE",
+          source: {
+            type: "citation",
+            citation: "89/2012 Sb.",
+            collection: "sb",
+            year: "2012",
+            number: "89",
+          },
+          section: "1",
+        },
+        context,
+      }),
+    );
+    const decision = unwrapInternalResult(
+      await LEGAL_RESOLVE_TOOL_HANDLERS.resolve_case_law_decision({
+        args: { country: "CZE", identifiers: [identity.identifier] },
+        context,
+      }),
+    );
+    expect(law.status).toBe("error");
+    expect(decision.status).toBe("error");
+    expect(calls).toEqual([]);
+  });
+
+  test("law scope access follows the shared implication in discovery and dispatch", () => {
+    for (const scope of [
+      [],
+      ["stella:search"],
+      ["stella:read"],
+      ["stella:law_read"],
+    ]) {
+      expect(hasGrantedScope(scope, "stella:law_read")).toBe(
+        scope.includes("stella:read") || scope.includes("stella:law_read"),
+      );
+    }
+    expect(hasGrantedScope(["stella:law_read"], "stella:read")).toBe(false);
+  });
+});
+
+describe("legal resolve organization admission", () => {
+  for (const definition of LEGAL_RESOLVE_TOOL_SET.definitions) {
+    test.each([
+      { type: "missing_scope", code: "feature_disabled", retryable: false },
+    ] as const)(
+      `${definition.name} maps $type without calling the resolver`,
+      async ({ type, code, retryable }) => {
+        const calls: unknown[] = [];
+        const result = unwrapInternalResult(
+          await LEGAL_RESOLVE_TOOL_HANDLERS[definition.name]({
+            args:
+              definition.name === "resolve_case_law_decision"
+                ? { country: "CZE", identifier: "1 Cdo 1/2026" }
+                : {
+                    country: "CZE",
+                    source: { type: "citation", citation: "89/2012 Sb." },
+                    section: "1729",
+                  },
+            context: contextWith({
+              admitLawRead: (options) => {
+                calls.push(options);
+                return Result.err({ type });
+              },
+              resolveDecision: async () => panic("resolver must not run"),
+              resolveLawCitation: async () => panic("resolver must not run"),
+            }),
+          }),
+        );
+        expect(calls).toEqual([{ organizationId }]);
+        expect(result).toMatchObject({
+          status: "error",
+          error: { code, retryable },
+        });
+        const wire = serializeToolResult(
+          result,
+          LEGAL_RESOLVE_TOOL_SET.outputs[definition.name],
+          definition.name,
+        );
+        expect(wire.isError).toBe(true);
+        expect(wire.content).toEqual([
+          { type: "text", text: expect.stringContaining(`"code":"${code}"`) },
+        ]);
+      },
+    );
+  }
+});
+
+/**
+ * The tool's description promises that a court in the identifier constrains
+ * it and that other courts' holders come back only as otherCourtCandidates.
+ * Driven through the MCP handler and boundary normalization with the real
+ * resolver over a fixture lookup, so the promise is checked where a model
+ * reads it.
+ */
+describe("resolve_case_law_decision keeps its court promise", () => {
+  const holder = (court: string, ecliCode: string, caseNumber: string) =>
+    ({
+      id: createSafeId<"caseLawDecision">(),
+      caseNumber,
+      caseNumberType: "case-number",
+      country: "CZE",
+      court,
+      courtAbbreviation: "OS",
+      decisionDate: "2025-03-04",
+      decisionType: "rozsudek",
+      ecli: `ECLI:CZ:${ecliCode}:2025:1`,
+      identifiers: [],
+      language: "cs",
+      languageAlternates: [],
+      slug: "/case/example",
+    }) satisfies DecisionIdentityRow;
+  const callTool = async (
+    identifier: string,
+    rows: readonly DecisionIdentityRow[],
+  ) => {
+    const definition =
+      LEGAL_RESOLVE_TOOL_SET.definitions.find(
+        ({ name }) => name === "resolve_case_law_decision",
+      ) ?? panic("resolve_case_law_decision is not registered");
+    const normalized = normalizeObjectInputAtBoundary({
+      access: "read",
+      schema: definition.inputSchema,
+      value: { country: "CZE", identifier },
+    });
+    if (!normalized.ok) {
+      return panic("The fixture call was rejected at the boundary");
+    }
+    return unwrapInternalResult(
+      await LEGAL_RESOLVE_TOOL_HANDLERS.resolve_case_law_decision({
+        args: normalized.value,
+        context: contextWith({
+          resolveDecision: async (options) =>
+            await resolveDecision({
+              ...options,
+              dependencies: {
+                lookup: async () => [...rows],
+                read: async () => null,
+                readReviews: async ({ decisionIds }) =>
+                  new Map(
+                    decisionIds.map((id) => [id, noDecisionReviewFound()]),
+                  ),
+              },
+            }),
+        }),
+      }),
+    );
+  };
+  test.each([
+    "8 C 123/2024 Obvodní soud pro Prahu 6",
+    "8 C 123/2024 OS Praha 6",
+  ])(
+    "a docket held only at another court is not_at_this_court: %s",
+    async (identifier) => {
+      const kladno = holder("Okresní soud v Kladně", "OSKD", "8 C 123/2024");
+      expect(await callTool(identifier, [kladno])).toEqual({
+        status: "success",
+        data: {
+          status: "not_found",
+          reason: "not_at_this_court",
+          otherCourtCandidates: [
+            expect.objectContaining({
+              decisionId: kladno.id,
+              court: "Okresní soud v Kladně",
+            }),
+          ],
+        },
+      });
+    },
+  );
+  test("the named court's holder resolves and the other court's is a candidate", async () => {
+    const prague = holder("Obvodní soud pro Prahu 6", "OSPH06", "20 C 45/2026");
+    const olomouc = holder("Okresní soud v Olomouci", "OSOL", "20 C 45/2026");
+    expect(
+      await callTool("20 C 45/2026 Obvodní soud pro Prahu 6", [
+        olomouc,
+        prague,
+      ]),
+    ).toMatchObject({
+      status: "success",
+      data: {
+        status: "resolved",
+        document: { decisionId: prague.id, court: "Obvodní soud pro Prahu 6" },
+        otherCourtCandidates: [{ decisionId: olomouc.id }],
+      },
+    });
+  });
+});

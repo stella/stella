@@ -61,6 +61,28 @@ export const GuideChecklistSkeleton = ({
   );
 };
 
+type GuideDisabledReasonOptions = {
+  tourActive: boolean;
+  isSaving: boolean;
+  t: (
+    key: "guides.checklist.activeTour" | "common.saving" | "common.loading",
+  ) => string;
+};
+
+const guideDisabledReason = ({
+  tourActive,
+  isSaving,
+  t,
+}: GuideDisabledReasonOptions) => {
+  if (tourActive) {
+    return t("guides.checklist.activeTour");
+  }
+  if (isSaving) {
+    return t("common.saving");
+  }
+  return t("common.loading");
+};
+
 export const GuideChecklist = ({
   tours,
   progress,
@@ -71,6 +93,12 @@ export const GuideChecklist = ({
   const format = useFormatter();
   const { resolvedCount, totalCount } = progress;
   const fraction = totalCount > 0 ? resolvedCount / totalCount : 0;
+
+  const disabledReason = guideDisabledReason({
+    tourActive: activeTourId !== null,
+    isSaving: progress.isSaving,
+    t,
+  });
 
   if (tours.length === 0) {
     return (
@@ -108,6 +136,7 @@ export const GuideChecklist = ({
             disabled={
               activeTourId !== null || progress.isSaving || !progress.isReady
             }
+            disabledReason={disabledReason}
             onSkip={() =>
               progress.setTourStatus(tour.id, GUIDE_TOUR_STATUSES.skipped)
             }
@@ -125,6 +154,7 @@ type GuideTourCardProps = {
   tour: GuideTour;
   status: GuideTourStatus;
   disabled: boolean;
+  disabledReason: string;
   onStart: () => void;
   onSkip: () => void;
 };
@@ -157,6 +187,7 @@ const GuideTourCard = ({
   tour,
   status,
   disabled,
+  disabledReason,
   onStart,
   onSkip,
 }: GuideTourCardProps) => {
@@ -168,11 +199,17 @@ const GuideTourCard = ({
       case "not-started":
         return (
           <>
-            <Button disabled={disabled} onClick={onStart} size="sm">
-              {t("guides.action.start")}
+            <Button
+              disabled={disabled}
+              disabledReason={disabledReason}
+              onClick={onStart}
+              size="sm"
+            >
+              {t("common.start")}
             </Button>
             <Button
               disabled={disabled}
+              disabledReason={disabledReason}
               onClick={onSkip}
               size="sm"
               variant="ghost"
@@ -185,6 +222,7 @@ const GuideTourCard = ({
         return (
           <Button
             disabled={disabled}
+            disabledReason={disabledReason}
             onClick={onStart}
             size="sm"
             variant="secondary"
@@ -194,8 +232,13 @@ const GuideTourCard = ({
         );
       case "skipped":
         return (
-          <Button disabled={disabled} onClick={onStart} size="sm">
-            {t("guides.action.start")}
+          <Button
+            disabled={disabled}
+            disabledReason={disabledReason}
+            onClick={onStart}
+            size="sm"
+          >
+            {t("common.start")}
           </Button>
         );
       default:

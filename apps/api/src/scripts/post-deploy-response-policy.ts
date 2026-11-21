@@ -29,18 +29,19 @@
  * ids), optional E2E_EDGE_HEADER_NAME / E2E_EDGE_HEADER_VALUE.
  */
 import { panic, TaggedError } from "better-result";
-import * as cheerio from "cheerio";
 import * as v from "valibot";
 
 import { loadCatalogue } from "@stll/catalogue";
+import { printError, sanitizeErrorForOutput } from "@stll/errors";
 import { fetchWithTimeout } from "@stll/fetch";
+import { load } from "@stll/html";
 
 import {
   CACHE_CONTROL_HEADER,
   NO_STORE_DIRECTIVE,
   PRIVATE_CACHE_CONTROL,
   publicCacheControl,
-} from "../lib/security-headers";
+} from "../http/cache";
 
 const REQUEST_TIMEOUT_MS = 20_000;
 
@@ -54,15 +55,26 @@ const PLAYBOOK_STARTERS = "/playbook-starters";
 /** Knowledge pages a visitor may open when public Knowledge is enabled. */
 const KNOWLEDGE_PAGE_PATHS = [
   "/knowledge",
-  "/knowledge/templates",
   "/knowledge/templates/catalogue",
-  "/knowledge/playbooks",
-  "/knowledge/tools",
+  "/knowledge/playbooks/catalogue",
+  "/knowledge/tools/catalogue",
   "/knowledge/tools/contribute",
 ] as const;
 
-/** Knowledge pages that need an account. */
+/** Of those, the pages built with the shared public head. */
+const PUBLIC_HEAD_PAGE_PATHS: ReadonlySet<string> = new Set([
+  "/knowledge/templates/catalogue",
+  "/knowledge/playbooks/catalogue",
+  "/knowledge/tools/catalogue",
+  "/knowledge/tools/contribute",
+]);
+
+/** Knowledge pages that need an account: a visitor is turned away (to the
+ *  section's catalogue, or the landing). */
 const SIGNED_IN_PAGE_PATHS = [
+  "/knowledge/templates",
+  "/knowledge/playbooks",
+  "/knowledge/tools",
   "/knowledge/clauses",
   "/knowledge/styles",
 ] as const;
@@ -337,7 +349,7 @@ export const evaluateStatus = (
  * scripts, styles, templates and comments never counts.
  */
 export const headMetaContents = (html: string, name: string): string[] => {
-  const $ = cheerio.load(html);
+  const $ = load(html);
   return $("head > meta")
     .toArray()
     .filter((meta) => $(meta).attr("name")?.toLowerCase() === name)
@@ -369,8 +381,7 @@ export const classifyPublicKnowledgeHead = (
 };
 
 type PublicKnowledgeProbe =
-  | { state: PublicKnowledgeState }
-  | { state: "inconsistent"; detail: string };
+  { state: PublicKnowledgeState } | { state: "inconsistent"; detail: string };
 
 /** API and web must agree on whether public Knowledge is enabled. */
 export const resolvePublicKnowledgeState = ({
@@ -463,7 +474,7 @@ export const buildTargets = ({
   const pages: Target[] = KNOWLEDGE_PAGE_PATHS.map((path) => ({
     path,
     responseClass: RESPONSE_CLASS.page,
-    robots: enabled && path === "/knowledge/tools/contribute",
+    robots: enabled && PUBLIC_HEAD_PAGE_PATHS.has(path),
   }));
   if (toolEntry) {
     pages.push({
@@ -606,8 +617,10 @@ const parseJson = (body: string): unknown => {
   }
 };
 
-const errorMessage = (error: unknown): string =>
-  error instanceof Error ? error.message : String(error);
+const errorMessage = (error: unknown): string => {
+  const safeError = sanitizeErrorForOutput(error);
+  return safeError instanceof Error ? safeError.message : String(safeError);
+};
 
 const createRun = (config: Config) => {
   const observations: Observation[] = [];
@@ -792,7 +805,7 @@ if (import.meta.main) {
   try {
     process.exit((await main()) ? 0 : 1);
   } catch (error) {
-    process.stderr.write(`${errorMessage(error)}\n`);
+    printError(error);
     process.exit(1);
   }
 }

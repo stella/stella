@@ -7,12 +7,12 @@ import { compareCodeUnit } from "@stll/collation";
 import { member, organization, user } from "@/api/db/auth-schema";
 import {
   correspondence,
-  correspondenceAttachments,
-  entities,
   correspondenceAllowedSenderMatters,
   correspondenceAllowedSenders,
+  correspondenceAttachments,
   correspondenceDropLogs,
   correspondenceFilers,
+  entities,
   matterInboundAddresses,
   workspaceMembers,
   workspaces,
@@ -23,8 +23,8 @@ import { createSafeId } from "@/api/lib/branded-types";
 import { generateInboundAddressToken } from "@/api/lib/email/inbound/address";
 import type { MailVerifier } from "@/api/lib/email/inbound/authentication";
 import {
-  ingestInboundMail,
   InboundPersistenceError,
+  ingestInboundMail,
 } from "@/api/lib/email/inbound/ingest";
 import { parseInboundMessage } from "@/api/lib/email/inbound/message";
 import { createInboundMailPersistence } from "@/api/lib/email/inbound/persistence";
@@ -32,14 +32,16 @@ import {
   receiveSesInboundMail,
   SesInboundError,
 } from "@/api/lib/email/inbound/ses";
+import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 import {
-  openGatedTestDatabase,
   type GatedTestDb,
+  openGatedTestDatabase,
 } from "@/api/tests/gated-test-database";
 import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { testScannedFile } from "@/api/tests/helpers/scanned-file";
 
 const databaseUrl = process.env["DATABASE_URL"];
@@ -53,10 +55,17 @@ const snapshotUserId = mintAuthProviderId<"user">();
 const workspaceId = createSafeId<"workspace">();
 const otherWorkspaceId = createSafeId<"workspace">();
 const mailboxId = createSafeId<"correspondenceAllowedSender">();
-const token = generateInboundAddressToken();
-const otherToken = generateInboundAddressToken();
+const token = generateInboundAddressToken({ userId: null });
+const otherToken = generateInboundAddressToken({ userId: null });
 const receivedAt = "2026-09-26T12:00:00.000Z";
 let db: GatedTestDb;
+const fixtureScoped = () =>
+  createScopedDb(
+    markRlsDatabase(db),
+    [workspaceId, otherWorkspaceId],
+    organizationId,
+    adminId,
+  );
 const fixture = async (name: string) =>
   new Uint8Array(
     await Bun.file(new URL(`fixtures/${name}`, import.meta.url)).arrayBuffer(),
@@ -103,20 +112,29 @@ const deliver = async (
     }),
   });
 const records = async () =>
-  await db
-    .select()
-    .from(correspondence)
-    .where(eq(correspondence.organizationId, organizationId));
+  await fixtureScoped()(
+    async (tx) =>
+      await tx
+        .select()
+        .from(correspondence)
+        .where(eq(correspondence.organizationId, organizationId)),
+  );
 const filers = async () =>
-  await db
-    .select()
-    .from(correspondenceFilers)
-    .where(eq(correspondenceFilers.organizationId, organizationId));
+  await fixtureScoped()(
+    async (tx) =>
+      await tx
+        .select()
+        .from(correspondenceFilers)
+        .where(eq(correspondenceFilers.organizationId, organizationId)),
+  );
 const drops = async () =>
-  await db
-    .select()
-    .from(correspondenceDropLogs)
-    .where(eq(correspondenceDropLogs.organizationId, organizationId));
+  await fixtureScoped()(
+    async (tx) =>
+      await tx
+        .select()
+        .from(correspondenceDropLogs)
+        .where(eq(correspondenceDropLogs.organizationId, organizationId)),
+  );
 
 if (!databaseUrl || !runPostgresTests) {
   describe.skip("inbound mail persisted under forced RLS", () => {
@@ -129,7 +147,7 @@ if (!databaseUrl || !runPostgresTests) {
     const gated = openGatedTestDatabase(databaseUrl);
     db = gated.db;
     gated.cleanUp(async () => {
-      await db.delete(organization).where(eq(organization.id, organizationId));
+      await deleteOrganizationsForTest(db, [organizationId]);
       for (const id of [memberId, colleagueId, adminId, snapshotUserId]) {
         await db.delete(user).where(eq(user.id, id));
       }
@@ -161,6 +179,10 @@ if (!databaseUrl || !runPostgresTests) {
         name: "Inbound integration",
         slug: `inbound-${organizationId}`,
         createdAt: new Date(),
+      });
+      await recordNewOrganizationAccessState(db, {
+        organizationId,
+        now: new Date(),
       });
       await db.insert(member).values([
         {
@@ -211,48 +233,63 @@ if (!databaseUrl || !runPostgresTests) {
           userId: colleagueId,
         },
       ]);
-      await db.insert(matterInboundAddresses).values([
-        {
-          id: createSafeId<"matterInboundAddress">(),
-          organizationId,
-          workspaceId,
-          token,
-        },
-        {
-          id: createSafeId<"matterInboundAddress">(),
-          organizationId,
-          workspaceId: otherWorkspaceId,
-          token: otherToken,
-        },
-      ]);
-      await db.insert(correspondenceAllowedSenders).values({
-        id: mailboxId,
-        organizationId,
-        address: "office@example.test",
-        kind: "shared_mailbox",
-        scope: "matters",
-        approvedBy: adminId,
-        approvedByDisplay: {
-          status: "active",
-          name: "Admin",
-          email: "admin@example.test",
-        },
-      });
-      await db.insert(correspondenceAllowedSenderMatters).values({
-        id: createSafeId<"correspondenceAllowedSenderMatter">(),
-        organizationId,
-        workspaceId,
-        allowedSenderId: mailboxId,
-      });
+      await fixtureScoped()(
+        async (tx) =>
+          await tx.insert(matterInboundAddresses).values([
+            {
+              id: createSafeId<"matterInboundAddress">(),
+              organizationId,
+              workspaceId,
+              token,
+            },
+            {
+              id: createSafeId<"matterInboundAddress">(),
+              organizationId,
+              workspaceId: otherWorkspaceId,
+              token: otherToken,
+            },
+          ]),
+      );
+      await fixtureScoped()(
+        async (tx) =>
+          await tx.insert(correspondenceAllowedSenders).values({
+            id: mailboxId,
+            organizationId,
+            address: "office@example.test",
+            kind: "shared_mailbox",
+            scope: "matters",
+            approvedBy: adminId,
+            approvedByDisplay: {
+              status: "active",
+              name: "Admin",
+              email: "admin@example.test",
+            },
+          }),
+      );
+      await fixtureScoped()(
+        async (tx) =>
+          await tx.insert(correspondenceAllowedSenderMatters).values({
+            id: createSafeId<"correspondenceAllowedSenderMatter">(),
+            organizationId,
+            workspaceId,
+            allowedSenderId: mailboxId,
+          }),
+      );
     }, 60_000);
 
     beforeEach(async () => {
-      await db
-        .delete(correspondenceDropLogs)
-        .where(eq(correspondenceDropLogs.organizationId, organizationId));
-      await db
-        .delete(correspondence)
-        .where(eq(correspondence.organizationId, organizationId));
+      await fixtureScoped()(
+        async (tx) =>
+          await tx
+            .delete(correspondenceDropLogs)
+            .where(eq(correspondenceDropLogs.organizationId, organizationId)),
+      );
+      await fixtureScoped()(
+        async (tx) =>
+          await tx
+            .delete(correspondence)
+            .where(eq(correspondence.organizationId, organizationId)),
+      );
       await db.delete(entities).where(eq(entities.workspaceId, workspaceId));
     });
     test("oversized provider deliveries acknowledge only after replay-safe token-scoped drops", async () => {
@@ -335,7 +372,7 @@ if (!databaseUrl || !runPostgresTests) {
           receipt: {
             ...event.receipt,
             recipients: [
-              `${generateInboundAddressToken()}@inbound.example.test`,
+              `${generateInboundAddressToken({ userId: null })}@inbound.example.test`,
             ],
           },
         },
@@ -419,24 +456,27 @@ if (!databaseUrl || !runPostgresTests) {
         userId: snapshotUserId,
       });
       const snapshotMailboxId = createSafeId<"correspondenceAllowedSender">();
-      await db.insert(correspondenceAllowedSenders).values([
-        {
-          organizationId,
-          address: "snapshot-alias@example.test",
-          kind: "verified_alias",
-          scope: "organization",
-          ownerUserId: snapshotUserId,
-        },
-        {
-          id: snapshotMailboxId,
-          organizationId,
-          address: "snapshot-office@example.test",
-          kind: "shared_mailbox",
-          scope: "organization",
-          approvedBy: snapshotUserId,
-          approvedByDisplay: display,
-        },
-      ]);
+      await fixtureScoped()(
+        async (tx) =>
+          await tx.insert(correspondenceAllowedSenders).values([
+            {
+              organizationId,
+              address: "snapshot-alias@example.test",
+              kind: "verified_alias",
+              scope: "organization",
+              ownerUserId: snapshotUserId,
+            },
+            {
+              id: snapshotMailboxId,
+              organizationId,
+              address: "snapshot-office@example.test",
+              kind: "shared_mailbox",
+              scope: "organization",
+              approvedBy: snapshotUserId,
+              approvedByDisplay: display,
+            },
+          ]),
+      );
       const source = decode(await fixture("member-cc.eml"));
       const deliveries = [
         display.email,
@@ -465,10 +505,15 @@ if (!databaseUrl || !runPostgresTests) {
       }
       const approvalDisplay = async () =>
         (
-          await db
-            .select({ display: correspondenceAllowedSenders.approvedByDisplay })
-            .from(correspondenceAllowedSenders)
-            .where(eq(correspondenceAllowedSenders.id, snapshotMailboxId))
+          await fixtureScoped()(
+            async (tx) =>
+              await tx
+                .select({
+                  display: correspondenceAllowedSenders.approvedByDisplay,
+                })
+                .from(correspondenceAllowedSenders)
+                .where(eq(correspondenceAllowedSenders.id, snapshotMailboxId)),
+          )
         ).at(0)?.display;
       await db
         .update(user)
@@ -711,6 +756,13 @@ if (!databaseUrl || !runPostgresTests) {
           "",
         ].join("\r\n"),
       );
+      const expectedAttachments = (await parseInboundMessage(raw))
+        .unwrap()
+        .message.attachments.map(({ fileName }, ordinal) => ({
+          ordinal,
+          filename: fileName,
+        }));
+      expect(expectedAttachments).toHaveLength(2);
       let writes = 0;
       let failSecond = true;
       const persist = createInboundMailPersistence({
@@ -777,9 +829,10 @@ if (!databaseUrl || !runPostgresTests) {
           persist,
         });
       expect((await ingest()).isErr()).toBe(true);
-      expect(await db.select().from(correspondenceAttachments)).toMatchObject([
-        { ordinal: 0, filename: "two.txt" },
-      ]);
+      const firstPersisted = await fixtureScoped()(
+        async (tx) => await tx.select().from(correspondenceAttachments),
+      );
+      expect(firstPersisted).toMatchObject(expectedAttachments.slice(0, 1));
       const reordered = encode(
         decode(raw).replace(
           '--parts\r\nContent-Type: text/plain; name=one.txt\r\nContent-Disposition: attachment; filename="one.txt"\r\n\r\nOne\r\n--parts\r\nContent-Type: text/plain; name=two.txt\r\nContent-Disposition: attachment; filename="two.txt"\r\n\r\nTwo',
@@ -807,11 +860,15 @@ if (!databaseUrl || !runPostgresTests) {
         ).isOk(),
       ).toBe(true);
       expect((await ingest()).isOk()).toBe(true);
-      expect(
-        (await db.select().from(correspondenceAttachments))
-          .map(({ ordinal }) => ordinal)
-          .toSorted((a, b) => a - b),
-      ).toEqual([0, 1]);
+      const completedAttachments = await fixtureScoped()(
+        async (tx) =>
+          await tx
+            .select()
+            .from(correspondenceAttachments)
+            .orderBy(correspondenceAttachments.ordinal),
+      );
+      expect(completedAttachments).toMatchObject(expectedAttachments);
+      expect(completedAttachments.slice(0, 1)).toEqual(firstPersisted);
       expect(
         await db
           .select()

@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 import { and, eq, exists, isNull, or, sql } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import {
   mcpConnectorAuthorizationReviews,
@@ -10,6 +10,7 @@ import { mcpConnectorRealtimeUpdates } from "@/api/handlers/realtime-resource-se
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   discoverOAuthMetadataForApproval,
@@ -17,16 +18,20 @@ import {
 } from "@/api/lib/mcp-upstream/oauth";
 
 const config = {
+  contract: "patch",
   permissions: { organizationSettings: ["update"] },
-  accountAccess: ACCOUNT_ACCESS.standard,
+  accountAccess: ACCOUNT_ACCESS.accountControl,
   realtime: mcpConnectorRealtimeUpdates,
   mcp: { type: "internal", reason: "mcp_transport" },
-  params: t.Object({ slug: t.String({ minLength: 1, maxLength: 80 }) }),
-  body: t.Object({
-    confirmedIssuer: t.String({ maxLength: 2048 }),
-    confirmedEndpointOrigins: t.Array(t.String({ maxLength: 2048 }), {
-      maxItems: 3,
-    }),
+  params: v.object({
+    slug: v.pipe(v.string(), v.minLength(1), v.maxLength(80)),
+  }),
+  body: v.object({
+    confirmedIssuer: v.pipe(v.string(), v.maxLength(2048)),
+    confirmedEndpointOrigins: v.pipe(
+      v.array(v.pipe(v.string(), v.maxLength(2048))),
+      v.maxLength(3),
+    ),
   }),
 } satisfies HandlerConfig;
 
@@ -90,7 +95,12 @@ export const createApproveMcpAuthorizationHandler = (
           }),
         );
       }
-      const metadata = yield* Result.await(discoverMetadata(connector.url));
+      const metadata = yield* Result.await(
+        discoverMetadata({
+          rawMcpUrl: connector.url,
+          permit: grantThirdPartyOutboundPermit(),
+        }),
+      );
       const issuer = metadata.authorizationServer.issuer;
       const endpointOrigins = getOAuthEndpointOrigins(metadata);
       if (

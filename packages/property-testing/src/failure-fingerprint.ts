@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { sha256Hex } from "@stll/sha256/node";
 
 export type PropertyFailureRecord = {
   id: string;
@@ -65,8 +65,5 @@ export const failureFingerprint = ({
     .replace(/\b(?:0x[\da-f]+|[\da-f]{8,})\b/giu, "<value>")
     .replace(/[+-]?\b\d+(?:\.\d+)?(?:e[+-]?\d+)?\b/giu, "<value>")
     .replace(/\s+/gu, " ");
-  return createHash("sha256")
-    .update(`${id}\0${normalized}`)
-    .digest("hex")
-    .slice(0, 16);
+  return sha256Hex(`${id}\0${normalized}`).slice(0, 16);
 };

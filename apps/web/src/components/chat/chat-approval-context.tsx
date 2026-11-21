@@ -3,10 +3,32 @@ import { createContext, use } from "react";
 import { panic } from "better-result";
 
 import type {
+  ConnectConnectorDecision,
+  ConnectConnectorOutput,
+} from "@stll/api-contract/chat-connector";
+import type { RequestSecretOutput } from "@stll/api-contract/chat-secret";
+
+import type {
   ApprovalToolName,
   ToolApprovalGrant,
 } from "@/components/chat/chat-ui-tools";
 import type { ChatSendMessageOptions } from "@/features/chat/chat-runtime";
+
+export type NormalConnectionAction = "preserve" | "replace-with-receipt-only";
+
+export type RequestSecretDecision =
+  | {
+      decision: "provide";
+      value: string;
+      saveForFuture: boolean;
+      normalConnectionAction: NormalConnectionAction;
+      targetConnection: { connectionId: string; host: string };
+    }
+  | {
+      decision: "use-saved";
+      targetConnection: { connectionId: string; host: string };
+    }
+  | { decision: "decline" };
 
 /**
  * Tool-approval handlers and grant sets shared by every leaf that
@@ -22,6 +44,13 @@ import type { ChatSendMessageOptions } from "@/features/chat/chat-runtime";
  */
 type ChatApprovalContextValue = {
   activeOrganizationId: string;
+  /**
+   * The approvals the thread already waited on when the page opened it
+   * (`ChatRuntime.approvalIdsAwaitedAtOpen`). A card among them never
+   * answers itself, whatever grant or policy covers it: on a reopened thread
+   * only the user's click resumes tool work.
+   */
+  approvalIdsAwaitedAtOpen: ReadonlySet<string>;
   handleAllowInConversation: (
     id: string,
     toolName: ApprovalToolName,
@@ -36,8 +65,41 @@ type ChatApprovalContextValue = {
     options?: ChatSendMessageOptions,
   ) => void | PromiseLike<void>;
   handleDeny: (id: string) => void | PromiseLike<void>;
+  handleRequestSecret: (
+    toolCallId: string,
+    decision: RequestSecretDecision,
+  ) => PromiseLike<RequestSecretOutput>;
+  continueRequestSecret: (
+    toolCallId: string,
+    receipt: RequestSecretOutput,
+  ) => PromiseLike<void>;
+  /**
+   * Reports what the user did on a connector card. The server answers
+   * `connected` only for a stored, usable connection and refuses otherwise.
+   */
+  handleConnectConnector: (
+    toolCallId: string,
+    decision: ConnectConnectorDecision,
+  ) => PromiseLike<ConnectConnectorOutput>;
+  continueConnectConnector: (
+    toolCallId: string,
+    receipt: ConnectConnectorOutput,
+  ) => PromiseLike<void>;
+  secretAvailabilityKey: string;
+  resolveSecretTarget: (
+    connectorSlug: string,
+    signal: AbortSignal,
+  ) => Promise<SecretTargetResolution>;
   alwaysApprovedTools: ReadonlySet<ToolApprovalGrant>;
   conversationApprovedTools: ReadonlySet<ToolApprovalGrant>;
+  /**
+   * Whether the API still holds a stored grant covering `toolName`, read
+   * fresh. A card answers itself on a grant only after this confirms it, so
+   * a grant removed in another session never answers a new card.
+   */
+  confirmStoredApprovalGrant: (
+    toolName: ApprovalToolName,
+  ) => PromiseLike<boolean>;
   /**
    * Optional set of tool names that should be auto-denied (e.g.
    * tools blocked while a specific file overlay is active). Leaves
@@ -55,6 +117,16 @@ type ChatApprovalContextValue = {
    * overlay) never need to supply it.
    */
   handleRetryAfterAuthorNameSet?: (() => void | PromiseLike<void>) | undefined;
+};
+
+export type SecretTargetResolution = {
+  available: boolean;
+  connector: {
+    connectionId: string;
+    displayName: string;
+    host: string;
+    responseDisposition: "normal" | "receipt-only";
+  };
 };
 
 export const ChatApprovalContext =

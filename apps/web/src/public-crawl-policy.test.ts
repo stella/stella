@@ -1,12 +1,19 @@
 import { describe, expect, test } from "bun:test";
+import nodePath from "node:path";
 
 import { loadCatalogue } from "@stll/catalogue";
 
+import {
+  PUBLIC_CASE_LAW_PAGE_COUNTRIES,
+  toCaseLawCountryParam,
+} from "@/features/case-law/case-law-jurisdiction";
+import { toolsCataloguePathOf } from "@/lib/knowledge/public-tools-catalogue-path";
 import type { FileRouteTypes } from "@/routeTree.gen";
 
 import {
   createPublicCrawlRules,
   isPublicCrawlPath,
+  PUBLIC_CRAWL_ASSETS,
   PUBLIC_CRAWL_ROUTES,
   type PublicCrawlOptions,
 } from "./public-crawl-policy";
@@ -23,16 +30,69 @@ const options = {
 } as const satisfies PublicCrawlOptions;
 
 describe("public crawl policy", () => {
+  test("published ownership proofs match their crawlable static assets", async () => {
+    for (const { path } of PUBLIC_CRAWL_ASSETS) {
+      const key = await Bun.file(
+        nodePath.join(import.meta.dir, "../public", path),
+      ).text();
+      expect(`${key.trim()}.txt`).toBe(path.slice(1));
+      expect(isPublicCrawlPath(path, options)).toBe(true);
+      expect(isPublicCrawlPath(`${path}/other`, options)).toBe(false);
+      expect(
+        isPublicCrawlPath(path, { ...options, publicLawCrawlAllowed: false }),
+      ).toBe(false);
+    }
+  });
   test("declares a route for each crawl surface", () => {
     expect(new Set(crawlRoutes.map(({ path }) => path)).size).toBe(
       crawlRoutes.length,
     );
     for (const { path, scope } of crawlRoutes) {
-      if (scope === "catalogue" && path !== options.toolsBasePath) {
+      if (
+        scope === "catalogue" &&
+        path !== toolsCataloguePathOf(options.toolsBasePath)
+      ) {
         continue;
       }
       expect(isPublicCrawlPath(path, options)).toBe(true);
     }
+  });
+
+  test("opens the law pages of pages-public jurisdictions only", () => {
+    const rules = createPublicCrawlRules(options).filter(
+      ({ path }) => path === "/law" || path.startsWith("/law/"),
+    );
+    expect(rules).toEqual([
+      { path: "/law", scope: "exact" },
+      ...PUBLIC_CASE_LAW_PAGE_COUNTRIES.map(
+        (country) =>
+          ({
+            path: `/law/${toCaseLawCountryParam(country)}`,
+            scope: "subtree",
+          }) as const,
+      ),
+      { path: "/law/cases", scope: "exact" },
+    ]);
+    // The pages-public corpus today, and what stays closed beside it.
+    expect(isPublicCrawlPath("/law/cze/cases/nejvyssi-soud/x", options)).toBe(
+      PUBLIC_CASE_LAW_PAGE_COUNTRIES.some((country) => country === "CZE"),
+    );
+    for (const country of ["svk", "usa", "gbr", "eu", "pol", "hun", "aut"]) {
+      if (
+        PUBLIC_CASE_LAW_PAGE_COUNTRIES.some(
+          (open) => toCaseLawCountryParam(open) === country,
+        )
+      ) {
+        continue;
+      }
+      expect(
+        isPublicCrawlPath(`/law/${country}/cases/court/slug`, options),
+      ).toBe(false);
+    }
+    // The case-law hub is open exactly; other cross-country pages are not.
+    expect(isPublicCrawlPath("/law/cases", options)).toBe(true);
+    expect(isPublicCrawlPath("/law/cases/research", options)).toBe(false);
+    expect(isPublicCrawlPath("/law/coverage", options)).toBe(false);
   });
 
   test("enumerates the published tool pages for both namespaces", () => {
@@ -42,7 +102,7 @@ describe("public crawl policy", () => {
         path.startsWith(toolsBasePath),
       );
       expect(rules).toEqual([
-        { path: toolsBasePath, scope: "exact" },
+        { path: toolsCataloguePathOf(toolsBasePath), scope: "exact" },
         { path: `${toolsBasePath}/contribute`, scope: "exact" },
         ...loadCatalogue().map(
           ({ slug }) =>
@@ -56,6 +116,21 @@ describe("public crawl policy", () => {
         expect(isPublicCrawlPath(path, enabled)).toBe(true);
         expect(isPublicCrawlPath(`${path}/download`, enabled)).toBe(false);
       }
+    }
+  });
+
+  test("keeps an organization's own Knowledge pages out of the crawl", () => {
+    expect(isPublicCrawlPath("/knowledge/tools/catalogue", options)).toBe(true);
+    expect(isPublicCrawlPath("/knowledge/playbooks/catalogue", options)).toBe(
+      true,
+    );
+    for (const memberPath of [
+      "/knowledge/tools",
+      "/knowledge/templates",
+      "/knowledge/playbooks",
+      "/knowledge/tools/skills/11111111-1111-4111-8111-111111111111",
+    ]) {
+      expect(isPublicCrawlPath(memberPath, options)).toBe(false);
     }
   });
 
@@ -77,7 +152,7 @@ describe("public crawl policy", () => {
           for (const entry of crawlRoutes) {
             if (
               entry.scope === "catalogue" &&
-              entry.path !== options.toolsBasePath
+              entry.path !== toolsCataloguePathOf(options.toolsBasePath)
             ) {
               continue;
             }

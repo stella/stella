@@ -47,8 +47,8 @@ const _method = customType<{ data: unknown }>({
 });
 
 // A quoted property key parses as a string literal, not an identifier, and
-// is matched too. oxfmt-ignore keeps the quotes in place.
-// oxfmt-ignore
+// is matched too. prettier-ignore keeps the quotes in place.
+// prettier-ignore
 // oxlint-disable-next-line require-custom-jsonb-column/require-custom-jsonb-column
 const _quotedKey = customType<{ data: unknown }>({
   "dataType": () => "jsonb",

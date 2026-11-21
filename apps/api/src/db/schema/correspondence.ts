@@ -1,3 +1,5 @@
+import type { SQLWrapper } from "drizzle-orm";
+
 import {
   CORRESPONDENCE_AUTH_RESULTS,
   CORRESPONDENCE_CHANNELS,
@@ -9,11 +11,24 @@ import {
   CORRESPONDENCE_SENDER_KINDS,
   CORRESPONDENCE_SENDER_SCOPES,
   CORRESPONDENCE_SOURCES,
-  type CorrespondenceAddress,
   type CorrespondenceActorDisplay,
+  type CorrespondenceAddress,
   type CorrespondenceOriginalSignature,
 } from "@stll/api-contract/correspondence";
+import type { DataBoxStatedEnvelope } from "@stll/api-contract/data-box";
 
+import {
+  entityFeatureGateChecks,
+  entityFeatureGateColumns,
+} from "../entity-feature-gate-columns";
+import {
+  importProvenanceColumns,
+  importProvenanceConstraints,
+} from "../import-provenance-columns";
+import {
+  REVIEW_RESET_ORGANIZATION_SETTING,
+  reviewResetOwnerPolicies,
+} from "../review-reset-policies";
 import {
   jsonb,
   organization,
@@ -53,8 +68,46 @@ export const CORRESPONDENCE_ERASURE_SETTING = {
   recordIds: "app.correspondence_erasure_record_ids",
 } as const;
 
+export const CORRESPONDENCE_REVIEW_RESET_SETTING = {
+  organizationId: REVIEW_RESET_ORGANIZATION_SETTING,
+} as const;
+
 // Resolve the owner through the catalog because deployment login names differ.
 const currentUserOwnsCorrespondence = sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.correspondence'::regclass)`;
+
+const correspondenceSourceMaintenance = p
+  .pgRole("stella_correspondence_source")
+  .existing();
+
+type SourceMaintenanceScopeColumns = {
+  organizationId: SQLWrapper;
+  workspaceId: SQLWrapper;
+  recordId: SQLWrapper;
+};
+
+const sourceMaintenanceScope = ({
+  organizationId,
+  workspaceId,
+  recordId,
+}: SourceMaintenanceScopeColumns) => sql`
+  ${organizationId} = nullif(current_setting('app.correspondence_source_organization_id', true), '')
+  AND ${workspaceId} = nullif(current_setting('app.correspondence_source_workspace_id', true), '')::uuid
+  AND ${recordId} = nullif(current_setting('app.correspondence_source_record_id', true), '')::uuid
+`;
+
+type SourceEntityMaintenanceScopeColumns = {
+  workspaceId: SQLWrapper;
+  entityId: SQLWrapper;
+};
+
+// The trigger supplies both identifiers from the entity row being deleted.
+const sourceEntityMaintenanceScope = ({
+  workspaceId,
+  entityId,
+}: SourceEntityMaintenanceScopeColumns) => sql`
+  ${workspaceId} = nullif(current_setting('app.correspondence_source_workspace_id', true), '')::uuid
+  AND ${entityId} = nullif(current_setting('app.correspondence_source_entity_id', true), '')::uuid
+`;
 
 const offboardingScopeCheck = sql`(
   current_setting(${sql.raw(`'${CORRESPONDENCE_OFFBOARDING_SETTING.scope}'`)}, true) = 'account'
@@ -66,23 +119,24 @@ const offboardingAssigneeCheck = sql`assignee_id = nullif(current_setting(${sql.
 export const correspondence = p.pgTable.withRLS(
   "correspondence",
   {
+    ...entityFeatureGateColumns(),
     id: pUuid<"correspondence">().primaryKey(),
     organizationId: safeOrganizationId("organization_id")
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
+    /** Import provenance: external_source, external_id, external_change_key, imported_at. */
+    ...importProvenanceColumns(),
     workspaceId: safeWorkspaceId("workspace_id")
       .notNull()
       .references(() => workspaces.id, { onDelete: "cascade" }),
-    direction: p
-      .text("direction", { enum: CORRESPONDENCE_DIRECTIONS })
-      .notNull(),
+    direction: p.text("direction", { enum: CORRESPONDENCE_DIRECTIONS }),
     channel: p.text("channel", { enum: CORRESPONDENCE_CHANNELS }).notNull(),
     source: p
       .text("source", { enum: CORRESPONDENCE_SOURCES })
       .notNull()
       .default("delivery"),
-    // An upload reads its message from this matter file; deleting the file
-    // deletes the record.
+    // The current uploaded source file; correspondence_sources owns its lifetime.
+    // Removing a copy switches this pointer, deleting the record at its last source.
     sourceEntityId: safeUuid<"entity">("source_entity_id"),
     // Delivery provenance; correspondence_provenance_check binds these
     // columns to the source.
@@ -90,7 +144,10 @@ export const correspondence = p.pgTable.withRLS(
     authenticatedSenderAddress: p.text("authenticated_sender_address"),
     originalSignature:
       jsonb("original_signature").$type<CorrespondenceOriginalSignature>(),
+    // The data-box message ID on the data-box channel.
     messageId: p.text("message_id"),
+    // A data-box message's envelope as stated in its file; null for email.
+    dataBox: jsonb("data_box_envelope").$type<DataBoxStatedEnvelope>(),
     contentHash: p.varchar("content_hash", { length: 64 }).notNull(),
     dedupKey: p.varchar("dedup_key", { length: 64 }).notNull(),
     from: jsonb("sender").$type<CorrespondenceAddress>().notNull(),
@@ -118,6 +175,32 @@ export const correspondence = p.pgTable.withRLS(
     updatedAt: timestamptz("updated_at").notNull().defaultNow(),
   },
   (table) => [
+    ...importProvenanceConstraints("correspondence", table),
+    ...reviewResetOwnerPolicies("correspondence"),
+    p.pgPolicy("correspondence_source_entity_maintenance", {
+      for: "all",
+      to: correspondenceSourceMaintenance,
+      using: sourceEntityMaintenanceScope({
+        workspaceId: table.workspaceId,
+        entityId: table.sourceEntityId,
+      }),
+      withCheck: sql`false`,
+    }),
+    p.pgPolicy("correspondence_source_maintenance", {
+      for: "all",
+      to: correspondenceSourceMaintenance,
+      using: sourceMaintenanceScope({
+        organizationId: table.organizationId,
+        workspaceId: table.workspaceId,
+        recordId: table.id,
+      }),
+      withCheck: sourceMaintenanceScope({
+        organizationId: table.organizationId,
+        workspaceId: table.workspaceId,
+        recordId: table.id,
+      }),
+    }),
+    ...entityFeatureGateChecks(table),
     p
       .foreignKey({
         name: "correspondence_workspace_organization_fk",
@@ -131,7 +214,7 @@ export const correspondence = p.pgTable.withRLS(
         columns: [table.sourceEntityId, table.workspaceId],
         foreignColumns: [entities.id, entities.workspaceId],
       })
-      .onDelete("cascade"),
+      .onDelete("restrict"),
     p.unique("correspondence_id_ws_unq").on(table.id, table.workspaceId),
     p
       .uniqueIndex("correspondence_ws_dedup_uidx")
@@ -167,11 +250,15 @@ export const correspondence = p.pgTable.withRLS(
     ),
     p.check(
       "correspondence_direction_check",
-      sql`${table.direction} in (${valuesSql(CORRESPONDENCE_DIRECTIONS)})`,
+      sql`((${table.channel} = 'email' and ${table.direction} in (${valuesSql(CORRESPONDENCE_DIRECTIONS)})) or (${table.channel} = 'data_box' and ${table.direction} is null)) is true`,
     ),
     p.check(
       "correspondence_channel_check",
       sql`${table.channel} in (${valuesSql(CORRESPONDENCE_CHANNELS)})`,
+    ),
+    p.check(
+      "correspondence_data_box_check",
+      sql`((${table.channel} = 'data_box') = (${table.dataBox} is not null) and (${table.channel} <> 'data_box' or (${table.source} = 'upload' and ${table.messageId} is not null and jsonb_typeof(${table.dataBox}) = 'object' and ${table.dataBox}->>'messageId' = ${table.messageId} and not (${table.dataBox} ? 'directionBasis')))) is true`,
     ),
     p.check(
       "correspondence_handling_check",
@@ -198,13 +285,102 @@ export const correspondence = p.pgTable.withRLS(
       using: sql`${currentUserOwnsCorrespondence} and ${offboardingAssigneeCheck} and ${offboardingScopeCheck}`,
       withCheck: sql`${currentUserOwnsCorrespondence} and ${table.assigneeId} is null and ${offboardingScopeCheck}`,
     }),
-    ...wsOrganizationPolicies("correspondence"),
+    ...wsOrganizationPolicies("correspondence", {
+      columns: table,
+      references: new Map([
+        [table.sourceEntityId, { target: "entities", kind: "owned-content" }],
+      ]),
+    }),
+  ],
+);
+
+// Each uploaded file belongs to one record in its matter, across both channels.
+export const correspondenceSources = p.pgTable.withRLS(
+  "correspondence_sources",
+  {
+    ...entityFeatureGateColumns(),
+    organizationId: safeOrganizationId("organization_id").notNull(),
+    workspaceId: safeWorkspaceId("workspace_id").notNull(),
+    correspondenceId: safeUuid<"correspondence">("correspondence_id").notNull(),
+    entityId: safeUuid<"entity">("entity_id").notNull(),
+  },
+  (table) => [
+    ...reviewResetOwnerPolicies("correspondence_sources"),
+    p.pgPolicy("correspondence_source_entity_maintenance", {
+      for: "all",
+      to: correspondenceSourceMaintenance,
+      using: sourceEntityMaintenanceScope({
+        workspaceId: table.workspaceId,
+        entityId: table.entityId,
+      }),
+      withCheck: sql`false`,
+    }),
+    p.pgPolicy("correspondence_source_maintenance", {
+      for: "select",
+      to: correspondenceSourceMaintenance,
+      using: sourceMaintenanceScope({
+        organizationId: table.organizationId,
+        workspaceId: table.workspaceId,
+        recordId: table.correspondenceId,
+      }),
+    }),
+    // The registration trigger inserts exactly the uploaded record's own
+    // source, scoped from the inserted record.
+    p.pgPolicy("correspondence_source_registration", {
+      for: "insert",
+      to: correspondenceSourceMaintenance,
+      withCheck: sql`${sourceMaintenanceScope({
+        organizationId: table.organizationId,
+        workspaceId: table.workspaceId,
+        recordId: table.correspondenceId,
+      })} AND ${table.entityId} = nullif(current_setting('app.correspondence_source_entity_id', true), '')::uuid`,
+    }),
+    ...entityFeatureGateChecks(table),
+    p.primaryKey({
+      name: "correspondence_sources_pkey",
+      columns: [table.workspaceId, table.entityId],
+    }),
+    p
+      .foreignKey({
+        name: "correspondence_sources_workspace_organization_fk",
+        columns: [table.workspaceId, table.organizationId],
+        foreignColumns: [workspaces.id, workspaces.organizationId],
+      })
+      .onDelete("cascade"),
+    p
+      .foreignKey({
+        name: "correspondence_sources_record_workspace_fk",
+        columns: [table.correspondenceId, table.workspaceId],
+        foreignColumns: [correspondence.id, correspondence.workspaceId],
+      })
+      .onDelete("cascade"),
+    p
+      .foreignKey({
+        name: "correspondence_sources_entity_workspace_fk",
+        columns: [table.entityId, table.workspaceId],
+        foreignColumns: [entities.id, entities.workspaceId],
+      })
+      .onDelete("cascade"),
+    p
+      .index("correspondence_sources_ws_record_entity_idx")
+      .on(table.workspaceId, table.correspondenceId, table.entityId),
+    ...wsOrganizationPolicies("correspondence_sources", {
+      columns: table,
+      references: new Map([
+        [table.entityId, { target: "entities", kind: "owned-content" }],
+        [
+          table.correspondenceId,
+          { kind: "owned-by-parent", parent: correspondence },
+        ],
+      ]),
+    }),
   ],
 );
 
 export const correspondenceFilers = p.pgTable.withRLS(
   "correspondence_filers",
   {
+    ...entityFeatureGateColumns(),
     id: pUuid<"correspondenceFiler">().primaryKey(),
     organizationId: safeOrganizationId("organization_id").notNull(),
     workspaceId: safeWorkspaceId("workspace_id").notNull(),
@@ -220,6 +396,8 @@ export const correspondenceFilers = p.pgTable.withRLS(
     filedAt: timestamptz("filed_at").notNull().defaultNow(),
   },
   (table) => [
+    ...reviewResetOwnerPolicies("correspondence_filers"),
+    ...entityFeatureGateChecks(table),
     p
       .foreignKey({
         name: "correspondence_filers_workspace_organization_fk",
@@ -282,13 +460,22 @@ export const correspondenceFilers = p.pgTable.withRLS(
       using: sql`(current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.correspondence_filers'::regclass) AND filed_by_user_id = nullif(current_setting('app.correspondence_erasure_user_id', true), ''))`,
       withCheck: sql`(current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.correspondence_filers'::regclass) AND filed_by_user_id = nullif(current_setting('app.correspondence_erasure_user_id', true), '') AND id = ANY(COALESCE(NULLIF(current_setting('app.correspondence_erasure_record_ids', true), '')::uuid[], ARRAY[]::uuid[])) AND filed_by_display = '{"status":"deleted"}'::jsonb)`,
     }),
-    ...wsOrganizationPolicies("correspondence_filers"),
+    ...wsOrganizationPolicies("correspondence_filers", {
+      columns: table,
+      references: new Map([
+        [
+          table.correspondenceId,
+          { kind: "owned-by-parent", parent: correspondence },
+        ],
+      ]),
+    }),
   ],
 );
 
 export const correspondenceAttachments = p.pgTable.withRLS(
   "correspondence_attachments",
   {
+    ...entityFeatureGateColumns(),
     id: pUuid<"correspondenceAttachment">().primaryKey(),
     organizationId: safeOrganizationId("organization_id").notNull(),
     workspaceId: safeWorkspaceId("workspace_id").notNull(),
@@ -304,6 +491,8 @@ export const correspondenceAttachments = p.pgTable.withRLS(
     createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [
+    ...reviewResetOwnerPolicies("correspondence_attachments"),
+    ...entityFeatureGateChecks(table),
     p
       .foreignKey({
         name: "correspondence_attachments_workspace_organization_fk",
@@ -342,7 +531,16 @@ export const correspondenceAttachments = p.pgTable.withRLS(
       "correspondence_attachments_scan_check",
       sql`${table.scanVerdict} in (${valuesSql(CORRESPONDENCE_SCAN_VERDICTS)})`,
     ),
-    ...wsOrganizationPolicies("correspondence_attachments"),
+    ...wsOrganizationPolicies("correspondence_attachments", {
+      columns: table,
+      references: new Map([
+        [table.entityId, { target: "entities", kind: "owned-content" }],
+        [
+          table.correspondenceId,
+          { kind: "owned-by-parent", parent: correspondence },
+        ],
+      ]),
+    }),
   ],
 );
 
@@ -383,7 +581,7 @@ export const matterInboundAddresses = p.pgTable.withRLS(
     p
       .index("matter_inbound_addresses_ws_created_idx")
       .on(table.workspaceId, table.createdAt.desc()),
-    ...wsOrganizationPolicies("matter_inbound_addresses"),
+    ...wsOrganizationPolicies("matter_inbound_addresses", { columns: table }),
   ],
 );
 
@@ -455,10 +653,21 @@ export const correspondenceAllowedSenders = p.pgTable.withRLS(
       using: sql`(current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.correspondence_allowed_senders'::regclass) AND approved_by = nullif(current_setting('app.correspondence_erasure_user_id', true), ''))`,
       withCheck: sql`(current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.correspondence_allowed_senders'::regclass) AND approved_by = nullif(current_setting('app.correspondence_erasure_user_id', true), '') AND id = ANY(COALESCE(NULLIF(current_setting('app.correspondence_erasure_record_ids', true), '')::uuid[], ARRAY[]::uuid[])) AND approved_by_display = '{"status":"deleted"}'::jsonb)`,
     }),
+    // Remove this legacy owner read only after context-writing reset callers have drained old tasks.
     p.pgPolicy("correspondence_allowed_senders_owner_lookup", {
       for: "select",
       to: "public",
       using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.correspondence_allowed_senders'::regclass)`,
+    }),
+    p.pgPolicy("correspondence_allowed_senders_owner_lifecycle_lookup", {
+      for: "select",
+      to: "public",
+      using: sql`(current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.correspondence_allowed_senders'::regclass) AND (approved_by = nullif(current_setting('app.correspondence_erasure_user_id', true), '') OR organization_id = nullif(current_setting('app.correspondence_review_reset_organization_id', true), '')))`,
+    }),
+    p.pgPolicy("correspondence_allowed_senders_owner_review_reset_delete", {
+      for: "delete",
+      to: "public",
+      using: sql`(current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.correspondence_allowed_senders'::regclass) AND organization_id = nullif(current_setting('app.correspondence_review_reset_organization_id', true), ''))`,
     }),
     ...orgPolicies(),
   ],
@@ -497,7 +706,10 @@ export const correspondenceAllowedSenderMatters = p.pgTable.withRLS(
     p
       .index("correspondence_allowed_sender_matters_ws_sender_idx")
       .on(table.workspaceId, table.allowedSenderId),
-    ...wsOrganizationPolicies("correspondence_allowed_sender_matters"),
+    ...reviewResetOwnerPolicies("correspondence_allowed_sender_matters"),
+    ...wsOrganizationPolicies("correspondence_allowed_sender_matters", {
+      columns: table,
+    }),
   ],
 );
 
@@ -526,6 +738,7 @@ export const correspondenceDropLogs = p.pgTable.withRLS(
       "correspondence_drop_logs_reason_check",
       sql`${table.reason} in (${valuesSql(CORRESPONDENCE_DROP_REASONS)})`,
     ),
-    ...wsOrganizationPolicies("correspondence_drop_logs"),
+    ...reviewResetOwnerPolicies("correspondence_drop_logs"),
+    ...wsOrganizationPolicies("correspondence_drop_logs", { columns: table }),
   ],
 );

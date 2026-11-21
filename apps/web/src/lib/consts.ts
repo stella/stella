@@ -41,8 +41,10 @@ export const PDF_MIME = "application/pdf" as const;
 export const EML_MIME = EML_MIME_TYPE;
 export const MSG_MIME = MSG_MIME_TYPE;
 export const MARKDOWN_MIME = "text/markdown" as const;
+export const PLAIN_TEXT_MIME = "text/plain" as const;
 
 const MARKDOWN_EXTENSIONS = [".md", ".markdown"] as const;
+const PLAIN_TEXT_EXTENSIONS = [".txt"] as const;
 
 export const isEmailFile = ({
   fileName,
@@ -73,6 +75,24 @@ export const isMarkdownFile = ({
     : false;
 };
 
+export const isPlainTextFile = ({
+  fileName,
+  mimeType,
+}: {
+  fileName?: string | null | undefined;
+  mimeType?: string | null | undefined;
+}): boolean => {
+  const normalizedMimeType = mimeType?.split(";").at(0)?.trim().toLowerCase();
+  if (normalizedMimeType === PLAIN_TEXT_MIME) {
+    return true;
+  }
+
+  const lowered = fileName?.toLowerCase();
+  return lowered
+    ? PLAIN_TEXT_EXTENSIONS.some((extension) => lowered.endsWith(extension))
+    : false;
+};
+
 /**
  * Shared layout heights so rows stay vertically aligned
  * across the main content area and the right panel.
@@ -93,6 +113,9 @@ export const SIDE_RAIL_TAB_ICON_SIZE_PX = 14 as const;
 
 export const STALE_TIME = {
   INFINITE: Number.POSITIVE_INFINITY,
+  ONE: {
+    MINUTE: 60 * 1000,
+  },
   FIVE: {
     MINUTES: 5 * 60 * 1000,
   },

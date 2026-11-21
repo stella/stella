@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { resultTx } from "@/api/db/safe-db";
 import { BILLING_STATUS, expenses } from "@/api/db/schema";
@@ -8,14 +8,13 @@ import { expenseRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
-const deleteExpenseBodySchema = t.Object({
-  id: tSafeId("expense"),
-});
+const deleteExpenseBodySchema = v.object({ id: resourceIdSchema("expense") });
 
 const config = {
+  contract: "patch",
   description:
     "Delete an expense: a draft expense is permanently deleted, and any other " +
     "unbilled expense is written off instead (kept for the audit trail, " +
@@ -23,6 +22,7 @@ const config = {
     "reverted; the return value says which of the two happened.",
   permissions: { expense: ["delete"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
+  featureAccess: { featureId: "time-billing", type: "required" },
   realtime: expenseRealtimeUpdates,
   mcp: { type: "capability", reason: "billing_admin", consumesServices: false },
   body: deleteExpenseBodySchema,

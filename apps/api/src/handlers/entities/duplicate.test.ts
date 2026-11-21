@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import {
   afterAll,
   afterEach,
@@ -9,16 +9,18 @@ import {
   mock,
   test,
 } from "bun:test";
-import { sql, TransactionRollbackError } from "drizzle-orm";
+import { eq, inArray, sql, TransactionRollbackError } from "drizzle-orm";
 import fc from "fast-check";
 
-import { assertProperty } from "@stll/property-testing";
+import { assertProperty, propertyConfig } from "@stll/property-testing";
+import { dbClock } from "@stll/test-kit/db";
 
 import { organization } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import {
   auditLogs,
+  bufferObjectCleanupIntents,
   documentCounters,
   entities,
   entityVersions,
@@ -27,18 +29,24 @@ import {
 } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
 import { envBase } from "@/api/env-base";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { createSiblingNamePlan } from "@/api/lib/entities/sibling-name-insert";
 import { DatabaseError } from "@/api/lib/errors/tagged-errors";
 import { createFileKey } from "@/api/lib/file-key";
+import type {
+  lockCopyPublicationIntentsInTransaction,
+  retirePublishedCopyIntentsInTransaction,
+} from "@/api/lib/files/copy-organization-files";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { entityVersionInsertResult } from "@/api/tests/helpers/entity-version-insert-mock";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
@@ -67,16 +75,68 @@ const flushEntitySearchRepairsMock = mock(async () => ({
   failed: 0,
   repaired: 0,
 }));
+type FileUsageDb = NonNullable<
+  Parameters<typeof copyFileObject>[0]["fileUsageDb"]
+>;
+const testFileUsageDb = (): FileUsageDb => asTestRaw<FileUsageDb>(fileUsageDb);
+
+const lockedPublicationIntentIds = new WeakMap<
+  object,
+  readonly SafeId<"pendingUpload">[]
+>();
+const lockCopyPublicationIntentsMock = mock(
+  async ({
+    intentIds,
+    tx,
+    workspaceMode,
+  }: Parameters<typeof lockCopyPublicationIntentsInTransaction>[0]) => {
+    expect(intentIds.length).toBeGreaterThan(0);
+    // Entity-cap admission later locks the destination for update.
+    expect(workspaceMode).toBe("update");
+    const reserved = await fileUsageDb
+      .select({ id: bufferObjectCleanupIntents.id })
+      .from(bufferObjectCleanupIntents)
+      .where(inArray(bufferObjectCleanupIntents.id, intentIds));
+    expect(reserved.map(({ id }) => id).toSorted()).toEqual(
+      intentIds.toSorted(),
+    );
+    lockedPublicationIntentIds.set(tx, intentIds);
+    return Result.ok(undefined);
+  },
+);
+const retirePublishedCopyIntentsMock = mock(
+  async ({
+    intentIds,
+    tx,
+  }: Parameters<typeof retirePublishedCopyIntentsInTransaction>[0]) => {
+    const lockedIntentIds = lockedPublicationIntentIds.get(tx);
+    if (!lockedIntentIds) {
+      panic("Copy publication intents were not locked");
+    }
+    expect([...intentIds]).toEqual([...lockedIntentIds]);
+    lockedPublicationIntentIds.delete(tx);
+    return Result.ok(undefined);
+  },
+);
 const duplicateEntity = createDuplicateEntity({
   enqueueDocumentProcessingRun: enqueueDocumentProcessingRunMock,
   enqueueEntitySearchRepairs: enqueueEntitySearchRepairsMock,
+  fileUsageDb: {
+    transaction: async (run) => await testFileUsageDb().transaction(run),
+  },
   flushEntitySearchRepairs: flushEntitySearchRepairsMock,
+  lockCopyPublicationIntentsInTransaction: lockCopyPublicationIntentsMock,
   requestNativeExtractionRuns: requestNativeExtractionRunsMock,
+  retirePublishedCopyIntentsInTransaction: retirePublishedCopyIntentsMock,
 });
 
-const workspaceId = toSafeId<"workspace">("workspace_1");
+const workspaceId = toSafeId<"workspace">(
+  "00000000-0000-4000-8000-000000000001",
+);
 const userId = toSafeId<"user">("user_1");
-const organizationId = toSafeId<"organization">("organization_1");
+const organizationId = toSafeId<"organization">(
+  "00000000-0000-4000-8000-000000000002",
+);
 const rootFolderId = toSafeId<"entity">("root_folder");
 const documentId = toSafeId<"entity">("document_child");
 const nestedFolderId = toSafeId<"entity">("nested_folder");
@@ -125,8 +185,42 @@ const secondarySourceKey = createFileKey({
 });
 
 let fake: FakeS3;
+let fileUsageDb: TestDatabase;
+
+beforeAll(
+  async () => {
+    fileUsageDb = await getTestDb();
+    await fileUsageDb.insert(organization).values({
+      createdAt: dbClock.now(),
+      id: organizationId,
+      name: "Duplicate entity tests",
+      slug: `duplicate-entity-${Bun.randomUUIDv7()}`,
+    });
+    await fileUsageDb.insert(workspaces).values({
+      id: workspaceId,
+      organizationId,
+      name: "Duplicate entity matter",
+      reference: `duplicate-${Bun.randomUUIDv7()}`,
+    });
+  },
+  { timeout: 30_000 },
+);
+
+afterAll(async () => {
+  await fileUsageDb
+    .delete(bufferObjectCleanupIntents)
+    .where(eq(bufferObjectCleanupIntents.organizationId, organizationId));
+  await deleteOrganizationsForTest(fileUsageDb, [organizationId]);
+  await releaseTestDb();
+});
 
 beforeEach(() => {
+  lockCopyPublicationIntentsMock.mockClear();
+  retirePublishedCopyIntentsMock.mockClear();
+  enqueueDocumentProcessingRunMock.mockClear();
+  enqueueEntitySearchRepairsMock.mockClear();
+  flushEntitySearchRepairsMock.mockClear();
+  requestNativeExtractionRunsMock.mockClear();
   fake = startFakeS3();
   fake.put(envBase.S3_BUCKET, sourceKey, sourceBytes, fileContent.mimeType);
   fake.put(
@@ -141,32 +235,55 @@ afterEach(() => {
   fake.stop();
 });
 
+// timeout: Writes through a real database and the fake object store around an ambiguous copy.
 test("reserves a copy destination before an ambiguous S3 failure", async () => {
   // A rejected copy is ambiguous: the object may still have landed, so the
   // destination has to be reserved before the request goes out.
   fake.failNext({ method: "COPY", code: "AccessDenied", status: 403 });
-  const copiedS3Keys: string[] = [];
-
-  const copied = await copyFileObject({
-    sourceEntityId: documentId,
-    sourceFileId: fileContent.id,
-    sourceKey,
-    mimeType: fileContent.mimeType,
-    organizationId,
-    targetWorkspaceId: workspaceId,
-    copiedS3Keys,
+  const copyDb = fileUsageDb;
+  const copyOrganizationId = mintAuthProviderId<"organization">();
+  const copyWorkspaceId = toSafeId<"workspace">(Bun.randomUUIDv7());
+  await copyDb.insert(organization).values({
+    createdAt: dbClock.now(),
+    id: copyOrganizationId,
+    name: "Ambiguous copy test",
+    slug: `ambiguous-copy-${Bun.randomUUIDv7()}`,
   });
+  await copyDb.insert(workspaces).values({
+    id: copyWorkspaceId,
+    organizationId: copyOrganizationId,
+    name: "Ambiguous copy matter",
+    reference: `ambiguous-${Bun.randomUUIDv7()}`,
+  });
+  try {
+    const copiedS3Keys: string[] = [];
+    const copied = await copyFileObject({
+      sourceEntityId: documentId,
+      sourceFileId: fileContent.id,
+      sourceKey,
+      mimeType: fileContent.mimeType,
+      organizationId: copyOrganizationId,
+      targetWorkspaceId: copyWorkspaceId,
+      copiedS3Keys,
+      fileUsageDb: testFileUsageDb(),
+    });
 
-  if (!Result.isError(copied)) {
-    throw new TypeError("Expected the ambiguous copy to fail");
+    if (!Result.isError(copied)) {
+      throw new TypeError("Expected the ambiguous copy to fail");
+    }
+    expect(copied.error).toMatchObject({ message: "Failed to copy object" });
+    const attempted = fake.requests.filter(({ method }) => method === "COPY");
+    expect(attempted).toHaveLength(1);
+    // The reserved key is the key the copy actually addressed, not a guess.
+    expect(copiedS3Keys).toEqual(attempted.map(({ key }) => key));
+    expect(attempted.at(0)?.copySourceKey).toBe(sourceKey);
+  } finally {
+    await copyDb
+      .delete(bufferObjectCleanupIntents)
+      .where(eq(bufferObjectCleanupIntents.organizationId, copyOrganizationId));
+    await deleteOrganizationsForTest(copyDb, [copyOrganizationId]);
   }
-  expect(copied.error).toMatchObject({ message: "Failed to copy object" });
-  const attempted = fake.requests.filter(({ method }) => method === "COPY");
-  expect(attempted).toHaveLength(1);
-  // The reserved key is the key the copy actually addressed, not a guess.
-  expect(copiedS3Keys).toEqual(attempted.map(({ key }) => key));
-  expect(attempted.at(0)?.copySourceKey).toBe(sourceKey);
-});
+}, 30_000);
 
 type InsertedEntity = {
   id: SafeId<"entity">;
@@ -244,24 +361,24 @@ const createContext = ({
     server: null,
   };
 
-  return {
+  return asTestRaw<Parameters<typeof duplicateEntity.handler>[0]>({
     workspaceId,
     user: { id: userId },
     session: { activeOrganizationId: organizationId },
     memberRole: sessionMemberRole("owner"),
     body,
     request: recorderBindings.request,
-    route: "/v1/entities/:workspaceId/duplicate",
+    route: "/v1/entities/:workspaceId/duplicate" satisfies ApiRoutePath,
     safeDb,
     recordAuditEvent: createAuditRecorder(recorderBindings),
     createAuditRecorder: () => createAuditRecorder(recorderBindings),
-    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test fixture only provides fields touched by the handler
-  } as Parameters<typeof duplicateEntity.handler>[0];
+  });
 };
 
 describe("duplicate name collisions", () => {
   let nameDb: TestDatabase;
 
+  // timeout: Boot a migrated test database before the collision cases.
   beforeAll(
     async () => {
       nameDb = await getTestDb();
@@ -603,6 +720,7 @@ describe("duplicate name collisions", () => {
           });
         },
       ),
+      propertyConfig({ numRuns: 24 }),
     );
   });
 });
@@ -634,6 +752,7 @@ describe("duplicate entity", () => {
       };
       let entityLookupCount = 0;
       const tx = {
+        execute: async () => [{ id: workspaceId }],
         query: {
           entities: {
             findFirst: async () => {
@@ -668,7 +787,9 @@ describe("duplicate entity", () => {
         }),
         update: () => ({ set: () => ({ where: async () => {} }) }),
       };
-      const { safeDb } = createScopedDbMock(tx);
+      const { safeDb } = createScopedDbMock(tx, {
+        visibleResources: { entity: [rootFolderId, documentId] },
+      });
 
       const result = await duplicateEntity.handler(
         createContext({
@@ -705,6 +826,7 @@ describe("duplicate entity", () => {
     let entityLookupCount = 0;
     let replayQuery: unknown;
     const tx = {
+      execute: async () => [{ id: workspaceId }],
       query: {
         entities: {
           findFirst: async (query: unknown) => {
@@ -752,7 +874,9 @@ describe("duplicate entity", () => {
       }),
       update: () => ({ set: () => ({ where: async () => {} }) }),
     };
-    const { safeDb } = createScopedDbMock(tx);
+    const { safeDb } = createScopedDbMock(tx, {
+      visibleResources: { entity: [rootFolderId, documentId] },
+    });
 
     const result = await duplicateEntity.handler(
       createContext({
@@ -791,8 +915,10 @@ describe("duplicate entity", () => {
   test("retains copied objects when a lost commit acknowledgement replays", async () => {
     const sourceDocument = sourceEntities.at(1);
     let entityLookupCount = 0;
+    let commitState: "pending" | "written" | "acknowledgement-lost" = "pending";
     const replayFieldId = toSafeId<"field">("committed_copy_field");
     const tx = {
+      execute: async () => [{ id: workspaceId }],
       query: {
         entities: {
           findFirst: async () => {
@@ -820,6 +946,9 @@ describe("duplicate entity", () => {
       }),
       insert: (table: unknown) => ({
         values: (value: unknown) => {
+          if (table === entities) {
+            commitState = "written";
+          }
           if (table === documentCounters) {
             return {
               onConflictDoUpdate: () => ({
@@ -834,12 +963,13 @@ describe("duplicate entity", () => {
       }),
       update: () => ({ set: () => ({ where: async () => {} }) }),
     };
-    const { safeDb: committedSafeDb } = createScopedDbMock(tx);
-    let safeDbCallCount = 0;
+    const { safeDb: committedSafeDb } = createScopedDbMock(tx, {
+      visibleResources: { entity: [rootFolderId, documentId] },
+    });
     const safeDb: SafeDb = async (callback, retry) => {
-      safeDbCallCount++;
       const result = await committedSafeDb(callback, retry);
-      if (safeDbCallCount === 3 && !Result.isError(result)) {
+      if (commitState === "written" && !Result.isError(result)) {
+        commitState = "acknowledgement-lost";
         return Result.err(
           new DatabaseError({ message: "commit acknowledgement lost" }),
         );
@@ -911,6 +1041,7 @@ describe("duplicate entity", () => {
     let siblingReads = 0;
 
     const tx = {
+      execute: async () => [{ id: workspaceId }],
       query: {
         entities: {
           findFirst: async () => sources.at(0),
@@ -974,7 +1105,9 @@ describe("duplicate entity", () => {
       }),
     };
 
-    const { safeDb } = createScopedDbMock(tx);
+    const { safeDb } = createScopedDbMock(tx, {
+      visibleResources: { entity: [rootFolderId, documentId] },
+    });
     const result = await duplicateEntity.handler(createContext({ safeDb }));
 
     expect(result).toEqual({
@@ -1046,19 +1179,23 @@ describe("duplicate entity", () => {
     expect(nestedDuplicate.kind).toBe("folder");
     expect(nestedDuplicate.name).toBe("Nested");
     expect(nestedDuplicate.parentId).toBe(rootDuplicate.id);
-    // The DOCX copy is indexed by the extraction run that reads it; the two
-    // folder copies have no such run, so their marks are written inside the
-    // copy transaction and only flushed afterwards.
+    // Every copy is marked for immediate name indexing. Native extraction
+    // independently adds content to the same source-fenced projection.
     expect(requestNativeExtractionRunsMock).toHaveBeenCalledTimes(1);
     expect(enqueueDocumentProcessingRunMock.mock.calls).toEqual([
       [toSafeId<"documentProcessingRun">("run_0")],
       [toSafeId<"documentProcessingRun">("run_1")],
     ]);
     expect(enqueueEntitySearchRepairsMock).toHaveBeenCalledTimes(1);
-    expect(enqueueEntitySearchRepairsMock.mock.calls.at(0)?.at(1)).toEqual([
-      rootDuplicate.id,
-      nestedDuplicate.id,
-    ]);
+    const markedIds = enqueueEntitySearchRepairsMock.mock.calls.at(0)?.at(1);
+    if (!Array.isArray(markedIds)) {
+      throw new TypeError("Expected copied entity search marks");
+    }
+    expect(markedIds).toBeArray();
+    expect(markedIds).toHaveLength(insertedEntities.length);
+    expect(markedIds).toEqual(
+      expect.arrayContaining(insertedEntities.map(({ id }) => id)),
+    );
     expect(flushEntitySearchRepairsMock).toHaveBeenCalledTimes(1);
   });
 
@@ -1082,6 +1219,7 @@ describe("duplicate entity", () => {
     ];
 
     const tx = {
+      execute: async () => [{ id: workspaceId }],
       query: {
         entities: {
           findFirst: async () => brokenSubtree.at(0),
@@ -1113,7 +1251,9 @@ describe("duplicate entity", () => {
       update: () => ({ set: () => ({ where: async () => {} }) }),
     };
 
-    const { safeDb } = createScopedDbMock(tx);
+    const { safeDb } = createScopedDbMock(tx, {
+      visibleResources: { entity: [rootFolderId, documentId] },
+    });
     const result = await duplicateEntity.handler(createContext({ safeDb }));
 
     // The abort travels as the same rejection the caller always answered.

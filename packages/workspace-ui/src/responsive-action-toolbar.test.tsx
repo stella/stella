@@ -8,7 +8,7 @@ import {
 } from "./responsive-action-toolbar";
 
 describe("ResponsiveActionToolbar", () => {
-  test("keeps primary, secondary, and action slots in one responsive row", () => {
+  test("wraps its slots instead of scrolling them out of view", () => {
     const markup = renderToStaticMarkup(
       <ResponsiveActionToolbar aria-label="Workspace actions">
         <ResponsiveActionToolbarItem slot="primary">
@@ -24,11 +24,9 @@ describe("ResponsiveActionToolbar", () => {
     );
 
     expect(markup).toContain('aria-label="Workspace actions"');
-    expect(markup).toContain("flex-nowrap");
-    expect(markup).toContain("overflow-x-auto");
-    expect(markup).toContain("scrollbar-width:none");
-    expect(markup).toContain("-ms-overflow-style:none");
-    expect(markup).toContain("webkit-scrollbar]:hidden");
+    expect(markup).toContain("flex-wrap");
+    expect(markup).not.toContain("overflow-x-auto");
+    expect(markup).not.toContain("scrollbar");
     expect(markup).toContain("Search");
     expect(markup).toContain("Filter");
     expect(markup).toContain("More");

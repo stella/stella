@@ -11,13 +11,13 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import {
   DOCUMENT_FETCH_EVENT,
   type DocumentStageObservation,
 } from "@stll/legal-atlas/document-fetch-diagnostics";
 
 import { toSafeId } from "@/api/lib/branded-types";
-import type { DocumentAst } from "@/api/lib/case-law/document-ast";
 import type {
   DecisionDocumentOutcome,
   PendingDocument,
@@ -29,11 +29,11 @@ import {
 } from "@/api/lib/legal-search/sk-document-queue";
 
 import {
+  type DeferredDocumentDrainOptions,
+  type DeferredDocumentDrainSummary,
+  type DeferredDocumentDrainTiming,
   DRAIN_CHECK_SLICE_MS,
-  type SkDocumentDrainOptions,
-  type SkDocumentDrainSummary,
-  type SkDocumentDrainTiming,
-  runSkDocumentDrain,
+  runDeferredDocumentDrain,
 } from "./sk-document-drain";
 
 const TIMING = {
@@ -42,7 +42,7 @@ const TIMING = {
   idleSleepMaxMs: 8000,
   summaryIntervalMs: 10_000,
   failureBackoffMaxMs: 4000,
-} as const satisfies SkDocumentDrainTiming;
+} as const satisfies DeferredDocumentDrainTiming;
 
 const EMPTY_AST: DocumentAst = {
   version: 1,
@@ -76,6 +76,8 @@ const OUTCOMES = {
   },
   unavailable: { status: "unavailable" },
   claimed: { status: "claimed" },
+  busy: { status: "busy" },
+  lost: { status: "lost" },
   superseded: { status: "superseded" },
   deferred: {
     status: "deferred",
@@ -134,12 +136,12 @@ type DrainEvent =
 
 type DrainRun = {
   events: DrainEvent[];
-  summaries: SkDocumentDrainSummary[];
+  summaries: DeferredDocumentDrainSummary[];
   clock: number;
 };
 
 type RunDrainOptions = {
-  documentObservations?: SkDocumentDrainOptions["documentObservations"];
+  documentObservations?: DeferredDocumentDrainOptions["documentObservations"];
   /** A queue, or one built over the run's fake clock. */
   queue: PendingDocumentQueue | ((now: () => number) => PendingDocumentQueue);
   /** Answers one fetch; throwing stands in for a transient failure. */
@@ -148,7 +150,7 @@ type RunDrainOptions = {
   polls: number;
   /** Additionally drain once the fake clock reaches this, mid-wait. */
   drainAtClock?: number;
-  timing?: SkDocumentDrainTiming;
+  timing?: DeferredDocumentDrainTiming;
 };
 
 const runDrain = async ({
@@ -160,13 +162,13 @@ const runDrain = async ({
   timing = TIMING,
 }: RunDrainOptions): Promise<DrainRun> => {
   const events: DrainEvent[] = [];
-  const summaries: SkDocumentDrainSummary[] = [];
+  const summaries: DeferredDocumentDrainSummary[] = [];
   let clock = 0;
   let polled = 0;
   let draining = false;
   const source = typeof queue === "function" ? queue(() => clock) : queue;
 
-  await runSkDocumentDrain({
+  await runDeferredDocumentDrain({
     ...(documentObservations === undefined ? {} : { documentObservations }),
     queue: {
       next: async () => {

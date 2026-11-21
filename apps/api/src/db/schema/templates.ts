@@ -1,6 +1,10 @@
 import { sql } from "drizzle-orm";
 
 import { CONTACT_TYPES } from "@stll/api-contract";
+import type {
+  DECISION_UNDECIDED_REASON_CODES,
+  DecisionUndecidedReason,
+} from "@stll/api-contract/ai-decision-provider";
 import type { TemplatePackAuthor } from "@stll/template-packs/schema";
 
 import type { ClauseDirectiveWarning } from "@/api/lib/clauses/clause-directives";
@@ -8,33 +12,39 @@ import type { AiFieldError } from "@/api/lib/docx/resolve-ai-fields";
 import { LOOKUP_REGISTRIES } from "@/api/lib/docx/types";
 
 import {
+  entityFeatureGateChecks,
+  entityFeatureGateColumns,
+  entityFeatureWorkspaceGateColumns,
+} from "../entity-feature-gate-columns";
+import { entityFeaturePolicies } from "../entity-feature-policies";
+import {
   deletionCleanupConstraints,
   deletionCleanupRetryColumns,
 } from "./cleanup-ledgers";
 import {
-  ENTITY_KINDS,
-  SEARCH_PROJECTION_KINDS,
-  TEMPLATE_DELETION_CLEANUP_STATUSES,
   bytea,
+  ENTITY_KINDS,
   jsonb,
+  organization,
   organizationCheck,
   orgPolicies,
   orgReadOnlyPolicies,
-  organization,
   p,
   pUuid,
   safeOrganizationId,
   safeUuid,
   safeWorkspaceId,
+  SEARCH_PROJECTION_KINDS,
   stella,
   storedFileScanState,
   storedFileScanStateCheck,
+  TEMPLATE_DELETION_CLEANUP_STATUSES,
+  timestamptz,
   tsvector,
   user,
   userOrganizationPolicies,
   wsOrganizationPolicies,
   wsOrganizationReadOnlyPolicies,
-  timestamptz,
 } from "./common";
 import type {
   AnyPgColumn,
@@ -44,7 +54,7 @@ import type {
   TemplateManifest,
 } from "./common";
 import { contacts, workspaces } from "./contacts";
-import { TEMPLATE_KINDS, entities, entityVersions, fields } from "./entities";
+import { entities, entityVersions, fields, TEMPLATE_KINDS } from "./entities";
 
 export const LOOKUP_FORMAT_PREFERENCE = {
   SAVED: "saved",
@@ -285,6 +295,10 @@ export const templates = p.pgTable(
     p.unique("templates_id_org_unq").on(table.id, table.organizationId),
     storedFileScanStateCheck("templates_scan_state_check", table.scanState),
     p.check(
+      "templates_s3_key_organization_check",
+      sql`starts_with(${table.s3Key}, ${table.organizationId} || '/')`,
+    ),
+    p.check(
       "templates_origin_type_values_check",
       sql`${table.originType} IN (${sql.join(TEMPLATE_ORIGIN_TYPE_SQL_VALUES, sql`, `)})`,
     ),
@@ -364,7 +378,7 @@ type TemplatePersistenceUndecidedCondition = {
   path: string;
   label: string;
   state: "undecided";
-  reason: "no_decision_model" | "below_floor" | "failed";
+  reason: (typeof DECISION_UNDECIDED_REASON_CODES)[DecisionUndecidedReason];
 };
 
 export const TEMPLATE_PERSISTENCE_REQUEST_STATUS = {
@@ -431,7 +445,9 @@ export const templatePersistenceRequests = p.pgTable(
         name: "template_persistence_requests_workspace_organization_fk",
       })
       .onDelete("cascade"),
-    ...wsOrganizationPolicies("template_persistence_requests"),
+    ...wsOrganizationPolicies("template_persistence_requests", {
+      columns: table,
+    }),
   ],
 );
 
@@ -467,6 +483,10 @@ export const templateVersions = p.pgTable(
     storedFileScanStateCheck(
       "template_versions_scan_state_check",
       table.scanState,
+    ),
+    p.check(
+      "template_versions_s3_key_organization_check",
+      sql`starts_with(${table.s3Key}, ${table.organizationId} || '/')`,
     ),
     ...orgPolicies(),
   ],
@@ -514,6 +534,8 @@ export const templateDeletionCleanupRequests = p.pgTable(
 export const searchDocuments = p.pgTable(
   "search_documents",
   {
+    ...entityFeatureGateColumns(),
+    ...entityFeatureWorkspaceGateColumns(),
     entityId: safeUuid<"entity">("entity_id")
       .primaryKey()
       .references(() => entities.id, { onDelete: "cascade" }),
@@ -532,6 +554,7 @@ export const searchDocuments = p.pgTable(
     updatedAt: timestamptz("updated_at").notNull().defaultNow(),
   },
   (table) => [
+    ...entityFeatureGateChecks(table),
     p.index("search_documents_org_id_idx").on(table.organizationId),
     p
       .index("search_documents_org_workspace_idx")
@@ -547,13 +570,20 @@ export const searchDocuments = p.pgTable(
         name: "search_documents_workspace_organization_fk",
       })
       .onDelete("cascade"),
-    ...wsOrganizationPolicies("search_documents"),
+    ...wsOrganizationPolicies("search_documents", {
+      columns: table,
+      references: new Map([
+        [table.entityId, { target: "entities", kind: "owned-content" }],
+      ]),
+    }),
   ],
 );
 
 export const searchDocumentPreviewPassages = p.pgTable(
   "search_document_preview_passages",
   {
+    ...entityFeatureGateColumns(),
+    ...entityFeatureWorkspaceGateColumns(),
     entityId: safeUuid<"entity">("entity_id")
       .notNull()
       .references(() => searchDocuments.entityId, { onDelete: "cascade" }),
@@ -565,6 +595,7 @@ export const searchDocumentPreviewPassages = p.pgTable(
     tsv: tsvector().notNull(),
   },
   (table) => [
+    ...entityFeatureGateChecks(table),
     p.primaryKey({
       columns: [table.entityId, table.generation, table.ordinal],
       name: "search_document_preview_passages_pk",
@@ -596,6 +627,12 @@ export const searchDocumentPreviewPassages = p.pgTable(
       })
       .onDelete("cascade"),
     ...wsOrganizationReadOnlyPolicies("search_document_preview_passages"),
+    ...entityFeaturePolicies(
+      table,
+      new Map([
+        [table.entityId, { target: "entities", kind: "owned-content" }],
+      ]),
+    ),
   ],
 );
 
@@ -703,7 +740,7 @@ export const workspaceSearchDocuments = p.pgTable(
         name: "workspace_search_documents_workspace_organization_fk",
       })
       .onDelete("cascade"),
-    ...wsOrganizationPolicies("workspace_search_documents"),
+    ...wsOrganizationPolicies("workspace_search_documents", { columns: table }),
   ],
 );
 
@@ -835,6 +872,8 @@ export const searchProjectionRepairQueue = p.pgTable(
 export const extractedContent = p.pgTable(
   "extracted_content",
   {
+    ...entityFeatureGateColumns(),
+    ...entityFeatureWorkspaceGateColumns(),
     entityId: safeUuid<"entity">("entity_id").primaryKey(),
     organizationId: safeOrganizationId("organization_id")
       .notNull()
@@ -865,6 +904,7 @@ export const extractedContent = p.pgTable(
     extractedAt: timestamptz("extracted_at").notNull().defaultNow(),
   },
   (table) => [
+    ...entityFeatureGateChecks(table),
     p.index("extracted_content_org_id_idx").on(table.organizationId),
     p
       .foreignKey({
@@ -902,6 +942,16 @@ export const extractedContent = p.pgTable(
         AND ${table.ocrPayloadIv} IS NOT NULL
       )`,
     ),
-    ...wsOrganizationPolicies("extracted_content"),
+    ...wsOrganizationPolicies("extracted_content", {
+      columns: table,
+      references: new Map([
+        [
+          table.sourceEntityVersionId,
+          { target: "entity_versions", kind: "owned-content" },
+        ],
+        [table.sourceFieldId, { target: "fields", kind: "owned-content" }],
+        [table.entityId, { target: "entities", kind: "owned-content" }],
+      ]),
+    }),
   ],
 );

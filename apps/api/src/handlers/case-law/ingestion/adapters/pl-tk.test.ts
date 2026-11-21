@@ -16,19 +16,16 @@ import {
   setSystemTime,
   test,
 } from "bun:test";
-import * as cheerio from "cheerio";
 
+import { load } from "@stll/html";
 import { DAY_IN_MS, Temporal } from "@stll/time";
 
 import {
-  decodeSourceRawEnvelope,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
-import {
   assemblePlTkDecision,
-  createPlTkSessionCooldown,
+  buildPlTkDecision,
+  createPlTkPageCache,
   createPlTkPublisherSessionCooldown,
+  createPlTkSessionCooldown,
   encodePlTkCursor,
   parsePlTkCursor,
   parsePlTkListingPage,
@@ -36,17 +33,29 @@ import {
   PL_TK_QUARANTINE_PREFIX,
   PL_TK_SESSION_REFUSAL_COOLDOWN_MS,
   plTkAdapter,
-  plTkSessionCooldown,
   plTkBatchWindow,
   plTkRawPartsOf,
+  plTkSessionCooldown,
 } from "@/api/handlers/case-law/ingestion/adapters/pl-tk";
-import type { PlTkListingRow } from "@/api/handlers/case-law/ingestion/adapters/pl-tk";
+import type {
+  PlTkListingRow,
+  PlTkPageCache,
+} from "@/api/handlers/case-law/ingestion/adapters/pl-tk";
 import { plConstitutionalTribunalRulingKeys } from "@/api/handlers/case-law/ingestion/adapters/pl-tk-ruling-keys";
 import { publisherRequestIntervalMs } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
+import { parsePlTkPage } from "@/api/handlers/case-law/ingestion/parsers/pl-tk";
 import { sanitizeMetadata } from "@/api/lib/legal-search/corpus-sanitize";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
+import {
+  decodeSourceRawEnvelope,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+} from "@/api/lib/legal-search/ingestion-types";
+import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { isRecord } from "@/api/lib/type-guards";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
+
+const testFetchState = createTestFetch();
 
 const ADAPTER_FIXTURES = new URL("__fixtures__/", import.meta.url);
 const PARSER_FIXTURES = new URL("../parsers/__fixtures__/", import.meta.url);
@@ -152,8 +161,8 @@ const redirectTo = (path: string): Response =>
 const installPortal = (options: PortalOptions): SeenRequest[] => {
   const seen: SeenRequest[] = [];
   let sessions = 0;
-  globalThis.fetch = asFetchMock(
-    async (input: string | URL | Request, init?: RequestInit) => {
+  testFetchState.set(
+    asFetchMock(async (input: string | URL | Request, init?: RequestInit) => {
       const url = new URL(requestUrl(input));
       const cookie = new Headers(init?.headers).get("Cookie");
       seen.push({
@@ -195,18 +204,15 @@ const installPortal = (options: PortalOptions): SeenRequest[] => {
         );
       }
       return await Promise.resolve(new Response("", { status: 404 }));
-    },
+    }),
   );
   return seen;
 };
 
-const originalFetch = globalThis.fetch;
 const originalSleep = Bun.sleep;
-let fixtureClock = Temporal.Now.instant().epochMilliseconds;
+const fixtureClock = Temporal.Now.instant().epochMilliseconds;
 
 beforeEach(() => {
-  // Each fixture starts after the preceding session-refusal cooldown expired.
-  fixtureClock += DAY_IN_MS + 1;
   setSystemTime(fixtureClock);
   Bun.sleep = async () => {
     // Nothing here is live.
@@ -218,7 +224,7 @@ afterAll(() => {
 });
 
 afterEach(() => {
-  globalThis.fetch = originalFetch;
+  testFetchState.restore();
   Bun.sleep = originalSleep;
 });
 
@@ -229,13 +235,15 @@ describe("portal session outcomes", () => {
       const cursor = "merits:1645,0,0";
       const startedAt = Temporal.Now.instant().epochMilliseconds;
       let requests = 0;
-      globalThis.fetch = asFetchMock(async () => {
-        requests++;
-        return new Response("entry refused", {
-          status: entryStatus,
-          headers: { "Retry-After": "3" },
-        });
-      });
+      testFetchState.set(
+        asFetchMock(async () => {
+          requests++;
+          return new Response("entry refused", {
+            status: entryStatus,
+            headers: { "Retry-After": "3" },
+          });
+        }),
+      );
       const first = await plTkAdapter.fetchPage(cursor, {});
       if (Result.isOk(first)) {
         throw new TypeError("Expected an entry refusal");
@@ -260,7 +268,6 @@ describe("portal session outcomes", () => {
       setSystemTime(startedAt + 3000);
       await plTkAdapter.fetchPage(cursor, {});
       expect(requests).toBe(2);
-      fixtureClock = Temporal.Now.instant().epochMilliseconds;
     },
   );
 
@@ -364,10 +371,12 @@ describe("portal session outcomes", () => {
     const cursor = "merits:1645,0,0";
     const startedAt = Temporal.Now.instant().epochMilliseconds;
     let requests = 0;
-    globalThis.fetch = asFetchMock(async () => {
-      requests++;
-      return new Response("entry refused", { status: 403 });
-    });
+    testFetchState.set(
+      asFetchMock(async () => {
+        requests++;
+        return new Response("entry refused", { status: 403 });
+      }),
+    );
     const first = await plTkAdapter.fetchPage(cursor, {});
     if (Result.isOk(first)) {
       throw new TypeError("Expected an entry refusal");
@@ -405,7 +414,6 @@ describe("portal session outcomes", () => {
     }
     expect(retried.error.httpStatus).toBe(403);
     expect(requests).toBe(2);
-    fixtureClock = Temporal.Now.instant().epochMilliseconds;
   });
 
   test("an entry refusal stops before search or listing", async () => {
@@ -413,10 +421,12 @@ describe("portal session outcomes", () => {
       new URL("pl-tk-entry-refused.html", ADAPTER_FIXTURES),
     ).text();
     const seen: string[] = [];
-    globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
-      seen.push(requestUrl(input));
-      return new Response(body, { status: 403 });
-    });
+    testFetchState.set(
+      asFetchMock(async (input: string | URL | Request) => {
+        seen.push(requestUrl(input));
+        return new Response(body, { status: 403 });
+      }),
+    );
 
     const result = await plTkAdapter.fetchPage("merits:1645,0,0", {});
     if (Result.isOk(result)) {
@@ -430,19 +440,21 @@ describe("portal session outcomes", () => {
 
   test("a refusal after successful bootstrap holds the cursor without reopening", async () => {
     const seen: string[] = [];
-    globalThis.fetch = asFetchMock(async (input, init) => {
-      const url = new URL(requestUrl(input));
-      seen.push(url.pathname);
-      if (url.pathname === "/ipo/") {
-        return html("<html></html>", [
-          "JSESSIONID=fixture-session; Path=/ipo; Secure; HttpOnly",
-        ]);
-      }
-      expect(new Headers(init?.headers).get("Cookie")).toContain(
-        "JSESSIONID=fixture-session",
-      );
-      return new Response("the portal opened no session", { status: 403 });
-    });
+    testFetchState.set(
+      asFetchMock(async (input, init) => {
+        const url = new URL(requestUrl(input));
+        seen.push(url.pathname);
+        if (url.pathname === "/ipo/") {
+          return html("<html></html>", [
+            "JSESSIONID=fixture-session; Path=/ipo; Secure; HttpOnly",
+          ]);
+        }
+        expect(new Headers(init?.headers).get("Cookie")).toContain(
+          "JSESSIONID=fixture-session",
+        );
+        return new Response("the portal opened no session", { status: 403 });
+      }),
+    );
 
     const result = await plTkAdapter.fetchPage("merits:1645,0,0", {});
     if (Result.isOk(result)) {
@@ -462,10 +474,12 @@ describe("portal session outcomes", () => {
 
   test("an entry transport failure is source unreachable and makes one request", async () => {
     let requests = 0;
-    globalThis.fetch = asFetchMock(async () => {
-      requests += 1;
-      throw new TypeError("Unable to connect");
-    });
+    testFetchState.set(
+      asFetchMock(async () => {
+        requests += 1;
+        throw new TypeError("Unable to connect");
+      }),
+    );
 
     const result = await plTkAdapter.fetchPage("merits:1645,0,0", {});
     if (Result.isOk(result)) {
@@ -512,6 +526,17 @@ describe("the print view's listing", () => {
       decisionDate: "2026-08-12",
       subject: "Tryb uchwalenia ustawy",
     });
+  });
+
+  test("a span nested in the italic subject inherits it without repeating it", async () => {
+    const page = parsePlTkListingPage(
+      (await listingFixture("pl-tk-listing-merits-page-0.html.gz")).replace(
+        'font-style: italic;">Tryb uchwalenia ustawy.</span>',
+        'font-style: italic;">Tryb <span style="font-style:inherit">uchwalenia</span> ustawy.</span>',
+      ),
+      "merits",
+    );
+    expect(page?.rows[1]?.subject).toBe("Tryb uchwalenia ustawy");
   });
 
   test("every row of the oldest page dates, including a padded day", async () => {
@@ -624,6 +649,65 @@ describe("the crawl cursor", () => {
 });
 
 describe("a crawl page against the portal", () => {
+  test.each(["fresh fetch", "cached HTML"] as const)(
+    "releases the previous parsed page before parsing a %s case",
+    async (path) => {
+      const [firstPage, secondPage] = await Promise.all([
+        caseFixture("pl-tk-case-k-2-26.html.gz"),
+        caseFixture("pl-tk-case-k-44-16.html.gz"),
+      ]);
+      const firstRow = rowFor({
+        documentId: "25564",
+        caseId: "29150",
+        caseNumber: "K 2/26",
+      });
+      const secondRow = rowFor({
+        documentId: "16940",
+        caseId: "17892",
+        caseNumber: "K 44/16",
+      });
+      let sizeWhileParsingSecond = -1;
+      const cache: PlTkPageCache = createPlTkPageCache((source) => {
+        if (source === secondPage) {
+          sizeWhileParsingSecond = cache.parsedSize();
+        }
+        return parsePlTkPage(source);
+      });
+      cache.parse(firstRow.caseId ?? panic("missing case id"), firstPage);
+      if (path === "cached HTML") {
+        cache.html.set(
+          secondRow.caseId ?? panic("missing case id"),
+          secondPage,
+        );
+      } else {
+        installPortal({
+          listingPage: () => undefined,
+          casePage: () => secondPage,
+        });
+      }
+
+      const actual = await buildPlTkDecision({
+        cursor: "merits:0,0,0",
+        pageCache: cache,
+        row: secondRow,
+        session: { sessionId: "s1" },
+        signal: undefined,
+      });
+
+      expect(sizeWhileParsingSecond).toBe(0);
+      expect(cache.parsedSize()).toBe(1);
+      expect(actual).toEqual(
+        Result.ok(
+          assemblePlTkDecision({
+            row: secondRow,
+            casePage: secondPage,
+            rawParts: plTkRawPartsOf(secondRow, secondPage),
+          }),
+        ),
+      );
+    },
+  );
+
   test("reads the stage's oldest rulings first, over HTTP/2, one case page per case", async () => {
     const [first, last, oldestCase] = await Promise.all([
       listingFixture("pl-tk-listing-merits-page-0.html.gz"),
@@ -988,7 +1072,7 @@ describe("the fields a case page states", () => {
     const stated = plTkAdapter.sourceFields.listSourceFields({
       "case-page": page,
     });
-    if (!Array.isArray(stated)) {
+    if (stated instanceof Promise) {
       throw new TypeError("the inventory reads synchronously");
     }
     return stated.filter(
@@ -1326,8 +1410,8 @@ describe("a case page that redirects", () => {
 
   test("a redirect on the listing itself fails the page", async () => {
     installPortal({ listingPage: () => undefined });
-    globalThis.fetch = asFetchMock(
-      async (input: string | URL | Request, init?: RequestInit) => {
+    testFetchState.set(
+      asFetchMock(async (input: string | URL | Request, init?: RequestInit) => {
         const url = new URL(requestUrl(input));
         if (url.pathname === "/ipo/SzukajDrukuj") {
           return await Promise.resolve(redirectTo("/ipo/Szukaj?cid=1"));
@@ -1344,7 +1428,7 @@ describe("a case page that redirects", () => {
             ].filter((header) => header.length > 0),
           ),
         );
-      },
+      }),
     );
 
     const result = await plTkAdapter.fetchPage(null, {});
@@ -1457,7 +1541,7 @@ for (const candidate of [
   ["javascript", "alert(1)"].join(":"),
 ]) {
   test(`all tribunal metadata URL paths use parser-decoded addresses: ${candidate}`, async () => {
-    const $ = cheerio.load(await caseFixture("pl-tk-case-k-2-26.html.gz"));
+    const $ = load(await caseFixture("pl-tk-case-k-2-26.html.gz"));
     const documents = $('[id="sprawaForm:tabView:dokumentyWSprawie"]');
     expect(documents.length).toBe(1);
     documents.empty().append("<ul><li><a>source document</a></li></ul>");

@@ -2,6 +2,8 @@ import { panic } from "better-result";
 import { lstatSync, readdirSync, realpathSync, type Stats } from "node:fs";
 import path from "node:path";
 
+import { isPathInside, repoRelativePath } from "@stll/portable-path";
+
 export type InspectedCatalogueEntry = {
   name: string;
   type: "directory" | "file";
@@ -87,7 +89,7 @@ const inspectDirectory = ({
 
   for (const name of names) {
     const entryPath = path.join(directoryPath, name);
-    const displayPath = path.relative(rootPath, entryPath);
+    const displayPath = repoRelativePath(rootPath, entryPath);
     const stats = lstatIfExists(entryPath);
     if (stats === null) {
       panic(
@@ -142,12 +144,7 @@ const assertContainedRealPath = ({
   displayPath,
   rootRealPath,
 }: AssertContainedRealPathOptions): void => {
-  const relativePath = path.relative(rootRealPath, candidateRealPath);
-  const escapesRoot =
-    relativePath === ".." ||
-    relativePath.startsWith(`..${path.sep}`) ||
-    path.isAbsolute(relativePath);
-  if (escapesRoot) {
+  if (!isPathInside(rootRealPath, candidateRealPath)) {
     panic(
       `Unsafe catalogue filesystem entry at ${displayPath}: real path escapes the catalogue root`,
     );

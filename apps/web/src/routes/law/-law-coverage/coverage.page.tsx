@@ -1,0 +1,906 @@
+import { useId, useState } from "react";
+
+import { useQuery } from "@tanstack/react-query";
+import { Link, useLocation, useNavigate } from "@tanstack/react-router";
+import { panic } from "better-result";
+import { useTranslations } from "use-intl";
+
+import type { CaseLawJurisdiction } from "@stll/api-contract/case-law-jurisdictions";
+import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
+import { Button } from "@stll/ui/button";
+import { DirectionalIcon } from "@stll/ui/directional-icon";
+import { ChevronRightIcon } from "@stll/ui/icons";
+import { ReviewStatusBadge } from "@stll/ui/review-status-badge";
+import {
+  Select,
+  SelectItem,
+  SelectPopup,
+  SelectTrigger,
+  SelectValue,
+} from "@stll/ui/select";
+import { TableBody, TableCell, TableHead, TableRow } from "@stll/ui/table";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
+import { cn } from "@stll/ui/utils";
+
+import {
+  caseLawCoverageAnchor,
+  toCaseLawCountryParam,
+} from "@/features/case-law/case-law-jurisdiction";
+import { CaseLawHealthSignal } from "@/features/case-law/components/case-law-health-signal";
+import { caseLawCompletenessPercent } from "@/features/case-law/coverage-completeness";
+import { caseLawCoverageOptions } from "@/features/case-law/queries/decisions";
+import {
+  useFormatter,
+  useFormattingLocale,
+  useRelativeTime,
+} from "@/i18n/formatting-context";
+import { caseLawCountryName } from "@/lib/case-law-route";
+import { detached } from "@/lib/detached";
+import { parseDeterministicDate } from "@/lib/deterministic-date";
+import {
+  CALENDAR_DATE_FORMAT,
+  MEDIUM_DATE_SHORT_TIME_FORMAT,
+  UTC_CALENDAR_DATE_FORMAT,
+} from "@/lib/relative-time";
+import {
+  CompletenessLabel,
+  COUNTRY_NAVIGATION_HEIGHT,
+  CountryCard,
+  CoverageTable,
+  SOURCE_COLUMN_COUNT,
+  SOURCE_COLUMNS,
+  SourcesTableHeadFace,
+  TableColumns,
+} from "@/routes/law/-law-coverage/coverage-country.pending";
+import {
+  CASE_LAW_COVERAGE_AVAILABILITY_LABEL_KEYS,
+  CASE_LAW_COVERAGE_AVAILABILITY_TONES,
+  type CaseLawCoverageCountry,
+  type CaseLawCoverageResponse,
+  type CaseLawCoverageSource,
+  type CaseLawMeasuredCompleteness,
+  type CaseLawSourceCompleteness,
+  orderCoverageCountriesByName,
+} from "@/routes/law/-law-coverage/coverage.logic";
+import {
+  CaseLawCoveragePending,
+  COUNTRY_NAVIGATION_ITEM_CLASS_NAME,
+  CoverageCountryNavigation,
+  CoverageGeneratedAt,
+  CoverageHeading,
+  CoverageHero,
+  CoverageLayout,
+  CoverageLegend,
+  CoverageLegendRow,
+  HeaderFigure,
+} from "@/routes/law/-law-coverage/coverage.pending";
+
+/** Where a figure stands that the corpus states no number for. */
+const NO_VALUE = "—";
+
+const PERCENT_FORMAT = {
+  style: "percent",
+} as const satisfies Intl.NumberFormatOptions;
+
+/** A year is an identifier, not a quantity: 2026, never 2,026. */
+const YEAR_FORMAT = {
+  useGrouping: false,
+} as const satisfies Intl.NumberFormatOptions;
+
+/**
+ * Signed, so the column reads as a delta rather than as a second total; a
+ * quiet week shows a plain 0 rather than "+0".
+ */
+const DELTA_FORMAT = {
+  signDisplay: "exceptZero",
+} as const satisfies Intl.NumberFormatOptions;
+
+// A callback ref publishes geometry before country refs perform their hash scroll.
+const measureCountryNavigation = (node: HTMLElement | null) => {
+  if (node === null) {
+    return undefined;
+  }
+  const container = node.parentElement;
+  if (container === null) {
+    panic("Country navigation requires a coverage container");
+  }
+  const measure = () => {
+    container.style.setProperty(
+      COUNTRY_NAVIGATION_HEIGHT,
+      `${node.getBoundingClientRect().height}px`,
+    );
+  };
+  measure();
+  const observer = new ResizeObserver(measure);
+  observer.observe(node);
+  return () => {
+    observer.disconnect();
+    container.style.removeProperty(COUNTRY_NAVIGATION_HEIGHT);
+  };
+};
+
+/**
+ * The /law/coverage page: the figures once they arrive, the pending shell
+ * until then, and "unavailable" when the read failed with nothing on hand.
+ */
+export const CaseLawCoverage = () => {
+  const t = useTranslations();
+  const { data, isError } = useQuery(caseLawCoverageOptions());
+
+  // Figures already on hand outrank a failed refetch: the query keeps its
+  // data when a background read fails, and a page that had the numbers must
+  // not swap them for "unavailable" because a later read did not answer.
+  if (data !== undefined) {
+    return <CaseLawCoveragePage coverage={data} />;
+  }
+  if (isError) {
+    return (
+      <CaseLawCoveragePage
+        coverage={{ message: t("caseLaw.coverage.unavailable") }}
+      />
+    );
+  }
+  return <CaseLawCoveragePending />;
+};
+
+/**
+ * What the corpus holds, country by country and source by source.
+ *
+ * The page keeps the two populations apart everywhere it prints them: what a
+ * search can find, and what is held. Summing them would count a searchable
+ * decision twice and imply that a country still in preparation can be
+ * searched, so they are never one figure.
+ */
+export const CaseLawCoveragePage = ({
+  coverage,
+}: {
+  coverage: CaseLawCoverageResponse;
+}) => {
+  const t = useTranslations();
+  const format = useFormatter();
+  const locale = useFormattingLocale();
+  const navigate = useNavigate();
+  const hash = useLocation({ select: (location) => location.hash });
+  const [collapsed, setCollapsed] = useState<ReadonlySet<CaseLawJurisdiction>>(
+    new Set(),
+  );
+  const expandCountry = (country: CaseLawJurisdiction) => {
+    setCollapsed((previous) => {
+      if (!previous.has(country)) {
+        return previous;
+      }
+      const next = new Set(previous);
+      next.delete(country);
+      return next;
+    });
+  };
+
+  // Not a discriminated union: the endpoint answers either the figures or a
+  // message saying it cannot state them.
+  if (!("countries" in coverage)) {
+    return (
+      <CoverageLayout>
+        <CoverageHeading title={t("caseLaw.coverage.title")} />
+        <p className="text-muted-foreground text-sm">
+          {t("caseLaw.coverage.unavailable")}
+        </p>
+      </CoverageLayout>
+    );
+  }
+
+  const countries = orderCoverageCountriesByName({
+    countries: coverage.countries,
+    locale,
+    nameOf: ({ country }) => caseLawCountryName(format, country),
+  });
+
+  return (
+    <CoverageLayout>
+      <CoverageHeading title={t("caseLaw.coverage.title")}>
+        <CoverageGeneratedAt>
+          {t("caseLaw.coverage.generatedAt", {
+            date: observedInstant(coverage.generatedAt, format),
+          })}
+        </CoverageGeneratedAt>
+      </CoverageHeading>
+
+      <CoverageHero
+        headline={
+          coverage.totals.searchable === null
+            ? NO_VALUE
+            : format.number(coverage.totals.searchable)
+        }
+        scope={t("caseLaw.coverage.decisionsAcross", {
+          count: countries.filter(
+            (country) => country.availability === "searchable",
+          ).length,
+        })}
+        figures={
+          <>
+            <HeaderFigure label={t("caseLaw.corpusStatus.newLast7Days")}>
+              <Delta value={coverage.totals.addedLastWeek} />
+            </HeaderFigure>
+            <HeaderFigure label={t("caseLaw.coverage.sourcesCurrent")}>
+              {t("common.stepProgress", {
+                current: format.number(
+                  countries
+                    .flatMap((country) => country.sources)
+                    .filter((source) => source.health === "current").length,
+                ),
+                total: format.number(
+                  countries.flatMap((country) => country.sources).length,
+                ),
+              })}
+            </HeaderFigure>
+          </>
+        }
+        legend={<CoverageLegendValues countries={coverage.countries} />}
+      />
+
+      <CoverageCountryNavigation
+        ref={measureCountryNavigation}
+        label={t("caseLaw.coverage.countryNavigation")}
+        phone={
+          <Select<string>
+            onValueChange={(anchor) => {
+              const country = countries.find(
+                (candidate) =>
+                  caseLawCoverageAnchor(candidate.country) === anchor,
+              );
+              if (country === undefined) {
+                return;
+              }
+              expandCountry(country.country);
+              detached(
+                navigate({
+                  to: "/law/coverage",
+                  hash: caseLawCoverageAnchor(country.country),
+                }),
+                "law-coverage.navigate-country",
+              );
+            }}
+            value={
+              countries.some(
+                (country) => caseLawCoverageAnchor(country.country) === hash,
+              )
+                ? hash
+                : null
+            }
+          >
+            <SelectTrigger
+              aria-label={t("caseLaw.coverage.countryNavigation")}
+              className="min-h-11 w-full sm:hidden"
+            >
+              <SelectValue
+                placeholder={t("caseLaw.coverage.countryNavigation")}
+              />
+            </SelectTrigger>
+            <SelectPopup>
+              {countries.map((country) => (
+                <SelectItem
+                  key={country.country}
+                  value={caseLawCoverageAnchor(country.country)}
+                >
+                  {caseLawCountryName(format, country.country)}
+                </SelectItem>
+              ))}
+            </SelectPopup>
+          </Select>
+        }
+        links={countries.map((country) => (
+          <Link
+            className={cn(
+              COUNTRY_NAVIGATION_ITEM_CLASS_NAME,
+              "hover:bg-muted focus-visible:ring-ring focus-visible:ring-2",
+            )}
+            hash={caseLawCoverageAnchor(country.country)}
+            key={country.country}
+            onClick={() => expandCountry(country.country)}
+            to="/law/coverage"
+          >
+            {caseLawCountryName(format, country.country)}
+          </Link>
+        ))}
+      />
+      {countries.map((country) => (
+        <CountrySection
+          country={country}
+          expanded={!collapsed.has(country.country)}
+          onExpand={expandCountry}
+          onToggle={() =>
+            setCollapsed((previous) => {
+              const next = new Set(previous);
+              if (next.has(country.country)) {
+                next.delete(country.country);
+              } else {
+                next.add(country.country);
+              }
+              return next;
+            })
+          }
+          key={country.country}
+        />
+      ))}
+    </CoverageLayout>
+  );
+};
+
+const COLOR_BY_JURISDICTION = {
+  AUT: "var(--chart-1)",
+  BRA: "var(--chart-2)",
+  CZE: "var(--chart-2)",
+  EU: "var(--chart-3)",
+  GBR: "var(--chart-4)",
+  HUN: "var(--chart-5)",
+  POL: "var(--chart-6)",
+  SVK: "var(--chart-7)",
+  USA: "var(--chart-8)",
+} as const satisfies Record<CaseLawJurisdiction, string>;
+
+/**
+ * A country's name as the way into its case list, where a search can reach
+ * it; a country in preparation has no list to open, so its name stays text.
+ */
+const CountryLink = ({
+  children,
+  country,
+}: {
+  /** The name alone: a string, so returning it as is returns no promise. */
+  children: string;
+  country: CaseLawCoverageCountry;
+}) => {
+  if (country.availability !== "searchable") {
+    return children;
+  }
+  return (
+    <Link
+      className="decoration-border underline underline-offset-2 hover:decoration-current"
+      search={{ country: toCaseLawCountryParam(country.country) }}
+      to="/law/cases"
+    >
+      {children}
+    </Link>
+  );
+};
+
+const CoverageLegendValues = ({
+  countries,
+}: {
+  countries: readonly CaseLawCoverageCountry[];
+}) => {
+  const t = useTranslations();
+  const format = useFormatter();
+  const count = (country: CaseLawCoverageCountry) =>
+    country.availability === "searchable" ? country.searchable : 0;
+  const ordered = countries.toSorted((a, b) => count(b) - count(a));
+  const maximum = Math.max(1, ...ordered.map(count));
+  return (
+    <CoverageLegend>
+      {ordered.map((country) => (
+        <CoverageLegendRow
+          key={country.country}
+          name={
+            <CountryLink country={country}>
+              {caseLawCountryName(format, country.country)}
+            </CountryLink>
+          }
+          value={
+            country.availability === "searchable"
+              ? format.number(country.searchable)
+              : t("caseLaw.coverage.inPreparation")
+          }
+          bar={
+            <span
+              className="block h-full rounded-full"
+              style={{
+                width: `${(count(country) / maximum) * 100}%`,
+                backgroundColor: COLOR_BY_JURISDICTION[country.country],
+              }}
+            />
+          }
+        />
+      ))}
+    </CoverageLegend>
+  );
+};
+
+/**
+ * A week's arrivals. A quiet week is a fact and stays on the row, receding
+ * rather than competing with the rows that moved; a week the read did not
+ * answer for is not a fact, and prints as none.
+ */
+const Delta = ({ value }: { value: number | null }) => {
+  const format = useFormatter();
+
+  if (value === null) {
+    return <span className="text-muted-foreground">{NO_VALUE}</span>;
+  }
+  return (
+    <span
+      className={cn("tabular-nums", value === 0 && "text-muted-foreground")}
+    >
+      {format.number(value, DELTA_FORMAT)}
+    </span>
+  );
+};
+
+/**
+ * A source's freshness. A fixed snapshot states the day it was taken beside
+ * its status: that day, not the last run, is how current it can ever be.
+ */
+const SourceHealth = ({ source }: { source: CaseLawCoverageSource }) => {
+  const format = useFormatter();
+  const { edition } = source;
+
+  switch (edition.type) {
+    case "live":
+      return <CaseLawHealthSignal className="text-sm" health={source.health} />;
+    case "snapshot": {
+      const taken = parseDeterministicDate(edition.snapshotDate);
+      return (
+        <span className="inline-flex flex-wrap items-center gap-x-1.5 gap-y-1">
+          <CaseLawHealthSignal className="text-sm" health={source.health} />
+          <time
+            className="text-muted-foreground text-xs"
+            dateTime={edition.snapshotDate}
+          >
+            {taken === null
+              ? edition.snapshotDate
+              : format.dateTime(taken, UTC_CALENDAR_DATE_FORMAT)}
+          </time>
+        </span>
+      );
+    }
+    default:
+      edition satisfies never;
+      return panic("Unhandled case-law source edition");
+  }
+};
+
+type CountrySectionProps = {
+  country: CaseLawCoverageCountry;
+  expanded: boolean;
+  onExpand: (country: CaseLawJurisdiction) => void;
+  onToggle: () => void;
+};
+const CountrySection = ({
+  country,
+  expanded,
+  onExpand,
+  onToggle,
+}: CountrySectionProps) => {
+  const t = useTranslations();
+  const format = useFormatter();
+  const headingId = useId();
+  const contentId = useId();
+  const anchor = caseLawCoverageAnchor(country.country);
+  const isTarget = useLocation({ select: ({ hash }) => hash === anchor });
+  // The figures arrive after the navigation, so the router's own hash scroll
+  // finds no section yet: the section a link named brings itself into view
+  // when it mounts. Stable per target, so a background refetch that
+  // re-renders the page does not pull the reader back.
+  const scrollIntoViewOnArrival = (node: HTMLElement | null) => {
+    if (isTarget && node !== null) {
+      onExpand(country.country);
+      node.scrollIntoView({ block: "start" });
+    }
+  };
+
+  return (
+    <CountryCard
+      anchor={anchor}
+      expanded={expanded}
+      contentId={contentId}
+      ref={scrollIntoViewOnArrival}
+      header={
+        <>
+          <Button
+            aria-controls={contentId}
+            aria-expanded={expanded}
+            aria-labelledby={headingId}
+            onClick={onToggle}
+            tooltip={caseLawCountryName(format, country.country)}
+            size="icon"
+            variant="ghost"
+          >
+            <DirectionalIcon
+              icon={ChevronRightIcon}
+              flip={!expanded}
+              className={cn(expanded && "rotate-90")}
+            />
+          </Button>
+          <h2 className="text-base font-semibold" id={headingId}>
+            <CountryLink country={country}>
+              {caseLawCountryName(format, country.country)}
+            </CountryLink>
+          </h2>
+          <ReviewStatusBadge
+            tone={CASE_LAW_COVERAGE_AVAILABILITY_TONES[country.availability]}
+          >
+            {t(CASE_LAW_COVERAGE_AVAILABILITY_LABEL_KEYS[country.availability])}
+          </ReviewStatusBadge>
+          {country.availability === "searchable" && (
+            <HeaderFigure label={t("caseLaw.coverage.searchable")}>
+              <span className="tabular-nums">
+                {format.number(country.searchable)}
+              </span>
+            </HeaderFigure>
+          )}
+          {country.availability === "searchable" && (
+            <DecisionYearsFigure
+              from={country.decisionYearFrom}
+              to={country.decisionYearTo}
+            />
+          )}
+          <CountryFreshness sources={country.sources} />
+        </>
+      }
+      headingId={headingId}
+    >
+      <SourcesTable sources={country.sources} />
+    </CountryCard>
+  );
+};
+
+const CountryFreshness = ({
+  sources: allSources,
+}: {
+  sources: readonly CaseLawCoverageSource[];
+}) => {
+  const t = useTranslations();
+  const relativeTime = useRelativeTime();
+  // A fixed release states its own date in the row; sync freshness applies to live sources.
+  const sources = allSources.filter((source) => source.edition.type === "live");
+  if (sources.length === 0) {
+    return null;
+  }
+  const exceptions = sources.filter(
+    (source) => source.health !== "current",
+  ).length;
+  // The oldest source is the freshness of the entire group; a never-run source has no sync time.
+  const oldest = sources.some((source) => source.lastSyncAt === null)
+    ? null
+    : sources
+        .map((source) => source.lastSyncAt)
+        .filter((value) => value !== null)
+        .toSorted()
+        .at(0);
+  return (
+    <span className="text-muted-foreground basis-full text-sm sm:ms-auto sm:basis-auto">
+      {exceptions === 0
+        ? t("caseLaw.coverage.allCurrent")
+        : t("caseLaw.coverage.sourceExceptions", { count: exceptions })}
+      {oldest && (
+        <> · {t("caseLaw.coverage.syncedAt", { time: relativeTime(oldest) })}</>
+      )}
+    </span>
+  );
+};
+
+/** The span the index covers, omitted where the index states no year at all. */
+const DecisionYearsFigure = ({
+  from,
+  to,
+}: {
+  from: number | null;
+  to: number | null;
+}) => {
+  const t = useTranslations();
+  const format = useFormatter();
+
+  if (from === null || to === null) {
+    return null;
+  }
+  const fromYear = format.number(from, YEAR_FORMAT);
+  const toYear = format.number(to, YEAR_FORMAT);
+
+  return (
+    <HeaderFigure label={t("caseLaw.coverage.decisionYears")}>
+      <bdi className="tabular-nums">
+        {from === to ? fromYear : `${fromYear}–${toYear}`}
+      </bdi>
+    </HeaderFigure>
+  );
+};
+
+/** The sources table's header with the completeness column's explanation. */
+const SourcesTableHead = () => {
+  const t = useTranslations();
+
+  return (
+    <SourcesTableHeadFace
+      labels={{
+        source: t("common.source"),
+        decisions: t("common.decisions"),
+        newLastWeek: t("caseLaw.corpusStatus.newLast7Days"),
+        completeness: (
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <Button
+                  className="min-h-11 max-w-full"
+                  size="inline"
+                  variant="muted"
+                />
+              }
+            >
+              <CompletenessLabel>
+                {t("caseLaw.coverage.completeness")}
+              </CompletenessLabel>
+            </TooltipTrigger>
+            <TooltipPopup>
+              {t("caseLaw.coverage.completenessHelp")}
+            </TooltipPopup>
+          </Tooltip>
+        ),
+      }}
+    />
+  );
+};
+
+const SourcesTable = ({
+  sources,
+}: {
+  sources: readonly CaseLawCoverageSource[];
+}) => {
+  const t = useTranslations();
+
+  return (
+    // No heading above it, so the table names itself for a screen reader.
+    <CoverageTable aria-label={t("common.source")}>
+      <TableColumns columns={SOURCE_COLUMNS} />
+      <SourcesTableHead />
+      {sources.map((source) => (
+        <SourceRows key={source.adapterKey} source={source} />
+      ))}
+    </CoverageTable>
+  );
+};
+
+const SourceRows = ({ source }: { source: CaseLawCoverageSource }) => {
+  const t = useTranslations();
+  const format = useFormatter();
+  const [expanded, setExpanded] = useState(false);
+  const courtsId = useId();
+  const toggleId = useId();
+  const sourceNameId = useId();
+
+  return (
+    <>
+      <TableBody>
+        <TableRow>
+          <TableHead
+            className={"text-foreground h-auto font-normal whitespace-normal"}
+            scope="row"
+          >
+            <Button
+              aria-expanded={expanded}
+              aria-controls={courtsId}
+              aria-label={t("common.court")}
+              aria-labelledby={`${toggleId} ${sourceNameId}`}
+              id={toggleId}
+              className="me-1"
+              onClick={() => setExpanded((value) => !value)}
+              size="icon"
+              variant="ghost"
+            >
+              <DirectionalIcon
+                icon={ChevronRightIcon}
+                flip={!expanded}
+                className={cn(expanded && "rotate-90")}
+              />
+            </Button>
+            <a
+              className="decoration-border underline underline-offset-2 hover:decoration-current"
+              href={sanitizeHref(source.publicHomeUrl)}
+              id={sourceNameId}
+              rel="noreferrer"
+            >
+              <bdi>{source.name}</bdi>
+            </a>
+            {source.health !== "current" && (
+              <div className="mt-1 ps-1 text-xs">
+                <SourceHealth source={source} />
+              </div>
+            )}
+          </TableHead>
+          <TableCell align="end" numeric>
+            {format.number(source.publishedDecisions)}
+          </TableCell>
+
+          <TableCell className={"text-end"}>
+            <Delta value={source.addedLastWeek} />
+          </TableCell>
+          <TableCell className={"whitespace-normal"}>
+            <SourcePublisherCensus census={source.publisherCensus} />
+            <SourceCompleteness
+              completeness={source.completeness}
+              knownGaps={source.knownGaps}
+            />
+          </TableCell>
+        </TableRow>
+      </TableBody>
+      <TableBody hidden={!expanded} id={courtsId}>
+        {source.courts.map((row) => (
+          <TableRow key={row.court ?? "other-courts"}>
+            <TableHead className="font-normal whitespace-normal" scope="row">
+              <span className="ps-8">
+                {row.court ?? t("caseLaw.corpusStatus.otherCourts")}
+              </span>
+            </TableHead>
+            <TableCell align="end" numeric>
+              {format.number(row.decisions)}
+            </TableCell>
+            <TableCell colSpan={SOURCE_COLUMN_COUNT - 2} />
+          </TableRow>
+        ))}
+      </TableBody>
+    </>
+  );
+};
+
+const SourcePublisherCensus = ({
+  census: { type, measurement },
+}: {
+  census: CaseLawCoverageSource["publisherCensus"];
+}) => {
+  const t = useTranslations();
+  const format = useFormatter();
+  const labels = {
+    unknown: "caseLaw.coverage.notMeasuredYet",
+    "none-recorded": "caseLaw.coverage.censusComplete",
+    known: "caseLaw.coverage.censusIncomplete",
+  } as const;
+  const tones = {
+    unknown: "neutral",
+    "none-recorded": "success",
+    known: "warning",
+  } as const;
+  return (
+    <div className="mb-1 flex flex-col gap-0.5 wrap-anywhere">
+      <ReviewStatusBadge
+        tone={tones[type]}
+        className="max-w-full whitespace-normal"
+      >
+        {t(labels[type])}
+      </ReviewStatusBadge>
+      {measurement.publisher !== null && (
+        <span className="text-muted-foreground text-xs tabular-nums">
+          {t("caseLaw.coverage.censusComparison", {
+            stored: format.number(measurement.stored),
+            publisher: format.number(measurement.publisher),
+            withText: format.number(measurement.withText),
+          })}
+          <span className="block">
+            {t("caseLaw.coverage.censusSliceMemberships")}
+          </span>
+        </span>
+      )}
+      {measurement.observedAt !== null && (
+        <ObservedOn asOf={measurement.observedAt} />
+      )}
+    </div>
+  );
+};
+
+const SourceCompleteness = ({
+  completeness,
+  knownGaps,
+}: {
+  completeness: CaseLawSourceCompleteness;
+  /** The source's own decision-by-decision reconciliation, when it has one. */
+  knownGaps: CaseLawCoverageSource["knownGaps"];
+}) => {
+  const t = useTranslations();
+
+  switch (completeness.state) {
+    case "not-measured-yet":
+      return (
+        <span className="text-muted-foreground text-xs wrap-break-word">
+          {t("caseLaw.coverage.notMeasuredYet")}
+        </span>
+      );
+    case "not-counted-yet":
+      return (
+        <span className="text-muted-foreground text-xs wrap-break-word">
+          {t("caseLaw.coverage.notCountedYet")}
+        </span>
+      );
+    case "measured":
+    case "stale":
+      return (
+        <MeasuredCompleteness
+          completeness={completeness}
+          knownGaps={knownGaps}
+        />
+      );
+    default: {
+      completeness satisfies never;
+      return panic("Unhandled case-law source completeness state");
+    }
+  }
+};
+
+/**
+ * A measured source's ratio and the warranty its denominator carries.
+ *
+ * The count's own date is not repeated on every row: the page states once,
+ * at the top, when its figures were taken. The publisher's total states its
+ * date only where it is out of date: on a current total the date is noise, on
+ * a lagging one it is the explanation.
+ */
+const MeasuredCompleteness = ({
+  completeness,
+  knownGaps,
+}: {
+  completeness: CaseLawMeasuredCompleteness;
+  knownGaps: CaseLawCoverageSource["knownGaps"];
+}) => {
+  const t = useTranslations();
+  const format = useFormatter();
+  const counts = {
+    reported: completeness.reported,
+    stored: completeness.stored,
+    knownMissing:
+      knownGaps.type === "reconciled" ? knownGaps.summary.missing : null,
+  };
+  const percent = caseLawCompletenessPercent(counts);
+
+  return (
+    <div className="flex flex-col gap-1">
+      {percent === null ? (
+        <span className="text-muted-foreground">{NO_VALUE}</span>
+      ) : (
+        <span
+          role="meter"
+          aria-label={t("caseLaw.coverage.completeness")}
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={percent}
+          aria-valuetext={format.number(percent / 100, PERCENT_FORMAT)}
+          className="bg-muted block h-1.5 w-full overflow-hidden rounded-full"
+        >
+          <span
+            className="bg-foreground-muted block h-full rounded-full"
+            style={{ width: `${percent}%` }}
+          />
+        </span>
+      )}
+      {completeness.state === "stale" && (
+        <ObservedOn asOf={completeness.reportedAsOf} />
+      )}
+    </div>
+  );
+};
+
+/** When the publisher's total was read, which is not when the corpus was counted. */
+const ObservedOn = ({ asOf }: { asOf: string }) => {
+  const t = useTranslations();
+  const format = useFormatter();
+
+  return (
+    <span className="text-muted-foreground text-xs wrap-break-word">
+      {t("caseLaw.coverage.totalFrom", { date: observedDate(asOf, format) })}
+    </span>
+  );
+};
+
+/** An observation instant as a calendar day; the hour it was read is nobody's fact. */
+const observedDate = (
+  value: string,
+  format: ReturnType<typeof useFormatter>,
+): string => {
+  const date = parseDeterministicDate(value);
+  return date === null ? value : format.dateTime(date, CALENDAR_DATE_FORMAT);
+};
+
+/** An instant with its time of day: when this page's figures were taken. */
+const observedInstant = (
+  value: string,
+  format: ReturnType<typeof useFormatter>,
+): string => {
+  const date = parseDeterministicDate(value);
+  return date === null
+    ? value
+    : format.dateTime(date, MEDIUM_DATE_SHORT_TIME_FORMAT);
+};

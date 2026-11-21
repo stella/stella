@@ -1,50 +1,31 @@
 import { panic } from "better-result";
 
+import type { ChatTurnInteractionType } from "@stll/api-contract/chat";
+import type {
+  ChatTurnFailureCode,
+  ChatTurnInterruptionReason,
+} from "@stll/api-contract/chat-turn-errors";
 import type { PermissionInput } from "@stll/permissions";
 
 import type { SafeId } from "@/api/lib/branded-types";
+import type { ChatTurnStatus } from "@/api/lib/chat/turn-status";
+
+export {
+  CHAT_TURN_FAILURE_CODES,
+  CHAT_TURN_INTERRUPTION_REASONS,
+} from "@stll/api-contract/chat-turn-errors";
+export type {
+  ChatTurnFailureCode,
+  ChatTurnInterruptionReason,
+} from "@stll/api-contract/chat-turn-errors";
+export { CHAT_TURN_INTERACTION_TYPES } from "@stll/api-contract/chat";
+export { ACTIVE_CHAT_TURN_STATUSES } from "@/api/lib/chat/turn-status";
+export type { ChatTurnInteractionType } from "@stll/api-contract/chat";
 
 /** Whoever may start a turn in a thread may also stop it. */
 export const CHAT_TURN_PERMISSIONS = {
   chat: ["create"],
 } satisfies PermissionInput;
-
-export const CHAT_TURN_STATUSES = [
-  "accepted",
-  "running",
-  "awaiting-user",
-  "completed",
-  "failed",
-  "cancelled",
-  "interrupted",
-] as const;
-export type ChatTurnStatus = (typeof CHAT_TURN_STATUSES)[number];
-
-/** The statuses of a turn not yet settled; a thread holds at most one. */
-export const ACTIVE_CHAT_TURN_STATUSES = [
-  "accepted",
-  "running",
-  "awaiting-user",
-] as const satisfies readonly ChatTurnStatus[];
-
-export const CHAT_TURN_INTERACTION_TYPES = [
-  "ask-user",
-  "approval",
-  "client-tool",
-] as const;
-export type ChatTurnInteractionType =
-  (typeof CHAT_TURN_INTERACTION_TYPES)[number];
-
-export const CHAT_TURN_FAILURE_CODES = [
-  "boundary-refusal",
-  "connector-discovery",
-  "empty-response",
-  "internal",
-  "persistence",
-  "provider-error",
-  "unsupported-input",
-] as const;
-export type ChatTurnFailureCode = (typeof CHAT_TURN_FAILURE_CODES)[number];
 
 export const CHAT_TURN_CANCELLATION_REASONS = [
   "superseded",
@@ -52,16 +33,6 @@ export const CHAT_TURN_CANCELLATION_REASONS = [
 ] as const;
 export type ChatTurnCancellationReason =
   (typeof CHAT_TURN_CANCELLATION_REASONS)[number];
-
-export const CHAT_TURN_INTERRUPTION_REASONS = [
-  "client-disconnected",
-  // The turn's owner stopped producing: its lease expired, or its process
-  // shut down.
-  "owner-lost",
-  "timeout",
-] as const;
-export type ChatTurnInterruptionReason =
-  (typeof CHAT_TURN_INTERRUPTION_REASONS)[number];
 
 export type ChatTurnState =
   | {
@@ -87,6 +58,16 @@ export type ChatTurnState =
         type: ChatTurnInteractionType;
       };
       status: "awaiting-user";
+      threadId: SafeId<"chatThread">;
+      userMessageId: SafeId<"chatMessage">;
+    }
+  | {
+      /** By when another task must adopt the turn, or it ends `owner-lost`. */
+      adoptBy: Date;
+      /** The answer so far, stored when the turn was released. */
+      assistantMessageId: SafeId<"chatMessage">;
+      id: SafeId<"chatTurn">;
+      status: "handed-over";
       threadId: SafeId<"chatThread">;
       userMessageId: SafeId<"chatMessage">;
     }
@@ -155,6 +136,7 @@ export const chatTurnViewOf = (state: ChatTurnState): ChatTurnView => {
     case "awaiting-user":
     case "completed":
     case "failed":
+    case "handed-over":
     case "running":
       return { id: state.id, status: state.status };
     default:
@@ -176,6 +158,11 @@ export type ChatTurnTransition =
         type: ChatTurnInteractionType;
       };
       type: "await-user";
+    }
+  | {
+      adoptBy: Date;
+      assistantMessageId: SafeId<"chatMessage">;
+      type: "hand-over";
     }
   | {
       assistantMessageId: SafeId<"chatMessage">;
@@ -319,6 +306,7 @@ export const planChatTurnTransition = (
           return interruptedTurn(state, transition);
         case "await-user":
         case "complete":
+        case "hand-over":
         case "resume":
           return rejectedTransition(state, transition);
         default:
@@ -334,6 +322,18 @@ export const planChatTurnTransition = (
               id: state.id,
               interaction: transition.interaction,
               status: "awaiting-user",
+              threadId: state.threadId,
+              userMessageId: state.userMessageId,
+            },
+            type: "applied",
+          };
+        case "hand-over":
+          return {
+            state: {
+              adoptBy: transition.adoptBy,
+              assistantMessageId: transition.assistantMessageId,
+              id: state.id,
+              status: "handed-over",
               threadId: state.threadId,
               userMessageId: state.userMessageId,
             },
@@ -373,7 +373,28 @@ export const planChatTurnTransition = (
         case "await-user":
         case "complete":
         case "fail":
+        case "hand-over":
         case "interrupt":
+        case "start":
+          return rejectedTransition(state, transition);
+        default:
+          transition satisfies never;
+          return panic(`Unhandled transition: ${String(transition)}`);
+      }
+    // Released by its owner: another task adopts it (`resume`), the member
+    // stops it, or nobody adopts it by its lease (`interrupt`).
+    case "handed-over":
+      switch (transition.type) {
+        case "resume":
+          return runningTurn(state, transition);
+        case "cancel":
+          return cancelledTurn(state, transition);
+        case "interrupt":
+          return interruptedTurn(state, transition);
+        case "await-user":
+        case "complete":
+        case "fail":
+        case "hand-over":
         case "start":
           return rejectedTransition(state, transition);
         default:

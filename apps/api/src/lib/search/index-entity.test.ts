@@ -2,6 +2,8 @@ import { afterEach, beforeEach, expect, mock, test } from "bun:test";
 import type { SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 
+import { createTestState } from "@stll/test-state";
+
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { encryptContent } from "@/api/lib/content-encryption";
@@ -13,10 +15,12 @@ import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemet
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
-process.env["REDIS_URL"] ??= "redis://localhost:6379";
-process.env["GOTENBERG_URL"] ??= "http://localhost:3002";
-process.env["GOTENBERG_USERNAME"] ??= "test";
-process.env["GOTENBERG_PASSWORD"] ??= "test";
+const testState = createTestState({ file: import.meta.path, config: {} });
+
+testState.setEnvIfAbsent("REDIS_URL", "redis://localhost:6379");
+testState.setEnvIfAbsent("GOTENBERG_URL", "http://localhost:3002");
+testState.setEnvIfAbsent("GOTENBERG_USERNAME", "test");
+testState.setEnvIfAbsent("GOTENBERG_PASSWORD", "test");
 
 const semanticUpdatedAt = new Date("2026-04-30T08:00:00.000Z");
 const semanticUpdatedAtToken =
@@ -40,11 +44,19 @@ const selectMock = mock((_fields: unknown) => ({
     where: (_where: unknown) => ({ limit: selectLimitMock }),
   }),
 }));
-const executeMock = mock(async (_query: SQL) => [
-  { entityId: toSafeId<"entity">("entity_1") },
-]);
+const executeDefault = async (_query: SQL) => [
+  {
+    id: new PgDialect().sqlToQuery(_query).params.at(0),
+    entityId: toSafeId<"entity">("entity_1"),
+  },
+];
+const executeMock = mock(executeDefault);
+const syncWorkspaceSearchActivityDefault = async (
+  _workspaceId: unknown,
+  _db: unknown,
+) => undefined;
 const syncWorkspaceSearchActivityMock = mock(
-  async (_workspaceId: unknown, _db: unknown) => undefined,
+  syncWorkspaceSearchActivityDefault,
 );
 const organizationId = toSafeId<"organization">("org_1");
 // Extracted content is stored as a real per-org AES-GCM envelope; fixtures
@@ -100,6 +112,7 @@ const entityRow = {
   workspaceId: toSafeId<"workspace">("ws_1"),
 };
 const findFirstMock = mock(async () => entityRow);
+let selectedEntityRow = entityRow;
 type VersionRow = {
   deletedAt: Date | null;
   id: SafeId<"entityVersion">;
@@ -121,7 +134,33 @@ const transactionMock = mock(
 
 const database = asTestRaw<NonNullable<IndexEntityDependencies["database"]>>({
   query: {
-    entities: { findFirst: findFirstMock },
+    entities: {
+      findFirst: async () => {
+        selectedEntityRow = await findFirstMock();
+        return selectedEntityRow;
+      },
+    },
+    extractedContent: {
+      findMany: async () =>
+        selectedEntityRow.extractedContent
+          ? [
+              {
+                ...selectedEntityRow.extractedContent,
+                entityId: selectedEntityRow.id,
+                workspaceId: selectedEntityRow.workspaceId,
+                entity: {
+                  name: selectedEntityRow.name,
+                  workspace: { status: "active" },
+                  currentVersion: {
+                    ...selectedEntityRow.currentVersion,
+                    deletedAt: null,
+                  },
+                  versions: versionRows,
+                },
+              },
+            ]
+          : [],
+    },
     entityVersions: { findMany: versionsFindManyMock },
   },
   select: selectMock,
@@ -137,6 +176,17 @@ const upsertSearchDocument = async (entityId: SafeId<"entity">) =>
 let analytics: RecordingAnalytics;
 
 beforeEach(() => {
+  executeMock.mockReset();
+  executeMock.mockImplementation(executeDefault);
+  findFirstMock.mockReset();
+  selectLimitMock.mockReset();
+  selectMock.mockClear();
+  syncWorkspaceSearchActivityMock.mockReset();
+  syncWorkspaceSearchActivityMock.mockImplementation(
+    syncWorkspaceSearchActivityDefault,
+  );
+  transactionMock.mockClear();
+  versionsFindManyMock.mockClear();
   analytics = installRecordingAnalytics();
   executeMock.mockClear();
   selectMock.mockClear();
@@ -144,8 +194,9 @@ beforeEach(() => {
   selectLimitMock.mockResolvedValue([
     { semanticUpdatedAtToken, extractedAtToken, versionSetToken: "[]" },
   ]);
-  findFirstMock.mockClear();
+  findFirstMock.mockReset();
   findFirstMock.mockResolvedValue(entityRow);
+  selectedEntityRow = entityRow;
   versionRows = currentVersionOnly();
   versionsFindManyMock.mockClear();
   syncWorkspaceSearchActivityMock.mockClear();
@@ -216,14 +267,34 @@ test("rejects an out-of-order projection against the authoritative entity", asyn
     /COALESCE\(e\.updated_at, e\.created_at\)\s+IS NOT DISTINCT FROM/u,
   );
   expect(compiled.sql).toContain("::timestamptz");
-  expect(compiled.sql).toContain("FOR UPDATE");
-  expect(compiled.sql).toContain("FOR UPDATE OF e");
+  // The entity row is locked in its own statement first, so the CAS above
+  // reads every version commit made while the projection waited.
+  const statements = executeMock.mock.calls.map(
+    ([executedQuery]) => new PgDialect().sqlToQuery(executedQuery).sql,
+  );
+  const entityLockAt = statements.findIndex(
+    (statement) =>
+      statement.includes('"entities"') && statement.includes("FOR UPDATE"),
+  );
+  const projectionAt = statements.findIndex((statement) =>
+    statement.includes("INSERT INTO search_documents"),
+  );
+  expect(entityLockAt).toBeGreaterThan(-1);
+  expect(entityLockAt).toBeLessThan(projectionAt);
   expect(compiled.sql).toContain("NOT EXISTS");
   expect(compiled.sql).toContain("FROM extracted_content ec");
 });
 
 test("does not advance matter activity when a stale projection is rejected", async () => {
-  executeMock.mockResolvedValueOnce([{ entityId: entityRow.id }]);
+  executeMock.mockResolvedValueOnce([
+    { id: organizationId, entityId: entityRow.id },
+  ]);
+  executeMock.mockResolvedValueOnce([
+    { id: entityRow.workspaceId, entityId: entityRow.id },
+  ]);
+  executeMock.mockResolvedValueOnce([
+    { id: entityRow.id, entityId: entityRow.id },
+  ]);
   executeMock.mockResolvedValueOnce([]);
   await upsertSearchDocument(toSafeId<"entity">("entity_1"));
 
@@ -242,7 +313,7 @@ test("propagates workspace activity failures from the projection transaction", a
 
   expect(rejection).toBe(activityFailure);
   expect(transactionMock).toHaveBeenCalledTimes(1);
-  expect(executeMock).toHaveBeenCalledTimes(5);
+  expect(executeMock).toHaveBeenCalledTimes(7);
 });
 
 test("keeps the last complete projection when extracted content cannot decrypt", async () => {
@@ -550,7 +621,10 @@ test("indexes every reference the document's live versions carry", async () => {
 
 test("drops the reference of a version that was deleted", async () => {
   versionRows = [
-    { ...stampedVersion(movedStamp, 2), deletedAt: new Date() },
+    {
+      ...stampedVersion(movedStamp, 2),
+      deletedAt: new Date("2026-04-30T09:00:00.000Z"),
+    },
     stampedVersion(firstStamp, 1),
   ];
 

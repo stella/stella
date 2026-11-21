@@ -17,6 +17,8 @@ import {
 import { validateAgainstSchema } from "./json-schema-validate.js";
 import type { RegistryToolListing } from "./route-types.js";
 
+const repositoryCapabilityCatalog = readCapabilityCatalog();
+
 const snapshotUrl = new URL(
   "generated/registry-snapshot.json",
   import.meta.url,
@@ -28,7 +30,7 @@ const listings: readonly RegistryToolListing[] =
 // way `codegen.ts` does. Worked capability examples in the generated skill
 // (see generate-skill.ts) resolve a real leaf out of this tree, so the test
 // input has to carry one instead of a hand-trimmed stand-in.
-const catalog = parseCapabilityCatalog(readCapabilityCatalog());
+const catalog = parseCapabilityCatalog(repositoryCapabilityCatalog);
 if (catalog === null) {
   throw new TypeError("Invalid capability catalog");
 }
@@ -341,14 +343,19 @@ describe("generateCliSkill (TanStack Intent)", () => {
     expect(skill).toContain('library: "@stll/cli"');
   });
 
-  test("documents the capability tree (count + discovery + dry-run)", () => {
+  test("documents the capability tree (discovery + dry-run, no count)", () => {
     const skill = generateCliSkill(listings, TOOL_ANNOTATIONS, CAPABILITY);
     expect(skill).toContain("## Capability commands (full surface)");
     expect(skill).toContain(
-      `generates ${CAPABILITY.commandCount}\ncapability commands`,
+      "the CLI generates capability commands\nfrom the server's capability catalog",
     );
+    // A count would change with every added capability and break merges of
+    // parallel additions; the section states the surface, not its size.
+    expect(skill).not.toContain(`generates ${CAPABILITY.commandCount}`);
     expect(skill).toContain("stella capability list");
-    expect(skill).toContain("stella capability describe");
+    expect(skill).toContain("stella capability describe --capability <id>");
+    expect(skill).toContain("stella capability read --capability <id>");
+    expect(skill).toContain("stella capability write --capability <id>");
     expect(skill).toContain(`stella ${CAPABILITY_NAMESPACE} <domain> <action>`);
     expect(skill).not.toContain("a colliding capability drops under");
     expect(skill).toContain("--dry-run");
@@ -375,7 +382,7 @@ describe("generateCliSkill (TanStack Intent)", () => {
     );
     // A discriminator subcommand marked destructive.
     expect(skill).toContain(
-      "`stella organization remove-member` | admin_write | destructive (needs `--yes` off a TTY) |",
+      "`stella matter remove-member` | matters_write | destructive (needs `--yes` off a TTY) |",
     );
     expect(skill).toContain(
       "`stella template save-filled new-document` | documents_write + templates |",

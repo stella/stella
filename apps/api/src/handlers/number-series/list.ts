@@ -1,11 +1,13 @@
 import { Result } from "better-result";
 import { and, desc, eq, isNull } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
+
+import { numberFromString } from "@stll/api-contract/http-input";
 
 import { numberSeries } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { tPaginationCursor } from "@/api/lib/custom-schema";
+import { paginationCursorSchema } from "@/api/lib/custom-schema";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
@@ -52,9 +54,11 @@ true satisfies MissingNumberSeriesListColumn extends never ? true : never;
 true satisfies UnexpectedNumberSeriesListColumn extends never ? true : never;
 
 const config = {
+  contract: "patch",
   description: "List active document number series in the active organization.",
   permissions: { organizationSettings: ["update"] },
   accountAccess: ACCOUNT_ACCESS.standard,
+  featureAccess: { featureId: "time-billing", type: "required" },
   mcp: {
     type: "capability",
     readClass: "tenant",
@@ -62,11 +66,18 @@ const config = {
     consumesServices: false,
   },
   access: "read",
-  query: t.Object({
-    limit: t.Optional(
-      t.Integer({ minimum: 1, maximum: LIMITS.numberSeriesPageSizeMax }),
+  query: v.object({
+    limit: v.optional(
+      numberFromString(
+        v.pipe(
+          v.number(),
+          v.integer(),
+          v.minValue(1),
+          v.maxValue(LIMITS.numberSeriesPageSizeMax),
+        ),
+      ),
     ),
-    cursor: t.Optional(tPaginationCursor()),
+    cursor: v.optional(paginationCursorSchema()),
   }),
 } satisfies HandlerConfig;
 

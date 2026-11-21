@@ -21,14 +21,16 @@ import type {
 } from "@/api/lib/email/inbound/ingest";
 import { InboundPersistenceError } from "@/api/lib/email/inbound/ingest";
 import { createInboundMailStore } from "@/api/lib/email/inbound/store";
+import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 import {
-  openGatedTestDatabase,
   type GatedTestDb,
+  openGatedTestDatabase,
 } from "@/api/tests/gated-test-database";
 import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -47,9 +49,9 @@ const wsB1 = createSafeId<"workspace">();
 const memberAWorkspaceId = createSafeId<"workspaceMember">();
 const aliasOwnerWorkspaceId = createSafeId<"workspaceMember">();
 const aliasOwnerOrganizationMemberId = mintAuthProviderIdValue();
-const tokenA1 = generateInboundAddressToken();
-const tokenA2 = generateInboundAddressToken();
-const tokenB1 = generateInboundAddressToken();
+const tokenA1 = generateInboundAddressToken({ userId: null });
+const tokenA2 = generateInboundAddressToken({ userId: null });
+const tokenB1 = generateInboundAddressToken({ userId: null });
 const matterMailboxId = createSafeId<"correspondenceAllowedSender">();
 const organizationMailboxId = createSafeId<"correspondenceAllowedSender">();
 const foreignMailboxId = createSafeId<"correspondenceAllowedSender">();
@@ -80,6 +82,7 @@ const candidate = (sender: string): Candidate => {
     message: {
       direction: "out",
       channel: "email",
+      dataBox: null,
       messageId: "<message@example.test>",
       contentHash: "a".repeat(64),
       from: { address: sender, name: null },
@@ -107,6 +110,8 @@ const candidate = (sender: string): Candidate => {
 };
 
 let db: GatedTestDb;
+const fixtureScoped = () =>
+  createScopedDb(markRlsDatabase(db), [wsA1, wsA2], orgA, adminA);
 let persist: InboundDeliveryStore;
 let filings: {
   workspaceId: string;
@@ -143,9 +148,7 @@ if (!databaseUrl || !runPostgresTests) {
     const gated = openGatedTestDatabase(databaseUrl);
     db = gated.db;
     gated.cleanUp(async () => {
-      await db
-        .delete(organization)
-        .where(inArray(organization.id, [orgA, orgB]));
+      await deleteOrganizationsForTest(db, [orgA, orgB]);
       await db
         .delete(user)
         .where(
@@ -212,6 +215,14 @@ if (!databaseUrl || !runPostgresTests) {
           createdAt: new Date(),
         },
       ]);
+      await recordNewOrganizationAccessState(db, {
+        organizationId: orgA,
+        now: new Date(),
+      });
+      await recordNewOrganizationAccessState(db, {
+        organizationId: orgB,
+        now: new Date(),
+      });
       await db.insert(member).values([
         {
           id: mintAuthProviderIdValue(),
@@ -280,89 +291,118 @@ if (!databaseUrl || !runPostgresTests) {
           userId: mailboxUser,
         },
       ]);
-      await db.insert(matterInboundAddresses).values([
-        {
-          id: createSafeId<"matterInboundAddress">(),
-          organizationId: orgA,
-          workspaceId: wsA1,
-          token: tokenA1,
-        },
-        {
-          id: createSafeId<"matterInboundAddress">(),
-          organizationId: orgA,
-          workspaceId: wsA2,
-          token: tokenA2,
-        },
-        {
-          id: createSafeId<"matterInboundAddress">(),
-          organizationId: orgB,
-          workspaceId: wsB1,
-          token: tokenB1,
-        },
-      ]);
-      await db.insert(correspondenceAllowedSenders).values([
-        {
-          id: matterMailboxId,
-          organizationId: orgA,
-          address: "shared-matter@example.test",
-          kind: "shared_mailbox",
-          scope: "matters",
-          approvedBy: adminA,
-          approvedByDisplay: {
-            status: "active",
-            name: "Admin A",
-            email: "admin@example.test",
-          },
-        },
-        {
-          id: organizationMailboxId,
-          organizationId: orgA,
-          address: "shared-org@example.test",
-          kind: "shared_mailbox",
-          scope: "organization",
-          approvedBy: adminA,
-          approvedByDisplay: {
-            status: "active",
-            name: "Admin A",
-            email: "admin@example.test",
-          },
-        },
-        {
-          id: foreignMailboxId,
-          organizationId: orgB,
-          address: "shared-foreign@foreign.test",
-          kind: "shared_mailbox",
-          scope: "organization",
-          approvedBy: memberB,
-          approvedByDisplay: {
-            status: "active",
-            name: "Member B",
-            email: "member@foreign.test",
-          },
-        },
-        {
-          id: aliasId,
-          organizationId: orgA,
-          address: "verified-alias@example.test",
-          kind: "verified_alias",
-          scope: "matters",
-          ownerUserId: aliasOwner,
-        },
-      ]);
-      await db.insert(correspondenceAllowedSenderMatters).values([
-        {
-          id: createSafeId<"correspondenceAllowedSenderMatter">(),
-          organizationId: orgA,
-          workspaceId: wsA1,
-          allowedSenderId: matterMailboxId,
-        },
-        {
-          id: createSafeId<"correspondenceAllowedSenderMatter">(),
-          organizationId: orgA,
-          workspaceId: wsA1,
-          allowedSenderId: aliasId,
-        },
-      ]);
+      await fixtureScoped()(
+        async (tx) =>
+          await tx.insert(matterInboundAddresses).values([
+            {
+              id: createSafeId<"matterInboundAddress">(),
+              organizationId: orgA,
+              workspaceId: wsA1,
+              token: tokenA1,
+            },
+            {
+              id: createSafeId<"matterInboundAddress">(),
+              organizationId: orgA,
+              workspaceId: wsA2,
+              token: tokenA2,
+            },
+          ]),
+      );
+      await createScopedDb(
+        markRlsDatabase(db),
+        [wsB1],
+        orgB,
+        memberB,
+      )(
+        async (tx) =>
+          await tx.insert(matterInboundAddresses).values([
+            {
+              id: createSafeId<"matterInboundAddress">(),
+              organizationId: orgB,
+              workspaceId: wsB1,
+              token: tokenB1,
+            },
+          ]),
+      );
+      await fixtureScoped()(
+        async (tx) =>
+          await tx.insert(correspondenceAllowedSenders).values([
+            {
+              id: matterMailboxId,
+              organizationId: orgA,
+              address: "shared-matter@example.test",
+              kind: "shared_mailbox",
+              scope: "matters",
+              approvedBy: adminA,
+              approvedByDisplay: {
+                status: "active",
+                name: "Admin A",
+                email: "admin@example.test",
+              },
+            },
+            {
+              id: organizationMailboxId,
+              organizationId: orgA,
+              address: "shared-org@example.test",
+              kind: "shared_mailbox",
+              scope: "organization",
+              approvedBy: adminA,
+              approvedByDisplay: {
+                status: "active",
+                name: "Admin A",
+                email: "admin@example.test",
+              },
+            },
+            {
+              id: aliasId,
+              organizationId: orgA,
+              address: "verified-alias@example.test",
+              kind: "verified_alias",
+              scope: "matters",
+              ownerUserId: aliasOwner,
+            },
+          ]),
+      );
+      await createScopedDb(
+        markRlsDatabase(db),
+        [wsB1],
+        orgB,
+        memberB,
+      )(
+        async (tx) =>
+          await tx.insert(correspondenceAllowedSenders).values([
+            {
+              id: foreignMailboxId,
+              organizationId: orgB,
+              address: "shared-foreign@foreign.test",
+              kind: "shared_mailbox",
+              scope: "organization",
+              approvedBy: memberB,
+              approvedByDisplay: {
+                status: "active",
+                name: "Member B",
+                email: "member@foreign.test",
+              },
+            },
+          ]),
+      );
+      await fixtureScoped()(
+        async (tx) =>
+          await tx.insert(correspondenceAllowedSenderMatters).values([
+            {
+              id: createSafeId<"correspondenceAllowedSenderMatter">(),
+              organizationId: orgA,
+              workspaceId: wsA1,
+              allowedSenderId: matterMailboxId,
+            },
+            {
+              id: createSafeId<"correspondenceAllowedSenderMatter">(),
+              organizationId: orgA,
+              workspaceId: wsA1,
+              allowedSenderId: aliasId,
+            },
+          ]),
+      );
       filings = [];
       persist = createInboundMailStore({
         database: db,
@@ -379,19 +419,25 @@ if (!databaseUrl || !runPostgresTests) {
         .update(user)
         .set({ emailVerified: true })
         .where(eq(user.id, memberA));
-      await db
-        .update(matterInboundAddresses)
-        .set({ revokedAt: null })
-        .where(eq(matterInboundAddresses.token, tokenA1));
-      await db
-        .update(correspondenceAllowedSenders)
-        .set({ revokedAt: null })
-        .where(
-          inArray(correspondenceAllowedSenders.id, [
-            matterMailboxId,
-            organizationMailboxId,
-          ]),
-        );
+      await fixtureScoped()(
+        async (tx) =>
+          await tx
+            .update(matterInboundAddresses)
+            .set({ revokedAt: null })
+            .where(eq(matterInboundAddresses.token, tokenA1)),
+      );
+      await fixtureScoped()(
+        async (tx) =>
+          await tx
+            .update(correspondenceAllowedSenders)
+            .set({ revokedAt: null })
+            .where(
+              inArray(correspondenceAllowedSenders.id, [
+                matterMailboxId,
+                organizationMailboxId,
+              ]),
+            ),
+      );
       await db
         .insert(workspaceMembers)
         .values({
@@ -409,14 +455,22 @@ if (!databaseUrl || !runPostgresTests) {
       const failingStore = createInboundMailStore({
         database: db,
         fileCandidate: async ({ tx, workspaceId, organizationId }) => {
-          await tx.insert(correspondenceDropLogs).values({
-            id: insertedId,
-            workspaceId,
+          await createScopedDb(
+            markRlsDatabase(tx),
+            [workspaceId],
             organizationId,
-            senderAddress: "member@example.test",
-            reason: "authentication_failed",
-            receivedAt: new Date(receivedAt),
-          });
+            memberA,
+          )(
+            async (scopedTx) =>
+              await scopedTx.insert(correspondenceDropLogs).values({
+                id: insertedId,
+                workspaceId,
+                organizationId,
+                senderAddress: "member@example.test",
+                reason: "authentication_failed",
+                receivedAt: new Date(receivedAt),
+              }),
+          );
           return Result.err(
             new InboundPersistenceError({ message: "Injected filing failure" }),
           );
@@ -429,10 +483,13 @@ if (!databaseUrl || !runPostgresTests) {
         delivery: candidate("member@example.test"),
       });
       expect(
-        await db
-          .select({ id: correspondenceDropLogs.id })
-          .from(correspondenceDropLogs)
-          .where(eq(correspondenceDropLogs.id, insertedId)),
+        await fixtureScoped()(
+          async (tx) =>
+            await tx
+              .select({ id: correspondenceDropLogs.id })
+              .from(correspondenceDropLogs)
+              .where(eq(correspondenceDropLogs.id, insertedId)),
+        ),
       ).toEqual([]);
       expect(result.isErr()).toBe(true);
       if (result.isErr()) {
@@ -480,10 +537,13 @@ if (!databaseUrl || !runPostgresTests) {
     });
 
     test("a revoked token cannot file, even for a current member", async () => {
-      await db
-        .update(matterInboundAddresses)
-        .set({ revokedAt: new Date() })
-        .where(eq(matterInboundAddresses.token, tokenA1));
+      await fixtureScoped()(
+        async (tx) =>
+          await tx
+            .update(matterInboundAddresses)
+            .set({ revokedAt: new Date() })
+            .where(eq(matterInboundAddresses.token, tokenA1)),
+      );
       expect(await deliver({ sender: "member@example.test" })).toEqual({
         status: "dropped",
         reason: "revoked_address",
@@ -548,10 +608,13 @@ if (!databaseUrl || !runPostgresTests) {
         approvedBy: adminA,
         filedAt: receivedAt,
       });
-      await db
-        .update(correspondenceAllowedSenders)
-        .set({ revokedAt: new Date() })
-        .where(eq(correspondenceAllowedSenders.id, matterMailboxId));
+      await fixtureScoped()(
+        async (tx) =>
+          await tx
+            .update(correspondenceAllowedSenders)
+            .set({ revokedAt: new Date() })
+            .where(eq(correspondenceAllowedSenders.id, matterMailboxId)),
+      );
       expect(await deliver({ sender })).toMatchObject({ status: "filed" });
       expect(filings.at(1)?.filer).toEqual({
         type: "user",
@@ -570,10 +633,13 @@ if (!databaseUrl || !runPostgresTests) {
         wsA1,
         wsA2,
       ]);
-      await db
-        .update(correspondenceAllowedSenders)
-        .set({ revokedAt: new Date() })
-        .where(eq(correspondenceAllowedSenders.id, organizationMailboxId));
+      await fixtureScoped()(
+        async (tx) =>
+          await tx
+            .update(correspondenceAllowedSenders)
+            .set({ revokedAt: new Date() })
+            .where(eq(correspondenceAllowedSenders.id, organizationMailboxId)),
+      );
       expect(await deliver({ sender: "shared-org@example.test" })).toEqual({
         status: "dropped",
         reason: "unauthorized_sender",
@@ -612,15 +678,18 @@ if (!databaseUrl || !runPostgresTests) {
           reason: "unauthorized_sender",
         });
       }
-      const rows = await db
-        .select()
-        .from(correspondenceDropLogs)
-        .where(
-          and(
-            eq(correspondenceDropLogs.workspaceId, wsA1),
-            eq(correspondenceDropLogs.senderAddress, sender),
-          ),
-        );
+      const rows = await fixtureScoped()(
+        async (tx) =>
+          await tx
+            .select()
+            .from(correspondenceDropLogs)
+            .where(
+              and(
+                eq(correspondenceDropLogs.workspaceId, wsA1),
+                eq(correspondenceDropLogs.senderAddress, sender),
+              ),
+            ),
+      );
       expect(rows).toHaveLength(1);
       expect(rows.at(0)?.reason).toBe("unauthorized_sender");
       expect(filings).toHaveLength(0);

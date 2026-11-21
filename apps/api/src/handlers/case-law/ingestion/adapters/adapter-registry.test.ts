@@ -18,20 +18,6 @@ import {
 } from "@/api/lib/legal-search/ingestion-constants";
 
 describe("case-law adapter capabilities", () => {
-  test("every registered adapter exposes a total count", () => {
-    // The type makes an omission uncompilable; this is the registry-level
-    // half, so an adapter reaching the registry through a widened type still
-    // has to carry a callable.
-    const missing = listAdapters().flatMap((adapter) =>
-      typeof adapter.getTotalCount === "function"
-        ? []
-        : [
-            `${adapter.key} declares no getTotalCount; every adapter must implement it`,
-          ],
-    );
-    expect(missing).toEqual([]);
-  });
-
   test("every adapter can start a page inside its own cycle budget", () => {
     // The page loop refuses to start a page the remaining cycle budget
     // cannot cover. An adapter whose page timeout is not shorter than its

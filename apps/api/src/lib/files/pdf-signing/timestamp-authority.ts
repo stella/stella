@@ -20,6 +20,7 @@ import { Result, TaggedError } from "better-result";
 import * as pkijs from "pkijs";
 
 import { env } from "@/api/env";
+import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { settleForLibpdf } from "@/api/lib/files/pdf-signing/libpdf-callbacks";
 import { safePkiFetch } from "@/api/lib/files/pdf-signing/pki-fetch";
 import type { PkiFetcher } from "@/api/lib/files/pdf-signing/pki-fetch";
@@ -145,12 +146,14 @@ const requestTimestamp = async ({
   algorithm,
   digest,
   fetcher,
+  permit,
   now,
   url,
 }: {
   algorithm: DigestAlgorithm;
   digest: Uint8Array;
   fetcher: PkiFetcher;
+  permit: ThirdPartyOutboundPermit;
   now: () => Date;
   url: string;
 }): Promise<Result<Uint8Array, PdfSigningTimestampInvalidError>> => {
@@ -177,6 +180,7 @@ const requestTimestamp = async ({
     contentType: "application/timestamp-query",
     maxBytes: TIMESTAMP_RESPONSE_MAX_BYTES,
     method: "POST",
+    permit,
     url,
   });
   if (body === null) {
@@ -224,20 +228,31 @@ const unreadableAnswer = () =>
  * An RFC 3161 client over the guarded fetcher. Its tokens must answer the
  * nonce it sent; the rest of the token is checked by the fallback above.
  */
-export const createHttpTimestampAuthority = (
-  url: string,
-  fetcher: PkiFetcher = safePkiFetch,
-  now: () => Date = () => new Date(),
-): TimestampAuthority => ({
+export const createHttpTimestampAuthority = ({
+  url,
+  permit,
+  fetcher = safePkiFetch,
+  now = () => new Date(),
+}: {
+  url: string;
+  permit: ThirdPartyOutboundPermit;
+  fetcher?: PkiFetcher;
+  now?: () => Date;
+}): TimestampAuthority => ({
   timestamp: async (digest: Uint8Array, algorithm: DigestAlgorithm) =>
     await settleForLibpdf(
-      requestTimestamp({ algorithm, digest, fetcher, now, url }),
+      requestTimestamp({ algorithm, digest, fetcher, now, permit, url }),
     ),
 });
 
 /** The configured authorities, in the order they are tried. */
-export const configuredTimestampAuthorities = (): NamedTimestampAuthority[] =>
+export const configuredTimestampAuthorities = (
+  permit: ThirdPartyOutboundPermit,
+): NamedTimestampAuthority[] =>
   parseTimestampAuthorityUrls({
     list: env.PDF_SIGNING_TSA_URLS,
     single: env.PDF_SIGNING_TSA_URL,
-  }).map((url) => ({ authority: createHttpTimestampAuthority(url), url }));
+  }).map((url) => ({
+    authority: createHttpTimestampAuthority({ permit, url }),
+    url,
+  }));

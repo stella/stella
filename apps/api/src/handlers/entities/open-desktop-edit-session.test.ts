@@ -96,6 +96,7 @@ describe("open desktop edit session", () => {
           ),
           recordAuditEvent: async () => undefined,
           safeDb,
+          source: { kind: "background", reason: "handler unit test" },
           userId: toSafeId<"user">("019e6000-0000-7000-8000-000000000004"),
           workspaceId,
         }),
@@ -142,6 +143,7 @@ describe("open desktop edit session", () => {
         ),
         recordAuditEvent,
         safeDb,
+        source: { kind: "background", reason: "handler unit test" },
         userId: toSafeId<"user">("019e6000-0000-7000-8000-000000000004"),
         workspaceId: toSafeId<"workspace">(
           "019e6000-0000-7000-8000-000000000005",

@@ -1,13 +1,20 @@
 name: Publish npm packages
 
+# release-chain-alert
+defaults:
+  run:
+    shell: bash
+
 # Keep this filename stable: npm trusted publishing authorizes the calling
 # repository workflow, even though the privileged release transaction is
-# implemented by stella/.github.
+# implemented with the pinned stella/.github release tooling.
 #
 # Shared libraries publish from version bumps on main. The CLI remains gated on
-# a successful stable Release Artifacts run and the corresponding production
-# deployment. Build, lifecycle, pack, and canary commands run without OIDC; only
-# the shared release job receives id-token and contents-write permissions.
+# the exact stable Release Artifacts production job receipt and its RC SHA; its
+# workspace dependencies that npm lacks at that SHA publish with it, first.
+# RC runs publish no npm versions. Build, lifecycle, pack, and canary commands
+# run without OIDC; only the reusable release jobs receive id-token and
+# contents-write permissions.
 
 env:
   NODE_VERSION: "22"
@@ -24,6 +31,7 @@ on:
       - packages/business-registries/CHANGELOG.md
       - packages/ai-catalog/CHANGELOG.md
       - packages/anonymize-chat/CHANGELOG.md
+      - packages/html/CHANGELOG.md
       - packages/chat/CHANGELOG.md
       - packages/country-codes/CHANGELOG.md
       - packages/conditions/CHANGELOG.md
@@ -38,10 +46,11 @@ on:
       - packages/workspace-model/CHANGELOG.md
       - packages/workspace-ui/CHANGELOG.md
       - packages/stable-stringify/CHANGELOG.md
-      - packages/time/CHANGELOG.md
       - packages/text-normalize/CHANGELOG.md
       - packages/agent-input/CHANGELOG.md
       - packages/mcp-kit/CHANGELOG.md
+      - packages/fetch/CHANGELOG.md
+      - packages/scan-engine/CHANGELOG.md
   workflow_run: # zizmor: ignore[dangerous-triggers] the release tag and SHA are revalidated before the release job receives id-token
     workflows: ["Release Artifacts"]
     types: [completed]
@@ -70,10 +79,12 @@ on:
           - workspace-model
           - workspace-ui
           - stable-stringify
-          - time
           - text-normalize
           - agent-input
           - mcp-kit
+          - fetch
+          - html
+          - scan-engine
           - cli
         default: all
       publish:
@@ -94,38 +105,60 @@ on:
         type: string
 
 concurrency:
-  # One group across every trigger so publishes to the same registry
-  # serialize instead of racing each other.
-  group: publish-npm
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
   release-trigger:
     name: Resolve release trigger
     # A workflow_run trigger is accepted only from this repository's own
-    # release workflow, started by a tag push or a manual dispatch.
+    # release workflow, started by a tag push or a manual dispatch. A release
+    # run whose jobs were all skipped carries no receipt and is ignored.
     if: >-
       github.event_name != 'workflow_run'
       || (github.event.workflow_run.head_repository.full_name == github.repository
       && github.event.workflow_run.path == '.github/workflows/release.yml'
-      && contains(fromJSON('["push", "workflow_dispatch"]'), github.event.workflow_run.event))
-    runs-on: ubuntu-latest
+      && contains(fromJSON('["push", "workflow_dispatch"]'), github.event.workflow_run.event)
+      && github.event.workflow_run.conclusion != 'skipped')
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
       actions: read # Download the completed release workflow's source receipt.
-      contents: read # Resolve the release tag and compare it with the default branch.
+      contents: read # Resolve the exact release tag and receipt.
     outputs:
       eligible: ${{ steps.source.outputs.eligible }}
       release_ref: ${{ steps.source.outputs.release_ref }}
       release_sha: ${{ steps.source.outputs.release_sha }}
     steps:
+      - name: Checkout GitHub API tooling
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.workflow_sha }}
+          path: .gh-retry
+          persist-credentials: false
+          sparse-checkout: |
+            scripts/gh-retry.sh
+            scripts/retry.sh
+            scripts/check-release-publication-source.sh
+            scripts/check-release-source-on-main.sh
+            scripts/release-branch.sh
+          sparse-checkout-cone-mode: false
+
+      - name: Preserve GitHub API tooling across source checkouts
+        run: |
+          cp "$GITHUB_WORKSPACE/.gh-retry/scripts/gh-retry.sh" "$RUNNER_TEMP/gh-retry.sh"
+          echo "GH_RETRY_SCRIPT=$RUNNER_TEMP/gh-retry.sh" >> "$GITHUB_ENV"
+      - name: Preserve release publication verification
+        run: |
+          cp "$GITHUB_WORKSPACE/.gh-retry/scripts/check-release-publication-source.sh" "$RUNNER_TEMP/check-release-publication-source.sh"
+
       - name: Resolve upstream release receipt
         id: source
+        timeout-minutes: 8
         env:
           EVENT_NAME: ${{ github.event_name }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
-          UPSTREAM_CONCLUSION: ${{ github.event.workflow_run.conclusion || '' }}
           UPSTREAM_EVENT: ${{ github.event.workflow_run.event || '' }}
           UPSTREAM_HEAD_SHA: ${{ github.event.workflow_run.head_sha || '' }}
           UPSTREAM_RUN_ID: ${{ github.event.workflow_run.id || '' }}
@@ -135,13 +168,8 @@ jobs:
             echo "eligible=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          if [[ "$UPSTREAM_CONCLUSION" != "success" ]]; then
-            echo "eligible=false" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
           receipt_dir="${RUNNER_TEMP}/release-source-receipt"
-          gh run download "$UPSTREAM_RUN_ID" \
+          bash "$GH_RETRY_SCRIPT" run download "$UPSTREAM_RUN_ID" \
             --repo "$GITHUB_REPOSITORY" \
             --name release-source-receipt \
             --dir "$receipt_dir"
@@ -158,20 +186,30 @@ jobs:
           fi
           eligible=false
           if [[ "$release_ref" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            eligible=true
+            receipt_status=0
+            bash "$RUNNER_TEMP/check-release-publication-source.sh" "$UPSTREAM_RUN_ID" "$release_ref" "$release_sha" || receipt_status=$?
+            case "$receipt_status" in
+              0) eligible=true ;;
+              1) ;;
+              *)
+                # An unreadable receipt must not pass as an ineligible release.
+                echo "::error::The production promotion receipt for $release_ref could not be read"
+                exit 1
+                ;;
+            esac
           fi
           # The receipt is data. Before a publish, the tag must exist in this
-          # repository and point at release_sha, which must be on the default
-          # branch; a tag push must also have run on that commit.
+          # repository and point at release_sha; a tag push must also have run
+          # on that commit. A release branch is squash-merged later.
           if [[ "$eligible" == "true" ]]; then
             if [[ "$UPSTREAM_EVENT" == "push" ]] \
               && [[ "$UPSTREAM_HEAD_SHA" != "$release_sha" ]]; then
               echo "::error::Upstream tag push does not match the release receipt." >&2
               exit 1
             fi
-            tag_object="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${release_ref}" --jq '.object.type + " " + .object.sha')"
+            tag_object="$(bash "$GH_RETRY_SCRIPT" api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${release_ref}" --jq '.object.type + " " + .object.sha')"
             if [[ "$tag_object" == tag\ * ]]; then
-              tag_sha="$(gh api "repos/${GITHUB_REPOSITORY}/git/tags/${tag_object#tag }" --jq 'select(.object.type == "commit") | .object.sha')"
+              tag_sha="$(bash "$GH_RETRY_SCRIPT" api "repos/${GITHUB_REPOSITORY}/git/tags/${tag_object#tag }" --jq 'select(.object.type == "commit") | .object.sha')"
             else
               tag_sha="${tag_object#commit }"
             fi
@@ -179,11 +217,16 @@ jobs:
               echo "::error::${release_ref} does not resolve to the receipt's release_sha in ${GITHUB_REPOSITORY}." >&2
               exit 1
             fi
-            on_default="$(gh api "repos/${GITHUB_REPOSITORY}/compare/${release_sha}...${DEFAULT_BRANCH}" --jq '.status')"
-            if [[ "$on_default" != "ahead" && "$on_default" != "identical" ]]; then
-              echo "::error::release_sha is not on ${DEFAULT_BRANCH}." >&2
-              exit 1
-            fi
+            # Protected main must carry the tagged commit, directly or as the
+            # head of the squash-merged release pull request, before pack
+            # builds from it. Only commit history is fetched.
+            history="${RUNNER_TEMP}/release-source-history"
+            git init --quiet "$history"
+            bash "$GITHUB_WORKSPACE/.gh-retry/scripts/retry.sh" git -C "$history" fetch --quiet --no-tags --filter=tree:0 \
+              "https://github.com/${GITHUB_REPOSITORY}.git" \
+              "+refs/heads/main:refs/remotes/origin/main" \
+              "+refs/tags/${release_ref}:refs/tags/${release_ref}"
+            (cd "$history" && bash "$GITHUB_WORKSPACE/.gh-retry/scripts/check-release-source-on-main.sh" "$release_sha" "$release_ref")
           fi
           {
             echo "eligible=${eligible}"
@@ -195,7 +238,7 @@ jobs:
     name: Build and pack
     needs: release-trigger
     if: ${{ needs.release-trigger.outputs.eligible == 'true' }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
       contents: read # deliberately NO id-token: untrusted build scripts run here
@@ -203,7 +246,27 @@ jobs:
       package_files: ${{ steps.pack.outputs.package_files }}
       packages: ${{ steps.pack.outputs.packages }}
       source_sha: ${{ steps.pack.outputs.source_sha }}
+      cli_release_ref: ${{ steps.release-source.outputs.release_ref }}
     steps:
+      - name: Checkout network retry helper
+        timeout-minutes: 2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.workflow_sha }}
+          path: .network-retry
+          persist-credentials: false
+          sparse-checkout: scripts/retry.sh
+          sparse-checkout-cone-mode: false
+
+      # The workflow's own helper: the source checks below run before the
+      # checked-out release source is validated, so they never run its copy.
+      - name: Stage network retry helper
+        run: |
+          mkdir -p "$RUNNER_TEMP/network-retry"
+          cp "$GITHUB_WORKSPACE/.network-retry/scripts/retry.sh" "$RUNNER_TEMP/network-retry/retry.sh"
+          echo "NETWORK_RETRY_SCRIPT=$RUNNER_TEMP/network-retry/retry.sh" >> "$GITHUB_ENV"
+
       - name: Resolve trusted source
         id: source
         env:
@@ -244,7 +307,33 @@ jobs:
           persist-credentials: false
           ref: ${{ steps.source.outputs.ref }}
 
+      # Recovery source can predate the current pack and declaration tools.
+      # They resolve their dependencies from the source's locked install.
+      - name: Checkout pack tooling
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: .pack-tooling
+          persist-credentials: false
+          sparse-checkout: |
+            scripts/pack-reproducibly.sh
+            scripts/publish-package-selection.ts
+            scripts/publish-packages.ts
+            scripts/generate-npm-release-jobs.ts
+            scripts/offline-check-startup.ts
+            packages/scripts/src/offline-check-startup.ts
+            scripts/prepare-publish.ts
+            scripts/publish-manifest.ts
+            scripts/publish-declarations.ts
+            scripts/install-packed-cli.sh
+            scripts/prepare-packed-cli-consumer.ts
+            scripts/retry.sh
+            scripts/check-release-source-on-main.sh
+            scripts/release-branch.sh
+          sparse-checkout-cone-mode: false
+
       - name: Verify manual package recovery source
+        timeout-minutes: 5
         if: >-
           github.event_name == 'workflow_dispatch'
           && inputs.publish
@@ -254,17 +343,15 @@ jobs:
           MANUAL_SOURCE_SHA: ${{ inputs.source_sha }}
         run: |
           set -euo pipefail
-          git fetch --no-tags origin main:refs/remotes/origin/main
+          bash "$NETWORK_RETRY_SCRIPT" git fetch --no-tags origin main:refs/remotes/origin/main
 
           source_sha="$(git rev-parse HEAD)"
           if [[ "$source_sha" != "$MANUAL_SOURCE_SHA" ]]; then
             echo "::error::Checked-out source does not match source_sha." >&2
             exit 1
           fi
-          if ! git merge-base --is-ancestor "$source_sha" origin/main; then
-            echo "::error::source_sha is not reachable from protected main." >&2
-            exit 1
-          fi
+          # Without a release ref only a commit on protected main qualifies.
+          bash "$GITHUB_WORKSPACE/.pack-tooling/scripts/check-release-source-on-main.sh" "$source_sha"
 
           manifest="packages/${MANUAL_PACKAGE}/package.json"
           if [[ ! -f "$manifest" ]]; then
@@ -296,22 +383,26 @@ jobs:
       # depend on install lifecycle scripts; other CI jobs build the same
       # packages from --ignore-scripts installs.
       - run: bash scripts/retry.sh bun ci --ignore-scripts
+        timeout-minutes: 5
 
       - name: Build and pack selected packages
         id: pack
-        shell: bash
         env:
           EVENT_NAME: ${{ github.event_name }}
           MANUAL_PACKAGE: ${{ inputs.package || 'all' }}
+          # A merge-queue push can carry several commits; select from all of
+          # them, not only the last one.
+          PUSH_BEFORE: ${{ github.event.before || '' }}
         run: |
           set -euo pipefail
-          # A historical source checkout predates this selector. Recovery is
-          # always one named non-CLI package, so resolve it from the workflow
-          # input instead of asking the old source to run new tooling.
-          if [[ "$EVENT_NAME" == "workflow_run" ]]; then
-            pkgs=(cli)
-          elif [[ "$EVENT_NAME" == "workflow_dispatch" && "$MANUAL_PACKAGE" != "all" ]]; then
-            pkgs=("$MANUAL_PACKAGE")
+          # Historical sources can predate the selector. Use current tooling
+          # with source manifests to resolve a named dispatch dependency closure.
+          # A CLI release (a release run or a cli dispatch) also packs every
+          # workspace dependency of the CLI whose version npm lacks, so the
+          # smoke installs this release's tarballs and they publish first.
+          if [[ "$EVENT_NAME" == "workflow_run" || ( "$EVENT_NAME" == "workflow_dispatch" && "$MANUAL_PACKAGE" != "all" ) ]]; then
+            selection="$(bun .pack-tooling/scripts/publish-package-selection.ts "$EVENT_NAME" "$MANUAL_PACKAGE" "$GITHUB_WORKSPACE")"
+            mapfile -t pkgs <<< "$selection"
           else
             mapfile -t pkgs < <(bun scripts/publish-package-selection.ts "$EVENT_NAME" "$MANUAL_PACKAGE")
           fi
@@ -322,14 +413,8 @@ jobs:
 
           for package in "${pkgs[@]}"; do
             echo "::group::Build + pack @stll/${package}"
-            if [[ "$package" == cli ]]; then
-              (cd packages/cli && bun run codegen:runtime)
-            fi
-            (cd "packages/${package}" && bun run build)
-            bun scripts/prepare-publish.ts "packages/${package}"
-            destination="release-artifacts/${package}"
-            mkdir -p "$destination"
-            (cd "packages/${package}" && bun pm pack --destination "${GITHUB_WORKSPACE}/${destination}")
+            PACK_SOURCE_ROOT="$GITHUB_WORKSPACE" bash .pack-tooling/scripts/pack-reproducibly.sh \
+              "$package" "$GITHUB_WORKSPACE/release-artifacts/${package}"
             echo "::endgroup::"
           done
 
@@ -343,6 +428,7 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: Validate CLI release source
+        timeout-minutes: 5
         id: release-source
         if: >-
           contains(fromJSON(steps.pack.outputs.packages), 'cli')
@@ -362,13 +448,11 @@ jobs:
             exit 1
           fi
 
-          if git ls-remote --exit-code --heads origin "refs/heads/${release_ref}" >/dev/null 2>&1; then
+          if RETRY_PASSTHROUGH_EXIT_CODES=2 bash "$NETWORK_RETRY_SCRIPT" git ls-remote --exit-code --heads origin "refs/heads/${release_ref}" >/dev/null 2>&1; then
             echo "::error::A branch named ${release_ref} exists alongside the release tag; refusing ambiguous publication." >&2
             exit 1
           fi
-          git fetch --no-tags origin \
-            "refs/tags/${release_ref}:refs/tags/${release_ref}" \
-            main:refs/remotes/origin/main
+          bash "$NETWORK_RETRY_SCRIPT" git fetch --tags origin "refs/tags/${release_ref}:refs/tags/${release_ref}"
 
           source_sha="$(git rev-parse HEAD)"
           release_sha="$(git rev-parse "refs/tags/${release_ref}^{commit}")"
@@ -376,32 +460,33 @@ jobs:
             echo "::error::Checked-out source ${source_sha} does not match ${release_ref} (${release_sha})." >&2
             exit 1
           fi
-          if ! git merge-base --is-ancestor "$release_sha" origin/main; then
-            echo "::error::${release_ref} is not reachable from protected main." >&2
-            exit 1
-          fi
-          if [[ "$(tr -d '[:space:]' < VERSION)" != "${release_ref#v}" ]]; then
+          stable_version="${release_ref#v}"
+          rc_tags=$(git tag --points-at "$release_sha" --list "v${stable_version}-rc.*" --sort=-v:refname)
+          rc_tag="${rc_tags%%$'\n'*}"
+          [[ -n "$rc_tag" ]] || { echo 'Final npm source must be the exact RC-proven SHA' >&2; exit 1; }
+          [[ "$(git rev-parse "refs/tags/${rc_tag}^{commit}")" == "$source_sha" ]] || exit 1
+          if [[ "$(tr -d '[:space:]' < VERSION)" != "$stable_version" ]]; then
             echo "::error::VERSION does not match ${release_ref}." >&2
             exit 1
           fi
           echo "expected_production_commit=${release_sha}" >> "$GITHUB_OUTPUT"
+          echo "release_ref=${release_ref}" >> "$GITHUB_OUTPUT"
 
       - name: Set up Node for the CLI smoke test
         if: contains(fromJSON(steps.pack.outputs.packages), 'cli')
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: ${{ env.NODE_VERSION }}
 
       - name: Smoke-test the packed CLI under plain Node # zizmor: ignore[adhoc-packages] intentionally installs the locally packed artifact as a consumer
+        timeout-minutes: 5
         if: contains(fromJSON(steps.pack.outputs.packages), 'cli')
-        shell: bash
         run: |
           set -euo pipefail
-          tarball="$(ls "${GITHUB_WORKSPACE}/release-artifacts/cli"/*.tgz)"
           smoke="$(mktemp -d)"
+          bash "$GITHUB_WORKSPACE/.pack-tooling/scripts/install-packed-cli.sh" \
+            "$GITHUB_WORKSPACE/release-artifacts" "$smoke" "$GITHUB_WORKSPACE/.pack-tooling/scripts/retry.sh"
           cd "$smoke"
-          npm init -y >/dev/null
-          npm install --ignore-scripts "$tarball"
           cli="node_modules/@stll/cli/dist/cli.js"
           node "$cli" --version
           node "$cli" --help
@@ -417,23 +502,22 @@ jobs:
         run: bun scripts/check-api-deployment.ts
 
       - name: Canary the exact packed CLI against production # zizmor: ignore[adhoc-packages] the exact local tarball is the canary subject
+        timeout-minutes: 5
         if: >-
           contains(fromJSON(steps.pack.outputs.packages), 'cli')
           && (github.event_name == 'workflow_run' || inputs.publish)
-        shell: bash
         run: |
           set -euo pipefail
-          tarball="$(ls "${GITHUB_WORKSPACE}/release-artifacts/cli"/*.tgz)"
           canary="$(mktemp -d)"
+          bash "$GITHUB_WORKSPACE/.pack-tooling/scripts/install-packed-cli.sh" \
+            "$GITHUB_WORKSPACE/release-artifacts" "$canary" "$GITHUB_WORKSPACE/.pack-tooling/scripts/retry.sh"
           cd "$canary"
-          npm init -y >/dev/null
-          npm install --ignore-scripts "$tarball"
           node node_modules/@stll/cli/dist/cli.js compatibility check \
             --server https://api.stll.app
 
       - name: Upload conditions tarball
         if: contains(fromJSON(steps.pack.outputs.packages), 'conditions')
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: npm-tarball-conditions
           path: release-artifacts/conditions/
@@ -442,14 +526,14 @@ jobs:
 
       - name: Upload auth-model tarball
         if: contains(fromJSON(steps.pack.outputs.packages), 'auth-model')
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: npm-tarball-auth-model
           path: release-artifacts/auth-model/
 
       - name: Upload ai-catalog tarball
         if: contains(fromJSON(steps.pack.outputs.packages), 'ai-catalog')
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: npm-tarball-ai-catalog
           path: release-artifacts/ai-catalog/
@@ -458,7 +542,7 @@ jobs:
 
       - name: Upload anonymize-chat tarball
         if: contains(fromJSON(steps.pack.outputs.packages), 'anonymize-chat')
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: npm-tarball-anonymize-chat
           path: release-artifacts/anonymize-chat/
@@ -467,7 +551,7 @@ jobs:
 
       - name: Upload business-registries tarball
         if: contains(fromJSON(steps.pack.outputs.packages), 'business-registries')
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: npm-tarball-business-registries
           path: release-artifacts/business-registries/
@@ -476,7 +560,7 @@ jobs:
 
       - name: Upload country-codes tarball
         if: contains(fromJSON(steps.pack.outputs.packages), 'country-codes')
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: npm-tarball-country-codes
           path: release-artifacts/country-codes/
@@ -485,7 +569,7 @@ jobs:
 
       - name: Upload stable-stringify tarball
         if: contains(fromJSON(steps.pack.outputs.packages), 'stable-stringify')
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: npm-tarball-stable-stringify
           path: release-artifacts/stable-stringify/
@@ -494,7 +578,7 @@ jobs:
 
       - name: Upload time tarball
         if: contains(fromJSON(steps.pack.outputs.packages), 'time')
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: npm-tarball-time
           path: release-artifacts/time/
@@ -503,7 +587,7 @@ jobs:
 
       - name: Upload text-normalize tarball
         if: contains(fromJSON(steps.pack.outputs.packages), 'text-normalize')
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: npm-tarball-text-normalize
           path: release-artifacts/text-normalize/
@@ -512,7 +596,7 @@ jobs:
 
       - name: Upload agent-input tarball
         if: contains(fromJSON(steps.pack.outputs.packages), 'agent-input')
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: npm-tarball-agent-input
           path: release-artifacts/agent-input/
@@ -521,16 +605,43 @@ jobs:
 
       - name: Upload mcp-kit tarball
         if: contains(fromJSON(steps.pack.outputs.packages), 'mcp-kit')
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: npm-tarball-mcp-kit
           path: release-artifacts/mcp-kit/
           retention-days: 1
           if-no-files-found: error
 
+      - name: Upload fetch tarball
+        if: contains(fromJSON(steps.pack.outputs.packages), 'fetch')
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: npm-tarball-fetch
+          path: release-artifacts/fetch/
+          retention-days: 1
+          if-no-files-found: error
+
+      - name: Upload html tarball
+        if: contains(fromJSON(steps.pack.outputs.packages), 'html')
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: npm-tarball-html
+          path: release-artifacts/html/
+          retention-days: 1
+          if-no-files-found: error
+
+      - name: Upload scan-engine tarball
+        if: contains(fromJSON(steps.pack.outputs.packages), 'scan-engine')
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: npm-tarball-scan-engine
+          path: release-artifacts/scan-engine/
+          retention-days: 1
+          if-no-files-found: error
+
       - name: Upload template-conditions tarball
         if: contains(fromJSON(steps.pack.outputs.packages), 'template-conditions')
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: npm-tarball-template-conditions
           path: release-artifacts/template-conditions/
@@ -539,7 +650,7 @@ jobs:
 
       - name: Upload docx-utils tarball
         if: contains(fromJSON(steps.pack.outputs.packages), 'docx-utils')
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: npm-tarball-docx-utils
           path: release-artifacts/docx-utils/
@@ -548,7 +659,7 @@ jobs:
 
       - name: Upload ssr-kit tarball
         if: contains(fromJSON(steps.pack.outputs.packages), 'ssr-kit')
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: npm-tarball-ssr-kit
           path: release-artifacts/ssr-kit/
@@ -557,7 +668,7 @@ jobs:
 
       - name: Upload ssr-testkit tarball
         if: contains(fromJSON(steps.pack.outputs.packages), 'ssr-testkit')
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: npm-tarball-ssr-testkit
           path: release-artifacts/ssr-testkit/
@@ -566,7 +677,7 @@ jobs:
 
       - name: Upload start-runtime tarball
         if: contains(fromJSON(steps.pack.outputs.packages), 'start-runtime')
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: npm-tarball-start-runtime
           path: release-artifacts/start-runtime/
@@ -575,7 +686,7 @@ jobs:
 
       - name: Upload chat tarball
         if: contains(fromJSON(steps.pack.outputs.packages), 'chat')
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: npm-tarball-chat
           path: release-artifacts/chat/
@@ -584,7 +695,7 @@ jobs:
 
       - name: Upload ui tarball
         if: contains(fromJSON(steps.pack.outputs.packages), 'ui')
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: npm-tarball-ui
           path: release-artifacts/ui/
@@ -593,7 +704,7 @@ jobs:
 
       - name: Upload money tarball
         if: contains(fromJSON(steps.pack.outputs.packages), 'money')
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: npm-tarball-money
           path: release-artifacts/money/
@@ -602,7 +713,7 @@ jobs:
 
       - name: Upload calculations tarball
         if: contains(fromJSON(steps.pack.outputs.packages), 'calculations')
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: npm-tarball-calculations
           path: release-artifacts/calculations/
@@ -611,7 +722,7 @@ jobs:
 
       - name: Upload workspace-ui tarball
         if: contains(fromJSON(steps.pack.outputs.packages), 'workspace-ui')
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: npm-tarball-workspace-ui
           path: release-artifacts/workspace-ui/
@@ -620,7 +731,7 @@ jobs:
 
       - name: Upload workspace-model tarball
         if: contains(fromJSON(steps.pack.outputs.packages), 'workspace-model')
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: npm-tarball-workspace-model
           path: release-artifacts/workspace-model/
@@ -629,37 +740,1220 @@ jobs:
 
       - name: Upload cli tarball
         if: contains(fromJSON(steps.pack.outputs.packages), 'cli')
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: npm-tarball-cli
           path: release-artifacts/cli/
           retention-days: 1
           if-no-files-found: error
 
-  release:
-    name: Publish selected packages
+  cli-native-build:
+    name: Build standalone CLI (${{ matrix.platform }})
     needs: pack
+    if: needs.pack.outputs.cli_release_ref != ''
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 40
+    permissions:
+      contents: read
+    strategy: &cli-native-strategy
+      fail-fast: false
+      matrix:
+        include:
+          - platform: darwin-arm64
+            runner: macos-15
+            target: bun-darwin-arm64
+            extension: ""
+          - platform: darwin-x64
+            runner: macos-15
+            target: bun-darwin-x64
+            extension: ""
+          - platform: linux-x64
+            runner: ubuntu-24.04
+            target: bun-linux-x64-baseline
+            extension: ""
+          - platform: linux-arm64
+            runner: ubuntu-24.04-arm
+            target: bun-linux-arm64
+            extension: ""
+          - platform: windows-x64
+            runner: windows-latest
+            target: bun-windows-x64-baseline
+            extension: .exe
+    steps:
+      - name: Checkout validated CLI release source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.pack.outputs.source_sha }}
+          persist-credentials: false
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: package.json
+          no-cache: true
+
+      - name: Install locked build dependencies
+        shell: bash
+        timeout-minutes: 20
+        run: bash scripts/retry.sh bun ci --ignore-scripts
+
+      - name: Compile standalone CLI
+        shell: bash
+        timeout-minutes: 10
+        env:
+          CLI_TARGET: ${{ matrix.target }}
+          CLI_ASSET: stella-${{ matrix.platform }}${{ matrix.extension }}
+        run: |
+          bun run --cwd packages/cli codegen:runtime
+          mkdir -p native-cli
+          cd packages/cli
+          bash ../../scripts/retry.sh bun build src/cli.ts --compile \
+            --target="$CLI_TARGET" --outfile="../../native-cli/$CLI_ASSET" \
+            --asset capabilities --asset src/generated/registry-snapshot.json \
+            --no-compile-autoload-dotenv --no-compile-autoload-bunfig
+
+      - name: Smoke test standalone CLI
+        shell: bash
+        # macOS x64 runs under Rosetta on the signing runner.
+        env:
+          CLI_ASSET: stella-${{ matrix.platform }}${{ matrix.extension }}
+        run: |
+          "./native-cli/$CLI_ASSET" --version
+          "./native-cli/$CLI_ASSET" --help
+
+      - name: Upload unsigned standalone CLI
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: cli-native-build-${{ matrix.platform }}
+          path: native-cli/stella-${{ matrix.platform }}${{ matrix.extension }}
+          if-no-files-found: error
+          retention-days: 7
+
+  cli-native-sign:
+    name: Sign standalone CLI (${{ matrix.platform }})
+    needs: cli-native-build
+    if: github.ref == 'refs/heads/main'
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 40
+    permissions: {}
+    strategy: *cli-native-strategy
+    steps:
+      - name: Download built standalone CLI
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: cli-native-build-${{ matrix.platform }}
+          path: native-cli
+
+      - name: Import Apple Developer ID certificate into temporary keychain
+        if: startsWith(matrix.platform, 'darwin-')
+        uses: apple-actions/import-codesign-certs@288b8ec97b82c66b6f2a6baaf7acc8dfbcbe331c # v7.2.0
+        with:
+          p12-file-base64: ${{ secrets.APPLE_CERTIFICATE }}
+          p12-password: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+
+      - name: Sign and notarize macOS CLI
+        shell: bash
+        if: startsWith(matrix.platform, 'darwin-')
+        timeout-minutes: 25
+        env:
+          CLI_ASSET: stella-${{ matrix.platform }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_KEY_PATH: ${{ runner.temp }}/apple-api.p8
+          APPLE_API_KEY_BASE64: ${{ secrets.APPLE_API_KEY }}
+        run: |
+          set -euo pipefail
+          trap 'rm -f "$APPLE_API_KEY_PATH"' EXIT
+          umask 077
+          printf '%s' "$APPLE_API_KEY_BASE64" | base64 -d > "$APPLE_API_KEY_PATH"
+          chmod 755 "native-cli/$CLI_ASSET"
+          # Signing policy comes from this workflow, never the build artifact.
+          cat > "$RUNNER_TEMP/cli-entitlements.plist" <<'PLIST'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict>
+          <key>com.apple.security.cs.allow-jit</key><true/>
+          <key>com.apple.security.cs.allow-unsigned-executable-memory</key><true/>
+          </dict></plist>
+          PLIST
+          codesign --force --timestamp --options runtime \
+            --identifier app.stll.cli --entitlements "$RUNNER_TEMP/cli-entitlements.plist" \
+            --sign "$APPLE_SIGNING_IDENTITY" "native-cli/$CLI_ASSET"
+          codesign --verify --strict --verbose=2 "native-cli/$CLI_ASSET"
+          ditto -c -k --keepParent "native-cli/$CLI_ASSET" "$RUNNER_TEMP/cli-notary.zip"
+          xcrun notarytool submit "$RUNNER_TEMP/cli-notary.zip" \
+            --key "$APPLE_API_KEY_PATH" --key-id "$APPLE_API_KEY" \
+            --issuer "$APPLE_API_ISSUER" --wait --timeout 20m --output-format json \
+            > "$RUNNER_TEMP/cli-notary-result.json"
+          jq -e '.status == "Accepted"' "$RUNNER_TEMP/cli-notary-result.json"
+          # A bare Mach-O cannot be stapled. Gatekeeper checks its accepted
+          # notarization ticket online when the installed executable runs.
+
+      - name: Setup Rust for Windows signing tools
+        if: matrix.platform == 'windows-x64'
+        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: 1.100.0
+
+      - name: Install desktop Windows signing CLI
+        if: matrix.platform == 'windows-x64'
+        uses: baptiste0928/cargo-install@8195d4f734a149db85385bb4102b42efcd373759 # v3.5.0
+        with:
+          crate: trusted-signing-cli
+          version: "0.10.0"
+          locked: true
+
+      - name: Sign Windows CLI with desktop signing mechanism
+        if: matrix.platform == 'windows-x64'
+        shell: bash
+        timeout-minutes: 10
+        env:
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          AZURE_ENDPOINT: ${{ secrets.AZURE_ENDPOINT }}
+          AZURE_CODE_SIGNING_ACCOUNT: ${{ secrets.AZURE_CODE_SIGNING_ACCOUNT }}
+          AZURE_CERT_PROFILE: ${{ secrets.AZURE_CERT_PROFILE }}
+        run: |
+          pwsh -NoProfile -NonInteractive -Command - <<'POWERSHELL'
+          $ErrorActionPreference = "Stop"
+          $signtool = Get-ChildItem -LiteralPath "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Directory |
+            Where-Object { $_.Name -match '^10\.\d+\.\d+\.\d+$' } |
+            Sort-Object { [Version]$_.Name } -Descending |
+            ForEach-Object { Join-Path $_.FullName 'x64\signtool.exe' } |
+            Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } |
+            Select-Object -First 1
+          if (-not $signtool) { throw "signtool.exe was not found" }
+          $env:SIGNTOOL_PATH = $signtool
+          $executables = @(Get-ChildItem -LiteralPath native-cli -Filter *.exe -File -Recurse -ErrorAction Stop)
+          if ($executables.Count -eq 0) { throw "No Windows executables to sign" }
+          foreach ($executable in $executables) {
+            & trusted-signing-cli -e $env:AZURE_ENDPOINT -a $env:AZURE_CODE_SIGNING_ACCOUNT -c $env:AZURE_CERT_PROFILE $executable.FullName
+            if ($LASTEXITCODE -ne 0) { throw "Windows executable signing failed" }
+          }
+
+          POWERSHELL
+
+      - name: Verify Windows signatures and timestamps
+        if: matrix.platform == 'windows-x64'
+        shell: bash
+        env:
+          SIGNED_ARTIFACT_DIRECTORY: native-cli
+        run: |
+          pwsh -NoProfile -NonInteractive -Command - <<'POWERSHELL'
+          $ErrorActionPreference = "Stop"
+          $executables = @(Get-ChildItem -LiteralPath $env:SIGNED_ARTIFACT_DIRECTORY -Filter *.exe -File -Recurse -ErrorAction Stop)
+          if ($executables.Count -eq 0) { throw "No Windows executables to verify" }
+          foreach ($executable in $executables) {
+            $signature = Get-AuthenticodeSignature -LiteralPath $executable.FullName -ErrorAction Stop
+            if ($signature.Status -ne "Valid") { throw "Windows Authenticode signature is invalid" }
+            if ($null -eq $signature.TimeStamperCertificate) { throw "Windows Authenticode timestamp is missing" }
+          }
+
+          POWERSHELL
+
+      - name: Upload verified standalone CLI
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: cli-native-release-${{ matrix.platform }}
+          path: native-cli/stella-${{ matrix.platform }}${{ matrix.extension }}
+          if-no-files-found: error
+          retention-days: 7
+
+  cli-native-upload:
+    name: Publish standalone CLI assets
+    needs: [pack, release-cli, cli-native-sign]
     if: >-
-      needs.pack.result == 'success'
+      !cancelled()
+      && needs.pack.result == 'success'
+      && needs.release-cli.result == 'success'
+      && needs.cli-native-sign.result == 'success'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      actions: read
+      contents: write
+      id-token: write
+      attestations: write
+    steps:
+      - name: Checkout release asset tooling
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.workflow_sha }}
+          persist-credentials: false
+          sparse-checkout: |
+            scripts/gh-retry.sh
+            scripts/upload-release-assets.sh
+            scripts/download-run-artifact.sh
+            .github/actions/provenance
+          sparse-checkout-cone-mode: false
+
+      - name: Download standalone CLI binaries
+        timeout-minutes: 5
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/download-run-artifact.sh --pattern 'cli-native-release-*' --merge --path native-cli
+
+      - name: Hash final release binaries
+        timeout-minutes: 5
+        run: |
+          set -euo pipefail
+          assets=(stella-darwin-arm64 stella-darwin-x64 stella-linux-x64 stella-linux-arm64 stella-windows-x64.exe)
+          (
+            cd native-cli
+            sha256sum "${assets[@]}" > checksums.txt
+          )
+
+      - name: Attest release binaries and checksums
+        timeout-minutes: 5
+        uses: ./.github/actions/provenance
+        with:
+          subject-path: native-cli/*
+
+      - name: Attach verified binaries to the existing release
+        timeout-minutes: 5
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CLI_RELEASE_REF: ${{ needs.pack.outputs.cli_release_ref }}
+          GH_RETRY_SCRIPT: ${{ github.workspace }}/scripts/gh-retry.sh
+        run: |
+          bash scripts/upload-release-assets.sh "$GITHUB_REPOSITORY" "$CLI_RELEASE_REF" native-cli/*
+
+  # npm-release-jobs:start
+
+  # Generated by scripts/generate-npm-release-jobs.ts; do not edit.
+
+  release-auth-model:
+    name: Publish @stll/auth-model
+    needs:
+      - release-trigger
+      - pack
+    if: >-
+      always() && !cancelled()
+      && needs.pack.result == 'success'
+      && (github.event_name != 'workflow_run'
+      || (github.event.workflow_run.head_repository.full_name == github.repository
+      && github.event.workflow_run.path == '.github/workflows/release.yml'
+      && contains(fromJSON('["push", "workflow_dispatch"]'), github.event.workflow_run.event)))
       && (github.event_name == 'workflow_run'
       || (github.ref == 'refs/heads/main'
       && (github.event_name == 'push' || inputs.publish)))
+      && contains(fromJSON(needs.pack.outputs.packages), 'auth-model')
     permissions:
-      actions: read # Verify exact artifacts when a release transaction is resumed.
-      contents: write # Create immutable package tags and GitHub releases.
-      id-token: write # Exchange a short-lived npm trusted-publishing credential.
-    # The repository owner publishes this versioned shared contract.
-    uses: stella/.github/.github/workflows/npm-independent-release.yml@28f9f43d5c1e820500f8526a5527465bcbcdf425 # release job environment input
+      actions: read
+      contents: write
+      id-token: write
+    uses: stella/.github/.github/workflows/npm-independent-release.yml@2664e46f02aea7164ba71bcdd485a686166993a4 # release job environment input
     with:
-      # The release App key is an environment secret; the shared job runs in
-      # this environment so only main and release tags can mint the token.
       environment: release-app
-      artifact-pattern: npm-tarball-*
-      # The reusable workflow verifies that a resumed artifact comes from this
-      # workflow and the immutable source commit before it is downloaded.
+      artifact-pattern: npm-tarball-auth-model
       artifact-run-id: ${{ inputs.artifact_run_id || '' }}
-      package-files: ${{ needs.pack.outputs.package_files }}
+      package-files: packages/auth-model/package.json
       source-ref: ${{ needs.pack.outputs.source_sha }}
     secrets:
       RELEASE_APP_ID: ${{ secrets.STELLA_RELEASE_APP_ID }}
       RELEASE_APP_PRIVATE_KEY: ${{ secrets.STELLA_RELEASE_APP_PRIVATE_KEY }}
+
+  release-ai-catalog:
+    name: Publish @stll/ai-catalog
+    needs:
+      - release-trigger
+      - pack
+    if: >-
+      always() && !cancelled()
+      && needs.pack.result == 'success'
+      && (github.event_name != 'workflow_run'
+      || (github.event.workflow_run.head_repository.full_name == github.repository
+      && github.event.workflow_run.path == '.github/workflows/release.yml'
+      && contains(fromJSON('["push", "workflow_dispatch"]'), github.event.workflow_run.event)))
+      && (github.event_name == 'workflow_run'
+      || (github.ref == 'refs/heads/main'
+      && (github.event_name == 'push' || inputs.publish)))
+      && contains(fromJSON(needs.pack.outputs.packages), 'ai-catalog')
+    permissions:
+      actions: read
+      contents: write
+      id-token: write
+    uses: stella/.github/.github/workflows/npm-independent-release.yml@2664e46f02aea7164ba71bcdd485a686166993a4 # release job environment input
+    with:
+      environment: release-app
+      artifact-pattern: npm-tarball-ai-catalog
+      artifact-run-id: ${{ inputs.artifact_run_id || '' }}
+      package-files: packages/ai-catalog/package.json
+      source-ref: ${{ needs.pack.outputs.source_sha }}
+    secrets:
+      RELEASE_APP_ID: ${{ secrets.STELLA_RELEASE_APP_ID }}
+      RELEASE_APP_PRIVATE_KEY: ${{ secrets.STELLA_RELEASE_APP_PRIVATE_KEY }}
+
+  release-text-normalize:
+    name: Publish @stll/text-normalize
+    needs:
+      - release-trigger
+      - pack
+    if: >-
+      always() && !cancelled()
+      && needs.pack.result == 'success'
+      && (github.event_name != 'workflow_run'
+      || (github.event.workflow_run.head_repository.full_name == github.repository
+      && github.event.workflow_run.path == '.github/workflows/release.yml'
+      && contains(fromJSON('["push", "workflow_dispatch"]'), github.event.workflow_run.event)))
+      && (github.event_name == 'workflow_run'
+      || (github.ref == 'refs/heads/main'
+      && (github.event_name == 'push' || inputs.publish)))
+      && contains(fromJSON(needs.pack.outputs.packages), 'text-normalize')
+    permissions:
+      actions: read
+      contents: write
+      id-token: write
+    uses: stella/.github/.github/workflows/npm-independent-release.yml@2664e46f02aea7164ba71bcdd485a686166993a4 # release job environment input
+    with:
+      environment: release-app
+      artifact-pattern: npm-tarball-text-normalize
+      artifact-run-id: ${{ inputs.artifact_run_id || '' }}
+      package-files: packages/text-normalize/package.json
+      source-ref: ${{ needs.pack.outputs.source_sha }}
+    secrets:
+      RELEASE_APP_ID: ${{ secrets.STELLA_RELEASE_APP_ID }}
+      RELEASE_APP_PRIVATE_KEY: ${{ secrets.STELLA_RELEASE_APP_PRIVATE_KEY }}
+
+  release-anonymize-chat:
+    name: Publish @stll/anonymize-chat
+    needs:
+      - release-trigger
+      - pack
+      - release-text-normalize
+    if: >-
+      always() && !cancelled()
+      && needs.pack.result == 'success'
+      && (github.event_name != 'workflow_run'
+      || (github.event.workflow_run.head_repository.full_name == github.repository
+      && github.event.workflow_run.path == '.github/workflows/release.yml'
+      && contains(fromJSON('["push", "workflow_dispatch"]'), github.event.workflow_run.event)))
+      && (github.event_name == 'workflow_run'
+      || (github.ref == 'refs/heads/main'
+      && (github.event_name == 'push' || inputs.publish)))
+      && contains(fromJSON(needs.pack.outputs.packages), 'anonymize-chat')
+      && (!contains(fromJSON(needs.pack.outputs.packages), 'text-normalize') || needs.release-text-normalize.result == 'success')
+    permissions:
+      actions: read
+      contents: write
+      id-token: write
+    uses: stella/.github/.github/workflows/npm-independent-release.yml@2664e46f02aea7164ba71bcdd485a686166993a4 # release job environment input
+    with:
+      environment: release-app
+      artifact-pattern: npm-tarball-anonymize-chat
+      artifact-run-id: ${{ inputs.artifact_run_id || '' }}
+      package-files: packages/anonymize-chat/package.json
+      source-ref: ${{ needs.pack.outputs.source_sha }}
+    secrets:
+      RELEASE_APP_ID: ${{ secrets.STELLA_RELEASE_APP_ID }}
+      RELEASE_APP_PRIVATE_KEY: ${{ secrets.STELLA_RELEASE_APP_PRIVATE_KEY }}
+
+  release-ui:
+    name: Publish @stll/ui
+    needs:
+      - release-trigger
+      - pack
+    if: >-
+      always() && !cancelled()
+      && needs.pack.result == 'success'
+      && (github.event_name != 'workflow_run'
+      || (github.event.workflow_run.head_repository.full_name == github.repository
+      && github.event.workflow_run.path == '.github/workflows/release.yml'
+      && contains(fromJSON('["push", "workflow_dispatch"]'), github.event.workflow_run.event)))
+      && (github.event_name == 'workflow_run'
+      || (github.ref == 'refs/heads/main'
+      && (github.event_name == 'push' || inputs.publish)))
+      && contains(fromJSON(needs.pack.outputs.packages), 'ui')
+    permissions:
+      actions: read
+      contents: write
+      id-token: write
+    uses: stella/.github/.github/workflows/npm-independent-release.yml@2664e46f02aea7164ba71bcdd485a686166993a4 # release job environment input
+    with:
+      environment: release-app
+      artifact-pattern: npm-tarball-ui
+      artifact-run-id: ${{ inputs.artifact_run_id || '' }}
+      package-files: packages/ui/package.json
+      source-ref: ${{ needs.pack.outputs.source_sha }}
+    secrets:
+      RELEASE_APP_ID: ${{ secrets.STELLA_RELEASE_APP_ID }}
+      RELEASE_APP_PRIVATE_KEY: ${{ secrets.STELLA_RELEASE_APP_PRIVATE_KEY }}
+
+  release-html:
+    name: Publish @stll/html
+    needs:
+      - release-trigger
+      - pack
+    if: >-
+      always() && !cancelled()
+      && needs.pack.result == 'success'
+      && (github.event_name != 'workflow_run'
+      || (github.event.workflow_run.head_repository.full_name == github.repository
+      && github.event.workflow_run.path == '.github/workflows/release.yml'
+      && contains(fromJSON('["push", "workflow_dispatch"]'), github.event.workflow_run.event)))
+      && (github.event_name == 'workflow_run'
+      || (github.ref == 'refs/heads/main'
+      && (github.event_name == 'push' || inputs.publish)))
+      && contains(fromJSON(needs.pack.outputs.packages), 'html')
+    permissions:
+      actions: read
+      contents: write
+      id-token: write
+    uses: stella/.github/.github/workflows/npm-independent-release.yml@2664e46f02aea7164ba71bcdd485a686166993a4 # release job environment input
+    with:
+      environment: release-app
+      artifact-pattern: npm-tarball-html
+      artifact-run-id: ${{ inputs.artifact_run_id || '' }}
+      package-files: packages/html/package.json
+      source-ref: ${{ needs.pack.outputs.source_sha }}
+    secrets:
+      RELEASE_APP_ID: ${{ secrets.STELLA_RELEASE_APP_ID }}
+      RELEASE_APP_PRIVATE_KEY: ${{ secrets.STELLA_RELEASE_APP_PRIVATE_KEY }}
+
+  release-chat:
+    name: Publish @stll/chat
+    needs:
+      - release-trigger
+      - pack
+      - release-ai-catalog
+      - release-ui
+      - release-html
+    if: >-
+      always() && !cancelled()
+      && needs.pack.result == 'success'
+      && (github.event_name != 'workflow_run'
+      || (github.event.workflow_run.head_repository.full_name == github.repository
+      && github.event.workflow_run.path == '.github/workflows/release.yml'
+      && contains(fromJSON('["push", "workflow_dispatch"]'), github.event.workflow_run.event)))
+      && (github.event_name == 'workflow_run'
+      || (github.ref == 'refs/heads/main'
+      && (github.event_name == 'push' || inputs.publish)))
+      && contains(fromJSON(needs.pack.outputs.packages), 'chat')
+      && (!contains(fromJSON(needs.pack.outputs.packages), 'ai-catalog') || needs.release-ai-catalog.result == 'success')
+      && (!contains(fromJSON(needs.pack.outputs.packages), 'ui') || needs.release-ui.result == 'success')
+      && (!contains(fromJSON(needs.pack.outputs.packages), 'html') || needs.release-html.result == 'success')
+    permissions:
+      actions: read
+      contents: write
+      id-token: write
+    uses: stella/.github/.github/workflows/npm-independent-release.yml@2664e46f02aea7164ba71bcdd485a686166993a4 # release job environment input
+    with:
+      environment: release-app
+      artifact-pattern: npm-tarball-chat
+      artifact-run-id: ${{ inputs.artifact_run_id || '' }}
+      package-files: packages/chat/package.json
+      source-ref: ${{ needs.pack.outputs.source_sha }}
+    secrets:
+      RELEASE_APP_ID: ${{ secrets.STELLA_RELEASE_APP_ID }}
+      RELEASE_APP_PRIVATE_KEY: ${{ secrets.STELLA_RELEASE_APP_PRIVATE_KEY }}
+
+  release-country-codes:
+    name: Publish @stll/country-codes
+    needs:
+      - release-trigger
+      - pack
+    if: >-
+      always() && !cancelled()
+      && needs.pack.result == 'success'
+      && (github.event_name != 'workflow_run'
+      || (github.event.workflow_run.head_repository.full_name == github.repository
+      && github.event.workflow_run.path == '.github/workflows/release.yml'
+      && contains(fromJSON('["push", "workflow_dispatch"]'), github.event.workflow_run.event)))
+      && (github.event_name == 'workflow_run'
+      || (github.ref == 'refs/heads/main'
+      && (github.event_name == 'push' || inputs.publish)))
+      && contains(fromJSON(needs.pack.outputs.packages), 'country-codes')
+    permissions:
+      actions: read
+      contents: write
+      id-token: write
+    uses: stella/.github/.github/workflows/npm-independent-release.yml@2664e46f02aea7164ba71bcdd485a686166993a4 # release job environment input
+    with:
+      environment: release-app
+      artifact-pattern: npm-tarball-country-codes
+      artifact-run-id: ${{ inputs.artifact_run_id || '' }}
+      package-files: packages/country-codes/package.json
+      source-ref: ${{ needs.pack.outputs.source_sha }}
+    secrets:
+      RELEASE_APP_ID: ${{ secrets.STELLA_RELEASE_APP_ID }}
+      RELEASE_APP_PRIVATE_KEY: ${{ secrets.STELLA_RELEASE_APP_PRIVATE_KEY }}
+
+  release-business-registries:
+    name: Publish @stll/business-registries
+    needs:
+      - release-trigger
+      - pack
+      - release-text-normalize
+      - release-country-codes
+    if: >-
+      always() && !cancelled()
+      && needs.pack.result == 'success'
+      && (github.event_name != 'workflow_run'
+      || (github.event.workflow_run.head_repository.full_name == github.repository
+      && github.event.workflow_run.path == '.github/workflows/release.yml'
+      && contains(fromJSON('["push", "workflow_dispatch"]'), github.event.workflow_run.event)))
+      && (github.event_name == 'workflow_run'
+      || (github.ref == 'refs/heads/main'
+      && (github.event_name == 'push' || inputs.publish)))
+      && contains(fromJSON(needs.pack.outputs.packages), 'business-registries')
+      && (!contains(fromJSON(needs.pack.outputs.packages), 'text-normalize') || needs.release-text-normalize.result == 'success')
+      && (!contains(fromJSON(needs.pack.outputs.packages), 'country-codes') || needs.release-country-codes.result == 'success')
+    permissions:
+      actions: read
+      contents: write
+      id-token: write
+    uses: stella/.github/.github/workflows/npm-independent-release.yml@2664e46f02aea7164ba71bcdd485a686166993a4 # release job environment input
+    with:
+      environment: release-app
+      artifact-pattern: npm-tarball-business-registries
+      artifact-run-id: ${{ inputs.artifact_run_id || '' }}
+      package-files: packages/business-registries/package.json
+      source-ref: ${{ needs.pack.outputs.source_sha }}
+    secrets:
+      RELEASE_APP_ID: ${{ secrets.STELLA_RELEASE_APP_ID }}
+      RELEASE_APP_PRIVATE_KEY: ${{ secrets.STELLA_RELEASE_APP_PRIVATE_KEY }}
+
+  release-conditions:
+    name: Publish @stll/conditions
+    needs:
+      - release-trigger
+      - pack
+    if: >-
+      always() && !cancelled()
+      && needs.pack.result == 'success'
+      && (github.event_name != 'workflow_run'
+      || (github.event.workflow_run.head_repository.full_name == github.repository
+      && github.event.workflow_run.path == '.github/workflows/release.yml'
+      && contains(fromJSON('["push", "workflow_dispatch"]'), github.event.workflow_run.event)))
+      && (github.event_name == 'workflow_run'
+      || (github.ref == 'refs/heads/main'
+      && (github.event_name == 'push' || inputs.publish)))
+      && contains(fromJSON(needs.pack.outputs.packages), 'conditions')
+    permissions:
+      actions: read
+      contents: write
+      id-token: write
+    uses: stella/.github/.github/workflows/npm-independent-release.yml@2664e46f02aea7164ba71bcdd485a686166993a4 # release job environment input
+    with:
+      environment: release-app
+      artifact-pattern: npm-tarball-conditions
+      artifact-run-id: ${{ inputs.artifact_run_id || '' }}
+      package-files: packages/conditions/package.json
+      source-ref: ${{ needs.pack.outputs.source_sha }}
+    secrets:
+      RELEASE_APP_ID: ${{ secrets.STELLA_RELEASE_APP_ID }}
+      RELEASE_APP_PRIVATE_KEY: ${{ secrets.STELLA_RELEASE_APP_PRIVATE_KEY }}
+
+  release-template-conditions:
+    name: Publish @stll/template-conditions
+    needs:
+      - release-trigger
+      - pack
+      - release-conditions
+    if: >-
+      always() && !cancelled()
+      && needs.pack.result == 'success'
+      && (github.event_name != 'workflow_run'
+      || (github.event.workflow_run.head_repository.full_name == github.repository
+      && github.event.workflow_run.path == '.github/workflows/release.yml'
+      && contains(fromJSON('["push", "workflow_dispatch"]'), github.event.workflow_run.event)))
+      && (github.event_name == 'workflow_run'
+      || (github.ref == 'refs/heads/main'
+      && (github.event_name == 'push' || inputs.publish)))
+      && contains(fromJSON(needs.pack.outputs.packages), 'template-conditions')
+      && (!contains(fromJSON(needs.pack.outputs.packages), 'conditions') || needs.release-conditions.result == 'success')
+    permissions:
+      actions: read
+      contents: write
+      id-token: write
+    uses: stella/.github/.github/workflows/npm-independent-release.yml@2664e46f02aea7164ba71bcdd485a686166993a4 # release job environment input
+    with:
+      environment: release-app
+      artifact-pattern: npm-tarball-template-conditions
+      artifact-run-id: ${{ inputs.artifact_run_id || '' }}
+      package-files: packages/template-conditions/package.json
+      source-ref: ${{ needs.pack.outputs.source_sha }}
+    secrets:
+      RELEASE_APP_ID: ${{ secrets.STELLA_RELEASE_APP_ID }}
+      RELEASE_APP_PRIVATE_KEY: ${{ secrets.STELLA_RELEASE_APP_PRIVATE_KEY }}
+
+  release-docx-utils:
+    name: Publish @stll/docx-utils
+    needs:
+      - release-trigger
+      - pack
+    if: >-
+      always() && !cancelled()
+      && needs.pack.result == 'success'
+      && (github.event_name != 'workflow_run'
+      || (github.event.workflow_run.head_repository.full_name == github.repository
+      && github.event.workflow_run.path == '.github/workflows/release.yml'
+      && contains(fromJSON('["push", "workflow_dispatch"]'), github.event.workflow_run.event)))
+      && (github.event_name == 'workflow_run'
+      || (github.ref == 'refs/heads/main'
+      && (github.event_name == 'push' || inputs.publish)))
+      && contains(fromJSON(needs.pack.outputs.packages), 'docx-utils')
+    permissions:
+      actions: read
+      contents: write
+      id-token: write
+    uses: stella/.github/.github/workflows/npm-independent-release.yml@2664e46f02aea7164ba71bcdd485a686166993a4 # release job environment input
+    with:
+      environment: release-app
+      artifact-pattern: npm-tarball-docx-utils
+      artifact-run-id: ${{ inputs.artifact_run_id || '' }}
+      package-files: packages/docx-utils/package.json
+      source-ref: ${{ needs.pack.outputs.source_sha }}
+    secrets:
+      RELEASE_APP_ID: ${{ secrets.STELLA_RELEASE_APP_ID }}
+      RELEASE_APP_PRIVATE_KEY: ${{ secrets.STELLA_RELEASE_APP_PRIVATE_KEY }}
+
+  release-start-runtime:
+    name: Publish @stll/start-runtime
+    needs:
+      - release-trigger
+      - pack
+    if: >-
+      always() && !cancelled()
+      && needs.pack.result == 'success'
+      && (github.event_name != 'workflow_run'
+      || (github.event.workflow_run.head_repository.full_name == github.repository
+      && github.event.workflow_run.path == '.github/workflows/release.yml'
+      && contains(fromJSON('["push", "workflow_dispatch"]'), github.event.workflow_run.event)))
+      && (github.event_name == 'workflow_run'
+      || (github.ref == 'refs/heads/main'
+      && (github.event_name == 'push' || inputs.publish)))
+      && contains(fromJSON(needs.pack.outputs.packages), 'start-runtime')
+    permissions:
+      actions: read
+      contents: write
+      id-token: write
+    uses: stella/.github/.github/workflows/npm-independent-release.yml@2664e46f02aea7164ba71bcdd485a686166993a4 # release job environment input
+    with:
+      environment: release-app
+      artifact-pattern: npm-tarball-start-runtime
+      artifact-run-id: ${{ inputs.artifact_run_id || '' }}
+      package-files: packages/start-runtime/package.json
+      source-ref: ${{ needs.pack.outputs.source_sha }}
+    secrets:
+      RELEASE_APP_ID: ${{ secrets.STELLA_RELEASE_APP_ID }}
+      RELEASE_APP_PRIVATE_KEY: ${{ secrets.STELLA_RELEASE_APP_PRIVATE_KEY }}
+
+  release-ssr-kit:
+    name: Publish @stll/ssr-kit
+    needs:
+      - release-trigger
+      - pack
+    if: >-
+      always() && !cancelled()
+      && needs.pack.result == 'success'
+      && (github.event_name != 'workflow_run'
+      || (github.event.workflow_run.head_repository.full_name == github.repository
+      && github.event.workflow_run.path == '.github/workflows/release.yml'
+      && contains(fromJSON('["push", "workflow_dispatch"]'), github.event.workflow_run.event)))
+      && (github.event_name == 'workflow_run'
+      || (github.ref == 'refs/heads/main'
+      && (github.event_name == 'push' || inputs.publish)))
+      && contains(fromJSON(needs.pack.outputs.packages), 'ssr-kit')
+    permissions:
+      actions: read
+      contents: write
+      id-token: write
+    uses: stella/.github/.github/workflows/npm-independent-release.yml@2664e46f02aea7164ba71bcdd485a686166993a4 # release job environment input
+    with:
+      environment: release-app
+      artifact-pattern: npm-tarball-ssr-kit
+      artifact-run-id: ${{ inputs.artifact_run_id || '' }}
+      package-files: packages/ssr-kit/package.json
+      source-ref: ${{ needs.pack.outputs.source_sha }}
+    secrets:
+      RELEASE_APP_ID: ${{ secrets.STELLA_RELEASE_APP_ID }}
+      RELEASE_APP_PRIVATE_KEY: ${{ secrets.STELLA_RELEASE_APP_PRIVATE_KEY }}
+
+  release-ssr-testkit:
+    name: Publish @stll/ssr-testkit
+    needs:
+      - release-trigger
+      - pack
+    if: >-
+      always() && !cancelled()
+      && needs.pack.result == 'success'
+      && (github.event_name != 'workflow_run'
+      || (github.event.workflow_run.head_repository.full_name == github.repository
+      && github.event.workflow_run.path == '.github/workflows/release.yml'
+      && contains(fromJSON('["push", "workflow_dispatch"]'), github.event.workflow_run.event)))
+      && (github.event_name == 'workflow_run'
+      || (github.ref == 'refs/heads/main'
+      && (github.event_name == 'push' || inputs.publish)))
+      && contains(fromJSON(needs.pack.outputs.packages), 'ssr-testkit')
+    permissions:
+      actions: read
+      contents: write
+      id-token: write
+    uses: stella/.github/.github/workflows/npm-independent-release.yml@2664e46f02aea7164ba71bcdd485a686166993a4 # release job environment input
+    with:
+      environment: release-app
+      artifact-pattern: npm-tarball-ssr-testkit
+      artifact-run-id: ${{ inputs.artifact_run_id || '' }}
+      package-files: packages/ssr-testkit/package.json
+      source-ref: ${{ needs.pack.outputs.source_sha }}
+    secrets:
+      RELEASE_APP_ID: ${{ secrets.STELLA_RELEASE_APP_ID }}
+      RELEASE_APP_PRIVATE_KEY: ${{ secrets.STELLA_RELEASE_APP_PRIVATE_KEY }}
+
+  release-money:
+    name: Publish @stll/money
+    needs:
+      - release-trigger
+      - pack
+    if: >-
+      always() && !cancelled()
+      && needs.pack.result == 'success'
+      && (github.event_name != 'workflow_run'
+      || (github.event.workflow_run.head_repository.full_name == github.repository
+      && github.event.workflow_run.path == '.github/workflows/release.yml'
+      && contains(fromJSON('["push", "workflow_dispatch"]'), github.event.workflow_run.event)))
+      && (github.event_name == 'workflow_run'
+      || (github.ref == 'refs/heads/main'
+      && (github.event_name == 'push' || inputs.publish)))
+      && contains(fromJSON(needs.pack.outputs.packages), 'money')
+    permissions:
+      actions: read
+      contents: write
+      id-token: write
+    uses: stella/.github/.github/workflows/npm-independent-release.yml@2664e46f02aea7164ba71bcdd485a686166993a4 # release job environment input
+    with:
+      environment: release-app
+      artifact-pattern: npm-tarball-money
+      artifact-run-id: ${{ inputs.artifact_run_id || '' }}
+      package-files: packages/money/package.json
+      source-ref: ${{ needs.pack.outputs.source_sha }}
+    secrets:
+      RELEASE_APP_ID: ${{ secrets.STELLA_RELEASE_APP_ID }}
+      RELEASE_APP_PRIVATE_KEY: ${{ secrets.STELLA_RELEASE_APP_PRIVATE_KEY }}
+
+  release-calculations:
+    name: Publish @stll/calculations
+    needs:
+      - release-trigger
+      - pack
+      - release-money
+    if: >-
+      always() && !cancelled()
+      && needs.pack.result == 'success'
+      && (github.event_name != 'workflow_run'
+      || (github.event.workflow_run.head_repository.full_name == github.repository
+      && github.event.workflow_run.path == '.github/workflows/release.yml'
+      && contains(fromJSON('["push", "workflow_dispatch"]'), github.event.workflow_run.event)))
+      && (github.event_name == 'workflow_run'
+      || (github.ref == 'refs/heads/main'
+      && (github.event_name == 'push' || inputs.publish)))
+      && contains(fromJSON(needs.pack.outputs.packages), 'calculations')
+      && (!contains(fromJSON(needs.pack.outputs.packages), 'money') || needs.release-money.result == 'success')
+    permissions:
+      actions: read
+      contents: write
+      id-token: write
+    uses: stella/.github/.github/workflows/npm-independent-release.yml@2664e46f02aea7164ba71bcdd485a686166993a4 # release job environment input
+    with:
+      environment: release-app
+      artifact-pattern: npm-tarball-calculations
+      artifact-run-id: ${{ inputs.artifact_run_id || '' }}
+      package-files: packages/calculations/package.json
+      source-ref: ${{ needs.pack.outputs.source_sha }}
+    secrets:
+      RELEASE_APP_ID: ${{ secrets.STELLA_RELEASE_APP_ID }}
+      RELEASE_APP_PRIVATE_KEY: ${{ secrets.STELLA_RELEASE_APP_PRIVATE_KEY }}
+
+  release-workspace-model:
+    name: Publish @stll/workspace-model
+    needs:
+      - release-trigger
+      - pack
+      - release-conditions
+      - release-calculations
+    if: >-
+      always() && !cancelled()
+      && needs.pack.result == 'success'
+      && (github.event_name != 'workflow_run'
+      || (github.event.workflow_run.head_repository.full_name == github.repository
+      && github.event.workflow_run.path == '.github/workflows/release.yml'
+      && contains(fromJSON('["push", "workflow_dispatch"]'), github.event.workflow_run.event)))
+      && (github.event_name == 'workflow_run'
+      || (github.ref == 'refs/heads/main'
+      && (github.event_name == 'push' || inputs.publish)))
+      && contains(fromJSON(needs.pack.outputs.packages), 'workspace-model')
+      && (!contains(fromJSON(needs.pack.outputs.packages), 'conditions') || needs.release-conditions.result == 'success')
+      && (!contains(fromJSON(needs.pack.outputs.packages), 'calculations') || needs.release-calculations.result == 'success')
+    permissions:
+      actions: read
+      contents: write
+      id-token: write
+    uses: stella/.github/.github/workflows/npm-independent-release.yml@2664e46f02aea7164ba71bcdd485a686166993a4 # release job environment input
+    with:
+      environment: release-app
+      artifact-pattern: npm-tarball-workspace-model
+      artifact-run-id: ${{ inputs.artifact_run_id || '' }}
+      package-files: packages/workspace-model/package.json
+      source-ref: ${{ needs.pack.outputs.source_sha }}
+    secrets:
+      RELEASE_APP_ID: ${{ secrets.STELLA_RELEASE_APP_ID }}
+      RELEASE_APP_PRIVATE_KEY: ${{ secrets.STELLA_RELEASE_APP_PRIVATE_KEY }}
+
+  release-workspace-ui:
+    name: Publish @stll/workspace-ui
+    needs:
+      - release-trigger
+      - pack
+      - release-ui
+      - release-conditions
+      - release-money
+      - release-calculations
+    if: >-
+      always() && !cancelled()
+      && needs.pack.result == 'success'
+      && (github.event_name != 'workflow_run'
+      || (github.event.workflow_run.head_repository.full_name == github.repository
+      && github.event.workflow_run.path == '.github/workflows/release.yml'
+      && contains(fromJSON('["push", "workflow_dispatch"]'), github.event.workflow_run.event)))
+      && (github.event_name == 'workflow_run'
+      || (github.ref == 'refs/heads/main'
+      && (github.event_name == 'push' || inputs.publish)))
+      && contains(fromJSON(needs.pack.outputs.packages), 'workspace-ui')
+      && (!contains(fromJSON(needs.pack.outputs.packages), 'ui') || needs.release-ui.result == 'success')
+      && (!contains(fromJSON(needs.pack.outputs.packages), 'conditions') || needs.release-conditions.result == 'success')
+      && (!contains(fromJSON(needs.pack.outputs.packages), 'money') || needs.release-money.result == 'success')
+      && (!contains(fromJSON(needs.pack.outputs.packages), 'calculations') || needs.release-calculations.result == 'success')
+    permissions:
+      actions: read
+      contents: write
+      id-token: write
+    uses: stella/.github/.github/workflows/npm-independent-release.yml@2664e46f02aea7164ba71bcdd485a686166993a4 # release job environment input
+    with:
+      environment: release-app
+      artifact-pattern: npm-tarball-workspace-ui
+      artifact-run-id: ${{ inputs.artifact_run_id || '' }}
+      package-files: packages/workspace-ui/package.json
+      source-ref: ${{ needs.pack.outputs.source_sha }}
+    secrets:
+      RELEASE_APP_ID: ${{ secrets.STELLA_RELEASE_APP_ID }}
+      RELEASE_APP_PRIVATE_KEY: ${{ secrets.STELLA_RELEASE_APP_PRIVATE_KEY }}
+
+  release-stable-stringify:
+    name: Publish @stll/stable-stringify
+    needs:
+      - release-trigger
+      - pack
+    if: >-
+      always() && !cancelled()
+      && needs.pack.result == 'success'
+      && (github.event_name != 'workflow_run'
+      || (github.event.workflow_run.head_repository.full_name == github.repository
+      && github.event.workflow_run.path == '.github/workflows/release.yml'
+      && contains(fromJSON('["push", "workflow_dispatch"]'), github.event.workflow_run.event)))
+      && (github.event_name == 'workflow_run'
+      || (github.ref == 'refs/heads/main'
+      && (github.event_name == 'push' || inputs.publish)))
+      && contains(fromJSON(needs.pack.outputs.packages), 'stable-stringify')
+    permissions:
+      actions: read
+      contents: write
+      id-token: write
+    uses: stella/.github/.github/workflows/npm-independent-release.yml@2664e46f02aea7164ba71bcdd485a686166993a4 # release job environment input
+    with:
+      environment: release-app
+      artifact-pattern: npm-tarball-stable-stringify
+      artifact-run-id: ${{ inputs.artifact_run_id || '' }}
+      package-files: packages/stable-stringify/package.json
+      source-ref: ${{ needs.pack.outputs.source_sha }}
+    secrets:
+      RELEASE_APP_ID: ${{ secrets.STELLA_RELEASE_APP_ID }}
+      RELEASE_APP_PRIVATE_KEY: ${{ secrets.STELLA_RELEASE_APP_PRIVATE_KEY }}
+
+  release-agent-input:
+    name: Publish @stll/agent-input
+    needs:
+      - release-trigger
+      - pack
+      - release-text-normalize
+      - release-country-codes
+      - release-template-conditions
+    if: >-
+      always() && !cancelled()
+      && needs.pack.result == 'success'
+      && (github.event_name != 'workflow_run'
+      || (github.event.workflow_run.head_repository.full_name == github.repository
+      && github.event.workflow_run.path == '.github/workflows/release.yml'
+      && contains(fromJSON('["push", "workflow_dispatch"]'), github.event.workflow_run.event)))
+      && (github.event_name == 'workflow_run'
+      || (github.ref == 'refs/heads/main'
+      && (github.event_name == 'push' || inputs.publish)))
+      && contains(fromJSON(needs.pack.outputs.packages), 'agent-input')
+      && (!contains(fromJSON(needs.pack.outputs.packages), 'text-normalize') || needs.release-text-normalize.result == 'success')
+      && (!contains(fromJSON(needs.pack.outputs.packages), 'country-codes') || needs.release-country-codes.result == 'success')
+      && (!contains(fromJSON(needs.pack.outputs.packages), 'template-conditions') || needs.release-template-conditions.result == 'success')
+    permissions:
+      actions: read
+      contents: write
+      id-token: write
+    uses: stella/.github/.github/workflows/npm-independent-release.yml@2664e46f02aea7164ba71bcdd485a686166993a4 # release job environment input
+    with:
+      environment: release-app
+      artifact-pattern: npm-tarball-agent-input
+      artifact-run-id: ${{ inputs.artifact_run_id || '' }}
+      package-files: packages/agent-input/package.json
+      source-ref: ${{ needs.pack.outputs.source_sha }}
+    secrets:
+      RELEASE_APP_ID: ${{ secrets.STELLA_RELEASE_APP_ID }}
+      RELEASE_APP_PRIVATE_KEY: ${{ secrets.STELLA_RELEASE_APP_PRIVATE_KEY }}
+
+  release-mcp-kit:
+    name: Publish @stll/mcp-kit
+    needs:
+      - release-trigger
+      - pack
+      - release-agent-input
+    if: >-
+      always() && !cancelled()
+      && needs.pack.result == 'success'
+      && (github.event_name != 'workflow_run'
+      || (github.event.workflow_run.head_repository.full_name == github.repository
+      && github.event.workflow_run.path == '.github/workflows/release.yml'
+      && contains(fromJSON('["push", "workflow_dispatch"]'), github.event.workflow_run.event)))
+      && (github.event_name == 'workflow_run'
+      || (github.ref == 'refs/heads/main'
+      && (github.event_name == 'push' || inputs.publish)))
+      && contains(fromJSON(needs.pack.outputs.packages), 'mcp-kit')
+      && (!contains(fromJSON(needs.pack.outputs.packages), 'agent-input') || needs.release-agent-input.result == 'success')
+    permissions:
+      actions: read
+      contents: write
+      id-token: write
+    uses: stella/.github/.github/workflows/npm-independent-release.yml@2664e46f02aea7164ba71bcdd485a686166993a4 # release job environment input
+    with:
+      environment: release-app
+      artifact-pattern: npm-tarball-mcp-kit
+      artifact-run-id: ${{ inputs.artifact_run_id || '' }}
+      package-files: packages/mcp-kit/package.json
+      source-ref: ${{ needs.pack.outputs.source_sha }}
+    secrets:
+      RELEASE_APP_ID: ${{ secrets.STELLA_RELEASE_APP_ID }}
+      RELEASE_APP_PRIVATE_KEY: ${{ secrets.STELLA_RELEASE_APP_PRIVATE_KEY }}
+
+  release-fetch:
+    name: Publish @stll/fetch
+    needs:
+      - release-trigger
+      - pack
+    if: >-
+      always() && !cancelled()
+      && needs.pack.result == 'success'
+      && (github.event_name != 'workflow_run'
+      || (github.event.workflow_run.head_repository.full_name == github.repository
+      && github.event.workflow_run.path == '.github/workflows/release.yml'
+      && contains(fromJSON('["push", "workflow_dispatch"]'), github.event.workflow_run.event)))
+      && (github.event_name == 'workflow_run'
+      || (github.ref == 'refs/heads/main'
+      && (github.event_name == 'push' || inputs.publish)))
+      && contains(fromJSON(needs.pack.outputs.packages), 'fetch')
+    permissions:
+      actions: read
+      contents: write
+      id-token: write
+    uses: stella/.github/.github/workflows/npm-independent-release.yml@2664e46f02aea7164ba71bcdd485a686166993a4 # release job environment input
+    with:
+      environment: release-app
+      artifact-pattern: npm-tarball-fetch
+      artifact-run-id: ${{ inputs.artifact_run_id || '' }}
+      package-files: packages/fetch/package.json
+      source-ref: ${{ needs.pack.outputs.source_sha }}
+    secrets:
+      RELEASE_APP_ID: ${{ secrets.STELLA_RELEASE_APP_ID }}
+      RELEASE_APP_PRIVATE_KEY: ${{ secrets.STELLA_RELEASE_APP_PRIVATE_KEY }}
+
+  release-scan-engine:
+    name: Publish @stll/scan-engine
+    needs:
+      - release-trigger
+      - pack
+      - release-fetch
+    if: >-
+      always() && !cancelled()
+      && needs.pack.result == 'success'
+      && (github.event_name != 'workflow_run'
+      || (github.event.workflow_run.head_repository.full_name == github.repository
+      && github.event.workflow_run.path == '.github/workflows/release.yml'
+      && contains(fromJSON('["push", "workflow_dispatch"]'), github.event.workflow_run.event)))
+      && (github.event_name == 'workflow_run'
+      || (github.ref == 'refs/heads/main'
+      && (github.event_name == 'push' || inputs.publish)))
+      && contains(fromJSON(needs.pack.outputs.packages), 'scan-engine')
+      && (!contains(fromJSON(needs.pack.outputs.packages), 'fetch') || needs.release-fetch.result == 'success')
+    permissions:
+      actions: read
+      contents: write
+      id-token: write
+    uses: stella/.github/.github/workflows/npm-independent-release.yml@2664e46f02aea7164ba71bcdd485a686166993a4 # release job environment input
+    with:
+      environment: release-app
+      artifact-pattern: npm-tarball-scan-engine
+      artifact-run-id: ${{ inputs.artifact_run_id || '' }}
+      package-files: packages/scan-engine/package.json
+      source-ref: ${{ needs.pack.outputs.source_sha }}
+    secrets:
+      RELEASE_APP_ID: ${{ secrets.STELLA_RELEASE_APP_ID }}
+      RELEASE_APP_PRIVATE_KEY: ${{ secrets.STELLA_RELEASE_APP_PRIVATE_KEY }}
+
+  release-cli:
+    name: Publish @stll/cli
+    needs:
+      - release-trigger
+      - pack
+      - release-stable-stringify
+      - release-agent-input
+    if: >-
+      always() && !cancelled()
+      && needs.pack.result == 'success'
+      && (github.event_name != 'workflow_run'
+      || (github.event.workflow_run.head_repository.full_name == github.repository
+      && github.event.workflow_run.path == '.github/workflows/release.yml'
+      && contains(fromJSON('["push", "workflow_dispatch"]'), github.event.workflow_run.event)))
+      && (github.event_name == 'workflow_run'
+      || (github.ref == 'refs/heads/main'
+      && (github.event_name == 'push' || inputs.publish)))
+      && contains(fromJSON(needs.pack.outputs.packages), 'cli')
+      && (!contains(fromJSON(needs.pack.outputs.packages), 'stable-stringify') || needs.release-stable-stringify.result == 'success')
+      && (!contains(fromJSON(needs.pack.outputs.packages), 'agent-input') || needs.release-agent-input.result == 'success')
+    permissions:
+      actions: read
+      contents: write
+      id-token: write
+    uses: stella/.github/.github/workflows/npm-independent-release.yml@2664e46f02aea7164ba71bcdd485a686166993a4 # release job environment input
+    with:
+      environment: release-app
+      artifact-pattern: npm-tarball-cli
+      artifact-run-id: ${{ inputs.artifact_run_id || '' }}
+      package-files: packages/cli/package.json
+      source-ref: ${{ needs.pack.outputs.source_sha }}
+    secrets:
+      RELEASE_APP_ID: ${{ secrets.STELLA_RELEASE_APP_ID }}
+      RELEASE_APP_PRIVATE_KEY: ${{ secrets.STELLA_RELEASE_APP_PRIVATE_KEY }}
+
+  # npm-release-jobs:end
+
+  release-summary:
+    name: Report every npm package result
+    # npm-release-summary-needs
+    needs:
+      - release-trigger
+      - pack
+      - release-auth-model
+      - release-ai-catalog
+      - release-text-normalize
+      - release-anonymize-chat
+      - release-ui
+      - release-html
+      - release-chat
+      - release-country-codes
+      - release-business-registries
+      - release-conditions
+      - release-template-conditions
+      - release-docx-utils
+      - release-start-runtime
+      - release-ssr-kit
+      - release-ssr-testkit
+      - release-money
+      - release-calculations
+      - release-workspace-model
+      - release-workspace-ui
+      - release-stable-stringify
+      - release-agent-input
+      - release-mcp-kit
+      - release-fetch
+      - release-scan-engine
+      - release-cli
+    if: >-
+      always()
+      && needs.release-trigger.outputs.eligible == 'true'
+      && (github.event_name != 'workflow_run'
+      || (github.event.workflow_run.head_repository.full_name == github.repository
+      && github.event.workflow_run.path == '.github/workflows/release.yml'
+      && contains(fromJSON('["push", "workflow_dispatch"]'), github.event.workflow_run.event)))
+      && (github.event_name == 'workflow_run'
+      || (github.ref == 'refs/heads/main'
+      && (github.event_name == 'push' || inputs.publish)))
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.workflow_sha }}
+          persist-credentials: false
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: "package.json"
+          no-cache: true
+
+      - name: Report published, failed and skipped packages
+        env:
+          NPM_RELEASE_NEEDS: ${{ toJSON(needs) }}
+        run: bun scripts/npm-release-summary.ts
+
+  verify-npm:
+    name: Verify npm serves the released versions
+    # A release run that fails, or publishes nothing, must not stay a quiet
+    # red X: this job fails with a per-package table of what npm lacks.
+    needs: [release-trigger, pack, release-summary]
+    if: >-
+      always()
+      && needs.release-trigger.outputs.eligible == 'true'
+      && (github.event_name == 'workflow_run'
+      || (github.ref == 'refs/heads/main'
+      && (github.event_name == 'push' || inputs.publish)))
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      # The guard comes from this workflow's own commit; only the manifests
+      # are read at the released source, so a recovery of an old commit still
+      # runs the current check.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: "package.json"
+          no-cache: true
+
+      # No install: the guard uses only Bun, Node built-ins, git and npm.
+      - name: Compare npm latest with the released versions
+        env:
+          PACKAGES: ${{ needs.pack.outputs.packages || '' }}
+          # Registry reads lag a fresh publish; wait only when one happened.
+          ATTEMPTS: ${{ needs.release-summary.result == 'success' && '10' || '1' }}
+          SOURCE_SHA: ${{ needs.pack.outputs.source_sha || needs.release-trigger.outputs.release_sha || github.sha }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          packages=""
+          if [[ -n "$PACKAGES" ]]; then
+            packages="$(jq -r 'join(",")' <<< "$PACKAGES")"
+          elif [[ "$EVENT_NAME" == "workflow_run" ]]; then
+            packages="cli"
+          fi
+          bun scripts/check-npm-publish-lag.ts \
+            --ref "$SOURCE_SHA" \
+            --packages "$packages" \
+            --attempts "$ATTEMPTS" \
+            --interval-seconds 30

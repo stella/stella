@@ -11,10 +11,8 @@ import {
   ENV_REQUIREMENT,
 } from "./env-catalog";
 import {
-  deploymentFlagPairingIssues,
   exampleValueForCatalogEntry,
   parseEnvText,
-  readDoctorInput,
   renderEnvironmentEntries,
   validateDoctorEnvironment,
 } from "./env-tool";
@@ -26,8 +24,8 @@ import {
   renderSelfhostCompose,
   renderSelfhostDocsContract,
   renderSelfhostRunDocsContract,
-  SELFHOST_COMPOSE_PATH,
   SELFHOST_COMPOSE_ENV,
+  SELFHOST_COMPOSE_PATH,
   SELFHOST_DOC_MARKERS,
   SELFHOST_ENV_EXAMPLE_PATH,
   SELFHOST_ENV_PATH,
@@ -143,8 +141,7 @@ export const materializeSelfhostTemplateForValidation = (text: string) => {
 
 const apiCatalogEntries = () =>
   ENV_CATALOG.filter(
-    ({ documented, owner }) =>
-      documented && owner !== ENV_OWNER.web && owner !== ENV_OWNER.collab,
+    ({ owner }) => owner !== ENV_OWNER.web && owner !== ENV_OWNER.collab,
   );
 
 export const isImmutableApplicationImage = (image: string) =>
@@ -164,7 +161,7 @@ export const renderSelfhostEnvExample = () => {
     "",
   ].join("\n");
 
-  return renderEnvironmentEntries(apiCatalogEntries(), {
+  const example = renderEnvironmentEntries(apiCatalogEntries(), {
     header,
     isActive: ({ name, requirement }) =>
       requirement === ENV_REQUIREMENT.required ||
@@ -173,6 +170,17 @@ export const renderSelfhostEnvExample = () => {
       SELFHOST_API_EXAMPLE_VALUES.get(entry.name) ??
       exampleValueForCatalogEntry({ ...entry, example: undefined }),
   });
+  const publicLawUrl = '# PUBLIC_LAW_DATABASE_URL=""';
+  if (!example.includes(publicLawUrl)) {
+    panic("Self-host environment example is missing PUBLIC_LAW_DATABASE_URL.");
+  }
+  return example.replace(publicLawUrl, () =>
+    [
+      "# Apply the release migrations before starting the API with an external",
+      "# public-law reader role; its grants must match this release.",
+      publicLawUrl,
+    ].join("\n"),
+  );
 };
 
 const replaceGeneratedBlock = (
@@ -439,26 +447,6 @@ const check = async () => {
   return false;
 };
 
-type SelfhostDoctorIssuesOptions = {
-  ambientEnvironment: NodeJS.ProcessEnv;
-  text: string;
-  /** The web build's variables; the web reads its flags from apps/web. */
-  webEnvironment: Record<string, string | undefined>;
-};
-
-export const selfhostDoctorIssues = ({
-  ambientEnvironment,
-  text,
-  webEnvironment,
-}: SelfhostDoctorIssuesOptions) => [
-  ...productionEnvironmentIssues(text),
-  ...ambientComposeOverrideIssues(text, ambientEnvironment),
-  ...deploymentFlagPairingIssues({
-    api: parseEnvText(text, {}),
-    web: webEnvironment,
-  }),
-];
-
 const doctor = (envPath = SELFHOST_ENV_PATH) => {
   const absolutePath = path.resolve(REPO_ROOT, envPath);
   if (!existsSync(absolutePath)) {
@@ -466,11 +454,10 @@ const doctor = (envPath = SELFHOST_ENV_PATH) => {
     return false;
   }
   const text = readFileSync(absolutePath, "utf-8");
-  const issues = selfhostDoctorIssues({
-    ambientEnvironment: process.env,
-    text,
-    webEnvironment: readDoctorInput({ app: "web", mode: "production" }).input,
-  });
+  const issues = [
+    ...productionEnvironmentIssues(text),
+    ...ambientComposeOverrideIssues(text, process.env),
+  ];
   if (issues.length === 0) {
     console.log(`${envPath}: valid production self-host configuration.`);
     return true;

@@ -1,7 +1,6 @@
 import { useTranslations } from "use-intl";
 
-import { Button } from "@stll/ui/button";
-import { contentDir } from "@stll/ui/use-content-dir";
+import { InlineRenameInput } from "@stll/ui/inline-rename";
 import { cn } from "@stll/ui/utils";
 
 type InlineEditProps = {
@@ -12,7 +11,7 @@ type InlineEditProps = {
   /** Extra content after the input (e.g. file extension). */
   suffix?: React.ReactNode;
   /**
-   * Action button(s) between the input and Done (e.g. a suggest wand).
+   * Action button(s) after the input (e.g. a suggest wand).
    * Buttons placed here must call `preventDefault()` in `onMouseDown` and
    * trigger on `onClick`: the input commits on blur, so an unprevented
    * press's focus steal would close the editor before the action's result
@@ -24,19 +23,15 @@ type InlineEditProps = {
    * ("Document name"). Defaults to the bare "Rename" verb.
    */
   inputAriaLabel?: string | undefined;
+  /** Longest value the field accepts; typing and pasting stop there. */
+  maxLength?: number | undefined;
   className?: string | undefined;
   inputClassName?: string | undefined;
 };
 
 /**
- * Compact inline rename used in toolbars / tab headers.
- *
- * Deliberately NOT built on the `<Input>` primitive: that's tuned
- * for full-form inputs (rounded-lg, shadow, larger text) and looked
- * oversized when dropped inline next to a label. This stays as a
- * raw `<input>` with text-xs to match the surrounding label height
- * exactly — only a subtle border + soft 2px focus ring at 16%
- * opacity signals the edit affordance, no dark "primary" ring leak.
+ * `InlineRenameInput` plus a suffix and action slot. It adds no commit button:
+ * Enter and blur commit and Escape cancels, as on every other inline rename.
  */
 export const InlineEdit = ({
   value,
@@ -46,6 +41,7 @@ export const InlineEdit = ({
   suffix,
   action,
   inputAriaLabel,
+  maxLength,
   className,
   inputClassName,
 }: InlineEditProps) => {
@@ -53,7 +49,10 @@ export const InlineEdit = ({
 
   return (
     <span
-      className={cn("inline-flex items-center gap-1", className)}
+      className={cn(
+        "inline-flex max-w-full min-w-0 items-center gap-1",
+        className,
+      )}
       onBlur={(event) => {
         const nextTarget = event.relatedTarget;
         if (
@@ -65,48 +64,20 @@ export const InlineEdit = ({
         onCommit();
       }}
     >
-      <input
+      <InlineRenameInput
         aria-label={inputAriaLabel ?? t("common.rename")}
-        autoFocus
-        className={cn(
-          "border-input bg-background text-foreground h-6 min-w-0 rounded-sm border px-1.5 text-xs leading-none outline-none",
-          "focus:border-ring focus:ring-ring/16 focus:ring-2 focus:ring-offset-0",
-          inputClassName,
-        )}
-        dir={contentDir(value)}
-        onChange={(e) => onChange(e.target.value)}
-        onClick={(e) => e.stopPropagation()}
-        // The editor opens seeded with the current name, so selecting it on
-        // focus makes typing replace it. A click inside collapses the
-        // selection to the caret, leaving pointer editing untouched.
-        onFocus={(e) => e.currentTarget.select()}
-        onKeyDown={(e) => {
-          e.stopPropagation();
-          if (e.key === "Enter") {
-            e.preventDefault();
-            onCommit();
-          }
-          if (e.key === "Escape") {
-            onCancel();
-          }
+        className={inputClassName}
+        maxLength={maxLength}
+        onBlur={() => {
+          // The group commits when focus leaves its action buttons too.
         }}
+        onCancel={onCancel}
+        onCommit={onCommit}
+        onValueChange={onChange}
         value={value}
       />
       {suffix}
       {action}
-      <Button
-        className="h-6 shrink-0 gap-0.5 px-2"
-        onClick={onCommit}
-        onMouseDown={(e) => {
-          e.preventDefault();
-        }}
-        size="xs"
-        type="button"
-        variant="default"
-      >
-        {t("common.done")}
-        <kbd className="text-3xs opacity-70">{t("common.enterKey")}</kbd>
-      </Button>
     </span>
   );
 };

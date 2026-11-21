@@ -1,5 +1,7 @@
 import { sql } from "drizzle-orm";
 
+import type { AuthorizationResponseBinding } from "@/api/lib/mcp-upstream/oauth";
+
 import { MCP_CONNECTION_STATUSES, MCP_CONNECTOR_AUTH_TYPES } from "./chat";
 import type {
   McpConnectionStatus,
@@ -21,8 +23,8 @@ import {
   pUuid,
   safeOrganizationId,
   safeUuid,
-  user,
   timestamptz,
+  user,
 } from "./common";
 
 export const mcpConnectors = p.pgTable(
@@ -189,6 +191,15 @@ export type CachedMcpToolDefinition = {
   title?: string;
 };
 
+export const MCP_RESPONSE_DISPOSITION = {
+  normal: "normal",
+  receiptOnly: "receipt-only",
+} as const;
+export const MCP_RESPONSE_DISPOSITIONS = [
+  MCP_RESPONSE_DISPOSITION.normal,
+  MCP_RESPONSE_DISPOSITION.receiptOnly,
+] as const;
+
 export const mcpUserConnections = p.pgTable(
   "mcp_user_connections",
   {
@@ -203,6 +214,11 @@ export const mcpUserConnections = p.pgTable(
       .text("user_id")
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
+    responseDisposition: p
+      .text("response_disposition", { enum: MCP_RESPONSE_DISPOSITIONS })
+      .notNull()
+      .default(MCP_RESPONSE_DISPOSITION.normal),
+    responseTargetUrl: p.text("response_target_url"),
     accessTokenEncrypted: bytea("access_token_encrypted"),
     accessTokenIv: bytea("access_token_iv"),
     refreshTokenEncrypted: bytea("refresh_token_encrypted"),
@@ -251,6 +267,17 @@ export const mcpUserConnections = p.pgTable(
       .index("mcp_user_connections_org_user_enabled_status_idx")
       .on(table.organizationId, table.userId, table.enabled, table.status),
     p.index("mcp_user_connections_connector_idx").on(table.connectorId),
+    p.check(
+      "mcp_user_connections_response_disposition_check",
+      sql`${table.responseDisposition} IN (${sql.join(
+        MCP_RESPONSE_DISPOSITIONS.map((value) => sql.raw(`'${value}'`)),
+        sql`, `,
+      )})`,
+    ),
+    p.check(
+      "mcp_user_connections_response_target_check",
+      sql`${table.responseDisposition} = 'normal' OR (${table.responseTargetUrl} IS NOT NULL AND ${table.staticTokenEncrypted} IS NOT NULL AND ${table.staticTokenIv} IS NOT NULL AND ${table.accessTokenEncrypted} IS NULL AND ${table.accessTokenIv} IS NULL AND ${table.refreshTokenEncrypted} IS NULL AND ${table.refreshTokenIv} IS NULL)`,
+    ),
     ...mcpUserConnectionPolicies(),
   ],
 );
@@ -273,6 +300,9 @@ export const mcpOAuthState = p.pgTable(
     redirectUri: p.text("redirect_uri").notNull(),
     resourceUrl: p.text("resource_url").notNull(),
     authorizationServerUrl: p.text("authorization_server_url").notNull(),
+    authorizationResponseBinding: p
+      .jsonb("authorization_response_binding")
+      .$type<AuthorizationResponseBinding>(),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [
@@ -280,6 +310,9 @@ export const mcpOAuthState = p.pgTable(
     p
       .index("mcp_oauth_state_org_user_idx")
       .on(table.organizationId, table.userId),
+    // The (organization, connector, user) unique index ships with the pending
+    // contract step (pending-contract-migrations/20261028061200_*); declare it
+    // here when that step moves into drizzle/.
     ...mcpOAuthStatePolicies(),
   ],
 );

@@ -18,28 +18,33 @@ One server, one registry, several audiences. Each audience is its own HTTP
 path with its own tool list, server name, resource scopes and connect-time
 instructions, because an orchestrator picks tools from the names it was handed:
 
-- `/mcp`: the default stella MCP. It includes first-party stella tools,
-  OpenAI-compatible `search` / `fetch` tools, user-managed skills, and enabled
-  external MCP connectors.
+- `/mcp`: the default stella MCP. It includes purpose-built stella tools and
+  user-managed skills.
+- `/mcp/advanced`: the opt-in advanced MCP. It adds generic capability access
+  and enabled external MCP connectors to the default tool set.
 - `/mcp-anonymized`: the anonymized MCP mode. It exposes the full first-party
   read/search surface (matters, matter overviews, cross-matter search and
-  content, contacts, templates, case law, plus the OpenAI-compatible
-  `search`/`fetch` tools) for clients that should receive anonymized results.
+  content, contacts, templates, case law, plus the compatible `search`/`fetch`
+  tools) for clients that should receive anonymized results.
   Tenant and personal text is redacted on egress; mutating tools and the dynamic
   gateway are not exposed.
 - `/mcp-documents`: the least-privilege document surface. Document tools plus
-  the version-upload lifecycle through `invoke_capability`, whose capability IDs
+  the version-upload lifecycle through `write_capability`, whose capability IDs
   are allowlisted for that surface.
-- `/mcp-law`: the public legal corpus. Exactly ten read tools (`search`,
-  `fetch`, `search_case_law`, `lookup_case_law`, `read_case_law_decision`,
-  `read_case_law_citations`, `search_legislation`, `read_statute`,
-  `read_statute_provisions`, `read_provision_history`) under `stella:search`
-  and `stella:read`. No matter, document, contact or billing data is reachable
+- `/mcp-law`: the public legal corpus. Exactly 16 read tools (`search`,
+  `fetch`, `search_case_law`, `resolve_case_law_decision`, `resolve_law_citation`, `read_case_law_decision`,
+  `read_case_law_citations`, `open_case_law_decision`, `verify_quote`, `case_law_coverage`,
+  `search_legislation`, `read_statute`, `read_statute_provisions`,
+  `read_provision_history`, `search_guidance`, `read_guidance`). Resolution uses `stella:law_read` (also implied by
+  `stella:read`); the other tools use `stella:search` or `stella:read`. The
+  decision reader app also calls two app-only tools there; `tools/list` keeps
+  them for the host, which hides them from the model, and they are not
+  counted here. No matter, document, contact or billing data is reachable
   through it. `search`/`fetch` are the OpenAI-compatible pair, defined and
   handled separately from the default audience's pair of the same names
   (`compat-law-tools.ts`), because a handler never sees the request mode.
   Authentication is the same as every other audience: an OAuth bearer token or
-  an API key carrying those two scopes.
+  an API key carrying the required scopes.
 
 Every audience authenticates the same way and serves static MCP resources
 through `resources/list` and `resources/read`, but each serves a filtered
@@ -53,10 +58,15 @@ the order those two are used in (author, create, read the discovered paths
 back, configure, preview, persist), and
 `stella://reference/legislation-workflow` for the corpus-reading order.
 
-The default audience serves all of them. The documents audience serves the
-product identity and the three template references, and not the legislation
-workflow. The law audience serves the product identity and the legislation
-workflow, and none of the template references.
+The default and advanced audiences serve all of them. The documents audience
+serves the product identity and the three template references, and not the
+legislation workflow. The law audience serves the product identity and the
+legislation workflow, and none of the template references.
+
+Machine API keys may be bound to the advanced audience for `/mcp/advanced`.
+Default-bound keys remain limited to `/mcp`; an unbound key can authenticate to
+either connection. An audience mismatch returns the key's configured audience
+and the path where it can be used.
 
 Each audience is also an OAuth resource, and adding one needs no operator step.
 It widens the resource set the startup census requires, and startup never seeds
@@ -72,6 +82,7 @@ OAuth protected-resource discovery is served from:
 
 - `/.well-known/oauth-protected-resource`
 - `/.well-known/oauth-protected-resource/mcp`
+- `/.well-known/oauth-protected-resource/mcp/advanced`
 - `/.well-known/oauth-protected-resource/mcp-anonymized`
 - `/.well-known/oauth-protected-resource/mcp-documents`
 - `/.well-known/oauth-protected-resource/mcp-law`
@@ -125,7 +136,7 @@ Only the outer MCP transport boundary serializes the finished result into a
 `CallToolResult`. Anonymize-before-window keeps entity names from splitting
 across a window edge and keeps placeholders stable across windows of one
 document. With no mode in scope, per-mode divergence inside a handler is
-structurally impossible. Tools with compound windowing (e.g.
+structurally impossible. Tools that page by number (e.g.
 `read_case_law_decision`) keep that logic tool-local and mode-agnostic.
 
 Most read tools use the generic `{ egress: "structured" }` plan: the handler
@@ -166,30 +177,63 @@ returns a single text content of
 
 ```json
 {
-  "error": { "code": "...", "message": "...", "hint": "...", "retryable": true }
+  "error": {
+    "code": "...",
+    "message": "...",
+    "hint": "...",
+    "retryable": true,
+    "retryAfterMs": 1250
+  }
 }
 ```
 
-with `isError` set. `hint` and `retryable` are omitted when absent. Build these
+with `isError` set. `hint`, `retryable`, and `retryAfterMs` are omitted when absent;
+`action_concurrency_busy` uses `retryAfterMs` as an advisory delay in milliseconds. Build these
 with `structuredErrorResult` (or the `notFoundResult` shorthand) in
 `tool-utils.ts`; the arg parsers there already emit `validation_error`. The
-`code` set is closed (`error-codes.ts`): `validation_error`, `missing_scope`,
-`feature_disabled`, `not_found`, `confirmation_required`, `rate_limited`,
-`unknown_tool`, `internal_error`. Agents branch on `code`; `hint` states the
+`code` set is closed and defined in [`error-codes.ts`](./error-codes.ts).
+An organization's active and daily model run limits (list verifications, fact
+extractions, document reviews) answer with the two codes in
+`@stll/api-contract/model-run-caps`. Agents branch on `code`; `hint` states the
 next step (e.g. `missing_scope` tells the client to re-run OAuth consent). The
 CLI keys its exit codes off `error.code` (e.g. `feature_disabled` -> exit 5), so
 the string values are a stable contract. `internal_error` never leaks internals:
 the real exception is captured for observability and the caller gets a generic
 message plus the feedback-tool hint.
 
+## Reauthorization
+
+A connected client should almost never need a manual reconnect. Grants carry
+`offline_access`, so a client refreshes its access token (15 minutes) with the
+refresh token (30 days, rotated on use) without the user, and a refresh grant
+survives the browser session that created it. When the user must act, the
+server says so in two standard forms:
+
+- **Missing, expired or revoked token:** the transport answers HTTP 401 with
+  `WWW-Authenticate: Bearer error="invalid_token", ..., resource_metadata="<protected-resource metadata URL>"`
+  (no `error` when no credential was sent). Clients refresh or rerun OAuth
+  from this; it is the signal every MCP client acts on.
+- **Valid token without a scope the call needs:** the tool returns the
+  `missing_scope` envelope (`isError`), and `tool-auth-challenge.ts` adds
+  `_meta["mcp/www_authenticate"]` with an `insufficient_scope` challenge naming
+  the same metadata. Hosts that read tool-level challenges offer to reconnect
+  in place; hosts that ignore `_meta` still show the envelope's `hint`.
+
 ## Destructive-op confirm guardrail
 
-Every tool with `annotations.destructiveHint === true` (the `delete_*` tools)
-advertises a `confirm` boolean (`confirmProp()`) and is refused before dispatch
-unless the call sets `confirm: true`. The gate lives in `handleMcpToolCall`,
-before any DB access, and returns `confirmation_required`. This stops an agent
-from deleting tenant data without an explicit, human-approved confirmation; the
-handlers themselves tolerate and ignore the extra `confirm` arg.
+`annotations.destructiveHint` tells clients that a tool can change existing
+stored data, including updates and deletions. It does not require a server
+confirmation gate: reversible updates may declare the hint without a
+`destructiveBehavior` or a `confirm` input.
+
+`destructiveBehavior` declares the server confirmation policy. The `always`
+behavior (used by the `delete_*` tools) requires `confirm: true` on every call;
+`input-discriminator` requires it only for the declared actions. These tools
+advertise a `confirm` boolean (`confirmProp()`). The gate in
+`handleMcpToolCall` returns `confirmation_required` before dispatch when
+confirmation is required and absent. Catalog-dispatched capabilities resolve
+their confirmation policy from the selected target; upstream servers own their
+operation-specific confirmation protocol.
 
 ## Feedback pipeline
 
@@ -252,14 +296,13 @@ kind, area, entry point, redaction count and per-channel outcome. No content.
 
 `POST /v1/feedback` is the authenticated route the web and desktop apps use
 (`handlers/feedback/create.ts`), rate-limited to 10 reports per user per hour. It
-is mounted at the root like `/v1/notifications` for the Eden type-complexity
-reason documented there.
+is mounted at the root like `/v1/notifications` and shares the standard API
+limiter scope (`lib/rate-limit/standard-api.ts`).
 
 `POST /public/feedback` is the public, unauthenticated intake
 (`handlers/feedback/intake.ts`), for a caller with no Stella account. Its body is
 the same report plus an optional `instance`, parsed from the raw string by a
-Valibot `strictObject` (Elysia's normalizer would strip unknown keys before a
-typed schema could reject them). Identity is not its protection: a per-IP rate
+Valibot `strictObject`. Identity is not its protection: a per-IP rate
 limit of 5 per hour in `intake-guards.ts` is, plus the service's own
 sanitization and fingerprint dedup. All error bodies reuse the
 `{ error: { code, message, hint } }` envelope so a forwarding tool can branch on
@@ -277,6 +320,32 @@ windowing, the error envelope shape, the confirm guardrail, and where static
 resources live. Terse and factual, under hard character budgets asserted in
 `instructions.test.ts` (the anonymized and law variants drop the feedback
 pointer, because neither surface carries the tools).
+
+## Verify a reported tool failure
+
+Run the verifier before escalating a tool failure or schema mismatch. Set
+`MCP_CANARY_TOKEN` to a bearer token for the target API. The command lists the
+tools afresh and executes the requested call once, so use a read-only
+reproduction when possible.
+
+```sh
+bun run incident:verify --tool search_case_law --args '{"query":"náhrada škody"}'
+```
+
+The target defaults to `https://api.stll.app`. To use `--base-url` for another
+deployment, set `MCP_CANARY_CONFIGURED_BASE_URL` to that API origin and use its
+credential. Pass `--stale-list path/to/tools-list.json` to compare against the
+reporter's saved list. Relative paths start at the repository root. Otherwise
+the command looks for the prior stable tag's registry snapshot in local Git. A missing snapshot leaves only the fresh
+result available. The evidence includes the server version and commit, schema
+verdicts, and the latest canary run if `gh` can read it.
+
+| Classification        | Exit | Meaning                                                                               |
+| --------------------- | ---- | ------------------------------------------------------------------------------------- |
+| `ALL CLIENTS BROKEN`  | 1    | The fresh probe could not list the tool or its result failed the advertised schema.   |
+| `STALE SESSIONS ONLY` | 2    | The fresh response passes and the earlier schema rejects that same result.            |
+| `NOT REPRODUCED`      | 0    | The fresh call works, and no mismatch was found against the available earlier schema. |
+| `SERVER ERROR`        | 3    | The call returned an error or setup prevented the probe.                              |
 
 ## Surface size
 
@@ -315,9 +384,15 @@ observations of those versions, not protocol guarantees:
 | instructions       | once, in the first user message | prefixed to every tool description                    | once, in the tool-search description |
 | call result        | `structuredContent` JSON only   | the script receives `content` and `structuredContent` | `structuredContent` JSON only        |
 
-Claude Code sends every tool upfront or, when the definitions are large, only
-the names (and instructions) and loads a definition when a tool is searched
-for. Codex always defers MCP tools behind discovery.
+Claude Code 2.1.283 sent every tool upfront or, when the definitions were
+large, only the names (and instructions) and loaded a definition when a tool
+was searched for. Claude Code 2.1.309 defers every MCP tool behind its tool
+search by default, whatever the size: its context usage report lists each
+stella tool as not loaded until the model searches for it. A tool whose
+`tools/list` entry carries `_meta: {"anthropic/alwaysLoad": true}` is loaded
+upfront; `false` keeps it deferred. The OpenAI-compatible `search` and `fetch`
+carry `true` (`COMPAT_PAIR_HOST_META` in `compat-shared.ts`) and every other
+tool stays deferred. Codex always defers MCP tools behind discovery.
 
 `scripts/mcp-surface-token-calibration.ts` measures the chars-per-token ratios
 behind the estimates with the Anthropic count_tokens endpoint; it needs
@@ -340,5 +415,22 @@ behind the estimates with the Anthropic count_tokens endpoint; it needs
   a Stella-owned family (skills) shares one output contract and annotation
   set, a third-party connector family keeps its upstream contract.
 - `server.ts` and `server-core.ts`: MCP HTTP transport wiring.
-- `../handlers/mcp/routes-core.ts`: Elysia routes that expose the MCP resources.
+- `../handlers/mcp/routes-core.ts`: HTTP routes that expose the MCP resources.
 - `../handlers/mcp-connectors/`: connector management APIs used by the web app.
+
+## Output projection contracts
+
+Bind successful payloads with `projectionPayload(schema, payload)` from
+`lib/projection-totality.ts` before a handler return annotation widens their
+source types. It checks undeclared fields recursively, including forwarded
+objects, arrays, unions and spreads. A domain field must be declared in the
+strict schema or explicitly removed when constructing the payload. Open JSON
+fields remain explicit schema decisions. Dispatch still strict-parses the
+served result; the compile-time gate does not replace runtime validation.
+
+The `weak-mcp-projection-ties` ratchet prevents new satisfies-only projection
+ties. `contracts/mcp-output-projection.ts` exercises producer-field drift and
+binds the case-law facet tree to its source type. The case-law source-facet
+database tests feed real SQL output through the production count builder and
+the MCP projection, covering exact counts, lower bounds and unknown-field
+rejection.

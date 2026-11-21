@@ -1,12 +1,15 @@
+import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
-import Elysia from "elysia";
 import fc from "fast-check";
 
 import { roles, statements } from "@stll/permissions";
 import type { PermissionInput } from "@stll/permissions";
 import { assertProperty } from "@stll/property-testing";
 
-import { permissionMacro } from "@/api/lib/auth";
+import { createHttpApp } from "@/api/http/app";
+import { routes } from "@/api/http/route";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
+import { AUTH_REJECTION_BODY } from "@/api/lib/auth";
 import { isMemberRole } from "@/api/lib/member-roles";
 import type { MemberRole } from "@/api/lib/member-roles";
 import {
@@ -17,6 +20,7 @@ import {
   readAuthorizedMemberRole,
   sessionMemberRole,
 } from "@/api/lib/permission-authorization";
+import { serveForTest } from "@/api/tests/helpers/test-server";
 
 const MEMBER_ROLES = Object.keys(roles).filter(isMemberRole);
 
@@ -223,17 +227,28 @@ describe("permission authorization", () => {
     ).toBe(true);
   });
 
-  test("permission macro authenticates before checking permissions", async () => {
-    const app = new Elysia()
-      .use(permissionMacro)
-      .get("/protected", () => ({ ok: true }), {
+  test("a permission-gated handler authenticates before checking permissions", async () => {
+    const protectedRoute = createSafeRootHandler(
+      {
+        contract: "patch",
+        accountAccess: ACCOUNT_ACCESS.sandbox,
         permissions: { workspace: ["read"] },
-      });
-
-    const response = await app.handle(
-      new Request("http://localhost/protected"),
+        mcp: { type: "internal", reason: "dev_only" },
+      },
+      async function* () {
+        return Result.ok({ ok: true });
+      },
+    );
+    await using server = serveForTest(
+      createHttpApp({
+        middleware: [],
+        routes: routes({ "/protected": { GET: protectedRoute } }),
+      }),
     );
 
+    const response = await server.fetch("http://localhost/protected");
+
     expect(response.status).toBe(401);
+    expect(await response.json()).toEqual(AUTH_REJECTION_BODY[401]);
   });
 });

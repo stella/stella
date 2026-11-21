@@ -1,10 +1,9 @@
 import { Result } from "better-result";
-import * as cheerio from "cheerio";
+import { decodeHTMLAttribute } from "entities";
 
-import {
-  parseSafeOutboundUrl,
-  safeOutboundFetchBytes,
-} from "@/api/lib/safe-outbound-fetch";
+import { safeOutboundFetchBytes } from "@/api/lib/auth/authorized-outbound-fetch";
+import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
+import { parseSafeOutboundUrl } from "@/api/lib/safe-outbound-fetch";
 
 const ICON_DISCOVERY_TIMEOUT_MS = 5000;
 const ICON_HTML_MAX_CHARS = 200_000;
@@ -12,6 +11,7 @@ const ICON_HTML_MAX_BYTES = 300_000;
 
 export const discoverMcpIconUrl = async (
   rawUrl: string,
+  permit: ThirdPartyOutboundPermit,
 ): Promise<string | null> => {
   const parsed = parseSafeOutboundUrl(rawUrl);
   if (Result.isError(parsed)) {
@@ -22,6 +22,7 @@ export const discoverMcpIconUrl = async (
   const htmlResult = await Result.tryPromise({
     try: async () => {
       const response = await safeOutboundFetchBytes({
+        permit,
         headers: { Accept: "text/html" },
         maxBytes: ICON_HTML_MAX_BYTES,
         timeoutMs: ICON_DISCOVERY_TIMEOUT_MS,
@@ -57,17 +58,34 @@ const ICON_REL_PRIORITY = [
   "shortcut icon",
 ] as const;
 
-const findIconInHtml = ({
+export const findIconInHtml = ({
   html,
   rootUrl,
 }: {
   html: string;
   rootUrl: URL;
 }): string | null => {
-  const $ = cheerio.load(html);
+  const hrefs = new Map<string, string | null>();
+  new HTMLRewriter()
+    .on("link", {
+      element(el) {
+        const rawRel = el.getAttribute("rel");
+        if (rawRel === null) {
+          return;
+        }
+        const decodedRel = decodeHTMLAttribute(rawRel).toLowerCase();
+        const rel = ICON_REL_PRIORITY.find((value) => value === decodedRel);
+        if (rel === undefined || hrefs.has(rel)) {
+          return;
+        }
+        const rawHref = el.getAttribute("href");
+        hrefs.set(rel, rawHref === null ? null : decodeHTMLAttribute(rawHref));
+      },
+    })
+    .transform(html);
 
   for (const rel of ICON_REL_PRIORITY) {
-    const href = $(`link[rel="${rel}"]`).attr("href");
+    const href = hrefs.get(rel);
     if (!href) {
       continue;
     }

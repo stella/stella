@@ -1,4 +1,7 @@
 import { describe, expect, test } from "bun:test";
+import fc from "fast-check";
+
+import { assertProperty } from "@stll/property-testing";
 
 import {
   escapeAndHighlight,
@@ -266,4 +269,226 @@ describe("search result highlighting", () => {
       );
     }
   });
+});
+
+describe("preview literal selection", () => {
+  test("bounds restoration work for repetitive sources and overlapping fragments", () => {
+    const source = "a".repeat(50_000);
+    const fragments = Array.from({ length: 64 }, (_, index) =>
+      "a".repeat(index + 1),
+    );
+    const started = performance.now();
+    const restored = restoreOriginalSearchPreview({
+      source,
+      normalizedSource: source,
+      headline: fragments.join(SEARCH_PREVIEW_FRAGMENT_DELIMITER),
+      maxLength: 10_000,
+      useUnaccent: false,
+    });
+    const elapsedMs = performance.now() - started;
+
+    expect(restored).toBe(fragments.join(SEARCH_PREVIEW_FRAGMENT_SEPARATOR));
+    // Source alignment is linear; enumerating every overlapping occurrence
+    // instead creates more than three million unnecessary match records.
+    expect(elapsedMs).toBeLessThan(1000);
+  });
+
+  test("preserves first-listed candidate priority at a tied lexeme start", () => {
+    const source = "00000 catapultmmm tail";
+    expect(
+      truncateSearchPreviewAroundCandidates({
+        source,
+        candidates: ["cat", "catapult"],
+        maxLength: 8,
+      }),
+    ).toBe("00 catap");
+    expect(
+      truncateSearchPreviewAroundCandidates({
+        source,
+        candidates: ["catapult", "cat"],
+        maxLength: 8,
+      }),
+    ).toBe("catapult");
+  });
+  test("uses consecutive lexical prefixes across punctuation and folded Czech inflections", () => {
+    const source = "aaaaa JUDr. Novákové, návrhu... konec";
+    expect(
+      truncateSearchPreviewAroundCandidates({
+        source,
+        candidates: ["Novak navr"],
+        maxLength: 18,
+      }),
+    ).toContain("Novákové, návrhu");
+    expect(
+      truncateSearchPreviewAroundCandidates({
+        source,
+        candidates: ["Novak konec"],
+        maxLength: 8,
+      }),
+    ).toBe("aaaaa JU");
+    expect(
+      truncateSearchPreviewAroundCandidates({
+        source,
+        candidates: ["...", ""],
+        maxLength: 8,
+      }),
+    ).toBe("aaaaa JU");
+  });
+  test("restores overlapping literal fragment sets at a monotonic cursor", () => {
+    const restored = restoreOriginalSearchPreview({
+      source: "aaaaa",
+      normalizedSource: "aaaaa",
+      headline: `aa${SEARCH_PREVIEW_FRAGMENT_DELIMITER}aaa`,
+      maxLength: 100,
+      useUnaccent: false,
+    });
+    expect(restored).toBe(`aa${SEARCH_PREVIEW_FRAGMENT_SEPARATOR}aaa`);
+    expect(
+      restoreOriginalSearchPreview({
+        source: "a.b axb a.b",
+        normalizedSource: "a.b axb a.b",
+        headline: `a.b${SEARCH_PREVIEW_FRAGMENT_DELIMITER}a.b`,
+        maxLength: 100,
+        useUnaccent: false,
+      }),
+    ).toBe(`a.b${SEARCH_PREVIEW_FRAGMENT_SEPARATOR}a.b`);
+  });
+});
+
+test("headline fragments agree with a monotonic exact-substring oracle", () => {
+  assertProperty(
+    "headline fragments agree with a monotonic exact-substring oracle",
+    fc.property(
+      fc.array(fc.constantFrom("a", "b", "ě", "😀", "a.b"), { maxLength: 30 }),
+      fc.array(fc.constantFrom("a", "aa", "ě", "😀", "a.b", "missing", ""), {
+        maxLength: 8,
+      }),
+      (units, fragments) => {
+        const source = units.join(" ");
+        const restored: string[] = [];
+        let cursor = 0;
+        for (const fragment of fragments) {
+          if (fragment.length === 0) {
+            continue;
+          }
+          const start = source.indexOf(fragment, cursor);
+          if (start === -1) {
+            break;
+          }
+          restored.push(source.slice(start, start + fragment.length));
+          cursor = start + fragment.length;
+        }
+        expect(
+          restoreOriginalSearchPreview({
+            source,
+            normalizedSource: source,
+            headline: fragments.join(SEARCH_PREVIEW_FRAGMENT_DELIMITER),
+            maxLength: 10_000,
+            useUnaccent: false,
+          }),
+        ).toBe(
+          restored.length > 0
+            ? restored.join(SEARCH_PREVIEW_FRAGMENT_SEPARATOR)
+            : source,
+        );
+      },
+    ),
+  );
+});
+
+test("preview matching uses scalar boundaries and normalized UTF-16 source offsets", () => {
+  expect(
+    truncateSearchPreviewAroundCandidates({
+      source: "x\ud800y",
+      candidates: [],
+      maxLength: 10,
+    }),
+  ).toBe("x�y");
+  expect(
+    restoreOriginalSearchPreview({
+      source: "x\ud801y",
+      normalizedSource: "x\ud801y",
+      headline: "\ud800",
+      maxLength: 100,
+      useUnaccent: false,
+    }),
+  ).toBe("�");
+  expect(
+    restoreOriginalSearchPreview({
+      source: "😀",
+      normalizedSource: "😀",
+      headline: "\ud83d",
+      maxLength: 100,
+      useUnaccent: false,
+    }),
+  ).toBe("😀");
+});
+
+test("preview lexical prefixes agree with the ordered token-prefix oracle", () => {
+  assertProperty(
+    "preview lexical prefixes agree with the ordered token-prefix oracle",
+    fc.property(
+      fc.array(fc.constantFrom("aa", "ab", "bb", "ba", "catapult", "memo"), {
+        maxLength: 20,
+      }),
+      fc.array(
+        fc.constantFrom("a", "b", "aa b", "cat", "catapult", "memo", "...", ""),
+        { maxLength: 8 },
+      ),
+      (words, candidates) => {
+        const source = `00000 ${words.join(", ")} 99999`;
+        const lexemes = Array.from(source.matchAll(/[a-z0-9]+/gu));
+        let firstStart = Infinity;
+        let firstLength = 0;
+        for (const candidate of candidates) {
+          const prefixes = Array.from(
+            candidate.matchAll(/[a-z0-9]+/gu),
+            (match) => match[0],
+          );
+          if (prefixes.length === 0) {
+            continue;
+          }
+          for (
+            let index = 0;
+            index <= lexemes.length - prefixes.length;
+            index += 1
+          ) {
+            if (
+              !prefixes.every((prefix, offset) =>
+                lexemes.at(index + offset)?.[0].startsWith(prefix),
+              )
+            ) {
+              continue;
+            }
+            const first = lexemes.at(index);
+            const last = lexemes.at(index + prefixes.length - 1);
+            const finalPrefix = prefixes.at(-1);
+            if (
+              first === undefined ||
+              last === undefined ||
+              finalPrefix === undefined
+            ) {
+              throw new TypeError("Oracle lexeme range is incomplete");
+            }
+            if (first.index < firstStart) {
+              firstStart = first.index;
+              firstLength = last.index + finalPrefix.length - first.index;
+            }
+            break;
+          }
+        }
+        const center = Math.floor(firstStart + firstLength / 2);
+        const start = Number.isFinite(firstStart)
+          ? Math.max(0, Math.min(source.length - 8, center - 4))
+          : 0;
+        expect(
+          truncateSearchPreviewAroundCandidates({
+            source,
+            candidates,
+            maxLength: 8,
+          }),
+        ).toBe(source.slice(start, start + 8));
+      },
+    ),
+  );
 });

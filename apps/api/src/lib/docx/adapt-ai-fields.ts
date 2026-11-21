@@ -36,7 +36,7 @@ export const AI_FIELD_ADAPTATION_FAILURE_MESSAGE =
 /** Characters of surrounding document text captured around each occurrence. */
 const CONTEXT_RADIUS = 400;
 
-export type MarkerOccurrence = {
+type MarkerOccurrence = {
   /** Surrounding document text, with the `{{path}}` marker left in place so
    *  the model sees exactly where the rendering will sit. */
   context: string;
@@ -106,18 +106,18 @@ export const adaptAiFields = async ({
   const zip = await loadDocx(file.bytes);
   // Sorted for a deterministic occurrence order; the patch pass below walks
   // the same list, so occurrence indices always line up with extraction.
-  const partNames = templateContentPartPaths(Object.keys(zip.files));
+  const partNames = templateContentPartPaths(zip.paths());
   // Each part is read independently; `Promise.all(map(...))` preserves the
   // sorted `partNames` order in the result regardless of completion order, so
   // the patch pass below still sees `parts` in the same order extraction used.
   const parts = (
     await Promise.all(
       partNames.map(async (name) => {
-        const entry = zip.file(name);
+        const entry = zip.entry(name);
         if (!entry) {
           return undefined;
         }
-        return { name, xml: await entry.async("string") };
+        return { name, xml: await entry.text() };
       }),
     )
   ).filter((part): part is { name: string; xml: string } => part !== undefined);
@@ -167,7 +167,7 @@ export const adaptAiFields = async ({
       counters,
     );
     if (patched.changed) {
-      zip.file(part.name, patched.xml);
+      zip.set(part.name, patched.xml);
       anyChanged = true;
     }
   }
@@ -178,7 +178,7 @@ export const adaptAiFields = async ({
   return {
     file: derivedScannedFile(
       file,
-      await zip.generateAsync({ type: "uint8array" }),
+      await zip.generate({ compression: "store" }),
     ),
     adaptedPaths: [...renderingsByPath.keys()],
     failures,

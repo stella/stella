@@ -23,8 +23,8 @@ import {
 } from "./values";
 import {
   attribute,
-  childText,
   childrenNamed,
+  childText,
   parseXmlList,
   readXmlListVersion,
 } from "./xml";

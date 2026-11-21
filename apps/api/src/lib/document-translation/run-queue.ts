@@ -1,16 +1,17 @@
-import { Result, panic } from "better-result";
-import { Worker } from "bullmq";
+import { panic, Result } from "better-result";
 import { and, asc, eq, inArray, isNull, lt, sql } from "drizzle-orm";
 
+import { chunk as chunkItems } from "@stll/concurrency/chunk";
+import type { PermissionInput } from "@stll/permissions";
 import { Temporal } from "@stll/time";
 
-import type { rootDb } from "@/api/db/root";
+import type { rootDb, Transaction } from "@/api/db/root";
 import {
   documentTranslationRuns,
   documentTranslationUnits,
 } from "@/api/db/schema";
 import { loadOrgAISettings } from "@/api/lib/ai-config-loader";
-import { captureError } from "@/api/lib/analytics/capture";
+import { captureError, detached } from "@/api/lib/analytics/capture";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import {
   decideDispositions,
@@ -44,11 +45,15 @@ import {
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createBullMqJobId } from "@/api/lib/bullmq-job-id";
-import { createLazyBullMqQueue } from "@/api/lib/bullmq-queue";
+import { BullMqWorker, createLazyBullMqQueue } from "@/api/lib/bullmq-queue";
 import type { BullMqWorkerContext } from "@/api/lib/bullmq-queue";
 import { requeueDeterministicJob } from "@/api/lib/bullmq-requeue";
 import type { RequeueableQueue } from "@/api/lib/bullmq-requeue";
 import { decryptContent } from "@/api/lib/content-encryption";
+import {
+  hasCurrentActiveWorkspaceMemberPermission,
+  requireCurrentActiveWorkspaceMemberPermission,
+} from "@/api/lib/db/member-authority";
 import { translateDocument, translateTextBatches } from "@/api/lib/deepl/deepl";
 import { translateTaggedSegments } from "@/api/lib/document-translation/ai";
 import { runBilingualTranslationBatches } from "@/api/lib/document-translation/bilingual-batch-runner";
@@ -108,8 +113,11 @@ import {
   uploadFileEncryption,
 } from "@/api/lib/files/detect-file-encryption";
 import { startNonOverlappingInterval } from "@/api/lib/non-overlapping-interval";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { logger } from "@/api/lib/observability/logger";
 import { createQueueWorkerErrorLogger } from "@/api/lib/queue-worker-error-log";
+import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
+import { runBackgroundJob } from "@/api/lib/rate-limit/queued-action-admission";
 import { createBullMqConnection } from "@/api/lib/redis-client";
 import { createRootRunActor } from "@/api/lib/root-scoped-db";
 import type { RootRunActor } from "@/api/lib/root-scoped-db";
@@ -199,7 +207,13 @@ const enqueueDocumentTranslationRuns = async (
   let handedOff = 0;
   for (const [index, outcome] of outcomes.entries()) {
     if (Result.isError(outcome)) {
-      captureError(outcome.error, { runId: runs.at(index)?.runId ?? "" });
+      captureError(
+        outcome.error,
+        handlerErrorContext(
+          "documenttranslation.enqueueDocumentTranslationRuns.outcome_error",
+          { runId: runs.at(index)?.runId ?? "" },
+        ),
+      );
       continue;
     }
     handedOff += 1;
@@ -208,6 +222,36 @@ const enqueueDocumentTranslationRuns = async (
 };
 
 type RunActor = RootRunActor<"documentTranslationRun">;
+
+const DOCUMENT_TRANSLATION_RUN_PERMISSIONS = {
+  entity: ["create"],
+} as const satisfies PermissionInput;
+
+const requireRunAuthority = async (
+  actor: RunActor,
+  tx: Transaction,
+): Promise<void> => {
+  await requireCurrentActiveWorkspaceMemberPermission({
+    db: tx,
+    organizationId: actor.organizationId,
+    userId: actor.userId,
+    workspaceId: actor.workspaceId,
+    permissions: DOCUMENT_TRANSLATION_RUN_PERMISSIONS,
+  });
+};
+
+const authorizedWrite = async <T>(
+  actor: RunActor,
+  write: (tx: Transaction) => T | Promise<T>,
+): Promise<T> =>
+  await actor.writeDb(async (tx) => {
+    await requireRunAuthority(actor, tx);
+    return await write(tx);
+  });
+
+const authorizeModelDispatch = async (actor: RunActor): Promise<void> => {
+  await authorizedWrite(actor, () => undefined);
+};
 
 const brandActor = (data: DocumentTranslationRunJobData): RunActor =>
   createRootRunActor(data, brandPersistedDocumentTranslationRunId);
@@ -226,6 +270,8 @@ type ClaimedRun = {
   targetLang: string;
 };
 
+const RUN_AUTHORITY_REVOKED = "authority_revoked" as const;
+
 const translationLanguagesForRun = (
   run: Pick<ClaimedRun, "sourceLang" | "targetLang">,
 ): TranslationLanguages =>
@@ -239,7 +285,9 @@ const translationLanguagesForRun = (
         targetLang: run.targetLang,
       };
 
-const claimRun = async (actor: RunActor): Promise<ClaimedRun | null> => {
+const claimRun = async (
+  actor: RunActor,
+): Promise<ClaimedRun | typeof RUN_AUTHORITY_REVOKED | null> => {
   const claimed = await actor.writeDb(async (tx) => {
     // audit: skip — lifecycle bookkeeping on the run audited at create.
     const rows = await tx
@@ -265,8 +313,25 @@ const claimRun = async (actor: RunActor): Promise<ClaimedRun | null> => {
         sourceLang: documentTranslationRuns.sourceLang,
         targetLang: documentTranslationRuns.targetLang,
       });
-    return rows.at(0);
+    const row = rows.at(0);
+    if (!row) {
+      return null;
+    }
+    const authorized = await hasCurrentActiveWorkspaceMemberPermission({
+      db: tx,
+      organizationId: actor.organizationId,
+      userId: actor.userId,
+      workspaceId: actor.workspaceId,
+      permissions: DOCUMENT_TRANSLATION_RUN_PERMISSIONS,
+    });
+    if (authorized) {
+      return row;
+    }
+    return RUN_AUTHORITY_REVOKED;
   });
+  if (claimed === RUN_AUTHORITY_REVOKED) {
+    return RUN_AUTHORITY_REVOKED;
+  }
   if (!claimed) {
     return null;
   }
@@ -283,7 +348,7 @@ const transitionStage = async (
   from: ActiveRunStage,
   to: ActiveRunStage,
 ): Promise<boolean> =>
-  await actor.writeDb(async (tx) => {
+  await authorizedWrite(actor, async (tx) => {
     // audit: skip — lifecycle bookkeeping on the run audited at create.
     const transitioned = await tx
       .update(documentTranslationRuns)
@@ -376,11 +441,17 @@ const loadPinnedSource = async (
     : Result.ok(bytes.value);
 };
 
-const createAIContext = async (
-  actor: RunActor,
-  run: ClaimedRun,
-): Promise<Result<BilingualAIContext, HandlerError>> => {
-  const settings = await actor.writeDb(
+const createAIContext = async ({
+  actor,
+  admission,
+  run,
+}: {
+  actor: RunActor;
+  admission: ModelDispatchAdmission;
+  run: ClaimedRun;
+}): Promise<Result<BilingualAIContext, HandlerError>> => {
+  const settings = await authorizedWrite(
+    actor,
     async (tx) => await loadOrgAISettings(tx, actor),
   );
   if (Result.isError(settings)) {
@@ -389,6 +460,7 @@ const createAIContext = async (
   const { orgAIConfig, managedAIResidency, promptCachingEnabled } =
     settings.value;
   return Result.ok({
+    admission,
     organizationId: actor.organizationId,
     workspaceId: actor.workspaceId,
     orgAIConfig,
@@ -408,7 +480,7 @@ const createAIContext = async (
 };
 
 const setTotal = async (actor: RunActor, total: number): Promise<void> => {
-  await actor.writeDb(async (tx) => {
+  await authorizedWrite(actor, async (tx) => {
     // audit: skip — progress bookkeeping on the run audited at create.
     await tx
       .update(documentTranslationRuns)
@@ -424,7 +496,7 @@ const updateTranslatedUnits = async (
   if (updates.length === 0) {
     return;
   }
-  await actor.writeDb(async (tx) => {
+  await authorizedWrite(actor, async (tx) => {
     // audit: skip — unit and progress bookkeeping inside the audited run.
     const values = sql.join(
       updates.map((update) => sql`(${update.unitKey}, ${update.targetText})`),
@@ -457,6 +529,7 @@ type TranslationOutput = {
 const loadDeepLApiKey = async (
   actor: RunActor,
 ): Promise<Result<string, "provider_unavailable">> => {
+  await authorizeModelDispatch(actor);
   const settings = await actor.writeSafeDb((tx) =>
     tx.query.organizationSettings.findFirst({
       where: { organizationId: { eq: actor.organizationId } },
@@ -476,7 +549,13 @@ const loadDeepLApiKey = async (
     catch: (cause) => cause,
   });
   if (Result.isError(decrypted)) {
-    captureError(decrypted.error, { runId: actor.runId });
+    captureError(
+      decrypted.error,
+      handlerErrorContext(
+        "documenttranslation.loadDeepLApiKey.decrypted_error",
+        { runId: actor.runId },
+      ),
+    );
     return Result.err("provider_unavailable");
   }
   return Result.ok(decrypted.value);
@@ -495,19 +574,22 @@ const translateCommentsWithAI = async (
     }
   }
   const pending = comments.filter((comment) => comment.text !== "");
-  const translateNextBatch = async (
-    index: number,
-  ): Promise<Result<void, DocumentTranslationRunErrorCode>> => {
-    if (index >= pending.length) {
+  const itemBatches = chunkItems(
+    pending,
+    DOCUMENT_TRANSLATION_LIMITS.batchSize,
+  )[Symbol.iterator]();
+  const translateNextBatch = async (): Promise<
+    Result<void, DocumentTranslationRunErrorCode>
+  > => {
+    const nextBatch = itemBatches.next();
+    if (nextBatch.done) {
       return Result.ok();
     }
-    const batch = pending.slice(
-      index,
-      index + DOCUMENT_TRANSLATION_LIMITS.batchSize,
-    );
+    const batch = nextBatch.value;
     const response = await Result.tryPromise({
-      try: async () =>
-        await translateTaggedSegments({
+      try: async () => {
+        await authorizeModelDispatch(actor);
+        return await translateTaggedSegments({
           segments: batch.map((comment) => ({
             id: `comment:${comment.id}`,
             taggedText: commentTaggedText(comment),
@@ -515,11 +597,18 @@ const translateCommentsWithAI = async (
           preceding: [],
           languages: translationLanguagesForRun(run),
           context,
-        }),
+        });
+      },
       catch: (cause) => cause,
     });
     if (Result.isError(response)) {
-      captureError(response.error, { runId: actor.runId });
+      captureError(
+        response.error,
+        handlerErrorContext(
+          "documenttranslation.translateNextBatch.response_error",
+          { runId: actor.runId },
+        ),
+      );
       return Result.err(documentTranslationProviderErrorCode(response.error));
     }
     for (const comment of batch) {
@@ -531,11 +620,9 @@ const translateCommentsWithAI = async (
       }
       translated.set(comment.id, text);
     }
-    return await translateNextBatch(
-      index + DOCUMENT_TRANSLATION_LIMITS.batchSize,
-    );
+    return await translateNextBatch();
   };
-  const result = await translateNextBatch(0);
+  const result = await translateNextBatch();
   return Result.isError(result) ? result : Result.ok(translated);
 };
 
@@ -547,18 +634,26 @@ const translateCommentsWithDeepL = async (
 ): Promise<Result<Map<number, string>, DocumentTranslationRunErrorCode>> => {
   const pending = comments.filter((comment) => comment.text !== "");
   const response = await Result.tryPromise({
-    try: async () =>
-      await translateTextBatches({
+    try: async () => {
+      await authorizeModelDispatch(actor);
+      return await translateTextBatches({
         apiKey,
         texts: pending.map((comment) => comment.text),
         targetLang: run.targetLang,
         sourceLang: run.sourceLang === "auto" ? undefined : run.sourceLang,
         formality: "prefer_more",
-      }),
+      });
+    },
     catch: (cause) => cause,
   });
   if (Result.isError(response)) {
-    captureError(response.error, { runId: actor.runId });
+    captureError(
+      response.error,
+      handlerErrorContext(
+        "documenttranslation.translateCommentsWithDeepL.response_error",
+        { runId: actor.runId },
+      ),
+    );
     return Result.err(documentTranslationProviderErrorCode(response.error));
   }
   return mapDeepLCommentTranslations(comments, response.value);
@@ -571,8 +666,9 @@ const translateWithDeepL = async (
   apiKey: string,
 ): Promise<Result<TranslationOutput, DocumentTranslationRunErrorCode>> => {
   const translated = await Result.tryPromise({
-    try: async () =>
-      await translateDocument({
+    try: async () => {
+      await authorizeModelDispatch(actor);
+      return await translateDocument({
         apiKey,
         file: new Uint8Array(source),
         fileName: run.sourceFileName,
@@ -580,11 +676,18 @@ const translateWithDeepL = async (
         targetLang: run.targetLang,
         sourceLang: run.sourceLang === "auto" ? undefined : run.sourceLang,
         formality: "prefer_more",
-      }),
+      });
+    },
     catch: (cause) => cause,
   });
   if (Result.isError(translated)) {
-    captureError(translated.error, { runId: actor.runId });
+    captureError(
+      translated.error,
+      handlerErrorContext(
+        "documenttranslation.translateWithDeepL.translated_error",
+        { runId: actor.runId },
+      ),
+    );
     return Result.err(documentTranslationProviderErrorCode(translated.error));
   }
   const output = resolveTranslatedOutput({
@@ -593,7 +696,7 @@ const translateWithDeepL = async (
     targetLang: run.targetLang,
   });
   await setTotal(actor, 1);
-  await actor.writeDb(async (tx) => {
+  await authorizedWrite(actor, async (tx) => {
     await tx
       .update(documentTranslationRuns)
       .set({ completed: 1 })
@@ -639,7 +742,7 @@ const translateDocxWithAI = async (
   ) {
     return Result.err("unsupported_format");
   }
-  await actor.writeDb(async (tx) => {
+  await authorizedWrite(actor, async (tx) => {
     await tx.insert(documentTranslationUnits).values(
       segments.map((segment, ordinal) => ({
         id: createSafeId<"documentTranslationUnit">(),
@@ -660,22 +763,25 @@ const translateDocxWithAI = async (
   await setTotal(actor, segments.length);
 
   const translated = new Map<string, string>();
+  const itemBatches = chunkItems(
+    segments,
+    DOCUMENT_TRANSLATION_LIMITS.batchSize,
+  )[Symbol.iterator]();
   const translateNextBatch = async (
     index: number,
   ): Promise<Result<void, DocumentTranslationRunErrorCode>> => {
-    if (index >= segments.length) {
+    const nextBatch = itemBatches.next();
+    if (nextBatch.done) {
       return Result.ok();
     }
-    const batch = segments.slice(
-      index,
-      index + DOCUMENT_TRANSLATION_LIMITS.batchSize,
-    );
+    const batch = nextBatch.value;
     const preceding = segments
       .slice(0, index)
       .slice(-DOCUMENT_TRANSLATION_LIMITS.contextUnits);
     const result = await Result.tryPromise({
-      try: async () =>
-        await translateTaggedSegments({
+      try: async () => {
+        await authorizeModelDispatch(actor);
+        return await translateTaggedSegments({
           segments: batch.map((segment) => ({
             id: segment.segmentId,
             taggedText: segment.taggedText,
@@ -686,11 +792,18 @@ const translateDocxWithAI = async (
           })),
           languages: translationLanguagesForRun(run),
           context,
-        }),
+        });
+      },
       catch: (cause) => cause,
     });
     if (Result.isError(result)) {
-      captureError(result.error, { runId: actor.runId });
+      captureError(
+        result.error,
+        handlerErrorContext(
+          "documenttranslation.translateNextBatch.result_error",
+          { runId: actor.runId },
+        ),
+      );
       return Result.err(documentTranslationProviderErrorCode(result.error));
     }
     const updates: { unitKey: string; targetText: string }[] = [];
@@ -729,7 +842,13 @@ const translateDocxWithAI = async (
     })
   ).andThen((patched) => patched);
   if (Result.isError(applied)) {
-    captureError(applied.error, { runId: actor.runId });
+    captureError(
+      applied.error,
+      handlerErrorContext(
+        "documenttranslation.translateDocxWithAI.applied_error",
+        { runId: actor.runId },
+      ),
+    );
     return Result.err("format_validation_failed");
   }
   const output = resolveTranslatedOutput({
@@ -795,12 +914,22 @@ const translateBilingualWithAI = async (
   const prepared = await Result.tryPromise({
     try: async () => {
       const [rows, glossary] = await Promise.all([
-        decideDispositions(formatted.value, languages, documentContext),
-        proposeGlossary(
-          detectGlossaryCandidates(texts),
-          texts,
-          languages,
-          documentContext,
+        authorizeModelDispatch(actor).then(
+          async () =>
+            await decideDispositions(
+              formatted.value,
+              languages,
+              documentContext,
+            ),
+        ),
+        authorizeModelDispatch(actor).then(
+          async () =>
+            await proposeGlossary(
+              detectGlossaryCandidates(texts),
+              texts,
+              languages,
+              documentContext,
+            ),
         ),
       ]);
       return { rows, glossary };
@@ -821,7 +950,7 @@ const translateBilingualWithAI = async (
   if (pending.length === 0) {
     return Result.err("translation_failed");
   }
-  await actor.writeDb(async (tx) => {
+  await authorizedWrite(actor, async (tx) => {
     await tx.insert(documentTranslationUnits).values(
       rows.map((row) => ({
         id: createSafeId<"documentTranslationUnit">(),
@@ -879,8 +1008,9 @@ const translateBilingualWithAI = async (
       formattedBatch.push(formattedUnit);
     }
     const attempted = await Result.tryPromise({
-      try: async () =>
-        await translateFormattedBatch(
+      try: async () => {
+        await authorizeModelDispatch(actor);
+        return await translateFormattedBatch(
           {
             batch: formattedBatch,
             preceding,
@@ -888,7 +1018,8 @@ const translateBilingualWithAI = async (
           },
           languages,
           documentContext,
-        ),
+        );
+      },
       catch: (cause) => cause,
     });
     if (Result.isError(attempted)) {
@@ -934,7 +1065,13 @@ const translateBilingualWithAI = async (
     catch: (cause) => cause,
   });
   if (Result.isError(formattedBuffer)) {
-    captureError(formattedBuffer.error, { runId: actor.runId });
+    captureError(
+      formattedBuffer.error,
+      handlerErrorContext(
+        "documenttranslation.translateBilingualWithAI.formattedBuffer_error",
+        { runId: actor.runId },
+      ),
+    );
     return Result.err("format_validation_failed");
   }
   const operations = buildFormattingPreservingOperations(
@@ -949,12 +1086,24 @@ const translateBilingualWithAI = async (
     fileName: run.sourceFileName,
   });
   if (Result.isError(scannedFormatted)) {
-    captureError(scannedFormatted.error, { runId: actor.runId });
+    captureError(
+      scannedFormatted.error,
+      handlerErrorContext(
+        "documenttranslation.translateBilingualWithAI.scannedFormatted_error",
+        { runId: actor.runId },
+      ),
+    );
     return Result.err("format_validation_failed");
   }
   const applied = await applyAiEditsToDocx(scannedFormatted.value, operations);
   if (Result.isError(applied)) {
-    captureError(applied.error, { runId: actor.runId });
+    captureError(
+      applied.error,
+      handlerErrorContext(
+        "documenttranslation.translateBilingualWithAI.applied_error",
+        { runId: actor.runId },
+      ),
+    );
     return Result.err("format_validation_failed");
   }
   if (applied.value.skipped.length > 0) {
@@ -992,10 +1141,15 @@ const translateBilingualWithAI = async (
   });
 };
 
-const executeRun = async (
-  actor: RunActor,
-  run: ClaimedRun,
-): Promise<DocumentTranslationRunErrorCode | null> => {
+const executeRun = async ({
+  actor,
+  admission,
+  run,
+}: {
+  actor: RunActor;
+  admission: ModelDispatchAdmission;
+  run: ClaimedRun;
+}): Promise<DocumentTranslationRunErrorCode | null> => {
   const loaded = await loadPinnedSource(actor, run);
   if (Result.isError(loaded)) {
     return loaded.error;
@@ -1010,7 +1164,12 @@ const executeRun = async (
       })
     ).andThen((resolved) => resolved);
     if (Result.isError(prepared)) {
-      captureError(prepared.error, { runId: actor.runId });
+      captureError(
+        prepared.error,
+        handlerErrorContext("documenttranslation.executeRun.prepared_error", {
+          runId: actor.runId,
+        }),
+      );
       return DocxReviewError.is(prepared.error)
         ? "unsupported_review_markup"
         : "unsupported_format";
@@ -1023,7 +1182,13 @@ const executeRun = async (
       })
     ).andThen((units) => units);
     if (Result.isError(readComments)) {
-      captureError(readComments.error, { runId: actor.runId });
+      captureError(
+        readComments.error,
+        handlerErrorContext(
+          "documenttranslation.executeRun.readComments_error",
+          { runId: actor.runId },
+        ),
+      );
       return "unsupported_format";
     }
     comments = readComments.value;
@@ -1073,7 +1238,7 @@ const executeRun = async (
   } else {
     const context = Result.flatten(
       await Result.tryPromise({
-        try: async () => await createAIContext(actor, run),
+        try: async () => await createAIContext({ actor, admission, run }),
         catch: (cause) => cause,
       }),
     );
@@ -1136,7 +1301,13 @@ const executeRun = async (
       })
     ).andThen((patched) => patched);
     if (Result.isError(withComments)) {
-      captureError(withComments.error, { runId: actor.runId });
+      captureError(
+        withComments.error,
+        handlerErrorContext(
+          "documenttranslation.executeRun.withComments_error",
+          { runId: actor.runId },
+        ),
+      );
       return "format_validation_failed";
     }
     completedOutput = { ...completedOutput, buffer: withComments.value };
@@ -1169,12 +1340,16 @@ const executeRun = async (
       mimeType: completedOutput.mimeType,
       scanned: scanned.value,
     }),
-    { mimeType: completedOutput.mimeType, runId: actor.runId },
+    handlerErrorContext("documentTranslation.detectEncryption", {
+      mimeType: completedOutput.mimeType,
+      runId: actor.runId,
+    }),
   );
   if (encryption === null) {
     return "format_validation_failed";
   }
 
+  await authorizeModelDispatch(actor);
   const created = await createEntityFromBuffer({
     scopedDb: actor.writeDb,
     organizationId: actor.organizationId,
@@ -1205,6 +1380,12 @@ const executeRun = async (
     mimeType: completedOutput.mimeType,
     encryption,
     scanWarnings: scanned.value.scanWarnings ?? undefined,
+    authority: {
+      type: "current-member",
+      authorize: async (tx) => {
+        await requireRunAuthority(actor, tx);
+      },
+    },
     afterCreate: async (tx, createdOutput) => {
       // audit: skip — lifecycle bookkeeping committed atomically with the
       // audited output entity, preventing a completed file with a stuck run.
@@ -1232,22 +1413,26 @@ const executeRun = async (
     },
   });
   if (Result.isError(created)) {
-    captureError(created.error, { runId: actor.runId });
+    captureError(
+      created.error,
+      handlerErrorContext("documenttranslation.executeRun.created_error", {
+        runId: actor.runId,
+      }),
+    );
     return "internal";
   }
   return null;
 };
 
-const processRunJob = async (
-  data: DocumentTranslationRunJobData,
-): Promise<void> => {
-  await processDocumentTranslationRun(brandActor(data));
-};
-
 export const processDocumentTranslationRun = async (
   actor: RunActor,
+  admission: ModelDispatchAdmission,
 ): Promise<void> => {
   const run = await claimRun(actor);
+  if (run === RUN_AUTHORITY_REVOKED) {
+    await setRunFailed(actor, "internal");
+    return;
+  }
   if (run === null) {
     if (await failRedeliveredRun(actor)) {
       logger.warn("document_translation.redelivery_failed_run", {
@@ -1258,11 +1443,17 @@ export const processDocumentTranslationRun = async (
     return;
   }
   const result = await Result.tryPromise({
-    try: async () => await executeRun(actor, run),
+    try: async () => await executeRun({ actor, admission, run }),
     catch: (cause) => cause,
   });
   if (Result.isError(result)) {
-    captureError(result.error, { runId: actor.runId });
+    captureError(
+      result.error,
+      handlerErrorContext(
+        "documenttranslation.processDocumentTranslationRun.result_error",
+        { runId: actor.runId },
+      ),
+    );
     await setRunFailed(actor, "internal");
     return;
   }
@@ -1277,7 +1468,7 @@ type ReconcileDocumentTranslationRunsResult = {
   handedOff: number;
 };
 
-export const reconcileDocumentTranslationRuns = async (
+const reconcileDocumentTranslationRuns = async (
   db: Pick<typeof rootDb, "select" | "update">,
 ): Promise<ReconcileDocumentTranslationRunsResult> => {
   const runningCutoff = new Date(
@@ -1344,9 +1535,23 @@ export const reconcileDocumentTranslationRuns = async (
 export const initDocumentTranslationRunWorker = ({
   db,
 }: BullMqWorkerContext) => {
-  const worker = new Worker<DocumentTranslationRunJobData>(
+  const worker = new BullMqWorker<DocumentTranslationRunJobData>(
     QUEUE_NAME,
-    async (job) => await processRunJob(job.data),
+    async (job) => {
+      const actor = brandActor(job.data);
+      // The run's period action was drawn when it was queued; the job takes
+      // a background slot. The run bounds its own time.
+      await runBackgroundJob({
+        actionKind: "document-translation.background",
+        organizationId: actor.organizationId,
+        userId: actor.userId,
+        organizationStateDb: actor.writeDb,
+        job,
+        signal: new AbortController().signal,
+        run: async (_signal, admission) =>
+          await processDocumentTranslationRun(actor, admission),
+      });
+    },
     {
       connection: createBullMqConnection({
         storeClass: "durable-coordination",
@@ -1356,12 +1561,28 @@ export const initDocumentTranslationRunWorker = ({
   );
   worker.on("failed", (job, error) => {
     if (job) {
-      setRunFailed(brandActor(job.data), "internal").catch(
-        (markError: unknown) =>
-          captureError(markError, { runId: job.data.runId }),
+      detached(
+        async () =>
+          setRunFailed(brandActor(job.data), "internal").catch(
+            (markError: unknown) =>
+              captureError(
+                markError,
+                handlerErrorContext(
+                  "documenttranslation.initDocumentTranslationRunWorker.markError",
+                  { runId: job.data.runId },
+                ),
+              ),
+          ),
+        "document-translation.set-run-failed",
       );
     }
-    captureError(error, { runId: job?.data.runId ?? "" });
+    captureError(
+      error,
+      handlerErrorContext(
+        "documenttranslation.initDocumentTranslationRunWorker",
+        { runId: job?.data.runId ?? "" },
+      ),
+    );
   });
   worker.on(
     "error",

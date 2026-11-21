@@ -1,7 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 
-import { PublicDecisionViewer } from "@/routes/law/-case-detail";
 import { publicDecisionSearchSchema } from "@/routes/law/-case-detail.logic";
+import { PublicLanguageDecisionPage } from "@/routes/law/-case-detail.page";
+import { DecisionReaderPending } from "@/routes/law/-case-detail.pending";
 import {
   loadPublicDecisionRoute,
   publicDecisionHead,
@@ -14,18 +15,6 @@ export const Route = createFileRoute(
   loaderDeps: ({ search }) => search,
   loader: loadPublicDecisionRoute,
   head: publicDecisionHead,
-  component: PublicDecisionRoute,
+  component: PublicLanguageDecisionPage,
+  pendingComponent: DecisionReaderPending,
 });
-
-function PublicDecisionRoute() {
-  const decision = Route.useLoaderData();
-  const initialSearchQuery = Route.useSearch({ select: (search) => search.q });
-
-  return (
-    <PublicDecisionViewer
-      decision={decision}
-      initialSearchQuery={initialSearchQuery}
-      routeId={Route.id}
-    />
-  );
-}

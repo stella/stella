@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { is } from "drizzle-orm";
-import { PgDialect, PgTable, getTableConfig } from "drizzle-orm/pg-core";
+import { getTableConfig, PgDialect, PgTable } from "drizzle-orm/pg-core";
 
 import * as schema from "@/api/db/schema";
 
@@ -16,12 +16,28 @@ const SOURCE_SCOPE_COLUMN = "source_data_workspace_ids";
 
 /**
  * Tables that reference a thread but hold no content derived from it: they
- * point a file or template at its latest thread, and following the pointer
- * reads the thread under the thread's own scope.
+ * point a file, template or stored tool approval at a thread, and following
+ * the pointer reads the thread under the thread's own scope.
  */
 const POINTER_ONLY_TABLES: ReadonlyMap<string, string> = new Map([
   ["file_chat_threads", "maps a file to its latest thread id"],
   ["template_chat_threads", "maps a template to its latest thread id"],
+  [
+    "chat_tool_grants",
+    "names the conversation a tool approval applies in; holds a tool name, never thread content",
+  ],
+  [
+    "chat_limit_reminders",
+    "names the conversation a usage-limit reminder is for; holds a turn id and a time, never thread content",
+  ],
+  [
+    "desktop_runner_runs",
+    "names the thread whose turn started a run on the member's computer; owner-only RLS denies every application role, and only the thread's own member reads the run back, by account and organization",
+  ],
+  [
+    "desktop_runner_folder_restores",
+    "names the thread whose folder a member asked to undo, with its state; holds no thread content, owner-only RLS denies every application role, and the undo routes read the turn through the member's chat scope first",
+  ],
 ]);
 
 const renderPolicies = (table: PgTable): string => {
@@ -57,21 +73,45 @@ describe("chat-derived rows carry the thread's data scope", () => {
   });
 
   test("each is scoped by a thread join or its own source scope", () => {
-    const unscoped = tablesReferencingChatThreads()
-      .filter((table) => {
-        const config = getTableConfig(table);
-        const policies = renderPolicies(table);
-        const joinsThread = /\bchat_threads\b/u.test(policies);
-        const ownSourceScope =
-          config.columns.some(
-            (column) => column.name === SOURCE_SCOPE_COLUMN,
-          ) && policies.includes(SOURCE_SCOPE_COLUMN);
+    const carriesThreadScope = (
+      table: PgTable,
+      visited: Set<PgTable>,
+    ): boolean => {
+      if (visited.has(table)) {
+        return false;
+      }
+      visited.add(table);
+      const config = getTableConfig(table);
+      const policies = renderPolicies(table);
+      if (/\bchat_threads\b/u.test(policies)) {
+        return true;
+      }
+      if (
+        config.columns.some((column) => column.name === SOURCE_SCOPE_COLUMN) &&
+        policies.includes(SOURCE_SCOPE_COLUMN)
+      ) {
+        return true;
+      }
+      // A policy may inherit scope through an RLS-protected parent row;
+      // derive that parent from the schema rather than exempting its child.
+      return config.foreignKeys.some((foreignKey) => {
+        const parent = foreignKey.reference().foreignTable;
+        const parentConfig = getTableConfig(parent);
         return (
-          !joinsThread &&
-          !ownSourceScope &&
-          !POINTER_ONLY_TABLES.has(config.name)
+          parentConfig.enableRLS &&
+          new RegExp(String.raw`\b${parentConfig.name}\b`, "u").test(
+            policies,
+          ) &&
+          carriesThreadScope(parent, new Set(visited))
         );
-      })
+      });
+    };
+    const unscoped = tablesReferencingChatThreads()
+      .filter(
+        (table) =>
+          !POINTER_ONLY_TABLES.has(getTableConfig(table).name) &&
+          !carriesThreadScope(table, new Set()),
+      )
       .map((table) => getTableConfig(table).name);
 
     expect(unscoped).toEqual([]);

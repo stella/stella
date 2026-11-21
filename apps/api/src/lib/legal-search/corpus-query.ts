@@ -1,13 +1,24 @@
 import { panic } from "better-result";
 
+import { DECISION_TYPE_KIND_OTHER } from "@stll/api-contract/case-law-decision-types";
 import type {
   JurisdictionProfile,
   WorkIdentifier,
 } from "@stll/legal-atlas/provision-citation-profile";
 import { provisionCitationProfileFor } from "@stll/legal-atlas/provision-citation-profiles";
-import { foldToAscii } from "@stll/text-normalize";
+import {
+  foldToAscii,
+  normalizeNumericIndices,
+  normalizeUnicode,
+} from "@stll/text-normalize";
 
+import {
+  decisionTypeFilter,
+  KINDED_DECISION_TYPES,
+  statedDecisionTypesOf,
+} from "@/api/lib/case-law/decision-type-kind";
 import { COURT_PARTITION_FIELD } from "@/api/lib/legal-search/corpus-index-group-contract";
+import type { CorpusIndexManifest } from "@/api/lib/legal-search/corpus-index-manifest";
 import {
   type CorpusProvisionMention,
   readCorpusProvisionMentions,
@@ -71,8 +82,7 @@ const findPhraseEnd = (text: string, from: number, closers: string): number => {
  * change what the reader asked to match adjacently.
  */
 export type CorpusQueryToken =
-  | { type: "phrase"; value: string }
-  | { type: "term"; value: string };
+  { type: "phrase"; value: string } | { type: "term"; value: string };
 
 /**
  * Split free user text into phrase and term tokens. The single splitter over
@@ -85,7 +95,10 @@ export type CorpusQueryToken =
  * parse error; an empty span yields no token at all. Text without quotes yields
  * exactly the terms it always did.
  */
-export const tokenizeCorpusFreeText = (text: string): CorpusQueryToken[] => {
+export const tokenizeCorpusFreeText = (raw: string): CorpusQueryToken[] => {
+  // The indexed projection prints numeric superscripts with a caret. Read a
+  // pasted superscript as the same two tokens before any compatibility fold.
+  const text = normalizeNumericIndices(raw);
   const tokens: CorpusQueryToken[] = [];
   let plain = "";
 
@@ -302,6 +315,12 @@ export const CORPUS_QUERY_LEAF_BUDGET = 24;
 export type CorpusStemming = {
   language: MorphologyLanguage;
   fields: readonly string[];
+  /**
+   * The members of `fields` the generation indexes without positions. A stem
+   * of more than one word is a phrase, which the engine rejects on such a
+   * field, so it goes only to the others; a one-word stem reaches them all.
+   */
+  positionlessFields: readonly string[];
 };
 
 /**
@@ -322,7 +341,10 @@ const stemLeaves = (
   if (stem === "") {
     return [];
   }
-  return stemming.fields.map((field) => `${field}:${quoteCorpusValue(stem)}`);
+  const phrase = corpusTokens(stem).length > 1;
+  return stemming.fields
+    .filter((field) => !phrase || !stemming.positionlessFields.includes(field))
+    .map((field) => `${field}:${quoteCorpusValue(stem)}`);
 };
 
 export type CorpusLegacyStemming = {
@@ -347,7 +369,7 @@ const legacyStemLeaves = ({
   }
   const faithful = corpusTokens(token.value)
     .map((term) => {
-      const normalized = term.normalize("NFC").toLowerCase();
+      const normalized = normalizeUnicode(term, "NFC").toLowerCase();
       return stemTerm(normalized) || normalized;
     })
     .join(" ");
@@ -983,6 +1005,33 @@ export const corpusFreeTextClause = (
 };
 
 /**
+ * The engine clause for a request's `decisionType`. The index stores the type
+ * as stated, in a raw (exact, case-sensitive) field, so a kind is every
+ * spelling the census maps to it, and the catch-all kind is a stated type
+ * none of them is. A value no kind claims is matched as stated.
+ */
+export const corpusDecisionTypeClause = (requested: string): string => {
+  const filter = decisionTypeFilter(requested);
+  switch (filter.type) {
+    case "kind": {
+      const spellings = (stated: readonly string[]) =>
+        `(${stated
+          .map((spelling) => `document_type:${quoteCorpusValue(spelling)}`)
+          .join(" OR ")})`;
+      if (filter.kind === DECISION_TYPE_KIND_OTHER) {
+        return `(document_type:* AND NOT ${spellings(KINDED_DECISION_TYPES)})`;
+      }
+      return spellings(statedDecisionTypesOf(filter.kind));
+    }
+    case "stated":
+      return `document_type:${quoteCorpusValue(filter.stated)}`;
+    default:
+      filter satisfies never;
+      return panic(`Unhandled decision type filter: ${String(filter)}`);
+  }
+};
+
+/**
  * Filters a case-law corpus query may carry, named after the index fields
  * rather than after either caller's request shape. `jurisdiction` selects the
  * index first; it is a clause here only when that index holds other
@@ -1001,11 +1050,21 @@ export type CaseLawCorpusFilters = {
   courtPartitions?: readonly string[] | undefined;
   dateFrom?: string | undefined;
   dateTo?: string | undefined;
+  /**
+   * The only decisions the query may return, as an id-set filter on the
+   * documents' decision id. Every chunk of a decision carries its id, so the
+   * engine's totals and facets count within the set.
+   */
+  decisionIds?: readonly string[] | undefined;
   documentType?: string | undefined;
   jurisdiction?: string | undefined;
   language?: string | undefined;
   source?: string | undefined;
 };
+
+/** Typed against the manifests, so a renamed id field cannot drift from here. */
+const DECISION_ID_FIELD: CorpusIndexManifest["projection"]["documentIdField"] =
+  "document_id";
 
 export type CaseLawCorpusQueryOptions = {
   queryVariant?: CorpusIndexQueryVariant | undefined;
@@ -1020,14 +1079,17 @@ export type CaseLawCorpusQueryOptions = {
   keywordFields?: readonly string[] | undefined;
   functionWords?: ReadonlySet<string> | null | undefined;
   legalAlternatives?: CorpusTermExpander | null | undefined;
+  /** "any" ranks partial matches by coverage; absent keeps the strict query. */
+  match?: "all" | "any" | undefined;
 };
 
 /**
  * The one assembler for a case-law corpus-index query. Both read paths (the
  * public search handler and the shared search provider) go through it, so
  * there is a single answer to what the engine sees and a single escaping rule
- * to audit. Null when the free text carries no searchable term: callers return
- * an empty page rather than querying the engine.
+ * to audit. Null when the free text carries no searchable term or the id-set
+ * filter is empty: callers return an empty page rather than querying the
+ * engine.
  */
 export const caseLawCorpusQuery = ({
   text,
@@ -1041,7 +1103,12 @@ export const caseLawCorpusQuery = ({
   functionWords,
   legalAlternatives,
   legacyStemming,
+  match,
 }: CaseLawCorpusQueryOptions): string | null => {
+  // An empty id set admits nothing: the page is empty without asking.
+  if (filters.decisionIds?.length === 0) {
+    return null;
+  }
   const freeText = corpusFreeTextClause(text, {
     jurisdiction,
     queryVariant,
@@ -1052,17 +1119,30 @@ export const caseLawCorpusQuery = ({
     functionWords,
     legalAlternatives,
     legacyStemming,
+    match,
   });
   if (freeText === null) {
     return null;
   }
 
-  const clauses: string[] = [freeText];
+  return [freeText, ...caseLawCorpusFilterClauses(filters)].join(" AND ");
+};
+
+/**
+ * The request's filters as engine clauses, without the words: what scopes a
+ * case-law query. The words and the scope are separate so a ranking can put
+ * the scope where it does not score (`corpus-ranked-decision-query.ts`); the
+ * query string above joins both, as it always has.
+ */
+export const caseLawCorpusFilterClauses = (
+  filters: CaseLawCorpusFilters,
+): string[] => {
+  const clauses: string[] = [];
   if (filters.jurisdiction) {
     clauses.push(`jurisdiction:${quoteCorpusValue(filters.jurisdiction)}`);
   }
   if (filters.documentType) {
-    clauses.push(`document_type:${quoteCorpusValue(filters.documentType)}`);
+    clauses.push(corpusDecisionTypeClause(filters.documentType));
   }
   if (filters.source) {
     clauses.push(`source:${quoteCorpusValue(filters.source)}`);
@@ -1094,7 +1174,12 @@ export const caseLawCorpusQuery = ({
       `decision_date:[${filters.dateFrom ?? "*"} TO ${filters.dateTo ?? "*"}]`,
     );
   }
-  return clauses.join(" AND ");
+  if (filters.decisionIds !== undefined) {
+    clauses.push(
+      `${DECISION_ID_FIELD}: IN [${filters.decisionIds.map(quoteCorpusValue).join(" ")}]`,
+    );
+  }
+  return clauses;
 };
 
 /**

@@ -1,7 +1,9 @@
 #!/usr/bin/env bun
 // A signed-in local stack in one blocking command, for agents and scripts.
 //
-//   bun run agent:up       start (or reuse) this checkout's seeded stack
+//   bun run agent:up       start (or reuse) this checkout's seeded stack;
+//                          `-- --local-runner` adds a stand-in computer
+//                          (agent-local-runner.ts)
 //   bun run agent:status   print the live URLs and credentials paths
 //   bun run agent:down     stop the stack this checkout started
 //   bun run agent:reset    recreate a worktree stack from the seed alone
@@ -16,7 +18,7 @@
 
 import { panic, Result } from "better-result";
 import { spawn } from "node:child_process";
-import { createHash, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import {
   closeSync,
   existsSync,
@@ -34,6 +36,7 @@ import * as v from "valibot";
 
 import { MCP_DEFAULT_RESOURCE_SCOPES } from "@stll/api-contract";
 import { roles } from "@stll/permissions";
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
 import {
@@ -44,6 +47,14 @@ import {
   parseSealStatus,
   verifyAttachment,
 } from "./agent-evidence";
+import {
+  forgetLocalRunner,
+  LOCAL_RUNNER_FLAG,
+  printLocalRunner,
+  runningLocalRunner,
+  startLocalRunner,
+  stopLocalRunner,
+} from "./agent-local-runner";
 import { childExitStatus } from "./child-exit-status";
 import {
   DEV_SESSION_ID_ENV,
@@ -56,10 +67,12 @@ import {
 import { buildStackScriptStep } from "./dev-runner";
 import {
   DEV_STATE_DIR,
+  type DevRuntime,
   devStatePath,
+  isPidAlive,
   readDevRuntime,
   SEAL_FILE,
-  type DevRuntime,
+  stackShutdownReason,
 } from "./dev-runtime";
 
 const RUNNER_SCRIPT = "packages/scripts/src/dev-runner.ts";
@@ -366,7 +379,7 @@ const readStoredAgentKey = (root: string) => {
   return isStoredAgentKey(parsed) ? parsed : null;
 };
 
-const readSessionCookie = (root: string) => {
+export const readSessionCookie = (root: string) => {
   const parsed: unknown = JSON.parse(
     readFileSync(path.join(root, STORAGE_STATE_PATH), "utf-8"),
   );
@@ -502,6 +515,10 @@ const printStatus = (root: string, runtime: DevRuntime) => {
   console.log(`storage state: ${path.join(root, STORAGE_STATE_PATH)}`);
   console.log(`env file:      ${devStatePath(root, AGENT_ENV_FILE)}`);
   console.log(`runner log:    ${devStatePath(root, RUNNER_LOG_FILE)}`);
+  const localRunner = runningLocalRunner(root);
+  if (localRunner !== null) {
+    printLocalRunner(root, localRunner);
+  }
 };
 
 const up = async (root: string, args: readonly string[]) => {
@@ -514,6 +531,19 @@ const up = async (root: string, args: readonly string[]) => {
     fail(
       "Web source generation failed; fix the generator before starting the stack",
     );
+  }
+  // The runner stops itself when its owner exits; this covers a runner that
+  // could not (killed, or a runtime file left by a previous boot).
+  const previous = readDevRuntime(root);
+  if (
+    previous !== null &&
+    stackShutdownReason({
+      checkoutExists: true,
+      ownerAlive:
+        previous.ownerPid === null ? null : isPidAlive(previous.ownerPid),
+    }) === "owner-exited"
+  ) {
+    await down(root);
   }
   const reused = await liveRuntime(root);
   const starting = readStartingRunner(root);
@@ -549,9 +579,23 @@ const up = async (root: string, args: readonly string[]) => {
   );
   console.log(reused === null ? "Stack ready." : "Reusing the running stack.");
   printStatus(root, runtime);
+  // Also with one running: it is reused, and still has to be ready.
+  if (args.includes(LOCAL_RUNNER_FLAG)) {
+    const started = await startLocalRunner({
+      root,
+      apiUrl,
+      webUrl: runtime.webUrl ?? fail("The running stack has no web server"),
+      cookie: readSessionCookie(root),
+    });
+    if (started.isErr()) {
+      fail(started.error);
+    }
+  }
 };
 
 export const down = async (root: string) => {
+  // Its runs answer through the API, so it stops before the stack.
+  await stopLocalRunner(root);
   const runtime = readDevRuntime(root);
   const starting = readStartingRunner(root);
   // A runner still starting has no runtime file yet, only its starting pid.
@@ -630,7 +674,7 @@ const runStackScript = (
   });
   const result = Bun.spawnSync(step.cmd, {
     cwd: step.cwd,
-    env: step.env ?? process.env,
+    env: step.env,
     stderr: "pipe",
     stdout: "pipe",
   });
@@ -641,13 +685,17 @@ const runStackScript = (
   return result.stdout.toString();
 };
 
-const checkSeal = (root: string, runtime: DevRuntime) =>
-  parseSealStatus(
-    runStackScript(root, runtime, {
-      args: ["scripts/seed-seal.ts", "check", devStatePath(root, SEAL_FILE)],
-      label: "Checking the seal",
-    }),
-  ) ?? fail("The seal check printed no status");
+const checkSeal = (root: string, runtime: DevRuntime) => {
+  const output = runStackScript(root, runtime, {
+    args: ["scripts/seed-seal.ts", "check", devStatePath(root, SEAL_FILE)],
+    label: "Checking the seal",
+  });
+  const status =
+    parseSealStatus(output) ?? fail("The seal check printed no status");
+  // Preserve the classified write report on both sides of each capture.
+  console.log(output.trim());
+  return status;
+};
 
 const EVIDENCE_DIR = "evidence";
 const MANIFEST_PATTERN = /^manifest-\d{20}-\d+\.json$/u;
@@ -724,8 +772,8 @@ const drive = async (root: string, args: readonly string[]) => {
   process.exit(exitCode);
 };
 
-const sha256File = (filePath: string) =>
-  createHash("sha256").update(readFileSync(filePath)).digest("hex");
+export const agentCaptureFileSha256 = (filePath: string) =>
+  hashSha256Hex(readFileSync(filePath));
 
 // The only way screenshots reach a pull request: each must be an unaltered
 // agent:drive capture of a stack that held only seeded content.
@@ -754,7 +802,7 @@ const attach = (root: string, args: readonly string[]) => {
     const verdict = verifyAttachment({
       evidenceDir,
       filePath,
-      fileSha256: sha256File(filePath),
+      fileSha256: agentCaptureFileSha256(filePath),
       manifest,
     });
     switch (verdict.type) {
@@ -808,6 +856,7 @@ const reset = async (root: string, args: readonly string[]) => {
   });
   await down(root);
   rmSync(devStatePath(root, AGENT_KEY_FILE), { force: true });
+  forgetLocalRunner(root);
   await up(root, args);
 };
 
@@ -861,7 +910,7 @@ const main = async () => {
       const generated = await passThrough({
         args: ["--runtime-only"],
         env: {},
-        script: path.join(root, "packages/cli/src/codegen.ts"),
+        script: path.join(root, "packages/cli/scripts/codegen.ts"),
       });
       if (generated !== 0) {
         process.exitCode = generated;

@@ -1,20 +1,110 @@
-import { eq } from "drizzle-orm";
+import { and, asc, eq, gt, inArray, isNull, ne, or, sql } from "drizzle-orm";
+import type { PgSelect } from "drizzle-orm/pg-core";
+import * as v from "valibot";
 
-import { user } from "@/api/db/auth-schema";
+import { account, member, user } from "@/api/db/auth-schema";
 import { rootDb } from "@/api/db/root";
 import type { Transaction } from "@/api/db/root";
 import type { SafeId } from "@/api/lib/branded-types";
+import { withAggregateRowQuery } from "@/api/lib/db/aggregate-lock";
+import { abortTransaction } from "@/api/lib/db/transaction-abort";
+import {
+  ACCOUNT_EMAIL_UNDELIVERABLE_REASONS,
+  type AccountEmailUndeliverableReason,
+} from "@/api/lib/email/deliverability-contract";
+import type { NormalizedEmail } from "@/api/lib/email/normalized-email";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 // Account-level access to the auth `user` row.
 //
 // Every query here is keyed by the one account it acts for: the caller's own
-// session user id, or the email an OTP or sign-in request names before any
-// organization context exists. None reads another account's data, so the
-// organization-membership scope the user-query lint rule asks for does not
-// apply; this module is listed in that rule's `allowedFiles` for that reason.
-// Keep it to such single-account reads and writes.
+// session user id, the email an OTP or sign-in request names before any
+// organization context exists, or the address a mail provider's delivery
+// event names. Membership reads are likewise filtered by the
+// caller's user id and return no organization row data. This module is listed
+// in the user-query lint rule's `allowedFiles` for these account-scoped reads.
 
 const DELETED_ACCOUNT_DISPLAY_NAME = "Deleted account";
+
+const ACCOUNT_PROFILE_PROJECTION = {
+  id: user.id,
+  name: user.name,
+  email: user.email,
+  emailVerified: user.emailVerified,
+  image: user.image,
+  timezoneId: user.timezoneId,
+  preferredName: user.preferredName,
+  wordEditShortcut: user.wordEditShortcut,
+  userShortcuts: user.userShortcuts,
+  guideProgress: user.guideProgress,
+  detectedCountry: user.detectedCountry,
+  createdAt: user.createdAt,
+  updatedAt: user.updatedAt,
+} as const;
+
+/** Reads only one account's profile through the account-row owner. */
+export const readAccountProfileForExport = async (
+  database: Pick<typeof rootDb, "select">,
+  userId: SafeId<"user">,
+) => {
+  const rows = await database
+    .select(ACCOUNT_PROFILE_PROJECTION)
+    .from(user)
+    .where(eq(user.id, userId))
+    .limit(1);
+  return rows.at(0);
+};
+
+export const ACCOUNT_MEMBERSHIP_PAGE_SIZE = 100;
+
+const ACCOUNT_MEMBERSHIP_PROJECTION = {
+  id: member.id,
+  organizationId: member.organizationId,
+  role: member.role,
+  createdAt: member.createdAt,
+};
+
+type AccountMembershipPageOptions = {
+  userId: SafeId<"user">;
+  after?: string;
+};
+
+const accountMembershipPageQuery = <T extends PgSelect>(
+  query: T,
+  { userId, after }: AccountMembershipPageOptions,
+) =>
+  query
+    .where(
+      and(
+        eq(member.userId, userId),
+        after === undefined ? undefined : gt(member.id, after),
+      ),
+    )
+    .orderBy(asc(member.id))
+    .limit(ACCOUNT_MEMBERSHIP_PAGE_SIZE);
+
+type ListAccountMembershipPageOptions = AccountMembershipPageOptions & {
+  database: Pick<typeof rootDb, "select">;
+};
+
+/** Reads this account's memberships on the caller's required connection. */
+export const listAccountMembershipPage = async ({
+  database,
+  ...scope
+}: ListAccountMembershipPageOptions) =>
+  await accountMembershipPageQuery(
+    database.select(ACCOUNT_MEMBERSHIP_PROJECTION).from(member).$dynamic(),
+    scope,
+  );
+
+/** Committed account updates fan out to the account's actual memberships. */
+export const readAccountMembershipPage = async (
+  scope: AccountMembershipPageOptions,
+) =>
+  await accountMembershipPageQuery(
+    rootDb.select(ACCOUNT_MEMBERSHIP_PROJECTION).from(member).$dynamic(),
+    scope,
+  );
 
 /** The caller's own email and two-factor enrollment, by their user id. */
 export const readAccountEmailAndTwoFactor = async (
@@ -39,6 +129,24 @@ export const readAccountEmail = async (
     .limit(1);
   return rows.at(0)?.email;
 };
+
+/** Whether the user still has a linked account at `providerId`. */
+export const hasAccountForProvider = async (
+  userId: SafeId<"user">,
+  providerId: string,
+): Promise<boolean> => {
+  const rows = await rootDb
+    .select({ id: account.id })
+    .from(account)
+    .where(and(eq(account.userId, userId), eq(account.providerId, providerId)))
+    .limit(1);
+  return rows.length > 0;
+};
+
+/** Whether the caller can sign in with a password of their own. */
+export const hasCredentialAccount = async (
+  userId: SafeId<"user">,
+): Promise<boolean> => await hasAccountForProvider(userId, "credential");
 
 /** The id of the account registered under `email`, if one exists. */
 export const findAccountIdByEmail = async (
@@ -71,11 +179,56 @@ export const lockAccountRow = async (
 ): Promise<void> => {
   // Drain membership-locked writers before erasure without blocking their
   // foreign-key KEY SHARE locks. The account's key is retained on deletion.
-  await tx
-    .select({ id: user.id })
-    .from(user)
-    .where(eq(user.id, userId))
-    .for("no key update");
+  await withAggregateRowQuery({
+    tx,
+    aggregate: "account",
+    id: userId,
+    mode: "no key update",
+    select: (lockedTx) => lockedTx.select({ id: user.id }).from(user),
+  });
+};
+
+/**
+ * Shares the account row while issuing a durable credential. Access recovery
+ * takes {@link lockAccountRow}, which conflicts with this mode, so issuance and
+ * recovery serialize while concurrent issuers do not block each other.
+ */
+export const shareAccountRow = async (
+  tx: Transaction,
+  userId: SafeId<"user">,
+): Promise<void> => {
+  await withAggregateRowQuery({
+    tx,
+    aggregate: "account",
+    id: userId,
+    mode: "share",
+    select: (lockedTx) => lockedTx.select({ id: user.id }).from(user),
+  });
+};
+
+/** Share the erasure lock before starting or completing account-owned work. */
+export const lockActiveAccountRow = async (
+  tx: Transaction,
+  userId: SafeId<"user">,
+): Promise<void> => {
+  const result = await withAggregateRowQuery({
+    tx,
+    aggregate: "account",
+    id: userId,
+    mode: "no key update",
+    select: (lockedTx) =>
+      lockedTx.select({ id: user.id, deletedAt: user.deletedAt }).from(user),
+  });
+  const row = result.rows.at(0);
+  if (row === undefined || row.deletedAt !== null) {
+    abortTransaction(
+      new HandlerError({
+        status: 404,
+        code: "account_export_account_missing",
+        message: "Account not found.",
+      }),
+    );
+  }
 };
 
 /**
@@ -98,4 +251,77 @@ export const anonymizeDeletedAccountRow = async (
       deletedAt: new Date(),
     })
     .where(eq(user.id, userId));
+};
+
+type MarkAccountEmailsUndeliverableOptions = {
+  database: Pick<typeof rootDb, "update">;
+  emails: readonly NormalizedEmail[];
+  reason: AccountEmailUndeliverableReason;
+  at: Date;
+};
+
+/**
+ * Records the mail provider's refusal of addresses on the accounts that use
+ * them, in one statement. The first refusal's reason and time stand while an
+ * account keeps that address; an address no account uses changes nothing.
+ * Returns how many accounts were marked.
+ */
+export const markAccountEmailsUndeliverable = async ({
+  database,
+  emails,
+  reason,
+  at,
+}: MarkAccountEmailsUndeliverableOptions): Promise<number> => {
+  if (emails.length === 0) {
+    return 0;
+  }
+  const marked = await database
+    .update(user)
+    .set({
+      emailUndeliverableAddress: sql`${user.email}`,
+      emailUndeliverableReason: reason,
+      emailUndeliverableAt: at,
+    })
+    .where(
+      and(
+        inArray(user.email, [...emails]),
+        or(
+          isNull(user.emailUndeliverableAddress),
+          ne(user.emailUndeliverableAddress, user.email),
+        ),
+      ),
+    )
+    .returning({ id: user.id });
+  return marked.length;
+};
+
+const undeliverableReasonSchema = v.picklist(
+  ACCOUNT_EMAIL_UNDELIVERABLE_REASONS,
+);
+
+/**
+ * Why mail to the account at this address cannot be delivered, or undefined
+ * when it can. A refusal recorded for an earlier address no longer applies.
+ */
+export const readAccountEmailUndeliverable = async (
+  database: Pick<typeof rootDb, "select">,
+  email: NormalizedEmail,
+): Promise<
+  { userId: string; reason: AccountEmailUndeliverableReason } | undefined
+> => {
+  const rows = await database
+    .select({ id: user.id, reason: user.emailUndeliverableReason })
+    .from(user)
+    .where(
+      and(eq(user.email, email), eq(user.emailUndeliverableAddress, email)),
+    )
+    .limit(1);
+  const row = rows.at(0);
+  if (row === undefined) {
+    return undefined;
+  }
+  return {
+    userId: row.id,
+    reason: v.parse(undeliverableReasonSchema, row.reason),
+  };
 };

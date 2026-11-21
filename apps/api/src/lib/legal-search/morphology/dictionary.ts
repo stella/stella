@@ -15,7 +15,8 @@
 
 import { panic } from "better-result";
 
-import { foldToAscii } from "@stll/text-normalize";
+import { nextMacrotask } from "@stll/concurrency/event-loop";
+import { foldToAscii, normalizeUnicode } from "@stll/text-normalize";
 
 import type { MorphologyLanguage } from "@/api/lib/legal-search/morphology/stem";
 
@@ -114,8 +115,7 @@ export const isMorphologyDictionaryContentHash = (value: string): boolean =>
  * unexpanded query, so they page against each other consistently.
  */
 export type ExpansionDictionaryIdentity =
-  | { contentHash: string; type: "dictionary" }
-  | { type: "none" };
+  { contentHash: string; type: "dictionary" } | { type: "none" };
 
 /**
  * Serialized `none`. A sha256 hex string is 64 characters, so this can never
@@ -225,7 +225,7 @@ export type ExpansionBucket = {
  * silent recall loss rather than a safety property.
  */
 export const isSurfaceForm = (value: string): boolean =>
-  SURFACE_FORM_PATTERN.test(value.normalize("NFC"));
+  SURFACE_FORM_PATTERN.test(normalizeUnicode(value, "NFC"));
 
 /**
  * `<stem>\t<form,form,...>\t<documentFrequency>` per line. Tab-separated
@@ -379,9 +379,7 @@ export const parseExpansionDictionaryOffLoop = async (
     if (end >= lines.length) {
       return;
     }
-    await new Promise<void>((resolve) => {
-      setImmediate(resolve);
-    });
+    await nextMacrotask();
     await parseFrom(end);
   };
 

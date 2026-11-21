@@ -1,13 +1,16 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { describe, expect, mock, test } from "bun:test";
 
 import { RUNTIME_MODE } from "@stll/runtime-mode";
+import { createTestState } from "@stll/test-state";
 
+import { ORGANIZATION_AI_INSTRUCTIONS_MAX_LENGTH } from "@/api/db/organization-settings-constants";
 import { env } from "@/api/env";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { toSafeId } from "@/api/lib/branded-types";
+import { SEARCH_BOE_LEGISLATION_PROJECTION } from "@/api/lib/chat/projections";
+import { parseStrippingUndeclaredKeys } from "@/api/lib/chat/tool-output-degrade";
 import type { MemberRole } from "@/api/lib/member-roles";
-import type { McpRequestContext } from "@/api/mcp/context";
 import { RESEARCH_ADMIN_TOOL_HANDLERS } from "@/api/mcp/research-admin-tools";
 import { DEFAULT_MCP_CLI_ANNOTATIONS } from "@/api/mcp/static-cli-metadata";
 import {
@@ -18,37 +21,45 @@ import type { McpToolDefinition, McpToolResponse } from "@/api/mcp/tool-types";
 import { isMcpEgressPlan } from "@/api/mcp/tool-types";
 import { serializeToolResult } from "@/api/mcp/tool-utils";
 import { listMcpTools } from "@/api/mcp/tools";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
+import { authorizedMcpContextForTest } from "@/api/tests/helpers/authorized-mcp-context";
+import { repositoryCapabilityCatalog } from "@/api/tests/helpers/repository-capability-catalog";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
+
+const testState = createTestState({ file: import.meta.path, config: env });
 
 const WORKSPACE_ID = "00000000-0000-4000-8000-000000000001";
 
 // A DB accessor that fails the test if any handler reaches it. Every assertion
 // here exercises authorization or input validation, which must reject before
 // the tool touches the database.
-const throwingScopedDb = asTestRaw<McpRequestContext["scopedDb"]>(() => {
-  throw new Error("database must not be reached in a rejection path");
-});
+const throwingScopedDb = asTestRaw<AuthorizedMcpRequestContext["scopedDb"]>(
+  () => {
+    throw new Error("database must not be reached in a rejection path");
+  },
+);
 
 const createContext = (
   memberRole: MemberRole = "owner",
-): McpRequestContext => ({
-  accessibleWorkspaceIds: [],
-  accessibleWorkspaceIdSet: new Set(),
-  accessibleWorkspaceStatusById: new Map(),
-  accessibleWorkspaces: [],
-  grantedScopes: [],
-  memberRole,
-  organizationId: toSafeId<"organization">("org_1"),
-  recordAuditEvent: async () => {},
-  safeDb: toSafeDbMock(throwingScopedDb),
-  scopedDb: throwingScopedDb,
-  // The MCP transport holds a permit for every request (`context.ts`).
-  thirdPartyOutboundPermit: grantThirdPartyOutboundPermit(),
-  userId: toSafeId<"user">("user_1"),
-  userEmail: "standard@example.test",
-});
+): AuthorizedMcpRequestContext =>
+  authorizedMcpContextForTest({
+    accessibleWorkspaceIds: [],
+    accessibleWorkspaceIdSet: new Set(),
+    accessibleWorkspaceStatusById: new Map(),
+    accessibleWorkspaces: [],
+    grantedScopes: [],
+    memberRole,
+    organizationId: toSafeId<"organization">("org_1"),
+    recordAuditEvent: async () => {},
+    safeDb: toSafeDbMock(throwingScopedDb),
+    scopedDb: throwingScopedDb,
+    // The MCP transport holds a permit for every request (`context.ts`).
+    thirdPartyOutboundPermit: grantThirdPartyOutboundPermit(),
+    userId: toSafeId<"user">("user_1"),
+    userEmail: "standard@example.test",
+  });
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
@@ -82,12 +93,6 @@ const errorMessage = (result: McpToolResponse): string => {
   }
   return raw;
 };
-
-const runManageOrg = async (args: Record<string, unknown>) =>
-  await RESEARCH_ADMIN_TOOL_HANDLERS.manage_organization({
-    args,
-    context: createContext("owner"),
-  });
 
 describe("list_audit_log", () => {
   test("fails closed on the anonymized surface", () => {
@@ -160,14 +165,14 @@ describe("search_boe_legislation feature gating", () => {
     run: () => Promise<void>,
   ) => {
     const previousFeaturePublicLaw = env.FEATURE_PUBLIC_LAW;
-    env.FEATURE_PUBLIC_LAW = featurePublicLaw;
+    testState.setConfig("FEATURE_PUBLIC_LAW", featurePublicLaw);
     const restoreRuntimeMode = setRuntimeModeForTesting({
       mode: localDevOpen ? RUNTIME_MODE.open : RUNTIME_MODE.strict,
     });
     try {
       await run();
     } finally {
-      env.FEATURE_PUBLIC_LAW = previousFeaturePublicLaw;
+      testState.setConfig("FEATURE_PUBLIC_LAW", previousFeaturePublicLaw);
       restoreRuntimeMode();
     }
   };
@@ -248,138 +253,219 @@ describe("search_boe_legislation feature gating", () => {
       "Provide law_id to read a law, or at least one search filter",
     );
   });
+
+  test("declares every field of a search hit in the output contract", async () => {
+    const searchConsolidatedLegislation = mock(async () => ({
+      data: [
+        {
+          identificador: "BOE-A-2000-1",
+          titulo: "Ley de ejemplo",
+          fecha_actualizacion: "20000102T000000Z",
+          fecha_disposicion: "20000101",
+          fecha_publicacion: "20000102",
+          fecha_vigencia: "20000103",
+          numero_oficial: "1/2000",
+          diario: "Boletín Oficial del Estado",
+          diario_numero: "1",
+          vigencia_agotada: "N",
+          ambito: { codigo: "1", texto: "Estatal" },
+          departamento: { codigo: "1", texto: "Departamento" },
+          rango: { codigo: "1", texto: "Ley" },
+          estado_consolidacion: { codigo: "3", texto: "Finalizado" },
+          url_eli: "https://www.boe.es/eli/es/l/2000/01/01/1",
+          url_html_consolidada:
+            "https://www.boe.es/buscar/act.php?id=BOE-A-2000-1",
+        },
+      ],
+      status: { code: "200", text: "ok" },
+    }));
+    const result = await RESEARCH_ADMIN_TOOL_HANDLERS.search_boe_legislation({
+      args: { query: "ejemplo" },
+      context: {
+        ...createContext("owner"),
+        testDependencies: { searchConsolidatedLegislation },
+      },
+    });
+    if (isMcpEgressPlan(result) || result.status !== "success") {
+      throw new Error("expected a successful search");
+    }
+    const parsed = parseStrippingUndeclaredKeys(
+      SEARCH_BOE_LEGISLATION_PROJECTION,
+      result.data,
+    );
+    expect(Result.isOk(parsed) && parsed.value.undeclaredPaths).toEqual([]);
+  });
 });
 
-describe("manage_organization per-action validation", () => {
-  test("requires user_id for a member action", async () => {
-    expect(
-      errorMessage(
-        await runManageOrg({ action: "add_member", matter_id: WORKSPACE_ID }),
-      ),
-    ).toBe("user_id is required for add_member and remove_member");
-  });
-
-  test("rejects org-settings fields on a member action", async () => {
-    const message = errorMessage(
-      await runManageOrg({
-        action: "remove_member",
-        matter_id: WORKSPACE_ID,
-        user_id: "user_2",
-        prompt_caching_enabled: false,
-        document_processing_mode: "searchable-text",
-      }),
+describe("matter membership and organization settings", () => {
+  test("each operation exposes only its own inputs and accurate annotations", () => {
+    const expected = {
+      add_matter_member: {
+        title: "Add matter member",
+        destructiveHint: false,
+        idempotentHint: false,
+      },
+      remove_matter_member: {
+        title: "Remove matter member",
+        destructiveHint: true,
+        idempotentHint: false,
+      },
+      update_organization_settings: {
+        title: "Update organization settings",
+        destructiveHint: false,
+        idempotentHint: true,
+      },
+    } as const;
+    for (const [name, annotations] of Object.entries(expected)) {
+      const definition = DEFAULT_MCP_TOOL_DEFINITIONS.find(
+        (tool) => tool.name === name,
+      );
+      expect(definition?.annotations).toEqual({
+        ...annotations,
+        readOnlyHint: false,
+        openWorldHint: false,
+      });
+      expect(definition?.inputSchema.properties).not.toHaveProperty("action");
+      expect(definition?.inputSchema["required"] ?? []).toEqual(
+        name === "update_organization_settings" ? [] : ["matter_id", "user_id"],
+      );
+    }
+    expect(DEFAULT_MCP_TOOL_DEFINITIONS.map((tool) => tool.name)).not.toContain(
+      "manage_organization",
     );
-    expect(message).toBe("Settings fields apply only to update_org_settings");
+    expect(DEFAULT_MCP_CLI_ANNOTATIONS.remove_matter_member.command).toEqual([
+      "matter",
+      "remove-member",
+    ]);
   });
 
-  test("rejects an empty update_org_settings action", async () => {
+  test("member operations require a user and reject settings and discriminator inputs", async () => {
+    for (const name of ["add_matter_member", "remove_matter_member"] as const) {
+      const handler = RESEARCH_ADMIN_TOOL_HANDLERS[name];
+      expect(
+        errorText(
+          await handler({
+            args: { matter_id: WORKSPACE_ID },
+            context: createContext(),
+          }),
+        ),
+      ).toContain("user_id");
+      for (const extra of [
+        { prompt_caching_enabled: true },
+        { action: "add_member" },
+      ]) {
+        expect(
+          errorText(
+            await handler({
+              args: { matter_id: WORKSPACE_ID, user_id: "user_2", ...extra },
+              context: createContext(),
+            }),
+          ),
+        ).toContain("validation_error");
+      }
+    }
+  });
+
+  test("only member removal accepts a replacement and confirmation", async () => {
+    const args = {
+      matter_id: WORKSPACE_ID,
+      user_id: "user_2",
+      reassign_to: "user_3",
+      confirm: true,
+    };
     expect(
-      errorMessage(await runManageOrg({ action: "update_org_settings" })),
-    ).toBe("Provide at least one setting to change for update_org_settings");
+      errorText(
+        await RESEARCH_ADMIN_TOOL_HANDLERS.add_matter_member({
+          args,
+          context: createContext(),
+        }),
+      ),
+    ).toContain("validation_error");
+    expect(
+      errorText(
+        await RESEARCH_ADMIN_TOOL_HANDLERS.remove_matter_member({
+          args,
+          context: createContext(),
+        }),
+      ),
+    ).toContain("Matter not found or not accessible");
+    const definitions: readonly McpToolDefinition[] =
+      DEFAULT_MCP_TOOL_DEFINITIONS;
+    expect(
+      definitions.find((tool) => tool.name === "remove_matter_member")
+        ?.destructiveBehavior,
+    ).toEqual({ type: "always" });
   });
 
-  test("requires the matter pattern and padding to be sent together", async () => {
+  // Organization AI instructions stay off the curated tool, which keeps the
+  // connect-time tool list within budget; agents reach them on demand through
+  // the organization-settings.update capability instead.
+  test("AI instructions are written through the settings capability, not the curated tool", async () => {
+    expect(
+      errorText(
+        await RESEARCH_ADMIN_TOOL_HANDLERS.update_organization_settings({
+          args: { ai_instructions: "Use concise language." },
+          context: createContext(),
+        }),
+      ),
+    ).toContain("validation_error");
+    const entry = repositoryCapabilityCatalog.find(
+      (candidate) =>
+        typeof candidate === "object" &&
+        candidate !== null &&
+        "id" in candidate &&
+        candidate.id === "organization-settings.update",
+    );
+    expect(entry).toMatchObject({
+      inputSchema: {
+        body: {
+          properties: {
+            aiInstructions: {
+              type: "string",
+              maxLength: ORGANIZATION_AI_INSTRUCTIONS_MAX_LENGTH,
+            },
+          },
+        },
+      },
+    });
+  });
+
+  test("settings reject empty updates, unpaired numbering, and member fields", async () => {
+    const handler = RESEARCH_ADMIN_TOOL_HANDLERS.update_organization_settings;
+    expect(
+      errorMessage(await handler({ args: {}, context: createContext() })),
+    ).toBe("Provide at least one setting to change");
     expect(
       errorMessage(
-        await runManageOrg({
-          action: "update_org_settings",
-          matter_number_pattern: "{YYYY}-{SEQ}",
+        await handler({
+          args: { matter_number_pattern: "{YYYY}-{SEQ}" },
+          context: createContext(),
         }),
       ),
     ).toBe(
       "matter_number_pattern and matter_number_padding must be sent together",
     );
-  });
-
-  test("rejects an unknown action shape", async () => {
-    expect(
-      errorText(await runManageOrg({ action: "promote_admin" })),
-    ).toContain("action");
-  });
-
-  test("exposes the searchable-text processing modes", () => {
-    const definition = DEFAULT_MCP_TOOL_DEFINITIONS.find(
-      (tool) => tool.name === "manage_organization",
-    );
-    const property =
-      definition?.inputSchema.properties?.["document_processing_mode"];
-
-    expect(property).toMatchObject({
-      type: "string",
-      enum: ["off", "searchable-text"],
-    });
-  });
-
-  test("rejects an unknown document processing mode", async () => {
     expect(
       errorText(
-        await runManageOrg({
-          action: "update_org_settings",
-          document_processing_mode: "structured-document",
+        await handler({
+          args: { prompt_caching_enabled: true, matter_id: WORKSPACE_ID },
+          context: createContext(),
+        }),
+      ),
+    ).toContain("matter_id");
+    const definition = DEFAULT_MCP_TOOL_DEFINITIONS.find(
+      (tool) => tool.name === "update_organization_settings",
+    );
+    expect(
+      definition?.inputSchema.properties?.["document_processing_mode"],
+    ).toMatchObject({ type: "string", enum: ["off", "searchable-text"] });
+    expect(
+      errorText(
+        await handler({
+          args: { document_processing_mode: "structured-document" },
+          context: createContext(),
         }),
       ),
     ).toContain("document_processing_mode");
   });
-});
-
-describe("manage_organization destructive behavior", () => {
-  test("binds remove_member confirmation to the action discriminator", () => {
-    const definitions: readonly McpToolDefinition[] =
-      DEFAULT_MCP_TOOL_DEFINITIONS;
-    const def = definitions.find((tool) => tool.name === "manage_organization");
-    expect(def).toBeDefined();
-    expect(def?.annotations.destructiveHint).toBe(true);
-    expect(def?.destructiveBehavior).toEqual({
-      type: "input-discriminator",
-      property: "action",
-      destructiveValues: ["remove_member"],
-    });
-  });
-
-  test("remove_member handler proceeds to normal resolution", async () => {
-    const text = errorText(
-      await runManageOrg({
-        action: "remove_member",
-        matter_id: WORKSPACE_ID,
-        user_id: "user_2",
-      }),
-    );
-    expect(text).not.toContain("confirmation_required");
-    expect(text).toContain("Matter not found or not accessible");
-  });
-
-  test("update_org_settings is unaffected by the confirm gate", async () => {
-    // A non-remove action needs no confirm; its own validation fires first.
-    expect(
-      errorMessage(await runManageOrg({ action: "update_org_settings" })),
-    ).toBe("Provide at least one setting to change for update_org_settings");
-  });
-});
-
-test("replacement is accepted only by the member removal action", async () => {
-  const wrongAction = await runManageOrg({
-    action: "add_member",
-    matter_id: WORKSPACE_ID,
-    user_id: "user_2",
-    reassign_to: "user_3",
-  });
-  expect(errorMessage(wrongAction)).toContain(
-    "reassign_to is only supported for remove_member",
-  );
-  const removal = await runManageOrg({
-    action: "remove_member",
-    matter_id: WORKSPACE_ID,
-    user_id: "user_2",
-    reassign_to: "user_3",
-    confirm: true,
-  });
-  expect(errorMessage(removal)).not.toContain("reassign_to");
-});
-
-test("the member removal CLI exposes optional replacement", () => {
-  expect(
-    DEFAULT_MCP_CLI_ANNOTATIONS.manage_organization.discriminator?.subcommands[
-      "remove_member"
-    ]?.include,
-  ).toContain("reassign_to");
 });

@@ -8,6 +8,7 @@ import nodePath from "node:path";
 import { compareCodeUnit } from "@stll/collation";
 import { assertProperty } from "@stll/property-testing";
 
+import { ORGANIZATION_DELETION_FOR_TEST_SQL } from "@/api/tests/helpers/organization-deletion";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
 let client: PGlite;
@@ -52,6 +53,10 @@ const fixture = async () => {
   for (const [index, organizationId] of organizations.entries()) {
     await client.query(
       `INSERT INTO organization (id, name, slug, created_at) VALUES ($1, 'Matter membership', $1, now())`,
+      [organizationId],
+    );
+    await client.query(
+      `INSERT INTO organization_access_states (organization_id, state, origin) VALUES ($1, 'self_managed_keys', 'creation') ON CONFLICT (organization_id) DO NOTHING`,
       [organizationId],
     );
     await client.query(
@@ -101,10 +106,9 @@ const fixture = async () => {
     matterMembers,
     orphans,
     cleanUp: async () => {
-      await client.query(
-        `DELETE FROM organization WHERE id = ANY($1::text[])`,
-        [[...organizations]],
-      );
+      await client.query(ORGANIZATION_DELETION_FOR_TEST_SQL("$1"), [
+        [...organizations].join(","),
+      ]);
       await client.query(`DELETE FROM "user" WHERE id = ANY($1::text[])`, [
         users,
       ]);

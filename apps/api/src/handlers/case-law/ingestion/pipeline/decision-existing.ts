@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { and, eq, isNull, sql } from "drizzle-orm";
 
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -5,7 +6,6 @@ import {
   CASE_LAW_CORPUS_MIRROR_STATUS,
   caseLawDecisions,
 } from "@/api/db/schema";
-import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import type { ExistingDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision-identity";
 import {
   PROCESS_DECISION_RETRY_REASON,
@@ -23,23 +23,25 @@ import type {
 import { unreadOutcomeOf } from "@/api/handlers/case-law/ingestion/pipeline/unread-items";
 import { shouldSkipRefresh } from "@/api/handlers/case-law/ingestion/refresh-policy";
 import type { PlainTextMetadataValue } from "@/api/lib/case-law/plain-text";
-import {
-  corpusCarriesDocument,
-  payloadCarriesDocument,
-} from "@/api/lib/case-law/stored-payload";
+import { replayWrite } from "@/api/lib/case-law/replay-write";
+import { corpusCarriesDocument } from "@/api/lib/case-law/stored-payload";
+import { errorTag } from "@/api/lib/errors/error-tag";
 import { READ_OUTCOME_METADATA_KEY } from "@/api/lib/errors/read-outcome";
+import { payloadCarriesDocument } from "@/api/lib/legal-search/corpus-content-hash";
 import {
   lockActiveCorpusProjectionSourceTx,
   synchronizeLockedCorpusProjectionDesiredStateTx,
 } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import { parsePrimaryReferenceType } from "@/api/lib/legal-search/decision-primary-reference";
 import { partialObservationFromMetadata } from "@/api/lib/legal-search/ingestion-normalization";
+import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { DOCUMENT_DELIVERY } from "@/api/lib/legal-search/ingestion-types";
 import {
   OBSERVATION_DETAIL,
   OBSERVATION_DETAIL_RANK,
   observationDetailOf,
 } from "@/api/lib/legal-search/partial-observation-sql";
+import { logger } from "@/api/lib/observability/logger";
 
 /** What an observation carries, measured against the row it would write. */
 export type ObservationShape = {
@@ -170,14 +172,12 @@ const unchangedReadOutcomeMetadata = (
 ) => {
   const unreadOutcome = unreadOutcomeOf(result);
   if (unreadOutcome !== undefined) {
-    return { metadata: recordReadOutcome(unreadOutcome) };
+    return recordReadOutcome(unreadOutcome);
   }
-  if (existing.metadata?.[READ_OUTCOME_METADATA_KEY] === undefined) {
-    return {};
+  if (existing.metadata?.[READ_OUTCOME_METADATA_KEY] !== undefined) {
+    return sql`${caseLawDecisions.metadata} - ${READ_OUTCOME_METADATA_KEY}::text`;
   }
-  return {
-    metadata: sql`${caseLawDecisions.metadata} - ${READ_OUTCOME_METADATA_KEY}::text`,
-  };
+  return undefined;
 };
 
 /**
@@ -199,23 +199,24 @@ const advancePartialObservationWatermark = async ({
       entityId: existing.id,
     });
     const unreadOutcome = unreadOutcomeOf(result);
+    const write = replayWrite(caseLawDecisions, {
+      sourceObservedAt: observedAt,
+      sourceObservationOrder: observationOrder,
+      sourceObservationHash: result.rawHash,
+      metadata:
+        unreadOutcome === undefined
+          ? undefined
+          : recordReadOutcome(unreadOutcome),
+      updatedAt: sql`${caseLawDecisions.updatedAt}`,
+    });
     // audit: skip — background case-law observation watermark; public data
     const advanced = (
       await tx
         .update(caseLawDecisions)
-        .set({
-          sourceObservedAt: observedAt,
-          sourceObservationOrder: observationOrder,
-          sourceObservationHash: result.rawHash,
-          ...(unreadOutcome === undefined
-            ? {}
-            : {
-                metadata: recordReadOutcome(unreadOutcome),
-              }),
-          updatedAt: sql`${caseLawDecisions.updatedAt}`,
-        })
+        .set(write.set)
         .where(
           and(
+            write.setWhere,
             eq(caseLawDecisions.id, existing.id),
             storedObservationPrecedes({ order: observationOrder }),
             isNull(caseLawDecisions.redactedAt),
@@ -248,31 +249,37 @@ const advanceUnchangedObservationWatermark = async ({
   result,
   observedAt,
   observationOrder,
-}: WatermarkOptions) =>
+  sourceFingerprintVersion,
+}: WatermarkOptions & { sourceFingerprintVersion: number }) =>
   await scopedDb(async (tx) => {
     const projectionActive = await lockActiveCorpusProjectionSourceTx(tx, {
       family: "case_law",
       entityId: existing.id,
     });
+    const write = replayWrite(caseLawDecisions, {
+      sourceObservedAt: observedAt,
+      sourceObservationOrder: observationOrder,
+      sourceObservationHash: result.rawHash,
+      sourceHash: result.rawHash,
+      sourceHashVersion: sourceFingerprintVersion,
+      metadata: unchangedReadOutcomeMetadata(existing, result),
+      // Drizzle applies the schema's on-update value unless this column is
+      // explicit. A watermark-only replay is not a content modification.
+      updatedAt: sql`${caseLawDecisions.updatedAt}`,
+    });
     // audit: skip — background case-law ingestion ordering metadata; public case-law data, not user actions
     const advanced = (
       await tx
         .update(caseLawDecisions)
-        .set({
-          sourceObservedAt: observedAt,
-          sourceObservationOrder: observationOrder,
-          sourceObservationHash: result.rawHash,
-          ...unchangedReadOutcomeMetadata(existing, result),
-          // Drizzle applies the schema's on-update value unless this column is
-          // explicit. A watermark-only replay is not a content modification.
-          updatedAt: sql`${caseLawDecisions.updatedAt}`,
-        })
+        .set(write.set)
         .where(
           and(
+            write.setWhere,
             eq(caseLawDecisions.id, existing.id),
             storedObservationPrecedes({ order: observationOrder }),
             isNull(caseLawDecisions.redactedAt),
             sql`${caseLawDecisions.sourceHash} IS NOT DISTINCT FROM ${existing.sourceHash}`,
+            eq(caseLawDecisions.sourceHashVersion, existing.sourceHashVersion),
             // The reference the skip compared, so a concurrent correction of
             // it is not overwritten by a watermark that says nothing changed.
             eq(caseLawDecisions.caseNumber, existing.caseNumber),
@@ -360,6 +367,8 @@ type ResolveExistingDecisionPolicyOptions = {
   observedAt: Date;
   observationOrder: bigint;
   refresh: DecisionRefresh;
+  sourceFingerprintVersion: number;
+  sourceFingerprintFromStoredRaw: (key: string) => Promise<string>;
 };
 
 /**
@@ -381,6 +390,8 @@ export const resolveExistingDecisionPolicy = async ({
   observedAt,
   observationOrder,
   refresh,
+  sourceFingerprintVersion,
+  sourceFingerprintFromStoredRaw,
 }: ResolveExistingDecisionPolicyOptions): Promise<AttemptStep | null> => {
   if (
     preservesExistingDetail &&
@@ -414,8 +425,8 @@ export const resolveExistingDecisionPolicy = async ({
     };
   }
 
-  if (
-    existing &&
+  const couldSkip =
+    existing !== undefined &&
     existing.corpusMirrorStatus === CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED &&
     refresh === DECISION_REFRESH.WHEN_SOURCE_CHANGED &&
     // A matching publisher hash cannot settle a row this observation
@@ -432,13 +443,47 @@ export const resolveExistingDecisionPolicy = async ({
       storedPartialObservation.detail !== OBSERVATION_DETAIL.LISTING_ONLY &&
       !corpusCarriesDocument(existing.contentHash)
     ) &&
+    (result.ecli === undefined || existing.ecli === result.ecli) &&
+    (result.sheetNumber === undefined ||
+      existing.sheetNumber === result.sheetNumber) &&
     existing.caseNumber === result.caseNumber &&
     existing.caseNumberType ===
-      parsePrimaryReferenceType(result.caseNumberType) &&
+      parsePrimaryReferenceType(result.caseNumberType);
+  if (!couldSkip) {
+    return null;
+  }
+
+  let comparedSourceHash =
+    existing.sourceHashVersion === sourceFingerprintVersion
+      ? existing.sourceHash
+      : null;
+  if (
+    existing.sourceHashVersion < sourceFingerprintVersion &&
+    existing.sourceRawS3Key !== null
+  ) {
+    const storedRawKey = existing.sourceRawS3Key;
+    const fingerprint = await Result.tryPromise({
+      try: async () => await sourceFingerprintFromStoredRaw(storedRawKey),
+      catch: (cause) => cause,
+    });
+    if (Result.isError(fingerprint)) {
+      logger.warn("case_law.ingestion.stored_source_fingerprint_unavailable", {
+        decisionId: existing.id,
+        "error.type": errorTag(fingerprint.error),
+      });
+      // No comparable hash means the unchanged check cannot succeed, so the
+      // incoming observation continues through the normal changed-write path.
+      comparedSourceHash = null;
+    } else {
+      comparedSourceHash = fingerprint.value;
+    }
+  }
+
+  if (
     shouldSkipRefresh({
       existingMetadata: existing.metadata,
       existingSourceRawContentType: existing.sourceRawContentType,
-      existingSourceHash: existing.sourceHash,
+      existingSourceHash: comparedSourceHash,
       incomingMetadata: result.metadata,
       incomingRawHash: result.rawHash,
       incomingSourceRawContentType: result.sourceRawContentType ?? "text/plain",
@@ -451,6 +496,7 @@ export const resolveExistingDecisionPolicy = async ({
       result,
       observedAt,
       observationOrder,
+      sourceFingerprintVersion,
     });
     if (!watermarkAdvanced) {
       return await watermarkMissOutcome({

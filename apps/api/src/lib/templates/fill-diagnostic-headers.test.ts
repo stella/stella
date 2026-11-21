@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
+import { DECISION_UNDECIDED_REASONS } from "@stll/api-contract/ai-decision-provider";
 import {
   CLAUSE_WARNINGS_HEADER,
   UNDECIDED_CONDITIONS_HEADER,
@@ -22,6 +23,14 @@ const EMPTY_DIAGNOSTICS: FillDiagnostics = {
 };
 
 describe("fillDiagnosticHeaders", () => {
+  test("the download contract rejects an unknown undecided reason", () => {
+    expect(
+      v.safeParse(undecidedConditionsHeaderSchema, [
+        { path: "is_consumer", label: "Consumer contract", reason: "other" },
+      ]).success,
+    ).toBe(false);
+  });
+
   test("a complete fill carries no diagnostic header", () => {
     const headers = fillDiagnosticHeaders({
       diagnostics: EMPTY_DIAGNOSTICS,
@@ -30,36 +39,39 @@ describe("fillDiagnosticHeaders", () => {
     expect([...headers.keys()]).toEqual([]);
   });
 
-  test("undecided AI conditions travel in a header the web contract parses, on both formats", () => {
-    const diagnostics: FillDiagnostics = {
-      ...EMPTY_DIAGNOSTICS,
-      undecidedConditions: [
-        {
-          path: "smlouva.spotřebitel",
-          label: "Spotřebitelská smlouva — ano/ne",
-          state: "undecided",
-          reason: "no-backend",
-        },
-      ],
-    };
-    for (const format of ["docx", "pdf"] as const) {
-      const headers = fillDiagnosticHeaders({ diagnostics, format });
-      const raw = headers.get(UNDECIDED_CONDITIONS_HEADER);
-      expect(raw).not.toBeNull();
-      expect(
-        v.parse(
-          undecidedConditionsHeaderSchema,
-          JSON.parse(decodeURIComponent(raw ?? "")),
-        ),
-      ).toEqual([
-        {
-          path: "smlouva.spotřebitel",
-          label: "Spotřebitelská smlouva — ano/ne",
-          reason: "no-backend",
-        },
-      ]);
-    }
-  });
+  test.each(DECISION_UNDECIDED_REASONS)(
+    "undecided AI conditions (%s) travel in a header the web contract parses, on both formats",
+    (reason) => {
+      const diagnostics: FillDiagnostics = {
+        ...EMPTY_DIAGNOSTICS,
+        undecidedConditions: [
+          {
+            path: "smlouva.spotřebitel",
+            label: "Spotřebitelská smlouva — ano/ne",
+            state: "undecided",
+            reason,
+          },
+        ],
+      };
+      for (const format of ["docx", "pdf"] as const) {
+        const headers = fillDiagnosticHeaders({ diagnostics, format });
+        const raw = headers.get(UNDECIDED_CONDITIONS_HEADER);
+        expect(raw).not.toBeNull();
+        expect(
+          v.parse(
+            undecidedConditionsHeaderSchema,
+            JSON.parse(decodeURIComponent(raw ?? "")),
+          ),
+        ).toEqual([
+          {
+            path: "smlouva.spotřebitel",
+            label: "Spotřebitelská smlouva — ano/ne",
+            reason,
+          },
+        ]);
+      }
+    },
+  );
 
   test("document-only diagnostics stay off a PDF download", () => {
     const diagnostics: FillDiagnostics = {

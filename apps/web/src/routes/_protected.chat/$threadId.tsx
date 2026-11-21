@@ -1,34 +1,38 @@
 import { createFileRoute } from "@tanstack/react-router";
 
-import { Skeleton } from "@stll/ui/skeleton";
-
 import { chatThreadOptions } from "@/features/chat/queries";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { roleOptions } from "@/lib/auth-queries";
 import { toChatThreadId } from "@/lib/chat-thread-ref";
 import { detached } from "@/lib/detached";
+import { loadRouteResource } from "@/lib/errors/route-resource";
 import { mcpConnectorsOptions, skillsOptions } from "@/lib/knowledge/queries";
 import { hasOrganizationManagementAccess } from "@/lib/organization/role-assignment.logic";
+import { pageTitle } from "@/lib/page-title";
 import {
   ensureRouteQueryData,
   prefetchNonCriticalInfiniteQuery,
   prefetchRouteQuery,
 } from "@/lib/react-query";
 import { usageEntitlementOptions } from "@/lib/usage-queries";
-import { ChatThreadPage } from "@/routes/_protected.chat/-components/chat-thread-page";
+import { routePresentation } from "@/routes/-route-presentation";
+import { GlobalChatThreadPage } from "@/routes/_protected.chat/-components/chat-thread.page";
+import { ChatThreadPending } from "@/routes/_protected.chat/-components/chat-thread.pending";
+import { loadThreadOrRedirect } from "@/routes/_protected.chat/-thread-scope-redirect-boundary";
 
 export const Route = createFileRoute("/_protected/chat/$threadId")({
-  component: ThreadRoute,
-  pendingComponent: ChatThreadPending,
-  // Most threads load instantly from cache, so hold the skeleton back for
-  // 1s — it only appears when the load actually stalls, avoiding a flash
-  // between two consecutive chats.
-  pendingMs: 1000,
   loader: async ({ context, params }) => {
     const { queryClient } = context;
     const organizationId = context.user.activeOrganizationId;
     const onPrefetchError = (error: unknown) => {
-      getAnalytics().captureError(error);
+      getAnalytics().captureError(error, {
+        fingerprintKey: "chat.threadId.loader.onPrefetchError:failure",
+        scope: {
+          type: "request",
+          method: "GET",
+          routeTemplate: "/_protected/chat/$threadId",
+        },
+      });
     };
     const prefetchManagerEntitlement = async () => {
       // Parent and child loaders can run together; share the role query
@@ -87,67 +91,36 @@ export const Route = createFileRoute("/_protected/chat/$threadId")({
     // awaited refetch would replace the seed with the server's (possibly
     // empty) set before the page's matter picker ever saw it. The loader
     // only fills a cold cache.
-    if (
-      context.queryClient.getQueryData(threadQueryOptions.queryKey) !==
-      undefined
-    ) {
-      return;
-    }
-    await ensureRouteQueryData(context.queryClient, threadQueryOptions);
+    // A thread that is not saved yet is a valid draft: /chat/new and
+    // "Build with AI" navigate to fresh ids before the first message.
+    // Only malformed or inaccessible ids become not-found; a matter thread
+    // opened at the global URL redirects to its matter-scoped route.
+    await loadRouteResource({
+      ids: [params.threadId],
+      load: async () => {
+        if (
+          context.queryClient.getQueryData(threadQueryOptions.queryKey) !==
+          undefined
+        ) {
+          return;
+        }
+        await loadThreadOrRedirect(
+          async () =>
+            await ensureRouteQueryData(context.queryClient, threadQueryOptions),
+          params.threadId,
+        );
+      },
+    });
   },
+  staticData: {
+    presentation: routePresentation({ type: "entity", entity: "chat" }),
+  },
+  component: GlobalChatThreadPage,
+  pendingComponent: ChatThreadPending,
+  // Most threads load instantly from cache, so hold the pending view back
+  // for 1s: it only appears when the load actually stalls, avoiding a flash
+  // between two consecutive chats. A cold load draws it from the first
+  // frame regardless.
+  pendingMs: 1000,
+  head: () => ({ meta: [{ title: pageTitle("navigation.chat") }] }),
 });
-
-function ThreadRoute() {
-  const threadId = Route.useParams({
-    select: (params) => toChatThreadId(params.threadId),
-  });
-
-  return <ChatThreadPage threadRef={{ scope: "global", threadId }} />;
-}
-
-const CHAT_SKELETON_BUBBLES = [
-  { key: "a", side: "user" },
-  { key: "b", side: "assistant" },
-  { key: "c", side: "user" },
-  { key: "d", side: "assistant" },
-] as const;
-
-// Mirrors the ChatThreadPage shell: top bar, conversation area, and the input
-// surface — so the chat structure is visible immediately instead of a logo.
-function ChatThreadPending() {
-  return (
-    <div className="flex w-full flex-1 flex-col overflow-hidden">
-      <div className="mx-auto flex w-full max-w-5xl items-center justify-between gap-2 px-4 py-2">
-        <div className="flex items-center gap-2">
-          <Skeleton className="h-8 w-24 rounded-md" />
-          <Skeleton className="h-8 w-32 rounded-md" />
-        </div>
-        <div className="flex items-center gap-1">
-          <Skeleton className="size-8 rounded-md" />
-          <Skeleton className="size-8 rounded-md" />
-          <Skeleton className="size-8 rounded-md" />
-        </div>
-      </div>
-
-      <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-4 overflow-hidden px-4 py-4">
-        {CHAT_SKELETON_BUBBLES.map((bubble) =>
-          bubble.side === "user" ? (
-            <div className="flex justify-end" key={bubble.key}>
-              <Skeleton className="h-12 w-2/5 rounded-2xl" />
-            </div>
-          ) : (
-            <div className="flex flex-col gap-2" key={bubble.key}>
-              <Skeleton className="h-4 w-4/5" />
-              <Skeleton className="h-4 w-3/5" />
-              <Skeleton className="h-4 w-2/3" />
-            </div>
-          ),
-        )}
-      </div>
-
-      <div className="mx-auto w-full max-w-5xl p-4">
-        <Skeleton className="h-24 w-full rounded-xl" />
-      </div>
-    </div>
-  );
-}

@@ -3,18 +3,23 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import fc from "fast-check";
 import { Buffer } from "node:buffer";
 
+import { getCollator } from "@stll/collation";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import { assertProperty } from "@stll/property-testing";
 
 import { envBase } from "@/api/env-base";
 import { toSafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { withCaseLawDatedDecisions } from "@/api/lib/legal-search/case-law-dated-decisions";
 import {
-  type CorpusIndexHit,
   CORPUS_INDEX_ENGINE_INGEST_MAX_BYTES,
+  CorpusIndexError,
+  type CorpusIndexHit,
+  elasticAnswerHasFailedShards,
   getCorpusIndexClient,
+  STRICT_ELASTIC_READ,
 } from "@/api/lib/legal-search/corpus-index-client";
+import { PROJECTION_GENERATION_FIELD } from "@/api/lib/legal-search/corpus-index-config";
+import { corpusIndexBrowseFacets } from "@/api/lib/legal-search/corpus-index-facets";
 import {
   CORPUS_INDEX_MANIFESTS,
   corpusIndexConfigFromManifest,
@@ -28,6 +33,7 @@ import {
 import { buildCaseLawProjectionDocuments } from "@/api/lib/legal-search/corpus-index-projection-builder";
 import type { CaseLawProjectionInput } from "@/api/lib/legal-search/corpus-index-projection-descriptor";
 import { caseLawCorpusQueryFields } from "@/api/lib/legal-search/corpus-index-read-contract";
+import { corpusAppliedProjection } from "@/api/lib/legal-search/corpus-index-revision-clause";
 import { caseLawCorpusQuery } from "@/api/lib/legal-search/corpus-query";
 import type { CorpusIndexQueryVariant } from "@/api/lib/legal-search/corpus-query-variant-policy";
 import {
@@ -63,10 +69,14 @@ import {
  */
 const runEngineTests = process.env["STELLA_RUN_CORPUS_ENGINE_TESTS"] === "true";
 
-const MANIFEST = CORPUS_INDEX_MANIFESTS.case_law_v7;
-const INDEX_ID = `case_law_v7_contract_${Date.now().toString(36)}`;
+const MANIFEST = CORPUS_INDEX_MANIFESTS.case_law_v8;
+const FLOOD_MANIFEST = CORPUS_INDEX_MANIFESTS.case_law_v7;
+const INDEX_ID = `case_law_v8_contract_${Date.now().toString(36)}`;
 const TIED_INDEX_ID = `${INDEX_ID}_tied`;
 const PROVISION_INDEX_ID = `${INDEX_ID}_provision`;
+const FLOOD_INDEX_ID = `${INDEX_ID}_flood`;
+const FACET_V8_INDEX_ID = `${INDEX_ID}_facets_v8`;
+const FACET_V9_INDEX_ID = `${INDEX_ID}_facets_v9`;
 const REVISION = toSafeId<"corpusIndexProjectionIntent">(
   "0198e331-e578-7000-8000-000000000001",
 );
@@ -75,6 +85,10 @@ const SMALL_TIED_SOURCE_ID = "0198e331-e578-7000-8000-000000000003";
 const PROVISION_SOURCE_ID = "0198e331-e578-7000-8000-000000000004";
 const PROVISION_ALIAS_DOCUMENT_ID = "0398e331-e578-7000-8000-000000000001";
 const PROVISION_OTHER_ACT_DOCUMENT_ID = "0398e331-e578-7000-8000-000000000002";
+const FLOOD_DOCUMENT_ID = "0498e331-e578-7000-8000-000000000001";
+const FLOOD_OTHER_DOCUMENT_ID = "0498e331-e578-7000-8000-000000000002";
+const FLOOD_TERM = "floodterm";
+const FLOOD_PASSAGE_CHARS = 1400;
 const ENGINE_TIMEOUT_MS = 120_000;
 
 /**
@@ -165,6 +179,13 @@ const decisionDocuments = (batch: number, slot: number) => {
     redistributionEligible: true,
     redacted: false,
     listingOnly: false,
+    provisionKeys: [],
+    rankingSignals: {
+      citationAuthorityBucket: 0,
+      languageGroupKey: null,
+      languageGroupShared: false,
+    },
+    vacatedFrom: null,
     caseNumber: `${String(slot + 1)} Cdo ${String(batch + 1)}/2020`,
     identifiers: [],
     court: "Najvyšší súd Slovenskej republiky",
@@ -199,6 +220,13 @@ const tiedDocuments = (serial: number) => {
     redistributionEligible: true,
     redacted: false,
     listingOnly: false,
+    provisionKeys: [],
+    rankingSignals: {
+      citationAuthorityBucket: 0,
+      languageGroupKey: null,
+      languageGroupShared: false,
+    },
+    vacatedFrom: null,
     caseNumber: "",
     identifiers: [],
     court: "",
@@ -242,6 +270,13 @@ const provisionDocuments = () =>
         redistributionEligible: true,
         redacted: false,
         listingOnly: false,
+        provisionKeys: [],
+        rankingSignals: {
+          citationAuthorityBucket: 0,
+          languageGroupKey: null,
+          languageGroupShared: false,
+        },
+        vacatedFrom: null,
         caseNumber: "",
         identifiers: [],
         court: "",
@@ -254,6 +289,78 @@ const provisionDocuments = () =>
       revision: REVISION,
     }),
   );
+
+const floodDocuments = () =>
+  [
+    {
+      documentId: FLOOD_DOCUMENT_ID,
+      texts: Array.from({ length: 3 }, () =>
+        Array.from({ length: 80 }, () => FLOOD_TERM)
+          .join(" ")
+          .padEnd(FLOOD_PASSAGE_CHARS, FILLER),
+      ),
+    },
+    {
+      documentId: FLOOD_OTHER_DOCUMENT_ID,
+      texts: [
+        `${FLOOD_TERM} `.padEnd(FLOOD_PASSAGE_CHARS, FILLER),
+        "".padEnd(FLOOD_PASSAGE_CHARS, FILLER),
+        "".padEnd(FLOOD_PASSAGE_CHARS, FILLER),
+      ],
+    },
+  ].flatMap(({ documentId, texts }) => {
+    const ast = {
+      ...decisionAst([]),
+      blocks: texts.map((text, index) => ({
+        id: `p${index}`,
+        anchorId: `p${index}`,
+        type: "paragraph",
+        role: "argumentation",
+        plainText: text,
+        inlines: [{ type: "text", text }],
+      })),
+    } satisfies DocumentAst;
+    const documents = buildCaseLawProjectionDocuments({
+      manifest: FLOOD_MANIFEST,
+      input: {
+        family: "case_law",
+        documentId,
+        sourceId: SOURCE_ID,
+        jurisdiction: "SVK",
+        language: "sk",
+        documentType: "rozsudok",
+        contentHash: null,
+        redistributionEligible: true,
+        redacted: false,
+        listingOnly: false,
+        provisionKeys: [],
+        rankingSignals: {
+          citationAuthorityBucket: 0,
+          languageGroupKey: null,
+          languageGroupShared: false,
+        },
+        vacatedFrom: null,
+        caseNumber: "",
+        identifiers: [],
+        court: "",
+        courtId: null,
+        decisionDate: "2020-01-01",
+        ecli: null,
+        metadata: null,
+      },
+      payload: {
+        text: ast.blocks.map((block) => block.plainText).join("\n\n"),
+        ast,
+      },
+      revision: REVISION,
+    });
+    expect(documents).toHaveLength(3);
+    expect(new Set(documents.map(({ text }) => text.length))).toEqual(
+      new Set([FLOOD_PASSAGE_CHARS]),
+    );
+    physicalPassagesByDocument.set(documentId, documents.length);
+    return documents;
+  });
 
 type HandlerQueryOptions = {
   queryVariant?: CorpusIndexQueryVariant;
@@ -283,7 +390,7 @@ const handlerQuery = (
   if (query === null) {
     throw new Error(`the entry ${text} built no engine query`);
   }
-  return withCaseLawDatedDecisions(query, "relevance");
+  return query;
 };
 
 const ENTRIES = [
@@ -376,6 +483,7 @@ const readScanPage = async ({
     scanTransport,
     rankingMode,
     snippetFields: ["text"],
+    projectionRevisionField: "projection_revision",
     extractId: (hit) =>
       typeof hit["document_id"] === "string" ? hit["document_id"] : null,
     extractSnippet: (snippet) => {
@@ -384,27 +492,40 @@ const readScanPage = async ({
     },
     unseenScoreUpperBound: (next) =>
       stableBlendUpperBound(next, DEFAULT_AUTHORITY_WEIGHT),
-    rankCandidates: async (candidates) => ({
-      context: null,
-      groups: candidates
-        .filter(({ id }) => {
-          const count = physicalPassagesByDocument.get(id);
-          if (count === undefined) {
-            return panic("Candidate has no ingested projection count");
-          }
-          return count > 1;
-        })
-        .map(({ id }) => corpusSearchGroupToken(id)),
-      ranked: blendStableCitationAuthority({
-        candidates: candidates.filter(
-          (candidate) =>
-            !parsedCursor?.excludedGroups?.includes(
-              corpusSearchGroupToken(candidate.id),
-            ),
+    rankCandidates: async (probes, { selectAppliedCandidates }) => {
+      const revisionById = new Map(probes.map(({ id }) => [id, REVISION]));
+      const candidates = selectAppliedCandidates(
+        new Map(
+          [...revisionById].map(([id, revision]) => [
+            id,
+            corpusAppliedProjection(MANIFEST, revision),
+          ]),
         ),
-        authorityById: new Map(),
-      }),
-    }),
+      );
+      return {
+        context: null,
+        // Every fixture document was ingested under this one revision.
+        revisionById,
+        groups: candidates
+          .filter(({ id }) => {
+            const count = physicalPassagesByDocument.get(id);
+            if (count === undefined) {
+              return panic("Candidate has no ingested projection count");
+            }
+            return count > 1;
+          })
+          .map(({ id }) => corpusSearchGroupToken(id)),
+        ranked: blendStableCitationAuthority({
+          candidates: candidates.filter(
+            (candidate) =>
+              !parsedCursor?.excludedGroups?.includes(
+                corpusSearchGroupToken(candidate.id),
+              ),
+          ),
+          authorityById: new Map(),
+        }),
+      };
+    },
   });
 
 describe.skipIf(!runEngineTests)(
@@ -494,16 +615,259 @@ describe.skipIf(!runEngineTests)(
       if (!tiedResponse.ok) {
         throw new Error(`ingest ${String(tiedResponse.status)}`);
       }
+      const floodCreated = await client.createIndex(
+        corpusIndexConfigFromManifest(FLOOD_MANIFEST, FLOOD_INDEX_ID),
+        "unobserved",
+      );
+      if (floodCreated.isErr()) {
+        throw floodCreated.error;
+      }
+      const floodResponse = await fetch(
+        `${String(mutationBase)}/api/v1/${FLOOD_INDEX_ID}/ingest?commit=force`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/x-ndjson" },
+          body: `${floodDocuments()
+            .map((document) => JSON.stringify(document))
+            .join("\n")}\n`,
+          signal: AbortSignal.timeout(ENGINE_TIMEOUT_MS),
+        },
+      );
+      if (!floodResponse.ok) {
+        throw new CorpusIndexError({
+          message: `Flood fixture ingest returned ${String(floodResponse.status)}`,
+          reach: "answered",
+        });
+      }
+      for (const { manifest, indexId } of [
+        { manifest: MANIFEST, indexId: FACET_V8_INDEX_ID },
+        {
+          manifest: CORPUS_INDEX_MANIFESTS.case_law_v9,
+          indexId: FACET_V9_INDEX_ID,
+        },
+      ]) {
+        const facetIndexCreated = await client.createIndex(
+          corpusIndexConfigFromManifest(manifest, indexId),
+          "unobserved",
+        );
+        if (facetIndexCreated.isErr()) {
+          throw facetIndexCreated.error;
+        }
+      }
     }, ENGINE_TIMEOUT_MS);
 
     afterAll(async () => {
-      for (const indexId of [INDEX_ID, TIED_INDEX_ID, PROVISION_INDEX_ID]) {
+      for (const indexId of [
+        INDEX_ID,
+        TIED_INDEX_ID,
+        PROVISION_INDEX_ID,
+        FLOOD_INDEX_ID,
+        FACET_V8_INDEX_ID,
+        FACET_V9_INDEX_ID,
+      ]) {
         const deleted = await client.deleteIndex(indexId, "unobserved");
         if (deleted.isErr()) {
           throw deleted.error;
         }
       }
     }, ENGINE_TIMEOUT_MS);
+
+    test(
+      "global browse facets exclude a vacated jurisdiction across legacy and marked index mappings before purge",
+      async () => {
+        const v9 = CORPUS_INDEX_MANIFESTS.case_law_v9;
+        const input = {
+          family: "case_law",
+          documentId: PROVISION_ALIAS_DOCUMENT_ID,
+          sourceId: SOURCE_ID,
+          jurisdiction: "CZE",
+          language: "cs",
+          documentType: null,
+          contentHash: null,
+          redistributionEligible: true,
+          redacted: false,
+          listingOnly: false,
+          provisionKeys: [],
+          rankingSignals: {
+            citationAuthorityBucket: 0,
+            languageGroupKey: null,
+            languageGroupShared: false,
+          },
+          vacatedFrom: null,
+          caseNumber: "1 Cdo 1/2024",
+          identifiers: [],
+          court: "Czech court",
+          courtId: null,
+          decisionDate: "2024-01-01",
+          ecli: null,
+          metadata: null,
+        } satisfies CaseLawProjectionInput;
+        const oldCzech = buildCaseLawProjectionDocuments({
+          manifest: MANIFEST,
+          input,
+          payload: { text: "Czech decision", ast: null },
+          revision: REVISION,
+        });
+        const oldSlovak = buildCaseLawProjectionDocuments({
+          manifest: MANIFEST,
+          input: {
+            ...input,
+            documentId: PROVISION_OTHER_ACT_DOCUMENT_ID,
+            jurisdiction: "SVK",
+            language: "sk",
+            court: "Slovak court",
+          },
+          payload: { text: "Slovak decision", ast: null },
+          revision: REVISION,
+        });
+        const newCzech = buildCaseLawProjectionDocuments({
+          manifest: v9,
+          input,
+          payload: { text: "Czech decision", ast: null },
+          revision: REVISION,
+        });
+        expect(oldCzech.at(0)?.[PROJECTION_GENERATION_FIELD]).toBeUndefined();
+        expect(newCzech.at(0)?.[PROJECTION_GENERATION_FIELD]).toBe(
+          v9.generation,
+        );
+        for (const { indexId, documents } of [
+          {
+            indexId: FACET_V8_INDEX_ID,
+            documents: [...oldCzech, ...oldSlovak],
+          },
+          { indexId: FACET_V9_INDEX_ID, documents: newCzech },
+        ]) {
+          const base =
+            envBase.CORPUS_INDEX_Q09_ENDPOINT ??
+            envBase.CORPUS_INDEX_Q09_SEARCH_ENDPOINT;
+          const response = await fetch(
+            `${String(base)}/api/v1/${indexId}/ingest?commit=force`,
+            {
+              method: "POST",
+              headers: { "content-type": "application/x-ndjson" },
+              body: `${documents.map((document) => JSON.stringify(document)).join("\n")}\n`,
+              signal: AbortSignal.timeout(ENGINE_TIMEOUT_MS),
+            },
+          );
+          if (!response.ok) {
+            throw new CorpusIndexError({
+              message: `Facet fixture ingest returned ${String(response.status)}`,
+              reach: "answered",
+            });
+          }
+        }
+        const readFacets = async (flipped: boolean) => {
+          const result = await corpusIndexBrowseFacets(
+            { excludedSourceIds: [], limit: 20 },
+            "unobserved",
+            {
+              readServingTarget: async () =>
+                Result.ok({
+                  serving: {
+                    family: "case_law",
+                    generation: MANIFEST.generation,
+                    cluster: "q09",
+                  },
+                  route: flipped
+                    ? {
+                        indexId: `${FACET_V8_INDEX_ID},${FACET_V9_INDEX_ID}`,
+                        jurisdictionClause: undefined,
+                        aggregationFilter: `(NOT jurisdiction:"CZE" OR ${PROJECTION_GENERATION_FIELD}:"${v9.generation}")`,
+                      }
+                    : {
+                        indexId: FACET_V8_INDEX_ID,
+                        jurisdictionClause: undefined,
+                      },
+                }),
+            },
+          );
+          if (result.isErr()) {
+            throw result.error;
+          }
+          // Equal-count buckets have no tie order in the engine contract.
+          // Compare every facet's complete bucket contents across the flip.
+          const { country, court, year } = result.value;
+          return Object.fromEntries(
+            Object.entries({ country, court, year }).map(([name, buckets]) => [
+              name,
+              buckets.toSorted((left, right) =>
+                getCollator("en").compare(left.value, right.value),
+              ),
+            ]),
+          );
+        };
+        const before = await readFacets(false);
+        expect(before["country"]).toEqual([
+          { value: "CZE", count: 1 },
+          { value: "SVK", count: 1 },
+        ]);
+        const after = await readFacets(true);
+        expect(after).toEqual(before);
+      },
+      ENGINE_TIMEOUT_MS,
+    );
+
+    test(
+      "a v7 passage flood recovers the missing document with exactly one highlight fallback",
+      async () => {
+        const query = `jurisdiction:SVK AND text:${FLOOD_TERM}`;
+        const physical = await client.search({
+          observer: "unobserved",
+          indexId: FLOOD_INDEX_ID,
+          query: `(${query}) AND projection_revision:"${REVISION}"`,
+          maxHits: 2,
+          sortBy: "_score",
+        });
+        if (physical.isErr()) {
+          throw physical.error;
+        }
+        expect(physical.value.hits.map((hit) => hit["document_id"])).toEqual([
+          FLOOD_DOCUMENT_ID,
+          FLOOD_DOCUMENT_ID,
+        ]);
+        for (const hit of physical.value.hits) {
+          expect(hit["chunk_id"]).toBeUndefined();
+          expect(typeof hit["anchor_id"]).toBe("string");
+        }
+        const highlightBatch = await client.search({
+          observer: "unobserved",
+          indexId: FLOOD_INDEX_ID,
+          query: `(${query}) AND ((document_id:"${FLOOD_DOCUMENT_ID}" AND projection_revision:"${REVISION}") OR (document_id:"${FLOOD_OTHER_DOCUMENT_ID}" AND projection_revision:"${REVISION}"))`,
+          maxHits: 2,
+          sortBy: "_score",
+          snippetFields: ["text"],
+        });
+        if (highlightBatch.isErr()) {
+          throw highlightBatch.error;
+        }
+        expect(
+          highlightBatch.value.hits.map((hit) => hit["document_id"]),
+        ).toEqual([FLOOD_DOCUMENT_ID, FLOOD_DOCUMENT_ID]);
+        const read = await readScanPage({
+          query,
+          indexId: FLOOD_INDEX_ID,
+          parsedCursor: null,
+          limit: 2,
+          scanTransport: { type: "scored" },
+          rankingMode: "bm25-ratio",
+        });
+        expect(read.pageRanked.map(({ id }) => id)).toEqual([
+          FLOOD_DOCUMENT_ID,
+          FLOOD_OTHER_DOCUMENT_ID,
+        ]);
+        expect(read.snippetById.size).toBe(2);
+        expect(read.anchorIdById.size).toBe(2);
+        expect(read.anchorIdById.get(FLOOD_OTHER_DOCUMENT_ID)).toBe("p0");
+        for (const id of [FLOOD_DOCUMENT_ID, FLOOD_OTHER_DOCUMENT_ID]) {
+          expect(read.snippetById.get(id)).toContain(FLOOD_TERM);
+          expect(read.anchorIdById.get(id)).toMatch(/^p[0-2]$/u);
+        }
+        expect(read.scan.rounds).toBe(1);
+        expect(read.scan.highlightRounds).toBe(2);
+        expect(read.nextCursor).toBeNull();
+      },
+      ENGINE_TIMEOUT_MS,
+    );
 
     test(
       "provision variants match civil-code aliases without admitting a different act",
@@ -576,7 +940,9 @@ describe.skipIf(!runEngineTests)(
                   limit,
                   parsedCursor: cursor,
                   rankingMode: "bm25-ratio",
-                  scanTransport: { type: "scored", fields: ["document_id"] },
+                  scanTransport: {
+                    type: "scored",
+                  },
                 });
                 seen.push(...read.pageRanked.map(({ id }) => id));
                 if (read.nextCursor === null) {
@@ -624,6 +990,10 @@ describe.skipIf(!runEngineTests)(
           indexId: TIED_INDEX_ID,
         });
         expect(universe.numHits).toBe(SMALL_TIED_DOCUMENT_COUNT);
+        for (const { fields } of universe.hits) {
+          expect(fields["chunk_id"]).toBe(`${String(fields["document_id"])}:0`);
+          expect(fields["anchor_id"]).toBeUndefined();
+        }
         expect(new Set(universe.hits.map(({ score }) => score)).size).toBe(1);
         expect(universe.hits.at(0)?.score).toBeGreaterThan(0);
         await assertProperty(
@@ -642,7 +1012,9 @@ describe.skipIf(!runEngineTests)(
                 limit,
                 parsedCursor: cursor,
                 rankingMode: "bm25-ratio",
-                scanTransport: { type: "scored", fields: ["document_id"] },
+                scanTransport: {
+                  type: "scored",
+                },
               });
               seen.push(...read.pageRanked.map(({ id }) => id));
               if (read.nextCursor === null) {
@@ -672,7 +1044,6 @@ describe.skipIf(!runEngineTests)(
                       rankingMode: "off",
                       scanTransport: {
                         type: "scored",
-                        fields: ["document_id"],
                       },
                     }),
                 );
@@ -713,6 +1084,75 @@ describe.skipIf(!runEngineTests)(
           : null;
 
       expect(Array.isArray(splits) ? splits.length : 0).toBeGreaterThan(1);
+    });
+
+    test("strict ES reads are accepted and report every split answered", async () => {
+      // The ES endpoint defaults to answering with the splits it could read;
+      // the client asks for failure instead, and reads `_shards.failed` as a
+      // second net. Both must be what this engine speaks: an unknown
+      // parameter or a missing count would make the guard a no-op.
+      const response = await fetch(
+        `${String(envBase.CORPUS_INDEX_Q09_SEARCH_ENDPOINT ?? envBase.CORPUS_INDEX_Q09_ENDPOINT)}/api/v1/_elastic/${INDEX_ID}/_search?${STRICT_ELASTIC_READ}`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ size: 0, query: { match_all: {} } }),
+        },
+      );
+      expect(response.ok).toBe(true);
+      const body: unknown = await response.json();
+      const shards =
+        typeof body === "object" && body !== null && "_shards" in body
+          ? body._shards
+          : null;
+      expect(shards).toMatchObject({ failed: 0 });
+      expect(elasticAnswerHasFailedShards(body)).toBe(false);
+      expect(
+        elasticAnswerHasFailedShards({
+          ...(typeof body === "object" && body !== null ? body : {}),
+          _shards: { failed: 1 },
+        }),
+      ).toBe(true);
+
+      // Both client reads through the ES endpoint answer under strict mode.
+      const scored = await readScored({ query: "*", from: 0, size: 1 });
+      expect(scored.numHits).toBeGreaterThan(0);
+      const aggregated = await client.aggregate({
+        observer: "unobserved",
+        indexId: INDEX_ID,
+        query: "*",
+        filter: "*",
+        aggs: { decisions: { cardinality: { field: "document_id" } } },
+      });
+      if (aggregated.isErr()) {
+        throw aggregated.error;
+      }
+      expect(aggregated.value["decisions"]).toMatchObject({
+        value: expect.any(Number),
+      });
+    });
+
+    test("the split census reports each index it is asked about", async () => {
+      const counts = await client.readPublishedSplitCounts({
+        includes: (indexId) => indexId === INDEX_ID,
+        observer: "unobserved",
+      });
+      if (counts.isErr()) {
+        throw counts.error;
+      }
+      expect(counts.value).toHaveLength(1);
+      expect(counts.value.at(0)?.indexId).toBe(INDEX_ID);
+      expect(counts.value.at(0)?.publishedSplits ?? 0).toBeGreaterThan(1);
+    });
+
+    test("the split census ends when its shared deadline has passed", async () => {
+      const counts = await client.readPublishedSplitCounts({
+        includes: (indexId) => indexId === INDEX_ID,
+        observer: "unobserved",
+        signal: AbortSignal.abort(),
+      });
+
+      expect(counts.isErr()).toBe(true);
     });
 
     test.each(ENTRIES)(
@@ -782,7 +1222,9 @@ describe.skipIf(!runEngineTests)(
           const read = await readScanPage({
             query,
             parsedCursor: cursor,
-            scanTransport: { type: "scored", fields: ["document_id"] },
+            scanTransport: {
+              type: "scored",
+            },
             rankingMode: "bm25-ratio",
           });
           expect(read.pageRanked).toEqual(
@@ -836,7 +1278,7 @@ describe.skipIf(!runEngineTests)(
         };
 
         const native = await pages(NATIVE_SCAN_TRANSPORT);
-        const scored = await pages({ type: "scored", fields: ["document_id"] });
+        const scored = await pages({ type: "scored" });
 
         expect(native.length).toBeGreaterThan(1);
         expect(scored).toEqual(native);

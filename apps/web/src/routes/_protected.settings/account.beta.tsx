@@ -1,15 +1,11 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
-import { useTranslations } from "use-intl";
 
-import { Checkbox } from "@stll/ui/checkbox";
-import { Field, FieldLabel } from "@stll/ui/field";
-import { Frame, FramePanel } from "@stll/ui/frame";
-
-import { env } from "@/env";
-import { useTimeBillingPreviewOffered } from "@/hooks/use-time-billing-preview";
 import { betaFeaturesAvailable } from "@/lib/beta-features";
-import { useDevStore } from "@/lib/dev-store";
-import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header";
+import { pageTitle } from "@/lib/page-title";
+import { routePresentation } from "@/routes/-route-presentation";
+
+import { BetaFeaturesPage } from "./-account.beta.page";
+import { BetaPending } from "./-account.beta.pending";
 
 export const Route = createFileRoute("/_protected/settings/account/beta")({
   beforeLoad: () => {
@@ -17,144 +13,14 @@ export const Route = createFileRoute("/_protected/settings/account/beta")({
       throw redirect({ to: "/settings/account/profile" });
     }
   },
+  staticData: {
+    presentation: routePresentation({
+      type: "label",
+      labelKey: "settings.account.beta",
+      to: "/settings/account/beta",
+    }),
+  },
+  head: () => ({ meta: [{ title: pageTitle("settings.account.beta") }] }),
   component: BetaFeaturesPage,
+  pendingComponent: BetaPending,
 });
-
-function BetaFeaturesPage() {
-  const t = useTranslations();
-  const publicLawPreview = useDevStore((s) => s.publicLawPreview);
-  const setPublicLawPreview = useDevStore((s) => s.setPublicLawPreview);
-  const workflowsPreview = useDevStore((s) => s.workflowsPreview);
-  const setWorkflowsPreview = useDevStore((s) => s.setWorkflowsPreview);
-  const timeBillingPreview = useDevStore((s) => s.timeBillingPreview);
-  const setTimeBillingPreview = useDevStore((s) => s.setTimeBillingPreview);
-  const timeBillingPreviewOffered = useTimeBillingPreviewOffered();
-  const inboxPreview = useDevStore((s) => s.inboxPreview);
-  const setInboxPreview = useDevStore((s) => s.setInboxPreview);
-  const avtPreview = useDevStore((s) => s.avtPreview);
-  const setAvtPreview = useDevStore((s) => s.setAvtPreview);
-
-  return (
-    <>
-      <SettingsPageHeader
-        description={t("settings.account.betaDescription")}
-        title={t("settings.account.beta")}
-      />
-      <Frame>
-        <FramePanel>
-          <div className="flex flex-col gap-3 p-1">
-            <h2 className="text-sm font-medium">{t("common.caseLaw")}</h2>
-            <p className="text-muted-foreground text-xs">
-              {t("settings.account.betaCaseLawDescription")}
-            </p>
-            <Field className="flex-row items-center gap-2">
-              <Checkbox
-                checked={publicLawPreview}
-                onCheckedChange={(next) => {
-                  if (next === publicLawPreview) {
-                    return;
-                  }
-
-                  setPublicLawPreview(next);
-                }}
-              />
-              <FieldLabel>{t("common.caseLaw")}</FieldLabel>
-            </Field>
-          </div>
-        </FramePanel>
-        <FramePanel>
-          <div className="flex flex-col gap-3 p-1">
-            <h2 className="text-sm font-medium">{t("common.workflows")}</h2>
-            <p className="text-muted-foreground text-xs">
-              {t("knowledge.sections.workflows.description")}
-            </p>
-            <Field className="flex-row items-center gap-2">
-              <Checkbox
-                checked={workflowsPreview}
-                onCheckedChange={(next) => {
-                  if (next === workflowsPreview) {
-                    return;
-                  }
-
-                  setWorkflowsPreview(next);
-                }}
-              />
-              <FieldLabel>{t("common.workflows")}</FieldLabel>
-            </Field>
-          </div>
-        </FramePanel>
-        {timeBillingPreviewOffered && (
-          <FramePanel>
-            <div className="flex flex-col gap-3 p-1">
-              <h2 className="text-sm font-medium">{t("common.timeBilling")}</h2>
-              <p className="text-muted-foreground text-xs">
-                {t("settings.account.betaTimeBillingDescription")}
-              </p>
-              <Field className="flex-row items-center gap-2">
-                <Checkbox
-                  checked={timeBillingPreview}
-                  onCheckedChange={(next) => {
-                    if (next === timeBillingPreview) {
-                      return;
-                    }
-
-                    setTimeBillingPreview(next);
-                  }}
-                />
-                <FieldLabel>{t("common.timeBilling")}</FieldLabel>
-              </Field>
-            </div>
-          </FramePanel>
-        )}
-        <FramePanel>
-          <div className="flex flex-col gap-3 p-1">
-            <h2 className="text-sm font-medium">
-              {t("settings.account.betaInbox")}
-            </h2>
-            <p className="text-muted-foreground text-xs">
-              {t("settings.account.betaInboxDescription")}
-            </p>
-            <Field className="flex-row items-center gap-2">
-              <Checkbox
-                checked={inboxPreview}
-                onCheckedChange={(next) => {
-                  if (next === inboxPreview) {
-                    return;
-                  }
-
-                  setInboxPreview(next);
-                }}
-              />
-              <FieldLabel>{t("settings.account.betaInbox")}</FieldLabel>
-            </Field>
-          </div>
-        </FramePanel>
-        {env.VITE_FEATURE_LEGAL_LISTS && (
-          <FramePanel>
-            <div className="flex flex-col gap-3 p-1">
-              <h2 className="text-sm font-medium">
-                {t("settings.account.betaAvt")}
-              </h2>
-              <p className="text-muted-foreground text-xs">
-                {t("settings.account.betaAvtDescription")}
-              </p>
-              <Field className="flex-row items-center gap-2">
-                <Checkbox
-                  checked={avtPreview}
-                  onCheckedChange={(next) => {
-                    if (next === avtPreview) {
-                      return;
-                    }
-
-                    setAvtPreview(next);
-                  }}
-                />
-                <FieldLabel>{t("settings.account.betaAvt")}</FieldLabel>
-              </Field>
-            </div>
-          </FramePanel>
-        )}
-      </Frame>
-    </>
-  );
-}

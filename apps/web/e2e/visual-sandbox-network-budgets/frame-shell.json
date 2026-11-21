@@ -1,0 +1,11 @@
+{
+  "route": "/visual-sandbox",
+  "reason": "The static frame renders without secondary API requests",
+  "budget": {
+    "depth": 0,
+    "requests": [],
+    "requestCounts": {},
+    "dbQueries": {},
+    "responseSizes": {}
+  }
+}

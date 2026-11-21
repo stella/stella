@@ -19,6 +19,7 @@ import {
 } from "./infosoud-common";
 
 const config = {
+  contract: "patch",
   body: infosoudLookupBodySchema,
   permissions: { entity: ["create"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,

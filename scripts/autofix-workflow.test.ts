@@ -1,11 +1,21 @@
 import { describe, expect, test } from "bun:test";
+import { readdirSync, readFileSync } from "node:fs";
 
-import { GENERATORS, orderGenerators } from "./generated-files";
+import { SAFE_AUTOFIX_RULES, safeAutofixRuleArgs } from "./autofix-safe-rules";
+import { requiresTauriAlignment } from "./check-tauri-package-alignment";
+import {
+  CI_GENERATION_COMMANDS,
+  GENERATORS,
+  generatorsForFiles,
+  orderGenerators,
+} from "./generated-files";
+import { workflowJobSteps, workflowStepByName } from "./workflow-steps";
 
 const WORKFLOW_URL = new URL(
   "../.github/workflows/autofix.yml",
   import.meta.url,
 );
+const CI_WORKFLOW_URL = new URL("../.github/workflows/ci.yml", import.meta.url);
 const HELPER_URL = new URL("dependabot-changeset.ts", import.meta.url);
 const HELPER_TEST_URL = new URL(
   "dependabot-changeset.test.ts",
@@ -23,6 +33,110 @@ const RESOLUTION_SOURCE_URLS = RESOLUTION_SCRIPTS.map(
   (script) => new URL(script.replace("scripts/", ""), import.meta.url),
 );
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+// This test runs before the dependency install, so it narrows the workflow by
+// hand instead of with a schema library. Undefined means no path filter.
+const autofixTriggerPaths = (): string[] | undefined => {
+  const workflow: unknown = Bun.YAML.parse(readFileSync(WORKFLOW_URL, "utf-8"));
+  const on = isRecord(workflow) ? workflow["on"] : undefined;
+  const pullRequest = isRecord(on) ? on["pull_request"] : undefined;
+  if (!isRecord(pullRequest)) {
+    throw new TypeError("autofix must trigger on pull_request");
+  }
+  expect(pullRequest["paths-ignore"]).toBeUndefined();
+  const paths: unknown = pullRequest["paths"];
+  if (paths === undefined) {
+    return undefined;
+  }
+  if (
+    !Array.isArray(paths) ||
+    !paths.every((path): path is string => typeof path === "string")
+  ) {
+    throw new TypeError("autofix pull_request paths must be strings");
+  }
+  return paths;
+};
+
+// Workflow files are never format or lint targets, so only a workflow that a
+// generator or the Tauri alignment reads (or this workflow) can need autofix.
+// When every workflow is read, the trigger filters nothing.
+test("the PR trigger drops exactly the workflow files autofix never reads", () => {
+  const all = readdirSync(new URL("../.github/workflows", import.meta.url))
+    .map((name) => `.github/workflows/${name}`)
+    .toSorted();
+  const workflows = all.filter(
+    (file) =>
+      file === ".github/workflows/autofix.yml" ||
+      generatorsForFiles([file]).length > 0 ||
+      requiresTauriAlignment([file]),
+  );
+  expect(workflows).toContain(".github/workflows/ci.yml");
+  expect(autofixTriggerPaths()).toEqual(
+    workflows.length === all.length
+      ? undefined
+      : ["**", "!.github/workflows/**", ...workflows],
+  );
+});
+
+// Its outputs live under .github/, which the autofix action may not modify,
+// so no edit selects the classification decision pruning as an autofix.
+test("no edit selects the classification decision pruning as an autofix", () => {
+  for (const file of [
+    ".github/workflows/deploy-staging.yml",
+    ".github/actions/ci-install/action.yml",
+    ".github/ci-job-classification-decisions/**",
+    "scripts/ci-job-classification/yaml.ts",
+  ]) {
+    expect(
+      generatorsForFiles([file]).map(({ id }) => id),
+      file,
+    ).not.toContain("ci-job-classification-decisions");
+  }
+});
+
+test("the bridge guard uses the merge-group base in merge queue runs", async () => {
+  const workflow: unknown = Bun.YAML.parse(
+    await Bun.file(CI_WORKFLOW_URL).text(),
+  );
+  const guard = namedCiStep(workflow, "Bridge-version guard");
+
+  // The root-check plan selects the guard for pull requests and merge groups;
+  // the step adds no event gate of its own.
+  expect(guard["if"]).toContain("'ci-checks-rest/Bridge-version guard'");
+  expect(guard["if"]).not.toContain("github.event_name");
+  expect(guard["env"]).toMatchObject({
+    BRIDGE_BASE_SHA: `\${{ github.event_name == 'merge_group' && needs.ci-plan.outputs.target_base_sha || '' }}`,
+  });
+});
+
+const namedCiStep = (workflow: unknown, name: string) => {
+  if (!isRecord(workflow)) {
+    throw new TypeError("CI workflow must declare jobs");
+  }
+  const jobs = workflow["jobs"];
+  if (!isRecord(jobs)) {
+    throw new TypeError("CI workflow must declare jobs");
+  }
+  const steps = Object.keys(jobs).flatMap((jobId) => {
+    const job = jobs[jobId];
+    if (!isRecord(job) || !Array.isArray(job["steps"])) {
+      return [];
+    }
+    const jobSteps = workflowJobSteps(workflow, jobId);
+    return jobSteps.some((step) => step["name"] === name)
+      ? [workflowStepByName(jobSteps, name)]
+      : [];
+  });
+  const step = workflowStepByName(steps.slice(0, 1), name);
+  // The same anchored guard runs in mutually exclusive event carriers.
+  for (const match of steps.slice(1)) {
+    expect(match).toEqual(step);
+  }
+  return step;
+};
+
 describe("Dependabot Bun autofix boundary", () => {
   test("keeps the runner read-only and hands off only verified autofixes", async () => {
     const workflow = await Bun.file(WORKFLOW_URL).text();
@@ -37,7 +151,6 @@ describe("Dependabot Bun autofix boundary", () => {
     expect(workflow).toContain(
       "name: autofix.ci # autofix.ci uses this exact name as a security boundary",
     );
-    expect(workflow).not.toContain("pull_request_target:");
     expect(workflow).toContain("permissions:\n  contents: read");
     expect(workflow).not.toContain("contents: write");
     expect(workflow).not.toContain("secrets.");
@@ -164,9 +277,13 @@ describe("Dependabot Bun autofix boundary", () => {
     const checkCall = `bun --no-install --no-env-file scripts/dependabot-changeset.ts \\
             --base "$BASE_SHA" --head "$HEAD_SHA" --output "$DEPENDABOT_CHANGESET_PATH" --check`;
 
-    // No workflow-level path filter can drop a package.json-only bump; the
-    // Dependabot job scopes itself by head ref.
-    expect(workflow).not.toContain("paths:");
+    // No path filter, or one that keeps every non-workflow file, so a
+    // package.json-only bump still runs; the Dependabot job scopes itself by
+    // head ref.
+    const paths = autofixTriggerPaths();
+    if (paths !== undefined) {
+      expect(paths.slice(0, 2)).toEqual(["**", "!.github/workflows/**"]);
+    }
     expect(workflow).toContain(
       `DEPENDABOT_CHANGESET_PATH: .changeset/dependabot-dependencies-\${{ github.event.pull_request.number }}.md`,
     );
@@ -205,6 +322,12 @@ describe("changed-file autofix boundary", () => {
     expect(job).toContain('NPM_TOKEN: ""');
     expect(job).not.toContain("secrets.");
 
+    const preparationStep = job.indexOf(
+      "- name: Prepare selected MCP app exports",
+    );
+    const fixesStep = job.indexOf("- name: Fix changed files");
+    expect(preparationStep).toBeGreaterThan(0);
+    expect(fixesStep).toBeGreaterThan(preparationStep);
     const restrictionStep = job.indexOf("- name: Restrict autofix changes");
     const pushStep = job.indexOf("- name: Push autofixes");
     expect(restrictionStep).toBeGreaterThanOrEqual(0);
@@ -212,11 +335,161 @@ describe("changed-file autofix boundary", () => {
     expect(job.indexOf("autofix-ci/action@")).toBeGreaterThan(pushStep);
   });
 
+  test("finds a named CI guard inside a nested parallel group", () => {
+    const workflow = {
+      jobs: {
+        generated: {
+          steps: [
+            {
+              parallel: [
+                {
+                  parallel: [
+                    {
+                      name: "Generated files manifest guard",
+                      run: "bun scripts/generated-files-guard.ts --guard-b",
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      },
+    };
+
+    expect(namedCiStep(workflow, "Generated files manifest guard")["run"]).toBe(
+      "bun scripts/generated-files-guard.ts --guard-b",
+    );
+  });
+
+  test("shared CI guards preserve identical commands and inputs in every carrier", () => {
+    const source = `jobs:
+  pull-request:
+    steps: &shared
+      - name: Generated files manifest guard
+        run: bun scripts/generated-files-guard.ts --guard-b
+        env:
+          MODE: check
+  other-events:
+    steps: *shared
+`;
+    expect(
+      namedCiStep(Bun.YAML.parse(source), "Generated files manifest guard")[
+        "run"
+      ],
+    ).toBe("bun scripts/generated-files-guard.ts --guard-b");
+    const changed = `jobs:
+  pull-request:
+    steps:
+      - name: Generated files manifest guard
+        run: bun scripts/generated-files-guard.ts --guard-b
+        env:
+          MODE: check
+  other-events:
+    steps:
+      - name: Generated files manifest guard
+        run: bun scripts/generated-files-guard.ts --guard-b
+        env:
+          MODE: write
+`;
+    expect(() =>
+      namedCiStep(Bun.YAML.parse(changed), "Generated files manifest guard"),
+    ).toThrow("toEqual");
+    const duplicate = `jobs:
+  check:
+    steps:
+      - &guard
+        name: Generated files manifest guard
+        run: bun scripts/generated-files-guard.ts --guard-b
+      - *guard
+`;
+    expect(() =>
+      namedCiStep(Bun.YAML.parse(duplicate), "Generated files manifest guard"),
+    ).toThrow("Expected one workflow step");
+  });
+
+  test("every selected generator finishes after every source-rewriting fixer", async () => {
+    const steps = workflowJobSteps(
+      Bun.YAML.parse(await Bun.file(WORKFLOW_URL).text()),
+      "regenerate-derived-files",
+    );
+    const generatorCommands = GENERATORS.filter(({ autofix }) => autofix).map(
+      ({ write }) => write.join(" "),
+    );
+    const sourceFixer =
+      /\boxlint\b[^\n]*--fix\b|\bbun fmt\b|scripts\/fix-[\w-]+\.ts|scripts\/typecheck-coverage\.ts[^\n]*--autofix\b/u;
+    const isGenerator = (run: string) =>
+      /scripts\/autofix-plan\.ts run\b/u.test(run) ||
+      generatorCommands.some((command) => run.includes(command));
+    const terminalGenerators = (pipeline: typeof steps) => {
+      const positions = new Map<string, number>();
+      for (const [position, step] of pipeline.entries()) {
+        const run = step["run"];
+        if (typeof run !== "string") {
+          continue;
+        }
+        if (/scripts\/autofix-plan\.ts run\b/u.test(run)) {
+          positions.set("selected generators", position);
+        }
+        for (const command of generatorCommands) {
+          if (run.includes(command)) {
+            positions.set(command, position);
+          }
+        }
+      }
+      return [...new Set(positions.values())];
+    };
+    const violations = (pipeline: typeof steps) => {
+      const fixers = pipeline.flatMap((step, position) =>
+        typeof step["run"] === "string" && sourceFixer.test(step["run"])
+          ? [position]
+          : [],
+      );
+      const generators = terminalGenerators(pipeline);
+      expect(fixers.length).toBeGreaterThan(0);
+      expect(generators.length).toBeGreaterThan(0);
+      return generators.flatMap((generator) =>
+        fixers.filter((fixer) => fixer >= generator),
+      );
+    };
+    expect(violations(steps)).toEqual([]);
+    // Mutate every enumerated producer/fixer pair, including future manifest
+    // generator commands. A new writer must satisfy the same ordering guard.
+    for (const [generator, producer] of steps.entries()) {
+      if (
+        typeof producer["run"] !== "string" ||
+        !isGenerator(producer["run"]) ||
+        !terminalGenerators(steps).includes(generator)
+      ) {
+        continue;
+      }
+      for (const [fixer, writer] of steps.entries()) {
+        if (
+          typeof writer["run"] !== "string" ||
+          !sourceFixer.test(writer["run"])
+        ) {
+          continue;
+        }
+        const mutated = [...steps];
+        mutated[generator] = writer;
+        mutated[fixer] = producer;
+        expect(violations(mutated).length).toBeGreaterThan(0);
+      }
+    }
+  });
+
   test("runs the manifest plan and keeps the generated diff restricted", async () => {
     const job = jobOf(await Bun.file(WORKFLOW_URL).text());
     const ci = await Bun.file(
       new URL("../.github/workflows/ci.yml", import.meta.url),
     ).text();
+    const ciWorkflow = Bun.YAML.parse(ci);
+    const preparationStep = job.indexOf(
+      "- name: Prepare selected MCP app exports",
+    );
+    const fixesStep = job.indexOf("- name: Fix changed files");
+    expect(preparationStep).toBeGreaterThan(0);
+    expect(fixesStep).toBeGreaterThan(preparationStep);
     const restrictionStep = job.indexOf("- name: Restrict autofix changes");
     const fetchStep = job.indexOf("- name: Fetch changed paths");
     const checkoutStep = job.indexOf("- name: Checkout pull request head");
@@ -269,37 +542,49 @@ describe("changed-file autofix boundary", () => {
     );
     for (const generator of ordered) {
       if (generator.check) {
-        expect(ci).toContain("- name: Generated files manifest guard");
-        expect(ci).toContain("bun scripts/generated-files-guard.ts --guard-b");
+        expect(
+          namedCiStep(ciWorkflow, "Generated files manifest guard")["run"],
+        ).toContain("bun scripts/generated-files-guard.ts --guard-b");
       } else {
         // The null-check families use the named CI guard paired in the manifest.
         expect(generator.checkedBy).toBeDefined();
-        expect(ci).toContain(`- name: ${generator.checkedBy ?? ""}`);
+        expect(
+          namedCiStep(ciWorkflow, generator.checkedBy ?? ""),
+        ).toBeDefined();
       }
     }
+  });
+
+  test("bounds the merged lockfile network refresh", async () => {
+    const workflow: unknown = Bun.YAML.parse(
+      await Bun.file(WORKFLOW_URL).text(),
+    );
+    const refresh = namedCiStep(workflow, "Refresh merged lockfile");
+
+    expect(refresh["timeout-minutes"]).toBe(5);
+    expect(refresh["run"]).toContain("refresh-lock --repo");
   });
 
   test("each named CI guard runs its generator command or check form", async () => {
     const ci = await Bun.file(
       new URL("../.github/workflows/ci.yml", import.meta.url),
     ).text();
+    const ciWorkflow = Bun.YAML.parse(ci);
     for (const generator of orderGenerators(GENERATORS)) {
       if (!generator.checkedBy) {
         continue;
       }
-      const marker = `- name: ${generator.checkedBy}\n`;
-      const start = ci.indexOf(marker);
-      expect(start, generator.id).toBeGreaterThanOrEqual(0);
-      const next = ci.indexOf("\n      - name:", start + marker.length);
-      const step = ci.slice(start, next === -1 ? undefined : next);
-      const runStart = step.indexOf("\n        run:");
-      expect(runStart, generator.id).toBeGreaterThanOrEqual(0);
-      const commands = new Set(
-        step
-          .slice(runStart)
-          .split("\n")
-          .map((line) => line.trim().replace(/^run: /u, "")),
-      );
+      const step = namedCiStep(ciWorkflow, generator.checkedBy);
+      const run = step["run"];
+      if (typeof run !== "string") {
+        throw new TypeError(`${generator.checkedBy} has no run command`);
+      }
+      const commands = new Set(run.split("\n").map((line) => line.trim()));
+      if (commands.has("bun scripts/ci-generated-sources.ts prepare")) {
+        for (const command of CI_GENERATION_COMMANDS) {
+          commands.add(command.join(" "));
+        }
+      }
       // Runtime flags don't change what a command checks; an improvements-only
       // writer is guarded by the full check.
       const write = generator.write.filter(
@@ -318,7 +603,7 @@ describe("changed-file autofix boundary", () => {
         return argv.join(" ");
       };
       expect(
-        [write, check].some(
+        [write, generator.check ?? generator.checkedWith ?? check].some(
           (argv) => commands.has(argv.join(" ")) || commands.has(render(argv)),
         ),
         `${generator.id}: ${generator.checkedBy}`,
@@ -334,14 +619,20 @@ describe("changed-file autofix boundary", () => {
     const fixStep = job.indexOf("- name: Fix changed files");
     const restrictionStep = job.indexOf("- name: Restrict autofix changes");
     const pushStep = job.indexOf("- name: Push autofixes");
+    const selectStep = job.indexOf("- name: Select fix paths");
+    const preflightStep = job.indexOf(
+      "- name: Check whether fixers can change files",
+    );
+    const installStep = job.indexOf("- name: Install dependencies");
+    const selection = job.slice(selectStep, preflightStep);
     const fix = job.slice(fixStep, restrictionStep);
 
     expect(job).toContain("needs: regenerate-scope");
     expect(job).toContain("needs.regenerate-scope.result == 'success'");
     expect(job).toContain("needs.regenerate-scope.outputs.ready == 'true'");
     expect(job).toContain("github.actor != 'autofix-ci[bot]'");
-    expect(job.slice(generatorStep, fixStep)).toContain(
-      "if: needs.regenerate-scope.outputs.run == 'true'",
+    expect(job.slice(generatorStep, restrictionStep)).toContain(
+      "needs.regenerate-scope.outputs.run == 'true'",
     );
     expect(job).toContain("scripts/autofix-plan.ts plan");
     expect(job).toContain("scripts/autofix-plan.ts plan --all");
@@ -349,32 +640,72 @@ describe("changed-file autofix boundary", () => {
     expect(job).toContain("-ge 3000");
     expect(changedStep).toBeGreaterThan(scopeStep);
     expect(generatorStep).toBeGreaterThan(changedStep);
-    expect(fixStep).toBeGreaterThan(generatorStep);
+    expect(fixStep).toBeGreaterThan(changedStep);
+    expect(generatorStep).toBeGreaterThan(fixStep);
     expect(restrictionStep).toBeGreaterThan(fixStep);
     expect(pushStep).toBeGreaterThan(restrictionStep);
+    expect(preflightStep).toBeLessThan(installStep);
+    for (const name of [
+      "Install dependencies",
+      "Prepare environment",
+      "Fix changed files",
+      "Restrict autofix changes",
+      "Push autofixes",
+    ]) {
+      const step = job.indexOf(`- name: ${name}`);
+      expect(job.slice(step, step + 220)).toContain(
+        "if: steps.preflight.outputs.run == 'true'",
+      );
+    }
 
     expect(job).toContain(
       'git diff --name-only -z --diff-filter=ACMR "$BASE_SHA"..."$HEAD_SHA" -- > "$RUNNER_TEMP/autofix-changed-paths"',
     );
+    expect(job).toContain("- name: Raise stale bridge version");
+    expect(job).toContain("bash scripts/fix-bridge-version.sh");
+    expect(job).toContain("BRIDGE_VERSION_ALLOWED");
+    // Path filtering lives in one helper shared with the local verify entry;
+    // its filtering is tested directly in autofix-select-paths.test.ts.
+    expect(selection).toContain("bun scripts/autofix-select-paths.ts");
+    expect(selection).toContain('"$RUNNER_TEMP/autofix-format-paths"');
+    expect(selection).toContain('"$RUNNER_TEMP/autofix-lint-paths"');
     expect(fix).toContain(
-      "mapfile -d '' -t changed < \"$RUNNER_TEMP/autofix-changed-paths\"",
-    );
-    expect(fix).toContain('[[ -f "$path" && ! -L "$path" ]]');
-    expect(fix).toContain(
-      'if [[ "$path" == .github/workflows/* || "$path" == scripts/ratchet-baseline.json ]]; then',
-    );
-    expect(fix).toContain(
-      `bun --bun oxlint -c oxlint.config.ts --no-error-on-unmatched-pattern --fix "\${lint_paths[@]}"`,
+      `bun --bun oxlint -c oxlint.config.ts --no-error-on-unmatched-pattern --type-aware --fix "\${safe_rule_args[@]}" "\${lint_paths[@]}"`,
     );
     expect(fix).toContain("lint_status > 1");
-    expect(fix).toContain(
-      `bun --bun oxfmt -c .oxfmtrc.json --no-error-on-unmatched-pattern "\${format_paths[@]}"`,
+    expect(fix).toContain('done < "$RUNNER_TEMP/autofix-format-paths"');
+    expect(fix).toContain('done < "$RUNNER_TEMP/autofix-lint-paths"');
+    const prepare = fix.indexOf("bun scripts/ci-generated-sources.ts prepare");
+    const typecheck = fix.indexOf(
+      "bun scripts/typecheck-coverage.ts --autofix",
     );
-    for (const unsafe of [
-      "--fix-suggestions",
-      "--fix-dangerously",
-      "--type-aware",
-    ]) {
+    const autofix = fix.indexOf("--type-aware --fix");
+    expect(prepare).toBeGreaterThan(0);
+    // The fixer runs on the prepared type graph; its rewrites are checked
+    // afterwards and restored when their project does not type-check, and
+    // the step continues so formatting and generators still push.
+    expect(autofix).toBeGreaterThan(prepare);
+    expect(typecheck).toBeGreaterThan(autofix);
+    // A syntactic pass with the same rules runs first, reads nothing it
+    // would rewrite, and only its clean exit skips the type graph.
+    const precheck = fix.indexOf(
+      `bun --bun oxlint -c oxlint.config.ts --no-error-on-unmatched-pattern --max-warnings 0 "\${safe_rule_args[@]}" "\${lint_paths[@]}" || precheck_status=$?`,
+    );
+    expect(precheck).toBeGreaterThan(0);
+    expect(prepare).toBeGreaterThan(precheck);
+    expect(fix.slice(precheck, prepare)).toContain(
+      `bun scripts/autofix-type-aware-precheck.ts "\${lint_paths[@]}" || precheck_status=$?`,
+    );
+    expect(fix.slice(precheck, prepare)).toContain(
+      "if (( precheck_status == 0 )); then",
+    );
+    expect(fix.slice(precheck, prepare)).not.toContain("--fix");
+    expect(fix.slice(precheck, prepare)).not.toContain("--type-aware");
+    expect(fix.slice(typecheck)).toContain("restore_lint_paths");
+    expect(fix.slice(typecheck)).not.toContain('exit "$typecheck_status"');
+    expect(fix).toContain("set -euo pipefail");
+    expect(fix).toContain(`bun fmt --ignore-unknown "\${format_paths[@]}"`);
+    for (const unsafe of ["--fix-suggestions", "--fix-dangerously"]) {
       expect(fix).not.toContain(unsafe);
     }
     expect(job.slice(restrictionStep, pushStep)).toContain(
@@ -390,6 +721,69 @@ describe("changed-file autofix boundary", () => {
     );
   });
 
+  test("scopes a later push to what changed since the settled commit", async () => {
+    const job = jobOf(await Bun.file(WORKFLOW_URL).text());
+    const settledStep = job.indexOf("- name: Find settled autofix commit");
+    const planStep = job.indexOf("- name: Match generator inputs");
+    const derivedJob = job.indexOf("  regenerate-derived-files:");
+    const changedStep = job.indexOf("- name: Record changed paths");
+    const tauriStep = job.indexOf("- name: Align Tauri counterparts");
+    const fixStep = job.indexOf("- name: Fix changed files");
+    const pruneStep = job.indexOf("- name: Prune stale baseline entries");
+    const restrictionStep = job.indexOf("- name: Restrict autofix changes");
+    const pushStep = job.indexOf("- name: Push autofixes");
+
+    expect(settledStep).toBeGreaterThan(0);
+    expect(planStep).toBeGreaterThan(settledStep);
+    expect(job.slice(0, derivedJob)).toContain("checks: read");
+    expect(job.slice(0, settledStep)).toContain("fetch-depth: 21");
+    expect(job.slice(settledStep, planStep)).toContain(
+      "github.event.action == 'synchronize'",
+    );
+    expect(job.slice(settledStep, planStep)).toContain(
+      "scripts/autofix-push-scope.ts settled",
+    );
+    expect(job.slice(planStep, derivedJob)).toContain(
+      'scripts/autofix-plan.ts plan --since "$RUNNER_TEMP/push-paths"',
+    );
+    // An older planner prints no `needed` or `prune`; empty means run.
+    expect(job.slice(derivedJob, changedStep)).toContain(
+      "needs.regenerate-scope.outputs.needed != 'false'",
+    );
+    expect(job.slice(pruneStep, restrictionStep)).toContain(
+      "needs.regenerate-scope.outputs.prune != 'false'",
+    );
+    // Fixers read the push scope; the rewrite boundary stays the whole PR.
+    const changed = job.slice(changedStep, tauriStep);
+    expect(changed).toContain(
+      'git diff --name-only -z --no-renames "$SINCE_SHA" "$HEAD_SHA"',
+    );
+    expect(changed).toContain(
+      'cp "$RUNNER_TEMP/autofix-changed-paths" "$RUNNER_TEMP/autofix-fix-paths"',
+    );
+    // A changed fixer input drops the push scope for the fixers.
+    expect(changed).toContain(
+      `SINCE_SHA: \${{ needs.regenerate-scope.outputs.refix != 'true' && needs.regenerate-scope.outputs.since || '' }}`,
+    );
+    expect(job.slice(0, derivedJob)).toContain(
+      `refix: \${{ steps.scope.outputs.refix }}`,
+    );
+    const selectStep = job.indexOf("- name: Select fix paths");
+    expect(selectStep).toBeGreaterThan(changedStep);
+    expect(job.slice(selectStep, fixStep)).toContain(
+      'bun scripts/autofix-select-paths.ts \\\n            "$RUNNER_TEMP/autofix-fix-paths"',
+    );
+    expect(job.slice(fixStep, pruneStep)).toContain(
+      'done < "$RUNNER_TEMP/autofix-format-paths"',
+    );
+    expect(job.slice(fixStep, pruneStep)).not.toContain(
+      "autofix-changed-paths",
+    );
+    expect(job.slice(restrictionStep, pushStep)).toContain(
+      'done < "$RUNNER_TEMP/autofix-changed-paths"',
+    );
+  });
+
   test("skips an old head without the planner but detects a broken sparse checkout", async () => {
     const job = jobOf(await Bun.file(WORKFLOW_URL).text());
     const availability = job.indexOf("- name: Check planner availability");
@@ -400,7 +794,7 @@ describe("changed-file autofix boundary", () => {
     expect(plan).toBeGreaterThan(availability);
     expect(job).toContain(`ready: \${{ steps.planner.outputs.ready }}`);
     expect(scope).toContain(
-      "scripts/autofix-plan.ts scripts/generated-files.ts",
+      "scripts/autofix-plan.ts scripts/autofix-protected-paths.ts scripts/baseline-paths.ts scripts/generated-files.ts packages/scripts/src/generated-files.ts",
     );
     expect(scope).toContain('git cat-file -e "HEAD:$path"');
     expect(scope).toContain('echo "ready=false" >> "$GITHUB_OUTPUT"');
@@ -410,4 +804,134 @@ describe("changed-file autofix boundary", () => {
     );
     expect(job).toContain("needs.regenerate-scope.outputs.ready == 'true'");
   });
+});
+
+test("type-aware autofix fixtures require a successful dependency install", async () => {
+  // Pooled checks are steps of their job; see scripts/workflow-steps.ts.
+  const steps = workflowJobSteps(
+    Bun.YAML.parse(
+      await Bun.file(
+        new URL("../.github/workflows/ci.yml", import.meta.url),
+      ).text(),
+    ),
+    "ci-checks-rest",
+  );
+  const named = (name: string) => {
+    const step = steps.find((candidate) => candidate["name"] === name);
+    expect(step, name).toBeDefined();
+    return { condition: String(step?.["if"]), run: String(step?.["run"]) };
+  };
+  const step = named("Test type-aware autofix");
+  expect(step.condition).toContain("steps.install.outcome == 'success'");
+  expect(step.condition).toContain(
+    "needs.ci-plan.outputs.package_checks_required == 'true'",
+  );
+  expect(step.run).toContain("bun test scripts/autofix-type-aware.test.ts");
+  const invariants = named("Test CI workflow invariants").run;
+  expect(invariants).not.toContain("scripts/autofix-type-aware.test.ts");
+  expect(invariants).not.toContain(
+    "apps/api/scripts/refresh-test-durations.test.ts",
+  );
+});
+
+test("source fixes use only the documented safe-rule allowlist and never save PR caches", () => {
+  const workflow = readFileSync(WORKFLOW_URL, "utf-8");
+  const steps = workflowJobSteps(
+    Bun.YAML.parse(workflow),
+    "regenerate-derived-files",
+  );
+  const fix = workflowStepByName(steps, "Fix changed files")["run"];
+  expect(fix).toContain("bun scripts/autofix-safe-rules.ts");
+  expect(fix).toContain(`"\${safe_rule_args[@]}" "\${lint_paths[@]}"`);
+  expect(safeAutofixRuleArgs()).toEqual([
+    "--allow",
+    "all",
+    ...Object.keys(SAFE_AUTOFIX_RULES).flatMap((rule) => ["--deny", rule]),
+  ]);
+  for (const reason of Object.values(SAFE_AUTOFIX_RULES)) {
+    expect(reason.length).toBeGreaterThan(20);
+  }
+  expect(workflow).not.toContain("save: true");
+  expect(workflow).not.toContain("--fix-dangerously");
+  const refresh = steps.indexOf(
+    workflowStepByName(steps, "Refresh merged lockfile"),
+  );
+  expect(refresh).toBeLessThan(
+    steps.indexOf(workflowStepByName(steps, "Install dependencies")),
+  );
+  expect(workflowStepByName(steps, "Refresh merged lockfile")["run"]).toContain(
+    'refresh-lock --repo "$GITHUB_WORKSPACE"',
+  );
+});
+
+test("runs lockfile tooling from the workflow revision, not the pull request", () => {
+  const steps = workflowJobSteps(
+    Bun.YAML.parse(readFileSync(WORKFLOW_URL, "utf-8")),
+    "regenerate-derived-files",
+  );
+  const checkout = workflowStepByName(steps, "Checkout lockfile tooling");
+  const checkoutInputs = checkout["with"];
+  if (!isRecord(checkoutInputs)) {
+    throw new TypeError("Lockfile tooling checkout inputs must be a mapping");
+  }
+  expect(checkoutInputs).toMatchObject({
+    repository: `\${{ github.repository }}`,
+    ref: `\${{ github.workflow_sha }}`,
+    path: ".workflow-tooling",
+    "persist-credentials": false,
+    "sparse-checkout-cone-mode": false,
+  });
+  const sparseCheckout = String(checkoutInputs["sparse-checkout"]);
+  for (const source of [
+    "packages/scripts/src/generated-files.ts",
+    "scripts/autofix-protected-paths.ts",
+    "scripts/baseline-paths.ts",
+    "scripts/bun-lock-text.ts",
+    "scripts/generated-conflicts.ts",
+    "scripts/generated-files.ts",
+  ]) {
+    expect(sparseCheckout.split("\n")).toContain(source);
+  }
+  expect(
+    workflowStepByName(
+      steps,
+      "Preserve lockfile tooling across source checkout",
+    )["run"],
+  ).toContain('rm -rf "$GITHUB_WORKSPACE/.workflow-tooling"');
+
+  for (const name of ["Refresh merged lockfile", "Restrict autofix changes"]) {
+    const run = String(workflowStepByName(steps, name)["run"]);
+    expect(run).toContain(
+      '"$RUNNER_TEMP/workflow-tooling/scripts/generated-conflicts.ts"',
+    );
+    expect(run).not.toMatch(
+      /(?:^|[;&|]\s*)bun(?:\s+--[\w-]+)*\s+scripts\/generated-conflicts\.ts\b/mu,
+    );
+  }
+});
+
+test("rechecks refresh-approved lockfile pins at the final collection boundary", () => {
+  const steps = workflowJobSteps(
+    Bun.YAML.parse(readFileSync(WORKFLOW_URL, "utf-8")),
+    "regenerate-derived-files",
+  );
+  expect(workflowStepByName(steps, "Refresh merged lockfile")["run"]).toContain(
+    'cp -- bun.lock "$RUNNER_TEMP/autofix-frozen-bun.lock"',
+  );
+  const restriction: unknown = workflowStepByName(
+    steps,
+    "Restrict autofix changes",
+  )["run"];
+  if (typeof restriction !== "string") {
+    throw new TypeError("Restrict autofix changes must be a shell step");
+  }
+  expect(restriction).toContain(
+    'assert-frozen-lock --repo "$GITHUB_WORKSPACE"',
+  );
+  expect(restriction).toContain(
+    '--frozen "$RUNNER_TEMP/autofix-frozen-bun.lock"',
+  );
+  expect(restriction.indexOf("assert-frozen-lock")).toBeLessThan(
+    restriction.indexOf('excludes+=(":(exclude,literal)bun.lock")'),
+  );
 });

@@ -42,6 +42,7 @@ import type {
   DocumentWriteAccess,
   NewDocumentVersionOperation,
 } from "@/api/lib/entities/authorize-document-write";
+import { CALLER_AUTHORIZED } from "@/api/lib/entities/buffer-write-authority";
 import { createEntityVersionFromBuffer } from "@/api/lib/entity-versions/create-entity-version-from-buffer";
 import { loadEntityVersionDocxBuffer } from "@/api/lib/entity-versions/load-entity-version-file-buffer";
 import { resolveDocxEditAuthorName } from "@/api/lib/entity-versions/resolve-docx-edit-author-name";
@@ -470,6 +471,7 @@ export const createAutoApplySuggestChangesTools = ({
         const writeAttemptResult = await Result.tryPromise({
           try: async () =>
             await createVersion({
+              authority: CALLER_AUTHORIZED,
               safeDb,
               organizationId,
               workspaceId,

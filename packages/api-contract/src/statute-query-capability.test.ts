@@ -5,8 +5,9 @@ import { STATUTE_ACTS } from "./statute-acts";
 import { STATUTE_ALIASES } from "./statute-aliases";
 import { statuteGazetteAbbreviation } from "./statute-gazette";
 import {
-  STATUTE_QUERY_CAPABILITIES,
+  isStatuteGazetteCountry,
   readStatuteQueryScope,
+  STATUTE_QUERY_CAPABILITIES,
 } from "./statute-query-capability";
 import { parseStatuteQuery } from "./statute-query-intent";
 
@@ -28,6 +29,13 @@ describe("statute query capability", () => {
       switch (scope.type) {
         case "supported": {
           const { country } = scope;
+          if (!isStatuteGazetteCountry(country)) {
+            // The Magyar Közlöny grammar reads designations, not numbers.
+            expect(
+              parseStatuteQuery(country, "2000. évi I. törvény"),
+            ).toMatchObject({ type: "act", number: "1", year: "2000" });
+            break;
+          }
           const { defaultCollection } = STATUTE_QUERY_CAPABILITIES[country];
           expect(Object.keys(STATUTE_ALIASES[country]).length).toBeGreaterThan(
             0,

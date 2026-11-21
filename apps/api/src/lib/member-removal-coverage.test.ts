@@ -1,11 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import { is } from "drizzle-orm";
-import { PgTable, getTableConfig } from "drizzle-orm/pg-core";
+import { getTableConfig, PgTable } from "drizzle-orm/pg-core";
 import type { PgColumn } from "drizzle-orm/pg-core";
 
 import * as agentSchema from "@/api/db/agent-auth-schema";
 import * as authSchema from "@/api/db/auth-schema";
 import * as schema from "@/api/db/schema";
+import { RETAINED_USER_ATTRIBUTION_COLUMNS } from "@/api/tests/helpers/user-attribution-retention";
 
 import {
   ORGANIZATION_MEMBER_CLEANUP_COLUMNS,
@@ -23,11 +24,18 @@ const MEMBER_REFERENCE_NAME =
 
 /** JSON columns whose documents can hold user or member ids. */
 const JSON_MEMBER_REFERENCE_COLUMNS = [
+  "account_exports.attempt_object_keys",
   "audit_logs.metadata",
   "audit_logs.changes",
   "cell_metadata.metadata",
   "chat_messages.content",
+  "request_idempotency_receipts.response_body",
+  "chat_message_revisions.content",
   "chat_run_log_entries.chunk",
+  "chat_run_logs.reference_summary",
+  "desktop_runner_app_calls.result",
+  "desktop_runner_commands.payload",
+  "desktop_runner_events.message",
   "entity_versions.collaboration_contributor_user_ids",
   "fields.content",
   "flow_run_steps.output",
@@ -43,31 +51,70 @@ const JSON_MEMBER_REFERENCE_COLUMNS = [
 
 /** JSON columns read and found to hold no user or member id. */
 const JSON_COLUMNS_WITHOUT_MEMBER_REFERENCES = [
+  "account_audit_logs.request_metadata",
   "account_deletion_requests.storage_cleanup",
+  // Matter ids and a closed legal-basis literal; no member identifiers.
+  "account_deletion_requests.erasure_report",
+  "chat_message_revisions.edit",
+  // A queued user message and its send options: text, the member's stored
+  // file references, matter, skill and model choices; no member ids.
+  "chat_queued_messages.request",
+  "conflict_checks.parties",
+  "conflict_checks.results",
+  // Generation and index names, proof and seeding pass identities, document
+  // counts; the actor is its own column.
+  "corpus_index_generation_flips.evidence",
   "agent_skills.metadata",
   "anonymization_blacklist_entries.variants",
   "bilingual_translation_rows.warnings",
   "bilingual_translation_runs.glossary",
+  "case_law_analysis_failures.provider_diagnostic",
+  // Citation evidence stores source-text offsets, not member identities.
+  "case_law_citations.polarity_evidence_windows",
+  // Global corpus coverage counts and source metadata contain no member identifiers.
+  "case_law_coverage_summaries.answer",
+  // Review evidence quotes public court text and its offsets; no member ids.
+  "case_law_decision_reviews.opening_evidence",
   "case_law_decision_supplements.document_ast",
   "case_law_decision_supplements.metadata",
   "case_law_decisions.sections",
   "case_law_decisions.document_ast",
+  "case_law_decisions.extraction_warnings",
   "case_law_decisions.analysis",
   "case_law_decisions.metadata",
+  // A publisher's typed metadata of a public decision and the identifiers it
+  // declares on it; no member ids.
+  "case_law_held_decision_attachments.declared_identifiers",
+  // Publisher sections and the public decision identifiers used to match them.
+  "case_law_held_decision_attachments.document_part",
+  "case_law_held_decision_attachments.match_evidence",
+  "case_law_held_decision_attachments.metadata",
   "case_law_judges.external_refs",
+  // Corpus population buckets: kind/value pairs derived from public decisions.
+  "case_law_population_projections.buckets",
   "case_law_polarity_rules.surface_forms",
   "case_law_provision_extractions.unresolved_counts",
   "case_law_reconciliation_items.payload",
+  // Corpus removal evidence and retry state contain no member identifiers.
+  "case_law_removal_reconciliation_items.payload",
   "case_law_replay_audit_events.details",
   "case_law_replay_batches.gate_verdict",
   "case_law_research_answers.answer",
   "case_law_research_answers.run",
   "case_law_research_columns.content",
   "case_law_research_columns.tool",
+  "case_law_sitemap_shard_counts.months",
   "case_law_sources.config",
   "case_law_sources.descriptor",
+  // Corpus enumeration cursor and publisher backoff contain no member identifiers.
+  "case_law_sources.removal_checkpoint",
   "chat_thread_compactions.summary",
   "chat_thread_names.target",
+  "chat_threads.active_skill",
+  // Generator identifiers and corpus decision IDs contain no member identifiers.
+  "chat_threads.generation_provenance",
+  // A local run target names a harness and model, never a member.
+  "chat_threads.chat_local_run_target",
   "clause_variants.body",
   "clause_versions.body",
   "clauses.body",
@@ -79,6 +126,7 @@ const JSON_COLUMNS_WITHOUT_MEMBER_REFERENCES = [
   "contacts.metadata",
   "contacts.bank_accounts",
   "contacts.billing_address",
+  "correspondence.data_box_envelope",
   "correspondence.original_signature",
   "correspondence.sender",
   "correspondence.recipients_to",
@@ -88,11 +136,19 @@ const JSON_COLUMNS_WITHOUT_MEMBER_REFERENCES = [
   "correspondence_filers.filed_by_display",
   "database_backfill_states.batch",
   "desktop_edit_handoffs.linked_account",
+  // Harness reports: ids, states, versions and models.
+  "desktop_runners.harnesses",
+  // Folders linked on the computer: link ids, folder names and states.
+  "desktop_runners.linked_folders",
+  // Background task counts keyed by run id.
+  "desktop_runners.background_tasks",
+  "desktop_time_entry_batches.result",
   "desktop_edit_sessions.checkpoint_scan_warnings",
   "document_review_findings.payload",
   "document_review_parties.parties",
   "document_review_runs.basis",
   "document_review_runs.skipped",
+  "document_review_runs.withheld_sources",
   "document_translation_runs.warnings",
   "document_translation_units.application",
   "document_translation_units.warnings",
@@ -109,11 +165,15 @@ const JSON_COLUMNS_WITHOUT_MEMBER_REFERENCES = [
   "eu_completion_receipts.provenance",
   "feedback_reports.context",
   "feedback_reports.deliveries",
+  // Terminal AI outcomes contain a run id and timestamp, not a member id; the
+  // refusal reason is a closed literal and cannot carry user-provided text.
+  "fields.ai_settlement",
   "flow_definitions.steps",
   "flow_definitions.trigger",
   "flow_runs.definition_snapshot",
   "folio_collab_room_tokens.permissions",
   "folio_collab_rooms.docx_checkpoint_scan_warnings",
+  "folio_collab_rooms.saved_snapshot_cut",
   "usage_provider_webhook_events.replay_audit",
   "justifications.content",
   "justifications.bounding_boxes",
@@ -121,20 +181,38 @@ const JSON_COLUMNS_WITHOUT_MEMBER_REFERENCES = [
   "legal_list_claims.anchor",
   "legal_list_claims.refs",
   "legal_list_claims.record_conflict",
+  // A closed qualifier kind and the grader's explanation; no member id.
+  "legal_list_claims.qualifiers",
+  // Which model decided the verdict, a fallback reason and a confidence;
+  // no member id.
+  "legal_list_claims.decider",
   "legal_list_generation_candidate_sources.locator",
   "legal_list_item_sources.locator",
   "legal_list_verification_runs.evidence",
+  // A paragraph range and its two edges (block id, offset); no member id.
+  "legal_list_verification_runs.scope",
+  // Edges of text a run could not read (block id, offset); no member id.
+  "legal_list_verification_runs.unread_parts",
+  "legal_lists.sample_case",
+  "legal_reader_answer_messages.citations",
+  "legal_reader_answer_messages.usage",
+  "legal_reader_answers.continuation_spans",
+  // Revision references and aggregate public-text counts contain no member identifiers.
+  "legislation_documents.change_summary",
   "legislation_documents.sections",
   "legislation_documents.document_ast",
   "legislation_documents.metadata",
+  "legislation_amendment_snapshots.coverage",
   "legislation_sources.config",
   "legislation_sources.descriptor",
   "mcp_connector_authorization_reviews.observed_endpoint_origins",
   "mcp_connector_authorization_reviews.approved_endpoint_origins",
   "mcp_connectors.oauth_confirmed_endpoint_origins",
   "mcp_oauth_clients.registration_response",
+  "mcp_oauth_state.authorization_response_binding",
   "mcp_user_connections.cached_tools",
   "notifications.metadata",
+  "organization_settings.data_box_ids",
   "organization_settings.practice_jurisdictions",
   "organization_settings.native_tool_overrides",
   "organization_settings.disabled_native_tools",
@@ -150,6 +228,8 @@ const JSON_COLUMNS_WITHOUT_MEMBER_REFERENCES = [
   "properties.content",
   "properties.tool",
   "property_dependencies.condition",
+  "organization_data_exports.parts",
+  "organization_data_exports.plan",
   "report_exports.template_ref",
   "report_exports.layout",
   "sanctions_contact_matches.match",
@@ -166,6 +246,7 @@ const JSON_COLUMNS_WITHOUT_MEMBER_REFERENCES = [
   "soft_law_document_versions.metadata",
   "soft_law_document_versions.source_dates",
   "soft_law_ingestion_attempts.entry",
+  "soft_law_ingestion_attempts.raw_objects",
   "system_audit_runs.counts",
   "template_fills.structure_errors",
   "template_persistence_requests.result",
@@ -187,17 +268,40 @@ const JSON_COLUMNS_WITHOUT_MEMBER_REFERENCES = [
 
 /** Member references both removal paths keep, and why. */
 const RETAINED_MEMBER_COLUMNS = {
+  "outbound_actions.user_id":
+    "Pending actions are removed; claimed and terminal delivery history remains attributable, with current membership and thread access gating reads.",
+  "oauth_grant_revocations.user_id":
+    "A revocation only refuses tokens issued before it and is pruned after the access-token lifetime.",
+  "desktop_time_entry_batches.user_id":
+    "Terminal billing replay receipt; current membership gates access and the row cascades with account or organization deletion.",
+  "account_audit_logs.user_id":
+    "User-owned account audit history; matter and organization removal do not erase the user account or grant membership.",
+  "sso_provider.user_id":
+    "Who registered the organization's SSO provider; the provider belongs to the organization, the attribution grants no membership or authority, and account deletion clears it.",
+  "account_exports.attempt_object_keys":
+    "Storage keys of the account's own archives, named by account id; reclamation and account deletion own them, not membership removal.",
+  "account_exports.user_id":
+    "Account-owned export ledger; matter and organization removal do not erase the user account, and each archive rechecks current membership when built.",
   "entity_versions.collaboration_contributor_user_ids":
     "Contribution history, not membership or write authority.",
   "legal_list_generation_candidates.suggested_assignee_user_ids":
     "Assignment suggestions; accepting a suggestion validates current membership.",
   "sanctions_contact_matches.reviewed_by":
     "Screening review attribution; current membership gates review actions.",
-  "audit_logs.user_id": "Audit performer history.",
+  "conflict_checks.run_by":
+    "Conflict-check attribution on the firm's compliance record; current membership and permissions gate every read and decision.",
+  "conflict_checks.decided_by":
+    "Decision attribution on the firm's compliance record; it grants no membership or review authority.",
+  "sanctions_screening_events.reviewer_id":
+    "Screening decision history; attribution grants no membership or review authority.",
+  "feature_enrolments.user_id":
+    "The person's own feature opt-in; access also requires current membership, and the row cascades with the user and organization.",
   "audit_logs.trigger_user_id": "Audit trigger history.",
   "audit_logs.approved_by_user_id": "Audit approval history.",
   "buffer_object_cleanup_intents.writer_user_id":
     "Storage erasure receipt; retained for cleanup.",
+  "invoice_sends.sent_by_user_id":
+    "Invoice delivery history; links remain valid after account deletion.",
   "time_entries.approved_by_user_id": "Billing approval history.",
   "time_entries.returned_by_user_id": "Billing return history.",
   "usage_allocations.seat_scope_user_id":
@@ -207,6 +311,12 @@ const RETAINED_MEMBER_COLUMNS = {
     "Account-scoped record; organization removal does not erase the user account.",
   "action_cost_records.user_id":
     "Retained accounting, telemetry or contribution history; no membership grant.",
+  "organization_creation_requests.user_id":
+    "Account-owned creation replay receipt; membership removal must not reopen the creation request, and account or organization deletion cascades the row. Grants no membership.",
+  "organization_professional_use_acceptances.accepted_by_user_id":
+    "Acceptance record of who created the organization; grants no membership.",
+  "user_professional_use_acceptances.user_id":
+    "Account-scoped acceptance record; organization removal does not erase the user account.",
   "agent_skill_comments.author_id":
     "Retained attribution or request history; this column grants no matter membership.",
   "agent_skill_comments.resolved_by":
@@ -233,18 +343,30 @@ const RETAINED_MEMBER_COLUMNS = {
     "Retained attribution or request history; this column grants no matter membership.",
   "case_law_matter_links.linked_by":
     "Retained attribution or request history; this column grants no matter membership.",
+  "legislation_matter_links.linked_by":
+    "Retained attribution or request history; this column grants no matter membership.",
   "case_law_research_columns.created_by":
     "Retained attribution or request history; this column grants no matter membership.",
   "cell_metadata.created_by":
     "Retained attribution or request history; this column grants no matter membership.",
   "cell_metadata.updated_by":
     "Retained attribution or request history; this column grants no matter membership.",
+  "chat_message_revisions.created_by":
+    "Retained edit attribution; current thread ownership and matter membership gate access.",
   "chat_messages.user_id":
     "User-owned matter content or preferences; current organization/matter membership gates access.",
+  "chat_secrets.user_id":
+    "Short-lived private input receipt in the user's own thread; current organization membership gates access and the payload expires within a day.",
   "chat_threads.user_id":
     "User-owned matter content or preferences; current organization/matter membership gates access.",
   "chat_turns.user_id":
     "User-owned matter content or preferences; current organization/matter membership gates access.",
+  "chat_queued_messages.user_id":
+    "User-owned matter content or preferences; current organization/matter membership gates access, and the queue's sender proves the member again before it sends one.",
+  "chat_command_receipts.user_id":
+    "A retry key of the person's own send or answer; it holds no content, current membership gates the send it answers, and it expires within a day.",
+  "chat_queue_holds.user_id":
+    "Why the person's own queue waits; it holds no content, and the queue's sender proves the member again before it sends anything.",
   "clauses.created_by":
     "Retained attribution or request history; this column grants no matter membership.",
   "contact_extraction_uploads.user_id":
@@ -258,6 +380,8 @@ const RETAINED_MEMBER_COLUMNS = {
   "correspondence_filers.filed_by_user_id":
     "Existing correspondence offboarding owns cleanup; attribution columns remain history.",
   "document_processing_runs.requested_by":
+    "Retained attribution or request history; this column grants no matter membership.",
+  "document_review_finding_decisions.actor_id":
     "Retained attribution or request history; this column grants no matter membership.",
   "document_review_findings.decided_by":
     "Retained attribution or request history; this column grants no matter membership.",
@@ -299,6 +423,10 @@ const RETAINED_MEMBER_COLUMNS = {
     "Retained attribution or request history; this column grants no matter membership.",
   "infosoud_tracked_cases.created_by":
     "Retained attribution or request history; this column grants no matter membership.",
+  "legal_holds.placed_by":
+    "Legal hold placement evidence; holds are audited records that grant no matter membership.",
+  "legal_holds.released_by":
+    "Legal hold release evidence; holds are audited records that grant no matter membership.",
   "legal_list_claim_review_events.actor_id":
     "Retained attribution or request history; this column grants no matter membership.",
   "legal_list_fact_details.updated_by":
@@ -309,17 +437,25 @@ const RETAINED_MEMBER_COLUMNS = {
     "Retained attribution or request history; this column grants no matter membership.",
   "legal_list_item_reviews.reviewer_id":
     "Retained attribution or request history; this column grants no matter membership.",
+  "legal_list_item_source_decisions.actor_id":
+    "Retained attribution or request history; this column grants no matter membership.",
   "legal_list_item_sources.verified_by":
     "Retained attribution or request history; this column grants no matter membership.",
   "legal_list_item_sources.created_by":
     "Retained attribution or request history; this column grants no matter membership.",
   "legal_list_items.added_by":
     "Retained attribution or request history; this column grants no matter membership.",
+  "legal_list_source_documents.updated_by":
+    "Retained attribution or request history; this column grants no matter membership.",
   "legal_list_verification_runs.requested_by":
     "Retained attribution or request history; this column grants no matter membership.",
+  "legal_list_verification_read_receipts.user_id":
+    "Read-audit dedupe receipt; retained with the run, cascades on user deletion, and grants no membership.",
   "legal_lists.created_by":
     "Retained attribution or request history; this column grants no matter membership.",
   "legal_reader_annotations.user_id":
+    "User-owned matter content or preferences; current organization/matter membership gates access.",
+  "legal_reader_answers.user_id":
     "User-owned matter content or preferences; current organization/matter membership gates access.",
   "matter_inbound_addresses.created_by":
     "Retained attribution or request history; this column grants no matter membership.",
@@ -327,6 +463,8 @@ const RETAINED_MEMBER_COLUMNS = {
     "Retained attribution or request history; this column grants no matter membership.",
   "notifications.user_id":
     "User-owned matter content or preferences; current organization/matter membership gates access.",
+  "push_devices.user_id":
+    "The person's own device registration, holding no organization content; alerts name nothing, and the row moves when the app signs in to another organization.",
   "pending_uploads.user_id":
     "Short-lived operation; current membership is revalidated before use.",
   "playbook_definition_versions.created_by":
@@ -335,6 +473,8 @@ const RETAINED_MEMBER_COLUMNS = {
     "Retained attribution or request history; this column grants no matter membership.",
   "rate_entries.user_id":
     "Retained billing records; current membership gates time APIs and timers are closed by offboarding.",
+  "organization_data_exports.requested_by":
+    "Retained attribution or request history; the export worker re-checks the requester's current permission before every part.",
   "report_exports.requested_by":
     "Retained attribution or request history; this column grants no matter membership.",
   "saved_searches.user_id":
@@ -405,10 +545,20 @@ const RETAINED_MEMBER_COLUMNS = {
   "audit_logs.changes": "Audit history.",
   "cell_metadata.metadata":
     "Flag and lock attribution history; grants no matter membership.",
+  "chat_message_revisions.content":
+    "Retained conversation history; tool payloads name members as they were.",
   "chat_messages.content":
     "Conversation history; tool payloads name members as they were.",
   "chat_run_log_entries.chunk":
     "Run log history; tool payloads name members as they were.",
+  "chat_run_logs.reference_summary":
+    "Derived conversation context can retain member identifiers in text; it grants no membership and expires with the run log.",
+  "desktop_runner_app_calls.result":
+    "Answers the server gave the member's own runs, deleted with their runner on organization removal; tool results name people as they were.",
+  "desktop_runner_commands.payload":
+    "Commands of the member's own runs, deleted with their runner on organization removal; transcripts name members as they were.",
+  "desktop_runner_events.message":
+    "Messages of the member's own runs, deleted with their runner on organization removal; tool payloads name members as they were.",
   "fields.content":
     "A person property value; it names someone and grants nothing.",
   "flow_run_steps.output": "Review gate decision attribution history.",
@@ -443,6 +593,32 @@ const RETAINED_MEMBER_COLUMNS = {
  * the person stays a member of the organization.
  */
 const MATTER_REMOVAL_RETAINED_COLUMNS = {
+  "timer_activity_devices.user_id":
+    "The person's own phones in the organization, which stays theirs; the Lock Screen names a matter only while the person can still reach it, and organization removal deletes the rows.",
+  "billing_draft_user_settings.user_id":
+    "Organization-wide consent and preferences remain for the person's other matters; organization removal deletes them.",
+  "request_idempotency_receipts.user_id":
+    "Organization-owned request coordination: retain through the bounded replay window so retries in other matters remain single-execution. Replay still passes the route's current authorization; organization removal clears the rows and account deletion cascades.",
+  "request_idempotency_receipts.response_body":
+    "Historical response cache, not membership or write authority. Current route authorization gates replay; organization removal erases the cache, while retention bounds matter-removal history without reopening creates in other matters.",
+  "mcp_web_handoff.user_id":
+    "Organization credential; opening a matter uses current matter access.",
+  "desktop_presence.user_id":
+    "Organization-scoped presence; the person stays an organization member.",
+  "desktop_runners.user_id":
+    "Organization-scoped runner; the person stays an organization member.",
+  "desktop_runner_runs.user_id":
+    "Runs of an organization-scoped runner; each MCP call intersects the run's matters with current matter access.",
+  "desktop_runner_folder_restores.user_id":
+    "Undos of an organization-scoped runner's chat folders; the undo routes read the turn through current chat and matter access.",
+  "search_history_entries.user_id":
+    "The person's own organization-scoped search history; they stay an organization member.",
+  "search_history_country_clears.user_id":
+    "Organization-scoped country clear barriers outlive a matter removal.",
+  "search_history_owners.user_id":
+    "Organization-scoped history ordering state outlives a matter removal.",
+  "search_history_tombstones.user_id":
+    "Organization-scoped deletion identities outlive a matter removal.",
   "member.user_id": "Organization membership outlives a matter removal.",
   "contacts.originating_attorney_id":
     "Organization-level attorney; the person stays an organization member.",
@@ -458,6 +634,12 @@ const MATTER_REMOVAL_RETAINED_COLUMNS = {
     "Organization-scoped connection; the person stays an organization member.",
   "sharepoint_oauth_state.user_id":
     "Organization-scoped connection; the person stays an organization member.",
+  "chat_tool_grants.user_id":
+    "The person's own organization-scoped tool approvals; every tool call still checks matter access.",
+  "chat_browser_site_grants.user_id":
+    "The person's own organization-scoped browser site approvals; they hold no matter data.",
+  "chat_limit_reminders.user_id":
+    "The person's own reminder for their own chat; it files a content-free notification, and opening the chat goes through current chat and matter access.",
   "invitation.inviter_id":
     "Organization invitation; the person stays an organization member.",
   "session.user_id":
@@ -594,7 +776,12 @@ const organizationPath: RemovalPath = {
   cleanup: new Set(
     ORGANIZATION_MEMBER_CLEANUP_COLUMNS.map(([column]) => columnKey(column)),
   ),
-  retained: new Map(Object.entries(RETAINED_MEMBER_COLUMNS)),
+  retained: new Map([
+    ...Object.entries(RETAINED_MEMBER_COLUMNS),
+    ...RETAINED_USER_ATTRIBUTION_COLUMNS.map(
+      ({ column, reason }) => [columnKey(column), reason] as const,
+    ),
+  ]),
 };
 const matterPath: RemovalPath = {
   name: "matter",
@@ -603,6 +790,9 @@ const matterPath: RemovalPath = {
   ),
   retained: new Map([
     ...Object.entries(RETAINED_MEMBER_COLUMNS),
+    ...RETAINED_USER_ATTRIBUTION_COLUMNS.map(
+      ({ column, reason }) => [columnKey(column), reason] as const,
+    ),
     ...Object.entries(MATTER_REMOVAL_RETAINED_COLUMNS),
   ]),
 };
@@ -620,6 +810,27 @@ const census = {
 };
 
 describe("member removal schema coverage", () => {
+  test("chat repair receipts retain only organization-owned metadata on member removal", () => {
+    // Repair history belongs to the organization, contains no member data,
+    // and is erased by its organization FK rather than member offboarding.
+    const receipt = schemaCensus().find(
+      (table) => table.name === "chat_content_v3_backfill_receipts",
+    );
+    expect(receipt).toBeDefined();
+    expect(receipt?.memberForeignKeyColumns).toEqual([]);
+    expect(receipt?.columns.map((column) => column.name).toSorted()).toEqual([
+      "from_version",
+      "message_id",
+      "organization_id",
+      "outcome",
+      "reason",
+      "recorded_at",
+      "row_id",
+      "source",
+    ]);
+    expect(receipt?.columns.some((column) => column.json)).toBe(false);
+  });
+
   test("every column naming a member has a disposition on both removal paths", () => {
     expect(memberReferenceGaps({ ...census, tables: schemaCensus() })).toEqual(
       [],
@@ -676,6 +887,9 @@ describe("member removal schema coverage", () => {
             ...matterPath,
             retained: new Map([
               ...Object.entries(RETAINED_MEMBER_COLUMNS),
+              ...RETAINED_USER_ATTRIBUTION_COLUMNS.map(
+                ({ column, reason }) => [columnKey(column), reason] as const,
+              ),
               ...matterOnly,
             ]),
           },

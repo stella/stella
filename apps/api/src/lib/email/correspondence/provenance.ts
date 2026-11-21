@@ -1,8 +1,16 @@
 import { panic } from "better-result";
 
-import type { CorrespondenceProvenance } from "@stll/api-contract/correspondence";
+import type {
+  CorrespondenceChannelContent,
+  CorrespondenceDirection,
+  CorrespondenceProvenance,
+} from "@stll/api-contract/correspondence";
 
 import type { correspondence } from "@/api/db/schema";
+import {
+  DIRECTION_BY_BASIS,
+  withDataBoxDirection,
+} from "@/api/lib/email/correspondence/data-box/direction";
 
 type StoredCorrespondenceProvenance = Pick<
   typeof correspondence.$inferSelect,
@@ -98,5 +106,46 @@ export const readCorrespondenceProvenance = (
     default:
       stored.source satisfies never;
       return panic("Unhandled correspondence source");
+  }
+};
+
+type StoredCorrespondenceChannel = Pick<
+  typeof correspondence.$inferSelect,
+  "channel" | "dataBox" | "direction"
+>;
+
+type CorrespondenceChannelProjection = CorrespondenceChannelContent & {
+  direction: CorrespondenceDirection;
+};
+
+/** Stored data-box envelopes contain only the file's assertions. */
+export const readCorrespondenceChannel = (
+  { channel, dataBox, direction }: StoredCorrespondenceChannel,
+  organizationBoxIds: readonly string[],
+): CorrespondenceChannelProjection => {
+  switch (channel) {
+    case "email":
+      if (dataBox !== null || direction === null) {
+        return panic("Email correspondence has invalid channel metadata");
+      }
+      return { channel, dataBox, direction };
+    case "data_box": {
+      if (
+        dataBox === null ||
+        direction !== null ||
+        "directionBasis" in dataBox
+      ) {
+        return panic("Data-box correspondence has invalid stored metadata");
+      }
+      const envelope = withDataBoxDirection(dataBox, organizationBoxIds);
+      return {
+        channel,
+        dataBox: envelope,
+        direction: DIRECTION_BY_BASIS[envelope.directionBasis],
+      };
+    }
+    default:
+      channel satisfies never;
+      return panic("Unhandled correspondence channel");
   }
 };

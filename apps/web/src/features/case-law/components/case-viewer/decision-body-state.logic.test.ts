@@ -1,11 +1,11 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  decisionHasNoDocument,
+  MISSING_BODY_REASON,
   missingBodyReason,
   missingBodyRetryable,
-  MISSING_BODY_REASON,
-  decisionHasNoDocument,
-} from "@/features/case-law/components/case-viewer/decision-body-state.logic";
+} from "@stll/decision-reader/decision-body-state.logic";
 
 test("only confirmed document absence changes notice and indexing", () => {
   for (const hasDocument of [false, true]) {

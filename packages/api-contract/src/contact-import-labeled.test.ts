@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
+import { normalizeUnicode } from "@stll/text-normalize";
+
 import {
   CONTACT_IMPORT_LABELED_FIELDS,
   CONTACT_IMPORT_VOCABULARIES,
@@ -19,8 +21,7 @@ describe("contact import vocabularies", () => {
       const labels = Object.values(vocabulary.fields).flatMap(
         ({ labels: aliases }) =>
           aliases.map((label) =>
-            label
-              .normalize("NFD")
+            normalizeUnicode(label, "NFD")
               .replace(/\p{Mark}/gu, "")
               .trim()
               .toLowerCase(),

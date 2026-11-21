@@ -3,6 +3,10 @@ import { STREAM_CHUNK_COMMIT_BUDGET } from "../../src/features/chat/stream-chunk
 import { RENDER_COMMIT_COUNT_GLOBAL } from "../../src/lib/render-storm-canary";
 import { EXPECTS_DEV_RUNTIME } from "../helpers/runtime-mode";
 import { expect, test } from "../helpers/test";
+import {
+  PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
+  PLAYWRIGHT_EXPECT_TIMEOUT_60_SECONDS_MS,
+} from "../helpers/wait-budgets";
 
 // Oracle `chat.render.stream-commits-bounded`, on the running app: for every
 // kind of chunk the thread page budgets, the mock model streams that kind as
@@ -45,17 +49,19 @@ for (const kind of KINDS) {
     const composer = page.getByRole("textbox", {
       name: /type your question/iu,
     });
-    await expect(composer).toBeVisible({ timeout: 30_000 });
+    await expect(composer).toBeVisible({
+      timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
+    });
     await composer.click();
     await composer.pressSequentially("Start this test thread");
     await page.getByRole("button", { name: "Send message" }).click();
     await expect(page).toHaveURL(
       /\/chat\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u,
-      { timeout: 30_000 },
+      { timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS },
     );
     const transcript = page.getByRole("log");
     await expect(transcript.getByRole("button", { name: "Retry" })).toBeVisible(
-      { timeout: 30_000 },
+      { timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS },
     );
 
     // The measured turn streams inside the settled thread route.
@@ -72,23 +78,36 @@ for (const kind of KINDS) {
       }, RENDER_COMMIT_COUNT_GLOBAL);
     const commitsBefore = await readCommits();
     const startedAt = Date.now();
+    const streamed = page.waitForResponse(
+      (response) =>
+        response.request().method() === "POST" &&
+        new URL(response.url()).pathname === "/v1/chat",
+    );
     await page.getByRole("button", { name: "Send message" }).click();
 
+    // These finite fixtures may finish before a browser observes Stop.
+    // Measure their actual SSE delivery instead of requiring that transient UI.
+    expect(await (await streamed).finished()).toBeNull();
     const stop = page.getByRole("button", { name: "Stop" });
-    await expect(stop).toBeVisible({ timeout: 30_000 });
-    await expect(stop).toHaveCount(0, { timeout: 60_000 });
-    const commits = (await readCommits()) - commitsBefore;
-    const seconds = (Date.now() - startedAt) / 1000;
-
+    await expect(stop).toHaveCount(0, {
+      timeout: PLAYWRIGHT_EXPECT_TIMEOUT_60_SECONDS_MS,
+    });
     if (WAITS_ON_USER[kind]) {
       await expect(
         transcript.getByRole("button", { name: "Submit answers" }),
-      ).toBeVisible({ timeout: 30_000 });
+      ).toBeVisible({ timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS });
     } else {
+      // The initial reply already has one Retry action. The second proves the
+      // browser processed this turn's terminal before sampling its commits.
+      await expect(
+        transcript.getByRole("button", { name: "Retry" }),
+      ).toHaveCount(2);
       await expect(
         transcript.getByRole("button", { name: "Resend" }),
       ).toHaveCount(0);
     }
+    const commits = (await readCommits()) - commitsBefore;
+    const seconds = (Date.now() - startedAt) / 1000;
     const detail = `chat.render.stream-commits-bounded: ${String(commits)} commits in ${seconds.toFixed(1)} s while ${streams} streamed`;
     expect(commits / seconds, detail).toBeLessThanOrEqual(budget);
   });

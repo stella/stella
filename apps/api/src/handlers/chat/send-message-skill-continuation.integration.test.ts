@@ -10,11 +10,12 @@ import {
 import { inArray } from "drizzle-orm";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
+import { CHAT_TOOL_EXECUTOR_METADATA_KEY } from "@stll/api-contract/chat";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { agentSkills, chatMessages, chatThreads } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
-import { toChatMessageContent } from "@/api/handlers/chat/chat-message-parts";
+import { toPersistedChatMessageContentV3 } from "@/api/handlers/chat/chat-message-parts";
 import type { ChatSendRequest } from "@/api/handlers/chat/chat-schema";
 import {
   claimChatTurnForExecution,
@@ -31,10 +32,12 @@ import {
 } from "@/api/handlers/chat/send-message-side-effects";
 import * as externalMcpToolsModule from "@/api/handlers/chat/tools/external-mcp-tools";
 import type { ChatPart } from "@/api/handlers/chat/types";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { withChatRunPings } from "@/api/lib/chat/chat-run-pings";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { createChatStreamMock } from "@/api/tests/helpers/chat-stream-mock";
@@ -165,6 +168,7 @@ const pendingAskUserCall = {
   arguments: JSON.stringify(askUserInput),
   id: ASK_USER_CALL_ID,
   input: askUserInput,
+  metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
   name: "ask-user",
   state: "input-complete",
   type: "tool-call",
@@ -184,6 +188,7 @@ const completedSkillCallParts = ({
       arguments: JSON.stringify(input),
       id: `${name}-1`,
       input,
+      metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "server" },
       name,
       output,
       state: "complete",
@@ -212,6 +217,7 @@ const seedAwaitingTurn = async (skillCallParts: ChatPart[]) => {
   });
 
   const acceptance = createChatTurnAcceptance({
+    source: { type: "member" },
     organizationId: ids.orgA,
     threadId,
     userId: ids.userA1,
@@ -219,37 +225,38 @@ const seedAwaitingTurn = async (skillCallParts: ChatPart[]) => {
     workspaceId: null,
   });
   unwrap(
-    await safeDb(async (tx) => {
-      await tx.insert(chatMessages).values([
-        {
-          content: toChatMessageContent({
-            data: [{ content: "Review this", type: "text" }],
-            version: 2,
-          }),
-          id: userMessageId,
-          role: "user",
-          threadId,
-          userId: ids.userA1,
-          workspaceId: null,
-        },
-        {
-          content: toChatMessageContent({
-            data: [...skillCallParts, pendingAskUserCall],
-            version: 2,
-          }),
-          id: assistantMessageId,
-          role: "assistant",
-          threadId,
-          userId: ids.userA1,
-          workspaceId: null,
-        },
-      ]);
-      expect(
-        await insertChatTurnAcceptanceOnTx({ acceptance, tx }),
-      ).toMatchObject({
-        type: "accepted",
-      });
-    }),
+    await withChatRunPings(
+      async (pings) =>
+        await safeDb(async (tx) => {
+          await tx.insert(chatMessages).values([
+            {
+              content: toPersistedChatMessageContentV3({
+                data: [{ content: "Review this", type: "text" }],
+              }),
+              id: userMessageId,
+              role: "user",
+              threadId,
+              userId: ids.userA1,
+              workspaceId: null,
+            },
+            {
+              content: toPersistedChatMessageContentV3({
+                data: [...skillCallParts, pendingAskUserCall],
+              }),
+              id: assistantMessageId,
+              role: "assistant",
+              threadId,
+              userId: ids.userA1,
+              workspaceId: null,
+            },
+          ]);
+          expect(
+            await insertChatTurnAcceptanceOnTx({ pings, acceptance, tx }),
+          ).toMatchObject({
+            type: "accepted",
+          });
+        }),
+    ),
   );
   const execution = unwrap(
     await claimChatTurnForExecution({
@@ -267,17 +274,21 @@ const seedAwaitingTurn = async (skillCallParts: ChatPart[]) => {
     throw new Error("Expected the accepted turn to be claimed");
   }
   unwrap(
-    await safeDb(
-      async (tx) =>
-        await settleChatTurnOnTx({
-          assistantMessageId,
-          execution,
-          outcome: {
-            interaction: { toolCallId: ASK_USER_CALL_ID, type: "ask-user" },
-            type: "awaiting-user",
-          },
-          tx,
-        }),
+    await withChatRunPings(
+      async (pings) =>
+        await safeDb(
+          async (tx) =>
+            await settleChatTurnOnTx({
+              pings,
+              assistantMessageId,
+              execution,
+              outcome: {
+                interaction: { toolCallId: ASK_USER_CALL_ID, type: "ask-user" },
+                type: "awaiting-user",
+              },
+              tx,
+            }),
+        ),
     ),
   );
   return { assistantMessageId, threadId };
@@ -322,10 +333,12 @@ const createContext = ({
     pinServerValidatedWorkspaceId: () => false,
     promptCachingEnabled: false,
     recordAuditEvent: async () => {},
-    request: new Request("http://localhost/v1/chat/send"),
-    route: "/v1/chat/send",
+    request: new Request("http://localhost/v1/chat"),
+    route: "/v1/chat" satisfies ApiRoutePath,
+    headers: {},
     safeDb,
     scopedDb,
+    set: { headers: {}, status: 200 },
     session: { activeOrganizationId: ids.orgA },
     user: { id: ids.userA1 },
   });

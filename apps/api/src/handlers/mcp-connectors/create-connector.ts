@@ -1,6 +1,8 @@
 import { Result } from "better-result";
 import { and, count, eq, inArray, isNull, or } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
+
+import { slugify } from "@stll/text-normalize";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { mcpConnectors } from "@/api/db/schema";
@@ -23,25 +25,30 @@ import type {
 } from "@/api/lib/api-handlers";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type { SafeId } from "@/api/lib/branded-types";
+import { displayNameSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { getCuratedMcpOAuthApproval } from "@/api/lib/mcp-connectors/catalog-metadata";
 import { oauthDomainsMatch } from "@/api/lib/mcp-upstream/oauth";
 
-const requestBody = t.Object({
-  url: t.String({ minLength: 1, maxLength: 2048 }),
-  displayName: t.Optional(t.String({ minLength: 1, maxLength: 160 })),
-  description: t.Optional(t.String({ minLength: 1, maxLength: 1000 })),
-  confirmedIssuer: t.Optional(t.String({ maxLength: 2048 })),
-  confirmedEndpointOrigins: t.Optional(
-    t.Array(t.String({ maxLength: 2048 }), { maxItems: 3 }),
+const requestBody = v.object({
+  url: v.pipe(v.string(), v.minLength(1), v.maxLength(2048)),
+  displayName: v.optional(displayNameSchema({ maxLength: 160 })),
+  description: v.optional(
+    v.pipe(v.string(), v.minLength(1), v.maxLength(1000)),
+  ),
+  confirmedIssuer: v.optional(v.pipe(v.string(), v.maxLength(2048))),
+  confirmedEndpointOrigins: v.optional(
+    v.pipe(v.array(v.pipe(v.string(), v.maxLength(2048))), v.maxLength(3)),
   ),
 });
 
 const config = {
+  contract: "patch",
   permissions: { organizationSettings: ["update"] },
-  accountAccess: ACCOUNT_ACCESS.standard,
+  accountAccess: ACCOUNT_ACCESS.accountControl,
   realtime: mcpConnectorRealtimeUpdates,
   mcp: { type: "internal", reason: "mcp_transport" },
   body: requestBody,
@@ -122,7 +129,8 @@ export const createMcpConnectorHandler = ({
         );
       }
 
-      const probeResult = await probeServer(normalizedUrl);
+      const permit = grantThirdPartyOutboundPermit();
+      const probeResult = await probeServer(normalizedUrl, permit);
       if (Result.isError(probeResult)) {
         return Result.err(
           new HandlerError({
@@ -165,11 +173,11 @@ export const createMcpConnectorHandler = ({
         input.displayName?.trim() || new URL(normalizedUrl).hostname;
       const [slug, iconUrl] = await Promise.all([
         nextSlug({
-          base: slugify(displayName),
+          base: connectorSlug(displayName),
           organizationId: session.activeOrganizationId,
           safeDb,
         }),
-        discoverIconUrl(normalizedUrl),
+        discoverIconUrl(normalizedUrl, permit),
       ]);
 
       const inserted = yield* Result.await(
@@ -279,21 +287,13 @@ const findDuplicateConnector = async ({
   return Result.ok(result.value.at(0));
 };
 
-const slugify = (value: string): string => {
-  let slug = value
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/gu, "-")
-    .slice(0, 60);
-
-  while (slug.startsWith("-")) {
-    slug = slug.slice(1);
-  }
-  while (slug.endsWith("-")) {
-    slug = slug.slice(0, -1);
-  }
-
-  return slug || "mcp-server";
-};
+const connectorSlug = (value: string): string =>
+  slugify(value, {
+    charset: "ascii",
+    fallback: "mcp-server",
+    maxLength: 60,
+    separator: "-",
+  });
 
 const nextSlug = async ({
   base,

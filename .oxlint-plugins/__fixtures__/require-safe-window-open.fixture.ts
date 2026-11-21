@@ -91,7 +91,7 @@ export const chainedWindowAlias = () => {
 };
 
 // MUST flag: invoking the primitive through call().
-// oxlint-disable-next-line require-safe-window-open/require-safe-window-open, eslint/no-useless-call -- fixture: call() invokes the same function
+// oxlint-disable-next-line require-safe-window-open/require-safe-window-open, no-useless-call -- fixture: call() invokes the same function
 export const callForm = window.open.call(window, externalDocumentUrl);
 
 // MUST flag: a sequence expression callee.

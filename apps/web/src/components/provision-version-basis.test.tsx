@@ -5,6 +5,7 @@ import { IntlProvider } from "use-intl";
 
 import { DECISION_DATE_VERSION_BASIS } from "@stll/api-contract/provision-version-basis";
 
+import { FormattingProvider } from "@/i18n/formatting-context";
 import ar from "@/i18n/langs/ar.json";
 import en from "@/i18n/langs/en.json";
 
@@ -21,7 +22,9 @@ for (const [locale, messages] of [
         messages={messages}
         timeZone="Europe/Prague"
       >
-        <ProvisionVersionBasisLabel basis={DECISION_DATE_VERSION_BASIS} />
+        <FormattingProvider locale={locale} timeZone="Europe/Prague">
+          <ProvisionVersionBasisLabel basis={DECISION_DATE_VERSION_BASIS} />
+        </FormattingProvider>
       </IntlProvider>,
     );
     expect(markup).toContain(

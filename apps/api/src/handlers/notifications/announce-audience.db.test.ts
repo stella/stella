@@ -1,3 +1,4 @@
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 /**
  * An announcement's audience is read in the caller's scoped transaction. The
  * `member` policy is what admits the organization's members and keeps every
@@ -5,8 +6,6 @@
  * request authentication builds. The recipient rows themselves are written
  * through a separate seam, captured here rather than filed.
  */
-
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 
 import { member, user } from "@/api/db/auth-schema";
@@ -16,6 +15,7 @@ import {
   createMembershipScopedDb,
 } from "@/api/db/scoped";
 import { createPublishAnnouncementEndpoint } from "@/api/handlers/notifications/announce";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditEvent } from "@/api/lib/audit-log";
@@ -197,7 +197,7 @@ describe("announcement endpoint", () => {
         promptCachingEnabled: false,
         recordAuditEvent,
         request: new Request("https://example.test/v1/notifications/announce"),
-        route: "/test/notifications/announce",
+        route: "/v1/notifications/announcements" satisfies ApiRoutePath,
         safeDb: createMembershipSafeDb(testDb, identity),
         scopedDb: createMembershipScopedDb(testDb, identity),
         session: { activeOrganizationId: ids.orgA },

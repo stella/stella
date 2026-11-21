@@ -1,20 +1,17 @@
-import {
-  Body,
-  Button,
-  Container,
-  Head,
-  Heading,
-  Hr,
-  Html,
-  Img,
-  Preview,
-  Section,
-  Text,
-} from "@react-email/components";
-
+import { Body } from "../components/body";
+import { Button } from "../components/button";
+import { Container } from "../components/container";
+import { Head } from "../components/head";
+import { Heading } from "../components/heading";
+import { Hr } from "../components/hr";
+import { Html } from "../components/html";
+import { Preview } from "../components/preview";
+import { Section } from "../components/section";
+import { Text } from "../components/text";
 import { getEmailDirection, getTranslator } from "../i18n/translate";
 import type { SupportedLang } from "../i18n/translate";
-import { BRAND_FOOTER_TEXT, ICON_URL, brand, sharedStyles } from "./_shared";
+import { brand, BRAND_FOOTER_TEXT, sharedStyles } from "./_shared";
+import { Wordmark } from "./_wordmark";
 
 type Props = {
   inviteLink: string;
@@ -39,15 +36,7 @@ export const Email = ({
       </Preview>
       <Body style={sharedStyles.body}>
         <Container style={sharedStyles.container}>
-          <Section style={sharedStyles.wordmarkSection}>
-            <Img
-              src={ICON_URL}
-              alt="stella"
-              width="40"
-              height="40"
-              style={{ margin: "0 auto", display: "block" }}
-            />
-          </Section>
+          <Wordmark />
           <Heading style={sharedStyles.heading}>
             {t("invitation.heading")}
           </Heading>
@@ -57,8 +46,8 @@ export const Email = ({
               invitedByUsername,
             })}
           </Text>
-          <Section style={styles["buttonSection"]}>
-            <Button href={inviteLink} style={styles["button"]}>
+          <Section style={styles.buttonSection}>
+            <Button href={inviteLink} style={styles.button}>
               {t("invitation.accept")}
             </Button>
           </Section>
@@ -72,14 +61,7 @@ export const Email = ({
   );
 };
 
-Email.PreviewProps = {
-  inviteLink: "http://localhost:3000/auth/accept-invitation/xxx",
-  organizationName: "Acme Inc",
-  invitedByUsername: "Jane Doe",
-  lang: "en",
-} satisfies Props;
-
-const styles: Record<string, React.CSSProperties> = {
+const styles = {
   buttonSection: {
     margin: "24px 0",
     textAlign: "center" as const,
@@ -87,10 +69,10 @@ const styles: Record<string, React.CSSProperties> = {
   button: {
     backgroundColor: brand.blue,
     borderRadius: "8px",
-    color: "#ffffff",
+    color: brand.foregroundOnAccent,
     fontSize: "16px",
     fontWeight: "600",
     padding: "12px 24px",
     textDecoration: "none",
   },
-};
+} satisfies Record<string, React.CSSProperties>;

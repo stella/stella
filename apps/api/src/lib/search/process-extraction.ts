@@ -1,9 +1,8 @@
-/** Durable native extraction request and worker-side execution. */
-
 import { panic, Result } from "better-result";
+/** Durable native extraction request and worker-side execution. */
 import { and, eq, sql } from "drizzle-orm";
 
-import { isEmailMimeType } from "@stll/api-contract/email-mime-types";
+import { chunk as chunkItems } from "@stll/concurrency/chunk";
 
 import { rootDb } from "@/api/db/root";
 import type { Transaction } from "@/api/db/root";
@@ -16,21 +15,22 @@ import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import { encryptContent } from "@/api/lib/content-encryption";
+import { lockForWrite } from "@/api/lib/db/lock-for-write";
 import { requestAutomaticDocumentOcr } from "@/api/lib/document-processing-automatic-request";
 import { DOCUMENT_NATIVE_EXTRACTION_PROCESSOR_VERSION } from "@/api/lib/document-processing-contract";
 import { enqueueDocumentProcessingRun } from "@/api/lib/document-processing-enqueue";
-import { restoreManualOcrRunAfterProjectionLoss } from "@/api/lib/document-processing-manual-ocr-restore";
 import { readDocxDeclaredSourceLanguage } from "@/api/lib/document-translation/docx-language";
 import { recordEntityVersionDetectedLanguage } from "@/api/lib/document-translation/version-language";
 import { enqueueUploadedMailFiling } from "@/api/lib/email/inbound/upload-enqueue";
 import type { FileKey } from "@/api/lib/file-key";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { readStoredFile } from "@/api/lib/file-scan/stored-file";
-import { shouldGeneratePdfDerivative } from "@/api/lib/files/pdf-derivative-policy";
 import { createFileKey } from "@/api/lib/files/utils";
 import { LIMITS } from "@/api/lib/limits";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
+import { restoreManualOcrRunAfterProjectionLoss } from "@/api/lib/search/document-processing-manual-ocr-restore";
 import {
   extractFileTextResult,
   resolveExtractionMimeType,
@@ -91,27 +91,28 @@ export const requiresDurableNativeExtraction = (
   if (fileField.encrypted) {
     return false;
   }
-  if (
-    fileField.pdfFileId === null &&
-    shouldGeneratePdfDerivative({
-      encrypted: fileField.encrypted,
-      mimeType: fileField.mimeType,
-    })
-  ) {
-    return false;
-  }
-  return canExtractMimeType(pickExtractionSource(fileField).extractionMimeType);
+
+  // A parser reads the original bytes (`pickExtractionSource`), so it never
+  // waits for the PDF preview: a failed conversion would otherwise leave the
+  // body out of search for good. Formats with no parser have the rendered
+  // PDF as their only text layer, so they become extractable once it exists.
+  return (
+    canExtractMimeType(
+      resolveExtractionMimeType({
+        fileName: fileField.fileName,
+        mimeType: fileField.mimeType,
+      }),
+    ) || fileField.pdfFileId !== null
+  );
 };
 
 /**
- * Which mechanism writes an entity's search projection once its current
- * version is committed.
+ * Which mechanism owns extracting an entity's searchable content.
  *
- * `durable-extraction` means a document-processing run owns it: the run
- * persists the extracted text and indexes the entity when it completes, so a
- * search mark written beside it would index the same entity a second time
- * with no text. `search-mark` means nothing else will write the projection,
- * so the mutation must mark the entity dirty inside its own transaction.
+ * Every committed entity is also marked for an immediate name projection.
+ * `durable-extraction` owns only extracted content and later rebuilds the same
+ * idempotent, compare-and-set protected projection. Either writer may finish
+ * first without removing extracted text or creating another search row.
  *
  * `processExtraction` reads this to pick its own branch, so a caller that
  * splits its entities by owner cannot drift from what extraction actually
@@ -160,9 +161,7 @@ type PersistedNativeExtractionProjection = {
 };
 
 export type NativeExtractionProjectionOutcome =
-  | "persisted"
-  | "preserved"
-  | "source_cancelled";
+  "persisted" | "preserved" | "source_cancelled";
 
 export const persistNativeExtractionProjection = async (
   {
@@ -180,7 +179,17 @@ export const persistNativeExtractionProjection = async (
   database: Pick<typeof rootDb, "transaction">,
 ): Promise<NativeExtractionProjectionOutcome> =>
   await database.transaction(async (tx) => {
-    // Manual OCR request and projection transactions take this same lock first.
+    const parents = await lockForWrite(tx, {
+      organizationIds: [organizationId],
+      workspaceIds: [workspaceId],
+    });
+    if (
+      !parents.organizationIds.has(organizationId) ||
+      !parents.workspaceIds.has(workspaceId)
+    ) {
+      return "source_cancelled";
+    }
+    // The entity lock also serializes with manual OCR requests and projections.
     // Keeping the conditional write in the next statement gives it a fresh
     // READ COMMITTED snapshot after any lock waiter ahead of us commits.
     const lockedSources =
@@ -354,7 +363,12 @@ const recordDocxVersionLanguage = async ({
     catch: (cause) => cause,
   });
   if (Result.isError(recorded)) {
-    captureError(recorded.error, { source: "native-extraction-docx-language" });
+    captureError(
+      recorded.error,
+      handlerErrorContext("search.recordDocxVersionLanguage.recorded_error", {
+        source: "native-extraction-docx-language",
+      }),
+    );
   }
 };
 
@@ -370,7 +384,9 @@ type RecordUploadedMailOptions = {
 };
 
 /**
- * Hand an email document to the job that files it as matter correspondence.
+ * Hand every projected file generation to correspondence reconciliation.
+ * The worker files email/data-box messages and retires stale correspondence
+ * when the current file belongs to another channel.
  *
  * Every transport that stores a file version reaches this run, so uploads
  * from the web, desktop, CLI, MCP and folder imports are covered without
@@ -383,14 +399,11 @@ const recordUploadedMail = async ({
   enqueueUploadedMail,
   run,
 }: RecordUploadedMailOptions): Promise<void> => {
-  if (!isEmailMimeType(source.extractionMimeType)) {
-    return;
-  }
   const handedOff = await Result.tryPromise({
     try: async () =>
       await enqueueUploadedMail({
         file: {
-          sourceFileId: source.fileId,
+          sourceFileId: run.sourceFileId,
           storageMimeType: source.storageMimeType,
           mimeType: source.extractionMimeType,
         },
@@ -425,6 +438,7 @@ export const executeNativeExtraction = async ({
     key: FileKey;
     mimeType: string;
     signal: AbortSignal;
+    maxBytes?: number;
   }) => Promise<ScannedFile>;
   run: NativeExtractionRun;
   dependencies?: ExecuteNativeExtractionDependencies | undefined;
@@ -446,7 +460,14 @@ export const executeNativeExtraction = async ({
   });
   const stored = await withTimeout(
     async (signal) =>
-      await readSource({ key, mimeType: source.extractionMimeType, signal }),
+      await readSource({
+        key,
+        mimeType: source.extractionMimeType,
+        signal,
+        ...(source.fileId === fileField.pdfFileId
+          ? { maxBytes: LIMITS.fileDerivativePdfMaxBytes }
+          : {}),
+      }),
     {
       label: "native extraction source read",
       signal: lifecycleSignal,
@@ -707,6 +728,7 @@ const nativeExtractionRunValues = (request: NativeExtractionRunRequest) =>
 // while reducing a whole-matter copy from one request query per document to a
 // small, bounded number of statements.
 const NATIVE_EXTRACTION_RUN_INSERT_BATCH_SIZE = 250;
+const extractionOwnerDb = rootDb;
 
 /** Insert immutable-source requests in bounded batches on one transaction. */
 export const requestNativeExtractionRuns = async ({
@@ -714,28 +736,35 @@ export const requestNativeExtractionRuns = async ({
   tx,
 }: {
   requests: readonly NativeExtractionRunRequest[];
-  tx: Transaction;
+  tx: Pick<Transaction, "insert">;
 }): Promise<SafeId<"documentProcessingRun">[]> => {
   const insertedRunIds: SafeId<"documentProcessingRun">[] = [];
-  const insertFrom = async (start: number): Promise<void> => {
-    if (start >= requests.length) {
+  const itemBatches = chunkItems(
+    requests,
+    NATIVE_EXTRACTION_RUN_INSERT_BATCH_SIZE,
+  )[Symbol.iterator]();
+  const insertFrom = async (): Promise<void> => {
+    const nextBatch = itemBatches.next();
+    if (nextBatch.done) {
       return;
     }
     const inserted = await tx
       .insert(documentProcessingRuns)
-      .values(
-        requests
-          .slice(start, start + NATIVE_EXTRACTION_RUN_INSERT_BATCH_SIZE)
-          .map(nativeExtractionRunValues),
-      )
+      .values(nextBatch.value.map(nativeExtractionRunValues))
       .onConflictDoNothing({ target: NATIVE_EXTRACTION_SOURCE_TARGET })
       .returning({ id: documentProcessingRuns.id });
     insertedRunIds.push(...inserted.map(({ id }) => id));
-    await insertFrom(start + NATIVE_EXTRACTION_RUN_INSERT_BATCH_SIZE);
+    await insertFrom();
   };
-  await insertFrom(0);
+  await insertFrom();
   return insertedRunIds;
 };
+
+/** Insert an operator repair page without exposing the owner transaction. */
+export const requestNativeExtractionRunsAsOwner = async (
+  requests: readonly NativeExtractionRunRequest[],
+): Promise<SafeId<"documentProcessingRun">[]> =>
+  await requestNativeExtractionRuns({ requests, tx: extractionOwnerDb });
 
 /**
  * Commit the durable extraction request with the mutation that creates its
@@ -796,7 +825,7 @@ export const processExtraction = async (
     filePropertyId?: SafeId<"property"> | undefined;
   },
   {
-    database = rootDb,
+    database = extractionOwnerDb,
     enqueueRun = enqueueDocumentProcessingRun,
     indexEntity = async (id) => await getSearchMaintenance().indexEntity(id),
   }: ProcessExtractionDependencies = {},
@@ -893,12 +922,15 @@ export const processExtraction = async (
   const requeued = await database
     .update(documentProcessingRuns)
     .set({
+      attemptCount: 0,
       claimedAt: null,
       claimedBy: null,
       errorAt: null,
       errorCode: null,
+      errorMessage: null,
       finishedAt: null,
       nextAttemptAt: null,
+      nextDeliveryAt: null,
       progressCompleted: 0,
       progressTotal: null,
       startedAt: null,

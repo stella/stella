@@ -13,13 +13,16 @@ import {
   timerParams,
 } from "@/api/lib/billing/time-timers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { scheduleTimerActivityUpdates } from "@/api/lib/push/timer-activity-queue";
 
 const discardTimer = createSafeRootHandler(
   {
+    contract: "patch",
     description:
       "Discard your timer and its unconfirmed time. This creates no time entry.",
     permissions: { timeEntry: ["delete"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
+    featureAccess: { featureId: "time-billing", type: "required" },
     mcp: {
       type: "capability",
       reason: "billing_admin",
@@ -86,6 +89,9 @@ const discardTimer = createSafeRootHandler(
         return Result.ok({ id: timer.id });
       }),
     );
+    if (outcome.isOk()) {
+      scheduleTimerActivityUpdates([owner]);
+    }
     return outcome;
   },
 );

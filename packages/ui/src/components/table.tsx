@@ -1,126 +1,103 @@
 import type * as React from "react";
 
-import { ArrowDownIcon, ArrowUpIcon } from "../icons";
 import { cn } from "../lib/utils";
+import { Button } from "./button";
+import {
+  resolveTableAlign,
+  tableCellClassName,
+  TableCellFace,
+} from "./table-cell";
+import type { TableCellFaceProps } from "./table-cell";
+import {
+  ariaSortOf,
+  HEAD_CONTENT_CLASS,
+  SORT_ICON_SLOT_CLASS,
+  sortableHeadButtonClassName,
+  SortDirectionIcon,
+  TableHead,
+} from "./table-shell";
+import type { SortDirection, TableHeadProps } from "./table-shell";
+import { TruncatedText } from "./truncated-text";
 
-const Table = ({ className, ...props }: React.ComponentProps<"table">) => (
-  <div className="relative w-full overflow-x-auto" data-slot="table-container">
-    <table
-      className={cn(
-        "w-full caption-bottom text-sm in-data-[slot=frame]:border-separate in-data-[slot=frame]:border-spacing-0",
-        className,
-      )}
-      data-slot="table"
+type TableCellProps = TableCellFaceProps & {
+  /**
+   * Cuts text that overflows the cell with an ellipsis; the caller bounds the
+   * cell's width (`max-w-xs`).
+   */
+  truncate?: boolean;
+};
+
+const TableCell = ({
+  className,
+  align,
+  tone,
+  numeric,
+  truncate = false,
+  flush = false,
+  children,
+  ...props
+}: TableCellProps) => {
+  if (truncate) {
+    // The cell itself is cut, so it stays a table cell rather than the
+    // block TruncatedText makes of a single line.
+    return (
+      <TruncatedText
+        className={cn(
+          "table-cell",
+          tableCellClassName({ align, className, flush, numeric, tone }),
+        )}
+        data-slot="table-cell"
+        render={<td {...props} />}
+      >
+        {children}
+      </TruncatedText>
+    );
+  }
+  return (
+    <TableCellFace
+      align={align}
+      className={className}
+      flush={flush}
+      numeric={numeric}
+      tone={tone}
       {...props}
-    />
-  </div>
-);
+    >
+      {children}
+    </TableCellFace>
+  );
+};
 
-const TableHeader = ({
-  className,
-  ...props
-}: React.ComponentProps<"thead">) => (
-  <thead
-    className={cn(
-      "[&_tr]:border-b in-data-[slot=frame]:**:[th]:h-9 in-data-[slot=frame]:*:[tr]:border-none in-data-[slot=frame]:*:[tr]:hover:bg-transparent",
-      className,
-    )}
-    data-slot="table-header"
-    {...props}
-  />
-);
-
-const TableBody = ({ className, ...props }: React.ComponentProps<"tbody">) => (
-  <tbody
-    className={cn(
-      "in-data-[slot=frame]:*:[tr]:*:[td]:bg-background in-data-[slot=frame]:*:[tr]:data-[state=selected]:*:[td]:bg-muted/72 relative before:pointer-events-none before:absolute before:inset-px before:rounded-[calc(var(--radius-xl)-1px)] before:shadow-[0_1px_--theme(--color-black/4%)] not-in-data-[slot=frame]:before:hidden in-data-[slot=frame]:rounded-xl in-data-[slot=frame]:shadow-xs/5 dark:before:shadow-[0_-1px_--theme(--color-white/8%)] [&_tr:last-child]:border-0 in-data-[slot=frame]:*:[tr]:border-0 in-data-[slot=frame]:*:[tr]:*:[td]:border-b in-data-[slot=frame]:*:[tr]:*:[td]:bg-clip-padding in-data-[slot=frame]:*:[tr]:first:*:[td]:first:rounded-ss-xl in-data-[slot=frame]:*:[tr]:*:[td]:first:border-s in-data-[slot=frame]:*:[tr]:first:*:[td]:border-t in-data-[slot=frame]:*:[tr]:last:*:[td]:last:rounded-ee-xl in-data-[slot=frame]:*:[tr]:*:[td]:last:border-e in-data-[slot=frame]:*:[tr]:first:*:[td]:last:rounded-se-xl in-data-[slot=frame]:*:[tr]:last:*:[td]:first:rounded-es-xl in-data-[slot=frame]:*:[tr]:hover:*:[td]:bg-transparent",
-      className,
-    )}
-    data-slot="table-body"
-    {...props}
-  />
-);
-
-const TableFooter = ({
-  className,
-  ...props
-}: React.ComponentProps<"tfoot">) => (
-  <tfoot
-    className={cn(
-      "bg-muted/72 border-t font-medium in-data-[slot=frame]:border-none in-data-[slot=frame]:bg-transparent in-data-[slot=frame]:*:[tr]:hover:bg-transparent [&>tr]:last:border-b-0",
-      className,
-    )}
-    data-slot="table-footer"
-    {...props}
-  />
-);
-
-const TableRow = ({ className, ...props }: React.ComponentProps<"tr">) => (
-  <tr
-    className={cn(
-      "hover:bg-muted/72 data-[state=selected]:bg-muted/72 border-b in-data-[slot=frame]:hover:bg-transparent in-data-[slot=frame]:data-[state=selected]:bg-transparent",
-      className,
-    )}
-    data-slot="table-row"
-    {...props}
-  />
-);
-
-const TableHead = ({ className, ...props }: React.ComponentProps<"th">) => (
-  <th
-    className={cn(
-      "text-muted-foreground h-10 px-2.5 text-start align-middle leading-none font-medium whitespace-nowrap has-[[role=checkbox]]:w-px has-[[role=checkbox]]:pe-0",
-      className,
-    )}
-    data-slot="table-head"
-    {...props}
-  />
-);
-
-const TableCell = ({ className, ...props }: React.ComponentProps<"td">) => (
-  <td
-    className={cn(
-      "p-2.5 align-middle leading-none whitespace-nowrap in-data-[slot=frame]:first:p-[calc(--spacing(2.5)-1px)] in-data-[slot=frame]:last:p-[calc(--spacing(2.5)-1px)] has-[[role=checkbox]]:pe-0",
-      className,
-    )}
-    data-slot="table-cell"
-    {...props}
-  />
-);
-
-type SortDirection = "asc" | "desc" | null;
-
-type SortableHeadProps = Omit<React.ComponentProps<"th">, "onClick"> & {
+type SortableHeadProps = Omit<TableHeadProps, "onClick"> & {
   sortDirection?: SortDirection;
   onSort: () => void;
   /** Rendered next to the sort button inside the same cell (e.g. filter icon). */
   trailing?: React.ReactNode;
 };
 
+/**
+ * A column head the reader sorts by. The label is a quiet `Button`, so it
+ * has the design system's hover band, focus ring and touch target; its
+ * padding is pulled back so the label still lines up with the cells below.
+ * In an end-aligned (numeric) column the arrow sits before the label, keeping
+ * the label flush with the figures.
+ */
 const SortableHead = ({
   children,
   sortDirection = null,
   onSort,
   trailing,
   className,
+  align,
+  numeric = false,
   ...props
 }: SortableHeadProps) => {
-  let ariaSort: "ascending" | "descending" | "none" = "none";
-  if (sortDirection === "asc") {
-    ariaSort = "ascending";
-  } else if (sortDirection === "desc") {
-    ariaSort = "descending";
-  }
-  let sortIcon: React.ReactNode = null;
-  if (sortDirection === "asc") {
-    sortIcon = <ArrowUpIcon className="size-3" />;
-  } else if (sortDirection === "desc") {
-    sortIcon = <ArrowDownIcon className="size-3" />;
-  }
+  const endAligned = resolveTableAlign(align, numeric) === "end";
   return (
     <TableHead
-      aria-sort={ariaSort}
+      align={align}
+      aria-sort={ariaSortOf(sortDirection)}
       className={className}
+      numeric={numeric}
       {...props}
       // After the spread on purpose: the props type omits `onClick` because the
       // sort button below owns activation, but omitting it only rejects a
@@ -129,36 +106,30 @@ const SortableHead = ({
       // that no keyboard user can reach.
       onClick={undefined}
     >
-      <span className="inline-flex items-center gap-1">
-        <button
-          className="text-muted-foreground hover:text-foreground inline-flex cursor-pointer items-center gap-1 font-medium select-none"
+      <span className={HEAD_CONTENT_CLASS}>
+        <Button
+          // The button's inline padding equals the head's, and the negative
+          // margin cancels exactly that: the label lines up with the cells and
+          // the button never reaches past the table's edge, where a scrolling
+          // container could not reveal it.
+          className={sortableHeadButtonClassName(endAligned)}
           onClick={onSort}
           type="button"
+          variant="muted"
         >
-          <span className="truncate">{children}</span>
-          <span aria-hidden className="inline-flex w-3 shrink-0 justify-center">
-            {sortIcon}
+          <TruncatedText>{children}</TruncatedText>
+          <span aria-hidden className={SORT_ICON_SLOT_CLASS}>
+            <SortDirectionIcon direction={sortDirection} />
           </span>
-        </button>
+        </Button>
         {trailing}
       </span>
     </TableHead>
   );
 };
 
-const TableCaption = ({
-  className,
-  ...props
-}: React.ComponentProps<"caption">) => (
-  <caption
-    className={cn(
-      "text-muted-foreground mt-4 text-sm in-data-[slot=frame]:my-4",
-      className,
-    )}
-    data-slot="table-caption"
-    {...props}
-  />
-);
+export { TABLE_FIRST_LINE } from "./table-layout";
+export type { TableFirstLine } from "./table-layout";
 
 export {
   Table,
@@ -167,8 +138,18 @@ export {
   TableFooter,
   TableHead,
   TableRow,
-  TableCell,
   TableCaption,
-  SortableHead,
-};
-export type { SortDirection };
+} from "./table-shell";
+export type {
+  TableAlign,
+  TableCellText,
+  TableDensity,
+  TableHeadProps,
+  TableHeaderProps,
+  TableInset,
+  TableProps,
+  TableScroll,
+  TableTone,
+} from "./table-shell";
+export { TableCell, SortableHead };
+export type { SortDirection, TableCellProps };

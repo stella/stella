@@ -1,4 +1,4 @@
-import { createContext, use, useMemo, useRef, useState } from "react";
+import { createContext, use, useRef, useState } from "react";
 import type { ComponentType, ReactNode, RefObject } from "react";
 
 import { flexRender, useTable } from "@tanstack/react-table";
@@ -19,14 +19,15 @@ import {
   TextIcon,
   UsersIcon,
 } from "@stll/ui/icons";
+import { MattersNavIcon } from "@stll/ui/matter-icon";
 import { ReviewStatusBadge } from "@stll/ui/review-status-badge";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 import type { SortableProperty } from "@stll/workspace-ui/sorts";
 
 import { SignalCard } from "@/components/inbox/signal-card";
 import { openInspectorSelection } from "@/components/inspector/inspector-actions";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
-import { MattersNavIcon } from "@/components/matter-icon";
 import { MatterRefLink } from "@/components/matter-ref-link";
 import { UserIdentity } from "@/components/user-avatar";
 import { EntityKindIcon } from "@/components/workspaces/entity-kind-icon";
@@ -34,6 +35,10 @@ import {
   getEntityName,
   getFirstFile,
 } from "@/components/workspaces/entity-utils";
+import {
+  orderedColumn,
+  UNORDERED_COLUMN,
+} from "@/components/workspaces/properties/sort-property.logic";
 import { ColumnToggle } from "@/components/workspaces/table/column-toggle";
 import { TableGroupHeader } from "@/components/workspaces/table/group-header";
 import { MetadataPopover } from "@/components/workspaces/table/metadata-popover";
@@ -51,8 +56,10 @@ import {
   WorkspaceGridRow,
 } from "@/components/workspaces/table/workspace-grid";
 import { getOrderedCells } from "@/components/workspaces/table/workspace-grid-order";
-import { RowEndFillerCell } from "@/components/workspaces/table/workspace-table/end-fillers";
-import { PinnedBoundary } from "@/components/workspaces/table/workspace-table/internals";
+import {
+  PinnedBoundary,
+  RowEndFillerCell,
+} from "@/components/workspaces/table/workspace-table/internals";
 import {
   getGridPinningStyles,
   isPinnedBoundaryColumn,
@@ -70,12 +77,17 @@ import type { TableContentMode } from "@/lib/workspaces/table-store";
 import { useTableStore } from "@/lib/workspaces/table-store";
 
 import {
+  ENTITY_VIEW_COLUMN_SIZES,
+  entityViewSizingScope,
+} from "./columns.logic";
+import {
   ENTITY_VIEW_GROUP,
-  entryId,
+  ENTITY_VIEW_SORT_KINDS,
+  entityViewSortValues,
   entryDueDate,
+  entryId,
   entryStatus,
   entryType,
-  entityViewSortValues,
   isEntityViewSortColumn,
 } from "./model";
 import { NewEntityViewTask } from "./new-task";
@@ -83,21 +95,22 @@ import { useEntityTableGroups } from "./table-groups";
 import type { EntityViewEntry, EntityViewRow, EntityViewScope } from "./types";
 import { WorkRiskBadge } from "./work-risk-badge";
 
+// The widths live in ENTITY_VIEW_COLUMN_SIZES, which the loading grid reads
+// too; this map's key order is the table's column order, as there.
 const COLUMN_MODEL = {
-  _name: { label: "common.name", icon: TextIcon, size: 300 },
-  _matter: { label: "common.matter", icon: MattersNavIcon, size: 200 },
-  "_agenda-kind": { label: "common.type", icon: ShapesIcon, size: 130 },
-  _status: { label: "tasks.status", icon: CircleDotIcon, size: 140 },
-  _priority: { label: "tasks.priority", icon: FlagIcon, size: 130 },
-  "_due-date": { label: "tasks.dueDate", icon: CalendarIcon, size: 150 },
-  _assignee: { label: "common.assignee", icon: UsersIcon, size: 180 },
-  _actions: { label: "common.actions", icon: ListChecksIcon, size: 240 },
+  _name: { label: "common.name", icon: TextIcon },
+  _matter: { label: "common.matter", icon: MattersNavIcon },
+  "_agenda-kind": { label: "common.type", icon: ShapesIcon },
+  _status: { label: "tasks.status", icon: CircleDotIcon },
+  _priority: { label: "tasks.priority", icon: FlagIcon },
+  "_due-date": { label: "tasks.dueDate", icon: CalendarIcon },
+  _assignee: { label: "common.assignee", icon: UsersIcon },
+  _actions: { label: "common.actions", icon: ListChecksIcon },
 } as const satisfies Record<
   keyof typeof ENTITY_VIEW_COLUMNS,
   {
     label: TranslationKey;
     icon: ComponentType<{ className?: string }>;
-    size: number;
   }
 >;
 type CollectionColumn = keyof typeof COLUMN_MODEL;
@@ -122,6 +135,7 @@ export const useEntityViewSortProperties = (): SortableProperty[] => {
       id,
       name: t(COLUMN_MODEL[id].label),
       type,
+      sortKind: ENTITY_VIEW_SORT_KINDS[id],
     });
   }
   return properties;
@@ -188,7 +202,7 @@ export const EntityViewTable = ({
   onLoadMore,
 }: EntityViewTableProps) => {
   const t = useTranslations();
-  const scopeId = `entity-view:${organizationId}`;
+  const scopeId = entityViewSizingScope(organizationId);
   const sizing = useTableStore(
     (state) => state.columnSizing[scopeId]?.[view.id] ?? EMPTY_SIZING,
   );
@@ -230,40 +244,41 @@ export const EntityViewTable = ({
     },
   });
   // TanStack's controlled table requires stable definitions between state updates.
-  const columns = useMemo(
-    () =>
-      Object.entries(COLUMN_MODEL).map(
-        ([column, model]): TableColumnDef<EntityViewRow> => {
-          if (!isCollectionColumn(column)) {
-            return panic(`Unknown collection column: ${column}`);
-          }
-          const columnId = column;
-          return {
-            id: columnId,
-            size: model.size,
-            minSize: DEFAULT_TABLE_COLUMN_MIN_SIZE,
-            enableSorting: ENTITY_VIEW_COLUMNS[columnId].sortable,
-            accessorFn: ({ entry }) =>
+  const columns = Object.entries(COLUMN_MODEL).map(
+    ([column, model]): TableColumnDef<EntityViewRow> => {
+      if (!isCollectionColumn(column)) {
+        return panic(`Unknown collection column: ${column}`);
+      }
+      const columnId = column;
+      return {
+        id: columnId,
+        size: ENTITY_VIEW_COLUMN_SIZES[columnId],
+        minSize: DEFAULT_TABLE_COLUMN_MIN_SIZE,
+        enableSorting: ENTITY_VIEW_COLUMNS[columnId].sortable,
+        accessorFn: ({ entry }) =>
+          isEntityViewSortColumn(columnId)
+            ? entityViewSortValues[columnId](entry)
+            : null,
+        enableHiding: true,
+        enablePinning: true,
+        enableResizing: true,
+        header: ({ header }) => (
+          <MetadataPopover
+            column={header.column}
+            icon={model.icon}
+            label={t(model.label)}
+            sort={
               isEntityViewSortColumn(columnId)
-                ? entityViewSortValues[columnId](entry)
-                : null,
-            enableHiding: true,
-            enablePinning: true,
-            enableResizing: true,
-            header: ({ header }) => (
-              <MetadataPopover
-                column={header.column}
-                icon={model.icon}
-                label={t(model.label)}
-              />
-            ),
-            cell: ({ row }) => (
-              <CollectionCell column={columnId} entry={row.original.entry} />
-            ),
-          };
-        },
-      ),
-    [t],
+                ? orderedColumn(ENTITY_VIEW_SORT_KINDS[columnId])
+                : UNORDERED_COLUMN
+            }
+          />
+        ),
+        cell: ({ row }) => (
+          <CollectionCell column={columnId} entry={row.original.entry} />
+        ),
+      };
+    },
   );
   const scrollRef = useRef<HTMLDivElement>(null);
   const groups = useEntityTableGroups(rows, layout.groupByPropertyId);
@@ -349,6 +364,7 @@ export const EntityViewTable = ({
             {hasNextPage && (
               <Button
                 disabled={loadingMore}
+                disabledReason={t("caseLaw.loadingMore")}
                 onClick={onLoadMore}
                 variant="ghost"
               >
@@ -471,13 +487,8 @@ const CollectionCell = ({ column, entry }: CollectionCellProps) => {
         entry.type === "entity" && entry.entity.kind === "document"
           ? getFirstFile(entry.entity)
           : null;
-      return (
-        <button
-          className="flex min-w-0 items-center gap-2 text-start"
-          disabled={open === undefined}
-          onClick={open}
-          type="button"
-        >
+      const name = (
+        <span className="flex min-w-0 items-center gap-2">
           {entry.type === "entity" && (
             <EntityKindIcon
               className="size-4 shrink-0"
@@ -496,18 +507,27 @@ const CollectionCell = ({ column, entry }: CollectionCellProps) => {
               }
             />
           )}
-          <UserText className="truncate font-medium">
+          <TruncatedText className="font-medium" render={<UserText />}>
             {entry.type === "entity"
               ? getEntityName(entry.entity)
               : entry.signal.title}
-          </UserText>
+          </TruncatedText>
           {entry.type === "proposal" && (
             <ReviewStatusBadge tone="neutral">
               {t("flows.status.awaitingReview")}
             </ReviewStatusBadge>
           )}
           {entry.type === "entity" && <WorkRiskBadge risk={entry.workRisk} />}
-        </button>
+        </span>
+      );
+      // An entry with nothing to open is a name, not a dimmed control.
+      if (open === undefined) {
+        return name;
+      }
+      return (
+        <Button className="flex min-w-0" onClick={open} variant="plain">
+          {name}
+        </Button>
       );
     }
     case "_matter": {
@@ -533,7 +553,7 @@ const CollectionCell = ({ column, entry }: CollectionCellProps) => {
         case "document":
           return t("common.document");
         case "folder":
-          return t("search.kinds.folder");
+          return t("common.folder");
         case null:
           return null;
         case "message":

@@ -4,42 +4,20 @@ import type { ErrorInfo, PropsWithChildren, ReactNode } from "react";
 import { CancelledError, QueryErrorResetBoundary } from "@tanstack/react-query";
 
 import { getAnalytics } from "@/lib/analytics/provider";
+import { leaveErrorToBoundary } from "@/lib/analytics/reported-error";
 import { ClientTelemetryError } from "@/lib/errors/telemetry";
 
 type QuerySuspenseBoundaryProps = PropsWithChildren<{
   area: string;
-  errorFallback: (props: { reset: () => void }) => ReactNode;
+  errorFallback: (props: { reset: () => void; error: Error }) => ReactNode;
   suspenseFallback: ReactNode;
   onError?: ((error: Error) => void) | undefined;
   resetKeys?: readonly unknown[] | undefined;
 }>;
 
-export const QuerySuspenseBoundary = ({
-  area,
-  children,
-  errorFallback,
-  onError,
-  resetKeys,
-  suspenseFallback,
-}: QuerySuspenseBoundaryProps) => (
-  <QueryErrorResetBoundary>
-    {({ reset }) => (
-      <QueryErrorBoundary
-        area={area}
-        fallback={errorFallback}
-        onError={onError}
-        onReset={reset}
-        resetKeys={resetKeys}
-      >
-        <Suspense fallback={suspenseFallback}>{children}</Suspense>
-      </QueryErrorBoundary>
-    )}
-  </QueryErrorResetBoundary>
-);
-
 type QueryErrorBoundaryProps = PropsWithChildren<{
   area: string;
-  fallback: (props: { reset: () => void }) => ReactNode;
+  fallback: (props: { reset: () => void; error: Error }) => ReactNode;
   onError?: ((error: Error) => void) | undefined;
   onReset: () => void;
   resetKeys?: readonly unknown[] | undefined;
@@ -63,6 +41,7 @@ class QueryErrorBoundary extends Component<
   }
 
   override componentDidCatch(error: Error, _info: ErrorInfo) {
+    leaveErrorToBoundary(error);
     if (error instanceof CancelledError) {
       queueMicrotask(this.reset);
       return;
@@ -74,6 +53,13 @@ class QueryErrorBoundary extends Component<
         message: `[${this.props.area}] ${error.message}`,
         cause: error,
       }),
+      {
+        fingerprintKey: `QueryErrorBoundary:${this.props.area}`,
+        scope: {
+          type: "handler",
+          handlerId: `QueryErrorBoundary:${this.props.area}`,
+        },
+      },
     );
     this.props.onError?.(error);
   }
@@ -98,12 +84,38 @@ class QueryErrorBoundary extends Component<
     }
 
     if (this.state.error !== null) {
-      return this.props.fallback({ reset: this.reset });
+      return this.props.fallback({
+        reset: this.reset,
+        error: this.state.error,
+      });
     }
 
     return this.props.children;
   }
 }
+
+export const QuerySuspenseBoundary = ({
+  area,
+  children,
+  errorFallback,
+  onError,
+  resetKeys,
+  suspenseFallback,
+}: QuerySuspenseBoundaryProps) => (
+  <QueryErrorResetBoundary>
+    {({ reset }) => (
+      <QueryErrorBoundary
+        area={area}
+        fallback={errorFallback}
+        onError={onError}
+        onReset={reset}
+        resetKeys={resetKeys}
+      >
+        <Suspense fallback={suspenseFallback}>{children}</Suspense>
+      </QueryErrorBoundary>
+    )}
+  </QueryErrorResetBoundary>
+);
 
 const resetKeysChanged = (
   prev: readonly unknown[] | undefined,

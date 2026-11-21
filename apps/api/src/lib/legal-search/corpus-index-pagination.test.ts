@@ -1,13 +1,33 @@
-import { panic } from "better-result";
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { Panic, panic } from "better-result";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  mock,
+  spyOn,
+  test,
+} from "bun:test";
+import fc from "fast-check";
 
+import { SEARCH_PAGE_REACH } from "@stll/api-contract/search";
+import { assertProperty } from "@stll/property-testing";
+import { rejectionOf } from "@stll/property-testing/rejection";
+
+import { withPinnedDecisions } from "@/api/handlers/case-law/decisions/search-identity-role";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import type { CorpusIndexHit } from "@/api/lib/legal-search/corpus-index-client";
+import {
+  CORPUS_INDEX_SEARCH_TIMEOUT_MS,
+  type CorpusIndexHit,
+} from "@/api/lib/legal-search/corpus-index-client";
 import type { SearchCursor } from "@/api/lib/legal-search/corpus-index-pagination";
 import {
+  CORPUS_INDEX_OFFSET_PAGE_MAX_ROUNDS,
   corpusIndexLexicalScore,
-  HIGHLIGHT_COPIES_PER_PASSAGE,
+  emptyCorpusIndexScan,
+  NATIVE_SCAN_TRANSPORT,
   readCorpusIndexSearchPage,
+  sumCorpusIndexScans,
 } from "@/api/lib/legal-search/corpus-index-pagination";
 import { corpusSearchGroupToken } from "@/api/lib/legal-search/corpus-search-cursor";
 import {
@@ -16,12 +36,26 @@ import {
 } from "@/api/lib/legal-search/corpus-search-order";
 import { collapseByLanguageGroup } from "@/api/lib/legal-search/language-group-collapse";
 import { collapseLegislationHitsByWork } from "@/api/lib/legal-search/legislation-work-collapse";
+import { PUBLIC_READ_TIMEOUT_CODE } from "@/api/lib/legal-search/public-read-timeout";
 import {
   blendStableCitationAuthority,
   DEFAULT_AUTHORITY_WEIGHT,
   stableBlendUpperBound,
 } from "@/api/lib/legal-search/rerank";
+import { isSearchIndexUnavailable } from "@/api/lib/legal-search/search-index-unavailable";
 import { LIMITS } from "@/api/lib/limits";
+import {
+  findRequestBudgetExpiry,
+  runWithinRequestLatencyBudget,
+} from "@/api/lib/load/request-latency-budget";
+import {
+  testAppliedProjectionsFor,
+  testRevisionOf,
+  testRevisionsFor,
+} from "@/api/tests/helpers/corpus-projection-revisions";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
+
+const testFetchState = createTestFetch();
 
 /**
  * Grouping passage hits back into document hits. A passage-granular generation
@@ -41,7 +75,13 @@ let responseBody: unknown;
  * single-window cases.
  */
 let engineHits:
-  | { document_id: string; anchor_id?: string; chunk_id?: string }[]
+  | {
+      document_id: string;
+      anchor_id?: string;
+      chunk_id?: string;
+      /** The copy the hit belongs to; the applied one when absent. */
+      projection_revision?: string;
+    }[]
   | null;
 let requestBodies: Record<string, unknown>[];
 /**
@@ -61,6 +101,8 @@ let snippetResponseBody: unknown;
  * what a refusal does rather than what a result does.
  */
 let engineFailureStatus: number | null;
+let highlightInFlight: number;
+let peakHighlightInFlight: number;
 
 beforeEach(() => {
   responseBody = { num_hits: 0, hits: [], snippets: [] };
@@ -69,6 +111,8 @@ beforeEach(() => {
   requestDelayMs = 0;
   snippetResponseBody = null;
   engineFailureStatus = null;
+  highlightInFlight = 0;
+  peakHighlightInFlight = 0;
   const stub = async (
     _input: Parameters<typeof fetch>[0],
     init?: Parameters<typeof fetch>[1],
@@ -76,8 +120,19 @@ beforeEach(() => {
     const body: Record<string, unknown> =
       typeof init?.body === "string" ? JSON.parse(init.body) : {};
     requestBodies.push(body);
+    const highlighting = body["snippet_fields"] !== undefined;
+    if (highlighting) {
+      highlightInFlight += 1;
+      peakHighlightInFlight = Math.max(
+        peakHighlightInFlight,
+        highlightInFlight,
+      );
+    }
     if (requestDelayMs > 0) {
       await Bun.sleep(requestDelayMs);
+    }
+    if (highlighting) {
+      highlightInFlight -= 1;
     }
     if (engineFailureStatus !== null) {
       return new Response("engine refused the search", {
@@ -88,26 +143,64 @@ beforeEach(() => {
       return new Response(JSON.stringify(snippetResponseBody), { status: 200 });
     }
     if (engineHits === null) {
-      return new Response(JSON.stringify(responseBody), { status: 200 });
+      const bodyWithRevisions =
+        typeof responseBody === "object" &&
+        responseBody !== null &&
+        "hits" in responseBody &&
+        Array.isArray(responseBody.hits)
+          ? {
+              ...responseBody,
+              hits: responseBody.hits.map((hit: unknown) =>
+                typeof hit === "object" &&
+                hit !== null &&
+                "document_id" in hit &&
+                typeof hit.document_id === "string"
+                  ? {
+                      ...hit,
+                      projection_revision: testRevisionOf(hit.document_id),
+                    }
+                  : hit,
+              ),
+            }
+          : responseBody;
+      return new Response(JSON.stringify(bodyWithRevisions), { status: 200 });
     }
     const offset = Number(body["start_offset"] ?? 0);
-    const window = engineHits.slice(offset, offset + Number(body["max_hits"]));
+    const matching =
+      body["snippet_fields"] === undefined
+        ? engineHits
+        : engineHits.filter(
+            (hit) =>
+              String(body["query"]).includes(
+                `document_id:"${hit.document_id}"`,
+              ) ||
+              (typeof hit.chunk_id === "string" &&
+                String(body["query"]).includes(`chunk_id:"${hit.chunk_id}"`)),
+          );
+    const window = matching.slice(offset, offset + Number(body["max_hits"]));
     return new Response(
       JSON.stringify({
         num_hits: engineHits.length,
-        hits: window,
+        hits: window.map((hit) => ({
+          ...hit,
+          projection_revision:
+            hit.projection_revision ?? testRevisionOf(hit.document_id),
+        })),
         snippets: window.map((hit) => ({ text: [`snip ${hit.document_id}`] })),
       }),
       { status: 200 },
     );
   };
-  globalThis.fetch = Object.assign(stub, {
-    preconnect: originalFetch.preconnect,
-  });
+  testFetchState.set(
+    Object.assign(stub, {
+      preconnect: originalFetch.preconnect,
+    }),
+  );
 });
 
 afterEach(() => {
-  globalThis.fetch = originalFetch;
+  testFetchState.restore();
+  mock.restore();
 });
 
 /**
@@ -146,6 +239,7 @@ const readPage = async (
   order: CorpusSearchOrder = RELEVANCE_ORDER,
 ) =>
   await readCorpusIndexSearchPage({
+    scanTransport: NATIVE_SCAN_TRANSPORT,
     observer: "unobserved",
     cluster: "q09",
     indexId: "case_law_v5_cs_sk",
@@ -154,6 +248,7 @@ const readPage = async (
     order,
     parsedCursor,
     snippetFields: ["text"],
+    projectionRevisionField: "projection_revision",
     extractId: (hit: CorpusIndexHit) =>
       typeof hit["document_id"] === "string" ? hit["document_id"] : null,
     extractSnippet: (snippet) => {
@@ -161,23 +256,29 @@ const readPage = async (
       return Array.isArray(text) ? String(text.at(0)) : null;
     },
     unseenScoreUpperBound: () => 0,
-    rankCandidates: async (candidates) => ({
-      context: null,
-      groups: recurringDocumentTokens(candidates),
-      ranked: candidates
-        .filter(
-          (candidate) =>
-            !parsedCursor?.excludedGroups?.includes(
-              corpusSearchGroupToken(candidate.id),
-            ),
-        )
-        .map((candidate) => ({
-          id: candidate.id,
-          score: candidate.score,
-          lexicalScore: candidate.score,
-          citationAuthority: 0,
-        })),
-    }),
+    rankCandidates: async (probes, { selectAppliedCandidates }) => {
+      const candidates = selectAppliedCandidates(
+        testAppliedProjectionsFor(probes),
+      );
+      return {
+        context: null,
+        revisionById: testRevisionsFor(candidates),
+        groups: recurringDocumentTokens(candidates),
+        ranked: candidates
+          .filter(
+            (candidate) =>
+              !parsedCursor?.excludedGroups?.includes(
+                corpusSearchGroupToken(candidate.id),
+              ),
+          )
+          .map((candidate) => ({
+            id: candidate.id,
+            score: candidate.score,
+            lexicalScore: candidate.score,
+            citationAuthority: 0,
+          })),
+      };
+    },
   });
 
 describe("passage hits group into document hits", () => {
@@ -323,6 +424,7 @@ describe("a page settles within one scan round", () => {
     parsedCursor: SearchCursor | null = null,
   ) =>
     await readCorpusIndexSearchPage({
+      scanTransport: NATIVE_SCAN_TRANSPORT,
       observer: "unobserved",
       cluster: "q09",
       indexId: "case_law_v5_cs_sk",
@@ -331,24 +433,31 @@ describe("a page settles within one scan round", () => {
       order: RELEVANCE_ORDER,
       parsedCursor,
       snippetFields: ["text"],
+      projectionRevisionField: "projection_revision",
       extractId: (hit: CorpusIndexHit) =>
         typeof hit["document_id"] === "string" ? hit["document_id"] : null,
       extractSnippet: () => null,
       unseenScoreUpperBound: (score) => stableBlendUpperBound(score, weight),
-      rankCandidates: async (candidates) => ({
-        context: null,
-        groups: recurringDocumentTokens(candidates),
-        ranked: blendStableCitationAuthority({
-          candidates: candidates.filter(
-            (candidate) =>
-              !parsedCursor?.excludedGroups?.includes(
-                corpusSearchGroupToken(candidate.id),
-              ),
-          ),
-          authorityById: new Map(),
-          weight,
-        }),
-      }),
+      rankCandidates: async (probes, { selectAppliedCandidates }) => {
+        const candidates = selectAppliedCandidates(
+          testAppliedProjectionsFor(probes),
+        );
+        return {
+          context: null,
+          revisionById: testRevisionsFor(candidates),
+          groups: recurringDocumentTokens(candidates),
+          ranked: blendStableCitationAuthority({
+            candidates: candidates.filter(
+              (candidate) =>
+                !parsedCursor?.excludedGroups?.includes(
+                  corpusSearchGroupToken(candidate.id),
+                ),
+            ),
+            authorityById: new Map(),
+            weight,
+          }),
+        };
+      },
     });
 
   const documentId = (index: number) => `doc-${String(index).padStart(5, "0")}`;
@@ -450,6 +559,7 @@ describe("the scan is bounded by engine round trips", () => {
     parsedCursor: SearchCursor | null = null,
   ) =>
     await readCorpusIndexSearchPage({
+      scanTransport: NATIVE_SCAN_TRANSPORT,
       observer: "unobserved",
       cluster: "q09",
       indexId: "case_law_v5_cs_sk",
@@ -458,27 +568,34 @@ describe("the scan is bounded by engine round trips", () => {
       order: RELEVANCE_ORDER,
       parsedCursor,
       snippetFields: ["text"],
+      projectionRevisionField: "projection_revision",
       extractId: (hit: CorpusIndexHit) =>
         typeof hit["document_id"] === "string" ? hit["document_id"] : null,
       extractSnippet: () => null,
       unseenScoreUpperBound: (score) => score + 1,
-      rankCandidates: async (candidates) => ({
-        context: null,
-        groups: recurringDocumentTokens(candidates),
-        ranked: candidates
-          .filter(
-            (candidate) =>
-              !parsedCursor?.excludedGroups?.includes(
-                corpusSearchGroupToken(candidate.id),
-              ),
-          )
-          .map((candidate) => ({
-            id: candidate.id,
-            score: candidate.score,
-            lexicalScore: candidate.score,
-            citationAuthority: 0,
-          })),
-      }),
+      rankCandidates: async (probes, { selectAppliedCandidates }) => {
+        const candidates = selectAppliedCandidates(
+          testAppliedProjectionsFor(probes),
+        );
+        return {
+          context: null,
+          revisionById: testRevisionsFor(candidates),
+          groups: recurringDocumentTokens(candidates),
+          ranked: candidates
+            .filter(
+              (candidate) =>
+                !parsedCursor?.excludedGroups?.includes(
+                  corpusSearchGroupToken(candidate.id),
+                ),
+            )
+            .map((candidate) => ({
+              id: candidate.id,
+              score: candidate.score,
+              lexicalScore: candidate.score,
+              citationAuthority: 0,
+            })),
+        };
+      },
     });
 
   beforeEach(() => {
@@ -613,6 +730,7 @@ describe("a passage flood does not strand the reader", () => {
     parsedCursor: SearchCursor | null = null,
   ) =>
     await readCorpusIndexSearchPage({
+      scanTransport: NATIVE_SCAN_TRANSPORT,
       observer: "unobserved",
       cluster: "q09",
       indexId: "case_law_v5_cs_sk",
@@ -621,25 +739,32 @@ describe("a passage flood does not strand the reader", () => {
       order: RELEVANCE_ORDER,
       parsedCursor,
       snippetFields: ["text"],
+      projectionRevisionField: "projection_revision",
       extractId: (hit: CorpusIndexHit) =>
         typeof hit["document_id"] === "string" ? hit["document_id"] : null,
       extractSnippet: () => null,
       unseenScoreUpperBound: (score) =>
         stableBlendUpperBound(score, DEFAULT_AUTHORITY_WEIGHT),
-      rankCandidates: async (candidates) => ({
-        context: null,
-        groups: recurringDocumentTokens(candidates),
-        ranked: blendStableCitationAuthority({
-          candidates: candidates.filter(
-            (candidate) =>
-              !parsedCursor?.excludedGroups?.includes(
-                corpusSearchGroupToken(candidate.id),
-              ),
-          ),
-          authorityById: new Map(),
-          weight: DEFAULT_AUTHORITY_WEIGHT,
-        }),
-      }),
+      rankCandidates: async (probes, { selectAppliedCandidates }) => {
+        const candidates = selectAppliedCandidates(
+          testAppliedProjectionsFor(probes),
+        );
+        return {
+          context: null,
+          revisionById: testRevisionsFor(candidates),
+          groups: recurringDocumentTokens(candidates),
+          ranked: blendStableCitationAuthority({
+            candidates: candidates.filter(
+              (candidate) =>
+                !parsedCursor?.excludedGroups?.includes(
+                  corpusSearchGroupToken(candidate.id),
+                ),
+            ),
+            authorityById: new Map(),
+            weight: DEFAULT_AUTHORITY_WEIGHT,
+          }),
+        };
+      },
     });
 
   beforeEach(() => {
@@ -715,6 +840,7 @@ describe("residual filters preserve progress past empty scan windows", () => {
     order: CorpusSearchOrder,
   ) =>
     await readCorpusIndexSearchPage({
+      scanTransport: NATIVE_SCAN_TRANSPORT,
       observer: "unobserved",
       cluster: "q09",
       indexId: "case_law_v5_cs_sk",
@@ -723,32 +849,39 @@ describe("residual filters preserve progress past empty scan windows", () => {
       order,
       parsedCursor,
       snippetFields: [],
+      projectionRevisionField: "projection_revision",
       extractId: (hit) =>
         typeof hit["document_id"] === "string" ? hit["document_id"] : null,
       extractSnippet: () => null,
       unseenScoreUpperBound: (score) => score,
-      rankCandidates: async (candidates) => ({
-        context: null,
-        groups: recurringDocumentTokens(
-          candidates.filter((candidate) =>
-            candidate.id.startsWith("zz-match-"),
+      rankCandidates: async (probes, { selectAppliedCandidates }) => {
+        const candidates = selectAppliedCandidates(
+          testAppliedProjectionsFor(probes),
+        );
+        return {
+          context: null,
+          revisionById: testRevisionsFor(candidates),
+          groups: recurringDocumentTokens(
+            candidates.filter((candidate) =>
+              candidate.id.startsWith("zz-match-"),
+            ),
           ),
-        ),
-        ranked: candidates
-          .filter(
-            (candidate) =>
-              candidate.id.startsWith("zz-match-") &&
-              !parsedCursor?.excludedGroups?.includes(
-                corpusSearchGroupToken(candidate.id),
-              ),
-          )
-          .map((candidate) => ({
-            id: candidate.id,
-            score: candidate.score,
-            lexicalScore: candidate.score,
-            citationAuthority: 0,
-          })),
-      }),
+          ranked: candidates
+            .filter(
+              (candidate) =>
+                candidate.id.startsWith("zz-match-") &&
+                !parsedCursor?.excludedGroups?.includes(
+                  corpusSearchGroupToken(candidate.id),
+                ),
+            )
+            .map((candidate) => ({
+              id: candidate.id,
+              score: candidate.score,
+              lexicalScore: candidate.score,
+              citationAuthority: 0,
+            })),
+        };
+      },
     });
 
   test.each([
@@ -845,6 +978,7 @@ describe("split legislation stays one hit across cursor pages", () => {
 
     const readLegislationPage = async (parsedCursor: SearchCursor | null) =>
       await readCorpusIndexSearchPage({
+        scanTransport: NATIVE_SCAN_TRANSPORT,
         observer: "unobserved",
         cluster: "q09",
         indexId: "legislation_v2",
@@ -853,27 +987,34 @@ describe("split legislation stays one hit across cursor pages", () => {
         order: RELEVANCE_ORDER,
         parsedCursor,
         snippetFields: [],
+        projectionRevisionField: "projection_revision",
         extractId: (hit: CorpusIndexHit) =>
           typeof hit["document_id"] === "string" ? hit["document_id"] : null,
         extractSnippet: () => null,
         unseenScoreUpperBound: () => 0,
-        rankCandidates: async (candidates) => ({
-          context: null,
-          groups: recurringDocumentTokens(candidates),
-          ranked: candidates
-            .filter(
-              (candidate) =>
-                !parsedCursor?.excludedGroups?.includes(
-                  corpusSearchGroupToken(candidate.id),
-                ),
-            )
-            .map((candidate) => ({
-              id: candidate.id,
-              score: candidate.score,
-              lexicalScore: candidate.score,
-              citationAuthority: 0,
-            })),
-        }),
+        rankCandidates: async (probes, { selectAppliedCandidates }) => {
+          const candidates = selectAppliedCandidates(
+            testAppliedProjectionsFor(probes),
+          );
+          return {
+            context: null,
+            revisionById: testRevisionsFor(candidates),
+            groups: recurringDocumentTokens(candidates),
+            ranked: candidates
+              .filter(
+                (candidate) =>
+                  !parsedCursor?.excludedGroups?.includes(
+                    corpusSearchGroupToken(candidate.id),
+                  ),
+              )
+              .map((candidate) => ({
+                id: candidate.id,
+                score: candidate.score,
+                lexicalScore: candidate.score,
+                citationAuthority: 0,
+              })),
+          };
+        },
       });
 
     const seen: string[] = [];
@@ -908,6 +1049,7 @@ describe("ranker-folded candidates stay folded across pages", () => {
     parsedCursor: SearchCursor | null,
   ) =>
     await readCorpusIndexSearchPage({
+      scanTransport: NATIVE_SCAN_TRANSPORT,
       observer: "unobserved",
       cluster: "q09",
       indexId: "case_law_v5_eu",
@@ -916,11 +1058,16 @@ describe("ranker-folded candidates stay folded across pages", () => {
       order: RELEVANCE_ORDER,
       parsedCursor,
       snippetFields: ["text"],
+      projectionRevisionField: "projection_revision",
       extractId: (hit: CorpusIndexHit) =>
         typeof hit["document_id"] === "string" ? hit["document_id"] : null,
       extractSnippet: () => null,
       unseenScoreUpperBound: (score) => score,
-      rankCandidates: async (candidates) => {
+      rankCandidates: async (probes, { selectAppliedCandidates }) => {
+        const candidates = selectAppliedCandidates(
+          testAppliedProjectionsFor(probes),
+        );
+
         const { representatives, groupTokenById } = collapseByLanguageGroup(
           candidates.map((candidate) => ({
             id: candidate.id,
@@ -933,6 +1080,7 @@ describe("ranker-folded candidates stay folded across pages", () => {
         const recurring = recurringFixtureIdentities((id) => groupOf(id) ?? id);
         return {
           context: null,
+          revisionById: testRevisionsFor(candidates),
           ranked: representatives.filter(
             (hit) =>
               !parsedCursor?.excludedGroups?.includes(
@@ -1066,11 +1214,15 @@ describe("ranker-folded candidates stay folded across pages", () => {
 describe("only the passages a page emits are highlighted", () => {
   const snippetRequests = (): Record<string, unknown>[] =>
     requestBodies.filter((body) => body["snippet_fields"] !== undefined);
+  /** A page clause, narrowed to the revision the ranker reported as applied. */
+  const current = (clause: string, id: string): string =>
+    `(${clause} AND projection_revision:"${testRevisionOf(id)}")`;
 
-  test("the scan asks for no highlighting and the page round asks for it once", async () => {
+  test("the scan asks for no highlighting and current chunks use one page request", async () => {
     engineHits = Array.from({ length: 5000 }, (_, index) => ({
       chunk_id: `doc-${index}:0`,
       document_id: `doc-${index}`,
+      anchor_id: `anchor-${index}`,
     }));
 
     const page = await readPage(3);
@@ -1080,11 +1232,11 @@ describe("only the passages a page emits are highlighted", () => {
     expect(page.scan.highlightRounds).toBe(1);
     const snippetRequest = snippetRequests().at(0);
     expect(snippetRequest?.["snippet_fields"]).toBe("text");
-    // One passage per emitted hit, with room for the physical copies a
-    // passage mid-refresh has: bounded by the page, not by the scan.
-    expect(snippetRequest?.["max_hits"]).toBe(3 * HIGHLIGHT_COPIES_PER_PASSAGE);
+    for (const request of snippetRequests()) {
+      expect(request["max_hits"]).toBe(3);
+    }
     expect(snippetRequest?.["query"]).toBe(
-      '(text:promlčení) AND (chunk_id:"doc-0:0" OR chunk_id:"doc-1:0" OR chunk_id:"doc-2:0")',
+      `(text:promlčení) AND (${[0, 1, 2].map((i) => current(`chunk_id:"doc-${i}:0"`, `doc-${i}`)).join(" OR ")})`,
     );
   });
 
@@ -1092,6 +1244,7 @@ describe("only the passages a page emits are highlighted", () => {
     engineHits = Array.from({ length: 5000 }, (_, index) => ({
       chunk_id: `doc-${index}:0`,
       document_id: `doc-${index}`,
+      anchor_id: `anchor-${index}`,
     }));
 
     await readPage(3);
@@ -1111,6 +1264,7 @@ describe("only the passages a page emits are highlighted", () => {
     engineHits = Array.from({ length: 5000 }, (_, index) => ({
       chunk_id: `doc-${index}:0`,
       document_id: `doc-${index}`,
+      anchor_id: `anchor-${index}`,
     }));
 
     const first = await readPage(3);
@@ -1128,7 +1282,7 @@ describe("only the passages a page emits are highlighted", () => {
     expect(snippetRequests()).toHaveLength(1);
     expect(second.scan.highlightRounds).toBe(1);
     expect(snippetRequests().at(0)?.["query"]).toBe(
-      '(text:promlčení) AND (chunk_id:"doc-3:0" OR chunk_id:"doc-4:0" OR chunk_id:"doc-5:0")',
+      `(text:promlčení) AND (${[3, 4, 5].map((i) => current(`chunk_id:"doc-${i}:0"`, `doc-${i}`)).join(" OR ")})`,
     );
     for (const hit of second.pageRanked) {
       expect(second.snippetById.get(hit.id)).toBe(`snip ${hit.id}`);
@@ -1146,12 +1300,12 @@ describe("only the passages a page emits are highlighted", () => {
     const page = await readPage();
 
     expect(snippetRequests().at(0)?.["query"]).toBe(
-      '(text:promlčení) AND (document_id:"doc-a" OR document_id:"doc-b")',
+      `(text:promlčení) AND (${current('document_id:"doc-a"', "doc-a")} OR ${current('document_id:"doc-b"', "doc-b")})`,
     );
     expect(page.snippetById.get("doc-a")).toBe("whole doc-a");
   });
 
-  test("the highlighted passage is the one the document ranked by", async () => {
+  test("the best matching passage within the applied revision supplies the snippet", async () => {
     const hits = [
       { document_id: "doc-b", chunk_id: "doc-b:7" },
       { document_id: "doc-a", chunk_id: "doc-a:2" },
@@ -1165,12 +1319,346 @@ describe("only the passages a page emits are highlighted", () => {
 
     const page = await readPage();
 
-    // doc-a matched three passages; only its best is worth highlighting, and
-    // it is the same passage the anchor deep-links to.
+    // The document clause lets the applied revision choose its own best
+    // matching passage, which also supplies the deep-link anchor.
     expect(snippetRequests().at(0)?.["query"]).toBe(
-      '(text:promlčení) AND (chunk_id:"doc-b:7" OR chunk_id:"doc-a:2")',
+      `(text:promlčení) AND (${current('chunk_id:"doc-b:7"', "doc-b")} OR ${current('chunk_id:"doc-a:2"', "doc-a")})`,
     );
     expect(page.snippetById.get("doc-a")).toBe("passage doc-a:2");
+  });
+
+  test("a passage flood cannot take another emitted document's highlight slot", async () => {
+    const hits = [
+      ...Array.from({ length: 40 }, (_, index) => ({
+        document_id: "doc-a",
+        chunk_id: `doc-a:${index}`,
+        anchor_id: `a-${index}`,
+      })),
+      { document_id: "doc-b", chunk_id: "doc-b:0", anchor_id: "b-0" },
+    ];
+    const stub = async (
+      _input: Parameters<typeof fetch>[0],
+      init?: Parameters<typeof fetch>[1],
+    ): Promise<Response> => {
+      const body: Record<string, unknown> =
+        typeof init?.body === "string" ? JSON.parse(init.body) : {};
+      requestBodies.push(body);
+      const query = String(body["query"]);
+      const matching =
+        body["snippet_fields"] === undefined
+          ? hits
+          : hits.filter((hit) =>
+              ["document_id", "chunk_id"].some((field) =>
+                query.includes(
+                  `(${field}:"${field === "document_id" ? hit.document_id : hit.chunk_id}" AND projection_revision:"${testRevisionOf(hit.document_id)}")`,
+                ),
+              ),
+            );
+      const selected = matching.slice(0, Number(body["max_hits"]));
+      return new Response(
+        JSON.stringify({
+          num_hits: matching.length,
+          hits: selected.map((hit) => ({
+            ...hit,
+            projection_revision: testRevisionOf(hit.document_id),
+          })),
+          snippets: selected.map((hit) => ({
+            text: [`passage ${hit.chunk_id}`],
+          })),
+        }),
+        { status: 200 },
+      );
+    };
+    testFetchState.set(
+      Object.assign(stub, {
+        preconnect: originalFetch.preconnect,
+      }),
+    );
+    const page = await readPage(2);
+    expect(
+      hits.filter(({ document_id }) => document_id === "doc-a").length,
+    ).toBeGreaterThan(page.pageRanked.length * 4);
+    expect(page.pageRanked.map(({ id }) => id)).toEqual(["doc-a", "doc-b"]);
+    expect(page.snippetById.get("doc-a")).toBe("passage doc-a:0");
+    expect(page.anchorIdById.get("doc-a")).toBe("a-0");
+    expect(page.snippetById.get("doc-b")).toBe("passage doc-b:0");
+    expect(page.anchorIdById.get("doc-b")).toBe("b-0");
+  });
+
+  test.each([25, 100])(
+    "a page of %i current documents uses one highlight call",
+    async (pageSize) => {
+      requestDelayMs = 20;
+      engineHits = Array.from({ length: pageSize }, (_, index) => ({
+        document_id: `doc-${index}`,
+        chunk_id: `doc-${index}:0`,
+        anchor_id: `anchor-${index}`,
+      }));
+      const page = await readPage(pageSize);
+      expect(peakHighlightInFlight).toBe(1);
+      expect(highlightInFlight).toBe(0);
+      expect(snippetRequests()).toHaveLength(1);
+      expect(page.scan.rounds).toBe(1);
+      expect(requestBodies).toHaveLength(2);
+      expect(page.scan.highlightRounds).toBe(1);
+      expect(page.snippetById.size).toBe(pageSize);
+      expect(page.anchorIdById.size).toBe(pageSize);
+    },
+  );
+
+  test.each(["document", "passage"])(
+    "100 current unanchored %s results need no fallback",
+    async (granularity) => {
+      engineHits = Array.from({ length: 100 }, (_, index) => ({
+        document_id: `doc-${index}`,
+        ...(granularity === "passage" ? { chunk_id: `doc-${index}:0` } : {}),
+      }));
+      const page = await readPage(100);
+      expect(page.snippetById.size).toBe(100);
+      expect(page.anchorIdById.size).toBe(0);
+      expect(scanRequestCount()).toBe(1);
+      expect(snippetRequests()).toHaveLength(1);
+      expect(requestBodies).toHaveLength(2);
+      expect(page.scan.highlightRounds).toBe(1);
+    },
+  );
+
+  test.each([
+    // Before batching, each superseded chunk cost one request of its own
+    // (1 + supersededCount highlight requests in all).
+    { supersededCount: 0, fallbackRequests: 0 },
+    { supersededCount: 1, fallbackRequests: 1 },
+    { supersededCount: 12, fallbackRequests: 1 },
+  ])(
+    "$supersededCount superseded chunks re-select in $fallbackRequests request(s)",
+    async ({ supersededCount, fallbackRequests }) => {
+      const currentHits = Array.from({ length: 20 }, (_, index) => ({
+        document_id: `doc-${index}`,
+        chunk_id: `doc-${index}:0`,
+        anchor_id: `anchor-${index}`,
+      }));
+      const scanned = currentHits.map((hit, index) => ({
+        ...hit,
+        chunk_id:
+          index < supersededCount ? `${hit.document_id}:5` : hit.chunk_id,
+      }));
+      let inFlight = 0;
+      let peak = 0;
+      const stub = async (
+        _input: Parameters<typeof fetch>[0],
+        init?: Parameters<typeof fetch>[1],
+      ): Promise<Response> => {
+        const body: Record<string, unknown> =
+          typeof init?.body === "string" ? JSON.parse(init.body) : {};
+        requestBodies.push(body);
+        const highlighting = body["snippet_fields"] !== undefined;
+        const query = String(body["query"]);
+        const matching = highlighting
+          ? currentHits.filter((hit) =>
+              ["document_id", "chunk_id"].some((field) =>
+                query.includes(
+                  current(
+                    `${field}:"${field === "document_id" ? hit.document_id : hit.chunk_id}"`,
+                    hit.document_id,
+                  ),
+                ),
+              ),
+            )
+          : scanned;
+        if (highlighting) {
+          inFlight += 1;
+          peak = Math.max(peak, inFlight);
+          await Bun.sleep(10);
+          inFlight -= 1;
+        }
+        const selected = matching.slice(0, Number(body["max_hits"]));
+        return new Response(
+          JSON.stringify({
+            num_hits: matching.length,
+            hits: selected.map((hit) => ({
+              ...hit,
+              projection_revision: testRevisionOf(hit.document_id),
+            })),
+            snippets: selected.map((hit) => ({
+              text: [`current ${hit.document_id}`],
+            })),
+          }),
+        );
+      };
+      testFetchState.set(
+        Object.assign(stub, {
+          preconnect: originalFetch.preconnect,
+        }),
+      );
+      const page = await readPage(20);
+      expect(scanRequestCount()).toBe(1);
+      expect(snippetRequests()).toHaveLength(1 + fallbackRequests);
+      expect(requestBodies).toHaveLength(2 + fallbackRequests);
+      expect(page.scan.highlightRounds).toBe(1 + fallbackRequests);
+      expect(peak).toBe(1);
+      for (const hit of currentHits) {
+        expect(page.snippetById.get(hit.document_id)).toBe(
+          `current ${hit.document_id}`,
+        );
+        expect(page.anchorIdById.get(hit.document_id)).toBe(hit.anchor_id);
+      }
+    },
+  );
+
+  test("a document crowded out of the batched re-selection gets a request of its own", async () => {
+    // Both scan chunks are superseded. doc-a's current revision matches in
+    // more passages than the batch has room for, all scoring above doc-b's.
+    const scanned = [
+      { document_id: "doc-a", chunk_id: "doc-a:old", anchor_id: "a-old" },
+      { document_id: "doc-b", chunk_id: "doc-b:old", anchor_id: "b-old" },
+    ];
+    const currentCopies = [
+      ...Array.from({ length: 20 }, (_, index) => ({
+        document_id: "doc-a",
+        chunk_id: `doc-a:${index}`,
+        anchor_id: `a-${index}`,
+      })),
+      { document_id: "doc-b", chunk_id: "doc-b:0", anchor_id: "b-0" },
+    ];
+    const stub = async (
+      _input: Parameters<typeof fetch>[0],
+      init?: Parameters<typeof fetch>[1],
+    ): Promise<Response> => {
+      const body: Record<string, unknown> =
+        typeof init?.body === "string" ? JSON.parse(init.body) : {};
+      requestBodies.push(body);
+      const query = String(body["query"]);
+      const matching =
+        body["snippet_fields"] === undefined
+          ? scanned
+          : currentCopies.filter((hit) =>
+              ["document_id", "chunk_id"].some((field) =>
+                query.includes(
+                  `(${field}:"${field === "document_id" ? hit.document_id : hit.chunk_id}" AND projection_revision:"${testRevisionOf(hit.document_id)}")`,
+                ),
+              ),
+            );
+      const selected = matching.slice(0, Number(body["max_hits"]));
+      return new Response(
+        JSON.stringify({
+          num_hits: matching.length,
+          hits: selected.map((hit) => ({
+            ...hit,
+            projection_revision: testRevisionOf(hit.document_id),
+          })),
+          snippets: selected.map((hit) => ({
+            text: [`passage ${hit.chunk_id}`],
+          })),
+        }),
+      );
+    };
+    testFetchState.set(
+      Object.assign(stub, { preconnect: originalFetch.preconnect }),
+    );
+
+    const page = await readPage(2);
+
+    expect(snippetRequests().map((request) => request["query"])).toEqual([
+      `(text:promlčení) AND (${current('chunk_id:"doc-a:old"', "doc-a")} OR ${current('chunk_id:"doc-b:old"', "doc-b")})`,
+      `(text:promlčení) AND (${current('document_id:"doc-a"', "doc-a")} OR ${current('document_id:"doc-b"', "doc-b")})`,
+      `(text:promlčení) AND (${current('document_id:"doc-b"', "doc-b")})`,
+    ]);
+    expect(page.scan.highlightRounds).toBe(3);
+    expect(page.snippetById.get("doc-a")).toBe("passage doc-a:0");
+    expect(page.anchorIdById.get("doc-a")).toBe("a-0");
+    expect(page.snippetById.get("doc-b")).toBe("passage doc-b:0");
+    expect(page.anchorIdById.get("doc-b")).toBe("b-0");
+  });
+
+  test("an expired shared highlight deadline prevents further dispatch", async () => {
+    engineHits = Array.from({ length: 6 }, (_, index) => ({
+      document_id: `doc-${index}`,
+    }));
+    let now = 0;
+    const clock = spyOn(performance, "now").mockImplementation(() => now);
+    const engine = globalThis.fetch;
+    const stub = async (
+      input: Parameters<typeof fetch>[0],
+      init?: Parameters<typeof fetch>[1],
+    ): Promise<Response> => {
+      const body: Record<string, unknown> =
+        typeof init?.body === "string" ? JSON.parse(init.body) : {};
+      if (
+        body["snippet_fields"] !== undefined &&
+        snippetRequests().length === 0
+      ) {
+        now = CORPUS_INDEX_SEARCH_TIMEOUT_MS + 1;
+        requestBodies.push(body);
+        return new Response(
+          JSON.stringify({ num_hits: 0, hits: [], snippets: [] }),
+        );
+      }
+      return engine(input, init);
+    };
+    testFetchState.set(
+      Object.assign(stub, {
+        preconnect: originalFetch.preconnect,
+      }),
+    );
+    // The batch consumes the shared budget; missing passages do not
+    // receive a fresh timeout for their fallback requests.
+    expect(await rejectionOf(readPage(6))).toMatchObject({
+      status: 503,
+      code: "search_index_unavailable",
+    });
+    expect(snippetRequests()).toHaveLength(1);
+    clock.mockRestore();
+  });
+
+  test("a highlight window the request's budget ended is a timeout, not an outage", async () => {
+    engineHits = Array.from({ length: 6 }, (_, index) => ({
+      document_id: `doc-${index}`,
+    }));
+    let now = 0;
+    const clock = spyOn(performance, "now").mockImplementation(() => now);
+    const budgetMs = 1000; // timeout under test: shorter than the 30 s window
+    const engine = globalThis.fetch;
+    const stub = async (
+      input: Parameters<typeof fetch>[0],
+      init?: Parameters<typeof fetch>[1],
+    ): Promise<Response> => {
+      const body: Record<string, unknown> =
+        typeof init?.body === "string" ? JSON.parse(init.body) : {};
+      if (
+        body["snippet_fields"] !== undefined &&
+        snippetRequests().length === 0
+      ) {
+        // The request's budget, not the window's own 30 s, runs out here.
+        now = budgetMs + 1;
+        requestBodies.push(body);
+        return new Response(
+          JSON.stringify({ num_hits: 0, hits: [], snippets: [] }),
+        );
+      }
+      return engine(input, init);
+    };
+    testFetchState.set(
+      Object.assign(stub, {
+        preconnect: originalFetch.preconnect,
+      }),
+    );
+    try {
+      const failure = await runWithinRequestLatencyBudget(
+        { label: "search_legislation", budgetMs },
+        async () => await rejectionOf(readPage(6)),
+      );
+      expect(failure).toMatchObject({
+        status: 503,
+        code: PUBLIC_READ_TIMEOUT_CODE,
+      });
+      expect(isSearchIndexUnavailable(failure)).toBe(false);
+      expect(findRequestBudgetExpiry(failure)).toMatchObject({
+        label: "search_legislation",
+      });
+      expect(snippetRequests()).toHaveLength(1);
+    } finally {
+      clock.mockRestore();
+    }
   });
 
   test("an empty page asks the engine for nothing to highlight", async () => {
@@ -1184,49 +1672,100 @@ describe("only the passages a page emits are highlighted", () => {
     expect(page.scan.highlightRounds).toBe(0);
   });
 
-  test("a passage the index holds twice does not cost another hit its snippet", async () => {
-    // Mid-refresh: ingestion has appended doc-a's new copy and the engine has
-    // not applied the delete yet, so one clause matches two rows.
+  test("a current revision selects its best passage when the superseded chunk differs", async () => {
+    // Mid-refresh: ingestion has appended doc-a's new revision and the engine
+    // has not applied the delete of the old one, so the scan reaches both.
     const scanned = [
-      { document_id: "doc-a", chunk_id: "doc-a:0" },
-      { document_id: "doc-b", chunk_id: "doc-b:0" },
-      { document_id: "doc-c", chunk_id: "doc-c:0" },
+      { document_id: "doc-a", chunk_id: "doc-a:5", anchor_id: "a-old" },
+      { document_id: "doc-b", chunk_id: "doc-b:0", anchor_id: "b-current" },
+      { document_id: "doc-c", chunk_id: "doc-c:0", anchor_id: "c-current" },
     ];
     responseBody = {
       num_hits: scanned.length,
       hits: scanned,
       snippets: scanned.map(() => ({ text: ["scanned"] })),
     };
-    const highlighted = [
-      { document_id: "doc-a", chunk_id: "doc-a:0" },
-      { document_id: "doc-a", chunk_id: "doc-a:0" },
-      { document_id: "doc-b", chunk_id: "doc-b:0" },
-      { document_id: "doc-c", chunk_id: "doc-c:0" },
+    const supersededRevision = "0b6f3a52-1d7e-4f0a-9c2b-5e8d7a6f4c31";
+    // Every physical copy the index holds, best first: the superseded copy of
+    // doc-a outranks its current one.
+    const copies = [
+      {
+        hit: { document_id: "doc-a", chunk_id: "doc-a:5", anchor_id: "a-old" },
+        revision: supersededRevision,
+        text: "doc-a superseded",
+      },
+      {
+        hit: { document_id: "doc-a", chunk_id: "doc-a:0", anchor_id: "a-new" },
+        revision: testRevisionOf("doc-a"),
+        text: "doc-a current",
+      },
+      {
+        hit: {
+          document_id: "doc-b",
+          chunk_id: "doc-b:0",
+          anchor_id: "b-current",
+        },
+        revision: testRevisionOf("doc-b"),
+        text: "doc-b current",
+      },
+      {
+        hit: {
+          document_id: "doc-c",
+          chunk_id: "doc-c:0",
+          anchor_id: "c-current",
+        },
+        revision: testRevisionOf("doc-c"),
+        text: "doc-c current",
+      },
     ];
-    snippetResponseBody = {
-      num_hits: highlighted.length,
-      hits: highlighted,
-      snippets: [
-        { text: ["doc-a current"] },
-        { text: ["doc-a superseded"] },
-        { text: ["doc-b"] },
-        { text: ["doc-c"] },
-      ],
-    };
+    const scanStub = globalThis.fetch;
+    testFetchState.set(
+      Object.assign(
+        async (
+          input: Parameters<typeof fetch>[0],
+          init?: Parameters<typeof fetch>[1],
+        ): Promise<Response> => {
+          const body: Record<string, unknown> =
+            typeof init?.body === "string" ? JSON.parse(init.body) : {};
+          if (body["snippet_fields"] === undefined) {
+            return await scanStub(input, init);
+          }
+          requestBodies.push(body);
+          // The engine answers a revision-narrowed clause with that copy only.
+          const query = String(body["query"]);
+          const answered = copies.filter(({ hit, revision }) =>
+            ["document_id", "chunk_id"].some((field) =>
+              query.includes(
+                `(${field}:"${field === "document_id" ? hit.document_id : hit.chunk_id}" AND projection_revision:"${revision}")`,
+              ),
+            ),
+          );
+          return new Response(
+            JSON.stringify({
+              num_hits: answered.length,
+              hits: answered.map(({ hit }) => hit),
+              snippets: answered.map(({ text }) => ({ text: [text] })),
+            }),
+            { status: 200 },
+          );
+        },
+        { preconnect: originalFetch.preconnect },
+      ),
+    );
 
     const page = await readPage();
 
-    // Room for the overlap, so the duplicate does not push doc-c out of the
-    // answer, and the copy that ranked first is the one the reader sees.
-    expect(snippetRequests().at(0)?.["max_hits"]).toBe(
-      3 * HIGHLIGHT_COPIES_PER_PASSAGE,
-    );
     expect(page.snippetById.get("doc-a")).toBe("doc-a current");
-    expect(page.snippetById.get("doc-b")).toBe("doc-b");
-    expect(page.snippetById.get("doc-c")).toBe("doc-c");
-    for (const hit of page.pageRanked) {
-      expect(page.snippetById.get(hit.id)).toBeDefined();
-    }
+    expect(page.anchorIdById.get("doc-a")).toBe("a-new");
+    // One clause per document, each narrowed to its applied revision.
+    expect(snippetRequests().map((request) => request["query"])).toEqual([
+      `(text:promlčení) AND (${current('chunk_id:"doc-a:5"', "doc-a")} OR ${current('chunk_id:"doc-b:0"', "doc-b")} OR ${current('chunk_id:"doc-c:0"', "doc-c")})`,
+      `(text:promlčení) AND (${current('document_id:"doc-a"', "doc-a")})`,
+    ]);
+    expect(page.snippetById.get("doc-b")).toBe("doc-b current");
+    expect(page.snippetById.get("doc-c")).toBe("doc-c current");
+    expect([...page.snippetById.values()]).not.toContain("doc-a superseded");
+    expect([...page.anchorIdById.values()]).not.toContain("a-old");
   });
 });
 
@@ -1245,6 +1784,7 @@ describe("the reported engine time accounts for every round trip", () => {
     engineHits = Array.from({ length: 5000 }, (_, index) => ({
       chunk_id: `doc-${index}:0`,
       document_id: `doc-${index}`,
+      anchor_id: `anchor-${index}`,
     }));
 
     const page = await readPage(3);
@@ -1261,6 +1801,7 @@ describe("the reported engine time accounts for every round trip", () => {
     engineHits = Array.from({ length: 5000 }, (_, index) => ({
       chunk_id: `doc-${index}:0`,
       document_id: `doc-${index}`,
+      anchor_id: `anchor-${index}`,
     }));
 
     const startedAt = performance.now();
@@ -1342,19 +1883,23 @@ describe("an engine refusal reaches the caller as a mapped status", () => {
     // request alone reaches the second read site with a page already scanned.
     snippetResponseBody = null;
     const stubbedFetch = globalThis.fetch;
-    globalThis.fetch = Object.assign(
-      async (
-        input: Parameters<typeof fetch>[0],
-        init?: Parameters<typeof fetch>[1],
-      ): Promise<Response> => {
-        const body: Record<string, unknown> =
-          typeof init?.body === "string" ? JSON.parse(init.body) : {};
-        if (body["snippet_fields"] !== undefined) {
-          return new Response("engine refused the highlight", { status: 503 });
-        }
-        return await stubbedFetch(input, init);
-      },
-      { preconnect: originalFetch.preconnect },
+    testFetchState.set(
+      Object.assign(
+        async (
+          input: Parameters<typeof fetch>[0],
+          init?: Parameters<typeof fetch>[1],
+        ): Promise<Response> => {
+          const body: Record<string, unknown> =
+            typeof init?.body === "string" ? JSON.parse(init.body) : {};
+          if (body["snippet_fields"] !== undefined) {
+            return new Response("engine refused the highlight", {
+              status: 503,
+            });
+          }
+          return await stubbedFetch(input, init);
+        },
+        { preconnect: originalFetch.preconnect },
+      ),
     );
 
     const failure = await readPageFailure();
@@ -1427,6 +1972,7 @@ describe("folded acts stay folded across capped windows", () => {
     parsedCursor: SearchCursor | null,
   ) =>
     await readCorpusIndexSearchPage({
+      scanTransport: NATIVE_SCAN_TRANSPORT,
       observer: "unobserved",
       cluster: "q09",
       indexId: "legislation_v2_cze",
@@ -1435,12 +1981,17 @@ describe("folded acts stay folded across capped windows", () => {
       order: RELEVANCE_ORDER,
       parsedCursor,
       snippetFields: ["text"],
+      projectionRevisionField: "projection_revision",
       extractId: (hit: CorpusIndexHit) =>
         typeof hit["document_id"] === "string" ? hit["document_id"] : null,
       extractSnippet: () => null,
       // No bound ever proves the page: only the round cap ends a scan.
       unseenScoreUpperBound: (score) => score + 1,
-      rankCandidates: async (candidates) => {
+      rankCandidates: async (probes, { selectAppliedCandidates }) => {
+        const candidates = selectAppliedCandidates(
+          testAppliedProjectionsFor(probes),
+        );
+
         const collapsed = collapseLegislationHitsByWork({
           ranked: candidates
             .filter(
@@ -1451,13 +2002,11 @@ describe("folded acts stay folded across capped windows", () => {
             )
             .map((candidate) => ({
               id: candidate.id,
+              work: actOf(candidate.id),
               score: candidate.score,
               lexicalScore: candidate.score,
               citationAuthority: 0,
             })),
-          workOf: new Map(
-            candidates.map((candidate) => [candidate.id, actOf(candidate.id)]),
-          ),
           representatives: new Map(),
           namedWorks: [],
           namedScoreFloor: 10,
@@ -1471,6 +2020,7 @@ describe("folded acts stay folded across capped windows", () => {
         );
         return {
           context: null,
+          revisionById: testRevisionsFor(candidates),
           ranked: collapsed.ranked,
           groups: collapsed.workTokens.filter(
             (token) =>
@@ -1601,5 +2151,699 @@ describe("folded acts stay folded across capped windows", () => {
       type: "truncated",
       reason: "exclusion_budget",
     });
+  });
+});
+
+/**
+ * A page addressed by number ranks every result in front of it in the same
+ * request, so a jump to page N is one request rather than N - 1 cursor pages
+ * walked first. It must land on the decisions the cursor chain reaches, and
+ * its deeper reach must not be cut short by the round cap a first page keeps.
+ */
+describe("a page addressed by offset", () => {
+  const documentId = (index: number) => `doc-${String(index).padStart(5, "0")}`;
+
+  type ReadOffsetPageOptions = {
+    limit: number;
+    parsedCursor?: SearchCursor | null;
+    skip: number;
+    /** Citation authority per decision; none by default. */
+    authorityById?: ReadonlyMap<string, number>;
+    /**
+     * Which shown decisions the ranker reports as groups a later window must
+     * leave out: none by default, or every one (each decision its own group).
+     */
+    carries?: "none" | "every";
+  };
+
+  const readOffsetPage = async ({
+    authorityById = new Map(),
+    carries = "none",
+    limit,
+    parsedCursor = null,
+    skip,
+  }: ReadOffsetPageOptions) =>
+    await readCorpusIndexSearchPage({
+      scanTransport: NATIVE_SCAN_TRANSPORT,
+      observer: "unobserved",
+      cluster: "q09",
+      indexId: "case_law_v5_cs_sk",
+      query: "text:smlouva",
+      limit,
+      order: RELEVANCE_ORDER,
+      parsedCursor,
+      skip,
+      snippetFields: ["text"],
+      projectionRevisionField: "projection_revision",
+      extractId: (hit: CorpusIndexHit) =>
+        typeof hit["document_id"] === "string" ? hit["document_id"] : null,
+      extractSnippet: () => null,
+      unseenScoreUpperBound: (score) =>
+        stableBlendUpperBound(score, DEFAULT_AUTHORITY_WEIGHT),
+      // The production contract: leave out the groups the scope names.
+      rankCandidates: async (
+        probes,
+        { excludedGroups, selectAppliedCandidates },
+      ) => {
+        const candidates = selectAppliedCandidates(
+          testAppliedProjectionsFor(probes),
+        );
+
+        const shown = candidates.filter(
+          ({ id }) => !excludedGroups.has(corpusSearchGroupToken(id)),
+        );
+        return {
+          context: null,
+          groups:
+            carries === "every"
+              ? shown.map(({ id }) => corpusSearchGroupToken(id))
+              : [],
+          ranked: blendStableCitationAuthority({
+            candidates: shown,
+            authorityById: new Map(authorityById),
+            weight: DEFAULT_AUTHORITY_WEIGHT,
+          }),
+          revisionById: testRevisionsFor(shown),
+        };
+      },
+    });
+
+  type ChainInput = Pick<ReadOffsetPageOptions, "authorityById" | "limit"> & {
+    /** Stop once the chain has read this many results. */
+    until: number;
+  };
+
+  /** The cursor chain's results in order, read page by page from the first. */
+  const readCursorChain = async ({
+    authorityById,
+    limit,
+    until,
+  }: ChainInput) => {
+    const chain: string[] = [];
+    let cursor: SearchCursor | null = null;
+    for (let page = 0; page < 200 && chain.length < until; page += 1) {
+      // Each cursor page needs the previous page's cursor.
+      const read = await readOffsetPage({
+        ...(authorityById === undefined ? {} : { authorityById }),
+        limit,
+        parsedCursor: cursor,
+        skip: 0,
+      });
+      chain.push(...read.pageRanked.map((hit) => hit.id));
+      if (read.nextCursor === null) {
+        break;
+      }
+      cursor = read.nextCursor;
+    }
+    return chain;
+  };
+
+  test("any page by offset is that page of the cursor chain, whatever the ranking found deeper", async () => {
+    // Decisions match a varying number of passages, so the chain's first
+    // windows end before every decision is scanned, and some decisions the
+    // first scan never reached carry enough citation authority to rank
+    // above ones it already showed. A deeper scan that re-ranked everything
+    // would reorder what earlier pages showed; the chain does not.
+    await assertProperty(
+      "any page by offset is that page of the cursor chain, whatever the ranking found deeper",
+      fc.asyncProperty(
+        fc.array(fc.integer({ min: 1, max: 8 }), {
+          minLength: 150,
+          maxLength: 260,
+        }),
+        fc.array(fc.double({ min: 0, max: 50, noNaN: true }), {
+          minLength: 260,
+          maxLength: 260,
+        }),
+        fc.integer({ min: 5, max: 40 }),
+        async (passagesPerDocument, authorities, limit) => {
+          engineHits = passagesPerDocument.flatMap((count, index) =>
+            Array.from({ length: count }, (_, passage) => ({
+              document_id: documentId(index),
+              anchor_id: `d${String(index)}p${String(passage)}`,
+            })),
+          );
+          const authorityById = new Map(
+            passagesPerDocument.map((_, index) => [
+              documentId(index),
+              // Deep decisions weigh most: the first scan cannot see them.
+              (authorities.at(index) ?? 0) *
+                (index / passagesPerDocument.length),
+            ]),
+          );
+          const pages = 4;
+          const chain = await readCursorChain({
+            authorityById,
+            limit,
+            until: pages * limit,
+          });
+
+          const byOffset: string[][] = [];
+          for (let page = 1; page < pages; page += 1) {
+            // Sequential only to keep the fake engine's request log readable.
+            const read = await readOffsetPage({
+              authorityById,
+              limit,
+              skip: page * limit,
+            });
+            byOffset.push(read.pageRanked.map((hit) => hit.id));
+          }
+
+          // Page 1 then the offset pages are the chain's prefix: no repeat,
+          // no gap, in the chain's order.
+          expect([...chain.slice(0, limit), ...byOffset.flat()]).toEqual(
+            chain.slice(0, pages * limit),
+          );
+        },
+      ),
+      { numRuns: 20 },
+    );
+  });
+
+  test("every offset page holds the decisions the cursor chain reaches", async () => {
+    engineHits = Array.from({ length: 30_000 }, (_, index) => ({
+      document_id: documentId(index),
+    }));
+    const limit = 20;
+    const chain: string[][] = [];
+    let cursor: SearchCursor | null = null;
+    for (let page = 0; page < 6; page += 1) {
+      // Each cursor page needs the previous page's cursor.
+      const read = await readOffsetPage({
+        limit,
+        parsedCursor: cursor,
+        skip: 0,
+      });
+      chain.push(read.pageRanked.map((hit) => hit.id));
+      cursor = read.nextCursor;
+    }
+    expect(new Set(chain.flat()).size).toBe(6 * limit);
+
+    const jumps = await Promise.all(
+      chain.map(
+        async (_, index) =>
+          await readOffsetPage({ limit, skip: index * limit }),
+      ),
+    );
+    expect(jumps.map((page) => page.pageRanked.map((hit) => hit.id))).toEqual(
+      chain,
+    );
+  });
+
+  test("the deepest page fills even when every decision matched several passages", async () => {
+    const passagesPerDocument = 4;
+    const documents = LIMITS.caseLawResultDepthMax + 100;
+    engineHits = Array.from(
+      { length: documents * passagesPerDocument },
+      (_, index) => ({
+        document_id: documentId(Math.floor(index / passagesPerDocument)),
+        anchor_id: `p${String(index)}`,
+      }),
+    );
+    const limit = 20;
+    const skip = LIMITS.caseLawResultDepthMax - limit;
+
+    const page = await readOffsetPage({ limit, skip });
+
+    // One window of the chain holds fewer decisions than the page is deep.
+    expect(
+      LIMITS.corpusIndexSearchMaxRounds *
+        LIMITS.corpusIndexSearchCandidateLimit,
+    ).toBeLessThan(LIMITS.caseLawResultDepthMax * passagesPerDocument);
+    expect(page.reach).toBe(SEARCH_PAGE_REACH.REACHED);
+    expect(page.pageRanked.map((hit) => hit.id)).toEqual(
+      Array.from({ length: limit }, (_, index) => documentId(skip + index)),
+    );
+    expect(page.scan.rounds).toBeLessThanOrEqual(
+      CORPUS_INDEX_OFFSET_PAGE_MAX_ROUNDS,
+    );
+  });
+
+  test("following the cursor of a deep offset page continues where the cursor chain does", async () => {
+    // Every decision matched four passages, so the deep page ranked well past
+    // what a first page's fixed round cap scans.
+    const passagesPerDocument = 4;
+    const documents = LIMITS.caseLawResultDepthMax + 200;
+    engineHits = Array.from(
+      { length: documents * passagesPerDocument },
+      (_, index) => ({
+        document_id: documentId(Math.floor(index / passagesPerDocument)),
+        anchor_id: `p${String(index)}`,
+      }),
+    );
+    const limit = 20;
+    const skip = LIMITS.caseLawResultDepthMax - limit;
+    const continuations = 3;
+
+    // The pure cursor chain, from the first page to past the offset page. Its
+    // pages are not all `limit` long (a capped window ends on a short page),
+    // so it is compared decision by decision rather than page by page.
+    const reachedByChain = skip + limit + continuations * limit;
+    const chain: string[] = [];
+    let chainCursor: SearchCursor | null = null;
+    for (let page = 0; page < 100 && chain.length < reachedByChain; page += 1) {
+      const read = await readOffsetPage({
+        limit,
+        parsedCursor: chainCursor,
+        skip: 0,
+      });
+      chain.push(...read.pageRanked.map((hit) => hit.id));
+      if (read.nextCursor === null) {
+        break;
+      }
+      chainCursor = read.nextCursor;
+    }
+    const chainAfterOffsetPage = chain.slice(skip + limit, reachedByChain);
+    expect(chainAfterOffsetPage).toHaveLength(continuations * limit);
+
+    // The offset page, then its own cursor followed.
+    const offsetPage = await readOffsetPage({ limit, skip });
+    const followed: string[][] = [];
+    let cursor = offsetPage.nextCursor;
+    for (let page = 0; page < continuations; page += 1) {
+      const read = await readOffsetPage({
+        limit,
+        parsedCursor: cursor,
+        skip: 0,
+      });
+      followed.push(read.pageRanked.map((hit) => hit.id));
+      cursor = read.nextCursor;
+    }
+
+    expect(followed.flat()).toEqual(chainAfterOffsetPage);
+    expect(followed.flat()).toEqual(
+      Array.from({ length: continuations * limit }, (_, index) =>
+        documentId(skip + limit + index),
+      ),
+    );
+  });
+
+  test("a deep offset page whose decisions matched more passages than the cap assumes reports that its scan stopped short", async () => {
+    // Eight passages a decision, twice what the offset round cap budgets for.
+    const passagesPerDocument = 8;
+    const documents = LIMITS.caseLawResultDepthMax + 100;
+    engineHits = Array.from(
+      { length: documents * passagesPerDocument },
+      (_, index) => ({
+        document_id: documentId(Math.floor(index / passagesPerDocument)),
+        anchor_id: `p${String(index)}`,
+      }),
+    );
+    const limit = 20;
+    const skip = LIMITS.caseLawResultDepthMax - limit;
+
+    const page = await readOffsetPage({ limit, skip });
+
+    // The fixture reaches the fault: the cap ends the scan before the page.
+    expect(page.scan.roundCapHit).toBe(true);
+    expect(page.pageRanked.length).toBeLessThan(limit);
+    // A short page here is not the end of the results.
+    expect(page.reach).toBe(SEARCH_PAGE_REACH.SCAN_BUDGET);
+    expect(page.nextCursor).toBeNull();
+  });
+
+  test("an offset page whose chain ran out of room for its exclusions does not read as the end of the results", async () => {
+    // Four passages a decision, so the chain's first window shows 225 of
+    // them, and every one is a group the next window must leave out: more
+    // than a cursor may carry, so the chain stops there with results left.
+    const passagesPerDocument = 4;
+    engineHits = Array.from(
+      { length: 2000 * passagesPerDocument },
+      (_, index) => ({
+        document_id: documentId(Math.floor(index / passagesPerDocument)),
+        anchor_id: `p${String(index)}`,
+      }),
+    );
+    const firstWindow =
+      (LIMITS.corpusIndexSearchMaxRounds *
+        LIMITS.corpusIndexSearchCandidateLimit) /
+      passagesPerDocument;
+    expect(firstWindow).toBeGreaterThan(
+      LIMITS.corpusIndexSearchMaxExcludedGroups,
+    );
+    const limit = 20;
+    const skip = 300;
+    // The fixture reaches the fault: the page lies past the first window.
+    expect(skip).toBeGreaterThan(firstWindow);
+
+    const page = await readOffsetPage({ carries: "every", limit, skip });
+
+    expect(page.pageRanked).toEqual([]);
+    expect(page.stop).toEqual({ type: "budget", budget: "exclusion" });
+    // Not the end of the results: no cursor, and the page says it was not
+    // reached, so the web neither shows it as the last page nor lands back.
+    expect(page.reach).toBe(SEARCH_PAGE_REACH.SCAN_BUDGET);
+    expect(page.nextCursor).toBeNull();
+    expect(page.paginationOutcome).toEqual({
+      type: "truncated",
+      reason: "exclusion_budget",
+    });
+  });
+
+  test("a page the scan read to the end of its hits is the end of the results", async () => {
+    engineHits = Array.from({ length: 30 }, (_, index) => ({
+      document_id: documentId(index),
+    }));
+
+    const page = await readOffsetPage({ limit: 20, skip: 20 });
+
+    expect(page.pageRanked).toHaveLength(10);
+    expect(page.stop).toEqual({ type: "exhausted" });
+    expect(page.reach).toBe(SEARCH_PAGE_REACH.REACHED);
+  });
+
+  test("an offset page the scan placed reports that it did", async () => {
+    engineHits = Array.from({ length: 2000 }, (_, index) => ({
+      document_id: documentId(index),
+    }));
+
+    const page = await readOffsetPage({ limit: 20, skip: 100 });
+
+    expect(page.pageRanked).toHaveLength(20);
+    expect(page.reach).toBe(SEARCH_PAGE_REACH.REACHED);
+  });
+
+  test("with decisions pinned above the text results, offset pages match the cursor chain with no gap or repeat", async () => {
+    // The composition the case-law search performs for an entry carrying a
+    // reference among other words: the decisions it names are pinned above
+    // the first page and dropped from the text ranking on every page.
+    engineHits = Array.from({ length: 300 }, (_, index) => ({
+      document_id: documentId(index),
+    }));
+    const limit = 25;
+    // One named decision outside the text ranking, one inside page 1's text
+    // slice and one inside page 2's.
+    const named = ["named-elsewhere", documentId(3), documentId(30)];
+    const pinnedIds = new Set(named);
+    const pinned = named.map((id) => ({ id }));
+    const shown = (
+      page: Awaited<ReturnType<typeof readOffsetPage>>,
+      prefix: readonly { id: string }[],
+    ) =>
+      withPinnedDecisions({
+        pinned: prefix,
+        pinnedIds,
+        ranked: page.pageRanked.map(({ id }) => ({ id })),
+      }).map(({ id }) => id);
+
+    const firstRead = await readOffsetPage({ limit, skip: 0 });
+    const first = shown(firstRead, pinned);
+    const byCursor: string[][] = [];
+    let cursor = firstRead.nextCursor;
+    for (let page = 0; page < 2; page += 1) {
+      const read = await readOffsetPage({
+        limit,
+        parsedCursor: cursor,
+        skip: 0,
+      });
+      byCursor.push(shown(read, []));
+      cursor = read.nextCursor;
+    }
+    const byOffset = await Promise.all(
+      [1, 2].map(async (page) =>
+        shown(await readOffsetPage({ limit, skip: page * limit }), []),
+      ),
+    );
+
+    expect(byOffset).toEqual(byCursor);
+    const reading = [...first, ...byOffset.flat()];
+    expect(new Set(reading).size).toBe(reading.length);
+    // Every text result up to the third page's end is read once, in order,
+    // after the named decisions.
+    expect(reading).toEqual([
+      ...named,
+      ...Array.from({ length: 3 * limit }, (_, index) =>
+        documentId(index),
+      ).filter((id) => !pinnedIds.has(id)),
+    ]);
+  });
+
+  test("a page placed by both a cursor and an offset is a programming error", async () => {
+    engineHits = [{ document_id: documentId(0) }];
+    const cursor: SearchCursor = {
+      score: 1,
+      id: documentId(0),
+      sort: "relevance",
+      windowStart: 0,
+    };
+
+    const failure = await rejectionOf(
+      readOffsetPage({ limit: 20, parsedCursor: cursor, skip: 20 }),
+    );
+
+    expect(failure).toBeInstanceOf(Panic);
+    expect(String(failure)).toContain("placed by its cursor or by its offset");
+  });
+});
+
+test("two sequential scans report as one, with every count added", () => {
+  const strict = {
+    rounds: 2,
+    passagesScanned: 40,
+    indexMs: 12,
+    earlyStopped: true,
+    roundCapHit: false,
+    highlightRounds: 1,
+  };
+  const relaxed = {
+    rounds: 1,
+    passagesScanned: 15,
+    indexMs: 5,
+    earlyStopped: false,
+    roundCapHit: true,
+    highlightRounds: 2,
+  };
+  expect(sumCorpusIndexScans(strict, relaxed)).toEqual({
+    rounds: 3,
+    passagesScanned: 55,
+    indexMs: 17,
+    earlyStopped: true,
+    roundCapHit: true,
+    highlightRounds: 3,
+  });
+  expect(sumCorpusIndexScans(strict, emptyCorpusIndexScan())).toEqual(strict);
+});
+
+describe("copies Postgres does not record as applied never surface", () => {
+  const documentId = (index: number) =>
+    `copy-${String(index).padStart(5, "0")}`;
+  /** A copy of the document other than the applied one: stale or unapplied. */
+  const otherRevisionOf = (id: string) => testRevisionOf(`${id}#other`);
+
+  type Copy = "applied" | "other";
+
+  /**
+   * The cursor chain over an engine holding `hits`, ranked through the scope's
+   * one servable check against the applied revisions in `applied`.
+   */
+  const readChain = async (applied: ReadonlySet<string>, limit: number) => {
+    const recurring = recurringFixtureIdentities();
+    const pages: { ids: string[]; reach: string }[] = [];
+    let cursor: SearchCursor | null = null;
+    for (let page = 0; page < 400; page += 1) {
+      const parsedCursor: SearchCursor | null = cursor;
+      // Each cursor page needs the previous page's cursor.
+      const read: Awaited<ReturnType<typeof readCorpusIndexSearchPage<null>>> =
+        await readCorpusIndexSearchPage({
+          scanTransport: NATIVE_SCAN_TRANSPORT,
+          observer: "unobserved",
+          cluster: "q09",
+          indexId: "case_law_v10_cze",
+          query: "text:smlouva",
+          limit,
+          order: RELEVANCE_ORDER,
+          parsedCursor,
+          snippetFields: ["text"],
+          projectionRevisionField: "projection_revision",
+          extractId: (hit: CorpusIndexHit) =>
+            typeof hit["document_id"] === "string" ? hit["document_id"] : null,
+          extractSnippet: () => null,
+          unseenScoreUpperBound: (score) => score,
+          rankCandidates: async (
+            probes,
+            { excludedGroups, selectAppliedCandidates },
+          ) => {
+            const candidates = selectAppliedCandidates(
+              testAppliedProjectionsFor(
+                probes.filter(({ id }) => applied.has(id)),
+              ),
+            );
+            const shown = candidates.filter(
+              ({ id }) => !excludedGroups.has(corpusSearchGroupToken(id)),
+            );
+            return {
+              context: null,
+              groups: shown
+                .filter(({ id }) => recurring.has(id))
+                .map(({ id }) => corpusSearchGroupToken(id)),
+              ranked: shown.map((candidate) => ({
+                id: candidate.id,
+                score: candidate.score,
+                lexicalScore: candidate.score,
+                citationAuthority: 0,
+              })),
+              revisionById: testRevisionsFor(shown),
+            };
+          },
+        });
+      pages.push({
+        ids: read.pageRanked.map((hit) => hit.id),
+        reach: read.reach,
+      });
+      if (read.nextCursor === null) {
+        break;
+      }
+      cursor = read.nextCursor;
+    }
+    return pages;
+  };
+
+  /**
+   * The independent oracle: the documents Postgres serves that the engine
+   * holds an applied copy of, each placed by its first applied hit.
+   */
+  const oracle = (applied: ReadonlySet<string>) => {
+    const placed: string[] = [];
+    for (const hit of engineHits ?? []) {
+      if (
+        applied.has(hit.document_id) &&
+        (hit.projection_revision ?? testRevisionOf(hit.document_id)) ===
+          testRevisionOf(hit.document_id) &&
+        !placed.includes(hit.document_id)
+      ) {
+        placed.push(hit.document_id);
+      }
+    }
+    return placed;
+  };
+
+  test("the cursor chain is exactly the applied copies' order, however many other copies the engine holds", async () => {
+    await assertProperty(
+      "the cursor chain is exactly the applied copies' order, however many other copies the engine holds",
+      fc.asyncProperty(
+        fc.array(
+          fc.record({
+            // Whether Postgres records any applied copy (none: never applied,
+            // withdrawn, or erased with its delete not settled).
+            served: fc.boolean(),
+            copies: fc.array(fc.constantFrom<Copy>("applied", "other"), {
+              minLength: 1,
+              maxLength: 5,
+            }),
+          }),
+          { minLength: 10, maxLength: 140 },
+        ),
+        fc.array(fc.nat(), { minLength: 700, maxLength: 700 }),
+        fc.integer({ min: 1, max: 25 }),
+        async (documents, order, limit) => {
+          const placed = documents.flatMap(({ copies }, index) =>
+            copies.map((copy) => ({
+              document_id: documentId(index),
+              projection_revision:
+                copy === "applied"
+                  ? testRevisionOf(documentId(index))
+                  : otherRevisionOf(documentId(index)),
+            })),
+          );
+          // An arbitrary interleaving: a stale copy may outrank the applied one.
+          engineHits = placed
+            .map((hit, at) => ({ hit, key: order.at(at) ?? at }))
+            .toSorted((left, right) => left.key - right.key)
+            .map(({ hit }) => hit);
+          const applied = new Set(
+            documents.flatMap(({ served }, index) =>
+              served ? [documentId(index)] : [],
+            ),
+          );
+
+          const pages = await readChain(applied, limit);
+          const chain = pages.flatMap(({ ids }) => ids);
+
+          // Every page is reached and full until the last, and the chain is
+          // the oracle: nothing unapplied, nothing twice, nothing missed, in
+          // the order of the applied copies.
+          expect(
+            pages.every(({ reach }) => reach === SEARCH_PAGE_REACH.REACHED),
+          ).toBe(true);
+          expect(
+            pages.slice(0, -1).every(({ ids }) => ids.length === limit),
+          ).toBe(true);
+          expect(chain).toEqual(oracle(applied));
+        },
+      ),
+      { numRuns: 40 },
+    );
+  });
+
+  test("a ranker that emits an id the servable check did not select is refused", async () => {
+    // The decision's only matching copy is one Postgres superseded; its applied
+    // copy matched nothing. A ranker reading past the check would show it.
+    engineHits = [
+      {
+        document_id: documentId(0),
+        projection_revision: otherRevisionOf(documentId(0)),
+      },
+      { document_id: documentId(1) },
+    ];
+    const read = readCorpusIndexSearchPage({
+      scanTransport: NATIVE_SCAN_TRANSPORT,
+      observer: "unobserved",
+      cluster: "q09",
+      indexId: "case_law_v10_cze",
+      query: "text:smlouva",
+      limit: 10,
+      order: RELEVANCE_ORDER,
+      parsedCursor: null,
+      snippetFields: ["text"],
+      projectionRevisionField: "projection_revision",
+      extractId: (hit: CorpusIndexHit) =>
+        typeof hit["document_id"] === "string" ? hit["document_id"] : null,
+      extractSnippet: () => null,
+      unseenScoreUpperBound: (score) => score,
+      rankCandidates: async (probes, { selectAppliedCandidates }) => {
+        selectAppliedCandidates(testAppliedProjectionsFor(probes));
+        return {
+          context: null,
+          groups: [],
+          // Every scanned id, not the selected ones.
+          ranked: probes.map(({ id }, at) => ({
+            id,
+            score: 1 - at / 10,
+            lexicalScore: 1 - at / 10,
+            citationAuthority: 0,
+          })),
+          revisionById: testRevisionsFor(probes),
+        };
+      },
+    });
+    expect(await rejectionOf(read)).toBeInstanceOf(Panic);
+  });
+
+  test("a window of other copies past the round cap continues the chain rather than ending it", async () => {
+    // More stale copies than the scan reads in one page, ahead of every
+    // applied one: the first page holds nothing, and says so without ending.
+    const flood =
+      LIMITS.corpusIndexSearchMaxRounds *
+        LIMITS.corpusIndexSearchCandidateLimit +
+      50;
+    engineHits = [
+      ...Array.from({ length: flood }, (_, index) => ({
+        document_id: documentId(index),
+        projection_revision: otherRevisionOf(documentId(index)),
+      })),
+      ...Array.from({ length: 30 }, (_, index) => ({
+        document_id: documentId(flood + index),
+      })),
+    ];
+    const applied = new Set(
+      Array.from({ length: flood + 30 }, (_, index) => documentId(index)),
+    );
+
+    const pages = await readChain(applied, 10);
+
+    expect(pages[0]?.ids).toEqual([]);
+    expect(pages[0]?.reach).toBe(SEARCH_PAGE_REACH.REACHED);
+    expect(pages.flatMap(({ ids }) => ids)).toEqual(oracle(applied));
+    expect(oracle(applied)).toHaveLength(30);
   });
 });

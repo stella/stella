@@ -1,20 +1,21 @@
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
+import { apexCourtAbbreviations } from "@stll/api-contract/case-law-court-abbreviations";
 import { PUBLIC_CASE_LAW_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
 
 import { envBaseServerSchema } from "@/api/env-base-schema";
-import { apexCourtAbbreviations } from "@/api/lib/case-law/court-abbreviations";
 import { CASE_LAW_SEARCH_GUIDANCE_MODES } from "@/api/lib/case-law/search-guidance-mode";
 import { LIMITS } from "@/api/lib/limits";
 import { searchCaseLawTexts } from "@/api/mcp/case-law-search-guidance";
 
 describe("search_case_law guidance", () => {
-  test("off is the contract as it read before guidance, byte for byte", () => {
+  test("off keeps the search contract without experimental guidance", () => {
     expect(searchCaseLawTexts("off")).toEqual({
       description:
-        "Search case law within one country. `queries` carries phrasings of one question and merges their results; matchedQueries names the phrasings behind each hit. `limit` is the merged page, split evenly across them. Filters: court, language, dates, decision type, source_id (a `facets.source` bucket's `value`). Facets describe the first phrasing on page one, null later. Total is not counted for multiple phrasings. Function words are not required terms; `searches[]` gives each phrasing's `queryUsed` and warnings, and `strict` requires every word. Each hit carries citationAuthority (the score ranking blends in), matchingPassages, a route-independent resourceName and caseNumber, its citable reference: not always a docket. read_case_law_decision types it; read_case_law_citations gives citing polarity.",
-      queries: `Several phrasings of ONE question, at most ${String(LIMITS.caseLawSearchQueriesMax)}. Their pages are merged and deduplicated within the page, so a reformulation costs no extra round trip; one phrasing is a valid call.`,
+        "Search case law. `queries` merges phrasings; matchedQueries names each hit's phrasings. `limit` is split evenly. Facets are opt-in, first phrasing, page one. total needs facets and one phrasing; not_counted means unknown, never zero. strict needs every word, not necessarily adjacent (quote a phrase for that); otherwise function words are optional and some_terms hits may appear; terms names each hit's words. searches[] has queryUsed/warnings; on time_budget or partial_matches_budget nextCursor reruns it. source_id uses facets.source values." +
+        ' Under load it may answer status "running": not a failure. After retryAfterMs, repeat the call with continuation_token; "partial" is never the full answer.',
+      queries: `Several phrasings of ONE question, at most ${String(LIMITS.caseLawSearchQueriesMax)}. Their pages are merged and deduplicated within the page, so a reformulation costs no extra round trip; one phrasing is a valid call. Omit queries and pass provision to list every decision citing it, by authority or date, paged without a total.`,
       limit:
         "Merged-page size, split evenly across the queries (at least one hit each)",
       courts:
@@ -25,8 +26,17 @@ describe("search_case_law guidance", () => {
   test("v1 says how a phrasing is matched and how the limit is shared", () => {
     const { description, queries, limit } = searchCaseLawTexts("v1");
 
-    expect(queries).toContain("must occur in the same passage");
-    expect(queries).toContain("two to four words");
+    // True of every serving generation: neither says where in a decision the
+    // words must sit, only that a full match holds them all.
+    expect(queries).toContain(
+      "A full match needs every word of a phrasing except function words, so each extra word narrows the full matches",
+    );
+    expect(queries).not.toContain("one passage");
+    // Partial matches can be on a page, so v1 never says every hit holds
+    // every word, nor where on the page they sit.
+    expect(description).toContain("some_terms hits may appear");
+    expect(description).toContain("not necessarily adjacent");
+    expect(description).not.toContain("append");
     expect(queries).toContain("a phrasing of its own");
     expect(queries).toContain("`§ N` plus the act's name or abbreviation");
     expect(limit).toContain("put the most central first");

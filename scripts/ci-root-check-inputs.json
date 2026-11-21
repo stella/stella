@@ -1,0 +1,901 @@
+{
+  "ci-checks-rest": {
+    "Action commit pins": [
+      ".github/workflows/**",
+      ".github/actions/**",
+      ".github/ci-checks/**",
+      "scripts/check-action-commit-pins.ts",
+      "scripts/check-action-commit-pins.test.ts"
+    ],
+    "Resolve static check receipts": ["**"],
+    "Run repository checks": ["**"],
+    "Record static check receipts": ["**"],
+    "Check AI prompt sync": ["**"],
+    "Check AI verification guards": [
+      "scripts/check-ai-skill-sync.test.sh",
+      "scripts/check-ai-skill-sync.sh",
+      "scripts/check-ai-skill-sources.sh",
+      "scripts/verify-step.test.sh",
+      "scripts/verify-step.sh"
+    ],
+    "Check local base selection": [],
+    "Check local skill overrides": [".ai/**", ".agents/**", ".claude/**"],
+    "Load release policy": ["**"],
+    "Published package lists match the release policy": ["**"],
+    "Changeset packages match changed files": ["**"],
+    "Validate AI skills": ["**"],
+    "Standalone lockfile guard": ["**"],
+    "Standalone negated shell statement guard": ["**"],
+    "Tauri package alignment": ["@stll/desktop"],
+    "Tauri counterpart autofix tests": ["@stll/desktop", "scripts/**"],
+    "Lockfile release-age guard": ["**"],
+    "Check script test declarations": ["**"],
+    "Restore generated sources": ["**"],
+    "Download generated sources": ["**"],
+    "API test timeout guard": [
+      "apps/api/**/*.test.ts",
+      "scripts/api-test-timeout-guard.ts",
+      "scripts/api-test-timeout-guard.test.ts"
+    ],
+    "Test oxlint plugins": [
+      ".oxlint-plugins/**",
+      "oxlint*.ts",
+      "scripts/**",
+      "apps/api/scripts/test-path-filters.ts",
+      "packages/scripts/src/child-exit-status.ts",
+      "@stll/api"
+    ],
+    "Route network manifest coverage": [
+      "@stll/web",
+      "apps/web/e2e/**",
+      "apps/web/src/routeTree.gen.ts",
+      "scripts/network-baseline-coverage.test.ts",
+      "scripts/network-baseline-scope.ts"
+    ],
+    "Restore route network baseline": ["**"],
+    "Prepare environment": ["**"],
+    "Content delivery declarations": ["@stll/api", "@stll/cli"],
+    "Test capability shard merge and package parity": [
+      "@stll/api",
+      "@stll/cli",
+      "scripts/**"
+    ],
+    "Test CLI contract changeset guard over derived catalogs": [
+      "@stll/api",
+      "@stll/cli",
+      "scripts/**"
+    ],
+    "Test remaining repository scripts": ["**"],
+    "Test release image CI gate": [
+      ".github/actions/**",
+      ".github/ci-checks/**",
+      ".github/*.json",
+      ".github/workflows/**",
+      "apps/api/scripts/**",
+      "apps/api/src/tests/helpers/recorded-conversation-suites.ts",
+      "apps/api/src/tests/module-mock-batching.ts",
+      "apps/web/e2e/shard-count.ts",
+      "apps/web/src/features/case-law/components/decision-table.tsx",
+      "apps/web/src/routes/dev/-components/workspace-table-playground.tsx",
+      "packages/collation/src/**",
+      "packages/concurrency/src/**",
+      "packages/portable-path/src/**",
+      "packages/property-testing/src/**",
+      "packages/scripts/src/**",
+      "packages/sha256/src/**",
+      "scripts/**",
+      "apps/*/package.json",
+      "packages/*/package.json",
+      "package.json",
+      "bun.lock",
+      "bunfig.toml",
+      "turbo.json"
+    ],
+    "Workspace hygiene": ["**"],
+    "Lockfile workspace-version guard": [
+      "bun.lock",
+      "package.json",
+      "apps/*/package.json",
+      "packages/*/package.json",
+      "scripts/**"
+    ],
+    "Resolution range guard": [
+      "bun.lock",
+      "package.json",
+      "apps/*/package.json",
+      "packages/*/package.json",
+      "scripts/**"
+    ],
+    "Quarantine-exclude guards": [
+      "bunfig.toml",
+      "bun.lock",
+      "docker-compose.yml",
+      "scripts/check-stll-quarantine-excludes.ts"
+    ],
+    "Policy evidence": [
+      "docs/policies/**",
+      "apps/api/src/handlers/entities/delete.ts",
+      "apps/api/src/lib/auth.ts",
+      "apps/api/src/lib/branded-types.ts",
+      "apps/api/src/lib/destructive-effect-chunks.ts",
+      "apps/api/src/lib/entity-deletion-cleanup-queue.ts",
+      "apps/api/src/lib/entity-deletion-effect-store.ts",
+      "apps/api/src/lib/file-key.ts",
+      "apps/api/src/lib/files/read-file.ts",
+      "apps/api/src/lib/organization-storage-teardown.ts",
+      "apps/api/src/lib/s3.ts",
+      "apps/api/src/lib/tanstack-ai-models.ts",
+      "apps/api/src/lib/uploads/runtime.ts",
+      "apps/api/src/lib/workspace-deletion.ts",
+      "apps/web/public/.well-known/security.txt"
+    ],
+    "Marketing content check": [
+      "@stll/landing",
+      "@stll/cli",
+      "@stll/docx-utils",
+      "apps/landing/**",
+      "packages/cli/**",
+      "apps/api/src/handlers/chat/send-message.ts",
+      "apps/api/src/mcp/server-core.ts",
+      "apps/desktop/src/mainview/App.tsx",
+      "apps/web/src/components/ai-suggestions/docx-suggestion-persistence.ts",
+      "apps/web/src/components/docx/use-docx-block-scroll.ts",
+      "apps/web/src/components/inspector/inspector-command-slice.ts",
+      "apps/web/src/routes/_protected.workspaces/$workspaceId/-$viewId.document.page.tsx",
+      "packages/anonymize-chat/src/index.ts",
+      "packages/business-registries/src/index.ts",
+      "packages/legal-atlas/src/runners/registry.ts",
+      "docs/policies/evidence.json",
+      "README.md"
+    ],
+    "Docker host mount guard": ["**"],
+    "Railway template shape": [
+      "railway/**",
+      "docs/railway.md",
+      "README.md",
+      ".dockerignore",
+      "apps/api/src/handlers/health/routes.ts",
+      "apps/api/src/lib/version.ts",
+      "apps/web/vite.config.ts",
+      "apps/api/Dockerfile",
+      "apps/web/Dockerfile",
+      "scripts/check-railway-template-shape.ts"
+    ],
+    "Check i18n sync": ["@task/i18n:check", "TERMINOLOGY.md"],
+    "Release changelog guard": ["**"],
+    "Release queue history guard": ["**"],
+    "Release CLI coupling guard": ["**"],
+    "CLI contract changeset guard": ["**"],
+    "MCP released surface compatibility": ["**"],
+    "SQL performance suppression summary": ["**"],
+    "Release marketing provenance warning": ["**"],
+    "Rust format": ["apps/desktop/src-tauri/**"],
+    "React Compiler bailout guard": [
+      "@stll/web",
+      "@stll/workspace-ui",
+      "@stll/ui",
+      "scripts/**"
+    ],
+    "Design-system lint backlog": ["**"],
+    "Full error toast text census": [
+      "apps/**/src/**/*.{ts,tsx}",
+      "packages/**/src/**/*.{ts,tsx}",
+      "scripts/toast-error-census.ts"
+    ],
+    "Query data state baseline": [
+      "apps/web/src/**/*.{ts,tsx}",
+      ".oxlint-plugins/query-data-requires-state*",
+      "scripts/query-data-state-baseline.ts"
+    ],
+    "SQL performance baseline": [
+      "apps/api/src/**/*.{ts,tsx}",
+      "apps/legal-atlas-runner/**/*.{ts,tsx}",
+      "packages/**/*.{ts,tsx}",
+      "apps/api/drizzle/*/migration.sql"
+    ],
+    "Failure-as-empty baseline": [
+      "apps/api/src/**/*.ts",
+      "packages/*/src/**/*.{ts,tsx}",
+      ".oxlint-plugins/no-failure-as-empty*",
+      "scripts/failure-as-empty-baseline.ts"
+    ],
+    "Oxlint override union guard": [
+      "apps/api/src/lib/db/status-tables.gen.ts",
+      "apps/api/src/lib/lists/sanctions/monitoring-transition-identities.ts",
+      "apps/api/src/lib/safe-handler-factories.ts",
+      "apps/api/src/lib/system-audit/modules.ts",
+      "oxlint.config.ts",
+      "apps/api/src/handlers/case-law/ingestion/parsers/**",
+      "apps/api/src/lib/legal-search/parsers/sk-courts.ts"
+    ],
+    "Oxlint rule decisions": [
+      "apps/api/src/lib/db/status-tables.gen.ts",
+      "apps/api/src/lib/lists/sanctions/monitoring-transition-identities.ts",
+      "apps/api/src/lib/safe-handler-factories.ts",
+      "apps/api/src/lib/system-audit/modules.ts",
+      "oxlint.config.ts",
+      "scripts/**",
+      ".oxlint-plugins/**"
+    ],
+    "Oxlint effective config": [
+      "apps/api/src/lib/db/status-tables.gen.ts",
+      "apps/api/src/lib/lists/sanctions/monitoring-transition-identities.ts",
+      "apps/api/src/lib/safe-handler-factories.ts",
+      "apps/api/src/lib/system-audit/modules.ts",
+      "oxlint.config.ts"
+    ],
+    "Result boundary enrolment": [
+      "scripts/check-result-boundary-enrolment.ts",
+      "scripts/result-boundary-globs.ts"
+    ],
+    "Generated source artifact contract": [
+      ".github/workflows/ci.yml",
+      ".github/actions/setup-e2e-stack/action.yml",
+      "turbo.json",
+      "apps/api/Dockerfile",
+      "packages/cli/src/capability-catalog-data.ts",
+      "scripts/ci-generated-sources.test.ts",
+      "scripts/**",
+      "@stll/sha256",
+      "@stll/test-state"
+    ],
+    "Windows dry-run receipt contract": [
+      ".github/workflows/ci.yml",
+      "scripts/ci-windows-dry-run-result.test.ts",
+      "scripts/ci-windows-dry-run-result.ts",
+      "scripts/**",
+      "@stll/sha256"
+    ],
+    "Test input coverage": [
+      "apps/**/*.test.{ts,tsx}",
+      "packages/**/*.test.{ts,tsx}",
+      "apps/**/tests/helpers/**/*.{ts,tsx}",
+      "packages/**/tests/helpers/**/*.{ts,tsx}",
+      "turbo.json"
+    ],
+    "Chat mutation targets": [
+      "apps/api/src/handlers/chat/**",
+      "apps/api/src/lib/chat/**",
+      "apps/api/src/lib/json-schema/null-optionals.ts",
+      "apps/api/src/lib/scheduler/tasks/chat-turn-reaper.ts",
+      "apps/api/src/lib/stella-openrouter-text-adapter.ts",
+      "apps/api/src/lib/tanstack-ai-models.ts",
+      "apps/api/src/tests/helpers/provider-wire-replay.ts",
+      "apps/api/src/tests/helpers/chat-oracles.ts",
+      "apps/api/src/tests/helpers/recorded-conversation-suites.ts",
+      "apps/web/src/components/chat/chat-thread-messages.tsx",
+      "apps/web/src/components/chat/tool-approval-card.tsx",
+      "apps/web/src/features/chat/chat-runtime.ts",
+      "apps/web/src/features/chat/chat-snapshot-history.ts",
+      "@stll/errors"
+    ],
+    "Desktop Rust inputs": [
+      "apps/desktop/src-tauri/**/*.rs",
+      "apps/desktop/rust-toolchain.toml",
+      "turbo.json"
+    ],
+    "Test shard partition": [
+      ".github/workflows/**",
+      "turbo.json",
+      "scripts/test-shards.ts",
+      "scripts/api-test-shard-plan.ts",
+      "scripts/**",
+      "@stll/api",
+      "@stll/sha256",
+      "@stll/concurrency"
+    ],
+    "Landing deploy scope": [
+      "turbo.json",
+      "bun.lock",
+      "scripts/landing-deploy-scope.ts",
+      "scripts/**"
+    ],
+    "Workflow cache policy": [
+      ".github/**",
+      "tsconfig.scripts.json",
+      "scripts/**",
+      "@stll/sha256"
+    ],
+    "Store cache save supervisor": [
+      ".github/actions/ci-store-save/**",
+      "scripts/ci-store-save.ts",
+      "scripts/ci-store-save-policy.ts",
+      "scripts/**",
+      "@stll/sha256"
+    ],
+    "Workflow lint": [".github/**", "scripts/**"],
+    "Workflow YAML": [".github/**", "scripts/**"],
+    "Module ownership": [
+      "@stll/api",
+      "docs/module-ownership/**",
+      "docs/module-ownership.md",
+      "scripts/**",
+      "bunfig.toml",
+      ".oxlint-plugins/**"
+    ],
+    "Outbound transport ownership": [
+      "apps/api/**",
+      "apps/collab/src/**",
+      "apps/web/src/**",
+      "packages/*/src/**",
+      "scripts/**"
+    ],
+    "Document identity ownership": [
+      "apps/web/src/**",
+      "packages/mcp-apps/src/**",
+      "packages/ui/src/**",
+      "packages/decision-reader/src/**",
+      "scripts/**"
+    ],
+    "Module ownership invariants": [
+      "@stll/api",
+      "docs/module-ownership/**",
+      "scripts/**",
+      ".oxlint-plugins/**",
+      "bunfig.toml"
+    ],
+    "Generated artifact formatting invariants": [
+      "@stll/scripts",
+      "bunfig.toml",
+      "scripts/**"
+    ],
+    "Schema introspection invariants": [
+      "@stll/api",
+      "scripts/**",
+      ".oxlint-plugins/**",
+      "@stll/api-contract"
+    ],
+    "Queue authority": ["**"],
+    "Design token docs": [
+      "packages/ui/src/styles/theme.css",
+      "packages/brand/src/palette.ts",
+      "DESIGN.md",
+      "scripts/**",
+      "bunfig.toml"
+    ],
+    "Icon module imports": [
+      "apps/*/src/**",
+      "packages/*/src/**",
+      "scripts/codemod-icons.ts",
+      "scripts/codemod-icons.test.ts",
+      "bunfig.toml"
+    ],
+    "Suppression waiver ledger": [
+      "apps/*/src/**",
+      "apps/*/scripts/**",
+      "packages/*/src/**",
+      "packages/*/scripts/**",
+      "scripts/**",
+      ".oxlint-plugins/**"
+    ],
+    "Crawl posture guard": [
+      "apps/*/src/**",
+      "apps/*/public/**",
+      "apps/*/*.html",
+      "@stll/web",
+      "@stll/api-contract",
+      "@stll/catalogue",
+      "scripts/**"
+    ],
+    "Chat fixture guard": [
+      "apps/api/src/**",
+      "apps/web/src/**",
+      "apps/web/e2e/**",
+      "scripts/**"
+    ],
+    "Transfer timeout and fixed read guard": [
+      "apps/**/src/**",
+      "packages/**/src/**",
+      "scripts/**"
+    ],
+    "Test api scripts": ["@stll/api", ".github/workflows/**", "scripts/**"],
+    "Test CLI runtime package parity": ["**"],
+    "Offline check transport policy": ["**"],
+    "Model catalog generation guard": [
+      "@stll/ai-catalog",
+      "@stll/fetch",
+      "@stll/stable-stringify",
+      "packages/scripts/fixtures/**",
+      "scripts/**"
+    ],
+    "Model task default evidence guard": ["**"],
+    "Model catalog snapshot drift check": ["@stll/ai-catalog"],
+    "Capability description ledger": ["@stll/api", "@stll/cli"],
+    "Capability file-transport ledger": ["@stll/api", "@stll/cli"],
+    "MCP coverage guard": ["@stll/api", "@stll/cli"],
+    "MCP surface baseline self-test": ["@stll/errors"],
+    "Offline catalogue pinned-content policy": ["**"],
+    "Catalogue pinned-content check": [
+      "@stll/catalogue",
+      "@stll/skills",
+      "@stll/sha256",
+      "@stll/stable-stringify",
+      "@stll/concurrency",
+      "scripts/**"
+    ],
+    "Property-test convention guard": ["**"],
+    "Test marketing recording verification guard": [
+      "@stll/web",
+      "apps/landing/product-media-manifest.json",
+      "apps/landing/public/**",
+      "apps/api/src/handlers/visual-sandbox/**",
+      "apps/api/src/dev/**",
+      "packages/ui/src/styles/theme.css",
+      "@stll/sha256",
+      "scripts/**",
+      ".github/actions/**"
+    ],
+    "Test desktop bridge CI guards": [
+      "scripts/check-bridge-version*",
+      "scripts/detect-tauri-rust-changes*"
+    ],
+    "Check workflow shell policy": [
+      ".github/workflows/**",
+      ".github/actions/**",
+      "scripts/check-workflow-shells*.ts",
+      "scripts/workflow-steps.ts"
+    ],
+    "Bun runtime guard": ["**"],
+    "Patched dependencies apply": [
+      "package.json",
+      "bun.lock",
+      "patches/**",
+      "scripts/bun-lock-text.ts",
+      "scripts/check-patched-dependencies*.ts",
+      "scripts/unpatched-dependency-copies.json"
+    ],
+    "Test release-channel script": ["VERSION"],
+    "Test web container platform boundary": [
+      "apps/web/Dockerfile",
+      "apps/landing/Dockerfile",
+      "scripts/**"
+    ],
+    "Test @stll resolution pin": ["**/package.json", "bun.lock", "scripts/**"],
+    "Test web runtime staging": [
+      "@stll/web",
+      "@stll/ssr-kit",
+      "@stll/ssr-testkit",
+      "scripts/**"
+    ],
+    "Check Docker source closure": ["**"],
+    "Test published export artifact guard": [
+      "scripts/published-export-guards*.ts",
+      "scripts/check-published-exports*.ts"
+    ],
+    "Test publish manifest transformation": [
+      "packages/*/package.json",
+      "apps/web/package.json",
+      "package.json",
+      "scripts/publish-manifest*.ts",
+      "scripts/publish-packages.ts"
+    ],
+    "Test journey checks": [
+      "scripts/check-journeys*",
+      "scripts/check-desktop-release-policy.sh",
+      "scripts/check-published-versions*",
+      "scripts/check-npm-publish-lag.ts",
+      "scripts/promoted-release-policy.ts",
+      "scripts/changeset-entry.ts",
+      ".github/workflows/journey-canary.yml",
+      ".github/workflows/case-law-search-probe.yml",
+      ".github/workflows/scheduled-run-alerts.yml",
+      ".github/workflows/publish-npm.yml",
+      "packages/db-load-gate/src/default-busy-windows.json",
+      "apps/api/src/lib/case-law/coverage-freshness.ts",
+      "apps/api/src/lib/case-law/coverage-refresh-interval.ts"
+    ],
+    "Test release policy scripts": [
+      "scripts/**",
+      ".github/workflows/**",
+      "apps/api/drizzle/**",
+      "apps/web/e2e/staging/global-setup.ts",
+      "docs/changelog/**",
+      "VERSION"
+    ],
+    "Test staging proof readiness": [
+      "@stll/portable-path",
+      "apps/api/src/db-components.ts",
+      "apps/api/src/deploy-env-contract.ts",
+      "apps/api/src/bullmq-queue-hosts.ts",
+      "scripts/**",
+      ".github/workflows/**",
+      ".github/actions/setup-playwright/**",
+      ".github/actions/promote-dispatch/**"
+    ],
+    "Generated files manifest guard": ["**"],
+    "Playwright config scope": ["**"],
+    "Test documentation and landing CI scope": ["**"],
+    "Test main heavy workflow contracts": [
+      "scripts/main-heavy*",
+      "scripts/validate-main-heavy-sha*",
+      "scripts/ci-service-images.json",
+      ".github/**",
+      "scripts/**"
+    ],
+    "Test cancellation evidence": [
+      "scripts/ci-cancellation-contract*",
+      ".github/workflows/cancel-failed-run.yml"
+    ],
+    "Test thin merge queue contracts": [
+      "scripts/thin-queue*",
+      "scripts/main-heavy-plan.ts",
+      ".github/**",
+      "scripts/**"
+    ],
+    "Test service-suite dependency scope": ["**"],
+    "Test nightly rehearsal and retry guards": ["**"],
+    "Reject automatic test retries": ["**"],
+    "Keep tests off history walks": ["**"],
+    "Test dependency malware scanners": [
+      "scripts/osv-scanner-install*",
+      "scripts/scan-dependency-malware*",
+      "scripts/check-osv-malware.sh",
+      "scripts/report-dependency-malware-failure*",
+      "scripts/fixtures/**",
+      ".github/**",
+      "@stll/sha256"
+    ],
+    "Test maintenance release preparation": [
+      "@stll/api",
+      "@stll/landing",
+      "@stll/web",
+      "scripts/**",
+      "docs/changelog/**",
+      "@stll/sha256",
+      "@stll/test-state"
+    ],
+    "Test release queue history guard": [
+      "scripts/check-release-queue-history*",
+      "@stll/sha256"
+    ],
+    "Test promoted release resolution": [
+      "@stll/collation",
+      "scripts/resolve-promoted-release*",
+      "scripts/offline-check-startup.ts",
+      "scripts/promoted-release-policy.ts",
+      "scripts/offline-network-preload.ts",
+      "apps/landing/src/data/changelog-release-dates.json",
+      ".github/workflows/ci.yml"
+    ],
+    "Test API and CLI contract invariants": [
+      "@stll/api",
+      "@stll/cli",
+      "@stll/api-contract",
+      "scripts/check-api-cli-contract*",
+      "scripts/changeset-*.ts",
+      ".changeset/**",
+      ".github/workflows/**",
+      "apps/**/*.json",
+      "apps/**/*.yml",
+      "apps/**/*.yaml",
+      "packages/**/*.json",
+      "packages/**/*.yml",
+      "packages/**/*.yaml",
+      "docker/**",
+      "docker-compose.yml",
+      "scripts/ci-service-images.json",
+      "scripts/check-railway-template-draft.ts",
+      "scripts/dev-compose-contract*"
+    ],
+    "Test detect-desktop-release-changes script": ["scripts/**"],
+    "Test route smoke change detector": [
+      "@stll/web",
+      ".github/actions/**",
+      "apps/api/scripts/seed-local-scripts.ts",
+      "scripts/**"
+    ],
+    "Test changed e2e shard selection": [
+      "apps/web/e2e/shard-count.ts",
+      "apps/api/src/tests/helpers/recorded-conversation-suites.ts",
+      "apps/api/src/tests/module-mock-batching.ts",
+      ".github/workflows/ci.yml",
+      "scripts/**",
+      "@stll/api",
+      "@stll/sha256",
+      "@stll/concurrency"
+    ],
+    "Test geometry shard plan": [
+      "@stll/web",
+      ".github/workflows/ci.yml",
+      "scripts/**"
+    ],
+    "Test e2e shard budget": [
+      "apps/web/e2e/playwright.config.ts",
+      "apps/web/e2e/execution-profile.ts",
+      "apps/web/e2e/shard-count.ts",
+      "@stll/sha256",
+      ".github/workflows/ci.yml",
+      "scripts/**"
+    ],
+    "Validate CI service image mirror inventory": ["**"],
+    "Test CI service image workflow contracts": [
+      ".github/**",
+      "scripts/ci-service-images.json",
+      "scripts/**"
+    ],
+    "Test CI workflow invariants": [
+      ".github/**",
+      "scripts/**",
+      "apps/api/scripts/seed-local-scripts.ts",
+      "apps/web/e2e/network-budgets/**",
+      "@stll/sha256",
+      "@stll/web"
+    ],
+    "Test reusable workflow permission contracts": [
+      ".github/workflows/**",
+      "scripts/**"
+    ],
+    "Test main network recording selection": [
+      ".github/actions/prepare-network-baseline/**",
+      "scripts/**"
+    ],
+    "Test API duration workflow": [
+      ".github/workflows/**",
+      "turbo.json",
+      "scripts/**"
+    ],
+    "Test autofix protected paths": [
+      "scripts/**",
+      ".changeset/**",
+      ".github/workflows/autofix.yml"
+    ],
+    "Test type-aware autofix": [
+      ".github/workflows/autofix.yml",
+      "packages/scripts/src/syntax-tree.ts",
+      "scripts/**"
+    ],
+    "Test local workflow verification": [".github/workflows/**", "scripts/**"],
+    "Run fork contributor commands": [
+      ".github/workflows/autofix.yml",
+      ".gitmodules",
+      "bun.lock",
+      "package.json",
+      "scripts/autofix-*",
+      "scripts/canonical-base.sh",
+      "scripts/check-tauri-package-alignment.ts",
+      "scripts/fix-tauri-package-alignment.ts",
+      "scripts/fork-contributor-commands.sh",
+      "scripts/generated-conflicts*.ts",
+      "scripts/verify*",
+      "scripts/workflow-steps.ts"
+    ],
+    "Typecheck cache contract": [
+      ".github/workflows/ci.yml",
+      "turbo.json",
+      "scripts/**"
+    ],
+    "Test CI check partition": [
+      ".github/**",
+      "scripts/**",
+      "@stll/sha256",
+      "@stll/api",
+      "@stll/concurrency",
+      "@stll/errors"
+    ],
+    "Task result cache contract": [
+      ".github/workflows/**",
+      "turbo.json",
+      "scripts/**"
+    ],
+    "Test install-free CI commands": [
+      "apps/web/e2e/helpers/public-visitor-route-defs.ts",
+      "apps/web/e2e/helpers/smoke-route-coverage.ts",
+      "apps/web/e2e/helpers/smoke-route-defs.ts",
+      "apps/web/e2e/shard-count.ts",
+      "apps/web/src/i18n/langs/en.json",
+      "@stll/sha256",
+      "@stll/collation",
+      ".github/**",
+      "scripts/**"
+    ],
+    "Test pre-push secret scan ranges": ["scripts/**"],
+    "Test merge-base network comparison": [
+      "@stll/web",
+      "scripts/**",
+      "@stll/concurrency"
+    ],
+    "Test CLI release coupling gate": [
+      "@stll/cli",
+      ".changeset/**",
+      ".github/workflows/**",
+      "scripts/**",
+      "@stll/sha256",
+      "apps/web/e2e/marketing/captures.ts"
+    ],
+    "Test CLI contract changeset guard": [".changeset/**", "scripts/**"],
+    "Test package scaffolder": ["scripts/**"],
+    "Test affected code-check planner": ["**"],
+    "Test changeset guard": [
+      "scripts/**",
+      ".changeset/**",
+      ".github/workflows/**",
+      "package.json",
+      "@stll/sha256"
+    ],
+    "Test environment tooling": ["**"],
+    "Test retry script": ["scripts/**"],
+    "Test CI failure digest": ["scripts/**"],
+    "Test base image pull script": [
+      "scripts/**",
+      "**/Dockerfile",
+      "**/*.Dockerfile"
+    ],
+    "Verify runner tool availability": ["**"],
+    "Test preview scope tool availability": [
+      ".github/workflows/visual-preview.yml",
+      "scripts/**"
+    ],
+    "Verify CI job event policies": [".github/**", "scripts/**"],
+    "Test public document fetch": ["scripts/**", "@stll/sha256"],
+    "Test migration identity logic": [
+      "@stll/api",
+      "@stll/sha256",
+      "scripts/**"
+    ],
+    "Check migration identity against the base branch": [
+      "@stll/api",
+      "@stll/sha256",
+      "scripts/**"
+    ],
+    "Check grant release order against the production release": [
+      "@stll/api",
+      "scripts/check-grant-release-order.ts",
+      "scripts/check-grant-release-order.test.ts"
+    ],
+    "Test dead-columns reference matching": [
+      "@stll/api",
+      "scripts/**",
+      "@stll/api-contract",
+      "@stll/permissions",
+      "@stll/auth-model",
+      "@stll/text-normalize",
+      "@stll/legal-ast",
+      "@stll/uuid-codec",
+      "@stll/money",
+      "@stll/errors",
+      "@stll/conditions",
+      "@stll/skills",
+      "@stll/sha256",
+      "@stll/chat-limits",
+      "@stll/template-conditions",
+      "@stll/agent-input",
+      "@stll/country-codes",
+      "@stll/ai-catalog",
+      "@stll/legal-atlas",
+      "@stll/invoicing",
+      "@stll/runtime-mode",
+      "@stll/redis-config",
+      "@stll/concurrency",
+      "@stll/fetch",
+      "@stll/docx-utils",
+      "@stll/locales"
+    ],
+    "Test projection-totality classification": [
+      "@stll/api",
+      "@stll/agent-input",
+      "@stll/ai-catalog",
+      "@stll/api-contract",
+      "@stll/auth-model",
+      "@stll/chat-limits",
+      "@stll/collation",
+      "@stll/concurrency",
+      "@stll/conditions",
+      "@stll/country-codes",
+      "@stll/docx-utils",
+      "@stll/errors",
+      "@stll/fetch",
+      "@stll/invoicing",
+      "@stll/legal-ast",
+      "@stll/legal-atlas",
+      "@stll/locales",
+      "@stll/money",
+      "@stll/permissions",
+      "@stll/portable-path",
+      "@stll/redis-config",
+      "@stll/runtime-mode",
+      "@stll/sha256",
+      "@stll/skills",
+      "@stll/template-conditions",
+      "@stll/text-normalize",
+      "@stll/uuid-codec",
+      "scripts/**"
+    ],
+    "Test aggregate inventories": [
+      "scripts/**",
+      ".oxlint-plugins/**",
+      "@stll/collation",
+      "@stll/api"
+    ],
+    "Test write contract inventories": ["**"],
+    "Office fixture metadata": ["**"],
+    "Tailwind sources cover class-shipping dependencies": [
+      "apps/**/*.css",
+      "apps/*/package.json",
+      "packages/*/package.json",
+      "bun.lock",
+      "scripts/check-tailwind-sources.ts",
+      "scripts/check-tailwind-sources.test.ts"
+    ],
+    "Bridge-version guard": [
+      "apps/desktop/src-tauri/src/**",
+      "apps/desktop/src/shared/rpc.ts",
+      "apps/desktop/src/shared/rpc.gen.ts",
+      "packages/api-contract/src/desktop-edit-file-types.ts",
+      "scripts/check-bridge-version.sh"
+    ],
+    "Test depth repository scripts": ["**"]
+  },
+  "ci-checks-policy": {
+    "Published package API reports": ["**"],
+    "Resolve static check receipts": ["**"],
+    "Run policy checks": ["**"],
+    "Record static check receipts": ["**"],
+    "Prepare environment": ["**"],
+    "Restore generated sources": ["**"],
+    "Download generated sources": ["**"],
+    "Compute affected flag": ["**"],
+    "Format": ["**"],
+    "Test unsignalled skip detection": ["**"],
+    "Select measured ratchet base from the target branch": ["**"],
+    "Ratchet guard": ["**"],
+    "Ratchet scanner invariants": ["**"],
+    "Web raw JSON API census self-test": ["@stll/web", "scripts/**"],
+    "Web raw JSON API census": ["@stll/web", "scripts/**"],
+    "Test subject reachability census": ["**"],
+    "Deployment feature guard": ["**"],
+    "Processed-field backlog guard": ["@stll/api"],
+    "GitHub API command ownership": ["**"],
+    "Tracked file sizes": ["**"],
+    "CI job names": [
+      ".github/workflows/ci.yml",
+      "scripts/check-ci-job-names.test.ts",
+      "scripts/check-ci-job-names.ts"
+    ],
+    "CI network step retries and timeouts": ["**"],
+    "Workspace test gating ledger": ["**"],
+    "Sparse checkout script dependencies": [
+      ".github/workflows/**",
+      ".github/actions/**",
+      "scripts/**"
+    ],
+    "SHA-256 migration ledger": ["**"],
+    "Custom lint rule coverage": ["**"],
+    "Custom lint test timeout policy": ["**"],
+    "Guard rollout scope tests": ["**"],
+    "Dated waiver lifecycle guards": ["**"],
+    "Documentation source policy rule": ["**"],
+    "Instruction policy": ["**"],
+    "Knip production dependency checks": ["**"],
+    "Knip workspace dependency checks": ["**"],
+    "Knip dead-export check (packages/cli)": ["**"],
+    "Knip dead-export budget (all workspaces)": ["**"],
+    "Dependabot group guard (installed packages)": [
+      ".github/dependabot.yml",
+      "scripts/dependabot-grouping.test.ts",
+      "package.json",
+      "apps/*/package.json",
+      "packages/*/package.json",
+      "bun.lock"
+    ]
+  },
+  "code-quality-web-rest": {
+    "Restore generated sources": ["**"],
+    "Download generated sources": ["**"],
+    "Prepare environment": ["**"],
+    "Install the docs MCP server": ["**"],
+    "Typecheck coverage": ["**"],
+    "Run independent code-quality checks": ["**"],
+    "Code quality (web)": ["**"],
+    "Result consumption (web)": ["**"],
+    "Code quality (rest)": ["**"],
+    "Query cache types": ["**"],
+    "Dead columns": ["**"],
+    "Projection totality": ["**"],
+    "Aggregate ownership": ["**"],
+    "Split-button census": ["**"],
+    "Database awaits in loops": ["**"],
+    "Online unique index dependency guard": ["**"],
+    "API timeout mutation guard": ["**"],
+    "Result consumption (rest)": ["**"]
+  }
+}

@@ -10,6 +10,10 @@ import { useShallow } from "zustand/shallow";
 import { useTableState } from "@/components/workspaces/table/use-table-state";
 import type { TableColumnSizingLayout } from "@/components/workspaces/table/use-table-state";
 import { omitUtilityColumnSizing } from "@/components/workspaces/table/use-table-state.logic";
+import {
+  isCurrentStorageOwner,
+  storageOwner,
+} from "@/lib/account/user-scoped-storage";
 import type { WorkspaceView } from "@/lib/types";
 import type { TableColumnLayout } from "@/lib/workspaces/column-layout";
 import { useUpdateView } from "@/lib/workspaces/mutations/views";
@@ -68,7 +72,12 @@ export const useViewTableState = ({
         // would update this component mid-render. Defer past the render so the
         // prune lands as its own update — harmless for real clicks (already
         // post-event).
-        queueMicrotask(() => storeSetRowSelection(viewRef, updater));
+        const owner = storageOwner();
+        queueMicrotask(() => {
+          if (isCurrentStorageOwner(owner)) {
+            storeSetRowSelection(viewRef, updater);
+          }
+        });
       },
     },
     sorting: {

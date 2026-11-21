@@ -1,6 +1,8 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
+
 GlobalRegistrator.register();
 const { QueryClient, QueryObserver } = await import("@tanstack/react-query");
 const { cleanup, fireEvent, render, waitFor } =
@@ -11,7 +13,7 @@ const { queryView } = await import("@/lib/query-view.logic");
 const messages = (await import("@/i18n/langs/en.json")).default;
 afterEach(cleanup);
 afterAll(async () => {
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 const savedNameFixture = "Rename saved name";
@@ -81,4 +83,29 @@ test("a failed breadcrumb refresh keeps the saved name and exposes retry", async
   expect(ui.getByRole("button", { name: messages.common.retry })).toBeDefined();
   observer.destroy();
   client.clear();
+});
+
+test("a missing resource leaves the crumb to the page's not-found state", async () => {
+  const { APIError } = await import("@/lib/errors/api");
+  const retry = async () => {
+    throw new Error("A missing resource is not retried from the crumb");
+  };
+  for (const status of [403, 404]) {
+    const missing = mount({
+      type: "error",
+      error: new APIError({ status, message: "Not found" }),
+      retry,
+    });
+    expect(missing.queryByRole("alert")).toBeNull();
+    expect(missing.queryByText(messages.common.somethingWentWrong)).toBeNull();
+    expect(missing.queryByText(savedNameFixture)).toBeNull();
+    missing.unmount();
+  }
+
+  const failed = mount({
+    type: "error",
+    error: new APIError({ status: 500, message: "Server error" }),
+    retry,
+  });
+  expect(failed.getByRole("alert")).toBeDefined();
 });

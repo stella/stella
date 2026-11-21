@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, test } from "bun:test";
 
+import { toPersistedChatMessageContentV3 } from "@/api/handlers/chat/chat-message-parts";
 import { toSafeId } from "@/api/lib/branded-types";
+import { ArtefactProvenanceDecodeError } from "@/api/lib/chat/artefact-provenance";
 import { HIGHLIGHT_START, HIGHLIGHT_STOP } from "@/api/lib/search/highlight";
 import { readSearchPreview as readSearchPreviewWithDatabase } from "@/api/lib/search/preview";
 import {
@@ -14,7 +16,7 @@ const { scopedDb } = createScopedDbMock(rootDbTestDouble);
 
 const readSearchPreview = async (
   input: Parameters<typeof readSearchPreviewWithDatabase>[0],
-) => await readSearchPreviewWithDatabase(input, scopedDb);
+) => (await readSearchPreviewWithDatabase(input, scopedDb)).unwrap();
 
 const previewQuery = {
   query: "",
@@ -95,27 +97,26 @@ describe("search preview rendering contract", () => {
   test("returns bounded chat messages with their speaker roles and visible text", async () => {
     rootDbExecuteMock.mockResolvedValueOnce([
       {
+        generation_provenance: null,
         messages: [
           {
             id: "00000000-0000-4000-8000-000000000010",
             isTarget: false,
             role: "user",
-            content: {
-              version: 1,
-              data: [{ type: "text", text: "Review this agreement" }],
-            },
+            content: toPersistedChatMessageContentV3({
+              data: [{ type: "text", content: "Review this agreement" }],
+            }),
           },
           {
             id: "00000000-0000-4000-8000-000000000011",
             isTarget: true,
             role: "assistant",
-            content: {
-              version: 2,
+            content: toPersistedChatMessageContentV3({
               data: [
                 { type: "text", content: "## Key issue" },
                 { type: "text", content: "The cap is uncapped." },
               ],
-            },
+            }),
           },
         ],
       },
@@ -142,24 +143,23 @@ describe("search preview rendering contract", () => {
     const oversizedContent = "a".repeat(20_000);
     rootDbExecuteMock.mockResolvedValueOnce([
       {
+        generation_provenance: null,
         messages: [
           {
             id: "00000000-0000-4000-8000-000000000010",
             isTarget: false,
             role: "user",
-            content: {
-              version: 2,
+            content: toPersistedChatMessageContentV3({
               data: [{ type: "text", content: oversizedContent }],
-            },
+            }),
           },
           {
             id: "00000000-0000-4000-8000-000000000011",
             isTarget: true,
             role: "assistant",
-            content: {
-              version: 2,
+            content: toPersistedChatMessageContentV3({
               data: [{ type: "text", content: "not returned" }],
-            },
+            }),
           },
         ],
       },
@@ -191,24 +191,23 @@ describe("search preview rendering contract", () => {
   test("retains the matching chat message when earlier context exhausts the cap", async () => {
     rootDbExecuteMock.mockResolvedValueOnce([
       {
+        generation_provenance: null,
         messages: [
           {
             id: "00000000-0000-4000-8000-000000000010",
             isTarget: false,
             role: "user",
-            content: {
-              version: 2,
+            content: toPersistedChatMessageContentV3({
               data: [{ type: "text", content: "a".repeat(16_000) }],
-            },
+            }),
           },
           {
             id: "00000000-0000-4000-8000-000000000011",
             isTarget: true,
             role: "assistant",
-            content: {
-              version: 2,
+            content: toPersistedChatMessageContentV3({
               data: [{ type: "text", content: "matched message" }],
-            },
+            }),
           },
         ],
       },
@@ -234,20 +233,20 @@ describe("search preview rendering contract", () => {
   test("retains a late match inside an oversized target message", async () => {
     rootDbExecuteMock.mockResolvedValueOnce([
       {
+        generation_provenance: null,
         messages: [
           {
             id: "00000000-0000-4000-8000-000000000010",
             isTarget: true,
             role: "assistant",
-            content: {
-              version: 2,
+            content: toPersistedChatMessageContentV3({
               data: [
                 {
                   type: "text",
                   content: `${"a".repeat(20_000)} résumé ${"b".repeat(1000)}`,
                 },
               ],
-            },
+            }),
           },
         ],
       },
@@ -273,20 +272,20 @@ describe("search preview rendering contract", () => {
   test("retains a late quoted phrase instead of an earlier standalone word", async () => {
     rootDbExecuteMock.mockResolvedValueOnce([
       {
+        generation_provenance: null,
         messages: [
           {
             id: "00000000-0000-4000-8000-000000000010",
             isTarget: true,
             role: "assistant",
-            content: {
-              version: 2,
+            content: toPersistedChatMessageContentV3({
               data: [
                 {
                   type: "text",
                   content: `closing ${"a".repeat(20_000)} closing, memo`,
                 },
               ],
-            },
+            }),
           },
         ],
       },
@@ -310,30 +309,31 @@ describe("search preview rendering contract", () => {
   test("orders context around a first-position target without duplicates", async () => {
     rootDbExecuteMock.mockResolvedValueOnce([
       {
+        generation_provenance: null,
         messages: [
           {
             id: "00000000-0000-4000-8000-000000000010",
             isTarget: true,
             role: "user",
-            content: {
-              version: 2,
+            content: toPersistedChatMessageContentV3({
               data: [{ type: "text", content: "target" }],
-            },
+            }),
           },
           {
             id: "00000000-0000-4000-8000-000000000011",
             isTarget: false,
             role: "assistant",
-            content: { version: 2, data: [{ type: "text", content: "reply" }] },
+            content: toPersistedChatMessageContentV3({
+              data: [{ type: "text", content: "reply" }],
+            }),
           },
           {
             id: "00000000-0000-4000-8000-000000000012",
             isTarget: false,
             role: "user",
-            content: {
-              version: 2,
+            content: toPersistedChatMessageContentV3({
               data: [{ type: "text", content: "follow-up" }],
-            },
+            }),
           },
         ],
       },
@@ -364,26 +364,29 @@ describe("search preview rendering contract", () => {
   test("renders indexed source-document metadata in chat previews", async () => {
     rootDbExecuteMock.mockResolvedValueOnce([
       {
+        generation_provenance: null,
         messages: [
           {
             id: "00000000-0000-4000-8000-000000000010",
             isTarget: true,
             role: "assistant",
-            content: {
-              version: 2,
+            content: toPersistedChatMessageContentV3({
               data: [],
               metadata: {
                 sourceDocuments: [
                   {
+                    entityId: "entity_1",
                     title: "Closing memorandum",
                     mention: "@closing-memo",
                     entityRef: "entity_1",
                     matterRef: "matter_1",
                     kind: "document",
+                    mimeType: "application/pdf",
+                    workspaceId: previewQuery.accessibleWorkspaceIds[0],
                   },
                 ],
               },
-            },
+            }),
           },
         ],
       },
@@ -401,50 +404,11 @@ describe("search preview rendering contract", () => {
     });
   });
 
-  test("normalizes legacy source-document metadata for chat previews", async () => {
-    rootDbExecuteMock.mockResolvedValueOnce([
-      {
-        messages: [
-          {
-            id: "00000000-0000-4000-8000-000000000010",
-            isTarget: true,
-            role: "assistant",
-            content: {
-              version: 1,
-              data: [
-                { type: "text", text: "The answer cites:" },
-                {
-                  type: "data-stella-source-document",
-                  data: {
-                    title: "Closing memorandum",
-                    mention: "@closing-memo",
-                    kind: "document",
-                  },
-                },
-              ],
-            },
-          },
-        ],
-      },
-    ]);
-
-    expect(await readSearchPreview({ ...previewQuery, type: "chat" })).toEqual({
-      type: "chat-messages",
-      messages: [
-        {
-          id: "00000000-0000-4000-8000-000000000010",
-          role: "assistant",
-          content:
-            "The answer cites:\n\nClosing memorandum\n\n@closing-memo\n\ndocument",
-        },
-      ],
-    });
-  });
-
   test("returns a title preview when a chat thread has no matching messages", async () => {
     rootDbExecuteMock.mockResolvedValueOnce([
       {
         isTitleOnlyMatch: true,
+        generation_provenance: null,
         messages: [],
         title: "Closing memorandum review",
       },
@@ -460,24 +424,23 @@ describe("search preview rendering contract", () => {
     rootDbExecuteMock.mockResolvedValueOnce([
       {
         isTitleOnlyMatch: false,
+        generation_provenance: null,
         messages: [
           {
             id: "00000000-0000-4000-8000-000000000010",
             isTarget: true,
             role: "user",
-            content: {
-              version: 2,
+            content: toPersistedChatMessageContentV3({
               data: [{ type: "text", content: "indemnity" }],
-            },
+            }),
           },
           {
             id: "00000000-0000-4000-8000-000000000011",
             isTarget: false,
             role: "assistant",
-            content: {
-              version: 2,
+            content: toPersistedChatMessageContentV3({
               data: [{ type: "text", content: "liability" }],
-            },
+            }),
           },
         ],
         title: "Unrelated title",
@@ -504,12 +467,13 @@ describe("search preview rendering contract", () => {
   test("skips malformed persisted chat parts", async () => {
     rootDbExecuteMock.mockResolvedValueOnce([
       {
+        generation_provenance: null,
         messages: [
           {
             id: "00000000-0000-4000-8000-000000000010",
             isTarget: true,
             role: "assistant",
-            content: { version: 2, data: [null] },
+            content: { version: 3, data: [null] },
           },
         ],
       },
@@ -521,3 +485,21 @@ describe("search preview rendering contract", () => {
     });
   });
 });
+
+test.each([{}, { version: 2, slots: {} }])(
+  "chat preview propagates invalid provenance %j as a typed failure",
+  async (metadata) => {
+    clearRootDbMocks();
+    rootDbExecuteMock.mockResolvedValueOnce([
+      { generation_provenance: metadata, messages: [] },
+    ]);
+    const result = await readSearchPreviewWithDatabase(
+      { ...previewQuery, type: "chat" },
+      scopedDb,
+    );
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error).toBeInstanceOf(ArtefactProvenanceDecodeError);
+    }
+  },
+);

@@ -1,6 +1,7 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
+import { AI_FAILURE_CODES } from "@stll/api-contract";
 import {
   PUBLIC_CASE_LAW_COUNTRIES,
   publicCaseLawCountry,
@@ -9,12 +10,19 @@ import {
 import {
   CASE_LAW_SEARCH_REFINE_SYSTEM,
   caseLawRefineOutputSchema,
+  isIncompleteCaseLawRefineGeneration,
   normalizeCaseLawRefinedQuery,
 } from "@/api/handlers/case-law/decisions/search-refine-query";
 import { resolveCaching } from "@/api/lib/ai-config";
+import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
+import { storedAIConfigUnreadableError } from "@/api/lib/ai-config-response";
 import { aiHandlerError } from "@/api/lib/ai-error";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
-import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
+import {
+  ACCOUNT_ACCESS,
+  configuredModelAdmission,
+  createSafeRootHandler,
+} from "@/api/lib/api-handlers";
 import type {
   HandlerConfig,
   SafeHandlerGenerator,
@@ -28,14 +36,16 @@ import {
 } from "@/api/lib/legal-search/public-law-country";
 import type { PublicCountryUnavailableAnswer } from "@/api/lib/legal-search/public-law-country";
 import { LIMITS } from "@/api/lib/limits";
-import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
-import { requireTanStackAIAvailableForRole } from "@/api/lib/tanstack-ai-models";
+import { generateTanStackObjectForTask } from "@/api/lib/tanstack-ai-generate";
+import { requireTanStackAIAvailableForTask } from "@/api/lib/tanstack-ai-models";
 
 const CASE_LAW_REFINE_MAX_ATTEMPTS = 3;
 const CASE_LAW_REFINE_TIMEOUT_MS = 20_000;
 const REFINE_FAILED_MESSAGE = "Failed to improve search query";
 
 const config = {
+  contract: "patch",
+  actionAdmission: { type: "handler", actionKind: "case-law.search-refine" },
   description:
     "Rewrite a case-law search into the words court decisions of the " +
     "jurisdiction use, in the corpus language: statutory terms for everyday " +
@@ -46,17 +56,22 @@ const config = {
   permissions: { chat: ["create"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "search_ui" },
-  body: t.Object({
-    query: t.String({ minLength: 1, maxLength: LIMITS.searchQueryMaxLength }),
+  body: v.object({
+    query: v.pipe(
+      v.string(),
+      v.minLength(1),
+      v.maxLength(LIMITS.searchQueryMaxLength),
+    ),
     country: tPublicLawCountry,
-    locale: t.Optional(t.String({ maxLength: 16 })),
+    locale: v.optional(v.pipe(v.string(), v.maxLength(16))),
   }),
-  requiresUsage: { actionType: "chat", modelRole: "fast" },
+  requiresUsage: { actionType: "chat", modelTask: "search-expand" },
 } satisfies HandlerConfig;
 
 const refineCaseLawSearch = createSafeRootHandler(
   config,
   async function* ({
+    modelAdmission,
     body,
     orgAIConfig,
     managedAIResidency,
@@ -67,8 +82,14 @@ const refineCaseLawSearch = createSafeRootHandler(
     session,
     user,
   }): SafeHandlerGenerator<{ query: string } | PublicCountryUnavailableAnswer> {
+    if (orgAIConfigStatus === ORG_AI_CONFIG_STATUS.unreadable) {
+      return Result.err(storedAIConfigUnreadableError());
+    }
+
     const countryRead = readPublicLawCountry(body.country, {
+      domain: "caseLaw",
       admitted: PUBLIC_CASE_LAW_COUNTRIES,
+      surface: "search",
     });
     if (countryRead.kind === "unavailable") {
       return Result.ok(countryRead.answer);
@@ -85,11 +106,11 @@ const refineCaseLawSearch = createSafeRootHandler(
       );
     }
 
-    yield* requireTanStackAIAvailableForRole({
+    yield* requireTanStackAIAvailableForTask({
       dataClass: "customer",
       configStatus: orgAIConfigStatus,
       orgConfig: orgAIConfig,
-      role: "fast",
+      task: "search-expand",
     });
 
     // The language the search stems and drops function words in, so the
@@ -110,8 +131,9 @@ const refineCaseLawSearch = createSafeRootHandler(
         workspaceId: null,
       },
       feature: "case-law.search.refine",
-      modelRole: "fast",
+      modelTask: "search-expand",
       orgAIConfig,
+      modelTier: configuredModelAdmission({ modelAdmission }).modelTier,
       properties: { organization_id: organizationId, jurisdiction: country },
       traceId: Bun.randomUUIDv7(),
     });
@@ -134,9 +156,11 @@ const refineCaseLawSearch = createSafeRootHandler(
       });
       const generated = await Result.tryPromise({
         try: async () =>
-          await generateTanStackObjectForRole({
+          await generateTanStackObjectForTask({
+            userId: user.id,
             dataClass: "customer",
-            role: "fast",
+            admission: configuredModelAdmission({ modelAdmission }),
+            task: "search-expand",
             serviceTier: "standard",
             orgAIConfig,
             managedAIResidency,
@@ -145,17 +169,15 @@ const refineCaseLawSearch = createSafeRootHandler(
             analytics,
             caching: resolveCaching({
               promptCachingEnabled,
-              role: "fast",
+              task: "search-expand",
               scopeKey: null,
             }),
             system: CASE_LAW_SEARCH_REFINE_SYSTEM,
             prompt,
             outputSchema: caseLawRefineOutputSchema,
             maxOutputTokens: 120,
-            abortSignal: AbortSignal.any([
-              request.signal,
-              AbortSignal.timeout(CASE_LAW_REFINE_TIMEOUT_MS),
-            ]),
+            abortSignal: request.signal,
+            deadlineMs: CASE_LAW_REFINE_TIMEOUT_MS,
           }),
         catch: (error: unknown) => {
           analytics.captureError(error);
@@ -163,6 +185,12 @@ const refineCaseLawSearch = createSafeRootHandler(
         },
       });
       if (generated.isErr()) {
+        if (
+          attempt < CASE_LAW_REFINE_MAX_ATTEMPTS &&
+          isIncompleteCaseLawRefineGeneration(generated.error)
+        ) {
+          continue;
+        }
         return Result.err(
           aiHandlerError(generated.error, {
             status: 502,
@@ -182,7 +210,11 @@ const refineCaseLawSearch = createSafeRootHandler(
     }
 
     return Result.err(
-      new HandlerError({ status: 502, message: REFINE_FAILED_MESSAGE }),
+      new HandlerError({
+        code: AI_FAILURE_CODES.output_invalid,
+        status: 502,
+        message: REFINE_FAILED_MESSAGE,
+      }),
     );
   },
 );

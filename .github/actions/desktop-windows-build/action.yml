@@ -1,0 +1,161 @@
+name: Desktop Windows build
+description: Build and optionally sign the Windows desktop release artifacts
+inputs:
+  dry-run:
+    description: Skip release signing while exercising the Windows build path
+    required: true
+  target:
+    description: Rust target triple
+    required: true
+  release-sha:
+    description: Commit embedded in the desktop build
+    required: true
+  script-path:
+    description: Path to desktop-release-step.ts
+    required: true
+  azure-endpoint:
+    description: Azure Trusted Signing endpoint
+    required: false
+  azure-account:
+    description: Azure Trusted Signing account
+    required: false
+  azure-profile:
+    description: Azure Trusted Signing certificate profile
+    required: false
+runs:
+  using: composite
+  steps:
+    - name: Install trusted-signing-cli
+      if: inputs.dry-run != 'true'
+      env:
+        AZURE_TENANT_ID: ""
+        AZURE_CLIENT_ID: ""
+        AZURE_CLIENT_SECRET: ""
+        AZURE_ENDPOINT: ""
+        AZURE_CODE_SIGNING_ACCOUNT: ""
+        AZURE_CERT_PROFILE: ""
+        TAURI_SIGNING_PRIVATE_KEY: ""
+        TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
+      uses: baptiste0928/cargo-install@8195d4f734a149db85385bb4102b42efcd373759 # v3.5.0
+      with:
+        crate: trusted-signing-cli
+        version: "0.10.0"
+        locked: true
+
+    - name: Locate signtool.exe
+      id: signtool
+      shell: bash
+      run: bun "${{ inputs.script-path }}" locate-windows-signing
+
+    # Tauri spawns bundle.windows.signCommand directly via Command::new (no
+    # shell), so %VAR%-style env interpolation isn't applied. The values are
+    # substituted at build time instead. Single-token args only, %1
+    # placeholder, and no `-d` description: Tauri parses signCommand with
+    # shlex::split and forwards each token verbatim, so a multi-word value
+    # breaks signtool's argument parsing.
+    - name: Configure Windows signing
+      shell: bash
+      env:
+        AZURE_ENDPOINT: ${{ inputs.azure-endpoint }}
+        AZURE_CODE_SIGNING_ACCOUNT: ${{ inputs.azure-account }}
+        AZURE_CERT_PROFILE: ${{ inputs.azure-profile }}
+      run: bun "${{ inputs.script-path }}" configure-windows "${{ inputs.dry-run == 'true' && 'dry-run' || 'release' }}" apps/desktop/src-tauri/tauri.conf.json
+
+    # ggml's ARM CPU backend builds with clang-cl, which needs Ninja. Visual
+    # Studio ships one; it is just not on the PATH.
+    # clang-cl comes from Visual Studio's own LLVM toolset, not the image's
+    # standalone LLVM: the MSVC STL accepts only the Clang it ships with
+    # (MSVC 14.52 rejects Clang 20 with STL1000), and the standalone LLVM
+    # lags it when the image moves to a newer Visual Studio.
+    - name: Put Ninja and Visual Studio's clang-cl on the PATH for the ARM64 speech engine
+      if: inputs.target == 'aarch64-pc-windows-msvc'
+      shell: pwsh
+      run: |
+        $ErrorActionPreference = 'Stop'
+        $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+        $vs = & $vswhere -latest -products '*' -property installationPath
+        $ninja = Join-Path $vs 'Common7\IDE\CommonExtensions\Microsoft\CMake\Ninja'
+        if (-not (Test-Path (Join-Path $ninja 'ninja.exe'))) { throw "ninja.exe not found under $vs" }
+        $llvm = Join-Path $vs 'VC\Tools\Llvm\x64\bin'
+        $clang = Join-Path $llvm 'clang-cl.exe'
+        if (-not (Test-Path $clang)) { throw "clang-cl.exe not found under $vs (Visual Studio LLVM toolset missing)" }
+        & $clang --version
+        Add-Content $env:GITHUB_PATH $ninja
+        Add-Content $env:GITHUB_PATH $llvm
+
+    - name: Build Windows desktop artifacts
+      shell: bash
+      working-directory: apps/desktop
+      env:
+        # The caller fetches the locked crates through scripts/retry.sh
+        # first; the build itself never reaches the registry.
+        CARGO_NET_OFFLINE: "true"
+        SIGNTOOL_PATH: ${{ steps.signtool.outputs.path }}
+        # SPA origins the shipped distribution build trusts at runtime.
+        # Read at compile time by config.rs via option_env!(); builds
+        # without this variable default to loopback-only.
+        STELLA_DESKTOP_DEFAULT_ORIGINS: "https://my.stll.app,https://app.stll.app"
+        # Public browser-ingestion configuration, compiled into the desktop
+        # adapter. The adapter accepts fixed error codes only and creates no
+        # person profile, persistence, autocapture, or session recording.
+        VITE_POSTHOG_HOST: "https://eu.i.posthog.com"
+        STELLA_COMMIT_SHA: ${{ inputs.release-sha }}
+      # `--verbose --verbose` surfaces the per-line output Tauri captures
+      # from signCommand; without it a trusted-signing-cli failure shows up
+      # as an opaque "failed to run trusted-signing-cli" (tauri-apps/tauri#11778,
+      # tauri-apps/tauri#13991).
+      # NSIS only (no MSI): MSI uses a 4-part 16-bit version that can't
+      # represent semver prerelease suffixes.
+      # Do NOT add `updater` to --bundles: in Tauri 2 the updater archives
+      # are emitted as a side effect of the platform installer when
+      # bundle.createUpdaterArtifacts is true; naming `updater` explicitly
+      # bypasses that side effect and no .nsis.zip is created.
+      run: bun run build -- --target ${{ inputs.target }} --bundles nsis --verbose --verbose
+
+    - name: Sign Windows installers with desktop release tooling
+      if: inputs.dry-run != 'true'
+      shell: bash
+      env:
+        AZURE_ENDPOINT: ${{ inputs.azure-endpoint }}
+        AZURE_CODE_SIGNING_ACCOUNT: ${{ inputs.azure-account }}
+        AZURE_CERT_PROFILE: ${{ inputs.azure-profile }}
+        SIGNTOOL_PATH: ${{ steps.signtool.outputs.path }}
+      run: bun "${{ inputs.script-path }}" sign-windows "apps/desktop/src-tauri/target/${{ inputs.target }}/release/bundle"
+
+    - name: Verify Windows signatures and timestamps
+      if: inputs.dry-run != 'true'
+      shell: pwsh
+      env:
+        SIGNED_ARTIFACT_DIRECTORY: apps/desktop/src-tauri/target/${{ inputs.target }}/release/bundle
+        AZURE_TENANT_ID: ""
+        AZURE_CLIENT_ID: ""
+        AZURE_CLIENT_SECRET: ""
+        AZURE_ENDPOINT: ""
+        AZURE_CODE_SIGNING_ACCOUNT: ""
+        AZURE_CERT_PROFILE: ""
+        TAURI_SIGNING_PRIVATE_KEY: ""
+        TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
+      run: |
+        $ErrorActionPreference = "Stop"
+        $executables = @(Get-ChildItem -LiteralPath $env:SIGNED_ARTIFACT_DIRECTORY -Filter *.exe -File -Recurse -ErrorAction Stop)
+        if ($executables.Count -eq 0) {
+          throw "No Windows executables found for signature verification"
+        }
+        foreach ($executable in $executables) {
+          $signature = Get-AuthenticodeSignature -LiteralPath $executable.FullName -ErrorAction Stop
+          if ($signature.Status -ne "Valid") {
+            throw "Invalid Authenticode signature for $($executable.Name): $($signature.Status)"
+          }
+          if ($null -eq $signature.TimeStamperCertificate) {
+            throw "Missing Authenticode timestamp for $($executable.Name)"
+          }
+        }
+
+    # Tauri's bundler signs the update package alongside the binary. Re-signing
+    # changes the binary hash, so the bundler's .sig is no
+    # longer valid; refresh it over the re-signed installer.
+    - name: Re-sign updater zip for Tauri after binary signing
+      if: inputs.dry-run != 'true'
+      shell: bash
+      working-directory: apps/desktop
+      run: bun "${{ inputs.script-path }}" resign "src-tauri/target/${{ inputs.target }}/release/bundle"

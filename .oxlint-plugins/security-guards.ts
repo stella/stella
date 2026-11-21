@@ -11,6 +11,7 @@
 import { eslintCompatPlugin, type Variable } from "@oxlint/plugins";
 
 import {
+  type AstNode,
   canonicalModuleId,
   everyNode,
   getImportedName,
@@ -18,9 +19,9 @@ import {
   invokedCallee,
   isAstNode,
   isCallTo,
+  isFileIn,
   isIdentifier,
   isIdentifierReference,
-  isFileIn,
   isStringLiteral,
   memberPropertyName,
   repoRelativeFilename,
@@ -28,7 +29,6 @@ import {
   resolveVariable,
   stableInitializer,
   unwrapExpression,
-  type AstNode,
 } from "./utils.ts";
 
 // ── Rule 1: no-raw-filename-write ──────────────────────────────
@@ -213,9 +213,21 @@ const isSafeTemplateLiteral = (node): boolean => {
 // `sanitizeHref`'s answer and then withholds any host outside the document's
 // publisher, so it is never weaker than `sanitizeHref`. A helper only earns a
 // place here by calling one of these itself.
-const HREF_SANITIZERS: ReadonlyMap<string, string> = new Map([
-  ["sanitizeHref", "apps/web/src/lib/sanitize-href"],
-  ["readerHref", "apps/web/src/components/legal-reader/source-link-policy"],
+const HREF_SANITIZERS: ReadonlyMap<string, readonly string[]> = new Map([
+  [
+    "sanitizeHref",
+    [
+      "@stll/decision-reader/sanitize-href",
+      "packages/decision-reader/src/sanitize-href",
+    ],
+  ],
+  [
+    "readerHref",
+    [
+      "@stll/decision-reader/source-link-policy",
+      "packages/decision-reader/src/source-link-policy",
+    ],
+  ],
 ]);
 
 // ── Rule 3: no-unscoped-user-query ─────────────────────────────
@@ -401,8 +413,10 @@ export default eslintCompatPlugin({
         type: "problem",
         messages: {
           rawFilename:
-            "Use sanitizeFilename() before writing a request-supplied " +
-            "filename. Raw strings may contain path traversal segments.",
+            "Use sanitizeFilename() from @/api/lib/sanitize-filename before " +
+            "writing a request-supplied filename (ZIP entries, " +
+            "Content-Disposition headers, S3 keys). Raw strings may contain " +
+            "path traversal segments.",
         },
       },
       createOnce(context) {
@@ -621,7 +635,9 @@ export default eslintCompatPlugin({
           const resolved = resolveImport(context, invokedCallee(node));
           return (
             resolved !== null &&
-            HREF_SANITIZERS.get(resolved.imported) === resolved.moduleId
+            HREF_SANITIZERS.get(resolved.imported)?.includes(
+              resolved.moduleId,
+            ) === true
           );
         };
 
@@ -707,8 +723,11 @@ export default eslintCompatPlugin({
           unscopedUserQuery:
             "A query reading the auth-schema 'user' table must reference " +
             "both member.userId and member.organizationId in the same query " +
-            "chain. Join through organization membership, or suppress " +
-            "narrowly with evidence for another authorized scope.",
+            "chain. Join through organization membership (an innerJoin on " +
+            "member filtered by session.activeOrganizationId); for a userId " +
+            "taken from the request, validate it first with validateOrgUserId " +
+            "from @/api/lib/validated-org-user-id. Or suppress narrowly with " +
+            "evidence for another authorized scope.",
         },
         schema: [
           {
@@ -823,12 +842,65 @@ export default eslintCompatPlugin({
           );
         };
 
+        const isSchemaMetadata = (node: AstNode): boolean => {
+          const parent = node.parent;
+          if (isAstNode(parent) && parent.type === "CallExpression") {
+            const callee = unwrapExpression(parent.callee);
+            const binding =
+              callee === null ? null : resolveImport(context, callee);
+            if (
+              binding !== null &&
+              ((binding.moduleId === "drizzle-orm/pg-core" &&
+                binding.imported === "getTableConfig") ||
+                (binding.moduleId === "drizzle-orm" &&
+                  ["getTableName", "getColumns"].includes(binding.imported)))
+            ) {
+              return true;
+            }
+          }
+          // A column-only FK callback describes a schema; it cannot perform a
+          // read. Calls inside the callback still pass through query checks.
+          if (
+            isAstNode(parent) &&
+            parent.type === "MemberExpression" &&
+            parent.object === node
+          ) {
+            const callback = parent.parent;
+            if (
+              isAstNode(callback) &&
+              callback.type === "ArrowFunctionExpression" &&
+              callback.body === parent
+            ) {
+              const declaration = callback.parent;
+              // Only the first argument is the column callback.
+              if (
+                isAstNode(declaration) &&
+                declaration.type === "CallExpression" &&
+                Array.isArray(declaration.arguments) &&
+                declaration.arguments.at(0) === callback
+              ) {
+                const callee = unwrapExpression(declaration.callee);
+                if (
+                  callee?.type === "MemberExpression" &&
+                  memberPropertyName(callee) === "references"
+                ) {
+                  return true;
+                }
+              }
+            }
+          }
+          return false;
+        };
+
         const checkTableReference = (node: unknown): void => {
           if (
             !isAstNode(node) ||
             isInTypePosition(node) ||
             authSchemaExport(node) !== USER_TABLE_EXPORT
           ) {
+            return;
+          }
+          if (isSchemaMetadata(node)) {
             return;
           }
           const chain = queryChainRoot(node);

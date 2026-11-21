@@ -59,31 +59,6 @@ const externalMcpGetDocument = {
   data_type: "case_law",
 };
 
-export const externalMcpGetDocumentObservedShape = {
-  mcpWrapperKeys: ["content", "isError"],
-  contentTextChars: 120_159,
-  documentTextChars: 119_202,
-  documentShape: {
-    source_id: "string",
-    source: "string",
-    title: "string",
-    text: "string",
-    url: "string",
-    date: "string",
-    country: "string",
-    language: "string",
-    court: "string",
-    chamber: "string",
-    jurisdiction: "null",
-    ecli: "string",
-    case_number: "string",
-    decision_type: "string",
-    court_tier: "number",
-    summary: "null",
-    data_type: "string",
-  },
-} as const;
-
 export const externalMcpGetDocumentResponseFixture = {
   content: [
     {

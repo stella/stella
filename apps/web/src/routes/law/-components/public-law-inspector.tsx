@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 
 import { useTranslations } from "use-intl";
 
+import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { PanelRightIcon } from "@stll/ui/icons";
 import { InspectorRailIconButton, InspectorRailTab } from "@stll/ui/inspector";
 import { WorkspaceEndRail } from "@stll/ui/workspace-shell";
@@ -11,15 +12,18 @@ import type { WorkspaceEndRailChatAction } from "@stll/ui/workspace-shell";
 import { useMainLegalDocument } from "@/components/ai-suggestions/use-main-legal-document";
 import { useRequireAccount } from "@/components/auth/use-require-account";
 import { railChatOpenArgs } from "@/components/inspector/inspector-rail-chat.logic";
+import { INSPECTOR_FOCUS_INTENT } from "@/components/inspector/inspector-store-types";
 import {
   isGenericInspectorTab,
   useInspectorTabsStore,
 } from "@/components/inspector/inspector-tabs-store";
 import type { InspectorTab } from "@/components/inspector/inspector-tabs-store";
+import { useInspectorTabPersistence } from "@/components/inspector/use-inspector-tab-persistence";
 import { getInspectorView } from "@/components/inspector/view-registry";
 import { PublicInspectorDock } from "@/components/public-inspector-rail";
 import Tooltip from "@/components/tooltip";
 import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
+import type { AuthenticatedUser } from "@/lib/authenticated-user-context";
 
 // The full inspector pulls the chat stack in with it. Only a reader with a
 // session can reach any of it, so it stays out of this shell's own chunk.
@@ -49,19 +53,37 @@ export const PublicLawInspector = () => {
   }
 
   return (
-    // The pane widens only for a tab; with none the rail stands alone and
-    // the inspector draws its own empty state behind the toggle.
-    <PublicInspectorDock expanded={!minimized && tabs.length > 0}>
-      {/*
-        The fallback is the rail, never nothing: the toggle is the only way
-        into the pane, and a dock that drops it while the inspector's chunk
-        (or anything it opens) loads leaves the reader with a blank column.
-      */}
-      <Suspense fallback={<SessionRailPlaceholder />}>
-        <LazySessionInspector />
-      </Suspense>
-    </PublicInspectorDock>
+    <>
+      {/* Beside the dock, not in it: a closed mobile sheet mounts nothing. */}
+      <MemberInspectorPersistence user={user} />
+      {/* The pane widens only for a tab; with none the rail stands alone and
+          the inspector draws its own empty state behind the toggle. */}
+      <PublicInspectorDock expanded={!minimized && tabs.length > 0}>
+        {/*
+          The fallback is the rail, never nothing: the toggle is the only way
+          into the pane, and a dock that drops it while the inspector's chunk
+          (or anything it opens) loads leaves the reader with a blank column.
+        */}
+        <Suspense fallback={<SessionRailPlaceholder />}>
+          <LazySessionInspector />
+        </Suspense>
+      </PublicInspectorDock>
+    </>
   );
+};
+
+/**
+ * A member's tabs on this surface are their workspace tabs: the ones they
+ * left are restored, and the ones they open here are kept. Mounted with the
+ * dock rather than the lazily loaded inspector, so the restore lands before a
+ * reader below asks for its document's chat.
+ */
+const MemberInspectorPersistence = ({ user }: { user: AuthenticatedUser }) => {
+  useInspectorTabPersistence({
+    organizationId: user.activeOrganizationId,
+    userId: user.id,
+  });
+  return null;
 };
 
 type GenericTab = Extract<InspectorTab, { type: "view" }>;
@@ -105,7 +127,7 @@ const PublicLawRail = ({
             />
           }
         >
-          <PanelRightIcon className="size-4" />
+          <DirectionalIcon className="size-4" icon={PanelRightIcon} />
         </Tooltip>
       }
     >
@@ -133,7 +155,10 @@ const SessionRailPlaceholder = () => {
         chatAction={{
           label: t("chat.newChat"),
           onActivate: () => {
-            openChat(railChatOpenArgs({ legalDocument }));
+            openChat({
+              ...railChatOpenArgs({ legalDocument }),
+              focus: INSPECTOR_FOCUS_INTENT.claim,
+            });
           },
           status: "enabled",
         }}
@@ -201,7 +226,11 @@ const AnonymousViewDock = ({ tabs }: { tabs: readonly GenericTab[] }) => {
         */}
         {expanded && (
           <Suspense fallback={<div className="bg-background flex-1" />}>
-            <RegisteredView onClose={() => closeTab(active.id)} tab={active} />
+            <RegisteredView
+              onClose={() => closeTab(active.id)}
+              onMoveToMain={() => closeTab(active.id, { movedToMain: true })}
+              tab={active}
+            />
           </Suspense>
         )}
       </div>
@@ -242,6 +271,7 @@ const RailTabButton = ({ active, onActivate, tab }: RailTabButtonProps) => {
 
 type RegisteredViewProps = {
   onClose: () => void;
+  onMoveToMain: () => void;
   tab: GenericTab;
 };
 
@@ -250,7 +280,11 @@ type RegisteredViewProps = {
  * owns its own hooks and re-render queue. Nothing renders while the chunk
  * carrying the registration is still loading.
  */
-const RegisteredView = ({ onClose, tab }: RegisteredViewProps) => {
+const RegisteredView = ({
+  onClose,
+  onMoveToMain,
+  tab,
+}: RegisteredViewProps) => {
   const registration = getInspectorView(tab.viewType);
 
   if (registration === undefined) {
@@ -262,6 +296,7 @@ const RegisteredView = ({ onClose, tab }: RegisteredViewProps) => {
   return (
     <Renderer
       onClose={onClose}
+      onMoveToMain={onMoveToMain}
       tab={{
         id: tab.id,
         label: tab.label,

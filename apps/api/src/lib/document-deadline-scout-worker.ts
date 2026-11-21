@@ -1,6 +1,5 @@
-import { Worker } from "bullmq";
-
 import { captureError } from "@/api/lib/analytics/capture";
+import { BullMqWorker } from "@/api/lib/bullmq-queue";
 import type { BullMqWorkerContext } from "@/api/lib/bullmq-queue";
 import {
   DEADLINE_SCOUT_JOB_NAME,
@@ -8,6 +7,7 @@ import {
   type DocumentDeadlineScoutJobData,
 } from "@/api/lib/document-processing-enqueue";
 import { errorTag } from "@/api/lib/errors/utils";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { logger } from "@/api/lib/observability/logger";
 import { createQueueWorkerErrorLogger } from "@/api/lib/queue-worker-error-log";
 import { createBullMqConnection } from "@/api/lib/redis-client";
@@ -17,7 +17,7 @@ const DEADLINE_SCOUT_WORKER_CONCURRENCY = 1;
 export const initDocumentDeadlineScoutWorker = ({
   db,
 }: BullMqWorkerContext) => {
-  const worker = new Worker<DocumentDeadlineScoutJobData>(
+  const worker = new BullMqWorker<DocumentDeadlineScoutJobData>(
     DEADLINE_SCOUT_QUEUE_NAME,
     async ({ data }) => {
       const { runDocumentDeadlineScout } =
@@ -33,10 +33,13 @@ export const initDocumentDeadlineScoutWorker = ({
   );
 
   worker.on("failed", (job, error) => {
-    captureError(error, {
-      scout: DEADLINE_SCOUT_JOB_NAME,
-      sourceRunId: job?.data.sourceRunId ?? "",
-    });
+    captureError(
+      error,
+      handlerErrorContext("lib.initDocumentDeadlineScoutWorker", {
+        scout: DEADLINE_SCOUT_JOB_NAME,
+        sourceRunId: job?.data.sourceRunId ?? "",
+      }),
+    );
     logger.error("scout.document_deadlines.failed", {
       "error.type": errorTag(error),
       "source.run.id": job?.data.sourceRunId ?? "",

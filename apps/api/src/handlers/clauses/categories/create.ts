@@ -4,6 +4,7 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { createCategoryBodySchema, createCategoryHandler } from "../categories";
 
 const config = {
+  contract: "patch",
   description:
     "Create a category in the organization's clause library taxonomy, " +
     "optionally under a parent category. Refused once the organization holds " +

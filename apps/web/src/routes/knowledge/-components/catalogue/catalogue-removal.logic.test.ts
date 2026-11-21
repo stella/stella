@@ -59,6 +59,8 @@ const commonFields = (): Omit<CatalogueSkill, "kind"> => ({
   installState: "installed",
   installedConnectorSlug: null,
   installedSkillId: null,
+  invocation: null,
+  binding: null,
   isLocked: false,
   isRecommendedForOrg: false,
   jurisdictions: [],

@@ -1,4 +1,6 @@
+import type { Locale } from "../i18n/config";
 import type { TranslationKey } from "../i18n/utils";
+import { productCaptures } from "./product-captures";
 
 type SceneWindowLabelKey = Extract<
   TranslationKey,
@@ -7,7 +9,7 @@ type SceneWindowLabelKey = Extract<
   | "story.bringWorkspaceToFront"
 >;
 
-export const productStorySceneIds = [
+const productStorySceneIds = [
   "workspace",
   "review",
   "review-citation",
@@ -28,20 +30,6 @@ export type ProductStoryMedia = {
   videoSrc: string;
 };
 
-export type ProductStoryScene = {
-  id: ProductStorySceneId;
-  label: string;
-  productSlug: "workspace" | "tabular-review" | "editor" | "agent" | "cli-mcp";
-};
-
-export const productStoryScenes = [
-  { id: "workspace", label: "Matter", productSlug: "workspace" },
-  { id: "review", label: "Review", productSlug: "tabular-review" },
-  { id: "editor", label: "Editor", productSlug: "editor" },
-  { id: "agent", label: "Agent", productSlug: "agent" },
-  { id: "cli", label: "CLI & MCP", productSlug: "cli-mcp" },
-] as const satisfies readonly ProductStoryScene[];
-
 export type ProductStoryWindowId = "app" | "editor" | "teams" | "terminal";
 
 /**
@@ -56,7 +44,7 @@ export type SceneWindowId = "workspace" | "source" | "terminal";
  * is a React island with no translator, so every Astro mount passes these in;
  * the prop is required, because a scene that renders the handles without them
  * would ship an English `aria-label` onto a localized page. Written out per
- * window for the same reason `resolveProductEyebrows` is: `satisfies` here
+ * window: `satisfies` here
  * turns a new scene window into a typecheck error, not a silent English label.
  */
 export const resolveSceneWindowLabels = (
@@ -120,56 +108,57 @@ export const openingProductStory = [
   },
 ] as const satisfies readonly ProductStoryPlaybackStep[];
 
-export const productStoryThumbnails = {
-  workspace: {
-    src: "/media/products/workspace.png",
-    darkSrc: "/media/products/workspace-dark.png",
-    alt: "Matter workspace in stella",
-  },
-  review: {
-    src: "/media/products/tabular-review.png",
-    darkSrc: "/media/products/tabular-review-dark.png",
-    alt: "Contract review table in stella",
-  },
-  // Product-page-only scene (same product area as "review"); reuses its
-  // thumbnail since nothing lists this scene by icon (nav mega-menu,
-  // homepage chapters) the way "review" itself is.
-  "review-citation": {
-    src: "/media/products/tabular-review.png",
-    darkSrc: "/media/products/tabular-review-dark.png",
-    alt: "Contract review table in stella",
-  },
-  editor: {
-    src: "/media/products/editor.png",
-    darkSrc: "/media/products/editor-dark.png",
-    alt: "Word document open in the stella Editor",
-  },
-  agent: {
-    src: "/media/products/agent.png",
-    darkSrc: "/media/products/agent-dark.png",
-    alt: "AI agent in stella",
-  },
-  cli: {
-    src: "/media/products/story-cli-poster.jpg",
-    darkSrc: "/media/products/story-cli-dark-poster.jpg",
-    alt: "The tools and capability catalogue in stella",
-  },
-  templates: {
-    src: "/media/products/story-templates-poster.jpg",
-    darkSrc: "/media/products/story-templates-dark-poster.jpg",
-    alt: "A template with fields and conditional clauses in the stella template studio",
-  },
-  // Product-page-only scene (same product area as "templates"); reuses its
-  // thumbnail since nothing lists this scene by icon.
-  "template-fill": {
-    src: "/media/products/story-templates-poster.jpg",
-    darkSrc: "/media/products/story-templates-dark-poster.jpg",
-    alt: "A template with fields and conditional clauses in the stella template studio",
-  },
-} as const satisfies Record<
-  ProductStorySceneId,
-  { alt: string; darkSrc: string; src: string }
->;
+export const productStoryThumbnails = (locale: Locale) =>
+  ({
+    workspace: {
+      src: productCaptures.workspace.src[locale],
+      darkSrc: productCaptures.workspace.darkSrc[locale],
+      alt: "Matter workspace in stella",
+    },
+    review: {
+      src: productCaptures["tabular-review"].src[locale],
+      darkSrc: productCaptures["tabular-review"].darkSrc[locale],
+      alt: "Contract review table in stella",
+    },
+    // Product-page-only scene (same product area as "review"); reuses its
+    // thumbnail since nothing lists this scene by icon (nav mega-menu,
+    // homepage chapters) the way "review" itself is.
+    "review-citation": {
+      src: productCaptures["tabular-review"].src[locale],
+      darkSrc: productCaptures["tabular-review"].darkSrc[locale],
+      alt: "Contract review table in stella",
+    },
+    editor: {
+      src: productCaptures.editor.src[locale],
+      darkSrc: productCaptures.editor.darkSrc[locale],
+      alt: "Word document open in the stella Editor",
+    },
+    agent: {
+      src: productCaptures.agent.src[locale],
+      darkSrc: productCaptures.agent.darkSrc[locale],
+      alt: "AI agent in stella: a cited change-of-control review with a generated exposure view",
+    },
+    cli: {
+      src: "/media/products/story-cli-poster.jpg",
+      darkSrc: "/media/products/story-cli-dark-poster.jpg",
+      alt: "The tools and capability catalogue in stella",
+    },
+    templates: {
+      src: productCaptures.templates.src[locale],
+      darkSrc: productCaptures.templates.darkSrc[locale],
+      alt: "A template with fields and conditional clauses in the stella template studio",
+    },
+    // Product-page-only scene (same product area as "templates"); reuses its
+    // thumbnail since nothing lists this scene by icon.
+    "template-fill": {
+      src: productCaptures.templates.src[locale],
+      darkSrc: productCaptures.templates.darkSrc[locale],
+      alt: "A template with fields and conditional clauses in the stella template studio",
+    },
+  }) as const satisfies Record<
+    ProductStorySceneId,
+    { alt: string; darkSrc: string; src: string }
+  >;
 
 // Stella-owned surfaces are recorded from deterministic, seeded app routes by
 // apps/web/e2e/marketing/record-product-story.ts. The homepage and product
@@ -208,7 +197,7 @@ export const productStoryMedia = {
     darkVideoSrc: "/media/products/story-agent-dark.mp4",
     posterSrc: "/media/products/story-agent-poster.jpg",
     darkPosterSrc: "/media/products/story-agent-dark-poster.jpg",
-    alt: "A grounded answer with cited matter sources in stella",
+    alt: "A cited change-of-control review in stella, opening each source from the answer",
   },
   cli: {
     videoSrc: "/media/products/story-cli.mp4",
@@ -256,7 +245,7 @@ export const productStoryHeroMedia = {
   // Product-page section only; like templates below, this has a wide
   // capture only, so the hero record reuses it (object-cover crops
   // slightly in the companion composition, which never renders this scene
-  // in practice — see productStoryScenes/openingProductStory).
+  // in practice — see openingProductStory).
   "review-citation": {
     videoSrc: "/media/products/story-review-citation.mp4",
     darkVideoSrc: "/media/products/story-review-citation-dark.mp4",
@@ -276,7 +265,7 @@ export const productStoryHeroMedia = {
     darkVideoSrc: "/media/products/story-agent-hero-dark.mp4",
     posterSrc: "/media/products/story-agent-hero-poster.jpg",
     darkPosterSrc: "/media/products/story-agent-hero-dark-poster.jpg",
-    alt: "A grounded answer with cited matter sources in stella",
+    alt: "A cited change-of-control review in stella, opening each source from the answer",
   },
   cli: {
     videoSrc: "/media/products/story-cli-hero.mp4",
@@ -296,8 +285,7 @@ export const productStoryHeroMedia = {
   },
   // Product-page section only, wide capture only; the hero record reuses it,
   // which object-cover crops slightly in the companion composition (which
-  // never renders this scene in practice — see productStoryScenes/
-  // openingProductStory).
+  // never renders this scene in practice — see openingProductStory).
   "template-fill": {
     videoSrc: "/media/products/story-template-fill.mp4",
     darkVideoSrc: "/media/products/story-template-fill-dark.mp4",
@@ -317,106 +305,6 @@ export const productStoryEditorPortraitMedia = {
   darkPosterSrc: "/media/products/story-editor-portrait-dark-poster.jpg",
   alt: "A Word document being reviewed in the stella Editor",
 } as const satisfies ProductStoryMedia;
-
-export type StoryDocumentStatus =
-  | "active"
-  | "complete"
-  | "in-review"
-  | "needs-review";
-
-export type StoryDocument = {
-  id: string;
-  name: string;
-  status: StoryDocumentStatus;
-  statusLabel: string;
-  note: string;
-  dueDate: string;
-  documentType: string;
-  playbookResult: string;
-};
-
-export const storyDocuments = [
-  {
-    id: "supplier-agreement",
-    name: "Supplier_Agreement.docx",
-    status: "needs-review",
-    statusLabel: "Needs review",
-    note: "Two positions outside playbook",
-    dueDate: "18 Jul",
-    documentType: "Supplier agreement",
-    playbookResult: "2 deviations",
-  },
-  {
-    id: "procurement-playbook",
-    name: "Procurement_Playbook.pdf",
-    status: "active",
-    statusLabel: "Active",
-    note: "Approved negotiation positions",
-    dueDate: "—",
-    documentType: "Playbook",
-    playbookResult: "Source",
-  },
-  {
-    id: "board-consent",
-    name: "Board_Consent.docx",
-    status: "complete",
-    statusLabel: "Complete",
-    note: "Change-of-control approval recorded",
-    dueDate: "16 Jul",
-    documentType: "Corporate approval",
-    playbookResult: "Aligned",
-  },
-  {
-    id: "due-diligence",
-    name: "Due_Diligence_Report.pdf",
-    status: "in-review",
-    statusLabel: "In review",
-    note: "Three source passages linked",
-    dueDate: "19 Jul",
-    documentType: "Review report",
-    playbookResult: "Review",
-  },
-  {
-    id: "risk-summary",
-    name: "Risk_Summary.docx",
-    status: "in-review",
-    statusLabel: "In review",
-    note: "Awaiting Legal sign-off",
-    dueDate: "20 Jul",
-    documentType: "Internal memo",
-    playbookResult: "Pending",
-  },
-] as const satisfies readonly StoryDocument[];
-
-export const storyEditorDocument = {
-  fileName: "Supplier_Agreement.docx",
-  title: "Supplier Agreement",
-  section: "12. Limitation of liability",
-  precedingText:
-    "Each party remains responsible for its obligations under this Agreement.",
-  clause:
-    "The Supplier’s aggregate liability shall not exceed 300% of the fees paid under this Agreement.",
-  clausePrefix: "The Supplier’s aggregate liability shall not exceed",
-  originalCap: "300%",
-  replacementCap: "100%",
-  clauseSuffix: "of the annual fees paid under this Agreement.",
-  followingText:
-    "The exclusions in this section survive termination of the Agreement.",
-  finding: "Above the approved liability cap",
-  recommendation: "Replace 300% with the playbook cap of 100% of annual fees.",
-} as const;
-
-export const storyAgentExchange = {
-  prompt: "Compare the change-of-control clauses across this matter.",
-  tools: [
-    { label: "Searched matter documents", meta: "18 documents" },
-    { label: "Read relevant clauses", meta: "3 passages" },
-    { label: "Checked cited sources", meta: "3 citations" },
-  ],
-  answer:
-    "The supplier agreement and board consent both require approval before a change of control. The SAFE uses a broader liquidity-event trigger.",
-  citations: ["Supplier Agreement · §14.2", "Board Consent · §3", "SAFE · §1"],
-} as const;
 
 export const storyTeamsExchange = {
   channel: "Supplier agreement",

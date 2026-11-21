@@ -57,6 +57,11 @@ describe("sitemapSources", () => {
       "apps/landing/src/content/docs/docs/get-started/cli.md",
       "apps/landing/src/content/docs/docs/get-started/cli.mdx",
     ]);
+    expect(sources("/docs/reference/tools/")).toEqual([
+      "apps/landing/src/content/docs/docs/reference/tools.md",
+      "apps/landing/src/content/docs/docs/reference/tools.mdx",
+      "packages/cli/src/generated/tool-reference.json",
+    ]);
   });
 
   test("blog posts date from their content file, the index from the directory", () => {
@@ -71,6 +76,9 @@ describe("sitemapSources", () => {
     expect(sources("/security/")).toContain(
       "apps/landing/src/data/security-controls.ts",
     );
+    expect(sources("/support/")).toEqual([
+      "apps/landing/src/pages/support.astro",
+    ]);
   });
 
   test("unmapped pages panic instead of inheriting a date", () => {

@@ -1,14 +1,19 @@
 import { sql } from "drizzle-orm";
 
+import { REVIEW_DECISION } from "@stll/api-contract/review-decision";
+import type { ReviewDecision } from "@stll/api-contract/review-decision";
+
 import { REVIEW_SKIPPED_MAX } from "@/api/lib/document-review/contract";
 import type {
   ReviewParty,
   ReviewSkippedTerm,
+  ReviewWithheldSource,
 } from "@/api/lib/document-review/contract";
 import {
-  DOCUMENT_REVIEW_APPLICATION_STATUSES,
   DOCUMENT_REVIEW_APPLICATION_STATUS,
+  DOCUMENT_REVIEW_APPLICATION_STATUSES,
   DOCUMENT_REVIEW_DECISION,
+  DOCUMENT_REVIEW_DECISION_REASON_MAX,
   DOCUMENT_REVIEW_DECISIONS,
   DOCUMENT_REVIEW_FINDING_FLAGS,
   DOCUMENT_REVIEW_FINDING_FLAGS_MAX,
@@ -27,6 +32,11 @@ import type {
 } from "@/api/lib/document-review/run-contract";
 
 import {
+  entityFeatureGateChecks,
+  entityFeatureGateColumns,
+  entityFeatureWorkspaceGateColumns,
+} from "../entity-feature-gate-columns";
+import {
   jsonb,
   organization,
   p,
@@ -34,8 +44,10 @@ import {
   safeOrganizationId,
   safeUuid,
   safeWorkspaceId,
+  stella,
   timestamptz,
   user,
+  workspaceCheck,
   wsOrganizationPolicies,
 } from "./common";
 import { workspaces } from "./contacts";
@@ -57,6 +69,7 @@ const PIN_PROVENANCE_SQL_VALUES = quoted(PLAYBOOK_PIN_PROVENANCES);
 const OUTCOME_SQL_VALUES = quoted(DOCUMENT_REVIEW_OUTCOMES);
 
 const DECISION_SQL_VALUES = quoted(DOCUMENT_REVIEW_DECISIONS);
+const REVIEW_DECISION_SQL_VALUES = quoted(REVIEW_DECISION);
 const FINDING_FLAG_SQL_VALUES = quoted(DOCUMENT_REVIEW_FINDING_FLAGS);
 const APPLICATION_STATUS_SQL_VALUES = quoted(
   DOCUMENT_REVIEW_APPLICATION_STATUSES,
@@ -72,11 +85,10 @@ const PENDING_APPLICATION_STATUS_SQL = sql.raw(
  * with the reference documents those positions came from and the side it was
  * judged for, measured against one pinned document version.
  *
- * The target and the basis are pinned by value, not by reference: `basis`
- * embeds the whole position snapshot and every reference's version, and there
- * is no foreign key from a run to a playbook or to the reviewed documents. A
- * completed review therefore stays readable after the playbook is deleted or
- * the document moves on. Workspace deletion still cascades everything.
+ * The basis is pinned by value: `basis` embeds the whole position snapshot and
+ * every reference's version, with no foreign key to a playbook or reference
+ * document. The target entity remains the content owner, so permanently
+ * deleting it cascades its copied review basis, skipped terms, and findings.
  */
 export const documentReviewRuns = p.pgTable(
   "document_review_runs",
@@ -88,8 +100,8 @@ export const documentReviewRuns = p.pgTable(
     workspaceId: safeWorkspaceId("workspace_id")
       .notNull()
       .references(() => workspaces.id, { onDelete: "cascade" }),
-    // Target pin. Plain identifier columns: a deleted document must not take
-    // its review history with it, so these deliberately carry no foreign key.
+    // Version and field ids preserve the historical input while the entity FK
+    // below binds every copied review payload to permanent target deletion.
     entityId: safeUuid<"entity">("entity_id").notNull(),
     fileFieldId: safeUuid<"field">("file_field_id").notNull(),
     entityVersionId: safeUuid<"entityVersion">("entity_version_id").notNull(),
@@ -106,6 +118,12 @@ export const documentReviewRuns = p.pgTable(
     // the other half were compliant, and that stays true when the review is
     // reopened tomorrow. Empty for a run with no proposal behind it.
     skipped: jsonb().$type<ReviewSkippedTerm[]>().notNull().default([]),
+    // Sources this run read only in part because they exceed the model's
+    // request budget. Sizes only, never text. Empty when all were read whole.
+    withheldSources: jsonb("withheld_sources")
+      .$type<ReviewWithheldSource[]>()
+      .notNull()
+      .default([]),
     status: p
       .text("status", { enum: DOCUMENT_REVIEW_RUN_STATUSES })
       .notNull()
@@ -120,9 +138,18 @@ export const documentReviewRuns = p.pgTable(
       .text("executor", { enum: DOCUMENT_REVIEW_RUN_EXECUTORS })
       .notNull()
       .default(DOCUMENT_REVIEW_RUN_EXECUTOR.WORKER),
+    // Whether the run counts against the organization's document review
+    // caps (`lib/usage/model-run-caps`): a review a person starts on one document
+    // does; a playbook run over a table of documents is admitted as one batch
+    // and does not. Set when the run is inserted and never changed, so the
+    // triggers that charge and free the counter see the same answer.
+    orgCapped: p.boolean("org_capped").notNull().default(false),
     // Coarse progress over the expected finding set (see `expectedFindings`).
     total: p.integer().notNull().default(0),
     completed: p.integer().notNull().default(0),
+    // Fixes the run did not stage because the requester could not open every
+    // matter its reference text came from, so the panel can say why.
+    fixesWithheld: p.integer("fixes_withheld").notNull().default(0),
     requestedBy: p
       .text("requested_by")
       .references(() => user.id, { onDelete: "set null" }),
@@ -215,6 +242,13 @@ export const documentReviewRuns = p.pgTable(
     ),
     p
       .foreignKey({
+        columns: [table.entityId, table.workspaceId],
+        foreignColumns: [entities.id, entities.workspaceId],
+        name: "document_review_runs_entity_workspace_fk",
+      })
+      .onDelete("cascade"),
+    p
+      .foreignKey({
         columns: [table.workspaceId, table.organizationId],
         foreignColumns: [workspaces.id, workspaces.organizationId],
         name: "document_review_runs_workspace_organization_fk",
@@ -223,7 +257,13 @@ export const documentReviewRuns = p.pgTable(
     // Both scopes in every command: the run row carries an organization
     // discriminator, so a valid workspace pin must not authorize a row whose
     // organization_id came from anywhere else.
-    ...wsOrganizationPolicies("document_review_runs"),
+    // The target key carries cascade only: run visibility follows the workspace.
+    ...wsOrganizationPolicies("document_review_runs", {
+      columns: table,
+      references: new Map([
+        [table.entityId, { target: "entities", kind: "context" }],
+      ]),
+    }),
   ],
 );
 
@@ -357,7 +397,70 @@ export const documentReviewFindings = p.pgTable(
         name: "document_review_findings_workspace_organization_fk",
       })
       .onDelete("cascade"),
-    ...wsOrganizationPolicies("document_review_findings"),
+    ...wsOrganizationPolicies("document_review_findings", { columns: table }),
+  ],
+);
+
+/** Immutable reviewer decisions. The finding row remains the current-state
+ * projection; these rows preserve every transition, including reopening. */
+export const documentReviewFindingDecisions = p.pgTable(
+  "document_review_finding_decisions",
+  {
+    id: pUuid<"documentReviewFindingDecision">().primaryKey(),
+    workspaceId: safeWorkspaceId("workspace_id").notNull(),
+    findingId: safeUuid<"documentReviewFinding">("finding_id").notNull(),
+    decision: p.text("decision").$type<ReviewDecision | null>(),
+    reason: p.text("reason"),
+    actorId: p
+      .text("actor_id")
+      .references(() => user.id, { onDelete: "set null" }),
+    createdAt: timestamptz("created_at")
+      .notNull()
+      .default(sql`clock_timestamp()`),
+  },
+  (table) => [
+    // Named here: the derived name is longer than Postgres keeps.
+    p
+      .foreignKey({
+        name: "document_review_finding_decisions_finding_fk",
+        columns: [table.findingId],
+        foreignColumns: [documentReviewFindings.id],
+      })
+      .onDelete("cascade"),
+    p
+      .index("document_review_finding_decisions_finding_created_idx")
+      .on(table.findingId, table.createdAt),
+    p.check(
+      "document_review_finding_decisions_decision_check",
+      sql`${table.decision} IS NULL OR ${table.decision} IN (${REVIEW_DECISION_SQL_VALUES})`,
+    ),
+    p.check(
+      "document_review_finding_decisions_reason_length_check",
+      sql`${table.reason} IS NULL OR char_length(${table.reason}) <= ${sql.raw(String(DOCUMENT_REVIEW_DECISION_REASON_MAX))}`,
+    ),
+    p.pgPolicy("document_review_finding_decisions_workspace_select", {
+      for: "select",
+      to: stella,
+      using: workspaceCheck,
+    }),
+    p.pgPolicy("document_review_finding_decisions_workspace_insert", {
+      for: "insert",
+      to: stella,
+      // The foreign key checks only the finding's id: the finding must also
+      // be in the event's workspace, or one workspace could write another's
+      // history. Outer columns are named by table, since both have them.
+      withCheck: sql`(${workspaceCheck}) AND EXISTS (
+        SELECT 1 FROM public.document_review_findings decided_finding
+        WHERE decided_finding.id = document_review_finding_decisions.finding_id
+          AND decided_finding.workspace_id = document_review_finding_decisions.workspace_id
+      )`,
+    }),
+    p.pgPolicy("document_review_finding_decisions_owner_access", {
+      for: "all",
+      to: "public",
+      using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.document_review_finding_decisions'::regclass)`,
+      withCheck: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.document_review_finding_decisions'::regclass)`,
+    }),
   ],
 );
 
@@ -372,6 +475,8 @@ export const documentReviewFindings = p.pgTable(
 export const documentReviewParties = p.pgTable(
   "document_review_parties",
   {
+    ...entityFeatureGateColumns(),
+    ...entityFeatureWorkspaceGateColumns(),
     id: pUuid<"documentReviewParty">().primaryKey(),
     organizationId: safeOrganizationId("organization_id")
       .notNull()
@@ -390,6 +495,7 @@ export const documentReviewParties = p.pgTable(
     createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [
+    ...entityFeatureGateChecks(table),
     p
       .uniqueIndex("document_review_parties_entity_version_uidx")
       .on(table.entityVersionId),
@@ -407,7 +513,19 @@ export const documentReviewParties = p.pgTable(
         name: "document_review_parties_workspace_organization_fk",
       })
       .onDelete("cascade"),
-    ...wsOrganizationPolicies("document_review_parties"),
+    ...wsOrganizationPolicies("document_review_parties", {
+      columns: table,
+      references: new Map([
+        [
+          table.entityVersionId,
+          { target: "entity_versions", kind: "owned-content" },
+        ],
+        [table.entityId, { target: "entities", kind: "owned-content" }],
+      ]),
+    }),
+    p
+      .index("document_review_parties_ef_entity_id_idx")
+      .on(table.workspaceId, table.entityId),
   ],
 );
 
@@ -425,6 +543,7 @@ export const documentReviewParties = p.pgTable(
 export const documentReviewReferencePassages = p.pgTable(
   "document_review_reference_passages",
   {
+    ...entityFeatureGateColumns(),
     id: pUuid<"documentReviewReferencePassage">().primaryKey(),
     // Both scope FKs are named by hand: the generated names run past
     // Postgres's 63-byte identifier limit and would be silently truncated.
@@ -442,6 +561,7 @@ export const documentReviewReferencePassages = p.pgTable(
     createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [
+    ...entityFeatureGateChecks(table),
     p
       .uniqueIndex("document_review_reference_passages_version_block_uidx")
       .on(table.entityVersionId, table.blockId),
@@ -473,6 +593,14 @@ export const documentReviewReferencePassages = p.pgTable(
         name: "document_review_reference_passages_workspace_organization_fk",
       })
       .onDelete("cascade"),
-    ...wsOrganizationPolicies("document_review_reference_passages"),
+    ...wsOrganizationPolicies("document_review_reference_passages", {
+      columns: table,
+      references: new Map([
+        [table.entityId, { target: "entities", kind: "owned-content" }],
+      ]),
+    }),
+    p
+      .index("document_review_reference_passages_ef_entity_id_idx")
+      .on(table.workspaceId, table.entityId),
   ],
 );

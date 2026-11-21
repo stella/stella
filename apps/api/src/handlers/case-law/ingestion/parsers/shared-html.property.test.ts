@@ -1,7 +1,9 @@
 import { expect, test } from "bun:test";
-import * as cheerio from "cheerio";
 import fc from "fast-check";
 
+import { load } from "@stll/html";
+import type * as cheerio from "@stll/html";
+import type { AnyNode } from "@stll/html/nodes";
 import { assertProperty } from "@stll/property-testing";
 
 import {
@@ -20,13 +22,57 @@ test("HTML text excludes scripts and styles at every nesting depth", () => {
       for (let i = 0; i < depth; i++) {
         html = `<div>${html}</div>`;
       }
-      const $ = cheerio.load(html);
+      const $ = load(html);
       const original = $.html();
       expect(visibleHtmlText($("body"))).toBe("VisibleTail");
       expect(inlinesToPlainText(walkInlines($, $("body")))).toBe("VisibleTail");
       expect($.html()).toBe(original);
     }),
     { numRuns: 20 },
+  );
+});
+
+/** Markup mixing text, comments, CDATA, scripts and styles at any depth. */
+const htmlTree: fc.Arbitrary<string> = fc.letrec<{ node: string }>((tie) => ({
+  node: fc.oneof(
+    { maxDepth: 4, depthSize: "small" },
+    fc.constantFrom("a", "č ", " ", "\n", "&amp;", "x<br>y"),
+    fc.constant("<!-- note -->"),
+    fc.constant("<![CDATA[cdata]]>"),
+    fc
+      .tuple(
+        fc.constantFrom("div", "p", "span", "td", "script", "style", "svg"),
+        fc.array(tie("node"), { maxLength: 4 }),
+      )
+      .map(([tag, children]) => `<${tag}>${children.join("")}</${tag}>`),
+  ),
+})).node;
+
+test("HTML text reads exactly what clone-and-remove reads", () => {
+  // The reading before the walk replaced it: a clone with every script and
+  // style removed. The walk must agree with it on every tree, including the
+  // root being a script or style itself.
+  const cloneAndRemove = (el: cheerio.Cheerio<AnyNode>): string => {
+    const copy = el.clone();
+    copy.find("script, style").remove();
+    return copy.not("script, style").text();
+  };
+  assertProperty(
+    "HTML text reads exactly what clone-and-remove reads",
+    fc.property(fc.array(htmlTree, { maxLength: 5 }), (nodes) => {
+      const $ = load(`<body>${nodes.join("")}</body>`);
+      const original = $.html();
+      for (const selection of [
+        $("body"),
+        $("body").children(),
+        $("body *"),
+        $.root(),
+      ]) {
+        expect(visibleHtmlText(selection)).toBe(cloneAndRemove(selection));
+      }
+      expect($.html()).toBe(original);
+    }),
+    { numRuns: 200 },
   );
 });
 
@@ -41,7 +87,7 @@ test("Table rows retain nested cell text exactly once", () => {
         for (let i = 0; i < depth; i++) {
           html = `<table><${section}><tr><td>Outer${html}Tail</td></tr></${section}></table>`;
         }
-        const $ = cheerio.load(html);
+        const $ = load(html);
         const rows = ownTableRows($("table").first());
         expect(rows.length).toBe(1);
         const text = rows

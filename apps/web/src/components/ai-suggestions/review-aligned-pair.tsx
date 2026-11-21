@@ -12,7 +12,7 @@ import type { ParameterDelta } from "@/components/ai-suggestions/review-term-row
 const SIDE_BY_SIDE_GRID_CLASS =
   "@min-[40rem]/review-pair:grid-cols-2 @min-[40rem]/review-pair:gap-x-6";
 
-export type ReviewAlignedPairSide = {
+type ReviewAlignedPairSide = {
   label: string;
   passages: readonly DeltaCitation[];
   /** What the side says when it quotes nothing. A standard whose passages

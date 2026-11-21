@@ -1,7 +1,9 @@
-import { useFormatter, useTranslations } from "use-intl";
+import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 import { ChevronDownIcon, ChevronUpIcon } from "@stll/ui/icons";
+
+import { useFormatter } from "@/i18n/formatting-context";
 
 type SearchMatchControlsProps = {
   activeIndex: number;
@@ -35,6 +37,7 @@ export const SearchMatchControls = ({
       <Button
         aria-label={t("common.previousMatch")}
         disabled={!hasMatches}
+        disabledReason={t("workspaces.filters.noMatches")}
         onClick={onPrevious}
         size="icon-xs"
         title={t("common.previousMatch")}
@@ -45,6 +48,7 @@ export const SearchMatchControls = ({
       <Button
         aria-label={t("common.nextMatch")}
         disabled={!hasMatches}
+        disabledReason={t("workspaces.filters.noMatches")}
         onClick={onNext}
         size="icon-xs"
         title={t("common.nextMatch")}

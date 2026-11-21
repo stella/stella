@@ -7,6 +7,7 @@
     "paths": {
       "@stll/ai-catalog": ["../../packages/ai-catalog/src/index.ts"],
       "@stll/boe": ["../../packages/boe/src/index.ts"],
+      "@stll/brand": ["../../packages/brand/src/index.ts"],
       "@stll/business-registries": [
         "../../packages/business-registries/src/index.ts"
       ],
@@ -29,12 +30,11 @@
       "@stll/template-packs/schema": [
         "../../packages/template-packs/src/schema.ts"
       ],
-      "@stll/time": ["../../packages/time/src/index.ts"],
       "@/api/*": ["./src/*"]
     },
     "jsx": "react-jsx",
     "types": ["bun-types"]
   },
   "include": ["src", "drizzle.config.ts", "../../types"],
-  "exclude": ["src/mcp/apps"]
+  "exclude": ["src/handlers/visual-sandbox/browser"]
 }

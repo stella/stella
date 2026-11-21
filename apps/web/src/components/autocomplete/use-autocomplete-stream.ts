@@ -18,6 +18,7 @@ import { getAnalytics } from "@/lib/analytics/provider";
 import { apiUrl } from "@/lib/api-url";
 import { detached } from "@/lib/detached";
 import { readSSEEvents } from "@/lib/sse-events";
+import { createUuid } from "@/lib/uuid";
 
 import { runAutocompleteRequest } from "./use-autocomplete-stream.logic";
 
@@ -182,7 +183,7 @@ export const useAutocompleteStream = (
       cancelInflight();
       const controller = new AbortController();
       inflight = controller;
-      const requestId = crypto.randomUUID();
+      const requestId = createUuid();
 
       // Settles every outcome itself (it never rejects), so the in-flight
       // slot is released right after it.
@@ -224,7 +225,15 @@ export const useAutocompleteStream = (
           dispatchSafe(clearAutocompleteSuggestion(view.state.tr));
         },
         reportError: (error) => {
-          getAnalytics().captureError(error);
+          getAnalytics().captureError(error, {
+            fingerprintKey:
+              "useAutocompleteStream.fireRequest.reportError:failure",
+            scope: {
+              type: "request",
+              method: "POST",
+              routeTemplate: "/v1/ai-autocomplete/stream",
+            },
+          });
         },
       });
       if (inflight === controller) {

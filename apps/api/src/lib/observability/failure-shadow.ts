@@ -1,7 +1,7 @@
 /**
  * Shadow grading: the owner's grade, attached to the failure records the
- * existing sinks already emit, without changing what they emit or at which
- * severity.
+ * existing sinks already emit. Log severity remains pinned, while capture
+ * follows the grade so anticipated outcomes never become exceptions.
  *
  * Every site that observes a failure today decided its own channel (capture,
  * a WARN, an ERROR, or both). Before any of those decisions moves to the
@@ -11,12 +11,13 @@
  * is the failure rate rather than the admitted rate.
  *
  * Removal condition: the aggregate is deleted once no sink carries a legacy
- * output pin.
+ * output pin. The window stays: it also ends the release failure counts
+ * (`release-failures.ts`), which every observation here feeds.
  */
 
 import { panic, Result, UnhandledException } from "better-result";
 
-import { failureGradeOf } from "@stll/errors";
+import type { FailureGrade } from "@stll/errors";
 
 import { errorTag } from "@/api/lib/errors/error-tag";
 import type {
@@ -31,7 +32,15 @@ import {
   gradeFailure,
 } from "@/api/lib/observability/failure";
 import { readEvidence } from "@/api/lib/observability/failure-evidence";
+import { failureOutputPolicy } from "@/api/lib/observability/failure-output-policy";
 import { logger } from "@/api/lib/observability/logger";
+import type { ReleaseFailureIdentity } from "@/api/lib/observability/release-failures";
+import {
+  countReleaseFailure,
+  flushReleaseFailures,
+  releaseFailureIdentity,
+  resetReleaseFailuresForTesting,
+} from "@/api/lib/observability/release-failures";
 import { recordRequestFailure } from "@/api/lib/observability/request-context";
 import { emitFailureMetric } from "@/api/lib/observability/request-metrics";
 
@@ -72,7 +81,6 @@ export const SHADOW_SINKS = {
   capture: failureSink({ event: "exception.captured", expected: [] }),
   handler: failureSink({ event: "request.handler_failed", expected: [] }),
   framework: failureSink({ event: "request.framework_failed", expected: [] }),
-  completion: failureSink({ event: "request.completed", expected: [] }),
 } as const satisfies Record<string, FailureSink>;
 
 // --- Emitter failure isolation ------------------------------------------------
@@ -124,8 +132,9 @@ let overflowOccurrences = 0;
 let flushTimer: ReturnType<typeof setTimeout> | undefined;
 
 /**
- * Emit one INFO line per aggregated key and start a new window. The timer
- * calls this at the end of each window; tests call it directly.
+ * Emit one INFO line per aggregated key, send the window's release failure
+ * counts, and start a new window. The timer calls this at the end of each
+ * window; tests call it directly.
  */
 export const flushFailureObservations = (): void => {
   if (flushTimer !== undefined) {
@@ -149,6 +158,7 @@ export const flushFailureObservations = (): void => {
   if (overflow > 0) {
     logger.info("failure.observed_overflow", { occurrences: overflow });
   }
+  flushReleaseFailures();
 };
 
 // A throw inside a timer callback is an uncaught exception, so the scheduled
@@ -165,6 +175,9 @@ type FailureObservationCount = {
   readonly grading: FailureGrading;
   readonly channel: LegacyChannel;
   readonly degradation: FingerprintDegradation | undefined;
+  /** The failed request's route template; the sink names any other failure. */
+  readonly route: string | undefined;
+  readonly identity: ReleaseFailureIdentity;
 };
 
 export const countFailureObservation = ({
@@ -172,7 +185,10 @@ export const countFailureObservation = ({
   grading,
   channel,
   degradation,
+  route,
+  identity,
 }: FailureObservationCount): void => {
+  countReleaseFailure({ handler: route ?? sink.event, identity, grading });
   const entry = {
     sink: sink.event,
     grade: grading.grade,
@@ -209,6 +225,7 @@ export const resetFailureObservationsForTesting = (): void => {
   }
   aggregate.clear();
   overflowOccurrences = 0;
+  resetReleaseFailuresForTesting();
 };
 
 // --- Shadow observation -------------------------------------------------------
@@ -216,17 +233,20 @@ export const resetFailureObservationsForTesting = (): void => {
 type ShadowObservation = {
   readonly error: unknown;
   readonly sink: FailureSink;
-  readonly channel: LegacyChannel;
+  /** A function when the grade decides the channel. */
+  readonly channel:
+    LegacyChannel | ((grading: FailureGrading) => LegacyChannel);
   readonly request?: Request | undefined;
+  /** The matched route template, when the sink knows it. */
+  readonly route?: string | undefined;
   readonly requestState?: FailureRequestState | undefined;
 };
 
 const recordRequestObservation = (
-  request: Request,
   sink: FailureSink,
   grading: FailureGrading,
 ): void => {
-  recordRequestFailure(request, {
+  recordRequestFailure({
     grade: grading.grade,
     reason: grading.reason,
     sink: sink.event,
@@ -248,6 +268,7 @@ export const observeShadow = ({
   sink,
   channel,
   request,
+  route,
   requestState,
 }: ShadowObservation): FailureGrading | undefined => {
   const observed = Result.try(() => {
@@ -259,11 +280,13 @@ export const observeShadow = ({
     countFailureObservation({
       sink,
       grading,
-      channel,
+      channel: typeof channel === "function" ? channel(grading) : channel,
       degradation: fingerprintDegradation(evidence),
+      route,
+      identity: releaseFailureIdentity(evidence),
     });
     if (request !== undefined) {
-      recordRequestObservation(request, sink, grading);
+      recordRequestObservation(sink, grading);
     }
     return grading;
   });
@@ -274,23 +297,20 @@ export const observeShadow = ({
   return observed.value;
 };
 
-// A 5xx the request answered with no failure observed on the way there.
-const UNOBSERVED_5XX_GRADING: FailureGrading = {
-  grade: failureGradeOf("unobserved_5xx"),
-  reason: "unobserved_5xx",
-  rule: "unobserved",
-  evidenceDepth: 0,
-};
-
-/** Count a 5xx no failure observation accounts for, and grade it. */
-export const observeUnobserved5xx = (): FailureGrading => {
-  countFailureObservation({
-    sink: SHADOW_SINKS.completion,
-    grading: UNOBSERVED_5XX_GRADING,
-    channel: "log_error",
-    degradation: undefined,
-  });
-  return UNOBSERVED_5XX_GRADING;
+/**
+ * The severity of a record answering a failure at `statusCode`. A 5xx takes its
+ * grade's: a dependency graded transient logs at WARN and is alarmed on its
+ * sustained rate from the failure metric, so a single blip pages no one and an
+ * outage still does. A 5xx with no grade is reported as a fault.
+ */
+export const answeredFailureSeverity = (
+  statusCode: number,
+  grade: FailureGrade | undefined,
+): "ERROR" | "WARN" => {
+  if (statusCode < 500) {
+    return "WARN";
+  }
+  return grade === undefined ? "ERROR" : failureOutputPolicy(grade).severity;
 };
 
 /** The fields a shadow-graded record carries. */

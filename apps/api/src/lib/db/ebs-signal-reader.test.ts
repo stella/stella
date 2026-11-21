@@ -16,10 +16,10 @@ import { EbsBalanceReadError } from "./ebs-balance-reader";
 import {
   createEbsReaderCache,
   createEbsSignalReader,
+  type EbsConfigurationEvent,
   EbsConfigurationMissingError,
   requireEbsConfiguration,
   resolveEbsConfiguration,
-  type EbsConfigurationEvent,
 } from "./ebs-signal-reader";
 
 const now = Temporal.Instant.from("2026-10-01T12:00:00Z").epochMilliseconds;
@@ -123,17 +123,20 @@ for (const row of rows) {
       const signal = await read();
       expect(signal.kind).toBe(row.kind);
       const verdict = combine([signal]);
-      const start = decideStart(verdict, "index_build");
+      const start = decideStart(verdict, "index_build", defaultConfig);
       expect(start.decision).toBe(row.decision);
       const batch = nextBatch({
         state: initialBatchState(),
         verdict,
         lastDurationMs: null,
+        config: defaultConfig,
         clock,
       });
       expect(batch.action).toBe(row.action);
       const serialized = JSON.stringify(start);
-      expect(JSON.parse(serialized).verdict.signals).toEqual([signal]);
+      const reparsed: { verdict: { signals: unknown } } =
+        JSON.parse(serialized);
+      expect(reparsed.verdict.signals).toEqual([signal]);
       expect(start.config.startFloor).toBe(defaultConfig.startFloor);
       expect(batch.verdict.signals).toEqual([signal]);
     }
@@ -170,7 +173,9 @@ test("an enabled metric factory failure still produces an unknown blocking signa
   });
   const signal = await read();
   expect(signal.kind).toBe("unknown");
-  expect(decideStart(combine([signal]), "index_build").decision).toBe("wait");
+  expect(
+    decideStart(combine([signal]), "index_build", defaultConfig).decision,
+  ).toBe("wait");
 });
 
 test("opt-out environment accepts only the explicit disabled value", () => {
@@ -213,7 +218,9 @@ test("an adapter Err remains an unknown blocking signal", async () => {
   });
   const signal = await read();
   expect(signal.kind).toBe("unknown");
-  expect(decideStart(combine([signal]), "index_build").decision).toBe("wait");
+  expect(
+    decideStart(combine([signal]), "index_build", defaultConfig).decision,
+  ).toBe("wait");
 });
 
 test("the migrator requirement rejects only a missing configuration", () => {
@@ -371,7 +378,7 @@ test.each(["factory", "reader"] as const)(
     const read = shared({
       instanceIdentifier: "throwing-instance",
       clock: () => instant,
-      timeoutMs: defaultConfig.readTimeoutMs,
+      timeoutMs: defaultConfig.readTimeoutMs, // timeout: production read deadline under a fake clock
       maxStalenessMs: defaultConfig.maxStalenessMs,
     });
     expect((await read()).isErr()).toBe(true);
@@ -457,7 +464,7 @@ test("unknown startup is cached without synthesizing a datapoint and raw reader 
   const options = {
     instanceIdentifier: "startup-instance",
     clock: () => instant,
-    timeoutMs: defaultConfig.readTimeoutMs,
+    timeoutMs: defaultConfig.readTimeoutMs, // timeout: production read deadline under a fake clock
     maxStalenessMs: defaultConfig.maxStalenessMs,
   };
   const initial = shared(options);
@@ -469,7 +476,7 @@ test("unknown startup is cached without synthesizing a datapoint and raw reader 
   expect(requests).toBe(2);
   for (const different of [
     { ...options, instanceIdentifier: "another-instance" },
-    { ...options, timeoutMs: options.timeoutMs + 1 },
+    { ...options, timeoutMs: options.timeoutMs + 1 }, // timeout: configuration identity variant, never awaited
     { ...options, maxStalenessMs: options.maxStalenessMs + 1 },
   ]) {
     expect((await shared(different)()).isErr()).toBe(true);

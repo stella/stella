@@ -2,8 +2,8 @@ import type { QueryClient, QueryKey } from "@tanstack/react-query";
 
 import type { CreateDocumentDraftPersistence } from "@/components/chat/create-document-draft-runtime";
 import {
-  CREATE_DOCUMENT_DRAFT_VIEW,
   bindCreateDocumentDraftChatThread,
+  CREATE_DOCUMENT_DRAFT_VIEW,
   createDocumentDraftTabId,
   isCreateDocumentDraftPayload,
   persistCreateDocumentDraftPayload,

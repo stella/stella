@@ -1,0 +1,84 @@
+import { panic, Result } from "better-result";
+
+import { CHAT_TURN_PERMISSIONS } from "@/api/handlers/chat/chat-turn-state";
+import { projectPageRowsOnTx } from "@/api/handlers/chat/message-page";
+import { revisionParams } from "@/api/handlers/chat/messages/revisions/accept";
+import { normalizeRevisionContent } from "@/api/handlers/chat/messages/revisions/normalize-revision-content";
+import { readEditableMessageOnTx } from "@/api/handlers/chat/messages/revisions/read-message";
+import { serializeRevisionSnapshot } from "@/api/handlers/chat/messages/revisions/serialize-revision-snapshot";
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
+import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { readChatCopyProjection } from "@/api/lib/chat/withdrawn-copies";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
+
+const config = {
+  contract: "patch",
+  description:
+    "Read the current chat answer and revision after an edit or selection conflict.",
+  permissions: CHAT_TURN_PERMISSIONS,
+  accountAccess: ACCOUNT_ACCESS.sandbox,
+  access: "read",
+  mcp: { type: "internal", reason: "chat_thread_ui" },
+  params: revisionParams,
+} satisfies HandlerConfig;
+
+export default createSafeRootHandler(
+  config,
+  async function* ({
+    params: { threadId, messageId },
+    safeDb,
+    getWorkspaceAccess,
+    user,
+    session,
+  }) {
+    const message = yield* Result.await(
+      safeDb(async (tx) => {
+        const loaded = await readEditableMessageOnTx({
+          admitted: "active-or-archived",
+          tx,
+          getWorkspaceAccess,
+          threadId,
+          messageId,
+          userId: user.id,
+          organizationId: session.activeOrganizationId,
+        });
+        if (!loaded) {
+          return null;
+        }
+        const { projection, subjectByThread } = await readChatCopyProjection({
+          tx,
+          threadIds: [threadId],
+          values: loaded.message,
+        });
+        const masked = projection.chat(
+          loaded.message,
+          subjectByThread.get(threadId),
+        );
+        const projected = (
+          await projectPageRowsOnTx({
+            tx,
+            rows: [masked],
+            threadId,
+            withdrawal: projection,
+            userId: user.id,
+          })
+        ).at(0);
+        if (!projected) {
+          return panic("Current chat message projection lost its source row");
+        }
+        return {
+          ...projected,
+          content: serializeRevisionSnapshot(
+            normalizeRevisionContent(masked.content).content,
+          ),
+        };
+      }),
+    );
+    if (!message) {
+      return Result.err(
+        new HandlerError({ status: 404, message: "Chat message not found" }),
+      );
+    }
+    return Result.ok(message);
+  },
+);

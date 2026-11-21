@@ -9,10 +9,27 @@ export const LEGISLATION_DOCUMENT_STATUSES = [
   "historical",
   "repealed",
   "draft",
+  "unknown",
 ] as const;
 
 export type LegislationDocumentStatus =
   (typeof LEGISLATION_DOCUMENT_STATUSES)[number];
+
+/**
+ * The statuses that only say whether a version's validity window covers a
+ * day. A stored one reflects the day the version was ingested, so every read
+ * derives them from the stored window and today's date instead; the other
+ * statuses are publisher statements and are read as stored.
+ */
+export const LEGISLATION_WINDOW_STATUSES = [
+  "current",
+  "historical",
+] as const satisfies readonly LegislationDocumentStatus[];
+
+export const isLegislationWindowStatus = (
+  value: string,
+): value is (typeof LEGISLATION_WINDOW_STATUSES)[number] =>
+  LEGISLATION_WINDOW_STATUSES.some((status) => status === value);
 
 export const isLegislationDocumentStatus = (
   value: unknown,

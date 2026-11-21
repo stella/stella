@@ -10,14 +10,42 @@ type Messages = {
     "ignore": "If you didn't expect this invitation, you can safely ignore this email.";
     "subject": "You're invited to join {organizationName}";
   };
+  "invoiceLink": {
+    "action": "{documentType, select, credit_note {View credit note} advance {View advance invoice} other {View invoice}}";
+    "amountDue": "Amount due: {amount}";
+    "body": "{firmName} sent you {documentType, select, credit_note {a credit note} advance {an advance invoice} other {an invoice}}. Open it to see the details and download the PDF.";
+    "dueDate": "Due date: {date}";
+    "expires": "The link is valid until {date}.";
+    "heading": "{documentType, select, credit_note {Credit note} advance {Advance invoice} other {Invoice}} {invoiceNumber}";
+    "ignore": "stella delivered this email on behalf of {firmName}. If you did not expect it, you can ignore it.";
+    "messageFrom": "Message from {firmName}";
+    "preview": "{firmName} sent you {documentType, select, credit_note {credit note} advance {advance invoice} other {invoice}} {invoiceNumber}";
+    "reply": "Reply to this email to contact {firmName}.";
+    "subject": "{documentType, select, credit_note {Credit note} advance {Advance invoice} other {Invoice}} {invoiceNumber} from {firmName}";
+  };
   "newDeviceLogin": {
-    "action": "Review sessions";
-    "body": "Your account was signed in to from a new device or location.";
+    "action": "Review signed-in devices";
+    "actionNote": "The button opens Settings › Security at this sign-in.";
+    "body": "Someone just signed in to your account from a new device or location.";
     "device": "Device";
-    "heading": "New sign-in detected";
-    "ignore": "If this was you, no action is needed. If you don't recognize this activity, review your active sessions and revoke any you don't recognize.";
+    "deviceName": {
+      "browserOnOs": "{browser} on {os}";
+      "unknown": "Unknown device";
+    };
+    "heading": "New sign-in to your account";
+    "ignore": "If this was you, you don't need to do anything. If you don't recognize this sign-in, sign this device out.";
     "ipAddress": "IP address";
+    "ipAddressUnknown": "Unknown";
+    "location": "Location";
+    "mapAlt": "Map showing the approximate sign-in location: {location}";
+    "place": {
+      "cityCountry": "{city}, {country}";
+      "cityRegionCountry": "{city}, {region}, {country}";
+      "regionCountry": "{region}, {country}";
+    };
+    "placeApproximate": "{place} (approximate)";
     "preview": "New sign-in from {device}";
+    "previewUnknownDevice": "New sign-in from an unknown device";
     "subject": "New sign-in to your stella account";
     "time": "Time";
   };
@@ -33,6 +61,15 @@ type Messages = {
     "signIn": "Use this code to sign in to your stella account.";
     "subject": "Your stella verification code";
     "twoFactorManage": "Use this code to confirm changes to your two-factor authentication settings.";
+  };
+  "pushAlert": {
+    "announcement": "Your organization posted an announcement";
+    "flowRunAwaitingApproval": "A workflow is waiting for your approval";
+    "flowRunCompleted": "A workflow finished";
+    "flowRunFailed": "A workflow failed";
+    "localRunLimitReset": "The coding agent on your computer can continue your chat";
+    "mention": "You were mentioned in a comment";
+    "taskAssigned": "A task was assigned to you";
   };
   "reportExportStatus": {
     "action": "Open stella";

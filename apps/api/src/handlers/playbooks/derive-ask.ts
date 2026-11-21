@@ -1,7 +1,10 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import * as v from "valibot";
 
-import type { PropertyContent } from "@/api/db/schema-validators";
+import { chunk as chunkItems } from "@stll/concurrency/chunk";
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
+
+import type { ScalarPropertyContent } from "@/api/db/schema-validators";
 import { resolveCaching } from "@/api/lib/ai-config";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
@@ -10,66 +13,68 @@ import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import { logger } from "@/api/lib/observability/logger";
-import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
+import type { ModelActionAdmitter } from "@/api/lib/rate-limit/model-action-admission";
+import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
+import { generateTanStackObjectForTask } from "@/api/lib/tanstack-ai-generate";
 import type {
   PlaybookPositions,
   Position,
 } from "@/api/lib/workflow/playbook-positions";
-import { isTierStandard } from "@/api/lib/workflow/position-runtime";
+import {
+  canonicalRulesInput,
+  isTierStandard,
+} from "@/api/lib/workflow/position-runtime";
 import type { TierStandardPosition } from "@/api/lib/workflow/position-runtime";
 
 // Auto-ASK derivation (save-time). A graded position with `ask.mode === "auto"`
-// derives its extraction question + content type from the issue and tier rules
-// so run/review consume `derived` exactly like a manual ask. Derivation is
-// gated on a `rulesHash` over the grading inputs: unchanged inputs skip the LLM
-// call and reuse the stored `derived`. Derivation never blocks a save — a failed
-// or timed-out call persists with `derived` absent, and run/review fall back to
-// a generic text ask over the issue.
+// derives its extraction question from the issue and tier rules so run/review
+// consume `derived` exactly like a manual ask. The position's check decides the
+// content type: a tier match reads the clause's wording and a presence check
+// reads whether there is any, so both store text; only a constraint compares a
+// number or date, so only a constraint keeps the type the model chooses.
+// Derivation is gated on a `rulesHash` over the grading inputs: unchanged inputs
+// skip the LLM call and reuse the stored `derived`. Derivation never blocks a
+// save — a failed or timed-out call persists with `derived` absent, and
+// run/review fall back to a generic text ask over the issue.
 
 const DERIVE_ASK_TIMEOUT_MS = 20_000;
 // Bound the per-save fan-out so a first save of a large playbook (up to 200
 // positions) cannot burst an unbounded number of external calls at once.
 const DERIVE_ASK_CONCURRENCY = 4;
 
-// The derive-ask task shares the verdict grading role so both playbook AI paths
+// The derive-ask task shares the verdict grading task so both playbook AI paths
 // resolve to the same model.
-const DERIVE_ASK_ROLE = "pdf" as const;
+const DERIVE_ASK_TASK = "pdf" as const;
 
-const DERIVE_ASK_SYSTEM_PROMPT =
+export const DERIVE_CLAUSE_ASK_SYSTEM_PROMPT =
+  "You turn a contract-review issue and its tiered rules into ONE extraction " +
+  "question. A reviewer will judge the contract against every rule from what the " +
+  "answer draws on, so the question must cover every term the rules cover, naming " +
+  "each term. Never narrow it to a single value. Ask WHAT the contract says, not " +
+  "whether it meets a rule, and do not mention the rules, tiers, or grading. Do " +
+  "not say how long the answer should be or whether to quote: the answer's format " +
+  "is set separately for each document. Ask for nothing to be said about a term " +
+  "the contract does not address, and for no answer at all when the contract does " +
+  "not address the issue. Write the question in " +
+  'the language of the issue, in under 800 characters. Set contentType to "text".';
+
+export const DERIVE_CONSTRAINT_ASK_SYSTEM_PROMPT =
   "You turn a contract-review issue and its tiered rules into ONE extraction " +
   "question for reading a single value from a contract, plus that value's " +
   "content type. Return a concise question that captures WHAT to extract, not " +
   'how to grade it. Choose contentType "date" for a calendar date, "int" ' +
   'for a whole number or monetary amount, otherwise "text".';
 
-const deriveAskSchema = v.strictObject({
+/** Read by the structured-output role contract test. @public */
+export const deriveAskSchema = v.strictObject({
   question: v.pipe(v.string(), v.maxLength(1000)),
   contentType: v.picklist(["text", "date", "int"]),
 });
 
 export type DeriveAskResult = v.InferOutput<typeof deriveAskSchema>;
 
-const contentForType = (
-  contentType: DeriveAskResult["contentType"],
-): PropertyContent => ({ version: 1, type: contentType });
-
-// The canonical grading inputs the derived question depends on, in stored order.
-// Ideal language is deliberately excluded: it drives FIX, not what to extract.
-const canonicalRulesInput = (position: TierStandardPosition) => {
-  const { tiers } = position.standard;
-  return {
-    issue: position.issue,
-    acceptableRuleTexts: tiers.acceptable.rules.map((rule) => rule.text),
-    fallbackTexts: tiers.fallback.entries.map((entry) => entry.text),
-    notAcceptableRuleTexts: tiers.notAcceptable.rules.map((rule) => rule.text),
-    check: position.check ?? null,
-  };
-};
-
 export const computeRulesHash = (position: TierStandardPosition): string =>
-  new Bun.CryptoHasher("sha256")
-    .update(JSON.stringify(canonicalRulesInput(position)))
-    .digest("hex");
+  hashSha256Hex(JSON.stringify(canonicalRulesInput(position)));
 
 const buildDeriveAskUserMessage = (position: TierStandardPosition): string => {
   const { tiers } = position.standard;
@@ -98,6 +103,7 @@ const buildDeriveAskUserMessage = (position: TierStandardPosition): string => {
 // The structured-output call that derives one ask. Injectable so callers (tests)
 // can substitute it without a live model; the default runs the real LLM task.
 export type DeriveAskGenerate = (input: {
+  admission: ModelDispatchAdmission;
   system: string;
   prompt: string;
   organizationId: SafeId<"organization">;
@@ -108,8 +114,10 @@ export type DeriveAskGenerate = (input: {
 
 // Not destructured in the parameter: the ownership-id lint rule needs the
 // branded type visible on the binding, which the aliased object type hides.
-const defaultDeriveAskGenerate: DeriveAskGenerate = async (input) => {
+/** Wrapped by the playbook clause eval to compare question prompts. @public */
+export const defaultDeriveAskGenerate: DeriveAskGenerate = async (input) => {
   const {
+    admission,
     system,
     prompt,
     organizationId,
@@ -120,33 +128,36 @@ const defaultDeriveAskGenerate: DeriveAskGenerate = async (input) => {
   const aiAnalytics = createTanStackAIAnalyticsCallbacks({
     dataClass: "customer",
     feature: "playbook.derive-ask",
-    modelRole: DERIVE_ASK_ROLE,
+    modelTask: DERIVE_ASK_TASK,
     organizationId,
     orgAIConfig,
+    modelTier: admission.modelTier,
     properties: { organization_id: organizationId },
     traceId: Bun.randomUUIDv7(),
   });
 
   try {
-    return await generateTanStackObjectForRole({
+    return await generateTanStackObjectForTask({
+      userId: admission.userId,
       dataClass: "customer",
-      role: DERIVE_ASK_ROLE,
+      task: DERIVE_ASK_TASK,
       orgAIConfig,
       managedAIResidency,
       organizationId,
+      admission,
       // DeriveAskGenerate carries no workspace id; playbook grading runs at
       // organization scope.
       tenantWorkspaceIds: [],
       analytics: aiAnalytics,
       caching: resolveCaching({
         promptCachingEnabled,
-        role: DERIVE_ASK_ROLE,
+        task: DERIVE_ASK_TASK,
         scopeKey: null,
       }),
       serviceTier: "standard",
       system,
       prompt,
-      abortSignal: AbortSignal.timeout(DERIVE_ASK_TIMEOUT_MS),
+      deadlineMs: DERIVE_ASK_TIMEOUT_MS,
       outputSchema: deriveAskSchema,
     });
   } catch (error) {
@@ -158,11 +169,13 @@ const defaultDeriveAskGenerate: DeriveAskGenerate = async (input) => {
 };
 
 export type DeriveAutoAsksDeps = {
+  /** Admits the derivations of one save as one action, only when any runs. */
+  admitModelAction: ModelActionAdmitter;
   organizationId: SafeId<"organization">;
   orgAIConfig: OrgAIConfig | null;
-  managedAIResidency: ManagedAIResidency;
+  managedAIResidency: ManagedAIResidency | null;
   orgAIConfigStatus: OrgAIConfigStatus;
-  promptCachingEnabled: boolean;
+  promptCachingEnabled: boolean | null;
   // Test seam; defaults to the real structured-output call.
   generate?: DeriveAskGenerate;
 };
@@ -179,22 +192,71 @@ const needsDerivation = (
   return position.ask.derived?.rulesHash !== rulesHash;
 };
 
-const deriveOne = async (
+type DerivedAsk = { question: string; content: ScalarPropertyContent };
+
+const deriveAskForCheck = async (
   position: TierStandardPosition,
-  rulesHash: string,
-  deps: DeriveAutoAsksDeps,
+  input: Omit<Parameters<DeriveAskGenerate>[0], "system" | "prompt">,
   generate: DeriveAskGenerate,
-): Promise<Position> => {
+): Promise<DerivedAsk> => {
+  const prompt = buildDeriveAskUserMessage(position);
+  const kind = position.check?.kind;
+  switch (kind) {
+    case undefined:
+    case "presence": {
+      // The model must return a contentType, but this check always reads text.
+      const { question } = await generate({
+        ...input,
+        system: DERIVE_CLAUSE_ASK_SYSTEM_PROMPT,
+        prompt,
+      });
+      return { question, content: { version: 1, type: "text" } };
+    }
+    case "constraint": {
+      const { question, contentType } = await generate({
+        ...input,
+        system: DERIVE_CONSTRAINT_ASK_SYSTEM_PROMPT,
+        prompt,
+      });
+      return { question, content: { version: 1, type: contentType } };
+    }
+    default:
+      kind satisfies never;
+      return panic(`Unhandled position check: ${String(kind)}`);
+  }
+};
+
+type DeriveOneOptions = {
+  admission: ModelDispatchAdmission;
+  deps: DeriveAutoAsksDeps & {
+    managedAIResidency: ManagedAIResidency;
+    promptCachingEnabled: boolean;
+  };
+  generate: DeriveAskGenerate;
+  position: TierStandardPosition;
+  rulesHash: string;
+};
+
+const deriveOne = async ({
+  admission,
+  deps,
+  generate,
+  position,
+  rulesHash,
+}: DeriveOneOptions): Promise<Position> => {
   const derived = await Result.tryPromise({
     try: async () =>
-      await generate({
-        system: DERIVE_ASK_SYSTEM_PROMPT,
-        prompt: buildDeriveAskUserMessage(position),
-        organizationId: deps.organizationId,
-        orgAIConfig: deps.orgAIConfig,
-        managedAIResidency: deps.managedAIResidency,
-        promptCachingEnabled: deps.promptCachingEnabled,
-      }),
+      await deriveAskForCheck(
+        position,
+        {
+          admission,
+          organizationId: deps.organizationId,
+          orgAIConfig: deps.orgAIConfig,
+          managedAIResidency: deps.managedAIResidency,
+          promptCachingEnabled: deps.promptCachingEnabled,
+        },
+        generate,
+      ),
     catch: (error) => error,
   });
 
@@ -212,11 +274,7 @@ const deriveOne = async (
     ...position,
     ask: {
       mode: "auto",
-      derived: {
-        question: derived.value.question,
-        content: contentForType(derived.value.contentType),
-        rulesHash,
-      },
+      derived: { ...derived.value, rulesHash },
     },
   };
 };
@@ -259,7 +317,11 @@ export const deriveAutoAsks = async (
   // be metered there. Make no call instead, and persist as a failed derivation
   // does (`derived` absent, dropping any stale value), so the save is kept and
   // the next one derives once the config is usable.
-  if (deps.orgAIConfigStatus !== ORG_AI_CONFIG_STATUS.ok) {
+  if (
+    deps.orgAIConfigStatus !== ORG_AI_CONFIG_STATUS.ok ||
+    deps.managedAIResidency === null ||
+    deps.promptCachingEnabled === null
+  ) {
     logger.warn("Playbook auto-ASK derivation skipped: AI config unusable", {
       organization_id: deps.organizationId,
       feature: "playbook.derive-ask",
@@ -271,20 +333,39 @@ export const deriveAutoAsks = async (
     return { version: 3, items };
   }
 
-  for (
-    let cursor = 0;
-    cursor < pending.length;
-    cursor += DERIVE_ASK_CONCURRENCY
-  ) {
-    const chunk = pending.slice(cursor, cursor + DERIVE_ASK_CONCURRENCY);
-    const derived = await Promise.all(
-      chunk.map(async ({ index, position, hash }) => ({
-        index,
-        position: await deriveOne(position, hash, deps, generate),
-      })),
-    );
-    for (const { index, position } of derived) {
-      items[index] = position;
+  const readyDeps = {
+    ...deps,
+    managedAIResidency: deps.managedAIResidency,
+    promptCachingEnabled: deps.promptCachingEnabled,
+  };
+  const admitted = await deps.admitModelAction(async ({ admission }) => {
+    for (const chunk of chunkItems(pending, DERIVE_ASK_CONCURRENCY)) {
+      const derived = await Promise.all(
+        chunk.map(async ({ index, position, hash }) => ({
+          index,
+          position: await deriveOne({
+            admission,
+            deps: readyDeps,
+            generate,
+            position,
+            rulesHash: hash,
+          }),
+        })),
+      );
+      for (const { index, position } of derived) {
+        items[index] = position;
+      }
+    }
+  });
+  if (Result.isError(admitted)) {
+    // A refused action is a skipped derivation: the save keeps its positions
+    // with `derived` absent, like a failed call.
+    logger.warn("Playbook auto-ASK derivation not admitted", {
+      organization_id: deps.organizationId,
+      feature: "playbook.derive-ask",
+    });
+    for (const { index, position } of pending) {
+      items[index] = { ...position, ask: { mode: "auto" } };
     }
   }
 

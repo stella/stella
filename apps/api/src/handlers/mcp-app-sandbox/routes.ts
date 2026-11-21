@@ -1,17 +1,15 @@
-import type { Context } from "elysia";
-
 import {
   MCP_APP_FRAME_TITLE_HASH_PARAM,
   MCP_APP_FRAME_TITLE_MAX_CHARS,
   MCP_APP_SANDBOX_PATH,
 } from "@stll/api-contract";
+import { MCP_APP_SANDBOX_CONTENT_DIRECTIVES } from "@stll/api-contract/mcp-app-sandbox-policy";
 
 import { env } from "@/api/env";
+import { routes } from "@/api/http/route";
 import { frontendOrigins } from "@/api/lib/dev-origins";
-import {
-  CACHE_CONTROL_HEADER,
-  PRIVATE_CACHE_CONTROL,
-} from "@/api/lib/security-headers";
+import { defineEndpoint } from "@/api/lib/endpoints";
+import { EMBEDDABLE_FRAME_HEADERS } from "@/api/lib/security-headers";
 import { runtimeMode } from "@/api/runtime-mode";
 
 const allowedHostOrigins = frontendOrigins({
@@ -104,45 +102,29 @@ export const MCP_APP_SANDBOX_DOCUMENT = `<!doctype html>
 </html>`;
 
 const SANDBOX_CONTENT_SECURITY_POLICY = [
-  "default-src 'none'",
-  "script-src 'unsafe-inline'",
-  "style-src 'unsafe-inline'",
-  "img-src data: blob:",
-  "media-src data: blob:",
-  "font-src data:",
-  "connect-src 'none'",
-  "frame-src 'self'",
-  "object-src 'none'",
-  "base-uri 'none'",
-  "form-action 'none'",
+  ...MCP_APP_SANDBOX_CONTENT_DIRECTIVES,
   `frame-ancestors ${frameAncestors}`,
 ].join("; ");
 
-const clearInheritedFrameDenial = (set: Context["set"]): void => {
-  // The API defaults every response to DENY / frame-ancestors 'none'. This
-  // route replaces that policy with the exact frontend allowlist below.
-  delete set.headers["X-Frame-Options"];
-  delete set.headers["Content-Security-Policy"];
-};
+/**
+ * The sandbox document, framed by the web app only. Its own policy names the
+ * exact frontend `frame-ancestors`, which replaces the API's frame denial.
+ */
+const mcpAppSandboxDocument = defineEndpoint.public(
+  {},
+  () =>
+    new Response(MCP_APP_SANDBOX_DOCUMENT, {
+      headers: {
+        ...EMBEDDABLE_FRAME_HEADERS,
+        "Content-Security-Policy": SANDBOX_CONTENT_SECURITY_POLICY,
+        "Content-Type": "text/html; charset=utf-8",
+        "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
+        "Referrer-Policy": "no-referrer",
+        "X-Content-Type-Options": "nosniff",
+      },
+    }),
+);
 
-export const handleMcpAppSandboxRequest = (
-  request: Request,
-  set: Context["set"],
-): Response | undefined => {
-  const { pathname } = new URL(request.url);
-  if (request.method !== "GET" || pathname !== MCP_APP_SANDBOX_PATH) {
-    return undefined;
-  }
-
-  clearInheritedFrameDenial(set);
-  return new Response(MCP_APP_SANDBOX_DOCUMENT, {
-    headers: {
-      [CACHE_CONTROL_HEADER]: PRIVATE_CACHE_CONTROL,
-      "Content-Security-Policy": SANDBOX_CONTENT_SECURITY_POLICY,
-      "Content-Type": "text/html; charset=utf-8",
-      "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
-      "Referrer-Policy": "no-referrer",
-      "X-Content-Type-Options": "nosniff",
-    },
-  });
-};
+export const mcpAppSandboxRoute = routes({
+  [MCP_APP_SANDBOX_PATH]: { GET: mcpAppSandboxDocument },
+});

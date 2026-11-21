@@ -1,16 +1,21 @@
 import { Result } from "better-result";
 import { and, asc, eq, gt } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
+
+import { numberFromString } from "@stll/api-contract/http-input";
 
 import { legalListItemSources } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
+import { projectListItemSource } from "@/api/lib/auth/feature-access/list-eligibility";
+import { avtViewAccessStatus } from "@/api/lib/auth/feature-access/view-eligibility";
 import {
-  tPaginationCursor,
-  tSafeId,
+  paginationCursorSchema,
+  resourceIdSchema,
   workspaceParams,
 } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { LEGAL_LISTS_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import { LIMITS } from "@/api/lib/limits";
 import {
   createCursorPage,
@@ -22,20 +27,28 @@ import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limit
 import { brandPersistedLegalListItemSourceId } from "@/api/lib/safe-id-boundaries";
 
 const paramsSchema = workspaceParams({
-  listId: tSafeId("legalList"),
-  itemEntityId: tSafeId("entity"),
+  listId: resourceIdSchema("legalList"),
+  itemEntityId: resourceIdSchema("entity"),
 });
-const querySchema = t.Object({
-  limit: t.Optional(
-    t.Integer({ minimum: 1, maximum: LIMITS.legalListSourcesPageSizeMax }),
+const querySchema = v.object({
+  limit: v.optional(
+    numberFromString(
+      v.pipe(
+        v.number(),
+        v.integer(),
+        v.minValue(1),
+        v.maxValue(LIMITS.legalListSourcesPageSizeMax),
+      ),
+    ),
   ),
-  cursor: t.Optional(tPaginationCursor()),
+  cursor: v.optional(paginationCursorSchema()),
 });
 const config = {
+  contract: "patch",
+  featureAccess: { type: "required", featureId: LEGAL_LISTS_FEATURE_ID },
   description:
     "List the sources attached to one list item with cursor pagination, each " +
-    "with the document version it points at, its locator, its quote, and its " +
-    "verification status with who verified it and when.",
+    "with the document version it points at, its locator, and its quote.",
   permissions: { workspace: ["read"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "read",
@@ -51,7 +64,20 @@ const config = {
 
 const readItemSources = createSafeHandler(
   config,
-  async function* ({ safeDb, workspaceId, params, query }) {
+  async function* ({
+    safeDb,
+    workspaceId,
+    params,
+    query,
+    featureAccessSnapshot,
+    session,
+    user,
+  }) {
+    const accessStatus = avtViewAccessStatus({
+      snapshot: featureAccessSnapshot,
+      organizationId: session.activeOrganizationId,
+      userId: user.id,
+    });
     const limit = normalizeTenantPageLimit(
       query.limit ?? LIMITS.legalListSourcesPageSizeDefault,
     );
@@ -114,7 +140,7 @@ const readItemSources = createSafeHandler(
     }
     return Result.ok(
       createCursorPage({
-        rows: result,
+        rows: result.map((row) => projectListItemSource(row, accessStatus)),
         limit,
         cursorForItem: (item) => encodePaginationCursor([item.id]),
       }),

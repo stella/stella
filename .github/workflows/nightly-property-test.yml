@@ -1,9 +1,12 @@
 name: Nightly Property Tests
 
+defaults:
+  run:
+    shell: bash
+
+# Long property runs are on demand only: pull requests, pushes and the merge
+# queue run the correctness gates in ci.yml.
 on:
-  schedule:
-    # 05:17 UTC daily, after the nightly full test suite.
-    - cron: "17 5 * * *"
   workflow_dispatch:
     inputs:
       round:
@@ -13,11 +16,23 @@ on:
 
 permissions: {}
 
+# Long-running property combinations retain cleanup time inside each job.
+env:
+  GIT_CONFIG_COUNT: "3"
+  GIT_CONFIG_KEY_0: maintenance.auto
+  GIT_CONFIG_VALUE_0: "false"
+  GIT_CONFIG_KEY_1: gc.auto
+  GIT_CONFIG_VALUE_1: "0"
+  GIT_CONFIG_KEY_2: gc.autoDetach
+  GIT_CONFIG_VALUE_2: "false"
+  API_TEST_CHILD_TIMEOUT_MS: "1200000"
+  API_TEST_RUNNER_DEADLINE_MS: "2100000"
+
 jobs:
   # The chat-turn combinations' all-triples cover: every combination of the
   # values of any three dimensions, every night, split into SHARDS jobs.
   provider-request-three-wise:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
     permissions:
       contents: read
@@ -34,11 +49,13 @@ jobs:
           submodules: true
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: stella/.github/actions/setup-bun-cached@2664e46f02aea7164ba71bcdd485a686166993a4
         with:
+          save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: "package.json"
 
       - name: Install dependencies
+        timeout-minutes: 5
         run: bash scripts/retry.sh bun ci --ignore-scripts
         env:
           NPM_TOKEN: ""
@@ -47,6 +64,9 @@ jobs:
         run: |
           cd ./apps/api
           cp .env.example .env
+
+      - name: Configure flaky-test quarantine
+        uses: ./.github/actions/flaky-test-quarantine
 
       - name: Provider request all-triples cover
         working-directory: apps/api
@@ -62,7 +82,7 @@ jobs:
   # so every combination runs once every ROUNDS nights; a dispatch can pick
   # a round.
   provider-request-combinations:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
     permissions:
       contents: read
@@ -82,11 +102,13 @@ jobs:
           submodules: true
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: stella/.github/actions/setup-bun-cached@2664e46f02aea7164ba71bcdd485a686166993a4
         with:
+          save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: "package.json"
 
       - name: Install dependencies
+        timeout-minutes: 5
         run: bash scripts/retry.sh bun ci --ignore-scripts
         env:
           NPM_TOKEN: ""
@@ -95,6 +117,9 @@ jobs:
         run: |
           cd ./apps/api
           cp .env.example .env
+
+      - name: Configure flaky-test quarantine
+        uses: ./.github/actions/flaky-test-quarantine
 
       - name: Provider request combinations
         working-directory: apps/api
@@ -115,7 +140,7 @@ jobs:
   # The matrices have three dimensions, so their all-triples cover is every
   # combination: each night runs all of them, a few seconds each.
   turn-outcome-combinations:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
     permissions:
       contents: read
@@ -132,11 +157,13 @@ jobs:
           submodules: true
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: stella/.github/actions/setup-bun-cached@2664e46f02aea7164ba71bcdd485a686166993a4
         with:
+          save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: "package.json"
 
       - name: Install dependencies
+        timeout-minutes: 5
         run: bash scripts/retry.sh bun ci --ignore-scripts
         env:
           NPM_TOKEN: ""
@@ -146,6 +173,9 @@ jobs:
           cd ./apps/api
           cp .env.example .env
 
+      - name: Configure flaky-test quarantine
+        uses: ./.github/actions/flaky-test-quarantine
+
       - name: Turn outcome combinations
         working-directory: apps/api
         run: bun run test src/handlers/chat/turn-outcome.integration.test.ts
@@ -154,7 +184,7 @@ jobs:
           TURN_OUTCOME_SHARD: ${{ matrix.shard }}/4
 
   chat-mutation-matrix:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
     permissions:
       contents: read
@@ -167,11 +197,13 @@ jobs:
           submodules: true
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: stella/.github/actions/setup-bun-cached@2664e46f02aea7164ba71bcdd485a686166993a4
         with:
+          save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: "package.json"
 
       - name: Install dependencies
+        timeout-minutes: 5
         run: bash scripts/retry.sh bun ci --ignore-scripts
         env:
           NPM_TOKEN: ""
@@ -194,6 +226,40 @@ jobs:
           bun apps/api/scripts/chat-mutation-matrix.ts --self-test
           bun apps/api/scripts/chat-mutation-matrix.ts
 
+  # Full-scale compact/cooperative screening parity and randomized
+  # properties. The default test run
+  # covers the same assertions on a bounded fixture.
+  sanctions-properties:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          submodules: true
+
+      - name: Setup Bun
+        uses: stella/.github/actions/setup-bun-cached@2664e46f02aea7164ba71bcdd485a686166993a4
+        with:
+          save: ${{ github.ref == 'refs/heads/main' }}
+          bun-version-file: "package.json"
+
+      - name: Install dependencies
+        timeout-minutes: 5
+        run: bash scripts/retry.sh bun ci --ignore-scripts
+        env:
+          NPM_TOKEN: ""
+
+      - name: Configure flaky-test quarantine
+        uses: ./.github/actions/flaky-test-quarantine
+
+      - name: Sanctions properties
+        run: bun --filter @stll/sanctions test:property
+
   # We follow TanStack AI's future releases. Against the latest published
   # @tanstack/ai* versions, in this throwaway checkout: does each of our
   # patches still apply, or is it already upstream, and do the provider-wire
@@ -202,7 +268,7 @@ jobs:
   # TanStack/ai#1511 (a client tool's final state), which our persistence
   # reads.
   tanstack-drift:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
     continue-on-error: true
     permissions:
@@ -216,11 +282,13 @@ jobs:
           submodules: true
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: stella/.github/actions/setup-bun-cached@2664e46f02aea7164ba71bcdd485a686166993a4
         with:
+          save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: "package.json"
 
       - name: Install pinned dependencies
+        timeout-minutes: 5
         run: bash scripts/retry.sh bun ci --ignore-scripts
         env:
           NPM_TOKEN: ""
@@ -232,11 +300,14 @@ jobs:
       # A latest set that does not install is drift too: the report step
       # still runs and says so.
       - name: Install the latest TanStack AI
+        timeout-minutes: 5
         id: install
         continue-on-error: true
         run: bash scripts/retry.sh bun install --ignore-scripts
         env:
           NPM_TOKEN: ""
+          # A tolerated failure is a warning, not a failure annotation.
+          RETRY_FAILURE_LEVEL: warning
 
       - name: Prepare environment
         run: |

@@ -7,7 +7,10 @@ import type { ScopedDb } from "@/api/db/safe-db";
 import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { DateOfBirth } from "@/api/lib/business-registries/date-of-birth";
-import { BUSINESS_REGISTRY_DISPATCH } from "@/api/lib/business-registries/dispatch";
+import {
+  BUSINESS_REGISTRY_DISPATCH,
+  NO_REGISTRY_WEB_SEARCH,
+} from "@/api/lib/business-registries/dispatch";
 import type { executeRegistryLookup } from "@/api/lib/business-registries/dispatch";
 import { lookupBusinessRegistryShared } from "@/api/lib/business-registries/registry-lookup";
 import { SANCTIONS_COMPANY_REGISTRY_BY_COUNTRY } from "@/api/lib/business-registries/sanctions-check-vocabulary";
@@ -18,15 +21,16 @@ import type {
 import { loadPracticeJurisdictions } from "@/api/lib/db/practice-jurisdictions";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
-  screenSanctionsSubject,
   SANCTIONS_SUBJECT_ERROR_MESSAGES,
+  screenSanctionsSubject,
+  signedInScreening,
   unavailableSanctionsScreening,
 } from "@/api/lib/lists/sanctions/screening-service";
 import type {
-  SanctionsScreening,
   SanctionsScreeningSubject,
+  SignedInSanctionsScreening,
 } from "@/api/lib/lists/sanctions/screening-service";
-import type { SanctionsUnavailableReason } from "@/api/lib/lists/sanctions/screening-vocabulary";
+import type { SanctionsSignedInUnavailableReason } from "@/api/lib/lists/sanctions/screening-vocabulary";
 
 // The sanctions check of the counterparty check: resolves the subject the
 // caller named into a name to screen, reads the firm's practice
@@ -86,7 +90,7 @@ type SanctionsCheckedSubject =
       country: SanctionsCompanyIdCountry;
     };
 
-export type SanctionsCheckResult = SanctionsScreening & {
+export type SanctionsCheckResult = SignedInSanctionsScreening & {
   kind: "sanctions";
   subject: SanctionsCheckedSubject;
 };
@@ -130,7 +134,7 @@ type ResolvedName =
       subject: SanctionsScreeningSubject;
       checked: SanctionsCheckedSubject;
     }
-  | { type: "unresolved"; reason: SanctionsUnavailableReason };
+  | { type: "unresolved"; reason: SanctionsSignedInUnavailableReason };
 
 const resolveCompanyName = async ({
   value,
@@ -166,6 +170,7 @@ const resolveCompanyName = async ({
     registry,
     q: companyId,
     executeLookup: dependencies.executeLookup,
+    loadWebSearch: NO_REGISTRY_WEB_SEARCH,
   });
   if (lookup.isErr()) {
     // The register refusing the ID itself (a failed checksum) is the caller's
@@ -325,10 +330,12 @@ export const runSanctionsCheck = async ({
         value: subject.value.trim(),
         country: subject.country,
       },
-      ...unavailableSanctionsScreening({
-        reason: outcome.reason,
-        practiceJurisdictions,
-      }),
+      ...signedInScreening(
+        unavailableSanctionsScreening({
+          reason: outcome.reason,
+          practiceJurisdictions,
+        }),
+      ),
     });
   }
   const screened = await screen({
@@ -342,10 +349,12 @@ export const runSanctionsCheck = async ({
       return Result.ok({
         kind: "sanctions",
         subject: outcome.checked,
-        ...unavailableSanctionsScreening({
-          reason: "load-failed",
-          practiceJurisdictions,
-        }),
+        ...signedInScreening(
+          unavailableSanctionsScreening({
+            reason: "load-failed",
+            practiceJurisdictions,
+          }),
+        ),
       });
     }
     return invalidSubject(
@@ -355,6 +364,6 @@ export const runSanctionsCheck = async ({
   return Result.ok({
     kind: "sanctions",
     subject: outcome.checked,
-    ...screened.value,
+    ...signedInScreening(screened.value),
   });
 };

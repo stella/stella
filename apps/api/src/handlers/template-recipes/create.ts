@@ -3,6 +3,7 @@ import { Result } from "better-result";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { authorizeOrganizationReplay } from "@/api/lib/idempotency/organization-replay-authorization";
 
 import {
   createTemplateRecipeBodySchema,
@@ -10,6 +11,8 @@ import {
 } from "./recipes";
 
 const config = {
+  contract: "patch",
+  idempotency: { type: "replay" },
   description:
     "Create a template recipe, a named reusable block of pre-configured " +
     "template fields, from a name, an optional description, and a definition " +
@@ -48,6 +51,7 @@ const createTemplateRecipe = createSafeRootHandler(
     );
     return Result.ok(result);
   },
+  { authorize: authorizeOrganizationReplay },
 );
 
 export default createTemplateRecipe;

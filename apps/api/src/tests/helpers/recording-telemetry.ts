@@ -22,7 +22,7 @@ import type { LogRecord } from "@/api/lib/observability/logger";
 // asserts on the event that would have shipped, not on a call to a function
 // the real module may no longer export with that shape.
 
-export type ExceptionEvent = Extract<
+type ExceptionEvent = Extract<
   ServerAnalyticsCaptureParams,
   { event: typeof SERVER_ANALYTICS_EVENTS.exception }
 >;
@@ -78,10 +78,13 @@ export type RecordingLogger = {
 };
 
 /** Route every sanitized log record into an in-memory list. */
-export const installRecordingLogger = (): RecordingLogger => {
+export const installRecordingLogger = (
+  onRecord?: (record: LogRecord) => void,
+): RecordingLogger => {
   const records: LogRecord[] = [];
   setLogSinkForTesting((record) => {
     records.push(record);
+    onRecord?.(record);
   });
   return {
     records,

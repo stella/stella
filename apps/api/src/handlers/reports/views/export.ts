@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 /**
  * Enqueue a view→report export.
  *
@@ -13,34 +14,44 @@
  * `templateId` come from the body but are validated against the workspace / org
  * (RLS) before use.
  */
-
-import { Result } from "better-result";
 import { eq } from "drizzle-orm";
 
 import { reportExports } from "@/api/db/schema";
 import { isReportRowCountOverCap } from "@/api/handlers/reports/build-report-data";
 import { getBuiltinReportTemplate } from "@/api/handlers/reports/builtin-templates";
 import {
+  REPORT_EXPORT_PERMISSIONS,
   reportExportBodySchema,
   reportExportConsumesServices,
 } from "@/api/handlers/reports/views/export-input";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import {
+  AVT_LAYOUT_FEATURE_ACCESS,
+  avtViewAccessStatus,
+  isAvtLayoutVisible,
+} from "@/api/lib/auth/feature-access/view-eligibility";
 import { workspaceParams } from "@/api/lib/custom-schema";
 import { queryEntities } from "@/api/lib/entities/query-entities";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { extractLangFromRequest } from "@/api/lib/locale";
+import {
+  createModelActionAdmitter,
+  modelActionRefusal,
+} from "@/api/lib/rate-limit/model-action-admission";
 import { enqueueReportExport } from "@/api/lib/report-export-enqueue";
 import { excludedEntityKindsForView } from "@/api/lib/views";
 import { parseStoredViewLayout } from "@/api/lib/views-schema";
 
 const config = {
+  contract: "patch",
   accountAccess: ACCOUNT_ACCESS.standard,
+  featureAccess: AVT_LAYOUT_FEATURE_ACCESS,
   description:
     "Start an asynchronous DOCX or PDF export of a matter view using a selected report template. Returns an export ID to poll.",
-  permissions: { workspace: ["read"], entity: ["create"] },
+  permissions: REPORT_EXPORT_PERMISSIONS,
   mcp: {
     type: "capability",
     reason: "reporting_export",
@@ -54,12 +65,14 @@ const exportViewReport = createSafeHandler(
   config,
   async function* ({
     safeDb,
+    scopedDb,
     workspaceId,
     user,
     session,
     body,
     recordAuditEvent,
     request,
+    featureAccessSnapshot,
   }) {
     const organizationId = session.activeOrganizationId;
 
@@ -80,6 +93,20 @@ const exportViewReport = createSafeHandler(
       );
     }
 
+    if (
+      !isAvtLayoutVisible(
+        view.layout,
+        avtViewAccessStatus({
+          snapshot: featureAccessSnapshot,
+          organizationId,
+          userId: user.id,
+        }),
+      )
+    ) {
+      return Result.err(
+        new HandlerError({ status: 404, message: "Not found" }),
+      );
+    }
     const layout = parseStoredViewLayout(view.layout);
     if (layout.type !== "table") {
       return Result.err(
@@ -124,6 +151,7 @@ const exportViewReport = createSafeHandler(
     // +1 so a view exactly one over the cap is detected, never truncated.
     const cappedRowsResult = yield* Result.await(
       queryEntities({
+        textMode: "full",
         safeDb,
         scope: { type: "matter", workspaceId },
         currentUserId: user.id,
@@ -150,6 +178,21 @@ const exportViewReport = createSafeHandler(
     // queue loses can be rebuilt from the row alone.
     const format = body.format ?? "docx";
     const aiNarrative = body.aiNarrative ?? true;
+
+    // A narrative export draws its one action here, before anything is
+    // queued; the worker runs on a background slot. A deterministic export
+    // calls no model and draws none.
+    if (aiNarrative) {
+      const admitted = await createModelActionAdmitter({
+        organizationId,
+        userId: user.id,
+        organizationStateDb: scopedDb,
+        actionKind: "report-export.start",
+      })(async ({ admission }) => await Promise.resolve(admission));
+      if (Result.isError(admitted)) {
+        return Result.err(modelActionRefusal(admitted.error));
+      }
+    }
 
     const exportId = yield* Result.await(
       safeDb(async (tx) => {

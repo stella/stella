@@ -1,10 +1,11 @@
 import { Result } from "better-result";
-import { Queue, Worker } from "bullmq";
+import { Queue } from "bullmq";
 import { RedisClient } from "bun";
 import { describe, expect, spyOn, test } from "bun:test";
 
 import { StoreUnavailableError } from "@stll/redis-config/store-policy";
 
+import { BullMqWorker } from "@/api/lib/bullmq-queue";
 import {
   createBullMqConnection,
   createRedisClient,
@@ -66,7 +67,7 @@ describe.skipIf(!enabled)("classified clients over Valkey", () => {
       connection: queueConnection,
     });
     let executed = 0;
-    const worker = new Worker(
+    const worker = new BullMqWorker(
       queue.name,
       async () => {
         executed += 1;

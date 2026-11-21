@@ -15,6 +15,8 @@ import {
 import { createSafeDb } from "@/api/db/scoped";
 import { createApproveMcpAuthorizationHandler } from "@/api/handlers/mcp-connectors/approve-authorization";
 import { createConnectMcpConnectorHandler } from "@/api/handlers/mcp-connectors/connect";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { recordMcpAuthorizationReview } from "@/api/lib/mcp-upstream/authorization-review";
@@ -26,7 +28,9 @@ import {
   releaseMcpRefreshLease,
 } from "@/api/lib/mcp-upstream/connections";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
+import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { TABLE_POLICY_SETTINGS_BASELINE } from "@/api/tests/security/table-policy-settings-baseline";
 import {
@@ -44,6 +48,7 @@ const connectorId = createSafeId<"mcpConnector">();
 const connectionId = createSafeId<"mcpUserConnection">();
 const otherOrganizationId = mintAuthProviderId<"organization">();
 const catalogueConnectorId = createSafeId<"mcpConnector">();
+const outboundPermit = grantThirdPartyOutboundPermit();
 
 let testDb: TestDatabase;
 
@@ -91,6 +96,10 @@ beforeAll(async () => {
     slug: `connector-${organizationId}`,
     createdAt: new Date(),
   });
+  await recordNewOrganizationAccessState(testDb, {
+    organizationId,
+    now: new Date(),
+  });
   await testDb.insert(member).values([
     {
       id: Bun.randomUUIDv7(),
@@ -134,10 +143,8 @@ afterAll(async () => {
   await testDb
     .delete(mcpConnectors)
     .where(eq(mcpConnectors.id, catalogueConnectorId));
-  await testDb
-    .delete(organization)
-    .where(eq(organization.id, otherOrganizationId));
-  await testDb.delete(organization).where(eq(organization.id, organizationId));
+  await deleteOrganizationsForTest(testDb, [otherOrganizationId]);
+  await deleteOrganizationsForTest(testDb, [organizationId]);
   await testDb.delete(user).where(eq(user.id, ownerId));
   await testDb.delete(user).where(eq(user.id, memberId));
   await releaseTestDb();
@@ -178,8 +185,9 @@ const approveAuthorization = async ({
   confirmedIssuer,
   activeOrganizationId,
 }: ApprovalRequestOptions) => {
-  const approval = createApproveMcpAuthorizationHandler(async (connectorUrl) =>
-    discoveredIssuerMetadata({ connectorUrl, issuer: discoveredIssuer }),
+  const approval = createApproveMcpAuthorizationHandler(
+    async ({ rawMcpUrl: connectorUrl }) =>
+      discoveredIssuerMetadata({ connectorUrl, issuer: discoveredIssuer }),
   );
   return await approval.handler(
     asTestRaw<Parameters<typeof approval.handler>[0]>({
@@ -197,7 +205,8 @@ const approveAuthorization = async ({
         `https://api.example.test/v1/mcp/connectors/${slug}/approve-authorization`,
         { method: "POST" },
       ),
-      route: "/v1/mcp/connectors/:slug/approve-authorization",
+      route:
+        "/v1/mcp/connectors/:slug/approve-authorization" satisfies ApiRoutePath,
     }),
   );
 };
@@ -216,7 +225,7 @@ const connectAsMember = async ({
   audits = [],
 }: MemberConnectOptions) => {
   const connect = createConnectMcpConnectorHandler({
-    discoverMetadata: async (connectorUrl) =>
+    discoverMetadata: async ({ rawMcpUrl: connectorUrl }) =>
       discoveredIssuerMetadata({ connectorUrl, issuer }),
     curatedOAuthApproval: () => curatedApproval ?? null,
   });
@@ -233,7 +242,7 @@ const connectAsMember = async ({
       request: new Request(
         `https://api.example.test/v1/mcp/connectors/${slug}/connect`,
       ),
-      route: "/v1/mcp/connectors/:slug/connect",
+      route: "/v1/mcp/connectors/:slug/connect" satisfies ApiRoutePath,
     }),
   );
 };
@@ -423,7 +432,7 @@ describe("MCP connector authorization reviews", () => {
       );
     const audits: unknown[] = [];
     const approval = createApproveMcpAuthorizationHandler(
-      async (connectorUrl) =>
+      async ({ rawMcpUrl: connectorUrl }) =>
         Result.ok({
           protectedResource: {
             resource: connectorUrl,
@@ -454,7 +463,8 @@ describe("MCP connector authorization reviews", () => {
         "https://api.example.test/v1/mcp/connectors/shared/approve-authorization",
         { method: "POST" },
       ),
-      route: "/v1/mcp/connectors/:slug/approve-authorization",
+      route:
+        "/v1/mcp/connectors/:slug/approve-authorization" satisfies ApiRoutePath,
     });
     expect(await approval.handler(approvalContext)).toEqual({ approved: true });
     expect(audits).toHaveLength(1);
@@ -510,6 +520,7 @@ describe("MCP connector authorization reviews", () => {
     expect(
       await createMcpClientForConnection({
         organizationId,
+        permit: outboundPermit,
         row: previousConnection,
         safeDb,
         userId: memberId,
@@ -649,7 +660,11 @@ describe("MCP connector authorization reviews", () => {
       resourceUrl: legacyUrl,
       authorizationServerUrl: legacyIssuer,
     });
-    const discoverLegacyMetadata = async (url: string) =>
+    const discoverLegacyMetadata = async ({
+      rawMcpUrl: url,
+    }: {
+      rawMcpUrl: string;
+    }) =>
       Result.ok({
         protectedResource: {
           resource: url,
@@ -700,6 +715,7 @@ describe("MCP connector authorization reviews", () => {
         ? null
         : await createMcpClientForConnection({
             organizationId,
+            permit: outboundPermit,
             row,
             safeDb: ownerDb,
             userId: ownerId,
@@ -756,7 +772,8 @@ describe("MCP connector authorization reviews", () => {
         "https://api.example.test/v1/mcp/connectors/legacy/approve-authorization",
         { method: "POST" },
       ),
-      route: "/v1/mcp/connectors/:slug/approve-authorization",
+      route:
+        "/v1/mcp/connectors/:slug/approve-authorization" satisfies ApiRoutePath,
     });
     expect(await approval.handler(approvalContext)).toEqual({ approved: true });
 
@@ -902,6 +919,10 @@ describe("MCP connector authorization reviews", () => {
       name: "Other connector organization",
       slug: `connector-${otherOrganizationId}`,
       createdAt: new Date(),
+    });
+    await recordNewOrganizationAccessState(testDb, {
+      organizationId: otherOrganizationId,
+      now: new Date(),
     });
     await testDb.insert(mcpConnectors).values({
       id: catalogueConnectorId,

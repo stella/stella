@@ -10,6 +10,8 @@ import type { BuiltInChatToolPolicyKindByName } from "@stll/api-contract";
 export const RAW_MODE_ONLY_CHAT_TOOL_NAMES = [
   "counterparty_check",
   "review_folder_consistency",
+  "request_secret",
+  "use_connector_secret",
 ] as const satisfies readonly (keyof BuiltInChatToolPolicyKindByName)[];
 
 export type RawModeOnlyChatToolName =

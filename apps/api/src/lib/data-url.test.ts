@@ -1,7 +1,7 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
-import { toDataUrl, parseDataUrl, validateDataUrl } from "@/api/lib/data-url";
+import { parseDataUrl, toDataUrl, validateDataUrl } from "@/api/lib/data-url";
 
 describe("data URL helpers", () => {
   test("builds and parses a valid base64 data URL", () => {

@@ -10,7 +10,12 @@ import {
   chatThreads,
   fileChatThreads,
 } from "@/api/db/schema";
-import { estimateChatContextPromptTokens } from "@/api/handlers/chat/chat-prompt";
+import { chatMessageFromPersisted } from "@/api/handlers/chat/chat-message-parts";
+import {
+  estimateChatContextPromptTokens,
+  estimateChatRevisionNoteTokens,
+} from "@/api/handlers/chat/chat-prompt";
+import { readChatRevisionContextChanges } from "@/api/handlers/chat/chat-revision-context";
 import { computeThreadContextUsage } from "@/api/handlers/chat/compaction";
 import type { ThreadContextUsage } from "@/api/handlers/chat/compaction";
 import type {
@@ -38,6 +43,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { resolveEffectiveChatModelId } from "@/api/lib/chat-model-selection";
 import { resolveChatCompactionBudget } from "@/api/lib/chat/compaction-budget";
 import { getDisabledNativeToolSlugsFromSettingsRow } from "@/api/lib/mcp-connectors/catalog-metadata";
+import { readManagedModelTierOnTx } from "@/api/lib/usage/organization-access-state";
 import { resolveWebSearchProvidersFromOrgSettingsRow } from "@/api/lib/web-search/load-org-keys";
 
 /**
@@ -205,6 +211,13 @@ export const loadResolvedThreadMessagePage = async ({
   );
 
   const hasContext = windowedMessages.length > 0 || checkpoint !== null;
+  const revisionChanges = unwrapTxRead(
+    await readChatRevisionContextChanges({
+      messages: windowedMessages,
+      threadId,
+      tx,
+    }),
+  );
   const { promptTokens, toolTokens } = estimateChatContextPromptTokens({
     toolAvailability: {
       docxEditMode: null,
@@ -227,14 +240,17 @@ export const loadResolvedThreadMessagePage = async ({
     chatModelOverride,
     orgAIConfig,
     organizationId,
+    modelTier: await readManagedModelTierOnTx(tx, organizationId),
   });
   const context: ThreadContextUsage | null = hasContext
     ? computeThreadContextUsage({
         messages: windowedMessages.map((message) => ({
           id: message.id,
           role: message.role,
-          parts: message.content.data,
+          parts: chatMessageFromPersisted(message).parts,
         })),
+        conversationContextTokens:
+          estimateChatRevisionNoteTokens(revisionChanges),
         promptTokens,
         toolTokens,
         triggerTokens,
@@ -306,25 +322,28 @@ const insertFileChatThread = async (
   });
 };
 
+type CreateFileChatThreadOptions = {
+  tx: Transaction;
+  input: FileThreadLookupInput;
+  recordAuditEvent: AuditRecorder;
+  orgAIConfig: OrgAIConfig | null;
+  webSearchAvailable: boolean;
+  requestedThreadId: SafeId<"chatThread"> | undefined;
+};
+
 /**
  * Materialize the thread + file mapping for a first send. Lives here (not in
  * the endpoint module) so the placeholder-adoption and legacy branches stay
  * integration-testable against a real transaction.
  */
-export const createFileChatThread = async (
-  tx: Transaction,
-  {
-    entityId,
-    fieldId,
-    organizationId,
-    userId,
-    workspaceId,
-  }: FileThreadLookupInput,
-  recordAuditEvent: AuditRecorder,
-  orgAIConfig: OrgAIConfig | null,
-  webSearchAvailable: boolean,
-  requestedThreadId: SafeId<"chatThread"> | undefined,
-): Promise<FileThreadCreateResult> => {
+export const createFileChatThread = async ({
+  tx,
+  input: { entityId, fieldId, organizationId, userId, workspaceId },
+  recordAuditEvent,
+  orgAIConfig,
+  webSearchAvailable,
+  requestedThreadId,
+}: CreateFileChatThreadOptions): Promise<FileThreadCreateResult> => {
   const entity = await tx.query.entities.findFirst({
     where: {
       id: { eq: entityId },

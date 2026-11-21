@@ -24,7 +24,7 @@ import { panic, Result } from "better-result";
  * Both return the same shape, so a script with a plan mode and an apply mode
  * picks its door after parsing arguments and runs one body against either.
  *
- * This is a different lock from `lockCitationGraph` in the resolver. That one
+ * This is a different lock from the citation-graph transaction owner. That one
  * is transaction-scoped and serializes the standing walk's batches against
  * ingestion; this one is session-scoped and serializes whole operator runs
  * against each other. A pass that also writes the graph still takes the graph
@@ -35,7 +35,6 @@ import { panic, Result } from "better-result";
  * advisory lock when that session ends, and every script ends with
  * `process.exit`, so there is nothing to unlock by hand.
  */
-import { SQL } from "bun";
 import { sql } from "drizzle-orm";
 import type { SQLWrapper } from "drizzle-orm";
 import { setTimeout as sleep } from "node:timers/promises";
@@ -56,12 +55,10 @@ export const CASE_LAW_MAINTENANCE_LANE = {
 } as const;
 
 /** Waits longer than this are logged so a stuck pass is visible. */
-export const MAINTENANCE_LANE_WAIT_LOG_MS = 30_000;
+const MAINTENANCE_LANE_WAIT_LOG_MS = 30_000;
 
-/** What `execute` resolves to for a row shape, as the drizzle instance types it. */
-type ExecuteResult<TRow extends Record<string, unknown>> = Awaited<
-  ReturnType<typeof rootDatabase.execute<TRow>>
->;
+/** Explicit object mode returns one array of rows, independent of driver raw envelopes. */
+type ExecuteResult<TRow extends Record<string, unknown>> = TRow[];
 
 /** A root-connection handle: the subset scripts use of the drizzle instance. */
 export type CaseLawRootHandle = {
@@ -112,7 +109,7 @@ export type MaintenanceLaneSession = CaseLawWriteHandles & MaintenanceLaneHold;
  * The two members the lane needs from its lock connection. Structural, so a
  * test can hand in a fake without importing Bun's client type.
  */
-export type MaintenanceLaneSql = {
+type MaintenanceLaneSql = {
   unsafe: (
     statement: string,
     values?: readonly string[],
@@ -123,6 +120,8 @@ export type MaintenanceLaneSql = {
 type HoldLaneOptions = {
   /** Lock connection override for tests; scripts open one on DATABASE_URL. */
   sql?: MaintenanceLaneSql;
+  /** Connection admission override for tests. */
+  openConnection?: () => Promise<MaintenanceLaneSql>;
   /** Clock override for tests. */
   now?: () => number;
 };
@@ -132,7 +131,9 @@ type HoldLaneOptions = {
 // an environment.
 const openLaneConnection = async (): Promise<MaintenanceLaneSql> => {
   const { envBase } = await import("@/api/env-base");
-  return new SQL({ url: envBase.DATABASE_URL, max: 1 });
+  const { openMaintenanceSql } =
+    await import("@/api/db/long-running-connection");
+  return await openMaintenanceSql(envBase.DATABASE_URL);
 };
 
 /**
@@ -140,24 +141,38 @@ const openLaneConnection = async (): Promise<MaintenanceLaneSql> => {
  * lane. `execute` outside a transaction runs inside one, so there is no path
  * around the lane.
  */
-const laneRootHandle = (rootDb: typeof rootDatabase): CaseLawRootHandle => {
+type CaseLawSchemaLaneHandleOptions = {
+  signal?: AbortSignal;
+  laneWaitMs?: number;
+  /** Test seam: how a refused try waits before the next. */
+  sleep?: (ms: number) => Promise<void>;
+};
+
+export const caseLawRootHandleUnderCorpusSchemaLane = (
+  rootDb: typeof rootDatabase,
+  options: CaseLawSchemaLaneHandleOptions = {},
+): CaseLawRootHandle => {
   const transaction = async <T>(
     fn: (tx: Transaction) => Promise<T>,
   ): Promise<T> =>
-    await runUnderCorpusSchemaLane({ database: rootDb, work: fn });
+    await runUnderCorpusSchemaLane({ database: rootDb, work: fn, ...options });
   return {
     transaction,
     execute: async <TRow extends Record<string, unknown>>(
       query: SQLWrapper | string,
-    ) => await transaction(async (tx) => await tx.execute<TRow>(query)),
+    ) =>
+      await transaction(async (tx) => await tx.execute<TRow>(query, "objects")),
   };
 };
 
 const loadWriteHandles = async (): Promise<CaseLawWriteHandles> => {
   const { rlsDb, rootDb } = await import("@/api/db/root");
+  const { assertDatabaseLoginPosture } =
+    await import("@/api/lib/db/assert-database-login-posture");
+  await assertDatabaseLoginPosture(rootDb);
   const { createIngestionDb } = await import("@/api/db/scoped");
   return {
-    rootDb: laneRootHandle(rootDb),
+    rootDb: caseLawRootHandleUnderCorpusSchemaLane(rootDb),
     ingestionDb: createIngestionDb(rlsDb),
   };
 };
@@ -169,10 +184,10 @@ const loadWriteHandles = async (): Promise<CaseLawWriteHandles> => {
  */
 export const holdCaseLawMaintenanceLane = async ({
   sql: providedSql,
+  openConnection = openLaneConnection,
   now = () => Temporal.Now.instant().epochMilliseconds,
 }: HoldLaneOptions = {}): Promise<MaintenanceLaneHold> => {
   const { logger } = await import("@/api/lib/observability/logger");
-  const lock = providedSql ?? (await openLaneConnection());
   const startedAt = now();
   // One warning while still waiting, so an operator watching the log learns
   // the pass is queued behind another rather than hung.
@@ -181,14 +196,22 @@ export const holdCaseLawMaintenanceLane = async ({
       "maintenanceLane.waitMs": now() - startedAt,
     });
   }, MAINTENANCE_LANE_WAIT_LOG_MS);
+  let lock: MaintenanceLaneSql | undefined;
+  let acquisition: "waiting" | "held" = "waiting";
   try {
+    lock = providedSql ?? (await openConnection());
     await lock.unsafe("SELECT pg_advisory_lock(hashtext($1), hashtext($2))", [
       CASE_LAW_MAINTENANCE_LANE.domain,
       CASE_LAW_MAINTENANCE_LANE.lane,
     ]);
+    acquisition = "held";
   } finally {
     clearTimeout(warnTimer);
+    if (lock && acquisition === "waiting") {
+      await lock.end();
+    }
   }
+  const heldLock = lock;
   const waitedMs = now() - startedAt;
   if (waitedMs >= MAINTENANCE_LANE_WAIT_LOG_MS) {
     logger.info("case_law.maintenance_lane.acquired", {
@@ -198,15 +221,18 @@ export const holdCaseLawMaintenanceLane = async ({
   return {
     waitedMs,
     release: async () => {
-      const rows = await lock.unsafe(
-        "SELECT pg_advisory_unlock(hashtext($1), hashtext($2)) AS released",
-        [CASE_LAW_MAINTENANCE_LANE.domain, CASE_LAW_MAINTENANCE_LANE.lane],
-      );
-      const released = rows.at(0)?.["released"];
-      if (released !== true) {
-        panic("Maintenance lane was not held by this session at release");
+      try {
+        const rows = await heldLock.unsafe(
+          "SELECT pg_advisory_unlock(hashtext($1), hashtext($2)) AS released",
+          [CASE_LAW_MAINTENANCE_LANE.domain, CASE_LAW_MAINTENANCE_LANE.lane],
+        );
+        const released = rows.at(0)?.["released"];
+        if (released !== true) {
+          panic("Maintenance lane was not held by this session at release");
+        }
+      } finally {
+        await heldLock.end();
       }
-      await lock.end();
     },
   };
 };
@@ -250,7 +276,10 @@ export const createCaseLawMaintenanceCleanupHandles = async ({
       transaction,
       execute: async <TRow extends Record<string, unknown>>(
         query: SQLWrapper | string,
-      ) => await transaction(async (tx) => await tx.execute<TRow>(query)),
+      ) =>
+        await transaction(
+          async (tx) => await tx.execute<TRow>(query, "objects"),
+        ),
     },
     ingestionDb: createIngestionDb(markRlsDatabase({ transaction }), {
       laneWaitMs: timeoutMs,
@@ -326,7 +355,10 @@ const runBoundedMaintenanceLane = async <T>({
         transaction,
         execute: async <TRow extends Record<string, unknown>>(
           query: SQLWrapper | string,
-        ) => await transaction(async (tx) => await tx.execute<TRow>(query)),
+        ) =>
+          await transaction(
+            async (tx) => await tx.execute<TRow>(query, "objects"),
+          ),
       };
       const scoped = createIngestionDb(markRlsDatabase(queuedDatabase), {
         laneWaitMs: lockTimeout,
@@ -344,6 +376,29 @@ const runBoundedMaintenanceLane = async <T>({
   );
 };
 
+type MaintenanceLaneSessionOptions = {
+  hold: () => Promise<MaintenanceLaneHold>;
+  loadHandles: () => Promise<CaseLawWriteHandles>;
+};
+
+/** Ownership transfers to the caller only after initialization succeeds. */
+export const createMaintenanceLaneSession = async ({
+  hold,
+  loadHandles,
+}: MaintenanceLaneSessionOptions): Promise<MaintenanceLaneSession> => {
+  const held = await hold();
+  let ownership: "initializing" | "transferred" = "initializing";
+  try {
+    const handles = await loadHandles();
+    ownership = "transferred";
+    return { ...handles, ...held };
+  } finally {
+    if (ownership === "initializing") {
+      await held.release();
+    }
+  }
+};
+
 /** Operator calls wait for the lane; bounded jobs skip contention and close on return. */
 export function enterCaseLawMaintenanceLane(): Promise<MaintenanceLaneSession>;
 export function enterCaseLawMaintenanceLane<T>(
@@ -355,9 +410,10 @@ export async function enterCaseLawMaintenanceLane<T>(
   if (options !== undefined) {
     return await runBoundedMaintenanceLane(options);
   }
-  const hold = await holdCaseLawMaintenanceLane();
-  const handles = await loadWriteHandles();
-  return { ...handles, ...hold };
+  return await createMaintenanceLaneSession({
+    hold: holdCaseLawMaintenanceLane,
+    loadHandles: loadWriteHandles,
+  });
 }
 
 type ReadOnlySessionOptions = {
@@ -386,7 +442,9 @@ export const readOnlyHandles = ({
       execute: async <TRow extends Record<string, unknown>>(
         query: SQLWrapper | string,
       ) =>
-        await readOnlyTransaction(async (tx) => await tx.execute<TRow>(query)),
+        await readOnlyTransaction(
+          async (tx) => await tx.execute<TRow>(query, "objects"),
+        ),
     },
     ingestionDb: async (fn) =>
       await ingestionDb(async (tx) => {

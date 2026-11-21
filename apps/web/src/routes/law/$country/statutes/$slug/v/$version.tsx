@@ -1,11 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
 
 import { publicStatuteSearchSchema } from "@/features/statutes/statute-page-search";
-import { PublicStatuteViewer } from "@/routes/law/-statute-detail";
 import {
   createPublicStatuteHead,
   loadPublicStatuteRoute,
 } from "@/routes/law/-statute-detail.logic";
+import { PublicStatuteVersionPage } from "@/routes/law/-statute-detail.page";
+import { StatuteReaderPending } from "@/routes/law/-statute-detail.pending";
 
 /**
  * One consolidation of a statute, addressed by the day its validity window
@@ -27,26 +28,7 @@ export const Route = createFileRoute("/law/$country/statutes/$slug/v/$version")(
       }),
     head: ({ loaderData }) =>
       loaderData ? createPublicStatuteHead(loaderData) : { meta: [] },
-    component: PublicStatuteVersionRoute,
+    component: PublicStatuteVersionPage,
+    pendingComponent: StatuteReaderPending,
   },
 );
-
-function PublicStatuteVersionRoute() {
-  const { statute, versions, windowGap, work } = Route.useLoaderData();
-  const requestedJump = Route.useSearch({ select: (search) => search.jump });
-  const compare = Route.useSearch({ select: (search) => search.compare });
-  const provision = Route.useSearch({ select: (search) => search.provision });
-  const show = Route.useSearch({ select: (search) => search.show });
-
-  return (
-    <PublicStatuteViewer
-      comparison={{ compare, provision, show }}
-      asOf={undefined}
-      requestedJump={requestedJump}
-      statute={statute}
-      versions={versions}
-      windowGap={windowGap}
-      work={work}
-    />
-  );
-}

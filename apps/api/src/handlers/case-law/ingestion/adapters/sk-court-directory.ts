@@ -153,7 +153,11 @@ export const skCourtDirectoryMetadata = (
     courtClassification:
       tier === undefined
         ? { status: "unclassified" as const, statedType: type }
-        : { status: "classified" as const, ...tier },
+        : {
+            status: "classified" as const,
+            level: tier.level,
+            jurisdiction: tier.jurisdiction,
+          },
     // Equal registry IDs establish an alias, never a distinct court's succession.
     courtAlias:
       statedName === record.nazov

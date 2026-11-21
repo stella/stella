@@ -6,34 +6,32 @@ import type { ResolveParams } from "@tanstack/react-router";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
-import { BidiText } from "@stll/ui/bidi-text";
+import { DEFAULT_VARCHAR_MAX_LENGTH } from "@stll/api-contract/limits";
+import { resolveReferenceEdit } from "@stll/api-contract/matter-reference-edit";
+import { BidiText, stripDirectionalControls } from "@stll/ui/bidi-text";
 import { BreadcrumbItem, BreadcrumbSeparator } from "@stll/ui/breadcrumb";
-import { Input } from "@stll/ui/input";
-import { cn } from "@stll/ui/utils";
+import { Button } from "@stll/ui/button";
+import { InlineRenameInput } from "@stll/ui/inline-rename";
+import { MatterIcon } from "@stll/ui/matter-icon";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
+import { MatterSwitcher } from "@/components/breadcrumbs/matter-switcher";
 import { BreadcrumbQueryContent } from "@/components/breadcrumbs/query-content";
-import { MatterIcon } from "@/components/matter-icon";
 import { MatterNumberHint } from "@/components/matter-number-hint";
-import Tooltip from "@/components/tooltip";
 import {
   MatterColorContextPicker,
   MatterColorPicker,
 } from "@/components/workspaces/matter-color-picker";
-import { resolveReferenceEdit } from "@/components/workspaces/matter-metadata-sheet.logic";
 import { ReferenceChangeConfirmation } from "@/components/workspaces/reference-change-confirmation";
 import { useInlineRename } from "@/hooks/use-inline-rename";
 import { detached } from "@/lib/detached";
 import { notifyUserError } from "@/lib/errors/user-toast";
-import { useQueryView } from "@/lib/use-query-view";
+import { useMatterNumberingEnabled } from "@/lib/organization/use-matter-numbering";
+import { queryView } from "@/lib/query-view.logic";
 import { useUpdateWorkspace } from "@/lib/workspaces/mutations";
 import { workspaceOptions } from "@/lib/workspaces/queries";
 import { useReferenceConflictMessage } from "@/lib/workspaces/use-reference-conflict-message";
 import { useConfigStore } from "@/stores/config-store";
-
-const breadcrumbInputClassName =
-  "border-input bg-background text-foreground inline-flex rounded-md border text-sm shadow-xs/5 has-focus-visible:border-ring";
-
-const matterNameInputClassName = `${breadcrumbInputClassName} font-semibold`;
 
 type ReferenceConfirmation =
   | { status: "closed" }
@@ -54,11 +52,12 @@ export const WorkspaceBreadcrumb = ({
   });
   const [refInputEl, setRefInputEl] = useState<HTMLInputElement | null>(null);
   const workspaceQuery = useQuery(workspaceOptions(workspaceId));
-  const workspaceView = useQueryView(workspaceQuery);
+  const workspaceView = queryView(workspaceQuery);
   const cachedWorkspace =
     workspaceView.type === "items" ? workspaceView.items : undefined;
   const updateWorkspace = useUpdateWorkspace();
   const updateMattersConfig = useConfigStore((s) => s.updateMatters);
+  const showMatterNumber = useMatterNumberingEnabled();
   const referenceConflictMessage = useReferenceConflictMessage();
   const [referenceConfirmation, setReferenceConfirmation] =
     useState<ReferenceConfirmation>({ status: "closed" });
@@ -166,7 +165,8 @@ export const WorkspaceBreadcrumb = ({
   }
   const workspace = workspaceView.items;
 
-  const displayName = workspace.name;
+  // Also a `title`, which the browser shows outside any isolating element.
+  const displayName = stripDirectionalControls(workspace.name);
 
   const startEditingName = () => {
     nameRename.startEditing(displayName);
@@ -183,21 +183,16 @@ export const WorkspaceBreadcrumb = ({
   const changeColorLabel = t("common.changeColor");
 
   const colorPicker = match ? (
-    <MatterColorPicker matter={workspace}>
-      <Tooltip
-        content={changeColorLabel}
-        render={
-          <button
-            aria-label={changeColorLabel}
-            className="hover:bg-muted cursor-pointer rounded p-0.5"
-            type="button"
-          >
-            <MatterIcon
-              className="size-3.5 shrink-0"
-              matter={{ id: workspaceId, color: workspace.color }}
-            />
-          </button>
-        }
+    // Held to the breadcrumb's glyph scale so the trail does not grow a
+    // taller row.
+    <MatterColorPicker
+      className="size-5 sm:size-5"
+      label={changeColorLabel}
+      matter={workspace}
+    >
+      <MatterIcon
+        className="size-3.5 shrink-0"
+        matter={{ id: workspaceId, color: workspace.color }}
       />
     </MatterColorPicker>
   ) : (
@@ -212,7 +207,7 @@ export const WorkspaceBreadcrumb = ({
     <>
       <BreadcrumbItem className="min-w-8 shrink">
         <Link
-          className="hover:text-foreground min-w-0 truncate"
+          className="hover:text-foreground min-w-0"
           onClick={() => {
             // Clear active filters and group by client so the full grouped
             // list is shown; the route then scrolls to and flashes this
@@ -221,10 +216,11 @@ export const WorkspaceBreadcrumb = ({
             updateMattersConfig({ groupBy: "client", filters: {} });
           }}
           search={{ focusClient: client.id }}
-          title={client.displayName}
           to="/workspaces"
         >
-          <BidiText>{client.displayName}</BidiText>
+          <TruncatedText render={<BidiText />}>
+            {client.displayName}
+          </TruncatedText>
         </Link>
       </BreadcrumbItem>
       <BreadcrumbSeparator className="shrink-0" />
@@ -233,14 +229,13 @@ export const WorkspaceBreadcrumb = ({
     <>
       <BreadcrumbItem className="min-w-8 shrink">
         <Link
-          className="hover:text-foreground text-muted-foreground min-w-0 truncate"
+          className="hover:text-foreground text-muted-foreground min-w-0"
           onClick={() => {
             updateMattersConfig({ clientFilter: null });
           }}
           to="/workspaces"
-          title={t("workspaces.parties.personalLabel")}
         >
-          {t("workspaces.parties.personalLabel")}
+          <TruncatedText>{t("workspaces.parties.personalLabel")}</TruncatedText>
         </Link>
       </BreadcrumbItem>
       <BreadcrumbSeparator className="shrink-0" />
@@ -250,40 +245,32 @@ export const WorkspaceBreadcrumb = ({
   const referenceSegment = (() => {
     if (isEditingRef) {
       return (
-        <Input
-          className={cn(breadcrumbInputClassName, "w-28")}
-          onBlur={() => {
+        <InlineRenameInput
+          className="text-sm"
+          onCommit={() => {
             detached(refRename.commit(), "workspace-breadcrumb.commit");
           }}
-          onChange={(e) => refRename.setDraft(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              detached(refRename.commit(), "workspace-breadcrumb.commit");
-            }
-            if (e.key === "Escape") {
-              refRename.cancel();
-            }
-          }}
+          onValueChange={refRename.setDraft}
+          onCancel={refRename.cancel}
           placeholder={t("workspaces.referencePlaceholder")}
           ref={(el) => {
             setRefInputEl(el);
-            el?.focus();
           }}
-          size="sm"
-          unstyled
           value={refDraft}
         />
       );
     }
-    if (workspace.reference) {
+    if (showMatterNumber && workspace.reference) {
       return (
-        <button
-          className="text-foreground-muted hover:text-muted-foreground cursor-text text-sm"
+        <Button
+          className="cursor-text"
           onClick={() => refRename.startEditing(workspace.reference)}
-          type="button"
+          variant="plain"
         >
-          {workspace.reference}
-        </button>
+          <span className="text-foreground-muted hover:text-muted-foreground text-sm whitespace-pre">
+            {workspace.reference}
+          </span>
+        </Button>
       );
     }
     return null;
@@ -315,12 +302,13 @@ export const WorkspaceBreadcrumb = ({
       <>
         <BreadcrumbQueryContent view={workspaceView} />
         {clientSegment}
-        <BreadcrumbItem className="shrink-0">
+        <BreadcrumbItem className="group/crumb shrink-0">
           {(() => {
             if (isEditing) {
               return (
                 <>
                   <MatterColorContextPicker
+                    className="pointer-coarse:size-6"
                     label={changeColorLabel}
                     matter={workspace}
                   >
@@ -329,28 +317,18 @@ export const WorkspaceBreadcrumb = ({
                       matter={{ id: workspaceId, color: workspace.color }}
                     />
                   </MatterColorContextPicker>
-                  <Input
-                    className={cn(matterNameInputClassName, "w-fit")}
+                  <InlineRenameInput
+                    className="text-sm font-semibold"
                     disabled={updateWorkspace.isPending}
-                    onBlur={() => {
+                    maxLength={DEFAULT_VARCHAR_MAX_LENGTH}
+                    onCommit={() => {
                       detached(
                         nameRename.commit(),
                         "workspace-breadcrumb.commit",
                       );
                     }}
-                    onChange={(e) => nameRename.setDraft(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.currentTarget.blur();
-                      }
-                      if (e.key === "Escape") {
-                        nameRename.cancel();
-                        e.currentTarget.blur();
-                      }
-                    }}
-                    autoFocus
-                    size="sm"
-                    unstyled
+                    onValueChange={nameRename.setDraft}
+                    onCancel={nameRename.cancel}
                     value={nameValue}
                   />
                 </>
@@ -359,6 +337,7 @@ export const WorkspaceBreadcrumb = ({
             return (
               <>
                 <MatterColorContextPicker
+                  className="pointer-coarse:size-6"
                   label={changeColorLabel}
                   matter={workspace}
                 >
@@ -375,7 +354,7 @@ export const WorkspaceBreadcrumb = ({
                   activeProps={{
                     className: "text-foreground font-semibold",
                   }}
-                  className="hover:text-foreground inline-flex max-w-80 items-center gap-1.5 font-semibold"
+                  className="hover:text-foreground inline-flex max-w-80 min-w-0 items-center gap-1.5"
                   onContextMenu={(e) => {
                     e.preventDefault();
                     startEditingName();
@@ -383,15 +362,17 @@ export const WorkspaceBreadcrumb = ({
                   params={{
                     workspaceId,
                   }}
-                  title={displayName}
                   to="/workspaces/$workspaceId"
                 >
-                  <BidiText as="span" className="truncate">
+                  <TruncatedText
+                    className="whitespace-pre"
+                    render={<BidiText as="span" />}
+                  >
                     {displayName}
-                  </BidiText>
-                  {workspace.reference && !isEditingRef ? (
+                  </TruncatedText>
+                  {showMatterNumber && workspace.reference && !isEditingRef ? (
                     <span
-                      className="text-foreground-muted shrink-0 text-sm"
+                      className="text-foreground-muted shrink-0 text-sm whitespace-pre"
                       onContextMenu={(e) => {
                         e.preventDefault();
                         e.stopPropagation();
@@ -402,6 +383,9 @@ export const WorkspaceBreadcrumb = ({
                     </span>
                   ) : null}
                 </Link>
+                {isEditingRef ? null : (
+                  <MatterSwitcher matter={workspace} revealOnHover />
+                )}
               </>
             );
           })()}
@@ -420,25 +404,15 @@ export const WorkspaceBreadcrumb = ({
         {clientSegment}
         <BreadcrumbItem className="shrink-0">
           {colorPicker}
-          <Input
-            className={cn(matterNameInputClassName, "w-fit")}
+          <InlineRenameInput
+            className="text-sm font-semibold"
             disabled={updateWorkspace.isPending}
-            onBlur={() => {
+            maxLength={DEFAULT_VARCHAR_MAX_LENGTH}
+            onCommit={() => {
               detached(nameRename.commit(), "workspace-breadcrumb.commit");
             }}
-            onChange={(e) => nameRename.setDraft(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.currentTarget.blur();
-              }
-              if (e.key === "Escape") {
-                nameRename.cancel();
-                e.currentTarget.blur();
-              }
-            }}
-            autoFocus
-            size="sm"
-            unstyled
+            onValueChange={nameRename.setDraft}
+            onCancel={nameRename.cancel}
             value={nameValue}
           />
           {referenceSegment}
@@ -458,7 +432,7 @@ export const WorkspaceBreadcrumb = ({
         <Link
           activeOptions={{ exact: true, includeSearch: false }}
           activeProps={{ className: "text-foreground font-semibold" }}
-          className="hover:text-foreground max-w-80 truncate font-semibold"
+          className="hover:text-foreground max-w-80 min-w-0 font-semibold"
           dir="auto"
           onClick={() => {
             startEditingName();
@@ -468,12 +442,17 @@ export const WorkspaceBreadcrumb = ({
             startEditingName();
           }}
           params={{ workspaceId }}
-          title={displayName}
           to="/workspaces/$workspaceId"
         >
-          {displayName}
+          <TruncatedText
+            className="whitespace-pre"
+            render={<BidiText as="span" />}
+          >
+            {displayName}
+          </TruncatedText>
         </Link>
         {referenceSegment}
+        {isEditingRef ? null : <MatterSwitcher matter={workspace} />}
         {referenceHint}
         {referenceConfirmationDialog}
       </BreadcrumbItem>

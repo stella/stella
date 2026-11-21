@@ -1,12 +1,5 @@
 export { OOXML_NS, type OoxmlPrefix } from "./namespaces.ts";
 export {
-  DOCX_COMPRESSION,
-  loadDocx,
-  extractText,
-  extractBinary,
-  repackZip,
-} from "./zip.ts";
-export {
   findNextRId,
   ensureContentType,
   ensureRelationship,
@@ -27,6 +20,7 @@ export {
   DOCX_MAX_ENTRY_BYTES,
   DOCX_MAX_TOTAL_BYTES,
   DocxArchiveError,
+  loadDocx,
   loadDocxArchive,
   type ArchiveOptions,
   type DocxArchive,

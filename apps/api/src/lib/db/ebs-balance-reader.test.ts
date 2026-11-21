@@ -44,7 +44,7 @@ describe("the shared RDS EBS reader", () => {
     const readResult = createEbsBalanceReader({
       instanceIdentifier: "test-instance",
       clock: () => NOW,
-      timeoutMs,
+      timeoutMs, // timeout: the injected timeout signal ends the read, not the clock
       timeoutSignal: (duration) => {
         requestedTimeouts.push(duration);
         return deadline.signal;

@@ -8,6 +8,6 @@ export class ClientTelemetryError extends TaggedError("ClientTelemetryError")<{
   cause?: unknown;
 }> {}
 
-export const logDevError = createDevErrorLogger({
-  echoErrors: import.meta.env.DEV,
-});
+export const logDevError = import.meta.env.DEV
+  ? createDevErrorLogger({ echoErrors: true })
+  : () => undefined;

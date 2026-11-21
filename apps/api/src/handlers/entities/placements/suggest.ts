@@ -1,7 +1,5 @@
 import { Result } from "better-result";
 import { and, eq, inArray, sql } from "drizzle-orm";
-import { t } from "elysia";
-import type { Static } from "elysia";
 import * as v from "valibot";
 
 import { agentInputNormalizationMetadata } from "@stll/agent-input";
@@ -14,22 +12,33 @@ import {
 } from "@/api/db/schema";
 import { resolveCaching } from "@/api/lib/ai-config";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
+import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import type { OrgAIConfigStatus } from "@/api/lib/ai-config-loader-core";
+import { storedAIConfigUnreadableError } from "@/api/lib/ai-config-response";
 import { aiHandlerError } from "@/api/lib/ai-error";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
-import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
+import {
+  ACCOUNT_ACCESS,
+  configuredModelAdmission,
+  createSafeHandler,
+} from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
+import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
+import { generateTanStackObjectForTask } from "@/api/lib/tanstack-ai-generate";
 import {
-  getTanStackTextModelInfoForRole,
-  requireTanStackAIAvailableForRole,
+  getTanStackTextModelInfoForTask,
+  requireTanStackAIAvailableForTask,
 } from "@/api/lib/tanstack-ai-models";
+import type { ManagedModelTier } from "@/api/lib/usage/managed-model-tier";
+
+import { hashSummarySource } from "./summary-source-hash";
 
 const MAX_ORGANIZE_FILES = 100;
 const MAX_EXISTING_FOLDERS = 500;
@@ -37,42 +46,51 @@ const MAX_USER_INSTRUCTIONS_CHARS = 1500;
 const SUMMARY_PROMPT_VERSION = 1;
 const SUMMARY_SOURCE_MAX_CHARS = 12_000;
 
-const organizeFileInputSchema = t.Object({
-  entityId: tSafeId("entity"),
-  originalName: t.String({ minLength: 1, maxLength: 1024 }),
+const organizeFileInputSchema = v.object({
+  entityId: resourceIdSchema("entity"),
+  originalName: v.pipe(v.string(), v.minLength(1), v.maxLength(1024)),
 });
 
-const organizeFolderInputSchema = t.Object({
-  entityId: tSafeId("entity"),
-  name: t.String({ minLength: 1, maxLength: 512 }),
-  path: t.String({ minLength: 1, maxLength: 1024 }),
+const organizeFolderInputSchema = v.object({
+  entityId: resourceIdSchema("entity"),
+  name: v.pipe(v.string(), v.minLength(1), v.maxLength(512)),
+  path: v.pipe(v.string(), v.minLength(1), v.maxLength(1024)),
 });
 
-const organizeSuggestionsBodySchema = t.Object({
-  existingFolders: t.Optional(
-    t.Array(organizeFolderInputSchema, {
-      maxItems: MAX_EXISTING_FOLDERS,
-    }),
+const { description: localeDescription, ...localeNormalization } =
+  agentInputNormalizationMetadata(
+    { kind: "locale" },
+    "BCP-47 language tag for generated names and folder suggestions",
+  );
+
+const organizeSuggestionsBodySchema = v.object({
+  existingFolders: v.optional(
+    v.pipe(
+      v.array(organizeFolderInputSchema),
+      v.maxLength(MAX_EXISTING_FOLDERS),
+    ),
   ),
-  files: t.Array(organizeFileInputSchema, {
-    minItems: 1,
-    maxItems: MAX_ORGANIZE_FILES,
-  }),
-  locale: t.Optional(
-    t.String({
-      maxLength: 16,
-      ...agentInputNormalizationMetadata(
-        { kind: "locale" },
-        "BCP-47 language tag for generated names and folder suggestions",
-      ),
-    }),
+  files: v.pipe(
+    v.array(organizeFileInputSchema),
+    v.minLength(1),
+    v.maxLength(MAX_ORGANIZE_FILES),
   ),
-  userInstructions: t.Optional(
-    t.String({ maxLength: MAX_USER_INSTRUCTIONS_CHARS }),
+  locale: v.optional(
+    v.pipe(
+      v.string(),
+      v.maxLength(16),
+      v.metadata(localeNormalization),
+      v.description(localeDescription),
+    ),
+  ),
+  userInstructions: v.optional(
+    v.pipe(v.string(), v.maxLength(MAX_USER_INSTRUCTIONS_CHARS)),
   ),
 });
 
-type OrganizeSuggestionsBody = Static<typeof organizeSuggestionsBodySchema>;
+type OrganizeSuggestionsBody = v.InferOutput<
+  typeof organizeSuggestionsBodySchema
+>;
 
 const generatedSummaryAISchema = v.strictObject({
   entityId: v.string(),
@@ -80,7 +98,8 @@ const generatedSummaryAISchema = v.strictObject({
   language: v.nullable(v.string()),
 });
 
-const generatedSummariesAISchema = v.strictObject({
+/** Read by the structured-output role contract test. @public */
+export const generatedSummariesAISchema = v.strictObject({
   summaries: v.array(generatedSummaryAISchema),
 });
 
@@ -92,7 +111,8 @@ const suggestionAIOutputSchema = v.strictObject({
   documentType: v.string(),
 });
 
-const suggestionsAIOutputSchema = v.strictObject({
+/** Read by the structured-output role contract test. @public */
+export const suggestionsAIOutputSchema = v.strictObject({
   suggestions: v.array(suggestionAIOutputSchema),
   deleteFolders: v.array(
     v.strictObject({
@@ -106,6 +126,7 @@ type OrganizeSuggestionsHandlerProps = {
   safeDb: SafeDb;
   workspaceId: SafeId<"workspace">;
   organizationId: SafeId<"organization">;
+  admission: ModelDispatchAdmission;
   orgAIConfig: OrgAIConfig | null;
   managedAIResidency: ManagedAIResidency;
   orgAIConfigStatus: OrgAIConfigStatus;
@@ -175,6 +196,7 @@ const organizeSuggestionsHandler = async function* ({
   safeDb,
   workspaceId,
   organizationId,
+  admission,
   orgAIConfig,
   managedAIResidency,
   orgAIConfigStatus,
@@ -182,11 +204,15 @@ const organizeSuggestionsHandler = async function* ({
   body,
   userId,
 }: OrganizeSuggestionsHandlerProps) {
-  yield* requireTanStackAIAvailableForRole({
+  if (orgAIConfigStatus === ORG_AI_CONFIG_STATUS.unreadable) {
+    return Result.err(storedAIConfigUnreadableError());
+  }
+
+  yield* requireTanStackAIAvailableForTask({
     dataClass: "customer",
     configStatus: orgAIConfigStatus,
     orgConfig: orgAIConfig,
-    role: "fast",
+    task: "short-text",
   });
 
   const contexts = yield* Result.await(
@@ -210,23 +236,22 @@ const organizeSuggestionsHandler = async function* ({
     (context) => context.summary === null,
   );
   if (missingContexts.length > 0) {
-    const summariesResult = await generateMissingSummaries({
-      contexts: missingContexts,
-      organizationId,
-      workspaceId,
-      orgAIConfig,
-      managedAIResidency,
-      promptCachingEnabled,
-      safeDb,
-      userId,
-    });
-
-    if (Result.isError(summariesResult)) {
-      return Result.err(summariesResult.error);
-    }
+    const summaries = yield* Result.await(
+      generateMissingSummaries({
+        contexts: missingContexts,
+        organizationId,
+        admission,
+        workspaceId,
+        orgAIConfig,
+        managedAIResidency,
+        promptCachingEnabled,
+        safeDb,
+        userId,
+      }),
+    );
 
     const generatedByEntityId = new Map(
-      summariesResult.value.map((summary) => [summary.entityId, summary]),
+      summaries.map((summary) => [summary.entityId, summary]),
     );
 
     for (const context of missingContexts) {
@@ -235,6 +260,7 @@ const organizeSuggestionsHandler = async function* ({
         return Result.err(
           new HandlerError({
             status: 502,
+            code: "internal_error",
             message: "Failed to generate document summaries",
           }),
         );
@@ -249,6 +275,7 @@ const organizeSuggestionsHandler = async function* ({
         organizationId,
         workspaceId,
         orgAIConfig,
+        modelTier: admission.modelTier,
         contexts: missingContexts,
       }),
     );
@@ -265,8 +292,9 @@ const organizeSuggestionsHandler = async function* ({
       workspaceId,
     },
     feature: "entities.placements.suggest",
-    modelRole: "fast",
+    modelTask: "short-text",
     orgAIConfig,
+    modelTier: admission.modelTier,
     properties: {
       file_count: String(body.files.length),
       organization_id: organizationId,
@@ -280,18 +308,20 @@ const organizeSuggestionsHandler = async function* ({
 
   const result = await Result.tryPromise({
     try: async () =>
-      await generateTanStackObjectForRole({
+      await generateTanStackObjectForTask({
+        userId,
         dataClass: "customer",
-        role: "fast",
+        task: "short-text",
         serviceTier: "flex",
         orgAIConfig,
         managedAIResidency,
         organizationId,
+        admission,
         tenantWorkspaceIds: [workspaceId],
         analytics: aiAnalytics,
         caching: resolveCaching({
           promptCachingEnabled,
-          role: "fast",
+          task: "short-text",
           scopeKey: `${organizationId}:${workspaceId}:organize`,
         }),
         system: ORGANIZE_SYSTEM_PROMPT,
@@ -316,18 +346,24 @@ const organizeSuggestionsHandler = async function* ({
         // wrapping). Capped at 24 000 so a 100-file batch (~20 200) has
         // headroom for the model's slightly variable output sizes.
         maxOutputTokens: Math.min(24_000, 200 + body.files.length * 200),
-        abortSignal: AbortSignal.timeout(60_000),
+        deadlineMs: 60_000,
       }),
     catch: (error: unknown) => error,
   });
 
   if (Result.isError(result)) {
     aiAnalytics.captureError(result.error);
-    captureError(result.error, {
-      feature: "entities.placements.suggest",
-      workspaceId,
-      organizationId,
-    });
+    captureError(
+      result.error,
+      handlerErrorContext(
+        "placements.organizeSuggestionsHandler.result_error",
+        {
+          feature: "entities.placements.suggest",
+          workspaceId,
+          organizationId,
+        },
+      ),
+    );
     return Result.err(
       aiHandlerError(result.error, {
         status: 502,
@@ -366,6 +402,7 @@ const organizeSuggestionsHandler = async function* ({
       return Result.err(
         new HandlerError({
           status: 502,
+          code: "internal_error",
           message: "Failed to generate organization suggestions",
         }),
       );
@@ -709,6 +746,7 @@ const loadSummaryContexts = async ({
 type GenerateMissingSummariesOptions = {
   contexts: EntitySummaryContext[];
   organizationId: SafeId<"organization">;
+  admission: ModelDispatchAdmission;
   workspaceId: SafeId<"workspace">;
   orgAIConfig: OrgAIConfig | null;
   managedAIResidency: ManagedAIResidency;
@@ -720,6 +758,7 @@ type GenerateMissingSummariesOptions = {
 const generateMissingSummaries = async ({
   contexts,
   organizationId,
+  admission,
   workspaceId,
   orgAIConfig,
   managedAIResidency,
@@ -740,8 +779,9 @@ const generateMissingSummaries = async ({
       workspaceId,
     },
     feature: "entities.version-summary",
-    modelRole: "fast",
+    modelTask: "short-text",
     orgAIConfig,
+    modelTier: admission.modelTier,
     properties: {
       file_count: String(contexts.length),
       organization_id: organizationId,
@@ -752,18 +792,20 @@ const generateMissingSummaries = async ({
 
   const result = await Result.tryPromise({
     try: async () =>
-      await generateTanStackObjectForRole({
+      await generateTanStackObjectForTask({
+        userId,
         dataClass: "customer",
-        role: "fast",
+        task: "short-text",
         serviceTier: "flex",
         orgAIConfig,
         managedAIResidency,
         organizationId,
+        admission,
         tenantWorkspaceIds: [workspaceId],
         analytics: aiAnalytics,
         caching: resolveCaching({
           promptCachingEnabled,
-          role: "fast",
+          task: "short-text",
           scopeKey: `${organizationId}:${workspaceId}:summaries`,
         }),
         system: SUMMARY_SYSTEM_PROMPT,
@@ -780,18 +822,21 @@ const generateMissingSummaries = async ({
         // bigger budget here. ~120 tokens per summary at 100 files puts
         // us around 12 200 tokens.
         maxOutputTokens: Math.min(24_000, 200 + contexts.length * 300),
-        abortSignal: AbortSignal.timeout(60_000),
+        deadlineMs: 60_000,
       }),
     catch: (error: unknown) => error,
   });
 
   if (Result.isError(result)) {
     aiAnalytics.captureError(result.error);
-    captureError(result.error, {
-      feature: "entities.version-summary",
-      workspaceId,
-      organizationId,
-    });
+    captureError(
+      result.error,
+      handlerErrorContext("placements.generateMissingSummaries.result_error", {
+        feature: "entities.version-summary",
+        workspaceId,
+        organizationId,
+      }),
+    );
     return Result.err(
       aiHandlerError(result.error, {
         status: 502,
@@ -812,6 +857,7 @@ const generateMissingSummaries = async ({
       return Result.err(
         new HandlerError({
           status: 502,
+          code: "internal_error",
           message: "Failed to generate document summaries",
         }),
       );
@@ -992,6 +1038,8 @@ type PersistGeneratedSummariesOptions = {
   organizationId: SafeId<"organization">;
   workspaceId: SafeId<"workspace">;
   orgAIConfig: OrgAIConfig | null;
+  /** The tier the summaries were generated on, so the recorded model matches. */
+  modelTier: ManagedModelTier;
   contexts: EntitySummaryContext[];
 };
 
@@ -1000,11 +1048,13 @@ const persistGeneratedSummaries = async ({
   organizationId,
   workspaceId,
   orgAIConfig,
+  modelTier,
   contexts,
 }: PersistGeneratedSummariesOptions) => {
-  const modelInfo = getTanStackTextModelInfoForRole("fast", orgAIConfig, {
+  const modelInfo = getTanStackTextModelInfoForTask("short-text", orgAIConfig, {
     dataClass: "customer",
     organizationId,
+    modelTier,
   });
   const values = contexts.flatMap((context) => {
     if (context.summary === null) {
@@ -1054,31 +1104,12 @@ const persistGeneratedSummaries = async ({
   });
 };
 
-type HashSummarySourceOptions = {
-  entityVersionId: SafeId<"entityVersion">;
-  originalName: string;
-  indexedTitle: string;
-  searchDocumentUpdatedAt: Date | null;
-};
-
-const hashSummarySource = ({
-  entityVersionId,
-  originalName,
-  indexedTitle,
-  searchDocumentUpdatedAt,
-}: HashSummarySourceOptions): string => {
-  const hasher = new Bun.CryptoHasher("sha256");
-  hasher.update(entityVersionId);
-  hasher.update("\n");
-  hasher.update(originalName);
-  hasher.update("\n");
-  hasher.update(indexedTitle);
-  hasher.update("\n");
-  hasher.update(searchDocumentUpdatedAt?.toISOString() ?? "");
-  return hasher.digest("hex");
-};
-
 const config = {
+  contract: "patch",
+  actionAdmission: {
+    type: "handler",
+    actionKind: "entities.suggest-placements",
+  },
   description:
     "Propose a folder placement and a tidied file name for up to 100 " +
     "documents of a matter, given the folders that already exist plus an " +
@@ -1102,13 +1133,14 @@ const config = {
   requiresUsage: {
     actionType: "chat",
     serviceTier: "flex",
-    modelRole: "fast",
+    modelTask: "short-text",
   },
 } satisfies WorkspaceHandlerConfig;
 
 const organizeSuggestions = createSafeHandler(
   config,
   async function* ({
+    modelAdmission,
     safeDb,
     workspaceId,
     session,
@@ -1119,7 +1151,12 @@ const organizeSuggestions = createSafeHandler(
     body,
     user,
   }) {
+    if (orgAIConfigStatus === ORG_AI_CONFIG_STATUS.unreadable) {
+      return Result.err(storedAIConfigUnreadableError());
+    }
+
     return yield* organizeSuggestionsHandler({
+      admission: configuredModelAdmission({ modelAdmission }),
       safeDb,
       workspaceId,
       organizationId: session.activeOrganizationId,

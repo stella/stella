@@ -4,28 +4,23 @@ import { useHotkey } from "@tanstack/react-hotkeys";
 import { useTranslations } from "use-intl";
 
 import {
+  PanelTrigger,
   Sidebar as SidebarShell,
   SidebarContent,
   SidebarFooter,
   SidebarGroup,
-  SidebarGroupAction,
   SidebarGroupContent,
   SidebarGroupLabel,
   SidebarHeader,
-  SidebarInput,
-  SidebarInset,
+  sidebarIdentityTriggerClassName,
   SidebarMenu,
-  SidebarMenuAction,
   SidebarMenuBadge,
   SidebarMenuButton,
-  sidebarIdentityTriggerClassName,
   SidebarMenuItem,
-  SidebarMenuSkeleton,
   SidebarMenuSub,
   SidebarMenuSubButton,
   SidebarMenuSubItem,
   SidebarProvider as SidebarProviderShell,
-  SidebarRail as SidebarRailShell,
   SidebarSeparator,
   SidebarTrigger as SidebarTriggerShell,
   useSidebar,
@@ -33,14 +28,14 @@ import {
   useSidebarLayout,
 } from "@stll/ui/sidebar";
 
+import { useHasMounted } from "@/hooks/use-chrome-query";
 import { usePersistedSidebarOpen } from "@/hooks/use-persisted-sidebar-open";
+import { defaultPresentationPrefs } from "@/lib/account/presentation-prefs/preferences";
 import { useEffectiveHotkey } from "@/lib/use-effective-shortcuts";
-
-const DEFAULT_SIDEBAR_OPEN = true;
 
 /**
  * App glue around `@stll/ui/sidebar`'s generic shell: wires the app's
- * persisted (localStorage-backed) open state in as a controlled value. The
+ * persisted presentation preference in as a controlled value. The
  * shell itself stays host-agnostic and does not persist anything on its own.
  */
 const SidebarProvider = ({
@@ -59,8 +54,8 @@ const SidebarProvider = ({
     persistOpen,
     setOpen: setPersistedOpen,
   } = usePersistedSidebarOpen({
-    defaultOpen: defaultOpen ?? DEFAULT_SIDEBAR_OPEN,
-    hydrateFromStorage: defaultOpen === undefined && openProp === undefined,
+    defaultOpen: defaultOpen ?? defaultPresentationPrefs.sidebarOpen,
+    usePreference: defaultOpen === undefined && openProp === undefined,
   });
 
   const open = openProp ?? persistedOpen;
@@ -106,41 +101,35 @@ const SidebarTrigger = (
   props: React.ComponentProps<typeof SidebarTriggerShell>,
 ) => {
   const t = useTranslations();
+  const mounted = useHasMounted();
 
   return (
-    <SidebarTriggerShell label={t("navigation.toggleSidebar")} {...props} />
+    <SidebarTriggerShell
+      label={t("navigation.toggleSidebar")}
+      {...props}
+      disabled={!mounted || props.disabled}
+    />
   );
 };
 
-const SidebarRail = (props: React.ComponentProps<typeof SidebarRailShell>) => {
-  const t = useTranslations();
-
-  return <SidebarRailShell label={t("navigation.toggleSidebar")} {...props} />;
-};
-
 export {
+  PanelTrigger,
   Sidebar,
   SidebarContent,
   SidebarFooter,
   SidebarGroup,
-  SidebarGroupAction,
   SidebarGroupContent,
   SidebarGroupLabel,
   SidebarHeader,
-  SidebarInput,
-  SidebarInset,
   SidebarMenu,
-  SidebarMenuAction,
   SidebarMenuBadge,
   SidebarMenuButton,
   sidebarIdentityTriggerClassName,
   SidebarMenuItem,
-  SidebarMenuSkeleton,
   SidebarMenuSub,
   SidebarMenuSubButton,
   SidebarMenuSubItem,
   SidebarProvider,
-  SidebarRail,
   SidebarSeparator,
   SidebarToggleHotkey,
   SidebarTrigger,

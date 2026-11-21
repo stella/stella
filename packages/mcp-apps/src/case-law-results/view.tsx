@@ -1,0 +1,1122 @@
+import { useId, useRef, useState, useSyncExternalStore } from "react";
+
+import { DirectionProvider } from "@base-ui/react/direction-provider";
+import { panic } from "better-result";
+import {
+  IntlProvider,
+  useFormatter,
+  useLocale,
+  useTranslations,
+} from "use-intl";
+
+import { normalizeStringList } from "@stll/agent-input/string-list";
+import { PUBLIC_CASE_LAW_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
+import { DECISION_TEXT_AVAILABILITY } from "@stll/api-contract/case-law-text-field";
+import {
+  formatDecisionParagraphRange,
+  parseDecisionParagraphFragment,
+} from "@stll/api-contract/decision-paragraph-range";
+import { parseLegalCitationHttpUrl } from "@stll/api-contract/legal-citation-links";
+import { foldSearchMatchText } from "@stll/text-normalize";
+import { Temporal, todayFor } from "@stll/time";
+import {
+  Accordion,
+  AccordionItem,
+  AccordionPanel,
+  AccordionTrigger,
+} from "@stll/ui/accordion";
+import { BidiText } from "@stll/ui/bidi-text";
+import { Button } from "@stll/ui/button";
+import { MultipleCourtFilter } from "@stll/ui/court-filter";
+import { DateRangeFilter } from "@stll/ui/date-range-filter";
+import { DocumentIdentityBadge } from "@stll/ui/document-identity-badge";
+import { Field, FieldLabel } from "@stll/ui/field";
+import { FIELD_TRIGGER_CLASS_NAME } from "@stll/ui/field-trigger";
+import { Form } from "@stll/ui/form";
+import {
+  CaseLawIcon,
+  ChevronRightIcon,
+  ExternalLinkIcon,
+  SearchIcon,
+} from "@stll/ui/icons";
+import { Input } from "@stll/ui/input";
+import { cn } from "@stll/ui/lib/utils";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+} from "@stll/ui/pagination";
+import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
+import {
+  PreviewCard,
+  PreviewCardPopup,
+  PreviewCardTrigger,
+} from "@stll/ui/preview-card";
+import { SearchField } from "@stll/ui/search-field";
+import {
+  Select,
+  SelectItem,
+  SelectPopup,
+  SelectTrigger,
+  SelectValue,
+} from "@stll/ui/select";
+import { Skeleton } from "@stll/ui/skeleton";
+import { StellaMark } from "@stll/ui/stella-mark";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@stll/ui/table";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
+import { TruncatedText } from "@stll/ui/truncated-text";
+import { containedEventHandler } from "@stll/ui/use-contained-handler";
+
+import { createReaderController } from "../decision-reader/controller";
+import { createEmbeddedReaderBridge } from "../decision-reader/embedded-bridge";
+import { ReaderView } from "../decision-reader/view";
+import { parseAppToolPayload } from "../shared/bridge";
+import type { createPresentationBridge } from "../shared/bridge";
+import type { CourtCatalog } from "../shared/generated/contracts";
+import { appLocale } from "../shared/locale";
+import { SearchNotice } from "../shared/notice";
+import { getAppToolArrayLimit } from "../shared/tool-input";
+import {
+  appendCourtCatalogPage,
+  courtPickerGroups,
+  filterDefaults,
+  originalSearchQuery,
+  searchSubmitInput,
+  sortResultRows,
+} from "./model";
+import type { CaseLawView, ResultRow, ResultSort } from "./model";
+import { parseCourtCatalog } from "./parse";
+
+/** Pages of a country's courts the picker reads before asking for a search. */
+const COURT_CATALOG_PAGE_CAP = 20;
+
+export type CaseLawBridge = ReturnType<
+  typeof createPresentationBridge<CaseLawView>
+>;
+type OpenReader = (
+  row: Pick<ResultRow, "decisionId" | "url" | "type">,
+  trigger: HTMLElement,
+) => void;
+type SearchPage = Extract<CaseLawView, { type: "search" }>;
+
+const ResultTableRow = ({
+  row,
+  bridge,
+  onOpen,
+}: {
+  row: ResultRow;
+  bridge: CaseLawBridge;
+  onOpen: OpenReader;
+}) => {
+  const t = useTranslations();
+  const format = useFormatter();
+  const panelId = useId();
+  const [expanded, setExpanded] = useState(false);
+  const headnoteText = (() => {
+    if (row.type === "resolve") {
+      return null;
+    }
+    const { headnote } = row;
+    switch (headnote.type) {
+      case "present":
+        return headnote.text;
+      case "omitted":
+        return t("headnoteOmitted");
+      case "not_stated":
+        return t("headnoteNotStated");
+      default:
+        return panic("Unknown headnote state", headnote satisfies never);
+    }
+  })();
+  const url = row.url;
+  const sourceUrl = row.source_url;
+  const openWeb = () => {
+    if (url !== null) {
+      bridge.detached(bridge.openLink(url), "caseLawResults.openDecision");
+    }
+  };
+  return (
+    <TableRow
+      className="max-[480px]:flex max-[480px]:flex-wrap"
+      onClick={containedEventHandler((event) => {
+        if (row.type === "resolve" || !(event.target instanceof Element)) {
+          return;
+        }
+        if (
+          event.target.closest("button, a, input, [data-slot=tooltip-trigger]")
+        ) {
+          return;
+        }
+        setExpanded(!expanded);
+      })}
+    >
+      <TableCell className="py-3 ps-4 max-[480px]:w-full">
+        <div className="flex min-w-0 items-center gap-2 whitespace-nowrap">
+          <DocumentIdentityBadge
+            identity={{
+              kind: "decision",
+              courtAbbreviation: row.courtAbbreviation,
+            }}
+            title={`${row.caseNumber}: ${row.court}`}
+          />
+          <PreviewCard>
+            <PreviewCardTrigger
+              render={
+                <Button
+                  type="button"
+                  variant="link"
+                  className="h-auto min-w-0 p-0 text-start font-semibold tabular-nums"
+                  disabled={
+                    (row.type === "resolve" || !bridge.supportsTools()) &&
+                    url === null
+                  }
+                  disabledReason={t("decisionLinkUnavailable")}
+                  onClick={(event) => onOpen(row, event.currentTarget)}
+                />
+              }
+            >
+              <TruncatedText
+                hint={false}
+                render={<BidiText />}
+                title={row.caseNumber}
+              >
+                {row.caseNumber}
+              </TruncatedText>
+            </PreviewCardTrigger>
+            <PreviewCardPopup align="start" className="w-80 flex-col">
+              <p className="font-semibold">
+                <BidiText>{row.caseNumber}</BidiText>
+              </p>
+              <p className="text-muted-foreground text-xs">{row.court}</p>
+              {row.snippet !== null && (
+                <p className="text-sm leading-relaxed">{row.snippet}</p>
+              )}
+              {row.ecli !== null && (
+                <Input
+                  readOnly
+                  value={row.ecli}
+                  aria-label={t("copyEcli")}
+                  className="font-mono text-xs"
+                  onFocus={(event) => event.currentTarget.select()}
+                />
+              )}
+              {url !== null && (
+                <Button variant="outline" size="sm" onClick={openWeb}>
+                  <StellaMark />
+                  {t("openInStella")}
+                </Button>
+              )}
+            </PreviewCardPopup>
+          </PreviewCard>
+          {row.type === "search" &&
+            row.textAvailability ===
+              DECISION_TEXT_AVAILABILITY.METADATA_ONLY && (
+              <span className="text-muted-foreground text-xs">
+                {t("noDecisionText")}
+              </span>
+            )}
+          {row.type === "search" && row.match === "some_terms" && (
+            <span className="text-muted-foreground text-xs">
+              {t("partialMatch")}
+            </span>
+          )}
+        </div>
+      </TableCell>
+      <TableCell className="py-3 max-[480px]:order-last max-[480px]:w-full max-[480px]:pt-0">
+        {row.type === "search" && (
+          <Accordion
+            value={expanded ? [row.decisionId] : []}
+            onValueChange={(value) => setExpanded(value.length > 0)}
+          >
+            <AccordionItem value={row.decisionId} className="border-0">
+              <div className="flex min-w-0 items-center gap-2">
+                <TruncatedText
+                  className="snippet text-muted-foreground flex-1 text-sm"
+                  render={<p />}
+                >
+                  {row.snippet ?? headnoteText}
+                </TruncatedText>
+                <AccordionTrigger
+                  aria-controls={panelId}
+                  aria-label={t(
+                    expanded ? "collapsePassages" : "expandPassages",
+                  )}
+                  className="size-[44px] flex-none items-center justify-center gap-0 p-0 [&_[data-slot=accordion-indicator]]:transition-none"
+                />
+              </div>
+              <AccordionPanel
+                id={panelId}
+                style={{ height: "auto", transition: "none" }}
+                className="space-y-3 pt-2 pb-0"
+              >
+                {row.snippet === null ? null : (
+                  <div className="space-y-1">
+                    <p className="text-foreground text-xs font-medium">
+                      {t("matchedPassages")}
+                    </p>
+                    <BidiText
+                      as="p"
+                      className="text-sm leading-relaxed break-words whitespace-pre-wrap"
+                    >
+                      {row.snippet}
+                    </BidiText>
+                  </div>
+                )}
+                <div className="space-y-1">
+                  <p className="text-foreground text-xs font-medium">
+                    {t("headnote")}
+                  </p>
+                  <BidiText
+                    as="p"
+                    className="text-sm leading-relaxed break-words whitespace-pre-wrap"
+                  >
+                    {headnoteText}
+                  </BidiText>
+                  {row.headnote.type === "present" &&
+                    row.headnote.truncated && (
+                      <p className="text-xs">{t("headnoteExcerpt")}</p>
+                    )}
+                </div>
+                {row.keywords !== null && (
+                  <div className="space-y-1">
+                    <p className="text-foreground text-xs font-medium">
+                      {t("keywords")}
+                    </p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {row.keywords.items.map((keyword) => (
+                        <span
+                          key={keyword}
+                          className="bg-muted max-w-full rounded-md px-2 py-1 text-xs break-words whitespace-normal"
+                        >
+                          <BidiText>{keyword}</BidiText>
+                        </span>
+                      ))}
+                      {row.keywords.omitted > 0 && (
+                        <span className="text-xs">
+                          {t("keywordsOmitted", {
+                            count: format.number(row.keywords.omitted),
+                          })}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </AccordionPanel>
+            </AccordionItem>
+          </Accordion>
+        )}
+      </TableCell>
+      <TableCell className="py-3 text-xs whitespace-nowrap tabular-nums max-[480px]:ps-4">
+        {row.decisionDate !== null && (
+          <BidiText>
+            {format.dateTime(new Date(row.decisionDate), {
+              year: "numeric",
+              month: "short",
+              day: "numeric",
+              timeZone: "UTC",
+            })}
+          </BidiText>
+        )}
+      </TableCell>
+      <TableCell className="py-2 max-[480px]:ms-auto">
+        <div className="flex justify-end gap-1">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            aria-label={t("open")}
+            tooltip={t("open")}
+            disabled={
+              (row.type === "resolve" || !bridge.supportsTools()) &&
+              url === null
+            }
+            disabledReason={t("decisionLinkUnavailable")}
+            onClick={(event) => onOpen(row, event.currentTarget)}
+          >
+            <ChevronRightIcon />
+          </Button>
+          {url !== null && (
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label={t("openInStella")}
+                    onClick={openWeb}
+                  />
+                }
+              >
+                <StellaMark />
+              </TooltipTrigger>
+              <TooltipPopup>{t("openInStella")}</TooltipPopup>
+            </Tooltip>
+          )}
+          {sourceUrl !== undefined && (
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label={t("openOriginalSource")}
+                    onClick={() => {
+                      bridge.detached(
+                        bridge.openLink(sourceUrl),
+                        "caseLawResults.openOriginalSource",
+                      );
+                    }}
+                  />
+                }
+              >
+                <ExternalLinkIcon />
+              </TooltipTrigger>
+              <TooltipPopup>{t("openOriginalSource")}</TooltipPopup>
+            </Tooltip>
+          )}
+        </div>
+      </TableCell>
+    </TableRow>
+  );
+};
+
+const ResultsTable = ({
+  rows,
+  bridge,
+  onOpen,
+}: {
+  rows: readonly ResultRow[];
+  bridge: CaseLawBridge;
+  onOpen: OpenReader;
+}) => {
+  const t = useTranslations();
+  if (rows.length === 0) {
+    return (
+      <div
+        className="bg-muted/40 flex flex-col items-center gap-3 rounded-xl px-6 py-12 text-center"
+        role="status"
+      >
+        <SearchIcon className="text-muted-foreground size-6" />
+        <p className="font-medium">{t("noResults")}</p>
+      </div>
+    );
+  }
+  return (
+    <Table className="table-fixed">
+      <TableHeader className="max-[480px]:hidden">
+        <TableRow className="hover:bg-transparent">
+          <TableHead className="w-72 ps-4">{t("reference")}</TableHead>
+          <TableHead>{t("summary")}</TableHead>
+          <TableHead className="w-28 whitespace-nowrap">{t("date")}</TableHead>
+          <TableHead className="w-20">
+            <span className="sr-only">{t("open")}</span>
+          </TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {[...new Map(rows.map((row) => [row.decisionId, row])).values()].map(
+          (row) => (
+            <ResultTableRow
+              key={row.decisionId}
+              row={row}
+              bridge={bridge}
+              onOpen={onOpen}
+            />
+          ),
+        )}
+      </TableBody>
+    </Table>
+  );
+};
+
+type SearchControlsProps = {
+  bridge: CaseLawBridge;
+  page: SearchPage;
+  input: Record<string, unknown>;
+  defaults: Extract<ReturnType<typeof filterDefaults>, { status: "ready" }>;
+};
+
+const SearchControls = ({
+  bridge,
+  page,
+  input,
+  defaults,
+}: SearchControlsProps) => {
+  const t = useTranslations();
+  const locale = useLocale();
+  const format = useFormatter();
+  const maxCourts = getAppToolArrayLimit("search_case_law", "courts");
+  const originalQuery = originalSearchQuery(input);
+  const [query, setQuery] = useState(originalQuery);
+  const [country, setCountry] = useState(defaults.country);
+  const [from, setFrom] = useState(defaults.from);
+  const [to, setTo] = useState(defaults.to);
+  const [courts, setCourts] = useState(() => {
+    const initial = normalizeStringList(defaults.court, {
+      split: "delimiters",
+    });
+    const selected = (() => {
+      if (defaults.courts.length > 0) {
+        return defaults.courts;
+      }
+      return initial.ok ? initial.value : [];
+    })();
+    return [...new Set(selected)];
+  });
+  // The page's facets describe the searched country; after a country switch
+  // they describe another one and name none of the chosen country's courts.
+  const facets = country === defaults.country ? page.facets : null;
+  // Per country: a page answering after a country switch joins its own
+  // country's catalog, and a reader coming back finds it where it stopped.
+  const [catalogs, setCatalogs] = useState<ReadonlyMap<string, CourtCatalog>>(
+    () => new Map(),
+  );
+  const [catalogsLoading, setCatalogsLoading] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
+  const countryCatalog = catalogs.get(country) ?? null;
+  const loadCatalog = () => {
+    if (catalogsLoading.has(country) || countryCatalog?.nextCursor === null) {
+      return;
+    }
+    const requested = country;
+    setCatalogsLoading((current) => new Set(current).add(requested));
+    bridge.detached(
+      (async () => {
+        // One bounded page per call, appended as it arrives, from where the
+        // country's catalog stopped. A cap or an unreadable page ends the
+        // round; the facets stand in, and the next opening picks up from here.
+        let cursor = countryCatalog?.nextCursor ?? null;
+        for (
+          let pageIndex = 0;
+          pageIndex < COURT_CATALOG_PAGE_CAP;
+          pageIndex += 1
+        ) {
+          // In turn: each page starts from the previous page's cursor.
+          const result = await bridge.requestTool({
+            name: "list_case_law_courts",
+            arguments: {
+              country: requested,
+              ...(cursor === null ? {} : { cursor }),
+            },
+          });
+          const parsed =
+            result.isError === true
+              ? undefined
+              : parseCourtCatalog(parseAppToolPayload(result));
+          if (parsed === undefined) {
+            break;
+          }
+          setCatalogs((current) =>
+            new Map(current).set(
+              requested,
+              appendCourtCatalogPage(current.get(requested) ?? null, parsed),
+            ),
+          );
+          cursor = parsed.nextCursor;
+          if (cursor === null) {
+            break;
+          }
+        }
+        setCatalogsLoading((current) => {
+          const next = new Set(current);
+          next.delete(requested);
+          return next;
+        });
+      })(),
+      "caseLawResults.courts",
+    );
+  };
+  const courtGroups = courtPickerGroups({ catalog: countryCatalog, facets });
+  const catalogPending =
+    countryCatalog === null && catalogsLoading.has(country);
+  const dateLabels = {
+    locale,
+    placeholderLabel: t("selectDate"),
+    clearLabel: t("clearDate"),
+    todayLabel: t("today"),
+    dialogLabel: t("datePicker"),
+    previousMonthLabel: t("previousMonth"),
+    nextMonthLabel: t("nextMonth"),
+    previousYearLabel: t("previousYear"),
+    nextYearLabel: t("nextYear"),
+    previousDecadeLabel: t("previousDecade"),
+    nextDecadeLabel: t("nextDecade"),
+    outOfRangeLabel: t("outOfRange"),
+  };
+  const submission = searchSubmitInput({
+    input,
+    query,
+    originalQuery,
+    country,
+    court:
+      courts.length === 0 ? { type: "all" } : { type: "courts", names: courts },
+    from,
+    to,
+  });
+  return (
+    <Form
+      onSubmit={(event) => {
+        event.preventDefault();
+        if (submission.type !== "search") {
+          return;
+        }
+        bridge.detached(
+          bridge.call({
+            name: "search_case_law",
+            arguments: submission.input,
+          }),
+          "caseLawResults.filter",
+        );
+      }}
+    >
+      <div className="flex gap-2">
+        <SearchField
+          value={query}
+          onValueChange={setQuery}
+          clearLabel={t("reset")}
+          aria-label={t("search")}
+          placeholder={t("searchPlaceholder")}
+          groupClassName="flex-1"
+        />
+        <Button
+          type="submit"
+          variant="outline"
+          className="h-auto shrink-0 max-sm:h-11 sm:h-auto"
+          disabled={submission.type !== "search"}
+          disabledReason={t("searchQueryRequired")}
+        >
+          {t("search")}
+        </Button>
+      </div>
+      <div className="grid grid-cols-2 items-end gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.6fr)_minmax(0,1.2fr)_minmax(0,1.2fr)_auto]">
+        <Field className="gap-1.5">
+          <FieldLabel className="text-muted-foreground text-xs">
+            {t("country")}
+          </FieldLabel>
+          <Select
+            value={country}
+            onValueChange={(value) => {
+              if (value !== null && value !== country) {
+                setCountry(value);
+                setCourts([]);
+              }
+            }}
+          >
+            <SelectTrigger aria-label={t("country")} className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectPopup>
+              {PUBLIC_CASE_LAW_COUNTRIES.map((value) => (
+                <SelectItem key={value} value={value}>
+                  {value}
+                </SelectItem>
+              ))}
+            </SelectPopup>
+          </Select>
+        </Field>
+        <Field className="gap-1.5">
+          <FieldLabel className="text-muted-foreground text-xs">
+            {t("court")}
+          </FieldLabel>
+          <Popover
+            onOpenChange={(open) => {
+              if (open) {
+                loadCatalog();
+              }
+            }}
+          >
+            <PopoverTrigger
+              className={cn(
+                FIELD_TRIGGER_CLASS_NAME,
+                "h-auto min-w-0 flex-wrap justify-start text-start",
+              )}
+              type="button"
+            >
+              <span className="sr-only">{t("court")}</span>
+              {courts.length === 0
+                ? t("all")
+                : courts.map((name) => (
+                    <span
+                      key={name}
+                      className="bg-muted max-w-full rounded px-1.5 py-0.5 text-xs break-words"
+                    >
+                      <bdi>{name}</bdi>
+                    </span>
+                  ))}
+            </PopoverTrigger>
+            <PopoverPopup
+              align="start"
+              className="w-80 max-w-[calc(100vw-2rem)] p-3"
+            >
+              <MultipleCourtFilter
+                maxSelections={maxCourts}
+                selectionHint={t("courtSelectionHint", {
+                  selected: format.number(courts.length),
+                  maximum: format.number(maxCourts),
+                })}
+                matchText={foldSearchMatchText}
+                groups={courtGroups.map(({ tierLabel, courts: options }) => ({
+                  value: tierLabel,
+                  label: t(tierLabel),
+                  courts: options.map(({ value, count }) => ({
+                    value,
+                    ...(count === null
+                      ? {}
+                      : { badgeText: format.number(count) }),
+                  })),
+                }))}
+                selected={courts}
+                onChange={setCourts}
+                label={t("court")}
+                searchLabel={t("search")}
+                clearLabel={t("reset")}
+                emptyLabel={catalogPending ? t("loading") : t("noResults")}
+              />
+            </PopoverPopup>
+          </Popover>
+        </Field>
+        <DateRangeFilter
+          {...dateLabels}
+          className="col-span-2 grid grid-cols-2 gap-2"
+          variant="field"
+          noFuture
+          getToday={() => todayFor(Temporal.Now.timeZoneId()).toString()}
+          from={from || null}
+          to={to || null}
+          fromLabel={t("from")}
+          toLabel={t("to")}
+          onFromChange={(value) => setFrom(value ?? "")}
+          onToChange={(value) => setTo(value ?? "")}
+        />
+        <Button
+          type="submit"
+          variant="outline"
+          className="max-sm:col-span-2"
+          disabled={submission.type !== "search"}
+          disabledReason={t("searchQueryRequired")}
+        >
+          {t("filter")}
+        </Button>
+      </div>
+    </Form>
+  );
+};
+
+const SearchResults = ({
+  bridge,
+  page,
+  input,
+  onOpen,
+}: {
+  bridge: CaseLawBridge;
+  page: SearchPage;
+  input: Record<string, unknown>;
+  onOpen: OpenReader;
+}) => {
+  const t = useTranslations();
+  const locale = useLocale();
+  const format = useFormatter();
+  const [sort, setSort] = useState<ResultSort>("relevance");
+  const defaults = filterDefaults(input);
+  const sorted = sortResultRows(page.results, sort, locale);
+  return (
+    <div className="space-y-5">
+      {defaults.status === "invalid" ? (
+        <p role="alert">{t(defaults.messageKey)}</p>
+      ) : (
+        <SearchControls
+          bridge={bridge}
+          page={page}
+          input={input}
+          defaults={defaults}
+        />
+      )}
+      <SearchNotice
+        warnings={page.searches.flatMap(({ warnings }) => warnings)}
+      />
+      <div className="bg-background overflow-hidden rounded-xl border shadow-xs">
+        <div className="flex items-center justify-between gap-3 px-4 py-3">
+          <p className="text-muted-foreground shrink-0 text-xs font-medium whitespace-nowrap">
+            {t("decisions")}{" "}
+            <span className="bg-muted ms-1 rounded-md px-1.5 py-0.5 tabular-nums">
+              {format.number(page.results.length)}
+            </span>
+          </p>
+          <div className="ms-auto grid">
+            {[t("relevance"), t("court"), t("newest")].map((label) => (
+              <span
+                key={label}
+                aria-hidden="true"
+                className="invisible col-start-1 row-start-1 px-9 text-xs whitespace-nowrap"
+              >
+                {label}
+              </span>
+            ))}
+            <Select
+              value={sort}
+              onValueChange={(value) => {
+                switch (value) {
+                  case "court":
+                  case "date":
+                  case "relevance":
+                    setSort(value);
+                    break;
+                  case null:
+                    break;
+                  default:
+                    panic("Unknown result sort", value satisfies never);
+                }
+              }}
+            >
+              <SelectTrigger
+                aria-label={t("sort")}
+                size="sm"
+                className="col-start-1 row-start-1 w-auto min-w-0"
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectPopup>
+                <SelectItem value="relevance">{t("relevance")}</SelectItem>
+                <SelectItem value="court">{t("court")}</SelectItem>
+                <SelectItem value="date">{t("newest")}</SelectItem>
+              </SelectPopup>
+            </Select>
+          </div>
+        </div>
+        <ResultsTable rows={sorted} bridge={bridge} onOpen={onOpen} />
+        <div className="border-t px-4 py-3">
+          <Pagination aria-label={t("next")} className="justify-end">
+            <PaginationContent>
+              <PaginationItem>
+                <PaginationLink
+                  render={
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={page.nextCursor === null}
+                      disabledReason={t("lastSearchResultsPage")}
+                      onClick={() =>
+                        bridge.detached(
+                          bridge.call({
+                            name: "search_case_law",
+                            arguments: { ...input, cursor: page.nextCursor },
+                          }),
+                          "caseLawResults.page",
+                        )
+                      }
+                    />
+                  }
+                >
+                  {t("next")}
+                  <ChevronRightIcon className="size-3.5 rtl:rotate-180" />
+                </PaginationLink>
+              </PaginationItem>
+            </PaginationContent>
+          </Pagination>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const LoadingResults = ({ continuing }: { continuing: boolean }) => {
+  const t = useTranslations();
+  return (
+    <div role="status" aria-label={t("loading")} className="space-y-4">
+      {continuing && (
+        <p className="text-muted-foreground text-sm">
+          {t("searchStillRunning")}
+        </p>
+      )}
+      <Skeleton className="h-9 w-full" />
+      {["first", "second", "third"].map((id) => (
+        <div key={id} className="flex items-center gap-4 rounded-lg border p-4">
+          <Skeleton className="h-10 w-10" />
+          <div className="flex-1 space-y-2">
+            <Skeleton className="h-4 w-1/2" />
+            <Skeleton className="h-3 w-3/4" />
+          </div>
+          <Skeleton className="h-4 w-20" />
+        </div>
+      ))}
+    </div>
+  );
+};
+type CaseLawError = Extract<
+  ReturnType<CaseLawBridge["getSnapshot"]>["result"],
+  { status: "error" }
+>;
+
+const ResultFailure = ({
+  bridge,
+  error,
+}: {
+  bridge: CaseLawBridge;
+  error: CaseLawError;
+}) => {
+  const t = useTranslations();
+  return (
+    <div role="alert" className="space-y-3 rounded-lg border p-4">
+      <p className="text-sm">{error.message}</p>
+      {error.failure.retryable && (
+        <Button
+          variant="outline"
+          onClick={() =>
+            bridge.detached(bridge.retry(), "caseLawResults.retry")
+          }
+        >
+          {t("retry")}
+        </Button>
+      )}
+    </div>
+  );
+};
+
+type ViewResultProps = {
+  bridge: CaseLawBridge;
+  view: CaseLawView;
+  input: Record<string, unknown>;
+  onOpen: OpenReader;
+};
+const ViewResult = ({ bridge, view, input, onOpen }: ViewResultProps) => {
+  switch (view.type) {
+    case "unavailable":
+      return (
+        <p role="status" className="bg-muted rounded-lg p-5 text-sm">
+          {view.message} {view.hint}
+        </p>
+      );
+    case "search":
+      return (
+        <SearchResults
+          bridge={bridge}
+          page={view}
+          input={input}
+          onOpen={onOpen}
+        />
+      );
+    case "resolve":
+      return <ResolveResults view={view} bridge={bridge} onOpen={onOpen} />;
+    default:
+      return panic("Unknown case-law result view", view satisfies never);
+  }
+};
+const ReadyResult = ({
+  bridge,
+  view,
+  input,
+  onOpen,
+  error,
+}: ViewResultProps & { error: CaseLawError | null }) => (
+  <div className="space-y-3">
+    {error !== null && <ResultFailure bridge={bridge} error={error} />}
+    <ViewResult bridge={bridge} view={view} input={input} onOpen={onOpen} />
+  </div>
+);
+const ResultContent = ({
+  bridge,
+  onOpen,
+}: {
+  bridge: CaseLawBridge;
+  onOpen: OpenReader;
+}) => {
+  const { result, input } = useSyncExternalStore(
+    bridge.subscribe,
+    bridge.getSnapshot,
+  );
+  switch (result.status) {
+    case "idle":
+      return <LoadingResults continuing={false} />;
+    case "loading":
+      return <LoadingResults continuing={result.phase === "continuing"} />;
+    case "error":
+      if (result.previous.status === "ready") {
+        return (
+          <ReadyResult
+            bridge={bridge}
+            view={result.previous.view}
+            input={input}
+            onOpen={onOpen}
+            error={result}
+          />
+        );
+      }
+      return <ResultFailure bridge={bridge} error={result} />;
+    case "ready":
+      return (
+        <ReadyResult
+          bridge={bridge}
+          view={result.view}
+          input={input}
+          onOpen={onOpen}
+          error={null}
+        />
+      );
+    default:
+      return panic("Unknown app result state", result satisfies never);
+  }
+};
+const ResolveResults = ({
+  view,
+  bridge,
+  onOpen,
+}: {
+  view: Extract<CaseLawView, { type: "resolve" }>;
+  bridge: CaseLawBridge;
+  onOpen: OpenReader;
+}) => {
+  const t = useTranslations();
+  switch (view.status) {
+    case "resolved":
+      return <ResultsTable rows={view.rows} bridge={bridge} onOpen={onOpen} />;
+    case "ambiguous":
+      return (
+        <div className="space-y-4">
+          <p role="status">{t("resolveAmbiguous")}</p>
+          <ul className="space-y-3">
+            {view.candidates.map((candidate) => (
+              <li key={candidate.decisionId}>
+                <Button
+                  variant="link"
+                  disabled={candidate.url === null}
+                  disabledReason={t("decisionLinkUnavailable")}
+                  onClick={(event) => onOpen(candidate, event.currentTarget)}
+                >
+                  <bdi>{candidate.identifier}</bdi>
+                </Button>
+                <p className="text-muted-foreground text-sm">
+                  {candidate.label}
+                </p>
+              </li>
+            ))}
+          </ul>
+        </div>
+      );
+    case "incomplete_identifier":
+      return (
+        <p role="status">
+          {t("resolveMissing", { parts: view.missing.join(", ") })}
+        </p>
+      );
+    case "not_found":
+      return <p role="status">{t("resolveNotFound")}</p>;
+    case "country_unavailable":
+      return <p role="status">{t("resolveUnavailable")}</p>;
+    default:
+      return panic("Unknown resolve status", view satisfies never);
+  }
+};
+
+export const CaseLawApp = ({ bridge }: { bridge: CaseLawBridge }) => {
+  const [embeddedReaderBridge] = useState(() =>
+    createEmbeddedReaderBridge(bridge),
+  );
+  const [embeddedReader] = useState(() =>
+    createReaderController(embeddedReaderBridge),
+  );
+  const [screen, setScreen] = useState<"results" | "reader">("results");
+  const returnLocation = useRef<{
+    trigger: HTMLElement;
+    scrollX: number;
+    scrollY: number;
+  } | null>(null);
+  const onOpen: OpenReader = (row, trigger) => {
+    if (row.type === "resolve" || !bridge.supportsTools()) {
+      if (row.url !== null) {
+        bridge.detached(
+          bridge.openLink(row.url),
+          "caseLawResults.openDecision",
+        );
+      }
+      return;
+    }
+    returnLocation.current = {
+      trigger,
+      scrollX: document.querySelector("[data-app-viewport]")?.scrollLeft ?? 0,
+      scrollY: document.querySelector("[data-app-viewport]")?.scrollTop ?? 0,
+    };
+    const url = row.url === null ? null : parseLegalCitationHttpUrl(row.url);
+    const paragraphs =
+      url === null ? null : parseDecisionParagraphFragment(url.hash);
+    setScreen("reader");
+    document.querySelector("[data-app-viewport]")?.scrollTo(0, 0);
+    embeddedReaderBridge.detached(
+      embeddedReaderBridge.call({
+        name: "open_case_law_decision",
+        arguments: {
+          decision_id: row.decisionId,
+          ...(paragraphs === null
+            ? {}
+            : { paragraphs: formatDecisionParagraphRange(paragraphs) }),
+        },
+      }),
+      "caseLawResults.openReader",
+    );
+  };
+  const onBack = () => {
+    embeddedReaderBridge.reset();
+    setScreen("results");
+    embeddedReaderBridge.detached(
+      embeddedReaderBridge.requestInline(),
+      "caseLawResults.restoreDisplayMode",
+    );
+  };
+  const { context } = useSyncExternalStore(
+    bridge.subscribe,
+    bridge.getSnapshot,
+  );
+  const { formattingLocale, direction, messages } = appLocale(context.locale);
+  return (
+    <IntlProvider locale={formattingLocale} messages={messages}>
+      <DirectionProvider direction={direction}>
+        <>
+          <main
+            hidden={screen !== "results"}
+            ref={(element) => {
+              if (
+                element === null ||
+                screen !== "results" ||
+                returnLocation.current === null
+              ) {
+                return;
+              }
+              const location = returnLocation.current;
+              returnLocation.current = null;
+              location.trigger.focus({ preventScroll: true });
+              document
+                .querySelector("[data-app-viewport]")
+                ?.scrollTo(location.scrollX, location.scrollY);
+            }}
+            dir={direction}
+            className="mx-auto max-w-6xl space-y-5 p-4 sm:p-6"
+          >
+            <header className="flex items-center gap-2.5">
+              <div className="bg-muted flex size-8 items-center justify-center rounded-lg">
+                <CaseLawIcon className="size-4" />
+              </div>
+              <h1 className="text-base font-semibold tracking-tight">
+                {messages.title}
+              </h1>
+            </header>
+            <ResultContent bridge={bridge} onOpen={onOpen} />
+          </main>
+          {screen === "reader" && (
+            <ReaderView host={embeddedReader} onBack={onBack} />
+          )}
+        </>
+      </DirectionProvider>
+    </IntlProvider>
+  );
+};

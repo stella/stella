@@ -1,8 +1,28 @@
 import type { TokenUsage } from "@tanstack/ai";
 import type { MessagePart, UIMessage } from "@tanstack/ai-client";
-import type { DocumentPart, ImagePart } from "@tanstack/ai/client";
+import type {
+  DocumentPart,
+  ImagePart,
+  ThinkingPart,
+  ToolCallPart,
+} from "@tanstack/ai/client";
 
+import type {
+  ReasoningEffort,
+  ReasoningProvenance,
+  TanStackAIProvider,
+} from "@stll/ai-catalog";
 import type { ActionAdmissionRefusal } from "@stll/api-contract/action-admission";
+import type { ChatTurnTiming } from "@stll/api-contract/chat";
+import type { ChatContextNotice } from "@stll/api-contract/chat-context-notice";
+import type { ChatLocalFilesUndone } from "@stll/api-contract/chat-local-files-undo";
+import type {
+  ChatLocalRunContext,
+  ChatLocalRunModel,
+} from "@stll/api-contract/chat-run-target";
+import type { ProviderDiagnostic } from "@stll/api-contract/provider-setup";
+import type { ChatTurnPauseReason } from "@stll/chat-limits";
+import type { ChatTurnResumeProbe } from "@stll/chat/resume-contract";
 import type { FolioAgentToolName } from "@stll/folio-agents";
 import type {
   FolioAgentToolInputByName,
@@ -28,13 +48,16 @@ import type {
   ChatUIToolsFor,
 } from "@/api/lib/chat/chat-tool-types";
 import type {
-  PersistedToolCallPart,
-  PersistedToolResultPart,
-  persistedChatMessageContentProof,
   persistedChatMessageContentV3Proof,
+  PersistedJsonObject,
+  PersistedToolCallPart,
+  PersistedToolProviderMetadata,
+  PersistedToolResultPart,
 } from "@/api/lib/chat/persisted-message-content";
 import type { ChatRefContext, ChatRefEncoding } from "@/api/lib/chat/ref-token";
 import type { ChatMentionsData } from "@/api/lib/chat/references";
+
+export type { ChatTurnTiming } from "@stll/api-contract/chat";
 
 export type { ChatSourceDocument } from "@/api/handlers/chat/tools/chat-source-document";
 
@@ -78,7 +101,7 @@ export type ChatUITools = Omit<
   RegisteredFolioAgentToolName
 > &
   FolioAgentChatUITools;
-type ChatClientTools = ChatClientToolsFor<
+export type ChatClientTools = ChatClientToolsFor<
   ChatTools,
   ChatBuiltinApprovalToolName
 >;
@@ -89,10 +112,32 @@ export type ChatAttachmentMetadata = {
 };
 
 export type ChatAttachmentPart =
-  | ImagePart<ChatAttachmentMetadata>
-  | DocumentPart<ChatAttachmentMetadata>;
+  ImagePart<ChatAttachmentMetadata> | DocumentPart<ChatAttachmentMetadata>;
 
-export type ChatTanStackPart = MessagePart<ChatClientTools>;
+type SdkChatPart = MessagePart<ChatClientTools>;
+export type ChatTanStackPart =
+  | Exclude<SdkChatPart, { type: "text" | "thinking" | "tool-call" }>
+  | (Extract<SdkChatPart, { type: "text" }> & {
+      /** Provider artefacts a writer stored with the text, kept as stored. */
+      providerMetadata?: PersistedJsonObject;
+    })
+  | (Extract<SdkChatPart, { type: "tool-call" }> &
+      Pick<ToolCallPart, "metadata"> & {
+        /** Provider artefacts a writer stored with the call, kept as stored. */
+        providerMetadata?: PersistedToolProviderMetadata;
+      })
+  | (ThinkingPart & {
+      /**
+       * Server-issued replay identity; historical parts may have none. One
+       * naming a provider or format this release does not list (a newer
+       * release's, or one since retired) is kept as stored but unverified:
+       * replay accepts only a provenance it can verify.
+       */
+      provenance?: ReasoningProvenance | PersistedJsonObject;
+      /** Provider artefacts a writer stored with the reasoning, kept as stored. */
+      providerMetadata?: PersistedJsonObject;
+    });
+
 export type ChatPart = ChatTanStackPart;
 export type PersistableChatPartType = ChatTanStackPart["type"];
 
@@ -127,21 +172,100 @@ export type ChatTurnOutcome =
          * whose input is complete and whose result the chat client posts back
          * as a native interrupt resolution.
          */
-        | { type: "client-tool"; toolCallId: string };
+        | { type: "client-tool"; toolCallId: string }
+        /**
+         * A blocking question a coding-agent harness on the member's computer
+         * asked (`HARNESS_QUESTION_TOOL`). The call stays as the harness
+         * reported it; the answer is the resume payload of the question's
+         * interrupt, which the API hands to the run that asked it.
+         */
+        | { type: "harness-question"; toolCallId: string };
     }
   | { type: "completed" }
   | { type: "cancelled"; reason: ChatTurnCancellationReason }
-  | { type: "failed"; error: AIErrorKind; refusal?: ActionAdmissionRefusal }
+  | {
+      type: "failed";
+      error: AIErrorKind;
+      /**
+       * Read by the page as well, so it carries the wire shape. Every API
+       * producer builds it through the redactor (`createProviderDiagnostic`,
+       * `redactedProviderDiagnostic`).
+       */
+      providerDiagnostic?: ProviderDiagnostic;
+      refusal?: ActionAdmissionRefusal;
+      /**
+       * When the usage limit of the harness that ran the turn on the
+       * member's computer resets (ISO 8601), for a `local_runner_limit_reached`
+       * failure whose harness reported it.
+       */
+      limitResetsAt?: string;
+    }
   | {
       type: "interrupted";
       reason: ChatTurnInterruptionReason;
+    }
+  /**
+   * The turn reached a cap of its budget (`CHAT_TURN_BUDGET`) at a step
+   * boundary: every call it started has its result, and nothing runs until
+   * the user sends a message (the page's Continue sends one).
+   */
+  | {
+      type: "paused";
+      reason: ChatTurnPauseReason;
+      /** Tool calls the turn ran before it paused. */
+      toolCalls: number;
     };
 
+/** What an assistant turn spent of its budget, over every request of it. */
+export type ChatTurnSpend = {
+  /** Prompt tokens its model calls read, summed over every call. */
+  promptTokens: number;
+};
+
+/**
+ * What the server found for one quotation (a Markdown blockquote) of an
+ * answer, checked against the case-law decisions the answer cites by id
+ * (`answer-quote-checks.ts`).
+ *
+ * - `verified`: a cited decision holds it word for word, at this block.
+ * - `unverified`: every cited decision was read and none holds it.
+ * - `unchecked`: there was nothing to check it against: the answer cites no
+ *   decision, or a cited decision could not be read.
+ *
+ * `key` is `answerQuoteKey` of the quotation's displayed text, which the
+ * answer renderer computes from the rendered blockquote to find its result.
+ */
+export type ChatAnswerQuoteCheck =
+  | {
+      type: "verified";
+      key: string;
+      decisionId: SafeId<"caseLawDecision">;
+      anchorId: string;
+      paragraph: number | null;
+    }
+  | { type: "unverified"; key: string }
+  | { type: "unchecked"; key: string };
+
 export type ChatMessageMetadata = {
+  /** Server-owned: the answer's quotations as checked once it completed.
+   * Absent when the answer quotes nothing or the check could not run.
+   * Incoming client metadata deliberately does not accept this field. */
+  answerQuotes?: ChatAnswerQuoteCheck[] | undefined;
+  /** Server-owned active execution time; human interaction waits are excluded. */
+  turnTiming?: ChatTurnTiming | null | undefined;
   /** Server-owned generated-document draft binding. Incoming client metadata
    * deliberately does not accept this field. */
   activeDraftContext?: GeneratedDocumentActiveDraftContext | undefined;
   anonRestorations?: ChatAnonRestorationsData | undefined;
+  /** Server-owned: what the answer's context left out (`context-notice.ts`).
+   * `null` only on the live stream, withdrawing a notice a replaced attempt
+   * streamed; never stored. Incoming client metadata deliberately does not
+   * accept this field. */
+  contextNotice?: ChatContextNotice | null | undefined;
+  /** Server-owned: files a local run left on the member's computer because
+   * they could not be shared. Incoming client metadata deliberately does not
+   * accept this field. */
+  localRunFilesNotShared?: string[] | undefined;
   docxEditPreferences?:
     | {
         docxEditRepresentation?: "tracked-changes" | "direct" | undefined;
@@ -154,6 +278,11 @@ export type ChatMessageMetadata = {
   refEncoding?: ChatRefEncoding | undefined;
   /** Server-owned replay context for persisted tool references. */
   refContext?: ChatRefContext | undefined;
+  /** Server-owned native interrupt identity, retained with the transcript
+   * after the delivery log expires. Incoming metadata cannot set this. */
+  resumeSnapshot?:
+    | Extract<ChatTurnResumeProbe, { type: "transcript" }>["resumeSnapshot"]
+    | undefined;
   /** Server-owned provenance. Incoming client metadata validation deliberately
    *  does not accept this field. */
   serverProvenance?:
@@ -168,11 +297,47 @@ export type ChatMessageMetadata = {
   /** Server-owned terminal state. Incoming client metadata validation
    * deliberately does not accept this field. */
   turnOutcome?: ChatTurnOutcome | undefined;
+  /** Server-owned: what the assistant turn has spent of its budget, which a
+   * later request of the same turn (an approval's answer) adds to. Incoming
+   * client metadata validation deliberately does not accept this field. */
+  turnSpend?: ChatTurnSpend | undefined;
+  /** Model that owns an assistant turn, including its approval resumes. */
+  turnModel?:
+    | {
+        provider: TanStackAIProvider;
+        model: string;
+        reasoningEffort?: ReasoningEffort;
+      }
+    | undefined;
   usage?: ChatMessageUsage | undefined;
+  /**
+   * How full the context of the harness that ran the turn on the member's
+   * computer was after its last model request, against its window, as the
+   * harness reported both. Server-owned; absent on a cloud turn.
+   */
+  localRunContext?: ChatLocalRunContext | undefined;
+  /**
+   * The model a turn on the member's computer asked for and the one its
+   * harness ran it on, which a reroute makes differ. Server-owned; absent on
+   * a cloud turn.
+   */
+  localRunModel?: ChatLocalRunModel | undefined;
+  /**
+   * The turn's file changes on the member's computer were undone. Written by
+   * the server when the computer reports the restore; incoming client
+   * metadata validation deliberately does not accept this field.
+   */
+  localFilesUndone?: ChatLocalFilesUndone | undefined;
 };
 
-export type ChatMessage = UIMessage<ChatClientTools> & {
+// UIMessage's other fields do not depend on its tool map. Omitting from the
+// tool-typed message would evaluate ChatTools eagerly, and ChatTools reaches
+// ChatMessage again through the chat history tools: a circular alias.
+export type ChatMessage = Omit<UIMessage, "parts"> & {
+  parts: ChatPart[];
   metadata?: ChatMessageMetadata;
+  revision?: number;
+  edited?: boolean;
 };
 
 export type PersistableChatMessageCandidate = {
@@ -219,41 +384,51 @@ export type ChatCompactionSummary = {
   readFiles: string[];
 };
 
-/** Versioned envelope for the chatMessages JSONB column.
- *  Bump the version and add a new variant when the parts
- *  shape changes; migrate in-place by reading the version
- *  and transforming old shapes on read. */
-type LegacyChatMessageContent = {
-  version: 1;
-  data: unknown[];
-};
-
 export type ChatMessageContentCandidate = {
   data: ChatMessage["parts"];
   metadata?: ChatMessageMetadata | undefined;
-  version: 2;
-};
-
-export type ChatMessageContent = {
-  data: ChatMessage["parts"];
-  metadata?: ChatMessageMetadata | undefined;
-  readonly [persistedChatMessageContentProof]: true;
-  version: 2;
 };
 
 type PersistedChatToolPartV3 = PersistedToolCallPart | PersistedToolResultPart;
 
+export type ChatSubagentPart = Extract<ChatPart, { type: "subagent" }>;
+
+/** The fields of a sub-agent run a stored part keeps: every field the SDK
+ *  gives the run's handle except its messages and the client's stop hook. */
+export type PersistedSubagentHandle = Omit<
+  ChatSubagentPart["subagent"],
+  "messages" | "stop"
+>;
+
+/**
+ * One message of a sub-agent run as stored: its parts are encoded exactly as
+ * a chat message's own content, so every rule a stored message follows
+ * (canonical tool encoding, result retention, the part budget) holds for a
+ * child's parts too.
+ */
+type PersistedSubagentMessage = {
+  content: PersistedChatMessageContentV3;
+  id: string;
+  role: ChatSubagentPart["subagent"]["messages"][number]["role"];
+};
+
+export type PersistedSubagentPart = {
+  subagent: PersistedSubagentHandle & {
+    messages: PersistedSubagentMessage[];
+  };
+  type: "subagent";
+};
+
 export type PersistedChatMessageContentV3 = {
   data: (
     | PersistedChatToolPartV3
-    | Exclude<ChatPart, { type: "tool-call" | "tool-result" }>
+    | PersistedSubagentPart
+    | Exclude<ChatPart, { type: "tool-call" | "tool-result" | "subagent" }>
   )[];
   metadata?: ChatMessageMetadata | undefined;
   readonly [persistedChatMessageContentV3Proof]: true;
   version: 3;
 };
 
-export type PersistedChatMessageContent =
-  | LegacyChatMessageContent
-  | ChatMessageContent
-  | PersistedChatMessageContentV3;
+/** Stored rows are upgraded to v3 before runtime readers start. */
+export type PersistedChatMessageContent = PersistedChatMessageContentV3;

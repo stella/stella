@@ -7,7 +7,7 @@ import { CHAT_TURN_INTENT } from "@stll/api-contract";
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { chatMessages, chatThreads, chatTurns } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
-import { toChatMessageContent } from "@/api/handlers/chat/chat-message-parts";
+import { toPersistedChatMessageContentV3 } from "@/api/handlers/chat/chat-message-parts";
 import type { ChatSendRequest } from "@/api/handlers/chat/chat-schema";
 import { createSendMessage } from "@/api/handlers/chat/send-message";
 import { compactMessagesForContext } from "@/api/handlers/chat/send-message-compaction";
@@ -16,6 +16,7 @@ import {
   uploadMessageFilesWithRollback,
 } from "@/api/handlers/chat/send-message-side-effects";
 import * as externalMcpToolsModule from "@/api/handlers/chat/tools/external-mcp-tools";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -117,9 +118,8 @@ const seedThread = async ({
   });
   await testDb.insert(chatMessages).values(
     messages.map(({ id, role, text }, index) => ({
-      content: toChatMessageContent({
+      content: toPersistedChatMessageContentV3({
         data: [{ content: text, type: "text" }],
-        version: 2,
       }),
       createdAt: new Date(Date.parse("2026-08-03T12:00:00.000Z") + index),
       id,
@@ -172,10 +172,12 @@ const createContext = ({
     pinServerValidatedWorkspaceId: () => false,
     promptCachingEnabled: false,
     recordAuditEvent: async () => {},
-    request: new Request("http://localhost/v1/chat/send"),
-    route: "/v1/chat/send",
+    request: new Request("http://localhost/v1/chat"),
+    route: "/v1/chat" satisfies ApiRoutePath,
+    headers: {},
     safeDb,
     scopedDb,
+    set: { headers: {}, status: 200 },
     session: { activeOrganizationId: ids.orgA },
     user: { id: ids.userA1 },
   });

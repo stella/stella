@@ -5,7 +5,7 @@
 // narrowed to `Pick<typeof rootDb, "select">` is still a handle; a Redis
 // client that happens to be called `db` is not one.
 //
-// Contract: one JavaScript `ts.Program` over the API's source and scripts
+// Contract: one JavaScript `Program` over the API's source and scripts
 // projects (`apps/api/tsconfig.json` plus `apps/api/tsconfig.scripts.json`,
 // which extends it). Tests, `apps/api/src/tests/`, and the development seed
 // scripts are out of scope: their loop lengths are a fixture's, not a
@@ -51,7 +51,7 @@
 // flagged when no `try` with a `catch` or `finally` can override the exit.
 // A return-site or an immediately following exit is independent of unrelated
 // continues; a later exit still requires no `continue` targeting the loop.
-// One DB hit per constant-bounded round is exempt: canonical chunked inputs
+// One DB hit per constant-bounded round is exempt: canonical chunk inputs
 // (literal/const size >= 2), array slice-step loops with that stride, fixed
 // sets of at most 16 elements, and nonnegative constant-start counters bounded by <= 16.
 // The counter must not be written in the body. Multiple DB hits, fan-out,
@@ -82,12 +82,27 @@
 // Usage: bun scripts/db-await-in-loop.ts
 
 import { panic } from "better-result";
-import { existsSync } from "node:fs";
+import { existsSync, realpathSync } from "node:fs";
 import path from "node:path";
-import ts from "typescript";
+import * as ts from "tsrs/ast";
+import {
+  API,
+  type Checker,
+  type Program,
+  SignatureKind,
+  type Symbol as CompilerSymbol,
+  type Type,
+  TypeFlags,
+} from "tsrs/async";
 
 import { compareCodeUnit } from "@stll/collation";
+import { repoRelativePath } from "@stll/portable-path";
 
+import {
+  type ParsedSource,
+  parseSource,
+  walk,
+} from "../packages/scripts/src/syntax-tree";
 import { createProgram } from "../packages/scripts/src/typescript-program.ts";
 
 const REPO_ROOT = path.resolve(import.meta.dir, "..");
@@ -203,12 +218,12 @@ export type DbAwaitInLoopReport = {
 };
 
 export type ScanDbAwaitInLoopOptions = {
-  readonly program: ts.Program;
+  readonly program: Program;
+  readonly checker: Checker;
   readonly repositoryRoot: string;
   readonly isInScope: (relativePath: string) => boolean;
   // Repository-relative paths of the modules that declare handle types.
   readonly handleDeclarationFiles: readonly string[];
-  readonly chunkHelperFiles?: readonly string[];
 };
 
 type Match =
@@ -221,8 +236,66 @@ type LoopContext = "loop" | "fan-out";
 
 const toPosix = (file: string): string => file.replaceAll(path.sep, "/");
 
-const isImportAlias = (symbol: ts.Symbol): boolean =>
-  (symbol.declarations ?? []).some(
+const hasModifiers = (node: ts.Node): node is ts.Node & ts.ModifiersBase =>
+  "modifiers" in node;
+
+const declarationsOf = async (
+  symbol: CompilerSymbol | undefined,
+): Promise<ts.Declaration[]> => {
+  const declarations: ts.Declaration[] = [];
+  for (const handle of symbol?.declarations ?? []) {
+    const declaration = await handle.resolve();
+    if (declaration === undefined) {
+      panic("Missing symbol declaration");
+    }
+    declarations.push(declaration);
+  }
+  return declarations;
+};
+
+const someAsync = async <T>(
+  values: readonly T[],
+  predicate: (value: T) => boolean | Promise<boolean>,
+): Promise<boolean> => {
+  for (const value of values) {
+    if (await predicate(value)) {
+      return true;
+    }
+  }
+  return false;
+};
+
+const everyAsync = async <T>(
+  values: readonly T[],
+  predicate: (value: T) => boolean | Promise<boolean>,
+): Promise<boolean> => {
+  for (const value of values) {
+    if (!(await predicate(value))) {
+      return false;
+    }
+  }
+  return true;
+};
+
+const childrenAsync = async <T>(
+  node: ts.Node,
+  visit: (child: ts.Node) => Promise<T>,
+): Promise<T | undefined> => {
+  const children: ts.Node[] = [];
+  node.forEachChild((child) => {
+    children.push(child);
+  });
+  for (const child of children) {
+    const value = await visit(child);
+    if (value) {
+      return value;
+    }
+  }
+  return undefined;
+};
+
+const isImportAlias = async (symbol: CompilerSymbol): Promise<boolean> =>
+  (await declarationsOf(symbol)).some(
     (declaration) =>
       ts.isImportSpecifier(declaration) ||
       ts.isImportClause(declaration) ||
@@ -238,7 +311,7 @@ const unwrap = (expression: ts.Expression): ts.Expression => {
     ts.isAsExpression(current) ||
     ts.isSatisfiesExpression(current) ||
     ts.isNonNullExpression(current) ||
-    ts.isTypeAssertionExpression(current)
+    ts.isTypeAssertion(current)
   ) {
     current = current.expression;
   }
@@ -254,7 +327,7 @@ const outerParent = (node: ts.Node): { parent: ts.Node; child: ts.Node } => {
     ts.isAsExpression(parent) ||
     ts.isSatisfiesExpression(parent) ||
     ts.isNonNullExpression(parent) ||
-    ts.isTypeAssertionExpression(parent)
+    ts.isTypeAssertion(parent)
   ) {
     child = parent;
     parent = parent.parent;
@@ -375,7 +448,15 @@ const isPerIterationPosition = (loop: ts.Node, child: ts.Node): boolean => {
   return false;
 };
 
-const isIterationStatement = (node: ts.Node): node is ts.IterationStatement =>
+// tsrs names the loop kinds but not their union.
+type IterationStatement =
+  | ts.DoStatement
+  | ts.ForInStatement
+  | ts.ForOfStatement
+  | ts.ForStatement
+  | ts.WhileStatement;
+
+const isIterationStatement = (node: ts.Node): node is IterationStatement =>
   ts.isForStatement(node) ||
   ts.isForOfStatement(node) ||
   ts.isForInStatement(node) ||
@@ -444,9 +525,9 @@ const isContinuedAnywhere = (loop: ts.Node): boolean => {
       found = true;
       return;
     }
-    ts.forEachChild(node, visit);
+    node.forEachChild(visit);
   };
-  ts.forEachChild(loop, visit);
+  loop.forEachChild(visit);
   return found;
 };
 
@@ -524,7 +605,7 @@ const findLoopContext = (
   exitSites: "include" | "exclude" = "exclude",
 ): {
   context: LoopContext;
-  loop: ts.IterationStatement | null;
+  loop: IterationStatement | null;
   fanOut: ts.CallExpression | null;
 } | null => {
   let child: ts.Node = site;
@@ -637,62 +718,29 @@ type DirectiveComment = {
   readonly rest: string;
 };
 
-const isJsDocNode = (node: ts.Node): boolean =>
-  node.kind >= ts.SyntaxKind.FirstJSDocNode &&
-  node.kind <= ts.SyntaxKind.LastJSDocNode;
-
-// Every `//` comment that opens with the directive token, read from the
-// comment trivia in front of each token, so a directive inside a template
-// interpolation is found and text inside a string, a template, or a block
-// comment never is.
-const directiveComments = (sourceFile: ts.SourceFile): DirectiveComment[] => {
-  const text = sourceFile.text;
-  const comments = new Map<number, ts.CommentRange>();
+const directiveComments = (parsed: ParsedSource): DirectiveComment[] => {
+  const { sourceText: text, comments, locate } = parsed;
   const tokenStarts: number[] = [];
-  const visit = (node: ts.Node): void => {
-    if (isJsDocNode(node)) {
-      return;
-    }
-    // Leading trivia skips a comment on the previous token's own line; the
-    // trailing read at each token's end picks that one up.
-    for (const range of [
-      ...(ts.getLeadingCommentRanges(text, node.getFullStart()) ?? []),
-      ...(ts.getTrailingCommentRanges(text, node.getEnd()) ?? []),
-    ]) {
-      if (range.kind === ts.SyntaxKind.SingleLineCommentTrivia) {
-        comments.set(range.pos, range);
-      }
-    }
-    const children = node.getChildren(sourceFile);
-    if (children.length === 0) {
-      tokenStarts.push(node.getStart(sourceFile));
-    }
-    for (const child of children) {
-      visit(child);
-    }
-  };
-  visit(sourceFile);
+  walk(parsed.program, (node) => {
+    tokenStarts.push(node.start);
+  });
   tokenStarts.sort((a, b) => a - b);
-
-  const lineOf = (position: number): number =>
-    sourceFile.getLineAndCharacterOfPosition(position).line + 1;
-
   const directives: DirectiveComment[] = [];
-  for (const range of [...comments.values()].toSorted(
-    (a, b) => a.pos - b.pos,
-  )) {
-    const match = DIRECTIVE_BODY.exec(text.slice(range.pos + 2, range.end));
+  for (const comment of comments) {
+    if (comment.type !== "Line") {
+      continue;
+    }
+    const match = DIRECTIVE_BODY.exec(comment.value);
     if (match === null) {
       continue;
     }
-    const line = lineOf(range.pos);
-    const lineStart =
-      range.pos - sourceFile.getLineAndCharacterOfPosition(range.pos).character;
-    const trailing = text.slice(lineStart, range.pos).trim() !== "";
-    const next = tokenStarts.find((position) => position >= range.end);
+    const { line, column } = locate(comment.start);
+    const lineStart = comment.start - column + 1;
+    const trailing = text.slice(lineStart, comment.start).trim() !== "";
+    const next = tokenStarts.find((position) => position >= comment.end);
     directives.push({
       line,
-      target: trailing || next === undefined ? line : lineOf(next),
+      target: trailing || next === undefined ? line : locate(next).line,
       variant: match.groups?.["variant"] ?? "",
       rest: match.groups?.["rest"] ?? "",
     });
@@ -701,10 +749,10 @@ const directiveComments = (sourceFile: ts.SourceFile): DirectiveComment[] => {
 };
 
 export const parseDirectives = (
-  sourceFile: ts.SourceFile,
+  parsed: ParsedSource,
   file: string,
 ): FileDirectives => {
-  if (!sourceFile.text.includes(DIRECTIVE_TOKEN)) {
+  if (!parsed.sourceText.includes(DIRECTIVE_TOKEN)) {
     return { lines: [], blocks: [], problems: [] };
   }
   const lines: Directive[] = [];
@@ -712,7 +760,7 @@ export const parseDirectives = (
   const problems: DbAwaitInLoopDirectiveProblem[] = [];
   let openBlock: Directive | null = null;
 
-  for (const { line, target, variant, rest } of directiveComments(sourceFile)) {
+  for (const { line, target, variant, rest } of directiveComments(parsed)) {
     if (variant === "-enable") {
       if (rest.trim() !== "") {
         problems.push({
@@ -788,37 +836,35 @@ export const countDbAwaitInLoopDirectives = (
   if (!text.includes(DIRECTIVE_TOKEN)) {
     return 0;
   }
-  const sourceFile = ts.createSourceFile(
-    file,
-    text,
-    ts.ScriptTarget.Latest,
-    true,
-    file.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
-  );
-  return countParsedDirectives(parseDirectives(sourceFile, file));
+  return countParsedDirectives(parseDirectives(parseSource(file, text), file));
 };
 
-export const scanDbAwaitInLoop = ({
+export const scanDbAwaitInLoop = async ({
   program,
+  checker,
   repositoryRoot,
   isInScope,
   handleDeclarationFiles,
-  chunkHelperFiles = ["apps/api/src/lib/chunked.ts"],
-}: ScanDbAwaitInLoopOptions): DbAwaitInLoopReport => {
-  const checker = program.getTypeChecker();
+}: ScanDbAwaitInLoopOptions): Promise<DbAwaitInLoopReport> => {
   const handleFiles = new Set(
     handleDeclarationFiles.map((file) =>
       toPosix(path.resolve(repositoryRoot, file)),
     ),
   );
 
-  const chunkFiles = new Set(
-    chunkHelperFiles.map((file) => toPosix(path.resolve(repositoryRoot, file))),
+  // preserveSymlinks gives workspace imports a node_modules path; ownership
+  // follows the physical source rather than that spelling.
+  const chunkFile = toPosix(
+    realpathSync(
+      path.resolve(repositoryRoot, "packages/concurrency/src/chunk.ts"),
+    ),
   );
-  const symbolOf = (expression: ts.Expression): ts.Symbol | undefined => {
-    const symbol = checker.getSymbolAtLocation(unwrap(expression));
-    return symbol !== undefined && isImportAlias(symbol)
-      ? checker.getAliasedSymbol(symbol)
+  const symbolOf = async (
+    expression: ts.Expression,
+  ): Promise<CompilerSymbol | undefined> => {
+    const symbol = await checker.getSymbolAtLocation(unwrap(expression));
+    return symbol !== undefined && (await isImportAlias(symbol))
+      ? await checker.getAliasedSymbol(symbol)
       : symbol;
   };
   const isConstDeclaration = (
@@ -828,93 +874,102 @@ export const scanDbAwaitInLoop = ({
     ts.isVariableDeclarationList(node.parent) &&
     node.parent.getFirstToken()?.kind === ts.SyntaxKind.ConstKeyword;
 
-  const isChunkHelper = (
+  const isChunkHelper = async (
     expression: ts.Expression,
-    seen = new Set<ts.Symbol>(),
-  ): boolean => {
-    const symbol = symbolOf(expression);
+    seen = new Set<CompilerSymbol>(),
+  ): Promise<boolean> => {
+    const symbol = await symbolOf(expression);
     if (symbol === undefined || seen.has(symbol)) {
       return false;
     }
     seen.add(symbol);
-    return (symbol.declarations ?? []).some((declaration) => {
-      if (
-        symbol.getName() === "chunked" &&
-        chunkFiles.has(toPosix(declaration.getSourceFile().fileName))
-      ) {
-        return true;
-      }
-      return (
-        isConstDeclaration(declaration) &&
-        declaration.initializer !== undefined &&
-        isChunkHelper(declaration.initializer, seen)
-      );
-    });
+    return await someAsync(
+      await declarationsOf(symbol),
+      async (declaration) => {
+        if (
+          symbol.name === "chunk" &&
+          toPosix(realpathSync(declaration.getSourceFile().fileName)) ===
+            chunkFile
+        ) {
+          return true;
+        }
+        return (
+          isConstDeclaration(declaration) &&
+          declaration.initializer !== undefined &&
+          (await isChunkHelper(declaration.initializer, seen))
+        );
+      },
+    );
   };
 
-  const isConstValue = (expression: ts.Expression): boolean => {
+  const isConstValue = async (expression: ts.Expression): Promise<boolean> => {
     const value = unwrap(expression);
     if (
       ts.isPropertyAccessExpression(value) ||
       ts.isElementAccessExpression(value)
     ) {
-      return isConstValue(value.expression);
+      return await isConstValue(value.expression);
     }
-    return (symbolOf(value)?.declarations ?? []).some(isConstDeclaration);
+    return (await declarationsOf(await symbolOf(value))).some(
+      isConstDeclaration,
+    );
   };
-  const literalNumber = (expression: ts.Expression): number | null => {
+  const literalNumber = async (
+    expression: ts.Expression,
+  ): Promise<number | null> => {
     const value = unwrap(expression);
-    if (!ts.isNumericLiteral(value) && !isConstValue(value)) {
+    if (!ts.isNumericLiteral(value) && !(await isConstValue(value))) {
       return null;
     }
-    const type = checker.getTypeAtLocation(value);
-    return type.isNumberLiteral() && Number.isSafeInteger(type.value)
+    const type = await checker.getTypeAtLocation(value);
+    return type.isNumberLiteralType() && Number.isSafeInteger(type.value)
       ? type.value
       : null;
   };
 
-  const isConstObject = (
+  const isConstObject = async (
     expression: ts.Expression,
-    seen = new Set<ts.Symbol>(),
-  ): boolean => {
+    seen = new Set<CompilerSymbol>(),
+  ): Promise<boolean> => {
     const value = unwrap(expression);
     if (ts.isObjectLiteralExpression(value)) {
       return !value.properties.some(ts.isSpreadAssignment);
     }
-    const symbol = symbolOf(value);
+    const symbol = await symbolOf(value);
     if (symbol === undefined || seen.has(symbol)) {
       return false;
     }
     seen.add(symbol);
-    return (symbol.declarations ?? []).some(
-      (declaration) =>
+    return await someAsync(
+      await declarationsOf(symbol),
+      async (declaration) =>
         isConstDeclaration(declaration) &&
         declaration.initializer !== undefined &&
-        isConstObject(declaration.initializer, seen),
+        (await isConstObject(declaration.initializer, seen)),
     );
   };
 
-  const isReadonlyObject = (
+  const isReadonlyObject = async (
     expression: ts.Expression,
-    seen = new Set<ts.Symbol>(),
-  ): boolean => {
-    if (!isConstObject(expression)) {
+    seen = new Set<CompilerSymbol>(),
+  ): Promise<boolean> => {
+    if (!(await isConstObject(expression))) {
       return false;
     }
-    const properties = checker.getTypeAtLocation(expression).getProperties();
+    const properties = await (
+      await checker.getTypeAtLocation(expression)
+    ).getProperties();
     if (
       properties.length > 0 &&
-      properties.every((property) =>
-        (property.declarations ?? []).some(
+      (await everyAsync(properties, async (property) =>
+        (await declarationsOf(property)).some(
           (declaration) =>
-            ts.canHaveModifiers(declaration) &&
-            ts
-              .getModifiers(declaration)
-              ?.some(
-                (modifier) => modifier.kind === ts.SyntaxKind.ReadonlyKeyword,
-              ),
+            hasModifiers(declaration) &&
+            declaration.modifiers?.some(
+              (modifier) => modifier.kind === ts.SyntaxKind.ReadonlyKeyword,
+            ),
         ),
-      )
+      ))
     ) {
       return true;
     }
@@ -923,10 +978,10 @@ export const scanDbAwaitInLoop = ({
       ts.isParenthesizedExpression(value) ||
       ts.isSatisfiesExpression(value) ||
       ts.isAsExpression(value) ||
-      ts.isTypeAssertionExpression(value)
+      ts.isTypeAssertion(value)
     ) {
       if (
-        (ts.isAsExpression(value) || ts.isTypeAssertionExpression(value)) &&
+        (ts.isAsExpression(value) || ts.isTypeAssertion(value)) &&
         ts.isTypeReferenceNode(value.type) &&
         ts.isIdentifier(value.type.typeName) &&
         value.type.typeName.text === "const"
@@ -935,21 +990,24 @@ export const scanDbAwaitInLoop = ({
       }
       value = value.expression;
     }
-    const symbol = symbolOf(value);
+    const symbol = await symbolOf(value);
     if (symbol === undefined || seen.has(symbol)) {
       return false;
     }
     seen.add(symbol);
-    return (symbol.declarations ?? []).some(
-      (declaration) =>
+    return await someAsync(
+      await declarationsOf(symbol),
+      async (declaration) =>
         isConstDeclaration(declaration) &&
         declaration.type === undefined &&
         declaration.initializer !== undefined &&
-        isReadonlyObject(declaration.initializer, seen),
+        (await isReadonlyObject(declaration.initializer, seen)),
     );
   };
 
-  const fixedSetLength = (expression: ts.Expression): number | null => {
+  const fixedSetLength = async (
+    expression: ts.Expression,
+  ): Promise<number | null> => {
     const value = unwrap(expression);
     if (ts.isArrayLiteralExpression(value)) {
       return value.elements.some(ts.isSpreadElement)
@@ -965,7 +1023,7 @@ export const scanDbAwaitInLoop = ({
         return null;
       }
       if (value.arguments.length === 0) {
-        return fixedSetLength(member.expression);
+        return await fixedSetLength(member.expression);
       }
       const [object] = value.arguments;
       if (
@@ -973,35 +1031,30 @@ export const scanDbAwaitInLoop = ({
         member.expression.text !== "Object" ||
         value.arguments.length !== 1 ||
         object === undefined ||
-        !isReadonlyObject(object)
+        !(await isReadonlyObject(object))
       ) {
         return null;
       }
-      const type = checker.getTypeAtLocation(object);
-      return checker.getIndexInfosOfType(type).length === 0
-        ? type.getProperties().length
+      const type = await checker.getTypeAtLocation(object);
+      return (await checker.getIndexInfosOfType(type)).length === 0
+        ? (await type.getProperties()).length
         : null;
     }
-    const type = checker.getTypeAtLocation(value);
-    if (
-      !checker.isTupleType(type) ||
-      !("target" in type) ||
-      typeof type.target !== "object" ||
-      type.target === null ||
-      !("readonly" in type.target) ||
-      type.target.readonly !== true
-    ) {
+    const type = await checker.getTypeAtLocation(value);
+    if (!type.isTupleType() || !(await type.getTarget()).readonly) {
       return null;
     }
-    const length = type.getProperty("length");
+    const length = await type.getProperty("length");
     if (length === undefined) {
       return null;
     }
-    const lengthType = checker.getTypeOfSymbolAtLocation(length, value);
-    const lengths = lengthType.isUnion() ? lengthType.types : [lengthType];
+    const lengthType = await checker.getTypeOfSymbolAtLocation(length, value);
+    const lengths = lengthType.isUnionType()
+      ? await lengthType.getTypes()
+      : [lengthType];
     let maximum = 0;
     for (const entry of lengths) {
-      if (!entry.isNumberLiteral()) {
+      if (!entry.isNumberLiteralType()) {
         return null;
       }
       maximum = Math.max(maximum, entry.value);
@@ -1009,17 +1062,20 @@ export const scanDbAwaitInLoop = ({
     return maximum;
   };
 
-  const writesCounter = (body: ts.Node, counter: ts.Symbol): boolean => {
-    const containsCounter = (node: ts.Node): boolean =>
+  const writesCounter = async (
+    body: ts.Node,
+    counter: CompilerSymbol,
+  ): Promise<boolean> => {
+    const containsCounter = async (node: ts.Node): Promise<boolean> =>
       (ts.isIdentifier(node) &&
-        checker.getSymbolAtLocation(node) === counter) ||
-      ts.forEachChild(node, containsCounter) === true;
-    const visit = (node: ts.Node): boolean => {
+        (await checker.getSymbolAtLocation(node)) === counter) ||
+      (await childrenAsync(node, containsCounter)) === true;
+    const visit = async (node: ts.Node): Promise<boolean> => {
       if (
         ts.isBinaryExpression(node) &&
         node.operatorToken.kind >= ts.SyntaxKind.FirstAssignment &&
         node.operatorToken.kind <= ts.SyntaxKind.LastAssignment &&
-        containsCounter(node.left)
+        (await containsCounter(node.left))
       ) {
         return true;
       }
@@ -1028,42 +1084,46 @@ export const scanDbAwaitInLoop = ({
           ts.isPostfixUnaryExpression(node)) &&
         (node.operator === ts.SyntaxKind.PlusPlusToken ||
           node.operator === ts.SyntaxKind.MinusMinusToken) &&
-        containsCounter(node.operand)
+        (await containsCounter(node.operand))
       ) {
         return true;
       }
-      return ts.forEachChild(node, visit) === true;
+      return (await childrenAsync(node, visit)) === true;
     };
-    return visit(body);
+    return await visit(body);
   };
 
-  const isCounter = (expression: ts.Expression, counter: ts.Symbol): boolean =>
-    ts.isIdentifier(unwrap(expression)) && symbolOf(expression) === counter;
-
-  const counterStep = (
+  const isCounter = async (
     expression: ts.Expression,
-    counter: ts.Symbol,
-  ): number | null => {
+    counter: CompilerSymbol,
+  ): Promise<boolean> =>
+    ts.isIdentifier(unwrap(expression)) &&
+    (await symbolOf(expression)) === counter;
+
+  const counterStep = async (
+    expression: ts.Expression,
+    counter: CompilerSymbol,
+  ): Promise<number | null> => {
     const increment = unwrap(expression);
     if (
       ts.isBinaryExpression(increment) &&
       increment.operatorToken.kind === ts.SyntaxKind.PlusEqualsToken &&
-      isCounter(increment.left, counter)
+      (await isCounter(increment.left, counter))
     ) {
-      return literalNumber(increment.right);
+      return await literalNumber(increment.right);
     }
     if (
       (ts.isPrefixUnaryExpression(increment) ||
         ts.isPostfixUnaryExpression(increment)) &&
       increment.operator === ts.SyntaxKind.PlusPlusToken &&
-      isCounter(increment.operand, counter)
+      (await isCounter(increment.operand, counter))
     ) {
       return 1;
     }
     return null;
   };
 
-  const boundedCounter = (loop: ts.ForStatement): boolean => {
+  const boundedCounter = async (loop: ts.ForStatement): Promise<boolean> => {
     if (
       !loop.initializer ||
       !ts.isVariableDeclarationList(loop.initializer) ||
@@ -1081,15 +1141,15 @@ export const scanDbAwaitInLoop = ({
     ) {
       return false;
     }
-    const initial = literalNumber(declaration.initializer);
+    const initial = await literalNumber(declaration.initializer);
     if (initial === null || initial < 0) {
       return false;
     }
-    const counter = checker.getSymbolAtLocation(declaration.name);
-    if (!counter || writesCounter(loop.statement, counter)) {
+    const counter = await checker.getSymbolAtLocation(declaration.name);
+    if (!counter || (await writesCounter(loop.statement, counter))) {
       return false;
     }
-    const step = counterStep(loop.incrementor, counter);
+    const step = await counterStep(loop.incrementor, counter);
     if (step === null || step < 1) {
       return false;
     }
@@ -1102,7 +1162,7 @@ export const scanDbAwaitInLoop = ({
     }
     if (
       !ts.isBinaryExpression(condition) ||
-      !isCounter(condition.left, counter)
+      !(await isCounter(condition.left, counter))
     ) {
       return false;
     }
@@ -1113,7 +1173,7 @@ export const scanDbAwaitInLoop = ({
     ) {
       return false;
     }
-    const bound = literalNumber(condition.right);
+    const bound = await literalNumber(condition.right);
     if (bound !== null) {
       return step === 1 && bound >= 0 && bound <= 16;
     }
@@ -1123,28 +1183,42 @@ export const scanDbAwaitInLoop = ({
       operator === ts.SyntaxKind.LessThanToken &&
       ts.isPropertyAccessExpression(right) &&
       right.name.text === "length" &&
-      checker.isArrayType(checker.getTypeAtLocation(right.expression))
+      checker.isArrayType(await checker.getTypeAtLocation(right.expression))
     );
   };
 
-  const boundedRoundShape = (loop: ts.IterationStatement): boolean => {
+  const boundedRoundShape = async (
+    loop: IterationStatement,
+  ): Promise<boolean> => {
     if (ts.isForStatement(loop)) {
-      return boundedCounter(loop);
+      return await boundedCounter(loop);
     }
     if (!ts.isForOfStatement(loop)) {
       return false;
     }
     const iterable = unwrap(loop.expression);
-    if (ts.isCallExpression(iterable) && isChunkHelper(iterable.expression)) {
-      const size = iterable.arguments.at(1);
-      const number = size === undefined ? null : literalNumber(size);
-      return iterable.arguments.length === 2 && number !== null && number >= 2;
+    let batches = iterable;
+    if (
+      ts.isCallExpression(batches) &&
+      batches.arguments.length === 0 &&
+      ts.isPropertyAccessExpression(batches.expression) &&
+      ["entries", "keys", "values"].includes(batches.expression.name.text)
+    ) {
+      batches = unwrap(batches.expression.expression);
     }
-    const length = fixedSetLength(iterable);
+    if (
+      ts.isCallExpression(batches) &&
+      (await isChunkHelper(batches.expression))
+    ) {
+      const size = batches.arguments.at(1);
+      const number = size === undefined ? null : await literalNumber(size);
+      return batches.arguments.length === 2 && number !== null && number >= 2;
+    }
+    const length = await fixedSetLength(iterable);
     return length !== null && length <= 16;
   };
 
-  const hasEnclosingIteration = (loop: ts.IterationStatement): boolean => {
+  const hasEnclosingIteration = (loop: IterationStatement): boolean => {
     for (
       let node: ts.Node = loop.parent;
       !ts.isSourceFile(node);
@@ -1165,38 +1239,38 @@ export const scanDbAwaitInLoop = ({
     return false;
   };
 
-  const isProgramSource = (sourceFile: ts.SourceFile): boolean =>
+  const isProgramSource = async (sourceFile: ts.SourceFile): Promise<boolean> =>
     !sourceFile.isDeclarationFile &&
-    !program.isSourceFileFromExternalLibrary(sourceFile) &&
+    !(await program.isSourceFileFromExternalLibrary(sourceFile)) &&
     !sourceFile.fileName.includes("/node_modules/");
 
-  const handleMemo = new Map<ts.Type, boolean>();
-  const executableMemo = new Map<ts.Type, boolean>();
-  const runnerMemo = new Map<ts.Type, boolean>();
+  const handleMemo = new Map<Type, boolean>();
+  const executableMemo = new Map<Type, boolean>();
+  const runnerMemo = new Map<Type, boolean>();
 
-  const memoized = (
-    memo: Map<ts.Type, boolean>,
-    type: ts.Type,
-    compute: () => boolean,
-  ): boolean => {
+  const memoized = async (
+    memo: Map<Type, boolean>,
+    type: Type,
+    compute: () => Promise<boolean>,
+  ): Promise<boolean> => {
     const known = memo.get(type);
     if (known !== undefined) {
       return known;
     }
     memo.set(type, false);
-    const value = compute();
+    const value = await compute();
     memo.set(type, value);
     return value;
   };
 
   // `any`, `unknown`, and the checker's error type are intrinsic types that
   // carry exactly one of these flags.
-  const isAnyLike = (type: ts.Type): boolean =>
-    type.flags === ts.TypeFlags.Any || type.flags === ts.TypeFlags.Unknown;
+  const isAnyLike = (type: Type): boolean =>
+    type.flags === TypeFlags.Any || type.flags === TypeFlags.Unknown;
 
-  const resolveConstraint = (type: ts.Type): ts.Type =>
+  const resolveConstraint = async (type: Type): Promise<Type> =>
     type.isTypeParameter()
-      ? (checker.getBaseConstraintOfType(type) ?? type)
+      ? ((await checker.getBaseConstraintOfType(type)) ?? type)
       : type;
 
   const isDrizzleDeclaration = (declaration: ts.Declaration): boolean =>
@@ -1222,25 +1296,27 @@ export const scanDbAwaitInLoop = ({
     return handleFiles.has(toPosix(declaration.getSourceFile().fileName));
   };
 
-  const isDrizzleHandleType = (type: ts.Type): boolean => {
-    const symbol = type.getSymbol();
+  const isDrizzleHandleType = async (type: Type): Promise<boolean> => {
+    const symbol = await type.getSymbol();
     return (
       symbol !== undefined &&
-      DRIZZLE_HANDLE_TYPE.test(symbol.getName()) &&
-      (symbol.declarations ?? []).some(isDrizzleDeclaration)
+      DRIZZLE_HANDLE_TYPE.test(symbol.name) &&
+      (await declarationsOf(symbol)).some(isDrizzleDeclaration)
     );
   };
 
   // A type Drizzle declares (`PgTable`, `SQL`, `SQLWrapper`,
   // `PgUpdateSetSource`, ...), through a union or a type parameter's
   // constraint.
-  const isDrizzleDeclaredType = (type: ts.Type): boolean => {
-    const resolved = resolveConstraint(type);
-    if (resolved.isUnion() || resolved.isIntersection()) {
-      return resolved.types.some(isDrizzleDeclaredType);
+  const isDrizzleDeclaredType = async (type: Type): Promise<boolean> => {
+    const resolved = await resolveConstraint(type);
+    if (resolved.isUnionType() || resolved.isIntersectionType()) {
+      return await someAsync(await resolved.getTypes(), isDrizzleDeclaredType);
     }
-    return [resolved.getSymbol(), resolved.aliasSymbol].some((symbol) =>
-      (symbol?.declarations ?? []).some(isDrizzleDeclaration),
+    return await someAsync(
+      [await resolved.getSymbol(), await resolved.getAliasSymbol()],
+      async (symbol) =>
+        (await declarationsOf(symbol)).some(isDrizzleDeclaration),
     );
   };
 
@@ -1250,44 +1326,54 @@ export const scanDbAwaitInLoop = ({
   // `execute: (query: SQL) => ...`) is a handle by what it accepts. Library
   // members are not adapters: `Array.prototype.with` over Drizzle row types
   // takes a Drizzle-declared value and writes nothing.
-  const takesDrizzleArgument = (type: ts.Type): boolean => {
-    const resolved = checker.getNonNullableType(type);
-    const parts = resolved.isUnion() ? resolved.types : [resolved];
-    return parts.some((part) =>
-      checker
-        .getSignaturesOfType(part, ts.SignatureKind.Call)
-        .some((signature) =>
-          signature
-            .getParameters()
-            .some((parameter) =>
-              isDrizzleDeclaredType(checker.getTypeOfSymbol(parameter)),
+  const takesDrizzleArgument = async (type: Type): Promise<boolean> => {
+    const resolved = await checker.getNonNullableType(type);
+    const parts = resolved.isUnionType()
+      ? await resolved.getTypes()
+      : [resolved];
+    return await someAsync(
+      parts,
+      async (part) =>
+        await someAsync(
+          await checker.getSignaturesOfType(part, SignatureKind.Call),
+          async (signature) =>
+            await someAsync(
+              await signature.getParameters(),
+              async (parameter) =>
+                await isDrizzleDeclaredType(
+                  await checker.getTypeOfSymbol(parameter),
+                ),
             ),
         ),
     );
   };
 
-  const hasHandleCapability = (type: ts.Type): boolean =>
-    memoized(handleMemo, type, () => {
-      const resolved = resolveConstraint(type);
-      if (resolved.isUnion()) {
-        return resolved.types.some(hasHandleCapability);
+  const hasHandleCapability = async (type: Type): Promise<boolean> =>
+    await memoized(handleMemo, type, async () => {
+      const resolved = await resolveConstraint(type);
+      if (resolved.isUnionType()) {
+        return await someAsync(await resolved.getTypes(), hasHandleCapability);
       }
       if (isAnyLike(resolved)) {
         return false;
       }
-      if (isDrizzleHandleType(resolved)) {
+      if (await isDrizzleHandleType(resolved)) {
         return true;
       }
       if (
-        HANDLE_MEMBER_NAMES.some((name) => {
-          const member = checker.getPropertyOfType(resolved, name);
+        await someAsync(HANDLE_MEMBER_NAMES, async (name) => {
+          const member = await checker.getPropertyOfType(resolved, name);
           return (
             member !== undefined &&
-            ((member.declarations ?? []).some(isHandleMemberDeclaration) ||
-              ((member.declarations ?? []).some((declaration) =>
-                isProgramSource(declaration.getSourceFile()),
-              ) &&
-                takesDrizzleArgument(checker.getTypeOfSymbol(member))))
+            ((await declarationsOf(member)).some(isHandleMemberDeclaration) ||
+              ((await someAsync(
+                await declarationsOf(member),
+                async (declaration) =>
+                  await isProgramSource(declaration.getSourceFile()),
+              )) &&
+                (await takesDrizzleArgument(
+                  await checker.getTypeOfSymbol(member),
+                ))))
           );
         })
       ) {
@@ -1295,69 +1381,91 @@ export const scanDbAwaitInLoop = ({
       }
       // A wrapper that opens transactions on a handle (a maintenance or
       // read-only session's `{ transaction, execute }`) is one by capability.
-      const transaction = checker.getPropertyOfType(resolved, "transaction");
+      const transaction = await checker.getPropertyOfType(
+        resolved,
+        "transaction",
+      );
       return (
         transaction !== undefined &&
-        isRunner(checker.getTypeOfSymbol(transaction))
+        (await isRunner(await checker.getTypeOfSymbol(transaction)))
       );
     });
 
-  const isExecutableQuery = (type: ts.Type): boolean =>
-    memoized(executableMemo, type, () => {
-      const resolved = resolveConstraint(type);
-      if (resolved.isUnion()) {
-        return resolved.types.some(isExecutableQuery);
+  const isExecutableQuery = async (type: Type): Promise<boolean> =>
+    await memoized(executableMemo, type, async () => {
+      const resolved = await resolveConstraint(type);
+      if (resolved.isUnionType()) {
+        return await someAsync(await resolved.getTypes(), isExecutableQuery);
       }
       if (isAnyLike(resolved)) {
         return false;
       }
       return (
-        checker.getPropertyOfType(resolved, "then")?.declarations ?? []
+        await declarationsOf(await checker.getPropertyOfType(resolved, "then"))
       ).some(isDrizzleDeclaration);
     });
 
-  const callbackReceivesHandle = (type: ts.Type): boolean => {
-    const resolved = resolveConstraint(checker.getNonNullableType(type));
-    const parts = resolved.isUnion() ? resolved.types : [resolved];
-    return parts.some((part) =>
-      checker
-        .getSignaturesOfType(part, ts.SignatureKind.Call)
-        .some((signature) => {
-          const [first] = signature.getParameters();
-          return (
-            first !== undefined &&
-            hasHandleCapability(checker.getTypeOfSymbol(first))
-          );
-        }),
+  const callbackReceivesHandle = async (type: Type): Promise<boolean> => {
+    const resolved = await resolveConstraint(
+      await checker.getNonNullableType(type),
+    );
+    const parts = resolved.isUnionType()
+      ? await resolved.getTypes()
+      : [resolved];
+    return await someAsync(
+      parts,
+      async (part) =>
+        await someAsync(
+          await checker.getSignaturesOfType(part, SignatureKind.Call),
+          async (signature) => {
+            const [first] = await signature.getParameters();
+            return (
+              first !== undefined &&
+              (await hasHandleCapability(await checker.getTypeOfSymbol(first)))
+            );
+          },
+        ),
     );
   };
 
-  const isRunner = (type: ts.Type): boolean =>
-    memoized(runnerMemo, type, () => {
-      const resolved = resolveConstraint(checker.getNonNullableType(type));
-      const parts = resolved.isUnion() ? resolved.types : [resolved];
-      return parts.some((part) =>
-        checker
-          .getSignaturesOfType(part, ts.SignatureKind.Call)
-          .some((signature) =>
-            signature
-              .getParameters()
-              .some((parameter) =>
-                callbackReceivesHandle(checker.getTypeOfSymbol(parameter)),
+  const isRunner = async (type: Type): Promise<boolean> =>
+    await memoized(runnerMemo, type, async () => {
+      const resolved = await resolveConstraint(
+        await checker.getNonNullableType(type),
+      );
+      const parts = resolved.isUnionType()
+        ? await resolved.getTypes()
+        : [resolved];
+      return await someAsync(
+        parts,
+        async (part) =>
+          await someAsync(
+            await checker.getSignaturesOfType(part, SignatureKind.Call),
+            async (signature) =>
+              await someAsync(
+                await signature.getParameters(),
+                async (parameter) =>
+                  await callbackReceivesHandle(
+                    await checker.getTypeOfSymbol(parameter),
+                  ),
               ),
           ),
       );
     });
 
-  const typeOf = (node: ts.Node): ts.Type => checker.getTypeAtLocation(node);
+  const typeOf = async (node: ts.Node): Promise<Type> =>
+    await checker.getTypeAtLocation(node);
 
-  const isThenable = (type: ts.Type): boolean => {
-    const resolved = resolveConstraint(type);
-    const parts = resolved.isUnion() ? resolved.types : [resolved];
-    return parts.some(
-      (part) =>
+  const isThenable = async (type: Type): Promise<boolean> => {
+    const resolved = await resolveConstraint(type);
+    const parts = resolved.isUnionType()
+      ? await resolved.getTypes()
+      : [resolved];
+    return await someAsync(
+      parts,
+      async (part) =>
         !isAnyLike(part) &&
-        checker.getPropertyOfType(part, "then") !== undefined,
+        (await checker.getPropertyOfType(part, "then")) !== undefined,
     );
   };
 
@@ -1365,14 +1473,16 @@ export const scanDbAwaitInLoop = ({
   // (`writer.delete(table).where(...)`)? A structural adapter's builders are
   // not Drizzle's, so awaiting the thenable at the chain's end is the
   // evidence that it runs.
-  const chainStartsAtHandleMember = (call: ts.CallExpression): boolean => {
+  const chainStartsAtHandleMember = async (
+    call: ts.CallExpression,
+  ): Promise<boolean> => {
     let current: ts.Expression = unwrap(call.expression);
     for (;;) {
       if (ts.isPropertyAccessExpression(current)) {
         const member = current.name.text;
         if (
           HANDLE_MEMBER_NAME_SET.has(member) &&
-          hasHandleCapability(typeOf(current.expression))
+          (await hasHandleCapability(await typeOf(current.expression)))
         ) {
           return true;
         }
@@ -1388,24 +1498,27 @@ export const scanDbAwaitInLoop = ({
   // A call that runs a statement: a runner invocation, an executing handle
   // member (`tx.execute(...)`, `db.transaction(...)`), `.execute()`/`.then()`
   // on a query, or a query value in an executed position.
-  const isQueryCall = (call: ts.CallExpression, executed: boolean): boolean => {
+  const isQueryCall = async (
+    call: ts.CallExpression,
+    executed: boolean,
+  ): Promise<boolean> => {
     const callee = unwrap(call.expression);
-    if (isRunner(typeOf(callee))) {
+    if (await isRunner(await typeOf(callee))) {
       return true;
     }
     if (ts.isPropertyAccessExpression(callee)) {
       const member = callee.name.text;
       if (
         EXECUTING_HANDLE_MEMBERS.has(member) &&
-        hasHandleCapability(typeOf(callee.expression))
+        (await hasHandleCapability(await typeOf(callee.expression)))
       ) {
         return true;
       }
       if (
         QUERY_EXECUTION_MEMBERS.has(member) &&
-        (checker.getSymbolAtLocation(callee.name)?.declarations ?? []).some(
-          isDrizzleDeclaration,
-        )
+        (
+          await declarationsOf(await checker.getSymbolAtLocation(callee.name))
+        ).some(isDrizzleDeclaration)
       ) {
         return true;
       }
@@ -1413,23 +1526,25 @@ export const scanDbAwaitInLoop = ({
     if (!executed) {
       return false;
     }
-    const type = typeOf(call);
+    const type = await typeOf(call);
     return (
-      isExecutableQuery(type) ||
-      (isThenable(type) && chainStartsAtHandleMember(call))
+      (await isExecutableQuery(type)) ||
+      ((await isThenable(type)) && (await chainStartsAtHandleMember(call)))
     );
   };
 
-  const isHandleValue = (expression: ts.Expression): boolean => {
-    const type = typeOf(expression);
-    return hasHandleCapability(type) || isRunner(type);
+  const isHandleValue = async (expression: ts.Expression): Promise<boolean> => {
+    const type = await typeOf(expression);
+    return (await hasHandleCapability(type)) || (await isRunner(type));
   };
 
   // The handle a call receives as an argument, directly or inside an object
   // literal (by value or shorthand, nested literals included). Function
   // arguments are not searched: a handle used inside a callback runs wherever
   // that callback runs, which is the callee's business.
-  const findHandleInValue = (expression: ts.Expression): string | null => {
+  const findHandleInValue = async (
+    expression: ts.Expression,
+  ): Promise<string | null> => {
     const value = unwrap(expression);
     if (ts.isArrowFunction(value) || ts.isFunctionExpression(value)) {
       return null;
@@ -1437,25 +1552,28 @@ export const scanDbAwaitInLoop = ({
     if (ts.isObjectLiteralExpression(value)) {
       for (const property of value.properties) {
         if (ts.isPropertyAssignment(property)) {
-          const found = findHandleInValue(property.initializer);
+          const found = await findHandleInValue(property.initializer);
           if (found !== null) {
             return found;
           }
         } else if (
           ts.isShorthandPropertyAssignment(property) &&
-          isHandleValue(property.name)
+          ts.isIdentifier(property.name) &&
+          (await isHandleValue(property.name))
         ) {
           return property.name.text;
         }
       }
       return null;
     }
-    return isHandleValue(value) ? subjectText(value) : null;
+    return (await isHandleValue(value)) ? subjectText(value) : null;
   };
 
-  const findHandleArgument = (call: ts.CallExpression): string | null => {
+  const findHandleArgument = async (
+    call: ts.CallExpression,
+  ): Promise<string | null> => {
     for (const argument of call.arguments) {
-      const found = findHandleInValue(
+      const found = await findHandleInValue(
         ts.isSpreadElement(argument) ? argument.expression : argument,
       );
       if (found !== null) {
@@ -1465,39 +1583,45 @@ export const scanDbAwaitInLoop = ({
     return null;
   };
 
-  const bodyOf = (declaration: ts.Node | undefined): ts.Node | null => {
+  const bodyOf = async (
+    declaration: ts.Node | undefined,
+  ): Promise<ts.Node | null> => {
     if (declaration === undefined) {
       return null;
     }
     if (ts.isVariableDeclaration(declaration)) {
       return declaration.initializer === undefined
         ? null
-        : bodyOf(unwrap(declaration.initializer));
+        : await bodyOf(unwrap(declaration.initializer));
     }
     if (!isFunctionBoundary(declaration) || declaration.body === undefined) {
       return null;
     }
-    return isProgramSource(declaration.getSourceFile())
+    return (await isProgramSource(declaration.getSourceFile()))
       ? declaration.body
       : null;
   };
 
-  const resolveCalleeBody = (call: ts.CallExpression): ts.Node | null =>
-    bodyOf(checker.getResolvedSignature(call)?.getDeclaration());
+  const resolveCalleeBody = async (
+    call: ts.CallExpression,
+  ): Promise<ts.Node | null> =>
+    await bodyOf(
+      await (await checker.getResolvedSignature(call)).declaration?.resolve(),
+    );
 
-  const resolveFunctionValueBody = (
+  const resolveFunctionValueBody = async (
     expression: ts.Expression,
-  ): ts.Node | null => {
+  ): Promise<ts.Node | null> => {
     const value = unwrap(expression);
     if (ts.isArrowFunction(value) || ts.isFunctionExpression(value)) {
       return value.body;
     }
-    let symbol = checker.getSymbolAtLocation(value);
-    if (symbol !== undefined && isImportAlias(symbol)) {
-      symbol = checker.getAliasedSymbol(symbol);
+    let symbol = await checker.getSymbolAtLocation(value);
+    if (symbol !== undefined && (await isImportAlias(symbol))) {
+      symbol = await checker.getAliasedSymbol(symbol);
     }
-    for (const declaration of symbol?.declarations ?? []) {
-      const body = bodyOf(declaration);
+    for (const declaration of await declarationsOf(symbol)) {
+      const body = await bodyOf(declaration);
       if (body !== null) {
         return body;
       }
@@ -1511,32 +1635,32 @@ export const scanDbAwaitInLoop = ({
   // further function bodies? `viaResolution` is false only while scanning an
   // inline fan-out callback's own body, where a directly awaited call belongs
   // to the await site inside the callback and must not be counted twice.
-  const scanForDatabaseWork = (
+  const scanForDatabaseWork = async (
     node: ts.Node,
     hops: number,
     viaResolution: boolean,
-  ): Match | null => {
+  ): Promise<Match | null> => {
     let found: Match | null = null;
-    const visit = (current: ts.Node): void => {
+    const visit = async (current: ts.Node): Promise<void> => {
       if (found !== null) {
         return;
       }
       if (ts.isCallExpression(current) && isChainEnd(current)) {
         const counts = viaResolution || !isDirectAwaitOperand(current);
         if (counts) {
-          if (isQueryCall(current, isExecutedPosition(current))) {
+          if (await isQueryCall(current, isExecutedPosition(current))) {
             found = QUERY_MATCH;
             return;
           }
-          const handle = findHandleArgument(current);
+          const handle = await findHandleArgument(current);
           if (handle !== null) {
             found = { kind: "handle", subject: handle };
             return;
           }
         }
         if (hops > 0) {
-          const body = resolveCalleeBody(current);
-          if (body !== null && summarize(body, hops - 1) !== null) {
+          const body = await resolveCalleeBody(current);
+          if (body !== null && (await summarize(body, hops - 1)) !== null) {
             found = {
               kind: "helper",
               subject: subjectText(current.expression),
@@ -1550,7 +1674,7 @@ export const scanDbAwaitInLoop = ({
           ts.isElementAccessExpression(current)) &&
         (viaResolution || !isDirectAwaitOperand(current)) &&
         isExecutedPosition(current) &&
-        isExecutableQuery(typeOf(current))
+        (await isExecutableQuery(await typeOf(current)))
       ) {
         // A query held in a variable and then awaited or returned: an async
         // function adopts the returned thenable, so returning it runs it.
@@ -1565,26 +1689,31 @@ export const scanDbAwaitInLoop = ({
         // A function defined here but not handed to a call is not run here.
         return;
       }
-      ts.forEachChild(current, visit);
+      await childrenAsync(current, visit);
     };
-    visit(node);
+    await visit(node);
     return found;
   };
 
-  const summarize = (body: ts.Node, hops: number): Match | null => {
+  const summarize = async (
+    body: ts.Node,
+    hops: number,
+  ): Promise<Match | null> => {
     const byHops = summaryMemo.get(body) ?? new Map<number, Match | null>();
     summaryMemo.set(body, byHops);
     if (byHops.has(hops)) {
       return byHops.get(hops) ?? null;
     }
     byHops.set(hops, null);
-    const match = scanForDatabaseWork(body, hops, true);
+    const match = await scanForDatabaseWork(body, hops, true);
     byHops.set(hops, match);
     return match;
   };
 
   // `Promise.all(items.map(cb))` whose callback reaches the database.
-  const fanOutMatch = (expression: ts.Expression): Match | null => {
+  const fanOutMatch = async (
+    expression: ts.Expression,
+  ): Promise<Match | null> => {
     const call = unwrap(expression);
     if (!isPromiseFanOutCall(call) || call.arguments.length !== 1) {
       return null;
@@ -1601,22 +1730,26 @@ export const scanDbAwaitInLoop = ({
     }
     const inline = unwrap(callback);
     if (ts.isArrowFunction(inline) || ts.isFunctionExpression(inline)) {
-      return scanForDatabaseWork(inline.body, 1, false);
+      return await scanForDatabaseWork(inline.body, 1, false);
     }
-    const body = resolveFunctionValueBody(inline);
-    return body === null ? null : summarize(body, 1);
+    const body = await resolveFunctionValueBody(inline);
+    return body === null ? null : await summarize(body, 1);
   };
 
   const fanOutMemo = new Map<ts.CallExpression, Match | null>();
-  const cachedFanOutMatch = (call: ts.CallExpression): Match | null => {
+  const cachedFanOutMatch = async (
+    call: ts.CallExpression,
+  ): Promise<Match | null> => {
     if (!fanOutMemo.has(call)) {
-      fanOutMemo.set(call, fanOutMatch(call));
+      fanOutMemo.set(call, await fanOutMatch(call));
     }
     return fanOutMemo.get(call) ?? null;
   };
 
-  const isUnclassified = (expression: ts.Expression): boolean => {
-    if (isAnyLike(typeOf(expression))) {
+  const isUnclassified = async (
+    expression: ts.Expression,
+  ): Promise<boolean> => {
+    if (isAnyLike(await typeOf(expression))) {
       return true;
     }
     if (!ts.isCallExpression(expression)) {
@@ -1624,29 +1757,32 @@ export const scanDbAwaitInLoop = ({
     }
     const callee = unwrap(expression.expression);
     return (
-      isAnyLike(typeOf(callee)) ||
+      isAnyLike(await typeOf(callee)) ||
       (ts.isPropertyAccessExpression(callee) &&
-        isAnyLike(typeOf(callee.expression)))
+        isAnyLike(await typeOf(callee.expression)))
     );
   };
 
   const hits: DbAwaitInLoopHit[] = [];
   const unclassified: DbAwaitInLoopUnclassified[] = [];
   const directiveProblems: DbAwaitInLoopDirectiveProblem[] = [];
-  const directiveCounts: Record<string, number> = {};
+  const directiveCounts = new Map<string, number>();
   let suppressedHits = 0;
   let boundedRoundHits = 0;
   let filesScanned = 0;
 
-  for (const sourceFile of program.getSourceFiles()) {
-    const file = toPosix(path.relative(repositoryRoot, sourceFile.fileName));
-    if (!isProgramSource(sourceFile) || !isInScope(file)) {
+  for (const sourceFileName of await program.getSourceFileNames()) {
+    const sourceFile =
+      (await program.getSourceFile(sourceFileName)) ??
+      panic(`Missing program source: ${sourceFileName}`);
+    const file = repoRelativePath(repositoryRoot, sourceFile.fileName);
+    if (!(await isProgramSource(sourceFile)) || !isInScope(file)) {
       continue;
     }
     filesScanned += 1;
     const fileHits: {
       hit: DbAwaitInLoopHit;
-      loop: ts.IterationStatement | null;
+      loop: IterationStatement | null;
       fanOut: boolean;
     }[] = [];
 
@@ -1691,11 +1827,14 @@ export const scanDbAwaitInLoop = ({
       });
     };
 
-    const inspectSite = (site: ts.Node, awaited: ts.Expression): void => {
+    const inspectSite = async (
+      site: ts.Node,
+      awaited: ts.Expression,
+    ): Promise<void> => {
       const loop = findLoopContext(site);
       const fanOut =
         ts.isCallExpression(awaited) && isPromiseFanOutCall(awaited)
-          ? cachedFanOutMatch(awaited)
+          ? await cachedFanOutMatch(awaited)
           : null;
       if (fanOut !== null) {
         fanOutSites.add(site);
@@ -1712,10 +1851,11 @@ export const scanDbAwaitInLoop = ({
       const ownedByFanOut =
         loop?.fanOut !== null &&
         loop?.fanOut !== undefined &&
-        cachedFanOutMatch(loop.fanOut) !== null;
+        (await cachedFanOutMatch(loop.fanOut)) !== null;
       if (
-        (ts.isCallExpression(awaited) && isQueryCall(awaited, true)) ||
-        (!ts.isCallExpression(awaited) && isExecutableQuery(typeOf(awaited)))
+        (ts.isCallExpression(awaited) && (await isQueryCall(awaited, true))) ||
+        (!ts.isCallExpression(awaited) &&
+          (await isExecutableQuery(await typeOf(awaited))))
       ) {
         if (!ownedByFanOut) {
           report(site, QUERY_MATCH);
@@ -1728,12 +1868,15 @@ export const scanDbAwaitInLoop = ({
       }
       let match: Match | null = null;
       if (ts.isCallExpression(awaited)) {
-        const handle = findHandleArgument(awaited);
+        const handle = await findHandleArgument(awaited);
         if (handle !== null) {
           match = { kind: "handle", subject: handle };
         } else {
-          const body = resolveCalleeBody(awaited);
-          if (body !== null && summarize(body, HELPER_HOPS - 1) !== null) {
+          const body = await resolveCalleeBody(awaited);
+          if (
+            body !== null &&
+            (await summarize(body, HELPER_HOPS - 1)) !== null
+          ) {
             match = {
               kind: "helper",
               subject: subjectText(awaited.expression),
@@ -1742,7 +1885,7 @@ export const scanDbAwaitInLoop = ({
         }
       }
       if (match === null) {
-        if (isUnclassified(awaited)) {
+        if (await isUnclassified(awaited)) {
           unclassified.push({
             file,
             ...location(site),
@@ -1757,9 +1900,9 @@ export const scanDbAwaitInLoop = ({
       report(site, match);
     };
 
-    const visit = (node: ts.Node): void => {
+    const visit = async (node: ts.Node): Promise<void> => {
       if (ts.isAwaitExpression(node)) {
-        inspectSite(node, unwrap(node.expression));
+        await inspectSite(node, unwrap(node.expression));
       } else if (
         ts.isYieldExpression(node) &&
         node.asteriskToken !== undefined &&
@@ -1767,18 +1910,21 @@ export const scanDbAwaitInLoop = ({
       ) {
         const argument = resultAwaitArgument(node.expression);
         if (argument !== null) {
-          inspectSite(node, argument);
+          await inspectSite(node, argument);
         }
       }
-      ts.forEachChild(node, visit);
+      await childrenAsync(node, visit);
     };
-    visit(sourceFile);
+    await visit(sourceFile);
 
-    const directives = parseDirectives(sourceFile, file);
+    const directives = parseDirectives(
+      parseSource(file, sourceFile.text),
+      file,
+    );
     directiveProblems.push(...directives.problems);
     const directiveCount = countParsedDirectives(directives);
     if (directiveCount > 0) {
-      directiveCounts[file] = directiveCount;
+      directiveCounts.set(file, directiveCount);
     }
     for (const { hit, loop, fanOut } of fileHits) {
       if (
@@ -1786,7 +1932,7 @@ export const scanDbAwaitInLoop = ({
         !fanOut &&
         loopHits.get(loop) === 1 &&
         !hasEnclosingIteration(loop) &&
-        boundedRoundShape(loop)
+        (await boundedRoundShape(loop))
       ) {
         boundedRoundHits += 1;
         continue;
@@ -1832,7 +1978,7 @@ export const scanDbAwaitInLoop = ({
     directiveProblems: directiveProblems.toSorted(byLocation),
     unclassified: unclassified.toSorted(byLocation),
     filesScanned,
-    directiveCounts,
+    directiveCounts: Object.fromEntries(directiveCounts),
   };
 };
 
@@ -1858,23 +2004,18 @@ const SUPPRESSION_HINT =
   "If the sequence is required (a cursor walk, a page loop, an ordered write, " +
   "a small fixed bound), put `// db-await-in-loop: <reason>` on the line above.";
 
-const readProjectFileNames = (configPath: string): readonly string[] => {
-  const configFile = ts.readConfigFile(configPath, (file) =>
-    ts.sys.readFile(file),
-  );
-  if (configFile.error !== undefined) {
-    panic(ts.flattenDiagnosticMessageText(configFile.error.messageText, "\n"));
+const readProjectFileNames = async (
+  configPath: string,
+): Promise<readonly string[]> => {
+  const api = new API({ cwd: path.dirname(configPath) });
+  try {
+    return (await api.parseConfigFile(configPath)).fileNames;
+  } finally {
+    await api.close();
   }
-  return ts.parseJsonConfigFileContent(
-    configFile.config,
-    ts.sys,
-    path.dirname(configPath),
-    undefined,
-    configPath,
-  ).fileNames;
 };
 
-const run = (): number => {
+const run = async (): Promise<number> => {
   const started = performance.now();
   for (const file of [...API_PROJECTS, ...API_HANDLE_DECLARATION_FILES]) {
     if (!existsSync(path.join(REPO_ROOT, file))) {
@@ -1886,55 +2027,70 @@ const run = (): number => {
   const [mainProject] = API_PROJECTS;
   const rootNames = [
     ...new Set(
-      API_PROJECTS.flatMap((project) =>
-        readProjectFileNames(path.join(REPO_ROOT, project)),
-      ),
+      (
+        await Promise.all(
+          API_PROJECTS.map(
+            async (project) =>
+              await readProjectFileNames(path.join(REPO_ROOT, project)),
+          ),
+        )
+      ).flat(),
     ),
   ];
-  const program = createProgram({
+  const opened = await createProgram({
     configPath: path.join(REPO_ROOT, mainProject),
     rootNames,
   });
-  const programReady = performance.now();
+  const { program, checker } = opened;
+  try {
+    const programReady = performance.now();
 
-  const report = scanDbAwaitInLoop({
-    program,
-    repositoryRoot: REPO_ROOT,
-    isInScope: isApiSourceInScope,
-    handleDeclarationFiles: API_HANDLE_DECLARATION_FILES,
-  });
-  const finished = performance.now();
+    const report = await scanDbAwaitInLoop({
+      program,
+      checker,
+      repositoryRoot: REPO_ROOT,
+      isInScope: isApiSourceInScope,
+      handleDeclarationFiles: API_HANDLE_DECLARATION_FILES,
+    });
+    const finished = performance.now();
 
-  for (const hit of report.hits) {
-    console.error(
-      `${hit.file}:${hit.line}:${hit.column} ${describeHit(hit)} [db-await-in-loop/${hit.kind}]`,
-    );
-  }
-  if (report.hits.length > 0) {
-    console.error(SUPPRESSION_HINT);
-  }
-  for (const problem of report.directiveProblems) {
-    console.error(`${problem.file}:${problem.line} ${problem.message}`);
-  }
-  if (report.unclassified.length > 0) {
-    console.log(
-      `db-await-in-loop: ${report.unclassified.length} awaited site(s) in loops resolve to any/unknown and are NOT certified clean:`,
-    );
-    for (const site of report.unclassified) {
-      console.log(`  ${site.file}:${site.line}:${site.column} ${site.subject}`);
+    for (const hit of report.hits) {
+      console.error(
+        `${hit.file}:${hit.line}:${hit.column} ${describeHit(hit)} [db-await-in-loop/${hit.kind}]`,
+      );
     }
+    if (report.hits.length > 0) {
+      console.error(SUPPRESSION_HINT);
+    }
+    for (const problem of report.directiveProblems) {
+      console.error(`${problem.file}:${problem.line} ${problem.message}`);
+    }
+    if (report.unclassified.length > 0) {
+      console.log(
+        `db-await-in-loop: ${report.unclassified.length} awaited site(s) in loops resolve to any/unknown and are NOT certified clean:`,
+      );
+      for (const site of report.unclassified) {
+        console.log(
+          `  ${site.file}:${site.line}:${site.column} ${site.subject}`,
+        );
+      }
+    }
+
+    const seconds = (milliseconds: number): string =>
+      (milliseconds / 1000).toFixed(1);
+    const peakMiB = Math.round(process.resourceUsage().maxRSS / 1024);
+    console.log(
+      `db-await-in-loop: ${report.filesScanned} files, program ${seconds(programReady - started)}s, scan ${seconds(finished - programReady)}s, peak RSS ${peakMiB} MiB; ${report.boundedRoundHits} constant-bounded rounds, ${report.suppressedHits} suppressed, ${report.hits.length} unsuppressed, ${report.directiveProblems.length} directive problem(s)`,
+    );
+
+    return report.hits.length > 0 || report.directiveProblems.length > 0
+      ? 1
+      : 0;
+  } finally {
+    await opened.close();
   }
-
-  const seconds = (milliseconds: number): string =>
-    (milliseconds / 1000).toFixed(1);
-  const peakMiB = Math.round(process.resourceUsage().maxRSS / 1024);
-  console.log(
-    `db-await-in-loop: ${report.filesScanned} files, program ${seconds(programReady - started)}s, scan ${seconds(finished - programReady)}s, peak RSS ${peakMiB} MiB; ${report.boundedRoundHits} constant-bounded rounds, ${report.suppressedHits} suppressed, ${report.hits.length} unsuppressed, ${report.directiveProblems.length} directive problem(s)`,
-  );
-
-  return report.hits.length > 0 || report.directiveProblems.length > 0 ? 1 : 0;
 };
 
 if (import.meta.main) {
-  process.exitCode = run();
+  process.exitCode = await run();
 }

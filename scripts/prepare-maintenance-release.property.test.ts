@@ -1,12 +1,4 @@
-import {
-  afterAll,
-  afterEach,
-  beforeAll,
-  describe,
-  expect,
-  spyOn,
-  test,
-} from "bun:test";
+import { afterEach, describe, expect, spyOn, test } from "bun:test";
 import fc from "fast-check";
 import {
   existsSync,
@@ -20,20 +12,29 @@ import {
 import { tmpdir } from "node:os";
 import nodePath from "node:path";
 
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
+import { createTestState } from "@stll/test-state";
 
 import { parseChangelogMarkdown } from "../apps/landing/src/lib/changelog-markdown";
 import { parseChangesetEntry } from "./changeset-entry";
 import {
+  assertReleaseCutReady,
   changesetVersionEnv,
-  fetchPublishedAt,
-  MaintenanceReleaseError,
+  foldSupersededChangelog,
   maintenanceChangelog,
+  MaintenanceReleaseError,
   nextPatchVersion,
   parseMaintenanceReleaseOptions,
   parseStableVersion,
   prepareMaintenanceReleaseFiles,
+  projectReleaseDates,
   readPendingChangesets,
+  readPreviousRelease,
+  readReleaseManifest,
+  type ReceiptCoverage,
+  type ReceiptCoverageReader,
+  receiptCoverageReader,
+  refreshMaintenanceReleaseFiles,
   resolveGitHubToken,
   withFileRollback,
 } from "./prepare-maintenance-release";
@@ -58,15 +59,20 @@ const respondWith = (...responses: readonly Response[]) => {
 const missing = () => new Response(null, { status: 404 });
 const tagRef = () => Response.json({ ref: "refs/tags/v1.2.3" });
 const draftRelease = { draft: true, published_at: null, tag_name: "v1.2.3" };
+const PUBLISHED = {
+  kind: "published",
+  publishedAt: "2026-02-03T04:05:06Z",
+} as const;
+const UNPROMOTED = { kind: "unpromoted" } as const;
 
 const failureMessage = async (tag: string): Promise<string> => {
-  let publishedAt: string | null;
+  let previous: unknown;
   try {
-    publishedAt = await fetchPublishedAt(tag);
+    previous = await readPreviousRelease(tag);
   } catch (error) {
     return error instanceof Error ? error.message : String(error);
   }
-  throw new Error(`Expected a failure; read ${String(publishedAt)}`);
+  throw new Error(`Expected a failure; read ${JSON.stringify(previous)}`);
 };
 
 const releaseFixture = (root: string, releaseDates: string) => {
@@ -94,17 +100,8 @@ const readReleaseDates = (root: string): unknown =>
 // The reads resolve their token once, falling back to spawning `gh auth token`
 // when no variable holds one. Fetch is stubbed here, so a fixed token keeps the
 // first read from waiting on the CLI.
-const previousGhToken = process.env["GH_TOKEN"];
-beforeAll(() => {
-  process.env["GH_TOKEN"] = "test-token";
-});
-afterAll(() => {
-  if (previousGhToken === undefined) {
-    delete process.env["GH_TOKEN"];
-  } else {
-    process.env["GH_TOKEN"] = previousGhToken;
-  }
-});
+const testState = createTestState({ file: import.meta.path, config: {} });
+testState.setEnv("GH_TOKEN", "test-token");
 
 afterEach(() => {
   for (const root of roots.splice(0)) {
@@ -208,7 +205,8 @@ describe("the token the GitHub reads are made with", () => {
   });
 
   test("changes GITHUB_TOKEN alone, whatever the parent environment holds", () => {
-    fc.assert(
+    assertProperty(
+      "changes GITHUB_TOKEN alone, whatever the parent environment holds",
       fc.property(
         fc.dictionary(fc.stringMatching(/^[A-Z][A-Z_]{0,7}$/u), fc.string()),
         fc.option(fc.string({ minLength: 1 }), { nil: null }),
@@ -226,7 +224,7 @@ describe("the token the GitHub reads are made with", () => {
           expect(child["GITHUB_TOKEN"]).toBe(token ?? parent["GITHUB_TOKEN"]);
         },
       ),
-      propertyConfig({ numRuns: 200 }),
+      { numRuns: 200 },
     );
   });
 });
@@ -320,7 +318,7 @@ describe("pending changesets folded into the release", () => {
 
   test("summarizes only the entries that release something", () => {
     expect(maintenanceChangelog([], "1.2.4")).toBe(
-      "# Maintenance release\n\nStella includes reliability and maintenance improvements.\n",
+      "# Maintenance release\n\nstella includes reliability and maintenance improvements.\n",
     );
     expect(
       maintenanceChangelog(
@@ -335,7 +333,7 @@ describe("pending changesets folded into the release", () => {
         "1.2.4",
       ),
     ).toBe(
-      "# Maintenance release\n\nStella includes reliability and maintenance improvements.\n\n## Packages\n\n- [@stll/cli](https://github.com/stella/stella/blob/v1.2.4/packages/cli/CHANGELOG.md): Lookup command.\n",
+      "# Maintenance release\n\nstella includes reliability and maintenance improvements.\n\n## Packages\n\n- [@stll/cli](https://github.com/stella/stella/blob/v1.2.4/packages/cli/CHANGELOG.md): Lookup command.\n",
     );
   });
 
@@ -362,7 +360,7 @@ describe("pending changesets folded into the release", () => {
       { type: "heading", level: 1, text: "Maintenance release" },
       {
         type: "paragraph",
-        text: "Stella includes reliability and maintenance improvements.",
+        text: "stella includes reliability and maintenance improvements.",
       },
       { type: "heading", level: 2, text: "Packages" },
       { type: "list", items: [bullet] },
@@ -420,6 +418,22 @@ describe("pending changesets folded into the release", () => {
     }
   });
 
+  test("increments the supplied newest final version even when main VERSION differs", () => {
+    const root = mkdtempSync(nodePath.join(tmpdir(), "stella-release-"));
+    roots.push(root);
+    releaseFixture(root, "{}\n");
+    writeFileSync(nodePath.join(root, "VERSION"), "9.9.9\n");
+    const prepared = prepareMaintenanceReleaseFiles({
+      previousFinalVersion: "1.2.3",
+      previousRelease: PUBLISHED,
+      rootDir: root,
+    });
+    expect(prepared.version).toBe("1.2.4");
+    expect(readFileSync(nodePath.join(root, "VERSION"), "utf-8")).toBe(
+      "1.2.4\n",
+    );
+  });
+
   test("versions the pending packages and records them in the changelog", () => {
     const root = mkdtempSync(nodePath.join(tmpdir(), "stella-release-"));
     roots.push(root);
@@ -434,13 +448,18 @@ describe("pending changesets folded into the release", () => {
 
     expect(
       prepareMaintenanceReleaseFiles({
-        publishedAt: "2026-02-03T04:05:06Z",
+        previousRelease: PUBLISHED,
+        previousFinalVersion: readFileSync(
+          nodePath.join(root, "VERSION"),
+          "utf-8",
+        ).trim(),
         rootDir: root,
         versionPackages,
       }),
     ).toEqual({
       changelogPath: "docs/changelog/v1.2.4.md",
       changesets: ["cli.md", "empty.md", "ui.md"],
+      foldedChangelogPath: null,
       previousTag: "v1.2.3",
       version: "1.2.4",
     });
@@ -448,7 +467,7 @@ describe("pending changesets folded into the release", () => {
     expect(
       readFileSync(nodePath.join(root, "docs/changelog/v1.2.4.md"), "utf-8"),
     ).toBe(
-      "# Maintenance release\n\nStella includes reliability and maintenance improvements.\n\n## Packages\n\n- [@stll/cli](https://github.com/stella/stella/blob/v1.2.4/packages/cli/CHANGELOG.md): New `case-law lookup` command: several references per call.\n- [@stll/ui](https://github.com/stella/stella/blob/v1.2.4/packages/ui/CHANGELOG.md): Keep the toolbar in view.\n",
+      "# Maintenance release\n\nstella includes reliability and maintenance improvements.\n\n## Packages\n\n- [@stll/cli](https://github.com/stella/stella/blob/v1.2.4/packages/cli/CHANGELOG.md): New `case-law lookup` command: several references per call.\n- [@stll/ui](https://github.com/stella/stella/blob/v1.2.4/packages/ui/CHANGELOG.md): Keep the toolbar in view.\n",
     );
     // The generated bumps are release-gated paths, so the release commit
     // carries the empty entry the changeset policy asks for beside them.
@@ -473,7 +492,11 @@ describe("pending changesets folded into the release", () => {
 
     expect(
       prepareMaintenanceReleaseFiles({
-        publishedAt: "2026-02-03T04:05:06Z",
+        previousRelease: PUBLISHED,
+        previousFinalVersion: readFileSync(
+          nodePath.join(root, "VERSION"),
+          "utf-8",
+        ).trim(),
         rootDir: root,
         versionPackages,
       }).changesets,
@@ -482,7 +505,7 @@ describe("pending changesets folded into the release", () => {
     expect(
       readFileSync(nodePath.join(root, "docs/changelog/v1.2.4.md"), "utf-8"),
     ).toBe(
-      "# Maintenance release\n\nStella includes reliability and maintenance improvements.\n",
+      "# Maintenance release\n\nstella includes reliability and maintenance improvements.\n",
     );
     expect(readdirSync(nodePath.join(root, ".changeset"))).toEqual([
       "README.md",
@@ -499,7 +522,11 @@ describe("pending changesets folded into the release", () => {
 
     expect(() =>
       prepareMaintenanceReleaseFiles({
-        publishedAt: "2026-02-03T04:05:06Z",
+        previousRelease: PUBLISHED,
+        previousFinalVersion: readFileSync(
+          nodePath.join(root, "VERSION"),
+          "utf-8",
+        ).trim(),
         rootDir: root,
         versionPackages,
         writeFile: (path, contents) => {
@@ -525,11 +552,133 @@ describe("pending changesets folded into the release", () => {
       readFileSync(nodePath.join(root, "packages/cli/CHANGELOG.md"), "utf-8"),
     ).toBe("# @stll/cli\n");
   });
+
+  // A release branch after its cut: VERSION names the cut version, its note
+  // lists what the cut consumed, and the cut's empty marker entry is present.
+  const cutRelease = (root: string, entries: Record<string, string>) => {
+    releaseFixture(root, "{}\n");
+    writeFileSync(nodePath.join(root, "VERSION"), "1.2.4\n");
+    writeFileSync(
+      nodePath.join(root, "docs/changelog/v1.2.4.md"),
+      "# Maintenance release\n\nstella includes reliability and maintenance improvements.\n\n## Packages\n\n- [@stll/ui](https://github.com/stella/stella/blob/v1.2.4/packages/ui/CHANGELOG.md): Keep the toolbar in view.\n",
+    );
+    changesetFixture(root, {
+      "README.md": "# Changesets\n",
+      "release-v1.2.4.md": "---\n---\n",
+      ...entries,
+    });
+  };
+
+  test("a refresh versions entries that reached main after the cut into the same release", () => {
+    const root = mkdtempSync(nodePath.join(tmpdir(), "stella-release-"));
+    roots.push(root);
+    cutRelease(root, { "cli.md": CLI_ENTRY });
+    const { calls, versionPackages } = consumeChangesets();
+
+    expect(
+      refreshMaintenanceReleaseFiles({ rootDir: root, versionPackages }),
+    ).toEqual({
+      changelogPath: "docs/changelog/v1.2.4.md",
+      changesets: ["cli.md"],
+      version: "1.2.4",
+    });
+    expect(calls).toEqual([root]);
+    expect(readFileSync(nodePath.join(root, "VERSION"), "utf-8")).toBe(
+      "1.2.4\n",
+    );
+    expect(
+      readFileSync(nodePath.join(root, "docs/changelog/v1.2.4.md"), "utf-8"),
+    ).toBe(
+      "# Maintenance release\n\nstella includes reliability and maintenance improvements.\n\n## Packages\n\n- [@stll/ui](https://github.com/stella/stella/blob/v1.2.4/packages/ui/CHANGELOG.md): Keep the toolbar in view.\n- [@stll/cli](https://github.com/stella/stella/blob/v1.2.4/packages/cli/CHANGELOG.md): New `case-law lookup` command: several references per call.\n",
+    );
+    // The version run consumed the marker with the new entry; the release
+    // policy still needs it beside the regenerated package files.
+    expect(readdirSync(nodePath.join(root, ".changeset")).toSorted()).toEqual([
+      "README.md",
+      "release-v1.2.4.md",
+    ]);
+    expect(
+      readFileSync(
+        nodePath.join(root, ".changeset/release-v1.2.4.md"),
+        "utf-8",
+      ),
+    ).toBe("---\n---\n");
+  });
+
+  test("a refresh leaves a release with nothing new untouched", () => {
+    const root = mkdtempSync(nodePath.join(tmpdir(), "stella-release-"));
+    roots.push(root);
+    cutRelease(root, {});
+    const { calls, versionPackages } = consumeChangesets();
+    const note = readFileSync(
+      nodePath.join(root, "docs/changelog/v1.2.4.md"),
+      "utf-8",
+    );
+
+    expect(
+      refreshMaintenanceReleaseFiles({ rootDir: root, versionPackages }),
+    ).toBeNull();
+    expect(calls).toEqual([]);
+    expect(
+      readFileSync(nodePath.join(root, "docs/changelog/v1.2.4.md"), "utf-8"),
+    ).toBe(note);
+  });
+
+  test("a refresh runs only on a branch whose release was cut", () => {
+    const root = mkdtempSync(nodePath.join(tmpdir(), "stella-release-"));
+    roots.push(root);
+    cutRelease(root, { "cli.md": CLI_ENTRY });
+    rmSync(nodePath.join(root, ".changeset/release-v1.2.4.md"));
+    const { calls, versionPackages } = consumeChangesets();
+
+    expect(() =>
+      refreshMaintenanceReleaseFiles({ rootDir: root, versionPackages }),
+    ).toThrow(
+      "No cut release v1.2.4 to refresh: .changeset/release-v1.2.4.md is missing",
+    );
+    expect(calls).toEqual([]);
+  });
+
+  test("a refresh restores the version run's writes when the note cannot be written", () => {
+    const root = mkdtempSync(nodePath.join(tmpdir(), "stella-release-"));
+    roots.push(root);
+    cutRelease(root, { "cli.md": CLI_ENTRY });
+    const { versionPackages } = consumeChangesets();
+    const notePath = nodePath.join(root, "docs/changelog/v1.2.4.md");
+    const note = readFileSync(notePath, "utf-8");
+
+    expect(() =>
+      refreshMaintenanceReleaseFiles({
+        rootDir: root,
+        versionPackages,
+        writeFile: (path, contents) => {
+          if (path === notePath) {
+            throw new Error("simulated write failure");
+          }
+          writeFileSync(path, contents);
+        },
+      }),
+    ).toThrow("simulated write failure");
+    expect(readFileSync(notePath, "utf-8")).toBe(note);
+    expect(
+      readFileSync(nodePath.join(root, ".changeset/cli.md"), "utf-8"),
+    ).toBe(CLI_ENTRY);
+    expect(
+      readFileSync(
+        nodePath.join(root, ".changeset/release-v1.2.4.md"),
+        "utf-8",
+      ),
+    ).toBe("---\n---\n");
+    expect(
+      readFileSync(nodePath.join(root, "packages/cli/CHANGELOG.md"), "utf-8"),
+    ).toBe("# @stll/cli\n");
+  });
 });
 
 describe("maintenance release preparation", () => {
   test("increments every safe stable patch version without changing its series", () => {
-    fc.assert(
+    assertProperty(
+      "increments every safe stable patch version without changing its series",
       fc.property(
         fc.nat({ max: 1_000_000 }),
         fc.nat({ max: 1_000_000 }),
@@ -546,12 +695,13 @@ describe("maintenance release preparation", () => {
           });
         },
       ),
-      propertyConfig({ numRuns: 200 }),
+      { numRuns: 200 },
     );
   });
 
   test("defaults the recording attestation and keeps an explicit one overridable", () => {
     expect(parseMaintenanceReleaseOptions([])).toEqual({
+      allowUnprovenMain: false,
       recordingReviewReason: "Patch release, UX diff negligible",
     });
     expect(() =>
@@ -567,8 +717,25 @@ describe("maintenance release preparation", () => {
         "Current recordings remain representative.",
       ]),
     ).toEqual({
+      allowUnprovenMain: false,
       recordingReviewReason: "Current recordings remain representative.",
     });
+  });
+
+  test("takes the unproven-main override only when it is spelled out, once", () => {
+    expect(parseMaintenanceReleaseOptions(["--allow-unproven-main"])).toEqual({
+      allowUnprovenMain: true,
+      recordingReviewReason: "Patch release, UX diff negligible",
+    });
+    expect(() =>
+      parseMaintenanceReleaseOptions([
+        "--allow-unproven-main",
+        "--allow-unproven-main",
+      ]),
+    ).toThrow("may be passed only once");
+    expect(() => parseMaintenanceReleaseOptions(["--allow-unproven"])).toThrow(
+      "Unknown argument",
+    );
   });
 
   test("writes the complete release file set", () => {
@@ -590,12 +757,17 @@ describe("maintenance release preparation", () => {
 
     expect(
       prepareMaintenanceReleaseFiles({
-        publishedAt: "2026-02-03T04:05:06Z",
+        previousRelease: PUBLISHED,
+        previousFinalVersion: readFileSync(
+          nodePath.join(root, "VERSION"),
+          "utf-8",
+        ).trim(),
         rootDir: root,
       }),
     ).toEqual({
       changelogPath: "docs/changelog/v1.2.4.md",
       changesets: [],
+      foldedChangelogPath: null,
       previousTag: "v1.2.3",
       version: "1.2.4",
     });
@@ -605,7 +777,7 @@ describe("maintenance release preparation", () => {
     expect(
       readFileSync(nodePath.join(root, "docs/changelog/v1.2.4.md"), "utf-8"),
     ).toBe(
-      "# Maintenance release\n\nStella includes reliability and maintenance improvements.\n",
+      "# Maintenance release\n\nstella includes reliability and maintenance improvements.\n",
     );
     // The release guard exempts this changelog from the media requirement by
     // its heading; the generated file must keep satisfying it.
@@ -645,7 +817,14 @@ describe("maintenance release preparation", () => {
     );
 
     expect(
-      prepareMaintenanceReleaseFiles({ publishedAt: null, rootDir: root }),
+      prepareMaintenanceReleaseFiles({
+        previousRelease: { kind: "unpromoted" },
+        previousFinalVersion: readFileSync(
+          nodePath.join(root, "VERSION"),
+          "utf-8",
+        ).trim(),
+        rootDir: root,
+      }),
     ).toMatchObject({ previousTag: "v1.2.3", version: "1.2.4" });
     expect(readReleaseDates(root)).toEqual({
       "v1.2.2": "2026-01-01T00:00:00Z",
@@ -653,36 +832,127 @@ describe("maintenance release preparation", () => {
     });
   });
 
-  test("keeps a previous tag already recorded as never promoted", () => {
+  test("records nothing for a superseded VERSION that was never tagged", () => {
+    const root = mkdtempSync(nodePath.join(tmpdir(), "stella-release-"));
+    roots.push(root);
+    const dates = { "v1.2.2": "2026-01-01T00:00:00Z" };
+    releaseFixture(root, `${JSON.stringify(dates, null, 2)}\n`);
+
+    expect(
+      prepareMaintenanceReleaseFiles({
+        previousRelease: { kind: "superseded" },
+        previousFinalVersion: readFileSync(
+          nodePath.join(root, "VERSION"),
+          "utf-8",
+        ).trim(),
+        rootDir: root,
+      }),
+    ).toMatchObject({ previousTag: "v1.2.3", version: "1.2.4" });
+    expect(readReleaseDates(root)).toEqual(dates);
+    expect(readFileSync(nodePath.join(root, "VERSION"), "utf-8")).toBe(
+      "1.2.4\n",
+    );
+  });
+
+  test("a previous tag recorded as never promoted takes the date GitHub now gives it", () => {
     const root = mkdtempSync(nodePath.join(tmpdir(), "stella-release-"));
     roots.push(root);
     releaseFixture(root, `${JSON.stringify({ "v1.2.3": null }, null, 2)}\n`);
 
     prepareMaintenanceReleaseFiles({
-      publishedAt: "2026-02-03T04:05:06Z",
+      previousRelease: PUBLISHED,
+      previousFinalVersion: readFileSync(
+        nodePath.join(root, "VERSION"),
+        "utf-8",
+      ).trim(),
       rootDir: root,
     });
-    expect(readReleaseDates(root)).toEqual({ "v1.2.3": null });
+    expect(readReleaseDates(root)).toEqual({ "v1.2.3": PUBLISHED.publishedAt });
+  });
+
+  test("a recorded never-promoted release stays null even when GitHub shows it published", () => {
+    const root = mkdtempSync(nodePath.join(tmpdir(), "stella-release-"));
+    roots.push(root);
+    const recorded = `${JSON.stringify(
+      {
+        _note: "Publication timestamps, keyed by tag.",
+        "v0.8.10": null,
+        "v0.9.14": null,
+        "v1.2.2": "2026-01-01T00:00:00Z",
+      },
+      null,
+      2,
+    )}\n`;
+    releaseFixture(root, recorded);
+
+    // Each recorded null is a release that was never promoted to production;
+    // a GitHub release published for it later does not change that.
+    prepareMaintenanceReleaseFiles({
+      previousRelease: PUBLISHED,
+      previousFinalVersion: "1.2.3",
+      rootDir: root,
+    });
+    expect(
+      readFileSync(
+        nodePath.join(
+          root,
+          "apps/landing/src/data/changelog-release-dates.json",
+        ),
+        "utf-8",
+      ),
+    ).toBe(
+      `${JSON.stringify(
+        {
+          _note: "Publication timestamps, keyed by tag.",
+          "v0.8.10": null,
+          "v0.9.14": null,
+          "v1.2.2": "2026-01-01T00:00:00Z",
+          "v1.2.3": PUBLISHED.publishedAt,
+        },
+        null,
+        2,
+      )}\n`,
+    );
+    expect(
+      projectReleaseDates({
+        dates: readReleaseManifest(root).releases,
+        previousRelease: UNPROMOTED,
+        previousTag: "v1.2.4",
+      }),
+    ).toMatchObject({ "v0.8.10": null, "v0.9.14": null, "v1.2.4": null });
+  });
+
+  test.each([
+    [{ latest: "2026-01-01T00:00:00Z" }, "invalid stable release ref: latest"],
+    [{ "v1.2": null }, "invalid stable release ref: v1.2"],
+    [{ _note: 3 }, "note must be a string"],
+    [{ "v1.2.1": 1 }, "invalid publication time for v1.2.1"],
+  ])("the manifest reader refuses %j", (entries, message) => {
+    const root = mkdtempSync(nodePath.join(tmpdir(), "stella-release-"));
+    roots.push(root);
+    releaseFixture(root, `${JSON.stringify(entries, null, 2)}\n`);
+
+    expect(() => readReleaseManifest(root)).toThrow(message);
   });
 
   test("reads the publication date of a published release", async () => {
     respondWith(Response.json({ published_at: "2026-02-03T04:05:06Z" }));
-    expect(await fetchPublishedAt("v1.2.3")).toBe("2026-02-03T04:05:06Z");
+    expect(await readPreviousRelease("v1.2.3")).toEqual(PUBLISHED);
   });
 
   test("reads a drafted release as never promoted", async () => {
     respondWith(missing(), tagRef(), Response.json([draftRelease]));
-    expect(await fetchPublishedAt("v1.2.3")).toBeNull();
+    expect(await readPreviousRelease("v1.2.3")).toEqual(UNPROMOTED);
   });
 
   test("reads a release without a publication date as never promoted", async () => {
     respondWith(Response.json({ published_at: null }));
-    expect(await fetchPublishedAt("v1.2.3")).toBeNull();
+    expect(await readPreviousRelease("v1.2.3")).toEqual(UNPROMOTED);
   });
 
   test("reads a release omitting the publication date as never promoted", async () => {
     respondWith(Response.json({ tag_name: "v1.2.3" }));
-    expect(await fetchPublishedAt("v1.2.3")).toBeNull();
+    expect(await readPreviousRelease("v1.2.3")).toEqual(UNPROMOTED);
   });
 
   test("pages through the release listing to find the drafted release", async () => {
@@ -697,7 +967,7 @@ describe("maintenance release preparation", () => {
       Response.json(filler),
       Response.json([draftRelease]),
     );
-    expect(await fetchPublishedAt("v1.2.3")).toBeNull();
+    expect(await readPreviousRelease("v1.2.3")).toEqual(UNPROMOTED);
   });
 
   test("fails when the previous tag has no release yet", async () => {
@@ -705,9 +975,14 @@ describe("maintenance release preparation", () => {
     expect(await failureMessage("v1.2.3")).toContain("has no GitHub release");
   });
 
-  test("fails when the previous tag does not exist", async () => {
+  test("reads a VERSION that was never tagged as superseded", async () => {
     respondWith(missing(), missing());
-    expect(await failureMessage("v1.2.3")).toContain("does not exist");
+    expect(await readPreviousRelease("v1.2.3")).toEqual({ kind: "superseded" });
+  });
+
+  test("fails on an unreadable tag ref", async () => {
+    respondWith(missing(), new Response(null, { status: 502 }));
+    expect(await failureMessage("v1.2.3")).toContain("HTTP 502");
   });
 
   test("fails on a GitHub error", async () => {
@@ -745,7 +1020,11 @@ describe("maintenance release preparation", () => {
 
     expect(() =>
       prepareMaintenanceReleaseFiles({
-        publishedAt: "2026-02-03T04:05:06Z",
+        previousRelease: PUBLISHED,
+        previousFinalVersion: readFileSync(
+          nodePath.join(root, "VERSION"),
+          "utf-8",
+        ).trim(),
         rootDir: root,
       }),
     ).toThrow("already exists");
@@ -774,7 +1053,11 @@ describe("maintenance release preparation", () => {
     let failed = false;
     expect(() =>
       prepareMaintenanceReleaseFiles({
-        publishedAt: "2026-02-03T04:05:06Z",
+        previousRelease: PUBLISHED,
+        previousFinalVersion: readFileSync(
+          nodePath.join(root, "VERSION"),
+          "utf-8",
+        ).trim(),
         rootDir: root,
         writeFile: (path, contents) => {
           if (path === releaseDatesPath && !failed) {
@@ -816,7 +1099,11 @@ describe("maintenance release preparation", () => {
     let caught: unknown;
     try {
       prepareMaintenanceReleaseFiles({
-        publishedAt: "2026-02-03T04:05:06Z",
+        previousRelease: PUBLISHED,
+        previousFinalVersion: readFileSync(
+          nodePath.join(root, "VERSION"),
+          "utf-8",
+        ).trim(),
         rootDir: root,
         writeFile: (path, contents) => {
           if (path === releaseDatesPath) {
@@ -830,7 +1117,7 @@ describe("maintenance release preparation", () => {
     }
     expect(caught).toBeInstanceOf(MaintenanceReleaseError);
     if (!(caught instanceof MaintenanceReleaseError)) {
-      throw new Error("Expected maintenance release failure");
+      throw new TypeError("Expected maintenance release failure");
     }
     expect(caught.message).toContain("persistent write failure");
     expect(caught.message).toContain(
@@ -841,7 +1128,11 @@ describe("maintenance release preparation", () => {
     expect(existsSync(nextChangelogPath)).toBe(false);
     expect(
       prepareMaintenanceReleaseFiles({
-        publishedAt: "2026-02-03T04:05:06Z",
+        previousRelease: PUBLISHED,
+        previousFinalVersion: readFileSync(
+          nodePath.join(root, "VERSION"),
+          "utf-8",
+        ).trim(),
         rootDir: root,
       }),
     ).toMatchObject({ version: "1.2.4" });
@@ -871,5 +1162,739 @@ describe("maintenance release preparation", () => {
     expect(readFileSync(manifestPath, "utf-8")).toBe('{"entries":[]}\n');
     expect(readFileSync(versionPath, "utf-8")).toBe("1.2.3\n");
     expect(existsSync(changelogPath)).toBe(false);
+  });
+});
+
+describe("a superseded version's notes folded into the release", () => {
+  const MAINTENANCE =
+    "# Maintenance release\n\nstella includes reliability and maintenance improvements.\n";
+  const bullet = (version: string, summary: string) =>
+    `- [@stll/cli](https://github.com/stella/stella/blob/v${version}/packages/cli/CHANGELOG.md): ${summary}`;
+  const withPackages = (body: string, ...entries: readonly string[]) =>
+    `${body}\n## Packages\n\n${entries.map((entry) => `${entry}\n`).join("")}`;
+  const FEATURE =
+    '# Table improvements\n\n## Faster table editing.\n\n<video controls src="https://github.com/user-attachments/assets/example"></video>\n';
+
+  const supersededFixture = (root: string, superseded: string) => {
+    releaseFixture(
+      root,
+      `${JSON.stringify({ "v1.2.2": "2026-01-01T00:00:00Z" }, null, 2)}\n`,
+    );
+    writeFileSync(nodePath.join(root, "docs/changelog/v1.2.3.md"), superseded);
+  };
+
+  const releaseGuard = (root: string, version: string) =>
+    Bun.spawnSync(
+      [
+        "bash",
+        nodePath.join(import.meta.dirname, "check-release-changelog.sh"),
+        "--version",
+        version,
+      ],
+      { cwd: root },
+    );
+
+  const changelogFiles = (root: string) =>
+    readdirSync(nodePath.join(root, "docs/changelog"));
+
+  const changelog = (root: string, tag: string) =>
+    readFileSync(nodePath.join(root, "docs/changelog", `${tag}.md`), "utf-8");
+
+  test("lists the superseded bullets first, on the release tag, once each", () => {
+    expect(
+      foldSupersededChangelog({
+        next: withPackages(
+          MAINTENANCE,
+          bullet("1.2.4", "Newer."),
+          bullet("1.2.4", "Shared."),
+        ),
+        superseded: withPackages(
+          MAINTENANCE,
+          bullet("1.2.3", "Older."),
+          bullet("1.2.3", "Shared."),
+        ),
+        supersededVersion: "1.2.3",
+        version: "1.2.4",
+      }),
+    ).toBe(
+      withPackages(
+        MAINTENANCE,
+        bullet("1.2.4", "Older."),
+        bullet("1.2.4", "Shared."),
+        bullet("1.2.4", "Newer."),
+      ),
+    );
+  });
+
+  test("keeps the heading and media of a superseded note that shows a change", () => {
+    expect(
+      foldSupersededChangelog({
+        next: withPackages(MAINTENANCE, bullet("1.2.4", "Newer.")),
+        superseded: FEATURE,
+        supersededVersion: "1.2.3",
+        version: "1.2.4",
+      }),
+    ).toBe(withPackages(FEATURE, bullet("1.2.4", "Newer.")));
+  });
+
+  test("writes no packages section when neither note has one", () => {
+    expect(
+      foldSupersededChangelog({
+        next: MAINTENANCE,
+        superseded: MAINTENANCE,
+        supersededVersion: "1.2.3",
+        version: "1.2.4",
+      }),
+    ).toBe(MAINTENANCE);
+  });
+
+  test("refuses a packages section it cannot place line by line", () => {
+    expect(() =>
+      foldSupersededChangelog({
+        next: MAINTENANCE,
+        superseded: `${withPackages(MAINTENANCE, bullet("1.2.3", "Older."))}\nA closing paragraph.\n`,
+        supersededVersion: "1.2.3",
+        version: "1.2.4",
+      }),
+    ).toThrow("cannot fold");
+  });
+
+  test("moves the superseded page into the release and removes it", () => {
+    const root = mkdtempSync(nodePath.join(tmpdir(), "stella-release-"));
+    roots.push(root);
+    supersededFixture(
+      root,
+      withPackages(MAINTENANCE, bullet("1.2.3", "Older.")),
+    );
+
+    expect(
+      prepareMaintenanceReleaseFiles({
+        previousRelease: { kind: "superseded" },
+        previousFinalVersion: readFileSync(
+          nodePath.join(root, "VERSION"),
+          "utf-8",
+        ).trim(),
+        rootDir: root,
+      }),
+    ).toEqual({
+      changelogPath: "docs/changelog/v1.2.4.md",
+      changesets: [],
+      foldedChangelogPath: "docs/changelog/v1.2.3.md",
+      previousTag: "v1.2.3",
+      version: "1.2.4",
+    });
+    expect(changelogFiles(root)).toEqual(["v1.2.4.md"]);
+    expect(changelog(root, "v1.2.4")).toBe(
+      withPackages(MAINTENANCE, bullet("1.2.4", "Older.")),
+    );
+    const guard = releaseGuard(root, "1.2.4");
+    expect(guard.stderr.toString()).toBe("");
+    expect(guard.exitCode).toBe(0);
+  });
+
+  test("carries a superseded feature note through the release guard", () => {
+    const root = mkdtempSync(nodePath.join(tmpdir(), "stella-release-"));
+    roots.push(root);
+    supersededFixture(root, FEATURE);
+
+    prepareMaintenanceReleaseFiles({
+      previousRelease: { kind: "superseded" },
+      previousFinalVersion: readFileSync(
+        nodePath.join(root, "VERSION"),
+        "utf-8",
+      ).trim(),
+      rootDir: root,
+    });
+    expect(changelogFiles(root)).toEqual(["v1.2.4.md"]);
+    expect(changelog(root, "v1.2.4")).toBe(FEATURE);
+    const guard = releaseGuard(root, "1.2.4");
+    expect(guard.stderr.toString()).toBe("");
+    expect(guard.exitCode).toBe(0);
+  });
+
+  test("keeps the page of a tagged previous release", () => {
+    const root = mkdtempSync(nodePath.join(tmpdir(), "stella-release-"));
+    roots.push(root);
+    supersededFixture(root, FEATURE);
+
+    expect(
+      prepareMaintenanceReleaseFiles({
+        previousRelease: PUBLISHED,
+        previousFinalVersion: readFileSync(
+          nodePath.join(root, "VERSION"),
+          "utf-8",
+        ).trim(),
+        rootDir: root,
+      }),
+    ).toMatchObject({ foldedChangelogPath: null });
+    expect(changelog(root, "v1.2.3")).toBe(FEATURE);
+    expect(changelog(root, "v1.2.4")).toBe(MAINTENANCE);
+  });
+
+  test("restores the superseded page when preparation fails", () => {
+    const root = mkdtempSync(nodePath.join(tmpdir(), "stella-release-"));
+    roots.push(root);
+    const superseded = withPackages(MAINTENANCE, bullet("1.2.3", "Older."));
+    supersededFixture(root, superseded);
+    const versionPath = nodePath.join(root, "VERSION");
+
+    expect(() =>
+      prepareMaintenanceReleaseFiles({
+        previousRelease: { kind: "superseded" },
+        previousFinalVersion: readFileSync(
+          nodePath.join(root, "VERSION"),
+          "utf-8",
+        ).trim(),
+        rootDir: root,
+        writeFile: (path, contents) => {
+          if (path === versionPath) {
+            throw new Error("simulated write failure");
+          }
+          writeFileSync(path, contents);
+        },
+      }),
+    ).toThrow("simulated write failure");
+
+    expect(changelogFiles(root)).toEqual(["v1.2.3.md"]);
+    expect(changelog(root, "v1.2.3")).toBe(superseded);
+  });
+
+  // The landing changelog lists every note file and requires a date for each
+  // but the newest. Whatever GitHub reports for each previous version, a run
+  // of cuts leaves no undated page behind the newest, and a bullet of a
+  // superseded version stays on exactly one page.
+  test("leaves every page but the newest dated after any run of cuts", () => {
+    assertProperty(
+      "leaves every page but the newest dated after any run of cuts",
+      fc.property(
+        fc.array(fc.constantFrom("published", "superseded", "unpromoted"), {
+          maxLength: 6,
+          minLength: 1,
+        }),
+        (outcomes) => {
+          const root = mkdtempSync(nodePath.join(tmpdir(), "stella-release-"));
+          roots.push(root);
+          supersededFixture(
+            root,
+            withPackages(MAINTENANCE, bullet("1.2.3", "Original.")),
+          );
+          for (const kind of outcomes) {
+            prepareMaintenanceReleaseFiles({
+              previousRelease: kind === "published" ? PUBLISHED : { kind },
+              previousFinalVersion: readFileSync(
+                nodePath.join(root, "VERSION"),
+                "utf-8",
+              ).trim(),
+              rootDir: root,
+            });
+          }
+
+          const dates = readReleaseDates(root);
+          if (!isReleaseDates(dates)) {
+            throw new Error("release dates must be an object");
+          }
+          const listed = changelogFiles(root)
+            .map((file) => file.replace(/\.md$/u, ""))
+            .filter((tag) => dates[tag] !== null)
+            .toSorted(
+              (left, right) =>
+                parseStableVersion(right.slice(1)).patch -
+                parseStableVersion(left.slice(1)).patch,
+            );
+          expect(listed.at(0)).toBe(`v1.2.${String(3 + outcomes.length)}`);
+          expect(
+            listed.slice(1).filter((tag) => typeof dates[tag] !== "string"),
+          ).toEqual([]);
+          const holding = changelogFiles(root).filter((file) =>
+            changelog(root, file.replace(/\.md$/u, "")).includes("Original."),
+          );
+          expect(holding).toHaveLength(1);
+        },
+      ),
+      { numRuns: 50 },
+    );
+  });
+});
+
+const isReleaseDates = (
+  value: unknown,
+): value is Partial<Record<string, string | null>> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+const CUT_SHA = "d".repeat(40);
+const RUN_PREFIX = "https://github.com/stella/stella/actions/runs/";
+const STATUSES_PATH = `/commits/${CUT_SHA}/statuses?per_page=100&page=1`;
+const SCHEDULED_PR_DEPTH_PATH = `/actions/workflows/main-pr-depth.yml/runs?head_sha=${CUT_SHA}&event=schedule&per_page=1`;
+const jobsPath = (runId: number) =>
+  `/actions/runs/${String(runId)}/jobs?filter=latest&per_page=100&page=1`;
+
+const commitStatus = (
+  context: string,
+  state: string,
+  runId: number,
+  login = "github-actions[bot]",
+) => ({
+  context,
+  creator: { login },
+  state,
+  target_url: `${RUN_PREFIX}${String(runId)}`,
+});
+
+const HEAVY_GREEN = commitStatus("main/heavy", "success", 11);
+const PR_DEPTH_GREEN = commitStatus("main/pr-depth", "success", 22);
+
+const job = (
+  name: string,
+  conclusion: string | null,
+  status = "completed",
+) => ({
+  conclusion,
+  name,
+  run_attempt: 1,
+  status,
+});
+
+// Every GitHub read the gate makes, by path; any other read fails the test.
+const fakeGitHub = (responses: Record<string, unknown>) => {
+  const paths: string[] = [];
+  const read = async (path: string): Promise<unknown> => {
+    paths.push(path);
+    if (!(path in responses)) {
+      throw new Error(`Unexpected GitHub read: ${path}`);
+    }
+    const response = responses[path];
+    if (response instanceof Error) {
+      throw response;
+    }
+    return response;
+  };
+  return Object.assign(read, { paths });
+};
+
+const NOT_COVERED = async (): Promise<ReceiptCoverage> => "not_covered";
+
+const cutRefusal = async (
+  responses: Record<string, unknown>,
+  coverage: ReceiptCoverageReader = NOT_COVERED,
+): Promise<string> => {
+  const written: string[] = [];
+  try {
+    await assertReleaseCutReady(
+      CUT_SHA,
+      false,
+      { json: fakeGitHub(responses), coverage },
+      (text) => {
+        written.push(text);
+      },
+    );
+  } catch (error) {
+    expect(error).toBeInstanceOf(MaintenanceReleaseError);
+    expect(written).toEqual([]);
+    return error instanceof Error ? error.message : String(error);
+  }
+  throw new Error(
+    `Expected the cut to be refused; it printed ${written.join("")}`,
+  );
+};
+
+describe("release cut readiness", () => {
+  test("cuts when main/heavy and main/pr-depth are green on the commit", async () => {
+    const read = fakeGitHub({
+      [STATUSES_PATH]: [PR_DEPTH_GREEN, HEAVY_GREEN],
+    });
+    const written: string[] = [];
+
+    await assertReleaseCutReady(CUT_SHA, false, { json: read }, (text) => {
+      written.push(text);
+    });
+
+    expect(written).toEqual([
+      `maintenance-release: main/heavy and main/pr-depth are green on ${CUT_SHA}\n`,
+    ]);
+    expect(read.paths).toEqual([STATUSES_PATH]);
+  });
+
+  test("refuses a red gate and names its failing jobs and the rerun", async () => {
+    const message = await cutRefusal({
+      [STATUSES_PATH]: [
+        commitStatus("main/heavy", "failure", 11),
+        PR_DEPTH_GREEN,
+      ],
+      [jobsPath(11)]: {
+        jobs: [
+          job("suites / api-tests (2)", "failure"),
+          job("suites / web-tests", "success"),
+          job("suites / docker-checks", "skipped"),
+          job("suites / e2e", "cancelled"),
+          job("status", null, "in_progress"),
+        ],
+      },
+    });
+
+    expect(message).toBe(
+      [
+        `main is not release-ready at ${CUT_SHA}:`,
+        `  main/heavy: failure (status failure) ${RUN_PREFIX}11`,
+        "    failing job: suites / api-tests (2) (failure)",
+        "    failing job: suites / e2e (cancelled)",
+        "    failing job: status (in_progress)",
+        `    run it: gh workflow run main-heavy.yml --ref main -f sha=${CUT_SHA}`,
+        "Cut from a commit where both are green, or pass --allow-unproven-main to cut anyway.",
+      ].join("\n"),
+    );
+  });
+
+  // The screenshots job fails only on a functional capture failure (a
+  // difference alone passes it with a warning), so it blocks like any job.
+  test("refuses a main/heavy run that failed only in marketing screenshots", async () => {
+    const message = await cutRefusal({
+      [STATUSES_PATH]: [
+        commitStatus("main/heavy", "failure", 11),
+        PR_DEPTH_GREEN,
+      ],
+      [jobsPath(11)]: {
+        jobs: [
+          job("suites / web-tests", "success"),
+          job("suites / marketing-screenshots / check", "failure"),
+          job("suites / ci-result", "failure"),
+          job("status", "failure"),
+        ],
+      },
+    });
+
+    expect(message).toBe(
+      [
+        `main is not release-ready at ${CUT_SHA}:`,
+        `  main/heavy: failure (status failure) ${RUN_PREFIX}11`,
+        "    failing job: suites / marketing-screenshots / check (failure)",
+        "    failing job: suites / ci-result (failure)",
+        "    failing job: status (failure)",
+        `    run it: gh workflow run main-heavy.yml --ref main -f sha=${CUT_SHA}`,
+        "Cut from a commit where both are green, or pass --allow-unproven-main to cut anyway.",
+      ].join("\n"),
+    );
+  });
+
+  test("reads only the newest status of each gate", async () => {
+    const newerRed = await cutRefusal({
+      [STATUSES_PATH]: [
+        commitStatus("main/pr-depth", "failure", 23),
+        HEAVY_GREEN,
+        PR_DEPTH_GREEN,
+      ],
+      [jobsPath(23)]: { jobs: [job("suites / lint", "failure")] },
+    });
+    expect(newerRed).toContain("main/pr-depth: failure");
+    expect(newerRed).toContain("failing job: suites / lint (failure)");
+    expect(newerRed).not.toContain("main/heavy");
+
+    const newerGreen = fakeGitHub({
+      [STATUSES_PATH]: [
+        HEAVY_GREEN,
+        PR_DEPTH_GREEN,
+        commitStatus("main/heavy", "failure", 10),
+      ],
+    });
+    await assertReleaseCutReady(
+      CUT_SHA,
+      false,
+      { json: newerGreen },
+      () => undefined,
+    );
+  });
+
+  test("refuses a missing main/heavy status and says how to run it", async () => {
+    const message = await cutRefusal({ [STATUSES_PATH]: [PR_DEPTH_GREEN] });
+
+    expect(message).toContain(
+      "  main/heavy: missing (no status on the commit)",
+    );
+    expect(message).toContain(
+      `    run it: gh workflow run main-heavy.yml --ref main -f sha=${CUT_SHA}`,
+    );
+  });
+
+  test("refuses a pending gate", async () => {
+    const message = await cutRefusal({
+      [STATUSES_PATH]: [
+        HEAVY_GREEN,
+        commitStatus("main/pr-depth", "pending", 24),
+      ],
+      [jobsPath(24)]: { jobs: [job("suites / lint", null, "queued")] },
+    });
+
+    expect(message).toContain("main/pr-depth: pending (status pending)");
+    expect(message).toContain("failing job: suites / lint (queued)");
+    expect(message).not.toContain("run it:");
+  });
+
+  test("does not take a success reported by anyone but the workflow bot", async () => {
+    const message = await cutRefusal({
+      [STATUSES_PATH]: [
+        HEAVY_GREEN,
+        commitStatus("main/pr-depth", "success", 25, "someone"),
+      ],
+      [jobsPath(25)]: { jobs: [] },
+    });
+
+    expect(message).toContain(
+      "main/pr-depth: failure (status success set by someone, not github-actions[bot])",
+    );
+  });
+
+  test("answers a missing main/pr-depth status with its latest scheduled run", async () => {
+    const scheduledRun = (status: string, conclusion: string | null) => ({
+      workflow_runs: [
+        {
+          conclusion,
+          event: "schedule",
+          head_sha: CUT_SHA,
+          html_url: `${RUN_PREFIX}30`,
+          status,
+        },
+      ],
+    });
+    const read = fakeGitHub({
+      [STATUSES_PATH]: [HEAVY_GREEN],
+      [SCHEDULED_PR_DEPTH_PATH]: scheduledRun("completed", "success"),
+    });
+    await assertReleaseCutReady(
+      CUT_SHA,
+      false,
+      { json: read },
+      () => undefined,
+    );
+    expect(read.paths).toEqual([STATUSES_PATH, SCHEDULED_PR_DEPTH_PATH]);
+
+    const failed = await cutRefusal({
+      [STATUSES_PATH]: [HEAVY_GREEN],
+      [SCHEDULED_PR_DEPTH_PATH]: scheduledRun("completed", "failure"),
+      [jobsPath(30)]: { jobs: [job("suites / typecheck", "failure")] },
+    });
+    expect(failed).toContain(
+      `main/pr-depth: failure (no status; latest scheduled run completed/failure) ${RUN_PREFIX}30`,
+    );
+    expect(failed).toContain("failing job: suites / typecheck (failure)");
+
+    const running = await cutRefusal({
+      [STATUSES_PATH]: [HEAVY_GREEN],
+      [SCHEDULED_PR_DEPTH_PATH]: scheduledRun("in_progress", null),
+      [jobsPath(30)]: {
+        jobs: [job("suites / typecheck", null, "in_progress")],
+      },
+    });
+    expect(running).toContain("main/pr-depth: pending");
+
+    const none = await cutRefusal({
+      [STATUSES_PATH]: [HEAVY_GREEN],
+      [SCHEDULED_PR_DEPTH_PATH]: { workflow_runs: [] },
+    });
+    expect(none).toContain(
+      "main/pr-depth: missing (no status and no scheduled run on the commit)",
+    );
+    expect(none).toContain(
+      `run it: gh workflow run main-pr-depth.yml --ref main -f sha=${CUT_SHA}`,
+    );
+  });
+
+  test("fails closed when GitHub cannot be read", async () => {
+    const unreadable = await cutRefusal({
+      [STATUSES_PATH]: new Error("HTTP 502"),
+    });
+    expect(unreadable).toContain("main/heavy: unreadable (HTTP 502)");
+    expect(unreadable).toContain("main/pr-depth: unreadable (HTTP 502)");
+
+    const malformed = await cutRefusal({ [STATUSES_PATH]: { statuses: [] } });
+    expect(malformed).toContain("main/heavy: unreadable");
+
+    const jobsDown = await cutRefusal({
+      [STATUSES_PATH]: [
+        commitStatus("main/heavy", "error", 12),
+        PR_DEPTH_GREEN,
+      ],
+      [jobsPath(12)]: new Error("HTTP 500"),
+    });
+    expect(jobsDown).toContain("main/heavy: failure (status error)");
+    expect(jobsDown).toContain("failing job: (jobs unreadable: HTTP 500)");
+  });
+
+  test("reads every page of statuses before calling a gate missing", async () => {
+    const unrelated = Array.from({ length: 100 }, (_unused, index) =>
+      commitStatus(`other/${String(index)}`, "success", 40 + index),
+    );
+    const read = fakeGitHub({
+      [STATUSES_PATH]: unrelated,
+      [`/commits/${CUT_SHA}/statuses?per_page=100&page=2`]: [
+        HEAVY_GREEN,
+        PR_DEPTH_GREEN,
+      ],
+    });
+
+    await assertReleaseCutReady(
+      CUT_SHA,
+      false,
+      { json: read },
+      () => undefined,
+    );
+    expect(read.paths).toHaveLength(2);
+  });
+
+  test("cuts without the statuses when a merge-group receipt covers the commit", async () => {
+    const asked: string[] = [];
+    const written: string[] = [];
+
+    await assertReleaseCutReady(
+      CUT_SHA,
+      false,
+      {
+        json: fakeGitHub({
+          [STATUSES_PATH]: [],
+          [SCHEDULED_PR_DEPTH_PATH]: { workflow_runs: [] },
+        }),
+        coverage: async (sha) => {
+          asked.push(sha);
+          return "covered";
+        },
+      },
+      (text) => {
+        written.push(text);
+      },
+    );
+
+    expect(asked).toEqual([CUT_SHA]);
+    expect(written).toEqual([
+      `maintenance-release: a merge-group receipt and validated queue history stand in for main/heavy and main/pr-depth on ${CUT_SHA}\n`,
+    ]);
+  });
+
+  test("an uncovered receipt keeps both statuses required", async () => {
+    const responses = {
+      [STATUSES_PATH]: [],
+      [SCHEDULED_PR_DEPTH_PATH]: { workflow_runs: [] },
+    };
+    const expected = [
+      `main is not release-ready at ${CUT_SHA}:`,
+      "  main/heavy: missing (no status on the commit)",
+      `    run it: gh workflow run main-heavy.yml --ref main -f sha=${CUT_SHA}`,
+      "  main/pr-depth: missing (no status and no scheduled run on the commit)",
+      `    run it: gh workflow run main-pr-depth.yml --ref main -f sha=${CUT_SHA}`,
+      "Cut from a commit where both are green, or pass --allow-unproven-main to cut anyway.",
+    ].join("\n");
+
+    expect(await cutRefusal(responses, NOT_COVERED)).toBe(expected);
+    // A coverage check that cannot run answers nothing: the same refusal.
+    expect(
+      await cutRefusal(responses, async () => {
+        throw new Error("coverage check crashed");
+      }),
+    ).toBe(expected);
+  });
+
+  test("a failed gate refuses even when a merge-group receipt covers the commit", async () => {
+    const asked: string[] = [];
+    const message = await cutRefusal(
+      {
+        [STATUSES_PATH]: [
+          commitStatus("main/heavy", "failure", 11),
+          PR_DEPTH_GREEN,
+        ],
+        [jobsPath(11)]: { jobs: [job("suites / api-tests (2)", "failure")] },
+      },
+      async (sha) => {
+        asked.push(sha);
+        return "covered";
+      },
+    );
+
+    expect(message).toBe(
+      [
+        `main is not release-ready at ${CUT_SHA}:`,
+        `  main/heavy: failure (status failure) ${RUN_PREFIX}11`,
+        "    failing job: suites / api-tests (2) (failure)",
+        `    run it: gh workflow run main-heavy.yml --ref main -f sha=${CUT_SHA}`,
+        "Cut from a commit where both are green, or pass --allow-unproven-main to cut anyway.",
+      ].join("\n"),
+    );
+    expect(asked).toEqual([]);
+  });
+
+  test("green statuses cut without asking for receipt coverage", async () => {
+    const asked: string[] = [];
+    const written: string[] = [];
+
+    await assertReleaseCutReady(
+      CUT_SHA,
+      false,
+      {
+        json: fakeGitHub({ [STATUSES_PATH]: [PR_DEPTH_GREEN, HEAVY_GREEN] }),
+        coverage: async (sha) => {
+          asked.push(sha);
+          return "not_covered";
+        },
+      },
+      (text) => {
+        written.push(text);
+      },
+    );
+
+    expect(asked).toEqual([]);
+    expect(written).toEqual([
+      `maintenance-release: main/heavy and main/pr-depth are green on ${CUT_SHA}\n`,
+    ]);
+  });
+
+  test("only exit 0 of the coverage command is coverage", async () => {
+    const root = mkdtempSync(nodePath.join(tmpdir(), "receipt-coverage-"));
+    roots.push(root);
+    const argumentsPath = nodePath.join(root, "arguments");
+    const stub = (exitCode: number) => {
+      const path = nodePath.join(root, `exit-${String(exitCode)}.sh`);
+      writeFileSync(
+        path,
+        `printf '%s\\n' "$@" > '${argumentsPath}'\nexit ${String(exitCode)}\n`,
+      );
+      return ["bash", path];
+    };
+
+    expect(await receiptCoverageReader(stub(0))(CUT_SHA)).toBe("covered");
+    expect(readFileSync(argumentsPath, "utf-8")).toBe(
+      `stella/stella\n${CUT_SHA}\n`,
+    );
+    for (const exitCode of [1, 2, 127]) {
+      expect(await receiptCoverageReader(stub(exitCode))(CUT_SHA)).toBe(
+        "not_covered",
+      );
+    }
+    expect(
+      await receiptCoverageReader([nodePath.join(root, "absent-command")])(
+        CUT_SHA,
+      ),
+    ).toBe("not_covered");
+  });
+
+  test("an explicit override prints the same refusal and lets the cut go on", async () => {
+    const written: string[] = [];
+
+    await assertReleaseCutReady(
+      CUT_SHA,
+      true,
+      {
+        json: fakeGitHub({ [STATUSES_PATH]: [PR_DEPTH_GREEN] }),
+        coverage: NOT_COVERED,
+      },
+      (text) => {
+        written.push(text);
+      },
+    );
+
+    expect(written).toEqual([
+      [
+        "maintenance-release: --allow-unproven-main passed; cutting anyway.",
+        `main is not release-ready at ${CUT_SHA}:`,
+        "  main/heavy: missing (no status on the commit)",
+        `    run it: gh workflow run main-heavy.yml --ref main -f sha=${CUT_SHA}`,
+        "",
+      ].join("\n"),
+    ]);
   });
 });

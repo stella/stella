@@ -1,20 +1,48 @@
 import { describe, expect, mock, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import { createLogger, type ConfigEnv, type UserConfig } from "vite";
+import { type ConfigEnv, createLogger, type UserConfig } from "vite";
+
+import { createTestState } from "@stll/test-state";
 
 import config, {
   capViteLogger,
   REACT_PLUGIN_EXCLUDE,
   rewriteBrowserApiPath,
+  rewritePackageImports,
+  serverPackageImports,
 } from "./vite.config";
 
-const KANBAN_DRAG_INTERACTIONS_PATH = path.resolve(
-  import.meta.dirname,
-  "../../packages/ui/src/kanban/drag-interactions.ts",
-);
-const ATLASKIT_DRAG_IMPORT =
-  /from "(@atlaskit\/pragmatic-drag-and-drop[^"]+)";/gu;
+const PRAGMATIC_IMPORT_PREFIX = "@atlaskit/pragmatic-";
+const DRAG_RUNTIME_SOURCE_ROOTS = [
+  path.resolve(import.meta.dirname, "src"),
+  path.resolve(import.meta.dirname, "../../packages/ui/src"),
+  path.resolve(import.meta.dirname, "../../packages/workspace-ui/src"),
+];
+const runtimeDragImports = () => {
+  const imports = new Set<string>();
+  const sourceFiles = new Bun.Glob("**/*.{ts,tsx}");
+  const ts = new Bun.Transpiler({ loader: "ts" });
+  const tsx = new Bun.Transpiler({ loader: "tsx" });
+  for (const root of DRAG_RUNTIME_SOURCE_ROOTS) {
+    for (const file of sourceFiles.scanSync({ cwd: root })) {
+      if (/\.(?:test|spec)\.tsx?$/u.test(file)) {
+        continue;
+      }
+      const source = readFileSync(path.join(root, file), "utf-8");
+      if (!source.includes(PRAGMATIC_IMPORT_PREFIX)) {
+        continue;
+      }
+      const transpiler = file.endsWith(".tsx") ? tsx : ts;
+      for (const entry of transpiler.scanImports(source)) {
+        if (entry.path.startsWith(PRAGMATIC_IMPORT_PREFIX)) {
+          imports.add(entry.path);
+        }
+      }
+    }
+  }
+  return [...imports].toSorted();
+};
 const I18N_STORE_PATH = path.resolve(
   import.meta.dirname,
   "src/i18n/i18n-store.ts",
@@ -23,7 +51,24 @@ const I18N_STORE_PATH = path.resolve(
 const FOLIO_CATALOG_IMPORT =
   /"(@stll\/folio-react\/messages\/(?!locales")[^"]+)"/gu;
 
+const state = createTestState({ file: import.meta.path, config: {} });
+
 describe("vite config", () => {
+  test("keeps route recovery components in the entry graph", () => {
+    const source = readFileSync(
+      path.resolve(import.meta.dirname, "vite.config.ts"),
+      "utf-8",
+    );
+    const defaultBehavior = /defaultBehavior:\s*(\[[^;]+\]),/u.exec(
+      source,
+    )?.[1];
+
+    expect(defaultBehavior).toBe('[["component"]]');
+    expect(defaultBehavior).not.toContain("errorComponent");
+    expect(defaultBehavior).not.toContain("notFoundComponent");
+    expect(defaultBehavior).not.toContain("pendingComponent");
+  });
+
   test("keeps opaque effect wrappers out of React compilation", () => {
     const isExcluded = (filePath: string) =>
       REACT_PLUGIN_EXCLUDE.some((pattern) => pattern.test(filePath));
@@ -50,6 +95,8 @@ describe("vite config", () => {
     const pluginNames = plugins.map((plugin) => plugin.name);
     expect(pluginNames).toContain("vite:react-babel");
     expect(pluginNames).toContain("vite:react-compiler");
+    expect(pluginNames).toContain("stella-dev-route-build-guard");
+    expect(pluginNames).toContain("stella-chat-runtime-build-guard");
     expect(pluginNames).not.toContain("@rolldown/plugin-babel");
   });
 
@@ -68,63 +115,46 @@ describe("vite config", () => {
   });
 
   test("proxies every public API surface through one dev origin when requested", () => {
-    const previousTarget = process.env["DEV_API_PROXY_TARGET"];
-    process.env["DEV_API_PROXY_TARGET"] = "http://localhost:3001";
+    state.setEnv("DEV_API_PROXY_TARGET", "http://localhost:3001");
 
-    try {
-      const resolvedConfig = resolveConfig("test");
+    const resolvedConfig = resolveConfig("test");
 
-      expect(resolvedConfig.server?.proxy).toEqual({
-        "/.well-known": {
-          changeOrigin: true,
-          target: "http://localhost:3001",
-        },
-        "/api": {
-          changeOrigin: true,
-          target: "http://localhost:3001",
-          rewrite: expect.any(Function),
-        },
-        "/dev-public": {
-          changeOrigin: true,
-          target: "http://localhost:3001",
-        },
-        "/health": {
-          changeOrigin: true,
-          target: "http://localhost:3001",
-        },
-        "/mcp": {
-          changeOrigin: true,
-          target: "http://localhost:3001",
-        },
-        "/oauth-ui": {
-          changeOrigin: true,
-          target: "http://localhost:3001",
-        },
-        "/v1": {
-          changeOrigin: true,
-          target: "http://localhost:3001",
-        },
-      });
-    } finally {
-      if (previousTarget === undefined) {
-        delete process.env["DEV_API_PROXY_TARGET"];
-      } else {
-        process.env["DEV_API_PROXY_TARGET"] = previousTarget;
-      }
-    }
+    expect(resolvedConfig.server?.proxy).toEqual({
+      "/.well-known": {
+        changeOrigin: true,
+        target: "http://localhost:3001",
+      },
+      "/api": {
+        changeOrigin: true,
+        target: "http://localhost:3001",
+        rewrite: expect.any(Function),
+      },
+      "/dev-public": {
+        changeOrigin: true,
+        target: "http://localhost:3001",
+      },
+      "/health": {
+        changeOrigin: true,
+        target: "http://localhost:3001",
+      },
+      "/mcp": {
+        changeOrigin: true,
+        target: "http://localhost:3001",
+      },
+      "/oauth-ui": {
+        changeOrigin: true,
+        target: "http://localhost:3001",
+      },
+      "/v1": {
+        changeOrigin: true,
+        target: "http://localhost:3001",
+      },
+    });
   });
 
   test("does not install a dev API proxy without an explicit target", () => {
-    const previousTarget = process.env["DEV_API_PROXY_TARGET"];
-    delete process.env["DEV_API_PROXY_TARGET"];
-
-    try {
-      expect(resolveConfig("test").server?.proxy).toBeUndefined();
-    } finally {
-      if (previousTarget !== undefined) {
-        process.env["DEV_API_PROXY_TARGET"] = previousTarget;
-      }
-    }
+    state.deleteEnv("DEV_API_PROXY_TARGET");
+    expect(resolveConfig("test").server?.proxy).toBeUndefined();
   });
 
   test("serves Silurus WASM outside the dependency optimizer", () => {
@@ -139,17 +169,52 @@ describe("vite config", () => {
     );
   });
 
-  test("prebundles the kanban drag runtime before lazy-route navigation", () => {
-    const runtimeSource = readFileSync(KANBAN_DRAG_INTERACTIONS_PATH, "utf-8");
-    const runtimeImports = Array.from(
-      runtimeSource.matchAll(ATLASKIT_DRAG_IMPORT),
-      (match) => match[1],
-    );
-
+  test("prebundles exactly the drag runtime imports without duplicate entries", () => {
+    const included = resolveConfig("test").optimizeDeps?.include ?? [];
+    expect(included).not.toHaveLength(0);
+    expect(included.length).toBe(new Set(included).size);
+    const runtimeImports = runtimeDragImports();
     expect(runtimeImports).not.toHaveLength(0);
-    expect(resolveConfig("test").optimizeDeps?.include).toEqual(
-      expect.arrayContaining(runtimeImports),
+    expect(
+      included
+        .filter((entry) => entry.startsWith(PRAGMATIC_IMPORT_PREFIX))
+        .toSorted(),
+    ).toEqual(runtimeImports);
+  });
+
+  test("every prebundled drag entry resolves from the web app", () => {
+    const entries = (resolveConfig("test").optimizeDeps?.include ?? []).filter(
+      (entry) => entry.startsWith(PRAGMATIC_IMPORT_PREFIX),
     );
+    expect(entries).not.toHaveLength(0);
+    for (const entry of entries) {
+      expect(Bun.resolveSync(entry, import.meta.dirname)).toBeString();
+    }
+  });
+
+  test("the drag resolver rejects a nonexistent entry", () => {
+    expect(
+      Bun.resolveSync(
+        "@atlaskit/pragmatic-drag-and-drop/adapter/element-adapter",
+        import.meta.dirname,
+      ),
+    ).toBeString();
+    const bogus = "@atlaskit/pragmatic-drag-and-drop/does-not-exist";
+    expect(() => Bun.resolveSync(bogus, import.meta.dirname)).toThrow(
+      "Cannot find package '@atlaskit/pragmatic-drag-and-drop'",
+    );
+  });
+
+  test("the runtime import scan excludes type-only drag entries", () => {
+    const imports = new Bun.Transpiler({ loader: "ts" }).scanImports(`
+      import type { Edge } from "@atlaskit/pragmatic-drag-and-drop-hitbox/types";
+      import { combine } from "@atlaskit/pragmatic-drag-and-drop/utils/combine";
+      export { combine };
+      export type { Edge };
+    `);
+    expect(imports.map((entry) => entry.path)).toEqual([
+      "@atlaskit/pragmatic-drag-and-drop/utils/combine",
+    ]);
   });
 
   test("prebundles every folio locale catalog the i18n store loads", () => {
@@ -251,3 +316,52 @@ const hasName = (value: unknown): value is { name: string } => {
 
   return typeof value.name === "string";
 };
+
+describe("server package imports", () => {
+  const targets = serverPackageImports(
+    JSON.parse(
+      readFileSync(path.resolve(import.meta.dirname, "package.json"), "utf-8"),
+    ),
+  );
+
+  test("maps every `#` import whose server target is a package", () => {
+    expect(targets).toEqual(
+      new Map([
+        ["#aho-corasick", "@stll/aho-corasick"],
+        ["#regex-set", "@stll/regex-set"],
+      ]),
+    );
+    expect(
+      serverPackageImports({
+        imports: { "#local": { default: "./src/local.ts" }, "#plain": "pkg" },
+      }),
+    ).toEqual(new Map([["#plain", "pkg"]]));
+  });
+
+  test("rewrites module specifiers and leaves other text alone", () => {
+    const untouched = [
+      'import "#unmapped";',
+      'const text = "#aho-corasick";',
+      "const quoted = 'import(\"#aho-corasick\")';",
+      'registry.import("#aho-corasick");',
+    ];
+    const source = [
+      'import { AhoCorasick } from "#aho-corasick";',
+      "export { RegexSet } from '#regex-set';",
+      'export * from "#regex-set";',
+      'const lazy = import("#aho-corasick");',
+      ...untouched,
+    ].join("\n");
+    expect(
+      rewritePackageImports({ code: source, file: "module.ts", targets }),
+    ).toBe(
+      [
+        'import { AhoCorasick } from "@stll/aho-corasick";',
+        "export { RegexSet } from '@stll/regex-set';",
+        'export * from "@stll/regex-set";',
+        'const lazy = import("@stll/aho-corasick");',
+        ...untouched,
+      ].join("\n"),
+    );
+  });
+});

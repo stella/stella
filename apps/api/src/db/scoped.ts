@@ -9,21 +9,26 @@ import { DrizzleQueryError, sql } from "drizzle-orm";
 import type { SQLWrapper } from "drizzle-orm";
 
 import {
-  SETTING_WORKSPACE_ACCESS_MODE,
   SETTING_ORGANIZATION_ID,
   SETTING_USER_ID,
+  SETTING_WORKSPACE_ACCESS_MODE,
   SETTING_WORKSPACE_IDS,
-  WORKSPACE_ACCESS_MODE,
   stella,
   stellaIngestion,
+  WORKSPACE_ACCESS_MODE,
 } from "@/api/db/rls";
+import type { Transaction } from "@/api/db/root";
 import { workspaces } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
+import { withAggregateSavepoint } from "@/api/lib/db/aggregate-lock";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import {
   DatabaseError,
   DatabaseRlsError,
 } from "@/api/lib/errors/tagged-errors";
+import type { FeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
+import { getRequestRouteScope } from "@/api/lib/observability/exception-scope";
+import { logger } from "@/api/lib/observability/logger";
 import {
   getPgDriverErrorCode,
   getPgErrorCode,
@@ -32,6 +37,7 @@ import {
 import { isRecord } from "@/api/lib/type-guards";
 
 import { runUnderCorpusSchemaLane } from "./corpus-schema-lane";
+import { resolveScopedFeatureIds } from "./scoped-feature-access";
 
 // Generic constraint accepts any drizzle instance (prod or
 // test PGlite) without importing test-only types.
@@ -76,7 +82,7 @@ export type SafeDbRetryConfig<E = unknown> = {
 
 type SafeDbError = DatabaseError | DatabaseRlsError | UnhandledException;
 
-type WorkspaceScope =
+export type WorkspaceScope =
   | {
       type: typeof WORKSPACE_ACCESS_MODE.explicit;
       workspaceIds: SafeId<"workspace">[];
@@ -85,6 +91,30 @@ type WorkspaceScope =
       type: typeof WORKSPACE_ACCESS_MODE.membership;
       serverValidatedWorkspaceIds: readonly SafeId<"workspace">[];
     };
+
+/**
+ * The deadline a whole transaction runs under. `statement_timeout` restarts
+ * with every statement; an enforced deadline sets `transaction_timeout`, which
+ * bounds the run of them (past it the server ends the session). An observed
+ * deadline only reports a transaction that ran past it, so the cases that run
+ * long legitimately are known before it is enforced. The transaction that
+ * opens the scope owns the deadline: savepoints and nested scopes inherit it
+ * and cannot set another.
+ */
+export const TRANSACTION_DEADLINE_MODE = {
+  observe: "observe",
+  enforce: "enforce",
+} as const;
+export type TransactionDeadline = {
+  timeoutMs: number;
+  mode: (typeof TRANSACTION_DEADLINE_MODE)[keyof typeof TRANSACTION_DEADLINE_MODE];
+  /** The monotonic clock the deadline is measured on; `performance.now()` when omitted. */
+  clock?: { monotonic: () => number } | undefined;
+};
+export const TRANSACTION_DEADLINE = {
+  /** A request's transaction: observed until its long cases are measured. */
+  request: { timeoutMs: 30_000, mode: TRANSACTION_DEADLINE_MODE.observe },
+} as const satisfies Record<"request", TransactionDeadline>;
 
 type RunScopedTransactionOptions<
   TTransaction extends ScopedTransactionBase,
@@ -95,6 +125,125 @@ type RunScopedTransactionOptions<
   organizationId: SafeId<"organization">;
   userId: SafeId<"user"> | null;
   workspaceScope: WorkspaceScope;
+  featureAccessSnapshot?: FeatureAccessSnapshot | undefined;
+  /** Omitted for background work, which runs under the pool's statement bound only. */
+  deadline?: TransactionDeadline | undefined;
+};
+
+type SetScopedTransactionSettingsOptions = {
+  tx: ScopedTransactionBase;
+  organizationId: SafeId<"organization">;
+  userId: SafeId<"user"> | null;
+  workspaceScope: WorkspaceScope;
+  featureIds: readonly string[];
+  /** Set only by the transaction that opens the scope. */
+  deadline?: TransactionDeadline | undefined;
+};
+
+const workspaceIdsSetting = (workspaceScope: WorkspaceScope): string => {
+  const workspaceIds =
+    workspaceScope.type === WORKSPACE_ACCESS_MODE.explicit
+      ? workspaceScope.workspaceIds
+      : workspaceScope.serverValidatedWorkspaceIds;
+  return `{${workspaceIds.join(",")}}`;
+};
+
+/** Install the application role and its tenant scope on an open transaction. */
+export const setScopedTransactionSettings = async ({
+  tx,
+  organizationId,
+  userId,
+  workspaceScope,
+  featureIds,
+  deadline,
+}: SetScopedTransactionSettingsOptions): Promise<void> => {
+  const wsIds = workspaceIdsSetting(workspaceScope);
+  if (userId === null) {
+    // A service actor has no membership-derived authority. Resolve its
+    // explicit workspace IDs against the tenant before changing the role.
+    await tx.execute(sql`SELECT set_config(
+      '${sql.raw(SETTING_WORKSPACE_IDS)}',
+      coalesce((
+        SELECT pg_catalog.array_agg(${workspaces.id})::text
+        FROM ${workspaces}
+        WHERE ${workspaces.id} = ANY(${wsIds}::uuid[])
+          AND ${workspaces.organizationId} = ${organizationId}
+      ), '{}'),
+      true
+    )`);
+  }
+
+  await tx.execute(
+    sql`SELECT
+      set_config('role', '${sql.raw(stella.name)}', true),
+      set_config('${sql.raw(SETTING_WORKSPACE_IDS)}', ${userId === null ? sql`pg_catalog.current_setting('${sql.raw(SETTING_WORKSPACE_IDS)}', true)` : sql`${wsIds}`}, true),
+      set_config('${sql.raw(SETTING_WORKSPACE_ACCESS_MODE)}', ${workspaceScope.type}, true),
+      set_config('${sql.raw(SETTING_ORGANIZATION_ID)}', ${organizationId}, true),
+      set_config('${sql.raw(SETTING_USER_ID)}', ${userId ?? ""}, true),
+      set_config('app.enabled_features', ${JSON.stringify(featureIds)}, true)${
+        deadline?.mode !== TRANSACTION_DEADLINE_MODE.enforce
+          ? sql``
+          : sql`,
+      set_config('transaction_timeout', ${`${String(deadline.timeoutMs)}ms`}, true)`
+      }`,
+  );
+};
+
+type ScopedWorkInTransactionOptions<T> = {
+  tx: Transaction;
+  organizationId: SafeId<"organization">;
+  userId: SafeId<"user">;
+  workspaceScope: WorkspaceScope;
+  fn: (tx: Transaction) => Promise<T>;
+};
+
+/** Keep aggregate cleanup atomic while lending it the application role. */
+export const runScopedWorkInTransaction = async <T>({
+  tx,
+  organizationId,
+  userId,
+  workspaceScope,
+  fn,
+}: ScopedWorkInTransactionOptions<T>): Promise<T> => {
+  const [previous] = await tx
+    .select({
+      role: sql<string>`current_user`,
+      organizationId: sql<string>`coalesce(current_setting('app.organization_id', true), '')`,
+      userId: sql<string>`coalesce(current_setting('app.user_id', true), '')`,
+      workspaceIds: sql<string>`coalesce(current_setting('app.workspace_ids', true), '')`,
+      workspaceAccessMode: sql<string>`coalesce(current_setting('app.workspace_access_mode', true), '')`,
+      featureIds: sql<string>`coalesce(current_setting('app.enabled_features', true), '')`,
+    })
+    .from(sql`(SELECT 1) AS aggregate_context`);
+  if (previous === undefined) {
+    return panic("Aggregate transaction has no role context");
+  }
+  // A failed statement rolls back the savepoint and its settings together;
+  // restoring on an aborted connection would hide the original error.
+  const value = await withAggregateSavepoint(tx, async (scopedTx) => {
+    const featureIds = await resolveScopedFeatureIds({
+      tx: scopedTx,
+      organizationId,
+      userId,
+    });
+    await setScopedTransactionSettings({
+      tx: scopedTx,
+      organizationId,
+      userId,
+      workspaceScope,
+      featureIds,
+    });
+    return await fn(scopedTx);
+  });
+  await tx.execute(sql`SELECT
+    set_config('role', ${previous.role}, true),
+    set_config('app.organization_id', ${previous.organizationId}, true),
+    set_config('app.user_id', ${previous.userId}, true),
+    set_config('app.workspace_ids', ${previous.workspaceIds}, true),
+    set_config('app.workspace_access_mode', ${previous.workspaceAccessMode}, true),
+    set_config('app.enabled_features', ${previous.featureIds}, true)
+  `);
+  return value;
 };
 
 export type CurrentMembershipScope = {
@@ -123,40 +272,107 @@ const runScopedTransaction = async <
   organizationId,
   userId,
   workspaceScope,
+  featureAccessSnapshot,
+  deadline,
 }: RunScopedTransactionOptions<TTransaction, T>): Promise<T> => {
-  const workspaceIds =
-    workspaceScope.type === WORKSPACE_ACCESS_MODE.explicit
-      ? workspaceScope.workspaceIds
-      : workspaceScope.serverValidatedWorkspaceIds;
-  const wsIds = `{${workspaceIds.join(",")}}`;
-
-  return await database.transaction(async (tx: TTransaction) => {
-    if (userId === null) {
-      // A service actor has no membership-derived authority. Resolve its
-      // explicit workspace IDs against the tenant before changing the role.
-      await tx.execute(sql`SELECT set_config(
-        '${sql.raw(SETTING_WORKSPACE_IDS)}',
-        coalesce((
-          SELECT pg_catalog.array_agg(${workspaces.id})::text
-          FROM ${workspaces}
-          WHERE ${workspaces.id} = ANY(${wsIds}::uuid[])
-            AND ${workspaces.organizationId} = ${organizationId}
-        ), '{}'),
-        true
-      )`);
+  // The pool hands over a connection only when one is free, and the callback
+  // runs only then: the deadline is measured from that entry, so time spent
+  // waiting for a connection is reported beside it, not counted in it.
+  const monotonic = deadline?.clock?.monotonic ?? (() => performance.now());
+  const requestedAt = monotonic();
+  let enteredAt: number | undefined;
+  try {
+    return await openScopedTransaction({
+      database,
+      fn,
+      organizationId,
+      userId,
+      workspaceScope,
+      featureAccessSnapshot,
+      deadline,
+      onEnter: () => {
+        enteredAt = monotonic();
+      },
+    });
+  } finally {
+    if (enteredAt !== undefined) {
+      reportOverDeadline({
+        deadline,
+        elapsedMs: monotonic() - enteredAt,
+        connectionWaitMs: enteredAt - requestedAt,
+      });
     }
-    await tx.execute(
-      sql`SELECT
-        set_config('role', '${sql.raw(stella.name)}', true),
-        set_config('${sql.raw(SETTING_WORKSPACE_IDS)}', ${userId === null ? sql`pg_catalog.current_setting('${sql.raw(SETTING_WORKSPACE_IDS)}', true)` : sql`${wsIds}`}, true),
-        set_config('${sql.raw(SETTING_WORKSPACE_ACCESS_MODE)}', ${workspaceScope.type}, true),
-        set_config('${sql.raw(SETTING_ORGANIZATION_ID)}', ${organizationId}, true),
-        set_config('${sql.raw(SETTING_USER_ID)}', ${userId ?? ""}, true)`,
-    );
+  }
+};
+
+/** Report a request transaction that ran past its deadline, whatever its outcome. */
+export const reportOverDeadline = ({
+  deadline,
+  elapsedMs,
+  connectionWaitMs,
+}: {
+  deadline: TransactionDeadline | undefined;
+  /** From the callback's entry, once the transaction holds its connection. */
+  elapsedMs: number;
+  /** How long the transaction waited for a pooled connection before that. */
+  connectionWaitMs: number;
+}): void => {
+  if (deadline === undefined || elapsedMs <= deadline.timeoutMs) {
+    return;
+  }
+  const route = getRequestRouteScope();
+  logger.warn("database.transaction_over_deadline", {
+    "http.method": route?.method ?? "none",
+    "http.route": route?.routeTemplate ?? "unmounted",
+    "db.transaction.duration_ms": Math.round(elapsedMs),
+    "db.transaction.connection_wait_ms": Math.round(connectionWaitMs),
+    "db.transaction.deadline_ms": deadline.timeoutMs,
+    "db.transaction.deadline_mode": deadline.mode,
+  });
+};
+
+const openScopedTransaction = async <
+  TTransaction extends ScopedTransactionBase,
+  T,
+>({
+  database,
+  fn,
+  organizationId,
+  userId,
+  workspaceScope,
+  featureAccessSnapshot,
+  deadline,
+  onEnter,
+}: RunScopedTransactionOptions<TTransaction, T> & {
+  /** Called first inside the transaction, once it holds its connection. */
+  onEnter?: (() => void) | undefined;
+}): Promise<T> =>
+  await database.transaction(async (tx: TTransaction) => {
+    onEnter?.();
+    if (
+      featureAccessSnapshot !== undefined &&
+      (featureAccessSnapshot.organizationId !== organizationId ||
+        featureAccessSnapshot.userId !== userId)
+    ) {
+      panic("Feature snapshot must belong to the database scope");
+    }
+    const featureIds =
+      featureAccessSnapshot === undefined
+        ? await resolveScopedFeatureIds({ tx, organizationId, userId })
+        : [...featureAccessSnapshot.decisions]
+            .filter(([, decision]) => decision.status === "enabled")
+            .map(([featureId]) => featureId);
+    await setScopedTransactionSettings({
+      tx,
+      organizationId,
+      userId,
+      workspaceScope,
+      featureIds,
+      deadline,
+    });
 
     return await fn(tx);
   });
-};
 
 /**
  * Create a database scope from an explicit workspace set or a declared mode.
@@ -178,6 +394,30 @@ export const createScopedDb =
       fn,
     });
 
+type ExplicitScopedDbOptions = {
+  workspaceIds: SafeId<"workspace">[];
+  organizationId: SafeId<"organization">;
+  userId: SafeId<"user"> | null;
+  /** A request scope passes `TRANSACTION_DEADLINE.request`; background work none. */
+  deadline?: TransactionDeadline | undefined;
+};
+
+/** An explicit workspace scope that a request context opens under its deadline. */
+export const createExplicitScopedDb =
+  <TTransaction extends ScopedTransactionBase>(
+    database: RlsDatabase<TTransaction>,
+    { workspaceIds, organizationId, userId, deadline }: ExplicitScopedDbOptions,
+  ) =>
+  async <T>(fn: (tx: TTransaction) => Promise<T>): Promise<T> =>
+    await runScopedTransaction({
+      database,
+      workspaceScope: { type: WORKSPACE_ACCESS_MODE.explicit, workspaceIds },
+      organizationId,
+      userId,
+      deadline,
+      fn,
+    });
+
 /**
  * A transaction on the application role with no tenant settings, for a call
  * that carries only a token. Every row policy is closed in it, so it reaches
@@ -196,6 +436,8 @@ export const createTenantlessDb =
     });
 
 type MembershipScopedDbOptions = {
+  /** Authenticated request decisions reused for that request only. */
+  featureAccessSnapshot?: FeatureAccessSnapshot | undefined;
   organizationId: SafeId<"organization">;
   /**
    * Small, operation-bounded set whose access was already proved by trusted
@@ -205,6 +447,8 @@ type MembershipScopedDbOptions = {
    */
   serverValidatedWorkspaceIds: readonly SafeId<"workspace">[];
   userId: SafeId<"user">;
+  /** A request scope passes `TRANSACTION_DEADLINE.request`; background work none. */
+  deadline?: TransactionDeadline | undefined;
 };
 
 /**
@@ -218,6 +462,8 @@ export const createMembershipScopedDb =
       organizationId,
       serverValidatedWorkspaceIds,
       userId,
+      featureAccessSnapshot,
+      deadline,
     }: MembershipScopedDbOptions,
   ) =>
   async <T>(fn: (tx: TTransaction) => Promise<T>): Promise<T> =>
@@ -229,6 +475,8 @@ export const createMembershipScopedDb =
       },
       organizationId,
       userId,
+      featureAccessSnapshot,
+      deadline,
       fn,
     });
 
@@ -341,13 +589,11 @@ const toSafeDbError = (cause: unknown): SafeDbError => {
   return new UnhandledException({ cause });
 };
 
-/** Result-wrapped form of createScopedDb for an explicit workspace scope. */
-export const createSafeDb =
+/** Result-wrapped form of createExplicitScopedDb. */
+export const createExplicitSafeDb =
   <TTransaction extends ScopedTransactionBase>(
     database: RlsDatabase<TTransaction>,
-    workspaceIds: SafeId<"workspace">[],
-    organizationId: SafeId<"organization">,
-    userId: SafeId<"user"> | null,
+    { workspaceIds, organizationId, userId, deadline }: ExplicitScopedDbOptions,
   ) =>
   async <T>(
     fn: (tx: TTransaction) => Promise<T>,
@@ -364,12 +610,21 @@ export const createSafeDb =
             },
             organizationId,
             userId,
+            deadline,
             fn,
           }),
         catch: toSafeDbError,
       },
       retry,
     );
+
+/** Result-wrapped form of createScopedDb for an explicit workspace scope. */
+export const createSafeDb = <TTransaction extends ScopedTransactionBase>(
+  database: RlsDatabase<TTransaction>,
+  workspaceIds: SafeId<"workspace">[],
+  organizationId: SafeId<"organization">,
+  userId: SafeId<"user"> | null,
+) => createExplicitSafeDb(database, { workspaceIds, organizationId, userId });
 
 /** Result-wrapped membership scope used by authenticated request contexts. */
 export const createMembershipSafeDb =
@@ -379,6 +634,8 @@ export const createMembershipSafeDb =
       organizationId,
       serverValidatedWorkspaceIds,
       userId,
+      featureAccessSnapshot,
+      deadline,
     }: MembershipScopedDbOptions,
   ) =>
   async <T>(
@@ -396,6 +653,8 @@ export const createMembershipSafeDb =
             },
             organizationId,
             userId,
+            featureAccessSnapshot,
+            deadline,
             fn,
           }),
         catch: toSafeDbError,

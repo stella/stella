@@ -1,0 +1,109 @@
+{
+  "version": 1,
+  "source": {
+    "system": "cz-esbirka",
+    "documentId": "262/2006",
+    "webUrl": "https://www.e-sbirka.cz/eli/cz/sb/2006/262/2025-06-01",
+    "printUrl": "https://www.e-sbirka.cz/eli/cz/sb/2006/262/2025-06-01"
+  },
+  "metadata": {
+    "caseNumber": null,
+    "ecli": null,
+    "court": null,
+    "decisionDate": null,
+    "decisionType": null,
+    "keywords": [],
+    "statutes": []
+  },
+  "blocks": [
+    {
+      "type": "heading",
+      "id": "cast_druha",
+      "anchorId": "cast_druha",
+      "level": 1,
+      "plainText": "ČÁST DRUHÁ\nPRACOVNÍ POMĚR",
+      "inlines": [
+        {
+          "type": "text",
+          "text": "ČÁST DRUHÁ\nPRACOVNÍ POMĚR"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "id": "hlava_iv",
+      "anchorId": "hlava_iv",
+      "level": 2,
+      "plainText": "HLAVA IV\nSKONČENÍ PRACOVNÍHO POMĚRU",
+      "inlines": [
+        {
+          "type": "text",
+          "text": "HLAVA IV\nSKONČENÍ PRACOVNÍHO POMĚRU"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "id": "dil_3",
+      "anchorId": "dil_3",
+      "level": 3,
+      "plainText": "Díl 3\nVýpověď, výpovědní doba a výpovědní důvody",
+      "inlines": [
+        {
+          "type": "text",
+          "text": "Díl 3\nVýpověď, výpovědní doba a výpovědní důvody"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "id": "oddil_1",
+      "anchorId": "oddil_1",
+      "level": 4,
+      "plainText": "Oddíl 1\nVýpověď",
+      "inlines": [
+        {
+          "type": "text",
+          "text": "Oddíl 1\nVýpověď"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "id": "par_51",
+      "anchorId": "par_51",
+      "level": 5,
+      "plainText": "§ 51",
+      "inlines": [
+        {
+          "type": "text",
+          "text": "§ 51"
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "id": "par_51-odst_1",
+      "anchorId": "par_51-odst_1",
+      "plainText": "(1) Byla-li dána výpověď, skončí pracovní poměr uplynutím výpovědní doby. Výpovědní doba začíná dnem, v němž byla výpověď doručena druhé smluvní straně, a končí dnem, který se s tímto dnem číslem shoduje; není-li takový den v posledním měsíci, připadne konec výpovědní doby na poslední den měsíce.",
+      "inlines": [
+        {
+          "type": "text",
+          "text": "(1) Byla-li dána výpověď, skončí pracovní poměr uplynutím výpovědní doby. Výpovědní doba začíná dnem, v němž byla výpověď doručena druhé smluvní straně, a končí dnem, který se s tímto dnem číslem shoduje; není-li takový den v posledním měsíci, připadne konec výpovědní doby na poslední den měsíce."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "id": "par_51-odst_3",
+      "anchorId": "par_51-odst_3",
+      "plainText": "(3) Písemnou dohodou mezi zaměstnavatelem a zaměstnancem lze prodloužit výpovědní dobu nebo změnit její běh. Výpovědní doba a její běh musí být sjednány stejně pro zaměstnavatele i zaměstnance; to neplatí pro případ výpovědi podle § 52 písm. f) až h).",
+      "inlines": [
+        {
+          "type": "text",
+          "text": "(3) Písemnou dohodou mezi zaměstnavatelem a zaměstnancem lze prodloužit výpovědní dobu nebo změnit její běh. Výpovědní doba a její běh musí být sjednány stejně pro zaměstnavatele i zaměstnance; to neplatí pro případ výpovědi podle § 52 písm. f) až h)."
+        }
+      ]
+    }
+  ]
+}

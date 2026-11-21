@@ -1,5 +1,7 @@
 import { panic, Result } from "better-result";
 
+import { chunk as chunkItems } from "@stll/concurrency/chunk";
+
 import type { VerdictMatchedRef } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
 import type { AIRequestServiceTier, OrgAIConfig } from "@/api/lib/ai-config";
@@ -15,7 +17,7 @@ import type {
 import {
   gradeReferencePositions,
   REFERENCE_GRADE_BATCH_SIZE,
-  ungradedReferenceGrading,
+  referencePassageCitations,
 } from "@/api/lib/document-review/reference-grade";
 import type {
   ReferenceGrading,
@@ -25,7 +27,7 @@ import type { PinnedReferencePassage } from "@/api/lib/document-review/reference
 import { LANGUAGE_DELTA } from "@/api/lib/document-review/review-delta";
 import type { ReviewDelta } from "@/api/lib/document-review/review-delta";
 import type {
-  AskExtraction,
+  AskOutcome,
   DocxFolioCitation,
 } from "@/api/lib/document-review/review-extract";
 import { resolveReviewTargetLanguage } from "@/api/lib/document-review/target-language";
@@ -34,6 +36,7 @@ import {
   buildGroundedReviewFix,
   type GroundedReviewFix,
 } from "@/api/lib/grounded-review-fix";
+import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
 import type { PreparedDocxFile } from "@/api/lib/workflow/generate-batch";
 import type {
   Position,
@@ -41,9 +44,12 @@ import type {
   PositionStandardSource,
   ResolvedTiers,
 } from "@/api/lib/workflow/playbook-positions";
+import { answerShapeForPosition } from "@/api/lib/workflow/position-runtime";
 import {
   askPresence,
   askText,
+  CUT_DOCUMENT_RATIONALE,
+  extractedFromCitedClause,
   extractedFromContent,
   gradePresence,
   gradePropertyConstraint,
@@ -89,8 +95,7 @@ export type ReviewFinding = {
    *  compare. Reference standards only; a tier match explains itself through
    *  `rationale` and `matchedRef`. */
   explanation?:
-    | { type: "comparison"; text: string }
-    | { type: "insufficient-evidence" };
+    { type: "comparison"; text: string } | { type: "insufficient-evidence" };
   /** One instruction for the drafter, or `null` when nothing should change. */
   recommendation?: string | null;
   citations: DocxFolioCitation[];
@@ -107,6 +112,7 @@ export type ReviewFinding = {
 type AiGradingDeps = {
   abortSignal: AbortSignal;
   organizationId: SafeId<"organization">;
+  admission: ModelDispatchAdmission;
   workspaceId: SafeId<"workspace">;
   entityVersionId: SafeId<"entityVersion">;
   orgAIConfig: OrgAIConfig | null;
@@ -114,6 +120,7 @@ type AiGradingDeps = {
   promptCachingEnabled: boolean;
   serviceTier: AIRequestServiceTier;
   usageMetering: AIUsageMetering;
+  authorizeModelDispatch?: (() => Promise<void>) | undefined;
   /** External model-dispatch boundaries; supplied by focused tests. */
   gradeTierMatches?: typeof gradeTierMatches | undefined;
   gradeReferencePositions?: typeof gradeReferencePositions | undefined;
@@ -125,13 +132,12 @@ type AiGradingDeps = {
  * takes several model calls; the reviewer watching it should see the count
  * move after each one, not once at the end.
  */
-export type OnFindingsGraded = (
-  findings: readonly ReviewFinding[],
-) => Promise<void>;
+type OnFindingsGraded = (findings: readonly ReviewFinding[]) => Promise<void>;
 
 export type BuildFindingsArgs = AiGradingDeps & {
   positions: readonly Position[];
-  contentBySourceId: ReadonlyMap<string, AskExtraction>;
+  /** What extraction settled for each ask, keyed by position sourceId. */
+  askOutcomes: ReadonlyMap<string, AskOutcome>;
   tiersBySourceId: ReadonlyMap<string, ResolvedTiers>;
   /** The prepared target, compared directly against a reference standard's
    *  passages. */
@@ -143,6 +149,8 @@ export type BuildFindingsArgs = AiGradingDeps & {
   /** The words behind every passage the positions pin, keyed by passage id.
    *  A passage whose row is gone is graded as if it were never quoted. */
   passageTextById: ReadonlyMap<string, string>;
+  /** Whether the model read the target whole, or with text withheld for length. */
+  documentRead: "whole" | "cut";
   /** Progress, per completed batch. The full set still comes back from the
    *  return value; this only lets a caller commit early. */
   onGraded: OnFindingsGraded;
@@ -198,32 +206,85 @@ const EMPTY_TIERS: ResolvedTiers = {
   notAcceptableRules: [],
 };
 
+/** Why a position whose grading failed needs a person. */
+export const UNGRADED_RATIONALE =
+  "Automated comparison against the standard could not be completed.";
+
 // A failed or absent compare must not silently pass: the finding is flagged
 // for human review, mirroring the engine's "no criteria configured" fallback.
 const UNGRADED_VERDICT: GradingOutcome = {
   status: "ungraded",
   verdict: "deviation",
-  rationale:
-    "Automated comparison against the standard could not be completed.",
+  rationale: UNGRADED_RATIONALE,
+};
+
+/**
+ * Where a position's ask stands for grading. `not-extracted` is an ask this
+ * pass holds no outcome for: nothing was learned about the document, so it
+ * grades as a failure, never as a clause the document lacks.
+ */
+type AskStanding = AskOutcome | { type: "not-extracted" };
+
+const NOT_EXTRACTED: AskStanding = { type: "not-extracted" };
+
+const askStandingOf = (
+  askOutcomes: ReadonlyMap<string, AskOutcome>,
+  sourceId: string,
+): AskStanding => askOutcomes.get(sourceId) ?? NOT_EXTRACTED;
+
+/** The extracted value and its citations, when the model answered. */
+const answeredExtraction = (
+  ask: AskStanding,
+): Extract<AskOutcome, { type: "answered" }> | undefined =>
+  ask.type === "answered" ? ask : undefined;
+
+/** A position the model still has to tier-match, with what it compares. */
+type ModelGradingItem = {
+  position: Position;
+  askValue: string;
+  passages: string[];
 };
 
 /**
  * Everything a position decides without a model: extract-only positions,
- * deterministic checks, and a tier-match position whose value is missing.
- * `null` means the position needs the model's tier-match.
+ * failed or refused asks, deterministic checks, and a tier-match position
+ * whose value is missing. `to-model` carries what the tier-match compares.
  */
 const gradeWithoutModel = ({
   position,
-  askContent,
+  ask,
   fieldContentBySourceId,
+  documentRead,
 }: {
   position: Position;
-  askContent: FieldContent | undefined;
+  ask: AskStanding;
   fieldContentBySourceId: ReadonlyMap<string, FieldContent>;
-}): GradingOutcome | null => {
+  documentRead: "whole" | "cut";
+}): GradingOutcome | { status: "to-model"; askValue: string } => {
   // Extract-only positions capture a value with no verdict.
   if (position.mode === "extract") {
     return { status: "graded", verdict: null, rationale: null };
+  }
+  // A failure is decided here, by name: only an answer or a stated absence
+  // may reach a verdict.
+  switch (ask.type) {
+    case "refused":
+    case "not-extracted":
+      return UNGRADED_VERDICT;
+    case "answered":
+    case "not-stated":
+      break;
+    default:
+      ask satisfies never;
+      return panic(`Unhandled ask standing: ${String(ask)}`);
+  }
+  const askContent = answeredExtraction(ask)?.content;
+  if (documentRead === "cut" && askPresence(askContent) !== "present") {
+    return {
+      status: "ungraded",
+      verdict: "deviation",
+      rationale: CUT_DOCUMENT_RATIONALE,
+    };
   }
 
   const { check } = position;
@@ -253,7 +314,7 @@ const gradeWithoutModel = ({
   if (askValue === null || askValue.trim().length === 0) {
     return { status: "graded", verdict: "missing", rationale: null };
   }
-  return null;
+  return { status: "to-model", askValue };
 };
 
 const toGradedVerdict = (graded: {
@@ -276,39 +337,37 @@ const toGradedVerdict = (graded: {
  * batch that just landed, so progress is committed per call.
  */
 const gradeTierMatchPositions = async ({
-  positions,
-  contentBySourceId,
+  items,
   tiersBySourceId,
   deps,
   verdicts,
   emit,
 }: {
-  positions: readonly Position[];
-  contentBySourceId: ReadonlyMap<string, AskExtraction>;
+  items: readonly ModelGradingItem[];
   tiersBySourceId: ReadonlyMap<string, ResolvedTiers>;
   deps: AiGradingDeps;
   verdicts: Map<string, GradingOutcome>;
   emit: (batch: readonly Position[]) => Promise<void>;
 }): Promise<void> => {
   const gradeTierMatchesForReview = deps.gradeTierMatches ?? gradeTierMatches;
-  for (
-    let cursor = 0;
-    cursor < positions.length;
-    cursor += TIER_MATCH_BATCH_SIZE
-  ) {
+  for (const batch of chunkItems(items, TIER_MATCH_BATCH_SIZE)) {
     if (deps.abortSignal.aborted) {
       break;
     }
-    const batch = positions.slice(cursor, cursor + TIER_MATCH_BATCH_SIZE);
+
+    if (deps.authorizeModelDispatch !== undefined) {
+      await deps.authorizeModelDispatch();
+    }
     const graded = await gradeTierMatchesForReview({
-      items: batch.map((position) => ({
+      items: batch.map(({ position, askValue, passages }) => ({
         key: position.sourceId,
-        askValue:
-          askText(contentBySourceId.get(position.sourceId)?.content) ?? "",
+        askValue,
         tiers: tiersBySourceId.get(position.sourceId) ?? EMPTY_TIERS,
+        passages,
       })),
       abortSignal: deps.abortSignal,
       organizationId: deps.organizationId,
+      admission: deps.admission,
       workspaceId: deps.workspaceId,
       entityVersionId: deps.entityVersionId,
       orgAIConfig: deps.orgAIConfig,
@@ -317,7 +376,8 @@ const gradeTierMatchPositions = async ({
       serviceTier: deps.serviceTier,
       usageMetering: deps.usageMetering,
     });
-    for (const position of batch) {
+    for (const { position } of batch) {
+      // A failed call and an item the model left out both decide nothing.
       const verdict = Result.isOk(graded)
         ? graded.value.get(position.sourceId)
         : undefined;
@@ -326,9 +386,19 @@ const gradeTierMatchPositions = async ({
         verdict === undefined ? UNGRADED_VERDICT : toGradedVerdict(verdict),
       );
     }
-    await emit(batch);
+    await emit(batch.map(({ position }) => position));
   }
 };
+
+/**
+ * What the reference grader settled for one position. `ungraded` is a failed
+ * call, a position the model left out, or one never reached: none of them says
+ * anything about the document, so none may read as a judgment of it.
+ */
+type ReferenceOutcome =
+  { status: "graded"; grading: ReferenceGrading } | { status: "ungraded" };
+
+const REFERENCE_UNGRADED: ReferenceOutcome = { status: "ungraded" };
 
 /** A reference-standard position, paired with the position it came from so a
  *  finished batch can be projected into findings without a second lookup. */
@@ -432,25 +502,21 @@ const gradeReferenceStandards = async ({
   perspective: ReviewPerspective;
   referenceEntityVersionIds: readonly SafeId<"entityVersion">[];
   deps: AiGradingDeps;
-  gradings: Map<string, ReferenceGrading>;
+  gradings: Map<string, ReferenceOutcome>;
   emit: (batch: readonly Position[]) => Promise<void>;
 }): Promise<void> => {
   const gradeReferencePositionsForReview =
     deps.gradeReferencePositions ?? gradeReferencePositions;
-  const batches: ReferencePair[][] = [];
-  for (
-    let cursor = 0;
-    cursor < pairs.length;
-    cursor += REFERENCE_GRADE_BATCH_SIZE
-  ) {
-    batches.push(pairs.slice(cursor, cursor + REFERENCE_GRADE_BATCH_SIZE));
-  }
+  const batches = chunkItems(pairs, REFERENCE_GRADE_BATCH_SIZE);
 
   await runBatchesWithConcurrency({
     batches,
     concurrency: REFERENCE_GRADE_CONCURRENCY,
     abortSignal: deps.abortSignal,
     onBatch: async (batch) => {
+      if (deps.authorizeModelDispatch !== undefined) {
+        await deps.authorizeModelDispatch();
+      }
       const outcome = await gradeReferencePositionsForReview({
         positions: batch.map((pair) => pair.reference),
         target,
@@ -459,6 +525,7 @@ const gradeReferenceStandards = async ({
         targetEntityVersionId: deps.entityVersionId,
         referenceEntityVersionIds,
         organizationId: deps.organizationId,
+        admission: deps.admission,
         workspaceId: deps.workspaceId,
         orgAIConfig: deps.orgAIConfig,
         managedAIResidency: deps.managedAIResidency,
@@ -473,7 +540,9 @@ const gradeReferenceStandards = async ({
           : undefined;
         gradings.set(
           reference.sourceId,
-          grading ?? ungradedReferenceGrading(reference),
+          grading === undefined
+            ? REFERENCE_UNGRADED
+            : { status: "graded", grading },
         );
       }
       // Findings still land in the caller's `positions` order: `emit` only
@@ -563,20 +632,71 @@ const referenceFinding = (
   fix: grading.fix,
 });
 
+/**
+ * A reference position a person has to look at: its grading failed, or it
+ * reads as missing from a document that was only partly read. Flagged the way
+ * an ungraded tier match is, with the standard's own passages still attached,
+ * rather than projected as a judgment the grader never made.
+ */
+const flaggedReferenceFinding = (
+  position: Position,
+  reference: ReferenceStandardPosition,
+  rationale: string,
+): ReviewFinding => ({
+  positionId: position.sourceId,
+  issue: position.issue,
+  severity: findingSeverity(position),
+  standardSource: "reference",
+  verdict: "deviation",
+  delta: LANGUAGE_DELTA,
+  extracted: null,
+  rationale,
+  citations: [],
+  referenceCitations: referencePassageCitations(reference.passages),
+  fix: null,
+});
+
+const projectReferenceFinding = ({
+  pair: { position, reference },
+  outcome,
+  documentRead,
+}: {
+  pair: ReferencePair;
+  outcome: ReferenceOutcome;
+  documentRead: "whole" | "cut";
+}): ReviewFinding => {
+  switch (outcome.status) {
+    case "ungraded":
+      return flaggedReferenceFinding(position, reference, UNGRADED_RATIONALE);
+    case "graded":
+      // The grader saw the target with text withheld, so a term it could not
+      // find may sit in the part it never read.
+      return documentRead === "cut" && outcome.grading.verdict === "missing"
+        ? flaggedReferenceFinding(position, reference, CUT_DOCUMENT_RATIONALE)
+        : referenceFinding(position, outcome.grading);
+    default:
+      outcome satisfies never;
+      return panic(`Unhandled reference outcome: ${String(outcome)}`);
+  }
+};
+
 export const buildFindings = async ({
   positions,
-  contentBySourceId,
+  askOutcomes,
   tiersBySourceId,
   target,
   perspective,
   referenceEntityVersionIds,
   passageTextById,
+  documentRead,
   onGraded,
   ...deps
 }: BuildFindingsArgs): Promise<ReviewFinding[]> => {
   const fieldContentBySourceId = new Map<string, FieldContent>();
-  for (const [sourceId, extraction] of contentBySourceId) {
-    fieldContentBySourceId.set(sourceId, extraction.content);
+  for (const [sourceId, outcome] of askOutcomes) {
+    if (outcome.type === "answered") {
+      fieldContentBySourceId.set(sourceId, outcome.content);
+    }
   }
 
   // Split on where the standard came from, then decide everything that needs
@@ -584,20 +704,28 @@ export const buildFindings = async ({
   // `positions` order.
   const referencePairs: ReferencePair[] = [];
   const decided = new Map<string, GradingOutcome>();
-  const forModel: Position[] = [];
+  const forModel: ModelGradingItem[] = [];
   for (const position of positions) {
     const pair = referencePair(position, passageTextById);
     if (pair !== null) {
       referencePairs.push(pair);
       continue;
     }
+    const ask = askStandingOf(askOutcomes, position.sourceId);
     const verdict = gradeWithoutModel({
       position,
-      askContent: contentBySourceId.get(position.sourceId)?.content,
+      ask,
       fieldContentBySourceId,
+      documentRead,
     });
-    if (verdict === null) {
-      forModel.push(position);
+    if (verdict.status === "to-model") {
+      forModel.push({
+        position,
+        askValue: verdict.askValue,
+        passages: arrayOrEmpty(answeredExtraction(ask)?.citations).flatMap(
+          (citation) => (citation.kind === "docx-folio" ? [citation.text] : []),
+        ),
+      });
     } else {
       decided.set(position.sourceId, verdict);
     }
@@ -607,18 +735,19 @@ export const buildFindings = async ({
   // call time — which is what lets a completed batch be handed over before the
   // pass is finished.
   const modelVerdicts = new Map<string, GradingOutcome>();
-  const referenceGradings = new Map<string, ReferenceGrading>();
+  const referenceGradings = new Map<string, ReferenceOutcome>();
   const targetLanguage = resolveReviewTargetLanguage(target);
   const project = (position: Position): ReviewFinding =>
     projectFinding({
       position,
       passageTextById,
-      contentBySourceId,
+      askOutcomes,
       tiersBySourceId,
       decided,
       modelVerdicts,
       referenceGradings,
       targetLanguage,
+      documentRead,
     });
   const emit = async (batch: readonly Position[]): Promise<void> => {
     await onGraded(batch.map(project));
@@ -626,8 +755,7 @@ export const buildFindings = async ({
 
   await Promise.all([
     gradeTierMatchPositions({
-      positions: forModel,
-      contentBySourceId,
+      items: forModel,
       tiersBySourceId,
       deps,
       verdicts: modelVerdicts,
@@ -651,12 +779,13 @@ export const buildFindings = async ({
 type ProjectFindingArgs = {
   position: Position;
   passageTextById: ReadonlyMap<string, string>;
-  contentBySourceId: ReadonlyMap<string, AskExtraction>;
+  askOutcomes: ReadonlyMap<string, AskOutcome>;
   tiersBySourceId: ReadonlyMap<string, ResolvedTiers>;
   decided: ReadonlyMap<string, GradingOutcome>;
   modelVerdicts: ReadonlyMap<string, GradingOutcome>;
-  referenceGradings: ReadonlyMap<string, ReferenceGrading>;
+  referenceGradings: ReadonlyMap<string, ReferenceOutcome>;
   targetLanguage: ReviewTargetLanguage;
+  documentRead: "whole" | "cut";
 };
 
 /** One position plus whatever has been decided about it, as the single
@@ -665,26 +794,29 @@ type ProjectFindingArgs = {
 const projectFinding = ({
   position,
   passageTextById,
-  contentBySourceId,
+  askOutcomes,
   tiersBySourceId,
   decided,
   modelVerdicts,
   referenceGradings,
   targetLanguage,
+  documentRead,
 }: ProjectFindingArgs): ReviewFinding => {
   const pair = referencePair(position, passageTextById);
   if (pair !== null) {
-    // A reference position the grader never reached keeps the flagged-for-a-
-    // human answer rather than falling through to the tier path, which would
-    // read its silence as a wording deviation.
-    return referenceFinding(
-      position,
-      referenceGradings.get(position.sourceId) ??
-        ungradedReferenceGrading(pair.reference),
-    );
+    // A reference position the grader never reached is flagged for a person
+    // rather than falling through to the tier path, which would read its
+    // silence as a wording deviation.
+    return projectReferenceFinding({
+      pair,
+      outcome: referenceGradings.get(position.sourceId) ?? REFERENCE_UNGRADED,
+      documentRead,
+    });
   }
 
-  const extraction = contentBySourceId.get(position.sourceId);
+  const extraction = answeredExtraction(
+    askStandingOf(askOutcomes, position.sourceId),
+  );
   const askContent = extraction?.content;
   const tiers = tiersBySourceId.get(position.sourceId);
   // Persisted findings keep the folio-only citation shape used by the
@@ -714,10 +846,20 @@ const projectFinding = ({
     // difference it finds is a language one; the structured kinds come from
     // a reference comparison, which reads both sides' text.
     delta: LANGUAGE_DELTA,
-    extracted: extractedFromContent(askContent),
+    extracted:
+      answerShapeForPosition(position) === "clause-summary"
+        ? extractedFromCitedClause(
+            askContent,
+            citations.map(({ text }) => text),
+          )
+        : extractedFromContent(askContent),
     rationale,
     ...(matchedRef === undefined ? {} : { matchedRef }),
     citations,
     fix,
   };
 };
+
+/** The files-table run flags a position it could not grade with the same
+ *  verdict and reason the worker gives one. */
+export { UNGRADED_VERDICT };

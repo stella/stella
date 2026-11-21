@@ -4,22 +4,26 @@ import {
   NoSuchKey,
   type S3Client,
 } from "@aws-sdk/client-s3";
-import { Result, TaggedError, panic } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 import { Readable } from "node:stream";
 import * as v from "valibot";
 
+import { apiDateTimeSchema } from "@stll/api-contract/api-date";
+import { declareFingerprintFields } from "@stll/errors";
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
+
 import type { AttachmentScanVerdict } from "@/api/lib/email/inbound/acceptance";
 import {
-  MailAuthenticationError,
-  mailboxDomain,
   type MailAuthentication,
+  MailAuthenticationError,
   type MailAuthResult,
+  mailboxDomain,
   type MailVerifier,
 } from "@/api/lib/email/inbound/authentication";
 import {
+  type InboundDeliveryStore,
   ingestInboundMail,
   recordOversizedInboundMail,
-  type InboundDeliveryStore,
 } from "@/api/lib/email/inbound/ingest";
 import { INBOUND_MAIL_LIMITS } from "@/api/lib/email/inbound/limits";
 import { parseOneMailbox } from "@/api/lib/email/inbound/message";
@@ -36,7 +40,7 @@ const sesDeliverySchema = v.object({
   mail: v.object({
     messageId: v.pipe(v.string(), v.regex(/^[a-zA-Z0-9-]{1,256}$/u)),
     source: boundedString,
-    timestamp: v.pipe(v.string(), v.isoTimestamp()),
+    timestamp: apiDateTimeSchema,
     commonHeaders: v.optional(
       v.object({
         from: v.optional(v.pipe(v.array(boundedString), v.maxLength(2))),
@@ -71,7 +75,7 @@ const AUTH_RESULT = {
 const SCAN_RESULT = {
   PASS: "pass",
   FAIL: "fail",
-  GRAY: "unavailable",
+  GRAY: "inconclusive",
   PROCESSING_FAILED: "unavailable",
 } as const satisfies Record<SesStatus, AttachmentScanVerdict>;
 
@@ -84,7 +88,11 @@ export class SesInboundError extends TaggedError("SesInboundError")<{
     | "object-unavailable"
     | "object-missing"
     | "object-delete-failed";
-}> {}
+}> {
+  static {
+    declareFingerprintFields(this, ["reason"]);
+  }
+}
 
 type ReadSesObjectOptions = { key: string; signal: AbortSignal };
 type SesObjectReader = (
@@ -237,9 +245,9 @@ export const readSesInboundDelivery = async ({
       ...metadata,
       // The bounded reader cannot hash the complete object. Provider identity
       // stays stable across retries without retaining object keys in drop logs.
-      deliveryKey: new Bun.CryptoHasher("sha256")
-        .update(JSON.stringify(["ses", bucket, receipt.action.objectKey]))
-        .digest("hex"),
+      deliveryKey: hashSha256Hex(
+        JSON.stringify(["ses", bucket, receipt.action.objectKey]),
+      ),
     });
   const read = await Result.tryPromise({
     try: async () =>

@@ -42,12 +42,13 @@ import { eslintCompatPlugin } from "@oxlint/plugins";
 
 import ledger from "../scripts/fill-diagnostics-ledger.json" with { type: "json" };
 import {
+  type BudgetTracker,
   createBudgetLedger,
   enclosingScopeName,
   FUNCTION_TYPES,
-  type BudgetTracker,
 } from "./budget-ledger.ts";
 import {
+  type AstNode,
   filenameForContext,
   getImportedName,
   getPropertyName,
@@ -56,7 +57,6 @@ import {
   memberPropertyName,
   TRANSPARENT_WRAPPERS,
   unwrapExpression,
-  type AstNode,
 } from "./utils.ts";
 
 const LEDGER_PATH = "scripts/fill-diagnostics-ledger.json";

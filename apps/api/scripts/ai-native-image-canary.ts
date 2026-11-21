@@ -19,9 +19,11 @@ import { parseArgs } from "node:util";
 import * as v from "valibot";
 
 import { isBYOKModelRoleSupported } from "@stll/ai-catalog";
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
+import { NO_ORGANIZATION_MODEL_DISPATCH } from "@/api/lib/rate-limit/model-dispatch-admission";
 import {
-  generateTanStackObjectForRole,
+  generateTanStackObjectForTask,
   resolveTanStackTextModel,
 } from "@/api/lib/tanstack-ai-generate";
 
@@ -33,7 +35,7 @@ import {
 } from "./ai-provider-canary";
 import {
   CANARY_PROVIDERS,
-  modelRoleMaxOutputTokens,
+  modelTaskMaxOutputTokens,
 } from "./ai-provider-canary-config";
 import type { CanaryProvider } from "./ai-provider-canary-config";
 
@@ -162,7 +164,7 @@ const nativeImageMessages = (
         type: "image",
         source: {
           type: "data",
-          value: Buffer.from(bytes).toString("base64"),
+          value: Buffer.from(bytes).toBase64(),
           mimeType,
         },
       },
@@ -198,26 +200,30 @@ export const probeNativeImage = async ({
     rotatedModelId: modelId,
   });
   const model = await resolveTanStackTextModel({
+    userId: null,
     dataClass: "public_corpus",
-    role: "chat",
+    task: "chat",
     orgAIConfig,
     organizationId: null,
+    admission: NO_ORGANIZATION_MODEL_DISPATCH,
   });
   if (model.provider !== provider || model.modelId !== modelId) {
     throw new NativeImageCanaryError({
       message: "Native image probe resolved a different model",
     });
   }
-  const output = await generateTanStackObjectForRole({
+  const output = await generateTanStackObjectForTask({
+    userId: null,
     dataClass: "public_corpus",
-    role: "chat",
+    task: "chat",
     orgAIConfig,
     organizationId: null,
+    admission: NO_ORGANIZATION_MODEL_DISPATCH,
     tenantWorkspaceIds: [],
     serviceTier: "standard",
     caching: { enabled: false, reason: "org-disabled" },
     abortSignal: signal,
-    maxOutputTokens: modelRoleMaxOutputTokens({ modelId, role: "chat" }),
+    maxOutputTokens: modelTaskMaxOutputTokens({ modelId, task: "chat" }),
     messages: nativeImageMessages(bytes, mimeType),
     outputSchema: v.strictObject({ token: v.string() }),
   });
@@ -252,9 +258,7 @@ export const runNativeImageProbes = async ({
   now = Date.now,
 }: RunNativeImageProbesOptions): Promise<NativeImageProbeRecord[]> => {
   const records: NativeImageProbeRecord[] = [];
-  const fixtureSha256 = new Bun.CryptoHasher("sha256")
-    .update(bytes)
-    .digest("hex");
+  const fixtureSha256 = hashSha256Hex(bytes);
   const deadline = now() + SWEEP_TIMEOUT_MS;
   for (const modelId of modelIds) {
     for (const mimeType of MIME_TYPES) {
@@ -302,6 +306,11 @@ export const runNativeImageProbes = async ({
   return records;
 };
 
+export const nativeImageSourceRevision = (
+  revision: string,
+  sourceBytes: Uint8Array,
+) => `${revision.trim()}:${hashSha256Hex(sourceBytes)}`;
+
 const run = async () => {
   const { values } = parseArgs({
     args: Bun.argv.slice(2),
@@ -334,16 +343,17 @@ const run = async () => {
   ).json();
   const { version } = v.parse(v.object({ version: v.string() }), packageJson);
   const revision = await Bun.$`git rev-parse HEAD`.text();
-  const sourceHash = new Bun.CryptoHasher("sha256")
-    .update(await Bun.file(import.meta.path).bytes())
-    .digest("hex");
+  const sourceRevision = nativeImageSourceRevision(
+    revision,
+    await Bun.file(import.meta.path).bytes(),
+  );
   const records = await runNativeImageProbes({
     apiKey,
     provider,
     modelIds: values.model === undefined ? modelIds : [values.model],
     bytes: await Bun.file(FIXTURE).bytes(),
     adapterVersion: `${adapterPackage}@${version}`,
-    sourceRevision: `${revision.trim()}:${sourceHash}`,
+    sourceRevision,
   });
   const report = v.parse(nativeImageProbeReportSchema, {
     probeVersion: 1,

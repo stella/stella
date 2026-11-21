@@ -38,10 +38,10 @@
 import { EventType, maxIterations, toolDefinition } from "@tanstack/ai";
 import type { AnyServerTool, TokenUsage } from "@tanstack/ai";
 import { panic } from "better-result";
-import JSZip from "jszip";
 import { writeFile } from "node:fs/promises";
 import * as v from "valibot";
 
+import { ZipArchive } from "@stll/docx-core/zip";
 import { filtersFromFieldConfig, formatDate } from "@stll/template-conditions";
 
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -58,6 +58,7 @@ import { extractDocxDocument } from "@/api/lib/docx/extract-text";
 import type { FieldMeta, TemplateManifest } from "@/api/lib/docx/types";
 import { writeFieldFilters } from "@/api/lib/docx/write-field-filters";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
+import { NO_ORGANIZATION_MODEL_DISPATCH } from "@/api/lib/rate-limit/model-dispatch-admission";
 import {
   mergeGenerationOptions,
   systemPromptsPatch,
@@ -116,9 +117,9 @@ const P = (text: string): string =>
 // minimal OPC package `fillTemplateDocx` needs (document part, content
 // types, package relationship).
 const makeDocx = async (documentXml: string): Promise<Buffer> => {
-  const zip = new JSZip();
-  zip.file("word/document.xml", documentXml);
-  zip.file(
+  const zip = new ZipArchive();
+  zip.set("word/document.xml", documentXml);
+  zip.set(
     "[Content_Types].xml",
     [
       '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
@@ -128,7 +129,7 @@ const makeDocx = async (documentXml: string): Promise<Buffer> => {
       "</Types>",
     ].join(""),
   );
-  zip.file(
+  zip.set(
     "_rels/.rels",
     [
       '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
@@ -137,7 +138,7 @@ const makeDocx = async (documentXml: string): Promise<Buffer> => {
       "</Relationships>",
     ].join(""),
   );
-  const buf = await zip.generateAsync({ type: "nodebuffer" });
+  const buf = Buffer.from(await zip.generate({ compression: "store" }));
   return Buffer.from(buf);
 };
 
@@ -830,7 +831,7 @@ const runModelTurn = async ({
 }): Promise<{ turn: ModelTurn; trace: ToolTrace[]; fillCalls: FillCall[] }> => {
   const caching = resolveCaching({
     promptCachingEnabled: false,
-    role: "fast",
+    task: "short-text",
     scopeKey: null,
   });
   const organizationId = mintAuthProviderId<"organization">();
@@ -848,6 +849,7 @@ const runModelTurn = async ({
     timeoutMs: MODEL_REQUEST_TIMEOUT_MS,
     chat: (abortController) =>
       streamChatChunks({
+        threadId: Bun.randomUUIDv7(),
         abortController,
         adapter: model.adapter,
         messages: [{ role: "user", content: task.prompt }],
@@ -1112,12 +1114,14 @@ const resolveModels = async (
     modelIds.map(async (id) => ({
       id,
       model: await resolveTanStackTextModel({
+        userId: null,
         modelId: id,
         orgAIConfig: null,
         dataClass: "customer",
         managedAIResidency: "eu",
-        role: "fast",
+        task: "short-text",
         organizationId: null,
+        admission: NO_ORGANIZATION_MODEL_DISPATCH,
       }),
     })),
   );

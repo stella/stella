@@ -21,7 +21,8 @@
 // import, a star re-export, and a dynamic import, which reach every export; the
 // specifier's other exports stay open, so one package entry point can carry
 // an owned capability next to unrelated ones. A dynamic import counts as the
-// names it is destructured into (`const { a } = await import("m")`) or read
+// names it is destructured into (`const { a } = await import("m")`), including
+// corresponding slots of an awaited `Promise.all` literal without spreads, or read
 // through (`(await import("m")).a`); held in any other shape, the module
 // object reaches every export. A `global-member` row matches
 // the full member chain `<object>.<path...>` on the global, including the
@@ -30,27 +31,66 @@
 // to `navigator.clipboard.writeText`) is untouched. A `member-call` row matches
 // a call of the named method on any receiver, including the optional-chained
 // form, in files under one of its `within` prefixes; the method name alone is
-// too common to confine repository-wide. A value reached through an alias, a
-// re-export of a local binding, or a computed member access is out of scope.
+// too common to confine repository-wide. A `function-call` row matches a direct
+// call of the named identifier in its scoped paths, including optional calls
+// and value-preserving TypeScript wrappers. This kind compares identifier names,
+// not bindings: renaming the function or its callback binding is unrecognized.
+// A `literal-pattern` row matches its
+// regular expression against cooked string and template text; constructing
+// the value across separate expressions is outside this syntax boundary.
+// A `table-column-read` row follows canonical table imports, namespace and
+// stable local aliases, and Drizzle aliases. It confines column access,
+// destructuring, column-map extraction, and implicit full-row selections.
+// Relational reads must explicitly select other columns or exclude the owned
+// columns. Dynamic keys and opaque relational projections count conservatively.
+// Cross-module local re-exports, mutable aliases and custom query wrappers are
+// outside this syntax boundary.
+// A `table-column-write` row resolves the table the same way and matches an
+// `.update(T).set(...)`, an `.insert(T).values(...)` and an insert's
+// `.onConflictDoUpdate({ set })` whose payload names an owned column, as a
+// key, a shorthand, or inside a spread or local that resolves to an object
+// literal. A builder or conflict option held in a stable local is followed;
+// a payload mutated after it is initialised, or built elsewhere and passed in
+// opaquely, is not.
 
-import { eslintCompatPlugin } from "@oxlint/plugins";
+import { type Context, eslintCompatPlugin } from "@oxlint/plugins";
 
-import type { AstNode } from "./utils.ts";
 import {
+  type AstNode,
   canonicalModuleId,
+  type FilenameContext,
   filenameForContext,
   getImportedName,
   getPropertyName,
   isAstNode,
   isIdentifier,
+  isIdentifierReference,
   isMemberAccess,
   isStringLiteral,
   memberPropertyName,
   repoRelativeFilename,
+  resolveImport,
+  resolveImportedExpressionForEnforcement,
+  resolveVariable,
+  type ScopeContext,
+  stableInitializer,
+  staticStringValue,
   TRANSPARENT_WRAPPERS,
+  unwrapExpression,
 } from "./utils.ts";
 
 const GLOBAL_ROOTS = ["window", "globalThis", "self"] as const;
+const TABLE_SELECTION_METHODS = new Set([
+  "from",
+  "innerJoin",
+  "leftJoin",
+  "rightJoin",
+  "fullJoin",
+  "innerJoinLateral",
+  "leftJoinLateral",
+  "crossJoin",
+  "crossJoinLateral",
+]);
 
 type ImportEntry = {
   id: string;
@@ -79,6 +119,32 @@ type MemberCallEntry = {
   within: readonly string[];
 };
 
+type FunctionCallEntry = {
+  id: string;
+  owner: string;
+  paths: readonly string[];
+  name: string;
+  within: readonly string[];
+};
+
+type LiteralPatternEntry = {
+  id: string;
+  owner: string;
+  paths: readonly string[];
+  pattern: RegExp;
+};
+
+type TableColumnReadEntry = {
+  id: string;
+  owner: string;
+  paths: readonly string[];
+  modules: readonly string[];
+  table: string;
+  columns: readonly string[];
+};
+
+type TableColumnWriteEntry = TableColumnReadEntry;
+
 const stringsFrom = (value: unknown): readonly string[] =>
   Array.isArray(value)
     ? value.filter((item): item is string => typeof item === "string")
@@ -103,6 +169,10 @@ type ConfiguredEntries = {
   importEntries: ImportEntry[];
   globalMemberEntries: GlobalMemberEntry[];
   memberCallEntries: MemberCallEntry[];
+  functionCallEntries: FunctionCallEntry[];
+  literalPatternEntries: LiteralPatternEntry[];
+  tableColumnReadEntries: TableColumnReadEntry[];
+  tableColumnWriteEntries: TableColumnWriteEntry[];
 };
 
 const configuredEntries = (context: {
@@ -111,7 +181,19 @@ const configuredEntries = (context: {
   const importEntries: ImportEntry[] = [];
   const globalMemberEntries: GlobalMemberEntry[] = [];
   const memberCallEntries: MemberCallEntry[] = [];
-  const configured = { importEntries, globalMemberEntries, memberCallEntries };
+  const functionCallEntries: FunctionCallEntry[] = [];
+  const literalPatternEntries: LiteralPatternEntry[] = [];
+  const tableColumnReadEntries: TableColumnReadEntry[] = [];
+  const tableColumnWriteEntries: TableColumnWriteEntry[] = [];
+  const configured = {
+    importEntries,
+    globalMemberEntries,
+    memberCallEntries,
+    functionCallEntries,
+    literalPatternEntries,
+    tableColumnReadEntries,
+    tableColumnWriteEntries,
+  };
   const options = context.options?.[0];
   if (typeof options !== "object" || options === null) {
     return configured;
@@ -137,6 +219,42 @@ const configuredEntries = (context: {
     const owner = owners.join(", ");
     const paths = allowedPathsFrom(entry, enforcement);
     const kind = Reflect.get(enforcement, "kind");
+
+    if (kind === "table-column-read" || kind === "table-column-write") {
+      const table = Reflect.get(enforcement, "table");
+      const columns = stringsFrom(Reflect.get(enforcement, "columns"));
+      if (typeof table !== "string" || columns.length === 0) {
+        continue;
+      }
+      (kind === "table-column-read"
+        ? tableColumnReadEntries
+        : tableColumnWriteEntries
+      ).push({
+        id,
+        owner,
+        paths,
+        modules: stringsFrom(Reflect.get(enforcement, "specifiers")).map(
+          (specifier) => canonicalModuleId(specifier, owners.at(0) ?? ""),
+        ),
+        table,
+        columns,
+      });
+      continue;
+    }
+
+    if (kind === "literal-pattern") {
+      const pattern = Reflect.get(enforcement, "pattern");
+      if (typeof pattern !== "string") {
+        continue;
+      }
+      literalPatternEntries.push({
+        id,
+        owner,
+        paths,
+        pattern: new RegExp(pattern),
+      });
+      continue;
+    }
 
     if (kind === "import") {
       const names = Reflect.get(enforcement, "names");
@@ -176,6 +294,15 @@ const configuredEntries = (context: {
         continue;
       }
       memberCallEntries.push({ id, owner, paths, method, within });
+      continue;
+    }
+    if (kind === "function-call") {
+      const name = Reflect.get(enforcement, "name");
+      const within = stringsFrom(Reflect.get(enforcement, "within"));
+      if (typeof name !== "string" || within.length === 0) {
+        continue;
+      }
+      functionCallEntries.push({ id, owner, paths, name, within });
     }
   }
 
@@ -241,10 +368,65 @@ const bindsOwnedName = (
     return name !== null && names.includes(name);
   });
 
+type ParallelImportBindingOptions = {
+  array: AstNode;
+  imported: AstNode;
+  context: ScopeContext;
+};
+
+const parallelImportBinding = ({
+  array,
+  imported,
+  context,
+}: ParallelImportBindingOptions) => {
+  const call = array.parent;
+  if (
+    !Array.isArray(array.elements) ||
+    array.elements.some(
+      (element) => isAstNode(element) && element.type === "SpreadElement",
+    ) ||
+    !isAstNode(call) ||
+    call.type !== "CallExpression" ||
+    !isMemberAccess(call.callee, "Promise", "all") ||
+    !Array.isArray(call.arguments) ||
+    call.arguments.length !== 1 ||
+    call.arguments.at(0) !== array
+  ) {
+    return null;
+  }
+  if (!isAstNode(call.callee) || !isIdentifierReference(call.callee.object)) {
+    return null;
+  }
+  const promise = resolveVariable(context, call.callee.object);
+  if (promise !== null && promise.defs.length > 0) {
+    return null;
+  }
+  const awaited = call.parent;
+  if (!isAstNode(awaited) || awaited.type !== "AwaitExpression") {
+    return null;
+  }
+  const declaration = awaited.parent;
+  if (
+    !isAstNode(declaration) ||
+    declaration.type !== "VariableDeclarator" ||
+    declaration.init !== awaited ||
+    !isAstNode(declaration.id) ||
+    declaration.id.type !== "ArrayPattern" ||
+    !Array.isArray(declaration.id.elements)
+  ) {
+    return null;
+  }
+  const slot = array.elements.indexOf(imported);
+  return slot === -1 ? null : declaration.id.elements.at(slot);
+};
+
 // The export names a dynamic import is destructured into or read through, or
 // null when the module object is held in a shape that reaches every export
 // (bound whole, passed on, a rest element or a computed key).
-const dynamicImportNames = (node: unknown): readonly string[] | null => {
+const dynamicImportNames = (
+  node: unknown,
+  context: ScopeContext,
+): readonly string[] | null => {
   if (!isAstNode(node)) {
     return null;
   }
@@ -264,17 +446,21 @@ const dynamicImportNames = (node: unknown): readonly string[] | null => {
     const name = memberPropertyName(parent);
     return name === null ? null : [name];
   }
+  const binding =
+    parent.type === "ArrayExpression"
+      ? parallelImportBinding({ array: parent, imported: current, context })
+      : parent.type === "VariableDeclarator" && parent.init === current
+        ? parent.id
+        : null;
   if (
-    parent.type !== "VariableDeclarator" ||
-    parent.init !== current ||
-    !isAstNode(parent.id) ||
-    parent.id.type !== "ObjectPattern" ||
-    !Array.isArray(parent.id.properties)
+    !isAstNode(binding) ||
+    binding.type !== "ObjectPattern" ||
+    !Array.isArray(binding.properties)
   ) {
     return null;
   }
   const names: string[] = [];
-  for (const property of parent.id.properties) {
+  for (const property of binding.properties) {
     if (
       !isAstNode(property) ||
       property.type !== "Property" ||
@@ -328,6 +514,675 @@ const isOwnedMemberPath = (
   return isGlobalObject(current, object);
 };
 
+type TableReadOptions = {
+  context: ScopeContext & FilenameContext;
+  entry: TableColumnReadEntry;
+  value: unknown;
+  seen?: Set<unknown>;
+};
+
+const isOwnedTable = ({
+  context,
+  entry,
+  value,
+  seen = new Set<unknown>(),
+}: TableReadOptions): boolean => {
+  const node = unwrapExpression(value);
+  if (node === null || seen.has(node)) {
+    return false;
+  }
+  seen.add(node);
+  const imported = resolveImport(context, node);
+  if (
+    imported?.imported === entry.table &&
+    entry.modules.includes(imported.moduleId)
+  ) {
+    return true;
+  }
+  if (isIdentifierReference(node)) {
+    const variable = resolveVariable(context, node);
+    return (
+      variable !== null &&
+      isOwnedTable({
+        context,
+        entry,
+        value: stableInitializer(variable),
+        seen,
+      })
+    );
+  }
+  if (node.type !== "CallExpression" || !Array.isArray(node.arguments)) {
+    return false;
+  }
+  const callee = resolveImport(context, node.callee);
+  return (
+    callee?.imported === "alias" &&
+    isOwnedModule(["drizzle-orm"], callee.moduleId) &&
+    isOwnedTable({ context, entry, value: node.arguments.at(0), seen })
+  );
+};
+
+const stableValue = (
+  context: ScopeContext,
+  value: unknown,
+  seen = new Set<unknown>(),
+): AstNode | null => {
+  const node = unwrapExpression(value);
+  if (node === null || seen.has(node)) {
+    return null;
+  }
+  seen.add(node);
+  if (!isIdentifierReference(node)) {
+    return node;
+  }
+  const variable = resolveVariable(context, node);
+  return variable === null
+    ? null
+    : stableValue(context, stableInitializer(variable), seen);
+};
+
+type PropertyLookup =
+  { kind: "absent" } | { kind: "unknown" } | { kind: "value"; node: AstNode };
+
+// Absent and unknown stay distinct through nested spreads: an unresolved
+// spread may override what came before it, an absent property cannot.
+const lookupObjectProperty = (
+  context: ScopeContext,
+  node: unknown,
+  name: string,
+): PropertyLookup => {
+  if (
+    !isAstNode(node) ||
+    node.type !== "ObjectExpression" ||
+    !Array.isArray(node.properties)
+  ) {
+    return { kind: "unknown" };
+  }
+  let result: PropertyLookup = { kind: "absent" };
+  for (const property of node.properties) {
+    if (!isAstNode(property)) {
+      return { kind: "unknown" };
+    }
+    if (property.type === "SpreadElement") {
+      const spreadValue = stableValue(context, property.argument);
+      if (spreadValue === null) {
+        result = { kind: "unknown" };
+        continue;
+      }
+      const inherited = lookupObjectProperty(context, spreadValue, name);
+      if (inherited.kind !== "absent") {
+        result = inherited;
+      }
+      continue;
+    }
+    if (property.type !== "Property") {
+      return { kind: "unknown" };
+    }
+    const key = property.computed
+      ? staticStringValue(property.key)
+      : getPropertyName(property.key);
+    if (key === null) {
+      return { kind: "unknown" };
+    }
+    if (key === name) {
+      result = isAstNode(property.value)
+        ? { kind: "value", node: property.value }
+        : { kind: "unknown" };
+    }
+  }
+  return result;
+};
+
+const objectProperty = (
+  context: ScopeContext,
+  node: unknown,
+  name: string,
+): AstNode | null => {
+  const found = lookupObjectProperty(context, node, name);
+  return found.kind === "value" ? found.node : null;
+};
+
+const relationSelectsOwnedColumns = ({
+  context,
+  entry,
+  value,
+}: TableReadOptions): boolean => {
+  const options = stableValue(context, value);
+  const columns = stableValue(
+    context,
+    objectProperty(context, options, "columns"),
+  );
+  if (
+    columns?.type !== "ObjectExpression" ||
+    !Array.isArray(columns.properties)
+  ) {
+    return true;
+  }
+  const decisions = new Map<string, boolean>();
+  for (const property of columns.properties) {
+    if (!isAstNode(property) || property.type !== "Property") {
+      return true;
+    }
+    const key = property.computed
+      ? staticStringValue(property.key)
+      : getPropertyName(property.key);
+    const decision = stableValue(context, property.value);
+    if (
+      key === null ||
+      decision?.type !== "Literal" ||
+      typeof decision.value !== "boolean"
+    ) {
+      return true;
+    }
+    decisions.set(key, decision.value);
+  }
+  if (entry.columns.some((column) => decisions.get(column) === true)) {
+    return true;
+  }
+  return (
+    ![...decisions.values()].includes(true) &&
+    entry.columns.some((column) => decisions.get(column) !== false)
+  );
+};
+
+const isOwnedRelation = ({
+  context,
+  entry,
+  value,
+}: TableReadOptions): boolean => {
+  const node = stableValue(context, value);
+  if (
+    node?.type !== "MemberExpression" ||
+    memberPropertyName(node) !== entry.table
+  ) {
+    return false;
+  }
+  const query = unwrapExpression(node.object);
+  return (
+    query?.type === "MemberExpression" && memberPropertyName(query) === "query"
+  );
+};
+
+const nestedRelationSelectsOwnedColumns = ({
+  context,
+  entry,
+  value,
+  seen = new Set<unknown>(),
+}: TableReadOptions): boolean => {
+  const options = stableValue(context, value);
+  if (options === null || seen.has(options)) {
+    return false;
+  }
+  seen.add(options);
+  const relationsSelectOwnedColumns = (withValue: unknown): boolean => {
+    if (!isAstNode(withValue)) {
+      return false;
+    }
+    const relations = stableValue(context, withValue);
+    // A relation selection the rule cannot see may name the owned relation;
+    // an imported one is left to the census, which checks it where written.
+    if (
+      relations?.type !== "ObjectExpression" ||
+      !Array.isArray(relations.properties)
+    ) {
+      return !isImportedValue(context, withValue);
+    }
+    return relations.properties.some((property) => {
+      // A spread inside `with` is followed when it resolves; an unresolved
+      // one could carry the owned relation, so it fails closed.
+      if (isAstNode(property) && property.type === "SpreadElement") {
+        const spread = stableValue(context, property.argument);
+        if (spread?.type === "ObjectExpression") {
+          return relationsSelectOwnedColumns(spread);
+        }
+        return !isImportedValue(context, property.argument);
+      }
+      if (!isAstNode(property) || property.type !== "Property") {
+        return false;
+      }
+      const key = property.computed
+        ? staticStringValue(property.key)
+        : getPropertyName(property.key);
+      const selection = stableValue(context, property.value);
+      if (selection?.type === "Literal" && selection.value === false) {
+        return false;
+      }
+      // An unresolved relation name may be the owned one, so it is checked
+      // as the owned relation.
+      return key === null || key === entry.table
+        ? relationSelectsOwnedColumns({ context, entry, value: selection })
+        : nestedRelationSelectsOwnedColumns({
+            context,
+            entry,
+            value: selection,
+            seen,
+          });
+    });
+  };
+  // Every `with` that may take effect counts: an unresolved later spread does
+  // not prove an earlier owned selection was overridden.
+  const found = withCandidates(context, options);
+  return found.unknown || found.candidates.some(relationsSelectOwnedColumns);
+};
+
+// A value imported from another module cannot be resolved here; the matter
+// access census checks every relation selection where it is written. An
+// unresolved local (a parameter, a computed value) fails closed instead.
+const isImportedValue = (context: ScopeContext, value: unknown): boolean => {
+  let base = unwrapExpression(value);
+  while (base?.type === "MemberExpression") {
+    base = unwrapExpression(base.object);
+  }
+  return resolveImportedExpressionForEnforcement(context, base) !== null;
+};
+
+// An unresolved spread or computed key may set `with` to anything, so it is
+// unknown and the read fails closed.
+const withCandidates = (
+  context: ScopeContext,
+  options: unknown,
+  seen = new Set<unknown>(),
+): { candidates: AstNode[]; unknown: boolean } => {
+  if (
+    !isAstNode(options) ||
+    options.type !== "ObjectExpression" ||
+    !Array.isArray(options.properties) ||
+    seen.has(options)
+  ) {
+    return { candidates: [], unknown: false };
+  }
+  seen.add(options);
+  const candidates: AstNode[] = [];
+  let unknown = false;
+  for (const property of options.properties) {
+    if (!isAstNode(property)) {
+      unknown = true;
+      continue;
+    }
+    if (property.type === "SpreadElement") {
+      const spread = stableValue(context, property.argument);
+      if (spread?.type !== "ObjectExpression") {
+        unknown ||= !isImportedValue(context, property.argument);
+        continue;
+      }
+      const inherited = withCandidates(context, spread, seen);
+      candidates.push(...inherited.candidates);
+      unknown ||= inherited.unknown;
+      continue;
+    }
+    if (property.type !== "Property") {
+      unknown = true;
+      continue;
+    }
+    const key = property.computed
+      ? staticStringValue(property.key)
+      : getPropertyName(property.key);
+    if (key === null) {
+      unknown = true;
+    } else if (key === "with" && isAstNode(property.value)) {
+      candidates.push(property.value);
+    }
+  }
+  return { candidates, unknown };
+};
+
+const patternReadsOwnedColumns = (
+  pattern: unknown,
+  columns: readonly string[],
+): boolean => {
+  if (
+    !isAstNode(pattern) ||
+    pattern.type !== "ObjectPattern" ||
+    !Array.isArray(pattern.properties)
+  ) {
+    return false;
+  }
+  return pattern.properties.some((property) => {
+    if (!isAstNode(property) || property.type !== "Property") {
+      return true;
+    }
+    const key = property.computed
+      ? staticStringValue(property.key)
+      : getPropertyName(property.key);
+    return key === null || columns.includes(key);
+  });
+};
+
+// Find the originating select/insert/update in a fluent query chain.
+const chainCall = (
+  value: unknown,
+  methods: readonly string[],
+): AstNode | null => {
+  let node = unwrapExpression(value);
+  while (node?.type === "CallExpression") {
+    const callee = unwrapExpression(node.callee);
+    if (callee?.type !== "MemberExpression") {
+      return null;
+    }
+    const method = memberPropertyName(callee);
+    if (method !== null && methods.includes(method)) {
+      return node;
+    }
+    node = unwrapExpression(callee.object);
+  }
+  return null;
+};
+
+const isImplicitOwnedRead = ({
+  context,
+  entry,
+  value,
+}: TableReadOptions): boolean => {
+  const call = unwrapExpression(value);
+  if (call?.type !== "CallExpression" || !Array.isArray(call.arguments)) {
+    return false;
+  }
+  const callee = unwrapExpression(call.callee);
+  if (callee?.type !== "MemberExpression") {
+    return false;
+  }
+  const method = memberPropertyName(callee);
+  if (method === "findFirst" || method === "findMany") {
+    return (
+      (isOwnedRelation({ context, entry, value: callee.object }) &&
+        relationSelectsOwnedColumns({
+          context,
+          entry,
+          value: call.arguments.at(0),
+        })) ||
+      nestedRelationSelectsOwnedColumns({
+        context,
+        entry,
+        value: call.arguments.at(0),
+      })
+    );
+  }
+  if (
+    method !== null &&
+    TABLE_SELECTION_METHODS.has(method) &&
+    isOwnedTable({ context, entry, value: call.arguments.at(0) })
+  ) {
+    const select = chainCall(callee.object, [
+      "select",
+      "selectDistinct",
+      "selectDistinctOn",
+    ]);
+    if (select === null || !Array.isArray(select.arguments)) {
+      return false;
+    }
+    const selectionMethod = isAstNode(select.callee)
+      ? memberPropertyName(select.callee)
+      : null;
+    return (
+      select.arguments.at(selectionMethod === "selectDistinctOn" ? 1 : 0) ===
+      undefined
+    );
+  }
+  if (method !== "returning" || call.arguments.length !== 0) {
+    return false;
+  }
+  const mutation = chainCall(callee.object, ["insert", "update", "delete"]);
+  return (
+    mutation !== null &&
+    Array.isArray(mutation.arguments) &&
+    isOwnedTable({ context, entry, value: mutation.arguments.at(0) })
+  );
+};
+
+const isOwnedColumnRead = ({
+  context,
+  entry,
+  value,
+}: TableReadOptions): boolean => {
+  const node = unwrapExpression(value);
+  if (node === null) {
+    return false;
+  }
+  switch (node.type) {
+    case "CallExpression": {
+      if (!Array.isArray(node.arguments)) {
+        return false;
+      }
+      const callee = resolveImport(context, node.callee);
+      const extractsColumns =
+        callee?.imported === "getTableColumns" &&
+        isOwnedModule(["drizzle-orm"], callee.moduleId) &&
+        isOwnedTable({ context, entry, value: node.arguments.at(0) });
+      return (
+        extractsColumns || isImplicitOwnedRead({ context, entry, value: node })
+      );
+    }
+    case "MemberExpression": {
+      const property = memberPropertyName(node);
+      return (
+        (property === null || entry.columns.includes(property)) &&
+        isOwnedTable({ context, entry, value: node.object })
+      );
+    }
+    case "VariableDeclarator":
+      return (
+        patternReadsOwnedColumns(node.id, entry.columns) &&
+        isOwnedTable({ context, entry, value: node.init })
+      );
+    case "AssignmentExpression":
+      return (
+        patternReadsOwnedColumns(node.left, entry.columns) &&
+        isOwnedTable({ context, entry, value: node.right })
+      );
+    case "SpreadElement":
+      return isOwnedTable({ context, entry, value: node.argument });
+    default:
+      return false;
+  }
+};
+
+/** The receiver call of a chained method call, with the receiver's method name. A builder held in a stable local resolves to the call that made it. */
+const chainedReceiver = (
+  context: ScopeContext,
+  call: AstNode,
+): {
+  method: string | null;
+  receiver: AstNode;
+  receiverMethod: string | null;
+} | null => {
+  if (call.type !== "CallExpression" || !Array.isArray(call.arguments)) {
+    return null;
+  }
+  const callee = unwrapExpression(call.callee);
+  if (callee?.type !== "MemberExpression") {
+    return null;
+  }
+  const receiver = stableValue(context, callee.object);
+  if (
+    receiver?.type !== "CallExpression" ||
+    !Array.isArray(receiver.arguments)
+  ) {
+    return null;
+  }
+  const receiverCallee = unwrapExpression(receiver.callee);
+  return {
+    method: memberPropertyName(callee),
+    receiver,
+    receiverMethod:
+      receiverCallee?.type === "MemberExpression"
+        ? memberPropertyName(receiverCallee)
+        : null,
+  };
+};
+
+/** The values an object literal, resolved through stable locals and spreads, holds under `name`. */
+const objectPropertyValues = (
+  context: ScopeContext,
+  value: unknown,
+  name: string,
+  seen = new Set<unknown>(),
+): unknown[] => {
+  const node = stableValue(context, value);
+  if (
+    node?.type !== "ObjectExpression" ||
+    !Array.isArray(node.properties) ||
+    seen.has(node)
+  ) {
+    return [];
+  }
+  seen.add(node);
+  return node.properties.flatMap((property: unknown) => {
+    if (!isAstNode(property)) {
+      return [];
+    }
+    if (property.type === "SpreadElement") {
+      return objectPropertyValues(context, property.argument, name, seen);
+    }
+    if (property.type !== "Property") {
+      return [];
+    }
+    const key = property.computed
+      ? staticStringValue(property.key)
+      : getPropertyName(property.key);
+    return key === name ? [property.value] : [];
+  });
+};
+
+/** The `set` payloads of an insert's `.onConflictDoUpdate(...)`, with the insert's table argument. */
+const conflictSetTarget = (
+  context: ScopeContext,
+  call: AstNode,
+  values: AstNode,
+): { table: unknown; payload: unknown } | null => {
+  const insert = chainedReceiver(context, values);
+  if (
+    insert?.receiverMethod !== "insert" ||
+    !Array.isArray(insert.receiver.arguments) ||
+    call.type !== "CallExpression" ||
+    !Array.isArray(call.arguments)
+  ) {
+    return null;
+  }
+  const sets = objectPropertyValues(context, call.arguments.at(0), "set");
+  return sets.length === 0
+    ? null
+    : { table: insert.receiver.arguments.at(0), payload: sets };
+};
+
+/** The table argument and payload of an insert, update or conflict set. */
+const writeTarget = (
+  context: ScopeContext,
+  call: AstNode,
+): { table: unknown; payload: unknown } | null => {
+  const chain = chainedReceiver(context, call);
+  if (
+    chain === null ||
+    call.type !== "CallExpression" ||
+    !Array.isArray(call.arguments) ||
+    !Array.isArray(chain.receiver.arguments)
+  ) {
+    return null;
+  }
+  if (
+    (chain.method === "set" && chain.receiverMethod === "update") ||
+    (chain.method === "values" && chain.receiverMethod === "insert")
+  ) {
+    return {
+      table: chain.receiver.arguments.at(0),
+      payload: call.arguments.at(0),
+    };
+  }
+  return chain.method === "onConflictDoUpdate" &&
+    chain.receiverMethod === "values"
+    ? conflictSetTarget(context, call, chain.receiver)
+    : null;
+};
+
+/** Whether a write payload, as far as it resolves to literals, names one of `columns`. */
+const payloadNamesColumn = (
+  context: ScopeContext,
+  value: unknown,
+  columns: readonly string[],
+  seen = new Set<unknown>(),
+): boolean => {
+  if (Array.isArray(value)) {
+    return value.some((item: unknown) =>
+      payloadNamesColumn(context, item, columns, seen),
+    );
+  }
+  const node = stableValue(context, value);
+  if (node === null || seen.has(node)) {
+    return false;
+  }
+  seen.add(node);
+  if (node.type === "ArrayExpression" && Array.isArray(node.elements)) {
+    return node.elements.some((element: unknown) =>
+      payloadNamesColumn(
+        context,
+        isAstNode(element) && element.type === "SpreadElement"
+          ? element.argument
+          : element,
+        columns,
+        seen,
+      ),
+    );
+  }
+  if (node.type !== "ObjectExpression" || !Array.isArray(node.properties)) {
+    return false;
+  }
+  return node.properties.some((property: unknown) => {
+    if (!isAstNode(property)) {
+      return false;
+    }
+    if (property.type === "SpreadElement") {
+      return payloadNamesColumn(context, property.argument, columns, seen);
+    }
+    if (property.type !== "Property") {
+      return false;
+    }
+    const key = property.computed
+      ? staticStringValue(property.key)
+      : getPropertyName(property.key);
+    return key !== null && columns.includes(key);
+  });
+};
+
+/** Reports a write naming an owned column of an owned table. */
+const createColumnWriteReporter =
+  (context: Context, activeEntries: () => readonly TableColumnWriteEntry[]) =>
+  (node: NonNullable<Parameters<typeof context.report>[0]["node"]>) => {
+    const entries = activeEntries();
+    if (entries.length === 0) {
+      return;
+    }
+    const target = isAstNode(node) ? writeTarget(context, node) : null;
+    if (target === null) {
+      return;
+    }
+    for (const entry of entries) {
+      if (
+        isOwnedTable({ context, entry, value: target.table }) &&
+        payloadNamesColumn(context, target.payload, entry.columns)
+      ) {
+        context.report({
+          node,
+          messageId: "unownedUse",
+          data: { id: entry.id, owner: entry.owner },
+        });
+      }
+    }
+  };
+
+const createColumnReadReporter =
+  (context: Context, entries: () => readonly TableColumnReadEntry[]) =>
+  (node: NonNullable<Parameters<typeof context.report>[0]["node"]>) => {
+    for (const entry of entries()) {
+      if (!isOwnedColumnRead({ context, entry, value: node })) {
+        continue;
+      }
+      context.report({
+        node,
+        messageId: "unownedUse",
+        data: { id: entry.id, owner: entry.owner },
+      });
+    }
+  };
+
 export default eslintCompatPlugin({
   meta: { name: "confine-owner" },
   rules: {
@@ -336,7 +1191,7 @@ export default eslintCompatPlugin({
         type: "problem",
         messages: {
           unownedUse:
-            "`{{id}}` is owned by {{owner}}. Go through the owner, or add this file to that entry's `allowed` list with a reason in scripts/ownership.ts.",
+            "`{{id}}` is owned by {{owner}}. Go through the owner, or add this file to that entry's `allowed` list with a reason in scripts/ownership/<id>.ts.",
         },
         schema: [
           {
@@ -354,6 +1209,14 @@ export default eslintCompatPlugin({
         let activeGlobalMembers: readonly GlobalMemberEntry[] = [];
         let importerPath = "";
         let activeMemberCalls: readonly MemberCallEntry[] = [];
+        let activeFunctionCalls: readonly FunctionCallEntry[] = [];
+        let activeLiteralPatterns: readonly LiteralPatternEntry[] = [];
+        let activeTableColumnReads: readonly TableColumnReadEntry[] = [];
+        let activeTableColumnWrites: readonly TableColumnWriteEntry[] = [];
+        const reportOwnedColumnWrite = createColumnWriteReporter(
+          context,
+          () => activeTableColumnWrites,
+        );
 
         // `takesOwnedName` is `null` when the declaration reaches every
         // export (a star re-export, or a dynamic import held whole), which
@@ -386,13 +1249,43 @@ export default eslintCompatPlugin({
           }
         };
 
+        const reportOwnedLiteral = (
+          node: NonNullable<Parameters<typeof context.report>[0]["node"]>,
+          text: unknown,
+        ) => {
+          if (typeof text !== "string") {
+            return;
+          }
+          for (const entry of activeLiteralPatterns) {
+            if (entry.pattern.test(text)) {
+              context.report({
+                node,
+                messageId: "unownedUse",
+                data: { id: entry.id, owner: entry.owner },
+              });
+            }
+          }
+        };
+
+        const reportOwnedColumnRead = createColumnReadReporter(
+          context,
+          () => activeTableColumnReads,
+        );
+
         return {
           before() {
             const filename = filenameForContext(context);
             importerPath = repoRelativeFilename(context);
             configured ??= configuredEntries(context);
-            const { importEntries, globalMemberEntries, memberCallEntries } =
-              configured;
+            const {
+              importEntries,
+              globalMemberEntries,
+              memberCallEntries,
+              functionCallEntries,
+              literalPatternEntries,
+              tableColumnReadEntries,
+              tableColumnWriteEntries,
+            } = configured;
             const applies = (entry: { paths: readonly string[] }) =>
               !entry.paths.some((allowedPath) =>
                 coversFile(allowedPath, filename),
@@ -400,7 +1293,15 @@ export default eslintCompatPlugin({
 
             activeImports = importEntries.filter(applies);
             activeGlobalMembers = globalMemberEntries.filter(applies);
+            activeLiteralPatterns = literalPatternEntries.filter(applies);
+            activeTableColumnReads = tableColumnReadEntries.filter(applies);
+            activeTableColumnWrites = tableColumnWriteEntries.filter(applies);
             activeMemberCalls = memberCallEntries.filter(
+              (entry) =>
+                applies(entry) &&
+                entry.within.some((prefix) => coversFile(prefix, filename)),
+            );
+            activeFunctionCalls = functionCallEntries.filter(
               (entry) =>
                 applies(entry) &&
                 entry.within.some((prefix) => coversFile(prefix, filename)),
@@ -408,13 +1309,23 @@ export default eslintCompatPlugin({
             return (
               activeImports.length > 0 ||
               activeGlobalMembers.length > 0 ||
-              activeMemberCalls.length > 0
+              activeMemberCalls.length > 0 ||
+              activeFunctionCalls.length > 0 ||
+              activeLiteralPatterns.length > 0 ||
+              activeTableColumnReads.length > 0 ||
+              activeTableColumnWrites.length > 0
             );
           },
           ImportDeclaration(node) {
             reportOwnedBinding(node, node.source.value, (names) =>
               bindsOwnedName(node.specifiers, names),
             );
+          },
+          Literal(node) {
+            reportOwnedLiteral(node, node.value);
+          },
+          TemplateElement(node) {
+            reportOwnedLiteral(node, node.value.cooked ?? node.value.raw);
           },
           // `export { x } from "..."`; a re-export of a local binding has no
           // source and is out of scope.
@@ -437,7 +1348,7 @@ export default eslintCompatPlugin({
             if (!isAstNode(node.source) || !isStringLiteral(node.source)) {
               return;
             }
-            const taken = dynamicImportNames(node);
+            const taken = dynamicImportNames(node, context);
             reportOwnedBinding(
               node,
               node.source.value,
@@ -447,6 +1358,8 @@ export default eslintCompatPlugin({
             );
           },
           CallExpression(node) {
+            reportOwnedColumnRead(node);
+            reportOwnedColumnWrite(node);
             for (const entry of activeMemberCalls) {
               if (isMemberStep(node.callee, entry.method)) {
                 context.report({
@@ -456,8 +1369,19 @@ export default eslintCompatPlugin({
                 });
               }
             }
+            const callee = unwrapExpression(node.callee);
+            for (const entry of activeFunctionCalls) {
+              if (isIdentifier(callee, entry.name)) {
+                context.report({
+                  node,
+                  messageId: "unownedUse",
+                  data: { id: entry.id, owner: entry.owner },
+                });
+              }
+            }
           },
           MemberExpression(node) {
+            reportOwnedColumnRead(node);
             if (node.computed) {
               return;
             }
@@ -473,6 +1397,9 @@ export default eslintCompatPlugin({
               }
             }
           },
+          VariableDeclarator: reportOwnedColumnRead,
+          AssignmentExpression: reportOwnedColumnRead,
+          SpreadElement: reportOwnedColumnRead,
         };
       },
     },

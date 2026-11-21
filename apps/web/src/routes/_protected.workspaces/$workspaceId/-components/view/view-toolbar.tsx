@@ -3,26 +3,23 @@ import { Fragment, useState } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import type { PlaybookRunProjection } from "@stll/api-contract";
 import { fetchWithTimeout } from "@stll/fetch";
 import { Button } from "@stll/ui/button";
 import {
-  AlignJustifyIcon,
+  AiActionIcon,
   CalendarIcon,
   ClockIcon,
   DownloadIcon,
   HashIcon,
-  Loader2Icon,
   PlayIcon,
-  Rows3Icon,
   SparklesIcon,
   UserIcon,
-  AiActionIcon,
-  WrapTextIcon,
 } from "@stll/ui/icons";
+import { Loader } from "@stll/ui/loader";
 import {
   Menu,
   MenuGroup,
@@ -44,12 +41,15 @@ import {
 } from "@stll/ui/select";
 import { stellaToast } from "@stll/ui/toast";
 import { ViewToolbarChrome } from "@stll/ui/view-toolbar";
+import { PropertyIcon } from "@stll/workspace-ui/property-icon";
 
 import { CsvIcon, DocxIcon, XlsxIcon } from "@/components/document-icon";
 import { FolderExpandToggle } from "@/components/file-tree/folder-expand-toggle";
+import { QueryViewFeedback } from "@/components/query-view-feedback";
+import { AiColumnSelectionAction } from "@/components/workspaces/ai-column-run-controls";
 import { BulkAddColumns } from "@/components/workspaces/bulk-add-columns";
 import { getInternalPropertyId } from "@/components/workspaces/entity-utils";
-import { PropertyIcon } from "@/components/workspaces/property-helpers";
+import { useStartWorkflow } from "@/components/workspaces/hooks/use-start-workflow";
 import { RowActions } from "@/components/workspaces/row-actions";
 import { ColumnToggle } from "@/components/workspaces/table/column-toggle";
 import type { ColumnToggleGroup } from "@/components/workspaces/table/column-toggle";
@@ -58,7 +58,7 @@ import {
   KanbanGroupingSettings,
 } from "@/components/workspaces/view-grouping-controls";
 import { FilterChips } from "@/components/workspaces/view-toolbar-filters";
-import { useLocale } from "@/i18n/formatting-context";
+import { useFormattingLocale } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
@@ -75,6 +75,8 @@ import {
   PLAYBOOK_PICKER_LIMIT,
   playbooksOptions,
 } from "@/lib/knowledge/queries";
+import { CapabilityAction } from "@/lib/organization/feature-access/capability-actions";
+import { queryView } from "@/lib/query-view.logic";
 import { toSafeId } from "@/lib/safe-id";
 import type {
   ViewLayout,
@@ -84,6 +86,7 @@ import type {
 } from "@/lib/types";
 import { downloadFile } from "@/lib/utils";
 import { useUpdateView } from "@/lib/workspaces/mutations/views";
+import { usePropertyDisplayName } from "@/lib/workspaces/property-display-name";
 import {
   workspaceFilesOptions,
   workspaceFoldersOptions,
@@ -93,7 +96,6 @@ import {
   propertiesOptions,
 } from "@/lib/workspaces/queries/properties";
 import { useWorkspaceStore } from "@/lib/workspaces/store";
-import type { TableContentMode } from "@/lib/workspaces/table-store";
 import { useTableStore } from "@/lib/workspaces/table-store";
 import { isTableView, mergeLayout } from "@/lib/workspaces/view-layout";
 import { ExistingFileOrganizerDialog } from "@/routes/_protected.workspaces/$workspaceId/-components/existing-file-organizer-dialog";
@@ -102,6 +104,26 @@ import { ExportReportControl } from "@/routes/_protected.workspaces/$workspaceId
 import { admitsOnlyTaskKind } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-kind-filters";
 import { ViewToolbarSearch } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar-search";
 import { SortChips } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar-sorts";
+import {
+  ADDITIONAL_DATES_BUTTON,
+  ADDITIONAL_DATES_ICON_CLASS,
+  CALENDAR_MODE_LABEL_KEYS,
+  CALENDAR_SHOW_BY_LABEL_CLASS,
+  FILE_ORGANIZER_BUTTON,
+  FileOrganizerActionContent,
+  INTERNAL_DATE_OPTIONS,
+  ownDateLabelKey,
+  TABLE_CONTENT_MODE_OPTIONS,
+  TABLE_EXPORT_BUTTON,
+  TABLE_EXPORT_ICON_CLASS,
+  TASK_DATE_OPTIONS,
+  TIMELINE_DATE_LABEL_CLASS,
+  TIMELINE_ZOOM_LABEL_KEYS,
+  TOOLBAR_CHOICE_ROW_CLASS,
+  TOOLBAR_FIELD_ROW_CLASS,
+  toolbarChoiceButton,
+  ViewToolbarDivider,
+} from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar.pending";
 
 const protectedRouteApi = getRouteApi("/_protected");
 
@@ -117,7 +139,10 @@ export const ViewToolbar = ({
   view,
   workspaceId,
 }: ViewToolbarProps) => {
-  const { data: properties = [] } = useQuery(propertiesOptions(workspaceId));
+  const propertiesQuery = useQuery(propertiesOptions(workspaceId));
+  const propertiesView = queryView(propertiesQuery);
+  const properties =
+    propertiesView.type === "items" ? propertiesView.items : [];
   const updateView = useUpdateView(workspaceId);
   const { filters, sorts, hiddenProperties } = view.layout;
   const folderState = useWorkspaceStore((s) => s.folderState);
@@ -137,12 +162,18 @@ export const ViewToolbar = ({
     });
   };
   const columnToggleGroups = useMatterColumnToggleGroups(properties);
+  const aiProperties =
+    view.layout.type === "table"
+      ? properties.filter(
+          (property) =>
+            property.tool.type === "ai-model" &&
+            !hiddenProperties.includes(property.id),
+        )
+      : [];
 
   return (
-    <ViewToolbarChrome
-      className="md:ms-auto md:justify-end"
-      data-slot="workspace-view-toolbar"
-    >
+    <ViewToolbarChrome data-slot="workspace-view-toolbar">
+      <QueryViewFeedback view={propertiesView} />
       <ExtractionRunProgress workspaceId={workspaceId} />
 
       {view.layout.type === "filesystem" && folderState.hasFolders && (
@@ -151,7 +182,7 @@ export const ViewToolbar = ({
             allExpanded={folderState.allExpanded}
             onToggle={toggleAllFolders}
           />
-          <span className="bg-border mx-1 h-4 w-px" />
+          <ViewToolbarDivider />
         </>
       )}
 
@@ -185,7 +216,7 @@ export const ViewToolbar = ({
 
       {view.layout.type === "kanban" && (
         <>
-          <span className="bg-border mx-1 h-4 w-px" />
+          <ViewToolbarDivider />
           <KanbanGroupingSettings
             allowAssigneeGrouping={allowAssigneeGrouping}
             groupByPropertyId={view.layout.groupByPropertyId}
@@ -200,7 +231,7 @@ export const ViewToolbar = ({
 
       {view.layout.type === "calendar" && (
         <>
-          <span className="bg-border mx-1 h-4 w-px" />
+          <ViewToolbarDivider />
           <CalendarDatePropertyControl
             datePropertyId={view.layout.datePropertyId}
             endDatePropertyId={view.layout.endDatePropertyId}
@@ -228,7 +259,7 @@ export const ViewToolbar = ({
 
       {view.layout.type === "timeline" && (
         <>
-          <span className="bg-border mx-1 h-4 w-px" />
+          <ViewToolbarDivider />
           <TimelineDatePropertyControl
             endDatePropertyId={view.layout.endDatePropertyId}
             onChange={(startDatePropertyId, endDatePropertyId) =>
@@ -249,7 +280,7 @@ export const ViewToolbar = ({
 
       {view.layout.type === "filesystem" && (
         <>
-          <span className="bg-border mx-1 h-4 w-px" />
+          <ViewToolbarDivider />
           <FilesystemOrganizerAction workspaceId={workspaceId} />
         </>
       )}
@@ -261,7 +292,7 @@ export const ViewToolbar = ({
           of the table header. */}
       {view.layout.type === "table" && (
         <>
-          <span className="bg-border mx-1 h-4 w-px" />
+          <ViewToolbarDivider />
           <GroupByControl
             allowMultiSelectGrouping
             allowNone
@@ -288,6 +319,7 @@ export const ViewToolbar = ({
 
       {view.layout.type === "table" && (
         <SelectionActions
+          aiProperties={aiProperties}
           selectedEntities={selectedEntities}
           workspaceId={workspaceId}
         />
@@ -297,6 +329,7 @@ export const ViewToolbar = ({
 };
 
 type SelectionActionsProps = {
+  aiProperties: readonly WorkspaceProperty[];
   selectedEntities: WorkspaceEntity[] | undefined;
   workspaceId: string;
 };
@@ -307,14 +340,62 @@ type SelectionActionsProps = {
  * toolbar and the row context menu cannot drift apart.
  */
 const SelectionActions = ({
+  aiProperties,
   selectedEntities,
   workspaceId,
 }: SelectionActionsProps) => {
   const t = useTranslations();
+  const startWorkflow = useStartWorkflow(workspaceId);
+  const [isRunningAIColumns, setIsRunningAIColumns] = useState(false);
   const firstSelected = selectedEntities?.at(0);
   if (!firstSelected || selectedEntities === undefined) {
     return null;
   }
+  const selectedRunRows = selectedEntities.filter(
+    (entity) => entity.kind !== "folder" && !entity.readOnly,
+  );
+  const aiPropertyIds = aiProperties.map((property) => property.id);
+  const runSelectedAIColumns = async () => {
+    if (aiPropertyIds.length === 0 || selectedRunRows.length === 0) {
+      return;
+    }
+    setIsRunningAIColumns(true);
+    try {
+      const result = await startWorkflow({
+        entityIds: selectedRunRows.map((entity) => entity.entityId),
+        propertyIds: aiPropertyIds,
+      });
+      if (!result) {
+        return;
+      }
+      switch (result.status) {
+        case "started":
+          stellaToast.add({
+            title: t("workspaces.workflow.startedSuccessfully"),
+            type: "success",
+          });
+          return;
+        case "already-running":
+          stellaToast.add({ title: t("common.running"), type: "info" });
+          return;
+        case "skipped":
+          stellaToast.add({
+            title: t("workspaces.workflow.noFieldsToProcess"),
+            type: "info",
+          });
+          return;
+        case "ai-unavailable":
+        case "failed":
+          return;
+        default: {
+          result satisfies never;
+          panic("Unhandled workflow start status");
+        }
+      }
+    } finally {
+      setIsRunningAIColumns(false);
+    }
+  };
 
   return (
     <div className="relative ms-auto flex items-center gap-1.5">
@@ -329,10 +410,25 @@ const SelectionActions = ({
         className="bg-primary/12 animate-attention-flash-twice pointer-events-none absolute -inset-x-1.5 -inset-y-1 rounded-md opacity-0 motion-reduce:animate-none"
       />
       <span className="text-muted-foreground relative text-xs">
-        {t("workspaces.views.fieldsSelected", {
+        {t("common.selectedCount", {
           count: selectedEntities.length,
         })}
       </span>
+      {aiPropertyIds.length > 0 && (
+        <div className="flex flex-col items-start gap-0.5">
+          <AiColumnSelectionAction
+            columns={aiPropertyIds.length}
+            rows={selectedRunRows.length}
+            disabled={isRunningAIColumns || selectedRunRows.length === 0}
+            onRun={() =>
+              detached(
+                runSelectedAIColumns(),
+                "view-toolbar.run-selected-ai-columns",
+              )
+            }
+          />
+        </div>
+      )}
       <RowActions
         entity={firstSelected}
         selectedEntities={
@@ -351,23 +447,6 @@ type TableContentModeControlProps = {
   workspaceId: string;
   viewId: string;
 };
-
-const TABLE_CONTENT_MODE_OPTIONS = [
-  {
-    mode: "tight",
-    icon: AlignJustifyIcon,
-    labelKey: "workspaces.table.tightContent",
-  },
-  {
-    mode: "fit-content",
-    icon: WrapTextIcon,
-    labelKey: "workspaces.table.wrapContent",
-  },
-] as const satisfies readonly {
-  mode: TableContentMode;
-  icon: ComponentType<{ className?: string }>;
-  labelKey: TranslationKey;
-}[];
 
 const TableContentModeControl = ({
   workspaceId,
@@ -436,11 +515,10 @@ const ExportFormatIcon = ({ Icon, pending }: ExportFormatIconProps) => {
 
   if (pending) {
     return (
-      <Loader2Icon
-        aria-hidden={false}
-        aria-label={t("common.loading")}
-        className="text-muted-foreground size-4.5 animate-spin sm:size-4"
-        role="img"
+      <Loader
+        className="size-4.5 sm:size-4"
+        label={t("common.loading")}
+        size="sm"
       />
     );
   }
@@ -455,7 +533,7 @@ type TableExportMenuProps = {
 
 const TableExportMenu = ({ view, workspaceId }: TableExportMenuProps) => {
   const t = useTranslations();
-  const locale = useLocale();
+  const locale = useFormattingLocale();
   const analytics = useAnalytics();
   const [exportingFormat, setExportingFormat] =
     useState<TableExportFormat | null>(null);
@@ -494,7 +572,10 @@ const TableExportMenu = ({ view, workspaceId }: TableExportMenuProps) => {
     setExportingFormat(null);
 
     if (Result.isError(result)) {
-      analytics.captureError(result.error);
+      analytics.captureError(result.error, {
+        fingerprintKey: "TableExportMenu.handleExport:failure",
+        scope: { type: "handler", handlerId: `table-export.${format}` },
+      });
       notifyUserError(result.error, t("workspaces.views.exportFailed"));
       return;
     }
@@ -511,16 +592,17 @@ const TableExportMenu = ({ view, workspaceId }: TableExportMenuProps) => {
               aria-busy={exportingFormat !== null}
               aria-label={t("workspaces.views.exportTable")}
               disabled={exportingFormat !== null}
-              size="icon-xs"
+              disabledReason={t("common.preparing")}
+              size={TABLE_EXPORT_BUTTON.size}
               title={t("workspaces.views.exportTable")}
-              variant="ghost"
+              variant={TABLE_EXPORT_BUTTON.variant}
             />
           }
         >
           {exportingFormat === null ? (
-            <DownloadIcon className="size-3.5" />
+            <DownloadIcon className={TABLE_EXPORT_ICON_CLASS} />
           ) : (
-            <Loader2Icon className="size-3.5 animate-spin" />
+            <Loader className="size-3.5" size="sm" variant="decorative" />
           )}
         </MenuTrigger>
         <MenuPopup className="min-w-56">
@@ -621,14 +703,26 @@ const RunPlaybookControl = ({ workspaceId }: RunPlaybookControlProps) => {
       });
     };
     if (Result.isError(result)) {
-      analytics.captureError(result.error);
+      analytics.captureError(result.error, {
+        fingerprintKey: "RunPlaybookControl.requestRun:failure",
+        scope: {
+          type: "handler",
+          handlerId: "RunPlaybookControl.requestRun:failure",
+        },
+      });
       reportFailure(result.error, t("common.unexpectedError"));
       return null;
     }
 
     const response = result.value;
     if (response.error) {
-      analytics.captureError(toAPIError(response.error));
+      analytics.captureError(toAPIError(response.error), {
+        fingerprintKey: "RunPlaybookControl.requestRun:failure-2",
+        scope: {
+          type: "handler",
+          handlerId: "RunPlaybookControl.requestRun:failure-2",
+        },
+      });
       reportFailure(
         toAPIError(response.error),
         userErrorMessage(response.error, t("common.unexpectedError")),
@@ -701,35 +795,46 @@ const RunPlaybookControl = ({ workspaceId }: RunPlaybookControlProps) => {
 
   return (
     <Menu onOpenChange={setOpen} open={open}>
-      <MenuTrigger
-        render={
-          <Button
-            aria-label={t("workspaces.playbooks.run")}
-            disabled={isRunning}
-            size="icon-xs"
-            title={t("workspaces.playbooks.run")}
-            variant="ghost"
-          />
-        }
-      >
-        <PlayIcon className="size-3.5" />
-      </MenuTrigger>
+      <CapabilityAction action={{ capability: "ai" }} surface="control">
+        {(capabilityProps) => (
+          <MenuTrigger
+            render={
+              <Button
+                aria-label={t("workspaces.playbooks.run")}
+                disabled={isRunning}
+                disabledReason={t("common.running")}
+                size="icon-xs"
+                title={t("workspaces.playbooks.run")}
+                variant="ghost"
+              />
+            }
+            {...capabilityProps}
+          >
+            <PlayIcon className="size-3.5" />
+          </MenuTrigger>
+        )}
+      </CapabilityAction>
       <MenuPopup>
-        <MenuItem
-          closeOnClick={false}
-          disabled={isRunning}
-          onClick={() => {
-            detached(handleAutoRun(), "view-toolbar.auto-run");
-          }}
-        >
-          <AiActionIcon className="size-3.5" />
-          <span className="flex flex-col">
-            <span>{t("workspaces.playbooks.autoRun")}</span>
-            <span className="text-muted-foreground text-xs">
-              {t("workspaces.playbooks.autoRunHint")}
-            </span>
-          </span>
-        </MenuItem>
+        <CapabilityAction action={{ capability: "ai" }} surface="menu">
+          {(capabilityProps) => (
+            <MenuItem
+              closeOnClick={false}
+              disabled={isRunning}
+              onClick={() => {
+                detached(handleAutoRun(), "view-toolbar.auto-run");
+              }}
+              {...capabilityProps}
+            >
+              <AiActionIcon className="size-3.5" />
+              <span className="flex flex-col">
+                <span>{t("workspaces.playbooks.autoRun")}</span>
+                <span className="text-muted-foreground text-xs">
+                  {t("workspaces.playbooks.autoRunHint")}
+                </span>
+              </span>
+            </MenuItem>
+          )}
+        </CapabilityAction>
         <MenuSeparator />
         {/* Applies to the individual playbooks below; auto-run always
             materializes columns. */}
@@ -762,16 +867,24 @@ const RunPlaybookControl = ({ workspaceId }: RunPlaybookControlProps) => {
           <MenuItem disabled>{t("knowledge.playbooks.empty")}</MenuItem>
         )}
         {playbooks.map((playbook) => (
-          <MenuItem
-            closeOnClick={false}
-            disabled={isRunning}
+          <CapabilityAction
+            action={{ capability: "ai" }}
+            surface="menu"
             key={playbook.id}
-            onClick={() => {
-              detached(handleRun(playbook.id), "view-toolbar.run");
-            }}
           >
-            {playbook.name}
-          </MenuItem>
+            {(capabilityProps) => (
+              <MenuItem
+                closeOnClick={false}
+                disabled={isRunning}
+                onClick={() => {
+                  detached(handleRun(playbook.id), "view-toolbar.run");
+                }}
+                {...capabilityProps}
+              >
+                {playbook.name}
+              </MenuItem>
+            )}
+          </CapabilityAction>
         ))}
       </MenuPopup>
     </Menu>
@@ -793,9 +906,15 @@ const FilesystemOrganizerAction = ({
   // independent of the FilesystemView's current page. useQuery (not
   // useSuspenseQuery) keeps a cache miss from suspending the toolbar
   // chrome — the action button just stays disabled until the data resolves.
-  const { data: foldersData } = useQuery(workspaceFoldersOptions(workspaceId));
+  const foldersDataQuery = useQuery(workspaceFoldersOptions(workspaceId));
+  const foldersDataView = queryView(foldersDataQuery);
+  const foldersData =
+    foldersDataView.type === "items" ? foldersDataView.items : undefined;
   const allFolders = normalizeOptionalArray(foldersData);
-  const { data: filesData } = useQuery(workspaceFilesOptions(workspaceId));
+  const filesDataQuery = useQuery(workspaceFilesOptions(workspaceId));
+  const filesDataView = queryView(filesDataQuery);
+  const filesData =
+    filesDataView.type === "items" ? filesDataView.items : undefined;
   const allFiles = normalizeOptionalArray(filesData);
 
   const existingFolders = (() => {
@@ -845,8 +964,23 @@ const FilesystemOrganizerAction = ({
     mimeType: file.mimeType,
   }));
 
+  const resolveOrganizerDisabledReason = () => {
+    if (
+      foldersDataView.type === "pending" ||
+      filesDataView.type === "pending"
+    ) {
+      return t("common.loading");
+    }
+    if (foldersDataView.type === "error" || filesDataView.type === "error") {
+      return t("common.loadFailed");
+    }
+    return t("workspaces.importOrganizer.noFilesToOrganize");
+  };
+
   return (
     <>
+      <QueryViewFeedback view={foldersDataView} />
+      <QueryViewFeedback view={filesDataView} />
       <Button
         aria-label={
           selectedFiles.length > 0
@@ -855,9 +989,16 @@ const FilesystemOrganizerAction = ({
               })
             : t("workspaces.importOrganizer.action")
         }
-        disabled={organizerFiles.length === 0}
+        disabled={
+          organizerFiles.length === 0 ||
+          foldersDataView.type === "pending" ||
+          foldersDataView.type === "error" ||
+          filesDataView.type === "pending" ||
+          filesDataView.type === "error"
+        }
+        disabledReason={resolveOrganizerDisabledReason()}
         onClick={() => setOpen(true)}
-        size="xs"
+        size={FILE_ORGANIZER_BUTTON.size}
         title={
           selectedFiles.length > 0
             ? t("workspaces.importOrganizer.actionSelected", {
@@ -866,16 +1007,17 @@ const FilesystemOrganizerAction = ({
             : t("workspaces.importOrganizer.action")
         }
         type="button"
-        variant="outline"
+        variant={FILE_ORGANIZER_BUTTON.variant}
       >
-        <Rows3Icon />
-        <span className="hidden sm:inline">
-          {selectedFiles.length > 0
-            ? t("workspaces.importOrganizer.actionSelected", {
-                count: organizerFiles.length,
-              })
-            : t("workspaces.importOrganizer.action")}
-        </span>
+        <FileOrganizerActionContent
+          label={
+            selectedFiles.length > 0
+              ? t("workspaces.importOrganizer.actionSelected", {
+                  count: organizerFiles.length,
+                })
+              : t("workspaces.importOrganizer.action")
+          }
+        />
       </Button>
       <ExistingFileOrganizerDialog
         existingFolders={existingFolders}
@@ -922,12 +1064,13 @@ const useMatterColumnToggleGroups = (
   properties: WorkspaceProperty[],
 ): ColumnToggleGroup[] => {
   const t = useTranslations();
+  const displayName = usePropertyDisplayName();
   const propertyColumns = (tool: WorkspaceProperty["tool"]["type"]) =>
     properties
       .filter((property) => property.tool.type === tool)
       .map((property) => ({
         id: property.id,
-        name: property.name,
+        name: displayName(property),
         icon: <PropertyIcon type={property.content.type} />,
       }));
 
@@ -961,22 +1104,6 @@ const useMatterColumnToggleGroups = (
 
 // -- Calendar controls --
 
-const INTERNAL_DATE_OPTIONS = [
-  {
-    id: "_created-at",
-    labelKey: "workspaces.views.calendar.createdAt",
-  },
-  {
-    id: "_updated-at",
-    labelKey: "common.lastUpdated",
-  },
-] as const satisfies readonly { id: string; labelKey: TranslationKey }[];
-
-const TASK_DATE_OPTIONS = [
-  { id: "_due-date", labelKey: "tasks.dueDate" },
-  { id: "_start-date", labelKey: "workspaces.views.timeline.startDate" },
-] as const satisfies readonly { id: string; labelKey: TranslationKey }[];
-
 type ResolveDatePropertyLabelArgs = {
   dateProperties: WorkspaceProperty[];
   id: string;
@@ -996,13 +1123,9 @@ const resolveDatePropertyLabel = ({
   dateProperties,
   id,
 }: ResolveDatePropertyLabelArgs): DatePropertyLabel => {
-  const internal = INTERNAL_DATE_OPTIONS.find((o) => o.id === id);
-  if (internal) {
-    return { key: internal.labelKey, type: "translated" };
-  }
-  const taskDate = TASK_DATE_OPTIONS.find((o) => o.id === id);
-  if (taskDate) {
-    return { key: taskDate.labelKey, type: "translated" };
+  const ownKey = ownDateLabelKey(id);
+  if (ownKey !== null) {
+    return { key: ownKey, type: "translated" };
   }
   const propertyName = dateProperties.find((p) => p.id === id)?.name;
   if (propertyName) {
@@ -1036,8 +1159,8 @@ const CalendarDatePropertyControl = ({
       : resolvedDatePropertyLabel.value;
 
   return (
-    <span className="flex items-center gap-1 text-xs">
-      <span className="text-muted-foreground shrink-0">
+    <span className={TOOLBAR_FIELD_ROW_CLASS}>
+      <span className={CALENDAR_SHOW_BY_LABEL_CLASS}>
         {t("workspaces.views.calendar.showBy")}
       </span>
       <Select
@@ -1123,8 +1246,11 @@ const AdditionalDatesControl = ({
     <Menu>
       <MenuTrigger
         render={
-          <Button size="xs" variant="ghost">
-            <CalendarIcon className="me-1 size-3" />
+          <Button
+            size={ADDITIONAL_DATES_BUTTON.size}
+            variant={ADDITIONAL_DATES_BUTTON.variant}
+          >
+            <CalendarIcon className={ADDITIONAL_DATES_ICON_CLASS} />
             {count > 0
               ? t("workspaces.views.calendar.additionalDates", {
                   count: String(count),
@@ -1167,27 +1293,24 @@ type CalendarModeControlProps = {
 
 const CALENDAR_MODES = ["year", "month", "week"] as const;
 
-const calendarModeKeys = {
-  year: "workspaces.views.calendar.year",
-  month: "workspaces.views.calendar.month",
-  week: "workspaces.views.calendar.week",
-} as const satisfies Record<CalendarMode, TranslationKey>;
-
 const CalendarModeControl = ({ mode, onChange }: CalendarModeControlProps) => {
   const t = useTranslations();
 
   return (
-    <span className="flex items-center gap-0.5 text-xs">
-      {CALENDAR_MODES.map((m) => (
-        <Button
-          key={m}
-          onClick={() => onChange(m)}
-          size="xs"
-          variant={mode === m ? "secondary" : "ghost"}
-        >
-          {t(calendarModeKeys[m])}
-        </Button>
-      ))}
+    <span className={TOOLBAR_CHOICE_ROW_CLASS}>
+      {CALENDAR_MODES.map((m) => {
+        const button = toolbarChoiceButton(mode === m);
+        return (
+          <Button
+            key={m}
+            onClick={() => onChange(m)}
+            size={button.size}
+            variant={button.variant}
+          >
+            {t(CALENDAR_MODE_LABEL_KEYS[m])}
+          </Button>
+        );
+      })}
     </span>
   );
 };
@@ -1244,8 +1367,8 @@ const TimelineDatePropertyControl = ({
   );
 
   return (
-    <span className="flex items-center gap-1 text-xs">
-      <span className="text-muted-foreground">
+    <span className={TOOLBAR_FIELD_ROW_CLASS}>
+      <span className={TIMELINE_DATE_LABEL_CLASS}>
         {t("workspaces.views.timeline.startDate")}
       </span>
       <Select
@@ -1263,7 +1386,7 @@ const TimelineDatePropertyControl = ({
         </SelectTrigger>
         <SelectPopup>{dateOptions}</SelectPopup>
       </Select>
-      <span className="text-muted-foreground">
+      <span className={TIMELINE_DATE_LABEL_CLASS}>
         {t("workspaces.views.timeline.endDate")}
       </span>
       <Select
@@ -1292,30 +1415,24 @@ type TimelineZoomControlProps = {
 
 const ZOOM_OPTIONS = ["day", "week", "month", "quarter"] as const;
 
-type TimelineZoom = "day" | "week" | "month" | "quarter";
-
-const ZOOM_LABEL_KEYS = {
-  day: "workspaces.views.timeline.day",
-  week: "workspaces.views.timeline.week",
-  month: "workspaces.views.timeline.month",
-  quarter: "workspaces.views.timeline.quarter",
-} as const satisfies Record<TimelineZoom, TranslationKey>;
-
 const TimelineZoomControl = ({ zoom, onChange }: TimelineZoomControlProps) => {
   const t = useTranslations();
 
   return (
-    <span className="flex items-center gap-0.5 text-xs">
-      {ZOOM_OPTIONS.map((z) => (
-        <Button
-          key={z}
-          onClick={() => onChange(z)}
-          size="xs"
-          variant={zoom === z ? "secondary" : "ghost"}
-        >
-          {t(ZOOM_LABEL_KEYS[z])}
-        </Button>
-      ))}
+    <span className={TOOLBAR_CHOICE_ROW_CLASS}>
+      {ZOOM_OPTIONS.map((z) => {
+        const button = toolbarChoiceButton(zoom === z);
+        return (
+          <Button
+            key={z}
+            onClick={() => onChange(z)}
+            size={button.size}
+            variant={button.variant}
+          >
+            {t(TIMELINE_ZOOM_LABEL_KEYS[z])}
+          </Button>
+        );
+      })}
     </span>
   );
 };

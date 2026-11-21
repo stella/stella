@@ -1,9 +1,12 @@
 name: Nightly Full Typecheck
 
+defaults:
+  run:
+    shell: bash
+
+# Optional proofs run on demand only: pull requests, pushes and the merge queue
+# run the correctness gates in ci.yml.
 on:
-  schedule:
-    # 03:17 UTC daily (off-minute to avoid :00 stampede)
-    - cron: "17 3 * * *"
   workflow_dispatch:
     inputs:
       fresh-web:
@@ -16,8 +19,8 @@ permissions: {}
 jobs:
   full-typecheck:
     if: ${{ !inputs.fresh-web }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
     permissions:
       contents: read
 
@@ -28,19 +31,31 @@ jobs:
           persist-credentials: false
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: stella/.github/actions/setup-bun-cached@2664e46f02aea7164ba71bcdd485a686166993a4
         with:
+          save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: "package.json"
 
       - name: Install dependencies
-        run: bun ci --ignore-scripts
+        timeout-minutes: 5
+        run: bash scripts/retry.sh bun ci --ignore-scripts
         env:
           # .npmrc references NPM_TOKEN, but installs must not expose
           # the real npm token to dependency lifecycle scripts.
           NPM_TOKEN: ""
 
+      - name: Install the docs MCP server
+        # typecheck:repo checks .claude/mcp against the packages installed
+        # there, which are outside the root lockfile.
+        timeout-minutes: 5
+        run: bash scripts/retry.sh bun run setup:mcp
+        env:
+          NPM_TOKEN: ""
+
       - name: Full typecheck (no --affected, no turbo cache)
-        run: bun run typecheck && bun run typecheck:repo
+        # The API compiler and web contract generator each build the API graph.
+        # Keep their peak memory separate, as in the full release check.
+        run: bun run typecheck --concurrency=1 && bun run typecheck:repo
         env:
           TURBO_FORCE: "true"
 
@@ -48,7 +63,7 @@ jobs:
   # full typecheck's timeout.
   cumulative-type-cost:
     if: ${{ !inputs.fresh-web }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 25
     permissions:
       contents: read
@@ -61,12 +76,14 @@ jobs:
           submodules: true
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: stella/.github/actions/setup-bun-cached@2664e46f02aea7164ba71bcdd485a686166993a4
         with:
+          save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: "package.json"
 
       - name: Install dependencies
-        run: bun ci --ignore-scripts
+        timeout-minutes: 5
+        run: bash scripts/retry.sh bun ci --ignore-scripts
         env:
           NPM_TOKEN: ""
 
@@ -74,6 +91,7 @@ jobs:
         # This job calls the compiler directly rather than the Turbo
         # typecheck graph, so materialize its ignored API contract first.
         run: |
+          bun --cwd=packages/cli run codegen:runtime
           bun --filter @stll/api generate:capability-runtime
           bun run generate
           bun run typegen
@@ -82,8 +100,8 @@ jobs:
         run: bun scripts/typecheck-baseline.ts --check
 
   fresh-web-sources:
-    if: ${{ github.event_name == 'schedule' || inputs.fresh-web }}
-    runs-on: ubuntu-latest
+    if: ${{ inputs.fresh-web }}
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
     permissions:
       contents: read
@@ -93,10 +111,12 @@ jobs:
         with:
           persist-credentials: false
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: stella/.github/actions/setup-bun-cached@2664e46f02aea7164ba71bcdd485a686166993a4
         with:
+          save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: package.json
       - name: Prove fresh web consumers and generator guards
+        timeout-minutes: 40
         run: bash scripts/check-fresh-web-sources.sh
         env:
           NPM_TOKEN: ""

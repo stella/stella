@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
 
@@ -19,8 +19,11 @@ import {
 } from "@/api/db/schema";
 import { createSafeDb } from "@/api/db/scoped";
 import { envBase } from "@/api/env-base";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { generateVerificationCode } from "@/api/lib/document-reference";
+import { CALLER_AUTHORIZED } from "@/api/lib/entities/buffer-write-authority";
 import { writeFileVersion } from "@/api/lib/entity-versions/write-file-version";
 import { createFileKey } from "@/api/lib/file-key";
 import { serverBuiltFileEncryption } from "@/api/lib/files/detect-file-encryption";
@@ -28,16 +31,50 @@ import { allocateFileObject } from "@/api/lib/files/file-object-ids";
 import { LIMITS } from "@/api/lib/limits";
 import { cents } from "@/api/lib/money";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
+import { copyObject } from "@/api/lib/s3-presign";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
 import { createCopyToWorkspace } from "./copy";
+import type { copyFileObjects, FileMapping } from "./copy-utils";
+import { readVersionsHandler } from "./versions/list";
 
 const noAudit = async () => undefined;
+const copyFileObjectsForTest = async ({
+  copiedS3Keys,
+  organizationId,
+  sources,
+  targetWorkspaceId,
+}: Parameters<typeof copyFileObjects>[0]) => {
+  const mappings: FileMapping[] = [];
+  for (const source of sources) {
+    const newFileId = allocateFileObject();
+    const targetKey = createFileKey({
+      fileId: newFileId,
+      mimeType: source.mimeType,
+      organizationId,
+      workspaceId: targetWorkspaceId,
+    });
+    copiedS3Keys.push(targetKey);
+    const copied = await copyObject(source.sourceKey, targetKey);
+    if (Result.isError(copied)) {
+      return panic("Seeded source object copy failed", copied.error);
+    }
+    mappings.push({
+      ...source,
+      cleanupIntentIds: [],
+      newFileId,
+      targetKey,
+    });
+  }
+  return Result.ok(mappings);
+};
 const handler = createCopyToWorkspace({
+  copyFileObjects: copyFileObjectsForTest,
   enqueueDocumentProcessingRun: async () => undefined,
   enqueueEntitySearchRepairs: async () => undefined,
   enqueueImageThumbnailOrMarkFailed: async () => undefined,
@@ -57,7 +94,7 @@ beforeAll(
 );
 afterAll(async () => {
   if (orgIds.length) {
-    await db.delete(organization).where(inArray(organization.id, orgIds));
+    await deleteOrganizationsForTest(db, orgIds);
   }
   if (userIds.length) {
     await db.delete(user).where(inArray(user.id, userIds));
@@ -221,7 +258,8 @@ const seed = async (folder: boolean) => {
           deleteSource,
         },
         request: new Request("https://example.test/transfer"),
-        route: "/v1/workspaces/:workspaceId/entities/copy-to-workspace",
+        route:
+          "/v1/entities/:workspaceId/copy-to-workspace" satisfies ApiRoutePath,
         safeDb,
         recordAuditEvent: noAudit,
         createAuditRecorder: () => noAudit,
@@ -479,7 +517,7 @@ test.each(["desktop", "signing"] as const)(
   30_000,
 );
 
-test("move refuses a source beyond the live-version read limit without suggesting retry or copying objects", async () => {
+test("move refuses a source beyond the version read limit without suggesting retry or copying objects", async () => {
   const f = await seed(false);
   try {
     await db.insert(entityVersions).values(
@@ -575,6 +613,7 @@ test.each(cases)(
           const outcome = await f.safeDb(
             async (tx) =>
               await writeFileVersion({
+                authority: CALLER_AUTHORIZED,
                 tx,
                 organizationId: f.organizationId,
                 workspaceId: f.sourceWorkspaceId,
@@ -749,6 +788,141 @@ test("an unchanged folder move carries its whole history and removes source obje
         .map(({ bytes }) => new TextDecoder().decode(bytes))
         .toSorted(),
     ).toEqual(["history", "original"]);
+  } finally {
+    f.fake.stop();
+  }
+}, 30_000);
+
+/** Mark the seeded first version deleted, as the version delete handler does. */
+const tombstoneFirstVersion = async (f: Fixture) => {
+  const tombstone = {
+    deletedAt: new Date("2026-10-01T09:30:00.000Z"),
+    deletedBy: f.userId,
+    stamp: "SRC/1.v1",
+    verificationCode: generateVerificationCode(),
+  };
+  await db
+    .update(entityVersions)
+    .set(tombstone)
+    .where(eq(entityVersions.id, f.firstVersionId));
+  return tombstone;
+};
+
+const workspaceVersions = async (workspaceId: SafeId<"workspace">) =>
+  await db.query.entityVersions.findMany({
+    where: { workspaceId: { eq: workspaceId } },
+    orderBy: { versionNumber: "asc" },
+    with: { fields: { columns: { content: true }, limit: 10 } },
+    limit: 100,
+  });
+
+const fileIdOf = (
+  version: Awaited<ReturnType<typeof workspaceVersions>>[number] | undefined,
+) => {
+  const content = version?.fields.at(0)?.content;
+  return content?.type === "file" && content.id
+    ? content.id
+    : panic("Version has no file");
+};
+
+// timeout: a full transfer over the in-process database and fake storage, like the other transfers here.
+test("a move carries a deleted version with its tombstone and object, still hidden from reads", async () => {
+  const f = await seed(false);
+  try {
+    const tombstone = await tombstoneFirstVersion(f);
+
+    expect(await f.run(true)).toHaveProperty("entityId");
+
+    expect(
+      await db.$count(entities, eq(entities.workspaceId, f.sourceWorkspaceId)),
+    ).toBe(0);
+    expect(
+      await db.$count(
+        entityVersions,
+        eq(entityVersions.workspaceId, f.sourceWorkspaceId),
+      ),
+    ).toBe(0);
+    const [moved, current, ...rest] = await workspaceVersions(
+      f.targetWorkspaceId,
+    );
+    expect(rest).toEqual([]);
+    expect(moved).toMatchObject({ versionNumber: 1, ...tombstone });
+    expect(current).toMatchObject({
+      versionNumber: 2,
+      deletedAt: null,
+      deletedBy: null,
+    });
+
+    // The tombstone's object was copied under the target matter and is the
+    // one its field references; nothing is left under the source matter.
+    const movedObject = f.fake.objects.get(
+      `${envBase.S3_BUCKET}/${createFileKey({
+        organizationId: f.organizationId,
+        workspaceId: f.targetWorkspaceId,
+        fileId: fileIdOf(moved),
+        mimeType: "text/plain",
+      })}`,
+    );
+    expect(new TextDecoder().decode(movedObject?.bytes)).toBe("history");
+    expect(
+      [...f.fake.objects.keys()].every((key) =>
+        key.includes(f.targetWorkspaceId),
+      ),
+    ).toBe(true);
+
+    const currentVersion = current ?? panic("Moved document has no version");
+    const listed = await Result.gen(() =>
+      readVersionsHandler({
+        safeDb: f.safeDb,
+        workspaceId: f.targetWorkspaceId,
+        entityId: currentVersion.entityId,
+        before: undefined,
+        filePropertyId: undefined,
+      }),
+    );
+    if (Result.isError(listed)) {
+      throw listed.error;
+    }
+    expect(listed.value.versions.map(({ id }) => id)).toEqual([
+      currentVersion.id,
+    ]);
+  } finally {
+    f.fake.stop();
+  }
+}, 30_000);
+
+// timeout: a full transfer over the in-process database and fake storage, like the other transfers here.
+test("a plain copy is a new document: only the current version, no tombstones", async () => {
+  const f = await seed(false);
+  try {
+    await tombstoneFirstVersion(f);
+    const before = await sourceState(f);
+
+    expect(await f.run(false)).toHaveProperty("entityId");
+
+    const copied = await workspaceVersions(f.targetWorkspaceId);
+    expect(copied).toHaveLength(1);
+    expect(copied[0]).toMatchObject({
+      versionNumber: 1,
+      deletedAt: null,
+      deletedBy: null,
+    });
+    expect(
+      f.fake.requests.filter(({ method }) => method === "COPY"),
+    ).toHaveLength(1);
+    expect(
+      new TextDecoder().decode(
+        f.fake.objects.get(
+          `${envBase.S3_BUCKET}/${createFileKey({
+            organizationId: f.organizationId,
+            workspaceId: f.targetWorkspaceId,
+            fileId: fileIdOf(copied[0]),
+            mimeType: "text/plain",
+          })}`,
+        )?.bytes,
+      ),
+    ).toBe("original");
+    expect(await sourceState(f)).toEqual(before);
   } finally {
     f.fake.stop();
   }

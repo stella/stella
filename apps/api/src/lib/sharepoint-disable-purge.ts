@@ -1,11 +1,10 @@
 /**
  * Org-level kill switch for the SharePoint connection.
  *
- * Disabling the org toggle must be a true revocation, not a soft hide: with
+ * The deployed /enablement disable operation must be a true revocation: with
  * the tokens retained, re-enabling would silently resurrect working refresh
- * tokens. So setting `sharepoint_connection_enabled` to false also purges
- * every member's stored connection (and any pending OAuth state) in the SAME
- * transaction as the toggle write.
+ * tokens. It clears both file and calendar policy, and purges every member's
+ * stored connection (and any pending OAuth state) in the SAME transaction.
  *
  * We cannot revoke the grant at Microsoft, but we must not retain usable
  * tokens on our side.
@@ -18,6 +17,7 @@
  * org's rows.
  */
 
+import { Result } from "better-result";
 import { eq } from "drizzle-orm";
 
 import { rootDb } from "@/api/db/root";
@@ -29,8 +29,8 @@ import {
 } from "@/api/db/schema";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
-import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { lockSharepointPolicy } from "@/api/lib/db/sharepoint-policy-lock";
 
 export type SharepointDisablePurgeResult = {
   purgedConnections: number;
@@ -50,22 +50,20 @@ export const purgeSharepointForOrg = async (
   tx: Transaction,
   { organizationId, recordAuditEvent }: PurgeOptions,
 ): Promise<SharepointDisablePurgeResult> => {
-  const previous = await tx.query.organizationSettings.findFirst({
-    where: { organizationId: { eq: organizationId } },
-    columns: { sharepointConnectionEnabled: true },
+  const previous = await lockSharepointPolicy({
+    tx,
+    organizationId,
+    recordAuditEvent,
   });
 
   await tx
-    .insert(organizationSettings)
-    .values({
-      id: createSafeId<"organizationSettings">(),
-      organizationId,
+    .update(organizationSettings)
+    .set({
       sharepointConnectionEnabled: false,
+      microsoft365CalendarReadEnabled: false,
+      updatedAt: new Date(),
     })
-    .onConflictDoUpdate({
-      target: organizationSettings.organizationId,
-      set: { sharepointConnectionEnabled: false, updatedAt: new Date() },
-    });
+    .where(eq(organizationSettings.organizationId, organizationId));
 
   const purgedConnections = await tx
     .delete(sharepointConnections)
@@ -85,7 +83,11 @@ export const purgeSharepointForOrg = async (
       workspaceId: null,
       changes: {
         sharepointConnectionEnabled: {
-          old: previous?.sharepointConnectionEnabled ?? false,
+          old: previous.sharepointConnectionEnabled,
+          new: false,
+        },
+        microsoft365CalendarReadEnabled: {
+          old: previous.microsoft365CalendarReadEnabled,
           new: false,
         },
       },
@@ -110,9 +112,10 @@ export const purgeSharepointForOrg = async (
   };
 };
 
-export const disableAndPurgeSharepointForOrg = async (
-  options: PurgeOptions,
-): Promise<SharepointDisablePurgeResult> =>
-  await rootDb.transaction(
-    async (tx) => await purgeSharepointForOrg(tx, options),
+export const disableAndPurgeSharepointForOrg = async (options: PurgeOptions) =>
+  await Result.tryPromise(
+    async () =>
+      await rootDb.transaction(
+        async (tx) => await purgeSharepointForOrg(tx, options),
+      ),
   );

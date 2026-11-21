@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
+import { normalizeUnicode } from "@stll/text-normalize";
+
 import {
   findCitationPassage,
   locateCitationSpans,
@@ -157,7 +159,7 @@ describe("locateCitationSpans", () => {
     // 4 Tdo 348/2023 prints I. ÚS 670/05 with "Ú" decomposed in one
     // paragraph and precomposed in another. One case, so both are marked.
     const composed = "I. ÚS 670/05";
-    const decomposed = composed.normalize("NFD");
+    const decomposed = normalizeUnicode(composed, "NFD");
     expect(decomposed).not.toBe(composed);
     const blocks = [
       paragraph("a", `nález Ústavního soudu sp. zn. ${decomposed} je v tomto`),
@@ -180,7 +182,8 @@ describe("locateCitationSpans", () => {
     const blocks = [
       paragraph(
         "a",
-        "usnesením Nejvyššího soudu ČR ze dne 30. 6. 2021, č. j. 4 Tdo 1323/2020-906, a to toliko".normalize(
+        normalizeUnicode(
+          "usnesením Nejvyššího soudu ČR ze dne 30. 6. 2021, č. j. 4 Tdo 1323/2020-906, a to toliko",
           "NFD",
         ),
       ),
@@ -194,7 +197,7 @@ describe("locateCitationSpans", () => {
     const text = blocks.at(0)?.plainText ?? "";
     expect(
       located["a"]?.map((span) => text.slice(span.start, span.end)),
-    ).toEqual(["č. j. 4 Tdo 1323/2020".normalize("NFD")]);
+    ).toEqual([normalizeUnicode("č. j. 4 Tdo 1323/2020", "NFD")]);
   });
 
   test("regex metacharacters in a citation are literal", () => {
@@ -220,7 +223,6 @@ describe("the paragraph a citation is read from", () => {
     const passage = findCitationPassage({
       blocks,
       citationText: "21 Cdo 500/2019",
-      sectionText: undefined,
     });
 
     expect(passage?.anchorId).toBe("p2");
@@ -241,15 +243,13 @@ describe("the paragraph a citation is read from", () => {
       findCitationPassage({
         blocks,
         citationText: "21 Cdo 500/2019",
-        sectionText: undefined,
       })?.anchorId,
     ).toBe("p9");
 
     const passage = findCitationPassage({
       blocks,
       citationText: "21 Cdo 500/2019",
-      sectionText:
-        "K rozsudku 21 Cdo 500/2019 se senát přiklání. Další věta sekce.",
+      classifiedBlockIds: ["p7"],
     });
 
     expect(passage?.anchorId).toBe("p7");
@@ -265,7 +265,7 @@ describe("the paragraph a citation is read from", () => {
     const passage = findCitationPassage({
       blocks,
       citationText: "21 Cdo 500/2019",
-      sectionText: "Sekce, kterou tento dokument nenese.",
+      classifiedBlockIds: [],
     });
 
     expect(passage?.anchorId).toBe("p9");
@@ -277,7 +277,6 @@ describe("the paragraph a citation is read from", () => {
       findCitationPassage({
         blocks: [paragraph("p1", "Nic k věci.")],
         citationText: "21 Cdo 500/2019",
-        sectionText: undefined,
       }),
     ).toBeNull();
   });
@@ -293,7 +292,6 @@ describe("the paragraph a citation is read from", () => {
       findCitationPassage({
         blocks: [paragraph("p3", blockText)],
         citationText,
-        sectionText: undefined,
       })?.anchorId,
     ).toBe("p3");
   });
@@ -313,7 +311,6 @@ describe("the paragraph a citation is read from", () => {
       findCitationPassage({
         blocks,
         citationText: "21 Cdo 500/2019",
-        sectionText: undefined,
       })?.mention,
     ).toBe("sole");
   });

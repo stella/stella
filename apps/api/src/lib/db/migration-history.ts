@@ -2,7 +2,9 @@ import { panic } from "better-result";
 import { existsSync, readdirSync } from "node:fs";
 import nodePath from "node:path";
 
-import migrationAliasInventory from "./migration-alias-inventory.json";
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
+
+import migrationAliasInventory from "./migration-alias-inventory.json" with { type: "json" };
 
 // Migrations intentionally rewritten after they shipped in a release. A
 // database that applied the earlier version recorded its hash, and the
@@ -19,6 +21,10 @@ export type RequiredMigrationIndex = {
   isUnique: boolean;
   name: string;
   tableName: string;
+};
+
+export type IntroducedMigrationIndex = RequiredMigrationIndex & {
+  introducedBy: string;
 };
 
 type MigrationAliasEntry = {
@@ -39,7 +45,7 @@ export const deriveMigrationAliasHistory = (
       requiredIndexes: RequiredMigrationIndex[];
     }
   > = {};
-  const indexesByName = new Map<string, RequiredMigrationIndex>();
+  const indexesByName = new Map<string, IntroducedMigrationIndex>();
 
   for (const { fileName, priorHash, newHash, repair } of inventory) {
     let history = histories[fileName];
@@ -71,7 +77,7 @@ export const deriveMigrationAliasHistory = (
       if (existing === undefined) {
         history.requiredIndexes.push(index);
       }
-      indexesByName.set(index.name, index);
+      indexesByName.set(index.name, { ...index, introducedBy: fileName });
     }
   }
   return { histories, indexes: [...indexesByName.values()] };
@@ -86,9 +92,21 @@ export const REWRITTEN_MIGRATION_HISTORIES: Readonly<
   Record<string, RewrittenMigrationHistory>
 > = rewrittenMigrationHistories;
 
-export const REWRITTEN_MIGRATION_INDEXES: readonly RequiredMigrationIndex[] = [
-  ...rewrittenMigrationIndexes,
-];
+/**
+ * Rewritten-migration indexes a later contract release retired: their
+ * historical receipts stay valid, but nothing requires them any more.
+ */
+export const RETIRED_REWRITTEN_MIGRATION_INDEXES: ReadonlySet<string> = new Set(
+  [
+    // Replaced by the court-qualified fallback identity indexes.
+    "case_law_decisions_source_case_lang_null_idx",
+  ],
+);
+
+export const REWRITTEN_MIGRATION_INDEXES: readonly IntroducedMigrationIndex[] =
+  rewrittenMigrationIndexes.filter(
+    ({ name }) => !RETIRED_REWRITTEN_MIGRATION_INDEXES.has(name),
+  );
 
 export type LocalMigration = { name: string; hash: string };
 export type AppliedMigration = { name: string | null; hash: string };
@@ -182,9 +200,7 @@ export const findUnappliedMigrations = ({
 };
 
 const hashMigrationFile = async (path: string): Promise<string> =>
-  new Bun.CryptoHasher("sha256")
-    .update(await Bun.file(path).bytes())
-    .digest("hex");
+  hashSha256Hex(await Bun.file(path).bytes());
 
 const listLocalMigrations = async (
   migrationsDir: string,

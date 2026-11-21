@@ -15,18 +15,20 @@ import {
 } from "@/api/db/scoped";
 import type { SafeId } from "@/api/lib/branded-types";
 import { isRecord } from "@/api/lib/type-guards";
+import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 import { MCP_ALL_RESOURCE_SCOPES } from "@/api/mcp/constants";
 import { loadAccessibleMcpWorkspaces } from "@/api/mcp/context";
-import type { McpRequestContext } from "@/api/mcp/context";
 import { DEFAULT_MCP_TOOL_DEFINITIONS } from "@/api/mcp/static-tool-definitions";
 import { TOOL_CONFIRMATION } from "@/api/mcp/tool-confirmation";
 import { handleMcpToolCall } from "@/api/mcp/tools";
 import { filterUsableMcpWorkspaces } from "@/api/mcp/workspace-session-scope";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import { enrolledTimeBillingSnapshot } from "@/api/tests/helpers/time-billing-enrolment";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
@@ -67,17 +69,29 @@ const OBJECT_STORAGE = "reads or writes DOCX files in object storage";
 const TOOL_COVERAGE = {
   search: excluded(SEARCH_INDEX),
   fetch: excluded(SEARCH_INDEX),
+  create_organization: excluded(
+    "dispatches the organizations.create HTTP capability; its output is covered by the organization creation PostgreSQL tests",
+  ),
   list_matters: RUN,
   read_contact: RUN,
   read_content_across_matters: excluded(SEARCH_INDEX),
   search_across_matters: excluded(SEARCH_INDEX),
   search_case_law: excluded(PUBLIC_CORPUS),
-  lookup_case_law: excluded(PUBLIC_CORPUS),
+  resolve_case_law_decision: excluded(PUBLIC_CORPUS),
+  resolve_law_citation: excluded(PUBLIC_CORPUS),
+  case_law_coverage: excluded(PUBLIC_CORPUS),
   read_case_law_decision: excluded(PUBLIC_CORPUS),
+  verify_quote: excluded(PUBLIC_CORPUS),
   read_case_law_citations: excluded(PUBLIC_CORPUS),
+  open_case_law_decision: excluded(PUBLIC_CORPUS),
+  read_case_law_decision_blocks: excluded(PUBLIC_CORPUS),
+  preview_cited_provision: excluded(PUBLIC_CORPUS),
+  list_case_law_courts: excluded(PUBLIC_CORPUS),
   set_practice_jurisdictions: RUN,
   search_legislation: excluded(PUBLIC_CORPUS),
   read_statute: excluded(PUBLIC_CORPUS),
+  search_guidance: excluded(PUBLIC_CORPUS),
+  read_guidance: excluded(PUBLIC_CORPUS),
   read_statute_provisions: excluded(PUBLIC_CORPUS),
   read_provision_history: excluded(PUBLIC_CORPUS),
   search_boe_legislation: excluded(UPSTREAM),
@@ -94,7 +108,7 @@ const TOOL_COVERAGE = {
   save_document: RUN,
   delete_document: RUN,
   set_field_value: excluded(
-    "a fresh matter holds only the file property, which set_field_value refuses; a text property is created through invoke_capability",
+    "a fresh matter holds only the file property, which set_field_value refuses; a text property is created through write_capability",
   ),
   list_properties: RUN,
   compare_documents: excluded(OBJECT_STORAGE),
@@ -137,12 +151,20 @@ const TOOL_COVERAGE = {
   list_invoices: RUN,
   get_usage: RUN,
   list_audit_log: RUN,
-  manage_organization: RUN,
+  add_matter_member: RUN,
+  remove_matter_member: RUN,
+  update_organization_settings: RUN,
+  mint_web_handoff: excluded(
+    "requires an OAuth consent context; covered by the handoff service tests",
+  ),
   prepare_feedback: RUN,
   submit_feedback: excluded("delivers the report to an external tracker"),
   list_capabilities: RUN,
   describe_capability: RUN,
-  invoke_capability: excluded(
+  read_capability: excluded(
+    "dispatches an HTTP request to the API router, which this test does not serve",
+  ),
+  write_capability: excluded(
     "dispatches an HTTP request to the API router, which this test does not serve",
   ),
 } as const satisfies Record<DefaultMcpToolName, ToolCoverage>;
@@ -158,6 +180,7 @@ type RunToolName = {
 /** Ids earlier calls created, read by later ones. */
 type Seeded = {
   userId: SafeId<"user">;
+  additionalMemberUserId: SafeId<"user">;
   matterId?: string;
   contactId?: string;
   taskId?: string;
@@ -310,9 +333,23 @@ const STEPS: readonly Step[] = [
     args: () => ({ jurisdictions: [{ country_code: "CZ", is_primary: true }] }),
   },
   {
-    tool: "manage_organization",
+    tool: "add_matter_member",
+    args: (s) => ({
+      matter_id: required(s.matterId, "matter"),
+      user_id: s.additionalMemberUserId,
+    }),
+  },
+  {
+    tool: "remove_matter_member",
+    args: (s) => ({
+      matter_id: required(s.matterId, "matter"),
+      user_id: s.additionalMemberUserId,
+      confirm: true,
+    }),
+  },
+  {
+    tool: "update_organization_settings",
     args: () => ({
-      action: "update_org_settings",
       time_narrative_required: false,
     }),
   },
@@ -389,6 +426,10 @@ const createOrganization = async (): Promise<Caller> => {
     slug: `firm-${organizationId}`,
     createdAt: new Date(),
   });
+  await recordNewOrganizationAccessState(testDb, {
+    organizationId,
+    now: new Date(),
+  });
   await testDb.insert(member).values({
     id: mintAuthProviderIdValue(),
     organizationId,
@@ -403,7 +444,7 @@ const createOrganization = async (): Promise<Caller> => {
 const requestContext = async ({
   organizationId,
   userId,
-}: Caller): Promise<McpRequestContext> => {
+}: Caller): Promise<AuthorizedMcpRequestContext> => {
   const identity = { organizationId, serverValidatedWorkspaceIds: [], userId };
   const scopedDb = asTestRaw<ScopedDb>(
     createMembershipScopedDb(testDb, identity),
@@ -417,7 +458,7 @@ const requestContext = async ({
     tokenWorkspaceIds: undefined,
   });
   const workspaceIds = usable.map((workspace) => workspace.id);
-  return asTestRaw<McpRequestContext>({
+  return asTestRaw<AuthorizedMcpRequestContext>({
     accessibleWorkspaceIds: workspaceIds,
     accessibleWorkspaceIdSet: new Set(workspaceIds),
     accessibleWorkspaceStatusById: new Map(
@@ -433,6 +474,12 @@ const requestContext = async ({
     toolConfirmation: TOOL_CONFIRMATION.caller,
     userId,
     userEmail: "owner@example.test",
+    // Billing tools are enrolment-gated; the owner is enrolled so every
+    // runnable tool is exercised.
+    featureAccessSnapshot: enrolledTimeBillingSnapshot({
+      organizationId,
+      userId,
+    }),
   });
 };
 
@@ -458,9 +505,23 @@ describe("every MCP tool's real output passes its output contract", () => {
 
   test("a seeded organization drives each runnable tool", async () => {
     const caller = await createOrganization();
-    const seeded: Seeded = { userId: caller.userId };
+    const additionalMemberUserId = mintAuthProviderId<"user">();
+    await testDb.insert(user).values({
+      id: additionalMemberUserId,
+      name: "Member",
+      email: `${additionalMemberUserId}@example.test`,
+    });
+    await testDb.insert(member).values({
+      id: mintAuthProviderIdValue(),
+      organizationId: caller.organizationId,
+      userId: additionalMemberUserId,
+      role: "member",
+      createdAt: new Date(),
+    });
+    const seeded: Seeded = { userId: caller.userId, additionalMemberUserId };
     for (const step of STEPS) {
       const result = await handleMcpToolCall({
+        mode: "advanced",
         args: step.args(seeded),
         context: await requestContext(caller),
         toolName: step.tool,

@@ -11,6 +11,7 @@ import {
   documentWriteRefusalHandlerError,
   DocumentWriteRefusedError,
 } from "@/api/lib/entities/authorize-document-write";
+import { CALLER_AUTHORIZED } from "@/api/lib/entities/buffer-write-authority";
 import { createEntityVersionFromBuffer } from "@/api/lib/entity-versions/create-entity-version-from-buffer";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
@@ -25,9 +26,15 @@ import {
   OrganizationFileUsageError,
   organizationFileUsageHandlerError,
 } from "@/api/lib/files/organization-file-usage";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 
 const config = {
+  contract: "replace",
+  precondition: {
+    type: "deferred",
+    baselineId: "apps/api/src/handlers/entities/versions/upload.ts",
+  },
   contentDelivery: {
     type: "none",
     reason:
@@ -124,10 +131,10 @@ export default createSafeHandler(
         mimeType: file.type,
         scanned: scanned.value,
       }),
-      {
+      handlerErrorContext("entityVersionUpload.detectEncryption", {
         mimeType: file.type,
         sizeBytes: String(scanned.value.bytes.byteLength),
-      },
+      }),
     );
     if (encryption === null) {
       return Result.err(
@@ -142,6 +149,7 @@ export default createSafeHandler(
       Result.tryPromise({
         try: async () =>
           await createEntityVersionFromBuffer({
+            authority: CALLER_AUTHORIZED,
             safeDb,
             organizationId,
             workspaceId: target.workspaceId,

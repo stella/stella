@@ -1,19 +1,22 @@
 import * as v from "valibot";
 
-import { SKILL_RESOURCE_KINDS } from "@stll/skills/resource-kinds";
-
 import { AGENT_SKILL_ORIGINS } from "@/api/db/schema";
+import { SKILL_RESOURCE_WINDOW_CHARS } from "@/api/lib/agent-skills/resource-window";
 import { CHAT_SKILL_SOURCE } from "@/api/lib/agent-skills/skills";
 import { LIMITS } from "@/api/lib/limits";
 import {
-  dynamicToolNamespaceOf,
   type DynamicToolNamespace,
+  dynamicToolNamespaceOf,
 } from "@/api/lib/mcp-upstream/namespace";
+import {
+  BOUND_TEXT_CURSOR_MAX_CHARS,
+  isBoundTextCursor,
+} from "@/api/mcp/bound-text-window";
+import { cursorInput, nullAsAbsent } from "@/api/mcp/input-schemas";
 import type {
   McpToolAnnotations,
   RuntimeMcpToolOutputContract,
 } from "@/api/mcp/tool-types";
-import { nullAsAbsent } from "@/api/mcp/tool-utils";
 import {
   defineMcpToolInput,
   defineMcpToolOutput,
@@ -27,7 +30,7 @@ export const SKILL_TOOL_OUTPUT_TYPE = {
 /**
  * The one input contract every `skill__*` tool accepts. Without `resource` a
  * call reads the skill's instructions and the paths of its resource files;
- * with it, one of those files.
+ * with it, one window of those files, continued with `cursor`.
  */
 export const SKILL_TOOL_INPUT = defineMcpToolInput(
   nullAsAbsent(
@@ -44,6 +47,13 @@ export const SKILL_TOOL_INPUT = defineMcpToolInput(
           ),
         ),
       ),
+      cursor: cursorInput({
+        description:
+          "nextCursor from the previous read of this same `resource`; " +
+          "omit to read the file from the start.",
+        issuedBy: isBoundTextCursor,
+        maxLength: BOUND_TEXT_CURSOR_MAX_CHARS,
+      }),
     }),
   ),
 );
@@ -53,10 +63,6 @@ const skillIdSchema = v.pipe(
   v.description("Stored skill id; null for a skill shipped with stella"),
 );
 const skillNameSchema = v.pipe(v.string(), v.description("Skill slug"));
-const resourceKindSchema = v.pipe(
-  v.picklist(SKILL_RESOURCE_KINDS),
-  v.description("What the resource file holds"),
-);
 
 /**
  * The one output contract every `skill__*` tool serves. Skill tools differ
@@ -90,7 +96,6 @@ const SKILL_TOOL_OUTPUT_SCHEMA = v.variant("type", [
     resources: v.pipe(
       v.array(
         v.strictObject({
-          kind: resourceKindSchema,
           path: v.pipe(
             v.string(),
             v.description("Pass as `resource` to read this file"),
@@ -106,10 +111,28 @@ const SKILL_TOOL_OUTPUT_SCHEMA = v.variant("type", [
   }),
   v.strictObject({
     type: v.literal(SKILL_TOOL_OUTPUT_TYPE.resource),
-    content: v.pipe(v.string(), v.description("The resource file's text")),
+    charCount: v.pipe(
+      v.number(),
+      v.integer(),
+      v.description("Length of the whole file in characters"),
+    ),
+    content: v.pipe(
+      v.string(),
+      v.maxLength(SKILL_RESOURCE_WINDOW_CHARS),
+      v.description(
+        "One window of the resource file's text, from the position the " +
+          "cursor names (the start without one)",
+      ),
+    ),
     id: skillIdSchema,
-    kind: resourceKindSchema,
     name: skillNameSchema,
+    nextCursor: v.pipe(
+      v.nullable(v.string()),
+      v.description(
+        "Pass as `cursor` with the same `resource` to read the next " +
+          "window; null once this window reaches the end of the file",
+      ),
+    ),
     path: v.pipe(v.string(), v.description("The resource file's path")),
   }),
 ]);
@@ -149,28 +172,14 @@ type DynamicToolFamilyPolicy =
  */
 export const DYNAMIC_TOOL_FAMILY_POLICIES = {
   external_mcp: { owner: "upstream" },
+  // MCP/CLI parity exception: the CLI keeps skills on /mcp/advanced.
+  // The default MCP surface carries only reviewed, purpose-built tools.
   skill: {
     owner: "stella",
     annotations: SKILL_TOOL_ANNOTATIONS,
     output: SKILL_TOOL_OUTPUT,
   },
 } as const satisfies Record<DynamicToolNamespace, DynamicToolFamilyPolicy>;
-
-/** Families whose tools serve a Stella contract; derived, never listed twice. */
-export type StellaOwnedDynamicToolNamespace = {
-  [
-    TNamespace in DynamicToolNamespace
-  ]: (typeof DYNAMIC_TOOL_FAMILY_POLICIES)[TNamespace] extends {
-    owner: "stella";
-  }
-    ? TNamespace
-    : never;
-}[DynamicToolNamespace];
-
-export const isStellaOwnedDynamicToolNamespace = (
-  namespace: DynamicToolNamespace,
-): namespace is StellaOwnedDynamicToolNamespace =>
-  DYNAMIC_TOOL_FAMILY_POLICIES[namespace].owner === "stella";
 
 export const getDynamicMcpToolOutputContract = (
   toolName: string,

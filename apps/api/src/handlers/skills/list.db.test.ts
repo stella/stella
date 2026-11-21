@@ -2,7 +2,8 @@ import { panic } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 
-import { listSkillMetadata, readSkillDisplayName } from "@stll/skills";
+import { listSkillMetadata } from "@stll/skills";
+import { readSkillDisplayName } from "@stll/skills/frontmatter";
 
 import { member, user } from "@/api/db/auth-schema";
 import { agentSkillRevisions } from "@/api/db/schema";

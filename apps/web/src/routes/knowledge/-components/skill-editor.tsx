@@ -4,8 +4,10 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
 import { SKILL_RESOURCE_PATH_PATTERN } from "@stll/api-contract";
+import { SKILL_RESOURCE_UPLOAD_MAX_BYTES } from "@stll/api-contract/limits";
 import { compareByLocale } from "@stll/collation";
 import { Button } from "@stll/ui/button";
+import { DocumentMark } from "@stll/ui/document-mark";
 import { openFilePicker } from "@stll/ui/file-picker";
 import {
   FileCodeIcon,
@@ -20,7 +22,9 @@ import {
   Trash2Icon,
   UploadIcon,
 } from "@stll/ui/icons";
+import { InlineRenameInput } from "@stll/ui/inline-rename";
 import { Input } from "@stll/ui/input";
+import { Label } from "@stll/ui/label";
 import {
   Menu,
   MenuItem,
@@ -29,6 +33,15 @@ import {
   MenuTrigger,
 } from "@stll/ui/menu";
 import { Popover, PopoverContent, PopoverTrigger } from "@stll/ui/popover";
+import {
+  Select,
+  SelectItem,
+  SelectPopup,
+  SelectTrigger,
+  SelectValue,
+} from "@stll/ui/select";
+import { Textarea } from "@stll/ui/textarea";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { contentDir } from "@stll/ui/use-content-dir";
 import { cn } from "@stll/ui/utils";
 
@@ -36,34 +49,40 @@ import { FileDropZone } from "@/components/file-drop-zone";
 import { FileTree } from "@/components/file-tree/file-tree";
 import type { FileTreeNode } from "@/components/file-tree/file-tree";
 import { FolderExpandToggle } from "@/components/file-tree/folder-expand-toggle";
+import { skillEditorChatSkill } from "@/components/inspector/inspector-active-skill";
+import { INSPECTOR_FOCUS_INTENT } from "@/components/inspector/inspector-store-types";
 import {
   buildSkillResourceTabId,
   useInspectorTabsStore,
 } from "@/components/inspector/inspector-tabs-store";
 import type { SkillEditAccess } from "@/components/inspector/skill-history/skill-history.logic";
 import { useSkillEditAccess } from "@/components/inspector/skill-history/use-skill-edit-access";
-import { MarkdownIcon } from "@/components/markdown-icon";
 import { useMountEffect } from "@/hooks/use-effect";
-import { useLocale } from "@/i18n/formatting-context";
+import { useFormattingLocale } from "@/i18n/formatting-context";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
-import { MARKDOWN_MIME, isMarkdownFile } from "@/lib/consts";
+import { isMarkdownFile, MARKDOWN_MIME } from "@/lib/consts";
 import { detached } from "@/lib/detached";
-import { APIError, unwrapEden } from "@/lib/errors/api";
+import { APIError, unwrapApiResponse } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
-import { notifyUserError } from "@/lib/errors/user-toast";
+import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
+import { useIdempotentMutation } from "@/lib/idempotency/use-idempotent-mutation";
 import { knowledgeKeys, skillDetailOptions } from "@/lib/knowledge/queries";
 import { catalogueKeys } from "@/lib/knowledge/queries/catalogue";
 import type { NonEmptyPatch } from "@/lib/mutation-command";
 import { toSafeId } from "@/lib/safe-id";
 
+import { SkillAvailabilitySummary } from "./skill-availability-field";
+import { SkillFilesPending } from "./skill-detail.pending";
+import { SkillExportMenu } from "./skill-export-menu";
 import {
   rebaseSkillMetadataDraft,
   skillMetadataDraft,
 } from "./skill-metadata-draft.logic";
+import type { SkillInvocation } from "./skill-metadata-draft.logic";
 import {
   FILENAME_PATTERN,
-  reserveKnowledgePath,
+  reserveReferencesPath,
 } from "./skill-resource-path.logic";
 
 const SKILL_BODY_FILE_NAME = "SKILL.md";
@@ -73,8 +92,6 @@ const SKILL_BODY_FILE_NAME = "SKILL.md";
 // translated default would fail validation.
 const NEW_FOLDER_BASE = "new-folder";
 
-const UPLOAD_MAX_BYTES_TEXT = 100_000;
-const UPLOAD_MAX_BYTES_BINARY = 5 * 1024 * 1024;
 const DOCX_MIME =
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 const PDF_MIME = "application/pdf";
@@ -87,14 +104,12 @@ const isBinaryUpload = (file: File) =>
 type SkillResource = {
   id: string;
   path: string;
-  kind: string;
   sizeBytes: number;
   content: string;
 };
 
 type SelectedFile =
-  | { type: "body" }
-  | { type: "resource"; resourceId: string; path: string };
+  { type: "body" } | { type: "resource"; resourceId: string; path: string };
 
 type SkillEditorProps = {
   skillId: string;
@@ -103,7 +118,7 @@ type SkillEditorProps = {
 export function SkillEditor({ skillId }: SkillEditorProps) {
   const t = useTranslations();
   const tSkills = useTranslations("knowledge.agentSkills");
-  const locale = useLocale();
+  const locale = useFormattingLocale();
   const queryClient = useQueryClient();
   const { activeOrganizationId, id: userId } = useAuthenticatedUser();
   const openSkillResourceTab = useInspectorTabsStore(
@@ -143,6 +158,9 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
     detail.data?.description ?? "",
   );
   const [enabled, setEnabled] = useState(detail.data?.enabled ?? false);
+  const [invocation, setInvocation] = useState<SkillInvocation>(() =>
+    detail.data ? skillMetadataDraft(detail.data).invocation : "auto",
+  );
   const [command, setCommand] = useState(() =>
     detail.data ? skillMetadataDraft(detail.data).command : "",
   );
@@ -183,13 +201,14 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
       lastDetailData === undefined
         ? skillMetadataDraft(detail.data)
         : rebaseSkillMetadataDraft({
-            draft: { command, description, enabled, name },
+            draft: { command, description, enabled, invocation, name },
             next: detail.data,
             previous: lastDetailData,
           });
     setName(rebased.name);
     setDescription(rebased.description);
     setEnabled(rebased.enabled);
+    setInvocation(rebased.invocation);
     setCommand(rebased.command);
   }
 
@@ -245,7 +264,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
       return;
     }
     if (!FILENAME_PATTERN.test(trimmed) || folderPrefixes.has(nextPath)) {
-      notifyUserError(undefined, tSkills("invalidPath"));
+      notifyUserProblem(tSkills("invalidPath"));
       return;
     }
     setPendingFolders((current) =>
@@ -285,6 +304,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
         ? MARKDOWN_MIME
         : "text/plain",
       content: resource.content,
+      focus: INSPECTOR_FOCUS_INTENT.claim,
     });
   };
 
@@ -308,6 +328,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
         label: SKILL_BODY_FILE_NAME,
         mimeType: MARKDOWN_MIME,
         content: bodyContent,
+        focus: INSPECTOR_FOCUS_INTENT.claim,
       });
       return;
     }
@@ -329,13 +350,14 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
         description: string;
         version: string | null;
         enabled: boolean;
+        invocation: SkillInvocation;
         command: string | null;
       }>,
     ) => {
       const response = await api
         .skills({ skillId: safeSkillId })
         .patch({ ...payload });
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onSuccess: () => {
       onChanged();
@@ -347,21 +369,23 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
         return;
       }
       toastError(error, t("common.unexpectedError"));
-      // The power toggle flips `enabled` optimistically; snap it back so the
-      // UI doesn't show an enable the server rejected. Text fields
-      // commit on blur and keep the user's draft for another attempt.
+      // The power toggle and the invocation choice apply optimistically; snap
+      // them back so the UI doesn't show a change the server rejected. Text
+      // fields commit on blur and keep the user's draft for another attempt.
       if (detail.data) {
         setEnabled(detail.data.enabled);
+        setInvocation(detail.data.invocation);
       }
     },
   });
 
-  const createResource = useMutation({
+  const createResource = useIdempotentMutation({
+    idempotencyScope: safeSkillId,
     mutationFn: async (payload: { path: string; content: string }) => {
       const response = await api
         .skills({ skillId: safeSkillId })
         .resources.post({ ...payload });
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onSuccess: (data) => {
       onChanged();
@@ -382,7 +406,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
         .resources.upload.post({
           ...payload,
         });
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onSuccess: (data) => {
       onChanged();
@@ -402,7 +426,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
         .skills({ skillId: safeSkillId })
         .resources.delete({ path: payload.path });
       return {
-        ...unwrapEden(response),
+        ...unwrapApiResponse(response),
         resourceId: payload.resourceId,
         path: payload.path,
       };
@@ -436,7 +460,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
       const response = await api
         .skills({ skillId: safeSkillId })
         .resources.rename.post({ ...payload });
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onSuccess: (data, variables) => {
       onChanged();
@@ -515,6 +539,13 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
     setEnabled(next);
     patchMetadata.mutate({ enabled: next });
   };
+  const changeInvocation = (next: SkillInvocation) => {
+    if (next === invocation) {
+      return;
+    }
+    setInvocation(next);
+    patchMetadata.mutate({ invocation: next });
+  };
 
   const COMMAND_PATTERN_LOCAL = /^[a-z0-9][a-z0-9_-]{0,48}$/u;
 
@@ -542,18 +573,17 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
   // drop, so identically named files get distinct paths instead of colliding.
   const handleUpload = async (file: File, takenPaths: Set<string>) => {
     const binary = isBinaryUpload(file);
-    const maxBytes = binary ? UPLOAD_MAX_BYTES_BINARY : UPLOAD_MAX_BYTES_TEXT;
-    if (file.size > maxBytes) {
-      notifyUserError(undefined, t("common.unexpectedError"), {
+    if (file.size > SKILL_RESOURCE_UPLOAD_MAX_BYTES) {
+      notifyUserProblem(t("common.unexpectedError"), {
         description: tSkills("uploadHelp"),
       });
       return;
     }
-    // Drop new uploads into knowledge/ by default. The user can rename
+    // Drop new uploads into references/ by default. The user can rename
     // afterward if they want a different folder.
-    const reserved = reserveKnowledgePath(file.name, binary, takenPaths);
+    const reserved = reserveReferencesPath(file.name, binary, takenPaths);
     if (reserved.type === "invalid") {
-      notifyUserError(undefined, tSkills("invalidPath"));
+      notifyUserProblem(tSkills("invalidPath"));
       return;
     }
     const { path } = reserved;
@@ -566,7 +596,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
   };
 
   // Reserve every dropped/selected file's path up front against one set seeded
-  // from the current resources. `reserveKnowledgePath` runs synchronously
+  // from the current resources. `reserveReferencesPath` runs synchronously
   // before each upload's first await, so path assignment stays ordered and two
   // same-named files in one batch never resolve to the same path.
   const handleUploadFiles = (files: readonly File[]) => {
@@ -578,11 +608,11 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
 
   const onCreateFile = (path: string, content: string) => {
     if (!SKILL_RESOURCE_PATH_PATTERN.test(path)) {
-      notifyUserError(undefined, tSkills("invalidPath"));
+      notifyUserProblem(tSkills("invalidPath"));
       return false;
     }
     if (existingPaths.has(path)) {
-      notifyUserError(undefined, tSkills("fileExists"));
+      notifyUserProblem(tSkills("fileExists"));
       return false;
     }
     createResource.mutate({ path, content });
@@ -597,11 +627,11 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
       return;
     }
     if (!SKILL_RESOURCE_PATH_PATTERN.test(trimmed)) {
-      notifyUserError(undefined, tSkills("invalidPath"));
+      notifyUserProblem(tSkills("invalidPath"));
       return;
     }
     if (existingPaths.has(trimmed)) {
-      notifyUserError(undefined, tSkills("fileExists"));
+      notifyUserProblem(tSkills("fileExists"));
       return;
     }
     renameResource.mutate({ oldPath, newPath: trimmed });
@@ -624,38 +654,49 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
               label: SKILL_BODY_FILE_NAME,
               mimeType: MARKDOWN_MIME,
               content: detail.data.body,
+              // Landing on the editor opens SKILL.md beside what the
+              // inspector already shows, never in its place.
+              focus: INSPECTOR_FOCUS_INTENT.ifIdle,
             });
           }}
         />
       )}
       {/* Identity, status, and how the skill runs. The files below are the main
           surface; editing happens in the inspector. */}
-      <div className="border-b p-4">
+      <div className="border-b p-4" data-slot="skill-editor-identity">
         {/* Name + description read as a title/summary; the status controls sit
             in the top-right corner, the identity stays a readable width. */}
         <div className="flex items-start gap-4">
           <div className="flex min-w-0 flex-1 flex-col gap-2">
-            <input
-              aria-label={t("common.name")}
-              className="text-foreground placeholder:text-foreground-placeholder focus-visible:ring-ring/30 -ms-1.5 w-full max-w-3xl rounded-md bg-transparent px-1.5 py-0.5 text-lg font-semibold outline-none focus-visible:ring-2"
-              dir={contentDir(name)}
-              onBlur={commitName}
-              onChange={(event) => setName(event.target.value)}
-              placeholder={t("common.name")}
-              readOnly={!canEditContent}
-              value={name}
-            />
-            <textarea
-              aria-label={t("common.description")}
-              className="text-muted-foreground placeholder:text-foreground-placeholder focus-visible:ring-ring/30 -ms-1.5 field-sizing-content w-full max-w-3xl resize-none rounded-md bg-transparent px-1.5 py-0.5 text-sm leading-relaxed outline-none focus-visible:ring-2"
-              dir={contentDir(description)}
-              onBlur={commitDescription}
-              onChange={(event) => setDescription(event.target.value)}
-              placeholder={t("common.description")}
-              readOnly={!canEditContent}
-              rows={2}
-              value={description}
-            />
+            {/* The name and summary are edited where they are read: the
+                fields take the heading's and the body's type from here. */}
+            <div className="text-foreground flex text-lg font-semibold">
+              <Input
+                aria-label={t("common.name")}
+                className="-ms-1.5 max-w-3xl"
+                dir={contentDir(name)}
+                onBlur={commitName}
+                onChange={(event) => setName(event.currentTarget.value)}
+                placeholder={t("common.name")}
+                readOnly={!canEditContent}
+                value={name}
+                inline
+              />
+            </div>
+            <div className="text-muted-foreground flex text-sm leading-relaxed">
+              <Textarea
+                aria-label={t("common.description")}
+                className="-ms-1.5 max-w-3xl"
+                dir={contentDir(description)}
+                onBlur={commitDescription}
+                onChange={(event) => setDescription(event.currentTarget.value)}
+                placeholder={t("common.description")}
+                readOnly={!canEditContent}
+                rows={2}
+                value={description}
+                inline
+              />
+            </div>
           </div>
           <div className="flex shrink-0 items-center gap-2">
             {detail.data && (
@@ -663,12 +704,13 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
                 aria-label={t("chat.newChat")}
                 onClick={() =>
                   openChat({
-                    activeSkill: {
-                      skillDisplayName: detail.data.name,
+                    activeSkill: skillEditorChatSkill({
+                      name: detail.data.name,
                       skillId,
-                      skillName: detail.data.slug,
-                    },
+                      slug: detail.data.slug,
+                    }),
                     label: detail.data.name,
+                    focus: INSPECTOR_FOCUS_INTENT.claim,
                   })
                 }
                 size="icon-sm"
@@ -677,6 +719,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
                 <NewChatIcon className="size-4" />
               </Button>
             )}
+            <SkillExportMenu skillId={skillId} />
             {detail.data && (
               <span className="text-muted-foreground rounded-md border px-1.5 py-0.5 text-xs">
                 {detail.data.scope === "team"
@@ -692,6 +735,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
                 <Button
                   aria-label={tSkills("disableSkill")}
                   disabled={patchMetadata.isPending}
+                  disabledReason={t("common.saving")}
                   onClick={toggleEnabled}
                   size="icon-sm"
                   variant="secondary"
@@ -701,6 +745,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
               ) : (
                 <Button
                   disabled={patchMetadata.isPending}
+                  disabledReason={t("common.saving")}
                   onClick={toggleEnabled}
                   size="sm"
                 >
@@ -717,12 +762,15 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
             {tSkills("howItRuns")}
           </p>
           <div className="grid max-w-3xl grid-cols-[9rem_minmax(0,1fr)] items-start gap-x-3 gap-y-2.5">
-            <label
-              className="text-muted-foreground pt-1.5 text-xs"
+            <Label
+              className="mt-1.5"
               htmlFor="edit-skill-command"
+              variant="muted"
             >
-              {t("knowledge.skills.commandLabel")}
-            </label>
+              <span className="font-normal">
+                {t("knowledge.skills.commandLabel")}
+              </span>
+            </Label>
             <div className="flex flex-col gap-1">
               <div className="flex items-stretch">
                 <span className="bg-muted border-border flex items-center rounded-s-md border border-e-0 px-2 text-xs">
@@ -750,12 +798,29 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
                 </p>
               )}
             </div>
+            <SkillInvocationField
+              locked={access === "none"}
+              onChange={changeInvocation}
+              saving={patchMetadata.isPending}
+              value={invocation}
+            />
+            {detail.data && (
+              <SkillAvailabilitySummary
+                boundClientId={detail.data.boundClientId}
+                boundWorkspaceId={detail.data.boundWorkspaceId}
+                scope={detail.data.scope}
+              />
+            )}
           </div>
         </div>
       </div>
       {/* Files — the skill's bundle, the main surface. Click a file to edit it
           in the inspector. */}
       <FileDropZone
+        exceptionScope={{
+          type: "handler",
+          handlerId: "knowledge.skill-files.drop",
+        }}
         className="p-3"
         coverage="content"
         enabled={canEditContent}
@@ -765,7 +830,10 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
         }}
       >
         <div className="mb-2 flex items-center gap-1 px-1">
-          <p className="text-muted-foreground me-auto text-xs font-semibold tracking-wider uppercase">
+          <p
+            className="text-muted-foreground me-auto text-xs font-semibold tracking-wider uppercase"
+            data-slot="skill-editor-files"
+          >
             {t("common.files")}
           </p>
           {allFolderIds.size > 0 && (
@@ -776,11 +844,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
             />
           )}
         </div>
-        {detail.isLoading && (
-          <p className="text-muted-foreground px-1 text-xs">
-            {t("common.loading")}
-          </p>
-        )}
+        {detail.isLoading && <SkillFilesPending />}
         {detail.error && (
           <p className="text-destructive px-1 text-sm">
             {userErrorFromThrown(detail.error, t("common.unexpectedError"))}
@@ -881,6 +945,59 @@ type SkillFileTreeProps = {
 // The SKILL.md body isn't a stored resource, so it gets a synthetic node id and
 // is pinned at the top of the tree.
 const BODY_NODE_ID = "__body__";
+
+/**
+ * Whether the assistant may use the skill on its own or only when the user
+ * invokes it. A label/field pair for the metadata grid it sits in.
+ */
+function SkillInvocationField({
+  locked,
+  onChange,
+  saving,
+  value,
+}: {
+  /** The caller may not change this skill's settings. */
+  locked: boolean;
+  onChange: (next: SkillInvocation) => void;
+  saving: boolean;
+  value: SkillInvocation;
+}) {
+  const tSkills = useTranslations("knowledge.agentSkills");
+  const tCommon = useTranslations("common");
+  return (
+    <>
+      <Label className="mt-1.5" htmlFor="edit-skill-invocation" variant="muted">
+        <span className="font-normal">{tCommon("whenToUse")}</span>
+      </Label>
+      <div className="flex flex-col gap-1">
+        <Select
+          disabled={locked || saving}
+          onValueChange={(next) => {
+            if (next === "auto" || next === "manual") {
+              onChange(next);
+            }
+          }}
+          value={value}
+        >
+          <SelectTrigger className="w-fit min-w-48" id="edit-skill-invocation">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectPopup>
+            <SelectItem value="auto">{tSkills("invocationAuto")}</SelectItem>
+            <SelectItem value="manual">
+              {tSkills("invocationManual")}
+            </SelectItem>
+          </SelectPopup>
+        </Select>
+        <p className="text-muted-foreground text-xs">
+          {value === "auto"
+            ? tSkills("invocationAutoHelp")
+            : tSkills("invocationManualHelp")}
+        </p>
+      </div>
+    </>
+  );
+}
 
 function SkillFileTree({
   access,
@@ -992,7 +1109,6 @@ function SkillFileTree({
               id: resource.id,
               path: resource.path,
               fileName: node.name,
-              kind: resource.kind,
             }}
             onDeleteFile={onDeleteFile}
             onStartRename={onStartRename}
@@ -1002,7 +1118,7 @@ function SkillFileTree({
       }}
       renderIcon={(node) => {
         if (node.id === BODY_NODE_ID) {
-          return <MarkdownIcon className="size-4 shrink-0" />;
+          return <DocumentMark className="size-4 shrink-0" kind="markdown" />;
         }
         if (node.kind === "file") {
           return fileIcon(node.name);
@@ -1012,23 +1128,12 @@ function SkillFileTree({
       renderName={(node) => {
         if (node.kind === "folder" && renamingFolderPath === node.id) {
           return (
-            <Input
-              autoFocus
-              className="flex-1"
+            <InlineRenameInput
               onBlur={onCancelFolderRename}
-              onChange={(event) => setRenameValue(event.target.value)}
+              onCancel={onCancelFolderRename}
+              onValueChange={setRenameValue}
               onClick={(event) => event.stopPropagation()}
-              onKeyDown={(event) => {
-                event.stopPropagation();
-                if (event.key === "Enter") {
-                  event.preventDefault();
-                  onSubmitFolderRename(node.id, renameValue);
-                }
-                if (event.key === "Escape") {
-                  onCancelFolderRename();
-                }
-              }}
-              size="sm"
+              onCommit={() => onSubmitFolderRename(node.id, renameValue)}
               value={renameValue}
             />
           );
@@ -1041,28 +1146,19 @@ function SkillFileTree({
           resource
         ) {
           return (
-            <Input
-              autoFocus
-              className="flex-1"
+            <InlineRenameInput
               onBlur={onCancelRename}
-              onChange={(event) => setRenameValue(event.target.value)}
+              onCancel={onCancelRename}
+              onValueChange={setRenameValue}
               onClick={(event) => event.stopPropagation()}
-              onKeyDown={(event) => {
-                event.stopPropagation();
-                if (event.key === "Enter") {
-                  event.preventDefault();
-                  onSubmitRename(resource.path, renameValue);
-                }
-                if (event.key === "Escape") {
-                  onCancelRename();
-                }
-              }}
-              size="sm"
+              onCommit={() => onSubmitRename(resource.path, renameValue)}
               value={renameValue}
             />
           );
         }
-        return <span className="truncate">{node.name}</span>;
+        return (
+          <TruncatedText className="whitespace-pre">{node.name}</TruncatedText>
+        );
       }}
       selectedId={selectedId}
     />
@@ -1073,7 +1169,6 @@ type TreeEntry = {
   id: string;
   path: string;
   fileName: string;
-  kind: string;
 };
 
 type FolderCreateActionsProps = {
@@ -1127,6 +1222,7 @@ function FolderCreateActions({
   onCreateFile,
   onCreateFolder,
 }: FolderCreateActionsProps) {
+  const tCommon = useTranslations("common");
   const tSkills = useTranslations("knowledge.agentSkills");
   const [newFileOpen, setNewFileOpen] = useState(false);
   const [filename, setFilename] = useState("");
@@ -1184,6 +1280,9 @@ function FolderCreateActions({
             />
             <Button
               disabled={createPending || filename.trim().length === 0}
+              disabledReason={
+                createPending ? tCommon("creating") : tSkills("enterFileName")
+              }
               onClick={submitNewFile}
               size="sm"
             >
@@ -1220,6 +1319,7 @@ function FileRowActions({
       <Button
         aria-label={tSkills("renameFile")}
         disabled={renamePending}
+        disabledReason={t("common.saving")}
         onClick={() => onStartRename(entry)}
         size="icon-sm"
         variant="ghost"
@@ -1232,6 +1332,7 @@ function FileRowActions({
             <Button
               aria-label={tSkills("deleteFile")}
               disabled={deletePending}
+              disabledReason={t("common.deleting")}
               size="icon-sm"
               variant="ghost"
             >
@@ -1254,6 +1355,7 @@ function FileRowActions({
             </Button>
             <Button
               disabled={deletePending}
+              disabledReason={t("common.deleting")}
               onClick={() => {
                 setConfirmingDelete(false);
                 onDeleteFile(entry);
@@ -1365,6 +1467,9 @@ function RootAddMenu({
             />
             <Button
               disabled={createPending || path.trim().length === 0}
+              disabledReason={
+                createPending ? t("common.creating") : tSkills("enterFileName")
+              }
               onClick={submitNewFile}
               size="sm"
             >
@@ -1403,7 +1508,7 @@ const fileIcon = (fileName: string) => {
   // Recognise markdown via the shared MIME/extension helper so the file view,
   // the inspector rail, and the panel all agree on what counts as markdown.
   if (isMarkdownFile({ fileName })) {
-    return <MarkdownIcon className="size-4 shrink-0" />;
+    return <DocumentMark className="size-4 shrink-0" kind="markdown" />;
   }
   const dotIndex = fileName.lastIndexOf(".");
   const ext = dotIndex === -1 ? "" : fileName.slice(dotIndex + 1).toLowerCase();

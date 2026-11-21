@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import JSZip from "jszip";
 
+import { ZipArchive } from "@stll/docx-core/zip";
+
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { SPREADSHEET_EXPORT_LIMITS } from "@/api/lib/views/table-export";
@@ -154,6 +156,9 @@ describe("document review run export", () => {
       },
     });
     const context = asTestRaw<ExportDocumentReviewRunContext>({
+      request: new Request("https://api.example.test/handler"),
+      route:
+        "/v1/workspaces/:workspaceId/document-reviews/runs/:runId/export" satisfies ApiRoutePath,
       memberRole: sessionMemberRole("owner"),
       params: { workspaceId: WORKSPACE_ID, runId: RUN_ID },
       query: { format: "xlsx" },
@@ -170,8 +175,8 @@ describe("document review run export", () => {
     if (!(response instanceof Response)) {
       return;
     }
-    const zip = await JSZip.loadAsync(await response.arrayBuffer());
-    const sheet = await zip.file("xl/worksheets/sheet1.xml")?.async("text");
+    const zip = await ZipArchive.read(await response.arrayBuffer());
+    const sheet = await zip.entry("xl/worksheets/sheet1.xml")?.text();
     expect(sheet).toBeDefined();
     if (sheet === undefined) {
       return;
@@ -342,6 +347,9 @@ describe("document review run export", () => {
       },
     });
     const context = asTestRaw<ExportDocumentReviewRunContext>({
+      request: new Request("https://api.example.test/handler"),
+      route:
+        "/v1/workspaces/:workspaceId/document-reviews/runs/:runId/export" satisfies ApiRoutePath,
       memberRole: sessionMemberRole("owner"),
       params: { workspaceId: WORKSPACE_ID, runId: RUN_ID },
       query: { format: "csv" },

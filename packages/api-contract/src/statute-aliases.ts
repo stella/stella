@@ -1,9 +1,9 @@
 import {
   STATUTE_ACTS,
-  statuteActEliCollection,
   type StatuteAct,
+  statuteActEliCollection,
 } from "./statute-acts";
-import type { StatuteQueryCountry } from "./statute-query-capability";
+import type { StatuteGazetteCountry } from "./statute-query-capability";
 
 /**
  * An act an alias names: its number in the collection that published it,
@@ -90,12 +90,12 @@ export const STATUTE_ALIASES = {
     "spravny poriadok": target(SVK.administrativeProcedure),
   },
 } as const satisfies Record<
-  StatuteQueryCountry,
+  StatuteGazetteCountry,
   Record<string, StatuteAliasTarget>
 >;
 
 export const resolveStatuteAlias = (
-  country: StatuteQueryCountry,
+  country: StatuteGazetteCountry,
   foldedText: string,
 ): StatuteAliasTarget | null => {
   const aliases: Record<string, StatuteAliasTarget> = STATUTE_ALIASES[country];

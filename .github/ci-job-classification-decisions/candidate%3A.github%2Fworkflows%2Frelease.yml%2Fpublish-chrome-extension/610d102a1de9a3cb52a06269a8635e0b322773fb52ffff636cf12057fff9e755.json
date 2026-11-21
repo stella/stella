@@ -1,0 +1,5 @@
+{
+  "kind": "priority",
+  "qualifier": "Submits the published stable release's extension package to the Chrome Web Store for review.",
+  "reviewedDigest": "610d102a1de9a3cb52a06269a8635e0b322773fb52ffff636cf12057fff9e755"
+}

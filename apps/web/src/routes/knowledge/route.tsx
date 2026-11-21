@@ -3,10 +3,15 @@ import { createFileRoute, Outlet } from "@tanstack/react-router";
 import { isPublicKnowledgeEnabled } from "@/lib/knowledge/public-knowledge-launch";
 import { pageTitle } from "@/lib/page-title";
 import {
+  APP_FRAME_SCOPE,
+  MEMBER_PROVIDER_SCOPES,
+} from "@/routes/-app-frame-scope";
+import {
   loadProtectedContext,
   prefetchProtectedShell,
 } from "@/routes/-protected-guard";
-import { ProtectedPendingSkeleton } from "@/routes/-protected-pending-skeleton";
+import { LeafPendingView } from "@/routes/-route-pending-view";
+import { routePresentation } from "@/routes/-route-presentation";
 
 // Knowledge sits beside the signed-in routes rather than under them, so it can
 // be readable without an account. Until that is switched on it keeps exactly
@@ -17,6 +22,15 @@ import { ProtectedPendingSkeleton } from "@/routes/-protected-pending-skeleton";
 const guarded = !isPublicKnowledgeEnabled();
 
 export const Route = createFileRoute("/knowledge")({
+  staticData: {
+    presentation: routePresentation({
+      type: "label",
+      labelKey: "navigation.knowledge",
+      to: "/knowledge",
+    }),
+    appFrame: APP_FRAME_SCOPE.knowledge,
+    providerScopes: MEMBER_PROVIDER_SCOPES,
+  },
   // Off behind sign-in; otherwise the root's public-path rule decides, since
   // a route cannot render on the server where its parent does not.
   ssr: !guarded,
@@ -31,7 +45,9 @@ export const Route = createFileRoute("/knowledge")({
     meta: [{ title: pageTitle("navigation.knowledge") }],
   }),
   component: KnowledgeLayout,
-  pendingComponent: ProtectedPendingSkeleton,
+  // A layout: while the protected shell loads, the section's own pending
+  // view stands in the Knowledge frame, not a generic block.
+  pendingComponent: LeafPendingView,
 });
 
 function KnowledgeLayout() {

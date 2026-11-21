@@ -302,6 +302,22 @@ describe("describeConditionChip", () => {
     });
   });
 
+  test("a generative preview states its answer without claiming a decision-model probability", () => {
+    expect(
+      describeConditionChip({
+        kind: "model",
+        decision: {
+          state: "decided",
+          decidedBy: "generative_model",
+          value: true,
+        },
+      }),
+    ).toEqual({
+      tone: "success",
+      answer: { kind: "generative", value: true },
+    });
+  });
+
   test("a value the user set never shows a probability", () => {
     expect(describeConditionChip({ kind: "forced", value: false })).toEqual({
       tone: "highlight",
@@ -321,24 +337,53 @@ describe("describeConditionChip", () => {
     });
   });
 
-  test("no answer yet reads the same as no backend", () => {
-    expect(describeConditionChip({ kind: "model", decision: null })).toEqual(
+  test("a pending preview differs from a terminal undecided answer", () => {
+    expect(
+      describeConditionChip({ kind: "model", decision: null }).answer,
+    ).toEqual({ kind: "onGenerate" });
+    expect(
       describeConditionChip({
         kind: "model",
         decision: { state: "undecided", reason: "no-backend" },
-      }),
-    );
+      }).answer,
+    ).toEqual({ kind: "notSettled" });
   });
 
-  test("only below-floor warns; the others are plain", () => {
-    const tone = (reason: "below-floor" | "no-backend" | "failed") =>
-      describeConditionChip({
-        kind: "model",
-        decision: { state: "undecided", reason },
-      }).tone;
-    expect(tone("below-floor")).toBe("warning");
-    expect(tone("no-backend")).toBe("neutral");
-    expect(tone("failed")).toBe("neutral");
+  test("every terminal undecided reason reports no settled answer", () => {
+    const expected = {
+      "below-floor": {
+        reason: "below-floor",
+        tone: "warning",
+        answer: { kind: "notSettled" },
+      },
+      "no-backend": {
+        reason: "no-backend",
+        tone: "neutral",
+        answer: { kind: "notSettled" },
+      },
+      failed: {
+        reason: "failed",
+        tone: "neutral",
+        answer: { kind: "notSettled" },
+      },
+      refusal: {
+        reason: "refusal",
+        tone: "neutral",
+        answer: { kind: "notSettled" },
+      },
+    } as const satisfies {
+      [
+        Reason in Extract<ConditionDecision, { state: "undecided" }>["reason"]
+      ]: { reason: Reason } & ReturnType<typeof describeConditionChip>;
+    };
+    for (const { reason, ...appearance } of Object.values(expected)) {
+      expect(
+        describeConditionChip({
+          kind: "model",
+          decision: { state: "undecided", reason },
+        }),
+      ).toEqual(appearance);
+    }
   });
 });
 

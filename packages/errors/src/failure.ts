@@ -1,3 +1,16 @@
+// parser-output-unchanged: [uk-fcl] limiter/admission failure grades only classify telemetry; parsed values and rejection decisions are unchanged.
+// parser-output-unchanged: [us-courtlistener] limiter/admission failure grades only classify telemetry; parsed values and rejection decisions are unchanged.
+// parser-output-unchanged: [cz-ns] limiter/admission failure grades only classify telemetry; parsed values and rejection decisions are unchanged.
+// parser-output-unchanged: [cz-uohs] limiter/admission failure grades only classify telemetry; parsed values and rejection decisions are unchanged.
+// parser-output-unchanged: [pl-courts] limiter/admission failure grades only classify telemetry; parsed values and rejection decisions are unchanged.
+// parser-output-unchanged: [pl-sn] limiter/admission failure grades only classify telemetry; parsed values and rejection decisions are unchanged.
+// parser-output-unchanged: [pl-kio] limiter/admission failure grades only classify telemetry; parsed values and rejection decisions are unchanged.
+// parser-output-unchanged: [pl-tk] limiter/admission failure grades only classify telemetry; parsed values and rejection decisions are unchanged.
+// parser-output-unchanged: [pl-ncourt] limiter/admission failure grades only classify telemetry; parsed values and rejection decisions are unchanged.
+// parser-output-unchanged: [eu-ecj] limiter/admission failure grades only classify telemetry; parsed values and rejection decisions are unchanged.
+// parser-output-unchanged: [pl-kis] limiter/admission failure grades only classify telemetry; parsed values and rejection decisions are unchanged.
+// parser-output-unchanged: [pl-uokik] limiter/admission failure grades only classify telemetry; parsed values and rejection decisions are unchanged.
+// parser-output-unchanged: failure grading and guarded telemetry fingerprint reads preserve parsed values and rejection decisions.
 // Failure vocabulary and classification, shared by every runtime that throws
 // or observes a failure.
 
@@ -17,11 +30,26 @@ export const FAILURE_GRADES = [
 export type FailureGrade = (typeof FAILURE_GRADES)[number];
 
 export const FAILURE_REASON_GRADE = {
+  public_read_timeout: "transient",
+  limiter_store_unavailable: "transient",
+  organization_state_unreadable: "transient",
+  admission_lease_lost: "transient",
+  admission_configuration_incomplete: "defect",
   upstream_unavailable: "transient",
+  work_capacity_unavailable: "transient",
+  work_deadline_exceeded: "transient",
   provider_unavailable: "transient",
   // The provider's stream stopped before its answer finished: a dropped
   // connection or a provider-side cut, not a fault of this service.
   provider_stream_incomplete: "transient",
+  // parser-output-unchanged: model output and deadline reasons grade observed failures only; no parser reads them.
+  // The model's answer ended before it was whole: it hit its output budget, or
+  // the structured output it produced was cut off and does not parse. A fresh
+  // run usually answers in full.
+  model_output_incomplete: "transient",
+  // A run the caller bounded with a deadline outlived it: the provider was
+  // too slow for the caller's budget, not a fault of this service.
+  model_deadline_exceeded: "transient",
   quota_exhausted: "transient",
   pg_connection_lifecycle: "transient",
   // 40001: the designed outcome of a serializable or repeatable-read
@@ -31,6 +59,11 @@ export const FAILURE_REASON_GRADE = {
   // the lock or statement timeout is expected.
   pg_lock_timeout_budgeted: "transient",
   pg_statement_budget_exhausted: "transient",
+  // parser-output-unchanged: a failure grade for budgeted request timeouts; no parser reads it.
+  // Only through a bounded request step: the request answered without the
+  // step, inside a sub-budget of its own latency budget. The counterpart of
+  // `timeout_unbounded`, a wait nobody bounded against the caller's budget.
+  timeout_budgeted: "transient",
   redis_connection: "transient",
   redis_poll_blip: "transient",
   network_reset: "transient",
@@ -40,15 +73,54 @@ export const FAILURE_REASON_GRADE = {
   // destination; a refused connection alone cannot tell an outage from a
   // wrong address.
   upstream_connection_refused: "transient",
+  // parser-output-unchanged: a failure grade for refused projection writes; no parser reads it.
+  // A process of an older release met a search-index generation that a newer
+  // release registered and refused to write without it. A process of the
+  // newer release takes the same write.
+  corpus_generation_unknown: "transient",
+  // parser-output-unchanged: a read-side grade for stored rows; no parser reads it.
+  // A stored document AST the reader served without loss but not as written
+  // (a role, inline kind or block type it does not declare kept in a neutral
+  // shape, a repeated identity re-keyed), or one ingestion stored without
+  // structure. The row's data needs a reparse; no code is at fault.
+  stored_ast_degraded: "anticipated",
   generation_cancelled: "anticipated",
+  work_cancelled: "anticipated",
+  publisher_resource_limit: "anticipated",
   chat_loop_detected: "anticipated",
   chat_empty_completion: "anticipated",
+  // parser-output-unchanged: visual preview reasons grade observed failures only; no parser reads them.
+  visual_preview_input_invalid: "anticipated",
+  visual_preview_not_configured: "anticipated",
+  // parser-output-unchanged: grades a deployment without hosted usage management; no parser reads it.
+  hosted_usage_not_configured: "anticipated",
   provider_billing: "anticipated",
   provider_credentials_rejected: "anticipated",
+  publisher_refused: "anticipated",
   model_unavailable: "anticipated",
+  // A complete structured answer that does not match the requested schema:
+  // the model's choice, which this service rejects rather than stores.
+  model_output_invalid: "anticipated",
+  // The provider filtered the model's answer under its content policy: its
+  // decision about the content, not a fault of this service.
+  // parser-output-unchanged: a failure grade for moderated model output; no parser output depends on it.
+  model_output_moderated: "anticipated",
   credentials_token_unreadable: "anticipated",
   client_disconnected: "anticipated",
   optional_file_absent: "anticipated",
+  // parser-output-unchanged: research retrieval reasons grade observed failures only; no parser reads them.
+  research_index_not_ready: "anticipated",
+  // parser-output-unchanged: a refusal grade for deferred document reads; no parser reads it.
+  // A read-through document fetch found the decision's source held by another
+  // owner, or lost it to one mid-fetch. The decision stays queued for them.
+  deferred_document_owned_elsewhere: "anticipated",
+  // parser-output-unchanged: a refusal grade for OCR requests no worker would run; no parser reads it.
+  document_ocr_unconfigured: "anticipated",
+  // parser-output-unchanged: sanctions reasons classify telemetry only; no parser reads them.
+  sanctions_matcher_deadline: "anticipated",
+  sanctions_matcher_saturated: "anticipated",
+  sanctions_matcher_closed: "anticipated",
+  sanctions_screening_work_limit: "anticipated",
   request_invalid: "client",
   access_denied: "client",
   usage_limited: "client",
@@ -59,16 +131,41 @@ export const FAILURE_REASON_GRADE = {
   request_validation: "client",
   route_not_found: "client",
   request_malformed: "client",
+  method_not_allowed: "client",
   unclassified: "defect",
+  tagged_failure: "defect",
+  // parser-output-unchanged: provider request rejections grade observed failures only; no parser reads them.
+  // A provider answered 400 to a request this service built and nothing more
+  // specific named it: the request broke the provider's contract, which is
+  // this service's bug, never the user's.
+  provider_request_rejected: "defect",
+  research_passage_target_failed: "defect",
+  sanctions_screening_failed: "defect",
+  research_passage_search_failed: "defect",
   unobserved_5xx: "defect",
   rls_denied: "defect",
   response_invalid: "defect",
+  // parser-output-unchanged: new outbound-action failure codes that no parser emits
+  outbound_action_storage_failed: "defect",
+  outbound_action_preview_unreadable: "defect",
+  // parser-output-unchanged: invoice renderer failures grade telemetry only.
+  invoice_renderer_failed: "defect",
+  // parser-output-unchanged: invoice-link read and delivery grades classify telemetry only.
+  invoice_link_read_failed: "defect",
+  invoice_email_unconfigured: "anticipated",
+  invoice_links_disabled: "anticipated",
+  visual_preview_unavailable: "defect",
+  visual_preview_timeout: "defect",
+  visual_preview_response_invalid: "defect",
   // 40P01 reaches a sink only after the transaction retry gave up, so what is
   // left is a lock-order signal rather than contention.
   pg_deadlock: "defect",
   pg_lock_unavailable: "defect",
   pg_query_canceled: "defect",
   pg_auth_failed: "defect",
+  // 22007, 22008, 22P02: Postgres could not read a value as its column type.
+  // A value that fails there passed input validation, so the gap is a defect.
+  pg_invalid_input: "defect",
   connection_refused: "defect",
   socket_open_failed: "defect",
   timeout_unbounded: "defect",
@@ -197,9 +294,14 @@ const resolveDeclaration = (
  * A reader that has already walked the prototype chain passes it, so a Proxy
  * whose `getPrototypeOf` answers differently on each call is read once.
  */
+type ReadFailureBrandOptions = {
+  prototypes?: readonly object[];
+  read?: (value: object, key: string) => unknown;
+};
+
 export const readFailureBrand = (
   value: unknown,
-  prototypes?: readonly object[],
+  { prototypes, read }: ReadFailureBrandOptions = {},
 ): FailureBrand | undefined => {
   if (typeof value !== "object" || value === null) {
     return undefined;
@@ -212,7 +314,17 @@ export const readFailureBrand = (
     const declaration = classDeclarations.get(prototype);
     if (declaration !== undefined) {
       return {
-        reason: resolveDeclaration(declaration, value),
+        reason: resolveDeclaration(
+          declaration,
+          read === undefined
+            ? value
+            : new Proxy(value, {
+                get: (target, key): unknown =>
+                  typeof key === "string"
+                    ? read(target, key)
+                    : Reflect.get(target, key),
+              }),
+        ),
         source: "class",
       };
     }

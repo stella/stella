@@ -1,10 +1,65 @@
 import { describe, expect, test } from "bun:test";
+import fc from "fast-check";
+
+import { assertProperty } from "@stll/property-testing";
+import { foldSearchMatchText } from "@stll/text-normalize";
 
 import type { PublicToolBrowseEntry } from "@/routes/tools/-components/public-tools-index.logic";
 import {
   filterPublicToolEntries,
   groupPublicToolEntries,
 } from "@/routes/tools/-components/public-tools-index.logic";
+
+const PROPERTY_MAX_TEXT_PARTS = 20;
+const PROPERTY_MAX_TOOLS = 12;
+const PROPERTY_MAX_METADATA_VALUES = 5;
+const searchTextArbitrary = fc
+  .array(
+    fc.constantFrom(
+      "a",
+      "C",
+      "é",
+      "e\u0301",
+      "Č",
+      "c\u030C",
+      "ß",
+      "ς",
+      "😀",
+      "\ud800",
+      "\udc00",
+      "\ufffd",
+      "+",
+      "[",
+      " ",
+      "\t",
+    ),
+    { maxLength: PROPERTY_MAX_TEXT_PARTS },
+  )
+  .map((parts) => parts.join(""));
+const practiceAreaArbitrary = fc.constantFrom(
+  "corporate",
+  "litigation",
+  "commercial",
+  "employment",
+);
+const publicToolEntriesArbitrary = fc
+  .array(
+    fc.record({
+      author: searchTextArbitrary,
+      description: searchTextArbitrary,
+      displayName: searchTextArbitrary,
+      jurisdictions: fc.array(searchTextArbitrary, {
+        maxLength: PROPERTY_MAX_METADATA_VALUES,
+      }),
+      kind: fc.constantFrom("skill", "native-tool"),
+      slug: searchTextArbitrary,
+      tags: fc.array(practiceAreaArbitrary, {
+        maxLength: PROPERTY_MAX_METADATA_VALUES,
+      }),
+    }),
+    { maxLength: PROPERTY_MAX_TOOLS },
+  )
+  .map((generated) => generated.map((overrides) => entry(overrides)));
 
 const entry = (
   overrides: Partial<PublicToolBrowseEntry> &
@@ -24,7 +79,7 @@ const skillEntry = entry({
   displayName: "JurisRank",
   jurisdictions: ["AR"],
   kind: "skill",
-  slug: "jurisrank-csjn-analysis",
+  slug: "jurisrank",
   tags: ["litigation"],
 });
 const dataSourceEntry = entry({
@@ -51,6 +106,20 @@ const noFilters = {
 };
 
 describe("filterPublicToolEntries", () => {
+  test("finds a tool by its source wording in any language", () => {
+    const localized = entries.map((tool) => ({
+      ...tool,
+      description: "popis",
+      sourceCopy: "business registry lookup",
+    }));
+    expect(
+      filterPublicToolEntries(localized, { ...noFilters, query: "registry" }),
+    ).toEqual(localized);
+    expect(
+      filterPublicToolEntries(localized, { ...noFilters, query: "popis" }),
+    ).toEqual(localized);
+  });
+
   test("searches names, descriptions, authors, and metadata without accents", () => {
     expect(
       filterPublicToolEntries(entries, { ...noFilters, query: "adrian AR" }),
@@ -61,6 +130,84 @@ describe("filterPublicToolEntries", () => {
         query: "corporate house",
       }),
     ).toEqual([dataSourceEntry]);
+  });
+
+  test("requires every folded query word, keeps punctuation literal, and accepts blank input", () => {
+    expect(
+      filterPublicToolEntries(entries, { ...noFilters, query: "   " }),
+    ).toEqual(entries);
+    expect(
+      filterPublicToolEntries(entries, {
+        ...noFilters,
+        query: "corporate +",
+      }),
+    ).toEqual([]);
+    expect(
+      filterPublicToolEntries(
+        [entry({ description: "A+B clause", kind: "skill", slug: "plus" })],
+        { ...noFilters, query: "+" },
+      ).map(({ slug }) => slug),
+    ).toEqual(["plus"]);
+  });
+
+  test("matches malformed surrogates as replacement characters and rejects half-astral queries", () => {
+    expect(
+      filterPublicToolEntries(
+        [
+          entry({
+            description: "broken\ud800text",
+            kind: "skill",
+            slug: "broken",
+          }),
+        ],
+        { ...noFilters, query: "\ufffd" },
+      ),
+    ).toHaveLength(1);
+    const astral = [
+      entry({ displayName: "😀", kind: "skill", slug: "astral" }),
+    ];
+    expect(
+      filterPublicToolEntries(astral, { ...noFilters, query: "\ud83d" }),
+    ).toEqual([]);
+    expect(
+      filterPublicToolEntries(astral, { ...noFilters, query: "\ude00" }),
+    ).toEqual([]);
+  });
+
+  test("public tool filtering matches the previous folded-word predicate for generated Unicode inputs", () => {
+    assertProperty(
+      "public tool filtering matches the previous folded-word predicate for generated Unicode inputs",
+      fc.property(
+        publicToolEntriesArbitrary,
+        searchTextArbitrary,
+        (generatedEntries, query) => {
+          const matchesOld = (tool: PublicToolBrowseEntry) => {
+            const terms = foldSearchMatchText(query)
+              .trim()
+              .split(/\s+/u)
+              .filter(Boolean)
+              .map((term) => term.toWellFormed());
+            if (terms.length === 0) {
+              return true;
+            }
+            const haystack = foldSearchMatchText(
+              [
+                tool.displayName,
+                tool.description,
+                tool.author ?? "",
+                tool.slug,
+                ...tool.tags,
+                ...tool.jurisdictions,
+              ].join(" "),
+            ).toWellFormed();
+            return terms.every((term) => haystack.includes(term));
+          };
+          expect(
+            filterPublicToolEntries(generatedEntries, { ...noFilters, query }),
+          ).toEqual(generatedEntries.filter(matchesOld));
+        },
+      ),
+    );
   });
 
   test("maps task-led discovery to the relevant catalogue entries", () => {

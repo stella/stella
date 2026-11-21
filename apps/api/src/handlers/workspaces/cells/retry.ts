@@ -1,16 +1,17 @@
 import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { cellMetadata } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { requestExtractionRunStore } from "@/api/lib/extraction-runs/request-run-store";
 import { isWorkflowRunning, startWorkflow } from "@/api/lib/workflow-queue";
 
 const config = {
+  contract: "patch",
   description:
     "Re-run the AI extraction for one cell, meaning one document's value for " +
     "one AI column, in a matter. Refused when the property is not " +
@@ -23,9 +24,9 @@ const config = {
     reason: "workflow_orchestration",
     consumesServices: true,
   },
-  body: t.Object({
-    entityId: tSafeId("entity"),
-    propertyId: tSafeId("property"),
+  body: v.object({
+    entityId: resourceIdSchema("entity"),
+    propertyId: resourceIdSchema("property"),
   }),
 } satisfies WorkspaceHandlerConfig;
 

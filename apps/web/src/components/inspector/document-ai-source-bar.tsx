@@ -6,11 +6,10 @@ import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
-import {
-  ChevronLeftIcon,
-  ChevronRightIcon,
-  LoaderCircleIcon,
-} from "@stll/ui/icons";
+import { ChevronLeftIcon, ChevronRightIcon } from "@stll/ui/icons";
+import { Loader } from "@stll/ui/loader";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import {
@@ -23,16 +22,18 @@ import type { FileTab } from "@/components/inspector/inspector-tabs-store";
 import { useSyncJustifications } from "@/components/workspaces/hooks/use-sync-justifications";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useFormatter } from "@/i18n/formatting-context";
-import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import type { Citation } from "@/lib/citations";
 import { iterateJustificationCitations } from "@/lib/citations";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { toAPIError } from "@/lib/errors/api";
+import { captureQueryError } from "@/lib/errors/query-result";
 import { useOptionalPDFStore } from "@/lib/pdf/pdf-context";
 import { getPDFPageIdByNumber } from "@/lib/pdf/utils";
+import { queryView } from "@/lib/query-view.logic";
 import { renderJustificationContent } from "@/lib/render-justification-content";
 import { toSafeId } from "@/lib/safe-id";
+import { useQueryViewError } from "@/lib/use-query-view";
 import { entityOptions } from "@/lib/workspaces/queries/entities";
 import { propertiesOptions } from "@/lib/workspaces/queries/properties";
 import { workspaceKeys } from "@/lib/workspaces/queries/workspace";
@@ -59,8 +60,12 @@ export const DocumentAiSourceBar = ({
   const openFile = useInspectorTabsStore((s) => s.openFile);
 
   const propertiesQuery = useQuery(propertiesOptions(workspaceId));
+  const propertiesQueryView = queryView(propertiesQuery);
+  useQueryViewError(propertiesQueryView, "DocumentAiSourceBar:query");
   const properties = propertiesQuery.data;
   const entityQuery = useQuery(entityOptions(workspaceId, activeTab.entityId));
+  const entityQueryView = queryView(entityQuery);
+  useQueryViewError(entityQueryView, "DocumentAiSourceBar:query-2");
   const entity = entityQuery.data;
   useSyncJustifications({
     workspaceId,
@@ -71,7 +76,7 @@ export const DocumentAiSourceBar = ({
     selectJustificationByFieldId(s.justifications, fieldId),
   );
 
-  const slots = useMemo(() => {
+  const slots = (() => {
     if (!justification || !entity || !properties) {
       return [];
     }
@@ -84,7 +89,7 @@ export const DocumentAiSourceBar = ({
         return { fieldId: f.id, property: prop };
       })
       .filter((s) => s !== null);
-  }, [entity, justification, properties]);
+  })();
 
   const currentIdx = slots.findIndex((s) => s.fieldId === fieldId);
   const prevSlot = currentIdx > 0 ? slots[currentIdx - 1] : null;
@@ -106,6 +111,7 @@ export const DocumentAiSourceBar = ({
   const pages = useOptionalPDFStore((s) => s.pages);
   const justificationId = justification?.id;
   const boundingBoxes = justification?.boundingBoxes;
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- react/exhaustive-deps cannot see compiler memoization, and this value is an effect dependency
   const activeDocumentJustificationContent = useMemo(
     () =>
       justification
@@ -123,6 +129,7 @@ export const DocumentAiSourceBar = ({
         : null,
     [activeTab.id, justification],
   );
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- react/exhaustive-deps cannot see compiler memoization, and this value is an effect dependency
   const citations = useMemo(
     () =>
       activeDocumentJustificationContent
@@ -150,14 +157,16 @@ export const DocumentAiSourceBar = ({
         return panic("bounding-box generation ran without a justification id");
       }
       const result = await Result.tryPromise(async () => {
-        const response = await api
-          .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
-          ["bounding-boxes"].post(
-            {
-              justificationId: toSafeId<"justification">(justificationId),
-            },
-            { fetch: { signal } },
-          );
+        const workspaceApi = api.workspaces({
+          workspaceId: toSafeId<"workspace">(workspaceId),
+        });
+
+        const response = await workspaceApi["bounding-boxes"].post(
+          {
+            justificationId: toSafeId<"justification">(justificationId),
+          },
+          { fetch: { signal } },
+        );
         if (response.error) {
           throw toAPIError(response.error);
         }
@@ -167,7 +176,13 @@ export const DocumentAiSourceBar = ({
         return response.data;
       });
       if (Result.isError(result)) {
-        getAnalytics().captureError(result.error);
+        captureQueryError(result.error, {
+          fingerprintKey: "DocumentAiSourceBar.queryFn:failure",
+          scope: {
+            type: "handler",
+            handlerId: "DocumentAiSourceBar.queryFn:failure",
+          },
+        });
         throw result.error;
       }
       return result.value;
@@ -413,24 +428,31 @@ export const DocumentAiSourceBar = ({
         )}
       >
         {isGeneratingBoxes && (
-          <LoaderCircleIcon className="text-muted-foreground size-3 shrink-0 animate-spin" />
+          <Loader
+            className="size-3 shrink-0"
+            label={t("common.loading")}
+            size="sm"
+          />
         )}
-        <button
+        <Button
           aria-expanded={isAnswerExpanded}
-          className="min-w-0 flex-1 truncate text-start"
+          className="min-w-0 flex-1"
           onClick={() => setIsAnswerExpanded((expanded) => !expanded)}
-          type="button"
+          variant="plain"
         >
-          {propertyName && (
-            <span className="text-muted-foreground">{propertyName}: </span>
-          )}
-          <span className="font-medium">
-            {shortAnswer ?? t("workspaces.pdf.evidence")}
-          </span>
-        </button>
+          <TruncatedText>
+            {propertyName && (
+              <span className="text-muted-foreground">{propertyName}: </span>
+            )}
+            <span className="font-medium">
+              {shortAnswer ?? t("workspaces.pdf.evidence")}
+            </span>
+          </TruncatedText>
+        </Button>
         <Button
           aria-label={t("common.previous")}
           disabled={!prevSlot}
+          disabledReason={t("inspector.firstSourceReached")}
           onClick={() => {
             if (!prevSlot) {
               return;
@@ -458,6 +480,7 @@ export const DocumentAiSourceBar = ({
         <Button
           aria-label={t("common.next")}
           disabled={!nextSlot}
+          disabledReason={t("inspector.lastSourceReached")}
           onClick={() => {
             if (!nextSlot) {
               return;
@@ -530,8 +553,10 @@ const useFolioBlockPage = (
   return page;
 };
 
+// The chip's surface is the outline button's; its tiny type and inset sit on
+// the label inside, so the chip stays the height of the line it cites from.
 const SOURCE_CITATION_CHIP_CLASS =
-  "border-border bg-muted/64 text-foreground-strong-muted hover:bg-muted hover:text-foreground hover:border-foreground/24 inline-flex shrink-0 items-center rounded-md border px-1.5 py-0.5 align-middle text-2xs font-medium tracking-tight";
+  "border-border bg-muted/64 text-foreground-strong-muted hover:bg-muted hover:text-foreground hover:border-foreground/24 inline-flex items-center rounded-md border px-1.5 py-0.5 text-2xs font-medium tracking-tight";
 
 // Unverified: no border, no hover affordance, dashed underline so it
 // reads as plain text the reader must not trust as a source anchor.
@@ -552,13 +577,15 @@ const SourceCitationChip = ({
   const t = useTranslations();
   if (citation.kind === "pdf-bates") {
     return (
-      <button
-        className={SOURCE_CITATION_CHIP_CLASS}
+      <Button
+        className="shrink-0 align-middle"
         onClick={onClick}
-        type="button"
+        variant="plain"
       >
-        p.&nbsp;{citation.pageNumber}
-      </button>
+        <span className={SOURCE_CITATION_CHIP_CLASS}>
+          p.&nbsp;{citation.pageNumber}
+        </span>
+      </Button>
     );
   }
 
@@ -569,12 +596,14 @@ const SourceCitationChip = ({
 
   if (citation.citationStatus === "unverified") {
     return (
-      <span
-        className={UNVERIFIED_CITATION_CHIP_CLASS}
-        title={t("common.unverifiedCitationHint")}
-      >
-        {t("common.unverified")}
-      </span>
+      <Tooltip>
+        <TooltipTrigger
+          render={<span className={UNVERIFIED_CITATION_CHIP_CLASS} />}
+        >
+          {t("common.unverified")}
+        </TooltipTrigger>
+        <TooltipPopup>{t("common.unverifiedCitationHint")}</TooltipPopup>
+      </Tooltip>
     );
   }
 
@@ -603,19 +632,19 @@ const DocxSourceCitationChip = ({
   tooltip: string | undefined;
 }) => {
   const page = useFolioBlockPage(entityId, fieldId, blockId);
-  // Page resolution races the editor's paginator on first mount —
-  // fall back to an em dash so the chip stays the same width and
-  // the layout doesn't reshuffle when the number lands.
-  const label = page !== null ? `p. ${page}` : "p. —";
+  // Page resolution races the editor's paginator on first mount, so
+  // fall back to an ellipsis while the number is pending; the chip keeps
+  // nearly the same width and the layout doesn't reshuffle when it lands.
+  const label = page !== null ? `p. ${page}` : "p. …";
 
   return (
-    <button
+    <Button
       aria-label={tooltip}
-      className={SOURCE_CITATION_CHIP_CLASS}
+      className="shrink-0 align-middle"
       onClick={onClick}
-      type="button"
+      variant="plain"
     >
-      {label}
-    </button>
+      <span className={SOURCE_CITATION_CHIP_CLASS}>{label}</span>
+    </Button>
   );
 };

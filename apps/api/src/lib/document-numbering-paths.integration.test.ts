@@ -7,15 +7,15 @@ import {
   setDefaultTimeout,
   test,
 } from "bun:test";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import {
   documentCounters,
   documentReferenceCounters,
   entities,
-  matterCounters,
   entityVersions,
+  matterCounters,
   organizationSettings,
   properties,
   workspaces,
@@ -25,6 +25,7 @@ import clipEntity from "@/api/handlers/entities/clip";
 import { createEntitiesHandler } from "@/api/handlers/entities/create";
 import { createWorkspaceHandler } from "@/api/handlers/workspaces/create";
 import { createDuplicateWorkspace } from "@/api/handlers/workspaces/duplicate";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -317,6 +318,44 @@ afterAll(async () => {
   }
 });
 
+test("scoped upload versions succeed with SELECT-only organization privileges", async () => {
+  testReferences.push("SCOPED-UPLOAD/26");
+  const workspaceId = await createMatter("SCOPED-UPLOAD/26");
+  const propertyId = await createFileProperty(workspaceId);
+  const role = expectOk(
+    await createSafeDb(
+      testDb,
+      [workspaceId],
+      ids.orgA,
+      ids.userA1,
+    )(async (tx) => {
+      const result = await tx.execute(sql`
+          SELECT current_user AS role,
+            has_table_privilege(current_user, 'public.organization', 'SELECT') AS "canSelect",
+            has_table_privilege(current_user, 'public.organization', 'UPDATE') AS "canUpdate"
+        `);
+      return result.rows;
+    }),
+  );
+  expect(role).toEqual([{ role: "stella", canSelect: true, canUpdate: false }]);
+  const uploaded = await runNumberingUpload({
+    testDb,
+    organizationId: ids.orgA,
+    userId: ids.userA1,
+    workspaceId,
+    propertyId,
+  });
+  const versioned = await runNumberingUpload({
+    testDb,
+    organizationId: ids.orgA,
+    userId: ids.userA1,
+    workspaceId,
+    propertyId,
+    entityId: uploaded.finalizedResult.entityId,
+  });
+  expect(versioned.finalizedResult.type).toBe("entity_version");
+});
+
 describe("numbering paths preserve issued stamps across counter state", () => {
   test.each(cases.map((scenario, index) => ({ scenario, index })))(
     "real numbering paths: %j",
@@ -362,7 +401,7 @@ describe("numbering paths preserve issued stamps across counter state", () => {
           request: new Request(
             `https://example.test/workspaces/${clippedState.matter}`,
           ),
-          route: "/test/entities/clip",
+          route: "/v1/entities/:workspaceId/clip" satisfies ApiRoutePath,
           safeDb: scopeFor(clippedState.matter),
           session: { activeOrganizationId: ids.orgA },
           user: { id: ids.userA1 },
@@ -522,7 +561,7 @@ describe("numbering paths preserve issued stamps across counter state", () => {
           request: new Request(
             `https://example.test/workspaces/${duplicateSource}/duplicate`,
           ),
-          route: "/test/workspaces/duplicate",
+          route: "/v1/workspaces/:workspaceId/duplicate" satisfies ApiRoutePath,
           session: { activeOrganizationId: ids.orgA },
           user: { id: ids.userA1 },
           workspaceId: duplicateSource,

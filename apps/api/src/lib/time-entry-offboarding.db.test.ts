@@ -20,8 +20,8 @@ import { member } from "@/api/db/auth-schema";
 import {
   organizationSettings,
   timeEntries,
-  timeTimers,
   timeEntryTimerStates,
+  timeTimers,
   workspaceMembers,
   workspaces,
 } from "@/api/db/schema";
@@ -43,6 +43,7 @@ import {
   releaseAgentAuthTestDb,
 } from "@/api/tests/helpers/mock-agent-auth-db";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import { enrolledTimeBillingSnapshot } from "@/api/tests/helpers/time-billing-enrolment";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
 setDefaultTimeout(120_000);
@@ -357,6 +358,10 @@ describe("member removal with an active timer", () => {
       createAuditRecorder: () => recordAuditEvent,
       request: new Request("https://example.test/time-entry-offboarding"),
       route: "/test/time-entry-offboarding",
+      featureAccessSnapshot: enrolledTimeBillingSnapshot({
+        userId: fixture.ownerId,
+        organizationId: fixture.organizationId,
+      }),
     };
     expect(
       await updateTimeEntry.handler(

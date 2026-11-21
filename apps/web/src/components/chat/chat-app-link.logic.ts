@@ -1,13 +1,11 @@
 import { panic, Result } from "better-result";
 import * as v from "valibot";
 
-import {
-  type CaseLawDecisionRouteParams,
-  parseCaseLawDecisionPath,
-} from "@stll/api-contract/case-law-decision-route";
+import type { CaseLawDecisionRouteParams } from "@stll/api-contract/case-law-decision-route";
+import { resolveLegalCitationLinks } from "@stll/api-contract/legal-citation-links";
+import { statuteDisplayLabel } from "@stll/api-contract/statute-display-label";
 import {
   createStatuteRouteParams,
-  parseStatutePath,
   type StatuteRouteParams,
 } from "@stll/api-contract/statute-route";
 
@@ -17,11 +15,13 @@ import type { StatuteRouteResolution } from "@/features/statutes/statute-route-r
 
 /**
  * A statute page's address, the `?asOf` day it asks the act on, and the
- * provision anchor it lands on, each null when the link names none.
+ * provision anchor it lands on, each null when the link names none. A link
+ * whose label names subdivisions of that provision carries their anchors.
  */
 export type StatuteLink = {
   anchor: string | null;
   asOf: string | null;
+  citedAnchorIds?: readonly string[] | undefined;
   params: StatuteRouteParams;
 };
 
@@ -60,22 +60,25 @@ type LinkedStatute = {
   id: string;
   slug: string | null;
   title: string;
+  documentType?: string | null;
   versionValidFrom: string | null;
 };
 
 /** The inspector tab a statute link opens: the act, landing on its anchor. */
 export const createStatuteLinkTab = (
   statute: LinkedStatute,
-  { anchor }: StatuteLink,
+  { anchor, citedAnchorIds }: StatuteLink,
 ) =>
   createStatuteViewTab({
     country: statute.country,
     documentId: statute.id,
     eli: statute.eli,
     slug: statute.slug,
-    statuteTitle: statute.title,
+    statuteTitle: statuteDisplayLabel({ ...statute, eli: statute.eli ?? "" })
+      .text,
     versionValidFrom: statute.versionValidFrom,
     ...(anchor === null ? {} : { anchorId: anchor }),
+    citedAnchorIds,
   });
 
 /**
@@ -135,26 +138,27 @@ export const classifyChatHttpLink = (
   url: URL,
   appOrigins: ReadonlySet<string>,
 ): ChatHttpLink => {
-  if (!appOrigins.has(url.origin)) {
-    return { type: "external" };
+  const resolved = resolveLegalCitationLinks({
+    url: url.href,
+    sourceUrl: url.href,
+    appOrigins,
+  });
+  switch (resolved.type) {
+    case "decision":
+      return { type: "decision", params: resolved.params };
+    case "statute":
+      return {
+        type: "statute",
+        link: {
+          anchor: readAnchor(url.hash),
+          asOf: readAsOf(url.searchParams),
+          params: resolved.params,
+        },
+      };
+    case "external":
+      return { type: "external" };
+    default:
+      resolved satisfies never;
+      return panic(`Unhandled legal citation: ${String(resolved)}`);
   }
-
-  const decision = parseCaseLawDecisionPath(url.pathname);
-  if (decision !== null) {
-    return { type: "decision", params: decision };
-  }
-
-  const statute = parseStatutePath(url.pathname);
-  if (statute !== null) {
-    return {
-      type: "statute",
-      link: {
-        anchor: readAnchor(url.hash),
-        asOf: readAsOf(url.searchParams),
-        params: statute,
-      },
-    };
-  }
-
-  return { type: "external" };
 };

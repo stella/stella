@@ -4,6 +4,7 @@ import { createRoot } from "react-dom/client";
 import { panic } from "better-result";
 
 import { cn } from "../../lib/utils";
+import { DetailsGrid, DetailsItem } from "../details-grid";
 import { Popover, PopoverPanel, PopoverTrigger } from "../popover";
 
 // The editor is far wider than the picker it replaces, and the swap happens
@@ -21,10 +22,11 @@ type PopoverView = keyof typeof VIEW_WIDTH_CLASS;
 // `side="top"` makes Base UI take the popup out of normal flow, so the
 // positioner has to measure it some other way; the trigger sits at the
 // bottom edge so that side has room and is not flipped away.
-const side =
-  new URLSearchParams(window.location.search).get("side") === "top"
-    ? "top"
-    : "bottom";
+const params = new URLSearchParams(window.location.search);
+const side = params.get("side") === "top" ? "top" : "bottom";
+// A fact sheet in a popup sized only by its content: the query container
+// inside `DetailsGrid` must still give the popup a width to size to.
+const content = params.get("content") === "details" ? "details" : "views";
 
 const PopoverResizeFixture = () => {
   const [view, setView] = useState<PopoverView>("picker");
@@ -51,19 +53,31 @@ const PopoverResizeFixture = () => {
         }}
       >
         <PopoverTrigger>Open</PopoverTrigger>
-        <PopoverPanel
-          align="start"
-          className={VIEW_WIDTH_CLASS[view]}
-          side={side}
-        >
-          {view === "picker" ? (
-            <button onClick={() => setView("editor")} type="button">
-              Edit
-            </button>
-          ) : (
-            <p data-testid="editor">Wide editor view</p>
-          )}
-        </PopoverPanel>
+        {content === "details" ? (
+          <PopoverPanel align="end" side={side}>
+            <p>Poland</p>
+            <DetailsGrid>
+              <DetailsItem label="Decisions">3,399,672</DetailsItem>
+              <DetailsItem data-testid="last-updated" label="Last updated">
+                Sunday, 25 October 2026 at 09:03:45
+              </DetailsItem>
+            </DetailsGrid>
+          </PopoverPanel>
+        ) : (
+          <PopoverPanel
+            align="start"
+            className={VIEW_WIDTH_CLASS[view]}
+            side={side}
+          >
+            {view === "picker" ? (
+              <button onClick={() => setView("editor")} type="button">
+                Edit
+              </button>
+            ) : (
+              <p data-testid="editor">Wide editor view</p>
+            )}
+          </PopoverPanel>
+        )}
       </Popover>
     </main>
   );

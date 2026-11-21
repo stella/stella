@@ -1,11 +1,15 @@
-import { Result, panic } from "better-result";
+import { panic, Result } from "better-result";
 
+import { sanitizeErrorAttributesForOutput } from "@stll/errors";
 import type { DocumentStageObserver } from "@stll/legal-atlas/document-fetch-diagnostics";
 import {
-  INGESTION_STOP_KIND,
-  type IngestionStopKind,
-  type IngestionPipelineResult,
   CYCLE_HALT_REASON,
+  CYCLE_OUTCOME,
+  INGESTION_PAUSE_REASON,
+  INGESTION_STOP_KIND,
+  type IngestionCycleTermination,
+  type IngestionPipelineResult,
+  type IngestionStopKind,
 } from "@stll/legal-atlas/ingestion-cycle";
 
 import type { IngestionScopedDb } from "@/api/db/safe-db";
@@ -14,17 +18,14 @@ import {
   ADAPTER_TIMEOUT,
   MAX_SYNC_PAGES,
 } from "@/api/handlers/case-law/consts";
-import type { SyncPage } from "@/api/handlers/case-law/ingestion/adapter";
 import { getAdapter } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
 import {
   applyDecisionBatch,
-  MAX_CONSECUTIVE_FAILURES,
   recordIngestionFailures,
 } from "@/api/handlers/case-law/ingestion/pipeline/batch";
 import type {
   DecisionBatchHalt,
   FailureLedgerWrite,
-  IngestionFailureRow,
 } from "@/api/handlers/case-law/ingestion/pipeline/batch";
 import {
   admitPageDecisions,
@@ -34,9 +35,14 @@ import {
 import { CASE_LAW_CORPUS_DEPENDENCIES } from "@/api/handlers/case-law/ingestion/pipeline/dependencies";
 import type { CaseLawCorpusDependencies } from "@/api/handlers/case-law/ingestion/pipeline/dependencies";
 import {
-  wrappedErrorDetail,
-  PROCESS_DECISION_STATUS,
+  captureFailureEvidence,
+  ingestionFailureRecordIdentity,
+} from "@/api/handlers/case-law/ingestion/pipeline/failure-evidence";
+import type { IngestionFailureRow } from "@/api/handlers/case-law/ingestion/pipeline/failure-evidence-persistence";
+import {
   PROCESS_DECISION_RETRY_REASON,
+  PROCESS_DECISION_STATUS,
+  wrappedErrorDetail,
 } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
 import { createSourceContractResolver } from "@/api/handlers/case-law/ingestion/pipeline/source-contract";
 import { allocateSourceObservationOrder } from "@/api/handlers/case-law/ingestion/pipeline/source-observation";
@@ -56,6 +62,8 @@ import {
   advanceCorpusIngestionCheckpoint,
   CORPUS_SOURCE_TYPE,
   INGESTION_CHECKPOINT_STATUS,
+  PUBLISHER_CHECK,
+  type PublisherCheck,
 } from "@/api/lib/corpus-ingestion-checkpoint";
 import { UNAVAILABLE_CYCLES_BEFORE_MARKING } from "@/api/lib/errors/read-outcome";
 import {
@@ -75,6 +83,10 @@ import type {
   CycleDeadline,
   StartCycleDeadlineOptions,
 } from "@/api/lib/legal-search/cycle-deadline";
+import { PUBLISHER_REQUEST } from "@/api/lib/legal-search/ingestion-types";
+import type { SyncPage } from "@/api/lib/legal-search/ingestion-types";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
+import { withExceptionScope } from "@/api/lib/observability/exception-scope";
 import { logger } from "@/api/lib/observability/logger";
 import { pgErrorFields } from "@/api/lib/pg-error";
 
@@ -82,6 +94,14 @@ type DbSlot = {
   acquire: (signal?: AbortSignal) => Promise<void>;
   release: () => void;
 };
+
+const STOP_LOGGER = {
+  [INGESTION_STOP_KIND.DEADLINE]: logger.info,
+  [INGESTION_STOP_KIND.SOURCE_UNREACHABLE]: logger.error,
+  [INGESTION_STOP_KIND.PUBLISHER_REFUSAL]: logger.error,
+  [INGESTION_STOP_KIND.ADAPTER_ERROR]: logger.error,
+  [INGESTION_STOP_KIND.INTERNAL_ERROR]: logger.error,
+} as const satisfies Record<IngestionStopKind, typeof logger.info>;
 
 type PipelineInput = {
   onDocumentObservation?: DocumentStageObserver;
@@ -122,6 +142,8 @@ type PipelineInput = {
    * while capping concurrent DB pressure.
    */
   dbSlot?: DbSlot;
+  /** Revalidate the caller's grant before each bounded decision batch. */
+  acquireBatchAdmission?: () => Promise<"granted" | "paused">;
   corpus?: CaseLawCorpusDependencies;
 };
 
@@ -129,16 +151,19 @@ const databaseTimeoutHaltReason = (error: TimeoutError): string =>
   `Database timeout; cursor held for retry: ${error.message.slice(0, 200)}`;
 
 /**
- * What a failure-ledger write means for the cursor. A timeout or a transient
- * database condition holds it and the page is read again. A rejection
- * repeats on a replay of the same rows, so it is reported and the page moves
- * on.
+ * Only a durable, replayable failure permits the cursor to pass its item.
+ * Missing identity or input, and every failed ledger write, hold the page.
  */
 const failureLedgerHaltReason = (write: FailureLedgerWrite): string | null => {
   switch (write.type) {
     case "written":
-    case "rejected":
       return null;
+    case "unreplayable":
+      return "Failure record has no replayable identity or input; cursor held for retry";
+    case "ownership-unavailable":
+      return "Failure record ownership unavailable; cursor held for retry";
+    case "rejected":
+      return "Failure record was not written; cursor held for retry";
     case "timeout":
       return databaseTimeoutHaltReason(write.error);
     case "transient":
@@ -150,6 +175,8 @@ const failureLedgerHaltReason = (write: FailureLedgerWrite): string | null => {
 };
 
 const RETRY_HALT_REASON = {
+  [PROCESS_DECISION_RETRY_REASON.FALLBACK_IDENTITY]:
+    "Fallback decision identity unavailable; cursor held for retry",
   [PROCESS_DECISION_RETRY_REASON.CORPUS_WRITE]:
     "1 corpus write failure(s); cursor held for retry",
   [PROCESS_DECISION_RETRY_REASON.SOURCE_RAW_WRITE]:
@@ -171,17 +198,14 @@ const batchHaltReason = (
       return RETRY_HALT_REASON[stop.reason];
     case "timeout":
       return databaseTimeoutHaltReason(stop.error);
+    case "transient":
+      return `Transient failure; cursor held for retry: [${stop.tag}] ${stop.message.slice(0, 200)}`;
     case "insert-limit":
       // Halting (instead of breaking quietly) keeps the cursor at this page
       // so the unprocessed remainder is not skipped.
       return `Decision cap (${String(maxDecisions)}) reached`;
-    case "failure-streak":
-      return (
-        `${MAX_CONSECUTIVE_FAILURES} consecutive failures; ` +
-        `last: [${stop.tag}] ${stop.message.slice(0, 200)}`
-      );
     case "aborted":
-      return panic("A crawl batch carries no abort signal");
+      return CYCLE_HALT_REASON.TIMEOUT;
     default:
       stop satisfies never;
       return panic(`Unhandled batch stop: ${String(stop)}`);
@@ -189,21 +213,71 @@ const batchHaltReason = (
 };
 
 const batchStopKind = (
-  stop: DecisionBatchHalt,
-): IngestionStopKind | undefined => {
+  stop: Exclude<DecisionBatchHalt, { type: "insert-limit" }>,
+): IngestionStopKind => {
   switch (stop.type) {
     case "retryable":
     case "timeout":
+    case "transient":
       return INGESTION_STOP_KIND.INTERNAL_ERROR;
-    case "insert-limit":
-      return undefined;
-    case "failure-streak":
-      return stop.stopKind;
     case "aborted":
-      return panic("A crawl batch carries no abort signal");
+      return INGESTION_STOP_KIND.DEADLINE;
     default:
       stop satisfies never;
       return panic(`Unhandled batch stop: ${String(stop)}`);
+  }
+};
+
+type FailedCycleTermination = Extract<
+  IngestionCycleTermination,
+  { stopKind: IngestionStopKind }
+>;
+
+const failedCycleTermination = (
+  stopKind: IngestionStopKind,
+): FailedCycleTermination => ({
+  outcome:
+    stopKind === INGESTION_STOP_KIND.DEADLINE
+      ? CYCLE_OUTCOME.TIMEOUT
+      : CYCLE_OUTCOME.FAILED,
+  stopKind,
+});
+
+type LogCycleTerminationOptions = {
+  termination: Exclude<
+    IngestionCycleTermination,
+    { outcome: typeof CYCLE_OUTCOME.COMPLETED }
+  >;
+  attributes: {
+    adapterKey: string;
+    cursor: string;
+    reason: string;
+    inserted: number;
+    skipped: number;
+  };
+};
+
+const logCycleTermination = ({
+  termination,
+  attributes,
+}: LogCycleTerminationOptions): void => {
+  switch (termination.outcome) {
+    case CYCLE_OUTCOME.PAUSED:
+      logger.info("case_law.ingestion.adapter_paused", {
+        ...attributes,
+        pauseReason: termination.pauseReason,
+      });
+      return;
+    case CYCLE_OUTCOME.FAILED:
+    case CYCLE_OUTCOME.TIMEOUT:
+      STOP_LOGGER[termination.stopKind]("case_law.ingestion.adapter_halted", {
+        ...attributes,
+        stopKind: termination.stopKind,
+      });
+      return;
+    default:
+      termination satisfies never;
+      panic("Unhandled ingestion termination");
   }
 };
 
@@ -218,6 +292,29 @@ const pageItemCount = ({
 }: SyncPage): number =>
   decisions.length + (supplements?.length ?? 0) + (unreadItems?.length ?? 0);
 
+/** An aggregate count cannot certify records the adapter omitted. */
+const unsettledBuildFailureCount = ({
+  decisions,
+  itemBuildFailures,
+}: SyncPage): number =>
+  Math.max(
+    0,
+    (itemBuildFailures?.count ?? 0) -
+      decisions.filter(
+        ({ plainTextOutcome }) => plainTextOutcome.type === "item_build_failed",
+      ).length,
+  );
+
+/** One when the publisher answered a request for the page, else zero. */
+const publisherAnsweredCount = ({ publisherRequest }: SyncPage): number =>
+  publisherRequest === PUBLISHER_REQUEST.ANSWERED ? 1 : 0;
+
+/** Whether a run heard from the publisher, from the pages it answered. */
+const publisherCheckOf = (answeredPages: number): PublisherCheck =>
+  answeredPages > 0
+    ? PUBLISHER_CHECK.ANSWERED
+    : PUBLISHER_CHECK.NOT_ASKED_OR_FAILED;
+
 const PAGE_SLOT = {
   HELD: "held",
   NOT_NEEDED: "not-needed",
@@ -227,14 +324,7 @@ const PAGE_SLOT = {
 
 type PageSlot = (typeof PAGE_SLOT)[keyof typeof PAGE_SLOT];
 
-/**
- * Run the ingestion pipeline for a configured source.
- *
- * Fetches pages from the source adapter, processes each
- * decision (segment, extract citations, dedup), and stores
- * results in the database.
- */
-export const runIngestionPipeline = async ({
+const runScopedIngestionPipeline = async ({
   source,
   sourceLease,
   scopedDb,
@@ -246,6 +336,7 @@ export const runIngestionPipeline = async ({
   maxDecisions,
   batchRecordLimit = CASE_LAW_INGESTION_BATCH_LIMITS.records,
   dbSlot,
+  acquireBatchAdmission,
   corpus = CASE_LAW_CORPUS_DEPENDENCIES,
 }: PipelineInput): Promise<IngestionPipelineResult> => {
   const resolveSourceContract = createSourceContractResolver(scopedDb);
@@ -270,16 +361,15 @@ export const runIngestionPipeline = async ({
   let searchVectorFailures = 0;
   let s3UploadFailures = 0;
   let pagesProcessed = 0;
+  /** Pages the publisher answered a request for, whatever they held. */
+  let publisherAnsweredPages = 0;
   /** Track recent cursors to detect parking (stagnation or ping-pong). */
   const recentCursors = new Set<string | null>();
-  /**
-   * Consecutive decision-level failures. Reset on each success.
-   * If this reaches the batch threshold, the adapter is halted for
-   * this cycle to avoid hammering a broken court API.
-   */
-  let consecutiveFailures = 0;
   let haltReason: string | null = null;
-  let stopKind: IngestionStopKind | undefined;
+  let termination: Exclude<
+    IngestionCycleTermination,
+    { outcome: typeof CYCLE_OUTCOME.COMPLETED }
+  > = failedCycleTermination(INGESTION_STOP_KIND.INTERNAL_ERROR);
   let checkpointObservationOrder = source.checkpointObservationOrder;
   /**
    * Compiled polarity rules for this cycle. One read per language the cycle
@@ -323,12 +413,27 @@ export const runIngestionPipeline = async ({
                   : ingestionStopKindOf(cause, "adapter"),
               }),
           });
+          // A failed fetch is graded when it settles. One that settled before
+          // our page or cycle signal fired is the publisher's (or the
+          // adapter's) own failure and keeps its grade, even if the lease
+          // renewal behind this callback is then held until the signal fires.
+          // Only a fetch that settled after the signal is a deadline.
           if (Result.isError(fetched)) {
-            return { error: fetched.error, type: "fetch-error" } as const;
+            return {
+              error: fetched.error,
+              stopKind: fetched.error.stopKind,
+              type: "fetch-error",
+            } as const;
           }
           const pageResult = fetched.value;
           if (Result.isError(pageResult)) {
-            return { error: pageResult.error, type: "fetch-error" } as const;
+            return {
+              error: pageResult.error,
+              stopKind: pageSignal.aborted
+                ? INGESTION_STOP_KIND.DEADLINE
+                : pageResult.error.stopKind,
+              type: "fetch-error",
+            } as const;
           }
           return {
             observationOrder: await allocateSourceObservationOrder({
@@ -396,19 +501,22 @@ export const runIngestionPipeline = async ({
       // Expected operational failure: record one halt in the event/log path;
       // the runner, rather than every attempt, captures sustained stalls.
       const reason = `Page fetch failed: ${observedPageResult.value.error.message}`;
-      const pageStopKind =
-        deadline?.signal.aborted || pageSignal.aborted
-          ? INGESTION_STOP_KIND.DEADLINE
-          : observedPageResult.value.error.stopKind;
-      logger.error("case_law.ingestion.adapter_halted", {
-        adapterKey: adapter.key,
-        cursor: cursor ?? "",
-        httpStatus: String(observedPageResult.value.error.httpStatus ?? ""),
-        reason,
-        stopKind: pageStopKind,
-        inserted,
-        skipped,
-      });
+      // Graded when the fetch settled, not now: a signal that fired after a
+      // publisher failure, while the page waited on the database, does not
+      // turn that failure into our deadline.
+      const pageStopKind = observedPageResult.value.stopKind;
+      STOP_LOGGER[pageStopKind](
+        "case_law.ingestion.adapter_halted",
+        sanitizeErrorAttributesForOutput({
+          adapterKey: adapter.key,
+          cursor: cursor ?? "",
+          httpStatus: String(observedPageResult.value.error.httpStatus ?? ""),
+          reason,
+          stopKind: pageStopKind,
+          inserted,
+          skipped,
+        }),
+      );
       return { type: "halt", reason, stopKind: pageStopKind } as const;
     }
     return observedPageResult.value;
@@ -458,7 +566,7 @@ export const runIngestionPipeline = async ({
       await dbSlot.acquire(deadline?.signal);
       return PAGE_SLOT.HELD;
     } catch (error) {
-      if (error instanceof DOMException && error.name === "AbortError") {
+      if (deadline?.signal.aborted) {
         return PAGE_SLOT.CYCLE_ENDED;
       }
       throw error;
@@ -484,6 +592,13 @@ export const runIngestionPipeline = async ({
     observation: { order: bigint; observedAt: Date };
   }): Promise<string | null> => {
     for (const batch of admitPageDecisions(decisions, batchRecordLimit)) {
+      if (
+        deadline?.signal.aborted ||
+        (await acquireBatchAdmission?.()) === "paused"
+      ) {
+        termination = failedCycleTermination(INGESTION_STOP_KIND.DEADLINE);
+        return CYCLE_HALT_REASON.TIMEOUT;
+      }
       if (batch.admission === DECISION_ADMISSION.OVERSIZED_RECORD) {
         // A page's records are applied whatever their size; one over the
         // byte bound goes alone, and is reported.
@@ -509,7 +624,7 @@ export const runIngestionPipeline = async ({
           corpus,
           polarityRules,
           context: { adapterKey: adapter.key, cursor },
-          failureStreak: consecutiveFailures,
+          signal: deadline?.signal,
           insertLimit:
             maxDecisions === undefined ? undefined : maxDecisions - inserted,
         },
@@ -519,7 +634,6 @@ export const runIngestionPipeline = async ({
       skipped += applied.skipped;
       searchVectorFailures += applied.searchVectorFailures;
       s3UploadFailures += applied.corpusWriteFailures;
-      consecutiveFailures = applied.failureStreak;
       // A reason the batch stopped for wins over the ledger write's own.
       const batchHalt =
         (applied.halt === null
@@ -527,10 +641,30 @@ export const runIngestionPipeline = async ({
           : batchHaltReason(applied.halt, maxDecisions)) ??
         failureLedgerHaltReason(applied.failureLedger);
       if (batchHalt !== null) {
-        stopKind =
+        if (applied.halt?.type === "insert-limit") {
+          if (
+            applied.failureLedger.type === "written" &&
+            applied.corpusWriteFailures === 0
+          ) {
+            termination = {
+              outcome: CYCLE_OUTCOME.PAUSED,
+              pauseReason: INGESTION_PAUSE_REASON.DECISION_ALLOWANCE_EXHAUSTED,
+            };
+            return batchHalt;
+          }
+          termination = failedCycleTermination(
+            INGESTION_STOP_KIND.INTERNAL_ERROR,
+          );
+          return (
+            failureLedgerHaltReason(applied.failureLedger) ??
+            "Decision allowance reached before all processed inputs were durable"
+          );
+        }
+        termination = failedCycleTermination(
           applied.halt === null
             ? INGESTION_STOP_KIND.INTERNAL_ERROR
-            : batchStopKind(applied.halt);
+            : batchStopKind(applied.halt),
+        );
         return batchHalt;
       }
     }
@@ -546,9 +680,11 @@ export const runIngestionPipeline = async ({
   const placePageSupplements = async ({
     supplements,
     halted,
+    observation,
   }: {
     supplements: SyncPage["supplements"];
     halted: string | null;
+    observation: { order: bigint; observedAt: Date };
   }): Promise<string | null> => {
     if (halted !== null || supplements === undefined) {
       return halted;
@@ -560,25 +696,27 @@ export const runIngestionPipeline = async ({
     }
     const failures: IngestionFailureRow[] = [];
     for (const supplement of supplements) {
-      const placed = await Result.tryPromise({
-        try: async () =>
-          // db-await-in-loop: each supplement locks its docket and may rewrite its judgment, ordered per observation
-          await processSupplement(
-            {
-              supplement,
-              sourceId: source.id,
-              scopedDb,
-              observedAt: new Date(),
-              nextObservationOrder,
-              reparseStoredRaw,
-              readStoredRaw: readStoredRawFromS3,
-              corpus,
-              polarityRules,
-            },
-            resolveSourceContract,
-          ),
-        catch: (cause) => cause,
-      });
+      const placed = (
+        await Result.tryPromise({
+          try: async () =>
+            // db-await-in-loop: each supplement locks its docket and may rewrite its judgment, ordered per observation
+            await processSupplement(
+              {
+                supplement,
+                sourceId: source.id,
+                scopedDb,
+                observedAt: new Date(),
+                nextObservationOrder,
+                reparseStoredRaw,
+                readStoredRaw: readStoredRawFromS3,
+                corpus,
+                polarityRules,
+              },
+              resolveSourceContract,
+            ),
+          catch: (cause) => cause,
+        })
+      ).andThen((outcome) => outcome);
       if (Result.isError(placed)) {
         // As a decision's failure is: recorded and stepped over, so one
         // poison supplement cannot pin the source. It is not lost: nothing
@@ -593,14 +731,21 @@ export const runIngestionPipeline = async ({
           ...pgErrorFields(error),
           "error.detail": wrappedErrorDetail(error),
         });
-        captureError(error, {
-          adapterKey: adapter.key,
-          step: "runIngestionPipeline.processSupplement",
-        });
+        captureError(
+          error,
+          handlerErrorContext("ingestion.placePageSupplements", {
+            adapterKey: adapter.key,
+            step: "runIngestionPipeline.processSupplement",
+          }),
+        );
         if (error instanceof TimeoutError) {
           await flushIngestionFailures(failures);
           return databaseTimeoutHaltReason(error);
         }
+        const captured = captureFailureEvidence({
+          record: { type: "supplement", supplement },
+          observation,
+        });
         failures.push({
           sourceId: source.id,
           caseNumber: document.caseNumber,
@@ -608,6 +753,11 @@ export const runIngestionPipeline = async ({
           errorType: errorTag(error).slice(0, 128),
           errorMessage: wrappedErrorDetail(error).slice(0, 2048),
           cursor,
+          ...ingestionFailureRecordIdentity({
+            sourceDocumentId: document.sourceDocumentId,
+            replayEvidence: Result.isOk(captured) ? captured.value : undefined,
+          }),
+          ...(Result.isOk(captured) ? { replayEvidence: captured.value } : {}),
         });
         continue;
       }
@@ -663,7 +813,9 @@ export const runIngestionPipeline = async ({
         streaks: plan.streaks,
       });
       if (!written) {
-        stopKind = INGESTION_STOP_KIND.INTERNAL_ERROR;
+        termination = failedCycleTermination(
+          INGESTION_STOP_KIND.INTERNAL_ERROR,
+        );
         return "Source ingestion lease was lost; cursor held for retry";
       }
       unavailableStreaks = plan.streaks;
@@ -678,7 +830,9 @@ export const runIngestionPipeline = async ({
       }
       return null;
     }
-    stopKind = INGESTION_STOP_KIND.SOURCE_UNREACHABLE;
+    termination = failedCycleTermination(
+      INGESTION_STOP_KIND.SOURCE_UNREACHABLE,
+    );
     return `${plan.holding} listed item(s) unavailable for fewer than ${UNAVAILABLE_CYCLES_BEFORE_MARKING} consecutive cycles; cursor held for retry`;
   };
 
@@ -705,9 +859,15 @@ export const runIngestionPipeline = async ({
     const placed = await placePageSupplements({
       supplements: page.supplements,
       halted,
+      observation,
     });
     if (placed !== null || s3UploadFailures > s3FailuresBefore) {
       return placed;
+    }
+    const unsettled = unsettledBuildFailureCount(page);
+    if (unsettled > 0) {
+      termination = failedCycleTermination(INGESTION_STOP_KIND.ADAPTER_ERROR);
+      return `${unsettled} adapter item build failure(s) lack replayable per-item outcomes; cursor held for retry`;
     }
     return await settlePageUnreadItems({
       unreadItems: page.unreadItems,
@@ -719,7 +879,7 @@ export const runIngestionPipeline = async ({
     const observedPage = await fetchNextObservedPage();
     if (observedPage.type === "halt") {
       haltReason = observedPage.reason;
-      stopKind = observedPage.stopKind;
+      termination = failedCycleTermination(observedPage.stopKind);
       break;
     }
 
@@ -729,6 +889,7 @@ export const runIngestionPipeline = async ({
     // overlapping; this durable token orders the resulting database writes.
     const { observationOrder, page } = observedPage;
     checkpointObservationOrder = observationOrder;
+    publisherAnsweredPages += publisherAnsweredCount(page);
     const observedAt = new Date();
 
     // Released before the next page fetch so external API calls don't hold
@@ -736,7 +897,7 @@ export const runIngestionPipeline = async ({
     const pageSlot = await acquirePageSlot(page);
     if (pageSlot === PAGE_SLOT.CYCLE_ENDED) {
       haltReason = CYCLE_HALT_REASON.TIMEOUT;
-      stopKind = INGESTION_STOP_KIND.DEADLINE;
+      termination = failedCycleTermination(INGESTION_STOP_KIND.DEADLINE);
       break;
     }
     const pageT0 = performance.now();
@@ -773,15 +934,16 @@ export const runIngestionPipeline = async ({
         halted: haltReason !== null,
       });
 
-      if (haltReason) {
-        stopKind ??= INGESTION_STOP_KIND.INTERNAL_ERROR;
-        logger.error("case_law.ingestion.adapter_halted", {
-          adapterKey: adapter.key,
-          cursor: cursor ?? "",
-          reason: haltReason,
-          stopKind,
-          inserted,
-          skipped,
+      if (haltReason !== null) {
+        logCycleTermination({
+          termination,
+          attributes: {
+            adapterKey: adapter.key,
+            cursor: cursor ?? "",
+            reason: haltReason,
+            inserted,
+            skipped,
+          },
         });
         break;
       }
@@ -815,6 +977,7 @@ export const runIngestionPipeline = async ({
       id: source.id,
       leaseToken: sourceLease.leaseToken,
       observationOrder: checkpointObservationOrder,
+      publisherCheck: publisherCheckOf(publisherAnsweredPages),
       type: CORPUS_SOURCE_TYPE.CASE_LAW,
     },
   });
@@ -844,14 +1007,35 @@ export const runIngestionPipeline = async ({
       }),
   });
 
-  return {
+  const counts = {
     inserted,
     skipped,
     searchVectorFailures,
     s3UploadFailures,
     pagesProcessed,
     nextCursor: cursor,
+  };
+  if (haltReason === null) {
+    return { ...counts, outcome: CYCLE_OUTCOME.COMPLETED, haltReason: null };
+  }
+  return {
+    ...counts,
+    ...termination,
     haltReason,
-    ...(stopKind === undefined ? {} : { stopKind }),
   };
 };
+
+/**
+ * Run the ingestion pipeline for a configured source.
+ *
+ * Fetches pages from the source adapter, processes each
+ * decision (segment, extract citations, dedup), and stores
+ * results in the database.
+ */
+export const runIngestionPipeline = async (
+  input: PipelineInput,
+): Promise<IngestionPipelineResult> =>
+  await withExceptionScope(
+    { type: "ingestion", adapterKey: input.source.adapterKey },
+    async () => await runScopedIngestionPipeline(input),
+  );

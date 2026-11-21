@@ -2,7 +2,7 @@ import { describe, expect, setDefaultTimeout, test } from "bun:test";
 import fc from "fast-check";
 
 import {
-  propertyConfig,
+  assertProperty,
   propertySeed,
   propertyTestTimeout,
 } from "@stll/property-testing";
@@ -59,7 +59,8 @@ const inputArb = fc.record({
 
 describe("schema normalization", () => {
   test("normalized nested inputs are fixed points", () => {
-    fc.assert(
+    assertProperty(
+      "normalized nested inputs are fixed points",
       fc.property(inputArb, (value) => {
         const first = normalizeAgentInput({ schema, value });
         expect(first.ok).toBe(true);
@@ -70,12 +71,13 @@ describe("schema normalization", () => {
         const second = normalizeAgentInput({ schema, value: first.value });
         expect(second).toEqual({ ok: true, value: first.value, notes: [] });
       }),
-      propertyConfig({ numRuns: 150, seed: propertySeed() }),
+      { numRuns: 150, seed: propertySeed() },
     );
   });
 
-  test("integer fields retain their declared shape", () => {
-    fc.assert(
+  test("integer fields accept whole numbers and their string spellings", () => {
+    assertProperty(
+      "integer fields accept whole numbers and their string spellings",
       fc.property(fc.integer(), (value) => {
         for (const spelling of [value, String(value)]) {
           expect(
@@ -86,10 +88,13 @@ describe("schema normalization", () => {
           ).toMatchObject({ ok: true, value });
         }
       }),
-      propertyConfig({ numRuns: 150, seed: propertySeed() }),
+      { numRuns: 150, seed: propertySeed() },
     );
+  });
 
-    fc.assert(
+  test("integer fields reject fractional numbers", () => {
+    assertProperty(
+      "integer fields reject fractional numbers",
       fc.property(
         fc.double({ min: -1_000_000, max: 1_000_000, noNaN: true }),
         (value) => {
@@ -104,7 +109,7 @@ describe("schema normalization", () => {
           );
         },
       ),
-      propertyConfig({ numRuns: 150, seed: propertySeed() }),
+      { numRuns: 150, seed: propertySeed() },
     );
   });
 });

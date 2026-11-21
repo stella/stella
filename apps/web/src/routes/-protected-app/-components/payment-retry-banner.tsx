@@ -11,7 +11,9 @@ import { usePermissions } from "@/hooks/use-permissions";
 import { useFormatter } from "@/i18n/formatting-context";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { parseDeterministicDate } from "@/lib/deterministic-date";
+import { queryView } from "@/lib/query-view.logic";
 import { organizationAccessOptions } from "@/lib/usage-queries";
+import { useQueryViewError } from "@/lib/use-query-view";
 
 const ACCESS_REFRESH_INTERVAL_MS = 60_000;
 
@@ -23,22 +25,26 @@ export const PaymentRetryBanner = () => {
   const [now, setNow] = useState(
     () => Temporal.Now.instant().epochMilliseconds,
   );
-  const { data } = useChromeQuery({
-    ...organizationAccessOptions({ organizationId: activeOrganizationId }),
-    enabled: env.VITE_FEATURE_USAGE && canUseChat,
-    refetchInterval: (query) => {
-      const retry = query.state.data?.paymentRetry;
-      if (retry?.status !== "payment_retry") {
-        return ACCESS_REFRESH_INTERVAL_MS;
-      }
-      const endsAt = parseDeterministicDate(retry.endsAt)?.getTime();
-      const currentTime = Temporal.Now.instant().epochMilliseconds;
-      if (endsAt === undefined || endsAt <= currentTime) {
-        return ACCESS_REFRESH_INTERVAL_MS;
-      }
-      return Math.min(ACCESS_REFRESH_INTERVAL_MS, endsAt - currentTime);
-    },
-  });
+  const accessView = queryView(
+    useChromeQuery({
+      ...organizationAccessOptions({ organizationId: activeOrganizationId }),
+      enabled: env.VITE_FEATURE_USAGE && canUseChat,
+      refetchInterval: (query) => {
+        const retry = query.state.data?.paymentRetry;
+        if (retry?.status !== "payment_retry") {
+          return ACCESS_REFRESH_INTERVAL_MS;
+        }
+        const endsAt = parseDeterministicDate(retry.endsAt)?.getTime();
+        const currentTime = Temporal.Now.instant().epochMilliseconds;
+        if (endsAt === undefined || endsAt <= currentTime) {
+          return ACCESS_REFRESH_INTERVAL_MS;
+        }
+        return Math.min(ACCESS_REFRESH_INTERVAL_MS, endsAt - currentTime);
+      },
+    }),
+  );
+  useQueryViewError(accessView, "PaymentRetryBanner:query");
+  const data = accessView.type === "items" ? accessView.items : undefined;
   const retryEndsAt =
     data?.paymentRetry.status === "payment_retry"
       ? parseDeterministicDate(data.paymentRetry.endsAt)?.getTime()

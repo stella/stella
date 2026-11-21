@@ -3,7 +3,11 @@ import type { ReactElement } from "react";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, expect, test } from "bun:test";
 
+import { sleep } from "@stll/concurrency/sleep";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
+
 import type { AuthenticatedUser } from "@/lib/authenticated-user-context";
+import { APP_FRAME_SCOPE } from "@/routes/-app-frame-scope";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/frame" });
 Object.assign(import.meta.env, { VITE_PUBLIC_KNOWLEDGE_ENABLED: "true" });
@@ -18,6 +22,8 @@ const { memberKnowledgeKeys } = await import("@/lib/knowledge/knowledge-cache");
 const { installSessionCacheGuard, settleAuthTransition } =
   await import("@/lib/session-cache-guard");
 const { AppFrameHost } = await import("@/routes/-app-frame-host");
+const { IntlProvider } = await import("use-intl");
+const messages = (await import("@/i18n/langs/en.json")).default;
 
 const member = (organizationId: string) =>
   ({
@@ -41,11 +47,9 @@ const frameKey = (organizationId: string) =>
 afterAll(async () => {
   testing.cleanup();
   await testing.act(async () => {
-    await new Promise((resolve) => {
-      setTimeout(resolve, 50);
-    });
+    await sleep(50);
   });
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 test("frame replacement completes cleanup after a delayed route update", async () => {
@@ -105,6 +109,7 @@ test("frame replacement completes cleanup after a delayed route update", async (
   const protectedRoute = router.createRoute({
     getParentRoute: () => rootRoute,
     id: "_protected",
+    staticData: { appFrame: APP_FRAME_SCOPE.member },
     beforeLoad: async () => {
       if (delayContext) {
         contextStarted.resolve(undefined);
@@ -124,10 +129,13 @@ test("frame replacement completes cleanup after a delayed route update", async (
     routeTree: rootRoute.addChildren([protectedRoute.addChildren([pageRoute])]),
   });
   await appRouter.load();
+  // The pending frame renders translated navigation labels.
   const view = testing.render(
-    <QueryClientProvider client={queryClient}>
-      <router.RouterProvider router={appRouter} />
-    </QueryClientProvider>,
+    <IntlProvider locale="en" messages={messages} timeZone="UTC">
+      <QueryClientProvider client={queryClient}>
+        <router.RouterProvider router={appRouter} />
+      </QueryClientProvider>
+    </IntlProvider>,
   );
   const removalsAfterHiding: boolean[] = [];
   const unsubscribe = queryClient.getQueryCache().subscribe((event) => {

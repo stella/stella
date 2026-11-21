@@ -1,34 +1,54 @@
 import { panic } from "better-result";
-import type { Static } from "elysia";
+import type * as v from "valibot";
 
 import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
-import { CASE_LAW_SEARCH_WARNING_CODES } from "@stll/api-contract/search";
+import { DECISION_TYPE_KINDS } from "@stll/api-contract/case-law-decision-types";
+import {
+  CASE_LAW_SEARCH_WARNING_CODES,
+  caseLawPageOutcome,
+  type CaseLawPagePhases,
+} from "@stll/api-contract/search";
 import { DECISION_IDENTIFIER_MAX_COUNT } from "@stll/legal-ast/decision-identifier";
 
+import type { DecisionHeadnoteMaxChars } from "@/api/lib/case-law/decision-headnote";
 import { CORPUS_SEARCH_CURSOR_WITH_GROUPS_MAX_LENGTH } from "@/api/lib/legal-search/corpus-search-cursor";
 import { LIMITS } from "@/api/lib/limits";
 import {
-  truncateHeadlineBytes,
   nullableText,
+  truncateHeadlineBytes,
   truncateTextBytes,
 } from "@/api/lib/search/response-text-bounds";
 
 import { CASE_SEARCH_TEXT_BYTES as bytes } from "./search-response-limits";
 import type { searchDecisionsSuccessResponseSchema } from "./search-schema";
 
-type SearchResponse = Static<typeof searchDecisionsSuccessResponseSchema>;
+type SearchResponse = v.InferOutput<
+  typeof searchDecisionsSuccessResponseSchema
+>;
 type SearchHit = SearchResponse["hits"][number];
+// The headnote's keywords branch is the readonly contract type; the
+// standalone field reads the same shape mutably, so accept the wider one.
+const projectKeywords = (
+  keywords: Extract<SearchHit["headnote"], { type: "keywords" }>,
+) => ({
+  type: keywords.type,
+  items: keywords.items
+    .slice(0, LIMITS.caseLawHeadnoteKeywords)
+    .map((text) => truncateTextBytes(text, LIMITS.caseLawHeadnoteMaxChars * 4)),
+  omitted:
+    keywords.omitted +
+    Math.max(0, keywords.items.length - LIMITS.caseLawHeadnoteKeywords),
+});
+
 const projectHeadnote = (
   headnote: SearchHit["headnote"],
+  maxChars: number,
 ): SearchHit["headnote"] => {
   switch (headnote.type) {
     case "absent":
       return headnote;
     case "present": {
-      const text = truncateTextBytes(
-        headnote.text,
-        LIMITS.caseLawHeadnoteMaxChars * 4,
-      );
+      const text = truncateTextBytes(headnote.text, maxChars * 4);
       return {
         type: "present",
         text,
@@ -36,17 +56,7 @@ const projectHeadnote = (
       };
     }
     case "keywords":
-      return {
-        type: "keywords",
-        items: headnote.items
-          .slice(0, LIMITS.caseLawHeadnoteKeywords)
-          .map((text) =>
-            truncateTextBytes(text, LIMITS.caseLawHeadnoteMaxChars * 4),
-          ),
-        omitted:
-          headnote.omitted +
-          Math.max(0, headnote.items.length - LIMITS.caseLawHeadnoteKeywords),
-      };
+      return projectKeywords(headnote);
     default: {
       headnote satisfies never;
       return panic(`Unhandled headnote: ${String(headnote)}`);
@@ -67,7 +77,12 @@ const projectIdentifiers = ([
     })),
 ];
 
-const projectHit = (hit: SearchHit): SearchHit => ({
+const projectTerms = (terms: readonly string[]): string[] =>
+  terms
+    .slice(0, LIMITS.caseLawSearchTermsMax)
+    .map((term) => truncateTextBytes(term, bytes.queryUsed));
+
+const projectHit = (hit: SearchHit, headnoteMaxChars: number): SearchHit => ({
   decisionId: truncateTextBytes(hit.decisionId, bytes.id),
   caseNumber: truncateTextBytes(hit.caseNumber, bytes.caseNumber),
   caseNumberType: hit.caseNumberType,
@@ -95,8 +110,12 @@ const projectHit = (hit: SearchHit): SearchHit => ({
     })),
   decisionDate: nullableText(hit.decisionDate, bytes.date),
   decisionType: nullableText(hit.decisionType, bytes.decisionType),
+  decisionTypeKind: hit.decisionTypeKind,
   sourceUrl: nullableText(hit.sourceUrl, bytes.sourceUrl),
-  headnote: projectHeadnote(hit.headnote),
+  headnote: projectHeadnote(hit.headnote, headnoteMaxChars),
+  keywords: hit.keywords === null ? null : projectKeywords(hit.keywords),
+  textAvailability: hit.textAvailability,
+  textWithheldReason: hit.textWithheldReason,
   headline:
     hit.headline === null
       ? null
@@ -105,6 +124,9 @@ const projectHit = (hit: SearchHit): SearchHit => ({
   citationCount: hit.citationCount,
   citationAuthority: hit.citationAuthority,
   matchingPassages: hit.matchingPassages,
+  match: hit.match,
+  matchedTerms: projectTerms(hit.matchedTerms),
+  missingTerms: projectTerms(hit.missingTerms),
   createdAt: truncateTextBytes(hit.createdAt, bytes.date),
 });
 
@@ -116,14 +138,28 @@ const projectBucket = (bucket: FacetBucket) => ({
 });
 
 // Both backends pass their entire successful envelope through this boundary.
+/**
+ * A search answer before projection: everything the response carries except
+ * its pagination outcome, which is derived here from every phase the search
+ * ran. No producer states `complete` itself; a page is complete only when
+ * `caseLawPageOutcome` says every phase let it be.
+ */
+export type CaseLawSearchAnswer = Omit<SearchResponse, "paginationOutcome"> & {
+  phases: CaseLawPagePhases;
+};
+
 export const projectCaseLawSearchResponse = (
-  response: SearchResponse,
+  response: CaseLawSearchAnswer,
+  headnoteMaxChars: DecisionHeadnoteMaxChars = LIMITS.caseLawHeadnoteMaxChars,
 ): SearchResponse => ({
-  hits: response.hits.slice(0, LIMITS.caseLawSearchPageSizeMax).map(projectHit),
+  hits: response.hits
+    .slice(0, LIMITS.caseLawSearchPageSizeMax)
+    .map((hit) => projectHit(hit, headnoteMaxChars)),
   facets:
     response.facets === null
       ? null
       : {
+          courtYear: response.facets.courtYear,
           court: response.facets.court
             .slice(0, COURT_TIER_LABELS.length)
             .map((tier) => ({
@@ -135,9 +171,14 @@ export const projectCaseLawSearchResponse = (
           year: response.facets.year
             .slice(0, LIMITS.caseLawYearFacetLimit)
             .map(projectBucket),
+          // A kind is a short closed value, so only the label needs bounding.
           decisionType: response.facets.decisionType
-            .slice(0, LIMITS.caseLawYearFacetLimit)
-            .map(projectBucket),
+            .slice(0, DECISION_TYPE_KINDS.length)
+            .map(({ count, label, value }) => ({
+              value,
+              label: nullableText(label, bytes.label),
+              count,
+            })),
           source: response.facets.source
             .slice(0, LIMITS.caseLawYearFacetLimit)
             .map((bucket) =>
@@ -150,11 +191,27 @@ export const projectCaseLawSearchResponse = (
             .map(projectBucket),
         },
   total: response.total,
+  hitOrder: response.hitOrder,
+  relaxedHitCount: response.relaxedHitCount,
+  termDecisionCounts:
+    response.termDecisionCounts === null
+      ? null
+      : {
+          allTerms: response.termDecisionCounts.allTerms,
+          terms: response.termDecisionCounts.terms
+            .slice(0, LIMITS.caseLawSearchTermCountsMax)
+            .map(({ term, count }) => ({
+              term: truncateTextBytes(term, bytes.queryUsed),
+              count,
+            })),
+          countType: response.termDecisionCounts.countType,
+        },
   nextCursor: nullableText(
     response.nextCursor,
     CORPUS_SEARCH_CURSOR_WITH_GROUPS_MAX_LENGTH,
   ),
-  paginationOutcome: response.paginationOutcome,
+  paginationOutcome: caseLawPageOutcome(response.phases),
+  pageReach: response.pageReach,
   queryUsed: truncateTextBytes(response.queryUsed, bytes.queryUsed),
   warnings: response.warnings
     .slice(0, CASE_LAW_SEARCH_WARNING_CODES.length)

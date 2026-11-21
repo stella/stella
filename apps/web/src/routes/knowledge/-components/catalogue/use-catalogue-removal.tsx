@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { type ReactNode, useState } from "react";
 
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";

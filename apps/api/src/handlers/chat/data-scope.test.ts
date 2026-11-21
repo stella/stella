@@ -3,11 +3,11 @@ import { describe, expect, mock, test } from "bun:test";
 import fc from "fast-check";
 
 import {
-  resourceRef,
   RESOURCE_TYPE,
+  resourceRef,
   toChatResourceHref,
 } from "@stll/api-contract";
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
 import type { ChatMention, ChatMessage } from "@/api/handlers/chat/types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -20,8 +20,8 @@ import {
   computeAssistantTurnWorkspaceIds,
   extractAssistantWorkspaceIds,
   extractIncomingMessageWorkspaceIds,
-  extractMessageWorkspaceIds,
   extractMentionWorkspaceIds,
+  extractMessageWorkspaceIds,
   extractThreadDataWorkspaceIds,
 } from "./data-scope";
 
@@ -347,7 +347,8 @@ describe("extractAssistantWorkspaceIds", () => {
   });
 
   test("accepts every nonempty opaque matterRef", () => {
-    fc.assert(
+    assertProperty(
+      "accepts every nonempty opaque matterRef",
       fc.property(fc.string({ minLength: 1, maxLength: 64 }), (id) => {
         const workspaceId = toSafeId<"workspace">(id);
         const parts = [
@@ -363,7 +364,7 @@ describe("extractAssistantWorkspaceIds", () => {
 
         expect(extractAssistantWorkspaceIds(parts)).toEqual([workspaceId]);
       }),
-      propertyConfig({ numRuns: 100 }),
+      { numRuns: 100 },
     );
   });
 

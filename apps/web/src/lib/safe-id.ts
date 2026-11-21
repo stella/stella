@@ -1,8 +1,7 @@
 import { toSafeId as brandSafeId } from "@stll/api-contract/safe-id";
+import type { SafeId, SafeIdType } from "@stll/api-contract/safe-id";
 
-import type { SafeId, SafeIdType } from "@/lib/api-contract";
-
-export type { SafeId, SafeIdType } from "@/lib/api-contract";
+export type { SafeId, SafeIdType } from "@stll/api-contract/safe-id";
 
 /**
  * The one web-side entry point for branding a raw identifier. It narrows the

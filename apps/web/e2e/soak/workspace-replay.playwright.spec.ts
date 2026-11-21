@@ -2,30 +2,32 @@ import { expect, type TestInfo } from "@playwright/test";
 import { Result } from "better-result";
 import { readFile, writeFile } from "node:fs/promises";
 
+import { setFixedBrowserTime } from "@stll/ui/browser-clock";
+
 import { apiStatus } from "../helpers/api";
-import { setFixedBrowserTime } from "../helpers/clock";
 import {
   E2E_CLEANUP_TARGET_TYPE,
   registerDeferredE2eCleanup,
 } from "../helpers/deferred-cleanup";
 import { createUploadedDocumentRoute } from "../helpers/document";
 import { test } from "../helpers/test";
+import { PLAYWRIGHT_EXPECT_TIMEOUT_10_SECONDS_MS } from "../helpers/wait-budgets";
 import { createTestWorkspace, deleteTestWorkspace } from "../helpers/workspace";
 import { WORKSPACE_REPLAY_ENV } from "./env";
 import {
   BoundedEventTrail,
   MAX_REPLAY_STEPS,
+  parseReplayArtifact,
   REPLAY_ARTIFACT_VERSION,
   REPLAY_FIXTURE_NAME,
-  parseReplayArtifact,
-  serializeReplayArtifact,
   type ReplayArtifact,
   type ReplayEvent,
   type ReplayTrailEvent,
+  serializeReplayArtifact,
 } from "./replay-artifact";
 import {
-  SeededRandom,
   hasWorkspaceAction,
+  SeededRandom,
   selectWeightedAction,
 } from "./workspace-actions";
 import {
@@ -194,7 +196,7 @@ test("deterministically explores the synthetic matter workspace", async ({
       async () => await apiStatus(page.request, `/workspaces/${workspace.id}`),
       {
         message: "browser context can read the synthetic matter",
-        timeout: 10_000,
+        timeout: PLAYWRIGHT_EXPECT_TIMEOUT_10_SECONDS_MS,
       },
     )
     .toBe(200);

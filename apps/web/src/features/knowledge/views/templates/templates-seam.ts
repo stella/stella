@@ -2,6 +2,8 @@ import type { DragEvent } from "react";
 
 import type { ContextMenuAction } from "@stll/ui/context-menu";
 
+export type TemplateDensity = "compact" | "comfortable";
+
 /**
  * A template as the shared views render it, whichever source supplied it.
  * Usage, authorship and edit times exist only for a library's own templates:

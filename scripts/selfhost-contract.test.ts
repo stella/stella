@@ -2,12 +2,16 @@ import { describe, expect, setDefaultTimeout, test } from "bun:test";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { ENV_CATALOG, ENV_OWNER } from "./env-catalog";
 import {
+  RELEASE_ARTIFACT,
   renderSelfhostCompose,
   SELFHOST_APPLICATION_IMAGE_EXPRESSION,
   SELFHOST_COMPOSE_ENV,
+  SELFHOST_SERVICE,
+  SELFHOST_SERVICE_CONTRACT,
   selfhostComposeViolations,
 } from "./selfhost-contract";
 import {
@@ -18,7 +22,6 @@ import {
   productionEnvironmentIssues,
   releaseManifestIssues,
   renderSelfhostEnvExample,
-  selfhostDoctorIssues,
   workflowContractIssues,
 } from "./selfhost-tool";
 
@@ -42,7 +45,7 @@ describe("self-host Compose contract", () => {
       "\n  scheduler:\n    image: stella:scheduler\n\n  gotenberg:\n    image:",
     );
     expect(selfhostComposeViolations(compose)).toContain(
-      "Compose services must be exactly: api, document-processing-worker, gotenberg.",
+      "Compose services must be exactly: api, document-processing-worker, file-derivative-worker, gotenberg.",
     );
   });
 
@@ -71,6 +74,31 @@ describe("self-host Compose contract", () => {
       "api healthcheck must probe /ready.",
     );
   });
+
+  test.each(
+    Object.values(SELFHOST_SERVICE).filter(
+      (service) => SELFHOST_SERVICE_CONTRACT[service].type === "queue-worker",
+    ),
+  )("requires an API health probe and healthy dependency for %s", (service) => {
+    const compose = renderSelfhostCompose();
+    const start = compose.indexOf(`\n  ${service}:\n`);
+    expect(start).toBeGreaterThanOrEqual(0);
+    const next = compose.slice(start + 1).search(/\n {2}\S/u);
+    const end = next === -1 ? compose.length : start + 1 + next;
+    const block = compose.slice(start, end);
+    for (const changed of [
+      block.replace(/ {4}healthcheck:[\s\S]*? {4}restart:/u, "    restart:"),
+      block.replace(
+        / {4}depends_on:[\s\S]*? {4}healthcheck:/u,
+        "    healthcheck:",
+      ),
+      block.replace("condition: service_healthy", "condition: service_started"),
+    ]) {
+      expect(
+        selfhostComposeViolations(compose.replace(block, () => changed)),
+      ).toContain(`${service} must depend on API readiness.`);
+    }
+  });
 });
 
 describe("self-host production environment", () => {
@@ -91,8 +119,7 @@ describe("self-host production environment", () => {
     expect(example).not.toMatch(/^SMTP_HOST=/mu);
 
     for (const entry of ENV_CATALOG.filter(
-      ({ documented, owner }) =>
-        documented && owner !== ENV_OWNER.web && owner !== ENV_OWNER.collab,
+      ({ owner }) => owner !== ENV_OWNER.web && owner !== ENV_OWNER.collab,
     )) {
       expect(
         example.match(new RegExp(`^#? ?${entry.name}=`, "gmu")),
@@ -170,34 +197,6 @@ describe("self-host production environment", () => {
     ).toEqual([]);
   });
 
-  describe("web and API feature flags", () => {
-    const template = materializeSelfhostTemplateForValidation(
-      renderSelfhostEnvExample(),
-    );
-    const doctorIssues = (text: string, webFlag: string | undefined) =>
-      selfhostDoctorIssues({
-        ambientEnvironment: {},
-        text,
-        webEnvironment: { VITE_FEATURE_TIME_BILLING: webFlag },
-      });
-    const withServerFlag = `${template}\nFEATURE_TIME_BILLING="true"\n`;
-
-    test("rejects the web time billing flag without the API flag", () => {
-      expect(doctorIssues(template, "true")).toEqual([
-        "VITE_FEATURE_TIME_BILLING=true needs FEATURE_TIME_BILLING=true on the API: the web build would offer a feature the API does not serve.",
-      ]);
-    });
-
-    test.each([
-      ["both flags on", withServerFlag, "true"],
-      ["both flags off", template, "false"],
-      ["the web flag unset", template, undefined],
-      ["only the API flag on", withServerFlag, "false"],
-    ])("accepts %s", (_name, text, webFlag) => {
-      expect(doctorIssues(text, webFlag)).toEqual([]);
-    });
-  });
-
   test("materializes through the real Docker Compose parser", () => {
     if (!Bun.which("docker")) {
       return;
@@ -218,11 +217,11 @@ describe("self-host production environment", () => {
       cmd: [
         process.execPath,
         "--no-env-file",
-        new URL("selfhost-tool.ts", import.meta.url).pathname,
+        fileURLToPath(new URL("selfhost-tool.ts", import.meta.url)),
         "doctor",
         envPath,
       ],
-      cwd: new URL("..", import.meta.url).pathname,
+      cwd: fileURLToPath(new URL("..", import.meta.url)),
       env: isolatedEnvironment,
       stderr: "pipe",
       stdout: "pipe",
@@ -234,11 +233,16 @@ describe("self-host production environment", () => {
         "--env-file",
         envPath,
         "-f",
-        new URL("../docker-compose.selfhost.yml", import.meta.url).pathname,
+        fileURLToPath(
+          new URL("../docker-compose.selfhost.yml", import.meta.url),
+        ),
         "config",
         "--quiet",
       ],
-      env: isolatedEnvironment,
+      env: {
+        ...isolatedEnvironment,
+        DOCKER_CONFIG: process.env["DOCKER_CONFIG"],
+      },
       stderr: "pipe",
       stdout: "pipe",
     });
@@ -255,29 +259,29 @@ describe("release manifest contract", () => {
     reference: `ghcr.io/stella/stella-api@sha256:${"a".repeat(64)}`,
   };
 
+  const artifacts = Object.fromEntries(
+    Object.values(RELEASE_ARTIFACT).map(({ manifestKey }) => [
+      manifestKey,
+      digestArtifact,
+    ]),
+  );
+
   test("accepts digest-qualified artifact references", () => {
-    expect(
-      releaseManifestIssues({
-        image: digestArtifact,
-        webImage: digestArtifact,
-      }),
-    ).toEqual([]);
+    expect(releaseManifestIssues(artifacts)).toEqual([]);
   });
 
-  test.each(["image", "webImage"])(
-    "rejects a mutable %s reference",
-    (manifestKey) => {
-      expect(
-        releaseManifestIssues({
-          image: digestArtifact,
-          webImage: digestArtifact,
-          [manifestKey]: { reference: "ghcr.io/stella/stella:latest" },
-        }),
-      ).toContain(
-        `Release manifest ${manifestKey}.reference must be a digest-qualified image reference.`,
-      );
-    },
-  );
+  test.each(
+    Object.values(RELEASE_ARTIFACT).map(({ manifestKey }) => manifestKey),
+  )("rejects a mutable %s reference", (manifestKey) => {
+    expect(
+      releaseManifestIssues({
+        ...artifacts,
+        [manifestKey]: { reference: "ghcr.io/stella/stella:latest" },
+      }),
+    ).toContain(
+      `Release manifest ${manifestKey}.reference must be a digest-qualified image reference.`,
+    );
+  });
 });
 
 describe("self-host workflow contract", () => {

@@ -7,15 +7,43 @@
     "ignore": "Ja negaidījāt šo uzaicinājumu, varat droši ignorēt šo e-pastu.",
     "subject": "Jūs esat uzaicināts pievienoties {organizationName}"
   },
+  "invoiceLink": {
+    "action": "{documentType, select, credit_note {Skatīt kredītrēķinu} advance {Skatīt avansa rēķinu} other {Skatīt rēķinu}}",
+    "amountDue": "Apmaksājamā summa: {amount}",
+    "body": "{firmName} jums nosūtīja {documentType, select, credit_note {kredītrēķinu} advance {avansa rēķinu} other {rēķinu}}. Atveriet saiti, lai skatītu informāciju un lejupielādētu PDF.",
+    "dueDate": "Apmaksas termiņš: {date}",
+    "expires": "Saite ir derīga līdz {date}.",
+    "heading": "{documentType, select, credit_note {Kredītrēķins} advance {Avansa rēķins} other {Rēķins}} {invoiceNumber}",
+    "ignore": "Šo e-pastu stella piegādāja sūtītāja {firmName} vārdā. Ja to negaidījāt, varat to ignorēt.",
+    "messageFrom": "Ziņa no sūtītāja {firmName}",
+    "preview": "{firmName} jums nosūtīja {documentType, select, credit_note {kredītrēķinu} advance {avansa rēķinu} other {rēķinu}} {invoiceNumber}",
+    "reply": "Lai sazinātos ar sūtītāju {firmName}, atbildiet uz šo e-pastu.",
+    "subject": "{documentType, select, credit_note {Kredītrēķins} advance {Avansa rēķins} other {Rēķins}} {invoiceNumber}, sūtītājs {firmName}"
+  },
   "newDeviceLogin": {
-    "action": "Pārskatīt sesijas",
-    "body": "Jūsu kontā tika pieteicies no jaunas ierīces vai atrašanās vietas.",
+    "action": "Pārskatīt pieslēgtās ierīces",
+    "actionNote": "Poga atver Iestatījumi › Drošība tieši pie šīs pieslēgšanās.",
+    "body": "Jūsu kontam tikko kāds pieslēdzās no jaunas ierīces vai atrašanās vietas.",
     "device": "Ierīce",
-    "heading": "Konstatēta jauna pieteikšanās",
-    "ignore": "Ja tas bijāt jūs, nekāda darbība nav nepieciešama. Ja neatpazīstat šo darbību, pārskatiet savas aktīvās sesijas un atsauciet tās, kuras neatpazīstat.",
+    "deviceName": {
+      "browserOnOs": "{browser} operētājsistēmā {os}",
+      "unknown": "Nezināma ierīce"
+    },
+    "heading": "Jauna pieslēgšanās jūsu kontam",
+    "ignore": "Ja tas bijāt jūs, nekas nav jādara. Ja neatpazīstat šo pieslēgšanos, atslēdziet šo ierīci.",
     "ipAddress": "IP adrese",
-    "preview": "Jauna pieteikšanās no {device}",
-    "subject": "Jauna pieteikšanās jūsu stella kontā",
+    "ipAddressUnknown": "Nezināma",
+    "location": "Atrašanās vieta",
+    "mapAlt": "Karte ar aptuveno pieteikšanās vietu: {location}",
+    "place": {
+      "cityCountry": "{city}, {country}",
+      "cityRegionCountry": "{city}, {region}, {country}",
+      "regionCountry": "{region}, {country}"
+    },
+    "placeApproximate": "{place} (aptuveni)",
+    "preview": "Jauna pieslēgšanās no {device}",
+    "previewUnknownDevice": "Jauna pieslēgšanās no nezināmas ierīces",
+    "subject": "Jauna pieslēgšanās jūsu stella kontam",
     "time": "Laiks"
   },
   "otp": {
@@ -30,6 +58,15 @@
     "signIn": "Izmantojiet šo kodu, lai pieslēgtos savam stella kontam.",
     "subject": "Jūsu stella verifikācijas kods",
     "twoFactorManage": "Izmantojiet šo kodu, lai apstiprinātu izmaiņas divfaktoru autentifikācijas iestatījumos."
+  },
+  "pushAlert": {
+    "announcement": "Jūsu organizācija publicēja paziņojumu",
+    "flowRunAwaitingApproval": "Darbplūsma gaida jūsu apstiprinājumu",
+    "flowRunCompleted": "Darbplūsma ir pabeigta",
+    "flowRunFailed": "Darbplūsma neizdevās",
+    "localRunLimitReset": "Programmēšanas aģents jūsu datorā var turpināt jūsu tērzēšanu",
+    "mention": "Jūs tikāt pieminēts komentārā",
+    "taskAssigned": "Jums piešķirts uzdevums"
   },
   "reportExportStatus": {
     "action": "Atvērt stella",

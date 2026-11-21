@@ -2,6 +2,8 @@ import { describe, expect, test } from "bun:test";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import nodePath from "node:path";
 
+import { repoRelativePath } from "@stll/portable-path";
+
 const repoRoot = nodePath.resolve(import.meta.dir, "../../../../..");
 const webSrc = nodePath.resolve(repoRoot, "apps/web/src");
 
@@ -19,6 +21,9 @@ const SSR_ENTRY_MODULES = [
   "apps/web/src/routes/knowledge/tools_.$entry_.download.ts",
   "apps/web/src/routes/knowledge/tools_.contribute.tsx",
   "apps/web/src/routes/knowledge/-public/public-tools-catalogue.tsx",
+  "apps/web/src/routes/knowledge/tools_.catalogue.tsx",
+  "apps/web/src/routes/knowledge/-public/tools-catalogue.page.tsx",
+  "apps/web/src/routes/knowledge/-public/tool-entry.page.tsx",
   "apps/web/src/lib/public-tools-data.ts",
   "apps/web/src/lib/public-tools-github-content.ts",
   "apps/web/src/lib/public-tools-sitemap.ts",
@@ -136,7 +141,7 @@ const walkSsrGraph = (entries: readonly string[]): WalkResult => {
         FORBIDDEN_IMPORT_PATTERNS.some((pattern) => pattern.test(specifier))
       ) {
         violations.push({
-          module: nodePath.relative(repoRoot, file),
+          module: repoRelativePath(repoRoot, file),
           specifier,
         });
         continue;
@@ -221,7 +226,7 @@ describe("public tools security invariants", () => {
   });
 
   test.each([
-    "apps/web/src/routes/tools/$slug.tsx",
+    "apps/web/src/routes/tools/-detail.page.tsx",
     "apps/web/src/routes/knowledge/-public/public-tool-detail.tsx",
   ])(
     "the install affordance in %s is a client-only lazy import, never static",

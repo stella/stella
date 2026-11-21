@@ -1,3 +1,4 @@
+// The STELLA_RUN_POSTGRES_TESTS runner also executes this verification suite.
 /**
  * A verification pins its facts by value when it starts, each with the
  * sources that say where it comes from and the name each source document had
@@ -6,7 +7,7 @@
  */
 
 import { afterAll, beforeAll, expect, test } from "bun:test";
-import { inArray, sql } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 
 import { LIST_ITEM_TYPE } from "@stll/api-contract/entity-options";
 
@@ -16,14 +17,15 @@ import {
   entities,
   entityVersions,
   legalListFactDetails,
-  legalListItemSources,
   legalListItems,
+  legalListItemSources,
   legalLists,
   workspaces,
 } from "@/api/db/schema";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { readVerificationEvidence } from "@/api/lib/lists/verification/evidence";
+import { deleteOrganizationsForTest } from "@/api/tests/helpers/organization-deletion";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type {
@@ -186,9 +188,7 @@ beforeAll(
 );
 
 afterAll(async () => {
-  await testDb
-    .delete(organization)
-    .where(inArray(organization.id, [organizationId]));
+  await deleteOrganizationsForTest(testDb, [organizationId]);
   await releaseTestDb();
 });
 

@@ -3,7 +3,10 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 
 import { parseContractDomainLedger } from "./contract-domain-ledger.ts";
-import { runLedgerMembershipGuard } from "./ledger-membership.ts";
+import {
+  relocateLedgerEntries,
+  runLedgerMembershipGuard,
+} from "./ledger-membership.ts";
 
 const LEDGER_REL = "scripts/contract-domain-ledger.json";
 const REPO_ROOT = path.resolve(import.meta.dir, "..");
@@ -25,6 +28,8 @@ if (import.meta.main) {
         }
         return entries.map((entry) => entry.id);
       },
+      normalizeBaseEntries: (options) =>
+        relocateLedgerEntries({ ...options, repoRoot: REPO_ROOT }),
       label: "contract-domain",
       remediation:
         "import the contract domain or limit instead of listing a new site",

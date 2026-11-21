@@ -4,9 +4,9 @@ import {
   hashSchemaInput,
   normalizeApprovalSchema,
   parseWithStandardSchema,
-  toolDefinition,
   type StreamChunk,
   type Tool,
+  toolDefinition,
 } from "@tanstack/ai";
 import {
   convertToolsToProviderFormat as convertAnthropicTools,
@@ -30,7 +30,7 @@ import * as v from "valibot";
 import { TANSTACK_AI_PROVIDERS } from "@stll/ai-catalog";
 import {
   BROWSER_CONTROL_PROTOCOL_VERSION,
-  type BrowserClientCapability,
+  type BrowserExtensionCapability,
 } from "@stll/api-contract";
 import {
   DOCX_SUGGEST_CHANGES_OPTIONS_BY_SURFACE,
@@ -75,9 +75,14 @@ import {
   projectToolMapForSubagent,
 } from "@/api/handlers/chat/tools/subagent-tools";
 import { getChatToolPolicy } from "@/api/handlers/chat/tools/tool-policy";
+import {
+  NO_SKILL_BINDING_SCOPE,
+  UNBOUND,
+} from "@/api/lib/agent-skills/binding";
 import { createSkillTools } from "@/api/lib/agent-skills/skill-tools";
 import { ACTIVE_SKILL_BODY_PROMPT_MAX_CHARS } from "@/api/lib/agent-skills/skills";
 import type { AuditRecorder } from "@/api/lib/audit-log";
+import type { AccessibleWorkspace } from "@/api/lib/auth/accessible-workspace";
 import { toSafeId } from "@/api/lib/branded-types";
 import { BUSINESS_REGISTRY_DISPATCH } from "@/api/lib/business-registries/dispatch";
 import {
@@ -89,6 +94,14 @@ import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { createChatToolDefectMemo } from "@/api/lib/chat/tool-defect-memo";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
+import {
+  createFeatureAccessSnapshot,
+  decideFeatureAccess,
+} from "@/api/lib/feature-access/policy";
+import {
+  AI_MEMORY_FEATURE_ID,
+  FEATURE_REGISTRY,
+} from "@/api/lib/feature-access/registry";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import {
   PROVIDER_SAFE_JSON_SCHEMA_KEYWORDS,
@@ -96,10 +109,12 @@ import {
 } from "@/api/lib/provider-safe-json-schema";
 import { projectSchemaInputJsonSchema } from "@/api/lib/tanstack-ai-schema";
 import type { UrlFetcher, WebSearchProvider } from "@/api/lib/web-search/types";
-import { DEFAULT_MCP_TOOL_DEFINITIONS } from "@/api/mcp/static-tool-definitions";
+import { MODEL_VISIBLE_MCP_TOOL_DEFINITIONS } from "@/api/mcp/static-tool-definitions";
 import { TEMPLATE_FIELD_REFERENCE_URI } from "@/api/mcp/template-field-reference";
 import { TEMPLATE_MARKER_REFERENCE_URI } from "@/api/mcp/template-marker-reference";
+import { offeredSkillCatalog } from "@/api/tests/helpers/offered-skills";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import { enrolledTimeBillingSnapshot } from "@/api/tests/helpers/time-billing-enrolment";
 
 import { createOrgTools } from "./org-tools";
 import { toTanStackToolSchema } from "./tanstack-tool-schema";
@@ -154,12 +169,36 @@ const getChatTools = (
   return getChatToolsWithPin({
     ...rest,
     memoryEnabled: props.memoryEnabled ?? true,
+    featureAccessSnapshot: createFeatureAccessSnapshot({
+      organizationId: props.organizationId,
+      userId: props.userId,
+      decisions: new Map([
+        ...(props.featureAccessSnapshot?.decisions ?? []),
+        [
+          AI_MEMORY_FEATURE_ID,
+          decideFeatureAccess({
+            registry: FEATURE_REGISTRY,
+            featureId: AI_MEMORY_FEATURE_ID,
+            organizationId: props.organizationId,
+            userId: props.userId,
+            membership: true,
+            user: { email: "member@example.test", emailVerified: true },
+            grants: {
+              [AI_MEMORY_FEATURE_ID]: [
+                { type: "organization", organizationId: props.organizationId },
+              ],
+            },
+          }),
+        ],
+      ]),
+    }),
     pinServerValidatedWorkspaceId: () => true,
     registryDispatch,
   });
 };
 
 const editableActiveSkillContext: ActiveChatSkillContext = {
+  binding: UNBOUND,
   body: "# Instructions\nUse the checklist.",
   description: "Review closing files.",
   displayName: "Closing Review",
@@ -169,7 +208,7 @@ const editableActiveSkillContext: ActiveChatSkillContext = {
   id: skillId,
   origin: "authored",
   requiredTools: [],
-  resources: [{ kind: "knowledge", path: "knowledge/checklist.md" }],
+  resources: [{ path: "references/checklist.md" }],
   source: "installed",
   toolName: "closing-review",
   version: null,
@@ -269,12 +308,13 @@ const suggestChangesOperationTypeEnum = (
 // register by default (no disabled slugs).
 const DEFAULT_BROWSER_CLIENT = {
   protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
-} satisfies BrowserClientCapability;
+  status: "connected",
+} satisfies BrowserExtensionCapability;
 
 const buildFullCoverageChatTools = (
   thirdPartyBoundary: ChatThirdPartyBoundary = rawThirdPartyBoundary,
   refRegistry: ChatRefRegistry = createChatRefRegistry(),
-  browserClient: BrowserClientCapability | null = DEFAULT_BROWSER_CLIENT,
+  browserExtension: BrowserExtensionCapability | null = DEFAULT_BROWSER_CLIENT,
 ) => {
   const webSearchProvider: WebSearchProvider = {
     name: "tavily",
@@ -291,6 +331,10 @@ const buildFullCoverageChatTools = (
   };
 
   return getChatTools({
+    featureAccessSnapshot: enrolledTimeBillingSnapshot({
+      organizationId,
+      userId,
+    }),
     orgAIConfig: null,
     managedAIResidency: "eu" as const,
     memberRole: sessionMemberRole("owner"),
@@ -313,7 +357,7 @@ const buildFullCoverageChatTools = (
     hasActiveDocxEditClient: true,
     hasActiveDocxFileClient: true,
     docxSuggestionSurface: "file-overlay",
-    browserClient: browserClient ?? undefined,
+    browserExtension: browserExtension ?? undefined,
     // Explicit "manual": DEFAULT_CHAT_EDIT_APPLY_MODE is now "auto", which
     // would suppress suggest_changes here (this call sets no
     // activeFile, so the auto tool never registers either) and drop it out
@@ -327,13 +371,17 @@ const buildFullCoverageChatTools = (
     recordAuditEvent: noopAuditRecorder,
     workspaceStatusById: new Map([[workspaceId, "active"]]),
     resolveMemorySourceWorkspaceIds: () => [],
-    skillMetadata: [
+    skillMetadata: offeredSkillCatalog([
       {
         description: editableActiveSkillContext.description,
+        // Declares the skill-gated tools, so full coverage includes them.
+        metadata: {
+          "stella-required-tools": "validate_skill_package save_skill_package",
+        },
         name: editableActiveSkillContext.toolName,
         version: editableActiveSkillContext.version,
       },
-    ],
+    ]),
   });
 };
 
@@ -354,6 +402,7 @@ const autoApplyActiveFile = {
 } as const;
 
 const autoApplyBaseArgs = {
+  workspaceStatusById: new Map<string, AccessibleWorkspace["status"]>(),
   orgAIConfig: null,
   managedAIResidency: "eu" as const,
   organizationId,
@@ -403,6 +452,7 @@ const serializeFullCoverageChatTools = (): Tool[] =>
   });
 
 const commonProviderOptions = (tools: Tool[]) => ({
+  threadId: "tool-schema-thread",
   logger: resolveDebugOption(false),
   messages: [{ role: "user" as const, content: "Contract probe." }],
   tools,
@@ -410,12 +460,7 @@ const commonProviderOptions = (tools: Tool[]) => ({
 
 type ProviderRequestProbe = {
   provider:
-    | "anthropic"
-    | "bedrock"
-    | "google"
-    | "mistral"
-    | "openai"
-    | "openrouter";
+    "anthropic" | "bedrock" | "google" | "mistral" | "openai" | "openrouter";
   capture: (tools: Tool[]) => Promise<Record<string, unknown>>;
   toolsFromRequest: (request: Record<string, unknown>) => unknown[];
 };
@@ -472,7 +517,7 @@ const providerRequestProbes: ProviderRequestProbe[] = [
       return groups.flatMap((group) => {
         const record = requireRecord(group, "Gemini tool group");
         return Array.isArray(record["functionDeclarations"])
-          ? record["functionDeclarations"]
+          ? (record["functionDeclarations"] as unknown[])
           : [record];
       });
     },
@@ -794,15 +839,16 @@ describe("chat tool schemas", () => {
   test("construct skill tools as JSON-schema-compatible AI tools", () => {
     expect(() =>
       createSkillTools({
+        bindingScope: NO_SKILL_BINDING_SCOPE,
         organizationId,
         safeDb: unusedSafeDb,
-        skills: [
+        skills: offeredSkillCatalog([
           {
             description: "Run a custom legal workflow.",
             name: "custom-legal-workflow",
             version: "1.0",
           },
-        ],
+        ]),
         userId,
       }),
     ).not.toThrow();
@@ -810,9 +856,10 @@ describe("chat tool schemas", () => {
 
   test("does not offer skill lookup when the catalog is empty", () => {
     const tools = createSkillTools({
+      bindingScope: NO_SKILL_BINDING_SCOPE,
       organizationId,
       safeDb: unusedSafeDb,
-      skills: [],
+      skills: offeredSkillCatalog([]),
       userId,
     });
 
@@ -822,15 +869,16 @@ describe("chat tool schemas", () => {
 
   test("keeps installed skill names out of tool schema descriptions", () => {
     const tools = createSkillTools({
+      bindingScope: NO_SKILL_BINDING_SCOPE,
       organizationId,
       safeDb: unusedSafeDb,
-      skills: [
+      skills: offeredSkillCatalog([
         {
           description: "Private matter-specific workflow.",
           name: "acme-closing-strategy",
           version: "1.0",
         },
-      ],
+      ]),
       userId,
     });
 
@@ -839,6 +887,7 @@ describe("chat tool schemas", () => {
 
   test("chat tools expose readonly data through the stella API", () => {
     const tools = getChatTools({
+      workspaceStatusById: new Map<string, AccessibleWorkspace["status"]>(),
       orgAIConfig: null,
       managedAIResidency: "eu" as const,
       memberRole: sessionMemberRole("owner"),
@@ -908,8 +957,22 @@ describe("chat tool schemas", () => {
     ).not.toHaveProperty(BROWSER_CONTROL_TOOL_NAME);
   });
 
+  test.each([
+    BROWSER_CONTROL_PROTOCOL_VERSION - 1,
+    BROWSER_CONTROL_PROTOCOL_VERSION + 1,
+  ])("omits browser control for protocol version %s", (protocolVersion) => {
+    expect(
+      buildFullCoverageChatTools(
+        rawThirdPartyBoundary,
+        createChatRefRegistry(),
+        { protocolVersion, status: "connected" },
+      ),
+    ).not.toHaveProperty(BROWSER_CONTROL_TOOL_NAME);
+  });
+
   test("keeps historical remember calls schema-valid while memory is disabled", () => {
     const baseArgs = {
+      workspaceStatusById: new Map<string, AccessibleWorkspace["status"]>(),
       orgAIConfig: null,
       managedAIResidency: "eu" as const,
       memberRole: sessionMemberRole("owner"),
@@ -939,6 +1002,40 @@ describe("chat tool schemas", () => {
       memoryEnabled: false,
     };
 
+    for (const invited of [false, true]) {
+      const featureAccessSnapshot = createFeatureAccessSnapshot({
+        organizationId,
+        userId,
+        decisions: new Map([
+          [
+            AI_MEMORY_FEATURE_ID,
+            decideFeatureAccess({
+              registry: FEATURE_REGISTRY,
+              featureId: AI_MEMORY_FEATURE_ID,
+              organizationId,
+              userId,
+              membership: true,
+              user: { email: "member@example.test", emailVerified: true },
+              grants: invited
+                ? {
+                    [AI_MEMORY_FEATURE_ID]: [
+                      { type: "organization", organizationId },
+                    ],
+                  }
+                : {},
+            }),
+          ],
+        ]),
+      });
+      const tools = getChatToolsWithPin({
+        ...baseArgs,
+        memoryEnabled: undefined,
+        featureAccessSnapshot,
+        pinServerValidatedWorkspaceId: () => true,
+        registryDispatch: BUSINESS_REGISTRY_DISPATCH,
+      });
+      expect(REMEMBER_TOOL_NAME in tools).toBe(invited);
+    }
     expect(getChatTools(baseArgs)).not.toHaveProperty(REMEMBER_TOOL_NAME);
     expect(
       getChatTools({
@@ -950,6 +1047,7 @@ describe("chat tool schemas", () => {
 
   test("registers the folio-agents read_document/find_text tools only when the file-overlay docx client is active", () => {
     const baseArgs = {
+      workspaceStatusById: new Map<string, AccessibleWorkspace["status"]>(),
       orgAIConfig: null,
       managedAIResidency: "eu" as const,
       memberRole: sessionMemberRole("owner"),
@@ -1112,6 +1210,7 @@ describe("chat tool schemas", () => {
 
   test("only exposes current skill edit tools for editable active skill chats", () => {
     const tools = getChatTools({
+      workspaceStatusById: new Map<string, AccessibleWorkspace["status"]>(),
       orgAIConfig: null,
       managedAIResidency: "eu" as const,
       memberRole: sessionMemberRole("owner"),
@@ -1139,13 +1238,13 @@ describe("chat tool schemas", () => {
       activeSkillContext: editableActiveSkillContext,
       recordAuditEvent: noopAuditRecorder,
       resolveMemorySourceWorkspaceIds: () => [],
-      skillMetadata: [
+      skillMetadata: offeredSkillCatalog([
         {
           description: editableActiveSkillContext.description,
           name: editableActiveSkillContext.toolName,
           version: editableActiveSkillContext.version,
         },
-      ],
+      ]),
     });
 
     const createResource = tools["create-current-skill-resource"];
@@ -1170,8 +1269,89 @@ describe("chat tool schemas", () => {
     }
   });
 
+  test("offers skill package tools only to a turn whose skill declares them, the save behind approval", () => {
+    const declaringSkill = {
+      description: "Builds skills.",
+      metadata: {
+        "stella-required-tools": "validate_skill_package save_skill_package",
+      },
+      name: "skill-builder",
+      version: null,
+    };
+    const toolsFor = (
+      role: "intern" | "member" | "owner",
+      recordAuditEvent: typeof noopAuditRecorder | undefined,
+      skills: readonly (typeof declaringSkill)[] = [declaringSkill],
+    ) =>
+      getChatTools({
+        workspaceStatusById: new Map<string, AccessibleWorkspace["status"]>(),
+        orgAIConfig: null,
+        managedAIResidency: "eu" as const,
+        memberRole: sessionMemberRole(role),
+        organizationId,
+        requestWorkspaceId: workspaceId,
+        thirdPartyBoundary: { type: "raw" },
+        refRegistry: createChatRefRegistry(),
+        toolDefectMemo: createChatToolDefectMemo(),
+        safeDb: unusedSafeDb,
+        scopedDb: unusedScopedDb,
+        threadId,
+        pastChatScope: { type: PAST_CHAT_SCOPE_TYPE.allChats },
+        workspaceId: null,
+        userId,
+        userEmail: "standard@example.test",
+        toolWorkspaceIds: resolveToolWorkspaceIds({
+          pinnedIds: [],
+          accessibleWorkspaceIds: [workspaceId],
+        }),
+        hasActiveDocxEditClient: false,
+        hasActiveDocxFileClient: false,
+        docxSuggestionSurface: "template-studio",
+        webSearchEnabled: false,
+        webSearchProviders: { webSearchProvider: null, urlFetcher: null },
+        recordAuditEvent,
+        resolveMemorySourceWorkspaceIds: () => [],
+        skillMetadata: offeredSkillCatalog(skills),
+      });
+
+    // A chat whose skills declare neither keeps both out of its prompt.
+    const undeclared = toolsFor("owner", noopAuditRecorder, []);
+    expect(undeclared["validate_skill_package"]).toBeUndefined();
+    expect(undeclared["save_skill_package"]).toBeUndefined();
+
+    for (const role of ["member", "owner"] as const) {
+      const tools = toolsFor(role, noopAuditRecorder);
+      const validate = tools["validate_skill_package"];
+      const save = tools["save_skill_package"];
+      if (!validate || !save) {
+        throw new Error(`Expected skill package tools for ${role}`);
+      }
+      expect(getChatToolPolicy(validate)).toEqual({
+        kind: "internal",
+        needsApproval: false,
+        requiresAnonymization: false,
+      });
+      expect(save.needsApproval).toBe(true);
+      expect(getChatToolPolicy(save)).toEqual({
+        kind: "mutation",
+        needsApproval: true,
+        requiresAnonymization: false,
+      });
+    }
+
+    const intern = toolsFor("intern", noopAuditRecorder);
+    expect(intern["validate_skill_package"]).toBeUndefined();
+    expect(intern["save_skill_package"]).toBeUndefined();
+
+    // A save is audited; a tool set that records no audit offers only the check.
+    const unaudited = toolsFor("member", undefined);
+    expect(unaudited["validate_skill_package"]).toBeDefined();
+    expect(unaudited["save_skill_package"]).toBeUndefined();
+  });
+
   test("does not expose full body replacement for truncated active skill bodies", () => {
     const tools = getChatTools({
+      workspaceStatusById: new Map<string, AccessibleWorkspace["status"]>(),
       orgAIConfig: null,
       managedAIResidency: "eu" as const,
       memberRole: sessionMemberRole("owner"),
@@ -1202,13 +1382,13 @@ describe("chat tool schemas", () => {
       },
       recordAuditEvent: noopAuditRecorder,
       resolveMemorySourceWorkspaceIds: () => [],
-      skillMetadata: [
+      skillMetadata: offeredSkillCatalog([
         {
           description: editableActiveSkillContext.description,
           name: editableActiveSkillContext.toolName,
           version: editableActiveSkillContext.version,
         },
-      ],
+      ]),
     });
 
     expect(tools).toHaveProperty("create-current-skill-resource");
@@ -1218,6 +1398,7 @@ describe("chat tool schemas", () => {
 
   test("applies approval and anonymization policies by tool risk", () => {
     const tools = getChatTools({
+      workspaceStatusById: new Map<string, AccessibleWorkspace["status"]>(),
       orgAIConfig: null,
       managedAIResidency: "eu" as const,
       memberRole: sessionMemberRole("owner"),
@@ -1272,7 +1453,7 @@ describe("chat tool schemas", () => {
       throw new Error("Expected chat tools to be registered");
     }
 
-    expect(businessRegistryLookup.needsApproval).toBeUndefined();
+    expect(businessRegistryLookup.needsApproval).toBe(true);
     const businessRegistrySchema = convertSchemaToJsonSchema(
       businessRegistryLookup.inputSchema,
     );
@@ -1281,7 +1462,7 @@ describe("chat tool schemas", () => {
     ).toContain("GB");
     expect(getChatToolPolicy(businessRegistryLookup)).toEqual({
       kind: "public_official",
-      needsApproval: false,
+      needsApproval: true,
       requiresAnonymization: false,
     });
     expect(updateEntityFields.needsApproval).toBe(true);
@@ -1939,6 +2120,7 @@ describe("chat tool schemas", () => {
     const chunks: StreamChunk[] = [];
 
     for await (const chunk of adapter.chatStream({
+      threadId: "tool-schema-thread",
       logger: resolveDebugOption(false),
       messages: [{ role: "user", content: "Run the round-trip tool." }],
       model: adapter.model,
@@ -1964,6 +2146,7 @@ describe("chat tool schemas", () => {
     }
 
     for await (const chunk of adapter.chatStream({
+      threadId: "tool-schema-thread",
       logger: resolveDebugOption(false),
       messages: [
         { role: "user", content: "Run the round-trip tool." },
@@ -2222,6 +2405,7 @@ describe("chat tool schemas", () => {
   // includes archived matters).
   describe("create_matter_document authorization", () => {
     const baseArgs = {
+      workspaceStatusById: new Map<string, AccessibleWorkspace["status"]>(),
       orgAIConfig: null,
       managedAIResidency: "eu" as const,
       organizationId,
@@ -2479,7 +2663,7 @@ describe("chat tool schemas", () => {
 });
 
 describe("registry write tool approval policy", () => {
-  const projectedWriteNames = DEFAULT_MCP_TOOL_DEFINITIONS.filter(
+  const projectedWriteNames = MODEL_VISIBLE_MCP_TOOL_DEFINITIONS.filter(
     (definition) =>
       definition.access === "write" &&
       WRITE_TOOL_REF_FIELD_MAP[definition.name].chatProjectable,
@@ -2487,6 +2671,11 @@ describe("registry write tool approval policy", () => {
 
   const buildToolsWithWorkspace = () =>
     getChatTools({
+      workspaceStatusById: new Map<string, AccessibleWorkspace["status"]>(),
+      featureAccessSnapshot: enrolledTimeBillingSnapshot({
+        organizationId,
+        userId,
+      }),
       orgAIConfig: null,
       managedAIResidency: "eu" as const,
       memberRole: sessionMemberRole("owner"),
@@ -2576,6 +2765,11 @@ describe("registry write tool approval policy", () => {
 
   test("every write tool is registered behind approval before the first matter exists", () => {
     const tools = getChatTools({
+      workspaceStatusById: new Map<string, AccessibleWorkspace["status"]>(),
+      featureAccessSnapshot: enrolledTimeBillingSnapshot({
+        organizationId,
+        userId,
+      }),
       orgAIConfig: null,
       managedAIResidency: "eu" as const,
       memberRole: sessionMemberRole("owner"),

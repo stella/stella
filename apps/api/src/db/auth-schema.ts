@@ -5,20 +5,33 @@ import {
   check,
   index,
   integer,
+  pgPolicy,
   pgTable,
   text,
   uniqueIndex,
 } from "drizzle-orm/pg-core";
 
 import { ORGANIZATION_ROLE_NAMES } from "@stll/auth-model";
+import { UI_LOCALES } from "@stll/locales";
 
-import { jsonb, timestamptz } from "@/api/db/columns";
+import { jsonb, sealedText, timestamptz } from "@/api/db/columns";
 import {
   authMemberPolicies,
   authOrganizationPolicies,
   authUserPolicies,
   denyStellaAccessPolicies,
 } from "@/api/db/rls";
+import { admitSsoOidcConfig } from "@/api/lib/db/sso-provider-config";
+import { ACCOUNT_EMAIL_UNDELIVERABLE_REASONS } from "@/api/lib/email/deliverability-contract";
+import {
+  SYNTHETIC_PRINCIPAL,
+  SYNTHETIC_SESSION_PREFIX,
+} from "@/api/lib/synthetic-principal/constants";
+
+const USER_LOCALES = [
+  "en",
+  ...UI_LOCALES.filter((locale) => locale !== "en"),
+] as const;
 
 export const user = pgTable(
   "user",
@@ -28,8 +41,15 @@ export const user = pgTable(
     email: text("email").notNull().unique(),
     emailVerified: boolean("email_verified").default(false).notNull(),
     image: text("image"),
+    // The UI locale the user picked, shared across devices. Null until they
+    // pick one: the browser's language applies meanwhile.
+    locale: text("locale", { enum: USER_LOCALES }),
     timezoneId: text("timezone_id").default("UTC").notNull(),
     preferredName: text("preferred_name"),
+    // Null or document follows the document language; a UI locale overrides it.
+    readerAnswerLanguage: text("reader_answer_language", {
+      enum: ["document", ...UI_LOCALES],
+    }),
     wordEditShortcut: text("word_edit_shortcut"),
     // Per-user keyboard-shortcut rebindings, serialized as a JSON object of
     // `{ [shortcutId]: "Mod+K" }`. Null when the user has never rebound a
@@ -46,6 +66,12 @@ export const user = pgTable(
     // did not advertise a country (local dev, self-hosted without a proxy).
     detectedCountry: text("detected_country"),
     twoFactorEnabled: boolean("two_factor_enabled").default(false).notNull(),
+    // The mail provider refused this address: which address (so a changed
+    // email is deliverable again), why, and since when. All null, or all set.
+    // Written only by the account-row owner from the provider's own events.
+    emailUndeliverableAddress: text("email_undeliverable_address"),
+    emailUndeliverableReason: text("email_undeliverable_reason"),
+    emailUndeliverableAt: timestamptz("email_undeliverable_at"),
     deletedAt: timestamptz("deleted_at"),
     createdAt: timestamptz("created_at").defaultNow().notNull(),
     updatedAt: timestamptz("updated_at")
@@ -54,9 +80,20 @@ export const user = pgTable(
       .notNull(),
   },
   (table) => [
+    check(
+      "user_locale_supported_check",
+      sql`${table.locale} IN (${sql.join(
+        UI_LOCALES.map((locale) => sql`${locale}`),
+        sql`, `,
+      )})`,
+    ),
     // Keyset pagination over registrations (operator observability)
     // orders by (created_at, id); without this the read is a table scan.
     index("user_createdAt_idx").on(table.createdAt, table.id),
+    check(
+      "user_email_undeliverable_check",
+      sql`(${table.emailUndeliverableAddress} IS NULL AND ${table.emailUndeliverableReason} IS NULL AND ${table.emailUndeliverableAt} IS NULL) OR (${table.emailUndeliverableAddress} IS NOT NULL AND ${table.emailUndeliverableAt} IS NOT NULL AND ${table.emailUndeliverableReason} IS NOT NULL AND ${inArray(table.emailUndeliverableReason, ACCOUNT_EMAIL_UNDELIVERABLE_REASONS)})`,
+    ),
     ...authUserPolicies(),
   ],
 );
@@ -78,13 +115,18 @@ export const AUTH_USER_STELLA_SELECT_COLUMNS = {
   email: "email",
   emailVerified: "email_verified",
   image: "image",
+  locale: "locale",
   timezoneId: "timezone_id",
   preferredName: "preferred_name",
+  readerAnswerLanguage: "reader_answer_language",
   wordEditShortcut: "word_edit_shortcut",
   userShortcuts: "user_shortcuts",
   guideProgress: "guide_progress",
   detectedCountry: "detected_country",
   twoFactorEnabled: "two_factor_enabled",
+  emailUndeliverableAddress: "email_undeliverable_address",
+  emailUndeliverableReason: "email_undeliverable_reason",
+  emailUndeliverableAt: "email_undeliverable_at",
   deletedAt: "deleted_at",
   createdAt: "created_at",
   updatedAt: "updated_at",
@@ -112,23 +154,49 @@ export const session = pgTable(
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
     activeOrganizationId: text("active_organization_id"),
+    // OAuth consent that owns this handoff session and its revocation.
+    originConsentId: text("origin_consent_id").references(
+      () => oauthConsent.id,
+      {
+        onDelete: "cascade",
+      },
+    ),
+    // Fixed expiry for text handoffs; session refresh never extends this cap.
+    handoffAbsoluteExpiresAt: timestamptz("handoff_absolute_expires_at"),
     refreshMode: text("refresh_mode", { enum: SESSION_REFRESH_MODES })
       .default("automatic")
       .notNull(),
     lastSeenAt: timestamptz("last_seen_at"),
     priorTokenHash: text("prior_token_hash"),
     priorTokenExpiresAt: timestamptz("prior_token_expires_at"),
+    /**
+     * The `sso_provider` row whose sign-in created this session, written only
+     * by that provider's callback; null for every other sign-in. No foreign
+     * key: a deleted provider leaves an id that matches no row, which an
+     * organization requiring SSO reads as a session it did not create.
+     */
+    ssoProviderId: text("sso_provider_id"),
   },
   (table) => [
     check(
       "session_refreshMode_check",
       inArray(table.refreshMode, SESSION_REFRESH_MODES),
     ),
+    check(
+      "session_monitoring_principal_check",
+      sql`(${table.id} NOT LIKE 'synthetic-session-%' OR ${table.userId} = ${sql.raw(`'${SYNTHETIC_PRINCIPAL.user.id}'`)}) AND (${table.id} NOT LIKE 'smoke-session-%' OR ${table.userId} IN ('smoke-user-stella', 'smoke-ai-user-stella'))`,
+    ),
+    index("session_monitoring_id_idx")
+      .on(table.id)
+      .where(
+        sql`${table.id} LIKE ${sql.raw(`'${SYNTHETIC_SESSION_PREFIX}%'`)}`,
+      ),
     index("session_userId_activeOrgId_idx").on(
       table.userId,
       table.activeOrganizationId,
     ),
     uniqueIndex("session_priorTokenHash_idx").on(table.priorTokenHash),
+    index("session_originConsentId_idx").on(table.originConsentId),
     ...denyStellaAccessPolicies(),
   ],
 );
@@ -157,6 +225,13 @@ export const account = pgTable(
     updatedAt: timestamptz("updated_at")
       .$onUpdate(() => /* @__PURE__ */ new Date())
       .notNull(),
+    /**
+     * For an SSO identity, the `sso_provider` row (one provider generation:
+     * its issuer and organization never change) that created it; null for
+     * every other account. A provider id reused by a later row does not
+     * reach identities an earlier row created.
+     */
+    ssoProviderId: text("sso_provider_id"),
   },
   (table) => [
     index("account_userId_idx").on(table.userId),
@@ -244,6 +319,10 @@ export const organization = pgTable(
   },
   (table) => [
     uniqueIndex("organization_slug_uidx").on(table.slug),
+    check(
+      "organization_monitoring_slug_check",
+      sql`${table.slug} <> ${sql.raw(`'${SYNTHETIC_PRINCIPAL.org.slug}'`)} OR ${table.id} = ${sql.raw(`'${SYNTHETIC_PRINCIPAL.org.id}'`)}`,
+    ),
     ...authOrganizationPolicies(),
   ],
 );
@@ -259,6 +338,8 @@ export const member = pgTable(
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
     role: text("role").default("member").notNull(),
+    /** An additional monetary-visibility grant; management roles hold it independently. */
+    billingAccess: boolean("billing_access").default(false).notNull(),
     lastActiveWorkspaceId: text("last_active_workspace_id"),
     createdAt: timestamptz("created_at").notNull(),
   },
@@ -310,6 +391,122 @@ export const invitation = pgTable(
       )})`,
     ),
     index("invitation_email_idx").on(table.email),
+    ...denyStellaAccessPolicies(),
+  ],
+);
+
+/**
+ * The form of an SSO provider id: `sso_` and a lowercase slug. Better-auth
+ * signs an account in by (provider id, subject), so a provider named after a
+ * social provider (`google`) could assert that provider's subjects; the
+ * prefix keeps the two namespaces apart.
+ */
+export const SSO_PROVIDER_ID_PATTERN = "^sso_[a-z0-9][a-z0-9_-]{0,62}$";
+
+/**
+ * Row security is forced on the SSO policy table, so even the owner role
+ * reaches it only through this policy; the request role has none.
+ */
+const tableOwnerAccess = (table: string) => {
+  const isOwner = sql.raw(
+    `current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.${table}'::regclass)`,
+  );
+  return pgPolicy(`${table}_owner_access`, {
+    for: "all",
+    to: "public",
+    using: isOwner,
+    withCheck: isOwner,
+  });
+};
+
+/**
+ * An organization's OIDC identity provider, read by `@better-auth/sso` during
+ * sign-in. Column keys mirror the plugin's field names. Rows are written only
+ * by server code: the plugin's own provider endpoints are disabled.
+ */
+export const ssoProvider = pgTable(
+  "sso_provider",
+  {
+    id: text("id").primaryKey(),
+    /** The provider id in sign-in and callback paths; see the pattern above. */
+    providerId: text("provider_id").notNull(),
+    /** The organization whose members this provider signs in. */
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    /** The OIDC issuer the ID token's `iss` must equal. */
+    issuer: text("issuer").notNull(),
+    /**
+     * The email domains, comma-separated, whose addresses this provider may
+     * create accounts for.
+     */
+    domain: text("domain").notNull(),
+    /** The plugin's OIDC configuration JSON, client secret included, sealed. */
+    oidcConfig: sealedText(
+      "stella:sealed-text:v1:sso_provider.oidc_config",
+      admitSsoOidcConfig,
+    )("oidc_config"),
+    /** SAML configuration; always null until SAML sign-in is offered. */
+    samlConfig: text("saml_config"),
+    /** The account that registered the provider, as the plugin records it. */
+    userId: text("user_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamptz("created_at").defaultNow().notNull(),
+    updatedAt: timestamptz("updated_at")
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("sso_provider_provider_id_uidx").on(table.providerId),
+    index("sso_provider_organization_id_idx").on(table.organizationId),
+    index("sso_provider_user_id_idx").on(table.userId),
+    check(
+      "sso_provider_provider_id_check",
+      sql`${table.providerId} ~ ${sql.raw(`'${SSO_PROVIDER_ID_PATTERN}'`)}`,
+    ),
+    check(
+      "sso_provider_oidc_only_check",
+      sql`${table.oidcConfig} IS NOT NULL AND ${table.samlConfig} IS NULL`,
+    ),
+    ...denyStellaAccessPolicies(),
+  ],
+);
+
+/** Whether an organization's members must sign in through its SSO provider. */
+export const ORGANIZATION_SSO_REQUIREMENTS = ["optional", "required"] as const;
+
+/**
+ * An organization's single sign-on policy; no row means SSO is optional.
+ * Kept apart from the providers so deleting or replacing a provider never
+ * lifts the requirement.
+ */
+export const organizationSsoPolicy = pgTable(
+  "organization_sso_policy",
+  {
+    organizationId: text("organization_id")
+      .primaryKey()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    /**
+     * `required`: only a session one of the organization's providers created
+     * reaches the organization.
+     */
+    requirement: text("requirement", {
+      enum: ORGANIZATION_SSO_REQUIREMENTS,
+    }).notNull(),
+    createdAt: timestamptz("created_at").defaultNow().notNull(),
+    updatedAt: timestamptz("updated_at")
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [
+    check(
+      "organization_sso_policy_requirement_check",
+      inArray(table.requirement, ORGANIZATION_SSO_REQUIREMENTS),
+    ),
+    tableOwnerAccess("organization_sso_policy"),
     ...denyStellaAccessPolicies(),
   ],
 );
@@ -391,6 +588,16 @@ export const apikey = pgTable(
     index("apikey_metadata_organization_id_idx")
       .on(sql`((${table.metadata}::jsonb ->> 'organizationId'))`)
       .where(sql`${table.metadata} IS NOT NULL`),
+    index("apikey_personal_owner_keyset_idx")
+      .on(
+        sql`((${table.metadata}::jsonb ->> 'organizationId'))`,
+        table.referenceId,
+        sql`${table.createdAt} DESC`,
+        sql`${table.id} DESC`,
+      )
+      .where(
+        sql`${table.metadata} IS NOT NULL AND ${table.metadata}::jsonb ->> 'kind' = 'personal'`,
+      ),
     index("apikey_org_keyset_idx")
       .on(
         sql`((${table.metadata}::jsonb ->> 'organizationId'))`,
@@ -416,6 +623,10 @@ export const oauthClient = pgTable(
     clientId: text("client_id").notNull().unique(),
     clientSecret: text("client_secret"),
     clientDiscoveryId: text("client_discovery_id"),
+    // When this discovery-owned client's metadata document last passed a
+    // fetch and validation. It bounds how long the stored client keeps
+    // resolving while the document cannot be revalidated.
+    metadataValidatedAt: timestamptz("metadata_validated_at"),
     registrationOrigin: text("registration_origin", {
       enum: OAUTH_CLIENT_REGISTRATION_ORIGINS,
     })
@@ -593,6 +804,20 @@ export const oauthRefreshToken = pgTable(
     index("oauth_refresh_token_authorization_code_id_idx").on(
       table.authorizationCodeId,
     ),
+    // Rotation revokes the old token in the same write; only its replay
+    // window, and the response stored for it, outlive that.
+    check(
+      "oauth_refresh_token_rotation_revokes_check",
+      sql`${table.rotatedAt} IS NULL OR ${table.revoked} IS NOT NULL`,
+    ),
+    check(
+      "oauth_refresh_token_replay_window_check",
+      sql`${table.rotationReplayExpiresAt} IS NULL OR ${table.rotatedAt} IS NOT NULL`,
+    ),
+    check(
+      "oauth_refresh_token_replay_response_check",
+      sql`${table.rotationReplayResponse} IS NULL OR ${table.rotationReplayExpiresAt} IS NOT NULL`,
+    ),
     ...denyStellaAccessPolicies(),
   ],
 );
@@ -678,6 +903,7 @@ export const authSchema = {
   organization,
   member,
   invitation,
+  ssoProvider,
   jwks,
   apikey,
   oauthClient,
@@ -757,6 +983,16 @@ export const authRelationsPart = defineRelationsPart(authSchema, (r) => ({
     invitations: r.many.invitation({
       from: r.organization.id,
       to: r.invitation.organizationId,
+    }),
+    ssoProviders: r.many.ssoProvider({
+      from: r.organization.id,
+      to: r.ssoProvider.organizationId,
+    }),
+  },
+  ssoProvider: {
+    organization: r.one.organization({
+      from: r.ssoProvider.organizationId,
+      to: r.organization.id,
     }),
   },
   member: {

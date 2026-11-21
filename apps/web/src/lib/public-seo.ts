@@ -1,3 +1,5 @@
+import type { LinkHTMLAttributes } from "react";
+
 import { env } from "@/env";
 
 export type JsonLdObject = Record<string, unknown>;
@@ -11,6 +13,11 @@ export type PublicHeadInput = {
   alternateLinks?: readonly PublicAlternateLink[];
   crawlAllowed: boolean;
   indexing?: "default" | "noindex";
+  /**
+   * The query-free page a `noindex` variant (a search, filter or paging URL)
+   * stands in for; its canonical link points there.
+   */
+  canonicalPath?: `/${string}` | null;
   description?: string | null;
   jsonLd?: JsonLdObject | null;
   path: `/${string}`;
@@ -50,6 +57,7 @@ export const createPublicCanonicalUrl = (path: `/${string}`): string =>
  */
 export const createPublicHead = ({
   alternateLinks = [],
+  canonicalPath = null,
   crawlAllowed,
   description,
   jsonLd,
@@ -59,16 +67,23 @@ export const createPublicHead = ({
   type,
 }: PublicHeadInput) => {
   const canonicalUrl = createPublicCanonicalUrl(path);
-  const links =
-    indexing === "noindex"
+  const variantLinks: LinkHTMLAttributes<HTMLLinkElement>[] =
+    canonicalPath === null
       ? []
+      : [{ rel: "canonical", href: createPublicCanonicalUrl(canonicalPath) }];
+  const links: LinkHTMLAttributes<HTMLLinkElement>[] =
+    indexing === "noindex"
+      ? variantLinks
       : [
           { rel: "canonical", href: canonicalUrl },
-          ...alternateLinks.map((link) => ({
-            rel: "alternate",
-            hreflang: link.hreflang,
-            href: link.href,
-          })),
+          ...alternateLinks.map(
+            (link) =>
+              ({
+                rel: "alternate",
+                hrefLang: link.hreflang,
+                href: link.href,
+              }) satisfies LinkHTMLAttributes<HTMLLinkElement>,
+          ),
         ];
   const publicRobots = indexing === "noindex" ? "noindex" : PUBLIC_ROBOTS;
   const robots = crawlAllowed ? publicRobots : PRIVATE_ROBOTS;

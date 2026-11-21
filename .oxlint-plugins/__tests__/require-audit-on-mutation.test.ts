@@ -1,9 +1,41 @@
 import { describe, expect, test } from "bun:test";
 
+import { rewriteFixture } from "../../scripts/check-oxlint-fixture-counts.ts";
 import { lintSingleRule } from "./lint-single-rule";
 
 const RULE = "require-audit-on-mutation";
 const SOURCE_PATH = "apps/api/src/lib/sample-store.ts";
+
+test("the fixture reports every declared mutation diagnostic", async () => {
+  const fixturePath =
+    ".oxlint-plugins/__fixtures__/require-audit-on-mutation.fixture.ts";
+  const fixture = await Bun.file(
+    new URL(
+      "../__fixtures__/require-audit-on-mutation.fixture.ts",
+      import.meta.url,
+    ),
+  ).text();
+  const rewritten = rewriteFixture(fixturePath, fixture);
+  expect(rewritten.problems).toEqual([]);
+  const expected = [...rewritten.expected]
+    .flatMap(([key, count]) => {
+      if (!key.endsWith(`:${RULE}/${RULE}`)) {
+        return [];
+      }
+      const line = Number(
+        key
+          .slice(fixturePath.length + 1)
+          .split(":")
+          .at(0),
+      );
+      return Array.from({ length: count }, () => line);
+    })
+    .toSorted((left, right) => left - right);
+  expect(expected.length).toBeGreaterThan(0);
+  expect(
+    await lintSingleRule(RULE, rewritten.source, { sourcePath: SOURCE_PATH }),
+  ).toEqual(expected);
+});
 
 // Three owners: `saveRow` writes twice to `rows` inside an anonymous
 // transaction callback, `clearRows` deletes once, and two `try` callbacks in
@@ -58,28 +90,53 @@ const lint = async (budgets: Budgets | null) =>
   });
 
 describe("require-audit-on-mutation ledger budgets", () => {
-  test("recognizes tenant group auditing only from its canonical owner", async () => {
+  test("recognizes service-client lifecycle auditing only from its canonical owner", async () => {
     const mutation = `
 declare const tx: { update: (row: unknown) => void };
 export const save = () => {
   tx.update({ id: "row" });
-  void recordAuditGroups({ tx, groups: [] });
+  void recordServiceClientOperatorAuditEvent({ tx });
 };`;
     expect(
       await lintSingleRule(
         RULE,
-        `import { recordAuditGroups } from "@/api/lib/audit-log";${mutation}`,
+        `import { recordServiceClientOperatorAuditEvent } from "@/api/lib/db/service-client-audit";${mutation}`,
         { sourcePath: SOURCE_PATH },
       ),
     ).toEqual([]);
     expect(
       await lintSingleRule(
         RULE,
-        `import { recordAuditGroups } from "./other-store";${mutation}`,
+        `import { recordServiceClientOperatorAuditEvent } from "./other-store";${mutation}`,
         { sourcePath: SOURCE_PATH },
       ),
     ).toEqual([4]);
   });
+  test.each(["@/api/lib/audit-log", "@/api/lib/db/audit-recording"])(
+    "recognizes tenant group auditing from %s",
+    async (module) => {
+      const mutation = `
+declare const tx: { update: (row: unknown) => void };
+export const save = () => {
+  tx.update({ id: "row" });
+  void recordAuditGroups({ tx, groups: [] });
+};`;
+      expect(
+        await lintSingleRule(
+          RULE,
+          `import { recordAuditGroups } from "${module}";${mutation}`,
+          { sourcePath: SOURCE_PATH },
+        ),
+      ).toEqual([]);
+      expect(
+        await lintSingleRule(
+          RULE,
+          `import { recordAuditGroups } from "./other-store";${mutation}`,
+          { sourcePath: SOURCE_PATH },
+        ),
+      ).toEqual([4]);
+    },
+  );
 
   test("a file without ledger rows is held to the full rule", async () => {
     expect(await lint(null)).toEqual([10, 11, 16, 19, 20]);
@@ -195,5 +252,275 @@ export const unaudited = async (db: Writer) => {
     expect(
       await lintSingleRule(RULE, recorded, { sourcePath: SOURCE_PATH }),
     ).toEqual([17]);
+  });
+});
+
+const lintDirective = async (body: string) =>
+  await lintSingleRule(
+    RULE,
+    [
+      "declare const tx: { insert: (row: unknown) => void; delete: (row: unknown) => void };",
+      "declare const rows: unknown;",
+      "declare const read: () => void;",
+      body,
+    ].join("\n"),
+    { sourcePath: SOURCE_PATH },
+  );
+
+describe("audit directive placement", () => {
+  test("block-body and adjacent expression-body directives are accepted", async () => {
+    expect(
+      await lintDirective(
+        [
+          "export const block = () => {",
+          "  // audit: skip - scheduler reconciliation records its own event",
+          "  return tx.insert(rows);",
+          "};",
+          "export const expression = () =>",
+          "  // audit: skip - scheduler reconciliation records its own event",
+          "  tx.insert(rows);",
+          "export const awaited = async () =>",
+          "  // audit: skip - scheduler reconciliation records its own event",
+          "  await tx.insert(rows);",
+        ].join("\n"),
+      ),
+    ).toEqual([]);
+  });
+
+  test("a directive describes only its adjacent mutation expression", async () => {
+    expect(
+      await lintDirective(
+        [
+          "export const write = () => [",
+          "  // audit: skip - scheduler reconciliation records its own event",
+          "  tx.insert(rows),",
+          "  tx.delete(rows)",
+          "];",
+        ].join("\n"),
+      ),
+    ).toEqual([7]);
+  });
+
+  test("a directive above another call or value leaves subsequent mutations checked", async () => {
+    const results = await Promise.all(
+      ["read()", "1"].map(async (lintCase, index) => {
+        const expression = lintCase;
+
+        return {
+          label: `case ${index + 1}: ${JSON.stringify(lintCase)}`,
+          result: await lintDirective(
+            [
+              "export const write = () => [",
+              "  // audit: skip - scheduler reconciliation records its own event",
+              `  ${expression},`,
+              "  tx.insert(rows)",
+              "];",
+            ].join("\n"),
+          ),
+          expected: [7],
+        };
+      }),
+    );
+    expect(results.map(({ label, result }) => ({ label, result }))).toEqual(
+      results.map(({ label, expected }) => ({ label, result: expected })),
+    );
+  });
+
+  test("a gap or an unjustified reason leaves the mutation checked", async () => {
+    const results = await Promise.all(
+      [
+        "  // audit: skip - scheduler reconciliation records its own event\n",
+        "  // audit: skip - scheduler",
+        "",
+      ].map(async (lintCase, index) => {
+        const before = lintCase;
+        const directiveSource = [
+          "export const write = () =>",
+          before,
+          "  tx.insert(rows);",
+        ].join("\n");
+
+        return {
+          label: `case ${index + 1}: ${JSON.stringify(lintCase)}`,
+          result: await lintDirective(directiveSource),
+          expected: [directiveSource.split("\n").length + 3],
+        };
+      }),
+    );
+    expect(results.map(({ label, result }) => ({ label, result }))).toEqual(
+      results.map(({ label, expected }) => ({ label, result: expected })),
+    );
+  });
+
+  test("an adjacent directive on a nested arrow leaves the parent mutation checked", async () => {
+    expect(
+      await lintDirective(
+        [
+          "export const parent = () => {",
+          "  const child = () =>",
+          "    // audit: skip - scheduler reconciliation records its own event",
+          "    tx.insert(rows);",
+          "  tx.delete(rows);",
+          "  child();",
+          "};",
+        ].join("\n"),
+      ),
+    ).toEqual([8]);
+  });
+
+  test("one directive covers only the first mutation when calls share a line", async () => {
+    expect(
+      await lintDirective(
+        [
+          "export const write = () => [",
+          "  // audit: skip - scheduler reconciliation records its own event",
+          "  tx.insert(rows), tx.delete(rows)",
+          "];",
+        ].join("\n"),
+      ),
+    ).toEqual([6]);
+  });
+});
+
+test("directive placement leaves ledger write counts identical", async () => {
+  const placements = [
+    [
+      "export const skipped = () => {",
+      "  // audit: skip - scheduler reconciliation records its own event",
+      "  return tx.insert(rows);",
+      "};",
+    ],
+    [
+      "export const skipped = () =>",
+      "  // audit: skip - scheduler reconciliation records its own event",
+      "  tx.insert(rows);",
+    ],
+  ];
+  const results = await Promise.all(
+    placements.map(async (placement, index) => {
+      const directiveSource = [
+        "declare const tx: { insert: (row: unknown) => void; delete: (row: unknown) => void };",
+        "declare const rows: unknown;",
+        ...placement,
+        "export const counted = () => tx.delete(rows);",
+      ].join("\n");
+      const census = await lintSingleRule(RULE, directiveSource, {
+        sourcePath: SOURCE_PATH,
+        ruleOptionsForRoot: (root) => ({ root, census: true }),
+      });
+      const budgeted = await lintSingleRule(RULE, directiveSource, {
+        sourcePath: SOURCE_PATH,
+        ruleOptionsForRoot: (root) => ({
+          root,
+          budgets: { [`${SOURCE_PATH}::counted`]: { "delete:rows": 1 } },
+        }),
+      });
+      return { label: `placement ${index + 1}`, census, budgeted };
+    }),
+  );
+  expect(results).toEqual(
+    placements.map((_, index) => ({
+      label: `placement ${index + 1}`,
+      census: [index === 0 ? 7 : 6],
+      budgeted: [],
+    })),
+  );
+});
+
+test("the recorder owns audit insertion while other writes still require an event", async () => {
+  const accountInsert =
+    "export const record = (tx) => tx.insert(accountAuditLogs);";
+  expect(
+    await lintSingleRule(RULE, accountInsert, {
+      sourcePath: "apps/api/src/lib/db/audit-recording.ts",
+      ruleOptionsForRoot: (root) => ({ root }),
+    }),
+  ).toEqual([]);
+  expect(
+    await lintSingleRule(RULE, accountInsert, {
+      sourcePath: SOURCE_PATH,
+      ruleOptionsForRoot: (root) => ({ root }),
+    }),
+  ).toEqual([1]);
+  expect(
+    await lintSingleRule(
+      RULE,
+      "export const record = (tx) => tx.insert(otherRows);",
+      {
+        sourcePath: "apps/api/src/lib/db/audit-recording.ts",
+        ruleOptionsForRoot: (root) => ({ root }),
+      },
+    ),
+  ).toEqual([1]);
+});
+
+describe("raw inserts owned by the canonical audit recorder", () => {
+  const recorderPath = "apps/api/src/lib/db/audit-recording.ts";
+  const lintRawInsert = async (
+    fixtureSource: string,
+    sourcePath = recorderPath,
+  ) =>
+    await lintSingleRule(RULE, fixtureSource, {
+      sourcePath,
+      ruleOptionsForRoot: (root) => ({ root }),
+    });
+
+  test.each([
+    ["@/api/db/schema", "auditLogs"],
+    ["@/api/db/schema", "accountAuditLogs"],
+    ["@/api/db/schema/contacts", "auditLogs"],
+    ["@/api/db/schema/contacts", "accountAuditLogs"],
+  ])("admits %s's %s only in the recorder", async (module, table) => {
+    const insertSource = [
+      'import { sql as query } from "drizzle-orm";',
+      `import { ${table} as auditTable } from "${module}";`,
+      `export const record = (tx) => tx.execute(query\`INSERT INTO \${auditTable} (id) SELECT \${id} WHERE \${live} RETURNING \${auditTable.id}\`);`,
+    ].join("\n");
+    expect(await lintRawInsert(insertSource)).toEqual([]);
+    expect(await lintRawInsert(insertSource, SOURCE_PATH)).toEqual([3]);
+  });
+
+  test.each([
+    "const auditLogs = {};",
+    'import { entities as auditLogs } from "@/api/db/schema";',
+    'import { auditLogs } from "@/api/lib/other-schema";',
+  ])("rejects unproven audit table provenance: %s", async (declaration) => {
+    expect(
+      await lintRawInsert(
+        [
+          'import { sql } from "drizzle-orm";',
+          declaration,
+          `export const record = (tx) => tx.execute(sql\`INSERT INTO \${auditLogs} (id) VALUES (\${id})\`);`,
+        ].join("\n"),
+      ),
+    ).toEqual([3]);
+  });
+
+  test("other raw mutations in the recorder still require an audit event", async () => {
+    expect(
+      await lintRawInsert(
+        [
+          'import { sql } from "drizzle-orm";',
+          'import { auditLogs, entities } from "@/api/db/schema";',
+          "export const record = async (tx) => {",
+          `  await tx.execute(sql\`INSERT INTO \${auditLogs} (id) VALUES (\${id})\`);`,
+          `  await tx.execute(sql\`INSERT INTO \${entities} (id) VALUES (\${id})\`);`,
+          `  await tx.execute(sql\`DELETE FROM \${auditLogs} WHERE id = \${id}\`);`,
+          "};",
+        ].join("\n"),
+      ),
+    ).toEqual([5, 6]);
+  });
+
+  test("an audit insert cannot hide a second raw statement", async () => {
+    expect(
+      await lintRawInsert(
+        [
+          'import { sql } from "drizzle-orm";',
+          'import { auditLogs, entities } from "@/api/db/schema";',
+          `export const record = (tx) => tx.execute(sql\`INSERT INTO \${auditLogs} (id) VALUES (\${id}); DELETE FROM \${entities}\`);`,
+        ].join("\n"),
+      ),
+    ).toEqual([3]);
   });
 });

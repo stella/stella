@@ -1,11 +1,23 @@
 import { describe, expect, test } from "bun:test";
 
-import type { Block, DocumentAst } from "./document-ast.js";
+import { sha256Hex } from "@stll/sha256/node";
+
+import type { Block, DecisionMetadata, DocumentAst } from "./document-ast.js";
 import {
-  PROVISION_SPAN_PROJECTION_REVISION,
   projectionDigest,
   projectionPieces,
+  PROVISION_SPAN_PROJECTION_REVISION,
 } from "./projection-digest.js";
+
+const BLANK_METADATA = {
+  caseNumber: null,
+  ecli: null,
+  court: null,
+  decisionDate: null,
+  decisionType: null,
+  keywords: [],
+  statutes: [],
+} satisfies DecisionMetadata;
 
 const blankAst = (blocks: Block[]): DocumentAst => ({
   version: 1,
@@ -15,15 +27,7 @@ const blankAst = (blocks: Block[]): DocumentAst => ({
     webUrl: "https://court.test/d",
     printUrl: "https://court.test/d/print",
   },
-  metadata: {
-    caseNumber: null,
-    ecli: null,
-    court: null,
-    decisionDate: null,
-    decisionType: null,
-    keywords: [],
-    statutes: [],
-  },
+  metadata: BLANK_METADATA,
   blocks,
 });
 
@@ -136,7 +140,7 @@ describe("projectionDigest", () => {
   test("ignores what the projection does not read", async () => {
     const relabelled: DocumentAst = {
       ...DECISION,
-      metadata: { ...DECISION.metadata, caseNumber: "other" },
+      metadata: { ...BLANK_METADATA, caseNumber: "other" },
       blocks: DECISION.blocks.map((block) => ({
         ...block,
         anchorId: `moved-${block.anchorId}`,
@@ -165,3 +169,41 @@ describe("projectionDigest", () => {
     expect(digests.size).toBe(3);
   });
 });
+
+for (const text of [
+  "",
+  "abc",
+  "Příliš žluťoučký kůň 📄 中文\u0000\ud800",
+  "e\u0301",
+]) {
+  test(`stored projection digests retain revision, inline text and piece order: ${JSON.stringify(text)}`, async () => {
+    const ast = blankAst([
+      {
+        id: "heading",
+        anchorId: "h",
+        type: "heading",
+        level: 1,
+        inlines: [{ type: "text", text }],
+        plainText: "ignored",
+      },
+      {
+        id: "paragraph",
+        anchorId: "p",
+        type: "paragraph",
+        inlines: [{ type: "text", text: "e\u0301" }],
+        plainText: "ignored",
+      },
+    ]);
+    const previous = JSON.stringify([
+      PROVISION_SPAN_PROJECTION_REVISION,
+      [
+        ["heading", text],
+        ["paragraph", "e\u0301"],
+      ],
+    ]);
+    expect(await projectionDigest(ast)).toBe(sha256Hex(previous));
+    expect(await projectionDigest(blankAst([]))).toBe(
+      sha256Hex(JSON.stringify([PROVISION_SPAN_PROJECTION_REVISION, []])),
+    );
+  });
+}

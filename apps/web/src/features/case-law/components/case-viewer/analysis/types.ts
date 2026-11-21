@@ -1,9 +1,6 @@
 import type { AnalysisHeading } from "@stll/legal-ast/analysis";
 
-export type {
-  AnalysisAnnotation,
-  AnalysisHeading,
-} from "@stll/legal-ast/analysis";
+export type { AnalysisHeading } from "@stll/legal-ast/analysis";
 
 // ── Color system ──────────────────────────────────────────
 //
@@ -113,6 +110,13 @@ export const buildSectionMap = (
   walk(headings);
   return map;
 };
+
+/** The first annotation is where the reader displays the section heading. */
+export const getHeadingDisplayAnchorId = ({
+  annotations,
+  startAnchorId,
+}: Pick<AnalysisHeading, "annotations" | "startAnchorId">): string =>
+  annotations.at(0)?.startAnchorId ?? startAnchorId;
 
 export const flattenAnalysisHeadings = (
   headings: readonly AnalysisHeading[],

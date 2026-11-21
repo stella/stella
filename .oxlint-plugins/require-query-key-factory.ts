@@ -28,7 +28,13 @@ import { eslintCompatPlugin } from "@oxlint/plugins";
 // it is also the one place a predicate's positional walk belongs. When a call
 // site genuinely cannot reference one, suppress with a reason.
 
-import { getPropertyName, isAstNode, unwrapExpression } from "./utils.ts";
+import {
+  getPropertyName,
+  isAstNode,
+  isIdentifierReference,
+  resolveVariable,
+  unwrapExpression,
+} from "./utils.ts";
 
 const CACHE_METHODS = new Set([
   "invalidateQueries",
@@ -62,8 +68,8 @@ const MODULE_SCOPES = new Set(["global", "module"]);
 
 // The initializer of a function-local `const` binding the node names, so a
 // filters object or a key hoisted into a variable resolves to the same literal
-// the inline form would have carried. One level only: a binding initialized
-// from another binding is not a hand-typed key at this call site. `let` is
+// the inline form would have carried. Bindings initialized from other local
+// constants are followed to their literal provenance. `let` is
 // skipped because a later write can replace the value this would report on.
 const constInitializer = (identifier, context) => {
   let scope = context.sourceCode.getScope(identifier);
@@ -90,7 +96,7 @@ const constInitializer = (identifier, context) => {
 
 // A literal of `expected` type written here, or held by a local `const` this
 // names. Both forms restate the factory's layout where nothing checks it.
-const literalOf = (node, expected, context) => {
+const literalOf = (node, expected, context, seen = new Set()) => {
   const unwrapped = unwrapExpression(node);
   if (!unwrapped) {
     return null;
@@ -98,11 +104,16 @@ const literalOf = (node, expected, context) => {
   if (unwrapped.type === expected) {
     return unwrapped;
   }
-  if (unwrapped.type !== "Identifier") {
+  if (!isIdentifierReference(unwrapped)) {
     return null;
   }
+  const variable = resolveVariable(context, unwrapped);
+  if (variable === null || seen.has(variable)) {
+    return null;
+  }
+  seen.add(variable);
   const initializer = constInitializer(unwrapped, context);
-  return initializer?.type === expected ? initializer : null;
+  return literalOf(initializer, expected, context, seen);
 };
 
 // `queryKey`, `query.queryKey`, `q.queryKey` — the value a predicate walks.

@@ -3,35 +3,39 @@
 import * as React from "react";
 
 import { Toast } from "@base-ui/react/toast";
-import type { ToastManagerAddOptions } from "@base-ui/react/toast";
+import type { ToastManagerAddOptions, ToastObject } from "@base-ui/react/toast";
 
 import {
   CircleAlertIcon,
   CircleCheckIcon,
   InfoIcon,
-  LoaderCircleIcon,
   TriangleAlertIcon,
   XIcon,
 } from "../icons";
+import { SAFE_AREA_TOAST_GEOMETRY_CLASS_NAME } from "../lib/safe-area";
 import { cn } from "../lib/utils";
 import { buttonVariants } from "./button";
+import { Loader } from "./loader";
+import { ScrollArea } from "./scroll-area";
 
 type ToastData = {
   tooltipStyle?: boolean;
+  timeoutPolicy?: { type: "automatic" } | { type: "explicit"; timeout: number };
 };
 
 const toastManager = Toast.createToastManager<ToastData>();
 const anchoredToastManager = Toast.createToastManager<ToastData>();
 
 const TOAST_RIGHT_OFFSET_VAR = "--stella-toast-right-offset";
+const ERROR_TOAST_TIMEOUT_MS = 8000;
 
 const TOAST_ICONS = {
-  error: CircleAlertIcon,
-  info: InfoIcon,
-  loading: LoaderCircleIcon,
+  error: <CircleAlertIcon className="text-destructive" />,
+  info: <InfoIcon className="text-info" />,
+  loading: null,
   neutral: null,
-  success: CircleCheckIcon,
-  warning: TriangleAlertIcon,
+  success: <CircleCheckIcon className="text-success" />,
+  warning: <TriangleAlertIcon className="text-warning" />,
 } as const;
 
 type ToastType = keyof typeof TOAST_ICONS;
@@ -47,14 +51,23 @@ type ToastOptions = Omit<
   ToastManagerAddOptions<ToastData>,
   "actionProps" | "title" | "type"
 > & {
-  action?: ToastAction;
+  action?: ToastAction | undefined;
   actionProps?: ToastActionProps;
 };
 
-type ToastUpdateOptions = Partial<ToastOptions> & {
+type ToastUpdateFields = Partial<Omit<ToastOptions, "timeout">> & {
   title?: React.ReactNode | undefined;
-  type?: ToastType | undefined;
 };
+
+type ToastUpdateOptions =
+  | (ToastUpdateFields & {
+      type: ToastType;
+      timeout?: number | undefined;
+    })
+  | (ToastUpdateFields & {
+      type?: undefined;
+      timeout?: number | undefined;
+    });
 
 type ToastPromiseMessage = React.ReactNode | ToastUpdateOptions;
 
@@ -102,7 +115,12 @@ const stellaToast: ToastApi = Object.assign(
     addToast(title, undefined, options),
   {
     add: (options: ToastAddOptions) =>
-      toastManager.add(normalizeToastAddOptions(options)),
+      toastManager.add(
+        normalizeToastAddOptions({
+          ...options,
+          id: options.id ?? toastDedupeId(options),
+        }),
+      ),
     close: (id?: string) => {
       toastManager.close(id);
     },
@@ -150,7 +168,9 @@ const stellaToast: ToastApi = Object.assign(
     success: (title: React.ReactNode, options?: ToastOptions) =>
       addToast(title, "success", options),
     update: (id: string, options: ToastUpdateOptions) => {
-      toastManager.update(id, normalizeToastUpdateOptions(options));
+      toastManager.update(id, (previous) =>
+        normalizeToastUpdateOptions(options, previous),
+      );
     },
     warning: (title: React.ReactNode, options?: ToastOptions) =>
       addToast(title, "warning", options),
@@ -171,6 +191,11 @@ const ToastProvider = ({
 const Toasts = ({ position }: { position: ToastPosition }) => {
   const { toasts } = Toast.useToastManager<ToastData>();
   const isTop = position.startsWith("top");
+  const windowFocused = React.useSyncExternalStore(
+    subscribeWindowFocus,
+    readWindowFocus,
+    readServerWindowFocus,
+  );
 
   return (
     <Toast.Portal data-slot="toast-portal">
@@ -181,127 +206,147 @@ const Toasts = ({ position }: { position: ToastPosition }) => {
           // glass, and above dialogs (z-[85]) so a toast raised by a dialog's
           // own action stays readable; still below actively-open context
           // menus (z-[100]). See @stll/ui/overlay-layer for the ladder.
-          "fixed z-[90] mx-auto flex w-[calc(100%-var(--toast-inset)*2)] max-w-90 [--toast-inset:--spacing(4)] sm:[--toast-inset:--spacing(8)]",
-          "md:data-[position*=right]:w-[calc(100%-var(--toast-inset)*2-min(var(--stella-toast-right-offset,0px),calc(100vw-var(--toast-inset)*2-10rem)))]",
-          // Vertical positioning
-          "data-[position*=top]:top-(--toast-inset)",
-          "data-[position*=bottom]:bottom-(--toast-inset)",
-          // Horizontal positioning
-          "data-[position*=left]:start-(--toast-inset)",
-          "data-[position*=right]:end-(--toast-inset)",
-          "md:data-[position*=right]:end-[calc(var(--toast-inset)+min(var(--stella-toast-right-offset,0px),calc(100vw-var(--toast-inset)*2-10rem)))]",
-          "data-[position*=center]:left-1/2 data-[position*=center]:-translate-x-1/2",
+          "fixed z-[90] mx-auto flex max-w-90 [--toast-inset:--spacing(4)] sm:[--toast-inset:--spacing(8)]",
+          SAFE_AREA_TOAST_GEOMETRY_CLASS_NAME,
+          // Vertical positioning, clear of the status bar and home indicator
+          "data-[position*=top]:top-[calc(var(--toast-inset)+var(--safe-area-top))]",
+          "data-[position*=bottom]:bottom-[calc(var(--toast-inset)+var(--safe-area-bottom))]",
         )}
         data-position={position}
         data-slot="toast-viewport"
+        data-window-blurred={windowFocused ? undefined : ""}
       >
-        {toasts.map((toastItem) => {
-          const Icon = getToastIcon(toastItem.type);
+        {toasts.map((toastItem) => (
+          <Toast.Root
+            className={cn(
+              "bg-popover text-popover-foreground absolute z-[calc(9999-var(--toast-index))] h-(--toast-calc-height) w-full rounded-lg border shadow-lg/5 [transition:transform_300ms_var(--ease-out),opacity_300ms_var(--ease-out),height_150ms_var(--ease-out)] not-dark:bg-clip-padding before:pointer-events-none before:absolute before:inset-0 before:rounded-[calc(var(--radius-lg)-1px)] before:shadow-[0_1px_--theme(--color-black/4%)] data-ending-style:[transition-duration:200ms,200ms,150ms] motion-reduce:transition-none dark:before:shadow-[0_-1px_--theme(--color-white/6%)]",
+              // Base positioning using data-position
+              "data-[position*=right]:start-auto data-[position*=right]:end-0",
+              "data-[position*=left]:start-0 data-[position*=left]:end-auto",
+              "data-[position*=center]:start-0 data-[position*=center]:end-0",
+              "data-[position*=top]:top-0 data-[position*=top]:bottom-auto data-[position*=top]:origin-top",
+              "data-[position*=bottom]:top-auto data-[position*=bottom]:bottom-0 data-[position*=bottom]:origin-bottom",
+              // Gap fill for hover
+              "after:absolute after:start-0 after:h-[calc(var(--toast-gap)+1px)] after:w-full",
+              "data-[position*=top]:after:top-full",
+              "data-[position*=bottom]:after:bottom-full",
+              // Define some variables
+              "[--toast-calc-height:var(--toast-frontmost-height,var(--toast-height))] [--toast-gap:--spacing(3)] [--toast-peek:--spacing(3)] [--toast-scale:calc(max(0,1-(var(--toast-index)*.1)))] [--toast-shrink:calc(1-var(--toast-scale))]",
+              // Define offset-y variable
+              "data-[position*=top]:[--toast-calc-offset-y:calc(var(--toast-offset-y)+var(--toast-index)*var(--toast-gap)+var(--toast-swipe-movement-y))]",
+              "data-[position*=bottom]:[--toast-calc-offset-y:calc(var(--toast-offset-y)*-1+var(--toast-index)*var(--toast-gap)*-1+var(--toast-swipe-movement-y))]",
+              // Default state transform
+              "data-[position*=top]:transform-[translateX(var(--toast-swipe-movement-x))_translateY(calc(var(--toast-swipe-movement-y)+(var(--toast-index)*var(--toast-peek))+(var(--toast-shrink)*var(--toast-calc-height))))_scale(var(--toast-scale))]",
+              "data-[position*=bottom]:transform-[translateX(var(--toast-swipe-movement-x))_translateY(calc(var(--toast-swipe-movement-y)-(var(--toast-index)*var(--toast-peek))-(var(--toast-shrink)*var(--toast-calc-height))))_scale(var(--toast-scale))]",
+              // Limited state
+              "data-limited:opacity-0",
+              // Expanded state
+              "data-expanded:h-(--toast-height)",
+              "data-position:data-expanded:transform-[translateX(var(--toast-swipe-movement-x))_translateY(var(--toast-calc-offset-y))]",
+              // Starting and ending animations
+              "data-[position*=top]:data-starting-style:transform-[translateY(calc(-100%-var(--toast-inset)))]",
+              "data-[position*=bottom]:data-starting-style:transform-[translateY(calc(100%+var(--toast-inset)))]",
+              "data-ending-style:opacity-0",
+              // Ending animations (direction-aware)
+              "data-ending-style:not-data-limited:not-data-swipe-direction:transform-[translateY(calc(100%+var(--toast-inset)))]",
+              "data-ending-style:data-[swipe-direction=left]:transform-[translateX(calc(var(--toast-swipe-movement-x)-100%-var(--toast-inset)))_translateY(var(--toast-calc-offset-y))]",
+              "data-ending-style:data-[swipe-direction=right]:transform-[translateX(calc(var(--toast-swipe-movement-x)+100%+var(--toast-inset)))_translateY(var(--toast-calc-offset-y))]",
+              "data-ending-style:data-[swipe-direction=up]:transform-[translateY(calc(var(--toast-swipe-movement-y)-100%-var(--toast-inset)))]",
+              "data-ending-style:data-[swipe-direction=down]:transform-[translateY(calc(var(--toast-swipe-movement-y)+100%+var(--toast-inset)))]",
+              // Ending animations (expanded)
+              "data-expanded:data-ending-style:data-[swipe-direction=left]:transform-[translateX(calc(var(--toast-swipe-movement-x)-100%-var(--toast-inset)))_translateY(var(--toast-calc-offset-y))]",
+              "data-expanded:data-ending-style:data-[swipe-direction=right]:transform-[translateX(calc(var(--toast-swipe-movement-x)+100%+var(--toast-inset)))_translateY(var(--toast-calc-offset-y))]",
+              "data-expanded:data-ending-style:data-[swipe-direction=up]:transform-[translateY(calc(var(--toast-swipe-movement-y)-100%-var(--toast-inset)))]",
+              "data-expanded:data-ending-style:data-[swipe-direction=down]:transform-[translateY(calc(var(--toast-swipe-movement-y)+100%+var(--toast-inset)))]",
+            )}
+            data-position={position}
+            key={toastItem.id}
+            swipeDirection={(() => {
+              if (position.includes("center")) {
+                return [isTop ? "up" : "down"];
+              }
+              if (position.includes("left")) {
+                return ["left", isTop ? "up" : "down"];
+              }
+              return ["right", isTop ? "up" : "down"];
+            })()}
+            toast={toastItem}
+          >
+            <Toast.Content className="pointer-events-auto flex items-center gap-3 px-3.5 py-3 text-sm transition-opacity duration-250 select-text data-behind:opacity-0 data-behind:not-data-expanded:pointer-events-none data-expanded:opacity-100">
+              <div className="flex min-w-0 flex-1 gap-2">
+                <ToastIcon type={toastItem.type} />
 
-          return (
-            <Toast.Root
-              className={cn(
-                "bg-popover text-popover-foreground absolute z-[calc(9999-var(--toast-index))] h-(--toast-calc-height) w-full rounded-lg border shadow-lg/5 [transition:transform_.5s_var(--ease-smooth),opacity_.5s,height_.15s] not-dark:bg-clip-padding before:pointer-events-none before:absolute before:inset-0 before:rounded-[calc(var(--radius-lg)-1px)] before:shadow-[0_1px_--theme(--color-black/4%)] motion-reduce:transition-none dark:before:shadow-[0_-1px_--theme(--color-white/6%)]",
-                // Base positioning using data-position
-                "data-[position*=right]:start-auto data-[position*=right]:end-0",
-                "data-[position*=left]:start-0 data-[position*=left]:end-auto",
-                "data-[position*=center]:start-0 data-[position*=center]:end-0",
-                "data-[position*=top]:top-0 data-[position*=top]:bottom-auto data-[position*=top]:origin-top",
-                "data-[position*=bottom]:top-auto data-[position*=bottom]:bottom-0 data-[position*=bottom]:origin-bottom",
-                // Gap fill for hover
-                "after:absolute after:start-0 after:h-[calc(var(--toast-gap)+1px)] after:w-full",
-                "data-[position*=top]:after:top-full",
-                "data-[position*=bottom]:after:bottom-full",
-                // Define some variables
-                "[--toast-calc-height:var(--toast-frontmost-height,var(--toast-height))] [--toast-gap:--spacing(3)] [--toast-peek:--spacing(3)] [--toast-scale:calc(max(0,1-(var(--toast-index)*.1)))] [--toast-shrink:calc(1-var(--toast-scale))]",
-                // Define offset-y variable
-                "data-[position*=top]:[--toast-calc-offset-y:calc(var(--toast-offset-y)+var(--toast-index)*var(--toast-gap)+var(--toast-swipe-movement-y))]",
-                "data-[position*=bottom]:[--toast-calc-offset-y:calc(var(--toast-offset-y)*-1+var(--toast-index)*var(--toast-gap)*-1+var(--toast-swipe-movement-y))]",
-                // Default state transform
-                "data-[position*=top]:transform-[translateX(var(--toast-swipe-movement-x))_translateY(calc(var(--toast-swipe-movement-y)+(var(--toast-index)*var(--toast-peek))+(var(--toast-shrink)*var(--toast-calc-height))))_scale(var(--toast-scale))]",
-                "data-[position*=bottom]:transform-[translateX(var(--toast-swipe-movement-x))_translateY(calc(var(--toast-swipe-movement-y)-(var(--toast-index)*var(--toast-peek))-(var(--toast-shrink)*var(--toast-calc-height))))_scale(var(--toast-scale))]",
-                // Limited state
-                "data-limited:opacity-0",
-                // Expanded state
-                "data-expanded:h-(--toast-height)",
-                "data-position:data-expanded:transform-[translateX(var(--toast-swipe-movement-x))_translateY(var(--toast-calc-offset-y))]",
-                // Starting and ending animations
-                "data-[position*=top]:data-starting-style:transform-[translateY(calc(-100%-var(--toast-inset)))]",
-                "data-[position*=bottom]:data-starting-style:transform-[translateY(calc(100%+var(--toast-inset)))]",
-                "data-ending-style:opacity-0",
-                // Ending animations (direction-aware)
-                "data-ending-style:not-data-limited:not-data-swipe-direction:transform-[translateY(calc(100%+var(--toast-inset)))]",
-                "data-ending-style:data-[swipe-direction=left]:transform-[translateX(calc(var(--toast-swipe-movement-x)-100%-var(--toast-inset)))_translateY(var(--toast-calc-offset-y))]",
-                "data-ending-style:data-[swipe-direction=right]:transform-[translateX(calc(var(--toast-swipe-movement-x)+100%+var(--toast-inset)))_translateY(var(--toast-calc-offset-y))]",
-                "data-ending-style:data-[swipe-direction=up]:transform-[translateY(calc(var(--toast-swipe-movement-y)-100%-var(--toast-inset)))]",
-                "data-ending-style:data-[swipe-direction=down]:transform-[translateY(calc(var(--toast-swipe-movement-y)+100%+var(--toast-inset)))]",
-                // Ending animations (expanded)
-                "data-expanded:data-ending-style:data-[swipe-direction=left]:transform-[translateX(calc(var(--toast-swipe-movement-x)-100%-var(--toast-inset)))_translateY(var(--toast-calc-offset-y))]",
-                "data-expanded:data-ending-style:data-[swipe-direction=right]:transform-[translateX(calc(var(--toast-swipe-movement-x)+100%+var(--toast-inset)))_translateY(var(--toast-calc-offset-y))]",
-                "data-expanded:data-ending-style:data-[swipe-direction=up]:transform-[translateY(calc(var(--toast-swipe-movement-y)-100%-var(--toast-inset)))]",
-                "data-expanded:data-ending-style:data-[swipe-direction=down]:transform-[translateY(calc(var(--toast-swipe-movement-y)+100%+var(--toast-inset)))]",
-              )}
-              data-position={position}
-              key={toastItem.id}
-              swipeDirection={(() => {
-                if (position.includes("center")) {
-                  return [isTop ? "up" : "down"];
-                }
-                if (position.includes("left")) {
-                  return ["left", isTop ? "up" : "down"];
-                }
-                return ["right", isTop ? "up" : "down"];
-              })()}
-              toast={toastItem}
-            >
-              <Toast.Content className="pointer-events-auto flex items-center gap-3 overflow-hidden px-3.5 py-3 text-sm transition-opacity duration-250 select-text data-behind:opacity-0 data-behind:not-data-expanded:pointer-events-none data-expanded:opacity-100">
-                <div className="flex min-w-0 flex-1 gap-2">
-                  {Icon && (
-                    <div
-                      className="select-none [&_svg]:pointer-events-none [&_svg]:shrink-0 [&>svg]:h-lh [&>svg]:w-4"
-                      data-slot="toast-icon"
-                    >
-                      <Icon className="in-data-[type=error]:text-destructive in-data-[type=info]:text-info in-data-[type=success]:text-success in-data-[type=warning]:text-warning in-data-[type=loading]:animate-spin in-data-[type=loading]:opacity-80" />
-                    </div>
-                  )}
-
+                <ScrollArea
+                  axis="vertical"
+                  className="h-auto min-w-0 flex-1 [&_[data-slot=scroll-area-viewport]]:max-h-[60dvh]"
+                >
                   <div className="flex min-w-0 flex-col gap-0.5 select-text">
                     <Toast.Title
-                      className="truncate font-medium"
+                      className="font-medium wrap-anywhere whitespace-pre-wrap"
                       data-slot="toast-title"
                     />
                     <Toast.Description
-                      className="text-muted-foreground wrap-break-word"
+                      className="text-muted-foreground wrap-anywhere whitespace-pre-wrap"
                       data-slot="toast-description"
                     />
                   </div>
-                </div>
-                <div className="ms-auto flex shrink-0 items-center gap-2">
-                  {toastItem.actionProps && (
-                    <Toast.Action
-                      className={cn(
-                        buttonVariants({ size: "xs" }),
-                        "select-none",
-                      )}
-                      data-slot="toast-action"
-                    >
-                      {toastItem.actionProps.children}
-                    </Toast.Action>
-                  )}
-                  <Toast.Close
-                    className="text-muted-foreground hover:text-foreground shrink-0 cursor-pointer rounded p-0.5 select-none"
-                    data-slot="toast-close"
-                    aria-label="Close notification"
+                </ScrollArea>
+              </div>
+              <div className="ms-auto flex shrink-0 items-center gap-2">
+                {toastItem.actionProps && (
+                  <Toast.Action
+                    className={cn(
+                      buttonVariants({ size: "xs" }),
+                      "select-none",
+                    )}
+                    data-slot="toast-action"
                   >
-                    <XIcon className="size-4" />
-                  </Toast.Close>
-                </div>
-              </Toast.Content>
-            </Toast.Root>
-          );
-        })}
+                    {toastItem.actionProps.children}
+                  </Toast.Action>
+                )}
+                <Toast.Close
+                  className="text-muted-foreground hover:text-foreground shrink-0 cursor-pointer rounded-sm p-0.5 select-none"
+                  data-slot="toast-close"
+                  aria-label="Close notification"
+                >
+                  <XIcon className="size-4" />
+                </Toast.Close>
+              </div>
+              <ToastCountdown toast={toastItem} />
+            </Toast.Content>
+          </Toast.Root>
+        ))}
       </Toast.Viewport>
     </Toast.Portal>
+  );
+};
+
+/**
+ * A faint line along the bottom edge that shrinks over the toast's lifetime
+ * and holds still whenever Base UI holds the timer (hover, focus, blurred
+ * window). Keyed on `updateKey`, so a refreshed toast starts it again.
+ */
+const ToastCountdown = ({
+  toast,
+}: {
+  toast: {
+    timeout?: number | undefined;
+    type?: string | undefined;
+    updateKey?: number | undefined;
+  };
+}) => {
+  const countdownMs = toastCountdownMs(toast);
+  if (countdownMs === undefined) {
+    return null;
+  }
+  return (
+    <span
+      aria-hidden="true"
+      className="bg-foreground/10 animate-toast-countdown pointer-events-none absolute inset-x-3 bottom-1 h-0.5 rounded-full in-data-expanded:[animation-play-state:paused] in-data-window-blurred:[animation-play-state:paused] motion-reduce:hidden ltr:origin-left rtl:origin-right"
+      data-slot="toast-countdown"
+      key={toast.updateKey ?? 0}
+      style={{ animationDuration: `${String(countdownMs)}ms` }}
+    />
   );
 };
 
@@ -325,7 +370,6 @@ const AnchoredToasts = () => {
         data-slot="toast-viewport-anchored"
       >
         {toasts.map((toastItem) => {
-          const Icon = getToastIcon(toastItem.type);
           const tooltipStyle = toastItem.data?.tooltipStyle ?? false;
           const positionerProps = toastItem.positionerProps;
 
@@ -353,30 +397,36 @@ const AnchoredToasts = () => {
               >
                 {tooltipStyle ? (
                   <Toast.Content className="pointer-events-auto px-2 py-1 select-text">
-                    <Toast.Title data-slot="toast-title" />
+                    <ScrollArea
+                      axis="vertical"
+                      className="h-auto [&_[data-slot=scroll-area-viewport]]:max-h-[60dvh]"
+                    >
+                      <Toast.Title
+                        className="wrap-anywhere whitespace-pre-wrap"
+                        data-slot="toast-title"
+                      />
+                    </ScrollArea>
                   </Toast.Content>
                 ) : (
-                  <Toast.Content className="pointer-events-auto flex items-center gap-3 overflow-hidden px-3.5 py-3 text-sm select-text">
+                  <Toast.Content className="pointer-events-auto flex items-center gap-3 px-3.5 py-3 text-sm select-text">
                     <div className="flex min-w-0 flex-1 gap-2">
-                      {Icon && (
-                        <div
-                          className="select-none [&_svg]:pointer-events-none [&_svg]:shrink-0 [&>svg]:h-lh [&>svg]:w-4"
-                          data-slot="toast-icon"
-                        >
-                          <Icon className="in-data-[type=error]:text-destructive in-data-[type=info]:text-info in-data-[type=success]:text-success in-data-[type=warning]:text-warning in-data-[type=loading]:animate-spin in-data-[type=loading]:opacity-80" />
-                        </div>
-                      )}
+                      <ToastIcon type={toastItem.type} />
 
-                      <div className="flex min-w-0 flex-col gap-0.5 select-text">
-                        <Toast.Title
-                          className="truncate font-medium"
-                          data-slot="toast-title"
-                        />
-                        <Toast.Description
-                          className="text-muted-foreground wrap-break-word"
-                          data-slot="toast-description"
-                        />
-                      </div>
+                      <ScrollArea
+                        axis="vertical"
+                        className="h-auto min-w-0 flex-1 [&_[data-slot=scroll-area-viewport]]:max-h-[60dvh]"
+                      >
+                        <div className="flex min-w-0 flex-col gap-0.5 select-text">
+                          <Toast.Title
+                            className="font-medium wrap-anywhere whitespace-pre-wrap"
+                            data-slot="toast-title"
+                          />
+                          <Toast.Description
+                            className="text-muted-foreground wrap-anywhere whitespace-pre-wrap"
+                            data-slot="toast-description"
+                          />
+                        </div>
+                      </ScrollArea>
                     </div>
                     {toastItem.actionProps && (
                       <Toast.Action
@@ -405,38 +455,96 @@ function addToast(
   type: ToastType | undefined,
   options?: ToastOptions,
 ) {
+  const addOptions = { ...options, title, type };
   return toastManager.add(
     normalizeToastAddOptions({
-      ...options,
-      title,
-      type,
+      ...addOptions,
+      id: addOptions.id ?? toastDedupeId(addOptions),
     }),
   );
 }
 
-function normalizeToastAddOptions({
+/**
+ * The same message raised again refreshes the toast already on screen (and
+ * restarts its timer) instead of stacking a copy. Only plain-text messages
+ * without an action merge: an action belongs to the call that raised it, and
+ * a loading toast is owned by the promise that will settle it.
+ */
+function toastDedupeId({
   action,
   actionProps,
+  description,
+  title,
+  type,
+}: {
+  action?: ToastAction | undefined;
+  actionProps?: ToastActionProps | undefined;
+  description?: React.ReactNode | undefined;
+  title: React.ReactNode;
+  type?: ToastType | undefined;
+}): string | undefined {
+  if (
+    type === "loading" ||
+    action !== undefined ||
+    actionProps !== undefined ||
+    typeof title !== "string" ||
+    (description !== undefined &&
+      description !== null &&
+      typeof description !== "string")
+  ) {
+    return undefined;
+  }
+  return `toast-dedupe:${JSON.stringify([type ?? "neutral", title, description ?? ""])}`;
+}
+
+/**
+ * How long the countdown runs, or `undefined` when the toast stays until
+ * dismissed (errors, loading, timeout 0).
+ */
+function toastCountdownMs({
   timeout,
   type,
-  ...options
-}: ToastUpdateOptions) {
+}: {
+  timeout?: number | undefined;
+  type?: string | undefined;
+}): number | undefined {
+  return type === "loading" || timeout === undefined || timeout <= 0
+    ? undefined
+    : timeout;
+}
+
+// Base UI pauses toast timers while the window is blurred; the countdown bar
+// pauses with them. The viewport's hover and focus pause shows as
+// `data-expanded` on each toast.
+const subscribeWindowFocus = (onChange: () => void) => {
+  window.addEventListener("focus", onChange);
+  window.addEventListener("blur", onChange);
+  return () => {
+    window.removeEventListener("focus", onChange);
+    window.removeEventListener("blur", onChange);
+  };
+};
+const readWindowFocus = () => document.hasFocus();
+const readServerWindowFocus = () => true;
+
+function normalizeToastAddOptions(options: ToastUpdateOptions) {
+  const { action, actionProps, data, timeout, type, ...addOptions } = options;
   return {
-    ...options,
+    ...addOptions,
     ...normalizeToastActionProps({ action, actionProps }),
-    timeout: normalizeToastTimeout(timeout ?? getDefaultToastTimeout(type)),
+    data: { ...data, timeoutPolicy: toastTimeoutPolicy(timeout) },
+    timeout: normalizeToastTimeout(timeout ?? getDefaultToastTimeout(options)),
     type,
   };
 }
 
-function normalizeToastUpdateOptions(options: ToastUpdateOptions) {
-  const { action, actionProps, timeout, type, ...updateOptions } = options;
-  const normalizedTimeout =
-    timeout === undefined
-      ? normalizeDefaultToastUpdateTimeout(type)
-      : normalizeToastTimeout(timeout);
-
-  return {
+function normalizeToastUpdateOptions(
+  options: ToastUpdateOptions,
+  previous: ToastObject<ToastData>,
+) {
+  const { action, actionProps, data, timeout, type, ...updateOptions } =
+    options;
+  const update = {
     ...updateOptions,
     ...normalizeToastActionProps({
       action,
@@ -446,16 +554,64 @@ function normalizeToastUpdateOptions(options: ToastUpdateOptions) {
         Object.hasOwn(options, "actionProps"),
     }),
     ...(type === undefined ? {} : { type }),
-    ...(normalizedTimeout === undefined ? {} : { timeout: normalizedTimeout }),
+  };
+  return {
+    ...update,
+    data: {
+      ...(Object.hasOwn(options, "data") ? data : previous.data),
+      timeoutPolicy:
+        timeout === undefined
+          ? (previous.data?.timeoutPolicy ?? toastTimeoutPolicy(undefined))
+          : toastTimeoutPolicy(timeout),
+    },
+    ...resolveToastUpdateTimeout(options, previous),
   };
 }
 
-function normalizeDefaultToastUpdateTimeout(type: ToastType | undefined) {
-  if (type === undefined) {
-    return undefined;
+function resolveToastUpdateTimeout(
+  options: ToastUpdateOptions,
+  previous: Pick<
+    ToastObject<ToastData>,
+    "actionProps" | "data" | "description" | "title" | "type"
+  >,
+): { timeout?: number } {
+  if (options.timeout !== undefined) {
+    return { timeout: normalizeToastTimeout(options.timeout) };
   }
 
-  return normalizeToastTimeout(getDefaultToastTimeout(type));
+  const timeoutPolicy = previous.data?.timeoutPolicy;
+  if (timeoutPolicy?.type === "explicit") {
+    return { timeout: timeoutPolicy.timeout };
+  }
+
+  if (previous.type === "loading" && options.type === undefined) {
+    return {};
+  }
+
+  const { action, actionProps, type, ...updateOptions } = options;
+  const update = {
+    ...updateOptions,
+    ...normalizeToastActionProps({
+      action,
+      actionProps,
+      includeEmptyActionProps:
+        Object.hasOwn(options, "action") ||
+        Object.hasOwn(options, "actionProps"),
+    }),
+    ...(type === undefined ? {} : { type }),
+  };
+
+  return {
+    timeout: getDefaultToastTimeout({ ...previous, ...update }),
+  };
+}
+
+function toastTimeoutPolicy(
+  timeout: number | undefined,
+): NonNullable<ToastData["timeoutPolicy"]> {
+  return timeout === undefined
+    ? { type: "automatic" }
+    : { type: "explicit", timeout: normalizeToastTimeout(timeout) };
 }
 
 function normalizeToastActionProps({
@@ -482,19 +638,43 @@ function normalizeToastActionProps({
   };
 }
 
-function getDefaultToastTimeout(type: ToastType | undefined) {
+/**
+ * A short plain error closes on its own like any notice. An error that carries
+ * detail (a description, rich content such as a provider reason to copy) or an
+ * action stays until dismissed, so it is never gone before it can be read.
+ */
+function getDefaultToastTimeout({
+  action,
+  actionProps,
+  description,
+  title,
+  type,
+}: Pick<
+  ToastManagerAddOptions<ToastData>,
+  "title" | "description" | "type" | "actionProps"
+> &
+  Pick<ToastOptions, "action">) {
   if (type === "loading") {
     return 0;
   }
 
-  if (type === "error" || type === "warning") {
+  if (type === "error") {
+    const plain =
+      typeof title === "string" &&
+      (description === undefined || description === null) &&
+      action === undefined &&
+      actionProps === undefined;
+    return plain ? ERROR_TOAST_TIMEOUT_MS : 0;
+  }
+
+  if (type === "warning") {
     return 6000;
   }
 
   return 4000;
 }
 
-function normalizeToastTimeout(timeout: number | undefined) {
+function normalizeToastTimeout(timeout: number) {
   if (timeout === Number.POSITIVE_INFINITY) {
     return 0;
   }
@@ -549,6 +729,31 @@ function isToastUpdateOptions(
   return !(Symbol.iterator in value);
 }
 
+const ToastIcon = ({ type }: { type: string | undefined }) => {
+  if (type === "loading") {
+    return (
+      <Loader
+        className="h-lh w-4 opacity-80"
+        data-slot="toast-icon"
+        size="sm"
+        variant="decorative"
+      />
+    );
+  }
+  const icon = getToastIcon(type);
+  if (icon === null) {
+    return null;
+  }
+  return (
+    <div
+      className="select-none [&_svg]:pointer-events-none [&_svg]:shrink-0 [&>svg]:h-lh [&>svg]:w-4"
+      data-slot="toast-icon"
+    >
+      {icon}
+    </div>
+  );
+};
+
 function getToastIcon(type: string | undefined) {
   if (!isToastType(type)) {
     return null;
@@ -567,4 +772,7 @@ export {
   TOAST_RIGHT_OFFSET_VAR,
   stellaToast,
   AnchoredToastProvider,
+  toastCountdownMs,
+  toastDedupeId,
+  resolveToastUpdateTimeout,
 };

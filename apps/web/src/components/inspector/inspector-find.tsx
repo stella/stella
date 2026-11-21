@@ -9,15 +9,28 @@ import { ChevronLeftIcon, ChevronRightIcon, XIcon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import { SEARCH_HIT_MARK, textMarkHighlightRule } from "@stll/ui/text-mark";
 
-import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useFindSurface } from "@/lib/find-owner";
+import { revealEnclosingDisclosures } from "@/lib/platform/reveal-disclosures";
+
+import {
+  buildReaderFindIndex,
+  findReaderMatches,
+  rangeOfMatch,
+} from "./reader-find-index";
+import type { ReaderFindIndex, ReaderFindMatch } from "./reader-find-index";
 
 type InspectorFindOptions = {
-  /** The text the bar searches: every text node under it is walked. */
+  /**
+   * The text the bar searches. Its text nodes are read once per version of
+   * the text; queries, steps and scrolling reuse that reading.
+   */
   contentRef: RefObject<HTMLElement | null>;
   /** While false the surface is not a candidate and its bar cannot open. */
   enabled: boolean;
+  /** Search terms supplied when this reader opens; later edits belong to the bar. */
+  initialQuery?: string | undefined;
   /**
    * Separates this reader's highlights from those of a reader mounted beside
    * it — the inspector keeps its background tabs mounted. Sanitized here, so
@@ -27,6 +40,21 @@ type InspectorFindOptions = {
   /** The reader's own pane: what the find registry treats as "inside". */
   panelRef: RefObject<HTMLElement | null>;
 };
+
+/**
+ * Moving the reader is something the reader asks for: a new query, Next or
+ * Previous, or opening the bar with terms. The text changing under an open
+ * bar (a provision card unfolds, a disclosure opens, a note arrives) repaints
+ * the marks and may move the active index, but never the view.
+ */
+const FIND_SCROLL_INTENT = {
+  /** Take the reader to the active match once, then settle. */
+  reveal: "reveal",
+  /** Repaint in place. */
+  stay: "stay",
+} as const;
+type FindScrollIntent =
+  (typeof FIND_SCROLL_INTENT)[keyof typeof FIND_SCROLL_INTENT];
 
 type FindBarState =
   | { open: false }
@@ -40,6 +68,10 @@ type FindBarState =
        * the bar is already open still returns the caret to the query.
        */
       focusRequest: number;
+      /** Whether the next match collection takes the reader to the active match. */
+      scrollIntent: FindScrollIntent;
+      /** A citation can request the same search passage again after the reader moved away. */
+      landingRequest: number;
     };
 
 const FIND_CLOSED: FindBarState = { open: false };
@@ -49,14 +81,28 @@ const FIND_OPENED: FindBarState = {
   matchCount: 0,
   activeIndex: 0,
   focusRequest: 0,
+  scrollIntent: FIND_SCROLL_INTENT.reveal,
+  landingRequest: 0,
 };
 
 /** What a match collection reads from the bar. */
 type FindInputs = {
   activeIndex: number;
+  scrollIntent: FindScrollIntent;
   enabled: boolean;
   findQuery: string;
+  /** Keys reapplication even when a citation's query and active index stay the same. */
+  landingRequest: number;
 };
+
+/**
+ * The page's highlight registry, or nothing in a browser without the CSS
+ * Custom Highlight API. Every mark goes through here, so that absence is
+ * handled in one place.
+ */
+const highlightRegistry = (): HighlightRegistry | undefined =>
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- CSS.highlights is not available in every supported browser.
+  CSS.highlights ?? undefined;
 
 /** The state after a find command: opened, or open with focus asked for again. */
 const findCommanded = (prev: FindBarState): FindBarState =>
@@ -74,39 +120,69 @@ export const useInspectorFind = ({
   contentRef,
   enabled,
   highlightKey,
+  initialQuery,
   panelRef,
 }: InspectorFindOptions) => {
-  const [findState, setFindState] = useState<FindBarState>(FIND_CLOSED);
+  const [findState, setFindState] = useState<FindBarState>(() =>
+    initialQuery?.trim()
+      ? { ...FIND_OPENED, query: initialQuery.trim() }
+      : FIND_CLOSED,
+  );
   const safeKey = sanitizeHighlightKey(highlightKey);
   const allHighlightName = `stella-inspector-find-${safeKey}`;
   const activeHighlightName = `stella-inspector-find-active-${safeKey}`;
 
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- react/exhaustive-deps cannot see compiler memoization, and this value is an effect dependency
   const clearFind = useCallback(() => {
     setFindState((prev) =>
       prev.open ? { ...prev, query: "", matchCount: 0, activeIndex: 0 } : prev,
     );
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- CSS.highlights is not available in every supported browser.
-    CSS.highlights?.delete(allHighlightName);
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- CSS.highlights is not available in every supported browser.
-    CSS.highlights?.delete(activeHighlightName);
+    highlightRegistry()?.delete(allHighlightName);
+    highlightRegistry()?.delete(activeHighlightName);
   }, [activeHighlightName, allHighlightName]);
 
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- react/exhaustive-deps cannot see compiler memoization, and this value is an effect dependency
   const closeFind = useCallback(() => {
+    clearFind();
     setFindState(FIND_CLOSED);
-  }, []);
+  }, [clearFind]);
 
-  const openFind = useCallback(() => {
+  const openFind = () => {
     if (!enabled) {
       return;
     }
     setFindState(findCommanded);
-  }, [enabled]);
+  };
 
-  const setFindQuery = useCallback((query: string) => {
-    setFindState((prev) => (prev.open ? { ...prev, query } : prev));
-  }, []);
+  const setFindQuery = (query: string) => {
+    setFindState((prev) =>
+      prev.open
+        ? {
+            ...prev,
+            query,
+            activeIndex: 0,
+            scrollIntent: FIND_SCROLL_INTENT.reveal,
+          }
+        : prev,
+    );
+  };
 
-  const nextMatch = useCallback(() => {
+  const openFindAtQuery = (query: string) => {
+    if (!enabled) {
+      return;
+    }
+    setFindState((prev) => ({
+      open: true,
+      query: query.trim(),
+      matchCount: 0,
+      activeIndex: 0,
+      focusRequest: prev.open ? prev.focusRequest : 0,
+      landingRequest: prev.open ? prev.landingRequest + 1 : 1,
+      scrollIntent: FIND_SCROLL_INTENT.reveal,
+    }));
+  };
+
+  const nextMatch = () => {
     setFindState((prev) => {
       if (!prev.open || prev.matchCount === 0) {
         return prev;
@@ -114,11 +190,12 @@ export const useInspectorFind = ({
       return {
         ...prev,
         activeIndex: (prev.activeIndex + 1) % prev.matchCount,
+        scrollIntent: FIND_SCROLL_INTENT.reveal,
       };
     });
-  }, []);
+  };
 
-  const previousMatch = useCallback(() => {
+  const previousMatch = () => {
     setFindState((prev) => {
       if (!prev.open || prev.matchCount === 0) {
         return prev;
@@ -126,15 +203,20 @@ export const useInspectorFind = ({
       return {
         ...prev,
         activeIndex: (prev.activeIndex - 1 + prev.matchCount) % prev.matchCount,
+        scrollIntent: FIND_SCROLL_INTENT.reveal,
       };
     });
-  }, []);
+  };
 
   const findOpen = findState.open;
   const findQuery = findState.open ? findState.query : "";
   const matchCount = findState.open ? findState.matchCount : 0;
   const activeIndex = findState.open ? findState.activeIndex : 0;
   const focusRequest = findState.open ? findState.focusRequest : 0;
+  const scrollIntent = findState.open
+    ? findState.scrollIntent
+    : FIND_SCROLL_INTENT.stay;
+  const landingRequest = findState.open ? findState.landingRequest : 0;
 
   // The DOCX pane and a table view's toolbar are candidates for the same
   // press: an inspector reader reaches the whole app while it is showing
@@ -154,9 +236,15 @@ export const useInspectorFind = ({
   // rather than travelling through a registry that has no opinion about it.
   useExternalSyncEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (enabled && findOpen && event.key === "Escape") {
+      if (
+        enabled &&
+        findOpen &&
+        event.key === "Escape" &&
+        event.target instanceof Node &&
+        panelRef.current?.contains(event.target)
+      ) {
         event.preventDefault();
-        setFindState(FIND_CLOSED);
+        closeFind();
       }
     };
 
@@ -164,7 +252,19 @@ export const useInspectorFind = ({
     return () => {
       document.removeEventListener("keydown", handleKeyDown, { capture: true });
     };
-  }, [enabled, findOpen]);
+  }, [closeFind, enabled, findOpen, panelRef]);
+
+  // The text read once, until it changes, and the drawing of the current
+  // query's matches over it. Both outlive renders: a keystroke queries the
+  // index, a step moves only the active mark, and scrolling draws the
+  // matches that come near the viewport.
+  const indexRef = useRef<ReaderFindIndex | null>(null);
+  const paintRef = useRef<FindPaint | null>(null);
+
+  const stopFindPaint = () => {
+    stopPaint(paintRef.current);
+    paintRef.current = null;
+  };
 
   // One collection for both things that change what matches: the bar's own
   // values, and the reader's text arriving later. Called with the values
@@ -174,75 +274,122 @@ export const useInspectorFind = ({
       activeIndex: index,
       enabled: isEnabled,
       findQuery: queryInput,
+      scrollIntent: intent,
     }: FindInputs) => {
-      // oxlint-disable-next-line typescript/no-unnecessary-condition -- CSS.highlights is not available in every supported browser.
-      CSS.highlights?.delete(allHighlightName);
-      // oxlint-disable-next-line typescript/no-unnecessary-condition -- CSS.highlights is not available in every supported browser.
-      CSS.highlights?.delete(activeHighlightName);
-
       const root = contentRef.current;
       const query = queryInput.trim();
       if (!isEnabled || !root || query.length === 0) {
+        stopFindPaint();
+        highlightRegistry()?.delete(allHighlightName);
+        highlightRegistry()?.delete(activeHighlightName);
         setFindState((prev) =>
           prev.open && (prev.matchCount !== 0 || prev.activeIndex !== 0)
             ? { ...prev, matchCount: 0, activeIndex: 0 }
             : prev,
         );
-        return undefined;
+        return;
       }
 
-      const ranges = collectTextRanges(root, query);
+      let textIndex = indexRef.current;
+      if (textIndex === null || textIndex.root !== root) {
+        textIndex = buildReaderFindIndex(root);
+        indexRef.current = textIndex;
+      }
+      let paint = paintRef.current;
+      if (
+        paint === null ||
+        paint.index !== textIndex ||
+        paint.query !== query ||
+        paint.allName !== allHighlightName ||
+        paint.activeName !== activeHighlightName
+      ) {
+        stopFindPaint();
+        paint = startPaint({
+          activeName: activeHighlightName,
+          allName: allHighlightName,
+          index: textIndex,
+          query,
+        });
+        paintRef.current = paint;
+      }
+      const { matches } = paint;
       setFindState((prev) =>
-        prev.open && prev.matchCount !== ranges.length
-          ? { ...prev, matchCount: ranges.length }
+        prev.open && prev.matchCount !== matches.length
+          ? { ...prev, matchCount: matches.length }
           : prev,
       );
 
-      if (ranges.length === 0) {
+      if (matches.length === 0) {
+        paint.active = null;
+        highlightRegistry()?.delete(activeHighlightName);
         setFindState((prev) =>
-          prev.open && prev.activeIndex !== 0
-            ? { ...prev, activeIndex: 0 }
+          prev.open &&
+          (prev.activeIndex !== 0 ||
+            prev.scrollIntent !== FIND_SCROLL_INTENT.stay)
+            ? {
+                ...prev,
+                activeIndex: 0,
+                scrollIntent: FIND_SCROLL_INTENT.stay,
+              }
             : prev,
         );
-        return undefined;
+        return;
       }
 
-      const safeActiveIndex = index >= ranges.length ? 0 : index;
+      const safeActiveIndex = index >= matches.length ? 0 : index;
       if (safeActiveIndex !== index) {
         setFindState((prev) =>
           prev.open ? { ...prev, activeIndex: safeActiveIndex } : prev,
         );
-        return undefined;
+        return;
       }
 
-      // oxlint-disable-next-line typescript/no-unnecessary-condition -- CSS.highlights is not available in every supported browser.
-      CSS.highlights?.set(allHighlightName, new Highlight(...ranges));
-      const activeRange = ranges.at(safeActiveIndex);
-      if (activeRange) {
-        // oxlint-disable-next-line typescript/no-unnecessary-condition -- CSS.highlights is not available in every supported browser.
-        CSS.highlights?.set(activeHighlightName, new Highlight(activeRange));
+      const activeRange = paintActive(paint, safeActiveIndex);
+      if (activeRange && intent === FIND_SCROLL_INTENT.reveal) {
         scrollRangeIntoView(activeRange);
+        setFindState((prev) =>
+          prev.open && prev.scrollIntent === FIND_SCROLL_INTENT.reveal
+            ? { ...prev, scrollIntent: FIND_SCROLL_INTENT.stay }
+            : prev,
+        );
       }
-
-      return () => {
-        // oxlint-disable-next-line typescript/no-unnecessary-condition -- CSS.highlights is not available in every supported browser.
-        CSS.highlights?.delete(allHighlightName);
-        // oxlint-disable-next-line typescript/no-unnecessary-condition -- CSS.highlights is not available in every supported browser.
-        CSS.highlights?.delete(activeHighlightName);
-      };
     },
   );
 
-  useLayoutEffect(
-    () => applyFind({ activeIndex, enabled, findQuery }),
-    [activeIndex, applyFind, enabled, findQuery],
-  );
+  useLayoutEffect(() => {
+    applyFind({
+      activeIndex,
+      enabled,
+      findQuery,
+      landingRequest,
+      scrollIntent,
+    });
+  }, [
+    activeIndex,
+    applyFind,
+    enabled,
+    findQuery,
+    landingRequest,
+    scrollIntent,
+  ]);
+
+  // The marks belong to this reader: they go when it unmounts.
+  useMountEffect(() => () => {
+    stopFindPaint();
+  });
 
   // The reader fills in after the bar can be open: citations, provision
   // history and "load more" insert text later. Each insertion is a new
-  // document to match against, so the collection runs again on it.
+  // version of the text, so it is read again and the query rerun on it.
   const reapplyFind = useLatestCallback(() => {
-    applyFind({ activeIndex, enabled, findQuery });
+    indexRef.current = null;
+    applyFind({
+      activeIndex,
+      enabled,
+      findQuery,
+      landingRequest,
+      scrollIntent,
+    });
   });
   useExternalSyncEffect(() => {
     const root = contentRef.current;
@@ -273,6 +420,7 @@ export const useInspectorFind = ({
     matchCount,
     nextMatch,
     openFind,
+    openFindAtQuery,
     previousMatch,
     setFindQuery,
   };
@@ -386,6 +534,7 @@ export const InspectorFindBar = ({ find }: { find: InspectorFind }) => {
       <Button
         aria-label={t("common.previousMatch")}
         disabled={matchCount === 0}
+        disabledReason={t("workspaces.filters.noMatches")}
         onClick={previousMatch}
         size="icon-xs"
         title={t("folio.findReplace.previousShortcut")}
@@ -396,6 +545,7 @@ export const InspectorFindBar = ({ find }: { find: InspectorFind }) => {
       <Button
         aria-label={t("common.nextMatch")}
         disabled={matchCount === 0}
+        disabledReason={t("workspaces.filters.noMatches")}
         onClick={nextMatch}
         size="icon-xs"
         title={t("folio.findReplace.nextShortcut")}
@@ -416,68 +566,142 @@ export const InspectorFindBar = ({ find }: { find: InspectorFind }) => {
 };
 
 /**
- * Case-folded text whose offsets still address the original: a character
- * whose lowercase form has a different UTF-16 length (`İ` becomes `i̇`)
- * stays as it is, so an index found in the folded text is valid as a range
- * offset in the node it came from.
+ * One query's matches drawn over one version of the text.
+ *
+ * The count and the steps cover every match; the marks are drawn only for
+ * matches whose block is on screen or near it, so the ranges a reader holds
+ * stay proportional to what it shows, not to the document. The active match
+ * is drawn wherever it is.
  */
-const foldCase = (text: string): string => {
-  const folded = text.toLocaleLowerCase();
-  if (folded.length === text.length) {
-    return folded;
-  }
-  let out = "";
-  for (const char of text) {
-    const lower = char.toLocaleLowerCase();
-    out += lower.length === char.length ? lower : char;
-  }
-  return out;
+type FindPaint = {
+  active: { index: number; range: Range } | null;
+  readonly activeName: string;
+  readonly all: Highlight;
+  readonly allName: string;
+  readonly index: ReaderFindIndex;
+  readonly matches: readonly ReaderFindMatch[];
+  readonly observer: IntersectionObserver;
+  readonly query: string;
 };
 
-const collectTextRanges = (root: HTMLElement, query: string): Range[] => {
-  const ranges: Range[] = [];
-  const normalizedQuery = foldCase(query);
-  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+/** How far beyond the visible text marks are drawn ahead of a scroll. */
+const PAINT_MARGIN = "100% 0px";
 
-  while (walker.nextNode()) {
-    const node = walker.currentNode;
-    const text = node.textContent ?? "";
-    const normalizedText = foldCase(text);
-    let from = 0;
-
-    while (from < normalizedText.length) {
-      const index = normalizedText.indexOf(normalizedQuery, from);
-      if (index === -1) {
-        break;
-      }
-
-      const range = document.createRange();
-      range.setStart(node, index);
-      range.setEnd(node, index + normalizedQuery.length);
-      ranges.push(range);
-      from = index + Math.max(normalizedQuery.length, 1);
+const startPaint = ({
+  activeName,
+  allName,
+  index,
+  query,
+}: {
+  activeName: string;
+  allName: string;
+  index: ReaderFindIndex;
+  query: string;
+}): FindPaint => {
+  const matches = findReaderMatches(index, query);
+  const all = new Highlight();
+  highlightRegistry()?.set(allName, all);
+  const matchesByBlock = new Map<Element, ReaderFindMatch[]>();
+  for (const match of matches) {
+    const blockMatches = matchesByBlock.get(match.block);
+    if (blockMatches) {
+      blockMatches.push(match);
+    } else {
+      matchesByBlock.set(match.block, [match]);
     }
   }
+  const drawn = new Map<Element, Range[]>();
+  const observer = new IntersectionObserver(
+    (entries) => {
+      for (const entry of entries) {
+        const block = entry.target;
+        const ranges = drawn.get(block);
+        if (entry.isIntersecting && ranges === undefined) {
+          const blockMatches = matchesByBlock.get(block);
+          if (blockMatches === undefined) {
+            continue;
+          }
+          const blockRanges = blockMatches.map(rangeOfMatch);
+          for (const range of blockRanges) {
+            all.add(range);
+          }
+          drawn.set(block, blockRanges);
+        } else if (!entry.isIntersecting && ranges !== undefined) {
+          for (const range of ranges) {
+            all.delete(range);
+          }
+          drawn.delete(block);
+        }
+      }
+    },
+    { root: scrollRootOf(index.root), rootMargin: PAINT_MARGIN },
+  );
+  for (const block of matchesByBlock.keys()) {
+    observer.observe(block);
+  }
+  return {
+    active: null,
+    activeName,
+    all,
+    allName,
+    index,
+    matches,
+    observer,
+    query,
+  };
+};
 
-  return ranges;
+const stopPaint = (paint: FindPaint | null): void => {
+  if (paint === null) {
+    return;
+  }
+  paint.observer.disconnect();
+  highlightRegistry()?.delete(paint.allName);
+  highlightRegistry()?.delete(paint.activeName);
+};
+
+/** Draws the active mark, making its range only when the active match moves. */
+const paintActive = (paint: FindPaint, index: number): Range | undefined => {
+  const match = paint.matches.at(index);
+  if (match === undefined) {
+    return undefined;
+  }
+  if (paint.active?.index !== index) {
+    paint.active = { index, range: rangeOfMatch(match) };
+  }
+  const { range } = paint.active;
+  // A reader's clear removes the registrations; drawing again restores them.
+  highlightRegistry()?.set(paint.allName, paint.all);
+  highlightRegistry()?.set(paint.activeName, new Highlight(range));
+  return range;
+};
+
+/** The element the reader scrolls in: what "near the viewport" is measured in. */
+const scrollRootOf = (element: HTMLElement): Element | null => {
+  for (
+    let current: HTMLElement | null = element;
+    current !== null;
+    current = current.parentElement
+  ) {
+    const { overflowY } = getComputedStyle(current);
+    if (overflowY === "auto" || overflowY === "scroll") {
+      return current;
+    }
+  }
+  return null;
 };
 
 /**
- * Opens every disclosure the range sits in. A match inside a closed
- * `<details>` (the decision reader folds its reporter apparatus) is counted
- * but has no box to highlight or scroll to until the fold is open.
+ * Opens every disclosure the range sits in. A match inside a closed fold
+ * (the decision reader folds its reporter apparatus) is counted but has no
+ * box to highlight or scroll to until the fold is open.
  */
 const revealRange = (range: Range): void => {
   const container = range.commonAncestorContainer;
-  let element =
+  const element =
     container instanceof Element ? container : container.parentElement;
-  while (element) {
-    const details = element.closest("details");
-    if (!details) {
-      return;
-    }
-    details.open = true;
-    element = details.parentElement;
+  if (element) {
+    revealEnclosingDisclosures(element);
   }
 };
 

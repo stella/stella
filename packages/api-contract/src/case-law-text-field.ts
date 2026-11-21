@@ -1,15 +1,78 @@
+// parser-output-unchanged: adds the decision-type availability vocabulary; only cz-uohs sets it, and it bumps its own version.
+// parser-output-unchanged: the decision-date availability marker is derived only from metadata a source sets; sources that never set it parse as before.
 import { panic } from "better-result";
+
+// parser-output-unchanged: Publication provenance and its schema checks affect metadata only, not canonical document payloads.
+// parser-output-unchanged: Publisher field absence markers widen the accepted absence fields; adapters that emit none produce the same output.
+// parser-output-unchanged: The decision text-source constant names read-time passage selection; no parser emits it.
+
+/** Canonical text used to page and locate a decision's passages. */
+export const DECISION_TEXT_SOURCE = {
+  AST: "ast",
+  FULLTEXT: "fulltext",
+} as const;
 
 export const TEXT_FIELD_TYPE = {
   ABSENT: "absent",
   PRESENT: "present",
 } as const;
 
+// parser-output-unchanged: Text availability labels describe public reads only; ingestion output is unchanged.
+/** Recorded text presence; licences and read-time failures are separate. */
+export const DECISION_TEXT_AVAILABILITY = {
+  AVAILABLE: "available",
+  METADATA_ONLY: "metadata_only",
+} as const;
+
+export type DecisionTextAvailability =
+  (typeof DECISION_TEXT_AVAILABILITY)[keyof typeof DECISION_TEXT_AVAILABILITY];
+
+export const DECISION_TEXT_WITHHELD_REASON = {
+  SOURCE_LICENCE: "source_licence",
+} as const;
+
+export type DecisionTextWithheldReason =
+  (typeof DECISION_TEXT_WITHHELD_REASON)[keyof typeof DECISION_TEXT_WITHHELD_REASON];
+
+// parser-output-unchanged: Decision completion reasons describe read-time availability; parsers do not emit them.
+export const DECISION_TEXT_INCOMPLETE_REASONS = [
+  "gate_failed",
+  "text_changed",
+  "missing_text",
+] as const;
+export type DecisionTextIncompleteReason =
+  (typeof DECISION_TEXT_INCOMPLETE_REASONS)[number];
+
+// parser-output-unchanged: Citation text eligibility reasons describe read-time failures; parsers do not emit them.
+export const CITATION_TEXT_INCOMPLETE_REASONS = [
+  "absent_ast",
+  ...DECISION_TEXT_INCOMPLETE_REASONS,
+] as const;
+export type CitationTextIncompleteReason =
+  (typeof CITATION_TEXT_INCOMPLETE_REASONS)[number];
+
+// parser-output-unchanged: citation evidence availability is read-time metadata.
+export const CITATION_EVIDENCE_INCOMPLETE_REASONS = [
+  "missing_privileges",
+  "missing_evidence",
+] as const;
+export type CitationEvidenceIncompleteReason =
+  (typeof CITATION_EVIDENCE_INCOMPLETE_REASONS)[number];
+export const CITATION_EVIDENCE_INCOMPLETE_REASON = {
+  MISSING_PRIVILEGES: "missing_privileges",
+  MISSING_EVIDENCE: "missing_evidence",
+} as const satisfies Record<
+  Uppercase<CitationEvidenceIncompleteReason>,
+  CitationEvidenceIncompleteReason
+>;
+
 export const TEXT_ABSENCE_REASONS = [
   "not_published",
   "parse_failed",
   "publisher_placeholder",
   "redistribution_withheld",
+  "missing_text",
+  "text_changed",
 ] as const;
 
 export type TextAbsenceReason = (typeof TEXT_ABSENCE_REASONS)[number];
@@ -19,6 +82,8 @@ export const TEXT_ABSENCE_REASON = {
   PARSE_FAILED: "parse_failed",
   PUBLISHER_PLACEHOLDER: "publisher_placeholder",
   REDISTRIBUTION_WITHHELD: "redistribution_withheld",
+  MISSING_TEXT: "missing_text",
+  TEXT_CHANGED: "text_changed",
 } as const satisfies Record<Uppercase<TextAbsenceReason>, TextAbsenceReason>;
 
 export type TextField =
@@ -112,12 +177,225 @@ export const DECISION_TEXT_FIELD_KEYS = Object.freeze(
 );
 
 export const DECISION_TEXT_ABSENCE_METADATA_KEY = "_stellaDecisionTextAbsence";
+export const DECISION_TEXT_ABSENCE_VERSION_METADATA_KEY =
+  "_stellaDecisionTextAbsenceVersion";
+export const DECISION_TEXT_ABSENCE_SCHEMA_VERSION = 2;
+
+export const DECISION_PUBLICATION_FIELD_KEYS = Object.freeze([
+  "ecli",
+  "decisionDate",
+  "decisionType",
+  "sourceUrl",
+  "documentUrl",
+] as const);
+
+export type DecisionPublicationFieldKey =
+  (typeof DECISION_PUBLICATION_FIELD_KEYS)[number];
+
+export const DECISION_ABSENCE_FIELD_KEYS = Object.freeze([
+  ...DECISION_TEXT_FIELD_KEYS,
+  ...DECISION_PUBLICATION_FIELD_KEYS,
+]);
+
+export const SK_US_ECLI_AVAILABILITY_STATUSES = [
+  "published",
+  "not_published",
+  "not_stated",
+] as const;
+
+export type SkUsEcliAvailability = {
+  status: (typeof SK_US_ECLI_AVAILABILITY_STATUSES)[number];
+};
+
+/**
+ * Whether the source states a decision's issue date. Any source declares it
+ * in `metadata.decisionDateAvailability` when the date is not published, so
+ * the absence is a typed marker rather than a missing value.
+ */
+export const DECISION_DATE_AVAILABILITY_STATUSES = [
+  "published",
+  "not-published-by-source",
+] as const;
+
+export type DecisionDateAvailability = {
+  status: (typeof DECISION_DATE_AVAILABILITY_STATUSES)[number];
+};
+
+/**
+ * Whether the source names a decision's type in words. A source that names it
+ * only by a code (an address in a code list) or not at all declares it in
+ * `metadata.decisionTypeAvailability`, so the absence is a typed marker.
+ */
+export const DECISION_TYPE_AVAILABILITY_STATUSES = [
+  "published",
+  "not-published-by-source",
+] as const;
+
+export type DecisionTypeAvailability = {
+  status: (typeof DECISION_TYPE_AVAILABILITY_STATUSES)[number];
+};
+
+/**
+ * Whether the stored text carries every character the source printed.
+ *
+ * A parser that finds its reading differs from the printed text still stores
+ * and publishes the decision; the difference is stated here, in
+ * `metadata.textFidelity`, beside the raw it can be re-read from. A decision
+ * whose reading matches states nothing.
+ */
+export const DECISION_TEXT_FIDELITY_METADATA_KEY = "textFidelity";
+
+/**
+ * `mismatch`: characters are missing or added. `reordered`: the text carries
+ * exactly the printed characters, in another order.
+ */
+export const DECISION_TEXT_FIDELITY_STATUSES = [
+  "mismatch",
+  "reordered",
+] as const;
+
+export type DecisionTextFidelity = {
+  status: (typeof DECISION_TEXT_FIDELITY_STATUSES)[number];
+  /** Non-space characters the source printed that the text lacks. */
+  missingChars: number;
+  /** Non-space characters the text carries that the source did not print. */
+  extraChars: number;
+  /** Offset in the printed non-space sequence where the reading first departs from it. */
+  firstDifferenceAt: number;
+};
+
+const isCount = (value: unknown): value is number =>
+  typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
+
+/**
+ * Counts and offsets are never negative, and a `reordered` text carries the
+ * printed characters exactly, so it misses and adds none.
+ */
+export const isDecisionTextFidelity = (
+  value: unknown,
+): value is DecisionTextFidelity =>
+  typeof value === "object" &&
+  value !== null &&
+  "status" in value &&
+  "missingChars" in value &&
+  "extraChars" in value &&
+  "firstDifferenceAt" in value &&
+  DECISION_TEXT_FIDELITY_STATUSES.some((status) => status === value.status) &&
+  isCount(value.missingChars) &&
+  isCount(value.extraChars) &&
+  isCount(value.firstDifferenceAt) &&
+  (value.status !== "reordered" ||
+    (value.missingChars === 0 && value.extraChars === 0));
+
+export const SK_COURTS_SOURCE_URL_STATUSES = [
+  "published",
+  "not-published-by-source",
+  "rejected-url",
+  "detail-unavailable",
+] as const;
+
+export type SkCourtsSourceUrlStatus =
+  (typeof SK_COURTS_SOURCE_URL_STATUSES)[number];
+
+/** Stored beside nullable publisher fields; each marker carries its reason. */
+export type DecisionTextAbsenceEntry = {
+  readonly field: DecisionTextFieldKey | DecisionPublicationFieldKey;
+  readonly reason: TextAbsenceReason;
+};
 
 export const DECISION_TEXT_METADATA_KEYS = Object.freeze([
   ...DECISION_TEXT_FIELD_KEYS,
   DECISION_TEXT_ABSENCE_METADATA_KEY,
+  DECISION_TEXT_ABSENCE_VERSION_METADATA_KEY,
 ]);
 
 export type ReadDecisionTextFields = Readonly<
   Record<DecisionTextFieldKey, TextField>
 >;
+
+const isDecisionTextAbsenceEntry = (
+  input: unknown,
+): input is { readonly field: string; readonly reason: TextAbsenceReason } =>
+  typeof input === "object" &&
+  input !== null &&
+  !Array.isArray(input) &&
+  Object.keys(input).length === 2 &&
+  Object.hasOwn(input, "field") &&
+  Object.hasOwn(input, "reason") &&
+  "field" in input &&
+  "reason" in input &&
+  typeof input.field === "string" &&
+  TEXT_ABSENCE_REASONS.some((reason) => reason === input.reason);
+
+export type DecisionTextAbsenceParseResult =
+  | { readonly type: "invalid" }
+  | {
+      readonly type: "valid";
+      readonly entries: readonly DecisionTextAbsenceEntry[];
+    };
+
+export const parseDecisionTextAbsence = (
+  value: unknown,
+): DecisionTextAbsenceParseResult => {
+  if (value === undefined) {
+    return { type: "valid", entries: [] };
+  }
+  if (!Array.isArray(value)) {
+    return { type: "invalid" };
+  }
+  const entries: DecisionTextAbsenceEntry[] = [];
+  const seenFields = new Set<string>();
+  for (const entry of value) {
+    if (!isDecisionTextAbsenceEntry(entry) || seenFields.has(entry.field)) {
+      return { type: "invalid" };
+    }
+    seenFields.add(entry.field);
+    const field = DECISION_ABSENCE_FIELD_KEYS.find(
+      (candidate) => candidate === entry.field,
+    );
+    if (field === undefined) {
+      continue;
+    }
+    entries.push({ field, reason: entry.reason });
+  }
+  return { type: "valid", entries };
+};
+
+export type DecisionTextAbsenceInspection =
+  | { readonly type: "legacy" }
+  | {
+      readonly type: "current";
+      readonly missingFields: readonly DecisionTextFieldKey[];
+    }
+  | { readonly type: "invalid"; readonly reason: "schema_version" | "sidecar" };
+
+/** Missing reasons are defects only for writes that promised explicit absence. */
+export const inspectDecisionTextAbsence = (
+  metadata: Readonly<Record<string, unknown>> | null,
+): DecisionTextAbsenceInspection => {
+  const version = metadata?.[DECISION_TEXT_ABSENCE_VERSION_METADATA_KEY];
+  if (
+    version !== undefined &&
+    version !== DECISION_TEXT_ABSENCE_SCHEMA_VERSION
+  ) {
+    return { type: "invalid", reason: "schema_version" };
+  }
+  const absence = parseDecisionTextAbsence(
+    metadata?.[DECISION_TEXT_ABSENCE_METADATA_KEY],
+  );
+  if (absence.type === "invalid") {
+    return { type: "invalid", reason: "sidecar" };
+  }
+  // A null metadata object has no version, so it is always legacy.
+  if (metadata === null || version === undefined) {
+    return { type: "legacy" };
+  }
+  return {
+    type: "current",
+    missingFields: DECISION_TEXT_FIELD_KEYS.filter(
+      (field) =>
+        (metadata[field] === null || metadata[field] === undefined) &&
+        !absence.entries.some((entry) => entry.field === field),
+    ),
+  };
+};

@@ -1,20 +1,28 @@
-import { QueryClient } from "@tanstack/react-query";
+import {
+  InfiniteQueryObserver,
+  infiniteQueryOptions,
+  QueryClient,
+  QueryObserver,
+  queryOptions,
+} from "@tanstack/react-query";
+import type { QueryFunctionContext } from "@tanstack/react-query";
 import { describe, expect, mock, test } from "bun:test";
 
+import { sleep } from "@stll/concurrency/sleep";
+import { rejectionOf } from "@stll/property-testing/rejection";
+
+import { queryView } from "@/lib/query-view.logic";
 import {
   CriticalQueryTimeoutError,
-  ROUTE_QUERY_STALE_TIME_MS,
   ensureCriticalQueryData,
   ensureRouteInfiniteQueryData,
+  ensureRouteQueryData,
+  fetchRouteQuery,
   prefetchNonCriticalInfiniteQuery,
   prefetchNonCriticalQuery,
+  ROUTE_QUERY_STALE_TIME_MS,
   routeQueryOptions,
 } from "@/lib/react-query";
-
-const wait = async (ms: number) =>
-  await new Promise((resolve) => {
-    setTimeout(resolve, ms);
-  });
 
 describe("ensureCriticalQueryData", () => {
   test("cancels timed-out critical queries and reports the query key", async () => {
@@ -60,7 +68,7 @@ describe("ensureCriticalQueryData", () => {
     expect(caughtError.queryKey).toEqual(queryKey);
     expect(caughtError.message).toContain(JSON.stringify(queryKey));
 
-    await wait(0);
+    await sleep(0);
 
     expect(abortReceived).toBe(true);
     expect(queryClient.getQueryCache().find({ queryKey })?.state).toMatchObject(
@@ -69,6 +77,57 @@ describe("ensureCriticalQueryData", () => {
         status: "error",
       },
     );
+  });
+
+  test("a mounted read exposes a deadline failure and can retry after cancellation", async () => {
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    let recovered = false;
+    const options = queryOptions({
+      queryKey: ["critical-query", "mounted-timeout"],
+      queryFn: async ({ signal }) => {
+        if (recovered) {
+          return "recovered";
+        }
+        return await new Promise<string>((_resolve, reject) => {
+          signal.addEventListener(
+            "abort",
+            () => reject(new Error("Query aborted", { cause: signal.reason })),
+            { once: true },
+          );
+        });
+      },
+    });
+    const observer = new QueryObserver(queryClient, options);
+    const deadlineObserved = Promise.withResolvers<undefined>();
+    const unsubscribe = observer.subscribe((result) => {
+      if (CriticalQueryTimeoutError.is(result.error)) {
+        deadlineObserved.resolve(undefined);
+      }
+    });
+    const error = await rejectionOf(
+      ensureCriticalQueryData(queryClient, options, { timeoutMs: 1 }),
+    );
+    expect(CriticalQueryTimeoutError.is(error)).toBe(true);
+    await deadlineObserved.promise;
+
+    const view = queryView(observer.getCurrentResult());
+    expect(view.type).toBe("error");
+    if (view.type !== "error") {
+      unsubscribe();
+      queryClient.clear();
+      throw new Error("Expected retryable deadline failure");
+    }
+    expect(CriticalQueryTimeoutError.is(view.error)).toBe(true);
+    recovered = true;
+    await view.retry();
+    expect(queryView(observer.getCurrentResult())).toMatchObject({
+      type: "items",
+      items: "recovered",
+    });
+    unsubscribe();
+    queryClient.clear();
   });
 
   test("does not cancel queries that resolve before the timeout", async () => {
@@ -90,7 +149,7 @@ describe("ensureCriticalQueryData", () => {
       { timeoutMs: 1 },
     );
 
-    await wait(5);
+    await sleep(5);
 
     expect(result).toBe("ok");
     expect(abortReceived).toBe(false);
@@ -108,14 +167,22 @@ describe("routeQueryOptions", () => {
     expect(options.staleTime).toBe(ROUTE_QUERY_STALE_TIME_MS);
   });
 
-  test("preserves explicit stale time overrides", () => {
-    const options = routeQueryOptions({
-      queryKey: ["route-query", "explicit"],
-      queryFn: async () => "ok",
-      staleTime: Number.POSITIVE_INFINITY,
-    });
+  test("preserves every explicit stale time policy", () => {
+    for (const staleTime of [
+      0,
+      1000,
+      Number.POSITIVE_INFINITY,
+      "static",
+      () => Number.POSITIVE_INFINITY,
+    ]) {
+      const options = routeQueryOptions({
+        queryKey: ["route-query", "explicit"],
+        queryFn: async () => "ok",
+        staleTime,
+      });
 
-    expect(options.staleTime).toBe(Number.POSITIVE_INFINITY);
+      expect(options.staleTime).toBe(staleTime);
+    }
   });
 });
 
@@ -216,4 +283,121 @@ describe("prefetchNonCriticalInfiniteQuery", () => {
     expect(onError).toHaveBeenCalledWith(firstError);
     expect(onError).toHaveBeenCalledWith(secondError);
   });
+});
+
+for (const [name, load] of Object.entries({
+  route: ensureRouteQueryData,
+  critical: ensureCriticalQueryData,
+  fetch: fetchRouteQuery,
+})) {
+  test(`keeps a ${name} read alive when its last component observer leaves`, async () => {
+    const queryClient = new QueryClient();
+    const rows = Promise.withResolvers<string>();
+    let aborted = false;
+    const read = mock(
+      async ({ signal }: Pick<QueryFunctionContext, "signal">) => {
+        signal.addEventListener(
+          "abort",
+          () => {
+            aborted = true;
+          },
+          { once: true },
+        );
+        return await rows.promise;
+      },
+    );
+    const options = queryOptions({
+      queryKey: ["route-read-ownership"],
+      queryFn: read,
+    });
+    const component = new QueryObserver(queryClient, options);
+    const unmount = component.subscribe(() => undefined);
+    const routeRead = load(queryClient, options);
+    unmount();
+    rows.resolve("rows");
+    expect(await routeRead).toBe("rows");
+    expect(aborted).toBe(false);
+    expect(read).toHaveBeenCalledTimes(1);
+    expect(
+      queryClient
+        .getQueryCache()
+        .find({ queryKey: options.queryKey })
+        ?.getObserversCount(),
+    ).toBe(0);
+    queryClient.clear();
+  });
+}
+
+test("a cached route read does not cancel a background refresh", async () => {
+  const queryClient = new QueryClient();
+  const rows = Promise.withResolvers<string>();
+  let aborted = false;
+  const read = mock(
+    async ({ signal }: Pick<QueryFunctionContext, "signal">) => {
+      signal.addEventListener(
+        "abort",
+        () => {
+          aborted = true;
+        },
+        { once: true },
+      );
+      return await rows.promise;
+    },
+  );
+  const options = queryOptions({
+    queryKey: ["cached-route-read-ownership"],
+    queryFn: read,
+  });
+  queryClient.setQueryData(options.queryKey, "cached rows");
+  const refresh = queryClient.query({ ...options, staleTime: 0 });
+  expect(await ensureRouteQueryData(queryClient, options)).toBe("cached rows");
+  expect(aborted).toBe(false);
+  rows.resolve("refreshed rows");
+  expect(await refresh).toBe("refreshed rows");
+  expect(
+    queryClient
+      .getQueryCache()
+      .find({ queryKey: options.queryKey })
+      ?.getObserversCount(),
+  ).toBe(0);
+  queryClient.clear();
+});
+
+test("keeps an infinite route read alive when its last component observer leaves", async () => {
+  const queryClient = new QueryClient();
+  const rows = Promise.withResolvers<string>();
+  let aborted = false;
+  const read = mock(
+    async ({ signal }: Pick<QueryFunctionContext, "signal">) => {
+      signal.addEventListener(
+        "abort",
+        () => {
+          aborted = true;
+        },
+        { once: true },
+      );
+      return await rows.promise;
+    },
+  );
+  const options = infiniteQueryOptions({
+    queryKey: ["infinite-route-read-ownership"],
+    queryFn: read,
+    initialPageParam: null,
+    getNextPageParam: () => undefined,
+  });
+  const component = new InfiniteQueryObserver(queryClient, options);
+  const unmount = component.subscribe(() => undefined);
+  const routeRead = ensureRouteInfiniteQueryData(queryClient, options);
+  unmount();
+  rows.resolve("rows");
+  expect(await routeRead).toEqual({ pages: ["rows"], pageParams: [null] });
+  expect(aborted).toBe(false);
+  expect(read).toHaveBeenCalledTimes(1);
+  expect(
+    queryClient
+      .getQueryCache()
+      .find({ queryKey: options.queryKey })
+      ?.getObserversCount(),
+  ).toBe(0);
+  queryClient.clear();
 });

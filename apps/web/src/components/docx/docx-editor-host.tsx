@@ -10,7 +10,7 @@
  * and a dropped edit session.
  */
 
-import { lazy, Suspense, useMemo, useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import type { ReactNode } from "react";
 
 import { useShallow } from "zustand/shallow";
@@ -117,11 +117,14 @@ const DocxEditorSlotInstance = ({
 
   // Constructed per branch rather than spread over a previous claim, so the
   // inspector's scroll position cannot leak into the full view's claim.
-  const claim: DocxEditorClaim = useMemo(() => {
+  // Keyed by the document's fields, not its identity: a caller that builds
+  // the document inline must not rewrite the claim on every render.
+  const { entityId, fileFieldId, propertyId, workspaceId } = document;
+  const claim: DocxEditorClaim = (() => {
     const base = {
       bindings,
       canUnlock,
-      document,
+      document: { entityId, fileFieldId, propertyId, workspaceId },
       isEditing,
       scaleOffset,
       sequence,
@@ -134,16 +137,7 @@ const DocxEditorSlotInstance = ({
           surface: "inspector",
         }
       : { ...base, slot: DOCX_EDITOR_SLOT.main, surface: "fullView" };
-  }, [
-    bindings,
-    canUnlock,
-    document,
-    initialScrollTop,
-    isEditing,
-    scaleOffset,
-    sequence,
-    slot,
-  ]);
+  })();
 
   useExternalSyncEffect(() => {
     claimSlot(hostKey, claim);

@@ -1,0 +1,55 @@
+import type { ReactNode } from "react";
+
+import { useTranslations } from "use-intl";
+
+import type { ReaderMessages } from "@stll/decision-reader/reader-adapters";
+import { BidiText } from "@stll/ui/bidi-text";
+
+import { useFormatter } from "@/i18n/formatting-context";
+import { formatValidityDate } from "@/lib/statutes/statute-format";
+
+export const useWebReaderMessages = (): ReaderMessages => {
+  const t = useTranslations();
+  const format = useFormatter();
+  return {
+    "statutes.diffRemoved": t("statutes.diffRemoved"),
+    "statutes.diffInserted": t("statutes.diffInserted"),
+    "common.copyLink": t("common.copyLink"),
+    "common.copied": t("common.copied"),
+    "common.back": t("common.back"),
+    "caseLaw.viewer.legalSentence": t("caseLaw.viewer.legalSentence"),
+    "caseLaw.viewer.abstract": t("caseLaw.viewer.abstract"),
+    "folio.comment": t("folio.comment"),
+    "legalReader.annotations.highlight": t("legalReader.annotations.highlight"),
+    "caseLaw.reader.headMatter": t("caseLaw.reader.headMatter"),
+    "caseLaw.notesFilter.ai": t("caseLaw.notesFilter.ai"),
+    "common.court": t("common.court"),
+    "statutes.wordingVersionUnknown": t("statutes.wordingVersionUnknown"),
+    "common.openInSidePanel": t("common.openInSidePanel"),
+    "common.openInStella": t("common.openInStella"),
+    "inspector.external.openOriginal": t("inspector.external.openOriginal"),
+    "caseLaw.citation.notInStella": t("caseLaw.citation.notInStella"),
+    "statutes.provisionTextUnavailable": t("statutes.provisionTextUnavailable"),
+    "common.loading": t("common.loading"),
+    "statutes.showCitedPartOnly": t("statutes.showCitedPartOnly"),
+    "statutes.showFullProvision": t("statutes.showFullProvision"),
+    "aiDisclosure.caseLaw": t("aiDisclosure.caseLaw"),
+    // Explicit ReactNode: the inferred `t.rich` result carries React 19's
+    // Promise<AwaitedReactNode> member, which promise-function-async flags.
+    sourceAttribution: (source, link): ReactNode =>
+      t.rich("caseLaw.reader.sourceAttribution", { source, link }),
+    dissentByline: (names): ReactNode =>
+      t.rich("caseLaw.viewer.dissentByline", {
+        bdi: (chunks) => <BidiText>{chunks}</BidiText>,
+        names: format.list([...names]),
+      }),
+    provisionPartTextUnavailable: (provisionLabel) =>
+      t("statutes.provisionPartTextUnavailable", { provisionLabel }),
+    provisionEffectiveFrom: (date) =>
+      t("statutes.provisionEffectiveFrom", { date }),
+    formatValidityDate: (date) => formatValidityDate(date, format),
+    provisionActText: ({ statuteTitle }) => statuteTitle,
+    formatLabelList: (labels) =>
+      format.list([...labels], { style: "short", type: "unit" }),
+  };
+};

@@ -3,14 +3,16 @@
 import { Result } from "better-result";
 import { AsyncLocalStorage } from "node:async_hooks";
 
+// parser-output-unchanged: imports the document AST from its package owner
+import { hasUsableAst } from "@stll/legal-ast/document-ast";
 import {
   DOCUMENT_FETCH_EVENT,
   DOCUMENT_FETCH_OUTCOME,
   documentFetchErrorOutcome,
-  documentFetchResponseOutcome,
   type DocumentFetchObservation,
-  type DocumentStageObserver,
+  documentFetchResponseOutcome,
   type DocumentStageObservation,
+  type DocumentStageObserver,
   type DocumentTelemetryObserverFailure,
 } from "@stll/legal-atlas/document-fetch-diagnostics";
 import {
@@ -19,7 +21,6 @@ import {
   observeDocumentStageSafely,
 } from "@stll/legal-atlas/document-stage-observer";
 
-import { hasUsableAst } from "@/api/lib/case-law/document-ast";
 import type { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import type { AdapterKey } from "@/api/lib/legal-search/ingestion-constants";
 import type { SyncPage } from "@/api/lib/legal-search/ingestion-types";
@@ -234,8 +235,7 @@ type ObserveDocumentFetchOptions = {
   fetch: () => Promise<Response>;
   expectedContentType?: "pdf" | undefined;
   responseOutcome?:
-    | ((response: Response) => DocumentFetchObservation)
-    | undefined;
+    ((response: Response) => DocumentFetchObservation) | undefined;
 };
 
 /** Preserve response/error identity and leave body consumption to the adapter. */
@@ -346,12 +346,10 @@ export const withDocumentStageWindow = async ({
     }
     if (page.supplements !== undefined) {
       for (const { document } of page.supplements) {
-        if (
-          !(
-            hasUsableAst(document.documentAst) ||
-            Boolean(document.fulltext?.trim())
-          )
-        ) {
+        if (!(
+          hasUsableAst(document.documentAst) ||
+          Boolean(document.fulltext?.trim())
+        )) {
           unresolved += 1;
           continue;
         }

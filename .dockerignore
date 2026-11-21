@@ -1,5 +1,6 @@
 .git
 .github
+.workflow-tooling
 .vscode
 .idea
 .claude

@@ -8,6 +8,8 @@ import { readFile, rm } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { repoRelativePath } from "@stll/portable-path";
+
 const WEB_ROOT_PATH = fileURLToPath(new URL("../", import.meta.url));
 const DIST_PATH = path.join(WEB_ROOT_PATH, "dist");
 const CLIENT_DIST_PATH = path.join(DIST_PATH, "client");
@@ -16,6 +18,23 @@ const RELEASE_NAME = "stella-web";
 // The comment the CLI appends to every chunk it paired with a map. The
 // tracker reads it at capture time, so a chunk without it never resolves.
 const CHUNK_ID_MARKER = "//# chunkId=";
+const SOURCEMAP_UPLOAD_ATTEMPTS = 3;
+const INITIAL_RETRY_DELAY_MS = 1000;
+const RETRY_JITTER_MIN = 0.5;
+const RETRY_JITTER_RANGE = 1;
+
+export type SourcemapProcessResult = {
+  exitCode: number;
+  stderr: string;
+};
+
+type PublishWithRetryOptions = {
+  run: () => SourcemapProcessResult;
+  sleep: (milliseconds: number) => Promise<void>;
+  random: () => number;
+  log: (message: string) => void;
+  attempts?: number;
+};
 
 export type SourcemapPublishPlan =
   | { type: "skip" }
@@ -79,6 +98,7 @@ export const sourcemapProcessCommand = (
   cmd: [
     "bun",
     "x",
+    "--bun",
     POSTHOG_CLI_PACKAGE,
     "sourcemap",
     "process",
@@ -95,6 +115,60 @@ export const sourcemapProcessCommand = (
     POSTHOG_CLI_PROJECT_ID: plan.projectId,
   },
 });
+
+export const isTransientSourcemapProcessFailure = ({
+  exitCode,
+  stderr,
+}: SourcemapProcessResult): boolean => {
+  if (exitCode === 0) {
+    return false;
+  }
+
+  return /(?:ECONNRESET|connection (?:reset|closed)|peer closed|TLS[^\n]*close_notify|timed? out|timeout|HTTP(?: status)?\s*5\d\d|status(?: code)?[ :=]+5\d\d|internal server error|bad gateway|service unavailable|gateway timeout)/iu.test(
+    stderr,
+  );
+};
+
+const retryDelayMs = (failedAttempt: number, random: () => number): number =>
+  Math.round(
+    INITIAL_RETRY_DELAY_MS *
+      2 ** (failedAttempt - 1) *
+      (RETRY_JITTER_MIN + random() * RETRY_JITTER_RANGE),
+  );
+
+export const publishSourcemapsWithRetry = async ({
+  run,
+  sleep,
+  random,
+  log,
+  attempts = SOURCEMAP_UPLOAD_ATTEMPTS,
+}: PublishWithRetryOptions): Promise<void> => {
+  // `process` is safe to repeat: injection derives the same chunk id from the
+  // same built artifact, and uploads are keyed by release plus chunk id.
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    const result = run();
+    if (result.exitCode === 0) {
+      log(`Source map upload attempt ${attempt}/${attempts} succeeded.`);
+      return;
+    }
+
+    const transient = isTransientSourcemapProcessFailure(result);
+    if (!transient || attempt === attempts) {
+      log(
+        `Source map upload attempt ${attempt}/${attempts} failed${transient ? " after transient retries" : " with a non-transient error"}.`,
+      );
+      return panic(
+        `posthog-cli sourcemap process exited with ${result.exitCode}: ${result.stderr.trim()}`,
+      );
+    }
+
+    const delay = retryDelayMs(attempt, random);
+    log(
+      `Source map upload attempt ${attempt}/${attempts} failed transiently; retrying in ${delay}ms.`,
+    );
+    await sleep(delay);
+  }
+};
 
 export const listSourcemaps = async (root: string): Promise<string[]> => {
   const files: string[] = [];
@@ -137,7 +211,7 @@ export const assertChunksInjected = async (
     const file = mapFile.slice(0, -".map".length);
     const source = await readFile(file, "utf-8");
     if (!source.includes(CHUNK_ID_MARKER)) {
-      missing.push(path.relative(clientRoot, file));
+      missing.push(repoRelativePath(clientRoot, file));
     }
   }
   if (count === 0) {
@@ -151,24 +225,31 @@ export const assertChunksInjected = async (
   return count;
 };
 
-const publish = (
+const publish = async (
   plan: Extract<SourcemapPublishPlan, { type: "publish" }>,
-): void => {
+): Promise<void> => {
   const { cmd, env } = sourcemapProcessCommand(plan, CLIENT_DIST_PATH);
-  const result = Bun.spawnSync(cmd, {
-    env: { ...Bun.env, ...env },
-    stderr: "inherit",
-    stdout: "inherit",
+  await publishSourcemapsWithRetry({
+    run: () => {
+      const result = Bun.spawnSync(cmd, {
+        env: { ...Bun.env, ...env },
+        stderr: "pipe",
+        stdout: "inherit",
+      });
+      const stderr = result.stderr.toString();
+      process.stderr.write(stderr);
+      return { exitCode: result.exitCode, stderr };
+    },
+    sleep: Bun.sleep,
+    random: Math.random,
+    log: console.log,
   });
-  if (result.exitCode !== 0) {
-    panic(`posthog-cli sourcemap process exited with ${result.exitCode}`);
-  }
 };
 
 if (import.meta.main) {
   const plan = planSourcemapPublish(Bun.env);
   if (plan.type === "publish") {
-    publish(plan);
+    await publish(plan);
     const injected = await assertChunksInjected(CLIENT_DIST_PATH);
     console.log(
       `Uploaded source maps for ${injected} client chunks as ${RELEASE_NAME}@${plan.version}.`,

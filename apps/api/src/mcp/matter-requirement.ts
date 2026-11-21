@@ -1,20 +1,23 @@
+import { MCP_CAPABILITY_EXECUTORS } from "@stll/api-contract/mcp-capability-executors";
+
 import { isRecord } from "@/api/lib/type-guards";
 import type { CompareToolInput } from "@/api/mcp/document-compare-tool";
 import { hasEffectiveAuthority } from "@/api/mcp/effective-authority";
 import type { McpEffectiveAuthority } from "@/api/mcp/effective-authority";
-import type { MANAGE_ORG_ACTIONS } from "@/api/mcp/research-admin-tools";
 import type { DEFAULT_MCP_TOOL_DEFINITIONS } from "@/api/mcp/static-tool-definitions";
 import type { InternalToolErrorResult } from "@/api/mcp/tool-types";
 import { structuredErrorResult } from "@/api/mcp/tool-utils";
 
 /**
- * Where a write tool acts. `organization` tools (the clause and playbook
+ * Where a write tool acts. `account` tools require no active organization.
+ * `organization` tools (the clause and playbook
  * library, templates, contacts, organization settings, creating a matter)
  * work in an organization that has no matter yet. `matter` tools act on data
  * that lives inside a matter, so they cannot succeed until the caller can
  * reach one.
  */
 export const WRITE_TOOL_SCOPE = {
+  account: "account",
   organization: "organization",
   matter: "matter",
 } as const;
@@ -39,7 +42,7 @@ export type McpWriteToolName = Extract<
   { access: "write" }
 >["name"];
 
-const { organization, matter } = WRITE_TOOL_SCOPE;
+const { account, organization, matter } = WRITE_TOOL_SCOPE;
 
 /**
  * Every write tool's scope, keyed by the registry's write-tool union so a new
@@ -85,25 +88,19 @@ export const WRITE_TOOL_SCOPES = {
   create_reader_annotation: organization,
   update_reader_annotation: organization,
   delete_reader_annotation: organization,
-  manage_organization: {
-    path: ["action"],
-    byValue: {
-      add_member: matter,
-      remove_member: matter,
-      update_org_settings: organization,
-    } satisfies Record<
-      (typeof MANAGE_ORG_ACTIONS)[number],
-      WriteToolScopeValue
-    >,
-  },
+  add_matter_member: matter,
+  remove_matter_member: matter,
+  create_organization: account,
+  update_organization_settings: organization,
   set_practice_jurisdictions: organization,
   fill_template: organization,
   save_filled_template: matter,
   create_template: organization,
   configure_template_fields: organization,
   // Each catalog capability enforces its own workspace access.
-  invoke_capability: organization,
+  [MCP_CAPABILITY_EXECUTORS.write]: organization,
   submit_feedback: organization,
+  mint_web_handoff: organization,
 } as const satisfies Record<McpWriteToolName, WriteToolScope>;
 
 const isWriteToolName = (toolName: string): toolName is McpWriteToolName =>

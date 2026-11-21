@@ -1,11 +1,4 @@
-/**
- * The per-decision provision-citation state, on the embedded test database:
- * the input digest, the decision enqueue trigger, `ensure_…_state`, and the
- * guards on scopes and revisions. PGlite is one session, so everything that
- * needs two connections (a scope row inserted concurrently, lock waits) is
- * in `case-law-provision-extraction-state.postgres.test.ts`.
- */
-
+import { panic } from "better-result";
 import {
   afterAll,
   beforeAll,
@@ -18,15 +11,27 @@ import { sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 import fc from "fast-check";
+/**
+ * The per-decision provision-citation state, on the embedded test database:
+ * the input digest, the decision enqueue trigger, `ensure_…_state`, and the
+ * guards on scopes and revisions. PGlite is one session, so everything that
+ * needs two connections (a scope row inserted concurrently, lock waits) is
+ * in `case-law-provision-extraction-state.postgres.test.ts`.
+ */
+import { readFileSync } from "node:fs";
 
 import {
-  propertyConfig,
+  assertProperty,
   propertySeed,
   propertyTestTimeout,
 } from "@stll/property-testing";
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/node";
 
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { PROVISION_STATE_BACKFILL_STEPS } from "@/api/lib/case-law/provision-state-backfill/backfill";
+import type { ProvisionBackfillSession } from "@/api/lib/case-law/provision-state-backfill/step";
+import { EMPTY_CORPUS_CONTENT_HASHES } from "@/api/lib/legal-search/corpus-content-hash";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
 let client: Awaited<ReturnType<typeof createTestPglite>>;
@@ -35,6 +40,10 @@ let db: ReturnType<typeof drizzle>;
 // are among the most expensive in the API's type check, and nothing here
 // needs them.
 const SOURCE_ID = createSafeId<"caseLawSource">();
+const pendingClockStep = () =>
+  PROVISION_STATE_BACKFILL_STEPS.find(
+    (step) => step.name === "pending-clock",
+  ) ?? panic("Missing pending-clock scheduler step");
 
 beforeAll(async () => {
   client = await createTestPglite();
@@ -45,9 +54,6 @@ beforeAll(async () => {
   `);
 }, propertyTestTimeout(120_000));
 afterAll(async () => await client.close());
-
-const config = (numRuns: number) =>
-  propertyConfig({ numRuns, seed: propertySeed() });
 
 const rows = async (query: SQL): Promise<Record<string, unknown>[]> =>
   (await db.execute(query)).rows;
@@ -388,16 +394,14 @@ describe("input digest", () => {
         redacted_at: "2026-01-01T00:00:00+00:00",
       },
     ]);
-    const sha256 = (text: string) =>
-      new Bun.CryptoHasher("sha256").update(text).digest("hex");
     const dayOffset = (Date.UTC(2020, 2, 1) - EPOCH_2000) / DAY_MS;
     expect(dated).toBe(
-      sha256(
+      hashSha256Hex(
         `["case-law-provision-extraction-input/1", "abc", ${String(dayOffset)}, "CZE", "cs", true]`,
       ),
     );
     expect(undated).toBe(
-      sha256(
+      hashSha256Hex(
         `["case-law-provision-extraction-input/1", null, null, "CZE", "cs", false]`,
       ),
     );
@@ -409,7 +413,8 @@ describe("input digest", () => {
    * and TimeZone a session may carry.
    */
   test("is injective on its inputs and independent of session settings", async () => {
-    await fc.assert(
+    await assertProperty(
+      "is injective on its inputs and independent of session settings",
       fc.asyncProperty(
         fc.array(inputVariant, { minLength: 2, maxLength: 8 }),
         fc.constantFrom(...SESSION_SETTINGS),
@@ -430,7 +435,7 @@ describe("input digest", () => {
           }
         },
       ),
-      config(40),
+      { numRuns: 40, seed: propertySeed() },
     );
   });
 
@@ -554,6 +559,24 @@ describe("enqueue trigger", () => {
     expect((await readState(id))?.dueAt).not.toBeNull();
   });
 
+  test("redaction retires fresh work even while its scope remains active", async () => {
+    const id = await insertDecision();
+    expect(await readState(id)).toMatchObject({
+      lane: "fresh",
+      enqueueReason: "input",
+    });
+    await db.execute(
+      sql`UPDATE case_law_decisions SET redacted_at = now(), content_hash = NULL WHERE id = ${id}`,
+    );
+    expect(await readState(id)).toMatchObject({
+      lane: "repair",
+      enqueueReason: "scope_retired",
+      workStatus: "eligible",
+      digestIsCurrent: true,
+    });
+    expect((await readState(id))?.dueAt).not.toBeNull();
+  });
+
   test("records an unseen key as a retired scope and enqueues nothing", async () => {
     const id = await insertDecision({ country: "POL", language: "pl" });
     expect(await readState(id)).toBeNull();
@@ -602,7 +625,8 @@ describe("enqueue trigger", () => {
       );
     await setScope("CZE", "sk", "active");
     await setScope("SVK", "cs", "active");
-    await fc.assert(
+    await assertProperty(
+      "makes the state due iff the input digest changed",
       fc.asyncProperty(plans, async (plan) => {
         const id = await insertDecision({ contentHash: null });
         await settle(id);
@@ -628,7 +652,7 @@ describe("enqueue trigger", () => {
         expect(state?.dueAt !== null).toBe(digestChanged);
         expect(state?.digestIsCurrent).toBe(true);
       }),
-      config(60),
+      { numRuns: 60, seed: propertySeed() },
     );
   });
 
@@ -800,6 +824,33 @@ describe("ensure_case_law_provision_extraction_state", () => {
     expect(await readState(outOfScope)).toBeNull();
     expect(await ensure([inScope, outOfScope], "seed")).toBe(0);
   });
+
+  test.each(["seed", "reconcile", "activate", "retire"] as const)(
+    "%s keeps redacted work in retirement and never creates fresh work",
+    async (action) => {
+      const id = await insertDecision();
+      await db.execute(
+        sql`UPDATE case_law_decisions SET redacted_at = now(), content_hash = NULL WHERE id = ${id}`,
+      );
+      await db.execute(
+        sql`UPDATE case_law_provision_extractions SET lane = 'fresh', enqueue_reason = 'input', due_at = now() WHERE decision_id = ${id}`,
+      );
+      expect(await ensure([id], action)).toBe(1);
+      expect(await readState(id)).toMatchObject({
+        lane: "repair",
+        enqueueReason: "scope_retired",
+        digestIsCurrent: true,
+      });
+      expect(await ensure([id], action)).toBe(0);
+      const withoutState = await insertDecision({
+        redactedAt: "2026-01-01T00:00:00Z",
+        contentHash: null,
+      });
+      expect(await readState(withoutState)).toBeNull();
+      expect(await ensure([withoutState], action)).toBe(0);
+      expect(await readState(withoutState)).toBeNull();
+    },
+  );
 
   test("reconciles only a missing or outdated digest", async () => {
     const current = await insertDecision();
@@ -1102,5 +1153,264 @@ describe("privileges", () => {
       }
       expect(await refusal(call)).toMatch(/permission denied/u);
     }
+  });
+});
+
+describe("pending clock", () => {
+  test(
+    "pre-migration debt is initialized in resumable bounded pages, including blocked debt",
+    async () => {
+      const migrated = await createTestPglite(await client.dumpDataDir());
+      const connection: ProvisionBackfillSession = {
+        execute: async (query, params = []) => {
+          await migrated.query(query, [...params]);
+        },
+        query: async (query, params = []) =>
+          (await migrated.query(query, [...params])).rows,
+        setTransactionBudget: async ({ lockTimeout, statementTimeout }) => {
+          await migrated.query(
+            "SELECT set_config('lock_timeout', $1, true), set_config('statement_timeout', $2, true)",
+            [String(lockTimeout), String(statementTimeout)],
+          );
+        },
+      };
+      const pending = async () =>
+        (
+          await migrated.query(
+            "SELECT availability, pending_count, oldest_pending_at::text AS oldest FROM read_case_law_provision_pending('CZE', 'cs', ARRAY[]::text[])",
+          )
+        ).rows;
+      try {
+        await migrated.exec(`
+        SET TIME ZONE 'UTC';
+        TRUNCATE case_law_decisions CASCADE;
+        DROP TRIGGER case_law_provision_pending_since ON case_law_provision_extractions;
+        DROP FUNCTION maintain_case_law_provision_pending_since();
+        DROP FUNCTION read_case_law_provision_pending(text, text, text[]);
+        ALTER TABLE case_law_provision_extractions DROP COLUMN pending_since;
+      `);
+        await migrated.query(
+          `
+        INSERT INTO case_law_decisions (id, source_id, court, case_number, metadata,
+          content_hash, decision_date, country, language)
+        SELECT gen_random_uuid(), $1, 'Court', series::text, '{}'::jsonb,
+          $2, '2020-03-01', 'CZE', 'cs'
+        FROM generate_series(1, 1002) series
+      `,
+          [SOURCE_ID, BASE_INPUTS.contentHash],
+        );
+        await migrated.exec(`
+        UPDATE case_law_provision_extractions state SET due_at = '2000-01-01'
+        FROM case_law_decisions decision WHERE decision.id = state.decision_id;
+        UPDATE case_law_provision_extractions state SET work_status = 'blocked',
+          blocked_input_digest = desired_input_digest, due_at = '1999-01-01'
+        FROM case_law_decisions decision WHERE decision.id = state.decision_id AND decision.case_number = '1';
+        UPDATE case_law_provision_extractions state SET due_at = NULL
+        FROM case_law_decisions decision WHERE decision.id = state.decision_id AND decision.case_number = '1002';
+        INSERT INTO case_law_provision_extraction_revisions_registry
+          (revision, jurisdiction, engine_input_digest, profile_digest, projection_revision)
+        VALUES (10002, 'CZE', repeat('1', 64), repeat('2', 64), 1);
+        INSERT INTO case_law_provision_extraction_revisions (jurisdiction, desired_revision, min_current_revision)
+        VALUES ('CZE', 10002, 10002) ON CONFLICT (jurisdiction)
+        DO UPDATE SET desired_revision = 10002, min_current_revision = 10002, changed_at = now();
+        INSERT INTO case_law_provision_repair_cursors (name, completed_at)
+        VALUES ('state-seed', now()), ('scope-bootstrap', now())
+        ON CONFLICT (name) DO UPDATE SET completed_at = now();
+        UPDATE case_law_provision_scope_transitions SET completed_at = now();
+        BEGIN;
+      `);
+        const migration = readFileSync(
+          new URL(
+            "../../drizzle/20261010110000_case_law_provision_pending_since/migration.sql",
+            import.meta.url,
+          ),
+          "utf-8",
+        );
+        for (const statement of migration.split("--> statement-breakpoint")) {
+          if (statement.trim().length > 0) {
+            await migrated.exec(statement);
+          }
+        }
+        await migrated.exec("COMMIT");
+        expect(await pending()).toEqual([
+          {
+            availability: "state_not_seeded",
+            pending_count: null,
+            oldest: null,
+          },
+        ]);
+        expect((await pendingClockStep().readCompletion(connection)).type).toBe(
+          "incomplete",
+        );
+        (await pendingClockStep().advance(connection)).unwrap();
+        expect(
+          (
+            await migrated.query(
+              "SELECT count(*)::integer AS seeded FROM case_law_provision_extractions WHERE pending_since IS NOT NULL",
+            )
+          ).rows,
+        ).toEqual([{ seeded: 1000 }]);
+        expect((await pendingClockStep().readCompletion(connection)).type).toBe(
+          "incomplete",
+        );
+        expect(await pending()).toEqual([
+          {
+            availability: "state_not_seeded",
+            pending_count: null,
+            oldest: null,
+          },
+        ]);
+        (await pendingClockStep().advance(connection)).unwrap();
+        expect(await pendingClockStep().readCompletion(connection)).toEqual({
+          type: "complete",
+        });
+        const initialized = await pending();
+        expect(initialized).toEqual([
+          {
+            availability: "available",
+            pending_count: "1001",
+            oldest: "1999-01-01 00:00:00+00",
+          },
+        ]);
+        expect(
+          (
+            await migrated.query(
+              "SELECT count(*)::integer AS mismatched FROM case_law_provision_extractions WHERE pending_since IS DISTINCT FROM due_at",
+            )
+          ).rows,
+        ).toEqual([{ mismatched: 0 }]);
+        (await pendingClockStep().advance(connection)).unwrap();
+        expect(await pending()).toEqual(initialized);
+      } finally {
+        await migrated.close();
+      }
+    },
+    propertyTestTimeout(120_000),
+  );
+
+  test("retry and lease changes preserve age; changed input restarts it", async () => {
+    const id = await insertDecision();
+    await run(
+      sql`UPDATE case_law_provision_extractions SET due_at = '2000-01-01' WHERE decision_id = ${id}`,
+    );
+    const initial = await one(
+      sql`SELECT pending_since::text AS value FROM case_law_provision_extractions WHERE decision_id = ${id}`,
+    );
+    expect(initial["value"]).not.toBeNull();
+    await run(sql`UPDATE case_law_provision_extractions SET due_at = now() + interval '1 hour',
+      work_status = 'retry_scheduled', retry_not_before = now() + interval '1 hour',
+      transient_attempts = transient_attempts + 1, lease_token = gen_random_uuid(),
+      lease_expires_at = now() + interval '1 minute', pending_since = '1999-01-01'
+      WHERE decision_id = ${id}`);
+    expect(
+      await one(
+        sql`SELECT pending_since::text AS value FROM case_law_provision_extractions WHERE decision_id = ${id}`,
+      ),
+    ).toEqual(initial);
+    await run(
+      sql`UPDATE case_law_decisions SET content_hash = ${"b".repeat(64)} WHERE id = ${id}`,
+    );
+    const changed = await one(
+      sql`SELECT pending_since > ${initial["value"]}::timestamptz AS restarted FROM case_law_provision_extractions WHERE decision_id = ${id}`,
+    );
+    expect(changed["restarted"]).toBe(true);
+    await run(
+      sql`UPDATE case_law_provision_extractions SET due_at = NULL WHERE decision_id = ${id}`,
+    );
+    expect(
+      await one(
+        sql`SELECT pending_since IS NULL AS cleared FROM case_law_provision_extractions WHERE decision_id = ${id}`,
+      ),
+    ).toEqual({ cleared: true });
+  });
+
+  test("unseeded debt is unavailable instead of zero", async () => {
+    await insertDecision();
+    const state = await one(
+      sql`SELECT availability, pending_count FROM read_case_law_provision_pending('CZE', 'cs', ARRAY[]::text[])`,
+    );
+    expect(state["pending_count"]).toBeNull();
+    expect(state["availability"]).not.toBe("available");
+  });
+});
+
+test("pending counts include delayed and blocked debt and exclude unreadable rows", async () => {
+  await setScope("CZE", "zz", "active");
+  await run(sql`INSERT INTO case_law_provision_extraction_revisions_registry
+    (revision, jurisdiction, engine_input_digest, profile_digest, projection_revision)
+    VALUES (10001, 'CZE', ${"1".repeat(64)}, ${"2".repeat(64)}, 1)`);
+  await run(sql`INSERT INTO case_law_provision_extraction_revisions AS revision
+    (jurisdiction, desired_revision, min_current_revision)
+    VALUES ('CZE', 10001, 10001)
+    ON CONFLICT (jurisdiction) DO UPDATE SET desired_revision = 10001, min_current_revision = 10001, changed_at = now()`);
+  await run(sql`INSERT INTO case_law_provision_repair_cursors (name, completed_at)
+    VALUES ('state-seed', now()), ('scope-bootstrap', now())
+    ON CONFLICT (name) DO UPDATE SET completed_at = now()`);
+  const connection: ProvisionBackfillSession = {
+    execute: async (query, params = []) => {
+      await client.query(query, [...params]);
+    },
+    query: async (query, params = []) =>
+      (await client.query(query, [...params])).rows,
+    setTransactionBudget: async () => undefined,
+  };
+  (await pendingClockStep().advance(connection)).unwrap();
+  const blocked = await insertDecision({ language: "zz" });
+  const retry = await insertDecision({ language: "zz" });
+  const emptyHash = EMPTY_CORPUS_CONTENT_HASHES.at(0);
+  expect(emptyHash).toBeDefined();
+  if (emptyHash === undefined) {
+    throw new Error("Missing empty hash fixture");
+  }
+  await insertDecision({ language: "zz", contentHash: emptyHash });
+  const listing = await insertDecision({ language: "zz" });
+  await run(
+    sql`UPDATE case_law_decisions SET metadata = '{"_stellaPartialObservation":{"isListingOnly":true}}'::jsonb WHERE id = ${listing}`,
+  );
+  const unusable = await insertDecision({ language: "zz" });
+  await run(
+    sql`UPDATE case_law_provision_extractions SET payload_class = 'unusable', payload_class_input_digest = desired_input_digest WHERE decision_id = ${unusable}`,
+  );
+  await run(
+    sql`UPDATE case_law_provision_extractions SET work_status = 'blocked', blocked_input_digest = desired_input_digest WHERE decision_id = ${blocked}`,
+  );
+  await run(
+    sql`UPDATE case_law_provision_extractions SET work_status = 'retry_scheduled', retry_not_before = now() + interval '1 hour' WHERE decision_id = ${retry}`,
+  );
+  const emptyHashes = sql.join(
+    EMPTY_CORPUS_CONTENT_HASHES.map((hash) => sql`${hash}`),
+    sql`, `,
+  );
+  const counts =
+    await one(sql`SELECT availability, pending_count, oldest_pending_at IS NOT NULL AS has_oldest
+    FROM read_case_law_provision_pending('CZE', 'zz', ARRAY[${emptyHashes}]::text[])`);
+  expect(counts).toEqual({
+    availability: "available",
+    pending_count: "2",
+    has_oldest: true,
+  });
+  await run(
+    sql`UPDATE case_law_provision_extractions SET due_at = NULL WHERE decision_id IN (${blocked}, ${retry})`,
+  );
+  expect(
+    await one(
+      sql`SELECT pending_count, oldest_pending_at FROM read_case_law_provision_pending('CZE', 'zz', ARRAY[${emptyHashes}]::text[])`,
+    ),
+  ).toEqual({ pending_count: "0", oldest_pending_at: null });
+});
+
+test("inactive or unversioned scopes never state a zero count", async () => {
+  const inactive = await one(sql`SELECT availability, pending_count
+    FROM read_case_law_provision_pending('ZZZ', 'zz', ARRAY[]::text[])`);
+  expect(inactive).toEqual({
+    availability: "scope_inactive",
+    pending_count: null,
+  });
+  await setScope("ZZZ", "zz", "active");
+  const unversioned = await one(sql`SELECT availability, pending_count
+    FROM read_case_law_provision_pending('ZZZ', 'zz', ARRAY[]::text[])`);
+  expect(unversioned).toEqual({
+    availability: "revision_unavailable",
+    pending_count: null,
   });
 });

@@ -32,6 +32,29 @@ describe("Expo Doctor Bun-store compatibility guard", () => {
     });
   });
 
+  test("accepts a configured CI-scoped Bun store and rejects it when unconfigured", () => {
+    const projectRoot = "/work/stella/apps/mobile";
+    const store = "/work/_temp/bun-scoped-install/store-key";
+    const output = `20/21 checks passed. 1 checks failed. Possible issues detected:
+
+✖ Check that no duplicate dependencies are installed
+Found duplicates for expo:
+  ├─ expo@57.0.27 (at: node_modules/expo)
+  └─ expo@57.0.27 (at: ../../../_temp/bun-scoped-install/store-key/links/expo@57.0.27-abc/node_modules/expo)
+
+1 check failed, indicating possible issues with the project.`;
+    expect(
+      classifyExpoDoctorResult(output, 1, {
+        projectRoot,
+        storeLinks: [path.join(store, "links")],
+      }),
+    ).toEqual({ type: "known-bun-store-layout", packages: ["expo"] });
+    expect(
+      classifyExpoDoctorResult(output, 1, { projectRoot, storeLinks: [] }).type,
+    ).toBe("failure");
+    expect(classifyExpoDoctorResult(output, 1).type).toBe("failure");
+  });
+
   test("rejects a real duplicate-version conflict", () => {
     const output = BUN_DUPLICATE_OUTPUT.replace(
       "└─ expo@57.0.13 (at:",

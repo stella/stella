@@ -1,23 +1,23 @@
 import { panic, Result } from "better-result";
 
 import {
-  initialBatchState,
-  nextBatch,
   type BatchState,
   type HealthConfig,
-  type Verdict,
+  initialBatchState,
   isHeldTooLong,
+  nextBatch,
+  type Verdict,
 } from "@stll/db-load-gate/health";
 
 import type { ReplayRunReport } from "@/api/handlers/case-law/ingestion/replay";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { AdapterKey } from "@/api/lib/legal-search/ingestion-constants";
 
-import { REPLAY_HEALTH_CONFIG } from "./replay-enrolment";
+import { replayHealthConfig } from "./replay-enrolment";
 import {
   classifyReplayFailure,
-  replayFailure,
   type ReplayFailure,
+  replayFailure,
 } from "./replay-failure";
 
 export type BackgroundReplaySource = {
@@ -35,6 +35,10 @@ export type BackgroundReplayBatch = {
   decisionId: SafeId<"caseLawDecision">;
   parserVersionFrom: number | null;
   targetParserVersion: number;
+  /** Captured immutable input; null is an unknown legacy reservation. */
+  sourceRawS3Key: string | null;
+  /** Persisted readmission epoch captured by the reservation owner. */
+  claimReadmission: number;
 };
 
 export type BackgroundReplayReservation =
@@ -335,7 +339,7 @@ const runReplayBatch = async ({
     failure = classifyReplayFailure(attempt.error);
   } else if (
     failure === null &&
-    (rowErrors > 0 || replayed?.haltReason !== null)
+    (rowErrors > 0 || (replayed !== null && replayed.haltReason !== null))
   ) {
     failure = replayFailure("writer-retryable");
   }
@@ -593,7 +597,7 @@ export const runBackgroundReplayTick = async ({
   dependencies,
   maxRows,
   maxDurationMs,
-  healthConfig = REPLAY_HEALTH_CONFIG,
+  healthConfig = replayHealthConfig(),
   signal,
 }: BackgroundReplayTickOptions): Promise<BackgroundReplayTickReport> => {
   if (
@@ -674,8 +678,8 @@ export const runBackgroundReplayTick = async ({
 
   const held = await dependencies.loadGateState(source);
   if (
-    held?.holdUntil !== null &&
-    held?.holdUntil !== undefined &&
+    held !== null &&
+    held.holdUntil !== null &&
     dependencies.now() < held.holdUntil
   ) {
     report.heldTooLong = isHeldTooLong(held, dependencies.now(), healthConfig);

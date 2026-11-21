@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 
+import { UNBOUND } from "@/api/lib/agent-skills/binding";
 import { toSafeId } from "@/api/lib/branded-types";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 
 import { resolveCatalogueSkillHandleMaps } from "./skill-handles";
 
@@ -10,11 +12,13 @@ const teamSkillId = toSafeId<"agentSkill">("skill-team");
 describe("resolveCatalogueSkillHandleMaps", () => {
   test("gives members a chat id for enabled team skills without an edit handle", () => {
     const handles = resolveCatalogueSkillHandleMaps({
-      canManageTeamSkills: false,
+      memberRole: sessionMemberRole("member"),
       rows: [
         {
+          ...UNBOUND,
           enabled: true,
           id: teamSkillId,
+          invocation: "auto",
           origin: "bundled",
           scope: "team",
           slug: "review",
@@ -31,11 +35,13 @@ describe("resolveCatalogueSkillHandleMaps", () => {
 
   test("does not expose disabled bundled team skills as active chat context", () => {
     const handles = resolveCatalogueSkillHandleMaps({
-      canManageTeamSkills: true,
+      memberRole: sessionMemberRole("admin"),
       rows: [
         {
+          ...UNBOUND,
           enabled: false,
           id: teamSkillId,
+          invocation: "auto",
           origin: "bundled",
           scope: "team",
           slug: "review",
@@ -52,11 +58,13 @@ describe("resolveCatalogueSkillHandleMaps", () => {
 
   test("allows disabled editable team skills as active chat context for managers", () => {
     const handles = resolveCatalogueSkillHandleMaps({
-      canManageTeamSkills: true,
+      memberRole: sessionMemberRole("admin"),
       rows: [
         {
+          ...UNBOUND,
           enabled: false,
           id: teamSkillId,
+          invocation: "auto",
           origin: "authored",
           scope: "team",
           slug: "review",

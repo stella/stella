@@ -6,6 +6,17 @@ import type {
 } from "@/components/chat/chat-ui-tools";
 import { ClientOperationError } from "@/lib/errors/client";
 
+/** Every SDK role chooses its visible message body explicitly. */
+export const CHAT_MESSAGE_RENDER_POLICY = {
+  activity: "activity",
+  assistant: "assistant",
+  system: "text",
+  user: "text",
+} as const satisfies Record<
+  PersistedChatMessage["role"],
+  "activity" | "assistant" | "text"
+>;
+
 export const DATA_URL_PREFIX = "data:";
 const BASE64_DATA_MARKER = ";base64,";
 
@@ -358,4 +369,26 @@ export const getFollowingAssistantRestorations = (
     }
   }
   return EMPTY_RESTORATION_PAIRS;
+};
+
+type SentinelEntry = {
+  readonly isIntersecting: boolean;
+  readonly boundingClientRect: { readonly top: number };
+  readonly rootBounds: { readonly top: number } | null;
+};
+
+/**
+ * Whether a sticky header's sentinel has scrolled above its scroll root.
+ * One delivery can queue several records for the same sentinel (a streamed
+ * reply grows and auto-scrolls between frames); only the latest is current.
+ */
+export const sentinelIsAboveRoot = (
+  entries: readonly SentinelEntry[],
+): boolean | undefined => {
+  const entry = entries.at(-1);
+  if (!entry) {
+    return undefined;
+  }
+  const rootTop = entry.rootBounds?.top ?? 0;
+  return !entry.isIntersecting && entry.boundingClientRect.top <= rootTop;
 };

@@ -1,41 +1,74 @@
-import type { Static, TSchema } from "@sinclair/typebox";
+import type { StandardSchemaV1 } from "@standard-schema/spec";
 import type { Err } from "better-result";
-import { Result, UnhandledException } from "better-result";
-import type { Context, InputSchema, UnwrapRoute } from "elysia";
-import { ElysiaCustomStatusResponse, status, t } from "elysia";
+import { panic, Result, UnhandledException } from "better-result";
+import * as v from "valibot";
 
-import type { ModelRole } from "@stll/ai-catalog";
+import type { ModelTask } from "@stll/ai-catalog";
+import {
+  parseResourceMutationId,
+  RESOURCE_MUTATION_ID_HEADER,
+} from "@stll/api-contract";
+import { ACTION_ADMISSION_CODES } from "@stll/api-contract/action-admission";
+import type { Money } from "@stll/api-contract/billing-money";
+import type { ACCOUNT_EXPORT_SCOPES } from "@stll/api-contract/mcp";
+import type { ORGANIZATION_CREATE_SCOPE } from "@stll/api-contract/organization-create";
+import type { ProviderDiagnostic } from "@stll/api-contract/provider-setup";
+import { resourceMutationDigest } from "@stll/api-contract/realtime-mutation-digest";
+import type { FailureGrade } from "@stll/errors";
+import type { CentsAmount } from "@stll/money";
+import { BILLING_MATTER_READ_PERMISSION } from "@stll/permissions";
 import type { PermissionInput } from "@stll/permissions";
 
+import { safeDbFromScoped } from "@/api/db/safe-db";
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import type { UsageActionType, UsageServiceTier } from "@/api/db/schema";
 import { env } from "@/api/env";
+import type { RouteCachePolicy } from "@/api/http/cache";
+import type { ResponseSet } from "@/api/http/context";
+import { decodeRequestInput } from "@/api/http/input";
+import type { QueryRecord } from "@/api/http/input";
+import type {
+  AnySchema,
+  RouteAccess,
+  RouteConfig,
+  RouteRequest,
+} from "@/api/http/route";
+import { decodeRouteInput, routeContext } from "@/api/http/route-input";
+import type { RawParams, RouteContext } from "@/api/http/route-input";
+import { HttpStatusResponse, status, unwrapStatus } from "@/api/http/status";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
-import type { OrgAIConfigStatus } from "@/api/lib/ai-config-loader-core";
 import {
   memberAssignmentRequiredError,
   orgAIConfigStatusError,
 } from "@/api/lib/ai-config-response";
 import { captureObservedError } from "@/api/lib/analytics/capture";
-import type { AuditExecutionContext, AuditRecorder } from "@/api/lib/audit-log";
-import type { AccessibleWorkspace } from "@/api/lib/auth";
-import { checkDemoAccountOperation } from "@/api/lib/auth/demo-account";
-import { resolveFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context";
 import {
-  isFeatureEnabled,
-  isFeatureAccessSnapshotForPrincipal,
-} from "@/api/lib/auth/feature-access/policy";
-import type {
-  FeatureAccessSnapshot,
-  FeatureAccessProof,
-} from "@/api/lib/auth/feature-access/policy";
+  authenticateMember,
+  authenticateSession,
+  authorizeWorkspace,
+} from "@/api/lib/auth";
+import type { WorkspaceStatusAccess } from "@/api/lib/auth/accessible-workspace";
+import { ACCOUNT_ACCESS } from "@/api/lib/auth/account-access";
+import type { AccountAccess } from "@/api/lib/auth/account-access";
+import { hasAccountCapabilityAuthority } from "@/api/lib/auth/account-export-policy";
+import type { AccountCapabilityAuthority } from "@/api/lib/auth/account-export-policy";
+import { resolveFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context";
 import type { FeatureAccessRequirement } from "@/api/lib/auth/feature-access/requirements";
+import type {
+  MemberCaller,
+  WorkspaceCaller,
+} from "@/api/lib/auth/member-caller";
+import { checkRestrictedAccountOperation } from "@/api/lib/auth/review-account";
+import { hasVisibleMoney } from "@/api/lib/billing/money-response";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CapabilityTransport } from "@/api/lib/capability-transport";
-import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
-import type { WorkspaceParamsSchema } from "@/api/lib/custom-schema";
+import { workspaceSegmentSchema } from "@/api/lib/custom-schema";
+import { databaseConstraintRefusal } from "@/api/lib/db/constraint-refusals";
+import { resourcesAreVisible } from "@/api/lib/entities/resource-access";
 import type { ActionAdmissionError } from "@/api/lib/errors/action-admission-error";
 import { resolveHandlerError } from "@/api/lib/errors/handler-error-resolution";
+import { ProviderCallError } from "@/api/lib/errors/provider-call-error";
+import { requestAbortRefusal } from "@/api/lib/errors/request-abort";
 import {
   DatabaseError,
   DatabaseRlsError,
@@ -51,11 +84,25 @@ import type {
 } from "@/api/lib/errors/tagged-errors";
 import { errorTag, unredactedErrorFields } from "@/api/lib/errors/utils";
 import {
+  isFeatureAccessSnapshotForPrincipal,
+  isFeatureEnabled,
+} from "@/api/lib/feature-access/policy";
+import type { FeatureAccessProof } from "@/api/lib/feature-access/policy";
+import {
   getContentDeliveryReceiptError,
   markContentDeliveryIntent,
   runWithContentDeliveryScope,
 } from "@/api/lib/files/content-delivery";
 import type { ContentDelivery } from "@/api/lib/files/content-delivery";
+import {
+  fingerprintHttpRequest,
+  runWithRequestReceipt,
+} from "@/api/lib/idempotency/request-receipts";
+import {
+  publicReadTimeoutError,
+  runPublicReadRequest,
+} from "@/api/lib/legal-search/public-read-timeout";
+import { withExceptionScope } from "@/api/lib/observability/exception-scope";
 import {
   causeChainAttributes,
   failureSink,
@@ -64,22 +111,35 @@ import {
 } from "@/api/lib/observability/failure";
 import { readEvidence } from "@/api/lib/observability/failure-evidence";
 import {
+  answeredFailureSeverity,
   legacyChannelOf,
   observeShadow,
   SHADOW_SINKS,
   shadowFields,
 } from "@/api/lib/observability/failure-shadow";
+import { observeLimiterAdmissionFailure } from "@/api/lib/observability/limiter-admission-failure";
 import { logger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
-import { getRequestContext } from "@/api/lib/observability/request-context";
+import {
+  getRequestContext,
+  recordRequestExceptionScope,
+} from "@/api/lib/observability/request-context";
 import {
   hasMemberPermission,
   readAuthorizedMemberRole,
 } from "@/api/lib/permission-authorization";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
-import type { AnyPermissiveRouteSchema } from "@/api/lib/permissive-route-schema";
+import {
+  authorizeOperation,
+  cloneOperationInput,
+} from "@/api/lib/proofs/checked-transaction";
+import type { CheckedOperationContext } from "@/api/lib/proofs/checked-transaction";
 import { withActionAdmission } from "@/api/lib/rate-limit/action-admission";
 import type { PeriodActionKind } from "@/api/lib/rate-limit/action-kinds";
+import {
+  admitModelDispatch,
+  type ModelDispatchAdmission,
+} from "@/api/lib/rate-limit/model-dispatch-admission";
 import type { ServiceClassification } from "@/api/lib/rate-limit/service-classification";
 import {
   announceResourceSetUpdates,
@@ -95,23 +155,21 @@ import {
 } from "@/api/lib/search/public-error-response";
 import { truncateTextBytes } from "@/api/lib/search/response-text-bounds";
 import {
-  applyResponseCachePolicy,
-  type CachePolicy,
-} from "@/api/lib/security-headers";
-import {
-  getTanStackTextModelInfoForRole,
+  getTanStackTextModelInfoForTask,
   resolveEffectiveServiceTierForProvider,
   resolveFallbackChatSelection,
 } from "@/api/lib/tanstack-ai-models";
 import { computeUsageUnitCost } from "@/api/lib/usage/action-weights";
 import { decideChatUsageLane } from "@/api/lib/usage/lane-routing";
 import type { UsageLaneDecision } from "@/api/lib/usage/lane-routing";
+import { MANAGED_MODEL_TIER } from "@/api/lib/usage/managed-model-tier";
 import { assertUsageAvailable } from "@/api/lib/usage/usage-ledger";
-// Type-only: derive the closed tool-name union from the single MCP registry
-// so `mcp: { type: "tool", name }` typechecks against the real tools. The
-// import is erased at build time and never creates a runtime import cycle
-// (api-handlers must stay importable without pulling in the MCP graph).
-import type { MCP_STATIC_TOOL_NAMES } from "@/api/mcp/static-tool-definitions";
+import { legalHoldViewerFromContext } from "@/api/lib/workspaces/legal-holds/projection";
+import { legalHoldRefusalForViewer } from "@/api/lib/workspaces/legal-holds/refusal";
+import { recordWriteContract } from "@/api/lib/write-contract/write-contract";
+import type { WriteContract } from "@/api/lib/write-contract/write-contract";
+// Type-only: keep endpoint metadata independent of the expensive MCP schema graph.
+import type { McpToolName } from "@/api/mcp/static-tool-names";
 import type { McpReadClass } from "@/api/mcp/tool-types";
 import { isLocalDevOpen } from "@/api/runtime-mode";
 
@@ -120,7 +178,7 @@ import { isLocalDevOpen } from "@/api/runtime-mode";
  * `type: "covered"` disposition references one of these; the coverage guard
  * (`apps/api/scripts/mcp-coverage-guard.ts`) cross-checks the runtime registry.
  */
-export type McpToolName = (typeof MCP_STATIC_TOOL_NAMES)[number];
+export type { McpToolName };
 
 /**
  * Reasons an endpoint is a real end-to-end capability a user or their agent
@@ -167,6 +225,19 @@ export type McpToolName = (typeof MCP_STATIC_TOOL_NAMES)[number];
  *   source document (e.g. a procuração); review-before-create only, not a
  *   standing agent capability. Mirrors `template_authoring_ui`.
  * - `correspondence`: matter correspondence list, read, and handling changes.
+ * - `personal_history`: the caller's own search history (list, delete one,
+ *   clear). Recording a use and the one-time browser import stay `internal`
+ *   under `search_ui`.
+ * - `assistant_memory`: the assistant memory the caller may read and write
+ *   (list, create, update). Firm-wide memory writes stay `internal` under
+ *   `assistant_chat`.
+ * - `notification_inbox`: the caller's own notifications (list, mark one
+ *   read). Mark-all and announcements stay `internal` under `native_tool_ui`.
+ * - `cross_matter_search`: the search screen's results across the matters the
+ *   caller can open, by text, result type, editor, file type and date. The
+ *   curated `search` and `search_across_matters` tools are separate, narrower
+ *   knowledge searches; facets, preview and the AI helpers stay `internal`
+ *   under `search_ui`.
  */
 type McpCapabilityReason =
   | "template_authoring_ui"
@@ -184,7 +255,13 @@ type McpCapabilityReason =
   | "chat_thread_ui"
   | "file_transport"
   | "contact_extraction_ui"
-  | "correspondence";
+  | "correspondence"
+  | "personal_history"
+  | "assistant_memory"
+  | "notification_inbox"
+  | "organization_management"
+  | "organization_admin"
+  | "cross_matter_search";
 
 /**
  * Approved, permanent reasons an endpoint is intentionally never reachable from
@@ -233,6 +310,18 @@ type McpCapabilityReason =
  * - `compound_consent`: operations that require multiple independent OAuth
  *   consent families; these stay first-party-only until the generic capability
  *   path can enforce conjunctive scopes.
+ * - `human_confirmation`: the user's own confirmation of an action an agent
+ *   prepared (for example sending an email they reviewed); an agent must never
+ *   be able to confirm for them.
+ * - `organization_export`: starting or downloading a whole-organization data
+ *   export; a person performs it in the app, never an agent, because it hands
+ *   over the firm's privileged material in one action.
+ * - `native_device`: a native app registering the device it runs on (push
+ *   alert delivery). Only the signed-in app holds the device token; an agent
+ *   that could register one could route a person's alerts elsewhere.
+ * - `agent_autonomy_ceiling`: an organization's limit on how much an agent
+ *   may do without asking. An agent that could change it could raise its
+ *   own limit, so only an administrator in the app sets it.
  */
 type McpInternalReason =
   | "auth_plumbing"
@@ -256,7 +345,11 @@ type McpInternalReason =
   | "document_processing"
   | "native_tool_ui"
   | "billing_ui"
-  | "compound_consent";
+  | "compound_consent"
+  | "human_confirmation"
+  | "native_device"
+  | "organization_export"
+  | "agent_autonomy_ceiling";
 
 /**
  * Required per-handler MCP disposition. Making this a field on every handler
@@ -282,7 +375,10 @@ export type McpExposure =
   | {
       type: "capability";
       reason: McpCapabilityReason;
+      /** Curated wrapper that delegates to this capability. */
+      by?: McpToolName;
       consumesServices: ServiceClassification;
+      confirmation?: "required";
       readClass?: McpReadClass;
     }
   | { type: "internal"; reason: McpInternalReason };
@@ -313,12 +409,12 @@ export type UsageMeteringConfig = {
    */
   laneRouting?: true;
   /**
-   * Logical model role recorded on the consumption ledger row.
-   * Defaults to `"chat"`. Set to the role the handler will pass
+   * Logical model task recorded on the consumption ledger row.
+   * Defaults to `"chat"`. Set to the task the handler will pass
    * to the model resolver so cross-cutting analytics match
    * the actual model.
    */
-  modelRole?: ModelRole;
+  modelTask?: ModelTask;
 };
 
 /**
@@ -333,14 +429,13 @@ export type UsageMeteringConfig = {
  * lead with the operation, then the consequential detail a caller needs BEFORE
  * invoking (irreversibility, what else it deletes, which fields are required for
  * a create vs. an update, what `null` clears). Per-PROPERTY prose does not
- * belong here; it goes on the property's own Elysia `t.*` schema
- * (`t.String({ description: "..." })`), which the same exporter already carries
+ * belong here; it goes on the property's own schema
+ * (`v.pipe(v.string(), v.description("..."))`), which the same exporter carries
  * into the catalog's `inputSchema`.
  *
- * Optional only until the remaining gaps are closed. Every capability without
- * one is listed by id in `apps/api/capability-description-ledger.json`; a new
- * capability may not join that list, and authoring prose means deleting its
- * line in the same change (see apps/api/scripts/capability-description-guard.ts).
+ * Optional in the type, required by
+ * apps/api/scripts/capability-description-guard.ts, which fails a capability
+ * without one.
  */
 type CapabilityDescription = {
   description?: string;
@@ -377,7 +472,7 @@ type CapabilityAccess =
  * ordinary case, where body/params/query go in as JSON and a structured value
  * comes back.
  *
- * A handler whose schema declares a `t.File()`/`t.Files()` field, or whose
+ * A handler whose schema declares a file field (`fileSchema`), or whose
  * success path returns a `Response`/raw bytes, MUST declare the matching file
  * transport. That is not a convention anyone has to remember: the
  * `require-file-transport-disposition` lint rule flags the schema side at author
@@ -396,22 +491,30 @@ type ContentDeliveryDisposition = {
   contentDelivery?: ContentDelivery;
 };
 
+/** The request and response schemas a handler config declares. */
+type InputSchema = RouteConfig;
+
 export type HandlerConfig = InputSchema &
+  WriteContract &
   CapabilityDescription &
   ContentDeliveryDisposition &
   CapabilityAccess &
   CapabilityTransportDisposition & {
+    /** Money-only response schema; the common egress checks it on every transport. */
+    moneyResponse?: AnySchema;
     permissions: PermissionInput;
     accountAccess: AccountAccess;
     /** Finite API-owned transport deadline for a generated capability command. */
     requestTimeoutMs?: number;
+    /** Scoped DB mutations only; external side effects require owner-specific receipt integration. */
+    idempotency?: { type: "replay" };
     requiresUsage?: UsageMeteringConfig;
     featureAccess?: FeatureAccessRequirement;
     /** Finite synchronous work; streaming and queued execution need their own lifetimes. */
     actionAdmission?: { type: "handler"; actionKind: PeriodActionKind };
     /**
      * Resource sets a successful call announces to open tabs. The wrapper
-     * broadcasts them for every transport (REST, `invoke_capability`, CLI);
+     * broadcasts them for every transport (REST, capability executors, CLI);
      * see `lib/resource-set-realtime.ts`.
      */
     realtime?: ResourceSetRealtime;
@@ -419,37 +522,63 @@ export type HandlerConfig = InputSchema &
   };
 
 /**
- * Config for a workspace-scoped route, i.e. one `createSafeHandler` mounts
- * under a `:workspaceId` prefix. Its `params` slot narrows `HandlerConfig`'s to
- * schemas that declare `workspaceId` (see `WorkspaceParamsSchema`), so the
- * route-level schema cannot shadow the segment the workspace macro resolves the
- * tenant from. `workspaceParams()` produces the shape.
+ * Config for a workspace-scoped route, one `createSafeHandler` mounts under a
+ * `:workspaceId` prefix. The matter must be active unless the config admits
+ * archived ones too (unarchiving does).
  */
-type WorkspaceHandlerConfigOf<TConfig> = TConfig extends HandlerConfig
-  ? Omit<TConfig, "params"> & { params?: WorkspaceParamsSchema }
-  : never;
+export type WorkspaceHandlerConfig = HandlerConfig & {
+  workspaceStatus?: WorkspaceStatusAccess;
+};
 
-export type WorkspaceHandlerConfig = WorkspaceHandlerConfigOf<HandlerConfig>;
+/**
+ * Which restricted accounts may call a handler. Every handler config declares
+ * one: `sandbox` admits every account, `standard` refuses the demo account,
+ * and `account-control` (credentials, keys, billing, external connections,
+ * organization configuration) also refuses the restricted review account.
+ */
+export { ACCOUNT_ACCESS } from "@/api/lib/auth/account-access";
+export type { AccountAccess } from "@/api/lib/auth/account-access";
+
+const requiresAccountCheck = (accountAccess: AccountAccess) =>
+  accountAccess !== ACCOUNT_ACCESS.sandbox;
+
+export type HandlerConfigurationAdmission =
+  "allowed" | "permission_required" | "account_restricted";
+
+/**
+ * Projects the permission and restricted-account checks performed by safe
+ * handlers without running the handler. Capability endpoints use this to
+ * advertise the same admission decision as the operation they describe.
+ */
+export const checkHandlerConfigurationAdmission = ({
+  principal,
+  config,
+  checkAccountOperation = checkRestrictedAccountOperation,
+}: {
+  // The email is read only when an account check applies: a sandbox handler's
+  // context need not carry a user.
+  principal: { memberRole: AuthorizedMemberRole; readEmail: () => string };
+  config: Pick<HandlerConfig, "permissions" | "accountAccess">;
+  checkAccountOperation?: typeof checkRestrictedAccountOperation;
+}): HandlerConfigurationAdmission => {
+  if (!hasMemberPermission(principal.memberRole, config.permissions)) {
+    return "permission_required";
+  }
+  if (
+    requiresAccountCheck(config.accountAccess) &&
+    Result.isError(
+      checkAccountOperation(principal.readEmail(), config.accountAccess),
+    )
+  ) {
+    return "account_restricted";
+  }
+  return "allowed";
+};
 
 /**
  * Factories without an organization-scoped caller run no account check, so
  * their handlers admit the demo account and can only declare `sandbox`.
  */
-/**
- * Whether the configured demo account may call a handler. Every handler config
- * declares one: `standard` refuses the demo account, `sandbox` admits it.
- */
-export const ACCOUNT_ACCESS = {
-  standard: "standard",
-  sandbox: "sandbox",
-} as const;
-
-export type AccountAccess =
-  (typeof ACCOUNT_ACCESS)[keyof typeof ACCOUNT_ACCESS];
-
-const requiresStandardAccount = (accountAccess: AccountAccess) =>
-  accountAccess === ACCOUNT_ACCESS.standard;
-
 type SandboxAccountAccess = {
   accountAccess: typeof ACCOUNT_ACCESS.sandbox;
 };
@@ -459,61 +588,71 @@ type SandboxAccountAccess = {
  * declares. A route census reads it: a mounted handler missing here skipped
  * every factory, so it carries no account decision of its own.
  */
-const safeHandlerAccountAccess = new WeakMap<object, AccountAccess>();
+const safeHandlerAccountAccess = new WeakMap<
+  object,
+  { accountAccess: AccountAccess; permissions?: PermissionInput }
+>();
 
 const recordSafeHandler = <
   TDefinition extends {
-    config: { accountAccess: AccountAccess };
+    config: WriteContract & {
+      accountAccess: AccountAccess;
+      permissions?: PermissionInput;
+      body?: unknown;
+      description?: string;
+    };
+    access: RouteAccess;
     handler: object;
   },
 >(
   definition: TDefinition,
 ): TDefinition => {
-  safeHandlerAccountAccess.set(
-    definition.handler,
-    definition.config.accountAccess,
-  );
+  recordWriteContract(definition.handler, definition.config);
+  safeHandlerAccountAccess.set(definition.handler, definition.config);
   return definition;
 };
 
 export const getSafeHandlerAccountAccess = (handler: unknown) =>
   typeof handler === "function"
+    ? safeHandlerAccountAccess.get(handler)?.accountAccess
+    : undefined;
+
+export const getSafeHandlerAccessMetadata = (handler: unknown) =>
+  typeof handler === "function"
     ? safeHandlerAccountAccess.get(handler)
     : undefined;
 
+type AccountCapabilityScope =
+  | (typeof ACCOUNT_EXPORT_SCOPES)[keyof typeof ACCOUNT_EXPORT_SCOPES]
+  | typeof ORGANIZATION_CREATE_SCOPE;
+
+type SessionCapabilityAuthority =
+  | { mcp: Extract<McpExposure, { type: "internal" }>; accountScope?: never }
+  | {
+      mcp: Exclude<McpExposure, { type: "internal" }>;
+      accountScope: AccountCapabilityScope;
+    };
+
 export type SessionHandlerConfig = InputSchema &
+  SessionCapabilityAuthority &
+  WriteContract &
   CapabilityDescription &
   ContentDeliveryDisposition &
   CapabilityAccess &
   CapabilityTransportDisposition & {
     accountAccess: AccountAccess;
-    mcp: McpExposure;
+    idempotency?: { type: "replay" };
+    /**
+     * Session handlers run outside an organization scope, so they can only
+     * state that a successful call announces no resource sets.
+     */
+    realtime?: NoResourceSetUpdates;
   };
-
-type ConfigRouteSchema<TConfig extends HandlerConfig> = UnwrapRoute<
-  Omit<
-    TConfig,
-    | "permissions"
-    | "mcp"
-    | "description"
-    | "access"
-    | "contentDelivery"
-    | "transport"
-    | "realtime"
-  >
->;
-
-type SessionConfigRouteSchema<TConfig extends SessionHandlerConfig> =
-  UnwrapRoute<
-    Omit<
-      TConfig,
-      "mcp" | "description" | "access" | "contentDelivery" | "transport"
-    >
-  >;
 
 type SessionHandlerContext<
   TConfig extends SessionHandlerConfig = SessionHandlerConfig,
-> = Context<SessionConfigRouteSchema<TConfig>> & {
+> = RouteContext<TConfig> & {
+  accountAuthority?: AccountCapabilityAuthority;
   user: {
     id: SafeId<"user">;
     email: string;
@@ -521,82 +660,28 @@ type SessionHandlerContext<
 };
 
 type BaseHandlerContext<TConfig extends HandlerConfig = HandlerConfig> =
-  Context<ConfigRouteSchema<TConfig>> & {
-    user: {
-      id: SafeId<"user">;
-      email: string;
+  RouteContext<TConfig> &
+    MemberCaller & {
+      /** Set by the route's feature-access decision; `undefined` once it found none. */
+      featureAccessProof?: FeatureAccessProof | undefined;
+      /**
+       * Budget lane the usage pre-flight resolved for this request.
+       * Set only when the handler declares `requiresUsage` and
+       * enforcement is on; handlers thread it into their metering so
+       * consumption settles against the decided budget.
+       */
+      usageLane?: UsageLaneDecision;
+      /** Shared lease and client cancellation, set only for admitted finite work. */
+      actionSignal?: AbortSignal;
+      /** Proof a model dispatch needs; set only for admitted finite work. */
+      modelAdmission?: ModelDispatchAdmission;
     };
-    session: {
-      activeOrganizationId: SafeId<"organization">;
-    };
-    featureAccessSnapshot?: FeatureAccessSnapshot;
-    featureAccessProof?: FeatureAccessProof;
-    scopedDb: ScopedDb;
-    safeDb: SafeDb;
-    /** Resolve non-deleting workspace IDs only when an operation spans matters. */
-    getActiveWorkspaceIds: () => Promise<SafeId<"workspace">[]>;
-    /** Resolve every accessible workspace only when status metadata is needed. */
-    getAccessibleWorkspaces: () => Promise<AccessibleWorkspace[]>;
-    /** Resolve one workspace by primary key without expanding the access set. */
-    getWorkspaceAccess: (
-      workspaceId: SafeId<"workspace">,
-    ) => Promise<AccessibleWorkspace | null>;
-    /** Preserve only a workspace whose access this request already proved. */
-    pinServerValidatedWorkspaceId: (
-      workspaceId: SafeId<"workspace">,
-    ) => boolean;
-    memberRole: AuthorizedMemberRole;
-    orgAIConfig: OrgAIConfig | null;
-    /**
-     * Whether `orgAIConfig` reflects the org's stored configuration.
-     * `unreadable` means a stored row failed to decrypt, so the null
-     * config above must not be read as "this org has none": pass this
-     * to `requireTanStackAIAvailableForRole` before any model call.
-     */
-    orgAIConfigStatus: OrgAIConfigStatus;
-    /**
-     * Budget lane the usage pre-flight resolved for this request.
-     * Set only when the handler declares `requiresUsage` and
-     * enforcement is on; handlers thread it into their metering so
-     * consumption settles against the decided budget.
-     */
-    usageLane?: UsageLaneDecision;
-    /** Shared lease and client cancellation, set only for admitted finite work. */
-    actionSignal?: AbortSignal;
-    /**
-     * Whether stella may annotate AI requests for this org with
-     * prompt-cache markers. Threaded through to the model resolver;
-     * provider adapters strip any markers when
-     * `false` regardless of what call sites set.
-     */
-    promptCachingEnabled: boolean;
-    managedAIResidency: ManagedAIResidency;
-    /**
-     * Records an audit row in the supplied transaction. Identity
-     * fields (org/user/IP/UA) are bound from the request context;
-     * workspaceId defaults to ctx.workspaceId on workspace handlers
-     * or null on root handlers, and can be overridden per event.
-     */
-    recordAuditEvent: AuditRecorder;
-    /**
-     * Builds a recorder with an overridden default workspaceId.
-     * Use when threading audit recording through helpers that
-     * don't receive the handler ctx (cross-workspace operations,
-     * shared copy/move utilities).
-     */
-    createAuditRecorder: (opts?: {
-      execution?: AuditExecutionContext;
-      workspaceId?: SafeId<"workspace"> | null;
-    }) => AuditRecorder;
-  };
 
 type RootHandlerContext<TConfig extends HandlerConfig = HandlerConfig> =
   BaseHandlerContext<TConfig>;
 
 type WorkspaceHandlerContext<TConfig extends HandlerConfig = HandlerConfig> =
-  BaseHandlerContext<TConfig> & {
-    workspaceId: SafeId<"workspace">;
-  };
+  BaseHandlerContext<TConfig> & WorkspaceCaller;
 
 type SafeHandlerError =
   | ActionAdmissionError
@@ -606,6 +691,7 @@ type SafeHandlerError =
   | UnhandledException;
 
 type SafeErrorBody = {
+  providerDiagnostic?: ProviderDiagnostic;
   code?: HandlerErrorCode;
   message: string;
   /** Corrective next step for programmatic clients. */
@@ -613,8 +699,12 @@ type SafeErrorBody = {
   clause?: HandlerError["clause"];
   contactUrl?: string;
   retryable?: boolean;
+  /** Advised wait before retrying, in milliseconds. */
+  retryAfterMs?: number;
   /** Field-scoped reasons the request was rejected. */
   issues?: HandlerErrorValidationIssue[];
+  /** Matter destination for a scope correction the caller may follow. */
+  workspaceId?: string;
   /**
    * Structured fields surfaced on specific error responses. Today
    * only the 402 UsageLimitExceeded path uses them so the
@@ -654,24 +744,21 @@ type SafeErrorBody = {
   requiredFields?: HandlerErrorMissingRequiredField[];
 };
 
-const safeHandlerErrorResponseSchema = t.Object(
-  {
-    message: t.String(),
-    code: t.Optional(t.String()),
-  },
-  { additionalProperties: true },
-);
+const safeHandlerErrorResponseSchema = v.looseObject({
+  message: v.string(),
+  code: v.optional(v.string()),
+});
 
-const safeHandlerErrorOrStatusTextResponseSchema = t.Union([
+const safeHandlerErrorOrStatusTextResponseSchema = v.union([
   safeHandlerErrorResponseSchema,
-  t.String(),
+  v.string(),
 ]);
 
-type SafeHandlerErrorResponseSchemas<TErrorSchema extends TSchema> = Readonly<
+type SafeHandlerErrorResponseSchemas<TErrorSchema extends AnySchema> = Readonly<
   Record<HandlerErrorStatusCode, TErrorSchema>
 >;
 
-const safeHandlerErrorResponseSchemas = <TErrorSchema extends TSchema>(
+const safeHandlerErrorResponseSchemas = <TErrorSchema extends AnySchema>(
   errorSchema: TErrorSchema,
 ): SafeHandlerErrorResponseSchemas<TErrorSchema> => ({
   400: errorSchema,
@@ -682,6 +769,7 @@ const safeHandlerErrorResponseSchemas = <TErrorSchema extends TSchema>(
   409: errorSchema,
   413: errorSchema,
   422: errorSchema,
+  426: errorSchema,
   428: errorSchema,
   429: errorSchema,
   500: errorSchema,
@@ -694,28 +782,28 @@ const SAFE_HANDLER_ERROR_RESPONSE_SCHEMAS = safeHandlerErrorResponseSchemas(
 );
 
 type SafeHandlerResponseSchemasFor<
-  TSuccessSchema extends TSchema,
-  TErrorSchema extends TSchema,
+  TSuccessSchema extends AnySchema,
+  TErrorSchema extends AnySchema,
 > = {
   readonly [TStatus in 200 | HandlerErrorStatusCode]: TStatus extends 200
     ? TSuccessSchema
     : TErrorSchema;
 };
 
-export type SafeHandlerResponseSchemas<TSuccessSchema extends TSchema> =
+export type SafeHandlerResponseSchemas<TSuccessSchema extends AnySchema> =
   SafeHandlerResponseSchemasFor<
     TSuccessSchema,
     typeof safeHandlerErrorResponseSchema
   >;
 
-export const safeHandlerResponseSchemas = <TSuccessSchema extends TSchema>(
+export const safeHandlerResponseSchemas = <TSuccessSchema extends AnySchema>(
   successSchema: TSuccessSchema,
 ): SafeHandlerResponseSchemas<TSuccessSchema> => ({
   200: successSchema,
   ...SAFE_HANDLER_ERROR_RESPONSE_SCHEMAS,
 });
 
-type SafeHandlerStatusTextResponseSchemas<TSuccessSchema extends TSchema> =
+type SafeHandlerStatusTextResponseSchemas<TSuccessSchema extends AnySchema> =
   SafeHandlerResponseSchemasFor<
     TSuccessSchema,
     typeof safeHandlerErrorOrStatusTextResponseSchema
@@ -725,7 +813,7 @@ const SAFE_HANDLER_STATUS_TEXT_RESPONSE_SCHEMAS =
   safeHandlerErrorResponseSchemas(safeHandlerErrorOrStatusTextResponseSchema);
 
 export const safeHandlerResponseSchemasWithStatusText = <
-  TSuccessSchema extends TSchema,
+  TSuccessSchema extends AnySchema,
 >(
   successSchema: TSuccessSchema,
 ): SafeHandlerStatusTextResponseSchemas<TSuccessSchema> => ({
@@ -739,7 +827,7 @@ const SAFE_PUBLIC_HANDLER_STATUS_TEXT_RESPONSE_SCHEMAS =
   );
 
 export const safePublicHandlerResponseSchemasWithStatusText = <
-  TSuccessSchema extends TSchema,
+  TSuccessSchema extends AnySchema,
 >(
   successSchema: TSuccessSchema,
 ): SafeHandlerResponseSchemasFor<
@@ -750,27 +838,23 @@ export const safePublicHandlerResponseSchemasWithStatusText = <
   ...SAFE_PUBLIC_HANDLER_STATUS_TEXT_RESPONSE_SCHEMAS,
 });
 
-// The conditional form is intentional: it keeps status unions distributive so
-// Eden sees distinct error codes instead of a single widened response.
+// The conditional form keeps status unions distributive, so each error code
+// stays a distinct answer instead of one widened response.
 type SafeStatusResponse<TStatusCode extends HandlerErrorStatusCode> =
   TStatusCode extends HandlerErrorStatusCode
-    ? ElysiaCustomStatusResponse<TStatusCode, SafeErrorBody>
+    ? HttpStatusResponse<TStatusCode, SafeErrorBody>
     : never;
 
 /**
- * Success payloads must be non-nullish, including every union member.
- * Elysia serializes a bare `null`/`undefined` return as a 200 with an
- * empty body, which Eden parses as `""` on the client — so a payload
- * typed `T | null` arrives as `T | ""` at runtime and breaks optional
- * chaining one property deep. Model absence as a field instead
- * (`{ entitlement: null }`, `{ items: [] }`); void mutations return a
- * minimal object such as `{}`.
+ * Success payloads are objects, arrays or other non-nullish values, so every
+ * answer is a JSON document a client can extend without breaking. Model
+ * absence as a field (`{ entitlement: null }`, `{ items: [] }`); void
+ * mutations return a minimal object such as `{}`.
  */
 type SafeHandlerPayload = NonNullable<unknown>;
 
 type SafeHandlerResult<TResult> =
-  | TResult
-  | SafeStatusResponse<HandlerErrorStatusCode>;
+  TResult | SafeStatusResponse<HandlerErrorStatusCode>;
 
 /**
  * The async-generator a safe handler runs: it may `yield*` intermediate
@@ -781,7 +865,8 @@ type SafeHandlerResult<TResult> =
  * reach the client typed. TypeScript cannot infer an async generator's return
  * type across `yield*` delegation, so a handler written as
  * `createSafeRootHandler(cfg, (ctx) => yield* myHandler(ctx))` silently widens
- * `TResult` (and the Eden response type) to `unknown` unless `myHandler` is
+ * `TResult` (and the API client's response type) to `unknown` unless
+ * `myHandler` is
  * declared `: SafeHandlerGenerator<MyResult>`.
  */
 export type SafeHandlerGenerator<TResult> = AsyncGenerator<
@@ -794,14 +879,85 @@ type SafeHandlerFn<TContext, TResult extends SafeHandlerPayload> = (
   ctx: TContext,
 ) => SafeHandlerGenerator<TResult>;
 
+/** A safe handler before it is bound to the HTTP transport. */
+type SafeHandlerCore<
+  TConfig extends InputSchema,
+  TContext,
+  TResult extends SafeHandlerPayload,
+> = {
+  readonly config: TConfig;
+  /** Who may call the route; the factory decides it, never the mount site. */
+  readonly access: RouteAccess;
+  /** The handler with its checks, for transports that build the context themselves. */
+  readonly handler: (ctx: TContext) => Promise<SafeHandlerResult<TResult>>;
+};
+
 type SafeHandlerDefinition<
   TConfig extends InputSchema = InputSchema,
-  TContext = Context<UnwrapRoute<TConfig>>,
+  TContext = RouteContext<TConfig>,
   TResult extends SafeHandlerPayload = SafeHandlerPayload,
-> = {
-  config: TConfig;
-  handler: (ctx: TContext) => Promise<SafeHandlerResult<TResult>>;
+> = SafeHandlerCore<TConfig, TContext, TResult> & {
+  /** The route over HTTP: caller, input, then the handler. */
+  readonly run: (request: RouteRequest) => Promise<unknown>;
 };
+
+/** Org routes: a member of the active organization, then the input. */
+const memberRun =
+  <TConfig extends HandlerConfig>(
+    config: TConfig,
+    handler: (ctx: RootHandlerContext<TConfig>) => Promise<unknown>,
+  ) =>
+  async (request: RouteRequest): Promise<unknown> => {
+    const member = await authenticateMember(request.ctx, config);
+    if (!member.ok) {
+      return member.answer;
+    }
+    const input = await decodeRouteInput(
+      config,
+      request,
+      await request.readBody(),
+    );
+    return await handler({ ...routeContext(request, input), ...member.caller });
+  };
+
+/**
+ * Matter routes: a member, then the matter the path names, then the input. A
+ * caller without the matter is refused before its input is read.
+ */
+const workspaceRun =
+  <TConfig extends WorkspaceHandlerConfig>(
+    config: TConfig,
+    handler: (ctx: WorkspaceHandlerContext<TConfig>) => Promise<unknown>,
+  ) =>
+  async (request: RouteRequest): Promise<unknown> => {
+    const member = await authenticateMember(request.ctx, config);
+    if (!member.ok) {
+      return member.answer;
+    }
+    const { workspaceId } = await decodeRequestInput(
+      workspaceSegmentSchema,
+      request.ctx.params,
+    );
+    const matter = await authorizeWorkspace(
+      member.caller,
+      request.ctx,
+      workspaceId,
+      config.workspaceStatus ?? "active",
+    );
+    if (!matter.ok) {
+      return matter.answer;
+    }
+    const input = await decodeRouteInput(
+      config,
+      request,
+      await request.readBody(),
+    );
+    return await handler({
+      ...routeContext(request, input),
+      ...member.caller,
+      ...matter.caller,
+    });
+  };
 
 const hasWorkspaceId = <TContext extends object>(
   ctx: TContext,
@@ -829,9 +985,25 @@ function toSafeStatusResponse(
   return status(statusCode, body);
 }
 
-type SafeHandlerLogContext = {
+export type SafeHandlerLogContext = {
   request: Request;
   route: string;
+  set?: ResponseSet;
+};
+
+const withSafeHandlerExceptionScope = <TResult>(
+  ctx: SafeHandlerLogContext,
+  operation: () => TResult,
+): TResult => {
+  const scope = ctx.route.startsWith("mcp:invoke_capability/")
+    ? ({ type: "handler", handlerId: ctx.route } as const)
+    : ({
+        type: "request",
+        method: ctx.request.method,
+        routeTemplate: ctx.route,
+      } as const);
+  recordRequestExceptionScope(ctx.request, scope);
+  return withExceptionScope(scope, operation);
 };
 
 type ErrorStatusBuilder<TErrorStatus> = (
@@ -850,6 +1022,26 @@ type RunSafeHandlerWithOptions<
   toErrorStatus: ErrorStatusBuilder<TErrorStatus>;
 };
 
+const getResponseHeader = (
+  headers: ResponseSet["headers"],
+  name: string,
+): unknown =>
+  Object.entries(headers)
+    .find(([key]) => key.toLowerCase() === name.toLowerCase())
+    ?.at(1);
+
+const applyRetryAfterHeader = (
+  ctx: SafeHandlerLogContext,
+  retryAfterMs: number | undefined,
+) => {
+  if (retryAfterMs === undefined || ctx.set === undefined) {
+    return;
+  }
+  ctx.set.headers["Retry-After"] = String(
+    Math.max(1, Math.ceil((retryAfterMs * (1 + Math.random() * 0.5)) / 1000)),
+  );
+};
+
 const runSafeHandlerInDeliveryScope = async <
   TContext extends SafeHandlerLogContext,
   TResult extends SafeHandlerPayload,
@@ -866,19 +1058,9 @@ const runSafeHandlerInDeliveryScope = async <
 
     if (Result.isOk(result)) {
       const response = result.value;
-      const responseSet: unknown = Reflect.get(ctx, "set");
-      const headers: unknown =
-        typeof responseSet === "object" && responseSet !== null
-          ? Reflect.get(responseSet, "headers")
-          : undefined;
-      let disposition: unknown;
-      if (headers instanceof Headers) {
-        disposition = headers.get("Content-Disposition");
-      } else if (typeof headers === "object" && headers !== null) {
-        disposition = Object.entries(headers)
-          .find(([key]) => key.toLowerCase() === "content-disposition")
-          ?.at(1);
-      }
+      const disposition = ctx.set
+        ? getResponseHeader(ctx.set.headers, "Content-Disposition")
+        : undefined;
       if (
         (response instanceof Response &&
           response.ok &&
@@ -900,22 +1082,35 @@ const runSafeHandlerInDeliveryScope = async <
 
     const error = result.error;
 
-    const handlerError = resolveHandlerError(
-      error,
-      env.ACTION_LIMIT_CONTACT_URL,
-    );
+    const handlerError =
+      requestAbortRefusal(ctx.request.signal, error) ??
+      publicReadTimeoutError(error) ??
+      // Before the typed status: a writer that wrapped the refused write in
+      // its own 500 still answers the limit the database kept.
+      databaseConstraintRefusal(error) ??
+      resolveHandlerError(error, env.ACTION_LIMIT_CONTACT_URL);
     if (handlerError !== null) {
       const statusCode = handlerError.status;
+
+      applyRetryAfterHeader(ctx, handlerError.retryAfterMs);
 
       logAndCaptureSafeError({
         request: ctx.request,
         route: ctx.route,
         error: handlerError,
         statusCode,
-        telemetry: safeErrorTelemetryDisposition(statusCode),
+        telemetry: safeErrorTelemetryDisposition(statusCode, handlerError.code),
       });
 
-      return toErrorStatus(statusCode, safeErrorBody(handlerError));
+      return toErrorStatus(
+        statusCode,
+        safeErrorBody(
+          legalHoldRefusalForViewer(
+            handlerError,
+            legalHoldViewerFromContext(ctx),
+          ),
+        ),
+      );
     }
 
     if (DatabaseError.is(error)) {
@@ -971,19 +1166,34 @@ const runSafeHandlerInDeliveryScope = async <
     // an AI request hitting a role the org has not configured a
     // BYOK key for) gets reported to the user as "Internal
     // server error" with no actionable detail.
-    const handlerError = resolveHandlerError(
-      error,
-      env.ACTION_LIMIT_CONTACT_URL,
-    );
+    const handlerError =
+      requestAbortRefusal(ctx.request.signal, error) ??
+      publicReadTimeoutError(error) ??
+      // Before the typed status: a writer that wrapped the refused write in
+      // its own 500 still answers the limit the database kept.
+      databaseConstraintRefusal(error) ??
+      resolveHandlerError(error, env.ACTION_LIMIT_CONTACT_URL);
     if (handlerError !== null) {
+      applyRetryAfterHeader(ctx, handlerError.retryAfterMs);
       logAndCaptureSafeError({
         request: ctx.request,
         route: ctx.route,
         error: handlerError,
         statusCode: handlerError.status,
-        telemetry: safeErrorTelemetryDisposition(handlerError.status),
+        telemetry: safeErrorTelemetryDisposition(
+          handlerError.status,
+          handlerError.code,
+        ),
       });
-      return toErrorStatus(handlerError.status, safeErrorBody(handlerError));
+      return toErrorStatus(
+        handlerError.status,
+        safeErrorBody(
+          legalHoldRefusalForViewer(
+            handlerError,
+            legalHoldViewerFromContext(ctx),
+          ),
+        ),
+      );
     }
 
     logAndCaptureSafeError({
@@ -1046,23 +1256,114 @@ type FiniteHandlerGuard<TResult> = [Extract<TResult, Response>] extends [never]
   ? unknown
   : never;
 
-type ConfiguredFiniteHandlerGuard<TConfig, TResult> = TConfig extends {
-  actionAdmission: { type: "handler"; actionKind: PeriodActionKind };
+/** Bounded recursion keeps the handler boundary from erasing monetary result types. */
+type ContainsMoney<T, Depth extends readonly unknown[] = []> = unknown extends T
+  ? false
+  : Depth["length"] extends 8
+    ? false
+    : T extends CentsAmount | Money
+      ? true
+      : T extends
+            | string
+            | number
+            | boolean
+            | bigint
+            | null
+            | undefined
+            | Date
+            | Response
+        ? false
+        : T extends readonly (infer Item)[]
+          ? ContainsMoney<Item, [...Depth, unknown]>
+          : T extends object
+            ? {
+                [K in keyof T]: ContainsMoney<T[K], [...Depth, unknown]>;
+              }[keyof T]
+            : false;
+
+type MoneyShapeMatches<T, Schema, Depth extends readonly unknown[] = []> =
+  T extends HttpStatusResponse<infer _Code, infer Body>
+    ? MoneyShapeMatches<Body, Schema, Depth>
+    : Depth["length"] extends 8
+      ? true
+      : true extends ContainsMoney<T>
+        ? Schema extends { readonly wrapped: infer Wrapped }
+          ? MoneyShapeMatches<T, Wrapped, Depth>
+          : NonNullable<T> extends CentsAmount | Money
+            ? Schema extends v.GenericSchema
+              ? NonNullable<v.InferOutput<Schema>> extends Money
+                ? true
+                : false
+              : false
+            : NonNullable<T> extends readonly (infer Item)[]
+              ? Schema extends { readonly item: infer ItemSchema }
+                ? MoneyShapeMatches<Item, ItemSchema, [...Depth, unknown]>
+                : false
+              : Schema extends { readonly entries: infer Entries }
+                ? false extends {
+                    [K in keyof NonNullable<T>]: true extends ContainsMoney<
+                      NonNullable<T>[K]
+                    >
+                      ? K extends keyof Entries
+                        ? MoneyShapeMatches<
+                            NonNullable<T>[K],
+                            Entries[K],
+                            [...Depth, unknown]
+                          >
+                        : false
+                      : true;
+                  }[keyof NonNullable<T>]
+                  ? false
+                  : true
+                : false
+        : true;
+
+type MoneyResponseGuard<TConfig, TResult> =
+  true extends ContainsMoney<TResult>
+    ? TConfig extends { moneyResponse: infer Schema }
+      ? MoneyShapeMatches<TResult, Schema> extends true
+        ? unknown
+        : { unclassifiedMoneyFields: never }
+      : { moneyResponseSchemaRequired: never }
+    : unknown;
+
+type NonJsonReplayPayload<T> =
+  T extends HttpStatusResponse<infer _Code, infer Body>
+    ? NonJsonReplayPayload<Body>
+    : Extract<
+        T,
+        Response | ReadableStream | Blob | ArrayBuffer | ArrayBufferView
+      >;
+
+type ConfiguredFiniteHandlerGuard<TConfig, TResult> = (TConfig extends {
+  idempotency: { type: "replay" };
 }
-  ? NoInfer<FiniteHandlerGuard<TResult>>
-  : unknown;
+  ? NoInfer<[NonJsonReplayPayload<TResult>] extends [never] ? unknown : never>
+  : unknown) &
+  (TConfig extends {
+    actionAdmission: { type: "handler"; actionKind: PeriodActionKind };
+  }
+    ? NoInfer<FiniteHandlerGuard<TResult>>
+    : unknown);
 
 type FiniteActionContext = SafeHandlerLogContext & {
   user: { id: SafeId<"user"> };
   session: { activeOrganizationId: SafeId<"organization"> };
   scopedDb: ScopedDb;
   actionSignal?: AbortSignal;
+  modelAdmission?: ModelDispatchAdmission;
+};
+
+/** What admitted finite work runs with: its lease signal and model proof. */
+type AdmittedFiniteContext = {
+  actionSignal: AbortSignal;
+  modelAdmission: ModelDispatchAdmission;
 };
 
 type FiniteActionOptions<TContext, TResult extends SafeHandlerPayload> = {
   actionKind: PeriodActionKind;
   ctx: TContext;
-  handler: SafeHandlerFn<TContext, TResult>;
+  handler: SafeHandlerFn<TContext & AdmittedFiniteContext, TResult>;
   admit?: typeof withActionAdmission;
 };
 
@@ -1083,8 +1384,7 @@ const runAdmittedFiniteHandler = async function* <
       periodIdentity: {
         actionKind,
         // These finite endpoints have no client idempotency key.
-        logicalPhaseId:
-          getRequestContext(ctx.request)?.requestId ?? Bun.randomUUIDv7(),
+        logicalPhaseId: getRequestContext()?.requestId ?? Bun.randomUUIDv7(),
       },
       run: async (signal) => {
         // Check before composing signals: composition can drop the request's
@@ -1102,9 +1402,24 @@ const runAdmittedFiniteHandler = async function* <
                 }),
           );
         }
-        ctx.actionSignal = AbortSignal.any([ctx.request.signal, signal]);
-        ctx.actionSignal.throwIfAborted();
-        const outcome = await Result.gen(() => handler(ctx));
+        const dispatch = await admitModelDispatch({
+          organizationId: ctx.session.activeOrganizationId,
+          userId: ctx.user.id,
+          actionKind,
+          organizationStateDb: ctx.scopedDb,
+          signal,
+          run: async (modelAdmission) => {
+            const admitted = Object.assign(ctx, {
+              actionSignal: AbortSignal.any([ctx.request.signal, signal]),
+              modelAdmission,
+            });
+            admitted.actionSignal.throwIfAborted();
+            return await Result.gen(() => handler(admitted));
+          },
+        });
+        const outcome = Result.isError(dispatch)
+          ? Result.err(dispatch.error)
+          : dispatch.value;
         if (Result.isOk(outcome) && outcome.value instanceof Response) {
           // Cancel the producer too: a rejected stream must not keep running after release.
           await outcome.value.body?.cancel();
@@ -1140,6 +1455,19 @@ const runAdmittedFiniteHandler = async function* <
 };
 
 /**
+ * The model proof of a handler whose config declares `actionAdmission`: the
+ * wrapper admits the request and sets it before the handler runs. The
+ * dispatch-admission guard checks that every caller declares the admission.
+ */
+export const configuredModelAdmission = ({
+  modelAdmission,
+}: {
+  modelAdmission?: ModelDispatchAdmission | undefined;
+}): ModelDispatchAdmission =>
+  modelAdmission ??
+  panic("A handler dispatched a model without its configured admission");
+
+/**
  * Call after resource authorization and the operation's usage preflight.
  * @yields Typed failures for the owning safe-handler boundary.
  */
@@ -1152,7 +1480,7 @@ export const admitFiniteAction = async function* <
   admit,
   actionKind,
 }: FiniteActionOptions<TContext, TResult> & {
-  handler: SafeHandlerFn<TContext, TResult> &
+  handler: SafeHandlerFn<TContext & AdmittedFiniteContext, TResult> &
     NoInfer<FiniteHandlerGuard<TResult>>;
 }): SafeHandlerGenerator<TResult> {
   return yield* runAdmittedFiniteHandler({
@@ -1163,9 +1491,10 @@ export const admitFiniteAction = async function* <
   });
 };
 
-type HandlerAdmissionDependencies = {
+type HandlerAdmissionDependencies<TContext> = {
+  authorize?: (ctx: TContext) => Promise<Result<void, HandlerError>>;
   admit?: typeof withActionAdmission;
-  checkAccountOperation?: typeof checkDemoAccountOperation;
+  checkAccountOperation?: typeof checkRestrictedAccountOperation;
   announce?: typeof announceResourceSetUpdates;
 };
 
@@ -1174,189 +1503,457 @@ const REALTIME_ANNOUNCEMENT_FAILURE = failureSink({
   expected: [],
 });
 
+const HANDLER_USAGE_ALLOWED = "HandlerUsageAllowed";
+
+type ScopedOperationInput<
+  TConfig extends HandlerConfig,
+  TContext extends BaseHandlerContext<TConfig>,
+  TResult extends SafeHandlerPayload,
+> = {
+  ctx: TContext;
+  config: TConfig;
+  handler: SafeHandlerFn<TContext, TResult>;
+  admit: typeof withActionAdmission;
+  authorize?: HandlerAdmissionDependencies<TContext>["authorize"];
+};
+
+export const runCheckedScopedHandler = async <
+  TConfig extends HandlerConfig,
+  TContext extends BaseHandlerContext<TConfig>,
+  TResult extends SafeHandlerPayload,
+  N,
+>(
+  {
+    proof,
+    scratch,
+  }: CheckedOperationContext<
+    typeof HANDLER_USAGE_ALLOWED,
+    ScopedOperationInput<TConfig, TContext, TResult>,
+    N
+  >,
+  usageLane?: UsageLaneDecision,
+  /** The live request's response state; the proof's copy by default. */
+  responseSet: ResponseSet = scratch.ctx.set,
+): Promise<SafeHandlerResult<TResult>> => {
+  const { ctx, config, handler, admit, authorize } = cloneOperationInput(
+    proof.input.value,
+  );
+  const admission = config.actionAdmission;
+  const run = async (handlerContext: TContext) =>
+    await runSafeHandler({
+      ctx: {
+        ...handlerContext,
+        // Response state belongs to the live request, outside the proof copy.
+        set: responseSet,
+        ...(usageLane === undefined ? {} : { usageLane }),
+      },
+      contentDelivery: config.contentDelivery,
+      handler:
+        admission === undefined
+          ? handler
+          : (context) =>
+              runAdmittedFiniteHandler({
+                ctx: context,
+                handler,
+                admit,
+                actionKind: admission.actionKind,
+              }),
+    });
+  const request = ctx.request;
+  const key = request.headers.get("Idempotency-Key");
+  if (key === null) {
+    if (authorize !== undefined) {
+      const authorization = await authorize(ctx);
+      if (authorization.isErr()) {
+        return toSafeStatusResponse(
+          authorization.error.status,
+          safeErrorBody(authorization.error),
+        );
+      }
+    }
+    return await run(ctx);
+  }
+  if (config.idempotency === undefined) {
+    return await runSafeHandler({
+      ctx: { ...ctx, set: responseSet },
+      contentDelivery: undefined,
+      async *handler() {
+        return yield* Result.await(
+          Promise.resolve(
+            Result.err(
+              new HandlerError({
+                status: 400,
+                message:
+                  "This endpoint does not support Idempotency-Key. Omit the header and use its documented submission flow.",
+              }),
+            ),
+          ),
+        );
+      },
+    });
+  }
+  return await runSafeHandler({
+    ctx: { ...ctx, set: responseSet },
+    contentDelivery: undefined,
+    async *handler() {
+      const result = yield* Result.await(
+        Result.tryPromise(
+          async () =>
+            await runWithRequestReceipt({
+              ...(authorize === undefined
+                ? {}
+                : { authorize: async () => await authorize(ctx) }),
+              checkResponse: (body) => {
+                const memberRole = readAuthorizedMemberRole(ctx);
+                if (
+                  memberRole === null ||
+                  (!hasMemberPermission(
+                    memberRole,
+                    BILLING_MATTER_READ_PERMISSION,
+                  ) &&
+                    hasVisibleMoney(config.moneyResponse, body))
+                ) {
+                  return Result.err(
+                    new HandlerError({
+                      status: 403,
+                      code: API_ERROR_CODE.forbidden,
+                      message: "Forbidden",
+                    }),
+                  );
+                }
+                return Result.ok(undefined);
+              },
+              scopedDb: ctx.scopedDb,
+              organizationId: ctx.session.activeOrganizationId,
+              userId: ctx.user.id,
+              key,
+              route: ctx.route,
+              fingerprint: await fingerprintHttpRequest({
+                method: request.method,
+                route: ctx.route,
+                body: ctx.body,
+                params: ctx.params,
+                query: ctx.query,
+              }),
+              run: async (scopedDb) =>
+                await run({
+                  ...ctx,
+                  scopedDb,
+                  safeDb: safeDbFromScoped(scopedDb),
+                }),
+              responseStatus: () => responseSet.status ?? 200,
+            }),
+        ),
+      );
+      return result;
+    },
+  });
+};
+
+type HandlerFeatureAccessOptions<
+  TConfig extends HandlerConfig,
+  TContext extends BaseHandlerContext<TConfig>,
+> = {
+  ctx: TContext;
+  config: TConfig;
+};
+
+/**
+ * Decide the route's feature access. Admitted, the handler runs with the
+ * context this decision produced (the snapshot it read and, for an enabled
+ * feature, the proof a model dispatch needs); refused, the answer is final.
+ */
+const admitHandlerFeatureAccess = async <
+  TConfig extends HandlerConfig,
+  TContext extends BaseHandlerContext<TConfig>,
+>({
+  ctx: requestCtx,
+  config,
+}: HandlerFeatureAccessOptions<TConfig, TContext>) => {
+  let featureAccess = config.featureAccess;
+  // A proof is only ever this decision's: none carries over from elsewhere.
+  let ctx: TContext =
+    featureAccess === undefined
+      ? requestCtx
+      : { ...requestCtx, featureAccessProof: undefined };
+  const fail = async (failure: SafeHandlerError) => ({
+    answer: await runSafeHandler({
+      ctx,
+      contentDelivery: config.contentDelivery,
+      async *handler(): SafeHandlerGenerator<never> {
+        return yield* Result.await(Promise.resolve(Result.err(failure)));
+      },
+    }),
+  });
+  if (
+    featureAccess?.type === "conditional" &&
+    featureAccess.decision === "when-used" &&
+    (ctx.featureAccessSnapshot === undefined ||
+      !isFeatureAccessSnapshotForPrincipal(ctx.featureAccessSnapshot, {
+        organizationId: ctx.session.activeOrganizationId,
+        userId: ctx.user.id,
+      }))
+  ) {
+    const conditionalFeatureAccess = featureAccess;
+    const usage = await Result.tryPromise(
+      async () =>
+        await conditionalFeatureAccess.usesFeature({
+          body: ctx.body,
+          params: ctx.params,
+          query: ctx.query,
+          organizationId: ctx.session.activeOrganizationId,
+          userId: ctx.user.id,
+          scopedDb: ctx.scopedDb,
+          safeDb: ctx.safeDb,
+          ...(hasWorkspaceId(ctx) ? { workspaceId: ctx.workspaceId } : {}),
+        }),
+    );
+    if (usage.isErr()) {
+      return await fail(usage.error);
+    }
+    if (!usage.value) {
+      featureAccess = undefined;
+    }
+  }
+  if (featureAccess !== undefined) {
+    const principal = {
+      organizationId: ctx.session.activeOrganizationId,
+      userId: ctx.user.id,
+    };
+    const snapshot =
+      ctx.featureAccessSnapshot === undefined ||
+      !isFeatureAccessSnapshotForPrincipal(ctx.featureAccessSnapshot, principal)
+        ? await ctx.safeDb(
+            async (tx) =>
+              await resolveFeatureAccessSnapshot({
+                tx,
+                organizationId: ctx.session.activeOrganizationId,
+                userId: ctx.user.id,
+              }),
+          )
+        : Result.ok(ctx.featureAccessSnapshot);
+    if (Result.isError(snapshot)) {
+      return await fail(snapshot.error);
+    }
+    const enabled = isFeatureEnabled(
+      snapshot.value,
+      featureAccess.featureId,
+      principal,
+    );
+    const decision = snapshot.value.decisions.get(featureAccess.featureId);
+    ctx = {
+      ...ctx,
+      featureAccessSnapshot: snapshot.value,
+      featureAccessProof:
+        enabled && decision?.status === "enabled" ? decision.proof : undefined,
+    };
+    if (!enabled) {
+      const usage =
+        featureAccess.type === "required"
+          ? Result.ok(true)
+          : await Result.tryPromise(
+              async () =>
+                await featureAccess.usesFeature({
+                  body: ctx.body,
+                  params: ctx.params,
+                  query: ctx.query,
+                  organizationId: ctx.session.activeOrganizationId,
+                  userId: ctx.user.id,
+                  scopedDb: ctx.scopedDb,
+                  safeDb: ctx.safeDb,
+                  ...(hasWorkspaceId(ctx)
+                    ? { workspaceId: ctx.workspaceId }
+                    : {}),
+                }),
+            );
+      if (Result.isError(usage)) {
+        return await fail(usage.error);
+      }
+      if (usage.value) {
+        return { answer: toSafeStatusResponse(404, { message: "Not found" }) };
+      }
+    }
+  }
+  return { ctx };
+};
+
 const createSafeScopedHandler = <
   TConfig extends HandlerConfig,
   TContext extends BaseHandlerContext<TConfig>,
   TResult extends SafeHandlerPayload,
 >(
+  access: "member" | "workspace",
   config: TConfig,
   handler: SafeHandlerFn<TContext, TResult>,
   {
+    authorize,
     admit = withActionAdmission,
-    checkAccountOperation = checkDemoAccountOperation,
+    checkAccountOperation = checkRestrictedAccountOperation,
     announce = announceResourceSetUpdates,
-  }: HandlerAdmissionDependencies = {},
-): SafeHandlerDefinition<TConfig, TContext, TResult> =>
+  }: HandlerAdmissionDependencies<TContext> = {},
+): SafeHandlerCore<TConfig, TContext, TResult> =>
   recordSafeHandler({
     config,
-    handler: async (ctx): Promise<SafeHandlerResult<TResult>> => {
-      const memberRole = readAuthorizedMemberRole(ctx);
-      if (!memberRole || !hasMemberPermission(memberRole, config.permissions)) {
-        return toSafeStatusResponse(403, {
-          code: API_ERROR_CODE.forbidden,
-          message: "Forbidden",
-        });
-      }
-
-      const featureAccess = config.featureAccess;
-      if (featureAccess !== undefined) {
-        const principal = {
-          organizationId: ctx.session.activeOrganizationId,
-          userId: ctx.user.id,
-        };
-        const snapshot =
-          ctx.featureAccessSnapshot === undefined ||
-          !isFeatureAccessSnapshotForPrincipal(
-            ctx.featureAccessSnapshot,
-            principal,
-          )
-            ? await ctx.safeDb(
-                async (tx) =>
-                  await resolveFeatureAccessSnapshot({
-                    tx,
-                    organizationId: ctx.session.activeOrganizationId,
-                    userId: ctx.user.id,
-                  }),
-              )
-            : Result.ok(ctx.featureAccessSnapshot);
-        if (Result.isError(snapshot)) {
-          return await runSafeHandler({
-            ctx,
-            contentDelivery: config.contentDelivery,
-            async *handler() {
-              return yield* Result.await(
-                Promise.resolve(Result.err(snapshot.error)),
-              );
-            },
+    access,
+    handler: async (requestCtx): Promise<SafeHandlerResult<TResult>> =>
+      await withSafeHandlerExceptionScope(requestCtx, async () => {
+        const memberRole = readAuthorizedMemberRole(requestCtx);
+        if (!memberRole) {
+          return toSafeStatusResponse(403, {
+            code: API_ERROR_CODE.forbidden,
+            message: "Forbidden",
           });
         }
-        ctx.featureAccessSnapshot = snapshot.value;
-        delete ctx.featureAccessProof;
-        const enabled = isFeatureEnabled(
-          snapshot.value,
-          featureAccess.featureId,
-          principal,
-        );
-        const decision = snapshot.value.decisions.get(featureAccess.featureId);
-        if (enabled && decision?.status === "enabled") {
-          ctx.featureAccessProof = decision.proof;
+        const configurationAdmission = checkHandlerConfigurationAdmission({
+          principal: { memberRole, readEmail: () => requestCtx.user.email },
+          config,
+          checkAccountOperation,
+        });
+        if (configurationAdmission === "permission_required") {
+          return toSafeStatusResponse(403, {
+            code: API_ERROR_CODE.forbidden,
+            message: "Forbidden",
+          });
         }
-        if (!enabled) {
-          const usage =
-            featureAccess.type === "required"
-              ? Result.ok(true)
-              : await Result.tryPromise(
-                  async () =>
-                    await featureAccess.usesFeature({
-                      body: ctx.body,
-                      params: ctx.params,
-                      query: ctx.query,
-                      organizationId: ctx.session.activeOrganizationId,
-                      scopedDb: ctx.scopedDb,
-                      safeDb: ctx.safeDb,
-                      ...(hasWorkspaceId(ctx)
-                        ? { workspaceId: ctx.workspaceId }
-                        : {}),
-                    }),
-                );
-          if (Result.isError(usage)) {
-            return await runSafeHandler({
-              ctx,
-              contentDelivery: config.contentDelivery,
-              async *handler() {
-                return yield* Result.await(
-                  Promise.resolve(Result.err(usage.error)),
-                );
-              },
-            });
-          }
-          if (usage.value) {
-            return toSafeStatusResponse(404, { message: "Not found" });
-          }
-        }
-      }
-
-      if (requiresStandardAccount(config.accountAccess)) {
-        const accountAccess = checkAccountOperation(ctx.user.email);
-        if (Result.isError(accountAccess)) {
+        if (configurationAdmission === "account_restricted") {
           return toSafeStatusResponse(403, {
             code: "account_access_unavailable",
             message: "This operation is unavailable for this account.",
           });
         }
-      }
-      // A handler that declares AI usage must not run when this request could
-      // not read the org's stored config, or the org is barred from the
-      // instance provider: `ctx.orgAIConfig` is null there, and resolving a
-      // model from it would silently run the org on the instance provider and
-      // meter the work against the wrong key source.
-      const configStatusError = config.requiresUsage
-        ? orgAIConfigStatusError(ctx.orgAIConfigStatus)
-        : null;
-      if (configStatusError) {
-        return toSafeStatusResponse(
-          configStatusError.status,
-          safeErrorBody(configStatusError),
-        );
-      }
-
-      // Resolve the metering context only when enforcement is on. It reads
-      // the org AI provider config to detect BYOK, which panics when no
-      // provider is configured; doing it unconditionally — before the
-      // handler's own requireAIAvailable check — would turn a missing-AI
-      // 403 into a 500, and would be wasted work while enforcement is off.
-      if (config.requiresUsage && env.USAGE_ENFORCEMENT_ENABLED) {
-        const meteringContext = resolveMeteringContext({
-          metering: config.requiresUsage,
-          organizationId: ctx.session.activeOrganizationId,
-          orgAIConfig: ctx.orgAIConfig,
-          workspaceId: hasWorkspaceId(ctx) ? ctx.workspaceId : null,
-          userId: ctx.user.id,
+        const featureAccess = await admitHandlerFeatureAccess({
+          ctx: requestCtx,
+          config,
         });
-        const preflight = await runUsagePreflight({ ctx, meteringContext });
-        if (preflight.kind === "blocked") {
-          return preflight.response;
+        if ("answer" in featureAccess) {
+          return featureAccess.answer;
         }
-        ctx.usageLane = preflight.lane;
-      }
+        const { ctx } = featureAccess;
 
-      const admission = config.actionAdmission;
-      const result = await runSafeHandler({
-        ctx,
-        contentDelivery: config.contentDelivery,
-        handler:
-          admission === undefined
-            ? handler
-            : (input) =>
-                runAdmittedFiniteHandler({
-                  ctx: input,
-                  handler,
-                  admit,
-                  actionKind: admission.actionKind,
-                }),
-      });
-      // The transaction has settled; realtime delivery cannot change its result.
-      if (
-        config.realtime !== undefined &&
-        config.realtime.scope !== "none" &&
-        isSuccessfulHandlerResult(result)
-      ) {
-        const announcement = Result.try(() =>
-          announce({
-            realtime: config.realtime,
-            result,
-            organizationId: ctx.session.activeOrganizationId,
-            workspaceId: hasWorkspaceId(ctx) ? ctx.workspaceId : undefined,
-          }),
+        const visible = await Result.tryPromise(
+          async () =>
+            await resourcesAreVisible({
+              inputs: [
+                { schema: config.body, value: ctx.body },
+                { schema: config.params, value: ctx.params },
+                { schema: config.query, value: ctx.query },
+              ],
+              scopedDb: async (read) => {
+                const result = await ctx.safeDb(read);
+                if (result.isErr()) {
+                  throw result.error;
+                }
+                return result.value;
+              },
+            }),
         );
-        if (Result.isError(announcement)) {
-          observeFailure(announcement.error, {
-            sink: REALTIME_ANNOUNCEMENT_FAILURE,
+        if (visible.isErr()) {
+          return await runSafeHandler({
+            ctx,
+            contentDelivery: config.contentDelivery,
+            async *handler() {
+              return yield* Result.await(
+                Promise.resolve(Result.err(visible.error)),
+              );
+            },
           });
         }
-      }
-      return result;
-    },
+        if (!visible.value) {
+          return toSafeStatusResponse(404, { message: "Not found" });
+        }
+
+        let usageLane = ctx.usageLane;
+        const authorization = await authorizeOperation({
+          kind: HANDLER_USAGE_ALLOWED,
+          input: {
+            ctx,
+            config,
+            handler,
+            admit,
+            ...(authorize === undefined ? {} : { authorize }),
+          },
+          check: async ({
+            ctx: checkedContext,
+            config: checkedConfig,
+          }): Promise<Result<void, HandlerError>> => {
+            const configStatusError = checkedConfig.requiresUsage
+              ? orgAIConfigStatusError(checkedContext.orgAIConfigStatus)
+              : null;
+            if (configStatusError) {
+              return Result.err(configStatusError);
+            }
+            if (checkedConfig.requiresUsage && env.USAGE_ENFORCEMENT_ENABLED) {
+              const meteringContext = resolveMeteringContext({
+                metering: checkedConfig.requiresUsage,
+                organizationId: checkedContext.session.activeOrganizationId,
+                orgAIConfig: checkedContext.orgAIConfig,
+                workspaceId: hasWorkspaceId(checkedContext)
+                  ? checkedContext.workspaceId
+                  : null,
+                userId: checkedContext.user.id,
+              });
+              const preflight = await runUsagePreflight({
+                ctx: checkedContext,
+                meteringContext,
+              });
+              if (Result.isError(preflight)) {
+                return Result.err(preflight.error);
+              }
+              usageLane = preflight.value;
+            }
+            return Result.ok(undefined);
+          },
+        });
+        if (Result.isError(authorization)) {
+          return toSafeStatusResponse(
+            authorization.error.status,
+            safeErrorBody(authorization.error),
+          );
+        }
+        const result = await authorization.value.execute(
+          async (operation) =>
+            // Response state belongs to the request; handler data belongs to this execution.
+            await runCheckedScopedHandler(operation, usageLane, ctx.set),
+        );
+        if (
+          !hasMemberPermission(memberRole, BILLING_MATTER_READ_PERMISSION) &&
+          hasVisibleMoney(config.moneyResponse, unwrapStatus(result).value)
+        ) {
+          return toSafeStatusResponse(403, {
+            code: API_ERROR_CODE.forbidden,
+            message: "Forbidden",
+          });
+        }
+        // The transaction has settled; realtime delivery cannot change its result.
+        if (
+          config.realtime !== undefined &&
+          config.realtime.scope !== "none" &&
+          isSuccessfulHandlerResult(result)
+        ) {
+          const mutationId = parseResourceMutationId(
+            ctx.request.headers.get(RESOURCE_MUTATION_ID_HEADER),
+          );
+          const announcement = await Result.tryPromise(async () => {
+            const mutationDigest =
+              mutationId === undefined
+                ? undefined
+                : await resourceMutationDigest(mutationId);
+            announce({
+              realtime: config.realtime,
+              ...(mutationDigest === undefined ? {} : { mutationDigest }),
+              result,
+              organizationId: ctx.session.activeOrganizationId,
+              workspaceId: hasWorkspaceId(ctx) ? ctx.workspaceId : undefined,
+            });
+          });
+          if (Result.isError(announcement)) {
+            observeFailure(announcement.error, {
+              sink: REALTIME_ANNOUNCEMENT_FAILURE,
+            });
+          }
+        }
+        return result;
+      }),
   });
 
 type ResolvedMeteringContext = {
@@ -1383,10 +1980,13 @@ export const resolveMeteringContext = ({
   workspaceId: SafeId<"workspace"> | null;
   userId: SafeId<"user">;
 }): ResolvedMeteringContext => {
-  const modelRole = metering.modelRole ?? "chat";
-  const modelInfo = getTanStackTextModelInfoForRole(modelRole, orgAIConfig, {
+  const modelTask = metering.modelTask ?? "chat";
+  const modelInfo = getTanStackTextModelInfoForTask(modelTask, orgAIConfig, {
     dataClass: "customer",
     organizationId,
+    // Unit metering and the free tier never run together
+    // (`freeTierInvariantViolation`), so a metered organization is standard.
+    modelTier: MANAGED_MODEL_TIER.standard,
   });
   const isByok = modelInfo.keySource === "byok";
   const serviceTier = resolveEffectiveServiceTierForProvider({
@@ -1417,20 +2017,16 @@ type PreflightCtx = {
   safeDb: SafeDb;
 };
 
-type UsagePreflightOutcome =
-  | { kind: "blocked"; response: SafeStatusResponse<402 | 403 | 500> }
-  | { kind: "allowed"; lane: UsageLaneDecision };
-
 const runUsagePreflight = async ({
   ctx,
   meteringContext,
 }: {
   ctx: PreflightCtx;
   meteringContext: ResolvedMeteringContext;
-}): Promise<UsagePreflightOutcome> => {
+}): Promise<Result<UsageLaneDecision, HandlerError<402 | 403 | 500>>> => {
   if (meteringContext.cost <= 0) {
     // BYOK (and other zero-cost) turns never draw a managed budget.
-    return { kind: "allowed", lane: { lane: "pool" } };
+    return Result.ok({ lane: "pool" });
   }
   const checkResult = await ctx.safeDb(async (tx) => {
     // Only endpoints that opted into lane routing (the interactive
@@ -1489,39 +2085,37 @@ const runUsagePreflight = async ({
       statusCode: 500,
       telemetry: "capture",
     });
-    return {
-      kind: "blocked",
-      response: toSafeStatusResponse(500, {
+    return Result.err(
+      new HandlerError({
+        status: 500,
         code: API_ERROR_CODE.internalServerError,
         message: "Internal server error",
       }),
-    };
+    );
   }
   const check = checkResult.value;
   if (check.ok) {
-    return { kind: "allowed", lane: check.lane };
+    return Result.ok(check.lane);
   }
   if (check.unassigned) {
-    const refusal = memberAssignmentRequiredError();
-    return {
-      kind: "blocked",
-      response: toSafeStatusResponse(refusal.status, safeErrorBody(refusal)),
-    };
+    return Result.err(memberAssignmentRequiredError());
   }
-  return {
-    kind: "blocked",
-    response: toSafeStatusResponse(402, {
+  return Result.err(
+    new HandlerError({
+      status: 402,
       code: API_ERROR_CODE.usageLimitExceeded,
       message: check.error.message,
-      reason: check.error.reason,
-      required: check.error.required,
-      available: check.error.available,
+      usage: {
+        reason: check.error.reason,
+        required: check.error.required,
+        available: check.error.available,
+      },
     }),
-  };
+  );
 };
 
 type UsagePreflightInput = {
-  metering: UsageMeteringConfig;
+  metering: UsageMeteringConfig | null;
   organizationId: SafeId<"organization">;
   orgAIConfig: OrgAIConfig | null;
   workspaceId: SafeId<"workspace"> | null;
@@ -1544,7 +2138,7 @@ type UsagePreflightInput = {
  * and the client sees an unchanged response. `null` means proceed. No-op
  * while `USAGE_ENFORCEMENT_ENABLED` is off, matching the static path.
  */
-export const assertUsageAvailableForHandler = async ({
+const checkUsageAvailableForHandler = async ({
   metering,
   organizationId,
   orgAIConfig,
@@ -1552,7 +2146,7 @@ export const assertUsageAvailableForHandler = async ({
   userId,
   safeDb,
 }: UsagePreflightInput): Promise<HandlerError<402 | 500> | null> => {
-  if (!env.USAGE_ENFORCEMENT_ENABLED) {
+  if (metering === null || !env.USAGE_ENFORCEMENT_ENABLED) {
     return null;
   }
   const meteringContext = resolveMeteringContext({
@@ -1600,6 +2194,20 @@ export const assertUsageAvailableForHandler = async ({
   });
 };
 
+const CONDITIONAL_USAGE_ALLOWED = "ConditionalUsageAllowed";
+
+export const authorizeHandlerUsage = async <Input extends UsagePreflightInput>(
+  input: Input,
+) =>
+  await authorizeOperation({
+    kind: CONDITIONAL_USAGE_ALLOWED,
+    input,
+    check: async (checkedInput) => {
+      const error = await checkUsageAvailableForHandler(checkedInput);
+      return error === null ? Result.ok(undefined) : Result.err(error);
+    },
+  });
+
 /**
  * Above this many estimated units, a queued run must carry an explicit
  * `confirmedUnits` restating its size before it may start.
@@ -1623,7 +2231,7 @@ type RunSizePreflightInput = UsagePreflightInput & {
  * client to confirm. No-op for BYOK settlements (the organization's own
  * key pays) and while `USAGE_ENFORCEMENT_ENABLED` is off.
  */
-export const assertRunSizeConfirmedForHandler = async ({
+const checkRunSizeConfirmedForHandler = async ({
   metering,
   estimatedUnits,
   confirmedUnits,
@@ -1633,7 +2241,7 @@ export const assertRunSizeConfirmedForHandler = async ({
   userId,
   safeDb,
 }: RunSizePreflightInput): Promise<HandlerError<402 | 428 | 500> | null> => {
-  if (!env.USAGE_ENFORCEMENT_ENABLED) {
+  if (metering === null || !env.USAGE_ENFORCEMENT_ENABLED) {
     return null;
   }
   // A run that makes no model calls spends nothing; refusing it for AI
@@ -1698,8 +2306,25 @@ export const assertRunSizeConfirmedForHandler = async ({
   });
 };
 
+const RUN_SIZE_CONFIRMED = "RunSizeConfirmed";
+
+export const authorizeHandlerRunSize = async <
+  Input extends RunSizePreflightInput,
+>(
+  input: Input,
+) =>
+  await authorizeOperation({
+    kind: RUN_SIZE_CONFIRMED,
+    input,
+    check: async (checkedInput) => {
+      const error = await checkRunSizeConfirmedForHandler(checkedInput);
+      return error === null ? Result.ok(undefined) : Result.err(error);
+    },
+  });
+
 const createSafeDirectHandler = <
   TConfig extends InputSchema &
+    WriteContract &
     ContentDeliveryDisposition &
     SandboxAccountAccess,
   TContext extends SafeHandlerLogContext,
@@ -1707,25 +2332,38 @@ const createSafeDirectHandler = <
 >(
   config: TConfig,
   handler: SafeHandlerFn<TContext, TResult>,
-): SafeHandlerDefinition<TConfig, TContext, TResult> =>
+): SafeHandlerCore<TConfig, TContext, TResult> =>
   recordSafeHandler({
     config,
-    handler: async (ctx): Promise<SafeHandlerResult<TResult>> =>
-      await runSafeHandler({
+    access: "token",
+    handler: async (ctx: TContext): Promise<SafeHandlerResult<TResult>> =>
+      await withSafeHandlerExceptionScope(
         ctx,
-        handler,
-        contentDelivery: config.contentDelivery,
-      }),
+        async () =>
+          await runSafeHandler({
+            ctx,
+            handler,
+            contentDelivery: config.contentDelivery,
+          }),
+      ),
   });
 
 const safeErrorBody = (error: HandlerError): SafeErrorBody => ({
+  ...(error instanceof ProviderCallError &&
+  error.providerDiagnostic !== undefined
+    ? { providerDiagnostic: error.providerDiagnostic }
+    : {}),
   ...(error.code ? { code: error.code } : {}),
   message: error.message,
   ...(error.hint ? { hint: error.hint } : {}),
   ...(error.clause ? { clause: error.clause } : {}),
   ...(error.contactUrl ? { contactUrl: error.contactUrl } : {}),
   ...(error.retryable === undefined ? {} : { retryable: error.retryable }),
+  ...(error.retryAfterMs === undefined
+    ? {}
+    : { retryAfterMs: error.retryAfterMs }),
   ...(error.issues ? { issues: error.issues } : {}),
+  ...(error.workspaceId ? { workspaceId: error.workspaceId } : {}),
   // Usage-limit 402s carry structured fields so the frontend renders the
   // "x of y units left" modal without parsing the message (see SafeErrorBody).
   ...(error.usage
@@ -1750,16 +2388,45 @@ type RootHandlerConfig = HandlerConfig & {
   realtime?: OrganizationResourceSetUpdates | NoResourceSetUpdates;
 };
 
+const rootReplayAuthorizations = new WeakSet<object>();
+
+export const hasRootReplayAuthorization = (definition: object) =>
+  rootReplayAuthorizations.has(definition);
+
 export const createSafeRootHandler = <
   TConfig extends RootHandlerConfig,
   TResult extends SafeHandlerPayload,
 >(
   config: TConfig,
   handler: SafeHandlerFn<RootHandlerContext<TConfig>, TResult> &
-    ConfiguredFiniteHandlerGuard<TConfig, TResult>,
-  dependencies?: HandlerAdmissionDependencies,
-): SafeHandlerDefinition<TConfig, RootHandlerContext<TConfig>, TResult> =>
-  createSafeScopedHandler(config, handler, dependencies);
+    ConfiguredFiniteHandlerGuard<TConfig, TResult> &
+    NoInfer<MoneyResponseGuard<TConfig, TResult>>,
+  ...dependencies: "idempotency" extends keyof TConfig
+    ? [
+        dependencies: HandlerAdmissionDependencies<
+          RootHandlerContext<TConfig>
+        > & {
+          authorize: NonNullable<
+            HandlerAdmissionDependencies<
+              RootHandlerContext<TConfig>
+            >["authorize"]
+          >;
+        },
+      ]
+    : [dependencies?: HandlerAdmissionDependencies<RootHandlerContext<TConfig>>]
+): SafeHandlerDefinition<TConfig, RootHandlerContext<TConfig>, TResult> => {
+  const admission = dependencies.at(0);
+  const authorizesBeforeReplay = admission?.authorize !== undefined;
+  if (config.idempotency !== undefined && !authorizesBeforeReplay) {
+    panic("Replay-enabled root handlers require pre-replay authorization");
+  }
+  const core = createSafeScopedHandler("member", config, handler, admission);
+  const definition = { ...core, run: memberRun(config, core.handler) };
+  if (config.idempotency !== undefined && admission?.authorize !== undefined) {
+    rootReplayAuthorizations.add(definition);
+  }
+  return definition;
+};
 
 export const createSafeHandler = <
   TConfig extends WorkspaceHandlerConfig,
@@ -1767,35 +2434,26 @@ export const createSafeHandler = <
 >(
   config: TConfig,
   handler: SafeHandlerFn<WorkspaceHandlerContext<TConfig>, TResult> &
-    ConfiguredFiniteHandlerGuard<TConfig, TResult>,
-  dependencies?: HandlerAdmissionDependencies,
-): SafeHandlerDefinition<TConfig, WorkspaceHandlerContext<TConfig>, TResult> =>
-  createSafeScopedHandler(
+    ConfiguredFiniteHandlerGuard<TConfig, TResult> &
+    NoInfer<MoneyResponseGuard<TConfig, TResult>>,
+  dependencies?: HandlerAdmissionDependencies<WorkspaceHandlerContext<TConfig>>,
+): SafeHandlerDefinition<
+  TConfig,
+  WorkspaceHandlerContext<TConfig>,
+  TResult
+> => {
+  const core = createSafeScopedHandler(
+    "workspace",
     config,
-    (ctx) => {
-      // Elysia may expand validateAuth again after validateWorkspaceAccess when a
-      // route also declares permissions. That later resolve carries the root
-      // recorder and can overwrite the recorder bound by the workspace macro.
-      // Rebind here, where the context type proves workspaceId was validated, so
-      // workspace mutations cannot emit organization-only audit rows regardless
-      // of macro composition order.
-      // Direct unit tests below the Elysia boundary may intentionally use a
-      // minimal raw context. Real WorkspaceHandlerContext values always carry
-      // this factory; keep those fixture-only omissions from changing handler
-      // behavior while still rebinding every framework-produced request.
-      const recorderFactory: unknown = Reflect.get(ctx, "createAuditRecorder");
-      if (typeof recorderFactory === "function") {
-        ctx.recordAuditEvent = ctx.createAuditRecorder({
-          workspaceId: ctx.workspaceId,
-        });
-      }
-      return handler(ctx);
-    },
+    handler,
     dependencies,
   );
+  return { ...core, run: workspaceRun(config, core.handler) };
+};
 
 type SessionHandlerDependencies = {
-  checkAccountOperation?: typeof checkDemoAccountOperation;
+  authenticate?: typeof authenticateSession;
+  checkAccountOperation?: typeof checkRestrictedAccountOperation;
 };
 
 export const createSafeSessionHandler = <
@@ -1805,111 +2463,192 @@ export const createSafeSessionHandler = <
   config: TConfig,
   handler: SafeHandlerFn<SessionHandlerContext<TConfig>, TResult>,
   {
-    checkAccountOperation = checkDemoAccountOperation,
+    authenticate = authenticateSession,
+    checkAccountOperation = checkRestrictedAccountOperation,
   }: SessionHandlerDependencies = {},
-): SafeHandlerDefinition<TConfig, SessionHandlerContext<TConfig>, TResult> =>
-  recordSafeHandler({
+): SafeHandlerDefinition<TConfig, SessionHandlerContext<TConfig>, TResult> => {
+  const core = recordSafeHandler({
     config,
-    handler: async (ctx): Promise<SafeHandlerResult<TResult>> => {
-      if (requiresStandardAccount(config.accountAccess)) {
-        const accountAccess = checkAccountOperation(ctx.user.email);
-        if (Result.isError(accountAccess)) {
+    access: "session",
+    handler: async (
+      ctx: SessionHandlerContext<TConfig>,
+    ): Promise<SafeHandlerResult<TResult>> =>
+      await withSafeHandlerExceptionScope(ctx, async () => {
+        if (
+          config.accountScope !== undefined &&
+          ctx.accountAuthority !== undefined &&
+          !hasAccountCapabilityAuthority(
+            ctx.accountAuthority,
+            config.accountScope,
+          )
+        ) {
           return toSafeStatusResponse(403, {
-            code: "account_access_unavailable",
-            message: "This operation is unavailable for this account.",
+            code: "missing_scope",
+            message: `This operation requires ${config.accountScope} consent.`,
           });
         }
+        if (requiresAccountCheck(config.accountAccess)) {
+          const accountAccess = checkAccountOperation(
+            ctx.user.email,
+            config.accountAccess,
+          );
+          if (Result.isError(accountAccess)) {
+            return toSafeStatusResponse(403, {
+              code: "account_access_unavailable",
+              message: "This operation is unavailable for this account.",
+            });
+          }
+        }
+        return await runSafeHandler({
+          ctx,
+          handler,
+          contentDelivery: config.contentDelivery,
+        });
+      }),
+  });
+  return {
+    ...core,
+    run: async (request) => {
+      const account = await authenticate(request.ctx, config);
+      if (!account.ok) {
+        return account.answer;
       }
-      return await runSafeHandler({
-        ctx,
-        handler,
-        contentDelivery: config.contentDelivery,
+      const input = await decodeRouteInput(
+        config,
+        request,
+        await request.readBody(),
+      );
+      return await core.handler({
+        ...routeContext(request, input),
+        ...account.caller,
       });
     },
-  });
+  };
+};
 
-/**
- * Config for self-authorizing (token) routes. The `body`, `query`, and
- * `params` slots only accept the branded permissive schemas from
- * `permissive-route-schema.ts`: Elysia runs route-schema validation before
- * the handler's own credential check, so a strict schema here would answer
- * unauthenticated probes with 422s that leak endpoint existence and
- * parameter shape. Handlers declare their strict schema separately and
- * apply it after authorization via `validatePostAuth`.
- */
-export type TokenHandlerConfig = Omit<
-  InputSchema,
-  "body" | "query" | "params"
-> &
+/** A token route's request before any schema has read it. */
+export type RawRouteInput = {
+  readonly request: Request;
+  readonly params: RawParams;
+  readonly query: QueryRecord;
+  /** The body as its content type reads, unvalidated: treat every field as unknown. */
+  readonly body: unknown;
+};
+
+export type TokenHandlerConfig = InputSchema &
+  WriteContract &
   CapabilityDescription &
   ContentDeliveryDisposition &
   CapabilityAccess &
   SandboxAccountAccess & {
-    body?: AnyPermissiveRouteSchema;
-    query?: AnyPermissiveRouteSchema;
-    params?: AnyPermissiveRouteSchema;
     mcp: McpExposure;
   };
 
+/**
+ * A token route's credential check: what the credential proves about the
+ * caller, or the error that refuses it. It reads the raw request, so treat
+ * every field as unknown; refuse a malformed credential exactly like an
+ * unknown one.
+ */
+export type VerifyCaller<TCaller> = (
+  raw: RawRouteInput,
+) => Result<TCaller, HandlerError> | Promise<Result<TCaller, HandlerError>>;
+
 type TokenHandlerContext<
-  TConfig extends TokenHandlerConfig = TokenHandlerConfig,
-> = Context<
-  UnwrapRoute<
-    Omit<TConfig, "mcp" | "description" | "access" | "contentDelivery">
-  >
->;
+  TConfig extends TokenHandlerConfig,
+  TCaller,
+> = RouteContext<TConfig> & {
+  /** What the credential check proved about the caller. */
+  caller: TCaller;
+};
 
 /**
- * Like `createSafeSessionHandler`, but the framework does not
- * authenticate the caller — the handler authorizes itself from a
- * body / param token (e.g. folio-collab session tokens). The
- * factory gives the handler the same structured error capture,
- * safe-status responses, and request logging as the org-scoped
- * variants without claiming a `user.id` that isn't present.
+ * Like `createSafeSessionHandler`, but the caller proves itself with a
+ * credential in the request (a collab room token, a one-time link code), not a
+ * session. `verifyCaller` runs on the raw request before any schema, so an
+ * unauthenticated probe is refused without learning the shape of the input;
+ * the strict schemas then validate the rest as usual. The handler gets the
+ * same structured error capture, safe-status responses, and request logging
+ * as the org-scoped variants without claiming a `user.id` that isn't present.
  */
 export const createSafeTokenHandler = <
   TConfig extends TokenHandlerConfig,
+  TCaller,
   TResult extends SafeHandlerPayload,
 >(
   config: TConfig,
-  handler: SafeHandlerFn<TokenHandlerContext<TConfig>, TResult>,
-): SafeHandlerDefinition<TConfig, TokenHandlerContext<TConfig>, TResult> =>
-  createSafeDirectHandler(config, handler);
+  verifyCaller: VerifyCaller<TCaller>,
+  handler: SafeHandlerFn<TokenHandlerContext<TConfig, TCaller>, TResult>,
+): SafeHandlerDefinition<
+  TConfig,
+  TokenHandlerContext<TConfig, TCaller>,
+  TResult
+> => {
+  const core = createSafeDirectHandler(config, handler);
+  return {
+    ...core,
+    run: async (request) => {
+      const rawBody = await request.readBody();
+      const verdict = await verifyCaller({
+        request: request.ctx.request,
+        params: request.ctx.params,
+        query: request.ctx.query,
+        body: rawBody,
+      });
+      if (Result.isError(verdict)) {
+        return toSafeStatusResponse(
+          verdict.error.status,
+          safeErrorBody(verdict.error),
+        );
+      }
+      const input = await decodeRouteInput(config, request, rawBody);
+      return await core.handler({
+        ...routeContext(request, input),
+        caller: verdict.value,
+      });
+    },
+  };
+};
 
 export type PublicHandlerConfig = InputSchema &
+  WriteContract &
   CapabilityDescription &
   ContentDeliveryDisposition &
   CapabilityAccess &
   SandboxAccountAccess & {
-    cache: CachePolicy;
+    cache: RouteCachePolicy;
+    /** `own`: the route answers CORS itself (an any-origin discovery document). */
+    cors?: "own";
     mcp: McpExposure;
   };
 
 export type PublicHandlerContext<
   TConfig extends PublicHandlerConfig = PublicHandlerConfig,
-> = Context<
-  UnwrapRoute<
-    Omit<TConfig, "mcp" | "description" | "access" | "contentDelivery">
-  >
->;
+> = RouteContext<TConfig>;
 
 /**
  * Handlers this factory produced. A public route census asserts that every
  * mounted handler is in here, which a naming convention cannot guarantee:
  * a raw function passed to `.get()` reads the same at the call site.
  */
-const safePublicHandlers = new WeakMap<object, CachePolicy>();
+type PublicHandlerRegistration = {
+  cache: RouteCachePolicy;
+  readTimeout: "route-class" | "none";
+};
 
-export const getPublicHandlerCachePolicy = (handler: unknown) =>
-  typeof handler === "function" ? safePublicHandlers.get(handler) : undefined;
+const safePublicHandlers = new WeakMap<object, PublicHandlerRegistration>();
 
 /** Whether a mounted route handler came out of a public handler factory. */
 export const isSafePublicHandler = (handler: unknown): boolean =>
   typeof handler === "function" && safePublicHandlers.has(handler);
 
+export const isPublicReadBudgetHandler = (handler: unknown): boolean =>
+  typeof handler === "function" &&
+  safePublicHandlers.get(handler)?.readTimeout === "route-class";
+
 type SafePublicStatusResponse<TStatusCode extends HandlerErrorStatusCode> =
   TStatusCode extends HandlerErrorStatusCode
-    ? ElysiaCustomStatusResponse<
+    ? HttpStatusResponse<
         TStatusCode,
         string | ReturnType<typeof projectPublicErrorBody>
       >
@@ -1940,25 +2679,41 @@ export const createSafePublicHandler = <
   config: TConfig,
   handler: SafeHandlerFn<PublicHandlerContext<TConfig>, TResult>,
 ) => {
-  const definition = {
+  const definition = recordSafeHandler({
     config,
-    handler: async (ctx: PublicHandlerContext<TConfig>) => {
-      const response = await runSafeHandler({
-        ctx,
-        handler,
-        contentDelivery: config.contentDelivery,
-      });
-      applyResponseCachePolicy({
-        cache: config.cache,
-        response,
-        set: ctx.set,
-      });
-      return response;
-    },
-  };
-  safePublicHandlers.set(definition.handler, config.cache);
-  return recordSafeHandler(definition);
+    access: "public",
+    cache: config.cache,
+    ...(config.cors === undefined ? {} : { cors: config.cors }),
+    handler: async (ctx: PublicHandlerContext<TConfig>) =>
+      await withSafeHandlerExceptionScope(ctx, async () => {
+        const response = await runSafeHandler({
+          ctx,
+          handler,
+          contentDelivery: config.contentDelivery,
+        });
+        return response;
+      }),
+  });
+  safePublicHandlers.set(definition.handler, {
+    cache: config.cache,
+    readTimeout: "none",
+  });
+  return { ...definition, run: publicRun(config, definition.handler) };
 };
+
+/** Public routes: no caller, the input only. */
+const publicRun =
+  <TConfig extends PublicHandlerConfig>(
+    config: TConfig,
+    handler: (ctx: PublicHandlerContext<TConfig>) => Promise<unknown>,
+  ) =>
+  async (request: RouteRequest): Promise<unknown> =>
+    await handler(
+      routeContext(
+        request,
+        await decodeRouteInput(config, request, await request.readBody()),
+      ),
+    );
 
 const toBoundedPublicErrorStatus = (
   statusCode: HandlerErrorStatusCode,
@@ -1967,8 +2722,7 @@ const toBoundedPublicErrorStatus = (
 
 /** What a handler answers with a 200: its result minus statuses and raw bodies. */
 type SuccessPayload<TResult> = TResult extends
-  | ElysiaCustomStatusResponse<infer _Code, infer _Body, infer _Status>
-  | Response
+  HttpStatusResponse<infer _Code, infer _Body> | Response
   ? never
   : TResult;
 
@@ -1977,7 +2731,7 @@ type SuccessPayload<TResult> = TResult extends
  * included, and `unknown` stay as they are; the mapped type is homomorphic, so
  * tuples stay tuples.
  */
-type ReadonlyWire<T> = unknown extends T
+export type ReadonlyWire<T> = unknown extends T
   ? T
   : T extends string | number | boolean | bigint | null | undefined
     ? T
@@ -1986,8 +2740,9 @@ type ReadonlyWire<T> = unknown extends T
 /**
  * Binds a public route's 200 schema to the data its handler returns.
  *
- * Elysia checks only that the payload is assignable to the schema, and Eden
- * types the client from the schema, so a schema looser than the data (a plain
+ * Typing the handler against its schema only checks that the payload is
+ * assignable to it, and the web client is typed from the schema, so a schema
+ * looser than the data (a plain
  * string for a `SafeId`, `X | null` for `X`, `number` for a literal, a key the
  * data never has) compiles and misdescribes the wire. Requiring the reverse
  * direction too makes the two mutually assignable. Readonly differences do not
@@ -1995,15 +2750,17 @@ type ReadonlyWire<T> = unknown extends T
  * readonly or a mutable schema array are both assignable to.
  */
 export type ExactSuccessSchemaGuard<TConfig, TResult> = TConfig extends {
-  response: { 200: infer TSuccessSchema extends TSchema };
+  response: { 200: infer TSuccessSchema extends AnySchema };
 }
   ? [SuccessPayload<TResult>] extends [never]
     ? unknown
-    : [Static<TSuccessSchema>] extends [ReadonlyWire<SuccessPayload<TResult>>]
+    : [StandardSchemaV1.InferOutput<TSuccessSchema>] extends [
+          ReadonlyWire<SuccessPayload<TResult>>,
+        ]
       ? unknown
       : {
           responseSchemaLooserThanData: {
-            schema: Static<TSuccessSchema>;
+            schema: StandardSchemaV1.InferOutput<TSuccessSchema>;
             data: SuccessPayload<TResult>;
           };
         }
@@ -2021,39 +2778,45 @@ export const createSafeUncheckedBoundedPublicHandler = <
   config: TConfig,
   handler: SafeHandlerFn<PublicHandlerContext<TConfig>, TResult>,
 ) => {
-  const definition = {
+  const definition = recordSafeHandler({
     config,
-    handler: async (ctx: PublicHandlerContext<TConfig>) => {
-      const result = await runSafeHandlerWith({
-        ctx,
-        handler,
-        contentDelivery: config.contentDelivery,
-        toErrorStatus: toBoundedPublicErrorStatus,
-      });
-      const response =
-        // Projection is idempotent, so factory-built statuses pass through it
-        // unchanged; handler-returned statuses are bounded the same way.
-        result instanceof ElysiaCustomStatusResponse && result.code >= 400
-          ? toSafePublicStatusResponse(
-              result.code,
-              typeof result.response === "string"
-                ? truncateTextBytes(
-                    result.response,
-                    PUBLIC_ERROR_TEXT_BYTES.statusText,
-                  )
-                : projectPublicErrorBody(result.response),
-            )
-          : result;
-      applyResponseCachePolicy({
-        cache: config.cache,
-        response,
-        set: ctx.set,
-      });
-      return response;
-    },
-  };
-  safePublicHandlers.set(definition.handler, config.cache);
-  return recordSafeHandler(definition);
+    access: "public",
+    cache: config.cache,
+    ...(config.cors === undefined ? {} : { cors: config.cors }),
+    handler: async (ctx: PublicHandlerContext<TConfig>) =>
+      await withSafeHandlerExceptionScope(ctx, async () => {
+        const result = await runPublicReadRequest(
+          ctx,
+          async () =>
+            await runSafeHandlerWith({
+              ctx,
+              handler,
+              contentDelivery: config.contentDelivery,
+              toErrorStatus: toBoundedPublicErrorStatus,
+            }),
+        );
+        const response =
+          // Projection is idempotent, so factory-built statuses pass through it
+          // unchanged; handler-returned statuses are bounded the same way.
+          result instanceof HttpStatusResponse && result.code >= 400
+            ? toSafePublicStatusResponse(
+                result.code,
+                typeof result.response === "string"
+                  ? truncateTextBytes(
+                      result.response,
+                      PUBLIC_ERROR_TEXT_BYTES.statusText,
+                    )
+                  : projectPublicErrorBody(result.response),
+              )
+            : result;
+        return response;
+      }),
+  });
+  safePublicHandlers.set(definition.handler, {
+    cache: config.cache,
+    readTimeout: "route-class",
+  });
+  return { ...definition, run: publicRun(config, definition.handler) };
 };
 
 /**
@@ -2084,7 +2847,11 @@ type SafeErrorTelemetry = "capture" | "log-only";
 
 const safeErrorTelemetryDisposition = (
   statusCode: number,
-): SafeErrorTelemetry => (statusCode >= 500 ? "capture" : "log-only");
+  code?: string,
+): SafeErrorTelemetry =>
+  statusCode >= 500 && code !== ACTION_ADMISSION_CODES.featureDisabled
+    ? "capture"
+    : "log-only";
 
 type LogAndCaptureSafeErrorProps = {
   request: Request;
@@ -2119,18 +2886,33 @@ const logAndCaptureSafeError = ({
   statusCode,
   telemetry,
 }: LogAndCaptureSafeErrorProps) => {
-  const reqCtx = getRequestContext(request);
+  if (
+    resolveHandlerError(error)?.code === ACTION_ADMISSION_CODES.storeUnavailable
+  ) {
+    observeLimiterAdmissionFailure(error, "admission");
+    return;
+  }
+  const reqCtx = getRequestContext();
   const evidence = readEvidence(error);
-  const severity = statusCode >= 500 ? "ERROR" : "WARN";
+  const featureDisabled =
+    HandlerError.is(error) &&
+    error.code === ACTION_ADMISSION_CODES.featureDisabled;
+  const severityFor = (grade: FailureGrade | undefined) =>
+    featureDisabled ? "WARN" : answeredFailureSeverity(statusCode, grade);
   const grading = observeShadow({
     error,
     sink: SHADOW_SINKS.handler,
-    channel: legacyChannelOf({ severity, capture: telemetry === "capture" }),
+    channel: ({ grade }) =>
+      legacyChannelOf({
+        severity: severityFor(grade),
+        capture: telemetry === "capture",
+      }),
     request,
+    route,
     requestState: { answeredStatus: statusCode },
   });
 
-  const attributes: Record<string, string | number | boolean> = {
+  const diagnosticAttributes = {
     "http.method": request.method,
     "http.route": route,
     "http.status_code": statusCode,
@@ -2138,49 +2920,42 @@ const logAndCaptureSafeError = ({
       reqCtx ? performance.now() - reqCtx.startTime : 0,
     ),
     "error.type": errorTag(error),
+    ...requestErrorStatusFields(evidence),
+    ...causeChainAttributes(evidence),
+
+    // Every answered failure is un-diagnosable without this: the message and
+    // stack are redacted from every sink, leaving only `error.type`. The
+    // diagnostic identity (class, stable code and source positions) is non-PII
+    // and uses keys that survive the logger's redaction, so a failure always
+    // carries a code location. A 4xx needs it at least as much as a panic —
+    // `error.type` reads `HandlerError` at every one of the dozens of sites
+    // that reject a request payload, so the frame is the only thing that says
+    // which rejection fired.
+    ...identityFields(evidence),
   };
 
-  Object.assign(attributes, requestErrorStatusFields(evidence));
-  Object.assign(attributes, causeChainAttributes(evidence));
+  const privateInputRequest = /\/chat\/threads\/[^/]+\/secrets\/[^/]+$/u.test(
+    new URL(request.url).pathname,
+  );
+  const attributes: Record<string, string | number | boolean> = {
+    ...diagnosticAttributes,
+    ...(isLocalDevOpen() && env.DEBUG_UNREDACTED_ERRORS && !privateInputRequest
+      ? unredactedErrorFields(error)
+      : {}),
+    ...(reqCtx?.requestId ? { "request.id": reqCtx.requestId } : {}),
+    ...(reqCtx?.posthogDistinctId
+      ? { posthogDistinctId: reqCtx.posthogDistinctId }
+      : {}),
+    ...(reqCtx?.sessionId ? { sessionId: reqCtx.sessionId } : {}),
+    ...(reqCtx?.organizationId
+      ? { "enduser.organization_id": reqCtx.organizationId }
+      : {}),
+    ...shadowFields(grading),
+  };
 
-  // Every answered failure is un-diagnosable without this: the message and
-  // stack are redacted from every sink, leaving only `error.type`. The
-  // fingerprint (class, stable code, top `file:line:col` frames) is non-PII
-  // and uses keys that survive the logger's redaction, so a failure always
-  // carries a code location. A 4xx needs it at least as much as a panic —
-  // `error.type` reads `HandlerError` at every one of the dozens of sites
-  // that reject a request payload, so the frame is the only thing that says
-  // which rejection fired.
-  Object.assign(attributes, identityFields(evidence));
-
-  if (isLocalDevOpen() && env.DEBUG_UNREDACTED_ERRORS) {
-    Object.assign(attributes, unredactedErrorFields(error));
-  }
-
-  if (reqCtx?.requestId) {
-    attributes["request.id"] = reqCtx.requestId;
-  }
-
-  if (reqCtx?.posthogDistinctId) {
-    attributes["posthogDistinctId"] = reqCtx.posthogDistinctId;
-  }
-
-  if (reqCtx?.sessionId) {
-    attributes["sessionId"] = reqCtx.sessionId;
-  }
-
-  if (reqCtx?.organizationId) {
-    attributes["enduser.organization_id"] = reqCtx.organizationId;
-  }
-
-  // The owner's grade rides along in shadow; it decides nothing here yet.
-  Object.assign(attributes, shadowFields(grading));
-
-  // Severity follows the status class, as it does at the request-level
-  // `onError` sink that emits this same `request.failed` event. A 5xx is a
-  // server fault; a 4xx is an answered client outcome, and an access denial
-  // graded ERROR would sit in the same class as a panic.
-  if (severity === "ERROR") {
+  // Operator feature refusals retain 503 on the wire while remaining an
+  // expected warning. Other server failures take their grade's severity.
+  if (severityFor(grading?.grade) === "ERROR") {
     logger.error("request.failed", attributes);
   } else {
     logger.warn("request.failed", attributes);
@@ -2192,6 +2967,12 @@ const logAndCaptureSafeError = ({
   // already carries the rejecting frame.
   if (telemetry === "capture") {
     captureObservedError(error, {
+      // HTTP routes are declared templates; MCP routes carry capability IDs.
+      // Neither contains resolved request values.
+      fingerprintKey: "api.safeHandlerFailure",
+      scope: route.startsWith("mcp:invoke_capability/")
+        ? { type: "handler", handlerId: route }
+        : { type: "request", method: request.method, routeTemplate: route },
       request,
       context: {
         method: request.method,

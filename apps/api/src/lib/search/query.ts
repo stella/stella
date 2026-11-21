@@ -3,10 +3,12 @@ import { sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
 import { isDocumentReferenceQuery } from "@stll/api-contract";
+import { ownEntry } from "@stll/api-contract/own-key";
 import {
   applyArabicFolds,
-  foldToAscii,
   arabicNormalize,
+  foldToAscii,
+  normalizeUnicode,
 } from "@stll/text-normalize";
 
 const PREFIX_QUERY_TOKEN_LIMIT = 8;
@@ -16,16 +18,14 @@ const FILE_EXTENSION_RE = /^[\p{L}\p{N}]{1,10}$/u;
 const ARABIC_COMPATIBLE_VARIANT_LIMIT = 64;
 type ArabicFoldMode = "compatible" | "folded" | "legacy";
 
-const ARABIC_FOLD_TARGET_ALTERNATES: Readonly<
-  Record<string, readonly string[]>
-> = {
+const ARABIC_FOLD_TARGET_ALTERNATES = {
   ا: ["آ", "أ", "إ", "ٱ"],
   و: ["ؤ"],
   ي: ["ئ", "ى"],
   ه: ["ة"],
-};
+} as const;
 
-const ARABIC_INDIC_DIGITS: Readonly<Record<string, string>> = {
+const ARABIC_INDIC_DIGITS = {
   "0": "٠",
   "1": "١",
   "2": "٢",
@@ -36,9 +36,9 @@ const ARABIC_INDIC_DIGITS: Readonly<Record<string, string>> = {
   "7": "٧",
   "8": "٨",
   "9": "٩",
-};
+} as const;
 
-const EXTENDED_ARABIC_INDIC_DIGITS: Readonly<Record<string, string>> = {
+const EXTENDED_ARABIC_INDIC_DIGITS = {
   "0": "۰",
   "1": "۱",
   "2": "۲",
@@ -49,7 +49,7 @@ const EXTENDED_ARABIC_INDIC_DIGITS: Readonly<Record<string, string>> = {
   "7": "۷",
   "8": "۸",
   "9": "۹",
-};
+} as const satisfies Record<keyof typeof ARABIC_INDIC_DIGITS, string>;
 
 const compact = (parts: readonly (string | null | undefined)[]): string =>
   parts
@@ -339,9 +339,10 @@ const toSearchLexemes = (
   mode: ArabicFoldMode = "folded",
 ): string[] =>
   Array.from(
-    foldToAscii(normalizeTextForLexemes(query))
-      .normalize("NFKC")
-      .matchAll(/[\p{L}\p{N}]+/gu),
+    normalizeUnicode(
+      foldToAscii(normalizeTextForLexemes(query)),
+      "NFKC",
+    ).matchAll(/[\p{L}\p{N}]+/gu),
     (match) => match[0],
   )
     .flatMap((token) => {
@@ -446,7 +447,7 @@ const expandArabicFoldTargetVariants = (text: string): string[] => {
       continue;
     }
 
-    const alternates = ARABIC_FOLD_TARGET_ALTERNATES[char];
+    const alternates = ownEntry(ARABIC_FOLD_TARGET_ALTERNATES, char);
     if (!alternates) {
       continue;
     }
@@ -479,10 +480,13 @@ const expandAsciiDigitVariants = (text: string): string[] => {
   }
 
   return [
-    text.replace(/[0-9]/gu, (digit) => ARABIC_INDIC_DIGITS[digit] ?? digit),
     text.replace(
       /[0-9]/gu,
-      (digit) => EXTENDED_ARABIC_INDIC_DIGITS[digit] ?? digit,
+      (digit) => ownEntry(ARABIC_INDIC_DIGITS, digit) ?? digit,
+    ),
+    text.replace(
+      /[0-9]/gu,
+      (digit) => ownEntry(EXTENDED_ARABIC_INDIC_DIGITS, digit) ?? digit,
     ),
   ].filter((variant) => variant !== text);
 };
@@ -580,6 +584,60 @@ const astToTsQuery = (ast: SearchAst): string => {
       return panic(`Unhandled ast: ${String(ast)}`);
     }
   }
+};
+
+type PositiveSearchAst =
+  | Extract<SearchAst, { type: "term" }>
+  | { type: "and" | "or"; left: PositiveSearchAst; right: PositiveSearchAst };
+
+/** NULL represents an unrestricted branch, so dropping a negation from OR widens to true. */
+const positiveCandidateAst = (
+  ast: SearchAst,
+  negated = false,
+): PositiveSearchAst | null => {
+  switch (ast.type) {
+    case "term":
+      return negated ? null : ast;
+    case "not":
+      return positiveCandidateAst(ast.child, !negated);
+    case "and":
+    case "or": {
+      let type = ast.type;
+      if (negated) {
+        type = ast.type === "and" ? "or" : "and";
+      }
+      const left = positiveCandidateAst(ast.left, negated);
+      const right = positiveCandidateAst(ast.right, negated);
+      if (type === "or" && (left === null || right === null)) {
+        return null;
+      }
+      if (left === null) {
+        return right;
+      }
+      if (right === null) {
+        return left;
+      }
+      return { type, left, right };
+    }
+    default:
+      ast satisfies never;
+      return panic("Unknown search candidate AST");
+  }
+};
+
+/** Candidates may contain text removed before admission; only positive constraints are safe here. */
+export const buildSearchCandidateTsQuery = (query: string): SQL | null => {
+  if (!isAdvancedQuery(query.trim())) {
+    return buildSearchTsQuery(query);
+  }
+  const ast = parseAdvancedSearchAst(query, "compatible");
+  if (ast === null || !hasPositiveTerm(ast)) {
+    return buildSearchTsQuery(query);
+  }
+  const candidate = positiveCandidateAst(ast);
+  return candidate === null
+    ? null
+    : sql`to_tsquery('simple', unaccent(${astToTsQuery(candidate)}))`;
 };
 
 const lexemeGroupToTsQuery = (lexemes: string[]): string => {

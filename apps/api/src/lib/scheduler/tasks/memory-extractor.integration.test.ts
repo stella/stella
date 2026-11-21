@@ -1,24 +1,27 @@
+import { panic, Result } from "better-result";
 /**
  * The memory extractor acts for each compaction's thread owner as they stand
  * when it runs: an owner who left the organization has nothing read or
  * suggested, and an owner who left the matter gets no matter memory from it.
  * Driven against a real (PGlite) database; the model is a fake.
  */
-
-import { panic, Result } from "better-result";
 import {
   afterAll,
   afterEach,
   beforeEach,
   describe,
   expect,
+  type Mock,
+  mock,
   setDefaultTimeout,
   spyOn,
   test,
 } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
 
-import { member } from "@/api/db/auth-schema";
+import { createTestState } from "@stll/test-state";
+
+import { member, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import {
   aiMemories,
@@ -30,6 +33,7 @@ import {
 } from "@/api/db/schema";
 import type { RlsDatabase } from "@/api/db/scoped";
 import { env } from "@/api/env";
+import { toPersistedChatMessageContentV3 } from "@/api/handlers/chat/chat-message-parts";
 import * as aiConfigLoader from "@/api/lib/ai-config-loader";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -90,16 +94,25 @@ const matterMessageId = createSafeId<"chatMessage">();
 const threadIds = [userThreadId, matterThreadId];
 const messageIds = [userMessageId, matterMessageId];
 
-const settingsSpy = spyOn(aiConfigLoader, "loadOrgAISettings");
-const generateSpy = spyOn(tanstackGenerate, "generateTanStackObjectForRole");
-const transcriptSpy = spyOn(compactionTranscript, "loadCompactionTranscript");
-const warnSpy = spyOn(logger, "warn");
-const dedupSpy = spyOn(memoryDedup, "createMemoryDedupIdentity");
-const originalFeature = env.FEATURE_AI_MEMORY;
+let settingsSpy: Mock<typeof aiConfigLoader.loadOrgAISettings>;
+let generateSpy: Mock<typeof tanstackGenerate.generateTanStackObjectForTask>;
+let transcriptSpy: Mock<typeof compactionTranscript.loadCompactionTranscript>;
+let warnSpy: Mock<typeof logger.warn>;
+let dedupSpy: Mock<typeof memoryDedup.createMemoryDedupIdentity>;
+const state = createTestState({ file: import.meta.path, config: env });
+
+const originalGrants = env.API_FEATURE_ACCESS_GRANTS;
+const originalUser =
+  (
+    await testDb
+      .select({ emailVerified: user.emailVerified })
+      .from(user)
+      .where(eq(user.id, ids.userA1))
+  ).at(0) ?? panic("Memory fixture user missing");
 
 /** The model's reply, after `beforeReply` runs while the call is in flight. */
 const fakeExtraction = (beforeReply?: () => Promise<void>) =>
-  asTestRaw<typeof tanstackGenerate.generateTanStackObjectForRole>(async () => {
+  asTestRaw<typeof tanstackGenerate.generateTanStackObjectForTask>(async () => {
     await beforeReply?.();
     return {
       candidates: [
@@ -144,7 +157,9 @@ const seedThread = async ({
     userId: ids.userA1,
     workspaceId,
     role: "user",
-    content: { version: 1, data: [{ type: "text", text }] },
+    content: toPersistedChatMessageContentV3({
+      data: [{ type: "text", content: text }],
+    }),
   });
   const compactionId = await seedActiveChatCompaction({
     firstKeptMessageId: messageId,
@@ -188,7 +203,21 @@ const accessLossWarnings = () =>
   );
 
 beforeEach(async () => {
-  env.FEATURE_AI_MEMORY = true;
+  settingsSpy = spyOn(aiConfigLoader, "loadOrgAISettings");
+  generateSpy = spyOn(tanstackGenerate, "generateTanStackObjectForTask");
+  transcriptSpy = spyOn(compactionTranscript, "loadCompactionTranscript");
+  warnSpy = spyOn(logger, "warn");
+  dedupSpy = spyOn(memoryDedup, "createMemoryDedupIdentity");
+
+  state.setConfig("FEATURE_AI_MEMORY", true);
+  state.setConfig("API_FEATURE_ACCESS_GRANTS", {
+    ...originalGrants,
+    "ai-memory": [{ type: "organization", organizationId: ids.orgA }],
+  });
+  await testDb
+    .update(user)
+    .set({ emailVerified: true })
+    .where(eq(user.id, ids.userA1));
   settingsSpy.mockReset();
   generateSpy.mockReset();
   transcriptSpy.mockClear();
@@ -240,7 +269,8 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
-  env.FEATURE_AI_MEMORY = originalFeature;
+  mock.restore();
+  await testDb.update(user).set(originalUser).where(eq(user.id, ids.userA1));
   await testDb
     .delete(aiMemories)
     .where(inArray(aiMemories.sourceMessageId, messageIds));
@@ -277,6 +307,15 @@ afterAll(async () => {
 });
 
 describe("memory extraction for a compaction's owner", () => {
+  test("queued extraction requires current invitation admission", async () => {
+    state.setConfig("API_FEATURE_ACCESS_GRANTS", {
+      ...originalGrants,
+      "ai-memory": [],
+    });
+    await runExtractor();
+    expect(generateSpy).not.toHaveBeenCalled();
+    expect(await readSuggestions()).toEqual([]);
+  });
   test("suggests user and matter memories while the owner keeps access", async () => {
     await runExtractor();
 
@@ -429,7 +468,7 @@ describe("memory extraction for a compaction's owner", () => {
           ? () => {
               throw new Error("scheduler connection lost");
             }
-          : Reflect.get(target, property, receiver),
+          : (Reflect.get(target, property, receiver) as unknown),
     });
     dedupSpy.mockImplementationOnce(() => {
       crashed = true;

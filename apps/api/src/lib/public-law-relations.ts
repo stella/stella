@@ -1,3 +1,9 @@
+import { panic } from "better-result";
+
+// Relative with its extension: the oxlint plugin loads this file in plain Node,
+// which does not resolve the `@/api` path alias.
+import { REVIEW_COLUMN_GRANTS_BY_RELATION } from "./case-law/review-column-grants.ts";
+
 /**
  * Exact PostgreSQL columns required or permitted for the public-law reader role.
  *
@@ -7,14 +13,27 @@
  * from this map, so adding a field requires one explicit public-data decision.
  */
 export const PUBLIC_LAW_RELATION_BY_SCHEMA_IMPORT = {
+  caseLawCitationDoctrineReviews: "case_law_citation_doctrine_reviews",
   caseLawCitations: "case_law_citations",
+  caseLawCompletenessCensus: "case_law_completeness_census",
+  caseLawWithdrawalStatus: "case_law_withdrawal_status",
   caseLawCorpusTombstones: "case_law_corpus_tombstones",
   caseLawCourtDirectoryRanks: "case_law_court_directory_ranks",
   caseLawCourtWeights: "case_law_court_weights",
+  caseLawCoverageSlices: "case_law_coverage_slices",
   caseLawDecisionAliases: "case_law_decision_aliases",
+  caseLawDecisionAnchorRedirects: "case_law_decision_anchor_redirects",
   caseLawDecisionIdentifiers: "case_law_decision_identifiers",
   caseLawDecisionJudges: "case_law_decision_judges",
-  caseLawDecisions: "case_law_decisions",
+  caseLawDecisionReviews: "case_law_decision_reviews",
+  publishedCaseLawDecisions: "case_law_published_decisions",
+  unredactedCaseLawDecisions: "case_law_unredacted_decisions",
+  caseLawDecisionCitationStats: "case_law_decision_citation_stats",
+  caseLawDecisionCitationStatsState: "case_law_decision_citation_stats_state",
+  caseLawPopulationProjections: "case_law_population_projections",
+  caseLawPopulationCountsLive: "case_law_population_counts_live",
+  caseLawPopulationDeltas: "case_law_population_deltas",
+  caseLawPopulationCounts: "case_law_population_counts",
   caseLawBrowseFacetCounts: "case_law_browse_facet_counts",
   caseLawFtsConfigs: "case_law_fts_configs",
   caseLawJudges: "case_law_judges",
@@ -26,26 +45,33 @@ export const PUBLIC_LAW_RELATION_BY_SCHEMA_IMPORT = {
   caseLawProvisionExtractions: "case_law_provision_extractions",
   caseLawSearchDocuments: "case_law_search_documents",
   caseLawSitemapShards: "case_law_sitemap_shards",
+  caseLawSourceArrivals: "case_law_source_arrivals",
   caseLawStatuteCitationCounts: "case_law_statute_citation_counts",
   caseLawStatuteCitationCountState: "case_law_statute_citation_count_state",
   caseLawSources: "case_law_sources",
   corpusIndexGenerations: "corpus_index_generations",
   corpusIndexGroupEnrollments: "corpus_index_group_enrollments",
+  corpusIndexJurisdictionServing: "corpus_index_jurisdiction_serving",
   corpusIndexProjectionIntents: "corpus_index_projection_intents",
   corpusIndexProjectionStates: "corpus_index_projection_states",
   legislationDocuments: "legislation_documents",
+  legislationAmendments: "legislation_amendments",
+  legislationAmendmentSnapshots: "legislation_amendment_snapshots",
+  legislationFacetCounts: "legislation_facet_counts",
+  legislationFacetRefreshes: "legislation_facet_refreshes",
   legislationSearchDocuments: "legislation_search_documents",
   legislationSources: "legislation_sources",
   legislationWorkNames: "legislation_work_names",
+  legislationWorkIdentifiers: "legislation_work_identifiers",
+  softLawDocuments: "soft_law_documents",
+  softLawDocumentVersions: "soft_law_document_versions",
+  softLawDocumentLocators: "soft_law_document_locators",
   statuteSitemapShards: "statute_sitemap_shards",
 } as const;
 
 export type PublicLawRelation =
-  (typeof PUBLIC_LAW_RELATION_BY_SCHEMA_IMPORT)[keyof typeof PUBLIC_LAW_RELATION_BY_SCHEMA_IMPORT];
-
-export const PUBLIC_CASE_LAW_SCHEMA_IMPORTS = Object.keys(
-  PUBLIC_LAW_RELATION_BY_SCHEMA_IMPORT,
-).filter((schemaImport) => schemaImport.startsWith("caseLaw"));
+  | (typeof PUBLIC_LAW_RELATION_BY_SCHEMA_IMPORT)[keyof typeof PUBLIC_LAW_RELATION_BY_SCHEMA_IMPORT]
+  | keyof typeof COLLECTION_BODY_COLUMN_GRANTS_BY_RELATION;
 
 /** How this release relates to a column's grant. */
 export type PublicLawColumnGrant = "required" | "permitted";
@@ -53,6 +79,103 @@ export type PublicLawColumnGrant = "required" | "permitted";
 export type PublicLawColumnGrantsByRelation = Readonly<
   Record<string, Readonly<Record<string, PublicLawColumnGrant>>>
 >;
+
+/**
+ * Expansion release for collection-backed decision bodies. Deploy before
+ * granting the narrow attachment view or reading normalized host sections.
+ * This release neither grants these columns nor reads them.
+ */
+export const COLLECTION_BODY_COLUMN_GRANTS_BY_RELATION = {
+  case_law_collection_bodies: {
+    host_decision_id: "permitted",
+    collection_source_id: "permitted",
+    collection_document_id: "permitted",
+    source_url: "permitted",
+    retrieved_at: "permitted",
+    detail_raw_s3_key: "permitted",
+    detail_raw_content_type: "permitted",
+  },
+  case_law_published_decisions: {
+    normalized_s3_key: "permitted",
+  },
+} as const satisfies PublicLawColumnGrantsByRelation;
+
+/** Permit typed collection-part projections before their grants and reader land. */
+export const COLLECTION_PART_COLUMN_GRANTS_BY_RELATION = {
+  case_law_collection_bodies: {
+    document_part: "permitted",
+    document_body_s3_key: "permitted",
+    document_body_sha256: "permitted",
+    origin: "permitted",
+  },
+} as const satisfies PublicLawColumnGrantsByRelation;
+
+/** Permit genuine source observation time before the reader starts selecting it. */
+export const COLLECTION_OBSERVATION_COLUMN_GRANTS_BY_RELATION = {
+  case_law_published_decisions: { source_observed_at: "permitted" },
+} as const satisfies PublicLawColumnGrantsByRelation;
+
+/**
+ * Expansion release: tolerate these future public census grants without
+ * requiring the relation or reading it. Deploy this declaration before the
+ * follow-up migration grants the columns and its readers require them.
+ */
+export const CENSUS_COLUMN_GRANTS_BY_RELATION = {
+  case_law_completeness_census: {
+    source_id: "permitted",
+    slice: "permitted",
+    year: "permitted",
+    outcome: "permitted",
+    scope_status: "permitted",
+    publisher_count: "permitted",
+    stored_count: "permitted",
+    text_count: "permitted",
+    observed_at: "permitted",
+    expected_slices: "permitted",
+    evidence_ref: "permitted",
+  },
+} as const satisfies PublicLawColumnGrantsByRelation;
+
+/**
+ * Deploy this expansion before the alias migration, grants and readers.
+ * Promote these columns to required in the following release; preceding
+ * supported tasks must tolerate the grants throughout the rollover.
+ */
+export const LEGISLATION_WORK_IDENTIFIER_COLUMN_GRANTS_BY_RELATION = {
+  legislation_work_identifiers: {
+    source_id: "permitted",
+    identifier: "permitted",
+    eli: "permitted",
+  },
+} as const satisfies PublicLawColumnGrantsByRelation;
+
+/**
+ * The reviewed doctrine capability, granted by
+ * `20261112120000_public_law_reader_citation_doctrine` one release after the
+ * map first permitted it.
+ */
+export const DOCTRINE_COLUMN_GRANTS_BY_RELATION = {
+  case_law_citations: {
+    citation_key: "permitted",
+    doctrinal_treatment: "permitted",
+  },
+  case_law_citation_doctrine_reviews: {
+    citing_decision_id: "permitted",
+    citation_key: "permitted",
+    doctrinal_treatment: "permitted",
+    evidence_quote: "permitted",
+  },
+} as const satisfies PublicLawColumnGrantsByRelation;
+
+export const CITATION_POLARITY_EVIDENCE_COLUMN_GRANTS_BY_RELATION = {
+  case_law_citations: {
+    polarity_rule_id: "permitted",
+    polarity_source: "permitted",
+    polarity_classifier_version: "permitted",
+    polarity_evidence_windows: "permitted",
+    cited_part: "permitted",
+  },
+} as const satisfies PublicLawColumnGrantsByRelation;
 
 const PROVISION_LINK_STATUS_GRANT = "permitted";
 
@@ -84,6 +207,7 @@ export const PROVISION_LINK_STATUS_COLUMN_GRANTS_BY_RELATION = {
   case_law_provision_extractions: {
     decision_id: PROVISION_LINK_STATUS_GRANT,
     desired_input_digest: PROVISION_LINK_STATUS_GRANT,
+    pending_since: PROVISION_LINK_STATUS_GRANT,
     work_status: PROVISION_LINK_STATUS_GRANT,
     generation: PROVISION_LINK_STATUS_GRANT,
     outcome: PROVISION_LINK_STATUS_GRANT,
@@ -117,8 +241,156 @@ export const PROVISION_LINK_STATUS_COLUMN_GRANTS_BY_RELATION = {
  * `permitted` first, revoke in a later release, so both releases serve while
  * the two steps are apart.
  */
+const CASE_LAW_DECISION_INITIAL_VIEW_COLUMN_GRANTS = {
+  id: "required",
+  source_id: "required",
+  case_number: "required",
+  case_number_type: "required",
+  slug: "required",
+  ecli: "required",
+  citation_key: "required",
+  // Granted a release after the column (expand first); the read probes
+  // for the grant and falls back to the spellings without it.
+  docket_family_key: "permitted",
+  court: "required",
+  court_id: "required",
+  country: "required",
+  language: "required",
+  language_group_key: "required",
+  decision_date: "required",
+  decision_type: "required",
+  fulltext: "required",
+  sections: "required",
+  document_ast: "required",
+  analysis: "required",
+  source_url: "required",
+  document_url: "required",
+  metadata: "required",
+  redacted_at: "required",
+  citation_authority: "required",
+  citation_count: "required",
+  text_s3_key: "required",
+  ast_s3_key: "required",
+  content_hash: "required",
+  // The reader retains this grant until the column is dropped in the next release.
+  indexed_hash: "permitted",
+  created_at: "required",
+  updated_at: "required",
+} as const;
+
+// Permitted ahead of its migration: runtime attestation accepts the grant,
+// but generators must not grant a column the migrated views do not contain.
+const CASE_LAW_DECISION_PENDING_VIEW_COLUMN_GRANTS = {
+  text_state: "permitted",
+} as const;
+
+const CASE_LAW_DECISION_LATER_VIEW_COLUMN_GRANTS = {
+  extraction_warnings: "required",
+} as const;
+
+const CASE_LAW_DECISION_VIEW_COLUMN_GRANTS = {
+  ...CASE_LAW_DECISION_INITIAL_VIEW_COLUMN_GRANTS,
+  ...CASE_LAW_DECISION_PENDING_VIEW_COLUMN_GRANTS,
+  ...CASE_LAW_DECISION_LATER_VIEW_COLUMN_GRANTS,
+} as const;
+
+export const CASE_LAW_DECISION_VIEWS = [
+  PUBLIC_LAW_RELATION_BY_SCHEMA_IMPORT.publishedCaseLawDecisions,
+  PUBLIC_LAW_RELATION_BY_SCHEMA_IMPORT.unredactedCaseLawDecisions,
+] as const;
+
+/** Subject resolution and publication reads require the paired decision views. */
+const CASE_LAW_DECISION_INITIAL_VIEW_SELECT_GRANTS_BY_ROLE = {
+  stella_public_law_reader: {
+    kind: "columns",
+    columns: CASE_LAW_DECISION_INITIAL_VIEW_COLUMN_GRANTS,
+  },
+  stella_caselaw_reader: { kind: "table" },
+  stella: { kind: "table" },
+  stella_ingestion: { kind: "table" },
+} as const;
+
+export const CASE_LAW_DECISION_VIEW_SELECT_GRANTS_BY_STAGE = {
+  initial: CASE_LAW_DECISION_INITIAL_VIEW_SELECT_GRANTS_BY_ROLE,
+  later: {
+    ...CASE_LAW_DECISION_INITIAL_VIEW_SELECT_GRANTS_BY_ROLE,
+    stella_public_law_reader: {
+      kind: "columns",
+      columns: {
+        ...CASE_LAW_DECISION_INITIAL_VIEW_COLUMN_GRANTS,
+        ...CASE_LAW_DECISION_LATER_VIEW_COLUMN_GRANTS,
+      },
+    },
+  },
+} as const;
+
+type DecisionViewGrantStage =
+  keyof typeof CASE_LAW_DECISION_VIEW_SELECT_GRANTS_BY_STAGE;
+type DecisionViewGrantRole =
+  keyof (typeof CASE_LAW_DECISION_VIEW_SELECT_GRANTS_BY_STAGE)[DecisionViewGrantStage];
+type DecisionViewGrant =
+  (typeof CASE_LAW_DECISION_VIEW_SELECT_GRANTS_BY_STAGE)[DecisionViewGrantStage][DecisionViewGrantRole];
+const decisionViewSelection = (grant: DecisionViewGrant): string => {
+  switch (grant.kind) {
+    case "columns":
+      return `SELECT (${Object.keys(grant.columns)
+        .map((column) => `"${column}"`)
+        .join(", ")})`;
+    case "table":
+      return "SELECT";
+    default:
+      grant satisfies never;
+      return panic("Unhandled decision view grant kind");
+  }
+};
+
+const renderDecisionViewGrant = (role: string, grant: DecisionViewGrant) =>
+  `GRANT ${decisionViewSelection(grant)} ON TABLE ${CASE_LAW_DECISION_VIEWS.map((relation) => `"${relation}"`).join(", ")} TO "${role}"`;
+
+export const caseLawDecisionViewGrantStatement = (
+  stage: DecisionViewGrantStage,
+  role: DecisionViewGrantRole,
+) =>
+  renderDecisionViewGrant(
+    role,
+    CASE_LAW_DECISION_VIEW_SELECT_GRANTS_BY_STAGE[stage][role],
+  );
+
+export const caseLawDecisionViewGrantStatements = (
+  stage: DecisionViewGrantStage,
+) =>
+  Object.entries(CASE_LAW_DECISION_VIEW_SELECT_GRANTS_BY_STAGE[stage]).map(
+    ([role, grant]) => renderDecisionViewGrant(role, grant),
+  );
+
 export const PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION = {
+  case_law_withdrawal_status: {
+    decision_id: "required",
+    status: "required",
+    withdrawn_at: "required",
+  },
+  ...CENSUS_COLUMN_GRANTS_BY_RELATION,
+  ...REVIEW_COLUMN_GRANTS_BY_RELATION,
+  ...LEGISLATION_WORK_IDENTIFIER_COLUMN_GRANTS_BY_RELATION,
+  case_law_citation_doctrine_reviews:
+    DOCTRINE_COLUMN_GRANTS_BY_RELATION.case_law_citation_doctrine_reviews,
+  case_law_decision_reviews: {
+    reviewing_decision_id: "required",
+    reviewed_decision_id: "required",
+    reviewed_case_number: "required",
+    reviewed_citation_key: "required",
+    reviewed_docket_family_key: "required",
+    reviewed_court: "required",
+    reviewed_decision_date: "required",
+    reviewed_sheet_number: "required",
+    outcome: "required",
+    source: "required",
+    evidence_classification: "required",
+    parser_version: "required",
+  },
   case_law_citations: {
+    ...DOCTRINE_COLUMN_GRANTS_BY_RELATION.case_law_citations,
+    ...CITATION_POLARITY_EVIDENCE_COLUMN_GRANTS_BY_RELATION.case_law_citations,
     id: "required",
     citing_decision_id: "required",
     cited_decision_id: "required",
@@ -149,10 +421,24 @@ export const PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION = {
     tier_label: "required",
     weight: "required",
   },
+  // Publisher-reported slice totals aggregated into the public coverage page.
+  case_law_coverage_slices: {
+    source_id: "required",
+    slice: "required",
+    reported: "required",
+    collected: "required",
+    checked_at: "required",
+  },
   // Accept the future reader grant before a later release grants and reads it.
   case_law_decision_aliases: {
     retired_decision_id: "permitted",
     canonical_decision_id: "permitted",
+  },
+  // Where an earlier document's anchor went; the redirect read answers from it.
+  case_law_decision_anchor_redirects: {
+    decision_id: "required",
+    from_anchor: "required",
+    to_anchor: "required",
   },
   case_law_decision_identifiers: {
     decision_id: "required",
@@ -171,41 +457,28 @@ export const PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION = {
     role: "required",
     position: "required",
   },
-  case_law_decisions: {
-    id: "required",
-    source_id: "required",
-    case_number: "required",
-    case_number_type: "required",
-    slug: "required",
-    ecli: "required",
-    citation_key: "required",
-    // Granted a release after the column (expand first); the read probes
-    // for the grant and falls back to the spellings without it.
-    docket_family_key: "permitted",
-    court: "required",
-    court_id: "required",
-    country: "required",
-    language: "required",
-    language_group_key: "required",
-    decision_date: "required",
-    decision_type: "required",
-    fulltext: "required",
-    sections: "required",
-    document_ast: "required",
-    analysis: "required",
-    source_url: "required",
-    document_url: "required",
-    metadata: "required",
-    redacted_at: "required",
-    citation_authority: "required",
-    citation_count: "required",
-    text_s3_key: "required",
-    ast_s3_key: "required",
-    content_hash: "required",
-    // Granted, and no longer read: the column is dropped a release from now.
-    indexed_hash: "permitted",
-    created_at: "required",
-    updated_at: "required",
+  [CASE_LAW_DECISION_VIEWS[0]]: {
+    ...CASE_LAW_DECISION_VIEW_COLUMN_GRANTS,
+    ...COLLECTION_BODY_COLUMN_GRANTS_BY_RELATION.case_law_published_decisions,
+    ...COLLECTION_OBSERVATION_COLUMN_GRANTS_BY_RELATION.case_law_published_decisions,
+  },
+  [CASE_LAW_DECISION_VIEWS[1]]: CASE_LAW_DECISION_VIEW_COLUMN_GRANTS,
+  case_law_collection_bodies: {
+    ...COLLECTION_BODY_COLUMN_GRANTS_BY_RELATION.case_law_collection_bodies,
+    ...COLLECTION_PART_COLUMN_GRANTS_BY_RELATION.case_law_collection_bodies,
+  },
+  case_law_decision_citation_stats: {
+    decision_id: "required",
+    direction: "required",
+    related_year: "required",
+    related_country: "required",
+    related_source_id: "required",
+    polarity: "required",
+    count: "required",
+  },
+  case_law_decision_citation_stats_state: {
+    decision_id: "required",
+    status: "required",
   },
   // The text-search configuration a language's query is parsed with. It is
   // read from the database whose search documents it has to match.
@@ -227,6 +500,8 @@ export const PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION = {
     jurisdiction: "required",
     work_identifier: "required",
     work_number: "required",
+    eu_work_number: "required",
+    eu_work_year: "required",
     work_year: "required",
     work_collection: "required",
     work_eli: "required",
@@ -239,6 +514,15 @@ export const PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION = {
     sentence: "required",
     open_ended: "required",
     anchor: "required",
+    applied_version_basis: "required",
+    applied_version_date: "required",
+    applied_version_date_relation: "required",
+    applied_version_amendment_work_identifier: "required",
+    applied_version_expression_date: "required",
+    applied_version_expression_eli: "required",
+    version_evidence_start: "required",
+    version_evidence_end: "required",
+    version_evidence_kind: "required",
     version_valid_from: "required",
     decision_date: "required",
     sentence_text: "required",
@@ -266,16 +550,71 @@ export const PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION = {
     tsv: "required",
     searchable_text: "required",
   },
-  // The shards the public sitemap index lists. The count is how the refresh
-  // splits a month, not what the index states.
+  // The shards the public sitemap index lists. A file's read looks up its
+  // range and refuses one whose count outgrew what a read may serve.
   case_law_sitemap_shards: {
     country: "required",
     year: "required",
     month: "required",
     bucket: "required",
     last_modified_at: "required",
+    total: "required",
+    range_start_date: "required",
+    range_start_id: "required",
+    range_end_date: "required",
+    range_end_id: "required",
+  },
+  case_law_source_arrivals: {
+    source_id: "required",
+    added_last_week: "required",
+    counted_at: "required",
+  },
+  case_law_completeness_census: Object.fromEntries(
+    Object.keys(
+      CENSUS_COLUMN_GRANTS_BY_RELATION.case_law_completeness_census,
+    ).map((column) => [column, "required"] as const),
+  ),
+  legislation_facet_refreshes: {
+    singleton: "required",
+    refreshed_at: "required",
+  },
+  legislation_facet_counts: {
+    country: "required",
+    source_id: "required",
+    document_type: "required",
+    works: "required",
   },
   case_law_browse_facet_counts: {
+    kind: "required",
+    country: "required",
+    source_id: "required",
+    value: "required",
+    total: "required",
+  },
+  case_law_population_projections: {
+    source_id: "required",
+    country: "required",
+    court: "required",
+    created_at: "required",
+    updated_at: "required",
+    publication: "required",
+  },
+  case_law_population_counts_live: {
+    kind: "required",
+    country: "required",
+    source_id: "required",
+    value: "required",
+    total: "required",
+  },
+  case_law_population_deltas: {
+    id: "required",
+    kind: "required",
+    country: "required",
+    source_id: "required",
+    value: "required",
+    delta: "required",
+  },
+  case_law_population_counts: {
     kind: "required",
     country: "required",
     source_id: "required",
@@ -312,6 +651,7 @@ export const PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION = {
     reported_total_origin: "required",
     stored_total: "required",
     stored_total_as_of: "required",
+    import_snapshot_date: "required",
   },
   corpus_index_generations: {
     family: "required",
@@ -329,6 +669,13 @@ export const PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION = {
     index_group: "required",
     effective_digest: "required",
     provisioning_status: "required",
+  },
+  // Which generation answers a jurisdiction the serving generation no longer
+  // holds: the row the acceptance of every indexed hit follows.
+  corpus_index_jurisdiction_serving: {
+    family: "required",
+    jurisdiction: "required",
+    generation: "required",
   },
   // Exactly what deciding "this generation holds this decision now" reads.
   // The revision joins its physical passage count; work schedules and failure
@@ -368,6 +715,10 @@ export const PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION = {
     expression_kind: "required",
     window_disposition: "required",
     window_disposition_basis: "required",
+    // What a consolidation changed against the one before it, served only
+    // while the row's payload revision is the one it was computed from.
+    change_summary: "required",
+    payload_revision: "required",
     fulltext: "required",
     sections: "required",
     document_ast: "required",
@@ -377,7 +728,7 @@ export const PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION = {
     text_s3_key: "required",
     ast_s3_key: "required",
     content_hash: "required",
-    // Granted, and no longer read: the column is dropped a release from now.
+    // The reader retains this grant until the column is dropped in the next release.
     indexed_hash: "permitted",
     created_at: "required",
     updated_at: "required",
@@ -399,9 +750,67 @@ export const PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION = {
     lastmod: "required",
     total: "required",
   },
+  // Expand phase: readers tolerate the grants while reads still fall back
+  // when the relations have not reached a deployment yet.
+  legislation_amendment_snapshots: {
+    source_id: "permitted",
+    target_eli: "permitted",
+    language: "permitted",
+    observed_at: "permitted",
+    coverage: "permitted",
+  },
+  legislation_amendments: {
+    source_id: "permitted",
+    target_eli: "permitted",
+    language: "permitted",
+    publisher_id: "permitted",
+    amending_eli: "permitted",
+    amending_title: "permitted",
+    amending_anchor: "permitted",
+    affected_anchor: "permitted",
+    change_kind: "permitted",
+    effective_type: "permitted",
+    effective_date: "permitted",
+    effective_text: "permitted",
+    publisher_instruction: "permitted",
+    effect_details: "permitted",
+    observations: "permitted",
+  },
   legislation_sources: {
     id: "required",
     descriptor: "required",
+  },
+  legislation_work_identifiers: {
+    source_id: "required",
+    identifier: "required",
+    eli: "required",
+  },
+  // Guidance as served; raw payloads, identity keys and run state stay with
+  // ingestion, and `soft_law_sources` is not readable at all.
+  soft_law_documents: {
+    id: "required",
+    jurisdiction: "required",
+    authority: "required",
+    kind: "required",
+    title: "required",
+    stated_reference: "required",
+    issued_on: "required",
+    listing_state: "required",
+    validity_state: "required",
+    validity_basis: "required",
+  },
+  soft_law_document_versions: {
+    document_id: "required",
+    metadata: "required",
+    extracted_text: "required",
+    extraction_quality: "required",
+    observed_to: "required",
+  },
+  soft_law_document_locators: {
+    document_id: "required",
+    url: "required",
+    state: "required",
+    last_seen_at: "required",
   },
   // The name lookup a legislation search places named acts first by: the
   // match keys and what they point at, not the names' text.
@@ -441,13 +850,12 @@ export const publicLawColumnPairs = (
   );
 
 /**
- * The v0.7.22 reader contract retained during the bounded rollout window.
- * Remove these constants with `stella_caselaw_reader` after that release can
- * no longer be deployed or used for rollback.
+ * The corpus relations retained for the legacy reader's bounded rollout. Its
+ * decisions come through the views only; the base table is closed to it.
  */
 export const ROLLOUT_CASE_LAW_WHOLE_RELATIONS = [
   "case_law_citations",
-  "case_law_decisions",
+  ...CASE_LAW_DECISION_VIEWS,
   "case_law_provision_citations",
 ] as const;
 export const ROLLOUT_CASE_LAW_SOURCE_RELATION = "case_law_sources";
@@ -458,6 +866,7 @@ export const ROLLOUT_CASE_LAW_SOURCE_COLUMNS = [
   "descriptor",
 ] as const;
 export const ROLLOUT_CASE_LAW_RELATIONS = [
-  ...ROLLOUT_CASE_LAW_WHOLE_RELATIONS,
+  "case_law_citations",
+  "case_law_provision_citations",
   ROLLOUT_CASE_LAW_SOURCE_RELATION,
 ] as const;

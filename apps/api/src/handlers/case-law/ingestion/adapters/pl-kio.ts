@@ -1,4 +1,49 @@
-import { Result, panic } from "better-result";
+// parser-output-unchanged: HTML parser bindings come from their package owner; DOM and serialization behavior are unchanged.
+// parser-output-unchanged: a page states whether the publisher was asked; parsed decision output is unchanged.
+// parser-output-unchanged: Reconciliation exposes the existing listing total for the census; decision parsing and listed identities are unchanged.
+// parser-output-unchanged: imports ingestion bindings directly from their existing owner.
+// parser-output-unchanged: shared warning projection changes error telemetry only; parsed decisions are unchanged.
+import { panic, Result } from "better-result";
+import { Buffer } from "node:buffer";
+
+import type * as cheerio from "@stll/html";
+import type { AnyNode } from "@stll/html/nodes";
+import {
+  DECISION_IDENTIFIER_TYPES,
+  type DecisionIdentifier,
+} from "@stll/legal-ast/decision-identifier";
+// parser-output-unchanged: imports the document AST from its package owner
+import type { DocumentAst } from "@stll/legal-ast/document-ast";
+import type { DocumentFetchStage } from "@stll/legal-atlas/document-fetch-diagnostics";
+// parser-output-unchanged: SHA-256 ownership changes preserve input bytes, serialization and update order, so stored hashes and parser output remain identical.
+import { sha256Hex as hashContent } from "@stll/sha256/bun";
+import { readCappedBytes } from "@stll/skills/streaming";
+import { Temporal } from "@stll/time";
+
+import {
+  ADAPTER_KEYS,
+  ADAPTER_TIMEOUT,
+  PARSER_VERSIONS,
+} from "@/api/handlers/case-law/consts";
+import { createCalendarDaySliceWalk } from "@/api/handlers/case-law/ingestion/adapters/calendar-day-slice-walk";
+import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
+import { publisherRequestIntervalMs } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
+import { fetchWithRetry } from "@/api/handlers/case-law/ingestion/adapters/retry";
+import { adapterCatch } from "@/api/handlers/case-law/ingestion/adapters/utils";
+import { parsePlDecisionContent } from "@/api/handlers/case-law/ingestion/parsers/pl-courts";
+import { readPlKioLayout } from "@/api/handlers/case-law/ingestion/parsers/pl-kio-layout";
+import {
+  legacyQuarantineHtmlText,
+  visibleHtmlText,
+} from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
+import {
+  absentDecisionTextFields,
+  checkedDecisionMetadata,
+  TEXT_ABSENCE_REASON,
+} from "@/api/lib/case-law/decision-text";
+import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
+import { errorTag } from "@/api/lib/errors/utils";
+import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 /**
  * Polish public-procurement rulings from the UZP decision database.
  *
@@ -34,41 +79,30 @@ import { Result, panic } from "better-result";
  * separate id spaces; {@link plProcurementRulingKeys} is the relationship
  * between their rows, and nothing here merges or deletes either side.
  */
-import * as cheerio from "cheerio";
-import type { AnyNode } from "domhandler";
-
 import {
-  DECISION_IDENTIFIER_TYPES,
-  type DecisionIdentifier,
-} from "@stll/legal-ast/decision-identifier";
-import type { DocumentFetchStage } from "@stll/legal-atlas/document-fetch-diagnostics";
-import { readCappedBytes } from "@stll/skills/streaming";
-import { Temporal } from "@stll/time";
-
-import {
-  ADAPTER_KEYS,
-  ADAPTER_TIMEOUT,
-  PARSER_VERSIONS,
-} from "@/api/handlers/case-law/consts";
-import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
+  decisionCourtExceedsStorage,
+  storedCaseNumberOf,
+} from "@/api/lib/legal-search/ingestion-normalization";
 import {
   defineSourceAdapter,
   EMPTY_AST,
   encodeSourceRawEnvelope,
   excludedSourceSurface,
   isPersistableSourceDocumentId,
+  PUBLISHER_REQUEST,
   readStoredRawListing,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+  SOURCE_TOTAL_PROBE_FAILURE,
   sourceTotalProbeFailed,
   sourceTotalRead,
-  SOURCE_TOTAL_PROBE_FAILURE,
   storedSourceSurface,
-} from "@/api/handlers/case-law/ingestion/adapter";
+} from "@/api/lib/legal-search/ingestion-types";
 import type {
   DecisionJudgeInput,
   EmptyAst,
   IngestionResult,
   ListingIdentity,
+  RawIngestionResult,
   ReconciliationBuildOutcome,
   ReconciliationSlicePage,
   ReconciliationSlicePageOptions,
@@ -80,33 +114,22 @@ import type {
   StoredRawReparseInput,
   StoredRawReparseOutcome,
   SyncPage,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import { createCalendarDaySliceWalk } from "@/api/handlers/case-law/ingestion/adapters/calendar-day-slice-walk";
-import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
-import { publisherRequestIntervalMs } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
-import { fetchWithRetry } from "@/api/handlers/case-law/ingestion/adapters/retry";
-import {
-  adapterCatch,
-  hashContent,
-} from "@/api/handlers/case-law/ingestion/adapters/utils";
-import { parsePlDecisionContent } from "@/api/handlers/case-law/ingestion/parsers/pl-courts";
-import {
-  legacyQuarantineHtmlText,
-  visibleHtmlText,
-} from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
-import {
-  TEXT_ABSENCE_REASON,
-  absentDecisionTextFields,
-  checkedDecisionMetadata,
-} from "@/api/lib/case-law/decision-text";
-import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
-import { errorTag } from "@/api/lib/errors/utils";
-import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
-import type { RawIngestionResult } from "@/api/lib/legal-search/ingestion-types";
+} from "@/api/lib/legal-search/ingestion-types";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { logger } from "@/api/lib/observability/logger";
 import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
 import { isRecord } from "@/api/lib/type-guards";
+
+import { logDocumentParseFailure } from "./document-parse-failure";
+import {
+  loadPlKioHtml,
+  PL_KIO_DOCUMENT_REJECTION,
+  PL_KIO_HTML_BUDGET,
+  PL_KIO_RESPONSE_BYTE_CAP,
+  PlKioHtmlBudgetError,
+  type PlKioResponseKind,
+  readPlKioHtml,
+} from "./pl-kio-response-budget";
 
 // ── Publisher boundary ───────────────────────────────────
 
@@ -323,7 +346,13 @@ const readPlKioListingItem = (
  * without it is an error page or a challenge, never an empty listing.
  */
 export const readPlKioListing = (html: string): PlKioListingPage | null => {
-  const $ = cheerio.load(html);
+  const parsed = readPlKioHtml(html, {
+    maxBytes: PL_KIO_RESPONSE_BYTE_CAP.listing,
+  });
+  if (parsed.type !== "accepted") {
+    return null;
+  }
+  const $ = parsed.document;
   const rawCounts = $("#resultCounts").attr("value");
   const counts = rawCounts?.split(",").map((part) => Number(part.trim()));
   if (
@@ -382,7 +411,13 @@ const plKioQuarantineRepairIds = (item: PlKioListingItem): string[] => {
   if (item.html === undefined) {
     return [canonicalId];
   }
-  const $ = cheerio.load(item.html);
+  const parsed = readPlKioHtml(item.html, {
+    maxBytes: PL_KIO_RESPONSE_BYTE_CAP.listing,
+  });
+  if (parsed.type !== "accepted") {
+    return [canonicalId];
+  }
+  const $ = parsed.document;
   const legacyId = plKioQuarantineId(
     readPlKioListingItem($(".search-list-item"), legacyQuarantineHtmlText),
   );
@@ -483,7 +518,13 @@ const KIND_HREF = /[?&]Kind=(?<kind>[A-Z]+)/u;
  * "no such page" answer is a full HTML page under a 404, handled before).
  */
 export const readPlKioDetail = (html: string): PlKioDetail | null => {
-  const $ = cheerio.load(html);
+  const parsed = readPlKioHtml(html, {
+    maxBytes: PL_KIO_RESPONSE_BYTE_CAP.detail,
+  });
+  if (parsed.type !== "accepted") {
+    return null;
+  }
+  const $ = parsed.document;
   const metrics = $(".details-metrics");
   if (metrics.length === 0) {
     return null;
@@ -576,6 +617,8 @@ type PlKioSourceField = (typeof SOURCE_FIELDS)[number];
 const isSourceField = (value: string): value is PlKioSourceField =>
   SOURCE_FIELDS.some((field) => field === value);
 
+type PlKioPublisherRecord = Readonly<Record<PlKioSourceField, unknown>>;
+
 const PL_KIO_SOURCE_FIELDS = {
   "Organ wydający": {
     disposition: "stored",
@@ -634,13 +677,14 @@ const PL_KIO_SOURCE_FIELDS = {
     disposition: "stored",
     target: { type: "metadata", key: "keywords" },
   },
-} as const satisfies Record<PlKioSourceField, SourceFieldDisposition>;
+} as const satisfies Record<keyof PlKioPublisherRecord, SourceFieldDisposition>;
 
-/** The envelope parts, named by the response each holds. */
+/** Response payloads and bounded-read dispositions needed for replay. */
 const RAW_PART = {
   LISTING: "listing",
   DETAIL: "detail",
   DOCUMENT: "document",
+  DOCUMENT_REJECTION: "document-rejection",
 } as const;
 
 const listPlKioSourceFields = (parts: SourceRawParts): readonly string[] => {
@@ -804,8 +848,82 @@ type AssemblePlKioDecisionOptions = {
   item: PlKioListingItem;
   /** The record page verbatim, where one was served. */
   detailHtml: string | undefined;
-  /** The document verbatim, where one was served; empty is no document. */
-  documentHtml: string | undefined;
+  document:
+    | { type: "read"; html: string }
+    | { type: "unavailable" }
+    | { type: typeof PL_KIO_DOCUMENT_REJECTION.OVERSIZED };
+  /** A replay can retain its decoded envelope without serializing it again. */
+  sourceRaw?: string;
+};
+
+type PlKioDocumentReadState = {
+  html: string | undefined;
+  rejection:
+    | (typeof PL_KIO_DOCUMENT_REJECTION)[keyof typeof PL_KIO_DOCUMENT_REJECTION]
+    | undefined;
+  rawParts: SourceRawParts;
+};
+
+const plKioParseError = (error: unknown, state: PlKioDocumentReadState) => {
+  if (error instanceof PlKioHtmlBudgetError) {
+    state.rejection = error.reason;
+  }
+  return errorTag(error);
+};
+
+const loadPlKioHtmlForParser = (html: string) => {
+  const loaded = loadPlKioHtml(html, {
+    maxBytes: PL_KIO_RESPONSE_BYTE_CAP.document,
+  });
+  if (Result.isError(loaded)) {
+    // oxlint-disable-next-line result-boundary/no-throw-outside-boundary -- the shared parser's callback contract returns a CheerioAPI; the enclosing Result.try in assemblePlKioDecision records the rejection via plKioParseError
+    throw loaded.error;
+  }
+  // The converter's print layout is read back before the parser walks the
+  // document; see pl-kio-layout.ts.
+  readPlKioLayout(loaded.value);
+  return loaded.value;
+};
+
+/**
+ * How the Polish parser reads this publisher's documents: bounded, through
+ * the layout reader, with `<sup>` and the small-type indices it lifts kept
+ * raised.
+ */
+const PL_KIO_PARSER_OPTIONS = {
+  loadHtml: loadPlKioHtmlForParser,
+  htmlExpansionBudget: PL_KIO_HTML_BUDGET,
+  superscripts: true,
+} as const;
+
+const plKioDocumentOf = (
+  document: AssemblePlKioDecisionOptions["document"],
+): PlKioDocumentReadState => {
+  switch (document.type) {
+    case "read":
+      return {
+        html: document.html,
+        rejection:
+          Buffer.byteLength(document.html, "utf-8") >
+          PL_KIO_RESPONSE_BYTE_CAP.document
+            ? PL_KIO_DOCUMENT_REJECTION.OVERSIZED
+            : undefined,
+        rawParts: { [RAW_PART.DOCUMENT]: document.html },
+      };
+    case "unavailable":
+      return { html: undefined, rejection: undefined, rawParts: {} };
+    case PL_KIO_DOCUMENT_REJECTION.OVERSIZED:
+      return {
+        html: undefined,
+        rejection: document.type,
+        rawParts: { [RAW_PART.DOCUMENT_REJECTION]: document.type },
+      };
+    default:
+      document satisfies never;
+      return panic(
+        `Unhandled procurement document read: ${JSON.stringify(document)}`,
+      );
+  }
 };
 
 const fieldOf = (
@@ -833,6 +951,77 @@ const listOf = (
   return items.length === 0 ? undefined : items;
 };
 
+type PlKioCourtStorageOptions = {
+  statedCourt: string | undefined;
+  hasRecordId: boolean;
+  caseNumber: string;
+  decisionType: string | undefined;
+  sourceDocumentId: string;
+};
+
+const plKioCourtStorage = ({
+  statedCourt,
+  hasRecordId,
+  caseNumber,
+  decisionType,
+  sourceDocumentId,
+}: PlKioCourtStorageOptions) => {
+  if (statedCourt === undefined) {
+    logger.warn("case_law.ingestion.court_not_stated", {
+      adapterKey: ADAPTER_KEYS.PL_KIO,
+      sourceDocumentId,
+    });
+  }
+  const candidate = {
+    caseNumber: storedCaseNumberOf({
+      caseNumber,
+      country: ADAPTER_MANIFESTS[ADAPTER_KEYS.PL_KIO].country,
+      sourceDocumentId,
+    }),
+    country: ADAPTER_MANIFESTS[ADAPTER_KEYS.PL_KIO].country,
+    court: statedCourt ?? "",
+    decisionType,
+    ecli: undefined,
+    sourceDocumentId,
+  };
+  const courtTooLong =
+    statedCourt !== undefined && decisionCourtExceedsStorage(candidate);
+  const court = courtTooLong ? "" : (statedCourt ?? "");
+  const unavailableCourt = statedCourt === undefined || courtTooLong;
+  let quarantineReason:
+    "no-record-id" | "court-not-stated" | "court-too-long" | undefined;
+  if (!hasRecordId) {
+    quarantineReason = "no-record-id";
+  } else if (statedCourt === undefined) {
+    quarantineReason = "court-not-stated";
+  } else if (courtTooLong) {
+    quarantineReason = "court-too-long";
+  }
+  return { court, courtTooLong, quarantineReason, unavailableCourt };
+};
+
+type PlKioSourceRawOptions = Pick<
+  AssemblePlKioDecisionOptions,
+  "detailHtml" | "item"
+> & { documentParts: SourceRawParts };
+
+const plKioSourceRawOf = ({
+  detailHtml,
+  documentParts,
+  item,
+}: PlKioSourceRawOptions) =>
+  encodeSourceRawEnvelope({
+    [RAW_PART.LISTING]: JSON.stringify(item),
+    ...(detailHtml === undefined ? {} : { [RAW_PART.DETAIL]: detailHtml }),
+    ...documentParts,
+  });
+
+const plKioIdentifiersOf = (dockets: readonly string[]) =>
+  dockets.map((value) => ({
+    type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+    value,
+  }));
+
 /**
  * Build one ruling from the responses in hand. No I/O: the crawl, the
  * reconciliation and a replay of the stored envelope all reach this with the
@@ -840,8 +1029,9 @@ const listOf = (
  */
 export const assemblePlKioDecision = ({
   detailHtml,
-  documentHtml,
+  document: documentRead,
   item,
+  sourceRaw: replaySourceRaw,
 }: AssemblePlKioDecisionOptions): PlKioBuildResult => {
   const id = publisherIdOf(item);
   const quarantineId = plKioQuarantineId(item);
@@ -850,7 +1040,6 @@ export const assemblePlKioDecision = ({
     id === undefined || detailHtml === undefined
       ? null
       : readPlKioDetail(detailHtml);
-
   const dockets = [
     ...new Set(
       detail !== null && detail.cases.length > 0
@@ -889,23 +1078,18 @@ export const assemblePlKioDecision = ({
   // and a later observation that states the body replaces it.
   const statedCourt =
     fieldOf(detail, "Organ wydający") ?? presentText(item.court);
-  if (statedCourt === undefined) {
-    logger.warn("case_law.ingestion.court_not_stated", {
-      adapterKey: ADAPTER_KEYS.PL_KIO,
-      sourceDocumentId,
-    });
-  }
-  const court = statedCourt ?? "";
-  let quarantineReason: "no-record-id" | "court-not-stated" | undefined;
-  if (id === undefined) {
-    quarantineReason = "no-record-id";
-  } else if (statedCourt === undefined) {
-    quarantineReason = "court-not-stated";
-  }
-  const listingOnly = detail === null || statedCourt === undefined;
   const decisionForm =
     fieldOf(detail, "Rodzaj dokumentu") ?? presentText(item.documentType);
   const decisionType = plKioDecisionType(decisionForm);
+  const { court, courtTooLong, quarantineReason, unavailableCourt } =
+    plKioCourtStorage({
+      statedCourt,
+      hasRecordId: id !== undefined,
+      caseNumber,
+      decisionType,
+      sourceDocumentId,
+    });
+  const listingOnly = detail === null || unavailableCourt;
   const publishedDate =
     plKioIsoDate(fieldOf(detail, "Data wydania rozstrzygnięcia")) ??
     plKioIsoDate(item.issueDate);
@@ -916,10 +1100,13 @@ export const assemblePlKioDecision = ({
   );
 
   const kind = detail?.kind;
+  const documentReadState = plKioDocumentOf(documentRead);
   const content =
-    documentHtml === undefined || documentHtml.trim().length === 0
+    documentReadState.rejection !== undefined ||
+    documentReadState.html === undefined ||
+    documentReadState.html.trim().length === 0
       ? undefined
-      : documentHtml;
+      : documentReadState.html;
   const parsed =
     content === undefined
       ? null
@@ -935,6 +1122,7 @@ export const assemblePlKioDecision = ({
               documentUrl:
                 id === undefined ? undefined : documentUrlOf(id, kind),
               content,
+              ...PL_KIO_PARSER_OPTIONS,
               keywords: itemsOf(
                 detail,
                 "Zagadnienia merytoryczne w odwołaniu z Indeksu tematycznego",
@@ -943,13 +1131,13 @@ export const assemblePlKioDecision = ({
               documentId: sourceDocumentId,
               sourceSystem: PL_KIO_SOURCE_SYSTEM,
             }),
-          catch: errorTag,
+          catch: (error) => plKioParseError(error, documentReadState),
         });
   if (parsed !== null && Result.isError(parsed)) {
-    logger.warn("case_law.ingestion.document_parse_failed", {
+    logDocumentParseFailure({
       adapterKey: ADAPTER_KEYS.PL_KIO,
       caseNumber,
-      "error.type": parsed.error,
+      error: parsed.error,
     });
   }
   const document = parsed !== null && Result.isOk(parsed) ? parsed.value : null;
@@ -977,19 +1165,16 @@ export const assemblePlKioDecision = ({
       ? undefined
       : [{ role: "presiding", nameAsPrinted: presiding }];
 
-  const identifiers: DecisionIdentifier[] = otherDockets.map((value) => ({
-    type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
-    value,
-  }));
+  const identifiers: DecisionIdentifier[] = plKioIdentifiersOf(otherDockets);
   const [firstIdentifier, ...restIdentifiers] = identifiers;
 
-  const sourceRaw = encodeSourceRawEnvelope({
-    [RAW_PART.LISTING]: JSON.stringify(item),
-    ...(detailHtml === undefined ? {} : { [RAW_PART.DETAIL]: detailHtml }),
-    ...(documentHtml === undefined
-      ? {}
-      : { [RAW_PART.DOCUMENT]: documentHtml }),
-  });
+  const sourceRaw =
+    replaySourceRaw ??
+    plKioSourceRawOf({
+      detailHtml,
+      documentParts: documentReadState.rawParts,
+      item,
+    });
 
   const keyed: ProcurementRulingKeyInput = {
     caseNumber,
@@ -1030,8 +1215,10 @@ export const assemblePlKioDecision = ({
       decisionDate,
       decisionType,
       decisionForm,
+      documentStatus: documentReadState.rejection,
       documentId: id,
       quarantineReason,
+      ...(courtTooLong ? { courtAsStated: statedCourt } : {}),
       kind,
       decisionDateSource,
       presiding,
@@ -1078,17 +1265,12 @@ const publisherError = (
 
 type Requested = { status: number; body: string; url: string };
 
-/**
- * The most a single response may hold. The largest document observed is a
- * quarter of a megabyte; anything past this is not a page this adapter reads.
- */
-const MAX_RESPONSE_BYTES = 16 * 1024 * 1024;
-
 type RequestOptions = {
   fetchStage: DocumentFetchStage;
   cursor: string;
   form?: URLSearchParams | undefined;
   path: string;
+  responseKind: PlKioResponseKind;
   signal?: AbortSignal | undefined;
   timeoutMs: number;
 };
@@ -1101,6 +1283,7 @@ const receive = async ({
   fetchStage,
   form,
   path,
+  responseKind,
   signal,
   timeoutMs,
 }: RequestOptions): Promise<Received> => {
@@ -1135,7 +1318,10 @@ const receive = async ({
   const bytes =
     response.body === null
       ? new Uint8Array()
-      : await readCappedBytes(response.body, MAX_RESPONSE_BYTES);
+      : await readCappedBytes(
+          response.body,
+          PL_KIO_RESPONSE_BYTE_CAP[responseKind],
+        );
   return { status: response.status, bytes, url: target.toString() };
 };
 
@@ -1147,7 +1333,7 @@ const request = async (
     return Result.err(
       publisherError(
         options.cursor,
-        `${options.path} answered more than ${MAX_RESPONSE_BYTES} bytes`,
+        `${options.path} answered more than ${PL_KIO_RESPONSE_BYTE_CAP[options.responseKind]} bytes`,
         status,
       ),
     );
@@ -1206,6 +1392,7 @@ const listPage = async ({
     fetchStage: "listing",
     form,
     path: LISTING_PATH,
+    responseKind: "listing",
     signal,
     timeoutMs: ADAPTER_TIMEOUT.LIST,
   });
@@ -1284,7 +1471,7 @@ const fetchPlKioDecision = async ({
       assemblePlKioDecision({
         item,
         detailHtml: undefined,
-        documentHtml: undefined,
+        document: { type: "unavailable" },
       }),
     );
   }
@@ -1292,6 +1479,7 @@ const fetchPlKioDecision = async ({
     cursor,
     fetchStage: "document",
     path: `/Home/Details/${id}`,
+    responseKind: "detail",
     signal,
     timeoutMs: ADAPTER_TIMEOUT.REQUEST,
   });
@@ -1304,7 +1492,7 @@ const fetchPlKioDecision = async ({
       assemblePlKioDecision({
         item,
         detailHtml: undefined,
-        documentHtml: undefined,
+        document: { type: "unavailable" },
       }),
     );
   }
@@ -1322,6 +1510,7 @@ const fetchPlKioDecision = async ({
     cursor,
     fetchStage: "document",
     path: documentPathOf(id, record.kind),
+    responseKind: "document",
     signal,
     timeoutMs: ADAPTER_TIMEOUT.PAGE,
   });
@@ -1330,14 +1519,16 @@ const fetchPlKioDecision = async ({
     content.status === 410 ||
     (content.status === 200 && content.bytes === null)
   ) {
-    // A record whose document is gone, or past what this adapter reads, is
-    // still the record: stored with no document, which the pipeline keeps
-    // unpublished and re-asks for.
+    // A missing document remains retryable. A response beyond the parser's
+    // resource budget is retained with an explicit exclusion for reconciliation.
     return Result.ok(
       assemblePlKioDecision({
         item,
         detailHtml: detail.body,
-        documentHtml: undefined,
+        document:
+          content.status === 200
+            ? { type: PL_KIO_DOCUMENT_REJECTION.OVERSIZED }
+            : { type: "unavailable" },
       }),
     );
   }
@@ -1354,7 +1545,7 @@ const fetchPlKioDecision = async ({
     assemblePlKioDecision({
       item,
       detailHtml: detail.body,
-      documentHtml: new TextDecoder().decode(content.bytes),
+      document: { type: "read", html: new TextDecoder().decode(content.bytes) },
     }),
   );
 };
@@ -1373,10 +1564,23 @@ const reparsePlKioStoredRaw = (
   if (read.type === "rejected") {
     return read;
   }
+  const storedDocument = read.parts[RAW_PART.DOCUMENT];
+  let document: AssemblePlKioDecisionOptions["document"];
+  if (storedDocument !== undefined) {
+    document = { type: "read", html: storedDocument };
+  } else if (
+    read.parts[RAW_PART.DOCUMENT_REJECTION] ===
+    PL_KIO_DOCUMENT_REJECTION.OVERSIZED
+  ) {
+    document = { type: PL_KIO_DOCUMENT_REJECTION.OVERSIZED };
+  } else {
+    document = { type: "unavailable" };
+  }
   const built = assemblePlKioDecision({
     item: normalizePlKioListingItem(read.listing),
     detailHtml: read.parts[RAW_PART.DETAIL],
-    documentHtml: read.parts[RAW_PART.DOCUMENT],
+    document,
+    sourceRaw: read.sourceRaw,
   });
   return { type: "parsed", result: built.decision };
 };
@@ -1581,6 +1785,7 @@ const fetchTailPage = async (
           },
         }),
     sourceUrl: listed.value.url,
+    publisherRequest: PUBLISHER_REQUEST.ANSWERED,
     nextCursor: aborted
       ? cursor
       : encodePlKioCursor({ ...parked, tail: parked.tail + rows.length }),
@@ -1621,6 +1826,7 @@ const plKioFetchPage = async (
             },
           }),
       sourceUrl: listed.url,
+      publisherRequest: PUBLISHER_REQUEST.ANSWERED,
       nextCursor: encodePlKioCursor(cursor),
     });
   }
@@ -1637,6 +1843,7 @@ const plKioFetchPage = async (
             },
           }),
       sourceUrl: listed.url,
+      publisherRequest: PUBLISHER_REQUEST.ANSWERED,
       nextCursor: encodePlKioCursor({ ...cursor, offset: reached }),
     });
   }
@@ -1652,6 +1859,7 @@ const plKioFetchPage = async (
           },
         }),
     sourceUrl: listed.url,
+    publisherRequest: PUBLISHER_REQUEST.ANSWERED,
     nextCursor: encodePlKioCursor(
       next === null
         ? { ...cursor, offset: reached }
@@ -1694,6 +1902,7 @@ const listPlKioSlicePage = async ({
       payload: row,
     })),
     totalPages,
+    publisherCount: listed.value.total,
   };
 };
 
@@ -1787,6 +1996,15 @@ export const plKioAdapter = defineSourceAdapter({
     ...plKioDaySlices.walk,
     tipWindowDays: PL_KIO_TIP_WINDOW_DAYS,
     heldRequiresDetail: true,
+    heldWithoutDocument: {
+      metadataKey: "documentStatus",
+      reasons: [
+        PL_KIO_DOCUMENT_REJECTION.OVERSIZED,
+        ...Object.values(PL_KIO_DOCUMENT_REJECTION).filter(
+          (reason) => reason !== PL_KIO_DOCUMENT_REJECTION.OVERSIZED,
+        ),
+      ],
+    },
     listSlicePage: listPlKioSlicePage,
     buildDecision: buildPlKioFromPayload,
   },

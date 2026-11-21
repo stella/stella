@@ -3,6 +3,8 @@ import * as v from "valibot";
 
 const stagingStateSchema = v.strictObject({
   corpus_index: v.optional(v.picklist(["on", "off"])),
+  // Read by the corpus preflight in deploy-staging.yml, not by a Playwright check.
+  corpus_reads: v.optional(v.picklist(["all", "search-only"])),
   rollout: v.optional(v.picklist(["on", "knowledge-web-pending"])),
 });
 
@@ -58,8 +60,7 @@ export const parseStagingState = (raw: string | undefined): StagingState => {
 };
 
 export type StagingCheckDisposition =
-  | { mode: "gating" }
-  | { mode: "report-only"; reason: string };
+  { mode: "gating" } | { mode: "report-only"; reason: string };
 
 export const stagingCheckDisposition = (
   state: StagingState,

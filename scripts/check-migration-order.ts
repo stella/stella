@@ -2,57 +2,50 @@
 
 import { panic } from "better-result";
 import { readMigrationFiles } from "drizzle-orm/migrator";
-import { appendFileSync } from "node:fs";
+import {
+  appendFileSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import { isDeepStrictEqual } from "node:util";
 
-import aliasInventory from "../apps/api/src/lib/db/migration-alias-inventory.json";
+import { createSha256 } from "@stll/sha256/bun";
+
+import aliasInventory from "../apps/api/src/lib/db/migration-alias-inventory.json" with { type: "json" };
 import {
   findMalformedRequiresLines,
   findSortUnstableNames,
   validateRequires,
 } from "../apps/api/src/lib/db/migration-ledger";
+import {
+  findMigrationTimestampViolations,
+  MIGRATION_FILE,
+  MIGRATION_RESTAMP_COMMAND,
+  MIGRATION_TIMESTAMP,
+  type MigrationIdentityChanges,
+  readMigrationBaseSnapshot,
+  runGit,
+} from "./migration-stamps";
+
+export {
+  findMigrationTimestampViolations,
+  readMigrationBaseSnapshot,
+  readMigrationChanges,
+} from "./migration-stamps";
 
 type MigrationIdentityViolation =
   | { type: "invalid-name"; directory: string }
-  | { type: "removed-base-migration"; directory: string };
+  | { type: "removed-base-migration"; directory: string }
+  | { type: "stale-timestamp"; directory: string; newestBaseDirectory: string };
 
-type MigrationIdentityChanges = {
-  addedDirectories: readonly string[];
-  removedDirectories: readonly string[];
-};
-
-type MigrationChanges = MigrationIdentityChanges & {
-  modifiedFiles: readonly string[];
-};
-
-const MIGRATION_TIMESTAMP = /(?:^|\/)([0-9]{14})_[^/]+$/u;
-const MIGRATION_FILE = /^apps\/api\/drizzle\/[^/]+\/migration\.sql$/u;
-const MIGRATION_FOLDER_FILE = /^apps\/api\/drizzle\/[^/]+\/.+$/u;
-const ALIAS_INVENTORY_PATH =
-  "apps/api/src/lib/db/migration-alias-inventory.json";
 const HASH = /^[0-9a-f]{64}$/u;
 const REPO_ROOT = path.resolve(import.meta.dir, "..");
-
-const runGit = ({
-  arguments_,
-  cwd,
-}: {
-  arguments_: readonly string[];
-  cwd: string;
-}): Uint8Array => {
-  const result = Bun.spawnSync(["git", ...arguments_], {
-    cwd,
-    stdout: "pipe",
-    stderr: "pipe",
-  });
-  if (result.exitCode !== 0) {
-    panic(
-      `git ${arguments_.join(" ")} failed (${result.exitCode}): ${result.stderr.toString()}`,
-    );
-  }
-  return result.stdout;
-};
+const SNAPSHOT_FILE = /^apps\/api\/drizzle\/[0-9]{14}_[^/]+\/snapshot\.json$/u;
 
 export const findMigrationIdentityViolation = ({
   addedDirectories,
@@ -68,53 +61,6 @@ export const findMigrationIdentityViolation = ({
     }
   }
   return null;
-};
-
-export const readMigrationChanges = ({
-  baseRef,
-  cwd,
-}: {
-  baseRef: string;
-  cwd: string;
-}): MigrationChanges => {
-  const arguments_ = [
-    "diff",
-    "--no-renames",
-    "--name-status",
-    `${baseRef}...HEAD`,
-    "--",
-    "apps/api/drizzle",
-  ];
-  const addedDirectories: string[] = [];
-  const removedDirectories: string[] = [];
-  const modifiedFiles: string[] = [];
-  for (const line of new TextDecoder()
-    .decode(runGit({ arguments_, cwd }))
-    .split("\n")) {
-    const [status, filename] = line.split("\t");
-    if (filename === undefined) {
-      continue;
-    }
-    if (status !== "A" && status !== "D" && status !== "M") {
-      panic(
-        `Unsupported migration change status ${String(status)} for ${filename}`,
-      );
-    }
-    if (status === "M" && MIGRATION_FOLDER_FILE.test(filename)) {
-      modifiedFiles.push(filename);
-      continue;
-    }
-    if (!MIGRATION_FILE.test(filename)) {
-      continue;
-    }
-    const directory = path.posix.dirname(filename);
-    if (status === "A") {
-      addedDirectories.push(directory);
-    } else if (status === "D") {
-      removedDirectories.push(directory);
-    }
-  }
-  return { addedDirectories, removedDirectories, modifiedFiles };
 };
 
 type AliasEntry = {
@@ -145,6 +91,85 @@ type MigrationImmutabilityViolation =
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
+
+const snapshotVersion = (snapshot: unknown): number | undefined => {
+  if (
+    !isRecord(snapshot) ||
+    snapshot["dialect"] !== "postgres" ||
+    typeof snapshot["version"] !== "string" ||
+    !/^[1-9][0-9]*$/u.test(snapshot["version"])
+  ) {
+    return undefined;
+  }
+  const version = Number(snapshot["version"]);
+  return Number.isSafeInteger(version) ? version : undefined;
+};
+
+/** Historical metadata can change format, never meaning. Reproduce the installed
+ * official upgrader over the complete BASE chain, then compare every JSON field,
+ * including identity, parent links and commutativity footprints. No SQL or database
+ * connection enters this operation. Ordinary checks never load Drizzle Kit. */
+export const canonicalSnapshotUpgrades = async ({
+  baseSnapshots,
+  headSnapshots,
+}: {
+  baseSnapshots: ReadonlyMap<string, unknown>;
+  headSnapshots: ReadonlyMap<string, unknown>;
+}): Promise<ReadonlySet<string>> => {
+  const changed = new Set<string>();
+  for (const [file, base] of baseSnapshots) {
+    const head = headSnapshots.get(file);
+    if (isDeepStrictEqual(base, head)) {
+      continue;
+    }
+    const before = snapshotVersion(base);
+    const after = snapshotVersion(head);
+    if (
+      !SNAPSHOT_FILE.test(file) ||
+      before === undefined ||
+      after === undefined ||
+      after <= before
+    ) {
+      return new Set();
+    }
+    changed.add(file);
+  }
+  if (changed.size === 0) {
+    return changed;
+  }
+  const directory = mkdtempSync(path.join(tmpdir(), "migration-snapshot-up-"));
+  try {
+    for (const [file, snapshot] of baseSnapshots) {
+      if (!SNAPSHOT_FILE.test(file)) {
+        return new Set();
+      }
+      const target = path.join(directory, file);
+      mkdirSync(path.dirname(target), { recursive: true });
+      writeFileSync(target, JSON.stringify(snapshot));
+    }
+    // This public operation is filesystem-only. An unavailable installed Kit
+    // fails the check; the guard never installs dependencies or uses credentials.
+    const { up } = await import("drizzle-kit/cli");
+    const result = await up({
+      dialect: "postgresql",
+      out: path.join(directory, "apps/api/drizzle"),
+    });
+    if (result.status !== "ok") {
+      panic(`Canonical snapshot upgrade failed: ${JSON.stringify(result)}`);
+    }
+    for (const file of baseSnapshots.keys()) {
+      const expected: unknown = JSON.parse(
+        readFileSync(path.join(directory, file), "utf-8"),
+      );
+      if (!isDeepStrictEqual(expected, headSnapshots.get(file))) {
+        return new Set();
+      }
+    }
+    return changed;
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+};
 
 const parseAliasEntry = (value: unknown): AliasEntry | null => {
   if (!isRecord(value)) {
@@ -197,12 +222,14 @@ export const findMigrationImmutabilityViolation = ({
   headInventory,
   baseHashes,
   headHashes,
+  snapshotUpgrades = new Set(),
 }: {
   modifiedFiles: readonly string[];
   baseInventory: unknown;
   headInventory: unknown;
   baseHashes: Readonly<Record<string, string>>;
   headHashes: Readonly<Record<string, string>>;
+  snapshotUpgrades?: ReadonlySet<string>;
 }): MigrationImmutabilityViolation | null => {
   if (!Array.isArray(baseInventory) || !Array.isArray(headInventory)) {
     return { type: "alias-invalid", detail: "inventory must be an array" };
@@ -279,6 +306,9 @@ export const findMigrationImmutabilityViolation = ({
   const appended = entries.slice(baseInventory.length);
   for (const file of modifiedFiles) {
     if (!MIGRATION_FILE.test(file)) {
+      if (SNAPSHOT_FILE.test(file) && snapshotUpgrades.has(file)) {
+        continue;
+      }
       return { type: "edited-non-sql-in-base-folder", file };
     }
     const baseHash = baseHashes[file];
@@ -311,63 +341,8 @@ const readGitFile = ({
   cwd: string;
 }): Uint8Array => runGit({ arguments_: ["show", `${ref}:${file}`], cwd });
 
-const hashBytes = (bytes: Uint8Array): string =>
-  new Bun.CryptoHasher("sha256").update(bytes).digest("hex");
-
-const readBaseInventory = ({
-  baseRef,
-  cwd,
-}: {
-  baseRef: string;
-  cwd: string;
-}): unknown => {
-  const files = new TextDecoder()
-    .decode(
-      runGit({
-        arguments_: [
-          "ls-tree",
-          "--name-only",
-          baseRef,
-          "--",
-          ALIAS_INVENTORY_PATH,
-        ],
-        cwd,
-      }),
-    )
-    .trim();
-  if (files === "") {
-    return [];
-  }
-  if (files !== ALIAS_INVENTORY_PATH) {
-    panic(`Unexpected base inventory path: ${files}`);
-  }
-  return JSON.parse(
-    new TextDecoder().decode(
-      readGitFile({ ref: baseRef, file: ALIAS_INVENTORY_PATH, cwd }),
-    ),
-  );
-};
-
-export const readMigrationBaseSnapshot = ({
-  baseRef,
-  cwd,
-}: {
-  baseRef: string;
-  cwd: string;
-}) => {
-  const mergeBase = new TextDecoder()
-    .decode(runGit({ arguments_: ["merge-base", baseRef, "HEAD"], cwd }))
-    .trim();
-  const changes = readMigrationChanges({ baseRef: mergeBase, cwd });
-  const baseInventory = readBaseInventory({ baseRef: mergeBase, cwd });
-  const baseHashes: Record<string, string> = {};
-  for (const file of changes.modifiedFiles.filter((candidate) =>
-    MIGRATION_FILE.test(candidate),
-  )) {
-    baseHashes[file] = hashBytes(readGitFile({ ref: mergeBase, file, cwd }));
-  }
-  return { mergeBase, changes, baseInventory, baseHashes };
-};
+export const hashBytes = (bytes: Uint8Array): string =>
+  createSha256().update(bytes).digest("hex");
 
 export const formatAliasSummary = (
   entries: readonly {
@@ -404,10 +379,11 @@ if (import.meta.main) {
     panic("Usage: bun scripts/check-migration-order.ts <base-ref>");
   }
 
-  const { changes, baseInventory, baseHashes } = readMigrationBaseSnapshot({
-    baseRef,
-    cwd: REPO_ROOT,
-  });
+  const { mergeBase, changes, baseInventory, baseHashes, baseDirectories } =
+    readMigrationBaseSnapshot({
+      baseRef,
+      cwd: REPO_ROOT,
+    });
   const violation = findMigrationIdentityViolation(changes);
   if (violation?.type === "invalid-name") {
     panic(
@@ -423,17 +399,77 @@ if (import.meta.main) {
     );
   }
 
+  const timestampViolations = findMigrationTimestampViolations({
+    addedDirectories: changes.addedDirectories,
+    baseDirectories,
+  });
+  if (timestampViolations.length > 0) {
+    panic(
+      timestampViolations
+        .map(
+          ({ directory, newestBaseDirectory }) =>
+            `New migration ${directory} must be stamped later than the newest base migration ${newestBaseDirectory}. Re-stamp the unmerged migration later than that one; never re-stamp a merged migration.`,
+        )
+        .concat(`Fix on the branch: ${MIGRATION_RESTAMP_COMMAND}`)
+        .join("\n"),
+    );
+  }
+
   const inventorySqlFiles = aliasInventory.map(
     ({ fileName }) => `apps/api/drizzle/${fileName}/migration.sql`,
   );
-  const headHashes: Record<string, string> = {};
-  for (const file of new Set([
-    ...Object.keys(baseHashes),
-    ...inventorySqlFiles,
-  ])) {
-    headHashes[file] = hashBytes(
-      readGitFile({ ref: "HEAD", file, cwd: REPO_ROOT }),
-    );
+  const headHashes = Object.fromEntries(
+    Array.from(
+      new Set([...Object.keys(baseHashes), ...inventorySqlFiles]),
+      (file) =>
+        [
+          file,
+          hashBytes(readGitFile({ ref: "HEAD", file, cwd: REPO_ROOT })),
+        ] as const,
+    ),
+  );
+  let snapshotUpgrades: ReadonlySet<string> = new Set();
+  if (changes.modifiedFiles.some((file) => SNAPSHOT_FILE.test(file))) {
+    const snapshotFiles = new TextDecoder()
+      .decode(
+        runGit({
+          arguments_: [
+            "ls-tree",
+            "-r",
+            "--name-only",
+            mergeBase,
+            "--",
+            "apps/api/drizzle",
+          ],
+          cwd: REPO_ROOT,
+        }),
+      )
+      .split("\n")
+      .filter((file) => SNAPSHOT_FILE.test(file));
+    const baseSnapshots = new Map<string, unknown>();
+    const headSnapshots = new Map<string, unknown>();
+    for (const file of snapshotFiles) {
+      baseSnapshots.set(
+        file,
+        JSON.parse(
+          new TextDecoder().decode(
+            readGitFile({ ref: mergeBase, file, cwd: REPO_ROOT }),
+          ),
+        ),
+      );
+      headSnapshots.set(
+        file,
+        JSON.parse(
+          new TextDecoder().decode(
+            readGitFile({ ref: "HEAD", file, cwd: REPO_ROOT }),
+          ),
+        ),
+      );
+    }
+    snapshotUpgrades = await canonicalSnapshotUpgrades({
+      baseSnapshots,
+      headSnapshots,
+    });
   }
   const immutabilityViolation = findMigrationImmutabilityViolation({
     modifiedFiles: changes.modifiedFiles,
@@ -441,6 +477,7 @@ if (import.meta.main) {
     headInventory: aliasInventory,
     baseHashes,
     headHashes,
+    snapshotUpgrades,
   });
   if (immutabilityViolation !== null) {
     panic(

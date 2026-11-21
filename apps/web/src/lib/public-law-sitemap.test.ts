@@ -1,11 +1,24 @@
 import { describe, expect, test } from "bun:test";
 import nodePath from "node:path";
 
+import { CASE_LAW_BROWSER_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
+import {
+  PUBLIC_ROBOTS_ALLOWED_SEARCH_USER_AGENTS,
+  PUBLIC_ROBOTS_DENIED_USER_AGENTS,
+} from "@stll/api-contract/public-crawl-rules";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 // Type-only, so the decision reader's component graph never loads here.
+import {
+  PUBLIC_CASE_LAW_PAGE_COUNTRIES,
+  toCaseLawCountryParam,
+} from "@/features/case-law/case-law-jurisdiction";
 import type { DecisionWorkspaceProps } from "@/features/case-law/components/case-viewer/decision-workspace";
-import { publicToolCrawlPaths } from "@/public-crawl-policy";
+import {
+  isPublicLawPathIndexable,
+  PUBLIC_CRAWL_ASSETS,
+  publicToolCrawlPaths,
+} from "@/public-crawl-policy";
 
 /** Whether an AI-mode branch carries the authenticated availability gate. */
 type CarriesAvailabilityGate<TMode> = "ensureAIAvailable" extends keyof TMode
@@ -27,16 +40,103 @@ const {
   fetchPublicSitemapShards,
   SITEMAP_XML_RESPONSE_HEADERS,
 } = await import("@/lib/public-law-sitemap");
+const {
+  createSitemapReadFailureResponse,
+  createSitemapUpstreamBusyError,
+  SitemapUpstreamBusyError,
+} = await import("@/lib/public-sitemap");
 const { isPublicSsrPath } = await import("@/lib/public-ssr-paths");
 const { ssrCacheClassHeaders } = await import("@/route-response-policy");
-const { isWorkspaceDocumentRoutePath } =
-  await import("@/components/workspaces/entity-utils");
+const { Route: robotsRoute, robotsHandlers } =
+  await import("@/routes/robots[.]txt");
 
 const repoRoot = nodePath.resolve(import.meta.dir, "../../../..");
 const readSource = async (path: string) =>
   await Bun.file(nodePath.resolve(repoRoot, path)).text();
 const expectNoDirectAuthImport = (source: string) => {
   expect(source).not.toMatch(/@\/lib\/auth["']/u);
+};
+
+type RobotsRule = { kind: "allow" | "disallow"; pattern: string };
+type RobotsGroup = { agents: string[]; rules: RobotsRule[] };
+
+const parseRobotsGroups = (robotsTxt: string): RobotsGroup[] => {
+  const groups: RobotsGroup[] = [];
+  let group: RobotsGroup = { agents: [], rules: [] };
+  for (const line of robotsTxt.split("\n")) {
+    const directive = line.split("#", 1)[0]?.trim();
+    if (!directive) {
+      continue;
+    }
+
+    const separator = directive.indexOf(":");
+    const name = directive.slice(0, separator).toLowerCase();
+    const value = directive.slice(separator + 1).trim();
+    if (name === "user-agent") {
+      if (group.rules.length > 0) {
+        groups.push(group);
+        group = { agents: [], rules: [] };
+      }
+      group.agents.push(value.toLowerCase());
+      continue;
+    }
+
+    if ((name === "allow" || name === "disallow") && value) {
+      group.rules.push({ kind: name, pattern: value });
+    }
+  }
+  if (group.agents.length > 0) {
+    groups.push(group);
+  }
+  return groups;
+};
+
+const namedRobotsAgents = (robotsTxt: string) =>
+  parseRobotsGroups(robotsTxt)
+    .flatMap(({ agents }) => agents)
+    .filter((agent) => agent !== "*");
+
+/** Evaluates the group selection and longest matching rule emitted by these files. */
+const robotsAllows = (
+  groups: RobotsGroup[],
+  userAgent: string,
+  pathAndQuery: string,
+): boolean => {
+  const userAgentToken = userAgent.toLowerCase();
+  const exactGroups = groups.filter((group) =>
+    group.agents.some(
+      (agent) => agent !== "*" && userAgentToken.includes(agent),
+    ),
+  );
+  const selectedGroups = exactGroups.length
+    ? exactGroups
+    : groups.filter((group) => group.agents.includes("*"));
+  const matchingRules = selectedGroups.flatMap(({ rules }) =>
+    rules.filter(({ pattern }) => {
+      const isEndAnchored = pattern.endsWith("$");
+      const pathPattern = isEndAnchored ? pattern.slice(0, -1) : pattern;
+      const expression = pathPattern
+        .split("*")
+        .map((part) => part.replace(/[.+?^${}()|[\]\\]/gu, "\\$&"))
+        .join(".*");
+      const endAnchor = isEndAnchored ? "$" : "";
+      return new RegExp(`^${expression}${endAnchor}`, "u").test(pathAndQuery);
+    }),
+  );
+  const specificity = (pattern: string) =>
+    pattern.replaceAll("*", "").replace(/\$$/u, "").length;
+  const longestMatch = Math.max(
+    -1,
+    ...matchingRules.map(({ pattern }) => specificity(pattern)),
+  );
+  if (longestMatch < 0) {
+    return true;
+  }
+
+  return matchingRules.some(
+    ({ kind, pattern }) =>
+      specificity(pattern) === longestMatch && kind === "allow",
+  );
 };
 
 const requestUrlForTest = (input: Request | URL | string): string => {
@@ -52,6 +152,150 @@ const requestUrlForTest = (input: Request | URL | string): string => {
 };
 
 describe("public law sitemap", () => {
+  test.each(CASE_LAW_BROWSER_COUNTRIES)(
+    "%s shard publication follows the public page countries",
+    async (country) => {
+      const segment = country.toLowerCase();
+      const shard = {
+        bucket: "all",
+        country: segment,
+        lastmod: "2026-01-01",
+        month: "03",
+        year: "2019",
+      };
+      const published = PUBLIC_CASE_LAW_PAGE_COUNTRIES.some(
+        (candidate) => candidate === country,
+      );
+      const shards = await fetchPublicSitemapShards({
+        fetchImpl: async () =>
+          Response.json({ items: [shard], limit: 50_000, nextCursor: null }),
+      });
+      expect(shards).toEqual(published ? [shard] : []);
+      const xml = createPublicLawSitemapIndexXml([shard], {
+        publicLawIndexingEnabled: true,
+      });
+      expect(xml.includes(`/sitemaps/law-cases/${segment}/2019/03.xml`)).toBe(
+        published,
+      );
+    },
+  );
+
+  test("app robots response blocks bulk and AI crawlers while retaining the deployment crawl policy", async () => {
+    expect(robotsRoute.options.server?.handlers).toBe(robotsHandlers);
+    const response = robotsHandlers.GET();
+
+    const body = await response.text();
+    const lines = body.split("\n");
+    expect(lines.slice(0, 2)).toEqual([
+      "# Automated scraping, bulk download and AI training on stella are not permitted.",
+      "# Interested in our data? We license it: hello@stll.app",
+    ]);
+    const groups = parseRobotsGroups(body);
+    for (const path of [
+      "/api/v1/public",
+      "/law/search?q=search",
+      "/law/search?country=cze&query=search",
+    ]) {
+      expect(robotsAllows(groups, "Googlebot", path)).toBe(false);
+    }
+    expect(response.headers.get("Content-Type")).toBe(
+      "text/plain; charset=utf-8",
+    );
+    expect(namedRobotsAgents(body).toSorted()).toEqual(
+      PUBLIC_ROBOTS_DENIED_USER_AGENTS.map((userAgent) =>
+        userAgent.toLowerCase(),
+      ).toSorted(),
+    );
+    for (const userAgent of PUBLIC_ROBOTS_DENIED_USER_AGENTS) {
+      const agentLine = `User-agent: ${userAgent}`;
+      const agentIndex = lines.indexOf(agentLine);
+      expect(agentIndex).toBeGreaterThanOrEqual(0);
+      expect(lines[agentIndex + 1]).toBe("Disallow: /");
+    }
+  });
+
+  test("landing robots rules block the same crawl classes and retain its sitemap", async () => {
+    const robots = await readSource("apps/landing/public/robots.txt");
+    const lines = robots.split("\n");
+
+    expect(lines.slice(0, 2)).toEqual([
+      "# Automated scraping, bulk download and AI training on stella are not permitted.",
+      "# Interested in our data? We license it: hello@stll.app",
+    ]);
+    expect(lines).toContain("Disallow: /api/");
+    expect(lines).toContain("Disallow: /*?q=");
+    expect(lines).toContain("Disallow: /*&q=");
+    expect(lines).toContain("Disallow: /*?query=");
+    expect(lines).toContain("Disallow: /*&query=");
+    expect(lines).toContain("Disallow: /law/*?q=");
+    expect(lines).toContain("Disallow: /law/*&q=");
+    expect(lines).toContain("Allow: /");
+    expect(lines).toContain("Sitemap: https://stll.app/sitemap-index.xml");
+    expect(namedRobotsAgents(robots).toSorted()).toEqual(
+      PUBLIC_ROBOTS_DENIED_USER_AGENTS.map((userAgent) =>
+        userAgent.toLowerCase(),
+      ).toSorted(),
+    );
+  });
+
+  test("robots path rules preserve public law and sitemap crawling while excluding searches", async () => {
+    const appRobots = createRobotsTxt({
+      publicLawCrawlAllowed: true,
+      seoIndexable: true,
+    });
+    const landingRobots = await readSource("apps/landing/public/robots.txt");
+    const policies = [
+      { name: "app", groups: parseRobotsGroups(appRobots) },
+      { name: "landing", groups: parseRobotsGroups(landingRobots) },
+    ];
+    const crawlablePaths = [
+      "/law/cases",
+      "/law/cze/statutes/constitution",
+      "/sitemap.xml",
+      "/sitemaps/law.xml",
+    ];
+    const excludedPaths = [
+      "/api/v1/public",
+      "/law/search?query=x",
+      "/law/statutes/search?query=x",
+      "/law/cases?q=x",
+    ];
+
+    for (const { name, groups } of policies) {
+      for (const userAgent of ["Googlebot", "Bingbot", "OAI-SearchBot"]) {
+        for (const path of crawlablePaths) {
+          expect(
+            robotsAllows(groups, userAgent, path),
+            `${name}: ${userAgent} ${path}`,
+          ).toBe(true);
+        }
+        for (const path of excludedPaths) {
+          expect(
+            robotsAllows(groups, userAgent, path),
+            `${name}: ${userAgent} ${path}`,
+          ).toBe(false);
+        }
+      }
+      for (const userAgent of PUBLIC_ROBOTS_ALLOWED_SEARCH_USER_AGENTS) {
+        for (const path of crawlablePaths) {
+          expect(
+            robotsAllows(groups, userAgent, path),
+            `${name}: ${userAgent} ${path}`,
+          ).toBe(true);
+        }
+      }
+
+      for (const userAgent of PUBLIC_ROBOTS_DENIED_USER_AGENTS) {
+        for (const path of crawlablePaths) {
+          expect(
+            robotsAllows(groups, userAgent, path),
+            `${name}: ${userAgent} ${path}`,
+          ).toBe(false);
+        }
+      }
+    }
+  });
+
   test("fetches public sitemap decisions from the public case-law API only", async () => {
     const requestedUrls: string[] = [];
     const fetchImpl = async (input: Request | URL | string) => {
@@ -91,7 +335,7 @@ describe("public law sitemap", () => {
     ]);
   });
 
-  test("fetches bucketed sitemap decisions from stable shard paths", async () => {
+  test("fetches a split month's range from its stable shard path", async () => {
     const requestedUrls: string[] = [];
     const fetchImpl = async (input: Request | URL | string) => {
       requestedUrls.push(requestUrlForTest(input));
@@ -108,14 +352,60 @@ describe("public law sitemap", () => {
 
     await fetchPublicSitemapDecisions({
       fetchImpl,
-      shard: { bucket: "07", country: "cze", month: "05", year: "2026" },
+      shard: { bucket: "0007", country: "cze", month: "05", year: "2026" },
       signal: AbortSignal.timeout(1000),
     });
 
     expect(requestedUrls).toEqual([
-      "http://localhost:3001/v1/case/sitemap/decisions/shard?country=cze&year=2026&month=05&bucket=07",
+      "http://localhost:3001/v1/case/sitemap/decisions/shard?country=cze&year=2026&month=05&bucket=0007",
     ]);
   });
+
+  test.each([
+    ["17", "17"],
+    [String(Number.MAX_SAFE_INTEGER), String(Number.MAX_SAFE_INTEGER)],
+    ["1e100", "60"],
+    ["9007199254740992", "60"],
+    ["Infinity", "60"],
+    ["NaN", "60"],
+    ["1.5", "60"],
+    ["0", "60"],
+    ["-1", "60"],
+    ["", "60"],
+  ])("normalizes retry delay %s to decimal seconds", (header, expected) => {
+    const error = createSitemapUpstreamBusyError({
+      action: "readPublicSitemap",
+      response: new Response("busy", {
+        status: 429,
+        headers: { "Retry-After": header },
+      }),
+    });
+
+    const response = createSitemapReadFailureResponse(error);
+    expect(response.status).toBe(503);
+    expect(response.headers.get("Retry-After")).toBe(expected);
+    expect(response.headers.get("Retry-After")).toMatch(/^[1-9][0-9]*$/u);
+  });
+
+  test.each([429, 503])(
+    "an upstream %s refusal rejects with a retryable busy error",
+    async (status) => {
+      const fetchImpl = async () => new Response("busy", { status });
+
+      const error = await rejectionOf(
+        fetchPublicSitemapDecisions({
+          fetchImpl,
+          shard: { bucket: "all", country: "cze", month: "05", year: "2026" },
+        }),
+      );
+
+      expect(SitemapUpstreamBusyError.is(error)).toBe(true);
+      expect(createSitemapReadFailureResponse(error).status).toBe(503);
+      expect(
+        createSitemapReadFailureResponse(error).headers.get("Retry-After"),
+      ).toBe("60");
+    },
+  );
 
   test("fetches public sitemap shards from the public case-law API only", async () => {
     const requestedUrls: string[] = [];
@@ -133,7 +423,7 @@ describe("public law sitemap", () => {
               year: "2026",
             },
             {
-              bucket: "07",
+              bucket: "0007",
               country: "cze",
               lastmod: "2025-12-31",
               month: "04",
@@ -202,7 +492,7 @@ describe("public law sitemap", () => {
           year: "2026",
         },
         {
-          bucket: "07",
+          bucket: "0007",
           country: "cze",
           lastmod: "2025-12-31",
           month: "04",
@@ -225,9 +515,12 @@ describe("public law sitemap", () => {
       "<loc>http://localhost:3000/sitemaps/law-cases/cze/2026/05.xml</loc>",
     );
     expect(xml).toContain(
-      "<loc>http://localhost:3000/sitemaps/law-cases/cze/2026/04/07.xml</loc>",
+      "<loc>http://localhost:3000/sitemaps/law-cases/cze/2026/04/0007.xml</loc>",
     );
     expect(xml).toContain("<lastmod>2026-01-01</lastmod>");
+    expect(xml).toMatch(
+      /<sitemap>\s*<loc>http:\/\/localhost:3000\/sitemaps\/law\.xml<\/loc>\s*<\/sitemap>/u,
+    );
     expect(xml).not.toContain("cursor=");
     expect(xml).not.toContain("/xaa/");
     expect(xml).not.toContain("workspace");
@@ -240,11 +533,53 @@ describe("public law sitemap", () => {
       publicLawIndexingEnabled: true,
     });
 
-    expect(xml).toContain("<loc>http://localhost:3000/law</loc>");
+    // The jurisdiction hubs, not the search home that redirects.
+    expect(xml).toContain("<loc>http://localhost:3000/law/cze</loc>");
+    expect(xml).toContain("<loc>http://localhost:3000/law/cze/statutes</loc>");
+    expect(xml).not.toContain("<loc>http://localhost:3000/law</loc>");
+    expect(xml).not.toContain("/law/usa");
     expect(xml).not.toContain("http://localhost:3000/law/cases");
     expect(xml).not.toContain("workspace");
     expect(xml).not.toContain("organization");
     expect(xml).not.toContain("matter");
+  });
+
+  test("every static sitemap URL is allowed by robots.txt and its path policy", () => {
+    const robots = createRobotsTxt({
+      publicKnowledgeCrawlAllowed: false,
+      publicLawCrawlAllowed: true,
+      publicToolsCrawlAllowed: false,
+      seoIndexable: true,
+    });
+    const allowed = (path: string): boolean =>
+      robots
+        .split("\n")
+        .filter((line) => line.startsWith("Allow: "))
+        .map((line) => line.slice("Allow: ".length))
+        .some((rule) =>
+          rule.endsWith("$")
+            ? path === rule.slice(0, -1)
+            : path.startsWith(rule),
+        );
+    const xml = createPublicLawStaticSitemapXml({
+      publicLawIndexingEnabled: true,
+    });
+    const paths = [...xml.matchAll(/<loc>([^<]+)<\/loc>/gu)].map(
+      ([, loc]) => new URL(loc ?? "").pathname,
+    );
+
+    expect(paths.length).toBeGreaterThan(0);
+    for (const path of paths) {
+      expect(allowed(path)).toBe(true);
+      expect(isPublicLawPathIndexable(path, true)).toBe(true);
+    }
+    // Pages robots.txt leaves disallowed are neither listed nor indexable.
+    for (const path of ["/law/coverage", "/law/cases/research", "/law/de/x"]) {
+      expect(allowed(path)).toBe(false);
+      expect(paths).not.toContain(path);
+      expect(isPublicLawPathIndexable(path, true)).toBe(false);
+    }
+    expect(isPublicLawPathIndexable("/law", false)).toBe(false);
   });
 
   test("case-law shard sitemaps do not duplicate the case-law index URL", () => {
@@ -401,6 +736,24 @@ describe("public law sitemap", () => {
     ).toThrow("Public sitemap exceeded 5 bytes.");
   });
 
+  test("the default sitemap ceiling refuses more than fifty mebibytes", () => {
+    const protocolLimitBytes = 50 * 1024 * 1024;
+    const xml = " ".repeat(protocolLimitBytes + 1);
+    expect(() => assertPublicLawSitemapXmlWithinProtocolLimits(xml)).toThrow(
+      `Public sitemap exceeded ${protocolLimitBytes} bytes.`,
+    );
+  });
+
+  test("the sitemap byte ceiling counts UTF-8 bytes", () => {
+    const xml = "<url>č</url>";
+    expect(new TextEncoder().encode(xml).byteLength).toBeGreaterThan(
+      xml.length,
+    );
+    expect(() =>
+      assertPublicLawSitemapXmlWithinProtocolLimits(xml, xml.length),
+    ).toThrow(`Public sitemap exceeded ${xml.length} bytes.`);
+  });
+
   test("root sitemap indexes fail before exceeding the protocol byte limit", () => {
     expect(() =>
       createPublicLawSitemapIndexXml(
@@ -429,7 +782,7 @@ describe("public law sitemap", () => {
     expect(SITEMAP_XML_RESPONSE_HEADERS).toEqual({
       ...ssrCacheClassHeaders("public-anonymous"),
       "Cache-Control":
-        "public, max-age=3600, s-maxage=21600, stale-while-revalidate=86400",
+        "public, max-age=3600, s-maxage=21600, stale-while-revalidate=86400, stale-if-error=86400",
       "Content-Type": "application/xml; charset=utf-8",
     });
   });
@@ -465,7 +818,7 @@ describe("public law sitemap", () => {
       seoIndexable: false,
     });
 
-    expect(robots).toBe("User-agent: *\nDisallow: /\n");
+    expect(robots.startsWith("User-agent: *\nDisallow: /\n")).toBe(true);
     expect(robots).not.toContain("Disallow: /law/");
     expect(robots).not.toContain("Disallow: /workspaces");
     expect(robots).not.toContain("Sitemap:");
@@ -473,7 +826,9 @@ describe("public law sitemap", () => {
 
   test("robots defaults to a full crawl block until the deployment is indexable", () => {
     // The env default leaves VITE_SEO_INDEXABLE off.
-    expect(createRobotsTxt()).toBe("User-agent: *\nDisallow: /\n");
+    expect(createRobotsTxt().startsWith("User-agent: *\nDisallow: /\n")).toBe(
+      true,
+    );
   });
 
   test("robots default-denies the whole host when indexable without crawl permission", () => {
@@ -504,12 +859,22 @@ describe("public law sitemap", () => {
     // Boundary-anchored rules: dir prefixes emit a subtree + exact-path pair,
     // the sitemap.xml file prefix emits just the exact-path rule.
     expect(allowLines).toEqual([
-      "Allow: /law/",
       "Allow: /law$",
+      // One subtree per pages-public jurisdiction, from the capability state.
+      ...PUBLIC_CASE_LAW_PAGE_COUNTRIES.flatMap((country) => {
+        const path = `/law/${toCaseLawCountryParam(country)}`;
+        return [`Allow: ${path}/`, `Allow: ${path}$`];
+      }),
+      "Allow: /law/cases$",
       "Allow: /sitemap.xml$",
       "Allow: /sitemaps/",
       "Allow: /sitemaps$",
+      ...PUBLIC_CRAWL_ASSETS.map(({ path }) => `Allow: ${path}$`),
     ]);
+    // A jurisdiction whose pages are not public stays behind Disallow: /.
+    expect(allowLines.some((line) => line.startsWith("Allow: /law/svk"))).toBe(
+      PUBLIC_CASE_LAW_PAGE_COUNTRIES.some((country) => country === "SVK"),
+    );
     // Sibling-path regression: never emit a bare un-anchored prefix (which
     // would also match /lawyer, /law-admin, …). Every Allow rule ends in / or $.
     for (const line of allowLines) {
@@ -536,7 +901,7 @@ describe("public law sitemap", () => {
     expect(robots).toContain("Disallow: /");
   });
 
-  test("robots opens the published template catalogue only behind the Knowledge crawl switch", () => {
+  test("robots opens the published Knowledge catalogues only behind the Knowledge crawl switch", () => {
     const allowLinesFor = (publicKnowledgeCrawlAllowed: boolean) =>
       createRobotsTxt({
         publicKnowledgeCrawlAllowed,
@@ -550,6 +915,7 @@ describe("public law sitemap", () => {
     expect(allowLinesFor(true)).toEqual([
       "Allow: /knowledge/templates/catalogue/",
       "Allow: /knowledge/templates/catalogue$",
+      "Allow: /knowledge/playbooks/catalogue$",
     ]);
     expect(allowLinesFor(false)).toEqual([]);
   });
@@ -597,7 +963,7 @@ describe("public law sitemap", () => {
       "<loc>http://localhost:3000/sitemaps/law.xml</loc>",
     );
     expect(staticXml).not.toContain("http://localhost:3000/law/cases");
-    expect(robots).toBe("User-agent: *\nDisallow: /\n");
+    expect(robots.startsWith("User-agent: *\nDisallow: /\n")).toBe(true);
   });
 
   test("dark-launched law sitemaps do not publish law URLs", () => {
@@ -624,7 +990,7 @@ describe("public law sitemap", () => {
     expectNoDirectAuthImport(source);
   });
 
-  test("root route streams only public law app paths", async () => {
+  test("root route renders every path with document presentation", async () => {
     const source = await readSource("apps/web/src/routes/__root.tsx");
 
     expect(isPublicSsrPath("/law")).toBe(true);
@@ -636,6 +1002,7 @@ describe("public law sitemap", () => {
     expect(source).toContain(
       "ssr: ({ location: routeLocation }) => isPublicSsrPath(routeLocation.pathname)",
     );
+    expect(source).toContain("loadDocumentPresentation(context.queryClient)");
     expect(source).toContain("shellComponent: RootDocument");
   });
 
@@ -657,7 +1024,9 @@ describe("public law sitemap", () => {
     const source = await readSource("apps/web/src/routes/_protected.tsx");
 
     expect(source).toContain("ssr: false");
-    expect(source).toContain("pendingComponent: ProtectedPendingSkeleton");
+    // A nested pending state renders content only; the shell owns its chrome.
+    expect(source).toContain("pendingComponent: DefaultPendingComponent");
+    expect(source).not.toContain("ProtectedPendingSkeleton");
   });
 
   test("document routes do not prefetch parent overview billing data", async () => {
@@ -665,29 +1034,33 @@ describe("public law sitemap", () => {
       "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.route.tsx",
     );
 
-    expect(
-      isWorkspaceDocumentRoutePath("/workspaces/workspace-id/view-id/document"),
-    ).toBe(true);
-    expect(
-      isWorkspaceDocumentRoutePath("/workspaces/workspace-id/view-id"),
-    ).toBe(false);
+    // The document page comes from the route matches (see
+    // use-workspace-view-params.dom.test.tsx), read in beforeLoad.
     expect(source).toContain(
-      "const isDocumentRoute = isWorkspaceDocumentRoutePath(location.pathname)",
+      "return { documentOnScreen: getCurrentWorkspaceDocument(matches) };",
+    );
+    expect(source).toContain(
+      "const isDocumentRoute = context.documentOnScreen !== undefined;",
     );
     expect(source).toContain("if (isDocumentRoute)");
     expect(source).toContain("timeEntrySummaryOptions(");
   });
 
   test("public case-law list route preloads first page for SSR links", async () => {
-    const source = await readSource("apps/web/src/routes/law/cases/index.tsx");
+    const [source, facets] = await Promise.all([
+      readSource("apps/web/src/routes/law/cases/index.tsx"),
+      readSource("apps/web/src/features/case-law/decision-filter-facets.ts"),
+    ]);
 
     expect(source).toContain("loader:");
-    expect(source).toContain("ensureRouteInfiniteQueryData");
-    expect(source).toContain(
-      "ensureRouteQueryData(queryClient, decisionFacetsOptions(scope))",
-    );
+    expect(source).toContain("ensureRouteQueryData");
+    expect(source).toContain("await prefetchDecisionFacetsAfterSearch({");
+    expect(source).toContain("country: scope,");
+    expect(facets).toContain("search.finally(");
+    expect(facets).toContain("prefetchRouteQuery(");
+    expect(facets).toContain("decisionFacetsOptions(country)");
     expect(source).not.toContain("decisionFacetsOptions()");
-    expect(source).toContain("decisionsInfiniteOptions(");
+    expect(source).toContain("decisionsPageOptions(");
     expect(source).toContain("validateSearch: searchSchema");
   });
 
@@ -753,12 +1126,8 @@ describe("public law sitemap", () => {
     expect(navSource).toContain("getWorkspacePrimaryNavItems");
     expect(navSource).toContain('if (item.id === "caseLaw")');
     expect(navSource).toContain("return includePublicLaw");
-    expect(appSidebarSource).toContain("usePublicLawPreviewEnabled");
-    // The server-rendered shell must use the isomorphic host/env gate;
-    // the browser-only preview hook would mismatch hydration there.
-    expect(publicShellSource).toContain("isPublicLawSsrRouteEnabled");
-    expect(publicShellSource).not.toContain("isPublicLawRouteEnabled");
-    expect(publicShellSource).not.toContain("usePublicLawPreviewEnabled");
+    expect(appSidebarSource).toContain("isPublicLawEnabled");
+    expect(publicShellSource).toContain("isPublicLawEnabled");
   });
 
   test("direct case-law callers are filtered by the shared dark-launch helper", async () => {
@@ -778,27 +1147,60 @@ describe("public law sitemap", () => {
       readSource("apps/web/src/components/search-dialog.tsx"),
     ]);
 
-    expect(chatLinkGateSource).toContain("isPublicLawPreviewEnabled");
+    expect(chatLinkGateSource).toContain("isPublicLawEnabled");
     expect(chatOpenSource).toContain("openPublicLawLink");
     expect(chatStatuteOpenSource).toContain("openPublicLawLink");
     expect(chatOpenSource).toContain("defaultCaseLawCountryForLocale");
-    expect(chatMentionSource).toContain("usePublicLawPreviewEnabled");
+    expect(chatMentionSource).toContain("isPublicLawEnabled");
     expect(chatMentionSource).toContain("defaultCaseLawCountryForLocale");
     expect(chatMentionSource).toContain("country !== null");
-    expect(searchSource).toContain("isPublicLawPreviewEnabled");
-    expect(searchSource).toContain("usePublicLawPreviewEnabled");
+    expect(searchSource).toContain("isPublicLawEnabled");
   });
 
-  test("start client orders i18n around hydration per path kind", async () => {
-    const source = await readSource("apps/web/src/client.tsx");
+  test("router restores the visitor snapshot before root-route account boot", async () => {
+    const [entry, runtime, source] = await Promise.all([
+      readSource("apps/web/src/client.tsx"),
+      readSource("apps/web/src/client-runtime.tsx"),
+      readSource("apps/web/src/router.tsx"),
+    ]);
+    expect(entry).toContain('import("@/client-runtime")');
 
-    // Public SSR paths hydrate first (against the server's English) and
-    // load the persisted locale after first paint; app paths keep the
-    // resolve-locale-then-hydrate boot model.
-    expect(source).toContain('from "@stll/ssr-kit/hydration"');
-    expect(source).toMatch(
-      /detached\(\s*bootHydratedClient\(\{\s*type:\s*isPublicSsrPath\(window\.location\.pathname\)\s*\?\s*"server-rendered"\s*:\s*"client-rendered",\s*hydrate,\s*initializeClientState:\s*initializeI18n,\s*\}\),\s*"client\.i18n",\s*\);/u,
+    expect(source).toContain(
+      "documentPresentationSnapshot(readRequestPresentationPrefs())",
     );
+    expect(source).not.toContain("useI18nStore.getState()");
+    // The snapshot is restored, then handed to the matches the hydration
+    // builds, so a member page's root (not loaded on the server) hydrates
+    // with the presentation the server painted.
+    expect(source).toContain(
+      "await restoreHydratedDocumentPresentation(snapshot);",
+    );
+    expect(source).toContain(
+      "router.options.context.presentationPrefs = snapshot.prefs;",
+    );
+    expect(source).not.toContain("localeUserId");
+    expect(source).not.toContain("loadAuthContext");
+    const root = await readSource("apps/web/src/routes/__root.tsx");
+    const boot = await readSource(
+      "apps/web/src/i18n/client-document-presentation-boot.tsx",
+    );
+    expect(runtime).not.toContain("HydrationCommitSignal");
+    expect(root).toContain(
+      "<ClientDocumentPresentationBoot queryClient={queryClient} />",
+    );
+    const rootComponent = root.slice(
+      root.indexOf("function RootComponent"),
+      root.indexOf("function RootDocument"),
+    );
+    const rootDocument = root.slice(root.indexOf("function RootDocument"));
+    expect(rootComponent).toContain("ClientDocumentPresentationBoot");
+    expect(rootDocument).not.toContain("ClientDocumentPresentationBoot");
+    expect(boot).toContain("loadClientDocumentPresentation(queryClient)");
+    expect(runtime).toContain(
+      'detached(Promise.resolve().then(hydrate), "client.hydration")',
+    );
+    expect(runtime).not.toContain("initializeI18n");
+    expect(runtime).toContain("createRootCaughtErrorHandler(getAnalytics)");
   });
 
   test("app provider preserves browser time zones for app timestamps", async () => {
@@ -811,7 +1213,9 @@ describe("public law sitemap", () => {
     expect(timeZoneSource).toContain('globalThis.addEventListener("focus"');
     expect(timeZoneSource).toContain('globalThis.removeEventListener("focus"');
 
-    const providerSource = await readSource("apps/web/src/app-providers.tsx");
+    const appSource = await readSource("apps/web/src/app-providers.tsx");
+    expect(appSource).toContain("<I18nProvider>");
+    const providerSource = await readSource("apps/web/src/i18n/provider.tsx");
     expect(providerSource).toContain(
       "useHydrationSafeTimeZone(synchronizeFormatterTimeZone)",
     );

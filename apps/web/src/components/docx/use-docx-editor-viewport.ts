@@ -1,4 +1,3 @@
-import { useMemo } from "react";
 import type { RefObject } from "react";
 
 import type { DocxEditorRef } from "@stll/folio-react";
@@ -6,10 +5,17 @@ import { composeRefs } from "@stll/ui/utils";
 
 import { useDocxFitZoom } from "@/components/docx-preview-zoom";
 import { useDocxFind } from "@/components/docx/use-docx-find";
+import { useExternalSyncEffect } from "@/hooks/use-effect";
+import type { DocumentTimingSurface } from "@/lib/analytics/types";
 import { useFindSurface } from "@/lib/find-owner";
 
 /** The inspector docks the editor beside the page; full view owns the page. */
 export type DocxEditorSurface = "fullView" | "inspector";
+
+export const DOCX_TIMING_SURFACE = {
+  fullView: "full-view",
+  inspector: "inspector",
+} as const satisfies Record<DocxEditorSurface, DocumentTimingSurface>;
 
 type UseDocxEditorViewportOptions = {
   containerRef: RefObject<HTMLDivElement | null>;
@@ -25,16 +31,22 @@ export const useDocxEditorViewport = ({
   scaleOffset,
   surface,
 }: UseDocxEditorViewportOptions) => {
+  // A nudge from the fit starts at the zoom the editor's own fit-width shows.
   const { containerRef: fitZoomRef, fitZoom: targetZoom } = useDocxFitZoom({
+    fit: { type: "editor" },
     scaleOffset,
-    maxAutoZoom: 0.85,
   });
+  const zoomMode = scaleOffset === 0 ? "fit-width" : "manual-offset";
+  // Switching initialZoom back to fit-width reattaches Folio's inner-viewport
+  // observer; a numeric setZoom here would override that first fit measurement.
+  useExternalSyncEffect(() => {
+    if (zoomMode === "manual-offset") {
+      editorRef.current?.setZoom(targetZoom);
+    }
+  }, [editorRef, zoomMode, targetZoom]);
   // Stable ref callback so React doesn't detach/re-attach the fit-zoom
   // ResizeObserver every render.
-  const composedContainerRef = useMemo(
-    () => composeRefs(containerRef, fitZoomRef),
-    [containerRef, fitZoomRef],
-  );
+  const composedContainerRef = composeRefs(containerRef, fitZoomRef);
   // Full view leaves Cmd+F to Folio's own dialog, which has the whole
   // viewport to sit in; only the docked inspector needs its own bar.
   const find = useDocxFind({
@@ -57,5 +69,5 @@ export const useDocxEditorViewport = ({
     scope: "app",
   });
 
-  return { composedContainerRef, find, targetZoom };
+  return { composedContainerRef, find, targetZoom, zoomMode };
 };

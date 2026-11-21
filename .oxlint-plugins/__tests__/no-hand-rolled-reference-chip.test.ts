@@ -1,8 +1,6 @@
-import { describe, expect, setDefaultTimeout, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 
 import { lintSingleRule } from "./lint-single-rule.ts";
-
-setDefaultTimeout(20_000);
 
 const lint = async (
   lines: readonly string[],
@@ -57,7 +55,7 @@ describe.serial("no-hand-rolled-reference-chip", () => {
     expect(
       await lint([
         'import type { ChatMentionResourceHref } from "@stll/api-contract";',
-        'import { MatterIcon } from "@/components/matter-icon";',
+        'import { MatterIcon } from "@stll/ui/matter-icon";',
         "declare const id: string;",
         "declare const href: ChatMentionResourceHref;",
         "export const Row = () => <MatterIcon matter={{ id, color: null }} />;",

@@ -14,6 +14,7 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 import nodePath from "node:path";
 
+import { CORPUS_PROJECTION_SEEDING_GUARD_TRIGGER } from "@/api/tests/helpers/corpus-projection-seeding-guard";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
 const DRIZZLE_DIR = nodePath.resolve(import.meta.dir, "../../drizzle");
@@ -22,7 +23,6 @@ const DRIZZLE_DIR = nodePath.resolve(import.meta.dir, "../../drizzle");
 const TRIGGERS_NOT_INSTALLED_IN_TESTS = [
   "case_law_decisions.case_law_corpus_jurisdictions_country_update",
   "case_law_decisions.case_law_corpus_jurisdictions_insert",
-  "case_law_decisions.case_law_decisions_corpus_country_shape",
   "case_law_decisions.case_law_decisions_legacy_corpus_mirror_settle",
   "case_law_decisions.case_law_decisions_legacy_redaction_fence",
   "case_law_decisions.case_law_decisions_projection_epoch_monotonic",
@@ -93,12 +93,22 @@ const triggersDefinedByMigrations = (): Map<string, string> => {
     .map((entry) => entry.name)
     .toSorted();
   for (const migration of migrations) {
-    const statements = readFileSync(
+    const migrationSql = readFileSync(
       nodePath.join(DRIZZLE_DIR, migration, "migration.sql"),
       "utf-8",
-    )
+    );
+    const statements = migrationSql
       .split("--> statement-breakpoint")
       .map((statement) => statement.replace(/^[ \t]*--[^\n]*/gmu, "").trim());
+    if (migration === "20261020000100_stored_keys_organization_scope") {
+      const organizationKeyTrigger =
+        /CREATE TRIGGER user_files_organization_key_guard[\s\S]*?;/u.exec(
+          migrationSql,
+        );
+      if (organizationKeyTrigger !== null) {
+        statements.push(organizationKeyTrigger[0]);
+      }
+    }
     for (const statement of statements) {
       const created = triggerKey(CREATE_TRIGGER.exec(statement));
       if (created !== undefined) {
@@ -140,7 +150,17 @@ beforeAll(async () => {
        JOIN pg_class c ON c.oid = t.tgrelid
       WHERE NOT t.tgisinternal`,
   );
-  installed = new Set(rows.map((row) => row.trigger));
+  // The seeding guard is a test-only check every test database installs on
+  // purpose (`helpers/corpus-projection-seeding-guard.ts`); no migration
+  // defines it.
+  installed = new Set(
+    rows
+      .map((row) => row.trigger)
+      .filter(
+        (trigger) =>
+          !trigger.endsWith(`.${CORPUS_PROJECTION_SEEDING_GUARD_TRIGGER}`),
+      ),
+  );
 }, 120_000);
 
 afterAll(async () => {

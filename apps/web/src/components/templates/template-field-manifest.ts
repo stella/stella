@@ -1,6 +1,6 @@
 import {
-  isBusinessRegistrySlug,
   type BusinessRegistrySlug,
+  isBusinessRegistrySlug,
 } from "@stll/api-contract";
 
 export type LookupRegistry = BusinessRegistrySlug;
@@ -10,13 +10,7 @@ export type LookupRegistry = BusinessRegistrySlug;
 export const isLookupRegistry = (value: unknown): value is LookupRegistry =>
   isBusinessRegistrySlug(value);
 
-export const INPUT_TYPES = [
-  "text",
-  "number",
-  "boolean",
-  "date",
-  "select",
-] as const;
+const INPUT_TYPES = ["text", "number", "boolean", "date", "select"] as const;
 
 export type InputType = (typeof INPUT_TYPES)[number];
 

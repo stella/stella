@@ -1,24 +1,41 @@
 import { EventType } from "@tanstack/ai";
-import type { AnyTextAdapter, StreamChunk } from "@tanstack/ai";
+import type { AnyTextAdapter, ModelMessage, StreamChunk } from "@tanstack/ai";
 import {
   toRunErrorPayload,
   toRunErrorRawEvent,
 } from "@tanstack/ai/adapter-internals";
-import { Result, panic } from "better-result";
+import { panic, Result } from "better-result";
 
-import type { TanStackAIProvider } from "@stll/ai-catalog";
+import { withModelPlaceholdersOmitted } from "@stll/agent-input";
+import type { ReasoningProvenance, TanStackAIProvider } from "@stll/ai-catalog";
 import { Temporal } from "@stll/time";
 
 import { arrayOrEmpty } from "@/api/lib/array";
-import { withReasoningBoundToProvider } from "@/api/lib/chat/provider-bound-reasoning";
 import {
+  buildClosedTranscript,
+  continuationThinkingFor,
+  createTurnReasoningDropEmitter,
+} from "@/api/lib/chat/closed-transcript";
+import type {
+  ClosedTranscript,
+  ContinuationThinking,
+} from "@/api/lib/chat/closed-transcript";
+import {
+  requestedOutputCeiling,
+  spentOutputCeiling,
+} from "@/api/lib/chat/output-ceiling";
+import {
+  recordedStopReasonOf,
   refuseTurnPausingRequest,
+  unfinishedStopMessage,
+  UNRECOGNIZED_STOP_REASON,
   withDecidedStopReasons,
 } from "@/api/lib/chat/provider-stop-reasons";
+import { reasoningProvenanceForSignature } from "@/api/lib/chat/reasoning-provenance";
 import { TOOL_CALL_STEP_METADATA_KEY } from "@/api/lib/chat/tool-call-step";
 import { withUniqueToolCallIds } from "@/api/lib/chat/unique-tool-call-ids";
 import type { ToolCallIdLedger } from "@/api/lib/chat/unique-tool-call-ids";
-import { withModelPlaceholdersOmitted } from "@/api/lib/json-schema/null-optionals";
+import { isRecord } from "@/api/lib/type-guards";
 
 // One owner for what every provider adapter's stream promises the rest of
 // the service: it ends in exactly one terminal event (`RUN_FINISHED` or
@@ -57,7 +74,7 @@ type RunFinishedChunk = Extract<StreamChunk, { type: EventType.RUN_FINISHED }>;
  * The run error code of a response the model stopped writing because it
  * reached the output ceiling the request set (Anthropic, Gemini).
  */
-const TRUNCATED_AT_OUTPUT_CEILING_CODE = "max_tokens";
+export const TRUNCATED_AT_OUTPUT_CEILING_CODE = "max_tokens";
 /**
  * OpenAI's Responses adapter reports a response that ended incomplete with
  * this code, and the reason it ended as the message.
@@ -68,16 +85,86 @@ const OUTPUT_CEILING_REASON = "max_output_tokens";
 // These upstream variants use string-literal discriminants rather than
 // EventType members. Named, checked literals keep Oxlint's exhaustiveness
 // analysis aligned with the SDK union.
+const ACTIVITY_SNAPSHOT_STREAM_CHUNK_TYPE =
+  "ACTIVITY_SNAPSHOT" satisfies StreamChunk["type"];
+const ACTIVITY_DELTA_STREAM_CHUNK_TYPE =
+  "ACTIVITY_DELTA" satisfies StreamChunk["type"];
 const CUSTOM_STREAM_CHUNK_TYPE = "CUSTOM" satisfies StreamChunk["type"];
 const TOOL_CALL_END_STREAM_CHUNK_TYPE =
   "TOOL_CALL_END" satisfies StreamChunk["type"];
 const TOOL_CALL_START_STREAM_CHUNK_TYPE =
   "TOOL_CALL_START" satisfies StreamChunk["type"];
 
+/**
+ * Whether a run error's `code` and `message` say the response stopped at the
+ * output ceiling. Read from the fields, so the same verdict holds for the
+ * stream event and for the `Error` the structured-output engine rebuilds from
+ * it (which keeps both).
+ */
+export const isOutputCeilingStopReport = ({
+  code,
+  message,
+}: {
+  code?: unknown;
+  message?: unknown;
+}): boolean =>
+  code === TRUNCATED_AT_OUTPUT_CEILING_CODE ||
+  (code === INCOMPLETE_RESPONSE_CODE && message === OUTPUT_CEILING_REASON);
+
 const isOutputCeilingStop = (chunk: RunErrorChunk): boolean =>
-  chunk.code === TRUNCATED_AT_OUTPUT_CEILING_CODE ||
-  (chunk.code === INCOMPLETE_RESPONSE_CODE &&
-    chunk.message === OUTPUT_CEILING_REASON);
+  isOutputCeilingStopReport(chunk);
+
+/**
+ * The patched OpenRouter adapter's run error for a stream that ended with
+ * no finish reason (`output-ceiling.test.ts` drives the real adapter to it).
+ * Its error for an `error` finish shares the code, so the message tells the
+ * two apart.
+ */
+const OPENROUTER_NO_FINISH_REPORT = {
+  code: "incomplete-stream",
+  message: "The provider stream ended before a finish reason.",
+} as const;
+
+/**
+ * Whether a run error says only that no stop reason arrived: the one failed
+ * ending usage may overrule. A failure the provider named (an error finish,
+ * a server error, a reason it does not document) stays a failure, whatever
+ * it spent.
+ */
+const reportsNoStopReason = (chunk: RunErrorChunk): boolean =>
+  (chunk.code === OPENROUTER_NO_FINISH_REPORT.code &&
+    chunk.message === OPENROUTER_NO_FINISH_REPORT.message) ||
+  (chunk.code === INCOMPLETE_STREAM_CODE &&
+    chunk.message === unfinishedStopMessage(null));
+
+type RunFinishReason = RunFinishedChunk["finishReason"];
+
+/**
+ * Whether a finish keeps its own reading when the response also spent its
+ * output ceiling. A finish the provider named stands: a clean stop says the
+ * answer ended, a tool call is a turn the engine continues, and a filtered
+ * response is the provider's decision about the content, which spent usage
+ * cannot overrule. Only a finish that says nothing about where the answer
+ * ended (none reported, or a reason no table lists, which an answered step
+ * also finishes as `stop`) is read as the ceiling that cut it.
+ */
+const finishStandsAgainstCeiling = (chunk: RunFinishedChunk): boolean => {
+  const reason: RunFinishReason = chunk.finishReason;
+  switch (reason) {
+    case "stop":
+      return recordedStopReasonOf(chunk) !== UNRECOGNIZED_STOP_REASON;
+    case "tool_calls":
+    case "length":
+    case "content_filter":
+      return true;
+    case null:
+    case undefined:
+      return false;
+    default:
+      reason satisfies never;
+      return panic(`Unhandled finish reason: ${String(reason)}`);
+  }
+};
 
 /**
  * A response cut off at the output ceiling, read as a `length` finish.
@@ -94,10 +181,17 @@ const isOutputCeilingStop = (chunk: RunErrorChunk): boolean =>
  * and then finishes anyway (Gemini) has its closing events pass in order, and
  * its trailing `RUN_FINISHED` gives the finish the usage the stop lacked.
  *
+ * Given the request's `ceiling`, the usage a terminal event reports is
+ * evidence too: a response that spent the whole ceiling and whose finish
+ * says nothing about where it ended (no reason, or one no table lists) was
+ * cut by it. A finish the provider named (a clean `stop`, a tool call, a
+ * filtered response) keeps its own reading.
+ *
  * @yields Every chunk of the run, with a ceiling stop read as `length`.
  */
 export const readOutputCeilingStopAsLength = async function* (
   chunks: AsyncIterable<StreamChunk>,
+  { ceiling }: { ceiling?: number | undefined } = {},
 ): AsyncIterable<StreamChunk> {
   let runIdentity: { runId: string; threadId: string } | undefined;
   let held: RunFinishedChunk | undefined;
@@ -111,7 +205,10 @@ export const readOutputCeilingStopAsLength = async function* (
         if (
           held !== undefined ||
           runIdentity === undefined ||
-          !isOutputCeilingStop(chunk)
+          !(
+            isOutputCeilingStop(chunk) ||
+            (reportsNoStopReason(chunk) && spentOutputCeiling(chunk, ceiling))
+          )
         ) {
           break;
         }
@@ -131,11 +228,25 @@ export const readOutputCeilingStopAsLength = async function* (
       }
       case EventType.RUN_FINISHED: {
         if (held === undefined) {
+          if (
+            !finishStandsAgainstCeiling(chunk) &&
+            spentOutputCeiling(chunk, ceiling)
+          ) {
+            yield { ...chunk, finishReason: "length" };
+            continue;
+          }
           break;
         }
         if (held.usage === undefined && chunk.usage !== undefined) {
           held = { ...held, usage: chunk.usage };
         }
+        continue;
+      }
+      case ACTIVITY_SNAPSHOT_STREAM_CHUNK_TYPE:
+      case ACTIVITY_DELTA_STREAM_CHUNK_TYPE: {
+        // Activity is browser-visible turn data, even while the terminal
+        // output-ceiling report is held until the provider stops.
+        yield chunk;
         continue;
       }
       case EventType.TEXT_MESSAGE_START:
@@ -160,8 +271,6 @@ export const readOutputCeilingStopAsLength = async function* (
       case EventType.REASONING_MESSAGE_CHUNK:
       case EventType.TEXT_MESSAGE_CHUNK:
       case EventType.TOOL_CALL_CHUNK:
-      case EventType.ACTIVITY_SNAPSHOT:
-      case EventType.ACTIVITY_DELTA:
       case EventType.RAW:
       case EventType.SUBAGENT_STARTED:
       case EventType.SUBAGENT_FINISHED:
@@ -340,14 +449,124 @@ type StreamContract = {
   /** The run's tool call ids; absent outside a chat run. */
   ledger: ToolCallIdLedger | undefined;
   provider: TanStackAIProvider | undefined;
+  reasoning: Map<string, ReasoningProvenance>;
 };
 
 /** What each contracted adapter wraps, so a run can bind its ledger to the
  *  same contract instead of stacking a second one. */
 const streamContracts = new WeakMap<AnyTextAdapter, StreamContract>();
 
+type ClosedProviderRequest = Omit<ChatStreamOptions, "messages"> & {
+  messages: ClosedTranscript;
+};
+
+const dispatchClosedRequest = (
+  adapter: AnyTextAdapter,
+  options: ClosedProviderRequest,
+) => adapter.chatStream(options);
+
+type ClosedStructuredRequest = Omit<
+  Parameters<AnyTextAdapter["structuredOutput"]>[0],
+  "chatOptions"
+> & {
+  chatOptions: ClosedProviderRequest;
+};
+
+const dispatchClosedStructuredRequest = async (
+  adapter: AnyTextAdapter,
+  options: ClosedStructuredRequest,
+) => adapter.structuredOutput(options);
+
+type ClosedStructuredStreamOptions = {
+  adapter: AnyTextAdapter;
+  stream: NonNullable<AnyTextAdapter["structuredOutputStream"]>;
+  options: ClosedStructuredRequest;
+};
+const dispatchClosedStructuredStream = ({
+  adapter,
+  stream,
+  options,
+}: ClosedStructuredStreamOptions) => stream.call(adapter, options);
+
+type ProducedReasoningOptions = {
+  chunks: AsyncIterable<StreamChunk>;
+  provider: TanStackAIProvider;
+  modelId: string;
+  reasoning: Map<string, ReasoningProvenance>;
+};
+
+// Only provider output may establish the origin of reasoning created inside
+// the SDK's tool loop. Historical signatures never populate this run ledger.
+async function* withProducedReasoning({
+  chunks,
+  provider,
+  modelId,
+  reasoning,
+}: ProducedReasoningOptions): AsyncIterable<StreamChunk> {
+  for await (const chunk of chunks) {
+    const signatures: unknown[] = [];
+    if (chunk.type === EventType.STEP_FINISHED) {
+      signatures.push(Reflect.get(chunk, "signature"));
+    }
+    if (chunk.type === EventType.REASONING_ENCRYPTED_VALUE) {
+      signatures.push(chunk.encryptedValue);
+    }
+    if (
+      chunk.type === EventType.TOOL_CALL_START ||
+      chunk.type === "TOOL_CALL_END"
+    ) {
+      signatures.push(chunk.metadata?.["thoughtSignature"]);
+    }
+    for (const signature of signatures) {
+      if (typeof signature !== "string" || signature === "") {
+        continue;
+      }
+      const provenance = reasoningProvenanceForSignature({
+        provider,
+        modelId,
+        signature,
+      });
+      if (provenance !== undefined) {
+        reasoning.set(signature, provenance);
+      }
+    }
+    yield chunk;
+  }
+}
+
+/** Whether provider options ask an Anthropic model to think. */
+const requestsThinking = (modelOptions: unknown): boolean => {
+  if (!isRecord(modelOptions)) {
+    return false;
+  }
+  const thinking = modelOptions["thinking"];
+  return isRecord(thinking) && thinking["type"] !== "disabled";
+};
+
+const withContinuationThinking = (
+  options: ClosedProviderRequest,
+  decision: ContinuationThinking,
+): ClosedProviderRequest => {
+  switch (decision) {
+    case "as-requested":
+      return options;
+    case "disabled":
+      return {
+        ...options,
+        modelOptions: {
+          ...(isRecord(options.modelOptions) ? options.modelOptions : {}),
+          thinking: { type: "disabled" },
+        },
+      };
+    default:
+      decision satisfies never;
+      return panic(`Unhandled continuation thinking: ${String(decision)}`);
+  }
+};
+
 const contracted = (contract: StreamContract): AnyTextAdapter => {
-  const { adapter, ledger, provider } = contract;
+  const { adapter, ledger, provider, reasoning } = contract;
+  const onReasoningDropped = createTurnReasoningDropEmitter();
   const decided = (chunks: AsyncIterable<StreamChunk>) =>
     provider === undefined
       ? chunks
@@ -355,40 +574,148 @@ const contracted = (contract: StreamContract): AnyTextAdapter => {
           provider,
           unfinishedCode: INCOMPLETE_STREAM_CODE,
         });
+  const closeMessages = (
+    requested: Pick<ChatStreamOptions, "messages" | "model">,
+    activeReasoning: Map<string, ReasoningProvenance>,
+  ): ClosedTranscript | undefined =>
+    provider === undefined
+      ? undefined
+      : buildClosedTranscript({
+          messages: requested.messages.map((message): ModelMessage => ({
+            ...message,
+            ...(message.thinking === undefined
+              ? {}
+              : {
+                  thinking: message.thinking.map((item) => {
+                    const provenance =
+                      item.signature === undefined
+                        ? undefined
+                        : activeReasoning.get(item.signature);
+                    return provenance === undefined
+                      ? item
+                      : { ...item, provenance };
+                  }),
+                }),
+            ...(message.toolCalls === undefined
+              ? {}
+              : {
+                  toolCalls: message.toolCalls.map((call) => {
+                    const signature: unknown = isRecord(call.metadata)
+                      ? call.metadata["thoughtSignature"]
+                      : undefined;
+                    const provenance =
+                      typeof signature === "string"
+                        ? activeReasoning.get(signature)
+                        : undefined;
+                    return provenance === undefined || !isRecord(call.metadata)
+                      ? call
+                      : {
+                          ...call,
+                          metadata: {
+                            ...call.metadata,
+                            reasoningProvenance: provenance,
+                          },
+                        };
+                  }),
+                }),
+          })),
+          target: { provider, modelId: requested.model },
+          onReasoningDropped,
+        });
+  // Every request path closes its transcript here, so none can send a
+  // continuation whose thinking options the closed transcript cannot honour.
+  const closeRequest = (
+    requested: ChatStreamOptions,
+  ): ClosedProviderRequest | undefined => {
+    const closed = closeMessages(requested, reasoning);
+    if (closed === undefined || provider === undefined) {
+      return undefined;
+    }
+    return withContinuationThinking(
+      { ...requested, messages: closed },
+      continuationThinkingFor({
+        transcript: closed,
+        target: { provider, modelId: requested.model },
+        thinkingRequested: requestsThinking(requested.modelOptions),
+        onReasoningDropped,
+      }),
+    );
+  };
   const chatStream: AnyTextAdapter["chatStream"] = (requested) => {
-    // Signed reasoning reaches only the provider that signed it.
-    const options =
-      provider === undefined
-        ? requested
-        : {
-            ...requested,
-            messages: withReasoningBoundToProvider(
-              requested.messages,
-              provider,
-            ),
-          };
+    const closedRequest = closeRequest(requested);
+    const options = closedRequest ?? requested;
     refuseTurnPausingRequest(provider, options);
+    const dispatched =
+      closedRequest === undefined
+        ? adapter.chatStream(requested)
+        : dispatchClosedRequest(adapter, closedRequest);
+    const produced =
+      provider === undefined
+        ? dispatched
+        : withProducedReasoning({
+            chunks: dispatched,
+            provider,
+            modelId: requested.model,
+            reasoning,
+          });
     return withOneTerminalEvent(
       withDeclaredToolInput(
         readOutputCeilingStopAsLength(
           decided(
             withToolCallSteps(
-              withUniqueToolCallIds(adapter.chatStream(options), {
+              withUniqueToolCallIds(produced, {
                 ledger,
                 messages: options.messages,
               }),
             ),
           ),
+          {
+            ceiling:
+              provider === undefined
+                ? undefined
+                : requestedOutputCeiling(provider, options.modelOptions),
+          },
         ),
         options,
       ),
       options,
     );
   };
+  const structuredOutput: AnyTextAdapter["structuredOutput"] = async (
+    requested,
+  ) => {
+    const closedRequest = closeRequest(requested.chatOptions);
+    return closedRequest === undefined
+      ? adapter.structuredOutput(requested)
+      : dispatchClosedStructuredRequest(adapter, {
+          ...requested,
+          chatOptions: closedRequest,
+        });
+  };
+  const rawStructuredStream = adapter.structuredOutputStream;
+  const structuredOutputStream: AnyTextAdapter["structuredOutputStream"] =
+    rawStructuredStream === undefined
+      ? undefined
+      : (requested) => {
+          const closedRequest = closeRequest(requested.chatOptions);
+          return closedRequest === undefined
+            ? rawStructuredStream.call(adapter, requested)
+            : dispatchClosedStructuredStream({
+                adapter,
+                stream: rawStructuredStream,
+                options: { ...requested, chatOptions: closedRequest },
+              });
+        };
   const proxy = new Proxy(adapter, {
     get: (target, key) => {
       if (key === "chatStream") {
         return chatStream;
+      }
+      if (key === "structuredOutput") {
+        return structuredOutput;
+      }
+      if (key === "structuredOutputStream") {
+        return structuredOutputStream;
       }
       const value: unknown = Reflect.get(target, key, target);
       if (typeof value !== "function") {
@@ -422,7 +749,12 @@ export const withProviderStreamContract = (
   if (streamContracts.has(adapter)) {
     panic("The adapter is already held to the provider stream contract");
   }
-  return contracted({ adapter, ledger: undefined, provider });
+  return contracted({
+    adapter,
+    ledger: undefined,
+    provider,
+    reasoning: new Map(),
+  });
 };
 
 /**
@@ -443,5 +775,6 @@ export const withRunToolCallIds = (
     adapter: contract.adapter,
     ledger,
     provider: contract.provider,
+    reasoning: new Map(),
   });
 };

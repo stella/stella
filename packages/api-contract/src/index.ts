@@ -1,5 +1,9 @@
+import { STELLA_API_VERSION_PREFIX } from "./api-version";
+
 /** Version of the public REST request and response contract. */
 export const STELLA_REST_API_CONTRACT_VERSION = 4 as const;
+
+export type { ConversionRefusal } from "./conversion-refusal";
 
 export { SEARCH_QUERY_MAX_LENGTH } from "./limits";
 export {
@@ -18,12 +22,39 @@ export type {
 export {
   CHAT_SKILL_CONTEXT_NEED,
   CHAT_SKILL_DOCUMENT,
+  SKILL_DRAFT_NAME_KINDS,
+  SKILL_EXPORT_TOO_LARGE_CODE,
+  SKILL_FROM_CHAT_REFUSAL_CODE,
+  SKILL_PACKAGE_FILE_EXTENSIONS,
+  SKILL_PACKAGE_REFUSAL_CODE,
+  SKILL_PACKAGE_SKILL_NOT_FOUND_CODE,
   SKILL_REF_HREF_PREFIX,
   SKILL_RESOURCE_PATH_PATTERN,
+  SKILL_RESOURCE_REFUSAL_CODE,
+  SKILL_SOURCE_UNREACHABLE_CODE,
 } from "./agent-skills";
-export type { ChatSkillContextNeed, ChatSkillDocument } from "./agent-skills";
-export { AI_ERROR_KINDS } from "./ai-errors";
-export type { AIErrorKind } from "./ai-errors";
+export type {
+  ChatSkillContextNeed,
+  ChatSkillDocument,
+  SkillDraftNameKind,
+} from "./agent-skills";
+export { AI_ERROR_KINDS, AI_FAILURE_CODES, isAIFailureCode } from "./ai-errors";
+export type { AIErrorKind, AIFailureCode } from "./ai-errors";
+export {
+  caseLawAnalysisProgressSchema,
+  CASE_LAW_ANALYSIS_FAILURE_CODES,
+  CASE_LAW_ANALYSIS_KEY_SOURCES,
+  CASE_LAW_ANALYSIS_LANGUAGES,
+  CASE_LAW_ANALYSIS_UNAVAILABLE_CODES,
+  isCaseLawAnalysisLanguage,
+} from "./case-law-analysis";
+export type {
+  CaseLawAnalysisFailureCode,
+  CaseLawAnalysisLanguage,
+  CaseLawAnalysisKeySource,
+  CaseLawAnalysisProgressResponse,
+  CaseLawAnalysisUnavailableCode,
+} from "./case-law-analysis";
 export {
   BROWSER_CONTROL_ACTION,
   BROWSER_CONTROL_CONTENT_TRUST,
@@ -31,27 +62,39 @@ export {
   BROWSER_CONTROL_KEYS,
   BROWSER_CONTROL_LIMITS,
   BROWSER_CONTROL_PROTOCOL_VERSION,
+  BROWSER_CONTROL_TARGET_METADATA,
   BROWSER_CONTROL_TOOL_NAME,
   BROWSER_EXTENSION_MESSAGE_SOURCE,
+  BROWSER_EXTENSION_STATUS,
   parseBrowserControlCommand,
   parseBrowserControlResult,
   parseBrowserExtensionRequest,
   parseBrowserExtensionResponse,
 } from "./browser-control";
 export type {
-  BrowserClientCapability,
+  BrowserExtensionCapability,
   BrowserControlCommand,
   BrowserControlErrorCode,
   BrowserControlResult,
   BrowserControlSnapshot,
+  BrowserControlTargetMetadata,
   BrowserExtensionRequest,
   BrowserExtensionResponse,
+  BrowserExtensionStatus,
 } from "./browser-control";
 export {
   BILLING_STATUS,
+  DEFAULT_INVOICE_DUE_DAYS,
+  INVOICE_DUE_DAY_PRESETS,
   EXPENSE_CATEGORIES,
+  INVOICE_LANGUAGES,
   INVOICE_LINE_SOURCE,
+  INVOICE_LINE_INPUT_LIMITS,
+  INVOICE_LINE_QUANTITY_PATTERN,
   INVOICE_LINE_SOURCES,
+  INVOICE_SEND_LIMITS,
+  INVOICE_PAYMENT_INPUT_LIMITS,
+  INVOICE_PAYMENT_METHODS,
   INVOICE_STATUS,
   INVOICE_STATUSES,
   NUMBER_SERIES_DOCUMENT_TYPES,
@@ -62,10 +105,13 @@ export {
   TIME_ENTRY_STATUSES,
   TIME_ENTRY_SUGGESTION_STATUS,
   TIME_ENTRY_SUGGESTION_STATUSES,
+  UNPRICED_TIME_ENTRY_CURRENCY,
 } from "./billing";
 export type {
   ExpenseCategory,
+  InvoiceLanguage,
   InvoiceLineSource,
+  InvoicePaymentMethod,
   InvoiceStatus,
   TimeEntrySource,
   TimeEntryActivityGroup,
@@ -77,6 +123,7 @@ export {
   BUSINESS_REGISTRY_CONFIGURATION,
   BUSINESS_REGISTRY_CREDENTIAL_SLUGS,
   BUSINESS_REGISTRY_LOOKUP_DETAILS,
+  BUSINESS_REGISTRY_SEARCH_CAPABILITIES,
   isBusinessRegistryCredentialSlug,
   isBusinessRegistrySlug,
 } from "./business-registries";
@@ -84,6 +131,7 @@ export type {
   BusinessRegistrySlug,
   BusinessRegistryCredentialSlug,
   BusinessRegistryLookupDetail,
+  BusinessRegistrySearchCapabilities,
 } from "./business-registries";
 export {
   CHAT_RUN_MODE,
@@ -94,6 +142,7 @@ export {
   CHAT_TURN_INTENT,
   REQUEST_ID_HEADER,
 } from "./chat";
+export type { ChatTurnIntent } from "./chat";
 export {
   CLAUSE_WARNINGS_HEADER,
   UNDECIDED_CONDITIONS_HEADER,
@@ -129,13 +178,39 @@ export {
 export type { ChatEditApplyMode, DocxEditRepresentation } from "./chat-edit";
 export {
   CHAT_DECISION_PASSAGE_HREF_PREFIX,
+  chatDecisionPassagesIn,
   parseChatDecisionPassageHref,
+  stampChatDecisionPassageHrefs,
   toChatDecisionPassageHref,
 } from "./chat-decision-passage-link";
 export type {
+  ChatDecisionPassage,
   ChatDecisionPassageHref,
   ChatDecisionPassageTarget,
 } from "./chat-decision-passage-link";
+export {
+  CHAT_CORPORA,
+  CHAT_CORPUS_HREF_PREFIX,
+  formatChatCorpusId,
+  parseChatCorpusHref,
+  parseChatCorpusId,
+  toChatCorpusHref,
+} from "./chat-corpus-scope";
+export type { ChatCorpus, ChatCorpusScope } from "./chat-corpus-scope";
+export {
+  CHAT_CONNECTOR_HREF_PREFIX,
+  CHAT_REGISTRY_HREF_PREFIX,
+  CHAT_SOURCE_SCOPE_KINDS,
+  chatSourceScopeKey,
+  chatSourceScopeKindOfHref,
+  formatChatSourceScopeId,
+  isChatConnectorSlug,
+  isChatSourceScopeKind,
+  parseChatSourceScopeHref,
+  parseChatSourceScopeId,
+  toChatSourceScopeHref,
+} from "./chat-source-scope";
+export type { ChatSourceScope, ChatSourceScopeKind } from "./chat-source-scope";
 export {
   CHAT_MENTION_CATEGORIES,
   CHAT_MENTION_HREF_PREFIXES,
@@ -164,6 +239,7 @@ export type {
   ChatSourceCitationTarget,
 } from "./chat-source-citations";
 export {
+  CONTACT_BULK_DELETE_LIMIT,
   CONTACT_IMPORT_CUSTOM_FIELD_DESTINATION,
   CONTACT_IMPORT_FIELDS,
   CONTACT_IMPORT_IGNORE_DESTINATION,
@@ -174,6 +250,7 @@ export {
   CONTACT_IMPORT_SCHEMA_VERSION,
   CONTACT_IMPORT_TARGET_FIELDS,
   CONTACT_IMPORT_TAX_ID_SCHEMES,
+  CONTACT_IMPORT_WARNING_CODE,
   parseContactImportMapping,
 } from "./contact-import";
 export type {
@@ -184,6 +261,7 @@ export type {
   ContactImportMappingParseResult,
   ContactImportTargetField,
   ContactImportTaxIdScheme,
+  ContactImportWarningCode,
 } from "./contact-import";
 export {
   AUTHORED_DOCUMENT_PROPERTY_KEYS,
@@ -229,6 +307,7 @@ export type {
   EntityFindScopeType,
   PropertyContentType,
 } from "./entity-find";
+export { PROPERTY_SORT_KINDS } from "./property-sort";
 export { ENTITY_KINDS, isEntityKind } from "./entity-kinds";
 export type { EntityKind } from "./entity-kinds";
 export {
@@ -292,26 +371,42 @@ export type {
 export {
   CLAUSE_VERSION_LIMIT_ERROR_CODE,
   API_FILE_SECURITY_REJECTED_ERROR_CODE,
+  API_VALIDATION_CONSTRAINTS,
   API_VALIDATION_ERROR_CODE,
   API_VERSION_CONFLICT_ERROR_CODE,
+  SAVED_SEARCH_NOT_FOUND_ERROR_CODE,
+  IDEMPOTENCY_IN_PROGRESS_CODE,
+  IDEMPOTENCY_KEY_REUSED_CODE,
   CLAUSE_DIRECTIVES_INVALID_CODE,
   CHAT_CONTINUATION_REJECTED_ERROR_CODE,
+  CHAT_HISTORY_CHANGED_ERROR_CODE,
+  CHAT_INPUT_REFUSAL_CODE,
+  CHAT_MESSAGE_EDIT_ERROR_CODE,
+  CHAT_MESSAGE_EMPTY_ERROR_CODE,
+  CHAT_THREAD_NOT_FOUND_ERROR_CODE,
   CHAT_TURN_NOT_OWNED_ERROR_CODE,
+  DOCUMENT_TOO_LARGE_ERROR_CODE,
   DOCX_SUGGESTIONS_PENDING_LIMIT_ERROR_CODE,
   ENCRYPTED_CONTENT_ERROR_CODE,
+  PREVIEW_UNAVAILABLE_ERROR_CODE,
   FILE_SECURITY_REMEDIATION,
   MEMBER_REMOVAL_BUSY_CODE,
   normalizeApiError,
   parseApiErrorValue,
+  parseApiValidationIssues,
 } from "./error";
 export type {
+  ChatInputRefusalCode,
   ApiErrorInput,
   ApiErrorObjectValue,
   ApiErrorValue,
   ApiFileSecurityIssue,
   ApiFileSecurityRejection,
   ApiFileSecurityRejectionDetails,
+  ApiValidationConstraint,
   ApiValidationErrorValue,
+  ApiValidationIssue,
+  ChatMessageEditErrorCode,
   FileSecurityRemediation,
   NormalizedApiError,
 } from "./error";
@@ -319,6 +414,7 @@ export {
   buildDocumentVersionUploadReservationInput,
   buildUploadAbortInput,
   buildUploadFinalizeInput,
+  DOCUMENT_UPLOAD_PUT_TIMEOUT_MS,
   DOCUMENT_VERSION_UPLOAD_CAPABILITY_IDS,
   DOCUMENT_VERSION_UPLOAD_TRANSPORT,
 } from "./document-version-upload";
@@ -347,10 +443,12 @@ export type {
 } from "./flow-status";
 export {
   AGENT_SKILLS_CHAT_METADATA_MAX,
+  CASE_LAW_CITATION_SUMMARY_SCAN_LIMIT,
   CASE_LAW_CITATION_TIMELINE_MAX_YEARS,
   CASE_LAW_RESEARCH_COLUMNS_PER_ORGANIZATION_MAX,
   CASE_LAW_RESEARCH_RUN_DECISIONS_MAX,
   CASE_LAW_RESEARCH_SUGGEST_SAMPLES_MAX,
+  CLAUSE_NUMBERING_LEVEL_LIMITS,
   DOCX_SUGGESTIONS_PAGE_SIZE_MAX,
   DOCX_SUGGESTIONS_PENDING_MAX,
   ENTITIES_PER_WORKSPACE_MAX,
@@ -385,31 +483,44 @@ export {
 } from "./matter-reference";
 export type { MatterReferenceToken } from "./matter-reference";
 export {
+  MCP_ADVANCED_HTTP_PATH,
+  MCP_ADVANCED_RESOURCE_SCOPES,
   MCP_ANONYMIZED_HTTP_PATH,
   MCP_ANONYMIZED_RESOURCE_SCOPES,
   MCP_ANONYMIZED_SCOPE_BY_DEFAULT_SCOPE,
+  ACCOUNT_EXPORT_SCOPES,
   MCP_DEFAULT_RESOURCE_SCOPES,
   MCP_DOCUMENTS_HTTP_PATH,
   MCP_HTTP_PATH,
   MCP_LAW_HTTP_PATH,
   MCP_OAUTH_PROTOCOL_SCOPES,
   MCP_WRITE_ONLY_RESOURCE_SCOPES,
+  VERIFIED_OAUTH_CLIENT_BRANDS,
 } from "./mcp";
 export type {
   McpAnonymizedResourceScope,
   McpDefaultResourceScope,
   McpOAuthScope,
   McpWriteOnlyResourceScope,
+  OAuthConsentClient,
+  VerifiedOAuthClientBrand,
 } from "./mcp";
 export { OCR_EXPORT_STATUSES } from "./ocr-export";
 export type { OcrExportStatus } from "./ocr-export";
 export {
+  chatBackgroundTasksChangedRealtimeEvent,
+  chatQueueChangedRealtimeEvent,
+  chatRunsChangedRealtimeEvent,
+  chatThreadsChangedRealtimeEvent,
   MAX_RESOURCE_CHANGES_PER_EVENT,
+  RESOURCE_MUTATION_ID_HEADER,
+  parseResourceMutationId,
   newNotificationRealtimeEvent,
   parseDesktopEditSessionRealtimeEvent,
   parseOrganizationRealtimeEvent,
   parseUserRealtimeEvent,
   parseWorkspaceRealtimeEvent,
+  REALTIME_CHANNEL_EVENT_TYPES,
   REALTIME_EVENT_TYPE,
   RESOURCE_CHANGE_TYPE,
   resourceDeletedChange,
@@ -418,6 +529,8 @@ export {
   resourceUpdatedChange,
   resourceUpdatedRealtimeEvent,
   resourcesChangedRealtimeEvent,
+  USER_EVENT_READ,
+  USER_EVENT_READS,
 } from "./realtime-events";
 export { encodeRfc3986Component } from "./rfc3986";
 export {
@@ -473,14 +586,17 @@ export type {
   DirectlyCreatableViewLayoutType,
   RequiredViewLayoutType,
   SingleViewLayoutType,
+  UnavailableWorkspaceView,
   ViewLayoutType,
 } from "./view-layout";
 export type {
   DesktopEditSessionClientEvent,
   DesktopEditSessionRealtimeEvent,
   OrganizationRealtimeEvent,
+  RealtimeChannel,
   ResourceChange,
   ResourceRealtimeEvent,
+  UserEventRead,
   UserRealtimeEvent,
   WorkspaceRealtimeEvent,
 } from "./realtime-events";
@@ -517,8 +633,7 @@ export type {
   ChatMentionResourceLinkTarget,
 } from "./resource-link";
 
-/** Path prefix shared by the REST router and direct-fetch clients. */
-export const STELLA_API_VERSION_PREFIX = "/v1" as const;
+export { STELLA_API_VERSION_PREFIX } from "./api-version";
 export const MAX_EMAIL_TEXT_ATTACHMENT_PREVIEW_BYTES = 1024 * 1024;
 export const EMAIL_TEXT_ATTACHMENT_CHARSET = {
   big5: "big5",
@@ -866,7 +981,8 @@ export const EMAIL_TEXT_ATTACHMENT_CHARSET_LABELS = {
 export const MCP_APP_SANDBOX_PATH = "/mcp-app-sandbox" as const;
 export const MCP_APP_FRAME_TITLE_HASH_PARAM = "frame-title" as const;
 export const MCP_APP_FRAME_TITLE_MAX_CHARS = 200;
-export const MCP_APP_RESOURCE_MIME_TYPE = "text/html;profile=mcp-app" as const;
+export const MCP_APP_EXTENSION_ID = "io.modelcontextprotocol/ui" as const;
+export { MCP_APP_RESOURCE_MIME_TYPE } from "./chat-ui-resources";
 export const DOCUMENT_REVIEW_LIMITS = {
   referencesMax: 3,
   positionsMax: 200,
@@ -924,13 +1040,32 @@ export const buildVersionedApiUrl = (
   `${origin.endsWith("/") ? origin.slice(0, -1) : origin}${STELLA_API_VERSION_PREFIX}${path}`;
 
 export {
+  decisionParagraphFragment,
+  decisionParagraphRangeSchema,
+  formatDecisionParagraphRange,
+  parseDecisionParagraphFragment,
+  parseDecisionParagraphRange,
+  DecisionParagraphRangeError,
+} from "./decision-paragraph-range";
+export type {
+  DecisionParagraphRange,
+  DecisionParagraphRangeErrorReason,
+} from "./decision-paragraph-range";
+export {
   RULING_IDENTITY_VERSION,
   foldRulingIdentity,
   rulingKeysOf,
   rulingGroupKeys,
 } from "./decision-ruling-identity";
+export {
+  AI_CELL_SETTLEMENT_TYPES,
+  type AiCellSettlement,
+} from "./ai-cell-settlement";
 export type {
   RulingIdentityInput,
   RulingIdentityKeys,
   RulingIdentityDefect,
 } from "./decision-ruling-identity";
+export * from "./vat-rate-presets";
+export { PARTY_IDENTIFIER_MAX_LENGTH } from "./party-identifiers";
+export { SELLER_PROFILE_TEXT_FIELDS } from "./seller-profile-fields";

@@ -1,32 +1,74 @@
 name: Nightly Full Test
 
+defaults:
+  run:
+    shell: bash
+
 on:
   schedule:
     # 04:17 UTC daily, after nightly typecheck.
     - cron: "17 4 * * *"
   workflow_dispatch:
-    inputs:
-      dry-run-issue:
-        description: Exercise migration failure reporting without writing an issue
-        type: boolean
-        default: true
 
 permissions: {}
 
 env:
+  GIT_CONFIG_COUNT: "3"
+  GIT_CONFIG_KEY_0: maintenance.auto
+  GIT_CONFIG_VALUE_0: "false"
+  GIT_CONFIG_KEY_1: gc.auto
+  GIT_CONFIG_VALUE_1: "0"
+  GIT_CONFIG_KEY_2: gc.autoDetach
+  GIT_CONFIG_VALUE_2: "false"
   # Disposable non-RDS databases: online index builds in migrate must not wait
   # on EBS metrics or a wall-clock busy window.
   DB_LOAD_GATE_EBS_SIGNAL: disabled
   DB_LOAD_GATE_BUSY_WINDOWS: "[]"
 
 jobs:
+  sanctions-real-editions:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Setup Bun
+        uses: stella/.github/actions/setup-bun-cached@2664e46f02aea7164ba71bcdd485a686166993a4
+        with:
+          save: ${{ github.ref == 'refs/heads/main' }}
+          bun-version-file: "package.json"
+      - name: Install dependencies
+        timeout-minutes: 5
+        run: bash scripts/retry.sh bun ci --ignore-scripts
+        env:
+          NPM_TOKEN: ""
+      - name: Prove fixture-edition screening completeness and latency
+        run: |
+          set -o pipefail
+          bun packages/sanctions/scripts/prove-real-editions.ts --generated --require-coverage 2>&1 | tee sanctions-real-editions.log
+      - name: Upload edition measurements
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: sanctions-real-editions
+          path: sanctions-real-editions.log
+          if-no-files-found: warn
+          retention-days: 30
+
   workspace-replay:
     if: github.event_name == 'schedule'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
       contents: read
+      packages: read
 
+    env:
+      CI_IMAGE_MIRROR_ENABLED: ${{ github.event.pull_request.head.repo.fork != true && github.token != '' }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -34,11 +76,13 @@ jobs:
           persist-credentials: false
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: stella/.github/actions/setup-bun-cached@2664e46f02aea7164ba71bcdd485a686166993a4
         with:
+          save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: "package.json"
 
       - name: Install dependencies
+        timeout-minutes: 5
         run: bash scripts/retry.sh bun ci --ignore-scripts
         env:
           NPM_TOKEN: ""
@@ -51,7 +95,6 @@ jobs:
       - name: Build production web
         env:
           VITE_FEATURE_INBOX: "true"
-          VITE_FEATURE_TIME_BILLING: "true"
           VITE_PUBLIC_LAW_ENABLED: "true"
           VITE_PUBLIC_TOOLS_ENABLED: "true"
           VITE_WORKFLOWS_ENABLED: "true"
@@ -64,19 +107,29 @@ jobs:
           dockerhub-username: ${{ secrets.DOCKERHUB_USERNAME }}
           dockerhub-token: ${{ secrets.DOCKERHUB_TOKEN }}
 
+      - name: Login to GitHub Container Registry for browser images
+        if: github.event.pull_request.head.repo.fork != true && github.token != ''
+        continue-on-error: true
+        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Install Playwright Chromium
-        if: steps.e2e-stack.outputs.status == 'ready'
+        timeout-minutes: 4
+        if: steps.e2e-stack.outcome == 'success'
         uses: ./.github/actions/setup-playwright
 
       - name: Start production web server
-        if: steps.e2e-stack.outputs.status == 'ready'
+        if: steps.e2e-stack.outcome == 'success'
         run: |
           cd apps/web
           NODE_ENV=production PORT=3000 nohup bun dist/runtime.js > /tmp/web-workspace-replay.log 2>&1 &
           echo $! > /tmp/web-workspace-replay.pid
 
       - name: Wait for production web server
-        if: steps.e2e-stack.outputs.status == 'ready'
+        if: steps.e2e-stack.outcome == 'success'
         run: |
           for i in {1..60}; do
             if curl --connect-timeout 2 --max-time 5 -sf http://localhost:3000/health > /dev/null 2>&1; then
@@ -89,15 +142,19 @@ jobs:
           tail -200 /tmp/web-workspace-replay.log || true
           exit 1
 
+      - name: Configure flaky-test quarantine
+        uses: ./.github/actions/flaky-test-quarantine
+
       - name: Explore workspace interactions
-        if: steps.e2e-stack.outputs.status == 'ready'
+        timeout-minutes: 15
+        if: steps.e2e-stack.outcome == 'success'
         env:
           E2E_SOAK_SEED: ${{ github.run_id }}
           E2E_SOAK_STEPS: "200"
         run: bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" bun --filter @stll/web test:e2e:soak
 
       - name: Add replay instructions
-        if: failure() && steps.e2e-stack.outputs.status == 'ready'
+        if: failure() && steps.e2e-stack.outcome != 'skipped'
         run: |
           {
             echo "## Workspace replay failure"
@@ -108,8 +165,8 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload replay diagnostics
-        if: failure() && steps.e2e-stack.outputs.status == 'ready'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: failure() && steps.e2e-stack.outcome != 'skipped'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: nightly-workspace-replay-${{ github.run_id }}
           path: apps/web/e2e/test-results/workspace-soak/
@@ -117,8 +174,8 @@ jobs:
           retention-days: 14
 
       - name: Upload server logs
-        if: failure() && steps.e2e-stack.outputs.status == 'ready'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: failure() && steps.e2e-stack.outcome != 'skipped'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: nightly-workspace-replay-server-logs-${{ github.run_id }}
           path: |
@@ -127,11 +184,63 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
+  full-test-plan:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      packages: read
+    outputs:
+      postgres: ${{ steps.images.outputs.postgres }}
+      valkey: ${{ steps.images.outputs.valkey }}
+      matrix: ${{ steps.plan.outputs.ci_tests_matrix }}
+      api-shards: ${{ steps.plan.outputs.api_test_shards }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Bun
+        uses: stella/.github/actions/setup-bun-cached@2664e46f02aea7164ba71bcdd485a686166993a4
+        with:
+          save: ${{ github.ref == 'refs/heads/main' }}
+          bun-version-file: "package.json"
+
+      - name: Plan full test shards
+        id: plan
+        run: bun scripts/api-test-shard-plan.ts >> "$GITHUB_OUTPUT"
+
+      - name: Login to GitHub Container Registry
+        id: registry
+        if: github.event.pull_request.head.repo.fork != true && github.token != ''
+        continue-on-error: true
+        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Resolve available image sources
+        id: images
+        env:
+          CI_IMAGE_MIRROR_ENABLED: ${{ github.event.pull_request.head.repo.fork != true && steps.registry.outcome == 'success' }}
+        run: bun scripts/ci-service-images.ts --resolve >> "$GITHUB_OUTPUT"
+
+      - name: Log out of GitHub Container Registry
+        if: always()
+        run: docker logout ghcr.io
+
   full-test:
-    runs-on: ubuntu-latest
+    needs: full-test-plan
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
     permissions:
       contents: read
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.full-test-plan.outputs.matrix) }}
 
     steps:
       - name: Checkout
@@ -141,11 +250,13 @@ jobs:
           submodules: true
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: stella/.github/actions/setup-bun-cached@2664e46f02aea7164ba71bcdd485a686166993a4
         with:
+          save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: "package.json"
 
       - name: Install dependencies
+        timeout-minutes: 5
         run: bash scripts/retry.sh bun ci --ignore-scripts
         env:
           # .npmrc references NPM_TOKEN, but this workflow can be manually
@@ -160,17 +271,34 @@ jobs:
           cd ../web
           cp .env.example .env
 
+      - name: Configure flaky-test quarantine
+        uses: ./.github/actions/flaky-test-quarantine
+
       - name: Full test suite
-        run: bun run test -- --concurrency=2
         env:
+          API_TEST_SHARD_COUNT: ${{ needs.full-test-plan.outputs.api-shards }}
+          SHARD: ${{ matrix.shard == 'rest-web' && 'rest' || matrix.shard }}
           TURBO_FORCE: "true"
+        run: |
+          read -r -a shard_args <<<"$(bun scripts/test-shards.ts --filters "$SHARD")"
+          API_TEST_SHARD=$(bun scripts/test-shards.ts --api-shard "$SHARD")
+          export API_TEST_SHARD
+          bun run test -- --concurrency=2 "${shard_args[@]}"
+      - name: Full web test suite
+        if: matrix.shard == 'rest-web'
+        env:
+          SHARD: web
+          TURBO_FORCE: "true"
+        run: |
+          read -r -a shard_args <<<"$(bun scripts/test-shards.ts --filters "$SHARD")"
+          bun run test -- --concurrency=2 "${shard_args[@]}"
 
   # The production client build is the remaining browser-CI setup hotspot.
   # Profile it nightly rather than taxing every PR; retain TanStack Start's
   # import-protection boundary and collect evidence for upgrades or upstream
   # performance fixes.
   web-build-profile:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
       contents: read
@@ -182,11 +310,13 @@ jobs:
           persist-credentials: false
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: stella/.github/actions/setup-bun-cached@2664e46f02aea7164ba71bcdd485a686166993a4
         with:
+          save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: "package.json"
 
       - name: Install dependencies
+        timeout-minutes: 5
         run: bash scripts/retry.sh bun ci --ignore-scripts
         env:
           NPM_TOKEN: ""
@@ -227,7 +357,7 @@ jobs:
 
       - name: Upload build profile
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: nightly-web-build-profile
           path: web-build-profile/
@@ -260,14 +390,17 @@ jobs:
   # separate from the network smoke canary below whose failures mean "upstream
   # changed", not "we broke something".
   postgres-suites:
-    runs-on: ubuntu-latest
+    needs: full-test-plan
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     permissions:
       contents: read
+      packages: read
 
     services:
       postgres:
-        image: postgres:18.6@sha256:4ef4dbc939d61acea57712655ddb4b4ab27419c913f94cca0cd57cb3ea3c2280
+        image: ${{ needs.full-test-plan.outputs.postgres }}
+        credentials: ${{ startsWith(needs.full-test-plan.outputs.postgres, 'ghcr.io/') && fromJSON(format('{{"username":"{0}","password":"{1}"}}', github.actor, secrets.GITHUB_TOKEN)) || fromJSON('{}') }}
         env:
           POSTGRES_USER: stella_owner
           POSTGRES_PASSWORD: stella
@@ -275,7 +408,7 @@ jobs:
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U stella_owner -d stella"
+          --health-cmd "pg_isready -U stella_owner -d postgres"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
@@ -288,14 +421,20 @@ jobs:
           submodules: true
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: stella/.github/actions/setup-bun-cached@2664e46f02aea7164ba71bcdd485a686166993a4
         with:
+          save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: "package.json"
 
       - name: Install dependencies
+        timeout-minutes: 5
         run: bash scripts/retry.sh bun ci --ignore-scripts
         env:
           NPM_TOKEN: ""
+
+      - name: Configure test Postgres parity
+        run: |
+          bash scripts/configure-test-postgres.sh "${{ job.services.postgres.id }}" stella_owner
 
       - name: Apply migrations to service Postgres
         working-directory: apps/api
@@ -306,25 +445,31 @@ jobs:
         # the case-law ingestion role/policy migrations.
         run: bun run src/db/migrate.ts
 
+      - name: Configure flaky-test quarantine
+        uses: ./.github/actions/flaky-test-quarantine
+
       - name: Run Postgres-gated API suites
         working-directory: apps/api
         env:
           DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5432/stella
-        # The runner discovers every suite that declares the Postgres gate, so
-        # adding a gated test cannot silently omit it from this workflow.
+        # Includes the full 20k/10k sanctions volume benchmark; required service
+        # CI selects its bounded correctness slice through the same runner.
         run: bun run test:postgres
 
   # BullMQ-backed API suites that gate on STELLA_RUN_VALKEY_TESTS=true and a
   # real REDIS_URL, run against the Valkey image the local stack pins.
   valkey-suites:
-    runs-on: ubuntu-latest
+    needs: full-test-plan
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
       contents: read
+      packages: read
 
     services:
       valkey:
-        image: valkey/valkey:9.1.1-alpine@sha256:ee91f7a174ac4d6a6b0685b3a60e321f0a9dbbb691f9b0e285be2ba1d1be8328
+        image: ${{ needs.full-test-plan.outputs.valkey }}
+        credentials: ${{ startsWith(needs.full-test-plan.outputs.valkey, 'ghcr.io/') && fromJSON(format('{{"username":"{0}","password":"{1}"}}', github.actor, secrets.GITHUB_TOKEN)) || fromJSON('{}') }}
         ports:
           - 6379:6379
         options: >-
@@ -341,14 +486,19 @@ jobs:
           submodules: true
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: stella/.github/actions/setup-bun-cached@2664e46f02aea7164ba71bcdd485a686166993a4
         with:
+          save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: "package.json"
 
       - name: Install dependencies
+        timeout-minutes: 5
         run: bash scripts/retry.sh bun ci --ignore-scripts
         env:
           NPM_TOKEN: ""
+
+      - name: Configure flaky-test quarantine
+        uses: ./.github/actions/flaky-test-quarantine
 
       - name: Run Valkey-gated API suites
         working-directory: apps/api
@@ -361,7 +511,7 @@ jobs:
   # changed, not a regression in our code. Isolated from the Postgres suites so
   # a flaky external endpoint cannot mask a real DB regression, and vice versa.
   smoke-suite:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
       contents: read
@@ -374,14 +524,19 @@ jobs:
           submodules: true
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: stella/.github/actions/setup-bun-cached@2664e46f02aea7164ba71bcdd485a686166993a4
         with:
+          save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: "package.json"
 
       - name: Install dependencies
+        timeout-minutes: 5
         run: bash scripts/retry.sh bun ci --ignore-scripts
         env:
           NPM_TOKEN: ""
+
+      - name: Configure flaky-test quarantine
+        uses: ./.github/actions/flaky-test-quarantine
 
       - name: Run live CJEU smoke suite
         working-directory: apps/api
@@ -392,14 +547,17 @@ jobs:
           src/handlers/case-law/ingestion/adapters/eu-ecj.smoke.test.ts
 
   migration-exact-base-upgrade:
+    needs: full-test-plan
     # Scheduled workflows run on main; dispatches rehearse main too.
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     permissions:
       contents: read
+      packages: read
     services:
       postgres:
-        image: postgres:18.6@sha256:4ef4dbc939d61acea57712655ddb4b4ab27419c913f94cca0cd57cb3ea3c2280
+        image: ${{ needs.full-test-plan.outputs.postgres }}
+        credentials: ${{ startsWith(needs.full-test-plan.outputs.postgres, 'ghcr.io/') && fromJSON(format('{{"username":"{0}","password":"{1}"}}', github.actor, secrets.GITHUB_TOKEN)) || fromJSON('{}') }}
         env:
           POSTGRES_USER: stella_owner
           POSTGRES_PASSWORD: stella
@@ -407,12 +565,13 @@ jobs:
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U stella_owner -d stella"
+          --health-cmd "pg_isready -U stella_owner -d postgres"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
       postgres-clean:
-        image: postgres:18.6@sha256:4ef4dbc939d61acea57712655ddb4b4ab27419c913f94cca0cd57cb3ea3c2280
+        image: ${{ needs.full-test-plan.outputs.postgres }}
+        credentials: ${{ startsWith(needs.full-test-plan.outputs.postgres, 'ghcr.io/') && fromJSON(format('{{"username":"{0}","password":"{1}"}}', github.actor, secrets.GITHUB_TOKEN)) || fromJSON('{}') }}
         env:
           POSTGRES_USER: stella_owner
           POSTGRES_PASSWORD: stella
@@ -420,7 +579,7 @@ jobs:
         ports:
           - 5433:5432
         options: >-
-          --health-cmd "pg_isready -U stella_owner -d stella"
+          --health-cmd "pg_isready -U stella_owner -d postgres"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
@@ -432,9 +591,10 @@ jobs:
           persist-credentials: false
 
       - name: Resolve previous main state
+        timeout-minutes: 5
         id: base
         run: |
-          git fetch --no-tags origin refs/heads/main
+          bash "${GITHUB_WORKSPACE}/scripts/retry.sh" git fetch --no-tags origin refs/heads/main
           git checkout --detach FETCH_HEAD
           base=$(git rev-list -1 --first-parent --before="$(date -u -d '24 hours ago' +%FT%TZ)" HEAD)
           [[ "$base" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::No main commit exists before the nightly window"; exit 1; }
@@ -442,19 +602,29 @@ jobs:
           echo "candidate=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: stella/.github/actions/setup-bun-cached@2664e46f02aea7164ba71bcdd485a686166993a4
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Install candidate dependencies
+        timeout-minutes: 5
         run: bash scripts/retry.sh bun ci --ignore-scripts
         env:
           NPM_TOKEN: ""
+
+      - name: Configure test Postgres parity
+        run: |
+          bash scripts/configure-test-postgres.sh "${{ job.services.postgres.id }}" stella_owner
+          bash scripts/configure-test-postgres.sh "${{ job.services.postgres-clean.id }}" stella_owner
+
+      - name: Configure flaky-test quarantine
+        uses: ./.github/actions/flaky-test-quarantine
 
       - name: Test exact-base rehearsal contracts
         run: bun test scripts/migration-catalog.test.ts scripts/rehearse-exact-base-upgrade.test.ts
 
       - name: Rehearse exact-base migration upgrade
+        timeout-minutes: 12
         id: rehearsal
         env:
           BASE_SHA: ${{ steps.base.outputs.sha }}
@@ -476,33 +646,55 @@ jobs:
             echo "Phase durations and rehearsal total: not run."
           } >> "$GITHUB_STEP_SUMMARY"
 
-  report-failure:
-    needs: migration-exact-base-upgrade
-    if: >-
-      always() && (needs.migration-exact-base-upgrade.result == 'failure'
-      || (github.event_name == 'schedule' && needs.migration-exact-base-upgrade.result == 'cancelled')
-      || (github.event_name == 'workflow_dispatch' && inputs.dry-run-issue))
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    # Serialize issue discovery and creation to avoid duplicate open issues.
-    concurrency:
-      group: nightly-exact-base-failure-issue
-      cancel-in-progress: false
+  # Every repository script test traced against its declared inputs in
+  # scripts/script-test-inputs.json. Pull requests run only the tests their
+  # diff selects, untraced, so a declaration that stops covering a test's
+  # reads fails here, through the scheduled-run alert, within a day.
+  script-test-declarations:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
     permissions:
       contents: read
-      # Files or updates the routine failure issue, without publishing logs.
-      issues: write
+    env:
+      CI_GENERATED_SOURCES_MANIFEST: ${{ github.workspace }}/.cache/ci-generated-sources/manifest.json
     steps:
-      - name: Checkout report script
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Checkout
+        uses: stella/.github/actions/partial-clone-checkout@2664e46f02aea7164ba71bcdd485a686166993a4
         with:
+          fetch-depth: 0
           persist-credentials: false
+          submodules: true
 
-      - name: File or update the routine failure issue
+      - name: Setup Bun
+        uses: stella/.github/actions/setup-bun-cached@2664e46f02aea7164ba71bcdd485a686166993a4
+        with:
+          save: ${{ github.ref == 'refs/heads/main' }}
+          bun-version-file: "package.json"
+
+      - name: Install dependencies
+        timeout-minutes: 5
+        run: bash scripts/retry.sh bun ci --ignore-scripts
         env:
-          GH_TOKEN: ${{ github.token }}
-          REPOSITORY: ${{ github.repository }}
-          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          # Manual branch dispatches may exercise reporting but never write.
-          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && (inputs.dry-run-issue || github.ref != 'refs/heads/main') }}
-        run: bash scripts/report-exact-base-failure.sh
+          NPM_TOKEN: ""
+
+      - name: Prepare environment
+        run: |
+          cd ./apps/api
+          cp .env.example .env
+          cd ../web
+          cp .env.example .env
+
+      # The same generated sources the pull request check restores.
+      - name: Produce generated sources
+        run: |
+          bun scripts/ci-generated-sources.ts produce "$RUNNER_TEMP/generated-sources"
+          bun scripts/ci-generated-sources.ts restore "$RUNNER_TEMP/generated-sources"
+
+      - name: Trace repository script tests
+        timeout-minutes: 20
+        run: bun scripts/run-unlisted-script-tests.ts --verify-declarations --timeout 35000
+
+      - name: Trace depth repository script tests
+        if: ${{ !cancelled() }}
+        timeout-minutes: 20
+        run: bun scripts/run-unlisted-script-tests.ts --depth --verify-declarations --timeout 120000

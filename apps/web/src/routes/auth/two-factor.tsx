@@ -1,11 +1,17 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import * as v from "valibot";
 
-import { TwoFactorPanel } from "@/components/auth/two-factor-panel";
+import { socialProviderSchema } from "@/components/auth/access-reset.logic";
 import { redirectToSchema } from "@/lib/redirect";
+import { optionalFlagSearchSchema } from "@/lib/schema";
+import { routeSearchSchema } from "@/route-search-params";
 
-const searchSchema = v.strictObject({
-  devQuickStart: v.optional(v.boolean()),
+import { TwoFactorPage } from "./-two-factor.page";
+import { TwoFactorPending } from "./-two-factor.pending";
+
+const searchSchema = routeSearchSchema({
+  linkProvider: v.optional(socialProviderSchema),
+  devQuickStart: optionalFlagSearchSchema,
   redirectTo: redirectToSchema,
 });
 
@@ -13,19 +19,28 @@ export const Route = createFileRoute("/auth/two-factor")({
   validateSearch: searchSchema,
   beforeLoad: ({ context, search }) => {
     if (context.session) {
-      throw redirect({
-        to: "/auth/organization",
-        search: {
-          devQuickStart: search.devQuickStart,
-          redirectTo: search.redirectTo,
-        },
-        replace: true,
-      });
+      throw redirect(
+        search.linkProvider
+          ? {
+              to: "/auth/error",
+              search: {
+                error: "account_not_linked",
+                linkProvider: search.linkProvider,
+                redirectTo: search.redirectTo,
+              },
+              replace: true,
+            }
+          : {
+              to: "/auth/organization",
+              search: {
+                devQuickStart: search.devQuickStart,
+                redirectTo: search.redirectTo,
+              },
+              replace: true,
+            },
+      );
     }
   },
-  component: TwoFactor,
+  component: TwoFactorPage,
+  pendingComponent: TwoFactorPending,
 });
-
-function TwoFactor() {
-  return <TwoFactorPanel />;
-}

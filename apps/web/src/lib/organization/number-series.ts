@@ -2,7 +2,7 @@ import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 import { panic } from "better-result";
 
 import { api } from "@/lib/api";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { stringCursorSeed } from "@/lib/infinite-query";
 import { toSafeId } from "@/lib/safe-id";
 
@@ -23,7 +23,7 @@ const listNumberSeries = async (
   cursor: string | undefined,
   signal: AbortSignal,
 ) =>
-  unwrapEden(
+  unwrapApiResponse(
     await api["number-series"].get({
       query: { ...(cursor === undefined ? {} : { cursor }) },
       fetch: { signal },
@@ -49,7 +49,7 @@ const getNumberSeriesPreview = async (
   options: NumberSeriesPreviewOptions,
   signal: AbortSignal,
 ) => {
-  const result = unwrapEden(
+  const result = unwrapApiResponse(
     await api["number-series"]({
       numberSeriesId: toSafeId<"numberSeries">(options.id),
     }).preview.get({ query: { issueDate: options.date }, fetch: { signal } }),
@@ -89,18 +89,18 @@ export type NumberSeriesCommand =
 
 export const sendNumberSeriesCommand = async (command: NumberSeriesCommand) => {
   if (command.type === "create") {
-    return unwrapEden(await api["number-series"].post(command.values));
+    return unwrapApiResponse(await api["number-series"].post(command.values));
   }
   const series = api["number-series"]({
     numberSeriesId: toSafeId<"numberSeries">(command.id),
   });
   switch (command.type) {
     case "update":
-      return unwrapEden(await series.patch(command.values));
+      return unwrapApiResponse(await series.patch(command.values));
     case "default":
-      return unwrapEden(await series.default.post());
+      return unwrapApiResponse(await series.default.post());
     case "archive":
-      return unwrapEden(await series.archive.post());
+      return unwrapApiResponse(await series.archive.post());
     default:
       command satisfies never;
       return panic("Unexpected number series command");

@@ -1,76 +1,80 @@
 import { describe, expect, test } from "bun:test";
 
+import { DECISION_MODEL_PROVIDERS } from "@stll/ai-catalog";
+
 import {
   createDecisionModelState,
-  createDefaultRoleModels,
   createProviderCredentialDraft,
+  DECISION_PROVIDER_KEYS,
   decisionModelDraft,
   decodeModelSelection,
   encodeModelSelection,
-  ensureRoleModelsForProviders,
   getAvailableModelOptions,
-  getNextAvailableProvider,
   getModelOptionsForRole,
+  getNextAvailableProvider,
   getProviderValues,
   getRolePickerRows,
+  hasProviderCredentialChanges,
   hasUsableDecisionModel,
   hasUsableProviderDrafts,
+  haveSameRoleModelSelections,
   isKnownModelSelection,
   isKnownModelSelectionForRole,
   isProviderRoleSupported,
+  projectDefaultRoleModels,
+  projectProviderDefaultRoleModels,
+  PROVIDER_KEYS,
   providerDraftsFromStoredProviders,
+  ROLE_KEYS,
   roleModelsFromOverrideModels,
+  roleOverridesFromStoredModels,
   serializeDecisionModel,
   serializeOverrideModels,
   serializeProviderDrafts,
+  serializeRoleOverrides,
 } from "@/components/ai-config-role-models.logic";
 import type {
   RoleModelSelections,
   StoredDecisionModel,
 } from "@/components/ai-config-role-models.logic";
 
+const GOOGLE_DEFAULTS = {
+  chat: { provider: "google", modelId: "gemini-3.8-flash" },
+  fast: { provider: "google", modelId: "gemini-3.8-flash" },
+  reasoning: { provider: "google", modelId: "gemini-3.8-flash" },
+  pdf: { provider: "google", modelId: "gemini-3.8-flash" },
+  browse: { provider: "google", modelId: "gemini-3.8-flash" },
+} satisfies RoleModelSelections;
+const ANTHROPIC_DEFAULTS = {
+  chat: { provider: "anthropic", modelId: "claude-opus-5-5" },
+  fast: { provider: "anthropic", modelId: "claude-haiku-5-5" },
+  reasoning: { provider: "anthropic", modelId: "claude-opus-5-5" },
+  pdf: { provider: "anthropic", modelId: "claude-opus-5-5" },
+  browse: { provider: "anthropic", modelId: "claude-haiku-5-5" },
+} satisfies RoleModelSelections;
+const OPENAI_DEFAULTS = {
+  chat: { provider: "openai", modelId: "gpt-6-sol" },
+  fast: { provider: "openai", modelId: "gpt-6-luna" },
+  reasoning: { provider: "openai", modelId: "gpt-6-sol" },
+  pdf: { provider: "openai", modelId: "gpt-6-sol" },
+  browse: { provider: "openai", modelId: "gpt-6-luna" },
+} satisfies RoleModelSelections;
+const OPENROUTER_DEFAULTS = {
+  chat: { provider: "openrouter", modelId: "openai/gpt-6-sol" },
+  fast: { provider: "openrouter", modelId: "anthropic/claude-haiku-5.5" },
+  reasoning: { provider: "openrouter", modelId: "openai/gpt-6-sol" },
+  pdf: { provider: "openrouter", modelId: "openai/gpt-6-sol" },
+  browse: { provider: "openrouter", modelId: "anthropic/claude-haiku-5.5" },
+} satisfies RoleModelSelections;
+const MISTRAL_DEFAULTS = {
+  chat: { provider: "mistral", modelId: "mistral-medium-latest" },
+  fast: { provider: "mistral", modelId: "mistral-small-latest" },
+  reasoning: { provider: "mistral", modelId: "mistral-medium-latest" },
+  pdf: null,
+  browse: { provider: "mistral", modelId: "mistral-small-latest" },
+} satisfies RoleModelSelections;
+
 describe("BYOK provider and model configuration", () => {
-  test("creates role defaults from the first configured provider", () => {
-    expect(createDefaultRoleModels(["anthropic", "openai"])).toEqual({
-      chat: { provider: "anthropic", modelId: "claude-opus-5-5" },
-      fast: { provider: "anthropic", modelId: "claude-opus-5-5" },
-      reasoning: { provider: "anthropic", modelId: "claude-opus-5-5" },
-      pdf: { provider: "anthropic", modelId: "claude-opus-5-5" },
-    });
-  });
-
-  test("uses the provider-specific recommendations for Google and OpenRouter", () => {
-    expect(createDefaultRoleModels(["google"])).toEqual({
-      chat: { provider: "google", modelId: "gemini-3.8-flash" },
-      fast: { provider: "google", modelId: "gemini-3.8-flash" },
-      reasoning: { provider: "google", modelId: "gemini-3.8-flash" },
-      pdf: { provider: "google", modelId: "gemini-3.8-flash" },
-    });
-    expect(createDefaultRoleModels(["openrouter"])).toEqual({
-      chat: { provider: "openrouter", modelId: "openai/gpt-6-sol" },
-      fast: { provider: "openrouter", modelId: "openai/gpt-6-luna" },
-      reasoning: {
-        provider: "openrouter",
-        modelId: "openai/gpt-6-sol",
-      },
-      pdf: { provider: "openrouter", modelId: "openai/gpt-6-sol" },
-    });
-  });
-
-  test("does not default PDF flows to Mistral", () => {
-    expect(createDefaultRoleModels(["mistral", "openai"])).toEqual({
-      chat: { provider: "mistral", modelId: "mistral-medium-latest" },
-      fast: { provider: "mistral", modelId: "mistral-small-latest" },
-      reasoning: {
-        provider: "mistral",
-        modelId: "mistral-medium-latest",
-      },
-      pdf: { provider: "openai", modelId: "gpt-6-sol" },
-    });
-
-    expect(createDefaultRoleModels(["mistral"]).pdf).toBeNull();
-  });
-
   test("preserves stored provider settings for editing without exposing keys", () => {
     expect(
       providerDraftsFromStoredProviders([
@@ -183,7 +187,7 @@ describe("BYOK provider and model configuration", () => {
 
   test("serializes every role as a provider-qualified model selection", () => {
     const roleModels: RoleModelSelections = {
-      ...createDefaultRoleModels(["anthropic"]),
+      ...ANTHROPIC_DEFAULTS,
       fast: { provider: "openai", modelId: "gpt-5.4-nano" },
     };
 
@@ -197,12 +201,13 @@ describe("BYOK provider and model configuration", () => {
       fast: { provider: "openai", modelId: "gpt-5.4-nano" },
       reasoning: { provider: "anthropic", modelId: "claude-opus-5-5" },
       pdf: { provider: "anthropic", modelId: "claude-opus-5-5" },
+      browse: { provider: "anthropic", modelId: "claude-haiku-5-5" },
     });
   });
 
   test("blocks Mistral PDF selections", () => {
     const roleModels: RoleModelSelections = {
-      ...createDefaultRoleModels(["mistral"]),
+      ...MISTRAL_DEFAULTS,
       pdf: { provider: "mistral", modelId: "mistral-large-latest" },
     };
 
@@ -230,7 +235,7 @@ describe("BYOK provider and model configuration", () => {
       serializeOverrideModels({
         providers: ["openai"],
         roleModels: {
-          ...createDefaultRoleModels(["openai"]),
+          ...OPENAI_DEFAULTS,
           pdf: null,
         },
       }),
@@ -241,37 +246,67 @@ describe("BYOK provider and model configuration", () => {
     expect(
       serializeOverrideModels({
         providers: ["openai", "anthropic"],
-        roleModels: createDefaultRoleModels(["openai"]),
+        roleModels: OPENAI_DEFAULTS,
       }),
     ).toEqual({
       chat: { provider: "openai", modelId: "gpt-6-sol" },
       fast: { provider: "openai", modelId: "gpt-6-luna" },
       reasoning: { provider: "openai", modelId: "gpt-6-sol" },
       pdf: { provider: "openai", modelId: "gpt-6-sol" },
+      browse: { provider: "openai", modelId: "gpt-6-luna" },
     });
   });
 
-  test("keeps selected models only while their provider remains configured", () => {
+  test("uses server defaults independently of provider order and preserves explicit selections", () => {
     expect(
-      ensureRoleModelsForProviders({
-        providers: ["openai"],
-        roleModels: {
-          ...createDefaultRoleModels(["anthropic"]),
-          fast: { provider: "openai", modelId: "gpt-5.4-nano" },
+      roleModelsFromOverrideModels({
+        providers: ["anthropic", "google"],
+        defaultModels: GOOGLE_DEFAULTS,
+        overrideModels: {
+          fast: { provider: "anthropic", modelId: "claude-opus-5-5" },
         },
       }),
     ).toEqual({
-      chat: { provider: "openai", modelId: "gpt-6-sol" },
-      fast: { provider: "openai", modelId: "gpt-5.4-nano" },
-      reasoning: { provider: "openai", modelId: "gpt-6-sol" },
-      pdf: { provider: "openai", modelId: "gpt-6-sol" },
+      ...GOOGLE_DEFAULTS,
+      fast: { provider: "anthropic", modelId: "claude-opus-5-5" },
+      // Unset browsing follows the fast pick.
+      browse: { provider: "anthropic", modelId: "claude-opus-5-5" },
     });
+    expect(GOOGLE_DEFAULTS.fast.provider).toBe("google");
   });
 
-  test("normalizes stored role selections into picker state", () => {
+  test("projects custom API providers as unavailable in the settings picker", () => {
+    expect(
+      projectDefaultRoleModels({
+        ...GOOGLE_DEFAULTS,
+        fast: { provider: "huggingface", modelId: "fixture-custom-model" },
+      }),
+    ).toEqual({ ...GOOGLE_DEFAULTS, fast: null });
+    expect(
+      projectProviderDefaultRoleModels([
+        {
+          provider: "huggingface",
+          defaultModels: {
+            ...GOOGLE_DEFAULTS,
+            fast: { provider: "huggingface", modelId: "fixture-custom-model" },
+          },
+        },
+        { provider: "google", defaultModels: GOOGLE_DEFAULTS },
+      ]),
+    ).toEqual([{ provider: "google", defaultModels: GOOGLE_DEFAULTS }]);
+  });
+
+  test("normalizes stored role selections into picker state, browsing on the chosen fast model", () => {
+    // The fixture's fast pick differs from the default the browse row
+    // would otherwise show.
+    expect(ANTHROPIC_DEFAULTS.browse).not.toEqual({
+      provider: "openai",
+      modelId: "gpt-5.4-nano",
+    });
     expect(
       roleModelsFromOverrideModels({
         providers: ["anthropic", "openai"],
+        defaultModels: ANTHROPIC_DEFAULTS,
         overrideModels: {
           chat: { provider: "anthropic", modelId: "claude-opus-4-5" },
           fast: { provider: "openai", modelId: "gpt-5.4-nano" },
@@ -282,7 +317,21 @@ describe("BYOK provider and model configuration", () => {
       fast: { provider: "openai", modelId: "gpt-5.4-nano" },
       reasoning: { provider: "anthropic", modelId: "claude-opus-5-5" },
       pdf: { provider: "anthropic", modelId: "claude-opus-5-5" },
+      browse: { provider: "openai", modelId: "gpt-5.4-nano" },
     });
+  });
+
+  test("keeps a browsing model the admin picked", () => {
+    expect(
+      roleModelsFromOverrideModels({
+        providers: ["anthropic", "openai"],
+        defaultModels: ANTHROPIC_DEFAULTS,
+        overrideModels: {
+          fast: { provider: "openai", modelId: "gpt-5.4-nano" },
+          browse: { provider: "anthropic", modelId: "claude-opus-5-5" },
+        },
+      }).browse,
+    ).toEqual({ provider: "anthropic", modelId: "claude-opus-5-5" });
   });
 
   test("encodes OpenRouter model values without breaking model IDs that contain slashes", () => {
@@ -331,6 +380,89 @@ describe("BYOK provider and model configuration", () => {
     ]);
   });
 
+  test("serializes trimmed Anthropic credentials and workspace IDs", () => {
+    expect(
+      serializeProviderDrafts([
+        {
+          ...createProviderCredentialDraft("anthropic"),
+          apiKey: "  sk-ant-api03-fixture  ",
+          anthropicWorkspaceId: "  wrkspc_fixture  ",
+        },
+      ]),
+    ).toEqual([
+      {
+        provider: "anthropic",
+        apiKey: "sk-ant-api03-fixture",
+        anthropicWorkspaceId: "wrkspc_fixture",
+        region: "global",
+      },
+    ]);
+  });
+
+  test("an empty workspace ID explicitly clears Anthropic workspace scope while keeping the saved key", () => {
+    expect(
+      serializeProviderDrafts([
+        {
+          ...createProviderCredentialDraft("anthropic"),
+          apiKey: "  ",
+          apiKeyMasked: "sk-ant-api03****1234",
+          replacingKey: false,
+          anthropicWorkspaceId: "  ",
+        },
+      ]),
+    ).toEqual([
+      {
+        provider: "anthropic",
+        anthropicWorkspaceId: "",
+        region: "global",
+      },
+    ]);
+  });
+
+  test.each(PROVIDER_KEYS)(
+    "workspace scope serialization is provider-specific for %s",
+    (provider) => {
+      expect(
+        serializeProviderDrafts([
+          {
+            ...createProviderCredentialDraft(provider),
+            anthropicWorkspaceId: "  wrkspc_fixture  ",
+          },
+        ]),
+      ).toEqual([
+        {
+          provider,
+          ...(provider === "anthropic"
+            ? { anthropicWorkspaceId: "wrkspc_fixture" }
+            : {}),
+          region: "global",
+        },
+      ]);
+      expect(
+        serializeProviderDrafts([
+          {
+            ...createProviderCredentialDraft(provider),
+            anthropicWorkspaceId: "  ",
+          },
+        ]),
+      ).toEqual([
+        {
+          provider,
+          ...(provider === "anthropic" ? { anthropicWorkspaceId: "" } : {}),
+          region: "global",
+        },
+      ]);
+      expect(
+        serializeProviderDrafts([createProviderCredentialDraft(provider)]),
+      ).toEqual([
+        {
+          provider,
+          region: "global",
+        },
+      ]);
+    },
+  );
+
   test("accepts saved provider drafts without requiring key replacement", () => {
     expect(
       hasUsableProviderDrafts([
@@ -369,7 +501,7 @@ describe("BYOK provider and model configuration", () => {
       serializeOverrideModels({
         providers: ["openrouter"],
         roleModels: {
-          ...createDefaultRoleModels(["openrouter"]),
+          ...OPENROUTER_DEFAULTS,
           chat: { provider: "openrouter", modelId: "x-ai/grok-4" },
         },
       }),
@@ -387,7 +519,7 @@ describe("BYOK provider and model configuration", () => {
     const rows = getRolePickerRows({
       providers: ["anthropic", "openai"],
       roleModels: {
-        ...createDefaultRoleModels(["anthropic"]),
+        ...ANTHROPIC_DEFAULTS,
         fast: { provider: "openai", modelId: "gpt-5.4-nano" },
       },
     });
@@ -397,6 +529,7 @@ describe("BYOK provider and model configuration", () => {
       "fast",
       "reasoning",
       "pdf",
+      "browse",
     ]);
     expect(rows.at(0)?.selection).toEqual({
       provider: "anthropic",
@@ -418,7 +551,7 @@ describe("BYOK provider and model configuration", () => {
   test("builds role-specific picker rows", () => {
     const rows = getRolePickerRows({
       providers: ["mistral", "openai"],
-      roleModels: createDefaultRoleModels(["mistral", "openai"]),
+      roleModels: { ...MISTRAL_DEFAULTS, pdf: OPENAI_DEFAULTS.pdf },
     });
 
     const chatRow = rows.find((row) => row.role === "chat");
@@ -564,4 +697,191 @@ describe("decision model configuration", () => {
       }),
     ).toBe(false);
   });
+});
+
+describe("OpenAI decision settings", () => {
+  test("offers every decision provider the API accepts", () => {
+    expect(DECISION_PROVIDER_KEYS).toEqual(DECISION_MODEL_PROVIDERS);
+  });
+  test("provider switch resets to the provider's default model and reused OpenAI key", () => {
+    const state = createDecisionModelState("openai");
+    expect(state).toEqual({
+      kind: "set",
+      provider: "openai",
+      apiKey: "",
+      modelId: "gpt-6-luna",
+      region: "eu",
+      keyMode: "reuse",
+    });
+    expect(serializeDecisionModel(state)).toEqual({
+      provider: "openai",
+      apiKey: null,
+      modelId: "gpt-6-luna",
+      region: "eu",
+    });
+    expect(
+      hasUsableDecisionModel({ state, stored: null, hasOpenAIKey: true }),
+    ).toBe(true);
+    expect(
+      hasUsableDecisionModel({ state, stored: null, hasOpenAIKey: false }),
+    ).toBe(false);
+  });
+  test("a separate override is required when no OpenAI key is configured", () => {
+    expect(createDecisionModelState("openai", false)).toEqual({
+      kind: "set",
+      provider: "openai",
+      apiKey: "",
+      modelId: "gpt-6-luna",
+      region: "eu",
+      keyMode: "override",
+    });
+    expect(
+      serializeDecisionModel({
+        kind: "set",
+        provider: "openai",
+        apiKey: " override ",
+        modelId: "gpt-6-luna",
+        region: "global",
+        keyMode: "override",
+      }),
+    ).toEqual({
+      provider: "openai",
+      apiKey: "override",
+      modelId: "gpt-6-luna",
+      region: "global",
+    });
+  });
+  test("read-back keeps key mode and region without borrowing another provider's key", () => {
+    const stored = {
+      provider: "openai",
+      modelId: "gpt-6-luna",
+      region: "global",
+      apiKeyMasked: undefined,
+    } as const satisfies StoredDecisionModel;
+    expect(
+      decisionModelDraft({ state: { kind: "untouched" }, stored }),
+    ).toEqual({
+      provider: "openai",
+      apiKey: "",
+      apiKeyMasked: undefined,
+      modelId: "gpt-6-luna",
+      region: "global",
+      keyMode: "reuse",
+    });
+    const state = createDecisionModelState("openai", false);
+    expect(hasUsableDecisionModel({ state, stored, hasOpenAIKey: true })).toBe(
+      false,
+    );
+  });
+});
+describe("provider credential changes", () => {
+  test.each([
+    { draftId: undefined, storedId: undefined, changed: false },
+    { draftId: "", storedId: undefined, changed: false },
+    { draftId: "  ", storedId: undefined, changed: false },
+    { draftId: undefined, storedId: "  ", changed: false },
+    { draftId: " wrkspc_fixture ", storedId: "wrkspc_fixture", changed: false },
+    { draftId: "", storedId: "wrkspc_fixture", changed: true },
+    { draftId: "wrkspc_fixture", storedId: undefined, changed: true },
+  ])(
+    "normalizes workspace scope $draftId against $storedId",
+    ({ draftId, storedId, changed }) => {
+      expect(
+        hasProviderCredentialChanges({
+          draft: {
+            ...createProviderCredentialDraft("anthropic"),
+            anthropicWorkspaceId: draftId,
+          },
+          stored: {
+            ...createProviderCredentialDraft("anthropic"),
+            anthropicWorkspaceId: storedId,
+          },
+        }),
+      ).toBe(changed);
+    },
+  );
+  test("a key still needs saving when workspace scope is unchanged", () => {
+    expect(
+      hasProviderCredentialChanges({
+        draft: {
+          ...createProviderCredentialDraft("anthropic"),
+          apiKey: "sk-ant-usr-fixture",
+          anthropicWorkspaceId: "",
+        },
+        stored: undefined,
+      }),
+    ).toBe(true);
+  });
+});
+
+test("only explicit role overrides are serialized, even when equal to a default", () => {
+  const defaults = GOOGLE_DEFAULTS;
+  const chat = defaults.chat;
+  expect(
+    serializeRoleOverrides({ providers: ["google"], overrides: {} }),
+  ).toEqual({ kind: "valid", overrides: null });
+  expect(
+    serializeRoleOverrides({ providers: ["google"], overrides: { chat } }),
+  ).toEqual({ kind: "valid", overrides: { chat } });
+  expect(
+    roleOverridesFromStoredModels({
+      providers: ["google"],
+      overrideModels: { chat },
+    }),
+  ).toEqual({ chat });
+  expect(
+    serializeRoleOverrides({
+      providers: ["google"],
+      overrides: { chat: null },
+    }),
+  ).toEqual({ kind: "invalid" });
+});
+
+test("role comparison ignores insertion order while preserving default and explicit selection states", () => {
+  const baseline = GOOGLE_DEFAULTS;
+  for (const [offset, role] of ROLE_KEYS.entries()) {
+    const order = [
+      ...ROLE_KEYS.slice(offset),
+      ...ROLE_KEYS.slice(0, offset),
+    ].toReversed();
+    const current = Object.fromEntries(
+      order.map((key) => [key, baseline[key]]),
+    );
+    expect(haveSameRoleModelSelections({ current, baseline })).toBe(true);
+    expect(
+      haveSameRoleModelSelections({
+        current: { ...current, [role]: null },
+        baseline,
+      }),
+    ).toBe(false);
+    const selection = baseline[role];
+    expect(
+      haveSameRoleModelSelections({
+        current: {
+          ...current,
+          [role]: { ...selection, modelId: `${selection.modelId}-different` },
+        },
+        baseline,
+      }),
+    ).toBe(false);
+    expect(
+      haveSameRoleModelSelections({
+        current: {
+          ...current,
+          [role]: { ...selection, provider: "anthropic" },
+        },
+        baseline,
+      }),
+    ).toBe(false);
+    expect(
+      haveSameRoleModelSelections({
+        current: { [role]: selection },
+        baseline: {},
+      }),
+    ).toBe(false);
+  }
+  expect(haveSameRoleModelSelections({ current: {}, baseline: {} })).toBe(true);
+  expect(
+    haveSameRoleModelSelections({ current: {}, baseline: { chat: null } }),
+  ).toBe(false);
 });

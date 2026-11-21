@@ -9,23 +9,28 @@ import { request as undiciRequest } from "undici";
 import { fetchWithTimeout as unrelatedFetch } from "unrelated-fetch";
 import SocketClient from "ws";
 
-import { fetchWithTimeout } from "@stll/fetch";
+import {
+  fetchWithTimeout,
+  fetchWithTimeout as aliasedFetch,
+  fetchWithTimeout as webFetch,
+} from "@stll/fetch";
 
 import { env } from "@/api/env";
+import { envConverter } from "@/api/env-converter";
 import { publisherTarget } from "@/api/handlers/case-law/ingestion/adapters/publisher-target";
 import {
   fetchPublisher,
   fetchWithRetry,
 } from "@/api/handlers/case-law/ingestion/adapters/retry";
-import { fetchWithTimeout as aliasedFetch } from "@/api/lib/fetch";
-import * as http from "@/api/lib/fetch";
+import { gotenbergConvertTarget } from "@/api/lib/files/converter-settings";
 import { restrictSkCourtDocumentUrl } from "@/api/lib/legal-search/sk-court-document-url";
 import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
 import { getCorpusS3, getS3 } from "@/api/lib/s3";
-import { safeOutboundFetchBytes } from "@/api/lib/safe-outbound-fetch";
+import { safeOutboundFetchBytes } from "@/api/lib/auth/authorized-outbound-fetch";
 
-import { fetchWithTimeout as relativeFetch } from "../../apps/api/src/lib/fetch.ts";
-import { fetchWithTimeout as webFetch } from "../../apps/web/src/lib/fetch.ts";
+import * as http from "../../packages/fetch/src/index.ts";
+
+const relativeFetch = http.fetchWithTimeout;
 
 const STATIC_BASE = "https://api.example.com";
 const STATIC_ALIAS = STATIC_BASE;
@@ -93,6 +98,23 @@ export const mustFlagUnprovenConfiguredTargets = async (store: {
 export const mustAllowConfiguredTargets = async () => {
   // expect-clean: require-safe-outbound-target/require-safe-outbound-target
   await fetchWithTimeout(`${env.GOTENBERG_URL}/health`, { timeoutMs: 1000 });
+
+  // expect-clean: require-safe-outbound-target/require-safe-outbound-target
+  await fetchWithTimeout(gotenbergConvertTarget(envConverter), {
+    redirect: "error",
+    timeoutMs: 1000,
+  });
+
+  const converterSettings = envConverter;
+  const converterTarget = gotenbergConvertTarget(converterSettings);
+  converterTarget.searchParams.set("trace", "fixture");
+  // expect-clean: require-safe-outbound-target/require-safe-outbound-target
+  await fetchWithTimeout(converterTarget, { timeoutMs: 1000 });
+
+  const changedConverterTarget = gotenbergConvertTarget(envConverter);
+  changedConverterTarget.hostname = dynamicBase;
+  // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- fixture: a configured builder still returns a mutable URL whose authority can change
+  await fetchWithTimeout(changedConverterTarget, { timeoutMs: 1000 });
 
   const choice = useFreeTier ? "https://free.example" : "https://pro.example";
   // expect-clean: require-safe-outbound-target/require-safe-outbound-target
@@ -303,7 +325,7 @@ export const mustFlagDynamicTargets = async (inputUrl: string) => {
     });
   }
 
-  // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- fixture: a re-exporting module's wrapper
+  // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- fixture: an aliased package import
   await webFetch(inputUrl, { timeoutMs: 1000 });
 
   // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- fixture: undici request

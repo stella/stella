@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 
 import type { SafeDb } from "@/api/db/safe-db";
@@ -7,13 +7,15 @@ import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
+import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
+import { TRANSITIONS } from "@/api/lib/db/transition-specs";
+import { transitionBatch } from "@/api/lib/db/transitions";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { PdfSigningSessionView } from "@/api/lib/files/pdf-signing/sessions";
 import { resolvePdfSigningSessionStatus } from "@/api/lib/files/pdf-signing/sessions";
 
 const paramsSchema = workspaceParams({
-  sessionId: tSafeId("pdfSigningSession"),
+  sessionId: resourceIdSchema("pdfSigningSession"),
 });
 
 type ReadSessionOptions = {
@@ -67,6 +69,7 @@ const sessionNotFound = () =>
   });
 
 const statusConfig = {
+  contract: "patch",
   params: paramsSchema,
   permissions: { entity: ["update"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
@@ -95,6 +98,7 @@ export const readPdfSigningSessionStatus = createSafeHandler<
 );
 
 const cancelConfig = {
+  contract: "patch",
   params: paramsSchema,
   permissions: { entity: ["update"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
@@ -118,32 +122,32 @@ export const cancelPdfSigningSession = createSafeHandler<
     // signature that landed in between.
     yield* Result.await(
       safeDb(async (tx) => {
-        const rows = await tx
-          .update(pdfSigningSessions)
-          .set({
-            closeReason: "user_cancelled",
-            closedAt: new Date(),
-            status: "cancelled",
-          })
-          .where(
-            and(
-              eq(pdfSigningSessions.id, sessionId),
-              eq(pdfSigningSessions.workspaceId, workspaceId),
-              eq(pdfSigningSessions.createdBy, user.id),
-              eq(pdfSigningSessions.status, "open"),
-            ),
-          )
-          .returning({ id: pdfSigningSessions.id });
-
-        if (rows.at(0)) {
-          await recordAuditEvent(tx, {
-            action: AUDIT_ACTION.UPDATE,
-            resourceType: AUDIT_RESOURCE_TYPE.PDF_SIGNING_SESSION,
-            resourceId: sessionId,
-            changes: { status: { old: "open", new: "cancelled" } },
-            metadata: { closeReason: "user_cancelled" },
-          });
-        }
+        await transitionBatch({
+          tx,
+          spec: TRANSITIONS.pdfSigningSessions,
+          ids: [sessionId],
+          options: {
+            from: ["open"],
+            to: "cancelled",
+            set: { closeReason: "user_cancelled", closedAt: new Date() },
+            guard:
+              and(
+                eq(pdfSigningSessions.id, sessionId),
+                eq(pdfSigningSessions.workspaceId, workspaceId),
+                eq(pdfSigningSessions.createdBy, user.id),
+                eq(pdfSigningSessions.status, "open"),
+              ) ?? panic("The signing session cancellation has no guard"),
+          },
+          recordTransitionAuditEvent: async (auditTx) => {
+            await recordAuditEvent(auditTx, {
+              action: AUDIT_ACTION.UPDATE,
+              resourceType: AUDIT_RESOURCE_TYPE.PDF_SIGNING_SESSION,
+              resourceId: sessionId,
+              changes: { status: { old: "open", new: "cancelled" } },
+              metadata: { closeReason: "user_cancelled" },
+            });
+          },
+        });
       }),
     );
 

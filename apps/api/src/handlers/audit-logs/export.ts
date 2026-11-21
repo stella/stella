@@ -1,7 +1,6 @@
 import { Result } from "better-result";
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc } from "drizzle-orm";
 
-import { member, user } from "@/api/db/auth-schema";
 import { auditLogs } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -10,8 +9,12 @@ import {
   AUDIT_RESOURCE_TYPE,
   ORGANIZATION_AUDIT_LOG_RESOURCE_ID,
 } from "@/api/lib/audit-log";
-import { auditChangesForResource } from "@/api/lib/audit-log-details";
-import { escapeCSV } from "@/api/lib/csv";
+import {
+  AUDIT_LOG_EXPORT_CSV_HEADER,
+  auditLogExportColumns,
+  auditLogExportCsvLine,
+  readAuditLogExportActors,
+} from "@/api/lib/audit-log-export";
 import { readBounded } from "@/api/lib/db/read-bounded";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
@@ -23,6 +26,7 @@ import {
 } from "./query";
 
 const config = {
+  contract: "patch",
   accountAccess: ACCOUNT_ACCESS.standard,
   contentDelivery: { type: "audited" },
   permissions: { auditLog: ["read"] },
@@ -32,7 +36,15 @@ const config = {
 
 const exportAuditLogs = createSafeRootHandler(
   config,
-  async function* ({ safeDb, session, recordAuditEvent, query, set }) {
+  async function* ({
+    safeDb,
+    session,
+    user: actor,
+    featureAccessSnapshot,
+    recordAuditEvent,
+    query,
+    set,
+  }) {
     const invalid = validateAuditLogFilter(query);
     if (invalid !== null) {
       return Result.err(new HandlerError({ status: 400, message: invalid }));
@@ -43,18 +55,19 @@ const exportAuditLogs = createSafeRootHandler(
       filter: query,
     });
 
+    const readContext = {
+      featureAccessSnapshot,
+      principal: {
+        organizationId: session.activeOrganizationId,
+        userId: actor.id,
+      },
+    };
+
     const exportResult = yield* Result.await(
       safeDb(async (tx) => {
         const bounded = await readBounded(
           tx
-            .select({
-              createdAt: auditLogs.createdAt,
-              userId: auditLogs.userId,
-              action: auditLogs.action,
-              resourceType: auditLogs.resourceType,
-              resourceId: auditLogs.resourceId,
-              changes: auditLogs.changes,
-            })
+            .select(auditLogExportColumns(readContext))
             .from(auditLogs)
             .where(and(...conditions))
             .orderBy(desc(auditLogs.createdAt), desc(auditLogs.id)),
@@ -66,21 +79,11 @@ const exportAuditLogs = createSafeRootHandler(
         }
 
         const { rows } = bounded;
-
-        const userIds = [...new Set(rows.map((row) => row.userId))];
-        const userDetails =
-          userIds.length > 0
-            ? await tx
-                .select({ id: user.id, name: user.name, email: user.email })
-                .from(user)
-                .innerJoin(member, eq(member.userId, user.id))
-                .where(
-                  and(
-                    eq(member.organizationId, session.activeOrganizationId),
-                    inArray(user.id, userIds),
-                  ),
-                )
-            : [];
+        const actors = await readAuditLogExportActors(
+          tx,
+          session.activeOrganizationId,
+          rows.map((row) => row.userId),
+        );
 
         await recordAuditEvent(tx, {
           action: AUDIT_ACTION.DOWNLOAD,
@@ -91,7 +94,7 @@ const exportAuditLogs = createSafeRootHandler(
         return {
           type: "complete" as const,
           rows,
-          userDetails,
+          actors,
         };
       }),
     );
@@ -105,40 +108,14 @@ const exportAuditLogs = createSafeRootHandler(
       );
     }
 
-    const userMap = new Map(
-      exportResult.userDetails.map((actor) => [
-        actor.id,
-        { name: actor.name, email: actor.email },
-      ]),
-    );
-
-    const headers = [
-      "Time",
-      "User Name",
-      "User Email",
-      "Action",
-      "Resource Type",
-      "Resource ID",
-      "Changes",
-    ];
-
-    const csvRows = [headers.join(",")];
-
+    const csvRows = [AUDIT_LOG_EXPORT_CSV_HEADER];
     for (const row of exportResult.rows) {
-      const u = row.userId ? userMap.get(row.userId) : undefined;
-      const userName = u?.name ?? "";
-      const userEmail = u?.email ?? "";
-      const changes = auditChangesForResource(row.resourceType, row.changes);
       csvRows.push(
-        [
-          escapeCSV(new Date(row.createdAt).toISOString()),
-          escapeCSV(userName),
-          escapeCSV(userEmail),
-          escapeCSV(row.action),
-          escapeCSV(row.resourceType),
-          escapeCSV(row.resourceId),
-          escapeCSV(changes ? JSON.stringify(changes) : ""),
-        ].join(","),
+        auditLogExportCsvLine({
+          row,
+          actor: exportResult.actors.get(row.userId),
+          ...readContext,
+        }),
       );
     }
 

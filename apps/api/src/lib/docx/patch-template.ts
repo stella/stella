@@ -9,9 +9,9 @@
  */
 
 import { panic, Result } from "better-result";
-import type JSZip from "jszip";
 import * as slimdom from "slimdom";
 
+import type { ZipArchive } from "@stll/docx-core/zip";
 import type { NamedCondition } from "@stll/template-conditions";
 import { scanMarkers, substitutionKey } from "@stll/template-conditions";
 
@@ -79,28 +79,26 @@ const fillTemplateWithValues = async (
   values: PatchValues,
 ): Promise<Buffer> => {
   const zip = await loadDocx(data);
-  const partNames = templateContentPartPaths(Object.keys(zip.files));
+  const partNames = templateContentPartPaths(zip.paths());
 
   // Each part is read, patched, and written back independently — `values` is
   // read-only and `patchXmlPart` carries no cross-part counter (unlike the
   // occurrence-indexed patcher), so the parts can be processed concurrently.
   await Promise.all(
     partNames.map(async (partName) => {
-      const entry = zip.file(partName);
+      const entry = zip.entry(partName);
       if (!entry) {
         return;
       }
-      const xml = await entry.async("string");
+      const xml = await entry.text();
       const patched = patchXmlPart(xml, values);
       if (patched.changed) {
-        zip.file(partName, patched.xml);
+        zip.set(partName, patched.xml);
       }
     }),
   );
 
-  const result = await zip.generateAsync({
-    type: "nodebuffer",
-  });
+  const result = Buffer.from(await zip.generate({ compression: "store" }));
 
   return Buffer.from(result);
 };
@@ -206,7 +204,7 @@ type DirectiveEvaluationOptions = {
 };
 
 const preProcessTemplateDirectives = async (
-  zip: JSZip,
+  zip: ZipArchive,
   templateData: TemplateData,
   {
     namedConditions,
@@ -221,12 +219,12 @@ const preProcessTemplateDirectives = async (
 } | null> => {
   const parts = (
     await Promise.all(
-      templateContentPartPaths(Object.keys(zip.files)).map(async (path) => {
-        const entry = zip.file(path);
+      templateContentPartPaths(zip.paths()).map(async (path) => {
+        const entry = zip.entry(path);
         if (!entry) {
           return undefined;
         }
-        return { path, xml: await entry.async("string") };
+        return { path, xml: await entry.text() };
       }),
     )
   ).filter((part): part is { path: string; xml: string } => part !== undefined);
@@ -245,8 +243,7 @@ const preProcessTemplateDirectives = async (
     footer: 0,
     header: 0,
   };
-  const numberingXml =
-    (await zip.file("word/numbering.xml")?.async("string")) ?? null;
+  const numberingXml = (await zip.entry("word/numbering.xml")?.text()) ?? null;
   const validNumIds = collectValidNumIds(numberingXml);
   const processingContext = createDirectiveProcessingContext();
   processingContext.scopeInlineText = inspection?.scopeInlineText;
@@ -263,7 +260,9 @@ const preProcessTemplateDirectives = async (
 
     const paragraphCount = container.getElementsByTagNameNS(W_NS, "p").length;
     const paragraphOffset = paragraphOffsets[source];
-    paragraphOffsets[source] += paragraphCount;
+    Object.defineProperty(paragraphOffsets, source, {
+      value: paragraphOffset + paragraphCount,
+    });
     const prepared = inspection?.prepare(container);
     if (prepared !== undefined && Result.isError(prepared)) {
       return null;
@@ -281,7 +280,10 @@ const preProcessTemplateDirectives = async (
       templateData,
       { conditionValues, namedConditions, processingContext },
     );
-    Object.assign(expandedValues, patchValues);
+    Object.defineProperties(
+      expandedValues,
+      Object.getOwnPropertyDescriptors(patchValues),
+    );
     const inlineErrors = processInlineConditions(
       container,
       inlineData,
@@ -307,12 +309,10 @@ const preProcessTemplateDirectives = async (
     if (container.getElementsByTagNameNS(W_NS, "numPr").length > 0) {
       pruneDanglingNumPr(container, validNumIds);
     }
-    zip.file(path, slimdom.serializeToWellFormedString(doc));
+    zip.set(path, slimdom.serializeToWellFormedString(doc));
   }
 
-  const modifiedBuf = await zip.generateAsync({
-    type: "nodebuffer",
-  });
+  const modifiedBuf = Buffer.from(await zip.generate({ compression: "store" }));
 
   return {
     buffer: Buffer.from(modifiedBuf),
@@ -353,8 +353,8 @@ export const renderedTemplateMarkers = async (
   };
   const zip = await loadDocx(Buffer.from(template.bytes));
   const authoredTexts = await Promise.all(
-    templateContentPartPaths(Object.keys(zip.files)).map(async (path) => {
-      const xml = await zip.file(path)?.async("string");
+    templateContentPartPaths(zip.paths()).map(async (path) => {
+      const xml = await zip.entry(path)?.text();
       if (xml === undefined) {
         return "";
       }
@@ -402,8 +402,8 @@ export const renderedTemplateMarkers = async (
     return Result.ok(rendered);
   }
   // No part carries a directive: every marker renders at document scope.
-  for (const path of templateContentPartPaths(Object.keys(zip.files))) {
-    const xml = await zip.file(path)?.async("string");
+  for (const path of templateContentPartPaths(zip.paths())) {
+    const xml = await zip.entry(path)?.text();
     const container =
       xml === undefined
         ? undefined
@@ -507,18 +507,16 @@ export const fillTemplate = async (
   // that Word split across runs be seen and rewritten, the same way the
   // placeholder pipeline handles split markers.
   const numberingZip = await loadDocx(data);
-  const numberingParts = templateContentPartPaths(
-    Object.keys(numberingZip.files),
-  );
+  const numberingParts = templateContentPartPaths(numberingZip.paths());
   const numberingDocs = new Map<string, slimdom.Document>();
   const numbers = new Map<string, number>();
 
   for (const partName of numberingParts) {
-    const entry = numberingZip.file(partName);
+    const entry = numberingZip.entry(partName);
     if (!entry) {
       continue;
     }
-    const partXml = await entry.async("string");
+    const partXml = await entry.text();
     // Split-safe pre-filter: skip DOM parsing only for parts that cannot hold a
     // numbering marker even across runs (a contiguous test would miss a marker
     // Word split between runs — the exact case this pass exists to handle).
@@ -534,10 +532,10 @@ export const fillTemplate = async (
     }
     for (const [partName, doc] of numberingDocs) {
       resolveRefsInDoc(doc, numbers);
-      numberingZip.file(partName, slimdom.serializeToWellFormedString(doc));
+      numberingZip.set(partName, slimdom.serializeToWellFormedString(doc));
     }
     data = Buffer.from(
-      await numberingZip.generateAsync({ type: "nodebuffer" }),
+      Buffer.from(await numberingZip.generate({ compression: "store" })),
     );
   }
 

@@ -1,13 +1,12 @@
 import { Result } from "better-result";
-import { createHash } from "node:crypto";
 import { open } from "node:fs/promises";
 import path from "node:path";
 
 import {
   actionAdmissionRefusalLines,
+  type CliActionAdmissionRefusal,
   readCliActionAdmissionRefusal,
   readHttpActionAdmissionRefusal,
-  type CliActionAdmissionRefusal,
 } from "./action-admission-refusal.js";
 import { inferFileMimeType } from "./file-mime-type.js";
 import { formatCapabilityCommand } from "./generate-capability-tree.js";
@@ -15,27 +14,52 @@ import {
   buildDocumentVersionUploadReservationInput,
   buildUploadAbortInput,
   buildUploadFinalizeInput,
+  DOCUMENT_UPLOAD_MIN_BYTES_PER_SECOND,
+  DOCUMENT_UPLOAD_PUT_TIMEOUT_MS,
   DOCUMENT_VERSION_UPLOAD_TRANSPORT,
+  UPLOAD_DOCUMENT_MAX_BYTES,
 } from "./generated/document-version-upload-transport.js";
+import { MCP_CAPABILITY_EXECUTORS } from "./generated/mcp-contract.js";
 import type { CallToolResult, McpClientError } from "./mcp-client.js";
 import { callTool } from "./mcp-client.js";
 import { parsePayload } from "./run-leaf-command.js";
+import { sha256Hex as hashSha256Hex } from "./sha256.js";
 
-const INVOKE_CAPABILITY_TOOL = "invoke_capability";
+const LIST_PROPERTIES_CAPABILITY = "properties.list";
 const UPLOAD_CAPABILITIES = {
   abort: DOCUMENT_VERSION_UPLOAD_TRANSPORT.capability.abort,
   create: DOCUMENT_VERSION_UPLOAD_TRANSPORT.capability.reserve,
   finalize: DOCUMENT_VERSION_UPLOAD_TRANSPORT.capability.finalize,
-  listProperties: "properties.list",
+  listProperties: LIST_PROPERTIES_CAPABILITY,
 } as const;
+type UploadCapability =
+  | (typeof DOCUMENT_VERSION_UPLOAD_TRANSPORT.capability)[keyof typeof DOCUMENT_VERSION_UPLOAD_TRANSPORT.capability]
+  | typeof LIST_PROPERTIES_CAPABILITY;
+
+const UPLOAD_CAPABILITY_ACCESS = {
+  [UPLOAD_CAPABILITIES.abort]: "write",
+  [UPLOAD_CAPABILITIES.create]: "write",
+  [UPLOAD_CAPABILITIES.finalize]: "write",
+  [UPLOAD_CAPABILITIES.listProperties]: "read",
+} as const satisfies Record<
+  UploadCapability,
+  keyof typeof MCP_CAPABILITY_EXECUTORS
+>;
+
 const UPLOAD_PURPOSE = {
   createEntity: "entity_create",
 } as const;
-export const DOCUMENT_UPLOAD_POLICY = {
-  maxBytes: 52_428_800, // 50 MiB
-  minimumBytesPerSecond: 32_768, // 32 KiB/s
-  putTimeoutMs: 1_800_000, // 30 minutes
-} as const;
+type DocumentUploadPolicy = {
+  readonly maxBytes: number;
+  readonly minimumBytesPerSecond: number;
+  readonly putTimeoutMs: typeof DOCUMENT_UPLOAD_PUT_TIMEOUT_MS;
+};
+
+export const DOCUMENT_UPLOAD_POLICY: DocumentUploadPolicy = {
+  maxBytes: UPLOAD_DOCUMENT_MAX_BYTES,
+  minimumBytesPerSecond: DOCUMENT_UPLOAD_MIN_BYTES_PER_SECOND,
+  putTimeoutMs: DOCUMENT_UPLOAD_PUT_TIMEOUT_MS,
+};
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
@@ -95,7 +119,7 @@ type CapabilityInvocation =
 
 export type UploadDocumentDependencies = {
   invoke: (
-    capability: string,
+    capability: UploadCapability,
     input: Record<string, unknown>,
     confirm?: true,
   ) => Promise<CapabilityInvocation>;
@@ -159,7 +183,7 @@ const readBoundedLocalFile = async (
         bytes,
         mimeType: inferFileMimeType(filePath),
         name: path.basename(filePath),
-        sha256Hex: createHash("sha256").update(bytes).digest("hex"),
+        sha256Hex: hashSha256Hex(bytes),
       });
     },
     catch: (cause) => cause,
@@ -228,7 +252,7 @@ export const createUploadDocumentDependencies = ({
     const called = await callTool({
       serverUrl,
       token,
-      name: INVOKE_CAPABILITY_TOOL,
+      name: MCP_CAPABILITY_EXECUTORS[UPLOAD_CAPABILITY_ACCESS[capability]],
       args: {
         capability,
         input,

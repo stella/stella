@@ -1,4 +1,12 @@
 name: Contributor signature notification
+defaults:
+  run:
+    shell: bash
+
+# Unprivileged half of the signature check: it runs for every pull request,
+# fork ones included, with no token scopes and no secrets, and only marks the
+# head for verification. Its completion triggers cla.yml on main, which reads
+# this run as untrusted data.
 on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
@@ -8,8 +16,8 @@ concurrency:
 permissions: {}
 jobs:
   notify:
-    if: github.actor == 'dependabot[bot]'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
     steps:
       - name: Request trusted signature verification
         run: ":"

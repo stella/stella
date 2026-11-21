@@ -1,5 +1,8 @@
 import { describe, expect, test } from "bun:test";
 
+import { rejectionOf } from "@stll/property-testing/rejection";
+import { deferred } from "@stll/test-kit";
+
 import { mapWithConcurrency, streamWithConcurrency } from "./index";
 
 const elapsedMs = async (
@@ -64,17 +67,30 @@ describe("mapWithConcurrency", () => {
 
 describe("streamWithConcurrency", () => {
   test("yields results in input order despite out-of-order completion", async () => {
-    // Later items resolve sooner, so completion order is reversed.
-    const values = await drain(
+    const started = [1, 2, 3, 4, 5].map(() => deferred());
+    const releases = [1, 2, 3, 4, 5].map(() => deferred());
+    const completed = [1, 2, 3, 4, 5].map(() => deferred());
+    const completionOrder: number[] = [];
+    const draining = drain(
       streamWithConcurrency({
         items: [1, 2, 3, 4, 5],
         limit: 5,
         operation: async (value) => {
-          await Bun.sleep((8 - value) * 5);
+          started[value - 1]?.resolve();
+          await releases[value - 1]?.promise;
+          completionOrder.push(value);
+          completed[value - 1]?.resolve();
           return value;
         },
       }),
     );
+    await Promise.all(started.map(async ({ promise }) => await promise));
+    for (const value of [5, 4, 3, 2, 1]) {
+      releases[value - 1]?.resolve();
+      await completed[value - 1]?.promise;
+    }
+    const values = await draining;
+    expect(completionOrder).toEqual([5, 4, 3, 2, 1]);
     expect(values).toEqual([1, 2, 3, 4, 5]);
   });
 
@@ -365,18 +381,23 @@ describe("streamWithConcurrency", () => {
     expect(values).toEqual([1, 2, 3, 4]);
   });
 
-  test("a non-finite limit is a defect, not a clamp", () => {
+  test("a non-finite limit is a defect, not a clamp", async () => {
     // NaN would clamp to a pool that starts nothing and returns an empty run.
     expect(
-      async () =>
-        await drain(
+      await rejectionOf(
+        drain(
           streamWithConcurrency({
             items: [1, 2, 3],
             limit: Number.NaN,
             operation: async (value) => value,
           }),
         ),
-    ).toThrow("Concurrency limit must be a finite number");
+      ),
+    ).toMatchObject({
+      message: expect.stringContaining(
+        "Concurrency limit must be a finite number",
+      ),
+    });
   });
 });
 

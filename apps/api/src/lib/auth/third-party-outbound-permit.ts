@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 const THIRD_PARTY_OUTBOUND_PERMIT: unique symbol = Symbol(
   "ThirdPartyOutboundPermit",
 );
@@ -18,6 +20,23 @@ export type ThirdPartyOutboundPermit = {
   readonly [THIRD_PARTY_OUTBOUND_PERMIT]: true;
 };
 
-export const grantThirdPartyOutboundPermit = (): ThirdPartyOutboundPermit => ({
-  [THIRD_PARTY_OUTBOUND_PERMIT]: true,
-});
+const issuedPermits = new WeakSet<object>();
+
+export const grantThirdPartyOutboundPermit = (): ThirdPartyOutboundPermit => {
+  const permit = Object.freeze({
+    [THIRD_PARTY_OUTBOUND_PERMIT]: true,
+  } as const);
+  issuedPermits.add(permit);
+  return permit;
+};
+
+/** A request carries the identity issued by its direct boundary. */
+export const assertThirdPartyOutboundPermit = (permit: unknown): void => {
+  if (
+    typeof permit !== "object" ||
+    permit === null ||
+    !issuedPermits.has(permit)
+  ) {
+    panic("An issued third-party outbound permit is required");
+  }
+};

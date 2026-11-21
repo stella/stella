@@ -1,0 +1,6 @@
+{
+  "sourceUrl": "https://www.e-sbirka.cz/eli/cz/sb/2006/262/2025-06-01",
+  "versionDate": "2025-06-01",
+  "sourceFixture": "apps/api/src/handlers/legislation/fixtures/statute-recall/documents.json",
+  "note": "DocumentAst excerpt assembled from the existing official statute text fixture; heading and paragraph text retained verbatim. Structural ids and levels are fixture metadata, not a captured ingestion result."
+}

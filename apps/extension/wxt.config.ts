@@ -1,8 +1,42 @@
+import { panic } from "better-result";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { defineConfig } from "wxt";
+
+const releaseVersion = readFileSync(
+  new URL("../../VERSION", import.meta.url),
+  "utf-8",
+).trim();
+if (!/^\d+\.\d+\.\d+(?:-(?:rc|beta|alpha)\.\d+)?$/u.test(releaseVersion)) {
+  panic("Extension version must come from a valid product release VERSION");
+}
+// Chrome accepts only numeric versions; prerelease builds retain their label.
+const chromeVersion = releaseVersion.replace(/-.*$/u, "");
+export const EXTENSION_ICONS = {
+  16: "icon/16.png",
+  32: "icon/32.png",
+  48: "icon/48.png",
+  128: "icon/128.png",
+} as const;
 
 export default defineConfig({
   imports: false,
+  hooks: {
+    "build:publicAssets": (_wxt, files) => {
+      for (const [size, relativeDest] of Object.entries(EXTENSION_ICONS)) {
+        files.push({
+          absoluteSrc: fileURLToPath(
+            new URL(`../desktop/assets/icon-${size}.png`, import.meta.url),
+          ),
+          relativeDest,
+        });
+      }
+    },
+  },
   manifest: {
+    version: chromeVersion,
+    version_name: releaseVersion,
+    icons: EXTENSION_ICONS,
     action: {
       default_popup: "popup.html",
       default_title: "__MSG_extensionName__",
@@ -18,9 +52,20 @@ export default defineConfig({
     optional_host_permissions: ["https://*/*"],
     // Granted with website access in one prompt: cancelling downloads a
     // controlled page starts from script, and tracing which page opened a
-    // new tab or which frame started a download.
-    optional_permissions: ["downloads", "webNavigation"],
-    permissions: ["activeTab", "declarativeNetRequest", "scripting", "storage"],
+    // new tab or which frame started a download. `nativeMessaging` is asked
+    // for on its own, by members who run coding agents with stella desktop.
+    optional_permissions: ["downloads", "nativeMessaging", "webNavigation"],
+    // `alarms` wakes the worker to reconnect to stella desktop.
+    // `offscreen` keeps a shown PDF's bytes as a blob address for its save.
+    permissions: [
+      "activeTab",
+      "alarms",
+      "declarativeNetRequest",
+      "offscreen",
+      "scripting",
+      "storage",
+    ],
   },
   srcDir: "src",
+  zip: { artifactTemplate: "stella-extension-chrome-{{version}}.zip" },
 });

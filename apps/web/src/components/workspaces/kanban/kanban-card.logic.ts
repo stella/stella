@@ -1,4 +1,9 @@
-import { getInternalPropertyId } from "@/components/workspaces/entity-utils";
+import {
+  getEntityName,
+  getFirstFile,
+  getInternalPropertyId,
+} from "@/components/workspaces/entity-utils";
+import type { KanbanCardDragItem } from "@/components/workspaces/kanban/kanban-selection.logic";
 import type { WorkspaceEntity, WorkspaceField } from "@/lib/types";
 
 export type KanbanCardMetadataVisibility = {
@@ -31,3 +36,16 @@ export const getKanbanCardRenameInitialValue = (
 
   return textName || fallbackName;
 };
+
+/** What a card carries into a drag, rendered under `subgroupValue`'s lane. */
+export const toKanbanCardDragItem = (
+  entity: WorkspaceEntity,
+  subgroupValue: string | null | undefined,
+): KanbanCardDragItem => ({
+  entityId: entity.entityId,
+  name: getEntityName(entity),
+  kind: entity.kind,
+  mimeType: getFirstFile(entity)?.mimeType ?? null,
+  parentId: entity.parentId ?? null,
+  subgroupValue,
+});

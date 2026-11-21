@@ -11,9 +11,8 @@
 //   - Global `fetch(...)`, `globalThis.fetch(...)`, `window.fetch(...)`,
 //     `self.fetch(...)`.
 //   - A call to a binding imported from a fetch-owning module:
-//     `@stll/fetch` (packages/fetch) and its two re-export shims
-//     `@/lib/fetch` (apps/web) and `@/api/lib/fetch`, plus the api's other
-//     HTTP helpers `@/api/lib/safe-outbound-fetch` and
+//     `@stll/fetch` (packages/fetch), plus the api's other
+//     HTTP helpers `@/api/lib/auth/authorized-outbound-fetch` and
 //     `@/api/lib/redirect-fetch`. Modules are matched by import source, so a
 //     local helper that merely spells `fetchSomething` is not a network call
 //     and an aliased import still is.
@@ -21,11 +20,12 @@
 //     shape. The `new *Command(...)` argument is required, so an unrelated
 //     `transport.send(message)` stays out of scope.
 //   - A method call on a binding imported from `@aws-sdk/*`,
-//     `@stll/api-client`, or the Eden client (`@/lib/eden-client` and its
-//     `@/lib/api` barrel, which export `api` / `memoriesApi`), e.g.
+//     `@stll/api-client`, or the browser client (`@/lib/api`, which exports
+//     `api` and `apiClient`), e.g.
 //     `await api.documents({ id }).get()`. Computed access is traversed, so a
 //     generated hyphenated route (`api["copy-to-workspace"].post(...)`) still
-//     resolves to the imported client.
+//     resolves to the imported client. Stable local API route receivers are
+//     followed too; awaited values and completed request calls are not receivers.
 //
 // "Inside a loop" walks up `parent` links from the await to the first
 // position that re-runs on every iteration: a loop BODY, a `while` / `do`
@@ -65,16 +65,14 @@
 
 import { eslintCompatPlugin, type ESTree } from "@oxlint/plugins";
 
+import { createNetworkCallDetector } from "./network-call.ts";
 import {
-  getImportLocalName,
   getPropertyName,
   isAstNode,
   isIdentifier,
   isPerIterationLoopPosition,
   isResultTryPromiseCallback,
-  isStringLiteral,
   LOOP_NODE_TYPES,
-  resolveChainRootName,
   unwrapExpression,
 } from "./utils.ts";
 
@@ -83,27 +81,6 @@ const FUNCTION_TYPES = new Set([
   "FunctionExpression",
   "ArrowFunctionExpression",
 ]);
-
-// Modules whose exported functions perform an HTTP request. Every binding
-// imported from them counts, so an added helper is covered on the day it
-// ships rather than when someone remembers to list its name.
-const FETCH_MODULES = new Set([
-  "@stll/fetch",
-  "@/api/lib/safe-outbound-fetch",
-  "@/api/lib/redirect-fetch",
-]);
-
-// Modules whose exported objects are remote clients: any method call on one
-// of their bindings is a round-trip.
-const CLIENT_MODULES = new Set([
-  "@stll/api-client",
-  "@/lib/eden-client",
-  "@/lib/api",
-]);
-
-const CLIENT_MODULE_PREFIX = "@aws-sdk/";
-
-const GLOBAL_FETCH_OBJECTS = new Set(["globalThis", "window", "self"]);
 
 const getType = (node: unknown): string | null =>
   isAstNode(node) ? node.type : null;
@@ -117,46 +94,6 @@ const getField = (node: unknown, field: string): unknown => {
 
 const isComputed = (node: unknown): boolean =>
   getField(node, "computed") === true;
-
-const isGlobalFetchCallee = (callee: unknown): boolean => {
-  if (isIdentifier(callee, "fetch")) {
-    return true;
-  }
-  if (getType(callee) !== "MemberExpression" || isComputed(callee)) {
-    return false;
-  }
-  const objectName = resolveChainRootName(getField(callee, "object"));
-  return (
-    objectName !== null &&
-    GLOBAL_FETCH_OBJECTS.has(objectName) &&
-    getPropertyName(getField(callee, "property")) === "fetch"
-  );
-};
-
-// `<anything>.send(new SomeCommand(...))` — the AWS SDK dispatch shape.
-const isAwsCommandSend = (node: unknown): boolean => {
-  const callee = getField(node, "callee");
-  if (
-    getType(callee) !== "MemberExpression" ||
-    isComputed(callee) ||
-    getPropertyName(getField(callee, "property")) !== "send"
-  ) {
-    return false;
-  }
-  const args = getField(node, "arguments");
-  if (!Array.isArray(args) || args.length === 0) {
-    return false;
-  }
-  const first = unwrapExpression(args[0]);
-  if (getType(first) !== "NewExpression") {
-    return false;
-  }
-  const constructorName = resolveChainRootName(getField(first, "callee"));
-  return constructorName?.endsWith("Command") ?? false;
-};
-
-const isClientModuleSource = (source: string): boolean =>
-  CLIENT_MODULES.has(source) || source.startsWith(CLIENT_MODULE_PREFIX);
 
 // Walk up from an awaited expression to the first per-iteration loop position
 // or function boundary. A `Result.tryPromise` callback is not a boundary: it
@@ -219,25 +156,7 @@ export default eslintCompatPlugin({
         },
       },
       createOnce(context) {
-        const fetchBindings = new Set<string>();
-        const clientBindings = new Set<string>();
-
-        const isNetworkCall = (node: unknown): boolean => {
-          if (getType(node) !== "CallExpression") {
-            return false;
-          }
-          if (isGlobalFetchCallee(getField(node, "callee"))) {
-            return true;
-          }
-          if (isAwsCommandSend(node)) {
-            return true;
-          }
-          const root = resolveChainRootName(node);
-          return (
-            root !== null &&
-            (fetchBindings.has(root) || clientBindings.has(root))
-          );
-        };
+        const isNetworkCall = createNetworkCallDetector(context);
 
         const reportAwaitedExpression = (
           node: ESTree.AwaitExpression | ESTree.YieldExpression,
@@ -249,39 +168,6 @@ export default eslintCompatPlugin({
         };
 
         return {
-          before() {
-            fetchBindings.clear();
-            clientBindings.clear();
-            return true;
-          },
-          ImportDeclaration(node) {
-            const source = getField(node, "source");
-            if (!isStringLiteral(source)) {
-              return;
-            }
-            const bindings = FETCH_MODULES.has(source.value)
-              ? fetchBindings
-              : isClientModuleSource(source.value)
-                ? clientBindings
-                : null;
-            if (bindings === null) {
-              return;
-            }
-            const specifiers = getField(node, "specifiers");
-            if (!Array.isArray(specifiers)) {
-              return;
-            }
-            for (const specifier of specifiers) {
-              const localName =
-                getImportLocalName(specifier) ??
-                (isIdentifier(getField(specifier, "local"))
-                  ? getPropertyName(getField(specifier, "local"))
-                  : null);
-              if (localName !== null) {
-                bindings.add(localName);
-              }
-            }
-          },
           AwaitExpression(node) {
             reportAwaitedExpression(node, unwrapExpression(node.argument));
           },

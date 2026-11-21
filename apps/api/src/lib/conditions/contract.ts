@@ -1,15 +1,12 @@
 /**
- * Elysia (TypeBox) mirror of the canonical `@stll/conditions`
- * AST, for HTTP route contracts. The valibot schema in the
- * package stays the source of truth for general runtime
- * validation; this mirror exists only because Elysia route
- * bodies are typed with `t`. The `_conditionParity` guard below
- * fails typecheck if the two ever drift.
+ * Route-contract mirror of the canonical `@stll/conditions` AST.
+ * The schema in the package stays the source of truth for general
+ * runtime validation; the route contract is narrower: its operands
+ * are the ones a filter route resolves, and a group's children and
+ * nesting are bounded. The parity guard below fails typecheck if
+ * the mirror admits a shape outside the canonical AST.
  */
-import type { TSchema } from "@sinclair/typebox";
-import { Type } from "@sinclair/typebox";
-import { t } from "elysia";
-import type { Static } from "elysia";
+import * as v from "valibot";
 
 import { VIEW_FILTERS_MAX } from "@stll/api-contract";
 import {
@@ -20,38 +17,41 @@ import {
   PREDICATE_OPS,
 } from "@stll/conditions";
 
-const tOperand = t.Union([
-  t.Object({
-    type: t.Literal("property"),
-    propertyId: t.String({ minLength: 1 }),
+const tOperand = v.union([
+  v.object({
+    type: v.literal("property"),
+    propertyId: v.pipe(v.string(), v.minLength(1)),
   }),
-  t.Object({
-    type: t.Literal("builtin"),
-    field: t.UnionEnum([...BUILTIN_FIELDS]),
+  v.object({
+    type: v.literal("builtin"),
+    field: v.picklist([...BUILTIN_FIELDS]),
   }),
-  t.Object({ type: t.Literal("kind") }),
-  t.Object({ type: t.Literal("path"), path: t.String({ minLength: 1 }) }),
-  t.Object({
-    type: t.Literal("literal"),
-    value: t.Union([t.String(), t.Number(), t.Boolean(), t.Array(t.String())]),
+  v.object({ type: v.literal("kind") }),
+  v.object({
+    type: v.literal("path"),
+    path: v.pipe(v.string(), v.minLength(1)),
+  }),
+  v.object({
+    type: v.literal("literal"),
+    value: v.union([v.string(), v.number(), v.boolean(), v.array(v.string())]),
   }),
 ]);
 
-const tCompare = t.Object({
-  type: t.Literal("compare"),
+const tCompare = v.object({
+  type: v.literal("compare"),
   left: tOperand,
-  op: t.UnionEnum([...COMPARE_OPS]),
+  op: v.picklist([...COMPARE_OPS]),
   right: tOperand,
 });
 
-const tPredicate = t.Object({
-  type: t.Literal("predicate"),
+const tPredicate = v.object({
+  type: v.literal("predicate"),
   operand: tOperand,
-  op: t.UnionEnum([...PREDICATE_OPS]),
-  value: t.Optional(t.Union([t.String(), t.Array(t.String()), t.Undefined()])),
+  op: v.picklist([...PREDICATE_OPS]),
+  value: v.optional(v.union([v.string(), v.array(v.string()), v.undefined()])),
 });
 
-const tLeaf = t.Union([tCompare, tPredicate]);
+const tLeaf = v.union([tCompare, tPredicate]);
 
 /**
  * Children one group may hold. The depth bound below limits nesting only; a
@@ -60,12 +60,12 @@ const tLeaf = t.Union([tCompare, tPredicate]);
  */
 const MAX_GROUP_CHILDREN = VIEW_FILTERS_MAX;
 
-const tGroupWith = <C extends TSchema>(children: C) =>
-  t.Object({
-    type: t.Literal("group"),
-    combinator: t.UnionEnum([...COMBINATORS]),
-    negated: t.Optional(t.Union([t.Boolean(), t.Undefined()])),
-    children: t.Array(children, { maxItems: MAX_GROUP_CHILDREN }),
+const tGroupWith = <C extends v.GenericSchema>(children: C) =>
+  v.object({
+    type: v.literal("group"),
+    combinator: v.picklist([...COMBINATORS]),
+    negated: v.optional(v.union([v.boolean(), v.undefined()])),
+    children: v.pipe(v.array(children), v.maxLength(MAX_GROUP_CHILDREN)),
   });
 
 /**
@@ -73,53 +73,49 @@ const tGroupWith = <C extends TSchema>(children: C) =>
  * leaves. Reused as both the innermost level of the bounded schema and the
  * static-type reference for the canonical-parity guard below.
  */
-const tNodeShape = t.Union([tCompare, tPredicate, tGroupWith(tLeaf)]);
+const tNodeShape = v.union([tCompare, tPredicate, tGroupWith(tLeaf)]);
 
 /**
  * Maximum group-nesting depth the route contract validates. The canonical
- * `@stll/conditions` AST is unbounded, but Elysia's exactMirror cannot build
- * a mirror for a `t.Recursive` schema: it throws per route, logs the whole
- * schema, and falls back to slow per-request serialization on every hot
- * filter route. A fixed finite nesting is exactMirror-safe and still
- * rejects malformed input, while being far deeper than any real filter tree
- * a builder UI produces.
+ * `@stll/conditions` AST is unbounded; a fixed finite nesting still rejects
+ * malformed input and bounds the tree one request can send, while being far
+ * deeper than any real filter tree a builder UI produces.
  */
 const MAX_CONDITION_DEPTH = 6;
 
-const buildBoundedNode = (): TSchema => {
-  let node: TSchema = tNodeShape;
+/**
+ * Route-contract schema. Validates with the bounded-depth structure built
+ * here but presents the canonical `ConditionNode` static type: a finite
+ * nesting otherwise leaks its depth into TypeScript inference, while the
+ * client always works with the unbounded `ConditionNode` shape. Every level
+ * is a `ConditionNode`, so the annotation holds without an assertion.
+ */
+const buildBoundedNode = (): v.GenericSchema<unknown, ConditionNode> => {
+  let node: v.GenericSchema<unknown, ConditionNode> = tNodeShape;
   for (let level = 1; level < MAX_CONDITION_DEPTH; level++) {
-    node = t.Union([tCompare, tPredicate, tGroupWith(node)]);
+    node = v.union([tCompare, tPredicate, tGroupWith(node)]);
   }
   return node;
 };
 
-const tConditionNodeBounded = buildBoundedNode();
-
-/**
- * Route-contract schema. Validates with the bounded-depth structure above
- * but presents the canonical `ConditionNode` static type to Eden: a finite
- * nesting otherwise leaks its depth into TypeScript inference, while the
- * client always works with the unbounded `ConditionNode` shape.
- */
-export const tConditionNode = Type.Unsafe<ConditionNode>(tConditionNodeBounded);
+export const tConditionNode = buildBoundedNode();
 
 /** Top-level condition: always the AND/OR root group. */
-export const tCondition = t.Object({
-  type: t.Literal("group"),
-  combinator: t.UnionEnum([...COMBINATORS]),
-  negated: t.Optional(t.Boolean()),
-  children: t.Array(tConditionNode, { maxItems: MAX_GROUP_CHILDREN }),
+export const tCondition = v.object({
+  type: v.literal("group"),
+  combinator: v.picklist([...COMBINATORS]),
+  negated: v.optional(v.boolean()),
+  children: v.pipe(v.array(tConditionNode), v.maxLength(MAX_GROUP_CHILDREN)),
 });
 
-// Fails typecheck if the TypeBox mirror admits a shape outside the canonical
-// AST. Depth bounding only restricts nesting (a strict subset of the canonical
+// Fails typecheck if the mirror admits a shape outside the canonical AST.
+// Depth bounding only restricts nesting (a strict subset of the canonical
 // tree), so checking one fully-formed level (leaf arms plus a group whose
 // children are nodes) covers every shape the mirror can admit. Operators and
 // fields can't drift; they're spread from the same package constants. The
-// reverse direction is intentionally omitted: TypeBox optionals drop
-// `| undefined` under exactOptionalPropertyTypes, so canonical->mirror would
-// false-positive without guarding anything the spreads don't already.
-true satisfies [Static<typeof tNodeShape>] extends [ConditionNode]
+// reverse direction is intentionally omitted: the canonical AST admits
+// operands the route contract does not (`formula`), so canonical->mirror
+// fails by design.
+true satisfies [v.InferOutput<typeof tNodeShape>] extends [ConditionNode]
   ? true
   : false;

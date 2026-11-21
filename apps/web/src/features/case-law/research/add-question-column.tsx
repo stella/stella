@@ -15,6 +15,8 @@ import {
   MenuSeparator,
   MenuTrigger,
 } from "@stll/ui/menu";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { PropertyIcon } from "@stll/workspace-ui/property-icon";
 
 import { ACCOUNT_GATE_OUTCOME } from "@/components/auth/require-account.logic";
@@ -125,6 +127,7 @@ export const AddQuestionColumn = ({
         <BulkAddColumns
           target={{
             kind: "organisation",
+            mode: { type: "add" },
             suggestion: action.surface.suggestion,
             onCreated: action.surface.onAddToSearch,
           }}
@@ -156,7 +159,11 @@ export const AddQuestionColumn = ({
               chooseOrganization();
             }
           }}
-          target={{ kind: "organisation", suggestion: action.suggestion }}
+          target={{
+            kind: "organisation",
+            mode: { type: "add" },
+            suggestion: action.suggestion,
+          }}
           triggerVariant={triggerVariant}
         />
       );
@@ -203,18 +210,25 @@ const PickQuestionColumn = ({
               {t("caseLaw.research.savedQuestions")}
             </MenuGroupLabel>
             {surface.addable.map((column) => (
-              <MenuItem
-                key={column.id}
-                onClick={() => surface.onAddToSearch([column.id])}
-              >
-                <PropertyIcon
-                  className="size-3.5 shrink-0"
-                  type={column.content.type}
-                />
-                <span className="min-w-0 truncate" title={column.question}>
-                  {column.question}
-                </span>
-              </MenuItem>
+              // The question truncates in the menu; the tooltip on the item
+              // gives it back in full, outside the item so its popup is not
+              // nested in the interactive row.
+              <Tooltip key={column.id}>
+                <TooltipTrigger
+                  render={
+                    <MenuItem
+                      onClick={() => surface.onAddToSearch([column.id])}
+                    />
+                  }
+                >
+                  <PropertyIcon
+                    className="size-3.5 shrink-0"
+                    type={column.content.type}
+                  />
+                  <TruncatedText hint={false}>{column.question}</TruncatedText>
+                </TooltipTrigger>
+                <TooltipPopup>{column.question}</TooltipPopup>
+              </Tooltip>
             ))}
           </MenuGroup>
         </MenuPopup>
@@ -229,6 +243,7 @@ const PickQuestionColumn = ({
           open
           target={{
             kind: "organisation",
+            mode: { type: "add" },
             suggestion: surface.suggestion,
             onCreated: surface.onAddToSearch,
           }}
@@ -264,13 +279,14 @@ const PickQuestionTrigger = ({
         <MenuTrigger
           aria-label={label}
           render={
-            <button
-              className="group/add-column-rail ring-ring focus-visible:ring-offset-background absolute inset-0 z-10 cursor-pointer border-0 bg-transparent p-0 outline-none focus-visible:ring-2 focus-visible:ring-offset-1"
+            <Button
+              className="group/add-column-rail absolute inset-0 z-10"
               data-add-property-trigger
               data-row-expansion-ignore
-              type="button"
+              variant="plain"
             />
           }
+          tooltip={label}
         >
           <PlusIcon className={ADD_COLUMN_RAIL_PLUS_CLASS_NAME} />
         </MenuTrigger>

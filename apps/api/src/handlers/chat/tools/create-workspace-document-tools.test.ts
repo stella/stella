@@ -4,11 +4,13 @@ import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import { docxToMarkdown } from "@stll/folio-core/server";
 
 import {
+  bufferObjectCleanupIntents,
   documentCounters,
   entities,
   entityVersions,
   fields,
   pendingUploads,
+  searchProjectionRepairQueue,
 } from "@/api/db/schema";
 import { envBase } from "@/api/env-base";
 import {
@@ -21,13 +23,23 @@ import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
 import type { CreateEntityFromBufferDependencies } from "@/api/lib/entities/create-from-buffer";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
 import { OrganizationFileUsageError } from "@/api/lib/files/organization-file-usage";
+import { enqueueEntitySearchRepairs } from "@/api/lib/search/projection-repair-queue";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 import { memberDocumentWriteAccess } from "@/api/tests/helpers/document-write-access";
 import { entityVersionInsertResult } from "@/api/tests/helpers/entity-version-insert-mock";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
-import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
+import {
+  createScopedDbMock,
+  createSelectQueryMock,
+} from "@/api/tests/scoped-db-mock";
+
+beforeEach(() => {
+  enqueueImageThumbnailOrMarkFailedMock.mockClear();
+  enqueuePdfDerivativeOrMarkFailedMock.mockClear();
+  processExtractionMock.mockClear();
+});
 
 const processExtractionMock = mock(async () => {});
 const enqueueImageThumbnailOrMarkFailedMock = mock(async () => {});
@@ -38,6 +50,8 @@ const createEntityDependencies = {
   enqueueImageThumbnailOrMarkFailed: enqueueImageThumbnailOrMarkFailedMock,
   enqueuePdfDerivativeOrMarkFailed: enqueuePdfDerivativeOrMarkFailedMock,
   processExtraction: processExtractionMock,
+  enqueueEntitySearchRepairs,
+  flushEntitySearchRepairs: async () => ({ failed: 0, repaired: 0 }),
   requestNativeExtractionRun: mock(async () => null),
 } satisfies CreateEntityFromBufferDependencies;
 
@@ -95,15 +109,27 @@ describe("createCreateWorkspaceDocumentTools", () => {
           findFirst: async () => ({ reference: null }),
         },
       },
+      execute: async () => [{ id: workspaceId }],
       $count: async () => 0,
-      select: () => ({
-        from: () => ({
-          where: () => ({
-            limit: () => ({ for: async () => [{ status: "active" }] }),
-          }),
-        }),
-      }),
+      select: (selection: Record<string, unknown>) =>
+        "sourceId" in selection
+          ? {
+              from: () => ({
+                innerJoin: () => ({
+                  where: async () => [{ organizationId, sourceId: "entity" }],
+                }),
+              }),
+            }
+          : createSelectQueryMock([{ status: "active" }]),
       insert: (table: unknown) => ({
+        select: (query: Promise<unknown>) => ({
+          onConflictDoUpdate: async () => {
+            if (table !== searchProjectionRepairQueue) {
+              throw new TypeError("Unexpected insert-select target");
+            }
+            await query;
+          },
+        }),
         values: (values: { id?: string; name?: string }) => {
           if (table === documentCounters) {
             return {
@@ -134,6 +160,14 @@ describe("createCreateWorkspaceDocumentTools", () => {
               ? { returning: async () => [{ id: "intent_1" }] }
               : undefined,
         }),
+      }),
+      delete: (table: unknown) => ({
+        where: async () => {
+          if (table !== bufferObjectCleanupIntents) {
+            throw new TypeError("Unexpected delete target");
+          }
+          return [];
+        },
       }),
     };
     return { tx, getInsertedFileName: () => insertedFileName };

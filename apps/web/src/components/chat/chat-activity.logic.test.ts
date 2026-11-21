@@ -2,13 +2,34 @@ import { describe, expect, test } from "bun:test";
 
 import {
   getChatToolActivityCategory,
-  getChatToolActivityState,
+  summarizeProcessRun,
+} from "@stll/api-contract/chat-tool-activity";
+import type { KnownChatToolName } from "@stll/api-contract/chat-tool-activity";
+
+import {
   getLatestCompletedResearchPartIndex,
   resolveChatActivityIndicatorState,
 } from "@/components/chat/chat-activity.logic";
-import type { ChatMessage } from "@/components/chat/chat-ui-tools";
+import { projectCanonicalChatUIMessages } from "@/components/chat/chat-ui-tools";
+import type { ChatMessage, ChatUITools } from "@/components/chat/chat-ui-tools";
+
+// Fixtures cross the same projection boundary the thread renders through.
+const projectParts = (parts: ChatMessage["parts"]) =>
+  projectCanonicalChatUIMessages([
+    { id: "message", parts, role: "assistant" },
+  ]).flatMap((message) => message.parts);
 
 describe("chat tool activity", () => {
+  test("knows every tool the web's messages carry", () => {
+    // Typecheck refuses this record while a registered tool has no shared
+    // kind and title, which would leave its steps reading "Unknown tool".
+    const unlabelled: Record<
+      Exclude<keyof ChatUITools, KnownChatToolName>,
+      true
+    > = {};
+    expect(Object.keys(unlabelled)).toEqual([]);
+  });
+
   test("classifies evidence gathering as research", () => {
     for (const toolName of [
       "web_search",
@@ -25,22 +46,19 @@ describe("chat tool activity", () => {
       "mcp__salvia__get_decision",
     ]) {
       expect(getChatToolActivityCategory(toolName)).toBe("research");
-      expect(getChatToolActivityState(toolName)).toBe("searching");
     }
   });
 
-  test("uses shaping only for artifact work", () => {
+  test("classifies artifact work apart from mutations", () => {
     for (const toolName of [
       "suggest_changes",
       "fill_template",
       "mcp__documents__draft_agreement",
     ]) {
       expect(getChatToolActivityCategory(toolName)).toBe("artifact");
-      expect(getChatToolActivityState(toolName)).toBe("shaping");
     }
 
     expect(getChatToolActivityCategory("save_matter")).toBe("mutation");
-    expect(getChatToolActivityState("save_matter")).toBe("working");
   });
 
   test("keeps a retired tool's category instead of the unknown fallback", () => {
@@ -51,10 +69,66 @@ describe("chat tool activity", () => {
     expect(getChatToolActivityCategory("compare_versions")).toBe("research");
   });
 
-  test("does not animate tools awaiting user input", () => {
+  test("classifies tools awaiting a person as user input", () => {
     expect(getChatToolActivityCategory("ask-user")).toBe("user-input");
-    expect(getChatToolActivityState("ask-user")).toBeNull();
-    expect(getChatToolActivityState("create-document")).toBeNull();
+    expect(getChatToolActivityCategory("create-document")).toBe("user-input");
+  });
+});
+
+describe("process summary", () => {
+  test("names landed work in plain phrases and leaves out failures, waits and reasoning", () => {
+    const parts = [
+      { type: "thinking" as const, content: "Check clause 11." },
+      {
+        type: "tool-call" as const,
+        id: "read",
+        name: "read_document" as const,
+        arguments: "{}",
+        input: {},
+        state: "complete" as const,
+        output: { text: "11.3 Aggregate liability" },
+      },
+      {
+        type: "tool-call" as const,
+        id: "read-failed",
+        name: "read_section" as const,
+        arguments: "{}",
+        input: {},
+        state: "complete" as const,
+        output: { error: "Renumbered" },
+      },
+      {
+        type: "tool-call" as const,
+        id: "still-running",
+        name: "web_search" as const,
+        arguments: "{}",
+        input: {},
+        state: "input-complete" as const,
+      },
+      {
+        type: "tool-call" as const,
+        id: "edit",
+        name: "suggest_changes" as const,
+        arguments: "{}",
+        input: {},
+        state: "complete" as const,
+        output: { success: true },
+      },
+      {
+        type: "tool-call" as const,
+        id: "ask",
+        name: "ask-user" as const,
+        arguments: "{}",
+        input: {},
+        state: "complete" as const,
+        output: { answers: [] },
+      },
+    ] satisfies ChatMessage["parts"];
+
+    expect(summarizeProcessRun(projectParts(parts), { stepCount: 5 })).toEqual([
+      { phrase: "readDocument", count: 1 },
+      { phrase: "documentEdits", count: 1 },
+    ]);
   });
 });
 
@@ -70,6 +144,7 @@ describe("thread activity", () => {
           id: "failed-search",
           name: "mcp__registry__lookup_company" as const,
           arguments: "{}",
+          input: {},
           state: "complete" as const,
           output: { error: "Unavailable" },
         },
@@ -78,6 +153,7 @@ describe("thread activity", () => {
           id: "successful-search",
           name: "web_search" as const,
           arguments: "{}",
+          input: {},
           state: "complete" as const,
           output: {
             jurisdiction: "global" as const,
@@ -107,6 +183,7 @@ describe("thread activity", () => {
               id: "failed-mcp-search",
               name: "mcp__registry__lookup_company" as const,
               arguments: "{}",
+              input: {},
               state: "complete" as const,
               output: { content: [], isError: true },
             },
@@ -149,5 +226,17 @@ describe("thread activity", () => {
         hasVisibleContent: true,
       }),
     ).toBeNull();
+  });
+});
+
+describe("tool names a model or a newer server sends", () => {
+  test("an inherited object name is categorized as the unknown tool it is", () => {
+    const unknown = getChatToolActivityCategory("no_such_tool");
+    for (const name of [
+      ...Object.getOwnPropertyNames(Object.prototype),
+      "__proto__",
+    ]) {
+      expect(getChatToolActivityCategory(name)).toBe(unknown);
+    }
   });
 });

@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 /**
  * Durable bilingual translation runs.
  *
@@ -11,18 +11,19 @@ import { Result } from "better-result";
  * One-shot semantics: `attempts: 1`. A retry would re-run metered model calls;
  * an abandoned run is flipped to `failed` by the reconciler instead.
  */
-import { Worker } from "bullmq";
 import { and, asc, eq, inArray, lt, or, sql } from "drizzle-orm";
 
-import { Temporal, DAY_IN_MS } from "@stll/time";
+import { chunk as chunkItems } from "@stll/concurrency/chunk";
+import type { PermissionInput } from "@stll/permissions";
+import { DAY_IN_MS, Temporal } from "@stll/time";
 
-import type { rootDb } from "@/api/db/root";
+import type { rootDb, Transaction } from "@/api/db/root";
 import {
   bilingualTranslationRows,
   bilingualTranslationRuns,
 } from "@/api/db/schema";
 import { loadOrgAISettings } from "@/api/lib/ai-config-loader";
-import { captureError } from "@/api/lib/analytics/capture";
+import { captureError, detached } from "@/api/lib/analytics/capture";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import { translateBatch } from "@/api/lib/bilingual/ai";
 import type {
@@ -42,10 +43,14 @@ import type { StoredRow } from "@/api/lib/bilingual/operations";
 import { checkTranslationConsistency } from "@/api/lib/bilingual/rows";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createBullMqJobId } from "@/api/lib/bullmq-job-id";
-import { createLazyBullMqQueue } from "@/api/lib/bullmq-queue";
+import { BullMqWorker, createLazyBullMqQueue } from "@/api/lib/bullmq-queue";
 import type { BullMqWorkerContext } from "@/api/lib/bullmq-queue";
 import type { RequeueableQueue } from "@/api/lib/bullmq-requeue";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
+import {
+  hasCurrentActiveWorkspaceMemberPermission,
+  requireCurrentActiveWorkspaceMemberPermission,
+} from "@/api/lib/db/member-authority";
 import { applyAiEditsToDocx } from "@/api/lib/docx-authoring/apply-ai-edits";
 import { createEntityVersionFromBuffer } from "@/api/lib/entity-versions/create-entity-version-from-buffer";
 import { loadEntityVersionDocxBuffer } from "@/api/lib/entity-versions/load-entity-version-file-buffer";
@@ -55,14 +60,19 @@ import { scanFile } from "@/api/lib/file-scan/scan";
 import { getScanWarnings } from "@/api/lib/file-scan/warnings";
 import { serverBuiltFileEncryption } from "@/api/lib/files/detect-file-encryption";
 import { startNonOverlappingInterval } from "@/api/lib/non-overlapping-interval";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { logger } from "@/api/lib/observability/logger";
 import {
+  MEMBER_RUN_AUTHORITY_REVOKED,
+  processClaimedMemberRun,
   RECONCILE_SCAN_PAGE_SIZE,
   reconcileCursorTimestamp,
   reconcileQueuedRuns,
 } from "@/api/lib/queue-reconcile-scan";
 import type { ReconcileScanResult } from "@/api/lib/queue-reconcile-scan";
 import { createQueueWorkerErrorLogger } from "@/api/lib/queue-worker-error-log";
+import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
+import { runBackgroundJob } from "@/api/lib/rate-limit/queued-action-admission";
 import { createBullMqConnection } from "@/api/lib/redis-client";
 import { createRootRunActor } from "@/api/lib/root-scoped-db";
 import type { RootRunActor } from "@/api/lib/root-scoped-db";
@@ -236,10 +246,22 @@ export const reconcileQueuedBilingualRuns = async ({
 };
 
 export const initBilingualRunWorker = ({ db }: BullMqWorkerContext) => {
-  const worker = new Worker<BilingualRunJobData>(
+  const worker = new BullMqWorker<BilingualRunJobData>(
     QUEUE_NAME,
     async (job) => {
-      await processBilingualRunJob(job.data);
+      const actor = brandActor(job.data);
+      // The run's period action was drawn when it was queued; the job takes
+      // a background slot. The run bounds its own time.
+      await runBackgroundJob({
+        actionKind: "bilingual.background",
+        organizationId: actor.organizationId,
+        userId: actor.userId,
+        organizationStateDb: actor.writeDb,
+        job,
+        signal: new AbortController().signal,
+        run: async (_signal, admission) =>
+          await processBilingualRun(actor, admission),
+      });
     },
     {
       connection: createBullMqConnection({
@@ -251,18 +273,34 @@ export const initBilingualRunWorker = ({ db }: BullMqWorkerContext) => {
 
   worker.on("failed", (job, error) => {
     if (job) {
-      setRunFailed(brandActor(job.data), "internal").catch(
-        (markError: unknown) => {
-          captureError(markError, {
-            runId: job.data.runId,
-            workspaceId: job.data.workspaceId,
-          });
-        },
+      detached(
+        async () =>
+          setRunFailed(brandActor(job.data), "internal").catch(
+            (markError: unknown) => {
+              captureError(
+                markError,
+                handlerErrorContext(
+                  "bilingual.initBilingualRunWorker.markError",
+                  {
+                    runId: job.data.runId,
+                    workspaceId: job.data.workspaceId,
+                  },
+                ),
+              );
+            },
+          ),
+        "bilingual-run.set-run-failed",
       );
     }
     const runId = job ? job.data.runId : "";
     const workspaceId = job ? job.data.workspaceId : "";
-    captureError(error, { runId, workspaceId });
+    captureError(
+      error,
+      handlerErrorContext("bilingual.initBilingualRunWorker", {
+        runId,
+        workspaceId,
+      }),
+    );
     logger.error("bilingual_run.failed", {
       runId,
       "error.type": errorTag(error),
@@ -286,7 +324,12 @@ export const initBilingualRunWorker = ({ db }: BullMqWorkerContext) => {
       }
     },
     onError: (error) => {
-      captureError(error, { operation: "bilingual_run.reconcile" });
+      captureError(
+        error,
+        handlerErrorContext("bilingual.closeReconcile", {
+          operation: "bilingual_run.reconcile",
+        }),
+      );
     },
   });
 
@@ -310,6 +353,36 @@ export const initBilingualRunWorker = ({ db }: BullMqWorkerContext) => {
 type BilingualRunActor = RootRunActor<"bilingualTranslationRun">;
 type RunActor = BilingualRunActor;
 
+const BILINGUAL_RUN_PERMISSIONS = {
+  entity: ["create"],
+} as const satisfies PermissionInput;
+
+const requireRunAuthority = async (
+  actor: RunActor,
+  tx: Transaction,
+): Promise<void> => {
+  await requireCurrentActiveWorkspaceMemberPermission({
+    db: tx,
+    organizationId: actor.organizationId,
+    userId: actor.userId,
+    workspaceId: actor.workspaceId,
+    permissions: BILINGUAL_RUN_PERMISSIONS,
+  });
+};
+
+const authorizedWrite = async <T>(
+  actor: RunActor,
+  write: (tx: Transaction) => T | Promise<T>,
+): Promise<T> =>
+  await actor.writeDb(async (tx) => {
+    await requireRunAuthority(actor, tx);
+    return await write(tx);
+  });
+
+const authorizeModelDispatch = async (actor: RunActor): Promise<void> => {
+  await authorizedWrite(actor, () => undefined);
+};
+
 const brandActor = (data: BilingualRunJobData): RunActor =>
   createRootRunActor(data, brandPersistedBilingualTranslationRunId);
 
@@ -323,7 +396,9 @@ type ClaimedRun = {
 };
 
 /** Conditional `queued -> running` claim; a second delivery updates zero rows. */
-const claimRun = async (actor: RunActor): Promise<ClaimedRun | null> => {
+const claimRun = async (
+  actor: RunActor,
+): Promise<ClaimedRun | typeof MEMBER_RUN_AUTHORITY_REVOKED | null> => {
   const claimed = await actor.writeDb(async (tx) => {
     // audit: skip — lifecycle bookkeeping on the run row audited at create.
     const rows = await tx
@@ -344,37 +419,36 @@ const claimRun = async (actor: RunActor): Promise<ClaimedRun | null> => {
         targetLang: bilingualTranslationRuns.targetLang,
         glossary: bilingualTranslationRuns.glossary,
       });
-    return rows.at(0);
+    const row = rows.at(0);
+    if (!row) {
+      return null;
+    }
+    const authorized = await hasCurrentActiveWorkspaceMemberPermission({
+      db: tx,
+      organizationId: actor.organizationId,
+      userId: actor.userId,
+      workspaceId: actor.workspaceId,
+      permissions: BILINGUAL_RUN_PERMISSIONS,
+    });
+    if (authorized) {
+      return row;
+    }
+    return MEMBER_RUN_AUTHORITY_REVOKED;
   });
   return claimed ?? null;
 };
 
-const processBilingualRunJob = async (
-  data: BilingualRunJobData,
+export const processBilingualRun = async (
+  actor: RunActor,
+  admission: ModelDispatchAdmission,
 ): Promise<void> => {
-  await processBilingualRun(brandActor(data));
-};
-
-export const processBilingualRun = async (actor: RunActor): Promise<void> => {
-  const claimed = await claimRun(actor);
-  if (claimed === null) {
-    return;
-  }
-  const outcome = await Result.tryPromise({
-    try: async () => await executeRun(actor, claimed),
-    catch: (cause) => cause,
+  await processClaimedMemberRun({
+    actor,
+    claim: claimRun,
+    execute: async (run) => await executeRun({ actor, admission, run }),
+    internalErrorCode: "internal",
+    setFailed: setRunFailed,
   });
-  if (Result.isError(outcome)) {
-    captureError(outcome.error, {
-      runId: actor.runId,
-      workspaceId: actor.workspaceId,
-    });
-    await setRunFailed(actor, "internal");
-    return;
-  }
-  if (outcome.value !== null) {
-    await setRunFailed(actor, outcome.value);
-  }
 };
 
 const loadRows = async (actor: RunActor): Promise<StoredRow[]> => {
@@ -406,10 +480,15 @@ const loadRows = async (actor: RunActor): Promise<StoredRow[]> => {
 const needsTranslation = (row: StoredRow): boolean =>
   row.disposition !== BILINGUAL_ROW_DISPOSITION.KEEP;
 
-const executeRun = async (
-  actor: RunActor,
-  run: ClaimedRun,
-): Promise<BilingualRunErrorCode | null> => {
+const executeRun = async ({
+  actor,
+  admission,
+  run,
+}: {
+  actor: RunActor;
+  admission: ModelDispatchAdmission;
+  run: ClaimedRun;
+}): Promise<BilingualRunErrorCode | null> => {
   const loaded = await loadEntityVersionDocxBuffer({
     safeDb: actor.inputSafeDb,
     organizationId: actor.organizationId,
@@ -427,20 +506,27 @@ const executeRun = async (
   const config = Result.flatten(
     await Result.tryPromise({
       try: async () =>
-        await actor.writeDb(async (tx) => await loadOrgAISettings(tx, actor)),
+        await authorizedWrite(
+          actor,
+          async (tx) => await loadOrgAISettings(tx, actor),
+        ),
       catch: (cause) => cause,
     }),
   );
   if (Result.isError(config)) {
-    captureError(config.error, {
-      runId: actor.runId,
-      workspaceId: actor.workspaceId,
-    });
+    captureError(
+      config.error,
+      handlerErrorContext("bilingual.executeRun.config_error", {
+        runId: actor.runId,
+        workspaceId: actor.workspaceId,
+      }),
+    );
     return "ai_unavailable";
   }
 
   const rows = await loadRows(actor);
   const context: BilingualAIDocumentContext = {
+    admission,
     organizationId: actor.organizationId,
     workspaceId: actor.workspaceId,
     orgAIConfig: config.value.orgAIConfig,
@@ -476,10 +562,15 @@ const executeRun = async (
   // Batches run strictly one after another: each carries the previous rows'
   // translations as context, and one request in flight per run keeps the
   // metered spend predictable.
-  const translateFrom = async (
-    index: number,
-  ): Promise<BilingualRunErrorCode | null> => {
-    const batch = pending.slice(index, index + BILINGUAL_LIMITS.batchSize);
+  const itemBatches = chunkItems(pending, BILINGUAL_LIMITS.batchSize)[
+    Symbol.iterator
+  ]();
+  const translateFrom = async (): Promise<BilingualRunErrorCode | null> => {
+    const nextBatch = itemBatches.next();
+    if (nextBatch.done) {
+      return null;
+    }
+    const batch = nextBatch.value;
     const first = batch[0];
     if (!first) {
       return null;
@@ -493,19 +584,24 @@ const executeRun = async (
       }));
 
     const result = await Result.tryPromise({
-      try: async () =>
-        await translateBatch(
+      try: async () => {
+        await authorizeModelDispatch(actor);
+        return await translateBatch(
           { batch, preceding, glossary: run.glossary },
           languages,
           context,
-        ),
+        );
+      },
       catch: (cause) => cause,
     });
     if (Result.isError(result)) {
-      captureError(result.error, {
-        runId: actor.runId,
-        workspaceId: actor.workspaceId,
-      });
+      captureError(
+        result.error,
+        handlerErrorContext("bilingual.translateFrom.result_error", {
+          runId: actor.runId,
+          workspaceId: actor.workspaceId,
+        }),
+      );
       return "translation_failed";
     }
 
@@ -531,7 +627,7 @@ const executeRun = async (
         }),
       };
     });
-    await actor.writeDb(async (tx) => {
+    await authorizedWrite(actor, async (tx) => {
       // audit: skip — row bookkeeping inside a run audited at create.
       // One statement for the whole batch: a VALUES list joined on row_id.
       const values = sql.join(
@@ -559,9 +655,9 @@ const executeRun = async (
         })
         .where(eq(bilingualTranslationRuns.id, actor.runId));
     });
-    return await translateFrom(index + BILINGUAL_LIMITS.batchSize);
+    return await translateFrom();
   };
-  const translationOutcome = await translateFrom(0);
+  const translationOutcome = await translateFrom();
   if (translationOutcome !== null) {
     return translationOutcome;
   }
@@ -578,10 +674,13 @@ const executeRun = async (
   const operations = buildOperations(rows, translated);
   const applied = await applyAiEditsToDocx(loaded.value.scanned, operations);
   if (Result.isError(applied)) {
-    captureError(applied.error, {
-      runId: actor.runId,
-      workspaceId: actor.workspaceId,
-    });
+    captureError(
+      applied.error,
+      handlerErrorContext("bilingual.executeRun.applied_error", {
+        runId: actor.runId,
+        workspaceId: actor.workspaceId,
+      }),
+    );
     return "apply_failed";
   }
   if (applied.value.skipped.length > 0) {
@@ -594,10 +693,13 @@ const executeRun = async (
 
   const validation = await validateDocxBuffer(applied.value.buffer);
   if (!validation.valid) {
-    captureError(new Error(validation.error), {
-      runId: actor.runId,
-      workspaceId: actor.workspaceId,
-    });
+    captureError(
+      new Error(validation.error),
+      handlerErrorContext("bilingual.executeRun", {
+        runId: actor.runId,
+        workspaceId: actor.workspaceId,
+      }),
+    );
     return "apply_failed";
   }
   const scanResult = await scanFile({
@@ -609,6 +711,7 @@ const executeRun = async (
     return "apply_failed";
   }
 
+  await authorizeModelDispatch(actor);
   const written = await createEntityVersionFromBuffer({
     safeDb: actor.writeSafeDb,
     organizationId: actor.organizationId,
@@ -647,26 +750,45 @@ const executeRun = async (
       replacedFileFieldId: run.fileFieldId,
     },
     scanWarnings: getScanWarnings(scanResult.value) ?? undefined,
+    authority: {
+      type: "current-member",
+      authorize: async (tx) => {
+        await requireRunAuthority(actor, tx);
+      },
+    },
+    afterWrite: async (tx, writtenOutput) => {
+      // audit: skip — completion bookkeeping committed atomically with the
+      // audited version, preventing a completed file with a stuck run.
+      const completed = await tx
+        .update(bilingualTranslationRuns)
+        .set({
+          status: "completed",
+          finishedAt: new Date(),
+          outputEntityVersionId: writtenOutput.entityVersionId,
+        })
+        .where(
+          and(
+            eq(bilingualTranslationRuns.id, actor.runId),
+            eq(bilingualTranslationRuns.status, "running"),
+          ),
+        )
+        .returning({ id: bilingualTranslationRuns.id });
+      if (!completed.at(0)) {
+        panic("Bilingual translation completion returned no run");
+      }
+    },
   });
   if (Result.isError(written)) {
-    captureError(written.error, {
-      runId: actor.runId,
-      workspaceId: actor.workspaceId,
-    });
+    captureError(
+      written.error,
+      handlerErrorContext("bilingual.executeRun.written_error", {
+        runId: actor.runId,
+        workspaceId: actor.workspaceId,
+      }),
+    );
     return "apply_failed";
   }
 
-  await actor.writeDb(async (tx) => {
-    // audit: skip — completion bookkeeping on the run row audited at create.
-    await tx
-      .update(bilingualTranslationRuns)
-      .set({
-        status: "completed",
-        finishedAt: new Date(),
-        outputEntityVersionId: written.value.entityVersionId,
-      })
-      .where(eq(bilingualTranslationRuns.id, actor.runId));
-  });
   return null;
 };
 

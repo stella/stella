@@ -1,0 +1,4 @@
+{
+  "add-column": "The stance and doctrine text-revision columns are nullable and default-free, catalog-only additions without rewriting review rows, under 1s lock_timeout and 5s statement_timeout.",
+  "add-constraint": "The two SHA-256 revision CHECKs are added NOT VALID without scanning existing stance or doctrine reviews, under 1s lock_timeout and 5s statement_timeout; the registered online-DDL owner validates them after the schema lock is released."
+}

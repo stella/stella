@@ -2,7 +2,7 @@ import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
 import { normalizeStringList } from "./string-list";
 
@@ -23,40 +23,44 @@ const isJsonStringArray = (text: string): boolean => {
 
 describe("lists of strings", () => {
   test("an array of strings round-trips unchanged with nothing to report", () => {
-    fc.assert(
+    assertProperty(
+      "an array of strings round-trips unchanged with nothing to report",
       fc.property(fc.array(fc.string()), splitArb, (items, split) => {
         expect(normalizeStringList(items, { split })).toEqual({
           ok: true,
           value: items,
         });
       }),
-      propertyConfig({ numRuns: 200 }),
+      { numRuns: 200 },
     );
   });
 
   test("an array's JSON reads back as the array in either mode", () => {
-    fc.assert(
+    assertProperty(
+      "an array's JSON reads back as the array in either mode",
       fc.property(fc.array(fc.string()), splitArb, (items, split) => {
         const result = normalizeStringList(JSON.stringify(items), { split });
         expect(result.ok && result.value).toEqual(items);
       }),
-      propertyConfig({ numRuns: 200 }),
+      { numRuns: 200 },
     );
   });
 
   test("free text is always one item, whatever it contains", () => {
-    fc.assert(
+    assertProperty(
+      "free text is always one item, whatever it contains",
       fc.property(fc.string(), (text) => {
         fc.pre(!isJsonStringArray(text));
         const result = normalizeStringList(text, { split: "never" });
         expect(result.ok && result.value).toEqual([text]);
       }),
-      propertyConfig({ numRuns: 300 }),
+      { numRuns: 300 },
     );
   });
 
   test("delimited tokens read back as the tokens", () => {
-    fc.assert(
+    assertProperty(
+      "delimited tokens read back as the tokens",
       fc.property(
         fc.array(fc.stringMatching(/^[^\s,;[][^,;\r\n]*[^\s,;]$|^[^\s,;[]$/u), {
           minLength: 1,
@@ -69,7 +73,7 @@ describe("lists of strings", () => {
           expect(result.ok && result.value).toEqual(tokens);
         },
       ),
-      propertyConfig({ numRuns: 300 }),
+      { numRuns: 300 },
     );
   });
 });

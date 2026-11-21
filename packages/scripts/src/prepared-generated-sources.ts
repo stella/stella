@@ -1,0 +1,331 @@
+import { panic, Result } from "better-result";
+import {
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import path from "node:path";
+import * as v from "valibot";
+
+import { createSha256, sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
+
+import { ciGeneratedFiles } from "./generated-file-inventory";
+import { CI_GENERATED_DIRECTORIES } from "./generated-files";
+import {
+  generatedInputGit,
+  generatedInputTreeHash,
+} from "./generated-input-identity";
+
+const hashSchema = v.pipe(v.string(), v.regex(/^[a-f0-9]{64}$/u));
+const preparedManifestSchema = v.strictObject({
+  sourceSha: v.pipe(v.string(), v.regex(/^[a-f0-9]{40}$/u)),
+  inputHash: hashSchema,
+  bunVersion: v.string(),
+  compilerVersion: v.string(),
+  files: v.record(v.string(), hashSchema),
+});
+
+export const generatedFileHash = (bytes: Uint8Array | string) =>
+  hashSha256Hex(bytes);
+
+// Generators use both compiler APIs and the shared syntax parser.
+const GENERATOR_COMPILERS = ["typescript6", "tsrs", "oxc-parser"] as const;
+
+const installedVersion = (root: string, name: string) =>
+  v.parse(
+    v.object({ version: v.string() }),
+    JSON.parse(
+      readFileSync(
+        path.join(root, "node_modules", name, "package.json"),
+        "utf-8",
+      ),
+    ),
+  ).version;
+
+export const generatedInputIdentity = (root: string) => {
+  const compiler = {
+    version: GENERATOR_COMPILERS.map(
+      (name) => `${name}@${installedVersion(root, name)}`,
+    ).join(" "),
+  };
+  return {
+    sourceSha: generatedInputGit({
+      root,
+      args: ["rev-parse", "HEAD"],
+      onFailure: panic,
+    }).trim(),
+    inputHash: generatedInputTreeHash({
+      root,
+      toolchain: { bun: Bun.version, compiler: compiler.version },
+      generatedOutputs: "exclude",
+      createHasher: createSha256,
+      hashFile: generatedFileHash,
+      onFailure: panic,
+    }),
+    bunVersion: Bun.version,
+    compilerVersion: compiler.version,
+  };
+};
+
+type TrackedInputHashOptions = {
+  excluded: ReadonlySet<string>;
+  context: unknown;
+};
+
+export const trackedInputHash = (
+  root: string,
+  { excluded, context }: TrackedInputHashOptions,
+) =>
+  generatedInputTreeHash({
+    root,
+    toolchain: context,
+    generatedOutputs: "exclude",
+    excluded,
+    createHasher: createSha256,
+    hashFile: generatedFileHash,
+    onFailure: panic,
+  });
+
+const resultManifestSchema = v.strictObject({
+  inputHash: hashSchema,
+  runId: v.pipe(v.string(), v.regex(/^[1-9][0-9]*$/u)),
+  event: v.literal("merge_group"),
+  conclusion: v.literal("success"),
+});
+
+// Result receipts use the same content-addressed artifact manifests as prepared
+// sources, but have no generated outputs to restore.
+export const reusableResultRun = (
+  raw: unknown,
+  inputHash: string,
+  event: string,
+) => {
+  if (event === "merge_group") {
+    return undefined;
+  }
+  const parsed = v.safeParse(resultManifestSchema, raw);
+  return parsed.success && parsed.output.inputHash === inputHash
+    ? parsed.output.runId
+    : undefined;
+};
+
+export const requireUnchangedGeneratedInputs = (
+  root: string,
+  before: ReturnType<typeof generatedInputIdentity>,
+) => {
+  const after = generatedInputIdentity(root);
+  if (
+    before.sourceSha !== after.sourceSha ||
+    before.inputHash !== after.inputHash ||
+    before.bunVersion !== after.bunVersion ||
+    before.compilerVersion !== after.compilerVersion
+  ) {
+    panic(
+      "Generation changed tracked source inputs; only canonical outputs may change during preparation",
+    );
+  }
+};
+
+/** A file a generated directory may hold; the pattern admits no path. */
+const isGeneratedDirectoryFile = (file: string) =>
+  CI_GENERATED_DIRECTORIES.some(
+    ({ directory, file: pattern }) =>
+      file.startsWith(`${directory}/`) &&
+      pattern.test(file.slice(directory.length + 1)),
+  );
+
+const preparedDirectoryFiles = (files: readonly string[], directory: string) =>
+  files.filter(
+    (file) =>
+      file.startsWith(`${directory}/`) && isGeneratedDirectoryFile(file),
+  );
+
+/** Every file in a generated directory, as manifest paths, for the producer. */
+export const generatedDirectoryFiles = (root: string) =>
+  CI_GENERATED_DIRECTORIES.flatMap(({ directory, file }) =>
+    readdirSync(path.join(root, directory))
+      .filter((name) => file.test(name))
+      .map((name) => `${directory}/${name}`),
+  ).toSorted();
+
+type ValidatePreparedManifestOptions = {
+  root: string;
+  raw: unknown;
+  generatedRoot?: string;
+};
+
+export const validatePreparedManifest = ({
+  root,
+  raw,
+  generatedRoot = root,
+}: ValidatePreparedManifestOptions) => {
+  const manifest = v.parse(preparedManifestSchema, raw);
+  const expected = generatedInputIdentity(root);
+  if (
+    manifest.sourceSha !== expected.sourceSha ||
+    manifest.inputHash !== expected.inputHash ||
+    manifest.bunVersion !== expected.bunVersion ||
+    manifest.compilerVersion !== expected.compilerVersion
+  ) {
+    panic("Generated source artifact does not match this source and toolchain");
+  }
+  const inventory = new Set(ciGeneratedFiles(root, { generatedRoot }));
+  const names = Object.keys(manifest.files);
+  if (
+    [...inventory].some((file) => !Object.hasOwn(manifest.files, file)) ||
+    names.some(
+      (file) => !inventory.has(file) && !isGeneratedDirectoryFile(file),
+    ) ||
+    CI_GENERATED_DIRECTORIES.some(
+      ({ directory }) => preparedDirectoryFiles(names, directory).length === 0,
+    )
+  ) {
+    panic("Generated source artifact has an incomplete output inventory");
+  }
+  return manifest;
+};
+
+export const preparedManifestPath = (root: string) =>
+  path.join(root, ".cache/ci-generated-sources/manifest.json");
+
+export const verifyPreparedGeneratedFiles = (root: string, raw: unknown) => {
+  const manifest = validatePreparedManifest({ root, raw });
+  for (const file of ciGeneratedFiles(root)) {
+    if (
+      generatedFileHash(readFileSync(path.join(root, file))) !==
+      manifest.files[file]
+    ) {
+      panic(`Prepared generated source differs: ${file}`);
+    }
+  }
+  return manifest;
+};
+
+/**
+ * The producer's bytes of one generated file, when this checkout's prepared
+ * manifest belongs to the current source and toolchain and the file on disk
+ * still has the bytes the producer recorded; otherwise undefined, never an
+ * error. Unlike hasPreparedGeneratedSources it ignores
+ * CI_GENERATED_SOURCES_MANIFEST, which regeneration guards clear for the rest
+ * of their job: it answers only whether an independent printout is on disk.
+ */
+export const preparedGeneratedFile = (
+  root: string,
+  file: string,
+): Uint8Array | undefined => {
+  const raw = Result.try((): unknown =>
+    JSON.parse(readFileSync(preparedManifestPath(root), "utf-8")),
+  );
+  if (Result.isError(raw)) {
+    return undefined;
+  }
+  const manifest = v.safeParse(preparedManifestSchema, raw.value);
+  if (!manifest.success) {
+    return undefined;
+  }
+  const expected = generatedInputIdentity(root);
+  const recorded = manifest.output.files[file];
+  if (
+    recorded === undefined ||
+    manifest.output.sourceSha !== expected.sourceSha ||
+    manifest.output.inputHash !== expected.inputHash ||
+    manifest.output.bunVersion !== expected.bunVersion ||
+    manifest.output.compilerVersion !== expected.compilerVersion
+  ) {
+    return undefined;
+  }
+  const bytes = Result.try(() => readFileSync(path.join(root, file)));
+  return Result.isOk(bytes) && generatedFileHash(bytes.value) === recorded
+    ? bytes.value
+    : undefined;
+};
+
+export const hasPreparedGeneratedSources = (root: string) => {
+  const configured = process.env["CI_GENERATED_SOURCES_MANIFEST"];
+  if (configured === undefined || configured === "") {
+    return false;
+  }
+  if (configured !== preparedManifestPath(root)) {
+    panic("Generated source manifest must belong to this checkout");
+  }
+  verifyPreparedGeneratedFiles(
+    root,
+    JSON.parse(readFileSync(configured, "utf-8")),
+  );
+  return true;
+};
+
+/**
+ * Whether this checkout holds the producer's files of a generated directory,
+ * so its generator has nothing to do: false where no prepared sources are
+ * configured. Prepared files that differ from the producer's are a defect,
+ * not a reason to generate again beside the checks that read them.
+ */
+export const hasPreparedGeneratedDirectory = (
+  root: string,
+  directory: (typeof CI_GENERATED_DIRECTORIES)[number]["directory"],
+) => {
+  if (!hasPreparedGeneratedSources(root)) {
+    return false;
+  }
+  const manifest = validatePreparedManifest({
+    root,
+    raw: JSON.parse(readFileSync(preparedManifestPath(root), "utf-8")),
+  });
+  const recorded = preparedDirectoryFiles(
+    Object.keys(manifest.files),
+    directory,
+  );
+  // A missing directory holds none of the recorded files, which fail below.
+  const names = Result.try(() => readdirSync(path.join(root, directory)));
+  const present = (Result.isOk(names) ? names.value : [])
+    .map((name) => `${directory}/${name}`)
+    .filter(isGeneratedDirectoryFile);
+  for (const file of new Set([...recorded, ...present])) {
+    const bytes = Result.try(() => readFileSync(path.join(root, file)));
+    if (
+      !Object.hasOwn(manifest.files, file) ||
+      Result.isError(bytes) ||
+      generatedFileHash(bytes.value) !== manifest.files[file]
+    ) {
+      panic(`Prepared generated source differs: ${file}`);
+    }
+  }
+  return true;
+};
+
+export const restorePreparedGeneratedSources = (
+  root: string,
+  source: string,
+) => {
+  const generatedRoot = path.join(source, "files");
+  const manifest = validatePreparedManifest({
+    root,
+    raw: JSON.parse(readFileSync(path.join(source, "manifest.json"), "utf-8")),
+    generatedRoot,
+  });
+  // Validate every byte before writing any output; only the canonical inventory
+  // and generated-directory file names can name a destination in the checkout.
+  const files = Object.keys(manifest.files).map((file) => {
+    const bytes = readFileSync(path.join(source, "files", file));
+    if (generatedFileHash(bytes) !== manifest.files[file]) {
+      panic(`Generated source artifact differs: ${file}`);
+    }
+    return { file, bytes };
+  });
+  // A restored directory holds exactly the producer's files: an older file left
+  // here would read as a prepared file that differs.
+  for (const { directory } of CI_GENERATED_DIRECTORIES) {
+    rmSync(path.join(root, directory), { recursive: true, force: true });
+  }
+  for (const { file, bytes } of files) {
+    const destination = path.join(root, file);
+    mkdirSync(path.dirname(destination), { recursive: true });
+    writeFileSync(destination, bytes);
+  }
+  const destination = preparedManifestPath(root);
+  mkdirSync(path.dirname(destination), { recursive: true });
+  writeFileSync(destination, JSON.stringify(manifest));
+};

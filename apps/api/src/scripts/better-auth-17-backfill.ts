@@ -8,11 +8,11 @@
  */
 
 import { Result, TaggedError } from "better-result";
-import { SQL } from "bun";
+import type { SQL } from "bun";
 import { sql } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/bun-sql";
 
 import { hasSecureDatabaseTransport, resolveDatabaseUrl } from "@/api/db-url";
+import { createDatabase, createSqlClient } from "@/api/db/sql-client";
 import {
   buildBetterAuthOAuthResources,
   normalizeBetterAuthOAuthBaseUrl,
@@ -30,7 +30,7 @@ import {
   type BetterAuthAuditCommandError,
   readBetterAuthAuditBaseline,
   readBetterAuthTrustedIdentityMap,
-} from "@/api/scripts/better-auth-migration-audit";
+} from "@/api/scripts/better-auth-migration-audit-command";
 import {
   BETTER_AUTH_AUDIT_MODES,
   BetterAuthAuditError,
@@ -156,7 +156,7 @@ const executeBackfill = async ({
   expectedOAuthResources: readonly BetterAuthExpectedOAuthResource[];
   trustedIdentityMap: BetterAuthTrustedIdentityMap;
 }) => {
-  const database = drizzle({ client });
+  const database = createDatabase({ client });
   const executed = await Result.tryPromise({
     try: async () =>
       await database.transaction(async (transaction) => {
@@ -290,7 +290,7 @@ const run = async (
       }),
     );
   }
-  const client = new SQL({ max: 1, url: databaseUrl });
+  const client = createSqlClient({ max: 1, url: databaseUrl });
   const result = await executeBackfill({
     baseline: baseline.value,
     batchSize: parsed.value.batchSize,

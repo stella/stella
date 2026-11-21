@@ -7,18 +7,20 @@ import {
   PL_ADMINISTRATIVE_SEATED_DOCKET_SOURCE,
   PL_ADMINISTRATIVE_SEATLESS_DOCKET_SOURCE,
   PL_AUTHORITY_FILE_NUMBER_SOURCE,
-  PL_UOKIK_CITED_DECISION_NUMBER_SOURCE,
   PL_KIO_DOCKET_SOURCE,
   PL_TK_DISTINCTIVE_DOCKET_SOURCE,
   PL_TK_DOCKET_SOURCE,
+  PL_UOKIK_CITED_DECISION_NUMBER_SOURCE,
   polishAdministrativeDocketOf,
   polishConstitutionalDocketKey,
   polishKioDocketKey,
 } from "@stll/api-contract/decision-docket-grammar";
 import {
-  canonicalUsReporterCitation,
-  readsUsReporterCitations,
-} from "@stll/api-contract/us-reporter-citation";
+  CZ_NSS_REPORTER_SOURCE,
+  czechConstitutionalDesignation,
+  decisionReporterGrammarForJurisdiction,
+} from "@stll/api-contract/decision-reporter-grammar";
+import { readsUsReporterCitations } from "@stll/api-contract/us-reporter-citation";
 import {
   CZ_FILE_NUMBER_PREFIX_SOURCE,
   stripCitationPrefix,
@@ -35,6 +37,8 @@ import type {
   DecisionIdentifierType,
   DecisionPrimaryReferenceType,
 } from "@stll/legal-ast/decision-identifier";
+import type { DocumentAst } from "@stll/legal-ast/document-ast";
+import { normalizeUnicode } from "@stll/text-normalize";
 
 import { detectCitationCourtHint } from "@/api/handlers/case-law/citation-court-hint";
 import { detectCitationDecisionDate } from "@/api/handlers/case-law/citation-decision-date";
@@ -48,6 +52,7 @@ import {
   type CitationScopesRejectedError,
   indexCitationScopes,
 } from "@/api/handlers/case-law/ingestion/citation-scopes";
+import { readCjeuCitationGroups } from "@/api/handlers/case-law/ingestion/cjeu-citation-groups";
 import { extractUsCitations } from "@/api/handlers/case-law/ingestion/us-citation-occurrences";
 import type {
   UsCitationDiagnostics,
@@ -55,7 +60,10 @@ import type {
   UsCitationRejection,
   UsCitedDecision,
 } from "@/api/handlers/case-law/ingestion/us-citation-occurrences";
-import type { DocumentAst } from "@/api/lib/case-law/document-ast";
+import {
+  boundedCitationKey,
+  fitsCitationStorageField,
+} from "@/api/lib/case-law/citation-storage-bounds";
 import {
   UNPERSISTABLE_DECISION_FIELDS,
   UnpersistableDecisionFieldError,
@@ -88,7 +96,8 @@ export type ExtractedCitation = {
    * where a sentence names one decision twice over — by docket and by
    * collection number. There the entry anchors on the docket the reader sees
    * and takes its identity from the collection number, which names exactly
-   * one decision where a docket may name a file's worth.
+   * one decision where a docket may name a file's worth. A docket printed
+   * with its sheet names one decision too, and keeps its own identity.
    */
   identifierValue: string;
   /**
@@ -198,7 +207,7 @@ const CASE_NUMBER_BODY_COMMA = String.raw`(?<caseNumber>\d{1,3}\s{0,3}\p{L}{1,6}
 // (a dropped diacritic, likely an encoding fallback) is the same class.
 const US_MARK_SOURCE = String.raw`[ÚU]\p{Mn}*S`;
 
-const CZECH_REPORTER_CITATION_SOURCE = String.raw`[čc]\.\s*\d{1,5}\/\d{4}\s+Sb\.\s*(?:rozh\.\s*(?:tr|ob)\.?|NSS|NS)`;
+export const CZECH_REPORTER_CITATION_SOURCE = String.raw`(?:${CZ_NSS_REPORTER_SOURCE}|[čc]\.\s*\d{1,5}\/\d{4}\s+Sb\.\s*(?:rozh\.\s*(?:tr|ob)\.?|NS(?![\p{L}\d])))`;
 
 const CZECH_REPORTER_CITATION_RE = new RegExp(
   `^${CZECH_REPORTER_CITATION_SOURCE}$`,
@@ -228,7 +237,7 @@ const CZ_US_GAZETTE_LEAD_SOURCE = String.raw`(?<!\p{L})[Nn]ález(?:u|em|y|ů|ům
  * the form the court cites it: `N 53/26 SbNU 73` is nález 53 of volume 26,
  * printed on page 73 (`U` for an usnesení).
  */
-const CZ_US_REPORT_SOURCE = String.raw`(?<![\p{L}\p{N}])[NU]\s?\d{1,4}\/\d{1,3}\s+SbNU(?:\s+\d{1,4})?(?![\p{L}\p{N}])`;
+export const CZ_US_REPORT_SOURCE = String.raw`(?<![\p{L}\p{N}])[NU]\s?\d{1,4}\/\d{1,3}\s+SbNU(?:\s+\d{1,4})?(?![\p{L}\p{N}])`;
 
 /**
  * The same entry in the older spelled-out form, where the kind is written as
@@ -238,46 +247,6 @@ const CZ_US_REPORT_SOURCE = String.raw`(?<![\p{L}\p{N}])[NU]\s?\d{1,4}\/\d{1,3}\
  * counts in.
  */
 const CZ_US_REPORT_VOLUME_SOURCE = String.raw`(?:Sbír(?:ka|ky|ce|ku)\s+nálezů\s+a\s+usnesení(?:\s+(?:Ústavního\s+soudu|${US_MARK_SOURCE}))?\s*,?\s*)?(?:svaz(?:ek|ku)|sv\.)\s*\d{1,3}\s*,\s*(?:nález|usnesení)\s+[čc]\.\s*\d{1,4}(?!\d)`;
-
-const CZ_US_GAZETTE_RE = /^(?<number>\d{1,4})\/(?<year>\d{4}) Sb\.?$/u;
-const CZ_US_REPORT_RE =
-  /^(?<kind>[NU]) ?(?<number>\d{1,4})\/(?<volume>\d{1,3}) SbNU(?: \d{1,4})?$/u;
-const CZ_US_REPORT_VOLUME_RE =
-  /^(?:Sbír\p{L}{1,2} nálezů a usnesení(?: \S+(?: soudu)?)? ?,? ?)?(?:svaz\p{L}{2}|sv\.) ?(?<volume>\d{1,3}) ?, ?(?<kind>nález|usnesení) [čc]\. ?(?<number>\d{1,4})$/u;
-
-/**
- * A Constitutional Court ruling in one spelling per publication, for the
- * reporter-citation normalization, or null for text that is neither: the
- * gazette number as `234/2002 Sb.`, the reporter entry as `SbNU sv. 26 N 53`.
- *
- * The reporter entry keeps volume, series and number and drops the page: the
- * three name the entry, the page only locates it, and a citation that leaves
- * the page out still names the same ruling. Letters stand between the numbers
- * because the shared normalization strips punctuation, and `N 5/326` must not
- * meet `N 53/26`.
- */
-const czechConstitutionalDesignation = (value: string): string | null => {
-  const text = value
-    .normalize("NFC")
-    .replace(/\s+/gu, " ")
-    .replace(/ ?\/ ?/gu, "/")
-    .trim();
-  const gazette = CZ_US_GAZETTE_RE.exec(text)?.groups;
-  if (gazette !== undefined) {
-    return `${requiredGroup(gazette, "number")}/${requiredGroup(gazette, "year")} Sb.`;
-  }
-  const report =
-    CZ_US_REPORT_RE.exec(text)?.groups ??
-    CZ_US_REPORT_VOLUME_RE.exec(text)?.groups;
-  if (report === undefined) {
-    return null;
-  }
-  const kind = requiredGroup(report, "kind");
-  const series = kind === "U" || kind === "usnesení" ? "U" : "N";
-  const volume = Number(requiredGroup(report, "volume"));
-  const number = Number(requiredGroup(report, "number"));
-  return `SbNU sv. ${String(volume)} ${series} ${String(number)}`;
-};
 
 /**
  * Reporter identifiers for a Constitutional Court ruling, read from the
@@ -525,7 +494,9 @@ const hungarianSeriesKey = (text: string): string | null => {
  */
 const hungarianConstitutionalDesignation = (value: string): string | null => {
   const groups = HU_CONSTITUTIONAL_RE.exec(
-    normalizeDashes(value.normalize("NFC")).replace(/\s+/gu, " ").trim(),
+    normalizeDashes(normalizeUnicode(value, "NFC"))
+      .replace(/\s+/gu, " ")
+      .trim(),
   )?.groups;
   return groups === undefined
     ? null
@@ -538,13 +509,12 @@ const hungarianConstitutionalDesignation = (value: string): string | null => {
  * opinion, a Constitutional Court decision). Null for text that is neither.
  */
 type HungarianCitationForm =
-  | { type: "docket"; registry: string }
-  | { type: "published" };
+  { type: "docket"; registry: string } | { type: "published" };
 
 export const hungarianCitationForm = (
   citationText: string,
 ): HungarianCitationForm | null => {
-  const text = normalizeDashes(citationText.normalize("NFC"))
+  const text = normalizeDashes(normalizeUnicode(citationText, "NFC"))
     .replace(/\s+/gu, " ")
     .trim();
   if (
@@ -582,11 +552,13 @@ const PL_SYGN_PREFIX = String.raw`[Ss]ygn\.\s{0,3}(?::\s{0,3})?(?:[Aa]kt\.?:?\s{
 // PL_TK_PATTERN/PL_TK_BARE_PATTERN's phantom-duplicate lookbehind exactly,
 // or a whitespace run this pattern still combines into one citation but
 // the lookbehind no longer recognizes lets the Tribunal symbol at the
-// tail phantom-duplicate as a second, separate citation. Group
+// tail phantom-duplicate as a second, separate citation. A division
+// code may carry a trailing dot ("IV P. 498/99", "VIII Kz. 123/15"); the
+// dedup key drops it. Group
 // `caseNumber` captures the bare case number to deduplicate against the
 // unprefixed pattern below.
 const PL_PREFIXED_PATTERN = new RegExp(
-  String.raw`${PL_SYGN_PREFIX}(?<caseNumber>[IVX]{1,6}\s{0,3}[A-Za-z]{1,5}(?:[\s/]{1,3}[A-Za-z]{1,5})?\s*\d{1,6}\/\d{2,4})`,
+  String.raw`${PL_SYGN_PREFIX}(?<caseNumber>[IVX]{1,6}\s{0,3}[A-Za-z]{1,5}\.?(?:[\s/]{1,3}[A-Za-z]{1,5}\.?)?\s*\d{1,6}\/\d{2,4})`,
   "gu",
 );
 
@@ -641,7 +613,7 @@ const PL_TK_PATTERN = new RegExp(
 // whitespace run: "I SK 12/20" is a Supreme Court docket, and its tail read
 // past a wide gap would key it as the Tribunal's.
 const PL_TK_BARE_PATTERN = new RegExp(
-  String.raw`(?<!\b[IVX]+\s+)\b(?<caseNumber>${PL_TK_DISTINCTIVE_DOCKET_SOURCE})(?!\d)`,
+  String.raw`\b(?<!\b[IVX]+\s+)(?<caseNumber>${PL_TK_DISTINCTIVE_DOCKET_SOURCE})(?!\d)`,
   "gu",
 );
 
@@ -651,72 +623,198 @@ const PL_TK_BARE_PATTERN = new RegExp(
 // ("sygn. akt II    K 12/20" -> "K 12/20") would otherwise pass the cue
 // gate as a different, Tribunal docket.
 const PL_TK_CUED_PATTERN = new RegExp(
-  String.raw`(?<!\b[IVX]+\s+)\b(?<caseNumber>${PL_TK_DOCKET_SOURCE})(?!\d)`,
+  String.raw`\b(?<!\b[IVX]+\s+)(?<caseNumber>${PL_TK_DOCKET_SOURCE})(?!\d)`,
   "gu",
 );
 
-/**
- * What marks a nearby bare "K 2/19" as the Tribunal's: its name or
- * abbreviation, a "sygn." label, or a judgment introduced by its date, in
- * any capitalisation ("Sygn.", a sentence-initial "Wyrok").
- */
-const PL_TK_CUE_RE =
-  /\bTK\b|Trybuna(?:ł|l)\p{L}*\s+Konstytucyjn|sygn\.|\bwyrok\p{L}*[^;]{0,80}?\bz\s+dnia\b/iu;
-
-/** How far before a bare Tribunal docket a cue may sit. */
-const PL_TK_CUE_WINDOW = 120;
-
-/** Patterns whose capture only counts next to a Tribunal cue. */
-const PL_TK_CUE_GATED_PATTERNS: ReadonlySet<RegExp> = new Set([
-  PL_TK_CUED_PATTERN,
-]);
-
-// A data protection authority's file number: "znak sprawy DKN.5131.6.2024".
-// The shape is also how other bodies number their files, so it is read only
-// near its own cue (PL_AUTHORITY_FILE_NUMBER_CUE_RE).
-const PL_AUTHORITY_FILE_NUMBER_PATTERN = new RegExp(
-  String.raw`(?<![\p{L}\d.\-])(?<caseNumber>${PL_AUTHORITY_FILE_NUMBER_SOURCE})(?![\p{L}\d\-]|\.[\p{L}\d])`,
-  "gu",
-);
-
-// National Appeal Chamber (KIO) dockets, joined ones included, from the same
-// source the search grammar reads: "KIO 1234/24", "KIO/UZP 1188/08",
-// "KIO 2845/25, KIO 2846/25". The all-caps mark is distinctive enough to
-// read without a cue.
 const PL_KIO_PATTERN = new RegExp(
   String.raw`(?<![\p{L}\d])(?<caseNumber>${PL_KIO_DOCKET_SOURCE})(?!\d)`,
   "gu",
 );
 
-// A decision number of the competition and consumer protection authority,
-// as a court or another decision cites it: "decyzji Prezesa UOKiK nr
-// DOK-1/2020", "od decyzji Prezesa Urzędu Ochrony Konkurencji i Konsumentów
-// z 29 lutego 2024 r. Nr DOZIK 3/2024". Its shape is shared with other
-// bodies' file numbers, so it is read only near its own cue
-// (PL_UOKIK_DECISION_CUE_RE). As PL_TK_BARE_PATTERN does, it rejects a
-// Roman division before the unit: "I CSK 123/2019" is a court docket, and
-// its tail is not a decision number.
-const PL_UOKIK_DECISION_PATTERN = new RegExp(
-  String.raw`(?<![${DECISION_DASH_CLASS_SOURCE}\p{L}\d])(?<!\b[IVX]+\s+)(?<caseNumber>${PL_UOKIK_CITED_DECISION_NUMBER_SOURCE})(?![${DECISION_DASH_CLASS_SOURCE}\p{L}\d/])`,
-  "gu",
+/** The official-language words that introduce a Commission competition case. */
+export const COMMISSION_CASE_CUES = [
+  { language: "Bulgarian", cue: "дело" },
+  { language: "Croatian", cue: "predmet" },
+  { language: "Czech", cue: "věc" },
+  { language: "Danish", cue: "sag" },
+  { language: "Dutch", cue: "zaak" },
+  { language: "English", cue: "case" },
+  { language: "Estonian", cue: "kohtuasi" },
+  { language: "Finnish", cue: "asia" },
+  { language: "French", cue: "affaire" },
+  { language: "German", cue: "Rechtssache" },
+  { language: "German", cue: "Sache" },
+  { language: "Greek", cue: "υπόθεση" },
+  { language: "Hungarian", cue: "ügy" },
+  { language: "Irish", cue: "cás" },
+  { language: "Italian", cue: "causa" },
+  { language: "Latvian", cue: "lieta" },
+  { language: "Lithuanian", cue: "byla" },
+  { language: "Maltese", cue: "kawża" },
+  { language: "Polish", cue: "sprawa" },
+  { language: "Portuguese", cue: "processo" },
+  { language: "Romanian", cue: "cauza" },
+  { language: "Slovak", cue: "vec" },
+  { language: "Slovenian", cue: "zadeva" },
+  { language: "Spanish", cue: "asunto" },
+  { language: "Spanish/Italian/Portuguese", cue: "caso" },
+  { language: "Swedish", cue: "mål" },
+] as const;
+
+const COMMISSION_CASE_CUE_SOURCE = COMMISSION_CASE_CUES.map(
+  ({ cue }) => cue,
+).join("|");
+const COMMISSION_CASE_CUE_RE = new RegExp(
+  String.raw`(?<!\p{L})(?:${COMMISSION_CASE_CUE_SOURCE})(?!\p{L})`,
+  "iu",
 );
 
-/** What marks a nearby decision number as the competition authority's. */
-const PL_UOKIK_DECISION_CUE_RE =
-  /\bUOKiK\b|Urz[ęe]d\p{L}*\s+Ochrony\s+Konkurencji|Ochrony\s+Konkurencji\s+i\s+Konsument/iu;
+/** A cue cannot license a number elsewhere in the sentence or paragraph. */
+const COMMISSION_CASE_CUE_WINDOW = 40;
 
-/** How far before a decision number its cue may sit. */
-const PL_UOKIK_DECISION_CUE_WINDOW = 160;
+const COMMISSION_CASE_NUMBER_PATTERN =
+  /(?<![\p{L}\d])(?<caseNumber>(?:AT\s*\.\s*\d{4,6}|COMP\s*\/\s*\d{2}\s*\.\s*\d{3}|M\s*\.\s*\d{1,6}|SA\s*\.\s*\d{3,6}|(?:C|N|NN)\s+\d{1,3}\s*\/\s*\d{4}))(?![\p{L}\d/])/giu;
+const COMMISSION_SHORT_CASE_NUMBER_RE = /^(?:C|N|NN)\s/iu;
+const ROMAN_NUMERALS = new Set(["I", "V", "X", "L", "C", "D", "M"]);
+const MAX_ROMAN_DIVISION_LENGTH = 8;
 
 /**
- * How far after it: "decyzja nr DOK-1/2020 Prezesa UOKiK" names its author
- * right after the number, so the window is short.
+ * Whether a short `C|N|NN 123/2020` form is the tail of a national docket:
+ * a senate number (`21 C 123/2020`) or a Roman court division
+ * (`IV C 123/2020`) precedes it across any amount of whitespace. A linear
+ * backwards scan, so neither whitespace runs nor long sections cost more.
  */
-const PL_UOKIK_DECISION_TRAILING_CUE_WINDOW = 60;
+const followsNationalDocketDivision = (
+  text: string,
+  matchIndex: number,
+): boolean => {
+  let end = matchIndex - 1;
+  while (end >= 0 && /\s/u.test(text.charAt(end))) {
+    end -= 1;
+  }
+  if (end < 0 || end === matchIndex - 1) {
+    return false;
+  }
+  if (/\d/u.test(text.charAt(end))) {
+    return true;
+  }
+  let start = end;
+  while (
+    start >= 0 &&
+    end - start < MAX_ROMAN_DIVISION_LENGTH &&
+    ROMAN_NUMERALS.has(text.charAt(start).toUpperCase())
+  ) {
+    start -= 1;
+  }
+  return start < end && (start < 0 || !/[\p{L}\d]/u.test(text.charAt(start)));
+};
 
-/** What marks a nearby authority file number as the data protection authority's. */
-const PL_AUTHORITY_FILE_NUMBER_CUE_RE =
-  /znak\p{L}*\s+sprawy|\bUODO\b|Ochrony\s+Danych\s+Osobowych/iu;
+export type CueGatedCitationPattern = {
+  id: string;
+  pattern: RegExp;
+  cue: RegExp;
+  windowBefore: number;
+  windowAfter: number;
+  identifierType: DecisionIdentifierType;
+  /** A cued match this shape still refuses; null when the cue decides alone. */
+  refuses:
+    | ((context: {
+        caseNumber: string | undefined;
+        text: string;
+        matchIndex: number;
+      }) => boolean)
+    | null;
+};
+
+// A proceeding number may carry the decision's own reference after a hyphen
+// ("ÚOHS-S0123/2024/VZ-12345/2024/500/JNe"); it is part of the identity, and
+// any other continuation is refused rather than cut to the proceeding.
+const CZ_UOHS_PATTERN =
+  /(?<![\p{L}\d])(?<caseNumber>ÚOHS-(?:[SR]\d{1,6}\/\d{4}\/[A-Z]{2}(?:-\d{1,6}\/\d{4}\/\d{3}(?:\/\p{L}{2,6})?)?|\d{1,6}\/\d{4}\/\d{3}(?:\/\p{L}{2,6})?))(?![\p{L}\d/-])/gu;
+const CZ_UOOU_PATTERN =
+  /(?<![\p{L}\d])(?<caseNumber>UOOU-(?:\d{1,6}\/\d{2}-\d{1,4}|\d{6,10}-\d{1,4}))(?![\p{L}\d-])/gu;
+
+/** Citation shapes that are too ambiguous without a nearby authority cue. */
+export const CUE_GATED_CITATION_PATTERNS = [
+  {
+    id: "pl-tk",
+    pattern: PL_TK_CUED_PATTERN,
+    cue: /\bTK\b|Trybuna(?:ł|l)\p{L}*\s+Konstytucyjn|sygn\.|\bwyrok\p{L}*[^;]{0,80}?\bz\s+dnia\b/iu,
+    windowBefore: 120,
+    windowAfter: 0,
+    identifierType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+    refuses: null,
+  },
+  {
+    id: "pl-uodo",
+    pattern: new RegExp(
+      String.raw`(?<![\p{L}\d.\-])(?<caseNumber>${PL_AUTHORITY_FILE_NUMBER_SOURCE})(?![\p{L}\d\-]|\.[\p{L}\d])`,
+      "gu",
+    ),
+    cue: /znak\p{L}*\s+sprawy|\bUODO\b|Ochrony\s+Danych\s+Osobowych/iu,
+    windowBefore: 120,
+    windowAfter: 0,
+    // The type the authority's own adapter stores: citations resolve only
+    // to identifiers of the same type.
+    identifierType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+    refuses: null,
+  },
+  {
+    id: "pl-uokik",
+    // The leading capital check runs the unbounded division lookbehind only
+    // where a number can start: tried at every position of a whitespace run,
+    // it rescans the run each time.
+    pattern: new RegExp(
+      String.raw`(?=\p{Lu})(?<![${DECISION_DASH_CLASS_SOURCE}\p{L}\d])(?<!\b[IVX]+\s+)(?<caseNumber>${PL_UOKIK_CITED_DECISION_NUMBER_SOURCE})(?![${DECISION_DASH_CLASS_SOURCE}\p{L}\d/])`,
+      "gu",
+    ),
+    cue: /\bUOKiK\b|Urz[ęe]d\p{L}*\s+Ochrony\s+Konkurencji|Ochrony\s+Konkurencji\s+i\s+Konsument/iu,
+    windowBefore: 160,
+    windowAfter: 60,
+    // The type the authority's own adapter stores: citations resolve only
+    // to identifiers of the same type.
+    identifierType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+    refuses: null,
+  },
+  {
+    id: "cz-uohs",
+    pattern: CZ_UOHS_PATTERN,
+    // Letter-aware boundaries (`\b` is ASCII-only), refusing a hyphen: the
+    // `ÚOHS-` prefix of a neighbouring number is not a cue.
+    cue: /(?<![\p{L}\d])(?:ÚOHS|OHS)(?![\p{L}\d-])|Úřad\s+pro\s+ochranu\s+hospodářské\s+soutěže|rozhodnutí\s+předsedy/iu,
+    windowBefore: 180,
+    windowAfter: 80,
+    identifierType: DECISION_IDENTIFIER_TYPES.AUTHORITY_DECISION_NUMBER,
+    refuses: null,
+  },
+  {
+    id: "cz-uoou",
+    pattern: CZ_UOOU_PATTERN,
+    cue: /(?<![\p{L}\d])(?:ÚOOÚ|UOOU)(?![\p{L}\d-])|Úřad\s+pro\s+ochranu\s+osobních\s+údajů|rozhodnutí\s+předsedy/iu,
+    windowBefore: 180,
+    windowAfter: 80,
+    identifierType: DECISION_IDENTIFIER_TYPES.AUTHORITY_DECISION_NUMBER,
+    refuses: null,
+  },
+  {
+    id: "eu-commission",
+    pattern: COMMISSION_CASE_NUMBER_PATTERN,
+    cue: COMMISSION_CASE_CUE_RE,
+    // A cue cannot license a number elsewhere in the sentence or paragraph.
+    windowBefore: COMMISSION_CASE_CUE_WINDOW,
+    windowAfter: 0,
+    identifierType: DECISION_IDENTIFIER_TYPES.COMMISSION_CASE_NUMBER,
+    refuses: ({ caseNumber, text, matchIndex }) =>
+      caseNumber !== undefined &&
+      COMMISSION_SHORT_CASE_NUMBER_RE.test(caseNumber) &&
+      followsNationalDocketDivision(text, matchIndex),
+  },
+] as const satisfies readonly CueGatedCitationPattern[];
+
+const CUE_GATED_PATTERN_BY_PATTERN = new Map(
+  CUE_GATED_CITATION_PATTERNS.map((entry) => [entry.pattern, entry] as const),
+);
 
 // Polish bare-symbol pattern: other tribunals and disciplinary registries
 // cite by a 1-3 letter symbol with no Roman-numeral chamber at all --
@@ -742,9 +840,23 @@ const PL_BARE_SYMBOL_PATTERN = new RegExp(
 // division, a ninth one ("IX SA/Wa") or one past a wide gap ("II      SA/Wa"),
 // rejects the match rather than leaving a docket with its division cut off.
 const PL_NSA_WSA_PATTERN = new RegExp(
-  String.raw`(?:${PL_SYGN_PREFIX})?(?<!\b[IVX]+\s+)\b(?<caseNumber>${PL_ADMINISTRATIVE_SEATED_DOCKET_SOURCE})(?!\d)`,
+  String.raw`(?:${PL_SYGN_PREFIX})?\b(?<!\b[IVX]+\s+)(?<caseNumber>${PL_ADMINISTRATIVE_SEATED_DOCKET_SOURCE})(?!\d)`,
   "gu",
 );
+
+// The seated register spelled with dots, "II S.A./Po 1234/01". The capture
+// is loose about the seat; it stands only when the undotted spelling parses
+// as an administrative docket (`foldPolishDottedRegister`).
+const PL_NSA_WSA_DOTTED_PATTERN = new RegExp(
+  String.raw`(?:${PL_SYGN_PREFIX})?\b(?<!\b[IVX]+\s+)(?<caseNumber>(?:[IVX]{1,4}\s{0,3})?S\.\s?A\.\s{0,3}\/\s{0,3}\p{Lu}\p{Ll}?\s{1,3}\d{1,6}\/\d{2}(?:\d{2})?)(?!\d)`,
+  "gu",
+);
+
+const POLISH_DOTTED_REGISTER_RE = /(?<![\p{L}\d.])S\.\s?A\.(?=\s{0,3}\/)/gu;
+
+/** "II S.A./Po 1234/01" in the register's undotted spelling, "II SA/Po". */
+const foldPolishDottedRegister = (text: string): string =>
+  text.replace(POLISH_DOTTED_REGISTER_RE, "SA");
 
 // The pre-2004 seatless Warsaw form, including a joined range of numbers
 // the bare Polish pattern does not read ("I SA 1234-1236/98"). The range
@@ -759,7 +871,7 @@ const PL_NSA_SEATLESS_PATTERN = new RegExp(
 // "OPS 3/98". The lookbehind leaves a divided mark ("I OPS 3/22") to the
 // bare Polish pattern, so its tail is not read as a second citation.
 const PL_NSA_PRE_REFORM_RESOLUTION_PATTERN = new RegExp(
-  String.raw`(?<!\b[IVX]+\s+)\b(?<caseNumber>${PL_ADMINISTRATIVE_PRE_REFORM_RESOLUTION_SOURCE})(?!\d)`,
+  String.raw`\b(?<!\b[IVX]+\s+)(?<caseNumber>${PL_ADMINISTRATIVE_PRE_REFORM_RESOLUTION_SOURCE})(?!\d)`,
   "gu",
 );
 
@@ -805,13 +917,15 @@ const CITATION_PATTERNS: RegExp[] = [
   // century mapping.
   new RegExp(String.raw`sp\.\s*zn\.?:?\s*${CASE_NUMBER_BODY}`, "gu"),
 
-  // Slovak Supreme Court extraordinary-review / grand-chamber panel: "sp.
-  // zn. 4 M Cdo 15/2010", "sp. zn. 2 M Obdo 1/2008", where "M"
-  // (mimoriadne dovolanie / veľký senát) sits between the chamber digit
-  // and the ordinary registry as its own word -- one word more than
-  // CASE_NUMBER_BODY allows. The period after "zn" is optional, matching
-  // the general sp. zn. pattern above ("sp. zn 4 M Cdo 15/2010").
-  /sp\.\s*zn\.?:?\s*(?<caseNumber>\d{1,3}\s+M\s+\p{L}{1,6}\s+\d{1,6}\/\d{2,4})(?!\d)/gu,
+  // Slovak Supreme Court compound registers printed as separate words: "sp.
+  // zn. 4 M Cdo 15/2010", "sp. zn. 2 M Obdo 1/2008", where "M" (mimoriadne
+  // dovolanie / veľký senát) sits between the chamber digit and the ordinary
+  // registry, and "sp. zn. 1 Tdo V 14/2007", "sp. zn. 2 Cdo Pr 3/2016", where
+  // a "V" or "Pr" follows it; "sp. zn. 1 M Obdo V 13/2005" has both. One or
+  // two words more than CASE_NUMBER_BODY allows. The period after "zn" is
+  // optional, matching the general sp. zn. pattern above ("sp. zn 4 M Cdo
+  // 15/2010").
+  /sp\.\s*zn\.?:?\s*(?<caseNumber>\d{1,3}\s{0,3}(?:M\s+\p{L}{1,6}(?:\s+(?:V|Pr))?|\p{L}{1,6}\s+(?:V|Pr))[\s/]{1,3}\d{1,6}\/\d{2,4})(?!\d)/gu,
 
   // Slovak Special Court (Špeciálny súd v Pezinku, 2004-2009) case numbers
   // carry a "PK" panel prefix before the ordinary senate/registry/number
@@ -985,12 +1099,11 @@ const CITATION_PATTERNS: RegExp[] = [
   PL_THREE_TOKEN_PATTERN,
   PL_TK_PATTERN,
   PL_TK_BARE_PATTERN,
-  PL_TK_CUED_PATTERN,
-  PL_AUTHORITY_FILE_NUMBER_PATTERN,
-  PL_UOKIK_DECISION_PATTERN,
+  ...CUE_GATED_CITATION_PATTERNS.map(({ pattern }) => pattern),
   PL_KIO_PATTERN,
   PL_BARE_SYMBOL_PATTERN,
   PL_NSA_WSA_PATTERN,
+  PL_NSA_WSA_DOTTED_PATTERN,
   PL_NSA_SEATLESS_PATTERN,
   PL_NSA_PRE_REFORM_RESOLUTION_PATTERN,
 
@@ -1053,8 +1166,36 @@ const normalizeDashes = (text: string): string => text.replace(DASH_RE, "-");
  * dot normalization, splitting it into its three components so the dedup
  * key can rebuild them with one canonical separator.
  */
+/**
+ * Registers whose decisions the publisher stores under another spelling than
+ * the one the courts print, keyed by the printed spelling (lowercased). The
+ * Czech Supreme Court's insolvency register is printed "NSČR" in judgments
+ * ("sen. zn. 29 NSČR 112/2013"), while its own database, and the ECLI it
+ * assigns (`29.NSCR.112.2013`), spell it "NSCR"; the stored case number takes
+ * that spelling. Without the fold a citation keyed `29nsčr/…` never meets the
+ * decision keyed `29nscr/…`. The fold is per register rather than a blanket
+ * diacritic strip, because other registers (the Slovak "Sžo") are stored with
+ * their diacritic and their stored keys must keep matching.
+ */
+const REGISTER_KEY_SPELLINGS: ReadonlyMap<string, string> = new Map([
+  ["nsčr", "nscr"],
+]);
+
 const SEPARATOR_NORMALIZE_RE =
   /^(?<number>\d{1,3})\s?(?<registry>\p{L}{1,6})[\s/](?<docket>\d{1,6}\/\d{2,4})$/u;
+
+/**
+ * Matches a Slovak numeric-first case number whose compound register is
+ * printed in separate words ("4 M Cdo 15/2010", "1 Tdo V 14/2007", "2 Cdo Pr
+ * 3/2016", "1 M Obdo V 13/2005"), so the dedup key can rebuild it as the one
+ * word the glued spelling already keys under ("1MObdoV/13/2005"). The panel
+ * may be glued too, because "MObdoPr" is one letter wider than
+ * `SEPARATOR_NORMALIZE_RE` reads. A register with neither part is that
+ * pattern's. Case-insensitive because this normalizer also runs on stored
+ * publisher text and on lowercased input.
+ */
+const SPACED_COMPOUND_REGISTER_RE =
+  /^(?<number>\d{1,3})\s?(?<panel>M\s?)?(?<registry>\p{L}{1,6})(?:\s(?<part>V|Pr))?[\s/](?<docket>\d{1,6}\/\d{2,4})$/iu;
 
 /**
  * Matches a Czech/Slovak numeric-first case number whose docket joins a
@@ -1209,6 +1350,8 @@ const hungarianDocketKey = (parts: RegExpGroups): string =>
  *    "KSCB 26INS/8270/2018"), including a court-code-prefixed
  *    consolidated docket join ("KSCB 26 INS 8270,8271/2018" vs "KSCB 26
  *    INS 8270/8271/2018");
+ *  - the words of a Slovak compound register, spaced or glued ("1 M Obdo V
+ *    13/2005" vs "1MObdoV/13/2005", "1 Tdo V 14/2007" vs "1 TdoV 14/2007");
  *  - the boundary between a Polish roman-numeral chamber and its division
  *    code, glued or spaced ("IC 1523/96" vs "I C 1523/96"), including a
  *    two-token division code ("III A Ua 2389/02" vs "III AUa 2389/02") and
@@ -1226,12 +1369,7 @@ const hungarianDocketKey = (parts: RegExpGroups): string =>
  *    "EBH.2018.K.17"); see `hungarianSeriesKey`.
  */
 const canonicalizeDedupKey = (text: string): string => {
-  const normalized = normalizeDashes(text)
-    // One key per case, whatever normalization form the publisher served:
-    // a decomposed "Ú" is the same letter as a precomposed one, and only
-    // the key folds it -- `citationText` stays verbatim so the reader can
-    // still find it in the document's own characters.
-    .normalize("NFC")
+  const normalized = normalizeUnicode(normalizeDashes(text), "NFC")
     .replace(/­/gu, "") // soft hyphen: invisible, never load-bearing
     .replace(/\u00A0/gu, " ") // NBSP -> space
     .replace(/\s+/gu, " ") // collapse line-wraps and repeated spaces
@@ -1241,7 +1379,8 @@ const canonicalizeDedupKey = (text: string): string => {
     .trim();
   // A leading `N/` some registers print ahead of an administrative docket
   // ("12/II SA/Po 1234/99") is not part of it.
-  const spaced = polishAdministrativeDocketOf(normalized) ?? normalized;
+  const undotted = foldPolishDottedRegister(normalized);
+  const spaced = polishAdministrativeDocketOf(undotted) ?? normalized;
 
   // Read before the registry dot is stripped below: in a Hungarian docket
   // that dot is the separator ("Pfv. 20.187/2017/12").
@@ -1268,15 +1407,30 @@ const canonicalizeDedupKey = (text: string): string => {
     .replace(/(\p{L})\.(?=[\s/]|$)/gu, "$1") // "Spr." / "K." -> "Spr" / "K"
     .trim();
 
+  const compound = SPACED_COMPOUND_REGISTER_RE.exec(cleaned)?.groups;
+  if (
+    compound !== undefined &&
+    (compound["panel"] !== undefined || compound["part"] !== undefined)
+  ) {
+    const panel = compound["panel"]?.trim() ?? "";
+    const canonical = `${requiredGroup(compound, "number")}${panel}${requiredGroup(compound, "registry")}${compound["part"] ?? ""}/${requiredGroup(compound, "docket")}`;
+    return canonical.toLowerCase();
+  }
+
   const numeric = SEPARATOR_NORMALIZE_RE.exec(cleaned);
   if (numeric?.groups) {
-    const canonical = `${requiredGroup(numeric.groups, "number")}${requiredGroup(numeric.groups, "registry")}/${requiredGroup(numeric.groups, "docket")}`;
+    const registry = requiredGroup(numeric.groups, "registry").toLowerCase();
+    const canonical = `${requiredGroup(numeric.groups, "number")}${REGISTER_KEY_SPELLINGS.get(registry) ?? registry}/${requiredGroup(numeric.groups, "docket")}`;
     return canonical.toLowerCase();
   }
 
   const consolidated = CONSOLIDATED_DOCKET_NORMALIZE_RE.exec(cleaned);
   if (consolidated?.groups) {
-    const canonical = `${requiredGroup(consolidated.groups, "number")}${requiredGroup(consolidated.groups, "registry")}/${requiredGroup(consolidated.groups, "docket1")},${requiredGroup(consolidated.groups, "docket2")}/${requiredGroup(consolidated.groups, "year")}`;
+    const registry = requiredGroup(
+      consolidated.groups,
+      "registry",
+    ).toLowerCase();
+    const canonical = `${requiredGroup(consolidated.groups, "number")}${REGISTER_KEY_SPELLINGS.get(registry) ?? registry}/${requiredGroup(consolidated.groups, "docket1")},${requiredGroup(consolidated.groups, "docket2")}/${requiredGroup(consolidated.groups, "year")}`;
     return canonical.toLowerCase();
   }
 
@@ -1559,12 +1713,13 @@ export const bareCitationKey = (text: string): string =>
  * call site, and the database refuses the loser (`citation_key <> ''`).
  */
 export const citationKeyOf = (text: string): string | null =>
-  bareCitationKey(text) || null;
+  boundedCitationKey(bareCitationKey(text));
 
 /**
  * A decision's own `citation_key`: its docket's key, and none where the
  * primary reference is not a docket. Citations reach such a decision through
- * its typed identifiers instead.
+ * its typed identifiers instead. A reference whose key would not fit the
+ * column is no docket a citation could name, so it gets no key either.
  */
 export const decisionCitationKeyOf = ({
   caseNumber,
@@ -1579,8 +1734,10 @@ export const normalizeDecisionIdentifier = (
   identifier: DecisionIdentifier,
 ): string => {
   switch (identifier.type) {
+    case DECISION_IDENTIFIER_TYPES.AUTHORITY_DECISION_NUMBER:
     case DECISION_IDENTIFIER_TYPES.CASE_NUMBER:
       return bareCitationKey(identifier.value);
+    case DECISION_IDENTIFIER_TYPES.COMMISSION_CASE_NUMBER:
     case DECISION_IDENTIFIER_TYPES.ECLI:
     case DECISION_IDENTIFIER_TYPES.NEUTRAL_CITATION:
       return normalizeStructuredDecisionIdentifier(identifier);
@@ -1604,7 +1761,11 @@ export const normalizeDecisionIdentifierValue = (
   value: string,
 ): string => {
   switch (type) {
+    case DECISION_IDENTIFIER_TYPES.AUTHORITY_DECISION_NUMBER:
+      return normalizeDecisionIdentifier({ type, value });
     case DECISION_IDENTIFIER_TYPES.CASE_NUMBER:
+      return normalizeDecisionIdentifier({ type, value });
+    case DECISION_IDENTIFIER_TYPES.COMMISSION_CASE_NUMBER:
       return normalizeDecisionIdentifier({ type, value });
     case DECISION_IDENTIFIER_TYPES.ECLI:
       return normalizeDecisionIdentifier({ type, value });
@@ -1623,23 +1784,31 @@ export const normalizeDecisionIdentifierValue = (
  * An identifier's stored key in the jurisdiction that holds it. Decision
  * identifier rows are written through it, by ingestion and by the backfill,
  * and exact lookup and search read through it, so writer and reader agree.
- * In the reporter jurisdiction a reporter citation is keyed by its canonical
- * volume, reporter and first page, so a variant abbreviation or a pin names
- * the same decision. Everywhere else, and for every other type, the key is
- * `normalizeDecisionIdentifier`'s, unchanged, so no stored key moves.
+ * Reporter jurisdictions key each citation through the grammar resolve reads,
+ * so publication spellings and pins name the same entry. Other types and
+ * unclaimed reporter values keep their existing normalization.
  */
 export const normalizeDecisionIdentifierIn = (
   jurisdiction: string | undefined,
   identifier: DecisionIdentifier,
-): string =>
-  identifier.type === DECISION_IDENTIFIER_TYPES.REPORTER_CITATION &&
-  readsUsReporterCitations(jurisdiction)
-    ? normalizeStructuredDecisionIdentifier({
-        type: identifier.type,
-        value:
-          canonicalUsReporterCitation(identifier.value) ?? identifier.value,
-      })
-    : normalizeDecisionIdentifier(identifier);
+): string => {
+  if (identifier.type !== DECISION_IDENTIFIER_TYPES.REPORTER_CITATION) {
+    return normalizeDecisionIdentifier(identifier);
+  }
+  const canonical = decisionReporterGrammarForJurisdiction(
+    jurisdiction,
+  )?.canonicalCitation(identifier.value);
+  if (
+    readsUsReporterCitations(jurisdiction) ||
+    (canonical !== null && canonical !== undefined)
+  ) {
+    return normalizeStructuredDecisionIdentifier({
+      type: identifier.type,
+      value: canonical ?? identifier.value,
+    });
+  }
+  return normalizeDecisionIdentifier(identifier);
+};
 
 /** `normalizeDecisionIdentifierIn` for a value whose type is known apart. */
 export const normalizeDecisionIdentifierValueIn = (
@@ -1764,9 +1933,10 @@ const collectionJoinAfterDocket = (
  * collection number becomes the identity, because it names exactly one
  * decision where a docket names a whole file.
  *
- * A Constitutional Court docket is the exception: the collection mention
- * beside it is absorbed into the docket's citation, which keeps the docket's
- * identity.
+ * Two dockets are the exception: a Constitutional Court docket, and a docket
+ * printed with its sheet, which names one decision already. The collection
+ * mention beside either is absorbed into the docket's citation, which keeps
+ * the docket's identity.
  *
  * Czech collections only. A Hungarian docket already names one decision (its
  * document number), and the only Hungarian reporter-type citation, a
@@ -1810,8 +1980,14 @@ const mergeCollectionCitations = ({
       }
       // A Constitutional Court docket keeps resolving by itself: the
       // collection numbers reach a ruling only once its row carries them, and
-      // the docket reaches it either way.
-      if (join !== CZ_US_COLLECTION_AFTER_DOCKET) {
+      // the docket reaches it either way. So does a docket printed with its
+      // sheet ("č. j. 1 Azs 13/2006-39"): docket and sheet name one decision
+      // as exactly as the collection number does, and every row carries its
+      // docket while few carry their collection number.
+      if (
+        join !== CZ_US_COLLECTION_AFTER_DOCKET &&
+        docket.citedSheetNumber === null
+      ) {
         docket.identifierType = reporter.identifierType;
         docket.identifierValue = reporter.identifierValue;
       }
@@ -1819,6 +1995,159 @@ const mergeCollectionCitations = ({
       break;
     }
   }
+};
+
+/** An ECLI printed after a group's numbers, or two that disagreed. */
+type CjeuGroupPin = { ecli: string; key: string } | "conflicting";
+
+type CjeuMemberCitationOptions = {
+  section: { index: number; text: string };
+  caseNumber: string;
+  span: { start: number; end: number };
+};
+
+/** One case a CJEU reference names, with the hints printed around it. */
+const cjeuMemberCitation = ({
+  section,
+  caseNumber,
+  span,
+}: CjeuMemberCitationOptions): ExtractedCitation => ({
+  citationText: caseNumber,
+  sectionIndex: section.index,
+  citedDecisionTypeHint: detectCitationDecisionTypeHint(
+    section.text,
+    span.start,
+  ),
+  identifierType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+  identifierValue: caseNumber,
+  citedCourtHint: detectCitationCourtHint(section.text, span.start),
+  citedSheetNumber: detectCitationSheetNumber(section.text, span.end),
+  citedDecisionDate: detectCitationDecisionDate(section.text, span.start),
+});
+
+type RecordCjeuGroupPinOptions = {
+  pins: Map<string, CjeuGroupPin>;
+  dedupKey: string;
+  ecli: string;
+};
+
+/** Pin a case number to the ECLI printed with it, unless another disagrees. */
+const recordCjeuGroupPin = ({
+  pins,
+  dedupKey,
+  ecli,
+}: RecordCjeuGroupPinOptions): void => {
+  const pin = {
+    ecli,
+    key: normalizeDecisionIdentifierValue(DECISION_IDENTIFIER_TYPES.ECLI, ecli),
+  };
+  const pinned = pins.get(dedupKey);
+  if (pinned === undefined) {
+    pins.set(dedupKey, pin);
+  } else if (pinned !== "conflicting" && pinned.key !== pin.key) {
+    pins.set(dedupKey, "conflicting");
+  }
+};
+
+/**
+ * Read the CJEU's own way of naming several cases in one reference (see
+ * `cjeu-citation-groups.ts`) into the citations the patterns found:
+ *
+ * - every case a group names becomes a citation, the cases a range names
+ *   between its two printed ends included;
+ * - a case number printed with an ECLI takes the ECLI as its identity. The
+ *   number keeps its text, which is what the reader marks; the ECLI decides
+ *   which decision it means, because a CJEU case number is shared by the
+ *   judgment, the Advocate General's opinion and every order in the case,
+ *   and joined cases are filed under the first number alone. Where one text
+ *   prints the same number with two ECLIs (a judgment and the opinion before
+ *   it), neither pins it, as for every other hint that must agree.
+ */
+const applyCjeuCitationGroups = ({
+  byKey,
+  sections,
+  language,
+}: {
+  byKey: Map<string, ExtractedCitation>;
+  sections: readonly { index: number; text: string }[];
+  language: string | undefined;
+}): void => {
+  const caseNumberType = DECISION_IDENTIFIER_TYPES.CASE_NUMBER;
+  const pins = new Map<string, CjeuGroupPin>();
+  const members = sections.flatMap((section) =>
+    readCjeuCitationGroups(section.text, language).groups.flatMap(
+      ({ members: groupMembers, ecli }) =>
+        groupMembers.map(({ caseNumber, span }) => ({
+          section,
+          caseNumber,
+          span,
+          ecli,
+        })),
+    ),
+  );
+  for (const { section, caseNumber, span, ecli } of members) {
+    const dedupKey = `${caseNumberType}:${normalizeDecisionIdentifierValue(caseNumberType, caseNumber)}`;
+    if (!byKey.has(dedupKey)) {
+      byKey.set(dedupKey, cjeuMemberCitation({ section, caseNumber, span }));
+    }
+    if (ecli !== null) {
+      recordCjeuGroupPin({ pins, dedupKey, ecli: ecli.text });
+    }
+  }
+  for (const [dedupKey, pin] of pins) {
+    const citation = byKey.get(dedupKey);
+    if (pin === "conflicting" || citation === undefined) {
+      continue;
+    }
+    citation.identifierType = DECISION_IDENTIFIER_TYPES.ECLI;
+    citation.identifierValue = pin.ecli;
+  }
+};
+
+type StorageBoundedCitationMatchOptions = {
+  pattern: RegExp;
+  match: RegExpExecArray;
+  kioRunEnd: number;
+};
+
+const storageBoundedCitationMatch = ({
+  pattern,
+  match,
+  kioRunEnd,
+}: StorageBoundedCitationMatchOptions) => {
+  // Preserve the printed passage for exact anchoring; only keys normalize it.
+  const citationText = match[0].trim();
+  const caseNumber = match.groups?.["caseNumber"]?.trim();
+  const matchEnd = match.index + match[0].length;
+  if (
+    pattern !== PL_KIO_PATTERN ||
+    (match.index >= kioRunEnd &&
+      fitsCitationStorageField("key", bareCitationKey(citationText)) &&
+      fitsCitationStorageField("text", citationText))
+  ) {
+    return { citationText, caseNumber, matchEnd, kioRunEnd };
+  }
+  // An oversized joined run is read docket by docket. A single KIO docket
+  // has no comma, and subsequent regex matches stay inside this run's end.
+  const [first = citationText] = citationText.split(",");
+  const firstDocket = first.trim();
+  const firstEnd = match.index + firstDocket.length;
+  pattern.lastIndex = firstEnd;
+  return {
+    citationText: firstDocket,
+    caseNumber: firstDocket,
+    matchEnd: firstEnd,
+    kioRunEnd: Math.max(kioRunEnd, matchEnd),
+  };
+};
+
+type ExtractCitationsOptions = {
+  /**
+   * The text's language, which settles the one word whose meaning differs
+   * between languages (`a` joins two case numbers in Czech and ranges them
+   * in Spanish). Without it the word joins, which never invents a case.
+   */
+  language?: string | undefined;
 };
 
 /**
@@ -1830,6 +2159,12 @@ const mergeCollectionCitations = ({
  */
 export const extractCitations = (
   sections: { index: number; text: string }[],
+  { language }: ExtractCitationsOptions = {},
+): ExtractedCitation[] => citationsOf(sections, language);
+
+const citationsOf = (
+  sections: { index: number; text: string }[],
+  language: string | undefined,
 ): ExtractedCitation[] => {
   const byKey = new Map<string, ExtractedCitation>();
   const positions = new Map<string, CitationPosition>();
@@ -1847,19 +2182,22 @@ export const extractCitations = (
   for (const section of sections) {
     for (const pattern of CITATION_PATTERNS) {
       pattern.lastIndex = 0;
+      // End of a joined KIO run too long to key as one citation; the
+      // dockets up to it are read one at a time.
+      let kioRunEnd = -1;
 
       for (
         let match = pattern.exec(section.text);
         match !== null;
         match = pattern.exec(section.text)
       ) {
-        // citationText is stored verbatim (only edge-trimmed), never
-        // whitespace-normalized: exact-passage anchoring must be able to
-        // find this exact string in the source document, including an
-        // embedded line-wrap newline. Only the dedup key below is
-        // canonicalized.
-        const citationText = match[0].trim();
-        const caseNumber = match.groups?.["caseNumber"]?.trim();
+        const projected = storageBoundedCitationMatch({
+          pattern,
+          match,
+          kioRunEnd,
+        });
+        const { citationText, caseNumber, matchEnd } = projected;
+        kioRunEnd = projected.kioRunEnd;
         // A bare letter run under a court's label is also how a ministry
         // writes a file number, so the docket grammar decides whether this
         // capture is a case number at all.
@@ -1871,47 +2209,40 @@ export const extractCitations = (
           continue;
         }
         if (
-          PL_TK_CUE_GATED_PATTERNS.has(pattern) &&
-          !PL_TK_CUE_RE.test(
-            section.text.slice(
-              Math.max(0, match.index - PL_TK_CUE_WINDOW),
-              match.index,
-            ),
-          )
+          pattern === PL_NSA_WSA_DOTTED_PATTERN &&
+          (caseNumber === undefined ||
+            polishAdministrativeDocketOf(
+              foldPolishDottedRegister(caseNumber),
+            ) === null)
         ) {
           continue;
         }
-        if (
-          pattern === PL_AUTHORITY_FILE_NUMBER_PATTERN &&
-          !PL_AUTHORITY_FILE_NUMBER_CUE_RE.test(
-            section.text.slice(
-              Math.max(0, match.index - PL_TK_CUE_WINDOW),
-              match.index,
-            ),
-          )
-        ) {
-          continue;
+        const cueGate = CUE_GATED_PATTERN_BY_PATTERN.get(pattern);
+        if (cueGate !== undefined) {
+          const before = section.text.slice(
+            Math.max(0, match.index - cueGate.windowBefore),
+            match.index,
+          );
+          const after = section.text.slice(
+            match.index + match[0].length,
+            match.index + match[0].length + cueGate.windowAfter,
+          );
+          if (!cueGate.cue.test(before) && !cueGate.cue.test(after)) {
+            continue;
+          }
+          if (
+            cueGate.refuses?.({
+              caseNumber,
+              text: section.text,
+              matchIndex: match.index,
+            }) === true
+          ) {
+            continue;
+          }
         }
-        if (
-          pattern === PL_UOKIK_DECISION_PATTERN &&
-          !PL_UOKIK_DECISION_CUE_RE.test(
-            section.text.slice(
-              Math.max(0, match.index - PL_UOKIK_DECISION_CUE_WINDOW),
-              match.index,
-            ),
-          ) &&
-          !PL_UOKIK_DECISION_CUE_RE.test(
-            section.text.slice(
-              match.index + match[0].length,
-              match.index +
-                match[0].length +
-                PL_UOKIK_DECISION_TRAILING_CUE_WINDOW,
-            ),
-          )
-        ) {
-          continue;
-        }
-        const identifierType = decisionIdentifierTypeOfCitation(citationText);
+        const identifierType =
+          cueGate?.identifierType ??
+          decisionIdentifierTypeOfCitation(citationText);
         // For patterns with a capture group (e.g. the Polish prefixed
         // pattern), use the bare case number as the canonical dedup key
         // so both "sygn. akt II CSK 123/20" and "II CSK 123/20" resolve
@@ -1928,10 +2259,7 @@ export const extractCitations = (
         );
         const observed: Record<AgreeingHint, string | null> = {
           citedCourtHint: detectCitationCourtHint(section.text, match.index),
-          citedSheetNumber: detectCitationSheetNumber(
-            section.text,
-            match.index + match[0].length,
-          ),
+          citedSheetNumber: detectCitationSheetNumber(section.text, matchEnd),
           citedDecisionDate: detectCitationDecisionDate(
             section.text,
             match.index,
@@ -1940,7 +2268,7 @@ export const extractCitations = (
         const position: CitationPosition = {
           sectionIndex: section.index,
           start: match.index,
-          end: match.index + match[0].length,
+          end: matchEnd,
         };
 
         const existing = byKey.get(dedupKey);
@@ -2003,6 +2331,7 @@ export const extractCitations = (
   }
 
   mergeCollectionCitations({ byKey, positions, sectionText });
+  applyCjeuCitationGroups({ byKey, sections, language });
 
   return [...byKey.values()];
 };
@@ -2010,6 +2339,8 @@ export const extractCitations = (
 export type ExtractDecisionCitationsOptions = {
   /** The decision's country as stored on its row. */
   country: string;
+  /** The decision's language as stored on its row, when known. */
+  language?: string | undefined;
   sections: readonly { index: number; text: string }[];
   documentAst?: DocumentAst | undefined;
   citationScopes?: readonly CitationOpinionScope[] | undefined;
@@ -2035,8 +2366,7 @@ export type DecisionCitationExtraction = {
 };
 
 export type DecisionCitationRejection =
-  | CitationScopesRejectedError
-  | UsCitationRejection;
+  CitationScopesRejectedError | UsCitationRejection;
 
 /** A cited decision as the citation graph's row source reads it. */
 const extractedCitationOf = ({
@@ -2066,6 +2396,7 @@ export const extractDecisionCitations = ({
   citationScopes,
   country,
   documentAst,
+  language,
   sections,
 }: ExtractDecisionCitationsOptions): Result<
   DecisionCitationExtraction,
@@ -2081,7 +2412,7 @@ export const extractDecisionCitations = ({
   }
   if (!readsUsReporterCitations(country)) {
     return Result.ok({
-      citations: extractCitations([...sections]),
+      citations: extractCitations([...sections], { language }),
       occurrences: [],
       documentAst,
       reading: { type: "patterns" },

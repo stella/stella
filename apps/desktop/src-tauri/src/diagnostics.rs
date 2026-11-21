@@ -49,6 +49,16 @@ pub(crate) struct DiagnosticSession {
   pub takeover_detected: bool,
 }
 
+/// Which managed settings apply; the server itself is not named.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct DiagnosticManagedPolicy {
+  updates_disabled: bool,
+  activity_disabled: bool,
+  clipboard_disabled: bool,
+  server_configured: bool,
+}
+
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct DiagnosticsExport<'a> {
@@ -59,6 +69,7 @@ struct DiagnosticsExport<'a> {
   store_load_issue: Option<DiagnosticStoreLoadIssue>,
   notification_preferences: DiagnosticNotificationPreferences,
   update: DiagnosticUpdate<'a>,
+  managed_policy: DiagnosticManagedPolicy,
   sessions: DiagnosticSessionSummary,
   cleanup_paths_queued: usize,
 }
@@ -98,6 +109,7 @@ struct DiagnosticSessionStatusCounts {
 }
 
 pub(crate) fn render_diagnostics(input: DiagnosticsInput<'_>) -> String {
+  let policy = crate::managed_policy::current();
   let diagnostics = DiagnosticsExport {
     generated_at: input.generated_at,
     platform: DiagnosticPlatform {
@@ -113,6 +125,12 @@ pub(crate) fn render_diagnostics(input: DiagnosticsInput<'_>) -> String {
     store_load_issue: input.store_load_issue,
     notification_preferences: input.notification_preferences,
     update: input.update,
+    managed_policy: DiagnosticManagedPolicy {
+      updates_disabled: policy.updates_disabled,
+      activity_disabled: policy.activity_disabled,
+      clipboard_disabled: policy.clipboard_disabled,
+      server_configured: policy.server.is_some(),
+    },
     sessions: summarize_sessions(input.sessions),
     cleanup_paths_queued: input.cleanup_paths_queued,
   };

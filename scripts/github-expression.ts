@@ -13,16 +13,19 @@
  * guessing.
  */
 
-import { panic } from "better-result";
+// The check pool evaluates step conditions before dependency installation
+// may have succeeded; keep this module free of package imports.
+class GitHubExpressionError extends Error {
+  override name = "GitHubExpressionError";
+  readonly _tag = "GitHubExpressionError";
+}
+const panic: (message: string) => never = (message) => {
+  throw new GitHubExpressionError(message);
+};
 
 export const UNKNOWN = Symbol("unknown");
-type Value =
-  | string
-  | number
-  | boolean
-  | null
-  | Value[]
-  | { [key: string]: Value };
+export type Value =
+  string | number | boolean | null | Value[] | { [key: string]: Value };
 export type Result = Value | typeof UNKNOWN;
 
 type Token =
@@ -119,10 +122,48 @@ const text = (value: Value | undefined): string => {
   return value === null || value === undefined ? "" : JSON.stringify(value);
 };
 
-const looseEquals = (left: Value | undefined, right: Value | undefined) =>
-  typeof left === "string" && typeof right === "string"
+// GitHub's number coercion for a comparison of two different types: null is 0,
+// a boolean is 0 or 1, a string is a JSON number (blank reads as 0, anything
+// else as NaN), and an array or object is NaN.
+const JSON_NUMBER = /^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$/u;
+const coercedNumber = (value: Value | undefined): number => {
+  if (value === null || value === undefined) {
+    return 0;
+  }
+  if (typeof value === "boolean") {
+    return value ? 1 : 0;
+  }
+  if (typeof value === "number") {
+    return value;
+  }
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (trimmed === "") {
+      return 0;
+    }
+    return JSON_NUMBER.test(trimmed) ? Number(trimmed) : Number.NaN;
+  }
+  return Number.NaN;
+};
+const kind = (value: Value | undefined) => {
+  if (value === null || value === undefined) {
+    return "null";
+  }
+  return Array.isArray(value) ? "array" : typeof value;
+};
+
+// Loose equality as GitHub evaluates it: strings compare case-insensitively,
+// arrays and objects only by identity, and values of different types as the
+// numbers they coerce to. `null == ''` is therefore true, as it is for an
+// unset job output in a workflow `if:`.
+const looseEquals = (left: Value | undefined, right: Value | undefined) => {
+  if (kind(left) !== kind(right)) {
+    return coercedNumber(left) === coercedNumber(right);
+  }
+  return typeof left === "string" && typeof right === "string"
     ? left.toLowerCase() === right.toLowerCase()
     : left === right;
+};
 
 const compare = (operator: string, left: Result, right: Result): Result => {
   if (left === UNKNOWN || right === UNKNOWN) {
@@ -148,7 +189,7 @@ const compare = (operator: string, left: Result, right: Result): Result => {
   return a >= b;
 };
 
-const toValue = (parsed: unknown): Value => {
+export const toValue = (parsed: unknown): Value => {
   if (
     parsed === null ||
     typeof parsed === "string" ||
@@ -180,6 +221,70 @@ export type Context = {
   status?: Partial<
     Record<"always" | "success" | "failure" | "cancelled", boolean>
   >;
+};
+
+const nestedValue = (
+  value: Value | undefined,
+  parts: readonly string[],
+): Value | undefined => {
+  const key = parts.at(0);
+  if (key === undefined) {
+    return value;
+  }
+  if (value === undefined || value === null || typeof value !== "object") {
+    return undefined;
+  }
+  const rest = parts.slice(1);
+  if (key === "*") {
+    const projected: Value[] = [];
+    for (const item of Object.values(value)) {
+      const result = nestedValue(item, rest);
+      if (result !== undefined) {
+        projected.push(result);
+      }
+    }
+    return projected;
+  }
+  if (Array.isArray(value)) {
+    return /^(0|[1-9][0-9]*)$/u.test(key)
+      ? nestedValue(value.at(Number(key)), rest)
+      : undefined;
+  }
+  return nestedValue(value[key], rest);
+};
+
+export const contextFromNested = (context: object): Context => {
+  const values = new Map<string, Value>();
+  const status = new Map<string, boolean>();
+  for (const [key, value] of Object.entries(context)) {
+    if (typeof value !== "function") {
+      values.set(key, toValue(value));
+      continue;
+    }
+    if (
+      key !== "always" &&
+      key !== "success" &&
+      key !== "failure" &&
+      key !== "cancelled"
+    ) {
+      continue;
+    }
+    const outcome: unknown = value();
+    if (typeof outcome !== "boolean") {
+      panic(`Invalid GitHub status function result: ${key}`);
+    }
+    status.set(key, outcome);
+  }
+  return {
+    values: {},
+    status: Object.fromEntries(status),
+    fallback: (path) => {
+      const [root, ...parts] = path.split(".");
+      return root === undefined
+        ? undefined
+        : nestedValue(values.get(root), parts);
+    },
+  };
 };
 
 const STATUS_FUNCTIONS = new Set(["always", "success", "failure", "cancelled"]);
@@ -215,8 +320,21 @@ const callFunction = (
       return text(first).toLowerCase().startsWith(text(second).toLowerCase());
     case "endswith":
       return text(first).toLowerCase().endsWith(text(second).toLowerCase());
+    case "format":
+      return text(first).replaceAll(
+        /\{\{|\}\}|\{(\d+)\}/gu,
+        (token, index: string | undefined) => {
+          if (index === undefined) {
+            return token.slice(1);
+          }
+          const value = values[Number(index) + 1];
+          return value === undefined
+            ? panic(`format index ${index}`)
+            : text(value);
+        },
+      );
     default:
-      // format, join, hashFiles and friends: no guard depends on their value.
+      // join, hashFiles and friends: no guard depends on their value.
       return UNKNOWN;
   }
 };
@@ -245,8 +363,20 @@ const or3 = (left: Result, right: Result): Result => {
   return a === UNKNOWN || b === UNKNOWN ? UNKNOWN : right;
 };
 
-/** Evaluates an `if:` condition (with or without `${{ }}`) in a partial context. */
-export const evaluate = (source: string, context: Context): Result => {
+type ExpressionSemantics<T> = {
+  literal: (value: Value) => T;
+  reference: (path: string) => T;
+  call: (name: string, args: T[]) => T;
+  not: (value: T) => T;
+  compare: (operator: string, left: T, right: T) => T;
+  and: (left: T, right: T) => T;
+  or: (left: T, right: T) => T;
+};
+
+const parseExpression = <T>(
+  source: string,
+  semantics: ExpressionSemantics<T>,
+): T => {
   const trimmed = source.trim();
   const body = /^\$\{\{([\s\S]*)\}\}$/u.exec(trimmed)?.[1] ?? trimmed;
   const tokens = tokenize(body);
@@ -261,16 +391,9 @@ export const evaluate = (source: string, context: Context): Result => {
     return token;
   };
 
-  const lookup = (path: string): Result => {
-    if (Object.hasOwn(context.values, path)) {
-      return context.values[path] ?? null;
-    }
-    return context.fallback?.(path) ?? UNKNOWN;
-  };
-
-  const call = (name: string): Result => {
+  const call = (name: string): T => {
     take("(");
-    const args: Result[] = [];
+    const args: T[] = [];
     while (peek()?.value !== ")") {
       args.push(or());
       if (peek()?.value === ",") {
@@ -278,13 +401,13 @@ export const evaluate = (source: string, context: Context): Result => {
       }
     }
     take(")");
-    return callFunction(name, args, context);
+    return semantics.call(name, args);
   };
 
-  const primary = (): Result => {
+  const primary = (): T => {
     const token = take();
     if (token.kind === "string" || token.kind === "number") {
-      return token.value;
+      return semantics.literal(token.value);
     }
     if (token.kind === "op" && token.value === "(") {
       const value = or();
@@ -292,46 +415,47 @@ export const evaluate = (source: string, context: Context): Result => {
       return value;
     }
     if (token.kind === "op" && token.value === "!") {
-      const truthy = isTruthy(primary());
-      return truthy === UNKNOWN ? UNKNOWN : !truthy;
+      return semantics.not(primary());
     }
     if (token.kind !== "word") {
       return panic(`unexpected '${token.value}' in: ${source}`);
     }
     if (token.value === "true" || token.value === "false") {
-      return token.value === "true";
+      return semantics.literal(token.value === "true");
     }
     if (token.value === "null") {
-      return null;
+      return semantics.literal(null);
     }
-    return peek()?.value === "(" ? call(token.value) : lookup(token.value);
+    return peek()?.value === "("
+      ? call(token.value)
+      : semantics.reference(token.value);
   };
 
-  const comparison = (): Result => {
+  const comparison = (): T => {
     let left = primary();
     let next = peek();
     while (next?.kind === "op" && COMPARISONS.has(next.value)) {
       take();
-      left = compare(next.value, left, primary());
+      left = semantics.compare(next.value, left, primary());
       next = peek();
     }
     return left;
   };
 
-  const and = (): Result => {
+  const and = (): T => {
     let left = comparison();
     while (peek()?.value === "&&") {
       take("&&");
-      left = and3(left, comparison());
+      left = semantics.and(left, comparison());
     }
     return left;
   };
 
-  const or = (): Result => {
+  const or = (): T => {
     let left = and();
     while (peek()?.value === "||") {
       take("||");
-      left = or3(left, and());
+      left = semantics.or(left, and());
     }
     return left;
   };
@@ -343,6 +467,318 @@ export const evaluate = (source: string, context: Context): Result => {
   return value;
 };
 
+/** Evaluates an `if:` condition (with or without `${{ }}`) in a partial context. */
+export const evaluate = (source: string, context: Context): Result =>
+  parseExpression(source, {
+    literal: (value) => value,
+    reference: (path) => {
+      if (Object.hasOwn(context.values, path)) {
+        return context.values[path] ?? null;
+      }
+      // A fallback's null is a known null (a missing property), not unknown.
+      const value = context.fallback?.(path);
+      return value === undefined ? UNKNOWN : value;
+    },
+    call: (name, args) => callFunction(name, args, context),
+    not: (value) => {
+      const truthy = isTruthy(value);
+      return truthy === UNKNOWN ? UNKNOWN : !truthy;
+    },
+    compare,
+    and: and3,
+    or: or3,
+  });
+
+/** Status checks inside quoted strings do not suppress GitHub's success default. */
+export const hasStatusCheckFunction = (source: string): boolean =>
+  parseExpression(source, {
+    literal: () => false,
+    reference: () => false,
+    call: (name, args) =>
+      STATUS_FUNCTIONS.has(name.toLowerCase()) || args.some(Boolean),
+    not: (value) => value,
+    compare: (_operator, left, right) => left || right,
+    and: (left, right) => left || right,
+    or: (left, right) => left || right,
+  });
+
+type ConditionTerms = readonly ReadonlyMap<string, boolean>[];
+
+const andConditionTerms = (
+  left: ConditionTerms,
+  right: ConditionTerms,
+): ConditionTerms => {
+  const result: ReadonlyMap<string, boolean>[] = [];
+  for (const a of left) {
+    for (const b of right) {
+      const term = new Map(a);
+      let compatible = true;
+      for (const [key, value] of b) {
+        if (term.has(key) && term.get(key) !== value) {
+          compatible = false;
+          break;
+        }
+        term.set(key, value);
+      }
+      if (compatible) {
+        result.push(term);
+      }
+      if (result.length > 1024) {
+        panic("Condition proof exceeds its term budget");
+      }
+    }
+  }
+  return result;
+};
+
+const notConditionTerms = (terms: ConditionTerms): ConditionTerms => {
+  let result: ConditionTerms = [new Map()];
+  for (const term of terms) {
+    result = andConditionTerms(
+      result,
+      [...term].map(([key, value]) => new Map([[key, !value]])),
+    );
+  }
+  return result;
+};
+
+type ConditionProofValue = {
+  key: string;
+  value: Result;
+  terms: ConditionTerms;
+};
+const conditionProofValue = (
+  key: string,
+  value: Result = UNKNOWN,
+): ConditionProofValue => {
+  if (value !== UNKNOWN) {
+    return {
+      key: JSON.stringify(value),
+      value,
+      terms: isTruthy(value) ? [new Map()] : [],
+    };
+  }
+  return { key, value, terms: [new Map([[key, true]])] };
+};
+
+type ConditionProofOptions = {
+  source: string;
+  status: NonNullable<Context["status"]>;
+  phase: string;
+  stableStepIds: ReadonlySet<string>;
+};
+const conditionProof = ({
+  source,
+  status,
+  phase,
+  stableStepIds,
+}: ConditionProofOptions) => {
+  const semantics: ExpressionSemantics<ConditionProofValue> = {
+    literal: (value) => conditionProofValue("literal", value),
+    reference: (reference) => {
+      const normalized = reference.toLowerCase();
+      const step = /^steps\.([^.]+)\./u.exec(normalized)?.at(1);
+      const stable =
+        !normalized.startsWith("env.") &&
+        normalized !== "job.status" &&
+        !normalized.startsWith("github.action") &&
+        (step === undefined || stableStepIds.has(step));
+      return conditionProofValue(
+        JSON.stringify([stable ? "shared" : phase, reference]),
+      );
+    },
+    call: (name, args) =>
+      conditionProofValue(
+        JSON.stringify([
+          name.toLowerCase() === "hashfiles" ? phase : "call",
+          name.toLowerCase(),
+          args.map(({ key }) => key),
+        ]),
+        callFunction(
+          name,
+          args.map(({ value }) => value),
+          { values: {}, status },
+        ),
+      ),
+    not: (value) => ({
+      key: JSON.stringify(["not", value.key]),
+      value: UNKNOWN,
+      terms: notConditionTerms(value.terms),
+    }),
+    compare: (operator, left, right) => {
+      const inverse = operator === "!=";
+      const atom = conditionProofValue(
+        JSON.stringify([inverse ? "==" : operator, left.key, right.key]),
+        compare(operator, left.value, right.value),
+      );
+      return inverse && atom.value === UNKNOWN
+        ? { ...atom, terms: notConditionTerms(atom.terms) }
+        : atom;
+    },
+    and: (left, right) => ({
+      key: JSON.stringify(["and", left.key, right.key]),
+      value: and3(left.value, right.value),
+      terms: andConditionTerms(left.terms, right.terms),
+    }),
+    or: (left, right) => ({
+      key: JSON.stringify(["or", left.key, right.key]),
+      value: or3(left.value, right.value),
+      terms: [...left.terms, ...right.terms],
+    }),
+  };
+  const terms = parseExpression(source, semantics).terms;
+  return hasStatusCheckFunction(source) || status.success === true ? terms : [];
+};
+
+const STEP_STATUSES = [
+  { always: true, success: true, failure: false, cancelled: false },
+  { always: true, success: false, failure: true, cancelled: false },
+  { always: true, success: false, failure: false, cancelled: true },
+  { always: true, success: false, failure: true, cancelled: true },
+] as const;
+
+type StepConditionCoverageOptions = {
+  earlier: string;
+  later: string;
+  stableStepIds: ReadonlySet<string>;
+};
+/** Proves coverage across possible failures and cancellation between ordered steps. */
+export const stepConditionCovers = ({
+  earlier,
+  later,
+  stableStepIds,
+}: StepConditionCoverageOptions): boolean =>
+  STEP_STATUSES.every((earlierStatus, index) => {
+    const missing = notConditionTerms(
+      conditionProof({
+        source: earlier,
+        status: earlierStatus,
+        phase: "earlier",
+        stableStepIds,
+      }),
+    );
+    return STEP_STATUSES.slice(index).every(
+      (laterStatus) =>
+        andConditionTerms(
+          conditionProof({
+            source: later,
+            status: laterStatus,
+            phase: "later",
+            stableStepIds,
+          }),
+          missing,
+        ).length === 0,
+    );
+  });
+
+type ExpressionValueSource =
+  | { type: "literal"; value: Value }
+  | { type: "reference"; path: string }
+  | { type: "computed" };
+
+type ExpressionValueAlternative = {
+  source: ExpressionValueSource;
+  truthiness: "truthy" | "falsy";
+};
+
+const valueAlternatives = (
+  source: ExpressionValueSource,
+): ExpressionValueAlternative[] =>
+  source.type === "literal"
+    ? [{ source, truthiness: isTruthy(source.value) ? "truthy" : "falsy" }]
+    : [
+        { source, truthiness: "truthy" },
+        { source, truthiness: "falsy" },
+      ];
+
+/**
+ * Conservative value provenance through GitHub's operand-returning &&/||.
+ * Comparisons and negation return booleans; calls stay unproven. Conditions
+ * are never assumed constant or correlated, so unknown branches remain visible.
+ */
+export const expressionValueSources = (source: string) =>
+  parseExpression(source, {
+    literal: (value) => valueAlternatives({ type: "literal", value }),
+    reference: (path) => valueAlternatives({ type: "reference", path }),
+    call: () => valueAlternatives({ type: "computed" }),
+    not: () => [
+      ...valueAlternatives({ type: "literal", value: true }),
+      ...valueAlternatives({ type: "literal", value: false }),
+    ],
+    compare: () => [
+      ...valueAlternatives({ type: "literal", value: true }),
+      ...valueAlternatives({ type: "literal", value: false }),
+    ],
+    and: (left, right) => [
+      ...left.filter(({ truthiness }) => truthiness === "falsy"),
+      ...(left.some(({ truthiness }) => truthiness === "truthy") ? right : []),
+    ],
+    or: (left, right) => [
+      ...left.filter(({ truthiness }) => truthiness === "truthy"),
+      ...(left.some(({ truthiness }) => truthiness === "falsy") ? right : []),
+    ],
+  }).map(({ source: valueSource }) => valueSource);
+
 /** True only when the condition is false whatever the unpinned context holds. */
 export const definitelyFalse = (source: string, context: Context): boolean =>
   isTruthy(evaluate(source, context)) === false;
+
+type ContextWithPlanOutputsOptions = {
+  context: Context;
+  outputs: Record<string, string>;
+};
+
+/** Resolve computed planner outputs from their source expressions, not fixture pins. */
+export const contextWithPlanOutputs = ({
+  context,
+  outputs,
+}: ContextWithPlanOutputsOptions): Context => {
+  const projections = new Map<string, string>();
+  const computed = new Map<string, string>();
+  for (const [name, expression] of Object.entries(outputs)) {
+    const output = `needs.ci-plan.outputs.${name}`;
+    const reference =
+      /^\$\{\{\s*([\w-]+(?:\.[\w-]+)+)(?:\s*\|\|\s*(?:'(?:[^']|'')*'|true|false|null|\d+))?\s*\}\}$/u.exec(
+        expression,
+      )?.[1];
+    computed.set(output, expression);
+    if (reference !== undefined) {
+      projections.set(reference, output);
+    }
+  }
+  const lookup = (path: string) =>
+    Object.hasOwn(context.values, path)
+      ? context.values[path]
+      : context.fallback?.(path);
+  const plannerContext = {
+    ...context,
+    fallback: (path: string) => {
+      const direct = lookup(path);
+      if (direct !== undefined) {
+        return direct;
+      }
+      const projection = projections.get(path);
+      return projection === undefined ? undefined : lookup(projection);
+    },
+  };
+  return {
+    ...context,
+    values: Object.fromEntries(
+      Object.entries(context.values).filter(([name]) => !computed.has(name)),
+    ),
+    fallback: (path) => {
+      const expression = computed.get(path);
+      if (expression === undefined) {
+        return lookup(path);
+      }
+      const value = evaluate(expression, plannerContext);
+      if (value === UNKNOWN) {
+        return undefined;
+      }
+      if (value !== null && typeof value === "object") {
+        panic(`Computed planner output is not scalar: ${path}`);
+      }
+      return value === null ? "" : String(value);
+    },
+  };
+};

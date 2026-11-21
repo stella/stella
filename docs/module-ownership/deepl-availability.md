@@ -1,0 +1,7 @@
+# Reading translation provider availability before offering actions
+
+Generated from `scripts/ownership/deepl-availability.ts`. See [Module ownership](../module-ownership.md).
+
+| Capability                                                                               | Owner                                                                 | Enforcement                                                                        | Summary                                                                                                                                                                                          |
+| ---------------------------------------------------------------------------------------- | --------------------------------------------------------------------- | ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `deepl-availability` — Reading translation provider availability before offering actions | `apps/web/src/lib/organization/feature-access/capability-actions.tsx` | import `deepLAvailabilityOptions` from `@/lib/deepl/queries` (plus 1 allowed file) | The shared action resolver reads translation availability before rendering actions. The dialog shares the organization-keyed query while open; in-flight reads complete across toolbar remounts. |

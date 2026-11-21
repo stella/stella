@@ -8,6 +8,7 @@ import { toSafeId } from "@/api/lib/branded-types";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import type { ExtractAskContentsArgs } from "@/api/lib/document-review/review-extract";
 import { LIMITS } from "@/api/lib/limits";
+import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 import {
@@ -117,10 +118,12 @@ describe("review_folder_consistency", () => {
       );
       return Result.ok({
         lastBlockId: null,
-        contentBySourceId: new Map([
+        withheld: [],
+        outcomeBySourceId: new Map([
           [
             "cross-document-consistency",
             {
+              type: "answered" as const,
               content: {
                 type: "text" as const,
                 version: 1 as const,
@@ -151,6 +154,7 @@ describe("review_folder_consistency", () => {
       createAbortSignal: () => new AbortController().signal,
       extractAskContentsFn,
       organizationId,
+      modelAdmission: testModelAdmission(organizationId),
       orgAIConfig: null,
       managedAIResidency: "eu" as const,
       promptCachingEnabled: false,
@@ -225,10 +229,12 @@ describe("review_folder_consistency", () => {
         );
         return Result.ok({
           lastBlockId: null,
-          contentBySourceId: new Map([
+          withheld: [],
+          outcomeBySourceId: new Map([
             [
               "cross-document-consistency",
               {
+                type: "answered" as const,
                 content: { type: "text", version: 1, value: "No conflict." },
                 citations: [],
               },
@@ -237,6 +243,7 @@ describe("review_folder_consistency", () => {
         });
       },
       organizationId,
+      modelAdmission: testModelAdmission(organizationId),
       orgAIConfig: null,
       managedAIResidency: "eu" as const,
       promptCachingEnabled: false,
@@ -284,6 +291,7 @@ describe("review_folder_consistency", () => {
       createFolderConsistencyReviewTools({
         createAbortSignal: () => new AbortController().signal,
         organizationId,
+        modelAdmission: testModelAdmission(organizationId),
         orgAIConfig: null,
         managedAIResidency: "eu" as const,
         promptCachingEnabled: false,
@@ -310,6 +318,7 @@ describe("review_folder_consistency", () => {
     const tools = createFolderConsistencyReviewTools({
       createAbortSignal: () => new AbortController().signal,
       organizationId,
+      modelAdmission: testModelAdmission(organizationId),
       orgAIConfig: null,
       managedAIResidency: "eu" as const,
       promptCachingEnabled: false,

@@ -4,22 +4,21 @@ import {
   fetchWorkspaceNavigationPage,
   WORKSPACE_NAVIGATION_STATUS_SCOPE,
 } from "@/lib/memory-api";
-import type { WorkspaceNavigationItem } from "@/lib/memory-api";
-
-export type MemoryMatter = WorkspaceNavigationItem;
+import type { WorkspaceNavigationCaller } from "@/lib/workspaces/queries.logic";
 
 const getInitialMemoryMatterCursor = (): string | undefined => undefined;
 
-export const memoryMatterKeys = {
-  all: (activeOrganizationId: string) => [
+const memoryMatterKeys = {
+  all: ({ organizationId, userId }: WorkspaceNavigationCaller) => [
     "memory-matters",
-    activeOrganizationId,
+    organizationId,
+    userId,
   ],
 };
 
-export const memoryMattersOptions = (activeOrganizationId: string) =>
+export const memoryMattersOptions = (caller: WorkspaceNavigationCaller) =>
   infiniteQueryOptions({
-    queryKey: memoryMatterKeys.all(activeOrganizationId),
+    queryKey: memoryMatterKeys.all(caller),
     queryFn: async ({ pageParam, signal }) =>
       await fetchWorkspaceNavigationPage({
         cursor: pageParam,

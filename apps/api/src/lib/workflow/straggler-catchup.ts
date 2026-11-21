@@ -4,8 +4,9 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { properties } from "@/api/db/schema";
 import type { AIRequestServiceTier } from "@/api/lib/ai-config";
-import { captureError } from "@/api/lib/analytics/capture";
+import { captureError, detached } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import type { WorkflowStartStatus } from "@/api/lib/workflow-queue";
 import { COMPUTED_PROPERTY_TOOL_TYPES } from "@/api/lib/workflow/get-execution-plan";
 
@@ -104,27 +105,40 @@ export const startStragglerCatchUp = async ({
     // Both outcomes are still read: a rejection and an in-band `failed` mean
     // the same thing here, work this workspace is owed that no longer has a
     // successor coming.
-    startWorkflow({
-      workspaceId,
-      organizationId,
-      userId,
-      scopedDb,
-      serviceTier,
-    })
-      .then((result) => {
-        if (startReportedFailure(result)) {
-          captureError(
-            new StragglerCatchUpError({
-              message: "Straggler catch-up could not start its follow-up run",
-              workspaceId,
-            }),
-            { workspaceId },
-          );
-        }
-        return result;
-      })
-      .catch((error: unknown) => captureError(error, { workspaceId }));
+    detached(
+      async () =>
+        startWorkflow({
+          workspaceId,
+          organizationId,
+          userId,
+          scopedDb,
+          serviceTier,
+        })
+          .then((result) => {
+            if (startReportedFailure(result)) {
+              captureError(
+                new StragglerCatchUpError({
+                  message:
+                    "Straggler catch-up could not start its follow-up run",
+                  workspaceId,
+                }),
+                handlerErrorContext("workflowCatchUp.refused", { workspaceId }),
+              );
+            }
+            return result;
+          })
+          .catch((error: unknown) =>
+            captureError(
+              error,
+              handlerErrorContext("workflowCatchUp.rejected", { workspaceId }),
+            ),
+          ),
+      "straggler-catchup.start-workflow",
+    );
   } catch (error: unknown) {
-    captureError(error, { workspaceId });
+    captureError(
+      error,
+      handlerErrorContext("workflowCatchUp.failed", { workspaceId }),
+    );
   }
 };

@@ -5,6 +5,7 @@ import {
   publisherKeywordsOf,
   publisherSummaryOf,
 } from "@/api/lib/case-law/publisher-summary";
+import type { CaseLawRankingSignals } from "@/api/lib/legal-search/case-law-ranking-signals";
 import { UNDATED_DECISION_TIMESTAMP } from "@/api/lib/legal-search/corpus-index-config";
 import {
   corpusIndexGroupContractForJurisdiction,
@@ -13,18 +14,22 @@ import {
 import {
   corpusIndexContractDigest,
   corpusIndexIdFromManifest,
-  corpusIndexManifestDigest,
-  corpusIndexPublisherFields,
-  corpusIndexStemFields,
   type CorpusIndexManifest,
+  corpusIndexManifestDigest,
   type CorpusIndexPublisherFields,
+  corpusIndexPublisherFields,
+  corpusIndexRankingSignals,
+  corpusIndexStemFields,
 } from "@/api/lib/legal-search/corpus-index-manifest";
 import { EMPTY_CORPUS_CONTENT_HASHES } from "@/api/lib/legal-search/corpus-storage";
 import {
-  typedLegislationClassification,
   type LegislationExpressionClassification,
+  typedLegislationClassification,
 } from "@/api/lib/legal-search/legislation-expression-classification";
-import { documentMorphologyLanguage } from "@/api/lib/legal-search/morphology/corpus-language";
+import {
+  caseLawDocumentStemLanguage,
+  documentMorphologyLanguage,
+} from "@/api/lib/legal-search/morphology/corpus-language";
 import { morphologyKey } from "@/api/lib/legal-search/morphology/stem";
 
 type ProjectionInputBase = {
@@ -61,6 +66,29 @@ export type CaseLawProjectionInput = ProjectionInputBase & {
    * is assembled per row inside the canonical transaction.
    */
   metadata: Record<string, unknown> | null;
+  /**
+   * The provision keys of the decision's recorded provision links, distinct
+   * and sorted (`@/api/lib/case-law/provision-keys`). Empty for a decision of
+   * a group whose contract carries no such field: only a `provision_keys_v1`
+   * group reads them, writes them and fingerprints them.
+   */
+  provisionKeys: readonly string[];
+  /**
+   * What search ranks the decision by beyond its text
+   * (`readCaseLawRankingSignals`). Read for every decision; only a generation
+   * whose manifest carries ranking signals writes them and fingerprints them.
+   */
+  rankingSignals: CaseLawRankingSignals;
+  /**
+   * The generation the gated flip moved this decision's jurisdiction away
+   * from (the jurisdiction-serving pointer's `from_generation`), or null while
+   * no flip has happened. That generation, and only that one, holds no copy of
+   * the decision any more: its projection is an erasure, which is how what the
+   * vacated generation still holds is purged once readers have moved. Every
+   * other generation, a whole one being built for promotion included, projects
+   * the decision as usual.
+   */
+  vacatedFrom: string | null;
 };
 
 export type LegislationV2ProjectionInput = ProjectionInputBase &
@@ -75,8 +103,7 @@ export type LegislationV2ProjectionInput = ProjectionInputBase &
   };
 
 export type CorpusIndexProjectionInput =
-  | CaseLawProjectionInput
-  | LegislationV2ProjectionInput;
+  CaseLawProjectionInput | LegislationV2ProjectionInput;
 
 export type CorpusIndexProjectionDescriptor =
   | { action: "erase" }
@@ -151,12 +178,14 @@ const publisherFingerprintFields = (
  * manifest's contract, so every such fingerprint keeps its bytes. A
  * court-partitioned group covers its effective contract and the court
  * identity it writes, so a contract change or a court correction re-projects
- * the decision.
+ * the decision. A group with provision keys covers its effective contract and
+ * the sorted keys it writes, so a link recorded, corrected or removed
+ * re-projects the decision.
  */
 const groupContractFingerprintFields = (
   manifest: CorpusIndexManifest,
   input: CaseLawProjectionInput,
-): { groupContract?: Record<string, string> } => {
+): { groupContract?: Record<string, string | readonly string[]> } => {
   const contract = corpusIndexGroupContractForJurisdiction(
     manifest,
     input.jurisdiction,
@@ -174,11 +203,56 @@ const groupContractFingerprintFields = (
         },
       };
     }
+    case "provision_keys_v1":
+      return {
+        groupContract: {
+          effectiveDigest: contract.effectiveDigest,
+          provisionKeys: input.provisionKeys.toSorted(),
+        },
+      };
     default:
       contract satisfies never;
       return panic(`Unhandled group contract: ${String(contract)}`);
   }
 };
+
+/**
+ * What the ranking signals add to a fingerprint: nothing for a generation that
+ * does not write them, so every earlier fingerprint keeps its bytes. One that
+ * does covers each value it writes that can move without the decision being
+ * edited (its authority bucket, whether its language group is shared) and the
+ * inputs the court tier is resolved from, so the decisions whose written
+ * signals moved re-project, and no others. The passage count is covered by
+ * the content hash it is derived from.
+ */
+const rankingSignalFingerprintFields = (
+  manifest: CorpusIndexManifest,
+  input: CaseLawProjectionInput,
+): { rankingSignals?: Record<string, string | number | boolean | null> } =>
+  corpusIndexRankingSignals(manifest) === null
+    ? {}
+    : {
+        rankingSignals: {
+          citationAuthorityBucket: input.rankingSignals.citationAuthorityBucket,
+          courtId: input.courtId,
+          languageGroupKey: input.rankingSignals.languageGroupKey,
+          languageGroupShared: input.rankingSignals.languageGroupShared,
+        },
+      };
+
+/**
+ * A decision in a language its jurisdiction does not declare is blocked, not
+ * built. Its fingerprint carries that mark, and only its: every declared
+ * decision keeps the fingerprint it had, and declaring the language later
+ * changes exactly the blocked decisions' fingerprints, which makes their
+ * states eligible again.
+ */
+export const undeclaredLanguageFingerprintFields = (
+  input: Pick<CaseLawProjectionInput, "jurisdiction" | "language">,
+): { documentLanguage?: "undeclared" } =>
+  caseLawDocumentStemLanguage(input).isErr()
+    ? { documentLanguage: "undeclared" }
+    : {};
 
 export const deriveCorpusIndexProjectionDescriptor = (
   manifest: CorpusIndexManifest,
@@ -194,6 +268,8 @@ export const deriveCorpusIndexProjectionDescriptor = (
     EMPTY_CORPUS_CONTENT_HASHES.includes(input.contentHash) ||
     !input.redistributionEligible ||
     (input.family === "case_law" && (input.redacted || input.listingOnly)) ||
+    (input.family === "case_law" &&
+      input.vacatedFrom === manifest.generation) ||
     // A withdrawn version is a tombstone the publisher no longer lists: it
     // stays openable by id, and no search may find it.
     (input.family === "legislation" && input.windowDisposition === "withdrawn")
@@ -255,6 +331,8 @@ export const deriveCorpusIndexProjectionDescriptor = (
           ecli: input.ecli,
           ...publisher,
           ...groupContractFingerprintFields(manifest, input),
+          ...rankingSignalFingerprintFields(manifest, input),
+          ...undeclaredLanguageFingerprintFields(input),
         }),
       };
     }

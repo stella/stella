@@ -1,3 +1,37 @@
+// parser-output-unchanged: responses within the publisher byte ceiling stream through unchanged; a larger body fails the read as too-large.
+// parser-output-unchanged: [cz-ns] Cancellation and discarded-body settlement preserve successful response bytes and parsed decisions.
+// parser-output-unchanged: [cz-nss] Cancellation and discarded-body settlement preserve successful response bytes and parsed decisions.
+// parser-output-unchanged: [cz-us] Cancellation and discarded-body settlement preserve successful response bytes and parsed decisions.
+// parser-output-unchanged: [cz-regional] Cancellation and discarded-body settlement preserve successful response bytes and parsed decisions.
+// parser-output-unchanged: [cz-uohs] Cancellation and discarded-body settlement preserve successful response bytes and parsed decisions.
+// parser-output-unchanged: [sk-courts] Cancellation and discarded-body settlement preserve successful response bytes and parsed decisions.
+// parser-output-unchanged: [sk-us] Cancellation and discarded-body settlement preserve successful response bytes and parsed decisions.
+// parser-output-unchanged: [pl-courts] Cancellation and discarded-body settlement preserve successful response bytes and parsed decisions.
+// parser-output-unchanged: [pl-sn] Cancellation and discarded-body settlement preserve successful response bytes and parsed decisions.
+// parser-output-unchanged: [pl-kio] Cancellation and discarded-body settlement preserve successful response bytes and parsed decisions.
+// parser-output-unchanged: [pl-tk] Cancellation and discarded-body settlement preserve successful response bytes and parsed decisions.
+// parser-output-unchanged: [pl-nsa] Cancellation and discarded-body settlement preserve successful response bytes and parsed decisions.
+// parser-output-unchanged: [pl-ncourt] Cancellation and discarded-body settlement preserve successful response bytes and parsed decisions.
+// parser-output-unchanged: [at-courts] Cancellation and discarded-body settlement preserve successful response bytes and parsed decisions.
+// parser-output-unchanged: [at-vfgh] Cancellation and discarded-body settlement preserve successful response bytes and parsed decisions.
+// parser-output-unchanged: [at-vwgh] Cancellation and discarded-body settlement preserve successful response bytes and parsed decisions.
+// parser-output-unchanged: [at-bvwg] Cancellation and discarded-body settlement preserve successful response bytes and parsed decisions.
+// parser-output-unchanged: [at-lvwg] Cancellation and discarded-body settlement preserve successful response bytes and parsed decisions.
+// parser-output-unchanged: [at-asylgh] Cancellation and discarded-body settlement preserve successful response bytes and parsed decisions.
+// parser-output-unchanged: [at-ubas] Cancellation and discarded-body settlement preserve successful response bytes and parsed decisions.
+// parser-output-unchanged: [at-uvs] Cancellation and discarded-body settlement preserve successful response bytes and parsed decisions.
+// parser-output-unchanged: [at-verg] Cancellation and discarded-body settlement preserve successful response bytes and parsed decisions.
+// parser-output-unchanged: [at-umse] Cancellation and discarded-body settlement preserve successful response bytes and parsed decisions.
+// parser-output-unchanged: [at-bks] Cancellation and discarded-body settlement preserve successful response bytes and parsed decisions.
+// parser-output-unchanged: [at-findok] Cancellation and discarded-body settlement preserve successful response bytes and parsed decisions.
+// parser-output-unchanged: [eu-ecj] Cancellation and discarded-body settlement preserve successful response bytes and parsed decisions.
+// parser-output-unchanged: [hu-bhgy] Cancellation and discarded-body settlement preserve successful response bytes and parsed decisions.
+// parser-output-unchanged: [uk-fcl] Cancellation and discarded-body settlement preserve successful response bytes and parsed decisions.
+// parser-output-unchanged: [pl-kis] Cancellation and discarded-body settlement preserve successful response bytes and parsed decisions.
+// parser-output-unchanged: [pl-uodo] Cancellation and discarded-body settlement preserve successful response bytes and parsed decisions.
+// parser-output-unchanged: [pl-uokik] Cancellation and discarded-body settlement preserve successful response bytes and parsed decisions.
+// parser-output-unchanged: one-request reads honor the existing rate-limit redirect predicate and preserve its typed source stop.
+import { panic, Result } from "better-result";
 // parser-output-unchanged: completion failures return Results to the job boundary; adapter parsing and ordinary request semantics are unchanged.
 // parser-output-unchanged: excluding the native timeout option only narrows the request type.
 // parser-output-unchanged: refusal stops are opt-in; existing response and retry semantics are unchanged.
@@ -14,9 +48,9 @@
  * `publisher-policy.ts` never saw, and neither can forget to.
  */
 
-import { Result, panic } from "better-result";
-
-import { fetchWithTimeout, type FetchWithTimeoutInit } from "@stll/fetch";
+// parser-output-unchanged: retry delays use the shared arithmetic owner; parsed content is unchanged.
+import { backoffDelay } from "@stll/concurrency/backoff-delay";
+import type { FetchWithTimeoutInit } from "@stll/fetch";
 import type { DocumentFetchStage } from "@stll/legal-atlas/document-fetch-diagnostics";
 import { INGESTION_STOP_KIND } from "@stll/legal-atlas/ingestion-cycle";
 import { Temporal } from "@stll/time";
@@ -25,16 +59,18 @@ import { ADAPTER_TIMEOUT } from "@/api/handlers/case-law/consts";
 import {
   ADAPTER_PUBLISHER_GATES,
   deferPublisherGate,
-  reservePublisherGateSlot,
   type PublisherGateId,
   publisherRunControls,
+  reservePublisherGateSlot,
 } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { observePublisherDocumentFetch } from "@/api/lib/legal-search/document-stage-observation";
 import type { AdapterKey } from "@/api/lib/legal-search/ingestion-constants";
+import { withPublicReadIo } from "@/api/lib/legal-search/public-read-timeout-context";
 import { logger } from "@/api/lib/observability/logger";
 
 import { abortableSleep } from "./publisher-request-gate";
+import { limitPublisherResponse } from "./publisher-response-limit";
 import { publisherTarget } from "./publisher-target";
 import { INGESTION_USER_AGENT, isTimeoutError } from "./utils";
 
@@ -84,22 +120,26 @@ export const fetchPublisher = async (
   url: string | URL,
   { retryPolicy, ...init }: PublisherFetchInit,
 ): Promise<Response> => {
-  if (retryPolicy === "publisher-backoff") {
-    return await retryPublisherRequest(url, init);
-  }
-  const response = await fetchPublisherRequest(url, init);
-  if (isStopStatus(init.refusalMode, response.status)) {
+  const response =
+    retryPolicy === "publisher-backoff"
+      ? await retryPublisherRequest(url, init)
+      : await fetchPublisherRequest(url, init);
+  if (
+    isStopStatus(init.refusalMode, response.status) ||
+    init.isRateLimitRedirect?.(response)
+  ) {
     const retryAfter = response.headers.get("Retry-After");
     await response.body?.cancel();
     throw new AdapterFetchError({
       message: `Publisher request refused: ${response.status}`,
+      stopKind: INGESTION_STOP_KIND.PUBLISHER_REFUSAL,
       adapterKey: init.adapterKey,
       cursor: null,
       httpStatus: response.status,
       ...(retryAfter === null ? {} : { retryAfter }),
     });
   }
-  return response;
+  return limitPublisherResponse(response);
 };
 
 type PublisherRateLimitRefusalErrorOptions = {
@@ -107,6 +147,7 @@ type PublisherRateLimitRefusalErrorOptions = {
   publisherKey: PublisherGateId;
   status: number;
   cooldownUntilEpochMs: number;
+  retryAfter?: string | null;
   adapterKey: AdapterKey;
 };
 
@@ -120,6 +161,7 @@ export class PublisherRateLimitRefusalError extends AdapterFetchError {
     publisherKey,
     status,
     cooldownUntilEpochMs,
+    retryAfter,
     adapterKey,
     cursor,
   }: PublisherRateLimitRefusalErrorOptions) {
@@ -128,6 +170,7 @@ export class PublisherRateLimitRefusalError extends AdapterFetchError {
       adapterKey,
       cursor,
       httpStatus: status,
+      ...(typeof retryAfter === "string" ? { retryAfter } : {}),
       stopKind: INGESTION_STOP_KIND.PUBLISHER_REFUSAL,
     });
     this.name = "PublisherRateLimitRefusalError";
@@ -184,9 +227,11 @@ export const publisherRetryDelay = ({
   random,
   retryAfterMaxMs = RETRY_AFTER_MAX_MS,
 }: PublisherRetryDelayOptions): number => {
-  const jitter =
-    random *
-    Math.min(PUBLISHER_BASE_DELAY_MS * 2 ** attempt, PUBLISHER_MAX_DELAY_MS);
+  const jitter = backoffDelay(attempt, {
+    baseMs: PUBLISHER_BASE_DELAY_MS,
+    maxMs: PUBLISHER_MAX_DELAY_MS,
+    jitter: { type: "full", random },
+  });
   const parsed = parsePublisherRetryAfter(retryAfter, now);
   if (parsed === null) {
     return jitter;
@@ -215,8 +260,12 @@ const fetchPublisherRequest = async (
   ) => {
     // Each request, including a redirect or backoff attempt, is observed.
     const sendRequest = async () =>
-      // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- canonical publisher boundary; callers validate the target
-      await fetchWithTimeout(target, requestOptions);
+      await withPublicReadIo(
+        "publisher",
+        async (io) =>
+          // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- canonical publisher boundary; callers validate the target
+          await io.fetchStream(target, requestOptions),
+      );
     if (fetchStage === "listing") {
       return await sendRequest();
     }
@@ -262,17 +311,24 @@ const fetchPublisherRequest = async (
         response.status === 429 ||
         _isRateLimitRedirect?.(response)
       ) {
+        const retryAfter = response.headers.get("Retry-After");
         const refusalNow = Temporal.Now.instant().epochMilliseconds;
         const delay = Math.ceil(
           publisherRetryDelay({
             attempt: 0,
-            retryAfter: response.headers.get("Retry-After"),
+            retryAfter,
             now: refusalNow,
             random: Math.random(),
             retryAfterMaxMs: MAX_DATE_EPOCH_MS - refusalNow,
           }),
         );
         controls.onRefusal?.(refusalNow + delay);
+        yield* Result.await(
+          Result.tryPromise({
+            try: async () => await response.body?.cancel(),
+            catch: (error) => error,
+          }),
+        );
         const cooldownUntilEpochMs = yield* Result.await(
           Result.tryPromise({
             try: async () =>
@@ -284,16 +340,11 @@ const fetchPublisherRequest = async (
             catch: (error) => error,
           }),
         );
-        yield* Result.await(
-          Result.tryPromise({
-            try: async () => await response.body?.cancel(),
-            catch: (error) => error,
-          }),
-        );
         return Result.err(
           new PublisherRateLimitRefusalError({
             publisherKey: gateId,
             status: response.status,
+            retryAfter,
             cooldownUntilEpochMs,
             adapterKey,
             cursor: null,
@@ -350,20 +401,6 @@ const fetchPublisherRequest = async (
   const result = await fetchTarget(String(url), 0);
   return result.isOk() ? result.value : controls.raiseFailure(result.error);
 };
-
-/**
- * Compute exponential backoff delay with jitter.
- *
- *   delay = min(baseMs × 2^attempt + random(0, baseMs), maxMs)
- *
- * Jitter prevents thundering-herd when multiple adapters
- * retry simultaneously against the same court server.
- */
-export const backoffMs = (
-  attempt: number,
-  baseMs = 1000,
-  maxMs = 30_000,
-): number => Math.min(baseMs * 2 ** attempt + Math.random() * baseMs, maxMs);
 
 type FetchWithRetryOptions = {
   /**
@@ -464,8 +501,17 @@ export const fetchWithRetry = async (
         return response;
       }
 
-      // Retryable status: back off and retry
-      const delay = backoffMs(attempt, baseDelayMs, maxDelayMs);
+      // Settle the discarded body before the next attempt.
+      await response.body?.cancel();
+      const delay = backoffDelay(attempt, {
+        baseMs: baseDelayMs,
+        maxMs: maxDelayMs,
+        jitter: {
+          type: "additive",
+          random: Math.random(),
+          rangeMs: baseDelayMs,
+        },
+      });
       logger.warn("case_law.ingestion.fetch_retry", {
         adapterKey,
         url,
@@ -488,7 +534,15 @@ export const fetchWithRetry = async (
         isTimeoutError(error) &&
         attempt < maxRetries
       ) {
-        const delay = backoffMs(attempt, baseDelayMs, maxDelayMs);
+        const delay = backoffDelay(attempt, {
+          baseMs: baseDelayMs,
+          maxMs: maxDelayMs,
+          jitter: {
+            type: "additive",
+            random: Math.random(),
+            rangeMs: baseDelayMs,
+          },
+        });
         logger.warn("case_law.ingestion.fetch_timeout_retry", {
           adapterKey,
           url,
@@ -588,10 +642,11 @@ export const retryPublisherRequest = async (
           (fetched.value.status === 401 || fetched.value.status === 403)) ||
         init.isRateLimitRedirect?.(fetched.value))
     ) {
+      const retryAfter = fetched.value.headers.get("Retry-After");
       const delay = Math.ceil(
         publisherRetryDelay({
           attempt,
-          retryAfter: fetched.value.headers.get("Retry-After"),
+          retryAfter,
           now: runtime.now(),
           random: runtime.random(),
           ...(controls === undefined
@@ -600,15 +655,16 @@ export const retryPublisherRequest = async (
         }),
       );
       controls?.onRefusal?.(runtime.now() + delay);
+      await fetched.value.body?.cancel();
       const cooldownUntilEpochMs = await runtime.defer(
         Math.min(delay, RETRY_AFTER_MAX_MS),
         init.signal,
       );
-      await fetched.value.body?.cancel();
       throw new PublisherRateLimitRefusalError({
         cursor: null,
         publisherKey: gateId,
         status: fetched.value.status,
+        retryAfter,
         cooldownUntilEpochMs,
         adapterKey: init.adapterKey,
       });
@@ -646,10 +702,10 @@ export const retryPublisherRequest = async (
     );
     // Publish the cooldown before sleeping. The Redis gate checks it before
     // every ECJ request, including slots reserved before this backoff began.
-    await runtime.defer(delay, init.signal);
     if (Result.isOk(fetched)) {
       await fetched.value.body?.cancel();
     }
+    await runtime.defer(delay, init.signal);
     await runtime.sleep(delay, init.signal);
   }
   return panic("retryPublisherRequest: unreachable");

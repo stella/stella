@@ -1,15 +1,15 @@
 import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
-import { status } from "elysia";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawMatterLinks } from "@/api/db/schema";
+import { status } from "@/api/http/status";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
+import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
 
 type DeleteMatterLinkProps = {
   scopedDb: ScopedDb;
@@ -55,6 +55,7 @@ export const deleteMatterLinkHandler = async ({
 };
 
 const config = {
+  contract: "patch",
   description:
     "Unlink one case-law decision from a matter, deleting the link and the " +
     "note recorded on it. The decision itself stays in the case-law corpus and " +
@@ -67,7 +68,7 @@ const config = {
     consumesServices: false,
   },
   params: workspaceParams({
-    linkId: tSafeId("caseLawMatterLink"),
+    linkId: resourceIdSchema("caseLawMatterLink"),
   }),
 } satisfies WorkspaceHandlerConfig;
 

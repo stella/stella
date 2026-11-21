@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 import { and, eq, ilike, or, sql } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { arabicNormalize } from "@stll/text-normalize";
 
@@ -8,16 +8,22 @@ import { contacts } from "@/api/db/schema";
 import { contactTypeSchema } from "@/api/handlers/contacts/schema";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { escapeLike } from "@/api/lib/escape-like";
+import { LIMITS } from "@/api/lib/limits";
 
 const SEARCH_LIMIT = 20;
 
-const searchContactsQuerySchema = t.Object({
-  q: t.String({ minLength: 1 }),
-  type: t.Optional(contactTypeSchema),
+const searchContactsQuerySchema = v.object({
+  q: v.pipe(
+    v.string(),
+    v.minLength(1),
+    v.maxLength(LIMITS.searchQueryMaxLength),
+  ),
+  type: v.optional(contactTypeSchema),
 });
 
 const searchContacts = createSafeRootHandler(
   {
+    contract: "patch",
     description:
       "Look up contacts by name, for a picker: q matches a substring of the " +
       "display name, first name, last name, or organization name, normalized " +

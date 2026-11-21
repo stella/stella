@@ -1,5 +1,131 @@
 # @stll/ai-catalog
 
+## 0.17.0
+
+### Minor Changes
+
+- [#9029](https://github.com/stella/stella/pull/9029) [`68c1187`](https://github.com/stella/stella/commit/68c118754f48886030189fc90429f3a224f7c499) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add a `browse` override group. It has no defaults of its own: `MODEL_OVERRIDE_GROUP_TASK` maps it to `short-text`, and `inheritedOverrideGroup` names the group it follows while unset (`fast`). `ModelOverrideGroup` gains a member, so code that matches it exhaustively has to handle it; `ModelTask` is unchanged.
+
+- [#9036](https://github.com/stella/stella/pull/9036) [`9977457`](https://github.com/stella/stella/commit/99774576b74999d1c440ca26f3345a6975c54dd0) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Default to the newest model generations: Gemini 4 Hydrogen for Google chat, fast and PDF tasks, Gemini 4 Neon for Google reasoning, and GPT-6.2 Sol for OpenAI and OpenRouter chat, reasoning and PDF tasks. Gemini 4 Hydrogen replaces Gemini 3.8 Flash in the recommended chat models. The default and recommended model id literal types change with them.
+
+## 0.16.0
+
+### Minor Changes
+
+- [#8903](https://github.com/stella/stella/pull/8903) [`0cf5be6`](https://github.com/stella/stella/commit/0cf5be6003a6796bb5f1dbbe937704027f79897b) Thanks [@stella-provenance-updater](https://github.com/apps/stella-provenance-updater)! - Offer Gemini 4 Neon on the Google and OpenRouter routes with its upstream rates, context window and generated capabilities. The offered model id types and option lists change with it, so code that matches them exhaustively has to handle the new id.
+
+## 0.15.0
+
+### Minor Changes
+
+- [#8829](https://github.com/stella/stella/pull/8829) [`f2d9c52`](https://github.com/stella/stella/commit/f2d9c5236e757123bc254e2783d60414c6b7db91) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Offer GPT-6.2 Astra and GPT-6.2 Sol. The offered model id types and option lists change with them, so code that matches them exhaustively has to handle the new ids.
+
+## 0.14.0
+
+### Minor Changes
+
+- [#8697](https://github.com/stella/stella/pull/8697) [`3505436`](https://github.com/stella/stella/commit/3505436363a468d70e34faa5d8511a31e6cb80a9) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Transcription models name their route (OpenRouter, or straight to ElevenLabs under the provider's model id), add Scribe v3, and `transcriptionEndpointFor` and `defaultTranscriptionModelId` take what the deployment serves.
+
+- [#8679](https://github.com/stella/stella/pull/8679) [`e5dacf4`](https://github.com/stella/stella/commit/e5dacf41a6d171397eb8b81fcd69385d41767005) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Transcription models now list availability on the global endpoint and a provider name, with refreshed prices, US availability and new zero-retention models; `transcriptionEndpointFor` picks the endpoint that serves a model for an organization.
+
+## 0.13.0
+
+### Minor Changes
+
+- [#8463](https://github.com/stella/stella/pull/8463) [`e87f7e2`](https://github.com/stella/stella/commit/e87f7e2f6e0607577e1a07f984151c1787cac989) Thanks [@stella-provenance-updater](https://github.com/apps/stella-provenance-updater)! - Offer Gemini 4 Hydrogen on the Google and OpenRouter routes with its upstream rates, context window and generated capabilities. The offered model id types and option lists change with it, so code that matches them exhaustively has to handle the new id.
+
+### Patch Changes
+
+- [#8537](https://github.com/stella/stella/pull/8537) [`001c640`](https://github.com/stella/stella/commit/001c640e64cb00e3948bdf68a18a40347c65a40f) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Build declarations through the native tsrs API supported by tsdown 0.23.7, resolving the compiler from each package.
+
+## 0.12.0
+
+### Minor Changes
+
+- [#8310](https://github.com/stella/stella/pull/8310) [`459ba98`](https://github.com/stella/stella/commit/459ba9864a0928dfd04e21ab77d0a0eca1f21ebf) Thanks [@stella-provenance-updater](https://github.com/apps/stella-provenance-updater)! - Offer Gemini 4 Carbon on the Google and OpenRouter routes with its upstream rates, context window and generated capabilities. The offered model id types and option lists change with it, so code that matches them exhaustively has to handle the new id.
+
+- [#8253](https://github.com/stella/stella/pull/8253) [`91b7234`](https://github.com/stella/stella/commit/91b7234554c474741dc9a2bf5f36a8117bc5c10c) Thanks [@stella-provenance-updater](https://github.com/apps/stella-provenance-updater)! - Offer Claude Fable 5.2 with its upstream rates, 1M context window, and generated capabilities, and supersede Claude Fable 5 and 5.1 with it. The offered model id types and option lists change with it, so code that matches them exhaustively has to handle the new id.
+
+## 0.11.0
+
+### Minor Changes
+
+- [#8036](https://github.com/stella/stella/pull/8036) [`a673b9c`](https://github.com/stella/stella/commit/a673b9ce9ae19be276457c14a29969f176e3daba) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Offer GPT-6.1 Terra. The offered model id types and option lists change with it, so code that matches them exhaustively has to handle the new id.
+
+## 0.10.1
+
+### Patch Changes
+
+- [#7357](https://github.com/stella/stella/pull/7357) [`14ae497`](https://github.com/stella/stella/commit/14ae497b31a86e96931d734fd3441c4bbe8aac29) Thanks [@stella-provenance-updater](https://github.com/apps/stella-provenance-updater)! - Refresh upstream model rates and request capabilities.
+
+## 0.10.0
+
+### Minor Changes
+
+- Add `defaultTranscriptionModelId`, the cheapest transcription model offered in a region. The `dictation transcribe` capability no longer requires a model: without one the server uses that default for the organization's region.
+
+## 0.9.0
+
+### Minor Changes
+
+- [#7350](https://github.com/stella/stella/pull/7350) [`27375ef`](https://github.com/stella/stella/commit/27375ef28c854e8341c537d18e910ca68b17e883) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add transcription model metadata and a file-input dictation capability description.
+
+## 0.8.2
+
+### Patch Changes
+
+- [#6300](https://github.com/stella/stella/pull/6300) [`17830cc`](https://github.com/stella/stella/commit/17830cc0f3578c1ad26acae77374ef9e959fa77f) Thanks [@stella-provenance-updater](https://github.com/apps/stella-provenance-updater)! - Refresh upstream model rates and request capabilities.
+
+## 0.8.1
+
+### Patch Changes
+
+- [#6141](https://github.com/stella/stella/pull/6141) [`1994418`](https://github.com/stella/stella/commit/19944181a4f1becd3d5266e985d95eb6961ddd2c) Thanks [@stella-provenance-updater](https://github.com/apps/stella-provenance-updater)! - Refresh upstream model rates and request capabilities.
+
+## 0.8.0
+
+### Minor Changes
+
+- [#5588](https://github.com/stella/stella/pull/5588) [`187f232`](https://github.com/stella/stella/commit/187f2321dddcd7776e00b789a84411bd7f319f61) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Replace model roles with separate task and organization override-group types. Resolve defaults and request modes from a total task ledger; use Claude Haiku 5.5 for search expansion, classification, and short text on Anthropic, Bedrock, and OpenRouter.
+
+## 0.7.1
+
+### Patch Changes
+
+- [#5769](https://github.com/stella/stella/pull/5769) [`7d21fdb`](https://github.com/stella/stella/commit/7d21fdb179373956566d4c5f2098a0dfb37af275) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Offer Gemini 4 Argon on the Google and OpenRouter routes.
+
+## 0.7.0
+
+### Minor Changes
+
+- [#5330](https://github.com/stella/stella/pull/5330) [`65edbfb`](https://github.com/stella/stella/commit/65edbfb9c7100778054b2db7e285385978483564) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Declare reasoning replay formats, request settings, and compatible provenances for every offered and retained model.
+
+- [#5183](https://github.com/stella/stella/pull/5183) [`553416d`](https://github.com/stella/stella/commit/553416dfc37ca3bcb5ba637fe8e78f8c829c470c) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add the beta OpenAI decision provider to the shared decision-model catalog.
+
+### Patch Changes
+
+- [#5515](https://github.com/stella/stella/pull/5515) [`37ddc2b`](https://github.com/stella/stella/commit/37ddc2b337d710c8611eb70c35f0450a25213adf) Thanks [@stella-provenance-updater](https://github.com/apps/stella-provenance-updater)! - Add Claude Haiku 5.5 routes with model rates and request capabilities.
+
+## 0.6.1
+
+### Patch Changes
+
+- [#5313](https://github.com/stella/stella/pull/5313) [`3e73ddb`](https://github.com/stella/stella/commit/3e73ddbb5df64c5d5edb3466e613eed180642b35) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Regenerate model catalog snapshots from committed upstream inputs during checks.
+
+- [#5297](https://github.com/stella/stella/pull/5297) [`4e74282`](https://github.com/stella/stella/commit/4e74282ce2ffe431108dfa4af8ce52a03db2499d) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Refresh the model capability snapshot so sampling parameters are omitted for models that reject them.
+
+- [#5281](https://github.com/stella/stella/pull/5281) [`9625362`](https://github.com/stella/stella/commit/962536216f2060e5854a82fcbc4cec1ac5abd7de) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Keep the model rate snapshot current, with reviewed price corrections pinned to the upstream values they replace.
+
+## 0.6.0
+
+### Minor Changes
+
+- [#4935](https://github.com/stella/stella/pull/4935) [`ef2de9c`](https://github.com/stella/stella/commit/ef2de9c14bdc4f7f2fd248a46df18dabac55b73c) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add `RECOMMENDED_CHAT_MODELS`, the curated list behind the chat model picker's Recommended section, and a `supersededBy` field in model display metadata that names the newer model replacing an older one.
+
+### Patch Changes
+
+- [#5162](https://github.com/stella/stella/pull/5162) [`78d2827`](https://github.com/stella/stella/commit/78d28278c6ab3b03a70afe426893a357a453b724) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Offer Mistral Large 4 in the model catalog.
+
 ## 0.5.0
 
 ### Minor Changes

@@ -66,9 +66,11 @@ export {
   PersonFieldValue,
 } from "./field-value";
 export { getClipFieldValueLabel } from "./field-value-logic";
+export { WorkspaceUiFormattingProvider } from "./formatting";
+export type { WorkspaceUiFormattingProviderProps } from "./formatting";
 export { PropertyIcon } from "./property-icon";
 export type { PropertyIconType } from "./property-icon";
-export { SortChips, sortDirectionHint } from "./sorts";
+export { SortChips } from "./sorts";
 export type {
   SortChipsLabels,
   SortChipsProps,
@@ -120,13 +122,16 @@ export type {
   WorkspaceViewSwitcherReorder,
 } from "./view-switcher";
 export {
-  reorderWorkspaceViewIds,
-  toWorkspaceViewDropPosition,
-} from "./view-switcher.logic";
+  WorkspaceViewStrip,
+  WorkspaceViewSwitcherFace,
+  WorkspaceViewTabFace,
+  WorkspaceViewTabName,
+} from "./view-switcher-face";
 export type {
-  WorkspaceViewDirection,
-  WorkspaceViewDropPosition,
-} from "./view-switcher.logic";
+  WorkspaceViewStripProps,
+  WorkspaceViewSwitcherFaceProps,
+  WorkspaceViewTabFaceProps,
+} from "./view-switcher-face";
 export { WorkspaceFrame } from "./workspace-frame";
 export type {
   WorkspaceFrameEndRail,

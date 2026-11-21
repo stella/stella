@@ -4,8 +4,8 @@ import { eq } from "drizzle-orm";
 import { rootDb } from "@/api/db/root";
 import { feedbackReports } from "@/api/db/schema";
 import {
-  feedbackReportStore,
   type FeedbackReportRow,
+  feedbackReportStore,
 } from "@/api/lib/db/feedback-report-store";
 
 const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";

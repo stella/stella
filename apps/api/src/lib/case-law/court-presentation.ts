@@ -1,11 +1,12 @@
 import { panic, Result } from "better-result";
 
-import type { CourtTierLabel } from "@stll/api-contract/case-law-court-tiers";
-
 import {
   courtAbbreviation,
   type CourtAbbreviationInput,
-} from "@/api/lib/case-law/court-abbreviations";
+} from "@stll/api-contract/case-law-court-abbreviations";
+import type { CourtTierLabel } from "@stll/api-contract/case-law-court-tiers";
+import { resolveUsCourt } from "@stll/api-contract/us-courts";
+
 import { courtTierLabel } from "@/api/lib/case-law/court-tiers";
 import {
   type CourtWeightMap,
@@ -33,18 +34,35 @@ export type CourtPresentation = {
   courtTier: CourtTierLabel;
 };
 
-/** The court registry, or nothing when the read that answers for it did not. */
+/** Name-pattern weights; compiled court directories remain available when this read fails. */
 export type CourtRegistry = CourtWeightMap | null;
 
 /**
- * The tier a row reports when no registry could be read. It is never drawn:
- * the abbreviation is null in that case, so the client has no chip to weight.
+ * A row whose rank is unavailable carries no abbreviation with this fallback.
  */
 const UNRANKED_TIER: CourtTierLabel = "other";
 
 type PresentedDecision = CourtAbbreviationInput & {
   /** The directory court id, where the decision's jurisdiction stores one. */
   courtId: string | null;
+};
+
+/** Directory courts carry their publisher's short name without loading it in the browser. */
+export const decisionCourtAbbreviation = (
+  decision: PresentedDecision,
+): string | null => {
+  if (decision.country !== "USA") {
+    return courtAbbreviation(decision) ?? null;
+  }
+  const resolved =
+    decision.courtId === null ? undefined : resolveUsCourt(decision.courtId);
+  if (resolved?.type === "accepted") {
+    return resolved.court.shortCode;
+  }
+  // Graph reads need only the code, but retain the rank owner's invalid-id
+  // telemetry even when they do not render a tier.
+  decisionCourtWeight(new Map(), decision);
+  return null;
 };
 
 /**
@@ -60,7 +78,7 @@ const rankedPresentation = (
   switch (rank.type) {
     case "ranked":
       return {
-        courtAbbreviation: courtAbbreviation(decision) ?? null,
+        courtAbbreviation: decisionCourtAbbreviation(decision),
         courtTier: courtTierLabel(rank.tier),
       };
     case "invalid-directory-identity":
@@ -74,14 +92,16 @@ const rankedPresentation = (
 export const courtPresentation = (
   courtWeights: CourtRegistry,
   decision: PresentedDecision,
-): CourtPresentation =>
-  // No registry, no chip. The alternative is a badge drawn at the bottom of a
-  // scale nobody could read, which would show the Supreme Court as a district
-  // one — a wrong answer where the honest one is silence, since the court's
-  // name is beside it either way.
-  courtWeights === null
+): CourtPresentation => {
+  if (decision.country === "USA") {
+    // The compiled directory owns both the name and rank; the DB name-pattern
+    // registry may be unavailable without affecting this jurisdiction.
+    return rankedPresentation(courtWeights ?? new Map(), decision);
+  }
+  return courtWeights === null
     ? { courtAbbreviation: null, courtTier: UNRANKED_TIER }
     : rankedPresentation(courtWeights, decision);
+};
 
 /**
  * How long a public read waits for the registry before drawing no chip.
@@ -98,8 +118,8 @@ const REGISTRY_READ_TIMEOUT_MS = 1000;
  * The registry for a read that must survive without it: bounded, and degraded
  * to nothing rather than propagated.
  *
- * Reported every time, because a registry that stops answering takes every
- * court badge off the public surface at once and nothing else would say so.
+ * Reported every time so the degraded name-pattern ranking remains visible.
+ * Compiled directory courts do not depend on this read.
  */
 export const readCourtRegistry = async (
   read: () => Promise<CourtWeightMap>,
@@ -115,7 +135,7 @@ export const readCourtRegistry = async (
   if (Result.isError(registry)) {
     logger.warn("case_law.court_presentation.registry_unavailable", {
       "error.type": errorTag(registry.error),
-      effect: "no_court_badge",
+      effect: "name_pattern_weights_unavailable",
     });
     return null;
   }

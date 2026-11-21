@@ -1,6 +1,6 @@
-import React, { useState, useRef, useCallback, useEffect } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 
-import { DocxEditor, createEmptyDocument } from "@stll/folio-react";
+import { createEmptyDocument, DocxEditor } from "@stll/folio-react";
 import type {
   Document as FolioDocument,
   DocxEditorRef,
@@ -247,6 +247,7 @@ export const App = () => {
       <main className="flex flex-1 overflow-hidden">
         <DocxEditor
           ref={editorRef}
+          accessibleName={fileName}
           document={documentBuffer ? null : currentDocument}
           documentBuffer={documentBuffer}
           author="Folio User"
@@ -317,7 +318,9 @@ export const App = () => {
           size="sm"
           onClick={handleZoomOut}
           disabled={zoom <= ZOOM_MIN}
+          disabledReason="Already at minimum zoom."
           title="Zoom out"
+          tooltip="Zoom out"
         >
           <MinusIcon />
         </Button>
@@ -335,7 +338,9 @@ export const App = () => {
           size="sm"
           onClick={handleZoomIn}
           disabled={zoom >= ZOOM_MAX}
+          disabledReason="Already at maximum zoom."
           title="Zoom in"
+          tooltip="Zoom in"
         >
           <PlusIcon />
         </Button>

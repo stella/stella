@@ -1,13 +1,13 @@
 import { and, eq, inArray } from "drizzle-orm";
 
-import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
+import { caseLawSources, publishedCaseLawDecisions } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { publicDecisionRowColumns } from "@/api/lib/case-law/decision-row-columns";
 import { readDecisionHeadnote } from "@/api/lib/case-law/decision-text";
 import { readPublicDecisionLanguageAlternatesByGroup } from "@/api/lib/case-law/language-alternates";
-import { publishedCaseLawDecision } from "@/api/lib/case-law/published-decisions";
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
+import { decisionTextWithheldReason } from "@/api/lib/legal-search/corpus-source";
 
 type ReadPublicDecisionSummariesOptions = {
   caseLawDb: CaseLawPublicReadDb;
@@ -28,17 +28,19 @@ export const readPublicDecisionSummaries = async ({
   }
   const rows = await caseLawDb((tx) =>
     tx
-      .select(publicDecisionRowColumns())
-      .from(caseLawDecisions)
+      .select({
+        ...publicDecisionRowColumns(),
+        sourceDescriptor: caseLawSources.descriptor,
+      })
+      .from(publishedCaseLawDecisions)
       .innerJoin(
         caseLawSources,
-        eq(caseLawSources.id, caseLawDecisions.sourceId),
+        eq(caseLawSources.id, publishedCaseLawDecisions.sourceId),
       )
       .where(
         and(
-          inArray(caseLawDecisions.id, [...decisionIds]),
+          inArray(publishedCaseLawDecisions.id, [...decisionIds]),
           redistributableCaseLawSource,
-          publishedCaseLawDecision,
         ),
       )
       .limit(decisionIds.length),
@@ -75,6 +77,7 @@ export const readPublicDecisionSummaries = async ({
       headnote: row.headnote,
       keywords: row.keywords,
     }),
+    textWithheldReason: decisionTextWithheldReason(row.sourceDescriptor),
     citationCount: row.citationCount,
     createdAt: row.createdAt.toISOString(),
   }));

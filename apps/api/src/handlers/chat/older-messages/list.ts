@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import {
   assertChatThreadScopeMatches,
@@ -11,10 +11,11 @@ import {
 } from "@/api/handlers/chat/message-page";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const config = {
+  contract: "patch",
   description:
     "Page backwards through one of your own chat threads using the " +
     "olderCursor a previous read returned. Returns only the message page and " +
@@ -30,10 +31,10 @@ const config = {
     reason: "assistant_chat",
     consumesServices: false,
   },
-  params: t.Object({ threadId: tSafeId("chatThread") }),
-  query: t.Object({
-    before: t.String(),
-    workspaceId: t.Optional(tSafeId("workspace")),
+  params: v.object({ threadId: resourceIdSchema("chatThread") }),
+  query: v.object({
+    before: v.string(),
+    workspaceId: v.optional(resourceIdSchema("workspace")),
   }),
 } satisfies HandlerConfig;
 
@@ -47,6 +48,7 @@ const getOlderMessages = createSafeRootHandler(
     user,
   }) {
     const scope = yield* resolveChatScope({
+      admitted: "active-or-archived",
       getWorkspaceAccess,
       workspaceId,
     });

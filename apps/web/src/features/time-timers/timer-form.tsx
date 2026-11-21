@@ -6,6 +6,7 @@ import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
 import { Button } from "@stll/ui/button";
+import { Form } from "@stll/ui/form";
 import { Label } from "@stll/ui/label";
 import { Textarea } from "@stll/ui/textarea";
 
@@ -25,6 +26,23 @@ type TimerFormProps = {
   timer: TimeTimer | null;
   initialMatter: MatterOption | null;
   onDone: () => void;
+};
+
+type TimerSubmitDisabledReasonOptions = {
+  isPending: boolean;
+  policyFailed: boolean;
+  t: (key: "common.saving" | "common.loadFailed" | "common.loading") => string;
+};
+
+const timerSubmitDisabledReason = ({
+  isPending,
+  policyFailed,
+  t,
+}: TimerSubmitDisabledReasonOptions) => {
+  if (isPending) {
+    return t("common.saving");
+  }
+  return policyFailed ? t("common.loadFailed") : t("common.loading");
 };
 
 export const TimerForm = ({ timer, initialMatter, onDone }: TimerFormProps) => {
@@ -97,9 +115,15 @@ export const TimerForm = ({ timer, initialMatter, onDone }: TimerFormProps) => {
     }),
   );
 
+  const submitDisabledReason = timerSubmitDisabledReason({
+    isPending: mutation.isPending,
+    policyFailed: policy.isError,
+    t,
+  });
+
   return (
-    <form
-      className="flex flex-col gap-3"
+    <Form
+      className="gap-3"
       onSubmit={(event) => {
         event.preventDefault();
         if (mutation.isPending || (timer !== null && !policy.data)) {
@@ -114,6 +138,7 @@ export const TimerForm = ({ timer, initialMatter, onDone }: TimerFormProps) => {
             <Label htmlFor={`${id}-matter`}>{t("common.matter")}</Label>
             <MatterCombobox
               activeOrganizationId={user.activeOrganizationId}
+              userId={user.id}
               id={`${id}-matter`}
               value={matter}
               onChange={(value) => {
@@ -185,6 +210,7 @@ export const TimerForm = ({ timer, initialMatter, onDone }: TimerFormProps) => {
       <div className="flex justify-end gap-2">
         <Button
           disabled={mutation.isPending}
+          disabledReason={t("common.saving")}
           onClick={onDone}
           type="button"
           variant="ghost"
@@ -193,6 +219,7 @@ export const TimerForm = ({ timer, initialMatter, onDone }: TimerFormProps) => {
         </Button>
         <Button
           disabled={mutation.isPending || (timer !== null && !policy.data)}
+          disabledReason={submitDisabledReason}
           type="submit"
         >
           {t(
@@ -202,6 +229,6 @@ export const TimerForm = ({ timer, initialMatter, onDone }: TimerFormProps) => {
           )}
         </Button>
       </div>
-    </form>
+    </Form>
   );
 };

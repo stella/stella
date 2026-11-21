@@ -3,10 +3,21 @@ import { getRouteApi, useNavigate } from "@tanstack/react-router";
 import { produce } from "immer";
 
 import { FileViewerWithAI } from "@/components/ai-suggestions/file-viewer-with-ai";
+import {
+  PdfSignPlacementBar,
+  PdfSignPlacementLayer,
+} from "@/components/inspector/pdf-sign-placement-viewer";
+import { DocumentMarkPageLayer } from "@/components/pdf/annotations/document-marks-layer";
 import { CreatingBBoxes } from "@/components/pdf/creating-citations";
 import { PageAnonymization } from "@/components/pdf/page-anonymization";
 import { PageCitation } from "@/components/pdf/page-citation";
-import { StellaMark } from "@/components/stella-mark";
+import { PdfSelectionActions } from "@/components/pdf/pdf-selection-actions";
+import { PDF_SELECTION_CHAT } from "@/components/pdf/pdf-selection-toolbar";
+import {
+  PDF_VIEWPORT_CLASS,
+  PDF_VIEWPORT_CONTENT_CLASS,
+} from "@/components/pdf/pdf-viewer.pending";
+import { DefaultPendingComponent } from "@/components/route-components";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { detached } from "@/lib/detached";
 import { fileOptions } from "@/lib/files/queries";
@@ -110,23 +121,34 @@ const FullscreenPdfViewer = () => {
       workspaceId={workspaceId}
     >
       <CreatingBBoxes />
-      <PDFViewport
-        buffer={file.buffer}
-        className="document-preview-surface h-full"
-        contentClassName="relative mt-2 space-y-2 px-2"
-        fileId={fieldId}
-        invertColors={resolvePDFInvertColors({
-          colorMode: pdfColorMode,
-          isImageOrigin,
-        })}
-        onPageChanged={handlePageChanged}
-        onWheelZoom={handleWheelZoom}
-        page={pageNumber}
-        scaleOffset={scaleOffset}
-        renderPage={(props) => (
-          <PDFPage {...props} renderOverlay={renderPageOverlay} />
-        )}
-      />
+      <PdfSignPlacementBar fieldId={fieldId} key={fieldId} />
+      <PdfSelectionActions
+        chat={entityId ? PDF_SELECTION_CHAT.fileChat : PDF_SELECTION_CHAT.none}
+        entityId={entityId}
+        file={file}
+        fileFieldId={fieldId}
+        fileName={file.fileName}
+        workspaceId={workspaceId}
+      >
+        <PDFViewport
+          pageSource="portfolio"
+          buffer={file.buffer}
+          className={PDF_VIEWPORT_CLASS}
+          contentClassName={PDF_VIEWPORT_CONTENT_CLASS}
+          fileId={fieldId}
+          invertColors={resolvePDFInvertColors({
+            colorMode: pdfColorMode,
+            isImageOrigin,
+          })}
+          onPageChanged={handlePageChanged}
+          onWheelZoom={handleWheelZoom}
+          page={pageNumber}
+          scaleOffset={scaleOffset}
+          renderPage={(props) => (
+            <PDFPage {...props} renderOverlay={renderPageOverlay} />
+          )}
+        />
+      </PdfSelectionActions>
     </FileViewerWithAI>
   );
 };
@@ -161,12 +183,10 @@ const PageOverlays = ({ pageId }: { pageId: string }) => {
         pageNumber={page.proxy.pageNumber}
         scale={page.viewport.scale}
       />
+      <DocumentMarkPageLayer pageId={pageId} />
+      <PdfSignPlacementLayer pageId={pageId} />
     </>
   );
 };
 
-export const PDFSuspenseFallback = () => (
-  <div className="flex h-full w-full items-center justify-center">
-    <StellaMark className="text-muted-foreground size-8 animate-pulse" />
-  </div>
-);
+export const PDFSuspenseFallback = DefaultPendingComponent;

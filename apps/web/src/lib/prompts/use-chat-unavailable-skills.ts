@@ -1,18 +1,19 @@
-import { useMemo } from "react";
-
 import { useQuery } from "@tanstack/react-query";
 
 import type { UnavailableSkillIds } from "@/components/chat-editor-slash-items";
-import { useBrowserClientConnected } from "@/features/chat/browser-control/browser-extension-bridge";
+import { useBrowserExtensionState } from "@/features/chat/browser-control/browser-extension-bridge";
 import { SIGNED_OUT_QUERY_OWNER } from "@/lib/account/queries";
 import { useOptionalChatAnonymized } from "@/lib/chat-anonymized-store";
 import { chatUnavailableSkillsOptions } from "@/lib/knowledge/queries";
 import {
+  chatCanUseBrowser,
   chatSkillAvailabilityQuery,
-  chatSkillMenuAvailability,
   type ChatSkillMenuAvailability,
+  chatSkillMenuAvailability,
   type ComposerSkillChatContext,
 } from "@/lib/prompts/chat-skill-availability.logic";
+import { queryView } from "@/lib/query-view.logic";
+import { useQueryViewError } from "@/lib/use-query-view";
 
 /**
  * The skills chat cannot offer the caller, keyed by id, with the tools each
@@ -24,25 +25,27 @@ export const useChatUnavailableSkills = (
   organizationId: string | undefined,
   userId: string | undefined,
 ): ReadonlyMap<string, readonly string[]> | undefined => {
-  const { data } = useQuery({
+  const dataQuery = useQuery({
     ...chatUnavailableSkillsOptions(
       organizationId ?? "",
       userId ?? SIGNED_OUT_QUERY_OWNER,
     ),
     enabled: organizationId !== undefined && userId !== undefined,
   });
-  return useMemo(
-    () =>
-      data === undefined
-        ? undefined
-        : new Map(
-            data.unavailable.map(({ missingTools, skillId }) => [
-              skillId,
-              missingTools,
-            ]),
-          ),
-    [data],
-  );
+  const dataView = queryView(dataQuery);
+  useQueryViewError(dataView, "useChatUnavailableSkills:query");
+  const data =
+    dataView.type === "items" && dataView.refetchError === undefined
+      ? dataView.items
+      : undefined;
+  return data === undefined
+    ? undefined
+    : new Map(
+        data.unavailable.map(({ missingTools, skillId }) => [
+          skillId,
+          missingTools,
+        ]),
+      );
 };
 
 /** The ids of {@link useChatUnavailableSkills}, as the slash menus take them. */
@@ -51,10 +54,7 @@ export const useChatUnavailableSkillIds = (
   userId: string | undefined,
 ): UnavailableSkillIds => {
   const unavailable = useChatUnavailableSkills(organizationId, userId);
-  return useMemo(
-    () => (unavailable === undefined ? undefined : new Set(unavailable.keys())),
-    [unavailable],
-  );
+  return unavailable === undefined ? undefined : new Set(unavailable.keys());
 };
 
 /**
@@ -77,19 +77,29 @@ export const useComposerSkillAvailability = ({
   userId: string;
 }): ChatSkillMenuAvailability => {
   const anonymized = useOptionalChatAnonymized(chat?.threadRef);
-  const browserExtension = useBrowserClientConnected();
+  const extensionStatus = useBrowserExtensionState().status;
   const query =
     chat === undefined
       ? undefined
-      : chatSkillAvailabilityQuery({ anonymized, browserExtension, chat });
+      : chatSkillAvailabilityQuery({
+          anonymized,
+          browserExtension: chatCanUseBrowser({
+            extensionStatus,
+            runTarget: chat.runTarget,
+          }),
+          chat,
+        });
   const known = query !== null;
-  const { data } = useQuery({
+  const dataQuery = useQuery({
     ...chatUnavailableSkillsOptions(organizationId, userId, query ?? undefined),
     enabled: enabled && known,
   });
+  const dataView = queryView(dataQuery);
+  useQueryViewError(dataView, "useComposerSkillAvailability:query");
+  const data =
+    dataView.type === "items" && dataView.refetchError === undefined
+      ? dataView.items
+      : undefined;
   // A chat not known yet reads no answer, not the widest chat's cached one.
-  return useMemo(
-    () => (known ? chatSkillMenuAvailability(data) : undefined),
-    [data, known],
-  );
+  return known ? chatSkillMenuAvailability(data) : undefined;
 };

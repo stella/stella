@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { readFile, readdir } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 
 const DESKTOP_ROOT = path.join(import.meta.dir, "..");
@@ -82,5 +82,97 @@ describe("unified registry search boundary", () => {
     expect(source).not.toMatch(
       /from\s+["'][^"']*\/clipboard\/|clipboard_get|clipboard-history|\bfetch\s*\(|XMLHttpRequest|WebSocket|localStorage|open_stella|opener/iu,
     );
+  });
+});
+
+// Account requests retain their lease in the transport signature. Session SSE
+// carries document-session tokens; issuance and rotation stay in account.rs.
+const accountBearerOwners = {
+  "account.rs": "_lease: tokio::sync::MutexGuard<'static, ()>",
+  "registry.rs": "saved: &account::AccountRequest",
+  "feature_access.rs": "request: &AccountRequest",
+  "presence.rs": "account: &crate::account::AccountRequest",
+  "handoff.rs": "account: Option<&'a crate::account::AccountRequest>",
+  "deep_link.rs": "crate::account::request_account(&state).await?",
+  "sse.rs": ".bearer_auth(&session_token)",
+  "http_client.rs": "key: &crate::device_proof::DeviceKey",
+  "time_entry_submit.rs": "account: &AccountRequest",
+  "billing_draft_submit.rs": "account: &AccountRequest",
+  "dictation_cleanup.rs": "account: &AccountRequest",
+  "dictation_cloud.rs": "account: &AccountRequest",
+  // Holds the runner's authorization, whose lease is the account request's.
+  "desktop_runner/awaited_steps.rs": "authorized: Authorized,",
+  // The development stand-in computer proves the device key it linked itself.
+  "desktop_runner/stand_in.rs": "let device = DeviceKey::from_pkcs8(&pkcs8)?;",
+} as const;
+
+const assertBearerOwner = (entry: string, source: string) => {
+  // A recursive listing separates folders as the platform does.
+  const file = entry.replaceAll("\\", "/");
+  const compactSource = source.replace(/\s+/gu, "");
+  if (
+    !compactSource.includes(".bearer_auth(") &&
+    !compactSource.includes("crate::http_client::device_proof_request(")
+  ) {
+    return;
+  }
+  if (!(file in accountBearerOwners)) {
+    throw new TypeError(`Unowned bearer transport: ${file}`);
+  }
+  const obligation = Object.entries(accountBearerOwners)
+    .find(([owner]) => owner === file)
+    ?.at(1)
+    ?.replace(/\s+/gu, "");
+  if (!obligation || !compactSource.includes(obligation)) {
+    throw new TypeError(`Account lease absent: ${file}`);
+  }
+};
+
+describe("native account transport ownership", () => {
+  test("every bearer transport retains its account lease or session-token owner", async () => {
+    const sourceRoot = path.join(NATIVE_ROOT, "src");
+    // Nested modules can open bearer transports too, so scan the whole crate.
+    const files = (await readdir(sourceRoot, { recursive: true })).filter(
+      (file) => file.endsWith(".rs"),
+    );
+    const exercised = new Set<string>();
+    for (const file of files) {
+      const source = (
+        (await readFile(path.join(sourceRoot, file), "utf-8"))
+          .split(/#\[cfg\(test\)\]\s*mod tests/u)
+          .at(0) ?? ""
+      ).replace(/\s+/gu, "");
+      assertBearerOwner(file, source);
+      if (
+        !source.includes(".bearer_auth(") &&
+        !source.includes("crate::http_client::device_proof_request(")
+      ) {
+        continue;
+      }
+      exercised.add(file);
+      const obligation = Object.entries(accountBearerOwners)
+        .find(([owner]) => owner === file)
+        ?.at(1)
+        ?.replace(/\s+/gu, "");
+      if (!obligation) {
+        throw new TypeError(`Missing owner ${file}`);
+      }
+      expect(() =>
+        assertBearerOwner(
+          file,
+          source.replaceAll(obligation, () =>
+            obligation.startsWith(".bearer_auth(")
+              ? ".bearer_auth(&unowned)"
+              : "invalid lease",
+          ),
+        ),
+      ).toThrow(`Account lease absent: ${file}`);
+    }
+    expect([...exercised].toSorted()).toEqual(
+      Object.keys(accountBearerOwners).toSorted(),
+    );
+    expect(() =>
+      assertBearerOwner("unowned.rs", ".bearer_auth(&credential)"),
+    ).toThrow("Unowned bearer transport");
   });
 });

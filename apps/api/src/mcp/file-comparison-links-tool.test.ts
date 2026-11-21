@@ -1,13 +1,19 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
+import type { SQL } from "drizzle-orm";
+import { PgDialect } from "drizzle-orm/pg-core";
 
+import { sha256Hex } from "@stll/sha256/node";
+
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { toSafeId } from "@/api/lib/branded-types";
 import { ENCRYPTED_CONTENT_MESSAGE } from "@/api/lib/files/detect-file-encryption";
 import { SafeOutboundFetchError } from "@/api/lib/safe-outbound-fetch";
-import type { McpRequestContext } from "@/api/mcp/context";
 import { handlePrepareFileComparisonFromLinksTool } from "@/api/mcp/file-comparison-links-tool";
 import type { PrepareFileComparisonFromLinksDependencies } from "@/api/mcp/file-comparison-links-tool";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
+import { aggregateExecutionRows } from "@/api/tests/fixtures/aggregate-lock-order";
 import { createEncryptedPdf } from "@/api/tests/helpers/signed-pdf";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
@@ -63,8 +69,26 @@ const createHarness = ({
   const inserted: InsertedRow[][] = [];
   const audited: AuditEvent[] = [];
   const puts: PutCall[] = [];
+  let downloadCount = 0;
 
   const { safeDb, scopedDb } = createScopedDbMock({
+    // The reservation takes its capacity lock and reads the organization's
+    // retained capacity census before inserting.
+    execute: async (statement: SQL) =>
+      await Promise.resolve(
+        new PgDialect()
+          .sqlToQuery(statement)
+          .sql.includes("file_comparison_outstanding_capacity()")
+          ? [
+              {
+                organization_bytes: 0,
+                organization_rows: 0,
+                user_bytes: 0,
+                user_rows: 0,
+              },
+            ]
+          : aggregateExecutionRows(statement),
+      ),
     insert: () => ({
       values: async (rows: InsertedRow[]) => {
         inserted.push(rows);
@@ -73,7 +97,7 @@ const createHarness = ({
     }),
   });
 
-  const context = asTestRaw<McpRequestContext>({
+  const context = asTestRaw<AuthorizedMcpRequestContext>({
     accessibleWorkspaceIds: [],
     accessibleWorkspaceIdSet: new Set<string>(),
     accessibleWorkspaceStatusById: new Map(),
@@ -85,6 +109,7 @@ const createHarness = ({
       audited.push(event);
       await Promise.resolve();
     },
+    thirdPartyOutboundPermit: grantThirdPartyOutboundPermit(),
     safeDb,
     scopedDb,
     userId: toSafeId<"user">("user_1"),
@@ -92,11 +117,13 @@ const createHarness = ({
   });
 
   const dependencies: PrepareFileComparisonFromLinksDependencies = {
-    download: async ({ url }) =>
-      await Promise.resolve(
+    download: async ({ url }) => {
+      downloadCount += 1;
+      return await Promise.resolve(
         downloads[String(url)] ??
           okDownload(String(url) === BASE_URL ? BASE_BYTES : TARGET_BYTES),
-      ),
+      );
+    },
     presignUploadUrl: async ({ key, contentType, sha256Base64 }) =>
       await Promise.resolve(
         Result.ok({
@@ -125,6 +152,11 @@ const createHarness = ({
 
   return {
     audited,
+    context,
+    dependencies,
+    get downloadCount() {
+      return downloadCount;
+    },
     inserted,
     puts,
     run: async (args: Record<string, unknown>) =>
@@ -166,6 +198,23 @@ const errorOf = (result: LinksResult) => {
 };
 
 describe("prepare_file_comparison_from_links", () => {
+  test("does not fetch when the request context has no permit", async () => {
+    const harness = createHarness();
+    const result = await handlePrepareFileComparisonFromLinksTool(
+      {
+        args: validArgs(),
+        context: { ...harness.context, thirdPartyOutboundPermit: undefined },
+      },
+      harness.dependencies,
+    );
+
+    expect(result).toMatchObject({
+      status: "error",
+      error: { type: "structured", code: "permission_denied" },
+    });
+    expect(harness.downloadCount).toBe(0);
+  });
+
   test("stages both downloads and echoes the compare_documents call back", async () => {
     const harness = createHarness();
 
@@ -213,9 +262,7 @@ describe("prepare_file_comparison_from_links", () => {
         headers: {
           "content-type": DOCX_MIME_TYPE,
           "content-length": "1",
-          "x-amz-checksum-sha256": Buffer.from(BASE_SHA, "hex").toString(
-            "base64",
-          ),
+          "x-amz-checksum-sha256": Buffer.from(BASE_SHA, "hex").toBase64(),
           "x-amz-sdk-checksum-algorithm": "SHA256",
         },
         size: BASE_BYTES.byteLength,
@@ -225,9 +272,7 @@ describe("prepare_file_comparison_from_links", () => {
         headers: {
           "content-type": DOCX_MIME_TYPE,
           "content-length": "1",
-          "x-amz-checksum-sha256": Buffer.from(TARGET_SHA, "hex").toString(
-            "base64",
-          ),
+          "x-amz-checksum-sha256": Buffer.from(TARGET_SHA, "hex").toBase64(),
           "x-amz-sdk-checksum-algorithm": "SHA256",
         },
         size: TARGET_BYTES.byteLength,
@@ -381,3 +426,23 @@ describe("prepare_file_comparison_from_links", () => {
     expect(harness.inserted).toHaveLength(1);
   });
 });
+
+for (const text of ["", "abc", "Příliš žluťoučký kůň 📄 中文", "e\u0301"]) {
+  test(`linked comparison reservations preserve exact downloaded SHA-256 bytes: ${JSON.stringify(text)}`, async () => {
+    // A DOCX download must start with ZIP magic, even for an empty text payload.
+    const bytes = new Uint8Array([
+      ...BASE_BYTES,
+      ...new TextEncoder().encode(text),
+    ]);
+    const harness = createHarness({
+      downloads: {
+        [BASE_URL]: okDownload(bytes),
+        [TARGET_URL]: okDownload(bytes),
+      },
+    });
+    dataOf(await harness.run(validArgs()));
+    expect(
+      harness.inserted.at(0)?.map(({ declaredSha256 }) => declaredSha256),
+    ).toEqual([sha256Hex(bytes), sha256Hex(bytes)]);
+  });
+}

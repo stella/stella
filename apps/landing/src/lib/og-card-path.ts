@@ -5,6 +5,8 @@ import { panic } from "better-result";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 
+import { slugify } from "@stll/text-normalize";
+
 /**
  * Site-wide card, used where a page's own title cannot be drawn in its
  * direction's face: a locale in a third script would fall back here rather
@@ -88,16 +90,13 @@ export const isGeneratedOgCard = (pathname: string): boolean =>
  * Two paths could in principle flatten onto one slug; the generator fails the
  * build on a collision rather than letting one page's card overwrite another's.
  */
-export const ogCardSlug = (pathname: string): string => {
-  const flattened = pathname
-    .toLowerCase()
-    .replaceAll(/[^a-z0-9]+/gu, "-")
-    // Single dashes, not runs: the line above already collapsed every run of
-    // separators into one, so there is at most one dash at each end. `-+`
-    // here would be the super-linear shape the ratchet bans, for no gain.
-    .replaceAll(/^-|-$/gu, "");
-  return flattened === "" ? "index" : flattened;
-};
+export const ogCardSlug = (pathname: string): string =>
+  slugify(pathname, {
+    charset: "ascii",
+    fallback: "index",
+    maxLength: Number.MAX_SAFE_INTEGER,
+    separator: "-",
+  });
 
 /** Whether every character in the headline has a glyph in that card's face. */
 export const isDrawableHeadline = (

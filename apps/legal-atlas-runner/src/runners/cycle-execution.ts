@@ -1,13 +1,12 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 
 import {
-  CYCLE_HALT_REASON,
-  INGESTION_STOP_KIND,
+  CYCLE_OUTCOME,
   type IngestionPipelineResult,
   type IngestionStopKind,
 } from "@stll/legal-atlas/ingestion-cycle";
 
-import { CYCLE_OUTCOME, type CycleResult } from "./cycle-progress";
+import type { CycleResult } from "./cycle-progress";
 
 type ExecuteIngestionCycleOptions = {
   runPipeline: () => Promise<IngestionPipelineResult>;
@@ -59,37 +58,36 @@ export const executeIngestionCycle = async ({
     pagesProcessed: result.pagesProcessed,
     cursorAdvanced: result.nextCursor !== cursorBefore,
   };
-  if (
-    result.haltReason === null ||
-    result.haltReason.startsWith("Decision cap")
-  ) {
-    return {
-      result,
-      errorMessage: null,
-      cycle: {
-        ...counts,
-        outcome: CYCLE_OUTCOME.COMPLETED,
-      } satisfies CycleResult,
-    };
+  switch (result.outcome) {
+    case CYCLE_OUTCOME.COMPLETED:
+      return {
+        result,
+        errorMessage: null,
+        cycle: { ...counts, outcome: CYCLE_OUTCOME.COMPLETED },
+      };
+    case CYCLE_OUTCOME.PAUSED:
+      return {
+        result,
+        errorMessage: null,
+        cycle: {
+          ...counts,
+          outcome: CYCLE_OUTCOME.PAUSED,
+          pauseReason: result.pauseReason,
+        },
+      };
+    case CYCLE_OUTCOME.FAILED:
+    case CYCLE_OUTCOME.TIMEOUT:
+      return {
+        result,
+        errorMessage: result.haltReason.slice(0, 2048),
+        cycle: {
+          ...counts,
+          outcome: result.outcome,
+          stopKind: result.stopKind,
+        },
+      };
+    default:
+      result satisfies never;
+      return panic("Unhandled pipeline outcome");
   }
-  if (result.haltReason === CYCLE_HALT_REASON.TIMEOUT) {
-    return {
-      result,
-      errorMessage: result.haltReason.slice(0, 2048),
-      cycle: {
-        ...counts,
-        outcome: CYCLE_OUTCOME.TIMEOUT,
-        stopKind: INGESTION_STOP_KIND.DEADLINE,
-      } satisfies CycleResult,
-    };
-  }
-  return {
-    result,
-    errorMessage: result.haltReason.slice(0, 2048),
-    cycle: {
-      ...counts,
-      outcome: CYCLE_OUTCOME.FAILED,
-      stopKind: result.stopKind ?? INGESTION_STOP_KIND.INTERNAL_ERROR,
-    } satisfies CycleResult,
-  };
 };

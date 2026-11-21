@@ -1,35 +1,67 @@
 ---
 name: conventions-perf
-description: "Apply when a performance-guard check (network baseline, bundle baseline, DB query count, loader-prefetch lint, RC bailouts) fails or when touching a hot route/endpoint."
+description: "Apply when adding or changing a route, screen, endpoint, MCP tool, mutation, live event, background job or polling loop, or when a performance guard fails."
 ---
 
 # Performance Guard Conventions
 
-Apply when a performance-guard check fails in CI, or when touching a route or
-endpoint flagged by the live `bun scripts/perf-hotspots.ts` report.
+Apply when adding or changing a route, screen, endpoint, MCP tool, mutation,
+live event, background job or polling loop, and when a performance guard fails.
 
 ## Overview
 
 Stella guards performance with recorded budgets, diffed on every run. A regression either fails CI outright or shows
-up as a reviewable diff in the PR. Six guards exist today:
+up as a reviewable diff in the PR. The guards include:
 
 - **Network baseline** (`apps/web/e2e/network-baseline.json`, checked by
   `apps/web/e2e/helpers/network.ts` from `apps/web/e2e/specs/route-smoke.spec.ts`):
   per-route request manifest, waterfall depth, per-request repeat budget, and
   per-request DB query budget.
-- **Bundle baseline** (`scripts/bundle-baseline.ts` +
-  `scripts/bundle-baseline.json`): gzipped size per vendor/entry/route chunk
-  group, wired into the web-build CI job via `--check`.
+- **Startup bundle gates** (`scripts/bundle-baseline.ts --check` over
+  `scripts/bundle-startup-gates.ts`, budgets `initial` and `pending` in
+  `scripts/bundle-baseline.json`):
+  blocking in the web-build CI job, on the build's Start manifest and hidden
+  sourcemaps. The initial graph is the manifest's `__root__` preloads, which
+  carry the route tree and every route file. Four gates: its gzip may grow at
+  most 8 KiB over the committed budget; `*.pending.tsx` views in it stay under
+  6 KiB minified each and within 1 KiB of the committed `pending` total
+  together; it holds no page code (`*.page.tsx` or route-local `-*-page.tsx`
+  modules, `?tsr-shared=1` modules, or route-file code only the route's
+  `component` reaches); and every page a route loads
+  with `import()` is in that route's manifest preloads, so a cold load never
+  waits an extra hop. No offender is exempt. Per-group gzip sizes (entry,
+  `vendor-*`, routes) stay a report in the default mode.
 - **React Compiler bailout guard** (`scripts/rc-bailouts.ts` +
   `scripts/react-compiler-bailouts.json`): tracks every component the compiler
   cannot memoize, so a bailout losing its manual `useMemo`/`useCallback` fails
   CI instead of silently reintroducing an infinite-update-loop risk.
 - **DB query counter** (`apps/api/src/lib/db-query-counter.ts`): the runtime
   half of the network baseline's DB-query budget. Dev/test only.
+- **Chat path budgets**
+  (`apps/api/src/handlers/chat/chat-path-budgets.integration.test.ts`,
+  `apps/web/src/features/chat/chat-runtime-send-budget.test.ts`): SQL
+  statements and bytes per chat path (thread open, older page, send, streamed
+  delta, settlement, rejoin, Stop) through the real handlers, on a short and
+  a long thread. The counts must be equal on both, so an N+1 fails at any
+  size; bytes are bounded per page and per delta, and a send carries only the
+  message it posts. Each budget is the measurement on main plus a stated
+  headroom; a real improvement lowers the measurement.
 - **`require-loader-prefetch`** oxlint rule
   (`.oxlint-plugins/require-loader-prefetch.ts`): static, not baseline-based;
   flags the waterfall pattern the network baseline would otherwise only catch
   after the fact.
+- **Read budgets** (`apps/api/src/lib/db/read-budgets.ts`, measured by
+  `apps/api/src/tests/query-perf`): absolute shared-buffer budgets per call
+  of a hot statement and per run of a scheduled job, checked with
+  `EXPLAIN (ANALYZE, BUFFERS)` on a corpus fixture in production's shape.
+  A scheduled job is measured by running its registered task, at one corpus
+  size and at twice that size, and must read the same pages at both. Every
+  declared job states its `reads` (a budget, `"load-governed"` for batches
+  under the backfill runtime, or a shrink-only ledger entry), and every MCP
+  tool has a budget or a ledger entry. A job that needs more than the
+  ungoverned ceiling per run batches through the load governor instead.
+  Nothing is compared with an earlier recording; raise a budget only with a
+  reason that derives the new number.
 - **Per-iteration I/O checks**: `scripts/db-await-in-loop.ts` (type-aware,
   CI) flags a database call awaited once per loop iteration (the N+1),
   recognizing handles by type rather than name and suppressed with
@@ -45,6 +77,45 @@ up as a reviewable diff in the PR. Six guards exist today:
   the fix is concrete: batch the calls, or record in the suppression reason
   why the sequence is required. There is no generic await-in-loop rule; a
   sequential await with no I/O behind it costs nothing to guard.
+
+## Measured by construction
+
+Every new or changed surface ships with a measurement at N and 10N using
+representative seeded data and a fixed response page size. Measure deterministic
+counts: statements, transactions, bytes, requests, refetches and reads. Never use
+wall time as the scaling assertion. Cost must not grow with data the response
+does not return; batch related work and bound result sizes at the owning boundary.
+The API read harness uses N=10 and N=200, a larger comparison than 10N: statement
+and transaction counts stay equal, and response bytes per returned row stay within
+1.2x at a fixed page size.
+
+Censuses walk the real mounted route or curated tool registry, or the owning file
+inventory for file-based surfaces. A new surface without a measurement fails the
+census. Do not infer API coverage from source regexes or MCP coverage from name
+prefixes. Every exemption carries a concrete reason in a shrink-only ledger;
+entries can be removed as coverage lands, never added to silence a new failure.
+`pendingWriteHarness` records the current mutating surfaces until their harness
+lands and obeys the same shrink-only rule.
+
+Mutation-check each guard: introduce the excess work or remove a coverage case,
+confirm that the relevant assertion fails, then restore the implementation. Record
+the deterministic before/after values and the rejected mutation in the PR.
+
+The performance coverage inventories are:
+
+| Census                                              | Test or check                                                                                         | Ledger or coverage inventory                                                              |
+| --------------------------------------------------- | ----------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| Mounted API v1 routes                               | `apps/api/src/tests/read-scaling/census.test.ts`                                                      | `apps/api/src/tests/read-scaling/api-scaling-ledger.json`                                 |
+| Curated MCP tools                                   | `apps/api/src/tests/read-scaling/census.test.ts`                                                      | `apps/api/src/tests/read-scaling/mcp-scaling-ledger.json`                                 |
+| Repeated SQL fingerprints per request and call site | `apps/api/src/lib/db-query-counter.test.ts`; `scripts/check-repeated-sql-fingerprints-ledger.test.ts` | `apps/api/src/lib/observability/repeated-sql-fingerprints.json`                           |
+| Web route smoke list                                | `apps/web/e2e/specs/route-smoke.spec.ts` (`assertSmokeRouteCoverage`)                                 | `apps/web/e2e/helpers/smoke-route-defs.ts` (`INTENTIONALLY_NOT_SMOKED`)                   |
+| Read budgets (scheduled jobs, MCP tools)            | `apps/api/src/lib/db/read-budgets.test.ts`; `apps/api/src/tests/query-perf/query-perf.test.ts`        | `apps/api/src/lib/db/read-budgets.ts`; `apps/api/src/lib/db/read-budgets-unmeasured.json` |
+| Create-form single-flight coverage                  | `apps/web/src/hooks/single-flight-census.test.ts`                                                     | Same file (`UNGUARDED_CREATE_FORMS`)                                                      |
+
+The existing web route inventory retains its recorded-budget policy below; it
+does not replace the two-size scaling measurement. Read budgets are absolute
+and are never recorded. The query
+plan gate measures shared blocks; its execution-time limit remains a hang guard.
 
 ## The Core Norm
 
@@ -76,7 +147,7 @@ main recording defaults to `write`; dispatch with `mode=rewrite` after a
 performance fix to tighten it. Do not commit measurement output on a PR.
 
 The bundle baseline mirrors this with `--write-baseline` (regenerate) and a
-`RATCHET_DOWN` prompt (not a failure) when a chunk shrinks by more than 3%,
+notice (not a failure) when the initial graph shrinks by more than 8 KiB,
 so a real win gets locked in rather than silently drifting back up. The RC
 bailout guard and the query counter follow the same "commit the smaller
 number, don't just silence the check" norm.
@@ -127,22 +198,41 @@ If instead the check reports `DB query count missing on <route>`, the
 response stopped exposing the dev/test `x-db-queries` header — restore the
 query counter wiring before trusting the route's N+1 budget again.
 
-### Bundle group over budget
+### Startup bundle gate failed
 
-The bundle baseline fails when a named group (`entry`, a `vendor-*` chunk, or
-`routes`/`largest-route`) exceeds its committed gzip size by more than 3% (or
-1 KiB, whichever is larger, per `HEADROOM`/`HEADROOM_FLOOR_BYTES`). Two
-specific failure shapes:
+The job summary's "Startup bundle gates" table names the gate and each
+offender with its minified bytes.
 
-- **A dependency escaped its `manualChunks` bucket** and landed in `entry`
-  (paid on every cold visit) instead of a lazy route chunk or `vendor-*`
-  group. Dynamic-`import()` it, or fix the `manualChunks` rule in
-  `apps/web/vite.config.ts`.
+- **Initial JS over budget.** Something new is reachable from a route file or
+  the root without a lazy boundary: a dependency a route file imports, or a
+  page an eager option renders. Put it behind the route's `component` (the
+  router splits it) or a dynamic `import()`. Rebaseline with
+  `--write-baseline` only with a stated reason every cold visit should pay
+  for it. [check: scripts/bundle-baseline.ts]
+- **Page code at startup.** A pending or error component, a loader or an
+  export reaches the page: the pending view imports from the page module, or
+  renders a component the page also renders, or the route file exports a page
+  part. Give the loading view its own `-x.pending.tsx` that imports nothing
+  from `-x.page.tsx`, and keep shared pieces in a module of their own.
+  [check: scripts/bundle-baseline.ts]
+- **Pending view too large.** It renders more than the page's skeleton.
+  [check: scripts/bundle-baseline.ts]
+- **Extra cold-load hop.** A route loads its page with a hand-written
+  `lazyRouteComponent(() => import(...))` or `await import(...)`, which the
+  manifest cannot preload. Import the page statically from the route file's
+  `component` and let the router split it. [check: scripts/bundle-baseline.ts]
+- **Pending layer over budget.** The loading views grew past the committed
+  `pending` total. Trim them, or re-anchor with `--write-baseline` and state
+  in the pull request why every cold visit should pay for it.
+  [check: scripts/bundle-baseline.ts]
+- **A dependency escaped its `manualChunks` bucket** and landed in the
+  initial graph instead of a lazy route chunk. Dynamic-`import()` it, or fix
+  the `manualChunks` rule in `apps/web/vite.config.ts`. [review]
 - **`vendor-anonymize-data` or `wasm-vendor` show up nonzero.** These are
   tracked at 0 because they should only ever load inside a web worker, never
   the main client bundle. A nonzero value means a worker-only dependency
   leaked into the client graph; keep it worker-only instead of widening the
-  baseline.
+  baseline. [review]
 
 ### `require-loader-prefetch` lint failure
 
@@ -154,37 +244,38 @@ Prefetch `factory(...)` in the `loader` via `ensureRouteQueryData` or
 
 ## How Depth Is Measured
 
-`waterfallDepth` (`apps/web/e2e/helpers/network.ts`) counts the most
-consecutive **busy blocks** in any one observation sequence: a busy block is a
-maximal run of requests whose intervals overlap, and a launch gap over
-`REQUEST_SEQUENCE_GAP_MS` (500) starts a new sequence so an idle prefetch is
-not read as another route-load round. Two requests in flight at the same
-instant are never two levels, so the number is a lower bound on true causal
-depth: a dependent request hiding behind an unrelated slow one is invisible
-to it.
+The measurement navigation uses `round-barrier-v1`: `page.route` holds every
+API request selected by the network collector. The round controller releases
+all currently held requests together and assigns each the same round level.
+It releases the next round only after every released request has finished or
+failed and the page has been quiet for `NETWORK_ROUND_SETTLE_MS` (150 ms)
+after the last response, with no new tracked request during that window. The
+navigation also uses the route smoke spec's existing page-settle check.
+Requests arriving while a round is in flight wait for the next round.
+Long-lived event streams complete at response headers so an open channel
+cannot block the barrier.
 
-Reading launch times rather than the gap since the previous response _ended_ is
-what buys monotonicity, and it costs sensitivity: a dependent request whose
-parent ran longer than 500ms opens a new sequence instead of counting a level.
-The three properties are not simultaneously satisfiable, because separating a
-dependent request from an idle prefetch requires the parent's duration, and any
-rule reading response ends lets a response growing under load close a gap it
-used to exceed. Under-counting is the safer error for a guard compared only
-upward.
+Depth is the number of nonempty released rounds; `depthChain` lists the
+request keys in each round. Response completion order cannot put independent
+branches at different levels: children of slow and fast parents released in
+the same round wait at the same barrier. A request arriving after the route's
+existing settled point is idle prefetch and cannot open a new round. Depth
+comes from scheduled release levels, never inferred launch gaps or response
+timing. Measurement adds approximately one settle window plus the slowest
+server response per round; report measured shard wall time when changing it.
 
-The metric is **load-monotone**: neither a slower response nor a uniformly
-stretched timeline can raise it. Sequence boundaries read launch times only,
-so a longer response cannot move one; coverage is a running max that is never
-rewound at a boundary, so a split can only lower the count.
+The recorder writes `depthMethod: "round-barrier-v1"` in the baseline. When
+the selected recording has a missing or different method, compare requests,
+request counts, DB queries, and response sizes normally, but report depth
+only as a notice. Enforce depth again once main publishes a recording with
+the same method. Do not widen depth budgets to bridge measurement methods.
 
-One residual remains, and it is what the +1 `DEPTH_JITTER_ALLOWANCE` in
-`assertNetworkBaseline` covers: two requests issued from different ticks may
-overlap on one run and not the next, shifting a route by exactly one block. No
-launch-time metric can tell that apart from a real added round. The allowance
-is capped at one level and must stay there, because the metric can no longer
-carry a count across an observation boundary: a route reporting **two** extra
-levels has genuinely grown one, so investigate the request graph rather than
-re-running. Only `write`/`rewrite` when the route's behavior actually changed.
+Keep the round controller testable as a pure state machine over held
+requests, in-flight requests, events, and a clock. Tests cover independent
+branches with unequal response durations, genuine dependencies across
+rounds, and randomized request graphs and completion orders whose depth
+matches the graph's longest path. Replacing the barrier with timing-derived
+levels must fail those tests.
 
 ## Live Hotspot Burn-Down
 

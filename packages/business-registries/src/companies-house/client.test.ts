@@ -140,7 +140,7 @@ describe("lookupByCompanyNumber mocked", () => {
     );
     // HTTP Basic with empty password: base64("test-api-key-not-real:")
     expect(ctx.captured.authorization).toBe(
-      `Basic ${Buffer.from(`${TEST_API_KEY}:`, "utf-8").toString("base64")}`,
+      `Basic ${Buffer.from(`${TEST_API_KEY}:`, "utf-8").toBase64()}`,
     );
   });
 

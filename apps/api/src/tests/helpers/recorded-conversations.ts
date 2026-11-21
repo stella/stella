@@ -1,6 +1,7 @@
+import { StreamProcessor } from "@tanstack/ai";
 import type { UIMessage } from "@tanstack/ai-client";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { inArray } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import {
   existsSync,
   readdirSync,
@@ -10,20 +11,27 @@ import {
 } from "node:fs";
 import path from "node:path";
 
+import { buildCreateDocumentDownloadFileName } from "@stll/api-contract/chat-create-document";
+import { CHAT_STEP_LEDGER_KEY } from "@stll/api-contract/chat-step-ledger";
+import { CHAT_TURN_BUDGET } from "@stll/chat-limits";
+
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { chatThreads } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
+import { stampReasoningProvenance } from "@/api/handlers/chat/reasoning-provenance-stamp";
 import { CODE_MODE_EXECUTE_TOOL_NAME } from "@/api/handlers/chat/tools/execute/chat-code-mode";
 import {
   ASK_USER_TOOL_NAME,
   CREATE_DOCUMENT_TOOL_NAME,
 } from "@/api/handlers/chat/tools/native-chat-tool-names";
+import type { ChatTurnOutcome } from "@/api/handlers/chat/types";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   APPROVAL_TOOL_NAME,
   approvalToolArguments,
   createApprovalHarness,
+  HARNESS_CHAT_MODEL_ID,
   PLAIN_TOOL_ARGUMENTS,
   PLAIN_TOOL_NAME,
 } from "@/api/tests/helpers/chat-approval-harness";
@@ -32,6 +40,7 @@ import type {
   RecordedExchange,
   RecordedPage,
 } from "@/api/tests/helpers/chat-approval-harness";
+import { buildEngineSnapshot } from "@/api/tests/helpers/chat-fixtures";
 import type { ScriptedTurn } from "@/api/tests/helpers/chat-round-trip";
 import type { WebChatClient } from "@/api/tests/helpers/chat-web-client";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -43,6 +52,7 @@ import {
 import type { TestIds } from "@/api/tests/security/rls-helpers";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
+import { stabilizeRecordedConversation } from "../../../scripts/recorded-conversation-stabilization";
 import type { RecordedConversationSuite } from "./recorded-conversation-suites";
 
 // Recorded conversations: for each scenario, the exact requests the web app's
@@ -70,7 +80,6 @@ export const registerRecordedConversationSuite = (
   let ids: TestIds;
   let safeDb: SafeDb;
   let scopedDb: ScopedDb;
-  const seededThreadIds: SafeId<"chatThread">[] = [];
 
   beforeAll(async () => {
     const fixture = await getRlsFixture();
@@ -80,14 +89,40 @@ export const registerRecordedConversationSuite = (
       createScopedDb(testDb, [ids.wsA1, ids.wsA2], ids.orgA, ids.userA1),
     );
     safeDb = toSafeDbMock(scopedDb);
+
+    // Refuse recordings from stale installs that omit the committed SDK patch.
+    // The model and encrypted signature are the scripted provider's inputs.
+    const message = stampReasoningProvenance({
+      message: {
+        id: "recording-provenance-preflight",
+        role: "assistant" as const,
+        parts: [
+          {
+            type: "thinking" as const,
+            content: "Recording preflight",
+            signature: JSON.stringify({
+              id: "rs_recording_preflight",
+              encrypted_content: "encrypted-recording-preflight",
+            }),
+          },
+        ],
+      },
+      model: { provider: "openai", modelId: HARNESS_CHAT_MODEL_ID },
+      initialMessages: [],
+    });
+    expect(message.parts.at(0)).toMatchObject({
+      provenance: {
+        provider: "openai",
+        model: HARNESS_CHAT_MODEL_ID,
+        format: "openai-encrypted-content",
+      },
+    });
+    const processor = new StreamProcessor();
+    processor.processChunk(buildEngineSnapshot([message]));
+    expect(processor.getMessages().at(0)?.parts).toEqual(message.parts);
   });
 
   afterAll(async () => {
-    if (seededThreadIds.length > 0) {
-      await testDb
-        .delete(chatThreads)
-        .where(inArray(chatThreads.id, seededThreadIds));
-    }
     await releaseRlsFixture();
   });
 
@@ -111,7 +146,9 @@ export const registerRecordedConversationSuite = (
     /** The user reloads the page. */
     | { type: "reload" }
     /** Retry on the latest answer. */
-    | { type: "retry" };
+    | { type: "retry" }
+    /** Continue on an answer paused on its turn budget: the message it sends. */
+    | { messageId: string; text: string; type: "continue" };
 
   type RecordedStep = {
     action: RecordedAction;
@@ -126,74 +163,19 @@ export const registerRecordedConversationSuite = (
     threadId: string;
   };
 
-  // --- Stable recordings -----------------------------------------------------
+  const EXPECTED_FAILED_OUTCOME_SCENARIOS = new Set([
+    "error-before-first-chunk",
+    "retry",
+  ]);
 
-  const UUID_PATTERN =
-    /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/giu;
-  /** The run and message ids the web client mints: `run-<epoch ms>-<random>`,
-   *  `msg-<epoch ms>-<random>`. */
-  const CLIENT_ID_PATTERN = /(run|msg)-\d{13}-[0-9a-z]{6}/gu;
-  const ISO_INSTANT_PATTERN =
-    /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z/gu;
-  /** Epoch milliseconds from 2023 to 2033, the stream's `timestamp` values. */
-  const EPOCH_MS_PATTERN = /(?<![\d.])1[7-9]\d{11}(?![\d.])/gu;
-  const RECORDING_EPOCH_MS = Date.UTC(2026, 0, 1);
-  /** Elapsed milliseconds a code-mode run reports, raw or inside an SSE body. */
-  const DURATION_PATTERN = /(\\?"(?:duration|durationMs)\\?":)\d+/gu;
-
-  /** Each distinct match of `pattern`, in order of first appearance, named by
-   *  `name(n, match)`: identity is kept, the generated value is not. */
-  const renameEach = (
-    text: string,
-    pattern: RegExp,
-    name: (index: number, match: string) => string,
-  ): string => {
-    const names = new Map<string, string>();
-    return text.replaceAll(pattern, (match) => {
-      const key = match.toLowerCase();
-      const known = names.get(key);
-      if (known !== undefined) {
-        return known;
-      }
-      const next = name(names.size + 1, match);
-      names.set(key, next);
-      return next;
-    });
-  };
-
-  /**
-   * The recording with every generated value made stable, so a fresh recording
-   * of the same conversation is byte for byte the committed one: each distinct
-   * UUID and client run id becomes a fixed one in order of first appearance
-   * (identity kept), and every instant, ISO or epoch milliseconds, the next of
-   * a fixed series a second apart in order of appearance. Whether two instants
-   * fell in the same millisecond is timing, not behaviour, so instants keep no
-   * identity; the page lists messages oldest first, so theirs stay in order.
-   * Durations are timing too, and become 0.
-   */
-  const stabilize = (recording: RecordedConversation): string => {
-    let instants = 0;
-    const nextInstant = () => {
-      instants += 1;
-      return RECORDING_EPOCH_MS + instants * 1000;
-    };
-    const text = renameEach(
-      renameEach(
-        JSON.stringify(recording, null, 2),
-        UUID_PATTERN,
-        (index) =>
-          `00000000-0000-7000-8000-${index.toString(16).padStart(12, "0")}`,
-      ),
-      CLIENT_ID_PATTERN,
-      (index, match) => `${match.slice(0, 3)}-recorded-${String(index)}`,
-    )
-      .replaceAll(ISO_INSTANT_PATTERN, () =>
-        new Date(nextInstant()).toISOString(),
-      )
-      .replaceAll(EPOCH_MS_PATTERN, () => String(nextInstant()))
-      .replaceAll(DURATION_PATTERN, (_, key: string) => `${key}0`);
-    return `${text}\n`;
-  };
+  const assistantMessagesOf = (page: RecordedPage) =>
+    asTestRaw<
+      {
+        metadata?: { turnOutcome?: ChatTurnOutcome };
+        parts?: unknown[];
+        role?: string;
+      }[]
+    >(page.messages).filter(({ role }) => role === "assistant");
 
   // --- Scenarios ---------------------------------------------------------------
 
@@ -295,7 +277,7 @@ return { id: document.entityId, name: document.name };`;
   const step = async (
     recorder: Recorder,
     action: RecordedAction,
-    perform: () => Promise<void>,
+    perform: () => Promise<void> | void,
     { midStream = false }: { midStream?: boolean } = {},
   ) => {
     const before = recorder.exchanges.length;
@@ -376,12 +358,6 @@ return { id: document.entityId, name: document.name };`;
         import.meta.url,
       ).href
     );
-    const draft: unknown = await import(
-      new URL(
-        "../../../../web/src/components/chat/create-document-draft.logic.ts",
-        import.meta.url,
-      ).href
-    );
     const { name, source } = asTestRaw<{ name: string; source: string }>(
       JSON.parse(DRAFT_ARGUMENTS),
     );
@@ -393,9 +369,6 @@ return { id: document.entityId, name: document.name };`;
         | { fixes: unknown[]; status: "ok"; warnings: unknown[] }
         | { status: "error" };
     }>(compiler);
-    const { buildCreateDocumentDownloadFileName } = asTestRaw<{
-      buildCreateDocumentDownloadFileName: (name: string) => string;
-    }>(draft);
     const compiled = compileCreateDocumentSourceToDocument(source, {
       titleFallback: name,
     });
@@ -413,11 +386,39 @@ return { id: document.entityId, name: document.name };`;
     };
   };
 
-  /** A tool call that has started streaming in the live view. */
-  const holdsToolCall = (messages: readonly UIMessage[]) =>
-    messages.some(({ parts }) =>
-      parts.some(({ type }) => type === "tool-call"),
+  /** What the web app's Continue sends, in the recording's language. */
+  const continueText = async (): Promise<string> => {
+    const catalog: unknown = await import(
+      new URL("../../../../web/src/i18n/langs/en.json", import.meta.url).href
     );
+    return asTestRaw<{
+      default: { chat: { turnPaused: { continue: string } } };
+    }>(catalog).default.chat.turnPaused.continue;
+  };
+
+  /**
+   * The live view holds the tool call as far as the scripted model streams
+   * it before going quiet at `point`: its arguments (`before-tool-end`), or
+   * its arguments and end (`after-tool-end`). Waiting for exactly that last
+   * event, not for the call to start, keeps what the page saw before a stop
+   * or a dropped connection the same on every run.
+   */
+  const holdsToolCallUntil =
+    (point: "after-tool-end" | "before-tool-end") =>
+    (messages: readonly UIMessage[]) =>
+      messages.some(({ parts }) =>
+        parts.some((part) => {
+          if (part.type !== "tool-call") {
+            return false;
+          }
+          if (point === "before-tool-end") {
+            return part.arguments !== "";
+          }
+          return (
+            part.state !== "awaiting-input" && part.state !== "input-streaming"
+          );
+        }),
+      );
 
   /** A model call that goes quiet at `quietAt` while its tool call streams. */
   const quietTurn = (
@@ -595,6 +596,54 @@ return { id: document.entityId, name: document.name };`;
           await recorder.client.resend();
         });
       },
+      // The turn reaches its budget at a step boundary and pauses; nothing
+      // runs until the user's Continue sends the next message.
+      "paused-turn": async (recorder) => {
+        recorder.harness.limitTurnBudget(recorder.threadId, {
+          maxToolCalls: 2,
+          maxPromptTokens: CHAT_TURN_BUDGET.maxPromptTokens,
+        });
+        await send(recorder, "List every template", [
+          asks([plainCall("call-1")]),
+          asks([plainCall("call-2")], "Some lists are long"),
+        ]);
+        const pausedPage = recorder.steps.at(-1)?.exchanges.at(-1)?.page;
+        if (pausedPage === undefined) {
+          expect.unreachable("The paused step must record its page");
+        }
+        const pausedMessage = assistantMessagesOf(pausedPage).at(-1);
+        expect(pausedMessage?.metadata?.turnOutcome).toEqual({
+          type: "paused",
+          reason: "tool-calls",
+          toolCalls: 2,
+        });
+        expect(
+          asTestRaw<{ output?: unknown; type?: string }[]>(
+            pausedMessage?.parts ?? [],
+          ).filter(
+            ({ output, type }) => type === "tool-call" && output !== undefined,
+          ),
+        ).toHaveLength(2);
+        recorder.harness.script(recorder.threadId, [
+          answers("Listed every template"),
+        ]);
+        const text = await continueText();
+        const messageId = Bun.randomUUIDv7();
+        await step(
+          recorder,
+          { messageId, text, type: "continue" },
+          async () => {
+            await recorder.client.sendUserMessage(messageId, text);
+          },
+        );
+        const completedPage = recorder.steps.at(-1)?.exchanges.at(-1)?.page;
+        if (completedPage === undefined) {
+          expect.unreachable("The Continue step must record its page");
+        }
+        expect(
+          assistantMessagesOf(completedPage).at(-1)?.metadata?.turnOutcome,
+        ).toEqual({ type: "completed" });
+      },
       "error-before-first-chunk": async (recorder) => {
         await send(recorder, "Draft the NDA", [
           { message: "Scripted provider failure", type: "fail-before-output" },
@@ -627,39 +676,50 @@ return { id: document.entityId, name: document.name };`;
         );
         await send(recorder, "Thanks", [answers("Anything else?")]);
       },
-      // The user types past a card that still waits: the new message replaces
-      // the waiting turn.
-      "supersede-approval": async (recorder) => {
-        await send(recorder, "Delete the NDA", [
-          asks([approvalCall("call-1")]),
-        ]);
-        await send(recorder, "Keep it and draft a new one", [
-          answers("Drafted"),
-        ]);
-      },
-      // The replacing turn asks for the same tool, and the user allows it for the
-      // conversation: the replaced card stays unanswered.
-      "supersede-approval-then-grant": async (recorder) => {
-        await send(recorder, "Delete the NDA", [
-          asks([approvalCall("call-1")]),
-        ]);
-        await send(recorder, "Delete the older copy instead", [
-          asks([approvalCall("call-2")]),
-        ]);
-        await approve(recorder, "call-2", "allow-in-conversation", [
-          answers("Deleted the older copy"),
-        ]);
-      },
-      "supersede-ask-user": async (recorder) => {
-        await send(recorder, "Draft the NDA", [asks([askUserCall("call-1")])]);
-        await send(recorder, "Use the buyer's form", [answers("Drafted")]);
-      },
       "connection-drop": async (recorder) => {
-        await sendUntilQuiet(recorder, "before-tool-end");
-        await step(recorder, { type: "drop-connection" }, async () => {
+        const continued = Promise.withResolvers<undefined>();
+        recorder.harness.streamLive(recorder.threadId);
+        recorder.harness.script(recorder.threadId, [
+          {
+            type: "step",
+            text: "Checking the register",
+            toolCalls: [plainCall("call-1")],
+            pause: {
+              at: "before-tool-end",
+              wait: async () => await continued.promise,
+            },
+          },
+          // Delivery can disconnect while the same producer keeps iterating.
+          answers("Checked the register"),
+        ]);
+        const messageId = Bun.randomUUIDv7();
+        await step(
+          recorder,
+          { messageId, text: "Check the register", type: "send" },
+          async () =>
+            await recorder.client.startUserMessage(
+              messageId,
+              "Check the register",
+              holdsToolCallUntil("before-tool-end"),
+            ),
+          { midStream: true },
+        );
+        expect(recorder.harness.modelOptionsOf(recorder.threadId)).toHaveLength(
+          1,
+        );
+        await step(recorder, { type: "drop-connection" }, () => {
           recorder.harness.dropConnection(recorder.threadId);
-          await Promise.resolve();
+          // Closing delivery leaves production alive; once its input is ready,
+          // read-only reconnection catches up to the completed transcript.
+          continued.resolve(undefined);
         });
+        await recorder.harness.expectSoundWebClient({
+          client: recorder.client,
+          threadId: recorder.threadId,
+        });
+        expect(recorder.harness.modelOptionsOf(recorder.threadId)).toHaveLength(
+          2,
+        );
       },
     },
   } as const satisfies Record<
@@ -680,7 +740,11 @@ return { id: document.entityId, name: document.name };`;
       recorder,
       { messageId, text, type: "send" },
       async () => {
-        await recorder.client.startUserMessage(messageId, text, holdsToolCall);
+        await recorder.client.startUserMessage(
+          messageId,
+          text,
+          holdsToolCallUntil(quietAt),
+        );
       },
       { midStream: true },
     );
@@ -696,34 +760,45 @@ return { id: document.entityId, name: document.name };`;
   ): Promise<{ failure: unknown; recording: RecordedConversation }> => {
     const harness = createApprovalHarness({ ids, safeDb, scopedDb, testDb });
     const threadId = toSafeId<"chatThread">(Bun.randomUUIDv7());
-    seededThreadIds.push(threadId);
-    const exchanges = harness.recordThread(threadId);
-    const initialPage = await harness.readPage(threadId);
-    const client = await harness.openWebClient(threadId);
-    const recorder: Recorder = {
-      client,
-      exchanges,
-      harness,
-      steps: [],
-      threadId,
-    };
-    let failure: unknown;
     try {
-      await run(recorder);
-      // The recording keeps what the page saw; which target each stored ref
-      // names in each request is only visible to the server, so it is checked
-      // here, on every scenario.
-      harness.expectStableRefs(threadId);
-    } catch (error) {
-      failure = error;
+      const exchanges = harness.recordThread(threadId);
+      const initialPage = await harness.readPage(threadId);
+      const client = await harness.openWebClient(threadId);
+      const recorder: Recorder = {
+        client,
+        exchanges,
+        harness,
+        steps: [],
+        threadId,
+      };
+      let failure: unknown;
+      try {
+        await run(recorder);
+        // The recording keeps what the page saw; which target each stored ref
+        // names in each request is only visible to the server, so it is checked
+        // here, on every scenario.
+        harness.expectStableRefs(threadId);
+        // A code step's ledger is for the page; no model call is handed one,
+        // on its own turn or when a later turn replays it.
+        expect(
+          harness
+            .promptsOf(threadId)
+            .flat()
+            .filter((block) => block.includes(CHAT_STEP_LEDGER_KEY)),
+        ).toEqual([]);
+      } catch (error) {
+        failure = error;
+      } finally {
+        recorder.client.dispose();
+      }
+      return {
+        failure,
+        recording: { initialPage, scenario, steps: recorder.steps, threadId },
+      };
     } finally {
-      recorder.client.dispose();
       await harness.close();
+      await testDb.delete(chatThreads).where(eq(chatThreads.id, threadId));
     }
-    return {
-      failure,
-      recording: { initialPage, scenario, steps: recorder.steps, threadId },
-    };
   };
 
   const checkRecording = async (
@@ -731,22 +806,36 @@ return { id: document.entityId, name: document.name };`;
     run: (recorder: Recorder) => Promise<void>,
   ) => {
     const { failure, recording } = await recordScenario(scenario, run);
-    const recorded = stabilize(recording);
+    const recorded = stabilizeRecordedConversation(recording);
     const file = path.join(FIXTURE_DIR, `${scenario}${RECORDING_EXTENSION}`);
     // A message the page never posted is a finding, never a recording: writing
     // it would make the committed file expect the page to drop it.
     const unposted = recording.steps.flatMap(({ action, exchanges }, index) =>
-      (action.type === "send" || action.type === "retry") &&
+      (action.type === "send" ||
+        action.type === "retry" ||
+        action.type === "continue") &&
       exchanges.length === 0
         ? [`step ${String(index + 1)} (${action.type})`]
         : [],
     );
-    if (process.env[WRITE_ENV] === "1" && unposted.length === 0) {
-      writeFileSync(file, recorded);
-    }
     expect(unposted).toEqual([]);
+    const failedOutcomes = recording.steps.flatMap(({ exchanges }, index) =>
+      exchanges.flatMap(({ page }) =>
+        assistantMessagesOf(page).flatMap(({ metadata }) =>
+          metadata?.turnOutcome?.type === "failed"
+            ? [`step ${String(index + 1)}`]
+            : [],
+        ),
+      ),
+    );
+    if (!EXPECTED_FAILED_OUTCOME_SCENARIOS.has(scenario)) {
+      expect(failedOutcomes).toEqual([]);
+    }
     // A scenario step that failed is the finding, not a stale file.
     expect(failure).toBeUndefined();
+    if (process.env[WRITE_ENV] === "1") {
+      writeFileSync(file, recorded);
+    }
     expect(existsSync(file)).toBe(true);
     // Regenerate with `bun run gen:chat-transcripts` in apps/api.
     expect(readFileSync(file, "utf-8")).toBe(recorded);
@@ -775,11 +864,13 @@ return { id: document.entityId, name: document.name };`;
           }
         }
       }
+      // Only orphans fail here: each scenario's own test requires its file,
+      // and a scenario of a suite that has not run yet has none to compare.
       expect(
-        readdirSync(FIXTURE_DIR)
-          .filter((name) => name.endsWith(RECORDING_EXTENSION))
-          .toSorted(),
-      ).toEqual(recordedFilenames.toSorted());
+        readdirSync(FIXTURE_DIR).filter(
+          (name) => name.endsWith(RECORDING_EXTENSION) && !recordings.has(name),
+        ),
+      ).toEqual([]);
     });
   });
 };

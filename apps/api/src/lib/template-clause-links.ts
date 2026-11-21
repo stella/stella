@@ -1,32 +1,32 @@
-/** Shared template-clause link operations used by the clause and template slices. */
 import { panic, Result } from "better-result";
 import { and, eq, or, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
-import { status, t } from "elysia";
-import type { Static } from "elysia";
+/** Shared template-clause link operations used by the clause and template slices. */
+import * as v from "valibot";
 
 import { isClauseSlotName } from "@stll/template-conditions";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { clauseVersions, templateClauses } from "@/api/db/schema";
+import { status } from "@/api/http/status";
 import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { validateClauseBodyDirectives } from "@/api/lib/clauses/clause-directives";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { displayNameSchema, resourceIdSchema } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
 import { getPgErrorCode, PG_ERROR } from "@/api/lib/pg-error";
 
 // ── Schemas ─────────────────────────────────────────
 
-export const linkClauseBodySchema = t.Object({
-  clauseId: tSafeId("clause"),
-  variantId: t.Optional(tSafeId("clauseVariant")),
-  slotName: t.Optional(t.String({ maxLength: 128 })),
+export const linkClauseBodySchema = v.object({
+  clauseId: resourceIdSchema("clause"),
+  variantId: v.optional(resourceIdSchema("clauseVariant")),
+  slotName: v.optional(displayNameSchema({ maxLength: 128, allowEmpty: true })),
 });
 
-type LinkClauseBody = Static<typeof linkClauseBodySchema>;
+type LinkClauseBody = v.InferOutput<typeof linkClauseBodySchema>;
 
 // ── Helpers ─────────────────────────────────────────
 
@@ -199,11 +199,12 @@ export const linkClauseHandler = async ({
   // Verify variant if specified; snapshot its label so a later
   // variant deletion leaves a detectable tombstone on the link.
   let variantLabel: string | null = null;
-  if (body.variantId) {
+  const variantId = body.variantId;
+  if (variantId) {
     const variant = await scopedDb((tx) =>
       tx.query.clauseVariants.findFirst({
         where: {
-          id: { eq: body.variantId },
+          id: { eq: variantId },
           clauseId: { eq: body.clauseId },
           organizationId: { eq: organizationId },
         },

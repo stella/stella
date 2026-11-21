@@ -48,7 +48,8 @@
                     },
                     "required": ["name"],
                     "additionalProperties": false
-                  }
+                  },
+                  "strict": false
                 },
                 "type": "function"
               }

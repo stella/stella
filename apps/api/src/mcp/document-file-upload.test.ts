@@ -4,11 +4,14 @@ import {
 } from "@modelcontextprotocol/ext-apps/app-bridge";
 import { panic, Result } from "better-result";
 import { describe, expect, mock, test } from "bun:test";
-import { createHash } from "node:crypto";
 
+import { createSha256 } from "@stll/sha256/node";
+
+import type { captureError } from "@/api/lib/analytics/capture";
 import type { AuditRecorder } from "@/api/lib/audit-log";
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { toSafeId } from "@/api/lib/branded-types";
-import type { McpRequestContext } from "@/api/mcp/context";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import {
   DOCUMENT_UPLOAD_APP_RESOURCE_URI,
   uploadRemoteDocumentVersion,
@@ -20,21 +23,23 @@ import {
 import { toMcpTools } from "@/api/mcp/gateway/list-tools";
 import { getStaticMcpToolOutputContract } from "@/api/mcp/static-tool-definitions";
 import { errorResult, serializeToolResult } from "@/api/mcp/tool-utils";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
+import { authorizedMcpContextForTest } from "@/api/tests/helpers/authorized-mcp-context";
 import { modelViewOf } from "@/api/tests/helpers/mcp-model-view";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 
-const emptyScopedDb = asTestRaw<McpRequestContext["scopedDb"]>(
+const emptyScopedDb = asTestRaw<AuthorizedMcpRequestContext["scopedDb"]>(
   async (run: (tx: unknown) => unknown) => await run({}),
 );
 const noopRecorder = asTestRaw<AuditRecorder>(async () => undefined);
 
-const createContext = (): McpRequestContext => {
+const createContext = (): AuthorizedMcpRequestContext => {
   const workspaceId = toSafeId<"workspace">(
     "00000000-0000-4000-8000-000000000001",
   );
   const safeDb = toSafeDbMock(emptyScopedDb);
-  return {
+  return authorizedMcpContextForTest({
     accessibleWorkspaceIds: [workspaceId],
     accessibleWorkspaceIdSet: new Set([workspaceId]),
     accessibleWorkspaceStatusById: new Map([[workspaceId, "active"]]),
@@ -49,12 +54,13 @@ const createContext = (): McpRequestContext => {
       "00000000-0000-4000-8000-000000000002",
     ),
     request: new Request("https://stella.example/mcp"),
+    thirdPartyOutboundPermit: grantThirdPartyOutboundPermit(),
     recordAuditEvent: noopRecorder,
     safeDb,
     scopedDb: emptyScopedDb,
     userId: toSafeId<"user">("00000000-0000-4000-8000-000000000003"),
     userEmail: "standard@example.test",
-  };
+  });
 };
 
 describe("document file upload surface", () => {
@@ -89,7 +95,16 @@ describe("document file upload surface", () => {
       },
     });
 
+    expect(listedUpload?.annotations?.destructiveHint).toBe(true);
+    if (!("nonDestructiveReason" in pickerDefinition)) {
+      panic("Canonical upload picker must state its non-modifying behavior");
+    }
+    expect(typeof pickerDefinition.nonDestructiveReason).toBe("string");
+    expect(pickerDefinition.nonDestructiveReason).toContain(
+      "without modifying",
+    );
     const listedPicker = toMcpTools([pickerDefinition]).at(0);
+    expect(listedPicker?.annotations?.destructiveHint).toBe(false);
     const parsedUi = McpUiToolMetaSchema.safeParse(listedPicker?._meta?.["ui"]);
     expect(parsedUi.success).toBe(true);
     if (!parsedUi.success) {
@@ -111,7 +126,7 @@ describe("document file upload surface", () => {
   test("returns the picker's next step in the result the model reads", async () => {
     const entityId = "00000000-0000-4000-8000-000000000010";
     const workspaceId = "00000000-0000-4000-8000-000000000001";
-    const scopedDb = asTestRaw<McpRequestContext["scopedDb"]>(
+    const scopedDb = asTestRaw<AuthorizedMcpRequestContext["scopedDb"]>(
       async (run: (tx: unknown) => unknown) =>
         await run({
           query: {
@@ -161,19 +176,110 @@ describe("document file upload surface", () => {
     });
   });
 
-  test("bridges a host file through the canonical create and finalize capabilities", async () => {
-    const bytes = new TextEncoder().encode("agreement body");
-    const invocations: Record<string, unknown>[] = [];
+  test.each(["agreement body", "Příliš žluťoučký kůň 📄 中文", "e\u0301"])(
+    "bridges host bytes with the former SHA-256 reservation digest: %j",
+    async (text) => {
+      const bytes = new TextEncoder().encode(text);
+      const invocations: Record<string, unknown>[] = [];
 
+      const result = await uploadRemoteDocumentVersion({
+        context: createContext(),
+        entityId: "00000000-0000-4000-8000-000000000010",
+        file: {
+          download_url: "https://files.example/agreement.docx",
+          file_id: "file_123",
+          file_name: "agreement.docx",
+          mime_type:
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        },
+        workspaceId: "00000000-0000-4000-8000-000000000001",
+        dependencies: {
+          abort: mock(async () => ({
+            status: "ok" as const,
+            payload: { aborted: true },
+          })),
+          captureCleanupFailure: mock(() => undefined),
+          download: mock(async () =>
+            Result.ok({
+              body: bytes.buffer,
+              headers: new Headers(),
+              ok: true,
+              status: 200,
+            }),
+          ),
+          invoke: mock(async ({ args }: { args: Record<string, unknown> }) => {
+            invocations.push(args);
+            return args["capability"] === "uploads.create"
+              ? ({
+                  status: "ok",
+                  payload: {
+                    headers: { "content-type": "application/octet-stream" },
+                    uploadId: "upload_123",
+                    url: "https://storage.example/upload",
+                  },
+                } satisfies { status: "ok"; payload: unknown })
+              : ({
+                  status: "ok",
+                  payload: {
+                    finalizedResult: {
+                      type: "entity_version",
+                      entityId: "00000000-0000-4000-8000-000000000010",
+                      entityVersionId: "version_123",
+                      versionNumber: 2,
+                      fileId: "file_456",
+                      fileName: "agreement.docx",
+                    },
+                  },
+                } satisfies { status: "ok"; payload: unknown });
+          }),
+          put: mock(async () => Result.ok(new Response(null, { status: 200 }))),
+        },
+      });
+
+      expect(result).toMatchObject({
+        egress: "structured",
+        payload: {
+          finalizedResult: {
+            type: "entity_version",
+            entityId: "00000000-0000-4000-8000-000000000010",
+            entityVersionId: "version_123",
+            versionNumber: 2,
+            fileId: "file_456",
+            fileName: "agreement.docx",
+          },
+        },
+      });
+      expect(invocations.map((args) => args["capability"])).toEqual([
+        "uploads.create",
+        "uploads.update",
+      ]);
+      expect(invocations.at(0)).toMatchObject({
+        input: {
+          body: {
+            purpose: "entity_version",
+            sha256Hex: createSha256().update(bytes).digest("hex"),
+            size: bytes.byteLength,
+          },
+        },
+      });
+    },
+  );
+
+  test("stops before downloading when the request context has no permit", async () => {
+    const download = mock(async () =>
+      Result.ok({
+        body: new ArrayBuffer(0),
+        headers: new Headers(),
+        ok: false,
+        status: 500,
+      }),
+    );
     const result = await uploadRemoteDocumentVersion({
-      context: createContext(),
+      context: { ...createContext(), thirdPartyOutboundPermit: undefined },
       entityId: "00000000-0000-4000-8000-000000000010",
       file: {
         download_url: "https://files.example/agreement.docx",
         file_id: "file_123",
-        file_name: "agreement.docx",
-        mime_type:
-          "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
       },
       workspaceId: "00000000-0000-4000-8000-000000000001",
       dependencies: {
@@ -182,69 +288,20 @@ describe("document file upload surface", () => {
           payload: { aborted: true },
         })),
         captureCleanupFailure: mock(() => undefined),
-        download: mock(async () =>
-          Result.ok({
-            body: bytes.buffer,
-            headers: new Headers(),
-            ok: true,
-            status: 200,
-          }),
-        ),
-        invoke: mock(async ({ args }) => {
-          invocations.push(args);
-          return args["capability"] === "uploads.create"
-            ? ({
-                status: "ok",
-                payload: {
-                  headers: { "content-type": "application/octet-stream" },
-                  uploadId: "upload_123",
-                  url: "https://storage.example/upload",
-                },
-              } satisfies { status: "ok"; payload: unknown })
-            : ({
-                status: "ok",
-                payload: {
-                  finalizedResult: {
-                    type: "entity_version",
-                    entityId: "00000000-0000-4000-8000-000000000010",
-                    entityVersionId: "version_123",
-                    versionNumber: 2,
-                    fileId: "file_456",
-                    fileName: "agreement.docx",
-                  },
-                },
-              } satisfies { status: "ok"; payload: unknown });
-        }),
+        download,
+        invoke: mock(async () => ({
+          status: "error" as const,
+          result: errorResult("unexpected invocation"),
+        })),
         put: mock(async () => Result.ok(new Response(null, { status: 200 }))),
       },
     });
 
     expect(result).toMatchObject({
-      egress: "structured",
-      payload: {
-        finalizedResult: {
-          type: "entity_version",
-          entityId: "00000000-0000-4000-8000-000000000010",
-          entityVersionId: "version_123",
-          versionNumber: 2,
-          fileId: "file_456",
-          fileName: "agreement.docx",
-        },
-      },
+      status: "error",
+      error: { type: "structured", code: "permission_denied" },
     });
-    expect(invocations.map((args) => args["capability"])).toEqual([
-      "uploads.create",
-      "uploads.update",
-    ]);
-    expect(invocations.at(0)).toMatchObject({
-      input: {
-        body: {
-          purpose: "entity_version",
-          sha256Hex: createHash("sha256").update(bytes).digest("hex"),
-          size: bytes.byteLength,
-        },
-      },
-    });
+    expect(download).not.toHaveBeenCalled();
   });
 
   test("aborts the canonical reservation when the storage PUT fails", async () => {
@@ -272,7 +329,7 @@ describe("document file upload surface", () => {
             status: 200,
           }),
         ),
-        invoke: mock(async ({ args }) => {
+        invoke: mock(async ({ args }: { args: Record<string, unknown> }) => {
           capabilities.push(String(args["capability"]));
           return {
             status: "ok",
@@ -294,7 +351,8 @@ describe("document file upload surface", () => {
 
   test("reports a failed reservation cleanup without hiding the transfer failure", async () => {
     const captureCleanupFailure = mock(
-      (_error: unknown, _context?: Record<string, string>) => undefined,
+      (_error: unknown, _options: Parameters<typeof captureError>[1]) =>
+        undefined,
     );
     const result = await uploadRemoteDocumentVersion({
       context: createContext(),
@@ -339,11 +397,14 @@ describe("document file upload surface", () => {
       },
     });
     expect(captureCleanupFailure).toHaveBeenCalledTimes(1);
-    expect(captureCleanupFailure).toHaveBeenCalledWith(expect.any(Error), {
-      source: "mcp_document_upload",
-      uploadId: "upload_123",
-      workspaceId: "00000000-0000-4000-8000-000000000001",
-    });
+    expect(captureCleanupFailure).toHaveBeenCalledWith(
+      expect.any(Error),
+      handlerErrorContext("abortCreatedReservation.failure", {
+        source: "mcp_document_upload",
+        uploadId: "upload_123",
+        workspaceId: "00000000-0000-4000-8000-000000000001",
+      }),
+    );
   });
 
   test("abandons a malformed reservation when the upload id is recoverable", async () => {

@@ -1,21 +1,30 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { prepareTemplateFromDocument } from "@/api/handlers/templates/prepare-template";
+import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
+import { storedAIConfigUnreadableError } from "@/api/lib/ai-config-response";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
-import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
+import {
+  ACCOUNT_ACCESS,
+  configuredModelAdmission,
+  createSafeRootHandler,
+} from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { fileSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { FILE_SIZE_LIMITS } from "@/api/lib/limits";
+import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
 import { scanTemplateUpload } from "@/api/lib/templates/scan-template-upload";
 import { suggestTemplateFieldsOrEmpty } from "@/api/lib/templates/suggest-template-fields";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
-const prepareBodySchema = t.Object({
-  file: t.File({ maxSize: FILE_SIZE_LIMITS.document }),
+const prepareBodySchema = v.object({
+  file: fileSchema({ maxBytes: FILE_SIZE_LIMIT_BYTES.multipartDocument }),
 });
 
 const config = {
+  contract: "patch",
+  actionAdmission: { type: "handler", actionKind: "templates.suggest-fields" },
   description:
     "Turn a finished DOCX into a template: the model proposes which literal " +
     "values should become fields, those spans are rewritten as markers, and " +
@@ -43,7 +52,7 @@ const config = {
     },
   },
   body: prepareBodySchema,
-  requiresUsage: { actionType: "chat", modelRole: "fast" },
+  requiresUsage: { actionType: "chat", modelTask: "short-text" },
 } satisfies HandlerConfig;
 
 /**
@@ -56,6 +65,8 @@ const config = {
 const prepareTemplate = createSafeRootHandler(
   config,
   async function* ({
+    orgAIConfigStatus,
+    modelAdmission,
     session,
     body,
     safeDb,
@@ -63,6 +74,10 @@ const prepareTemplate = createSafeRootHandler(
     managedAIResidency,
     user,
   }) {
+    if (orgAIConfigStatus === ORG_AI_CONFIG_STATUS.unreadable) {
+      return Result.err(storedAIConfigUnreadableError());
+    }
+
     const organizationId = session.activeOrganizationId;
     const { file } = body;
     if (file.type !== DOCX_MIME_TYPE) {
@@ -85,8 +100,9 @@ const prepareTemplate = createSafeRootHandler(
         workspaceId: null,
       },
       feature: "templates.prepare",
-      modelRole: "fast",
+      modelTask: "short-text",
       orgAIConfig,
+      modelTier: configuredModelAdmission({ modelAdmission }).modelTier,
       properties: { organization_id: organizationId },
       traceId: Bun.randomUUIDv7(),
     });
@@ -104,6 +120,7 @@ const prepareTemplate = createSafeRootHandler(
             // prepare request — capturing it first so it isn't silent.
             suggest: async (documentText) =>
               await suggestTemplateFieldsOrEmpty({
+                admission: configuredModelAdmission({ modelAdmission }),
                 documentText,
                 orgAIConfig,
                 managedAIResidency,
@@ -122,11 +139,10 @@ const prepareTemplate = createSafeRootHandler(
       }),
     );
 
-    // Return the prepared docx as base64 in JSON, NOT a binary Response: Eden
-    // parses binary responses as text and corrupts the zip (the same failure
-    // the save round-trip hit). The client decodes this back to bytes.
+    // Return the prepared docx as base64 in JSON rather than a binary
+    // Response. The client decodes this back to bytes.
     return Result.ok({
-      docxBase64: Buffer.from(prepared.file.bytes).toString("base64"),
+      docxBase64: Buffer.from(prepared.file.bytes).toBase64(),
       fieldCount: prepared.fields.length,
       unappliedCount: prepared.unapplied.length,
     });

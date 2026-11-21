@@ -1,49 +1,42 @@
-import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
-import * as v from "valibot";
+import { createFileRoute, redirect } from "@tanstack/react-router";
+import { panic } from "better-result";
 
-import { OTPPanel } from "@/components/auth/otp-panel";
+import { SIGN_IN_MODE } from "@/components/auth/sign-in-mode";
 import { fetchDevOtp } from "@/lib/dev-otp";
-import { afterSignInNavigation, redirectToSchema } from "@/lib/redirect";
-import { emailSchema } from "@/lib/schema";
 
-const searchSchema = v.strictObject({
-  email: emailSchema(),
-  redirectTo: redirectToSchema,
-});
+import { otpSearchSchema, otpSessionNavigation } from "./-otp.logic";
+import { OTPPage } from "./-otp.page";
+import { OTPPending } from "./-otp.pending";
 
 export const Route = createFileRoute("/auth/otp")({
-  validateSearch: searchSchema,
+  validateSearch: otpSearchSchema,
   loaderDeps: ({ search }) => ({ email: search.email }),
   beforeLoad: ({ context, search }) => {
-    if (context.session) {
-      throw redirect({
-        to: "/auth/organization",
+    const navigation = otpSessionNavigation({
+      mode: search.mode,
+      session: context.session ? "present" : "absent",
+      redirectTo: search.redirectTo,
+    });
+    if (navigation) {
+      redirect({ ...navigation, throw: true });
+    }
+    if (search.email === undefined) {
+      redirect({
+        to:
+          search.mode === SIGN_IN_MODE.reauthenticate
+            ? "/auth/reauth"
+            : "/auth",
         search: { redirectTo: search.redirectTo },
         replace: true,
+        throw: true,
       });
+      return panic("TanStack Router did not throw the sign-in redirect.");
     }
+    return { otpEmail: search.email };
   },
-  loader: async ({ deps }) => ({ devOtp: await fetchDevOtp(deps.email) }),
-  component: OTP,
+  loader: async ({ context }) => ({
+    devOtp: await fetchDevOtp(context.otpEmail),
+  }),
+  component: OTPPage,
+  pendingComponent: OTPPending,
 });
-
-function OTP() {
-  const navigate = useNavigate();
-  const { email, redirectTo } = Route.useSearch({
-    select: (s) => ({ email: s.email, redirectTo: s.redirectTo }),
-  });
-  const devOtp = Route.useLoaderData({ select: (d) => d.devOtp });
-
-  const handleVerified = async () => {
-    await navigate(afterSignInNavigation(redirectTo));
-  };
-
-  return (
-    <OTPPanel
-      email={email}
-      initialOtp={devOtp ?? undefined}
-      onVerified={handleVerified}
-      redirectTo={redirectTo}
-    />
-  );
-}

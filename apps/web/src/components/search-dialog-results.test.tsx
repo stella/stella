@@ -2,16 +2,18 @@ import { renderToStaticMarkup } from "react-dom/server";
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { expect, test } from "bun:test";
+import { IntlProvider } from "use-intl";
 
-import { resourceRef, RESOURCE_TYPE, toResourceName } from "@stll/api-contract";
+import { RESOURCE_TYPE, resourceRef, toResourceName } from "@stll/api-contract";
 
 import {
   RecentFileIcon,
   SearchHitIcon,
 } from "@/components/search-dialog-results";
+import { DocumentExtractionStatus } from "@/components/workspaces/document-extraction-status";
 import type { GlobalSearchHit } from "@/lib/api-contract";
 import { toSafeId } from "@/lib/safe-id";
-import type { RecentFile } from "@/lib/search-recents";
+import type { RecentFileWithIdentity } from "@/lib/search-recents";
 import { entityOptions } from "@/lib/workspaces/queries/entities";
 
 const resource = resourceRef({
@@ -35,7 +37,34 @@ const hit = {
   fileFieldId: "field_search_image",
   filePropertyId: "property_search_image",
   mimeType: "image/png",
+  processingStatus: null,
 } as const satisfies GlobalSearchHit;
+
+test.each([
+  ["queued", true],
+  ["running", true],
+  ["failed", false],
+  ["succeeded", false],
+] as const)(
+  "search results and workspace file rows show extraction state for %s",
+  (processingStatus, visible) => {
+    const renderStatus = () =>
+      renderToStaticMarkup(
+        <IntlProvider
+          locale="en"
+          messages={{ chat: { extractingContent: "Extracting content…" } }}
+          timeZone="UTC"
+        >
+          <DocumentExtractionStatus processingStatus={processingStatus} />
+        </IntlProvider>,
+      );
+
+    const searchResultStatus = renderStatus();
+    const workspaceFileStatus = renderStatus();
+    expect(searchResultStatus.includes("Extracting content…")).toBe(visible);
+    expect(workspaceFileStatus.includes("Extracting content…")).toBe(visible);
+  },
+);
 
 test.each([
   { mimeType: "image/png", fileFieldId: hit.fileFieldId },
@@ -70,7 +99,7 @@ const recent = {
   filePropertyId: hit.filePropertyId,
   mimeType: hit.mimeType,
   openedAt: hit.updatedAt,
-} as const satisfies RecentFile;
+} as const satisfies RecentFileWithIdentity;
 
 test.each([
   {
@@ -142,5 +171,55 @@ test.each([
     }
     expect(client.getQueryState(options.queryKey)?.fetchStatus).toBe("idle");
     client.clear();
+  },
+);
+
+test.each([
+  [{ kind: "statute", number: "172", year: "2026" }, "172/26"],
+  [{ kind: "decision", courtAbbreviation: "NS", courtTier: "supreme" }, "NS"],
+  [
+    { kind: "decision", courtAbbreviation: "ÚS", courtTier: "constitutional" },
+    "ÚS",
+  ],
+  [{ kind: "decision", courtAbbreviation: null }, 'data-kind="unknown"'],
+] as const)(
+  "recents render their document identity without fetching file metadata: %j",
+  (documentIdentity, label) => {
+    const markup = renderToStaticMarkup(
+      <RecentFileIcon file={{ ...recent, documentIdentity }} />,
+    );
+    expect(markup).toContain('data-slot="document-identity-badge"');
+    expect(markup).toContain(label);
+    expect(markup).not.toContain("/thumbnail/");
+  },
+);
+
+test.each([
+  { color: "--option-red", expected: "var(--option-red)" },
+  { color: "#336699", expected: "#336699" },
+  { color: null, expected: "var(--option-amber)" },
+])(
+  "matter search identities preserve their colour: %j",
+  ({ color, expected }) => {
+    const matterResource = resourceRef({
+      type: RESOURCE_TYPE.WORKSPACE,
+      id: toSafeId<"workspace">("matter_search_badge"),
+    });
+    const matter = {
+      id: "matter:badge",
+      type: "matter",
+      resource: matterResource,
+      resourceName: toResourceName(matterResource),
+      title: "Civil proceeding",
+      headline: null,
+      updatedAt: hit.updatedAt,
+      workspaceId: "matter_search_badge",
+      workspaceName: "Civil proceeding",
+      color,
+    } as const satisfies GlobalSearchHit;
+    const markup = renderToStaticMarkup(<SearchHitIcon hit={matter} />);
+    expect(markup).not.toContain('data-slot="document-identity-badge"');
+    expect(markup).toContain("lucide-layers");
+    expect(markup).toContain(`color:${expected}`);
   },
 );

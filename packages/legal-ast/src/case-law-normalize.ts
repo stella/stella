@@ -1,0 +1,66 @@
+import { collapseSpacedLetters } from "@stll/text-normalize";
+
+import { caseLawSectionHeading, romanItemNumber } from "./case-law-heading.js";
+import type { Block, DocumentAst } from "./document-ast.js";
+
+const REASONING_HEADING = /^Odůvodnění\s*:?$/iu;
+/** A sentence introducing a quoted ruling: the Roman items after it are its content. */
+const QUOTE_INTRO = /(?:tak,?\s+že|takto)\s*:?$/iu;
+
+/**
+ * Repair structure shared by every case-law consumer, including decisions
+ * stored before parsers learned to preserve same-line Roman section titles.
+ */
+export const normalizeCaseLawDecisionAst = (ast: DocumentAst): DocumentAst => {
+  const blocks: Block[] = [];
+  let changed = false;
+  let inReasoning = false;
+  let inQuotedRun = false;
+  /** The numeral the quoted ruling's next item carries. */
+  let nextQuotedItem = 0;
+  let previousText = "";
+  for (const block of ast.blocks) {
+    if (
+      block.type === "heading" &&
+      REASONING_HEADING.test(collapseSpacedLetters(block.plainText))
+    ) {
+      inReasoning = true;
+    }
+    const text = block.plainText.trim();
+    const item = block.type === "paragraph" ? romanItemNumber(text) : null;
+    // A quoted ruling counts its items on (I., II., III.); a numeral that
+    // does not continue it is the court's own outline again.
+    if (inQuotedRun && item !== nextQuotedItem) {
+      inQuotedRun = false;
+    }
+    if (!inQuotedRun && item !== null && QUOTE_INTRO.test(previousText)) {
+      inQuotedRun = true;
+    }
+    if (inQuotedRun && item !== null) {
+      nextQuotedItem = item + 1;
+    }
+    previousText = text;
+    if (
+      inReasoning &&
+      !inQuotedRun &&
+      block.type === "paragraph" &&
+      block.role === undefined
+    ) {
+      const heading = caseLawSectionHeading(block.plainText);
+      if (heading !== null) {
+        blocks.push({
+          anchorId: block.anchorId,
+          id: block.id,
+          inlines: block.inlines,
+          level: heading.level,
+          plainText: block.plainText,
+          type: "heading",
+        });
+        changed = true;
+        continue;
+      }
+    }
+    blocks.push(block);
+  }
+  return changed ? { ...ast, blocks } : ast;
+};

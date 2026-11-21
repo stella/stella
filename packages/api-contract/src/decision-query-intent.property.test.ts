@@ -4,10 +4,10 @@ import fc from "fast-check";
 
 import {
   assertProperty,
-  propertyConfig,
   propertySeed,
   propertyTestTimeout,
 } from "@stll/property-testing";
+import { normalizeUnicode } from "@stll/text-normalize";
 
 import { DECISION_DOCKET_GRAMMARS } from "./decision-docket-grammar";
 import {
@@ -64,7 +64,8 @@ describe("case-law query parser properties", () => {
   test(
     "canonical docket values parse to a stable canonical identifier",
     () => {
-      fc.assert(
+      assertProperty(
+        "canonical docket values parse to a stable canonical identifier",
         fc.property(
           fc.oneof(
             fc.constantFrom(...canonicalDockets),
@@ -88,7 +89,7 @@ describe("case-law query parser properties", () => {
             expect(parseDecisionQuery(first.value)).toEqual(first);
           },
         ),
-        propertyConfig({ seed: propertySeed() }),
+        { seed: propertySeed() },
       );
     },
     propertyTestTimeout(10_000),
@@ -97,11 +98,12 @@ describe("case-law query parser properties", () => {
   test(
     "operator shaped unrecognized entries remain intact text",
     () => {
-      fc.assert(
+      assertProperty(
+        "operator shaped unrecognized entries remain intact text",
         fc.property(adversarialText, (text) => {
           expect(parseDecisionQuery(text)).toEqual({ type: "text", text });
         }),
-        propertyConfig({ seed: propertySeed() }),
+        { seed: propertySeed() },
       );
     },
     propertyTestTimeout(10_000),
@@ -161,7 +163,7 @@ test(
             for (const entry of [
               `rozsudek podle ${docket} o náhradě škody`,
               `uznesenie podľa ${docket} o náhrade škody`,
-              `nález ${docket.normalize("NFD")}`,
+              `nález ${normalizeUnicode(docket, "NFD")}`,
             ]) {
               const embedded = parseDecisionQuery(entry, options);
               expect(embedded).toEqual({ ...standalone, embeddedIn: entry });
@@ -177,10 +179,10 @@ test(
 );
 
 test(
-  "constitutional references preserve senate and year width in each scope",
+  "constitutional references keep senate and year width and name either year form",
   () => {
     assertProperty(
-      "constitutional references preserve senate and year width in each scope",
+      "constitutional references keep senate and year width and name either year form",
       fc.property(fc.integer({ min: 1, max: 9999 }), (number) => {
         for (const jurisdiction of ["CZE", "SVK"] as const) {
           const options = { grammar: DECISION_DOCKET_GRAMMARS[jurisdiction] };
@@ -203,13 +205,20 @@ test(
                   : entry,
               );
               expect(parseDecisionQuery(intent.value, options)).toEqual(intent);
+              // The same case printed with its year in the other width is
+              // the same decision; another number is not.
               const siblingYear =
                 year.length === 2 ? `20${year}` : year.slice(-2);
               const hit = {
                 caseNumber: `${senate}. ÚS ${number}/${siblingYear}`,
                 ecli: null,
               };
-              expect(namedDecisionsOf(intent, [hit])).toEqual([]);
+              expect(namedDecisionsOf(intent, [hit])).toEqual([hit]);
+              const otherCase = {
+                caseNumber: `${senate}. ÚS ${number + 1}/${siblingYear}`,
+                ecli: null,
+              };
+              expect(namedDecisionsOf(intent, [otherCase])).toEqual([]);
             }
           }
         }

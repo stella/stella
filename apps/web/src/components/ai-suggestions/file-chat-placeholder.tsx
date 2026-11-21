@@ -1,17 +1,18 @@
 /**
- * What the composer floating over a document says while it is empty.
+ * What the composer floating over a document says while it is empty, and
+ * which document it names.
  *
  * One owner, because two bars ask: the live one the chat runtime mounts, and
- * the gated one a visitor without an account gets in its place. A visitor must
- * read exactly what a member reads, so neither bar may word this for itself.
- * Kept out of the overlay's own module so the gated bar can have the copy
- * without the editor bundle behind it.
+ * the sign-in offer a visitor without an account gets in its place, which
+ * names the same document. Kept out of the overlay's own module so the offer
+ * can have the copy without the editor bundle behind it.
  */
 
 import { useTranslations } from "use-intl";
 
 import { BidiText } from "@stll/ui/bidi-text";
 import { COMPOSER_TEXT_CLASS } from "@stll/ui/composer";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { activeLegalDocumentRef } from "@/components/ai-suggestions/active-legal-document";
@@ -107,9 +108,12 @@ export const FileChatEmptyPlaceholder = ({
       )}
     >
       <span className="shrink-0">{placeholderAction}</span>
-      <BidiText as="span" className="text-foreground-label max-w-64 truncate">
+      <TruncatedText
+        className="text-foreground-label max-w-64"
+        render={<BidiText as="span" />}
+      >
         {sourceLabel}
-      </BidiText>
+      </TruncatedText>
     </span>
   );
 };

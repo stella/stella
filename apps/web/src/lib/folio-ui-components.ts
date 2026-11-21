@@ -1,4 +1,4 @@
-import { createElement } from "react";
+import { createElement, useState } from "react";
 import type { ComponentProps } from "react";
 
 import { Dialog as DialogPrimitive } from "@base-ui/react/dialog";
@@ -9,7 +9,6 @@ import type { FolioUIComponents } from "@stll/folio-react";
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
 import { ColorPicker } from "@stll/ui/color-picker";
-import type { ColorPickerProps } from "@stll/ui/color-picker";
 import {
   Dialog,
   DialogBackdrop,
@@ -44,10 +43,15 @@ import {
 } from "@stll/ui/select";
 
 import { DatePickerPopover } from "@/components/date-picker-popover";
+import { retainOutlinePageNumbers } from "@/components/docx/folio-outline-items.logic";
 
-const LocalizedColorPicker = (props: Omit<ColorPickerProps, "moreLabel">) => {
+const LocalizedColorPicker = (
+  props: ComponentProps<FolioUIComponents["ColorPicker"]>,
+) => {
   const t = useTranslations();
 
+  // Folio passes its toolbar button as the native-button trigger, so the
+  // picker renders it directly as the popover trigger.
   return createElement(ColorPicker, {
     ...props,
     moreLabel: t("common.showMore"),
@@ -70,6 +74,27 @@ const FolioInput = ({ type, ...props }: FolioInputProps) => {
   return createElement(Input, { ...props, type });
 };
 
+// Folio reserves docked chrome on its outline host for both default and injected rails.
+const FolioOutlineRail = ({
+  items,
+  ...props
+}: ComponentProps<FolioUIComponents["OutlineRail"]>) => {
+  const t = useTranslations();
+  const [retained, setRetained] = useState({ source: items, shown: items });
+  if (retained.source !== items) {
+    setRetained({
+      source: items,
+      shown: retainOutlinePageNumbers(retained.shown, items),
+    });
+  }
+  return createElement(OutlineRail, {
+    ...props,
+    items: retained.shown,
+    bottomInset: 0,
+    formatMetaLabel: (page) => t("common.page", { page }),
+  });
+};
+
 const FolioDialogPopup = (props: DialogPrimitive.Popup.Props) =>
   createElement(DialogPrimitive.Popup, props);
 
@@ -90,7 +115,7 @@ export const folioUIComponents: Partial<FolioUIComponents> = {
   Input: FolioInput,
   ColorPicker: LocalizedColorPicker,
   DatePickerPopover,
-  OutlineRail,
+  OutlineRail: FolioOutlineRail,
   Dialog: {
     Root: Dialog,
     Portal: DialogPortal,

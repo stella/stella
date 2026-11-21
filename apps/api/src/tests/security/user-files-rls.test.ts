@@ -6,8 +6,8 @@ import { chatThreads, userFiles, workspaces } from "@/api/db/schema";
 import { createMembershipScopedDb } from "@/api/db/scoped";
 import type { SafeId } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
+import { createUserFileKey } from "@/api/lib/file-key";
 import { isPgError, PG_ERROR } from "@/api/lib/pg-error";
-import { testFileKey } from "@/api/tests/helpers/file-key";
 import { installPgliteMigration } from "@/api/tests/pglite-schema";
 import {
   getRlsFixture,
@@ -15,10 +15,10 @@ import {
 } from "@/api/tests/security/rls-fixture";
 import type { TestIds } from "@/api/tests/security/rls-helpers";
 import type {
-  TestDatabase,
-  TestDatabaseTransaction,
   createDryScopedQuery,
   createScopedQuery,
+  TestDatabase,
+  TestDatabaseTransaction,
 } from "@/api/tests/security/test-utils";
 
 let ids: TestIds;
@@ -53,11 +53,17 @@ const captureError = async (fn: () => Promise<unknown>) => {
   }
 };
 
-const insertFile = async (
-  tx: TestDatabaseTransaction,
-  id: SafeId<"userFile">,
-  threadId: SafeId<"chatThread">,
-) =>
+const insertFile = async ({
+  id,
+  organizationId,
+  threadId,
+  tx,
+}: {
+  id: SafeId<"userFile">;
+  organizationId: SafeId<"organization">;
+  threadId: SafeId<"chatThread">;
+  tx: TestDatabaseTransaction;
+}) =>
   await tx.insert(userFiles).values({
     id,
     userId: ids.userA1,
@@ -65,7 +71,11 @@ const insertFile = async (
     mimeType: "text/plain",
     sizeBytes: 3,
     sha256Hex: "1".repeat(64),
-    s3Key: testFileKey(`user-files/${id}`),
+    s3Key: createUserFileKey({
+      fileId: id,
+      mimeType: "text/plain",
+      organizationId,
+    }),
     threadId,
   });
 
@@ -214,7 +224,12 @@ describe("user_files RLS follows the owning chat thread", () => {
       ids.orgA,
       async (tx) => {
         const fileId = createFileId();
-        await insertFile(tx, fileId, ids.chatThreadWorkspaceA1);
+        await insertFile({
+          id: fileId,
+          organizationId: ids.orgA,
+          threadId: ids.chatThreadWorkspaceA1,
+          tx,
+        });
 
         const updated = await tx
           .update(userFiles)
@@ -239,13 +254,18 @@ describe("user_files RLS follows the owning chat thread", () => {
         [ids.wsA1],
         ids.orgA,
         async (tx) => {
-          await insertFile(tx, createFileId(), ids.chatThreadWorkspaceB1UserA1);
+          await insertFile({
+            id: createFileId(),
+            organizationId: ids.orgB,
+            threadId: ids.chatThreadWorkspaceB1UserA1,
+            tx,
+          });
         },
         ids.userA1,
       );
     });
 
-    expect(isPgError(error, PG_ERROR.INSUFFICIENT_PRIVILEGE)).toBe(true);
+    expect(isPgError(error, PG_ERROR.CHECK_VIOLATION)).toBe(true);
   });
 
   test("update cannot move a file to another organization's thread", async () => {
@@ -263,7 +283,7 @@ describe("user_files RLS follows the owning chat thread", () => {
       );
     });
 
-    expect(isPgError(error, PG_ERROR.INSUFFICIENT_PRIVILEGE)).toBe(true);
+    expect(isPgError(error, PG_ERROR.CHECK_VIOLATION)).toBe(true);
   });
 
   test("foreign rows cannot be updated or deleted", async () => {

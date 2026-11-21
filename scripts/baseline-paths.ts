@@ -17,8 +17,30 @@
 // and locally, so a re-anchor written locally would not hold in CI.
 
 export const BASELINE_PATHS = {
-  /** scripts/check-oxlint-rule-coverage.ts */
-  oxlintRuleCoverage: "scripts/oxlint-rule-coverage-baseline.json",
+  /** scripts/check-mutation-query-invalidation.ts */
+  mutationQueryInvalidation:
+    "scripts/mutation-query-invalidation-baseline.json",
+  /** scripts/check-actionlint-baseline.ts */
+  actionlint: ".github/actionlint-baseline.json",
+  /** scripts/check-test-state-baseline.ts */
+  testState: "scripts/test-state-baseline.json",
+  /** scripts/seed-test-determinism-baselines.ts */
+  testAmbientTime: "scripts/test-ambient-time-baseline.json",
+  /** scripts/seed-test-determinism-baselines.ts */
+  testRealTimers: "scripts/test-real-timers-baseline.json",
+  /** scripts/seed-test-determinism-baselines.ts */
+  testWallclockAssertion: "scripts/test-wallclock-assertion-baseline.json",
+  /** scripts/check-rust-test-determinism.ts */
+  rustTestDeterminism: "scripts/rust-test-determinism-baseline.json",
+  /** scripts/check-aggregate-locks.ts */
+  aggregateLocks: "scripts/aggregate-lock-baseline.json",
+  /** .oxlint-plugins/no-variable-arity-values.ts */
+  noVariableArityValues:
+    ".oxlint-plugins/no-variable-arity-values-baseline.json",
+  /** scripts/check-write-contracts.ts */
+  writeContracts: "scripts/write-contract-routes-baseline.json",
+  /** scripts/check-aggregate-mutations.ts */
+  aggregateMutations: "scripts/aggregate-mutation-routes-baseline.json",
   /** scripts/check-oxlint-effective-config.ts */
   oxlintEffectiveConfig: "scripts/oxlint-effective-config-baseline.json",
   /** scripts/bundle-baseline.ts */
@@ -27,6 +49,12 @@ export const BASELINE_PATHS = {
   dependencyAudit: "scripts/dependency-audit-baseline.json",
   /** scripts/knip-exports-ratchet.ts */
   knipExports: "scripts/knip-exports-baseline.json",
+  /** scripts/offline-check-policy.ts */
+  offlineCheckImports: "scripts/offline-check-import-allowlist.json",
+  /** scripts/check-ci-network-steps.ts */
+  ciNetworkSteps: "scripts/ci-network-steps-allowlist.json",
+  /** scripts/check-tracked-file-sizes.ts */
+  trackedFileSizes: "scripts/tracked-file-size-baseline.json",
   /** scripts/rc-bailouts.ts */
   reactCompilerBailouts: "scripts/react-compiler-bailouts.json",
   /** scripts/design-lint-baseline.ts */
@@ -41,26 +69,37 @@ export const BASELINE_PATHS = {
   transferRead: "scripts/transfer-read-guard-baseline.json",
   /** scripts/source-fingerprint-baseline.ts */
   sourceFingerprint: "scripts/source-fingerprint-baseline.json",
+  /** scripts/test-subject-reachability.ts */
+  testSubjectReachability: "scripts/test-subject-reachability-baseline.json",
   /** scripts/sql-perf-baseline.ts */
   sqlPerf: ".oxlint-plugins/sql-perf-baseline.json",
-  /** apps/api/scripts/mcp-coverage-guard.ts */
-  mcpCoverage: "apps/api/mcp-coverage-baseline.json",
+  /** scripts/render-phase-update-baseline.ts */
+  renderPhaseUpdate: ".oxlint-plugins/no-render-phase-update-baseline.json",
   /** apps/api/scripts/mcp-surface-baseline.ts */
   mcpSurface: "apps/api/mcp-surface-baseline.json",
   /** apps/api/scripts/deployment-feature-guard.ts */
-  deploymentFeature: "apps/api/deployment-feature-baseline.json",
+  deploymentFeature: "apps/api/deployment-feature-routes-baseline.json",
   /** apps/api/src/handlers/chat/provider-request-cache.integration.test.ts */
   chatPromptPrefix:
     "apps/api/src/tests/fixtures/provider-request-schemas/chat-prompt-baseline.json",
   /** apps/api/src/handlers/case-law/ingestion/adapters/source-surface-census.test.ts */
   caseLawSourceSurfaceBacklog:
     "apps/api/src/handlers/case-law/ingestion/adapters/source-surface-backlog-baseline.json",
+  /** apps/api/scripts/processed-field-backlog-guard.ts */
+  caseLawProcessedFieldBacklog:
+    "apps/api/src/handlers/case-law/ingestion/adapters/processed-field-backlog-baseline.json",
   /** apps/api/src/handlers/case-law/ingestion/adapters/silent-drop-guard.test.ts */
   caseLawSilentDrop:
     "apps/api/src/handlers/case-law/ingestion/adapters/silent-drop-guard-baseline.json",
   /** apps/api/src/handlers/case-law/ingestion/adapters/read-fault-guard.test.ts */
   caseLawReadFault:
     "apps/api/src/handlers/case-law/ingestion/adapters/read-fault-guard-baseline.json",
+  /** apps/api/scripts/update-structure-fidelity-baseline.ts */
+  caseLawStructureFidelity:
+    "apps/api/src/handlers/case-law/ingestion/parsers/structure-fidelity-baseline.json",
+  /** apps/api/src/lib/legal-search/parsers/validate-ast-defaults.test.ts */
+  validateAstDefaults:
+    "apps/api/src/lib/legal-search/parsers/validate-ast-defaults.baseline.json",
   /** apps/api/src/handlers/legislation/statute-recall.contract.test.ts */
   statuteRecall:
     "apps/api/src/handlers/legislation/fixtures/statute-recall/baseline.json",
@@ -70,9 +109,11 @@ export const BASELINE_PATHS = {
   queueAuthority: "scripts/queue-authority-baseline.json",
   /** scripts/queue-authority.ts */
   schedulerTaskAuthority: "scripts/scheduler-task-authority-baseline.json",
-  // The i18n pair is produced by `packages/scripts/src/i18n-*.ts` against the
-  // messages directory it is given, so the package holds the file name and
-  // each app contributes the directory. Both committed pairs are listed.
+  // The i18n baselines and source locks are produced by
+  // `packages/scripts/src/i18n-*.ts` against the messages directory it is
+  // given, so the package holds the file name and each catalog contributes the
+  // directory. Every committed one is listed. A source lock records which
+  // English the translations follow; only `--sync` and `--accept` may write it.
   /** packages/scripts/src/i18n-check.ts, apps/web */
   webI18nCheck: "apps/web/src/i18n/i18n-check-baseline.json",
   /** packages/scripts/src/i18n-lint.ts, apps/web */
@@ -81,6 +122,21 @@ export const BASELINE_PATHS = {
   landingI18nCheck: "apps/landing/src/i18n/i18n-check-baseline.json",
   /** packages/scripts/src/i18n-lint.ts, apps/landing */
   landingI18nLint: "apps/landing/src/i18n/i18n-lint-baseline.json",
+  /** packages/scripts/src/i18n-check.ts, apps/web */
+  webI18nSourceLock: "apps/web/src/i18n/i18n-source-lock.json",
+  /** packages/scripts/src/i18n-check.ts, apps/landing */
+  landingI18nSourceLock: "apps/landing/src/i18n/i18n-source-lock.json",
+  /** packages/scripts/src/i18n-check.ts, packages/transactional */
+  transactionalI18nSourceLock:
+    "packages/transactional/i18n/i18n-source-lock.json",
+  /** packages/scripts/src/i18n-check.ts, apps/desktop */
+  desktopI18nCheck: "apps/desktop/src/i18n/i18n-check-baseline.json",
+  /** packages/scripts/src/i18n-check.ts, apps/desktop */
+  desktopI18nSourceLock: "apps/desktop/src/i18n/i18n-source-lock.json",
+  /** packages/scripts/src/i18n-check.ts, apps/mobile */
+  mobileI18nCheck: "apps/mobile/src/i18n/i18n-check-baseline.json",
+  /** packages/scripts/src/i18n-check.ts, apps/mobile */
+  mobileI18nSourceLock: "apps/mobile/src/i18n/i18n-source-lock.json",
 } as const satisfies Record<string, string>;
 
 export const isSeededBaselineFile = (file: string): boolean =>

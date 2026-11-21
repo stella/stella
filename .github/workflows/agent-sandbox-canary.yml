@@ -1,5 +1,9 @@
 name: Agent sandbox canary
 
+defaults:
+  run:
+    shell: bash
+
 on:
   schedule:
     # Off the top of the hour to reduce GitHub-hosted runner scheduling delay.
@@ -12,6 +16,15 @@ concurrency:
   group: agent-sandbox-canary-${{ github.ref }}
   cancel-in-progress: false
 
+env:
+  GIT_CONFIG_COUNT: "3"
+  GIT_CONFIG_KEY_0: maintenance.auto
+  GIT_CONFIG_VALUE_0: "false"
+  GIT_CONFIG_KEY_1: gc.auto
+  GIT_CONFIG_VALUE_1: "0"
+  GIT_CONFIG_KEY_2: gc.autoDetach
+  GIT_CONFIG_VALUE_2: "false"
+
 jobs:
   real-model-mcp-canary:
     name: Real Codex to MCP canary
@@ -23,6 +36,7 @@ jobs:
     environment: agent-sandbox-canary
     permissions:
       contents: read
+      packages: read
     env:
       AGENT_SANDBOX_IMAGE: stella/agent-sandbox:canary
       AGENT_SANDBOX_NETWORK: stella-agent-canary-${{ github.run_id }}-${{ github.run_attempt }}
@@ -46,24 +60,42 @@ jobs:
           fi
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: stella/.github/actions/setup-bun-cached@2664e46f02aea7164ba71bcdd485a686166993a4
         with:
+          save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: "package.json"
 
       - name: Install dependencies
+        timeout-minutes: 5
         run: bash scripts/retry.sh bun ci --ignore-scripts
         env:
           NPM_TOKEN: ""
 
+      - name: Configure flaky-test quarantine
+        uses: ./.github/actions/flaky-test-quarantine
+
       - name: Run canary protocol tests
         run: bun test packages/agent-engine/scripts/mcp-canary-server.test.ts
 
+      - name: Log in to the CI image mirror
+        if: github.event.pull_request.head.repo.fork != true && github.token != ''
+        continue-on-error: true
+        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
       - name: Pull sandbox base images
-        run: bash scripts/pull-base-images.sh packages/agent-engine/docker/sandbox.Dockerfile
+        env:
+          CI_IMAGE_MIRROR_ENABLED: "true"
+        run: bun scripts/ci-service-images.ts --pull packages/agent-engine/docker/sandbox.Dockerfile
 
       - name: Build pinned sandbox image
+        env:
+          CI_IMAGE_MIRROR_ENABLED: "true"
         run: >-
-          docker build
+          bun scripts/ci-service-images.ts --build packages/agent-engine/docker/sandbox.Dockerfile --
           --file packages/agent-engine/docker/sandbox.Dockerfile
           --tag "$AGENT_SANDBOX_IMAGE"
           packages/agent-engine/docker
@@ -72,6 +104,10 @@ jobs:
       # inner workspace-write sandbox still has network access disabled for
       # model-authored shell commands; the draft-safe job separately proves an
       # internal Docker network blocks arbitrary container egress.
+      - name: Log out of GitHub Container Registry
+        if: always()
+        run: docker logout ghcr.io
+
       - name: Create canary network
         run: docker network create "$AGENT_SANDBOX_NETWORK"
 

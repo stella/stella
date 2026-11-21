@@ -1,4 +1,3 @@
-import { panic } from "better-result";
 import { defineRelations, isNotNull, isNull, sql } from "drizzle-orm";
 import * as p from "drizzle-orm/pg-core";
 import { customType } from "drizzle-orm/pg-core";
@@ -7,11 +6,11 @@ import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import {
   BILLING_STATUS,
   EXPENSE_CATEGORIES,
+  type ExpenseCategory,
   TIME_ENTRY_SOURCE,
   TIME_ENTRY_SOURCES,
   TIME_ENTRY_STATUSES,
   TIME_ENTRY_SUGGESTION_STATUS,
-  type ExpenseCategory,
   type TimeEntrySource,
   type TimeEntryStatus,
 } from "@stll/api-contract";
@@ -24,38 +23,49 @@ import { member, organization, user } from "@/api/db/auth-schema";
 import { bytea, jsonb, timestamptz } from "@/api/db/columns";
 import {
   agentSkillChildPolicies,
-  agentSkillRevisionPolicies,
   agentSkillPolicies,
   agentSkillResourcePolicies,
+  agentSkillRevisionPolicies,
   aiMemoryPolicies,
-  chatMessageSearchDocumentPolicies,
-  chatMessagePolicies,
-  chatTurnPolicies,
-  chatThreadCompactionPolicies,
-  chatThreadNamePolicies,
-  chatThreadPreviewPassagePolicies,
-  chatThreadPolicies,
-  chatThreadSearchDocumentPolicies,
+  authoredNotePolicies,
+  authoredOptionalMatterNotePolicies,
+  caseLawAnalysisReaderDecisionPolicies,
   caseLawAnalysisReaderPolicies,
   caseLawAnalysisWriterPolicies,
   caseLawAnalysisWriterReadPolicies,
   caseLawIngestionOnlyPolicies,
+  chatBrowserSiteGrantPolicies,
+  chatCommandReceiptPolicies,
+  chatLimitReminderPolicies,
+  chatMessagePolicies,
+  chatMessageRevisionPolicies,
+  chatMessageSearchDocumentPolicies,
+  chatQueuedMessagePolicies,
+  chatQueueHoldPolicies,
+  chatThreadCompactionPolicies,
+  chatThreadNamePolicies,
+  chatThreadPolicies,
+  chatThreadPreviewPassagePolicies,
+  chatThreadSearchDocumentPolicies,
+  chatToolGrantPolicies,
+  chatTurnPolicies,
   corpusSampleReaderDecisionPolicies,
   corpusSampleReaderPolicies,
   fileChatThreadPolicies,
   globalCaseLawPolicies,
-  publicCaseLawReaderPolicies,
-  publicLawReaderPolicies,
   mcpConnectorAuthorizationReviewPolicies,
   mcpConnectorPolicies,
-  mcpOAuthStatePolicies,
   mcpOAuthClientPolicies,
+  mcpOAuthStatePolicies,
   mcpUserConnectionPolicies,
+  notificationPolicies,
   organizationCheck,
-  authoredNotePolicies,
   organizationOptionalWorkspacePolicies,
   orgPolicies,
   orgReadOnlyPolicies,
+  outboundActionPolicies,
+  publicCaseLawReaderPolicies,
+  publicLawReaderPolicies,
   savedSearchPolicies,
   sharepointConnectionPolicies,
   sharepointOAuthStatePolicies,
@@ -63,18 +73,18 @@ import {
   stellaPublicLawReader,
   templateChatThreadPolicies,
   userFilePolicies,
-  notificationPolicies,
   userOrganizationPolicies,
   userPolicies,
-  workspaceIdCheck,
   workspaceCheck,
+  workspaceIdCheck,
   workspaceViewTemplatePolicies,
-  wsOrganizationPolicies,
-  wsOrganizationUserPolicies,
-  wsOrganizationReadOnlyPolicies,
   wsDataScopePolicies,
+  wsOrganizationPolicies,
+  wsOrganizationReadOnlyPolicies,
   wsOrganizationScopedRequestPolicies,
+  wsOrganizationUserPolicies,
   wsPolicies,
+  wsRecordedOrganizationPolicies,
 } from "@/api/db/rls";
 import type {
   BankAccount,
@@ -104,7 +114,10 @@ import type {
   SafeIdType,
 } from "@/api/lib/branded-types";
 import type { ClauseBody } from "@/api/lib/clauses/types";
-import type { DocumentSource } from "@/api/lib/document-source";
+import type {
+  DocumentSource,
+  ImportDocumentSource,
+} from "@/api/lib/document-source";
 import type { TemplateManifest } from "@/api/lib/docx/types";
 import type { AgendaAttendeeType } from "@/api/lib/entity-constants";
 import type { CorpusSourceDescriptor } from "@/api/lib/legal-search/corpus-source";
@@ -151,7 +164,7 @@ export type PdfBatesJustificationBlock = {
  *  - `unverified`: the model produced a quote that matched no source
  *    block. There is no navigable block, so only the model's raw text
  *    is kept and the client renders it as a non-navigable hint. */
-export type DocxFolioJustificationCitation =
+type DocxFolioJustificationCitation =
   | { citationStatus: "verified"; blockId: string; text: string }
   | { citationStatus: "unverified"; text: string };
 
@@ -194,6 +207,11 @@ export type VerdictRationaleJustificationBlock = {
 type DecisionPassageJustificationBlock = {
   kind: "decision-passage";
   anchorId: string;
+  /**
+   * The number the court printed on the cited block, read from the
+   * decision's AST when the answer was written; null when it printed none.
+   */
+  courtParagraphNumber: number | null;
   excerpt: string;
 };
 
@@ -206,6 +224,8 @@ export type JustificationBlock =
 export type JustificationContent = {
   version: 1;
   blocks: JustificationBlock[];
+  /** Set on a clause summary, whose wording lives only in its citations. */
+  gradeFrom?: "cited-passages";
 };
 
 /** Re-exported so the schema layer keeps one import surface; the agenda member
@@ -256,8 +276,7 @@ export type SchedulerDailySchedule = {
 };
 
 export type SchedulerSchedule =
-  | SchedulerDailySchedule
-  | SchedulerIntervalSchedule;
+  SchedulerDailySchedule | SchedulerIntervalSchedule;
 
 export type SchedulerPayload = Record<string, unknown>;
 
@@ -338,12 +357,25 @@ export const DESTRUCTIVE_EFFECT_CHUNK_STATUSES = [
 export type DestructiveEffectChunkStatus =
   (typeof DESTRUCTIVE_EFFECT_CHUNK_STATUSES)[number];
 
+export type AccountErasureReport = {
+  retainedMatterContent: {
+    workspaceId: SafeId<"workspace">;
+    reason: "establishment_or_defence_of_legal_claims";
+  }[];
+};
+
 export type AccountDeletionStorageCleanup = {
   s3Keys: string[];
+  notBefore?: string;
 };
 
 export const tsvector = customType<{ data: string }>({
   dataType: () => "tsvector",
+});
+
+/** A full transaction id, read as its decimal text. */
+export const xid8 = customType<{ data: string }>({
+  dataType: () => "xid8",
 });
 
 export const safeWorkspaceId = (name: string) =>
@@ -510,7 +542,6 @@ export {
   member,
   organization,
   p,
-  panic,
   sql,
   timestamptz,
   unsafeCents,
@@ -524,6 +555,10 @@ export {
   agentSkillResourcePolicies,
   aiMemoryPolicies,
   chatMessagePolicies,
+  chatMessageRevisionPolicies,
+  chatCommandReceiptPolicies,
+  chatQueueHoldPolicies,
+  chatQueuedMessagePolicies,
   chatTurnPolicies,
   chatMessageSearchDocumentPolicies,
   chatThreadCompactionPolicies,
@@ -531,6 +566,7 @@ export {
   chatThreadPreviewPassagePolicies,
   chatThreadPolicies,
   chatThreadSearchDocumentPolicies,
+  caseLawAnalysisReaderDecisionPolicies,
   caseLawAnalysisReaderPolicies,
   caseLawAnalysisWriterPolicies,
   caseLawAnalysisWriterReadPolicies,
@@ -548,10 +584,15 @@ export {
   mcpUserConnectionPolicies,
   organizationCheck,
   authoredNotePolicies,
+  authoredOptionalMatterNotePolicies,
   organizationOptionalWorkspacePolicies,
   orgPolicies,
   orgReadOnlyPolicies,
   savedSearchPolicies,
+  outboundActionPolicies,
+  chatLimitReminderPolicies,
+  chatBrowserSiteGrantPolicies,
+  chatToolGrantPolicies,
   sharepointConnectionPolicies,
   sharepointOAuthStatePolicies,
   stella,
@@ -570,6 +611,7 @@ export {
   wsDataScopePolicies,
   wsOrganizationScopedRequestPolicies,
   wsPolicies,
+  wsRecordedOrganizationPolicies,
 };
 
 export type {
@@ -593,6 +635,7 @@ export type {
   DocumentAst,
   DocumentSource,
   EmptyAst,
+  ImportDocumentSource,
   EntityKind,
   FieldContent,
   PersistedChatMessageContent,

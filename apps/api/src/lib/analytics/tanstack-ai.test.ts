@@ -5,31 +5,51 @@ import type {
   TokenUsage,
 } from "@tanstack/ai";
 import { EventType } from "@tanstack/ai";
-import { describe, expect, spyOn, test } from "bun:test";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  mock,
+  spyOn,
+  test,
+} from "bun:test";
+import fc from "fast-check";
 
+import { assertProperty } from "@stll/property-testing";
 import { rejectionOf } from "@stll/property-testing/rejection";
+import { createTestState } from "@stll/test-state";
 
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { toSafeId } from "@/api/lib/branded-types";
 import {
   generateChatObject,
   streamChatChunks,
+  streamChatObject,
 } from "@/api/lib/chat/tanstack-chat-runtime";
 import { tokenUsageFromTerminalChunk } from "@/api/lib/tanstack-ai-usage";
+import { MANAGED_MODEL_TIER } from "@/api/lib/usage/managed-model-tier";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 import { SERVER_ANALYTICS_EVENTS } from "./server-analytics";
 import type { ServerAnalytics } from "./server-analytics";
+import type { TanStackAIAnalyticsCallbacks } from "./tanstack-ai";
 
-process.env["EMAIL_PROVIDER"] ??= "smtp";
-process.env["GOTENBERG_PASSWORD"] ??= "gotenberg";
-process.env["GOTENBERG_URL"] ??= "http://localhost:3003";
-process.env["GOTENBERG_USERNAME"] ??= "gotenberg";
-process.env["AI_PROVIDER"] = "openai";
-process.env["OPENAI_API_KEY"] ??= "test-openai-instance-key";
-process.env["REDIS_URL"] ??= "redis://localhost:6379";
-process.env["SMTP_HOST"] ??= "localhost";
-process.env["SMTP_PORT"] ??= "1025";
+const state = createTestState({ file: import.meta.path, config: {} });
+
+state.setEnvIfAbsent("EMAIL_PROVIDER", "smtp");
+state.setEnvIfAbsent("GOTENBERG_PASSWORD", "gotenberg");
+state.setEnvIfAbsent("GOTENBERG_URL", "http://localhost:3003");
+state.setEnvIfAbsent("GOTENBERG_USERNAME", "gotenberg");
+state.setEnv("AI_PROVIDER", "openai");
+state.setEnvIfAbsent("OPENAI_API_KEY", "test-openai-instance-key");
+state.setEnvIfAbsent("REDIS_URL", "redis://localhost:6379");
+state.setEnvIfAbsent("SMTP_HOST", "localhost");
+state.setEnvIfAbsent("SMTP_PORT", "1025");
+
+// Bootstrap precedes validation; both objects share the fixture lifetime.
+const { env } = await import("@/api/env");
+const configState = state.forConfig(env);
 
 const loadTanStackAIAnalytics = async () => await import("./tanstack-ai");
 
@@ -94,7 +114,9 @@ const createMiddlewareContext = ({
   phase: "modelStream",
   iteration,
   chunkIndex: 0,
+  callMetadata: {},
   abort: () => undefined,
+  retry: () => undefined,
   // The engine pushes CUSTOM chunks onto the stream through this; the
   // analytics callbacks under test only read the context.
   emitCustomEvent: () => undefined,
@@ -129,6 +151,37 @@ const createMiddlewareContext = ({
   provide: () => undefined,
 });
 
+const recordedUsageLedger = () => {
+  const insertedRows: unknown[] = [];
+  const { safeDb } = createScopedDbMock({
+    select: () => ({
+      from: () => ({
+        where: () => ({
+          limit: async () => [
+            {
+              currentPeriodEnd: new Date("2026-07-01T00:00:00.000Z"),
+              currentPeriodStart: new Date("2026-06-01T00:00:00.000Z"),
+              status: "active",
+            },
+          ],
+          for: async () => [{ id: workspaceId }],
+        }),
+      }),
+    }),
+    insert: () => ({
+      values: (values: unknown) => {
+        insertedRows.push(values);
+        return {
+          onConflictDoNothing: () => ({
+            returning: async () => [{ id: "usage_event_1" }],
+          }),
+        };
+      },
+    }),
+  });
+  return { insertedRows, safeDb };
+};
+
 describe("createTanStackAIAnalyticsCallbacks", () => {
   test("captures completion events from TanStack middleware hooks", async () => {
     const { createTanStackAIAnalyticsCallbacks } =
@@ -142,6 +195,7 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
       identifyOrganizationGroup: () => undefined,
     };
     const callbacks = createTanStackAIAnalyticsCallbacks({
+      modelTier: MANAGED_MODEL_TIER.standard,
       dataClass: "public_corpus",
       analytics,
       distinctId: "user_123",
@@ -237,6 +291,7 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
     // organization id must group generation, completion, and failure events
     // exactly like the metering-derived id does.
     const callbacks = createTanStackAIAnalyticsCallbacks({
+      modelTier: MANAGED_MODEL_TIER.standard,
       dataClass: "public_corpus",
       analytics,
       feature: "case-law.analysis",
@@ -271,100 +326,104 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
     expect(completed?.properties).toMatchObject({ jurisdiction: "CZE" });
   });
 
-  test("records usage through TanStack deferred side effects", async () => {
-    const { createTanStackAIAnalyticsCallbacks } =
-      await loadTanStackAIAnalytics();
-    const periodStart = new Date("2026-06-01T00:00:00.000Z");
-    const periodEnd = new Date("2026-07-01T00:00:00.000Z");
-    const insertedRows: unknown[] = [];
-    const tx = {
-      select: () => ({
-        from: () => ({
-          where: () => ({
-            limit: async () => [
-              {
-                currentPeriodEnd: periodEnd,
-                currentPeriodStart: periodStart,
-                status: "active",
-              },
-            ],
-            for: async () => [{ id: workspaceId }],
+  test.each(["chat", "short-text"] as const)(
+    "records %s usage through TanStack deferred side effects",
+    async (modelTask) => {
+      const { createTanStackAIAnalyticsCallbacks } =
+        await loadTanStackAIAnalytics();
+      const periodStart = new Date("2026-06-01T00:00:00.000Z");
+      const periodEnd = new Date("2026-07-01T00:00:00.000Z");
+      const insertedRows: unknown[] = [];
+      const tx = {
+        select: () => ({
+          from: () => ({
+            where: () => ({
+              limit: async () => [
+                {
+                  currentPeriodEnd: periodEnd,
+                  currentPeriodStart: periodStart,
+                  status: "active",
+                },
+              ],
+              for: async () => [{ id: workspaceId }],
+            }),
           }),
         }),
-      }),
-      insert: () => ({
-        values: (values: unknown) => {
-          insertedRows.push(values);
-          return {
-            onConflictDoNothing: () => ({
-              returning: async () => [{ id: "usage_event_1" }],
-            }),
-          };
+        insert: () => ({
+          values: (values: unknown) => {
+            insertedRows.push(values);
+            return {
+              onConflictDoNothing: () => ({
+                returning: async () => [{ id: "usage_event_1" }],
+              }),
+            };
+          },
+        }),
+      };
+      const { safeDb } = createScopedDbMock(tx);
+      const analytics: ServerAnalytics = {
+        capture: () => undefined,
+        flush: async () => undefined,
+        identifyOrganizationGroup: () => undefined,
+      };
+      const callbacks = createTanStackAIAnalyticsCallbacks({
+        modelTier: MANAGED_MODEL_TIER.standard,
+        dataClass: "public_corpus",
+        analytics,
+        feature: "chat.stream",
+        modelTask,
+        traceId: "trace_usage",
+        usageMetering: {
+          actionType: "chat",
+          organizationId: orgId,
+          safeDb,
+          serviceTier: "standard",
+          userId,
+          workspaceId,
         },
-      }),
-    };
-    const { safeDb } = createScopedDbMock(tx);
-    const analytics: ServerAnalytics = {
-      capture: () => undefined,
-      flush: async () => undefined,
-      identifyOrganizationGroup: () => undefined,
-    };
-    const callbacks = createTanStackAIAnalyticsCallbacks({
-      dataClass: "public_corpus",
-      analytics,
-      feature: "chat.stream",
-      modelRole: "chat",
-      traceId: "trace_usage",
-      usageMetering: {
+      });
+      const deferred: Promise<unknown>[] = [];
+
+      await callbacks.middleware.onUsage?.(
+        createMiddlewareContext({ deferred }),
+        usage,
+      );
+      await callbacks.middleware.onUsage?.(
+        createMiddlewareContext({ deferred, iteration: 1 }),
+        usage,
+      );
+      await callbacks.middleware.onUsage?.(
+        createMiddlewareContext({ deferred, runId: "run_2" }),
+        usage,
+      );
+      await Promise.all(deferred);
+
+      expect(insertedRows).toHaveLength(3);
+      expect(insertedRows[0]).toMatchObject({
         actionType: "chat",
+        isByok: false,
+        idempotencyKey: "trace_usage:run_1:0",
+        modelRole: modelTask,
         organizationId: orgId,
-        safeDb,
+        periodEnd,
+        periodStart,
         serviceTier: "standard",
+        traceId: "trace_usage",
         userId,
         workspaceId,
-      },
-    });
-    const deferred: Promise<unknown>[] = [];
+      });
+      expect(insertedRows[1]).toMatchObject({
+        idempotencyKey: "trace_usage:run_1:1",
+        traceId: "trace_usage",
+      });
+      expect(insertedRows[2]).toMatchObject({
+        idempotencyKey: "trace_usage:run_2:0",
+        traceId: "trace_usage",
+      });
+    },
+  );
 
-    await callbacks.middleware.onUsage?.(
-      createMiddlewareContext({ deferred }),
-      usage,
-    );
-    await callbacks.middleware.onUsage?.(
-      createMiddlewareContext({ deferred, iteration: 1 }),
-      usage,
-    );
-    await callbacks.middleware.onUsage?.(
-      createMiddlewareContext({ deferred, runId: "run_2" }),
-      usage,
-    );
-    await Promise.all(deferred);
-
-    expect(insertedRows).toHaveLength(3);
-    expect(insertedRows[0]).toMatchObject({
-      actionType: "chat",
-      isByok: false,
-      idempotencyKey: "trace_usage:run_1:0",
-      modelRole: "chat",
-      organizationId: orgId,
-      periodEnd,
-      periodStart,
-      serviceTier: "standard",
-      traceId: "trace_usage",
-      userId,
-      workspaceId,
-    });
-    expect(insertedRows[1]).toMatchObject({
-      idempotencyKey: "trace_usage:run_1:1",
-      traceId: "trace_usage",
-    });
-    expect(insertedRows[2]).toMatchObject({
-      idempotencyKey: "trace_usage:run_2:0",
-      traceId: "trace_usage",
-    });
-  });
-
-  test("meters an Anthropic warm cache where cached reads exceed input tokens", async () => {
+  test("meters an Anthropic warm cache from canonical total input", async () => {
     const { createTanStackAIAnalyticsCallbacks } =
       await loadTanStackAIAnalytics();
     const insertedRows: unknown[] = [];
@@ -396,6 +455,7 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
     };
     const { safeDb } = createScopedDbMock(tx);
     const callbacks = createTanStackAIAnalyticsCallbacks({
+      modelTier: MANAGED_MODEL_TIER.standard,
       dataClass: "public_corpus",
       analytics: {
         capture: () => undefined,
@@ -403,7 +463,7 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
         identifyOrganizationGroup: () => undefined,
       },
       feature: "chat.stream",
-      modelRole: "chat",
+      modelTask: "chat",
       orgAIConfig: createAnthropicOrgAIConfig(),
       traceId: "trace_anthropic_warm_cache",
       usageMetering: {
@@ -417,15 +477,14 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
     });
     const deferred: Promise<unknown>[] = [];
 
-    // Production-shaped Anthropic usage on a warm cache: `input_tokens`
-    // excludes cache reads and writes, so the cached count dwarfs it.
+    // TanStack includes both cache operations in canonical promptTokens.
     await callbacks.middleware.onUsage?.(
       createMiddlewareContext({ deferred }),
       {
         completionTokens: 1538,
-        promptTokens: 217,
+        promptTokens: 46_503,
         promptTokensDetails: { cachedTokens: 45_082, cacheWriteTokens: 1204 },
-        totalTokens: 1755,
+        totalTokens: 48_041,
       },
     );
     await Promise.all(deferred);
@@ -458,6 +517,7 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
     };
     const { safeDb } = createScopedDbMock(tx);
     const callbacks = createTanStackAIAnalyticsCallbacks({
+      modelTier: MANAGED_MODEL_TIER.standard,
       dataClass: "public_corpus",
       analytics: {
         capture: () => undefined,
@@ -465,7 +525,7 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
         identifyOrganizationGroup: () => undefined,
       },
       feature: "chat.stream",
-      modelRole: "chat",
+      modelTask: "chat",
       orgAIConfig: createOpenAIOrgAIConfig(),
       traceId: "trace_poisoned_usage",
       usageMetering: {
@@ -544,10 +604,11 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
       identifyOrganizationGroup: () => undefined,
     };
     const callbacks = createTanStackAIAnalyticsCallbacks({
+      modelTier: MANAGED_MODEL_TIER.standard,
       dataClass: "public_corpus",
       analytics,
       feature: "chat.stream",
-      modelRole: "chat",
+      modelTask: "chat",
       orgAIConfig: createOpenAIOrgAIConfig(),
       selectedModelId: "openai::gpt-5.6",
       traceId: "trace_selected_model",
@@ -599,6 +660,241 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
     });
   });
 
+  test("rates interleaved requests against their bound models without changing shared callbacks", async () => {
+    const { createTanStackAIAnalyticsCallbacks } =
+      await loadTanStackAIAnalytics();
+    const { usageUnitsFromTokens } = await import("@/api/lib/usage/unit-model");
+    const insertedRows: unknown[] = [];
+    const { safeDb } = createScopedDbMock({
+      select: () => ({
+        from: () => ({
+          where: () => ({
+            limit: async () => [
+              {
+                currentPeriodEnd: new Date("2026-07-01T00:00:00.000Z"),
+                currentPeriodStart: new Date("2026-06-01T00:00:00.000Z"),
+                status: "active",
+              },
+            ],
+            for: async () => [{ id: workspaceId }],
+          }),
+        }),
+      }),
+      insert: () => ({
+        values: (values: unknown) => {
+          insertedRows.push(values);
+          return {
+            onConflictDoNothing: () => ({
+              returning: async () => [{ id: "usage_event_1" }],
+            }),
+          };
+        },
+      }),
+    });
+    const events: Parameters<ServerAnalytics["capture"]>[0][] = [];
+    const callbacks = createTanStackAIAnalyticsCallbacks({
+      modelTier: MANAGED_MODEL_TIER.standard,
+      dataClass: "public_corpus",
+      analytics: {
+        capture: (event) => {
+          events.push(event);
+        },
+        flush: async () => undefined,
+        identifyOrganizationGroup: () => undefined,
+      },
+      feature: "structured.answer",
+      modelTask: "chat",
+      orgAIConfig: createOpenAIOrgAIConfig(),
+      traceId: "trace_bound_models",
+      usageMetering: {
+        actionType: "chat",
+        organizationId: orgId,
+        safeDb,
+        serviceTier: "standard",
+        userId,
+        workspaceId,
+      },
+    });
+    const deferred: Promise<unknown>[] = [];
+    const originalContext = createMiddlewareContext({
+      deferred,
+      runId: "original",
+    });
+    // Prime the shared callback's cached primary identity before binding.
+    await callbacks.middleware.onUsage?.(originalContext, usage);
+    const fallback = callbacks.forModel({
+      keySource: "instance",
+      modelId: "claude-sonnet-5",
+      provider: "anthropic",
+    });
+    const primary = callbacks.forModel({
+      keySource: "byok",
+      modelId: "gpt-5.6",
+      provider: "openai",
+    });
+    await fallback.middleware.onUsage?.(
+      createMiddlewareContext({ deferred, runId: "fallback" }),
+      usage,
+    );
+    await primary.middleware.onUsage?.(
+      createMiddlewareContext({ deferred, runId: "primary" }),
+      usage,
+    );
+    await callbacks.middleware.onUsage?.(
+      createMiddlewareContext({ deferred, runId: "original", iteration: 1 }),
+      usage,
+    );
+    await Promise.all(deferred);
+
+    const expectedModels = [
+      { modelId: "gpt-5.4-mini", provider: "openai", isByok: true },
+      { modelId: "claude-sonnet-5", provider: "anthropic", isByok: false },
+      { modelId: "gpt-5.6", provider: "openai", isByok: true },
+      { modelId: "gpt-5.4-mini", provider: "openai", isByok: true },
+    ];
+    const generations = events.filter(
+      (event) => event.event === SERVER_ANALYTICS_EVENTS.aiGeneration,
+    );
+    expect(insertedRows).toHaveLength(expectedModels.length);
+    expect(generations).toHaveLength(expectedModels.length);
+    const expectedRates = expectedModels.map(({ modelId, isByok }) =>
+      usageUnitsFromTokens({
+        actionType: "chat",
+        isByok,
+        modelId,
+        outputTokens: usage.completionTokens,
+        serviceTier: "standard",
+        uncachedInputTokens: usage.promptTokens,
+      }),
+    );
+    expect(expectedRates[0]?.rawUsageMicroUnits).not.toBe(
+      expectedRates[1]?.rawUsageMicroUnits,
+    );
+    for (const [index, model] of expectedModels.entries()) {
+      expect(insertedRows[index]).toMatchObject({
+        ...expectedRates[index],
+        isByok: model.isByok,
+        organizationId: orgId,
+        traceId: "trace_bound_models",
+      });
+      expect(generations[index]).toMatchObject({
+        groups: { organization: orgId },
+        properties: {
+          $ai_model: model.modelId,
+          $ai_provider: model.provider,
+        },
+      });
+    }
+    expect(fallback.usageMetering).toBe(callbacks.usageMetering);
+  });
+
+  test("records a role's usage under the role, at the role's model or the bound one", async () => {
+    const { createTanStackAIAnalyticsCallbacks } =
+      await loadTanStackAIAnalytics();
+    const { usageUnitsFromTokens } = await import("@/api/lib/usage/unit-model");
+    const ratedMicroUnits = (modelId: string) =>
+      usageUnitsFromTokens({
+        actionType: "chat",
+        isByok: true,
+        modelId,
+        outputTokens: usage.completionTokens,
+        serviceTier: "standard",
+        uncachedInputTokens: usage.promptTokens,
+      }).rawUsageMicroUnits;
+    // Three distinct rates, so rating the wrong model fails below.
+    expect(
+      new Set(["gpt-5.4-nano", "gpt-5.4-mini", "gpt-5.6"].map(ratedMicroUnits))
+        .size,
+    ).toBe(3);
+    const insertedRows: unknown[] = [];
+    const { safeDb } = createScopedDbMock({
+      select: () => ({
+        from: () => ({
+          where: () => ({
+            limit: async () => [
+              {
+                currentPeriodEnd: new Date("2026-07-01T00:00:00.000Z"),
+                currentPeriodStart: new Date("2026-06-01T00:00:00.000Z"),
+                status: "active",
+              },
+            ],
+            for: async () => [{ id: workspaceId }],
+          }),
+        }),
+      }),
+      insert: () => ({
+        values: (values: unknown) => {
+          insertedRows.push(values);
+          return {
+            onConflictDoNothing: () => ({
+              returning: async () => [{ id: "usage_event_1" }],
+            }),
+          };
+        },
+      }),
+    });
+    const events: Parameters<ServerAnalytics["capture"]>[0][] = [];
+    // No browsing pick: the role runs on the org's fast model (gpt-5.4-nano),
+    // which differs from the chat model a task-keyed default would rate.
+    const orgAIConfig = createOpenAIOrgAIConfig();
+    expect(orgAIConfig.overrideModels?.browse).toBeUndefined();
+    const callbacks = createTanStackAIAnalyticsCallbacks({
+      modelTier: MANAGED_MODEL_TIER.standard,
+      dataClass: "public_corpus",
+      analytics: {
+        capture: (event) => {
+          events.push(event);
+        },
+        flush: async () => undefined,
+        identifyOrganizationGroup: () => undefined,
+      },
+      feature: "chat.browse",
+      modelOverrideGroup: "browse",
+      orgAIConfig,
+      traceId: "trace_browse_role",
+      usageMetering: {
+        actionType: "chat",
+        organizationId: orgId,
+        safeDb,
+        serviceTier: "standard",
+        userId,
+        workspaceId,
+      },
+    });
+    const deferred: Promise<unknown>[] = [];
+    await callbacks.middleware.onUsage?.(
+      createMiddlewareContext({ deferred, runId: "resolved" }),
+      usage,
+    );
+    const bound = callbacks.forModel({
+      keySource: "byok",
+      modelId: "gpt-5.6",
+      provider: "openai",
+    });
+    await bound.middleware.onUsage?.(
+      createMiddlewareContext({ deferred, runId: "bound" }),
+      usage,
+    );
+    await Promise.all(deferred);
+
+    expect(insertedRows).toHaveLength(2);
+    expect(insertedRows[0]).toMatchObject({
+      modelRole: "browse",
+      rawUsageMicroUnits: ratedMicroUnits("gpt-5.4-nano"),
+    });
+    expect(insertedRows[1]).toMatchObject({
+      modelRole: "browse",
+      rawUsageMicroUnits: ratedMicroUnits("gpt-5.6"),
+    });
+    const generations = events.filter(
+      (event) => event.event === SERVER_ANALYTICS_EVENTS.aiGeneration,
+    );
+    expect(generations.map((event) => event.properties["$ai_model"])).toEqual([
+      "gpt-5.4-nano",
+      "gpt-5.6",
+    ]);
+  });
+
   test("meters standard-tier fallback usage as standard", async () => {
     const { createTanStackAIAnalyticsCallbacks } =
       await loadTanStackAIAnalytics();
@@ -638,10 +934,11 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
       identifyOrganizationGroup: () => undefined,
     };
     const callbacks = createTanStackAIAnalyticsCallbacks({
+      modelTier: MANAGED_MODEL_TIER.standard,
       dataClass: "public_corpus",
       analytics,
       feature: "chat.stream",
-      modelRole: "chat",
+      modelTask: "chat",
       traceId: "trace_fallback_usage",
       usageMetering: {
         actionType: "chat",
@@ -683,6 +980,7 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
       identifyOrganizationGroup: () => undefined,
     };
     const callbacks = createTanStackAIAnalyticsCallbacks({
+      modelTier: MANAGED_MODEL_TIER.standard,
       dataClass: "public_corpus",
       analytics,
       feature: "chat.stream",
@@ -712,18 +1010,54 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
       event: SERVER_ANALYTICS_EVENTS.aiGenerationFailed,
       properties: {
         failure_reason: "provider",
+        failure_kind: "unknown",
         feature: "chat.stream",
         model: "gpt-5.4-mini",
         provider: "openai",
       },
     });
+    // No status was carried, so none is invented.
+    expect(failedEvent?.properties).not.toHaveProperty("provider_status");
+  });
+
+  test("names a provider refusal by kind and status, not by its message", async () => {
+    const { createTanStackAIAnalyticsCallbacks } =
+      await loadTanStackAIAnalytics();
+    const events: Parameters<ServerAnalytics["capture"]>[0][] = [];
+    const callbacks = createTanStackAIAnalyticsCallbacks({
+      modelTier: MANAGED_MODEL_TIER.standard,
+      dataClass: "public_corpus",
+      analytics: {
+        capture: (event) => {
+          events.push(event);
+        },
+        flush: async () => undefined,
+        identifyOrganizationGroup: () => undefined,
+      },
+      feature: "case-law.analysis",
+      orgAIConfig: createOpenAIOrgAIConfig(),
+      traceId: "trace_refused",
+    });
+    const SENTINEL = "SENTINEL_PROVIDER_TEXT";
+    const error = new Error("stream failed", {
+      cause: { statusCode: 401, message: `${SENTINEL} key rejected` },
+    });
+
+    callbacks.captureError(error);
+
+    const failedEvent = events.find(
+      (event) => event.event === SERVER_ANALYTICS_EVENTS.aiGenerationFailed,
+    );
+    expect(failedEvent?.properties).toMatchObject({
+      failure_kind: "provider_credentials_rejected",
+      provider_status: "401",
+    });
+    expect(JSON.stringify(events)).not.toContain(SENTINEL);
   });
 
   test("keeps model metadata lookup best-effort", async () => {
-    const { env } = await import("@/api/env");
     const { createTanStackAIAnalyticsCallbacks } =
       await loadTanStackAIAnalytics();
-    const originalRequirePersonalAIKey = env.REQUIRE_PERSONAL_AI_KEY;
     const events: Parameters<ServerAnalytics["capture"]>[0][] = [];
     const analytics: ServerAnalytics = {
       capture: (event) => {
@@ -733,47 +1067,44 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
       identifyOrganizationGroup: () => undefined,
     };
 
-    try {
-      env.REQUIRE_PERSONAL_AI_KEY = true;
+    configState.setConfig("REQUIRE_PERSONAL_AI_KEY", true);
 
-      const callbacks = createTanStackAIAnalyticsCallbacks({
-        dataClass: "public_corpus",
-        analytics,
+    const callbacks = createTanStackAIAnalyticsCallbacks({
+      modelTier: MANAGED_MODEL_TIER.standard,
+      dataClass: "public_corpus",
+      analytics,
+      feature: "chat.suggested-prompts",
+      traceId: "trace_missing_model",
+    });
+    const deferred: Promise<unknown>[] = [];
+    const error = new Error("provider unavailable");
+
+    callbacks.captureError(error);
+    await callbacks.middleware.onUsage?.(
+      createMiddlewareContext({ deferred }),
+      usage,
+    );
+
+    expect(deferred).toHaveLength(0);
+    expect(events).toHaveLength(2);
+    const failedEvent = events.find(
+      (event) => event.event === SERVER_ANALYTICS_EVENTS.aiGenerationFailed,
+    );
+    expect(failedEvent).toMatchObject({
+      event: SERVER_ANALYTICS_EVENTS.aiGenerationFailed,
+      properties: {
+        failure_reason: "provider",
         feature: "chat.suggested-prompts",
-        traceId: "trace_missing_model",
-      });
-      const deferred: Promise<unknown>[] = [];
-      const error = new Error("provider unavailable");
-
-      callbacks.captureError(error);
-      await callbacks.middleware.onUsage?.(
-        createMiddlewareContext({ deferred }),
-        usage,
-      );
-
-      expect(deferred).toHaveLength(0);
-      expect(events).toHaveLength(2);
-      const failedEvent = events.find(
-        (event) => event.event === SERVER_ANALYTICS_EVENTS.aiGenerationFailed,
-      );
-      expect(failedEvent).toMatchObject({
-        event: SERVER_ANALYTICS_EVENTS.aiGenerationFailed,
-        properties: {
-          failure_reason: "provider",
-          feature: "chat.suggested-prompts",
-        },
-      });
-      expect(failedEvent?.properties).not.toHaveProperty("model");
-      expect(failedEvent?.properties).not.toHaveProperty("provider");
-      // Without resolved model info the standard record still ships, just
-      // without model attribution.
-      const generation = events.find(
-        (event) => event.event === SERVER_ANALYTICS_EVENTS.aiGeneration,
-      );
-      expect(generation?.properties).not.toHaveProperty("$ai_model");
-    } finally {
-      env.REQUIRE_PERSONAL_AI_KEY = originalRequirePersonalAIKey;
-    }
+      },
+    });
+    expect(failedEvent?.properties).not.toHaveProperty("model");
+    expect(failedEvent?.properties).not.toHaveProperty("provider");
+    // Without resolved model info the standard record still ships, just
+    // without model attribution.
+    const generation = events.find(
+      (event) => event.event === SERVER_ANALYTICS_EVENTS.aiGeneration,
+    );
+    expect(generation?.properties).not.toHaveProperty("$ai_model");
   });
 
   test.each(["iteration", "structured_output"] as const)(
@@ -784,6 +1115,7 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
       const { logger } = await import("@/api/lib/observability/logger");
       const errorSpy = spyOn(logger, "error");
       const callbacks = createTanStackAIAnalyticsCallbacks({
+        modelTier: MANAGED_MODEL_TIER.standard,
         dataClass: "public_corpus",
         analytics: {
           capture: () => undefined,
@@ -880,8 +1212,11 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
     const { createTanStackAIAnalyticsCallbacks } =
       await loadTanStackAIAnalytics();
     const { logger } = await import("@/api/lib/observability/logger");
+    // A cut-off answer is a named, anticipated outcome: WARN, never ERROR.
     const errorSpy = spyOn(logger, "error");
+    const warnSpy = spyOn(logger, "warn");
     const callbacks = createTanStackAIAnalyticsCallbacks({
+      modelTier: MANAGED_MODEL_TIER.standard,
       dataClass: "public_corpus",
       analytics: {
         capture: () => undefined,
@@ -910,7 +1245,7 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
         yield {
           type: EventType.RUN_STARTED,
           runId: runId ?? "truncated-run",
-          threadId: threadId ?? "truncated-thread",
+          threadId,
         } satisfies StreamChunk;
         yield {
           type: EventType.TEXT_MESSAGE_START,
@@ -929,7 +1264,7 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
         yield {
           type: EventType.RUN_FINISHED,
           runId: runId ?? "truncated-run",
-          threadId: threadId ?? "truncated-thread",
+          threadId,
           finishReason: "length",
           usage: {
             promptTokens: 100,
@@ -949,6 +1284,7 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
       expect(
         await rejectionOf(
           generateChatObject({
+            threadId: "test-thread",
             adapter,
             messages: [{ role: "user", content: "Return JSON" }],
             outputSchema: {
@@ -970,19 +1306,26 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
         errorSpy.mock.calls.filter(
           ([event]) => event === "tanstack_ai.generation.failed",
         ),
+      ).toHaveLength(0);
+      expect(
+        warnSpy.mock.calls.filter(
+          ([event]) => event === "tanstack_ai.generation.failed",
+        ),
       ).toHaveLength(1);
-      expect(errorSpy).toHaveBeenCalledWith(
+      expect(warnSpy).toHaveBeenCalledWith(
         "tanstack_ai.generation.failed",
         expect.objectContaining({
+          "ai.error_kind": "output_incomplete",
           "ai.finish_reason": "length",
           "ai.output_tokens": 2000,
         }),
       );
-      expect(JSON.stringify(errorSpy.mock.calls)).not.toContain(
+      expect(JSON.stringify(warnSpy.mock.calls)).not.toContain(
         "private unfinished output",
       );
     } finally {
       errorSpy.mockRestore();
+      warnSpy.mockRestore();
     }
   });
 
@@ -995,6 +1338,7 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
 
     try {
       createTanStackAIAnalyticsCallbacks({
+        modelTier: MANAGED_MODEL_TIER.standard,
         dataClass: "public_corpus",
         analytics: {
           capture: () => undefined,
@@ -1005,6 +1349,7 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
         traceId: "trace_provider_unavailable",
       }).captureError({ status: 503 });
       createTanStackAIAnalyticsCallbacks({
+        modelTier: MANAGED_MODEL_TIER.standard,
         dataClass: "public_corpus",
         analytics: {
           capture: () => undefined,
@@ -1031,67 +1376,44 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
     }
   });
 
-  test("a model call that fails after reporting usage is metered once, and its run error keeps the usage", async () => {
+  test.each([
+    {
+      name: "the run error's raw event",
+      chunk: {
+        message: "Provider returned error",
+        rawEvent: { error: { code: 503, message: "Upstream unavailable" } },
+      },
+    },
+    {
+      name: "a provider body in the run error's message",
+      chunk: {
+        message: JSON.stringify({
+          error: { code: 503, message: "Upstream unavailable" },
+        }),
+      },
+    },
+  ])("classifies a run error from $name", async ({ chunk }) => {
     const { createTanStackAIAnalyticsCallbacks } =
       await loadTanStackAIAnalytics();
-    const insertedRows: unknown[] = [];
-    const { safeDb } = createScopedDbMock({
-      select: () => ({
-        from: () => ({
-          where: () => ({
-            limit: async () => [
-              {
-                currentPeriodEnd: new Date("2026-07-01T00:00:00.000Z"),
-                currentPeriodStart: new Date("2026-06-01T00:00:00.000Z"),
-                status: "active",
-              },
-            ],
-            for: async () => [{ id: workspaceId }],
-          }),
-        }),
-      }),
-      insert: () => ({
-        values: (values: unknown) => {
-          insertedRows.push(values);
-          return {
-            onConflictDoNothing: () => ({
-              returning: async () => [{ id: "usage_event_1" }],
-            }),
-          };
-        },
-      }),
-    });
-    const events: Parameters<ServerAnalytics["capture"]>[0][] = [];
+    const { logger } = await import("@/api/lib/observability/logger");
+    const errorSpy = spyOn(logger, "error");
+    const warnSpy = spyOn(logger, "warn");
     const callbacks = createTanStackAIAnalyticsCallbacks({
       dataClass: "public_corpus",
       analytics: {
-        capture: (event) => {
-          events.push(event);
-        },
+        capture: () => undefined,
         flush: async () => undefined,
         identifyOrganizationGroup: () => undefined,
       },
-      feature: "chat.stream",
+      feature: "subagent",
       orgAIConfig: createOpenAIOrgAIConfig(),
-      traceId: "trace_failed_call",
-      usageMetering: {
-        actionType: "chat",
-        organizationId: orgId,
-        safeDb,
-        serviceTier: "standard",
-        userId,
-        workspaceId,
-      },
+      modelTier: MANAGED_MODEL_TIER.standard,
+      traceId: "trace_run_error_detail",
     });
-    const reported = {
-      promptTokens: 24,
-      completionTokens: 2,
-      totalTokens: 26,
-    } satisfies TokenUsage;
     const adapter = {
       kind: "text",
-      name: "cut-off",
-      model: "cut-off",
+      name: "run-error",
+      model: "run-error",
       "~types": {
         providerOptions: {},
         inputModalities: ["text"],
@@ -1103,47 +1425,259 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
       async *chatStream({ runId, threadId }) {
         yield {
           type: EventType.RUN_STARTED,
-          runId: runId ?? "cut-off-run",
-          threadId: threadId ?? "cut-off-thread",
+          runId: runId ?? "run-error-run",
+          threadId,
         } satisfies StreamChunk;
-        yield {
-          type: EventType.RUN_ERROR,
-          message: "The provider stream ended with an error.",
-          code: "incomplete-stream",
-          usage: reported,
-        } satisfies StreamChunk;
+        yield { type: EventType.RUN_ERROR, ...chunk } satisfies StreamChunk;
       },
       structuredOutput: () => {
         throw new Error("This run streams");
       },
     } satisfies AnyTextAdapter;
 
-    const chunks: StreamChunk[] = [];
-    for await (const chunk of streamChatChunks({
-      adapter,
-      messages: [{ role: "user", content: "Reply." }],
-      middleware: [callbacks.middleware],
-    })) {
-      chunks.push(chunk);
-    }
+    try {
+      for await (const _ of streamChatChunks({
+        threadId: "test-thread",
+        adapter,
+        messages: [{ role: "user", content: "Reply." }],
+        middleware: [callbacks.middleware],
+      })) {
+        // Drain the stream so the terminal hook runs.
+      }
 
-    const runError = chunks.find((chunk) => chunk.type === EventType.RUN_ERROR);
-    if (runError?.type !== EventType.RUN_ERROR) {
-      throw new TypeError("The run reported no run error");
+      expect(warnSpy).toHaveBeenCalledWith(
+        "tanstack_ai.generation.failed",
+        expect.objectContaining({ "ai.error_kind": "provider_unavailable" }),
+      );
+      expect(errorSpy).not.toHaveBeenCalledWith(
+        "tanstack_ai.generation.failed",
+        expect.anything(),
+      );
+    } finally {
+      errorSpy.mockRestore();
+      warnSpy.mockRestore();
     }
-    expect(tokenUsageFromTerminalChunk(runError)).toMatchObject(reported);
-    const generations = events.filter(
-      (event) => event.event === SERVER_ANALYTICS_EVENTS.aiGeneration,
-    );
-    expect(insertedRows).toHaveLength(1);
-    // One record for the one model call: the failure, with what it reported.
-    expect(generations).toHaveLength(1);
-    expect(generations[0]?.properties).toMatchObject({
-      $ai_input_tokens: reported.promptTokens,
-      $ai_is_error: true,
-      $ai_output_tokens: reported.completionTokens,
-    });
   });
+
+  test.each(["text", "structured"] as const)(
+    "a %s model call that fails after reporting usage is metered once, and its run error keeps the usage",
+    async (mode) => {
+      const { createTanStackAIAnalyticsCallbacks } =
+        await loadTanStackAIAnalytics();
+      const { insertedRows, safeDb } = recordedUsageLedger();
+      const events: Parameters<ServerAnalytics["capture"]>[0][] = [];
+      const callbacks = createTanStackAIAnalyticsCallbacks({
+        modelTier: MANAGED_MODEL_TIER.standard,
+        dataClass: "public_corpus",
+        analytics: {
+          capture: (event) => {
+            events.push(event);
+          },
+          flush: async () => undefined,
+          identifyOrganizationGroup: () => undefined,
+        },
+        feature: "chat.stream",
+        orgAIConfig: createOpenAIOrgAIConfig(),
+        traceId: "trace_failed_call",
+        usageMetering: {
+          actionType: "chat",
+          organizationId: orgId,
+          safeDb,
+          serviceTier: "standard",
+          userId,
+          workspaceId,
+        },
+      });
+      const reported = {
+        promptTokens: 24,
+        completionTokens: 2,
+        totalTokens: 26,
+      } satisfies TokenUsage;
+      const adapter = {
+        kind: "text",
+        name: "cut-off",
+        model: "cut-off",
+        "~types": {
+          providerOptions: {},
+          inputModalities: ["text"],
+          messageMetadataByModality: {},
+          toolCapabilities: [],
+          toolCallMetadata: {},
+          systemPromptMetadata: undefined,
+        },
+        async *chatStream({ runId, threadId }) {
+          yield {
+            type: EventType.RUN_STARTED,
+            runId: runId ?? "cut-off-run",
+            threadId,
+          } satisfies StreamChunk;
+          yield {
+            type: EventType.RUN_ERROR,
+            message: "The provider stream ended with an error.",
+            code: "incomplete-stream",
+            usage: reported,
+          } satisfies StreamChunk;
+        },
+        structuredOutput: () => {
+          throw new Error("This run streams");
+        },
+        async *structuredOutputStream() {
+          yield {
+            type: EventType.RUN_ERROR,
+            message: "The provider stream ended with an error.",
+            code: "incomplete-stream",
+            usage: reported,
+          } satisfies StreamChunk;
+        },
+      } satisfies AnyTextAdapter;
+
+      const hookOrder: string[] = [];
+      const options = {
+        threadId: "test-thread",
+        adapter,
+        messages: [{ role: "user", content: "Reply." }] satisfies Parameters<
+          typeof streamChatChunks
+        >[0]["messages"],
+        middleware: [
+          callbacks.middleware,
+          {
+            onChunk: (_ctx: ChatMiddlewareContext, chunk: StreamChunk) => {
+              if (chunk.type === EventType.RUN_ERROR) {
+                hookOrder.push("error");
+              }
+            },
+            onUsage: () => {
+              hookOrder.push("usage");
+            },
+          },
+        ],
+      };
+      const stream =
+        mode === "text"
+          ? streamChatChunks(options)
+          : streamChatObject({
+              ...options,
+              outputSchema: {
+                type: "object",
+                properties: { value: { type: "string" } },
+                required: ["value"],
+              },
+            });
+      const chunks: StreamChunk[] = [];
+      for await (const chunk of stream) {
+        chunks.push(chunk);
+      }
+      expect(hookOrder).toEqual(
+        mode === "text" ? ["error", "usage"] : ["usage", "error"],
+      );
+
+      const runError = chunks.find(
+        (chunk) => chunk.type === EventType.RUN_ERROR,
+      );
+      if (runError?.type !== EventType.RUN_ERROR) {
+        throw new TypeError("The run reported no run error");
+      }
+      expect(tokenUsageFromTerminalChunk(runError)).toMatchObject(reported);
+      const generations = events.filter(
+        (event) => event.event === SERVER_ANALYTICS_EVENTS.aiGeneration,
+      );
+      expect(insertedRows).toHaveLength(1);
+      // One record for the one model call: the failure, with what it reported.
+      expect(generations).toHaveLength(1);
+      expect(generations[0]?.properties).toMatchObject({
+        $ai_input_tokens: reported.promptTokens,
+        $ai_is_error: true,
+        $ai_output_tokens: reported.completionTokens,
+      });
+    },
+  );
+
+  test.each(["finish", "error", "error-chunk"] as const)(
+    "multiple structured calls in one iteration retain usage through on%s",
+    async (terminal) => {
+      const { createTanStackAIAnalyticsCallbacks } =
+        await loadTanStackAIAnalytics();
+      const { insertedRows, safeDb } = recordedUsageLedger();
+      const events: Parameters<ServerAnalytics["capture"]>[0][] = [];
+      const callbacks = createTanStackAIAnalyticsCallbacks({
+        modelTier: MANAGED_MODEL_TIER.standard,
+        dataClass: "public_corpus",
+        analytics: {
+          capture: (event) => {
+            events.push(event);
+          },
+          flush: async () => undefined,
+          identifyOrganizationGroup: () => undefined,
+        },
+        feature: "chat.stream",
+        orgAIConfig: createOpenAIOrgAIConfig(),
+        traceId: "structured_usage",
+        usageMetering: {
+          actionType: "chat",
+          organizationId: orgId,
+          safeDb,
+          serviceTier: "standard",
+          userId,
+          workspaceId,
+        },
+      });
+      const deferred: Promise<unknown>[] = [];
+      const ctx = createMiddlewareContext({ deferred });
+      ctx.phase = "structuredOutput";
+      const first = {
+        promptTokens: 1200,
+        completionTokens: 200,
+        totalTokens: 1400,
+      };
+      const second = {
+        promptTokens: 4300,
+        completionTokens: 900,
+        totalTokens: 5200,
+      };
+      await callbacks.middleware.onUsage?.(ctx, first);
+      await callbacks.middleware.onUsage?.(ctx, second);
+      if (terminal === "finish") {
+        await callbacks.middleware.onFinish?.(ctx, {
+          content: "Done",
+          duration: 1,
+          finishReason: "stop",
+          usage: second,
+        });
+      } else {
+        if (terminal === "error-chunk") {
+          await callbacks.middleware.onChunk?.(ctx, {
+            type: EventType.RUN_ERROR,
+            message: "Structured validation failed after usage was reported.",
+          });
+        }
+        await callbacks.middleware.onError?.(ctx, {
+          duration: 1,
+          error: Object.assign(new Error("unavailable"), { status: 503 }),
+        });
+      }
+      await Promise.all(deferred);
+      expect(insertedRows).toHaveLength(2);
+      const generations = events.filter(
+        (event) => event.event === SERVER_ANALYTICS_EVENTS.aiGeneration,
+      );
+      expect(generations).toHaveLength(2);
+      expect(generations.map((event) => event.properties)).toMatchObject([
+        {
+          $ai_input_tokens: first.promptTokens,
+          $ai_output_tokens: first.completionTokens,
+        },
+        {
+          $ai_input_tokens: second.promptTokens,
+          $ai_output_tokens: second.completionTokens,
+        },
+      ]);
+      if (terminal !== "finish") {
+        expect(generations[1]?.properties).toHaveProperty("$ai_is_error", true);
+      } else {
+        expect(generations[1]?.properties).not.toHaveProperty("$ai_is_error");
+      }
+    },
+  );
 
   test("captures one generation per model call and sums the run's usage", async () => {
     const { createTanStackAIAnalyticsCallbacks } =
@@ -1157,6 +1691,7 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
       identifyOrganizationGroup: () => undefined,
     };
     const callbacks = createTanStackAIAnalyticsCallbacks({
+      modelTier: MANAGED_MODEL_TIER.standard,
       dataClass: "public_corpus",
       analytics,
       feature: "chat.stream",
@@ -1236,6 +1771,7 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
     try {
       const runOn = async (promptCacheSurface: "chat" | undefined) => {
         const callbacks = createTanStackAIAnalyticsCallbacks({
+          modelTier: MANAGED_MODEL_TIER.standard,
           analytics: {
             capture: () => undefined,
             flush: async () => undefined,
@@ -1248,22 +1784,22 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
           traceId: "trace_prompt_cache",
         });
         // A tool-calling turn on a warm Anthropic cache: the first call
-        // writes the prefix, the second reads it. Anthropic's input count
-        // excludes both.
+        // writes the prefix, the second reads it. TanStack includes each
+        // cache operation in the corresponding input total.
         const ctx0 = createMiddlewareContext({ iteration: 0 });
         const ctx1 = createMiddlewareContext({ iteration: 1 });
         await callbacks.middleware.onUsage?.(ctx0, {
           completionTokens: 40,
-          promptTokens: 100,
+          promptTokens: 1000,
           promptTokensDetails: { cachedTokens: 0, cacheWriteTokens: 900 },
-          totalTokens: 140,
+          totalTokens: 1040,
         });
         // The run then parks at an approval: no terminal hook follows.
         await callbacks.middleware.onUsage?.(ctx1, {
           completionTokens: 60,
-          promptTokens: 200,
+          promptTokens: 1100,
           promptTokensDetails: { cachedTokens: 900, cacheWriteTokens: 0 },
-          totalTokens: 260,
+          totalTokens: 1160,
         });
       };
 
@@ -1307,6 +1843,7 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
     // Template filling shares one callbacks instance across concurrent
     // field resolutions: each run's totals and tool count must stay its own.
     const callbacks = createTanStackAIAnalyticsCallbacks({
+      modelTier: MANAGED_MODEL_TIER.standard,
       dataClass: "public_corpus",
       analytics,
       feature: "templates.fill",
@@ -1397,6 +1934,7 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
       identifyOrganizationGroup: () => undefined,
     };
     const callbacks = createTanStackAIAnalyticsCallbacks({
+      modelTier: MANAGED_MODEL_TIER.standard,
       dataClass: "public_corpus",
       analytics,
       feature: "chat.stream",
@@ -1441,6 +1979,7 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
 
     try {
       createTanStackAIAnalyticsCallbacks({
+        modelTier: MANAGED_MODEL_TIER.standard,
         dataClass: "public_corpus",
         analytics: {
           capture: () => undefined,
@@ -1500,6 +2039,7 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
     try {
       for (const error of anticipated) {
         createTanStackAIAnalyticsCallbacks({
+          modelTier: MANAGED_MODEL_TIER.standard,
           dataClass: "public_corpus",
           analytics: silentAnalytics,
           feature: "templates.suggestFields",
@@ -1510,6 +2050,7 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
       expect(recording.exceptions()).toEqual([]);
 
       createTanStackAIAnalyticsCallbacks({
+        modelTier: MANAGED_MODEL_TIER.standard,
         dataClass: "public_corpus",
         analytics: silentAnalytics,
         feature: "templates.suggestFields",
@@ -1543,6 +2084,7 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
 
     try {
       createTanStackAIAnalyticsCallbacks({
+        modelTier: MANAGED_MODEL_TIER.standard,
         dataClass: "public_corpus",
         analytics: {
           capture: () => undefined,
@@ -1575,6 +2117,7 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
 
     try {
       createTanStackAIAnalyticsCallbacks({
+        modelTier: MANAGED_MODEL_TIER.standard,
         dataClass: "public_corpus",
         analytics: {
           capture: () => undefined,
@@ -1610,6 +2153,7 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
 
     try {
       createTanStackAIAnalyticsCallbacks({
+        modelTier: MANAGED_MODEL_TIER.standard,
         dataClass: "public_corpus",
         analytics: {
           capture: () => undefined,
@@ -1631,5 +2175,165 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
     } finally {
       warnSpy.mockRestore();
     }
+  });
+});
+
+describe("a failed generation is recorded once per callbacks family", () => {
+  // An anticipated failure keeps these tests off the exception sink; the
+  // ledger is the same for every kind.
+  const providerFailure = () =>
+    Object.assign(new Error("rate limited"), { statusCode: 429 });
+
+  // Each recorded failure also logs at WARN; the events are what is asserted.
+  beforeEach(async () => {
+    const { logger } = await import("@/api/lib/observability/logger");
+    spyOn(logger, "warn").mockImplementation(() => undefined);
+  });
+  afterEach(() => {
+    mock.restore();
+  });
+
+  const boundModel = (modelId: string) => ({
+    keySource: "instance" as const,
+    modelId,
+    provider: "openai" as const,
+  });
+
+  const createFamilyRoot = async () => {
+    const { createTanStackAIAnalyticsCallbacks } =
+      await loadTanStackAIAnalytics();
+    const events: Parameters<ServerAnalytics["capture"]>[0][] = [];
+    const root = createTanStackAIAnalyticsCallbacks({
+      modelTier: MANAGED_MODEL_TIER.standard,
+      dataClass: "public_corpus",
+      analytics: {
+        capture: (event) => {
+          events.push(event);
+        },
+        flush: async () => undefined,
+        identifyOrganizationGroup: () => undefined,
+      },
+      feature: "case-law.analysis.significance",
+      orgAIConfig: createOpenAIOrgAIConfig(),
+      traceId: "trace_failure_family",
+    });
+    const recorded = () => ({
+      failed: events.filter(
+        (event) => event.event === SERVER_ANALYTICS_EVENTS.aiGenerationFailed,
+      ).length,
+      generationErrors: events.filter(
+        (event) =>
+          event.event === SERVER_ANALYTICS_EVENTS.aiGeneration &&
+          event.properties["$ai_is_error"] === true,
+      ).length,
+    });
+    return { recorded, root };
+  };
+
+  // The middleware's terminal hook for one run that failed at the provider.
+  const failRun = async (
+    member: TanStackAIAnalyticsCallbacks,
+    runId: string,
+  ): Promise<void> => {
+    await member.middleware.onError?.(createMiddlewareContext({ runId }), {
+      duration: 50,
+      error: providerFailure(),
+    });
+  };
+
+  test("a run that failed on a bound model and is caught by the caller records once", async () => {
+    const { recorded, root } = await createFamilyRoot();
+    const bound = root.forModel(boundModel("gpt-5.4-mini"));
+
+    await failRun(bound, "run_bound");
+    root.captureError(providerFailure());
+
+    expect(recorded()).toEqual({ failed: 1, generationErrors: 1 });
+  });
+
+  test("a failure before any model call records once from the catch path", async () => {
+    const { recorded, root } = await createFamilyRoot();
+    root.forModel(boundModel("gpt-5.4-mini"));
+
+    root.captureError(providerFailure());
+    root.captureError(providerFailure());
+
+    expect(recorded()).toEqual({ failed: 1, generationErrors: 1 });
+  });
+
+  test("two concurrent runs that both fail record twice", async () => {
+    const { recorded, root } = await createFamilyRoot();
+    const first = root.forModel(boundModel("gpt-5.4-mini"));
+    const second = root.forModel(boundModel("gpt-5.4"));
+
+    await Promise.all([failRun(first, "run_a"), failRun(second, "run_b")]);
+    root.captureError(providerFailure());
+    root.captureError(providerFailure());
+
+    expect(recorded()).toEqual({ failed: 2, generationErrors: 2 });
+  });
+
+  test("a nested binding shares the root's ledger", async () => {
+    const { recorded, root } = await createFamilyRoot();
+    const child = root.forModel(boundModel("gpt-5.4-mini"));
+    const grandchild = child.forModel(boundModel("gpt-5.4"));
+
+    await failRun(grandchild, "run_nested");
+    child.captureError(providerFailure());
+    root.captureError(providerFailure());
+
+    expect(recorded()).toEqual({ failed: 1, generationErrors: 1 });
+  });
+
+  test("every interleaving of run failures and catch-path reports records each failed run once", async () => {
+    // The root, two bound children, and two grandchildren.
+    const memberCount = 5;
+    const step = fc.record({
+      kind: fc.constantFrom("run" as const, "catch" as const),
+      member: fc.nat({ max: memberCount - 1 }),
+    });
+    await assertProperty(
+      "every interleaving of run failures and catch-path reports records each failed run once",
+      fc.asyncProperty(
+        fc.array(step, { minLength: 1, maxLength: 12 }),
+        async (steps) => {
+          const { recorded, root } = await createFamilyRoot();
+          const child = root.forModel(boundModel("gpt-5.4-mini"));
+          const members = [
+            root,
+            child,
+            root.forModel(boundModel("gpt-5.4")),
+            child.forModel(boundModel("gpt-5.4-nano")),
+            child.forModel(boundModel("gpt-5.4")),
+          ];
+
+          // A run reaches its terminal hook once, so each "run" step is a
+          // distinct failed run. A catch-path report before any run failed
+          // is a failure before the model call: one more distinct failure.
+          // A catch-path report after one is the caller's echo of a run the
+          // middleware already recorded.
+          let failedRuns = 0;
+          let failedBeforeModelCall = 0;
+          for (const [index, { kind, member }] of steps.entries()) {
+            const target = members.at(member) ?? root;
+            if (kind === "run") {
+              await failRun(target, `run_${String(index)}`);
+              failedRuns += 1;
+            } else {
+              if (failedRuns === 0) {
+                failedBeforeModelCall = 1;
+              }
+              target.captureError(providerFailure());
+            }
+          }
+
+          const expected = failedRuns + failedBeforeModelCall;
+          expect(recorded()).toEqual({
+            failed: expected,
+            generationErrors: expected,
+          });
+        },
+      ),
+    );
   });
 });

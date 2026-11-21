@@ -1,5 +1,103 @@
 # @stll/auth-model
 
+## 0.10.0
+
+### Minor Changes
+
+- [#8919](https://github.com/stella/stella/pull/8919) [`fdd1eb7`](https://github.com/stella/stella/commit/fdd1eb7769c43f9c2242d5f05399cb36314c3638) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Align the schema contract version with Better Auth 1.7.25 after verifying the core and organization schemas are unchanged. `BETTER_AUTH_CONTRACT_VERSION` and `BETTER_AUTH_PARITY_MANIFEST.betterAuthVersion` now carry the literal `"1.7.25"`; no entrypoints are removed.
+
+## 0.9.0
+
+### Minor Changes
+
+- [#8618](https://github.com/stella/stella/pull/8618) [`e229034`](https://github.com/stella/stella/commit/e22903462cf3734c29b0a97f2f48dc3023e758c8) Thanks [@dependabot](https://github.com/apps/dependabot)! - Align the schema contract version with Better Auth 1.7.20 after verifying the core and organization schemas are unchanged. `BETTER_AUTH_CONTRACT_VERSION` and `BETTER_AUTH_PARITY_MANIFEST.betterAuthVersion` now carry the literal `"1.7.20"`; no entrypoints are removed.
+
+## 0.8.2
+
+### Patch Changes
+
+- [#7365](https://github.com/stella/stella/pull/7365) [`5613d6a`](https://github.com/stella/stella/commit/5613d6aa3e4c87ff5fcf2fb408db801df5d89909) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Require billing visibility for monetary operations and preserve hidden rates as null in time records.
+
+- [#8574](https://github.com/stella/stella/pull/8574) [`81de98c`](https://github.com/stella/stella/commit/81de98c398770aea32040c9463006f70b3317c72) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add `AUTH_SIGN_IN_CODE_UNAVAILABLE_ERROR_CODE`, the error code for a sign-in code request that names an account signing in with a password.
+
+## 0.8.1
+
+### Patch Changes
+
+- [#8564](https://github.com/stella/stella/pull/8564) [`383c1db`](https://github.com/stella/stella/commit/383c1db86a75f2b3114fdfeda0dff9df7b6bb975) Thanks [@NavpreetSSidhu](https://github.com/NavpreetSSidhu)! - Add `ORGANIZATION_LOGO_RULES`, the format and size rules for an organization logo.
+
+## 0.8.0
+
+### Minor Changes
+
+- [#8537](https://github.com/stella/stella/pull/8537) [`001c640`](https://github.com/stella/stella/commit/001c640e64cb00e3948bdf68a18a40347c65a40f) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Align the schema contract version with Better Auth 1.7.19 after verifying the core and organization schemas are unchanged. `BETTER_AUTH_CONTRACT_VERSION` and `BETTER_AUTH_PARITY_MANIFEST.betterAuthVersion` now carry the literal `"1.7.19"`; no entrypoints are removed.
+
+### Patch Changes
+
+- [#8537](https://github.com/stella/stella/pull/8537) [`001c640`](https://github.com/stella/stella/commit/001c640e64cb00e3948bdf68a18a40347c65a40f) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Build declarations through the native tsrs API supported by tsdown 0.23.7, resolving the compiler from each package.
+
+## 0.7.1
+
+### Patch Changes
+
+- [#6568](https://github.com/stella/stella/pull/6568) [`d61016a`](https://github.com/stella/stella/commit/d61016a6d30def831c2d1657b1e895b8f409d3f3) Thanks [@jan-kubica](https://github.com/jan-kubica)! - The opaque organization slug's random source takes an ArrayBuffer-backed byte view, so the module type-checks under both the Node and DOM declarations of `crypto.getRandomValues`.
+
+## 0.7.0
+
+### Minor Changes
+
+- [#7920](https://github.com/stella/stella/pull/7920) [`668938a`](https://github.com/stella/stella/commit/668938a1fad9d45c6cc6bb211daf52e3bec16558) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Align the schema contract version with Better Auth 1.7.16 after confirming the core and organization schemas are unchanged. `BETTER_AUTH_CONTRACT_VERSION` and `BETTER_AUTH_PARITY_MANIFEST.betterAuthVersion` now carry the literal `"1.7.16"`; no entrypoints are removed.
+
+## 0.6.0
+
+### Minor Changes
+
+- Export the opaque organization slug pattern next to its generator.
+
+## 0.5.0
+
+### Minor Changes
+
+- [#7600](https://github.com/stella/stella/pull/7600) [`cd76389`](https://github.com/stella/stella/commit/cd7638987595cc0f1776b204073fb958bf94bf35) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Expose a shared invitation lifecycle classifier for pending, past, and accepted invitations.
+
+- [#7607](https://github.com/stella/stella/pull/7607) [`34a741f`](https://github.com/stella/stella/commit/34a741fa7878e68f1cf01093d1208719e783df75) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Export the opaque organization slug generator next to the shared slug rules.
+
+## 0.4.0
+
+### Minor Changes
+
+- [#7633](https://github.com/stella/stella/pull/7633) [`ea026da`](https://github.com/stella/stella/commit/ea026da403d121c9894049e1dd7f803120a73577) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Allow organization owners and admins to change an existing organization's slug through generated capabilities, with an opaque identifier option and shared slug validation.
+
+## 0.3.0
+
+### Minor Changes
+
+- [#7236](https://github.com/stella/stella/pull/7236) [`52590f6`](https://github.com/stella/stella/commit/52590f6353c040428264ad26386d7a5e6492ad5b) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add `apple` to the social provider identifiers and export `AuthSocialProviderId`.
+
+- [#6315](https://github.com/stella/stella/pull/6315) [`a21a5e7`](https://github.com/stella/stella/commit/a21a5e7d9a41efbc874e06450be60e9818cf2cf6) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Remove the session startup header constant from the portable authentication contract.
+
+### Patch Changes
+
+- [#7359](https://github.com/stella/stella/pull/7359) [`fa2397d`](https://github.com/stella/stella/commit/fa2397d59e8a09dc9d412a102f18c5c449341876) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Align the schema contract version with Better Auth 1.7.12 after confirming the core and organization schemas are unchanged.
+
+## 0.2.7
+
+### Patch Changes
+
+- [#5704](https://github.com/stella/stella/pull/5704) [`c57c0e8`](https://github.com/stella/stella/commit/c57c0e833228f6351c5f7c9a5519e4bbebcf980f) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Include OAuth consent references in the authentication model contract.
+
+## 0.2.6
+
+### Patch Changes
+
+- [#5371](https://github.com/stella/stella/pull/5371) [`d3cc682`](https://github.com/stella/stella/commit/d3cc6823822f3cf3369d4a3c2ab910cea7d371b2) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add the shared sign-in recovery constants.
+
+## 0.2.5
+
+### Patch Changes
+
+- [#4835](https://github.com/stella/stella/pull/4835) [`d3c05df`](https://github.com/stella/stella/commit/d3c05df5cbb84b037077c035267ca62a859bd702) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Update the shared auth runtime dependency.
+
 ## 0.2.4
 
 ### Patch Changes

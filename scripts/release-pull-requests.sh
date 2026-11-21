@@ -11,6 +11,7 @@
 # Prints:
 #   open_other=<count of release pull requests other than --number>
 #   current_is_release=<true when --number is itself a release pull request>
+#   numbers=<space-separated numbers of every release pull request>
 set -euo pipefail
 
 repo=""
@@ -68,3 +69,5 @@ done
 
 echo "open_other=$open_other"
 echo "current_is_release=$current_is_release"
+# Every release pull request number, current one included, space separated.
+echo "numbers=$releases"

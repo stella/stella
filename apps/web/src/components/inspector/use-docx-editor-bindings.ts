@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import type { Dispatch, RefObject, SetStateAction } from "react";
 
 import type { DocxCompatibility } from "@stll/folio-react";
@@ -35,9 +35,15 @@ export const useDocxEditorBindings = ({
 }: UseDocxEditorBindingsOptions) => {
   const [isCollaborationPublishable, setIsCollaborationPublishable] =
     useState(false);
+  // The hosted editor has loaded its document (it reports compatibility once
+  // parsed) or failed: what a restored viewer waits for before settling.
+  const [isDocumentReady, setIsDocumentReady] = useState(false);
 
   const handleScrollTopChange = (scrollTop: number) => {
     setDocxScrollTopByTab((prev) => {
+      if (prev.get(tabId) === scrollTop) {
+        return prev;
+      }
       const next = new Map(prev);
       next.set(tabId, scrollTop);
       return next;
@@ -55,6 +61,7 @@ export const useDocxEditorBindings = ({
   });
   const handleCompatibilityChange = useLatestCallback(
     (compatibility: DocxCompatibility) => {
+      setIsDocumentReady(true);
       setDocxCompatibilityByTab((prev) => {
         if (prev.get(tabId) === compatibility) {
           return prev;
@@ -93,32 +100,27 @@ export const useDocxEditorBindings = ({
   const handleCollaborationPublishableChange = useLatestCallback(
     setIsCollaborationPublishable,
   );
-  const handleError = useLatestCallback(onError);
-  const bindings = useMemo(
-    () =>
-      ({
-        actionsKey: tabId,
-        actionsMapRef: docxActionsRef,
-        onClose: handleClose,
-        onCollaborationPublishableChange: handleCollaborationPublishableChange,
-        onCompatibilityChange: handleCompatibilityChange,
-        onError: handleError,
-        onSaved: handleSaved,
-        onScrollTopChange: handleScrollTop,
-      }) satisfies DocxEditorSlotBindings,
-    [
-      docxActionsRef,
-      handleClose,
-      handleCollaborationPublishableChange,
-      handleCompatibilityChange,
-      handleError,
-      handleSaved,
-      handleScrollTop,
-      tabId,
-    ],
-  );
+  const handleError = useLatestCallback((error: unknown) => {
+    setIsDocumentReady(true);
+    onError(error);
+  });
+  const bindings = {
+    actionsKey: tabId,
+    actionsMapRef: docxActionsRef,
+    onClose: handleClose,
+    onCollaborationPublishableChange: handleCollaborationPublishableChange,
+    onCompatibilityChange: handleCompatibilityChange,
+    onError: handleError,
+    onSaved: handleSaved,
+    onScrollTopChange: handleScrollTop,
+  } satisfies DocxEditorSlotBindings;
 
-  return { bindings, handleScrollTopChange, isCollaborationPublishable };
+  return {
+    bindings,
+    handleScrollTopChange,
+    isCollaborationPublishable,
+    isDocumentReady,
+  };
 };
 
 export type DocxEditorBindings = ReturnType<typeof useDocxEditorBindings>;

@@ -24,9 +24,9 @@ import {
   classifyMarkerDefect,
   detectRowBlockPair,
   isBlockDirectiveKind,
-  type ScannedMarker,
   scanInvalidMarkers,
   scanMarkers,
+  type ScannedMarker,
 } from "@stll/template-conditions";
 
 import { parseInlineConditions } from "@/api/lib/docx/inline-conditions";
@@ -507,11 +507,7 @@ export type SaveAttempt =
     };
 
 type AuthoringOutcome =
-  | "pass"
-  | "partial"
-  | "invalid-docx"
-  | "no-call"
-  | "error";
+  "pass" | "partial" | "invalid-docx" | "no-call" | "error";
 
 export type AuthoringRunScore = {
   outcome: AuthoringOutcome;

@@ -11,6 +11,7 @@ import {
 
 const readManifest = createSafePublicHandler(
   {
+    contract: "patch",
     cache: { kind: "public", maxAge: 300 },
     accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "internal", reason: "auth_plumbing" },

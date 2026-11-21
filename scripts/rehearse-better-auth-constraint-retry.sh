@@ -9,6 +9,7 @@ fi
 
 repo_root="$(cd "$(dirname "$0")/.." && pwd)"
 readonly repo_root
+source "$repo_root/scripts/lib/has-postgres-sqlstate.sh"
 readonly constraints_migration="20260825220000_better_auth_17_constraints"
 readonly constraints_sql="$repo_root/apps/api/drizzle/$constraints_migration/migration.sql"
 # The later migration that relaxes the column this rehearsal tightens. Its
@@ -34,6 +35,11 @@ else
   exit 1
 fi
 readonly constraints_hash
+
+# Whether a single-value query returns true.
+psql_is_true() {
+  [[ "$(psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -At "$@")" == t ]]
+}
 
 recorded_constraints="$(
   psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -At \
@@ -91,14 +97,29 @@ if (
   exit 1
 fi
 
-if ! grep -Fq 'account_issuer_not_null_check' "$failure_log"; then
+if ! has_postgres_sqlstate "$failure_log" P0001; then
   echo "Constraints migration failed for an unrelated reason" >&2
   tail -40 "$failure_log" >&2
   exit 1
 fi
 
-psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -Atc "
+psql_is_true \
+  -v constraints_migration="$constraints_migration" \
+  -v constraints_hash="$constraints_hash" <<'SQL' || {
 SELECT
+  EXISTS (
+    SELECT 1
+    FROM public.account
+    WHERE id = 'constraint-retry-account'
+      AND issuer IS NULL
+  )
+  AND NOT EXISTS (
+    SELECT 1
+    FROM drizzle.__drizzle_migrations
+    WHERE name = :'constraints_migration'
+      AND hash = :'constraints_hash'
+  )
+  AND
   NOT EXISTS (
     SELECT 1
     FROM pg_constraint
@@ -106,7 +127,7 @@ SELECT
       AND conname = 'account_issuer_not_null_check'
   )
   AND to_regclass('public.account_issuer_account_id_uidx') IS NULL;
-" | grep -qx t || {
+SQL
   echo "Incomplete backfill left committed constraint side effects" >&2
   exit 1
 }
@@ -150,7 +171,7 @@ fi
   bun run src/db/migrate.ts
 )
 
-psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -Atc "
+psql_is_true -c "
 SELECT
   (SELECT count(*) = ${recorded_before}
    FROM drizzle.__drizzle_migrations)
@@ -167,7 +188,7 @@ SELECT
   AND (SELECT indisvalid AND indisready
        FROM pg_index
        WHERE indexrelid = 'public.account_provider_account_id_uidx'::regclass);
-" | grep -qx t || {
+" || {
   echo "Retried Better Auth constraints migration did not converge" >&2
   exit 1
 }
@@ -197,7 +218,7 @@ run_migrator() {
 # replacement valid and enforcing.
 assert_relaxed_head() {
   local expected_receipts="$1"
-  psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -Atc "
+  psql_is_true -c "
 SELECT
   (SELECT count(*) = ${expected_receipts}
    FROM drizzle.__drizzle_migrations)
@@ -209,14 +230,14 @@ SELECT
   AND (SELECT indisvalid AND indisready
        FROM pg_index
        WHERE indexrelid = 'public.account_provider_account_id_uidx'::regclass);
-" | grep -qx t
+"
 }
 
 # The head shape of a checkout that predates the relaxation migration: the
 # historical constraint stays, and the migrator recorded nothing new.
 assert_constrained_head() {
   local expected_receipts="$1"
-  psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -Atc "
+  psql_is_true -c "
 SELECT
   (SELECT count(*) = ${expected_receipts}
    FROM drizzle.__drizzle_migrations)
@@ -224,7 +245,7 @@ SELECT
        FROM pg_attribute
        WHERE attrelid = 'public.account'::regclass
          AND attname = 'issuer');
-" | grep -qx t
+"
 }
 
 if [[ "$relaxation_receipts" -eq 0 ]]; then

@@ -1,10 +1,8 @@
-import { Result } from "better-result";
-import { and, eq } from "drizzle-orm";
+import { panic, Result } from "better-result";
 
-import type { SafeDb } from "@/api/db/safe-db";
-import { CHAT_TITLE_SOURCE, chatThreads } from "@/api/db/schema";
-import { startChatExecutionAdmission } from "@/api/handlers/chat/chat-execution-admission";
-import { aiTitlingMayReplace } from "@/api/handlers/chat/thread-title";
+import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
+import { CHAT_TITLE_SOURCE } from "@/api/db/schema";
+import { readThreadTitleInput } from "@/api/handlers/chat/thread-title-input";
 import {
   buildThreadTitlePrompt,
   cleanGeneratedTitle,
@@ -12,24 +10,37 @@ import {
   TITLE_MAX_OUTPUT_TOKENS,
 } from "@/api/handlers/chat/thread-title-prompt";
 import type { ChatMessage } from "@/api/handlers/chat/types";
-import { resolveCaching, type OrgAIConfig } from "@/api/lib/ai-config";
+import { type OrgAIConfig, resolveCaching } from "@/api/lib/ai-config";
 import { isUnanticipatedAIFailure } from "@/api/lib/ai-error";
-import { captureError } from "@/api/lib/analytics/capture";
+import {
+  generateArtefact,
+  projectArtefactText,
+  writeThreadArtefactTitle,
+} from "@/api/lib/ai-generation/provenance";
+import { captureError, createErrorCapture } from "@/api/lib/analytics/capture";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import type { AuditRecorder } from "@/api/lib/audit-log";
-import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
-import {
-  readThreadStoredContentSendModeOnTx,
-  THREAD_STORED_CONTENT_SEND_MODE,
-} from "@/api/lib/chat/thread-stored-content-send-mode";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
+import { startExecutionAdmission } from "@/api/lib/rate-limit/execution-admission";
+import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
 import type { upsertChatThreadSearchDocument } from "@/api/lib/search/index-chat";
-import { generateTanStackTextForRole } from "@/api/lib/tanstack-ai-generate";
+import { generateTanStackTextForTask } from "@/api/lib/tanstack-ai-generate";
 
 const TITLE_GENERATION_TIMEOUT_MS = 10_000;
+
+/**
+ * A title runs on the standard tier: the reader sees it the moment the first
+ * turn ends, and a deferred tier bounds no latency at all, so a title queued
+ * there outlives its deadline and is never written. Read by the
+ * structured-output request settings test.
+ *
+ * @public
+ */
+export const TITLE_SERVICE_TIER = "standard";
 
 const SEND_MODE_READ_FAILED_SINK = failureSink({
   event: "chat.thread_title.send_mode_read_failed",
@@ -53,13 +64,17 @@ type GenerateThreadTitleProps = {
   promptCachingEnabled: boolean;
   recordAuditEvent: AuditRecorder;
   safeDb: SafeDb;
+  /** The organization's scope, read for the title's managed model tier. */
+  organizationStateDb: ScopedDb;
   threadId: SafeId<"chatThread">;
   threadWorkspaceId: SafeId<"workspace"> | null;
   userId: SafeId<"user">;
 };
 
-const generateAdmittedThreadTitle = async ({
+export const generateAdmittedThreadTitle = async ({
+  generateTextForTask = generateTanStackTextForTask,
   admissionSignal,
+  modelAdmission,
   indexThread,
   initialTitle,
   messages,
@@ -73,7 +88,9 @@ const generateAdmittedThreadTitle = async ({
   threadWorkspaceId,
   userId,
 }: GenerateThreadTitleProps & {
-  admissionSignal?: AbortSignal | undefined;
+  generateTextForTask?: typeof generateTanStackTextForTask;
+  admissionSignal: AbortSignal;
+  modelAdmission: ModelDispatchAdmission;
 }): Promise<void> => {
   const aiAnalytics = createTanStackAIAnalyticsCallbacks({
     dataClass: "customer",
@@ -81,140 +98,120 @@ const generateAdmittedThreadTitle = async ({
       actionType: "background",
       organizationId,
       safeDb,
-      serviceTier: "batch",
+      serviceTier: TITLE_SERVICE_TIER,
       userId,
       workspaceId: threadWorkspaceId,
     },
     feature: "chat.thread_title",
-    modelRole: "fast",
+    modelTask: "short-text",
     orgAIConfig,
+    modelTier: modelAdmission.modelTier,
     properties: threadWorkspaceId ? { workspace_id: threadWorkspaceId } : {},
     traceId: Bun.randomUUIDv7(),
   });
 
   // Queued by a raw turn; read again before sending, since the thread may
   // have switched to anonymized mode since.
-  const sendMode = await safeDb(
-    async (tx) => await readThreadStoredContentSendModeOnTx({ threadId, tx }),
-  );
-  if (Result.isError(sendMode)) {
-    observeFailure(sendMode.error, { sink: SEND_MODE_READ_FAILED_SINK });
+  const input = await readThreadTitleInput({
+    safeDb,
+    threadId,
+    userId,
+    messages,
+  });
+  if (input.isErr()) {
+    observeFailure(input.error, { sink: SEND_MODE_READ_FAILED_SINK });
     return;
   }
-  if (sendMode.value === THREAD_STORED_CONTENT_SEND_MODE.anonymized) {
-    return;
+  const titleInput = input.value;
+  switch (titleInput.type) {
+    case "anonymized":
+    case "withdrawn":
+      return;
+    case "available":
+      break;
+    default:
+      titleInput satisfies never;
+      return panic("Unhandled title input status");
   }
 
   const generated = await Result.tryPromise({
     try: async () =>
-      await generateTanStackTextForRole({
-        dataClass: "customer",
-        abortSignal:
-          admissionSignal === undefined
-            ? AbortSignal.timeout(TITLE_GENERATION_TIMEOUT_MS)
-            : AbortSignal.any([
-                AbortSignal.timeout(TITLE_GENERATION_TIMEOUT_MS),
-                admissionSignal,
-              ]),
-        finishPolicy: TITLE_FINISH_POLICY,
-        maxOutputTokens: TITLE_MAX_OUTPUT_TOKENS,
-        role: "fast",
-        serviceTier: "batch",
-        orgAIConfig,
-        managedAIResidency,
-        organizationId,
-        analytics: aiAnalytics,
-        caching: resolveCaching({
-          promptCachingEnabled,
-          role: "fast",
-          scopeKey: threadId,
-        }),
-        tenantWorkspaceIds: threadWorkspaceId ? [threadWorkspaceId] : [],
-        prompt: buildThreadTitlePrompt(messages),
+      await generateArtefact({
+        generator: "apps/api/src/handlers/chat/generate-thread-title.ts",
+        sources: titleInput.sources,
+        generate: async () =>
+          cleanGeneratedTitle(
+            await generateTextForTask({
+              userId,
+              dataClass: "customer",
+              abortSignal: admissionSignal,
+              deadlineMs: TITLE_GENERATION_TIMEOUT_MS,
+              finishPolicy: TITLE_FINISH_POLICY,
+              maxOutputTokens: TITLE_MAX_OUTPUT_TOKENS,
+              task: "short-text",
+              serviceTier: TITLE_SERVICE_TIER,
+              orgAIConfig,
+              managedAIResidency,
+              organizationId,
+              admission: modelAdmission,
+              analytics: aiAnalytics,
+              caching: resolveCaching({
+                promptCachingEnabled,
+                task: "short-text",
+                scopeKey: threadId,
+              }),
+              tenantWorkspaceIds: threadWorkspaceId ? [threadWorkspaceId] : [],
+              prompt: buildThreadTitlePrompt(titleInput.messages),
+            }),
+          ),
       }),
     catch: (cause) => cause,
   });
-  if (Result.isError(generated)) {
-    aiAnalytics.captureError(generated.error);
-    if (isUnanticipatedAIFailure(generated.error)) {
-      captureError(generated.error, { threadId });
+  const outcome = Result.flatten(generated);
+  if (Result.isError(outcome)) {
+    aiAnalytics.captureError(outcome.error);
+    if (
+      Result.isError(generated) &&
+      isUnanticipatedAIFailure(generated.error)
+    ) {
+      captureError(
+        generated.error,
+        handlerErrorContext(
+          "chat.generateAdmittedThreadTitle.generated_error",
+          { threadId },
+        ),
+      );
     }
     return;
   }
-  const text = generated.value;
-
-  const title = cleanGeneratedTitle(text);
+  const artefact = outcome.value;
+  const title = projectArtefactText({
+    artefact,
+    projection: titleInput.projection,
+  });
   if (!title) {
     return;
   }
 
-  const updateResult = await safeDb(async (tx) => {
-    const currentThread = await tx.query.chatThreads.findFirst({
-      where: {
-        id: { eq: threadId },
-      },
-      columns: {
-        title: true,
-        titleSource: true,
-      },
-    });
-
-    // Only replace a still-default placeholder title whose text still
-    // matches what this request set at creation. A "user" rename or a
-    // prior "ai" title is left untouched: the generator writes once, and a
-    // rename that raced this fire-and-forget path must win.
-    //
-    // The title-text comparison (not just titleSource) also covers a
-    // rolling-deploy window: an old API task's rename-thread implementation
-    // predates titleSource and only writes `title`, so a rename it serves
-    // leaves titleSource="default" behind. Requiring the title to still
-    // equal initialTitle catches that stale-column case too, since any
-    // rename necessarily changes the text.
-    if (
-      !currentThread ||
-      !aiTitlingMayReplace(currentThread.titleSource) ||
-      currentThread.title !== initialTitle
-    ) {
-      return false;
-    }
-
-    const updatedRows = await tx
-      .update(chatThreads)
-      .set({ title, titleSource: CHAT_TITLE_SOURCE.AI })
-      .where(
-        and(
-          eq(chatThreads.id, threadId),
-          // Re-check inside the UPDATE so a rename committing between the
-          // read above and this write cannot be clobbered.
-          eq(chatThreads.titleSource, CHAT_TITLE_SOURCE.DEFAULT),
-          eq(chatThreads.title, initialTitle),
-        ),
-      )
-      .returning({ id: chatThreads.id });
-
-    if (updatedRows.length === 0) {
-      return false;
-    }
-
-    await recordAuditEvent(tx, {
-      action: AUDIT_ACTION.UPDATE,
-      resourceType: AUDIT_RESOURCE_TYPE.CHAT_THREAD,
-      resourceId: threadId,
-      workspaceId: threadWorkspaceId,
-      changes: {
-        titleChanged: { old: false, new: true },
-        titleSource: {
-          old: currentThread.titleSource,
-          new: CHAT_TITLE_SOURCE.AI,
-        },
-      },
-    });
-
-    return true;
-  });
+  const updateResult = await safeDb(
+    async (tx) =>
+      await writeThreadArtefactTitle({
+        tx,
+        threadId,
+        artefact,
+        recordAuditEvent,
+        expected: { title: initialTitle, source: CHAT_TITLE_SOURCE.DEFAULT },
+      }),
+  );
 
   if (Result.isError(updateResult)) {
-    captureError(updateResult.error, { threadId });
+    captureError(
+      updateResult.error,
+      handlerErrorContext(
+        "chat.generateAdmittedThreadTitle.updateResult_error",
+        { threadId },
+      ),
+    );
     return;
   }
 
@@ -222,7 +219,11 @@ const generateAdmittedThreadTitle = async ({
   // a failure is reported, never thrown. Awaited, so whoever waits for
   // this title (the turn's follow-ups) waits for its indexing too.
   if (updateResult.value) {
-    await indexThread(threadId).catch(captureError);
+    await indexThread(threadId).catch(
+      createErrorCapture(
+        handlerErrorContext("generateAdmittedThreadTitle.indexThread"),
+      ),
+    );
   }
 };
 
@@ -230,11 +231,12 @@ const generateAdmittedThreadTitle = async ({
 export const generateThreadTitle = async (
   props: GenerateThreadTitleProps,
 ): Promise<void> => {
-  const admitted = await startChatExecutionAdmission({
+  const admitted = await startExecutionAdmission({
     mode: "concurrency-only",
     actionKind: "chat.generate-thread-title",
     organizationId: props.organizationId,
     userId: props.userId,
+    organizationStateDb: props.organizationStateDb,
   });
   if (Result.isError(admitted)) {
     observeFailure(admitted.error, {
@@ -247,6 +249,7 @@ export const generateThreadTitle = async (
     await generateAdmittedThreadTitle({
       ...props,
       admissionSignal: admitted.value.signal,
+      modelAdmission: admitted.value.modelAdmission,
     });
   } finally {
     await admitted.value.release();

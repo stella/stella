@@ -3,11 +3,15 @@ import { panic } from "better-result";
 import { produce } from "immer";
 import { useTranslations } from "use-intl";
 
+import { Button } from "@stll/ui/button";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
 import Tooltip from "@/components/tooltip";
 import { useCreateBBoxes } from "@/components/workspaces/hooks/use-create-b-boxes";
+import type { Decision } from "@/features/case-law/components/decision-cells";
+import { DecisionPassageCitation } from "@/features/case-law/components/decision-passage-citation";
 import type { Citation } from "@/lib/citations";
 import { detached } from "@/lib/detached";
 import {
@@ -41,6 +45,7 @@ export type JustificationSource =
     }
   | {
       kind: "decision";
+      decision: Decision;
       content: JustificationContent;
       /** Opens the decision at the passage, with the reader's highlight. */
       onOpenPassage: (anchorId: string) => void;
@@ -69,8 +74,9 @@ export const Justification = ({ source }: { source: JustificationSource }) => (
               return <DocxQuote citation={citation} key={key} />;
             case "decision-passage":
               return source.kind === "decision" ? (
-                <DecisionPassageChip
+                <DecisionPassageCitation
                   citation={citation}
+                  decision={source.decision}
                   key={key}
                   onOpen={source.onOpenPassage}
                 />
@@ -121,11 +127,8 @@ const PdfChip = ({ workspaceId, justification, citation }: PdfChipProps) => {
   const setScrollTo = useOptionalPDFStore((s) => s.setScrollTo);
 
   return (
-    <button
-      className={cn(
-        CITATION_CHIP_CLASSES,
-        isActive && "bg-primary/25 hover:bg-primary/25",
-      )}
+    <Button
+      className="align-baseline"
       onClick={() => {
         detached(
           (async () => {
@@ -165,49 +168,17 @@ const PdfChip = ({ workspaceId, justification, citation }: PdfChipProps) => {
       onMouseEnter={() => {
         createBoundingBoxes();
       }}
-      type="button"
+      variant="plain"
     >
-      p.&nbsp;{citation.pageNumber}
-    </button>
-  );
-};
-
-type DecisionPassageChipProps = {
-  citation: Extract<Citation, { kind: "decision-passage" }>;
-  onOpen: (anchorId: string) => void;
-};
-
-/**
- * The passage of a decision an answer leaned on. Pressing it opens the
- * decision at that paragraph with the reader's highlight on it, the way a
- * page chip opens a file at its page.
- */
-const DecisionPassageChip = ({
-  citation,
-  onOpen,
-}: DecisionPassageChipProps) => {
-  const trimmed = citation.excerpt.trim();
-  const preview =
-    trimmed.length > DOCX_CHIP_PREVIEW_CHARS
-      ? `${trimmed.slice(0, DOCX_CHIP_PREVIEW_CHARS).trimEnd()}…`
-      : trimmed || "¶";
-
-  return (
-    <Tooltip
-      content={trimmed || undefined}
-      render={
-        <button
-          className={cn(CITATION_CHIP_CLASSES, "max-w-[16rem] truncate")}
-          dir="auto"
-          onClick={() => onOpen(citation.anchorId)}
-          type="button"
-        >
-          {"“"}
-          {preview}
-          {"”"}
-        </button>
-      }
-    />
+      <span
+        className={cn(
+          CITATION_CHIP_CLASSES,
+          isActive && "bg-primary/25 hover:bg-primary/25",
+        )}
+      >
+        p.&nbsp;{citation.pageNumber}
+      </span>
+    </Button>
   );
 };
 
@@ -233,8 +204,10 @@ const DocxQuote = ({ citation }: DocxQuoteProps) => {
       <Tooltip
         content={t("common.unverifiedCitationHint")}
         render={
-          <span className="text-muted-foreground text-2xs inline-flex max-w-[16rem] items-center gap-1 truncate align-baseline font-medium italic underline decoration-dotted underline-offset-2">
-            “{preview}” · {t("common.unverified")}
+          <span className="text-muted-foreground text-2xs inline-flex max-w-[16rem] items-center gap-1 align-baseline font-medium italic underline decoration-dotted underline-offset-2">
+            <TruncatedText>
+              “{preview}” · {t("common.unverified")}
+            </TruncatedText>
           </span>
         }
       />
@@ -244,8 +217,8 @@ const DocxQuote = ({ citation }: DocxQuoteProps) => {
     <Tooltip
       content={trimmed || undefined}
       render={
-        <button
-          className={cn(CITATION_CHIP_CLASSES, "max-w-[16rem] truncate")}
+        <Button
+          className="max-w-[16rem] align-baseline"
           data-block-id={citation.blockId}
           onClick={() => {
             // Inspector peek path reads `pendingBlockScroll` from the
@@ -267,10 +240,15 @@ const DocxQuote = ({ citation }: DocxQuoteProps) => {
               }),
             );
           }}
-          type="button"
+          variant="plain"
         >
-          “{preview}”
-        </button>
+          <TruncatedText
+            className={cn(CITATION_CHIP_CLASSES, "block")}
+            hint={false}
+          >
+            “{preview}”
+          </TruncatedText>
+        </Button>
       }
     />
   );

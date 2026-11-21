@@ -12,6 +12,7 @@ import {
   brandPersistedUserId,
   brandPersistedWorkspaceId,
 } from "@/api/lib/safe-id-boundaries";
+import { typedPgArray } from "@/api/lib/search/sql";
 
 export const MEMORY_EXTRACTION_BATCH_SIZE = 25;
 export const MEMORY_EXTRACTION_PER_ORGANIZATION_LIMIT = 3;
@@ -155,10 +156,8 @@ type BuildSettleMemoryExtractionQueueQueryOptions = {
  * of erasing the wakeup; the CAS is per row, so one statement settles the whole
  * batch without any tenant borrowing another's outcome.
  *
- * The ids go in as a single array parameter rather than a list of binds, so the
- * statement's shape does not change with the batch size. `sql.param` is
- * load-bearing: a bare array is expanded into one bind per element, which would
- * put the cast on the last one alone.
+ * Construct an explicit SQL array: the Bun SQL driver does not encode a raw
+ * JavaScript array parameter as a PostgreSQL text array.
  */
 export const buildSettleMemoryExtractionQueueQuery = ({
   leaseExpiresAt,
@@ -183,7 +182,7 @@ export const buildSettleMemoryExtractionQueueQuery = ({
     ) THEN ${now}::timestamptz
     ELSE NULL
   END
-  WHERE settings.organization_id = ANY(${sql.param([...organizationIds])}::text[])
+  WHERE settings.organization_id = ANY(${typedPgArray(organizationIds, "text")})
     AND settings.memory_extraction_enabled = true
     AND settings.memory_extraction_enabled_at IS NOT NULL
     AND settings.memory_extraction_scheduled_at = ${leaseExpiresAt}::timestamptz

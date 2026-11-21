@@ -10,7 +10,9 @@
  * - an optimistic `<entity-mention>` tag in a just-sent message: the same;
  * - a persisted or streamed markdown href: identity and label only (a kind
  *   never crosses the API's trust boundary into persisted text), so the kind
- *   comes from the session's carried hints or a background read.
+ *   comes from the session's carried hints or a background read. The href
+ *   is read by `referenceFromHref` in `@stll/api-contract/chat-reference`,
+ *   which the phone reads chat text with too.
  *
  * The visual rule (`resolveReferenceVisual`): the glyph says what the
  * reference is (kind icon; a person's avatar), and a reference that belongs
@@ -21,187 +23,29 @@
 import { panic } from "better-result";
 
 import {
-  CHAT_DECISION_PASSAGE_HREF_PREFIX,
+  isChatSourceScopeKind,
   isEntityKind,
-  parseChatDecisionPassageHref,
-  parseChatResourceHref,
+  parseChatSourceScopeId,
   RESOURCE_TYPE,
   resourceRef,
-  SKILL_REF_HREF_PREFIX,
   toChatMentionResourceHref,
   toChatResourceHref,
+  toChatSourceScopeHref,
 } from "@stll/api-contract";
-import type { ChatMentionResourceHref, EntityKind } from "@stll/api-contract";
+import type {
+  ChatCorpusScope,
+  ChatMentionResourceHref,
+  EntityKind,
+} from "@stll/api-contract";
 import type { CaseLawDecisionRouteParams } from "@stll/api-contract/case-law-decision-route";
+import {
+  entityDisplayLabel,
+  sourceScopeReference,
+} from "@stll/api-contract/chat-reference-href";
+import type { ChatReference } from "@stll/api-contract/chat-reference-href";
 
-import type { CaseLawDecisionLocator } from "@/components/chat/case-law-open";
 import type { EntityIconSource } from "@/components/workspaces/entity-kind-icon";
-import { PDF_MIME_TYPE } from "@/consts";
-import { DOCX_MIME } from "@/lib/consts";
 import { toSafeId } from "@/lib/safe-id";
-
-export type ChatReference =
-  | {
-      type: "entity";
-      entityId: string;
-      /** The matter the entity lives in; null when no source names it. */
-      matterId: string | null;
-      label: string;
-      /** Carried kind; null when the source does not carry one. */
-      entityKind: EntityKind | null;
-      mimeType: string | null;
-    }
-  | { type: "matter"; matterId: string; label: string }
-  | {
-      type: "decision";
-      locator: CaseLawDecisionLocator;
-      /** A passage of the decision the reference points into. */
-      anchorId: string | null;
-      label: string;
-    }
-  | { type: "skill"; slug: string; label: string }
-  | { type: "user"; userId: string; label: string };
-
-export type ChatReferenceType = ChatReference["type"];
-
-/** What a source string resolved to: a reference, a reference the server
- * marked unresolvable (renders as its plain label), or not a reference. */
-export type ParsedReference =
-  | { type: "reference"; reference: ChatReference }
-  | { type: "unresolved" }
-  | null;
-
-// --- Hrefs ------------------------------------------------------------------
-
-/**
- * The server rewrites a citation whose ref was never minted this turn to this
- * href (`CHAT_UNRESOLVED_REF_HREF` in the API's ref registry): a fabricated
- * or mangled mention must render as plain text, never as a real-looking chip.
- */
-export const UNRESOLVED_REFERENCE_HREF = "#stella-unresolved-ref";
-// Model-facing per-turn refs persisted by older builds. A stable UUID behind
-// them is still a reference; a per-turn token (`ent_99`) is not.
-const LEGACY_ENTITY_REF_PREFIX = "#stella-entity-ref=";
-const LEGACY_MATTER_REF_PREFIX = "#stella-workspace-ref=";
-const UUID_SHAPE_REGEX =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu;
-
-/** Whether an href is one this module turns into a reference (or into the
- * plain label of an unresolvable one). */
-export const isReferenceHref = (href: string): boolean =>
-  href === UNRESOLVED_REFERENCE_HREF ||
-  parseChatResourceHref(href) !== null ||
-  parseChatDecisionPassageHref(href) !== null ||
-  href.startsWith(LEGACY_ENTITY_REF_PREFIX) ||
-  href.startsWith(LEGACY_MATTER_REF_PREFIX) ||
-  href.startsWith(SKILL_REF_HREF_PREFIX);
-
-type HrefContext = {
-  /** The matter the surface renders in, for an entity href that names none. */
-  renderWorkspaceId?: string | undefined;
-};
-
-export const referenceFromHref = (
-  href: string,
-  label: string,
-  { renderWorkspaceId }: HrefContext = {},
-): ParsedReference => {
-  if (href === UNRESOLVED_REFERENCE_HREF) {
-    return { type: "unresolved" };
-  }
-
-  if (href.startsWith(LEGACY_ENTITY_REF_PREFIX)) {
-    const raw = href.slice(LEGACY_ENTITY_REF_PREFIX.length);
-    const separator = raw.indexOf(":");
-    const entityId = separator === -1 ? raw : raw.slice(separator + 1);
-    if (!UUID_SHAPE_REGEX.test(entityId)) {
-      return { type: "unresolved" };
-    }
-    return asReference({
-      type: "entity",
-      entityId,
-      matterId:
-        separator === -1
-          ? (renderWorkspaceId ?? null)
-          : raw.slice(0, separator),
-      label,
-      entityKind: null,
-      mimeType: null,
-    });
-  }
-
-  if (href.startsWith(LEGACY_MATTER_REF_PREFIX)) {
-    const matterId = href.slice(LEGACY_MATTER_REF_PREFIX.length);
-    return UUID_SHAPE_REGEX.test(matterId)
-      ? asReference({ type: "matter", matterId, label })
-      : { type: "unresolved" };
-  }
-
-  const passage = parseChatDecisionPassageHref(href);
-  if (passage !== null) {
-    // A model occasionally emits a degenerate citation whose text is the bare
-    // href or is empty; the anchor is the decision's own paragraph marker, so
-    // it reads as a locator rather than as the internal scheme.
-    const text = label.trim();
-    return asReference({
-      type: "decision",
-      locator: { type: "ref", ref: passage.decisionId },
-      anchorId: passage.anchorId,
-      label:
-        text.length === 0 ||
-        text.toLowerCase().startsWith(CHAT_DECISION_PASSAGE_HREF_PREFIX)
-          ? passage.anchorId
-          : label,
-    });
-  }
-
-  if (href.startsWith(SKILL_REF_HREF_PREFIX)) {
-    const slug = href.slice(SKILL_REF_HREF_PREFIX.length);
-    return slug.length > 0 ? asReference({ type: "skill", slug, label }) : null;
-  }
-
-  const target = parseChatResourceHref(href);
-  if (target === null) {
-    return null;
-  }
-  switch (target.type) {
-    case RESOURCE_TYPE.ENTITY:
-      return asReference({
-        type: "entity",
-        entityId: target.resource.id,
-        matterId:
-          target.location.type === "workspace"
-            ? target.location.workspace.id
-            : (renderWorkspaceId ?? null),
-        label,
-        entityKind: null,
-        mimeType: null,
-      });
-    case RESOURCE_TYPE.WORKSPACE:
-      return asReference({
-        type: "matter",
-        matterId: target.resource.id,
-        label,
-      });
-    case RESOURCE_TYPE.CASE_LAW_DECISION:
-      return asReference({
-        type: "decision",
-        locator: { type: "ref", ref: target.resource.id },
-        anchorId: null,
-        label,
-      });
-    case RESOURCE_TYPE.USER:
-      return asReference({ type: "user", userId: target.resource.id, label });
-    default:
-      target satisfies never;
-      return panic(`Unhandled reference target: ${String(target)}`);
-  }
-};
-
-const asReference = (value: ChatReference): ParsedReference => ({
-  type: "reference",
-  reference: value,
-});
 
 /** A link to one of this app's own decision pages, opened in-app. */
 export const referenceFromDecisionRoute = (
@@ -210,18 +54,7 @@ export const referenceFromDecisionRoute = (
 ): ChatReference => ({
   type: "decision",
   locator: { type: "route", params },
-  anchorId: null,
-  label,
-});
-
-/** A decision stella holds, by its id (a publisher's URL for it, say). */
-export const referenceFromDecisionId = (
-  decisionId: string,
-  label: string,
-): ChatReference => ({
-  type: "decision",
-  locator: { type: "ref", ref: decisionId },
-  anchorId: null,
+  paragraph: null,
   label,
 });
 
@@ -248,6 +81,16 @@ export const entityReferenceHref = ({
     },
   });
 
+/** The durable href of a case-law decision, as an answer's text carries it. */
+export const decisionReferenceHref = (decisionId: string): string =>
+  toChatResourceHref({
+    type: RESOURCE_TYPE.CASE_LAW_DECISION,
+    resource: resourceRef({
+      type: RESOURCE_TYPE.CASE_LAW_DECISION,
+      id: toSafeId<"caseLawDecision">(decisionId),
+    }),
+  });
+
 // --- Composer mention attrs ---------------------------------------------------
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -269,7 +112,12 @@ const readString = (
  */
 export const referenceFromMentionAttrs = (
   attrs: unknown,
-  { renderWorkspaceId }: HrefContext = {},
+  {
+    renderWorkspaceId,
+  }: {
+    /** The matter the surface renders in, for an entity attrs name none. */
+    renderWorkspaceId?: string | undefined;
+  } = {},
 ): ChatReference | null => {
   if (!isRecord(attrs)) {
     return null;
@@ -280,6 +128,10 @@ export const referenceFromMentionAttrs = (
   if (id === null) {
     return null;
   }
+  if (isChatSourceScopeKind(category)) {
+    const scope = parseChatSourceScopeId(category, id);
+    return scope === null ? null : sourceScopeReference(scope, label);
+  }
   switch (category) {
     case "workspace":
       return { type: "matter", matterId: id, label };
@@ -287,7 +139,7 @@ export const referenceFromMentionAttrs = (
       return {
         type: "decision",
         locator: { type: "ref", ref: id },
-        anchorId: null,
+        paragraph: null,
         label,
       };
     case "entity": {
@@ -335,6 +187,10 @@ export const mentionAttrsToHref = (attrs: unknown): string | null => {
   if (id === null || category === null) {
     return null;
   }
+  if (isChatSourceScopeKind(category)) {
+    const scope = parseChatSourceScopeId(category, id);
+    return scope === null ? null : toChatSourceScopeHref(scope);
+  }
   switch (category) {
     case "workspace":
       return toChatResourceHref({
@@ -345,13 +201,7 @@ export const mentionAttrsToHref = (attrs: unknown): string | null => {
         }),
       });
     case "decision":
-      return toChatResourceHref({
-        type: RESOURCE_TYPE.CASE_LAW_DECISION,
-        resource: resourceRef({
-          type: RESOURCE_TYPE.CASE_LAW_DECISION,
-          id: toSafeId<"caseLawDecision">(id),
-        }),
-      });
+      return decisionReferenceHref(id);
     case "entity": {
       const sourceWorkspaceId = readString(attrs, "sourceWorkspaceId");
       return sourceWorkspaceId === null
@@ -399,6 +249,9 @@ export type ReferenceGlyph =
   | { type: "matter" }
   | { type: "decision" }
   | { type: "skill" }
+  | { type: "corpus"; corpus: ChatCorpusScope["corpus"] }
+  | { type: "registry" }
+  | { type: "connector" }
   | { type: "user"; name: string; image: string | null; deleted: boolean };
 
 export type ReferenceMatterColor =
@@ -414,37 +267,6 @@ export type ReferenceVisual =
       matter: ReferenceMatterColor;
       label: string;
     };
-
-const DOCUMENT_EXTENSION_MIME: Readonly<Record<string, string>> = {
-  csv: "text/csv",
-  doc: "application/msword",
-  docx: DOCX_MIME,
-  gif: "image/gif",
-  jpeg: "image/jpeg",
-  jpg: "image/jpeg",
-  odt: "application/vnd.oasis.opendocument.text",
-  pdf: PDF_MIME_TYPE,
-  png: "image/png",
-  rtf: "application/rtf",
-  webp: "image/webp",
-  xls: "application/vnd.ms-excel",
-  xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-};
-const DOCUMENT_EXTENSION_REGEX = /\.(?<ext>[A-Za-z0-9]{1,8})$/u;
-
-/** An entity label without a known file extension: the icon says the type. */
-export const entityDisplayLabel = (label: string): string => {
-  const extension = DOCUMENT_EXTENSION_REGEX.exec(label.trim())?.groups?.[
-    "ext"
-  ];
-  if (
-    extension === undefined ||
-    DOCUMENT_EXTENSION_MIME[extension.toLowerCase()] === undefined
-  ) {
-    return label;
-  }
-  return label.trim().replace(DOCUMENT_EXTENSION_REGEX, "");
-};
 
 const entityGlyphSource = (
   reference: Extract<ChatReference, { type: "entity" }>,
@@ -528,6 +350,21 @@ export const resolveReferenceVisual = (
         matter: { type: "none" },
         label: reference.label,
       };
+    case "corpus":
+      return {
+        type: "chip",
+        glyph: { type: "corpus", corpus: reference.scope.corpus },
+        matter: { type: "none" },
+        label: reference.label,
+      };
+    case "registry":
+    case "connector":
+      return {
+        type: "chip",
+        glyph: { type: reference.type },
+        matter: { type: "none" },
+        label: reference.label,
+      };
     case "user":
       // Only people the viewer's organization lists get a person chip; any
       // other id stays the plain text the message already shows.
@@ -563,6 +400,9 @@ export const referenceMatterId = (reference: ChatReference): string | null => {
       return reference.matterId;
     case "decision":
     case "skill":
+    case "corpus":
+    case "registry":
+    case "connector":
     case "user":
       return null;
     default:

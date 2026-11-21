@@ -1,7 +1,9 @@
 import {
   Fragment,
+  type ReactNode,
   type RefObject,
   useCallback,
+  useDeferredValue,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -9,7 +11,7 @@ import {
 } from "react";
 
 import { autoScrollForElements } from "@atlaskit/pragmatic-drag-and-drop-auto-scroll/element";
-import { extractClosestEdge } from "@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge";
+import { extractClosestEdge } from "@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge/extract-closest-edge";
 import { monitorForElements } from "@atlaskit/pragmatic-drag-and-drop/adapter/element-adapter";
 import { combine } from "@atlaskit/pragmatic-drag-and-drop/utils/combine";
 import { useVirtualizer } from "@tanstack/react-virtual";
@@ -31,6 +33,10 @@ import type {
   WorkspaceTable as WorkspaceTableType,
 } from "@/components/workspaces/table/types";
 import {
+  WORKSPACE_TABLE_FRAME_CLASS,
+  WORKSPACE_TABLE_GRID_CLASS,
+  WORKSPACE_TABLE_SCROLL_CLASS,
+  WORKSPACE_TABLE_SCROLL_SLOT,
   WorkspaceGridFillerCell,
   WorkspaceGridRow,
 } from "@/components/workspaces/table/workspace-grid";
@@ -52,6 +58,7 @@ import type { HorizontalScrollMetrics } from "@/components/workspaces/table/work
 import {
   ADD_PROPERTY_RAIL_ACTIVE_CLASS_NAME,
   TABLE_ROW_ESTIMATE_PX,
+  TABLE_ROW_FIRST_PAINT_OVERSCAN,
   TABLE_ROW_OVERSCAN,
 } from "@/components/workspaces/table/workspace-table/internals";
 import type {
@@ -66,11 +73,15 @@ import {
   getRequiredHeader,
   getScrollableAncestor,
   getVerticalScrollbarWidth,
+  getWorkspaceGridColumnMetadata,
   getWorkspaceGridTemplateColumns,
   TABLE_COLUMN_DRAG_TYPE,
   toColumnDropEdge,
 } from "@/components/workspaces/table/workspace-table/internals-helpers";
-import { tableRowWindow } from "@/components/workspaces/table/workspace-table/row-window.logic";
+import {
+  measureFlowRow,
+  tableRowWindow,
+} from "@/components/workspaces/table/workspace-table/row-window.logic";
 import { WorkspaceTableSkeletonRows } from "@/components/workspaces/table/workspace-table/skeleton-rows";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { TOOLBAR_ROW_HEIGHT_PX } from "@/lib/consts";
@@ -83,6 +94,8 @@ type WorkspaceTableProps<TRow extends TableRowData> = {
    * ordinal of its page, so page three does not count from one again.
    */
   firstRowNumber?: number;
+  getRowSelectionLabel?: ((row: TRow) => string) | undefined;
+  selectAllLabel?: string | undefined;
   /** Everything that depends on what a row is; see `TableRowHost`. */
   rowHost: TableRowHost<TRow>;
   contentMode: TableContentMode;
@@ -103,6 +116,12 @@ type WorkspaceTableProps<TRow extends TableRowData> = {
   // last result instead, so grouped sections and the public results list opt
   // out. The add-column rail is drawn beside the table either way.
   fillHeight?: boolean;
+  // What stands where the rows would be when the table holds none and waits
+  // for none: right under the headers, in place of the body. While it shows,
+  // the body does not scroll sideways (no row lies beyond the edge to scroll
+  // to) and claims no height of its own, so neither a scrollbar nor a blank
+  // band separates the headers from it. Omitted, an empty body stays empty.
+  emptyState?: ReactNode;
   // When set, the table flows inside this shared scroll container instead of
   // owning its own scroll box. Grouped sections pass the single grouped-view
   // scroller so every group shares one vertical/horizontal scroll (nested
@@ -129,7 +148,10 @@ export const WorkspaceTable = <TRow extends TableRowData = TableTreeNode>({
   skeletonRowCount = 0,
   stickyColumnHeader = true,
   fillHeight = true,
+  emptyState,
   firstRowNumber = 1,
+  getRowSelectionLabel,
+  selectAllLabel,
   outerScrollRef,
 }: WorkspaceTableProps<TRow>) => {
   const inlineFlow = outerScrollRef !== undefined;
@@ -274,6 +296,12 @@ export const WorkspaceTable = <TRow extends TableRowData = TableTreeNode>({
     (index: number) => rowModel.rows.at(index)?.id ?? `table-row-${index}`,
     [rowModel.rows],
   );
+  // React's initial value: the first commit mounts the rows on screen, and
+  // the scroll buffer mounts in a background render after that paint.
+  const overscan = useDeferredValue(
+    TABLE_ROW_OVERSCAN,
+    TABLE_ROW_FIRST_PAINT_OVERSCAN,
+  );
   const rowVirtualizer = useVirtualizer({
     count: rowModel.rows.length,
     getScrollElement: () => {
@@ -287,8 +315,8 @@ export const WorkspaceTable = <TRow extends TableRowData = TableTreeNode>({
     },
     estimateSize: () => TABLE_ROW_ESTIMATE_PX,
     getItemKey: getVirtualRowKey,
-    measureElement: (element) => element.getBoundingClientRect().height,
-    overscan: TABLE_ROW_OVERSCAN,
+    measureElement: measureFlowRow,
+    overscan,
     scrollMargin: inlineFlow ? scrollMargin : 0,
     ...(inlineFlow && { scrollToFn: noopScrollTo }),
   });
@@ -384,6 +412,10 @@ export const WorkspaceTable = <TRow extends TableRowData = TableTreeNode>({
   // Rows that are on their way stand in the grid; rows that are on screen stay
   // on screen, so a refetch over a drawn result set never draws both.
   const showsSkeletonRows = skeletonRowCount > 0 && rowModel.rows.length === 0;
+  const showsEmptyState =
+    emptyState !== undefined &&
+    rowModel.rows.length === 0 &&
+    !showsSkeletonRows;
   const orderedColumns = getOrderedColumns({
     startColumns: table.getStartLeafColumns(),
     centerColumns: table.getCenterLeafColumns(),
@@ -401,7 +433,10 @@ export const WorkspaceTable = <TRow extends TableRowData = TableTreeNode>({
   const renderColumns = orderedColumns.filter(
     (column) => column.id !== addPropertyColId,
   );
-  const visibleColumnCount = renderColumns.length + (addPropertyColumn ? 1 : 0);
+  const columnMetadata = getWorkspaceGridColumnMetadata({
+    renderColumns,
+    addPropertyColumn,
+  });
   const tableWidth = orderedColumns.reduce(
     (sum, column) => sum + column.getSize(),
     0,
@@ -577,25 +612,27 @@ export const WorkspaceTable = <TRow extends TableRowData = TableTreeNode>({
   return (
     <div
       className={cn(
-        "relative",
-        !inlineFlow && "h-full flex-1",
+        inlineFlow ? "relative" : WORKSPACE_TABLE_FRAME_CLASS,
+        showsEmptyState && "flex flex-col",
         addPropertyColumn && ADD_PROPERTY_RAIL_ACTIVE_CLASS_NAME,
       )}
     >
       <div
         className={cn(
-          inlineFlow ? "w-full" : "scrollbar-subtle h-full overflow-auto",
+          showsEmptyState && "shrink-0 overflow-hidden",
+          !showsEmptyState &&
+            (inlineFlow ? "w-full" : WORKSPACE_TABLE_SCROLL_CLASS),
         )}
-        data-slot="workspace-table-scroll"
+        data-slot={WORKSPACE_TABLE_SCROLL_SLOT}
         ref={tableWrapperRef}
       >
         <div
           aria-busy={showsSkeletonRows || undefined}
-          aria-colcount={visibleColumnCount}
+          aria-colcount={columnMetadata.columnCount}
           aria-rowcount={rowModel.rows.length}
           className={cn(
-            "relative flex flex-col text-sm",
-            !inlineFlow && "min-h-full",
+            WORKSPACE_TABLE_GRID_CLASS,
+            !inlineFlow && !showsEmptyState && "min-h-full",
           )}
           role="grid"
           style={gridStyle}
@@ -606,6 +643,7 @@ export const WorkspaceTable = <TRow extends TableRowData = TableTreeNode>({
               stickyColumnHeader && "sticky top-0",
             )}
             ref={headerRowsRef}
+            role="rowgroup"
           >
             {table.getHeaderGroups().map((headerGroup) => (
               <WorkspaceGridRow key={headerGroup.id}>
@@ -617,6 +655,7 @@ export const WorkspaceTable = <TRow extends TableRowData = TableTreeNode>({
                       index={index}
                       key={header.id}
                       onToggleSelectAll={handleToggleSelectAll}
+                      selectAllLabel={selectAllLabel}
                       selectAllState={selectAllState}
                     />
                   ),
@@ -633,15 +672,20 @@ export const WorkspaceTable = <TRow extends TableRowData = TableTreeNode>({
                       addPropertyColumn.id,
                     )}
                     headerTrigger={addColumnHeaderTrigger}
-                    index={renderColumns.length}
+                    index={columnMetadata.addPropertyColumnIndex - 1}
                     onToggleSelectAll={handleToggleSelectAll}
+                    selectAllLabel={selectAllLabel}
                     selectAllState={selectAllState}
                   />
                 )}
               </WorkspaceGridRow>
             ))}
           </div>
-          <div className="flex flex-1 flex-col" ref={rowsContainerRef}>
+          <div
+            className="flex flex-1 flex-col"
+            ref={rowsContainerRef}
+            role="rowgroup"
+          >
             {paddingTop > 0 && (
               <WorkspaceGridRow className="pointer-events-none">
                 <WorkspaceGridFillerCell
@@ -678,6 +722,7 @@ export const WorkspaceTable = <TRow extends TableRowData = TableTreeNode>({
                     renderColumns,
                     row,
                     rowLabel: rowLabels[index] ?? "",
+                    selectionLabel: getRowSelectionLabel?.(row.original),
                     table,
                   })}
                 </Fragment>
@@ -725,6 +770,11 @@ export const WorkspaceTable = <TRow extends TableRowData = TableTreeNode>({
           </div>
         </div>
       </div>
+      {showsEmptyState && (
+        <div className="flex flex-1 justify-center px-4 py-8">
+          <div className="w-full max-w-md">{emptyState}</div>
+        </div>
+      )}
       {!inlineFlow &&
         addPropertyColumn !== null &&
         rowHost.addColumnRail !== undefined && (

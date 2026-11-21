@@ -7,14 +7,15 @@ import {
   type LoadedCatalogueEntry,
   type LoadedEntryByKind,
 } from "@stll/catalogue";
+import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 import { Button } from "@stll/ui/button";
 
+import { MarkdownSectionPending } from "@/features/knowledge/public/tools/markdown-page.pending";
 import {
   buildMcpConfigSnippet,
   githubSkillTreeUrl,
 } from "@/features/knowledge/public/tools/tool-detail.logic";
 import { publicToolDownloadPath } from "@/lib/knowledge/public-tools-path";
-import { sanitizeHref } from "@/lib/sanitize-href";
 
 const ToolMarkdown = lazy(async () => ({
   default: (await import("@/features/knowledge/public/tools/tool-markdown"))
@@ -30,7 +31,7 @@ const CopyButton = lazy(async () => ({
 export const InstallButtonPlaceholder = () => {
   const t = useTranslations();
   return (
-    <Button disabled type="button">
+    <Button disabled disabledReason={t("common.loading")} type="button">
       {t("publicTools.addToStella")}
     </Button>
   );
@@ -101,7 +102,7 @@ export const ToolContent = ({
 
   if (markdown !== null) {
     return (
-      <Suspense fallback={<ContentLoading />}>
+      <Suspense fallback={<MarkdownSectionPending />}>
         <ToolMarkdown markdown={markdown} />
       </Suspense>
     );
@@ -177,12 +178,5 @@ const McpConfig = ({ entry }: { entry: LoadedEntryByKind<"mcp"> }) => {
         )}
       </div>
     </section>
-  );
-};
-
-const ContentLoading = () => {
-  const t = useTranslations();
-  return (
-    <p className="text-muted-foreground text-sm">{t("publicTools.content")}</p>
   );
 };

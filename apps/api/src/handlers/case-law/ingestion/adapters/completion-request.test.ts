@@ -2,7 +2,9 @@ import { Result } from "better-result";
 import { afterEach, describe, expect, mock, test } from "bun:test";
 
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
+import { HAPPY_PATH_TIMEOUT_MS } from "@/api/tests/test-timeouts";
 
 import { withPublisherRequestRateLimit } from "./publisher-policy";
 import {
@@ -11,9 +13,10 @@ import {
   PublisherRateLimitRefusalError,
 } from "./retry";
 
-const originalFetch = globalThis.fetch;
+const testFetchState = createTestFetch();
+
 afterEach(() => {
-  globalThis.fetch = originalFetch;
+  testFetchState.restore();
 });
 const target = "https://publications.europa.eu/completion-fixture";
 const fixture = (failCooldown = false) => {
@@ -89,11 +92,13 @@ describe("completion request boundary", () => {
     const state = fixture();
     const sent: number[] = [];
     let charged = 0;
-    globalThis.fetch = asFetchMock(
-      mock(async () => {
-        sent.push(state.now());
-        return new Response("fixture");
-      }),
+    testFetchState.set(
+      asFetchMock(
+        mock(async () => {
+          sent.push(state.now());
+          return new Response("fixture");
+        }),
+      ),
     );
     await withPublisherRequestRateLimit({
       gateId: "cellar-eu",
@@ -112,12 +117,12 @@ describe("completion request boundary", () => {
         await fetchPublisher(target, {
           adapterKey: ADAPTER_KEYS.EU_ECJ,
           fetchStage: "document",
-          timeoutMs: 1000,
+          timeoutMs: HAPPY_PATH_TIMEOUT_MS,
         });
         await fetchPublisher(target, {
           adapterKey: ADAPTER_KEYS.EU_ECJ,
           fetchStage: "document",
-          timeoutMs: 1000,
+          timeoutMs: HAPPY_PATH_TIMEOUT_MS,
         });
       },
     });
@@ -128,14 +133,16 @@ describe("completion request boundary", () => {
     async (status) => {
       const state = fixture();
       let sent = 0;
-      globalThis.fetch = asFetchMock(
-        mock(async () => {
-          sent++;
-          return new Response(null, {
-            status,
-            headers: { "Retry-After": "60" },
-          });
-        }),
+      testFetchState.set(
+        asFetchMock(
+          mock(async () => {
+            sent++;
+            return new Response(null, {
+              status,
+              headers: { "Retry-After": "60" },
+            });
+          }),
+        ),
       );
       const response = await Result.tryPromise({
         try: async () =>
@@ -148,7 +155,7 @@ describe("completion request boundary", () => {
               await fetchPublisher(target, {
                 adapterKey: ADAPTER_KEYS.EU_ECJ,
                 fetchStage: "document",
-                timeoutMs: 1000,
+                timeoutMs: HAPPY_PATH_TIMEOUT_MS,
               }),
           }),
         catch: (error) => error,
@@ -169,11 +176,13 @@ describe("completion request boundary", () => {
       const state = fixture();
       const failure = new TypeError(`fixture ${stage} refused`);
       let requests = 0;
-      globalThis.fetch = asFetchMock(
-        mock(async () => {
-          requests++;
-          return new Response("unexpected request");
-        }),
+      testFetchState.set(
+        asFetchMock(
+          mock(async () => {
+            requests++;
+            return new Response("unexpected request");
+          }),
+        ),
       );
       const result = await Result.tryPromise({
         try: async () =>
@@ -194,7 +203,7 @@ describe("completion request boundary", () => {
               await fetchPublisher(target, {
                 adapterKey: ADAPTER_KEYS.EU_ECJ,
                 fetchStage: "document",
-                timeoutMs: 1000,
+                timeoutMs: HAPPY_PATH_TIMEOUT_MS,
               }),
           }),
         catch: (error) => error,
@@ -210,14 +219,16 @@ describe("completion request boundary", () => {
   test("a refusal remains latched when cooldown persistence fails", async () => {
     const state = fixture(true);
     let requests = 0;
-    globalThis.fetch = asFetchMock(
-      mock(async () => {
-        requests++;
-        return new Response(null, {
-          status: 429,
-          headers: { "Retry-After": "60" },
-        });
-      }),
+    testFetchState.set(
+      asFetchMock(
+        mock(async () => {
+          requests++;
+          return new Response(null, {
+            status: 429,
+            headers: { "Retry-After": "60" },
+          });
+        }),
+      ),
     );
     await withPublisherRequestRateLimit({
       gateId: "cellar-eu",
@@ -230,7 +241,7 @@ describe("completion request boundary", () => {
             await fetchPublisher(target, {
               adapterKey: ADAPTER_KEYS.EU_ECJ,
               fetchStage: "document",
-              timeoutMs: 1000,
+              timeoutMs: HAPPY_PATH_TIMEOUT_MS,
             }),
         );
         const second = await Result.tryPromise(
@@ -238,7 +249,7 @@ describe("completion request boundary", () => {
             await fetchPublisher(target, {
               adapterKey: ADAPTER_KEYS.EU_ECJ,
               fetchStage: "document",
-              timeoutMs: 1000,
+              timeoutMs: HAPPY_PATH_TIMEOUT_MS,
             }),
         );
         expect(first.isErr()).toBe(true);
@@ -252,14 +263,16 @@ describe("completion request boundary", () => {
   test("429 ends one request and retains a Retry-After longer than ordinary retry caps", async () => {
     const state = fixture();
     let requests = 0;
-    globalThis.fetch = asFetchMock(
-      mock(async () => {
-        requests++;
-        return new Response("refused", {
-          status: 429,
-          headers: { "Retry-After": "7200" },
-        });
-      }),
+    testFetchState.set(
+      asFetchMock(
+        mock(async () => {
+          requests++;
+          return new Response("refused", {
+            status: 429,
+            headers: { "Retry-After": "7200" },
+          });
+        }),
+      ),
     );
     const result = await Result.tryPromise({
       try: async () =>
@@ -272,7 +285,7 @@ describe("completion request boundary", () => {
             await fetchPublisher(target, {
               adapterKey: ADAPTER_KEYS.EU_ECJ,
               fetchStage: "document",
-              timeoutMs: 1000,
+              timeoutMs: HAPPY_PATH_TIMEOUT_MS,
             }),
         }),
       catch: (error) => error,
@@ -290,14 +303,16 @@ describe("completion request boundary", () => {
   test("publisher-backoff preserves refusal redirects before the redirect can be followed", async () => {
     const state = fixture();
     const visited: string[] = [];
-    globalThis.fetch = asFetchMock(
-      mock(async (input) => {
-        visited.push(String(input));
-        return new Response(null, {
-          status: 302,
-          headers: { Location: `${target}/final`, "Retry-After": "60" },
-        });
-      }),
+    testFetchState.set(
+      asFetchMock(
+        mock(async (input) => {
+          visited.push(String(input));
+          return new Response(null, {
+            status: 302,
+            headers: { Location: `${target}/final`, "Retry-After": "60" },
+          });
+        }),
+      ),
     );
     const result = await Result.tryPromise({
       try: async () =>
@@ -310,7 +325,7 @@ describe("completion request boundary", () => {
             await fetchPublisher(target, {
               adapterKey: ADAPTER_KEYS.EU_ECJ,
               fetchStage: "document",
-              timeoutMs: 1000,
+              timeoutMs: HAPPY_PATH_TIMEOUT_MS,
               retryPolicy: "publisher-backoff",
               isRateLimitRedirect: (response) => response.status === 302,
             }),
@@ -328,16 +343,18 @@ describe("completion request boundary", () => {
   test("redirects consume separate paced and persisted requests", async () => {
     const state = fixture();
     const visited: number[] = [];
-    globalThis.fetch = asFetchMock(
-      mock(async () => {
-        visited.push(state.now());
-        return visited.length === 1
-          ? new Response(null, {
-              status: 302,
-              headers: { Location: `${target}/final` },
-            })
-          : new Response("document");
-      }),
+    testFetchState.set(
+      asFetchMock(
+        mock(async () => {
+          visited.push(state.now());
+          return visited.length === 1
+            ? new Response(null, {
+                status: 302,
+                headers: { Location: `${target}/final` },
+              })
+            : new Response("document");
+        }),
+      ),
     );
     const response = await withPublisherRequestRateLimit({
       gateId: "cellar-eu",
@@ -348,7 +365,7 @@ describe("completion request boundary", () => {
         await fetchPublisher(target, {
           adapterKey: ADAPTER_KEYS.EU_ECJ,
           fetchStage: "document",
-          timeoutMs: 1000,
+          timeoutMs: HAPPY_PATH_TIMEOUT_MS,
         }),
     });
     expect(response.status).toBe(200);
@@ -358,11 +375,13 @@ describe("completion request boundary", () => {
   test("durable completion never loops a transient publisher answer", async () => {
     const state = fixture();
     let requests = 0;
-    globalThis.fetch = asFetchMock(
-      mock(async () => {
-        requests++;
-        return new Response("unavailable", { status: 503 });
-      }),
+    testFetchState.set(
+      asFetchMock(
+        mock(async () => {
+          requests++;
+          return new Response("unavailable", { status: 503 });
+        }),
+      ),
     );
     const response = await withPublisherRequestRateLimit({
       gateId: "cellar-eu",
@@ -383,15 +402,17 @@ describe("completion request boundary", () => {
   test("a kill after the first response prevents a redirected request", async () => {
     const state = fixture();
     let requests = 0;
-    globalThis.fetch = asFetchMock(
-      mock(async () => {
-        requests++;
-        state.disable();
-        return new Response(null, {
-          status: 302,
-          headers: { Location: `${target}/final` },
-        });
-      }),
+    testFetchState.set(
+      asFetchMock(
+        mock(async () => {
+          requests++;
+          state.disable();
+          return new Response(null, {
+            status: 302,
+            headers: { Location: `${target}/final` },
+          });
+        }),
+      ),
     );
     const result = await Result.tryPromise({
       try: async () =>
@@ -404,7 +425,7 @@ describe("completion request boundary", () => {
             await fetchPublisher(target, {
               adapterKey: ADAPTER_KEYS.EU_ECJ,
               fetchStage: "document",
-              timeoutMs: 1000,
+              timeoutMs: HAPPY_PATH_TIMEOUT_MS,
             }),
         }),
       catch: (error) => error,

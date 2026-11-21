@@ -9,10 +9,14 @@ import {
 } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
 
+import { user as authUser } from "@/api/db/auth-schema";
 import {
   BILLING_STATUS,
+  featureEnrolments,
+  INVOICE_PAYMENT_ORIGIN,
   INVOICE_STATUS,
   invoiceLines,
+  invoicePayments,
   invoices,
   timeEntries,
 } from "@/api/db/schema";
@@ -26,11 +30,17 @@ import updateLine from "@/api/handlers/invoices/lines/update";
 import listInvoices from "@/api/handlers/invoices/list";
 import transitionInvoice from "@/api/handlers/invoices/transition";
 import updateInvoice from "@/api/handlers/invoices/update";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
+import type { SafeHandlerLogContext } from "@/api/lib/api-handlers";
 import type { AuditEvent } from "@/api/lib/audit-log";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { cents } from "@/api/lib/money";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
+import {
+  removeIssuingSeller,
+  seedIssuingSeller,
+} from "@/api/tests/helpers/issuing-seller";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -44,10 +54,27 @@ let testDb: TestDatabase;
 let ids: TestIds;
 const seededEntries: SafeId<"timeEntry">[] = [];
 const seededIds: SafeId<"invoice">[] = [];
+let issuingSellerId: SafeId<"sellerProfile">;
 beforeAll(async () => {
   const fixture = await getRlsFixture();
   testDb = fixture.testDb;
   ids = fixture.ids;
+
+  await testDb
+    .update(authUser)
+    .set({ emailVerified: true })
+    .where(inArray(authUser.id, [ids.userA1]));
+  await testDb
+    .insert(featureEnrolments)
+    .values([
+      {
+        organizationId: ids.orgA,
+        userId: ids.userA1,
+        featureId: "time-billing",
+      },
+    ])
+    .onConflictDoNothing();
+  issuingSellerId = await seedIssuingSeller(testDb, ids.orgA);
 });
 afterAll(async () => {
   if (seededIds.length > 0) {
@@ -61,10 +88,42 @@ afterAll(async () => {
       .delete(timeEntries)
       .where(inArray(timeEntries.id, seededEntries));
   }
+  await removeIssuingSeller(testDb, issuingSellerId);
   await releaseRlsFixture();
 });
 
-const contextFor = <TContext>(
+const invoiceRouteForHandler = (handler: unknown): ApiRoutePath => {
+  if (handler === createInvoice.handler) {
+    return "/v1/invoices/:workspaceId";
+  }
+  if (handler === deleteInvoice.handler) {
+    return "/v1/invoices/:workspaceId/:invoiceId";
+  }
+  if (handler === addEntries.handler) {
+    return "/v1/invoices/:workspaceId/:invoiceId/entries";
+  }
+  if (handler === createLine.handler) {
+    return "/v1/invoices/:workspaceId/:invoiceId/lines";
+  }
+  if (handler === getInvoice.handler) {
+    return "/v1/invoices/:workspaceId/:invoiceId";
+  }
+  if (handler === listInvoices.handler) {
+    return "/v1/invoices/:workspaceId";
+  }
+  if (handler === transitionInvoice.handler) {
+    return "/v1/invoices/:workspaceId/:invoiceId/transition";
+  }
+  if (handler === updateInvoice.handler) {
+    return "/v1/invoices/:workspaceId/:invoiceId";
+  }
+  if (handler === updateLine.handler) {
+    return "/v1/invoices/:workspaceId/:invoiceId/lines/:lineId";
+  }
+  return panic("Invoice test context received an unregistered handler");
+};
+
+const contextFor = <TContext extends SafeHandlerLogContext>(
   _handler: (context: TContext) => unknown,
   options: {
     body: unknown;
@@ -94,7 +153,7 @@ const contextFor = <TContext>(
     promptCachingEnabled: false,
     recordAuditEvent,
     request: new Request(`https://example.test/workspaces/${ids.wsA1}`),
-    route: "/test/invoice-types",
+    route: invoiceRouteForHandler(_handler),
     safeDb: createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
     scopedDb: createScopedDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
     session: { activeOrganizationId: ids.orgA },
@@ -117,6 +176,7 @@ const seedOriginal = async (
     currency: "USD",
     status: INVOICE_STATUS.FINALIZED,
     totalAmount: cents(1210),
+    sellerProfileId: issuingSellerId,
     ...options,
   });
   return id;
@@ -512,9 +572,90 @@ describe("invoice document types", () => {
     });
   });
 
+  test("issuing and voiding credit notes settles and reopens their original", async () => {
+    const statusOf = async (invoiceId: SafeId<"invoice">) => {
+      const [row] = await testDb
+        .select({ status: invoices.status, paidAt: invoices.paidAt })
+        .from(invoices)
+        .where(eq(invoices.id, invoiceId));
+      return row ?? panic("Expected the original invoice");
+    };
+    const issuedCredit = async (
+      originalInvoiceId: SafeId<"invoice">,
+      netAmount: number,
+    ) => {
+      const creditId = createdId(await createCredit(originalInvoiceId));
+      expect(await addLine(creditId, netAmount)).toMatchObject({
+        totals: { netAmountMinor: -netAmount },
+      });
+      expect(await changeStatus(creditId, "finalize")).toEqual({
+        id: creditId,
+      });
+      return creditId;
+    };
+
+    const settlementOf = async (invoiceId: SafeId<"invoice">) =>
+      await getInvoice.handler(
+        contextFor(getInvoice.handler, {
+          params: { workspaceId: ids.wsA1, invoiceId },
+          body: {},
+        }),
+      );
+
+    // Credited in full: nothing is due, but no money was received, so the
+    // original keeps its issued status and gets no payment time.
+    const credited = await seedOriginal();
+    const fullCredit = await issuedCredit(credited, 1000);
+    expect(await statusOf(credited)).toEqual({
+      status: INVOICE_STATUS.FINALIZED,
+      paidAt: null,
+    });
+    expect(await settlementOf(credited)).toMatchObject({
+      outstandingAmount: 0,
+      settlement: { kind: "credited" },
+    });
+    // Taking the credit back reopens it.
+    expect(await changeStatus(fullCredit, "void")).toEqual({ id: fullCredit });
+    expect(await settlementOf(credited)).toMatchObject({
+      outstandingAmount: 1210,
+      settlement: { kind: "open" },
+    });
+
+    // A partial credit leaves the original open until a payment covers the rest.
+    const partlyPaid = await seedOriginal();
+    await testDb.insert(invoicePayments).values({
+      id: createSafeId<"invoicePayment">(),
+      organizationId: ids.orgA,
+      invoiceId: partlyPaid,
+      amount: cents(605),
+      paidOn: "2026-09-30",
+      method: "bank_transfer",
+      origin: INVOICE_PAYMENT_ORIGIN.RECORDED,
+      recordedBy: ids.userA1,
+    });
+    expect((await statusOf(partlyPaid)).status).toBe(INVOICE_STATUS.FINALIZED);
+    const partCredit = await issuedCredit(partlyPaid, 500);
+    // The payment and the credit note together cover 1210: paid by payment.
+    expect((await statusOf(partlyPaid)).status).toBe(INVOICE_STATUS.PAID);
+    expect(await settlementOf(partlyPaid)).toMatchObject({
+      settlement: { kind: "paid" },
+    });
+    expect(await changeStatus(partCredit, "revert_to_draft")).toEqual({
+      id: partCredit,
+    });
+    expect((await statusOf(partlyPaid)).status).toBe(INVOICE_STATUS.FINALIZED);
+  });
+
   test("linked credit notes protect original transitions and deletion", async () => {
     const originalInvoiceId = await seedOriginal();
     const creditId = createdId(await createCredit(originalInvoiceId));
+    // Issued by the original's seller, which finalizing requires.
+    expect(
+      await testDb.query.invoices.findFirst({
+        where: { id: { eq: creditId } },
+        columns: { sellerProfileId: true },
+      }),
+    ).toEqual({ sellerProfileId: issuingSellerId });
     for (const action of ["void", "revert_to_draft"] as const) {
       expect(await changeStatus(originalInvoiceId, action)).toMatchObject({
         code: 409,

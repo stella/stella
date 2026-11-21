@@ -1,7 +1,7 @@
 // The path-scope selector of ci.yml's `ci-plan` job, runnable outside CI.
 // The workflow is the only copy of the selection rules: this module slices
 // them out of a given ci.yml and runs them over a list of changed files, so
-// the plan tests and the merge bar evaluate exactly what CI would.
+// the plan tests evaluate exactly what CI would.
 
 import { panic, Result, TaggedError } from "better-result";
 
@@ -35,11 +35,13 @@ type RunPlanSelectorOptions = {
   e2eLandingRequired?: string;
   event?: string;
   title?: string;
+  /** The pull request is armed for merge: queue-only suites at merge-group scope. */
+  armed?: boolean;
 };
 
 /**
  * The preamble stands in for the lines ci.yml runs before the selector:
- * the detectors it calls, and package checks planned as for any code change.
+ * the preliminary detectors it calls. Package selection runs from the workflow.
  */
 export const runPlanSelector = ({
   selector,
@@ -50,6 +52,7 @@ export const runPlanSelector = ({
   e2eLandingRequired,
   event = "pull_request",
   title = "",
+  armed = false,
 }: RunPlanSelectorOptions) => {
   const invalid = outputs.find((output) => !OUTPUT_NAME_PATTERN.test(output));
   if (invalid !== undefined) {
@@ -63,7 +66,6 @@ export const runPlanSelector = ({
       `changed_files=("$@"); e2e_core_required=$(bash scripts/detect-e2e-changes.sh core "$@")
 e2e_landing_required=\${E2E_LANDING_REQUIRED:-$(bash scripts/detect-e2e-changes.sh landing "$@")}
 desktop_rust_checks_required=$(bash scripts/detect-tauri-rust-changes.sh "$@")
-package_checks_required=true
 ${selector}
 printf "%s\\n" "${VALUES_MARKER}" ${outputs.map((output) => `"$${output}"`).join(" ")}`,
       "ci-plan-selector",
@@ -71,6 +73,7 @@ printf "%s\\n" "${VALUES_MARKER}" ${outputs.map((output) => `"$${output}"`).join
     ],
     cwd,
     env: {
+      ARMED: String(armed),
       E2E_LANDING_REQUIRED: e2eLandingRequired ?? "",
       EVENT_NAME: event,
       PATH: Bun.env["PATH"] ?? "",

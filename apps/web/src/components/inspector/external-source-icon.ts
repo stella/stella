@@ -1,4 +1,4 @@
-import { sanitizeHref } from "@/lib/sanitize-href";
+import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 
 export const findMcpConnectorIconHref = ({
   connectorSlug,

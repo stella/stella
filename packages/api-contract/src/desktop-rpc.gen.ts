@@ -2,7 +2,7 @@
 // Regenerate from the repository root with `bun --filter @stll/desktop rpc:generate`.
 // Do not edit by hand.
 
-export type AppSnapshot = { bridgePort: number,
+export type AppSnapshot = { documentRecovery: DocumentRecoverySnapshot, bridgePort: number,
 /**
  * See [`BRIDGE_VERSION`].
  */
@@ -16,15 +16,19 @@ export type DesktopAccountCredential = { key: string, expiresAt: string, };
 
 export type DesktopAccountIdentity = { userId: string, organizationId: string, };
 
-export type DesktopAccountSnapshot = { "status": "disconnected" } | { "status": "connected", account: LinkedAccountSnapshot, identity: DesktopAccountIdentity, expiresAt: string, };
+export type DesktopAccountSnapshot = { "status": "disconnected", server: string, } | { "status": "reconnectRequired", server: string, } | { "status": "expired", server: string, } | { "status": "connected", account: LinkedAccountSnapshot, identity: DesktopAccountIdentity, expiresAt: string, server: string, };
 
 export type DesktopEditFileType = "docx" | "xlsx" | "pptx";
+
+export type DesktopLinkFailure = "account_conflict" | "switch_declined" | "declined" | "update_required" | "unavailable";
 
 export type DesktopNotificationPreferences = { documentReady: boolean, revisionCreated: boolean, syncIssues: boolean, };
 
 export type DesktopUpdateSnapshot = { baseUrl: string | null, channel: string | null, currentHash: string | null, currentVersion: string | null, lastCheckedAt: string | null, latestHash: string | null, latestVersion: string | null, status: DesktopUpdateStatus, statusMessage: string, updateAvailable: boolean, updateReady: boolean, };
 
 export type DesktopUpdateStatus = "idle" | "checking" | "available" | "downloading" | "ready" | "applying" | "up_to_date" | "error" | "disabled";
+
+export type DocumentRecoverySnapshot = { edits: RecoveryEdit[], unassigned: boolean, pending: boolean, access: RecoveryAccess, };
 
 export type LinkAccountRequest = { apiBaseUrl: string, credential: DesktopAccountCredential, };
 
@@ -36,8 +40,18 @@ export type OpenFileRequest = { apiBaseUrl: string, entityId: string, handoffId?
 
 export type OpenFileResponse = { alreadyOpen: boolean, filePath: string, sessionId: string, };
 
+export type RecoveryAccess = "available" | "signInRequired";
+
+export type RecoveryEdit = { id: string, fileName: string, status: RecoveryStatus, };
+
+export type RecoveryStatus = "pending" | "available";
+
+export type RecoveryTarget = "account" | "unassigned";
+
 export type SessionSnapshot = { baseVersionNumber: number, entityId: string, fileType: DesktopEditFileType, fileName: string, filePath: string, id: string, lastError: string | null, lastCheckpointAt: string | null, pendingFinalize: boolean, propertyId: string, status: SessionStatus, takeoverDetected: boolean, workspaceId: string, };
 
 export type SessionStatus = "opening" | "ready" | "syncing" | "finalizing" | "error";
+
+export type SettingsCheck = { "status": "up_to_date" } | { "status": "available", version: string, } | { "status": "deferred", version: string, } | { "status": "installing", version: string, } | { "status": "managed" };
 
 export type TrustedSelfHostConnection = { apiBaseUrl: string, trustedAt: string, webOrigin: string, };

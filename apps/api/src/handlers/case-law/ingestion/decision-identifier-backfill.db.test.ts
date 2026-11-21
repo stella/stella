@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
-import { asc, eq, inArray } from "drizzle-orm";
+import { asc, eq, inArray, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
@@ -23,7 +23,9 @@ import {
 } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import {
   DECISION_IDENTIFIER_BACKFILL_VERSION,
+  DECISION_IDENTIFIER_RECONCILIATION_COOLDOWN_MS,
   MAX_DECISION_IDENTIFIER_BACKFILL_BATCH_SIZE,
+  reconcileDecisionIdentifiersStep,
   runDecisionIdentifierBackfill,
   verifyDecisionIdentifierBackfill,
 } from "@/api/handlers/case-law/ingestion/decision-identifier-backfill";
@@ -36,6 +38,7 @@ import {
 } from "@/api/lib/legal-search/corpus-index-manifest";
 import { ensureCorpusProjectionDesiredStateTx } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import { storeDecisionIdentifiersInMetadata } from "@/api/lib/legal-search/decision-identifier-metadata";
+import { CORPUS_PROJECTION_SEEDING_GUARD_OFF_SETTING } from "@/api/tests/helpers/corpus-projection-seeding-guard";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
 let client: Awaited<ReturnType<typeof createTestPglite>>;
@@ -120,6 +123,23 @@ beforeAll(async () => {
 afterAll(async () => {
   await client.close();
 });
+
+/**
+ * A decision as production holds it from before a rule change: data no
+ * writer has touched since, standing beside a generation an earlier test
+ * registered. The seeding guard stands aside for the fixture only; the
+ * backfill's own writes stay guarded.
+ */
+const standUpDecision = async (
+  values: typeof caseLawDecisions.$inferInsert,
+): Promise<void> => {
+  await db.transaction(async (tx) => {
+    await tx.execute(
+      sql`SELECT set_config(${CORPUS_PROJECTION_SEEDING_GUARD_OFF_SETTING}, 'off', true)`,
+    );
+    await tx.insert(caseLawDecisions).values(values);
+  });
+};
 
 test("resumes committed pages and converges to an exact replay-safe projection", async () => {
   let interrupted = false;
@@ -236,7 +256,11 @@ test("resumes committed pages and converges to an exact replay-safe projection",
 test("a completion receipt does not hide later projection drift", async () => {
   await db
     .update(caseLawCitations)
-    .set({ normalizedIdentifierValue: "drifted" })
+    .set({
+      normalizedIdentifierValue: "drifted",
+      citedDecisionId: decisionId,
+      resolutionStatus: CITATION_RESOLUTION_STATUS.RESOLVED,
+    })
     .where(eq(caseLawCitations.id, caseNumberCitationId));
 
   const verification = await verifyDecisionIdentifierBackfill(rootDb(), 1);
@@ -252,6 +276,20 @@ test("a completion receipt does not hide later projection drift", async () => {
   expect(await checkpoint()).toMatchObject({
     phase: CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.COMPLETE,
     cursorId: null,
+  });
+
+  // Queued for another answer and still linked: a pass reaching many citations
+  // at once must not empty the decisions they point at until the walk returns.
+  const [reopened] = await db
+    .select({
+      citedDecisionId: caseLawCitations.citedDecisionId,
+      resolutionStatus: caseLawCitations.resolutionStatus,
+    })
+    .from(caseLawCitations)
+    .where(eq(caseLawCitations.id, caseNumberCitationId));
+  expect(reopened).toEqual({
+    citedDecisionId: decisionId,
+    resolutionStatus: CITATION_RESOLUTION_STATUS.PENDING,
   });
 });
 
@@ -325,7 +363,7 @@ test("a completed backfill re-derives identifiers a key rule change moved", asyn
   // number keyed verbatim, closing dot included. The current rule keys it
   // without, so a completed receipt must not stand over the stale row.
   const reporterDecisionId = createSafeId<"caseLawDecision">();
-  await db.insert(caseLawDecisions).values({
+  await standUpDecision({
     id: reporterDecisionId,
     sourceId,
     caseNumber: "EBH.2015.K.38.",
@@ -394,7 +432,7 @@ test("a declared alias keyed by its jurisdiction's rule is not counted as drift"
     type: DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
     value: "347 U.S. Rep. 483",
   } as const;
-  await db.insert(caseLawDecisions).values({
+  await standUpDecision({
     id: usaDecisionId,
     sourceId,
     caseNumber: "No. 1",
@@ -438,9 +476,37 @@ test("rejects a batch that could exceed PostgreSQL's bind-parameter limit", asyn
   });
 });
 
+test("a completed pass waits for its cooldown and then restarts", async () => {
+  await runDecisionIdentifierBackfill(rootDb(), { batchSize: 10 });
+  const completed = await checkpoint();
+  expect(completed?.completedAt).toBeInstanceOf(Date);
+  const completedAt = completed?.completedAt ?? new Date(0);
+
+  expect(
+    await reconcileDecisionIdentifiersStep(rootDb(), {
+      now: completedAt,
+      batchSize: 1,
+    }),
+  ).toMatchObject({ status: "cooldown" });
+
+  const afterCooldown = new Date(
+    completedAt.getTime() + DECISION_IDENTIFIER_RECONCILIATION_COOLDOWN_MS,
+  );
+  expect(
+    await reconcileDecisionIdentifiersStep(rootDb(), {
+      now: afterCooldown,
+      batchSize: 1,
+    }),
+  ).toEqual({ status: "advanced" });
+  expect(await checkpoint()).toMatchObject({
+    phase: CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE.DECISIONS,
+    completedAt: null,
+  });
+});
+
 test("advances past malformed decisions but bounds non-converging retries", async () => {
   const malformedDecisionId = createSafeId<"caseLawDecision">();
-  await db.insert(caseLawDecisions).values({
+  await standUpDecision({
     id: malformedDecisionId,
     sourceId,
     caseNumber: "   ",

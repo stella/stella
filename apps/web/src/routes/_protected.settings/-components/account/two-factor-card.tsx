@@ -1,4 +1,5 @@
 import { useState } from "react";
+import type { ReactNode } from "react";
 
 import {
   useMutation,
@@ -6,35 +7,30 @@ import {
   useQueryClient,
   useSuspenseQuery,
 } from "@tanstack/react-query";
-import { panic, Result } from "better-result";
+import { panic } from "better-result";
 import { renderSVG } from "uqr";
 import { useTranslations } from "use-intl";
 
-import { copyToClipboard } from "@stll/clipboard";
 import { Button } from "@stll/ui/button";
 import {
   Dialog,
   DialogClose,
   DialogDescription,
   DialogFooter,
+  DialogFormState,
   DialogHeader,
   DialogPopup,
   DialogTitle,
 } from "@stll/ui/dialog";
-import {
-  Frame,
-  FrameDescription,
-  FrameHeader,
-  FramePanel,
-  FrameTitle,
-} from "@stll/ui/frame";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@stll/ui/input-otp";
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
+import { CopyControl } from "@/components/copy-control";
+import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { SecretInput } from "@/components/secret-input";
 import { linkedAccountsOptions } from "@/lib/account/queries";
-import { getAnalytics, useAnalytics } from "@/lib/analytics/provider";
+import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { authCapabilitiesOptions } from "@/lib/auth-capabilities";
 import {
@@ -44,11 +40,30 @@ import {
 } from "@/lib/auth-client";
 import { sessionOptions } from "@/lib/auth-queries";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
-import { detached } from "@/lib/detached";
 import { APIError, toAPIError } from "@/lib/errors/api";
 import { toAuthClientError } from "@/lib/errors/auth";
-import { notifyUserError } from "@/lib/errors/user-toast";
+import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
+import { queryView } from "@/lib/query-view.logic";
 import { downloadFile } from "@/lib/utils";
+import {
+  TWO_FACTOR_STATUS_CLASS,
+  TwoFactorCardFrame,
+} from "@/routes/_protected.settings/-components/account/two-factor-card.pending";
+
+const ERROR_CAPTURE = {
+  enable: {
+    fingerprintKey: "EnableTwoFactorDialog:failure",
+    scope: { type: "handler", handlerId: "EnableTwoFactorDialog:failure" },
+  },
+  verify: {
+    fingerprintKey: "EnableTwoFactorDialog:failure-2",
+    scope: { type: "handler", handlerId: "EnableTwoFactorDialog:failure-2" },
+  },
+  backup: {
+    fingerprintKey: "EnableTwoFactorDialog:failure-3",
+    scope: { type: "handler", handlerId: "EnableTwoFactorDialog:failure-3" },
+  },
+} as const;
 
 const TOTP_LENGTH = 6;
 const HTTP_BAD_REQUEST = 400;
@@ -82,88 +97,101 @@ export const TwoFactorCard = () => {
   // as distinct from "no password needed": starting a password-gated action
   // before the account type is known could otherwise fire the plugin call
   // without a password for a credential account.
-  const requiresPassword = accountsQuery.data
-    ? accountsQuery.data.some((account) => account.providerId === "credential")
-    : undefined;
+  const accountsView = queryView(accountsQuery, { isEmpty: () => false });
+  const requiresPassword =
+    accountsView.type === "items" && accountsView.refetchError === undefined
+      ? accountsView.items.some(
+          (account) => account.providerId === "credential",
+        )
+      : undefined;
 
   // Transactional email is optional, and a deployment without it cannot send
-  // the emailed confirmation step. Enrollment there rests on the account
-  // password instead (see `requireTwoFactorManageOtp` in
-  // apps/api/src/lib/auth.ts), so the enable dialog must not ask for a code it
-  // will never receive. `undefined` while unresolved, like `requiresPassword`.
+  // the emailed confirmation step. A credential account can use its password
+  // instead; the API refuses passwordless enrollment because the active session
+  // alone is not an independent step-up. `undefined` while unresolved, like
+  // `requiresPassword`.
   const capabilitiesQuery = useQuery({
     ...authCapabilitiesOptions,
     enabled: isAnyDialogOpen,
   });
-  const canEmailConfirmationCode = capabilitiesQuery.data?.transactionalEmail;
+  const capabilitiesView = queryView(capabilitiesQuery);
+  const canEmailConfirmationCode =
+    capabilitiesView.type === "items" &&
+    capabilitiesView.refetchError === undefined
+      ? capabilitiesView.items.transactionalEmail
+      : undefined;
 
   return (
-    <Frame>
-      <FrameHeader>
-        <FrameTitle>{t("settings.account.twoFactor.title")}</FrameTitle>
-        <FrameDescription>
-          {t("settings.account.twoFactor.description")}
-        </FrameDescription>
-      </FrameHeader>
-      <FramePanel>
-        <div className="flex items-center justify-between gap-4 p-4">
-          <span
-            className={cn(
-              enabled
-                ? "bg-success/16 text-success-foreground inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium"
-                : "bg-muted text-muted-foreground inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium",
-            )}
+    <TwoFactorCardFrame
+      action={
+        <Button
+          onClick={() => {
+            if (enabled) {
+              setIsDisableOpen(true);
+              return;
+            }
+            setIsEnableOpen(true);
+          }}
+          size="sm"
+          variant={enabled ? "destructive" : "default"}
+        >
+          {enabled
+            ? t("settings.account.twoFactor.disable")
+            : t("settings.account.twoFactor.enable")}
+        </Button>
+      }
+      footer={
+        enabled && (
+          <Button
+            onClick={() => setIsRegenerateOpen(true)}
+            size="sm"
+            variant="outline"
           >
-            {enabled
-              ? t("settings.account.twoFactor.enabledStatus")
-              : t("settings.account.twoFactor.disabledStatus")}
-          </span>
-          <div className="flex gap-2">
-            {enabled && (
-              <Button
-                onClick={() => setIsRegenerateOpen(true)}
-                size="sm"
-                variant="outline"
-              >
-                {t("settings.account.twoFactor.regenerateBackupCodes")}
-              </Button>
-            )}
-            <Button
-              onClick={() => {
-                if (enabled) {
-                  setIsDisableOpen(true);
-                  return;
-                }
-                setIsEnableOpen(true);
-              }}
-              size="sm"
-              variant={enabled ? "destructive" : "default"}
-            >
-              {enabled
-                ? t("settings.account.twoFactor.disable")
-                : t("settings.account.twoFactor.enable")}
-            </Button>
-          </div>
-        </div>
-      </FramePanel>
-
+            {t("settings.account.twoFactor.regenerateBackupCodes")}
+          </Button>
+        )
+      }
+      status={
+        <span
+          className={cn(
+            TWO_FACTOR_STATUS_CLASS,
+            enabled
+              ? "bg-success/16 text-success-foreground"
+              : "bg-muted text-muted-foreground",
+          )}
+        >
+          {enabled
+            ? t("settings.account.twoFactor.enabledStatus")
+            : t("settings.account.twoFactor.disabledStatus")}
+        </span>
+      }
+    >
       <EnableTwoFactorDialog
+        queryFeedback={
+          <>
+            {" "}
+            <QueryViewFeedback view={accountsView} />{" "}
+            <QueryViewFeedback view={capabilitiesView} />{" "}
+          </>
+        }
         canEmailConfirmationCode={canEmailConfirmationCode}
         onOpenChange={setIsEnableOpen}
         open={isEnableOpen}
         requiresPassword={requiresPassword}
       />
       <DisableTwoFactorDialog
+        queryFeedback={<QueryViewFeedback view={accountsView} />}
         onOpenChange={setIsDisableOpen}
         open={isDisableOpen}
         requiresPassword={requiresPassword}
       />
       <RegenerateBackupCodesDialog
+        queryFeedback={<QueryViewFeedback view={accountsView} />}
         onOpenChange={setIsRegenerateOpen}
         open={isRegenerateOpen}
         requiresPassword={requiresPassword}
       />
-    </Frame>
+    </TwoFactorCardFrame>
   );
 };
 
@@ -230,7 +258,7 @@ const showManagementMutationError = (
     return;
   }
   if (error.status === HTTP_BAD_REQUEST) {
-    notifyUserError(undefined, invalidCodeMessage);
+    notifyUserProblem(invalidCodeMessage);
     return;
   }
   const authError = toAuthClientError(error);
@@ -255,16 +283,6 @@ const downloadBackupCodes = (codes: readonly string[]) => {
 const BackupCodesList = ({ codes }: { codes: readonly string[] }) => {
   const t = useTranslations();
 
-  const handleCopyAll = async () => {
-    const copied = await copyToClipboard(codes.join("\n"));
-    if (Result.isError(copied)) {
-      getAnalytics().captureError(copied.error);
-      notifyUserError(copied.error, t("errors.actionFailed"));
-      return;
-    }
-    stellaToast.add({ title: t("common.copied"), type: "success" });
-  };
-
   return (
     <div className="flex flex-col gap-3">
       <div className="bg-muted grid grid-cols-2 gap-x-4 gap-y-1.5 rounded-md p-3 font-mono text-sm">
@@ -273,15 +291,12 @@ const BackupCodesList = ({ codes }: { codes: readonly string[] }) => {
         ))}
       </div>
       <div className="flex gap-2">
-        <Button
-          onClick={() => {
-            detached(handleCopyAll(), "two-factor-card.copy-all");
-          }}
+        <CopyControl
+          label={t("settings.account.twoFactor.copyAllCodes")}
           size="sm"
+          text={codes.join("\n")}
           variant="outline"
-        >
-          {t("settings.account.twoFactor.copyAllCodes")}
-        </Button>
+        />
         <Button
           onClick={() => downloadBackupCodes(codes)}
           size="sm"
@@ -303,7 +318,9 @@ const EnableTwoFactorDialog = ({
   onOpenChange,
   open,
   requiresPassword,
+  queryFeedback,
 }: {
+  queryFeedback: ReactNode;
   // `undefined` until the capability lookup resolves; see the parent's comment
   // on `canEmailConfirmationCode`.
   canEmailConfirmationCode: boolean | undefined;
@@ -350,7 +367,7 @@ const EnableTwoFactorDialog = ({
         error,
         APIError.is(error) ? error.message : t("errors.actionFailed"),
       );
-      analytics.captureError(error);
+      analytics.captureError(error, ERROR_CAPTURE.enable);
     },
   });
 
@@ -369,7 +386,8 @@ const EnableTwoFactorDialog = ({
       // mirroring the disable and regenerate dialogs. Better Auth's own
       // `enable` endpoint additionally requires the account password for
       // credential accounts; omit it for passwordless users. `otp` is absent
-      // on a deployment that cannot email one, where the gate stands down.
+      // on a deployment that cannot email one; only credential accounts can
+      // use that fallback because the plugin independently verifies password.
       const { data, error } = await authClient.$fetch("/two-factor/enable", {
         method: "POST",
         body: {
@@ -398,7 +416,7 @@ const EnableTwoFactorDialog = ({
       // rejected password can be retyped).
       setCode("");
       setStep("confirm");
-      analytics.captureError(error);
+      analytics.captureError(error, ERROR_CAPTURE.verify);
     },
   });
 
@@ -430,7 +448,7 @@ const EnableTwoFactorDialog = ({
       });
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, ERROR_CAPTURE.backup);
     },
   });
 
@@ -438,10 +456,15 @@ const EnableTwoFactorDialog = ({
   const backupCodes = enrollment?.backupCodes ?? null;
   const secret = totpURI ? getTotpSecret(totpURI) : null;
   const qrSvg = totpURI ? renderSVG(totpURI, { pixelSize: 6 }) : null;
+  const qrImageSrc = qrSvg
+    ? `data:image/svg+xml,${encodeURIComponent(qrSvg)}`
+    : null;
 
   return (
     <Dialog onOpenChange={handleOpenChange} open={open}>
       <DialogPopup>
+        {queryFeedback}
+        <DialogFormState dirty={code !== "" || password !== ""} />
         <DialogHeader>
           <DialogTitle>
             {t("settings.account.twoFactor.setupTitle")}
@@ -497,28 +520,19 @@ const EnableTwoFactorDialog = ({
               </InputOTP>
             </div>
           )}
-          {step === "setup" && qrSvg && (
+          {step === "setup" && qrImageSrc && (
             <div className="flex flex-col items-center gap-3">
-              {/* `qrSvg` is rendered locally by `renderSVG` (uqr) from the
-                 `totpURI` our own backend just returned; it is never
-                 user-controlled input. The SVG already paints its own solid
-                 white/black background rect so the code stays scannable
-                 regardless of the app's light/dark theme. */}
-              <div
-                // uqr emits `<svg viewBox=...>` with no width/height, so the
-                // element has an intrinsic ratio but no intrinsic size. Inside
-                // a shrink-to-fit flex item that resolves to a collapsed box
-                // and the code renders blank; pin the size explicitly.
-                className="rounded-md p-3 [&>svg]:size-48"
-                // safe-html: locally generated by uqr's renderSVG from our own totpURI, not user input
-                dangerouslySetInnerHTML={{ __html: qrSvg }}
+              <img
+                alt={t("settings.account.twoFactor.scanQrDescription")}
+                className="size-48 rounded-md p-3"
+                src={qrImageSrc}
               />
               {secret && (
                 <div className="flex flex-col items-center gap-1">
                   <span className="text-muted-foreground text-xs">
                     {t("settings.account.twoFactor.manualSetupKey")}
                   </span>
-                  <code className="bg-muted rounded px-2 py-1 font-mono text-sm">
+                  <code className="bg-muted rounded-sm px-2 py-1 font-mono text-sm">
                     {secret}
                   </code>
                 </div>
@@ -568,6 +582,12 @@ const EnableTwoFactorDialog = ({
                 canEmailConfirmationCode === undefined ||
                 (requiresPassword && password.length === 0)
               }
+              disabledReason={
+                requiresPassword === undefined ||
+                canEmailConfirmationCode === undefined
+                  ? t("common.loading")
+                  : t("common.enterPassword")
+              }
               loading={
                 sendEnableOtpMutation.isPending || enableMutation.isPending
               }
@@ -586,6 +606,11 @@ const EnableTwoFactorDialog = ({
           {step === "code" && (
             <Button
               disabled={code.length !== TOTP_LENGTH || enableMutation.isPending}
+              disabledReason={
+                enableMutation.isPending
+                  ? t("common.verifying")
+                  : t("common.enterVerificationCode")
+              }
               loading={enableMutation.isPending}
               onClick={() => enableMutation.mutate({ code, password })}
               variant="default"
@@ -596,6 +621,7 @@ const EnableTwoFactorDialog = ({
           {step === "setup" && (
             <Button
               disabled={!qrSvg}
+              disabledReason={t("common.loading")}
               onClick={() => setStep("verify")}
               variant="default"
             >
@@ -605,6 +631,11 @@ const EnableTwoFactorDialog = ({
           {step === "verify" && (
             <Button
               disabled={code.length !== TOTP_LENGTH || verifyMutation.isPending}
+              disabledReason={
+                verifyMutation.isPending
+                  ? t("common.verifying")
+                  : t("common.enterVerificationCode")
+              }
               loading={verifyMutation.isPending}
               onClick={() => verifyMutation.mutate(code)}
             >
@@ -633,7 +664,9 @@ const DisableTwoFactorDialog = ({
   onOpenChange,
   open,
   requiresPassword,
+  queryFeedback,
 }: {
+  queryFeedback: ReactNode;
   onOpenChange: (open: boolean) => void;
   open: boolean;
   // `undefined` until the account-type lookup resolves; see the parent's
@@ -675,7 +708,10 @@ const DisableTwoFactorDialog = ({
         error,
         APIError.is(error) ? error.message : t("errors.actionFailed"),
       );
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "DisableTwoFactorDialog:failure",
+        scope: { type: "handler", handlerId: "DisableTwoFactorDialog:failure" },
+      });
     },
   });
 
@@ -722,13 +758,27 @@ const DisableTwoFactorDialog = ({
       // requests a fresh one instead of leaving an input nothing can satisfy.
       setCode("");
       setStep("confirm");
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "DisableTwoFactorDialog:failure-2",
+        scope: {
+          type: "handler",
+          handlerId: "DisableTwoFactorDialog:failure-2",
+        },
+      });
     },
   });
 
   return (
     <Dialog onOpenChange={handleOpenChange} open={open}>
       <DialogPopup>
+        {queryFeedback}
+        <DialogFormState
+          dirty={code !== "" || password !== ""}
+          onDiscard={() => {
+            setCode("");
+            setPassword("");
+          }}
+        />
         <DialogHeader>
           <DialogTitle>
             {t("settings.account.twoFactor.disableConfirmTitle")}
@@ -783,6 +833,11 @@ const DisableTwoFactorDialog = ({
                 requiresPassword === undefined ||
                 (requiresPassword && password.length === 0)
               }
+              disabledReason={
+                requiresPassword === undefined
+                  ? t("common.loading")
+                  : t("common.enterPassword")
+              }
               loading={sendDisableOtpMutation.isPending}
               onClick={() => sendDisableOtpMutation.mutate()}
               variant="destructive"
@@ -794,6 +849,11 @@ const DisableTwoFactorDialog = ({
             <Button
               disabled={
                 code.length !== TOTP_LENGTH || disableMutation.isPending
+              }
+              disabledReason={
+                disableMutation.isPending
+                  ? t("common.verifying")
+                  : t("common.enterVerificationCode")
               }
               loading={disableMutation.isPending}
               onClick={() => disableMutation.mutate({ code, password })}
@@ -814,7 +874,9 @@ const RegenerateBackupCodesDialog = ({
   onOpenChange,
   open,
   requiresPassword,
+  queryFeedback,
 }: {
+  queryFeedback: ReactNode;
   onOpenChange: (open: boolean) => void;
   open: boolean;
   // `undefined` until the account-type lookup resolves; see the parent's
@@ -857,7 +919,13 @@ const RegenerateBackupCodesDialog = ({
         error,
         APIError.is(error) ? error.message : t("errors.actionFailed"),
       );
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "RegenerateBackupCodesDialog:failure",
+        scope: {
+          type: "handler",
+          handlerId: "RegenerateBackupCodesDialog:failure",
+        },
+      });
     },
   });
 
@@ -909,13 +977,27 @@ const RegenerateBackupCodesDialog = ({
       // requests a fresh one instead of leaving an input nothing can satisfy.
       setCode("");
       setStep("confirm");
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "RegenerateBackupCodesDialog:failure-2",
+        scope: {
+          type: "handler",
+          handlerId: "RegenerateBackupCodesDialog:failure-2",
+        },
+      });
     },
   });
 
   return (
     <Dialog onOpenChange={handleOpenChange} open={open}>
       <DialogPopup>
+        {queryFeedback}
+        <DialogFormState
+          dirty={code !== "" || password !== ""}
+          onDiscard={() => {
+            setCode("");
+            setPassword("");
+          }}
+        />
         <DialogHeader>
           <DialogTitle>
             {t("settings.account.twoFactor.regenerateConfirmTitle")}
@@ -983,6 +1065,11 @@ const RegenerateBackupCodesDialog = ({
                     requiresPassword === undefined ||
                     (requiresPassword && password.length === 0)
                   }
+                  disabledReason={
+                    requiresPassword === undefined
+                      ? t("common.loading")
+                      : t("common.enterPassword")
+                  }
                   loading={sendOtpMutation.isPending}
                   onClick={() => sendOtpMutation.mutate()}
                   variant="destructive"
@@ -994,6 +1081,11 @@ const RegenerateBackupCodesDialog = ({
                 <Button
                   disabled={
                     code.length !== TOTP_LENGTH || regenerateMutation.isPending
+                  }
+                  disabledReason={
+                    regenerateMutation.isPending
+                      ? t("common.verifying")
+                      : t("common.enterVerificationCode")
                   }
                   loading={regenerateMutation.isPending}
                   onClick={() => regenerateMutation.mutate({ code, password })}

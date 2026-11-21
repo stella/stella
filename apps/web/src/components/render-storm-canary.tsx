@@ -1,5 +1,9 @@
 import { createContext, Profiler, use, useCallback, useState } from "react";
-import type { PropsWithChildren, ReactNode } from "react";
+import type {
+  ProfilerOnRenderCallback,
+  PropsWithChildren,
+  ReactNode,
+} from "react";
 
 import { emitDevCanaryError } from "@/lib/dev-canary";
 import type {
@@ -7,10 +11,7 @@ import type {
   RenderStormMonitor,
   RenderStormPhase,
 } from "@/lib/render-storm-canary";
-import {
-  createRenderStormMonitor,
-  RENDER_COMMIT_COUNT_GLOBAL,
-} from "@/lib/render-storm-canary";
+import { createRenderStormMonitor } from "@/lib/render-storm-canary";
 
 const RENDER_STORM_CANARY_PROFILER_ID = "render-storm-canary";
 
@@ -127,24 +128,18 @@ const emitRenderStormError = (details: RenderStormDetails) => {
 
 /** Counts one commit of the app where an e2e spec can read it. */
 const countCommit = () => {
-  const counted: unknown = Reflect.get(globalThis, RENDER_COMMIT_COUNT_GLOBAL);
-  Reflect.set(
-    globalThis,
-    RENDER_COMMIT_COUNT_GLOBAL,
-    (typeof counted === "number" ? counted : 0) + 1,
-  );
+  const counted = globalThis.__stellaRenderCommitCount;
+  globalThis.__stellaRenderCommitCount = (counted ?? 0) + 1;
 };
 
 const RenderStormProfiler = ({ children }: PropsWithChildren) => {
   const [{ monitor, onRender }] = useState(() => {
     const created = createRenderStormMonitor(emitRenderStormError);
-    return {
-      monitor: created,
-      onRender: (...commit: Parameters<RenderStormMonitor["onRender"]>) => {
-        countCommit();
-        created.onRender(...commit);
-      },
+    const handleRender: ProfilerOnRenderCallback = (...commit) => {
+      countCommit();
+      created.onCommit({ phase: commit[1], commitTime: commit[5] });
     };
+    return { monitor: created, onRender: handleRender };
   });
 
   return (

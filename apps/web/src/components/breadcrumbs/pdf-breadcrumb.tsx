@@ -8,21 +8,27 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from "@stll/ui/breadcrumb";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
+import { DocumentSwitcher } from "@/components/breadcrumbs/document-switcher";
 import {
   canRenameDocumentCrumb,
   resolveCrumbRenameShortcut,
-  resolveDocumentRenameSubmission,
-  splitFileName,
 } from "@/components/breadcrumbs/pdf-breadcrumb.logic";
 import { BreadcrumbQueryContent } from "@/components/breadcrumbs/query-content";
+import { DocumentIcon } from "@/components/document-icon";
+import { fileExtensionSuffix } from "@/components/file-extension-suffix";
 import { InlineEdit } from "@/components/inline-edit";
 import Tooltip from "@/components/tooltip";
 import { useInlineRename } from "@/hooks/use-inline-rename";
 import { usePermissions } from "@/hooks/use-permissions";
 import { detached } from "@/lib/detached";
 import { fileMetadataOptions } from "@/lib/files/file-metadata-query";
-import { useQueryView } from "@/lib/use-query-view";
+import {
+  resolveFileRenameSubmission,
+  splitFileName,
+} from "@/lib/files/file-name-edit";
+import { queryView } from "@/lib/query-view.logic";
 import { useRenameEntity } from "@/lib/workspaces/mutations/entities";
 
 export const PdfBreadcrumb = () => {
@@ -49,21 +55,24 @@ export const PdfBreadcrumb = () => {
   const fileQuery = useQuery({
     ...fileMetadata,
     enabled: pdfMatch !== undefined && fieldId.length > 0,
-    select: (file) => file.fileName,
+    select: (file) => ({
+      fileName: file.fileName,
+      originalMimeType: file.originalMimeType,
+    }),
   });
-  const fileNameView = useQueryView(fileQuery);
-  const fileName =
-    fileNameView.type === "items" ? fileNameView.items : undefined;
+  const fileNameView = queryView(fileQuery);
+  const file = fileNameView.type === "items" ? fileNameView.items : undefined;
+  const fileName = file?.fileName;
   const canUpdateEntity = usePermissions({ entity: ["update"] });
   const renameEntity = useRenameEntity();
 
   const storedName = fileName ?? fieldId;
-  const { baseName, extension } = splitFileName(storedName);
+  const { baseName } = splitFileName(storedName);
 
   const rename = useInlineRename({
     initial: baseName,
     onCommit: (value) => {
-      const submission = resolveDocumentRenameSubmission({
+      const submission = resolveFileRenameSubmission({
         draft: value,
         currentName: storedName,
       });
@@ -103,24 +112,23 @@ export const PdfBreadcrumb = () => {
     <>
       <BreadcrumbQueryContent view={fileNameView} />
       <BreadcrumbItem>
+        {/* The stored file's type, not the PDF the viewer renders from it. */}
+        <DocumentIcon
+          className="size-3.5 shrink-0"
+          fileName={storedName}
+          mimeType={file?.originalMimeType}
+        />
         {(() => {
           if (rename.state.mode === "edit") {
             return (
               <InlineEdit
                 inputAriaLabel={tCommon("documentName")}
-                inputClassName="h-5 w-48 text-xs"
                 onCancel={rename.cancel}
                 onChange={rename.setDraft}
                 onCommit={() => {
                   detached(rename.commit(), "pdf-breadcrumb.commit");
                 }}
-                suffix={
-                  extension ? (
-                    <span className="text-muted-foreground text-xs">
-                      {extension}
-                    </span>
-                  ) : undefined
-                }
+                suffix={fileExtensionSuffix(storedName)}
                 value={rename.state.draft}
               />
             );
@@ -129,9 +137,12 @@ export const PdfBreadcrumb = () => {
           if (pendingName !== null) {
             return (
               <BreadcrumbPage>
-                <BidiText as="span" className="max-w-64 truncate">
+                <TruncatedText
+                  className="max-w-64 whitespace-pre"
+                  render={<BidiText as="span" />}
+                >
                   {pendingName}
-                </BidiText>
+                </TruncatedText>
               </BreadcrumbPage>
             );
           }
@@ -144,7 +155,7 @@ export const PdfBreadcrumb = () => {
                 explicitUndefined: true,
               }}
               activeProps={{ className: "text-foreground font-semibold" }}
-              className="hover:text-foreground max-w-64 truncate"
+              className="hover:text-foreground max-w-64 min-w-0"
               params={{ workspaceId, viewId }}
               onDoubleClick={(event) => {
                 if (!isRenameable) {
@@ -169,7 +180,9 @@ export const PdfBreadcrumb = () => {
               to="/workspaces/$workspaceId/$viewId/document"
               {...(isRenameable ? { "aria-keyshortcuts": "F2" } : {})}
             >
-              <BidiText>{storedName}</BidiText>
+              <TruncatedText className="whitespace-pre" render={<BidiText />}>
+                {storedName}
+              </TruncatedText>
             </Link>
           );
 
@@ -184,6 +197,20 @@ export const PdfBreadcrumb = () => {
             />
           );
         })()}
+        {/* Switching away while pages are being organized would drop the
+            unsaved arrangement, so the caret waits until that ends. */}
+        {rename.state.mode !== "edit" &&
+        pendingName === null &&
+        pdfMode !== "organize" &&
+        entityId.length > 0 ? (
+          <DocumentSwitcher
+            entityId={entityId}
+            fieldId={fieldId}
+            fileName={storedName}
+            viewId={viewId}
+            workspaceId={workspaceId}
+          />
+        ) : null}
       </BreadcrumbItem>
       {pdfMode === "organize" && (
         <>

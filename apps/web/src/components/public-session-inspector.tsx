@@ -1,5 +1,6 @@
 import { ChatEditorProvider } from "@/components/chat-editor-provider";
 import { ChatMentionProviders } from "@/components/chat-mention-providers";
+import { DocxEditorHost } from "@/components/docx/docx-editor-host";
 import { InspectorPanel } from "@/components/inspector/inspector-panel";
 import { AIAvailabilityProvider } from "@/components/require-ai-key";
 
@@ -12,6 +13,7 @@ export const PublicSessionInspector = () => (
   <ChatMentionProviders>
     <AIAvailabilityProvider>
       <ChatEditorProvider>
+        <DocxEditorHost />
         <InspectorPanel />
       </ChatEditorProvider>
     </AIAvailabilityProvider>

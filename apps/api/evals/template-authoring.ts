@@ -93,11 +93,11 @@
 import { EventType, maxIterations, toolDefinition } from "@tanstack/ai";
 import type { AnyServerTool, TokenUsage } from "@tanstack/ai";
 import { panic } from "better-result";
-import JSZip from "jszip";
 import { readFile, writeFile } from "node:fs/promises";
 import * as slimdom from "slimdom";
 import * as v from "valibot";
 
+import { ZipArchive } from "@stll/docx-core/zip";
 import { filtersFromFieldConfig, formatDate } from "@stll/template-conditions";
 
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -122,20 +122,22 @@ import type { FieldMeta, TemplateManifest } from "@/api/lib/docx/types";
 import { writeFieldFilters } from "@/api/lib/docx/write-field-filters";
 import { validateDocxBuffer } from "@/api/lib/entity-versions/validate-docx-buffer";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
+import { NO_ORGANIZATION_MODEL_DISPATCH } from "@/api/lib/rate-limit/model-dispatch-admission";
 import {
   mergeGenerationOptions,
   systemPromptsPatch,
 } from "@/api/lib/tanstack-ai-generate";
 import type { ResolvedTanStackTextModel } from "@/api/lib/tanstack-ai-models";
 import {
-  fieldConfigurationIssuePath,
   type FieldConfigurationIssue,
+  fieldConfigurationIssuePath,
 } from "@/api/lib/templates/configure-field-input";
 import { configureTemplateDocument } from "@/api/lib/templates/configure-template-document";
 import {
   fillTemplateDocx,
   type FillTemplateSource,
 } from "@/api/lib/templates/template-fill-service";
+import type { NullAsAbsentInputSchema } from "@/api/mcp/input-schemas";
 import { buildFieldReference } from "@/api/mcp/template-field-reference";
 import { buildMarkerReference } from "@/api/mcp/template-marker-reference";
 import {
@@ -144,7 +146,6 @@ import {
   parseConfigureEntries,
 } from "@/api/mcp/template-tools";
 import type { McpToolInputSchema } from "@/api/mcp/tool-types";
-import type { NullAsAbsentInputSchema } from "@/api/mcp/tool-utils";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { testDocxFile } from "@/api/tests/helpers/scanned-file";
 
@@ -262,9 +263,9 @@ const blockXml = (block: AuthoredBlock): string =>
 // minimal OPC package discovery and the fill service need (document part,
 // content types, package relationship).
 const makeDocx = async (documentXml: string): Promise<Buffer> => {
-  const zip = new JSZip();
-  zip.file("word/document.xml", documentXml);
-  zip.file(
+  const zip = new ZipArchive();
+  zip.set("word/document.xml", documentXml);
+  zip.set(
     "[Content_Types].xml",
     [
       '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
@@ -274,7 +275,7 @@ const makeDocx = async (documentXml: string): Promise<Buffer> => {
       "</Types>",
     ].join(""),
   );
-  zip.file(
+  zip.set(
     "_rels/.rels",
     [
       '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
@@ -283,7 +284,7 @@ const makeDocx = async (documentXml: string): Promise<Buffer> => {
       "</Relationships>",
     ].join(""),
   );
-  return Buffer.from(await zip.generateAsync({ type: "nodebuffer" }));
+  return Buffer.from(Buffer.from(await zip.generate({ compression: "store" })));
 };
 
 const buildDocx = async (blocks: readonly AuthoredBlock[]): Promise<Buffer> =>
@@ -297,8 +298,8 @@ const buildDocx = async (blocks: readonly AuthoredBlock[]): Promise<Buffer> =>
 const readDocxBlocks = async (
   bytes: ArrayBuffer | Uint8Array,
 ): Promise<AuthoredBlock[]> => {
-  const zip = await JSZip.loadAsync(bytes);
-  const xml = await zip.file(MAIN_DOCUMENT_PART_PATH)?.async("string");
+  const zip = await ZipArchive.read(bytes);
+  const xml = await zip.entry(MAIN_DOCUMENT_PART_PATH)?.text();
   if (xml === undefined) {
     return panic("DOCX has no word/document.xml");
   }
@@ -1450,7 +1451,7 @@ const createAuthoringTools = ({
     // taken as real base64, so a client that does hold the file still works.
     const writtenDocx = written.get(ref.trim());
     const outcome = await createTemplateInMemory(
-      writtenDocx?.toString("base64") ?? ref,
+      writtenDocx?.toBase64() ?? ref,
     );
     await recordAttempt({ outcome, overlay: [], step: "create" });
     if (outcome.status === "invalid-docx") {
@@ -1715,7 +1716,7 @@ const runModelTurn = async ({
 }): Promise<ModelTurn> => {
   const caching = resolveCaching({
     promptCachingEnabled: false,
-    role: "fast",
+    task: "short-text",
     scopeKey: null,
   });
   const system = `${systemPrompt}\n\n${REFERENCE_RESOURCES}`;
@@ -1726,6 +1727,7 @@ const runModelTurn = async ({
     timeoutMs: MODEL_TURN_TIMEOUT_MS,
     chat: (abortController) =>
       streamChatChunks({
+        threadId: Bun.randomUUIDv7(),
         abortController,
         adapter: model.adapter,
         messages: [{ role: "user", content: prompt }],
@@ -2419,12 +2421,14 @@ const resolveModels = async (
     modelIds.map(async (id) => ({
       id,
       model: await resolveTanStackTextModel({
+        userId: null,
         modelId: id,
         orgAIConfig: null,
         dataClass: "customer",
         managedAIResidency: "eu",
-        role: "fast",
+        task: "short-text",
         organizationId: null,
+        admission: NO_ORGANIZATION_MODEL_DISPATCH,
       }),
     })),
   );

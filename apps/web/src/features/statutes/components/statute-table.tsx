@@ -8,7 +8,7 @@
  * the table read one column set.
  */
 
-import { useMemo } from "react";
+import { createContext, use } from "react";
 import type { ReactNode } from "react";
 
 import { Link } from "@tanstack/react-router";
@@ -16,22 +16,23 @@ import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import type { LegislationListValidity } from "@stll/api-contract/legislation-status";
+import { STATUTE_COLUMN_IDS } from "@stll/api-contract/public-law-table";
+import type { StatuteColumnId } from "@stll/api-contract/public-law-table";
+import { statuteDisplayLabel } from "@stll/api-contract/statute-display-label";
+import { STATUTE_LIST_SORT_KEY_KINDS } from "@stll/api-contract/statute-list-sort";
+import type { StatuteListSortKey } from "@stll/api-contract/statute-list-sort";
 import { BidiText } from "@stll/ui/bidi-text";
-import {
-  CalendarClockIcon,
-  CalendarIcon,
-  CircleDotIcon,
-  HashIcon,
-  HistoryIcon,
-  ScrollTextIcon,
-  ShapesIcon,
-} from "@stll/ui/icons";
+import { DocumentIdentityBadge } from "@stll/ui/document-identity-badge";
 import type { LucideIcon } from "@stll/ui/icons";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { PublicLawRow } from "@/components/public-law-table/public-law-row";
 import { PublicLawTable } from "@/components/public-law-table/public-law-table";
+import type { PublicLawTableLayoutUpdate } from "@/components/public-law-table/public-law-table-layout.logic";
+import { UNORDERED_COLUMN } from "@/components/workspaces/properties/sort-property.logic";
+import type { SortDirectionOffers } from "@/components/workspaces/properties/sort-property.logic";
 import type { ColumnToggleGroup } from "@/components/workspaces/table/column-toggle";
 import { HighlightedText } from "@/components/workspaces/table/find-highlight";
 import type { TableFindHighlight } from "@/components/workspaces/table/find-highlight";
@@ -41,44 +42,34 @@ import { SELECT_COLUMN_SIZE } from "@/components/workspaces/table/table-schema";
 import type {
   StatuteRowData,
   TableCellContext,
+  TableColumn,
   TableColumnDef,
   TableHeaderContext,
 } from "@/components/workspaces/table/types";
 import { selectColId } from "@/components/workspaces/table/workspace-table/internals-helpers";
 import {
+  STATUTE_COLUMN_ICONS,
+  StatuteColumnIcon,
+} from "@/features/statutes/components/statute-table.pending";
+import {
   statuteListLinkTarget,
   useOpenStatuteTab,
 } from "@/features/statutes/open-statute-tab";
 import type { StatuteListItem } from "@/features/statutes/queries/statutes";
-import { statuteActLabel } from "@/features/statutes/statute-act-number";
 import {
-  STATUTE_COLUMN_IDS,
   STATUTE_COLUMN_LABEL_KEYS,
   STATUTE_COLUMN_MIN_SIZE,
   STATUTE_COLUMN_MODEL,
+  STATUTE_COLUMN_SORT_KEYS,
   STATUTE_VALIDITY_LABEL_KEYS,
 } from "@/features/statutes/statute-columns.logic";
-import type {
-  StatuteColumnId,
-  StatuteTableLayout,
-} from "@/features/statutes/statute-columns.logic";
-import {
-  EM_DASH,
-  formatValidityDate,
-} from "@/features/statutes/statute-format";
 import { statuteTabId } from "@/features/statutes/statute-inspector.logic";
+import { statuteTableSorting } from "@/features/statutes/statute-order.logic";
+import type { StatuteColumnOrder } from "@/features/statutes/statute-order.logic";
+import type { StatuteTableLayout } from "@/features/statutes/statute-table-layout.logic";
 import { useFormatter } from "@/i18n/formatting-context";
-
-/** The icon each statute column wears in its header menu and the chooser. */
-export const STATUTE_COLUMN_ICONS = {
-  act: ScrollTextIcon,
-  type: ShapesIcon,
-  validity: CircleDotIcon,
-  firstVersion: CalendarIcon,
-  amendments: HistoryIcon,
-  lastAmended: CalendarClockIcon,
-  citedBy: HashIcon,
-} as const satisfies Record<StatuteColumnId, LucideIcon>;
+import { statuteDocumentIdentity } from "@/lib/legal/statute-act-number";
+import { EM_DASH, formatValidityDate } from "@/lib/statutes/statute-format";
 
 const statuteRowId = (row: StatuteRowData): string => row.statute.id;
 
@@ -95,7 +86,11 @@ type StatuteTableProps = {
   /** See `PublicLawTable`. */
   isRefreshing?: boolean | undefined;
   layout: StatuteTableLayout;
-  onLayoutChange: (layout: StatuteTableLayout) => void;
+  onLayoutChange: (
+    update: PublicLawTableLayoutUpdate<StatuteTableLayout>,
+  ) => void;
+  /** The order the rows were read in, as the headers state and change it. */
+  order: StatuteColumnOrder;
   statutes: readonly StatuteListItem[];
 };
 
@@ -108,34 +103,74 @@ export const StatuteTable = ({
   isRefreshing = false,
   layout,
   onLayoutChange,
+  order,
   statutes,
 }: StatuteTableProps) => {
   const columns = useStatuteTableColumns();
-  const rows = useMemo(
-    () =>
-      statutes.map((statute): StatuteRowData => ({
-        kind: "statute",
-        statute,
-        children: [],
-      })),
-    [statutes],
-  );
+  const rows = statutes.map((statute): StatuteRowData => ({
+    kind: "statute",
+    statute,
+    children: [],
+  }));
   const rowHost = useStatuteRowHost();
 
   return (
-    <PublicLawTable
-      columns={columns}
-      emptyState={emptyState}
-      expectedRowCount={expectedRowCount}
-      findHighlight={findHighlight}
-      firstRowNumber={firstRowNumber}
-      getRowId={statuteRowId}
-      isLoading={isLoading}
-      isRefreshing={isRefreshing}
-      layout={layout}
-      onLayoutChange={onLayoutChange}
-      rowHost={rowHost}
-      rows={rows}
+    <StatuteOrderDirectionsScope value={order.directions}>
+      <PublicLawTable
+        columns={columns}
+        emptyState={emptyState}
+        expectedRowCount={expectedRowCount}
+        findHighlight={findHighlight}
+        firstRowNumber={firstRowNumber}
+        getRowId={statuteRowId}
+        isLoading={isLoading}
+        isRefreshing={isRefreshing}
+        layout={layout}
+        onLayoutChange={onLayoutChange}
+        rowHost={rowHost}
+        rows={rows}
+        sorting={statuteTableSorting(order)}
+      />
+    </StatuteOrderDirectionsScope>
+  );
+};
+
+/**
+ * Which ways a header may order the list. Through a context rather than the
+ * column definitions, as the decision table does: it changes with the
+ * filters while the columns do not, and rebuilding the definitions loops a
+ * controlled table.
+ */
+const StatuteOrderDirectionsContext = createContext<SortDirectionOffers | null>(
+  null,
+);
+
+const StatuteOrderDirectionsScope = StatuteOrderDirectionsContext.Provider;
+
+const StatuteOrderedHeader = ({
+  column,
+  icon,
+  label,
+  sortKey,
+}: {
+  column: TableColumn<StatuteRowData>;
+  icon: LucideIcon;
+  label: string;
+  sortKey: StatuteListSortKey;
+}) => {
+  const directions =
+    use(StatuteOrderDirectionsContext) ??
+    panic("An ordered statute header rendered outside an order scope");
+  return (
+    <MetadataPopover
+      column={column}
+      icon={icon}
+      label={label}
+      sort={{
+        type: "ordered",
+        kind: STATUTE_LIST_SORT_KEY_KINDS[sortKey],
+        directions,
+      }}
     />
   );
 };
@@ -158,17 +193,6 @@ export const useStatuteColumnGroups = (): ColumnToggleGroup[] => {
   ];
 };
 
-export const StatuteColumnIcon = ({
-  className = "size-3.5",
-  column,
-}: {
-  className?: string;
-  column: StatuteColumnId;
-}) => {
-  const Icon = STATUTE_COLUMN_ICONS[column];
-  return <Icon className={className} />;
-};
-
 /**
  * The statute field a column stands for: the value the table reads for the
  * column, so a column always names one field of the row rather than a
@@ -189,15 +213,12 @@ const useStatuteTableColumns = (): TableColumnDef<StatuteRowData>[] => {
 
   // Rebuilt only when the words change: a controlled table handed new column
   // definitions every render loops.
-  return useMemo(
-    () => [
-      ROW_NUMBER_COLUMN,
-      ...STATUTE_COLUMN_IDS.map((column) =>
-        statuteColumnDef(column, t(STATUTE_COLUMN_LABEL_KEYS[column])),
-      ),
-    ],
-    [t],
-  );
+  return [
+    ROW_NUMBER_COLUMN,
+    ...STATUTE_COLUMN_IDS.map((column) =>
+      statuteColumnDef(column, t(STATUTE_COLUMN_LABEL_KEYS[column])),
+    ),
+  ];
 };
 
 const renderNothing = () => null;
@@ -223,24 +244,34 @@ const statuteColumnDef = (
   label: string,
 ): TableColumnDef<StatuteRowData> => {
   const model = STATUTE_COLUMN_MODEL[column];
+  const sortKey = STATUTE_COLUMN_SORT_KEYS[column];
   return {
     id: column,
     size: model.size,
     minSize: STATUTE_COLUMN_MIN_SIZE,
-    // Statutes are ordered by the list, never by a column.
-    enableSorting: false,
+    // The API orders the rows; a header only asks it for another order.
+    enableSorting: sortKey !== null,
     enableHiding: model.hide,
     enableResizing: true,
     enablePinning: true,
     ...(model.emphasis === "metadata" ? { meta: { muted: true } } : {}),
     accessorFn: (row) => row.statute[STATUTE_ACCESSORS[column]],
-    header: ({ header }: TableHeaderContext<unknown, StatuteRowData>) => (
-      <MetadataPopover
-        column={header.column}
-        icon={STATUTE_COLUMN_ICONS[column]}
-        label={label}
-      />
-    ),
+    header: ({ header }: TableHeaderContext<unknown, StatuteRowData>) =>
+      sortKey === null ? (
+        <MetadataPopover
+          column={header.column}
+          icon={STATUTE_COLUMN_ICONS[column]}
+          label={label}
+          sort={UNORDERED_COLUMN}
+        />
+      ) : (
+        <StatuteOrderedHeader
+          column={header.column}
+          icon={STATUTE_COLUMN_ICONS[column]}
+          label={label}
+          sortKey={sortKey}
+        />
+      ),
     cell: ({ row }: TableCellContext<unknown, StatuteRowData>) => (
       <StatuteCell column={column} statute={row.original.statute} />
     ),
@@ -302,7 +333,11 @@ const StatuteCell = ({
  */
 const StatuteActCell = ({ statute }: { statute: StatuteListItem }) => {
   const openStatute = useOpenStatuteTab();
-  const { name, number } = statuteActLabel(statute);
+  const {
+    subject: name,
+    identity: number,
+    text,
+  } = statuteDisplayLabel(statute);
 
   return (
     <Link
@@ -310,26 +345,31 @@ const StatuteActCell = ({ statute }: { statute: StatuteListItem }) => {
       onClick={openStatute.onLinkClick(statute)}
       {...statuteListLinkTarget(statute)}
     >
+      <DocumentIdentityBadge
+        identity={statuteDocumentIdentity(statute.eli)}
+        title={text}
+      />
       {number !== null && (
         <BidiText
           as="span"
-          className="text-foreground block font-medium whitespace-nowrap group-hover/act:underline"
+          className="text-foreground block font-medium whitespace-normal group-hover/act:underline"
         >
           <HighlightedText columnId="act" text={number} />
         </BidiText>
       )}
       {name !== null && (
-        <BidiText
-          as="span"
+        <TruncatedText
           className={cn(
-            "line-clamp-2 wrap-break-word whitespace-normal",
+            "wrap-break-word whitespace-normal",
             number === null
               ? "text-foreground font-medium group-hover/act:underline"
               : "text-muted-foreground text-xs",
           )}
+          lines={2}
+          render={<BidiText as="span" />}
         >
           <HighlightedText columnId="act" text={name} />
-        </BidiText>
+        </TruncatedText>
       )}
     </Link>
   );
@@ -351,7 +391,7 @@ const StatuteValidityPill = ({
   return (
     <span
       className={cn(
-        "rounded px-1.5 py-0.5 text-xs font-medium",
+        "rounded-sm px-1.5 py-0.5 text-xs font-medium",
         VALIDITY_PILL_CLASS[validity],
       )}
     >
